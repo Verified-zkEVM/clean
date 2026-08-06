@@ -1698,19 +1698,23 @@ fn component_2_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
 pub struct FibonacciWitnessProgramAir {
     component: usize,
     trace_height: usize,
+    active_rows: usize,
     num_lookups: usize,
 }
 
 impl FibonacciWitnessProgramAir {
-    pub fn all(trace_heights: &[usize]) -> Vec<Self> {
+    pub fn all(trace_heights: &[usize], active_rows: &[usize]) -> Vec<Self> {
         assert_eq!(trace_heights.len(), 4);
+        assert_eq!(active_rows.len(), 4);
         trace_heights
             .iter()
             .copied()
+            .zip(active_rows.iter().copied())
             .enumerate()
-            .map(|(component, trace_height)| Self {
+            .map(|(component, (trace_height, active_rows))| Self {
                 component,
                 trace_height,
+                active_rows,
                 num_lookups: 0,
             })
             .collect()
@@ -1723,11 +1727,8 @@ impl<F: Field> BaseAir<F> for FibonacciWitnessProgramAir {
     }
 
     fn preprocessed_trace(&self) -> Option<RowMajorMatrix<F>> {
-        if self.component != 0 {
-            return None;
-        }
         let mut selector = vec![F::ZERO; self.trace_height];
-        selector[0] = F::ONE;
+        selector[..self.active_rows].fill(F::ONE);
         Some(RowMajorMatrix::new(selector, 1))
     }
 }
@@ -1739,6 +1740,12 @@ where
     fn eval(&self, builder: &mut AB) {
         let main = builder.main();
         let local = main.row_slice(0).expect("empty trace");
+        let preprocessed = builder.preprocessed();
+        let preprocessed_local = preprocessed
+            .as_ref()
+            .and_then(|matrix| matrix.row_slice(0))
+            .expect("missing active-row selector");
+        let active = Into::<AB::Expr>::into(preprocessed_local[0].clone());
         let constraints: Vec<AB::Expr> = match self.component {
             0 => vec![],
             1 => vec![
@@ -1763,7 +1770,7 @@ where
             _ => unreachable!("invalid generated AIR component"),
         };
         for constraint in constraints {
-            builder.assert_zero(constraint);
+            builder.assert_zero(active.clone() * constraint);
         }
     }
 
@@ -1772,7 +1779,7 @@ where
         AB: PermutationAirBuilder + AirBuilderWithPublicValues,
     {
         self.num_lookups = 0;
-        let preprocessed_width = usize::from(self.component == 0);
+        let preprocessed_width = 1;
         let symbolic = SymbolicAirBuilder::<AB::F>::new(
             preprocessed_width,
             BaseAir::<AB::F>::width(self),
@@ -1836,8 +1843,13 @@ where
                             SymbolicExpression::<AB::F>::from(local[2]),
                             SymbolicExpression::<AB::F>::from(local[3]),
                         ],
-                        -(SymbolicExpression::<AB::F>::from(AB::F::from_u64(2013265920u64))
-                            * SymbolicExpression::<AB::F>::from(local[0])),
+                        -((SymbolicExpression::<AB::F>::from(AB::F::from_u64(2013265920u64))
+                            * SymbolicExpression::<AB::F>::from(local[0]))
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Receive,
                     )],
                 ));
@@ -1850,8 +1862,13 @@ where
                             SymbolicExpression::<AB::F>::from(local[3]),
                             SymbolicExpression::<AB::F>::from(local[4]),
                         ],
-                        -(SymbolicExpression::<AB::F>::from(AB::F::from_u64(2013265920u64))
-                            * SymbolicExpression::<AB::F>::from(local[0])),
+                        -((SymbolicExpression::<AB::F>::from(AB::F::from_u64(2013265920u64))
+                            * SymbolicExpression::<AB::F>::from(local[0]))
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Receive,
                     )],
                 ));
@@ -1865,7 +1882,12 @@ where
                             SymbolicExpression::<AB::F>::from(local[3]),
                             SymbolicExpression::<AB::F>::from(local[4]),
                         ],
-                        SymbolicExpression::<AB::F>::from(local[0]),
+                        (SymbolicExpression::<AB::F>::from(local[0])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -1876,8 +1898,13 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(local[2])],
-                        -(SymbolicExpression::<AB::F>::from(AB::F::from_u64(2013265920u64))
-                            * SymbolicExpression::<AB::F>::from(AB::F::from_u64(1u64))),
+                        -((SymbolicExpression::<AB::F>::from(AB::F::from_u64(2013265920u64))
+                            * SymbolicExpression::<AB::F>::from(AB::F::from_u64(1u64)))
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Receive,
                     )],
                 ));
@@ -1890,7 +1917,12 @@ where
                             SymbolicExpression::<AB::F>::from(local[1]),
                             SymbolicExpression::<AB::F>::from(local[2]),
                         ],
-                        SymbolicExpression::<AB::F>::from(local[3]),
+                        (SymbolicExpression::<AB::F>::from(local[3])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -1901,7 +1933,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(0u64))],
-                        SymbolicExpression::<AB::F>::from(local[0]),
+                        (SymbolicExpression::<AB::F>::from(local[0])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -1910,7 +1947,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(1u64))],
-                        SymbolicExpression::<AB::F>::from(local[1]),
+                        (SymbolicExpression::<AB::F>::from(local[1])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -1919,7 +1961,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(2u64))],
-                        SymbolicExpression::<AB::F>::from(local[2]),
+                        (SymbolicExpression::<AB::F>::from(local[2])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -1928,7 +1975,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(3u64))],
-                        SymbolicExpression::<AB::F>::from(local[3]),
+                        (SymbolicExpression::<AB::F>::from(local[3])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -1937,7 +1989,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(4u64))],
-                        SymbolicExpression::<AB::F>::from(local[4]),
+                        (SymbolicExpression::<AB::F>::from(local[4])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -1946,7 +2003,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(5u64))],
-                        SymbolicExpression::<AB::F>::from(local[5]),
+                        (SymbolicExpression::<AB::F>::from(local[5])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -1955,7 +2017,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(6u64))],
-                        SymbolicExpression::<AB::F>::from(local[6]),
+                        (SymbolicExpression::<AB::F>::from(local[6])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -1964,7 +2031,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(7u64))],
-                        SymbolicExpression::<AB::F>::from(local[7]),
+                        (SymbolicExpression::<AB::F>::from(local[7])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -1973,7 +2045,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(8u64))],
-                        SymbolicExpression::<AB::F>::from(local[8]),
+                        (SymbolicExpression::<AB::F>::from(local[8])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -1982,7 +2059,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(9u64))],
-                        SymbolicExpression::<AB::F>::from(local[9]),
+                        (SymbolicExpression::<AB::F>::from(local[9])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -1991,7 +2073,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(10u64))],
-                        SymbolicExpression::<AB::F>::from(local[10]),
+                        (SymbolicExpression::<AB::F>::from(local[10])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2000,7 +2087,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(11u64))],
-                        SymbolicExpression::<AB::F>::from(local[11]),
+                        (SymbolicExpression::<AB::F>::from(local[11])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2009,7 +2101,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(12u64))],
-                        SymbolicExpression::<AB::F>::from(local[12]),
+                        (SymbolicExpression::<AB::F>::from(local[12])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2018,7 +2115,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(13u64))],
-                        SymbolicExpression::<AB::F>::from(local[13]),
+                        (SymbolicExpression::<AB::F>::from(local[13])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2027,7 +2129,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(14u64))],
-                        SymbolicExpression::<AB::F>::from(local[14]),
+                        (SymbolicExpression::<AB::F>::from(local[14])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2036,7 +2143,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(15u64))],
-                        SymbolicExpression::<AB::F>::from(local[15]),
+                        (SymbolicExpression::<AB::F>::from(local[15])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2045,7 +2157,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(16u64))],
-                        SymbolicExpression::<AB::F>::from(local[16]),
+                        (SymbolicExpression::<AB::F>::from(local[16])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2054,7 +2171,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(17u64))],
-                        SymbolicExpression::<AB::F>::from(local[17]),
+                        (SymbolicExpression::<AB::F>::from(local[17])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2063,7 +2185,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(18u64))],
-                        SymbolicExpression::<AB::F>::from(local[18]),
+                        (SymbolicExpression::<AB::F>::from(local[18])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2072,7 +2199,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(19u64))],
-                        SymbolicExpression::<AB::F>::from(local[19]),
+                        (SymbolicExpression::<AB::F>::from(local[19])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2081,7 +2213,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(20u64))],
-                        SymbolicExpression::<AB::F>::from(local[20]),
+                        (SymbolicExpression::<AB::F>::from(local[20])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2090,7 +2227,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(21u64))],
-                        SymbolicExpression::<AB::F>::from(local[21]),
+                        (SymbolicExpression::<AB::F>::from(local[21])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2099,7 +2241,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(22u64))],
-                        SymbolicExpression::<AB::F>::from(local[22]),
+                        (SymbolicExpression::<AB::F>::from(local[22])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2108,7 +2255,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(23u64))],
-                        SymbolicExpression::<AB::F>::from(local[23]),
+                        (SymbolicExpression::<AB::F>::from(local[23])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2117,7 +2269,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(24u64))],
-                        SymbolicExpression::<AB::F>::from(local[24]),
+                        (SymbolicExpression::<AB::F>::from(local[24])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2126,7 +2283,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(25u64))],
-                        SymbolicExpression::<AB::F>::from(local[25]),
+                        (SymbolicExpression::<AB::F>::from(local[25])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2135,7 +2297,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(26u64))],
-                        SymbolicExpression::<AB::F>::from(local[26]),
+                        (SymbolicExpression::<AB::F>::from(local[26])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2144,7 +2311,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(27u64))],
-                        SymbolicExpression::<AB::F>::from(local[27]),
+                        (SymbolicExpression::<AB::F>::from(local[27])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2153,7 +2325,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(28u64))],
-                        SymbolicExpression::<AB::F>::from(local[28]),
+                        (SymbolicExpression::<AB::F>::from(local[28])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2162,7 +2339,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(29u64))],
-                        SymbolicExpression::<AB::F>::from(local[29]),
+                        (SymbolicExpression::<AB::F>::from(local[29])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2171,7 +2353,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(30u64))],
-                        SymbolicExpression::<AB::F>::from(local[30]),
+                        (SymbolicExpression::<AB::F>::from(local[30])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2180,7 +2367,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(31u64))],
-                        SymbolicExpression::<AB::F>::from(local[31]),
+                        (SymbolicExpression::<AB::F>::from(local[31])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2189,7 +2381,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(32u64))],
-                        SymbolicExpression::<AB::F>::from(local[32]),
+                        (SymbolicExpression::<AB::F>::from(local[32])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2198,7 +2395,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(33u64))],
-                        SymbolicExpression::<AB::F>::from(local[33]),
+                        (SymbolicExpression::<AB::F>::from(local[33])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2207,7 +2409,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(34u64))],
-                        SymbolicExpression::<AB::F>::from(local[34]),
+                        (SymbolicExpression::<AB::F>::from(local[34])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2216,7 +2423,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(35u64))],
-                        SymbolicExpression::<AB::F>::from(local[35]),
+                        (SymbolicExpression::<AB::F>::from(local[35])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2225,7 +2437,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(36u64))],
-                        SymbolicExpression::<AB::F>::from(local[36]),
+                        (SymbolicExpression::<AB::F>::from(local[36])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2234,7 +2451,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(37u64))],
-                        SymbolicExpression::<AB::F>::from(local[37]),
+                        (SymbolicExpression::<AB::F>::from(local[37])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2243,7 +2465,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(38u64))],
-                        SymbolicExpression::<AB::F>::from(local[38]),
+                        (SymbolicExpression::<AB::F>::from(local[38])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2252,7 +2479,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(39u64))],
-                        SymbolicExpression::<AB::F>::from(local[39]),
+                        (SymbolicExpression::<AB::F>::from(local[39])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2261,7 +2493,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(40u64))],
-                        SymbolicExpression::<AB::F>::from(local[40]),
+                        (SymbolicExpression::<AB::F>::from(local[40])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2270,7 +2507,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(41u64))],
-                        SymbolicExpression::<AB::F>::from(local[41]),
+                        (SymbolicExpression::<AB::F>::from(local[41])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2279,7 +2521,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(42u64))],
-                        SymbolicExpression::<AB::F>::from(local[42]),
+                        (SymbolicExpression::<AB::F>::from(local[42])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2288,7 +2535,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(43u64))],
-                        SymbolicExpression::<AB::F>::from(local[43]),
+                        (SymbolicExpression::<AB::F>::from(local[43])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2297,7 +2549,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(44u64))],
-                        SymbolicExpression::<AB::F>::from(local[44]),
+                        (SymbolicExpression::<AB::F>::from(local[44])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2306,7 +2563,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(45u64))],
-                        SymbolicExpression::<AB::F>::from(local[45]),
+                        (SymbolicExpression::<AB::F>::from(local[45])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2315,7 +2577,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(46u64))],
-                        SymbolicExpression::<AB::F>::from(local[46]),
+                        (SymbolicExpression::<AB::F>::from(local[46])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2324,7 +2591,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(47u64))],
-                        SymbolicExpression::<AB::F>::from(local[47]),
+                        (SymbolicExpression::<AB::F>::from(local[47])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2333,7 +2605,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(48u64))],
-                        SymbolicExpression::<AB::F>::from(local[48]),
+                        (SymbolicExpression::<AB::F>::from(local[48])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2342,7 +2619,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(49u64))],
-                        SymbolicExpression::<AB::F>::from(local[49]),
+                        (SymbolicExpression::<AB::F>::from(local[49])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2351,7 +2633,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(50u64))],
-                        SymbolicExpression::<AB::F>::from(local[50]),
+                        (SymbolicExpression::<AB::F>::from(local[50])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2360,7 +2647,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(51u64))],
-                        SymbolicExpression::<AB::F>::from(local[51]),
+                        (SymbolicExpression::<AB::F>::from(local[51])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2369,7 +2661,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(52u64))],
-                        SymbolicExpression::<AB::F>::from(local[52]),
+                        (SymbolicExpression::<AB::F>::from(local[52])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2378,7 +2675,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(53u64))],
-                        SymbolicExpression::<AB::F>::from(local[53]),
+                        (SymbolicExpression::<AB::F>::from(local[53])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2387,7 +2689,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(54u64))],
-                        SymbolicExpression::<AB::F>::from(local[54]),
+                        (SymbolicExpression::<AB::F>::from(local[54])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2396,7 +2703,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(55u64))],
-                        SymbolicExpression::<AB::F>::from(local[55]),
+                        (SymbolicExpression::<AB::F>::from(local[55])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2405,7 +2717,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(56u64))],
-                        SymbolicExpression::<AB::F>::from(local[56]),
+                        (SymbolicExpression::<AB::F>::from(local[56])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2414,7 +2731,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(57u64))],
-                        SymbolicExpression::<AB::F>::from(local[57]),
+                        (SymbolicExpression::<AB::F>::from(local[57])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2423,7 +2745,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(58u64))],
-                        SymbolicExpression::<AB::F>::from(local[58]),
+                        (SymbolicExpression::<AB::F>::from(local[58])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2432,7 +2759,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(59u64))],
-                        SymbolicExpression::<AB::F>::from(local[59]),
+                        (SymbolicExpression::<AB::F>::from(local[59])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2441,7 +2773,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(60u64))],
-                        SymbolicExpression::<AB::F>::from(local[60]),
+                        (SymbolicExpression::<AB::F>::from(local[60])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2450,7 +2787,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(61u64))],
-                        SymbolicExpression::<AB::F>::from(local[61]),
+                        (SymbolicExpression::<AB::F>::from(local[61])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2459,7 +2801,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(62u64))],
-                        SymbolicExpression::<AB::F>::from(local[62]),
+                        (SymbolicExpression::<AB::F>::from(local[62])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2468,7 +2815,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(63u64))],
-                        SymbolicExpression::<AB::F>::from(local[63]),
+                        (SymbolicExpression::<AB::F>::from(local[63])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2477,7 +2829,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(64u64))],
-                        SymbolicExpression::<AB::F>::from(local[64]),
+                        (SymbolicExpression::<AB::F>::from(local[64])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2486,7 +2843,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(65u64))],
-                        SymbolicExpression::<AB::F>::from(local[65]),
+                        (SymbolicExpression::<AB::F>::from(local[65])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2495,7 +2857,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(66u64))],
-                        SymbolicExpression::<AB::F>::from(local[66]),
+                        (SymbolicExpression::<AB::F>::from(local[66])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2504,7 +2871,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(67u64))],
-                        SymbolicExpression::<AB::F>::from(local[67]),
+                        (SymbolicExpression::<AB::F>::from(local[67])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2513,7 +2885,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(68u64))],
-                        SymbolicExpression::<AB::F>::from(local[68]),
+                        (SymbolicExpression::<AB::F>::from(local[68])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2522,7 +2899,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(69u64))],
-                        SymbolicExpression::<AB::F>::from(local[69]),
+                        (SymbolicExpression::<AB::F>::from(local[69])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2531,7 +2913,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(70u64))],
-                        SymbolicExpression::<AB::F>::from(local[70]),
+                        (SymbolicExpression::<AB::F>::from(local[70])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2540,7 +2927,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(71u64))],
-                        SymbolicExpression::<AB::F>::from(local[71]),
+                        (SymbolicExpression::<AB::F>::from(local[71])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2549,7 +2941,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(72u64))],
-                        SymbolicExpression::<AB::F>::from(local[72]),
+                        (SymbolicExpression::<AB::F>::from(local[72])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2558,7 +2955,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(73u64))],
-                        SymbolicExpression::<AB::F>::from(local[73]),
+                        (SymbolicExpression::<AB::F>::from(local[73])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2567,7 +2969,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(74u64))],
-                        SymbolicExpression::<AB::F>::from(local[74]),
+                        (SymbolicExpression::<AB::F>::from(local[74])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2576,7 +2983,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(75u64))],
-                        SymbolicExpression::<AB::F>::from(local[75]),
+                        (SymbolicExpression::<AB::F>::from(local[75])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2585,7 +2997,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(76u64))],
-                        SymbolicExpression::<AB::F>::from(local[76]),
+                        (SymbolicExpression::<AB::F>::from(local[76])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2594,7 +3011,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(77u64))],
-                        SymbolicExpression::<AB::F>::from(local[77]),
+                        (SymbolicExpression::<AB::F>::from(local[77])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2603,7 +3025,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(78u64))],
-                        SymbolicExpression::<AB::F>::from(local[78]),
+                        (SymbolicExpression::<AB::F>::from(local[78])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2612,7 +3039,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(79u64))],
-                        SymbolicExpression::<AB::F>::from(local[79]),
+                        (SymbolicExpression::<AB::F>::from(local[79])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2621,7 +3053,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(80u64))],
-                        SymbolicExpression::<AB::F>::from(local[80]),
+                        (SymbolicExpression::<AB::F>::from(local[80])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2630,7 +3067,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(81u64))],
-                        SymbolicExpression::<AB::F>::from(local[81]),
+                        (SymbolicExpression::<AB::F>::from(local[81])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2639,7 +3081,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(82u64))],
-                        SymbolicExpression::<AB::F>::from(local[82]),
+                        (SymbolicExpression::<AB::F>::from(local[82])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2648,7 +3095,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(83u64))],
-                        SymbolicExpression::<AB::F>::from(local[83]),
+                        (SymbolicExpression::<AB::F>::from(local[83])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2657,7 +3109,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(84u64))],
-                        SymbolicExpression::<AB::F>::from(local[84]),
+                        (SymbolicExpression::<AB::F>::from(local[84])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2666,7 +3123,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(85u64))],
-                        SymbolicExpression::<AB::F>::from(local[85]),
+                        (SymbolicExpression::<AB::F>::from(local[85])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2675,7 +3137,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(86u64))],
-                        SymbolicExpression::<AB::F>::from(local[86]),
+                        (SymbolicExpression::<AB::F>::from(local[86])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2684,7 +3151,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(87u64))],
-                        SymbolicExpression::<AB::F>::from(local[87]),
+                        (SymbolicExpression::<AB::F>::from(local[87])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2693,7 +3165,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(88u64))],
-                        SymbolicExpression::<AB::F>::from(local[88]),
+                        (SymbolicExpression::<AB::F>::from(local[88])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2702,7 +3179,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(89u64))],
-                        SymbolicExpression::<AB::F>::from(local[89]),
+                        (SymbolicExpression::<AB::F>::from(local[89])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2711,7 +3193,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(90u64))],
-                        SymbolicExpression::<AB::F>::from(local[90]),
+                        (SymbolicExpression::<AB::F>::from(local[90])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2720,7 +3207,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(91u64))],
-                        SymbolicExpression::<AB::F>::from(local[91]),
+                        (SymbolicExpression::<AB::F>::from(local[91])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2729,7 +3221,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(92u64))],
-                        SymbolicExpression::<AB::F>::from(local[92]),
+                        (SymbolicExpression::<AB::F>::from(local[92])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2738,7 +3235,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(93u64))],
-                        SymbolicExpression::<AB::F>::from(local[93]),
+                        (SymbolicExpression::<AB::F>::from(local[93])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2747,7 +3249,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(94u64))],
-                        SymbolicExpression::<AB::F>::from(local[94]),
+                        (SymbolicExpression::<AB::F>::from(local[94])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2756,7 +3263,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(95u64))],
-                        SymbolicExpression::<AB::F>::from(local[95]),
+                        (SymbolicExpression::<AB::F>::from(local[95])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2765,7 +3277,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(96u64))],
-                        SymbolicExpression::<AB::F>::from(local[96]),
+                        (SymbolicExpression::<AB::F>::from(local[96])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2774,7 +3291,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(97u64))],
-                        SymbolicExpression::<AB::F>::from(local[97]),
+                        (SymbolicExpression::<AB::F>::from(local[97])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2783,7 +3305,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(98u64))],
-                        SymbolicExpression::<AB::F>::from(local[98]),
+                        (SymbolicExpression::<AB::F>::from(local[98])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2792,7 +3319,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(99u64))],
-                        SymbolicExpression::<AB::F>::from(local[99]),
+                        (SymbolicExpression::<AB::F>::from(local[99])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2801,7 +3333,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(100u64))],
-                        SymbolicExpression::<AB::F>::from(local[100]),
+                        (SymbolicExpression::<AB::F>::from(local[100])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2810,7 +3347,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(101u64))],
-                        SymbolicExpression::<AB::F>::from(local[101]),
+                        (SymbolicExpression::<AB::F>::from(local[101])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2819,7 +3361,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(102u64))],
-                        SymbolicExpression::<AB::F>::from(local[102]),
+                        (SymbolicExpression::<AB::F>::from(local[102])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2828,7 +3375,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(103u64))],
-                        SymbolicExpression::<AB::F>::from(local[103]),
+                        (SymbolicExpression::<AB::F>::from(local[103])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2837,7 +3389,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(104u64))],
-                        SymbolicExpression::<AB::F>::from(local[104]),
+                        (SymbolicExpression::<AB::F>::from(local[104])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2846,7 +3403,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(105u64))],
-                        SymbolicExpression::<AB::F>::from(local[105]),
+                        (SymbolicExpression::<AB::F>::from(local[105])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2855,7 +3417,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(106u64))],
-                        SymbolicExpression::<AB::F>::from(local[106]),
+                        (SymbolicExpression::<AB::F>::from(local[106])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2864,7 +3431,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(107u64))],
-                        SymbolicExpression::<AB::F>::from(local[107]),
+                        (SymbolicExpression::<AB::F>::from(local[107])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2873,7 +3445,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(108u64))],
-                        SymbolicExpression::<AB::F>::from(local[108]),
+                        (SymbolicExpression::<AB::F>::from(local[108])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2882,7 +3459,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(109u64))],
-                        SymbolicExpression::<AB::F>::from(local[109]),
+                        (SymbolicExpression::<AB::F>::from(local[109])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2891,7 +3473,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(110u64))],
-                        SymbolicExpression::<AB::F>::from(local[110]),
+                        (SymbolicExpression::<AB::F>::from(local[110])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2900,7 +3487,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(111u64))],
-                        SymbolicExpression::<AB::F>::from(local[111]),
+                        (SymbolicExpression::<AB::F>::from(local[111])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2909,7 +3501,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(112u64))],
-                        SymbolicExpression::<AB::F>::from(local[112]),
+                        (SymbolicExpression::<AB::F>::from(local[112])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2918,7 +3515,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(113u64))],
-                        SymbolicExpression::<AB::F>::from(local[113]),
+                        (SymbolicExpression::<AB::F>::from(local[113])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2927,7 +3529,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(114u64))],
-                        SymbolicExpression::<AB::F>::from(local[114]),
+                        (SymbolicExpression::<AB::F>::from(local[114])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2936,7 +3543,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(115u64))],
-                        SymbolicExpression::<AB::F>::from(local[115]),
+                        (SymbolicExpression::<AB::F>::from(local[115])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2945,7 +3557,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(116u64))],
-                        SymbolicExpression::<AB::F>::from(local[116]),
+                        (SymbolicExpression::<AB::F>::from(local[116])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2954,7 +3571,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(117u64))],
-                        SymbolicExpression::<AB::F>::from(local[117]),
+                        (SymbolicExpression::<AB::F>::from(local[117])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2963,7 +3585,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(118u64))],
-                        SymbolicExpression::<AB::F>::from(local[118]),
+                        (SymbolicExpression::<AB::F>::from(local[118])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2972,7 +3599,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(119u64))],
-                        SymbolicExpression::<AB::F>::from(local[119]),
+                        (SymbolicExpression::<AB::F>::from(local[119])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2981,7 +3613,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(120u64))],
-                        SymbolicExpression::<AB::F>::from(local[120]),
+                        (SymbolicExpression::<AB::F>::from(local[120])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2990,7 +3627,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(121u64))],
-                        SymbolicExpression::<AB::F>::from(local[121]),
+                        (SymbolicExpression::<AB::F>::from(local[121])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -2999,7 +3641,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(122u64))],
-                        SymbolicExpression::<AB::F>::from(local[122]),
+                        (SymbolicExpression::<AB::F>::from(local[122])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3008,7 +3655,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(123u64))],
-                        SymbolicExpression::<AB::F>::from(local[123]),
+                        (SymbolicExpression::<AB::F>::from(local[123])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3017,7 +3669,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(124u64))],
-                        SymbolicExpression::<AB::F>::from(local[124]),
+                        (SymbolicExpression::<AB::F>::from(local[124])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3026,7 +3683,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(125u64))],
-                        SymbolicExpression::<AB::F>::from(local[125]),
+                        (SymbolicExpression::<AB::F>::from(local[125])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3035,7 +3697,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(126u64))],
-                        SymbolicExpression::<AB::F>::from(local[126]),
+                        (SymbolicExpression::<AB::F>::from(local[126])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3044,7 +3711,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(127u64))],
-                        SymbolicExpression::<AB::F>::from(local[127]),
+                        (SymbolicExpression::<AB::F>::from(local[127])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3053,7 +3725,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(128u64))],
-                        SymbolicExpression::<AB::F>::from(local[128]),
+                        (SymbolicExpression::<AB::F>::from(local[128])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3062,7 +3739,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(129u64))],
-                        SymbolicExpression::<AB::F>::from(local[129]),
+                        (SymbolicExpression::<AB::F>::from(local[129])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3071,7 +3753,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(130u64))],
-                        SymbolicExpression::<AB::F>::from(local[130]),
+                        (SymbolicExpression::<AB::F>::from(local[130])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3080,7 +3767,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(131u64))],
-                        SymbolicExpression::<AB::F>::from(local[131]),
+                        (SymbolicExpression::<AB::F>::from(local[131])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3089,7 +3781,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(132u64))],
-                        SymbolicExpression::<AB::F>::from(local[132]),
+                        (SymbolicExpression::<AB::F>::from(local[132])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3098,7 +3795,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(133u64))],
-                        SymbolicExpression::<AB::F>::from(local[133]),
+                        (SymbolicExpression::<AB::F>::from(local[133])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3107,7 +3809,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(134u64))],
-                        SymbolicExpression::<AB::F>::from(local[134]),
+                        (SymbolicExpression::<AB::F>::from(local[134])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3116,7 +3823,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(135u64))],
-                        SymbolicExpression::<AB::F>::from(local[135]),
+                        (SymbolicExpression::<AB::F>::from(local[135])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3125,7 +3837,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(136u64))],
-                        SymbolicExpression::<AB::F>::from(local[136]),
+                        (SymbolicExpression::<AB::F>::from(local[136])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3134,7 +3851,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(137u64))],
-                        SymbolicExpression::<AB::F>::from(local[137]),
+                        (SymbolicExpression::<AB::F>::from(local[137])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3143,7 +3865,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(138u64))],
-                        SymbolicExpression::<AB::F>::from(local[138]),
+                        (SymbolicExpression::<AB::F>::from(local[138])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3152,7 +3879,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(139u64))],
-                        SymbolicExpression::<AB::F>::from(local[139]),
+                        (SymbolicExpression::<AB::F>::from(local[139])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3161,7 +3893,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(140u64))],
-                        SymbolicExpression::<AB::F>::from(local[140]),
+                        (SymbolicExpression::<AB::F>::from(local[140])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3170,7 +3907,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(141u64))],
-                        SymbolicExpression::<AB::F>::from(local[141]),
+                        (SymbolicExpression::<AB::F>::from(local[141])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3179,7 +3921,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(142u64))],
-                        SymbolicExpression::<AB::F>::from(local[142]),
+                        (SymbolicExpression::<AB::F>::from(local[142])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3188,7 +3935,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(143u64))],
-                        SymbolicExpression::<AB::F>::from(local[143]),
+                        (SymbolicExpression::<AB::F>::from(local[143])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3197,7 +3949,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(144u64))],
-                        SymbolicExpression::<AB::F>::from(local[144]),
+                        (SymbolicExpression::<AB::F>::from(local[144])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3206,7 +3963,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(145u64))],
-                        SymbolicExpression::<AB::F>::from(local[145]),
+                        (SymbolicExpression::<AB::F>::from(local[145])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3215,7 +3977,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(146u64))],
-                        SymbolicExpression::<AB::F>::from(local[146]),
+                        (SymbolicExpression::<AB::F>::from(local[146])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3224,7 +3991,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(147u64))],
-                        SymbolicExpression::<AB::F>::from(local[147]),
+                        (SymbolicExpression::<AB::F>::from(local[147])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3233,7 +4005,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(148u64))],
-                        SymbolicExpression::<AB::F>::from(local[148]),
+                        (SymbolicExpression::<AB::F>::from(local[148])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3242,7 +4019,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(149u64))],
-                        SymbolicExpression::<AB::F>::from(local[149]),
+                        (SymbolicExpression::<AB::F>::from(local[149])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3251,7 +4033,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(150u64))],
-                        SymbolicExpression::<AB::F>::from(local[150]),
+                        (SymbolicExpression::<AB::F>::from(local[150])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3260,7 +4047,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(151u64))],
-                        SymbolicExpression::<AB::F>::from(local[151]),
+                        (SymbolicExpression::<AB::F>::from(local[151])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3269,7 +4061,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(152u64))],
-                        SymbolicExpression::<AB::F>::from(local[152]),
+                        (SymbolicExpression::<AB::F>::from(local[152])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3278,7 +4075,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(153u64))],
-                        SymbolicExpression::<AB::F>::from(local[153]),
+                        (SymbolicExpression::<AB::F>::from(local[153])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3287,7 +4089,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(154u64))],
-                        SymbolicExpression::<AB::F>::from(local[154]),
+                        (SymbolicExpression::<AB::F>::from(local[154])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3296,7 +4103,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(155u64))],
-                        SymbolicExpression::<AB::F>::from(local[155]),
+                        (SymbolicExpression::<AB::F>::from(local[155])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3305,7 +4117,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(156u64))],
-                        SymbolicExpression::<AB::F>::from(local[156]),
+                        (SymbolicExpression::<AB::F>::from(local[156])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3314,7 +4131,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(157u64))],
-                        SymbolicExpression::<AB::F>::from(local[157]),
+                        (SymbolicExpression::<AB::F>::from(local[157])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3323,7 +4145,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(158u64))],
-                        SymbolicExpression::<AB::F>::from(local[158]),
+                        (SymbolicExpression::<AB::F>::from(local[158])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3332,7 +4159,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(159u64))],
-                        SymbolicExpression::<AB::F>::from(local[159]),
+                        (SymbolicExpression::<AB::F>::from(local[159])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3341,7 +4173,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(160u64))],
-                        SymbolicExpression::<AB::F>::from(local[160]),
+                        (SymbolicExpression::<AB::F>::from(local[160])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3350,7 +4187,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(161u64))],
-                        SymbolicExpression::<AB::F>::from(local[161]),
+                        (SymbolicExpression::<AB::F>::from(local[161])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3359,7 +4201,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(162u64))],
-                        SymbolicExpression::<AB::F>::from(local[162]),
+                        (SymbolicExpression::<AB::F>::from(local[162])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3368,7 +4215,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(163u64))],
-                        SymbolicExpression::<AB::F>::from(local[163]),
+                        (SymbolicExpression::<AB::F>::from(local[163])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3377,7 +4229,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(164u64))],
-                        SymbolicExpression::<AB::F>::from(local[164]),
+                        (SymbolicExpression::<AB::F>::from(local[164])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3386,7 +4243,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(165u64))],
-                        SymbolicExpression::<AB::F>::from(local[165]),
+                        (SymbolicExpression::<AB::F>::from(local[165])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3395,7 +4257,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(166u64))],
-                        SymbolicExpression::<AB::F>::from(local[166]),
+                        (SymbolicExpression::<AB::F>::from(local[166])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3404,7 +4271,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(167u64))],
-                        SymbolicExpression::<AB::F>::from(local[167]),
+                        (SymbolicExpression::<AB::F>::from(local[167])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3413,7 +4285,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(168u64))],
-                        SymbolicExpression::<AB::F>::from(local[168]),
+                        (SymbolicExpression::<AB::F>::from(local[168])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3422,7 +4299,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(169u64))],
-                        SymbolicExpression::<AB::F>::from(local[169]),
+                        (SymbolicExpression::<AB::F>::from(local[169])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3431,7 +4313,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(170u64))],
-                        SymbolicExpression::<AB::F>::from(local[170]),
+                        (SymbolicExpression::<AB::F>::from(local[170])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3440,7 +4327,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(171u64))],
-                        SymbolicExpression::<AB::F>::from(local[171]),
+                        (SymbolicExpression::<AB::F>::from(local[171])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3449,7 +4341,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(172u64))],
-                        SymbolicExpression::<AB::F>::from(local[172]),
+                        (SymbolicExpression::<AB::F>::from(local[172])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3458,7 +4355,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(173u64))],
-                        SymbolicExpression::<AB::F>::from(local[173]),
+                        (SymbolicExpression::<AB::F>::from(local[173])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3467,7 +4369,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(174u64))],
-                        SymbolicExpression::<AB::F>::from(local[174]),
+                        (SymbolicExpression::<AB::F>::from(local[174])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3476,7 +4383,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(175u64))],
-                        SymbolicExpression::<AB::F>::from(local[175]),
+                        (SymbolicExpression::<AB::F>::from(local[175])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3485,7 +4397,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(176u64))],
-                        SymbolicExpression::<AB::F>::from(local[176]),
+                        (SymbolicExpression::<AB::F>::from(local[176])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3494,7 +4411,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(177u64))],
-                        SymbolicExpression::<AB::F>::from(local[177]),
+                        (SymbolicExpression::<AB::F>::from(local[177])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3503,7 +4425,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(178u64))],
-                        SymbolicExpression::<AB::F>::from(local[178]),
+                        (SymbolicExpression::<AB::F>::from(local[178])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3512,7 +4439,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(179u64))],
-                        SymbolicExpression::<AB::F>::from(local[179]),
+                        (SymbolicExpression::<AB::F>::from(local[179])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3521,7 +4453,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(180u64))],
-                        SymbolicExpression::<AB::F>::from(local[180]),
+                        (SymbolicExpression::<AB::F>::from(local[180])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3530,7 +4467,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(181u64))],
-                        SymbolicExpression::<AB::F>::from(local[181]),
+                        (SymbolicExpression::<AB::F>::from(local[181])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3539,7 +4481,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(182u64))],
-                        SymbolicExpression::<AB::F>::from(local[182]),
+                        (SymbolicExpression::<AB::F>::from(local[182])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3548,7 +4495,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(183u64))],
-                        SymbolicExpression::<AB::F>::from(local[183]),
+                        (SymbolicExpression::<AB::F>::from(local[183])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3557,7 +4509,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(184u64))],
-                        SymbolicExpression::<AB::F>::from(local[184]),
+                        (SymbolicExpression::<AB::F>::from(local[184])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3566,7 +4523,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(185u64))],
-                        SymbolicExpression::<AB::F>::from(local[185]),
+                        (SymbolicExpression::<AB::F>::from(local[185])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3575,7 +4537,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(186u64))],
-                        SymbolicExpression::<AB::F>::from(local[186]),
+                        (SymbolicExpression::<AB::F>::from(local[186])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3584,7 +4551,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(187u64))],
-                        SymbolicExpression::<AB::F>::from(local[187]),
+                        (SymbolicExpression::<AB::F>::from(local[187])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3593,7 +4565,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(188u64))],
-                        SymbolicExpression::<AB::F>::from(local[188]),
+                        (SymbolicExpression::<AB::F>::from(local[188])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3602,7 +4579,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(189u64))],
-                        SymbolicExpression::<AB::F>::from(local[189]),
+                        (SymbolicExpression::<AB::F>::from(local[189])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3611,7 +4593,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(190u64))],
-                        SymbolicExpression::<AB::F>::from(local[190]),
+                        (SymbolicExpression::<AB::F>::from(local[190])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3620,7 +4607,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(191u64))],
-                        SymbolicExpression::<AB::F>::from(local[191]),
+                        (SymbolicExpression::<AB::F>::from(local[191])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3629,7 +4621,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(192u64))],
-                        SymbolicExpression::<AB::F>::from(local[192]),
+                        (SymbolicExpression::<AB::F>::from(local[192])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3638,7 +4635,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(193u64))],
-                        SymbolicExpression::<AB::F>::from(local[193]),
+                        (SymbolicExpression::<AB::F>::from(local[193])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3647,7 +4649,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(194u64))],
-                        SymbolicExpression::<AB::F>::from(local[194]),
+                        (SymbolicExpression::<AB::F>::from(local[194])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3656,7 +4663,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(195u64))],
-                        SymbolicExpression::<AB::F>::from(local[195]),
+                        (SymbolicExpression::<AB::F>::from(local[195])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3665,7 +4677,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(196u64))],
-                        SymbolicExpression::<AB::F>::from(local[196]),
+                        (SymbolicExpression::<AB::F>::from(local[196])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3674,7 +4691,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(197u64))],
-                        SymbolicExpression::<AB::F>::from(local[197]),
+                        (SymbolicExpression::<AB::F>::from(local[197])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3683,7 +4705,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(198u64))],
-                        SymbolicExpression::<AB::F>::from(local[198]),
+                        (SymbolicExpression::<AB::F>::from(local[198])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3692,7 +4719,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(199u64))],
-                        SymbolicExpression::<AB::F>::from(local[199]),
+                        (SymbolicExpression::<AB::F>::from(local[199])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3701,7 +4733,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(200u64))],
-                        SymbolicExpression::<AB::F>::from(local[200]),
+                        (SymbolicExpression::<AB::F>::from(local[200])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3710,7 +4747,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(201u64))],
-                        SymbolicExpression::<AB::F>::from(local[201]),
+                        (SymbolicExpression::<AB::F>::from(local[201])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3719,7 +4761,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(202u64))],
-                        SymbolicExpression::<AB::F>::from(local[202]),
+                        (SymbolicExpression::<AB::F>::from(local[202])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3728,7 +4775,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(203u64))],
-                        SymbolicExpression::<AB::F>::from(local[203]),
+                        (SymbolicExpression::<AB::F>::from(local[203])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3737,7 +4789,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(204u64))],
-                        SymbolicExpression::<AB::F>::from(local[204]),
+                        (SymbolicExpression::<AB::F>::from(local[204])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3746,7 +4803,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(205u64))],
-                        SymbolicExpression::<AB::F>::from(local[205]),
+                        (SymbolicExpression::<AB::F>::from(local[205])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3755,7 +4817,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(206u64))],
-                        SymbolicExpression::<AB::F>::from(local[206]),
+                        (SymbolicExpression::<AB::F>::from(local[206])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3764,7 +4831,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(207u64))],
-                        SymbolicExpression::<AB::F>::from(local[207]),
+                        (SymbolicExpression::<AB::F>::from(local[207])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3773,7 +4845,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(208u64))],
-                        SymbolicExpression::<AB::F>::from(local[208]),
+                        (SymbolicExpression::<AB::F>::from(local[208])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3782,7 +4859,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(209u64))],
-                        SymbolicExpression::<AB::F>::from(local[209]),
+                        (SymbolicExpression::<AB::F>::from(local[209])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3791,7 +4873,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(210u64))],
-                        SymbolicExpression::<AB::F>::from(local[210]),
+                        (SymbolicExpression::<AB::F>::from(local[210])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3800,7 +4887,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(211u64))],
-                        SymbolicExpression::<AB::F>::from(local[211]),
+                        (SymbolicExpression::<AB::F>::from(local[211])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3809,7 +4901,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(212u64))],
-                        SymbolicExpression::<AB::F>::from(local[212]),
+                        (SymbolicExpression::<AB::F>::from(local[212])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3818,7 +4915,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(213u64))],
-                        SymbolicExpression::<AB::F>::from(local[213]),
+                        (SymbolicExpression::<AB::F>::from(local[213])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3827,7 +4929,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(214u64))],
-                        SymbolicExpression::<AB::F>::from(local[214]),
+                        (SymbolicExpression::<AB::F>::from(local[214])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3836,7 +4943,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(215u64))],
-                        SymbolicExpression::<AB::F>::from(local[215]),
+                        (SymbolicExpression::<AB::F>::from(local[215])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3845,7 +4957,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(216u64))],
-                        SymbolicExpression::<AB::F>::from(local[216]),
+                        (SymbolicExpression::<AB::F>::from(local[216])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3854,7 +4971,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(217u64))],
-                        SymbolicExpression::<AB::F>::from(local[217]),
+                        (SymbolicExpression::<AB::F>::from(local[217])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3863,7 +4985,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(218u64))],
-                        SymbolicExpression::<AB::F>::from(local[218]),
+                        (SymbolicExpression::<AB::F>::from(local[218])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3872,7 +4999,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(219u64))],
-                        SymbolicExpression::<AB::F>::from(local[219]),
+                        (SymbolicExpression::<AB::F>::from(local[219])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3881,7 +5013,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(220u64))],
-                        SymbolicExpression::<AB::F>::from(local[220]),
+                        (SymbolicExpression::<AB::F>::from(local[220])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3890,7 +5027,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(221u64))],
-                        SymbolicExpression::<AB::F>::from(local[221]),
+                        (SymbolicExpression::<AB::F>::from(local[221])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3899,7 +5041,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(222u64))],
-                        SymbolicExpression::<AB::F>::from(local[222]),
+                        (SymbolicExpression::<AB::F>::from(local[222])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3908,7 +5055,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(223u64))],
-                        SymbolicExpression::<AB::F>::from(local[223]),
+                        (SymbolicExpression::<AB::F>::from(local[223])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3917,7 +5069,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(224u64))],
-                        SymbolicExpression::<AB::F>::from(local[224]),
+                        (SymbolicExpression::<AB::F>::from(local[224])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3926,7 +5083,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(225u64))],
-                        SymbolicExpression::<AB::F>::from(local[225]),
+                        (SymbolicExpression::<AB::F>::from(local[225])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3935,7 +5097,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(226u64))],
-                        SymbolicExpression::<AB::F>::from(local[226]),
+                        (SymbolicExpression::<AB::F>::from(local[226])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3944,7 +5111,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(227u64))],
-                        SymbolicExpression::<AB::F>::from(local[227]),
+                        (SymbolicExpression::<AB::F>::from(local[227])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3953,7 +5125,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(228u64))],
-                        SymbolicExpression::<AB::F>::from(local[228]),
+                        (SymbolicExpression::<AB::F>::from(local[228])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3962,7 +5139,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(229u64))],
-                        SymbolicExpression::<AB::F>::from(local[229]),
+                        (SymbolicExpression::<AB::F>::from(local[229])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3971,7 +5153,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(230u64))],
-                        SymbolicExpression::<AB::F>::from(local[230]),
+                        (SymbolicExpression::<AB::F>::from(local[230])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3980,7 +5167,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(231u64))],
-                        SymbolicExpression::<AB::F>::from(local[231]),
+                        (SymbolicExpression::<AB::F>::from(local[231])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3989,7 +5181,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(232u64))],
-                        SymbolicExpression::<AB::F>::from(local[232]),
+                        (SymbolicExpression::<AB::F>::from(local[232])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -3998,7 +5195,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(233u64))],
-                        SymbolicExpression::<AB::F>::from(local[233]),
+                        (SymbolicExpression::<AB::F>::from(local[233])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -4007,7 +5209,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(234u64))],
-                        SymbolicExpression::<AB::F>::from(local[234]),
+                        (SymbolicExpression::<AB::F>::from(local[234])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -4016,7 +5223,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(235u64))],
-                        SymbolicExpression::<AB::F>::from(local[235]),
+                        (SymbolicExpression::<AB::F>::from(local[235])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -4025,7 +5237,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(236u64))],
-                        SymbolicExpression::<AB::F>::from(local[236]),
+                        (SymbolicExpression::<AB::F>::from(local[236])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -4034,7 +5251,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(237u64))],
-                        SymbolicExpression::<AB::F>::from(local[237]),
+                        (SymbolicExpression::<AB::F>::from(local[237])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -4043,7 +5265,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(238u64))],
-                        SymbolicExpression::<AB::F>::from(local[238]),
+                        (SymbolicExpression::<AB::F>::from(local[238])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -4052,7 +5279,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(239u64))],
-                        SymbolicExpression::<AB::F>::from(local[239]),
+                        (SymbolicExpression::<AB::F>::from(local[239])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -4061,7 +5293,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(240u64))],
-                        SymbolicExpression::<AB::F>::from(local[240]),
+                        (SymbolicExpression::<AB::F>::from(local[240])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -4070,7 +5307,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(241u64))],
-                        SymbolicExpression::<AB::F>::from(local[241]),
+                        (SymbolicExpression::<AB::F>::from(local[241])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -4079,7 +5321,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(242u64))],
-                        SymbolicExpression::<AB::F>::from(local[242]),
+                        (SymbolicExpression::<AB::F>::from(local[242])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -4088,7 +5335,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(243u64))],
-                        SymbolicExpression::<AB::F>::from(local[243]),
+                        (SymbolicExpression::<AB::F>::from(local[243])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -4097,7 +5349,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(244u64))],
-                        SymbolicExpression::<AB::F>::from(local[244]),
+                        (SymbolicExpression::<AB::F>::from(local[244])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -4106,7 +5363,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(245u64))],
-                        SymbolicExpression::<AB::F>::from(local[245]),
+                        (SymbolicExpression::<AB::F>::from(local[245])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -4115,7 +5377,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(246u64))],
-                        SymbolicExpression::<AB::F>::from(local[246]),
+                        (SymbolicExpression::<AB::F>::from(local[246])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -4124,7 +5391,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(247u64))],
-                        SymbolicExpression::<AB::F>::from(local[247]),
+                        (SymbolicExpression::<AB::F>::from(local[247])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -4133,7 +5405,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(248u64))],
-                        SymbolicExpression::<AB::F>::from(local[248]),
+                        (SymbolicExpression::<AB::F>::from(local[248])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -4142,7 +5419,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(249u64))],
-                        SymbolicExpression::<AB::F>::from(local[249]),
+                        (SymbolicExpression::<AB::F>::from(local[249])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -4151,7 +5433,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(250u64))],
-                        SymbolicExpression::<AB::F>::from(local[250]),
+                        (SymbolicExpression::<AB::F>::from(local[250])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -4160,7 +5447,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(251u64))],
-                        SymbolicExpression::<AB::F>::from(local[251]),
+                        (SymbolicExpression::<AB::F>::from(local[251])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -4169,7 +5461,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(252u64))],
-                        SymbolicExpression::<AB::F>::from(local[252]),
+                        (SymbolicExpression::<AB::F>::from(local[252])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -4178,7 +5475,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(253u64))],
-                        SymbolicExpression::<AB::F>::from(local[253]),
+                        (SymbolicExpression::<AB::F>::from(local[253])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -4187,7 +5489,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(254u64))],
-                        SymbolicExpression::<AB::F>::from(local[254]),
+                        (SymbolicExpression::<AB::F>::from(local[254])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));
@@ -4196,7 +5503,12 @@ where
                     Kind::Global("bytes".into()),
                     &[(
                         vec![SymbolicExpression::<AB::F>::from(AB::F::from_u64(255u64))],
-                        SymbolicExpression::<AB::F>::from(local[255]),
+                        (SymbolicExpression::<AB::F>::from(local[255])
+                            * SymbolicExpression::<AB::F>::from(
+                                preprocessed_local
+                                    .as_ref()
+                                    .expect("missing verifier selector")[0],
+                            )),
                         LookupDirection::Send,
                     )],
                 ));

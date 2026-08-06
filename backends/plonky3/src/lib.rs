@@ -14,6 +14,7 @@ mod lookup_trace;
 mod prover;
 mod verifier;
 pub mod witness_generation;
+mod ensemble_prover;
 
 pub use check_constraints::*;
 pub use clean_air::*;
@@ -24,3 +25,4 @@ pub use lookup::*;
 pub use lookup_trace::*;
 pub use prover::prove;
 pub use verifier::verify;
+pub use ensemble_prover::{prove_ensemble, verify_ensemble};

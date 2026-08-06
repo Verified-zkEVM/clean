@@ -6,9 +6,11 @@
 
 use alloc::format;
 use alloc::string::{String, ToString};
+use alloc::vec;
 use alloc::vec::Vec;
 
 use p3_field::{Field, PrimeField64};
+use p3_matrix::dense::RowMajorMatrix;
 
 /// The field operations used by extracted witness programs.
 pub trait WitnessField: Field + PrimeField64 + Copy + Eq {
@@ -96,6 +98,14 @@ pub struct Interaction<F> {
 #[derive(Clone, Debug)]
 pub struct EnsembleWitness<F> {
     pub tables: Vec<Vec<Vec<F>>>,
+}
+
+/// Power-of-two matrices plus the number of semantically active rows in each
+/// matrix. Entry zero is the one-row verifier instance.
+#[derive(Clone, Debug)]
+pub struct PaddedEnsembleWitness<F> {
+    pub traces: Vec<RowMajorMatrix<F>>,
+    pub active_rows: Vec<usize>,
 }
 
 /// Implemented by Rust emitted directly from a Clean ensemble and its witness IR.
@@ -447,4 +457,49 @@ pub fn generate<F: WitnessField, P: Program<F>>(
     }
 
     Err("ensemble witness generation exhausted its fuel".to_string())
+}
+
+/// Pad every generated component with zero rows. Generated AIR code gates both
+/// constraints and interactions with committed active-row selectors, so padding
+/// is backend bookkeeping and does not change the Clean witness relation.
+pub fn pad<F: WitnessField, P: Program<F>>(
+    witness: EnsembleWitness<F>,
+    minimum_height: usize,
+) -> Result<PaddedEnsembleWitness<F>, String> {
+    let minimum_height = minimum_height.max(1).next_power_of_two();
+    if witness.tables.len() != P::COMPONENTS {
+        return Err(format!(
+            "witness table count {} does not match component count {}",
+            witness.tables.len(),
+            P::COMPONENTS
+        ));
+    }
+
+    let mut active_rows = Vec::with_capacity(P::COMPONENTS + 1);
+    let mut traces = Vec::with_capacity(P::COMPONENTS + 1);
+    active_rows.push(1);
+    traces.push(RowMajorMatrix::new(vec![F::ZERO; minimum_height], 1));
+
+    for (component, rows) in witness.tables.into_iter().enumerate() {
+        let width = rows
+            .first()
+            .map(Vec::len)
+            .ok_or_else(|| format!("cannot pad empty component {component}"))?;
+        if rows.iter().any(|row| row.len() != width) {
+            return Err(format!(
+                "component {component} contains a row of the wrong width"
+            ));
+        }
+        let logical_height = rows.len();
+        let height = logical_height.max(minimum_height).next_power_of_two();
+        let mut values = rows.into_iter().flatten().collect::<Vec<_>>();
+        values.resize(height * width, F::ZERO);
+        active_rows.push(logical_height);
+        traces.push(RowMajorMatrix::new(values, width));
+    }
+
+    Ok(PaddedEnsembleWitness {
+        traces,
+        active_rows,
+    })
 }

@@ -196,14 +196,16 @@ private def airToRust (name : String) (ensemble : Ensemble F PublicIO) : String 
   let verifierCase := lookupCaseToRust 0 "public_values" (some verifierSelector)
     ensemble.verifierOperations.interactions
   let tableCases := String.intercalate "\n" <| ensemble.tables.zipIdx.map fun (component, index) =>
-    lookupCaseToRust (index + 1) "local" none component.rowOperations.interactions
+    lookupCaseToRust (index + 1) "local" (some verifierSelector)
+      component.rowOperations.interactions
   s!"#[derive(Clone, Debug)]\n\
-pub struct {name}Air \{ component: usize, trace_height: usize, num_lookups: usize }\n\
+pub struct {name}Air \{ component: usize, trace_height: usize, active_rows: usize, num_lookups: usize }\n\
 \n\
 impl {name}Air \{\n\
-    pub fn all(trace_heights: &[usize]) -> Vec<Self> \{\n\
+    pub fn all(trace_heights: &[usize], active_rows: &[usize]) -> Vec<Self> \{\n\
         assert_eq!(trace_heights.len(), {ensemble.tables.length + 1});\n\
-        trace_heights.iter().copied().enumerate().map(|(component, trace_height)| Self \{ component, trace_height, num_lookups: 0 }).collect()\n\
+        assert_eq!(active_rows.len(), {ensemble.tables.length + 1});\n\
+        trace_heights.iter().copied().zip(active_rows.iter().copied()).enumerate().map(|(component, (trace_height, active_rows))| Self \{ component, trace_height, active_rows, num_lookups: 0 }).collect()\n\
     }\n\
 }\n\
 \n\
@@ -211,9 +213,8 @@ impl<F: Field> BaseAir<F> for {name}Air \{\n\
     fn width(&self) -> usize \{ [{commaSep widths}][self.component] }\n\
 \n\
     fn preprocessed_trace(&self) -> Option<RowMajorMatrix<F>> \{\n\
-        if self.component != 0 \{ return None; }\n\
         let mut selector = vec![F::ZERO; self.trace_height];\n\
-        selector[0] = F::ONE;\n\
+        selector[..self.active_rows].fill(F::ONE);\n\
         Some(RowMajorMatrix::new(selector, 1))\n\
     }\n\
 }\n\
@@ -224,19 +225,22 @@ where AB::F: Field + PrimeCharacteristicRing\n\
     fn eval(&self, builder: &mut AB) \{\n\
         let main = builder.main();\n\
         let local = main.row_slice(0).expect(\"empty trace\");\n\
+        let preprocessed = builder.preprocessed();\n\
+        let preprocessed_local = preprocessed.as_ref().and_then(|matrix| matrix.row_slice(0)).expect(\"missing active-row selector\");\n\
+        let active = Into::<AB::Expr>::into(preprocessed_local[0].clone());\n\
         let constraints: Vec<AB::Expr> = match self.component \{\n\
             0 => vec![],\n\
 {constraintCases}\n\
             _ => unreachable!(\"invalid generated AIR component\"),\n\
         };\n\
-        for constraint in constraints \{ builder.assert_zero(constraint); }\n\
+        for constraint in constraints \{ builder.assert_zero(active.clone() * constraint); }\n\
     }\n\
 \n\
     fn get_lookups(&mut self) -> Vec<Lookup<AB::F>>\n\
     where AB: PermutationAirBuilder + AirBuilderWithPublicValues\n\
     \{\n\
         self.num_lookups = 0;\n\
-        let preprocessed_width = usize::from(self.component == 0);\n\
+        let preprocessed_width = 1;\n\
         let symbolic = SymbolicAirBuilder::<AB::F>::new(preprocessed_width, BaseAir::<AB::F>::width(self), {size PublicIO}, 0, 0);\n\
         let main = AirBuilder::main(&symbolic);\n\
         let local = main.row_slice(0).expect(\"empty symbolic trace\");\n\
