@@ -148,6 +148,117 @@ private def interactionToRust (row : String) (interaction : AbstractInteraction 
 private def interactionsToRust (row : String) (interactions : List (AbstractInteraction F)) : String :=
   s!"vec![{commaSep (interactions.map (interactionToRust row))}]"
 
+private partial def airExprToRust (cells : String) : Expression F → String
+  | .var v => s!"Into::<AB::Expr>::into({cells}[{v.index}].clone())"
+  | .const value =>
+      s!"Into::<AB::Expr>::into(AB::F::from_u64({FiniteField.val value}u64))"
+  | .add left right =>
+      s!"({airExprToRust cells left} + {airExprToRust cells right})"
+  | .mul left right =>
+      s!"({airExprToRust cells left} * {airExprToRust cells right})"
+
+private partial def symbolicExprToRust (cells : String) : Expression F → String
+  | .var v => s!"SymbolicExpression::<AB::F>::from({cells}[{v.index}])"
+  | .const value =>
+      s!"SymbolicExpression::<AB::F>::from(AB::F::from_u64({FiniteField.val value}u64))"
+  | .add left right =>
+      s!"({symbolicExprToRust cells left} + {symbolicExprToRust cells right})"
+  | .mul left right =>
+      s!"({symbolicExprToRust cells left} * {symbolicExprToRust cells right})"
+
+private def constraintCaseToRust (index : ℕ) (component : Component F) : String :=
+  let constraints := component.rowOperations.constraints.map (airExprToRust "local")
+  s!"            {index + 1} => vec![{commaSep constraints}],"
+
+private def lookupToRust (cells : String) (selector : Option String)
+    (interaction : AbstractInteraction F) : String :=
+  let message := commaSep <| interaction.msg.toList.map (symbolicExprToRust cells)
+  let multiplicity := match selector with
+    | none => symbolicExprToRust cells interaction.mult
+    | some selector => s!"({symbolicExprToRust cells interaction.mult} * {selector})"
+  let (multiplicity, direction) := if interaction.assumeGuarantees then
+    (s!"-({multiplicity})", "LookupDirection::Receive")
+  else
+    (multiplicity, "LookupDirection::Send")
+  s!"        lookups.push(Air::<AB>::register_lookup(self, Kind::Global({quoted interaction.channel.name}.into()), &[(vec![{message}], {multiplicity}, {direction})]));"
+
+private def lookupCaseToRust (index : ℕ) (cells : String) (selector : Option String)
+    (interactions : List (AbstractInteraction F)) : String :=
+  let lookups := String.intercalate "\n" <| interactions.map (lookupToRust cells selector)
+  s!"            {index} => \{\n{lookups}\n            }"
+
+private def airToRust (name : String) (ensemble : Ensemble F PublicIO) : String :=
+  let widths := "1" :: ensemble.tables.map (toString ·.width)
+  let constraintCases := String.intercalate "\n" <|
+    ensemble.tables.zipIdx.map fun (component, index) => constraintCaseToRust index component
+  let verifierSelector :=
+    "SymbolicExpression::<AB::F>::from(preprocessed_local.as_ref().expect(\"missing verifier selector\")[0])"
+  let verifierCase := lookupCaseToRust 0 "public_values" (some verifierSelector)
+    ensemble.verifierOperations.interactions
+  let tableCases := String.intercalate "\n" <| ensemble.tables.zipIdx.map fun (component, index) =>
+    lookupCaseToRust (index + 1) "local" none component.rowOperations.interactions
+  s!"#[derive(Clone, Debug)]\n\
+pub struct {name}Air \{ component: usize, trace_height: usize, num_lookups: usize }\n\
+\n\
+impl {name}Air \{\n\
+    pub fn all(trace_heights: &[usize]) -> Vec<Self> \{\n\
+        assert_eq!(trace_heights.len(), {ensemble.tables.length + 1});\n\
+        trace_heights.iter().copied().enumerate().map(|(component, trace_height)| Self \{ component, trace_height, num_lookups: 0 }).collect()\n\
+    }\n\
+}\n\
+\n\
+impl<F: Field> BaseAir<F> for {name}Air \{\n\
+    fn width(&self) -> usize \{ [{commaSep widths}][self.component] }\n\
+\n\
+    fn preprocessed_trace(&self) -> Option<RowMajorMatrix<F>> \{\n\
+        if self.component != 0 \{ return None; }\n\
+        let mut selector = vec![F::ZERO; self.trace_height];\n\
+        selector[0] = F::ONE;\n\
+        Some(RowMajorMatrix::new(selector, 1))\n\
+    }\n\
+}\n\
+\n\
+impl<AB: AirBuilderWithPublicValues> Air<AB> for {name}Air\n\
+where AB::F: Field + PrimeCharacteristicRing\n\
+\{\n\
+    fn eval(&self, builder: &mut AB) \{\n\
+        let main = builder.main();\n\
+        let local = main.row_slice(0).expect(\"empty trace\");\n\
+        let constraints: Vec<AB::Expr> = match self.component \{\n\
+            0 => vec![],\n\
+{constraintCases}\n\
+            _ => unreachable!(\"invalid generated AIR component\"),\n\
+        };\n\
+        for constraint in constraints \{ builder.assert_zero(constraint); }\n\
+    }\n\
+\n\
+    fn get_lookups(&mut self) -> Vec<Lookup<AB::F>>\n\
+    where AB: PermutationAirBuilder + AirBuilderWithPublicValues\n\
+    \{\n\
+        self.num_lookups = 0;\n\
+        let preprocessed_width = usize::from(self.component == 0);\n\
+        let symbolic = SymbolicAirBuilder::<AB::F>::new(preprocessed_width, BaseAir::<AB::F>::width(self), {size PublicIO}, 0, 0);\n\
+        let main = AirBuilder::main(&symbolic);\n\
+        let local = main.row_slice(0).expect(\"empty symbolic trace\");\n\
+        let preprocessed = AirBuilder::preprocessed(&symbolic);\n\
+        let preprocessed_local = preprocessed.as_ref().and_then(|matrix| matrix.row_slice(0));\n\
+        let public_values = AirBuilderWithPublicValues::public_values(&symbolic);\n\
+        let mut lookups = Vec::new();\n\
+        match self.component \{\n\
+{verifierCase},\n\
+{tableCases}\n\
+            _ => unreachable!(\"invalid generated AIR component\"),\n\
+        }\n\
+        lookups\n\
+    }\n\
+\n\
+    fn add_lookup_columns(&mut self) -> Vec<usize> \{\n\
+        let index = self.num_lookups;\n\
+        self.num_lookups += 1;\n\
+        vec![index]\n\
+    }\n\
+}"
+
 private def componentToRust (index : ℕ) (component : Component F) : Except String String := do
   let operations := component.rowOperations
   let flat := operations.toFlat
@@ -185,6 +296,12 @@ private def modeToRust : Mode F → String
 
 private def prelude : String := "// Generated by Clean from structured witness IR. Do not edit.\n\
 use clean_backend::witness_generation::{Aggregation, DemandMode, Direction, EnsembleWitness, FixedSlot, InputCell, Interaction, Mode, Program, WitnessField};\n\
+use p3_air::lookup::{Direction as LookupDirection, Kind, Lookup};\n\
+use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PermutationAirBuilder};\n\
+use p3_field::{Field, PrimeCharacteristicRing};\n\
+use p3_matrix::dense::RowMajorMatrix;\n\
+use p3_matrix::Matrix;\n\
+use p3_uni_stark::{SymbolicAirBuilder, SymbolicExpression};\n\
 use alloc::{format, vec, vec::Vec};\n\
 use alloc::string::String;\n\
 \n\
@@ -201,6 +318,8 @@ def ensembleToRust (name : String) (ensemble : Ensemble F PublicIO) (config : Co
   let components ← ensemble.tables.zipIdx.mapM fun (component, index) =>
     componentToRust index component
   let verifier := interactionsToRust "public_input" ensemble.verifierOperations.interactions
+  let air := airToRust name ensemble
+  let components := components ++ [air]
   let modes := commaSep (config.modes.map modeToRust)
   let completeCases := String.intercalate "\n" <| ensemble.tables.zipIdx.map fun (_, index) =>
     s!"            {index} => component_{index}(input),"
