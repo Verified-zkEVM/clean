@@ -46,10 +46,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
         (by try omega) fun h_agrees => by
           simp only [circuit_norm]
-          (try and_intros) <;>
-            first
-              | grind
-              | exact congrArg (fun s : Round.Inputs (F p) => s.message) h
+          grind
     · have eR : ∀ v, (Round.circuit (p:=p)).localLength v = 768 :=
         fun _ => by simp only [circuit_norm, Round.circuit]
       have eP : ∀ v, (Permute.circuit (p:=p)).localLength v = 0 :=
@@ -64,10 +61,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
             (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eR]; omega)),
             FormalCircuit.output_of_input_eq (Permute.circuit (p:=p))
             (n := n + (Round.circuit (p:=p)).localLength input)
-            (by first
-              | exact congrArg (fun s : Round.Inputs (F p) => s.message) h
-              | (simp only [circuit_norm]
-                 exact congrArg (fun s : Round.Inputs (F p) => s.message) h))
+            (by exact congrArg (fun s : Round.Inputs (F p) => s.message) h)
             (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eR, eP]; omega))⟩
   elaborated := by elaborate_circuit_with {
     output input offset := output input offset
@@ -573,6 +567,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
 -- Unfortunately @[simps! (config := {isSimp := false, attrs := [`circuit_norm]})] timeouts.
 -- Therefore I had to add simplification rules `circuit_assumptions_is` and `circuit_spec_is` manually.
+omit p_large_enough in
 private lemma initState_eval_congr {env env' : ProverEnvironment (F p)}
     {chaining_value : Vector (U32 (Expression (F p))) 8}
     {counter_high counter_low block_len flags : U32 (Expression (F p))}
@@ -637,13 +632,12 @@ def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
     intro n input env env'
     obtain ⟨chaining_value, block_words, counter_high, counter_low, block_len, flags⟩ := input
     have e7 : ∀ v, (sevenRoundsApplyStyle (p:=p)).localLength v = 5376 := fun _ => rfl
-    simp only [circuit_norm, main, initializeStateVector, e7]
+    simp only [circuit_norm, main, initializeStateVector]
     refine ⟨fun h => ?_, fun h h_agrees => ?_⟩
     · exact FormalCircuit.toSubcircuit_computableWitnesses _
         (by simp only [circuit_norm]; exact ⟨initState_eval_congr h.1 h.2.2.1 h.2.2.2.1 h.2.2.2.2.1 h.2.2.2.2.2, h.2.1⟩)
     · simp only [circuit_norm]
-      (try and_intros) <;>
-        first
+      first
           | grind
           | exact FormalCircuit.output_of_input_eq _
               (by simp only [circuit_norm]; exact ⟨initState_eval_congr h.1 h.2.2.1 h.2.2.2.1 h.2.2.2.2.1 h.2.2.2.2.2, h.2.1⟩)

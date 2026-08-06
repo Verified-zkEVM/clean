@@ -218,6 +218,7 @@ private lemma finFoldl_eq_varSchedule_48 (i₀ : ℕ) (input_var_block : SHA256B
     change (scheduleStep _ ⟨k, hk''⟩).output (i₀ + k * 227) = _
     rw [scheduleStep_output]
 
+omit [Fact (p > 2 ^ 33)] in
 /-- Env-agreement transfers to a fresh `varFromOffset` window that lies below the bound. -/
 private lemma varFromOffset_eval_congr {env env' : Environment (F p)} {k n : ℕ}
     (h : ∀ i < n, env.get i = env'.get i) (hk : k + 32 ≤ n) :
@@ -228,6 +229,7 @@ private lemma varFromOffset_eval_congr {env env' : Environment (F p)} {k n : ℕ
   simp only [Vector.getElem_mapRange]
   exact h (k + i) (by first | omega | (simp only [circuit_norm] at hi hk ⊢; omega))
 
+omit [Fact (p > 2 ^ 33)] in
 /-- Env-agreement below `i₀ + k * 227` transfers to the whole variable-level schedule
 after `k` steps: initial entries evaluate through the input block, expanded entries are
 `varFromOffset` windows that lie below the bound. -/
@@ -248,7 +250,7 @@ private lemma varSchedule_eval_congr {env env' : ProverEnvironment (F p)}
     simp only [Vector.getElem_map, Vector.getElem_append]
     split_ifs with hj16
     · have hc := congrArg
-        (fun v => v[j]'(by first | omega | (simp only [circuit_norm] at hj16 ⊢; omega))) h
+        (fun v => v[j]'(by omega)) h
       simp only [Vector.getElem_map] at hc
       exact hc
     · simp only [Vector.getElem_replicate, circuit_norm, Vector.map_replicate]
@@ -268,7 +270,7 @@ private lemma varSchedule_eval_congr {env env' : ProverEnvironment (F p)}
     · -- both sides carry the same (env-independent) `set` term, so one rewrite hits both
       rw [Vector.getElem_set_ne (by omega) (by omega) (by omega)]
       have hc := congrArg
-        (fun v => v[j]'(by first | omega | (simp only [circuit_norm]; omega))) hprev
+        (fun v => v[j]'(by omega)) hprev
       simp only [Vector.getElem_map] at hc
       exact hc
 

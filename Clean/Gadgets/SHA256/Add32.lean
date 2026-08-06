@@ -84,7 +84,7 @@ theorem Inputs.eval_mk {F : Type} [FiniteField F] (env : Environment F)
     (a b : fields 32 (Expression F)) :
     eval env ({ a := a, b := b } : Inputs (Expression F)) =
       { a := Vector.map (Expression.eval env) a, b := Vector.map (Expression.eval env) b } := by
-  simp only [circuit_norm, eval_vector]
+  simp only [circuit_norm]
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
   add32 input.a input.b

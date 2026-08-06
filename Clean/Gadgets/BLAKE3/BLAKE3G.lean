@@ -124,6 +124,7 @@ theorem completeness (a b c d : Fin 16) : Completeness (F p) (main a b c d) Assu
   -- resolve all chains of assumptions
   simp_all only [forall_const, and_true]
 
+omit p_large_enough in
 lemma state_elem_congr {env env' : ProverEnvironment (F p)}
     {state : BLAKE3State (Expression (F p))}
     (h1 : eval env.toEnvironment state = eval env'.toEnvironment state) (i : Fin 16) :
@@ -133,11 +134,11 @@ lemma state_elem_congr {env env' : ProverEnvironment (F p)}
       (getElem_eval_vector env'.toEnvironment state i.val i.isLt).symm)
 
 private lemma node1_out_congr {env env' : ProverEnvironment (F p)}
-    {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))}
+    {_a b _c _d : Fin 16} {state : BLAKE3State (Expression (F p))}
     {x y : U32 (Expression (F p))} {n : ℕ}
     (h1 : eval env.toEnvironment state = eval env'.toEnvironment state)
     (h2 : (eval env.toEnvironment x : U32 (F p)) = eval env'.toEnvironment x)
-    (h3 : (eval env.toEnvironment y : U32 (F p)) = eval env'.toEnvironment y)
+    (_h3 : (eval env.toEnvironment y : U32 (F p)) = eval env'.toEnvironment y)
     (h_agrees : env.AgreesBelow (n + 8) env') :
     eval env.toEnvironment
         ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n) =
@@ -150,7 +151,7 @@ private lemma node1_out_congr {env env' : ProverEnvironment (F p)}
   exact FormalCircuit.output_of_input_eq _
     (by simp only [circuit_norm]; exact ⟨state_elem_congr h1 b, h2⟩)
     (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eA, eX, eR]; omega)))
+      (by first | omega | (simp only [eA]; omega)))
 
 private lemma node2_out_congr {env env' : ProverEnvironment (F p)}
     {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))}
@@ -167,12 +168,12 @@ private lemma node2_out_congr {env env' : ProverEnvironment (F p)}
   have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
   have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
     fun _ _ => rfl
-  have o1 := node1_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
+  have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h1 h2 h3
     (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
   exact FormalCircuit.output_of_input_eq _
     (by simp only [circuit_norm]; exact ⟨state_elem_congr h1 a, o1⟩)
     (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eA, eX, eR]; omega)))
+      (by first | omega | (simp only [eA]; omega)))
 
 private lemma node3_out_congr {env env' : ProverEnvironment (F p)}
     {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))}
@@ -189,14 +190,14 @@ private lemma node3_out_congr {env env' : ProverEnvironment (F p)}
   have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
   have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
     fun _ _ => rfl
-  have o1 := node1_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
+  have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h1 h2 h3
     (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
   have o2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
     (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
   exact FormalCircuit.output_of_input_eq _
     (by simp only [circuit_norm]; exact ⟨state_elem_congr h1 d, o2⟩)
     (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eA, eX, eR]; omega)))
+      (by first | omega | (simp only [eX]; omega)))
 
 private lemma node4_out_congr {env env' : ProverEnvironment (F p)}
     {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))}
@@ -213,7 +214,7 @@ private lemma node4_out_congr {env env' : ProverEnvironment (F p)}
   have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
   have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
     fun _ _ => rfl
-  have o1 := node1_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
+  have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h1 h2 h3
     (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
   have o2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
     (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
@@ -222,7 +223,7 @@ private lemma node4_out_congr {env env' : ProverEnvironment (F p)}
   exact FormalCircuit.output_of_input_eq _
     o3
     (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eA, eX, eR]; omega)))
+      (by first | omega | (simp only [eR]; omega)))
 
 private lemma node5_out_congr {env env' : ProverEnvironment (F p)}
     {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))}
@@ -239,7 +240,7 @@ private lemma node5_out_congr {env env' : ProverEnvironment (F p)}
   have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
   have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
     fun _ _ => rfl
-  have o1 := node1_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
+  have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h1 h2 h3
     (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
   have o2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
     (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
@@ -250,7 +251,7 @@ private lemma node5_out_congr {env env' : ProverEnvironment (F p)}
   exact FormalCircuit.output_of_input_eq _
     (by simp only [circuit_norm]; exact ⟨state_elem_congr h1 c, o4⟩)
     (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eA, eX, eR]; omega)))
+      (by first | omega | (simp only [eA]; omega)))
 
 private lemma node6_out_congr {env env' : ProverEnvironment (F p)}
     {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))}
@@ -267,7 +268,7 @@ private lemma node6_out_congr {env env' : ProverEnvironment (F p)}
   have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
   have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
     fun _ _ => rfl
-  have o1 := node1_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
+  have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h1 h2 h3
     (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
   have o2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
     (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
@@ -280,7 +281,7 @@ private lemma node6_out_congr {env env' : ProverEnvironment (F p)}
   exact FormalCircuit.output_of_input_eq _
     (by simp only [circuit_norm]; exact ⟨state_elem_congr h1 b, o5⟩)
     (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eA, eX, eR]; omega)))
+      (by first | omega | (simp only [eX]; omega)))
 
 private lemma node7_out_congr {env env' : ProverEnvironment (F p)}
     {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))}
@@ -297,7 +298,7 @@ private lemma node7_out_congr {env env' : ProverEnvironment (F p)}
   have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
   have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
     fun _ _ => rfl
-  have o1 := node1_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
+  have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h1 h2 h3
     (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
   have o2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
     (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
@@ -312,7 +313,7 @@ private lemma node7_out_congr {env env' : ProverEnvironment (F p)}
   exact FormalCircuit.output_of_input_eq _
     o6
     (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eA, eX, eR]; omega)))
+      (by first | omega | (simp only [eR]; omega)))
 
 private lemma node8_out_congr {env env' : ProverEnvironment (F p)}
     {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))}
@@ -329,7 +330,7 @@ private lemma node8_out_congr {env env' : ProverEnvironment (F p)}
   have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
   have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
     fun _ _ => rfl
-  have o1 := node1_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
+  have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h1 h2 h3
     (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
   have o2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
     (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
@@ -346,7 +347,7 @@ private lemma node8_out_congr {env env' : ProverEnvironment (F p)}
   exact FormalCircuit.output_of_input_eq _
     (by simp only [circuit_norm]; exact ⟨o7, h3⟩)
     (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eA, eX, eR]; omega)))
+      (by first | omega | (simp only [eA]; omega)))
 
 private lemma node9_out_congr {env env' : ProverEnvironment (F p)}
     {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))}
@@ -363,7 +364,7 @@ private lemma node9_out_congr {env env' : ProverEnvironment (F p)}
   have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
   have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
     fun _ _ => rfl
-  have o1 := node1_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
+  have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h1 h2 h3
     (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
   have o2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
     (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
@@ -382,7 +383,7 @@ private lemma node9_out_congr {env env' : ProverEnvironment (F p)}
   exact FormalCircuit.output_of_input_eq _
     (by simp only [circuit_norm]; exact ⟨o2, o8⟩)
     (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eA, eX, eR]; omega)))
+      (by first | omega | (simp only [eA]; omega)))
 
 private lemma node10_out_congr {env env' : ProverEnvironment (F p)}
     {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))}
@@ -399,7 +400,7 @@ private lemma node10_out_congr {env env' : ProverEnvironment (F p)}
   have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
   have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
     fun _ _ => rfl
-  have o1 := node1_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
+  have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h1 h2 h3
     (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
   have o2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
     (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
@@ -420,7 +421,7 @@ private lemma node10_out_congr {env env' : ProverEnvironment (F p)}
   exact FormalCircuit.output_of_input_eq _
     (by simp only [circuit_norm]; exact ⟨o4, o9⟩)
     (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eA, eX, eR]; omega)))
+      (by first | omega | (simp only [eX]; omega)))
 
 private lemma node11_out_congr {env env' : ProverEnvironment (F p)}
     {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))}
@@ -437,7 +438,7 @@ private lemma node11_out_congr {env env' : ProverEnvironment (F p)}
   have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
   have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
     fun _ _ => rfl
-  have o1 := node1_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
+  have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h1 h2 h3
     (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
   have o2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
     (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
@@ -460,7 +461,7 @@ private lemma node11_out_congr {env env' : ProverEnvironment (F p)}
   exact FormalCircuit.output_of_input_eq _
     o10
     (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eA, eX, eR]; omega)))
+      (by first | omega | (simp only [eR]; omega)))
 
 private lemma node12_out_congr {env env' : ProverEnvironment (F p)}
     {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))}
@@ -477,7 +478,7 @@ private lemma node12_out_congr {env env' : ProverEnvironment (F p)}
   have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
   have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
     fun _ _ => rfl
-  have o1 := node1_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
+  have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h1 h2 h3
     (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
   have o2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
     (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
@@ -502,7 +503,7 @@ private lemma node12_out_congr {env env' : ProverEnvironment (F p)}
   exact FormalCircuit.output_of_input_eq _
     (by simp only [circuit_norm]; exact ⟨o5, o11⟩)
     (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eA, eX, eR]; omega)))
+      (by first | omega | (simp only [eA]; omega)))
 
 private lemma node13_out_congr {env env' : ProverEnvironment (F p)}
     {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))}
@@ -519,7 +520,7 @@ private lemma node13_out_congr {env env' : ProverEnvironment (F p)}
   have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
   have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
     fun _ _ => rfl
-  have o1 := node1_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
+  have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h1 h2 h3
     (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
   have o2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
     (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
@@ -546,7 +547,7 @@ private lemma node13_out_congr {env env' : ProverEnvironment (F p)}
   exact FormalCircuit.output_of_input_eq _
     (by simp only [circuit_norm]; exact ⟨o7, o12⟩)
     (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eA, eX, eR]; omega)))
+      (by first | omega | (simp only [eX]; omega)))
 
 private lemma node14_out_congr {env env' : ProverEnvironment (F p)}
     {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))}
@@ -563,7 +564,7 @@ private lemma node14_out_congr {env env' : ProverEnvironment (F p)}
   have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
   have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
     fun _ _ => rfl
-  have o1 := node1_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
+  have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h1 h2 h3
     (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
   have o2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
     (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
@@ -592,9 +593,10 @@ private lemma node14_out_congr {env env' : ProverEnvironment (F p)}
   exact FormalCircuit.output_of_input_eq _
     o13
     (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eA, eX, eR]; omega)))
+      (by first | omega | (simp only [eR]; omega)))
 
 set_option maxRecDepth 2048 in
+omit p_large_enough in
 /-- Env-agreement transfers to the output state: the four set slots are fresh witness
 windows below the bound, the remaining entries evaluate through the input state. -/
 lemma output_eval_congr {env env' : ProverEnvironment (F p)}
@@ -638,29 +640,27 @@ def circuit (a b c d : Fin 16) : FormalCircuit (F p) Inputs BLAKE3State where
              fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_,
              fun h => ?_, fun h => ?_⟩, fun h h_agrees => ?_⟩
     · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [eA, eX, eR]; try omega)) fun h_agrees => by
+        (by omega) fun h_agrees => by
           simp only [circuit_norm]
           (try and_intros) <;> grind
 
     · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [eA, eX, eR]; try omega)) fun h_agrees => by
-          try have o1 := node1_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h.1 h.2.1 h.2.2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+        (by first | omega | (simp only [eA]; try omega)) fun h_agrees => by
+          try have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h.1 h.2.1 h.2.2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
           simp only [circuit_norm]
           (try and_intros) <;> grind
 
     · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [eA, eX, eR]; try omega)) fun h_agrees => by
+        (by first | omega | (simp only [eA]; try omega)) fun h_agrees => by
           try have o2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h.1 h.2.1 h.2.2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
           simp only [circuit_norm]
           (try and_intros) <;> grind
 
     · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [eA, eX, eR]; try omega)) fun h_agrees => by
+        (by first | omega | (simp only [eA, eX]; try omega)) fun h_agrees => by
           try have o3 := node3_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h.1 h.2.1 h.2.2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
           simp only [circuit_norm]
-          first
-            | exact o3
-            | ((try and_intros) <;> grind)
+          exact o3
 
     · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
         (by first | omega | (simp only [eA, eX, eR]; try omega)) fun h_agrees => by
@@ -678,9 +678,7 @@ def circuit (a b c d : Fin 16) : FormalCircuit (F p) Inputs BLAKE3State where
         (by first | omega | (simp only [eA, eX, eR]; try omega)) fun h_agrees => by
           try have o6 := node6_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h.1 h.2.1 h.2.2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
           simp only [circuit_norm]
-          first
-            | exact o6
-            | ((try and_intros) <;> grind)
+          exact o6
 
     · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
         (by first | omega | (simp only [eA, eX, eR]; try omega)) fun h_agrees => by
@@ -706,9 +704,7 @@ def circuit (a b c d : Fin 16) : FormalCircuit (F p) Inputs BLAKE3State where
         (by first | omega | (simp only [eA, eX, eR]; try omega)) fun h_agrees => by
           try have o10 := node10_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h.1 h.2.1 h.2.2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
           simp only [circuit_norm]
-          first
-            | exact o10
-            | ((try and_intros) <;> grind)
+          exact o10
 
     · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
         (by first | omega | (simp only [eA, eX, eR]; try omega)) fun h_agrees => by
@@ -728,9 +724,7 @@ def circuit (a b c d : Fin 16) : FormalCircuit (F p) Inputs BLAKE3State where
         (by first | omega | (simp only [eA, eX, eR]; try omega)) fun h_agrees => by
           try have o13 := node13_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h.1 h.2.1 h.2.2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
           simp only [circuit_norm]
-          first
-            | exact o13
-            | ((try and_intros) <;> grind)
+          exact o13
 
     · -- output
       exact output_eval_congr (a := a) (b := b) (c := c) (d := d) (n := n) h.1 h_agrees

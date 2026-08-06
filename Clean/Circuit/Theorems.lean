@@ -412,7 +412,7 @@ theorem forAll_mono {c c' : Condition F} {n : ℕ} {ops : Operations F}
   | nil => trivial
   | cons op ops ih =>
     rw [forAll_cons] at h ⊢
-    exact ⟨by cases op <;> simp_all [Condition.apply] <;> solve_by_elim, ih h.2⟩
+    exact ⟨by cases op <;> simp_all [Condition.apply], ih h.2⟩
 
 theorem forAll_implies {c c' : Condition F} (n : ℕ) {ops : Operations F} :
     (forAll n (c.implies c') ops) → (forAll n c ops → forAll n c' ops) := by

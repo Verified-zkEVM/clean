@@ -344,6 +344,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
     exact h_sched_norm i
 
 set_option maxRecDepth 2048 in
+omit [Fact (p > 2 ^ 33)] in
 /-- Env-agreement below `i₀ + k * 455` transfers to the variable-level state after `k`
 rounds, elementwise: initial entries evaluate through the input state, later entries are
 fresh witness windows below the bound. -/
@@ -364,9 +365,7 @@ private lemma stateVar_eval_congr {env env' : ProverEnvironment (F p)}
     have hk' : k ≤ 64 := by omega
     have hag' : ∀ i < i₀ + k * 455, env.get i = env'.get i := fun i hi => hag i (by omega)
     have hprev := ih hk' hag'
-    rcases jj with _|_|_|_|_|_|_|_|jj <;> simp only [stateVar] <;>
-      (try simp only [Vector.getElem_mk, List.getElem_toArray,
-        List.getElem_cons_zero, List.getElem_cons_succ])
+    rcases jj with _|_|_|_|_|_|_|_|jj <;> simp only [stateVar]
     · exact SHA256Round.mapRange_var_eval_congr (fun j => i₀ + k * 455 + 389 + j) hag (fun j hj => by omega)
     · exact hprev 0 (by omega)
     · exact hprev 1 (by omega)
@@ -378,6 +377,7 @@ private lemma stateVar_eval_congr {env env' : ProverEnvironment (F p)}
     · omega
 
 set_option maxRecDepth 2048 in
+omit [Fact (p > 2 ^ 33)] in
 /-- Composite form of `stateVar_eval_congr`, stated without ascriptions so it matches the
 framework's spelling of the accumulator eval; the instance-path defeq is paid once here. -/
 private lemma stateVar_eval_congr_composite {env env' : ProverEnvironment (F p)}
@@ -574,7 +574,7 @@ def circuit : FormalCircuit (F p) Inputs SHA256State := {
       · exact FormalCircuit.output_of_input_eq _ (by exact h.2)
           (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eM]; omega))
     · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by try simp only [eM, eR, eA]; try omega) fun h_agrees => ?_
+        (by try simp only [eM, eA]; try omega) fun h_agrees => ?_
       have oR := FormalCircuit.output_of_input_eq (SHA256Rounds.circuit (p:=p))
         (input_var := ⟨state, (MessageSchedule.circuit (p:=p)).output block n⟩) (n := n + 10896)
         (by simp only [circuit_norm]
@@ -582,7 +582,7 @@ def circuit : FormalCircuit (F p) Inputs SHA256State := {
             · exact h.1
             · exact FormalCircuit.output_of_input_eq _ (by exact h.2)
                 (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eM]; omega)))
-        (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eM, eR]; omega))
+        (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eR]; omega))
       have hb := fun (jj : ℕ) (hjj : jj < 8) => map_eval_getElem_congr oR jj hjj
       have ha := fun (jj : ℕ) (hjj : jj < 8) => map_eval_getElem_congr h.1 jj hjj
       simp only [circuit_norm]

@@ -802,6 +802,7 @@ private lemma decodeInstruction_output_congr {env env' : ProverEnvironment (F p)
     (input_var := raw) (n := n + 4) (by with_unfolding_all exact input_eq) h_agrees
   exact h0
 
+omit p_large_enough in
 /-- Componentwise, raw-spelled form of the fetch-output congruence: the framework states
 composite evals through the generic `Var`-instance path, which is definitionally equal to
 but not syntactically the concrete spelling of the goal atoms (TODO COMPWIT); the expensive
@@ -856,18 +857,18 @@ def femtoCairoStep : GeneralFormalCircuit (F p) State State where
     -- fetch takes the raw input; every later node consumes components of earlier outputs,
     -- so their env-agreement is established up front from the componentwise congruences
     · exact GeneralFormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by try simp only [ef, ed, er, en]; try omega) fun h_agrees => by
+        (by omega) fun h_agrees => by
           simp only [circuit_norm]; grind
     all_goals
       first
         | refine GeneralFormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-            (by try simp only [ef, ed, er, en]; try omega) fun h_agrees => ?_
+            (by try simp only [ef, ed, er]; try omega) fun h_agrees => ?_
         | skip
     all_goals
       have of1 := fetchInstruction_output_congr program h_programSize (pc := input.pc) (n := n)
         (by grind)
         (ProverEnvironment.agreesBelow_of_le h_agrees
-          (by first | omega | (simp only [ef, ed, er, en]; omega)))
+          (by first | omega | (simp only [ef, ed, er]; omega)))
     all_goals
       -- the composite decode-output equality, then normalized by the same simp pass as the
       -- goal so the stuck `ProvableStruct.eval.go` spellings coincide
@@ -876,13 +877,11 @@ def femtoCairoStep : GeneralFormalCircuit (F p) State State where
           (raw := ((fetchInstruction (p:=p) program h_programSize).output input.pc n).rawInstrType)
           (n := n) of1.1
           (ProverEnvironment.agreesBelow_of_le h_agrees
-            (by first | omega | (simp only [ef, ed, er, en]; omega)))
+            (by first | omega | (simp only [ef, ed, er]; omega)))
     all_goals
-      try simp only [circuit_norm, ef, ed, er, en] at of2
+      try simp only [circuit_norm] at of2
     all_goals
-      try simp only [circuit_norm, ef, ed, er, en] at h
-    all_goals
-      simp only [circuit_norm, ef, ed, er, en]
+      simp only [circuit_norm, ef, ed, er]
       (try and_intros) <;>
         first
           | exact h

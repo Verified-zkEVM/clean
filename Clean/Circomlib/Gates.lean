@@ -1019,7 +1019,7 @@ theorem main_computableWitnesses (n : ℕ) :
               omega))
       · -- output: unfold one recursion step so the AND node's output variable is exposed,
         -- and reduce the recursive localLengths so its index is in the agreement range
-        simp only [circuit_norm, main, AND.circuit] at hag ⊢
+        simp only [circuit_norm, AND.circuit] at hag ⊢
         have e1 := localLength_eq ((m + 3) / 2)
           (((input.take ((m + 3) / 2)).cast (by omega) :
             Vector (Expression (F p)) ((m + 3) / 2))) offset

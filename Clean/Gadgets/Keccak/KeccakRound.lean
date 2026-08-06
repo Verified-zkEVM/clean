@@ -104,10 +104,10 @@ def circuit (rc : UInt64) : FormalCircuit (F p) KeccakState KeccakState where
     refine ⟨⟨fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_⟩, fun h h_agrees => ?_⟩
     · exact FormalCircuit.toSubcircuit_computableWitnesses _ (by exact h)
     · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [Nat.add_zero]; try omega))
+        (by omega)
         (FormalCircuit.output_onlyAccessedBelow _ fun _ => h)
     · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [Nat.add_zero]; try omega))
+        (by omega)
         (FormalCircuit.output_onlyAccessedBelow _
           (FormalCircuit.output_onlyAccessedBelow _ fun _ => h))
     · -- the round-constant xor consumes an element of the three-deep output chain

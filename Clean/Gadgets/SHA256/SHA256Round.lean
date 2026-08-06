@@ -205,6 +205,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
   · exact ⟨n_t1, by simp_all⟩
   · rw [h_eval 3 (by omega)]; exact ⟨h_d, n_t1⟩
 
+omit [Fact (p > 2 ^ 33)] in
 /-- Env-agreement transfers to a fresh window of witness variables (own heartbeat budget). -/
 lemma mapRange_var_eval_congr {env env' : ProverEnvironment (F p)} {n : ℕ}
     (f : ℕ → ℕ) (h : ∀ i < n, env.get i = env'.get i) (hf : ∀ i < 32, f i < n) :
@@ -216,6 +217,7 @@ lemma mapRange_var_eval_congr {env env' : ProverEnvironment (F p)} {n : ℕ}
   simp only [Vector.getElem_map, Vector.getElem_mapRange, circuit_norm]
   exact h (f i) (hf i (by omega))
 
+omit [Fact (p > 2 ^ 33)] in
 /-- Env-agreement transfers to the output state vector (own heartbeat budget): fresh witness
 windows lie below the bound, the remaining entries evaluate through the input state. -/
 private lemma output_eval_congr {env env' : ProverEnvironment (F p)}
