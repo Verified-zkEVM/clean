@@ -796,6 +796,20 @@ theorem mem_appendFirstEncounters {α : Type} [DecidableEq α]
           · exact Or.inr htail
       · simp [hrequest, or_assoc, or_left_comm]
 
+private theorem nodup_appendFirstEncounters {α : Type} [DecidableEq α]
+    (initial requests : List α) (hinitial : initial.Nodup) :
+    (appendFirstEncounters initial requests).Nodup := by
+  induction requests generalizing initial with
+  | nil => simpa [appendFirstEncounters] using hinitial
+  | cons request requests inductionHypothesis =>
+      rw [appendFirstEncounters, List.foldl_cons]
+      apply inductionHypothesis
+      by_cases hrequest : request ∈ initial
+      · simpa [hrequest] using hinitial
+      · simp only [hrequest, if_false]
+        exact hinitial.append (by simp : [request].Nodup)
+          (by simpa using hrequest)
+
 def ConfigureDelta.apply (delta : ConfigureDelta F)
     (initial : ConstraintSystem F) (counts : ConfigureCounts) :
     ConstraintSystem F where
@@ -967,6 +981,14 @@ theorem mem_permutationColumns_run_iff
           (program.delta
             (ConfigureCounts.ofConstraintSystem initial)).permutationRequests := by
   simp only [run, delta, ConfigureDelta.apply, mem_appendFirstEncounters]
+
+/-- Configure interpretation preserves the first-encounter invariant of the
+permutation-column list. -/
+theorem permutationColumns_run_nodup
+    (program : Configure F α) (initial : ConstraintSystem F)
+    (hinitial : initial.permutationColumns.Nodup) :
+    (program.run initial).2.permutationColumns.Nodup := by
+  exact nodup_appendFirstEncounters _ _ hinitial
 
 instance : CoeFun (Configure F α)
     (fun _ => ConstraintSystem F → α × ConstraintSystem F) where

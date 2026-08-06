@@ -603,6 +603,44 @@ def permutationColumns
 def permutationColumnCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
   self.permutationColumns.length
 
+/-- The configure interpreter retains each equality-enabled column only at its first
+request. -/
+theorem permutationColumns_nodup
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.permutationColumns.Nodup := by
+  apply Configure.permutationColumns_run_nodup
+  simp
+
+private def flattenColumn
+    (counts : ConfigureCounts) : AnyColumn → ℕ
+  | ⟨.advice, index⟩ => index
+  | ⟨.fixed, index⟩ => counts.numAdviceColumns + index
+  | ⟨.instance, index⟩ =>
+      counts.numAdviceColumns + counts.numFixedColumns + index
+
+private theorem flattenColumn_lt
+    (counts : ConfigureCounts) (column : AnyColumn)
+    (hcolumn : column.Allocated counts) :
+    flattenColumn counts column <
+      counts.numAdviceColumns + counts.numFixedColumns +
+        counts.numInstanceColumns := by
+  rcases column with ⟨kind, index⟩
+  cases kind <;>
+    simp only [AnyColumn.Allocated, flattenColumn] at hcolumn ⊢ <;>
+    omega
+
+private theorem flattenColumn_injective_of_allocated
+    (counts : ConfigureCounts) {left right : AnyColumn}
+    (hleft : left.Allocated counts) (hright : right.Allocated counts)
+    (heq : flattenColumn counts left = flattenColumn counts right) :
+    left = right := by
+  rcases left with ⟨leftKind, leftIndex⟩
+  rcases right with ⟨rightKind, rightIndex⟩
+  cases leftKind <;> cases rightKind <;>
+    simp only [AnyColumn.Allocated, flattenColumn] at hleft hright heq ⊢ <;>
+    try omega
+  all_goals congr 1 <;> omega
+
 /-- The number of chunks in the circuit's permutation argument. -/
 def permutationSetCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
   (self.permutationColumnCount + self.chunkLen - 1) / self.chunkLen
@@ -1008,6 +1046,102 @@ theorem permutationColumn_mem_queryLayout
           program] using hrun
       rw [instanceQueryLayout_eq_constraintSystem]
       exact List.mem_map.mpr ⟨(⟨index⟩, 0), hquery, rfl⟩
+
+/-- Every equality-enabled column was allocated by the same closed configure run. -/
+theorem permutationColumn_allocated
+    (self : TopLevelCircuit F Config PublicInput)
+    {column : AnyColumn} (hcolumn : column ∈ self.permutationColumns) :
+    column.Allocated
+      (ConfigureCounts.ofConstraintSystem self.constraintSystem) := by
+  let program := self.formalCircuit.configure ()
+  let delta := program.delta {}
+  let counts := program.finalCounts {}
+  have hlawful : delta.QueriesLawful counts :=
+    self.formalCircuit.queriesLawful () {} self.queryRequirements
+  have hdelta : column ∈ delta.permutationRequests := by
+    have hrun :=
+      (Configure.mem_permutationColumns_run_iff program {} column).mp
+        (by simpa [permutationColumns, constraintSystem,
+          TopLevelCompilation.constraintSystem, program] using hcolumn)
+    exact hrun.resolve_left (by simp)
+  have hregistered := List.forall_iff_forall_mem.mp
+    hlawful.permutationRequests_registered column hdelta
+  rcases column with ⟨kind, index⟩
+  cases kind with
+  | advice =>
+      have hquery : (⟨index⟩, 0) ∈ delta.adviceQueries := by
+        simpa [ConfigureDelta.RegistersPermutationColumn] using hregistered
+      have hindex := List.forall_iff_forall_mem.mp
+        hlawful.adviceQueries_fst_lt_numAdviceColumns
+        (⟨index⟩, 0) hquery
+      simpa only [AnyColumn.Allocated, constraintSystem,
+        TopLevelCompilation.constraintSystem, ConfigureCounts.ofConstraintSystem,
+        program, counts, Configure.run_numAdviceColumns] using hindex
+  | fixed =>
+      have hquery : (⟨index⟩, 0) ∈ delta.fixedQueries := by
+        simpa [ConfigureDelta.RegistersPermutationColumn] using hregistered
+      have hindex := List.forall_iff_forall_mem.mp
+        hlawful.fixedQueries_fst_lt_numFixedColumns
+        (⟨index⟩, 0) hquery
+      simpa only [AnyColumn.Allocated, constraintSystem,
+        TopLevelCompilation.constraintSystem, ConfigureCounts.ofConstraintSystem,
+        program, counts, Configure.run_numFixedColumns] using hindex
+  | «instance» =>
+      have hquery : (⟨index⟩, 0) ∈ delta.instanceQueries := by
+        simpa [ConfigureDelta.RegistersPermutationColumn] using hregistered
+      have hindex := List.forall_iff_forall_mem.mp
+        hlawful.instanceQueries_fst_lt_numInstanceColumns
+        (⟨index⟩, 0) hquery
+      simpa only [AnyColumn.Allocated, constraintSystem,
+        TopLevelCompilation.constraintSystem, ConfigureCounts.ofConstraintSystem,
+        program, counts, Configure.run_numInstanceColumns] using hindex
+
+/-- The duplicate-free permutation family fits inside the disjoint configured advice,
+fixed, and instance column spaces. -/
+theorem permutationColumnCount_le_configuredColumnCount
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.permutationColumnCount ≤
+      self.constraintSystem.numAdviceColumns +
+        self.constraintSystem.numFixedColumns +
+          self.constraintSystem.numInstanceColumns := by
+  classical
+  let counts := ConfigureCounts.ofConstraintSystem self.constraintSystem
+  let columns := self.permutationColumns.toFinset
+  let indices := columns.image (flattenColumn counts)
+  have hinjective : Set.InjOn (flattenColumn counts) columns := by
+    intro left hleft right hright heq
+    apply flattenColumn_injective_of_allocated counts
+    · apply self.permutationColumn_allocated
+      exact List.mem_toFinset.mp (show left ∈ columns from hleft)
+    · apply self.permutationColumn_allocated
+      exact List.mem_toFinset.mp (show right ∈ columns from hright)
+    · exact heq
+  have hindicesCard : indices.card = columns.card := by
+    exact Finset.card_image_iff.mpr hinjective
+  have hsubset : indices ⊆ Finset.range
+      (counts.numAdviceColumns + counts.numFixedColumns +
+        counts.numInstanceColumns) := by
+    intro index hindex
+    rw [Finset.mem_image] at hindex
+    obtain ⟨column, hcolumn, rfl⟩ := hindex
+    rw [Finset.mem_range]
+    apply flattenColumn_lt
+    apply self.permutationColumn_allocated
+    exact List.mem_toFinset.mp (show column ∈ columns from hcolumn)
+  calc
+    self.permutationColumnCount = columns.card := by
+      exact (List.toFinset_card_of_nodup
+        self.permutationColumns_nodup).symm
+    _ = indices.card := hindicesCard.symm
+    _ ≤ (Finset.range
+        (counts.numAdviceColumns + counts.numFixedColumns +
+          counts.numInstanceColumns)).card :=
+      Finset.card_le_card hsubset
+    _ = self.constraintSystem.numAdviceColumns +
+        self.constraintSystem.numFixedColumns +
+          self.constraintSystem.numInstanceColumns := by
+      simp only [Finset.card_range, counts,
+        ConfigureCounts.ofConstraintSystem]
 
 /-- The number of fixed columns in the circuit-owned pinned constraint system. -/
 def fixedColumnCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
