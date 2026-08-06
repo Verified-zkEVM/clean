@@ -111,35 +111,6 @@ def circuit : FormalCircuit (F p) KeccakState KeccakState where
   -- TODO why does this time out??
   -- completeness
   completeness := by simp only [completeness]
-  computableWitnesses := by
-    intro n input env env'
-    have eK : ∀ (rc : UInt64) v, (KeccakRound.circuit (p:=p) rc).localLength v = 1288 :=
-      fun _ _ => rfl
-    simp only [circuit_norm, main, eK]
-    refine ⟨⟨fun h => ?_, fun i hi h => ?_⟩, fun h h_agrees => ?_⟩
-    · exact FormalCircuit.toSubcircuit_computableWitnesses _ (by exact h)
-    · -- every later round consumes only the previous round's fresh witness windows
-      refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [eK, Nat.add_zero]; try omega)) fun h_agrees => ?_
-      have hout : (KeccakRound.circuit (p:=p) roundConstants[i]).output default (n + i * 1288) =
-          ((Vector.mapRange 25 fun j => varFromOffset U64 (n + i * 1288 + 16 * j + 888)).set 0
-            (varFromOffset U64 (n + i * 1288 + 1280)) (by omega)) := rfl
-      rw [hout]
-      simp only [circuit_norm, eval_vector]
-      refine Vector.ext fun j hj => ?_
-      simp only [Vector.getElem_map, Vector.getElem_set, Vector.getElem_mapRange]
-      split_ifs <;>
-        · simp only [ProvableType.eval_varFromOffset, circuit_norm,
-            Vector.mapRange_succ, Vector.mapRange_zero]
-          grind
-    · -- output: `stateVar` is fresh witness windows only
-      simp only [stateVar]
-      simp only [circuit_norm, eval_vector]
-      refine Vector.ext fun j hj => ?_
-      simp only [Vector.getElem_map, Vector.getElem_set, Vector.getElem_mapRange]
-      split_ifs <;>
-        · simp only [ProvableType.eval_varFromOffset, circuit_norm,
-            Vector.mapRange_succ, Vector.mapRange_zero]
-          grind
+  computableWitnesses := by computable_witnesses [main]
 
 end Gadgets.Keccak256.Permutation

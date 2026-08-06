@@ -98,41 +98,6 @@ def circuit (rc : UInt64) : FormalCircuit (F p) KeccakState KeccakState where
   Assumptions
   soundness := soundness rc
   completeness := completeness rc
-  computableWitnesses := by
-    intro n input env env'
-    simp only [circuit_norm, main]
-    refine ⟨⟨fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_⟩, fun h h_agrees => ?_⟩
-    · exact FormalCircuit.toSubcircuit_computableWitnesses _ (by exact h)
-    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by omega)
-        (FormalCircuit.output_onlyAccessedBelow _ fun _ => h)
-    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by omega)
-        (FormalCircuit.output_onlyAccessedBelow _
-          (FormalCircuit.output_onlyAccessedBelow _ fun _ => h))
-    · -- the round-constant xor consumes an element of the three-deep output chain
-      refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [Nat.add_zero]; try omega)) fun h_agrees => ?_
-      have oT := FormalCircuit.output_of_input_eq (Theta.circuit (p:=p)) (input_var := input)
-        (n := n) h (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-      have oR := FormalCircuit.output_of_input_eq (RhoPi.circuit (p:=p))
-        (n := n + (Theta.circuit (p:=p)).localLength input) oT
-        (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-      have oC := FormalCircuit.output_of_input_eq (Chi.circuit (p:=p))
-        (n := n + (Theta.circuit (p:=p)).localLength input +
-          (RhoPi.circuit (p:=p)).localLength ((Theta.circuit (p:=p)).output input n)) oR
-        (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-      simp only [circuit_norm]
-      exact (getElem_eval_vector env.toEnvironment _ 0 (by omega)).trans
-        ((congrArg (fun s : KeccakState (F p) => s[0]) oC).trans
-          (getElem_eval_vector env'.toEnvironment _ 0 (by omega)).symm)
-    · -- output: fresh `varFromOffset` windows only
-      simp only [circuit_norm, eval_vector]
-      refine Vector.ext fun j hj => ?_
-      simp only [Vector.getElem_map, Vector.getElem_set, Vector.getElem_mapRange]
-      split_ifs <;>
-        · simp only [ProvableType.eval_varFromOffset, circuit_norm,
-            Vector.mapRange_succ, Vector.mapRange_zero]
-          grind
+  computableWitnesses := by computable_witnesses [main]
 
 end Gadgets.Keccak256.KeccakRound

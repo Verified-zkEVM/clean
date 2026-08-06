@@ -190,6 +190,70 @@ name; registering it into any shared set would change normal forms for every oth
 user of that set. -/
 dsimproc_decl reduceLocalLength (_) := reduceLocalLengthCore
 
+/-- Definitional reduction of child-output metadata (`c.output v m` and its
+`ElaboratedCircuit.output c.main v m` spelling) to its explicit form (usually a
+`varFromOffset` window). Unfolds ONLY bundle-typed constants and the metadata
+projections — never `varFromOffset` or witness IR — so the eval simp lemmas keep
+matching. As a dsimproc this also fires on binder-nested occurrences (simp enters
+binders with fvars), including parameterized children like
+`(KeccakRound.circuit roundConstants[i]).main`, which no closed universal fact can
+state. -/
+def reduceOutputMetadataCore : Simp.DSimproc := fun e => do
+  let .const nm _ := e.getAppFn | return .continue
+  unless nm == `FormalCircuitBase.output || nm == `ElaboratedCircuit.output do
+    return .continue
+  let arity := (← getConstInfo nm).type.getForallBinderNames.length
+  unless e.getAppNumArgs == arity do return .continue
+  if e.hasLooseBVars || e.hasMVar then return .continue
+  let bundleHeads : List Name :=
+    [`FormalCircuitBase, `FormalCircuit, `GeneralFormalCircuit,
+     `GeneralFormalCircuit.WithHint, `FormalAssertion, `ElaboratedCircuit]
+  -- unfold bundle-typed constants, the metadata projections, and Var-typed helper
+  -- defs (e.g. `Rotation64.output` as a named elaborated output); iterate because
+  -- helpers only surface after the bundle unfolds
+  let collectUnfolds (t : Expr) : MetaM (Array Name) := do
+    let names ← IO.mkRef (#[] : Array Name)
+    t.forEach fun sub => do
+      let .const c _ := sub | return ()
+      let some ci := (← getEnv).find? c | return ()
+      let body := ci.type.getForallBody
+      let isBundle := bundleHeads.contains body.getAppFn.constName
+      let isVarTyped := body.getAppFn.isConstOf `CircuitType.Var ||
+        (body.isApp && body.getAppFn.isConst &&
+          body.appArg!.getAppFn.isConstOf `Expression)
+      if isBundle || isVarTyped then
+        names.modify (·.push c)
+    return (← names.get)
+  let mut w := e
+  for _ in [0:3] do
+    let mut thms : SimpTheorems := {}
+    for c in (← collectUnfolds w) do
+      thms ← thms.addDeclToUnfold c
+    thms ← thms.addDeclToUnfold `FormalCircuitBase.output
+    thms ← thms.addDeclToUnfold `ElaboratedCircuit.output
+    let ctx ← Simp.mkContext
+      { zeta := true, beta := true, proj := true, iota := true, instances := true }
+      (simpTheorems := #[thms]) (← Meta.getSimpCongrTheorems)
+    let w' := (← Meta.dsimp w ctx).1
+    if w' == w then break
+    w := w'
+  if w == e || w.getAppFn.isConstOf `FormalCircuitBase.output ||
+      w.getAppFn.isConstOf `ElaboratedCircuit.output then
+    return .continue
+  -- accept only metadata-explicit results: a bundle whose `output` falls back to
+  -- `(main v n).1` reduces to a worse spelling than the original — the chainer's
+  -- per-instance facts key on the `output` form
+  let leakedCircuit ← IO.mkRef false
+  w.forEach fun sub => do
+    let .const c _ := sub | return ()
+    let some ci := (← getEnv).find? c | return ()
+    if ci.type.getForallBody.getAppFn.isConstOf `Circuit then
+      leakedCircuit.set true
+  if (← leakedCircuit.get) then return .continue
+  return .visit w
+
+dsimproc_decl reduceOutputMetadata (_) := reduceOutputMetadataCore
+
 /-- Collect fully-applied child-output terms: `c.output v k` and its pre-normalization
 spelling `(subcircuit c v k).1` (definitionally equal, handled by unification). -/
 partial def collectOutputsGo (e : Expr) (seen : IO.Ref (Std.HashSet Expr))
@@ -461,16 +525,14 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
     -- blindly in an alternatives chain.
     let baseClose : TSyntax `tactic ← `(tactic|
       first
-        | assumption
         | (simp_all; done)
         | (simp_all [circuit_norm, computable_witnesses_norm]; done)
         | grind)
     let vecClose : TSyntax `tactic ← `(tactic|
       first
-        | assumption
         | (simp_all; done)
         | (simp_all only [circuit_norm, eval_vector, Vector.map_mk, List.map_toArray,
-             List.map_cons, List.map_nil,
+             List.map_cons, List.map_nil, reduceOutputMetadata,
              Vector.mk.injEq, Array.mk.injEq, List.cons.injEq, and_true,
              Vector.map_ofFn, Vector.ext_iff, Vector.getElem_ofFn, Function.comp_def,
              Vector.getElem_map, Vector.getElem_append,
@@ -532,24 +594,55 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
             body.appArg!.getAppFn.isConstOf `Expression)
         unless isVarTyped do return
         try evalTactic (← `(tactic| unfold $(mkIdent argHead):ident)) catch _ => return
+    -- `grind` internalizes every hypothesis and whnf-normalizes its terms; a
+    -- `localLength`-equation whose LHS is a raw operations list (e.g. Permutation's 24
+    -- rounds) blows the heartbeat budget during that normalization. The equations have
+    -- already done their work (offset discharge, AgreesBelow bounds) by close time.
+    let clearOpsLengthHyps : TacticM Unit := withMainContext do
+      for decl in ← getLCtx do
+        if decl.isImplementationDetail then continue
+        let toxic := (← instantiateMVars decl.type).find? fun e =>
+          e.getAppFn.isConstOf `Operations.localLength
+        if toxic.isSome then
+          try liftMetaTactic fun g => do return [← g.clear decl.fvarId] catch _ => pure ()
+    -- `assumption` isDefEq-matches the goal against every hypothesis; a mismatched
+    -- pair of large vector terms whnf-executes them (heartbeat blowup). Syntactic
+    -- matching is enough here: the chain re-keys facts at the goal's own spelling.
+    let syntacticAssumption : TacticM Unit := withMainContext do
+      let tgt ← instantiateMVars (← getMainTarget)
+      for decl in ← getLCtx do
+        if decl.isImplementationDetail then continue
+        if (← instantiateMVars decl.type) == tgt then
+          (← getMainGoal).assign decl.toExpr
+          replaceMainGoal []
+          return
+      throwError "syntacticAssumption: no match"
     let evalCloseRun : TacticM Unit := do
       if (← getGoals).isEmpty then return
+      try clearOpsLengthHyps catch _ => pure ()
+      if (← try syntacticAssumption; pure true catch _ => pure false) then return
       if ← isEvalCongrEq then
         try unfoldSharedEvalArgHeads catch _ => pure ()
+        dbg_trace "cw# vecClose"
         evalTactic vecClose
+        dbg_trace "cw# vecClose done"
       else
+        dbg_trace "cw# baseClose"
         evalTactic baseClose
+        dbg_trace "cw# baseClose done"
     let leafDispatch : TacticM Unit := withMainContext do
       -- inaccessible hyp names (from intro1P) break the chainer's delab roundtrip
       try evalTactic (← `(tactic| expose_names)) catch _ => pure ()
       -- leaf-local simp (normalizes loop-instantiated lengths), then dispatch
       try
         evalTactic (← `(tactic| simp only [circuit_norm, computable_witnesses_norm,
-          ComputableWitnesses.structEqSplit, reduceLocalLength,
+          ComputableWitnesses.structEqSplit, reduceLocalLength, reduceOutputMetadata,
           $lemmasArray,*] at *))
       catch _ => pure ()
       if (← getGoals).isEmpty then return
+      dbg_trace "cw# pre-assert"
       evalTactic (← `(tactic| assert_local_lengths))
+      dbg_trace "cw# post-assert"
       withMainContext do
         let t := (← instantiateMVars (← getMainTarget)).consumeMData
         let .const headName _ := t.getAppFn | evalCloseRun
@@ -577,8 +670,10 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
               `FormalAssertion.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq] do
             unless applied do
               if ← tryVariant nm then applied := true
+          dbg_trace s!"cw# variant applied={applied}"
           if applied then
             simpPass
+            dbg_trace "cw# post-variant simpPass"
             unless (← getGoals).isEmpty do
               evalTactic (← `(tactic| (try chain_output_facts)))
               unless (← getGoals).isEmpty do
@@ -586,7 +681,9 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
           else
             evalTactic (← `(tactic| grind))
         else
+          dbg_trace "cw# chain (non-CW head)"
           evalTactic (← `(tactic| (try chain_output_facts)))
+          dbg_trace "cw# chained"
           unless (← getGoals).isEmpty do
             evalCloseRun
     let goals ← getGoals
