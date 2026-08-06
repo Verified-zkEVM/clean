@@ -83,14 +83,5 @@ def KeccakBlock.normalized : FormalAssertion (F p) KeccakBlock where
     simp [getElem_eval_vector, KeccakBlock.Normalized]
 
   computableWitnesses := by
-    intro n input env env'
-    refine ⟨?_, ?_⟩
-    · -- each loop body is an ordinary subcircuit: discharge via the general composition lemma
-      simp only [circuit_norm]
-      intro i h_input
-      apply FormalAssertion.toSubcircuit_computableWitnesses
-      -- the loop body's input `input[i]` agrees because the whole input does
-      rw [getElem_eval_vector, getElem_eval_vector, h_input]
-    · grind
-
+    computable_witnesses
 end Gadgets.Keccak256

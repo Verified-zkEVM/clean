@@ -133,22 +133,5 @@ def circuit : FormalCircuit (F p) Inputs BLAKE3State where
   soundness := soundness
   completeness := completeness
   computableWitnesses := by
-    intro n input env env'
-    obtain ⟨state, chaining_value⟩ := input
-    simp only [circuit_norm, main]
-    -- sixteen independent Xor32 nodes; their type-index offsets carry stuck `+ 0`s
-    -- (dependent motive) and the child's constant localLength is tactic-defined, so it
-    -- is exposed by rfl for the offset arithmetic
-    have ex : ∀ x : Var Gadgets.Xor32.Inputs (F p),
-        (Gadgets.Xor32.circuit (p := p)).localLength x = 4 := fun _ => rfl
-    refine ⟨⟨fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_,
-             fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_,
-             fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_⟩, fun h h_agrees => ?_⟩
-    all_goals first
-      | exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-          (by simp only [ex]) fun h_agrees => by simp only [circuit_norm]; grind
-      | -- output: a literal vector of fresh witness windows, elementwise below n + 64
-        (simp only [circuit_norm, eval_vector, Array.mk.injEq, List.cons.injEq, and_true]
-         and_intros <;> exact varFromOffset_eval_congr (p := p) h_agrees.1 (by omega))
-
+    computable_witnesses
 end Gadgets.BLAKE3.FinalStateUpdate
