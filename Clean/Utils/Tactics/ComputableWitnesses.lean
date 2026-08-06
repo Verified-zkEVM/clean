@@ -25,6 +25,23 @@ elab "unfold_formal_circuit_consts" : tactic => do
       catch _ =>
         pure ()
 
+/-- Like `unfold_formal_circuit_consts`, but unfolds only constants whose type lands in
+plain `Circuit` — inner wrapper defs like `add32` — never `FormalCircuit`-variant bundles,
+so child subcircuits stay opaque for the composition machinery. -/
+elab "unfold_plain_circuit_consts" : tactic => do
+  withMainContext do
+    let noUnfold ← labelled `explicit_circuit_no_unfold
+    let unfoldTypes ← labelled `explicit_circuit_unfold_type
+    let names ← collectUnfoldableCircuitDecls (← getMainTarget) #[]
+      (some noUnfold) (some unfoldTypes)
+    for name in names do
+      let some ci := (← getEnv).find? name | continue
+      unless ci.type.getForallBody.getAppFn.isConstOf `Circuit do continue
+      try
+        evalTactic (← `(tactic| unfold $(mkIdent name)))
+      catch _ =>
+        pure ()
+
 namespace ComputableWitnesses
 
 /--
@@ -67,7 +84,7 @@ private def localLengthHeads : List Name :=
 /-- Evaluate a closed ℕ-expression to a literal by whnf plus folding of `+`/`*`
 (the shape `elaborate_circuit` leaves `localLength` metadata in). -/
 private partial def natValOf (e : Expr) : MetaM (Option Nat) := do
-  let e ← try whnf e catch _ => return none
+  let e ← try withDefault <| whnf e catch _ => return none
   if let some k := e.rawNatLit? then return some k
   match_expr e with
   | HAdd.hAdd _ _ _ _ a b => do
@@ -115,6 +132,148 @@ elab "assert_local_lengths" : tactic => withMainContext do
       return [goal]
     i := i + 1
 
+/-- Definitional reduction of concrete `localLength` metadata to numerals. As a
+`dsimproc` the rewrite is a defeq step, so it also applies inside `Subcircuit`'s
+dependent offset positions where propositional rewrites cannot build a motive. -/
+def reduceLocalLengthCore : Simp.DSimproc := fun e => do
+  let .const name _ := e.getAppFn | return .continue
+  unless name == `FormalCircuitBase.localLength ||
+      name == `ElaboratedCircuit.localLength do return .continue
+  if e.hasLooseBVars || e.hasMVar then return .continue
+  let some k ← try natValOf e catch _ => return .continue | return .continue
+  return .visit (mkNatLit k)
+
+/- shape-only pattern: the localLength constants live downstream of this file, so they
+cannot be named in the pattern; the proc bails immediately on other heads -/
+dsimproc reduceLocalLength (_) := reduceLocalLengthCore
+
+/-- Collect fully-applied child-output terms: `c.output v k` and its pre-normalization
+spelling `(subcircuit c v k).1` (definitionally equal, handled by unification). -/
+partial def collectOutputsGo (e : Expr) (seen : IO.Ref (Std.HashSet Expr))
+    (acc : IO.Ref (Array Expr)) : MetaM Unit := do
+  match e with
+  | .app f a => collectOutputsGo f seen acc; collectOutputsGo a seen acc
+  | .lam _ t b _ => collectOutputsGo t seen acc; collectOutputsGo b seen acc
+  | .forallE _ t b _ => collectOutputsGo t seen acc; collectOutputsGo b seen acc
+  | .letE _ t v b _ =>
+      collectOutputsGo t seen acc; collectOutputsGo v seen acc; collectOutputsGo b seen acc
+  | .mdata _ b => collectOutputsGo b seen acc
+  | .proj _ _ b => collectOutputsGo b seen acc
+  | _ => pure ()
+  let .const nm _ := e.getAppFn | return ()
+  let isOutput := nm == `FormalCircuitBase.output ||
+    (nm == `Prod.fst && e.getAppNumArgs ≥ 1 && e.appArg!.getAppFn.isConstOf `subcircuit)
+  if isOutput && !e.hasLooseBVars && !e.hasMVar then
+    unless (← seen.get).contains e do
+      seen.modify (·.insert e)
+      unless (← instantiateMVars (← inferType e)).isForall do
+        acc.modify (·.push e)
+
+/-- Forward-chain child-output equality facts: for each collected output term, build
+`output_of_input_eq` in tactic context — where the definitional dsimprocs can normalize
+the `c.localLength v` bound — and re-key the fact at the goal's own eval spelling
+(the lemma's conclusion uses a different, defeq eval-instance atom; `grind` congruence
+works on syntactic atoms). `grind` cannot run simprocs, so letting it instantiate the
+composition rules would re-create opaque length atoms. -/
+elab "chain_output_facts" : tactic => withMainContext do
+  try evalTactic (← `(tactic| beta_reduce)) catch _ => pure ()
+  let tgt ← instantiateMVars (← getMainTarget)
+  let mut hA? : Option (Name × Expr × Expr) := none
+  for decl in ← getLCtx do
+    if decl.isImplementationDetail then continue
+    let ty ← instantiateMVars decl.type
+    if ty.getAppFn.isConstOf `ProverEnvironment.AgreesBelow then
+      let args := ty.getAppArgs
+      if args.size ≥ 2 then
+        hA? := some (decl.userName, args[args.size - 2]!, args[args.size - 1]!)
+  let some (hAName, envE, envE') := hA? | return
+  let seen ← IO.mkRef ((∅ : Std.HashSet Expr))
+  let acc ← IO.mkRef (#[] : Array Expr)
+  collectOutputsGo tgt seen acc
+  for o in (← acc.get) do
+    let step : TacticM Unit := do
+      let lem ← mkConstWithFreshMVarLevels `FormalCircuit.output_of_input_eq
+      let (ms, _, concl) ← forallMetaTelescope (← inferType lem)
+      let some (_, lhs, rhs) := concl.eq? | throwError "conclusion not an equality"
+      unless ← isDefEq lhs.appArg! o do throwError "output does not unify"
+      discard <| isDefEq lhs.appFn!.appArg!.appArg! envE
+      discard <| isDefEq rhs.appFn!.appArg!.appArg! envE'
+      let mainG ← getMainGoal
+      for m in ms do
+        let mid := m.mvarId!
+        unless ← mid.isAssigned do
+          let mty ← instantiateMVars (← mid.getType)
+          if (← inferType mty).isProp then
+            setGoals [mid]
+            if mty.getAppFn.isConstOf `ProverEnvironment.AgreesBelow then
+              evalTactic (← `(tactic|
+                exact $(mkIdent `ProverEnvironment.agreesBelow_of_le) $(mkIdent hAName)
+                  (by simp only [reduceLocalLength]; omega)))
+            else
+              evalTactic (← `(tactic| first
+                | assumption
+                | (simp only [circuit_norm]; grind)))
+      let proof ← instantiateMVars (mkAppN lem ms)
+      if proof.hasExprMVar then throwError "open premises"
+      -- state the fact with freshly-synthesized (canonical) eval instances: the
+      -- lemma's conclusion carries composite instance spellings, and grind's
+      -- congruence works on syntactic atoms — the goal-side evals (via the
+      -- eval_mk rules) use the canonical synthesis
+      let mut ptype ← instantiateMVars (← inferType proof)
+      let mut proofF := proof
+      -- re-key the fact at the goal's own eval spelling: the lemma's conclusion uses
+      -- a different (defeq) eval-instance atom, and grind's congruence works on
+      -- syntactic atoms; the goal is normalized before chaining, so its component
+      -- evals of the output term are present as subterms
+      let sides ← IO.mkRef (#[] : Array Expr)
+      tgt.forEach fun sub => do
+        if !sub.hasLooseBVars && sub.isApp && sub.appArg! == o then
+          sides.modify fun a => if a.contains sub then a else a.push sub
+      let arr ← sides.get
+      if arr.size == 2 then
+        try
+          let e0 := arr[0]!
+          let e1 := arr[1]!
+          let l := if e0.appFn!.appArg!.appArg! == envE then e0 else e1
+          let r := if l == e0 then e1 else e0
+          let eqTy ← mkEq l r
+          proofF ← mkExpectedTypeHint proof eqTy
+          ptype := eqTy
+        catch _ => pure ()
+      setGoals [mainG]
+      liftMetaTactic fun g => do
+        let g ← g.assert `o_chain ptype proofF
+        let (_, g) ← g.intro1P
+        return [g]
+    let st ← Tactic.saveState
+    try step
+    catch _ => st.restore
+
+/-- Split conjunctions and intro binders down to per-obligation leaves. `apply`/`intro`
+use whnf, so conjunctions hidden behind definitional unfolding (`Operations.forAll` on
+concrete op lists) split as well; child obligations stay intact via the head guard. -/
+private partial def splitStep (g : MVarId) (fuel : Nat) : MetaM (List MVarId) := do
+  if fuel == 0 then return [g]
+  let t := (← instantiateMVars (← g.getType)).consumeMData
+  -- `apply`/`intro` unify up to whnf, which also splits conjunctions reachable only
+  -- by definitional unfolding (`Operations.forAll` over bind-chains). This is safe
+  -- only because `unfold_formal_circuit_consts` ran first: whnf-unifying against a
+  -- still-opaque inner circuit would symbolically execute it (heartbeat/memory
+  -- catastrophe on the bit-decomposed gadgets, and the runtime exception escapes
+  -- `try`). The `Subcircuit.ComputableWitnesses` head guard above keeps child
+  -- obligations intact.
+  match ← observing? (g.apply (mkConst ``And.intro)) with
+  | some gs =>
+    gs.foldlM (init := []) fun acc g' => do
+      return acc ++ (← splitStep g' (fuel - 1))
+  | none =>
+    match ← observing? g.intro1P with
+    | some (_, g') => splitStep g' (fuel - 1)
+    | none => return [g]
+
+private def splitStructure : TacticM Unit :=
+  liftMetaTactic fun g => splitStep g 512
+
 /-- Find a local variable of `ProvableStruct` type (e.g. an opaque circuit input) that can be
 destructured: `simp`/`grind` do not iota-reduce the `match` coming from `main`'s destructuring
 `let` against an opaque variable, so the tactic case-splits such variables up front. -/
@@ -161,77 +320,80 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
       evalTactic (← `(tactic| unfold $(mkIdent `main):ident))
     catch _ =>
       pure ()
+    -- One boundary rule, mirroring the library's own: plain-`Circuit`-typed constants
+    -- are the current circuit's own structure and always unfold; `FormalCircuit`-variant
+    -- bundles are proof boundaries and never do (unfolding them destroys the
+    -- `c.output`/`toSubcircuit` spellings the composition machinery patterns on, and
+    -- leaving a wrapper folded makes And-unification whnf-execute the whole circuit).
+    try evalTactic (← `(tactic| unfold_plain_circuit_consts)) catch _ => pure ()
     simpPass
   unless (← getGoals).isEmpty do
     evalTactic (← `(tactic| intros))
   destructureProvableStructVars
   simpPass
   unless (← getGoals).isEmpty do
-    evalTactic (← `(tactic| assert_local_lengths))
-    -- Per-obligation closing ladder. The alternatives cover, in order: plain closes;
-    -- subcircuit obligations via the offset-bridging composition rule (with child-output
-    -- inputs assembled by `grind` from the tagged composition rules and `eval_mk` lemmas,
-    -- elementwise vector reasoning as fallback); direct output-composition goals; and
-    -- output metadata spelled as `varFromOffset` witness windows.
-    let ofsEqId : Ident := mkIdent
-      `FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq
-    let outEqId : Ident := mkIdent `FormalCircuit.output_of_input_eq
-    let agLeId : Ident := mkIdent `ProverEnvironment.agreesBelow_of_le
-    let gevId : Ident := mkIdent `getElem_eval_vector
-    let evId : Ident := mkIdent `eval_vector
-    let evfoId : Ident := mkIdent `ProvableType.eval_varFromOffset
-    let ladder ← `(tactic|
+    -- deterministic split to leaves
+    splitStructure
+    -- per-leaf: cheap normalization + head dispatch
+    let evalClose : TSyntax `tactic ← `(tactic|
       first
-        | (simp_all; done)
-        | grind
-        | (intros
-           refine $ofsEqId _
-             (by first | rfl | omega | (assert_local_lengths; omega)) fun h_agrees => ?_
-           simp_all only [circuit_norm, $lemmasArray,*]
-           first
-             | grind
-             | (refine Vector.ext fun j hj => ?_
-                simp only [$gevId:ident, Vector.getElem_map, Vector.getElem_append,
-                  Vector.getElem_mapFinRange, Vector.getElem_ofFn]
-                (try split_ifs) <;> grind [Vector.getElem_map, $gevId:ident])
-             | grind [Vector.getElem_append, Vector.getElem_mapFinRange, Vector.getElem_map,
-                 $gevId:ident]
-             | refine $outEqId _ (by assumption)
-                 ($agLeId (by assumption)
-                   (by first | omega | (assert_local_lengths; omega))))
-        | (intros
-           refine $outEqId _ (by assumption) ?_
-           first
-             | assumption
-             | exact $agLeId (by assumption)
-                 (by first | omega | (assert_local_lengths; omega)))
-        | (intros
-           simp_all only [circuit_norm, $evId:ident, Vector.map_mk, List.map_toArray,
-             List.map_cons, List.map_nil, $evfoId:ident, Vector.mapRange_succ,
+        | assumption
+        | (congr 1 <;> first | assumption | grind)
+        | (simp_all only [circuit_norm, eval_vector, Vector.map_mk, List.map_toArray,
+             List.map_cons, List.map_nil, ProvableType.eval_varFromOffset, Vector.mapRange_succ,
              Vector.mapRange_zero, Vector.mk.injEq, Array.mk.injEq, List.cons.injEq, and_true,
              Vector.map_ofFn, Vector.ext_iff, Vector.getElem_ofFn, Function.comp_def,
              $lemmasArray,*]
-           (try and_intros) <;> grind))
-    withMainContext do
-      -- syntactic head check: `whnf` on post-simp targets can blow the heartbeat budget
-      -- (the And is exposed by the simp pass whenever it is going to be)
-      let target := (← instantiateMVars (← getMainTarget)).consumeMData
-      let closeTwo ← `(tacticSeq|
-        refine ⟨?_, ?_⟩
-        · intros
-          (try and_intros) <;> $ladder:tactic
-        · $ladder:tactic)
-      if target.isAppOfArity ``And 2 then
-        evalTacticSeq closeTwo
-      else
-        -- the ops/output conjunction can hide behind a definitionally-unfolding head;
-        -- try the two-branch split first, fall back to the single ladder
-        let s ← Tactic.saveState
-        try
-          evalTacticSeq closeTwo
-        catch _ =>
-          s.restore
-          evalTactic ladder
+           (try and_intros) <;> grind)
+        | (refine Vector.ext fun j hj => ?_
+           simp only [getElem_eval_vector, Vector.getElem_map, Vector.getElem_append,
+             Vector.getElem_mapFinRange, Vector.getElem_ofFn, Vector.getElem_mapIdx]
+           (try split_ifs) <;> grind [Vector.getElem_map, getElem_eval_vector])
+        | grind)
+    let leafDispatch : TacticM Unit := withMainContext do
+      -- inaccessible hyp names (from intro1P) break the chainer's delab roundtrip
+      try evalTactic (← `(tactic| expose_names)) catch _ => pure ()
+      -- leaf-local simp (normalizes loop-instantiated lengths), then dispatch
+      try
+        evalTactic (← `(tactic| simp only [circuit_norm, computable_witnesses_norm,
+          ComputableWitnesses.structEqSplit, reduceLocalLength,
+          $lemmasArray,*] at *))
+      catch _ => pure ()
+      if (← getGoals).isEmpty then return
+      evalTactic (← `(tactic| assert_local_lengths))
+      withMainContext do
+        let t := (← instantiateMVars (← getMainTarget)).consumeMData
+        let .const headName _ := t.getAppFn | evalTactic evalClose
+        if headName == `Subcircuit.ComputableWitnesses then
+          let tryVariant (nm : Name) : TacticM Bool := do
+            let st ← Tactic.saveState
+            try
+              evalTactic (← `(tactic| refine $(mkIdent nm) _ fun h_agrees => ?_))
+              pure true
+            catch _ =>
+              st.restore
+              pure false
+          let mut applied := false
+          for nm in [`FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow,
+              `GeneralFormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow,
+              `FormalAssertion.toSubcircuit_computableWitnesses_onlyAccessedBelow] do
+            unless applied do
+              if ← tryVariant nm then applied := true
+          if applied then
+            simpPass
+            evalTactic (← `(tactic| (try chain_output_facts)))
+            evalTactic evalClose
+          else
+            evalTactic (← `(tactic| grind))
+        else
+          evalTactic (← `(tactic| ((try chain_output_facts); $evalClose:tactic)))
+    let goals ← getGoals
+    for g in goals do
+      setGoals [g]
+      try leafDispatch
+      catch e =>
+        throw e
+    setGoals []
 
 /--
 Prove the standard computable-witness obligation using a controlled normalization pass,
