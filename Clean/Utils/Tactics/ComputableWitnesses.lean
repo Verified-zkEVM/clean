@@ -241,17 +241,20 @@ def reduceOutputMetadataCore : Simp.DSimproc := fun e => do
       if isBundle || isVarTyped then
         names.modify (·.push c)
     return (← names.get)
+  -- reduce WITHOUT `addDeclToUnfold`: unfolding via simp generates the constant's
+  -- equation lemmas in the current module, and two sibling modules generating them
+  -- for the same shared child (e.g. `Xor32.circuit`) collide on import. `deltaExpand`
+  -- rewrites the Expr directly; the theorem-free dsimp then reduces the exposed
+  -- projections and betas.
+  let cfgCtx ← Simp.mkContext
+    { zeta := true, beta := true, proj := true, iota := true, instances := true }
+    (simpTheorems := #[]) (← Meta.getSimpCongrTheorems)
   let mut w := e
-  for _ in [0:3] do
-    let mut thms : SimpTheorems := {}
-    for c in (← collectUnfolds w) do
-      thms ← thms.addDeclToUnfold c
-    thms ← thms.addDeclToUnfold `FormalCircuitBase.output
-    thms ← thms.addDeclToUnfold `ElaboratedCircuit.output
-    let ctx ← Simp.mkContext
-      { zeta := true, beta := true, proj := true, iota := true, instances := true }
-      (simpTheorems := #[thms]) (← Meta.getSimpCongrTheorems)
-    let w' := (← Meta.dsimp w ctx).1
+  for _ in [0:4] do
+    let allowed := (← collectUnfolds w).push `FormalCircuitBase.output
+      |>.push `ElaboratedCircuit.output
+    let expanded ← Meta.deltaExpand w (allowed.contains ·)
+    let w' := (← Meta.dsimp expanded cfgCtx).1
     if w' == w then break
     w := w'
   if w == e || w.getAppFn.isConstOf `FormalCircuitBase.output ||
@@ -340,24 +343,23 @@ elab "chain_output_facts" : tactic => withMainContext do
             -- Unfold ONLY the bundle constant and its projection — full `whnf` would
             -- keep going through `varFromOffset` into an exploded element-literal that
             -- no eval simp lemma matches.
-            let mut thms : SimpTheorems := {}
+            -- environment-clean reduction (no addDeclToUnfold: it generates the
+            -- constant's equation lemmas in this module, colliding on import when a
+            -- sibling module does the same for a shared child bundle)
             let bundleHeads : List Name :=
               [`FormalCircuitBase, `FormalCircuit, `GeneralFormalCircuit,
                `GeneralFormalCircuit.WithHint, `FormalAssertion, `ElaboratedCircuit]
-            let names ← IO.mkRef (#[] : Array Name)
+            let names ← IO.mkRef (#[`FormalCircuitBase.output, `ElaboratedCircuit.output] : Array Name)
             pfx.appArg!.forEach fun sub => do
               let .const c _ := sub | return ()
               let some ci := (← getEnv).find? c | return ()
               if bundleHeads.contains ci.type.getForallBody.getAppFn.constName then
                 names.modify (·.push c)
-            for c in (← names.get) do
-              thms ← thms.addDeclToUnfold c
-            thms ← thms.addDeclToUnfold `FormalCircuitBase.output
-            thms ← thms.addDeclToUnfold `ElaboratedCircuit.output
+            let allowed ← names.get
             let ctx ← Simp.mkContext
               { zeta := true, beta := true, proj := true, iota := true, instances := true }
-              (simpTheorems := #[thms]) (← getSimpCongrTheorems)
-            let w := (← Meta.dsimp app ctx).1
+              (simpTheorems := #[]) (← getSimpCongrTheorems)
+            let w := (← Meta.dsimp (← Meta.deltaExpand app (allowed.contains ·)) ctx).1
             if w == app || w.getAppFn.isConstOf `FormalCircuitBase.output then pure none
             else do
               let eqTy ← mkEq app w
@@ -525,7 +527,8 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
     unless (← getGoals).isEmpty do
       try
         evalTactic (← `(tactic| simp only [circuit_norm, computable_witnesses_norm,
-          ComputableWitnesses.structEqSplit, $lemmasArray,*]))
+          ComputableWitnesses.structEqSplit,
+          $(mkIdent `Circuit.forEach.forAll):term, $lemmasArray,*]))
       catch _ =>
         pure ()
   simpPass
@@ -659,7 +662,8 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
       -- leaf-local simp (normalizes loop-instantiated lengths), then dispatch
       try
         evalTactic (← `(tactic| simp only [circuit_norm, computable_witnesses_norm,
-          ComputableWitnesses.structEqSplit, reduceLocalLength, reduceOutputMetadata,
+          ComputableWitnesses.structEqSplit, $(mkIdent `Circuit.forEach.forAll):term,
+          reduceLocalLength, reduceOutputMetadata,
           $lemmasArray,*] at *))
       catch _ => pure ()
       if (← getGoals).isEmpty then return
