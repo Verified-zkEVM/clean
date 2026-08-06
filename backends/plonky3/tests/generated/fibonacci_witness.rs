@@ -5,6 +5,7 @@ use clean_backend::witness_generation::{
     Aggregation, DemandMode, Direction, EnsembleWitness, FixedSlot, InputCell, Interaction, Mode,
     Program, WitnessField,
 };
+use clean_backend::EnsembleAir;
 use p3_air::lookup::{Direction as LookupDirection, Kind, Lookup};
 use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PermutationAirBuilder};
 use p3_field::{Field, PrimeCharacteristicRing};
@@ -1718,6 +1719,12 @@ impl FibonacciWitnessProgramAir {
                 num_lookups: 0,
             })
             .collect()
+    }
+}
+
+impl EnsembleAir for FibonacciWitnessProgramAir {
+    fn trace_height(&self) -> usize {
+        self.trace_height
     }
 }
 

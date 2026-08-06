@@ -82,3 +82,45 @@ fn extracted_fibonacci_air_proves_and_verifies() {
         verification_started.elapsed()
     );
 }
+
+#[test]
+fn verifier_rejects_a_valid_proof_at_the_wrong_height() {
+    let config = setup::test_config(11);
+    let public_values = vec![field(32), field(5), field(226)];
+    let witness = generated::generate(&public_values)
+        .expect("extracted Rust witness generation failed");
+    let expected = pad::<BabyBear, generated::FibonacciWitnessProgram>(witness.clone(), 32)
+        .expect("failed to pad expected witness");
+    let wrong = pad::<BabyBear, generated::FibonacciWitnessProgram>(witness, 64)
+        .expect("failed to pad wrong-height witness");
+
+    let wrong_heights = wrong.traces.iter().map(Matrix::height).collect::<Vec<_>>();
+    let wrong_airs =
+        generated::FibonacciWitnessProgramAir::all(&wrong_heights, &wrong.active_rows);
+    let (wrong_proof, _) = prove_ensemble(&config, &wrong_airs, wrong.traces, &public_values);
+    verify_ensemble(&config, &wrong_airs, &wrong_proof, &public_values)
+        .expect("the wrong-height proof must be otherwise valid");
+    let altered_public_values = vec![field(32), field(6), field(226)];
+    assert!(verify_ensemble(
+        &config,
+        &wrong_airs,
+        &wrong_proof,
+        &altered_public_values
+    )
+    .is_err());
+
+    let expected_heights = expected
+        .traces
+        .iter()
+        .map(Matrix::height)
+        .collect::<Vec<_>>();
+    let expected_airs =
+        generated::FibonacciWitnessProgramAir::all(&expected_heights, &expected.active_rows);
+    assert!(verify_ensemble(
+        &config,
+        &expected_airs,
+        &wrong_proof,
+        &public_values
+    )
+    .is_err());
+}

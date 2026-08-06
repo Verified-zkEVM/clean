@@ -15,6 +15,11 @@ use p3_util::log2_strict_usize;
 
 use crate::{PcsError, StarkGenericConfig, Val};
 
+/// Static physical trace height expected by the verifier for one generated AIR.
+pub trait EnsembleAir {
+    fn trace_height(&self) -> usize;
+}
+
 #[cfg(debug_assertions)]
 #[doc(hidden)]
 pub trait ProverAir<SC: StarkGenericConfig>:
@@ -106,8 +111,16 @@ where
     SymbolicExpression<SC::Challenge>: From<SymbolicExpression<Val<SC>>>,
     A: Air<SymbolicAirBuilder<Val<SC>, SC::Challenge>>
         + for<'a> Air<VerifierConstraintFolderWithLookups<'a, SC>>
+        + EnsembleAir
         + Clone,
 {
+    let expected_degree_bits = airs
+        .iter()
+        .map(|air| log2_strict_usize(air.trace_height()) + config.is_zk())
+        .collect::<Vec<_>>();
+    if proof.degree_bits != expected_degree_bits {
+        return Err(VerificationError::InvalidProofShape);
+    }
     let mut verifier_airs = airs.to_vec();
     let prover_data =
         ProverData::from_airs_and_degrees(config, &mut verifier_airs, &proof.degree_bits);

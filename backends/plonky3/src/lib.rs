@@ -25,4 +25,4 @@ pub use lookup::*;
 pub use lookup_trace::*;
 pub use prover::prove;
 pub use verifier::verify;
-pub use ensemble_prover::{prove_ensemble, verify_ensemble};
+pub use ensemble_prover::{prove_ensemble, verify_ensemble, EnsembleAir};
