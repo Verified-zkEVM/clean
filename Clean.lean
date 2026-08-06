@@ -25,6 +25,7 @@ import Clean.Examples.FemtoCairo.Plonky3Helpers
 import Clean.Examples.FemtoCairo.Plonky3TestData
 import Clean.Examples.FemtoCairo.Plonky3MemoryTestData
 import Clean.Air.WitnessGeneration
+import Clean.Air.WitnessExport
 import Clean.Tables.Fibonacci8
 import Clean.Tables.Fibonacci32
 import Clean.Tables.Fibonacci32Inductive
