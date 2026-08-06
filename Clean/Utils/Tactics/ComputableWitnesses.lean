@@ -81,6 +81,16 @@ private def localLengthHeads : List Name :=
   [`FormalCircuitBase.localLength, `ElaboratedCircuit.localLength,
    `Subcircuit.localLength, `Operations.localLength]
 
+/-- Run `x` under a local heartbeat sub-budget, converting a runtime timeout into
+`none`. Used for speculative defeq probes that would otherwise symbolically execute
+opaque terms and kill the whole tactic (the runtime exception escapes `try`). -/
+private def withProbeBudget {α : Type} (x : MetaM α) : MetaM (Option α) :=
+  tryCatchRuntimeEx
+    (withCurrHeartbeats do
+      withTheReader Core.Context (fun ctx => { ctx with maxHeartbeats := 1000000 }) do
+        some <$> x)
+    (fun _ => pure none)
+
 /-- Reduce a `localLength`-shaped term with the `circuit_norm` simp set — the same way
 soundness proofs obtain lengths. This turns `Operations.localLength` of concrete
 operation lists into arithmetic over bundled-circuit metadata projections *without*
@@ -149,8 +159,10 @@ elab "assert_local_lengths" : tactic => withMainContext do
     if (← seen.get).contains e then return ()
     seen.modify (·.insert e)
     unless (← try inferType e catch _ => return ()).isConstOf `Nat do return ()
-    let r ← try simpLocalLength e catch _ => return ()
-    let k? ← try natValOf r.expr catch _ => pure none
+    -- budgeted: simp/whnf on exotic length spellings (e.g. folded `forEach` groups)
+    -- can be a runaway; skip the term rather than kill the tactic
+    let some r ← withProbeBudget (try simpLocalLength e catch _ => pure { expr := e }) | return ()
+    let some k? ← withProbeBudget (try natValOf r.expr catch _ => pure none) | return ()
     if k?.isNone && r.expr == e then return ()
     eqs.modify (·.push (e, r, k?))
   let mut i := 0
@@ -456,27 +468,31 @@ elab "chain_output_facts" : tactic => withMainContext do
         catch _ =>
           st.restore
 
-/-- Split conjunctions and intro binders down to per-obligation leaves. `apply`/`intro`
-use whnf, so conjunctions hidden behind definitional unfolding (`Operations.forAll` on
-concrete op lists) split as well; child obligations stay intact via the head guard. -/
 private partial def splitStep (g : MVarId) (fuel : Nat) : MetaM (List MVarId) := do
   if fuel == 0 then return [g]
-  let _t := (← instantiateMVars (← g.getType)).consumeMData
-  -- `apply`/`intro` unify up to whnf, which also splits conjunctions reachable only
-  -- by definitional unfolding (`Operations.forAll` over bind-chains). This is safe
-  -- only because `unfold_formal_circuit_consts` ran first: whnf-unifying against a
-  -- still-opaque inner circuit would symbolically execute it (heartbeat/memory
-  -- catastrophe on the bit-decomposed gadgets, and the runtime exception escapes
-  -- `try`). The `Subcircuit.ComputableWitnesses` head guard above keeps child
-  -- obligations intact.
-  match ← observing? (g.apply (mkConst ``And.intro)) with
-  | some gs =>
+  let t := (← instantiateMVars (← g.getType)).consumeMData
+  -- child obligations stay whole for the composition rules
+  if t.getAppFn.isConstOf `Subcircuit.ComputableWitnesses then return [g]
+  -- syntactic fast paths first; the whnf-unifying fallback also splits conjunctions
+  -- reachable only by definitional unfolding (`Operations.forAll` over bind-chains),
+  -- but under a sub-budget: whnf-unifying against a still-opaque group (e.g. a folded
+  -- 32-wide `Circuit.forEach`) symbolically executes it, and the runtime exception
+  -- escapes `try` — with the budget it degrades to keeping the leaf whole.
+  if t.isAppOfArity ``And 2 then
+    if let some gs ← observing? (g.apply (mkConst ``And.intro)) then
+      return ← gs.foldlM (init := []) fun acc g' => do
+        return acc ++ (← splitStep g' (fuel - 1))
+  if t.isForall then
+    if let some (_, g') ← observing? g.intro1P then
+      return ← splitStep g' (fuel - 1)
+  match ← withProbeBudget (observing? (g.apply (mkConst ``And.intro))) with
+  | some (some gs) =>
     gs.foldlM (init := []) fun acc g' => do
       return acc ++ (← splitStep g' (fuel - 1))
-  | none =>
-    match ← observing? g.intro1P with
-    | some (_, g') => splitStep g' (fuel - 1)
-    | none => return [g]
+  | _ =>
+    match ← withProbeBudget (observing? g.intro1P) with
+    | some (some (_, g')) => splitStep g' (fuel - 1)
+    | _ => return [g]
 
 private def splitStructure : TacticM Unit :=
   liftMetaTactic fun g => splitStep g 512
@@ -659,6 +675,14 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
     let leafDispatch : TacticM Unit := withMainContext do
       -- inaccessible hyp names (from intro1P) break the chainer's delab roundtrip
       try evalTactic (← `(tactic| expose_names)) catch _ => pure ()
+      -- offset arithmetic into the shape `Circuit.forEach.forAll` matches (the manual
+      -- proofs' `ring_nf` step) — only for leaves that actually contain a forEach
+      -- group; elsewhere ring_nf re-spells offsets out from under the omega discharge
+      let hasForEach ← withMainContext do
+        let t ← instantiateMVars (← getMainTarget)
+        pure (t.find? fun e => e.getAppFn.isConstOf `Circuit.forEach).isSome
+      if hasForEach then
+        try evalTactic (← `(tactic| ring_nf)) catch _ => pure ()
       -- leaf-local simp (normalizes loop-instantiated lengths), then dispatch
       try
         evalTactic (← `(tactic| simp only [circuit_norm, computable_witnesses_norm,

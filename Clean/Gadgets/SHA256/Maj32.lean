@@ -256,26 +256,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
 def circuit : FormalCircuit (F p) Inputs (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness
-  computableWitnesses := by
-    intro n input env env'
-    obtain ⟨a, b, c⟩ := input
-    simp only [circuit_norm, main, maj32]
-    constructor
-    · constructor
-      · intro h hag
-        refine Vector.ext fun i hi => ?_
-        simp only [circuit_norm]
-        grind
-      · constructor
-        · intro h hag
-          refine Vector.ext fun i hi => ?_
-          simp only [circuit_norm]
-          grind
-        · -- assert-only forEach groups: no witnesses, trivially computable
-          ring_nf
-          simp only [Circuit.forEach.forAll, circuit_norm]
-    · intro h hag
-      grind
+  computableWitnesses := by computable_witnesses [main]
 
 end Maj32
 end Gadgets.SHA256
