@@ -1,0 +1,46 @@
+import Clean.Examples.FibonacciWithChannels
+import Clean.Utils.Primes
+
+namespace Air.Flat.WitnessGenerationTest
+
+open Air.Flat.WitnessGeneration
+
+private def steps : ℕ := 32
+
+private def publicInput : fieldTriple (F pBabybear) :=
+  let state := fibonacci steps
+  (steps, state.1, state.2)
+
+private def result : Except String (List ℕ × ℕ × ℕ × Bool × Bool) :=
+  match FibonacciWitness.generate publicInput 1000 with
+  | .error error => .error error
+  | .ok witness =>
+      match witness.tables with
+      | _ :: _ :: bytes :: _ =>
+          match bytes.table with
+          | byteRow :: _ => .ok (
+              witness.tables.map (·.length),
+              byteRow.toList.sum.val,
+              (byteRow.toList.map FiniteField.val).max?.getD 0,
+              constraintsHold witness,
+              channelsBalanced witness)
+          | [] => .error "byte table has no rows"
+      | _ => .error "ensemble has no byte table"
+
+/--
+The verifier seed automatically creates 32 Fibonacci rows; their pulls create 32
+distinct addition rows; byte range checks are accumulated into the one fixed byte row.
+-/
+example : result = .ok ([32, 32, 1], 32, 2, true, true) := by native_decide
+
+private def invalidPublicInput : fieldTriple (F pBabybear) := (10, 42, 42)
+
+private def invalidRejected : Bool :=
+  match FibonacciWitness.generate invalidPublicInput 20 with
+  | .error _ => true
+  | .ok _ => false
+
+/-- A final state not reached within the configured fuel fails generation. -/
+example : invalidRejected = true := by native_decide
+
+end Air.Flat.WitnessGenerationTest
