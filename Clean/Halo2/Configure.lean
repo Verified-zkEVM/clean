@@ -900,6 +900,13 @@ def run (program : Configure F α) (initial : ConstraintSystem F) :
   let (output, delta, countDelta) := program.plan counts
   (output, delta.apply initial (countDelta.apply counts))
 
+/-- Running a configure program returns the same value as its compositional
+`output` projection at the initial constraint system's allocation counts. -/
+theorem run_fst (program : Configure F α) (initial : ConstraintSystem F) :
+    (program.run initial).1 =
+      program.output (ConfigureCounts.ofConstraintSystem initial) :=
+  rfl
+
 @[simp] theorem run_numAdviceColumns
     (program : Configure F α) (initial : ConstraintSystem F) :
     (program.run initial).2.numAdviceColumns =
