@@ -309,6 +309,48 @@ theorem forRangeVar'_operations (rows : ℕ → ℕ) (m : ℕ)
       = (List.ofFn fun i : Fin m => (body i.val (rows i.val)).operations self).flatten :=
   loopAux_operations _ _ _ _
 
+/-- Exact columns contributed by a variable-stride region loop. -/
+@[synthesis_summary_norm]
+theorem forRangeVar'_regionSynthesisSummary_columns
+    (rows : ℕ → ℕ) (m : ℕ) (body : ℕ → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) :
+    (FloorPlanner.regionSynthesisSummary
+      ((forRangeVar' rows m body).operations self)).columns =
+      (List.ofFn fun i : Fin m =>
+        (FloorPlanner.regionSynthesisSummary
+          ((body i.val (rows i.val)).operations self)).columns).flatten := by
+  rw [forRangeVar'_operations,
+    FloorPlanner.regionSynthesisSummary_flatten_columns, List.map_ofFn]
+  congr 2
+
+/-- Exact maximum row extent of a variable-stride region loop. -/
+@[synthesis_summary_norm]
+theorem forRangeVar'_regionSynthesisSummary_rowCount
+    (rows : ℕ → ℕ) (m : ℕ) (body : ℕ → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) :
+    (FloorPlanner.regionSynthesisSummary
+      ((forRangeVar' rows m body).operations self)).rowCount =
+      (List.ofFn fun i : Fin m =>
+        (FloorPlanner.regionSynthesisSummary
+          ((body i.val (rows i.val)).operations self)).rowCount).foldr max 0 := by
+  rw [forRangeVar'_operations,
+    FloorPlanner.regionSynthesisSummary_flatten_rowCount, List.map_ofFn]
+  congr 2
+
+/-- Exact deferred-constant demand of a variable-stride region loop. -/
+@[synthesis_summary_norm]
+theorem forRangeVar'_regionSynthesisSummary_constantSiteCount
+    (rows : ℕ → ℕ) (m : ℕ) (body : ℕ → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) :
+    (FloorPlanner.regionSynthesisSummary
+      ((forRangeVar' rows m body).operations self)).constantSiteCount =
+      (List.ofFn fun i : Fin m =>
+        (FloorPlanner.regionSynthesisSummary
+          ((body i.val (rows i.val)).operations self)).constantSiteCount).sum := by
+  rw [forRangeVar'_operations,
+    FloorPlanner.regionSynthesisSummary_flatten_constantSiteCount, List.map_ofFn]
+  congr 2
+
 /-- Operation-local laws over `forRangeVar'`, split by symbolic round. -/
 theorem forRangeVar'_forall (property : RegionOperation F → Prop)
     (rows : ℕ → ℕ) (m : ℕ)

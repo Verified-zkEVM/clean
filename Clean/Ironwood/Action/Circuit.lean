@@ -910,6 +910,52 @@ def synthCrossAddressChecks (cfg : Config) (pts : Var AddressPoints Fp) :
       let _ ← copyAdvice dca (cfg.advices 9) row
       (orchardGate cfg.qOrchard cfg.advices).enable row)
 
+/-- The four cross-address rows request four deferred constants each. -/
+@[synthesis_summary_norm]
+theorem synthCrossAddressChecks_synthesisSummary_constantSiteCount
+    (config : Config) (points : Var AddressPoints Fp)
+    (region : RegionIndex) :
+    (FloorPlanner.synthesisSummary
+      ((synthCrossAddressChecks config points).operations
+        region)).constantSiteCount = 16 := by
+  simp only [synthCrossAddressChecks, operations_assignRegion,
+    FloorPlanner.synthesisSummary_region_cons_constantSiteCount,
+    FloorPlanner.synthesisSummary_nil_constantSiteCount, Nat.add_zero]
+  simp only [synthesis_summary_norm]
+  simp only [circuit_norm]
+  norm_num [List.ofFn, Fin.foldr_succ, Fin.foldr_zero]
+
+/-- Every cross-address row occupies the first advice column. -/
+@[synthesis_summary_norm]
+theorem synthCrossAddressChecks_synthesisSummary_adviceZeroOccupancy
+    (config : Config) (points : Var AddressPoints Fp)
+    (region : RegionIndex) :
+    (FloorPlanner.synthesisSummary
+      ((synthCrossAddressChecks config points).operations region)).columnOccupancy
+        (.column .advice (config.advices 0).index) = 4 := by
+  simp only [synthCrossAddressChecks, operations_assignRegion,
+    FloorPlanner.synthesisSummary_region_cons_columnOccupancy,
+    FloorPlanner.synthesisSummary_nil_columnOccupancy, Nat.add_zero]
+  simp only [synthesis_summary_norm]
+  simp only [circuit_norm]
+  norm_num [List.ofFn, Fin.foldr_succ, Fin.foldr_zero]
+
+/-- Cross-address checks occupy no fixed columns. -/
+@[synthesis_summary_norm]
+theorem synthCrossAddressChecks_synthesisSummary_fixedOccupancy
+    (config : Config) (points : Var AddressPoints Fp)
+    (column : Column .fixed) (region : RegionIndex) :
+    (FloorPlanner.synthesisSummary
+      ((synthCrossAddressChecks config points).operations region)).columnOccupancy
+        (.column .fixed column.index) = 0 := by
+  simp only [synthCrossAddressChecks, operations_assignRegion,
+    FloorPlanner.synthesisSummary_region_cons_columnOccupancy,
+    FloorPlanner.synthesisSummary_nil_columnOccupancy, Nat.add_zero]
+  simp only [synthesis_summary_norm]
+  simp only [circuit_norm]
+  norm_num [List.ofFn, Fin.foldr_succ, Fin.foldr_zero]
+  simp
+
 @[keygen_helper]
 theorem synthCrossAddressChecks_keygenRegistered
     (cfg : Config) (pts : Var AddressPoints Fp)
