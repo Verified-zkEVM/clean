@@ -81,10 +81,25 @@ private def localLengthHeads : List Name :=
   [`FormalCircuitBase.localLength, `ElaboratedCircuit.localLength,
    `Subcircuit.localLength, `Operations.localLength]
 
-/-- Evaluate a closed ℕ-expression to a literal by whnf plus folding of `+`/`*`
-(the shape `elaborate_circuit` leaves `localLength` metadata in). -/
+/-- Reduce a `localLength`-shaped term with the `circuit_norm` simp set — the same way
+soundness proofs obtain lengths. This turns `Operations.localLength` of concrete
+operation lists into arithmetic over bundled-circuit metadata projections *without*
+executing the list: `whnf` evaluates such a list element by element (quadratic vector
+pushes for `mapFinRange`-built circuits), which blows the heartbeat budget on larger
+gadgets, while this path costs a few hundred heartbeats. -/
+private def simpLocalLength (e : Expr) : MetaM Simp.Result := do
+  let some ext ← getSimpExtension? `circuit_norm | return { expr := e }
+  let ctx ← Simp.mkContext
+    { zeta := true, beta := true, proj := true, iota := true, instances := true }
+    (simpTheorems := #[← ext.getTheorems]) (← getSimpCongrTheorems)
+  return (← Meta.simp e ctx).1
+
+/-- Evaluate a closed ℕ-expression to a literal by folding `+`/`*` and whnf-reducing
+leaves (the shape `elaborate_circuit` leaves `localLength` metadata in: arithmetic over
+explicit-structure projections, whose whnf is a cheap literal-field lookup). Refuses to
+whnf an `Operations.localLength` head — that executes the operations list; such terms
+must go through `simpLocalLength` first. -/
 private partial def natValOf (e : Expr) : MetaM (Option Nat) := do
-  let e ← try withDefault <| whnf e catch _ => return none
   if let some k := e.rawNatLit? then return some k
   match_expr e with
   | HAdd.hAdd _ _ _ _ a b => do
@@ -104,12 +119,18 @@ private partial def natValOf (e : Expr) : MetaM (Option Nat) := do
       let some y ← natValOf b | return none
       return some (x * y)
   | OfNat.ofNat _ k _ => natValOf k
-  | _ => return none
+  | _ => do
+      if e.getAppFn.isConstOf `Operations.localLength then return none
+      let e' ← try withDefault <| whnf e catch _ => return none
+      if e' == e then return none
+      natValOf e'
 
-/-- Assert `localLength = <numeral>` equations (definitional, by `rfl`) for every closed
-`localLength` application in the goal. `Subcircuit`'s offset index makes these terms
-unrewritable by `simp` in dependent positions; as hypotheses, `grind`'s arithmetic and
-`omega` can bridge the offset spellings instead. -/
+/-- Assert `localLength = <numeral>` equations for every closed `localLength`
+application in the goal. `Subcircuit`'s offset index makes these terms unrewritable by
+`simp` in dependent positions (no motive) — but a standalone copy of the term simplifies
+fine, so each equation is proved by `circuit_norm` simp plus a defeq step on the reduced
+form only. As hypotheses, `grind`'s arithmetic and `omega` can bridge the offset
+spellings. -/
 elab "assert_local_lengths" : tactic => withMainContext do
   let tgt ← instantiateMVars (← getMainTarget)
   -- scan hypotheses too: after the structural split, length terms often live in
@@ -119,7 +140,7 @@ elab "assert_local_lengths" : tactic => withMainContext do
     unless decl.isImplementationDetail do
       scan := scan.push (← instantiateMVars decl.type)
   let seen ← IO.mkRef ((∅ : Std.HashSet Expr))
-  let eqs ← IO.mkRef (#[] : Array (Expr × Nat))
+  let eqs ← IO.mkRef (#[] : Array (Expr × Simp.Result × Nat))
   for tgt in scan do
    tgt.forEach fun e => do
     let .const name _ := e.getAppFn | return ()
@@ -127,12 +148,24 @@ elab "assert_local_lengths" : tactic => withMainContext do
     if e.hasLooseBVars || e.hasMVar then return ()
     if (← seen.get).contains e then return ()
     seen.modify (·.insert e)
-    let some k ← try natValOf e catch _ => return () | return ()
-    eqs.modify (·.push (e, k))
+    let r ← try simpLocalLength e catch _ => return ()
+    let some k ← try natValOf r.expr catch _ => return () | return ()
+    eqs.modify (·.push (e, r, k))
   let mut i := 0
-  for (e, k) in (← eqs.get) do
-    let eqType ← mkEq e (mkNatLit k)
-    let proof ← mkExpectedTypeHint (← mkEqRefl e) eqType
+  for (e, r, k) in (← eqs.get) do
+    let lit := mkNatLit k
+    let eqType ← mkEq e lit
+    -- the defeq gap is only between the simp-reduced form and the numeral (cheap
+    -- metadata projections + arithmetic); the reduction from the original spelling is
+    -- carried by the simp proof, so neither elaborator nor kernel ever defeq-executes
+    -- the raw operations list
+    let finish ← mkExpectedTypeHint (← mkEqRefl r.expr) (← mkEq r.expr lit)
+    -- re-key at the original spelling: simp states its proof for the beta/projection
+    -- normal form of `e`; the hint bridges that (cheap) defeq gap so users of the
+    -- hypothesis see exactly the goal's spelling
+    let proof ← match r.proof? with
+      | some p => mkExpectedTypeHint (← mkEqTrans p finish) eqType
+      | none => mkExpectedTypeHint finish eqType
     liftMetaTactic fun goal => do
       let goal ← goal.assert (Name.mkSimple s!"h_ll_{i}") eqType proof
       let (_, goal) ← goal.intro1P
@@ -187,6 +220,78 @@ works on syntactic atoms). `grind` cannot run simprocs, so letting it instantiat
 composition rules would re-create opaque length atoms. -/
 elab "chain_output_facts" : tactic => withMainContext do
   try evalTactic (← `(tactic| beta_reduce)) catch _ => pure ()
+  let tgt ← instantiateMVars (← getMainTarget)
+  -- Universal child-output metadata facts. Binder-nested outputs (e.g. inside a
+  -- `Vector.mapFinRange` lambda) cannot be chained per instance — the term has loose
+  -- bvars — and `grind` does not look under binders. Instead, state
+  -- `∀ v m, c.output v m = <reduced>` once per closed output prefix (bundle constant
+  -- plus instances), prove it by the `circuit_norm` reduction of the metadata
+  -- projection (cheap: `elaborate_circuit` stores it explicitly), and rewrite it
+  -- through goal and hypotheses — `simp` rewrites under binders.
+  let outputArity := (← getConstInfo `FormalCircuitBase.output).type.getForallBinderNames.length
+  let prefixes ← IO.mkRef (#[] : Array Expr)
+  tgt.forEach fun e => do
+    unless e.getAppFn.isConstOf `FormalCircuitBase.output do return ()
+    -- exact arity only: every partial application along the spine is also visited
+    unless e.getAppNumArgs == outputArity do return ()
+    -- binder-nested occurrences only: closed occurrences are handled per instance by
+    -- the chaining loop below, and rewriting them away would detach the goal's atoms
+    -- from the chained `o_chain` facts
+    unless e.hasLooseBVars do return ()
+    let pfx := e.appFn!.appFn!
+    if pfx.hasLooseBVars || pfx.hasMVar then return ()
+    prefixes.modify fun a => if a.contains pfx then a else a.push pfx
+  for pfx in (← prefixes.get) do
+    let emit : TacticM Unit := do
+      let factData? ← forallBoundedTelescope (← inferType pfx) (some 2) fun vs _ => do
+        if vs.size = 2 then do
+          let app := mkAppN pfx vs
+          let r ← simpLocalLength app
+          if r.expr != app then do
+            let eqTy ← mkEq app r.expr
+            let prf ← match r.proof? with
+              | some pr => pure pr
+              | none => mkExpectedTypeHint (← mkEqRefl app) eqTy
+            pure (some (← mkForallFVars vs eqTy, ← mkLambdaFVars vs prf))
+          else do
+            -- named bundles reduce definitionally, not by simp: the metadata is an
+            -- explicit structure field (the manual-proof `hout := fun _ _ => rfl`).
+            -- Unfold ONLY the bundle constant and its projection — full `whnf` would
+            -- keep going through `varFromOffset` into an exploded element-literal that
+            -- no eval simp lemma matches.
+            let mut thms : SimpTheorems := {}
+            let bundleHeads : List Name :=
+              [`FormalCircuitBase, `FormalCircuit, `GeneralFormalCircuit,
+               `GeneralFormalCircuit.WithHint, `FormalAssertion, `ElaboratedCircuit]
+            let names ← IO.mkRef (#[] : Array Name)
+            pfx.appArg!.forEach fun sub => do
+              let .const c _ := sub | return ()
+              let some ci := (← getEnv).find? c | return ()
+              if bundleHeads.contains ci.type.getForallBody.getAppFn.constName then
+                names.modify (·.push c)
+            for c in (← names.get) do
+              thms ← thms.addDeclToUnfold c
+            thms ← thms.addDeclToUnfold `FormalCircuitBase.output
+            thms ← thms.addDeclToUnfold `ElaboratedCircuit.output
+            let ctx ← Simp.mkContext
+              { zeta := true, beta := true, proj := true, iota := true, instances := true }
+              (simpTheorems := #[thms]) (← getSimpCongrTheorems)
+            let w := (← Meta.dsimp app ctx).1
+            if w == app || w.getAppFn.isConstOf `FormalCircuitBase.output then pure none
+            else do
+              let eqTy ← mkEq app w
+              let prf ← mkExpectedTypeHint (← mkEqRefl app) eqTy
+              pure (some (← mkForallFVars vs eqTy, ← mkLambdaFVars vs prf))
+        else pure none
+      let some (factTy, factPrf) := factData? | return
+      liftMetaTactic fun g => do
+        let g ← g.assert `o_meta factTy factPrf
+        let (_, g) ← g.intro1P
+        return [g]
+      -- goal only: `at *` would rewrite the fact with itself into `True`
+      try evalTactic (← `(tactic| simp only [$(mkIdent `o_meta):term])) catch _ => pure ()
+    try emit catch _ => pure ()
+  withMainContext do
   let tgt ← instantiateMVars (← getMainTarget)
   let mut hA? : Option (Name × Expr × Expr) := none
   for decl in ← getLCtx do
@@ -365,11 +470,18 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
         | assumption
         | (simp_all; done)
         | (simp_all only [circuit_norm, eval_vector, Vector.map_mk, List.map_toArray,
-             List.map_cons, List.map_nil, ProvableType.eval_varFromOffset, Vector.mapRange_succ,
-             Vector.mapRange_zero, Vector.mk.injEq, Array.mk.injEq, List.cons.injEq, and_true,
+             List.map_cons, List.map_nil,
+             Vector.mk.injEq, Array.mk.injEq, List.cons.injEq, and_true,
              Vector.map_ofFn, Vector.ext_iff, Vector.getElem_ofFn, Function.comp_def,
+             Vector.getElem_map, Vector.getElem_append,
+             Vector.getElem_mapFinRange, Vector.getElem_mapIdx,
+             Vector.getElem_set, Vector.getElem_mapRange,
              $lemmasArray,*]
-           all_goals ((try and_intros) <;> grind))
+           all_goals ((intros; (try split_ifs)) <;>
+               ((try simp only [ProvableType.eval_varFromOffset, circuit_norm, eval_vector,
+                  Vector.mapRange_succ, Vector.mapRange_zero, Vector.mk.injEq, Array.mk.injEq,
+                  List.cons.injEq, and_true, $lemmasArray,*]);
+                ((try and_intros) <;> grind))))
         | (refine Vector.ext fun j hj => ?_
            simp only [getElem_eval_vector, Vector.getElem_map, Vector.getElem_append,
              Vector.getElem_mapFinRange, Vector.getElem_ofFn, Vector.getElem_mapIdx]
@@ -392,9 +504,38 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
       return (t.find? fun e =>
         e.getAppFn.isConstOf `Expression.var ||
         e.getAppFn.isConstOf `ProvableType.varFromOffset).isSome
+    -- when both sides of an eval-congruence goal share the same argument whose head is
+    -- a plain (non-bundle) definition — e.g. a child's Var-typed output metadata def like
+    -- `Permutation.stateVar`, already substituted for `c.output` by metadata reduction —
+    -- unfold that head: it is data, not a proof boundary, and unfolding exposes the
+    -- `varFromOffset` spelling the eval simp lemmas need
+    let unfoldSharedEvalArgHeads : TacticM Unit := withMainContext do
+      let bundleHeads : List Name :=
+        [`FormalCircuitBase, `FormalCircuit, `GeneralFormalCircuit,
+         `GeneralFormalCircuit.WithHint, `FormalAssertion, `Circuit]
+      for _ in [0:4] do
+        if (← getGoals).isEmpty then return
+        let t := (← instantiateMVars (← getMainTarget)).consumeMData
+        let some (_, lhs, rhs) := t.eq? | return
+        unless lhs.isApp && rhs.isApp && lhs.appArg! == rhs.appArg! do return
+        let .const argHead _ := lhs.appArg!.getAppFn | return
+        let some ci := (← getEnv).find? argHead | return
+        unless ci.hasValue do return
+        -- only `Var`-typed metadata defs (e.g. a child's output helper like
+        -- `Permutation.stateVar : Var KeccakState (F p)`, stored reducible-unfolded as
+        -- `KeccakState (Expression (F p))`): polymorphic operator heads must keep their
+        -- spelling for the vector simp lemmas, and witness-IR construction defs
+        -- (`FExpr`-typed values) must keep theirs for the IR eval lemmas
+        let body := ci.type.getForallBody
+        let isVarTyped := body.getAppFn.isConstOf `CircuitType.Var ||
+          (body.isApp && body.getAppFn.isConst &&
+            body.appArg!.getAppFn.isConstOf `Expression)
+        unless isVarTyped do return
+        try evalTactic (← `(tactic| unfold $(mkIdent argHead):ident)) catch _ => return
     let evalCloseRun : TacticM Unit := do
       if (← getGoals).isEmpty then return
       if ← isEvalCongrEq then
+        try unfoldSharedEvalArgHeads catch _ => pure ()
         evalTactic vecClose
       else
         evalTactic baseClose
@@ -416,15 +557,24 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
           let tryVariant (nm : Name) : TacticM Bool := do
             let st ← Tactic.saveState
             try
-              evalTactic (← `(tactic| refine $(mkIdent nm) _ fun h_agrees => ?_))
+              -- offset_eq variants keep the subcircuit's type-index offset separate
+              -- from the computability offset: unifying a single-`n` rule against two
+              -- defeq-but-differently-spelled offsets makes isDefEq whnf-execute the
+              -- operations list (heartbeat blowup on mapFinRange-built circuits). The
+              -- `m = n` premise is discharged arithmetically over the asserted lengths.
+              evalTactic (← `(tactic| refine $(mkIdent nm) _
+                (by
+                  (try simp only [circuit_norm, computable_witnesses_norm,
+                    reduceLocalLength, $lemmasArray,*]) <;> omega) fun h_agrees => ?_))
               pure true
             catch _ =>
               st.restore
               pure false
           let mut applied := false
-          for nm in [`FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow,
-              `GeneralFormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow,
-              `FormalAssertion.toSubcircuit_computableWitnesses_onlyAccessedBelow] do
+          for nm in [`FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq,
+              `GeneralFormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq,
+              `GeneralFormalCircuit.WithHint.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq,
+              `FormalAssertion.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq] do
             unless applied do
               if ← tryVariant nm then applied := true
           if applied then
