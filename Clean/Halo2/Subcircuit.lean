@@ -381,6 +381,45 @@ theorem FormalCircuit.foldCall_synthesisSummary_constantSiteCount (m : ℕ) :
   rw [FormalCircuit.foldCall_operations,
     FormalCircuit.foldOps_synthesisSummary_constantSiteCount]
 
+/-- Exact occupancy of one column across a serial circuit fold. -/
+@[synthesis_summary_norm]
+theorem FormalCircuit.foldOps_synthesisSummary_columnOccupancy
+    (column : FloorPlanner.RegionColumn) (m : ℕ) :
+    (FloorPlanner.synthesisSummary
+      (FormalCircuit.foldOps c toInput config init i₀ m)).columnOccupancy column =
+      (List.ofFn fun i : Fin m =>
+        ((c i).elaborated.synthesisSummary config
+          (FormalCircuit.foldState c toInput config init i₀ i).1
+          (FormalCircuit.foldState c toInput config init i₀ i).2).columnOccupancy
+            column).sum := by
+  induction m with
+  | zero =>
+      simp only [FormalCircuit.foldOps,
+        FloorPlanner.synthesisSummary_nil_columnOccupancy,
+        List.ofFn_zero, List.sum_nil]
+  | succ m inductionHypothesis =>
+      rw [FormalCircuit.foldOps, FloorPlanner.synthesisSummary_append,
+        FloorPlanner.SynthesisSummary.combine_columnOccupancy,
+        inductionHypothesis, FormalCircuit.call_synthesisSummary,
+        List.ofFn_succ', List.sum_concat]
+      simp only [Fin.val_castSucc, Fin.val_last]
+      rfl
+
+/-- `foldCall`-spelled exact occupancy of one column. -/
+@[synthesis_summary_norm]
+theorem FormalCircuit.foldCall_synthesisSummary_columnOccupancy
+    (column : FloorPlanner.RegionColumn) (m : ℕ) :
+    (FloorPlanner.synthesisSummary
+      ((FormalCircuit.foldCall c toInput config init m).operations i₀)).columnOccupancy
+        column =
+      (List.ofFn fun i : Fin m =>
+        ((c i).elaborated.synthesisSummary config
+          (FormalCircuit.foldState c toInput config init i₀ i).1
+          (FormalCircuit.foldState c toInput config init i₀ i).2).columnOccupancy
+            column).sum := by
+  rw [FormalCircuit.foldCall_operations,
+    FormalCircuit.foldOps_synthesisSummary_columnOccupancy]
+
 theorem FormalCircuit.foldCall_output (m : ℕ) :
     (FormalCircuit.foldCall c toInput config init m).output i₀
       = (FormalCircuit.foldState c toInput config init i₀ m).1 := by
