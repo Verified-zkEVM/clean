@@ -112,9 +112,16 @@ unrewritable by `simp` in dependent positions; as hypotheses, `grind`'s arithmet
 `omega` can bridge the offset spellings instead. -/
 elab "assert_local_lengths" : tactic => withMainContext do
   let tgt ← instantiateMVars (← getMainTarget)
+  -- scan hypotheses too: after the structural split, length terms often live in
+  -- intro'd premises rather than the leaf's conclusion
+  let mut scan := #[tgt]
+  for decl in ← getLCtx do
+    unless decl.isImplementationDetail do
+      scan := scan.push (← instantiateMVars decl.type)
   let seen ← IO.mkRef ((∅ : Std.HashSet Expr))
   let eqs ← IO.mkRef (#[] : Array (Expr × Nat))
-  tgt.forEach fun e => do
+  for tgt in scan do
+   tgt.forEach fun e => do
     let .const name _ := e.getAppFn | return ()
     unless localLengthHeads.contains name do return ()
     if e.hasLooseBVars || e.hasMVar then return ()
@@ -144,8 +151,11 @@ def reduceLocalLengthCore : Simp.DSimproc := fun e => do
   return .visit (mkNatLit k)
 
 /- shape-only pattern: the localLength constants live downstream of this file, so they
-cannot be named in the pattern; the proc bails immediately on other heads -/
-dsimproc reduceLocalLength (_) := reduceLocalLengthCore
+cannot be named in the pattern; the proc bails immediately on other heads. Declared
+without attribute registration — the tactic's controlled simp passes reference it by
+name; registering it into any shared set would change normal forms for every other
+user of that set. -/
+dsimproc_decl reduceLocalLength (_) := reduceLocalLengthCore
 
 /-- Collect fully-applied child-output terms: `c.output v k` and its pre-normalization
 spelling `(subcircuit c v k).1` (definitionally equal, handled by unification). -/
@@ -191,8 +201,8 @@ elab "chain_output_facts" : tactic => withMainContext do
   let acc ← IO.mkRef (#[] : Array Expr)
   collectOutputsGo tgt seen acc
   for o in (← acc.get) do
-    let step : TacticM Unit := do
-      let lem ← mkConstWithFreshMVarLevels `FormalCircuit.output_of_input_eq
+    let step (lemName : Name) : TacticM Unit := do
+      let lem ← mkConstWithFreshMVarLevels lemName
       let (ms, _, concl) ← forallMetaTelescope (← inferType lem)
       let some (_, lhs, rhs) := concl.eq? | throwError "conclusion not an equality"
       unless ← isDefEq lhs.appArg! o do throwError "output does not unify"
@@ -212,7 +222,7 @@ elab "chain_output_facts" : tactic => withMainContext do
             else
               evalTactic (← `(tactic| first
                 | assumption
-                | (simp only [circuit_norm]; grind)))
+                | ((try simp only [circuit_norm]); grind)))
       let proof ← instantiateMVars (mkAppN lem ms)
       if proof.hasExprMVar then throwError "open premises"
       -- state the fact with freshly-synthesized (canonical) eval instances: the
@@ -245,9 +255,15 @@ elab "chain_output_facts" : tactic => withMainContext do
         let g ← g.assert `o_chain ptype proofF
         let (_, g) ← g.intro1P
         return [g]
-    let st ← Tactic.saveState
-    try step
-    catch _ => st.restore
+    let mut done := false
+    for lemName in [`FormalCircuit.output_of_input_eq, `GeneralFormalCircuit.output_of_input_eq] do
+      unless done do
+        let st ← Tactic.saveState
+        try
+          step lemName
+          done := true
+        catch _ =>
+          st.restore
 
 /-- Split conjunctions and intro binders down to per-obligation leaves. `apply`/`intro`
 use whnf, so conjunctions hidden behind definitional unfolding (`Operations.forAll` on
@@ -338,13 +354,15 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
     let evalClose : TSyntax `tactic ← `(tactic|
       first
         | assumption
+        | (simp_all; done)
+        | (simp_all [circuit_norm, computable_witnesses_norm]; done)
         | (congr 1 <;> first | assumption | grind)
         | (simp_all only [circuit_norm, eval_vector, Vector.map_mk, List.map_toArray,
              List.map_cons, List.map_nil, ProvableType.eval_varFromOffset, Vector.mapRange_succ,
              Vector.mapRange_zero, Vector.mk.injEq, Array.mk.injEq, List.cons.injEq, and_true,
              Vector.map_ofFn, Vector.ext_iff, Vector.getElem_ofFn, Function.comp_def,
              $lemmasArray,*]
-           (try and_intros) <;> grind)
+           all_goals ((try and_intros) <;> grind))
         | (refine Vector.ext fun j hj => ?_
            simp only [getElem_eval_vector, Vector.getElem_map, Vector.getElem_append,
              Vector.getElem_mapFinRange, Vector.getElem_ofFn, Vector.getElem_mapIdx]
@@ -381,18 +399,20 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
               if ← tryVariant nm then applied := true
           if applied then
             simpPass
-            evalTactic (← `(tactic| (try chain_output_facts)))
-            evalTactic evalClose
+            unless (← getGoals).isEmpty do
+              evalTactic (← `(tactic| (try chain_output_facts)))
+              unless (← getGoals).isEmpty do
+                evalTactic evalClose
           else
             evalTactic (← `(tactic| grind))
         else
-          evalTactic (← `(tactic| ((try chain_output_facts); $evalClose:tactic)))
+          evalTactic (← `(tactic| (try chain_output_facts)))
+          unless (← getGoals).isEmpty do
+            evalTactic evalClose
     let goals ← getGoals
     for g in goals do
       setGoals [g]
-      try leafDispatch
-      catch e =>
-        throw e
+      leafDispatch
     setGoals []
 
 /--

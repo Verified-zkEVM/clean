@@ -77,7 +77,21 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
       output[i] = (c[i])[idx]
 
   computableWitnesses := by
-    computable_witnesses [eval_vector, Vector.ext_iff, explicit_provable_type]
+    intro n input env env'
+    obtain ⟨c, s⟩ := input
+    simp only [main, circuit_norm, computable_witnesses_norm, eval_vector, Vector.ext_iff]
+    refine ⟨?_, ?_⟩ <;>
+      · intros
+        (try and_intros) <;>
+          first
+            | (simp_all; done)
+            | grind
+            | (simp only [circuit_norm, eval_vector, explicit_provable_type,
+                 Vector.getElem_map, ProvableType.getElem_eval_toElements] at *
+               -- grind leaves this congruence open (upstream suspect, see the
+               -- TODO COMPWIT note on the wrapper circuit below); rewrite with the
+               -- elementwise facts directly instead
+               first | grind | simp_all)
 
   soundness := by
     circuit_proof_start

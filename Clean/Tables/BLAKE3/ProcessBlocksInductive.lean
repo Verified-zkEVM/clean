@@ -72,25 +72,7 @@ def circuit : FormalAssertion (F p) ProcessBlocksState where
   main
   Spec x := x.Normalized
   computableWitnesses := by
-    intro n input env env'
-    have eN : ∀ v, (U32.AssertNormalized.circuit (p:=p)).localLength v = 0 := fun _ => rfl
-    simp only [circuit_norm, main, eN]
-    (try and_intros) <;>
-      first
-        | (intro i h
-           refine FormalAssertion.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-             (by first | omega | (simp only [circuit_norm, eN]; try omega)) fun h_agrees => ?_
-           simp only [circuit_norm]
-           grind)
-        | (intro h
-           refine FormalAssertion.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-             (by first | omega | (simp only [circuit_norm, eN]; try omega)) fun h_agrees => ?_
-           simp only [circuit_norm]
-           grind)
-        | grind
-        | exact fun _ => trivial
-        | trivial
-
+    computable_witnesses
   soundness := by
     circuit_proof_start [ProcessBlocksState.Normalized, U32.AssertNormalized.circuit]
     simp_all [← h_input, eval_vector] -- provable_vector_simp wanted
