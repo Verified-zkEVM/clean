@@ -208,6 +208,17 @@ theorem swap_configured_permutationColumns_eq (wb : WitgenIR Fp 1)
     FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
     swap, Configure.delta_pure, List.append_nil]
 
+/-- Conditional swapping requests no deferred constants. -/
+@[synthesis_summary_norm]
+theorem swap_synthesisSummary_constantSiteCount
+    (wb : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool)
+    (config : Config) (offset : ℕ) (input : Var Input Fp)
+    (region : RegionIndex) :
+    ((swap wb wswap).elaborated.synthesisSummary
+      config offset input region).constantSiteCount = 0 := by
+  rw [ElaboratedRegionCircuit.synthesisSummary_constantSiteCount_eq]
+  simp only [swap, circuit_norm]
+
 /-- A conditional-swap capability exported by its producing configure run. -/
 def swapConfigureCertificate
     (a b aSwapped bSwapped swapColumn : Column .advice)

@@ -300,6 +300,17 @@ def circuit_configured (l : Fp) (cfg : Config)
   subst simple
   rfl
 
+/-- The decomposition gate requests one deferred constant cell for its layer
+index. -/
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_constantSiteCount
+    (l : Fp) (config : Config) (input : Var Inputs Fp)
+    (region : RegionIndex) :
+    ((circuit l).elaborated.synthesisSummary
+      config 0 input region).constantSiteCount = 1 := by
+  rw [ElaboratedRegionCircuit.synthesisSummary_constantSiteCount_eq]
+  simp only [circuit, body, circuit_norm]
+
 end Gate
 
 /-! ### The chip-level configure
@@ -1959,6 +1970,31 @@ end Layer
 derive_contract_bridges HashLayer.circuit (G : Generators) (Q : Point Fp)
   (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10) := HashLayer.circuit G Q hQ l hl
 
+/-- A Merkle hash layer requests four deferred constant cells: two short-range
+inverses, the public Sinsemilla initial x-coordinate, and the layer index. -/
+@[synthesis_summary_norm]
+theorem HashLayer.circuit_synthesisSummary_constantSiteCount
+    (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
+    (l : ℕ) (hl : l < 2 ^ 10)
+    (config : Config × LookupRangeCheck.Config 10)
+    (input : Var HashLayer.Input Fp) (region : RegionIndex) :
+    ((HashLayer.circuit G Q hQ l hl).elaborated.synthesisSummary
+      config input region).constantSiteCount = 4 := by
+  rw [ElaboratedCircuit.synthesisSummary_constantSiteCount_eq]
+  simp only [HashLayer.circuit, HashLayer.synthesize,
+    Circuit.operations_bind, Circuit.operations_pure,
+    FloorPlanner.synthesisSummary_append,
+    FloorPlanner.SynthesisSummary.combine_constantSiteCount,
+    operations_assignRegion,
+    FloorPlanner.synthesisSummary_region_cons_constantSiteCount,
+    FloorPlanner.synthesisSummary_nil_constantSiteCount, Nat.add_zero]
+  repeat' first
+    | rw [HashToPoint.witnessMessagePiece_synthesisSummary_constantSiteCount]
+    | rw [LookupRangeCheck.witnessShortCheck_synthesisSummary_constantSiteCount]
+    | rw [HashToPoint.hashMessage_synthesisSummary_constantSiteCount]
+  rw [FormalRegionCircuit.call_synthesisSummary,
+    Gate.circuit_synthesisSummary_constantSiteCount]
+
 /-- Assemble a hash-layer capability from its three direct child capabilities. -/
 def HashLayer.configurationCertificate (G : Generators) (Q : Point Fp)
     (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10)
@@ -2220,6 +2256,29 @@ derive_contract_bridges Layer.circuit (G : Generators) (Q : Point Fp)
   (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10)
   (wsib : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool) :=
     Layer.circuit G Q hQ l hl wsib wswap
+
+/-- Conditional swapping adds no deferred constants, so a complete Merkle
+layer has the same four requests as its hash layer. -/
+@[synthesis_summary_norm]
+theorem Layer.circuit_synthesisSummary_constantSiteCount
+    (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
+    (l : ℕ) (hl : l < 2 ^ 10) (wsib : WitgenIR Fp 1)
+    (wswap : Placed ProverEnvironment Fp → Bool)
+    (config : CondSwap.Config × Config × LookupRangeCheck.Config 10)
+    (input : Var Layer.Input Fp) (region : RegionIndex) :
+    ((Layer.circuit G Q hQ l hl wsib wswap).elaborated.synthesisSummary
+      config input region).constantSiteCount = 4 := by
+  rw [ElaboratedCircuit.synthesisSummary_constantSiteCount_eq]
+  simp only [Layer.circuit, Circuit.operations_bind,
+    FloorPlanner.synthesisSummary_append,
+    FloorPlanner.SynthesisSummary.combine_constantSiteCount,
+    operations_assignRegion,
+    FloorPlanner.synthesisSummary_region_cons_constantSiteCount,
+    FloorPlanner.synthesisSummary_nil_constantSiteCount, Nat.add_zero]
+  rw [FormalRegionCircuit.call_synthesisSummary,
+    CondSwap.swap_synthesisSummary_constantSiteCount,
+    FormalCircuit.call_synthesisSummary,
+    HashLayer.circuit_synthesisSummary_constantSiteCount]
 
 /-- A Merkle-layer output stays in the hash chip's `xA` column. -/
 @[keygen_norm]

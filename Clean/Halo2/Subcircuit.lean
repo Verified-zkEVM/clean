@@ -348,6 +348,39 @@ theorem FormalCircuit.foldCall_operations (m : ℕ) :
       = FormalCircuit.foldOps c toInput config init i₀ m := by
   rw [Circuit.operations, FormalCircuit.foldCall_run]
 
+/-- Exact deferred-constant demand of a serial circuit fold. -/
+@[synthesis_summary_norm]
+theorem FormalCircuit.foldOps_synthesisSummary_constantSiteCount (m : ℕ) :
+    (FloorPlanner.synthesisSummary
+      (FormalCircuit.foldOps c toInput config init i₀ m)).constantSiteCount =
+      (List.ofFn fun i : Fin m =>
+        ((c i).elaborated.synthesisSummary config
+          (FormalCircuit.foldState c toInput config init i₀ i).1
+          (FormalCircuit.foldState c toInput config init i₀ i).2).constantSiteCount).sum := by
+  induction m with
+  | zero =>
+      simp only [FormalCircuit.foldOps, FloorPlanner.synthesisSummary_nil_constantSiteCount,
+        List.ofFn_zero, List.sum_nil]
+  | succ m inductionHypothesis =>
+      rw [FormalCircuit.foldOps, FloorPlanner.synthesisSummary_append,
+        FloorPlanner.SynthesisSummary.combine_constantSiteCount,
+        inductionHypothesis, FormalCircuit.call_synthesisSummary,
+        List.ofFn_succ', List.sum_concat]
+      simp only [Fin.val_castSucc, Fin.val_last]
+      rfl
+
+/-- `foldCall`-spelled exact deferred-constant demand. -/
+@[synthesis_summary_norm]
+theorem FormalCircuit.foldCall_synthesisSummary_constantSiteCount (m : ℕ) :
+    (FloorPlanner.synthesisSummary
+      ((FormalCircuit.foldCall c toInput config init m).operations i₀)).constantSiteCount =
+      (List.ofFn fun i : Fin m =>
+        ((c i).elaborated.synthesisSummary config
+          (FormalCircuit.foldState c toInput config init i₀ i).1
+          (FormalCircuit.foldState c toInput config init i₀ i).2).constantSiteCount).sum := by
+  rw [FormalCircuit.foldCall_operations,
+    FormalCircuit.foldOps_synthesisSummary_constantSiteCount]
+
 theorem FormalCircuit.foldCall_output (m : ℕ) :
     (FormalCircuit.foldCall c toInput config init m).output i₀
       = (FormalCircuit.foldState c toInput config init i₀ m).1 := by

@@ -481,6 +481,17 @@ def shortRangeCheck (K numBits : ℕ) :
     · -- the honest-prover contract: the output IS the extraction cell
       exact hOut.symm
 
+/-- A short range check requests one deferred constant cell for the inverse
+power-of-two value. -/
+@[synthesis_summary_norm]
+theorem shortRangeCheck_synthesisSummary_constantSiteCount
+    (K numBits : ℕ) (config : Config K) (offset : ℕ)
+    (region : RegionIndex) :
+    ((shortRangeCheck K numBits).elaborated.synthesisSummary
+      config offset () region).constantSiteCount = 1 := by
+  rw [ElaboratedRegionCircuit.synthesisSummary_constantSiteCount_eq]
+  simp only [shortRangeCheck, circuit_norm]
+
 /-- The short range check registers exactly its running-sum column for equality. -/
 @[keygen_norm]
 theorem shortRangeCheck_configured_permutationColumns_eq
@@ -1195,6 +1206,20 @@ def witnessShortCheck (K numBits : ℕ) (cfg : Config K) (w : WitgenIR Fp 1) :
     let elt ← assignAdvice cfg.runningSum 0 w
     let _ ← (shortRangeCheck K numBits).call cfg 0 ()
     pure elt)
+
+/-- Witnessing a short range check preserves the child's single deferred
+constant request. -/
+@[synthesis_summary_norm]
+theorem witnessShortCheck_synthesisSummary_constantSiteCount
+    (K numBits : ℕ) (config : Config K) (w : WitgenIR Fp 1)
+    (region : RegionIndex) :
+    (FloorPlanner.synthesisSummary
+      ((witnessShortCheck K numBits config w).operations
+        region)).constantSiteCount = 1 := by
+  simp only [witnessShortCheck, operations_assignRegion,
+    FloorPlanner.synthesisSummary_region_cons_constantSiteCount,
+    FloorPlanner.synthesisSummary_nil_constantSiteCount, circuit_norm]
+  simp only [shortRangeCheck, circuit_norm]
 
 /-- The cell returned by `witnessShortCheck` stays in the configured running-sum column. -/
 @[keygen_norm]

@@ -398,6 +398,20 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
         hchain'
       exact hres
 
+/-- A Sinsemilla message slot requests no deferred constants. -/
+@[synthesis_summary_norm]
+theorem slot_synthesisSummary_constantSiteCount
+    (G : Generators) (ns : List ℕ)
+    (yaIn : Placed Environment Fp → Fp) (i : ℕ)
+    (config : Config) (offset : ℕ) (piece : AssignedCell Fp)
+    (region : RegionIndex) :
+    ((slot G ns yaIn i).elaborated.synthesisSummary
+      config offset piece region).constantSiteCount = 0 := by
+  rw [ElaboratedRegionCircuit.synthesisSummary_constantSiteCount_eq]
+  simp only [slot, RegionCircuit.operations_bind,
+    FloorPlanner.regionSynthesisSummary_append, synthesis_summary_norm]
+  simp only [circuit_norm]
+
 /-! Contract bridges for the slot child (generated — including over the function-typed
 `yaIn` binder); only the applied deep-extract bridge stays hand-written. -/
 
@@ -1509,6 +1523,20 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
         rw [slotEnterVal, if_pos rfl] at h
         simp only [prefixRows_zero, Nat.add_zero, dRowP] at h
         rw [h, hAy]
+
+/-- A complete Sinsemilla message chain requests no deferred constants. -/
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_constantSiteCount
+    (G : Generators) (ns : List ℕ)
+    (yaIn : Placed Environment Fp → Fp) (config : Config) (offset : ℕ)
+    (input : Var (Inputs ns.length) Fp) (region : RegionIndex) :
+    ((circuit G ns yaIn).elaborated.synthesisSummary
+      config offset input region).constantSiteCount = 0 := by
+  rw [ElaboratedRegionCircuit.synthesisSummary_constantSiteCount_eq]
+  simp only [circuit, RegionCircuit.operations_bind,
+    FloorPlanner.regionSynthesisSummary_append, synthesis_summary_norm]
+  simp only [circuit_norm]
+  simp
 
 /-- The chain's eval'd output, landed on raw advice reads (the public composition lemma —
 what `hash_message`-level consumers rewrite `(circuit …).output` with). -/

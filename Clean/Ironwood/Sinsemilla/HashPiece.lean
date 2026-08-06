@@ -331,6 +331,19 @@ def loop (G : Generators) (n : ℕ) : FormalRegionCircuit Fp Config Config field
       rw [show offset + 1 + ↑j = offset + (↑j + 1) from by omega]
       exact congrArg State.z hj
 
+/-- The interior hash-piece loop requests no deferred constants. -/
+@[synthesis_summary_norm]
+theorem loop_synthesisSummary_constantSiteCount
+    (G : Generators) (n : ℕ) (config : Config) (offset : ℕ)
+    (piece : AssignedCell Fp) (region : RegionIndex) :
+    ((loop G n).elaborated.synthesisSummary
+      config offset piece region).constantSiteCount = 0 := by
+  rw [ElaboratedRegionCircuit.synthesisSummary_constantSiteCount_eq]
+  simp only [loop, RegionCircuit.operations_bind,
+    FloorPlanner.regionSynthesisSummary_append, synthesis_summary_norm]
+  simp only [circuit_norm]
+  simp
+
 -- contract bridges for the `loop` child (opened by the piece bundle's proofs)
 derive_contract_bridges loopC (G : Generators) (n : ℕ) := loop G n
 
@@ -759,6 +772,19 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
         simp only [yA, xR, State.accY, Ecc.DoubleAndAdd.yA,
           Ecc.DoubleAndAdd.xR] at hEyB ⊢
         linear_combination (norm := (field_simp; ring)) 2 * hEyB
+
+/-- A complete hash-piece bundle requests no deferred constants. -/
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_constantSiteCount
+    (G : Generators) (w : ℕ) (final : Bool)
+    (yaIn : Placed Environment Fp → Fp) (config : Config) (offset : ℕ)
+    (piece : AssignedCell Fp) (region : RegionIndex) :
+    ((circuit G w final yaIn).elaborated.synthesisSummary
+      config offset piece region).constantSiteCount = 0 := by
+  rw [ElaboratedRegionCircuit.synthesisSummary_constantSiteCount_eq]
+  simp only [circuit, RegionCircuit.operations_bind,
+    FloorPlanner.regionSynthesisSummary_append, synthesis_summary_norm]
+  simp only [circuit_norm]
 
 /-- The piece bundle's output variable (position-determined, rfl). -/
 @[circuit_norm]

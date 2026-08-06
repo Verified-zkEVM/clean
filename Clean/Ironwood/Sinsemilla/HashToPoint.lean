@@ -44,6 +44,17 @@ def witnessMessagePiece (cfg : Sinsemilla.HashPiece.Config) (w : WitgenIR Fp 1) 
     Circuit Fp (AssignedCell Fp) :=
   assignRegion "witness message piece" (assignAdvice cfg.witnessPieces 0 w)
 
+/-- Witnessing a message piece requests no deferred constants. -/
+@[synthesis_summary_norm]
+theorem witnessMessagePiece_synthesisSummary_constantSiteCount
+    (config : Sinsemilla.HashPiece.Config) (w : WitgenIR Fp 1)
+    (region : RegionIndex) :
+    (FloorPlanner.synthesisSummary
+      ((witnessMessagePiece config w).operations region)).constantSiteCount = 0 := by
+  simp only [witnessMessagePiece, operations_assignRegion,
+    FloorPlanner.synthesisSummary_region_cons_constantSiteCount,
+    FloorPlanner.synthesisSummary_nil_constantSiteCount, circuit_norm]
+
 /-- A witnessed message piece stays in the chip's witness-piece column. -/
 @[keygen_norm]
 theorem witnessMessagePiece_output_column (cfg : Sinsemilla.HashPiece.Config)
@@ -405,6 +416,22 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
             (congrArg (fun output : Value Sinsemilla.Chain.Output Fp => output.point.y) hout).symm
           _ = B0.y := hpy⟩
 
+/-- A hash-to-point region requests one deferred constant cell for the public
+initial point's x-coordinate. -/
+@[synthesis_summary_norm]
+theorem hashRegion_synthesisSummary_constantSiteCount
+    (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
+    (hns : ns ≠ []) (config : Sinsemilla.HashPiece.Config)
+    (input : Var (Sinsemilla.Chain.Inputs ns.length) Fp)
+    (region : RegionIndex) :
+    ((hashRegion G ns Q hQ hns).elaborated.synthesisSummary
+      config 0 input region).constantSiteCount = 1 := by
+  rw [ElaboratedRegionCircuit.synthesisSummary_constantSiteCount_eq]
+  simp only [hashRegion, RegionCircuit.operations_bind,
+    FloorPlanner.regionSynthesisSummary_append, synthesis_summary_norm]
+  simp only [circuit_norm]
+  rfl
+
 /-- The layouter-level `hash_message` bundle: the `"hash_to_point"` region (Rust
 `SinsemillaChip::hash_to_point`). -/
 def hashCircuit (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
@@ -412,6 +439,21 @@ def hashCircuit (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
     FormalCircuit Fp Sinsemilla.HashPiece.Config Sinsemilla.HashPiece.Config
       (Sinsemilla.Chain.Inputs ns.length) (Output ns.length) :=
   (hashRegion G ns Q hQ hns).toFormal
+
+/-- Lifting hash-to-point to a layouter region preserves its one deferred
+constant request. -/
+@[synthesis_summary_norm]
+theorem hashCircuit_synthesisSummary_constantSiteCount
+    (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
+    (hns : ns ≠ []) (config : Sinsemilla.HashPiece.Config)
+    (input : Var (Sinsemilla.Chain.Inputs ns.length) Fp)
+    (region : RegionIndex) :
+    ((hashCircuit G ns Q hQ hns).elaborated.synthesisSummary
+      config input region).constantSiteCount = 1 := by
+  simpa only [hashCircuit, hashRegion_synthesisSummary_constantSiteCount] using
+    FormalRegionCircuit.toFormal_synthesisSummary_constantSiteCount
+      (hashRegion G ns Q hQ hns) (hashRegion G ns Q hQ hns).name
+      config input region
 
 attribute [keygen_metadata_projection] hashCircuit hashRegion
 
@@ -523,6 +565,20 @@ def hashMessage (G : Generators) (ns : List ℕ) (cfg : Sinsemilla.HashPiece.Con
     (pieces : Var (Sinsemilla.Chain.Inputs ns.length) Fp) :
     Circuit Fp (Var (Output ns.length) Fp) :=
   (hashCircuit G ns Q hQ hns).call cfg pieces
+
+/-- Calling hash-to-point preserves its one deferred constant request. -/
+@[synthesis_summary_norm]
+theorem hashMessage_synthesisSummary_constantSiteCount
+    (G : Generators) (ns : List ℕ) (config : Sinsemilla.HashPiece.Config)
+    (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ [])
+    (input : Var (Sinsemilla.Chain.Inputs ns.length) Fp)
+    (region : RegionIndex) :
+    (FloorPlanner.synthesisSummary
+      ((hashMessage G ns config Q hQ hns input).operations
+        region)).constantSiteCount = 1 := by
+  simp only [hashMessage, FormalCircuit.call_synthesisSummary]
+  exact hashCircuit_synthesisSummary_constantSiteCount
+    G ns Q hQ hns config input region
 
 /-- The hash bundle's output `z1s` cells (positional, rfl). -/
 theorem hashCircuit_output_z1s (G : Generators) (ns : List ℕ) (Q : Point Fp)

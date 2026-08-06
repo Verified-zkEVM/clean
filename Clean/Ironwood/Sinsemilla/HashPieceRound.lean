@@ -997,6 +997,16 @@ def round (G : Generators) (i : ℕ) : FormalRegionCircuit Fp Config Config fiel
       (fun t => env.fixed cfg.generatorTable.tableY.inner (t : ℤ))
       hH hchain hUsable hBlock
 
+/-- An interior hash-word round requests no deferred constants. -/
+@[synthesis_summary_norm]
+theorem round_synthesisSummary_constantSiteCount
+    (G : Generators) (i : ℕ) (config : Config) (offset : ℕ)
+    (piece : AssignedCell Fp) (region : RegionIndex) :
+    ((round G i).elaborated.synthesisSummary
+      config offset piece region).constantSiteCount = 0 := by
+  rw [ElaboratedRegionCircuit.synthesisSummary_constantSiteCount_eq]
+  simp only [round, circuit_norm]
+
 /-- The round's output variable: the next row's neighborhood (position-determined). -/
 @[circuit_norm]
 theorem round_output (G : Generators) (i : ℕ) (cfg : Config) (o : ℕ) (iv : AssignedCell Fp)
