@@ -260,6 +260,47 @@ theorem forRange'_regionSynthesisSummary_rowCount
     FloorPlanner.regionSynthesisSummary_flatten_rowCount, List.map_ofFn]
   congr 2
 
+/-- A uniform bound on the row extent of every loop iteration bounds the whole loop.
+This avoids reducing a concrete loop into one goal per iteration. -/
+theorem forRange'_regionSynthesisSummary_rowCount_le
+    (offset stride m : ℕ) (body : ℕ → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) (bound : ℕ)
+    (hbody : ∀ i : Fin m,
+      (FloorPlanner.regionSynthesisSummary
+        ((body i.val (offset + i.val * stride)).operations self)).rowCount ≤ bound) :
+    (FloorPlanner.regionSynthesisSummary
+      ((forRange' offset stride m body).operations self)).rowCount ≤ bound := by
+  rw [forRange'_regionSynthesisSummary_rowCount]
+  apply List.max_le_of_forall_le
+  intro value hvalue
+  rw [List.mem_ofFn] at hvalue
+  obtain ⟨i, rfl⟩ := hvalue
+  exact hbody i
+
+/-- The row extent of a selected iteration is bounded by the whole loop. -/
+theorem regionSynthesisSummary_rowCount_le_forRange'
+    (offset stride m : ℕ) (body : ℕ → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) (i : Fin m) :
+    (FloorPlanner.regionSynthesisSummary
+      ((body i.val (offset + i.val * stride)).operations self)).rowCount ≤
+      (FloorPlanner.regionSynthesisSummary
+        ((forRange' offset stride m body).operations self)).rowCount := by
+  rw [forRange'_regionSynthesisSummary_rowCount]
+  apply List.le_max_of_le (List.mem_ofFn.mpr ⟨i, rfl⟩)
+  exact Nat.le_refl _
+
+/-- Any column used by a selected loop iteration is used by the whole loop. -/
+theorem mem_forRange'_regionSynthesisSummary_columns
+    (offset stride m : ℕ) (body : ℕ → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) (column : FloorPlanner.RegionColumn) (i : Fin m)
+    (hcolumn : column ∈
+      (FloorPlanner.regionSynthesisSummary
+        ((body i.val (offset + i.val * stride)).operations self)).columns) :
+    column ∈ (FloorPlanner.regionSynthesisSummary
+      ((forRange' offset stride m body).operations self)).columns := by
+  rw [forRange'_regionSynthesisSummary_columns, List.mem_flatten]
+  exact ⟨_, List.mem_ofFn.mpr ⟨i, rfl⟩, hcolumn⟩
+
 /-- Exact deferred-constant demand of a region loop. -/
 @[synthesis_summary_norm]
 theorem forRange'_regionSynthesisSummary_constantSiteCount

@@ -3048,6 +3048,31 @@ theorem circuit_output_column
   unfold FormalCircuit.output ElaboratedCircuit.output circuit
   exact foldState_node_column G Q hQ l₀ wsib wswap cfg input region d
 
+/-- A calculate-root fold requests exactly four deferred constants per Merkle
+layer. -/
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_constantSiteCount
+    (config : CondSwap.Config × Config × LookupRangeCheck.Config 10)
+    (input : Var Layer.Input Fp) (region : RegionIndex) :
+    ((circuit G Q hQ l₀ d hld wsib wswap).elaborated.synthesisSummary
+      config input region).constantSiteCount = 4 * d := by
+  rw [ElaboratedCircuit.synthesisSummary_constantSiteCount_eq]
+  simp only [circuit, synthesize, Circuit.operations_bind,
+    Circuit.operations_pure, List.append_nil]
+  rw [FormalCircuit.foldCall_synthesisSummary_constantSiteCount]
+  have hround (i : Fin d) :
+      ((layerAt G Q hQ l₀ wsib wswap i).elaborated.synthesisSummary
+        config
+        (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap)
+          toInput config input region i).1
+        (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap)
+          toInput config input region i).2).constantSiteCount = 4 := by
+    simp only [layerAt]
+    apply Layer.circuit_synthesisSummary_constantSiteCount
+  simp_rw [hround]
+  simp
+  omega
+
 /-- Package the fold from the single layer-family capability it exposes. -/
 def configurationCertificate
     {cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10}
