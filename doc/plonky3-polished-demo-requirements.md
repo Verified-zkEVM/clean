@@ -18,63 +18,102 @@ integration convenience must not be obtained by weakening the proved relation.
 The work should also leave behind a reusable Plonky3 backend rather than an integration whose
 architecture or data formats are specific to FemtoCairo.
 
-## Initial unblocked slice: `FibonacciWithChannels`
+## Delivery milestone 1: generic ensemble witness generation
 
-The first implementation target is the `fibonacciEnsemble` defined in
-`Clean/Examples/FibonacciWithChannels.lean`. This slice establishes the reusable backend substrate
-before addressing FemtoCairo's unresolved external-data semantics.
+Before changing the Plonky3 backend, Clean must gain a generic, executable way to construct an
+`Air.Flat.EnsembleWitness` for an arbitrary ensemble. This facility is a Clean/AIR and witness-IR
+feature, not a Plonky3 or Fibonacci feature, and must be testable with the Lean reference evaluator
+in isolation.
 
-This is a meaningful backend target rather than a replacement toy example. It exercises:
+An ensemble witness generator must separate two responsibilities:
 
-- multiple same-row AIR components (`pushBytes`, `add8`, and `fib8`);
-- a verifier/public-input circuit;
-- static, lookup-like, and VM-state channels (`bytes`, `add8`, and `fibonacci`);
-- conditional and non-constant interaction multiplicities;
-- channel communication across rows and components; and
-- an end-to-end formally proved Fibonacci statement.
+- an ensemble-specific structured program supplies public input and the primary input rows for
+  each component; and
+- a generic builder derives the component order and widths from the `Ensemble`, runs each
+  component's existing row-local Witgen IR to complete its rows, constructs the verifier row, and
+  assembles the `EnsembleWitness`.
+
+The generic builder must not know Fibonacci component names, channel names, row schedules, or
+trace topology. `FibonacciWithChannels` may define the program that produces its Fibonacci,
+`add8`, and byte-multiplicity inputs, but it must do so through the same authoring interface
+available to any ensemble.
+
+The generator must be represented as structured, exportable witness IR. The existing
+`WitgenIR F m` is row-local and fixed-output-size, so the implementation may extend it or compose it
+with an ensemble-level IR. In either case, the exportable language must represent the required
+multi-table construction, row iteration, and accumulator/scan computations without embedding
+native Lean closures.
+
+The same IR must be the source for generated Rust witness code. Rust generation is
+backend-independent: it produces component traces and public inputs, not Plonky3 constraints or
+proofs. The generated Rust implementation must agree with the Lean reference evaluator and must
+not interpret witness JSON in the proving hot path.
+
+This milestone does not require a formal completeness proof for the ensemble witness generator.
+In particular, it need not prove for all valid inputs that the generated tables satisfy every
+constraint and balance every channel. Structural properties needed to construct an
+`EnsembleWitness`—component identity and ordering, row widths, shared data, and public input—must
+still hold by construction or be validated with explicit errors.
+
+An incorrect generator can prevent an honest proof from being produced, but it must not weaken
+the constraints or channel relation checked by the proof system. Lean tests must execute concrete
+generated witnesses and check their constraints and channel balance even though the general
+completeness theorem is deferred.
+
+External `ProverData` semantics are outside this first milestone. The initial implementation may
+support only generators and component witness programs that do not read external data, and must
+reject unsupported data-dependent programs rather than ignore them.
+
+### Ensemble-witness milestone acceptance criteria
+
+1. A generic Lean API associates an exportable witness generator with an arbitrary
+   `Air.Flat.Ensemble` without example-specific logic in the builder.
+2. Given generator inputs, the Lean evaluator returns a structurally valid `EnsembleWitness` or an
+   actionable validation error.
+3. The builder automatically invokes each component's existing row-local Witgen IR; ensemble
+   authors do not duplicate local witness computations.
+4. The structured IR can express multiple component tables, row loops, accumulator/scan state,
+   public input construction, and trace padding needed by `FibonacciWithChannels`.
+5. All code reachable through the export path is structured IR; native witness closures are
+   rejected with their locations.
+6. A Fibonacci generator written through the generic interface produces a non-trivial witness in
+   Lean whose component constraints and `bytes`, `add8`, and `fibonacci` channel balances pass
+   executable checks.
+7. Backend-independent Rust code is generated from the same witness IR and differentially tested
+   against Lean on the Fibonacci witness, including trace contents and public inputs.
+8. The interface and trusted status are documented: the generator is not completeness-proved and
+   generated witness correctness is not part of the soundness argument.
+
+## Delivery milestone 2: Plonky3 support for `FibonacciWithChannels`
+
+The first backend target is the `fibonacciEnsemble` defined in
+`Clean/Examples/FibonacciWithChannels.lean`. It exercises multiple same-row AIR components, a
+verifier/public-input circuit, conditional multiplicities, and the static, lookup-like, and
+VM-state `bytes`, `add8`, and `fibonacci` channels.
 
 None of these channel guarantees depends semantically on external `ProverData`. Therefore this
-slice does not require a design for binding external program or memory data into the proof.
+slice establishes the reusable backend substrate before addressing FemtoCairo's unresolved
+external-data semantics.
 
-The Lean example proves ensemble soundness but does not currently define an executable
-`EnsembleWitness` builder. The slice must therefore include an example-level Rust trace-input
-driver. Given a requested step count, it must supply Fibonacci transition rows, corresponding
-`add8` rows, balanced byte multiplicities, any valid disabled padding rows, and the claimed final
-public state. Generated Witgen code then completes the local witness columns for those rows.
-
-This trace-input driver is permitted to understand Fibonacci execution. It must use a generic
-backend interface for component descriptions, row witness generation, channel topology, proving,
-and verification; that topology must not be reassembled in a Fibonacci-specific backend adapter.
-The chosen trace heights and padding policy are statement metadata and must be enforced by the
-verifier.
-
-All otherwise applicable backend requirements in this document apply to the initial slice. In
-particular, it must use generated direct Rust constraints, generated Rust witness code, generic
-multi-component channel support, public inputs, verifier-bound trace metadata, documentation, and
-CI. It must not reach the goal by extending legacy `Clean/Table`, using the existing FemtoCairo
-adapter, interpreting the constraint AST in the proving hot path, or invoking Lean for witness
-generation at proving time.
-
-Support for witness operations or channel semantics that read external `ProverData` may be
-rejected explicitly by the initial exporter. Such operations must not be silently ignored or
-given a weaker backend meaning.
+All otherwise applicable backend requirements in this document apply. In particular, this slice
+must use generated direct Rust constraints, the generated ensemble witness code from milestone 1,
+generic multi-component channel support, public inputs, verifier-bound trace metadata,
+documentation, and CI. It must not extend legacy `Clean/Table`, use the existing FemtoCairo
+adapter, interpret constraint JSON in the proving hot path, or invoke Lean during Rust proving.
 
 Completing this slice deliberately defers, but does not resolve or remove, the requirements for
 sound external-data binding and the FemtoCairo demo. Those remain release blockers for the final
 grant milestone.
 
-### Initial-slice acceptance criteria
-
-The `FibonacciWithChannels` slice is complete when all of the following hold:
+### Fibonacci backend acceptance criteria
 
 1. A documented Clean command generates a reproducible Rust artifact from `fibonacciEnsemble`.
 2. The generated backend represents all ensemble components and the `bytes`, `add8`, and
    `fibonacci` channels without example-specific Rust topology.
 3. Generated direct Rust code evaluates component constraints and interactions; the runtime JSON
    constraint interpreter is not used.
-4. A Rust trace-input driver plus generated Rust witness code constructs every component trace
-   without invoking Lean at proving time; the boundary between supplied row inputs and generated
-   local witnesses is documented.
+4. The generated ensemble witness code constructs every component trace without invoking Lean at
+   proving time.
 5. The prover and verifier accept the public Fibonacci input explicitly and establish the
    Clean-level statement represented by `fibonacci_soundness`.
 6. Plonky3 channel arguments enforce balance across all participating rows and components,
