@@ -33,6 +33,23 @@ distinct addition rows; byte range checks are accumulated into the one fixed byt
 -/
 example : result = .ok ([32, 32, 1], 32, 2, true, true) := by native_decide
 
+private def repeatedSteps : ℕ := 400
+
+private def repeatedPublicInput : fieldTriple (F pBabybear) :=
+  let state := fibonacci repeatedSteps
+  (repeatedSteps, state.1, state.2)
+
+private def repeatedResult : Except String (List ℕ × Bool × Bool) :=
+  match FibonacciWitness.generate repeatedPublicInput 2000 with
+  | .error error => .error error
+  | .ok witness => .ok (
+      witness.tables.map (·.length),
+      constraintsHold witness,
+      channelsBalanced witness)
+
+/-- Repeated addition pulls coalesce after the period of Fibonacci modulo 256. -/
+example : repeatedResult = .ok ([400, 384, 1], true, true) := by native_decide
+
 private def invalidPublicInput : fieldTriple (F pBabybear) := (10, 42, 42)
 
 private def invalidRejected : Bool :=
