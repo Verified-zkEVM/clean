@@ -585,6 +585,10 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
              $lemmasArray,*]
            all_goals ((intros; (try split_ifs)) <;>
                ((try simp only [ProvableType.eval_varFromOffset, circuit_norm, eval_vector,
+                  $(mkIdent `U32.ByteVector.eval_fromLimbs):term,
+                  $(mkIdent `U64.ByteVector.eval_fromLimbs):term,
+                  getElem_eval_vector, Vector.getElem_set, Vector.getElem_map,
+                  Vector.map_ofFn, Vector.getElem_ofFn,
                   Vector.mapRange_succ, Vector.mapRange_zero, Vector.mk.injEq, Array.mk.injEq,
                   List.cons.injEq, and_true, $lemmasArray,*]);
                 ((try and_intros) <;> grind))))
