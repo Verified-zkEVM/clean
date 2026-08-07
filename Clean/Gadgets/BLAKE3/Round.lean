@@ -95,11 +95,10 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   main, elaborated, Assumptions, Spec, soundness, completeness
-  -- Manual: the per-leg leaves close under `closing [eval_vector_set,
-  -- U32.ByteVector.eval_fromLimbs, U32.ByteVector.fromLimbs_inj]`, but the output
-  -- leg — eight chained G-output windows, fully expanded by the tactic — exceeds the
-  -- heartbeat budget inside the close; the leaf loop has no per-leaf budget scoping,
-  -- so the whole call dies. The named-window chain below stays linear instead.
+  -- Manual: `computable_witnesses_close closing [eval_vector_set, …]` handles legs whose
+  -- input carries at most two expanded G-output chains, but from the fourth leg on the
+  -- elementwise decomposition of the nested set-chains exceeds the heartbeat budget, so
+  -- the whole circuit keeps the linear named-window chain.
   computableWitnesses := by
     intro n input env env'
     obtain ⟨state, message⟩ := input

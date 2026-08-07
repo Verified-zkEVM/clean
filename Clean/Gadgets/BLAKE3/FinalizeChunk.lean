@@ -274,46 +274,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
       · exact h_or2.2
 
 omit p_large_enough in
-lemma eval_components {env env' : Environment (F p)} {input : Var Inputs (F p)}
-    (h : ProvableStruct.eval env input = ProvableStruct.eval env' input) :
-    eval env input.state.blocks_compressed = eval env' input.state.blocks_compressed ∧
-    eval env input.base_flags = eval env' input.base_flags := by
-  obtain ⟨⟨cv, cc, bc⟩, bl, bd, bf⟩ := input
-  simp only [circuit_norm] at h ⊢
-  grind
-
-omit p_large_enough in
-lemma or1_input_eq {env env' : Environment (F p)} {bf : Var U32 (F p)}
-    {z : Var field (F p)}
-    (hbf : eval env bf = eval env' bf) (hz : eval env z = eval env' z) :
-    eval env (Or32.Inputs.mk bf (U32.mk (z * Expression.const 1) 0 0 0)) =
-      eval env' (Or32.Inputs.mk bf (U32.mk (z * Expression.const 1) 0 0 0)) := by
-  simp only [circuit_norm] at hbf hz ⊢
-  grind
-
-omit p_large_enough in
-lemma or2_input_eq {env env' : Environment (F p)} {w : Var U32 (F p)}
-    (hw : eval env w = eval env' w) :
-    eval env (Or32.Inputs.mk w (U32.mk (Expression.const (chunkEnd : F p)) 0 0 0)) =
-      eval env' (Or32.Inputs.mk w (U32.mk (Expression.const (chunkEnd : F p)) 0 0 0)) := by
-  simp only [circuit_norm] at hw ⊢
-  grind
-
-omit p_large_enough in
-lemma compress_input_eq {env env' : Environment (F p)} {input : Var Inputs (F p)}
-    {fl : Var U32 (F p)}
-    (h : ProvableStruct.eval env input = ProvableStruct.eval env' input)
-    (hfl : eval env fl = eval env' fl) :
-    eval env (ApplyRounds.Inputs.mk input.state.chaining_value (bytesToWords input.buffer_data)
-        (U32.mk 0 0 0 0) input.state.chunk_counter (U32.mk input.buffer_len 0 0 0) fl) =
-      eval env' (ApplyRounds.Inputs.mk input.state.chaining_value (bytesToWords input.buffer_data)
-        (U32.mk 0 0 0 0) input.state.chunk_counter (U32.mk input.buffer_len 0 0 0) fl) := by
-  obtain ⟨⟨cv, cc, bc⟩, bl, bd, bf⟩ := input
-  simp only [circuit_norm] at h hfl ⊢
-  try rw [eval_bytesToWords, eval_bytesToWords]
-  grind [eval_bytesToWords]
-
-omit p_large_enough in
 lemma output_windows_eq {env env' : ProverEnvironment (F p)} {m k : ℕ}
     (h_agrees : env.AgreesBelow m env') (hk : k + 4 ≤ m) :
     eval env.toEnvironment (varFromOffset U32 k : Var U32 (F p)) =
@@ -375,35 +335,20 @@ def circuit : FormalCircuit (F p) Inputs (ProvableVector U32 8) := {
   -- them as `n + 9 + 4 + 4 + 5376` chains, and simp keys don't bridge that arithmetic.
   computableWitnesses := by
     intro n input env env'
-    have eZ : ∀ v, (IsZero.circuit (F := F p) (M := U32)).localLength v = 9 := fun _ => rfl
-    have eO : ∀ v, (Or32.circuit (p := p)).localLength v = 4 := fun _ => rfl
-    simp only [circuit_norm, main, eZ, eO]
+    obtain ⟨⟨chaining_value, chunk_counter, blocks_compressed⟩,
+      buffer_len, buffer_data, base_flags⟩ := input
+    simp only [circuit_norm, main]
     refine ⟨⟨fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_⟩, fun h h_agrees => ?_⟩
-    · exact FormalCircuit.toSubcircuit_computableWitnesses _ (eval_components h).1
-    · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by simp only [circuit_norm, eZ]) fun h_agrees => ?_
-      exact or1_input_eq (eval_components h).2
-        (FormalCircuit.output_of_input_eq _ (eval_components h).1
-          (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eZ]; omega)))
-    · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by simp only [circuit_norm, eZ, eO]; try omega) fun h_agrees => ?_
-      exact or2_input_eq
-        (FormalCircuit.output_of_input_eq _
-          (or1_input_eq (eval_components h).2
-            (FormalCircuit.output_of_input_eq _ (eval_components h).1
-              (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eZ]; omega))))
-          (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eO]; omega)))
-    · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by simp only [circuit_norm, eZ, eO]; try omega) fun h_agrees => ?_
-      exact compress_input_eq h
-        (FormalCircuit.output_of_input_eq _
-          (or2_input_eq
-            (FormalCircuit.output_of_input_eq _
-              (or1_input_eq (eval_components h).2
-                (FormalCircuit.output_of_input_eq _ (eval_components h).1
-                  (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eZ]; omega))))
-              (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eO]; omega))))
-          (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eO]; omega)))
+    · computable_witnesses_close [bytesToWords] closing [eval_vector_set,
+        U32.ByteVector.eval_fromLimbs, U32.ByteVector.fromLimbs_inj]
+    · computable_witnesses_close [bytesToWords] closing [eval_vector_set,
+        U32.ByteVector.eval_fromLimbs, U32.ByteVector.fromLimbs_inj]
+    · computable_witnesses_close [bytesToWords] closing [eval_vector_set,
+        U32.ByteVector.eval_fromLimbs, U32.ByteVector.fromLimbs_inj]
+    · computable_witnesses_close [bytesToWords] closing [eval_vector_set,
+        U32.ByteVector.eval_fromLimbs, U32.ByteVector.fromLimbs_inj]
+    -- the output leg needs `output_take8_eq`: its offset spelling
+    -- (`n + 9 + 4 + 4 + 5376` chains) is not reachable by the closer's normalization
     · exact output_take8_eq h_agrees
 }
 

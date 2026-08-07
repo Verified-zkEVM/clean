@@ -602,30 +602,234 @@ def destructureProvableStructVars : TacticM Unit := do
       let subgoals ← goal.cases fvarId
       return subgoals.map (·.mvarId) |>.toList
 
-def runComputableWitnesses (extraTerms closeTerms : Array (TSyntax `term)) : TacticM Unit := do
+/-- The per-leaf dispatch/close stage of `computable_witnesses`, shared by the main
+entry (per split leaf) and the standalone `computable_witnesses_close`. -/
+def runLeafDispatch (lemmasArray closeArray : Array (TSyntax `Lean.Parser.Tactic.simpLemma)) :
+    TacticM Unit := do
+  let simpPass : TacticM Unit := do
+    unless (← getGoals).isEmpty do
+      try
+        evalTactic (← `(tactic| simp only [circuit_norm, computable_witnesses_norm,
+          ComputableWitnesses.structEqSplit, $lemmasArray,*]))
+      catch _ =>
+        pure ()
+  let baseClose : TSyntax `tactic ← `(tactic|
+    first
+      | (simp_all; done)
+      | (simp_all [circuit_norm, computable_witnesses_norm]; done)
+      | grind)
+  let vecClose : TSyntax `tactic ← `(tactic|
+    first
+      | (simp_all; done)
+      | (simp_all only [circuit_norm, eval_vector, Vector.map_mk, List.map_toArray,
+           List.map_cons, List.map_nil, reduceOutputMetadata, retypeVectorAliasEq,
+           Vector.mk.injEq, Array.mk.injEq, List.cons.injEq, and_true,
+           Vector.map_ofFn, Vector.ext_iff, Vector.getElem_ofFn, Function.comp_def,
+           Vector.getElem_map, Vector.getElem_append,
+           Vector.getElem_mapFinRange, Vector.getElem_mapIdx,
+           Vector.getElem_set, Vector.getElem_mapRange]
+         -- user hints goal-only: in the `simp_all` above they would rewrite every
+         -- chain-fact hypothesis (all legs' window facts) at every leaf — a
+         -- heartbeat blowup for recursive eval decompositions (eval_vector_set)
+         (try simp only [circuit_norm, eval_vector, Vector.ext_iff, Vector.getElem_set,
+           Vector.getElem_ofFn, Vector.getElem_map, Vector.map_ofFn, retypeVectorAliasEq,
+           $closeArray,*])
+         all_goals ((intros; (try split_ifs)) <;>
+             ((try simp only [ProvableType.eval_varFromOffset, circuit_norm, eval_vector,
+                Vector.mapRange_succ, Vector.mapRange_zero, Vector.mk.injEq, Array.mk.injEq,
+                List.cons.injEq, and_true, $closeArray,*]);
+              ((try and_intros) <;> grind))))
+      | (refine Vector.ext fun j hj => ?_
+         simp only [getElem_eval_vector, Vector.getElem_map, Vector.getElem_append,
+           Vector.getElem_mapFinRange, Vector.getElem_ofFn, Vector.getElem_mapIdx]
+         (try split_ifs) <;> grind [Vector.getElem_map, getElem_eval_vector])
+      | grind)
+  -- the window/elementwise route applies to eval-congruence goals: both sides are
+  -- eval applications of the same variable term under the two environments (output
+  -- windows, child-output metadata, vector states) — recognized by shape, whether
+  -- the value type is a vector or a provable struct
+  let isEvalCongrEq : TacticM Bool := withMainContext do
+    let t := (← instantiateMVars (← getMainTarget)).consumeMData
+    -- witness-window / child-output atoms mark eval-congruence territory whatever
+    -- the goal's connective shape (equality, conjunction of equalities, …)
+    if (t.find? fun e =>
+        e.getAppFn.isConstOf `Expression.var ||
+        e.getAppFn.isConstOf `ProvableType.varFromOffset ||
+        e.getAppFn.isConstOf `FormalCircuitBase.output ||
+        e.getAppFn.isConstOf `ElaboratedCircuit.output).isSome then
+      return true
+    let some (_, lhs, rhs) := t.eq? | return false
+    let ty ← instantiateMVars (← inferType lhs)
+    let tyW ← withTransparency .instances <| whnf ty
+    if tyW.getAppFn.isConstOf ``Vector then return true
+    if lhs.isApp && rhs.isApp && lhs.appArg! == rhs.appArg! &&
+        (lhs.getAppFn.isConstOf `Eval.eval || lhs.getAppFn.isConstOf `Expression.eval) then
+      return true
+    return false
+  -- Var-typed metadata helper defs tagged `@[computable_witnesses_metadata]`
+  -- (`Permutation.stateVar`, `BLAKE3.G.output`, …) block the eval simp lemmas;
+  -- delta-expand them in the goal to expose their `varFromOffset` spelling.
+  -- Environment-clean (`unfold` would generate the helper's equation lemmas here
+  -- and collide with sibling modules doing the same) and shape-agnostic
+  -- (conjunction goals included). Opt-in by label: return-type shape cannot
+  -- separate safe helpers from spellings the chainer's facts key on.
+  let unfoldSharedEvalArgHeads : TacticM Unit := withMainContext do
+    let labeledSet ← labelled `computable_witnesses_metadata
+    if labeledSet.isEmpty then return
+    let ctx ← Simp.mkContext
+      { zeta := true, beta := true, proj := true, iota := true, instances := true }
+      (simpTheorems := #[]) (← Meta.getSimpCongrTheorems)
+    let mut t := (← instantiateMVars (← getMainTarget)).consumeMData
+    let mut changed := false
+    -- iterate: labeled helpers can be nested inside other labeled helpers
+    -- (`Rotation32.output` inside `BLAKE3.G.output`)
+    for _ in [0:4] do
+      let names ← IO.mkRef (#[] : Array Name)
+      t.forEach fun sub => do
+        let .const c _ := sub.getAppFn | return ()
+        if labeledSet.contains c then
+          names.modify fun a => if a.contains c then a else a.push c
+      let allowed ← names.get
+      if allowed.isEmpty then break
+      let expanded ← Meta.deltaExpand t (allowed.contains ·)
+      let t' := (← Meta.dsimp expanded ctx).1
+      if t' == t then break
+      t := t'
+      changed := true
+    unless changed do return
+    liftMetaTactic fun g => do return [← g.change t]
+  -- `grind` internalizes every hypothesis and whnf-normalizes its terms; a
+  -- `localLength`-equation whose LHS is a raw operations list (e.g. Permutation's 24
+  -- rounds) blows the heartbeat budget during that normalization. The equations have
+  -- already done their work (offset discharge, AgreesBelow bounds) by close time.
+  let clearOpsLengthHyps : TacticM Unit := withMainContext do
+    for decl in ← getLCtx do
+      if decl.isImplementationDetail then continue
+      let toxic := (← instantiateMVars decl.type).find? fun e =>
+        e.getAppFn.isConstOf `Operations.localLength
+      if toxic.isSome then
+        try liftMetaTactic fun g => do return [← g.clear decl.fvarId] catch _ => pure ()
+  -- `assumption` isDefEq-matches the goal against every hypothesis; a mismatched
+  -- pair of large vector terms whnf-executes them (heartbeat blowup). Syntactic
+  -- matching is enough here: the chain re-keys facts at the goal's own spelling.
+  let syntacticAssumption : TacticM Unit := withMainContext do
+    let tgt ← instantiateMVars (← getMainTarget)
+    for decl in ← getLCtx do
+      if decl.isImplementationDetail then continue
+      if (← instantiateMVars decl.type) == tgt then
+        (← getMainGoal).assign decl.toExpr
+        replaceMainGoal []
+        return
+    throwError "syntacticAssumption: no match"
+  let evalCloseRun : TacticM Unit := do
+    if (← getGoals).isEmpty then return
+    try clearOpsLengthHyps catch _ => pure ()
+    if (← try syntacticAssumption; pure true catch _ => pure false) then return
+    -- expose labeled helper metadata before routing: the expansion produces the
+    -- `varFromOffset` atoms the route test looks for
+    try unfoldSharedEvalArgHeads catch _ => pure ()
+    if ← isEvalCongrEq then
+      evalTactic vecClose
+    else
+      evalTactic baseClose
+  let leafDispatch : TacticM Unit := withMainContext do
+    -- inaccessible hyp names (from intro1P) break the chainer's delab roundtrip
+    try evalTactic (← `(tactic| expose_names)) catch _ => pure ()
+    -- offset arithmetic into the shape `Circuit.forEach.forAll` matches (the manual
+    -- proofs' `ring_nf` step) — only for leaves that actually contain a forEach
+    -- group; elsewhere ring_nf re-spells offsets out from under the omega discharge
+    let hasForEach ← withMainContext do
+      let t ← instantiateMVars (← getMainTarget)
+      pure (t.find? fun e => e.getAppFn.isConstOf `Circuit.forEach).isSome
+    if hasForEach then
+      try evalTactic (← `(tactic| ring_nf)) catch _ => pure ()
+    -- leaf-local simp (normalizes loop-instantiated lengths), then dispatch
+    -- deliberately WITHOUT the user hints: this simp hits `at *`, and close-stage
+    -- hints (e.g. recursive eval decompositions like `eval_vector_set`) rewriting
+    -- every chain fact in every hypothesis is a heartbeat blowup; hints reach
+    -- hypotheses via the close routes' `simp_all` instead
+    try
+      evalTactic (← `(tactic| simp only [circuit_norm, computable_witnesses_norm,
+        ComputableWitnesses.structEqSplit, reduceLocalLength, reduceOutputMetadata,
+        retypeVectorAliasEq] at *))
+    catch _ => pure ()
+    if (← getGoals).isEmpty then return
+    evalTactic (← `(tactic| assert_local_lengths))
+    withMainContext do
+      let t := (← instantiateMVars (← getMainTarget)).consumeMData
+      let .const headName _ := t.getAppFn | evalCloseRun
+      if headName == `Subcircuit.ComputableWitnesses then
+        -- offset_eq variants keep the subcircuit's type-index offset separate
+        -- from the computability offset: unifying a single-`n` rule against two
+        -- defeq-but-differently-spelled offsets makes isDefEq whnf-execute the
+        -- operations list (heartbeat blowup on mapFinRange-built circuits). The
+        -- `m = n` premise is discharged arithmetically over the asserted lengths.
+        -- `WithHint`'s rule takes the input variable explicitly (extra underscore).
+        let tryVariant (nm : Name) : TacticM Bool := do
+          let st ← Tactic.saveState
+          let discharge ← `(term| (by
+            (try simp only [circuit_norm, computable_witnesses_norm,
+              reduceLocalLength, $lemmasArray,*]) <;> omega))
+          try
+            if nm == `GeneralFormalCircuit.WithHint.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq then
+              evalTactic (← `(tactic| refine $(mkIdent nm) _ _ $discharge fun h_agrees => ?_))
+            else
+              evalTactic (← `(tactic| refine $(mkIdent nm) _ $discharge fun h_agrees => ?_))
+            pure true
+          catch _ =>
+            st.restore
+            pure false
+        let mut applied := false
+        for nm in [`FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq,
+            `GeneralFormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq,
+            `GeneralFormalCircuit.WithHint.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq,
+            `FormalAssertion.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq] do
+          unless applied do
+            if ← tryVariant nm then applied := true
+        if applied then
+          simpPass
+          unless (← getGoals).isEmpty do
+            evalTactic (← `(tactic| (try chain_output_facts)))
+            unless (← getGoals).isEmpty do
+              evalCloseRun
+        else
+          -- no composition rule applied: still normalize before grind — witness IR
+          -- and metadata spellings are not grind-reachable in raw form
+          simpPass
+          unless (← getGoals).isEmpty do
+            evalTactic (← `(tactic| grind))
+      else
+        evalTactic (← `(tactic| (try chain_output_facts)))
+        unless (← getGoals).isEmpty do
+          evalCloseRun
+  leafDispatch
+
+/-- Elaborate the two user hint lists into simp-lemma arrays, self-supplying the current
+`main` (all resolutions — a constant absent from the goal contributes no rewrites) and,
+when it exists here, `Circuit.forEach.forAll` (an unresolvable name inside a simp call
+does not error, it silently disables the entire call). Returns `(lemmasArray, closeArray)`
+where `closeArray` additionally carries the `closing` hints — those participate only in
+the close routes' goal-only simp steps, never in `simp_all`/`at *`/whole-circuit
+normalization, so recursive eval decompositions (e.g. `eval_vector_set`) stay
+affordable. -/
+def elabHintArrays (extraTerms closeTerms : Array (TSyntax `term)) :
+    TacticM (Array (TSyntax `Lean.Parser.Tactic.simpLemma) ×
+      Array (TSyntax `Lean.Parser.Tactic.simpLemma)) := do
   let mut lemmasArray ← extraTerms.mapM fun term =>
     `(Lean.Parser.Tactic.simpLemma| $term:term)
-  -- `closing` hints participate only in the close routes' goal-only simp steps: they
-  -- never ride `simp_all`/`at *`/whole-circuit normalization, so recursive eval
-  -- decompositions (e.g. `eval_vector_set`) stay affordable
   let closeOnlyArray ← closeTerms.mapM fun term =>
     `(Lean.Parser.Tactic.simpLemma| $term:term)
-  -- self-supply the current `main` as a simp lemma so every pass (leaf simp, close,
-  -- offset discharge) can unfold occurrences that only surface after early rewriting;
-  -- robust against obligations with no `main` in scope
-  -- ambiguity-tolerant: with several `main`s in scope, include all resolutions — a
-  -- constant that does not occur in the goal contributes no rewrites
   let mainNames ← try resolveGlobalConst (mkIdent `main) catch _ => pure []
   for mainName in mainNames do
     lemmasArray := lemmasArray.push
       (← `(Lean.Parser.Tactic.simpLemma| $(mkIdent mainName):term))
-  -- only when the constant exists here: an unresolvable name inside a simp call does
-  -- not error, it silently disables the entire call (files that do not transitively
-  -- import Clean.Circuit.Loops would lose the whole normalization pass)
   if (← getEnv).contains `Circuit.forEach.forAll then
     lemmasArray := lemmasArray.push
       (← `(Lean.Parser.Tactic.simpLemma| $(mkIdent `Circuit.forEach.forAll):term))
-  let closeArray := lemmasArray ++ closeOnlyArray
+  return (lemmasArray, lemmasArray ++ closeOnlyArray)
+
+def runComputableWitnesses (extraTerms closeTerms : Array (TSyntax `term)) : TacticM Unit := do
+  let (lemmasArray, closeArray) ← elabHintArrays extraTerms closeTerms
   let simpPass : TacticM Unit := do
     unless (← getGoals).isEmpty do
       try
@@ -653,199 +857,10 @@ def runComputableWitnesses (extraTerms closeTerms : Array (TSyntax `term)) : Tac
     -- Base close plus one shape-dispatched route: `Vector.ext` is only ever correct on
     -- an equality of vectors, so it is selected by inspecting the goal, not tried
     -- blindly in an alternatives chain.
-    let baseClose : TSyntax `tactic ← `(tactic|
-      first
-        | (simp_all; done)
-        | (simp_all [circuit_norm, computable_witnesses_norm]; done)
-        | grind)
-    let vecClose : TSyntax `tactic ← `(tactic|
-      first
-        | (simp_all; done)
-        | (simp_all only [circuit_norm, eval_vector, Vector.map_mk, List.map_toArray,
-             List.map_cons, List.map_nil, reduceOutputMetadata, retypeVectorAliasEq,
-             Vector.mk.injEq, Array.mk.injEq, List.cons.injEq, and_true,
-             Vector.map_ofFn, Vector.ext_iff, Vector.getElem_ofFn, Function.comp_def,
-             Vector.getElem_map, Vector.getElem_append,
-             Vector.getElem_mapFinRange, Vector.getElem_mapIdx,
-             Vector.getElem_set, Vector.getElem_mapRange]
-           -- user hints goal-only: in the `simp_all` above they would rewrite every
-           -- chain-fact hypothesis (all legs' window facts) at every leaf — a
-           -- heartbeat blowup for recursive eval decompositions (eval_vector_set)
-           (try simp only [circuit_norm, eval_vector, Vector.ext_iff, Vector.getElem_set,
-             Vector.getElem_ofFn, Vector.getElem_map, Vector.map_ofFn, retypeVectorAliasEq,
-             $closeArray,*])
-           all_goals ((intros; (try split_ifs)) <;>
-               ((try simp only [ProvableType.eval_varFromOffset, circuit_norm, eval_vector,
-                  Vector.mapRange_succ, Vector.mapRange_zero, Vector.mk.injEq, Array.mk.injEq,
-                  List.cons.injEq, and_true, $closeArray,*]);
-                ((try and_intros) <;> grind))))
-        | (refine Vector.ext fun j hj => ?_
-           simp only [getElem_eval_vector, Vector.getElem_map, Vector.getElem_append,
-             Vector.getElem_mapFinRange, Vector.getElem_ofFn, Vector.getElem_mapIdx]
-           (try split_ifs) <;> grind [Vector.getElem_map, getElem_eval_vector])
-        | grind)
-    -- the window/elementwise route applies to eval-congruence goals: both sides are
-    -- eval applications of the same variable term under the two environments (output
-    -- windows, child-output metadata, vector states) — recognized by shape, whether
-    -- the value type is a vector or a provable struct
-    let isEvalCongrEq : TacticM Bool := withMainContext do
-      let t := (← instantiateMVars (← getMainTarget)).consumeMData
-      -- witness-window / child-output atoms mark eval-congruence territory whatever
-      -- the goal's connective shape (equality, conjunction of equalities, …)
-      if (t.find? fun e =>
-          e.getAppFn.isConstOf `Expression.var ||
-          e.getAppFn.isConstOf `ProvableType.varFromOffset ||
-          e.getAppFn.isConstOf `FormalCircuitBase.output ||
-          e.getAppFn.isConstOf `ElaboratedCircuit.output).isSome then
-        return true
-      let some (_, lhs, rhs) := t.eq? | return false
-      let ty ← instantiateMVars (← inferType lhs)
-      let tyW ← withTransparency .instances <| whnf ty
-      if tyW.getAppFn.isConstOf ``Vector then return true
-      if lhs.isApp && rhs.isApp && lhs.appArg! == rhs.appArg! &&
-          (lhs.getAppFn.isConstOf `Eval.eval || lhs.getAppFn.isConstOf `Expression.eval) then
-        return true
-      return false
-    -- Var-typed metadata helper defs tagged `@[computable_witnesses_metadata]`
-    -- (`Permutation.stateVar`, `BLAKE3.G.output`, …) block the eval simp lemmas;
-    -- delta-expand them in the goal to expose their `varFromOffset` spelling.
-    -- Environment-clean (`unfold` would generate the helper's equation lemmas here
-    -- and collide with sibling modules doing the same) and shape-agnostic
-    -- (conjunction goals included). Opt-in by label: return-type shape cannot
-    -- separate safe helpers from spellings the chainer's facts key on.
-    let unfoldSharedEvalArgHeads : TacticM Unit := withMainContext do
-      let labeledSet ← labelled `computable_witnesses_metadata
-      if labeledSet.isEmpty then return
-      let ctx ← Simp.mkContext
-        { zeta := true, beta := true, proj := true, iota := true, instances := true }
-        (simpTheorems := #[]) (← Meta.getSimpCongrTheorems)
-      let mut t := (← instantiateMVars (← getMainTarget)).consumeMData
-      let mut changed := false
-      -- iterate: labeled helpers can be nested inside other labeled helpers
-      -- (`Rotation32.output` inside `BLAKE3.G.output`)
-      for _ in [0:4] do
-        let names ← IO.mkRef (#[] : Array Name)
-        t.forEach fun sub => do
-          let .const c _ := sub.getAppFn | return ()
-          if labeledSet.contains c then
-            names.modify fun a => if a.contains c then a else a.push c
-        let allowed ← names.get
-        if allowed.isEmpty then break
-        let expanded ← Meta.deltaExpand t (allowed.contains ·)
-        let t' := (← Meta.dsimp expanded ctx).1
-        if t' == t then break
-        t := t'
-        changed := true
-      unless changed do return
-      liftMetaTactic fun g => do return [← g.change t]
-    -- `grind` internalizes every hypothesis and whnf-normalizes its terms; a
-    -- `localLength`-equation whose LHS is a raw operations list (e.g. Permutation's 24
-    -- rounds) blows the heartbeat budget during that normalization. The equations have
-    -- already done their work (offset discharge, AgreesBelow bounds) by close time.
-    let clearOpsLengthHyps : TacticM Unit := withMainContext do
-      for decl in ← getLCtx do
-        if decl.isImplementationDetail then continue
-        let toxic := (← instantiateMVars decl.type).find? fun e =>
-          e.getAppFn.isConstOf `Operations.localLength
-        if toxic.isSome then
-          try liftMetaTactic fun g => do return [← g.clear decl.fvarId] catch _ => pure ()
-    -- `assumption` isDefEq-matches the goal against every hypothesis; a mismatched
-    -- pair of large vector terms whnf-executes them (heartbeat blowup). Syntactic
-    -- matching is enough here: the chain re-keys facts at the goal's own spelling.
-    let syntacticAssumption : TacticM Unit := withMainContext do
-      let tgt ← instantiateMVars (← getMainTarget)
-      for decl in ← getLCtx do
-        if decl.isImplementationDetail then continue
-        if (← instantiateMVars decl.type) == tgt then
-          (← getMainGoal).assign decl.toExpr
-          replaceMainGoal []
-          return
-      throwError "syntacticAssumption: no match"
-    let evalCloseRun : TacticM Unit := do
-      if (← getGoals).isEmpty then return
-      try clearOpsLengthHyps catch _ => pure ()
-      if (← try syntacticAssumption; pure true catch _ => pure false) then return
-      -- expose labeled helper metadata before routing: the expansion produces the
-      -- `varFromOffset` atoms the route test looks for
-      try unfoldSharedEvalArgHeads catch _ => pure ()
-      if ← isEvalCongrEq then
-        evalTactic vecClose
-      else
-        evalTactic baseClose
-    let leafDispatch : TacticM Unit := withMainContext do
-      -- inaccessible hyp names (from intro1P) break the chainer's delab roundtrip
-      try evalTactic (← `(tactic| expose_names)) catch _ => pure ()
-      -- offset arithmetic into the shape `Circuit.forEach.forAll` matches (the manual
-      -- proofs' `ring_nf` step) — only for leaves that actually contain a forEach
-      -- group; elsewhere ring_nf re-spells offsets out from under the omega discharge
-      let hasForEach ← withMainContext do
-        let t ← instantiateMVars (← getMainTarget)
-        pure (t.find? fun e => e.getAppFn.isConstOf `Circuit.forEach).isSome
-      if hasForEach then
-        try evalTactic (← `(tactic| ring_nf)) catch _ => pure ()
-      -- leaf-local simp (normalizes loop-instantiated lengths), then dispatch
-      -- deliberately WITHOUT the user hints: this simp hits `at *`, and close-stage
-      -- hints (e.g. recursive eval decompositions like `eval_vector_set`) rewriting
-      -- every chain fact in every hypothesis is a heartbeat blowup; hints reach
-      -- hypotheses via the close routes' `simp_all` instead
-      try
-        evalTactic (← `(tactic| simp only [circuit_norm, computable_witnesses_norm,
-          ComputableWitnesses.structEqSplit, reduceLocalLength, reduceOutputMetadata,
-          retypeVectorAliasEq] at *))
-      catch _ => pure ()
-      if (← getGoals).isEmpty then return
-      evalTactic (← `(tactic| assert_local_lengths))
-      withMainContext do
-        let t := (← instantiateMVars (← getMainTarget)).consumeMData
-        let .const headName _ := t.getAppFn | evalCloseRun
-        if headName == `Subcircuit.ComputableWitnesses then
-          -- offset_eq variants keep the subcircuit's type-index offset separate
-          -- from the computability offset: unifying a single-`n` rule against two
-          -- defeq-but-differently-spelled offsets makes isDefEq whnf-execute the
-          -- operations list (heartbeat blowup on mapFinRange-built circuits). The
-          -- `m = n` premise is discharged arithmetically over the asserted lengths.
-          -- `WithHint`'s rule takes the input variable explicitly (extra underscore).
-          let tryVariant (nm : Name) : TacticM Bool := do
-            let st ← Tactic.saveState
-            let discharge ← `(term| (by
-              (try simp only [circuit_norm, computable_witnesses_norm,
-                reduceLocalLength, $lemmasArray,*]) <;> omega))
-            try
-              if nm == `GeneralFormalCircuit.WithHint.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq then
-                evalTactic (← `(tactic| refine $(mkIdent nm) _ _ $discharge fun h_agrees => ?_))
-              else
-                evalTactic (← `(tactic| refine $(mkIdent nm) _ $discharge fun h_agrees => ?_))
-              pure true
-            catch _ =>
-              st.restore
-              pure false
-          let mut applied := false
-          for nm in [`FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq,
-              `GeneralFormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq,
-              `GeneralFormalCircuit.WithHint.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq,
-              `FormalAssertion.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq] do
-            unless applied do
-              if ← tryVariant nm then applied := true
-          if applied then
-            simpPass
-            unless (← getGoals).isEmpty do
-              evalTactic (← `(tactic| (try chain_output_facts)))
-              unless (← getGoals).isEmpty do
-                evalCloseRun
-          else
-            -- no composition rule applied: still normalize before grind — witness IR
-            -- and metadata spellings are not grind-reachable in raw form
-            simpPass
-            unless (← getGoals).isEmpty do
-              evalTactic (← `(tactic| grind))
-        else
-          evalTactic (← `(tactic| (try chain_output_facts)))
-          unless (← getGoals).isEmpty do
-            evalCloseRun
     let goals ← getGoals
     for g in goals do
       setGoals [g]
-      leafDispatch
+      runLeafDispatch lemmasArray closeArray
     setGoals []
 
 /--
@@ -872,6 +887,21 @@ elab_rules : tactic
   | `(tactic| computable_witnesses $[[$terms:term,*]]? $[closing [$closeTerms:term,*]]?) =>
       runComputableWitnesses (terms.map (fun terms => terms.getElems) |>.getD #[])
         (closeTerms.map (fun terms => terms.getElems) |>.getD #[])
+
+/-- Run only the per-leaf dispatch/close stage of `computable_witnesses` on the current
+goal: leaf-local normalization, `assert_local_lengths`, subcircuit composition-rule
+dispatch, child-output chaining, and the shape-dispatched close routes. For manual
+proofs that do the structural decomposition themselves — each machine-closable leg
+becomes `computable_witnesses_close`, and only legs needing a bespoke lemma stay
+hand-written. Accepts the same two hint lists as `computable_witnesses`. -/
+syntax "computable_witnesses_close" ("[" term,* "]")? ("closing " "[" term,* "]")? : tactic
+
+elab_rules : tactic
+  | `(tactic| computable_witnesses_close $[[$terms:term,*]]? $[closing [$closeTerms:term,*]]?) => do
+      let (lemmasArray, closeArray) ← elabHintArrays
+        (terms.map (fun terms => terms.getElems) |>.getD #[])
+        (closeTerms.map (fun terms => terms.getElems) |>.getD #[])
+      runLeafDispatch lemmasArray closeArray
 
 /-- Diagnostic variant of `computable_witnesses` without the `simp_all` fallback, so
 `grind`'s failure state is visible. Not for committed proofs. -/
