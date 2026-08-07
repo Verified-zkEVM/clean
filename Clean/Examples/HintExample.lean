@@ -76,12 +76,9 @@ def booleanAnd : FormalCircuit (F p) Input field where
     simp only [circuit_norm, computable_witnesses_norm, ComputableWitnesses.structEqSplit]
     refine ⟨fun h_input => ?_, ?_⟩
     · -- WithHint subcircuit node: the composition lemma, input equality from the components
-      apply GeneralFormalCircuit.WithHint.toSubcircuit_computableWitnesses
-      -- rewriting under `decide` leaves two different `DecidableEq (F p)` instance
-      -- constants (`instDecidableEqF` vs `FiniteField.instDecidableEq`); close at the
-      -- Prop level, where the instance is irrelevant
-      simp only [circuit_norm, h_input.1, h_input.2]
-      congr 1 <;> exact decide_eq_decide.mpr Iff.rfl
+      apply GeneralFormalCircuit.WithHint.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _ _ rfl
+      simp only [circuit_norm]
+      grind
     · grind
 
 structure MixedInput (F : Type) where
