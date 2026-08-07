@@ -95,13 +95,11 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   main, elaborated, Assumptions, Spec, soundness, completeness
-  -- Manual: every leaf shape here closes under the tactic's vector route given
-  -- [eval_vector_set, U32.ByteVector.eval_fromLimbs, U32.ByteVector.fromLimbs_inj]
-  -- (verified 2026-08-07 by emulating the route on the leaves), but passing those as
-  -- hints blows the heartbeat budget: the single hint channel also feeds the initial
-  -- whole-circuit `simpPass`, where a recursive eval decomposition (eval_vector_set)
-  -- rewrites all eight legs' set-chains pre-split. Needs a separate close-only hint
-  -- channel (API decision).
+  -- Manual: the per-leg leaves close under `closing [eval_vector_set,
+  -- U32.ByteVector.eval_fromLimbs, U32.ByteVector.fromLimbs_inj]`, but the output
+  -- leg — eight chained G-output windows, fully expanded by the tactic — exceeds the
+  -- heartbeat budget inside the close; the leaf loop has no per-leaf budget scoping,
+  -- so the whole call dies. The named-window chain below stays linear instead.
   computableWitnesses := by
     intro n input env env'
     obtain ⟨state, message⟩ := input

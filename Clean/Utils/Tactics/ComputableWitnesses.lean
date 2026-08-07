@@ -602,8 +602,13 @@ def destructureProvableStructVars : TacticM Unit := do
       let subgoals ← goal.cases fvarId
       return subgoals.map (·.mvarId) |>.toList
 
-def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : TacticM Unit := do
+def runComputableWitnesses (extraTerms closeTerms : Array (TSyntax `term)) : TacticM Unit := do
   let mut lemmasArray ← extraTerms.mapM fun term =>
+    `(Lean.Parser.Tactic.simpLemma| $term:term)
+  -- `closing` hints participate only in the close routes' goal-only simp steps: they
+  -- never ride `simp_all`/`at *`/whole-circuit normalization, so recursive eval
+  -- decompositions (e.g. `eval_vector_set`) stay affordable
+  let closeOnlyArray ← closeTerms.mapM fun term =>
     `(Lean.Parser.Tactic.simpLemma| $term:term)
   -- self-supply the current `main` as a simp lemma so every pass (leaf simp, close,
   -- offset discharge) can unfold occurrences that only surface after early rewriting;
@@ -620,6 +625,7 @@ def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : TacticM Unit :
   if (← getEnv).contains `Circuit.forEach.forAll then
     lemmasArray := lemmasArray.push
       (← `(Lean.Parser.Tactic.simpLemma| $(mkIdent `Circuit.forEach.forAll):term))
+  let closeArray := lemmasArray ++ closeOnlyArray
   let simpPass : TacticM Unit := do
     unless (← getGoals).isEmpty do
       try
@@ -667,11 +673,11 @@ def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : TacticM Unit :
            -- heartbeat blowup for recursive eval decompositions (eval_vector_set)
            (try simp only [circuit_norm, eval_vector, Vector.ext_iff, Vector.getElem_set,
              Vector.getElem_ofFn, Vector.getElem_map, Vector.map_ofFn, retypeVectorAliasEq,
-             $lemmasArray,*])
+             $closeArray,*])
            all_goals ((intros; (try split_ifs)) <;>
                ((try simp only [ProvableType.eval_varFromOffset, circuit_norm, eval_vector,
                   Vector.mapRange_succ, Vector.mapRange_zero, Vector.mk.injEq, Array.mk.injEq,
-                  List.cons.injEq, and_true, $lemmasArray,*]);
+                  List.cons.injEq, and_true, $closeArray,*]);
                 ((try and_intros) <;> grind))))
         | (refine Vector.ext fun j hj => ?_
            simp only [getElem_eval_vector, Vector.getElem_map, Vector.getElem_append,
@@ -853,12 +859,19 @@ shape.
 Extra simp lemmas may be supplied as `computable_witnesses [lemma₁, lemma₂]` — e.g. a
 child bundle name to reduce its `output`/`localLength` metadata when witness expressions
 embed the child's output under a binder, where `grind`'s E-matching cannot reach it.
+
+A second hint list `computable_witnesses [..] closing [lemma₁, lemma₂]` participates only
+in the close routes' goal-only simp steps, after the goal is split to leaves. Use it for
+rewrites that decompose evaluation recursively (`eval_vector_set`, `eval_fromLimbs`-style
+lemmas): in the normalization positions those would rewrite every chain-fact hypothesis
+or the whole-circuit goal and blow the heartbeat budget.
 -/
-syntax "computable_witnesses" ("[" term,* "]")? : tactic
+syntax "computable_witnesses" ("[" term,* "]")? ("closing " "[" term,* "]")? : tactic
 
 elab_rules : tactic
-  | `(tactic| computable_witnesses $[[$terms:term,*]]?) =>
+  | `(tactic| computable_witnesses $[[$terms:term,*]]? $[closing [$closeTerms:term,*]]?) =>
       runComputableWitnesses (terms.map (fun terms => terms.getElems) |>.getD #[])
+        (closeTerms.map (fun terms => terms.getElems) |>.getD #[])
 
 /-- Diagnostic variant of `computable_witnesses` without the `simp_all` fallback, so
 `grind`'s failure state is visible. Not for committed proofs. -/

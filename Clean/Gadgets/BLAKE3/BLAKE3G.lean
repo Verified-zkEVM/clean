@@ -168,36 +168,7 @@ def circuit (a b c d : Fin 16) : FormalCircuit (F p) Inputs BLAKE3State where
   soundness := soundness a b c d
   completeness := completeness a b c d
   computableWitnesses := by
-    rintro n ⟨state, x, y⟩ env env'
-    simp only [circuit_norm, main, ComputableWitnesses.reduceLocalLength]
-    refine ⟨?_, fun h h_agrees => output_eval_congr h.1 h_agrees⟩
-    and_intros <;>
-      refine fun h =>
-        FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-          (by omega) fun h_agrees => ?_ <;>
-      simp only [circuit_norm]
-    · exact ⟨state_elem_congr h.1 b, h.2.1⟩
-    · exact ⟨state_elem_congr h.1 a,
-        Addition32.output_congr (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))⟩
-    · exact ⟨state_elem_congr h.1 d,
-        Addition32.output_congr (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))⟩
-    · exact Xor32.output_congr (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-    · exact ⟨state_elem_congr h.1 c,
-        Rotation32.output_congr (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))⟩
-    · exact ⟨state_elem_congr h.1 b,
-        Addition32.output_congr (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))⟩
-    · exact Xor32.output_congr (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-    · exact ⟨Rotation32.output_congr (ProverEnvironment.agreesBelow_of_le h_agrees (by omega)),
-        h.2.2⟩
-    · exact ⟨Addition32.output_congr (ProverEnvironment.agreesBelow_of_le h_agrees (by omega)),
-        Addition32.output_congr (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))⟩
-    · exact ⟨Rotation32.output_congr (ProverEnvironment.agreesBelow_of_le h_agrees (by omega)),
-        Addition32.output_congr (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))⟩
-    · exact Xor32.output_congr (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-    · exact ⟨Addition32.output_congr (ProverEnvironment.agreesBelow_of_le h_agrees (by omega)),
-        Rotation32.output_congr (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))⟩
-    · exact ⟨Rotation32.output_congr (ProverEnvironment.agreesBelow_of_le h_agrees (by omega)),
-        Addition32.output_congr (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))⟩
-    · exact Xor32.output_congr (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+    computable_witnesses closing [eval_vector_set, U32.ByteVector.eval_fromLimbs,
+      U32.ByteVector.fromLimbs_inj]
 
 end Gadgets.BLAKE3.G

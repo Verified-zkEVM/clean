@@ -368,8 +368,11 @@ lemma output_take8_eq {env env' : ProverEnvironment (F p)} {n : ℕ}
 
 def circuit : FormalCircuit (F p) Inputs (ProvableVector U32 8) := {
   main, elaborated, Assumptions, Spec, soundness, completeness
-  -- Manual: leaves pair input-component facts with child output windows, like
-  -- BLAKE3.Round; the tactic does not use the premise-free window lemmas yet.
+  -- Manual: with `computable_witnesses [bytesToWords] closing [eval_vector_set, …]`
+  -- every leg closes except the output: its `take 8` of a varFromOffset literal needs
+  -- `output_take8_eq`, which cannot fire as a hint — the tactic normalizes the window
+  -- offsets to `n + 5393`-style numerals while the lemma (matching the metadata) spells
+  -- them as `n + 9 + 4 + 4 + 5376` chains, and simp keys don't bridge that arithmetic.
   computableWitnesses := by
     intro n input env env'
     have eZ : ∀ v, (IsZero.circuit (F := F p) (M := U32)).localLength v = 9 := fun _ => rfl
