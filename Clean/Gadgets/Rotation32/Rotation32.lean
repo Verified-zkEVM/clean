@@ -76,18 +76,4 @@ def circuit (offset : Fin 32) : FormalCircuit (F p) U32 U32 where
   computableWitnesses := by
     computable_witnesses [main, output, Rotation32Bits.output, U32.ByteVector.eval_fromLimbs]
 
-/-- The output is a fresh witness window (limb recombination of the bit witnesses):
-evaluating it reads the environment only below `n + localLength`, independently of the
-circuit's input. -/
-lemma output_congr {env env' : ProverEnvironment (F p)} {off : Fin 32} {v : Var U32 (F p)} {n : ℕ}
-    (h : env.AgreesBelow (n + 8) env') :
-    eval env.toEnvironment ((circuit (p:=p) off).output v n) =
-      eval env'.toEnvironment ((circuit (p:=p) off).output v n) := by
-  simp only [circuit_norm, ComputableWitnesses.reduceOutputMetadata,
-    U32.ByteVector.eval_fromLimbs]
-  congr 1
-  ext i hi
-  simp only [Vector.getElem_map, Vector.getElem_ofFn, Expression.eval]
-  rw [h.1 _ (by omega), h.1 _ (by omega)]
-
 end Gadgets.Rotation32
