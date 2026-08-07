@@ -174,7 +174,7 @@ lemma lc_eq {env} {n : ℕ} {v : Vector (Expression (F p)) n} :
     rw [ZMod.cast_id]
 
 omit [Fact (p > 2)] in
-private lemma lc_eq_map {env} {n : ℕ} {v : Vector (Expression (F p)) n} :
+lemma lc_eq_map {env} {n : ℕ} {v : Vector (Expression (F p)) n} :
     Expression.eval env (Fin.foldl n
       (fun ((lc1, e2) : Expression (F p) × Expression (F p)) i =>
         (lc1 + v[↑i] * e2, e2 + e2)) (0, 1)).1 =

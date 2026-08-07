@@ -136,14 +136,14 @@ simproc structEqSplit (_ = _) := structEqSplitProc
 
 /-- Heads under which concrete circuits' `localLength` metadata appears in
 computable-witness goals. -/
-private def localLengthHeads : List Name :=
+def localLengthHeads : List Name :=
   [`FormalCircuitBase.localLength, `ElaboratedCircuit.localLength,
    `Subcircuit.localLength, `Operations.localLength]
 
 /-- Run `x` under a local heartbeat sub-budget, converting a runtime timeout into
 `none`. Used for speculative defeq probes that would otherwise symbolically execute
 opaque terms and kill the whole tactic (the runtime exception escapes `try`). -/
-private def withProbeBudget {α : Type} (x : MetaM α) : MetaM (Option α) :=
+def withProbeBudget {α : Type} (x : MetaM α) : MetaM (Option α) :=
   tryCatchRuntimeEx
     (withCurrHeartbeats do
       withTheReader Core.Context (fun ctx => { ctx with maxHeartbeats := 1000000 }) do
@@ -156,7 +156,7 @@ operation lists into arithmetic over bundled-circuit metadata projections *witho
 executing the list: `whnf` evaluates such a list element by element (quadratic vector
 pushes for `mapFinRange`-built circuits), which blows the heartbeat budget on larger
 gadgets, while this path costs a few hundred heartbeats. -/
-private def simpLocalLength (e : Expr) : MetaM Simp.Result := do
+def simpLocalLength (e : Expr) : MetaM Simp.Result := do
   let some ext ← getSimpExtension? `circuit_norm | return { expr := e }
   let ctx ← Simp.mkContext
     { zeta := true, beta := true, proj := true, iota := true, instances := true }
@@ -168,7 +168,7 @@ leaves (the shape `elaborate_circuit` leaves `localLength` metadata in: arithmet
 explicit-structure projections, whose whnf is a cheap literal-field lookup). Refuses to
 whnf an `Operations.localLength` head — that executes the operations list; such terms
 must go through `simpLocalLength` first. -/
-private partial def natValOf (e : Expr) : MetaM (Option Nat) := do
+partial def natValOf (e : Expr) : MetaM (Option Nat) := do
   if let some k := e.rawNatLit? then return some k
   match_expr e with
   | HAdd.hAdd _ _ _ _ a b => do
@@ -527,7 +527,7 @@ elab "chain_output_facts" : tactic => withMainContext do
         catch _ =>
           st.restore
 
-private partial def splitStep (g : MVarId) (fuel : Nat) : MetaM (List MVarId) := do
+partial def splitStep (g : MVarId) (fuel : Nat) : MetaM (List MVarId) := do
   if fuel == 0 then return [g]
   let t := (← instantiateMVars (← g.getType)).consumeMData
   -- child obligations stay whole for the composition rules
@@ -553,13 +553,13 @@ private partial def splitStep (g : MVarId) (fuel : Nat) : MetaM (List MVarId) :=
     | some (some (_, g')) => splitStep g' (fuel - 1)
     | _ => return [g]
 
-private def splitStructure : TacticM Unit :=
+def splitStructure : TacticM Unit :=
   liftMetaTactic fun g => splitStep g 512
 
 /-- Find a local variable of `ProvableStruct` type (e.g. an opaque circuit input) that can be
 destructured: `simp`/`grind` do not iota-reduce the `match` coming from `main`'s destructuring
 `let` against an opaque variable, so the tactic case-splits such variables up front. -/
-private def findProvableStructVar : TacticM (Option FVarId) :=
+def findProvableStructVar : TacticM (Option FVarId) :=
   withMainContext do
     for decl in ← getLCtx do
       if decl.isImplementationDetail then continue
@@ -578,7 +578,7 @@ private def findProvableStructVar : TacticM (Option FVarId) :=
     return none
 
 /-- Destructure all `ProvableStruct`-typed local variables (fixpoint, bounded). -/
-private def destructureProvableStructVars : TacticM Unit := do
+def destructureProvableStructVars : TacticM Unit := do
   for _ in [0:8] do
     if (← getGoals).isEmpty then return
     let some fvarId ← findProvableStructVar | return
@@ -586,7 +586,7 @@ private def destructureProvableStructVars : TacticM Unit := do
       let subgoals ← goal.cases fvarId
       return subgoals.map (·.mvarId) |>.toList
 
-private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : TacticM Unit := do
+def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : TacticM Unit := do
   let mut lemmasArray ← extraTerms.mapM fun term =>
     `(Lean.Parser.Tactic.simpLemma| $term:term)
   -- self-supply the current `main` as a simp lemma so every pass (leaf simp, close,

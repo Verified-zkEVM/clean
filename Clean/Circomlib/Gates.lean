@@ -899,14 +899,14 @@ instance elaboratedMain (n : ℕ) : ElaboratedCircuit (F p) (fields n) field mai
     · exact (subcircuitChannelsWithGuarantees_subset_nil_and_inChannelsOrGuarantees_nil n input_var offset).2
     · exact subcircuitChannelsLawful n input_var offset
 
-private lemma map_eval_congr_of_getElem {n : ℕ} {v : Vector (Expression (F p)) n}
+lemma map_eval_congr_of_getElem {n : ℕ} {v : Vector (Expression (F p)) n}
     {env env' : Environment (F p)}
     (h : ∀ i (_ : i < n), Expression.eval env v[i] = Expression.eval env' v[i]) :
     v.map (Expression.eval env) = v.map (Expression.eval env') := by
   ext i hi
   simpa using h i hi
 
-private lemma getElem_eval_of_map_eq {n : ℕ} {v : Vector (Expression (F p)) n}
+lemma getElem_eval_of_map_eq {n : ℕ} {v : Vector (Expression (F p)) n}
     {env env' : Environment (F p)}
     (h : v.map (Expression.eval env) = v.map (Expression.eval env')) (i : ℕ) (hi : i < n) :
     Expression.eval env v[i] = Expression.eval env' v[i] := by

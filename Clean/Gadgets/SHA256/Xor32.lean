@@ -41,7 +41,7 @@ def Spec (input : Inputs (F p)) (z : fields 32 (F p)) : Prop :=
 ## Helper lemmas for valueBits and bitwise XOR
 -/
 
-private lemma sum_bool_lt_two_pow (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i ≤ 1) :
+lemma sum_bool_lt_two_pow (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i ≤ 1) :
     ∑ i : Fin n, f i * 2^i.val < 2^n := by
   induction n with
   | zero => simp
@@ -54,7 +54,7 @@ private lemma sum_bool_lt_two_pow (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i
     have h2 : 2^m + 2^m = 2^(m+1) := by ring
     omega
 
-private lemma testBit_binary_sum (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i = 0 ∨ f i = 1) (k : Fin n) :
+lemma testBit_binary_sum (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i = 0 ∨ f i = 1) (k : Fin n) :
     Nat.testBit (∑ i : Fin n, f i * 2^i.val) k.val = decide (f k = 1) := by
   induction n with
   | zero => exact k.elim0
@@ -75,7 +75,7 @@ private lemma testBit_binary_sum (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i 
       have hklast : k = Fin.last m := Fin.ext hkeq; subst hklast
       rcases hf (Fin.last m) with h | h <;> simp [h, fm]
 
-private lemma bool_finsum_xor (n : ℕ) (f g : Fin n → ℕ) (hf : ∀ i, f i = 0 ∨ f i = 1)
+lemma bool_finsum_xor (n : ℕ) (f g : Fin n → ℕ) (hf : ∀ i, f i = 0 ∨ f i = 1)
     (hg : ∀ i, g i = 0 ∨ g i = 1) :
     (∑ i : Fin n, f i * 2^i.val) ^^^ (∑ i : Fin n, g i * 2^i.val)
     = ∑ i : Fin n, (f i ^^^ g i) * 2^i.val := by

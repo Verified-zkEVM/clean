@@ -110,7 +110,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
     ⟨chaining_value_norm 6, state_norm 14⟩, chaining_value_norm 7, state_norm 15⟩
 
 omit [Fact (p > 2 ^ 16 + 2 ^ 8)] in
-private lemma varFromOffset_eval_congr {env env' : Environment (F p)} {k n : ℕ}
+lemma varFromOffset_eval_congr {env env' : Environment (F p)} {k n : ℕ}
     (h : ∀ i < n, env.get i = env'.get i) (hk : k + 4 ≤ n) :
     eval env (varFromOffset U32 k : U32 (Expression (F p))) =
       eval env' (varFromOffset U32 k : U32 (Expression (F p))) := by

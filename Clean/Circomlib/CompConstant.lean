@@ -14,7 +14,7 @@ variable {p : ℕ} [Fact p.Prime] [Fact (p < 2^254)] [Fact (p > 2^253)]
 
 namespace CompConstant
 
-private lemma eval_sum_eq_of_eval_eq {F : Type} [Field F]
+lemma eval_sum_eq_of_eval_eq {F : Type} [Field F]
     {env env' : Environment F} {n : ℕ} {v : Vector (Expression F) n}
     (h : ∀ i : Fin n, Expression.eval env v[i] = Expression.eval env' v[i]) :
     Expression.eval env v.sum = Expression.eval env' v.sum := by

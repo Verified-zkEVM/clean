@@ -388,11 +388,11 @@ end ByteVector
 section Bitwise
 
 -- helper lemma to prepare the goal for testBit_two_pow_mul_add
-private lemma reorganize_value (a b c d : ℕ) :
+lemma reorganize_value (a b c d : ℕ) :
   a + 256 * (b + 256 * (c + 256 * d)) =
   2^8 * (2^8 * (2^8 * d + c) + b) + a := by ring
 
-private lemma reorganize_value' (a b c d : ℕ) :
+lemma reorganize_value' (a b c d : ℕ) :
   a + b * 256 + c * 256 ^ 2 + d * 256 ^ 3 =
   2^8 * (2^8 * (2^8 * d + c) + b) + a := by ring
 

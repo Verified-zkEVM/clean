@@ -220,7 +220,7 @@ lemma mapRange_var_eval_congr {env env' : ProverEnvironment (F p)} {n : ℕ}
 omit [Fact (p > 2 ^ 33)] in
 /-- Env-agreement transfers to the output state vector (own heartbeat budget): fresh witness
 windows lie below the bound, the remaining entries evaluate through the input state. -/
-private lemma output_eval_congr {env env' : ProverEnvironment (F p)}
+lemma output_eval_congr {env env' : ProverEnvironment (F p)}
     {state : SHA256State (Expression (F p))} {n : ℕ}
     (hstate : (eval env.toEnvironment state : SHA256State (F p)) = eval env'.toEnvironment state)
     (h_agrees : env.AgreesBelow (n + 455) env') :

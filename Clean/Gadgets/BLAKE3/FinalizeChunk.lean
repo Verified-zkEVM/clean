@@ -113,14 +113,14 @@ def Spec (input : Inputs (F p)) (output : ProvableVector U32 8 (F p)) : Prop :=
   output.map U32.value = Specs.BLAKE3.finalizeChunk chunk_state input.base_flags.value ∧
   (∀ i : Fin 8, output[i].Normalized)
 
-private lemma ZMod_val_chunkEnd :
+lemma ZMod_val_chunkEnd :
     ZMod.val (n:=p) ↑chunkEnd = 2 := by
   have := p_large_enough.elim
   simp only [ZMod.val_natCast, chunkEnd, pow_one]
   rw [Nat.mod_eq_of_lt]; omega
 
 omit p_large_enough in
-private lemma eval_bytesToWords (env : Environment (F p))
+lemma eval_bytesToWords (env : Environment (F p))
     (input_var_buffer_data : BLAKE3Buffer (Expression (F p))) :
   eval env (bytesToWords input_var_buffer_data : ProvableVector U32 16 (Expression (F p))) =
       bytesToWords (eval env input_var_buffer_data : BLAKE3Buffer (F p)) := by
@@ -130,7 +130,7 @@ private lemma eval_bytesToWords (env : Environment (F p))
   simp only [Vector.getElem_map, Vector.getElem_ofFn, U32.eval_of_literal]
 
 omit p_large_enough in
-private lemma eval_take_normalized (env : Environment (F p)) (v : BLAKE3State (Expression (F p)))
+lemma eval_take_normalized (env : Environment (F p)) (v : BLAKE3State (Expression (F p)))
     (h : ∀ i : Fin 16, (eval env v : BLAKE3State (F p))[i.val].Normalized) (i : ℕ) (h_i : i < 8) :
     ((eval env (v.take 8) : ProvableVector U32 8 (F p))[i]'(by omega)).Normalized := by
   have h_eq : (eval env (v.take 8) : ProvableVector U32 8 (F p)) =
@@ -274,7 +274,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
       · exact h_or2.2
 
 omit p_large_enough in
-private lemma eval_components {env env' : Environment (F p)} {input : Var Inputs (F p)}
+lemma eval_components {env env' : Environment (F p)} {input : Var Inputs (F p)}
     (h : ProvableStruct.eval env input = ProvableStruct.eval env' input) :
     eval env input.state.blocks_compressed = eval env' input.state.blocks_compressed ∧
     eval env input.base_flags = eval env' input.base_flags := by
@@ -283,7 +283,7 @@ private lemma eval_components {env env' : Environment (F p)} {input : Var Inputs
   grind
 
 omit p_large_enough in
-private lemma or1_input_eq {env env' : Environment (F p)} {bf : Var U32 (F p)}
+lemma or1_input_eq {env env' : Environment (F p)} {bf : Var U32 (F p)}
     {z : Var field (F p)}
     (hbf : eval env bf = eval env' bf) (hz : eval env z = eval env' z) :
     eval env (Or32.Inputs.mk bf (U32.mk (z * Expression.const 1) 0 0 0)) =
@@ -292,7 +292,7 @@ private lemma or1_input_eq {env env' : Environment (F p)} {bf : Var U32 (F p)}
   grind
 
 omit p_large_enough in
-private lemma or2_input_eq {env env' : Environment (F p)} {w : Var U32 (F p)}
+lemma or2_input_eq {env env' : Environment (F p)} {w : Var U32 (F p)}
     (hw : eval env w = eval env' w) :
     eval env (Or32.Inputs.mk w (U32.mk (Expression.const (chunkEnd : F p)) 0 0 0)) =
       eval env' (Or32.Inputs.mk w (U32.mk (Expression.const (chunkEnd : F p)) 0 0 0)) := by
@@ -300,7 +300,7 @@ private lemma or2_input_eq {env env' : Environment (F p)} {w : Var U32 (F p)}
   grind
 
 omit p_large_enough in
-private lemma compress_input_eq {env env' : Environment (F p)} {input : Var Inputs (F p)}
+lemma compress_input_eq {env env' : Environment (F p)} {input : Var Inputs (F p)}
     {fl : Var U32 (F p)}
     (h : ProvableStruct.eval env input = ProvableStruct.eval env' input)
     (hfl : eval env fl = eval env' fl) :
@@ -314,7 +314,7 @@ private lemma compress_input_eq {env env' : Environment (F p)} {input : Var Inpu
   grind [eval_bytesToWords]
 
 omit p_large_enough in
-private lemma output_windows_eq {env env' : ProverEnvironment (F p)} {m k : ℕ}
+lemma output_windows_eq {env env' : ProverEnvironment (F p)} {m k : ℕ}
     (h_agrees : env.AgreesBelow m env') (hk : k + 4 ≤ m) :
     eval env.toEnvironment (varFromOffset U32 k : Var U32 (F p)) =
       eval env'.toEnvironment (varFromOffset U32 k : Var U32 (F p)) := by
@@ -324,7 +324,7 @@ private lemma output_windows_eq {env env' : ProverEnvironment (F p)} {m k : ℕ}
   and_intros <;> exact h_agrees.1 _ (by omega)
 
 omit p_large_enough in
-private lemma output_take8_eq {env env' : ProverEnvironment (F p)} {n : ℕ}
+lemma output_take8_eq {env env' : ProverEnvironment (F p)} {n : ℕ}
     (h_agrees : env.AgreesBelow (n + 5457) env') :
     eval env.toEnvironment
         ((#v[varFromOffset U32 (n + 9 + 4 + 4 + 5376),

@@ -791,7 +791,7 @@ theorem _root_.GeneralFormalCircuit.output_of_input_eq
 /-- Concrete-instance-spelled composite decode-output congruence: the framework spelling is
 definitionally equal but distinct as a simp/grind atom (TODO COMPWIT); the conversion's
 instance-level defeq check is paid here, in its own heartbeat budget. -/
-private lemma decodeInstruction_output_congr {env env' : ProverEnvironment (F p)}
+lemma decodeInstruction_output_congr {env env' : ProverEnvironment (F p)}
     {n : ℕ} {raw : Expression (F p)}
     (input_eq : Expression.eval env.toEnvironment raw = Expression.eval env'.toEnvironment raw)
     (h_agrees : env.AgreesBelow (n + 4 + 8) env') :
@@ -807,7 +807,7 @@ omit p_large_enough in
 composite evals through the generic `Var`-instance path, which is definitionally equal to
 but not syntactically the concrete spelling of the goal atoms (TODO COMPWIT); the expensive
 full-transparency bridge is paid once here, in its own heartbeat budget. -/
-private lemma fetchInstruction_output_congr {env env' : ProverEnvironment (F p)}
+lemma fetchInstruction_output_congr {env env' : ProverEnvironment (F p)}
     {n : ℕ} {pc : Expression (F p)}
     (input_eq : Expression.eval env.toEnvironment pc = Expression.eval env'.toEnvironment pc)
     (h_agrees : env.AgreesBelow (n + 4) env') :

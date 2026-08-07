@@ -43,7 +43,7 @@ def main (input : Expression (F p)) := do
   return bits
 
 omit [Fact (p < 2^254)] [Fact (p > 2^253)] in
-private theorem num2Bits_main_forAll_iff
+theorem num2Bits_main_forAll_iff
     {n offset : ℕ} {input : Expression (F p)} {env env' : ProverEnvironment (F p)} :
     ((Num2Bits.main n input).operations offset).forAll offset {
       witness n _ compute :=
@@ -58,7 +58,7 @@ private theorem num2Bits_main_forAll_iff
     offset input env env' |>.1
 
 omit [Fact (p < 2^254)] [Fact (p > 2^253)] in
-private theorem num2Bits_main_output_eq_iff
+theorem num2Bits_main_output_eq_iff
     {n offset : ℕ} {input : Expression (F p)} {env env' : ProverEnvironment (F p)}
     (h_input : input.eval env = input.eval env')
     (h_agrees : env.AgreesBelow (offset + (Num2Bits.main n input).localLength offset) env') :

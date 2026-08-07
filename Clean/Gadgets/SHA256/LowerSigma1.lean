@@ -37,7 +37,7 @@ def Spec (x : fields 32 (F p)) (z : fields 32 (F p)) : Prop :=
 
 /-! ## Spec proof factored out to avoid kernel deep recursion -/
 
-private lemma spec_of_constraint
+lemma spec_of_constraint
     (input z : fields 32 (F p))
     (hx : Normalized input)
     (h_z : ∀ i : Fin 32, z[i] =

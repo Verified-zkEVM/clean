@@ -24,7 +24,7 @@ Per step, `scheduleStep` creates:
 -/
 
 /-- One step of the message schedule: compute w[j] for j = i.val + 16. -/
-private def scheduleStep (w : SHA256Schedule (Expression (F p))) (i : Fin 48) :
+def scheduleStep (w : SHA256Schedule (Expression (F p))) (i : Fin 48) :
     Circuit (F p) (SHA256Schedule (Expression (F p))) := do
   let j := i.val + 16
   let s1   ← LowerSigma1.circuit (w.get ⟨j - 2,  by omega⟩)
@@ -35,7 +35,7 @@ private def scheduleStep (w : SHA256Schedule (Expression (F p))) (i : Fin 48) :
   return w.set (⟨j, by omega⟩ : Fin 64) wj
 
 @[implicit_reducible]
-private def constantLength :
+def constantLength :
     Circuit.ConstantLength (fun (x : SHA256Schedule (Expression (F p)) × Fin 48) => scheduleStep x.1 x.2) where
   localLength := 227
   localLength_eq _ _ := by
@@ -80,7 +80,7 @@ def varSchedule (i₀ : ℕ) (input_var_block : SHA256Block (Expression (F p))) 
       varSchedule i₀ input_var_block k
 
 /-- Value-level schedule after `k` expansion steps. -/
-private def valSchedule (input_block : Vector ℕ 16) : ℕ → Vector ℕ 64
+def valSchedule (input_block : Vector ℕ 16) : ℕ → Vector ℕ 64
   | 0 => Vector.mapFinRange 64 fun i => if h : i.val < 16 then input_block.get ⟨i.val, h⟩ else 0
   | k + 1 =>
     if h : k < 48 then
@@ -94,7 +94,7 @@ private def valSchedule (input_block : Vector ℕ 16) : ℕ → Vector ℕ 64
 
 omit [Fact (Nat.Prime p)] [Fact (p > 2 ^ 33)] in
 /-- `Specs.SHA256.messageSchedule` equals our `valSchedule` at index 48. -/
-private lemma messageSchedule_eq_valSchedule (input_block : Vector ℕ 16) :
+lemma messageSchedule_eq_valSchedule (input_block : Vector ℕ 16) :
     Specs.SHA256.messageSchedule input_block = valSchedule input_block 48 := by
   simp only [Specs.SHA256.messageSchedule]
   -- Generic step body, independent of the foldl bound, so the IH on `k` matches
@@ -137,18 +137,18 @@ private lemma messageSchedule_eq_valSchedule (input_block : Vector ℕ 16) :
     simp only [Fin.val_last, hbody_def, dif_pos (show k < 48 from by omega)]
 
 /-- The output of `scheduleStep w i` at offset `n` is `w.set (i.val + 16) (varFromOffset ...)`. -/
-private lemma scheduleStep_output (w : SHA256Schedule (Expression (F p))) (i : Fin 48) (n : ℕ) :
+lemma scheduleStep_output (w : SHA256Schedule (Expression (F p))) (i : Fin 48) (n : ℕ) :
     (scheduleStep w i).output n =
       w.set (i.val + 16) (varFromOffset (fields 32) (n + 194)) (by omega) := by
   simp [scheduleStep, circuit_norm, LowerSigma1.circuit, LowerSigma0.circuit, Add32.circuit]
 
 /-- The localLength of `scheduleStep w i` is 227. -/
-private lemma scheduleStep_localLength (w : SHA256Schedule (Expression (F p))) (i : Fin 48) (n : ℕ) :
+lemma scheduleStep_localLength (w : SHA256Schedule (Expression (F p))) (i : Fin 48) (n : ℕ) :
     (scheduleStep w i).localLength n = 227 := by
   simp [circuit_norm, scheduleStep, LowerSigma1.circuit, LowerSigma0.circuit, Add32.circuit]
 
 /-- `Circuit.FoldlM.foldlAcc` at index `⟨k, h⟩ : Fin 48` equals `varSchedule i₀ input_var k`. -/
-private lemma foldlAcc_eq_varSchedule (i₀ : ℕ) (input_var_block : SHA256Block (Expression (F p)))
+lemma foldlAcc_eq_varSchedule (i₀ : ℕ) (input_var_block : SHA256Block (Expression (F p)))
     (k : ℕ) (h : k < 48) :
     Circuit.FoldlM.foldlAcc i₀ (Vector.finRange 48)
       (fun w (i : Fin 48) => scheduleStep w i)
@@ -178,7 +178,7 @@ private lemma foldlAcc_eq_varSchedule (i₀ : ℕ) (input_var_block : SHA256Bloc
     rw [scheduleStep_output, scheduleStep_localLength]
 
 /-- The 48-step `Fin.foldl` of the variable-level schedule body equals `varSchedule 48`. -/
-private lemma finFoldl_eq_varSchedule_48 (i₀ : ℕ) (input_var_block : SHA256Block (Expression (F p))) :
+lemma finFoldl_eq_varSchedule_48 (i₀ : ℕ) (input_var_block : SHA256Block (Expression (F p))) :
     Fin.foldl 48
       (fun (acc : SHA256Schedule (Expression (F p))) (i : Fin 48) =>
         (scheduleStep acc i (i₀ + i.val * 227)).1)
@@ -220,7 +220,7 @@ private lemma finFoldl_eq_varSchedule_48 (i₀ : ℕ) (input_var_block : SHA256B
 
 omit [Fact (p > 2 ^ 33)] in
 /-- Env-agreement transfers to a fresh `varFromOffset` window that lies below the bound. -/
-private lemma varFromOffset_eval_congr {env env' : Environment (F p)} {k n : ℕ}
+lemma varFromOffset_eval_congr {env env' : Environment (F p)} {k n : ℕ}
     (h : ∀ i < n, env.get i = env'.get i) (hk : k + 32 ≤ n) :
     (eval env (varFromOffset (fields 32) k : Var (fields 32) (F p)) : fields 32 (F p)) =
       eval env' (varFromOffset (fields 32) k : Var (fields 32) (F p)) := by
@@ -233,7 +233,7 @@ omit [Fact (p > 2 ^ 33)] in
 /-- Env-agreement below `i₀ + k * 227` transfers to the whole variable-level schedule
 after `k` steps: initial entries evaluate through the input block, expanded entries are
 `varFromOffset` windows that lie below the bound. -/
-private lemma varSchedule_eval_congr {env env' : ProverEnvironment (F p)}
+lemma varSchedule_eval_congr {env env' : ProverEnvironment (F p)}
     {input : SHA256Block (Expression (F p))} {i₀ : ℕ}
     (h : eval env.toEnvironment input = eval env'.toEnvironment input) :
     ∀ k, k ≤ 48 → (∀ i < i₀ + k * 227, env.get i = env'.get i) →
@@ -276,7 +276,7 @@ private lemma varSchedule_eval_congr {env env' : ProverEnvironment (F p)}
 
 /-- The soundness inductive invariant. Given the constraints `h_holds` hold for every step,
     the variable-level schedule at step `k` matches the value-level schedule and is normalized. -/
-private lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F p)))
+lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F p)))
     (env : Environment (F p)) (input : SHA256Block (F p))
     (h_input : eval env input_var = input)
     (h_assumptions : ∀ i : Fin 16, Normalized input[i])

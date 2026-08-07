@@ -584,7 +584,7 @@ syntax "unfold_explicit_circuits_head" : tactic
 syntax "infer_explicit_circuits" : tactic
 
 /-- The head of `type`, looking through `∀`/`let`/`mdata`. -/
-private def resultTypeHead? : Expr → Option Name
+def resultTypeHead? : Expr → Option Name
   | .forallE _ _ body _ => resultTypeHead? body
   | .letE _ _ _ body _ => resultTypeHead? body
   | .mdata _ body => resultTypeHead? body
@@ -1053,7 +1053,7 @@ elab "elaborate_circuit" : tactic => withMainContext do
 syntax "elaborate_circuit_with" term : tactic
 syntax "elaborate_circuit_with" term " using " term : tactic
 
-private def elaborateCircuitWith (dataStx : TSyntax `term) (dataEqStx? : Option (TSyntax `term)) :
+def elaborateCircuitWith (dataStx : TSyntax `term) (dataEqStx? : Option (TSyntax `term)) :
     TacticM Unit := withMainContext do
   -- The tactic is used in goals of the form
   --   ElaboratedCircuit F Input Output main
@@ -1213,9 +1213,9 @@ example : ElaboratedCircuit F field unit (fun x ↦ assertZero (x * (x - 1))) :=
   elaborate_circuit_naive
 
 -- works with circuits hidden behind definitions
-private def assertBool (x : Expression F) := do
+def assertBoolExample (x : Expression F) := do
   assertZero (x * (x - 1))
 
-example : ElaboratedCircuit F field unit assertBool := by elaborate_circuit_naive
+example : ElaboratedCircuit F field unit assertBoolExample := by elaborate_circuit_naive
 
 end

@@ -570,7 +570,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
 -- Unfortunately @[simps! (config := {isSimp := false, attrs := [`circuit_norm]})] timeouts.
 -- Therefore I had to add simplification rules `circuit_assumptions_is` and `circuit_spec_is` manually.
 omit p_large_enough in
-private lemma initState_eval_congr {env env' : ProverEnvironment (F p)}
+lemma initState_eval_congr {env env' : ProverEnvironment (F p)}
     {chaining_value : Vector (U32 (Expression (F p))) 8}
     {counter_high counter_low block_len flags : U32 (Expression (F p))}
     (h1 : eval env.toEnvironment chaining_value = eval env'.toEnvironment chaining_value)

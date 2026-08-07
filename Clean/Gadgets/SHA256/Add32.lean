@@ -21,17 +21,17 @@ Soundness requires the prime p to exceed 2^33 so that the linear constraint
 can distinguish the intended ℕ-level relation from field wraparound.
 -/
 
-private def evalBitsNat (env : ProverEnvironment (F p)) (a : Var (fields 32) (F p)) : ℕ :=
+def evalBitsNat (env : ProverEnvironment (F p)) (a : Var (fields 32) (F p)) : ℕ :=
   Finset.univ.sum fun (i : Fin 32) => (env a[i]).val * 2^i.val
 
 /-- IR expression for the ℕ value of a vector of bit-variables: `Σ a[i].val · 2^i`
 (authoring-time fold; the witness-IR counterpart of `evalBitsNat`). -/
-private def bitsVal (a : Var (fields 32) (F p)) : Witgen.U64Expr (F p) :=
+def bitsVal (a : Var (fields 32) (F p)) : Witgen.U64Expr (F p) :=
   (List.finRange 32).foldr
     (fun i acc => a[i.val].val * (2^i.val : ℕ) + acc) 0
 
 omit h_large in
-private lemma bitsVal_eval (ctx : Witgen.Ctx (F p)) (a : Var (fields 32) (F p)) :
+lemma bitsVal_eval (ctx : Witgen.Ctx (F p)) (a : Var (fields 32) (F p)) :
     (bitsVal a).eval ctx = UInt64.ofNat (evalBitsNat ctx.env a) := by
   rw [evalBitsNat, Fin.sum_univ_def, bitsVal, List.sum_eq_foldr, List.foldr_map]
   generalize List.finRange 32 = l
@@ -42,7 +42,7 @@ private lemma bitsVal_eval (ctx : Witgen.Ctx (F p)) (a : Var (fields 32) (F p)) 
     simp only [List.foldr_cons, circuit_norm, ih, UInt64.ofNat_add, UInt64.ofNat_mul]
 
 omit h_large in
-private lemma evalBitsNat_congr {env env' : ProverEnvironment (F p)} {a : Var (fields 32) (F p)}
+lemma evalBitsNat_congr {env env' : ProverEnvironment (F p)} {a : Var (fields 32) (F p)}
     (h : Vector.map (Expression.eval env.toEnvironment) a =
       Vector.map (Expression.eval env'.toEnvironment) a) :
     evalBitsNat env a = evalBitsNat env' a := by
@@ -99,7 +99,7 @@ def Spec (input : Inputs (F p)) (z : fields 32 (F p)) : Prop :=
 ## Helper lemmas
 -/
 
-private lemma sum_bool_lt_two_pow (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i ≤ 1) :
+lemma sum_bool_lt_two_pow (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i ≤ 1) :
     ∑ i : Fin n, f i * 2^i.val < 2^n := by
   induction n with
   | zero => simp
@@ -114,7 +114,7 @@ private lemma sum_bool_lt_two_pow (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i
 
 omit h_large in
 /-- valueBits of normalized bits is < 2^32 -/
-private lemma valueBits_lt_two_pow (bits : Vector (F p) 32) (h : Normalized bits) :
+lemma valueBits_lt_two_pow (bits : Vector (F p) 32) (h : Normalized bits) :
     valueBits bits < 2^32 := by
   apply sum_bool_lt_two_pow
   intro i
@@ -124,7 +124,7 @@ private lemma valueBits_lt_two_pow (bits : Vector (F p) 32) (h : Normalized bits
 
 omit [Fact (Nat.Prime p)] h_large in
 /-- The natural-number sum from fromBits equals valueBits -/
-private lemma fromBits_map_val_eq_valueBits (bits : Vector (F p) 32) :
+lemma fromBits_map_val_eq_valueBits (bits : Vector (F p) 32) :
     Utils.Bits.fromBits (bits.map ZMod.val) = valueBits bits := by
   simp only [Utils.Bits.fromBits, valueBits, Fin.foldl_to_sum]
   apply Finset.sum_congr rfl
@@ -135,14 +135,14 @@ private lemma fromBits_map_val_eq_valueBits (bits : Vector (F p) 32) :
 
 omit h_large in
 /-- fieldFromBits bits = (valueBits bits : F p) -/
-private lemma fieldFromBits_eq_valueBits (bits : Vector (F p) 32) :
+lemma fieldFromBits_eq_valueBits (bits : Vector (F p) 32) :
     Utils.Bits.fieldFromBits bits = (valueBits bits : F p) := by
   unfold Utils.Bits.fieldFromBits
   rw [fromBits_map_val_eq_valueBits]
 
 omit h_large in
 /-- fromBitsExpr evaluated at concrete inputs = (valueBits bits : F p) -/
-private lemma fromBitsExpr_eval_normalized (env : Environment (F p))
+lemma fromBitsExpr_eval_normalized (env : Environment (F p))
     (bits_var : Var (fields 32) (F p)) (bits : Vector (F p) 32)
     (h_eval : Vector.map (Expression.eval env) bits_var = bits) :
     Expression.eval env (fromBitsExpr bits_var) = (valueBits bits : F p) := by
@@ -152,7 +152,7 @@ private lemma fromBitsExpr_eval_normalized (env : Environment (F p))
 
 omit h_large in
 /-- For normalized bits with p > 2^32, (fromBitsExpr bits_var).val = valueBits bits -/
-private lemma fromBitsExpr_val_eq (env : Environment (F p))
+lemma fromBitsExpr_val_eq (env : Environment (F p))
     (bits_var : Var (fields 32) (F p)) (bits : Vector (F p) 32)
     (h_eval : Vector.map (Expression.eval env) bits_var = bits)
     (h_norm : Normalized bits) (hp : 2^32 < p) :
@@ -162,7 +162,7 @@ private lemma fromBitsExpr_val_eq (env : Environment (F p))
 
 omit h_large in
 /-- The z output variable vector evaluates to env.get at the witness offsets -/
-private lemma z_var_eval (env : Environment (F p)) (i₀ : ℕ) :
+lemma z_var_eval (env : Environment (F p)) (i₀ : ℕ) :
     Vector.map (Expression.eval env)
       (Vector.mapRange 32 fun i => (var {index := i₀ + i} : Expression (F p)))
     = Vector.ofFn fun i : Fin 32 => env.get (i₀ + i.val) := by
@@ -170,12 +170,12 @@ private lemma z_var_eval (env : Environment (F p)) (i₀ : ℕ) :
 
 omit h_large in
 /-- IsBool from boolean constraint x * (x - 1) = 0 -/
-private lemma isbool_of_bool_constraint {x : F p} (h : x * (x - 1) = 0) : IsBool x := by
+lemma isbool_of_bool_constraint {x : F p} (h : x * (x - 1) = 0) : IsBool x := by
   rwa [← IsBool.iff_mul_sub_one] at h
 
 omit h_large in
 /-- Normalized z from boolean constraints -/
-private lemma normalized_of_bool_holds (env : Environment (F p)) (i₀ : ℕ)
+lemma normalized_of_bool_holds (env : Environment (F p)) (i₀ : ℕ)
     (h : ∀ i : Fin 32, env.get (i₀ + i.val) * (env.get (i₀ + i.val) - 1) = 0) :
     Normalized (Vector.ofFn fun i : Fin 32 => env.get (i₀ + i.val)) := by
   intro i
@@ -187,7 +187,7 @@ private lemma normalized_of_bool_holds (env : Environment (F p)) (i₀ : ℕ)
 
 omit h_large in
 /-- evalBitsNat env a = valueBits a when the variables evaluate to a -/
-private lemma evalBitsNat_eq_valueBits (env : ProverEnvironment (F p))
+lemma evalBitsNat_eq_valueBits (env : ProverEnvironment (F p))
     (a_var : Var (fields 32) (F p)) (a : fields 32 (F p))
     (h : Vector.map (Expression.eval env.toEnvironment) a_var = a) :
     evalBitsNat env a_var = valueBits a := by
@@ -198,12 +198,12 @@ private lemma evalBitsNat_eq_valueBits (env : ProverEnvironment (F p))
   simp [Vector.getElem_map]
 
 /-- testBit equals div/mod expression -/
-private lemma testBit_ite_eq (n i : ℕ) : (if n.testBit i = true then 1 else 0 : ℕ) = n / 2^i % 2 := by
+lemma testBit_ite_eq (n i : ℕ) : (if n.testBit i = true then 1 else 0 : ℕ) = n / 2^i % 2 := by
   simp only [Nat.testBit, Nat.shiftRight_eq_div_pow, Nat.one_and_eq_mod_two]
   rcases Nat.mod_two_eq_zero_or_one (n / 2^i) with h | h <;> rw [h] <;> rfl
 
 /-- Bit decomposition: ∑ i, (n / 2^i % 2) * 2^i = n for n < 2^32 -/
-private lemma bit_decomp_sum (n : ℕ) (h_n_lt : n < 2^32) :
+lemma bit_decomp_sum (n : ℕ) (h_n_lt : n < 2^32) :
     ∑ i : Fin 32, n / 2^i.val % 2 * 2^i.val = n := by
   conv_rhs => rw [← Utils.Bits.fromBits_toBits h_n_lt]
   unfold Utils.Bits.fromBits Utils.Bits.toBits
@@ -214,7 +214,7 @@ private lemma bit_decomp_sum (n : ℕ) (h_n_lt : n < 2^32) :
 
 omit h_large in
 /-- For n < 2^32 and 2^32 < p, fieldFromBits of the bit decomposition vector equals (n : F p) -/
-private lemma fieldFromBits_bit_decomp (n : ℕ) (h_n_lt : n < 2^32) (hp32 : (2:ℕ)^32 < p) :
+lemma fieldFromBits_bit_decomp (n : ℕ) (h_n_lt : n < 2^32) (hp32 : (2:ℕ)^32 < p) :
     Utils.Bits.fieldFromBits (Vector.ofFn fun i : Fin 32 => ((n / 2^i.val % 2 : ℕ) : F p)) =
     ((n : ℕ) : F p) := by
   simp only [Utils.Bits.fieldFromBits, Utils.Bits.fromBits, Fin.foldl_to_sum]

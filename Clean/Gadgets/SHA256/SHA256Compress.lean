@@ -62,7 +62,7 @@ def Spec (input : Inputs (F p)) (out : SHA256State (F p)) : Prop :=
 omit [Fact (Nat.Prime p)] [Fact (p > 2 ^ 33)] in
 /-- Generic version of `output_eq`: for any bound `k`, the `Fin.foldl k` over our round body
     equals `stateVar i₀ input_var_state k`. -/
-private lemma fin_foldl_eq_stateVar (i₀ : ℕ) (input_var_state : Var SHA256State (F p)) (k : ℕ) :
+lemma fin_foldl_eq_stateVar (i₀ : ℕ) (input_var_state : Var SHA256State (F p)) (k : ℕ) :
     Fin.foldl k
       (fun (acc : Var SHA256State (F p)) (i : Fin k) =>
         #v[Vector.mapRange 32 fun i_1 => var { index := i₀ + i.val * 455 + 389 + i_1 },
@@ -94,7 +94,7 @@ private lemma fin_foldl_eq_stateVar (i₀ : ℕ) (input_var_state : Var SHA256St
     Uses `SHA256State (Expression (F p))` for the accumulator type (not the
     `Var SHA256State (F p)` alias) so the lemma's pattern matches `h_holds`
     syntactically — `rw` can't see through the alias. -/
-private lemma foldlAcc_eq_stateVar (i₀ : ℕ)
+lemma foldlAcc_eq_stateVar (i₀ : ℕ)
     (input_var_state : SHA256State (Expression (F p)))
     (input_var_schedule : SHA256Schedule (Expression (F p)))
     (k : ℕ) (h : k < 64) :
@@ -111,7 +111,7 @@ private lemma foldlAcc_eq_stateVar (i₀ : ℕ)
 
 omit [Fact (p > 2 ^ 33)] in
 /-- Helper: `constWord32 n` evaluated is always normalized (bits are 0 or 1). -/
-private lemma normalized_constWord32 (env : Environment (F p)) (n : ℕ) :
+lemma normalized_constWord32 (env : Environment (F p)) (n : ℕ) :
     Normalized (Vector.map (Expression.eval env) (constWord32 (p:=p) n)) := by
   intro i
   have h : (n / 2^i.val % 2 : ℕ) = 0 ∨ (n / 2^i.val % 2 : ℕ) = 1 := by omega
@@ -122,7 +122,7 @@ private lemma normalized_constWord32 (env : Environment (F p)) (n : ℕ) :
     simp [constWord32, Expression.eval, h]
 
 /-- valueBits of `constWord32 n` equals `n` modulo `2^32`. -/
-private lemma valueBits_constWord32 (env : Environment (F p)) (n : ℕ) :
+lemma valueBits_constWord32 (env : Environment (F p)) (n : ℕ) :
     valueBits (Vector.map (Expression.eval env) (constWord32 (p:=p) n)) = n % 2^32 := by
   simp only [valueBits, constWord32]
   have h2 : ∀ i : Fin 32, ((n / 2^i.val % 2 : ℕ) : F p).val = n / 2^i.val % 2 := by
@@ -157,12 +157,12 @@ private lemma valueBits_constWord32 (env : Environment (F p)) (n : ℕ) :
   exact key 32
 
 /-- For `n < 2^32`, valueBits of `constWord32 n` is `n`. -/
-private lemma valueBits_constWord32_of_lt (env : Environment (F p)) {n : ℕ} (h : n < 2^32) :
+lemma valueBits_constWord32_of_lt (env : Environment (F p)) {n : ℕ} (h : n < 2^32) :
     valueBits (Vector.map (Expression.eval env) (constWord32 (p:=p) n)) = n := by
   rw [valueBits_constWord32, Nat.mod_eq_of_lt h]
 
 /-- The value-level state at the end of round `k`. -/
-private def valStateAfterRound (input_state : Vector ℕ 8)
+def valStateAfterRound (input_state : Vector ℕ 8)
     (input_schedule : Vector ℕ 64) : ℕ → Vector ℕ 8
   | 0 => input_state
   | k + 1 =>
@@ -173,7 +173,7 @@ private def valStateAfterRound (input_state : Vector ℕ 8)
       valStateAfterRound input_state input_schedule k
 
 /-- `sha256Compress` equals our `valStateAfterRound` at index 64. -/
-private lemma sha256Compress_eq_valStateAfterRound
+lemma sha256Compress_eq_valStateAfterRound
     (input_state : Vector ℕ 8) (input_schedule : Vector ℕ 64) :
     Specs.SHA256.sha256Compress input_state input_schedule =
       valStateAfterRound input_state input_schedule 64 := by
@@ -348,7 +348,7 @@ omit [Fact (p > 2 ^ 33)] in
 /-- Env-agreement below `i₀ + k * 455` transfers to the variable-level state after `k`
 rounds, elementwise: initial entries evaluate through the input state, later entries are
 fresh witness windows below the bound. -/
-private lemma stateVar_eval_congr {env env' : ProverEnvironment (F p)}
+lemma stateVar_eval_congr {env env' : ProverEnvironment (F p)}
     {input_var_state : SHA256State (Expression (F p))} {i₀ : ℕ}
     (h : ∀ (jj : ℕ) (hjj : jj < 8),
       Vector.map (Expression.eval env.toEnvironment) (input_var_state[jj]'hjj) =
@@ -380,7 +380,7 @@ set_option maxRecDepth 2048 in
 omit [Fact (p > 2 ^ 33)] in
 /-- Composite form of `stateVar_eval_congr`, stated without ascriptions so it matches the
 framework's spelling of the accumulator eval; the instance-path defeq is paid once here. -/
-private lemma stateVar_eval_congr_composite {env env' : ProverEnvironment (F p)}
+lemma stateVar_eval_congr_composite {env env' : ProverEnvironment (F p)}
     {input_var_state : Var SHA256State (F p)} {i₀ k : ℕ}
     (hIn : ∀ (jj : ℕ) (hjj : jj < 8),
       Vector.map (Expression.eval env.toEnvironment) (input_var_state[jj]'hjj) =

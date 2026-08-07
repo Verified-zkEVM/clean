@@ -69,7 +69,7 @@ def Spec (input : Inputs (F p)) (z : fields 32 (F p)) : Prop :=
 ## Helper lemmas for valueBits and bitwise Maj
 -/
 
-private lemma sum_bool_lt_two_pow (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i ≤ 1) :
+lemma sum_bool_lt_two_pow (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i ≤ 1) :
     ∑ i : Fin n, f i * 2^i.val < 2^n := by
   induction n with
   | zero => simp
@@ -82,7 +82,7 @@ private lemma sum_bool_lt_two_pow (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i
     have h2 : 2^m + 2^m = 2^(m+1) := by ring
     omega
 
-private lemma testBit_binary_sum (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i = 0 ∨ f i = 1) (k : Fin n) :
+lemma testBit_binary_sum (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i = 0 ∨ f i = 1) (k : Fin n) :
     Nat.testBit (∑ i : Fin n, f i * 2^i.val) k.val = decide (f k = 1) := by
   induction n with
   | zero => exact k.elim0
@@ -105,7 +105,7 @@ private lemma testBit_binary_sum (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i 
 
 /-- For boolean field elements a, b, c: the field expression t + c*(a+b-2t) where t=a*b
     has val equal to the bitwise Nat majority of a.val, b.val, c.val -/
-private lemma maj_eq_val_maj {p : ℕ} [Fact p.Prime]
+lemma maj_eq_val_maj {p : ℕ} [Fact p.Prime]
     {a b c : F p} (ha : IsBool a) (hb : IsBool b) (hc : IsBool c) :
     (a * b + c * (a + b - 2 * (a * b))).val = (a.val &&& b.val) ^^^ (a.val &&& c.val) ^^^ (b.val &&& c.val) := by
   rcases ha with ha | ha <;> rcases hb with hb | hb <;> rcases hc with hc | hc <;>
@@ -113,12 +113,12 @@ private lemma maj_eq_val_maj {p : ℕ} [Fact p.Prime]
 
 /-- For boolean field elements a, b, c: the field expression t + c*(a+b-2t) where t=a*b
     is boolean -/
-private lemma maj_is_bool {α : Type*} [Ring α] {a b c : α} (ha : IsBool a) (hb : IsBool b) (hc : IsBool c) :
+lemma maj_is_bool {α : Type*} [Ring α] {a b c : α} (ha : IsBool a) (hb : IsBool b) (hc : IsBool c) :
     IsBool (a * b + c * (a + b - 2 * (a * b))) := by
   rcases ha with ha | ha <;> rcases hb with hb | hb <;> rcases hc with hc | hc <;>
     simp [ha, hb, hc] <;> norm_num <;> first | exact IsBool.zero | exact IsBool.one
 
-private lemma bool_finsum_maj (n : ℕ) (f g k : Fin n → ℕ)
+lemma bool_finsum_maj (n : ℕ) (f g k : Fin n → ℕ)
     (hf : ∀ i, f i = 0 ∨ f i = 1) (hg : ∀ i, g i = 0 ∨ g i = 1) (hk : ∀ i, k i = 0 ∨ k i = 1) :
     ((∑ i : Fin n, f i * 2^i.val) &&& (∑ i : Fin n, g i * 2^i.val)) ^^^
     ((∑ i : Fin n, f i * 2^i.val) &&& (∑ i : Fin n, k i * 2^i.val)) ^^^
@@ -164,7 +164,7 @@ private lemma bool_finsum_maj (n : ℕ) (f g k : Fin n → ℕ)
         Nat.testBit_eq_false_of_lt (Nat.lt_of_lt_of_le hmajS pow_le)]
 
 /-- Spec holds for any vector `z` whose bits satisfy the per-bit constraint. -/
-private lemma spec_of_constraint
+lemma spec_of_constraint
     (input_a input_b input_c z : fields 32 (F p))
     (ha : Normalized input_a) (hb : Normalized input_b) (hc : Normalized input_c)
     (h_eq : ∀ i : Fin 32, z[i] =

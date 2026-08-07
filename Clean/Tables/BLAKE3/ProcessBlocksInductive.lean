@@ -24,7 +24,7 @@ instance : Fact (p > 2^16 + 2^8) := .mk (by
   linarith
 )
 
-private lemma ZMod_val_64 :
+lemma ZMod_val_64 :
     ZMod.val (n:=p) 64 = 64 := by
   rw [ZMod.val_ofNat_of_lt]
   have := p_large.elim
@@ -197,7 +197,7 @@ def Spec (initialState : ProcessBlocksState (F p)) (inputs : List (BlockInput (F
     state.Normalized
 
 omit [Fact p.Prime] p_large in
-private lemma takeShort8_normalized {v : BLAKE3.BLAKE3State (F p)} (h8 : 8 < 16)
+lemma takeShort8_normalized {v : BLAKE3.BLAKE3State (F p)} (h8 : 8 < 16)
     (hv : v.Normalized) : ∀ i : Fin 8, (v.takeShort 8 h8)[i].Normalized := by
   intro i
   convert hv ⟨i.val, by omega⟩ using 1

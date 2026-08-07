@@ -225,7 +225,7 @@ open Lean Meta Simp
 
 /-- Closed `ℕ` value of an expression, seeing through `b ^ k` (which `Meta.evalNat` does
 not reduce at the `Monoid.toPow` instance that `2 ^ 64` elaborates to). -/
-private partial def natLit? (e : Expr) : MetaM (Option ℕ) := do
+partial def natLit? (e : Expr) : MetaM (Option ℕ) := do
   if let some n ← evalNat e |>.run then return some n
   if e.isAppOfArity ``HPow.hPow 6 then
     let args := e.getAppArgs
@@ -249,7 +249,7 @@ local hypotheses as facts) whether `n` is already below the modulus, and rewrite
 when it is. Other moduli are left alone, so ordinary `% 256`-style specification
 arithmetic is untouched.
 -/
-private def u64WrapSimproc (e : Expr) : SimpM Simp.Step := do
+def u64WrapSimproc (e : Expr) : SimpM Simp.Step := do
   unless e.isAppOfArity ``HMod.hMod 6 do return .continue
   let args := e.getAppArgs
   let n := args[4]!
@@ -615,7 +615,7 @@ structure projection like `.value`, `.address`, etc.  The meta code recognizes p
 applications, rebuilds the same projection on the evaluated row, then proves the rewrite by
 simplifying the generated RHS with the small struct-evaluation theorem set below.
 -/
-private def evalProjectionSimproc (e : Expr) : SimpM Simp.Step := do
+def evalProjectionSimproc (e : Expr) : SimpM Simp.Step := do
   -- The simproc is registered on `Witgen.FExpr.eval _ _`; the last two explicit arguments are
   -- the evaluation context and the scalar expression being evaluated.
   let args := e.getAppArgs
@@ -698,7 +698,7 @@ simproc above. Decomposing an opaque value via structure eta would produce
 confluent: a literal's components are the program's own expressions, never projections
 of an opaque base.
 -/
-private def evalStructLiteralSimproc (e : Expr) : SimpM Simp.Step := do
+def evalStructLiteralSimproc (e : Expr) : SimpM Simp.Step := do
   let args := e.getAppArgs
   unless e.getAppFn.isConstOf ``Witgen.eval && args.size >= 2 do
     return .continue

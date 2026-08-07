@@ -250,7 +250,7 @@ lemma shr_isbool (k : ℕ) (input : fields 32 (F p)) (ha : Normalized input) (i 
 
 /-! ## Spec proof factored out to avoid kernel deep recursion -/
 
-private lemma spec_of_constraint
+lemma spec_of_constraint
     (input z : fields 32 (F p))
     (hx : Normalized input)
     (h_z : ∀ i : Fin 32, z[i] =
