@@ -40,6 +40,8 @@ def concat
   completeness := by
     simp only [circuit_norm]
     aesop
+  -- Manual: generic construction over abstract child circuits; closes with the bare
+  -- tactic in isolation but flips with import context (grind sensitivity).
   computableWitnesses := by
     simp only [circuit_norm]
     intros n input env env'

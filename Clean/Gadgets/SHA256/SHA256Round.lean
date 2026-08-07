@@ -249,6 +249,8 @@ private lemma output_eval_congr {env env' : ProverEnvironment (F p)}
 
 def circuit : FormalCircuit (F p) Inputs SHA256State where
   main; elaborated; Assumptions; Spec; soundness; completeness
+  -- Manual: leaves need the whole-input congruence lifted elementwise through
+  -- state[i]/Vector.map spellings; the tactic's close lacks these lifting lemmas.
   computableWitnesses := by
     intro n input env env'
     obtain ⟨state, k, w⟩ := input

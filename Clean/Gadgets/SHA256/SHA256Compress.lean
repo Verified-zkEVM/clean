@@ -401,6 +401,8 @@ private lemma stateVar_eval_congr_composite {env env' : ProverEnvironment (F p)}
 def circuit : FormalCircuit (F p) Inputs SHA256State := {
   main, elaborated, Assumptions, Spec, soundness
   completeness := by simp only [completeness]
+  -- Manual: compound of the SHA256Round/Schedule leaves (elementwise input lifting
+  -- plus Add32-family witness IR); see those gadgets' comments.
   computableWitnesses := by
     intro n input env env'
     obtain ⟨state, schedule⟩ := input
@@ -557,6 +559,8 @@ theorem completeness : Completeness (F p) main Assumptions := by
 def circuit : FormalCircuit (F p) Inputs SHA256State := {
   main, elaborated, Assumptions, Spec, soundness
   completeness := by simp only [completeness]
+  -- Manual: compound of the SHA256Round/Schedule leaves (elementwise input lifting
+  -- plus Add32-family witness IR); see those gadgets' comments.
   computableWitnesses := by
     intro n input env env'
     obtain ⟨state, block⟩ := input

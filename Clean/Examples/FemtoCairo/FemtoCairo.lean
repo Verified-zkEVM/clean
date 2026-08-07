@@ -842,6 +842,9 @@ def femtoCairoStep : GeneralFormalCircuit (F p) State State where
   Spec := femtoCairoStepSpec program
   soundness := femtoCairoStepSoundness program h_programSize
   completeness := femtoCairoStepCompleteness program h_programSize
+  -- Manual: the leaves are fresh-window congruences (varFromOffset State (n + k)) —
+  -- exactly ProvableType.eval_varFromOffset_congr; the tactic's close does not apply
+  -- it yet.
   computableWitnesses := by
     intro n input env env'
     simp only [circuit_norm, femtoCairoStepMain]

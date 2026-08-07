@@ -212,6 +212,8 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
 def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness
+  -- Manual: the rotation-xor witness IR reads input bits; its eval-congruence needs the
+  -- sigma-specific decomposition facts, beyond the tactic's generic close.
   computableWitnesses := by
     intro n input env env'
     simp only [circuit_norm, main, upperSigma1, xor32, rotr32, Vector.ext_iff]

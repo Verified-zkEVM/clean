@@ -288,6 +288,8 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
         fieldFromBits input[0] + (2^n : F p) - fieldFromBits input[1] =
           fieldFromBits output + aux * (2^n : F p)
 
+  -- Manual: witness IR over input bits with a symbolic width bound; needs the file's
+  -- decomposition facts and induction the tactic's close cannot do.
   computableWitnesses := by
     intro n' input env env'
     simp only [circuit_norm, computable_witnesses_norm, main]

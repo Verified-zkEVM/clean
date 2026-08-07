@@ -421,6 +421,9 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
 def circuit : FormalCircuit (F p) Inputs (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness
+  -- Manual: the witness IR recombines the input bits ((bitsVal a).add (bitsVal b) % 2^32);
+  -- its eval-congruence rests on this file's bit-decomposition lemmas (evalBitsNat_congr),
+  -- which the tactic's generic close cannot invent.
   computableWitnesses := by
     intro n input env env'
     obtain ⟨a, b⟩ := input

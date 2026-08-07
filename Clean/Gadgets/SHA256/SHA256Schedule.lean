@@ -612,6 +612,8 @@ theorem completeness : Completeness (F p) (Input := SHA256Block) (Output := SHA2
 def circuit : FormalCircuit (F p) SHA256Block SHA256Schedule where
   main; elaborated; Assumptions; Spec; soundness;
   completeness := by simp only [completeness]
+  -- Manual: leaves need the whole-input congruence lifted elementwise through
+  -- state[i]/Vector.map spellings; the tactic's close lacks these lifting lemmas.
   computableWitnesses := by
     intro n input env env'
     simp only [circuit_norm, main, messageSchedule]

@@ -127,6 +127,8 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
   Spec bits output :=
     output = if fromBits (bits.map ZMod.val) > c then 1 else 0
 
+  -- Manual: selector/pair-vector evaluations under binders (toElements spellings over
+  -- 127 windows); grind cannot reach them and the close lacks the decomposition.
   computableWitnesses := by
     unfold FormalCircuitBase.ComputableWitnesses
     intros n input env env'

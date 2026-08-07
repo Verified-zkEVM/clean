@@ -167,6 +167,8 @@ def circuit : GeneralFormalCircuit (F p) (fields 254) field where
   Spec (input : fields 254 (F p)) output _ :=
     output.val = fromBits (input.map ZMod.val)
 
+  -- Manual: Num2Bits-style bit-decomposition witness IR; its eval-congruence needs the
+  -- decomposition facts, beyond the generic close.
   computableWitnesses := by
     unfold FormalCircuitBase.ComputableWitnesses
     intros offset input env env'

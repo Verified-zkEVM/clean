@@ -368,6 +368,8 @@ private lemma output_take8_eq {env env' : ProverEnvironment (F p)} {n : ℕ}
 
 def circuit : FormalCircuit (F p) Inputs (ProvableVector U32 8) := {
   main, elaborated, Assumptions, Spec, soundness, completeness
+  -- Manual: leaves pair input-component facts with child output windows, like
+  -- BLAKE3.Round; the tactic does not use the premise-free window lemmas yet.
   computableWitnesses := by
     intro n input env env'
     have eZ : ∀ v, (IsZero.circuit (F := F p) (M := U32)).localLength v = 9 := fun _ => rfl

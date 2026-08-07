@@ -96,6 +96,9 @@ def circuit [DecidableEq F] : FormalCircuit F (Inputs M) M where
   Spec
   soundness
   completeness
+  -- Manual: closes with the bare tactic in isolation but is budget-borderline and flips
+  -- with unrelated import changes (grind context sensitivity); kept explicit until the
+  -- close is deterministic on this goal.
   computableWitnesses := by
     intro n input env env'
     -- destructure up front: simp does not iota-reduce the `match` coming from `main`'s

@@ -37,6 +37,8 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     let state ← Round.circuit input
     let permuted_message ← Permute.circuit input.message
     return ⟨state, permuted_message⟩
+  -- Manual: the witness structure matches on the round permutation constant; the
+  -- tactic has no case-split step for data-dependent operation lists.
   computableWitnesses := by
     intro n input env env'
     simp only [circuit_norm]
@@ -628,6 +630,7 @@ private lemma initState_eval_congr {env env' : ProverEnvironment (F p)}
 set_option maxRecDepth 8192 in
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   main, elaborated, Assumptions, Spec, soundness, completeness
+  -- Manual: compound of Round's leaves at eight-round scale; see Round's comment.
   computableWitnesses := by
     intro n input env env'
     obtain ⟨chaining_value, block_words, counter_high, counter_low, block_len, flags⟩ := input

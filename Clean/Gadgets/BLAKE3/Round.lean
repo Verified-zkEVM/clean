@@ -95,6 +95,9 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   main, elaborated, Assumptions, Spec, soundness, completeness
+  -- Manual: leaves pair input-lane facts with child output-window facts
+  -- (Addition32/Xor32/Rotation32.output_congr); the tactic's chain does not use the
+  -- premise-free window lemmas yet, and the compound close is budget-borderline.
   computableWitnesses := by
     intro n input env env'
     obtain ⟨state, message⟩ := input

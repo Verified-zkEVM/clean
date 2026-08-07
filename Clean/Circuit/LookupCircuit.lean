@@ -94,6 +94,9 @@ def lookupCircuit (circuit : LookupCircuit F α β) (hint : ProverHint F) :
     simp only [h_input] at h_env ⊢
     use h_assumptions
 
+  -- Manual: the witness is a native hint program (WitgenIR.nativeValue over the wrapped
+  -- circuit's constantOutput); outside the ProvableType composition rules, and
+  -- budget-borderline under the bare tactic.
   computableWitnesses := by
     intro n input env env'
     refine ⟨?_, ?_⟩
