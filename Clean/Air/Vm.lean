@@ -132,15 +132,18 @@ def toFormal (F : Type) [FiniteField F] [DecidableEq F] (ens : SoundVmEnsemble F
     rw [EnsembleWitnessView.forall_mem_allTables_iff,
       ← EnsembleWitnessView.verifierAssumptions_iff_verifierTable_assumptions]
     use verifier_assumptions
-    intro table h_table row h_row
-    cases hcolumns : table.component.fixedColumns with
-    | none =>
-        simp only [Component.Assumptions, hcolumns, Component.CircuitAssumptions,
-          Component.rowInput]
-        apply extraAssumptionsConsistency witness.publicInput witness.data extra_assumptions
-        exact EnsembleWitnessView.mem_tables_component_of_mem_tables h_table
-        exact hcolumns
-    | some fixed => simp [Component.Assumptions, hcolumns]
+    intro table h_table
+    constructor
+    · exact witness.data_consistent table h_table
+    · intro row h_row
+      cases hcolumns : table.component.fixedColumns with
+      | none =>
+          simp only [Component.Assumptions, hcolumns, Component.CircuitAssumptions,
+            Component.rowInput]
+          apply extraAssumptionsConsistency witness.publicInput witness.data extra_assumptions
+          exact EnsembleWitnessView.mem_tables_component_of_mem_tables h_table
+          exact hcolumns
+      | some fixed => simp [Component.Assumptions, hcolumns]
 
 variable {ens : SoundVmEnsemble F PublicIO} {ExtraAssumptions : PublicIO F → ProverData F → Prop}
   {eac : ∀ publicInput data, ExtraAssumptions publicInput data →
@@ -689,6 +692,10 @@ lemma addVm_witness (ens : Ensemble F PublicIO) (vm : VmTables F PublicIO)
       intro table h_table
       apply witness.same_data
       exact List.mem_of_mem_take h_table
+    data_consistent := by
+      intro table h_table
+      apply witness.data_consistent
+      exact List.mem_of_mem_take h_table
   }
   let witness' : EnsembleWitnessView ens := {
     tables := witness.tables.drop vm.tables.length
@@ -705,6 +712,10 @@ lemma addVm_witness (ens : Ensemble F PublicIO) (vm : VmTables F PublicIO)
     same_data := by
       intro table h_table
       apply witness.same_data
+      exact List.mem_of_mem_drop h_table
+    data_consistent := by
+      intro table h_table
+      apply witness.data_consistent
       exact List.mem_of_mem_drop h_table
   }
   refine ⟨vmWitness, witness', ?_, ?_, rfl, rfl, rfl, rfl ⟩

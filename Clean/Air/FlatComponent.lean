@@ -18,6 +18,9 @@ abbrev RowsMatch (fixed : FixedColumns F) (rows : List (Array F)) : Prop :=
 
 end FixedColumns
 
+def projectRow (columns : List ℕ) (row : Array F) : Vector F columns.length :=
+  ⟨(columns.map fun column => row[column]?.getD 0).toArray, by simp⟩
+
 /--
 A flat AIR component: one circuit whose constraints are checked independently on each row.
 There are no direct adjacent-row constraints; communication with other rows/components is
@@ -36,6 +39,8 @@ structure Component (F : Type) [FiniteField F] where
     | none => True
     | some fixed => ∀ i (hi : i < fixed.rows.length) row data,
         row.extract 0 fixed.width = fixed.rows[i]'hi →
+        (dataColumns = [] ∨
+          (data name dataColumns.length)[i]? = some (projectRow dataColumns row)) →
         circuit.Assumptions
           (valueFromOffset Input 0 (Environment.fromArray row data)) data := by simp
   fixed_width_le_input : (fixedColumns.map FixedColumns.width).getD 0 ≤ size Input := by simp
@@ -220,9 +225,6 @@ def toTable (table : BareTable F) (data : ProverData F) : Table F where
   uniform_width := table.uniform_width
   fixed_rows_match := table.fixed_rows_match
 
-private def projectRow (columns : List ℕ) (row : Array F) : Vector F columns.length :=
-  ⟨(columns.map fun column => row[column]?.getD 0).toArray, by simp⟩
-
 def proverRows (table : BareTable F) (n : ℕ) : Array (Vector F n) :=
   if h : table.component.dataColumns.length = n then
     h ▸ (table.table.map (projectRow table.component.dataColumns) |>.toArray)
@@ -232,13 +234,43 @@ def proverRows (table : BareTable F) (n : ℕ) : Array (Vector F n) :=
 end BareTable
 
 /-- The unique named component trace is the source of each `ProverData` entry. -/
-def deriveProverData (tables : List (BareTable F)) : ProverData F := fun name n =>
-  match tables.find? (fun table => table.component.name == name) with
-  | some table => table.proverRows n
-  | none => #[]
+def deriveProverData : List (BareTable F) → ProverData F
+  | [] => fun _ _ => #[]
+  | table :: tables => fun name n =>
+      if table.component.name = name then table.proverRows n else deriveProverData tables name n
+
+lemma deriveProverData_eq_of_mem (tables : List (BareTable F))
+    (hunique : (tables.map (fun table => table.component.name)).Nodup)
+    {table : BareTable F} (hmem : table ∈ tables) (n : ℕ) :
+    deriveProverData tables table.component.name n = table.proverRows n := by
+  induction tables with
+  | nil => simp at hmem
+  | cons head tail ih =>
+      simp only [List.map_cons, List.nodup_cons] at hunique
+      obtain ⟨hhead, htail⟩ := hunique
+      simp only [List.mem_cons] at hmem
+      rcases hmem with rfl | hmem
+      · simp [deriveProverData]
+      · have hne : head.component.name ≠ table.component.name := by
+          intro heq
+          apply hhead
+          rw [heq]
+          exact List.mem_map.mpr ⟨table, hmem, rfl⟩
+        simp [deriveProverData, hne, ih htail hmem]
 
 namespace Table
 variable {table : Table F} {channel : RawChannel F}
+
+def proverRows (table : Table F) (n : ℕ) : Array (Vector F n) :=
+  if h : table.component.dataColumns.length = n then
+    h ▸ (table.table.map (projectRow table.component.dataColumns) |>.toArray)
+  else
+    #[]
+
+def DataConsistency (table : Table F) : Prop :=
+  table.component.dataColumns = [] ∨
+    table.data table.component.name table.component.dataColumns.length =
+      table.proverRows table.component.dataColumns.length
 
 abbrev length (t : Table F) : ℕ := t.table.length
 
@@ -268,8 +300,9 @@ def Constraints (table : Table F) : Prop :=
     table.component.operations.ConstraintsHold (table.environment row)
 
 def Assumptions (table : Table F) : Prop :=
-  ∀ row ∈ table.table,
-    table.component.Assumptions (table.environment row)
+  table.DataConsistency ∧
+    ∀ row ∈ table.table,
+      table.component.Assumptions (table.environment row)
 
 lemma circuitAssumptions (table : Table F) (assumptions : table.Assumptions)
     (row : Array F) (hrow : row ∈ table.table) :
@@ -279,13 +312,16 @@ lemma circuitAssumptions (table : Table F) (assumptions : table.Assumptions)
       have h : Table.Assumptions table := assumptions
       unfold Table.Assumptions Component.Assumptions at h
       rw [hcolumns] at h
-      exact h row hrow
+      exact h.2 row hrow
   | some fixed =>
       have hfixed := table.component.fixed_assumptions
       change (match table.component.fixedColumns with
         | none => True
         | some fixed => ∀ i (hi : i < fixed.rows.length) candidate data,
             candidate.extract 0 fixed.width = fixed.rows[i]'hi →
+            (table.component.dataColumns = [] ∨
+              (data table.component.name table.component.dataColumns.length)[i]? =
+                some (projectRow table.component.dataColumns candidate)) →
             table.component.circuit.Assumptions
               (valueFromOffset table.component.Input 0 (Environment.fromArray candidate data)) data) at hfixed
       rw [hcolumns] at hfixed
@@ -297,17 +333,23 @@ lemma circuitAssumptions (table : Table F) (assumptions : table.Assumptions)
         simpa using congrArg List.length hmatch
       have hfixedIndex : i.val < fixed.rows.length := by omega
       apply hfixed i.val hfixedIndex row table.data
-      have hprefix := congrArg (fun rows => rows[i.val]?) hmatch
-      have hmappedIndex : i.val < (table.table.map
-          (fun candidate => candidate.extract 0 fixed.width)).length := by
-        simp only [List.length_map]
-        exact i.isLt
-      rw [List.getElem?_eq_getElem hmappedIndex,
-        List.getElem?_eq_getElem hfixedIndex] at hprefix
-      simp only [List.getElem_map, Option.some.injEq] at hprefix
-      have hi' : table.table[i.val] = row := hi
-      rw [hi'] at hprefix
-      exact hprefix
+      · have hprefix := congrArg (fun rows => rows[i.val]?) hmatch
+        have hmappedIndex : i.val < (table.table.map
+            (fun candidate => candidate.extract 0 fixed.width)).length := by
+          simp only [List.length_map]
+          exact i.isLt
+        rw [List.getElem?_eq_getElem hmappedIndex,
+          List.getElem?_eq_getElem hfixedIndex] at hprefix
+        simp only [List.getElem_map, Option.some.injEq] at hprefix
+        have hi' : table.table[i.val] = row := hi
+        rw [hi'] at hprefix
+        exact hprefix
+      · rcases assumptions.1 with hempty | hconsistent
+        · exact Or.inl hempty
+        · right
+          rw [hconsistent]
+          have hi' : table.table[i.val] = row := hi
+          simp [Table.proverRows, i.isLt, hi']
 
 def Guarantees (table : Table F) : Prop :=
   ∀ row ∈ table.table,

@@ -76,7 +76,7 @@ def bytesComponent : Component (F p) where
   fixedColumns := some bytesFixedColumns
   fixed_width_le_input := by change 1 ≤ 2; omega
   fixed_assumptions := by
-    intro i hi row data hrow
+    intro i hi row data hrow _
     simp only [pushBytes]
     let byteIndex : Fin 256 := ⟨i, by simpa [bytesFixedColumns] using hi⟩
     refine ⟨byteIndex, ?_⟩

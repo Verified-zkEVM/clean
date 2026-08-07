@@ -29,6 +29,7 @@ structure EnsembleWitnessView (ens : Ensemble F PublicIO) where
   same_circuits : ∀ i (hi : i < ens.tables.length),
     ens.tables[i] = tables[i].component
   same_data : ∀ table ∈ tables, table.data = data
+  data_consistent : ∀ table ∈ tables, table.DataConsistency
 
 /-- The externally committed ensemble witness. Its `ProverData` is derived from its tables. -/
 structure EnsembleWitness (ens : Ensemble F PublicIO) where
@@ -60,6 +61,25 @@ def toView {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Ensembl
     intro i hi
     simpa [tables, BareTable.toTable] using witness.same_circuits i hi
   same_data := by simp [tables, BareTable.toTable]
+  data_consistent := by
+    have hcomponents : witness.tableWitnesses.map (·.component) = ens.tables := by
+      apply List.ext_getElem
+      · simp [witness.same_length]
+      · intro i hi hi'
+        simpa using (witness.same_circuits i hi').symm
+    have hnames : (witness.tableWitnesses.map (fun table => table.component.name)).Nodup := by
+      rw [show witness.tableWitnesses.map (fun table => table.component.name) =
+        ens.tables.map (·.name) by rw [← hcomponents]; simp]
+      exact witness.unique_names
+    intro table htable
+    simp only [tables, List.mem_map] at htable
+    obtain ⟨bare, hbare, rfl⟩ := htable
+    by_cases hempty : bare.component.dataColumns = []
+    · exact Or.inl hempty
+    · right
+      change witness.data bare.component.name bare.component.dataColumns.length =
+        bare.proverRows bare.component.dataColumns.length
+      exact deriveProverData_eq_of_mem witness.tableWitnesses hnames hbare _
 
 end EnsembleWitness
 
@@ -321,7 +341,7 @@ lemma verifierConstraints_iff_verifierTable_constraints {witness : EnsembleWitne
 lemma verifierAssumptions_iff_verifierTable_assumptions {witness : EnsembleWitnessView ens} :
   ens.verifier.Assumptions witness.publicInput witness.data ↔
     witness.verifierTable.Assumptions := by
-  simp +instances only [circuit_norm, Table.Assumptions,
+  simp +instances only [circuit_norm, Table.Assumptions, Table.DataConsistency,
     Ensemble.verifierTable, Component.Assumptions, Component.CircuitAssumptions]
 
 lemma verifierSpec_iff_verifierTable_spec {witness : EnsembleWitnessView ens} :
