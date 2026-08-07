@@ -172,18 +172,7 @@ def circuit (n ops : ℕ) [hn : NeZero n] (hnout : 2^(nbits ((2^n - 1) * ops)) <
         Fin.foldl ops (fun sum (j : Fin ops) =>
           sum + fieldFromBits input[j]) (0 : F p)
 
-  computableWitnesses := by
-    -- explicit version of `computable_witnesses`: grind cannot reach the eval terms
-    -- inside `inputLinearSum`'s Fin.foldl binders, so the child's input equality is
-    -- bridged through `inputLinearSum_eval_eq_sum` instead
-    intro n' input env env'
-    simp only [circuit_norm, computable_witnesses_norm, main]
-    refine ⟨fun h => ?_, fun h h_agrees => ?_⟩
-    · apply GeneralFormalCircuit.toSubcircuit_computableWitnesses
-      simp only [circuit_norm]
-      rw [inputLinearSum_eval_eq_sum env.toEnvironment input _ rfl,
-        inputLinearSum_eval_eq_sum env'.toEnvironment input _ rfl, h]
-    · grind
+  computableWitnesses := by computable_witnesses [inputLinearSum_eval_eq_sum]
 
   soundness := by
     intros offset env input_var input h_input_eval h_assumptions h_constraints_hold
