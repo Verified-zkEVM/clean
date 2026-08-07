@@ -785,6 +785,10 @@ def runLeafDispatch (lemmasArray closeArray : Array (TSyntax `Lean.Parser.Tactic
         let st ← Tactic.saveState
         try evalTactic t; pure true
         catch _ => st.restore; pure false
+      -- unify the environments first: legs whose goal is a pure witness-window fact
+      -- close by rfl right here, and the rest reach grind with fewer distinct atoms
+      envUnify
+      if (← getGoals).isEmpty then return
       if ← attempt (← `(tactic| grind)) then return
       if ← attempt (← `(tactic|
           (simp_all only [circuit_norm, computable_witnesses_norm]; done))) then return
