@@ -95,9 +95,12 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   main, elaborated, Assumptions, Spec, soundness, completeness
-  -- Manual: leaves pair input-lane facts with child output-window facts
-  -- (Addition32/Xor32/Rotation32.output_congr); the tactic's chain does not use the
-  -- premise-free window lemmas yet, and the compound close is budget-borderline.
+  -- Manual: every leaf shape here closes under the tactic's vector route given
+  -- [eval_vector_set, U32.ByteVector.eval_fromLimbs, U32.ByteVector.fromLimbs_inj]
+  -- (verified 2026-08-07 by emulating the route on the leaves), but passing those as
+  -- hints blows the heartbeat budget: the hint channel also feeds `simp_all`/`at *`
+  -- positions, where a recursive eval decomposition rewrites all eight legs' chain
+  -- facts at every leaf. Needs a goal-only hint position in the close routes.
   computableWitnesses := by
     intro n input env env'
     obtain ⟨state, message⟩ := input

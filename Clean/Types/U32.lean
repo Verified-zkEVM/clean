@@ -355,6 +355,18 @@ theorem ext_iff {F} {x y : U32 F} :
     x = y ↔ ∀ i (_ : i < 4), x.toLimbs[i] = y.toLimbs[i] := by
   simp only [U32.toLimbs, ProvableType.ext_iff, size]
 
+@[grind =]
+theorem fromLimbs_inj {F} {x y : Vector F 4} :
+    U32.fromLimbs x = U32.fromLimbs y ↔ x = y := by
+  constructor
+  · intro h
+    have := congrArg U32.toLimbs h
+    simp only [toLimbs_fromLimbs] at this
+    exact this
+  · intro h
+    subst y
+    rfl
+
 omit [Fact (Nat.Prime p)] p_large_enough in
 theorem normalized_iff {x : U32 (F p)} :
     x.Normalized ↔ ∀ i (_ : i < 4), x.toLimbs[i].val < 256 := by

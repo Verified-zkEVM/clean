@@ -794,6 +794,16 @@ theorem getElem_eval_vector (env : Environment F) (x : ProvableVector α n (Expr
   have h' := congrArg (fun xs : Vector (α F) n => xs[i]) (eval_vector env x)
   simpa only [Vector.getElem_map] using h'.symm
 
+/-- `eval` commutes with `Vector.set`, so vectors updated entry by entry (state-update
+circuits) evaluate without unfolding the whole vector. Paired with the outward-oriented
+`getElem_eval_vector` normal form, this lets `grind` compute `(eval env (v.set i a))[j]`
+elementwise via `Vector.getElem_set`. -/
+@[grind =]
+theorem eval_vector_set (env : Environment F) (x : ProvableVector α n (Expression F))
+    (i : ℕ) (h : i < n) (a : α (Expression F)) :
+    eval env (x.set i a) = (eval env x).set i (eval env a) := by
+  simp only [eval_vector, Vector.map_set]
+
 lemma eval_vector_eq_get {n : ℕ} (env : Environment F)
     (vars : Vector (M (Expression F)) n) (vals : Vector (M F) n)
     (h : eval env vars = vals) (i : ℕ) (h_i : i < n) :

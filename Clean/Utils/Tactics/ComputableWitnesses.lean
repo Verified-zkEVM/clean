@@ -773,11 +773,14 @@ def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : TacticM Unit :
       if hasForEach then
         try evalTactic (← `(tactic| ring_nf)) catch _ => pure ()
       -- leaf-local simp (normalizes loop-instantiated lengths), then dispatch
+      -- deliberately WITHOUT the user hints: this simp hits `at *`, and close-stage
+      -- hints (e.g. recursive eval decompositions like `eval_vector_set`) rewriting
+      -- every chain fact in every hypothesis is a heartbeat blowup; hints reach
+      -- hypotheses via the close routes' `simp_all` instead
       try
         evalTactic (← `(tactic| simp only [circuit_norm, computable_witnesses_norm,
           ComputableWitnesses.structEqSplit, reduceLocalLength, reduceOutputMetadata,
-          retypeVectorAliasEq,
-          $lemmasArray,*] at *))
+          retypeVectorAliasEq] at *))
       catch _ => pure ()
       if (← getGoals).isEmpty then return
       evalTactic (← `(tactic| assert_local_lengths))
