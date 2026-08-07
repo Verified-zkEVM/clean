@@ -220,7 +220,9 @@ def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
     refine ⟨⟨fun h hag => ?_, fun h hag => ?_, ?_⟩, fun h hag => ?_⟩
     · intro i hi
       simp only [circuit_norm, Vector.getElem_rotate]
-      -- TODO COMPWIT grind does not instantiate `h` at the `% 32` rotation indices on its own
+      -- grind needs the `% 32`-index instantiations supplied (retested 2026-08-07: with
+      -- `Nat.mod_lt` it finds the atoms but still leaves the `.val`-xor congruence open);
+      -- the two explicit `have`s are the minimal patch
       have hr1 := h ((i + 2) % 32) (by omega)
       have hr2 := h ((i + 13) % 32) (by omega)
       grind

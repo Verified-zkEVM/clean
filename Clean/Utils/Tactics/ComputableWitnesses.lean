@@ -345,6 +345,22 @@ def reduceOutputMetadataCore : Simp.DSimproc := fun e => do
 
 dsimproc_decl reduceOutputMetadata (_) := reduceOutputMetadataCore
 
+/-- Retype equalities whose type is a reducible Vector alias
+(`BLAKE3State := ProvableVector U32 16`): the alias hides the `Vector` head from
+every `Eq (Vector …)`-keyed simp lemma (`Vector.ext_iff`, `Vector.mk.injEq`, …), at any
+depth in the goal. Definitional, so it is a pure respelling. -/
+def retypeVectorAliasEqCore : Simp.DSimproc := fun e => do
+  unless e.isAppOfArity ``Eq 3 do return .continue
+  let args := e.getAppArgs
+  let T := args[0]!
+  if T.getAppFn.isConstOf ``Vector then return .continue
+  let T' ← withReducible <| whnf T
+  unless T'.getAppFn.isConstOf ``Vector do return .continue
+  let u ← getLevel T'
+  return .visit (mkApp3 (mkConst ``Eq [u]) T' args[1]! args[2]!)
+
+dsimproc_decl retypeVectorAliasEq (_ = _) := retypeVectorAliasEqCore
+
 /-- Collect fully-applied child-output terms: `c.output v k` and its pre-normalization
 spelling `(subcircuit c v k).1` (definitionally equal, handled by unification). -/
 partial def collectOutputsGo (e : Expr) (seen : IO.Ref (Std.HashSet Expr))
@@ -640,7 +656,7 @@ def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : TacticM Unit :
       first
         | (simp_all; done)
         | (simp_all only [circuit_norm, eval_vector, Vector.map_mk, List.map_toArray,
-             List.map_cons, List.map_nil, reduceOutputMetadata,
+             List.map_cons, List.map_nil, reduceOutputMetadata, retypeVectorAliasEq,
              Vector.mk.injEq, Array.mk.injEq, List.cons.injEq, and_true,
              Vector.map_ofFn, Vector.ext_iff, Vector.getElem_ofFn, Function.comp_def,
              Vector.getElem_map, Vector.getElem_append,
@@ -734,22 +750,9 @@ def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : TacticM Unit :
           replaceMainGoal []
           return
       throwError "syntacticAssumption: no match"
-    -- reducible type aliases (`BLAKE3State := ProvableVector U32 16`) hide the Vector
-    -- type from `Vector.ext_iff`'s discrimination key; retype the equality at the
-    -- reducible normal form (a defeq `change`, cheap alias unfolding only)
-    let retypeAliasEq : TacticM Unit := withMainContext do
-      let t := (← instantiateMVars (← getMainTarget)).consumeMData
-      let some (T, lhs, rhs) := t.eq? | return
-      let T' ← withReducible <| whnf T
-      if T' == T then return
-      unless T'.getAppFn.isConstOf ``Vector do return
-      let u ← getLevel T'
-      let eq' := mkApp3 (mkConst ``Eq [u]) T' lhs rhs
-      liftMetaTactic fun g => do return [← g.change eq']
     let evalCloseRun : TacticM Unit := do
       if (← getGoals).isEmpty then return
       try clearOpsLengthHyps catch _ => pure ()
-      try retypeAliasEq catch _ => pure ()
       if (← try syntacticAssumption; pure true catch _ => pure false) then return
       -- expose labeled helper metadata before routing: the expansion produces the
       -- `varFromOffset` atoms the route test looks for
@@ -773,6 +776,7 @@ def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : TacticM Unit :
       try
         evalTactic (← `(tactic| simp only [circuit_norm, computable_witnesses_norm,
           ComputableWitnesses.structEqSplit, reduceLocalLength, reduceOutputMetadata,
+          retypeVectorAliasEq,
           $lemmasArray,*] at *))
       catch _ => pure ()
       if (← getGoals).isEmpty then return
