@@ -761,8 +761,11 @@ def runLeafDispatch (lemmasArray closeArray : Array (TSyntax `Lean.Parser.Tactic
               all_goals (try simp only [ProvableType.eval_varFromOffset, circuit_norm,
                 eval_vector, Vector.mapRange_succ, Vector.mapRange_zero, Vector.mk.injEq,
                 Array.mk.injEq, List.cons.injEq, and_true, $closeArray,*])))
+            -- split conjunctions before unifying environments: window conjuncts then
+            -- close by rfl inside envUnify, leaving grind only the input-derived parts
+            evalTactic (← `(tactic| all_goals (try and_intros)))
             envUnify
-            evalTactic (← `(tactic| all_goals ((try and_intros) <;> grind)))
+            evalTactic (← `(tactic| all_goals grind))
         setGoals []
       let attempt (act : TacticM Unit) : TacticM Bool := do
         let st ← Tactic.saveState
