@@ -87,6 +87,10 @@ private def lowerComponent (index : ℕ) (component : Component F) :
   | none => pure ()
   return {
     inputWidth := component.rowOffset
+    fixedColumns := component.fixedColumns.map fun fixed => {
+      width := fixed.width
+      rows := fixed.rows
+    }
     width := component.width
     witnesses
     constraints

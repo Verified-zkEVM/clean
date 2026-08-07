@@ -15,6 +15,7 @@ use p3_air::{
     SymbolicExpression, SymbolicVariable,
 };
 use p3_field::{Field, PrimeCharacteristicRing};
+use p3_matrix::dense::RowMajorMatrix;
 use p3_matrix::Matrix;
 use p3_uni_stark::SymbolicAirBuilder;
 
@@ -41,6 +42,11 @@ pub enum EnsembleShapeError {
         component: usize,
         height: usize,
     },
+    FixedTraceHeight {
+        component: usize,
+        expected: usize,
+        actual: usize,
+    },
     PublicValueCount {
         expected: usize,
         actual: usize,
@@ -63,14 +69,21 @@ pub struct GeneratedLookup<F: Field> {
 pub trait GeneratedAirSpec: Clone + Sync {
     const PUBLIC_VALUES: usize;
     const WIDTHS: &'static [usize];
+    const FIXED_WIDTHS: &'static [usize];
+    const FIXED_HEIGHTS: &'static [usize];
 
-    fn constraints<AB>(component: usize, local: &[AB::Var]) -> Vec<AB::Expr>
+    fn fixed_trace<F: Field + PrimeCharacteristicRing>(
+        component: usize,
+    ) -> Option<RowMajorMatrix<F>>;
+
+    fn constraints<AB>(component: usize, fixed: &[AB::Var], local: &[AB::Var]) -> Vec<AB::Expr>
     where
         AB: AirBuilderWithPublicValues,
         AB::F: Field + PrimeCharacteristicRing;
 
     fn lookups<F: Field>(
         component: usize,
+        fixed: &[SymbolicVariable<F>],
         local: &[SymbolicVariable<F>],
     ) -> Vec<GeneratedLookup<F>>;
 
@@ -104,6 +117,14 @@ impl<P: GeneratedAirSpec> GeneratedAir<P> {
                     return Err(EnsembleShapeError::TraceHeight {
                         component,
                         height: trace_height,
+                    });
+                }
+                let fixed_height = P::FIXED_HEIGHTS[component];
+                if fixed_height != 0 && fixed_height != trace_height {
+                    return Err(EnsembleShapeError::FixedTraceHeight {
+                        component,
+                        expected: fixed_height,
+                        actual: trace_height,
                     });
                 }
                 Ok(Self {
@@ -142,6 +163,10 @@ impl<F: Field, P: GeneratedAirSpec> BaseAir<F> for GeneratedAir<P> {
     fn width(&self) -> usize {
         P::WIDTHS[self.component]
     }
+
+    fn preprocessed_trace(&self) -> Option<RowMajorMatrix<F>> {
+        P::fixed_trace(self.component)
+    }
 }
 
 impl<AB, P> Air<AB> for GeneratedAir<P>
@@ -155,7 +180,20 @@ where
         let local = main
             .row_slice(0)
             .expect("validated trace height is nonzero");
-        for constraint in P::constraints::<AB>(self.component, &local) {
+        let constraints = if P::FIXED_WIDTHS[self.component] == 0 {
+            P::constraints::<AB>(self.component, &[], &local)
+        } else {
+            match builder.preprocessed() {
+                Some(fixed) => {
+                    let fixed_local = fixed
+                        .row_slice(0)
+                        .expect("validated fixed trace height is nonzero");
+                    P::constraints::<AB>(self.component, &fixed_local, &local)
+                }
+                None => unreachable!("fixed component has no preprocessed trace"),
+            }
+        };
+        for constraint in constraints {
             builder.assert_zero(constraint);
         }
     }
@@ -166,7 +204,7 @@ where
     {
         self.num_lookups = 0;
         let symbolic = SymbolicAirBuilder::<AB::F>::new(
-            0,
+            P::FIXED_WIDTHS[self.component],
             BaseAir::<AB::F>::width(self),
             P::PUBLIC_VALUES,
             0,
@@ -176,7 +214,20 @@ where
         let local = main
             .row_slice(0)
             .expect("validated trace height is nonzero");
-        P::lookups(self.component, &local)
+        let lookups = if P::FIXED_WIDTHS[self.component] == 0 {
+            P::lookups(self.component, &[], &local)
+        } else {
+            match AirBuilder::preprocessed(&symbolic) {
+                Some(fixed) => {
+                    let fixed_local = fixed
+                        .row_slice(0)
+                        .expect("validated fixed trace height is nonzero");
+                    P::lookups(self.component, &fixed_local, &local)
+                }
+                None => unreachable!("fixed component has no symbolic preprocessed trace"),
+            }
+        };
+        lookups
             .into_iter()
             .map(|lookup| {
                 Air::<AB>::register_lookup(

@@ -27,9 +27,12 @@ fn extracted_rust_generates_fibonacci_ensemble_witness() {
 
     assert_eq!(
         witness.tables.iter().map(Vec::len).collect::<Vec<_>>(),
-        vec![32, 32, 32]
+        vec![32, 32, 256]
     );
-    let bytes = &witness.tables[2][0];
+    let bytes = witness.tables[2]
+        .iter()
+        .map(|row| row[1])
+        .collect::<Vec<_>>();
     assert_eq!(
         bytes
             .iter()
@@ -50,7 +53,7 @@ fn extracted_rust_coalesces_repeated_chip_pulls() {
 
     assert_eq!(
         witness.tables.iter().map(Vec::len).collect::<Vec<_>>(),
-        vec![512, 512, 32]
+        vec![512, 512, 256]
     );
 }
 
@@ -65,7 +68,11 @@ fn extracted_fibonacci_air_proves_and_verifies() {
     let traces = witness.into_traces().expect("invalid extracted traces");
     assert_eq!(
         traces.iter().map(Matrix::height).collect::<Vec<_>>(),
-        vec![4096, 512, 32]
+        vec![4096, 512, 256]
+    );
+    assert_eq!(
+        traces.iter().map(Matrix::width).collect::<Vec<_>>(),
+        vec![5, 5, 1]
     );
 
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
@@ -112,6 +119,16 @@ fn ensemble_api_reports_shape_errors() {
             trace_heights: 2,
         })
     ));
+    let mut wrong_fixed_height = trace_heights.clone();
+    wrong_fixed_height[2] = 128;
+    assert!(matches!(
+        generated::FibonacciEnsembleProgramAir::all(&wrong_fixed_height),
+        Err(EnsembleShapeError::FixedTraceHeight {
+            component: 2,
+            expected: 256,
+            actual: 128,
+        })
+    ));
 }
 
 struct Minimum64Program;
@@ -119,6 +136,8 @@ struct Minimum64Program;
 impl<F: WitnessField> Program<F> for Minimum64Program {
     const FUEL: usize = <generated::FibonacciEnsembleProgram as Program<F>>::FUEL;
     const COMPONENTS: usize = <generated::FibonacciEnsembleProgram as Program<F>>::COMPONENTS;
+    const FIXED_WIDTHS: &'static [usize] =
+        <generated::FibonacciEnsembleProgram as Program<F>>::FIXED_WIDTHS;
 
     fn modes() -> Vec<Mode<F>> {
         generated::FibonacciEnsembleProgram::modes()

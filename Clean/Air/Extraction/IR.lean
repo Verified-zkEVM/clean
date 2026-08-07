@@ -115,8 +115,13 @@ def eval (block : WitnessBlock F) (environment : ProverEnvironment F) : Vector F
 end WitnessBlock
 
 /-- A backend-facing component with explicit shape and only same-row operations. -/
+structure FixedColumnsProgram (F : Type) where
+  width : ℕ
+  rows : List (Array F)
+
 structure ComponentProgram (F : Type) [FiniteField F] where
   inputWidth : ℕ
+  fixedColumns : Option (FixedColumnsProgram F)
   width : ℕ
   witnesses : List (WitnessBlock F)
   constraints : List (Expression F)

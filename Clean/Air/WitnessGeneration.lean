@@ -450,6 +450,20 @@ private structure AssembledTables (components : List (Component F)) where
     components[index] = tables[index].component
   data_eq : ∀ table ∈ tables, table.data = emptyData F
 
+private structure MatchedFixedRows (component : Component F) (rows : List (Array F)) where
+  marker : Unit := ()
+  property : component.fixedRowsMatch rows
+
+private def validateFixedRows (component : Component F) (rows : List (Array F)) :
+    Except String (MatchedFixedRows component rows) :=
+  match hcolumns : component.fixedColumns with
+  | none => .ok ⟨(), by simp [Component.fixedRowsMatch, hcolumns]⟩
+  | some fixed =>
+      if hrows : FixedColumns.RowsMatch fixed rows then
+        .ok ⟨(), by simpa [Component.fixedRowsMatch, hcolumns] using hrows⟩
+      else
+        .error "generated table does not match its fixed columns"
+
 private def assembleTables :
     (components : List (Component F)) → List (GeneratedTable F) →
       Except String (AssembledTables components)
@@ -462,31 +476,35 @@ private def assembleTables :
   | component :: components, generated :: generatedTables => do
       let rows := generated.rows.map (·.values)
       if h : ∀ row ∈ rows, row.size = component.width then
-        let table : Table F := {
-          component
-          width := component.width
-          table := rows
-          data := emptyData F
-          uniform_width := h
-        }
-        let rest ← assembleTables components generatedTables
-        return {
-          tables := table :: rest.tables
-          same_length := by simp [rest.same_length]
-          same_circuits := by
-            intro index hindex
-            cases index with
-            | zero => rfl
-            | succ index =>
-                simp only [List.getElem_cons_succ]
-                exact rest.same_circuits index (by simp at hindex; omega)
-          data_eq := by
-            intro candidate hcandidate
-            simp only [List.mem_cons] at hcandidate
-            rcases hcandidate with rfl | hrest
-            · rfl
-            · exact rest.data_eq candidate hrest
-        }
+        match validateFixedRows component rows with
+        | .error error => .error error
+        | .ok matched => do
+          let table : Table F := {
+            component
+            width := component.width
+            table := rows
+            data := emptyData F
+            uniform_width := h
+            fixed_rows_match := matched.property
+          }
+          let rest ← assembleTables components generatedTables
+          return {
+            tables := table :: rest.tables
+            same_length := by simp [rest.same_length]
+            same_circuits := by
+              intro index hindex
+              cases index with
+              | zero => rfl
+              | succ index =>
+                  simp only [List.getElem_cons_succ]
+                  exact rest.same_circuits index (by simp at hindex; omega)
+            data_eq := by
+              intro candidate hcandidate
+              simp only [List.mem_cons] at hcandidate
+              rcases hcandidate with rfl | hrest
+              · rfl
+              · exact rest.data_eq candidate hrest
+          }
       else
         throw "generated table contains a row of the wrong width"
   | _, _ => .error "generated-table count does not match ensemble component count"

@@ -19,6 +19,9 @@ variable {PublicIO : TypeMap} [ProvableType PublicIO]
 private def field (value : F) : String :=
   s!"F::from_canonical_u64({FiniteField.val value}u64)"
 
+private def airField (value : F) : String :=
+  s!"F::from_u64({FiniteField.val value}u64)"
+
 private def quoted (value : String) : String := reprStr value
 
 private def commaSep (values : List String) : String :=
@@ -141,60 +144,100 @@ private def interactionToRust (row : String) (interaction : AbstractInteraction 
 private def interactionsToRust (row : String) (interactions : List (AbstractInteraction F)) : String :=
   s!"vec![{commaSep (interactions.map (interactionToRust row))}]"
 
-private def airExprToRust (cells : String) : Expression F → String
-  | .var cell => s!"Into::<AB::Expr>::into({cells}[{cell.index}].clone())"
+private def airExprToRust (fixedWidth : ℕ) (fixed main : String) : Expression F → String
+  | .var cell =>
+      if cell.index < fixedWidth then
+        s!"Into::<AB::Expr>::into({fixed}[{cell.index}].clone())"
+      else
+        s!"Into::<AB::Expr>::into({main}[{cell.index - fixedWidth}].clone())"
   | .const value =>
       s!"Into::<AB::Expr>::into(AB::F::from_u64({FiniteField.val value}u64))"
   | .add left right =>
-      s!"({airExprToRust cells left} + {airExprToRust cells right})"
+      s!"({airExprToRust fixedWidth fixed main left} + {airExprToRust fixedWidth fixed main right})"
   | .mul left right =>
-      s!"({airExprToRust cells left} * {airExprToRust cells right})"
+      s!"({airExprToRust fixedWidth fixed main left} * {airExprToRust fixedWidth fixed main right})"
 
-private def symbolicExprToRust (cells : String) : Expression F → String
-  | .var cell => s!"SymbolicExpression::<F>::from({cells}[{cell.index}])"
+private def symbolicExprToRust (fixedWidth : ℕ) (fixed main : String) : Expression F → String
+  | .var cell =>
+      if cell.index < fixedWidth then
+        s!"SymbolicExpression::<F>::from({fixed}[{cell.index}])"
+      else
+        s!"SymbolicExpression::<F>::from({main}[{cell.index - fixedWidth}])"
   | .const value =>
       s!"SymbolicExpression::<F>::from(F::from_u64({FiniteField.val value}u64))"
   | .add left right =>
-      s!"({symbolicExprToRust cells left} + {symbolicExprToRust cells right})"
+      s!"({symbolicExprToRust fixedWidth fixed main left} + {symbolicExprToRust fixedWidth fixed main right})"
   | .mul left right =>
-      s!"({symbolicExprToRust cells left} * {symbolicExprToRust cells right})"
+      s!"({symbolicExprToRust fixedWidth fixed main left} * {symbolicExprToRust fixedWidth fixed main right})"
+
+private def componentFixedWidth (component : ComponentProgram F) : ℕ :=
+  component.fixedColumns.map (·.width) |>.getD 0
+
+private def componentCommittedWidth (component : ComponentProgram F) : ℕ :=
+  component.width - componentFixedWidth component
 
 private def constraintCaseToRust (index : ℕ) (component : ComponentProgram F) : String :=
-  let constraints := component.constraints.map (airExprToRust "local")
+  let constraints := component.constraints.map
+    (airExprToRust (componentFixedWidth component) "fixed" "local")
   s!"            {index} => vec![{commaSep constraints}],"
 
-private def lookupToRust (cells : String) (interaction : AbstractInteraction F) : String :=
-  let message := commaSep <| interaction.msg.toList.map (symbolicExprToRust cells)
-  let multiplicity := symbolicExprToRust cells interaction.mult
+private def lookupToRust (fixedWidth : ℕ) (fixed main : String)
+    (interaction : AbstractInteraction F) : String :=
+  let message := commaSep <| interaction.msg.toList.map
+    (symbolicExprToRust fixedWidth fixed main)
+  let multiplicity := symbolicExprToRust fixedWidth fixed main interaction.mult
   let (multiplicity, direction) := if interaction.assumeGuarantees then
     (s!"-({multiplicity})", "LookupDirection::Receive")
   else
     (multiplicity, "LookupDirection::Send")
   s!"                lookups.push(GeneratedLookup \{ channel: {quoted interaction.channel.name}.into(), message: vec![{message}], multiplicity: {multiplicity}, direction: {direction} });"
 
-private def lookupCaseToRust (index : ℕ) (cells : String)
+private def lookupCaseToRust (index fixedWidth : ℕ) (fixed main : String)
     (interactions : List (AbstractInteraction F)) : String :=
-  let lookups := String.intercalate "\n" <| interactions.map (lookupToRust cells)
+  let lookups := String.intercalate "\n" <|
+    interactions.map (lookupToRust fixedWidth fixed main)
   s!"            {index} => \{\n{lookups}\n            }"
 
+private def fixedColumnsToRust (component : ComponentProgram F) : String :=
+  match component.fixedColumns with
+  | none => "None"
+  | some fixed =>
+      let values := commaSep <| fixed.rows.flatMap fun row => row.toList.map airField
+      s!"Some(RowMajorMatrix::new(vec![{values}], {fixed.width}))"
+
 private def airToRust (name : String) (program : Program F) : String :=
-  let widths := program.components.map (toString ·.width)
+  let widths := program.components.map (toString ∘ componentCommittedWidth)
+  let fixedWidths := program.components.map (toString ∘ componentFixedWidth)
+  let fixedHeights := program.components.map fun component =>
+    toString (component.fixedColumns.map (·.rows.length) |>.getD 0)
   let constraintCases := String.intercalate "\n" <|
     program.components.zipIdx.map fun (component, index) => constraintCaseToRust index component
   let tableCases := String.intercalate "\n" <| program.components.zipIdx.map fun (component, index) =>
-    lookupCaseToRust index "local" component.interactions
+    lookupCaseToRust index (componentFixedWidth component) "fixed" "local" component.interactions
+  let fixedCases := String.intercalate "\n" <| program.components.zipIdx.map fun (component, index) =>
+    s!"            {index} => {fixedColumnsToRust component},"
   s!"#[derive(Clone, Debug)]\n\
 pub struct {name}AirSpec;\n\
 \n\
 impl GeneratedAirSpec for {name}AirSpec \{\n\
     const PUBLIC_VALUES: usize = {program.publicInputWidth};\n\
     const WIDTHS: &'static [usize] = &[{commaSep widths}];\n\
+    const FIXED_WIDTHS: &'static [usize] = &[{commaSep fixedWidths}];\n\
+    const FIXED_HEIGHTS: &'static [usize] = &[{commaSep fixedHeights}];\n\
 \n\
-    fn constraints<AB>(component: usize, local: &[AB::Var]) -> Vec<AB::Expr>\n\
+    fn fixed_trace<F: Field + PrimeCharacteristicRing>(component: usize) -> Option<RowMajorMatrix<F>> \{\n\
+        match component \{\n\
+{fixedCases}\n\
+            _ => unreachable!(\"invalid generated AIR component\"),\n\
+        }\n\
+    }\n\
+\n\
+    fn constraints<AB>(component: usize, fixed: &[AB::Var], local: &[AB::Var]) -> Vec<AB::Expr>\n\
     where\n\
         AB: AirBuilderWithPublicValues,\n\
         AB::F: Field + PrimeCharacteristicRing,\n\
     \{\n\
+        let _ = fixed;\n\
         match component \{\n\
 {constraintCases}\n\
             _ => unreachable!(\"invalid generated AIR component\"),\n\
@@ -203,6 +246,7 @@ impl GeneratedAirSpec for {name}AirSpec \{\n\
 \n\
     fn lookups<F: Field>(\n\
         component: usize,\n\
+        fixed: &[SymbolicVariable<F>],\n\
         local: &[SymbolicVariable<F>],\n\
     ) -> Vec<GeneratedLookup<F>> \{\n\
         let mut lookups = Vec::new();\n\
@@ -261,6 +305,7 @@ use clean_backend::{GeneratedAir, GeneratedAirSpec, GeneratedLookup};\n\
 use p3_air::lookup::Direction as LookupDirection;\n\
 use p3_air::{AirBuilderWithPublicValues, SymbolicExpression, SymbolicVariable};\n\
 use p3_field::{Field, PrimeCharacteristicRing};\n\
+use p3_matrix::dense::RowMajorMatrix;\n\
 use alloc::{format, vec, vec::Vec};\n\
 use alloc::string::String;\n\
 \n\
@@ -277,11 +322,12 @@ def programToRust (name : String) (program : Program F) : Except String String :
   let air := airToRust name program
   let modes := commaSep (program.modes.map modeToRust)
   let padding := commaSep (program.padding.map paddingToRust)
+  let fixedWidths := commaSep (program.components.map (toString ∘ componentFixedWidth))
   let completeCases := String.intercalate "\n" <| program.components.zipIdx.map fun (_, index) =>
     s!"            {index} => component_{index}(input),"
   let interactionCases := String.intercalate "\n" <| program.components.zipIdx.map fun (_, index) =>
     s!"            {index} => component_{index}_interactions(row),"
-  return s!"{prelude}\n{String.intercalate "\n\n" components}\n\nfn public_interactions<F: WitnessField>(public_input: &[F]) -> Vec<Interaction<F>> \{\n    {verifier}\n}\n\n{air}\n\npub struct {name};\n\nimpl<F: WitnessField> Program<F> for {name} \{\n    const FUEL: usize = {program.fuel};\n    const COMPONENTS: usize = {program.components.length};\n\n    fn modes() -> Vec<Mode<F>> \{ vec![{modes}] }\n\n    fn padding() -> Vec<Padding<F>> \{ vec![{padding}] }\n\n    fn complete_row(component: usize, input: &[F]) -> Result<Vec<F>, String> \{\n        match component \{\n{completeCases}\n            _ => Err(format!(\"component index \{component} is out of bounds\")),\n        }\n    }\n\n    fn interactions(component: usize, row: &[F]) -> Vec<Interaction<F>> \{\n        match component \{\n{interactionCases}\n            _ => vec![],\n        }\n    }\n\n    fn verifier_interactions(public_input: &[F]) -> Vec<Interaction<F>> \{\n        public_interactions(public_input)\n    }\n}\n\npub fn generate<F: WitnessField>(public_input: &[F]) -> Result<EnsembleWitness<F>, String> \{\n    clean_backend::witness_generation::generate::<F, {name}>(public_input)\n}\n"
+  return s!"{prelude}\n{String.intercalate "\n\n" components}\n\nfn public_interactions<F: WitnessField>(public_input: &[F]) -> Vec<Interaction<F>> \{\n    {verifier}\n}\n\n{air}\n\npub struct {name};\n\nimpl<F: WitnessField> Program<F> for {name} \{\n    const FUEL: usize = {program.fuel};\n    const COMPONENTS: usize = {program.components.length};\n    const FIXED_WIDTHS: &'static [usize] = &[{fixedWidths}];\n\n    fn modes() -> Vec<Mode<F>> \{ vec![{modes}] }\n\n    fn padding() -> Vec<Padding<F>> \{ vec![{padding}] }\n\n    fn complete_row(component: usize, input: &[F]) -> Result<Vec<F>, String> \{\n        match component \{\n{completeCases}\n            _ => Err(format!(\"component index \{component} is out of bounds\")),\n        }\n    }\n\n    fn interactions(component: usize, row: &[F]) -> Vec<Interaction<F>> \{\n        match component \{\n{interactionCases}\n            _ => vec![],\n        }\n    }\n\n    fn verifier_interactions(public_input: &[F]) -> Vec<Interaction<F>> \{\n        public_interactions(public_input)\n    }\n}\n\npub fn generate<F: WitnessField>(public_input: &[F]) -> Result<EnsembleWitness<F>, String> \{\n    clean_backend::witness_generation::generate::<F, {name}>(public_input)\n}\n"
 
 /-- Validate an ensemble into the typed artifact and render that artifact as Rust. -/
 def ensembleToRust (name : String) (ensemble : Ensemble F PublicIO) (config : Config F) :

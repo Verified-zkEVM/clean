@@ -4,6 +4,20 @@ namespace Air.Flat
 variable {F : Type} [FiniteField F]
 variable {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
 
+/-- Public, index-addressed columns supplied by the verifier rather than committed by the prover. -/
+structure FixedColumns (F : Type) where
+  width : ℕ
+  rows : List (Array F)
+  uniform_width : ∀ row ∈ rows, row.size = width
+
+namespace FixedColumns
+
+/-- The full semantic rows have exactly the declared fixed prefix at every row index. -/
+abbrev RowsMatch (fixed : FixedColumns F) (rows : List (Array F)) : Prop :=
+  rows.map (fun row => row.extract 0 fixed.width) = fixed.rows
+
+end FixedColumns
+
 /--
 A flat AIR component: one circuit whose constraints are checked independently on each row.
 There are no direct adjacent-row constraints; communication with other rows/components is
@@ -13,15 +27,34 @@ structure Component (F : Type) [FiniteField F] where
   {Input : TypeMap} {Output : TypeMap}
   [provableInput : ProvableType Input] [provableOutput : ProvableType Output]
   circuit : GeneralFormalCircuit F Input Output
+  fixedColumns : Option (FixedColumns F) := none
+  fixed_assumptions : match fixedColumns with
+    | none => True
+    | some fixed => ∀ i (hi : i < fixed.rows.length) row data,
+        row.extract 0 fixed.width = fixed.rows[i]'hi →
+        circuit.Assumptions
+          (valueFromOffset Input 0 (Environment.fromArray row data)) data := by simp
+  fixed_width_le_input : (fixedColumns.map FixedColumns.width).getD 0 ≤ size Input := by simp
 
 instance (t: Component F) : ProvableType t.Input := t.provableInput
 instance (t: Component F) : ProvableType t.Output := t.provableOutput
 
 namespace Component
+def fixedWidth (component : Component F) : ℕ :=
+  component.fixedColumns.map FixedColumns.width |>.getD 0
+
+def fixedRowsMatch (component : Component F) (rows : List (Array F)) : Prop :=
+  match component.fixedColumns with
+  | none => True
+  | some fixed => FixedColumns.RowsMatch fixed rows
+
 def operations (component : Component F) : Operations F :=
   component.circuit.instantiate.operations 0
 
 def width (component : Component F) : ℕ := component.circuit.size
+
+def committedWidth (component : Component F) : ℕ :=
+  component.width - component.fixedWidth
 
 def rowOffset (component : Component F) : ℕ := size component.Input
 
@@ -30,11 +63,11 @@ def rowInputVar (component : Component F): Var component.Input F :=
 
 @[circuit_norm]
 lemma rowOffset_mk (circuit : GeneralFormalCircuit F Input Output) :
-  (⟨ circuit ⟩ : Component F).rowOffset = size Input := rfl
+  ({ circuit := circuit } : Component F).rowOffset = size Input := rfl
 
 @[circuit_norm]
 lemma rowInputVar_mk (circuit : GeneralFormalCircuit F Input Output) :
-  (⟨ circuit ⟩ : Component F).rowInputVar = varFromOffset Input 0 := rfl
+  ({ circuit := circuit } : Component F).rowInputVar = varFromOffset Input 0 := rfl
 
 /-- first `size Input` elements of the environment are the input -/
 @[circuit_norm]
@@ -52,14 +85,20 @@ def rowOperations (component : Component F) : Operations F :=
 
 @[circuit_norm]
 lemma rowOperations_mk (circuit : GeneralFormalCircuit F Input Output) :
-  (⟨ circuit ⟩ : Component F).rowOperations =
+  ({ circuit := circuit } : Component F).rowOperations =
     (circuit.main (varFromOffset Input 0)).operations (size Input) := rfl
 
 def Spec (component : Component F) (row : Environment F) : Prop :=
   component.circuit.Spec (component.rowInput row) (component.rowOutput row) row.data
 
-def Assumptions (component : Component F) (row : Environment F) : Prop :=
+def CircuitAssumptions (component : Component F) (row : Environment F) : Prop :=
   component.circuit.Assumptions (component.rowInput row) row.data
+
+/-- Assumptions not already supplied by the component's fixed columns. -/
+def Assumptions (component : Component F) (row : Environment F) : Prop :=
+  match component.fixedColumns with
+  | none => component.CircuitAssumptions row
+  | some _ => True
 
 def exposedChannels (component : Component F) : List (ExposedChannel F) :=
   component.circuit.exposedChannels component.rowInputVar component.rowOffset
@@ -132,7 +171,7 @@ lemma inChannelsOrGuarantees (env : Environment F) :
 
 -- this is the circuit's soundness theorem, stated in "instantiated" form
 theorem weakSoundness {component : Component F} {env : Environment F} :
-    component.Assumptions env →
+    component.CircuitAssumptions env →
     component.operations.ConstraintsHold env →
     component.operations.FullGuarantees env →
       component.Spec env ∧ component.operations.FullRequirements env := by
@@ -141,7 +180,8 @@ theorem weakSoundness {component : Component F} {env : Environment F} :
   set inputVar := varFromOffset component.Input 0
   set ops := (component.circuit.main inputVar).operations (size component.Input)
   have h_assumptions' : component.circuit.Assumptions (eval env inputVar) env.data := by
-    simpa only [Assumptions, rowInput, inputVar, eval_varFromOffset_valueFromOffset] using h_assumptions
+    simpa only [CircuitAssumptions, rowInput, inputVar, eval_varFromOffset_valueFromOffset]
+      using h_assumptions
   convert component.circuit.original_full_soundness _ _ _ h_assumptions' h_constraints h_guarantees
   simp only [rowInput, inputVar, eval_varFromOffset_valueFromOffset]
   rfl
@@ -154,6 +194,8 @@ structure Table (F : Type) [FiniteField F] where
   table : List (Array F)
   data : ProverData F
   uniform_width : ∀ row ∈ table, row.size = width
+  fixed_rows_match : component.fixedRowsMatch table := by
+    simp [Component.fixedRowsMatch]
 
 namespace Table
 variable {table : Table F} {channel : RawChannel F}
@@ -188,6 +230,44 @@ def Constraints (table : Table F) : Prop :=
 def Assumptions (table : Table F) : Prop :=
   ∀ row ∈ table.table,
     table.component.Assumptions (table.environment row)
+
+lemma circuitAssumptions (table : Table F) (assumptions : table.Assumptions)
+    (row : Array F) (hrow : row ∈ table.table) :
+    table.component.CircuitAssumptions (table.environment row) := by
+  cases hcolumns : table.component.fixedColumns with
+  | none =>
+      have h : Table.Assumptions table := assumptions
+      unfold Table.Assumptions Component.Assumptions at h
+      rw [hcolumns] at h
+      exact h row hrow
+  | some fixed =>
+      have hfixed := table.component.fixed_assumptions
+      change (match table.component.fixedColumns with
+        | none => True
+        | some fixed => ∀ i (hi : i < fixed.rows.length) candidate data,
+            candidate.extract 0 fixed.width = fixed.rows[i]'hi →
+            table.component.circuit.Assumptions
+              (valueFromOffset table.component.Input 0 (Environment.fromArray candidate data)) data) at hfixed
+      rw [hcolumns] at hfixed
+      simp only [Component.CircuitAssumptions, Component.rowInput, environment]
+      obtain ⟨i, hi⟩ := List.get_of_mem hrow
+      have hmatch := table.fixed_rows_match
+      simp only [Component.fixedRowsMatch, hcolumns] at hmatch
+      have hlength : table.table.length = fixed.rows.length := by
+        simpa using congrArg List.length hmatch
+      have hfixedIndex : i.val < fixed.rows.length := by omega
+      apply hfixed i.val hfixedIndex row table.data
+      have hprefix := congrArg (fun rows => rows[i.val]?) hmatch
+      have hmappedIndex : i.val < (table.table.map
+          (fun candidate => candidate.extract 0 fixed.width)).length := by
+        simp only [List.length_map]
+        exact i.isLt
+      rw [List.getElem?_eq_getElem hmappedIndex,
+        List.getElem?_eq_getElem hfixedIndex] at hprefix
+      simp only [List.getElem_map, Option.some.injEq] at hprefix
+      have hi' : table.table[i.val] = row := hi
+      rw [hi'] at hprefix
+      exact hprefix
 
 def Guarantees (table : Table F) : Prop :=
   ∀ row ∈ table.table,
@@ -388,8 +468,14 @@ lemma guarantees_of_not_mem (table : Table F) {channel : RawChannel F} :
 theorem weakSoundness {table : Table F} :
     table.Assumptions → table.Constraints → table.Guarantees →
     table.Spec ∧ table.Requirements := by
-  simp_all [Table.Constraints, Table.Guarantees, Table.Spec,
-    Table.Requirements, Table.Assumptions, Component.weakSoundness]
+  intro assumptions constraints guarantees
+  constructor
+  · intro row hrow
+    exact (table.component.weakSoundness (table.circuitAssumptions assumptions row hrow)
+      (constraints row hrow) (guarantees row hrow)).left
+  · intro row hrow
+    exact (table.component.weakSoundness (table.circuitAssumptions assumptions row hrow)
+      (constraints row hrow) (guarantees row hrow)).right
 
 /--
 If we know constraints and _some_ of the guarantees unconditionally, we can remove them from the per-row assumptions.
@@ -414,7 +500,8 @@ lemma requirements_of_partial_guarantees_of_constraints {table : Table F}
     intro i hi _
     exact this i hi
   suffices table.component.operations.FullGuarantees env from
-    table.component.weakSoundness (assumptions row h_row) (constraints row h_row) this |>.right
+    table.component.weakSoundness (table.circuitAssumptions assumptions row h_row)
+      (constraints row h_row) this |>.right
   simp only [Component.guarantees_iff, Component.rowOperations]
   rw [GeneralFormalCircuit.guarantees_iff]
   intro channel channel_mem

@@ -197,7 +197,21 @@ the same data must govern:
 - channel guarantees and requirements;
 - the final Clean-level specification.
 
-The exact representation is still an open design question.
+The intended representation is component-derived data: named component tables determine the
+corresponding `ProverData` entries by construction, rather than accepting a separate uncommitted
+object and postulating consistency.
+
+### Fixed columns have indexed Lean semantics
+
+Verifier-known columns are part of the Clean component model, not constraints patched into the
+Rust backend. A fixed component declares its exact ordered fixed rows. Semantic table row `i` must
+have the declared fixed prefix at `i`, while only the remaining columns are prover-committed.
+
+The component proof receives the row index and the equality between the evaluated fixed input and
+the declared value at that index. Fixed columns therefore discharge facts such as the byte-table
+bound (`i < 256`) inside Lean soundness. Their declared height is exact: the witness generator may
+not power-of-two-pad such a component beyond that height, and the verifier rejects a proof shape
+whose main trace height differs from the fixed trace height.
 
 ### Verifier-known trace shape must be bound
 
@@ -379,12 +393,10 @@ The polished milestone is acceptable only when all of the following hold:
 
 ## Open design questions
 
-- How should proof-committed data realize `ProverData` used in Clean specifications and channel
-  guarantees?
-- Should the new model bind an external-data object to component traces, or should components and
-  channels replace semantic uses of `ProverData` entirely?
-- What extensions to `Clean/Air` are required to express this relation and prove ensemble
-  soundness?
+- Which component row projection should define each named `ProverData` entry, including whether
+  multiplicity and padding-only columns are omitted?
+- Where should the generic theorem live that transports facts about component-derived data into
+  ensemble-level soundness proofs?
 - What public-input/output statement should the FemtoCairo demo prove?
 - Which trace heights are static, dynamic, or public, and what bounds apply to dynamic heights?
 - What is the minimum realistic FemtoCairo workload, and which instructions and memory behaviors

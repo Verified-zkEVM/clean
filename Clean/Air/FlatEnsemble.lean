@@ -26,11 +26,11 @@ structure EnsembleWitness (ens : Ensemble F PublicIO) where
 
 /-- it's convenient to define a `Table` for the verifier, to treat them in a unified way -/
 def Ensemble.verifierTable (ens : Ensemble F PublicIO) : Component F :=
-  ⟨ ens.verifier ⟩
+  { circuit := ens.verifier }
 
 /-- it's convenient to define a `Table` for the verifier, to treat them in a unified way -/
 def EnsembleWitness.verifierTable {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Table F where
-  component := ⟨ ens.verifier ⟩
+  component := { circuit := ens.verifier }
   width := size PublicIO
   -- it's important that this has one row, which contains the input,
   -- since we want to "run" the verifier once to produce interactions,
@@ -38,6 +38,7 @@ def EnsembleWitness.verifierTable {ens : Ensemble F PublicIO} (witness : Ensembl
   table := [witness.publicInput |> toElements |>.toArray]
   data := witness.data
   uniform_width := by simp
+  fixed_rows_match := by simp [Component.fixedRowsMatch]
 
 @[circuit_norm]
 lemma List.flatMap_subset_iff {α β : Type*} {f : α → List β} {l₁ : List α} {l₂ : List β} :
@@ -62,7 +63,7 @@ def empty (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO
 @[circuit_norm] lemma empty_verifier :
   (empty F PublicIO).verifier = .empty F PublicIO := rfl
 @[circuit_norm] lemma empty_allTables :
-  (empty F PublicIO).allTables = [⟨ .empty F PublicIO ⟩] := rfl
+  (empty F PublicIO).allTables = [{ circuit := .empty F PublicIO }] := rfl
 
 lemma size_verifier {ens : Ensemble F PublicIO} :
     ens.verifier.size = size PublicIO := by
@@ -282,7 +283,7 @@ lemma verifierAssumptions_iff_verifierTable_assumptions {witness : EnsembleWitne
   ens.verifier.Assumptions witness.publicInput witness.data ↔
     witness.verifierTable.Assumptions := by
   simp +instances only [circuit_norm, Table.Assumptions,
-    Ensemble.verifierTable, Component.Assumptions]
+    Ensemble.verifierTable, Component.Assumptions, Component.CircuitAssumptions]
 
 lemma verifierSpec_iff_verifierTable_spec {witness : EnsembleWitness ens} :
   ens.VerifierSpec witness.publicInput witness.data ↔

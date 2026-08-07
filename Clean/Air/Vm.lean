@@ -104,7 +104,8 @@ def toFormal (F : Type) [FiniteField F] [DecidableEq F] (ens : SoundVmEnsemble F
   -- TODO is this useful in practice? Right now, tables don't have access to public input so that's weird
   (ExtraAssumptions : PublicIO F → ProverData F → Prop)
   (extraAssumptionsConsistency : ∀ publicInput data, ExtraAssumptions publicInput data →
-    ∀ table ∈ ens.ensemble.tables, ∀ input data, table.circuit.Assumptions input data) :
+    ∀ table ∈ ens.ensemble.tables, table.fixedColumns = none →
+      ∀ input data, table.circuit.Assumptions input data) :
     FormalEnsemble F PublicIO where
   ensemble := ens.ensemble
   Assumptions publicInput := ∀ data,
@@ -128,12 +129,19 @@ def toFormal (F : Type) [FiniteField F] [DecidableEq F] (ens : SoundVmEnsemble F
       ← EnsembleWitness.verifierAssumptions_iff_verifierTable_assumptions]
     use verifier_assumptions
     intro table h_table row h_row
-    apply extraAssumptionsConsistency witness.publicInput witness.data extra_assumptions
-    exact EnsembleWitness.mem_tables_component_of_mem_tables h_table
+    cases hcolumns : table.component.fixedColumns with
+    | none =>
+        simp only [Component.Assumptions, hcolumns, Component.CircuitAssumptions,
+          Component.rowInput]
+        apply extraAssumptionsConsistency witness.publicInput witness.data extra_assumptions
+        exact EnsembleWitness.mem_tables_component_of_mem_tables h_table
+        exact hcolumns
+    | some fixed => simp [Component.Assumptions, hcolumns]
 
 variable {ens : SoundVmEnsemble F PublicIO} {ExtraAssumptions : PublicIO F → ProverData F → Prop}
   {eac : ∀ publicInput data, ExtraAssumptions publicInput data →
-    ∀ table ∈ ens.tables, ∀ input data, table.circuit.Assumptions input data}
+    ∀ table ∈ ens.tables, table.fixedColumns = none →
+      ∀ input data, table.circuit.Assumptions input data}
 
 @[circuit_norm] lemma toFormal_spec publicInput :
   (ens.toFormal F ExtraAssumptions eac).Spec publicInput ↔

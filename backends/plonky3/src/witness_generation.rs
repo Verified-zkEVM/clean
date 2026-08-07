@@ -103,6 +103,7 @@ pub struct Interaction<F> {
 /// The backend-neutral output of extracted ensemble witness generation.
 #[derive(Clone, Debug)]
 pub struct EnsembleWitness<F> {
+    fixed_widths: Vec<usize>,
     pub tables: Vec<Vec<Vec<F>>>,
 }
 
@@ -111,22 +112,28 @@ impl<F: Field> EnsembleWitness<F> {
     pub fn into_traces(self) -> Result<Vec<RowMajorMatrix<F>>, String> {
         self.tables
             .into_iter()
+            .zip(self.fixed_widths)
             .enumerate()
-            .map(|(component, rows)| {
+            .map(|(component, (rows, fixed_width))| {
                 if rows.is_empty() || !rows.len().is_power_of_two() {
                     return Err(format!(
                         "component {component} has non-power-of-two height {}",
                         rows.len()
                     ));
                 }
-                let width = rows[0].len();
-                if width == 0 || rows.iter().any(|row| row.len() != width) {
+                let semantic_width = rows[0].len();
+                let width = semantic_width.checked_sub(fixed_width).ok_or_else(|| {
+                    format!("component {component} fixed width exceeds its semantic row width")
+                })?;
+                if width == 0 || rows.iter().any(|row| row.len() != semantic_width) {
                     return Err(format!(
                         "component {component} contains a row of the wrong width"
                     ));
                 }
                 Ok(RowMajorMatrix::new(
-                    rows.into_iter().flatten().collect(),
+                    rows.into_iter()
+                        .flat_map(|row| row.into_iter().skip(fixed_width))
+                        .collect(),
                     width,
                 ))
             })
@@ -138,6 +145,7 @@ impl<F: Field> EnsembleWitness<F> {
 pub trait Program<F: WitnessField> {
     const FUEL: usize;
     const COMPONENTS: usize;
+    const FIXED_WIDTHS: &'static [usize];
 
     fn modes() -> Vec<Mode<F>>;
     fn padding() -> Vec<Padding<F>>;
@@ -502,6 +510,13 @@ pub fn generate<F: WitnessField, P: Program<F>>(
             P::COMPONENTS
         ));
     }
+    if P::FIXED_WIDTHS.len() != P::COMPONENTS {
+        return Err(format!(
+            "fixed-width count {} does not match component count {}",
+            P::FIXED_WIDTHS.len(),
+            P::COMPONENTS
+        ));
+    }
 
     let mut tables = Vec::with_capacity(modes.len());
     for (component, mode) in modes.iter().enumerate() {
@@ -529,6 +544,7 @@ pub fn generate<F: WitnessField, P: Program<F>>(
     pad_and_balance::<F, P>(&modes, &padding, &mut tables)?;
 
     Ok(EnsembleWitness {
+        fixed_widths: P::FIXED_WIDTHS.to_vec(),
         tables: tables
             .into_iter()
             .map(|table| table.into_iter().map(|row| row.values).collect())

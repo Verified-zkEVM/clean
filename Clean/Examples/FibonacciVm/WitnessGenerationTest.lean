@@ -18,21 +18,20 @@ private def result : Except String (List ℕ × ℕ × ℕ × Bool × Bool) :=
   | .ok witness =>
       match witness.tables with
       | _ :: _ :: bytes :: _ =>
-          match bytes.table with
-          | byteRow :: _ => .ok (
-              witness.tables.map (·.length),
-              byteRow.toList.sum.val,
-              (byteRow.toList.map FiniteField.val).max?.getD 0,
-              constraintsHold witness,
-              channelsBalanced witness)
-          | [] => .error "byte table has no rows"
+          let multiplicities := bytes.table.map fun row => row[1]?.getD 0
+          .ok (
+            witness.tables.map (·.length),
+            multiplicities.sum.val,
+            (multiplicities.map FiniteField.val).max?.getD 0,
+            constraintsHold witness,
+            channelsBalanced witness)
       | _ => .error "ensemble has no byte table"
 
 /--
 The verifier seed automatically creates 32 Fibonacci rows; their pulls create 32
-distinct addition rows; byte range checks are accumulated into the one fixed byte row.
+distinct addition rows; byte range checks are accumulated in the 256 fixed byte rows.
 -/
-example : result = .ok ([32, 32, 32], 32, 2, true, true) := by native_decide
+example : result = .ok ([32, 32, 256], 32, 2, true, true) := by native_decide
 
 private def repeatedSteps : ℕ := 400
 
@@ -49,7 +48,7 @@ private def repeatedResult : Except String (List ℕ × Bool × Bool) :=
       channelsBalanced witness)
 
 /-- Repeated addition pulls coalesce after the period of Fibonacci modulo 256. -/
-example : repeatedResult = .ok ([512, 512, 32], true, true) := by native_decide
+example : repeatedResult = .ok ([512, 512, 256], true, true) := by native_decide
 
 private def invalidPublicInput : fieldTriple (F pBabybear) := (10, 42, 42)
 
