@@ -71,4 +71,4 @@ end
 
 /- The Circomlib mux family is not stated here: their `ElaboratedCircuit` instances are
 inline in the bundles, so the obligation cannot be restated externally. Their coverage
-is the fields themselves; see the TODO COMPWIT notes in Mux2. -/
+is the fields themselves (hinted `computable_witnesses` one-liners). -/

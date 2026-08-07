@@ -132,16 +132,7 @@ def main (input : Var Inputs (F p)) := do
 def circuit : FormalCircuit (F p) Inputs field where
   main := main
 
-  computableWitnesses := by
-    intro n input env env'
-    obtain ⟨c, s⟩ := input
-    simp only [main, circuit_norm, computable_witnesses_norm, Vector.ext_iff]
-    refine ⟨?_, ?_⟩
-    · intro h_input
-      apply (MultiMux1.circuit 1).toSubcircuit_computableWitnesses
-      simp only [circuit_norm, eval_vector, Vector.ext_iff]
-      grind
-    · grind
+  computableWitnesses := by computable_witnesses [eval_vector, Vector.ext_iff]
 
   Assumptions input :=
     let ⟨_, s⟩ := input

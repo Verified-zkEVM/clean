@@ -77,21 +77,8 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
       output[i] = (c[i])[idx]
 
   computableWitnesses := by
-    intro n input env env'
-    obtain ⟨c, s⟩ := input
-    simp only [main, circuit_norm, computable_witnesses_norm, eval_vector, Vector.ext_iff]
-    refine ⟨?_, ?_⟩ <;>
-      · intros
-        (try and_intros) <;>
-          first
-            | (simp_all; done)
-            | grind
-            | (simp only [circuit_norm, explicit_provable_type,
-                 Vector.getElem_map] at *
-               -- grind leaves this congruence open (upstream suspect, see the
-               -- TODO COMPWIT note on the wrapper circuit below); rewrite with the
-               -- elementwise facts directly instead
-               first | grind | simp_all)
+    computable_witnesses [eval_vector, Vector.ext_iff, explicit_provable_type,
+      Vector.getElem_map]
 
   soundness := by
     circuit_proof_start
@@ -161,28 +148,7 @@ def circuit : FormalCircuit (F p) Inputs field where
   main := main
 
   computableWitnesses := by
-    intro n input env env'
-    obtain ⟨c, s⟩ := input
-    simp only [main, circuit_norm, computable_witnesses_norm, Vector.ext_iff]
-    refine ⟨?_, ?_⟩
-    · intro h_input
-      obtain ⟨h_c, h_s⟩ := h_input
-      apply (MultiMux2.circuit 1).toSubcircuit_computableWitnesses
-      simp only [circuit_norm, eval_vector]
-      -- TODO COMPWIT: grind leaves this congruence open even though (verified under
-      -- `pp.explicit` via `computable_witnesses_probe`) hypothesis and goal agree on every
-      -- instance spelling and the argument eq-classes merge. Order-dependent — a clean
-      -- retype of the sequent closes — so likely the ring/field module's normal forms
-      -- going stale after late eqc merges; upstream (Lean grind) suspect. Apply the
-      -- elementwise facts directly instead.
-      refine ⟨congrArg (fun x => #[x]) ?_, ?_⟩
-      · ext i hi
-        simp only [Vector.getElem_map]
-        exact h_c i hi
-      · ext i hi
-        simp only [Vector.getElem_map]
-        exact h_s i hi
-    · grind
+    computable_witnesses [eval_vector, Vector.ext_iff, Vector.getElem_map]
 
   Assumptions input :=
     let ⟨_, s⟩ := input
