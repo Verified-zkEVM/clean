@@ -67,5 +67,4 @@ def circuit : FormalCircuit (F p) U64 U64 where
     intros
     exact trivial
 
-
 end Gadgets.Not

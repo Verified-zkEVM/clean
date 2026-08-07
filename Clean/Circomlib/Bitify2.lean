@@ -80,7 +80,6 @@ set_option linter.constructorNameAsVariable false
 def circuit : FormalCircuit (F p) field (fields 254) where
   main
 
-
   Spec input bits :=
     bits = fieldToBits 254 input
 
@@ -252,7 +251,6 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
 
   Spec input output _ :=
     output = fieldToBits n (if n = 0 then 0 else 2^n - input.val : F p)
-
 
   soundness := by
     intro i0 env input_var (input : F p) h_input _ h_holds
