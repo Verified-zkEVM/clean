@@ -26,6 +26,10 @@ expressed by channel interactions.
 structure Component (F : Type) [FiniteField F] where
   {Input : TypeMap} {Output : TypeMap}
   [provableInput : ProvableType Input] [provableOutput : ProvableType Output]
+  name : String := ""
+  /-- Virtual row columns exposed through `ProverData name`. -/
+  dataColumns : List ℕ := []
+  data_columns_lt_input : ∀ column ∈ dataColumns, column < size Input := by simp
   circuit : GeneralFormalCircuit F Input Output
   fixedColumns : Option (FixedColumns F) := none
   fixed_assumptions : match fixedColumns with
@@ -196,6 +200,42 @@ structure Table (F : Type) [FiniteField F] where
   uniform_width : ∀ row ∈ table, row.size = width
   fixed_rows_match : component.fixedRowsMatch table := by
     simp [Component.fixedRowsMatch]
+
+/-- A component trace before the ensemble-derived `ProverData` is attached. -/
+structure BareTable (F : Type) [FiniteField F] where
+  component : Component F
+  width : ℕ
+  table : List (Array F)
+  uniform_width : ∀ row ∈ table, row.size = width
+  fixed_rows_match : component.fixedRowsMatch table := by
+    simp [Component.fixedRowsMatch]
+
+namespace BareTable
+
+def toTable (table : BareTable F) (data : ProverData F) : Table F where
+  component := table.component
+  width := table.width
+  table := table.table
+  data
+  uniform_width := table.uniform_width
+  fixed_rows_match := table.fixed_rows_match
+
+private def projectRow (columns : List ℕ) (row : Array F) : Vector F columns.length :=
+  ⟨(columns.map fun column => row[column]?.getD 0).toArray, by simp⟩
+
+def proverRows (table : BareTable F) (n : ℕ) : Array (Vector F n) :=
+  if h : table.component.dataColumns.length = n then
+    h ▸ (table.table.map (projectRow table.component.dataColumns) |>.toArray)
+  else
+    #[]
+
+end BareTable
+
+/-- The unique named component trace is the source of each `ProverData` entry. -/
+def deriveProverData (tables : List (BareTable F)) : ProverData F := fun name n =>
+  match tables.find? (fun table => table.component.name == name) with
+  | some table => table.proverRows n
+  | none => #[]
 
 namespace Table
 variable {table : Table F} {channel : RawChannel F}

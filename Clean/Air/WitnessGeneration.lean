@@ -205,45 +205,87 @@ private def prepareComponent (component : Component F) : PreparedComponent F :=
     interactions := operations.interactions
   }
 
+private def witgenStepWithData (data : ProverData F) (hint : ProverHint F)
+    (acc : Array F) : FlatOperation F → Array F
+  | .witness _ code =>
+      let environment : ProverEnvironment F := {
+        get index := acc[index]?.getD 0
+        data
+        hint
+      }
+      acc ++ (code.eval environment).toArray
+  | .assert _ | .lookup _ | .interact _ => acc
+
+private def witgenWithData (data : ProverData F) (hint : ProverHint F)
+    (ops : List (FlatOperation F)) (input : Array F) : Array F :=
+  ops.foldl (witgenStepWithData data hint) input
+
+private def projectGeneratedRow (columns : List ℕ) (row : GeneratedRow F) :
+    Vector F columns.length :=
+  ⟨(columns.map fun column => row.values[column]?.getD 0).toArray, by simp⟩
+
+/-- The runtime view of the same component-table projection used by `deriveProverData`. -/
+private def generatedData :
+    List (PreparedComponent F) → List (GeneratedTable F) → ProverData F
+  | prepared, tables => fun name n =>
+      match prepared.zip tables |>.find? (fun (component, _) => component.component.name == name) with
+      | some (component, table) =>
+          if h : component.component.dataColumns.length = n then
+            h ▸ (table.rows.map (projectGeneratedRow component.component.dataColumns) |>.toArray)
+          else #[]
+      | none => #[]
+
 private def completeRow (prepared : PreparedComponent F) (input : Array F)
-    (origin : Option (Origin F) := none) : Except String (GeneratedRow F) := do
+    (data : ProverData F) (origin : Option (Origin F) := none) : Except String (GeneratedRow F) := do
   unless input.size = prepared.inputWidth do
     throw s!"component input has width {input.size}, expected {prepared.inputWidth}"
-  let values := FlatOperation.witgen (ProverHint.empty F) prepared.witgenOps input
+  let values := witgenWithData data (ProverHint.empty F) prepared.witgenOps input
   unless values.size = prepared.width do
     throw s!"generated row has width {values.size}, expected {prepared.width}"
   return { input, values, origin }
 
-private def initializeTables :
+private def initializeTableInputs :
     List (PreparedComponent F) → List (Mode F) → Except String (List (GeneratedTable F))
   | [], [] => .ok []
-  | prepared :: components, mode :: modes => do
+  | _ :: components, mode :: modes => do
       let rows ← match mode with
         | .demand _ => pure []
-        | .fixed inputRows _ => inputRows.mapM fun input => completeRow prepared input
-      let rest ← initializeTables components modes
+        | .fixed inputRows _ => pure <| inputRows.map fun input => { input, values := input }
+      let rest ← initializeTableInputs components modes
       return { rows } :: rest
   | _, _ => .error "generation-mode count does not match ensemble component count"
 
-private def rowInteractions (prepared : PreparedComponent F) (row : GeneratedRow F) :
+private def completeInitialTables (data : ProverData F) :
+    List (PreparedComponent F) → List (GeneratedTable F) →
+      Except String (List (GeneratedTable F))
+  | [], [] => pure []
+  | prepared :: components, table :: tables => do
+      let rows ← table.rows.mapM fun row => completeRow prepared row.input data row.origin
+      let rest ← completeInitialTables data components tables
+      return { rows } :: rest
+  | _, _ => .error "generated-table count does not match ensemble component count"
+
+private def rowInteractions (prepared : PreparedComponent F) (row : GeneratedRow F)
+    (data : ProverData F) :
     List (Interaction F) :=
-  let environment := Environment.fromArray row.values (emptyData F)
+  let environment := Environment.fromArray row.values data
   prepared.interactions.map (·.eval environment)
 
-private def tableInteractions :
+private def tableInteractions (data : ProverData F) :
     List (PreparedComponent F) → List (GeneratedTable F) → Except String (List (Interaction F))
   | [], [] => .ok []
   | prepared :: components, table :: tables => do
-      let rest ← tableInteractions components tables
-      return table.rows.flatMap (rowInteractions prepared) ++ rest
+      let rest ← tableInteractions data components tables
+      return table.rows.flatMap (rowInteractions prepared · data) ++ rest
   | _, _ => .error "generated-table count does not match ensemble component count"
 
 private def allInteractions (ensemble : Ensemble F PublicIO) (publicInput : PublicIO F)
-    (prepared : List (PreparedComponent F)) (tables : List (GeneratedTable F)) :
+    (prepared : List (PreparedComponent F)) (tables : List (GeneratedTable F))
+    (data : ProverData F) :
     Except String (List (Interaction F)) := do
   let verifier := ensemble.verifierOperations.interactionValues
-    (.fromInput publicInput (emptyData F))
-  return verifier ++ (← tableInteractions prepared tables)
+    (.fromInput publicInput data)
+  return verifier ++ (← tableInteractions data prepared tables)
 
 private def Mode.handles (mode : Mode F) (demand : Demand F) : Bool :=
   match mode with
@@ -277,14 +319,15 @@ private def findOriginIndex (rows : List (GeneratedRow F)) (mode : DemandMode F)
     | none => none
 
 private def createDemandRow (prepared : PreparedComponent F) (mode : DemandMode F)
-    (demand : Demand F) (multiplicity : ℕ) : Except String (GeneratedRow F) := do
+    (demand : Demand F) (multiplicity : ℕ) (data : ProverData F) :
+    Except String (GeneratedRow F) := do
   let origin : Origin F := {
     channel := mode.channel
     direction := mode.direction
     message := demand.message
     multiplicity
   }
-  completeRow prepared (← mode.input.eval demand.message multiplicity) (some origin)
+  completeRow prepared (← mode.input.eval demand.message multiplicity) data (some origin)
 
 private structure TableMutation (F : Type) where
   table : GeneratedTable F
@@ -293,24 +336,24 @@ private structure TableMutation (F : Type) where
   directDemands : List (Demand F) := []
 
 private def handleDemand (prepared : PreparedComponent F) (mode : DemandMode F)
-    (demand : Demand F) (table : GeneratedTable F) :
+    (demand : Demand F) (table : GeneratedTable F) (data : ProverData F) :
     Except String (TableMutation F) := do
   match mode.aggregation with
   | .perOccurrence =>
       let rows ← (List.replicate demand.count ()).mapM fun _ =>
-        createDemandRow prepared mode demand 1
+        createDemandRow prepared mode demand 1 data
       return { table := { table with rows := table.rows ++ rows }, addedRows := rows }
   | .byMessage =>
       match findOriginIndex table.rows mode demand with
       | none =>
-          let row ← createDemandRow prepared mode demand demand.count
+          let row ← createDemandRow prepared mode demand demand.count data
           return { table := { table with rows := table.rows ++ [row] }, addedRows := [row] }
       | some index =>
           let some row := table.rows[index]?
             | throw "coalesced row index is out of bounds"
           let some origin := row.origin
             | throw "coalesced row has no origin"
-          let updated ← createDemandRow prepared mode demand (origin.multiplicity + demand.count)
+          let updated ← createDemandRow prepared mode demand (origin.multiplicity + demand.count) data
           return {
             table := { table with rows := table.rows.set index updated }
             removedRows := [row]
@@ -327,7 +370,7 @@ private def findFixedSlot (slots : List (FixedSlot F)) (demand : Demand F) :
   | _ => .error s!"fixed handler has duplicate slots for channel '{demand.channel}' message"
 
 private def handleFixed (prepared : PreparedComponent F) (slots : List (FixedSlot F))
-    (demand : Demand F) (table : GeneratedTable F) :
+    (demand : Demand F) (table : GeneratedTable F) (data : ProverData F) :
     Except String (TableMutation F) := do
   let slot ← findFixedSlot slots demand
   let some row := table.rows[slot.row]?
@@ -339,7 +382,7 @@ private def handleFixed (prepared : PreparedComponent F) (slots : List (FixedSlo
   unless FiniteField.val value = count do
     throw s!"fixed multiplicity {count} overflows the field characteristic"
   let input := (row.input.toList.set slot.column value).toArray
-  let updated ← completeRow prepared input
+  let updated ← completeRow prepared input data
   return {
     table := { table with rows := table.rows.set slot.row updated }
     directDemands := [{
@@ -359,7 +402,8 @@ private structure Mutation (F : Type) where
   directDemands : List (Demand F) := []
 
 private def handle (prepared : List (PreparedComponent F)) (config : Config F)
-    (tables : List (GeneratedTable F)) (demand : Demand F) (index : ℕ) :
+    (tables : List (GeneratedTable F)) (demand : Demand F) (index : ℕ)
+    (data : ProverData F) :
     Except String (Mutation F) := do
   let some component := prepared[index]?
     | throw s!"component index {index} is out of bounds"
@@ -368,17 +412,17 @@ private def handle (prepared : List (PreparedComponent F)) (config : Config F)
   let some table := tables[index]?
     | throw s!"generated table index {index} is out of bounds"
   let tableMutation ← match mode with
-    | .demand mode => handleDemand component mode demand table
-    | .fixed _ slots => handleFixed component slots demand table
+    | .demand mode => handleDemand component mode demand table data
+    | .fixed _ slots => handleFixed component slots demand table data
   return {
     tables := tables.set index tableMutation.table
-    removed := tableMutation.removedRows.flatMap (rowInteractions component)
-    added := tableMutation.addedRows.flatMap (rowInteractions component)
+    removed := tableMutation.removedRows.flatMap (rowInteractions component · data)
+    added := tableMutation.addedRows.flatMap (rowInteractions component · data)
     directDemands := tableMutation.directDemands
   }
 
 private def generateLoop (ensemble : Ensemble F PublicIO) (config : Config F)
-    (prepared : List (PreparedComponent F)) (publicInput : PublicIO F) :
+    (prepared : List (PreparedComponent F)) (publicInput : PublicIO F) (data : ProverData F) :
     ℕ → List (GeneratedTable F) → List (Demand F) →
     Except String (List (GeneratedTable F))
   | 0, _, _ => .error "ensemble witness generation exhausted its fuel"
@@ -389,11 +433,11 @@ private def generateLoop (ensemble : Ensemble F PublicIO) (config : Config F)
           let channels := String.intercalate ", " (demands.map (·.channel))
           throw s!"unhandled channel imbalance on: {channels}"
       | some (demand, index) =>
-          let mutation ← handle prepared config tables demand index
+          let mutation ← handle prepared config tables demand index data
           let demands := Demand.addInteractions
             (Demand.removeInteractions demands mutation.removed) mutation.added
           let demands := mutation.directDemands.foldl Demand.add demands
-          generateLoop ensemble config prepared publicInput fuel mutation.tables demands
+          generateLoop ensemble config prepared publicInput data fuel mutation.tables demands
 
 private def nextPowerOfTwoAux (target : ℕ) : ℕ → ℕ → ℕ
   | 0, power => power
@@ -410,18 +454,18 @@ private structure PaddingMutation (F : Type) where
   tables : List (GeneratedTable F)
   added : List (Interaction F)
 
-private def padTables :
+private def padTables (data : ProverData F) :
     List (PreparedComponent F) → List (Padding F) → List (GeneratedTable F) →
       Except String (PaddingMutation F)
   | [], [], [] => .ok { tables := [], added := [] }
   | prepared :: components, padding :: paddings, table :: tables => do
       let count := paddingTarget table.rows.length padding - table.rows.length
       let rows ← (List.replicate count ()).mapM fun _ =>
-        completeRow prepared padding.input
-      let rest ← padTables components paddings tables
+        completeRow prepared padding.input data
+      let rest ← padTables data components paddings tables
       return {
         tables := { table with rows := table.rows ++ rows } :: rest.tables
-        added := rows.flatMap (rowInteractions prepared) ++ rest.added
+        added := rows.flatMap (rowInteractions prepared · data) ++ rest.added
       }
   | _, _, _ => .error "padding count does not match ensemble component count"
 
@@ -432,23 +476,40 @@ private def tablesArePadded : List (GeneratedTable F) → List (Padding F) → B
         tablesArePadded tables paddings
   | _, _ => false
 
+private def validateDataOwners :
+    List (PreparedComponent F) → List (Mode F) → List (Padding F) → Except String Unit
+  | [], [], [] => pure ()
+  | prepared :: components, mode :: modes, padding :: paddings => do
+      unless prepared.component.dataColumns.isEmpty do
+        unless prepared.component.dataColumns.all (fun column => column < prepared.inputWidth) do
+          throw s!"data columns for component '{prepared.component.name}' must be input columns"
+        match mode with
+        | .demand _ =>
+            throw s!"data-owning component '{prepared.component.name}' must use fixed generation"
+        | .fixed inputRows slots =>
+            unless paddingTarget inputRows.length padding = inputRows.length do
+              throw s!"data-owning component '{prepared.component.name}' must have a fixed power-of-two height"
+            unless slots.all fun slot => !prepared.component.dataColumns.contains slot.column do
+              throw s!"data-owning component '{prepared.component.name}' mutates a data column"
+      validateDataOwners components modes paddings
+  | _, _, _ => .error "generation metadata does not match ensemble component count"
+
 private def padAndBalance (ensemble : Ensemble F PublicIO) (config : Config F)
-    (prepared : List (PreparedComponent F)) (publicInput : PublicIO F) :
+    (prepared : List (PreparedComponent F)) (publicInput : PublicIO F) (data : ProverData F) :
     ℕ → List (GeneratedTable F) → Except String (List (GeneratedTable F))
   | 0, _ => .error "ensemble padding exhausted its fuel"
   | fuel + 1, tables => do
-      let mutation ← padTables prepared config.padding tables
-      let tables ← generateLoop ensemble config prepared publicInput config.fuel mutation.tables
+      let mutation ← padTables data prepared config.padding tables
+      let tables ← generateLoop ensemble config prepared publicInput data config.fuel mutation.tables
         (Demand.normalize mutation.added)
       if tablesArePadded tables config.padding then return tables
-      padAndBalance ensemble config prepared publicInput fuel tables
+      padAndBalance ensemble config prepared publicInput data fuel tables
 
 private structure AssembledTables (components : List (Component F)) where
-  tables : List (Table F)
+  tables : List (BareTable F)
   same_length : components.length = tables.length
   same_circuits : ∀ index (hindex : index < components.length),
     components[index] = tables[index].component
-  data_eq : ∀ table ∈ tables, table.data = emptyData F
 
 private structure MatchedFixedRows (component : Component F) (rows : List (Array F)) where
   marker : Unit := ()
@@ -471,7 +532,6 @@ private def assembleTables :
       tables := []
       same_length := rfl
       same_circuits := by simp
-      data_eq := by simp
     }
   | component :: components, generated :: generatedTables => do
       let rows := generated.rows.map (·.values)
@@ -479,11 +539,10 @@ private def assembleTables :
         match validateFixedRows component rows with
         | .error error => .error error
         | .ok matched => do
-          let table : Table F := {
+          let table : BareTable F := {
             component
             width := component.width
             table := rows
-            data := emptyData F
             uniform_width := h
             fixed_rows_match := matched.property
           }
@@ -498,12 +557,6 @@ private def assembleTables :
               | succ index =>
                   simp only [List.getElem_cons_succ]
                   exact rest.same_circuits index (by simp at hindex; omega)
-            data_eq := by
-              intro candidate hcandidate
-              simp only [List.mem_cons] at hcandidate
-              rcases hcandidate with rfl | hrest
-              · rfl
-              · exact rest.data_eq candidate hrest
           }
       else
         throw "generated table contains a row of the wrong width"
@@ -513,32 +566,41 @@ private def assembleTables :
 def generate (ensemble : Ensemble F PublicIO) (config : Config F) (publicInput : PublicIO F) :
     Except String (EnsembleWitness ensemble) :=
   let prepared := ensemble.tables.map prepareComponent
-  match initializeTables prepared config.modes with
+  if hallNamed : ∀ component ∈ ensemble.tables, component.name ≠ "" then
+  if hnames : (ensemble.tables.map (·.name)).Nodup then
+  match validateDataOwners prepared config.modes config.padding with
   | .error error => .error error
-  | .ok initial =>
-    match allInteractions ensemble publicInput prepared initial with
+  | .ok () => match initializeTableInputs prepared config.modes with
+  | .error error => .error error
+  | .ok initialInputs =>
+    let data := generatedData prepared initialInputs
+    match completeInitialTables data prepared initialInputs with
+    | .error error => .error error
+    | .ok initial => match allInteractions ensemble publicInput prepared initial data with
     | .error error => .error error
     | .ok interactions =>
-      match generateLoop ensemble config prepared publicInput config.fuel initial
+      match generateLoop ensemble config prepared publicInput data config.fuel initial
           (Demand.normalize interactions) with
       | .error error => .error error
       | .ok generated =>
-        match padAndBalance ensemble config prepared publicInput config.fuel generated with
+        match padAndBalance ensemble config prepared publicInput data config.fuel generated with
         | .error error => .error error
         | .ok padded => match assembleTables ensemble.tables padded with
         | .error error => .error error
         | .ok assembled => .ok {
-            tables := assembled.tables
-            data := emptyData F
+            tableWitnesses := assembled.tables
             publicInput
+            all_named := hallNamed
+            unique_names := hnames
             same_length := assembled.same_length
             same_circuits := assembled.same_circuits
-            same_data := assembled.data_eq
           }
+  else .error "component names must be unique"
+  else .error "every component must have a name"
 
 /-- Executable constraint check for the no-legacy-lookup initial milestone. -/
 def constraintsHold {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness ensemble) : Bool :=
-  witness.allTables.all fun table =>
+  witness.toView.allTables.all fun table =>
     table.table.all fun row =>
       table.component.operations.lookups.isEmpty &&
       table.component.operations.constraints.all fun constraint =>
@@ -546,6 +608,6 @@ def constraintsHold {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness 
 
 /-- Executable balance check using the same normalized worklist representation. -/
 def channelsBalanced {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness ensemble) : Bool :=
-  Demand.normalize witness.interactions |>.isEmpty
+  Demand.normalize witness.toView.interactions |>.isEmpty
 
 end Air.Flat.WitnessGeneration

@@ -69,6 +69,9 @@ def bytesFixedColumns : FixedColumns (F p) where
   uniform_width := by simp
 
 def bytesComponent : Component (F p) where
+  name := "bytes"
+  dataColumns := [0]
+  data_columns_lt_input := by change ∀ column ∈ [0], column < 2; simp
   circuit := pushBytes
   fixedColumns := some bytesFixedColumns
   fixed_width_le_input := by change 1 ≤ 2; omega
@@ -155,6 +158,10 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
 example (input : Var Add8Inputs (F p)) :
     ExplicitCircuit (add8.main input) := by
   infer_explicit_circuit
+
+def add8Component : Component (F p) where
+  name := "add8"
+  circuit := add8
 
 def fibonacci : ℕ → (ℕ × ℕ)
   | 0 => (0, 1)
@@ -278,12 +285,21 @@ example (input : Var fieldTriple (F p)) :
     ExplicitCircuit (fibonacciVerifier.main input) := by
   infer_explicit_circuit
 
+def fib8Component : Component (F p) where
+  name := "fibonacci"
+  circuit := fib8
+
 def fibonacciVm : VmTables (F p) fieldTriple where
   channel := FibonacciChannel
-  tables := [{ circuit := fib8 }]
+  tables := [fib8Component]
   verifier := fibonacciVerifier
   verifier_length_zero := by simp [circuit_norm, fibonacciVerifier]
-  tables_channel := by simp [circuit_norm, fib8, sub_eq_zero]
+  tables_channel := by
+    simp [circuit_norm, fib8Component, fib8, Component.rowInputVar, Component.rowOperations]
+    intro env h
+    rcases h with h | h
+    · exact Or.inl h
+    · exact Or.inr (sub_eq_zero.mp h)
   verifier_channel := by simp [circuit_norm, fibonacciVerifier]
   verifier_requirements env := by
     simp only [circuit_norm, fibonacciVerifier, FibonacciChannel, ZMod.val_zero, ZMod.val_one]
@@ -294,16 +310,19 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
     (List.Subset.refl _)
     (by simp [circuit_norm, bytesComponent, pushBytes])
   |>.addFinishedChannel BytesChannel.toRaw
-  |>.addTable { circuit := add8 }
-    (by simp +instances [circuit_norm, add8]) (by simp [circuit_norm, add8])
+  |>.addTable add8Component
+    (by simp +instances [circuit_norm, add8Component, add8])
+    (by simp [circuit_norm, add8Component, add8])
   |>.addFinishedChannel Add8Channel.toRaw
   |>.addVm fibonacciVm
-    (by simp +instances [circuit_norm, fibonacciVm, add8, bytesComponent, pushBytes,
+    (by simp +instances [circuit_norm, fibonacciVm, add8Component, add8, bytesComponent, pushBytes,
       Add8Channel, FibonacciChannel])
-    (by simp +instances [circuit_norm, fibonacciVm, fib8, fibonacciVerifier])
-    (by simp [circuit_norm, fibonacciVm, fib8, fibonacciVerifier, Add8Channel, FibonacciChannel])
+    (by simp +instances [circuit_norm, fibonacciVm, fib8Component, fib8, fibonacciVerifier])
+    (by simp [circuit_norm, fibonacciVm, fib8Component, fib8, fibonacciVerifier,
+      Add8Channel, FibonacciChannel])
   |>.toFormal _ (fun _ _ => True)
-    (by simp [circuit_norm, fibonacciVm, add8, bytesComponent, pushBytes, fib8])
+    (by simp [circuit_norm, fibonacciVm, fib8Component, add8Component, add8,
+      bytesComponent, pushBytes, fib8])
 
 namespace FibonacciWitness
 
@@ -402,5 +421,5 @@ def falseCircuit : GeneralFormalCircuit (F p) unit unit where
 
 def falseEnsemble := SoundEnsemble.empty (F p) unit
   |>.addFinishedChannel FalseChannel.toRaw
-  |>.addTable { circuit := falseCircuit }
+  |>.addTable { name := "false", circuit := falseCircuit }
     (by simp [circuit_norm, falseCircuit]) (by simp [circuit_norm, falseCircuit])

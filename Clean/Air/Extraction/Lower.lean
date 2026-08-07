@@ -18,6 +18,9 @@ inductive LoweringError where
   | verifierWitness (operation : ℕ)
   | verifierConstraint (operation : ℕ)
   | verifierLookup (operation : ℕ)
+  | unnamedComponent (component : ℕ)
+  | duplicateComponentName (name : String)
+  | dataColumn (component column inputWidth : ℕ)
   | componentVariable (component index width : ℕ)
   | verifierVariable (index width : ℕ)
 deriving Repr, DecidableEq
@@ -40,6 +43,12 @@ instance : ToString LoweringError where
         s!"verifier operation {operation} is a constraint; extraction supports verifier interactions only"
     | .verifierLookup operation =>
         s!"verifier operation {operation} is a legacy lookup; extraction supports verifier interactions only"
+    | .unnamedComponent component =>
+        s!"component {component} has no name"
+    | .duplicateComponentName name =>
+        s!"component name '{name}' is not unique"
+    | .dataColumn component column inputWidth =>
+        s!"component {component} data column {column} is not an input column (input width {inputWidth})"
     | .componentVariable component index width =>
         s!"component {component} expression reads cell {index}, but its width is {width}"
     | .verifierVariable index width =>
@@ -73,6 +82,9 @@ private def lowerWitnesses (component : ℕ) (operations : List (FlatOperation F
 
 private def lowerComponent (index : ℕ) (component : Component F) :
     Except LoweringError (ComponentProgram F) := do
+  for column in component.dataColumns do
+    unless column < component.rowOffset do
+      throw (.dataColumn index column component.rowOffset)
   let operations := component.rowOperations
   unless operations.lookups.isEmpty do
     throw (.legacyLookup index)
@@ -86,6 +98,8 @@ private def lowerComponent (index : ℕ) (component : Component F) :
   | some cellIndex => throw (.componentVariable index cellIndex component.width)
   | none => pure ()
   return {
+    name := component.name
+    dataColumns := component.dataColumns
     inputWidth := component.rowOffset
     fixedColumns := component.fixedColumns.map fun fixed => {
       width := fixed.width
@@ -104,6 +118,13 @@ private def validateVerifierOperations : ℕ → List (FlatOperation F) → Exce
   | index, .assert _ :: _ => throw (.verifierConstraint index)
   | index, .lookup _ :: _ => throw (.verifierLookup index)
 
+private def validateComponentNames : List (String × ℕ) → Except LoweringError Unit
+  | [] => pure ()
+  | (name, index) :: names => do
+      if name.isEmpty then throw (.unnamedComponent index)
+      if names.any fun (other, _) => other == name then throw (.duplicateComponentName name)
+      validateComponentNames names
+
 /-- Lower and validate the backend-facing portion of an ensemble without producing source text. -/
 def lower (ensemble : Ensemble F PublicIO) (config : Config F) :
     Except LoweringError (Program F) := do
@@ -111,6 +132,7 @@ def lower (ensemble : Ensemble F PublicIO) (config : Config F) :
     throw (.modeCount ensemble.tables.length config.modes.length)
   unless config.padding.length = ensemble.tables.length do
     throw (.paddingCount ensemble.tables.length config.padding.length)
+  validateComponentNames <| ensemble.tables.map (fun component => component.name) |>.zipIdx
   let components ← ensemble.tables.zipIdx.mapM fun (component, index) =>
     lowerComponent index component
   let verifierOperations := ensemble.verifierOperations.toFlat

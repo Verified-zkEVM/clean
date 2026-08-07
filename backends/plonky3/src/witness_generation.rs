@@ -85,6 +85,54 @@ pub enum Mode<F> {
     },
 }
 
+#[derive(Clone, Debug)]
+pub struct DataSchema {
+    pub name: &'static str,
+    pub columns: &'static [usize],
+}
+
+/// Stable, table-derived data available to extracted witness programs.
+#[derive(Clone, Debug)]
+pub struct WitnessData<F> {
+    entries: Vec<(&'static str, Vec<Vec<F>>)>,
+}
+
+impl<F: Field + Copy> WitnessData<F> {
+    fn from_initial_tables(schemas: &[DataSchema], tables: &[Vec<Row<F>>]) -> Self {
+        let entries = schemas
+            .iter()
+            .zip(tables)
+            .map(|(schema, table)| {
+                let rows = table
+                    .iter()
+                    .map(|row| {
+                        schema
+                            .columns
+                            .iter()
+                            .map(|column| row.values.get(*column).copied().unwrap_or(F::ZERO))
+                            .collect()
+                    })
+                    .collect();
+                (schema.name, rows)
+            })
+            .collect();
+        Self { entries }
+    }
+
+    #[inline(always)]
+    pub fn get(&self, name: &str, width: usize, row: usize, column: usize) -> F {
+        self.entries
+            .iter()
+            .find(|(entry_name, rows)| {
+                *entry_name == name && rows.first().is_none_or(|value| value.len() == width)
+            })
+            .and_then(|(_, rows)| rows.get(row))
+            .and_then(|value| value.get(column))
+            .copied()
+            .unwrap_or(F::ZERO)
+    }
+}
+
 /// A semantic component input used to extend a table to a power-of-two height.
 #[derive(Clone, Debug)]
 pub struct Padding<F> {
@@ -147,9 +195,11 @@ pub trait Program<F: WitnessField> {
     const COMPONENTS: usize;
     const FIXED_WIDTHS: &'static [usize];
 
+    fn data_schemas() -> Vec<DataSchema>;
     fn modes() -> Vec<Mode<F>>;
     fn padding() -> Vec<Padding<F>>;
-    fn complete_row(component: usize, input: &[F]) -> Result<Vec<F>, String>;
+    fn complete_row(component: usize, input: &[F], data: &WitnessData<F>)
+        -> Result<Vec<F>, String>;
     fn interactions(component: usize, row: &[F]) -> Vec<Interaction<F>>;
     fn verifier_interactions(public_input: &[F]) -> Vec<Interaction<F>>;
 }
@@ -279,9 +329,10 @@ fn make_demand_row<F: WitnessField, P: Program<F>>(
     mode: &DemandMode<F>,
     demand: &Demand<F>,
     multiplicity: usize,
+    data: &WitnessData<F>,
 ) -> Result<Row<F>, String> {
     let input = input_for_demand(mode, demand, multiplicity)?;
-    let values = P::complete_row(component, &input)?;
+    let values = P::complete_row(component, &input, data)?;
     Ok(Row {
         values,
         origin: Some(Origin {
@@ -299,11 +350,12 @@ fn handle_demand<F: WitnessField, P: Program<F>>(
     demand: &Demand<F>,
     table: &mut Vec<Row<F>>,
     demands: &mut Vec<Demand<F>>,
+    data: &WitnessData<F>,
 ) -> Result<(), String> {
     match mode.aggregation {
         Aggregation::PerOccurrence => {
             for _ in 0..demand.count {
-                let row = make_demand_row::<F, P>(component, mode, demand, 1)?;
+                let row = make_demand_row::<F, P>(component, mode, demand, 1, data)?;
                 add_interactions(demands, P::interactions(component, &row.values));
                 table.push(row);
             }
@@ -318,7 +370,7 @@ fn handle_demand<F: WitnessField, P: Program<F>>(
             });
             match existing {
                 None => {
-                    let row = make_demand_row::<F, P>(component, mode, demand, demand.count)?;
+                    let row = make_demand_row::<F, P>(component, mode, demand, demand.count, data)?;
                     add_interactions(demands, P::interactions(component, &row.values));
                     table.push(row);
                 }
@@ -330,7 +382,8 @@ fn handle_demand<F: WitnessField, P: Program<F>>(
                         .expect("matched row must have an origin")
                         .multiplicity
                         + demand.count;
-                    let updated = make_demand_row::<F, P>(component, mode, demand, multiplicity)?;
+                    let updated =
+                        make_demand_row::<F, P>(component, mode, demand, multiplicity, data)?;
                     remove_interactions(demands, P::interactions(component, &old.values));
                     add_interactions(demands, P::interactions(component, &updated.values));
                     table[index] = updated;
@@ -347,6 +400,7 @@ fn handle_fixed<F: WitnessField, P: Program<F>>(
     demand: &Demand<F>,
     table: &mut [Row<F>],
     demands: &mut Vec<Demand<F>>,
+    data: &WitnessData<F>,
 ) -> Result<(), String> {
     let mut matches = slots.iter().filter(|slot| {
         slot.channel == demand.channel
@@ -379,7 +433,7 @@ fn handle_fixed<F: WitnessField, P: Program<F>>(
     }
     let mut input = row.values.clone();
     input[slot.column] = value;
-    row.values = P::complete_row(component, &input)?;
+    row.values = P::complete_row(component, &input, data)?;
 
     // The fixed row's only changed interaction is the slot represented by this
     // demand, so update the worklist directly instead of evaluating every fixed slot.
@@ -399,6 +453,7 @@ fn balance<F: WitnessField, P: Program<F>>(
     modes: &[Mode<F>],
     tables: &mut [Vec<Row<F>>],
     demands: &mut Vec<Demand<F>>,
+    data: &WitnessData<F>,
 ) -> Result<(), String> {
     for _ in 0..P::FUEL {
         if demands.is_empty() {
@@ -439,12 +494,22 @@ fn balance<F: WitnessField, P: Program<F>>(
         // opposite interaction (or fixed-slot delta) cancels it incrementally.
         let demand = demands[demand_index].clone();
         match &modes[component] {
-            Mode::Demand(mode) => {
-                handle_demand::<F, P>(component, mode, &demand, &mut tables[component], demands)?
-            }
-            Mode::Fixed { slots, .. } => {
-                handle_fixed::<F, P>(component, slots, &demand, &mut tables[component], demands)?
-            }
+            Mode::Demand(mode) => handle_demand::<F, P>(
+                component,
+                mode,
+                &demand,
+                &mut tables[component],
+                demands,
+                data,
+            )?,
+            Mode::Fixed { slots, .. } => handle_fixed::<F, P>(
+                component,
+                slots,
+                &demand,
+                &mut tables[component],
+                demands,
+                data,
+            )?,
         }
     }
 
@@ -462,13 +527,14 @@ fn pad_and_balance<F: WitnessField, P: Program<F>>(
     modes: &[Mode<F>],
     padding: &[Padding<F>],
     tables: &mut [Vec<Row<F>>],
+    data: &WitnessData<F>,
 ) -> Result<(), String> {
     for _ in 0..P::FUEL {
         let mut demands = Vec::new();
         for (component, (table, padding)) in tables.iter_mut().zip(padding).enumerate() {
             let height = target_height(table.len(), padding);
             for _ in table.len()..height {
-                let values = P::complete_row(component, &padding.input)?;
+                let values = P::complete_row(component, &padding.input, data)?;
                 add_interactions(&mut demands, P::interactions(component, &values));
                 table.push(Row {
                     values,
@@ -477,7 +543,7 @@ fn pad_and_balance<F: WitnessField, P: Program<F>>(
             }
         }
 
-        balance::<F, P>(modes, tables, &mut demands)?;
+        balance::<F, P>(modes, tables, &mut demands, data)?;
         if tables
             .iter()
             .zip(padding)
@@ -496,6 +562,7 @@ pub fn generate<F: WitnessField, P: Program<F>>(
 ) -> Result<EnsembleWitness<F>, String> {
     let modes = P::modes();
     let padding = P::padding();
+    let data_schemas = P::data_schemas();
     if modes.len() != P::COMPONENTS {
         return Err(format!(
             "generation-mode count {} does not match component count {}",
@@ -517,19 +584,59 @@ pub fn generate<F: WitnessField, P: Program<F>>(
             P::COMPONENTS
         ));
     }
+    if data_schemas.len() != P::COMPONENTS {
+        return Err(format!(
+            "data-schema count {} does not match component count {}",
+            data_schemas.len(),
+            P::COMPONENTS
+        ));
+    }
 
     let mut tables = Vec::with_capacity(modes.len());
-    for (component, mode) in modes.iter().enumerate() {
+    for mode in &modes {
         let mut rows = Vec::new();
         if let Mode::Fixed { input_rows, .. } = mode {
             for input in input_rows {
                 rows.push(Row {
-                    values: P::complete_row(component, input)?,
+                    values: input.clone(),
                     origin: None,
                 });
             }
         }
         tables.push(rows);
+    }
+
+    for (component, ((schema, mode), component_padding)) in
+        data_schemas.iter().zip(&modes).zip(&padding).enumerate()
+    {
+        if schema.columns.is_empty() {
+            continue;
+        }
+        let Mode::Fixed { input_rows, slots } = mode else {
+            return Err(format!(
+                "data-owning component {component} must use fixed generation"
+            ));
+        };
+        if target_height(input_rows.len(), component_padding) != input_rows.len() {
+            return Err(format!(
+                "data-owning component {component} must have a fixed power-of-two height"
+            ));
+        }
+        if let Some(column) = slots
+            .iter()
+            .find_map(|slot| schema.columns.contains(&slot.column).then_some(slot.column))
+        {
+            return Err(format!(
+                "data-owning component {component} mutates data column {column}"
+            ));
+        }
+    }
+
+    let data = WitnessData::from_initial_tables(&data_schemas, &tables);
+    for (component, table) in tables.iter_mut().enumerate() {
+        for row in table {
+            row.values = P::complete_row(component, &row.values, &data)?;
+        }
     }
 
     let mut demands = Vec::new();
@@ -540,8 +647,8 @@ pub fn generate<F: WitnessField, P: Program<F>>(
         }
     }
 
-    balance::<F, P>(&modes, &mut tables, &mut demands)?;
-    pad_and_balance::<F, P>(&modes, &padding, &mut tables)?;
+    balance::<F, P>(&modes, &mut tables, &mut demands, &data)?;
+    pad_and_balance::<F, P>(&modes, &padding, &mut tables, &data)?;
 
     Ok(EnsembleWitness {
         fixed_widths: P::FIXED_WIDTHS.to_vec(),

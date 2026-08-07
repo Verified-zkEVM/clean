@@ -548,12 +548,12 @@ variable [DecidableEq F]
 namespace Ensemble
 /-- Partial balanced channel is trivially weaker than balanced channel -/
 lemma partialBalancedChannel_of_balancedChannel {ens : Ensemble F PublicIO}
-    {witness : EnsembleWitness ens} (channel : RawChannel F) :
+    {witness : EnsembleWitnessView ens} (channel : RawChannel F) :
   witness.BalancedChannel channel →
     PartialBalancedChannel witness channel := by
   intro balanced
   use []
-  simp_all [EnsembleWitness.BalancedChannel]
+  simp_all [EnsembleWitnessView.BalancedChannel]
 
 @[circuit_norm]
 abbrev SoundChannels (ens : Ensemble F PublicIO) (finished : List (RawChannel F)) : Prop :=

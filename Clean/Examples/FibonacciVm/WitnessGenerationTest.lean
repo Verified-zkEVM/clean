@@ -33,6 +33,18 @@ distinct addition rows; byte range checks are accumulated in the 256 fixed byte 
 -/
 example : result = .ok ([32, 32, 256], 32, 2, true, true) := by native_decide
 
+private def derivedBytesData : Bool :=
+  match FibonacciWitness.generate publicInput 1000 with
+  | .error _ => false
+  | .ok witness =>
+      let rows := witness.data "bytes" 1
+      rows.size == 256 && match rows[42]? with
+        | some row => row[0] == (42 : F pBabybear)
+        | none => false
+
+/-- The byte table itself, including its fixed byte column, is the committed data source. -/
+example : derivedBytesData = true := by native_decide
+
 private def repeatedSteps : ℕ := 400
 
 private def repeatedPublicInput : fieldTriple (F pBabybear) :=

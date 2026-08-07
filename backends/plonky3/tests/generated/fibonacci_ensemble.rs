@@ -2,8 +2,8 @@
 use alloc::string::String;
 use alloc::{format, vec, vec::Vec};
 use clean_backend::witness_generation::{
-    Aggregation, DemandMode, Direction, EnsembleWitness, FixedSlot, InputCell, Interaction, Mode,
-    Padding, Program, WitnessField,
+    Aggregation, DataSchema, DemandMode, Direction, EnsembleWitness, FixedSlot, InputCell,
+    Interaction, Mode, Padding, Program, WitnessData, WitnessField,
 };
 use clean_backend::{GeneratedAir, GeneratedAirSpec, GeneratedLookup};
 use p3_air::lookup::Direction as LookupDirection;
@@ -28,7 +28,7 @@ fn safe_rem(left: u64, right: u64) -> u64 {
     }
 }
 
-fn component_0<F: WitnessField>(input: &[F]) -> Result<Vec<F>, String> {
+fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<Vec<F>, String> {
     if input.len() != 4 {
         return Err(format!(
             "component input has width {}, expected 4",
@@ -89,7 +89,7 @@ fn component_0_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
     ]
 }
 
-fn component_1<F: WitnessField>(input: &[F]) -> Result<Vec<F>, String> {
+fn component_1<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<Vec<F>, String> {
     if input.len() != 4 {
         return Err(format!(
             "component input has width {}, expected 4",
@@ -134,7 +134,7 @@ fn component_1_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
     ]
 }
 
-fn component_2<F: WitnessField>(input: &[F]) -> Result<Vec<F>, String> {
+fn component_2<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<Vec<F>, String> {
     if input.len() != 2 {
         return Err(format!(
             "component input has width {}, expected 2",
@@ -580,6 +580,23 @@ impl<F: WitnessField> Program<F> for FibonacciEnsembleProgram {
     const FUEL: usize = 100000;
     const COMPONENTS: usize = 3;
     const FIXED_WIDTHS: &'static [usize] = &[0, 0, 1];
+
+    fn data_schemas() -> Vec<DataSchema> {
+        vec![
+            DataSchema {
+                name: "fibonacci",
+                columns: &[],
+            },
+            DataSchema {
+                name: "add8",
+                columns: &[],
+            },
+            DataSchema {
+                name: "bytes",
+                columns: &[0],
+            },
+        ]
+    }
 
     fn modes() -> Vec<Mode<F>> {
         vec![
@@ -2689,11 +2706,15 @@ impl<F: WitnessField> Program<F> for FibonacciEnsembleProgram {
         ]
     }
 
-    fn complete_row(component: usize, input: &[F]) -> Result<Vec<F>, String> {
+    fn complete_row(
+        component: usize,
+        input: &[F],
+        data: &WitnessData<F>,
+    ) -> Result<Vec<F>, String> {
         match component {
-            0 => component_0(input),
-            1 => component_1(input),
-            2 => component_2(input),
+            0 => component_0(input, data),
+            1 => component_1(input, data),
+            2 => component_2(input, data),
             _ => Err(format!("component index {component} is out of bounds")),
         }
     }

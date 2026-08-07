@@ -6,7 +6,9 @@ mod generated {
     include!("generated/fibonacci_ensemble.rs");
 }
 
-use clean_backend::witness_generation::{self, Interaction, Mode, Padding, Program, WitnessField};
+use clean_backend::witness_generation::{
+    self, DataSchema, Interaction, Mode, Padding, Program, WitnessData, WitnessField,
+};
 use clean_backend::{
     prove_ensemble, verify_ensemble, EnsembleShapeError, EnsembleVerificationError,
 };
@@ -139,6 +141,10 @@ impl<F: WitnessField> Program<F> for Minimum64Program {
     const FIXED_WIDTHS: &'static [usize] =
         <generated::FibonacciEnsembleProgram as Program<F>>::FIXED_WIDTHS;
 
+    fn data_schemas() -> Vec<DataSchema> {
+        <generated::FibonacciEnsembleProgram as Program<F>>::data_schemas()
+    }
+
     fn modes() -> Vec<Mode<F>> {
         generated::FibonacciEnsembleProgram::modes()
     }
@@ -153,8 +159,12 @@ impl<F: WitnessField> Program<F> for Minimum64Program {
             .collect()
     }
 
-    fn complete_row(component: usize, input: &[F]) -> Result<Vec<F>, String> {
-        generated::FibonacciEnsembleProgram::complete_row(component, input)
+    fn complete_row(
+        component: usize,
+        input: &[F],
+        data: &WitnessData<F>,
+    ) -> Result<Vec<F>, String> {
+        generated::FibonacciEnsembleProgram::complete_row(component, input, data)
     }
 
     fn interactions(component: usize, row: &[F]) -> Vec<Interaction<F>> {
