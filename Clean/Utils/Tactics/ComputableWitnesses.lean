@@ -598,12 +598,17 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
   for mainName in mainNames do
     lemmasArray := lemmasArray.push
       (← `(Lean.Parser.Tactic.simpLemma| $(mkIdent mainName):term))
+  -- only when the constant exists here: an unresolvable name inside a simp call does
+  -- not error, it silently disables the entire call (files that do not transitively
+  -- import Clean.Circuit.Loops would lose the whole normalization pass)
+  if (← getEnv).contains `Circuit.forEach.forAll then
+    lemmasArray := lemmasArray.push
+      (← `(Lean.Parser.Tactic.simpLemma| $(mkIdent `Circuit.forEach.forAll):term))
   let simpPass : TacticM Unit := do
     unless (← getGoals).isEmpty do
       try
         evalTactic (← `(tactic| simp only [circuit_norm, computable_witnesses_norm,
-          ComputableWitnesses.structEqSplit,
-          $(mkIdent `Circuit.forEach.forAll):term, $lemmasArray,*]))
+          ComputableWitnesses.structEqSplit, $lemmasArray,*]))
       catch _ =>
         pure ()
   simpPass
@@ -754,8 +759,7 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
       -- leaf-local simp (normalizes loop-instantiated lengths), then dispatch
       try
         evalTactic (← `(tactic| simp only [circuit_norm, computable_witnesses_norm,
-          ComputableWitnesses.structEqSplit, $(mkIdent `Circuit.forEach.forAll):term,
-          reduceLocalLength, reduceOutputMetadata,
+          ComputableWitnesses.structEqSplit, reduceLocalLength, reduceOutputMetadata,
           $lemmasArray,*] at *))
       catch _ => pure ()
       if (← getGoals).isEmpty then return

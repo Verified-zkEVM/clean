@@ -67,9 +67,5 @@ def circuit : FormalCircuit (F p) U64 U64 where
     intros
     exact trivial
 
-  computableWitnesses := by
-    intro n input
-    simp_all only [circuit_norm]
-    grind
 
 end Gadgets.Not

@@ -126,8 +126,4 @@ def circuit (offset : Fin 8) : FormalCircuit (F p) field Outputs where
   Spec := Spec offset
   soundness := soundness offset
   completeness := completeness offset
-  computableWitnesses := by
-    intro n input env env'
-    simp_all only [main, circuit_norm]
-    grind
 end Gadgets.ByteDecomposition

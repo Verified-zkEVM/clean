@@ -67,9 +67,5 @@ def circuit : FormalCircuit (F p) KeccakState KeccakRow where
   Spec := Spec
   soundness := soundness
   completeness := completeness
-  computableWitnesses := by
-    -- reduce the child's localLength/output metadata: with five chained calls, the
-    -- unreduced offset sums send grind's case-splitting off a cliff
-    computable_witnesses [Xor64.circuit]
 
 end Gadgets.Keccak256.ThetaC

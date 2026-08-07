@@ -80,22 +80,6 @@ set_option linter.constructorNameAsVariable false
 def circuit : FormalCircuit (F p) field (fields 254) where
   main
 
-  computableWitnesses := by
-    unfold FormalCircuitBase.ComputableWitnesses
-    intros offset input env env'
-    simp only [main, Circuit.bind_forAll]
-    constructor
-    · constructor
-      · rw [num2Bits_main_forAll_iff]
-        trivial
-      · simp only [circuit_norm, computable_witnesses_norm]
-        intro h_input
-        apply FormalAssertion.toSubcircuit_computableWitnesses_onlyAccessedBelow
-        intro h_agrees
-        rw [num2Bits_main_output_eq_iff h_input h_agrees]
-        trivial
-    · simp only [circuit_norm, computable_witnesses_norm, Vector.ext_iff]
-      grind
 
   Spec input bits :=
     bits = fieldToBits 254 input
@@ -267,27 +251,6 @@ def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields 
   Spec input output _ :=
     output = fieldToBits n (if n = 0 then 0 else 2^n - input.val : F p)
 
-  computableWitnesses := by
-    unfold FormalCircuitBase.ComputableWitnesses
-    intros offset input env env'
-    simp only [main, circuit_norm, computable_witnesses_norm, Vector.ext_iff]
-    constructor
-    · constructor
-      · grind
-      · constructor
-        · intro i _
-          apply FormalAssertion.toSubcircuit_computableWitnesses_onlyAccessedBelow
-          simp only [computable_witnesses_norm, circuit_norm]
-          grind
-        · intro h
-          apply FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq
-          · simp only [circuit_norm]
-            split <;> simp only [Nat.mul_zero, zero_add, add_zero]
-          · simp only [computable_witnesses_norm]
-            intro _
-            simp only [circuit_norm] at h ⊢
-            exact h
-    · grind
 
   soundness := by
     intro i0 env input_var (input : F p) h_input _ h_holds
