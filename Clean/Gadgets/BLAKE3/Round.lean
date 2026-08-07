@@ -98,9 +98,10 @@ def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   -- Manual: every leaf shape here closes under the tactic's vector route given
   -- [eval_vector_set, U32.ByteVector.eval_fromLimbs, U32.ByteVector.fromLimbs_inj]
   -- (verified 2026-08-07 by emulating the route on the leaves), but passing those as
-  -- hints blows the heartbeat budget: the hint channel also feeds `simp_all`/`at *`
-  -- positions, where a recursive eval decomposition rewrites all eight legs' chain
-  -- facts at every leaf. Needs a goal-only hint position in the close routes.
+  -- hints blows the heartbeat budget: the single hint channel also feeds the initial
+  -- whole-circuit `simpPass`, where a recursive eval decomposition (eval_vector_set)
+  -- rewrites all eight legs' set-chains pre-split. Needs a separate close-only hint
+  -- channel (API decision).
   computableWitnesses := by
     intro n input env env'
     obtain ⟨state, message⟩ := input

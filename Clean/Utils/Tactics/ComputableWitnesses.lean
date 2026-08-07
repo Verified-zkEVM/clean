@@ -661,8 +661,13 @@ def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : TacticM Unit :
              Vector.map_ofFn, Vector.ext_iff, Vector.getElem_ofFn, Function.comp_def,
              Vector.getElem_map, Vector.getElem_append,
              Vector.getElem_mapFinRange, Vector.getElem_mapIdx,
-             Vector.getElem_set, Vector.getElem_mapRange,
-             $lemmasArray,*]
+             Vector.getElem_set, Vector.getElem_mapRange]
+           -- user hints goal-only: in the `simp_all` above they would rewrite every
+           -- chain-fact hypothesis (all legs' window facts) at every leaf — a
+           -- heartbeat blowup for recursive eval decompositions (eval_vector_set)
+           (try simp only [circuit_norm, eval_vector, Vector.ext_iff, Vector.getElem_set,
+             Vector.getElem_ofFn, Vector.getElem_map, Vector.map_ofFn, retypeVectorAliasEq,
+             $lemmasArray,*])
            all_goals ((intros; (try split_ifs)) <;>
                ((try simp only [ProvableType.eval_varFromOffset, circuit_norm, eval_vector,
                   Vector.mapRange_succ, Vector.mapRange_zero, Vector.mk.injEq, Array.mk.injEq,
