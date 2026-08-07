@@ -124,8 +124,6 @@ def decodeInstruction : GeneralFormalCircuit (F p) field DecodedInstruction wher
   main := decodeInstructionMain
   Spec := decodeInstructionSpec
   soundness := decodeInstructionSoundness
-  computableWitnesses := by
-    computable_witnesses [decodeInstructionMain, Gadgets.toBits]
 
   ProverAssumptions
   | instruction, _, _ => instruction.val < 256
@@ -410,9 +408,6 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
       simp [addr1, addr2, *]
     · simp at h_mem_access
       simp [addr1, addr2, *]
-  computableWitnesses := by
-    computable_witnesses [Vector.ext_iff, List.getElem_singleton,
-      Types.State.eval_eq_components, Types.DecodedAddressingMode.eval_eq_components]
 
 /--
   Circuit that computes the next state of the femtoCairo VM, given the current state,
@@ -547,10 +542,8 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
         simp only [circuit_norm, explicit_provable_type, h_env1]
       · simp only [circuit_norm, explicit_provable_type, h_store, ↓reduceIte] at h_env2
         simp only [circuit_norm, explicit_provable_type, h_env2]
-  computableWitnesses := by
-    computable_witnesses [Types.State.eval_eq_components,
-      Types.DecodedInstructionType.eval_eq_components,
-      Types.DecodedAddressingMode.eval_eq_components, explicit_provable_type]
+
+  computableWitnesses := by computable_witnesses [explicit_provable_type]
 
 /--
   The main femtoCairo step circuit, which combines instruction fetch, decode,
@@ -769,72 +762,8 @@ theorem femtoCairoStepCompleteness {programSize : ℕ} (program : Fin programSiz
 variable {programSize : ℕ} (program : Fin programSize → (F p)) (h_programSize : programSize < p)
 variable (h_program : ValidProgramSize p programSize ∧ ValidProgram program)
 
--- the plain (input-eq keyed) composition rule; its FormalCircuit counterpart is tagged in
--- `Clean.Circuit.Subcircuit`, the GeneralFormalCircuit one is not (TODO COMPWIT: tag at source)
-attribute [local grind ←] GeneralFormalCircuit.toSubcircuit_computableWitnesses
-
-/-- Verifier-eval output congruence for `GeneralFormalCircuit` values; the `FormalCircuit`
-counterpart lives in `Clean.Circuit.Subcircuit` (TODO COMPWIT: provide at source). -/
-theorem _root_.GeneralFormalCircuit.output_of_input_eq
-    {F : Type} [FiniteField F] {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    {n : ℕ} {input_var : Var Input F} {env env' : ProverEnvironment F}
-    (circuit : GeneralFormalCircuit F Input Output)
-    (input_eq : eval env.toEnvironment input_var = eval env'.toEnvironment input_var)
-    (h_agrees : env.AgreesBelow (n + circuit.localLength input_var) env') :
-    eval env.toEnvironment (circuit.output input_var n) =
-      eval env'.toEnvironment (circuit.output input_var n) := by
-  haveI := circuit.elaborated
-  have h := (circuit.computableWitnesses'
-    (by simpa only [CircuitType.eval_var_prover_to_verifier] using input_eq)).2 h_agrees
-  simpa only [CircuitType.eval_var_prover_to_verifier] using h
-
-/-- Concrete-instance-spelled composite decode-output congruence: the framework spelling is
-definitionally equal but distinct as a simp/grind atom (TODO COMPWIT); the conversion's
-instance-level defeq check is paid here, in its own heartbeat budget. -/
-lemma decodeInstruction_output_congr {env env' : ProverEnvironment (F p)}
-    {n : ℕ} {raw : Expression (F p)}
-    (input_eq : Expression.eval env.toEnvironment raw = Expression.eval env'.toEnvironment raw)
-    (h_agrees : env.AgreesBelow (n + 4 + 8) env') :
-    (eval env.toEnvironment ((decodeInstruction (p:=p)).output raw (n + 4)) :
-        DecodedInstruction (F p)) =
-      eval env'.toEnvironment ((decodeInstruction (p:=p)).output raw (n + 4)) := by
-  have h0 := GeneralFormalCircuit.output_of_input_eq (decodeInstruction (p:=p))
-    (input_var := raw) (n := n + 4) (by with_unfolding_all exact input_eq) h_agrees
-  exact h0
-
-omit p_large_enough in
-/-- Componentwise, raw-spelled form of the fetch-output congruence: the framework states
-composite evals through the generic `Var`-instance path, which is definitionally equal to
-but not syntactically the concrete spelling of the goal atoms (TODO COMPWIT); the expensive
-full-transparency bridge is paid once here, in its own heartbeat budget. -/
-lemma fetchInstruction_output_congr {env env' : ProverEnvironment (F p)}
-    {n : ℕ} {pc : Expression (F p)}
-    (input_eq : Expression.eval env.toEnvironment pc = Expression.eval env'.toEnvironment pc)
-    (h_agrees : env.AgreesBelow (n + 4) env') :
-    Expression.eval env.toEnvironment ((fetchInstruction (p:=p) program h_programSize).output pc n).rawInstrType =
-      Expression.eval env'.toEnvironment ((fetchInstruction (p:=p) program h_programSize).output pc n).rawInstrType ∧
-    Expression.eval env.toEnvironment ((fetchInstruction (p:=p) program h_programSize).output pc n).op1 =
-      Expression.eval env'.toEnvironment ((fetchInstruction (p:=p) program h_programSize).output pc n).op1 ∧
-    Expression.eval env.toEnvironment ((fetchInstruction (p:=p) program h_programSize).output pc n).op2 =
-      Expression.eval env'.toEnvironment ((fetchInstruction (p:=p) program h_programSize).output pc n).op2 ∧
-    Expression.eval env.toEnvironment ((fetchInstruction (p:=p) program h_programSize).output pc n).op3 =
-      Expression.eval env'.toEnvironment ((fetchInstruction (p:=p) program h_programSize).output pc n).op3 := by
-  have h0 := GeneralFormalCircuit.output_of_input_eq (fetchInstruction (p:=p) program h_programSize)
-    (input_var := pc) (n := n) (by with_unfolding_all exact input_eq) h_agrees
-  -- re-key the composite equality at the concrete instance spelling (instance-level defeq
-  -- only; the output term itself is never unfolded), then project componentwise
-  have h0c : (eval env.toEnvironment ((fetchInstruction (p:=p) program h_programSize).output pc n) :
-      RawInstruction (F p)) =
-      eval env'.toEnvironment ((fetchInstruction (p:=p) program h_programSize).output pc n) := h0
-  refine ⟨?_, ?_, ?_, ?_⟩
-  · rw [← RawInstruction.eval_rawInstrType, ← RawInstruction.eval_rawInstrType]
-    exact congrArg RawInstruction.rawInstrType h0c
-  · rw [← RawInstruction.eval_op1, ← RawInstruction.eval_op1]
-    exact congrArg RawInstruction.op1 h0c
-  · rw [← RawInstruction.eval_op2, ← RawInstruction.eval_op2]
-    exact congrArg RawInstruction.op2 h0c
-  · rw [← RawInstruction.eval_op3, ← RawInstruction.eval_op3]
-    exact congrArg RawInstruction.op3 h0c
+-- TODO how to get grind to do this generically?
+@[local grind norm] lemma size_state_eq : size State = 3 := rfl
 
 def femtoCairoStep : GeneralFormalCircuit (F p) State State where
   main := femtoCairoStepMain program h_programSize
@@ -842,62 +771,6 @@ def femtoCairoStep : GeneralFormalCircuit (F p) State State where
   Spec := femtoCairoStepSpec program
   soundness := femtoCairoStepSoundness program h_programSize
   completeness := femtoCairoStepCompleteness program h_programSize
-  -- Manual: the leaves are fresh-window congruences (varFromOffset State (n + k)) —
-  -- exactly ProvableType.eval_varFromOffset_congr; the tactic's close does not apply
-  -- it yet.
-  computableWitnesses := by
-    intro n input env env'
-    simp only [circuit_norm, femtoCairoStepMain]
-    -- constant but tactic-defined localLength metadata, exposed by rfl for offset arithmetic
-    have ef : ∀ x, (fetchInstruction (p:=p) program h_programSize).localLength x = 4 :=
-      fun _ => rfl
-    have ed : ∀ x, (decodeInstruction (p:=p)).localLength x = 8 := fun _ => rfl
-    have er : ∀ x, (readFromMemory (p:=p)).localLength x = 5 :=
-      fun _ => by simp only [circuit_norm, readFromMemory]
-    have en : ∀ x, (nextState (p:=p)).localLength x = 3 := fun _ => rfl
-    refine ⟨⟨fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_⟩,
-      fun h h_agrees => ?_⟩
-    -- fetch takes the raw input; every later node consumes components of earlier outputs,
-    -- so their env-agreement is established up front from the componentwise congruences
-    · exact GeneralFormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by omega) fun h_agrees => by
-          simp only [circuit_norm]; grind
-    all_goals
-      first
-        | refine GeneralFormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-            (by try simp only [ef, ed, er]; try omega) fun h_agrees => ?_
-        | skip
-    all_goals
-      have of1 := fetchInstruction_output_congr program h_programSize (pc := input.pc) (n := n)
-        (by grind)
-        (ProverEnvironment.agreesBelow_of_le h_agrees
-          (by first | omega | (simp only [ef, ed, er]; omega)))
-    all_goals
-      -- the composite decode-output equality, then normalized by the same simp pass as the
-      -- goal so the stuck `ProvableStruct.eval.go` spellings coincide
-      try
-        have of2 := decodeInstruction_output_congr
-          (raw := ((fetchInstruction (p:=p) program h_programSize).output input.pc n).rawInstrType)
-          (n := n) of1.1
-          (ProverEnvironment.agreesBelow_of_le h_agrees
-            (by first | omega | (simp only [ef, ed, er]; omega)))
-    all_goals
-      try simp only [circuit_norm] at of2
-    all_goals
-      simp only [circuit_norm, ef, ed, er]
-      (try and_intros) <;>
-        first
-          | exact h
-          | grind
-          | exact congrArg DecodedInstruction.instrType of2
-          | exact congrArg DecodedInstruction.mode1 of2
-          | exact congrArg DecodedInstruction.mode2 of2
-          | exact congrArg DecodedInstruction.mode3 of2
-          | -- output: fresh witness window of the nextState node
-            (rw [ProvableType.eval_varFromOffset, ProvableType.eval_varFromOffset]
-             refine congrArg fromElements (Vector.ext fun i hi => ?_)
-             simp only [Vector.getElem_mapRange]
-             exact h_agrees.1 _ (by simp only [circuit_norm] at hi ⊢; omega))
 
 /--
   The femtoCairo table, which defines the step relation for the femtoCairo VM.

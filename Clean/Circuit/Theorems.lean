@@ -546,29 +546,25 @@ lemma ProverEnvironment.agreesBelow_of_le {F} {n m : ℕ} {env env' : ProverEnvi
 window's end: it is a fresh block of witness variables, independent of any circuit input.
 This is the congruence behind "the output of a subcircuit with a plain witness output is
 computable", without threading input congruence through the parent. -/
-lemma ProvableType.eval_varFromOffset_congr {F} [FiniteField F] {M : TypeMap} [ProvableType M]
+lemma ProverEnvironment.eval_varFromOffset_congr {F} [FiniteField F] {M : TypeMap} [ProvableType M]
     {env env' : ProverEnvironment F} {n : ℕ} (h : env.AgreesBelow (n + size M) env') :
-    (eval env.toEnvironment (varFromOffset M n) : M F) =
-      eval env'.toEnvironment (varFromOffset M n) := by
-  simp only [ProvableType.eval, varFromOffset, ProvableType.toElements_fromElements]
-  congr 1
-  ext i hi
-  simp only [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
-  exact h.1 _ (by omega)
+    (eval env.toEnvironment (varFromOffset (F:=F) M n) : M F) =
+      eval env'.toEnvironment (varFromOffset (F:=F) M n) := by
+  grind
 
 /-- Backward-reasoning form for `grind`: the agreement bound is a separate variable with
 an arithmetic side premise, so E-matching can fire on whatever `AgreesBelow` hypothesis
 is in context before bound normalization (the same shaping as the
 `…_of_offset_eq` composition rules). -/
-lemma ProvableType.eval_varFromOffset_congr_of_le {F} [FiniteField F] {M : TypeMap}
+lemma ProverEnvironment.eval_varFromOffset_congr_of_le {F} [FiniteField F] {M : TypeMap}
     [ProvableType M] {env env' : ProverEnvironment F} {n m : ℕ}
     (h : env.AgreesBelow m env') (hle : n + size M ≤ m) :
-    (eval env.toEnvironment (varFromOffset M n) : M F) =
-      eval env'.toEnvironment (varFromOffset M n) :=
-  eval_varFromOffset_congr (ProverEnvironment.agreesBelow_of_le h hle)
+    (eval env.toEnvironment (varFromOffset (F:=F) M n) : M F) =
+      eval env'.toEnvironment (varFromOffset (F:=F) M n) :=
+  ProverEnvironment.eval_varFromOffset_congr (ProverEnvironment.agreesBelow_of_le h hle)
 
-grind_pattern ProvableType.eval_varFromOffset_congr_of_le =>
-  eval env.toEnvironment (varFromOffset M n), env.AgreesBelow m env'
+grind_pattern ProverEnvironment.eval_varFromOffset_congr_of_le =>
+  eval env.toEnvironment (varFromOffset (F:=F) M n), env.AgreesBelow m env'
 
 @[circuit_norm]
 lemma ProverEnvironment.onlyAccessedBelow_environment_get_iff_lt {n m : ℕ} :

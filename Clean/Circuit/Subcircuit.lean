@@ -874,6 +874,15 @@ theorem GeneralFormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_
   subst m
   exact circuit.toSubcircuit_computableWitnesses_onlyAccessedBelow h
 
+theorem GeneralFormalCircuit.output_of_input_eq
+    {env env' : ProverEnvironment F} (circuit : GeneralFormalCircuit F Input Output)
+    (input_eq : eval env.toEnvironment input_var = eval env'.toEnvironment input_var)
+    (h_agrees : env.AgreesBelow (n + circuit.localLength input_var) env') :
+    eval env.toEnvironment (circuit.output input_var n) = eval env'.toEnvironment (circuit.output input_var n) := by
+  haveI := circuit.elaborated
+  have h := circuit.base.output_of_input_eq ?_ h_agrees
+  <;> simp_all only [circuit_norm]
+
 -- Simplification lemmas for toSubcircuit channelsWithGuarantees and channelsWithRequirements
 
 @[circuit_norm]
