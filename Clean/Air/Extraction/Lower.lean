@@ -14,6 +14,9 @@ inductive LoweringError where
   | nativeWitness (component operation : ℕ)
   | malformedWitnessLocals (component operation : ℕ)
   | legacyLookup (component : ℕ)
+  | verifierWitness (operation : ℕ)
+  | verifierConstraint (operation : ℕ)
+  | verifierLookup (operation : ℕ)
   | componentVariable (component index width : ℕ)
   | verifierVariable (index width : ℕ)
 deriving Repr, DecidableEq
@@ -28,6 +31,12 @@ instance : ToString LoweringError where
         s!"component {component} witness operation {operation} has an invalid local reference"
     | .legacyLookup component =>
         s!"component {component} contains a legacy lookup; extraction supports channels only"
+    | .verifierWitness operation =>
+        s!"verifier operation {operation} is a witness; extraction supports verifier interactions only"
+    | .verifierConstraint operation =>
+        s!"verifier operation {operation} is a constraint; extraction supports verifier interactions only"
+    | .verifierLookup operation =>
+        s!"verifier operation {operation} is a legacy lookup; extraction supports verifier interactions only"
     | .componentVariable component index width =>
         s!"component {component} expression reads cell {index}, but its width is {width}"
     | .verifierVariable index width =>
@@ -81,6 +90,13 @@ private def lowerComponent (index : ℕ) (component : Component F) :
     interactions
   }
 
+private def validateVerifierOperations : ℕ → List (FlatOperation F) → Except LoweringError Unit
+  | _, [] => pure ()
+  | index, .interact _ :: operations => validateVerifierOperations (index + 1) operations
+  | index, .witness _ _ :: _ => throw (.verifierWitness index)
+  | index, .assert _ :: _ => throw (.verifierConstraint index)
+  | index, .lookup _ :: _ => throw (.verifierLookup index)
+
 /-- Lower and validate the backend-facing portion of an ensemble without producing source text. -/
 def lower (ensemble : Ensemble F PublicIO) (config : Config F) :
     Except LoweringError (Program F) := do
@@ -88,7 +104,9 @@ def lower (ensemble : Ensemble F PublicIO) (config : Config F) :
     throw (.modeCount ensemble.tables.length config.modes.length)
   let components ← ensemble.tables.zipIdx.mapM fun (component, index) =>
     lowerComponent index component
-  let verifierInteractions := ensemble.verifierOperations.interactions
+  let verifierOperations := ensemble.verifierOperations.toFlat
+  validateVerifierOperations 0 verifierOperations
+  let verifierInteractions := FlatOperation.interactions verifierOperations
   let verifierExpressions := verifierInteractions.flatMap fun interaction =>
     interaction.mult :: interaction.msg.toList
   match expressionsBadVariable (size PublicIO) verifierExpressions with

@@ -75,4 +75,25 @@ private def extractedFirstRow : Except String (Array (F pBabybear)) := do
 /-- The typed extraction semantics execute the same row-local witness IR as the source circuit. -/
 example : extractedFirstRow = .ok #[1, 0, 0, 1, 1] := by native_decide
 
+private def constrainedVerifier : GeneralFormalCircuit (F pBabybear) unit unit where
+  main _ := do
+    assertZero 0
+  Spec _ _ _ := True
+  soundness := by circuit_proof_start
+  completeness := by circuit_proof_start
+
+private def constrainedVerifierEnsemble : Air.Flat.Ensemble (F pBabybear) unit where
+  tables := []
+  channels := []
+  verifier := constrainedVerifier
+  verifier_length_zero := by simp [constrainedVerifier, circuit_norm]
+
+private def constrainedVerifierRejected : Bool :=
+  match Air.Flat.Extraction.lower constrainedVerifierEnsemble { modes := [], fuel := 1 } with
+  | .error (.verifierConstraint 0) => true
+  | _ => false
+
+/-- Rust extraction must not silently discard verifier constraints. -/
+example : constrainedVerifierRejected = true := by native_decide
+
 end Air.Flat.WitnessGenerationTest
