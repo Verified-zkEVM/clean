@@ -1,5 +1,4 @@
-import Clean.Examples.FibonacciWithChannels
-import Clean.Air.WitnessExport
+import Clean.Examples.FibonacciVm.Circuit
 import Clean.Utils.Primes
 
 namespace Air.Flat.WitnessGenerationTest
@@ -60,15 +59,5 @@ private def invalidRejected : Bool :=
 
 /-- A final state not reached within the configured fuel fails generation. -/
 example : invalidRejected = true := by native_decide
-
-private def exportSucceeds : Bool :=
-  match Export.ensembleToJson
-      (fibonacciEnsemble (p := pBabybear)).ensemble
-      (FibonacciWitness.config (p := pBabybear) 2000) with
-  | .ok _ => true
-  | .error _ => false
-
-/-- The full generator contains only structured, external-data-free witness IR. -/
-example : exportSucceeds = true := by native_decide
 
 end Air.Flat.WitnessGenerationTest

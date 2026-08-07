@@ -301,12 +301,12 @@ def bytesMode : Mode (F p) := .fixed
 Channel-driven witness-generation metadata, aligned with
 `fibonacciEnsemble.ensemble.tables = [fib8, add8, pushBytes]`.
 -/
-def config (fuel : ℕ := 100000) : Config (F p) where
+def config (fuel : ℕ) : Config (F p) where
   modes := [fibMode (p := p), add8Mode (p := p), bytesMode (p := p)]
   fuel := fuel
 
 /-- Generate a complete ensemble witness from the claimed public final state. -/
-def generate (publicInput : fieldTriple (F p)) (fuel : ℕ := 100000) :
+def generate (publicInput : fieldTriple (F p)) (fuel : ℕ) :
     Except String (EnsembleWitness (fibonacciEnsemble (p := p)).ensemble) :=
   Air.Flat.WitnessGeneration.generate (fibonacciEnsemble (p := p)).ensemble
     (config (p := p) fuel) publicInput

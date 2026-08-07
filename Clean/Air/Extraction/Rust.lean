@@ -1,4 +1,4 @@
-import Clean.Air.WitnessExport
+import Clean.Air.WitnessGeneration
 
 /-!
 # Direct Rust extraction for AIR ensembles
@@ -8,7 +8,7 @@ IR, and channel-generation metadata to ordinary Rust. The generated proving-time
 contains no JSON parser or IR interpreter.
 -/
 
-namespace Air.Flat.EnsembleRust
+namespace Air.Flat.Extraction.Rust
 
 open Air.Flat.WitnessGeneration
 
@@ -338,4 +338,4 @@ def ensembleToRust (name : String) (ensemble : Ensemble F PublicIO) (config : Co
     s!"            {index} => component_{index}_interactions(row),"
   return s!"{prelude}\n{String.intercalate "\n\n" components}\n\npub struct {name};\n\nimpl<F: WitnessField> Program<F> for {name} \{\n    const FUEL: usize = {config.fuel};\n    const COMPONENTS: usize = {ensemble.tables.length};\n\n    fn modes() -> Vec<Mode<F>> \{ vec![{modes}] }\n\n    fn complete_row(component: usize, input: &[F]) -> Result<Vec<F>, String> \{\n        match component \{\n{completeCases}\n            _ => Err(format!(\"component index \{component} is out of bounds\")),\n        }\n    }\n\n    fn interactions(component: usize, row: &[F]) -> Vec<Interaction<F>> \{\n        match component \{\n{interactionCases}\n            _ => vec![],\n        }\n    }\n\n    fn verifier_interactions(public_input: &[F]) -> Vec<Interaction<F>> \{\n        {verifier}\n    }\n}\n\npub fn generate<F: WitnessField>(public_input: &[F]) -> Result<EnsembleWitness<F>, String> \{\n    clean_backend::witness_generation::generate::<F, {name}>(public_input)\n}\n"
 
-end Air.Flat.EnsembleRust
+end Air.Flat.Extraction.Rust

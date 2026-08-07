@@ -85,7 +85,7 @@ inductive Mode (F : Type) where
 /-- Generation metadata is aligned with `Ensemble.tables`. -/
 structure Config (F : Type) where
   modes : List (Mode F)
-  fuel : ℕ := 100000
+  fuel : ℕ
 
 /-- A normalized, nonzero channel imbalance. -/
 structure Demand (F : Type) where

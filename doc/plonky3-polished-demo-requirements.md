@@ -113,7 +113,7 @@ reject unsupported data-dependent programs rather than ignore them.
 ## Delivery milestone 2: Plonky3 support for `FibonacciWithChannels`
 
 The first backend target is the `fibonacciEnsemble` defined in
-`Clean/Examples/FibonacciWithChannels.lean`. It exercises multiple same-row AIR components, a
+`Clean/Examples/FibonacciVm/Circuit.lean`. It exercises multiple same-row AIR components, a
 verifier/public-input circuit, conditional multiplicities, and the static, lookup-like, and
 VM-state `bytes`, `add8`, and `fibonacci` channels.
 
