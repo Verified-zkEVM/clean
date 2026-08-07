@@ -13,11 +13,14 @@ use p3_matrix::Matrix;
 use p3_uni_stark::{SymbolicAirBuilder, SymbolicExpression, VerificationError};
 use p3_util::log2_strict_usize;
 
-use crate::{PcsError, StarkGenericConfig, Val};
+use crate::{EnsembleAir, EnsembleShapeError, PcsError, StarkGenericConfig, Val};
 
-/// Static physical trace height expected by the verifier for one generated AIR.
-pub trait EnsembleAir {
-    fn trace_height(&self) -> usize;
+/// Verification failures are separated into caller-visible statement-shape errors and
+/// cryptographic Plonky3 verification errors.
+#[derive(Debug)]
+pub enum EnsembleVerificationError<E: core::fmt::Debug> {
+    Shape(EnsembleShapeError),
+    Proof(VerificationError<E>),
 }
 
 #[cfg(all(debug_assertions, not(doc)))]
@@ -66,16 +69,43 @@ pub fn prove_ensemble<SC, A>(
     airs: &[A],
     traces: Vec<RowMajorMatrix<Val<SC>>>,
     public_values: &[Val<SC>],
-) -> (BatchProof<SC>, ProverData<SC>)
+) -> Result<(BatchProof<SC>, ProverData<SC>), EnsembleShapeError>
 where
     SC: StarkGenericConfig,
     SC::Challenge: BasedVectorSpace<Val<SC>>,
     SymbolicExpression<SC::Challenge>: From<SymbolicExpression<Val<SC>>>,
-    A: ProverAir<SC>,
+    A: ProverAir<SC> + EnsembleAir,
 {
-    assert_eq!(airs.len(), traces.len());
-    for (air, trace) in airs.iter().zip(&traces) {
-        assert_eq!(air.width(), trace.width());
+    let Some(first_air) = airs.first() else {
+        return Err(EnsembleShapeError::NoComponents);
+    };
+    if airs.len() != traces.len() {
+        return Err(EnsembleShapeError::TraceCount {
+            airs: airs.len(),
+            traces: traces.len(),
+        });
+    }
+    let expected_public_values = first_air.public_value_count();
+    if public_values.len() != expected_public_values {
+        return Err(EnsembleShapeError::PublicValueCount {
+            expected: expected_public_values,
+            actual: public_values.len(),
+        });
+    }
+    for (component, (air, trace)) in airs.iter().zip(&traces).enumerate() {
+        if air.width() != trace.width() {
+            return Err(EnsembleShapeError::TraceWidth {
+                component,
+                expected: air.width(),
+                actual: trace.width(),
+            });
+        }
+        if trace.height() == 0 || !trace.height().is_power_of_two() {
+            return Err(EnsembleShapeError::TraceHeight {
+                component,
+                height: trace.height(),
+            });
+        }
     }
     let log_degrees = traces
         .iter()
@@ -95,7 +125,7 @@ where
         })
         .collect::<Vec<_>>();
     let proof = prove_batch(config, &instances, &prover_data);
-    (proof, prover_data)
+    Ok((proof, prover_data))
 }
 
 /// Verify a proof produced for direct generated ensemble AIR code.
@@ -104,7 +134,7 @@ pub fn verify_ensemble<SC, A>(
     airs: &[A],
     proof: &BatchProof<SC>,
     public_values: &[Val<SC>],
-) -> Result<(), VerificationError<PcsError<SC>>>
+) -> Result<(), EnsembleVerificationError<PcsError<SC>>>
 where
     SC: StarkGenericConfig,
     SC::Challenge: BasedVectorSpace<Val<SC>>,
@@ -114,12 +144,39 @@ where
         + EnsembleAir
         + Clone,
 {
+    let Some(first_air) = airs.first() else {
+        return Err(EnsembleVerificationError::Shape(
+            EnsembleShapeError::NoComponents,
+        ));
+    };
+    let expected_public_values = first_air.public_value_count();
+    if public_values.len() != expected_public_values {
+        return Err(EnsembleVerificationError::Shape(
+            EnsembleShapeError::PublicValueCount {
+                expected: expected_public_values,
+                actual: public_values.len(),
+            },
+        ));
+    }
+    for (component, air) in airs.iter().enumerate() {
+        let height = air.trace_height();
+        if height == 0 || !height.is_power_of_two() {
+            return Err(EnsembleVerificationError::Shape(
+                EnsembleShapeError::TraceHeight { component, height },
+            ));
+        }
+    }
     let expected_degree_bits = airs
         .iter()
         .map(|air| log2_strict_usize(air.trace_height()) + config.is_zk())
         .collect::<Vec<_>>();
     if proof.degree_bits != expected_degree_bits {
-        return Err(VerificationError::InvalidProofShape);
+        return Err(EnsembleVerificationError::Shape(
+            EnsembleShapeError::ProofDegreeBits {
+                expected: expected_degree_bits,
+                actual: proof.degree_bits.clone(),
+            },
+        ));
     }
     let mut verifier_airs = airs.to_vec();
     let prover_data =
@@ -135,4 +192,5 @@ where
         &per_air_public_values,
         &prover_data.common,
     )
+    .map_err(EnsembleVerificationError::Proof)
 }

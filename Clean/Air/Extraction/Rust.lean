@@ -1,16 +1,17 @@
-import Clean.Air.WitnessGeneration
+import Clean.Air.Extraction.Lower
 
 /-!
-# Direct Rust extraction for AIR ensembles
+# Rust rendering for typed AIR extraction programs
 
-This compiler lowers an ensemble's constraints, channel interactions, structured witness
-IR, and channel-generation metadata to ordinary Rust. The generated proving-time path
-contains no JSON parser or IR interpreter.
+This is the only string-producing part of ensemble extraction. It consumes a validated
+`Extraction.Program`; lowering, validation, and executable semantics live in `IR.lean` and
+`Lower.lean`. Generic Plonky3 `Air` plumbing lives in the Rust backend.
 -/
 
 namespace Air.Flat.Extraction.Rust
 
 open Air.Flat.WitnessGeneration
+open Air.Flat.Extraction
 
 variable {F : Type} [FiniteField F] [DecidableEq F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
@@ -23,27 +24,22 @@ private def quoted (value : String) : String := reprStr value
 private def commaSep (values : List String) : String :=
   String.intercalate ", " values
 
-inductive LocalSort where
-  | field
-  | u64
-deriving DecidableEq
-
-private partial def exprToRust (row : String) : Expression F → String
-  | .var v => s!"{row}.get({v.index}).copied().unwrap_or(F::ZERO)"
+private def exprToRust (row : String) : Expression F → String
+  | .var cell => s!"{row}.get({cell.index}).copied().unwrap_or(F::ZERO)"
   | .const value => field value
   | .add left right => s!"({exprToRust row left} + {exprToRust row right})"
   | .mul left right => s!"({exprToRust row left} * {exprToRust row right})"
 
 mutual
 
-private partial def fexprToRust (locals : Array LocalSort) (row idx : String) :
+private def fexprToRust (locals : Array LocalSort) (row idx : String) :
     Witgen.FExpr F → Except String String
   | .expr expression => pure (exprToRust row expression)
   | .const value => pure (field value)
   | .localVar index =>
       match locals[index]? with
       | some .field => pure s!"local_{index}"
-      | _ => pure "F::ZERO"
+      | _ => throw s!"invalid field local {index} reached the validated Rust renderer"
   | .add left right => return s!"({← fexprToRust locals row idx left} + {← fexprToRust locals row idx right})"
   | .mul left right => return s!"({← fexprToRust locals row idx left} * {← fexprToRust locals row idx right})"
   | .inv value => return s!"({← fexprToRust locals row idx value}).inverse_or_zero()"
@@ -51,12 +47,19 @@ private partial def fexprToRust (locals : Array LocalSort) (row idx : String) :
   | .ite condition thenValue elseValue =>
       return s!"if {← bexprToRust locals row idx condition} \{ {← fexprToRust locals row idx thenValue} } else \{ {← fexprToRust locals row idx elseValue} }"
   | .listGet values index => do
-      let values ← values.mapM (fexprToRust locals row idx)
+      let values ← fexprListToRust locals row idx values
       return s!"[{commaSep values}].get(({← u64exprToRust locals row idx index}) as usize).copied().unwrap_or(F::ZERO)"
-  | .dataGet .. => throw "external ProverData cannot be extracted yet"
-  | .hintGet .. => throw "external prover hints cannot be extracted yet"
+  | .dataGet .. => throw "external ProverData cannot be rendered for Rust yet"
+  | .hintGet .. => throw "external prover hints cannot be rendered for Rust yet"
 
-private partial def u64exprToRust (locals : Array LocalSort) (row idx : String) :
+private def fexprListToRust (locals : Array LocalSort) (row idx : String) :
+    List (Witgen.FExpr F) → Except String (List String)
+  | [] => pure []
+  | value :: values =>
+      return (← fexprToRust locals row idx value) ::
+        (← fexprListToRust locals row idx values)
+
+private def u64exprToRust (locals : Array LocalSort) (row idx : String) :
     Witgen.U64Expr F → Except String String
   | .const value => pure s!"{value.toNat}u64"
   | .val value => return s!"({← fexprToRust locals row idx value}).canonical_u64()"
@@ -64,17 +67,11 @@ private partial def u64exprToRust (locals : Array LocalSort) (row idx : String) 
   | .localVar index =>
       match locals[index]? with
       | some .u64 => pure s!"local_{index}"
-      | _ => pure "0u64"
+      | _ => throw s!"invalid u64 local {index} reached the validated Rust renderer"
   | .add left right => return s!"({← u64exprToRust locals row idx left}).wrapping_add({← u64exprToRust locals row idx right})"
   | .mul left right => return s!"({← u64exprToRust locals row idx left}).wrapping_mul({← u64exprToRust locals row idx right})"
-  | .div left right => do
-      let left ← u64exprToRust locals row idx left
-      let right ← u64exprToRust locals row idx right
-      return s!"safe_div({left}, {right})"
-  | .mod left right => do
-      let left ← u64exprToRust locals row idx left
-      let right ← u64exprToRust locals row idx right
-      return s!"safe_rem({left}, {right})"
+  | .div left right => return s!"safe_div({← u64exprToRust locals row idx left}, {← u64exprToRust locals row idx right})"
+  | .mod left right => return s!"safe_rem({← u64exprToRust locals row idx left}, {← u64exprToRust locals row idx right})"
   | .land left right => return s!"({← u64exprToRust locals row idx left} & {← u64exprToRust locals row idx right})"
   | .lor left right => return s!"({← u64exprToRust locals row idx left} | {← u64exprToRust locals row idx right})"
   | .lxor left right => return s!"({← u64exprToRust locals row idx left} ^ {← u64exprToRust locals row idx right})"
@@ -83,7 +80,7 @@ private partial def u64exprToRust (locals : Array LocalSort) (row idx : String) 
   | .ite condition thenValue elseValue =>
       return s!"if {← bexprToRust locals row idx condition} \{ {← u64exprToRust locals row idx thenValue} } else \{ {← u64exprToRust locals row idx elseValue} }"
 
-private partial def bexprToRust (locals : Array LocalSort) (row idx : String) :
+private def bexprToRust (locals : Array LocalSort) (row idx : String) :
     Witgen.BExpr F → Except String String
   | .true => pure "true"
   | .false => pure "false"
@@ -123,25 +120,19 @@ private def vexprPushRust (locals : Array LocalSort) (row output idx : String) :
   | n, .bitsOf value => do
       let value ← fexprToRust locals row idx value
       return s!"        let bits_value = ({value}).canonical_u64();\n        for bit in 0u32..{n}u32 \{\n            {output}.push(F::from_canonical_u64((bits_value >> bit) & 1));\n        }"
-  | _, .append left right => do
+  | _, .append left right =>
       return s!"{← vexprPushRust locals row output idx left}\n{← vexprPushRust locals row output idx right}"
 
-private def witgenToRust {n : ℕ} (code : Witgen.WitgenIR F n) (row : String) :
-    Except String String := do
-  match code with
-  | .native _ => throw "native witness closures cannot be extracted"
-  | .ir steps output =>
-      let locals := steps.map stepSort |>.toArray
-      let stepCode ← stepsToRust steps row
-      let outputCode ← vexprPushRust locals row "output" "0u64" output
-      return s!"{stepCode}\n        let mut output = Vec::with_capacity({n});\n{outputCode}\n        debug_assert_eq!(output.len(), {n});\n        row.extend(output);"
+private def witnessBlockToRust (block : WitnessBlock F) (row : String) : Except String String := do
+  let locals := block.steps.map stepSort |>.toArray
+  let stepCode ← stepsToRust block.steps row
+  let outputCode ← vexprPushRust locals row "output" "0u64" block.output
+  return s!"{stepCode}\n        let mut output = Vec::with_capacity({block.outputWidth});\n{outputCode}\n        debug_assert_eq!(output.len(), {block.outputWidth});\n        {row}.extend(output);"
 
-private def witnessOpsToRust (operations : List (FlatOperation F)) : Except String String := do
-  let blocks ← operations.filterMapM fun operation =>
-    match operation with
-    | .witness _ code => return some s!"    \{\n{← witgenToRust code "row"}\n    }"
-    | _ => return none
-  return String.intercalate "\n" blocks
+private def witnessBlocksToRust (blocks : List (WitnessBlock F)) : Except String String := do
+  let rendered ← blocks.mapM fun block =>
+    return s!"    \{\n{← witnessBlockToRust block "row"}\n    }"
+  return String.intercalate "\n" rendered
 
 private def interactionToRust (row : String) (interaction : AbstractInteraction F) : String :=
   let message := interaction.msg.toList.map (exprToRust row)
@@ -150,8 +141,8 @@ private def interactionToRust (row : String) (interaction : AbstractInteraction 
 private def interactionsToRust (row : String) (interactions : List (AbstractInteraction F)) : String :=
   s!"vec![{commaSep (interactions.map (interactionToRust row))}]"
 
-private partial def airExprToRust (cells : String) : Expression F → String
-  | .var v => s!"Into::<AB::Expr>::into({cells}[{v.index}].clone())"
+private def airExprToRust (cells : String) : Expression F → String
+  | .var cell => s!"Into::<AB::Expr>::into({cells}[{cell.index}].clone())"
   | .const value =>
       s!"Into::<AB::Expr>::into(AB::F::from_u64({FiniteField.val value}u64))"
   | .add left right =>
@@ -159,124 +150,82 @@ private partial def airExprToRust (cells : String) : Expression F → String
   | .mul left right =>
       s!"({airExprToRust cells left} * {airExprToRust cells right})"
 
-private partial def symbolicExprToRust (cells : String) : Expression F → String
-  | .var v => s!"SymbolicExpression::<AB::F>::from({cells}[{v.index}])"
+private def symbolicExprToRust (cells : String) : Expression F → String
+  | .var cell => s!"SymbolicExpression::<F>::from({cells}[{cell.index}])"
   | .const value =>
-      s!"SymbolicExpression::<AB::F>::from(AB::F::from_u64({FiniteField.val value}u64))"
+      s!"SymbolicExpression::<F>::from(F::from_u64({FiniteField.val value}u64))"
   | .add left right =>
       s!"({symbolicExprToRust cells left} + {symbolicExprToRust cells right})"
   | .mul left right =>
       s!"({symbolicExprToRust cells left} * {symbolicExprToRust cells right})"
 
-private def constraintCaseToRust (index : ℕ) (component : Component F) : String :=
-  let constraints := component.rowOperations.constraints.map (airExprToRust "local")
+private def constraintCaseToRust (index : ℕ) (component : ComponentProgram F) : String :=
+  let constraints := component.constraints.map (airExprToRust "local")
   s!"            {index + 1} => vec![{commaSep constraints}],"
 
-private def lookupToRust (cells : String) (selector : Option String)
-    (interaction : AbstractInteraction F) : String :=
+private def lookupToRust (cells : String) (interaction : AbstractInteraction F) : String :=
   let message := commaSep <| interaction.msg.toList.map (symbolicExprToRust cells)
-  let multiplicity := match selector with
-    | none => symbolicExprToRust cells interaction.mult
-    | some selector => s!"({symbolicExprToRust cells interaction.mult} * {selector})"
+  let multiplicity := symbolicExprToRust cells interaction.mult
   let (multiplicity, direction) := if interaction.assumeGuarantees then
-    (s!"-({multiplicity})", "LookupDirection::Receive")
+    (s!"-({multiplicity} * active.clone())", "LookupDirection::Receive")
   else
-    (multiplicity, "LookupDirection::Send")
-  s!"        lookups.push(Air::<AB>::register_lookup(self, Kind::Global({quoted interaction.channel.name}.into()), &[(vec![{message}], {multiplicity}, {direction})]));"
+    (s!"({multiplicity} * active.clone())", "LookupDirection::Send")
+  s!"                lookups.push(GeneratedLookup \{ channel: {quoted interaction.channel.name}.into(), message: vec![{message}], multiplicity: {multiplicity}, direction: {direction} });"
 
-private def lookupCaseToRust (index : ℕ) (cells : String) (selector : Option String)
+private def lookupCaseToRust (index : ℕ) (cells : String)
     (interactions : List (AbstractInteraction F)) : String :=
-  let lookups := String.intercalate "\n" <| interactions.map (lookupToRust cells selector)
+  let lookups := String.intercalate "\n" <| interactions.map (lookupToRust cells)
   s!"            {index} => \{\n{lookups}\n            }"
 
-private def airToRust (name : String) (ensemble : Ensemble F PublicIO) : String :=
-  let widths := "1" :: ensemble.tables.map (toString ·.width)
+private def airToRust (name : String) (program : Program F) : String :=
+  let widths := "1" :: program.components.map (toString ·.width)
   let constraintCases := String.intercalate "\n" <|
-    ensemble.tables.zipIdx.map fun (component, index) => constraintCaseToRust index component
-  let verifierSelector :=
-    "SymbolicExpression::<AB::F>::from(preprocessed_local.as_ref().expect(\"missing verifier selector\")[0])"
-  let verifierCase := lookupCaseToRust 0 "public_values" (some verifierSelector)
-    ensemble.verifierOperations.interactions
-  let tableCases := String.intercalate "\n" <| ensemble.tables.zipIdx.map fun (component, index) =>
-    lookupCaseToRust (index + 1) "local" (some verifierSelector)
-      component.rowOperations.interactions
+    program.components.zipIdx.map fun (component, index) => constraintCaseToRust index component
+  let verifierCase := lookupCaseToRust 0 "public_values" program.verifierInteractions
+  let tableCases := String.intercalate "\n" <| program.components.zipIdx.map fun (component, index) =>
+    lookupCaseToRust (index + 1) "local" component.interactions
   s!"#[derive(Clone, Debug)]\n\
-pub struct {name}Air \{ component: usize, trace_height: usize, active_rows: usize, num_lookups: usize }\n\
+pub struct {name}AirSpec;\n\
 \n\
-impl {name}Air \{\n\
-    pub fn all(trace_heights: &[usize], active_rows: &[usize]) -> Vec<Self> \{\n\
-        assert_eq!(trace_heights.len(), {ensemble.tables.length + 1});\n\
-        assert_eq!(active_rows.len(), {ensemble.tables.length + 1});\n\
-        trace_heights.iter().copied().zip(active_rows.iter().copied()).enumerate().map(|(component, (trace_height, active_rows))| Self \{ component, trace_height, active_rows, num_lookups: 0 }).collect()\n\
-    }\n\
-}\n\
+impl GeneratedAirSpec for {name}AirSpec \{\n\
+    const PUBLIC_VALUES: usize = {program.publicInputWidth};\n\
+    const WIDTHS: &'static [usize] = &[{commaSep widths}];\n\
 \n\
-impl EnsembleAir for {name}Air \{\n\
-    fn trace_height(&self) -> usize \{ self.trace_height }\n\
-}\n\
-\n\
-impl<F: Field> BaseAir<F> for {name}Air \{\n\
-    fn width(&self) -> usize \{ [{commaSep widths}][self.component] }\n\
-\n\
-    fn preprocessed_trace(&self) -> Option<RowMajorMatrix<F>> \{\n\
-        let mut selector = vec![F::ZERO; self.trace_height];\n\
-        selector[..self.active_rows].fill(F::ONE);\n\
-        Some(RowMajorMatrix::new(selector, 1))\n\
-    }\n\
-}\n\
-\n\
-impl<AB: AirBuilderWithPublicValues> Air<AB> for {name}Air\n\
-where AB::F: Field + PrimeCharacteristicRing\n\
-\{\n\
-    fn eval(&self, builder: &mut AB) \{\n\
-        let main = builder.main();\n\
-        let local = main.row_slice(0).expect(\"empty trace\");\n\
-        let preprocessed = builder.preprocessed();\n\
-        let preprocessed_local = preprocessed.as_ref().and_then(|matrix| matrix.row_slice(0)).expect(\"missing active-row selector\");\n\
-        let active = Into::<AB::Expr>::into(preprocessed_local[0].clone());\n\
-        let constraints: Vec<AB::Expr> = match self.component \{\n\
+    fn constraints<AB>(component: usize, local: &[AB::Var]) -> Vec<AB::Expr>\n\
+    where\n\
+        AB: AirBuilderWithPublicValues,\n\
+        AB::F: Field + PrimeCharacteristicRing,\n\
+    \{\n\
+        match component \{\n\
             0 => vec![],\n\
 {constraintCases}\n\
             _ => unreachable!(\"invalid generated AIR component\"),\n\
-        };\n\
-        for constraint in constraints \{ builder.assert_zero(active.clone() * constraint); }\n\
+        }\n\
     }\n\
 \n\
-    fn get_lookups(&mut self) -> Vec<Lookup<AB::F>>\n\
-    where AB: PermutationAirBuilder + AirBuilderWithPublicValues\n\
-    \{\n\
-        self.num_lookups = 0;\n\
-        let preprocessed_width = 1;\n\
-        let symbolic = SymbolicAirBuilder::<AB::F>::new(preprocessed_width, BaseAir::<AB::F>::width(self), {size PublicIO}, 0, 0);\n\
-        let main = AirBuilder::main(&symbolic);\n\
-        let local = main.row_slice(0).expect(\"empty symbolic trace\");\n\
-        let preprocessed = AirBuilder::preprocessed(&symbolic);\n\
-        let preprocessed_local = preprocessed.as_ref().and_then(|matrix| matrix.row_slice(0));\n\
-        let public_values = AirBuilderWithPublicValues::public_values(&symbolic);\n\
+    fn lookups<F: Field>(\n\
+        component: usize,\n\
+        local: &[SymbolicVariable<F>],\n\
+        public_values: &[SymbolicVariable<F>],\n\
+        active: SymbolicExpression<F>,\n\
+    ) -> Vec<GeneratedLookup<F>> \{\n\
         let mut lookups = Vec::new();\n\
-        match self.component \{\n\
+        match component \{\n\
 {verifierCase},\n\
 {tableCases}\n\
             _ => unreachable!(\"invalid generated AIR component\"),\n\
         }\n\
         lookups\n\
     }\n\
+}\n\
 \n\
-    fn add_lookup_columns(&mut self) -> Vec<usize> \{\n\
-        let index = self.num_lookups;\n\
-        self.num_lookups += 1;\n\
-        vec![index]\n\
-    }\n\
-}"
+pub type {name}Air = GeneratedAir<{name}AirSpec>;"
 
-private def componentToRust (index : ℕ) (component : Component F) : Except String String := do
-  let operations := component.rowOperations
-  let flat := operations.toFlat
-  let witgen ← witnessOpsToRust flat
-  let mutable := if flat.any fun operation =>
-    match operation with | .witness _ _ => true | _ => false then "mut " else ""
-  let interactions := interactionsToRust "row" operations.interactions
-  return s!"fn component_{index}<F: WitnessField>(input: &[F]) -> Result<Vec<F>, String> \{\n    if input.len() != {component.rowOffset} \{ return Err(format!(\"component input has width \{}, expected {component.rowOffset}\", input.len())); }\n    let {mutable}row = input.to_vec();\n{witgen}\n    if row.len() != {component.width} \{ return Err(format!(\"generated row has width \{}, expected {component.width}\", row.len())); }\n    Ok(row)\n}\n\nfn component_{index}_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> \{\n    {interactions}\n}"
+private def componentToRust (index : ℕ) (component : ComponentProgram F) : Except String String := do
+  let witgen ← witnessBlocksToRust component.witnesses
+  let mutable := if component.witnesses.isEmpty then "" else "mut "
+  let interactions := interactionsToRust "row" component.interactions
+  return s!"fn component_{index}<F: WitnessField>(input: &[F]) -> Result<Vec<F>, String> \{\n    if input.len() != {component.inputWidth} \{ return Err(format!(\"component input has width \{}, expected {component.inputWidth}\", input.len())); }\n    let {mutable}row = input.to_vec();\n{witgen}\n    if row.len() != {component.width} \{ return Err(format!(\"generated row has width \{}, expected {component.width}\", row.len())); }\n    Ok(row)\n}\n\nfn component_{index}_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> \{\n    {interactions}\n}"
 
 private def inputCellToRust : InputCell F → String
   | .message index => s!"InputCell::Message({index})"
@@ -304,15 +253,12 @@ private def modeToRust : Mode F → String
   | .fixed rows slots =>
       s!"Mode::Fixed \{ input_rows: vec![{commaSep (rows.map rowToRust)}], slots: vec![{commaSep (slots.map slotToRust)}] }"
 
-private def prelude : String := "// Generated by Clean from structured witness IR. Do not edit.\n\
+private def prelude : String := "// Generated by Clean from a typed extraction program. Do not edit.\n\
 use clean_backend::witness_generation::{Aggregation, DemandMode, Direction, EnsembleWitness, FixedSlot, InputCell, Interaction, Mode, Program, WitnessField};\n\
-use clean_backend::EnsembleAir;\n\
-use p3_air::lookup::{Direction as LookupDirection, Kind, Lookup};\n\
-use p3_air::{Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PermutationAirBuilder};\n\
+use clean_backend::{GeneratedAir, GeneratedAirSpec, GeneratedLookup};\n\
+use p3_air::lookup::Direction as LookupDirection;\n\
+use p3_air::{AirBuilderWithPublicValues, SymbolicExpression, SymbolicVariable};\n\
 use p3_field::{Field, PrimeCharacteristicRing};\n\
-use p3_matrix::dense::RowMajorMatrix;\n\
-use p3_matrix::Matrix;\n\
-use p3_uni_stark::{SymbolicAirBuilder, SymbolicExpression};\n\
 use alloc::{format, vec, vec::Vec};\n\
 use alloc::string::String;\n\
 \n\
@@ -321,21 +267,23 @@ fn safe_div(left: u64, right: u64) -> u64 { if right == 0 { 0 } else { left / ri
 #[inline(always)]\n\
 fn safe_rem(left: u64, right: u64) -> u64 { if right == 0 { 0 } else { left % right } }\n"
 
-/-- Compile an ensemble witness program to direct Rust source. -/
+/-- Render a validated extraction program as direct Rust witness and constraint code. -/
+def programToRust (name : String) (program : Program F) : Except String String := do
+  let components ← program.components.zipIdx.mapM fun (component, index) =>
+    componentToRust index component
+  let verifier := interactionsToRust "public_input" program.verifierInteractions
+  let air := airToRust name program
+  let modes := commaSep (program.modes.map modeToRust)
+  let completeCases := String.intercalate "\n" <| program.components.zipIdx.map fun (_, index) =>
+    s!"            {index} => component_{index}(input),"
+  let interactionCases := String.intercalate "\n" <| program.components.zipIdx.map fun (_, index) =>
+    s!"            {index} => component_{index}_interactions(row),"
+  return s!"{prelude}\n{String.intercalate "\n\n" components}\n\n{air}\n\npub struct {name};\n\nimpl<F: WitnessField> Program<F> for {name} \{\n    const FUEL: usize = {program.fuel};\n    const COMPONENTS: usize = {program.components.length};\n\n    fn modes() -> Vec<Mode<F>> \{ vec![{modes}] }\n\n    fn complete_row(component: usize, input: &[F]) -> Result<Vec<F>, String> \{\n        match component \{\n{completeCases}\n            _ => Err(format!(\"component index \{component} is out of bounds\")),\n        }\n    }\n\n    fn interactions(component: usize, row: &[F]) -> Vec<Interaction<F>> \{\n        match component \{\n{interactionCases}\n            _ => vec![],\n        }\n    }\n\n    fn verifier_interactions(public_input: &[F]) -> Vec<Interaction<F>> \{\n        {verifier}\n    }\n}\n\npub fn generate<F: WitnessField>(public_input: &[F]) -> Result<EnsembleWitness<F>, String> \{\n    clean_backend::witness_generation::generate::<F, {name}>(public_input)\n}\n"
+
+/-- Validate an ensemble into the typed artifact and render that artifact as Rust. -/
 def ensembleToRust (name : String) (ensemble : Ensemble F PublicIO) (config : Config F) :
     Except String String := do
-  unless config.modes.length = ensemble.tables.length do
-    throw "generation-mode count does not match ensemble component count"
-  let components ← ensemble.tables.zipIdx.mapM fun (component, index) =>
-    componentToRust index component
-  let verifier := interactionsToRust "public_input" ensemble.verifierOperations.interactions
-  let air := airToRust name ensemble
-  let components := components ++ [air]
-  let modes := commaSep (config.modes.map modeToRust)
-  let completeCases := String.intercalate "\n" <| ensemble.tables.zipIdx.map fun (_, index) =>
-    s!"            {index} => component_{index}(input),"
-  let interactionCases := String.intercalate "\n" <| ensemble.tables.zipIdx.map fun (_, index) =>
-    s!"            {index} => component_{index}_interactions(row),"
-  return s!"{prelude}\n{String.intercalate "\n\n" components}\n\npub struct {name};\n\nimpl<F: WitnessField> Program<F> for {name} \{\n    const FUEL: usize = {config.fuel};\n    const COMPONENTS: usize = {ensemble.tables.length};\n\n    fn modes() -> Vec<Mode<F>> \{ vec![{modes}] }\n\n    fn complete_row(component: usize, input: &[F]) -> Result<Vec<F>, String> \{\n        match component \{\n{completeCases}\n            _ => Err(format!(\"component index \{component} is out of bounds\")),\n        }\n    }\n\n    fn interactions(component: usize, row: &[F]) -> Vec<Interaction<F>> \{\n        match component \{\n{interactionCases}\n            _ => vec![],\n        }\n    }\n\n    fn verifier_interactions(public_input: &[F]) -> Vec<Interaction<F>> \{\n        {verifier}\n    }\n}\n\npub fn generate<F: WitnessField>(public_input: &[F]) -> Result<EnsembleWitness<F>, String> \{\n    clean_backend::witness_generation::generate::<F, {name}>(public_input)\n}\n"
+  let program ← lower ensemble config |>.mapError toString
+  programToRust name program
 
 end Air.Flat.Extraction.Rust

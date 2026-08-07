@@ -1,4 +1,5 @@
 import Clean.Examples.FibonacciVm.Circuit
+import Clean.Air.Extraction.Lower
 import Clean.Utils.Primes
 
 namespace Air.Flat.WitnessGenerationTest
@@ -59,5 +60,19 @@ private def invalidRejected : Bool :=
 
 /-- A final state not reached within the configured fuel fails generation. -/
 example : invalidRejected = true := by native_decide
+
+private def noData : ProverData (F pBabybear) := fun _ _ => #[]
+
+private def extractedFirstRow : Except String (Array (F pBabybear)) := do
+  let program ← Air.Flat.Extraction.lower
+    (fibonacciEnsemble (p := pBabybear)).ensemble
+    (FibonacciWitness.config (p := pBabybear) 1000)
+    |>.mapError toString
+  let some component := program.components[0]?
+    | throw "extracted program has no Fibonacci component"
+  component.completeRow #[1, 0, 0, 1] noData
+
+/-- The typed extraction semantics execute the same row-local witness IR as the source circuit. -/
+example : extractedFirstRow = .ok #[1, 0, 0, 1, 1] := by native_decide
 
 end Air.Flat.WitnessGenerationTest
