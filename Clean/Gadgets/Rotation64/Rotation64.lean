@@ -73,6 +73,4 @@ def circuit (offset : Fin 64) : FormalCircuit (F p) U64 U64 where
   Spec := Spec offset
   soundness := soundness offset
   completeness := completeness offset
-  computableWitnesses := by
-    computable_witnesses [main, output, Rotation64Bits.output, Vector.getElem_ofFn]
 end Gadgets.Rotation64

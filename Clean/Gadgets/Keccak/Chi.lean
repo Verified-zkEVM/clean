@@ -62,5 +62,5 @@ def circuit : FormalCircuit (F p) KeccakState KeccakState where
   computableWitnesses := by
     -- reduce the children's localLength/output metadata: the chained offsets otherwise
     -- leave opaque sums that send grind's case-splitting off a cliff
-    computable_witnesses [Not.circuit, And.And64.circuit, Xor64.circuit]
+    computable_witnesses [Not.circuit]
 end Gadgets.Keccak256.Chi

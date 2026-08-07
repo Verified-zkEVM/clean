@@ -108,8 +108,7 @@ def circuit : FormalCircuit (F p) Inputs U32 where
 lemma output_congr {env env' : ProverEnvironment (F p)} {v : Var Inputs (F p)} {n : ℕ}
     (h : env.AgreesBelow (n + 4) env') :
     eval env.toEnvironment ((circuit (p:=p)).output v n) =
-      eval env'.toEnvironment ((circuit (p:=p)).output v n) := by
-  rw [CircuitType.eval_expression, CircuitType.eval_expression]
-  exact ProvableType.eval_varFromOffset_congr (M := U32) h
+      eval env'.toEnvironment ((circuit (p:=p)).output v n) :=
+  ProverEnvironment.eval_varFromOffset_congr (M := U32) h
 
 end Gadgets.Xor32

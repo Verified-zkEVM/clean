@@ -734,9 +734,22 @@ def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : TacticM Unit :
           replaceMainGoal []
           return
       throwError "syntacticAssumption: no match"
+    -- reducible type aliases (`BLAKE3State := ProvableVector U32 16`) hide the Vector
+    -- type from `Vector.ext_iff`'s discrimination key; retype the equality at the
+    -- reducible normal form (a defeq `change`, cheap alias unfolding only)
+    let retypeAliasEq : TacticM Unit := withMainContext do
+      let t := (← instantiateMVars (← getMainTarget)).consumeMData
+      let some (T, lhs, rhs) := t.eq? | return
+      let T' ← withReducible <| whnf T
+      if T' == T then return
+      unless T'.getAppFn.isConstOf ``Vector do return
+      let u ← getLevel T'
+      let eq' := mkApp3 (mkConst ``Eq [u]) T' lhs rhs
+      liftMetaTactic fun g => do return [← g.change eq']
     let evalCloseRun : TacticM Unit := do
       if (← getGoals).isEmpty then return
       try clearOpsLengthHyps catch _ => pure ()
+      try retypeAliasEq catch _ => pure ()
       if (← try syntacticAssumption; pure true catch _ => pure false) then return
       -- expose labeled helper metadata before routing: the expansion produces the
       -- `varFromOffset` atoms the route test looks for

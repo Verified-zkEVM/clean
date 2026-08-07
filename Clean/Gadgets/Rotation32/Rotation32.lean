@@ -74,8 +74,7 @@ def circuit (offset : Fin 32) : FormalCircuit (F p) U32 U32 where
   soundness := soundness offset
   completeness := completeness offset
   computableWitnesses := by
-    computable_witnesses [main, output, Rotation32Bits.output, U32.ByteVector.eval_fromLimbs,
-      Vector.getElem_ofFn]
+    computable_witnesses [main, output, Rotation32Bits.output, U32.ByteVector.eval_fromLimbs]
 
 /-- The output is a fresh witness window (limb recombination of the bit witnesses):
 evaluating it reads the environment only below `n + localLength`, independently of the

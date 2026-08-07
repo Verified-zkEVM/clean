@@ -65,6 +65,4 @@ def circuit : FormalCircuit (F p) KeccakState KeccakState where
   Spec := Spec
   soundness := soundness
   completeness := completeness
-  computableWitnesses := by
-    computable_witnesses [main, Gadgets.Rotation64.output, Vector.getElem_mapIdx]
 end Gadgets.Keccak256.RhoPi

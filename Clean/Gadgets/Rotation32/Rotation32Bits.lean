@@ -118,5 +118,5 @@ def circuit (offset : Fin 8) : FormalCircuit (F p) U32 U32 where
   completeness := completeness offset
   computableWitnesses := by
     computable_witnesses [main, output, U32.ByteVector.getElem_eval_toLimbs,
-      U32.ByteVector.eval_fromLimbs, Vector.getElem_ofFn]
+      U32.ByteVector.eval_fromLimbs]
 end Gadgets.Rotation32Bits
