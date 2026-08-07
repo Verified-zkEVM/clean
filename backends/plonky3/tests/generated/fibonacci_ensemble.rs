@@ -1696,14 +1696,14 @@ fn component_2_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
 }
 
 #[derive(Clone, Debug)]
-pub struct FibonacciWitnessProgramAir {
+pub struct FibonacciEnsembleProgramAir {
     component: usize,
     trace_height: usize,
     active_rows: usize,
     num_lookups: usize,
 }
 
-impl FibonacciWitnessProgramAir {
+impl FibonacciEnsembleProgramAir {
     pub fn all(trace_heights: &[usize], active_rows: &[usize]) -> Vec<Self> {
         assert_eq!(trace_heights.len(), 4);
         assert_eq!(active_rows.len(), 4);
@@ -1722,13 +1722,13 @@ impl FibonacciWitnessProgramAir {
     }
 }
 
-impl EnsembleAir for FibonacciWitnessProgramAir {
+impl EnsembleAir for FibonacciEnsembleProgramAir {
     fn trace_height(&self) -> usize {
         self.trace_height
     }
 }
 
-impl<F: Field> BaseAir<F> for FibonacciWitnessProgramAir {
+impl<F: Field> BaseAir<F> for FibonacciEnsembleProgramAir {
     fn width(&self) -> usize {
         [1, 5, 5, 256][self.component]
     }
@@ -1740,7 +1740,7 @@ impl<F: Field> BaseAir<F> for FibonacciWitnessProgramAir {
     }
 }
 
-impl<AB: AirBuilderWithPublicValues> Air<AB> for FibonacciWitnessProgramAir
+impl<AB: AirBuilderWithPublicValues> Air<AB> for FibonacciEnsembleProgramAir
 where
     AB::F: Field + PrimeCharacteristicRing,
 {
@@ -5532,9 +5532,9 @@ where
     }
 }
 
-pub struct FibonacciWitnessProgram;
+pub struct FibonacciEnsembleProgram;
 
-impl<F: WitnessField> Program<F> for FibonacciWitnessProgram {
+impl<F: WitnessField> Program<F> for FibonacciEnsembleProgram {
     const FUEL: usize = 100000;
     const COMPONENTS: usize = 3;
 
@@ -7664,5 +7664,5 @@ impl<F: WitnessField> Program<F> for FibonacciWitnessProgram {
 }
 
 pub fn generate<F: WitnessField>(public_input: &[F]) -> Result<EnsembleWitness<F>, String> {
-    clean_backend::witness_generation::generate::<F, FibonacciWitnessProgram>(public_input)
+    clean_backend::witness_generation::generate::<F, FibonacciEnsembleProgram>(public_input)
 }

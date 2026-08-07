@@ -1,14 +1,16 @@
 import Clean.Air.WitnessExport
 
 /-!
-# Direct Rust extraction for ensemble witness generation
+# Direct Rust extraction for AIR ensembles
 
-This compiler lowers structured witness IR and channel-generation metadata to ordinary
-Rust functions. The generated proving-time path contains no JSON parser or IR
-interpreter: witness expressions, row interactions, and generation modes are Rust code.
+This compiler lowers an ensemble's constraints, channel interactions, structured witness
+IR, and channel-generation metadata to ordinary Rust. The generated proving-time path
+contains no JSON parser or IR interpreter.
 -/
 
-namespace Air.Flat.WitnessGeneration.Rust
+namespace Air.Flat.EnsembleRust
+
+open Air.Flat.WitnessGeneration
 
 variable {F : Type} [FiniteField F] [DecidableEq F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
@@ -336,4 +338,4 @@ def ensembleToRust (name : String) (ensemble : Ensemble F PublicIO) (config : Co
     s!"            {index} => component_{index}_interactions(row),"
   return s!"{prelude}\n{String.intercalate "\n\n" components}\n\npub struct {name};\n\nimpl<F: WitnessField> Program<F> for {name} \{\n    const FUEL: usize = {config.fuel};\n    const COMPONENTS: usize = {ensemble.tables.length};\n\n    fn modes() -> Vec<Mode<F>> \{ vec![{modes}] }\n\n    fn complete_row(component: usize, input: &[F]) -> Result<Vec<F>, String> \{\n        match component \{\n{completeCases}\n            _ => Err(format!(\"component index \{component} is out of bounds\")),\n        }\n    }\n\n    fn interactions(component: usize, row: &[F]) -> Vec<Interaction<F>> \{\n        match component \{\n{interactionCases}\n            _ => vec![],\n        }\n    }\n\n    fn verifier_interactions(public_input: &[F]) -> Vec<Interaction<F>> \{\n        {verifier}\n    }\n}\n\npub fn generate<F: WitnessField>(public_input: &[F]) -> Result<EnsembleWitness<F>, String> \{\n    clean_backend::witness_generation::generate::<F, {name}>(public_input)\n}\n"
 
-end Air.Flat.WitnessGeneration.Rust
+end Air.Flat.EnsembleRust
