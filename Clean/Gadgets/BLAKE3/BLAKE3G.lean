@@ -133,468 +133,40 @@ lemma state_elem_congr {env env' : ProverEnvironment (F p)}
   (getElem_eval_vector env.toEnvironment state i.val i.isLt).trans
     ((congrArg (fun s : BLAKE3State (F p) => s[i]) h1).trans
       (getElem_eval_vector env'.toEnvironment state i.val i.isLt).symm)
+private def out1 (_a b _c _d : Fin 16) (state : BLAKE3State (Expression (F p))) (x _y : U32 (Expression (F p))) (n : ℕ) := (Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n
+private def out2 (a b c d : Fin 16) (state : BLAKE3State (Expression (F p))) (x y : U32 (Expression (F p))) (n : ℕ) := (Addition32.circuit (p:=p)).output ⟨state[a], out1 a b c d state x y n⟩ (n + 8)
+private def out3 (a b c d : Fin 16) (state : BLAKE3State (Expression (F p))) (x y : U32 (Expression (F p))) (n : ℕ) := (Xor32.circuit (p:=p)).output ⟨state[d], out2 a b c d state x y n⟩ (n + 16)
+private def out4 (a b c d : Fin 16) (state : BLAKE3State (Expression (F p))) (x y : U32 (Expression (F p))) (n : ℕ) := (Rotation32.circuit (p:=p) 16).output (out3 a b c d state x y n) (n + 20)
+private def out5 (a b c d : Fin 16) (state : BLAKE3State (Expression (F p))) (x y : U32 (Expression (F p))) (n : ℕ) := (Addition32.circuit (p:=p)).output ⟨state[c], out4 a b c d state x y n⟩ (n + 28)
+private def out6 (a b c d : Fin 16) (state : BLAKE3State (Expression (F p))) (x y : U32 (Expression (F p))) (n : ℕ) := (Xor32.circuit (p:=p)).output ⟨state[b], out5 a b c d state x y n⟩ (n + 36)
+private def out7 (a b c d : Fin 16) (state : BLAKE3State (Expression (F p))) (x y : U32 (Expression (F p))) (n : ℕ) := (Rotation32.circuit (p:=p) 12).output (out6 a b c d state x y n) (n + 40)
+private def out8 (a b c d : Fin 16) (state : BLAKE3State (Expression (F p))) (x y : U32 (Expression (F p))) (n : ℕ) := (Addition32.circuit (p:=p)).output ⟨out7 a b c d state x y n, y⟩ (n + 48)
+private def out9 (a b c d : Fin 16) (state : BLAKE3State (Expression (F p))) (x y : U32 (Expression (F p))) (n : ℕ) := (Addition32.circuit (p:=p)).output ⟨out2 a b c d state x y n, out8 a b c d state x y n⟩ (n + 56)
+private def out10 (a b c d : Fin 16) (state : BLAKE3State (Expression (F p))) (x y : U32 (Expression (F p))) (n : ℕ) := (Xor32.circuit (p:=p)).output ⟨out4 a b c d state x y n, out9 a b c d state x y n⟩ (n + 64)
+private def out11 (a b c d : Fin 16) (state : BLAKE3State (Expression (F p))) (x y : U32 (Expression (F p))) (n : ℕ) := (Rotation32.circuit (p:=p) 8).output (out10 a b c d state x y n) (n + 68)
+private def out12 (a b c d : Fin 16) (state : BLAKE3State (Expression (F p))) (x y : U32 (Expression (F p))) (n : ℕ) := (Addition32.circuit (p:=p)).output ⟨out5 a b c d state x y n, out11 a b c d state x y n⟩ (n + 76)
+private def out13 (a b c d : Fin 16) (state : BLAKE3State (Expression (F p))) (x y : U32 (Expression (F p))) (n : ℕ) := (Xor32.circuit (p:=p)).output ⟨out7 a b c d state x y n, out12 a b c d state x y n⟩ (n + 84)
 
-private lemma node1_out_congr {env env' : ProverEnvironment (F p)}
-    {_a b _c _d : Fin 16} {state : BLAKE3State (Expression (F p))}
-    {x y : U32 (Expression (F p))} {n : ℕ}
-    (h1 : eval env.toEnvironment state = eval env'.toEnvironment state)
-    (h2 : (eval env.toEnvironment x : U32 (F p)) = eval env'.toEnvironment x)
-    (_h3 : (eval env.toEnvironment y : U32 (F p)) = eval env'.toEnvironment y)
-    (h_agrees : env.AgreesBelow (n + 8) env') :
-    eval env.toEnvironment
-        ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n) =
-      eval env'.toEnvironment
-        ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n) := by
-  have eA : ∀ v, (Addition32.circuit (p:=p)).localLength v = 8 := fun _ => rfl
-  have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
-  have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
-    fun _ _ => rfl
-  exact FormalCircuit.output_of_input_eq _
-    (by simp only [circuit_norm]; exact ⟨state_elem_congr h1 b, h2⟩)
-    (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eA]; omega)))
+section
+variable {env env' : ProverEnvironment (F p)} {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))} {x y : U32 (Expression (F p))} {n : ℕ}
+variable (h1 : eval env.toEnvironment state = eval env'.toEnvironment state) (h2 : (eval env.toEnvironment x : U32 (F p)) = eval env'.toEnvironment x) (h3 : (eval env.toEnvironment y : U32 (F p)) = eval env'.toEnvironment y)
+include h1 h2 h3
 
-private lemma node2_out_congr {env env' : ProverEnvironment (F p)}
-    {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))}
-    {x y : U32 (Expression (F p))} {n : ℕ}
-    (h1 : eval env.toEnvironment state = eval env'.toEnvironment state)
-    (h2 : (eval env.toEnvironment x : U32 (F p)) = eval env'.toEnvironment x)
-    (h3 : (eval env.toEnvironment y : U32 (F p)) = eval env'.toEnvironment y)
-    (h_agrees : env.AgreesBelow (n + 16) env') :
-    eval env.toEnvironment
-        ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8)) =
-      eval env'.toEnvironment
-        ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8)) := by
-  have eA : ∀ v, (Addition32.circuit (p:=p)).localLength v = 8 := fun _ => rfl
-  have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
-  have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
-    fun _ _ => rfl
-  have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  exact FormalCircuit.output_of_input_eq _
-    (by simp only [circuit_norm]; exact ⟨state_elem_congr h1 a, o1⟩)
-    (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eA]; omega)))
+omit h3 in private lemma node1_out_congr (h_agrees : env.AgreesBelow (n + 8) env') : eval env.toEnvironment (out1 a b c d state x y n) = eval env'.toEnvironment (out1 a b c d state x y n) := FormalCircuit.output_of_input_eq _ (by simp only [circuit_norm]; exact ⟨state_elem_congr h1 b, h2⟩) (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [ComputableWitnesses.reduceLocalLength]; omega))
+omit h3 in private lemma node2_out_congr (h_agrees : env.AgreesBelow (n + 16) env') : eval env.toEnvironment (out2 a b c d state x y n) = eval env'.toEnvironment (out2 a b c d state x y n) := FormalCircuit.output_of_input_eq _ (by simp only [circuit_norm]; exact ⟨state_elem_congr h1 a, node1_out_congr h1 h2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))⟩) (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [ComputableWitnesses.reduceLocalLength]; omega))
+omit h3 in private lemma node3_out_congr (h_agrees : env.AgreesBelow (n + 20) env') : eval env.toEnvironment (out3 a b c d state x y n) = eval env'.toEnvironment (out3 a b c d state x y n) := FormalCircuit.output_of_input_eq _ (by simp only [circuit_norm]; exact ⟨state_elem_congr h1 d, node2_out_congr h1 h2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))⟩) (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [ComputableWitnesses.reduceLocalLength]; omega))
+omit h3 in private lemma node4_out_congr (h_agrees : env.AgreesBelow (n + 28) env') : eval env.toEnvironment (out4 a b c d state x y n) = eval env'.toEnvironment (out4 a b c d state x y n) := FormalCircuit.output_of_input_eq _ (node3_out_congr h1 h2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))) (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [ComputableWitnesses.reduceLocalLength]; omega))
+omit h3 in private lemma node5_out_congr (h_agrees : env.AgreesBelow (n + 36) env') : eval env.toEnvironment (out5 a b c d state x y n) = eval env'.toEnvironment (out5 a b c d state x y n) := FormalCircuit.output_of_input_eq _ (by simp only [circuit_norm]; exact ⟨state_elem_congr h1 c, node4_out_congr h1 h2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))⟩) (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [ComputableWitnesses.reduceLocalLength]; omega))
+omit h3 in private lemma node6_out_congr (h_agrees : env.AgreesBelow (n + 40) env') : eval env.toEnvironment (out6 a b c d state x y n) = eval env'.toEnvironment (out6 a b c d state x y n) := FormalCircuit.output_of_input_eq _ (by simp only [circuit_norm]; exact ⟨state_elem_congr h1 b, node5_out_congr h1 h2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))⟩) (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [ComputableWitnesses.reduceLocalLength]; omega))
+omit h3 in private lemma node7_out_congr (h_agrees : env.AgreesBelow (n + 48) env') : eval env.toEnvironment (out7 a b c d state x y n) = eval env'.toEnvironment (out7 a b c d state x y n) := FormalCircuit.output_of_input_eq _ (node6_out_congr h1 h2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))) (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [ComputableWitnesses.reduceLocalLength]; omega))
+private lemma node8_out_congr (h_agrees : env.AgreesBelow (n + 56) env') : eval env.toEnvironment (out8 a b c d state x y n) = eval env'.toEnvironment (out8 a b c d state x y n) := FormalCircuit.output_of_input_eq _ (by simp only [circuit_norm]; exact ⟨node7_out_congr h1 h2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega)), h3⟩) (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [ComputableWitnesses.reduceLocalLength]; omega))
+private lemma node9_out_congr (h_agrees : env.AgreesBelow (n + 64) env') : eval env.toEnvironment (out9 a b c d state x y n) = eval env'.toEnvironment (out9 a b c d state x y n) := FormalCircuit.output_of_input_eq _ (by simp only [circuit_norm]; exact ⟨node2_out_congr h1 h2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega)), node8_out_congr h1 h2 h3 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))⟩) (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [ComputableWitnesses.reduceLocalLength]; omega))
+private lemma node10_out_congr (h_agrees : env.AgreesBelow (n + 68) env') : eval env.toEnvironment (out10 a b c d state x y n) = eval env'.toEnvironment (out10 a b c d state x y n) := FormalCircuit.output_of_input_eq _ (by simp only [circuit_norm]; exact ⟨node4_out_congr h1 h2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega)), node9_out_congr h1 h2 h3 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))⟩) (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [ComputableWitnesses.reduceLocalLength]; omega))
+private lemma node11_out_congr (h_agrees : env.AgreesBelow (n + 76) env') : eval env.toEnvironment (out11 a b c d state x y n) = eval env'.toEnvironment (out11 a b c d state x y n) := FormalCircuit.output_of_input_eq _ (node10_out_congr h1 h2 h3 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))) (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [ComputableWitnesses.reduceLocalLength]; omega))
+private lemma node12_out_congr (h_agrees : env.AgreesBelow (n + 84) env') : eval env.toEnvironment (out12 a b c d state x y n) = eval env'.toEnvironment (out12 a b c d state x y n) := FormalCircuit.output_of_input_eq _ (by simp only [circuit_norm]; exact ⟨node5_out_congr h1 h2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega)), node11_out_congr h1 h2 h3 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))⟩) (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [ComputableWitnesses.reduceLocalLength]; omega))
+private lemma node13_out_congr (h_agrees : env.AgreesBelow (n + 88) env') : eval env.toEnvironment (out13 a b c d state x y n) = eval env'.toEnvironment (out13 a b c d state x y n) := FormalCircuit.output_of_input_eq _ (by simp only [circuit_norm]; exact ⟨node7_out_congr h1 h2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega)), node12_out_congr h1 h2 h3 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))⟩) (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [ComputableWitnesses.reduceLocalLength]; omega))
 
-private lemma node3_out_congr {env env' : ProverEnvironment (F p)}
-    {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))}
-    {x y : U32 (Expression (F p))} {n : ℕ}
-    (h1 : eval env.toEnvironment state = eval env'.toEnvironment state)
-    (h2 : (eval env.toEnvironment x : U32 (F p)) = eval env'.toEnvironment x)
-    (h3 : (eval env.toEnvironment y : U32 (F p)) = eval env'.toEnvironment y)
-    (h_agrees : env.AgreesBelow (n + 20) env') :
-    eval env.toEnvironment
-        ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) =
-      eval env'.toEnvironment
-        ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) := by
-  have eA : ∀ v, (Addition32.circuit (p:=p)).localLength v = 8 := fun _ => rfl
-  have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
-  have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
-    fun _ _ => rfl
-  have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  exact FormalCircuit.output_of_input_eq _
-    (by simp only [circuit_norm]; exact ⟨state_elem_congr h1 d, o2⟩)
-    (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eX]; omega)))
-
-private lemma node4_out_congr {env env' : ProverEnvironment (F p)}
-    {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))}
-    {x y : U32 (Expression (F p))} {n : ℕ}
-    (h1 : eval env.toEnvironment state = eval env'.toEnvironment state)
-    (h2 : (eval env.toEnvironment x : U32 (F p)) = eval env'.toEnvironment x)
-    (h3 : (eval env.toEnvironment y : U32 (F p)) = eval env'.toEnvironment y)
-    (h_agrees : env.AgreesBelow (n + 28) env') :
-    eval env.toEnvironment
-        ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20)) =
-      eval env'.toEnvironment
-        ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20)) := by
-  have eA : ∀ v, (Addition32.circuit (p:=p)).localLength v = 8 := fun _ => rfl
-  have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
-  have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
-    fun _ _ => rfl
-  have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o3 := node3_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  exact FormalCircuit.output_of_input_eq _
-    o3
-    (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eR]; omega)))
-
-private lemma node5_out_congr {env env' : ProverEnvironment (F p)}
-    {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))}
-    {x y : U32 (Expression (F p))} {n : ℕ}
-    (h1 : eval env.toEnvironment state = eval env'.toEnvironment state)
-    (h2 : (eval env.toEnvironment x : U32 (F p)) = eval env'.toEnvironment x)
-    (h3 : (eval env.toEnvironment y : U32 (F p)) = eval env'.toEnvironment y)
-    (h_agrees : env.AgreesBelow (n + 36) env') :
-    eval env.toEnvironment
-        ((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28)) =
-      eval env'.toEnvironment
-        ((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28)) := by
-  have eA : ∀ v, (Addition32.circuit (p:=p)).localLength v = 8 := fun _ => rfl
-  have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
-  have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
-    fun _ _ => rfl
-  have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o3 := node3_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o4 := node4_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  exact FormalCircuit.output_of_input_eq _
-    (by simp only [circuit_norm]; exact ⟨state_elem_congr h1 c, o4⟩)
-    (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eA]; omega)))
-
-private lemma node6_out_congr {env env' : ProverEnvironment (F p)}
-    {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))}
-    {x y : U32 (Expression (F p))} {n : ℕ}
-    (h1 : eval env.toEnvironment state = eval env'.toEnvironment state)
-    (h2 : (eval env.toEnvironment x : U32 (F p)) = eval env'.toEnvironment x)
-    (h3 : (eval env.toEnvironment y : U32 (F p)) = eval env'.toEnvironment y)
-    (h_agrees : env.AgreesBelow (n + 40) env') :
-    eval env.toEnvironment
-        ((Xor32.circuit (p:=p)).output ⟨state[b], ((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28))⟩ (n + 36)) =
-      eval env'.toEnvironment
-        ((Xor32.circuit (p:=p)).output ⟨state[b], ((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28))⟩ (n + 36)) := by
-  have eA : ∀ v, (Addition32.circuit (p:=p)).localLength v = 8 := fun _ => rfl
-  have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
-  have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
-    fun _ _ => rfl
-  have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o3 := node3_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o4 := node4_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o5 := node5_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  exact FormalCircuit.output_of_input_eq _
-    (by simp only [circuit_norm]; exact ⟨state_elem_congr h1 b, o5⟩)
-    (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eX]; omega)))
-
-private lemma node7_out_congr {env env' : ProverEnvironment (F p)}
-    {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))}
-    {x y : U32 (Expression (F p))} {n : ℕ}
-    (h1 : eval env.toEnvironment state = eval env'.toEnvironment state)
-    (h2 : (eval env.toEnvironment x : U32 (F p)) = eval env'.toEnvironment x)
-    (h3 : (eval env.toEnvironment y : U32 (F p)) = eval env'.toEnvironment y)
-    (h_agrees : env.AgreesBelow (n + 48) env') :
-    eval env.toEnvironment
-        ((Rotation32.circuit (p:=p) 12).output ((Xor32.circuit (p:=p)).output ⟨state[b], ((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28))⟩ (n + 36)) (n + 40)) =
-      eval env'.toEnvironment
-        ((Rotation32.circuit (p:=p) 12).output ((Xor32.circuit (p:=p)).output ⟨state[b], ((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28))⟩ (n + 36)) (n + 40)) := by
-  have eA : ∀ v, (Addition32.circuit (p:=p)).localLength v = 8 := fun _ => rfl
-  have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
-  have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
-    fun _ _ => rfl
-  have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o3 := node3_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o4 := node4_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o5 := node5_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o6 := node6_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  exact FormalCircuit.output_of_input_eq _
-    o6
-    (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eR]; omega)))
-
-private lemma node8_out_congr {env env' : ProverEnvironment (F p)}
-    {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))}
-    {x y : U32 (Expression (F p))} {n : ℕ}
-    (h1 : eval env.toEnvironment state = eval env'.toEnvironment state)
-    (h2 : (eval env.toEnvironment x : U32 (F p)) = eval env'.toEnvironment x)
-    (h3 : (eval env.toEnvironment y : U32 (F p)) = eval env'.toEnvironment y)
-    (h_agrees : env.AgreesBelow (n + 56) env') :
-    eval env.toEnvironment
-        ((Addition32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 12).output ((Xor32.circuit (p:=p)).output ⟨state[b], ((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28))⟩ (n + 36)) (n + 40)), y⟩ (n + 48)) =
-      eval env'.toEnvironment
-        ((Addition32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 12).output ((Xor32.circuit (p:=p)).output ⟨state[b], ((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28))⟩ (n + 36)) (n + 40)), y⟩ (n + 48)) := by
-  have eA : ∀ v, (Addition32.circuit (p:=p)).localLength v = 8 := fun _ => rfl
-  have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
-  have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
-    fun _ _ => rfl
-  have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o3 := node3_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o4 := node4_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o5 := node5_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o6 := node6_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o7 := node7_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  exact FormalCircuit.output_of_input_eq _
-    (by simp only [circuit_norm]; exact ⟨o7, h3⟩)
-    (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eA]; omega)))
-
-private lemma node9_out_congr {env env' : ProverEnvironment (F p)}
-    {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))}
-    {x y : U32 (Expression (F p))} {n : ℕ}
-    (h1 : eval env.toEnvironment state = eval env'.toEnvironment state)
-    (h2 : (eval env.toEnvironment x : U32 (F p)) = eval env'.toEnvironment x)
-    (h3 : (eval env.toEnvironment y : U32 (F p)) = eval env'.toEnvironment y)
-    (h_agrees : env.AgreesBelow (n + 64) env') :
-    eval env.toEnvironment
-        ((Addition32.circuit (p:=p)).output ⟨((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8)), ((Addition32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 12).output ((Xor32.circuit (p:=p)).output ⟨state[b], ((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28))⟩ (n + 36)) (n + 40)), y⟩ (n + 48))⟩ (n + 56)) =
-      eval env'.toEnvironment
-        ((Addition32.circuit (p:=p)).output ⟨((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8)), ((Addition32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 12).output ((Xor32.circuit (p:=p)).output ⟨state[b], ((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28))⟩ (n + 36)) (n + 40)), y⟩ (n + 48))⟩ (n + 56)) := by
-  have eA : ∀ v, (Addition32.circuit (p:=p)).localLength v = 8 := fun _ => rfl
-  have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
-  have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
-    fun _ _ => rfl
-  have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o3 := node3_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o4 := node4_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o5 := node5_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o6 := node6_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o7 := node7_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o8 := node8_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  exact FormalCircuit.output_of_input_eq _
-    (by simp only [circuit_norm]; exact ⟨o2, o8⟩)
-    (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eA]; omega)))
-
-private lemma node10_out_congr {env env' : ProverEnvironment (F p)}
-    {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))}
-    {x y : U32 (Expression (F p))} {n : ℕ}
-    (h1 : eval env.toEnvironment state = eval env'.toEnvironment state)
-    (h2 : (eval env.toEnvironment x : U32 (F p)) = eval env'.toEnvironment x)
-    (h3 : (eval env.toEnvironment y : U32 (F p)) = eval env'.toEnvironment y)
-    (h_agrees : env.AgreesBelow (n + 68) env') :
-    eval env.toEnvironment
-        ((Xor32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20)), ((Addition32.circuit (p:=p)).output ⟨((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8)), ((Addition32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 12).output ((Xor32.circuit (p:=p)).output ⟨state[b], ((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28))⟩ (n + 36)) (n + 40)), y⟩ (n + 48))⟩ (n + 56))⟩ (n + 64)) =
-      eval env'.toEnvironment
-        ((Xor32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20)), ((Addition32.circuit (p:=p)).output ⟨((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8)), ((Addition32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 12).output ((Xor32.circuit (p:=p)).output ⟨state[b], ((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28))⟩ (n + 36)) (n + 40)), y⟩ (n + 48))⟩ (n + 56))⟩ (n + 64)) := by
-  have eA : ∀ v, (Addition32.circuit (p:=p)).localLength v = 8 := fun _ => rfl
-  have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
-  have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
-    fun _ _ => rfl
-  have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o3 := node3_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o4 := node4_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o5 := node5_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o6 := node6_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o7 := node7_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o8 := node8_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o9 := node9_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  exact FormalCircuit.output_of_input_eq _
-    (by simp only [circuit_norm]; exact ⟨o4, o9⟩)
-    (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eX]; omega)))
-
-private lemma node11_out_congr {env env' : ProverEnvironment (F p)}
-    {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))}
-    {x y : U32 (Expression (F p))} {n : ℕ}
-    (h1 : eval env.toEnvironment state = eval env'.toEnvironment state)
-    (h2 : (eval env.toEnvironment x : U32 (F p)) = eval env'.toEnvironment x)
-    (h3 : (eval env.toEnvironment y : U32 (F p)) = eval env'.toEnvironment y)
-    (h_agrees : env.AgreesBelow (n + 76) env') :
-    eval env.toEnvironment
-        ((Rotation32.circuit (p:=p) 8).output ((Xor32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20)), ((Addition32.circuit (p:=p)).output ⟨((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8)), ((Addition32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 12).output ((Xor32.circuit (p:=p)).output ⟨state[b], ((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28))⟩ (n + 36)) (n + 40)), y⟩ (n + 48))⟩ (n + 56))⟩ (n + 64)) (n + 68)) =
-      eval env'.toEnvironment
-        ((Rotation32.circuit (p:=p) 8).output ((Xor32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20)), ((Addition32.circuit (p:=p)).output ⟨((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8)), ((Addition32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 12).output ((Xor32.circuit (p:=p)).output ⟨state[b], ((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28))⟩ (n + 36)) (n + 40)), y⟩ (n + 48))⟩ (n + 56))⟩ (n + 64)) (n + 68)) := by
-  have eA : ∀ v, (Addition32.circuit (p:=p)).localLength v = 8 := fun _ => rfl
-  have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
-  have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
-    fun _ _ => rfl
-  have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o3 := node3_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o4 := node4_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o5 := node5_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o6 := node6_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o7 := node7_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o8 := node8_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o9 := node9_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o10 := node10_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  exact FormalCircuit.output_of_input_eq _
-    o10
-    (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eR]; omega)))
-
-private lemma node12_out_congr {env env' : ProverEnvironment (F p)}
-    {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))}
-    {x y : U32 (Expression (F p))} {n : ℕ}
-    (h1 : eval env.toEnvironment state = eval env'.toEnvironment state)
-    (h2 : (eval env.toEnvironment x : U32 (F p)) = eval env'.toEnvironment x)
-    (h3 : (eval env.toEnvironment y : U32 (F p)) = eval env'.toEnvironment y)
-    (h_agrees : env.AgreesBelow (n + 84) env') :
-    eval env.toEnvironment
-        ((Addition32.circuit (p:=p)).output ⟨((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28)), ((Rotation32.circuit (p:=p) 8).output ((Xor32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20)), ((Addition32.circuit (p:=p)).output ⟨((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8)), ((Addition32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 12).output ((Xor32.circuit (p:=p)).output ⟨state[b], ((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28))⟩ (n + 36)) (n + 40)), y⟩ (n + 48))⟩ (n + 56))⟩ (n + 64)) (n + 68))⟩ (n + 76)) =
-      eval env'.toEnvironment
-        ((Addition32.circuit (p:=p)).output ⟨((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28)), ((Rotation32.circuit (p:=p) 8).output ((Xor32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20)), ((Addition32.circuit (p:=p)).output ⟨((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8)), ((Addition32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 12).output ((Xor32.circuit (p:=p)).output ⟨state[b], ((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28))⟩ (n + 36)) (n + 40)), y⟩ (n + 48))⟩ (n + 56))⟩ (n + 64)) (n + 68))⟩ (n + 76)) := by
-  have eA : ∀ v, (Addition32.circuit (p:=p)).localLength v = 8 := fun _ => rfl
-  have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
-  have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
-    fun _ _ => rfl
-  have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o3 := node3_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o4 := node4_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o5 := node5_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o6 := node6_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o7 := node7_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o8 := node8_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o9 := node9_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o10 := node10_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o11 := node11_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  exact FormalCircuit.output_of_input_eq _
-    (by simp only [circuit_norm]; exact ⟨o5, o11⟩)
-    (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eA]; omega)))
-
-private lemma node13_out_congr {env env' : ProverEnvironment (F p)}
-    {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))}
-    {x y : U32 (Expression (F p))} {n : ℕ}
-    (h1 : eval env.toEnvironment state = eval env'.toEnvironment state)
-    (h2 : (eval env.toEnvironment x : U32 (F p)) = eval env'.toEnvironment x)
-    (h3 : (eval env.toEnvironment y : U32 (F p)) = eval env'.toEnvironment y)
-    (h_agrees : env.AgreesBelow (n + 88) env') :
-    eval env.toEnvironment
-        ((Xor32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 12).output ((Xor32.circuit (p:=p)).output ⟨state[b], ((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28))⟩ (n + 36)) (n + 40)), ((Addition32.circuit (p:=p)).output ⟨((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28)), ((Rotation32.circuit (p:=p) 8).output ((Xor32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20)), ((Addition32.circuit (p:=p)).output ⟨((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8)), ((Addition32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 12).output ((Xor32.circuit (p:=p)).output ⟨state[b], ((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28))⟩ (n + 36)) (n + 40)), y⟩ (n + 48))⟩ (n + 56))⟩ (n + 64)) (n + 68))⟩ (n + 76))⟩ (n + 84)) =
-      eval env'.toEnvironment
-        ((Xor32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 12).output ((Xor32.circuit (p:=p)).output ⟨state[b], ((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28))⟩ (n + 36)) (n + 40)), ((Addition32.circuit (p:=p)).output ⟨((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28)), ((Rotation32.circuit (p:=p) 8).output ((Xor32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20)), ((Addition32.circuit (p:=p)).output ⟨((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8)), ((Addition32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 12).output ((Xor32.circuit (p:=p)).output ⟨state[b], ((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28))⟩ (n + 36)) (n + 40)), y⟩ (n + 48))⟩ (n + 56))⟩ (n + 64)) (n + 68))⟩ (n + 76))⟩ (n + 84)) := by
-  have eA : ∀ v, (Addition32.circuit (p:=p)).localLength v = 8 := fun _ => rfl
-  have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
-  have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
-    fun _ _ => rfl
-  have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o3 := node3_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o4 := node4_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o5 := node5_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o6 := node6_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o7 := node7_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o8 := node8_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o9 := node9_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o10 := node10_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o11 := node11_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o12 := node12_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  exact FormalCircuit.output_of_input_eq _
-    (by simp only [circuit_norm]; exact ⟨o7, o12⟩)
-    (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eX]; omega)))
-
-private lemma node14_out_congr {env env' : ProverEnvironment (F p)}
-    {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))}
-    {x y : U32 (Expression (F p))} {n : ℕ}
-    (h1 : eval env.toEnvironment state = eval env'.toEnvironment state)
-    (h2 : (eval env.toEnvironment x : U32 (F p)) = eval env'.toEnvironment x)
-    (h3 : (eval env.toEnvironment y : U32 (F p)) = eval env'.toEnvironment y)
-    (h_agrees : env.AgreesBelow (n + 96) env') :
-    eval env.toEnvironment
-        ((Rotation32.circuit (p:=p) 7).output ((Xor32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 12).output ((Xor32.circuit (p:=p)).output ⟨state[b], ((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28))⟩ (n + 36)) (n + 40)), ((Addition32.circuit (p:=p)).output ⟨((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28)), ((Rotation32.circuit (p:=p) 8).output ((Xor32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20)), ((Addition32.circuit (p:=p)).output ⟨((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8)), ((Addition32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 12).output ((Xor32.circuit (p:=p)).output ⟨state[b], ((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28))⟩ (n + 36)) (n + 40)), y⟩ (n + 48))⟩ (n + 56))⟩ (n + 64)) (n + 68))⟩ (n + 76))⟩ (n + 84)) (n + 88)) =
-      eval env'.toEnvironment
-        ((Rotation32.circuit (p:=p) 7).output ((Xor32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 12).output ((Xor32.circuit (p:=p)).output ⟨state[b], ((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28))⟩ (n + 36)) (n + 40)), ((Addition32.circuit (p:=p)).output ⟨((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28)), ((Rotation32.circuit (p:=p) 8).output ((Xor32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20)), ((Addition32.circuit (p:=p)).output ⟨((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8)), ((Addition32.circuit (p:=p)).output ⟨((Rotation32.circuit (p:=p) 12).output ((Xor32.circuit (p:=p)).output ⟨state[b], ((Addition32.circuit (p:=p)).output ⟨state[c], ((Rotation32.circuit (p:=p) 16).output ((Xor32.circuit (p:=p)).output ⟨state[d], ((Addition32.circuit (p:=p)).output ⟨state[a], ((Addition32.circuit (p:=p)).output ⟨state[b], x⟩ n)⟩ (n + 8))⟩ (n + 16)) (n + 20))⟩ (n + 28))⟩ (n + 36)) (n + 40)), y⟩ (n + 48))⟩ (n + 56))⟩ (n + 64)) (n + 68))⟩ (n + 76))⟩ (n + 84)) (n + 88)) := by
-  have eA : ∀ v, (Addition32.circuit (p:=p)).localLength v = 8 := fun _ => rfl
-  have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
-  have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
-    fun _ _ => rfl
-  have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o3 := node3_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o4 := node4_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o5 := node5_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o6 := node6_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o7 := node7_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o8 := node8_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o9 := node9_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o10 := node10_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o11 := node11_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o12 := node12_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  have o13 := node13_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h1 h2 h3
-    (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-  exact FormalCircuit.output_of_input_eq _
-    o13
-    (ProverEnvironment.agreesBelow_of_le h_agrees
-      (by first | omega | (simp only [eR]; omega)))
+end
 
 set_option maxRecDepth 2048 in
 omit p_large_enough in
@@ -630,104 +202,27 @@ def circuit (a b c d : Fin 16) : FormalCircuit (F p) Inputs BLAKE3State where
   soundness := soundness a b c d
   completeness := completeness a b c d
   computableWitnesses := by
-    intro n input env env'
-    obtain ⟨state, x, y⟩ := input
-    have eA : ∀ v, (Addition32.circuit (p:=p)).localLength v = 8 := fun _ => rfl
-    have eX : ∀ v, (Xor32.circuit (p:=p)).localLength v = 4 := fun _ => rfl
-    have eR : ∀ (k : Fin 32) v, (Rotation32.circuit (p:=p) k).localLength v = 8 :=
-      fun _ _ => rfl
-    simp only [circuit_norm, main, eA, eX, eR]
-    refine ⟨⟨fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_,
-             fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_,
-             fun h => ?_, fun h => ?_⟩, fun h h_agrees => ?_⟩
-    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+    rintro n ⟨state, x, y⟩ env env'
+    simp only [circuit_norm, main, ComputableWitnesses.reduceLocalLength]
+    refine ⟨?_, fun h h_agrees => output_eval_congr h.1 h_agrees⟩
+    and_intros <;>
+      exact fun h => FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
         (by omega) fun h_agrees => by
-          simp only [circuit_norm]
-          (try and_intros) <;> grind
-
-    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [eA]; try omega)) fun h_agrees => by
-          try have o1 := node1_out_congr (_a := a) (b := b) (_c := c) (_d := d) (n := n) h.1 h.2.1 h.2.2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          simp only [circuit_norm]
-          (try and_intros) <;> grind
-
-    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [eA]; try omega)) fun h_agrees => by
-          try have o2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h.1 h.2.1 h.2.2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          simp only [circuit_norm]
-          (try and_intros) <;> grind
-
-    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [eA, eX]; try omega)) fun h_agrees => by
-          try have o3 := node3_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h.1 h.2.1 h.2.2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          simp only [circuit_norm]
-          exact o3
-
-    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [eA, eX, eR]; try omega)) fun h_agrees => by
-          try have o4 := node4_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h.1 h.2.1 h.2.2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          simp only [circuit_norm]
-          (try and_intros) <;> grind
-
-    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [eA, eX, eR]; try omega)) fun h_agrees => by
-          try have o5 := node5_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h.1 h.2.1 h.2.2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          simp only [circuit_norm]
-          (try and_intros) <;> grind
-
-    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [eA, eX, eR]; try omega)) fun h_agrees => by
-          try have o6 := node6_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h.1 h.2.1 h.2.2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          simp only [circuit_norm]
-          exact o6
-
-    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [eA, eX, eR]; try omega)) fun h_agrees => by
-          try have o7 := node7_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h.1 h.2.1 h.2.2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          simp only [circuit_norm]
-          (try and_intros) <;> grind
-
-    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [eA, eX, eR]; try omega)) fun h_agrees => by
-          try have o2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h.1 h.2.1 h.2.2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          try have o8 := node8_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h.1 h.2.1 h.2.2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          simp only [circuit_norm]
-          (try and_intros) <;> grind
-
-    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [eA, eX, eR]; try omega)) fun h_agrees => by
-          try have o4 := node4_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h.1 h.2.1 h.2.2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          try have o9 := node9_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h.1 h.2.1 h.2.2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          simp only [circuit_norm]
-          (try and_intros) <;> grind
-
-    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [eA, eX, eR]; try omega)) fun h_agrees => by
-          try have o10 := node10_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h.1 h.2.1 h.2.2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          simp only [circuit_norm]
-          exact o10
-
-    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [eA, eX, eR]; try omega)) fun h_agrees => by
-          try have o5 := node5_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h.1 h.2.1 h.2.2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          try have o11 := node11_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h.1 h.2.1 h.2.2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          simp only [circuit_norm]
-          (try and_intros) <;> grind
-
-    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [eA, eX, eR]; try omega)) fun h_agrees => by
-          try have o7 := node7_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h.1 h.2.1 h.2.2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          try have o12 := node12_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h.1 h.2.1 h.2.2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          simp only [circuit_norm]
-          (try and_intros) <;> grind
-
-    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [eA, eX, eR]; try omega)) fun h_agrees => by
-          try have o13 := node13_out_congr (a := a) (b := b) (c := c) (d := d) (n := n) h.1 h.2.1 h.2.2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          simp only [circuit_norm]
-          exact o13
-
-    · -- output
-      exact output_eval_congr (a := a) (b := b) (c := c) (d := d) (n := n) h.1 h_agrees
+          obtain ⟨h1, h2, h3⟩ := h
+          try have p1 := node1_out_congr (a := a) (b := b) (c := c) (d := d) (y := y) (n := n) h1 h2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+          try have p2 := node2_out_congr (a := a) (b := b) (c := c) (d := d) (y := y) (n := n) h1 h2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+          try have p3 := node3_out_congr (a := a) (b := b) (c := c) (d := d) (y := y) (n := n) h1 h2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+          try have p4 := node4_out_congr (a := a) (b := b) (c := c) (d := d) (y := y) (n := n) h1 h2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+          try have p5 := node5_out_congr (a := a) (b := b) (c := c) (d := d) (y := y) (n := n) h1 h2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+          try have p6 := node6_out_congr (a := a) (b := b) (c := c) (d := d) (y := y) (n := n) h1 h2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+          try have p7 := node7_out_congr (a := a) (b := b) (c := c) (d := d) (y := y) (n := n) h1 h2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+          try have p8 := node8_out_congr (a := a) (b := b) (c := c) (d := d) (y := y) (n := n) h1 h2 h3 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+          try have p9 := node9_out_congr (a := a) (b := b) (c := c) (d := d) (y := y) (n := n) h1 h2 h3 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+          try have p10 := node10_out_congr (a := a) (b := b) (c := c) (d := d) (y := y) (n := n) h1 h2 h3 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+          try have p11 := node11_out_congr (a := a) (b := b) (c := c) (d := d) (y := y) (n := n) h1 h2 h3 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+          try have p12 := node12_out_congr (a := a) (b := b) (c := c) (d := d) (y := y) (n := n) h1 h2 h3 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+          try have p13 := node13_out_congr (a := a) (b := b) (c := c) (d := d) (y := y) (n := n) h1 h2 h3 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+          try simp only [circuit_norm, out13, out12, out11, out10, out9, out8, out7, out6, out5, out4, out3, out2, out1] at *
+          (try and_intros) <;> first | assumption | grind
 
 end Gadgets.BLAKE3.G
