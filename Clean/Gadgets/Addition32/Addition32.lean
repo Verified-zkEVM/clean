@@ -48,4 +48,13 @@ def circuit : FormalCircuit (F p) Inputs U32 where
   Spec
   soundness
   completeness
+/-- The output is a fresh witness window (the interleaved sum limbs): evaluating it reads
+the environment only below `n + localLength`, independently of the circuit's input. -/
+lemma output_congr {env env' : ProverEnvironment (F p)} {v : Var Inputs (F p)} {n : ℕ}
+    (h : env.AgreesBelow (n + 8) env') :
+    eval env.toEnvironment ((circuit (p:=p)).output v n) =
+      eval env'.toEnvironment ((circuit (p:=p)).output v n) := by
+  simp only [circuit_norm, ComputableWitnesses.reduceOutputMetadata, U32.mk.injEq]
+  refine ⟨?_, ?_, ?_, ?_⟩ <;> exact h.1 _ (by omega)
+
 end Gadgets.Addition32

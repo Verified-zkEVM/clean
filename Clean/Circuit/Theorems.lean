@@ -542,6 +542,20 @@ lemma ProverEnvironment.agreesBelow_of_le {F} {n m : ℕ} {env env' : ProverEnvi
     env.AgreesBelow n env' → m ≤ n → env.AgreesBelow m env' :=
   fun h_same hi => ⟨fun i hi' => h_same.1 i (Nat.lt_of_lt_of_le hi' hi), h_same.2.1, h_same.2.2⟩
 
+/-- A `varFromOffset` window evaluates equally under environments that agree below the
+window's end: it is a fresh block of witness variables, independent of any circuit input.
+This is the congruence behind "the output of a subcircuit with a plain witness output is
+computable", without threading input congruence through the parent. -/
+lemma ProvableType.eval_varFromOffset_congr {F} [FiniteField F] {M : TypeMap} [ProvableType M]
+    {env env' : ProverEnvironment F} {n : ℕ} (h : env.AgreesBelow (n + size M) env') :
+    (eval env.toEnvironment (varFromOffset M n) : M F) =
+      eval env'.toEnvironment (varFromOffset M n) := by
+  simp only [ProvableType.eval, varFromOffset, ProvableType.toElements_fromElements]
+  congr 1
+  ext i hi
+  simp only [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
+  exact h.1 _ (by omega)
+
 @[circuit_norm]
 lemma ProverEnvironment.onlyAccessedBelow_environment_get_iff_lt {n m : ℕ} :
     (∀ env env', ProverEnvironment.OnlyAccessedBelow n (fun env => env.get (F:=F) m) env env') ↔ m < n := by

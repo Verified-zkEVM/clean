@@ -102,4 +102,14 @@ def circuit : FormalCircuit (F p) Inputs U32 where
   Spec
   soundness
   completeness
+
+/-- The output is a fresh witness window: evaluating it reads the environment only below
+`n + localLength`, independently of the circuit's input. -/
+lemma output_congr {env env' : ProverEnvironment (F p)} {v : Var Inputs (F p)} {n : ℕ}
+    (h : env.AgreesBelow (n + 4) env') :
+    eval env.toEnvironment ((circuit (p:=p)).output v n) =
+      eval env'.toEnvironment ((circuit (p:=p)).output v n) := by
+  rw [CircuitType.eval_expression, CircuitType.eval_expression]
+  exact ProvableType.eval_varFromOffset_congr (M := U32) h
+
 end Gadgets.Xor32
