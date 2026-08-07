@@ -702,6 +702,20 @@ theorem synthesisSummary_eq_operations
     self.synthesisSummary = FloorPlanner.synthesisSummary self.operations := by
   exact self.formalCircuit.elaborated.synthesisSummary_eq self.config () 0
 
+/-- The compactly elaborated, ordered region shapes consumed by V1 measurement. -/
+def plannerShapes (self : TopLevelCircuit F Config PublicInput) :
+    List FloorPlanner.RegionShape :=
+  FloorPlanner.indexRegionSummaries 0 self.synthesisSummary.regionShapes
+
+/-- Elaborated planner shapes are exactly V1's measurement of the full operation
+stream. -/
+theorem plannerShapes_eq_measureRegions
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.plannerShapes = FloorPlanner.measureRegions self.operations := by
+  unfold plannerShapes
+  rw [self.synthesisSummary_eq_operations]
+  exact (FloorPlanner.measureRegions_eq_synthesisSummary_regionShapes _).symm
+
 def constantSiteCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
   self.synthesisSummary.constantSiteCount
 

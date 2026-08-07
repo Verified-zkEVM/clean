@@ -1000,7 +1000,8 @@ def synthNotesSynthesisSummary (cfg : Config) :
       lookupConfig := cfg.lookupConfig,
       mulConfig := cfg.eccConfig.mulFixedFull,
       addConfig := cfg.eccConfig.add }
-  [noteOld, nonId, nonId,
+  let copyRegion := FloorPlanner.SynthesisSummary.ofRegion {}
+  [noteOld, copyRegion, nonId, nonId,
     loadPrivateSynthesisSummary (cfg.advices 0), noteNew,
     orchardChecksSynthesisSummary cfg].foldr
       FloorPlanner.SynthesisSummary.combine {}
@@ -1016,14 +1017,6 @@ theorem synthNotes_synthesisSummary_eq (G : Generators) (B : Bases)
     orchardChecksSynthesisSummary, circuit_norm, synthesis_summary_norm,
     List.foldr_cons, List.foldr_nil,
     FloorPlanner.SynthesisSummary.combine_empty]
-  rw [FloorPlanner.SynthesisSummary.empty_combine]
-  simp only [FloorPlanner.SynthesisSummary.combine_columns,
-    FloorPlanner.SynthesisSummary.ofRegion_columns,
-    Ecc.WitnessPoint.pointNonIdSynthesisSummary,
-    FloorPlanner.RegionSynthesisSummary.ofColumns_columns]
-  apply FloorPlanner.unionColumns_nodup
-  apply FloorPlanner.unionColumns_nodup
-  exact List.nodup_nil
 
 /-- Rust `AddressPoints` (ironwood `circuit.rs`): the old/new-note diversified-address
 points the cross-address stage compares — the base circuit's output. -/

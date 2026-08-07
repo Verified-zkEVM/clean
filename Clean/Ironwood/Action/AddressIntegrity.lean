@@ -49,8 +49,9 @@ def synthesisSummary
     (cfg : Ecc.Mul.Config × Ecc.WitnessPoint.Config) :
     FloorPlanner.SynthesisSummary :=
   (Ecc.Mul.mulSynthesisSummary cfg.1).combine
-    (FloorPlanner.SynthesisSummary.ofRegion
-      (Ecc.WitnessPoint.pointNonIdSynthesisSummary cfg.2 0))
+    ((FloorPlanner.SynthesisSummary.ofRegion
+      (Ecc.WitnessPoint.pointNonIdSynthesisSummary cfg.2 0)).combine
+        (FloorPlanner.SynthesisSummary.ofRegion {}))
 
 /-- Rust `Circuit::synthesize`'s diversified-address-integrity block (post-`commit_ivk`):
 `[ivk] g_d_old` (variable-base `Ecc.Mul`), the witnessed `pk_d_old`, and the equality

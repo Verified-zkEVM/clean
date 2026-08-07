@@ -229,6 +229,18 @@ theorem ElaboratedCircuit.synthesisSummary_constantSiteCount_eq
   congrArg FloorPlanner.SynthesisSummary.constantSiteCount
     (self.synthesisSummary_eq config input i)
 
+/-- Project the ordered reduced V1 measurement input without exposing the child's
+operation stream. -/
+@[circuit_norm ↓]
+theorem ElaboratedCircuit.synthesisSummary_regionShapes_eq
+    (self : ElaboratedCircuit F ConfigInput Config Input Output configure synthesize)
+    (config : Config) (input : Var Input F) (i : RegionIndex) :
+    (self.synthesisSummary config input i).regionShapes =
+      (FloorPlanner.synthesisSummary
+        ((synthesize config input).operations i)).regionShapes :=
+  congrArg FloorPlanner.SynthesisSummary.regionShapes
+    (self.synthesisSummary_eq config input i)
+
 end SynthesisSummary
 
 section Statements

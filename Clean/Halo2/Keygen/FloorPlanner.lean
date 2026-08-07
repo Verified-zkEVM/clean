@@ -134,6 +134,26 @@ def measureRegion (idx : ℕ) (body : RegionOperations F) : RegionShape :=
     columns := summary.columns
     rowCount := summary.rowCount }
 
+/-- Turn an already-reduced region shape summary into V1's measured shape. -/
+def measureRegionSummary (idx : ℕ) (summary : RegionShapeSummary) : RegionShape :=
+  { index := idx
+    columns := summary.columns
+    rowCount := summary.rowCount }
+
+/-- Add consecutive region indices to an ordered reduced shape sequence. -/
+def indexRegionSummaries : ℕ → List RegionShapeSummary → List RegionShape
+  | _, [] => []
+  | index, summary :: rest =>
+      measureRegionSummary index summary ::
+        indexRegionSummaries (index + 1) rest
+
+theorem measureRegion_eq_measureRegionSummary
+    (index : ℕ) (body : RegionOperations F) :
+    measureRegion index body =
+      measureRegionSummary index
+        (regionSynthesisSummary body).toRegionShapeSummary := by
+  rfl
+
 theorem mem_measureRegion_columns_iff
     (index : ℕ) (body : RegionOperations F) (column : RegionColumn) :
     column ∈ (measureRegion index body).columns ↔
@@ -189,6 +209,39 @@ theorem row_lt_measureRegion_of_enableLookup_mem
 `v1.rs:183-184`). -/
 def measureRegions (ops : Operations F) : List RegionShape :=
   (indexedRegions ops 0).1.map fun (idx, body) => measureRegion idx body
+
+/-- V1's complete measurement input is exactly the ordered reduced shape sequence
+published by the synthesis summary. -/
+theorem measureRegions_eq_synthesisSummary_regionShapes
+    (ops : Operations F) :
+    measureRegions ops =
+      indexRegionSummaries 0 (synthesisSummary ops).regionShapes := by
+  have general : ∀ (operations : Operations F) (initial : ℕ),
+      (indexedRegions operations initial).1.map
+          (fun (index, body) => measureRegion index body) =
+        indexRegionSummaries initial
+          (synthesisSummary operations).regionShapes := by
+    intro operations
+    induction operations with
+    | nil => intro initial; rfl
+    | cons operation rest inductionHypothesis =>
+        intro initial
+        cases operation with
+        | region name body =>
+            simp only [indexedRegions, List.map_cons, synthesisSummary,
+              SynthesisSummary.combine_regionShapes,
+              SynthesisSummary.ofRegion_regionShapes, List.singleton_append,
+              indexRegionSummaries, measureRegion_eq_measureRegionSummary]
+            congr 1
+            simpa only [measureRegion_eq_measureRegionSummary] using
+              inductionHypothesis (initial + 1)
+        | constrainInstance cell column row =>
+            simpa only [indexedRegions, synthesisSummary] using
+              inductionHypothesis initial
+        | loadTable column values =>
+            simpa only [indexedRegions, synthesisSummary] using
+              inductionHypothesis initial
+  exact general ops 0
 
 /-- Total length occupied in one planner column.  Shared-column intervals are
 row-disjoint under V1, so this compositional sum is exact. -/
