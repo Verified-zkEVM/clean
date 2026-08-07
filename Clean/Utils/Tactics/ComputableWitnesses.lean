@@ -3,11 +3,70 @@ import Clean.Circuit.Explicit
 /-!
 # `computable_witnesses`
 
-Automation for the common `FormalCircuitBase.ComputableWitnesses` proof shape.
+Automation for `FormalCircuitBase.ComputableWitnesses` — the obligation that every
+witness generator of a circuit reads the prover environment only **below its own
+offset** (`ProverEnvironment.AgreesBelow`, which also holds hint/data fixed). It is the
+default tactic for the `computableWitnesses` field, so most gadgets need no field at
+all; hints can be passed as `computable_witnesses [lemma₁, …]` (extra simp lemmas, e.g.
+a child bundle name whose metadata is otherwise stuck under a binder).
 
-The tactic uses controlled simp sets and unfolds only a `main` declaration in the current
-scope; child subcircuit constants remain opaque, and their obligations are discharged
-through the composition lemmas and `grind` rules in `Clean.Circuit.Subcircuit`.
+## Pipeline
+
+1. **Normalize** with `circuit_norm` + `computable_witnesses_norm`, plus the current
+   `main` (resolved from scope and self-supplied as a simp lemma) and any hints.
+   `unfold_plain_circuit_consts` additionally unfolds plain-`Circuit`-typed wrapper
+   defs. `FormalCircuit`-variant bundles are proof boundaries and are **never**
+   unfolded — their obligations go through the composition lemmas instead.
+2. **Destructure** `ProvableStruct`-typed inputs (`simp`/`grind` do not iota-reduce
+   `main`'s destructuring match against an opaque variable).
+3. **Split** the resulting conjunction into per-obligation leaves (`splitStep`):
+   syntactic `And`/`∀` fast paths first, then whnf-unifying probes under a local
+   heartbeat sub-budget — probing a still-folded group (e.g. a 32-wide
+   `Circuit.forEach`) would otherwise symbolically execute it. Goals headed by
+   `Subcircuit.ComputableWitnesses` stay whole.
+4. **Per leaf**: a leaf-local simp (including `reduceLocalLength` and, for leaves with
+   a `Circuit.forEach` group, `ring_nf` + `Circuit.forEach.forAll`), then
+   `assert_local_lengths`, then dispatch:
+   * a `Subcircuit.ComputableWitnesses` head is refined with the `_of_offset_eq`
+     composition rules — separate offset metavariables, with the `m = n` premise
+     discharged arithmetically, so unification never defeq-executes an operations
+     list — leaving the `OnlyAccessedBelow` premise;
+   * `chain_output_facts` derives child-output congruence facts
+     (`FormalCircuit.output_of_input_eq` instances, re-keyed at the goal's own eval
+     spelling) plus universal metadata facts for binder-nested outputs;
+   * the close routes by shape (`isEvalCongrEq`): vector/eval-congruence goals get the
+     staged vector ladder (`vecClose` — pointwise `getElem` lemmas first, window
+     unrolling only per branch after `split_ifs`), everything else `simp_all`/`grind`
+     (`baseClose`).
+
+## Key supporting pieces
+
+* `reduceLocalLength` (dsimproc): definitional reduction of bundled `localLength`
+  metadata to numerals (or symbolic normal forms for parameterized circuits). As a
+  definitional rewrite it also fires inside `Subcircuit`'s dependent offset positions,
+  where propositional rewrites cannot build a motive. It never touches
+  `Operations.localLength` of a raw operations list — computing that by `whnf`
+  executes the list (quadratic vector pushes for `mapFinRange`-built circuits);
+  `assert_local_lengths` handles those spellings with a `circuit_norm`-simp-first
+  reduction and asserts the equations as hypotheses with propositional proofs.
+* `reduceOutputMetadata` (dsimproc, used in the close): definitional in-place
+  reduction of child output metadata, including binder-nested and parameterized
+  children which no closed universal fact can state.
+* `@[computable_witnesses_metadata]` (label attribute): opt-in marker for Var-typed
+  gadget output-helper defs (`Permutation.stateVar`, `BLAKE3.G.output`, …) that the
+  close may delta-expand to expose their `varFromOffset` spelling. Opt-in, because
+  return-type shape cannot distinguish safe helpers from spellings the chained facts
+  key on.
+* All unfolding used by the tactic is **environment-clean** (`Meta.deltaExpand` +
+  theorem-free `dsimp`): `simp [X]`/`unfold X` on a cross-module constant generates
+  `X.eq_*` equation lemmas in the using module, and sibling modules doing this for a
+  shared child collide on import.
+
+Performance invariants (violating any of these historically produced 200 000-heartbeat
+timeouts): never whnf-execute an operations list, never unfold a bundle, never let
+`grind` internalize a hypothesis whose spelling contains a raw operations list
+(`clearOpsLengthHyps`), and match goals against hypotheses syntactically before
+attempting defeq (`syntacticAssumption`).
 -/
 
 open Lean Meta Simp Elab Tactic
@@ -747,13 +806,16 @@ private def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : Tactic
     setGoals []
 
 /--
-Prove the standard computable-witness obligation using a controlled normalization pass,
-unfolding of the current `main` declaration (child subcircuit constants remain opaque),
-structural splitting of the operations/output conjunction, and `grind`.
+Prove the standard computable-witness obligation. Default tactic for the
+`computableWitnesses` field — most gadgets need no field at all. See the module
+docstring for the pipeline: normalize (with the in-scope `main` self-supplied as a simp
+lemma), destructure inputs, split into per-obligation leaves, then per leaf dispatch the
+subcircuit composition rules, chain child-output congruence facts, and close by goal
+shape.
 
-Extra simp lemmas may be supplied as `computable_witnesses [lemma₁, lemma₂]` — e.g. a child
-bundle name to reduce its `output`/`localLength` metadata when witness expressions embed the
-child's output under a binder, where `grind`'s E-matching cannot reach it.
+Extra simp lemmas may be supplied as `computable_witnesses [lemma₁, lemma₂]` — e.g. a
+child bundle name to reduce its `output`/`localLength` metadata when witness expressions
+embed the child's output under a binder, where `grind`'s E-matching cannot reach it.
 -/
 syntax "computable_witnesses" ("[" term,* "]")? : tactic
 
