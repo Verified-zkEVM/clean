@@ -11,10 +11,14 @@ This is the maintained path for new channel-based AIR work.
 2. The Rust renderer emits direct row witness functions, constraint expressions, and channel
    interactions. It does not emit generic Plonky3 plumbing.
 3. `src/witness_generation.rs` runs the generated channel worklist and constructs all component
-   traces without invoking Lean.
+   traces without invoking Lean. Lean's witness configuration supplies semantic padding rows; the
+   worklist executes them and balances any interactions they create until every trace has a
+   power-of-two height.
 4. `src/generated_air.rs` supplies the shared Plonky3 `Air` implementation and registers generated
    channel lookups.
 5. `src/ensemble_prover.rs` validates statement shape and proves or verifies the component batch.
+   Verifier-only interactions are derived from public inputs and enter the global channel argument
+   directly, without a synthetic verifier AIR or trace.
 
 The complete example is documented in
 [`Clean/Examples/FibonacciVm/README.md`](../../Clean/Examples/FibonacciVm/README.md). Its generated

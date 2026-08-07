@@ -1,8 +1,8 @@
 //! Generic Plonky3 AIR wrapper for programs extracted from Clean.
 //!
 //! Generated files provide only component widths and direct expression builders through
-//! [`GeneratedAirSpec`]. Trace selectors, lookup registration, and Plonky3 trait plumbing live
-//! here so they are implemented and reviewed once.
+//! [`GeneratedAirSpec`]. Lookup registration and Plonky3 trait plumbing live here so they are
+//! implemented and reviewed once.
 
 use alloc::string::String;
 use alloc::vec;
@@ -15,9 +15,10 @@ use p3_air::{
     SymbolicExpression, SymbolicVariable,
 };
 use p3_field::{Field, PrimeCharacteristicRing};
-use p3_matrix::dense::RowMajorMatrix;
 use p3_matrix::Matrix;
 use p3_uni_stark::SymbolicAirBuilder;
+
+use crate::witness_generation::{Interaction, WitnessField};
 
 /// Shape errors detected before proving or verification.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -26,12 +27,6 @@ pub enum EnsembleShapeError {
     ComponentCount {
         expected: usize,
         trace_heights: usize,
-        active_rows: usize,
-    },
-    ActiveRowsExceedHeight {
-        component: usize,
-        active_rows: usize,
-        trace_height: usize,
     },
     TraceCount {
         airs: usize,
@@ -77,9 +72,9 @@ pub trait GeneratedAirSpec: Clone + Sync {
     fn lookups<F: Field>(
         component: usize,
         local: &[SymbolicVariable<F>],
-        public_values: &[SymbolicVariable<F>],
-        active: SymbolicExpression<F>,
     ) -> Vec<GeneratedLookup<F>>;
+
+    fn verifier_interactions<F: WitnessField>(public_values: &[F]) -> Vec<Interaction<F>>;
 }
 
 /// Plonky3 wrapper shared by every generated ensemble AIR.
@@ -87,47 +82,33 @@ pub trait GeneratedAirSpec: Clone + Sync {
 pub struct GeneratedAir<P> {
     component: usize,
     trace_height: usize,
-    active_rows: usize,
     num_lookups: usize,
     _program: PhantomData<P>,
 }
 
 impl<P: GeneratedAirSpec> GeneratedAir<P> {
-    pub fn all(
-        trace_heights: &[usize],
-        active_rows: &[usize],
-    ) -> Result<Vec<Self>, EnsembleShapeError> {
+    pub fn all(trace_heights: &[usize]) -> Result<Vec<Self>, EnsembleShapeError> {
         let expected = P::WIDTHS.len();
-        if trace_heights.len() != expected || active_rows.len() != expected {
+        if trace_heights.len() != expected {
             return Err(EnsembleShapeError::ComponentCount {
                 expected,
                 trace_heights: trace_heights.len(),
-                active_rows: active_rows.len(),
             });
         }
         trace_heights
             .iter()
             .copied()
-            .zip(active_rows.iter().copied())
             .enumerate()
-            .map(|(component, (trace_height, active_rows))| {
+            .map(|(component, trace_height)| {
                 if trace_height == 0 || !trace_height.is_power_of_two() {
                     return Err(EnsembleShapeError::TraceHeight {
                         component,
                         height: trace_height,
                     });
                 }
-                if active_rows > trace_height {
-                    return Err(EnsembleShapeError::ActiveRowsExceedHeight {
-                        component,
-                        active_rows,
-                        trace_height,
-                    });
-                }
                 Ok(Self {
                     component,
                     trace_height,
-                    active_rows,
                     num_lookups: 0,
                     _program: PhantomData,
                 })
@@ -137,12 +118,13 @@ impl<P: GeneratedAirSpec> GeneratedAir<P> {
 }
 
 /// Static physical trace metadata expected by the verifier.
-pub trait EnsembleAir {
+pub trait EnsembleAir<F: WitnessField> {
     fn trace_height(&self) -> usize;
     fn public_value_count(&self) -> usize;
+    fn verifier_interactions(&self, public_values: &[F]) -> Vec<Interaction<F>>;
 }
 
-impl<P: GeneratedAirSpec> EnsembleAir for GeneratedAir<P> {
+impl<F: WitnessField, P: GeneratedAirSpec> EnsembleAir<F> for GeneratedAir<P> {
     fn trace_height(&self) -> usize {
         self.trace_height
     }
@@ -150,17 +132,15 @@ impl<P: GeneratedAirSpec> EnsembleAir for GeneratedAir<P> {
     fn public_value_count(&self) -> usize {
         P::PUBLIC_VALUES
     }
+
+    fn verifier_interactions(&self, public_values: &[F]) -> Vec<Interaction<F>> {
+        P::verifier_interactions(public_values)
+    }
 }
 
 impl<F: Field, P: GeneratedAirSpec> BaseAir<F> for GeneratedAir<P> {
     fn width(&self) -> usize {
         P::WIDTHS[self.component]
-    }
-
-    fn preprocessed_trace(&self) -> Option<RowMajorMatrix<F>> {
-        let mut selector = vec![F::ZERO; self.trace_height];
-        selector[..self.active_rows].fill(F::ONE);
-        Some(RowMajorMatrix::new(selector, 1))
     }
 }
 
@@ -175,14 +155,8 @@ where
         let local = main
             .row_slice(0)
             .expect("validated trace height is nonzero");
-        let preprocessed = builder.preprocessed();
-        let preprocessed_local = preprocessed
-            .as_ref()
-            .and_then(|matrix| matrix.row_slice(0))
-            .expect("generated AIR always has an active-row selector");
-        let active = Into::<AB::Expr>::into(preprocessed_local[0].clone());
         for constraint in P::constraints::<AB>(self.component, &local) {
-            builder.assert_zero(active.clone() * constraint);
+            builder.assert_zero(constraint);
         }
     }
 
@@ -192,7 +166,7 @@ where
     {
         self.num_lookups = 0;
         let symbolic = SymbolicAirBuilder::<AB::F>::new(
-            1,
+            0,
             BaseAir::<AB::F>::width(self),
             P::PUBLIC_VALUES,
             0,
@@ -202,14 +176,7 @@ where
         let local = main
             .row_slice(0)
             .expect("validated trace height is nonzero");
-        let preprocessed = AirBuilder::preprocessed(&symbolic);
-        let preprocessed_local = preprocessed
-            .as_ref()
-            .and_then(|matrix| matrix.row_slice(0))
-            .expect("generated AIR always has an active-row selector");
-        let active = SymbolicExpression::<AB::F>::from(preprocessed_local[0]);
-        let public_values = AirBuilderWithPublicValues::public_values(&symbolic);
-        P::lookups(self.component, &local, public_values, active)
+        P::lookups(self.component, &local)
             .into_iter()
             .map(|lookup| {
                 Air::<AB>::register_lookup(

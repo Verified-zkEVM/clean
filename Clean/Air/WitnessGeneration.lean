@@ -82,9 +82,15 @@ inductive Mode (F : Type) where
   | demand (mode : DemandMode F)
   | fixed (inputRows : List (Array F)) (slots : List (FixedSlot F))
 
-/-- Generation metadata is aligned with `Ensemble.tables`. -/
+/-- A semantic row used to extend one component to a power-of-two trace height. -/
+structure Padding (F : Type) where
+  input : Array F
+  minimumRows : ℕ := 1
+
+/-- Generation and padding metadata are aligned with `Ensemble.tables`. -/
 structure Config (F : Type) where
   modes : List (Mode F)
+  padding : List (Padding F)
   fuel : ℕ
 
 /-- A normalized, nonzero channel imbalance. -/
@@ -389,6 +395,54 @@ private def generateLoop (ensemble : Ensemble F PublicIO) (config : Config F)
           let demands := mutation.directDemands.foldl Demand.add demands
           generateLoop ensemble config prepared publicInput fuel mutation.tables demands
 
+private def nextPowerOfTwoAux (target : ℕ) : ℕ → ℕ → ℕ
+  | 0, power => power
+  | fuel + 1, power =>
+      if target ≤ power then power else nextPowerOfTwoAux target fuel (power * 2)
+
+private def nextPowerOfTwo (value : ℕ) : ℕ :=
+  nextPowerOfTwoAux (max value 1) value 1
+
+private def paddingTarget (rowCount : ℕ) (padding : Padding F) : ℕ :=
+  nextPowerOfTwo (max rowCount padding.minimumRows)
+
+private structure PaddingMutation (F : Type) where
+  tables : List (GeneratedTable F)
+  added : List (Interaction F)
+
+private def padTables :
+    List (PreparedComponent F) → List (Padding F) → List (GeneratedTable F) →
+      Except String (PaddingMutation F)
+  | [], [], [] => .ok { tables := [], added := [] }
+  | prepared :: components, padding :: paddings, table :: tables => do
+      let count := paddingTarget table.rows.length padding - table.rows.length
+      let rows ← (List.replicate count ()).mapM fun _ =>
+        completeRow prepared padding.input
+      let rest ← padTables components paddings tables
+      return {
+        tables := { table with rows := table.rows ++ rows } :: rest.tables
+        added := rows.flatMap (rowInteractions prepared) ++ rest.added
+      }
+  | _, _, _ => .error "padding count does not match ensemble component count"
+
+private def tablesArePadded : List (GeneratedTable F) → List (Padding F) → Bool
+  | [], [] => true
+  | table :: tables, padding :: paddings =>
+      table.rows.length == paddingTarget table.rows.length padding &&
+        tablesArePadded tables paddings
+  | _, _ => false
+
+private def padAndBalance (ensemble : Ensemble F PublicIO) (config : Config F)
+    (prepared : List (PreparedComponent F)) (publicInput : PublicIO F) :
+    ℕ → List (GeneratedTable F) → Except String (List (GeneratedTable F))
+  | 0, _ => .error "ensemble padding exhausted its fuel"
+  | fuel + 1, tables => do
+      let mutation ← padTables prepared config.padding tables
+      let tables ← generateLoop ensemble config prepared publicInput config.fuel mutation.tables
+        (Demand.normalize mutation.added)
+      if tablesArePadded tables config.padding then return tables
+      padAndBalance ensemble config prepared publicInput fuel tables
+
 private structure AssembledTables (components : List (Component F)) where
   tables : List (Table F)
   same_length : components.length = tables.length
@@ -451,7 +505,9 @@ def generate (ensemble : Ensemble F PublicIO) (config : Config F) (publicInput :
           (Demand.normalize interactions) with
       | .error error => .error error
       | .ok generated =>
-        match assembleTables ensemble.tables generated with
+        match padAndBalance ensemble config prepared publicInput config.fuel generated with
+        | .error error => .error error
+        | .ok padded => match assembleTables ensemble.tables padded with
         | .error error => .error error
         | .ok assembled => .ok {
             tables := assembled.tables

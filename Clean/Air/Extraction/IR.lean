@@ -163,6 +163,7 @@ structure Program (F : Type) [FiniteField F] where
   components : List (ComponentProgram F)
   verifierInteractions : List (AbstractInteraction F)
   modes : List (Mode F)
+  padding : List (Padding F)
   fuel : ℕ
 
 end Air.Flat.Extraction

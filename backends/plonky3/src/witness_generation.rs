@@ -6,7 +6,6 @@
 
 use alloc::format;
 use alloc::string::{String, ToString};
-use alloc::vec;
 use alloc::vec::Vec;
 
 use p3_field::{Field, PrimeField64};
@@ -86,6 +85,13 @@ pub enum Mode<F> {
     },
 }
 
+/// A semantic component input used to extend a table to a power-of-two height.
+#[derive(Clone, Debug)]
+pub struct Padding<F> {
+    pub input: Vec<F>,
+    pub minimum_rows: usize,
+}
+
 #[derive(Clone, Debug)]
 pub struct Interaction<F> {
     pub channel: &'static str,
@@ -100,12 +106,32 @@ pub struct EnsembleWitness<F> {
     pub tables: Vec<Vec<Vec<F>>>,
 }
 
-/// Power-of-two matrices plus the number of semantically active rows in each
-/// matrix. Entry zero is the one-row verifier instance.
-#[derive(Clone, Debug)]
-pub struct PaddedEnsembleWitness<F> {
-    pub traces: Vec<RowMajorMatrix<F>>,
-    pub active_rows: Vec<usize>,
+impl<F: Field> EnsembleWitness<F> {
+    /// Convert already-padded semantic tables to Plonky3 trace matrices.
+    pub fn into_traces(self) -> Result<Vec<RowMajorMatrix<F>>, String> {
+        self.tables
+            .into_iter()
+            .enumerate()
+            .map(|(component, rows)| {
+                if rows.is_empty() || !rows.len().is_power_of_two() {
+                    return Err(format!(
+                        "component {component} has non-power-of-two height {}",
+                        rows.len()
+                    ));
+                }
+                let width = rows[0].len();
+                if width == 0 || rows.iter().any(|row| row.len() != width) {
+                    return Err(format!(
+                        "component {component} contains a row of the wrong width"
+                    ));
+                }
+                Ok(RowMajorMatrix::new(
+                    rows.into_iter().flatten().collect(),
+                    width,
+                ))
+            })
+            .collect()
+    }
 }
 
 /// Implemented by Rust emitted directly from a Clean ensemble and its witness IR.
@@ -114,6 +140,7 @@ pub trait Program<F: WitnessField> {
     const COMPONENTS: usize;
 
     fn modes() -> Vec<Mode<F>>;
+    fn padding() -> Vec<Padding<F>>;
     fn complete_row(component: usize, input: &[F]) -> Result<Vec<F>, String>;
     fn interactions(component: usize, row: &[F]) -> Vec<Interaction<F>>;
     fn verifier_interactions(public_input: &[F]) -> Vec<Interaction<F>>;
@@ -360,49 +387,14 @@ fn handle_fixed<F: WitnessField, P: Program<F>>(
     Ok(())
 }
 
-/// Run an extracted channel-driven ensemble witness program.
-pub fn generate<F: WitnessField, P: Program<F>>(
-    public_input: &[F],
-) -> Result<EnsembleWitness<F>, String> {
-    let modes = P::modes();
-    if modes.len() != P::COMPONENTS {
-        return Err(format!(
-            "generation-mode count {} does not match component count {}",
-            modes.len(),
-            P::COMPONENTS
-        ));
-    }
-
-    let mut tables = Vec::with_capacity(modes.len());
-    for (component, mode) in modes.iter().enumerate() {
-        let mut rows = Vec::new();
-        if let Mode::Fixed { input_rows, .. } = mode {
-            for input in input_rows {
-                rows.push(Row {
-                    values: P::complete_row(component, input)?,
-                    origin: None,
-                });
-            }
-        }
-        tables.push(rows);
-    }
-
-    let mut demands = Vec::new();
-    add_interactions(&mut demands, P::verifier_interactions(public_input));
-    for (component, table) in tables.iter().enumerate() {
-        for row in table {
-            add_interactions(&mut demands, P::interactions(component, &row.values));
-        }
-    }
-
+fn balance<F: WitnessField, P: Program<F>>(
+    modes: &[Mode<F>],
+    tables: &mut [Vec<Row<F>>],
+    demands: &mut Vec<Demand<F>>,
+) -> Result<(), String> {
     for _ in 0..P::FUEL {
         if demands.is_empty() {
-            return Ok(EnsembleWitness {
-                tables: tables
-                    .into_iter()
-                    .map(|table| table.into_iter().map(|row| row.values).collect())
-                    .collect(),
-            });
+            return Ok(());
         }
 
         let mut action = None;
@@ -439,67 +431,107 @@ pub fn generate<F: WitnessField, P: Program<F>>(
         // opposite interaction (or fixed-slot delta) cancels it incrementally.
         let demand = demands[demand_index].clone();
         match &modes[component] {
-            Mode::Demand(mode) => handle_demand::<F, P>(
-                component,
-                mode,
-                &demand,
-                &mut tables[component],
-                &mut demands,
-            )?,
-            Mode::Fixed { slots, .. } => handle_fixed::<F, P>(
-                component,
-                slots,
-                &demand,
-                &mut tables[component],
-                &mut demands,
-            )?,
+            Mode::Demand(mode) => {
+                handle_demand::<F, P>(component, mode, &demand, &mut tables[component], demands)?
+            }
+            Mode::Fixed { slots, .. } => {
+                handle_fixed::<F, P>(component, slots, &demand, &mut tables[component], demands)?
+            }
         }
     }
 
     Err("ensemble witness generation exhausted its fuel".to_string())
 }
 
-/// Pad every generated component with zero rows. Generated AIR code gates both
-/// constraints and interactions with committed active-row selectors, so padding
-/// is backend bookkeeping and does not change the Clean witness relation.
-pub fn pad<F: WitnessField, P: Program<F>>(
-    witness: EnsembleWitness<F>,
-    minimum_height: usize,
-) -> Result<PaddedEnsembleWitness<F>, String> {
-    let minimum_height = minimum_height.max(1).next_power_of_two();
-    if witness.tables.len() != P::COMPONENTS {
+fn target_height<F>(row_count: usize, padding: &Padding<F>) -> usize {
+    row_count
+        .max(padding.minimum_rows)
+        .max(1)
+        .next_power_of_two()
+}
+
+fn pad_and_balance<F: WitnessField, P: Program<F>>(
+    modes: &[Mode<F>],
+    padding: &[Padding<F>],
+    tables: &mut [Vec<Row<F>>],
+) -> Result<(), String> {
+    for _ in 0..P::FUEL {
+        let mut demands = Vec::new();
+        for (component, (table, padding)) in tables.iter_mut().zip(padding).enumerate() {
+            let height = target_height(table.len(), padding);
+            for _ in table.len()..height {
+                let values = P::complete_row(component, &padding.input)?;
+                add_interactions(&mut demands, P::interactions(component, &values));
+                table.push(Row {
+                    values,
+                    origin: None,
+                });
+            }
+        }
+
+        balance::<F, P>(modes, tables, &mut demands)?;
+        if tables
+            .iter()
+            .zip(padding)
+            .all(|(table, padding)| table.len() == target_height(table.len(), padding))
+        {
+            return Ok(());
+        }
+    }
+
+    Err("ensemble padding exhausted its fuel".to_string())
+}
+
+/// Run an extracted channel-driven ensemble witness program.
+pub fn generate<F: WitnessField, P: Program<F>>(
+    public_input: &[F],
+) -> Result<EnsembleWitness<F>, String> {
+    let modes = P::modes();
+    let padding = P::padding();
+    if modes.len() != P::COMPONENTS {
         return Err(format!(
-            "witness table count {} does not match component count {}",
-            witness.tables.len(),
+            "generation-mode count {} does not match component count {}",
+            modes.len(),
+            P::COMPONENTS
+        ));
+    }
+    if padding.len() != P::COMPONENTS {
+        return Err(format!(
+            "padding count {} does not match component count {}",
+            padding.len(),
             P::COMPONENTS
         ));
     }
 
-    let mut active_rows = Vec::with_capacity(P::COMPONENTS + 1);
-    let mut traces = Vec::with_capacity(P::COMPONENTS + 1);
-    active_rows.push(1);
-    traces.push(RowMajorMatrix::new(vec![F::ZERO; minimum_height], 1));
-
-    for (component, rows) in witness.tables.into_iter().enumerate() {
-        let width = rows
-            .first()
-            .map(Vec::len)
-            .ok_or_else(|| format!("cannot pad empty component {component}"))?;
-        if rows.iter().any(|row| row.len() != width) {
-            return Err(format!(
-                "component {component} contains a row of the wrong width"
-            ));
+    let mut tables = Vec::with_capacity(modes.len());
+    for (component, mode) in modes.iter().enumerate() {
+        let mut rows = Vec::new();
+        if let Mode::Fixed { input_rows, .. } = mode {
+            for input in input_rows {
+                rows.push(Row {
+                    values: P::complete_row(component, input)?,
+                    origin: None,
+                });
+            }
         }
-        let logical_height = rows.len();
-        let height = logical_height.max(minimum_height).next_power_of_two();
-        let mut values = rows.into_iter().flatten().collect::<Vec<_>>();
-        values.resize(height * width, F::ZERO);
-        active_rows.push(logical_height);
-        traces.push(RowMajorMatrix::new(values, width));
+        tables.push(rows);
     }
 
-    Ok(PaddedEnsembleWitness {
-        traces,
-        active_rows,
+    let mut demands = Vec::new();
+    add_interactions(&mut demands, P::verifier_interactions(public_input));
+    for (component, table) in tables.iter().enumerate() {
+        for row in table {
+            add_interactions(&mut demands, P::interactions(component, &row.values));
+        }
+    }
+
+    balance::<F, P>(&modes, &mut tables, &mut demands)?;
+    pad_and_balance::<F, P>(&modes, &padding, &mut tables)?;
+
+    Ok(EnsembleWitness {
+        tables: tables
+            .into_iter()
+            .map(|table| table.into_iter().map(|row| row.values).collect())
+            .collect(),
     })
 }

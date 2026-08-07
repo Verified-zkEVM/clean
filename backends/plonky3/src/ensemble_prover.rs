@@ -5,7 +5,10 @@ use alloc::vec::Vec;
 use p3_air::Air;
 #[cfg(all(debug_assertions, not(doc)))]
 use p3_batch_stark::DebugConstraintBuilderWithLookups;
-use p3_batch_stark::{prove_batch, verify_batch, BatchProof, ProverData, StarkInstance};
+use p3_batch_stark::{
+    prove_batch_with_public_lookups, verify_batch_with_public_lookups, BatchProof, ProverData,
+    PublicLookup, StarkInstance,
+};
 use p3_field::BasedVectorSpace;
 use p3_lookup::folder::{ProverConstraintFolderWithLookups, VerifierConstraintFolderWithLookups};
 use p3_matrix::dense::RowMajorMatrix;
@@ -13,7 +16,21 @@ use p3_matrix::Matrix;
 use p3_uni_stark::{SymbolicAirBuilder, SymbolicExpression, VerificationError};
 use p3_util::log2_strict_usize;
 
+use crate::witness_generation::{Interaction, WitnessField};
 use crate::{EnsembleAir, EnsembleShapeError, PcsError, StarkGenericConfig, Val};
+
+fn public_lookups<F: WitnessField>(interactions: Vec<Interaction<F>>) -> Vec<PublicLookup<F>> {
+    interactions
+        .into_iter()
+        .map(|interaction| PublicLookup {
+            name: interaction.channel.into(),
+            values: interaction.message,
+            // Generated AIR lookups encode both Clean push and pull multiplicities with
+            // the opposite sign. Apply that same convention to the one-shot public side.
+            multiplicity: -interaction.multiplicity,
+        })
+        .collect()
+}
 
 /// Verification failures are separated into caller-visible statement-shape errors and
 /// cryptographic Plonky3 verification errors.
@@ -74,7 +91,8 @@ where
     SC: StarkGenericConfig,
     SC::Challenge: BasedVectorSpace<Val<SC>>,
     SymbolicExpression<SC::Challenge>: From<SymbolicExpression<Val<SC>>>,
-    A: ProverAir<SC> + EnsembleAir,
+    Val<SC>: WitnessField,
+    A: ProverAir<SC> + EnsembleAir<Val<SC>>,
 {
     let Some(first_air) = airs.first() else {
         return Err(EnsembleShapeError::NoComponents);
@@ -124,7 +142,8 @@ where
             lookups: lookups.clone(),
         })
         .collect::<Vec<_>>();
-    let proof = prove_batch(config, &instances, &prover_data);
+    let public_lookups = public_lookups(first_air.verifier_interactions(public_values));
+    let proof = prove_batch_with_public_lookups(config, &instances, &prover_data, &public_lookups);
     Ok((proof, prover_data))
 }
 
@@ -141,8 +160,9 @@ where
     SymbolicExpression<SC::Challenge>: From<SymbolicExpression<Val<SC>>>,
     A: Air<SymbolicAirBuilder<Val<SC>, SC::Challenge>>
         + for<'a> Air<VerifierConstraintFolderWithLookups<'a, SC>>
-        + EnsembleAir
+        + EnsembleAir<Val<SC>>
         + Clone,
+    Val<SC>: WitnessField,
 {
     let Some(first_air) = airs.first() else {
         return Err(EnsembleVerificationError::Shape(
@@ -185,12 +205,14 @@ where
         .iter()
         .map(|_| public_values.to_vec())
         .collect::<Vec<_>>();
-    verify_batch(
+    let public_lookups = public_lookups(first_air.verifier_interactions(public_values));
+    verify_batch_with_public_lookups(
         config,
         airs,
         proof,
         &per_air_public_values,
         &prover_data.common,
+        &public_lookups,
     )
     .map_err(EnsembleVerificationError::Proof)
 }

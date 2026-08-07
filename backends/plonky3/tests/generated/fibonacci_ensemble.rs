@@ -3,7 +3,7 @@ use alloc::string::String;
 use alloc::{format, vec, vec::Vec};
 use clean_backend::witness_generation::{
     Aggregation, DemandMode, Direction, EnsembleWitness, FixedSlot, InputCell, Interaction, Mode,
-    Program, WitnessField,
+    Padding, Program, WitnessField,
 };
 use clean_backend::{GeneratedAir, GeneratedAirSpec, GeneratedLookup};
 use p3_air::lookup::Direction as LookupDirection;
@@ -1692,12 +1692,37 @@ fn component_2_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
     ]
 }
 
+fn public_interactions<F: WitnessField>(public_input: &[F]) -> Vec<Interaction<F>> {
+    vec![
+        Interaction {
+            channel: "fibonacci",
+            multiplicity: (F::from_canonical_u64(2013265920u64) * F::from_canonical_u64(1u64)),
+            message: vec![
+                public_input.get(0).copied().unwrap_or(F::ZERO),
+                public_input.get(1).copied().unwrap_or(F::ZERO),
+                public_input.get(2).copied().unwrap_or(F::ZERO),
+            ],
+            assume_guarantees: true,
+        },
+        Interaction {
+            channel: "fibonacci",
+            multiplicity: F::from_canonical_u64(1u64),
+            message: vec![
+                F::from_canonical_u64(0u64),
+                F::from_canonical_u64(0u64),
+                F::from_canonical_u64(1u64),
+            ],
+            assume_guarantees: false,
+        },
+    ]
+}
+
 #[derive(Clone, Debug)]
 pub struct FibonacciEnsembleProgramAirSpec;
 
 impl GeneratedAirSpec for FibonacciEnsembleProgramAirSpec {
     const PUBLIC_VALUES: usize = 3;
-    const WIDTHS: &'static [usize] = &[1, 5, 5, 256];
+    const WIDTHS: &'static [usize] = &[5, 5, 256];
 
     fn constraints<AB>(component: usize, local: &[AB::Var]) -> Vec<AB::Expr>
     where
@@ -1705,14 +1730,13 @@ impl GeneratedAirSpec for FibonacciEnsembleProgramAirSpec {
         AB::F: Field + PrimeCharacteristicRing,
     {
         match component {
-            0 => vec![],
-            1 => vec![
+            0 => vec![
                 (Into::<AB::Expr>::into(local[0].clone())
                     * (Into::<AB::Expr>::into(local[0].clone())
                         + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
                             * Into::<AB::Expr>::into(AB::F::from_u64(1u64))))),
             ],
-            2 => vec![
+            1 => vec![
                 (Into::<AB::Expr>::into(local[4].clone())
                     * (Into::<AB::Expr>::into(local[4].clone())
                         + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
@@ -1724,7 +1748,7 @@ impl GeneratedAirSpec for FibonacciEnsembleProgramAirSpec {
                             + (Into::<AB::Expr>::into(local[4].clone())
                                 * Into::<AB::Expr>::into(AB::F::from_u64(256u64)))))),
             ],
-            3 => vec![],
+            2 => vec![],
             _ => unreachable!("invalid generated AIR component"),
         }
     }
@@ -1732,8 +1756,6 @@ impl GeneratedAirSpec for FibonacciEnsembleProgramAirSpec {
     fn lookups<F: Field>(
         component: usize,
         local: &[SymbolicVariable<F>],
-        public_values: &[SymbolicVariable<F>],
-        active: SymbolicExpression<F>,
     ) -> Vec<GeneratedLookup<F>> {
         let mut lookups = Vec::new();
         match component {
@@ -1741,38 +1763,12 @@ impl GeneratedAirSpec for FibonacciEnsembleProgramAirSpec {
                 lookups.push(GeneratedLookup {
                     channel: "fibonacci".into(),
                     message: vec![
-                        SymbolicExpression::<F>::from(public_values[0]),
-                        SymbolicExpression::<F>::from(public_values[1]),
-                        SymbolicExpression::<F>::from(public_values[2]),
-                    ],
-                    multiplicity: -((SymbolicExpression::<F>::from(F::from_u64(2013265920u64))
-                        * SymbolicExpression::<F>::from(F::from_u64(1u64)))
-                        * active.clone()),
-                    direction: LookupDirection::Receive,
-                });
-                lookups.push(GeneratedLookup {
-                    channel: "fibonacci".into(),
-                    message: vec![
-                        SymbolicExpression::<F>::from(F::from_u64(0u64)),
-                        SymbolicExpression::<F>::from(F::from_u64(0u64)),
-                        SymbolicExpression::<F>::from(F::from_u64(1u64)),
-                    ],
-                    multiplicity: (SymbolicExpression::<F>::from(F::from_u64(1u64))
-                        * active.clone()),
-                    direction: LookupDirection::Send,
-                });
-            }
-            1 => {
-                lookups.push(GeneratedLookup {
-                    channel: "fibonacci".into(),
-                    message: vec![
                         SymbolicExpression::<F>::from(local[1]),
                         SymbolicExpression::<F>::from(local[2]),
                         SymbolicExpression::<F>::from(local[3]),
                     ],
-                    multiplicity: -((SymbolicExpression::<F>::from(F::from_u64(2013265920u64))
-                        * SymbolicExpression::<F>::from(local[0]))
-                        * active.clone()),
+                    multiplicity: -(SymbolicExpression::<F>::from(F::from_u64(2013265920u64))
+                        * SymbolicExpression::<F>::from(local[0])),
                     direction: LookupDirection::Receive,
                 });
                 lookups.push(GeneratedLookup {
@@ -1782,9 +1778,8 @@ impl GeneratedAirSpec for FibonacciEnsembleProgramAirSpec {
                         SymbolicExpression::<F>::from(local[3]),
                         SymbolicExpression::<F>::from(local[4]),
                     ],
-                    multiplicity: -((SymbolicExpression::<F>::from(F::from_u64(2013265920u64))
-                        * SymbolicExpression::<F>::from(local[0]))
-                        * active.clone()),
+                    multiplicity: -(SymbolicExpression::<F>::from(F::from_u64(2013265920u64))
+                        * SymbolicExpression::<F>::from(local[0])),
                     direction: LookupDirection::Receive,
                 });
                 lookups.push(GeneratedLookup {
@@ -1795,17 +1790,16 @@ impl GeneratedAirSpec for FibonacciEnsembleProgramAirSpec {
                         SymbolicExpression::<F>::from(local[3]),
                         SymbolicExpression::<F>::from(local[4]),
                     ],
-                    multiplicity: (SymbolicExpression::<F>::from(local[0]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[0]),
                     direction: LookupDirection::Send,
                 });
             }
-            2 => {
+            1 => {
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(local[2])],
-                    multiplicity: -((SymbolicExpression::<F>::from(F::from_u64(2013265920u64))
-                        * SymbolicExpression::<F>::from(F::from_u64(1u64)))
-                        * active.clone()),
+                    multiplicity: -(SymbolicExpression::<F>::from(F::from_u64(2013265920u64))
+                        * SymbolicExpression::<F>::from(F::from_u64(1u64))),
                     direction: LookupDirection::Receive,
                 });
                 lookups.push(GeneratedLookup {
@@ -1815,1551 +1809,1555 @@ impl GeneratedAirSpec for FibonacciEnsembleProgramAirSpec {
                         SymbolicExpression::<F>::from(local[1]),
                         SymbolicExpression::<F>::from(local[2]),
                     ],
-                    multiplicity: (SymbolicExpression::<F>::from(local[3]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[3]),
                     direction: LookupDirection::Send,
                 });
             }
-            3 => {
+            2 => {
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(0u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[0]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[0]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(1u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[1]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[1]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(2u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[2]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[2]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(3u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[3]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[3]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(4u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[4]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[4]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(5u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[5]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[5]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(6u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[6]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[6]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(7u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[7]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[7]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(8u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[8]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[8]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(9u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[9]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[9]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(10u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[10]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[10]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(11u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[11]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[11]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(12u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[12]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[12]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(13u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[13]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[13]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(14u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[14]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[14]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(15u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[15]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[15]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(16u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[16]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[16]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(17u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[17]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[17]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(18u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[18]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[18]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(19u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[19]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[19]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(20u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[20]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[20]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(21u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[21]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[21]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(22u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[22]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[22]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(23u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[23]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[23]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(24u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[24]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[24]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(25u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[25]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[25]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(26u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[26]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[26]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(27u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[27]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[27]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(28u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[28]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[28]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(29u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[29]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[29]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(30u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[30]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[30]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(31u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[31]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[31]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(32u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[32]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[32]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(33u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[33]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[33]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(34u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[34]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[34]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(35u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[35]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[35]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(36u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[36]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[36]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(37u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[37]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[37]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(38u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[38]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[38]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(39u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[39]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[39]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(40u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[40]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[40]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(41u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[41]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[41]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(42u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[42]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[42]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(43u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[43]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[43]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(44u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[44]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[44]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(45u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[45]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[45]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(46u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[46]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[46]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(47u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[47]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[47]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(48u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[48]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[48]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(49u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[49]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[49]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(50u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[50]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[50]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(51u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[51]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[51]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(52u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[52]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[52]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(53u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[53]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[53]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(54u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[54]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[54]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(55u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[55]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[55]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(56u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[56]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[56]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(57u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[57]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[57]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(58u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[58]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[58]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(59u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[59]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[59]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(60u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[60]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[60]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(61u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[61]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[61]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(62u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[62]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[62]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(63u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[63]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[63]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(64u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[64]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[64]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(65u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[65]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[65]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(66u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[66]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[66]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(67u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[67]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[67]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(68u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[68]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[68]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(69u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[69]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[69]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(70u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[70]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[70]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(71u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[71]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[71]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(72u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[72]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[72]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(73u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[73]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[73]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(74u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[74]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[74]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(75u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[75]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[75]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(76u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[76]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[76]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(77u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[77]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[77]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(78u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[78]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[78]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(79u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[79]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[79]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(80u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[80]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[80]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(81u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[81]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[81]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(82u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[82]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[82]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(83u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[83]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[83]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(84u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[84]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[84]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(85u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[85]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[85]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(86u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[86]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[86]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(87u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[87]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[87]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(88u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[88]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[88]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(89u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[89]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[89]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(90u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[90]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[90]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(91u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[91]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[91]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(92u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[92]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[92]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(93u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[93]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[93]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(94u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[94]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[94]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(95u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[95]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[95]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(96u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[96]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[96]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(97u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[97]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[97]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(98u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[98]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[98]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(99u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[99]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[99]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(100u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[100]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[100]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(101u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[101]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[101]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(102u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[102]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[102]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(103u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[103]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[103]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(104u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[104]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[104]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(105u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[105]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[105]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(106u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[106]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[106]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(107u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[107]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[107]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(108u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[108]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[108]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(109u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[109]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[109]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(110u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[110]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[110]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(111u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[111]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[111]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(112u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[112]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[112]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(113u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[113]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[113]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(114u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[114]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[114]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(115u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[115]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[115]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(116u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[116]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[116]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(117u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[117]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[117]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(118u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[118]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[118]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(119u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[119]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[119]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(120u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[120]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[120]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(121u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[121]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[121]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(122u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[122]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[122]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(123u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[123]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[123]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(124u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[124]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[124]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(125u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[125]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[125]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(126u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[126]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[126]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(127u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[127]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[127]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(128u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[128]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[128]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(129u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[129]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[129]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(130u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[130]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[130]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(131u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[131]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[131]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(132u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[132]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[132]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(133u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[133]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[133]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(134u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[134]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[134]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(135u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[135]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[135]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(136u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[136]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[136]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(137u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[137]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[137]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(138u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[138]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[138]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(139u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[139]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[139]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(140u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[140]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[140]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(141u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[141]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[141]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(142u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[142]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[142]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(143u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[143]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[143]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(144u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[144]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[144]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(145u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[145]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[145]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(146u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[146]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[146]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(147u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[147]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[147]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(148u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[148]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[148]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(149u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[149]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[149]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(150u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[150]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[150]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(151u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[151]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[151]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(152u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[152]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[152]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(153u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[153]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[153]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(154u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[154]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[154]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(155u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[155]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[155]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(156u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[156]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[156]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(157u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[157]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[157]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(158u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[158]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[158]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(159u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[159]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[159]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(160u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[160]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[160]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(161u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[161]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[161]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(162u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[162]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[162]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(163u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[163]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[163]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(164u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[164]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[164]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(165u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[165]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[165]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(166u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[166]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[166]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(167u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[167]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[167]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(168u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[168]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[168]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(169u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[169]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[169]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(170u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[170]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[170]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(171u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[171]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[171]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(172u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[172]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[172]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(173u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[173]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[173]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(174u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[174]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[174]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(175u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[175]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[175]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(176u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[176]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[176]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(177u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[177]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[177]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(178u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[178]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[178]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(179u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[179]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[179]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(180u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[180]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[180]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(181u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[181]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[181]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(182u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[182]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[182]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(183u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[183]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[183]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(184u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[184]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[184]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(185u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[185]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[185]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(186u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[186]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[186]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(187u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[187]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[187]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(188u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[188]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[188]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(189u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[189]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[189]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(190u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[190]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[190]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(191u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[191]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[191]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(192u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[192]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[192]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(193u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[193]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[193]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(194u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[194]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[194]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(195u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[195]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[195]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(196u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[196]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[196]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(197u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[197]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[197]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(198u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[198]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[198]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(199u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[199]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[199]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(200u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[200]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[200]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(201u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[201]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[201]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(202u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[202]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[202]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(203u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[203]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[203]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(204u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[204]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[204]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(205u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[205]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[205]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(206u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[206]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[206]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(207u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[207]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[207]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(208u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[208]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[208]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(209u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[209]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[209]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(210u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[210]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[210]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(211u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[211]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[211]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(212u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[212]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[212]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(213u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[213]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[213]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(214u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[214]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[214]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(215u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[215]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[215]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(216u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[216]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[216]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(217u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[217]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[217]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(218u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[218]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[218]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(219u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[219]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[219]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(220u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[220]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[220]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(221u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[221]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[221]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(222u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[222]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[222]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(223u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[223]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[223]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(224u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[224]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[224]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(225u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[225]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[225]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(226u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[226]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[226]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(227u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[227]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[227]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(228u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[228]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[228]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(229u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[229]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[229]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(230u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[230]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[230]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(231u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[231]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[231]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(232u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[232]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[232]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(233u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[233]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[233]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(234u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[234]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[234]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(235u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[235]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[235]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(236u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[236]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[236]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(237u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[237]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[237]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(238u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[238]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[238]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(239u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[239]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[239]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(240u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[240]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[240]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(241u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[241]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[241]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(242u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[242]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[242]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(243u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[243]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[243]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(244u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[244]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[244]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(245u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[245]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[245]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(246u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[246]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[246]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(247u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[247]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[247]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(248u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[248]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[248]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(249u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[249]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[249]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(250u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[250]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[250]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(251u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[251]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[251]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(252u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[252]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[252]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(253u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[253]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[253]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(254u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[254]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[254]),
                     direction: LookupDirection::Send,
                 });
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(F::from_u64(255u64))],
-                    multiplicity: (SymbolicExpression::<F>::from(local[255]) * active.clone()),
+                    multiplicity: SymbolicExpression::<F>::from(local[255]),
                     direction: LookupDirection::Send,
                 });
             }
             _ => unreachable!("invalid generated AIR component"),
         }
         lookups
+    }
+
+    fn verifier_interactions<F: WitnessField>(public_values: &[F]) -> Vec<Interaction<F>> {
+        public_interactions(public_values)
     }
 }
 
@@ -5452,6 +5450,290 @@ impl<F: WitnessField> Program<F> for FibonacciEnsembleProgram {
         ]
     }
 
+    fn padding() -> Vec<Padding<F>> {
+        vec![
+            Padding {
+                input: vec![
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                ],
+                minimum_rows: 32,
+            },
+            Padding {
+                input: vec![
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                ],
+                minimum_rows: 32,
+            },
+            Padding {
+                input: vec![
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                    F::from_canonical_u64(0u64),
+                ],
+                minimum_rows: 32,
+            },
+        ]
+    }
+
     fn complete_row(component: usize, input: &[F]) -> Result<Vec<F>, String> {
         match component {
             0 => component_0(input),
@@ -5471,28 +5753,7 @@ impl<F: WitnessField> Program<F> for FibonacciEnsembleProgram {
     }
 
     fn verifier_interactions(public_input: &[F]) -> Vec<Interaction<F>> {
-        vec![
-            Interaction {
-                channel: "fibonacci",
-                multiplicity: (F::from_canonical_u64(2013265920u64) * F::from_canonical_u64(1u64)),
-                message: vec![
-                    public_input.get(0).copied().unwrap_or(F::ZERO),
-                    public_input.get(1).copied().unwrap_or(F::ZERO),
-                    public_input.get(2).copied().unwrap_or(F::ZERO),
-                ],
-                assume_guarantees: true,
-            },
-            Interaction {
-                channel: "fibonacci",
-                multiplicity: F::from_canonical_u64(1u64),
-                message: vec![
-                    F::from_canonical_u64(0u64),
-                    F::from_canonical_u64(0u64),
-                    F::from_canonical_u64(1u64),
-                ],
-                assume_guarantees: false,
-            },
-        ]
+        public_interactions(public_input)
     }
 }
 

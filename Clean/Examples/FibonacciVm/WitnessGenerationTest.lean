@@ -32,7 +32,7 @@ private def result : Except String (List ℕ × ℕ × ℕ × Bool × Bool) :=
 The verifier seed automatically creates 32 Fibonacci rows; their pulls create 32
 distinct addition rows; byte range checks are accumulated into the one fixed byte row.
 -/
-example : result = .ok ([32, 32, 1], 32, 2, true, true) := by native_decide
+example : result = .ok ([32, 32, 32], 32, 2, true, true) := by native_decide
 
 private def repeatedSteps : ℕ := 400
 
@@ -49,7 +49,7 @@ private def repeatedResult : Except String (List ℕ × Bool × Bool) :=
       channelsBalanced witness)
 
 /-- Repeated addition pulls coalesce after the period of Fibonacci modulo 256. -/
-example : repeatedResult = .ok ([400, 384, 1], true, true) := by native_decide
+example : repeatedResult = .ok ([512, 512, 32], true, true) := by native_decide
 
 private def invalidPublicInput : fieldTriple (F pBabybear) := (10, 42, 42)
 
@@ -89,7 +89,7 @@ private def constrainedVerifierEnsemble : Air.Flat.Ensemble (F pBabybear) unit w
   verifier_length_zero := by simp [constrainedVerifier, circuit_norm]
 
 private def constrainedVerifierRejected : Bool :=
-  match Air.Flat.Extraction.lower constrainedVerifierEnsemble { modes := [], fuel := 1 } with
+  match Air.Flat.Extraction.lower constrainedVerifierEnsemble { modes := [], padding := [], fuel := 1 } with
   | .error (.verifierConstraint 0) => true
   | _ => false
 

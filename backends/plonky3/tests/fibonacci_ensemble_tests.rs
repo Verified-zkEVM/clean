@@ -6,7 +6,7 @@ mod generated {
     include!("generated/fibonacci_ensemble.rs");
 }
 
-use clean_backend::witness_generation::pad;
+use clean_backend::witness_generation::{self, Interaction, Mode, Padding, Program, WitnessField};
 use clean_backend::{
     prove_ensemble, verify_ensemble, EnsembleShapeError, EnsembleVerificationError,
 };
@@ -27,7 +27,7 @@ fn extracted_rust_generates_fibonacci_ensemble_witness() {
 
     assert_eq!(
         witness.tables.iter().map(Vec::len).collect::<Vec<_>>(),
-        vec![32, 32, 1]
+        vec![32, 32, 32]
     );
     let bytes = &witness.tables[2][0];
     assert_eq!(
@@ -50,7 +50,7 @@ fn extracted_rust_coalesces_repeated_chip_pulls() {
 
     assert_eq!(
         witness.tables.iter().map(Vec::len).collect::<Vec<_>>(),
-        vec![400, 384, 1]
+        vec![512, 512, 32]
     );
 }
 
@@ -62,16 +62,14 @@ fn extracted_fibonacci_air_proves_and_verifies() {
     let witness =
         generated::generate(&public_values).expect("extracted Rust witness generation failed");
 
-    let padded = pad::<BabyBear, generated::FibonacciEnsembleProgram>(witness, 32)
-        .expect("failed to pad extracted witness");
-    let traces = padded.traces;
+    let traces = witness.into_traces().expect("invalid extracted traces");
     assert_eq!(
         traces.iter().map(Matrix::height).collect::<Vec<_>>(),
-        vec![32, 4096, 512, 32]
+        vec![4096, 512, 32]
     );
 
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
-    let airs = generated::FibonacciEnsembleProgramAir::all(&trace_heights, &padded.active_rows)
+    let airs = generated::FibonacciEnsembleProgramAir::all(&trace_heights)
         .expect("invalid generated AIR shape");
     let witness_elapsed = witness_started.elapsed();
     let proving_started = Instant::now();
@@ -96,44 +94,73 @@ fn ensemble_api_reports_shape_errors() {
     let public_values = vec![field(32), field(5), field(226)];
     let witness =
         generated::generate(&public_values).expect("extracted Rust witness generation failed");
-    let padded = pad::<BabyBear, generated::FibonacciEnsembleProgram>(witness, 32)
-        .expect("failed to pad extracted witness");
-    let trace_heights = padded.traces.iter().map(Matrix::height).collect::<Vec<_>>();
-    let airs = generated::FibonacciEnsembleProgramAir::all(&trace_heights, &padded.active_rows)
+    let traces = witness.into_traces().expect("invalid extracted traces");
+    let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
+    let airs = generated::FibonacciEnsembleProgramAir::all(&trace_heights)
         .expect("invalid generated AIR shape");
-    let mut traces = padded.traces;
+    let mut traces = traces;
     traces.pop();
 
     assert!(matches!(
         prove_ensemble(&config, &airs, traces, &public_values),
-        Err(EnsembleShapeError::TraceCount { airs: 4, traces: 3 })
+        Err(EnsembleShapeError::TraceCount { airs: 3, traces: 2 })
     ));
     assert!(matches!(
-        generated::FibonacciEnsembleProgramAir::all(&trace_heights[..3], &padded.active_rows),
+        generated::FibonacciEnsembleProgramAir::all(&trace_heights[..2]),
         Err(EnsembleShapeError::ComponentCount {
-            expected: 4,
-            trace_heights: 3,
-            active_rows: 4
+            expected: 3,
+            trace_heights: 2,
         })
     ));
+}
+
+struct Minimum64Program;
+
+impl<F: WitnessField> Program<F> for Minimum64Program {
+    const FUEL: usize = <generated::FibonacciEnsembleProgram as Program<F>>::FUEL;
+    const COMPONENTS: usize = <generated::FibonacciEnsembleProgram as Program<F>>::COMPONENTS;
+
+    fn modes() -> Vec<Mode<F>> {
+        generated::FibonacciEnsembleProgram::modes()
+    }
+
+    fn padding() -> Vec<Padding<F>> {
+        generated::FibonacciEnsembleProgram::padding()
+            .into_iter()
+            .map(|padding| Padding {
+                minimum_rows: 64,
+                ..padding
+            })
+            .collect()
+    }
+
+    fn complete_row(component: usize, input: &[F]) -> Result<Vec<F>, String> {
+        generated::FibonacciEnsembleProgram::complete_row(component, input)
+    }
+
+    fn interactions(component: usize, row: &[F]) -> Vec<Interaction<F>> {
+        generated::FibonacciEnsembleProgram::interactions(component, row)
+    }
+
+    fn verifier_interactions(public_input: &[F]) -> Vec<Interaction<F>> {
+        generated::FibonacciEnsembleProgram::verifier_interactions(public_input)
+    }
 }
 
 #[test]
 fn verifier_rejects_a_valid_proof_at_the_wrong_height() {
     let config = setup::test_config(11);
     let public_values = vec![field(32), field(5), field(226)];
-    let witness =
+    let expected =
         generated::generate(&public_values).expect("extracted Rust witness generation failed");
-    let expected = pad::<BabyBear, generated::FibonacciEnsembleProgram>(witness.clone(), 32)
-        .expect("failed to pad expected witness");
-    let wrong = pad::<BabyBear, generated::FibonacciEnsembleProgram>(witness, 64)
-        .expect("failed to pad wrong-height witness");
+    let wrong = witness_generation::generate::<BabyBear, Minimum64Program>(&public_values)
+        .expect("wrong-height witness generation failed");
 
-    let wrong_heights = wrong.traces.iter().map(Matrix::height).collect::<Vec<_>>();
-    let wrong_airs =
-        generated::FibonacciEnsembleProgramAir::all(&wrong_heights, &wrong.active_rows)
-            .expect("invalid wrong-height AIR shape");
-    let (wrong_proof, _) = prove_ensemble(&config, &wrong_airs, wrong.traces, &public_values)
+    let wrong_traces = wrong.into_traces().expect("invalid wrong-height traces");
+    let wrong_heights = wrong_traces.iter().map(Matrix::height).collect::<Vec<_>>();
+    let wrong_airs = generated::FibonacciEnsembleProgramAir::all(&wrong_heights)
+        .expect("invalid wrong-height AIR shape");
+    let (wrong_proof, _) = prove_ensemble(&config, &wrong_airs, wrong_traces, &public_values)
         .expect("invalid wrong-height proving shape");
     verify_ensemble(&config, &wrong_airs, &wrong_proof, &public_values)
         .expect("the wrong-height proof must be otherwise valid");
@@ -143,14 +170,13 @@ fn verifier_rejects_a_valid_proof_at_the_wrong_height() {
         Err(EnsembleVerificationError::Proof(_))
     ));
 
-    let expected_heights = expected
-        .traces
+    let expected_traces = expected.into_traces().expect("invalid expected traces");
+    let expected_heights = expected_traces
         .iter()
         .map(Matrix::height)
         .collect::<Vec<_>>();
-    let expected_airs =
-        generated::FibonacciEnsembleProgramAir::all(&expected_heights, &expected.active_rows)
-            .expect("invalid expected AIR shape");
+    let expected_airs = generated::FibonacciEnsembleProgramAir::all(&expected_heights)
+        .expect("invalid expected AIR shape");
     assert!(matches!(
         verify_ensemble(&config, &expected_airs, &wrong_proof, &public_values),
         Err(EnsembleVerificationError::Shape(

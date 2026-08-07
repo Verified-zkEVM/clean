@@ -4,7 +4,7 @@ This directory contains the channel-based Fibonacci VM used to exercise generic 
 generation and the Rust/Plonky3 extraction path.
 
 - `Circuit.lean` defines the byte and addition chips, the Fibonacci VM, its formally sound
-  ensemble, and the explicit witness-generation modes.
+  ensemble, and the explicit witness-generation and semantic-padding configuration.
 - `WitnessGenerationTest.lean` executes the generic ensemble witness builder in Lean. It checks
   constraints and channel balance, repeated-pull coalescing, byte multiplicities greater than one,
   and fuel exhaustion.
@@ -31,6 +31,7 @@ cargo test --release --manifest-path backends/plonky3/Cargo.toml \
   --test fibonacci_ensemble_tests -- --nocapture
 ```
 
-The proof test takes public values `(steps, x, y)`, generates all component traces without invoking
-Lean, proves the resulting Plonky3 batch, and verifies it. External `ProverData` and hint reads are
-not supported by this extraction slice.
+The proof test takes public values `(steps, x, y)`, generates power-of-two component traces without
+invoking Lean, proves the resulting Plonky3 batch, and verifies it. The verifier's initial and final
+Fibonacci interactions are public contributions to the channel argument rather than a synthetic
+trace. External `ProverData` and hint reads are not supported by this extraction slice.

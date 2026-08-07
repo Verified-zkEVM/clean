@@ -25,8 +25,9 @@ Before changing the Plonky3 backend, Clean must gain a generic, executable way t
 feature, not a Plonky3 or Fibonacci feature, and must be testable with the Lean reference evaluator
 in isolation.
 
-Ensemble witness generation is driven automatically by channel imbalance. The verifier row is
-constructed from the public input and its channel interactions seed a deterministic worklist.
+Ensemble witness generation is driven automatically by channel imbalance. The verifier circuit's
+interactions are evaluated from the public input and seed a deterministic worklist; the verifier
+does not produce a component table.
 Opposite interactions carrying the same channel message cancel. Any remaining interaction is
 routed to the component registered to handle that channel and polarity; materializing or updating
 that row may produce more interactions. Generation terminates when the worklist is balanced.
@@ -44,10 +45,16 @@ and aggregation policy. The declarations must also specify how a trigger message
 map to component input cells. The builder must not attempt to infer allocation, deduplication,
 termination, or padding policy from circuit expressions.
 
+Each component also declares a semantic padding input and minimum height. The builder completes
+that input with the component's ordinary witness program, adds enough rows to reach a power-of-two
+height, and balances any interactions produced by those rows. If balancing grows another table,
+padding and balancing repeat. There is no backend-only active-row selector or constraint gating:
+every committed row is a valid Clean row and participates in its declared interactions.
+
 The generic builder derives component order and widths from the `Ensemble`, runs each component's
-existing row-local Witgen IR to complete rows, evaluates the rows' channel interactions, constructs
-the verifier row, and assembles the `EnsembleWitness`. It must not know Fibonacci component names,
-channel names, or schedules.
+existing row-local Witgen IR to complete rows, evaluates row and verifier interactions, and
+assembles the `EnsembleWitness`. It must not know Fibonacci component names, channel names, or
+schedules.
 
 When an existing row is updated—for example, when a chip multiplicity increases—the builder must
 replace that row's previous contribution to channel imbalance with its new contribution. It must
@@ -98,9 +105,9 @@ reject unsupported data-dependent programs rather than ignore them.
 5. Updating a row changes the global channel imbalance by the delta between its old and new
    interactions, so unchanged nested pulls or pushes are not counted twice.
 6. Missing or ambiguous handlers, malformed row inputs, non-termination/fuel exhaustion,
-   multiplicity overflow, and unsupported padding are reported as explicit errors.
+   multiplicity overflow, and malformed padding declarations are reported as explicit errors.
 7. The structured IR can express multiple component tables, deterministic worklist/scan state,
-   public input construction, and trace padding needed by `FibonacciWithChannels`.
+   verifier interactions, and semantic trace padding needed by `FibonacciWithChannels`.
 8. All code reachable through the export path is structured IR; native witness closures are
    rejected with their locations.
 9. Fibonacci generation declarations produce a non-trivial witness in Lean whose component
@@ -143,7 +150,8 @@ grant milestone.
 5. The prover and verifier accept the public Fibonacci input explicitly and establish the
    Clean-level statement represented by `fibonacci_soundness`.
 6. Plonky3 channel arguments enforce balance across all participating rows and components,
-   including conditional multiplicities and the public-input verifier interaction.
+   including conditional multiplicities and public-input verifier interactions supplied directly
+   to the argument without a synthetic verifier trace.
 7. A valid proof generated with a verifier-unexpected static trace height is rejected.
 8. Negative tests reject altered public values, unbalanced or malformed channel traces, and
    invalid component witnesses.
@@ -203,9 +211,9 @@ the cryptographic opening.
 
 ### Public inputs are required
 
-The polished demo must support public inputs end to end. Public values must be represented in the
-generated Rust AIR, included in the proof statement/transcript as required by Plonky3, and checked
-by the verifier.
+The polished demo must support public inputs end to end. Public values must be included in the
+proof statement/transcript as required by Plonky3, drive the verifier-side channel interactions,
+and be checked by the verifier.
 
 The main demonstrated claim must not be expressed solely through constants hard-coded into a
 generated circuit artifact.

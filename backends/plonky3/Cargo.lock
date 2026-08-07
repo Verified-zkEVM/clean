@@ -267,7 +267,6 @@ dependencies = [
 [[package]]
 name = "p3-batch-stark"
 version = "0.4.2"
-source = "git+https://github.com/Plonky3/Plonky3?rev=47e442f#47e442ffb5ad5f6c86f845e48283867f348243ba"
 dependencies = [
  "hashbrown 0.16.1",
  "itertools",

@@ -303,6 +303,11 @@ Channel-driven witness-generation metadata, aligned with
 -/
 def config (fuel : ℕ) : Config (F p) where
   modes := [fibMode (p := p), add8Mode (p := p), bytesMode (p := p)]
+  padding := [
+    { input := #[0, 0, 0, 0], minimumRows := 32 },
+    { input := #[0, 0, 0, 0], minimumRows := 32 },
+    { input := Array.replicate 256 0, minimumRows := 32 }
+  ]
   fuel := fuel
 
 /-- Generate a complete ensemble witness from the claimed public final state. -/
