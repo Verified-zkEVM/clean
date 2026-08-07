@@ -768,18 +768,22 @@ def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : TacticM Unit :
         let t := (← instantiateMVars (← getMainTarget)).consumeMData
         let .const headName _ := t.getAppFn | evalCloseRun
         if headName == `Subcircuit.ComputableWitnesses then
+          -- offset_eq variants keep the subcircuit's type-index offset separate
+          -- from the computability offset: unifying a single-`n` rule against two
+          -- defeq-but-differently-spelled offsets makes isDefEq whnf-execute the
+          -- operations list (heartbeat blowup on mapFinRange-built circuits). The
+          -- `m = n` premise is discharged arithmetically over the asserted lengths.
+          -- `WithHint`'s rule takes the input variable explicitly (extra underscore).
           let tryVariant (nm : Name) : TacticM Bool := do
             let st ← Tactic.saveState
+            let discharge ← `(term| (by
+              (try simp only [circuit_norm, computable_witnesses_norm,
+                reduceLocalLength, $lemmasArray,*]) <;> omega))
             try
-              -- offset_eq variants keep the subcircuit's type-index offset separate
-              -- from the computability offset: unifying a single-`n` rule against two
-              -- defeq-but-differently-spelled offsets makes isDefEq whnf-execute the
-              -- operations list (heartbeat blowup on mapFinRange-built circuits). The
-              -- `m = n` premise is discharged arithmetically over the asserted lengths.
-              evalTactic (← `(tactic| refine $(mkIdent nm) _
-                (by
-                  (try simp only [circuit_norm, computable_witnesses_norm,
-                    reduceLocalLength, $lemmasArray,*]) <;> omega) fun h_agrees => ?_))
+              if nm == `GeneralFormalCircuit.WithHint.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq then
+                evalTactic (← `(tactic| refine $(mkIdent nm) _ _ $discharge fun h_agrees => ?_))
+              else
+                evalTactic (← `(tactic| refine $(mkIdent nm) _ $discharge fun h_agrees => ?_))
               pure true
             catch _ =>
               st.restore
@@ -798,7 +802,11 @@ def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : TacticM Unit :
               unless (← getGoals).isEmpty do
                 evalCloseRun
           else
-            evalTactic (← `(tactic| grind))
+            -- no composition rule applied: still normalize before grind — witness IR
+            -- and metadata spellings are not grind-reachable in raw form
+            simpPass
+            unless (← getGoals).isEmpty do
+              evalTactic (← `(tactic| grind))
         else
           evalTactic (← `(tactic| (try chain_output_facts)))
           unless (← getGoals).isEmpty do

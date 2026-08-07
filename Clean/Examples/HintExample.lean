@@ -69,18 +69,6 @@ def booleanAnd : FormalCircuit (F p) Input field where
     rcases h_assumptions with ⟨ x | notx, y | noty ⟩
     <;> simp_all
 
-  computableWitnesses := by
-    -- explicit version of `computable_witnesses`, split where grind needs help
-    intro n input env env'
-    obtain ⟨x, y⟩ := input
-    simp only [circuit_norm, computable_witnesses_norm, ComputableWitnesses.structEqSplit]
-    refine ⟨fun h_input => ?_, ?_⟩
-    · -- WithHint subcircuit node: the composition lemma, input equality from the components
-      apply GeneralFormalCircuit.WithHint.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _ _ rfl
-      simp only [circuit_norm]
-      grind
-    · grind
-
 structure MixedInput (F : Type) where
   someElement : U32 F
   someHint : UnconstrainedNative Bool F
