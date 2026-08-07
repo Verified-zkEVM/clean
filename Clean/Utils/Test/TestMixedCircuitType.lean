@@ -52,11 +52,6 @@ def circuit : GeneralFormalCircuit.WithHint F Input field where
     refine ⟨ ?_, h_env ⟩
     rwa [h_env]
 
-  computableWitnesses := by
-    intro n input
-    simp_all only [circuit_norm, Witgen.M.eval_toIRLiteral]
-    grind
-
 def parent : GeneralFormalCircuit F field field where
   main (input : Expression F) := do
     circuit { x := input, inverse := unconstrained (do return input⁻¹) }
@@ -79,19 +74,6 @@ def parent : GeneralFormalCircuit F field field where
     -- inline inverse hint.
     guard_target = input * input⁻¹ = 1
     exact mul_inv_cancel₀ (G₀ := F) h_assumptions
-
-  computableWitnesses := by
-    intro n input env env'
-    refine ⟨?_, ?_⟩
-    · -- forAll: single WithHint subcircuit; computable once the child input agrees
-      simp only [circuit_norm]
-      intro h_input
-      apply GeneralFormalCircuit.WithHint.toSubcircuit_computableWitnesses
-      simp only [circuit_norm, h_input]
-    · -- output: the subcircuit's freshly-witnessed output, fixed by environment agreement
-      intro _ h_agrees
-      simp only [circuit_norm] at h_agrees ⊢
-      grind
 
 structure BoolU64Input (F : Type) where
   x : F
@@ -119,11 +101,6 @@ def boolU64Circuit : GeneralFormalCircuit.WithHint F BoolU64Input field where
   completeness := by
     circuit_proof_start
 
-  computableWitnesses := by
-    intro n input
-    simp_all only [circuit_norm]
-    grind
-
 def boolU64Parent : GeneralFormalCircuit F field field where
   main (input : Expression F) := do
     boolU64Circuit {
@@ -140,17 +117,5 @@ def boolU64Parent : GeneralFormalCircuit F field field where
 
   completeness := by
     circuit_proof_start [boolU64Circuit]
-
-  computableWitnesses := by
-    intro n input env env'
-    refine ⟨?_, ?_⟩
-    · -- forAll: single WithHint subcircuit; computable once the child input agrees
-      simp only [circuit_norm]
-      intro h_input
-      apply GeneralFormalCircuit.WithHint.toSubcircuit_computableWitnesses
-      simp only [circuit_norm, h_input]
-    · -- output is the parent input itself, fixed by the input agreement
-      intro h_input _
-      simpa only [circuit_norm, CircuitType.eval_var_prover_to_verifier] using h_input
 
 end TestMixedCircuitType
