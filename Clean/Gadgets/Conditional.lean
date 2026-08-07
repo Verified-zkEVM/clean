@@ -96,31 +96,9 @@ def circuit [DecidableEq F] : FormalCircuit F (Inputs M) M where
   Spec
   soundness
   completeness
-  -- Manual: closes with the bare tactic in isolation but is budget-borderline and flips
-  -- with unrelated import changes (grind context sensitivity); kept explicit until the
-  -- close is deterministic on this goal.
   computableWitnesses := by
-    intro n input env env'
-    -- destructure up front: simp does not iota-reduce the `match` coming from `main`'s
-    -- destructuring against an opaque variable
-    obtain ⟨selector, ifTrue, ifFalse⟩ := input
-    refine ⟨?_, ?_⟩
-    · -- forAll part (witnesses/subcircuits are computable) — closes automatically
-      simp only [circuit_norm]
-      try (unfold_formal_circuit_consts; simp only [circuit_norm])
-    · -- output part: the output agrees given the input agrees (+ AgreesBelow)
-      intro h_input h_agrees
-      simp_all only [circuit_norm, Inputs.mk.injEq] -- TODO our tactic could be able to break up h_input
-      -- HARD TO AUTOMATE: goal is now
-      --   eval env.toEnvironment (fromElements (Vector.ofFn fun i => selector*(…)+…))
-      --     = eval env'.toEnvironment (…)
-      simp_rw [ProvableType.eval_fromElements]
-      congr 1
-      rw [Vector.ext_iff]
-      intro i hi
-      simp only [circuit_norm]
-      simp_rw [ProvableType.getElem_eval_toElements]
-      simp_all
+    computable_witnesses [ProvableType.eval_fromElements, ProvableType.getElem_eval_toElements,
+      Vector.ext_iff]
 
 /--
 Conditional selection.

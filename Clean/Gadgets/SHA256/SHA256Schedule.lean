@@ -613,9 +613,6 @@ def circuit : FormalCircuit (F p) SHA256Block SHA256Schedule where
   computableWitnesses := by
     intro n input env env'
     simp only [circuit_norm, main, messageSchedule]
-    have es1 : ∀ x, (LowerSigma1.circuit (p:=p)).localLength x = 64 := fun _ => rfl
-    have es0 : ∀ x, (LowerSigma0.circuit (p:=p)).localLength x = 64 := fun _ => rfl
-    have ea : ∀ x, (Add32.circuit (p:=p)).localLength x = 33 := fun _ => rfl
     -- `Vector.get` spellings in `scheduleStep` bridge to `getElem` by rfl
     have hget : ∀ (v : Vector (fields 32 (Expression (F p))) 64) (i : Fin 64),
         v.get i = v[i.val] := fun _ _ => rfl
@@ -630,7 +627,7 @@ def circuit : FormalCircuit (F p) SHA256Block SHA256Schedule where
       refine ⟨fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_⟩
       all_goals
         refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-          (by try simp only [es1, es0, ea]; try omega) fun h_agrees => ?_
+          (by simp only [circuit_norm]) fun h_agrees => ?_
       all_goals
         have hsched := varSchedule_eval_congr (i₀ := n) h iv (by omega)
           (fun j hj => h_agrees.1 j (by omega))

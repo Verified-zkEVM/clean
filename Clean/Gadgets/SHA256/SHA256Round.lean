@@ -254,23 +254,17 @@ def circuit : FormalCircuit (F p) Inputs SHA256State where
   computableWitnesses := by
     intro n input env env'
     obtain ⟨state, k, w⟩ := input
-    -- constant but tactic-defined localLength metadata, exposed by rfl for offset arithmetic
-    have e1 : ∀ x, (UpperSigma1.circuit (p:=p)).localLength x = 64 := fun _ => rfl
-    have e2 : ∀ x, (UpperSigma0.circuit (p:=p)).localLength x = 64 := fun _ => rfl
-    have e3 : ∀ x, (Ch32.circuit (p:=p)).localLength x = 32 := fun _ => rfl
-    have e4 : ∀ x, (Add32.circuit (p:=p)).localLength x = 33 := fun _ => rfl
-    have e5 : ∀ x, (Maj32.circuit (p:=p)).localLength x = 64 := fun _ => rfl
-    simp only [circuit_norm, main, sha256Round, e1, e2, e3, e4, e5]
+    simp only [circuit_norm, main, sha256Round]
     refine ⟨⟨fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_,
              fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_⟩,
       fun h h_agrees => ?output⟩
     case output => exact output_eval_congr h.1 h_agrees
     all_goals
       exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by try simp only [e1, e2, e3, e4, e5]; try omega) fun h_agrees => by
+        (by simp only [circuit_norm]) fun h_agrees => by
           have hel := fun (jj : ℕ) (hjj : jj < 8) => map_eval_getElem_congr h.1 jj hjj
           simp only [circuit_norm]
-          (try and_intros) <;> grind
+          and_intros <;> grind
 
 end SHA256Round
 end Gadgets.SHA256

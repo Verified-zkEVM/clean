@@ -40,8 +40,11 @@ def concat
   completeness := by
     simp only [circuit_norm]
     aesop
-  -- Manual: generic construction over abstract child circuits; closes with the bare
-  -- tactic in isolation but flips with import context (grind sensitivity).
+  -- Manual: generic construction over abstract child circuits. The tactic's grind close
+  -- cannot instantiate `output_of_input_eq` here — the goal spells the child metadata as raw
+  -- structure projections (`circuit1.elaborated.1`), which defeats e-matching even when the
+  -- lemma is hinted — and the offset bounds need `h_localLength_stable` applied at specific
+  -- output instantiations.
   computableWitnesses := by
     simp only [circuit_norm]
     intros n input env env'

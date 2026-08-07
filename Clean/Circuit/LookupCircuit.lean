@@ -94,24 +94,7 @@ def lookupCircuit (circuit : LookupCircuit F α β) (hint : ProverHint F) :
     simp only [h_input] at h_env ⊢
     use h_assumptions
 
-  -- Manual: the witness is a native hint program (WitgenIR.nativeValue over the wrapped
-  -- circuit's constantOutput); outside the ProvableType composition rules, and
-  -- budget-borderline under the bare tactic.
-  computableWitnesses := by
-    intro n input env env'
-    refine ⟨?_, ?_⟩
-    · -- forAll: the sole witness is the native output value; the lookup adds no witness/subcircuit
-      simp only [circuit_norm, Witgen.WitgenIR.eval_nativeValue]
-      grind
-    · -- output: the freshly-witnessed output var only reads offsets `[n, n+size β)`,
-      -- so environment agreement below `n + localLength` gives equality
-      intro _ h_agrees
-      simp only [circuit_norm] at h_agrees ⊢
-      rw [ProvableType.eval_varFromOffset, ProvableType.eval_varFromOffset]
-      congr 1
-      ext i hi
-      simp only [Vector.getElem_mapRange]
-      exact h_agrees.1 (n + i) (by omega)
+  computableWitnesses := by computable_witnesses [Witgen.WitgenIR.eval_nativeValue]
 
 @[circuit_norm]
 def lookup (circuit : LookupCircuit F α β) (hint : ProverHint F) (input : Var α F) : Circuit F (Var β F) :=
