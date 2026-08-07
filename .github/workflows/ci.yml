@@ -45,6 +45,7 @@ jobs:
         run: |
           cargo test --release -- --nocapture test_lean_circuit_end_to_end
           cargo test --release --test fibonacci_ensemble_tests -- --nocapture
+          cargo test --release --test femtocairo_flat_air_tests -- --nocapture
           cargo test test_tampered_multiplicity
           cargo test --release test_tampered_multiplicity
           cargo test --release -- --nocapture test_femtocairo

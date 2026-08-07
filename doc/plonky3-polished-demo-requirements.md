@@ -213,6 +213,19 @@ bound (`i < 256`) inside Lean soundness. Their declared height is exact: the wit
 not power-of-two-pad such a component beyond that height, and the verifier rejects a proof shape
 whose main trace height differs from the fixed trace height.
 
+### Implemented Flat AIR substrate
+
+The first external-data slice uses unique component names as `ProverData` keys and explicit
+`dataColumns` projections as their values. An `EnsembleWitness` derives this data from committed
+component rows, and table assumptions carry the resulting data-consistency fact into component
+soundness proofs.
+
+FemtoCairo now exercises this substrate with indexed fixed program and memory providers, a
+channel-connected execution component, and a public final state. Its extracted Rust witness reads
+memory through the derived data, and the generated Plonky3 AIR proves and verifies an eight-step
+program with non-trivial AP- and FP-relative reads. This is a correctness substrate, not yet the
+realistically sized performance demonstration required for the final milestone.
+
 ### Verifier-known trace shape must be bound
 
 Verifier-known static trace heights and other static shape metadata must not be accepted from the
@@ -393,10 +406,6 @@ The polished milestone is acceptable only when all of the following hold:
 
 ## Open design questions
 
-- Which component row projection should define each named `ProverData` entry, including whether
-  multiplicity and padding-only columns are omitted?
-- Where should the generic theorem live that transports facts about component-derived data into
-  ensemble-level soundness proofs?
 - What public-input/output statement should the FemtoCairo demo prove?
 - Which trace heights are static, dynamic, or public, and what bounds apply to dynamic heights?
 - What is the minimum realistic FemtoCairo workload, and which instructions and memory behaviors
