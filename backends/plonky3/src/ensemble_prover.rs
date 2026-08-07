@@ -3,7 +3,7 @@
 use alloc::vec::Vec;
 
 use p3_air::Air;
-#[cfg(debug_assertions)]
+#[cfg(all(debug_assertions, not(doc)))]
 use p3_batch_stark::DebugConstraintBuilderWithLookups;
 use p3_batch_stark::{prove_batch, verify_batch, BatchProof, ProverData, StarkInstance};
 use p3_field::BasedVectorSpace;
@@ -20,7 +20,7 @@ pub trait EnsembleAir {
     fn trace_height(&self) -> usize;
 }
 
-#[cfg(debug_assertions)]
+#[cfg(all(debug_assertions, not(doc)))]
 #[doc(hidden)]
 pub trait ProverAir<SC: StarkGenericConfig>:
     Air<SymbolicAirBuilder<Val<SC>, SC::Challenge>>
@@ -30,7 +30,7 @@ pub trait ProverAir<SC: StarkGenericConfig>:
 {
 }
 
-#[cfg(debug_assertions)]
+#[cfg(all(debug_assertions, not(doc)))]
 impl<SC, A> ProverAir<SC> for A
 where
     SC: StarkGenericConfig,
@@ -41,7 +41,7 @@ where
 {
 }
 
-#[cfg(not(debug_assertions))]
+#[cfg(any(not(debug_assertions), doc))]
 #[doc(hidden)]
 pub trait ProverAir<SC: StarkGenericConfig>:
     Air<SymbolicAirBuilder<Val<SC>, SC::Challenge>>
@@ -50,7 +50,7 @@ pub trait ProverAir<SC: StarkGenericConfig>:
 {
 }
 
-#[cfg(not(debug_assertions))]
+#[cfg(any(not(debug_assertions), doc))]
 impl<SC, A> ProverAir<SC> for A
 where
     SC: StarkGenericConfig,
