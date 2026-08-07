@@ -27,11 +27,11 @@ Per step, `scheduleStep` creates:
 def scheduleStep (w : SHA256Schedule (Expression (F p))) (i : Fin 48) :
     Circuit (F p) (SHA256Schedule (Expression (F p))) := do
   let j := i.val + 16
-  let s1   ← LowerSigma1.circuit (w.get ⟨j - 2,  by omega⟩)
-  let s0   ← LowerSigma0.circuit (w.get ⟨j - 15, by omega⟩)
-  let sum0 ← Add32.circuit ⟨s1, w.get ⟨j - 7, by omega⟩⟩
+  let s1   ← LowerSigma1.circuit (w[j - 2]'(by omega))
+  let s0   ← LowerSigma0.circuit (w[j - 15]'(by omega))
+  let sum0 ← Add32.circuit ⟨s1, w[j - 7]'(by omega)⟩
   let sum1 ← Add32.circuit ⟨sum0, s0⟩
-  let wj   ← Add32.circuit ⟨sum1, w.get ⟨j - 16, by omega⟩⟩
+  let wj   ← Add32.circuit ⟨sum1, w[j - 16]'(by omega)⟩
   return w.set (⟨j, by omega⟩ : Fin 64) wj
 
 @[implicit_reducible]
@@ -81,7 +81,7 @@ def varSchedule (i₀ : ℕ) (input_var_block : SHA256Block (Expression (F p))) 
 
 /-- Value-level schedule after `k` expansion steps. -/
 def valSchedule (input_block : Vector ℕ 16) : ℕ → Vector ℕ 64
-  | 0 => Vector.mapFinRange 64 fun i => if h : i.val < 16 then input_block.get ⟨i.val, h⟩ else 0
+  | 0 => Vector.mapFinRange 64 fun i => if h : i.val < 16 then input_block[i.val]'h else 0
   | k + 1 =>
     if h : k < 48 then
       let prev := valSchedule input_block k
@@ -108,7 +108,7 @@ lemma messageSchedule_eq_valSchedule (input_block : Vector ℕ 16) :
       w.set (n + 16) wj hj
     else w with hbody_def
   set init : Vector ℕ 64 :=
-    Vector.mapFinRange 64 fun i => if h : i.val < 16 then input_block.get ⟨i.val, h⟩ else 0
+    Vector.mapFinRange 64 fun i => if h : i.val < 16 then input_block[i.val]'h else 0
   -- Rephrase RHS bodies in terms of `body`.
   have hspec : Fin.foldl 48 (fun w (i : Fin 48) =>
       w.set (i.val + 16)
@@ -308,8 +308,6 @@ lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F p)))
           Vector.replicate 48 (Vector.replicate 32 (0 : Expression (F p))))[j]) = _
         rw [Vector.getElem_append_left hj16]
         simp only [Vector.getElem_mapFinRange, hj16, dif_pos]
-        rw [show (Vector.map valueBits input).get ⟨j, hj16⟩ =
-              (Vector.map valueBits input)[j]'hj16 from rfl]
         rw [Vector.getElem_map]
         congr 1
         rw [getElem_eval_vector, h_input]
@@ -374,12 +372,11 @@ lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F p)))
       LowerSigma0.Assumptions, LowerSigma0.Spec, Add32.Assumptions, Add32.Spec, and_imp] at h_step
     obtain ⟨c_sig1, c_sig0, c_sum0, c_sum1, c_wj⟩ := h_step
     -- Establish normalization of indexed positions via IH.
-    -- Convert `Vector.get x ⟨i, h⟩` to `x[i]` for our IH lemmas.
+    -- Bridge the raw `Vector.map (Expression.eval env)` spelling to `eval env` for the IH lemmas.
     have h_eval_get : ∀ (x : SHA256Schedule (Expression (F p))) (i : ℕ) (h : i < 64),
-        Vector.map (Expression.eval env) (Vector.get x ⟨i, h⟩) = eval env (x[i]'h) := by
+        Vector.map (Expression.eval env) (x[i]'h) = eval env (x[i]'h) := by
       intros x i h
-      rw [show Vector.get x ⟨i, h⟩ = x[i]'h from rfl,
-          CircuitType.eval_var_fields]
+      rw [CircuitType.eval_var_fields]
     have h_norm_m2 : Normalized (eval env ((varSchedule i₀ input_var k)[k + 16 - 2]'(by omega))) :=
       ih_norm (k + 16 - 2) (by omega)
     have h_norm_m7 : Normalized (eval env ((varSchedule i₀ input_var k)[k + 16 - 7]'(by omega))) :=
@@ -529,10 +526,10 @@ theorem completeness : Completeness (F p) (Input := SHA256Block) (Output := SHA2
       -- We need to show Normalized at slot j for varSchedule (k+1).
       obtain ⟨c_sig1, c_sig0, c_sum0, c_sum1, c_wj⟩ := h_step
       have h_eval_get : ∀ (x : SHA256Schedule (Expression (F p))) (i : ℕ) (h : i < 64),
-          Vector.map (Expression.eval env.toEnvironment) (Vector.get x ⟨i, h⟩) =
+          Vector.map (Expression.eval env.toEnvironment) (x[i]'h) =
             eval env.toEnvironment (x[i]'h) := by
         intros x i h
-        rw [show Vector.get x ⟨i, h⟩ = x[i]'h from rfl,
+        rw [
             CircuitType.eval_var_fields]
       have h_norm_m2 := ih (k + 16 - 2) (by omega)
       have h_norm_m7 := ih (k + 16 - 7) (by omega)
@@ -585,11 +582,10 @@ theorem completeness : Completeness (F p) (Input := SHA256Block) (Output := SHA2
   -- Extract the chain from h_env_i.
   obtain ⟨e_sig1, e_sig0, e_sum0, e_sum1, e_wj⟩ := h_env_i
   have h_eval_get : ∀ (x : SHA256Schedule (Expression (F p))) (i : ℕ) (h : i < 64),
-      Vector.map (Expression.eval env.toEnvironment) (Vector.get x ⟨i, h⟩) =
+      Vector.map (Expression.eval env.toEnvironment) (x[i]'h) =
         eval env.toEnvironment (x[i]'h) := by
     intros x i h
-    rw [show Vector.get x ⟨i, h⟩ = x[i]'h from rfl,
-        CircuitType.eval_var_fields]
+    rw [CircuitType.eval_var_fields]
   have h_norm_m2 := ih (i.val + 16 - 2) (by omega)
   have h_norm_m7 := ih (i.val + 16 - 7) (by omega)
   have h_norm_m15 := ih (i.val + 16 - 15) (by omega)
