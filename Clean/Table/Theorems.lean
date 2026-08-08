@@ -63,7 +63,7 @@ def every_row_two_rows_induction {P : (N : ℕ) → TraceOfLength F S N → Sort
       (every_row_two_rows_induction zero one more N ⟨rest, eq⟩)
       (every_row_two_rows_induction zero one more (N + 1) ⟨rest +> curr, by rw [Trace.len, eq]⟩)
 
-def everyRowTwoRowsInduction' {P : (N : ℕ+) → TraceOfLength F S N → Prop}
+theorem everyRowTwoRowsInduction' {P : (N : ℕ+) → TraceOfLength F S N → Prop}
     (one : ∀ row : Row F S, P 1 ⟨<+> +> row, rfl⟩)
     (more : ∀ (N : ℕ) (curr next : Row F S) (rest : TraceOfLength F S N),
       P ⟨N + 1, Nat.succ_pos N⟩ ⟨rest.val +> curr, by simp [Trace.len, rest.property]⟩ →
@@ -75,9 +75,11 @@ def everyRowTwoRowsInduction' {P : (N : ℕ+) → TraceOfLength F S N → Prop}
   have goal' := every_row_two_rows_induction (P:=P') trivial one (by
     intro N curr next rest h_rest h_curr
     exact more N curr next rest h_curr) N trace
-  simpa [P', N.pos] using goal'
+  simp only [P'] at goal'
+  rw [dif_neg N.pos.ne'] at goal'
+  exact goal'
 
-def two_row_induction {prop : Row F S → ℕ → Prop}
+theorem two_row_induction {prop : Row F S → ℕ → Prop}
     (zero : ∀ first_row : Row F S, prop first_row 0)
     (succ : ∀ (N : ℕ) (curr next : Row F S), prop curr N → prop next (N + 1))
     : ∀ N (trace : TraceOfLength F S N), ForAllRowsOfTraceWithIndex trace prop := by
@@ -125,7 +127,7 @@ variable {F : Type} [FiniteField F] {S : Type → Type} [ProvableType S] {W : �
 
 namespace CellAssignment
 
-def pushVarInput_offset (assignment : CellAssignment W S) (off : CellOffset W S) :
+theorem pushVarInput_offset (assignment : CellAssignment W S) (off : CellOffset W S) :
   (assignment.pushVarInput off).offset = assignment.offset + 1 := by
   simp [pushVarInput, Vector.push]
 

@@ -13,5 +13,4 @@ lean_lib Clean where
 lean_lib CleanTests where
   roots := #[`Clean.Test, `Clean.Specs.BLAKE3.ChunkProcessingTests]
 
-require mathlib from git "https://github.com/leanprover-community/mathlib4"@"v4.30.0"
-require CompPoly from git "https://github.com/Verified-zkEVM/CompPoly.git"@"v4.30.0-patch1"
+require mathlib from git "https://github.com/leanprover-community/mathlib4"@"v4.32.2"

@@ -95,6 +95,8 @@ theorem soundness (offset : Fin 8) : Soundness (Input:=field) (Output:=Outputs) 
 theorem completeness (offset : Fin 8) : Completeness (Input:=field) (Output:=Outputs) (F p) (main offset) Assumptions := by
   rintro i0 env x_var henv (x : F p) h_input (x_byte : x.val < 256)
   simp only [circuit_norm] at h_input
+  -- bound on `2^offset` so that the witness generator's u64 wrapping simplifies away
+  have h_pow_64 : 2^offset.val < 2^64 := Nat.pow_lt_pow_right (by norm_num) (by omega)
   simp only [circuit_norm, main, h_input, ByteTable] at henv ⊢
   simp only [henv]
   have pow_8_nat : 2^8 = 2^(8-offset.val) * 2^offset.val := by simp [←pow_add]

@@ -81,17 +81,17 @@ lemma xor_val {x y : F p} (hx : x.val < 256) (hy : y.val < 256) :
   exact Nat.mod_eq_of_lt (by linarith [p_large_enough.elim])
 
 theorem completeness : Completeness (F p) main Assumptions := by
-  intro i0 env input_var h_env input h_input as
-  let ⟨⟨ x0, x1, x2, x3 ⟩,
-       ⟨ y0, y1, y2, y3 ⟩⟩ := input
-  simp only [circuit_norm, explicit_provable_type, Inputs.mk.injEq, U32.mk.injEq] at h_input
+  circuit_proof_start [ByteXorTable]
+  rcases input_x with ⟨ x0, x1, x2, x3 ⟩
+  rcases input_y with ⟨ y0, y1, y2, y3 ⟩
+  simp only [circuit_norm, explicit_provable_type, U32.mk.injEq] at h_input
 
-  simp only [Assumptions, circuit_norm, U32.Normalized] at as
-  obtain ⟨ x_bytes, y_bytes ⟩ := as
+  simp only [circuit_norm, U32.Normalized] at h_assumptions
+  obtain ⟨ x_bytes, y_bytes ⟩ := h_assumptions
   obtain ⟨ x0_byte, x1_byte, x2_byte, x3_byte ⟩ := x_bytes
   obtain ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_bytes
 
-  simp only [h_input, circuit_norm, main, ByteXorTable] at h_env ⊢
+  simp only [h_input, circuit_norm] at h_env ⊢
   simp only [circuit_norm, explicit_provable_type, U32.mk.injEq] at h_env ⊢
   simp_all [circuit_norm, xor_val]
 

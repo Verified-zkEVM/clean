@@ -56,6 +56,12 @@ theorem fromNat_val (x : F) : fromNat (val x) = x :=
 theorem fieldSize_pos : FiniteField.size F > 1 := by
   have := val_lt (1 : F); rwa [val_one] at this
 
+@[simp, circuit_norm] theorem fromNat_zero : (fromNat 0 : F) = 0 :=
+  val_injective (by rw [val_fromNat 0 (by have := fieldSize_pos (F := F); omega), val_zero])
+
+@[simp, circuit_norm] theorem fromNat_one : (fromNat 1 : F) = 1 :=
+  val_injective (by rw [val_fromNat 1 fieldSize_pos, val_one])
+
 /-- Two field elements are equal iff their values are equal. -/
 theorem ext {x y : F} (h : val x = val y) : x = y :=
   val_injective h

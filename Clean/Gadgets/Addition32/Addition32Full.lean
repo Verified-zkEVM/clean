@@ -113,29 +113,36 @@ theorem completeness : Completeness (F p) main Assumptions := by
   set c3 := env.get (i₀ + 7)
   obtain ⟨ hz0, hc0, hz1, hc1, hz2, hc2, hz3, hc3 ⟩ := h_env
 
-  -- the add8 completeness proof, four times
+  -- the add8 completeness proof, four times.
+  -- the witness IR computes on `u64`s, but `x + y + c_in` is a sum of two bytes and a
+  -- bit, hence < 512, so the `% 2 ^ 64` truncations are inert.
   have add8_completeness {x y c_in z c_out : F p}
-    (hz : z = mod256 (x + y + c_in)) (hc_out : c_out = floorDiv (x + y + c_in) 256) :
-    x.val < 256 → y.val < 256 → IsBool c_in →
+    (x_byte : x.val < 256) (y_byte : y.val < 256) (hc : IsBool c_in)
+    (hz : z = (((x + y + c_in).val % 2 ^ 64 % 256 : ℕ) : F p))
+    (hc_out : c_out = (((x + y + c_in).val % 2 ^ 64 / 256 : ℕ) : F p)) :
     z.val < 256 ∧ IsBool c_out ∧ x + y + c_in - z - c_out * 256 = 0
   := by
-    intro x_byte y_byte hc
+    have carry_lt_2 : c_in.val < 2 := IsBool.val_lt_two hc
+    have h512 : (x + y + c_in).val < 512 :=
+      ByteUtils.byte_sum_and_bit_lt_512 x y c_in x_byte y_byte carry_lt_2
+    have h_wrap : (x + y + c_in).val % 2 ^ 64 = (x + y + c_in).val :=
+      Nat.mod_eq_of_lt (by omega)
+    rw [h_wrap] at hz hc_out
+    replace hz : z = mod256 (x + y + c_in) := hz
+    replace hc_out : c_out = floorDiv (x + y + c_in) 256 := hc_out
     have : z.val < 256 := hz ▸ ByteUtils.mod256_lt (x + y + c_in)
     use this
-    have carry_lt_2 : c_in.val < 2 := IsBool.val_lt_two hc
-    have : (x + y + c_in).val < 512 :=
-      ByteUtils.byte_sum_and_bit_lt_512 x y c_in x_byte y_byte carry_lt_2
-    use (hc_out ▸ ByteUtils.floorDiv256_bool this)
+    use (hc_out ▸ ByteUtils.floorDiv256_bool h512)
     rw [← ByteUtils.mod_add_div256 (x + y + c_in), hz, hc_out]
     ring
 
   have ⟨ x_norm, y_norm, carry_in_bool ⟩ := h_assumptions
   have ⟨ x0_byte, x1_byte, x2_byte, x3_byte ⟩ := x_norm
   have ⟨ y0_byte, y1_byte, y2_byte, y3_byte ⟩ := y_norm
-  have ⟨ z0_byte, c0_bool, h0 ⟩ := add8_completeness hz0 hc0 x0_byte y0_byte carry_in_bool
-  have ⟨ z1_byte, c1_bool, h1 ⟩ := add8_completeness hz1 hc1 x1_byte y1_byte c0_bool
-  have ⟨ z2_byte, c2_bool, h2 ⟩ := add8_completeness hz2 hc2 x2_byte y2_byte c1_bool
-  have ⟨ z3_byte, c3_bool, h3 ⟩ := add8_completeness hz3 hc3 x3_byte y3_byte c2_bool
+  have ⟨ z0_byte, c0_bool, h0 ⟩ := add8_completeness x0_byte y0_byte carry_in_bool hz0 hc0
+  have ⟨ z1_byte, c1_bool, h1 ⟩ := add8_completeness x1_byte y1_byte c0_bool hz1 hc1
+  have ⟨ z2_byte, c2_bool, h2 ⟩ := add8_completeness x2_byte y2_byte c1_bool hz2 hc2
+  have ⟨ z3_byte, c3_bool, h3 ⟩ := add8_completeness x3_byte y3_byte c2_bool hz3 hc3
 
   exact ⟨ z0_byte, c0_bool, h0, z1_byte, c1_bool, h1, z2_byte, c2_bool, h2, z3_byte, c3_bool, h3 ⟩
 
