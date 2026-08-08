@@ -2,9 +2,11 @@
 WASM Compiler: compiles Clean witness-generation IR to WASM modules
 with full snarkjs Circom 2 ABI compatibility.
 
-Produces typed WASM AST (Ast.lean) and emits WAT text. Supports
-single-word (primes ≤ 2^32, so products fit in an i64 before modular
-reduction) and multi-word (BN254-size) field arithmetic.
+Produces a typed WASM AST (Ast.lean) and emits a binary WASM module
+(Binary.lean). Supports single-word (primes ≤ 2^32, so products fit in
+an i64 before modular reduction) and multi-word (BN254-size) field
+arithmetic using CIOS Montgomery reduction with 64-bit limbs
+(operands and results in Montgomery form).
 
 All compilation entry points return `Except String _`: inputs the
 compiler does not support produce an error with a reason.
@@ -49,11 +51,6 @@ private def snarkjsPatchVersion    : ℕ := 0
 
 -- WASM locals layout
 private def getWitnessFixedLocals : ℕ := 3  -- $i(0), $tmp(1), $idx(2)
-private def numScratchLocals      : ℕ := 4  -- lo, hi, carry, sum
-
--- R1CS signal numbering (signal 0 = constant 1)
-private def r1csSignalOffset : ℕ := 1
-
 /-! ## Instruction builder -/
 
 structure CodeBuilder where
@@ -82,7 +79,6 @@ def i64.or : Instr := .binop .i64 .or
 def i64.shl : Instr := .binop .i64 .shl
 def i64.shr_u : Instr := .binop .i64 .shr_u
 def i64.lt_u : Instr := .relop .i64 .lt_u
-def i64.lt_s : Instr := .relop .i64 .lt_s
 def i64.gt_u : Instr := .relop .i64 .gt_u
 def i64.eq : Instr := .relop .i64 .eq
 def i64.eqz : Instr := .relop .i64 .eqz
@@ -110,7 +106,6 @@ def loop (label : String) (body : List Instr) : Instr := .loop label none body
 def br (label : String) : Instr := .br label
 def br_if (label : String) : Instr := .brIf label
 def if_ (t : Option ValType) (thenB elseB : List Instr) : Instr := .ifElse "" t thenB elseB
-def ifNone (thenB elseB : List Instr) : Instr := .ifElse "" none thenB elseB
 
 /-! ## Single-word field arithmetic (numWords=1) -/
 
@@ -129,17 +124,6 @@ def genSingleWordArith (p : ℕ) : List Func :=
       params := [("", .i64), ("", .i64)]
       results := [.i64]
       body := [local.get 0, local.get 1, i64.mul,
-               i64.const pVal, i64.rem_u] }
-    ,
-    { name := "$fsub"
-      params := [("", .i64), ("", .i64)]
-      results := [.i64]
-      locals := [("$d", .i64)]
-      body := [local.get 0, local.get 1, i64.sub, local.tee 2,
-               i64.const 0, i64.lt_s,
-               .ifElse "" (some .i64)
-                 [local.get 2, i64.const pVal, i64.add]
-                 [local.get 2],
                i64.const pVal, i64.rem_u] }
     ,
     { name := "$fpow"
@@ -172,7 +156,7 @@ def genSingleWordArith (p : ℕ) : List Func :=
 
 /-- Split a Nat into numWords 64-bit limbs (little-endian). -/
 def toLimbs (n numWords : ℕ) : List ℕ :=
-  List.range numWords |>.map fun i => (n >>> (i * 64)) % (2^64)
+  List.range numWords |>.map fun i => (n >>> (i * limbBits)) % limbModulus
 
 /-- 64×64→128 multiplication helper.
     Locals: a_lo(2), a_hi(3), b_lo(4), b_hi(5), p00(6), p01(7), p10(8), p11(9), lo(10), hi(11), tmp(12) -/
@@ -252,12 +236,12 @@ def genSchoolbook (N srcAOff srcBOff destOff : ℕ) (scratchOff : ℕ := 0) : Li
 
 /-- Push a Nat constant as nw i64 limbs (limb 0 deepest). -/
 def pushCoeff (c numWords : ℕ) : List Instr :=
-  (List.range numWords).map fun w => i64.const ((c >>> (w * 64)) % (2^64))
+  (List.range numWords).map fun w => i64.const ((c >>> (w * limbBits)) % limbModulus)
 
 /-- Montgomery constant n' = -p⁻¹ mod 2^64, computed via Newton iteration
     (x_{k+1} = x_k·(2 − p·x_k) mod 2^64, 6 iterations double precision to 2^64).
     Requires p odd (true for all field primes used here).
-    Returns p⁻¹ mod 2^64; the reduction uses the negation (2^64 − p⁻¹). -/
+    Returns n' = -p⁻¹ mod 2^64 (i.e. 2^64 − p⁻¹, since p⁻¹ ≠ 0 for odd p). -/
 def montNPrime (p : ℕ) : ℕ :=
   let m : ℕ := 2^64
   let x1 := (1 * (2 - (p : ℤ) * 1)) % m
@@ -406,7 +390,8 @@ def genFadd (p numWords : ℕ) : Func :=
       local.get (ri idx), local.get (pBase + idx), i64.lt_u, i64.extend_i32_u,
       local.get (ri idx), local.get (pBase + idx), i64.eq, i64.extend_i32_u,
       local.get brIdx, i64.and, i64.or, local.set brIdx ]
-  -- If no borrow (r >= p), copy tmp to result. Return in reverse order.
+  -- If no borrow (r >= p), copy tmp to result. Return limbs in ascending order
+  -- (limb 0 deepest), matching the $fmul convention.
   let condSub : List Instr :=
     [ local.get brIdx, i64.eqz,
       .ifElse "" none ((List.range N) >>= fun i => [ local.get (tmpBase + i), local.set (ri i) ]) [] ]
@@ -420,29 +405,9 @@ def genFadd (p numWords : ℕ) : Func :=
       ++ [("$br", .i64)]
     body := initP ++ addLimb0 ++ addRest ++ subLimb0 ++ subRest ++ condSub ++ rets }
 
-/-- Generate multi-word modular subtraction as AST Func. -/
-def genFsub (numWords : ℕ) : Func :=
-  let N := numWords
-  let ri (i : ℕ) : ℕ := 2*N + i
-  let brIdx : ℕ := 2*N + N
-  let subLimb0 : List Instr :=
-    [ local.get 0, local.get N, i64.sub, local.set (ri 0),
-      local.get 0, local.get N, i64.lt_u, i64.extend_i32_u, local.set brIdx ]
-  let subRest : List Instr := (List.range (N-1)) >>= fun i =>
-    let idx := i + 1
-    [ local.get idx, local.get (N + idx), i64.sub, local.get brIdx, i64.sub, local.set (ri idx),
-      local.get idx, local.get (N + idx), i64.lt_u, i64.extend_i32_u,
-      local.get idx, local.get (N + idx), i64.eq, i64.extend_i32_u,
-      local.get brIdx, i64.and, i64.or, local.set brIdx ]
-  -- Return in reverse order (highest limb first) to match $fmul convention
-  let rets : List Instr := (List.range N) >>= fun i => [ local.get (ri i) ]
-  { name := "$fsub"
-    params := ((List.range N).map fun i => (s!"$a{i}", .i64)) ++ ((List.range N).map fun i => (s!"$b{i}", .i64))
-    results := List.replicate N .i64
-    locals := ((List.range N).map fun i => (s!"$r{i}", .i64)) ++ [("$br", .i64)]
-    body := subLimb0 ++ subRest ++ rets }
-
-/-- Generate multi-word modular inverse as AST Func (Fermat square-and-multiply). -/
+/-- Generate multi-word modular inverse as AST Func (Fermat square-and-multiply).
+    Operates on Montgomery-form values: starting from mont(1) = R mod p, repeated
+    montMul (x·y·R⁻¹) gives mont(a^e), so mont(a^(p-2)) = mont(a⁻¹). -/
 def genFinv (p numWords : ℕ) : Func :=
   let N := numWords
   let exp := p - 2
@@ -451,15 +416,16 @@ def genFinv (p numWords : ℕ) : Func :=
   let ri (i : ℕ) : ℕ := N + i  -- r limbs at offset N (after params a0..a{N-1})
   let pushR : List Instr := (List.range N) >>= fun i => [ local.get (ri i) ]
   let pushA : List Instr := (List.range N) >>= fun i => [ local.get i ]
-  -- captureR pops the return values from $fmul (which pushes highest limb first,
-  -- lowest limb last). Forward capture: first pop (top=lowest limb) → ri[0].
+  -- $fmul pushes the lowest limb first (deepest) and the highest limb last
+  -- (top of stack). captureR pops in reverse: first pop (highest limb) → ri[N-1],
+  -- last pop (lowest limb) → ri[0].
   let captureR : List Instr := (List.range N).reverse >>= fun i => [ local.set (ri i) ]
   let finvRets : List Instr := (List.range N) >>= fun i => [ local.get (ri i) ]
   let square : List Instr := pushR ++ pushR ++ [ call "$fmul" ] ++ captureR
   let multiply : List Instr := pushR ++ pushA ++ [ call "$fmul" ] ++ captureR
   let init : List Instr :=
-    -- Push N limbs of Montgomery-form 1 = R mod p (limb 0 deepest), then N-1 zeros.
-    -- Returns are now ascending (limb[0] deepest), captureR is reverse.
+    -- Push the N limbs of R mod p (the Montgomery form of 1), limb 0 deepest;
+    -- captureR stores them so ri[i] = limb i.
     (pushCoeff (montR p N) N) ++ captureR
   let steps : List Instr := (List.range (msb+1) |>.reverse) >>= fun b =>
     if (exp >>> b) % 2 = 1 then square ++ multiply else square
@@ -469,10 +435,7 @@ def genFinv (p numWords : ℕ) : Func :=
     locals := (List.range N).map fun i => (s!"$r{i}", .i64)
     body := init ++ steps ++ finvRets }
 
-/-- Generate multi-word arithmetic as AST Func list.
-    `genFsub` (multi-word subtraction) is not included: the compiler only
-    emits `$fadd` and `$fmul` calls; field subtraction is handled via
-    `$fsub` in single-word mode only. -/
+/-- Generate multi-word arithmetic as AST Func list. -/
 def genMultiWordArith (p numWords : ℕ) : List Func :=
   [ genMul64x64, genFmul p numWords, genFadd p numWords, genFinv p numWords ]
 
@@ -538,7 +501,7 @@ def pushConst (c : F) (vm : VarMap) (cb : CodeBuilder) : CodeBuilder :=
   let p := vm.prime
   let val := if nw = 1 then FiniteField.val c else (FiniteField.val c * montR p nw) % p
   if nw = 1 then cb.push (i64.const val)
-  else List.range nw |>.foldl (fun cb' w => cb'.push (i64.const ((val >>> (w * 64)) % (2^64)))) cb
+  else List.range nw |>.foldl (fun cb' w => cb'.push (i64.const ((val >>> (w * limbBits)) % limbModulus))) cb
 
 def pushVar (idx : ℕ) (vm : VarMap) (cb : CodeBuilder) : CodeBuilder :=
   let nw := vm.numWords
@@ -854,7 +817,7 @@ def loadSignal (i signalBase signalBytes numWords prime : ℕ) : List Instr :=
   else
     -- Load each limb from signal memory (normal form), then convert to Montgomery
     let load : List Instr := (List.range nw) >>= fun w =>
-      [ i32.const (signalBase + i * signalBytes + w * 8), .memLoad .i64 0 alignmentI64 ]
+      [ i32.const (signalBase + i * signalBytes + w * bytesPerI64), .memLoad .i64 0 alignmentI64 ]
     if nw = 1 then load
     else load ++ pushCoeff (montR2 prime nw) nw ++ [call "$fmul"]
 
@@ -916,7 +879,7 @@ def discoverAndCompileIntermediates (vm : VarMap) (flatOps : List (FlatOperation
       let captureFromMont : List Instr := if nw = 1 then []
         else (List.range nw).reverse.map fun w => local.set (base + w)
       let storeAll : List Instr := (List.range nw) >>= fun w =>
-        [ i32.const (signalBase + k * signalBytes + w * 8),
+        [ i32.const (signalBase + k * signalBytes + w * bytesPerI64),
           local.get (base + w), .memStore .i64 0 alignmentI64 ]
       let localNames : List (String × ValType) :=
         (List.range nw).map fun w => (s!"$int_{idx}_{w}", .i64)
@@ -1117,8 +1080,8 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   let n32 := nw * 2
   let srwmBase := srwmBaseAddress
   -- Signal array must be 8-byte aligned for i64.store/i64.load
-  let signalBaseRaw := 4 + n32 * 4
-  let signalBase := ((signalBaseRaw + 7) / 8) * 8
+  let signalBaseRaw := srwmBaseAddress + n32 * bytesPerI32
+  let signalBase := ((signalBaseRaw + bytesPerI64 - 1) / bytesPerI64) * bytesPerI64
   let signalBytes := n32 * 4
   let startSignal := 1 + numInputs + witnessCount  -- signal 0 = constant 1, then inputs, then witnesses
   -- Local index base for intermediates in getWitness: param $i(0), $tmp(1), $idx(2), $in_*(3..)
@@ -1136,7 +1099,7 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
     let wasmBase := finalVm.lookup elemIdx
     if nw = 1 then
       (List.range nw) >>= fun w =>
-        [ i32.const (signalBase + (1 + numInputs + i) * signalBytes + w * 8),
+        [ i32.const (signalBase + (1 + numInputs + i) * signalBytes + w * bytesPerI64),
           local.get (wasmBase + w),
           .memStore .i64 0 alignmentI64 ]
     else
@@ -1149,7 +1112,7 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
       let convert := pushCoeff 1 nw ++ [call "$fmul"]
       let capture := (List.range nw).reverse.map fun w => local.set (tmpBase + w)
       let storeAll := (List.range nw) >>= fun w =>
-        [ i32.const (signalBase + (1 + numInputs + i) * signalBytes + w * 8),
+        [ i32.const (signalBase + (1 + numInputs + i) * signalBytes + w * bytesPerI64),
           local.get (tmpBase + w), .memStore .i64 0 alignmentI64 ]
       pushVal ++ convert ++ capture ++ storeAll
   -- Build the compute function
@@ -1174,7 +1137,7 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   -- for the multi-word compute function.
   let inputLoads : List Instr := (List.range numInputs) >>= fun i =>
     let loadAll := (List.range nw) >>= fun w =>
-      [ i32.const (signalBase + (1 + i) * signalBytes + w * 8),
+      [ i32.const (signalBase + (1 + i) * signalBytes + w * bytesPerI64),
         .memLoad .i64 0 alignmentI64,
         local.set (3 + i * nw + w) ]
     let convert := if nw = 1 then []
@@ -1188,9 +1151,9 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
       [ local.get (3 + i * nw + w) ]
   -- Tail: copy all n32 32-bit words of signal $i to SRWM[0..n32-1].
   let gwTail : List Instr := (List.range n32) >>= fun w =>
-    [ i32.const (srwmBase + w * 4),
+    [ i32.const (srwmBase + w * bytesPerI32),
       i32.const signalBase, local.get 0, i32.const signalBytes, .binop .i32 .mul, .binop .i32 .add,
-      i32.const (w * 4), .binop .i32 .add,
+      i32.const (w * bytesPerI32), .binop .i32 .add,
       i32.load 0,
       .memStore .i32 0 2 ]
   -- Build the getWitness function body
@@ -1211,7 +1174,7 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
     { name := "$getRawPrime"
       exportName := some "getRawPrime"
       body := (List.range n32) >>= fun w =>
-        [ i32.const (srwmBase + w * 4), i32.const ((fieldPrime >>> (w * 32)) % (2^32)), .memStore .i32 0 2 ] },
+        [ i32.const (srwmBase + w * bytesPerI32), i32.const ((fieldPrime >>> (w * hiWordShift)) % (2^32)), .memStore .i32 0 2 ] },
     { name := "$readSharedRWMemory"
       exportName := some "readSharedRWMemory"
       params := [("", .i32)]
@@ -1252,9 +1215,9 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
         ((List.range nw) >>= fun w =>
           [ i32.const (signalBase + signalBytes),
             local.get 2, i32.const signalBytes, .binop .i32 .mul, .binop .i32 .add,
-            i32.const (w * 8), .binop .i32 .add,
-            i32.const (srwmBase + 2*w*4), .memLoad .i32 0 2, .unop .i64 .extend_i32_u,
-            i32.const (srwmBase + (2*w+1)*4), .memLoad .i32 0 2, .unop .i64 .extend_i32_u,
+            i32.const (w * bytesPerI64), .binop .i32 .add,
+            i32.const (srwmBase + 2*w*bytesPerI32), .memLoad .i32 0 2, .unop .i64 .extend_i32_u,
+            i32.const (srwmBase + (2*w+1)*bytesPerI32), .memLoad .i32 0 2, .unop .i64 .extend_i32_u,
             i64.const hiWordShift, i64.shl, i64.or,
             .memStore .i64 0 alignmentI64 ])
     },
@@ -1275,11 +1238,11 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
     { name := "$getMinorVersion"
       exportName := some "getMinorVersion"
       results := [.i32]
-      body := [i32.const 0] },
+      body := [i32.const snarkjsMinorVersion] },
     { name := "$getPatchVersion"
       exportName := some "getPatchVersion"
       results := [.i32]
-      body := [i32.const 0] },
+      body := [i32.const snarkjsPatchVersion] },
     { name := "$init"
       exportName := some "init"
       params := [("", .i32)]

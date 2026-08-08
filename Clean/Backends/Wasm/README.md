@@ -6,10 +6,10 @@ Compiles Clean witness-generation IR to WASM modules with full snarkjs Circom 2 
 
 Two compilers sharing a common flattening pass:
 
-- **WASM compiler** (`Compile.lean`): Compiles witness-generation IR to a typed WASM AST, emitted as WAT text. Generates all snarkjs-compatible ABI functions
+- **WASM compiler** (`Compile.lean`): Compiles witness-generation IR to a typed WASM AST, emitted as a binary WASM module. Generates all snarkjs-compatible ABI functions
 - **R1CS exporter** (`R1CS.lean`): Converts circuit operations to R1CS JSON format, compatible with `snarkjs`
 
-Both entry points return `Except String String`: inputs the compiler does not support produce `.error` with a reason, never silently wrong output.
+`compileModule` returns `Except String ByteArray` (a binary WASM module); `compileR1CS` returns `Except String String` (JSON). Inputs the compiler does not support produce `.error` with a reason, never silently wrong output.
 
 ## Quick Start
 
@@ -17,14 +17,14 @@ Both entry points return `Except String String`: inputs the compiler does not su
 import Clean.Backends.Wasm.Compile
 import Clean.Backends.Wasm.R1CS
 
--- Compile to WAT text (single-word, p ≤ 2^32)
-def wat : Except String String := compileModule 1009 2 myCircuitOps 1
+-- Compile to binary WASM (single-word, p ≤ 2^32)
+def wasm : Except String ByteArray := compileModule 1009 2 myCircuitOps 1
 
--- Compile to WAT text (multi-word, BN254 needs 4 words)
-def watBN254 : Except String String := compileModule BN254_PRIME 1 myPoseidonOps 4
+-- Compile to binary WASM (multi-word, BN254 needs 4 words)
+def wasmBN254 : Except String ByteArray := compileModule BN254_PRIME 1 myPoseidonOps 4
 
 -- Export R1CS constraints as JSON
-def r1csJson : Except String String := compileR1CS BN254_PRIME 1 myPoseidonOps
+def r1csJson : Except String String := compileR1CS BN254_PRIME 1 1 myPoseidonOps 4
 ```
 
 
@@ -57,7 +57,8 @@ def r1csJson : Except String String := compileR1CS BN254_PRIME 1 myPoseidonOps
 | `feq`                                       | ✅ Supported (pairwise limb compare for multi-word)  |
 | `lit`, `mapRange`, `envRange`, `bitsOf`     | ✅ Supported                                         |
 | `append`                                    | ✅ Supported                                         |
-| `listGet`, `dataGet`, `hintGet`             | ❌ Not yet supported (`.error`)                      |
+| `listGet`                                    | ✅ Supported (select-sum chain)                       |
+| `dataGet`, `hintGet`                          | ❌ Not yet supported (`.error`)                      |
 | `native` witnesses (Lean closures)          | ❌ Not compilable (`.error`)                         |
 | `idx` (outside `mapRange`)                  | ❌ Invalid (`.error`)                                |
 | lookups                                     | Ignored by witness gen; `.error` in R1CS export     |
@@ -93,10 +94,7 @@ The generated WASM module exports these functions:
 ### Using with snarkjs
 
 ```bash
-# The WAT text must first be converted to binary WASM using wat2wasm (from wabt):
-wat2wasm circuit.wat -o circuit.wasm
-
-# Generate witness
+# Generate witness directly from the compiled binary WASM
 snarkjs wtns calculate circuit.wasm input.json witness.wtns
 ```
 
@@ -113,15 +111,20 @@ Uses WASM `i64` operations. Multiplication uses `i64.mul` followed by `i64.rem_u
 Full multi-precision arithmetic:
 
 - `$mul64x64`: 64×64 → 128 multiplication with carry detection
-- `$fmul`: N×N schoolbook multiplication + Barrett reduction (HAC Algorithm 14.42)
-- `$fadd`/`$fsub`: Limb-wise addition/subtraction with carry/borrow + conditional mod p
-- `$finv`: Fermat's little theorem square-and-multiply via `$fmul`
+- `$fmul`: N×N schoolbook multiplication + CIOS Montgomery reduction (HAC Algorithm 14.36) with 64-bit limbs
+- `$fadd`: Limb-wise addition with carry + conditional mod p
+- `$finv`: Fermat's little theorem square-and-multiply via `$fmul` (operates in Montgomery form)
 
-Barrett reduction uses the precomputed constant `μ = floor(2^(2*N*64) / p)` with `N+1` limbs.
+Values are kept in Montgomery form (`x·R mod p`, `R = 2^(N*64)`) throughout the computation and converted only at boundaries: constants are emitted as `c·R mod p`, inputs are converted via `montMul(x, R²)`, and outputs are converted back via `montMul(x, 1)`. The reduction uses `n' = -p⁻¹ mod 2^64` and a single conditional subtraction (result < 2p).
+
+## Known Limitations
+
+- **WASM local limit**: each witness output occupies `numWords` locals in the compute function, plus a shared scratch region of `2*numWords` and `numWords` per let-step. Circuits with tens of thousands of multi-word witnesses can approach WASM's 50,000-local-per-function limit (e.g. SHA256Compress's 80K two-limb witnesses exceed it). Single-word circuits use no scratch and stay well under the limit.
+- **`dataGet`/`hintGet`**: these read committed/uncommitted prover data from the Lean environment, which is not representable in a standalone WASM module; they are rejected with `.error`.
 
 ## References
 
 - [snarkjs Circom 2 ABI](https://github.com/iden3/snarkjs)
 - [WASM binary format](https://webassembly.github.io/spec/core/binary/)
-- [Barrett reduction](https://en.wikipedia.org/wiki/Barrett_reduction)
+- [Montgomery multiplication](https://en.wikipedia.org/wiki/Montgomery_modular_multiplication)
 

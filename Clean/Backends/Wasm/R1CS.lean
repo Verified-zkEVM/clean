@@ -52,8 +52,8 @@ def processOps (vm : VarMap) (ops : List (FlatOperation F)) (st : FlattenState F
   | .assert e :: rest =>
       let (lc, st1) := flattenExpr vm e st
       processOps vm rest { st1 with constraints := (lc, [(0, (1 : F))], []) :: st1.constraints }
-  | .lookup _ :: _ => .error "compileR1CS: lookup constraints cannot be represented in R1CS"
-  | .interact _ :: _ => .error "compileR1CS: interactions cannot be represented in R1CS"
+  | .lookup _ :: _ => .error "processOps: lookup constraints cannot be represented in R1CS"
+  | .interact _ :: _ => .error "processOps: interactions cannot be represented in R1CS"
 
 /-- Convert a linear combination to a sparse JSON object: {"signalIndex": "coeff", ...} -/
 def linCombToJson (lc : List (ℕ × F)) : Json :=

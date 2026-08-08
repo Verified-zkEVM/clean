@@ -157,7 +157,7 @@ partial def encodeInstr (arr : ByteArray) (resolveCall : String → ℕ) (labels
   | .binop .i64 op => arr.push (UInt8.ofNat (opI64BinopBase.toNat + binopOffset op))
   | .unop .i32 .wrap_i64 => arr.push opI32WrapI64
   | .unop .i64 .extend_i32_u => arr.push opI64ExtI32U
-  | .unop _ _ => arr
+  | .unop _ _ => arr.push opUnreachable  -- unsupported: fail validation loudly
   | .relop .i32 .eq => arr.push opI32Eq
   | .relop .i64 .eq => arr.push opI64Eq
   | .relop .i32 .lt_u => arr.push opI32LtU
@@ -170,7 +170,7 @@ partial def encodeInstr (arr : ByteArray) (resolveCall : String → ℕ) (labels
   | .relop .i64 .ge_u => arr.push opI64GeU
   | .relop .i64 .gt_u => arr.push opI64GtU
   | .relop .i32 .ne => arr.push opI32Ne
-  | .relop _ _ => arr
+  | .relop _ _ => arr.push opUnreachable  -- unsupported: fail validation loudly
   | .localGet idx => putULEB128 (arr.push opLocalGet) idx
   | .localSet idx => putULEB128 (arr.push opLocalSet) idx
   | .localTee idx => putULEB128 (arr.push opLocalTee) idx
