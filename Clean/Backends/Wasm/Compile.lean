@@ -897,8 +897,13 @@ def discoverAndCompileIntermediates (vm : VarMap) (flatOps : List (FlatOperation
 
 /-- Scratch locals reserved above each allocation so multi-word expression
     compilers (`.flt`/`.feq`/`.ite`, up to `2*nw` locals at `vm.nextLocal`)
-    never overrun the declared local range. -/
-def scratchReserve (nw : ℕ) : ℕ := 2 * nw
+    never overrun the declared local range.
+    For single-word (nw=1) no scratch is needed: `.flt`/`.feq` use direct
+    `i64.lt_u`/`i64.eq`, and `.ite`/`.bit` reuse the output slot transiently
+    (their temp use completes before the final capture). Returning 0 keeps
+    large single-word circuits (e.g. Keccak's 31K witnesses) within the
+    WASM 50K-local limit. -/
+def scratchReserve (nw : ℕ) : ℕ := if nw = 1 then 0 else 2 * nw
 
 /-- compile let-steps (letF/letN) to instructions.
     Steps are allocated at `vm.nextLocal` (direct WASM local allocation,
@@ -1188,7 +1193,9 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
       exportName := some "getInputSignalSize"
       params := [("", .i32), ("", .i32)]
       results := [.i32]
-      body := [i32.const 1] },  -- each input signal is a single field element
+      -- The circuit has one input signal name holding `numInputs` field
+      -- elements; snarkjs requires the count to match the JSON array length.
+      body := [i32.const numInputs] },
     { name := "$getInputSize"
       exportName := some "getInputSize"
       results := [.i32]
