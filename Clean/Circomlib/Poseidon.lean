@@ -18,11 +18,6 @@ namespace Circomlib.Poseidon
 open Specs.Poseidon (F BN254_PRIME C_t2 M_t2)
 open Specs.PoseidonOptimized (P_t2 S_t2)
 
--- BN254 primality is needed for the `Field (ZMod BN254_PRIME)` instance.
--- TODO: replace with a proper primality proof (was CompPoly's Pratt certificate
--- before the Lean 4.32.2 bump dropped the dependency).
-instance : Fact (Nat.Prime BN254_PRIME) := ⟨by sorry⟩
-
 /-
 ============================================================================
 SIGMA (S-box): x^5
