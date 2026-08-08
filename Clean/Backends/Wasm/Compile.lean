@@ -17,7 +17,7 @@ import Clean.Backends.Wasm.Binary
 
 namespace Backends.Wasm
 
-open Witgen (FExpr NExpr BExpr VExpr Step WitgenIR)
+open Witgen (FExpr U64Expr BExpr VExpr Step WitgenIR)
 open Ast (ValType Instr Func Module BinOp UnOp RelOp)
 
 variable {F : Type} [FiniteField F]
@@ -41,7 +41,6 @@ private def hiWordShift      : ℕ := 32
 
 -- Validation
 private def singleWordPrimeMax : ℕ := 2^32
-private def maxI64Const      : ℕ := 2^64
 
 -- snarkjs ABI
 private def snarkjsProtocolVersion : ℕ := 2
@@ -503,7 +502,7 @@ def genMultiWordArith (p numWords : ℕ) : List Func :=
 
     Only true circuit variables (inputs and witness outputs) appear in `env`.
     Let-steps are allocated in a separate local-index space anchored at `letBase`;
-    they are accessed via `FExpr.localVar` / `NExpr.localVar` using a direct offset,
+    they are accessed via `FExpr.localVar` / `U64Expr.localVar` using a direct offset,
     never through `lookup`. -/
 structure VarMap where
   env : List (ℕ × ℕ) := []
@@ -513,7 +512,7 @@ structure VarMap where
   loopIdx : Option ℕ := none
   /-- WASM local index of the first let-step of the current witness op.
       `FExpr.localVar i` reads `nw` locals at `letBase + i * numWords`;
-      `NExpr.localVar i` reads the low limb at the same position.
+      `U64Expr.localVar i` reads the low limb at the same position.
       Steps are dead after their enclosing op, so this is set fresh per op. -/
   letBase : ℕ := 0
   numWords : ℕ := 1
@@ -552,7 +551,7 @@ def pushVar (idx : ℕ) (vm : VarMap) (cb : CodeBuilder) : CodeBuilder :=
   else List.range nw |>.foldl (fun cb' w => cb'.push (local.get (base + w))) cb
 
 /-- Push `nw` limbs from a given WASM local base index (no env lookup).
-    Used by `FExpr.localVar` and `NExpr.localVar` for let-step access. -/
+    Used by `FExpr.localVar` and `U64Expr.localVar` for let-step access. -/
 def pushStepVar (baseWasm nw : ℕ) (cb : CodeBuilder) : CodeBuilder :=
   if nw = 1 then cb.push (local.get baseWasm)
   else List.range nw |>.foldl (fun cb' w => cb'.push (local.get (baseWasm + w))) cb
@@ -599,28 +598,25 @@ def compileFExpr (vm : VarMap) : FExpr F → CodeBuilder → Except String CodeB
     -- Load the chosen branch's result back onto the stack (lowest limb first).
     let loadBack : List Instr := (List.range nw).map fun w => local.get (tmpBase + w)
     pure (cond.push (.ifElse "" none (thenCB.build ++ captureAll) (elseCB.build ++ captureAll)) |>.pushList loadBack)
-  | .ofNat n, cb => do
+  | .ofU64 n, cb => do
     let nw := vm.numWords
-    let cb ← compileNExpr vm n cb
-    -- NExpr produces a single i64. Zero-extend to nw limbs, then reduce mod p via $fadd.
+    let cb ← compileU64Expr vm n cb
+    -- U64Expr produces a single i64. Zero-extend to nw limbs, then reduce mod p via $fadd.
     if nw = 1 then
       pure (cb.push (i64.const 0) |>.push (call "$fadd"))
     else
-      -- Push nw-1 zero limbs (deepest first), then the NExpr result as limb 0
+      -- Push nw-1 zero limbs (deepest first), then the U64Expr result as limb 0
       let cb := (List.replicate (nw-1) (i64.const 0)).foldl (fun cb' i => cb'.push i) cb
       -- Now push nw zero limbs for the second operand of $fadd
       let cb := (List.range nw).foldl (fun cb' _ => cb'.push (i64.const 0)) cb
       pure (cb.push (call "$fadd"))
   | .localVar i, cb => pure (pushStepVar (vm.letBase + i * vm.numWords) vm.numWords cb)
-  | .envGet _, _ => .error "compileFExpr: envGet is not yet supported"
   | .listGet _ _, _ => .error "compileFExpr: listGet is not yet supported"
   | .dataGet _ _ _ _, _ => .error "compileFExpr: dataGet is not yet supported"
   | .hintGet _ _ _ _, _ => .error "compileFExpr: hintGet is not yet supported"
 
-def compileNExpr (vm : VarMap) : NExpr F → CodeBuilder → Except String CodeBuilder
-  | .const n, cb =>
-    if n < maxI64Const then pure (cb.push (i64.const n))
-    else .error s!"compileNExpr: constant {n} does not fit in 64 bits"
+def compileU64Expr (vm : VarMap) : U64Expr F → CodeBuilder → Except String CodeBuilder
+  | .const n, cb => pure (cb.push (i64.const n.toNat))
   | .val x, cb =>
     -- Extracts the integer representative of a field element.
     -- For multi-word, compile the FExpr (pushes nw limbs), keep only limb 0
@@ -635,30 +631,30 @@ def compileNExpr (vm : VarMap) : NExpr F → CodeBuilder → Except String CodeB
     -- mapRange loops are unrolled at compile time, so the index is a constant.
     match vm.loopIdx with
     | some i => pure (cb.push (i64.const i))
-    | none => .error "compileNExpr: idx used outside of a mapRange loop"
+    | none => .error "compileU64Expr: idx used outside of a mapRange loop"
   | .localVar i, cb => pure (cb.push (local.get (vm.letBase + i * vm.numWords)))
   | .add a e, cb => do
-    let cb ← compileNExpr vm a cb; let cb ← compileNExpr vm e cb; pure (cb.push i64.add)
+    let cb ← compileU64Expr vm a cb; let cb ← compileU64Expr vm e cb; pure (cb.push i64.add)
   | .mul a e, cb => do
-    let cb ← compileNExpr vm a cb; let cb ← compileNExpr vm e cb; pure (cb.push i64.mul)
+    let cb ← compileU64Expr vm a cb; let cb ← compileU64Expr vm e cb; pure (cb.push i64.mul)
   | .div a e, cb => do
-    let cb ← compileNExpr vm a cb; let cb ← compileNExpr vm e cb; pure (cb.push (.binop .i64 .div_u))
+    let cb ← compileU64Expr vm a cb; let cb ← compileU64Expr vm e cb; pure (cb.push (.binop .i64 .div_u))
   | .mod a e, cb => do
-    let cb ← compileNExpr vm a cb; let cb ← compileNExpr vm e cb; pure (cb.push i64.rem_u)
+    let cb ← compileU64Expr vm a cb; let cb ← compileU64Expr vm e cb; pure (cb.push i64.rem_u)
   | .land a e, cb => do
-    let cb ← compileNExpr vm a cb; let cb ← compileNExpr vm e cb; pure (cb.push i64.and)
+    let cb ← compileU64Expr vm a cb; let cb ← compileU64Expr vm e cb; pure (cb.push i64.and)
   | .lor a e, cb => do
-    let cb ← compileNExpr vm a cb; let cb ← compileNExpr vm e cb; pure (cb.push i64.or)
+    let cb ← compileU64Expr vm a cb; let cb ← compileU64Expr vm e cb; pure (cb.push i64.or)
   | .lxor a e, cb => do
-    let cb ← compileNExpr vm a cb; let cb ← compileNExpr vm e cb; pure (cb.push (.binop .i64 .xor))
+    let cb ← compileU64Expr vm a cb; let cb ← compileU64Expr vm e cb; pure (cb.push (.binop .i64 .xor))
   | .shiftL a e, cb => do
-    let cb ← compileNExpr vm a cb; let cb ← compileNExpr vm e cb; pure (cb.push i64.shl)
+    let cb ← compileU64Expr vm a cb; let cb ← compileU64Expr vm e cb; pure (cb.push i64.shl)
   | .shiftR a e, cb => do
-    let cb ← compileNExpr vm a cb; let cb ← compileNExpr vm e cb; pure (cb.push i64.shr_u)
+    let cb ← compileU64Expr vm a cb; let cb ← compileU64Expr vm e cb; pure (cb.push i64.shr_u)
   | .ite c t e, cb => do
     let cond ← compileBExpr vm c cb
-    let thenCB ← compileNExpr vm t {}
-    let elseCB ← compileNExpr vm e {}
+    let thenCB ← compileU64Expr vm t {}
+    let elseCB ← compileU64Expr vm e {}
     pure (cond.push (.ifElse "" (some .i64) thenCB.build elseCB.build))
 
 /-- Conditions compile to `i32`, the native WASM boolean type.
@@ -690,14 +686,66 @@ def compileBExpr (vm : VarMap) : BExpr F → CodeBuilder → Except String CodeB
       pure (cb.pushList aCB.build |>.pushList captureA |>.pushList eCB.build |>.pushList captureE
               |>.pushList cmpAll |>.pushList andAll |>.push i32.wrap_i64)
   | .lt a e, cb => do
-    let cb ← compileNExpr vm a cb
-    let cb ← compileNExpr vm e cb
+    let cb ← compileU64Expr vm a cb
+    let cb ← compileU64Expr vm e cb
     pure (cb.push i64.lt_u)
   | .neq a e, cb => do
-    -- NOTE: despite the name, `BExpr.neq` is Nat *equality* (see `BExpr.eval`).
-    let cb ← compileNExpr vm a cb
-    let cb ← compileNExpr vm e cb
+    -- NOTE: despite the name, `BExpr.neq` is u64 *equality* (see `BExpr.eval`).
+    let cb ← compileU64Expr vm a cb
+    let cb ← compileU64Expr vm e cb
     pure (cb.push i64.eq)
+  | .flt a e, cb => do
+    -- Field-sorted less-than over the integer representatives.
+    -- For single-word: i64.lt_u works. For multi-word: compare limb-wise
+    -- from the highest limb down (unsigned comparison).
+    let nw := vm.numWords
+    if nw = 1 then do
+      let cb ← compileFExpr vm a cb
+      let cb ← compileFExpr vm e cb
+      pure (cb.push i64.lt_u)
+    else do
+      -- Capture both operands to temp locals, compare highest limb first.
+      let tmpBase := vm.nextLocal
+      let aCB ← compileFExpr vm a {}
+      let eCB ← compileFExpr vm e {}
+      let captureA : List Instr := (List.range nw).reverse.map fun w => local.set (tmpBase + nw + w)
+      let captureE : List Instr := (List.range nw).reverse.map fun w => local.set (tmpBase + w)
+      -- Multi-limb unsigned comparison, highest limb first, as nested ifElse:
+      --   if a_{nw-1} < e_{nw-1} then 1
+      --   else if a_{nw-1} > e_{nw-1} then 0
+      --   else <recurse on lower limbs>
+      -- Base case (all higher limbs equal): a_0 < e_0 ? 1 : 0.
+      let rec cmpChain (i : ℕ) : List Instr :=
+        if i = 0 then
+          [ local.get (tmpBase + nw + 0), local.get (tmpBase + 0), i64.lt_u,
+            .ifElse "" (some .i32) [i32.const 1] [i32.const 0] ]
+        else
+          [ local.get (tmpBase + nw + i), local.get (tmpBase + i), i64.lt_u,
+            .ifElse "" (some .i32) [i32.const 1]
+              ([ local.get (tmpBase + nw + i), local.get (tmpBase + i), i64.gt_u,
+                 .ifElse "" (some .i32) [i32.const 0] (cmpChain (i - 1)) ]) ]
+      pure (cb.pushList aCB.build |>.pushList captureA |>.pushList eCB.build |>.pushList captureE
+              |>.pushList (cmpChain (nw - 1)))
+  | .bit x i, cb => do
+    -- Test bit `i` of `FiniteField.val x`: limb i/64, bit i%64 (constant i).
+    let nw := vm.numWords
+    let limbIdx := i / 64
+    let bitIdx := i % 64
+    if limbIdx ≥ nw then
+      -- Bit index beyond the field width: always 0 (val < 2^(nw*64)).
+      pure (cb.push (i32.const 0))
+    else do
+      -- Capture the field value to locals, then extract the limb and test the bit.
+      let tmpBase := vm.nextLocal
+      let xCB ← compileFExpr vm x {}
+      let capture : List Instr := (List.range nw).reverse.map fun w => local.set (tmpBase + w)
+      -- a_i & (1 << bit): if zero, the bit is not set (→ 0); else it is set (→ 1).
+      -- i64.eqz gives i32 = 1 when the bit is NOT set; ifElse (result i32):
+      --   then-branch (bit not set): 0, else-branch (bit set): 1
+      let testInstrs : List Instr :=
+        [ local.get (tmpBase + limbIdx), i64.const (2^bitIdx), i64.and, i64.eqz,
+          .ifElse "" (some .i32) [i32.const 0] [i32.const 1] ]
+      pure (cb.pushList xCB.build |>.pushList capture |>.pushList testInstrs)
   | .not x, cb => do
     let cb ← compileBExpr vm x cb
     pure (cb.push i32.eqz)
@@ -833,6 +881,11 @@ def discoverAndCompileIntermediates (vm : VarMap) (flatOps : List (FlatOperation
   let (_, locals, instrs) := buildAST 0 [] [] intConstraintsRev
   (numInt, locals.reverse, instrs)
 
+/-- Scratch locals reserved above each allocation so multi-word expression
+    compilers (`.flt`/`.feq`/`.ite`, up to `2*nw` locals at `vm.nextLocal`)
+    never overrun the declared local range. -/
+def scratchReserve (nw : ℕ) : ℕ := 2 * nw
+
 /-- compile let-steps (letF/letN) to instructions.
     Steps are allocated at `vm.nextLocal` (direct WASM local allocation,
     NOT through `vm.alloc` — they are not circuit variables).
@@ -842,11 +895,13 @@ def compileSteps (vm : VarMap) (vi : ℕ) (steps : List (Step F)) :
     Except String (VarMap × ℕ × List Instr) :=
   let nw := vm.numWords
   let stepBase := vm.nextLocal
-  -- Allocate one nw-limb slot per step, bumping nextLocal
+  -- Allocate one nw-limb slot per step, bumping nextLocal. The trailing
+  -- `scratchReserve nw` keeps the step expressions' scratch (up to 2*nw
+  -- locals at the returned nextLocal) inside the declared local range.
   let (vmInit, _) := (steps.foldl (fun (v : VarMap × ℕ) _ =>
     ({ v.1 with nextLocal := v.1.nextLocal + nw, letBase := stepBase }, v.2)
   ) (vm, vi))
-  let vmB := { vmInit with letBase := stepBase }
+  let vmB := { vmInit with nextLocal := vmInit.nextLocal + scratchReserve nw, letBase := stepBase }
   steps.foldlM (fun ((vm, idx, instrs) : VarMap × ℕ × List Instr) step => do
     let wasmBase := stepBase + idx * nw
     let locs := List.range nw |>.map fun w => wasmBase + w
@@ -855,9 +910,9 @@ def compileSteps (vm : VarMap) (vi : ℕ) (steps : List (Step F)) :
       let cb ← compileFExpr vm e {}
       -- Capture all nw limbs: forward order pops lowest limb first
       pure (vm, idx + 1, instrs ++ cb.build ++ (locs.reverse.map fun w => local.set w))
-    | .letN e =>
-      let cb ← compileNExpr vm e {}
-      -- A Nat is a single i64: store it in the low limb and zero the rest.
+    | .letU e =>
+      let cb ← compileU64Expr vm e {}
+      -- A u64 is a single i64: store it in the low limb and zero the rest.
       let capture := match locs with
         | [] => []
         | base :: highs => local.set base :: (highs >>= fun idx' => [i64.const 0, local.set idx'])
@@ -868,8 +923,12 @@ def compileSteps (vm : VarMap) (vi : ℕ) (steps : List (Step F)) :
 def compileLit (vm : VarMap) (vi : ℕ) (acc : List Instr) (es : List (FExpr F)) :
     Except String (VarMap × ℕ × List Instr) :=
   es.foldlM (fun ((vm, vi, instrs) : VarMap × ℕ × List Instr) (e : FExpr F) => do
+    -- Expression compilers use `vm.nextLocal .. vm.nextLocal + 2*nw` as scratch,
+    -- so compile with the current vm, then allocate the output slot ABOVE the
+    -- scratch (the returned vm's nextLocal covers both).
     let cb ← compileFExpr vm e {}
-    let (vm', locs) := vm.alloc 1 vi
+    let vmRes := { vm with nextLocal := vm.nextLocal + scratchReserve vm.numWords }
+    let (vm', locs) := vmRes.alloc 1 vi
     pure (vm', vi + 1, instrs ++ cb.build ++ (locs.reverse.map fun idx => local.set idx))
   ) (vm, vi, acc)
 
@@ -881,6 +940,9 @@ def compileVExpr (vm : VarMap) (vi : ℕ) (acc : List Instr) :
     let nw := vm.numWords
     let (vmOut, _) := vm.alloc n vi
     let outBase := vmOut.nextLocal - n * nw
+    -- Bodies compile with vmOut; their scratch extends `scratchReserve nw`
+    -- past it, so the returned vm bumps nextLocal to keep it declared.
+    let vmRet := { vmOut with nextLocal := vmOut.nextLocal + scratchReserve nw }
     let instrs ← (List.range n).foldlM (fun (is : List Instr) (i : ℕ) => do
       -- The loop is unrolled at compile time; `idx` in the body is the constant `i`.
       let cb ← compileFExpr { vmOut with loopIdx := some i } body {}
@@ -889,7 +951,57 @@ def compileVExpr (vm : VarMap) (vi : ℕ) (acc : List Instr) :
       let capture := (List.range nw).reverse.map fun w => local.set (elemBase + w)
       pure (is ++ cb.build ++ capture)
     ) acc
+    pure (vmRet, vi + n, instrs)
+  | n, .envRange offset => do
+    -- `n` consecutive environment cells at `offset + i`, witnessed as fresh outputs.
+    -- During witness generation the environment cells are inputs and earlier
+    -- witnesses, which live in WASM locals — so each cell is a `local.get` via
+    -- `vm.lookup`, captured into the new witness slot.
+    let nw := vm.numWords
+    let (vmOut, _) := vm.alloc n vi
+    let outBase := vmOut.nextLocal - n * nw
+    let instrs := (List.range n).foldl (fun (is : List Instr) (i : ℕ) =>
+      let elemBase := outBase + i * nw
+      let srcBase := vm.lookup (offset + i)
+      let load : List Instr := (List.range nw) >>= fun w => [ local.get (srcBase + w) ]
+      let capture := (List.range nw).reverse.map fun w => local.set (elemBase + w)
+      is ++ load ++ capture
+    ) acc
     pure (vmOut, vi + n, instrs)
+  | n, .bitsOf x => do
+    -- The `n` low bits of `FiniteField.val x`, each as field 0 or 1.
+    -- Compile `x` ONCE into scratch locals placed ABOVE the output slots
+    -- (outputs start at `outBase = vm.nextLocal`, scratch at `vmOut.nextLocal`),
+    -- so the per-bit tests never overwrite earlier outputs. Bumping
+    -- `nextLocal` past the scratch keeps those locals declared in $compute.
+    let nw := vm.numWords
+    let (vmOut, _) := vm.alloc n vi
+    let outBase := vmOut.nextLocal - n * nw
+    -- Compile `x` with a vm bumped past the outputs: `x`'s own scratch
+    -- (up to 2*nw at the passed nextLocal) lands above the output slots.
+    let vmX := { vm with nextLocal := vmOut.nextLocal }
+    let xCB ← compileFExpr vmX x {}
+    let scratchBase := vmOut.nextLocal
+    let captureX : List Instr := (List.range nw).reverse.map fun w => local.set (scratchBase + w)
+    -- Return a vm whose nextLocal covers both the x-scratch and the output slots.
+    let vmScratch := { vmOut with nextLocal := vmOut.nextLocal + scratchReserve nw }
+    let instrs ← (List.range n).foldlM (fun (is : List Instr) (i : ℕ) => do
+      let limbIdx := i / 64
+      let bitIdx := i % 64
+      let elemBase := outBase + i * nw
+      -- Bit i of the field representative: limb i/64, bit i%64 (constant i).
+      -- Bits beyond the field width are always 0.
+      let testInstrs : List Instr := if limbIdx ≥ nw then
+          [i32.const 0]
+        else
+          [ local.get (scratchBase + limbIdx), i64.const (2^bitIdx), i64.and, i64.eqz,
+            .ifElse "" (some .i32) [i32.const 0] [i32.const 1] ]
+      -- testInstrs leaves i32 (0/1); zero-extend to i64 then to nw limbs
+      let extend : List Instr := [i64.extend_i32_u] ++ List.replicate (nw - 1) (i64.const 0)
+      let capture := (List.range nw).reverse.map fun w => local.set (elemBase + w)
+      pure (is ++ testInstrs ++ extend ++ capture)
+    ) (acc ++ xCB.build ++ captureX)
+    pure (vmScratch, vi + n, instrs)
   | _, .append a b => do
     -- Compile first segment (produces m elements at vi..vi+m-1),
     -- then second segment (produces n elements at vi+m..vi+m+n-1).

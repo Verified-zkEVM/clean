@@ -48,21 +48,23 @@ def r1csJson : Except String String := compileR1CS BN254_PRIME 1 myPoseidonOps
 | ------------------------------------------- | --------------------------------------------------- |
 | `const`, `add`, `mul`, `inv`                | ✅ Supported                                         |
 | `var`, `localVar`                           | ✅ Supported                                         |
-| `ofNat`                                     | ✅ Supported (zero-extends to nw limbs, reduces)      |
+| `ofU64`                                     | ✅ Supported (zero-extends to nw limbs, reduces)      |
 | `val`                                       | ✅ Supported (keeps lowest 64 bits of integer rep)   |
 | `ite` (if-else)                             | ✅ Supported (multi-value for multi-word)            |
 | `lt`, `neq`, `not`, `and` (booleans)        | ✅ Supported                                         |
+| `flt` (field-sorted `<`)                    | ✅ Supported (limb-wise compare for multi-word)      |
+| `bit` (bit test)                            | ✅ Supported                                         |
 | `feq`                                       | ✅ Supported (pairwise limb compare for multi-word)  |
-| `lit`, `mapRange`                           | ✅ Supported                                         |
+| `lit`, `mapRange`, `envRange`, `bitsOf`     | ✅ Supported                                         |
 | `append`                                    | ✅ Supported                                         |
-| `envGet`, `listGet`, `dataGet`, `hintGet`   | ❌ Not yet supported (`.error`)                      |
+| `listGet`, `dataGet`, `hintGet`             | ❌ Not yet supported (`.error`)                      |
 | `native` witnesses (Lean closures)          | ❌ Not compilable (`.error`)                         |
 | `idx` (outside `mapRange`)                  | ❌ Invalid (`.error`)                                |
 | lookups                                     | Ignored by witness gen; `.error` in R1CS export     |
 | interactions                                | ✅ Ignored by witness gen; `.error` in R1CS export |
 
 
-Unsupported operations make the compiler return `.error` with a descriptive message. Note that Nat-sorted (`NExpr`) arithmetic is performed on single 64-bit words; operations whose intermediate values exceed 2^64 wrap around.
+Unsupported operations make the compiler return `.error` with a descriptive message. All u64-sorted (`U64Expr`) arithmetic is performed on single 64-bit words with WASM's native wrap-around semantics, exactly matching the IR's `UInt64` evaluation.
 
 ## Output Format
 

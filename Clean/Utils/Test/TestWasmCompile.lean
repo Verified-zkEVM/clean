@@ -91,9 +91,9 @@ def assertOps : List (Operation (F p1009)) :=
 
 #eval! expectBinaryOk "append compiles" "" (compileModule p1009 0 ([.witness 2 (.ir [] (.append (.lit #v[.const 0]) (.lit #v[.const 1])))] : List (Operation (F p1009))) 1)
 
-#eval! expectBinaryError "envGet rejected" "envGet" (compileModule p1009 0 ([.witness 1 (.ir [] (.lit #v[.envGet (.const 0)]))] : List (Operation (F p1009))) 1)
+#eval! expectBinaryError "listGet rejected" "listGet" (compileModule p1009 0 ([.witness 1 (.ir [] (.lit #v[.listGet [.const 0] (.const 0)]))] : List (Operation (F p1009))) 1)
 
-#eval! expectBinaryOk "multi-word val compiles" "" (compileModule Specs.Poseidon.BN254_PRIME 0 ([.witness 1 (.ir [.letN (.val (.const 1))] (.lit #v[.const 0]))] : List (Operation Specs.Poseidon.F)) 4)
+#eval! expectBinaryOk "multi-word val compiles" "" (compileModule Specs.Poseidon.BN254_PRIME 0 ([.witness 1 (.ir [.letU (.val (.const 1))] (.lit #v[.const 0]))] : List (Operation Specs.Poseidon.F)) 4)
 
 #eval! expectError "R1CS rejects native witness" "native"
   (compileR1CS p1009 0 0
@@ -115,6 +115,38 @@ def letStepOps : List (Operation (F p1009)) :=
 
 #eval! expectOk "let-step R1CS exports" "\"nConstraints\""
   (compileR1CS p1009 1 1 letStepOps 1)
+
+/-! ## New u64 IR constructors (flt, bit, bitsOf, envRange) -/
+
+/-- Witness program using `BExpr.flt` (field-sorted less-than):
+    w = if x < 5 then 1 else 0. -/
+def fltOps : List (Operation (F p1009)) :=
+  [.witness 1 (.ir [] (.lit #v[
+    .ite (.flt (.expr (.var ⟨0⟩)) (.const 5))
+      (.const 1) (.const 0)]))]
+
+#eval! expectBinaryOk "flt compiles" "" (compileModule p1009 1 fltOps 1)
+
+/-- Witness program using `BExpr.bit` (bit test):
+    w = if bit 2 of x is set then 1 else 0. -/
+def bitOps : List (Operation (F p1009)) :=
+  [.witness 1 (.ir [] (.lit #v[
+    .ite (.bit (.expr (.var ⟨0⟩)) 2)
+      (.const 1) (.const 0)]))]
+
+#eval! expectBinaryOk "bit compiles" "" (compileModule p1009 1 bitOps 1)
+
+/-- Witness program using `VExpr.bitsOf`: 8 low bits of x. -/
+def bitsOfOps : List (Operation (F p1009)) :=
+  [.witness 8 (.ir [] (.bitsOf (.expr (.var ⟨0⟩))))]
+
+#eval! expectBinaryOk "bitsOf compiles" "" (compileModule p1009 1 bitsOfOps 1)
+
+/-- Witness program using `VExpr.envRange`: witness env cells 0..1 (the input twice). -/
+def envRangeOps : List (Operation (F p1009)) :=
+  [.witness 2 (.ir [] (.envRange 0))]
+
+#eval! expectBinaryOk "envRange compiles" "" (compileModule p1009 1 envRangeOps 1)
 
 /-! ## Binary path validation with simple circuits -/
 
