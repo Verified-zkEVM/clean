@@ -760,7 +760,8 @@ def runLeafDispatch (lemmasArray closeArray : Array (TSyntax `Lean.Parser.Tactic
             evalTactic (← `(tactic|
               all_goals (try simp only [ProvableType.eval_varFromOffset, circuit_norm,
                 eval_vector, Vector.mapRange_succ, Vector.mapRange_zero, Vector.mk.injEq,
-                Array.mk.injEq, List.cons.injEq, and_true, $closeArray,*])))
+                Array.mk.injEq, List.cons.injEq, and_true, Function.comp_apply,
+                $closeArray,*])))
             -- split conjunctions before unifying environments: window conjuncts then
             -- close by rfl inside envUnify, leaving grind only the input-derived parts
             evalTactic (← `(tactic| all_goals (try and_intros)))
@@ -891,6 +892,18 @@ def elabHintArrays (extraTerms closeTerms : Array (TSyntax `term)) :
 
 def runComputableWitnesses (extraTerms closeTerms : Array (TSyntax `term)) : TacticM Unit := do
   let (lemmasArray, closeArray) ← elabHintArrays extraTerms closeTerms
+  -- expose the offset binder before the first simp: rewriting under it makes the whole
+  -- pass pay simp's congruence-through-binder overhead (~12% measured). Introducing
+  -- `input` as well would save more but drifts the operations spelling away from what
+  -- `Circuit.forEach.forAll` keys on (struct-splitting of the free input variable).
+  -- Delta-expansion keeps the environment clean (no equation lemmas).
+  withMainContext do
+    let t ← instantiateMVars (← getMainTarget)
+    if t.getAppFn.isConstOf `FormalCircuitBase.ComputableWitnesses then
+      let t' ← Meta.deltaExpand t (· == `FormalCircuitBase.ComputableWitnesses)
+      unless t' == t do
+        liftMetaTactic fun g => do return [← g.change t']
+      evalTactic (← `(tactic| intro n))
   let simpPass : TacticM Unit := do
     unless (← getGoals).isEmpty do
       try

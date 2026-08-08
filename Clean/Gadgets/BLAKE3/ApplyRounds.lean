@@ -44,7 +44,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     simp only [circuit_norm]
     refine ⟨⟨fun h => ?_, fun h => ?_⟩, fun h h_agrees => ?_⟩
     · exact FormalCircuit.toSubcircuit_computableWitnesses _
-        (by first | exact h | (simp only [circuit_norm] at h ⊢; exact h))
+        (by simp only [circuit_norm] at h ⊢; exact h)
     · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
         (by try omega) fun h_agrees => by
           simp only [circuit_norm]
@@ -54,17 +54,13 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
       have eP : ∀ v, (Permute.circuit (p:=p)).localLength v = 0 :=
         fun _ => by simp only [circuit_norm, Permute.circuit]
       simp only [circuit_norm, output]
-      first
-        | exact FormalCircuit.output_of_input_eq (Round.circuit (p:=p)) (n := n)
-            (by first | exact h | (simp only [circuit_norm]; exact h))
-            (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eR]; omega))
-        | refine ⟨FormalCircuit.output_of_input_eq (Round.circuit (p:=p)) (n := n)
-            (by first | exact h | (simp only [circuit_norm]; exact h))
-            (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eR]; omega)),
-            FormalCircuit.output_of_input_eq (Permute.circuit (p:=p))
-            (n := n + (Round.circuit (p:=p)).localLength input)
-            (by exact congrArg (fun s : Round.Inputs (F p) => s.message) h)
-            (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eR, eP]; omega))⟩
+      refine ⟨FormalCircuit.output_of_input_eq (Round.circuit (p:=p)) (n := n)
+          (by simp only [circuit_norm]; exact h)
+          (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eR]; omega)),
+          FormalCircuit.output_of_input_eq (Permute.circuit (p:=p))
+          (n := n + (Round.circuit (p:=p)).localLength input)
+          (congrArg (fun s : Round.Inputs (F p) => s.message) h)
+          (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eR, eP]; omega))⟩
   elaborated := by elaborate_circuit_with {
     output input offset := output input offset
   }
@@ -640,12 +636,10 @@ def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
     · exact FormalCircuit.toSubcircuit_computableWitnesses _
         (by simp only [circuit_norm]; exact ⟨initState_eval_congr h.1 h.2.2.1 h.2.2.2.1 h.2.2.2.2.1 h.2.2.2.2.2, h.2.1⟩)
     · simp only [circuit_norm]
-      first
-          | grind
-          | exact FormalCircuit.output_of_input_eq _
-              (by simp only [circuit_norm]; exact ⟨initState_eval_congr h.1 h.2.2.1 h.2.2.2.1 h.2.2.2.2.1 h.2.2.2.2.2, h.2.1⟩)
-              (ProverEnvironment.agreesBelow_of_le h_agrees
-                (by first | omega | (simp only [e7]; omega)))
+      exact FormalCircuit.output_of_input_eq _
+        (by simp only [circuit_norm];
+            exact ⟨initState_eval_congr h.1 h.2.2.1 h.2.2.2.1 h.2.2.2.2.1 h.2.2.2.2.2, h.2.1⟩)
+        (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [e7]; omega))
 }
 
 end Gadgets.BLAKE3.ApplyRounds
