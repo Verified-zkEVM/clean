@@ -75,7 +75,7 @@ def compileR1CS (fieldPrime numInputs numOutputs : ℕ) (ops : List (Operation F
     Except String String := do
   let flatOps := Operations.toFlat ops
   -- Use the WASM compiler’s VarMap to get the same signal layout
-  let vm := VarMap.init numInputs numWords
+  let vm := VarMap.init numInputs numWords fieldPrime
   let (_, finalVarIdx, _) ← processFlatOps numInputs flatOps vm numInputs []
   -- finalVarIdx = numInputs + total witness outputs (steps don’t count)
   let witnessCount := finalVarIdx - numInputs

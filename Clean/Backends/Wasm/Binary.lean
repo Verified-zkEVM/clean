@@ -127,7 +127,7 @@ def binopOffset : BinOp → ℕ
   | .add => 0  | .sub => 1  | .mul => 2
   | .div_u => 4 | .rem_u => 6
   | .and => 7  | .or => 8   | .xor => 9
-  | .shl => 10 | .shr_u => 11 | .shr_s => 12
+  | .shl => 10 | .shr_s => 11 | .shr_u => 12
   | .rotl => 13 | .rotr => 14
 
 /-- Label stack entry: (label name, nesting depth from current position). -/

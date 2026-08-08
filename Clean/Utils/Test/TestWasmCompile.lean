@@ -192,15 +192,39 @@ def envRangeOps : List (Operation (F p1009)) :=
       cmd := "snarkjs", args := #["wtns", "calculate", wasmPath, "/tmp/poseidon1_input.json", "/tmp/poseidon1_witness.wtns"]
     }
     if snarkOut.exitCode ≠ 0 then throw <| IO.userError s!"FAIL: snarkjs: {snarkOut.stderr}"
-    -- Verify different inputs produce different outputs (hash behavior)
-    for input in ["0", "1", "5"] do
+    -- Verify against Lean ground truth. The Poseidon1 output is the circuit
+    -- variable at index 402 (0-based signal 402), which is NOT the last signal
+    -- (later signals are intermediate constraint witnesses).
+    -- Ground truths from Specs.PoseidonOptimized.poseidon1Opt:
+    --   0 → 19014214495641488759237505126948346942972912379615652741039992445865937985820
+    --   1 → 18586133768512220936620570745912940619677854269274689475585506675881198879027
+    --   5 → 19065150524771031435284970883882288895168425523179566388456001105768498065277
+    let gts := [("0", "19014214495641488759237505126948346942972912379615652741039992445865937985820"),
+               ("1", "18586133768512220936620570745912940619677854269274689475585506675881198879027"),
+               ("5", "19065150524771031435284970883882288895168425523179566388456001105768498065277")]
+    for (input, gt) in gts do
       IO.FS.writeFile (System.FilePath.mk "/tmp/poseidon1_input.json") (String.intercalate "" ["{\"in\": \"", input, "\"}"])
       let r ← IO.Process.output {
         cmd := "snarkjs", args := #["wtns", "calculate", wasmPath, "/tmp/poseidon1_input.json", "/tmp/poseidon1_witness.wtns"]
       }
       if r.exitCode ≠ 0 then throw <| IO.userError s!"FAIL: snarkjs input={input}: {r.stderr}"
+      -- Parse the wtns file: read signal 402 (32 bytes, little-endian)
       let wtnsBytes ← IO.FS.readBinFile (System.FilePath.mk "/tmp/poseidon1_witness.wtns")
-      if wtnsBytes.size < 100 then throw <| IO.userError s!"FAIL: witness too small for input={input}"
-    IO.println s!"OK: Poseidon1 → wasm-validate + snarkjs wtns (3 inputs, {binary.size} bytes WASM)"
+      -- wtns layout: "wtns"(4) version(4) nSections(4) id1(4) len1(8) n8(4) prime(n8) nWitnesses(4) id2(4) len2(8) witnesses...
+      -- Section 2 header is id2(4)+len2(8), then witness data directly (nWitnesses is in section 1).
+      let n8 := 32
+      let witnessData := 4+4+4+4+8+4+n8+4+4+8
+      let signal402 := wtnsBytes.extract (witnessData + 402*n8) (witnessData + 403*n8)
+      -- little-endian u256: byte 0 is the least significant
+      let leVal := (List.range signal402.size).foldl (fun acc i => acc * 256 + (signal402.get! (signal402.size - 1 - i)).toNat) 0
+      let expected := String.toNat? gt
+      match expected with
+      | none => throw <| IO.userError "FAIL: bad ground truth"
+      | some exp =>
+        if leVal ≠ exp then
+          throw <| IO.userError s!"FAIL: Poseidon1({input}) = {leVal}, expected {exp}"
+        else
+          IO.println s!"OK: Poseidon1({input}) matches ground truth"
+    IO.println s!"OK: Poseidon1 → wasm-validate + snarkjs (3 inputs verified vs ground truth, {binary.size} bytes WASM)"
 
 end TestWasmCompile

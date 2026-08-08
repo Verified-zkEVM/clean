@@ -250,147 +250,129 @@ def genSchoolbook (N srcAOff srcBOff destOff : ℕ) (scratchOff : ℕ := 0) : Li
     (List.range N) >>= fun j =>
       genSchoolbookAccum N i j srcAOff srcBOff destOff scratchOff
 
-/--
-Generate multi-word modular multiplication AST Func with word-aligned Barrett reduction
-(HAC Algorithm 14.42). Operates on N 64-bit limbs per field element.
+/-- Push a Nat constant as nw i64 limbs (limb 0 deepest). -/
+def pushCoeff (c numWords : ℕ) : List Instr :=
+  (List.range numWords).map fun w => i64.const ((c >>> (w * 64)) % (2^64))
 
-Algorithm for N=4, k=256:
-  1. c = a * b (8 limbs, schoolbook)
-  2. q1 = c >> 192 (5 limbs)
-  3. q2 = q1 * μ (5×5 schoolbook, 9 limbs, μ = floor(2^512 / p))
-  4. q3 = q2 >> 320 (4 limbs)
-  5. r1 = c mod 2^320 (5 limbs)
-  6. r2 = (q3 * p) mod 2^320 (5 limbs)
-  7. r = r1 - r2 (5-limb sub, result < 3p by Barrett guarantee)
-  8. Conditional subtract p up to 2 times
-  9. Return r[0..N-1]
+/-- Montgomery constant n' = -p⁻¹ mod 2^64, computed via Newton iteration
+    (x_{k+1} = x_k·(2 − p·x_k) mod 2^64, 6 iterations double precision to 2^64).
+    Requires p odd (true for all field primes used here).
+    Returns p⁻¹ mod 2^64; the reduction uses the negation (2^64 − p⁻¹). -/
+def montNPrime (p : ℕ) : ℕ :=
+  let m : ℕ := 2^64
+  let x1 := (1 * (2 - (p : ℤ) * 1)) % m
+  let x2 := (x1 * (2 - (p : ℤ) * x1)) % m
+  let x3 := (x2 * (2 - (p : ℤ) * x2)) % m
+  let x4 := (x3 * (2 - (p : ℤ) * x3)) % m
+  let x5 := (x4 * (2 - (p : ℤ) * x4)) % m
+  let x6 := (x5 * (2 - (p : ℤ) * x5)) % m
+  -- n' = -p⁻¹ mod 2^64 = 2^64 − p⁻¹ (p⁻¹ ≠ 0 since p is odd)
+  (m - Int.toNat (x6 % m)) % m
+
+/-- Montgomery radix R = 2^(N*64) mod p (the Montgomery form of 1). -/
+def montR (p numWords : ℕ) : ℕ := (2^(numWords * 64)) % p
+
+/-- R² mod p — the constant to convert a normal-form value to Montgomery form
+    (montMul(x, R²) = x·R²·R⁻¹ = x·R). -/
+def montR2 (p numWords : ℕ) : ℕ := (2^(2 * numWords * 64)) % p
+
+/--
+Generate multi-word modular multiplication AST Func using CIOS Montgomery
+reduction with 64-bit limbs (HAC Algorithm 14.36, CIOS variant). Operands are
+in Montgomery form (x·R mod p); the result is in Montgomery form.
+
+Algorithm:
+  1. c = a * b (2N limbs, schoolbook)
+  2. For i in 0..N-1 (Montgomery reduction):
+       m = c[i] * n' mod 2^64        (n' = -p⁻¹ mod 2^64)
+       c[i..i+N] += m * p            (schoolbook accumulate, carry propagates)
+     After N steps c[0..N-1] = 0 and c[N..2N-1] ≡ a·b·R⁻¹ (mod p), value < 2p.
+  3. Conditional subtract p once → result in [0, p).
+  4. Return c[N..2N-1].
 
 Local layout (N=4):
   params: a[0..3] at 0-3, b[4..7] at 4-7
-  scratchN4[lo,hi,carry,sum]: 8-11 (for N=4 schoolbooks)
-  scratchN5[lo,hi,carry,sum]: 12-15 (for 5×5 schoolbook, avoids overlap with scratchN4 at 10-11)
-  c[0..7]:      16-23 (full a*b product)
-  q1[0..4]:     24-28 (c>>192), also q3[0..3]/result[0..3] at 24-27
-  q2[0..8]:     29-37 (q1*μ), also r2_full[0..7] at 29-36
-  muArr[0..4]:  38-42 (μ = floor(2^512/p), 5 limbs)
-  pArr[0..3]:   43-46 (prime p, 4 limbs)
-  r1[0..4]:     47-51 (c mod 2^320)
+  schoolbook scratch lo,hi,carry,sum: 8-11 (genSchoolbookAccum's default 2N..2N+3)
+  c[0..8]:  12-20 (full a*b product, 2N+1 limbs for carry headroom)
+  pArr:     21-24 (prime p, N limbs)
+  m:        25   (Montgomery quotient)
+  lo,hi,carry,sum: 26-29 (Montgomery reduction accumulate scratch)
+  br:       30   (borrow flag)
 -/
 def genFmul (p numWords : ℕ) : Func :=
   let N := numWords
-  let limbs2N := 2 * N
-  -- Barrett precomputed constant: μ = floor(b^(2k) / p) = floor(2^(2*N*64) / p)
-  let mu := (2^(2*N*64)) / p
-  let muLimbs := toLimbs mu (N+1)   -- μ has N+1 limbs (5 for N=4)
-  let pLimbs := toLimbs p N          -- p has N limbs
+  let nPrime := montNPrime p
+  let pLimbs := toLimbs p N
 
-  -- Local index layout
-  let scratchN5 := 2*N + 4           -- 12 (scratch base for N+1 schoolbook, avoids N=4 at 8-11)
-  let cBase := 2*N + 8               -- 16 (a*b: 8 limbs)
-  let q1Base := cBase + limbs2N      -- 24 (c>>192: N+1 limbs, also q3[0..N-1] / result[0..N-1])
-  -- q2 needs 2*(N+1) limbs (10 for N=4), since 5×5 schoolbook produces up to 10 limbs.
-  -- Overlap with mu would corrupt the multiplier during carry propagation.
-  let q2Base := q1Base + (N+1)       -- 29 (q1*μ: 2*(N+1) limbs, also r2_full[0..2N-1])
-  let muBase := q2Base + 2*(N+1)     -- 39 (μ: N+1 limbs)
-  let pBase := muBase + (N+1)        -- 44 (p: N limbs)
-  let r1Base := pBase + N            -- 48 (c mod 2^(k+1): N+1 limbs)
-  let brIdx := 2*N+2                 -- 10 (borrow flag, reuses scratchN4 carry slot)
+  -- Local index layout. NOTE: cBase must be past the schoolbook scratch
+  -- (genSchoolbookAccum uses 2N..2N+3 by default), so start c at 2N+4.
+  let cBase := 2*N + 4         -- 12 (c[0..2N], 2N+1 limbs)
+  let pBase := cBase + 2*N + 1  -- 21 (p: N limbs)
+  let mIdx := pBase + N       -- 25
+  let loIdx := mIdx + 1       -- 26
+  let hiIdx := loIdx + 1      -- 27
+  let carryIdx := hiIdx + 1   -- 28
+  let sumIdx := carryIdx + 1  -- 29
+  let brIdx := sumIdx + 1     -- 30
 
-  -- Step 1: Initialize working arrays
-  let initAll : List Instr :=
-    ((muLimbs.zip (List.range (N+1))) >>= fun (val, i) => [ i64.const val, local.set (muBase+i) ]) ++
-    ((pLimbs.zip (List.range N)) >>= fun (val, i) => [ i64.const val, local.set (pBase+i) ])
+  -- Initialize p limbs
+  let initP : List Instr :=
+    (pLimbs.zip (List.range N)) >>= fun (val, i) => [ i64.const val, local.set (pBase+i) ]
 
-  -- Step 2: c = a * b (N×N schoolbook → 2N limbs, scratch at 8-11)
+  -- c = a * b (N×N schoolbook → 2N limbs). Zero c first (schoolbook ADDS).
+  let zeroC : List Instr :=
+    (List.range (2*N+1)) >>= fun i => [ i64.const 0, local.set (cBase+i) ]
   let mainSB := genSchoolbook N 0 N cBase
 
-  -- Step 3: q1 = c[N-1..2N] (c >> ((N-1)*64), N+1 limbs)
-  let extractQ1 : List Instr :=
-    (List.range (N+1)) >>= fun i => [ local.get (cBase + (N-1) + i), local.set (q1Base + i) ]
+  -- Montgomery reduction: N steps. Step i zeroes c[i] and shifts the reduction.
+  let redStep (i : ℕ) : List Instr :=
+    -- m = c[i] * n' mod 2^64
+    [ local.get (cBase+i), i64.const nPrime, i64.mul, local.set mIdx ]
+    -- for j in 0..N-1: c[i+j] += m * p[j] (via $mul64x64), carry propagates to c[2N]
+    ++ ((List.range N) >>= fun j =>
+      [ local.get mIdx, local.get (pBase+j), call "$mul64x64", local.set hiIdx, local.set loIdx,
+        local.get (cBase+i+j), local.get loIdx, i64.add, local.tee (cBase+i+j),
+        local.get loIdx, i64.lt_u, i64.extend_i32_u, local.set carryIdx,
+        local.get hiIdx, local.get carryIdx, i64.add, local.tee sumIdx,
+        local.get hiIdx, i64.lt_u, i64.extend_i32_u, local.set carryIdx,
+        local.get (cBase+i+j+1), local.get sumIdx, i64.add, local.tee (cBase+i+j+1),
+        local.get sumIdx, i64.lt_u, i64.extend_i32_u,
+        local.get carryIdx, i64.or, local.set carryIdx ]
+      -- propagate carry through remaining limbs up to c[2N]
+      ++ ((List.range (2*N + 1 - (i+j+2))) >>= fun d =>
+        let k := i + j + 2 + d
+        [ local.get (cBase+k), local.get carryIdx, i64.add, local.tee (cBase+k),
+          local.get carryIdx, i64.lt_u, i64.extend_i32_u, local.set carryIdx ]))
+  let redSteps := (List.range N) >>= redStep
 
-  -- Step 4: q2 = q1 * μ (5×5 schoolbook → 9 limbs, scratch at 12-15)
-  let muMult := genSchoolbook (N+1) q1Base muBase q2Base scratchN5
-
-  -- Step 5: q3 = q2[N+1..2N+1] (q2 >> ((N+1)*64), N limbs), reuse q1Base[0..N-1]
-  let extractQ3 : List Instr :=
-    (List.range N) >>= fun i => [ local.get (q2Base + (N+1) + i), local.set (q1Base + i) ]
-
-  -- Step 6: r1 = c[0..4] (c mod 2^320, 5 limbs)
-  let extractR1 : List Instr :=
-    (List.range (N+1)) >>= fun i => [ local.get (cBase + i), local.set (r1Base + i) ]
-
-  -- Step 7: r2_full = q3 * p (N×N schoolbook → 8 limbs, scratch at 8-11)
-  -- r2 = low 5 limbs at q2Base[0..4]
-  -- IMPORTANT: zero q2Base first since genSchoolbook ADDS to destination,
-  -- and q2Base still contains the muMult result (q2 = q1*μ).
-  let zeroR2 : List Instr :=
-    (List.range limbs2N) >>= fun i => [ i64.const 0, local.set (q2Base+i) ]
-  let r2Mult := genSchoolbook N q1Base pBase q2Base
-
-  -- Step 8: r = r1 - r2 (5-limb subtraction with borrow, result at q1Base[0..3]).
-  -- Barrett guarantees the result fits in 4 limbs (< 3p < 2^256 for N=4),
-  -- so limb 4 is computed (for borrow detection) but discarded.
-  let sub5Limb : List Instr :=
-    -- Limb 0
-    [ local.get (r1Base+0), local.get (q2Base+0), i64.sub, local.set (q1Base+0),
-      local.get (r1Base+0), local.get (q2Base+0), i64.lt_u, i64.extend_i32_u, local.set brIdx ]
-    -- Limbs 1..3
-    ++ ((List.range (N-1)) >>= fun i =>
-      let idx := i + 1
-      [ local.get (r1Base+idx), local.get (q2Base+idx), i64.sub, local.get brIdx, i64.sub, local.set (q1Base+idx),
-        local.get (r1Base+idx), local.get (q2Base+idx), i64.lt_u, i64.extend_i32_u,
-        local.get (r1Base+idx), local.get (q2Base+idx), i64.eq, i64.extend_i32_u,
-        local.get brIdx, i64.and, i64.or, local.set brIdx ])
-    -- Limb 4: compute borrow, discard result
-    ++ [ local.get (r1Base+4), local.get (q2Base+4), i64.sub, local.get brIdx, i64.sub,
-         Instr.drop,
-         local.get (r1Base+4), local.get (q2Base+4), i64.lt_u, i64.extend_i32_u,
-         local.get (r1Base+4), local.get (q2Base+4), i64.eq, i64.extend_i32_u,
-         local.get brIdx, i64.and, i64.or, local.set brIdx ]
-
-  -- Step 9: Conditional subtraction. r = r - p if r >= p, at most 2 times.
-  -- Computes r-p at q2Base[0..3], copies back to q1Base[0..3] if no borrow (r >= p).
+  -- Conditional subtraction: c[N..2N-1] -= p if >= p. Result lands back in c[N..2N-1].
+  -- Uses c[0..N-1] (all zero after reduction) as scratch for the trial subtraction.
   let subOneP : List Instr :=
-    [ local.get (q1Base+0), local.get (pBase+0), i64.sub, local.set (q2Base+0),
-      local.get (q1Base+0), local.get (pBase+0), i64.lt_u, i64.extend_i32_u, local.set brIdx ]
+    [ local.get (cBase+N+0), local.get (pBase+0), i64.sub, local.set (cBase+0),
+      local.get (cBase+N+0), local.get (pBase+0), i64.lt_u, i64.extend_i32_u, local.set brIdx ]
     ++ ((List.range (N-1)) >>= fun i =>
       let idx := i + 1
-      [ local.get (q1Base+idx), local.get (pBase+idx), i64.sub, local.get brIdx, i64.sub, local.set (q2Base+idx),
-        local.get (q1Base+idx), local.get (pBase+idx), i64.lt_u, i64.extend_i32_u,
-        local.get (q1Base+idx), local.get (pBase+idx), i64.eq, i64.extend_i32_u,
+      [ local.get (cBase+N+idx), local.get (pBase+idx), i64.sub, local.get brIdx, i64.sub, local.set (cBase+idx),
+        local.get (cBase+N+idx), local.get (pBase+idx), i64.lt_u, i64.extend_i32_u,
+        local.get (cBase+N+idx), local.get (pBase+idx), i64.eq, i64.extend_i32_u,
         local.get brIdx, i64.and, i64.or, local.set brIdx ])
     ++ [ local.get brIdx, i64.eqz,  -- borrow=0 means r >= p
-         .ifElse "" none ((List.range N) >>= fun i => [ local.get (q2Base+i), local.set (q1Base+i) ]) [] ]
+         .ifElse "" none ((List.range N) >>= fun i => [ local.get (cBase+i), local.set (cBase+N+i) ]) [] ]
 
-  -- Build return sequence. In WASM multi-value returns, the first result type
-  -- corresponds to the deepest stack value (pushed first). Callers pop top-first,
-  -- so we push limbs in reverse order (highest limb first) so that the lowest limb
-  -- is popped first and matches the first result type.
-  let rets : List Instr := (List.range N) >>= fun i => [ local.get (q1Base+i) ]
+  -- Return c[N..2N-1] (lowest limb first, matching the caller convention)
+  let rets : List Instr := (List.range N) >>= fun i => [ local.get (cBase+N+i) ]
 
   { name := "$fmul"
     params := ((List.range N).map fun i => (s!"$a{i}", ValType.i64))
       ++ ((List.range N).map fun i => (s!"$b{i}", ValType.i64))
     results := List.replicate N ValType.i64
     locals :=
-      -- scratchN4 (lo,hi,carry,sum): 4 locals at 8-11
-      [("$lo", ValType.i64), ("$hi", ValType.i64), ("$carry", ValType.i64), ("$sum", ValType.i64)]
-      -- scratchN5 (lo,hi,carry,sum): 4 locals at 12-15
-      ++ [("$lo5", ValType.i64), ("$hi5", ValType.i64), ("$carry5", ValType.i64), ("$sum5", ValType.i64)]
-      -- c[0..7]: 8 locals at 16-23
-      ++ ((List.range limbs2N).map fun i => (s!"$c{i}", ValType.i64))
-      -- q1[0..4] / q3[0..3] / result[0..3]: 5 locals at 24-28
-      ++ ((List.range (N+1)).map fun i => (s!"$q1{i}", ValType.i64))
-      -- q2[0..2*(N+1)-1] / r2_full[0..2N-1]: 2*(N+1) locals at 29.. for N=4
-      ++ ((List.range (2*(N+1))).map fun i => (s!"$q2{i}", ValType.i64))
-      -- muArr[0..4]: 5 locals at 38-42
-      ++ ((List.range (N+1)).map fun i => (s!"$mu{i}", ValType.i64))
-      -- pArr[0..3]: 4 locals at 43-46
-      ++ ((List.range N).map fun i => (s!"$pArr{i}", ValType.i64))
-      -- r1[0..4]: 5 locals at 47-51
-      ++ ((List.range (N+1)).map fun i => (s!"$r1{i}", ValType.i64))
-    body := initAll ++ mainSB ++ extractQ1 ++ muMult ++ extractQ3
-            ++ extractR1 ++ zeroR2 ++ r2Mult ++ sub5Limb ++ subOneP ++ subOneP ++ rets
+      -- Declare all locals from index 8 (after 8 params) up to brIdx = 5*N+10.
+      -- Layout: c[0..2N] at 2N+4..4N+4, p[0..N-1] at 4N+5..5N+4,
+      -- m at 5N+5, lo 5N+6, hi 5N+7, carry 5N+8, sum 5N+9, br 5N+10.
+      let totalLocals := (5*N + 11) - (2*N)
+      (List.range totalLocals).map fun i => (s!"$l{i}", ValType.i64)
+    body := initP ++ zeroC ++ mainSB ++ redSteps ++ subOneP ++ rets
     exportName := none
   }
 
@@ -476,9 +458,9 @@ def genFinv (p numWords : ℕ) : Func :=
   let square : List Instr := pushR ++ pushR ++ [ call "$fmul" ] ++ captureR
   let multiply : List Instr := pushR ++ pushA ++ [ call "$fmul" ] ++ captureR
   let init : List Instr :=
-    -- Push N limbs: 1 (limb 0, deepest), then N-1 zeros.
+    -- Push N limbs of Montgomery-form 1 = R mod p (limb 0 deepest), then N-1 zeros.
     -- Returns are now ascending (limb[0] deepest), captureR is reverse.
-    ([i64.const 1] ++ List.replicate (N-1) (i64.const 0)) ++ captureR
+    (pushCoeff (montR p N) N) ++ captureR
   let steps : List Instr := (List.range (msb+1) |>.reverse) >>= fun b =>
     if (exp >>> b) % 2 = 1 then square ++ multiply else square
   { name := "$finv"
@@ -516,12 +498,15 @@ structure VarMap where
       Steps are dead after their enclosing op, so this is set fresh per op. -/
   letBase : ℕ := 0
   numWords : ℕ := 1
+  /-- The field prime, for computing Montgomery-form constants. -/
+  prime : ℕ := 0
 deriving Inhabited
 
-def VarMap.init (numInputs : ℕ) (numWords : ℕ) : VarMap :=
+def VarMap.init (numInputs : ℕ) (numWords : ℕ) (prime : ℕ := 0) : VarMap :=
   { env := List.range numInputs |>.map fun i => (i, i * numWords)
     nextLocal := numInputs * numWords
-    numWords }
+    numWords
+    prime }
 
 /-- Look up the WASM local index for a circuit variable.
     Falls back to `idx * numWords` if not explicitly mapped,
@@ -534,13 +519,16 @@ def VarMap.alloc (vm : VarMap) (m : ℕ) (baseVarIdx : ℕ) : VarMap × List ℕ
   let wasmLocals := List.range (m * nw) |>.map fun i => vm.nextLocal + i
   let newEnv := (List.range m |>.map fun i => (baseVarIdx + i, vm.nextLocal + i * nw)) ++ vm.env
   ({ env := newEnv, nextLocal := vm.nextLocal + m * nw, loopIdx := vm.loopIdx,
-     letBase := vm.letBase, numWords := nw }, wasmLocals)
+     letBase := vm.letBase, numWords := nw, prime := vm.prime }, wasmLocals)
 
 /-! ## AST-based expression compilers (for CodeBuilder) -/
 
+/-- Push a field constant. In multi-word (Montgomery) mode the constant is
+    multiplied by R mod p so arithmetic can operate in Montgomery form. -/
 def pushConst (c : F) (vm : VarMap) (cb : CodeBuilder) : CodeBuilder :=
   let nw := vm.numWords
-  let val := FiniteField.val c
+  let p := vm.prime
+  let val := if nw = 1 then FiniteField.val c else (FiniteField.val c * montR p nw) % p
   if nw = 1 then cb.push (i64.const val)
   else List.range nw |>.foldl (fun cb' w => cb'.push (i64.const ((val >>> (w * 64)) % (2^64)))) cb
 
@@ -601,15 +589,17 @@ def compileFExpr (vm : VarMap) : FExpr F → CodeBuilder → Except String CodeB
   | .ofU64 n, cb => do
     let nw := vm.numWords
     let cb ← compileU64Expr vm n cb
-    -- U64Expr produces a single i64. Zero-extend to nw limbs, then reduce mod p via $fadd.
+    -- U64Expr produces a single i64.
     if nw = 1 then
+      -- Reduce mod p via $fadd with 0.
       pure (cb.push (i64.const 0) |>.push (call "$fadd"))
-    else
-      -- Push nw-1 zero limbs (deepest first), then the U64Expr result as limb 0
-      let cb := (List.replicate (nw-1) (i64.const 0)).foldl (fun cb' i => cb'.push i) cb
-      -- Now push nw zero limbs for the second operand of $fadd
-      let cb := (List.range nw).foldl (fun cb' _ => cb'.push (i64.const 0)) cb
-      pure (cb.push (call "$fadd"))
+    else do
+      -- Zero-extend to nw limbs (limb 0 = the u64, rest 0). Since n < 2^64 ≤ p,
+      -- n mod p = n; convert to Montgomery form via montMul(n, R²) = n·R.
+      let cb := (List.replicate (nw-1) (i64.const 0)).foldl (fun cb' _ => cb'.push (i64.const 0)) cb
+      let cb := pushCoeff (montR2 vm.prime nw) nw |> fun instrs =>
+        instrs.foldl (fun cb' i => cb'.push i) cb
+      pure (cb.push (call "$fmul"))
   | .localVar i, cb => pure (pushStepVar (vm.letBase + i * vm.numWords) vm.numWords cb)
   | .listGet _ _, _ => .error "compileFExpr: listGet is not yet supported"
   | .dataGet _ _ _ _, _ => .error "compileFExpr: dataGet is not yet supported"
@@ -619,11 +609,13 @@ def compileU64Expr (vm : VarMap) : U64Expr F → CodeBuilder → Except String C
   | .const n, cb => pure (cb.push (i64.const n.toNat))
   | .val x, cb =>
     -- Extracts the integer representative of a field element.
-    -- For multi-word, compile the FExpr (pushes nw limbs), keep only limb 0
-    -- (the lowest 64 bits of the integer representative).
+    -- For multi-word, convert from Montgomery form first (montMul(x, 1) = x),
+    -- then keep only limb 0 (the lowest 64 bits of the representative).
     if vm.numWords = 1 then compileFExpr vm x cb
     else do
       let cb ← compileFExpr vm x cb
+      -- fromMontgomery: montMul(x, 1) = x·R·1·R⁻¹ = x
+      let cb := cb.pushList (pushCoeff 1 vm.numWords) |>.push (call "$fmul")
       -- Drop upper nw-1 limbs, keeping only limb 0 on the stack
       let drops := List.replicate (vm.numWords - 1) Instr.drop
       pure (cb.pushList drops)
@@ -696,18 +688,22 @@ def compileBExpr (vm : VarMap) : BExpr F → CodeBuilder → Except String CodeB
     pure (cb.push i64.eq)
   | .flt a e, cb => do
     -- Field-sorted less-than over the integer representatives.
-    -- For single-word: i64.lt_u works. For multi-word: compare limb-wise
-    -- from the highest limb down (unsigned comparison).
+    -- For single-word: i64.lt_u works. For multi-word: convert both operands
+    -- from Montgomery form (montMul(x, 1) = x — Montgomery representatives are
+    -- permuted, so `<` on them is not the field-sorted order), then compare
+    -- limb-wise from the highest limb down (unsigned comparison).
     let nw := vm.numWords
     if nw = 1 then do
       let cb ← compileFExpr vm a cb
       let cb ← compileFExpr vm e cb
       pure (cb.push i64.lt_u)
     else do
-      -- Capture both operands to temp locals, compare highest limb first.
+      -- Convert both operands from Montgomery on the stack (montMul(x, 1) = x),
+      -- then capture to temp locals, compare highest limb first.
       let tmpBase := vm.nextLocal
       let aCB ← compileFExpr vm a {}
       let eCB ← compileFExpr vm e {}
+      let fromMont : List Instr := pushCoeff 1 nw ++ [call "$fmul"]
       let captureA : List Instr := (List.range nw).reverse.map fun w => local.set (tmpBase + nw + w)
       let captureE : List Instr := (List.range nw).reverse.map fun w => local.set (tmpBase + w)
       -- Multi-limb unsigned comparison, highest limb first, as nested ifElse:
@@ -724,10 +720,12 @@ def compileBExpr (vm : VarMap) : BExpr F → CodeBuilder → Except String CodeB
             .ifElse "" (some .i32) [i32.const 1]
               ([ local.get (tmpBase + nw + i), local.get (tmpBase + i), i64.gt_u,
                  .ifElse "" (some .i32) [i32.const 0] (cmpChain (i - 1)) ]) ]
-      pure (cb.pushList aCB.build |>.pushList captureA |>.pushList eCB.build |>.pushList captureE
+      pure (cb.pushList aCB.build |>.pushList fromMont |>.pushList captureA
+              |>.pushList eCB.build |>.pushList fromMont |>.pushList captureE
               |>.pushList (cmpChain (nw - 1)))
   | .bit x i, cb => do
     -- Test bit `i` of `FiniteField.val x`: limb i/64, bit i%64 (constant i).
+    -- Multi-word: convert from Montgomery first (montMul(x, 1) = x).
     let nw := vm.numWords
     let limbIdx := i / 64
     let bitIdx := i % 64
@@ -738,6 +736,8 @@ def compileBExpr (vm : VarMap) : BExpr F → CodeBuilder → Except String CodeB
       -- Capture the field value to locals, then extract the limb and test the bit.
       let tmpBase := vm.nextLocal
       let xCB ← compileFExpr vm x {}
+      let fromMont : List Instr := if nw = 1 then []
+        else pushCoeff 1 nw ++ [call "$fmul"]
       let capture : List Instr := (List.range nw).reverse.map fun w => local.set (tmpBase + w)
       -- a_i & (1 << bit): if zero, the bit is not set (→ 0); else it is set (→ 1).
       -- i64.eqz gives i32 = 1 when the bit is NOT set; ifElse (result i32):
@@ -745,7 +745,7 @@ def compileBExpr (vm : VarMap) : BExpr F → CodeBuilder → Except String CodeB
       let testInstrs : List Instr :=
         [ local.get (tmpBase + limbIdx), i64.const (2^bitIdx), i64.and, i64.eqz,
           .ifElse "" (some .i32) [i32.const 0] [i32.const 1] ]
-      pure (cb.pushList xCB.build |>.pushList capture |>.pushList testInstrs)
+      pure (cb.pushList xCB.build |>.pushList fromMont |>.pushList capture |>.pushList testInstrs)
   | .not x, cb => do
     let cb ← compileBExpr vm x cb
     pure (cb.push i32.eqz)
@@ -809,38 +809,42 @@ def flattenExpr (vm : VarMap) : (e : Expression F) → FlattenState F → (List 
 
 /-! ## AST-based witness computation helpers -/
 
-/-- Load signal i from memory. Pushes nw i64 limbs (lowest limb on top for multi-word). -/
-def loadSignal (i signalBase signalBytes numWords : ℕ) : List Instr :=
+/-- Load signal i from memory and convert to Montgomery form (multi-word).
+    Signal 0 is the constant 1 — in Montgomery form that is R mod p.
+    Other signals are stored in normal form in memory, so they are converted
+    by montMul(x, R²). Single-word mode loads raw. -/
+def loadSignal (i signalBase signalBytes numWords prime : ℕ) : List Instr :=
   let nw := numWords
   if i = 0 then
-    -- Signal 0 is the constant 1: push [1, 0, ..., 0] as nw limbs
-    i64.const 1 :: (List.replicate (nw - 1) (i64.const 0))
+    if nw = 1 then [i64.const 1]
+    else pushCoeff (montR prime nw) nw
   else
-    -- Load each limb from signal memory: signalBase + i*signalBytes + w*4
-    (List.range nw) >>= fun w =>
+    -- Load each limb from signal memory (normal form), then convert to Montgomery
+    let load : List Instr := (List.range nw) >>= fun w =>
       [ i32.const (signalBase + i * signalBytes + w * 8), .memLoad .i64 0 alignmentI64 ]
+    if nw = 1 then load
+    else load ++ pushCoeff (montR2 prime nw) nw ++ [call "$fmul"]
 
-/-- Push a Nat constant as nw i64 limbs. -/
-def pushCoeff (c numWords : ℕ) : List Instr :=
-  (List.range numWords).map fun w => i64.const ((c >>> (w * 64)) % (2^64))
+/-- Push a field element as nw i64 limbs.
+    In multi-word (Montgomery) mode the coefficient is multiplied by R mod p. -/
+def pushCoeffF (c : F) (numWords prime : ℕ) : List Instr :=
+  let val := if numWords = 1 then FiniteField.val c else (FiniteField.val c * montR prime numWords) % prime
+  pushCoeff val numWords
 
-/-- Push a field element as nw i64 limbs. -/
-def pushCoeffF (c : F) (numWords : ℕ) : List Instr :=
-  pushCoeff (FiniteField.val c) numWords
-
-/-- Evaluate a linear combination over nw-limb field elements. Leaves nw i64 on the stack. -/
-def compileLinComb (lc : List (ℕ × F)) (signalBase signalBytes numWords : ℕ) : List Instr :=
+/-- Evaluate a linear combination over nw-limb field elements (in Montgomery
+    form). Leaves nw i64 on the stack. -/
+def compileLinComb (lc : List (ℕ × F)) (signalBase signalBytes numWords prime : ℕ) : List Instr :=
   let nw := numWords
   match lc with
   | [] => List.replicate nw (i64.const 0)
-  | [(0, c)] => pushCoeffF c nw
-  | [(i, c)] => loadSignal i signalBase signalBytes nw ++ pushCoeffF c nw ++ [call "$fmul"]
+  | [(0, c)] => pushCoeffF c nw prime
+  | [(i, c)] => loadSignal i signalBase signalBytes nw prime ++ pushCoeffF c nw prime ++ [call "$fmul"]
   | (i1, c1) :: rest =>
-    let first := if i1 = 0 then pushCoeffF c1 nw
-      else loadSignal i1 signalBase signalBytes nw ++ pushCoeffF c1 nw ++ [call "$fmul"]
+    let first := if i1 = 0 then pushCoeffF c1 nw prime
+      else loadSignal i1 signalBase signalBytes nw prime ++ pushCoeffF c1 nw prime ++ [call "$fmul"]
     let restInstrs : List Instr := rest >>= fun (i, c) =>
-      if i = 0 then pushCoeffF c nw ++ [call "$fadd"]
-      else loadSignal i signalBase signalBytes nw ++ pushCoeffF c nw ++ [call "$fmul", call "$fadd"]
+      if i = 0 then pushCoeffF c nw prime ++ [call "$fadd"]
+      else loadSignal i signalBase signalBytes nw prime ++ pushCoeffF c nw prime ++ [call "$fmul", call "$fadd"]
     first ++ restInstrs
 
 /--
@@ -865,17 +869,27 @@ def discoverAndCompileIntermediates (vm : VarMap) (flatOps : List (FlatOperation
     match remaining with
     | [] => (idx, locals, instrs)
     | (la, lb, [(k, _)]) :: rest =>
-      let laInstrs := compileLinComb la signalBase signalBytes nw
-      let lbInstrs := compileLinComb lb signalBase signalBytes nw
+      let laInstrs := compileLinComb la signalBase signalBytes nw vm.prime
+      let lbInstrs := compileLinComb lb signalBase signalBytes nw vm.prime
       -- Each intermediate uses nw consecutive locals
       let base := intLocalBase + idx * nw
       let captureAll : List Instr := (List.range nw).reverse.map fun w => local.set (base + w)
+      -- Convert from Montgomery form back to normal form before storing
+      -- (memory holds normal form; snarkjs reads it directly).
+      -- montMul(mont(x), 1) = x·R·1·R⁻¹ = x. Single-word mode needs no conversion.
+      let fromMont : List Instr := if nw = 1 then []
+        else ((List.range nw) >>= fun w => [ local.get (base + w) ])
+             ++ pushCoeff 1 nw ++ [call "$fmul"]
+      let captureFromMont : List Instr := if nw = 1 then []
+        else (List.range nw).reverse.map fun w => local.set (base + w)
       let storeAll : List Instr := (List.range nw) >>= fun w =>
         [ i32.const (signalBase + k * signalBytes + w * 8),
           local.get (base + w), .memStore .i64 0 alignmentI64 ]
       let localNames : List (String × ValType) :=
         (List.range nw).map fun w => (s!"$int_{idx}_{w}", .i64)
-      let computeInstrs : List Instr := laInstrs ++ lbInstrs ++ [call "$fmul"] ++ captureAll ++ storeAll
+      let computeInstrs : List Instr :=
+        laInstrs ++ lbInstrs ++ [call "$fmul"] ++ captureAll
+        ++ fromMont ++ captureFromMont ++ storeAll
       buildAST (idx + 1) (computeInstrs ++ instrs) (localNames ++ locals) rest
     | _ :: rest => buildAST idx instrs locals rest
   let (_, locals, instrs) := buildAST 0 [] [] intConstraintsRev
@@ -979,8 +993,11 @@ def compileVExpr (vm : VarMap) (vi : ℕ) (acc : List Instr) :
     let outBase := vmOut.nextLocal - n * nw
     -- Compile `x` with a vm bumped past the outputs: `x`'s own scratch
     -- (up to 2*nw at the passed nextLocal) lands above the output slots.
+    -- Multi-word: convert from Montgomery first (montMul(x, 1) = x).
     let vmX := { vm with nextLocal := vmOut.nextLocal }
     let xCB ← compileFExpr vmX x {}
+    let fromMont : List Instr := if nw = 1 then []
+      else pushCoeff 1 nw ++ [call "$fmul"]
     let scratchBase := vmOut.nextLocal
     let captureX : List Instr := (List.range nw).reverse.map fun w => local.set (scratchBase + w)
     -- Return a vm whose nextLocal covers both the x-scratch and the output slots.
@@ -1000,7 +1017,7 @@ def compileVExpr (vm : VarMap) (vi : ℕ) (acc : List Instr) :
       let extend : List Instr := [i64.extend_i32_u] ++ List.replicate (nw - 1) (i64.const 0)
       let capture := (List.range nw).reverse.map fun w => local.set (elemBase + w)
       pure (is ++ testInstrs ++ extend ++ capture)
-    ) (acc ++ xCB.build ++ captureX)
+    ) (acc ++ xCB.build ++ fromMont ++ captureX)
     pure (vmScratch, vi + n, instrs)
   | _, .append a b => do
     -- Compile first segment (produces m elements at vi..vi+m-1),
@@ -1050,7 +1067,7 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
     throw s!"compileModule: numWords=1 requires a prime <= 2^32 to avoid i64.mul overflow; got a {primeBits}-bit prime, use numWords = {max minWords 2}"
   if nw * 64 < primeBits then
     throw s!"compileModule: numWords={nw} is insufficient for a {primeBits}-bit prime; need at least {minWords} words"
-  let vm := VarMap.init numInputs nw
+  let vm := VarMap.init numInputs nw fieldPrime
   let flatOps := Operations.toFlat ops
   -- vi starts at numInputs so that circuit variable indices (which start at 0 for
   -- inputs) align with VarMap entries. vm.alloc adds (vi, local) for each witness,
@@ -1074,22 +1091,39 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
     discoverAndCompileIntermediates vm flatOps startSignal signalBase signalBytes nw intLocalBase
   let totalSignals := startSignal + numInt
   -- Build witness output stores: write each 64-bit limb to signal memory.
-  -- Witness i is stored at local (numInputs*nw + i*nw) since witnesses are
-  -- allocated sequentially starting from numInputs*nw via vm.alloc.
+  -- Witness values are in Montgomery form in locals; convert back to normal
+  -- form (montMul(x, 1) = x) before storing, since memory/snarkjs use normal form.
   let outputStores : List Instr := (List.range witnessCount) >>= fun i =>
     let elemIdx := numInputs + i  -- circuit variable index of this witness
     let wasmBase := finalVm.lookup elemIdx
-    (List.range nw) >>= fun w =>
-      [ i32.const (signalBase + (1 + numInputs + i) * signalBytes + w * 8),
-        local.get (wasmBase + w),
-        .memStore .i64 0 alignmentI64 ]
+    if nw = 1 then
+      (List.range nw) >>= fun w =>
+        [ i32.const (signalBase + (1 + numInputs + i) * signalBytes + w * 8),
+          local.get (wasmBase + w),
+          .memStore .i64 0 alignmentI64 ]
+    else
+      -- Push the value (limb 0 deepest), multiply by 1 to leave Montgomery form
+      -- (montMul(x, 1) = x), capture result limbs to the shared scratch block
+      -- at `finalVm.nextLocal` (declared by adding nw to the compute locals),
+      -- then store. Capture order: after $fmul the stack has limb0 deepest,
+      -- so popping top-first (reverse) stores limb w at tmpBase+w.
+      let tmpBase := finalVm.nextLocal
+      let pushVal := (List.range nw) >>= fun w => [ local.get (wasmBase + w) ]
+      let convert := pushCoeff 1 nw ++ [call "$fmul"]
+      let capture := (List.range nw).reverse.map fun w => local.set (tmpBase + w)
+      let storeAll := (List.range nw) >>= fun w =>
+        [ i32.const (signalBase + (1 + numInputs + i) * signalBytes + w * 8),
+          local.get (tmpBase + w), .memStore .i64 0 alignmentI64 ]
+      pushVal ++ convert ++ capture ++ storeAll
   -- Build the compute function
   let inputParams := (List.range numInputs) >>= fun i =>
     (List.range nw).map fun w => (s!"$in_{i}_{w}", .i64)
   let computeFunc : Func := {
     name := "$compute"
     params := inputParams
-    locals := (List.replicate witnessWords ("", .i64)) ++ [("$idx", .i64)]
+    -- nw extra scratch locals at the end are used by outputStores for the
+    -- from-Montgomery conversion of each witness before storing.
+    locals := (List.replicate witnessWords ("", .i64)) ++ (List.replicate nw ("", .i64)) ++ [("$idx", .i64)]
     body := bodyInstrs ++ outputStores
   }
   -- Build getWitness body
@@ -1097,11 +1131,18 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
     (List.range numInputs) >>= fun i =>
       (List.range nw).map fun w => (s!"$in_{i}_{w}", ValType.i64)
   -- Input loads: for each input i and limb w, read i64 from signal memory
+  -- (normal form), then convert to Montgomery form (montMul(x, R²) = x·R)
+  -- for the multi-word compute function.
   let inputLoads : List Instr := (List.range numInputs) >>= fun i =>
-    (List.range nw) >>= fun w =>
+    let loadAll := (List.range nw) >>= fun w =>
       [ i32.const (signalBase + (1 + i) * signalBytes + w * 8),
         .memLoad .i64 0 alignmentI64,
         local.set (3 + i * nw + w) ]
+    let convert := if nw = 1 then []
+      else ((List.range nw) >>= fun w => [ local.get (3 + i * nw + w) ])
+           ++ pushCoeff (montR2 fieldPrime nw) nw ++ [call "$fmul"]
+    let capture := if nw = 1 then [] else (List.range nw).reverse.map fun w => local.set (3 + i * nw + w)
+    loadAll ++ convert ++ capture
   -- Input push: push all nw limbs per input
   let inputPush : List Instr := (List.range numInputs) >>= fun i =>
     (List.range nw) >>= fun w =>
@@ -1159,19 +1200,23 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
     { name := "$setInputSignal"
       exportName := some "setInputSignal"
       params := [("$hMSB", .i32), ("$hLSB", .i32), ("$idx", .i32)]
-      -- For multi-word, idx ranges over nw limbs per input. Compute which
-      -- element and which limb, then store the 64-bit value at the right offset.
-      body := [
-        -- Compute target address: signalBase + signalBytes + (idx/nw)*signalBytes + (idx%nw)*8
-        i32.const (signalBase + signalBytes),
-        local.get 2, i32.const nw, .binop .i32 .div_u, i32.const signalBytes, .binop .i32 .mul, .binop .i32 .add,
-        local.get 2, i32.const nw, .binop .i32 .rem_u, i32.const 8, .binop .i32 .mul, .binop .i32 .add,
-        -- Read 64-bit value from SRWM: low 32 bits at srwmBase, high 32 at srwmBase+4
-        i32.const srwmBase, .memLoad .i32 0 2, .unop .i64 .extend_i32_u,
-        i32.const (srwmBase + 4), .memLoad .i32 0 2, .unop .i64 .extend_i32_u,
-        i64.const hiWordShift, i64.shl, i64.or,
-        .memStore .i64 0 alignmentI64
-      ] },
+      -- The Circom 2 ABI calls setInputSignal(hMSB, hLSB, i) once per FIELD
+      -- ELEMENT i (not per limb). snarkjs writes the value to SRWM via
+      --   writeSharedRWMemory(j, arrFr[n32-1-j])
+      -- where toArray32 produces MOST-significant word first (res.unshift),
+      -- so SRWM word j = the j-th least significant word of the value, i.e.
+      -- SRWM is LSW-first. Limb w (bits 64w..64w+63) = SRWM[2w] | SRWM[2w+1]<<32.
+      -- Store all nw limbs of element $idx at signalBase + (1+idx)*signalBytes.
+      body :=
+        ((List.range nw) >>= fun w =>
+          [ i32.const (signalBase + signalBytes),
+            local.get 2, i32.const signalBytes, .binop .i32 .mul, .binop .i32 .add,
+            i32.const (w * 8), .binop .i32 .add,
+            i32.const (srwmBase + 2*w*4), .memLoad .i32 0 2, .unop .i64 .extend_i32_u,
+            i32.const (srwmBase + (2*w+1)*4), .memLoad .i32 0 2, .unop .i64 .extend_i32_u,
+            i64.const hiWordShift, i64.shl, i64.or,
+            .memStore .i64 0 alignmentI64 ])
+    },
     { name := "$getWitness"
       exportName := some "getWitness"
       params := [("$i", .i32)]
