@@ -70,6 +70,7 @@ def eccConfigureCertificate (G : Generators) (counts : ConfigureCounts) :
         unfold configureBase
         apply Configure.mem_lookups_delta_bind_right
         apply Configure.mem_lookups_delta_bind_left
+        rw [LookupRangeCheck.configure_delta_lookups]
         simp
       · unfold configure
         apply Configure.mem_lookups_delta_bind_right
@@ -1135,8 +1136,8 @@ theorem configure_output_advice_mem_permutationRequests (G : Generators)
     (counts : ConfigureCounts) (index : Fin 10) :
     (((configure G).output counts).advices index).toAny ∈
       ((configure G).delta counts).permutationRequests := by
-  simpa [configure, configureChips] using
-    (baseConfigureCertificate G counts).advicePermutationColumn index
+  rw [configure_output_advices]
+  exact (baseConfigureCertificate G counts).advicePermutationColumn index
 
 /-- The Action instance column is equality-enabled by the shared configure prefix. -/
 @[keygen_norm]
@@ -1144,8 +1145,8 @@ theorem configure_output_primary_mem_permutationRequests (G : Generators)
     (counts : ConfigureCounts) :
     ((configure G).output counts).primary.toAny ∈
       ((configure G).delta counts).permutationRequests := by
-  simpa [configure, configureChips] using
-    (baseConfigureCertificate G counts).primaryPermutationColumn
+  rw [configure_output_primary]
+  exact (baseConfigureCertificate G counts).primaryPermutationColumn
 
 /-- The witness-point coordinate columns exported by Action's ECC configuration are
 equality-enabled. -/
@@ -1154,16 +1155,16 @@ theorem configure_output_witnessPoint_x_mem_permutationRequests
     (G : Generators) (counts : ConfigureCounts) :
     ((configure G).output counts).eccConfig.witnessPoint.x.toAny ∈
       ((configure G).delta counts).permutationRequests := by
-  simpa [configure, configureChips] using
-    (baseConfigureCertificate G counts).advicePermutationColumn 0
+  rw [configure_output_witnessPoint_x]
+  exact (baseConfigureCertificate G counts).advicePermutationColumn 0
 
 @[keygen_norm]
 theorem configure_output_witnessPoint_y_mem_permutationRequests
     (G : Generators) (counts : ConfigureCounts) :
     ((configure G).output counts).eccConfig.witnessPoint.y.toAny ∈
       ((configure G).delta counts).permutationRequests := by
-  simpa [configure, configureChips] using
-    (baseConfigureCertificate G counts).advicePermutationColumn 1
+  rw [configure_output_witnessPoint_y]
+  exact (baseConfigureCertificate G counts).advicePermutationColumn 1
 
 /-- The complete-addition output columns exported by Action's ECC configuration are
 equality-enabled. -/
@@ -1172,16 +1173,16 @@ theorem configure_output_add_xQR_mem_permutationRequests
     (G : Generators) (counts : ConfigureCounts) :
     ((configure G).output counts).eccConfig.add.xQR.toAny ∈
       ((configure G).delta counts).permutationRequests := by
-  simpa [configure, configureChips] using
-    (baseConfigureCertificate G counts).advicePermutationColumn 2
+  rw [configure_output_add_xQR]
+  exact (baseConfigureCertificate G counts).advicePermutationColumn 2
 
 @[keygen_norm]
 theorem configure_output_add_yQR_mem_permutationRequests
     (G : Generators) (counts : ConfigureCounts) :
     ((configure G).output counts).eccConfig.add.yQR.toAny ∈
       ((configure G).delta counts).permutationRequests := by
-  simpa [configure, configureChips] using
-    (baseConfigureCertificate G counts).advicePermutationColumn 3
+  rw [configure_output_add_yQR]
+  exact (baseConfigureCertificate G counts).advicePermutationColumn 3
 
 /-- The first Merkle configuration reuses Action advice column zero as its accumulator
 column. -/
@@ -1189,8 +1190,8 @@ theorem configure_output_merkle1_xA_mem_permutationRequests
     (G : Generators) (counts : ConfigureCounts) :
     ((configure G).output counts).merkle1.sinsemilla.xA.toAny ∈
       ((configure G).delta counts).permutationRequests := by
-  simpa [configure, configureChips] using
-    (baseConfigureCertificate G counts).advicePermutationColumn 0
+  rw [configure_output_merkle1_xA]
+  exact (baseConfigureCertificate G counts).advicePermutationColumn 0
 
 /-- The second Merkle configuration reuses Action advice column five as its accumulator
 column. -/
@@ -1198,8 +1199,8 @@ theorem configure_output_merkle2_xA_mem_permutationRequests
     (G : Generators) (counts : ConfigureCounts) :
     ((configure G).output counts).merkle2.sinsemilla.xA.toAny ∈
       ((configure G).delta counts).permutationRequests := by
-  simpa [configure, configureChips] using
-    (baseConfigureCertificate G counts).advicePermutationColumn 5
+  rw [configure_output_merkle2_xA]
+  exact (baseConfigureCertificate G counts).advicePermutationColumn 5
 
 /-- The Orchard gate emitted by Action configure is available to the final Action
 regions. -/

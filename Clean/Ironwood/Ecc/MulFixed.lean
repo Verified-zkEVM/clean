@@ -129,6 +129,10 @@ def coordsGate (cfg : Config) : Gate Fp :=
     let word := zCur - zNext * (((H : ℕ) : Fp) : Expression Fp Query)
     coordsCheck cfg word
 
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem coordsGate_selector (cfg : Config) :
+    (coordsGate cfg).selector = cfg.runningSumConfig.qRangeCheck := rfl
+
 /-- The `CoordsParams` read off the environment's fixed cells at a given row — what the
 coords gate's queries see. -/
 def readParams (cfg : Config) (f : Query → Fp) : CoordsParams Fp where
@@ -604,6 +608,36 @@ theorem windowChain_processWindow_synthesisSummary_constantSiteCount
   apply windowChain_synthesisSummary_constantSiteCount_eq_zero
   intro w row
   simp only [processWindow, circuit_norm]
+
+/-- Lookup-local activation correctness composes through the shared window-chain
+driver whenever it holds for the supplied per-window program. -/
+theorem windowChain_lookupActivationsWellFormed
+    (cfg : Config)
+    (processW : ℕ → ℕ → RegionCircuit Fp (Point (AssignedCell Fp)))
+    (offset numWindows : ℕ) (region : RegionIndex)
+    (hprocessW : ∀ w row,
+      ((processW w row).operations region).LookupActivationsWellFormed) :
+    ((windowChain cfg processW offset numWindows).operations region)
+      |>.LookupActivationsWellFormed := by
+  unfold windowChain
+  simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    RegionOperations.LookupActivationsWellFormed, List.forall_append,
+    List.forall_nil, and_true, operations_cellAt]
+  keygen_registration
+
+/-- The standard fixed-base per-window program and its shared driver satisfy the
+lookup-local activation law. -/
+@[keygen_norm]
+theorem windowChain_processWindow_lookupActivationsWellFormed
+    (B : FixedBaseData) (table : ℕ → ℕ → Point Fp) (cfg : Config)
+    (alpha : AssignedCell Fp) (offset numWindows : ℕ)
+    (region : RegionIndex) :
+    ((windowChain cfg (processWindow B table cfg alpha)
+      offset numWindows).operations region).LookupActivationsWellFormed := by
+  apply windowChain_lookupActivationsWellFormed
+  intro w row
+  unfold processWindow
+  keygen_registration
 
 @[keygen_helper]
 theorem windowChain_processWindow_keygenRegistered

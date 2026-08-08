@@ -556,7 +556,7 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
     let ex ← readState cfg (offset + w)
     let _q ← assignFixed cfg.qS2 (offset + w) (qS2Boundary final)
     let _xf ← assignAdvice cfg.xA (offset + w + 1) (exitXAWit ex)
-    (generatorLookup G cfg).enable [cfg.qS1] (offset + w)
+    (generatorLookup G cfg).enable [] (offset + w)
     -- name the output cells (fixed rows)
     let first0 ← cellAt cfg.xA offset
     let firstXP ← cellAt cfg.xP offset

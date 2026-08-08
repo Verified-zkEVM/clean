@@ -134,7 +134,7 @@ def qMul1Gate (cfg : Config) : Gate Fp :=
     let yAWitnessed : Expression Fp Query := queryAdvice cfg.lambda1 0
     [("init y_a", yAWitnessed - yA cfg 1)]
 
-@[circuit_norm, synthesis_summary_norm]
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
 theorem qMul1Gate_selector (cfg : Config) :
     (qMul1Gate cfg).selector = cfg.qMul1 := rfl
 
@@ -156,7 +156,7 @@ def qMul2Gate (cfg : Config) : Gate Fp :=
        ("y_p_check", yPCur - yPNext) ]
       ++ forLoopPolys cfg (yA cfg 1))
 
-@[circuit_norm, synthesis_summary_norm]
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
 theorem qMul2Gate_selector (cfg : Config) :
     (qMul2Gate cfg).selector = cfg.qMul2 := rfl
 
@@ -172,7 +172,7 @@ def qMul3Gate (cfg : Config) : Gate Fp :=
     let yAFinal : Expression Fp Query := queryAdvice cfg.lambda1 1
     forLoopPolys cfg yAFinal
 
-@[circuit_norm, synthesis_summary_norm]
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
 theorem qMul3Gate_selector (cfg : Config) :
     (qMul3Gate cfg).selector = cfg.qMul3 := rfl
 

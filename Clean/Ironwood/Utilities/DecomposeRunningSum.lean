@@ -121,7 +121,7 @@ def rangeCheckGate (W : ℕ) (cfg : Config) : Gate Fp :=
     [zCur, zNext]
     [("range check", rangeCheckExpr (2 ^ W) word)]
 
-@[circuit_norm, synthesis_summary_norm]
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
 theorem rangeCheckGate_selector (W : ℕ) (cfg : Config) :
     (rangeCheckGate W cfg).selector = cfg.qRangeCheck := rfl
 

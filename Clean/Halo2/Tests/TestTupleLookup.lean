@@ -34,7 +34,8 @@ per-column equalities — the exact shape the Sinsemilla generator lookup is con
 example (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp) (row : ℕ)
     (s : Selector) (i0 i1 i2 : Expression Fp Query) (c0 c1 c2 : Column .fixed) :
     (RegionOperation.enableLookup
-        { inputs := [i0, i1, i2],
+        { masterSelector := s,
+          inputs := [i0, i1, i2],
           tables := [queryFixed c0, queryFixed c1, queryFixed c2],
           tablesFree := by selector_free
           arity := rfl }

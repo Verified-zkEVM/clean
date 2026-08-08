@@ -57,6 +57,9 @@ def gate (cfg : Config) : Gate Fp :=
      ("decomposition",
       b - (b0 + b1 * (2 ^ 4 : Fp) + b2 * (2 ^ 5 : Fp) + b3 * (2 ^ 6 : Fp)))]
 
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem gate_selector (cfg : Config) : (gate cfg).selector = cfg.qNotecommitB := rfl
+
 def configure (colL colM colR : Column .advice) : Configure Fp Config := do
   let qNotecommitB ← selector
   let cfg : Config := { qNotecommitB, colL, colM, colR }
@@ -94,6 +97,9 @@ def gate (cfg : Config) : Gate Fp :=
      ("decomposition",
       d - (d0 + d1 * (2 : Fp) + d2 * (2 ^ 2 : Fp) + d3 * (2 ^ 10 : Fp)))]
 
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem gate_selector (cfg : Config) : (gate cfg).selector = cfg.qNotecommitD := rfl
+
 def configure (colL colM colR : Column .advice) : Configure Fp Config := do
   let qNotecommitD ← selector
   let cfg : Config := { qNotecommitD, colL, colM, colR }
@@ -124,6 +130,9 @@ def gate (cfg : Config) : Gate Fp :=
   Gate.withSelector "NoteCommit MessagePiece e" cfg.qNotecommitE
     [e, e0, e1]
     [("decomposition", e - (e0 + e1 * (2 ^ 6 : Fp)))]
+
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem gate_selector (cfg : Config) : (gate cfg).selector = cfg.qNotecommitE := rfl
 
 def configure (colL colM colR : Column .advice) : Configure Fp Config := do
   let qNotecommitE ← selector
@@ -158,6 +167,9 @@ def gate (cfg : Config) : Gate Fp :=
     [("bool_check g_0", boolCheck g0),
      ("decomposition", g - (g0 + g1 * (2 : Fp) + g2 * (2 ^ 10 : Fp)))]
 
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem gate_selector (cfg : Config) : (gate cfg).selector = cfg.qNotecommitG := rfl
+
 def configure (colL colM : Column .advice) : Configure Fp Config := do
   let qNotecommitG ← selector
   let cfg : Config := { qNotecommitG, colL, colM }
@@ -190,6 +202,9 @@ def gate (cfg : Config) : Gate Fp :=
     [h, h0, h1]
     [("bool_check h_1", boolCheck h1),
      ("decomposition", h - (h0 + h1 * (2 ^ 5 : Fp)))]
+
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem gate_selector (cfg : Config) : (gate cfg).selector = cfg.qNotecommitH := rfl
 
 def configure (colL colM colR : Column .advice) : Configure Fp Config := do
   let qNotecommitH ← selector
@@ -235,6 +250,9 @@ def gate (cfg : Config) : Gate Fp :=
      ("b_1 = 1 => z13_a", b1 * z13A),
      ("b_1 = 1 => z13_a_prime", b1 * z13APrime)]
 
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem gate_selector (cfg : Config) : (gate cfg).selector = cfg.qNotecommitGd := rfl
+
 def configure (colL colM colR colZ : Column .advice) : Configure Fp Config := do
   let qNotecommitGd ← selector
   let cfg : Config := { qNotecommitGd, colL, colM, colR, colZ }
@@ -277,6 +295,9 @@ def gate (cfg : Config) : Gate Fp :=
      ("d_0 = 1 => z13_c", d0 * z13C),
      ("d_0 = 1 => z14_b3_c_prime", d0 * z14B3CPrime)]
 
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem gate_selector (cfg : Config) : (gate cfg).selector = cfg.qNotecommitPkd := rfl
+
 def configure (colL colM colR colZ : Column .advice) : Configure Fp Config := do
   let qNotecommitPkd ← selector
   let cfg : Config := { qNotecommitPkd, colL, colM, colR, colZ }
@@ -310,6 +331,9 @@ def gate (cfg : Config) : Gate Fp :=
   Gate.withSelector "NoteCommit input value" cfg.qNotecommitValue
     [value, d2, d3, e0]
     [("value_check", d2 + d3 * (2 ^ 8 : Fp) + e0 * (2 ^ 58 : Fp) - value)]
+
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem gate_selector (cfg : Config) : (gate cfg).selector = cfg.qNotecommitValue := rfl
 
 def configure (colL colM colR colZ : Column .advice) : Configure Fp Config := do
   let qNotecommitValue ← selector
@@ -352,6 +376,9 @@ def gate (cfg : Config) : Gate Fp :=
       e1 + f * (2 ^ 4 : Fp) + (2 ^ 140 : Fp) - (tP : Fp) - e1FPrime),
      ("g_0 = 1 => z13_f", g0 * z13F),
      ("g_0 = 1 => z14_e1_f_prime", g0 * z14E1FPrime)]
+
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem gate_selector (cfg : Config) : (gate cfg).selector = cfg.qNotecommitRho := rfl
 
 def configure (colL colM colR colZ : Column .advice) : Configure Fp Config := do
   let qNotecommitRho ← selector
@@ -398,6 +425,9 @@ def gate (cfg : Config) : Gate Fp :=
      ("h_1 = 1 => z13_g", h1 * z13G),
      ("h_1 = 1 => z13_g1_g2_prime", h1 * z13G1G2Prime)]
 
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem gate_selector (cfg : Config) : (gate cfg).selector = cfg.qNotecommitPsi := rfl
+
 def configure (colL colM colR colZ : Column .advice) : Configure Fp Config := do
   let qNotecommitPsi ← selector
   let cfg : Config := { qNotecommitPsi, colL, colM, colR, colZ }
@@ -441,6 +471,9 @@ def gate (cfg : Config) : Gate Fp :=
      ("k_3 = 1 => k_2 = 0", k3 * k2),
      ("k_3 = 1 => z13_j = 0", k3 * z13J),
      ("k_3 = 1 => z13_j_prime = 0", k3 * z13JPrime)]
+
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem gate_selector (cfg : Config) : (gate cfg).selector = cfg.qYCanon := rfl
 
 def configure (advices : Fin 10 → Column .advice) : Configure Fp Config := do
   let qYCanon ← selector
@@ -506,10 +539,35 @@ def configure (advices : Fin 10 → Column .advice) : Configure Fp Config := do
   let y ← YCanonicity.configure advices
   return { b, d, e, g, h, gd, pkd, value, rho, psi, y }
 
-instance (advices : Fin 10 → Column .advice) :
+@[configure_selector_norm, keygen_norm] theorem configure_delta_lookups
+    (advices : Fin 10 → Column .advice) (counts) :
+    ((configure advices).delta counts).lookups = [] := by
+  simp [configure, DecomposeB.configure, DecomposeD.configure,
+    DecomposeE.configure, DecomposeG.configure, DecomposeH.configure,
+    GdCanonicity.configure, PkdCanonicity.configure,
+    ValueCanonicity.configure, RhoCanonicity.configure,
+    PsiCanonicity.configure, YCanonicity.configure]
+
+@[reducible] private def configureInferred (advices : Fin 10 → Column .advice) :
     ElaboratedConfigure (configure advices) := by
   unfold configure
   infer_instance
+
+private theorem configure_selectorRequirements
+    (advices : Fin 10 → Column .advice) (counts) :
+    (configureInferred advices).selectorRequirements counts := by
+  dsimp only [configureInferred, configure]
+  simp [configure_selector_norm, ConfigureDelta.LookupSelectorsCrossCompatible,
+    DecomposeB.configure, DecomposeD.configure, DecomposeE.configure,
+    DecomposeG.configure, DecomposeH.configure, GdCanonicity.configure,
+    PkdCanonicity.configure, ValueCanonicity.configure,
+    RhoCanonicity.configure, PsiCanonicity.configure,
+    YCanonicity.configure]
+
+instance (advices : Fin 10 → Column .advice) :
+    ElaboratedConfigure (configure advices) :=
+  (configureInferred advices).closeSelectorRequirements
+    (configure_selectorRequirements advices)
 
 /-- Every local copy column produced by NoteCommit configure is one of advices 5–9. -/
 theorem mem_adviceColumns_of_mem_configure_output_permutationColumns

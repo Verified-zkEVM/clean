@@ -47,6 +47,10 @@ def fullWidthGate (cfg : Config) : Gate Fp :=
     coordsCheck cfg.superConfig window
       ++ [("window range check", rangeCheckExpr 8 window)]
 
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem fullWidthGate_selector (cfg : Config) :
+    (fullWidthGate cfg).selector = cfg.qMulFixedFull := rfl
+
 /-- Allocate a fresh selector, register the gate. -/
 def configure (superConfig : MulFixed.Config) : Configure Fp Config := do
   let qMulFixedFull ← selector
@@ -454,6 +458,23 @@ instance innerElab (B : FixedBaseData)
     innerKeygenRequirements
   registered configInput counts configured offset input self :=
     innerRegion_keygenRegistered B configInput offset windows self counts input configured
+  lookupActivationsWellFormed config offset _ region := by
+    simp only [innerRegion, RegionCircuit.operations_bind,
+      RegionCircuit.operations_pure,
+      RegionOperations.LookupActivationsWellFormed,
+      List.forall_append, List.forall_nil, and_true]
+    constructor
+    · unfold witnessScalarLoop
+      keygen_registration
+    constructor
+    · simp only [fixedConstantsLoop, RegionCircuit.forRange'_forall]
+      intro i
+      unfold fixedConstantsWindow
+      keygen_registration
+    · apply windowChain_lookupActivationsWellFormed
+      intro w row
+      unfold processWindowH
+      keygen_registration
   output config offset _ self := innerOutCells config offset self
   synthesisSummary config offset _ _ :=
     innerRegionSynthesisSummary config offset
@@ -1244,6 +1265,14 @@ def circuit (B : FixedBase) :
             (by keygen_registration) (by keygen_registration)
             (by keygen_registration)
         · keygen_registration
+      lookupActivationsWellFormed config scalar region := by
+        simp only [synthesize, Circuit.operations_bind,
+          operations_assignRegion, Operations.LookupActivationsWellFormed]
+        constructor
+        · exact (innerElab B.toData (scalarWindows scalar))
+            |>.lookupActivationsWellFormed config 0 () region
+        · exact Add.add.call_lookupActivationsWellFormed
+            config.superConfig.addConfig 0 _ (region + 1)
       output cfg _ i :=
         { x := .of (i + 1) 1 cfg.superConfig.addConfig.xQR
           y := .of (i + 1) 1 cfg.superConfig.addConfig.yQR }

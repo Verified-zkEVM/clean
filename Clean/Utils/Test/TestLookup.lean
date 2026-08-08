@@ -39,6 +39,7 @@ def qRunning : Selector := ⟨1, false⟩
 table = the table column's rotation-0 fixed query. ONE argument whose input reduces to
 *different* words depending on which selectors are enabled at the row. -/
 def rcArg (z : Column .advice) (tbl : TableColumn) : LookupArgument Fp where
+  masterSelector := qLookup
   inputs :=
     let qL : Expression Fp Query := querySelector qLookup
     let qR : Expression Fp Query := querySelector qRunning
@@ -84,7 +85,7 @@ example (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp
 example (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp)
     (z : Column .advice) (tbl : TableColumn) (row : ℕ) :
     RegionOperations.Constraints place self env
-      ((rcArg z tbl |>.enable [qLookup] row).operations self)
+      ((rcArg z tbl |>.enable [] row).operations self)
       ↔ ∃ tableRow : ℕ, tableRow < env.usableRows ∧
           env.advice z ((place self + row : ℕ) : ℤ) = env.fixed tbl.inner (tableRow : ℤ) := by
   simp only [circuit_norm, rcArg, qLookup, qRunning, List.map_cons, List.map_nil,

@@ -61,6 +61,10 @@ def shortGate (cfg : Config) : Gate Fp :=
       ("y_check", yCheck),
       ("negation_check", negationCheck) ]
 
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem shortGate_selector (cfg : Config) :
+    (shortGate cfg).selector = cfg.qMulFixedShort := rfl
+
 /-- Allocate the `q_mul_fixed_short` selector and register the gate. -/
 def configure (superConfig : MulFixed.Config) : Configure Fp Config := do
   let qMulFixedShort ← selector
@@ -442,6 +446,21 @@ instance innerElab (B : FixedBaseData) :
   registered configInput _ configured offset input region := by
     simpa using innerRegion_keygenRegistered
       B configInput offset input.alpha region configured
+  lookupActivationsWellFormed config offset input region := by
+    simp only [innerRegion, RegionCircuit.operations_bind,
+      RegionCircuit.operations_pure,
+      RegionOperations.LookupActivationsWellFormed,
+      List.forall_append, List.forall_nil, and_true]
+    constructor
+    · keygen_registration
+    constructor
+    · simp only [fixedConstantsLoop, RegionCircuit.forRange'_forall]
+      intro i
+      unfold fixedConstantsWindow
+      keygen_registration
+    · exact windowChain_processWindow_lookupActivationsWellFormed
+        B (Ecc.MulFixed.Short.windowPoint B.point) config.superConfig input.alpha
+        offset 22 region
   output config offset _ self := innerOutCells config offset self
   synthesisSummary config offset _ _ :=
     innerRegionSynthesisSummary config offset
@@ -1337,6 +1356,14 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
         · apply mswRegion_keygenRegistered
             _ _ _ _ _ _ configuredAdd <;>
               keygen_registration
+      lookupActivationsWellFormed config input self := by
+        simp only [synthesize, Circuit.operations_bind, operations_assignRegion,
+          Operations.LookupActivationsWellFormed]
+        constructor
+        · exact (innerElab B.toData).lookupActivationsWellFormed
+            config 0 ⟨input.magnitude⟩ self
+        · unfold mswRegion
+          keygen_registration
       output cfg _ i :=
         { x := .of (i + 1) 1 cfg.superConfig.addConfig.xQR
           y := .of (i + 1) 1 cfg.superConfig.addConfig.yP }

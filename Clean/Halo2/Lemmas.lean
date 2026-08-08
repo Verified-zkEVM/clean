@@ -150,9 +150,27 @@ theorem operations_enable (gate : Gate F) (row : ℕ) (self : RegionIndex) :
     (gate.enable row).operations self = [.enableGate gate row] := rfl
 
 @[circuit_norm]
-theorem operations_enableLookup (arg : LookupArgument F) (enabled : List Selector)
-    (row : ℕ) (self : RegionIndex) :
-    (arg.enable enabled row).operations self = [.enableLookup arg enabled row] := rfl
+theorem operations_enableLookup (arg : LookupArgument F) (auxiliarySelectors : List Selector)
+    (row : ℕ)
+    (hauxiliary : auxiliarySelectors.Forall fun selector =>
+      selector.index ∈ arg.selectorIndices)
+    (self : RegionIndex) :
+    (arg.enable auxiliarySelectors row hauxiliary).operations self =
+      [.enableLookup arg (arg.masterSelector :: auxiliarySelectors) row] := rfl
+
+@[keygen_norm]
+theorem lookupActivationsWellFormed_operations_enableLookup
+    (arg : LookupArgument F) (auxiliarySelectors : List Selector)
+    (row : ℕ)
+    (hauxiliary : auxiliarySelectors.Forall fun selector =>
+      selector.index ∈ arg.selectorIndices)
+    (self : RegionIndex) :
+    (arg.enable auxiliarySelectors row hauxiliary).operations self
+      |>.LookupActivationsWellFormed := by
+  rw [operations_enableLookup, RegionOperations.LookupActivationsWellFormed]
+  rw [List.forall_cons]
+  exact ⟨arg.lookupActivationWellFormed_enable
+    auxiliarySelectors row hauxiliary, by trivial⟩
 
 @[circuit_norm]
 theorem operations_constrainEqual (a b : AssignedCell F) (self : RegionIndex) :

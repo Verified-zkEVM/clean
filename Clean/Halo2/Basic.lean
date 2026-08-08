@@ -160,16 +160,17 @@ selector activation and carries the gate's constraints. See `Operations.lean`. -
 def Gate.enable (gate : Gate F) (row : ℕ) : RegionCircuit F Unit :=
   fun _ => ((), [.enableGate gate row])
 
-/-- Enable a lookup argument at a local row: the dual of `Gate.enable`. Emits a single
-`enableLookup` op carrying the registered `LookupArgument` and `enabled` — the complex
-selector(s) the gadget turns on at this row (`arg.enable [qLookup, qRunning] row` at a
-running-sum row, `arg.enable [qLookup] row` at a short row); this mirrors the Rust, where
-enabling those selectors IS how a gadget "enables the lookup" (there is no single Rust
-method). The argument, like a gate, is a standalone `configure`-registered def the gadget
-references from both phases. See `Operations.lean` / `lookup-design.md`. -/
-def LookupArgument.enable (arg : LookupArgument F) (enabled : List Selector) (row : ℕ) :
+/-- Enable a lookup argument at a local row. The caller supplies only the auxiliary
+selectors selecting this row's lookup mode; the lookup's master selector is enabled by
+construction. Thus `arg.enable [qRunning] row` is a running-sum row and
+`arg.enable [] row` is a short row. -/
+def LookupArgument.enable (arg : LookupArgument F) (auxiliarySelectors : List Selector)
+    (row : ℕ)
+    (_hauxiliary : auxiliarySelectors.Forall fun selector =>
+      selector.index ∈ arg.selectorIndices := by
+        simp only [keygen_norm]) :
     RegionCircuit F Unit :=
-  fun _ => ((), [.enableLookup arg enabled row])
+  fun _ => ((), [.enableLookup arg (arg.masterSelector :: auxiliarySelectors) row])
 
 /-! ## Layouter-level circuits -/
 

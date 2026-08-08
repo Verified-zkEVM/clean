@@ -1400,6 +1400,37 @@ theorem keygenCoherent
   exact self.formalCircuit.operationsKeygenCoherent
     () () self.noCallerRequirements
 
+/-- Every synthesized lookup activation enables its master and only selectors declared
+by that lookup. -/
+theorem lookupActivationsWellFormed
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.operations.LookupActivationsWellFormed := by
+  exact self.formalCircuit.elaborated.lookupActivationsWellFormed
+    self.config () 0
+
+/-- Configure composition keeps every gate and lookup selector compatible with every
+configured lookup's master-selector discipline. -/
+theorem lookupSelectorsCompatible
+    (self : TopLevelCircuit F Config PublicInput) :
+    Halo2.LookupSelectorsCompatible
+      self.constraintSystem.gates self.constraintSystem.lookups := by
+  let program := self.formalCircuit.configure ()
+  let counts :=
+    ConfigureCounts.ofConstraintSystem ({} : ConstraintSystem F)
+  have hcompatible := self.formalCircuit.lookupSelectorsCompatible
+    () counts self.selectorRequirements
+  simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
+    program, counts, Configure.run, ConfigureCounts.ofConstraintSystem,
+    ConfigureDelta.apply, List.nil_append] using hcompatible
+
+/-- The global lookup-selector law follows generically from configure registration,
+lookup-local activation, and configure-time selector compatibility. -/
+theorem lookupSelectorsLawful
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.operations.LookupSelectorsLawful self.constraintSystem.lookups :=
+  Operations.lookupSelectorsLawful_of_registered self.keygenCoherent
+    self.lookupActivationsWellFormed self.lookupSelectorsCompatible
+
 /-- Every configured gate's activation selector is allocated. -/
 theorem gateSelectorsAllocated
     (self : TopLevelCircuit F Config PublicInput) :

@@ -771,6 +771,7 @@ instance elaborated (G : Generators) (B : Bases) :
               (commitIvkCertificate G B counts)
           | apply AddressIntegrity.circuit.call_keygenRegistered_ofCertificate
               (addressIntegrityCertificate G counts)
+          | exact configure_output_orchardGate_mem_gates G counts
           | skip
         all_goals simp_all only [keygen_norm, keygen_output_norm,
           synthWitness_output, actionConfigureContext_permutationColumns,
@@ -789,11 +790,55 @@ instance elaborated (G : Generators) (B : Bases) :
               (noteCommitNewCertificate G B counts)
           | apply Ecc.WitnessPoint.pointNonIdFormal.call_keygenRegistered_ofCertificate
               (eccConfigureCertificate G counts).witnessPointNonIdFormal
+          | exact configure_output_orchardGate_mem_gates G counts
           | skip
         all_goals simp_all only [keygen_norm, keygen_output_norm,
           synthWitness_output, synthChecks_output,
           actionConfigureContext_permutationColumns,
           Nat.reduceEqDiff, if_false]
+  lookupActivationsWellFormed := by
+    intro config input i
+    simp only [main, CircuitPreIronwood.synthesize, synthesizeBase,
+      Circuit.operations_bind, Circuit.operations_pure,
+      Operations.LookupActivationsWellFormed, List.forall_append,
+      List.forall_nil, and_true]
+    constructor
+    · unfold synthWitness
+      keygen_registration
+    constructor
+    · unfold synthChecks
+      simp only [keygen_spine]
+      repeat' constructor
+      all_goals
+        first
+        | apply
+            (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+              B.merkleQ_onCurve 0 16 (by norm_num)
+              hintWitnesses.merkleSib
+              hintWitnesses.merkleSwap).call_lookupActivationsWellFormed
+        | apply
+            (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+              B.merkleQ_onCurve 16 16 (by norm_num)
+              (fun i => hintWitnesses.merkleSib (16 + i))
+              (fun i => hintWitnesses.merkleSwap
+                (16 + i))).call_lookupActivationsWellFormed
+        | apply (ValueCommit.circuit B.valueCommitV
+            B.valueCommitR).call_lookupActivationsWellFormed
+        | apply (DeriveNullifier.circuit
+            B.nullifierK).call_lookupActivationsWellFormed
+        | apply (SpendAuthority.circuit
+            B.spendAuthG).call_lookupActivationsWellFormed
+        | apply (CommitIvk.Main.circuit G B.commitIvkR B.ivkQ
+            B.ivkQ_onCurve).call_lookupActivationsWellFormed
+        | apply AddressIntegrity.circuit.call_lookupActivationsWellFormed
+    · unfold synthNotes
+      simp only [keygen_spine]
+      repeat' constructor
+      all_goals
+        first
+        | apply (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
+            B.noteQ_onCurve).call_lookupActivationsWellFormed
+        | apply Ecc.WitnessPoint.pointNonIdFormal.call_lookupActivationsWellFormed
   output cfg _ i₀ :=
     { gdOld := { x := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.x,
                  y := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.y },

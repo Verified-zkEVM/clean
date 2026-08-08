@@ -49,6 +49,11 @@ def gate (qAddIncomplete : Selector) (xP yP xQR yQR : Column .advice) : Gate Fp 
     [x_p, y_p, x_q, y_q, x_r, y_r]
     [("x_r", poly1), ("y_r", poly2)]
 
+@[circuit_norm, configure_selector_norm, keygen_norm]
+theorem gate_selector
+    (qAddIncomplete : Selector) (xP yP xQR yQR : Column .advice) :
+    (gate qAddIncomplete xP yP xQR yQR).selector = qAddIncomplete := rfl
+
 /-!
 ## The gadget
 

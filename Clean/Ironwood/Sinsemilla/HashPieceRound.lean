@@ -105,6 +105,10 @@ def initialYQGate (cfg : Config) : Gate Fp :=
     let yQ : Expression Fp Query := queryFixed cfg.fixedYQ
     [("init y_q", yQ * (2 : Fp) - yAExpr cfg 0)]
 
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem initialYQGate_selector (cfg : Config) :
+    (initialYQGate cfg).selector = cfg.qS4 := rfl
+
 /-- The synthetic selector `q_s3 = q_s2·(q_s2 − 1)`: `0` when `q_s2 ∈ {0,1}`, `2` when
 `q_s2 = 2` (final piece). -/
 @[selector_free, query_correct]
@@ -138,7 +142,7 @@ def sinsemillaGate (cfg : Config) : Gate Fp :=
             + qS3Expr cfg * (2 : Fp) * l1Next)
     [("secant line", secant), ("y check", yCheck)]
 
-@[circuit_norm, synthesis_summary_norm]
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
 theorem sinsemillaGate_selector (cfg : Config) :
     (sinsemillaGate cfg).selector = cfg.qS1 := rfl
 
@@ -154,6 +158,7 @@ with `word = z_cur − q_run·z_next·2^K` (`z` = the `bits` column), `y_p = Y_A
 (`yPExpr`), and `(init_x, init_y) = S(0)`. -/
 @[query_correct]
 def generatorLookup (G : Generators) (cfg : Config) : LookupArgument Fp where
+  masterSelector := cfg.qS1
   inputs :=
     let qS1 : Expression Fp Query := querySelector cfg.qS1
     let qRun : Expression Fp Query := queryFixed cfg.qS2 - qS3Expr cfg
@@ -172,6 +177,17 @@ def generatorLookup (G : Generators) (cfg : Config) : LookupArgument Fp where
       queryFixed cfg.generatorTable.tableY.inner ]
   tablesFree := by simp [Expression.SelectorFree, queryFixed]
   arity := rfl
+
+@[circuit_norm, synthesis_summary_norm, keygen_norm]
+theorem generatorLookup_masterSelector (G : Generators) (cfg : Config) :
+    (generatorLookup G cfg).masterSelector = cfg.qS1 := rfl
+
+@[keygen_norm]
+theorem generatorLookup_auxiliarySelectorIndices (G : Generators) (cfg : Config) :
+    (generatorLookup G cfg).auxiliarySelectorIndices = [] := by
+  simp [keygen_norm, generatorLookup,
+    LookupArgument.auxiliarySelectorIndices,
+    yPExpr, yAExpr, xRExpr, qS3Expr]
 
 /-! ## Configure
 
@@ -201,13 +217,33 @@ def configure (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
   -- λ₁/x_a @ cur plus λ₂ @ cur (from `Y_A`).
   lookup [queryFixed cfg.qS2, queryAdvice cfg.bits 0, queryAdvice cfg.bits 1,
           queryAdvice cfg.xP 0, queryAdvice cfg.lambda1 0, queryAdvice cfg.xA 0,
-          queryAdvice cfg.lambda2 0]
+          queryAdvice cfg.lambda2 0] cfg.qS1
     [((generatorLookup G cfg).inputs[0]!, genTable.tableIdx),
           ((generatorLookup G cfg).inputs[1]!, genTable.tableX),
           ((generatorLookup G cfg).inputs[2]!, genTable.tableY)]
   createGate (initialYQGate cfg)
   createGate (sinsemillaGate cfg)
   return cfg
+
+@[configure_selector_norm, keygen_norm] theorem configure_output_qS1_index
+    (G : Generators) (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).output
+      counts).qS1.index = counts.numSelectors := by
+  simp [configure]
+
+@[keygen_norm]
+theorem configure_lookups (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).delta
+      counts).lookups =
+      [generatorLookup G
+        ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).output
+          counts)] := by
+  rfl
 
 theorem configure_output_xA (G : Generators)
     (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
@@ -364,6 +400,15 @@ instance (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
   { configureElaborated G xA xP bits lambda1 lambda2 witnessPieces fixedYQ
       genTable with
     selectorRequirements _ := True
+    lookupSelectorsCompatible := by
+      intro counts _
+      simp [configure_lookups, generatorLookup_auxiliarySelectorIndices,
+        Gate.LookupSelectorsCompatible,
+        ConfigureDelta.LookupSelectorsCompatible,
+        Halo2.LookupSelectorsCompatible]
+      constructor
+      · exact List.forall_iff_forall_mem.mpr fun _ _ => trivial
+      · exact LookupArgument.selectorsCompatible_self _
     selectorsAllocated := by
       intro counts _
       constructor
@@ -964,7 +1009,7 @@ def round (G : Generators) (i : ℕ) : FormalRegionCircuit Fp Config Config fiel
     let _l1 ← assignAdvice cfg.lambda1 (offset + 1) (stepWit G piece w i (·.row.lambda1))
     let _l2 ← assignAdvice cfg.lambda2 (offset + 1) (stepWit G piece w i (·.row.lambda2))
     let _xA ← assignAdvice cfg.xA (offset + 1) (stepWit G piece w i (·.row.xA))
-    (generatorLookup G cfg).enable [cfg.qS1] offset
+    (generatorLookup G cfg).enable [] offset
     (sinsemillaGate cfg).enable offset
     readState cfg (offset + 1)
 

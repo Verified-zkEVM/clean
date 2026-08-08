@@ -85,6 +85,12 @@ def gate (qAdd : Selector) (lambda xP yP xQR yQR alpha beta gamma delta : Column
       ("5a", poly5a), ("5b", poly5b),
       ("6a", poly6a), ("6b", poly6b) ]
 
+@[circuit_norm, configure_selector_norm, keygen_norm]
+theorem gate_selector
+    (qAdd : Selector)
+    (lambda xP yP xQR yQR alpha beta gamma delta : Column .advice) :
+    (gate qAdd lambda xP yP xQR yQR alpha beta gamma delta).selector = qAdd := rfl
+
 /-!
 ## Algebraic core lemmas
 

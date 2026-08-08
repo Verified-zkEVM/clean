@@ -67,11 +67,20 @@ def pointGate (qPoint : Selector) (x y : Column .advice) : Gate Fp where
         · exact mul_eq_zero.mpr (.inl ((mul_eq_zero.mp hscaled).resolve_left hscale))
         · exact mul_eq_zero.mpr (.inr hcurve)
 
+@[circuit_norm, configure_selector_norm, keygen_norm]
+theorem pointGate_selector (qPoint : Selector) (x y : Column .advice) :
+    (pointGate qPoint x y).selector = qPoint := rfl
+
 /-- The "witness non-identity point" gate. -/
 def pointNonIdGate (qPointNonId : Selector) (x y : Column .advice) : Gate Fp :=
   Gate.withSelector "witness non-identity point" qPointNonId
     [queryAdvice x 0, queryAdvice y 0]
     [("on_curve", curveEqn x y)]
+
+@[circuit_norm, configure_selector_norm, keygen_norm]
+theorem pointNonIdGate_selector
+    (qPointNonId : Selector) (x y : Column .advice) :
+    (pointNonIdGate qPointNonId x y).selector = qPointNonId := rfl
 
 def configure (x y : Column .advice) : Configure Fp Config := do
   let qPoint ← selector

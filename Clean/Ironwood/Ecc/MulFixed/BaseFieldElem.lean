@@ -88,6 +88,10 @@ def canonGate (cfg : Config) : Gate Fp :=
       ("z_84_alpha_check", z84AlphaCheck),
       ("alpha_0_prime check", alpha0PrimeCheck) ]
 
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem canonGate_selector (cfg : Config) :
+    (canonGate cfg).selector = cfg.qMulFixedBaseField := rfl
+
 /-- Enable equality on the three canon advices, allocate a fresh selector, register the
 canonicity gate. (The canon-advice/incomplete-addition column deconfliction assert holds
 by construction at the `EccChip` wiring: canon = advices 6/7/8, add_incomplete =
@@ -442,6 +446,21 @@ bundle's default `{}`), local so the standalone proofs can state
   registered configInput counts configured offset input self := by
     simpa using
       innerRegion_keygenRegistered B configInput offset input.alpha self configured
+  lookupActivationsWellFormed config offset input region := by
+    simp only [innerRegion, RegionCircuit.operations_bind,
+      RegionCircuit.operations_pure,
+      RegionOperations.LookupActivationsWellFormed,
+      List.forall_append, List.forall_nil, and_true]
+    constructor
+    · keygen_registration
+    constructor
+    · simp only [fixedConstantsLoop, RegionCircuit.forRange'_forall]
+      intro i
+      unfold fixedConstantsWindow
+      keygen_registration
+    · exact windowChain_processWindow_lookupActivationsWellFormed
+        B (Ecc.MulFixed.windowPoint B.point) config.superConfig input.alpha
+        offset 85 region
   output config offset _ self :=
     { acc := { x := .of self (offset + 84) config.superConfig.addIncompleteConfig.xQR,
                y := .of self (offset + 84) config.superConfig.addIncompleteConfig.yQR },
@@ -1478,6 +1497,17 @@ def circuit (B : FixedBase) : FormalCircuit Fp
   elaborated :=
     { keygenRequirements := keygenRequirements
       registered := synthesize_keygenRegistered B
+      lookupActivationsWellFormed config alpha region := by
+        simp only [synthesize, Circuit.operations_bind,
+          Circuit.operations_pure, operations_assignRegion,
+          Operations.LookupActivationsWellFormed]
+        constructor
+        · exact (inner B).call_lookupActivationsWellFormed
+            config 0 ⟨alpha⟩ region
+        constructor
+        · exact Add.add.call_lookupActivationsWellFormed
+            config.superConfig.addConfig 0 _ (region + 1)
+        constructor <;> keygen_registration
       output cfg _ i :=
         { x := .of (i + 1) 1 cfg.superConfig.addConfig.xQR
           y := .of (i + 1) 1 cfg.superConfig.addConfig.yQR }

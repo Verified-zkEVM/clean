@@ -59,20 +59,76 @@ pair is
 
 where the table side is `table_idx`'s rotation-0 fixed query. Which word the gated input
 reduces to depends on which selectors are enabled at the row (running-sum vs short row). -/
-@[query_correct]
-def rangeCheckLookup (K : ℕ) (cfg : Config K) : LookupArgument Fp where
-  inputs :=
-    let qL : Expression Fp Query := querySelector cfg.qLookup
-    let qR : Expression Fp Query := querySelector cfg.qRunning
-    let zCur : Expression Fp Query := queryAdvice cfg.runningSum 0
-    let zNext : Expression Fp Query := queryAdvice cfg.runningSum 1
-    -- Rust builds `z_cur - z_next * F::from(1 << K)` (`lookup_range_check.rs:347`): the
-    -- `2^K` is a FIELD scalar on the RIGHT of `z_next` (`impl Mul<F>`), so the AST is
-    -- `.scaled z_next 2^K`, NOT `product(const, z_next)`. Spell it `zNext * (2^K : Fp)`.
-    [qL * (qR * (zCur - zNext * (2 ^ K : Fp)) + (1 - qR) * zCur)]
-  tables := [queryFixed cfg.tableIdx.inner]
+@[query_correct, circuit_norm]
+def rangeCheckInputFor (K : ℕ) (qLookup qRunning : Selector)
+    (runningSum : Column .advice) : Expression Fp Query :=
+  let qL : Expression Fp Query := querySelector qLookup
+  let qR : Expression Fp Query := querySelector qRunning
+  let zCur : Expression Fp Query := queryAdvice runningSum 0
+  let zNext : Expression Fp Query := queryAdvice runningSum 1
+  -- Rust builds `z_cur - z_next * F::from(1 << K)` (`lookup_range_check.rs:347`): the
+  -- `2^K` is a FIELD scalar on the RIGHT of `z_next` (`impl Mul<F>`), so the AST is
+  -- `.scaled z_next 2^K`, NOT `product(const, z_next)`. Spell it `zNext * (2^K : Fp)`.
+  qL * (qR * (zCur - zNext * (2 ^ K : Fp)) + (1 - qR) * zCur)
+
+@[query_correct, circuit_norm]
+def rangeCheckInput (K : ℕ) (cfg : Config K) : Expression Fp Query :=
+  rangeCheckInputFor K cfg.qLookup cfg.qRunning cfg.runningSum
+
+@[query_correct, circuit_norm]
+def rangeCheckLookupFor (K : ℕ) (qLookup qRunning : Selector)
+    (runningSum : Column .advice) (tableIdx : TableColumn) : LookupArgument Fp where
+  masterSelector := qLookup
+  inputs := [rangeCheckInputFor K qLookup qRunning runningSum]
+  tables := [queryFixed tableIdx.inner]
   tablesFree := by simp [Expression.SelectorFree, queryFixed]
   arity := rfl
+
+@[query_correct]
+def rangeCheckLookup (K : ℕ) (cfg : Config K) : LookupArgument Fp :=
+  rangeCheckLookupFor K cfg.qLookup cfg.qRunning cfg.runningSum cfg.tableIdx
+
+@[configure_selector_norm, keygen_norm] theorem delta_rangeCheckLookup_lookups
+    (K : ℕ) (qLookup qRunning : Selector)
+    (runningSum : Column .advice) (tableIdx : TableColumn)
+    (counts : ConfigureCounts) :
+    ((lookup [queryAdvice runningSum 0, queryAdvice runningSum 1]
+      qLookup [(rangeCheckInputFor K qLookup qRunning runningSum, tableIdx)]).delta
+        counts).lookups =
+      [rangeCheckLookupFor K qLookup qRunning runningSum tableIdx] := by
+  unfold Halo2.lookup rangeCheckLookupFor
+  rfl
+
+@[circuit_norm, synthesis_summary_norm, keygen_norm]
+theorem rangeCheckLookup_masterSelector (K : ℕ) (cfg : Config K) :
+    (rangeCheckLookup K cfg).masterSelector = cfg.qLookup := rfl
+
+@[keygen_norm]
+theorem qLookup_mem_rangeCheckLookup_selectorIndices (K : ℕ) (cfg : Config K) :
+    cfg.qLookup.index ∈ (rangeCheckLookup K cfg).selectorIndices := by
+  simpa only [rangeCheckLookup_masterSelector] using
+    (rangeCheckLookup K cfg).masterSelector_mem_selectorIndices
+
+@[keygen_norm]
+theorem qRunning_mem_rangeCheckLookup_selectorIndices (K : ℕ) (cfg : Config K) :
+    cfg.qRunning.index ∈ (rangeCheckLookup K cfg).selectorIndices := by
+  rw [LookupArgument.selectorIndices, List.mem_cons]
+  by_cases hmaster : cfg.qRunning.index = cfg.qLookup.index
+  · exact Or.inl hmaster
+  · right
+    rw [LookupArgument.auxiliarySelectorIndices, List.mem_filter]
+    exact ⟨by
+      simp only [rangeCheckLookup]
+      tauto,
+      by simpa [rangeCheckLookup_masterSelector] using hmaster⟩
+
+@[keygen_norm]
+theorem qRunning_declared_by_rangeCheckLookup (K : ℕ) (cfg : Config K) :
+    cfg.qRunning.index = cfg.qLookup.index ∨
+      cfg.qRunning.index ∈ (rangeCheckLookup K cfg).auxiliarySelectorIndices := by
+  simpa only [rangeCheckLookup_masterSelector, LookupArgument.selectorIndices,
+    List.mem_cons] using
+    qRunning_mem_rangeCheckLookup_selectorIndices K cfg
 
 /-- The "Short lookup bitshift" gate, ported verbatim from `configure`
 (`lookup_range_check.rs:370-384`). Reads `word` at `Rotation::prev()` (−1), `shifted_word`
@@ -86,7 +142,7 @@ def bitshiftGate (K : ℕ) (cfg : Config K) : Gate Fp :=
     [word, shiftedWord, invTwoPowS]
     [("bitshift", word * (2 ^ K : Fp) * invTwoPowS - shiftedWord)]
 
-@[circuit_norm] theorem bitshiftGate_selector (K : ℕ) (cfg : Config K) :
+@[circuit_norm, keygen_norm] theorem bitshiftGate_selector (K : ℕ) (cfg : Config K) :
     (bitshiftGate K cfg).selector = cfg.qBitshift := rfl
 
 /-- Rust `configure` (`lookup_range_check.rs:313-387`): enable equality on `running_sum`,
@@ -100,18 +156,74 @@ def configure (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn) :
   let qBitshift ← selector
   let cfg : Config K := { qLookup, qRunning, qBitshift, runningSum, tableIdx }
   -- register the lookup: one (input, table) pair, verbatim §1.4
-  lookup [queryAdvice runningSum 0, queryAdvice runningSum 1]
-    [((rangeCheckLookup K cfg).inputs.headI, tableIdx)]
+  lookup [queryAdvice runningSum 0, queryAdvice runningSum 1] qLookup
+    [(rangeCheckInputFor K qLookup qRunning runningSum, tableIdx)]
   -- register the bitshift gate
   createGate (bitshiftGate K cfg)
   return cfg
 
-instance (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn) :
-    ElaboratedConfigure (configure K runningSum tableIdx) := by
-  unfold configure
-  infer_instance
+@[configure_selector_norm, keygen_norm] theorem configure_output_qLookup_index
+    (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn)
+    (counts : ConfigureCounts) :
+    ((configure K runningSum tableIdx).output counts).qLookup.index =
+      counts.numSelectors := by
+  simp [configure, keygen_norm]
 
-@[simp] theorem configure_delta_lookups (K : ℕ)
+@[configure_selector_norm, keygen_norm] theorem configure_output_qRunning_index
+    (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn)
+    (counts : ConfigureCounts) :
+    ((configure K runningSum tableIdx).output counts).qRunning.index =
+      counts.numSelectors + 1 := by
+  simp [configure, keygen_norm]
+
+@[configure_selector_norm, keygen_norm] theorem configure_output_qBitshift_index
+    (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn)
+    (counts : ConfigureCounts) :
+    ((configure K runningSum tableIdx).output counts).qBitshift.index =
+      counts.numSelectors + 2 := by
+  simp [configure, keygen_norm]
+
+@[configure_selector_norm, keygen_norm]
+theorem configure_output_lookup_auxiliarySelectorIndices
+    (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn)
+    (counts : ConfigureCounts) :
+    (rangeCheckLookup K
+      ((configure K runningSum tableIdx).output counts)).auxiliarySelectorIndices =
+      [counts.numSelectors + 1, counts.numSelectors + 1] := by
+  simp [rangeCheckLookup, rangeCheckLookupFor, rangeCheckInputFor,
+    LookupArgument.auxiliarySelectorIndices, Expression.selectorIndices,
+    Expression.selectorIndices_querySelector,
+    Expression.selectorIndices_queryAdvice, keygen_norm]
+
+@[configure_selector_norm, keygen_norm]
+theorem configure_output_lookup_selectorIndices
+    (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn)
+    (counts : ConfigureCounts) :
+    (rangeCheckLookup K
+      ((configure K runningSum tableIdx).output counts)).selectorIndices =
+      [counts.numSelectors, counts.numSelectors + 1,
+        counts.numSelectors + 1] := by
+  simp [LookupArgument.selectorIndices, rangeCheckLookup_masterSelector, keygen_norm]
+
+@[configure_selector_norm, keygen_norm] theorem configure_finalCounts_numSelectors
+    (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn)
+    (counts : ConfigureCounts) :
+    ((configure K runningSum tableIdx).finalCounts counts).numSelectors =
+      counts.numSelectors + 3 := by
+  simp [configure]
+
+theorem gate_lookupSelectorsCompatible_configure_output
+    (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn)
+    (counts : ConfigureCounts) (gate : Gate Fp)
+    (hgate : gate.selector.index < counts.numSelectors) :
+    gate.LookupSelectorsCompatible
+      (rangeCheckLookup K ((configure K runningSum tableIdx).output counts)) := by
+  rw [Gate.LookupSelectorsCompatible,
+    configure_output_lookup_auxiliarySelectorIndices]
+  simp only [List.forall_cons, List.forall_nil, and_true]
+  constructor <;> omega
+
+@[configure_selector_norm, keygen_norm] theorem configure_delta_lookups (K : ℕ)
     (runningSum : Column .advice) (tableIdx : TableColumn)
     (counts : ConfigureCounts) :
     ((configure K runningSum tableIdx).delta counts).lookups =
@@ -119,13 +231,37 @@ instance (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn) :
   unfold configure lookup
   rfl
 
-@[simp] theorem configure_delta_gates (K : ℕ)
+@[configure_selector_norm, keygen_norm] theorem configure_delta_gates (K : ℕ)
     (runningSum : Column .advice) (tableIdx : TableColumn)
     (counts : ConfigureCounts) :
     ((configure K runningSum tableIdx).delta counts).gates =
       [bitshiftGate K ((configure K runningSum tableIdx).output counts)] := by
   unfold configure
   rfl
+
+@[reducible] private def configureInferred
+    (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn) :
+    ElaboratedConfigure (configure K runningSum tableIdx) := by
+  unfold configure
+  infer_instance
+
+private theorem configure_selectorRequirements
+    (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn) (counts) :
+    (configureInferred K runningSum tableIdx).selectorRequirements counts := by
+  dsimp only [configureInferred, configure]
+  simp only [configure_selector_norm]
+  simp [configure_selector_norm, ConfigureDelta.LookupSelectorsCrossCompatible,
+    Gate.LookupSelectorsCompatible]
+  simp [keygen_norm, rangeCheckLookupFor, rangeCheckInputFor,
+    lookupInputSelectorBound, LookupArgument.inputSelectorBound,
+    LookupArgument.auxiliarySelectorIndices,
+    Expression.selectorIndices]
+  simp [Expression.selectorBound]
+
+instance (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn) :
+    ElaboratedConfigure (configure K runningSum tableIdx) :=
+  (configureInferred K runningSum tableIdx).closeSelectorRequirements
+    (configure_selectorRequirements K runningSum tableIdx)
 
 /-! ## The table loader
 
@@ -352,11 +488,11 @@ def shortRangeCheck (K numBits : ℕ) :
   synthesize cfg offset _ := do
     -- the caller-assigned `element` at `offset`; short lookup there (q_running OFF)
     let elt ← cellAt cfg.runningSum offset
-    (rangeCheckLookup K cfg).enable [cfg.qLookup] offset
+    (rangeCheckLookup K cfg).enable [] offset
     -- assign shifted = element · 2^(K − num_bits) at `offset + 1`; short lookup there too
     let _shifted ← assignAdvice cfg.runningSum (offset + 1)
       (.ofFExpr ((.expr elt) * (.const (2 ^ (K - numBits) : Fp))))
-    (rangeCheckLookup K cfg).enable [cfg.qLookup] (offset + 1)
+    (rangeCheckLookup K cfg).enable [] (offset + 1)
     -- assign 2^(−num_bits) as a constant at `offset + 2`
     let invCell ← assignAdvice cfg.runningSum (offset + 2) (.ofFExpr (.const (invTwoPowS numBits)))
     constrainConstant invCell (invTwoPowS numBits)
@@ -685,7 +821,7 @@ independent of the others — exactly the forEach shape `RegionCircuit.forRange'
 def rangeCheckRound (K : ℕ) (cfg : Config K) (element : AssignedCell Fp) (idx row : ℕ) :
     RegionCircuit Fp Unit := do
   -- running-sum row: both q_lookup and q_running on (§1.4 → input = running word a_idx)
-  (rangeCheckLookup K cfg).enable [cfg.qLookup, cfg.qRunning] row
+  (rangeCheckLookup K cfg).enable [cfg.qRunning] row
   -- assign z_{idx+1} = element ≫ (K·(idx+1)) at row + 1
   let _z ← assignAdvice cfg.runningSum (row + 1) (zWitness K (idx + 1) element)
   return ()
@@ -1714,12 +1850,12 @@ def shortRangeConfigureCertificate (K numBits : ℕ)
     simp only [shortRangeCheck, FormalRegionCircuit.keygenRequirements,
       ElaboratedRegionCircuit.keygenRequirements, Configure.delta_pure,
       List.append_nil] at hgate
-    simpa [cfg] using hgate
+    simpa [cfg, keygen_norm] using hgate
   · intro argument hargument
     simp only [shortRangeCheck, FormalRegionCircuit.keygenRequirements,
       ElaboratedRegionCircuit.keygenRequirements, Configure.delta_pure,
       List.append_nil] at hargument
-    simpa [cfg] using hargument
+    simpa [cfg, keygen_norm] using hargument
   · intro column hcolumn
     simp only [keygen_norm, shortRangeCheck,
       FormalRegionCircuit.keygenRequirements,

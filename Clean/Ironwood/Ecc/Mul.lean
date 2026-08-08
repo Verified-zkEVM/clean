@@ -85,7 +85,7 @@ def lsbGate (cfg : Config) : Gate Fp :=
     let lsbY := lsb * yP + ((1 : Fp) - lsb) * (yP + baseY)
     [ ("bool_check", boolCheck), ("lsb_x", lsbX), ("lsb_y", lsbY) ]
 
-@[circuit_norm, synthesis_summary_norm]
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
 theorem lsbGate_selector (cfg : Config) :
     (lsbGate cfg).selector = cfg.qMulLsb := rfl
 
@@ -1257,6 +1257,15 @@ def mul :
               unfold configure
               apply Configure.mem_permutationRequests_delta_bind_left
               exact hcolumn
+      lookupActivationsWellFormed config input region := by
+        simp only [synthesize, Circuit.operations_bind,
+          Circuit.operations_pure, Operations.LookupActivationsWellFormed,
+          List.forall_append, List.forall_nil, and_true]
+        constructor
+        · exact (mainCircuit.toFormal "variable-base scalar mul")
+            |>.call_lookupActivationsWellFormed config input region
+        · exact (MulOverflow.circuit 10 hKW10)
+            |>.call_lookupActivationsWellFormed config.overflowConfig _ _
       output cfg _ self :=
         { x := .of self (offLsb + 1) cfg.addConfig.xQR
           y := .of self (offLsb + 1) cfg.addConfig.yQR }

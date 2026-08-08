@@ -154,6 +154,11 @@ class ElaboratedCircuit (F : Type) [FiniteField F]
         (program.delta counts).permutationRequests ++
         keygenRequirements.inputPermutationColumns configInput hconfig input) := by
     keygen_registration
+  /-- Every lookup activation enables its master and only its declared selectors. -/
+  lookupActivationsWellFormed :
+    ∀ (config : Config) (input : Var Input F) (i : RegionIndex),
+    ((synthesize config input).operations i).LookupActivationsWellFormed := by
+    keygen_registration
   output : Config → Var Input F → RegionIndex → Var Output F :=
     fun config input i => (synthesize config input).output i
   regionCount : Var Input F → ℕ := fun _ => 0
@@ -711,6 +716,15 @@ theorem selectorsAllocated
       ((self.configure input).finalCounts counts).numSelectors :=
   (self.elaborated.configureInfo input).selectorsAllocated counts hrequirements
 
+/-- Configure composition keeps gate and lookup selectors mutually compatible. -/
+theorem lookupSelectorsCompatible
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (input : ConfigInput) (counts : ConfigureCounts)
+    (hrequirements : self.selectorRequirements input counts) :
+    ((self.configure input).delta counts).LookupSelectorsCompatible :=
+  (self.elaborated.configureInfo input).lookupSelectorsCompatible
+    counts hrequirements
+
 /-- Column allocation and query-shape requirements borrowed from the incoming
 configure state. Closed circuits normally reduce this to `True`. -/
 def queryRequirements
@@ -970,6 +984,25 @@ theorem call_keygenRegistered_exact
     (fun _ h => List.mem_append_left _ h)
     (fun _ h => List.mem_append_right _ h)
 
+/-- Lookup activations in a child call obey the lookup's local selector declaration. -/
+theorem call_lookupActivationsWellFormed
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (config : Config)
+    (input : Var Input F) (i : RegionIndex) :
+    ((self.call config input).operations i).LookupActivationsWellFormed := by
+  rw [self.call_operations]
+  exact self.elaborated.lookupActivationsWellFormed config input i
+
+/-- Lookup-activation certificate in the opaque call spelling. -/
+theorem callPacked_lookupActivationsWellFormed
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (config : Config)
+    (input : Var Input F) (i : RegionIndex) :
+    (((callPacked F ConfigInput Config Input Output).val self
+      config input i).2.1)
+        |>.LookupActivationsWellFormed :=
+  self.call_lookupActivationsWellFormed config input i
+
 /-- Registration certificate in the exact opaque spelling exposed after operation-spine
 normalization. -/
 theorem callPacked_keygenRegistered
@@ -1094,6 +1127,13 @@ class ElaboratedRegionCircuit (F : Type) [FiniteField F]
           (keygenRequirements.permutationColumns configInput hconfig ++
             (program.delta counts).permutationRequests ++
             keygenRequirements.inputPermutationColumns configInput hconfig input)) := by
+    keygen_registration
+  /-- Every region lookup activation enables its master and only declared selectors. -/
+  lookupActivationsWellFormed :
+    ∀ (config : Config) (offset : ℕ)
+      (input : Var Input F) (region : RegionIndex),
+    ((synthesize config offset input).operations region)
+      |>.LookupActivationsWellFormed := by
     keygen_registration
   output : Config → ℕ → Var Input F → RegionIndex → Var Output F :=
     fun config offset input self =>
@@ -1633,6 +1673,15 @@ theorem selectorsAllocated
       ((self.configure input).finalCounts counts).numSelectors :=
   (self.elaborated.configureInfo input).selectorsAllocated counts hrequirements
 
+/-- Region-level counterpart of `FormalCircuit.lookupSelectorsCompatible`. -/
+theorem lookupSelectorsCompatible
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (input : ConfigInput) (counts : ConfigureCounts)
+    (hrequirements : self.selectorRequirements input counts) :
+    ((self.configure input).delta counts).LookupSelectorsCompatible :=
+  (self.elaborated.configureInfo input).lookupSelectorsCompatible
+    counts hrequirements
+
 /-- Region-level counterpart of `FormalCircuit.queryRequirements`. -/
 def queryRequirements
     (self : FormalRegionCircuit F ConfigInput Config Input Output)
@@ -1897,6 +1946,28 @@ theorem call_keygenRegistered_exact
     (fun _ h => List.mem_append_left _ h)
     (fun _ h => List.mem_append_right _ h)
 
+/-- Lookup activations in a region child call obey the lookup's local selector declaration. -/
+theorem call_lookupActivationsWellFormed
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (config : Config)
+    (offset : ℕ) (input : Var Input F) (region : RegionIndex) :
+    ((self.call config offset input).operations region)
+      |>.LookupActivationsWellFormed := by
+  rw [self.call_operations]
+  exact self.elaborated.lookupActivationsWellFormed
+    config offset input region
+
+/-- Region lookup-activation certificate in the opaque call spelling. -/
+theorem callPacked_lookupActivationsWellFormed
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (config : Config)
+    (offset : ℕ) (input : Var Input F) (region : RegionIndex) :
+    (((callPacked F ConfigInput Config Input Output).val self
+      config offset input region).2)
+        |>.LookupActivationsWellFormed :=
+  self.call_lookupActivationsWellFormed
+    config offset input region
+
 /-- Region registration certificate in the opaque spelling exposed after spine
 normalization. -/
 theorem callPacked_keygenRegistered
@@ -2011,6 +2082,13 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
         simpa only [assignRegion, Circuit.operations,
           Operations.KeygenRegistered, Operation.KeygenRegistered,
           List.Forall, and_true] using hregistered
+      lookupActivationsWellFormed := by
+        intro config input region
+        have hlawful := child.elaborated.lookupActivationsWellFormed
+          config 0 input region
+        simpa only [assignRegion, Circuit.operations,
+          Operations.LookupActivationsWellFormed,
+          Operation.LookupActivationsWellFormed, List.Forall, and_true] using hlawful
       output config input i :=
         child.output config 0 input i
       regionCount _ := 1
@@ -2147,8 +2225,12 @@ end FormalRegionCircuit
 attribute [keygen_call]
   FormalCircuit.callPacked_keygenRegistered
   FormalCircuit.call_keygenRegistered
+  FormalCircuit.callPacked_lookupActivationsWellFormed
+  FormalCircuit.call_lookupActivationsWellFormed
   FormalRegionCircuit.callPacked_keygenRegistered
   FormalRegionCircuit.call_keygenRegistered
+  FormalRegionCircuit.callPacked_lookupActivationsWellFormed
+  FormalRegionCircuit.call_lookupActivationsWellFormed
 
 attribute [keygen_call_expression]
   FormalCircuit.call

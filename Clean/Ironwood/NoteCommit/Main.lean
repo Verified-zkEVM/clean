@@ -1378,6 +1378,28 @@ instance elaborated (G : Generators) (R : FixedBase)
   registered configInput _ configured input self := by
     simpa using synth_keygenRegistered
       G R Q hQ configInput input self configured
+  lookupActivationsWellFormed config input region := by
+    simp only [synth, Circuit.operations_bind, currentRegion_operations,
+      Circuit.operations_pure, Operations.LookupActivationsWellFormed,
+      List.forall_append, List.forall_nil, true_and, and_true]
+    constructor
+    · unfold synthPieces
+      keygen_registration
+    constructor
+    · unfold synthChecks
+      keygen_registration
+    · simp only [synthGates, Circuit.operations_bind,
+        List.forall_append]
+      constructor
+      · unfold synthDecompositions
+        keygen_registration
+      · simp only [synthCanonicity, Circuit.operations_bind,
+          List.forall_append]
+        constructor
+        · unfold synthGdPkdValueCanonicity
+          keygen_registration
+        · unfold synthRhoPsiCanonicity
+          keygen_registration
   output cfg _ self := output cfg self
   regionCount _ := 43
   synthesisSummary cfg _ _ := synthesisSummary cfg

@@ -108,6 +108,10 @@ def decomposeGate (cfg : Config) : Gate Fp :=
     [ ("l_check", lCheck), ("left_check", leftCheck),
       ("right_check", rightCheck), ("b1_b2_check", b1b2Check) ]
 
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem decomposeGate_selector (cfg : Config) :
+    (decomposeGate cfg).selector = cfg.qDecompose := rfl
+
 /-- The value-level decomposition spec, over the ten cell values.
 Uses the plain `(2^k : Fp)` literals (definitionally the `twoPow*` constants). -/
 def Spec (aWhole bWhole cWhole leftNode rightNode z1A z1B b1 b2 lWhole : Fp) : Prop :=
@@ -376,10 +380,27 @@ def configure (scfg : HashPiece.Config) : Configure Fp Config := do
     scfg.xA scfg.xP scfg.bits scfg.lambda1 scfg.lambda2
   return { condSwap, gate, sinsemilla := scfg }
 
-instance (scfg : HashPiece.Config) :
+@[configure_selector_norm, keygen_norm] theorem configure_delta_lookups
+    (scfg : HashPiece.Config) (counts) :
+    ((configure scfg).delta counts).lookups = [] := by
+  simp [configure, CondSwap.configure, Gate.configure]
+
+@[reducible] private def configureInferred (scfg : HashPiece.Config) :
     ElaboratedConfigure (configure scfg) := by
   unfold configure
   infer_instance
+
+private theorem configure_selectorRequirements
+    (scfg : HashPiece.Config) (counts) :
+    (configureInferred scfg).selectorRequirements counts := by
+  dsimp only [configureInferred, configure]
+  simp [configure_selector_norm, ConfigureDelta.LookupSelectorsCrossCompatible,
+    Halo2.Gate.LookupSelectorsCompatible, CondSwap.configure, Gate.configure]
+
+instance (scfg : HashPiece.Config) :
+    ElaboratedConfigure (configure scfg) :=
+  (configureInferred scfg).closeSelectorRequirements
+    (configure_selectorRequirements scfg)
 
 /-- Capabilities produced by one Merkle configure run. Hashing and range checking
 remain caller-supplied because `configure` receives their already-built configs. -/
@@ -1334,6 +1355,30 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
             all_goals simp [AssignedCell.of_cell, Cell.of_column,
               HashToPoint.Configured.permutationColumns_eq,
               LookupRangeCheck.shortRangeCheck_configured_permutationColumns_eq]
+          · trivial
+      lookupActivationsWellFormed config input region := by
+        unfold HashLayer.synthesize
+        simp only [Circuit.operations_bind,
+          Operations.LookupActivationsWellFormed,
+          operations_assignRegion, Circuit.operations_pure, List.forall_append,
+          List.forall_nil]
+        constructor
+        · keygen_registration [HashToPoint.witnessMessagePiece]
+        constructor
+        · keygen_registration [LookupRangeCheck.witnessShortCheck]
+        constructor
+        · keygen_registration [LookupRangeCheck.witnessShortCheck]
+        constructor
+        · keygen_registration [HashToPoint.witnessMessagePiece]
+        constructor
+        · keygen_registration [HashToPoint.witnessMessagePiece]
+        constructor
+        · simpa only [HashToPoint.hashMessage] using
+            (HashToPoint.hashCircuit G merkleNs Q hQ HashLayer.synthesize._proof_1)
+              |>.call_lookupActivationsWellFormed config.1.sinsemilla _ _
+        · constructor
+          · exact (Gate.circuit (l : Fp)).call_lookupActivationsWellFormed
+              config.1.gate 0 _ _
           · trivial
       output := fun (cfg, _) _ i =>
         AssignedCell.of (i + 5)

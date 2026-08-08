@@ -1734,22 +1734,16 @@ operations activate a selector at a region-local row. Keeping them below the key
 layer lets floor planning state its placement facts without importing keygen.
 -/
 
-/-- Selector indices occurring in an expression, with syntax-order multiplicity. -/
-@[circuit_norm]
-def Expression.selectorIndices : Expression F Query → List ℕ
-  | .var (.selector selector) => [selector.index]
-  | .var _ => []
-  | .const _ => []
-  | .add left right =>
-      left.selectorIndices ++ right.selectorIndices
-  | .mul left right =>
-      left.selectorIndices ++ right.selectorIndices
-
 /-- Membership in an enabled-selector list, by the index used by semantics. -/
 @[circuit_norm]
 def SelectorEnabledAtIndex
     (enabled : List Selector) (selector : ℕ) : Prop :=
   ∃ candidate ∈ enabled, candidate.index = selector
+
+theorem selectorEnabledAtIndex_cons_self
+    (selector : Selector) (rest : List Selector) :
+    SelectorEnabledAtIndex (selector :: rest) selector.index :=
+  ⟨selector, by simp, rfl⟩
 
 /-- An operation activates selector `selector` at region-local `row`. -/
 @[circuit_norm]
@@ -1760,6 +1754,201 @@ def RegionOperation.ActivatesSelectorAt
   | .enableLookup _ enabled operationRow =>
       SelectorEnabledAtIndex enabled selector ∧ operationRow = row
   | _ => False
+
+/-- A lookup activation enables its mandatory master selector and no selector outside
+the lookup's declared selector set. This property is local to the operation and is
+therefore stable under circuit composition. -/
+@[circuit_norm]
+def RegionOperation.LookupActivationWellFormed : RegionOperation F → Prop
+  | .enableLookup argument enabled _ =>
+      SelectorEnabledAtIndex enabled argument.masterSelector.index ∧
+        enabled.Forall fun selector =>
+          selector.index = argument.masterSelector.index ∨
+            selector.index ∈ argument.auxiliarySelectorIndices
+  | _ => True
+
+/-- Region-list lift of lookup-local activation well-formedness. -/
+@[circuit_norm]
+def RegionOperations.LookupActivationsWellFormed
+    (operations : RegionOperations F) : Prop :=
+  operations.Forall RegionOperation.LookupActivationWellFormed
+
+/-- Layouter operation lift of lookup-local activation well-formedness. -/
+@[circuit_norm]
+def Operation.LookupActivationsWellFormed : Operation F → Prop
+  | .region _ body => body.LookupActivationsWellFormed
+  | _ => True
+
+/-- Every lookup activation in every synthesized region is locally well-formed. -/
+@[circuit_norm]
+def Operations.LookupActivationsWellFormed
+    (operations : Operations F) : Prop :=
+  operations.Forall Operation.LookupActivationsWellFormed
+
+/-- A gate never activates a selector used as an auxiliary by a configured lookup. -/
+@[circuit_norm]
+def Gate.AvoidsLookupAuxiliarySelectors
+    (gate : Gate F) (lookups : List (LookupArgument F)) : Prop :=
+  lookups.Forall fun lookup =>
+    lookup.auxiliarySelectorIndices.Forall fun selector =>
+      selector ≠ gate.selector.index
+
+/-- A selector activation respects every configured lookup's master-selector
+discipline. Gate selectors may not be auxiliary lookup selectors. A lookup activation
+which turns on an auxiliary selector must turn on that lookup's master in the same
+operation. `List.Forall` makes concrete configure output reduce compositionally. -/
+@[circuit_norm]
+def RegionOperation.LookupSelectorsLawful
+    (lookups : List (LookupArgument F)) : RegionOperation F → Prop
+  | .enableGate gate _ =>
+      gate.AvoidsLookupAuxiliarySelectors lookups
+  | .enableLookup _ enabled _ =>
+      lookups.Forall fun lookup =>
+        lookup.auxiliarySelectorIndices.Forall fun selector =>
+          SelectorEnabledAtIndex enabled selector →
+            SelectorEnabledAtIndex enabled lookup.masterSelector.index
+  | _ => True
+
+/-- Region-operation-list lift of `RegionOperation.LookupSelectorsLawful`. -/
+@[circuit_norm]
+def RegionOperations.LookupSelectorsLawful
+    (lookups : List (LookupArgument F)) (operations : RegionOperations F) : Prop :=
+  operations.Forall (RegionOperation.LookupSelectorsLawful lookups)
+
+/-- Layouter operation lift of lookup-selector lawfulness. -/
+@[circuit_norm]
+def Operation.LookupSelectorsLawful
+    (lookups : List (LookupArgument F)) : Operation F → Prop
+  | .region _ body => body.LookupSelectorsLawful lookups
+  | _ => True
+
+/-- Every selector activation in every synthesized region follows the configured
+lookup master-selector discipline. -/
+@[circuit_norm]
+def Operations.LookupSelectorsLawful
+    (lookups : List (LookupArgument F)) (operations : Operations F) : Prop :=
+  operations.Forall (Operation.LookupSelectorsLawful lookups)
+
+/-- The standard lookup-enabling constructor satisfies its own master-selector
+obligation independently of which auxiliary selectors are selected. -/
+theorem LookupArgument.lookupSelectorsLawful_enable_self
+    (argument : LookupArgument F) (auxiliarySelectors : List Selector) (row : ℕ) :
+    RegionOperation.LookupSelectorsLawful [argument]
+      (.enableLookup argument
+        (argument.masterSelector :: auxiliarySelectors) row) := by
+  rw [RegionOperation.LookupSelectorsLawful, List.forall_cons]
+  constructor
+  · rw [List.forall_iff_forall_mem]
+    intro _ _ _
+    exact ⟨argument.masterSelector, by simp, rfl⟩
+  · trivial
+
+/-- The standard lookup constructor is locally well-formed whenever its explicitly
+enabled auxiliary selectors belong to the lookup expression. -/
+theorem LookupArgument.lookupActivationWellFormed_enable
+    (argument : LookupArgument F) (auxiliarySelectors : List Selector) (row : ℕ)
+    (hauxiliary : auxiliarySelectors.Forall fun selector =>
+      selector.index ∈ argument.selectorIndices) :
+    RegionOperation.LookupActivationWellFormed
+      (.enableLookup argument
+        (argument.masterSelector :: auxiliarySelectors) row) := by
+  constructor
+  · exact selectorEnabledAtIndex_cons_self _ _
+  · rw [List.forall_cons]
+    constructor
+    · exact Or.inl rfl
+    · exact hauxiliary.imp fun _ hselector => by
+        simpa only [LookupArgument.selectorIndices, List.mem_cons] using hselector
+
+/-- Registration, lookup-local activation well-formedness, and configure-time selector
+compatibility imply the global master-selector discipline for one operation. -/
+theorem RegionOperation.lookupSelectorsLawful_of_registered
+    {operation : RegionOperation F}
+    {gates : List (Gate F)} {lookups : List (LookupArgument F)}
+    {permutationColumns : List AnyColumn}
+    (hregistered : operation.KeygenRegistered
+      gates lookups permutationColumns)
+    (hactivation : operation.LookupActivationWellFormed)
+    (hcompatible : Halo2.LookupSelectorsCompatible gates lookups) :
+    operation.LookupSelectorsLawful lookups := by
+  cases operation with
+  | enableGate gate row =>
+      exact List.forall_iff_forall_mem.mpr fun argument hargument =>
+        List.forall_iff_forall_mem.mp
+          (List.forall_iff_forall_mem.mp hcompatible.1 gate hregistered)
+          argument hargument
+  | enableLookup source enabled row =>
+      rw [RegionOperation.LookupSelectorsLawful,
+        List.forall_iff_forall_mem]
+      intro target htarget
+      rw [List.forall_iff_forall_mem]
+      intro selector hselector henabled
+      obtain ⟨candidate, hcandidate, hcandidateIndex⟩ := henabled
+      have hsourceSelector : selector ∈ source.selectorIndices := by
+        rw [← hcandidateIndex]
+        simpa only [LookupArgument.selectorIndices, List.mem_cons] using
+          (List.forall_iff_forall_mem.mp hactivation.2
+            candidate hcandidate)
+      have hpair := List.forall_iff_forall_mem.mp
+        (List.forall_iff_forall_mem.mp hcompatible.2 source hregistered)
+        target htarget
+      have hmaster := List.forall_iff_forall_mem.mp hpair
+        selector hsourceSelector hselector
+      rw [hmaster]
+      exact hactivation.1
+  | assignAdvice | assignFixed | constrainEqual | constrainConstant |
+      constrainInstance =>
+      trivial
+
+theorem RegionOperations.lookupSelectorsLawful_of_registered
+    {operations : RegionOperations F}
+    {gates : List (Gate F)} {lookups : List (LookupArgument F)}
+    {permutationColumns : List AnyColumn}
+    (hregistered : operations.Forall
+      (RegionOperation.KeygenRegistered gates lookups permutationColumns))
+    (hactivations : operations.LookupActivationsWellFormed)
+    (hcompatible : Halo2.LookupSelectorsCompatible gates lookups) :
+    operations.LookupSelectorsLawful lookups := by
+  rw [RegionOperations.LookupSelectorsLawful,
+    List.forall_iff_forall_mem] at ⊢
+  intro operation hoperation
+  exact RegionOperation.lookupSelectorsLawful_of_registered
+    (List.forall_iff_forall_mem.mp hregistered operation hoperation)
+    (List.forall_iff_forall_mem.mp hactivations operation hoperation)
+    hcompatible
+
+theorem Operation.lookupSelectorsLawful_of_registered
+    {operation : Operation F}
+    {gates : List (Gate F)} {lookups : List (LookupArgument F)}
+    {permutationColumns : List AnyColumn}
+    (hregistered : operation.KeygenRegistered
+      gates lookups permutationColumns)
+    (hactivations : operation.LookupActivationsWellFormed)
+    (hcompatible : Halo2.LookupSelectorsCompatible gates lookups) :
+    operation.LookupSelectorsLawful lookups := by
+  cases operation with
+  | region name body =>
+      exact RegionOperations.lookupSelectorsLawful_of_registered
+        hregistered hactivations hcompatible
+  | constrainInstance | loadTable =>
+      trivial
+
+theorem Operations.lookupSelectorsLawful_of_registered
+    {operations : Operations F}
+    {gates : List (Gate F)} {lookups : List (LookupArgument F)}
+    {permutationColumns : List AnyColumn}
+    (hregistered : operations.KeygenRegistered
+      gates lookups permutationColumns)
+    (hactivations : operations.LookupActivationsWellFormed)
+    (hcompatible : Halo2.LookupSelectorsCompatible gates lookups) :
+    operations.LookupSelectorsLawful lookups := by
+  rw [Operations.LookupSelectorsLawful,
+    List.forall_iff_forall_mem] at ⊢
+  intro operation hoperation
+  exact Operation.lookupSelectorsLawful_of_registered
+    (List.forall_iff_forall_mem.mp hregistered operation hoperation)
+    (List.forall_iff_forall_mem.mp hactivations operation hoperation)
+    hcompatible
 
 /-- Number of region indices a list of operations consumes (the `localLength`
 analogue) — computed, not cached; per-circuit lemmas evaluate it to a literal. -/

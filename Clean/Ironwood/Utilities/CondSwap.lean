@@ -55,6 +55,10 @@ def swapGate (cfg : Config) : Gate Fp :=
     [a, b, aSwapped, bSwapped, swap]
     [("a check", aCheck), ("b check", bCheck), ("swap is bool", boolCheck)]
 
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem swapGate_selector (cfg : Config) :
+    (swapGate cfg).selector = cfg.qSwap := rfl
+
 /-- Rust `CondSwapChip::configure` (`cond_swap.rs:235-287`), VK-exact: equality on column
 `a` only (`cond_swap.rs:241` — the other columns are the caller's business), the simple
 `q_swap` selector, the swap gate. -/

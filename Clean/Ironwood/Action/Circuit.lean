@@ -70,6 +70,10 @@ def orchardGate (qOrchard : Selector) (advices : Fin 10 → Column .advice) : Ga
       ("v_old = 0 or enable_spends = 1", vOld * ((1 : Fp) - enableSpends)),
       ("v_new = 0 or enable_outputs = 1", vNew * ((1 : Fp) - enableOutputs)) ]
 
+@[circuit_norm, keygen_norm] theorem orchardGate_selector
+    (qOrchard : Selector) (advices : Fin 10 → Column .advice) :
+    (orchardGate qOrchard advices).selector = qOrchard := rfl
+
 /-- Columns and shared chips allocated before the composite chip assembly. -/
 structure ConfigureBase where
   primary : Column .instance
@@ -98,9 +102,30 @@ private def configureAdvices : Configure Fp (Fin 10 → Column .advice) := do
   let a9 ← adviceColumn
   return ![a0, a1, a2, a3, a4, a5, a6, a7, a8, a9]
 
-private instance : ElaboratedConfigure configureAdvices := by
+@[configure_selector_norm, keygen_norm]
+private theorem configureAdvices_delta_gates (counts) :
+    (configureAdvices.delta counts).gates = [] := by
+  simp [configureAdvices]
+
+@[configure_selector_norm, keygen_norm]
+private theorem configureAdvices_delta_lookups (counts) :
+    (configureAdvices.delta counts).lookups = [] := by
+  simp [configureAdvices]
+
+@[reducible] private def configureAdvicesInferred :
+    ElaboratedConfigure configureAdvices := by
   unfold configureAdvices
   infer_instance
+
+private theorem configureAdvices_selectorRequirements (counts) :
+    configureAdvicesInferred.selectorRequirements counts := by
+  dsimp only [configureAdvicesInferred, configureAdvices]
+  simp [configure_selector_norm,
+    ConfigureDelta.LookupSelectorsCrossCompatible]
+
+private instance : ElaboratedConfigure configureAdvices :=
+  configureAdvicesInferred.closeSelectorRequirements
+    configureAdvices_selectorRequirements
 
 private def configureAdviceEqualitiesLow (advices : Fin 10 → Column .advice) :
     Configure Fp Unit := do
@@ -108,10 +133,36 @@ private def configureAdviceEqualitiesLow (advices : Fin 10 → Column .advice) :
   enableEquality (advices 2); enableEquality (advices 3)
   enableEquality (advices 4)
 
-private instance (advices : Fin 10 → Column .advice) :
+@[configure_selector_norm, keygen_norm]
+private theorem configureAdviceEqualitiesLow_delta_gates
+    (advices : Fin 10 → Column .advice) (counts) :
+    ((configureAdviceEqualitiesLow advices).delta counts).gates = [] := by
+  simp [configureAdviceEqualitiesLow]
+
+@[configure_selector_norm, keygen_norm]
+private theorem configureAdviceEqualitiesLow_delta_lookups
+    (advices : Fin 10 → Column .advice) (counts) :
+    ((configureAdviceEqualitiesLow advices).delta counts).lookups = [] := by
+  simp [configureAdviceEqualitiesLow]
+
+@[reducible] private def configureAdviceEqualitiesLowInferred
+    (advices : Fin 10 → Column .advice) :
     ElaboratedConfigure (configureAdviceEqualitiesLow advices) := by
   unfold configureAdviceEqualitiesLow
   infer_instance
+
+private theorem configureAdviceEqualitiesLow_selectorRequirements
+    (advices : Fin 10 → Column .advice) (counts) :
+    (configureAdviceEqualitiesLowInferred advices).selectorRequirements counts := by
+  dsimp only [configureAdviceEqualitiesLowInferred,
+    configureAdviceEqualitiesLow]
+  simp [configure_selector_norm,
+    ConfigureDelta.LookupSelectorsCrossCompatible]
+
+private instance (advices : Fin 10 → Column .advice) :
+    ElaboratedConfigure (configureAdviceEqualitiesLow advices) :=
+  (configureAdviceEqualitiesLowInferred advices).closeSelectorRequirements
+    (configureAdviceEqualitiesLow_selectorRequirements advices)
 
 private def configureAdviceEqualitiesHigh (advices : Fin 10 → Column .advice) :
     Configure Fp Unit := do
@@ -119,10 +170,36 @@ private def configureAdviceEqualitiesHigh (advices : Fin 10 → Column .advice) 
   enableEquality (advices 6); enableEquality (advices 7)
   enableEquality (advices 8); enableEquality (advices 9)
 
-private instance (advices : Fin 10 → Column .advice) :
+@[configure_selector_norm, keygen_norm]
+private theorem configureAdviceEqualitiesHigh_delta_gates
+    (advices : Fin 10 → Column .advice) (counts) :
+    ((configureAdviceEqualitiesHigh advices).delta counts).gates = [] := by
+  simp [configureAdviceEqualitiesHigh]
+
+@[configure_selector_norm, keygen_norm]
+private theorem configureAdviceEqualitiesHigh_delta_lookups
+    (advices : Fin 10 → Column .advice) (counts) :
+    ((configureAdviceEqualitiesHigh advices).delta counts).lookups = [] := by
+  simp [configureAdviceEqualitiesHigh]
+
+@[reducible] private def configureAdviceEqualitiesHighInferred
+    (advices : Fin 10 → Column .advice) :
     ElaboratedConfigure (configureAdviceEqualitiesHigh advices) := by
   unfold configureAdviceEqualitiesHigh
   infer_instance
+
+private theorem configureAdviceEqualitiesHigh_selectorRequirements
+    (advices : Fin 10 → Column .advice) (counts) :
+    (configureAdviceEqualitiesHighInferred advices).selectorRequirements counts := by
+  dsimp only [configureAdviceEqualitiesHighInferred,
+    configureAdviceEqualitiesHigh]
+  simp [configure_selector_norm,
+    ConfigureDelta.LookupSelectorsCrossCompatible]
+
+private instance (advices : Fin 10 → Column .advice) :
+    ElaboratedConfigure (configureAdviceEqualitiesHigh advices) :=
+  (configureAdviceEqualitiesHighInferred advices).closeSelectorRequirements
+    (configureAdviceEqualitiesHigh_selectorRequirements advices)
 
 /-- Equality registration for the public input and the ten Action advice columns. -/
 private def configureEqualities
@@ -132,10 +209,35 @@ private def configureEqualities
   configureAdviceEqualitiesLow advices
   configureAdviceEqualitiesHigh advices
 
-private instance (primary : Column .instance) (advices : Fin 10 → Column .advice) :
+@[configure_selector_norm, keygen_norm]
+private theorem configureEqualities_delta_gates
+    (primary : Column .instance) (advices : Fin 10 → Column .advice) (counts) :
+    ((configureEqualities primary advices).delta counts).gates = [] := by
+  simp [configureEqualities, keygen_norm]
+
+@[configure_selector_norm, keygen_norm]
+private theorem configureEqualities_delta_lookups
+    (primary : Column .instance) (advices : Fin 10 → Column .advice) (counts) :
+    ((configureEqualities primary advices).delta counts).lookups = [] := by
+  simp [configureEqualities, keygen_norm]
+
+@[reducible] private def configureEqualitiesInferred
+    (primary : Column .instance) (advices : Fin 10 → Column .advice) :
     ElaboratedConfigure (configureEqualities primary advices) := by
   unfold configureEqualities
   infer_instance
+
+private theorem configureEqualities_selectorRequirements
+    (primary : Column .instance) (advices : Fin 10 → Column .advice) (counts) :
+    (configureEqualitiesInferred primary advices).selectorRequirements counts := by
+  dsimp only [configureEqualitiesInferred, configureEqualities]
+  simp [configure_selector_norm,
+    ConfigureDelta.LookupSelectorsCrossCompatible]
+
+private instance (primary : Column .instance) (advices : Fin 10 → Column .advice) :
+    ElaboratedConfigure (configureEqualities primary advices) :=
+  (configureEqualitiesInferred primary advices).closeSelectorRequirements
+    (configureEqualities_selectorRequirements primary advices)
 
 private theorem configureEqualities_advicePermutationColumn
     (primary : Column .instance) (advices : Fin 10 → Column .advice)
@@ -164,9 +266,30 @@ private def configureLagrange : Configure Fp (Fin 8 → Column .fixed) := do
   enableConstant l0
   return ![l0, l1, l2, l3, l4, l5, l6, l7]
 
-private instance : ElaboratedConfigure configureLagrange := by
+@[configure_selector_norm, keygen_norm]
+private theorem configureLagrange_delta_gates (counts) :
+    (configureLagrange.delta counts).gates = [] := by
+  simp [configureLagrange]
+
+@[configure_selector_norm, keygen_norm]
+private theorem configureLagrange_delta_lookups (counts) :
+    (configureLagrange.delta counts).lookups = [] := by
+  simp [configureLagrange]
+
+@[reducible] private def configureLagrangeInferred :
+    ElaboratedConfigure configureLagrange := by
   unfold configureLagrange
   infer_instance
+
+private theorem configureLagrange_selectorRequirements (counts) :
+    configureLagrangeInferred.selectorRequirements counts := by
+  dsimp only [configureLagrangeInferred, configureLagrange]
+  simp [configure_selector_norm,
+    ConfigureDelta.LookupSelectorsCrossCompatible]
+
+private instance : ElaboratedConfigure configureLagrange :=
+  configureLagrangeInferred.closeSelectorRequirements
+    configureLagrange_selectorRequirements
 
 /-- The shared columns and chips allocated before the range-check configuration. -/
 private def configureShared : Configure Fp ConfigureShared := do
@@ -191,9 +314,47 @@ private def configureShared : Configure Fp ConfigureShared := do
   return { primary, qOrchard, advices, addChipConfig, genTable,
            lagrangeCoeffs }
 
-private instance : ElaboratedConfigure configureShared := by
+@[configure_selector_norm, keygen_norm]
+private theorem configureShared_delta_gates (counts) :
+    (configureShared.delta counts).gates =
+      [orchardGate (configureShared.output counts).qOrchard
+          (configureShared.output counts).advices,
+        AddChip.addGate (configureShared.output counts).addChipConfig] := by
+  simp [configureShared, AddChip.configure, keygen_norm]
+
+@[configure_selector_norm, keygen_norm]
+private theorem configureShared_delta_lookups (counts) :
+    (configureShared.delta counts).lookups = [] := by
+  simp [configureShared, AddChip.configure, keygen_norm]
+
+@[configure_selector_norm, keygen_norm]
+private theorem configureShared_qOrchard_index (counts) :
+    (configureShared.output counts).qOrchard.index = counts.numSelectors := by
+  simp [configureShared, configureAdvices, keygen_norm]
+
+@[configure_selector_norm, keygen_norm]
+private theorem configureShared_qAdd_index (counts) :
+    (configureShared.output counts).addChipConfig.qAdd.index =
+      counts.numSelectors + 1 := by
+  simp [configureShared, configureAdvices, AddChip.configure, keygen_norm]
+
+@[reducible] private def configureSharedInferred : ElaboratedConfigure configureShared := by
   unfold configureShared
   infer_instance
+
+private theorem configureShared_selectorRequirements (counts) :
+    configureSharedInferred.selectorRequirements counts := by
+  dsimp only [configureSharedInferred, configure_selector_norm, configureShared]
+  simp only [configure_selector_norm]
+  simp [keygen_norm, ConfigureDelta.LookupSelectorsCrossCompatible,
+    Gate.LookupSelectorsCompatible, LookupArgument.auxiliarySelectorIndices,
+    configureAdvices, configureAdviceEqualitiesLow,
+    configureAdviceEqualitiesHigh, configureEqualities, configureLagrange,
+    AddChip.configure, lookupTableColumn]
+
+private instance : ElaboratedConfigure configureShared :=
+  configureSharedInferred.closeSelectorRequirements
+    configureShared_selectorRequirements
 
 /-- Every advice column allocated by the shared Action prefix is registered for equality. -/
 private theorem configureShared_advicePermutationColumn
@@ -259,9 +420,59 @@ def configureBase : Configure Fp ConfigureBase := do
     (shared.advices 9) shared.genTable.tableIdx
   return { shared with lookupConfig }
 
-private instance : ElaboratedConfigure configureBase := by
+@[reducible] private def configureBaseInferred : ElaboratedConfigure configureBase := by
   unfold configureBase
   infer_instance
+
+private theorem configureBase_selectorRequirements (counts) :
+    configureBaseInferred.selectorRequirements counts := by
+  have hallocated := configureSharedInferred.selectorsAllocated counts
+    (configureShared_selectorRequirements counts)
+  have hgates :
+      (configureShared.output counts).qOrchard.index <
+          (configureShared.finalCounts counts).numSelectors ∧
+        (configureShared.output counts).addChipConfig.qAdd.index <
+          (configureShared.finalCounts counts).numSelectors := by
+    simpa only [configureShared_delta_gates, List.forall_cons,
+      List.forall_nil, and_true, orchardGate_selector,
+      AddChip.addGate_selector] using hallocated.gates
+  have horchard :
+      (configureShared.output counts).qOrchard.index <
+        (configureShared.finalCounts counts).numSelectors := hgates.1
+  have hadd :
+      (configureShared.output counts).addChipConfig.qAdd.index <
+        (configureShared.finalCounts counts).numSelectors := hgates.2
+  have horchardCompatible :=
+    LookupRangeCheck.gate_lookupSelectorsCompatible_configure_output 10
+      ((configureShared.output counts).advices 9)
+      (configureShared.output counts).genTable.tableIdx
+      (configureShared.finalCounts counts)
+      (orchardGate (configureShared.output counts).qOrchard
+        (configureShared.output counts).advices) horchard
+  have haddCompatible :=
+    LookupRangeCheck.gate_lookupSelectorsCompatible_configure_output 10
+      ((configureShared.output counts).advices 9)
+      (configureShared.output counts).genTable.tableIdx
+      (configureShared.finalCounts counts)
+      (AddChip.addGate (configureShared.output counts).addChipConfig) hadd
+  dsimp only [configureBaseInferred, configure_selector_norm, configureBase]
+  simp only [configure_selector_norm]
+  simpa [configure_selector_norm, ConfigureDelta.LookupSelectorsCrossCompatible] using
+    And.intro horchardCompatible haddCompatible
+
+private instance : ElaboratedConfigure configureBase :=
+  configureBaseInferred.closeSelectorRequirements
+    configureBase_selectorRequirements
+
+private theorem configureBase_selectorsBounded (counts) :
+    (configureBase.delta counts).SelectorsBounded
+      (configureBase.finalCounts counts).numSelectors := by
+  have hallocated :=
+    (inferInstance : ElaboratedConfigure configureBase).selectorsAllocated
+      counts trivial
+  constructor
+  · exact hallocated.gates
+  · simp [configureBase, keygen_norm]
 
 /-- Equality registration from the shared prefix survives the range-check suffix. -/
 private theorem configureBase_advicePermutationColumn
@@ -407,6 +618,7 @@ def configureBaseCertificate (counts : ConfigureCounts) :
     simp only
     apply Configure.mem_lookups_delta_bind_right
     apply Configure.mem_lookups_delta_bind_left
+    rw [LookupRangeCheck.configure_delta_lookups]
     simp
   · intro index
     exact configureBase_advicePermutationColumn counts index
@@ -450,17 +662,102 @@ def configureChips (G : Generators) (base : ConfigureBase) :
            sinsemilla1, merkle1, sinsemilla2, merkle2, commitIvkConfig,
            noteCommitOld, noteCommitNew, lookupConfig := base.lookupConfig }
 
-private instance (G : Generators) (base : ConfigureBase) :
+@[reducible] private def configureChipsInferred (G : Generators) (base : ConfigureBase) :
     ElaboratedConfigure (configureChips G base) := by
   unfold configureChips
   infer_instance
+
+private theorem configureChips_selectorRequirements
+    (G : Generators) (base : ConfigureBase) (counts) :
+    (configureChipsInferred G base).selectorRequirements counts := by
+  dsimp only [configureChipsInferred, configure_selector_norm, configureChips]
+  simp [keygen_norm, ConfigureDelta.LookupSelectorsCrossCompatible,
+    Gate.LookupSelectorsCompatible, LookupArgument.SelectorsCompatible]
+
+private instance (G : Generators) (base : ConfigureBase) :
+    ElaboratedConfigure (configureChips G base) :=
+  (configureChipsInferred G base).closeSelectorRequirements
+    (configureChips_selectorRequirements G base)
+
+private theorem configureChips_selectorsFreshFrom
+    (G : Generators) (base : ConfigureBase) (counts) :
+    ((configureChips G base).delta counts).SelectorsFreshFrom
+      counts.numSelectors := by
+  let ecc := Ecc.configure base.advices base.lagrangeCoeffs base.lookupConfig
+  let poseidon := Poseidon.configure
+    ![base.advices 6, base.advices 7, base.advices 8] (base.advices 5)
+    ![base.lagrangeCoeffs 2, base.lagrangeCoeffs 3, base.lagrangeCoeffs 4]
+    ![base.lagrangeCoeffs 5, base.lagrangeCoeffs 6, base.lagrangeCoeffs 7]
+  let hash1 := Sinsemilla.HashPiece.configure G
+    (base.advices 0) (base.advices 1) (base.advices 2) (base.advices 3)
+    (base.advices 4) (base.advices 6) (base.lagrangeCoeffs 0) base.genTable
+  let merkle1 := Sinsemilla.Merkle.configure
+    (hash1.output (poseidon.finalCounts (ecc.finalCounts counts)))
+  have hBeforeHash1 :
+      counts.numSelectors ≤
+        (poseidon.finalCounts (ecc.finalCounts counts)).numSelectors :=
+    (ecc.numSelectors_le_finalCounts counts).trans
+      (poseidon.numSelectors_le_finalCounts (ecc.finalCounts counts))
+  have hBeforeHash2 :
+      counts.numSelectors ≤
+        (merkle1.finalCounts
+          (hash1.finalCounts
+            (poseidon.finalCounts (ecc.finalCounts counts)))).numSelectors :=
+    hBeforeHash1.trans <| (hash1.numSelectors_le_finalCounts
+      (poseidon.finalCounts (ecc.finalCounts counts))).trans <|
+        merkle1.numSelectors_le_finalCounts
+          (hash1.finalCounts (poseidon.finalCounts (ecc.finalCounts counts)))
+  dsimp only [ecc, poseidon, hash1, merkle1] at hBeforeHash1 hBeforeHash2
+  constructor
+  · simp [configure_selector_norm, configureChips,
+      Ecc.configure, Ecc.WitnessPoint.configure,
+      Ecc.AddIncomplete.add, Ecc.Add.add, Ecc.Mul.configure,
+      Ecc.MulIncomplete.configure, Ecc.MulComplete.configure,
+      Ecc.MulOverflow.configure, Ecc.MulFixed.configure,
+      Ecc.MulFixed.FullWidth.configure, Ecc.MulFixed.Short.configure,
+      Ecc.MulFixed.BaseFieldElem.configure,
+      DecomposeRunningSum.configure, Poseidon.configure,
+      Poseidon.configureEqualities, Poseidon.configureGates,
+      Sinsemilla.HashPiece.configure, Sinsemilla.Merkle.configure,
+      CondSwap.configure, Sinsemilla.Merkle.Gate.configure,
+      CommitIvk.configure, NoteCommit.configure,
+      NoteCommit.DecomposeB.configure, NoteCommit.DecomposeD.configure,
+      NoteCommit.DecomposeE.configure, NoteCommit.DecomposeG.configure,
+      NoteCommit.DecomposeH.configure, NoteCommit.GdCanonicity.configure,
+      NoteCommit.PkdCanonicity.configure,
+      NoteCommit.ValueCanonicity.configure,
+      NoteCommit.RhoCanonicity.configure,
+      NoteCommit.PsiCanonicity.configure,
+      NoteCommit.YCanonicity.configure]
+    omega
+  · simp [configure_selector_norm, keygen_norm, configureChips,
+      LookupArgument.selectorIndices]
+    omega
 
 /-- Rust `Circuit::configure` (`circuit.rs:271-459`), VK-exact registration order. -/
 def configure (G : Generators) : Configure Fp Config := do
   let base ← configureBase
   configureChips G base
 
-@[simp] theorem configure_output_eccConfig (G : Generators)
+@[keygen_norm] theorem configure_output_primary (G : Generators)
+    (counts : ConfigureCounts) :
+    ((configure G).output counts).primary =
+      (configureBase.output counts).primary := by
+  simp [configure, configureChips]
+
+@[keygen_norm] theorem configure_output_qOrchard (G : Generators)
+    (counts : ConfigureCounts) :
+    ((configure G).output counts).qOrchard =
+      (configureBase.output counts).qOrchard := by
+  simp [configure, configureChips]
+
+@[keygen_norm] theorem configure_output_advices (G : Generators)
+    (counts : ConfigureCounts) :
+    ((configure G).output counts).advices =
+      (configureBase.output counts).advices := by
+  simp [configure, configureChips]
+
+@[keygen_norm] theorem configure_output_eccConfig (G : Generators)
     (counts : ConfigureCounts) :
     ((configure G).output counts).eccConfig =
       (Ecc.configure (configureBase.output counts).advices
@@ -468,6 +765,44 @@ def configure (G : Generators) : Configure Fp Config := do
         (configureBase.output counts).lookupConfig).output
           (configureBase.finalCounts counts) := by
   simp [configure, configureChips]
+
+@[keygen_norm] theorem configure_output_witnessPoint_x (G : Generators)
+    (counts : ConfigureCounts) :
+    ((configure G).output counts).eccConfig.witnessPoint.x =
+      (configureBase.output counts).advices 0 := by
+  simp [configure, configureChips, Ecc.configure, Ecc.WitnessPoint.configure]
+
+@[keygen_norm] theorem configure_output_witnessPoint_y (G : Generators)
+    (counts : ConfigureCounts) :
+    ((configure G).output counts).eccConfig.witnessPoint.y =
+      (configureBase.output counts).advices 1 := by
+  simp [configure, configureChips, Ecc.configure, Ecc.WitnessPoint.configure]
+
+@[keygen_norm] theorem configure_output_add_xQR (G : Generators)
+    (counts : ConfigureCounts) :
+    ((configure G).output counts).eccConfig.add.xQR =
+      (configureBase.output counts).advices 2 := by
+  simp [configure, configureChips, Ecc.configure, Ecc.Add.add]
+
+@[keygen_norm] theorem configure_output_add_yQR (G : Generators)
+    (counts : ConfigureCounts) :
+    ((configure G).output counts).eccConfig.add.yQR =
+      (configureBase.output counts).advices 3 := by
+  simp [configure, configureChips, Ecc.configure, Ecc.Add.add]
+
+@[keygen_norm] theorem configure_output_merkle1_xA (G : Generators)
+    (counts : ConfigureCounts) :
+    ((configure G).output counts).merkle1.sinsemilla.xA =
+      (configureBase.output counts).advices 0 := by
+  simp [configure, configureChips, Sinsemilla.HashPiece.configure,
+    Sinsemilla.Merkle.configure]
+
+@[keygen_norm] theorem configure_output_merkle2_xA (G : Generators)
+    (counts : ConfigureCounts) :
+    ((configure G).output counts).merkle2.sinsemilla.xA =
+      (configureBase.output counts).advices 5 := by
+  simp [configure, configureChips, Sinsemilla.HashPiece.configure,
+    Sinsemilla.Merkle.configure]
 
 /-- The fixed-column identities exported by the closed Action configuration. Keeping
 this allocation summary next to `configure` lets later lawfulness proofs reason about
@@ -520,15 +855,14 @@ private theorem configure_instanceQueries (G : Generators) : ∀ counts,
 
 private theorem configure_selectorRequirements (G : Generators) (counts) :
     (elaboratedConfigure G).selectorRequirements counts := by
-  dsimp +instances only [configure_selector_norm, configure, configureBase,
-    configureChips, configureShared]
-  simp [LookupRangeCheck.rangeCheckLookup, Expression.selectorBound,
-    Ecc.configure, Ecc.WitnessPoint.configure, Ecc.AddIncomplete.add,
-    Ecc.Add.add, Ecc.Mul.configure, Ecc.MulIncomplete.configure,
-    Ecc.MulComplete.configure, Ecc.MulOverflow.configure,
-    Ecc.MulFixed.configure, Ecc.MulFixed.FullWidth.configure,
-    Ecc.MulFixed.Short.configure, Ecc.MulFixed.BaseFieldElem.configure,
-    DecomposeRunningSum.configure]
+  have hcross :=
+    ConfigureDelta.LookupSelectorsCrossCompatible.of_bounded_fresh
+      (configureBase_selectorsBounded counts)
+      (configureChips_selectorsFreshFrom G (configureBase.output counts)
+        (configureBase.finalCounts counts))
+  dsimp +instances only [configure_selector_norm, configure]
+  simp only [configure_selector_norm]
+  exact ⟨trivial, trivial, hcross⟩
 
 private theorem configure_queryRequirements (G : Generators) (counts) :
     (elaboratedConfigure G).queryRequirements counts := by
@@ -537,8 +871,7 @@ private theorem configure_queryRequirements (G : Generators) (counts) :
   simp +arith [configureBase, configureChips, configureShared,
     configureAdvices, configureAdviceEqualitiesLow,
     configureAdviceEqualitiesHigh, configureEqualities, configureLagrange,
-    lookupTableColumn, AddChip.configure, LookupRangeCheck.configure,
-    LookupRangeCheck.rangeCheckLookup, Poseidon.configure,
+    lookupTableColumn, AddChip.configure, LookupRangeCheck.configure, Poseidon.configure,
     Sinsemilla.HashPiece.configure, Sinsemilla.Merkle.configure,
     CommitIvk.configure, NoteCommit.configure,
     Ecc.configure, Ecc.WitnessPoint.configure, Ecc.AddIncomplete.add,
@@ -561,6 +894,9 @@ instance-query and selector requirements are stored in their compact normal form
     selectorRequirements _ := True
     selectorsAllocated counts _ :=
       (elaboratedConfigure G).selectorsAllocated counts
+        (configure_selectorRequirements G counts)
+    lookupSelectorsCompatible counts _ :=
+      (elaboratedConfigure G).lookupSelectorsCompatible counts
         (configure_selectorRequirements G counts)
     queryRequirements _ := True
     queriesLawful counts _ :=

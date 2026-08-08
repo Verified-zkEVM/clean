@@ -64,6 +64,10 @@ def decomposeGate (cfg : Config) : Gate Fp :=
     let ySwitch := k * (baseY - yP) + ((1 : Fp) - k) * (baseY + yP)
     [ ("bool_check", boolCheck), ("y_switch", ySwitch) ]
 
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem decomposeGate_selector (cfg : Config) :
+    (decomposeGate cfg).selector = cfg.qDecompose := rfl
+
 /-- Enable equality on `z_complete`, allocate the selector, register the gate. The `add::Config`'s
 columns are already equality-enabled by `add`'s own `configure`. -/
 def configure (zComplete : Column .advice) (addConfig : Add.Config) : Configure Fp Config := do

@@ -66,12 +66,46 @@ def configure (advices : Fin 10 → Column .advice)
   return { witnessPoint, addIncomplete, add, mul, mulFixedFull, mulFixedShort,
            mulFixedBaseField }
 
-instance (advices : Fin 10 → Column .advice)
+@[configure_selector_norm, keygen_norm] theorem configure_delta_lookups
+    (advices : Fin 10 → Column .advice)
+    (lagrangeCoeffs : Fin 8 → Column .fixed)
+    (rangeCheck : LookupRangeCheck.Config 10) (counts) :
+    ((configure advices lagrangeCoeffs rangeCheck).delta counts).lookups = [] := by
+  simp [configure, WitnessPoint.configure, AddIncomplete.add, Add.add,
+    Mul.configure, MulIncomplete.configure, MulComplete.configure,
+    MulOverflow.configure, MulFixed.configure, MulFixed.FullWidth.configure,
+    MulFixed.Short.configure, MulFixed.BaseFieldElem.configure,
+    DecomposeRunningSum.configure]
+
+@[reducible] private def configureInferred
+    (advices : Fin 10 → Column .advice)
     (lagrangeCoeffs : Fin 8 → Column .fixed)
     (rangeCheck : LookupRangeCheck.Config 10) :
     ElaboratedConfigure (configure advices lagrangeCoeffs rangeCheck) := by
   unfold configure
   infer_instance
+
+private theorem configure_selectorRequirements
+    (advices : Fin 10 → Column .advice)
+    (lagrangeCoeffs : Fin 8 → Column .fixed)
+    (rangeCheck : LookupRangeCheck.Config 10) (counts) :
+    (configureInferred advices lagrangeCoeffs rangeCheck).selectorRequirements
+      counts := by
+  dsimp only [configureInferred, configure]
+  simp [keygen_norm, ConfigureDelta.LookupSelectorsCrossCompatible,
+    Gate.LookupSelectorsCompatible, LookupArgument.auxiliarySelectorIndices,
+    WitnessPoint.configure, AddIncomplete.add, Add.add, Mul.configure,
+    MulIncomplete.configure, MulComplete.configure, MulOverflow.configure,
+    MulFixed.configure, MulFixed.FullWidth.configure,
+    MulFixed.Short.configure, MulFixed.BaseFieldElem.configure,
+    DecomposeRunningSum.configure]
+
+instance (advices : Fin 10 → Column .advice)
+    (lagrangeCoeffs : Fin 8 → Column .fixed)
+    (rangeCheck : LookupRangeCheck.Config 10) :
+    ElaboratedConfigure (configure advices lagrangeCoeffs rangeCheck) :=
+  (configureInferred advices lagrangeCoeffs rangeCheck).closeSelectorRequirements
+    (configure_selectorRequirements advices lagrangeCoeffs rangeCheck)
 
 /-- Every advice column handed to the ECC chip is equality-enabled by its aggregate
 configure program. -/

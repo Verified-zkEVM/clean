@@ -35,6 +35,9 @@ def addGate (cfg : Config) : Gate Fp :=
   Gate.withSelector "Field element addition: c = a + b" cfg.qAdd
     [a, b, c] [("", a + b - c)]
 
+@[circuit_norm, keygen_norm] theorem addGate_selector (cfg : Config) :
+    (addGate cfg).selector = cfg.qAdd := rfl
+
 /-- Rust `AddChip::configure` (`add_chip.rs:43-61`), VK-exact: the fresh `q_add`
 selector, then the gate. -/
 def configure (a b c : Column .advice) : Configure Fp Config := do

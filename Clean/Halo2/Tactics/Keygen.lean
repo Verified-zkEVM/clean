@@ -46,6 +46,12 @@ attribute [keygen_norm]
   ConfigureDelta.permutationRequests_queryAny
   ConfigureDelta.permutationRequests_queriedCells
   RegionOperation.KeygenRegistered Operation.KeygenRegistered
+  RegionOperation.LookupActivationWellFormed
+  Operation.LookupActivationsWellFormed
+  RegionOperations.LookupActivationsWellFormed
+  Operations.LookupActivationsWellFormed
+  LookupArgument.lookupActivationWellFormed_enable
+  selectorEnabledAtIndex_cons_self
   Operations.KeygenRegistered.nil Operations.KeygenRegistered.append
   Operations.KeygenRegistered.region_cons
   Operations.KeygenRegistered.constrainInstance_cons
@@ -74,6 +80,10 @@ attribute [keygen_spine]
   operations_constrainConstant operations_assignAdviceFromInstance
   operations_cellAt operations_cellVec
   RegionOperation.KeygenRegistered Operation.KeygenRegistered
+  RegionOperation.LookupActivationWellFormed
+  Operation.LookupActivationsWellFormed
+  RegionOperations.LookupActivationsWellFormed
+  Operations.LookupActivationsWellFormed
   Operations.KeygenRegistered.nil Operations.KeygenRegistered.append
   Operations.KeygenRegistered.region_cons
   Operations.KeygenRegistered.constrainInstance_cons
@@ -105,6 +115,11 @@ theorem List.forall_ite {α : Type} (property : α → Prop)
 theorem List.forall_nil {α : Type} (property : α → Prop) :
     ([].Forall property) ↔ True :=
   Iff.rfl
+
+@[keygen_norm]
+theorem List.forall_true {α : Type} (values : List α) :
+    values.Forall (fun _ => True) ↔ True := by
+  induction values <;> simp_all
 
 @[keygen_norm, keygen_spine]
 theorem List.forall_nil_append {α : Type} (property : α → Prop) (values : List α) :

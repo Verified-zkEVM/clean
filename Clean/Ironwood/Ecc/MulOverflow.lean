@@ -92,6 +92,10 @@ def overflowGate (K : ℕ) (cfg : Config K) : Gate Fp :=
     [ ("s_check", sCheck), ("recovery", recovery), ("lo_zero", loZero),
       ("s_minus_lo_130_check", sMinusLo130Check), ("canonicity", canonicity) ]
 
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem overflowGate_selector (K : ℕ) (cfg : Config K) :
+    (overflowGate K cfg).selector = cfg.qOverflow := rfl
+
 /-- Enable equality on the three advice columns, allocate the `q_mul_overflow` selector, register
 the overflow gate. The `lookup_config` is handed down by the chip assembly, already configured by
 `LookupRangeCheck.configure`. -/
