@@ -609,6 +609,23 @@ pub fn generate<F: WitnessField, P: Program<F>>(
     for (component, ((schema, mode), component_padding)) in
         data_schemas.iter().zip(&modes).zip(&padding).enumerate()
     {
+        let fixed_width = P::FIXED_WIDTHS[component];
+        match mode {
+            Mode::Demand(_) if fixed_width != 0 => {
+                return Err(format!(
+                    "fixed-column component {component} must use fixed generation"
+                ));
+            }
+            Mode::Fixed { slots, .. } => {
+                if let Some(slot) = slots.iter().find(|slot| slot.column < fixed_width) {
+                    return Err(format!(
+                        "fixed handler for component {component} mutates fixed column {}",
+                        slot.column
+                    ));
+                }
+            }
+            Mode::Demand(_) => {}
+        }
         if schema.columns.is_empty() {
             continue;
         }

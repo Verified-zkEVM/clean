@@ -45,6 +45,14 @@ private def derivedBytesData : Bool :=
 /-- The byte table itself, including its fixed byte column, is the committed data source. -/
 example : derivedBytesData = true := by native_decide
 
+private def nonExportingComponentHasNoData : Bool :=
+  match FibonacciWitness.generate publicInput 1000 with
+  | .error _ => false
+  | .ok witness => (witness.data "fibonacci" 0).isEmpty
+
+/-- A component with no declared data columns does not accidentally expose zero-width rows. -/
+example : nonExportingComponentHasNoData = true := by native_decide
+
 private def repeatedSteps : ℕ := 400
 
 private def repeatedPublicInput : fieldTriple (F pBabybear) :=
@@ -95,6 +103,7 @@ private def constrainedVerifier : GeneralFormalCircuit (F pBabybear) unit unit w
 
 private def constrainedVerifierEnsemble : Air.Flat.Ensemble (F pBabybear) unit where
   tables := []
+  unique_names := by simp
   channels := []
   verifier := constrainedVerifier
   verifier_length_zero := by simp [constrainedVerifier, circuit_norm]

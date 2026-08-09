@@ -75,8 +75,10 @@ def bytesComponent : Component (F p) where
   circuit := pushBytes
   fixedColumns := some bytesFixedColumns
   fixed_width_le_input := by change 1 ≤ 2; omega
-  fixed_assumptions := by
-    intro i hi row data hrow _
+  Assumptions := fun _ _ => True
+  assumptions_imply_circuit := by
+    intro i row data hfixed _ _
+    rcases hfixed with ⟨hi, hrow⟩
     simp only [pushBytes]
     let byteIndex : Fin 256 := ⟨i, by simpa [bytesFixedColumns] using hi⟩
     refine ⟨byteIndex, ?_⟩
@@ -292,6 +294,7 @@ def fib8Component : Component (F p) where
 def fibonacciVm : VmTables (F p) fieldTriple where
   channel := FibonacciChannel
   tables := [fib8Component]
+  unique_names := by simp [fib8Component]
   verifier := fibonacciVerifier
   verifier_length_zero := by simp [circuit_norm, fibonacciVerifier]
   tables_channel := by
@@ -313,6 +316,10 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
   |>.addTable add8Component
     (by simp +instances [circuit_norm, add8Component, add8])
     (by simp [circuit_norm, add8Component, add8])
+    (by
+      simp only [SoundEnsemble.addFinishedChannel_tables, SoundEnsemble.addTable_tables,
+        SoundEnsemble.empty_tables, List.map_cons, List.map_nil, List.mem_singleton]
+      simp [add8Component, bytesComponent])
   |>.addFinishedChannel Add8Channel.toRaw
   |>.addVm fibonacciVm
     (by simp +instances [circuit_norm, fibonacciVm, add8Component, add8, bytesComponent, pushBytes,
@@ -320,6 +327,10 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
     (by simp +instances [circuit_norm, fibonacciVm, fib8Component, fib8, fibonacciVerifier])
     (by simp [circuit_norm, fibonacciVm, fib8Component, fib8, fibonacciVerifier,
       Add8Channel, FibonacciChannel])
+    (by
+      simp only [SoundEnsemble.addFinishedChannel_tables, SoundEnsemble.addTable_tables,
+        SoundEnsemble.empty_tables, List.map_append, List.map_cons, List.map_nil]
+      simp [fibonacciVm, fib8Component, add8Component, bytesComponent])
   |>.toFormal _ (fun _ _ => True)
     (by simp [circuit_norm, fibonacciVm, fib8Component, add8Component, add8,
       bytesComponent, pushBytes, fib8])
@@ -346,12 +357,12 @@ def add8Mode : Mode (F p) := .demand {
 
 /-- The byte provider has one fixed-value row and one multiplicity cell per byte. -/
 def bytesMode : Mode (F p) := .fixed
-  ((List.range 256).map fun value => #[(value : F p), 0])
-  ((List.range 256).map fun (value : ℕ) => {
+  (bytesFixedColumns.rows.map fun fixed => fixed ++ #[0])
+  (bytesFixedColumns.rows.zipIdx.map fun (fixed, row) => {
     channel := (BytesChannel (p := p)).name
     direction := .pull
-    message := #[(value : F p)]
-    row := value
+    message := fixed
+    row
     column := 1
   })
 
@@ -370,7 +381,7 @@ def config (fuel : ℕ) : Config (F p) where
 
 /-- Generate a complete ensemble witness from the claimed public final state. -/
 def generate (publicInput : fieldTriple (F p)) (fuel : ℕ) :
-    Except String (EnsembleWitness (fibonacciEnsemble (p := p)).ensemble) :=
+    Except String (CommittedEnsembleWitness (fibonacciEnsemble (p := p)).ensemble) :=
   Air.Flat.WitnessGeneration.generate (fibonacciEnsemble (p := p)).ensemble
     (config (p := p) fuel) publicInput
 

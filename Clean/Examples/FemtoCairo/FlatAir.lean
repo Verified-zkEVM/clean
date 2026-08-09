@@ -407,8 +407,10 @@ def programComponent {programSize : ℕ} (program : Fin programSize → F p)
   circuit := provideProgram program
   fixedColumns := some (programFixedColumns program)
   fixed_width_le_input := by change 2 ≤ 3; omega
-  fixed_assumptions := by
-    intro i hi row data hrow _
+  Assumptions := fun _ _ => True
+  assumptions_imply_circuit := by
+    intro i row data hfixed _ _
+    rcases hfixed with ⟨hi, hrow⟩
     simp only [provideProgram]
     change ∃ h : (row[0]?.getD 0).val < programSize,
       row[1]?.getD 0 = program ⟨(row[0]?.getD 0).val, h⟩
@@ -465,14 +467,15 @@ def memoryComponent (memorySize : ℕ) (h_memorySize : memorySize < p) : Compone
   circuit := provideMemory
   fixedColumns := some (memoryFixedColumns memorySize)
   fixed_width_le_input := by change 1 ≤ 3; omega
-  fixed_assumptions := by
-    intro i hi row data hrow hdata
+  Assumptions := fun _ _ => True
+  assumptions_imply_circuit := by
+    intro i row data hfixed hdata _
+    rcases hfixed with ⟨hi, hrow⟩
     simp only [provideMemory, MemoryChannel]
     change ∃ ha : (row[0]?.getD 0).val < (data.getTable MemoryTable).size,
       row[0]?.getD 0 = (data.getTable MemoryTable)[(row[0]?.getD 0).val].address ∧
       row[1]?.getD 0 = (data.getTable MemoryTable)[(row[0]?.getD 0).val].value
-    rcases hdata with hfalse | hdata
-    · contradiction
+    specialize hdata (by simp)
     let projected : Vector (F p) (size MemoryEntry) :=
       (projectRow [0, 1] row).cast (by rfl)
     change (data "memory" (size MemoryEntry))[i]? =
@@ -641,6 +644,7 @@ def vm {programSize : ℕ} (program : Fin programSize → F p)
     VmTables (F p) State where
   channel := StateChannel program initialState
   tables := [executionComponent program h_programSize initialState]
+  unique_names := by simp [executionComponent]
   verifier := verifier program initialState
   verifier_length_zero := by simp [verifier, circuit_norm]
   tables_channel := by
@@ -677,6 +681,10 @@ def soundEnsemble {programSize memorySize : ℕ} (program : Fin programSize → 
         change "program" = "memory" at hname
         contradiction
       simp [circuit_norm, memoryComponent, provideMemory, hne])
+    (by
+      simp only [SoundEnsemble.addFinishedChannel_tables, SoundEnsemble.addTable_tables,
+        SoundEnsemble.empty_tables, List.map_cons, List.map_nil, List.mem_singleton]
+      simp [memoryComponent, programComponent])
   |>.addFinishedChannel MemoryChannel.toRaw
   |>.addVm (vm program h_programSize initialState)
     (by simp +instances [circuit_norm, vm, programComponent, provideProgram,
@@ -684,6 +692,10 @@ def soundEnsemble {programSize memorySize : ℕ} (program : Fin programSize → 
     (by simp +instances [circuit_norm, vm, executionComponent, executeStep, verifier])
     (by simp [circuit_norm, vm, executionComponent, executeStep, verifier,
       StateChannel, ProgramChannel, MemoryChannel])
+    (by
+      simp only [SoundEnsemble.addFinishedChannel_tables, SoundEnsemble.addTable_tables,
+        SoundEnsemble.empty_tables, List.map_append, List.map_cons, List.map_nil]
+      simp [vm, executionComponent, memoryComponent, programComponent])
 
 def formalEnsemble {programSize memorySize : ℕ} (program : Fin programSize → F p)
     (h_programSize : programSize < p) (h_memorySize : memorySize < p)
@@ -691,15 +703,15 @@ def formalEnsemble {programSize memorySize : ℕ} (program : Fin programSize →
   (soundEnsemble program h_programSize h_memorySize initialState).toFormal _
     (fun _ _ => True)
     (by
-      intro publicInput data _ table htable hfixed input data'
+      intro publicInput data _ table htable input
       simp [soundEnsemble, circuit_norm] at htable
       rcases htable with hvm | rfl | rfl
       · have heq : table = executionComponent program h_programSize initialState := by
           simpa [vm] using hvm
         subst table
         simp [executionComponent, executeStep]
-      · simp [memoryComponent] at hfixed
-      · simp [programComponent] at hfixed)
+      · simp [memoryComponent]
+      · simp [programComponent])
 
 namespace Witness
 
@@ -714,23 +726,26 @@ def executionMode {programSize : ℕ} (program : Fin programSize → F p)
 }
 
 def programMode {programSize : ℕ} (program : Fin programSize → F p) : Mode (F p) :=
+  let fixed := (programFixedColumns program).rows
   .fixed
-    (List.finRange programSize |>.map fun i => #[(i.val : F p), program i, 0])
-    (List.finRange programSize |>.map fun i => {
+    (fixed.map fun row => row ++ #[0])
+    (fixed.zipIdx.map fun (message, row) => {
       channel := (ProgramChannel program).name
       direction := .pull
-      message := #[(i.val : F p), program i]
-      row := i.val
+      message
+      row
       column := 2
     })
 
 def memoryMode {memorySize : ℕ} (memoryValues : Fin memorySize → F p) : Mode (F p) :=
+  let fixed := (memoryFixedColumns (p := p) memorySize).rows
   .fixed
-    (List.finRange memorySize |>.map fun i => #[(i.val : F p), memoryValues i, 0])
-    (List.finRange memorySize |>.map fun i => {
+    ((fixed.zip (List.finRange memorySize)).map fun (row, i) =>
+      row ++ #[memoryValues i, 0])
+    ((fixed.zip (List.finRange memorySize)).map fun (address, i) => {
       channel := (MemoryChannel (p := p)).name
       direction := .pull
-      message := #[(i.val : F p), memoryValues i]
+      message := address ++ #[memoryValues i]
       row := i.val
       column := 2
     })
@@ -750,7 +765,7 @@ def generate {programSize memorySize : ℕ} (program : Fin programSize → F p)
     (h_programSize : programSize < p) (h_memorySize : memorySize < p)
     (memoryValues : Fin memorySize → F p) (initialState finalState : State (F p))
     (executionRows fuel : ℕ) :
-    Except String (EnsembleWitness
+    Except String (CommittedEnsembleWitness
       (soundEnsemble program h_programSize h_memorySize initialState).ensemble) :=
   Air.Flat.WitnessGeneration.generate
     (soundEnsemble program h_programSize h_memorySize initialState).ensemble

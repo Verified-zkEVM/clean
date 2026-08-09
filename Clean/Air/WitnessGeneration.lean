@@ -179,8 +179,6 @@ structure GeneratedRow (F : Type) where
 structure GeneratedTable (F : Type) where
   rows : List (GeneratedRow F) := []
 
-private def emptyData (F : Type) : ProverData F := fun _ _ => #[]
-
 private structure PreparedComponent (F : Type) [FiniteField F] where
   component : Component F
   inputWidth : ℕ
@@ -447,7 +445,7 @@ private def nextPowerOfTwoAux (target : ℕ) : ℕ → ℕ → ℕ
 private def nextPowerOfTwo (value : ℕ) : ℕ :=
   nextPowerOfTwoAux (max value 1) value 1
 
-private def paddingTarget (rowCount : ℕ) (padding : Padding F) : ℕ :=
+def Padding.targetHeight (padding : Padding F) (rowCount : ℕ) : ℕ :=
   nextPowerOfTwo (max rowCount padding.minimumRows)
 
 private structure PaddingMutation (F : Type) where
@@ -459,7 +457,7 @@ private def padTables (data : ProverData F) :
       Except String (PaddingMutation F)
   | [], [], [] => .ok { tables := [], added := [] }
   | prepared :: components, padding :: paddings, table :: tables => do
-      let count := paddingTarget table.rows.length padding - table.rows.length
+      let count := padding.targetHeight table.rows.length - table.rows.length
       let rows ← (List.replicate count ()).mapM fun _ =>
         completeRow prepared padding.input data
       let rest ← padTables data components paddings tables
@@ -472,14 +470,25 @@ private def padTables (data : ProverData F) :
 private def tablesArePadded : List (GeneratedTable F) → List (Padding F) → Bool
   | [], [] => true
   | table :: tables, padding :: paddings =>
-      table.rows.length == paddingTarget table.rows.length padding &&
+      table.rows.length == padding.targetHeight table.rows.length &&
         tablesArePadded tables paddings
   | _, _ => false
 
-private def validateDataOwners :
+private def validateModes :
     List (PreparedComponent F) → List (Mode F) → List (Padding F) → Except String Unit
   | [], [], [] => pure ()
   | prepared :: components, mode :: modes, padding :: paddings => do
+      match prepared.component.fixedColumns, mode with
+      | some _, .demand _ =>
+          throw s!"fixed-column component '{prepared.component.name}' must use fixed generation"
+      | some fixed, .fixed inputRows slots =>
+          unless FixedColumns.RowsMatch fixed inputRows do
+            throw s!"fixed input rows for component '{prepared.component.name}' do not match its fixed columns"
+          unless padding.targetHeight inputRows.length = inputRows.length do
+            throw s!"fixed-column component '{prepared.component.name}' cannot change height during padding"
+          unless slots.all fun slot => fixed.width ≤ slot.column do
+            throw s!"fixed handler for component '{prepared.component.name}' mutates a fixed column"
+      | none, _ => pure ()
       unless prepared.component.dataColumns.isEmpty do
         unless prepared.component.dataColumns.all (fun column => column < prepared.inputWidth) do
           throw s!"data columns for component '{prepared.component.name}' must be input columns"
@@ -487,11 +496,11 @@ private def validateDataOwners :
         | .demand _ =>
             throw s!"data-owning component '{prepared.component.name}' must use fixed generation"
         | .fixed inputRows slots =>
-            unless paddingTarget inputRows.length padding = inputRows.length do
+            unless padding.targetHeight inputRows.length = inputRows.length do
               throw s!"data-owning component '{prepared.component.name}' must have a fixed power-of-two height"
             unless slots.all fun slot => !prepared.component.dataColumns.contains slot.column do
               throw s!"data-owning component '{prepared.component.name}' mutates a data column"
-      validateDataOwners components modes paddings
+      validateModes components modes paddings
   | _, _, _ => .error "generation metadata does not match ensemble component count"
 
 private def padAndBalance (ensemble : Ensemble F PublicIO) (config : Config F)
@@ -541,7 +550,6 @@ private def assembleTables :
         | .ok matched => do
           let table : BareTable F := {
             component
-            width := component.width
             table := rows
             uniform_width := h
             fixed_rows_match := matched.property
@@ -564,11 +572,9 @@ private def assembleTables :
 
 /-- Execute channel-driven generation and construct a structurally valid ensemble witness. -/
 def generate (ensemble : Ensemble F PublicIO) (config : Config F) (publicInput : PublicIO F) :
-    Except String (EnsembleWitness ensemble) :=
+    Except String (CommittedEnsembleWitness ensemble) :=
   let prepared := ensemble.tables.map prepareComponent
-  if hallNamed : ∀ component ∈ ensemble.tables, component.name ≠ "" then
-  if hnames : (ensemble.tables.map (·.name)).Nodup then
-  match validateDataOwners prepared config.modes config.padding with
+  match validateModes prepared config.modes config.padding with
   | .error error => .error error
   | .ok () => match initializeTableInputs prepared config.modes with
   | .error error => .error error
@@ -590,24 +596,20 @@ def generate (ensemble : Ensemble F PublicIO) (config : Config F) (publicInput :
         | .ok assembled => .ok {
             tableWitnesses := assembled.tables
             publicInput
-            all_named := hallNamed
-            unique_names := hnames
             same_length := assembled.same_length
             same_circuits := assembled.same_circuits
           }
-  else .error "component names must be unique"
-  else .error "every component must have a name"
 
 /-- Executable constraint check for the no-legacy-lookup initial milestone. -/
-def constraintsHold {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness ensemble) : Bool :=
-  witness.toView.allTables.all fun table =>
+def constraintsHold {ensemble : Ensemble F PublicIO} (witness : CommittedEnsembleWitness ensemble) : Bool :=
+  witness.toWitness.allTables.all fun table =>
     table.table.all fun row =>
       table.component.operations.lookups.isEmpty &&
       table.component.operations.constraints.all fun constraint =>
         constraint.eval (table.environment row) == 0
 
 /-- Executable balance check using the same normalized worklist representation. -/
-def channelsBalanced {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness ensemble) : Bool :=
-  Demand.normalize witness.toView.interactions |>.isEmpty
+def channelsBalanced {ensemble : Ensemble F PublicIO} (witness : CommittedEnsembleWitness ensemble) : Bool :=
+  Demand.normalize witness.toWitness.interactions |>.isEmpty
 
 end Air.Flat.WitnessGeneration

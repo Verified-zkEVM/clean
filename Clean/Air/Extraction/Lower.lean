@@ -18,8 +18,10 @@ inductive LoweringError where
   | verifierWitness (operation : ℕ)
   | verifierConstraint (operation : ℕ)
   | verifierLookup (operation : ℕ)
-  | unnamedComponent (component : ℕ)
-  | duplicateComponentName (name : String)
+  | fixedDemandMode (component : ℕ)
+  | fixedRows (component : ℕ)
+  | fixedPadding (component expected actual : ℕ)
+  | fixedSlot (component column fixedWidth : ℕ)
   | dataColumn (component column inputWidth : ℕ)
   | componentVariable (component index width : ℕ)
   | verifierVariable (index width : ℕ)
@@ -43,10 +45,14 @@ instance : ToString LoweringError where
         s!"verifier operation {operation} is a constraint; extraction supports verifier interactions only"
     | .verifierLookup operation =>
         s!"verifier operation {operation} is a legacy lookup; extraction supports verifier interactions only"
-    | .unnamedComponent component =>
-        s!"component {component} has no name"
-    | .duplicateComponentName name =>
-        s!"component name '{name}' is not unique"
+    | .fixedDemandMode component =>
+        s!"fixed-column component {component} uses demand-driven generation"
+    | .fixedRows component =>
+        s!"fixed input rows for component {component} do not match its fixed columns"
+    | .fixedPadding component expected actual =>
+        s!"fixed-column component {component} has height {actual}, expected {expected} after padding"
+    | .fixedSlot component column fixedWidth =>
+        s!"fixed handler for component {component} mutates column {column} below fixed width {fixedWidth}"
     | .dataColumn component column inputWidth =>
         s!"component {component} data column {column} is not an input column (input width {inputWidth})"
     | .componentVariable component index width =>
@@ -118,12 +124,19 @@ private def validateVerifierOperations : ℕ → List (FlatOperation F) → Exce
   | index, .assert _ :: _ => throw (.verifierConstraint index)
   | index, .lookup _ :: _ => throw (.verifierLookup index)
 
-private def validateComponentNames : List (String × ℕ) → Except LoweringError Unit
-  | [] => pure ()
-  | (name, index) :: names => do
-      if name.isEmpty then throw (.unnamedComponent index)
-      if names.any fun (other, _) => other == name then throw (.duplicateComponentName name)
-      validateComponentNames names
+private def validateFixedComponent (index : ℕ) (component : Component F)
+    (mode : Mode F) (padding : Padding F) : Except LoweringError Unit := do
+  match component.fixedColumns, mode with
+  | none, _ => pure ()
+  | some _, .demand _ => throw (.fixedDemandMode index)
+  | some fixed, .fixed inputRows slots =>
+      unless FixedColumns.RowsMatch fixed inputRows do
+        throw (.fixedRows index)
+      let paddedHeight := padding.targetHeight inputRows.length
+      unless paddedHeight = fixed.rows.length do
+        throw (.fixedPadding index fixed.rows.length paddedHeight)
+      if let some slot := slots.find? fun slot => slot.column < fixed.width then
+        throw (.fixedSlot index slot.column fixed.width)
 
 /-- Lower and validate the backend-facing portion of an ensemble without producing source text. -/
 def lower (ensemble : Ensemble F PublicIO) (config : Config F) :
@@ -132,7 +145,9 @@ def lower (ensemble : Ensemble F PublicIO) (config : Config F) :
     throw (.modeCount ensemble.tables.length config.modes.length)
   unless config.padding.length = ensemble.tables.length do
     throw (.paddingCount ensemble.tables.length config.padding.length)
-  validateComponentNames <| ensemble.tables.map (fun component => component.name) |>.zipIdx
+  for (((component, mode), padding), index) in
+      ((ensemble.tables.zip config.modes).zip config.padding).zipIdx do
+    validateFixedComponent index component mode padding
   let components ← ensemble.tables.zipIdx.mapM fun (component, index) =>
     lowerComponent index component
   let verifierOperations := ensemble.verifierOperations.toFlat
