@@ -46,6 +46,7 @@ deriving ProvableStruct
 
 /-- One byte-channel row. Its byte value is supplied by an indexed fixed column. -/
 def pushBytes : GeneralFormalCircuit (F p) BytesInput unit where
+  name := "bytes"
   main | { value, multiplicity } => do
     BytesChannel.emit multiplicity value
 
@@ -69,7 +70,6 @@ def bytesFixedColumns : FixedColumns (F p) where
   uniform_width := by simp
 
 def bytesComponent : Component (F p) where
-  name := "bytes"
   dataColumns := [0]
   data_columns_lt_input := by change ∀ column ∈ [0], column < 2; simp
   circuit := pushBytes
@@ -111,6 +111,7 @@ deriving ProvableStruct
 
 /-- Proves x + y = z (mod 256) -/
 def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
+  name := "add8"
   main | { x, y, z, m } => do
     -- range-check z using the bytes channel
     -- (x and y are guaranteed to be range-checked from earlier interactions)
@@ -162,7 +163,6 @@ example (input : Var Add8Inputs (F p)) :
   infer_explicit_circuit
 
 def add8Component : Component (F p) where
-  name := "add8"
   circuit := add8
 
 def fibonacci : ℕ → (ℕ × ℕ)
@@ -194,6 +194,7 @@ structure Fib8Input F where
 deriving ProvableStruct
 
 def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
+  name := "fibonacci"
   main | { enabled, n, x, y } => do
     -- boolean constraint for `enabled`
     -- has to be inline, channels with requirements proof doesn't handle subcircuits
@@ -288,7 +289,6 @@ example (input : Var fieldTriple (F p)) :
   infer_explicit_circuit
 
 def fib8Component : Component (F p) where
-  name := "fibonacci"
   circuit := fib8
 
 def fibonacciVm : VmTables (F p) fieldTriple where
@@ -319,7 +319,7 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
     (by
       simp only [SoundEnsemble.addFinishedChannel_tables, SoundEnsemble.addTable_tables,
         SoundEnsemble.empty_tables, List.map_cons, List.map_nil, List.mem_singleton]
-      simp [add8Component, bytesComponent])
+      simp [add8Component, add8, bytesComponent, pushBytes])
   |>.addFinishedChannel Add8Channel.toRaw
   |>.addVm fibonacciVm
     (by simp +instances [circuit_norm, fibonacciVm, add8Component, add8, bytesComponent, pushBytes,
@@ -330,7 +330,8 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
     (by
       simp only [SoundEnsemble.addFinishedChannel_tables, SoundEnsemble.addTable_tables,
         SoundEnsemble.empty_tables, List.map_append, List.map_cons, List.map_nil]
-      simp [fibonacciVm, fib8Component, add8Component, bytesComponent])
+      simp [fibonacciVm, fib8Component, fib8, add8Component, add8,
+        bytesComponent, pushBytes])
   |>.toFormal _ (fun _ _ => True)
     (by simp [circuit_norm, fibonacciVm, fib8Component, add8Component, add8,
       bytesComponent, pushBytes, fib8])
@@ -422,6 +423,7 @@ def FalseChannel : Channel (F p) unit where
   Guarantees _ _ := False
 
 def falseCircuit : GeneralFormalCircuit (F p) unit unit where
+  name := "false"
   main _ := do
     FalseChannel.pull ()
     return
@@ -432,5 +434,5 @@ def falseCircuit : GeneralFormalCircuit (F p) unit unit where
 
 def falseEnsemble := SoundEnsemble.empty (F p) unit
   |>.addFinishedChannel FalseChannel.toRaw
-  |>.addTable { name := "false", circuit := falseCircuit }
+  |>.addTable { circuit := falseCircuit }
     (by simp [circuit_norm, falseCircuit]) (by simp [circuit_norm, falseCircuit])

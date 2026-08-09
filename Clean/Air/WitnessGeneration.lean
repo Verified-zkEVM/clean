@@ -226,7 +226,7 @@ private def projectGeneratedRow (columns : List ℕ) (row : GeneratedRow F) :
 private def generatedData :
     List (PreparedComponent F) → List (GeneratedTable F) → ProverData F
   | prepared, tables => fun name n =>
-      match prepared.zip tables |>.find? (fun (component, _) => component.component.name == name) with
+      match prepared.zip tables |>.find? (fun (component, _) => component.component.circuit.name == name) with
       | some (component, table) =>
           if h : component.component.dataColumns.length = n then
             h ▸ (table.rows.map (projectGeneratedRow component.component.dataColumns) |>.toArray)
@@ -480,26 +480,26 @@ private def validateModes :
   | prepared :: components, mode :: modes, padding :: paddings => do
       match prepared.component.fixedColumns, mode with
       | some _, .demand _ =>
-          throw s!"fixed-column component '{prepared.component.name}' must use fixed generation"
+          throw s!"fixed-column component '{prepared.component.circuit.name}' must use fixed generation"
       | some fixed, .fixed inputRows slots =>
           unless FixedColumns.RowsMatch fixed inputRows do
-            throw s!"fixed input rows for component '{prepared.component.name}' do not match its fixed columns"
+            throw s!"fixed input rows for component '{prepared.component.circuit.name}' do not match its fixed columns"
           unless padding.targetHeight inputRows.length = inputRows.length do
-            throw s!"fixed-column component '{prepared.component.name}' cannot change height during padding"
+            throw s!"fixed-column component '{prepared.component.circuit.name}' cannot change height during padding"
           unless slots.all fun slot => fixed.width ≤ slot.column do
-            throw s!"fixed handler for component '{prepared.component.name}' mutates a fixed column"
+            throw s!"fixed handler for component '{prepared.component.circuit.name}' mutates a fixed column"
       | none, _ => pure ()
       unless prepared.component.dataColumns.isEmpty do
         unless prepared.component.dataColumns.all (fun column => column < prepared.inputWidth) do
-          throw s!"data columns for component '{prepared.component.name}' must be input columns"
+          throw s!"data columns for component '{prepared.component.circuit.name}' must be input columns"
         match mode with
         | .demand _ =>
-            throw s!"data-owning component '{prepared.component.name}' must use fixed generation"
+            throw s!"data-owning component '{prepared.component.circuit.name}' must use fixed generation"
         | .fixed inputRows slots =>
             unless padding.targetHeight inputRows.length = inputRows.length do
-              throw s!"data-owning component '{prepared.component.name}' must have a fixed power-of-two height"
+              throw s!"data-owning component '{prepared.component.circuit.name}' must have a fixed power-of-two height"
             unless slots.all fun slot => !prepared.component.dataColumns.contains slot.column do
-              throw s!"data-owning component '{prepared.component.name}' mutates a data column"
+              throw s!"data-owning component '{prepared.component.circuit.name}' mutates a data column"
       validateModes components modes paddings
   | _, _, _ => .error "generation metadata does not match ensemble component count"
 

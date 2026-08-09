@@ -378,6 +378,7 @@ deriving ProvableStruct
 
 def provideProgram {programSize : ℕ} (program : Fin programSize → F p) :
     GeneralFormalCircuit (F p) ProviderInput unit where
+  name := "program"
   main | { address, value, multiplicity } => do
     (ProgramChannel program).emit multiplicity (address, value)
   Assumptions
@@ -401,7 +402,6 @@ def programFixedColumns {programSize : ℕ} (program : Fin programSize → F p) 
 def programComponent {programSize : ℕ} (program : Fin programSize → F p)
     (h_programSize : programSize < p) :
     Component (F p) where
-  name := "program"
   dataColumns := [0, 1]
   data_columns_lt_input := by change ∀ column ∈ [0, 1], column < 3; simp
   circuit := provideProgram program
@@ -441,6 +441,7 @@ def programComponent {programSize : ℕ} (program : Fin programSize → F p)
     simpa [hval] using hvalue
 
 def provideMemory : GeneralFormalCircuit (F p) ProviderInput unit where
+  name := "memory"
   main | { address, value, multiplicity } => do
     MemoryChannel.emit multiplicity { address, value }
   Assumptions
@@ -461,7 +462,6 @@ def memoryFixedColumns (memorySize : ℕ) : FixedColumns (F p) where
   uniform_width := by simp
 
 def memoryComponent (memorySize : ℕ) (h_memorySize : memorySize < p) : Component (F p) where
-  name := "memory"
   dataColumns := [0, 1]
   data_columns_lt_input := by change ∀ column ∈ [0, 1], column < 3; simp
   circuit := provideMemory
@@ -531,6 +531,7 @@ def StateChannel {programSize : ℕ} (program : Fin programSize → F p)
 def executeStep {programSize : ℕ} (program : Fin programSize → F p)
     (h_programSize : programSize < p) (initialState : State (F p)) :
     GeneralFormalCircuit (F p) State unit where
+  name := "execution"
   main state := do
     (StateChannel program initialState).pull state
     let nextState ← femtoCairoStep program h_programSize state
@@ -608,7 +609,6 @@ def executeStep {programSize : ℕ} (program : Fin programSize → F p)
 
 def executionComponent {programSize : ℕ} (program : Fin programSize → F p)
     (h_programSize : programSize < p) (initialState : State (F p)) : Component (F p) where
-  name := "execution"
   circuit := executeStep program h_programSize initialState
 
 def verifier {programSize : ℕ} (program : Fin programSize → F p)
@@ -684,7 +684,7 @@ def soundEnsemble {programSize memorySize : ℕ} (program : Fin programSize → 
     (by
       simp only [SoundEnsemble.addFinishedChannel_tables, SoundEnsemble.addTable_tables,
         SoundEnsemble.empty_tables, List.map_cons, List.map_nil, List.mem_singleton]
-      simp [memoryComponent, programComponent])
+      simp [memoryComponent, provideMemory, programComponent, provideProgram])
   |>.addFinishedChannel MemoryChannel.toRaw
   |>.addVm (vm program h_programSize initialState)
     (by simp +instances [circuit_norm, vm, programComponent, provideProgram,
@@ -695,7 +695,8 @@ def soundEnsemble {programSize memorySize : ℕ} (program : Fin programSize → 
     (by
       simp only [SoundEnsemble.addFinishedChannel_tables, SoundEnsemble.addTable_tables,
         SoundEnsemble.empty_tables, List.map_append, List.map_cons, List.map_nil]
-      simp [vm, executionComponent, memoryComponent, programComponent])
+      simp [vm, executionComponent, executeStep, memoryComponent, provideMemory,
+        programComponent, provideProgram])
 
 def formalEnsemble {programSize memorySize : ℕ} (program : Fin programSize → F p)
     (h_programSize : programSize < p) (h_memorySize : memorySize < p)

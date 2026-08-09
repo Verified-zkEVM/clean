@@ -45,8 +45,6 @@ expressed by channel interactions.
 structure Component (F : Type) [FiniteField F] where
   {Input : TypeMap} {Output : TypeMap}
   [provableInput : ProvableType Input] [provableOutput : ProvableType Output]
-  name : String
-  name_ne : name ≠ "" := by simp
   /-- Virtual row columns exposed through `ProverData name`; an empty list disables export. -/
   dataColumns : List ℕ := []
   data_columns_lt_input : ∀ column ∈ dataColumns, column < size Input := by simp
@@ -59,7 +57,7 @@ structure Component (F : Type) [FiniteField F] where
   assumptions of the underlying row circuit. -/
   assumptions_imply_circuit : ∀ i row data,
       FixedRowAt fixedColumns i row →
-        DataRowAt name dataColumns i row data →
+        DataRowAt circuit.name dataColumns i row data →
         Assumptions (valueFromOffset Input 0 (Environment.fromArray row data)) data →
         circuit.Assumptions
           (valueFromOffset Input 0 (Environment.fromArray row data)) data := by simp
@@ -87,7 +85,7 @@ def proverRows (component : Component F) (rows : List (Array F)) (n : ℕ) :
 def DataConsistency (component : Component F) (rows : List (Array F))
     (data : ProverData F) : Prop :=
   component.dataColumns ≠ [] →
-    data component.name component.dataColumns.length =
+    data component.circuit.name component.dataColumns.length =
       component.proverRows rows component.dataColumns.length
 
 def operations (component : Component F) : Operations F :=
@@ -104,14 +102,12 @@ def rowInputVar (component : Component F): Var component.Input F :=
   varFromOffset component.Input 0
 
 @[circuit_norm]
-lemma rowOffset_mk (name : String) (hname : name ≠ "")
-    (circuit : GeneralFormalCircuit F Input Output) :
-  ({ name, name_ne := hname, circuit } : Component F).rowOffset = size Input := rfl
+lemma rowOffset_mk (circuit : GeneralFormalCircuit F Input Output) :
+  ({ circuit } : Component F).rowOffset = size Input := rfl
 
 @[circuit_norm]
-lemma rowInputVar_mk (name : String) (hname : name ≠ "")
-    (circuit : GeneralFormalCircuit F Input Output) :
-  ({ name, name_ne := hname, circuit } : Component F).rowInputVar = varFromOffset Input 0 := rfl
+lemma rowInputVar_mk (circuit : GeneralFormalCircuit F Input Output) :
+  ({ circuit } : Component F).rowInputVar = varFromOffset Input 0 := rfl
 
 /-- first `size Input` elements of the environment are the input -/
 @[circuit_norm]
@@ -128,9 +124,8 @@ def rowOperations (component : Component F) : Operations F :=
   component.circuit.main (varFromOffset component.Input 0) |>.operations (size component.Input)
 
 @[circuit_norm]
-lemma rowOperations_mk (name : String) (hname : name ≠ "")
-    (circuit : GeneralFormalCircuit F Input Output) :
-  ({ name, name_ne := hname, circuit } : Component F).rowOperations =
+lemma rowOperations_mk (circuit : GeneralFormalCircuit F Input Output) :
+  ({ circuit } : Component F).rowOperations =
     (circuit.main (varFromOffset Input 0)).operations (size Input) := rfl
 
 def Spec (component : Component F) (row : Environment F) : Prop :=
@@ -244,14 +239,14 @@ def deriveProverData : List (Table F) → ProverData F
   | [] => fun _ _ => #[]
   | table :: tables => fun name n =>
       if table.component.dataColumns = [] then deriveProverData tables name n
-      else if table.component.name = name then table.component.proverRows table.table n
+      else if table.component.circuit.name = name then table.component.proverRows table.table n
       else deriveProverData tables name n
 
 lemma deriveProverData_eq_of_mem (tables : List (Table F))
-    (hunique : (tables.map (fun table => table.component.name)).Nodup)
+    (hunique : (tables.map (fun table => table.component.circuit.name)).Nodup)
     {table : Table F} (hmem : table ∈ tables)
     (hcolumns : table.component.dataColumns ≠ []) (n : ℕ) :
-    deriveProverData tables table.component.name n = table.component.proverRows table.table n := by
+    deriveProverData tables table.component.circuit.name n = table.component.proverRows table.table n := by
   induction tables with
   | nil => simp at hmem
   | cons head tail ih =>
@@ -260,7 +255,7 @@ lemma deriveProverData_eq_of_mem (tables : List (Table F))
       simp only [List.mem_cons] at hmem
       rcases hmem with rfl | hmem
       · simp [deriveProverData, hcolumns]
-      · have hne : head.component.name ≠ table.component.name := by
+      · have hne : head.component.circuit.name ≠ table.component.circuit.name := by
           intro heq
           apply hhead
           rw [heq]

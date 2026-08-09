@@ -12,7 +12,7 @@ structure Ensemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType
   /-- Components form an ordered map: names are keys, while list order fixes the trace order
   consumed by witness generation and backend extraction. -/
   tables : List (Component F)
-  unique_names : (tables.map (·.name)).Nodup
+  unique_names : (tables.map (·.circuit.name)).Nodup
   channels : List (RawChannel F)
   -- TODO: the verifier shouldn't be treated as a "circuit", and possibly shouldn't even be on here
   verifier : GeneralFormalCircuit F PublicIO unit := .empty F PublicIO
@@ -34,11 +34,11 @@ def EnsembleWitness.data {ens : Ensemble F PublicIO} (witness : EnsembleWitness 
 
 /-- it's convenient to define a `Table` for the verifier, to treat them in a unified way -/
 def Ensemble.verifierTable (ens : Ensemble F PublicIO) : Component F :=
-  { name := "__verifier", circuit := ens.verifier }
+  { circuit := ens.verifier }
 
 /-- The verifier's public row, represented as a table for uniform semantic reasoning. -/
 def Ensemble.verifierWitnessTable (ens : Ensemble F PublicIO) (publicInput : PublicIO F) : Table F where
-  component := { name := "__verifier", circuit := ens.verifier }
+  component := { circuit := ens.verifier }
   -- it's important that this has one row, which contains the input,
   -- since we want to "run" the verifier once to produce interactions,
   -- and so that constraints etc are actually enforced
@@ -89,7 +89,7 @@ def empty (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO
 @[circuit_norm] lemma empty_verifier :
   (empty F PublicIO).verifier = .empty F PublicIO := rfl
 @[circuit_norm] lemma empty_allTables :
-  (empty F PublicIO).allTables = [{ name := "__verifier", circuit := .empty F PublicIO }] := rfl
+  (empty F PublicIO).allTables = [{ circuit := .empty F PublicIO }] := rfl
 
 lemma size_verifier {ens : Ensemble F PublicIO} :
     ens.verifier.size = size PublicIO := by
@@ -205,12 +205,13 @@ lemma tables_map_component (witness : EnsembleWitness ens) :
   simp [witness.same_circuits i hi']
 
 private lemma tableNamesNodup (witness : EnsembleWitness ens) :
-    (witness.tables.map (fun table => table.component.name)).Nodup := by
-  rw [show witness.tables.map (fun table => table.component.name) =
-    ens.tables.map (·.name) by
+    (witness.tables.map (fun table => table.component.circuit.name)).Nodup := by
+  rw [show witness.tables.map (fun table => table.component.circuit.name) =
+    ens.tables.map (·.circuit.name) by
       calc
-        _ = (witness.tables.map (·.component)).map (·.name) := by simp
-        _ = ens.tables.map (·.name) := congrArg (List.map (·.name)) witness.tables_map_component]
+        _ = (witness.tables.map (·.component)).map (·.circuit.name) := by simp
+        _ = ens.tables.map (·.circuit.name) :=
+          congrArg (List.map (·.circuit.name)) witness.tables_map_component]
   exact ens.unique_names
 
 lemma data_consistent (witness : EnsembleWitness ens) :
@@ -495,7 +496,7 @@ end Ensemble
 namespace Ensemble
 /-- Takes verifier and spec from the second ensemble -/
 def merge (ens1 ens2 : Ensemble F PublicIO)
-    (unique_names : ((ens2.tables ++ ens1.tables).map (·.name)).Nodup) :
+    (unique_names : ((ens2.tables ++ ens1.tables).map (·.circuit.name)).Nodup) :
     Ensemble F PublicIO :=
   { ens2 with
     tables := ens2.tables ++ ens1.tables,
@@ -508,7 +509,7 @@ def merge (ens1 ens2 : Ensemble F PublicIO)
   (ens1.merge ens2 unique_names).verifierTable = ens2.verifierTable := rfl
 
 def addTable (ens : Ensemble F PublicIO) (table : Component F)
-    (fresh : table.name ∉ ens.tables.map (·.name)) : Ensemble F PublicIO :=
+    (fresh : table.circuit.name ∉ ens.tables.map (·.circuit.name)) : Ensemble F PublicIO :=
   { ens with
     tables := table :: ens.tables
     unique_names := by simpa using List.nodup_cons.mpr ⟨fresh, ens.unique_names⟩ }

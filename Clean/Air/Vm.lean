@@ -49,7 +49,7 @@ structure VmTables (F : Type) [FiniteField F] [DecidableEq F] (PublicIO : TypeMa
   channel : Channel F Message
 
   tables : List (Component F)
-  unique_names : (tables.map (·.name)).Nodup
+  unique_names : (tables.map (·.circuit.name)).Nodup
   verifier : GeneralFormalCircuit F PublicIO unit
   verifier_length_zero : ∀ pi, (verifier pi).localLength 0 = 0 := by
     simp only [circuit_norm]
@@ -334,7 +334,7 @@ end VmTables
 namespace Ensemble
 
 def addVm (ens : Ensemble F PublicIO) (vm : VmTables F PublicIO)
-    (unique_names : ((vm.tables ++ ens.tables).map (·.name)).Nodup) : Ensemble F PublicIO where
+    (unique_names : ((vm.tables ++ ens.tables).map (·.circuit.name)).Nodup) : Ensemble F PublicIO where
   channels := vm.channel :: ens.channels
   tables := vm.tables ++ ens.tables
   unique_names
@@ -354,7 +354,7 @@ end Ensemble
 
 namespace EnsembleWitness
 variable {ens : Ensemble F PublicIO} {vm : VmTables F PublicIO}
-  {names : ((vm.tables ++ ens.tables).map (·.name)).Nodup}
+  {names : ((vm.tables ++ ens.tables).map (·.circuit.name)).Nodup}
 
 abbrev vmTables (witness : EnsembleWitness (ens.addVm vm names)) : List (Table F) :=
   witness.tables.take vm.tables.length
@@ -740,7 +740,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
     (verifier_empty : ens.verifier = .empty F PublicIO)
     -- and given a VM channel + tables + verifier
     (vm : VmTables F PublicIO)
-    (names : ((vm.tables ++ ens.tables).map (·.name)).Nodup) :
+    (names : ((vm.tables ++ ens.tables).map (·.circuit.name)).Nodup) :
     -- assuming that none of the existing tables interacted with the VM channel
     (∀ table ∈ ens.tables, vm.channel.toRaw ∉ table.circuit.channels) →
     -- assuming that the VM tables' and verifier's channelsWithGuarantees are either finished or the VM channel
@@ -968,7 +968,7 @@ def addVm [Fact (ringChar F ≠ 2)] (ens : SoundEnsemble F PublicIO) (vm : VmTab
     (reqs_disjoint_finished : ∀ channel ∈ ens.finished, channel ∉ vm.verifier.channelsWithRequirements ∧
       ∀ table ∈ vm.tables, channel ∉ table.circuit.channelsWithRequirements
       := by simp [circuit_norm])
-    (names : ((vm.tables ++ ens.tables).map (·.name)).Nodup := by simp [circuit_norm]) :
+    (names : ((vm.tables ++ ens.tables).map (·.circuit.name)).Nodup := by simp [circuit_norm]) :
     SoundVmEnsemble F PublicIO where
   __ := ens.ensemble.addVm vm names
   soundVmChannel := ens.ensemble.addVm_soundVmChannel_of_soundChannels
@@ -981,7 +981,7 @@ variable {soundEns : SoundEnsemble F PublicIO} {vm : VmTables F PublicIO}
     ∀ table ∈ vm.tables, table.circuit.channelsWithGuarantees ⊆ vm.channel.toRaw :: soundEns.finished}
   {rdf : ∀ channel ∈ soundEns.finished, channel ∉ vm.verifier.channelsWithRequirements ∧
     ∀ table ∈ vm.tables, channel ∉ table.circuit.channelsWithRequirements}
-  {names : ((vm.tables ++ soundEns.tables).map (·.name)).Nodup}
+  {names : ((vm.tables ++ soundEns.tables).map (·.circuit.name)).Nodup}
 
 @[circuit_norm] lemma addVm_tables [Fact (ringChar F ≠ 2)] :
   (soundEns.addVm vm nmv gsf rdf names).tables = vm.tables ++ soundEns.tables := rfl

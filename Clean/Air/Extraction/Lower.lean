@@ -104,7 +104,7 @@ private def lowerComponent (index : ℕ) (component : Component F) :
   | some cellIndex => throw (.componentVariable index cellIndex component.width)
   | none => pure ()
   return {
-    name := component.name
+    name := component.circuit.name
     dataColumns := component.dataColumns
     inputWidth := component.rowOffset
     fixedColumns := component.fixedColumns.map fun fixed => {

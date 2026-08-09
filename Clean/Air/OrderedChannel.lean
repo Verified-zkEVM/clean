@@ -599,7 +599,7 @@ theorem empty_tableSoundness : (empty F PublicIO).TableSoundness :=
 -- adding one table to a SoundChannels ensemble preserves SoundChannels under some
 -- easy-to-prove assumptions on what channels the new table uses
 theorem orderedChannels_of_soundChannels_addTable (ens : Ensemble F PublicIO)
-  (table : Component F) (fresh : table.name ∉ ens.tables.map (·.name))
+  (table : Component F) (fresh : table.circuit.name ∉ ens.tables.map (·.circuit.name))
   {finished : List (RawChannel F)} :
     -- given a sound channels ensemble with empty verifier,
     ens.SoundChannels finished →
@@ -618,7 +618,7 @@ theorem orderedChannels_of_soundChannels_addTable (ens : Ensemble F PublicIO)
   simp_all
 
 theorem orderedChannels_of_soundChannels_merge (ens1 ens2 : Ensemble F PublicIO)
-  (unique_names : ((ens2.tables ++ ens1.tables).map (·.name)).Nodup)
+  (unique_names : ((ens2.tables ++ ens1.tables).map (·.circuit.name)).Nodup)
   {finished : List (RawChannel F)} :
     -- given a sound channels ensemble with empty verifier,
     ens1.SoundChannels finished →
@@ -688,7 +688,7 @@ def addTable (soundEns : SoundEnsemble F PublicIO) (table : Component F)
       := by simp [circuit_norm])
     (reqs_disjoint_finished : ∀ channel ∈ soundEns.finished, channel ∉ table.circuit.channelsWithRequirements
       := by simp [circuit_norm])
-    (fresh : table.name ∉ soundEns.tables.map (·.name) := by simp [circuit_norm])
+    (fresh : table.circuit.name ∉ soundEns.tables.map (·.circuit.name) := by simp [circuit_norm])
     : SoundEnsemble F PublicIO where
   ensemble := soundEns.ensemble.addTable table fresh
   finished := soundEns.finished
@@ -704,7 +704,7 @@ def addTable (soundEns : SoundEnsemble F PublicIO) (table : Component F)
 variable {soundEns : SoundEnsemble F PublicIO} {table : Component F}
     {gsf : table.circuit.channelsWithGuarantees ⊆ soundEns.finished}
     {rdf : ∀ channel ∈ soundEns.finished, channel ∉ table.circuit.channelsWithRequirements}
-    {fresh : table.name ∉ soundEns.tables.map (·.name)}
+    {fresh : table.circuit.name ∉ soundEns.tables.map (·.circuit.name)}
 
 @[circuit_norm] lemma addTable_tables :
   (soundEns.addTable table gsf rdf fresh).tables = table :: soundEns.tables := rfl
