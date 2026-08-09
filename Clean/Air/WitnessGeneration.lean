@@ -515,7 +515,7 @@ private def padAndBalance (ensemble : Ensemble F PublicIO) (config : Config F)
       padAndBalance ensemble config prepared publicInput data fuel tables
 
 private structure AssembledTables (components : List (Component F)) where
-  tables : List (BareTable F)
+  tables : List (Table F)
   same_length : components.length = tables.length
   same_circuits : ∀ index (hindex : index < components.length),
     components[index] = tables[index].component
@@ -548,7 +548,7 @@ private def assembleTables :
         match validateFixedRows component rows with
         | .error error => .error error
         | .ok matched => do
-          let table : BareTable F := {
+          let table : Table F := {
             component
             table := rows
             uniform_width := h
@@ -572,7 +572,7 @@ private def assembleTables :
 
 /-- Execute channel-driven generation and construct a structurally valid ensemble witness. -/
 def generate (ensemble : Ensemble F PublicIO) (config : Config F) (publicInput : PublicIO F) :
-    Except String (CommittedEnsembleWitness ensemble) :=
+    Except String (EnsembleWitness ensemble) :=
   let prepared := ensemble.tables.map prepareComponent
   match validateModes prepared config.modes config.padding with
   | .error error => .error error
@@ -594,22 +594,22 @@ def generate (ensemble : Ensemble F PublicIO) (config : Config F) (publicInput :
         | .ok padded => match assembleTables ensemble.tables padded with
         | .error error => .error error
         | .ok assembled => .ok {
-            tableWitnesses := assembled.tables
+            tables := assembled.tables
             publicInput
             same_length := assembled.same_length
             same_circuits := assembled.same_circuits
           }
 
 /-- Executable constraint check for the no-legacy-lookup initial milestone. -/
-def constraintsHold {ensemble : Ensemble F PublicIO} (witness : CommittedEnsembleWitness ensemble) : Bool :=
-  witness.toWitness.allTables.all fun table =>
+def constraintsHold {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness ensemble) : Bool :=
+  witness.allTables.all fun table =>
     table.table.all fun row =>
       table.component.operations.lookups.isEmpty &&
       table.component.operations.constraints.all fun constraint =>
-        constraint.eval (table.environment row) == 0
+        constraint.eval (Environment.fromArray row witness.data) == 0
 
 /-- Executable balance check using the same normalized worklist representation. -/
-def channelsBalanced {ensemble : Ensemble F PublicIO} (witness : CommittedEnsembleWitness ensemble) : Bool :=
-  Demand.normalize witness.toWitness.interactions |>.isEmpty
+def channelsBalanced {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness ensemble) : Bool :=
+  Demand.normalize witness.interactions |>.isEmpty
 
 end Air.Flat.WitnessGeneration

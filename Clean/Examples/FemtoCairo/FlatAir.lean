@@ -765,7 +765,7 @@ def generate {programSize memorySize : ℕ} (program : Fin programSize → F p)
     (h_programSize : programSize < p) (h_memorySize : memorySize < p)
     (memoryValues : Fin memorySize → F p) (initialState finalState : State (F p))
     (executionRows fuel : ℕ) :
-    Except String (CommittedEnsembleWitness
+    Except String (EnsembleWitness
       (soundEnsemble program h_programSize h_memorySize initialState).ensemble) :=
   Air.Flat.WitnessGeneration.generate
     (soundEnsemble program h_programSize h_memorySize initialState).ensemble

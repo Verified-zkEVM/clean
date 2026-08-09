@@ -29,7 +29,7 @@ private def result : Except String (List ℕ × Bool × Bool × ℕ × ℕ) :=
     let memoryValue := match memoryData[5]? with
       | some row => (row[1]?.getD 0).val
       | none => 0
-    .ok (witness.tableWitnesses.map (fun (table : BareTable (F pBabybear)) => table.table.length),
+    .ok (witness.tables.map (fun table => table.table.length),
       constraintsHold witness,
       channelsBalanced witness, memoryData.size, memoryValue)
 

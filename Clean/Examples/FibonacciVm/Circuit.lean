@@ -381,7 +381,7 @@ def config (fuel : ℕ) : Config (F p) where
 
 /-- Generate a complete ensemble witness from the claimed public final state. -/
 def generate (publicInput : fieldTriple (F p)) (fuel : ℕ) :
-    Except String (CommittedEnsembleWitness (fibonacciEnsemble (p := p)).ensemble) :=
+    Except String (EnsembleWitness (fibonacciEnsemble (p := p)).ensemble) :=
   Air.Flat.WitnessGeneration.generate (fibonacciEnsemble (p := p)).ensemble
     (config (p := p) fuel) publicInput
 
