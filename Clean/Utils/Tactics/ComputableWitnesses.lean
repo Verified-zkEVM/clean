@@ -911,11 +911,6 @@ def runComputableWitnesses (extraTerms closeTerms : Array (TSyntax `term)) : Tac
           ComputableWitnesses.structEqSplit, $lemmasArray,*]))
       catch _ =>
         pure ()
-  -- definitional unfolding first: dsimp does the monad/ops/forAll expansion for ~1/15th
-  -- of the simp pass's cost (no conditional-rewrite machinery); the simp pass then only
-  -- pays for the rewrites that actually need it
-  unless (← getGoals).isEmpty do
-    try evalTactic (← `(tactic| dsimp only [circuit_norm, $lemmasArray,*])) catch _ => pure ()
   simpPass
   unless (← getGoals).isEmpty do
     -- One boundary rule, mirroring the library's own: plain-`Circuit`-typed constants
