@@ -5935,10 +5935,16 @@ def planFull (shapes : List RegionShape) : List ℕ × CircuitAllocations :=
   else
     (globallyDisjointStarts shapes, globallyDisjointAllocations shapes)
 
-/-- Apply the shape-safe V1 planner to the regions measured from an operation stream. -/
-def planOperations
+/-- Apply the shape-safe V1 planner to the regions measured from an operation stream.
+Keep the planner opaque to type-class inference and expose its behavior propositionally. -/
+irreducible_def planOperations
     (operations : Operations F) : List ℕ × CircuitAllocations :=
   planFull (measureRegions operations)
+
+theorem planOperations_eq
+    (operations : Operations F) :
+    planOperations operations = planFull (measureRegions operations) := by
+  rw [planOperations]
 
 /-- The V1 region starts, per `assignRegion` index, from the operation stream. -/
 def starts (ops : Operations F) : List ℕ := (planOperations ops).1
@@ -6219,7 +6225,7 @@ theorem starts_sharedColumnIntervalsDisjoint
     (ops : Operations F) :
     SharedColumnIntervalsDisjoint
       (measureRegions ops) (starts ops) := by
-  unfold starts planOperations
+  rw [starts, planOperations_eq]
   unfold planFull
   dsimp only
   split
