@@ -19,7 +19,7 @@ import Clean.Backends.Wasm.Binary
 
 namespace Backends.Wasm
 
-open Witgen (FExpr U64Expr BExpr VExpr Step WitgenIR)
+open Witgen (FExpr U64Expr BExpr VExpr Step)
 open Ast (ValType Instr Func Module BinOp UnOp RelOp)
 
 variable {F : Type} [FiniteField F]
@@ -34,6 +34,14 @@ private def alignmentI32     : ℕ := 2   -- i32 alignment exponent (2^2 = 4)
 private def alignmentI64     : ℕ := 3   -- i64 alignment exponent (2^3 = 8)
 private def wasmPageSize     : ℕ := 65536
 private def wasmPageMask     : ℕ := 65535
+private def computedFlagAddr : ℕ := 0   -- byte 0 = "witness computed" flag
+private def computedFlagSet  : ℕ := 1
+private def constSignalValue : ℕ := 1   -- signal 0 (the constant 1)
+
+-- Multi-word arithmetic layout
+private def i32PerLimb        : ℕ := 2  -- 64-bit limbs per 32-bit word
+private def accumScratchSlots : ℕ := 4  -- lo, hi, carry, sum in genSchoolbookAccum
+private def minMultiWordWords : ℕ := 2  -- numWords minimum when the prime needs multi-word
 
 -- Limb / word arithmetic
 private def limbBits         : ℕ := 64
@@ -90,8 +98,6 @@ def i32.load (off : ℕ := 0) : Instr := .memLoad .i32 off alignmentI32
 def i32.store (off : ℕ := 0) : Instr := .memStore .i32 off alignmentI32
 def i32.wrap_i64 : Instr := .unop .i32 .wrap_i64
 def i32.eqz : Instr := .relop .i32 .eqz
-def i32.mul : Instr := .binop .i32 .mul
-def i32.add : Instr := .binop .i32 .add
 def i32.and : Instr := .binop .i32 .and
 
 -- Local access (by index)
@@ -178,16 +184,16 @@ def genMul64x64 : Func :=
       ++ [ local.get a_lo, local.get b_hi, i64.mul, local.set p01 ]
       ++ [ local.get a_hi, local.get b_lo, i64.mul, local.set p10 ]
       ++ [ local.get a_hi, local.get b_hi, i64.mul, local.set p11 ]
-      -- Compute v1+v2 first, detect overflow (carry1)
+      -- tmp = (p01<<32) + (p10<<32); detect overflow into hi
       ++ [ local.get p01, i64.const low32Mask, i64.and, i64.const hiWordShift, i64.shl,
            local.get p10, i64.const low32Mask, i64.and, i64.const hiWordShift, i64.shl,
            i64.add, local.tee tmp,
            local.get p01, i64.const low32Mask, i64.and, i64.const hiWordShift, i64.shl,
-           i64.lt_u, i64.extend_i32_u, local.set hi ]  -- carry1 in hi temporarily
-      -- lo = p00 + tmp, detect carry2
+           i64.lt_u, i64.extend_i32_u, local.set hi ]
+      -- lo = p00 + tmp; detect overflow and add it to hi
       ++ [ local.get p00, local.get tmp, i64.add, local.set lo,
            local.get lo, local.get p00, i64.lt_u, i64.extend_i32_u,
-           local.get hi, i64.add, local.set hi ]  -- hi = carry1 + carry2
+           local.get hi, i64.add, local.set hi ]
       -- Add high parts: hi += p11 + (p01>>32) + (p10>>32)
       ++ [ local.get hi, local.get p11, i64.add,
            local.get p01, i64.const hiWordShift, i64.shr_u, i64.add,
@@ -290,7 +296,7 @@ def genFmul (p numWords : ℕ) : Func :=
 
   -- Local index layout. NOTE: cBase must be past the schoolbook scratch
   -- (genSchoolbookAccum uses 2N..2N+3 by default), so start c at 2N+4.
-  let cBase := 2*N + 4         -- 12 (c[0..2N], 2N+1 limbs)
+  let cBase := 2*N + accumScratchSlots  -- past the schoolbook scratch (2N..2N+3)
   let pBase := cBase + 2*N + 1  -- 21 (p: N limbs)
   let mIdx := pBase + N       -- 25
   let loIdx := mIdx + 1       -- 26
@@ -303,7 +309,7 @@ def genFmul (p numWords : ℕ) : Func :=
   let initP : List Instr :=
     (pLimbs.zip (List.range N)) >>= fun (val, i) => [ i64.const val, local.set (pBase+i) ]
 
-  -- c = a * b (N×N schoolbook → 2N limbs). Zero c first (schoolbook ADDS).
+  -- c = a * b (N×N schoolbook → 2N limbs). genSchoolbookAccum adds into c, so pre-zero it.
   let zeroC : List Instr :=
     (List.range (2*N+1)) >>= fun i => [ i64.const 0, local.set (cBase+i) ]
   let mainSB := genSchoolbook N 0 N cBase
@@ -351,7 +357,7 @@ def genFmul (p numWords : ℕ) : Func :=
       ++ ((List.range N).map fun i => (s!"$b{i}", ValType.i64))
     results := List.replicate N ValType.i64
     locals :=
-      -- Declare all locals from index 8 (after 8 params) up to brIdx = 5*N+10.
+      -- Declare all locals from index 2N (after 2N params) up to brIdx = 5*N+10.
       -- Layout: c[0..2N] at 2N+4..4N+4, p[0..N-1] at 4N+5..5N+4,
       -- m at 5N+5, lo 5N+6, hi 5N+7, carry 5N+8, sum 5N+9, br 5N+10.
       let totalLocals := (5*N + 11) - (2*N)
@@ -411,8 +417,8 @@ def genFadd (p numWords : ℕ) : Func :=
 def genFinv (p numWords : ℕ) : Func :=
   let N := numWords
   let exp := p - 2
-  let bitPositions := List.range (N*64) |>.reverse
-  let msb := (bitPositions.find? fun b => (exp >>> b) % 2 = 1).getD (N*64 - 1)
+  let bitPositions := List.range (N*limbBits) |>.reverse
+  let msb := (bitPositions.find? fun b => (exp >>> b) % 2 = 1).getD (N*limbBits - 1)
   let ri (i : ℕ) : ℕ := N + i  -- r limbs at offset N (after params a0..a{N-1})
   let pushR : List Instr := (List.range N) >>= fun i => [ local.get (ri i) ]
   let pushA : List Instr := (List.range N) >>= fun i => [ local.get i ]
@@ -562,7 +568,8 @@ def compileFExpr (vm : VarMap) : FExpr F → CodeBuilder → Except String CodeB
     let cond ← compileBExpr vm c cb
     let thenCB ← compileFExpr vm t {}
     let elseCB ← compileFExpr vm e {}
-    -- Capture each branch's nw-limb result to temporary locals at `vm.nextLocal`.
+    -- Capture each branch's nw-limb result to temporary locals at the shared
+    -- `vm.scratchBase` region.
     -- The stack has limbs in ascending order (limb₀ deepest, limb_{nw-1} top),
     -- so `.reverse` stores limbᵢ at `tmpBase + i`.
     let tmpBase := vm.scratchBase
@@ -723,8 +730,8 @@ def compileBExpr (vm : VarMap) : BExpr F → CodeBuilder → Except String CodeB
     -- Test bit `i` of `FiniteField.val x`: limb i/64, bit i%64 (constant i).
     -- Multi-word: convert from Montgomery first (montMul(x, 1) = x).
     let nw := vm.numWords
-    let limbIdx := i / 64
-    let bitIdx := i % 64
+    let limbIdx := i / limbBits
+    let bitIdx := i % limbBits
     if limbIdx ≥ nw then
       -- Bit index beyond the field width: always 0 (val < 2^(nw*64)).
       pure (cb.push (i32.const 0))
@@ -891,15 +898,13 @@ def discoverAndCompileIntermediates (vm : VarMap) (flatOps : List (FlatOperation
   let (_, locals, instrs) := buildAST 0 [] [] intConstraintsRev
   (numInt, locals.reverse, instrs)
 
-/-- Scratch locals reserved above each allocation so multi-word expression
-    compilers (`.flt`/`.feq`/`.ite`, up to `2*nw` locals at `vm.nextLocal`)
-    never overrun the declared local range.
-    For single-word (nw=1) no scratch is needed: `.flt`/`.feq` use direct
-    `i64.lt_u`/`i64.eq`, and `.ite`/`.bit` reuse the output slot transiently
-    (their temp use completes before the final capture). Returning 0 keeps
-    large single-word circuits (e.g. Keccak's 31K witnesses) within the
-    WASM 50K-local limit. -/
-def scratchReserve (nw : ℕ) : ℕ := if nw = 1 then 0 else 2 * nw
+/-- Size of the shared scratch region reserved at `vm.scratchBase` for
+    expression compilers. `.flt`/`.feq` (multi-word) capture both operands
+    (2*nw locals); `.ite`/`.bit`/`listGet`/`.bitsOf` use nw (or 1). Single-word
+    still needs 1 local (`.ite`/`.bit`/`listGet` capture at `scratchBase`).
+    Keeping this small lets large circuits (e.g. Keccak's 31K witnesses) stay
+    within the WASM 50K-local limit. -/
+def scratchReserve (nw : ℕ) : ℕ := if nw = 1 then 1 else 2 * nw
 
 /-- compile let-steps (letF/letN) to instructions.
     Steps are allocated at `vm.nextLocal` (direct WASM local allocation,
@@ -922,7 +927,8 @@ def compileSteps (vm : VarMap) (vi : ℕ) (steps : List (Step F)) :
     match step with
     | .letF e =>
       let cb ← compileFExpr vm e {}
-      -- Capture all nw limbs: forward order pops lowest limb first
+      -- Capture all nw limbs: the stack has limb₀ deepest, so `.reverse`
+      -- stores limbᵢ at `wasmBase + i` (pops the highest limb first).
       pure (vm, idx + 1, instrs ++ cb.build ++ (locs.reverse.map fun w => local.set w))
     | .letU e =>
       let cb ← compileU64Expr vm e {}
@@ -956,7 +962,8 @@ def compileVExpr (vm : VarMap) (vi : ℕ) (acc : List Instr) :
       -- The loop is unrolled at compile time; `idx` in the body is the constant `i`.
       -- Body scratch uses the shared `vm.scratchBase`.
       let cb ← compileFExpr { vmOut with loopIdx := some i } body {}
-      -- Capture all nw limbs of element i: forward order pops lowest limb first
+      -- Capture all nw limbs of element i: the stack has limb₀ deepest, so
+      -- `.reverse` stores limbᵢ at `elemBase + i` (pops the highest limb first).
       let elemBase := outBase + i * nw
       let capture := (List.range nw).reverse.map fun w => local.set (elemBase + w)
       pure (is ++ cb.build ++ capture)
@@ -993,10 +1000,10 @@ def compileVExpr (vm : VarMap) (vi : ℕ) (acc : List Instr) :
     let scratchBase := vm.scratchBase
     let captureX : List Instr := (List.range nw).reverse.map fun w => local.set (scratchBase + w)
     let instrs ← (List.range n).foldlM (fun (is : List Instr) (i : ℕ) => do
-      let limbIdx := i / 64
-      let bitIdx := i % 64
+      let limbIdx := i / limbBits
+      let bitIdx := i % limbBits
       let elemBase := outBase + i * nw
-      -- Bit i of the field representative: limb i/64, bit i%64 (constant i).
+      -- Bit i of the field representative: limb i/limbBits, bit i%limbBits (constant i).
       -- Bits beyond the field width are always 0.
       let testInstrs : List Instr := if limbIdx ≥ nw then
           [i32.const 0]
@@ -1018,30 +1025,30 @@ def compileVExpr (vm : VarMap) (vi : ℕ) (acc : List Instr) :
 /-- process flat operations, accumulating instructions.
     `vi` tracks the next circuit-variable index (input count + sum of witness sizes).
     This is NOT advanced by let-steps, which live in a separate local-index space. -/
-def processFlatOps (numInputs : ℕ) :
+def processFlatOps :
     List (FlatOperation F) → VarMap → ℕ → List Instr → Except String (VarMap × ℕ × List Instr)
   | [], vm, finalVarIdx, instrs => pure (vm, finalVarIdx, instrs)
   | .witness _ (.ir steps vexpr) :: rest, vm, vi, acc => do
     let (vmS, _, stepInstrs) ← compileSteps vm vi steps
     let (vmOut, viOut, outInstrs) ← compileVExpr vmS vi stepInstrs vexpr
-    processFlatOps numInputs rest vmOut viOut (acc ++ outInstrs)
+    processFlatOps rest vmOut viOut (acc ++ outInstrs)
   | .witness _ (.native _) :: _, _, _, _ =>
     .error "processFlatOps: cannot compile a `native` witness (arbitrary Lean closure); rewrite it as structured witness IR"
   | .assert _ :: rest, vm, vi, acc =>
     -- Asserts allocate no witnesses and need no code here; intermediate signals
     -- they induce are compiled separately by `discoverAndCompileIntermediates`.
-    processFlatOps numInputs rest vm vi acc
+    processFlatOps rest vm vi acc
   | .lookup _ :: rest, vm, vi, acc =>
     -- Lookups constrain existing values and allocate no witnesses,
     -- so witness generation ignores them.
-    processFlatOps numInputs rest vm vi acc
+    processFlatOps rest vm vi acc
   | .interact _ :: rest, vm, vi, acc =>
     -- Interactions constrain values through channels but allocate no witnesses,
     -- so witness generation ignores them (like lookups).
-    processFlatOps numInputs rest vm vi acc
+    processFlatOps rest vm vi acc
 
 /-- Compile to a WASM binary module (LEB128-encoded WASM).
-    `numWords` must be at least `ceil(bitLength(fieldPrime) / 64)`, and
+    `numWords` must be at least `ceil(bitLength(fieldPrime) / limbBits)`, and
     `numWords = 1` additionally requires `fieldPrime ≤ 2^32` so that products
     of two field elements fit in an i64 before modular reduction.
     Returns an error for inputs the compiler does not support. -/
@@ -1052,10 +1059,10 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   -- For single-word (nw=1), the prime must satisfy (p-1)^2 < 2^64
   -- to avoid i64.mul overflow, i.e., p <= 2^32.
   let primeBits := Nat.log2 fieldPrime + 1
-  let minWords := (primeBits + 63) / 64
+  let minWords := (primeBits + limbBits - 1) / limbBits
   if nw = 1 ∧ fieldPrime > singleWordPrimeMax then
-    throw s!"compileModule: numWords=1 requires a prime <= 2^32 to avoid i64.mul overflow; got a {primeBits}-bit prime, use numWords = {max minWords 2}"
-  if nw * 64 < primeBits then
+    throw s!"compileModule: numWords=1 requires a prime <= 2^32 to avoid i64.mul overflow; got a {primeBits}-bit prime, use numWords = {max minWords minMultiWordWords}"
+  if nw * limbBits < primeBits then
     throw s!"compileModule: numWords={nw} is insufficient for a {primeBits}-bit prime; need at least {minWords} words"
   let flatOps := Operations.toFlat ops
   -- Pre-pass: count the total witness slots (per flat op) and the maximum
@@ -1074,15 +1081,15 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   -- inputs) align with VarMap entries. vm.alloc adds (vi, local) for each witness,
   -- and pushVar uses the circuit variable index from the witness IR directly.
   let vm := { (VarMap.init numInputs nw fieldPrime) with scratchBase := stepEnd }
-  let (finalVm, finalVarIdx, bodyInstrs) ← processFlatOps numInputs flatOps vm numInputs []
+  let (finalVm, finalVarIdx, bodyInstrs) ← processFlatOps flatOps vm numInputs []
   -- finalVarIdx = numInputs + total witness outputs (steps don't count)
   let witnessCount := finalVarIdx - numInputs
-  let n32 := nw * 2
+  let n32 := nw * i32PerLimb
   let srwmBase := srwmBaseAddress
   -- Signal array must be 8-byte aligned for i64.store/i64.load
   let signalBaseRaw := srwmBaseAddress + n32 * bytesPerI32
   let signalBase := ((signalBaseRaw + bytesPerI64 - 1) / bytesPerI64) * bytesPerI64
-  let signalBytes := n32 * 4
+  let signalBytes := n32 * bytesPerI32
   let startSignal := 1 + numInputs + witnessCount  -- signal 0 = constant 1, then inputs, then witnesses
   -- Local index base for intermediates in getWitness: param $i(0), $tmp(1), $idx(2), $in_*(3..)
   -- For multi-word, each input has nw limbs; locals are $in_{i}_{w}
@@ -1124,8 +1131,8 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
     -- nw extra scratch locals at the end are used by outputStores for the
     -- from-Montgomery conversion of each witness before storing.
     -- Declare locals up to the end of the shared scratch region
-    -- (scratchBase + 2*nw), minus the params (numInputs*nw).
-    locals := (List.replicate (finalVm.scratchBase + 2*nw - numInputs*nw) ("", .i64)) ++ [("$idx", .i64)]
+    -- (scratchBase + scratchReserve nw), minus the params (numInputs*nw).
+    locals := (List.replicate (finalVm.scratchBase + scratchReserve nw - numInputs*nw) ("", .i64)) ++ [("$idx", .i64)]
     body := bodyInstrs ++ outputStores
   }
   -- Build getWitness body
@@ -1139,30 +1146,30 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
     let loadAll := (List.range nw) >>= fun w =>
       [ i32.const (signalBase + (1 + i) * signalBytes + w * bytesPerI64),
         .memLoad .i64 0 alignmentI64,
-        local.set (3 + i * nw + w) ]
+        local.set (getWitnessFixedLocals + i * nw + w) ]
     let convert := if nw = 1 then []
-      else ((List.range nw) >>= fun w => [ local.get (3 + i * nw + w) ])
+      else ((List.range nw) >>= fun w => [ local.get (getWitnessFixedLocals + i * nw + w) ])
            ++ pushCoeff (montR2 fieldPrime nw) nw ++ [call "$fmul"]
-    let capture := if nw = 1 then [] else (List.range nw).reverse.map fun w => local.set (3 + i * nw + w)
+    let capture := if nw = 1 then [] else (List.range nw).reverse.map fun w => local.set (getWitnessFixedLocals + i * nw + w)
     loadAll ++ convert ++ capture
   -- Input push: push all nw limbs per input
   let inputPush : List Instr := (List.range numInputs) >>= fun i =>
     (List.range nw) >>= fun w =>
-      [ local.get (3 + i * nw + w) ]
+      [ local.get (getWitnessFixedLocals + i * nw + w) ]
   -- Tail: copy all n32 32-bit words of signal $i to SRWM[0..n32-1].
   let gwTail : List Instr := (List.range n32) >>= fun w =>
     [ i32.const (srwmBase + w * bytesPerI32),
       i32.const signalBase, local.get 0, i32.const signalBytes, .binop .i32 .mul, .binop .i32 .add,
       i32.const (w * bytesPerI32), .binop .i32 .add,
       i32.load 0,
-      .memStore .i32 0 2 ]
+      .memStore .i32 0 alignmentI32 ]
   -- Build the getWitness function body
   let gwBody : List Instr :=
-    [ i32.const 0, i32.load 0, i32.eqz ]  -- check computed flag
+    [ i32.const computedFlagAddr, i32.load 0, i32.eqz ]  -- check computed flag
     ++ [ if_ none
           (inputLoads ++ inputPush ++ [call "$compute"] ++ intCode
-           ++ [ i32.const signalBase, i32.const 1, i32.store 0,  -- store constant 1
-                i32.const 0, i32.const 1, i32.store 0 ])           -- set computed flag
+           ++ [ i32.const signalBase, i32.const constSignalValue, i32.store 0,  -- signal 0 = constant 1
+                i32.const computedFlagAddr, i32.const computedFlagSet, i32.store 0 ])  -- set computed flag
           [] ]
     ++ gwTail
   -- snarkjs ABI functions
@@ -1174,18 +1181,18 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
     { name := "$getRawPrime"
       exportName := some "getRawPrime"
       body := (List.range n32) >>= fun w =>
-        [ i32.const (srwmBase + w * bytesPerI32), i32.const ((fieldPrime >>> (w * hiWordShift)) % (2^32)), .memStore .i32 0 2 ] },
+        [ i32.const (srwmBase + w * bytesPerI32), i32.const ((fieldPrime >>> (w * hiWordShift)) % (2^hiWordShift)), .memStore .i32 0 alignmentI32 ] },
     { name := "$readSharedRWMemory"
       exportName := some "readSharedRWMemory"
       params := [("", .i32)]
       results := [.i32]
-      body := [ i32.const srwmBase, local.get 0, i32.const 4,
-                .binop .i32 .mul, .binop .i32 .add, .memLoad .i32 0 2 ] },
+      body := [ i32.const srwmBase, local.get 0, i32.const bytesPerI32,
+                .binop .i32 .mul, .binop .i32 .add, .memLoad .i32 0 alignmentI32 ] },
     { name := "$writeSharedRWMemory"
       exportName := some "writeSharedRWMemory"
       params := [("$j", .i32), ("$v", .i32)]
-      body := [ i32.const srwmBase, local.get 0, i32.const 4,
-                .binop .i32 .mul, .binop .i32 .add, local.get 1, .memStore .i32 0 2 ] },
+      body := [ i32.const srwmBase, local.get 0, i32.const bytesPerI32,
+                .binop .i32 .mul, .binop .i32 .add, local.get 1, .memStore .i32 0 alignmentI32 ] },
     { name := "$getInputSignalSize"
       exportName := some "getInputSignalSize"
       params := [("", .i32), ("", .i32)]
@@ -1216,8 +1223,8 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
           [ i32.const (signalBase + signalBytes),
             local.get 2, i32.const signalBytes, .binop .i32 .mul, .binop .i32 .add,
             i32.const (w * bytesPerI64), .binop .i32 .add,
-            i32.const (srwmBase + 2*w*bytesPerI32), .memLoad .i32 0 2, .unop .i64 .extend_i32_u,
-            i32.const (srwmBase + (2*w+1)*bytesPerI32), .memLoad .i32 0 2, .unop .i64 .extend_i32_u,
+            i32.const (srwmBase + 2*w*bytesPerI32), .memLoad .i32 0 alignmentI32, .unop .i64 .extend_i32_u,
+            i32.const (srwmBase + (2*w+1)*bytesPerI32), .memLoad .i32 0 alignmentI32, .unop .i64 .extend_i32_u,
             i64.const hiWordShift, i64.shl, i64.or,
             .memStore .i64 0 alignmentI64 ])
     },
@@ -1246,8 +1253,8 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
     { name := "$init"
       exportName := some "init"
       params := [("", .i32)]
-      body := [ i32.const 0, i32.const 0, .memStore .i32 0 2,
-                i32.const signalBase, i32.const 1, .memStore .i32 0 2 ] }
+      body := [ i32.const computedFlagAddr, i32.const 0, .memStore .i32 0 alignmentI32,  -- clear computed flag
+                i32.const signalBase, i32.const constSignalValue, .memStore .i32 0 alignmentI32 ] }  -- signal 0 = constant 1
   ]
   -- Arithmetic helpers
   let arithFuncs := if nw == 1 then genSingleWordArith fieldPrime
@@ -1263,4 +1270,4 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
       { computeFunc with name := "$witness", exportName := some "witness" }]
       ++ abiFuncs
   }
-  pure (Binary.Module.toBinary module)
+  Binary.Module.toBinary module

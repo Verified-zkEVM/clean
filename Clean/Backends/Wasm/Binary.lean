@@ -85,14 +85,28 @@ private def functypeOpcode  : UInt8 := 0x60
 
 -- Memory section
 private def memflagsNoMax   : UInt8 := 0x00
+private def memoryCount     : UInt8 := 0x01
 
--- Export kinds
+-- Export section
 private def exportKindFunc   : UInt8 := 0x00
 private def exportKindMem    : UInt8 := 0x02
+private def memoryExportIndex : UInt8 := 0x00
+
+-- Name section (custom section)
+private def customSectionName : ℕ := 0
+private def nameSubsectionFunctionNames : ℕ := 1
 
 -- LEB128 encoding
-private def leb128ContBit    : ℕ := 0x80
-private def leb128Limit      : ℕ := 128
+private def leb128ContBit    : ℕ := 0x80   -- continuation bit (bit 7 set = more bytes)
+private def leb128Limit      : ℕ := 128    -- 7-bit group size
+private def leb128SignBit    : ℕ := 64     -- bit 6 of a 7-bit group
+private def leb128PayloadMask : ℕ := 0x7F  -- low 7 bits
+
+-- Signed-const two's-complement bounds for i32.const / i64.const
+private def i32ConstSignBase  : ℕ := 2^31
+private def i32ConstModulus   : ℕ := 2^32
+private def i64ConstSignBase  : ℕ := 2^63
+private def i64ConstModulus   : ℕ := 2^64
 
 /-! ## LEB128 encoding with ByteArray -/
 
@@ -106,14 +120,14 @@ partial def putULEB128 (arr : ByteArray) (n : ℕ) : ByteArray :=
     Encodes in two's complement: for negative n, each 7-bit group is
     sign-extended in the final byte. -/
 partial def putSLEB128 (arr : ByteArray) (n : ℤ) : ByteArray :=
-  let b := n % 128
-  let rest := n / 128
+  let b := n % leb128Limit
+  let rest := n / leb128Limit
   -- A byte is final if the remaining value is 0 AND the sign bit (bit 6) is clear,
   -- OR if the remaining value is -1 AND the sign bit is set (sign extension complete).
-  if (rest = 0 && b < 64) || (rest = -1 && b ≥ 64) then
-    arr.push (UInt8.ofNat (b.toNat &&& 0x7F))
+  if (rest = 0 && b < leb128SignBit) || (rest = -1 && b ≥ leb128SignBit) then
+    arr.push (UInt8.ofNat (b.toNat &&& leb128PayloadMask))
   else
-    putSLEB128 (arr.push (UInt8.ofNat ((b.toNat &&& 0x7F) ||| 0x80))) rest
+    putSLEB128 (arr.push (UInt8.ofNat ((b.toNat &&& leb128PayloadMask) ||| leb128ContBit))) rest
 
 /-! ## WASM value type opcodes -/
 
@@ -133,11 +147,12 @@ def binopOffset : BinOp → ℕ
 /-- Label stack entry: (label name, nesting depth from current position). -/
 abbrev LabelStack := List (String × ℕ)
 
-/-- Look up a label in the stack and return its relative depth (0-indexed from innermost). -/
-def resolveLabel (stack : LabelStack) (label : String) : ℕ :=
+/-- Look up a label in the stack and return its relative depth (0-indexed from innermost).
+    Unknown labels are an error (never silently branch to depth 0). -/
+def resolveLabel (stack : LabelStack) (label : String) : Except String ℕ :=
   match stack.findIdx? fun (l, _) => l = label with
-  | some idx => idx
-  | none => 0
+  | some idx => pure idx
+  | none => .error s!"encodeInstr: unknown label '${label}'"
 
 /-- Encode a block type (empty or single value). -/
 def encodeBlockType (arr : ByteArray) : Option ValType → ByteArray
@@ -150,61 +165,72 @@ def encodeMemArg (arr : ByteArray) (offset align : ℕ) : ByteArray :=
   putULEB128 (putULEB128 arr align) offset
 
 mutual
-partial def encodeInstr (arr : ByteArray) (resolveCall : String → ℕ) (labels : LabelStack) : Instr → ByteArray
-  | .const .i32 n => putSLEB128 (arr.push opI32Const) (if n < 2^31 then (n : ℤ) else ((n : ℤ) - (2^32 : ℤ)))
-  | .const .i64 n => putSLEB128 (arr.push opI64Const) (if n < 2^63 then (n : ℤ) else ((n : ℤ) - (2^64 : ℤ)))
-  | .binop .i32 op => arr.push (UInt8.ofNat (opI32BinopBase.toNat + binopOffset op))
-  | .binop .i64 op => arr.push (UInt8.ofNat (opI64BinopBase.toNat + binopOffset op))
-  | .unop .i32 .wrap_i64 => arr.push opI32WrapI64
-  | .unop .i64 .extend_i32_u => arr.push opI64ExtI32U
-  | .unop _ _ => arr.push opUnreachable  -- unsupported: fail validation loudly
-  | .relop .i32 .eq => arr.push opI32Eq
-  | .relop .i64 .eq => arr.push opI64Eq
-  | .relop .i32 .lt_u => arr.push opI32LtU
-  | .relop .i64 .lt_u => arr.push opI64LtU
-  | .relop .i32 .eqz => arr.push opI32Eqz
-  | .relop .i64 .eqz => arr.push opI64Eqz
-  | .relop .i64 .lt_s => arr.push opI64LtS
-  | .relop .i64 .ne => arr.push opI64Ne
-  | .relop .i64 .le_u => arr.push opI64LeU
-  | .relop .i64 .ge_u => arr.push opI64GeU
-  | .relop .i64 .gt_u => arr.push opI64GtU
-  | .relop .i32 .ne => arr.push opI32Ne
-  | .relop _ _ => arr.push opUnreachable  -- unsupported: fail validation loudly
-  | .localGet idx => putULEB128 (arr.push opLocalGet) idx
-  | .localSet idx => putULEB128 (arr.push opLocalSet) idx
-  | .localTee idx => putULEB128 (arr.push opLocalTee) idx
-  | .call name => putULEB128 (arr.push opCall) (resolveCall name)
-  | .br label => putULEB128 (arr.push opBr) (resolveLabel labels label)
-  | .brIf label => putULEB128 (arr.push opBrIf) (resolveLabel labels label)
+/-- Encode a single instruction. Unsupported instructions and unknown labels
+    are errors, so a broken module fails at compile time rather than emitting
+    silently-wrong WASM. -/
+partial def encodeInstr (arr : ByteArray) (resolveCall : String → Except String ℕ) (labels : LabelStack) :
+    Instr → Except String ByteArray
+  | .const .i32 n => pure (putSLEB128 (arr.push opI32Const) (if n < i32ConstSignBase then (n : ℤ) else ((n : ℤ) - (i32ConstModulus : ℤ))))
+  | .const .i64 n => pure (putSLEB128 (arr.push opI64Const) (if n < i64ConstSignBase then (n : ℤ) else ((n : ℤ) - (i64ConstModulus : ℤ))))
+  | .binop .i32 op => pure (arr.push (UInt8.ofNat (opI32BinopBase.toNat + binopOffset op)))
+  | .binop .i64 op => pure (arr.push (UInt8.ofNat (opI64BinopBase.toNat + binopOffset op)))
+  | .unop .i32 .wrap_i64 => pure (arr.push opI32WrapI64)
+  | .unop .i64 .extend_i32_u => pure (arr.push opI64ExtI32U)
+  | .unop t op => .error s!"encodeInstr: unsupported unop {repr op} on {repr t}"
+  | .relop .i32 .eq => pure (arr.push opI32Eq)
+  | .relop .i64 .eq => pure (arr.push opI64Eq)
+  | .relop .i32 .lt_u => pure (arr.push opI32LtU)
+  | .relop .i64 .lt_u => pure (arr.push opI64LtU)
+  | .relop .i32 .eqz => pure (arr.push opI32Eqz)
+  | .relop .i64 .eqz => pure (arr.push opI64Eqz)
+  | .relop .i64 .lt_s => pure (arr.push opI64LtS)
+  | .relop .i64 .ne => pure (arr.push opI64Ne)
+  | .relop .i64 .le_u => pure (arr.push opI64LeU)
+  | .relop .i64 .ge_u => pure (arr.push opI64GeU)
+  | .relop .i64 .gt_u => pure (arr.push opI64GtU)
+  | .relop .i32 .ne => pure (arr.push opI32Ne)
+  | .relop t op => .error s!"encodeInstr: unsupported relop {repr op} on {repr t}"
+  | .localGet idx => pure (putULEB128 (arr.push opLocalGet) idx)
+  | .localSet idx => pure (putULEB128 (arr.push opLocalSet) idx)
+  | .localTee idx => pure (putULEB128 (arr.push opLocalTee) idx)
+  | .call name => do
+    let idx ← resolveCall name
+    pure (putULEB128 (arr.push opCall) idx)
+  | .br label => do
+    let d ← resolveLabel labels label
+    pure (putULEB128 (arr.push opBr) d)
+  | .brIf label => do
+    let d ← resolveLabel labels label
+    pure (putULEB128 (arr.push opBrIf) d)
   | .block label result body => encodeBlock arr resolveCall labels opBlock label result body
   | .loop label result body => encodeBlock arr resolveCall labels opLoop label result body
-  | .ifElse label result thenBody elseBody =>
+  | .ifElse label result thenBody elseBody => do
     let arr := arr.push opIf
     let arr := encodeBlockType arr result
     let innerLabels := (label, 0) :: labels
-    let arr := thenBody.foldl (fun a i => encodeInstr a resolveCall innerLabels i) arr
-    let arr := if elseBody.isEmpty then arr else
-      (arr.push opElse) |> fun a => elseBody.foldl (fun a' i => encodeInstr a' resolveCall innerLabels i) a
-    arr.push opEnd
-  | .memLoad .i32 off align => encodeMemArg (arr.push opI32Load) off align
-  | .memLoad .i64 off align => encodeMemArg (arr.push opI64Load) off align
-  | .memStore .i32 off align => encodeMemArg (arr.push opI32Store) off align
-  | .memStore .i64 off align => encodeMemArg (arr.push opI64Store) off align
-  | .drop => arr.push opDrop
-  | .select => arr.push opSelect
-  | .unreachable => arr.push opUnreachable
-  | .nop => arr.push opNop
-  | .return => arr.push opReturn
+    let arr ← thenBody.foldlM (fun a i => encodeInstr a resolveCall innerLabels i) arr
+    if elseBody.isEmpty then pure (arr.push opEnd)
+    else do
+      let arr ← elseBody.foldlM (fun a i => encodeInstr a resolveCall innerLabels i) (arr.push opElse)
+      pure (arr.push opEnd)
+  | .memLoad .i32 off align => pure (encodeMemArg (arr.push opI32Load) off align)
+  | .memLoad .i64 off align => pure (encodeMemArg (arr.push opI64Load) off align)
+  | .memStore .i32 off align => pure (encodeMemArg (arr.push opI32Store) off align)
+  | .memStore .i64 off align => pure (encodeMemArg (arr.push opI64Store) off align)
+  | .drop => pure (arr.push opDrop)
+  | .select => pure (arr.push opSelect)
+  | .unreachable => pure (arr.push opUnreachable)
+  | .nop => pure (arr.push opNop)
+  | .return => pure (arr.push opReturn)
 
 /-- Encode a block/loop body with correct result type and label tracking. -/
-partial def encodeBlock (arr : ByteArray) (resolveCall : String → ℕ) (labels : LabelStack)
-    (opcode : UInt8) (label : String) (result : Option ValType) (body : List Instr) : ByteArray :=
+partial def encodeBlock (arr : ByteArray) (resolveCall : String → Except String ℕ) (labels : LabelStack)
+    (opcode : UInt8) (label : String) (result : Option ValType) (body : List Instr) : Except String ByteArray := do
   let arr := arr.push opcode
   let arr := encodeBlockType arr result
   let innerLabels := (label, 0) :: labels.map fun (l, d) => (l, d + 1)
-  let arr := body.foldl (fun a i => encodeInstr a resolveCall innerLabels i) arr
-  arr.push opEnd
+  let arr ← body.foldlM (fun a i => encodeInstr a resolveCall innerLabels i) arr
+  pure (arr.push opEnd)
 end
 
 /-! ## Module encoding -/
@@ -219,16 +245,22 @@ def encodeString (arr : ByteArray) (s : String) : ByteArray :=
   let arr := putULEB128 arr utf8.size
   utf8.foldl (fun a b => a.push b) arr
 
-def Module.toBinary (m : Module) : ByteArray :=
+/-- Encode a WASM module to binary. Unknown function names are errors, so a
+    broken call cannot silently target function 0. -/
+def Module.toBinary (m : Module) : Except String ByteArray := do
   let funcs := m.funcs
-  let nameToIdx (name : String) : ℕ :=
-    funcs.findIdx? (fun f => f.name == name) |>.getD 0
+  let nameToIdx (name : String) : Except String ℕ :=
+    match funcs.findIdx? (fun f => f.name == name) with
+    | some idx => pure idx
+    | none => .error s!"toBinary: unknown function '{name}'"
 
   -- Collect unique type signatures
   let sigs := funcs.map (fun f => (f.params.map Prod.snd, f.results))
   let uniqueSigs := List.reverse <| sigs.foldl (fun acc s => if acc.elem s then acc else s :: acc) []
-  let sigIdx (sig : List ValType × List ValType) : ℕ :=
-    uniqueSigs.findIdx? (fun s => s == sig) |>.getD 0
+  let sigIdx (sig : List ValType × List ValType) : Except String ℕ :=
+    match uniqueSigs.findIdx? (fun s => s == sig) with
+    | some idx => pure idx
+    | none => .error "toBinary: signature not found"
 
   -- Type section
   let typeSec := uniqueSigs.foldl (fun (arr : ByteArray) (params, results) =>
@@ -240,50 +272,53 @@ def Module.toBinary (m : Module) : ByteArray :=
   ) (putULEB128 ByteArray.empty uniqueSigs.length)
 
   -- Function section
-  let funcSec := funcs.foldl (fun (arr : ByteArray) f =>
-    putULEB128 arr (sigIdx (f.params.map Prod.snd, f.results))
+  let funcSec ← funcs.foldlM (fun (arr : ByteArray) f => do
+    let s ← sigIdx (f.params.map Prod.snd, f.results)
+    pure (putULEB128 arr s)
   ) (putULEB128 ByteArray.empty funcs.length)
 
   -- Memory section: 1 memory, min pages only
-  let memSec := ByteArray.empty.push 0x01 |>.push memflagsNoMax |> fun a => putULEB128 a m.memoryPages
+  let memSec := ByteArray.empty.push memoryCount |>.push memflagsNoMax |> fun a => putULEB128 a m.memoryPages
 
   -- Export section
   let exportCount := 1 + (funcs.filter fun f => f.exportName.isSome).length
   let exportSec := putULEB128 ByteArray.empty exportCount
   -- Memory export
   let exportSec := encodeString exportSec "memory"
-  let exportSec := exportSec.push exportKindMem |>.push 0x00
+  let exportSec := exportSec.push exportKindMem |>.push memoryExportIndex
   -- Function exports
-  let exportSec := funcs.foldl (fun (arr : ByteArray) f =>
+  let exportSec ← funcs.foldlM (fun (arr : ByteArray) f =>
     match f.exportName with
-    | none => arr
-    | some ename =>
+    | none => pure arr
+    | some ename => do
       let arr := encodeString arr ename
       let arr := arr.push exportKindFunc
-      putULEB128 arr (nameToIdx f.name)
+      let idx ← nameToIdx f.name
+      pure (putULEB128 arr idx)
   ) exportSec
 
   -- Code section
   let codeCount := funcs.length
-  let codeSec := funcs.foldl (fun (arr : ByteArray) f =>
+  let codeSec ← funcs.foldlM (fun (arr : ByteArray) f => do
     let locals := f.locals.map Prod.snd
     let localSec := putULEB128 ByteArray.empty locals.length
     let localSec := locals.foldl (fun a t =>
       (putULEB128 a 1).push (vtOpc t)
     ) localSec
-    let bodyArr := f.body.foldl (fun a i => encodeInstr a nameToIdx [] i) localSec
+    let bodyArr ← f.body.foldlM (fun a i => encodeInstr a nameToIdx [] i) localSec
     let funcBytes := bodyArr.push opEnd
-    putULEB128 arr funcBytes.size |> fun a => a ++ funcBytes
+    pure (putULEB128 arr funcBytes.size |> fun a => a ++ funcBytes)
   ) (putULEB128 ByteArray.empty codeCount)
 
   -- Name section (custom section id 0): maps function indices to names for debugging.
   -- Format: "name" string, subsection_id=1, subsection_size, count, entries.
-  let nameSec :=
-    let nameMap := funcs.foldl (fun (arr : ByteArray) f =>
-      putULEB128 arr (nameToIdx f.name) |> fun a => encodeString a f.name
+  let nameSec ← do
+    let nameMap ← funcs.foldlM (fun (arr : ByteArray) f => do
+      let idx ← nameToIdx f.name
+      pure (putULEB128 arr idx |> fun a => encodeString a f.name)
     ) (putULEB128 ByteArray.empty funcs.length)
-    let subsec := putULEB128 ByteArray.empty 1 |> fun a => putULEB128 a nameMap.size |> fun a => a ++ nameMap
-    encodeString ByteArray.empty "name" ++ subsec
+    let subsec := putULEB128 ByteArray.empty nameSubsectionFunctionNames |> fun a => putULEB128 a nameMap.size |> fun a => a ++ nameMap
+    pure (encodeString ByteArray.empty "name" ++ subsec)
   -- Assemble: magic + version + sections
   let arr := wasmMagic.foldl (fun a b => a.push b) ByteArray.empty
   let arr := wasmVersion.foldl (fun a b => a.push b) arr
@@ -292,7 +327,7 @@ def Module.toBinary (m : Module) : ByteArray :=
   let arr := putSection arr sectionIdMemory memSec
   let arr := putSection arr sectionIdExport exportSec
   let arr := putSection arr sectionIdCode codeSec
-  let arr := putSection arr 0 nameSec  -- custom section 0 = name section
-  arr
+  let arr := putSection arr customSectionName nameSec  -- custom section = name section
+  pure arr
 
 end Backends.Wasm.Binary

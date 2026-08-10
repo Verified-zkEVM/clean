@@ -12,9 +12,11 @@ open Lean
 
 namespace Backends.Wasm
 
-open Expression (var const add mul)
+open Expression (const add mul)
 
 variable {F : Type} [FiniteField F]
+
+private def bitsPerByte : ℕ := 8
 
 def processOps (vm : VarMap) (ops : List (FlatOperation F)) (st : FlattenState F) :
     Except String (List (Constraint F) × ℕ) :=
@@ -74,10 +76,10 @@ backend cannot compile.
 def compileR1CS (fieldPrime numInputs numOutputs : ℕ) (ops : List (Operation F)) (numWords : ℕ) :
     Except String String := do
   let flatOps := Operations.toFlat ops
-  -- Use the WASM compiler’s VarMap to get the same signal layout
+  -- Use the WASM compiler's VarMap to get the same signal layout
   let vm := VarMap.init numInputs numWords fieldPrime
-  let (_, finalVarIdx, _) ← processFlatOps numInputs flatOps vm numInputs []
-  -- finalVarIdx = numInputs + total witness outputs (steps don’t count)
+  let (_, finalVarIdx, _) ← processFlatOps flatOps vm numInputs []
+  -- finalVarIdx = numInputs + total witness outputs (steps don't count)
   let witnessCount := finalVarIdx - numInputs
   let totalSignals := 1 + numInputs + witnessCount  -- +1 for constant signal
   let st : FlattenState F := { nextSignal := totalSignals }
@@ -85,7 +87,7 @@ def compileR1CS (fieldPrime numInputs numOutputs : ℕ) (ops : List (Operation F
   let ps := toString fieldPrime
   let constraintsArr := Json.arr (allConstraints.reverse.map constraintToJson |>.toArray)
   let primeBits := Nat.log2 fieldPrime + 1
-  let n8 : ℕ := (primeBits + 7) / 8
+  let n8 : ℕ := (primeBits + bitsPerByte - 1) / bitsPerByte
   let json := Json.mkObj [
     ("n8", Json.num n8),
     ("prime", Json.str ps),
