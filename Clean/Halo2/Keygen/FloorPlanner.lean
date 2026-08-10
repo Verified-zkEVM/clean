@@ -1,5 +1,6 @@
 import Clean.Halo2.Operations
 import Mathlib.Data.List.Perm.Basic
+import Mathlib.Data.List.Sort
 import Mathlib.Data.List.TakeDrop
 
 /-!
@@ -13,7 +14,7 @@ Two planners, matching the Rust module split (`halo2_proofs/src/circuit/floor_pl
 
 * **`V1`** (`v1.rs`, `v1/strategy.rs`) — the planner the real orchard `Circuit` declares
   (`orchard/src/circuit.rs`, `type FloorPlanner = V1`, with the
-  `floor-planner-v1-legacy-pdqsort` feature — see `V1.planFull`). A dual pass:
+  `floor-planner-v1-legacy-pdqsort` feature). A dual pass:
   a measurement pass computes each region's shape (`measureRegions`/`RegionShape`), then
   a greedy first-fit places the regions biggest-advice-area first
   (`slot_in_biggest_advice_first` + `slot_in` + `first_fit_region`). Drives the Action
@@ -21,10 +22,9 @@ Two planners, matching the Rust module split (`halo2_proofs/src/circuit/floor_pl
 * **`SimpleFloorPlanner`** (`single_pass.rs`) — sequential per-region placement at the
   earliest row where none of the region's columns are in use. Drives the Add/Mul fixtures.
 
-Everything is `#eval`-computable. V1 retains the exact candidate placement when a
-small finite shared-column guard accepts it, and otherwise uses a conservative
-globally row-disjoint plan. Tests can `#guard`/`#eval` the derived starts against
-fixture placements.
+Everything is `#eval`-computable. V1's first-fit allocator is proved generically to
+place regions sharing a column in disjoint row intervals. Tests can `#guard`/`#eval`
+the derived starts against fixture placements.
 
 ## Region shape — what participates (`layouter.rs`, `impl RegionLayouter for RegionShape`)
 
@@ -99,7 +99,14 @@ circuit summaries can use the planner's canonical column vocabulary. -/
 /-- Sort a region's column set by `RegionColumn::Ord` (`strategy.rs:177-178`). The input is a
 set (deduplicated), so the order is total. -/
 def sortRegionColumns (cols : List RegionColumn) : List RegionColumn :=
-  (cols.toArray.qsort RegionColumn.lt).toList
+  cols.insertionSort fun left right =>
+    RegionColumn.lt left right = true
+
+theorem sortRegionColumns_perm (columns : List RegionColumn) :
+    (sortRegionColumns columns).Perm columns := by
+  exact List.perm_insertionSort
+    (r := fun left right : RegionColumn =>
+      RegionColumn.lt left right = true) columns
 
 /-! ## Measurement pass (`v1.rs` `MeasurementPass` / `layouter.rs` `RegionShape`) -/
 
@@ -110,6 +117,11 @@ structure RegionShape where
   columns : List RegionColumn
   rowCount : ℕ
 deriving Repr, Inhabited
+
+/-- The local representation facts needed by the generic V1 allocator proof. -/
+def RegionShape.WellFormed (shape : RegionShape) : Prop :=
+  shape.columns.Nodup ∧
+    (shape.columns ≠ [] → 0 < shape.rowCount)
 
 /-- Add a column to a shape's set (dedup; first-seen order — the list is re-sorted by
 `RegionColumn::Ord` at slotting, and the advice-count/row-count are order-independent). -/
@@ -153,6 +165,15 @@ theorem measureRegion_eq_measureRegionSummary
       measureRegionSummary index
         (regionSynthesisSummary body).toRegionShapeSummary := by
   rfl
+
+theorem measureRegion_wellFormed
+    (index : ℕ) (operations : RegionOperations F) :
+    (measureRegion index operations).WellFormed := by
+  constructor
+  · exact regionSynthesisSummary_columns_nodup operations
+  · intro hcolumns
+    exact regionSynthesisSummary_rowCount_pos_of_columns_nonempty
+      operations hcolumns
 
 theorem mem_measureRegion_columns_iff
     (index : ℕ) (body : RegionOperations F) (column : RegionColumn) :
@@ -209,6 +230,14 @@ theorem row_lt_measureRegion_of_enableLookup_mem
 `v1.rs:183-184`). -/
 def measureRegions (ops : Operations F) : List RegionShape :=
   (indexedRegions ops 0).1.map fun (idx, body) => measureRegion idx body
+
+theorem measureRegions_wellFormed (operations : Operations F) :
+    (measureRegions operations).Forall RegionShape.WellFormed := by
+  rw [List.forall_iff_forall_mem]
+  intro shape hshape
+  rw [measureRegions, List.mem_map] at hshape
+  obtain ⟨region, hregion, rfl⟩ := hshape
+  exact measureRegion_wellFormed region.1 region.2
 
 /-- V1's complete measurement input is exactly the ordered reduced shape sequence
 published by the synthesis summary. -/
@@ -291,6 +320,16 @@ theorem measureRegions_indices_nodup (ops : Operations F) :
     simp [measureRegions, measureRegion]
   rw [hmap, indexedRegions_indices_eq_range]
   exact List.nodup_range'
+
+theorem measureRegions_indices_eq_range (operations : Operations F) :
+    (measureRegions operations).map (·.index) =
+      List.range operations.regionCount := by
+  have hmap :
+      (measureRegions operations).map (·.index) =
+        (indexedRegions operations 0).1.map Prod.fst := by
+    simp [measureRegions, measureRegion]
+  rw [hmap, indexedRegions_indices_eq_range]
+  exact List.range_eq_range'.symm
 
 theorem synthesisSummary_columnOccupancy_eq
     (ops : Operations F) (column : RegionColumn) :
@@ -5183,15 +5222,147 @@ end Pdqsort
 Per-column set of disjoint `[start, start+length)` allocated intervals, kept sorted by
 `start` (Rust `BTreeSet<AllocatedRegion>` ordered by `start`). -/
 
+/-- Disjointness of two half-open row intervals. -/
+def RowIntervalsDisjoint
+    (leftStart leftLength rightStart rightLength : ℕ) : Prop :=
+  leftStart + leftLength ≤ rightStart ∨
+    rightStart + rightLength ≤ leftStart
+
 /-- A column's allocated intervals `(start, length)`, sorted by `start`, disjoint. -/
 abbrev Allocations := Array (ℕ × ℕ)
 
+/-- List-level core of sorted interval insertion. -/
+def Allocations.insertList (start length : ℕ) :
+    List (ℕ × ℕ) → List (ℕ × ℕ)
+  | [] => [(start, length)]
+  | head :: rest =>
+      if start < head.1 then
+        (start, length) :: head :: rest
+      else
+        head :: insertList start length rest
+
 /-- Insert an allocated interval keeping the sort by `start` (`BTreeSet::insert`). -/
 def Allocations.insert (a : Allocations) (start len : ℕ) : Allocations :=
-  let rec go : List (ℕ × ℕ) → List (ℕ × ℕ)
-    | [] => [(start, len)]
-    | (s, l) :: rest => if start < s then (start, len) :: (s, l) :: rest else (s, l) :: go rest
-  (go a.toList).toArray
+  (insertList start len a.toList).toArray
+
+/-- Strict row ordering carried by adjacent allocated intervals. -/
+def Allocations.IntervalBefore (left right : ℕ × ℕ) : Prop :=
+  left.1 + left.2 ≤ right.1
+
+/-- The representation invariant of a column's allocation set. -/
+def Allocations.Valid (allocations : Allocations) : Prop :=
+  allocations.toList.Pairwise IntervalBefore
+
+/-- A proposed interval is disjoint from every existing allocation. -/
+def Allocations.Fits
+    (allocations : Allocations) (start length : ℕ) : Prop :=
+  ∀ allocated ∈ allocations.toList,
+    RowIntervalsDisjoint start length allocated.1 allocated.2
+
+private theorem Allocations.mem_insertList
+    (items : List (ℕ × ℕ)) (start length : ℕ) :
+    (start, length) ∈ insertList start length items := by
+  induction items with
+  | nil => simp [insertList]
+  | cons head rest inductionHypothesis =>
+      simp only [insertList]
+      split <;> simp_all
+
+private theorem Allocations.mem_insertList_of_mem
+    (items : List (ℕ × ℕ)) (start length : ℕ)
+    {allocated : ℕ × ℕ} (hallocated : allocated ∈ items) :
+    allocated ∈ insertList start length items := by
+  induction items with
+  | nil => simp at hallocated
+  | cons head rest inductionHypothesis =>
+      simp only [insertList]
+      split
+      · simp_all
+      · simp only [List.mem_cons] at hallocated ⊢
+        exact hallocated.imp_right inductionHypothesis
+
+private theorem Allocations.mem_insertList_iff
+    (items : List (ℕ × ℕ)) (start length : ℕ)
+    (item : ℕ × ℕ) :
+    item ∈ insertList start length items ↔
+      item = (start, length) ∨ item ∈ items := by
+  induction items with
+  | nil => simp [insertList]
+  | cons head rest inductionHypothesis =>
+      simp only [insertList]
+      split <;> simp_all [or_left_comm]
+
+private theorem Allocations.valid_head_before
+    {head : ℕ × ℕ} {rest : List (ℕ × ℕ)}
+    (hvalid : (head :: rest).Pairwise IntervalBefore)
+    {item : ℕ × ℕ} (hitem : item ∈ rest) :
+    IntervalBefore head item := by
+  exact List.pairwise_cons.mp hvalid |>.1 item hitem
+
+private theorem Allocations.valid_insertList
+    (items : List (ℕ × ℕ)) (start length : ℕ)
+    (hvalid : items.Pairwise IntervalBefore)
+    (hfits : ∀ allocated ∈ items,
+      RowIntervalsDisjoint start length allocated.1 allocated.2)
+    (hlength : 0 < length) :
+    (insertList start length items).Pairwise IntervalBefore := by
+  induction items with
+  | nil => simp [insertList]
+  | cons head rest inductionHypothesis =>
+      simp only [insertList]
+      split
+      next hlt =>
+        rw [List.pairwise_cons]
+        constructor
+        · intro item hitem
+          have hdisjoint := hfits item (by simp_all)
+          rcases hdisjoint with hbefore | hafter
+          · exact hbefore
+          · have hstartLe : head.1 ≤ item.1 := by
+              simp only [List.mem_cons] at hitem
+              rcases hitem with rfl | hrest
+              · exact le_rfl
+              · exact (Nat.le_add_right head.1 head.2).trans
+                  (valid_head_before hvalid hrest)
+            omega
+        · exact hvalid
+      next hge =>
+        rw [List.pairwise_cons] at hvalid ⊢
+        constructor
+        · intro item hitem
+          by_cases hnew : item = (start, length)
+          · subst item
+            have hheadFits := hfits head (by simp)
+            rcases hheadFits with hnewBefore | hheadBefore
+            · omega
+            · exact hheadBefore
+          · rw [mem_insertList_iff] at hitem
+            exact hvalid.1 item (hitem.resolve_left hnew)
+        · apply inductionHypothesis hvalid.2
+          intro allocated hallocated
+          exact hfits allocated (by simp [hallocated])
+
+/-- Inserting a positive fitting interval preserves sorted disjointness. -/
+theorem Allocations.Valid.insert
+    (allocations : Allocations) (start length : ℕ)
+    (hvalid : allocations.Valid)
+    (hfits : allocations.Fits start length)
+    (hlength : 0 < length) :
+    (allocations.insert start length).Valid := by
+  simpa [Valid, insert] using
+    valid_insertList allocations.toList start length hvalid hfits hlength
+
+theorem Allocations.mem_insert
+    (allocations : Allocations) (start length : ℕ) :
+    (start, length) ∈ (allocations.insert start length).toList := by
+  simpa [insert] using mem_insertList allocations.toList start length
+
+theorem Allocations.mem_insert_of_mem
+    (allocations : Allocations) (start length : ℕ)
+    {allocated : ℕ × ℕ} (hallocated : allocated ∈ allocations.toList) :
+    allocated ∈ (allocations.insert start length).toList := by
+  simpa [insert] using
+    mem_insertList_of_mem allocations.toList start length hallocated
 
 /-- `unbounded_interval_start` (`strategy.rs:53-59`): the row after the last allocated
 interval, or 0. -/
@@ -5200,56 +5371,304 @@ def Allocations.unboundedStart (a : Allocations) : ℕ :=
   | some (s, l) => s + l
   | none => 0
 
-/-- One step of `free_intervals`, exposed separately so its elementary range
-invariants do not depend on unfolding the imperative loop. -/
-private def Allocations.freeIntervalsNext (endBound : Option ℕ)
-    (state : MProd (Array (ℕ × Option ℕ)) ℕ) (interval : ℕ × ℕ) :
-    MProd (Array (ℕ × Option ℕ)) ℕ :=
-  let (regionStart, regionLength) := interval
-  let output := state.fst
-  let row := state.snd
-  let past : Bool := match endBound with
-    | some endRow => decide (regionStart ≥ endRow)
-    | none => false
-  if !past then
-    let output :=
-      if row < regionStart then output.push (row, some regionStart)
-      else output
-    ⟨output, max row (regionStart + regionLength)⟩
-  else
-    state
+/-- Recursive core of `free_intervals`. The second component is the first row after
+all processed allocations; the first contains the bounded gaps encountered so far. -/
+def Allocations.scanFreeIntervals (endBound : Option ℕ) :
+    List (ℕ × ℕ) → ℕ → List (ℕ × Option ℕ) × ℕ
+  | [], row => ([], row)
+  | (regionStart, regionLength) :: rest, row =>
+      let past : Bool := match endBound with
+        | some endRow => decide (regionStart ≥ endRow)
+        | none => false
+      if !past then
+        let tail := scanFreeIntervals endBound rest
+          (max row (regionStart + regionLength))
+        (if row < regionStart then
+            (row, some regionStart) :: tail.1
+          else tail.1,
+          tail.2)
+      else
+        scanFreeIntervals endBound rest row
 
 /-- `free_intervals(start, end)` (`strategy.rs:64-98`): the unallocated intervals of this
 column intersecting `[start, end)`, as `(spaceStart, spaceEnd?)` (`end? = none` unbounded).
-Verbatim port of the `scan`: a region with `start ≥ end` is skipped without advancing `row`,
-and the final unbounded item emits `[row, end)` when `end = none ∨ row < end`. -/
+The recursive scan is extensionally the Rust iterator: a region with `start ≥ end` is
+skipped without advancing `row`, and the final item emits `[row, end)` when
+`end = none ∨ row < end`. -/
 def Allocations.freeIntervals (a : Allocations) (start : ℕ) (endBound : Option ℕ) :
     List (ℕ × Option ℕ) :=
-  let result : MProd (Array (ℕ × Option ℕ)) ℕ := Id.run <|
-    forIn a.toList ⟨#[], start⟩ fun interval state =>
-      pure (.yield (Allocations.freeIntervalsNext endBound state interval))
-  let output :=
-    match endBound with
-    | some endRow =>
-        if result.snd < endRow then
-          result.fst.push (result.snd, some endRow)
-        else result.fst
-    | none => result.fst.push (result.snd, none)
-  output.toList
+  let result := scanFreeIntervals endBound a.toList start
+  match endBound with
+  | some endRow =>
+      if result.2 < endRow then
+        result.1 ++ [(result.2, some endRow)]
+      else result.1
+  | none => result.1 ++ [(result.2, none)]
 
-private theorem list_forIn_yield_invariant
-    {ι S : Type} (items : List ι) (next : ι → S → S)
-    (property : S → Prop) (initial : S)
-    (hnext : ∀ item state, property state → property (next item state))
-    (hinitial : property initial) :
-    property (Id.run <|
-      forIn items initial fun item state =>
-        pure (.yield (next item state))) := by
-  induction items generalizing initial with
-  | nil => simpa using hinitial
-  | cons item items inductionHypothesis =>
-      rw [List.forIn_cons]
-      exact inductionHypothesis _ (hnext item initial hinitial)
+/-- A candidate interval lies within a free-space descriptor. -/
+def Allocations.SpaceAllows
+    (space : ℕ × Option ℕ) (start length : ℕ) : Prop :=
+  space.1 ≤ start ∧
+    ∀ stop, space.2 = some stop → start + length ≤ stop
+
+private def Allocations.EndsBefore
+    (items : List (ℕ × ℕ)) (row : ℕ) : Prop :=
+  ∀ item ∈ items, item.1 + item.2 ≤ row
+
+private theorem Allocations.valid_head_start_le
+    {head : ℕ × ℕ} {rest : List (ℕ × ℕ)}
+    (hvalid : (head :: rest).Pairwise IntervalBefore)
+    {item : ℕ × ℕ} (hitem : item ∈ head :: rest) :
+    head.1 ≤ item.1 := by
+  simp only [List.mem_cons] at hitem
+  rcases hitem with rfl | hrest
+  · exact le_rfl
+  · exact (Nat.le_add_right head.1 head.2).trans
+      (List.pairwise_cons.mp hvalid |>.1 item hrest)
+
+private theorem Allocations.valid_suffix
+    {previous items : List (ℕ × ℕ)}
+    (hvalid : (previous ++ items).Pairwise IntervalBefore) :
+    items.Pairwise IntervalBefore := by
+  exact (List.pairwise_append.mp hvalid).2.1
+
+private theorem Allocations.fits_of_before_and_after
+    {previous suffix : List (ℕ × ℕ)} {boundary start length : ℕ}
+    (hprevious : EndsBefore previous boundary)
+    (hstart : boundary ≤ start)
+    (hsuffix : ∀ item ∈ suffix, start + length ≤ item.1) :
+    ∀ item ∈ previous ++ suffix,
+      RowIntervalsDisjoint start length item.1 item.2 := by
+  intro item hitem
+  rw [List.mem_append] at hitem
+  rcases hitem with hpast | hsuffixItem
+  · exact Or.inr ((hprevious item hpast).trans hstart)
+  · exact Or.inl (hsuffix item hsuffixItem)
+
+private theorem Allocations.scanFreeIntervals_fst_eq_nil_of_starts_ge
+    (items : List (ℕ × ℕ)) (row endRow : ℕ)
+    (hstarts : ∀ item ∈ items, endRow ≤ item.1) :
+    (scanFreeIntervals (some endRow) items row).1 = [] := by
+  induction items with
+  | nil => rfl
+  | cons head rest inductionHypothesis =>
+      have hhead := hstarts head (by simp)
+      simp only [scanFreeIntervals, hhead, decide_true, Bool.not_true]
+      apply inductionHypothesis
+      intro item hitem
+      exact hstarts item (by simp [hitem])
+
+private theorem Allocations.endsBefore_append_singleton
+    {previous : List (ℕ × ℕ)} {head : ℕ × ℕ} {row : ℕ}
+    (hprevious : EndsBefore previous row) :
+    EndsBefore (previous ++ [head])
+      (max row (head.1 + head.2)) := by
+  intro item hitem
+  rw [List.mem_append, List.mem_singleton] at hitem
+  rcases hitem with hpast | rfl
+  · exact (hprevious item hpast).trans (Nat.le_max_left _ _)
+  · exact Nat.le_max_right _ _
+
+private theorem Allocations.scanFreeIntervals_spaces_fit
+    (previous items : List (ℕ × ℕ)) (row : ℕ)
+    (endBound : Option ℕ)
+    (hvalid : (previous ++ items).Pairwise IntervalBefore)
+    (hprevious : EndsBefore previous row)
+    {space : ℕ × Option ℕ}
+    (hspace : space ∈ (scanFreeIntervals endBound items row).1)
+    {start length : ℕ} (hallows : SpaceAllows space start length) :
+    ∀ allocated ∈ previous ++ items,
+      RowIntervalsDisjoint start length allocated.1 allocated.2 := by
+  cases endBound with
+  | none =>
+      induction items generalizing previous row with
+      | nil => simp [scanFreeIntervals] at hspace
+      | cons head rest inductionHypothesis =>
+          simp only [scanFreeIntervals, Bool.not_false, ↓reduceIte] at hspace
+          split at hspace
+          next hgap =>
+            simp only [List.mem_cons] at hspace
+            rcases hspace with rfl | htail
+            · apply fits_of_before_and_after hprevious hallows.1
+              intro item hitem
+              exact hallows.2 head.1 rfl |>.trans
+                (valid_head_start_le (valid_suffix hvalid) hitem)
+            · intro allocated hallocated
+              exact inductionHypothesis (previous := previous ++ [head])
+                (row := max row (head.1 + head.2))
+                (by simpa only [List.append_assoc] using hvalid)
+                (endsBefore_append_singleton hprevious)
+                htail allocated
+                (by simpa only [List.append_assoc] using hallocated)
+          next hnoGap =>
+            intro allocated hallocated
+            exact inductionHypothesis (previous := previous ++ [head])
+              (row := max row (head.1 + head.2))
+              (by simpa only [List.append_assoc] using hvalid)
+              (endsBefore_append_singleton hprevious)
+              hspace allocated
+              (by simpa only [List.append_assoc] using hallocated)
+  | some endRow =>
+      induction items generalizing previous row with
+      | nil => simp [scanFreeIntervals] at hspace
+      | cons head rest inductionHypothesis =>
+          by_cases hpast : endRow ≤ head.1
+          · have hstarts : ∀ item ∈ head :: rest, endRow ≤ item.1 := by
+              intro item hitem
+              exact hpast.trans
+                (valid_head_start_le (valid_suffix hvalid) hitem)
+            rw [scanFreeIntervals_fst_eq_nil_of_starts_ge
+              (head :: rest) row endRow hstarts] at hspace
+            contradiction
+          · simp only [scanFreeIntervals, hpast, decide_false,
+              Bool.not_false, ↓reduceIte] at hspace
+            split at hspace
+            next hgap =>
+              simp only [List.mem_cons] at hspace
+              rcases hspace with rfl | htail
+              · apply fits_of_before_and_after hprevious hallows.1
+                intro item hitem
+                exact hallows.2 head.1 rfl |>.trans
+                  (valid_head_start_le (valid_suffix hvalid) hitem)
+              · intro allocated hallocated
+                exact inductionHypothesis (previous := previous ++ [head])
+                  (row := max row (head.1 + head.2))
+                  (by simpa only [List.append_assoc] using hvalid)
+                  (endsBefore_append_singleton hprevious)
+                  htail allocated
+                  (by simpa only [List.append_assoc] using hallocated)
+            next hnoGap =>
+              intro allocated hallocated
+              exact inductionHypothesis (previous := previous ++ [head])
+                (row := max row (head.1 + head.2))
+                (by simpa only [List.append_assoc] using hvalid)
+                (endsBefore_append_singleton hprevious)
+                hspace allocated
+                (by simpa only [List.append_assoc] using hallocated)
+
+private theorem Allocations.row_le_scanFreeIntervals
+    (items : List (ℕ × ℕ)) (row : ℕ) (endBound : Option ℕ) :
+    row ≤ (scanFreeIntervals endBound items row).2 := by
+  induction items generalizing row with
+  | nil => exact le_rfl
+  | cons head rest inductionHypothesis =>
+      cases endBound with
+      | none =>
+          simp only [scanFreeIntervals, Bool.not_false, ↓reduceIte]
+          exact (Nat.le_max_left _ _).trans (inductionHypothesis _)
+      | some endRow =>
+          by_cases hpast : endRow ≤ head.1
+          · simp only [scanFreeIntervals, hpast, decide_true,
+              Bool.not_true]
+            exact inductionHypothesis row
+          · simp only [scanFreeIntervals, hpast, decide_false,
+              Bool.not_false, ↓reduceIte]
+            exact (Nat.le_max_left _ _).trans (inductionHypothesis _)
+
+private theorem Allocations.scanFreeIntervals_boundary
+    (items : List (ℕ × ℕ)) (row : ℕ) (endBound : Option ℕ) :
+    ∀ item ∈ items,
+      item.1 + item.2 ≤ (scanFreeIntervals endBound items row).2 ∨
+        ∃ endRow, endBound = some endRow ∧ endRow ≤ item.1 := by
+  intro item hitem
+  induction items generalizing row with
+  | nil => simp at hitem
+  | cons head rest inductionHypothesis =>
+      simp only [List.mem_cons] at hitem
+      cases endBound with
+      | none =>
+          simp only [scanFreeIntervals, Bool.not_false, ↓reduceIte]
+          rcases hitem with heq | hrest
+          · subst item
+            exact Or.inl ((Nat.le_max_right row (head.1 + head.2)).trans
+              (row_le_scanFreeIntervals rest
+                (max row (head.1 + head.2)) none))
+          · exact inductionHypothesis (max row (head.1 + head.2)) hrest
+      | some endRow =>
+          by_cases hpast : endRow ≤ head.1
+          · simp only [scanFreeIntervals, hpast, decide_true,
+              Bool.not_true]
+            rcases hitem with heq | hrest
+            · subst item
+              exact Or.inr ⟨endRow, rfl, hpast⟩
+            · exact inductionHypothesis row hrest
+          · simp only [scanFreeIntervals, hpast, decide_false,
+              Bool.not_false, ↓reduceIte]
+            rcases hitem with heq | hrest
+            · subst item
+              exact Or.inl (Nat.le_max_right row (head.1 + head.2) |>.trans
+                (row_le_scanFreeIntervals rest
+                  (max row (head.1 + head.2)) (some endRow)))
+            · exact inductionHypothesis (max row (head.1 + head.2)) hrest
+
+/-- Every interval admitted by `freeIntervals` is disjoint from all allocations. -/
+theorem Allocations.freeIntervals_fits
+    (allocations : Allocations) (start : ℕ) (endBound : Option ℕ)
+    (hvalid : allocations.Valid)
+    {space : ℕ × Option ℕ}
+    (hspace : space ∈ allocations.freeIntervals start endBound)
+    {candidate length : ℕ}
+    (hallows : SpaceAllows space candidate length) :
+    allocations.Fits candidate length := by
+  cases endBound with
+  | none =>
+      simp only [freeIntervals, List.mem_append,
+        List.mem_singleton] at hspace
+      rcases hspace with hscan | rfl
+      · exact scanFreeIntervals_spaces_fit [] allocations.toList start none
+          (by simpa [Valid] using hvalid) (by simp [EndsBefore]) hscan hallows
+      · intro item hitem
+        have hboundary :=
+          scanFreeIntervals_boundary allocations.toList start none item hitem
+        rcases hboundary with hbefore | ⟨_, hnone, _⟩
+        · exact Or.inr (hbefore.trans hallows.1)
+        · contradiction
+  | some endRow =>
+      simp only [freeIntervals] at hspace
+      split at hspace
+      next hfinal =>
+        simp only [List.mem_append, List.mem_singleton] at hspace
+        rcases hspace with hscan | rfl
+        · exact scanFreeIntervals_spaces_fit [] allocations.toList start
+            (some endRow) (by simpa [Valid] using hvalid)
+            (by simp [EndsBefore]) hscan hallows
+        · intro item hitem
+          have hboundary := scanFreeIntervals_boundary allocations.toList
+            start (some endRow) item hitem
+          rcases hboundary with hbefore | ⟨foundEnd, heq, hafter⟩
+          · exact Or.inr (hbefore.trans hallows.1)
+          · simp only [Option.some.injEq] at heq
+            subst foundEnd
+            exact Or.inl ((hallows.2 endRow rfl).trans hafter)
+      next hnoFinal =>
+        exact scanFreeIntervals_spaces_fit [] allocations.toList start
+          (some endRow) (by simpa [Valid] using hvalid)
+          (by simp [EndsBefore]) hspace hallows
+
+private theorem Allocations.scanFreeIntervals_end_le
+    (items : List (ℕ × ℕ)) (row endRow : ℕ)
+    {spaceStart spaceEnd : ℕ}
+    (hspace : (spaceStart, some spaceEnd) ∈
+      (scanFreeIntervals (some endRow) items row).1) :
+    spaceEnd ≤ endRow := by
+  induction items generalizing row with
+  | nil => simp [scanFreeIntervals] at hspace
+  | cons head rest inductionHypothesis =>
+      by_cases hpast : endRow ≤ head.1
+      · simp only [scanFreeIntervals, hpast, decide_true,
+          Bool.not_true] at hspace
+        exact inductionHypothesis row hspace
+      · simp only [scanFreeIntervals, hpast, decide_false,
+          Bool.not_false, ↓reduceIte] at hspace
+        split at hspace
+        next hgap =>
+          simp only [List.mem_cons, Prod.mk.injEq,
+            Option.some.injEq] at hspace
+          rcases hspace with ⟨rfl, rfl⟩ | htail
+          · omega
+          · exact inductionHypothesis _ htail
+        next hnoGap =>
+          exact inductionHypothesis _ hspace
 
 /-- Every bounded free interval ends within the requested upper bound. -/
 theorem Allocations.freeIntervals_end_le
@@ -5259,59 +5678,246 @@ theorem Allocations.freeIntervals_end_le
       (intervalStart, some intervalEnd) ∈
         allocations.freeIntervals start (some endRow)) :
     intervalEnd ≤ endRow := by
-  let Good := fun state : MProd (Array (ℕ × Option ℕ)) ℕ =>
-    ∀ interval ∈ state.fst.toList,
-      ∀ foundEnd, interval.2 = some foundEnd → foundEnd ≤ endRow
-  let initial : MProd (Array (ℕ × Option ℕ)) ℕ := ⟨#[], start⟩
-  let result : MProd (Array (ℕ × Option ℕ)) ℕ := Id.run <|
-    forIn allocations.toList initial fun interval state =>
-      pure (.yield (Allocations.freeIntervalsNext (some endRow) state interval))
-  have hresult : Good result := by
-    apply list_forIn_yield_invariant allocations.toList
-      (fun interval state =>
-        Allocations.freeIntervalsNext (some endRow) state interval)
-      Good initial
-    · intro interval state hstate
-      rcases interval with ⟨regionStart, regionLength⟩
-      simp only [Allocations.freeIntervalsNext]
-      by_cases hpast : regionStart ≥ endRow
-      · simp [hpast]
-        exact hstate
-      · simp only [hpast, decide_false, Bool.not_false]
-        by_cases hgap : state.snd < regionStart
-        · simp only [hgap, ↓reduceIte]
-          intro found hfound foundEnd hfoundEnd
-          simp at hfound
-          rcases hfound with hfound | rfl
-          · exact hstate found (by simpa using hfound) foundEnd hfoundEnd
-          · simp only [Option.some.injEq] at hfoundEnd
-            subst foundEnd
-            omega
-        · simp only [hgap, ↓reduceIte]
-          exact hstate
-    · intro interval hinterval foundEnd hfoundEnd
-      simp [initial] at hinterval
+  simp only [Allocations.freeIntervals] at hinterval
+  split at hinterval
+  next hfinal =>
+    simp only [List.mem_append, List.mem_singleton,
+      Prod.mk.injEq, Option.some.injEq] at hinterval
+    rcases hinterval with hscan | ⟨_, rfl⟩
+    · exact scanFreeIntervals_end_le allocations.toList start endRow hscan
+    · exact le_rfl
+  next hnoFinal =>
+    exact scanFreeIntervals_end_le allocations.toList start endRow hinterval
 
-  unfold Allocations.freeIntervals at hinterval
-  dsimp only at hinterval
-  change
-    (intervalStart, some intervalEnd) ∈
-      (if result.snd < endRow then
-        result.fst.push (result.snd, some endRow)
-      else result.fst).toList at hinterval
-  by_cases hfinal : result.snd < endRow
-  · simp only [hfinal, ↓reduceIte, Array.toList_push,
-      List.mem_append, List.mem_singleton] at hinterval
-    rcases hinterval with hprevious | hlast
-    · exact hresult (intervalStart, some intervalEnd) hprevious
-        intervalEnd rfl
-    · exact Nat.le_of_eq (by simpa using congrArg Prod.snd hlast)
-  · simp only [hfinal, ↓reduceIte] at hinterval
-    exact hresult (intervalStart, some intervalEnd) hinterval
-      intervalEnd rfl
+private theorem Allocations.scanFreeIntervals_start_le
+    (items : List (ℕ × ℕ)) (row : ℕ) (endBound : Option ℕ)
+    {space : ℕ × Option ℕ}
+    (hspace : space ∈ (scanFreeIntervals endBound items row).1) :
+    row ≤ space.1 := by
+  induction items generalizing row with
+  | nil => simp [scanFreeIntervals] at hspace
+  | cons head rest inductionHypothesis =>
+      cases endBound with
+      | none =>
+          simp only [scanFreeIntervals, Bool.not_false, ↓reduceIte] at hspace
+          split at hspace
+          next hgap =>
+            simp only [List.mem_cons] at hspace
+            rcases hspace with rfl | htail
+            · exact le_rfl
+            · exact (Nat.le_max_left _ _).trans
+                (inductionHypothesis _ htail)
+          next =>
+            exact (Nat.le_max_left _ _).trans
+              (inductionHypothesis _ hspace)
+      | some endRow =>
+          by_cases hpast : endRow ≤ head.1
+          · simp only [scanFreeIntervals, hpast, decide_true,
+              Bool.not_true] at hspace
+            exact inductionHypothesis row hspace
+          · simp only [scanFreeIntervals, hpast, decide_false,
+              Bool.not_false, ↓reduceIte] at hspace
+            split at hspace
+            next hgap =>
+              simp only [List.mem_cons] at hspace
+              rcases hspace with rfl | htail
+              · exact le_rfl
+              · exact (Nat.le_max_left _ _).trans
+                  (inductionHypothesis _ htail)
+            next =>
+              exact (Nat.le_max_left _ _).trans
+                (inductionHypothesis _ hspace)
+
+theorem Allocations.freeIntervals_start_le
+    (allocations : Allocations) (start : ℕ) (endBound : Option ℕ)
+    {space : ℕ × Option ℕ}
+    (hspace : space ∈ allocations.freeIntervals start endBound) :
+    start ≤ space.1 := by
+  cases endBound with
+  | none =>
+      simp only [Allocations.freeIntervals, List.mem_append,
+        List.mem_singleton] at hspace
+      rcases hspace with hscan | rfl
+      · exact scanFreeIntervals_start_le _ _ _ hscan
+      · exact row_le_scanFreeIntervals _ _ _
+  | some endRow =>
+      simp only [Allocations.freeIntervals] at hspace
+      split at hspace
+      next =>
+        simp only [List.mem_append, List.mem_singleton] at hspace
+        rcases hspace with hscan | rfl
+        · exact scanFreeIntervals_start_le _ _ _ hscan
+        · exact row_le_scanFreeIntervals _ _ _
+      next => exact scanFreeIntervals_start_le _ _ _ hspace
+
+private theorem Allocations.scanFreeIntervals_bounded
+    (items : List (ℕ × ℕ)) (row endRow : ℕ)
+    {space : ℕ × Option ℕ}
+    (hspace : space ∈
+      (scanFreeIntervals (some endRow) items row).1) :
+    ∃ stop, space.2 = some stop := by
+  induction items generalizing row with
+  | nil => simp [scanFreeIntervals] at hspace
+  | cons head rest inductionHypothesis =>
+      by_cases hpast : endRow ≤ head.1
+      · simp only [scanFreeIntervals, hpast, decide_true,
+          Bool.not_true] at hspace
+        exact inductionHypothesis row hspace
+      · simp only [scanFreeIntervals, hpast, decide_false,
+          Bool.not_false, ↓reduceIte] at hspace
+        split at hspace
+        next =>
+          simp only [List.mem_cons] at hspace
+          rcases hspace with rfl | htail
+          · exact ⟨head.1, rfl⟩
+          · exact inductionHypothesis _ htail
+        next => exact inductionHypothesis _ hspace
+
+theorem Allocations.freeIntervals_bounded
+    (allocations : Allocations) (start endRow : ℕ)
+    {space : ℕ × Option ℕ}
+    (hspace : space ∈ allocations.freeIntervals start (some endRow)) :
+    ∃ stop, space.2 = some stop := by
+  simp only [Allocations.freeIntervals] at hspace
+  split at hspace
+  next =>
+    simp only [List.mem_append, List.mem_singleton] at hspace
+    rcases hspace with hscan | rfl
+    · exact scanFreeIntervals_bounded _ _ _ hscan
+    · exact ⟨endRow, rfl⟩
+  next => exact scanFreeIntervals_bounded _ _ _ hspace
 
 /-- The circuit's per-column allocations. -/
 abbrev CircuitAllocations := Std.HashMap RegionColumn Allocations
+
+/-- Every per-column allocation sequence satisfies its ordering invariant. -/
+def CircuitAllocations.Valid (allocations : CircuitAllocations) : Prop :=
+  ∀ column, (allocations.getD column #[]).Valid
+
+/-- Every allocation recorded before remains recorded after an update. -/
+def CircuitAllocations.Extends
+    (before after : CircuitAllocations) : Prop :=
+  ∀ column interval,
+    interval ∈ (before.getD column #[]).toList →
+      interval ∈ (after.getD column #[]).toList
+
+/-- An update leaves columns outside the given footprint unchanged. -/
+def CircuitAllocations.SameOutside
+    (columns : List RegionColumn)
+    (before after : CircuitAllocations) : Prop :=
+  ∀ column, column ∉ columns →
+    after.getD column #[] = before.getD column #[]
+
+/-- An allocation map records one placed interval in every listed column. -/
+def CircuitAllocations.Records
+    (allocations : CircuitAllocations) (columns : List RegionColumn)
+    (start length : ℕ) : Prop :=
+  ∀ column ∈ columns,
+    (start, length) ∈ (allocations.getD column #[]).toList
+
+theorem CircuitAllocations.Valid.empty :
+    (∅ : CircuitAllocations).Valid := by
+  intro column
+  simp [Allocations.Valid]
+
+theorem CircuitAllocations.Extends.refl
+    (allocations : CircuitAllocations) :
+    allocations.Extends allocations := by
+  intro column interval hinterval
+  exact hinterval
+
+theorem CircuitAllocations.Extends.trans
+    {first second third : CircuitAllocations}
+    (hfirst : first.Extends second) (hsecond : second.Extends third) :
+    first.Extends third := by
+  intro column interval hinterval
+  exact hsecond column interval (hfirst column interval hinterval)
+
+theorem CircuitAllocations.Valid.insertSame
+    {allocations : CircuitAllocations} (hvalid : allocations.Valid)
+    (column : RegionColumn) :
+    CircuitAllocations.Valid
+      (allocations.insert column (allocations.getD column #[])) := by
+  intro candidate
+  rw [Std.HashMap.getD_insert]
+  split
+  next heq =>
+    have : column = candidate := by simpa using heq
+    subst candidate
+    exact hvalid column
+  · exact hvalid candidate
+
+theorem CircuitAllocations.Extends.insertSame
+    (allocations : CircuitAllocations) (column : RegionColumn) :
+    allocations.Extends
+      (allocations.insert column (allocations.getD column #[])) := by
+  intro candidate interval hinterval
+  rw [Std.HashMap.getD_insert]
+  split
+  next heq =>
+    have : column = candidate := by simpa using heq
+    subst candidate
+    exact hinterval
+  · exact hinterval
+
+theorem CircuitAllocations.SameOutside.insertSame
+    (allocations : CircuitAllocations) (column : RegionColumn) :
+    allocations.SameOutside [column]
+      (allocations.insert column (allocations.getD column #[])) := by
+  intro candidate hcandidate
+  simp only [List.mem_singleton] at hcandidate
+  rw [Std.HashMap.getD_insert]
+  split
+  next heq =>
+    exact False.elim (hcandidate (beq_iff_eq.mp heq).symm)
+  next => rfl
+
+theorem CircuitAllocations.Valid.insertAllocation
+    {allocations : CircuitAllocations} (hvalid : allocations.Valid)
+    (column : RegionColumn) (start length : ℕ)
+    (hfits : (allocations.getD column #[]).Fits start length)
+    (hlength : 0 < length) :
+    CircuitAllocations.Valid
+      (allocations.insert column
+        ((allocations.getD column #[]).insert start length)) := by
+  intro candidate
+  rw [Std.HashMap.getD_insert]
+  split
+  next heq =>
+    have : column = candidate := by simpa using heq
+    subst candidate
+    exact Allocations.Valid.insert _ _ _
+      (hvalid column) hfits hlength
+  next hne => exact hvalid candidate
+
+theorem CircuitAllocations.Extends.insertAllocation
+    (allocations : CircuitAllocations) (column : RegionColumn)
+    (start length : ℕ) :
+    allocations.Extends
+      (allocations.insert column
+        ((allocations.getD column #[]).insert start length)) := by
+  intro candidate interval hinterval
+  rw [Std.HashMap.getD_insert]
+  split
+  next heq =>
+    have : column = candidate := by simpa using heq
+    subst candidate
+    exact Allocations.mem_insert_of_mem _ _ _ hinterval
+  next hne => exact hinterval
+
+theorem CircuitAllocations.SameOutside.insertAllocation
+    (allocations : CircuitAllocations) (column : RegionColumn)
+    (start length : ℕ) :
+    allocations.SameOutside [column]
+      (allocations.insert column
+        ((allocations.getD column #[]).insert start length)) := by
+  intro candidate hcandidate
+  simp only [List.mem_singleton] at hcandidate
+  rw [Std.HashMap.getD_insert]
+  split
+  next heq =>
+    exact False.elim (hcandidate (beq_iff_eq.mp heq).symm)
+  next => rfl
 
 mutual
 
@@ -5365,50 +5971,635 @@ termination_by (fuel, 1, spaces.length)
 
 end
 
+/-- A successful recursive placement remains inside its initial search window. -/
+def Within (start : ℕ) (slack : Option ℕ)
+    (length row : ℕ) : Prop :=
+  start ≤ row ∧
+    ∀ available, slack = some available →
+      row + length ≤ start + length + available
+
+/-- The allocation facts preserved by either a successful or failed first-fit search. -/
+structure PlacementLaw
+    (before : CircuitAllocations) (columns : List RegionColumn)
+    (length : ℕ) (result : Option ℕ × CircuitAllocations) : Prop where
+  valid : result.2.Valid
+  preserves : before.Extends result.2
+  sameOutside : before.SameOutside columns result.2
+  records : ∀ row, result.1 = some row →
+    result.2.Records columns row length
+  fits : ∀ row, result.1 = some row →
+    ∀ column ∈ columns,
+      (before.getD column #[]).Fits row length
+
+private def FirstFitLaw
+    (fuel : ℕ) (allocations : CircuitAllocations)
+    (columns : List RegionColumn) (length start : ℕ)
+    (slack : Option ℕ) : Prop :=
+  allocations.Valid → columns.Nodup → 0 < length →
+    let result := firstFit fuel allocations columns length start slack
+    PlacementLaw allocations columns length result ∧
+      ∀ row, result.1 = some row → Within start slack length row
+
+private def TrySpacesLaw
+    (fuel : ℕ) (allocations : CircuitAllocations)
+    (column : RegionColumn) (rest : List RegionColumn)
+    (length : ℕ) (spaces : List (ℕ × Option ℕ)) : Prop :=
+  allocations.Valid → rest.Nodup → column ∉ rest → 0 < length →
+    (∀ space ∈ spaces, ∀ row,
+      Allocations.SpaceAllows space row length →
+        (allocations.getD column #[]).Fits row length) →
+    let result := trySpaces fuel allocations column rest length spaces
+    PlacementLaw allocations (column :: rest) length result ∧
+      ∀ row, result.1 = some row →
+        ∃ space ∈ spaces,
+          Allocations.SpaceAllows space row length
+
+private theorem within_space_of_ok
+    (spaceStart : ℕ) (spaceEnd : Option ℕ) (length row : ℕ)
+    (hok : (match spaceEnd.map fun endRow =>
+        (endRow : ℤ) - spaceStart - length with
+      | some available => decide (available ≥ 0)
+      | none => true) = true)
+    (hwithin : Within spaceStart
+      ((spaceEnd.map fun endRow =>
+        (endRow : ℤ) - spaceStart - length).map Int.toNat)
+      length row) :
+    Allocations.SpaceAllows (spaceStart, spaceEnd) row length := by
+  constructor
+  · exact hwithin.1
+  · intro stop hstop
+    change spaceEnd = some stop at hstop
+    subst spaceEnd
+    change decide
+      (((stop : ℤ) - spaceStart - length) ≥ 0) = true at hok
+    rw [decide_eq_true_eq] at hok
+    have hbound := hwithin.2
+      ((stop : ℤ) - spaceStart - length).toNat rfl
+    have hcast :
+        (↑(((stop : ℤ) - spaceStart - length).toNat) : ℤ) =
+          (stop : ℤ) - spaceStart - length :=
+      Int.toNat_of_nonneg hok
+    omega
+
+/-- First-fit preserves allocation validity and records any successful placement. -/
+theorem firstFit_law
+    (fuel : ℕ) (allocations : CircuitAllocations)
+    (columns : List RegionColumn) (length start : ℕ)
+    (slack : Option ℕ) :
+    FirstFitLaw fuel allocations columns length start slack := by
+  apply firstFit.induct (regionLen := length)
+    (motive1 := fun fuel allocations columns start slack =>
+      FirstFitLaw fuel allocations columns length start slack)
+    (motive2 := fun fuel allocations column rest spaces =>
+      TrySpacesLaw fuel allocations column rest length spaces)
+  all_goals simp only [FirstFitLaw, TrySpacesLaw]
+  case case1 =>
+    intro fuel allocations start slack hvalid hnodup hlength
+    simp only [firstFit]
+    constructor
+    · exact
+        { valid := hvalid
+          preserves := CircuitAllocations.Extends.refl allocations
+          sameOutside := by intro column hcolumn; rfl
+          records := by
+            intro row hrow column hcolumn
+            simp at hcolumn
+          fits := by
+            intro row hrow column hcolumn
+            simp at hcolumn }
+    · intro row hrow
+      simp only [Option.some.injEq] at hrow
+      subst row
+      exact ⟨le_rfl, by intro available havailable; omega⟩
+  case case2 =>
+    intro allocations start slack head tail hvalid hnodup hlength
+    simp only [firstFit]
+    constructor
+    · exact
+        { valid := hvalid
+          preserves := CircuitAllocations.Extends.refl allocations
+          sameOutside := by intro column hcolumn; rfl
+          records := by simp
+          fits := by simp }
+    · simp
+  case case3 =>
+    intro allocations start slack fuel column rest inductionHypothesis
+      hvalid hnodup hlength
+    have hrestNodup := List.nodup_cons.mp hnodup |>.2
+    have hcolumnRest := List.nodup_cons.mp hnodup |>.1
+    let initialized :=
+      allocations.insert column (allocations.getD column #[])
+    have hinitializedValid : CircuitAllocations.Valid initialized :=
+      CircuitAllocations.Valid.insertSame hvalid column
+    have hspaceSafety :
+        ∀ space ∈ (allocations.getD column #[]).freeIntervals start
+            (slack.map fun available => start + length + available),
+          ∀ row, Allocations.SpaceAllows space row length →
+            (initialized.getD column #[]).Fits row length := by
+      intro space hspace row hallows
+      have hfits := Allocations.freeIntervals_fits
+        (allocations.getD column #[]) start
+        (slack.map fun available => start + length + available)
+        (hvalid column) hspace hallows
+      simpa [initialized, Std.HashMap.getD_insert] using hfits
+    obtain ⟨hlaw, hwitness⟩ := inductionHypothesis
+      hinitializedValid hrestNodup hcolumnRest hlength hspaceSafety
+    simp only [firstFit]
+    constructor
+    · refine
+        { valid := hlaw.valid
+          preserves := ?_
+          sameOutside := ?_
+          records := hlaw.records
+          fits := ?_ }
+      · exact (CircuitAllocations.Extends.insertSame allocations column).trans
+          hlaw.preserves
+      · intro candidate hcandidate
+        have hresult := hlaw.sameOutside candidate hcandidate
+        rw [hresult]
+        exact CircuitAllocations.SameOutside.insertSame allocations column
+          candidate (by
+            intro heq
+            apply hcandidate
+            simp only [List.mem_cons]
+            exact Or.inl (by simpa using heq))
+      · intro row hrow candidate hcandidate
+        have hfits := hlaw.fits row hrow candidate hcandidate
+        change (initialized.getD candidate #[]).Fits row length at hfits
+        dsimp only [initialized] at hfits
+        rw [Std.HashMap.getD_insert] at hfits
+        split at hfits
+        next heq =>
+          have : column = candidate := beq_iff_eq.mp heq
+          subst candidate
+          exact hfits
+        next => exact hfits
+    · intro row hrow
+      obtain ⟨space, hspace, hallows⟩ := hwitness row hrow
+      constructor
+      · exact (Allocations.freeIntervals_start_le _ _ _ hspace).trans
+          hallows.1
+      · intro available havailable
+        subst slack
+        simp only [Option.map_some] at hspace
+        obtain ⟨stop, hstop⟩ :=
+          Allocations.freeIntervals_bounded _ _ _ hspace
+        rcases space with ⟨spaceStart, spaceEnd⟩
+        simp only at hstop
+        subst spaceEnd
+        exact (hallows.2 stop rfl).trans
+          (Allocations.freeIntervals_end_le _ _ _ hspace)
+  case case4 =>
+    intro fuel allocations column rest hvalid hnodup hcolumn hlength
+      hspaceSafety
+    simp only [trySpaces]
+    constructor
+    · exact
+        { valid := hvalid
+          preserves := CircuitAllocations.Extends.refl allocations
+          sameOutside := by intro candidate hcandidate; rfl
+          records := by simp
+          fits := by simp }
+    · simp
+  case case5 =>
+    intro fuel allocations column rest spaceStart spaceEnd more hok
+      recursiveAllocations row hrecursive inductionHypothesis
+      hvalid hnodup hcolumn hlength hspaceSafety
+    obtain ⟨hrecursiveLaw, hrecursiveWithin⟩ :=
+      inductionHypothesis hvalid hnodup hlength
+    rw [hrecursive] at hrecursiveLaw hrecursiveWithin
+    have hallows := within_space_of_ok spaceStart spaceEnd length row hok
+      (hrecursiveWithin row rfl)
+    have hfitsOriginal := hspaceSafety (spaceStart, spaceEnd)
+      (by simp) row hallows
+    have hcolumnSame := hrecursiveLaw.sameOutside column hcolumn
+    have hfitsRecursive :
+        (recursiveAllocations.getD column #[]).Fits row length := by
+      rw [hcolumnSame]
+      exact hfitsOriginal
+    let resultAllocations := recursiveAllocations.insert column
+      ((recursiveAllocations.getD column #[]).insert row length)
+    have hresultValid : CircuitAllocations.Valid resultAllocations :=
+      CircuitAllocations.Valid.insertAllocation hrecursiveLaw.valid
+        column row length hfitsRecursive hlength
+    have hinsertExtends := CircuitAllocations.Extends.insertAllocation
+      recursiveAllocations column row length
+    simp only [trySpaces, hok, if_true, hrecursive]
+    constructor
+    · refine
+        { valid := hresultValid
+          preserves := hrecursiveLaw.preserves.trans hinsertExtends
+          sameOutside := ?_
+          records := ?_
+          fits := ?_ }
+      · intro candidate hcandidate
+        have hinsertSame :=
+          CircuitAllocations.SameOutside.insertAllocation
+            recursiveAllocations column row length candidate
+            (by
+              intro heq
+              apply hcandidate
+              simp only [List.mem_cons]
+              exact Or.inl (by simpa using heq))
+        rw [hinsertSame]
+        exact hrecursiveLaw.sameOutside candidate (by
+          intro hrest
+          apply hcandidate
+          simp [hrest])
+      · intro foundRow hfound
+        have : foundRow = row := Option.some.inj hfound.symm
+        subst foundRow
+        intro candidate hcandidate
+        simp only [List.mem_cons] at hcandidate
+        rcases hcandidate with rfl | hrest
+        · rw [Std.HashMap.getD_insert, if_pos]
+          · exact Allocations.mem_insert _ _ _
+          · simp
+        · exact hinsertExtends candidate (row, length)
+            (hrecursiveLaw.records row rfl candidate hrest)
+      · intro foundRow hfound candidate hcandidate
+        have : foundRow = row := Option.some.inj hfound.symm
+        subst foundRow
+        simp only [List.mem_cons] at hcandidate
+        rcases hcandidate with rfl | hrest
+        · exact hfitsOriginal
+        · exact hrecursiveLaw.fits row rfl candidate hrest
+    · intro foundRow hfound
+      have : foundRow = row := Option.some.inj hfound.symm
+      subst foundRow
+      exact ⟨(spaceStart, spaceEnd), by simp, hallows⟩
+  case case6 =>
+    intro fuel allocations column rest spaceStart spaceEnd more hok
+      recursiveAllocations hrecursive firstInduction spacesInduction
+      hvalid hnodup hcolumn hlength hspaceSafety
+    obtain ⟨hrecursiveLaw, hrecursiveWithin⟩ :=
+      firstInduction hvalid hnodup hlength
+    rw [hrecursive] at hrecursiveLaw hrecursiveWithin
+    have hcolumnSame := hrecursiveLaw.sameOutside column hcolumn
+    have hremainingSafety :
+        ∀ space ∈ more, ∀ row,
+          Allocations.SpaceAllows space row length →
+            (recursiveAllocations.getD column #[]).Fits row length := by
+      intro space hspace row hallows
+      rw [hcolumnSame]
+      exact hspaceSafety space (by simp [hspace]) row hallows
+    obtain ⟨hremainingLaw, hremainingWitness⟩ :=
+      spacesInduction hrecursiveLaw.valid hnodup hcolumn hlength
+        hremainingSafety
+    simp only [trySpaces, hok, if_true, hrecursive]
+    constructor
+    · refine
+        { valid := hremainingLaw.valid
+          preserves := hrecursiveLaw.preserves.trans
+            hremainingLaw.preserves
+          sameOutside := ?_
+          records := hremainingLaw.records
+          fits := ?_ }
+      · intro candidate hcandidate
+        rw [hremainingLaw.sameOutside candidate hcandidate]
+        apply hrecursiveLaw.sameOutside candidate
+        intro hrest
+        apply hcandidate
+        simp [hrest]
+      · intro row hrow candidate hcandidate
+        have hfits := hremainingLaw.fits row hrow candidate hcandidate
+        intro interval hinterval
+        exact hfits interval
+          (hrecursiveLaw.preserves candidate interval hinterval)
+    · intro row hrow
+      obtain ⟨space, hspace, hallows⟩ :=
+        hremainingWitness row hrow
+      exact ⟨space, by simp [hspace], hallows⟩
+  case case7 =>
+    intro fuel allocations column rest spaceStart spaceEnd more hok
+      inductionHypothesis hvalid hnodup hcolumn hlength hspaceSafety
+    obtain ⟨hlaw, hwitness⟩ := inductionHypothesis
+      hvalid hnodup hcolumn hlength (by
+        intro space hspace row hallows
+        exact hspaceSafety space (by simp [hspace]) row hallows)
+    simp only [trySpaces, hok]
+    exact ⟨hlaw, by
+      intro row hrow
+      obtain ⟨space, hspace, hallows⟩ := hwitness row hrow
+      exact ⟨space, by simp [hspace], hallows⟩⟩
+
+private theorem trySpaces_success_of_final_unbounded
+    (initialSpaces : List (ℕ × Option ℕ))
+    (fuel : ℕ) (allocations : CircuitAllocations)
+    (column : RegionColumn) (rest : List RegionColumn)
+    (length finalStart : ℕ)
+    (hvalid : allocations.Valid)
+    (hnodup : rest.Nodup) (hlength : 0 < length)
+    (hrecursiveSuccess :
+      ∀ current, current.Valid →
+        ∃ row updated,
+          firstFit fuel current rest length finalStart none =
+            (some row, updated)) :
+    ∃ row updated,
+      trySpaces fuel allocations column rest length
+        (initialSpaces ++ [(finalStart, none)]) = (some row, updated) := by
+  induction initialSpaces generalizing allocations with
+  | nil =>
+      obtain ⟨row, updated, hresult⟩ :=
+        hrecursiveSuccess allocations hvalid
+      exact ⟨row,
+        updated.insert column
+          ((updated.getD column #[]).insert row length), by
+          simp [trySpaces, hresult]⟩
+  | cons space more inductionHypothesis =>
+      rcases space with ⟨spaceStart, spaceEnd⟩
+      cases spaceEnd with
+      | none =>
+        cases hresult : firstFit fuel allocations rest length spaceStart
+            none with
+        | mk rowOption updated =>
+          cases rowOption with
+          | some row =>
+              exact ⟨row,
+                updated.insert column
+                  ((updated.getD column #[]).insert row length), by
+                    simp [trySpaces, hresult]⟩
+          | none =>
+              have hfirstLaw := firstFit_law fuel allocations rest
+                length spaceStart none hvalid hnodup hlength
+              rw [hresult] at hfirstLaw
+              obtain ⟨row, final, hfinal⟩ :=
+                inductionHypothesis updated hfirstLaw.1.valid
+              exact ⟨row, final, by simp [trySpaces, hresult, hfinal]⟩
+      | some spaceEnd =>
+          by_cases hfits :
+              (0 : ℤ) ≤ (spaceEnd : ℤ) - spaceStart - length
+          · have hcondition :
+                (length : ℤ) ≤ (spaceEnd : ℤ) - spaceStart := by
+              omega
+            cases hresult : firstFit fuel allocations rest length spaceStart
+                (some (spaceEnd - spaceStart - length)) with
+            | mk rowOption updated =>
+              cases rowOption with
+              | some row =>
+                  exact ⟨row,
+                    updated.insert column
+                      ((updated.getD column #[]).insert row length), by
+                        simp [trySpaces, hcondition, hresult]⟩
+              | none =>
+                  have hfirstLaw := firstFit_law fuel allocations rest
+                    length spaceStart
+                    (some (spaceEnd - spaceStart - length))
+                    hvalid hnodup hlength
+                  rw [hresult] at hfirstLaw
+                  obtain ⟨row, final, hfinal⟩ :=
+                    inductionHypothesis updated hfirstLaw.1.valid
+                  exact ⟨row, final, by
+                    simp [trySpaces, hcondition, hresult, hfinal]⟩
+          · obtain ⟨row, updated, hresult⟩ :=
+              inductionHypothesis allocations hvalid
+            exact ⟨row, updated, by
+              have hcondition :
+                  ¬(length : ℤ) ≤ (spaceEnd : ℤ) - spaceStart := by
+                omega
+              simp [trySpaces, hcondition, hresult]⟩
+
+/-- With unbounded outer slack, sufficient fuel always yields a placement. -/
+theorem firstFit_success_unbounded
+    (columns : List RegionColumn) (allocations : CircuitAllocations)
+    (length start : ℕ)
+    (hvalid : allocations.Valid) (hnodup : columns.Nodup)
+    (hlength : 0 < length) :
+    ∃ row updated,
+      firstFit columns.length allocations columns length start none =
+        (some row, updated) := by
+  induction columns generalizing allocations start with
+  | nil => exact ⟨start, allocations, by simp [firstFit]⟩
+  | cons column rest inductionHypothesis =>
+      have hrestNodup := List.nodup_cons.mp hnodup |>.2
+      let initialized :=
+        allocations.insert column (allocations.getD column #[])
+      let scanResult := Allocations.scanFreeIntervals none
+        (allocations.getD column #[]).toList start
+      have hinitializedValid : CircuitAllocations.Valid initialized :=
+        CircuitAllocations.Valid.insertSame hvalid column
+      have hrecursiveSuccess :
+          ∀ current, current.Valid →
+            ∃ row updated,
+              firstFit rest.length current rest length
+                scanResult.2 none =
+                (some row, updated) := by
+        intro current hcurrent
+        exact inductionHypothesis current _ hcurrent hrestNodup
+      obtain ⟨row, updated, hresult⟩ :=
+        trySpaces_success_of_final_unbounded scanResult.1
+          rest.length initialized column rest length scanResult.2
+          hinitializedValid hrestNodup hlength hrecursiveSuccess
+      exact ⟨row, updated, by
+        simpa [firstFit, initialized, Allocations.freeIntervals] using hresult⟩
+
 /-- `slot_in` (`strategy.rs:165-195`): place each shape (in the given order) at the earliest
 free common row via `first_fit_region`, threading the allocations. Returns the
 `(regionIndex, start)` pairs in the input order plus the final allocations. -/
-def slotIn (shapes : List RegionShape) : List (ℕ × ℕ) × CircuitAllocations :=
-  shapes.foldl (init := ([], ∅)) fun (acc : List (ℕ × ℕ) × CircuitAllocations) shape =>
-    let (pairs, colAllocs) := acc
+def slotInFrom (shapes : List RegionShape)
+    (colAllocs : CircuitAllocations) :
+    List (ℕ × ℕ) × CircuitAllocations :=
+  match shapes with
+  | [] => ([], colAllocs)
+  | shape :: rest =>
     let cols := sortRegionColumns shape.columns
     let (row?, colAllocs') := firstFit cols.length colAllocs cols shape.rowCount 0 none
-    (pairs ++ [(shape.index, row?.getD 0)], colAllocs')
+    let (pairs, finalAllocations) := slotInFrom rest colAllocs'
+    ((shape.index, row?.getD 0) :: pairs, finalAllocations)
 
-/-! ## Guarded selector placement
+/-- `slot_in` (`strategy.rs:165-195`) from an initially empty allocation map. -/
+def slotIn (shapes : List RegionShape) :
+    List (ℕ × ℕ) × CircuitAllocations :=
+  slotInFrom shapes ∅
 
-The legacy planner's two sorting implementations are consensus-critical computations,
-but their implementations do not expose permutation proofs. Rather than make selector
-cell-disjointness depend on those implementation details, V1 validates the candidate's
-small list of virtual-selector intervals. A rejected candidate falls back to a
-globally row-disjoint placement with matching allocation state.
--/
+/-- Pair shapes with the starts returned in the same slotting order. -/
+def placedShapes (shapes : List RegionShape)
+    (pairs : List (ℕ × ℕ)) : List (RegionShape × ℕ) :=
+  shapes.zip (pairs.map (·.2))
 
-/-- Disjointness of two half-open row intervals. -/
-def RowIntervalsDisjoint
-    (leftStart leftLength rightStart rightLength : ℕ) : Prop :=
-  leftStart + leftLength ≤ rightStart ∨
-    rightStart + rightLength ≤ leftStart
+private def PlacedRecords (allocations : CircuitAllocations)
+    (placed : List (RegionShape × ℕ)) : Prop :=
+  ∀ item ∈ placed, ∀ column ∈ item.1.columns,
+    (item.2, item.1.rowCount) ∈
+      (allocations.getD column #[]).toList
 
-/-- Whether two measured regions share any concrete or virtual column. -/
-def columnsOverlap
-    (left right : List RegionColumn) : Bool :=
-  left.any fun column => right.contains column
+private def PlacedFits (allocations : CircuitAllocations)
+    (placed : List (RegionShape × ℕ)) : Prop :=
+  ∀ item ∈ placed, ∀ column ∈ item.1.columns,
+    (allocations.getD column #[]).Fits item.2 item.1.rowCount
 
-/-- Finite safety check for every shared measured column in a candidate placement. -/
-def CheckedSharedColumnIntervalsDisjoint
-    (shapes : List RegionShape) (starts : List ℕ) : Prop :=
-  shapes.Pairwise fun left right =>
-    columnsOverlap left.columns right.columns = false ∨
+/-- Pairwise row disjointness for shapes that share a planner column. -/
+def PlacedDisjoint (placed : List (RegionShape × ℕ)) : Prop :=
+  placed.Pairwise fun left right =>
+    ∀ column, column ∈ left.1.columns → column ∈ right.1.columns →
       RowIntervalsDisjoint
-        (starts.getD left.index 0) left.rowCount
-        (starts.getD right.index 0) right.rowCount
+        left.2 left.1.rowCount right.2 right.1.rowCount
 
-private def checkedSharedColumnIntervalsDisjointDecidable
-    (shapes : List RegionShape) (starts : List ℕ) :
-    Decidable (CheckedSharedColumnIntervalsDisjoint shapes starts) := by
-  unfold CheckedSharedColumnIntervalsDisjoint RowIntervalsDisjoint
-  infer_instance
+/-- The compositional correctness interface of `slotInFrom`. -/
+structure SlotInLaw
+    (before : CircuitAllocations) (shapes : List RegionShape)
+    (result : List (ℕ × ℕ) × CircuitAllocations) : Prop where
+  valid : result.2.Valid
+  preserves : before.Extends result.2
+  indices : result.1.map (·.1) = shapes.map RegionShape.index
+  records : PlacedRecords result.2 (placedShapes shapes result.1)
+  fitsBefore : PlacedFits before (placedShapes shapes result.1)
+  disjoint : PlacedDisjoint (placedShapes shapes result.1)
+
+/-- Recursive slotting preserves allocation validity and separates shared columns. -/
+theorem slotInFrom_law
+    (shapes : List RegionShape) (allocations : CircuitAllocations)
+    (hvalid : allocations.Valid)
+    (hshapes : shapes.Forall RegionShape.WellFormed) :
+    SlotInLaw allocations shapes (slotInFrom shapes allocations) := by
+  induction shapes generalizing allocations with
+  | nil =>
+      exact
+        { valid := hvalid
+          preserves := CircuitAllocations.Extends.refl allocations
+          indices := rfl
+          records := by simp [PlacedRecords, placedShapes]
+          fitsBefore := by simp [PlacedFits, placedShapes]
+          disjoint := by simp [PlacedDisjoint, placedShapes] }
+  | cons shape rest inductionHypothesis =>
+      rw [List.forall_cons] at hshapes
+      have hcolumnsNodup : (sortRegionColumns shape.columns).Nodup :=
+        (sortRegionColumns_perm shape.columns).nodup_iff.mpr
+          hshapes.1.1
+      by_cases hcolumns : shape.columns = []
+      · have hsorted : sortRegionColumns shape.columns = [] := by
+          exact List.eq_nil_iff_forall_not_mem.mpr fun column hcolumn =>
+            (by simpa [hcolumns] using
+              (sortRegionColumns_perm shape.columns).mem_iff.mp hcolumn)
+        have hrecursive := inductionHypothesis allocations hvalid hshapes.2
+        simp only [slotInFrom, hsorted, firstFit]
+        refine
+          { valid := hrecursive.valid
+            preserves := hrecursive.preserves
+            indices := by simp [hrecursive.indices]
+            records := ?_
+            fitsBefore := ?_
+            disjoint := ?_ }
+        · intro item hitem column hcolumn
+          simp only [placedShapes, List.map_cons, List.zip_cons_cons,
+            List.mem_cons] at hitem
+          rcases hitem with rfl | hrest
+          · simp [hcolumns] at hcolumn
+          · exact hrecursive.records item (by
+              simpa [placedShapes] using hrest) column hcolumn
+        · intro item hitem column hcolumn
+          simp only [placedShapes, List.map_cons, List.zip_cons_cons,
+            List.mem_cons] at hitem
+          rcases hitem with rfl | hrest
+          · simp [hcolumns] at hcolumn
+          · exact hrecursive.fitsBefore item (by
+              simpa [placedShapes] using hrest) column hcolumn
+        · unfold placedShapes PlacedDisjoint
+          rw [List.map_cons, List.zip_cons_cons, List.pairwise_cons]
+          exact ⟨by
+            intro item hitem column hcolumn
+            simp [hcolumns] at hcolumn,
+            hrecursive.disjoint⟩
+      · have hrowCount : 0 < shape.rowCount := hshapes.1.2 hcolumns
+        obtain ⟨row, nextAllocations, hplacement⟩ :=
+          firstFit_success_unbounded (sortRegionColumns shape.columns)
+            allocations shape.rowCount 0 hvalid hcolumnsNodup hrowCount
+        have hplacementLaw := firstFit_law
+          (sortRegionColumns shape.columns).length allocations
+          (sortRegionColumns shape.columns) shape.rowCount 0 none
+          hvalid hcolumnsNodup hrowCount
+        rw [hplacement] at hplacementLaw
+        have hrecursive := inductionHypothesis nextAllocations
+          hplacementLaw.1.valid hshapes.2
+        simp only [slotInFrom, hplacement]
+        refine
+          { valid := hrecursive.valid
+            preserves := hplacementLaw.1.preserves.trans
+              hrecursive.preserves
+            indices := by simp [hrecursive.indices]
+            records := ?_
+            fitsBefore := ?_
+            disjoint := ?_ }
+        · intro item hitem column hcolumn
+          simp only [placedShapes, List.map_cons, List.zip_cons_cons,
+            List.mem_cons] at hitem
+          rcases hitem with rfl | hrest
+          · exact hrecursive.preserves column (row, shape.rowCount)
+              (hplacementLaw.1.records row rfl column
+                ((sortRegionColumns_perm shape.columns).mem_iff.mpr hcolumn))
+          · exact hrecursive.records item (by
+              simpa [placedShapes] using hrest) column hcolumn
+        · intro item hitem column hcolumn
+          simp only [placedShapes, List.map_cons, List.zip_cons_cons,
+            List.mem_cons] at hitem
+          rcases hitem with rfl | hrest
+          · exact hplacementLaw.1.fits row rfl column
+              ((sortRegionColumns_perm shape.columns).mem_iff.mpr hcolumn)
+          · intro interval hinterval
+            exact hrecursive.fitsBefore item (by
+                simpa [placedShapes] using hrest) column hcolumn
+              interval
+              (hplacementLaw.1.preserves column interval hinterval)
+        · unfold placedShapes PlacedDisjoint
+          rw [List.map_cons, List.zip_cons_cons, List.pairwise_cons]
+          constructor
+          · intro item hitem column hshapeColumn hitemColumn
+            have hitemFit := hrecursive.fitsBefore item (by
+              simpa [placedShapes] using hitem) column hitemColumn
+            have hshapeRecord := hplacementLaw.1.records row rfl column
+              ((sortRegionColumns_perm shape.columns).mem_iff.mpr
+                hshapeColumn)
+            exact (hitemFit (row, shape.rowCount) hshapeRecord).elim
+              Or.inr Or.inl
+          · exact hrecursive.disjoint
+
+private theorem placedShapes_exists_of_mem
+    (shapes : List RegionShape) (pairs : List (ℕ × ℕ))
+    (hindices : pairs.map (·.1) = shapes.map RegionShape.index)
+    {shape : RegionShape} (hshape : shape ∈ shapes) :
+    ∃ start, (shape, start) ∈ placedShapes shapes pairs := by
+  induction shapes generalizing pairs with
+  | nil => simp at hshape
+  | cons head rest inductionHypothesis =>
+      cases pairs with
+      | nil => simp at hindices
+      | cons pair remaining =>
+          simp only [List.map_cons, List.cons.injEq] at hindices
+          simp only [List.mem_cons] at hshape
+          rcases hshape with rfl | hrest
+          · exact ⟨pair.2, by simp [placedShapes]⟩
+          · obtain ⟨start, hplaced⟩ :=
+              inductionHypothesis remaining hindices.2 hrest
+            exact ⟨start, by
+              simp only [placedShapes, List.map_cons, List.zip_cons_cons,
+                List.mem_cons]
+              exact Or.inr hplaced⟩
+
+private theorem pair_mem_of_mem_placedShapes
+    (shapes : List RegionShape) (pairs : List (ℕ × ℕ))
+    (hindices : pairs.map (·.1) = shapes.map RegionShape.index)
+    {shape : RegionShape} {start : ℕ}
+    (hplaced : (shape, start) ∈ placedShapes shapes pairs) :
+    (shape.index, start) ∈ pairs := by
+  induction shapes generalizing pairs with
+  | nil => simp [placedShapes] at hplaced
+  | cons head rest inductionHypothesis =>
+      cases pairs with
+      | nil => simp [placedShapes] at hplaced
+      | cons pair remaining =>
+          simp only [List.map_cons, List.cons.injEq] at hindices
+          simp only [placedShapes, List.map_cons, List.zip_cons_cons,
+            List.mem_cons] at hplaced
+          rcases hplaced with hhead | htail
+          · have hshape : shape = head := congrArg Prod.fst hhead
+            have hstart : start = pair.2 := congrArg Prod.snd hhead
+            subst shape
+            subst start
+            rw [List.mem_cons]
+            apply Or.inl
+            exact Prod.ext hindices.1.symm rfl
+          · exact List.mem_cons_of_mem _
+              (inductionHypothesis remaining hindices.2 htail)
 
 /-- Distinct regions sharing any measured column occupy disjoint row intervals. -/
 def SharedColumnIntervalsDisjoint
@@ -5423,43 +6614,6 @@ def SharedColumnIntervalsDisjoint
       RowIntervalsDisjoint
         (starts.getD left.index 0) left.rowCount
         (starts.getD right.index 0) right.rowCount
-
-/-- One occurrence of a virtual selector column in a placed region. -/
-structure SelectorPlacement where
-  selector : ℕ
-  regionIndex : ℕ
-  start : ℕ
-  length : ℕ
-deriving DecidableEq
-
-/-- Flatten the virtual-selector part of a placed region layout. -/
-def selectorPlacements
-    (shapes : List RegionShape) (starts : List ℕ) :
-    List SelectorPlacement :=
-  shapes.flatMap fun shape =>
-    shape.columns.filterMap fun
-      | .selector selector =>
-          some
-            { selector
-              regionIndex := shape.index
-              start := starts.getD shape.index 0
-              length := shape.rowCount }
-      | .column _ _ => none
-
-/-- Finite selector-only safety check for a candidate placement. -/
-def CheckedSharedSelectorIntervalsDisjoint
-    (shapes : List RegionShape) (starts : List ℕ) : Prop :=
-  (selectorPlacements shapes starts).Pairwise fun left right =>
-    left.selector ≠ right.selector ∨
-      left.regionIndex = right.regionIndex ∨
-      RowIntervalsDisjoint
-        left.start left.length right.start right.length
-
-private def checkedSharedSelectorIntervalsDisjointDecidable
-    (shapes : List RegionShape) (starts : List ℕ) :
-    Decidable (CheckedSharedSelectorIntervalsDisjoint shapes starts) := by
-  unfold CheckedSharedSelectorIntervalsDisjoint RowIntervalsDisjoint
-  infer_instance
 
 /--
 The semantic selector-placement invariant: distinct regions that share a virtual
@@ -5497,181 +6651,6 @@ private theorem rel_or_reverse_of_pairwise_of_mem
       · rcases hright with rfl | hright
         · exact Or.inr (hpairs.1 left hleft)
         · exact ih hpairs.2 hleft hright
-
-/-- Acceptance of the full finite guard implies the shared-column invariant. -/
-theorem sharedColumnIntervalsDisjoint_of_checked
-    {shapes : List RegionShape} {starts : List ℕ}
-    (hchecked :
-      CheckedSharedColumnIntervalsDisjoint shapes starts) :
-    SharedColumnIntervalsDisjoint shapes starts := by
-  intro left right hleft hright hindices column
-    hleftColumn hrightColumn
-  have hne : left ≠ right := by
-    intro heq
-    apply hindices
-    exact congrArg RegionShape.index heq
-  rcases rel_or_reverse_of_pairwise_of_mem
-      hchecked hleft hright hne with hforward | hreverse
-  · rcases hforward with hcolumns | hintervals
-    · have hnotContains :=
-        List.any_eq_false.mp hcolumns column hleftColumn
-      exact False.elim
-        (hnotContains (List.contains_iff_mem.mpr hrightColumn))
-    · exact hintervals
-  · rcases hreverse with hcolumns | hintervals
-    · have hnotContains :=
-        List.any_eq_false.mp hcolumns column hrightColumn
-      exact False.elim
-        (hnotContains (List.contains_iff_mem.mpr hleftColumn))
-    · exact hintervals.elim Or.inr Or.inl
-
-private theorem selectorPlacement_mem
-    {shapes : List RegionShape} {starts : List ℕ}
-    {shape : RegionShape} (hshape : shape ∈ shapes)
-    {selector : ℕ}
-    (hselector : RegionColumn.selector selector ∈ shape.columns) :
-    { selector
-      regionIndex := shape.index
-      start := starts.getD shape.index 0
-      length := shape.rowCount : SelectorPlacement } ∈
-      selectorPlacements shapes starts := by
-  rw [selectorPlacements, List.mem_flatMap]
-  refine ⟨shape, hshape, ?_⟩
-  rw [List.mem_filterMap]
-  exact ⟨.selector selector, hselector, rfl⟩
-
-/-- Acceptance of the finite guard implies the semantic selector invariant. -/
-theorem sharedSelectorIntervalsDisjoint_of_checked
-    {shapes : List RegionShape} {starts : List ℕ}
-    (hchecked :
-      CheckedSharedSelectorIntervalsDisjoint shapes starts) :
-    SharedSelectorIntervalsDisjoint shapes starts := by
-  intro left right hleft hright hindices selector
-    hleftSelector hrightSelector
-  let leftPlacement : SelectorPlacement :=
-    { selector
-      regionIndex := left.index
-      start := starts.getD left.index 0
-      length := left.rowCount }
-  let rightPlacement : SelectorPlacement :=
-    { selector
-      regionIndex := right.index
-      start := starts.getD right.index 0
-      length := right.rowCount }
-  have hleftPlacement : leftPlacement ∈ selectorPlacements shapes starts :=
-    selectorPlacement_mem hleft hleftSelector
-  have hrightPlacement : rightPlacement ∈ selectorPlacements shapes starts :=
-    selectorPlacement_mem hright hrightSelector
-  have hne : leftPlacement ≠ rightPlacement := by
-    intro heq
-    apply hindices
-    exact congrArg SelectorPlacement.regionIndex heq
-  rcases rel_or_reverse_of_pairwise_of_mem hchecked
-      hleftPlacement hrightPlacement hne with hforward | hreverse
-  · rcases hforward with hselector | hregion | hintervals
-    · exact False.elim (hselector rfl)
-    · exact False.elim (hindices hregion)
-    · exact hintervals
-  · rcases hreverse with hselector | hregion | hintervals
-    · exact False.elim (hselector rfl)
-    · exact False.elim (hindices hregion.symm)
-    · exact hintervals.elim Or.inr Or.inl
-
-/-- One plus the largest region index, enough entries to address every shape. -/
-def fallbackStartsLength (shapes : List RegionShape) : ℕ :=
-  shapes.foldl (fun length shape => max length (shape.index + 1)) 0
-
-/-- The largest measured region height. -/
-def fallbackStride (shapes : List RegionShape) : ℕ :=
-  shapes.foldl (fun stride shape => max stride shape.rowCount) 0
-
-/--
-A universally safe fallback: region `i` starts at `i * maxRowCount`, so distinct
-region indices occupy globally disjoint row intervals.
--/
-def globallyDisjointStarts (shapes : List RegionShape) : List ℕ :=
-  (List.range (fallbackStartsLength shapes)).map
-    fun index => index * fallbackStride shapes
-
-private theorem index_lt_fallbackStartsLength_of_mem
-    {shapes : List RegionShape} {shape : RegionShape}
-    (hshape : shape ∈ shapes) :
-    shape.index < fallbackStartsLength shapes := by
-  rw [Nat.lt_iff_add_one_le]
-  exact value_le_foldl_max_of_mem shapes
-    (fun current => current.index + 1) 0 shape hshape
-
-private theorem rowCount_le_fallbackStride_of_mem
-    {shapes : List RegionShape} {shape : RegionShape}
-    (hshape : shape ∈ shapes) :
-    shape.rowCount ≤ fallbackStride shapes := by
-  exact value_le_foldl_max_of_mem shapes
-    RegionShape.rowCount 0 shape hshape
-
-private theorem globallyDisjointStarts_getD
-    {shapes : List RegionShape} {shape : RegionShape}
-    (hshape : shape ∈ shapes) :
-    (globallyDisjointStarts shapes).getD shape.index 0 =
-      shape.index * fallbackStride shapes := by
-  have hindex :=
-    index_lt_fallbackStartsLength_of_mem hshape
-  simp [globallyDisjointStarts, hindex]
-
-/-- The conservative fallback satisfies the shared-column invariant. -/
-theorem globallyDisjointStarts_sharedColumnIntervalsDisjoint
-    (shapes : List RegionShape) :
-    SharedColumnIntervalsDisjoint
-      shapes (globallyDisjointStarts shapes) := by
-  intro left right hleft hright hindices column
-    hleftColumn hrightColumn
-  rw [globallyDisjointStarts_getD hleft,
-    globallyDisjointStarts_getD hright]
-  have hleftHeight :=
-    rowCount_le_fallbackStride_of_mem hleft
-  have hrightHeight :=
-    rowCount_le_fallbackStride_of_mem hright
-  rcases Nat.lt_or_gt_of_ne hindices with hlt | hgt
-  · left
-    calc
-      left.index * fallbackStride shapes + left.rowCount ≤
-          left.index * fallbackStride shapes +
-            fallbackStride shapes :=
-        Nat.add_le_add_left hleftHeight _
-      _ = (left.index + 1) * fallbackStride shapes := by
-        rw [Nat.add_mul, one_mul]
-      _ ≤ right.index * fallbackStride shapes :=
-        Nat.mul_le_mul_right _ (Nat.add_one_le_iff.mpr hlt)
-  · right
-    calc
-      right.index * fallbackStride shapes + right.rowCount ≤
-          right.index * fallbackStride shapes +
-            fallbackStride shapes :=
-        Nat.add_le_add_left hrightHeight _
-      _ = (right.index + 1) * fallbackStride shapes := by
-        rw [Nat.add_mul, one_mul]
-      _ ≤ left.index * fallbackStride shapes :=
-        Nat.mul_le_mul_right _ (Nat.add_one_le_iff.mpr hgt)
-
-/-- The conservative fallback also satisfies the selector-only projection. -/
-theorem globallyDisjointStarts_sharedSelectorIntervalsDisjoint
-    (shapes : List RegionShape) :
-    SharedSelectorIntervalsDisjoint
-      shapes (globallyDisjointStarts shapes) := by
-  intro left right hleft hright hindices selector
-    hleftSelector hrightSelector
-  exact globallyDisjointStarts_sharedColumnIntervalsDisjoint shapes
-    hleft hright hindices hleftSelector hrightSelector
-
-/-- Allocation state corresponding to `globallyDisjointStarts`. -/
-def globallyDisjointAllocations
-    (shapes : List RegionShape) : CircuitAllocations :=
-  let stride := fallbackStride shapes
-  shapes.foldl (init := ∅) fun allocations shape =>
-    let start := shape.index * stride
-    shape.columns.foldl (init := allocations) fun current column =>
-      let columnAllocations := current.getD column #[]
-      current.insert column
-        (columnAllocations.insert start shape.rowCount)
 
 /-- An operation activates selector `selector` at region-local `row`. -/
 def activatesSelectorAt (selector row : ℕ) : RegionOperation F → Prop
@@ -5912,38 +6891,203 @@ theorem activation_origin_regionIndex_unique
 
 namespace V1
 
+/-- Restore region-index order after largest-region-first slotting. -/
+def sortPairsByIndex (pairs : List (ℕ × ℕ)) : List (ℕ × ℕ) :=
+  pairs.insertionSort fun left right => left.1 ≤ right.1
+
+theorem sortPairsByIndex_perm (pairs : List (ℕ × ℕ)) :
+    (sortPairsByIndex pairs).Perm pairs := by
+  exact List.perm_insertionSort
+    (r := fun left right : ℕ × ℕ => left.1 ≤ right.1) pairs
+
+private theorem sortPairsByIndex_fst_sorted (pairs : List (ℕ × ℕ)) :
+    (sortPairsByIndex pairs).map (·.1) |>.SortedLE := by
+  have hpairs := List.pairwise_insertionSort
+    (r := fun left right : ℕ × ℕ => left.1 ≤ right.1) pairs
+  have general : ∀ items : List (ℕ × ℕ),
+      items.Pairwise (fun left right => left.1 ≤ right.1) →
+        (items.map (·.1)).Pairwise (· ≤ ·) := by
+    intro items hitems
+    induction items with
+    | nil => simp
+    | cons head rest inductionHypothesis =>
+        rw [List.pairwise_cons] at hitems
+        rw [List.map_cons, List.pairwise_cons]
+        constructor
+        · intro item hitem
+          rw [List.mem_map] at hitem
+          obtain ⟨pair, hpair, rfl⟩ := hitem
+          exact hitems.1 pair hpair
+        · exact inductionHypothesis hitems.2
+  rw [List.sortedLE_iff_pairwise]
+  exact general _ hpairs
+
+private theorem range_sortedLE (count : ℕ) :
+    (List.range count).SortedLE := by
+  rw [List.sortedLE_iff_pairwise]
+  induction count with
+  | zero => simp
+  | succ count inductionHypothesis =>
+      rw [List.range_succ, List.pairwise_append]
+      exact ⟨inductionHypothesis, by simp, by
+        intro left hleft right hright
+        simp only [List.mem_singleton] at hright
+        subst right
+        exact Nat.le_of_lt (List.mem_range.mp hleft)⟩
+
+private theorem sortPairsByIndex_fst_eq_range
+    (pairs : List (ℕ × ℕ)) (count : ℕ)
+    (hindices : (pairs.map (·.1)).Perm (List.range count)) :
+    (sortPairsByIndex pairs).map (·.1) = List.range count := by
+  apply List.Perm.eq_of_sortedLE
+    (sortPairsByIndex_fst_sorted pairs)
+    (range_sortedLE count)
+  exact (sortPairsByIndex_perm pairs).map (·.1) |>.trans hindices
+
+private theorem getD_of_mem_range_zip
+    (values : List ℕ) {index value : ℕ}
+    (hmember : (index, value) ∈
+      (List.range values.length).zip values) :
+    values.getD index 0 = value := by
+  induction values generalizing index value with
+  | nil => simp at hmember
+  | cons head rest inductionHypothesis =>
+      rw [List.length_cons, List.range_succ_eq_map,
+        List.zip_cons_cons, List.mem_cons] at hmember
+      rcases hmember with hhead | htail
+      · have hindex : index = 0 := congrArg Prod.fst hhead
+        have hvalue : value = head := congrArg Prod.snd hhead
+        subst index
+        subst value
+        rfl
+      · rw [List.zip_map_left, List.mem_map] at htail
+        obtain ⟨pair, hpair, heq⟩ := htail
+        rcases pair with ⟨restIndex, restValue⟩
+        have hindex : restIndex + 1 = index := congrArg Prod.fst heq
+        have hvalue : restValue = value := congrArg Prod.snd heq
+        rw [← hindex, ← hvalue]
+        exact inductionHypothesis hpair
+
+private theorem starts_getD_of_pair_mem
+    (pairs : List (ℕ × ℕ)) (count : ℕ)
+    (hindices :
+      (sortPairsByIndex pairs).map (·.1) = List.range count)
+    {index start : ℕ}
+    (hpair : (index, start) ∈ pairs) :
+    ((sortPairsByIndex pairs).map (·.2)).getD index 0 = start := by
+  let sorted := sortPairsByIndex pairs
+  have hsortedPair : (index, start) ∈ sorted :=
+    (sortPairsByIndex_perm pairs).mem_iff.mpr hpair
+  have hzip : sorted =
+      (List.range count).zip (sorted.map (·.2)) := by
+    exact List.zip_of_prod hindices rfl
+  have hlength : (sorted.map (·.2)).length = count := by
+    have := congrArg List.length hindices
+    simpa using this
+  apply getD_of_mem_range_zip (sorted.map (·.2))
+  rw [hlength, ← hzip]
+  exact hsortedPair
+
 /-- `slot_in_biggest_advice_first` (`strategy.rs:198-242`) then un-sort: sort the shapes by
 `key` (legacy pdqsort), reverse (biggest advice area first), slot them in, and re-order the
 resulting starts back to region-index order. Returns `(starts, finalAllocations)`. -/
 def planCandidate (shapes : List RegionShape) : List ℕ × CircuitAllocations :=
   let sortedDesc := (Pdqsort.quicksort shapes.toArray (fun a b => a.key < b.key)).reverse
   let (pairs, colAllocs) := slotIn sortedDesc.toList
-  let byIndex := pairs.toArray.qsort (fun p q => p.1 < q.1)
-  ((byIndex.toList).map (·.2), colAllocs)
+  let byIndex := sortPairsByIndex pairs
+  (byIndex.map (·.2), colAllocs)
 
-/--
-The exact legacy V1 plan when every pair of regions sharing a measured column passes
-the finite safety guard; otherwise a conservative plan whose region intervals and
-allocation state agree.
--/
-def planFull (shapes : List RegionShape) : List ℕ × CircuitAllocations :=
-  let candidate := planCandidate shapes
-  if @decide
-      (CheckedSharedColumnIntervalsDisjoint shapes candidate.1)
-      (checkedSharedColumnIntervalsDisjointDecidable shapes candidate.1) then
-    candidate
-  else
-    (globallyDisjointStarts shapes, globallyDisjointAllocations shapes)
+/-- V1's actual first-fit candidate separates every pair of shared columns. -/
+theorem planCandidate_measureRegions_sharedColumnIntervalsDisjoint
+    (operations : Operations F) :
+    SharedColumnIntervalsDisjoint
+      (measureRegions operations)
+      (planCandidate (measureRegions operations)).1 := by
+  let shapes := measureRegions operations
+  let sortedArray :=
+    (Pdqsort.quicksort shapes.toArray
+      (fun left right => left.key < right.key)).reverse
+  let sortedShapes := sortedArray.toList
+  have hsorted : sortedShapes.Perm shapes := by
+    have hquick := Pdqsort.quicksort_perm shapes.toArray
+      (fun left right => left.key < right.key)
+    exact (by
+      simpa [sortedShapes, sortedArray] using
+        (List.reverse_perm
+          (Pdqsort.quicksort shapes.toArray
+            (fun left right => left.key < right.key)).toList).trans hquick)
+  have hwellFormed : sortedShapes.Forall RegionShape.WellFormed := by
+    rw [List.forall_iff_forall_mem]
+    intro shape hshape
+    have hshape' : shape ∈ measureRegions operations := by
+      exact hsorted.mem_iff.mp hshape
+    exact (List.forall_iff_forall_mem.mp
+      (measureRegions_wellFormed operations)) shape hshape'
+  let slotted := slotIn sortedShapes
+  let pairs := slotted.1
+  have hslot : SlotInLaw (∅ : CircuitAllocations) sortedShapes slotted := by
+    exact slotInFrom_law sortedShapes ∅ CircuitAllocations.Valid.empty
+      hwellFormed
+  have hpairsRange : (pairs.map (·.1)).Perm
+      (List.range operations.regionCount) := by
+    rw [hslot.indices]
+    have hindices := hsorted.map RegionShape.index
+    change (sortedShapes.map RegionShape.index).Perm
+      ((measureRegions operations).map RegionShape.index) at hindices
+    rw [measureRegions_indices_eq_range] at hindices
+    exact hindices
+  have hsortedIndices :
+      (sortPairsByIndex pairs).map (·.1) =
+        List.range operations.regionCount :=
+    sortPairsByIndex_fst_eq_range pairs operations.regionCount
+      hpairsRange
+  have hplanStarts :
+      (planCandidate (measureRegions operations)).1 =
+        (sortPairsByIndex pairs).map (·.2) := by
+    rfl
+  intro left right hleft hright hindices column
+    hleftColumn hrightColumn
+  have hleftSorted : left ∈ sortedShapes := hsorted.mem_iff.mpr hleft
+  have hrightSorted : right ∈ sortedShapes := hsorted.mem_iff.mpr hright
+  obtain ⟨leftStart, hleftPlaced⟩ :=
+    placedShapes_exists_of_mem sortedShapes pairs hslot.indices hleftSorted
+  obtain ⟨rightStart, hrightPlaced⟩ :=
+    placedShapes_exists_of_mem sortedShapes pairs hslot.indices hrightSorted
+  have hleftPair : (left.index, leftStart) ∈ pairs :=
+    pair_mem_of_mem_placedShapes sortedShapes pairs hslot.indices hleftPlaced
+  have hrightPair : (right.index, rightStart) ∈ pairs :=
+    pair_mem_of_mem_placedShapes sortedShapes pairs hslot.indices hrightPlaced
+  have hleftStart :
+      ((sortPairsByIndex pairs).map (·.2)).getD left.index 0 =
+        leftStart :=
+    starts_getD_of_pair_mem pairs operations.regionCount
+      hsortedIndices hleftPair
+  have hrightStart :
+      ((sortPairsByIndex pairs).map (·.2)).getD right.index 0 =
+        rightStart :=
+    starts_getD_of_pair_mem pairs operations.regionCount
+      hsortedIndices hrightPair
+  have hplacedNe : (left, leftStart) ≠ (right, rightStart) := by
+    intro heq
+    apply hindices
+    exact congrArg (fun placed : RegionShape × ℕ => placed.1.index) heq
+  rcases rel_or_reverse_of_pairwise_of_mem hslot.disjoint
+      hleftPlaced hrightPlaced hplacedNe with hforward | hreverse
+  · rw [hplanStarts, hleftStart, hrightStart]
+    exact hforward column hleftColumn hrightColumn
+  · have hdisjoint := hreverse column hrightColumn hleftColumn
+    rw [hplanStarts, hleftStart, hrightStart]
+    exact hdisjoint.elim Or.inr Or.inl
 
-/-- Apply the shape-safe V1 planner to the regions measured from an operation stream.
+/-- Apply the proven-safe V1 planner to the regions measured from an operation stream.
 Keep the planner opaque to type-class inference and expose its behavior propositionally. -/
 irreducible_def planOperations
     (operations : Operations F) : List ℕ × CircuitAllocations :=
-  planFull (measureRegions operations)
+  planCandidate (measureRegions operations)
 
 theorem planOperations_eq
     (operations : Operations F) :
-    planOperations operations = planFull (measureRegions operations) := by
+    planOperations operations = planCandidate (measureRegions operations) := by
   rw [planOperations]
 
 /-- The V1 region starts, per `assignRegion` index, from the operation stream. -/
@@ -6226,19 +7370,7 @@ theorem starts_sharedColumnIntervalsDisjoint
     SharedColumnIntervalsDisjoint
       (measureRegions ops) (starts ops) := by
   rw [starts, planOperations_eq]
-  unfold planFull
-  dsimp only
-  split
-  · rename_i hchecked
-    exact sharedColumnIntervalsDisjoint_of_checked
-      (@of_decide_eq_true
-        (CheckedSharedColumnIntervalsDisjoint
-          (measureRegions ops) (planCandidate (measureRegions ops)).1)
-        (checkedSharedColumnIntervalsDisjointDecidable
-          (measureRegions ops) (planCandidate (measureRegions ops)).1)
-        hchecked)
-  · exact globallyDisjointStarts_sharedColumnIntervalsDisjoint
-      (measureRegions ops)
+  exact planCandidate_measureRegions_sharedColumnIntervalsDisjoint ops
 
 /-- Every column's exact compositional occupancy fits below V1's placement end. -/
 theorem columnOccupiedLength_le_placementEnd

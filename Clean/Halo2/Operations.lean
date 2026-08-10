@@ -629,6 +629,35 @@ theorem regionSynthesisSummary_cons_columns
       unionColumns (unionColumns [] (regionOperationShapeColumns operation))
         (regionSynthesisSummary rest).columns := rfl
 
+/-- A measured region that touches a planner column occupies at least one row. -/
+theorem regionSynthesisSummary_rowCount_pos_of_columns_nonempty
+    (operations : RegionOperations F)
+    (hcolumns : (regionSynthesisSummary operations).columns ≠ []) :
+    0 < (regionSynthesisSummary operations).rowCount := by
+  induction operations with
+  | nil => exact False.elim (hcolumns rfl)
+  | cons operation rest inductionHypothesis =>
+      have hnonempty :
+          (unionColumns [] (regionOperationShapeColumns operation) ≠ []) ∨
+            (regionSynthesisSummary rest).columns ≠ [] := by
+        by_contra hneither
+        rw [not_or] at hneither
+        push Not at hneither
+        apply hcolumns
+        rw [regionSynthesisSummary_cons_columns,
+          hneither.1, hneither.2]
+        rfl
+      rw [regionSynthesisSummary,
+        RegionSynthesisSummary.combine_rowCount]
+      rcases hnonempty with hoperation | hrest
+      · have hextent : 0 < regionOperationRowExtent operation := by
+          cases operation <;>
+            simp_all [regionOperationShapeColumns, unionColumns,
+              addColumn, regionOperationRowExtent]
+        exact hextent.trans_le (Nat.le_max_left _ _)
+      · exact (inductionHypothesis hrest).trans_le
+          (Nat.le_max_right _ _)
+
 theorem regionSynthesisSummary_columns_eq_unionColumns
     (operations : RegionOperations F) :
     (regionSynthesisSummary operations).columns =
