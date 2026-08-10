@@ -138,6 +138,16 @@ private theorem actionQueryRequirements :
     Circuit.elaboratedPost, Circuit.configureElaborated]
   trivial
 
+private theorem actionDomainExponentBounds :
+    DomainExponentBounds
+      (TopLevelCompilation.domainRowRequirement
+        (circuit Specs.Sinsemilla.orchardGenerators orchardBases)
+        PublicInputs.layout)
+      (TopLevelCompilation.domainExponent
+        (circuit Specs.Sinsemilla.orchardGenerators orchardBases)
+        PublicInputs.layout) :=
+  minimalKForRows_bounds _ _
+
 def actionCircuit : TopLevelCircuit Fp Config PublicInputs where
   formalCircuit :=
     circuit Specs.Sinsemilla.orchardGenerators orchardBases
@@ -167,6 +177,12 @@ def actionCircuit : TopLevelCircuit Fp Config PublicInputs where
     set_option maxRecDepth 10000 in
       decide
   publicInputLayout := PublicInputs.layout
+  domainExponent :=
+    TopLevelCompilation.domainExponent
+      (circuit Specs.Sinsemilla.orchardGenerators orchardBases)
+      PublicInputs.layout
+  domainExponentBounds :=
+    actionDomainExponentBounds
   PrivateWitness := PrivateWitness
   extractPrivate := fun cfg env =>
     PrivateWitness.ofActionData (extractPost cfg () 0 env)
