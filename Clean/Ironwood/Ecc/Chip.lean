@@ -92,9 +92,8 @@ private theorem configure_selectorRequirements
     (configureInferred advices lagrangeCoeffs rangeCheck).selectorRequirements
       counts := by
   dsimp only [configureInferred, configure]
-  simp [keygen_norm, ConfigureDelta.LookupSelectorsCrossCompatible,
-    Gate.LookupSelectorsCompatible, LookupArgument.auxiliarySelectorIndices,
-    WitnessPoint.configure, AddIncomplete.add, Add.add, Mul.configure,
+  simp [keygen_norm, WitnessPoint.configure,
+    AddIncomplete.add, Add.add, Mul.configure,
     MulIncomplete.configure, MulComplete.configure, MulOverflow.configure,
     MulFixed.configure, MulFixed.FullWidth.configure,
     MulFixed.Short.configure, MulFixed.BaseFieldElem.configure,
@@ -104,8 +103,20 @@ instance (advices : Fin 10 → Column .advice)
     (lagrangeCoeffs : Fin 8 → Column .fixed)
     (rangeCheck : LookupRangeCheck.Config 10) :
     ElaboratedConfigure (configure advices lagrangeCoeffs rangeCheck) :=
-  (configureInferred advices lagrangeCoeffs rangeCheck).closeSelectorRequirements
-    (configure_selectorRequirements advices lagrangeCoeffs rangeCheck)
+  ((configureInferred advices lagrangeCoeffs rangeCheck).closeSelectorRequirements
+    (configure_selectorRequirements advices lagrangeCoeffs rangeCheck)).withNoExternalSelectors (by
+      intro counts
+      constructor
+      · simp [configure_selector_norm, configure,
+          WitnessPoint.configure, AddIncomplete.add, Add.add, Mul.configure,
+          MulIncomplete.configure, MulComplete.configure,
+          MulOverflow.configure, MulFixed.configure,
+          MulFixed.FullWidth.configure, MulFixed.Short.configure,
+          MulFixed.BaseFieldElem.configure,
+          DecomposeRunningSum.configure]
+        omega
+      · rw [configure_delta_lookups]
+        simp)
 
 /-- Every advice column handed to the ECC chip is equality-enabled by its aggregate
 configure program. -/

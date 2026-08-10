@@ -93,11 +93,13 @@ private theorem configure_selectorRequirements
     (advices : Fin 10 → Column .advice) (counts) :
     (configureInferred advices).selectorRequirements counts := by
   dsimp only [configureInferred, configure]
-  simp [configure_selector_norm, ConfigureDelta.LookupSelectorsCrossCompatible]
+  simp [configure_selector_norm]
 
 instance (advices : Fin 10 → Column .advice) :
     ElaboratedConfigure (configure advices) :=
-  (configureInferred advices).closeSelectorRequirements
-    (configure_selectorRequirements advices)
+  ((configureInferred advices).closeSelectorRequirements
+    (configure_selectorRequirements advices)).withNoExternalSelectors (by
+      intro counts
+      constructor <;> simp [configure, gate, Gate.withSelector])
 
 end Zcash.Circuits.CommitIvk

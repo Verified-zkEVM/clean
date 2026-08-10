@@ -26,6 +26,7 @@ open Lean
 initialize registerTraceClass `Halo2.keygen
 
 attribute [keygen_norm]
+  ComplexSelector.toSelector_index ComplexSelector.toSelector_simple
   Configure.delta_bind Configure.delta_pure
   Configure.delta_permutationRequests
   Configure.delta_enableEquality_gates
@@ -51,7 +52,7 @@ attribute [keygen_norm]
   RegionOperations.LookupActivationsWellFormed
   Operations.LookupActivationsWellFormed
   LookupArgument.lookupActivationWellFormed_enable
-  selectorEnabledAtIndex_cons_self
+  selectorEnabledAtIndex_cons_self complexSelectorEnabledAtIndex_cons_self
   Operations.KeygenRegistered.nil Operations.KeygenRegistered.append
   Operations.KeygenRegistered.region_cons
   Operations.KeygenRegistered.constrainInstance_cons

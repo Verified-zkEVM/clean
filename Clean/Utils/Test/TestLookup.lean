@@ -47,6 +47,8 @@ def rcArg (z : Column .advice) (tbl : TableColumn) : LookupArgument Fp where
     let zNext : Expression Fp Query := queryAdvice z 1
     [qL * (qR * (zCur - (2 ^ 4 : Fp) * zNext) + (1 - qR) * zCur)]
   tables := [queryFixed tbl.inner]
+  inputsNoSimpleSelectors := by
+    simp [qLookup, qRunning, Expression.NoSimpleSelectors]
   tablesFree := by simp [Expression.SelectorFree, queryFixed]
   arity := rfl
 

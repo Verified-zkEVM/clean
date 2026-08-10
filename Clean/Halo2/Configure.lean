@@ -77,6 +77,57 @@ def Expression.NoSimpleSelectors : Expression F Query → Prop
   | .mul left right =>
       left.NoSimpleSelectors ∧ right.NoSimpleSelectors
 
+@[circuit_norm, keygen_norm]
+theorem Expression.noSimpleSelectors_queryComplexSelector
+    (selector : ComplexSelector) :
+  (querySelector (F := F) (selector : Selector)).NoSimpleSelectors := by
+  simp [querySelector, Expression.NoSimpleSelectors,
+    ComplexSelector.toSelector_simple]
+
+@[circuit_norm, keygen_norm]
+theorem Expression.noSimpleSelectors_queryAdvice
+    (column : Column .advice) (rotation : Rotation) :
+    (queryAdvice (F := F) column rotation).NoSimpleSelectors := by
+  simp [queryAdvice, Expression.NoSimpleSelectors]
+
+@[circuit_norm, keygen_norm]
+theorem Expression.noSimpleSelectors_queryFixed
+    (column : Column .fixed) :
+    (queryFixed (F := F) column).NoSimpleSelectors := by
+  simp [queryFixed, Expression.NoSimpleSelectors]
+
+@[circuit_norm, keygen_norm]
+theorem Expression.noSimpleSelectors_queryInstance
+    (column : Column .instance) (rotation : Rotation) :
+    (queryInstance (F := F) column rotation).NoSimpleSelectors := by
+  simp [queryInstance, Expression.NoSimpleSelectors]
+
+/-- Every selector atom is the gate's distinguished selector, including its simple
+versus complex kind. -/
+@[circuit_norm]
+def Expression.SelectorsOwnedBy
+    (owner : Selector) : Expression F Query → Prop
+  | .var (.selector selector) => selector = owner
+  | .var _ => True
+  | .const _ => True
+  | .add left right
+  | .mul left right =>
+      left.SelectorsOwnedBy owner ∧ right.SelectorsOwnedBy owner
+
+theorem Expression.selectorsOwnedBy_of_selectorFree
+    (owner : Selector) (expression : Expression F Query)
+    (hfree : expression.SelectorFree) :
+    expression.SelectorsOwnedBy owner := by
+  induction expression with
+  | var query =>
+      cases query <;>
+        simp_all [Expression.SelectorFree, Expression.SelectorsOwnedBy]
+  | const value => trivial
+  | add left right ihLeft ihRight =>
+      exact ⟨ihLeft hfree.1, ihRight hfree.2⟩
+  | mul left right ihLeft ihRight =>
+      exact ⟨ihLeft hfree.1, ihRight hfree.2⟩
+
 /-- One named constraint of a custom gate. Rust: `Constraint<F>`. -/
 structure Constraint (F : Type) where
   name : String := ""
@@ -101,8 +152,7 @@ structure Gate.WellFormed
       constraint.poly.QueriesDeclared queriedCells
   selectorsOwned :
     constraints.Forall fun constraint =>
-      constraint.poly.selectorsCovered
-        (fun index => decide (index = selector.index)) = true
+      constraint.poly.SelectorsOwnedBy selector
   compressionSound :
     ∀ [Field F] (constraint : Constraint F), constraint ∈ constraints →
       ∀ (base : Query → F) (scale : F), scale ≠ 0 →
@@ -179,11 +229,9 @@ def Gate.withSelector
       intro constraint hconstraint
       obtain ⟨⟨constraintName, poly⟩, hsource, rfl⟩ :=
         List.mem_map.mp hconstraint
-      simp only [querySelector, Expression.selectorsCovered,
-        decide_true, Bool.true_and]
-      exact Expression.selectorsCovered_of_selectorFree
-        (fun index => decide (index = selector.index))
-        poly (hfree (constraintName, poly) hsource)
+      simp only [querySelector, Expression.SelectorsOwnedBy, true_and]
+      exact Expression.selectorsOwnedBy_of_selectorFree selector poly
+        (hfree (constraintName, poly) hsource)
     · intro _ constraint hconstraint
       obtain ⟨⟨constraintName, poly⟩, hsource, rfl⟩ :=
         List.mem_map.mp hconstraint
@@ -258,9 +306,11 @@ structure LookupArgument (F : Type) where
   /-- The complex selector whose activation marks a row as participating in this
   lookup. Auxiliary selectors may choose between input modes, but must be activated
   together with this selector; see `LookupSelectorsLawful`. -/
-  masterSelector : Selector
+  masterSelector : ComplexSelector
   inputs : List (Expression F Query)
   tables : List (Expression F Query)
+  /-- Halo 2 rejects simple selectors in lookup input expressions. -/
+  inputsNoSimpleSelectors : inputs.Forall Expression.NoSimpleSelectors
   /-- Halo 2 constructs the table side solely from lookup-table columns. -/
   tablesFree : ∀ table ∈ tables, table.SelectorFree
   /-- `lookup` receives pairs and unzips them, so both tuple sides have equal arity. -/
@@ -357,12 +407,35 @@ theorem LookupArgument.masterSelector_mem_selectorIndices
     argument.masterSelector.index ∈ argument.selectorIndices :=
   List.mem_cons_self
 
+/-- The selector-only projection of a lookup argument. This is the complete data
+needed to check selector compatibility, without retaining its expressions. -/
+structure LookupSelectorUsage where
+  master : ComplexSelector
+  auxiliary : List ℕ
+  selectors : List ℕ
+deriving DecidableEq, Repr
+
+def LookupArgument.selectorUsage
+    (argument : LookupArgument F) : LookupSelectorUsage where
+  master := argument.masterSelector
+  auxiliary := argument.auxiliarySelectorIndices
+  selectors := argument.selectorIndices
+
+def Selector.LookupSelectorsCompatible
+    (gate : Selector) (argument : LookupSelectorUsage) : Prop :=
+  (argument.auxiliary.Forall fun selector => selector ≠ gate.index) ∧
+    (argument.master.index = gate.index → gate.simple = false)
+
+def LookupSelectorUsage.SelectorsCompatible
+    (source target : LookupSelectorUsage) : Prop :=
+  source.selectors.Forall fun selector =>
+    selector ∈ target.auxiliary → target.master.index = source.master.index
+
 /-- A gate selector cannot double as an auxiliary selector of this lookup. -/
 @[circuit_norm]
 def Gate.LookupSelectorsCompatible
     (gate : Gate F) (argument : LookupArgument F) : Prop :=
-  argument.auxiliarySelectorIndices.Forall fun selector =>
-    selector ≠ gate.selector.index
+  gate.selector.LookupSelectorsCompatible argument.selectorUsage
 
 /-- Enabling selectors declared by `source` respects `target`'s master-selector rule.
 This one-sided formulation permits harmless selector sharing whenever `target`'s
@@ -370,14 +443,14 @@ master is enabled as well. -/
 @[circuit_norm]
 def LookupArgument.SelectorsCompatible
     (source target : LookupArgument F) : Prop :=
-  source.selectorIndices.Forall fun selector =>
-    selector ∈ target.auxiliarySelectorIndices →
-      target.masterSelector.index = source.masterSelector.index
+  source.selectorUsage.SelectorsCompatible target.selectorUsage
 
 @[circuit_norm]
 theorem LookupArgument.selectorsCompatible_self
     (argument : LookupArgument F) : argument.SelectorsCompatible argument := by
-  rw [LookupArgument.SelectorsCompatible, List.forall_iff_forall_mem]
+  rw [LookupArgument.SelectorsCompatible,
+    LookupSelectorUsage.SelectorsCompatible,
+    LookupArgument.selectorUsage, List.forall_iff_forall_mem]
   intros
   rfl
 
@@ -1362,9 +1435,9 @@ def selector : Configure F Selector :=
       { numSelectors := 1 })⟩
 
 /-- Rust: `meta.complex_selector()`. -/
-def complexSelector : Configure F Selector :=
+def complexSelector : Configure F ComplexSelector :=
   ⟨fun counts =>
-    (⟨counts.numSelectors, false⟩, {},
+    (⟨counts.numSelectors⟩, {},
       { numSelectors := 1 })⟩
 
 /-- Rust: `meta.enable_equality(column)`. Idempotent, exactly like Rust's
@@ -1462,10 +1535,13 @@ def LookupQueriesDeclared
       expression.QueriesDeclared queriedCells
 
 def lookup (queriedCells : List (Expression F Query))
-    (masterSelector : Selector)
+    (masterSelector : ComplexSelector)
     (tableMap : List (Expression F Query × TableColumn))
     (_hqueries : LookupQueriesDeclared queriedCells tableMap := by
-      query_correct) : Configure F Unit :=
+      query_correct)
+    (_hnoSimpleSelectors :
+      (tableMap.map Prod.fst).Forall Expression.NoSimpleSelectors := by
+      simp [Expression.NoSimpleSelectors]) : Configure F Unit :=
   let inputs := tableMap.map Prod.fst
   let tables : List (Expression F Query) :=
     tableMap.map fun (_, tbl) => queryFixed tbl.inner
@@ -1476,12 +1552,22 @@ def lookup (queriedCells : List (Expression F Query))
     simp [Expression.SelectorFree, queryFixed]
   have arity : inputs.length = tables.length := by
     simp [inputs, tables]
+  have inputsNoSimpleSelectors :
+      inputs.Forall Expression.NoSimpleSelectors :=
+    _hnoSimpleSelectors
+  let argument : LookupArgument F :=
+    { masterSelector := masterSelector
+      inputs := inputs
+      tables := tables
+      inputsNoSimpleSelectors := inputsNoSimpleSelectors
+      tablesFree := tablesFree
+      arity := arity }
   ⟨fun _ =>
     let queryDelta := ConfigureDelta.queriedCells "lookup" queriedCells
     let tableDelta := ConfigureDelta.fixedQueriesOfColumns
       (tableMap.map Prod.snd)
     ((), queryDelta.append tableDelta |>.append
-      { lookups := [{ masterSelector, inputs, tables, tablesFree, arity }] }, {})⟩
+      { lookups := [argument] }, {})⟩
 
 @[simp] theorem ConfigureDelta.gates_append
     (left right : ConfigureDelta F) :
@@ -1717,6 +1803,29 @@ def Expression.selectorBound : Expression F Query → ℕ
   | .add left right
   | .mul left right => max left.selectorBound right.selectorBound
 
+/-- Every occurring selector index lies below the expression's selector bound. -/
+theorem Expression.lt_selectorBound_of_mem_selectorIndices
+    (expression : Expression F Query) {selector : ℕ}
+    (hselector : selector ∈ expression.selectorIndices) :
+    selector < expression.selectorBound := by
+  induction expression with
+  | var query =>
+      cases query <;>
+        simp_all [Expression.selectorIndices, Expression.selectorBound]
+  | const value => simp [Expression.selectorIndices] at hselector
+  | add left right ihLeft ihRight =>
+      simp only [Expression.selectorIndices, List.mem_append] at hselector
+      simp only [Expression.selectorBound]
+      exact hselector.elim
+        (fun hleft => (ihLeft hleft).trans_le (Nat.le_max_left _ _))
+        (fun hright => (ihRight hright).trans_le (Nat.le_max_right _ _))
+  | mul left right ihLeft ihRight =>
+      simp only [Expression.selectorIndices, List.mem_append] at hselector
+      simp only [Expression.selectorBound]
+      exact hselector.elim
+        (fun hleft => (ihLeft hleft).trans_le (Nat.le_max_left _ _))
+        (fun hright => (ihRight hright).trans_le (Nat.le_max_right _ _))
+
 @[simp] theorem Expression.selectorBound_querySelector (selector : Selector) :
     (querySelector (F := F) selector).selectorBound = selector.index + 1 :=
   rfl
@@ -1784,6 +1893,9 @@ structure ConfigureDelta.SelectorsAllocated
     (delta : ConfigureDelta F) (numSelectors : ℕ) : Prop where
   gates :
     delta.gates.Forall fun gate => gate.selector.index < numSelectors
+  lookupMasters :
+    delta.lookups.Forall fun argument =>
+      argument.masterSelector.index < numSelectors
   lookups :
     lookupInputSelectorBound delta.lookups ≤ numSelectors
 
@@ -1805,6 +1917,357 @@ structure ConfigureDelta.SelectorsFreshFrom
   lookups : delta.lookups.Forall fun argument =>
     argument.selectorIndices.Forall (fun selector => lowerBound ≤ selector)
 
+/-- Reduced selector data emitted by configure. It retains exactly what is needed for
+gate/lookup compatibility, while discarding gate polynomials and lookup expressions. -/
+structure ConfigureSelectorSummary where
+  gates : List Selector := []
+  lookups : List LookupSelectorUsage := []
+
+@[ext]
+theorem ConfigureSelectorSummary.ext
+    {left right : ConfigureSelectorSummary}
+    (gates : left.gates = right.gates)
+    (lookups : left.lookups = right.lookups) : left = right := by
+  cases left
+  cases right
+  simp_all
+
+/-- Every selector represented by a reduced summary lies below a boundary. -/
+def ConfigureSelectorSummary.Bounded
+    (summary : ConfigureSelectorSummary) (bound : ℕ) : Prop :=
+  (summary.gates.Forall fun gate => gate.index < bound) ∧
+    summary.lookups.Forall fun usage =>
+      usage.master.index < bound ∧
+        usage.auxiliary.Forall (fun selector => selector < bound) ∧
+        usage.selectors.Forall fun selector => selector < bound
+
+/-- The selector usages inherited from outside a configure program. A lookup is kept
+whole when any of its selectors predates the program, since its master selector is
+needed to state lookup compatibility. -/
+@[configure_selector_norm, keygen_norm]
+def LookupSelectorUsage.HasSelectorBefore
+    (usage : LookupSelectorUsage) (boundary : ℕ) : Bool :=
+  decide (usage.master.index < boundary) ||
+    usage.auxiliary.any (fun selector => selector < boundary) ||
+    usage.selectors.any fun selector => selector < boundary
+
+@[configure_selector_norm, keygen_norm]
+def ConfigureSelectorSummary.externalAt
+    (summary : ConfigureSelectorSummary) (boundary : ℕ) :
+    ConfigureSelectorSummary :=
+  { gates := summary.gates.filter fun gate => gate.index < boundary
+    lookups := summary.lookups.filter fun usage =>
+      usage.HasSelectorBefore boundary }
+
+@[configure_selector_norm, keygen_norm]
+def ConfigureSelectorSummary.append
+    (left right : ConfigureSelectorSummary) : ConfigureSelectorSummary :=
+  { gates := left.gates ++ right.gates
+    lookups := left.lookups ++ right.lookups }
+
+@[configure_selector_norm, keygen_norm]
+theorem ConfigureSelectorSummary.externalAt_append
+    (left right : ConfigureSelectorSummary) (boundary : ℕ) :
+    (left.append right).externalAt boundary =
+      (left.externalAt boundary).append (right.externalAt boundary) := by
+  simp [ConfigureSelectorSummary.externalAt,
+    ConfigureSelectorSummary.append, List.filter_append]
+
+theorem LookupSelectorUsage.hasSelectorBefore_mono
+    {usage : LookupSelectorUsage} {source target : ℕ}
+    (hbound : source ≤ target) (hsource : usage.HasSelectorBefore source) :
+    usage.HasSelectorBefore target := by
+  simp only [LookupSelectorUsage.HasSelectorBefore, Bool.or_eq_true,
+    decide_eq_true_eq, List.any_eq_true] at hsource ⊢
+  rcases hsource with (hmaster | hauxiliary) | hselector
+  · exact Or.inl <| Or.inl (hmaster.trans_le hbound)
+  · exact Or.inl <| Or.inr <| hauxiliary.imp fun _ h =>
+      ⟨h.1, h.2.trans_le hbound⟩
+  · exact Or.inr <| hselector.imp fun _ h =>
+      ⟨h.1, h.2.trans_le hbound⟩
+
+theorem ConfigureSelectorSummary.externalAt_externalAt
+    (summary : ConfigureSelectorSummary) {source target : ℕ}
+    (hbound : source ≤ target) :
+    (summary.externalAt target).externalAt source =
+      summary.externalAt source := by
+  apply ConfigureSelectorSummary.ext
+  · simp only [ConfigureSelectorSummary.externalAt]
+    rw [List.filter_filter]
+    apply List.filter_congr
+    intro gate _
+    apply Bool.eq_iff_iff.mpr
+    simp only [Bool.and_eq_true, decide_eq_true_eq]
+    constructor
+    · exact fun h => h.1
+    · exact fun h => ⟨h, h.trans_le hbound⟩
+  · simp only [ConfigureSelectorSummary.externalAt]
+    rw [List.filter_filter]
+    apply List.filter_congr
+    intro usage _
+    apply Bool.eq_iff_iff.mpr
+    simp only [Bool.and_eq_true]
+    constructor
+    · exact fun h => h.1
+    · exact fun h =>
+        ⟨h, usage.hasSelectorBefore_mono hbound h⟩
+
+theorem ConfigureSelectorSummary.externalAt_eq_empty_of_fresh
+    {summary : ConfigureSelectorSummary} {boundary : ℕ}
+    (hgates : summary.gates.Forall fun gate => boundary ≤ gate.index)
+    (hlookups : summary.lookups.Forall fun usage =>
+      boundary ≤ usage.master.index ∧
+        usage.auxiliary.Forall (fun selector => boundary ≤ selector) ∧
+        usage.selectors.Forall fun selector => boundary ≤ selector) :
+    summary.externalAt boundary = {} := by
+  apply ConfigureSelectorSummary.ext
+  · simp only [ConfigureSelectorSummary.externalAt]
+    apply List.filter_eq_nil_iff.mpr
+    intro gate hgate
+    have hfresh := List.forall_iff_forall_mem.mp hgates gate hgate
+    simp
+    omega
+  · simp only [ConfigureSelectorSummary.externalAt]
+    apply List.filter_eq_nil_iff.mpr
+    intro usage husage
+    have hfresh := List.forall_iff_forall_mem.mp hlookups usage husage
+    intro hbefore
+    simp only [LookupSelectorUsage.HasSelectorBefore, Bool.or_eq_true,
+      decide_eq_true_eq, List.any_eq_true] at hbefore
+    rcases hbefore with (hmaster | hauxiliary) | hselector
+    · omega
+    · obtain ⟨selector, hselectorMem, hselectorBefore⟩ := hauxiliary
+      have hselectorFresh :=
+        List.forall_iff_forall_mem.mp hfresh.2.1 selector hselectorMem
+      omega
+    · obtain ⟨selector, hselectorMem, hselectorBefore⟩ := hselector
+      have hselectorFresh :=
+        List.forall_iff_forall_mem.mp hfresh.2.2 selector hselectorMem
+      omega
+
+def ConfigureDelta.selectorSummary
+    (delta : ConfigureDelta F) : ConfigureSelectorSummary :=
+  { gates := delta.gates.map Gate.selector
+    lookups := delta.lookups.map LookupArgument.selectorUsage }
+
+theorem ConfigureDelta.selectorSummary_externalAt_eq_empty_of_fresh
+    {delta : ConfigureDelta F} {boundary : ℕ}
+    (hfresh : delta.SelectorsFreshFrom boundary) :
+    delta.selectorSummary.externalAt boundary = {} := by
+  apply ConfigureSelectorSummary.externalAt_eq_empty_of_fresh
+  · simpa [ConfigureDelta.selectorSummary, List.forall_map_iff]
+      using hfresh.gates
+  · rw [List.forall_iff_forall_mem]
+    intro usage husage
+    obtain ⟨argument, hargument, rfl⟩ :=
+      List.mem_map.mp husage
+    have hselectors := List.forall_iff_forall_mem.mp hfresh.lookups
+      argument hargument
+    have hselectors' :
+        boundary ≤ argument.masterSelector.index ∧
+          argument.auxiliarySelectorIndices.Forall
+            (fun selector => boundary ≤ selector) := by
+      simpa [LookupArgument.selectorIndices] using hselectors
+    exact ⟨hselectors'.1, hselectors'.2, hselectors⟩
+
+def ConfigureSelectorSummary.CrossCompatible
+    (left right : ConfigureSelectorSummary) : Prop :=
+  (left.gates.Forall fun gate =>
+    right.lookups.Forall (gate.LookupSelectorsCompatible ·)) ∧
+  (right.gates.Forall fun gate =>
+    left.lookups.Forall (gate.LookupSelectorsCompatible ·)) ∧
+  (left.lookups.Forall fun source =>
+    right.lookups.Forall source.SelectorsCompatible) ∧
+  (right.lookups.Forall fun source =>
+    left.lookups.Forall source.SelectorsCompatible)
+
+@[configure_selector_norm, keygen_norm]
+theorem listForall_nil {A : Type} (predicate : A → Prop) :
+    List.Forall predicate [] := by
+  trivial
+
+@[configure_selector_norm, keygen_norm]
+theorem listForall_true {A : Type} (values : List A) :
+    List.Forall (fun _ => True) values := by
+  induction values <;> simp_all [List.Forall]
+
+@[configure_selector_norm, keygen_norm]
+theorem ConfigureSelectorSummary.crossCompatible_withoutLookups
+    (leftGates rightGates : List Selector) :
+    CrossCompatible { gates := leftGates } { gates := rightGates } := by
+  simp [CrossCompatible, listForall_true]
+
+@[configure_selector_norm, keygen_norm]
+theorem ConfigureSelectorSummary.crossCompatible_empty
+    (summary : ConfigureSelectorSummary) :
+    summary.CrossCompatible {} := by
+  simp [CrossCompatible, listForall_true]
+
+@[configure_selector_norm, keygen_norm]
+theorem ConfigureSelectorSummary.empty_crossCompatible
+    (summary : ConfigureSelectorSummary) :
+    ({} : ConfigureSelectorSummary).CrossCompatible summary := by
+  simp [CrossCompatible, listForall_true]
+
+theorem ConfigureSelectorSummary.CrossCompatible.facts
+    {left right : ConfigureSelectorSummary}
+    (self : left.CrossCompatible right) :
+    (left.gates.Forall fun gate =>
+      right.lookups.Forall (gate.LookupSelectorsCompatible ·)) ∧
+    (right.gates.Forall fun gate =>
+      left.lookups.Forall (gate.LookupSelectorsCompatible ·)) ∧
+    (left.lookups.Forall fun source =>
+      right.lookups.Forall source.SelectorsCompatible) ∧
+    (right.lookups.Forall fun source =>
+      left.lookups.Forall source.SelectorsCompatible) := by
+  exact self
+
+theorem ConfigureSelectorSummary.gate_fresh_of_not_mem_externalAt
+    {summary : ConfigureSelectorSummary} {boundary : ℕ}
+    {gate : Selector} (hgate : gate ∈ summary.gates)
+    (hexternal : gate ∉ (summary.externalAt boundary).gates) :
+    boundary ≤ gate.index := by
+  simp [ConfigureSelectorSummary.externalAt, hgate] at hexternal
+  exact hexternal
+
+theorem ConfigureSelectorSummary.lookup_fresh_of_not_mem_externalAt
+    {summary : ConfigureSelectorSummary} {boundary : ℕ}
+    {usage : LookupSelectorUsage} (husage : usage ∈ summary.lookups)
+    (hexternal : usage ∉ (summary.externalAt boundary).lookups) :
+    boundary ≤ usage.master.index ∧
+      usage.auxiliary.Forall (fun selector => boundary ≤ selector) ∧
+      usage.selectors.Forall fun selector => boundary ≤ selector := by
+  constructor
+  · by_contra hfresh
+    apply hexternal
+    simp [ConfigureSelectorSummary.externalAt,
+      LookupSelectorUsage.HasSelectorBefore, husage]
+    exact Or.inl (by omega)
+  constructor
+  · rw [List.forall_iff_forall_mem]
+    intro selector hselector
+    by_contra hfresh
+    apply hexternal
+    simp [ConfigureSelectorSummary.externalAt,
+      LookupSelectorUsage.HasSelectorBefore, husage]
+    exact Or.inl <| Or.inr ⟨selector, hselector, by omega⟩
+  · rw [List.forall_iff_forall_mem]
+    intro selector hselector
+    by_contra hfresh
+    apply hexternal
+    simp [ConfigureSelectorSummary.externalAt,
+      LookupSelectorUsage.HasSelectorBefore, husage]
+    exact Or.inr ⟨selector, hselector, by omega⟩
+
+/-- Only externally inherited selector usages can interact with an earlier configure
+contribution. Fresh selectors are separated from all selectors allocated earlier. -/
+theorem ConfigureSelectorSummary.CrossCompatible.of_externalAt
+    {left right : ConfigureSelectorSummary} {boundary : ℕ}
+    (hleft : left.Bounded boundary)
+    (hexternal : left.CrossCompatible (right.externalAt boundary)) :
+    left.CrossCompatible right := by
+  rcases hleft with ⟨hleftGates, hleftLookups⟩
+  rcases hexternal.facts with
+    ⟨hleftRightGates, hrightLeftGates,
+      hleftRightLookups, hrightLeftLookups⟩
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · rw [List.forall_iff_forall_mem]
+    intro gate hgate
+    rw [List.forall_iff_forall_mem]
+    intro usage husage
+    by_cases hexternalUsage :
+        usage ∈ (right.externalAt boundary).lookups
+    · exact List.forall_iff_forall_mem.mp
+        (List.forall_iff_forall_mem.mp hleftRightGates gate hgate)
+        usage hexternalUsage
+    · have hfresh := right.lookup_fresh_of_not_mem_externalAt
+          husage hexternalUsage
+      unfold Selector.LookupSelectorsCompatible
+      constructor
+      · rw [List.forall_iff_forall_mem]
+        intro selector hselector hequal
+        have hselectorFresh := List.forall_iff_forall_mem.mp hfresh.2.1
+          selector hselector
+        have hgateBound :=
+          List.forall_iff_forall_mem.mp hleftGates gate hgate
+        omega
+      · intro hequal
+        have hmasterFresh := hfresh.1
+        have hgateBound :=
+          List.forall_iff_forall_mem.mp hleftGates gate hgate
+        omega
+  · rw [List.forall_iff_forall_mem]
+    intro gate hgate
+    rw [List.forall_iff_forall_mem]
+    intro usage husage
+    by_cases hexternalGate : gate ∈ (right.externalAt boundary).gates
+    · exact List.forall_iff_forall_mem.mp
+        (List.forall_iff_forall_mem.mp hrightLeftGates gate hexternalGate)
+        usage husage
+    · have hgateFresh := right.gate_fresh_of_not_mem_externalAt
+          hgate hexternalGate
+      have husageBound :=
+        List.forall_iff_forall_mem.mp hleftLookups usage husage
+      unfold Selector.LookupSelectorsCompatible
+      constructor
+      · rw [List.forall_iff_forall_mem]
+        intro selector hselector hequal
+        have hselectorBound := List.forall_iff_forall_mem.mp husageBound.2.1
+          selector hselector
+        omega
+      · intro hequal
+        have hmasterBound := husageBound.1
+        omega
+  · rw [List.forall_iff_forall_mem]
+    intro source hsource
+    rw [List.forall_iff_forall_mem]
+    intro target htarget
+    by_cases hexternalTarget :
+        target ∈ (right.externalAt boundary).lookups
+    · exact List.forall_iff_forall_mem.mp
+        (List.forall_iff_forall_mem.mp hleftRightLookups source hsource)
+        target hexternalTarget
+    · have hsourceBound :=
+        List.forall_iff_forall_mem.mp hleftLookups source hsource
+      have htargetFresh := right.lookup_fresh_of_not_mem_externalAt
+        htarget hexternalTarget
+      unfold LookupSelectorUsage.SelectorsCompatible
+      rw [List.forall_iff_forall_mem]
+      intro selector hselector hauxiliary
+      have hselectorBound :=
+        List.forall_iff_forall_mem.mp hsourceBound.2.2 selector hselector
+      have hselectorFresh :=
+        List.forall_iff_forall_mem.mp htargetFresh.2.1 selector hauxiliary
+      omega
+  · rw [List.forall_iff_forall_mem]
+    intro source hsource
+    rw [List.forall_iff_forall_mem]
+    intro target htarget
+    by_cases hexternalSource :
+        source ∈ (right.externalAt boundary).lookups
+    · exact List.forall_iff_forall_mem.mp
+        (List.forall_iff_forall_mem.mp hrightLeftLookups source hexternalSource)
+        target htarget
+    · have hsourceFresh := right.lookup_fresh_of_not_mem_externalAt
+        hsource hexternalSource
+      have htargetBound :=
+        List.forall_iff_forall_mem.mp hleftLookups target htarget
+      unfold LookupSelectorUsage.SelectorsCompatible
+      rw [List.forall_iff_forall_mem]
+      intro selector hselector hauxiliary
+      have hselectorFresh :=
+        List.forall_iff_forall_mem.mp hsourceFresh.2.2 selector hselector
+      have hselectorBound :=
+        List.forall_iff_forall_mem.mp htargetBound.2.1 selector hauxiliary
+      omega
+
+@[configure_selector_norm, keygen_norm]
+theorem ConfigureDelta.selectorSummary_append
+    (left right : ConfigureDelta F) :
+    (left.append right).selectorSummary =
+      left.selectorSummary.append right.selectorSummary := by
+  simp [ConfigureDelta.selectorSummary, ConfigureSelectorSummary.append]
+
 /-- Gate/lookup selector compatibility within one configure contribution. -/
 def ConfigureDelta.LookupSelectorsCompatible
     (delta : ConfigureDelta F) : Prop :=
@@ -1824,84 +2287,26 @@ def ConfigureDelta.LookupSelectorsCrossCompatible
   (right.lookups.Forall fun source =>
       left.lookups.Forall source.SelectorsCompatible)
 
-/-- Sequential configure contributions cannot have selector collisions when the first
-uses only selectors below the boundary and the second uses only selectors at or above
-it. -/
-theorem ConfigureDelta.LookupSelectorsCrossCompatible.of_bounded_fresh
-    {left right : ConfigureDelta F} {boundary : ℕ}
-    (hleft : left.SelectorsBounded boundary)
-    (hright : right.SelectorsFreshFrom boundary) :
+theorem ConfigureDelta.LookupSelectorsCrossCompatible.ofSelectorSummary
+    {left right : ConfigureDelta F}
+    (hsummary : left.selectorSummary.CrossCompatible
+      right.selectorSummary) :
     left.LookupSelectorsCrossCompatible right := by
-  unfold ConfigureDelta.LookupSelectorsCrossCompatible
+  rcases hsummary.facts with ⟨hleftGates, hrightGates,
+    hleftLookups, hrightLookups⟩
   refine ⟨?_, ?_, ?_, ?_⟩
-  · rw [List.forall_iff_forall_mem]
-    intro gate hgate
-    rw [List.forall_iff_forall_mem]
-    intro argument hargument
-    unfold Gate.LookupSelectorsCompatible
-    rw [List.forall_iff_forall_mem]
-    intro selector hselector
-    have hgateBound :=
-      List.forall_iff_forall_mem.mp hleft.gates gate hgate
-    have hselectorFresh :=
-      List.forall_iff_forall_mem.mp
-        (List.forall_iff_forall_mem.mp hright.lookups argument hargument)
-        selector (by
-          simp only [LookupArgument.selectorIndices, List.mem_cons]
-          exact Or.inr hselector)
-    omega
-  · rw [List.forall_iff_forall_mem]
-    intro gate hgate
-    rw [List.forall_iff_forall_mem]
-    intro argument hargument
-    unfold Gate.LookupSelectorsCompatible
-    rw [List.forall_iff_forall_mem]
-    intro selector hselector
-    have hgateFresh :=
-      List.forall_iff_forall_mem.mp hright.gates gate hgate
-    have hselectorBound :=
-      List.forall_iff_forall_mem.mp
-        (List.forall_iff_forall_mem.mp hleft.lookups argument hargument)
-        selector (by
-          simp only [LookupArgument.selectorIndices, List.mem_cons]
-          exact Or.inr hselector)
-    omega
-  · rw [List.forall_iff_forall_mem]
-    intro source hsource
-    rw [List.forall_iff_forall_mem]
-    intro target htarget
-    unfold LookupArgument.SelectorsCompatible
-    rw [List.forall_iff_forall_mem]
-    intro selector hselector hauxiliary
-    have hselectorBound :=
-      List.forall_iff_forall_mem.mp
-        (List.forall_iff_forall_mem.mp hleft.lookups source hsource)
-        selector hselector
-    have hselectorFresh :=
-      List.forall_iff_forall_mem.mp
-        (List.forall_iff_forall_mem.mp hright.lookups target htarget)
-        selector (by
-          simp only [LookupArgument.selectorIndices, List.mem_cons]
-          exact Or.inr hauxiliary)
-    omega
-  · rw [List.forall_iff_forall_mem]
-    intro source hsource
-    rw [List.forall_iff_forall_mem]
-    intro target htarget
-    unfold LookupArgument.SelectorsCompatible
-    rw [List.forall_iff_forall_mem]
-    intro selector hselector hauxiliary
-    have hselectorFresh :=
-      List.forall_iff_forall_mem.mp
-        (List.forall_iff_forall_mem.mp hright.lookups source hsource)
-        selector hselector
-    have hselectorBound :=
-      List.forall_iff_forall_mem.mp
-        (List.forall_iff_forall_mem.mp hleft.lookups target htarget)
-        selector (by
-          simp only [LookupArgument.selectorIndices, List.mem_cons]
-          exact Or.inr hauxiliary)
-    omega
+  · simpa [ConfigureDelta.selectorSummary,
+      Gate.LookupSelectorsCompatible, LookupArgument.selectorUsage] using
+      hleftGates
+  · simpa [ConfigureDelta.selectorSummary,
+      Gate.LookupSelectorsCompatible, LookupArgument.selectorUsage] using
+      hrightGates
+  · simpa [ConfigureDelta.selectorSummary,
+      LookupArgument.SelectorsCompatible,
+      LookupArgument.selectorUsage] using hleftLookups
+  · simpa [ConfigureDelta.selectorSummary,
+      LookupArgument.SelectorsCompatible,
+      LookupArgument.selectorUsage] using hrightLookups
 
 @[simp] theorem ConfigureDelta.empty_lookupSelectorsCrossCompatible
     (delta : ConfigureDelta F) :
@@ -1996,12 +2401,15 @@ theorem ConfigureDelta.SelectorsAllocated.mono
     (hcount : source ≤ target) :
     delta.SelectorsAllocated target where
   gates := hallocated.gates.imp fun _ hgate => hgate.trans_le hcount
+  lookupMasters :=
+    hallocated.lookupMasters.imp fun _ hmaster => hmaster.trans_le hcount
   lookups := hallocated.lookups.trans hcount
 
 /-- The empty configure contribution allocates no selectors. -/
 theorem ConfigureDelta.SelectorsAllocated.empty (numSelectors : ℕ) :
     ({} : ConfigureDelta F).SelectorsAllocated numSelectors := by
   constructor
+  · simp
   · simp
   · simp [lookupInputSelectorBound]
 
@@ -2014,10 +2422,56 @@ theorem ConfigureDelta.SelectorsAllocated.append
   gates := by
     simpa only [ConfigureDelta.gates_append, List.forall_append] using
       And.intro hleft.gates hright.gates
+  lookupMasters := by
+    simpa only [ConfigureDelta.lookups_append, List.forall_append] using
+      And.intro hleft.lookupMasters hright.lookupMasters
   lookups := by
     simp only [ConfigureDelta.lookups_append,
       lookupInputSelectorBound_append]
     exact max_le hleft.lookups hright.lookups
+
+/-- Allocation bounds cover every selector represented in the reduced summary. -/
+theorem ConfigureDelta.SelectorsAllocated.selectorsBounded
+    {delta : ConfigureDelta F} {numSelectors : ℕ}
+    (hallocated : delta.SelectorsAllocated numSelectors) :
+    delta.SelectorsBounded numSelectors := by
+  constructor
+  · exact hallocated.gates
+  · rw [List.forall_iff_forall_mem]
+    intro argument hargument
+    rw [List.forall_iff_forall_mem]
+    intro selector hselector
+    rw [LookupArgument.selectorIndices, List.mem_cons] at hselector
+    rcases hselector with rfl | hauxiliary
+    · exact List.forall_iff_forall_mem.mp hallocated.lookupMasters
+        argument hargument
+    · simp only [LookupArgument.auxiliarySelectorIndices,
+        List.mem_filter, List.mem_flatMap] at hauxiliary
+      rcases hauxiliary.1 with ⟨expression, hexpression, hselector⟩
+      exact (expression.lt_selectorBound_of_mem_selectorIndices hselector).trans_le
+        ((expression.selectorBound_le_lookupInputSelectorBound
+          hargument hexpression).trans hallocated.lookups)
+
+theorem ConfigureDelta.selectorSummary_bounded
+    {delta : ConfigureDelta F} {bound : ℕ}
+    (hbounded : delta.SelectorsBounded bound) :
+    delta.selectorSummary.Bounded bound := by
+  constructor
+  · simpa [ConfigureDelta.selectorSummary] using hbounded.gates
+  · rw [ConfigureDelta.selectorSummary, List.forall_map_iff,
+      List.forall_iff_forall_mem]
+    intro argument hargument
+    have hargumentBound :=
+      List.forall_iff_forall_mem.mp hbounded.lookups argument hargument
+    refine ⟨?_, ?_, ?_⟩
+    · exact List.forall_iff_forall_mem.mp hargumentBound
+        argument.masterSelector.index argument.masterSelector_mem_selectorIndices
+    · rw [List.forall_iff_forall_mem]
+      intro selector hselector
+      exact List.forall_iff_forall_mem.mp hargumentBound selector (by
+        simp only [LookupArgument.selectorIndices, List.mem_cons]
+        exact Or.inr hselector)
+    · exact hargumentBound
 
 @[simp] theorem ConfigureDelta.gates_queriedCells
     (owner : String) (cells : List (Expression F Query)) :
@@ -2129,11 +2583,14 @@ private theorem foldlTableDelta_lookups
 
 @[simp] theorem Configure.delta_lookup_gates
     (queriedCells : List (Expression F Query))
-    (masterSelector : Selector)
+    (masterSelector : ComplexSelector)
     (tableMap : List (Expression F Query × TableColumn))
     (hqueries : LookupQueriesDeclared queriedCells tableMap)
+    (hnoSimpleSelectors :
+      (tableMap.map Prod.fst).Forall Expression.NoSimpleSelectors)
     (counts : ConfigureCounts) :
-    ((lookup queriedCells masterSelector tableMap hqueries).delta counts).gates = [] := by
+    ((lookup queriedCells masterSelector tableMap hqueries
+      hnoSimpleSelectors).delta counts).gates = [] := by
   unfold Configure.delta lookup
   simp [ConfigureDelta.fixedQueriesOfColumns, foldlTableDelta_gates]
 
@@ -2149,12 +2606,15 @@ private theorem foldlTableDelta_lookups
 
 @[simp] theorem Configure.lookupInputSelectorBound_delta_lookup
     (queriedCells : List (Expression F Query))
-    (masterSelector : Selector)
+    (masterSelector : ComplexSelector)
     (tableMap : List (Expression F Query × TableColumn))
     (hqueries : LookupQueriesDeclared queriedCells tableMap)
+    (hnoSimpleSelectors :
+      (tableMap.map Prod.fst).Forall Expression.NoSimpleSelectors)
     (counts : ConfigureCounts) :
     lookupInputSelectorBound
-        ((lookup queriedCells masterSelector tableMap hqueries).delta counts).lookups =
+        ((lookup queriedCells masterSelector tableMap hqueries
+          hnoSimpleSelectors).delta counts).lookups =
       ((tableMap.map Prod.fst).map Expression.selectorBound).foldr max 0 := by
   unfold Configure.delta lookup lookupInputSelectorBound
     LookupArgument.inputSelectorBound
@@ -2186,7 +2646,7 @@ variable {α β : Type}
   rfl
 
 @[simp] theorem delta_complexSelector (counts : ConfigureCounts) :
-    delta (complexSelector : Configure F Selector) counts = {} :=
+    delta (complexSelector : Configure F ComplexSelector) counts = {} :=
   rfl
 
 @[simp] theorem delta_createGate
@@ -2271,12 +2731,12 @@ variable {α β : Type}
   rfl
 
 @[simp] theorem output_complexSelector (counts : ConfigureCounts) :
-    output (complexSelector : Configure F Selector) counts =
-      ⟨counts.numSelectors, false⟩ :=
+    output (complexSelector : Configure F ComplexSelector) counts =
+      ⟨counts.numSelectors⟩ :=
   rfl
 
 @[simp] theorem finalCounts_complexSelector (counts : ConfigureCounts) :
-    finalCounts (complexSelector : Configure F Selector) counts =
+    finalCounts (complexSelector : Configure F ComplexSelector) counts =
       { counts with numSelectors := counts.numSelectors + 1 } :=
   rfl
 
@@ -2312,20 +2772,26 @@ variable {α β : Type}
 
 @[simp] theorem output_lookup
     (queriedCells : List (Expression F Query))
-    (masterSelector : Selector)
+    (masterSelector : ComplexSelector)
     (tableMap : List (Expression F Query × TableColumn))
     (hqueries : LookupQueriesDeclared queriedCells tableMap)
+    (hnoSimpleSelectors :
+      (tableMap.map Prod.fst).Forall Expression.NoSimpleSelectors)
     (counts : ConfigureCounts) :
-    output (lookup queriedCells masterSelector tableMap hqueries) counts = () :=
+    output (lookup queriedCells masterSelector tableMap hqueries
+      hnoSimpleSelectors) counts = () :=
   rfl
 
 @[simp] theorem finalCounts_lookup
     (queriedCells : List (Expression F Query))
-    (masterSelector : Selector)
+    (masterSelector : ComplexSelector)
     (tableMap : List (Expression F Query × TableColumn))
     (hqueries : LookupQueriesDeclared queriedCells tableMap)
+    (hnoSimpleSelectors :
+      (tableMap.map Prod.fst).Forall Expression.NoSimpleSelectors)
     (counts : ConfigureCounts) :
-    finalCounts (lookup queriedCells masterSelector tableMap hqueries) counts = counts :=
+    finalCounts (lookup queriedCells masterSelector tableMap hqueries
+      hnoSimpleSelectors) counts = counts :=
   rfl
 
 end Configure
@@ -2435,7 +2901,7 @@ private theorem ConfigureDelta.queriedCells_instanceQueries_aux
 
 @[simp] theorem Configure.delta_complexSelector_instanceQueries
     (counts : ConfigureCounts) :
-    (Configure.delta (complexSelector : Configure F Selector)
+    (Configure.delta (complexSelector : Configure F ComplexSelector)
       counts).instanceQueries = [] :=
   rfl
 
@@ -2487,11 +2953,14 @@ theorem Configure.delta_enableEquality_instanceQueries
 
 @[simp] theorem Configure.delta_lookup_instanceQueries
     (queriedCells : List (Expression F Query))
-    (masterSelector : Selector)
+    (masterSelector : ComplexSelector)
     (tableMap : List (Expression F Query × TableColumn))
     (hqueries : LookupQueriesDeclared queriedCells tableMap)
+    (hnoSimpleSelectors :
+      (tableMap.map Prod.fst).Forall Expression.NoSimpleSelectors)
     (counts : ConfigureCounts) :
-    (Configure.delta (lookup queriedCells masterSelector tableMap hqueries) counts).instanceQueries =
+    (Configure.delta (lookup queriedCells masterSelector tableMap hqueries
+      hnoSimpleSelectors) counts).instanceQueries =
       ConfigureDelta.instanceQueriesOfCells queriedCells := by
   simp only [Configure.delta, lookup,
     ConfigureDelta.instanceQueries_append,
@@ -2597,7 +3066,7 @@ private theorem ConfigureDelta.queriedCells_fixedQueries_aux
 
 @[simp] theorem Configure.delta_complexSelector_fixedQueries
     (counts : ConfigureCounts) :
-    ((complexSelector : Configure F Selector).delta counts).fixedQueries = [] :=
+    ((complexSelector : Configure F ComplexSelector).delta counts).fixedQueries = [] :=
   rfl
 
 @[simp] theorem Configure.delta_enableEquality_advice_fixedQueries
@@ -2632,11 +3101,14 @@ private theorem ConfigureDelta.queriedCells_fixedQueries_aux
 
 @[simp] theorem Configure.delta_lookup_fixedQueries
     (queriedCells : List (Expression F Query))
-    (masterSelector : Selector)
+    (masterSelector : ComplexSelector)
     (tableMap : List (Expression F Query × TableColumn))
     (hqueries : LookupQueriesDeclared queriedCells tableMap)
+    (hnoSimpleSelectors :
+      (tableMap.map Prod.fst).Forall Expression.NoSimpleSelectors)
     (counts : ConfigureCounts) :
-    ((lookup queriedCells masterSelector tableMap hqueries).delta counts).fixedQueries =
+    ((lookup queriedCells masterSelector tableMap hqueries
+      hnoSimpleSelectors).delta counts).fixedQueries =
       ConfigureDelta.fixedQueriesOfCells queriedCells ++
         (tableMap.map Prod.snd).map fun column => (column.inner, 0) := by
   simp only [Configure.delta, lookup, ConfigureDelta.fixedQueries_append,
@@ -2799,6 +3271,23 @@ class ElaboratedConfigure (program : Configure F α) where
     (program.delta counts).instanceQueries =
       instanceQueries counts := by
     configure_norm
+  /-- Reduced gate/lookup selector usage. Parent configure programs use this summary
+  to check cross-child compatibility without reopening child expressions. -/
+  selectorSummary : ConfigureCounts → ConfigureSelectorSummary :=
+    fun counts => (program.delta counts).selectorSummary
+  selectorSummary_eq : ∀ counts,
+    (program.delta counts).selectorSummary = selectorSummary counts := by
+    intro counts
+    rfl
+  /-- Selector usages inherited from the incoming configure state. Closed child
+  programs normally reduce this to the empty summary. -/
+  externalSelectorSummary : ConfigureCounts → ConfigureSelectorSummary :=
+    fun counts => (selectorSummary counts).externalAt counts.numSelectors
+  externalSelectorSummary_eq : ∀ counts,
+    (selectorSummary counts).externalAt counts.numSelectors =
+      externalSelectorSummary counts := by
+    intro counts
+    rfl
   /--
   Selector allocation required from the incoming configure state. Primitive gate and
   lookup registration expose requirements; monadic bind composes them.
@@ -2837,6 +3326,48 @@ without replaying the child's configure tree. -/
     lookupSelectorsCompatible counts _ :=
       self.lookupSelectorsCompatible counts (requirements counts) }
 
+@[configure_selector_norm, keygen_norm]
+theorem ElaboratedConfigure.closeSelectorRequirements_selectorSummary
+    {program : Configure F α} (self : ElaboratedConfigure program)
+    (requirements : ∀ counts, self.selectorRequirements counts)
+    (counts : ConfigureCounts) :
+    (self.closeSelectorRequirements requirements).selectorSummary counts =
+      self.selectorSummary counts := rfl
+
+@[configure_selector_norm, keygen_norm]
+theorem ElaboratedConfigure.closeSelectorRequirements_externalSelectorSummary
+    {program : Configure F α} (self : ElaboratedConfigure program)
+    (requirements : ∀ counts, self.selectorRequirements counts)
+    (counts : ConfigureCounts) :
+    (self.closeSelectorRequirements requirements).externalSelectorSummary counts =
+      self.externalSelectorSummary counts := rfl
+
+/-- Replace computed external-selector provenance by its reduced circuit-local
+summary. Parents consume this small interface instead of reopening the configure
+program that established it. -/
+@[reducible] def ElaboratedConfigure.withExternalSelectorSummary
+    {program : Configure F α} (self : ElaboratedConfigure program)
+    (summary : ConfigureCounts → ConfigureSelectorSummary)
+    (summary_eq : ∀ counts,
+      (self.selectorSummary counts).externalAt counts.numSelectors =
+        summary counts) : ElaboratedConfigure program :=
+  { self with
+    externalSelectorSummary := summary
+    externalSelectorSummary_eq := summary_eq }
+
+/-- Close selector provenance when a configure program only uses selectors allocated
+at or after its incoming selector count. -/
+@[reducible] def ElaboratedConfigure.withNoExternalSelectors
+    {program : Configure F α} (self : ElaboratedConfigure program)
+    (fresh : ∀ counts,
+      (program.delta counts).SelectorsFreshFrom counts.numSelectors) :
+    ElaboratedConfigure program :=
+  self.withExternalSelectorSummary (fun _ => {}) (by
+    intro counts
+    rw [← self.selectorSummary_eq]
+    exact ConfigureDelta.selectorSummary_externalAt_eq_empty_of_fresh
+      (fresh counts))
+
 @[simp] theorem ElaboratedConfigure.delta_instanceQueries
     (program : Configure F α) [elaborated : ElaboratedConfigure program]
     (counts : ConfigureCounts) :
@@ -2849,6 +3380,7 @@ instance ElaboratedConfigure.pure (value : α) :
   instanceQueries_eq := by
     intro counts
     rfl
+  selectorSummary _ := {}
   selectorRequirements _ := True
   selectorsAllocated := by
     intro counts _
@@ -2872,13 +3404,35 @@ instance ElaboratedConfigure.bind {β : Type}
     rw [Configure.delta_bind, ConfigureDelta.instanceQueries_append,
       programElaborated.instanceQueries_eq,
       (nextElaborated (program.output counts)).instanceQueries_eq]
+  selectorSummary counts :=
+    (programElaborated.selectorSummary counts).append
+      ((nextElaborated (program.output counts)).selectorSummary
+        (program.finalCounts counts))
+  selectorSummary_eq := by
+    intro counts
+    rw [Configure.delta_bind, ConfigureDelta.selectorSummary_append,
+      programElaborated.selectorSummary_eq,
+      (nextElaborated (program.output counts)).selectorSummary_eq]
+  externalSelectorSummary counts :=
+    (programElaborated.externalSelectorSummary counts).append
+      (((nextElaborated (program.output counts)).externalSelectorSummary
+        (program.finalCounts counts)).externalAt counts.numSelectors)
+  externalSelectorSummary_eq := by
+    intro counts
+    rw [ConfigureSelectorSummary.externalAt_append,
+      programElaborated.externalSelectorSummary_eq,
+      ← (nextElaborated
+        (program.output counts)).externalSelectorSummary_eq]
+    rw [ConfigureSelectorSummary.externalAt_externalAt _
+      (program.numSelectors_le_finalCounts counts)]
   selectorRequirements counts :=
     programElaborated.selectorRequirements counts ∧
       (nextElaborated (program.output counts)).selectorRequirements
         (program.finalCounts counts) ∧
-      (program.delta counts).LookupSelectorsCrossCompatible
-        ((next (program.output counts)).delta
-          (program.finalCounts counts))
+      (programElaborated.selectorSummary counts).CrossCompatible
+        ((nextElaborated
+          (program.output counts)).externalSelectorSummary
+            (program.finalCounts counts))
   selectorsAllocated := by
     intro counts hrequirements
     rw [Configure.delta_bind, Configure.finalCounts_bind]
@@ -2897,7 +3451,17 @@ instance ElaboratedConfigure.bind {β : Type}
       (programElaborated.lookupSelectorsCompatible counts hrequirements.1)
       ((nextElaborated (program.output counts)).lookupSelectorsCompatible
         (program.finalCounts counts) hrequirements.2.1)
-      hrequirements.2.2
+      (ConfigureDelta.LookupSelectorsCrossCompatible.ofSelectorSummary (by
+        apply ConfigureSelectorSummary.CrossCompatible.of_externalAt
+          (boundary := (program.finalCounts counts).numSelectors)
+        · exact ConfigureDelta.selectorSummary_bounded
+            ((programElaborated.selectorsAllocated counts
+              hrequirements.1).selectorsBounded)
+        · rw [programElaborated.selectorSummary_eq,
+            (nextElaborated (program.output counts)).selectorSummary_eq,
+            (nextElaborated
+              (program.output counts)).externalSelectorSummary_eq]
+          exact hrequirements.2.2))
   queryRequirements counts :=
     programElaborated.queryRequirements counts ∧
       (nextElaborated (program.output counts)).queryRequirements
@@ -2917,6 +3481,7 @@ instance ElaboratedConfigure.bind {β : Type}
 instance ElaboratedConfigure.adviceColumn :
     ElaboratedConfigure (adviceColumn : Configure F (Column .advice)) where
   instanceQueries_eq := Configure.delta_adviceColumn_instanceQueries
+  selectorSummary _ := {}
   selectorRequirements _ := True
   selectorsAllocated := by
     intro counts _
@@ -2929,6 +3494,7 @@ instance ElaboratedConfigure.adviceColumn :
 instance ElaboratedConfigure.fixedColumn :
     ElaboratedConfigure (fixedColumn : Configure F (Column .fixed)) where
   instanceQueries_eq := Configure.delta_fixedColumn_instanceQueries
+  selectorSummary _ := {}
   selectorRequirements _ := True
   selectorsAllocated := by
     intro counts _
@@ -2941,6 +3507,7 @@ instance ElaboratedConfigure.fixedColumn :
 instance ElaboratedConfigure.instanceColumn :
     ElaboratedConfigure (instanceColumn : Configure F (Column .instance)) where
   instanceQueries_eq := Configure.delta_instanceColumn_instanceQueries
+  selectorSummary _ := {}
   selectorRequirements _ := True
   selectorsAllocated := by
     intro counts _
@@ -2953,6 +3520,7 @@ instance ElaboratedConfigure.instanceColumn :
 instance ElaboratedConfigure.selector :
     ElaboratedConfigure (selector : Configure F Selector) where
   instanceQueries_eq := Configure.delta_selector_instanceQueries
+  selectorSummary _ := {}
   selectorRequirements _ := True
   selectorsAllocated := by
     intro counts _
@@ -2964,8 +3532,9 @@ instance ElaboratedConfigure.selector :
     exact ConfigureDelta.QueriesLawful.empty _
 
 instance ElaboratedConfigure.complexSelector :
-    ElaboratedConfigure (complexSelector : Configure F Selector) where
+    ElaboratedConfigure (complexSelector : Configure F ComplexSelector) where
   instanceQueries_eq := Configure.delta_complexSelector_instanceQueries
+  selectorSummary _ := {}
   selectorRequirements _ := True
   selectorsAllocated := by
     intro counts _
@@ -2984,6 +3553,13 @@ instance ElaboratedConfigure.enableEquality (column : AnyColumn) :
     | _ => []
   instanceQueries_eq :=
     Configure.delta_enableEquality_instanceQueries column
+  selectorSummary _ := {}
+  selectorSummary_eq := by
+    intro counts
+    rcases column with ⟨kind, index⟩
+    cases kind <;>
+      simp [ConfigureDelta.selectorSummary, Configure.delta,
+        Halo2.enableEquality, ConfigureDelta.queryAny]
   selectorRequirements _ := True
   selectorsAllocated := by
     intro counts _
@@ -2991,6 +3567,9 @@ instance ElaboratedConfigure.enableEquality (column : AnyColumn) :
     cases kind
     all_goals
       constructor
+      · simp [Configure.delta, Configure.finalCounts,
+          Configure.countDelta, ConfigureCountDelta.apply,
+          Halo2.enableEquality, ConfigureDelta.queryAny]
       · simp [Configure.delta, Configure.finalCounts,
           Configure.countDelta, ConfigureCountDelta.apply,
           Halo2.enableEquality, ConfigureDelta.queryAny]
@@ -3015,10 +3594,14 @@ instance ElaboratedConfigure.enableConstant (column : Column .fixed) :
     ElaboratedConfigure (enableConstant (F := F) column) where
   instanceQueries_eq :=
     Configure.delta_enableConstant_instanceQueries column
+  selectorSummary _ := {}
   selectorRequirements _ := True
   selectorsAllocated := by
     intro counts _
     constructor
+    · simp [Configure.delta, Configure.finalCounts,
+        Configure.countDelta, ConfigureCountDelta.apply,
+        Halo2.enableConstant]
     · simp [Configure.delta, Configure.finalCounts,
         Configure.countDelta, ConfigureCountDelta.apply,
         Halo2.enableConstant]
@@ -3047,12 +3630,18 @@ instance ElaboratedConfigure.createGate (gate : Gate F) :
     ConfigureDelta.instanceQueriesOfCells gate.queriedCells
   instanceQueries_eq :=
     Configure.delta_createGate_instanceQueries gate
+  selectorSummary _ := { gates := [gate.selector] }
+  selectorSummary_eq := by
+    intro counts
+    simp [ConfigureDelta.selectorSummary, Configure.delta,
+      Halo2.createGate]
   selectorRequirements counts :=
     gate.selector.index < counts.numSelectors
   selectorsAllocated := by
     intro counts hselector
     constructor
     · simpa [Configure.delta_createGate] using hselector
+    · simp [Configure.delta_createGate]
     · simp [Configure.delta_createGate, lookupInputSelectorBound]
   queryRequirements counts :=
     gate.queriedCells.Forall (·.QueryAllocated counts)
@@ -3099,25 +3688,45 @@ instance ElaboratedConfigure.createGate (gate : Gate F) :
 
 instance ElaboratedConfigure.lookup
     (queriedCells : List (Expression F Query))
-    (masterSelector : Selector)
+    (masterSelector : ComplexSelector)
     (tableMap : List (Expression F Query × TableColumn))
-    (hqueries : LookupQueriesDeclared queriedCells tableMap) :
-    ElaboratedConfigure (lookup queriedCells masterSelector tableMap hqueries) where
+    (hqueries : LookupQueriesDeclared queriedCells tableMap)
+    (hnoSimpleSelectors :
+      (tableMap.map Prod.fst).Forall Expression.NoSimpleSelectors) :
+    ElaboratedConfigure (lookup queriedCells masterSelector tableMap hqueries
+      hnoSimpleSelectors) where
   instanceQueries := fun _ =>
     ConfigureDelta.instanceQueriesOfCells queriedCells
   instanceQueries_eq :=
     Configure.delta_lookup_instanceQueries queriedCells masterSelector tableMap hqueries
+      hnoSimpleSelectors
+  selectorSummary _ :=
+    let auxiliary :=
+      ((tableMap.map Prod.fst).flatMap Expression.selectorIndices).filter
+        (· != masterSelector.index)
+    { lookups :=
+        [{ master := masterSelector
+           auxiliary
+           selectors := masterSelector.index :: auxiliary }] }
+  selectorSummary_eq := by
+    intro counts
+    simp [ConfigureDelta.selectorSummary, Configure.delta, Halo2.lookup,
+      ConfigureDelta.fixedQueriesOfColumns, foldlTableDelta_gates,
+      foldlTableDelta_lookups, LookupArgument.selectorUsage,
+      LookupArgument.selectorIndices, LookupArgument.auxiliarySelectorIndices]
   selectorRequirements counts :=
-    (Configure.delta
-        (Halo2.lookup queriedCells masterSelector tableMap hqueries) counts).gates = [] ∧
+    masterSelector.index < counts.numSelectors ∧
       lookupInputSelectorBound
-        ((Halo2.lookup queriedCells masterSelector tableMap hqueries).delta counts).lookups ≤
+        ((Halo2.lookup queriedCells masterSelector tableMap hqueries
+          hnoSimpleSelectors).delta counts).lookups ≤
           counts.numSelectors
   selectorsAllocated := by
     intro counts hselectors
     constructor
-    · rw [hselectors.1]
-      trivial
+    · simp [Configure.delta_lookup_gates]
+    · simpa [Configure.delta, Halo2.lookup,
+        ConfigureDelta.fixedQueriesOfColumns, foldlTableDelta_lookups] using
+        hselectors.1
     · simpa using hselectors.2
   lookupSelectorsCompatible := by
     intro counts _
@@ -3206,6 +3815,35 @@ instance ElaboratedConfigure.lookupTableColumn :
 
 attribute [configure_selector_norm] ElaboratedConfigure.pure ElaboratedConfigure.bind
 attribute [configure_query_norm] ElaboratedConfigure.pure ElaboratedConfigure.bind
+attribute [configure_selector_norm] List.nil_append List.append_nil List.filter_nil
+
+open Lean Meta Simp in
+/-- Fold the reduced selector summary stored in an inferred configure elaboration. -/
+def foldElaboratedConfigureSelectorSummaryProc : Simproc := fun expression => do
+  unless expression.getAppFn.isConstOf ``ElaboratedConfigure.selectorSummary ||
+      expression.getAppFn.isConstOf
+        ``ElaboratedConfigure.externalSelectorSummary do
+    return .continue
+  try
+    let reduced ← withTransparency .all (whnf expression)
+    if reduced == expression then
+      return .continue
+    let proof ← mkExpectedTypeHint
+      (← mkEqRefl expression) (← mkEq expression reduced)
+    return .visit { expr := reduced, proof? := some proof }
+  catch _ =>
+    return .continue
+
+simproc foldElaboratedConfigureSelectorSummary
+    (ElaboratedConfigure.selectorSummary _ _) :=
+  foldElaboratedConfigureSelectorSummaryProc
+attribute [configure_selector_norm] foldElaboratedConfigureSelectorSummary
+
+simproc foldElaboratedConfigureExternalSelectorSummary
+    (ElaboratedConfigure.externalSelectorSummary _ _) :=
+  foldElaboratedConfigureSelectorSummaryProc
+attribute [configure_selector_norm]
+  foldElaboratedConfigureExternalSelectorSummary
 
 open Lean Meta Simp in
 /-- Fold the selector requirements stored in an inferred configure elaboration. -/

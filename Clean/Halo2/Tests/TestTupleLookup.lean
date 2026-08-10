@@ -32,11 +32,14 @@ example (i0 i1 i2 t0 t1 t2 : Fp) :
 under `circuit_norm` + the list-map splitting, to a shared-row existential over three
 per-column equalities — the exact shape the Sinsemilla generator lookup is consumed at. -/
 example (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp) (row : ℕ)
-    (s : Selector) (i0 i1 i2 : Expression Fp Query) (c0 c1 c2 : Column .fixed) :
+    (s : ComplexSelector) (i0 i1 i2 : Expression Fp Query)
+    (c0 c1 c2 : Column .fixed)
+    (hinputs : [i0, i1, i2].Forall Expression.NoSimpleSelectors) :
     (RegionOperation.enableLookup
         { masterSelector := s,
           inputs := [i0, i1, i2],
           tables := [queryFixed c0, queryFixed c1, queryFixed c2],
+          inputsNoSimpleSelectors := hinputs
           tablesFree := by selector_free
           arity := rfl }
         [s] row).Constraints place self env

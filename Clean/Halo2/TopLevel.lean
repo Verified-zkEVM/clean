@@ -1455,6 +1455,46 @@ theorem lookupInputsAllocated
   exact (self.formalCircuit.lookupSelectorsAllocated
     () self.selectorRequirements).lookupInputsAllocated
 
+/-- Every selector used by a lookup has compression degree zero. Static configure
+compatibility excludes it from all gate selector sets, and gate well-formedness owns
+every selector atom in each gate polynomial. -/
+theorem lookupInputSelectorDegree_eq_zero
+    (self : TopLevelCircuit F Config PublicInput)
+    (argument : LookupArgument F)
+    (hargument : argument ∈ self.constraintSystem.lookups)
+    (expression : Expression F Query) (hexpression : expression ∈ argument.inputs)
+    {selector : ℕ} (hselector : selector ∈ expression.selectorIndices) :
+    (selectorMaxDegrees self.constraintSystem)[selector]! = 0 := by
+  have hbound := self.lookupInputsAllocated argument hargument
+    expression hexpression
+  have hallocated :=
+    (Expression.lt_selectorBound_of_mem_selectorIndices
+      expression hselector).trans_le hbound
+  apply selectorMaxDegrees_eq_zero_of_complexGateSelectors
+    self.constraintSystem hallocated
+  rw [List.forall_iff_forall_mem]
+  intro gate hgate
+  have hcompatible := List.forall_iff_forall_mem.mp
+    (List.forall_iff_forall_mem.mp self.lookupSelectorsCompatible.1
+      gate hgate) argument hargument
+  have hcompatible' :
+      (argument.auxiliarySelectorIndices.Forall fun candidate =>
+        candidate ≠ gate.selector.index) ∧
+      (argument.masterSelector.index = gate.selector.index →
+        gate.selector.simple = false) := by
+    simpa [Gate.LookupSelectorsCompatible,
+      Selector.LookupSelectorsCompatible,
+      LookupArgument.selectorUsage] using hcompatible
+  intro hgateSelector
+  by_cases hmaster : selector = argument.masterSelector.index
+  · exact hcompatible'.2 (by omega)
+  · have hauxiliary : selector ∈ argument.auxiliarySelectorIndices :=
+      List.mem_filter.mpr ⟨List.mem_flatMap.mpr
+        ⟨expression, hexpression, hselector⟩, by simpa⟩
+    have hdisjoint := List.forall_iff_forall_mem.mp hcompatible'.1
+      selector hauxiliary
+    omega
+
 /-- Every query declaration emitted by the closed configure program is valid and
 names a column allocated by that program. -/
 theorem configureQueriesLawful

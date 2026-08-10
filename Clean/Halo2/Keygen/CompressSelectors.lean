@@ -45,6 +45,90 @@ def simpleSelector? {F : Type} : Expression F Query → Option Selector
   | .add a b => a.simpleSelector? <|> b.simpleSelector?
   | .mul a b => a.simpleSelector? <|> b.simpleSelector?
 
+/-- A selector returned by `simpleSelector?` is simple. -/
+theorem simpleSelector?_eq_some_simple
+    {F : Type} (expression : Expression F Query) {selected : Selector}
+    (hselector : expression.simpleSelector? = some selected) :
+    selected.simple = true := by
+  induction expression with
+  | var query =>
+      cases query with
+      | selector candidate =>
+          simp only [simpleSelector?] at hselector
+          split at hselector
+          next hsimple =>
+            simp only [Option.some.injEq] at hselector
+            subst selected
+            exact hsimple
+          next => simp at hselector
+      | fixed column rotation => simp [simpleSelector?] at hselector
+      | advice column rotation => simp [simpleSelector?] at hselector
+      | «instance» column rotation => simp [simpleSelector?] at hselector
+  | const value => simp [simpleSelector?] at hselector
+  | add left right ihLeft ihRight =>
+      simp only [simpleSelector?] at hselector
+      cases hleft : left.simpleSelector? with
+      | none =>
+          simp [hleft] at hselector
+          exact ihRight hselector
+      | some candidate =>
+          simp [hleft] at hselector
+          subst selected
+          exact ihLeft hleft
+  | mul left right ihLeft ihRight =>
+      simp only [simpleSelector?] at hselector
+      cases hleft : left.simpleSelector? with
+      | none =>
+          simp [hleft] at hselector
+          exact ihRight hselector
+      | some candidate =>
+          simp [hleft] at hselector
+          subst selected
+          exact ihLeft hleft
+
+/-- Gate ownership identifies the selector found by the simple-selector walk with the
+gate's distinguished selector, including its kind. -/
+theorem simpleSelector?_eq_some_of_selectorsOwnedBy
+    {F : Type} (expression : Expression F Query) (owner selected : Selector)
+    (howned : expression.SelectorsOwnedBy owner)
+    (hselector : expression.simpleSelector? = some selected) :
+    selected = owner := by
+  induction expression with
+  | var query =>
+      cases query with
+      | selector candidate =>
+          simp only [SelectorsOwnedBy] at howned
+          subst candidate
+          simp only [simpleSelector?] at hselector
+          split at hselector
+          next => exact Option.some.inj hselector.symm
+          next => simp at hselector
+      | fixed column rotation => simp [simpleSelector?] at hselector
+      | advice column rotation => simp [simpleSelector?] at hselector
+      | «instance» column rotation => simp [simpleSelector?] at hselector
+  | const value => simp [simpleSelector?] at hselector
+  | add left right ihLeft ihRight =>
+      simp only [SelectorsOwnedBy] at howned
+      simp only [simpleSelector?] at hselector
+      cases hleft : left.simpleSelector? with
+      | none =>
+          simp [hleft] at hselector
+          exact ihRight howned.2 hselector
+      | some candidate =>
+          simp [hleft] at hselector
+          subst selected
+          exact ihLeft howned.1 hleft
+  | mul left right ihLeft ihRight =>
+      simp only [SelectorsOwnedBy] at howned
+      simp only [simpleSelector?] at hselector
+      cases hleft : left.simpleSelector? with
+      | none =>
+          simp [hleft] at hselector
+          exact ihRight howned.2 hselector
+      | some candidate =>
+          simp [hleft] at hselector
+          subst selected
+          exact ihLeft howned.1 hleft
 end Halo2.Expression
 
 namespace Halo2
@@ -303,6 +387,94 @@ def selectorMaxDegrees (cs : ConstraintSystem F) : Array ℕ :=
       match p.simpleSelector? with
       | some s => degs.modify s.index (max · p.degree)
       | none => degs
+
+private theorem foldl_selectorMaxDegrees_getElem?_eq_zero
+    (polynomials : List (Expression F Query)) (degrees : Array ℕ)
+    {selector : ℕ}
+    (hzero : degrees[selector]? = some 0)
+    (havoids : ∀ polynomial ∈ polynomials, ∀ candidate,
+      polynomial.simpleSelector? = some candidate →
+        candidate.index ≠ selector) :
+    (polynomials.foldl (init := degrees) fun current polynomial =>
+      match polynomial.simpleSelector? with
+      | some candidate =>
+          current.modify candidate.index (max · polynomial.degree)
+      | none => current)[selector]? = some 0 := by
+  induction polynomials generalizing degrees with
+  | nil => exact hzero
+  | cons polynomial polynomials ih =>
+      simp only [List.foldl_cons]
+      apply ih
+      · cases hsimple : polynomial.simpleSelector? with
+        | none => exact hzero
+        | some candidate =>
+            rw [Array.getElem?_modify]
+            have hne := havoids polynomial List.mem_cons_self candidate hsimple
+            simp [hne, hzero]
+      · intro remaining hremaining candidate hsimple
+        exact havoids remaining (List.mem_cons_of_mem _ hremaining)
+          candidate hsimple
+
+private theorem foldl_selectorMaxDegrees_size
+    (polynomials : List (Expression F Query)) (degrees : Array ℕ) :
+    (polynomials.foldl (init := degrees) fun current polynomial =>
+      match polynomial.simpleSelector? with
+      | some candidate =>
+          current.modify candidate.index (max · polynomial.degree)
+      | none => current).size = degrees.size := by
+  induction polynomials generalizing degrees with
+  | nil => rfl
+  | cons polynomial polynomials ih =>
+      simp only [List.foldl_cons]
+      rw [ih]
+      cases polynomial.simpleSelector? <;> simp
+
+/-- A selector for which every same-index gate selector is complex has degree zero in
+selector compression. Gate well-formedness identifies a polynomial's selector with
+the gate's distinguished selector, including its kind. -/
+theorem selectorMaxDegrees_eq_zero_of_complexGateSelectors
+    (cs : ConstraintSystem F) {selector : ℕ}
+    (hallocated : selector < cs.numSelectors)
+    (hcomplex : cs.gates.Forall fun gate =>
+      gate.selector.index = selector → gate.selector.simple = false) :
+    (selectorMaxDegrees cs)[selector]! = 0 := by
+  let initial := (List.replicate cs.numSelectors 0).toArray
+  have hinitial : initial[selector]? = some 0 := by
+    rw [getElem?_pos initial selector]
+    · simp [initial]
+    · simpa [initial] using hallocated
+  have hpolynomials : ∀ polynomial ∈ flatGates cs, ∀ candidate,
+      polynomial.simpleSelector? = some candidate →
+        candidate.index ≠ selector := by
+    intro polynomial hpolynomial candidate hsimple hequal
+    rw [flatGates, List.mem_flatMap] at hpolynomial
+    obtain ⟨gate, hgate, hconstraint⟩ := hpolynomial
+    obtain ⟨constraint, hconstraintMem, rfl⟩ := List.mem_map.mp hconstraint
+    have howned := List.forall_iff_forall_mem.mp
+      gate.wellFormed.selectorsOwned constraint hconstraintMem
+    have howner := Expression.simpleSelector?_eq_some_of_selectorsOwnedBy
+      constraint.poly gate.selector candidate howned hsimple
+    have hsimpleTrue :=
+      Expression.simpleSelector?_eq_some_simple constraint.poly hsimple
+    have hgateComplex := List.forall_iff_forall_mem.mp hcomplex gate hgate
+      (howner ▸ hequal)
+    rw [howner] at hsimpleTrue
+    simp [hgateComplex] at hsimpleTrue
+  have hfold := foldl_selectorMaxDegrees_getElem?_eq_zero
+    (flatGates cs) initial hinitial hpolynomials
+  let result := (flatGates cs).foldl (init := initial)
+    fun current polynomial =>
+      match polynomial.simpleSelector? with
+      | some candidate =>
+          current.modify candidate.index (max · polynomial.degree)
+      | none => current
+  have hresultBound : selector < result.size := by
+    rw [show result.size = initial.size by
+      exact foldl_selectorMaxDegrees_size (flatGates cs) initial]
+    simpa [initial] using hallocated
+  rw [selectorMaxDegrees, getElem!_pos result selector hresultBound]
+  rw [getElem?_pos result selector hresultBound] at hfold
+  exact Option.some.inj hfold
 
 /-- halo2 `ConstraintSystem::degree`: the max of the permutation argument's constant
 `3`, the lookups' required degrees, and the gate degrees (no `minimum_degree` — Clean's

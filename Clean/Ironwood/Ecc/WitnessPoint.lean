@@ -41,7 +41,7 @@ def pointGate (qPoint : Selector) (x y : Column .advice) : Gate Fp where
       ⟨ "y == 0 v on_curve", qPoint * queryAdvice y 0 * curveEqn x y ⟩ ]
   wellFormed := by
     refine ⟨by query_correct, by query_correct, ?_, ?_⟩
-    · simp [Expression.selectorsCovered, querySelector,
+    · simp [Expression.SelectorsOwnedBy, querySelector,
         queryAdvice, curveEqn]
     · intro _ constraint hconstraint
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hconstraint

@@ -394,13 +394,17 @@ private theorem configure_selectorRequirements
     (scfg : HashPiece.Config) (counts) :
     (configureInferred scfg).selectorRequirements counts := by
   dsimp only [configureInferred, configure]
-  simp [configure_selector_norm, ConfigureDelta.LookupSelectorsCrossCompatible,
-    Halo2.Gate.LookupSelectorsCompatible, CondSwap.configure, Gate.configure]
+  simp [configure_selector_norm, CondSwap.configure, Gate.configure]
 
 instance (scfg : HashPiece.Config) :
     ElaboratedConfigure (configure scfg) :=
-  (configureInferred scfg).closeSelectorRequirements
-    (configure_selectorRequirements scfg)
+  ((configureInferred scfg).closeSelectorRequirements
+    (configure_selectorRequirements scfg)).withNoExternalSelectors (by
+      intro counts
+      constructor
+      · simp [configure, CondSwap.configure, Gate.configure,
+          CondSwap.swapGate_selector, Gate.decomposeGate_selector]
+      · simp [configure, CondSwap.configure, Gate.configure])
 
 /-- Capabilities produced by one Merkle configure run. Hashing and range checking
 remain caller-supplied because `configure` receives their already-built configs. -/

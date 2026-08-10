@@ -205,7 +205,7 @@ theorem state_mem_configure_permutationRequests
 instance (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
     (rcA rcB : Fin 3 → Column .fixed) :
     ElaboratedConfigure (configure state partialSbox rcA rcB) :=
-  { configureElaborated state partialSbox rcA rcB with
+  ({ configureElaborated state partialSbox rcA rcB with
     selectorRequirements _ := True
     lookupSelectorsCompatible := by
       intro counts _
@@ -219,7 +219,14 @@ instance (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
           fullRoundGate, partialRoundsGate, padAndAddGate,
           Gate.withSelector]
         omega
+      · simp [configure, configureEqualities, configureGates]
       · simp [configure, configureEqualities, configureGates,
-          lookupInputSelectorBound] }
+          lookupInputSelectorBound] }).withNoExternalSelectors (by
+    intro counts
+    constructor
+    · simp [configure, configureEqualities, configureGates,
+        fullRoundGate, partialRoundsGate, padAndAddGate, Gate.withSelector]
+      omega
+    · simp [configure, configureEqualities, configureGates])
 
 end Zcash.Circuits.Poseidon

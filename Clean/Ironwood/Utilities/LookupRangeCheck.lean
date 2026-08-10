@@ -39,8 +39,8 @@ open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
 simple selectors are banned — `lookup-design.md` §1.1); `qBitshift` is a simple selector
 (it only guards an ordinary gate). -/
 structure Config (K : ℕ) where
-  qLookup : Selector
-  qRunning : Selector
+  qLookup : ComplexSelector
+  qRunning : ComplexSelector
   qBitshift : Selector
   runningSum : Column .advice
   tableIdx : TableColumn
@@ -60,7 +60,7 @@ pair is
 where the table side is `table_idx`'s rotation-0 fixed query. Which word the gated input
 reduces to depends on which selectors are enabled at the row (running-sum vs short row). -/
 @[query_correct, circuit_norm]
-def rangeCheckInputFor (K : ℕ) (qLookup qRunning : Selector)
+def rangeCheckInputFor (K : ℕ) (qLookup qRunning : ComplexSelector)
     (runningSum : Column .advice) : Expression Fp Query :=
   let qL : Expression Fp Query := querySelector qLookup
   let qR : Expression Fp Query := querySelector qRunning
@@ -71,16 +71,28 @@ def rangeCheckInputFor (K : ℕ) (qLookup qRunning : Selector)
   -- `.scaled z_next 2^K`, NOT `product(const, z_next)`. Spell it `zNext * (2^K : Fp)`.
   qL * (qR * (zCur - zNext * (2 ^ K : Fp)) + (1 - qR) * zCur)
 
+@[circuit_norm, keygen_norm]
+theorem rangeCheckInputFor_noSimpleSelectors
+    (K : ℕ) (qLookup qRunning : ComplexSelector)
+    (runningSum : Column .advice) :
+    (rangeCheckInputFor K qLookup qRunning runningSum).NoSimpleSelectors := by
+  simp [rangeCheckInputFor, Expression.NoSimpleSelectors,
+    Expression.noSimpleSelectors_queryComplexSelector,
+    Expression.noSimpleSelectors_queryAdvice]
+
 @[query_correct, circuit_norm]
 def rangeCheckInput (K : ℕ) (cfg : Config K) : Expression Fp Query :=
   rangeCheckInputFor K cfg.qLookup cfg.qRunning cfg.runningSum
 
 @[query_correct, circuit_norm]
-def rangeCheckLookupFor (K : ℕ) (qLookup qRunning : Selector)
+def rangeCheckLookupFor (K : ℕ) (qLookup qRunning : ComplexSelector)
     (runningSum : Column .advice) (tableIdx : TableColumn) : LookupArgument Fp where
   masterSelector := qLookup
   inputs := [rangeCheckInputFor K qLookup qRunning runningSum]
   tables := [queryFixed tableIdx.inner]
+  inputsNoSimpleSelectors := by
+    simpa using
+      rangeCheckInputFor_noSimpleSelectors K qLookup qRunning runningSum
   tablesFree := by simp [Expression.SelectorFree, queryFixed]
   arity := rfl
 
@@ -89,11 +101,13 @@ def rangeCheckLookup (K : ℕ) (cfg : Config K) : LookupArgument Fp :=
   rangeCheckLookupFor K cfg.qLookup cfg.qRunning cfg.runningSum cfg.tableIdx
 
 @[configure_selector_norm, keygen_norm] theorem delta_rangeCheckLookup_lookups
-    (K : ℕ) (qLookup qRunning : Selector)
+    (K : ℕ) (qLookup qRunning : ComplexSelector)
     (runningSum : Column .advice) (tableIdx : TableColumn)
     (counts : ConfigureCounts) :
     ((lookup [queryAdvice runningSum 0, queryAdvice runningSum 1]
-      qLookup [(rangeCheckInputFor K qLookup qRunning runningSum, tableIdx)]).delta
+      qLookup [(rangeCheckInputFor K qLookup qRunning runningSum, tableIdx)]
+        (_hnoSimpleSelectors :=
+          rangeCheckInputFor_noSimpleSelectors K qLookup qRunning runningSum)).delta
         counts).lookups =
       [rangeCheckLookupFor K qLookup qRunning runningSum tableIdx] := by
   unfold Halo2.lookup rangeCheckLookupFor
@@ -125,7 +139,8 @@ theorem qRunning_mem_rangeCheckLookup_selectorIndices (K : ℕ) (cfg : Config K)
 @[keygen_norm]
 theorem qRunning_declared_by_rangeCheckLookup (K : ℕ) (cfg : Config K) :
     cfg.qRunning.index = cfg.qLookup.index ∨
-      cfg.qRunning.index ∈ (rangeCheckLookup K cfg).auxiliarySelectorIndices := by
+      cfg.qRunning.index ∈
+        (rangeCheckLookup K cfg).auxiliarySelectorIndices := by
   simpa only [rangeCheckLookup_masterSelector, LookupArgument.selectorIndices,
     List.mem_cons] using
     qRunning_mem_rangeCheckLookup_selectorIndices K cfg
@@ -158,6 +173,8 @@ def configure (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn) :
   -- register the lookup: one (input, table) pair, verbatim §1.4
   lookup [queryAdvice runningSum 0, queryAdvice runningSum 1] qLookup
     [(rangeCheckInputFor K qLookup qRunning runningSum, tableIdx)]
+      (_hnoSimpleSelectors :=
+        rangeCheckInputFor_noSimpleSelectors K qLookup qRunning runningSum)
   -- register the bitshift gate
   createGate (bitshiftGate K cfg)
   return cfg
@@ -219,9 +236,16 @@ theorem gate_lookupSelectorsCompatible_configure_output
     gate.LookupSelectorsCompatible
       (rangeCheckLookup K ((configure K runningSum tableIdx).output counts)) := by
   rw [Gate.LookupSelectorsCompatible,
-    configure_output_lookup_auxiliarySelectorIndices]
-  simp only [List.forall_cons, List.forall_nil, and_true]
-  constructor <;> omega
+    Selector.LookupSelectorsCompatible,
+    LookupArgument.selectorUsage]
+  constructor
+  · rw [configure_output_lookup_auxiliarySelectorIndices]
+    simp only [List.forall_cons, List.forall_nil, and_true]
+    constructor <;> omega
+  · rw [rangeCheckLookup_masterSelector]
+    rw [configure_output_qLookup_index]
+    intro hindex
+    omega
 
 @[configure_selector_norm, keygen_norm] theorem configure_delta_lookups (K : ℕ)
     (runningSum : Column .advice) (tableIdx : TableColumn)
@@ -250,18 +274,28 @@ private theorem configure_selectorRequirements
     (configureInferred K runningSum tableIdx).selectorRequirements counts := by
   dsimp only [configureInferred, configure]
   simp only [configure_selector_norm]
-  simp [configure_selector_norm, ConfigureDelta.LookupSelectorsCrossCompatible,
-    Gate.LookupSelectorsCompatible]
+  simp [configure_selector_norm, ConfigureSelectorSummary.CrossCompatible,
+    Selector.LookupSelectorsCompatible]
   simp [keygen_norm, rangeCheckLookupFor, rangeCheckInputFor,
     lookupInputSelectorBound, LookupArgument.inputSelectorBound,
-    LookupArgument.auxiliarySelectorIndices,
     Expression.selectorIndices]
   simp [Expression.selectorBound]
+  omega
+
+private theorem configure_externalSelectorSummary
+    (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn) (counts) :
+    ((configureInferred K runningSum tableIdx).selectorSummary counts).externalAt
+      counts.numSelectors = {} := by
+  dsimp only [configureInferred, configure]
+  simp [configure_selector_norm, keygen_norm, rangeCheckInputFor,
+    Expression.selectorIndices]
+  omega
 
 instance (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn) :
     ElaboratedConfigure (configure K runningSum tableIdx) :=
-  (configureInferred K runningSum tableIdx).closeSelectorRequirements
-    (configure_selectorRequirements K runningSum tableIdx)
+  ((configureInferred K runningSum tableIdx).closeSelectorRequirements
+    (configure_selectorRequirements K runningSum tableIdx)).withExternalSelectorSummary
+      (fun _ => {}) (configure_externalSelectorSummary K runningSum tableIdx)
 
 /-! ## The table loader
 

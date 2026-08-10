@@ -74,6 +74,25 @@ structure Selector where
   simple : Bool
 deriving DecidableEq, Repr
 
+/-- A selector allocated through Halo 2's `complex_selector` API. Its coercion records
+the invariant that it is never treated as a simple selector by compression. -/
+structure ComplexSelector where
+  index : ℕ
+deriving DecidableEq, Repr
+
+def ComplexSelector.toSelector (selector : ComplexSelector) : Selector :=
+  ⟨selector.index, false⟩
+
+instance : CoeOut ComplexSelector Selector := ⟨ComplexSelector.toSelector⟩
+
+@[simp, circuit_norm]
+theorem ComplexSelector.toSelector_index (selector : ComplexSelector) :
+    selector.toSelector.index = selector.index := rfl
+
+@[simp, circuit_norm]
+theorem ComplexSelector.toSelector_simple (selector : ComplexSelector) :
+    selector.toSelector.simple = false := rfl
+
 /-- A relative row offset within a gate. Rust: `pub struct Rotation(pub i32)`. -/
 abbrev Rotation := ℤ
 

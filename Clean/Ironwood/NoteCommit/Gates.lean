@@ -557,7 +557,7 @@ private theorem configure_selectorRequirements
     (advices : Fin 10 → Column .advice) (counts) :
     (configureInferred advices).selectorRequirements counts := by
   dsimp only [configureInferred, configure]
-  simp [configure_selector_norm, ConfigureDelta.LookupSelectorsCrossCompatible,
+  simp [configure_selector_norm,
     DecomposeB.configure, DecomposeD.configure, DecomposeE.configure,
     DecomposeG.configure, DecomposeH.configure, GdCanonicity.configure,
     PkdCanonicity.configure, ValueCanonicity.configure,
@@ -566,8 +566,27 @@ private theorem configure_selectorRequirements
 
 instance (advices : Fin 10 → Column .advice) :
     ElaboratedConfigure (configure advices) :=
-  (configureInferred advices).closeSelectorRequirements
-    (configure_selectorRequirements advices)
+  ((configureInferred advices).closeSelectorRequirements
+    (configure_selectorRequirements advices)).withNoExternalSelectors (by
+      intro counts
+      constructor
+      · simp [configure, DecomposeB.configure, DecomposeD.configure,
+          DecomposeE.configure, DecomposeG.configure, DecomposeH.configure,
+          GdCanonicity.configure, PkdCanonicity.configure,
+          ValueCanonicity.configure, RhoCanonicity.configure,
+          PsiCanonicity.configure, YCanonicity.configure,
+          DecomposeB.gate_selector, DecomposeD.gate_selector,
+          DecomposeE.gate_selector, DecomposeG.gate_selector,
+          DecomposeH.gate_selector, GdCanonicity.gate_selector,
+          PkdCanonicity.gate_selector, ValueCanonicity.gate_selector,
+          RhoCanonicity.gate_selector, PsiCanonicity.gate_selector,
+          YCanonicity.gate_selector]
+        omega
+      · simp [configure, DecomposeB.configure, DecomposeD.configure,
+          DecomposeE.configure, DecomposeG.configure, DecomposeH.configure,
+          GdCanonicity.configure, PkdCanonicity.configure,
+          ValueCanonicity.configure, RhoCanonicity.configure,
+          PsiCanonicity.configure, YCanonicity.configure])
 
 /-- Every local copy column produced by NoteCommit configure is one of advices 5–9. -/
 theorem mem_adviceColumns_of_mem_configure_output_permutationColumns

@@ -1745,6 +1745,11 @@ theorem selectorEnabledAtIndex_cons_self
     SelectorEnabledAtIndex (selector :: rest) selector.index :=
   ⟨selector, by simp, rfl⟩
 
+theorem complexSelectorEnabledAtIndex_cons_self
+    (selector : ComplexSelector) (rest : List Selector) :
+    SelectorEnabledAtIndex ((selector : Selector) :: rest) selector.index :=
+  ⟨selector, by simp, by simp⟩
+
 /-- An operation activates selector `selector` at region-local `row`. -/
 @[circuit_norm]
 def RegionOperation.ActivatesSelectorAt
@@ -1874,9 +1879,9 @@ theorem RegionOperation.lookupSelectorsLawful_of_registered
   cases operation with
   | enableGate gate row =>
       exact List.forall_iff_forall_mem.mpr fun argument hargument =>
-        List.forall_iff_forall_mem.mp
+        (List.forall_iff_forall_mem.mp
           (List.forall_iff_forall_mem.mp hcompatible.1 gate hregistered)
-          argument hargument
+          argument hargument).1
   | enableLookup source enabled row =>
       rw [RegionOperation.LookupSelectorsLawful,
         List.forall_iff_forall_mem]
@@ -1894,7 +1899,10 @@ theorem RegionOperation.lookupSelectorsLawful_of_registered
         target htarget
       have hmaster := List.forall_iff_forall_mem.mp hpair
         selector hsourceSelector hselector
-      rw [hmaster]
+      have hmaster' :
+          target.masterSelector.index = source.masterSelector.index := by
+        simpa [LookupArgument.selectorUsage] using hmaster
+      rw [hmaster']
       exact hactivation.1
   | assignAdvice | assignFixed | constrainEqual | constrainConstant |
       constrainInstance =>

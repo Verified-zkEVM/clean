@@ -37,7 +37,7 @@ open Sinsemilla
 
 structure Config where
   -- `q_sinsemilla1`: the Sinsemilla gate selector.
-  qS1 : Selector
+  qS1 : ComplexSelector
   -- `q_sinsemilla2`: a fixed column taking values `0/1/2`, queried inside gate polynomials and the
   -- lookup input.
   qS2 : Column .fixed
@@ -175,6 +175,12 @@ def generatorLookup (G : Generators) (cfg : Config) : LookupArgument Fp where
     [ queryFixed cfg.generatorTable.tableIdx.inner,
       queryFixed cfg.generatorTable.tableX.inner,
       queryFixed cfg.generatorTable.tableY.inner ]
+  inputsNoSimpleSelectors := by
+    simp [yPExpr, yAExpr, xRExpr, qS3Expr,
+      Expression.NoSimpleSelectors,
+      Expression.noSimpleSelectors_queryComplexSelector,
+      Expression.noSimpleSelectors_queryAdvice,
+      Expression.noSimpleSelectors_queryFixed]
   tablesFree := by simp [Expression.SelectorFree, queryFixed]
   arity := rfl
 
@@ -221,6 +227,9 @@ def configure (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
     [((generatorLookup G cfg).inputs[0]!, genTable.tableIdx),
           ((generatorLookup G cfg).inputs[1]!, genTable.tableX),
           ((generatorLookup G cfg).inputs[2]!, genTable.tableY)]
+    (_hnoSimpleSelectors := by
+      simpa [generatorLookup] using
+        (generatorLookup G cfg).inputsNoSimpleSelectors)
   createGate (initialYQGate cfg)
   createGate (sinsemillaGate cfg)
   return cfg
@@ -233,6 +242,14 @@ def configure (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
       counts).qS1.index = counts.numSelectors := by
   simp [configure]
 
+@[configure_selector_norm, keygen_norm] theorem configure_output_qS4_index
+    (G : Generators) (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).output
+      counts).qS4.index = counts.numSelectors + 1 := by
+  simp [configure]
+
 @[keygen_norm]
 theorem configure_lookups (G : Generators)
     (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
@@ -243,6 +260,18 @@ theorem configure_lookups (G : Generators)
       [generatorLookup G
         ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).output
           counts)] := by
+  rfl
+
+@[keygen_norm]
+theorem configure_gates (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).delta
+      counts).gates =
+      let cfg := (configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ
+        genTable).output counts
+      [initialYQGate cfg, sinsemillaGate cfg] := by
   rfl
 
 theorem configure_output_xA (G : Generators)
@@ -397,24 +426,39 @@ instance (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
     (genTable : GeneratorTableConfig) :
     ElaboratedConfigure
       (configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable) :=
-  { configureElaborated G xA xP bits lambda1 lambda2 witnessPieces fixedYQ
+  ({ configureElaborated G xA xP bits lambda1 lambda2 witnessPieces fixedYQ
       genTable with
     selectorRequirements _ := True
     lookupSelectorsCompatible := by
       intro counts _
-      simp [configure_lookups, generatorLookup_auxiliarySelectorIndices,
+      simp [configure_lookups, configure_gates,
+        generatorLookup_auxiliarySelectorIndices,
+        generatorLookup_masterSelector,
+        initialYQGate_selector, sinsemillaGate_selector,
+        configure_output_qS1_index, configure_output_qS4_index,
         Gate.LookupSelectorsCompatible,
+        Selector.LookupSelectorsCompatible,
+        LookupArgument.selectorUsage,
         ConfigureDelta.LookupSelectorsCompatible,
         Halo2.LookupSelectorsCompatible]
-      constructor
-      · exact List.forall_iff_forall_mem.mpr fun _ _ => trivial
-      · exact LookupArgument.selectorsCompatible_self _
+      exact LookupArgument.selectorsCompatible_self _
     selectorsAllocated := by
       intro counts _
       constructor
       · simp [configure, initialYQGate, sinsemillaGate, Gate.withSelector]
+      · rw [configure_lookups]
+        simp [generatorLookup_masterSelector, configure]
       · simp [configure, generatorLookup, yPExpr, yAExpr, qS3Expr,
-          xRExpr, Expression.selectorBound] }
+          xRExpr, Expression.selectorBound] }).withNoExternalSelectors (by
+    intro counts
+    constructor
+    · rw [configure_gates]
+      simp [initialYQGate_selector, sinsemillaGate_selector,
+        configure_output_qS1_index, configure_output_qS4_index]
+    · rw [configure_lookups]
+      simp [generatorLookup_masterSelector,
+        generatorLookup_auxiliarySelectorIndices,
+        LookupArgument.selectorIndices, configure_output_qS1_index])
 
 /-- The boundary `q_s2` value: `0` between pieces, `2` on the message's final piece
 (`hash_to_point.rs::hash_piece`, `final_piece`). Deliberately NOT `@[simp]`: proofs keep it
