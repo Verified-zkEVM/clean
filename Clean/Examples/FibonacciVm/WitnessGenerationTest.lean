@@ -37,21 +37,25 @@ private def derivedBytesData : Bool :=
   match FibonacciWitness.generate publicInput 1000 with
   | .error _ => false
   | .ok witness =>
-      let rows := witness.data "bytes" 1
+      let rows := witness.data "bytes" 2
       rows.size == 256 && match rows[42]? with
         | some row => row[0] == (42 : F pBabybear)
         | none => false
 
-/-- The byte table itself, including its fixed byte column, is the committed data source. -/
+/-- The byte component exports its complete `(value, multiplicity)` input rows. -/
 example : derivedBytesData = true := by native_decide
 
-private def nonExportingComponentHasNoData : Bool :=
+private def dynamicComponentData : Bool :=
   match FibonacciWitness.generate publicInput 1000 with
   | .error _ => false
-  | .ok witness => (witness.data "fibonacci" 0).isEmpty
+  | .ok witness =>
+      let rows := witness.data "fibonacci" 4
+      rows.size == 32 && match rows[0]? with
+        | some row => row[0] == 1 && row[1] == 0 && row[2] == 0 && row[3] == 1
+        | none => false
 
-/-- A component with no declared data columns does not accidentally expose zero-width rows. -/
-example : nonExportingComponentHasNoData = true := by native_decide
+/-- Demand-generated components expose their complete inputs just like fixed components. -/
+example : dynamicComponentData = true := by native_decide
 
 private def repeatedSteps : ℕ := 400
 

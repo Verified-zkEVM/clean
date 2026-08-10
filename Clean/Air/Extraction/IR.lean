@@ -121,7 +121,6 @@ structure FixedColumnsProgram (F : Type) where
 
 structure ComponentProgram (F : Type) [FiniteField F] where
   name : String
-  dataColumns : List ℕ
   inputWidth : ℕ
   fixedColumns : Option (FixedColumnsProgram F)
   width : ℕ

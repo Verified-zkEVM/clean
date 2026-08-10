@@ -7,7 +7,7 @@ mod generated {
 }
 
 use clean_backend::witness_generation::{
-    self, DataSchema, Interaction, Mode, Padding, Program, WitnessData, WitnessField,
+    self, Interaction, Mode, Padding, Program, WitnessData, WitnessField,
 };
 use clean_backend::{
     prove_ensemble, verify_ensemble, EnsembleShapeError, EnsembleVerificationError,
@@ -140,10 +140,8 @@ impl<F: WitnessField> Program<F> for Minimum64Program {
     const COMPONENTS: usize = <generated::FibonacciEnsembleProgram as Program<F>>::COMPONENTS;
     const FIXED_WIDTHS: &'static [usize] =
         <generated::FibonacciEnsembleProgram as Program<F>>::FIXED_WIDTHS;
-
-    fn data_schemas() -> Vec<DataSchema> {
-        <generated::FibonacciEnsembleProgram as Program<F>>::data_schemas()
-    }
+    const COMPONENT_NAMES: &'static [&'static str] =
+        <generated::FibonacciEnsembleProgram as Program<F>>::COMPONENT_NAMES;
 
     fn modes() -> Vec<Mode<F>> {
         generated::FibonacciEnsembleProgram::modes()

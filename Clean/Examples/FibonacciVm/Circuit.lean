@@ -70,8 +70,6 @@ def bytesFixedColumns : FixedColumns (F p) where
   uniform_width := by simp
 
 def bytesComponent : Component (F p) where
-  dataColumns := [0]
-  data_columns_lt_input := by change ∀ column ∈ [0], column < 2; simp
   circuit := pushBytes
   fixedColumns := some bytesFixedColumns
   fixed_width_le_input := by change 1 ≤ 2; omega

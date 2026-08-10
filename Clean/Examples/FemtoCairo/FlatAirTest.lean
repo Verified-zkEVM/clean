@@ -25,7 +25,7 @@ private def result : Except String (List ℕ × Bool × Bool × ℕ × ℕ) :=
       memoryValues initialState finalStateAfterEight 8 1000 with
   | .error error => .error error
   | .ok witness =>
-    let memoryData := witness.data "memory" 2
+    let memoryData := witness.data "memory" 3
     let memoryValue := match memoryData[5]? with
       | some row => (row[1]?.getD 0).val
       | none => 0
@@ -35,8 +35,9 @@ private def result : Except String (List ℕ × Bool × Bool × ℕ × ℕ) :=
 
 /--
 The full channel-driven witness contains eight execution rows, the eight-row fixed
-memory, and the 32-row fixed program. The derived prover data preserves the non-trivial
-memory value used by the execution trace.
+memory, and the 32-row fixed program. The derived prover data exposes each complete
+memory input row, including its multiplicity, while preserving the non-trivial value
+used by the execution trace.
 -/
 example : result = .ok ([8, 8, 32], true, true, 8, 10) := by native_decide
 

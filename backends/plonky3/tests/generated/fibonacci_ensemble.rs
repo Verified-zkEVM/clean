@@ -2,8 +2,8 @@
 use alloc::string::String;
 use alloc::{format, vec, vec::Vec};
 use clean_backend::witness_generation::{
-    Aggregation, DataSchema, DemandMode, Direction, EnsembleWitness, FixedSlot, InputCell,
-    Interaction, Mode, Padding, Program, WitnessData, WitnessField,
+    Aggregation, DemandMode, Direction, EnsembleWitness, FixedSlot, InputCell, Interaction, Mode,
+    Padding, Program, WitnessData, WitnessField,
 };
 use clean_backend::{GeneratedAir, GeneratedAirSpec, GeneratedLookup};
 use p3_air::lookup::Direction as LookupDirection;
@@ -580,23 +580,7 @@ impl<F: WitnessField> Program<F> for FibonacciEnsembleProgram {
     const FUEL: usize = 100000;
     const COMPONENTS: usize = 3;
     const FIXED_WIDTHS: &'static [usize] = &[0, 0, 1];
-
-    fn data_schemas() -> Vec<DataSchema> {
-        vec![
-            DataSchema {
-                name: "fibonacci",
-                columns: &[],
-            },
-            DataSchema {
-                name: "add8",
-                columns: &[],
-            },
-            DataSchema {
-                name: "bytes",
-                columns: &[0],
-            },
-        ]
-    }
+    const COMPONENT_NAMES: &'static [&'static str] = &["fibonacci", "add8", "bytes"];
 
     fn modes() -> Vec<Mode<F>> {
         vec![

@@ -214,10 +214,10 @@ lemma partialBalancedChannel_of_balancedInteractions [DecidableEq F] {tables : T
 For ordered channels, we can always instantiate partial balance at an initial sublist.
 -/
 theorem partialBalancedChannel_of_cons_of_orderedChannelLt [DecidableEq F]
-  {table : Table F} {tables : TableContext F} (consistent : table.DataConsistency tables.data)
+  {table : Table F} {tables : TableContext F} (sufficient : table.AssumptionsSufficient tables.data)
   {channel : RawChannel F} :
   table.Constraints tables.data →
-  PartialBalancedChannel (.cons table tables consistent) channel →
+  PartialBalancedChannel (.cons table tables sufficient) channel →
   OrderedChannelLt channel tables.components [table.component] →
     PartialBalancedChannel tables channel := by
   rintro table_constraints ⟨ extraInteractions, balanced, same_channel, extra_reqs_or_no_grts ⟩
@@ -247,14 +247,14 @@ theorem partialBalancedChannel_of_cons_of_orderedChannelLt [DecidableEq F]
 For ordered channels, we can always instantiate partial balance at an initial sublist.
 -/
 lemma partialBalancedChannel_of_cons_of_orderedChannel [DecidableEq F]
-  {table : Table F} {tables : TableContext F} (consistent : table.DataConsistency tables.data)
+  {table : Table F} {tables : TableContext F} (sufficient : table.AssumptionsSufficient tables.data)
   {channel : RawChannel F} :
   table.Constraints tables.data →
-  PartialBalancedChannel (tables.cons table consistent) channel →
+  PartialBalancedChannel (tables.cons table sufficient) channel →
   OrderedChannel channel (table.component :: tables.components) →
     PartialBalancedChannel tables channel := by
   intro table_constraints partial_balance ordered_channel
-  apply partialBalancedChannel_of_cons_of_orderedChannelLt consistent table_constraints partial_balance
+  apply partialBalancedChannel_of_cons_of_orderedChannelLt sufficient table_constraints partial_balance
   simp_all [circuit_norm]
 
 /--
@@ -263,12 +263,12 @@ on a list of tables by induction. This lemma captures the main step.
 -/
 lemma guarantees_of_requirements_cons [DecidableEq F]
   -- given a list of tables, and one additional table
-  {table : Table F} {tables : TableContext F} (consistent : table.DataConsistency tables.data)
+  {table : Table F} {tables : TableContext F} (sufficient : table.AssumptionsSufficient tables.data)
   -- and a channel that is consistent, ordered on the new table, and partially balanced on the combined tables
   {channel : RawChannel F} [channel.Consistent] :
   table.Constraints tables.data →
   OrderedChannelRefl channel table.component →
-  PartialBalancedChannel (tables.cons table consistent) channel →
+  PartialBalancedChannel (tables.cons table sufficient) channel →
   -- the channel requirements on the old tables imply guarantees on the new table
   (∀ table ∈ tables.tables, table.ChannelRequirements tables.data channel) →
     table.ChannelGuarantees tables.data channel := by
@@ -288,7 +288,7 @@ lemma guarantees_of_requirements_cons [DecidableEq F]
   · simp only [circuit_norm] at grts
     exact table.guarantees_of_not_mem tables.data grts.left
   -- now, to prove this table's channel guarantees, we show guarantees on _all_ channel interactions (that we know are balanced)
-  set channelInteractions := (tables.cons table consistent).interactionsWith channel ++ extraInteractions
+  set channelInteractions := (tables.cons table sufficient).interactionsWith channel ++ extraInteractions
   have subset_channelInteractions : table.interactionsWith tables.data channel ⊆ channelInteractions := by
     simp only [channelInteractions, circuit_norm]
   suffices all_grts : ∀ i ∈ channelInteractions, i.Guarantees tables.data by
@@ -393,17 +393,17 @@ lemma guarantees_of_requirements_append [DecidableEq F]
     ∀ table ∈ ts.tables, table.ChannelGuarantees ts.data channel := by
   -- we show that for each (t, ss) pair, the assumptions of `*_cons` hold
   rintro constraints reqs partial_balance ih table h_table
-  have consistent : table.DataConsistency ss.data := by
+  have sufficient : table.AssumptionsSufficient ss.data := by
     rw [← data_eq]
-    exact ts.data_consistent table h_table
+    exact ts.assumptions_sufficient table h_table
   rw [data_eq]
-  apply guarantees_of_requirements_cons (tables := ss) consistent ?_ ?_ ?_ ih
+  apply guarantees_of_requirements_cons (tables := ss) sufficient ?_ ?_ ?_ ih
   · rw [← data_eq]
     exact constraints _ h_table
   · right; exact reqs _ h_table
   -- get partial balance by sublist/permutation argument
   apply partialBalancedChannel_of_sublist
-    (subtables := ss.cons table consistent) (tables := ts.append ss data_eq)
+    (subtables := ss.cons table sufficient) (tables := ts.append ss data_eq)
     data_eq.symm partial_balance
   obtain ⟨ i, hi, h' ⟩ := List.getElem_of_mem h_table
   symm at h'; subst h'
@@ -422,14 +422,14 @@ lemma guarantees_of_requirements_append [DecidableEq F]
 /-- Helper lemma that uses circuit soundness, to strengthen guarantees to include requirements -/
 lemma iff_guarantees_of_constraints {table : Table F} {data : ProverData F}
     {finished : List (RawChannel F)} :
-  table.DataConsistency data →
+  table.AssumptionsSufficient data →
   table.Assumptions data →
   table.Constraints data →
   table.component.circuit.channelsWithGuarantees ⊆ finished →
   ((table.Spec data ∧ ∀ channel ∈ finished,
       table.ChannelGuarantees data channel ∧ table.ChannelRequirements data channel) ↔
     ∀ channel ∈ finished, table.ChannelGuarantees data channel) := by
-  intro consistent assumptions constraints subset_finished
+  intro sufficient assumptions constraints subset_finished
   constructor; simp_all
   intro grts
   have all_grts : table.Guarantees data := by
@@ -437,7 +437,7 @@ lemma iff_guarantees_of_constraints {table : Table F} {data : ProverData F}
     intro channel h_channel
     exact grts _ (subset_finished h_channel)
   -- constraints ∧ guarantees → requirements → channelRequirements
-  have ⟨ spec, all_reqs ⟩ := table.weakSoundness consistent assumptions constraints all_grts
+  have ⟨ spec, all_reqs ⟩ := table.weakSoundness sufficient assumptions constraints all_grts
   use spec
   intro channel h_channel
   exact ⟨ grts _ h_channel, table.channelRequirements_of_requirements data all_reqs ⟩
@@ -483,12 +483,12 @@ theorem spec_and_guarantees_of_soundChannels [DecidableEq F] {witness : TableCon
   induction witness using TableContext.induct
   · intro _ h_table; nomatch h_table
   -- induction step
-  rename_i table tables consistent ih
+  rename_i table tables sufficient ih
   simp only [TableContext.Assumptions, TableContext.Constraints, circuit_norm] at *
   simp only [forall_exists_index, and_imp, forall_apply_eq_imp_iff₂] at *
   -- first, we use the IH
   have partial_balance' c hc := by
-    apply partialBalancedChannel_of_cons_of_orderedChannelLt consistent constraints.left
+    apply partialBalancedChannel_of_cons_of_orderedChannelLt sufficient constraints.left
       (partial_balance c hc)
     rw [OrderedChannelLt]
     simp only [TableContext.components, List.flatMap_singleton]
@@ -505,13 +505,13 @@ theorem spec_and_guarantees_of_soundChannels [DecidableEq F] {witness : TableCon
   constructor; swap
   · exact ih
   -- it's enough to prove guarantees of all channels, since they + constraints imply requirements
-  rw [iff_guarantees_of_constraints consistent assumptions.left constraints.left subset_finished.left]
+  rw [iff_guarantees_of_constraints sufficient assumptions.left constraints.left subset_finished.left]
   -- the rest is just applying `guarantees_of_requirements_cons`
   intro channel h_channel
   have : channel.Consistent := consistent_channels _ h_channel
   have orderedChannelRefl : OrderedChannelRefl channel table.component := by
     simp only [circuit_norm, ordered_channels channel h_channel]
-  apply guarantees_of_requirements_cons consistent
+  apply guarantees_of_requirements_cons sufficient
     constraints.left orderedChannelRefl (partial_balance channel h_channel)
   intro t ht
   exact (ih t ht).right _ h_channel |>.right

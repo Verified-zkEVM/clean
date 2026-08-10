@@ -799,24 +799,29 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
   let vmContext : TableContext F := {
     tables := witness.vmAllTables
     data := witness.data
-    data_consistent := by
+    assumptions_sufficient := by
       intro table htable
       simp only [EnsembleWitness.vmAllTables, List.mem_cons] at htable
       rcases htable with rfl | htable
-      · simp [Ensemble.verifierWitnessTable,
-          Table.DataConsistency, Component.DataConsistency]
-      · exact witness.data_consistent table (List.mem_of_mem_take htable)
+      · simp [Table.AssumptionsSufficient, Table.Assumptions, Table.CircuitAssumptions,
+          Ensemble.verifierWitnessTable, Component.RowAssumptions,
+          Component.CircuitAssumptions]
+      · exact table.assumptionsSufficient
+          (witness.data_consistent table (List.mem_of_mem_take htable))
   }
   let oldContext : TableContext F := {
     tables := ens.verifierWitnessTable witness.publicInput ::
       witness.tables.drop vm.tables.length
     data := witness.data
-    data_consistent := by
+    assumptions_sufficient := by
       intro table htable
       simp only [List.mem_cons] at htable
       rcases htable with rfl | htable
-      · simp [Ensemble.verifierWitnessTable, Table.DataConsistency, Component.DataConsistency]
-      · exact witness.data_consistent table (List.mem_of_mem_drop htable)
+      · simp [Table.AssumptionsSufficient, Table.Assumptions, Table.CircuitAssumptions,
+          Ensemble.verifierWitnessTable, Component.RowAssumptions,
+          Component.CircuitAssumptions]
+      · exact table.assumptionsSufficient
+          (witness.data_consistent table (List.mem_of_mem_drop htable))
   }
   set vmChannel := vm.channel.toRaw
   -- the vm channel interactions are constrained to vm tables
@@ -932,7 +937,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
   -- and use it in `verifier_guarantees`
   have reqs_of_grts (table) (h_table : table ∈ witness.vmAllTables) :=
     table.requirements_of_partial_guarantees_of_constraints (unfinished := vmChannel)
-    (vmContext.data_consistent table h_table)
+    (vmContext.assumptions_sufficient table h_table)
     (vm_assumptions table h_table) (vm_constraints table h_table)
     (grts_subset_all table h_table) (finished_grts table h_table)
   specialize verifier_guarantees reqs_of_grts

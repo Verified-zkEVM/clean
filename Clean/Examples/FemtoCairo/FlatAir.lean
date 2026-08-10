@@ -16,6 +16,30 @@ instance (p : ℕ) [p_large_enough : Fact (p > 512)] : Fact (ringChar (F p) ≠ 
     simp [F, ZMod.ringChar_zmod_n]
     linarith [p_large_enough.out]
 
+structure ProviderInput F where
+  address : F
+  value : F
+  multiplicity : F
+deriving ProvableStruct
+
+def memorySize (data : ProverData (F p)) : ℕ :=
+  (data.getRows "memory" ProviderInput).size
+
+def memoryValue (env : Environment (F p)) (address : Expression (F p)) : F p :=
+  let mem := env.data.getRows "memory" ProviderInput
+  if he : (env address).val < mem.size then
+    mem[(env address).val].value
+  else 0
+
+def memory (data : ProverData (F p)) : Fin (memorySize data) → F p :=
+  let mem := data.getRows "memory" ProviderInput
+  fun i => mem[i.val].value
+
+def MemoryCompletenessAssumption (data : ProverData (F p)) : Prop :=
+  let mem := data.getRows "memory" ProviderInput
+  mem.size > 0 ∧ mem.size ≤ 2^64 ∧
+    ∀ (address : F p) (ha : address.val < mem.size), mem[address.val].address = address
+
 def ProgramChannel {programSize : ℕ} (program : Fin programSize → F p) :
     Channel (F p) fieldPair where
   name := "program"
@@ -73,21 +97,19 @@ def fetchInstruction
 
 def MemoryChannel : Channel (F p) MemoryEntry where
   name := "memory"
-  Guarantees entry data := MemoryTable.Contains (data.getTable MemoryTable) entry
+  Guarantees entry data :=
+    let table := data.getRows "memory" ProviderInput
+    ∃ ha : entry.address.val < table.size,
+      entry.address = table[entry.address.val].address ∧
+      entry.value = table[entry.address.val].value
 
 omit [Fact p.Prime] p_large_enough in
-lemma memoryEntry_toElements (entry : MemoryEntry (F p)) :
-    toElements entry = #v[entry.address, entry.value] := by
-  rcases entry with ⟨address, value⟩
-  rfl
-
-omit [Fact p.Prime] p_large_enough in
-lemma memoryTable_getElem?_eq (data : ProverData (F p)) (i : ℕ) :
-    (data.getTable MemoryTable)[i]? =
-      Option.map (fromElements (M := MemoryEntry))
-        ((data "memory" (size MemoryEntry))[i]?) := by
-  rw [show data.getTable MemoryTable =
-    (data "memory" (size MemoryEntry)).map fromElements by rfl]
+lemma memoryRows_getElem?_eq (data : ProverData (F p)) (i : ℕ) :
+    (data.getRows "memory" ProviderInput)[i]? =
+      Option.map (fromElements (M := ProviderInput))
+        ((data "memory" (size ProviderInput))[i]?) := by
+  rw [show data.getRows "memory" ProviderInput =
+    (data "memory" (size ProviderInput)).map fromElements by rfl]
   exact Array.getElem?_map
 
 def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
@@ -96,9 +118,9 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
       mode.isDoubleAddressing * (state.ap + offset) +
       mode.isApRelative * (state.ap + offset) +
       mode.isFpRelative * (state.fp + offset)
-    let value1 ← witness (MemoryTable.dataGet addr1.val).value
+    let value1 ← witness (Witgen.dataGet "memory" ProviderInput addr1.val).value
     let addr2 <== mode.isDoubleAddressing * value1
-    let value2 ← witness (MemoryTable.dataGet addr2.val).value
+    let value2 ← witness (Witgen.dataGet "memory" ProviderInput addr2.val).value
     MemoryChannel.pull { address := addr1, value := value1 }
     MemoryChannel.pull { address := addr2, value := value2 }
     let value <==
@@ -127,8 +149,7 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
     circuit_proof_start [MemoryChannel, Spec.dataMemoryAccess, Spec.memoryAccess,
       DecodedAddressingMode.val, DecodedAddressingMode.isEncodedCorrectly,
       memorySize, memoryValue, memory, MemoryEntry, MemoryReadInput.mk.injEq]
-    set memoryTable := env.data.getTable MemoryTable with h_memory_table_def
-    simp only [MemoryTable] at h_holds
+    set memoryTable := env.data.getRows "memory" ProviderInput with h_memory_table_def
     obtain ⟨isDoubleAddressing, isApRelative, isFpRelative, isImmediate⟩ := input_mode
     obtain ⟨_pc, ap, fp⟩ := input_state
     simp only [CircuitType.eval_expression, fromElements, ProvableType.eval,
@@ -176,11 +197,10 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
     set addr2 := env.get (i₀ + 2)
     set value2 := env.get (i₀ + 3)
     set value := env.get (i₀ + 4)
-    set memoryTable := env.data.getTable MemoryTable with h_memory_table_def
-    simp only [MemoryTable]
+    set memoryTable := env.data.getRows "memory" ProviderInput with h_memory_table_def
     obtain ⟨addr1_def, value1_def, addr2_def, value2_def, value_def⟩ := h_env
     use addr1_def, addr2_def
-    simp only [value_def, and_true]
+    simp only [value_def]
     obtain ⟨isDoubleAddressing, isApRelative, isFpRelative, isImmediate⟩ := input_mode
     obtain ⟨_pc, ap, fp⟩ := input_state
     simp only [circuit_norm, explicit_provable_type, DecodedAddressingMode.mk.injEq,
@@ -194,12 +214,18 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
       constructor
       · use h_addr1_lt
         use h_mem_completeness addr1 h_addr1_lt |>.symm
+        change value1 = memoryTable[addr1.val].value
         rw [value1_def]
         simp [h_addr1_lt]
-      · use h_addr2_lt
-        use h_mem_completeness addr2 h_addr2_lt |>.symm
-        rw [value2_def]
-        simp [h_addr2_lt]
+      · constructor
+        · change ∃ h : addr2.val < memoryTable.size,
+            addr2 = memoryTable[addr2.val].address ∧
+            value2 = memoryTable[addr2.val].value
+          use h_addr2_lt
+          use h_mem_completeness addr2 h_addr2_lt |>.symm
+          rw [value2_def]
+          simp [h_addr2_lt]
+        · simp [value1, value2]
     rcases h_mode_encode with h_mode | h_mode | h_mode | h_mode
     <;> simp only [h_mode, one_mul, zero_mul, add_zero, zero_add, reduceIte] at *
     · simp only [Option.bind_eq_bind, Option.isSome_iff_exists, Option.bind_eq_some_iff,
@@ -370,12 +396,6 @@ def femtoCairoStep {programSize : ℕ} (program : Fin programSize → F p)
   soundness := femtoCairoStepSoundness program h_programSize
   completeness := femtoCairoStepCompleteness program h_programSize
 
-structure ProviderInput F where
-  address : F
-  value : F
-  multiplicity : F
-deriving ProvableStruct
-
 def provideProgram {programSize : ℕ} (program : Fin programSize → F p) :
     GeneralFormalCircuit (F p) ProviderInput unit where
   name := "program"
@@ -402,8 +422,6 @@ def programFixedColumns {programSize : ℕ} (program : Fin programSize → F p) 
 def programComponent {programSize : ℕ} (program : Fin programSize → F p)
     (h_programSize : programSize < p) :
     Component (F p) where
-  dataColumns := [0, 1]
-  data_columns_lt_input := by change ∀ column ∈ [0, 1], column < 3; simp
   circuit := provideProgram program
   fixedColumns := some (programFixedColumns program)
   fixed_width_le_input := by change 2 ≤ 3; omega
@@ -462,8 +480,6 @@ def memoryFixedColumns (memorySize : ℕ) : FixedColumns (F p) where
   uniform_width := by simp
 
 def memoryComponent (memorySize : ℕ) (h_memorySize : memorySize < p) : Component (F p) where
-  dataColumns := [0, 1]
-  data_columns_lt_input := by change ∀ column ∈ [0, 1], column < 3; simp
   circuit := provideMemory
   fixedColumns := some (memoryFixedColumns memorySize)
   fixed_width_le_input := by change 1 ≤ 3; omega
@@ -472,14 +488,11 @@ def memoryComponent (memorySize : ℕ) (h_memorySize : memorySize < p) : Compone
     intro i row data hfixed hdata _
     rcases hfixed with ⟨hi, hrow⟩
     simp only [provideMemory, MemoryChannel]
-    change ∃ ha : (row[0]?.getD 0).val < (data.getTable MemoryTable).size,
-      row[0]?.getD 0 = (data.getTable MemoryTable)[(row[0]?.getD 0).val].address ∧
-      row[1]?.getD 0 = (data.getTable MemoryTable)[(row[0]?.getD 0).val].value
-    specialize hdata (by simp)
-    let projected : Vector (F p) (size MemoryEntry) :=
-      (projectRow [0, 1] row).cast (by rfl)
-    change (data "memory" (size MemoryEntry))[i]? =
-      some projected at hdata
+    change ∃ ha : (row[0]?.getD 0).val < (data.getRows "memory" ProviderInput).size,
+      row[0]?.getD 0 = (data.getRows "memory" ProviderInput)[(row[0]?.getD 0).val].address ∧
+      row[1]?.getD 0 = (data.getRows "memory" ProviderInput)[(row[0]?.getD 0).val].value
+    change (data "memory" (size ProviderInput))[i]? =
+      some (inputRow ProviderInput row) at hdata
     have hi : i < memorySize := by simpa [memoryFixedColumns] using hi
     have hrow' : row.extract 0 1 = #[(i : F p)] := by
       simpa [memoryFixedColumns] using hrow
@@ -496,30 +509,32 @@ def memoryComponent (memorySize : ℕ) (h_memorySize : memorySize < p) : Compone
         _ = (i : F p) := by rw [hrow']; rfl
     have hindex : (row[0]?.getD 0).val = i := by
       rw [haddress, ZMod.val_natCast_of_lt (lt_trans hi h_memorySize)]
-    have hdataSize : i < (data "memory" (size MemoryEntry)).size := by
+    have hdataSize : i < (data "memory" (size ProviderInput)).size := by
       exact Array.getElem?_eq_some_iff.mp hdata |>.1
-    have htypedDataSize : i < (data.getTable MemoryTable).size := by
-      change i < ((data "memory" (size MemoryEntry)).map
-        (fromElements (M := MemoryEntry))).size
+    have htypedDataSize : i < (data.getRows "memory" ProviderInput).size := by
+      change i < ((data "memory" (size ProviderInput)).map
+        (fromElements (M := ProviderInput))).size
       rw [Array.size_map]
       exact hdataSize
-    let entry : MemoryEntry (F p) := { address := row[0]?.getD 0, value := row[1]?.getD 0 }
-    have hproject : projected = toElements entry := by
-      dsimp only [projected]
-      rw [memoryEntry_toElements (p := p)]
+    let provider : ProviderInput (F p) := {
+      address := row[0]?.getD 0
+      value := row[1]?.getD 0
+      multiplicity := row[2]?.getD 0
+    }
+    have hinput : inputRow ProviderInput row = toElements provider := by
       rfl
-    have hrawOpt : (data "memory" (size MemoryEntry))[i]? =
-        some projected := hdata
-    have hentryOpt : (data.getTable MemoryTable)[i]? = some entry := by
-      rw [memoryTable_getElem?_eq, hrawOpt, Option.map_some, hproject,
+    have hrawOpt : (data "memory" (size ProviderInput))[i]? =
+        some (inputRow ProviderInput row) := hdata
+    have hproviderOpt : (data.getRows "memory" ProviderInput)[i]? = some provider := by
+      rw [memoryRows_getElem?_eq, hrawOpt, Option.map_some, hinput,
         ProvableType.fromElements_toElements]
     have hentryOptAtAddress :
-        (data.getTable MemoryTable)[(row[0]?.getD 0).val]? = some entry := by
-      simpa [hindex] using hentryOpt
-    have hentry := Array.getElem?_eq_some_iff.mp hentryOptAtAddress |>.2
+        (data.getRows "memory" ProviderInput)[(row[0]?.getD 0).val]? = some provider := by
+      simpa [hindex] using hproviderOpt
+    have hprovider := Array.getElem?_eq_some_iff.mp hentryOptAtAddress |>.2
     refine ⟨hindex ▸ htypedDataSize, ?_, ?_⟩
-    · exact congrArg MemoryEntry.address hentry.symm
-    · exact congrArg MemoryEntry.value hentry.symm
+    · exact congrArg ProviderInput.address hprovider.symm
+    · exact congrArg ProviderInput.value hprovider.symm
 
 def StateChannel {programSize : ℕ} (program : Fin programSize → F p)
     (initialState : State (F p)) : Channel (F p) State where

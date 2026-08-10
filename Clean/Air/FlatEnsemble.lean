@@ -216,19 +216,21 @@ private lemma tableNamesNodup (witness : EnsembleWitness ens) :
 
 lemma data_consistent (witness : EnsembleWitness ens) :
     ∀ table ∈ witness.tables, table.DataConsistency witness.data := by
-  intro table htable hcolumns
+  intro table htable
   exact deriveProverData_eq_of_mem witness.tables witness.tableNamesNodup
-    htable hcolumns _
+    htable _
 
 def tableContext (witness : EnsembleWitness ens) : TableContext F where
   tables := witness.allTables
   data := witness.data
-  data_consistent := by
+  assumptions_sufficient := by
     simp only [allTables, List.forall_mem_cons]
     constructor
-    · simp [verifierTable, Ensemble.verifierWitnessTable,
-        Table.DataConsistency, Component.DataConsistency]
-    · exact witness.data_consistent
+    · simp [Table.AssumptionsSufficient, Table.Assumptions, Table.CircuitAssumptions,
+        verifierTable, Ensemble.verifierWitnessTable, Component.RowAssumptions,
+        Component.CircuitAssumptions]
+    · intro table htable
+      exact table.assumptionsSufficient (witness.data_consistent table htable)
 
 @[circuit_norm] lemma allTablesWitness_tables (witness : EnsembleWitness ens) :
   witness.tableContext.tables = witness.allTables := rfl

@@ -218,18 +218,14 @@ private def witgenWithData (data : ProverData F) (hint : ProverHint F)
     (ops : List (FlatOperation F)) (input : Array F) : Array F :=
   ops.foldl (witgenStepWithData data hint) input
 
-private def projectGeneratedRow (columns : List ℕ) (row : GeneratedRow F) :
-    Vector F columns.length :=
-  ⟨(columns.map fun column => row.values[column]?.getD 0).toArray, by simp⟩
-
-/-- The runtime view of the same component-table projection used by `deriveProverData`. -/
+/-- The runtime view of the same complete circuit inputs used by `deriveProverData`. -/
 private def generatedData :
     List (PreparedComponent F) → List (GeneratedTable F) → ProverData F
   | prepared, tables => fun name n =>
       match prepared.zip tables |>.find? (fun (component, _) => component.component.circuit.name == name) with
       | some (component, table) =>
-          if h : component.component.dataColumns.length = n then
-            h ▸ (table.rows.map (projectGeneratedRow component.component.dataColumns) |>.toArray)
+          if h : size component.component.Input = n then
+            h ▸ (table.rows.map (inputRow component.component.Input ∘ (·.input)) |>.toArray)
           else #[]
       | none => #[]
 
@@ -489,17 +485,6 @@ private def validateModes :
           unless slots.all fun slot => fixed.width ≤ slot.column do
             throw s!"fixed handler for component '{prepared.component.circuit.name}' mutates a fixed column"
       | none, _ => pure ()
-      unless prepared.component.dataColumns.isEmpty do
-        unless prepared.component.dataColumns.all (fun column => column < prepared.inputWidth) do
-          throw s!"data columns for component '{prepared.component.circuit.name}' must be input columns"
-        match mode with
-        | .demand _ =>
-            throw s!"data-owning component '{prepared.component.circuit.name}' must use fixed generation"
-        | .fixed inputRows slots =>
-            unless padding.targetHeight inputRows.length = inputRows.length do
-              throw s!"data-owning component '{prepared.component.circuit.name}' must have a fixed power-of-two height"
-            unless slots.all fun slot => !prepared.component.dataColumns.contains slot.column do
-              throw s!"data-owning component '{prepared.component.circuit.name}' mutates a data column"
       validateModes components modes paddings
   | _, _, _ => .error "generation metadata does not match ensemble component count"
 

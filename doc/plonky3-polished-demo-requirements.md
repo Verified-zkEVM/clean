@@ -215,10 +215,10 @@ whose main trace height differs from the fixed trace height.
 
 ### Implemented Flat AIR substrate
 
-The first external-data slice uses unique component names as `ProverData` keys and explicit
-`dataColumns` projections as their values. An `EnsembleWitness` derives this data from committed
-component rows, and table assumptions carry the resulting data-consistency fact into component
-soundness proofs.
+The first external-data slice uses unique circuit names as `ProverData` keys. Each value is the
+component's complete serialized circuit input; there is no separately selected column view. An
+`EnsembleWitness` derives this data from committed component rows, and the resulting
+data-consistency fact makes the row circuit's assumptions available to component soundness proofs.
 
 FemtoCairo now exercises this substrate with indexed fixed program and memory providers, a
 channel-connected execution component, and a public final state. Its extracted Rust witness reads

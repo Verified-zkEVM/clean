@@ -71,6 +71,32 @@ def ProverData.getTable (data : ProverData F) {Row : TypeMap} [ProvableType Row]
   (table : Table F Row) : Array (Row F) :=
   data table.name (size Row) |>.map fromElements
 
+/-- Interpret the rows stored under a component name using their declared circuit-input type. -/
+def ProverData.getRows (data : ProverData F) (name : String)
+    (Row : TypeMap) [ProvableType Row] : Array (Row F) :=
+  data name (size Row) |>.map fromElements
+
+/-- Read a typed component-input row from committed prover data. -/
+def Witgen.dataGet (name : String) (Row : TypeMap) [ProvableType Row]
+    (row : Witgen.U64Expr F) : Row (Witgen.FExpr F) :=
+  fromElements <| Vector.mapFinRange (size Row) fun col =>
+    Witgen.FExpr.dataGet name (size Row) row col
+
+@[circuit_norm]
+lemma Witgen.eval_dataGet [FiniteField F] (name : String) (Row : TypeMap) [ProvableType Row]
+    (row : Witgen.U64Expr F) (ctx : Witgen.Ctx F) :
+    Witgen.eval ctx (Witgen.dataGet name Row row) =
+      ((ctx.env.data.getRows name Row)[(row.eval ctx).toNat]?.getD default) := by
+  simp only [Witgen.eval, Witgen.dataGet, ProverData.getRows]
+  rw [ProvableType.fromElements_eq_iff, ProvableType.toElements_fromElements,
+    Vector.map_mapFinRange]
+  simp only [Witgen.FExpr.eval]
+  by_cases h : (row.eval ctx).toNat < (ctx.env.data name (size Row)).size
+  · simp [h]
+    rw [ProvableType.toElements_fromElements, Vector.mapFinRange_eq_self]
+  · simp [h, Vector.mapFinRange_eq_self]
+    simp only [default, ProvableType.toElements_fromElements]
+
 namespace Lookup
 variable {F : Type} [FiniteField F]
 
@@ -156,8 +182,7 @@ namespace Table
 
 /-- Read a typed row from committed prover data. -/
 def dataGet (table : Table F Row) (row : Witgen.U64Expr F) : Row (Witgen.FExpr F) :=
-  fromElements <| Vector.mapFinRange (size Row) fun col =>
-    Witgen.FExpr.dataGet table.name (size Row) row col
+  Witgen.dataGet table.name Row row
 
 /-- Read a typed row from prover hints. -/
 def hintGet (table : Table F Row) (row : Witgen.U64Expr F) : Row (Witgen.FExpr F) :=
@@ -168,7 +193,7 @@ def hintGet (table : Table F Row) (row : Witgen.U64Expr F) : Row (Witgen.FExpr F
 lemma eval_dataGet [FiniteField F] (table : Table F Row) (row : Witgen.U64Expr F) (ctx : Witgen.Ctx F) :
     Witgen.eval ctx (table.dataGet row) =
       ((ctx.env.data.getTable table)[(row.eval ctx).toNat]?.getD default) := by
-  simp only [Witgen.eval, dataGet, ProverData.getTable]
+  simp only [Witgen.eval, dataGet, Witgen.dataGet, ProverData.getTable]
   rw [ProvableType.fromElements_eq_iff, ProvableType.toElements_fromElements, Vector.map_mapFinRange]
   simp only [Witgen.FExpr.eval]
   by_cases h : (row.eval ctx).toNat < (ctx.env.data table.name (size Row)).size

@@ -85,35 +85,20 @@ pub enum Mode<F> {
     },
 }
 
-#[derive(Clone, Debug)]
-pub struct DataSchema {
-    pub name: &'static str,
-    pub columns: &'static [usize],
-}
-
-/// Stable, table-derived data available to extracted witness programs.
+/// Component-input rows available to extracted witness programs.
 #[derive(Clone, Debug)]
 pub struct WitnessData<F> {
     entries: Vec<(&'static str, Vec<Vec<F>>)>,
 }
 
 impl<F: Field + Copy> WitnessData<F> {
-    fn from_initial_tables(schemas: &[DataSchema], tables: &[Vec<Row<F>>]) -> Self {
-        let entries = schemas
+    fn from_initial_tables(names: &[&'static str], tables: &[Vec<Row<F>>]) -> Self {
+        let entries = names
             .iter()
             .zip(tables)
-            .map(|(schema, table)| {
-                let rows = table
-                    .iter()
-                    .map(|row| {
-                        schema
-                            .columns
-                            .iter()
-                            .map(|column| row.values.get(*column).copied().unwrap_or(F::ZERO))
-                            .collect()
-                    })
-                    .collect();
-                (schema.name, rows)
+            .map(|(name, table)| {
+                let rows = table.iter().map(|row| row.values.clone()).collect();
+                (*name, rows)
             })
             .collect();
         Self { entries }
@@ -194,8 +179,8 @@ pub trait Program<F: WitnessField> {
     const FUEL: usize;
     const COMPONENTS: usize;
     const FIXED_WIDTHS: &'static [usize];
+    const COMPONENT_NAMES: &'static [&'static str];
 
-    fn data_schemas() -> Vec<DataSchema>;
     fn modes() -> Vec<Mode<F>>;
     fn padding() -> Vec<Padding<F>>;
     fn complete_row(component: usize, input: &[F], data: &WitnessData<F>)
@@ -562,7 +547,6 @@ pub fn generate<F: WitnessField, P: Program<F>>(
 ) -> Result<EnsembleWitness<F>, String> {
     let modes = P::modes();
     let padding = P::padding();
-    let data_schemas = P::data_schemas();
     if modes.len() != P::COMPONENTS {
         return Err(format!(
             "generation-mode count {} does not match component count {}",
@@ -584,10 +568,10 @@ pub fn generate<F: WitnessField, P: Program<F>>(
             P::COMPONENTS
         ));
     }
-    if data_schemas.len() != P::COMPONENTS {
+    if P::COMPONENT_NAMES.len() != P::COMPONENTS {
         return Err(format!(
-            "data-schema count {} does not match component count {}",
-            data_schemas.len(),
+            "component-name count {} does not match component count {}",
+            P::COMPONENT_NAMES.len(),
             P::COMPONENTS
         ));
     }
@@ -606,9 +590,7 @@ pub fn generate<F: WitnessField, P: Program<F>>(
         tables.push(rows);
     }
 
-    for (component, ((schema, mode), component_padding)) in
-        data_schemas.iter().zip(&modes).zip(&padding).enumerate()
-    {
+    for (component, mode) in modes.iter().enumerate() {
         let fixed_width = P::FIXED_WIDTHS[component];
         match mode {
             Mode::Demand(_) if fixed_width != 0 => {
@@ -626,30 +608,9 @@ pub fn generate<F: WitnessField, P: Program<F>>(
             }
             Mode::Demand(_) => {}
         }
-        if schema.columns.is_empty() {
-            continue;
-        }
-        let Mode::Fixed { input_rows, slots } = mode else {
-            return Err(format!(
-                "data-owning component {component} must use fixed generation"
-            ));
-        };
-        if target_height(input_rows.len(), component_padding) != input_rows.len() {
-            return Err(format!(
-                "data-owning component {component} must have a fixed power-of-two height"
-            ));
-        }
-        if let Some(column) = slots
-            .iter()
-            .find_map(|slot| schema.columns.contains(&slot.column).then_some(slot.column))
-        {
-            return Err(format!(
-                "data-owning component {component} mutates data column {column}"
-            ));
-        }
     }
 
-    let data = WitnessData::from_initial_tables(&data_schemas, &tables);
+    let data = WitnessData::from_initial_tables(P::COMPONENT_NAMES, &tables);
     for (component, table) in tables.iter_mut().enumerate() {
         for row in table {
             row.values = P::complete_row(component, &row.values, &data)?;

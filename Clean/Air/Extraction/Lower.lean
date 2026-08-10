@@ -22,7 +22,6 @@ inductive LoweringError where
   | fixedRows (component : ℕ)
   | fixedPadding (component expected actual : ℕ)
   | fixedSlot (component column fixedWidth : ℕ)
-  | dataColumn (component column inputWidth : ℕ)
   | componentVariable (component index width : ℕ)
   | verifierVariable (index width : ℕ)
 deriving Repr, DecidableEq
@@ -53,8 +52,6 @@ instance : ToString LoweringError where
         s!"fixed-column component {component} has height {actual}, expected {expected} after padding"
     | .fixedSlot component column fixedWidth =>
         s!"fixed handler for component {component} mutates column {column} below fixed width {fixedWidth}"
-    | .dataColumn component column inputWidth =>
-        s!"component {component} data column {column} is not an input column (input width {inputWidth})"
     | .componentVariable component index width =>
         s!"component {component} expression reads cell {index}, but its width is {width}"
     | .verifierVariable index width =>
@@ -88,9 +85,6 @@ private def lowerWitnesses (component : ℕ) (operations : List (FlatOperation F
 
 private def lowerComponent (index : ℕ) (component : Component F) :
     Except LoweringError (ComponentProgram F) := do
-  for column in component.dataColumns do
-    unless column < component.rowOffset do
-      throw (.dataColumn index column component.rowOffset)
   let operations := component.rowOperations
   unless operations.lookups.isEmpty do
     throw (.legacyLookup index)
@@ -105,7 +99,6 @@ private def lowerComponent (index : ℕ) (component : Component F) :
   | none => pure ()
   return {
     name := component.circuit.name
-    dataColumns := component.dataColumns
     inputWidth := component.rowOffset
     fixedColumns := component.fixedColumns.map fun fixed => {
       width := fixed.width
