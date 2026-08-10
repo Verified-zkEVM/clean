@@ -22,7 +22,7 @@ Two planners, matching the Rust module split (`halo2_proofs/src/circuit/floor_pl
   earliest row where none of the region's columns are in use. Drives the Add/Mul fixtures.
 
 Everything is `#eval`-computable. V1 retains the exact candidate placement when a
-small finite selector-interval guard accepts it, and otherwise uses a conservative
+small finite shared-column guard accepts it, and otherwise uses a conservative
 globally row-disjoint plan. Tests can `#guard`/`#eval` the derived starts against
 fixture placements.
 
@@ -5424,47 +5424,6 @@ def SharedColumnIntervalsDisjoint
         (starts.getD left.index 0) left.rowCount
         (starts.getD right.index 0) right.rowCount
 
-/-- Hash-set form of the placed selector activation stream, used by the V1 guard. -/
-def activationSet
-    (starts : List ℕ) (regions : List (ℕ × RegionOperations F)) :
-    Std.HashSet (ℕ × ℕ) :=
-  (activations starts regions).foldl
-    (fun set activation => set.insert activation) ∅
-
-/--
-Executable guard for the exact placed selector fact lookup semantics needs. The
-activation set is built once before the nested lookup-input walk.
--/
-def placedLookupSelectorRowsExactCheck
-    (operations : Operations F) (starts : List ℕ) : Bool :=
-  let regions := (indexedRegions operations 0).1
-  let active := activationSet starts regions
-  regions.all fun region =>
-    region.2.all fun operation =>
-      match operation with
-      | .enableLookup argument enabled row =>
-          argument.inputs.all fun expression =>
-            expression.selectorIndices.all fun selector =>
-              (enabled.any fun candidate =>
-                  candidate.index == selector) ==
-                active.contains
-                  (selector, starts.getD region.1 0 + row)
-      | _ => true
-
-/--
-Every selector leaf occurring in a lookup input has the lookup operation's zero/one
-enabled value at that absolute row.
--/
-def PlacedLookupSelectorRowsExact
-    (operations : Operations F) (starts : List ℕ) : Prop :=
-  placedLookupSelectorRowsExactCheck operations starts = true
-
-private def placedLookupSelectorRowsExactDecidable
-    (operations : Operations F) (starts : List ℕ) :
-    Decidable (PlacedLookupSelectorRowsExact operations starts) := by
-  unfold PlacedLookupSelectorRowsExact
-  infer_instance
-
 /-- One occurrence of a virtual selector column in a placed region. -/
 structure SelectorPlacement where
   selector : ℕ
@@ -5976,21 +5935,10 @@ def planFull (shapes : List RegionShape) : List ℕ × CircuitAllocations :=
   else
     (globallyDisjointStarts shapes, globallyDisjointAllocations shapes)
 
-/--
-Apply the semantic lookup-selector guard to the shape-safe V1 plan. A faithful
-candidate is preserved exactly; a rejected candidate uses the same globally
-row-disjoint starts and allocation state as the shape guard's fallback.
--/
+/-- Apply the shape-safe V1 planner to the regions measured from an operation stream. -/
 def planOperations
     (operations : Operations F) : List ℕ × CircuitAllocations :=
-  let shapes := measureRegions operations
-  let candidate := planFull shapes
-  if @decide
-      (PlacedLookupSelectorRowsExact operations candidate.1)
-      (placedLookupSelectorRowsExactDecidable operations candidate.1) then
-    candidate
-  else
-    (globallyDisjointStarts shapes, globallyDisjointAllocations shapes)
+  planFull (measureRegions operations)
 
 /-- The V1 region starts, per `assignRegion` index, from the operation stream. -/
 def starts (ops : Operations F) : List ℕ := (planOperations ops).1
@@ -6272,22 +6220,17 @@ theorem starts_sharedColumnIntervalsDisjoint
     SharedColumnIntervalsDisjoint
       (measureRegions ops) (starts ops) := by
   unfold starts planOperations
+  unfold planFull
   dsimp only
   split
-  · exact (by
-      unfold planFull
-      dsimp only
-      split
-      · rename_i hchecked
-        exact sharedColumnIntervalsDisjoint_of_checked
-          (@of_decide_eq_true
-            (CheckedSharedColumnIntervalsDisjoint
-              (measureRegions ops) (planCandidate (measureRegions ops)).1)
-            (checkedSharedColumnIntervalsDisjointDecidable
-              (measureRegions ops) (planCandidate (measureRegions ops)).1)
-            hchecked)
-      · exact globallyDisjointStarts_sharedColumnIntervalsDisjoint
-          (measureRegions ops))
+  · rename_i hchecked
+    exact sharedColumnIntervalsDisjoint_of_checked
+      (@of_decide_eq_true
+        (CheckedSharedColumnIntervalsDisjoint
+          (measureRegions ops) (planCandidate (measureRegions ops)).1)
+        (checkedSharedColumnIntervalsDisjointDecidable
+          (measureRegions ops) (planCandidate (measureRegions ops)).1)
+        hchecked)
   · exact globallyDisjointStarts_sharedColumnIntervalsDisjoint
       (measureRegions ops)
 
