@@ -3,30 +3,44 @@ This file defines flat AIR ensembles and what soundness and completeness mean fo
 -/
 import Clean.Air.FlatComponent
 import Clean.Air.Balance
+import Clean.Circuit.Verifier
 
 namespace Air.Flat
+universe u
 variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
 
-def Operations.InteractionsOnly (operations : Operations F) : Prop :=
-  operations.witnessOperations = [] ∧
-    operations.constraints = [] ∧
-    operations.lookups = []
+structure ChannelInterface (F : Type) where
+  channelsWithGuarantees : List (RawChannel F)
+  channelsWithRequirements : List (RawChannel F)
 
-lemma Operations.InteractionsOnly.localLength_eq_zero {operations : Operations F}
-    (onlyInteractions : Operations.InteractionsOnly operations) : operations.localLength = 0 := by
-  rw [← FlatOperation.localLength_toFlat]
-  have no_witnesses := onlyInteractions.left
-  rw [← Operations.witnessOperations_toFlat] at no_witnesses
-  generalize operations.toFlat = flatOperations at no_witnesses ⊢
-  induction flatOperations using FlatOperation.induct <;>
-    simp_all [FlatOperation.witnessOperations, FlatOperation.localLength]
+class HasChannelInterface (F : Type) (α : Type u) where
+  channelInterface : α → ChannelInterface F
 
-lemma Operations.InteractionsOnly.constraintsHold {operations : Operations F}
-    (onlyInteractions : Operations.InteractionsOnly operations) (env : Environment F) :
-    operations.ConstraintsHold env := by
-  rw [Operations.ConstraintsHold, onlyInteractions.2.1, onlyInteractions.2.2]
-  simp
+def channelInterface {α : Type u} [HasChannelInterface F α] (value : α) : ChannelInterface F :=
+  HasChannelInterface.channelInterface value
+
+instance : HasChannelInterface F (Component F) where
+  channelInterface component :=
+    { channelsWithGuarantees := component.circuit.channelsWithGuarantees
+      channelsWithRequirements := component.circuit.channelsWithRequirements }
+
+instance : HasChannelInterface F (Verifier.Program F PublicIO) where
+  channelInterface verifier :=
+    { channelsWithGuarantees := verifier.channelsWithGuarantees
+      channelsWithRequirements := verifier.channelsWithRequirements }
+
+@[circuit_norm] lemma component_channelInterface (component : Component F) :
+    (channelInterface component).channelsWithGuarantees =
+      component.circuit.channelsWithGuarantees := rfl
+@[circuit_norm] lemma component_channelInterface_requirements (component : Component F) :
+    (channelInterface component).channelsWithRequirements =
+      component.circuit.channelsWithRequirements := rfl
+@[circuit_norm] lemma verifier_channelInterface (verifier : Verifier.Program F PublicIO) :
+    (channelInterface verifier).channelsWithGuarantees = verifier.channelsWithGuarantees := rfl
+@[circuit_norm] lemma verifier_channelInterface_requirements
+    (verifier : Verifier.Program F PublicIO) :
+    (channelInterface verifier).channelsWithRequirements = verifier.channelsWithRequirements := rfl
 
 structure Ensemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO] where
   /-- Components form an ordered map: names are keys, while list order fixes the trace order
@@ -34,13 +48,7 @@ structure Ensemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType
   tables : List (Component F)
   unique_names : (tables.map (·.circuit.name)).Nodup
   channels : List (RawChannel F)
-  /-- A public interaction source with a semantic specification but no witness, constraint, or lookup
-  operations. -/
-  verifier : GeneralFormalCircuit F PublicIO unit := .empty F PublicIO
-  verifier_interactions_only :
-    Operations.InteractionsOnly
-      ((verifier.main (varFromOffset PublicIO 0)).operations (size PublicIO)) := by
-    simp [Operations.InteractionsOnly, GeneralFormalCircuit.empty, circuit_norm]
+  verifier : Verifier.Program F PublicIO := .empty F PublicIO
 
 /-- The public input and component traces committed by an ensemble proof. -/
 structure EnsembleWitness (ens : Ensemble F PublicIO) where
@@ -55,10 +63,6 @@ def EnsembleWitness.data {ens : Ensemble F PublicIO} (witness : EnsembleWitness 
     ProverData F :=
   deriveProverData witness.tables
 
-/-- The verifier represented as a component only for static channel-order analysis. -/
-def Ensemble.verifierComponent (ens : Ensemble F PublicIO) : Component F :=
-  { circuit := ens.verifier }
-
 @[circuit_norm]
 lemma List.flatMap_subset_iff {α β : Type*} {f : α → List β} {l₁ : List α} {l₂ : List β} :
     l₁.flatMap f ⊆ l₂ ↔ ∀ a ∈ l₁, f a ⊆ l₂ := by
@@ -66,9 +70,6 @@ lemma List.flatMap_subset_iff {α β : Type*} {f : α → List β} {l₁ : List 
 
 namespace Ensemble
 variable {ens : Ensemble F PublicIO}
-
-def allComponents (ens : Ensemble F PublicIO) : List (Component F) :=
-  ens.verifierComponent :: ens.tables
 
 def empty (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO] :
   Ensemble F PublicIO where
@@ -81,36 +82,13 @@ def empty (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO
 @[circuit_norm] lemma empty_channels :
   (empty F PublicIO).channels = [] := rfl
 @[circuit_norm] lemma empty_verifier :
-  (empty F PublicIO).verifier = .empty F PublicIO := rfl
-@[circuit_norm] lemma empty_allComponents :
-  (empty F PublicIO).allComponents = [{ circuit := .empty F PublicIO }] := rfl
-
-lemma size_verifier {ens : Ensemble F PublicIO} :
-    ens.verifier.size = size PublicIO := by
-  rw [GeneralFormalCircuit.size_eq]
-  suffices ens.verifier.localLength (varFromOffset PublicIO 0) = 0 by omega
-  rw [← ens.verifier.localLength_eq (varFromOffset PublicIO 0) (size PublicIO)]
-  exact ens.verifier_interactions_only.localLength_eq_zero
-
-@[circuit_norm] lemma verifierComponent_circuit : ens.verifierComponent.circuit = ens.verifier := rfl
-@[circuit_norm] lemma verifierComponent_input : ens.verifierComponent.Input = PublicIO := rfl
-@[circuit_norm] lemma verifierComponent_output : ens.verifierComponent.Output = unit := rfl
-
-@[circuit_norm] lemma mem_allComponents_verifierComponent:
-  ens.verifierComponent ∈ ens.allComponents := by simp [allComponents]
-lemma mem_allComponents_of_mem_tables {table : Component F} :
-    table ∈ ens.tables → table ∈ ens.allComponents := by simp_all [allComponents]
-
+  (empty F PublicIO).verifier = Verifier.Program.empty F PublicIO := rfl
 @[circuit_norm]
 abbrev verifierOperations (ens : Ensemble F PublicIO) : Operations F :=
-  (ens.verifier.main (varFromOffset PublicIO 0)).operations (size PublicIO)
+  ens.verifier.circuitOperations
 
 def VerifierGuarantees (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : ProverData F) : Prop :=
   ens.verifierOperations.FullGuarantees (.fromInput publicInput data)
-
-def VerifierRequirements (ens : Ensemble F PublicIO) (publicInput : PublicIO F)
-    (data : ProverData F) : Prop :=
-  ens.verifierOperations.FullRequirements (.fromInput publicInput data)
 
 def VerifierChannelGuarantees (ens : Ensemble F PublicIO) (publicInput : PublicIO F)
     (data : ProverData F) (channel : RawChannel F) : Prop :=
@@ -120,33 +98,15 @@ def VerifierChannelRequirements (ens : Ensemble F PublicIO) (publicInput : Publi
     (data : ProverData F) (channel : RawChannel F) : Prop :=
   ens.verifierOperations.ChannelRequirements channel (.fromInput publicInput data)
 
-@[circuit_norm]
-def VerifierSpec (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : ProverData F) : Prop :=
-  ens.verifier.Spec publicInput () data
-
-theorem verifierWeakSoundness (ens : Ensemble F PublicIO) (publicInput : PublicIO F)
-    (data : ProverData F) :
-    ens.verifier.Assumptions publicInput data →
-    ens.VerifierGuarantees publicInput data →
-      ens.VerifierSpec publicInput data ∧ ens.VerifierRequirements publicInput data := by
-  intro assumptions guarantees
-  have assumptions' : ens.verifier.Assumptions
-      (Eval.eval (Environment.fromInput publicInput data)
-        (varFromOffset (F := F) PublicIO 0)) data := by
-    simpa only [ProvableType.eval_fromInput_varFromOffset_zero] using assumptions
-  have result := ens.verifier.original_full_soundness (size PublicIO)
-    (Environment.fromInput publicInput data) (varFromOffset PublicIO 0)
-    assumptions' (ens.verifier_interactions_only.constraintsHold _) guarantees
-  simpa only [VerifierSpec, VerifierRequirements, circuit_norm] using result
-
 lemma verifierChannelRequirements_of_not_mem
     (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : ProverData F)
     {channel : RawChannel F} :
     channel ∉ ens.verifier.channelsWithRequirements →
       ens.VerifierChannelRequirements publicInput data channel := by
   intro h_not_mem
-  exact ens.verifier.requirements_of_not_mem_of_constraints channel h_not_mem
-    (ens.verifier_interactions_only.constraintsHold _)
+  exact Operations.requirements_of_not_mem ens.verifierOperations
+    ens.verifier.channelsWithRequirements (.fromInput publicInput data)
+    (ens.verifier.operations.inChannelsOrRequirementsFull _) channel h_not_mem
 
 lemma verifierChannelGuarantees_of_not_mem
     (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : ProverData F)
@@ -154,29 +114,31 @@ lemma verifierChannelGuarantees_of_not_mem
     channel ∉ ens.verifier.channelsWithGuarantees →
       ens.VerifierChannelGuarantees publicInput data channel := by
   intro h_not_mem
-  apply Operations.guarantees_of_not_mem ens.verifierOperations
+  exact Operations.guarantees_of_not_mem ens.verifierOperations
     ens.verifier.channelsWithGuarantees (.fromInput publicInput data)
-  · exact ens.verifier.in_channels_or_guarantees_full _ _ _
-  · exact h_not_mem
+    (ens.verifier.operations.inChannelsOrGuaranteesFull _) channel h_not_mem
 
 def channelsWithGuarantees (ens : Ensemble F PublicIO) : List (RawChannel F) :=
-  ens.allComponents.flatMap (·.circuit.channelsWithGuarantees)
+  ens.verifier.channelsWithGuarantees ++
+    ens.tables.flatMap (·.circuit.channelsWithGuarantees)
 
 def channelsWithRequirements (ens : Ensemble F PublicIO) : List (RawChannel F) :=
-  ens.allComponents.flatMap (·.circuit.channelsWithRequirements)
+  ens.verifier.channelsWithRequirements ++
+    ens.tables.flatMap (·.circuit.channelsWithRequirements)
 
 lemma channelsWithGuarantees_eq_verifier_append (ens : Ensemble F PublicIO) :
   ens.channelsWithGuarantees = ens.verifier.channelsWithGuarantees ++ ens.tables.flatMap (·.circuit.channelsWithGuarantees) := by
-  simp [channelsWithGuarantees, allComponents, verifierComponent]
+  rfl
 
 lemma channelsWithRequirements_eq_verifier_append (ens : Ensemble F PublicIO) :
   ens.channelsWithRequirements = ens.verifier.channelsWithRequirements ++ ens.tables.flatMap (·.circuit.channelsWithRequirements) := by
-  simp [channelsWithRequirements, allComponents, verifierComponent]
+  rfl
 
 @[circuit_norm]
 lemma channelsWithGuarantees_subset_iff {ens : Ensemble F PublicIO} {finished : List (RawChannel F)} :
   ens.channelsWithGuarantees ⊆ finished ↔
-    ∀ component ∈ ens.allComponents, component.circuit.channelsWithGuarantees ⊆ finished := by
+    ens.verifier.channelsWithGuarantees ⊆ finished ∧
+      ∀ component ∈ ens.tables, component.circuit.channelsWithGuarantees ⊆ finished := by
   simp [circuit_norm, channelsWithGuarantees]
 end Ensemble
 
@@ -227,12 +189,10 @@ def Constraints {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Pr
   witness.tableContext.Constraints
 
 def Assumptions {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Prop :=
-  ens.verifier.Assumptions witness.publicInput witness.data ∧
-    witness.tableContext.Assumptions
+  witness.tableContext.Assumptions
 
 def Spec {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Prop :=
-  ens.VerifierSpec witness.publicInput witness.data ∧
-    ∀ table ∈ witness.tables, table.Spec witness.data
+  ∀ table ∈ witness.tables, table.Spec witness.data
 
 def interactions {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : List (Interaction F) :=
   ens.verifierOperations.interactionValues (.fromInput witness.publicInput witness.data) ++
@@ -254,14 +214,12 @@ noncomputable def interactionsWith {ens : Ensemble F PublicIO} (witness : Ensemb
 
 @[circuit_norm] lemma assumptions_iff {ens : Ensemble F PublicIO}
     (witness : EnsembleWitness ens) :
-  witness.Assumptions ↔ ens.verifier.Assumptions witness.publicInput witness.data ∧
-    ∀ table ∈ witness.tables, table.Assumptions witness.data := by
+  witness.Assumptions ↔ ∀ table ∈ witness.tables, table.Assumptions witness.data := by
   rfl
 
 @[circuit_norm] lemma spec_iff {ens : Ensemble F PublicIO}
     (witness : EnsembleWitness ens) :
-  witness.Spec ↔ ens.VerifierSpec witness.publicInput witness.data ∧
-    ∀ table ∈ witness.tables, table.Spec witness.data := by
+  witness.Spec ↔ ∀ table ∈ witness.tables, table.Spec witness.data := by
   rfl
 
 lemma mem_interactionsWith {witness : EnsembleWitness ens}
@@ -301,17 +259,12 @@ lemma verifierChannelGuarantees_iff_forall {witness : EnsembleWitness ens}
     Operations.interactionValuesWith_eq_map, List.forall_mem_map]
   rfl
 
-lemma verifierAssumptions_of_assumptions {ens : Ensemble F PublicIO} {witness : EnsembleWitness ens} :
-  witness.Assumptions →
-    ens.verifier.Assumptions witness.publicInput witness.data := by
-  exact And.left
-
 lemma interactionsWith_of_verifier_empty {ens : Ensemble F PublicIO} {witness : EnsembleWitness ens} {channel : RawChannel F}
   (h_verifier_empty : ens.verifier = .empty F PublicIO) :
     witness.interactionsWith channel =
       witness.tables.flatMap (·.interactionsWith witness.data channel) := by
   simp [interactionsWith, verifierInteractionsWith, TableContext.interactionsWith,
-    circuit_norm, h_verifier_empty]
+    circuit_norm, h_verifier_empty, Verifier.Program.empty]
 
 /-- The ensemble interactions with a particular channel are balanced. -/
 @[circuit_norm]
@@ -380,18 +333,16 @@ def TableSoundness (ens : Ensemble F PublicIO) : Prop :=
     witness.BalancedChannels →
     witness.Spec
 
-/-- specs on all tables + verifier spec imply ensemble spec -/
+/-- The table specs imply the ensemble's public specification. -/
 def SpecConsistency (ens : Ensemble F PublicIO) (Spec : PublicIO F → Prop) : Prop :=
   ∀ (witness : EnsembleWitness ens),
     -- TODO maybe we could add balanced channels + channel reqs / grts here as well, to enable you to prove
     -- something at the global level from the max interaction length, like we do below for fibonacci
     -- where we prove the counter does not overflow.
-    -- but it's awkward that the public input is not clearly related to the channel, only via the verifier.
-    -- which shows that "circuit" probably isn't the best way to model the verifier.
     witness.Spec →
     Spec witness.publicInput
 
-/-- Ensemble-level assumptions imply the per-table assumptions and verifier assumptions -/
+/-- Ensemble-level assumptions imply every table's assumptions. -/
 def AssumptionsConsistency (ens : Ensemble F PublicIO) (Assumptions : PublicIO F → Prop) : Prop :=
   ∀ (witness : EnsembleWitness ens),
     Assumptions witness.publicInput →
@@ -416,7 +367,7 @@ end Ensemble
 /- ## Constructing ensembles -/
 
 namespace Ensemble
-/-- Takes verifier and spec from the second ensemble -/
+/-- Takes the verifier from the second ensemble. -/
 def merge (ens1 ens2 : Ensemble F PublicIO)
     (unique_names : ((ens2.tables ++ ens1.tables).map (·.circuit.name)).Nodup) :
     Ensemble F PublicIO :=
@@ -427,8 +378,8 @@ def merge (ens1 ens2 : Ensemble F PublicIO)
 
 @[circuit_norm] lemma merge_tables (ens1 ens2 : Ensemble F PublicIO) (unique_names) :
   (ens1.merge ens2 unique_names).tables = ens2.tables ++ ens1.tables := rfl
-@[circuit_norm] lemma merge_verifierComponent (ens1 ens2 : Ensemble F PublicIO) (unique_names) :
-  (ens1.merge ens2 unique_names).verifierComponent = ens2.verifierComponent := rfl
+@[circuit_norm] lemma merge_verifier (ens1 ens2 : Ensemble F PublicIO) (unique_names) :
+  (ens1.merge ens2 unique_names).verifier = ens2.verifier := rfl
 
 def addTable (ens : Ensemble F PublicIO) (table : Component F)
     (fresh : table.circuit.name ∉ ens.tables.map (·.circuit.name)) : Ensemble F PublicIO :=
@@ -438,8 +389,6 @@ def addTable (ens : Ensemble F PublicIO) (table : Component F)
 
 @[circuit_norm] lemma addTable_tables (ens : Ensemble F PublicIO) (table : Component F) (fresh) :
   (ens.addTable table fresh).tables = table :: ens.tables := rfl
-@[circuit_norm] lemma addTable_verifierComponent (ens : Ensemble F PublicIO) (table : Component F) (fresh) :
-  (ens.addTable table fresh).verifierComponent = ens.verifierComponent := rfl
 @[circuit_norm] lemma addTable_verifier (ens : Ensemble F PublicIO) (table : Component F) (fresh) :
   (ens.addTable table fresh).verifier = ens.verifier := rfl
 
