@@ -25,7 +25,7 @@ Before changing the Plonky3 backend, Clean must gain a generic, executable way t
 feature, not a Plonky3 or Fibonacci feature, and must be testable with the Lean reference evaluator
 in isolation.
 
-Ensemble witness generation is driven automatically by channel imbalance. The verifier circuit's
+Ensemble witness generation is driven automatically by channel imbalance. The verifier's
 interactions are evaluated from the public input and seed a deterministic worklist; the verifier
 does not produce a component table.
 Opposite interactions carrying the same channel message cancel. Any remaining interaction is
@@ -219,10 +219,10 @@ The first external-data slice uses unique circuit names as `ProverData` keys. Ea
 component's complete serialized circuit input; there is no separately selected column view. An
 `EnsembleWitness` derives this data from committed component rows, and the resulting
 data-consistency fact makes the row circuit's assumptions available to component soundness proofs.
-The verifier is not represented by a synthetic component trace: its public-input environment,
-constraints, assumptions, and channel interactions enter the ensemble statement and soundness
-proof directly. Consequently, data consistency is required only of actual committed component
-tables.
+The verifier is not represented by a synthetic component trace. It is structurally restricted to
+public interactions: it has no witnesses, constraints, or lookups. Its assumptions, specification,
+and channel interactions enter ensemble soundness directly. Consequently, data consistency and
+constraint satisfaction apply only to actual committed component tables.
 
 FemtoCairo now exercises this substrate with indexed fixed program and memory providers, a
 channel-connected execution component, and a public final state. Its extracted Rust witness reads

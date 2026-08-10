@@ -562,11 +562,10 @@ abbrev OrderedChannels (ens : Ensemble F PublicIO) (finished : List (RawChannel 
 
 lemma partialBalancedChannel_of_balancedChannel {ens : Ensemble F PublicIO}
     {witness : EnsembleWitness ens} {channel : RawChannel F} :
-    ens.VerifierConstraints witness.publicInput witness.data →
     OrderedChannel channel ens.allComponents →
     witness.BalancedChannel channel →
       PartialBalancedChannel witness.tableContext channel := by
-  intro verifier_constraints ordered balanced
+  intro ordered balanced
   use witness.verifierInteractionsWith channel
   constructor
   · apply balancedInteractions_of_perm balanced
@@ -590,25 +589,22 @@ lemma partialBalancedChannel_of_balancedChannel {ens : Ensemble F PublicIO}
   · right
     rw [witness.tableContext_data]
     rw [← witness.verifierChannelRequirements_iff_forall]
-    apply ens.verifierChannelRequirements_of_not_mem_of_constraints
-      witness.publicInput witness.data verifier_constraints
+    apply ens.verifierChannelRequirements_of_not_mem witness.publicInput witness.data
     simpa [OrderedChannelLt, Ensemble.verifierComponent] using no_verifier_requirements
 
 lemma verifierChannelGuarantees_of_tableRequirements {ens : Ensemble F PublicIO}
     {witness : EnsembleWitness ens} {channel : RawChannel F} [channel.Consistent] :
-    ens.VerifierConstraints witness.publicInput witness.data →
     OrderedChannelRefl channel ens.verifierComponent →
     witness.BalancedChannel channel →
     (∀ table ∈ witness.tables, table.ChannelRequirements witness.data channel) →
       ens.VerifierChannelGuarantees witness.publicInput witness.data channel := by
-  intro verifier_constraints ordered balanced table_requirements
+  intro ordered balanced table_requirements
   rcases ordered with no_verifier_guarantees | no_verifier_requirements
   · exact ens.verifierChannelGuarantees_of_not_mem
       witness.publicInput witness.data no_verifier_guarantees
   have verifier_requirements :
       ens.VerifierChannelRequirements witness.publicInput witness.data channel := by
-    apply ens.verifierChannelRequirements_of_not_mem_of_constraints
-      witness.publicInput witness.data verifier_constraints
+    apply ens.verifierChannelRequirements_of_not_mem witness.publicInput witness.data
     exact no_verifier_requirements
   rw [witness.verifierChannelGuarantees_iff_forall]
   have all_requirements : ∀ interaction ∈ witness.interactionsWith channel,
@@ -640,7 +636,6 @@ theorem tableSoundness_of_soundChannels {ens : Ensemble F PublicIO} :
     ens.TableSoundness := by
   intro ⟨ finished, finished_subset, soundChannels ⟩ witness assumptions constraints balance
   rcases assumptions with ⟨verifier_assumptions, table_assumptions⟩
-  rcases constraints with ⟨verifier_constraints, table_constraints⟩
   have table_sound_channels : _root_.SoundChannels ens.tables finished := by
     exact ⟨
       fun table h_table => soundChannels.left table (by simp [Ensemble.allComponents, h_table]),
@@ -652,20 +647,18 @@ theorem tableSoundness_of_soundChannels {ens : Ensemble F PublicIO} :
       PartialBalancedChannel witness.tableContext channel := by
     intro channel h_channel
     apply partialBalancedChannel_of_balancedChannel
-    · exact verifier_constraints
     · exact soundChannels.right.left channel h_channel
     · exact balance _ <| finished_subset h_channel
   have table_results := spec_and_guarantees_of_soundChannels
     (witness := witness.tableContext) (by
       simpa only [EnsembleWitness.tableContext_tables,
         witness.tables_map_component] using table_sound_channels) table_assumptions
-    table_constraints partial_balance
+    constraints partial_balance
   have verifier_channel_guarantees : ∀ channel ∈ finished,
       ens.VerifierChannelGuarantees witness.publicInput witness.data channel := by
     intro channel h_channel
     letI : channel.Consistent := soundChannels.right.right channel h_channel
     apply verifierChannelGuarantees_of_tableRequirements
-      verifier_constraints
       ((orderedChannel_cons _ _ _).mp (soundChannels.right.left channel h_channel)).left
       (balance channel (finished_subset h_channel))
     intro table h_table
@@ -679,7 +672,7 @@ theorem tableSoundness_of_soundChannels {ens : Ensemble F PublicIO} :
       exact soundChannels.left ens.verifierComponent (by simp [Ensemble.allComponents]) h_channel
     · exact ens.verifier.in_channels_or_guarantees_full _ _ _
   have verifier_result := ens.verifierWeakSoundness witness.publicInput witness.data
-    verifier_assumptions verifier_constraints verifier_guarantees
+    verifier_assumptions verifier_guarantees
   exact ⟨verifier_result.left, fun table h_table => (table_results table h_table).left⟩
 
 /-- Empty ensemble satisfies SoundChannels -/

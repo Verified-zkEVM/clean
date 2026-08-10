@@ -294,7 +294,8 @@ def fibonacciVm : VmTables (F p) fieldTriple where
   tables := [fib8Component]
   unique_names := by simp [fib8Component]
   verifier := fibonacciVerifier
-  verifier_length_zero := by simp [circuit_norm, fibonacciVerifier]
+  verifier_interactions_only := by
+    simp [Operations.InteractionsOnly, circuit_norm, fibonacciVerifier]
   tables_channel := by
     simp [circuit_norm, fib8Component, fib8, Component.rowInputVar, Component.rowOperations]
     intro env h

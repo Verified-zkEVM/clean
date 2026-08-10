@@ -51,8 +51,8 @@ structure VmTables (F : Type) [FiniteField F] [DecidableEq F] (PublicIO : TypeMa
   tables : List (Component F)
   unique_names : (tables.map (·.circuit.name)).Nodup
   verifier : GeneralFormalCircuit F PublicIO unit
-  verifier_length_zero : ∀ pi, (verifier pi).localLength 0 = 0 := by
-    simp only [circuit_norm]
+  verifier_interactions_only : Operations.InteractionsOnly
+      ((verifier.main (varFromOffset PublicIO 0)).operations (size PublicIO))
 
   tables_channel : tables.Forall fun table =>
     ∃ enabled : Expression F, ∃ pull push : Var Message F,
@@ -65,13 +65,11 @@ structure VmTables (F : Type) [FiniteField F] [DecidableEq F] (PublicIO : TypeMa
   verifier_channel : ∃ m1 m2, ⟨ channel, [(channel.pulled m1).toRaw, (channel.pushed m2).toRaw] ⟩ ∈
     verifier.exposedChannels (varFromOffset PublicIO 0) (size PublicIO)
 
-  -- verifier requirements follow _unconditionally_ from constraints (without relying on guarantees)
-  -- essentially a modified soundness theorem for the verifier
+  -- verifier requirements hold unconditionally (without relying on channel guarantees)
   verifier_requirements :
     let offset := size PublicIO;
     let input_var := varFromOffset PublicIO 0;
     ∀ env,
-      Operations.ConstraintsHold env (verifier.main input_var |>.operations offset) →
       Operations.ChannelRequirements channel env (verifier.main input_var |>.operations offset)
 
 instance (vm : VmTables F PublicIO) : ProvableType vm.Message := vm.provableMessage
@@ -81,12 +79,12 @@ def VmTables.toEnsemble (vm : VmTables F PublicIO) : Ensemble F PublicIO where
   tables := vm.tables
   unique_names := vm.unique_names
   verifier := vm.verifier
-  verifier_length_zero := vm.verifier_length_zero
+  verifier_interactions_only := vm.verifier_interactions_only
 
 /--
 Soundness for a VM ensemble is simple:
 - the ensemble spec is just the verifier spec
-- the verifier spec can be proven from constraints + balance for all tables/channels
+- the verifier spec can be proven from table constraints and balance for all channels
 -/
 def Ensemble.SoundVmChannel (ens : Ensemble F PublicIO) : Prop :=
   ∀ (witness : EnsembleWitness ens),
@@ -122,7 +120,7 @@ def toFormal (F : Type) [FiniteField F] [DecidableEq F] (ens : SoundVmEnsemble F
     · rw [ProvableType.eval_fromInput_varFromOffset_zero]
     · rw [ProvableType.eval_fromInput_varFromOffset_zero]
       exact verifier_assumptions
-    · exact EnsembleWitness.verifierConstraints_of_constraints constraints
+    · exact ens.ensemble.verifier_interactions_only.constraintsHold _
     refine ⟨verifier_assumptions, ?_⟩
     intro table h_table row h_row
     simp only [Component.RowAssumptions]
@@ -304,7 +302,7 @@ def addVm (ens : Ensemble F PublicIO) (vm : VmTables F PublicIO)
   tables := vm.tables ++ ens.tables
   unique_names
   verifier := vm.verifier
-  verifier_length_zero := vm.verifier_length_zero
+  verifier_interactions_only := vm.verifier_interactions_only
 
 @[circuit_norm] lemma addVm_channels (ens : Ensemble F PublicIO) (vm : VmTables F PublicIO) (names) :
   (ens.addVm vm names).channels = vm.channel.toRaw :: ens.channels := rfl
@@ -326,8 +324,7 @@ abbrev vmTables (witness : EnsembleWitness (ens.addVm vm names)) : List (Table F
   witness.tables.take vm.tables.length
 
 def VmConstraints (witness : EnsembleWitness (ens.addVm vm names)) : Prop :=
-  (ens.addVm vm names).VerifierConstraints witness.publicInput witness.data ∧
-    ∀ table ∈ witness.vmTables, table.Constraints witness.data
+  ∀ table ∈ witness.vmTables, table.Constraints witness.data
 
 noncomputable def vmInteractionsWith (witness : EnsembleWitness (ens.addVm vm names))
     (channel : RawChannel F) : List (Interaction F) :=
@@ -468,7 +465,7 @@ lemma vmRowEnabled_isBool_of_constraints {witness : EnsembleWitness (ens.addVm v
       IsBool (witness.vmRowEnabled ‹_› row) := by
   intro constraints table table_mem row row_mem
   exact vm.tableStep_enabled_isBool (witness.vmMemTablesComponent table_mem) _
-    (constraints.right table table_mem row row_mem)
+    (constraints table table_mem row row_mem)
 
 lemma vmPulls_mult {witness : EnsembleWitness (ens.addVm vm names)} :
   witness.VmConstraints →
@@ -585,7 +582,7 @@ lemma vmPullRequirementsOfConstraints {witness : EnsembleWitness (ens.addVm vm n
   rw [witness.mem_vmPulls_iff] at h_pull
   rcases h_pull with rfl | ⟨table, table_mem, row, row_mem, rfl⟩
   · have verifier_requirements := vm.verifier_requirements
-      (Environment.fromInput witness.publicInput witness.data) constraints.left
+      (Environment.fromInput witness.publicInput witness.data)
     change (ens.addVm vm names).VerifierChannelRequirements witness.publicInput witness.data
       vm.channel.toRaw at verifier_requirements
     rw [witness.verifierChannelRequirements_iff_forall] at verifier_requirements
@@ -769,7 +766,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
      as the key lemmas.
   3) the combination of guarantees for finished channels + vm constraints gives us the main condition:
      "vm guarantees → vm requirements", by invoking `requirements_of_partial_guarantees_of_constraints`.
-  4) finally, `VmTables.verifier_requirements` gives us the requirements for the verifier,
+  4) finally, `VmTables.verifier_requirements` gives us the unconditional requirements for the verifier,
      from which the conclusion follows.
   -/
   have witness_length : witness.tables.length = vm.tables.length + ens.tables.length := by
@@ -814,7 +811,6 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
   }
   set vmChannel := vm.channel.toRaw
   rcases assumptions with ⟨verifier_assumptions, table_assumptions⟩
-  rcases constraints with ⟨verifier_constraints, table_constraints⟩
   -- the vm channel interactions are constrained to vm tables
   have vmInteractions_eq : witness.interactionsWith vmChannel =
       witness.vmInteractionsWith vmChannel := by
@@ -850,10 +846,10 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
   -- specialize constraints and assumptions to both old and vm ensemble
   have old_constraints : oldContext.Constraints := by
     intro table table_mem
-    exact table_constraints table (List.mem_of_mem_drop table_mem)
+    exact constraints table (List.mem_of_mem_drop table_mem)
   have vm_constraints : witness.VmConstraints := by
-    exact ⟨verifier_constraints, fun table table_mem =>
-      table_constraints table (List.mem_of_mem_take table_mem)⟩
+    intro table table_mem
+    exact constraints table (List.mem_of_mem_take table_mem)
   have old_assumptions : oldContext.Assumptions := by
     intro table table_mem
     exact table_assumptions table (List.mem_of_mem_drop table_mem)
@@ -882,7 +878,6 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
       PartialBalancedChannel witness.tableContext channel := by
     intro channel channel_mem
     apply Ensemble.partialBalancedChannel_of_balancedChannel
-      verifier_constraints
     · change OrderedChannel channel
         ((ens.addVm vm names).verifierComponent :: (ens.addVm vm names).tables)
       rw [Ensemble.addVm_verifierComponent, Ensemble.addVm_tables]
@@ -900,7 +895,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
           witness.tables.drop vm.tables.length :=
         (List.take_append_drop vm.tables.length witness.tables).symm
       exact (List.Perm.of_eq h_split).trans List.perm_append_comm
-    exact ⟨vm_constraints.right, vm_reqs_disjoint _ channel_mem'⟩
+    exact ⟨vm_constraints, vm_reqs_disjoint _ channel_mem'⟩
   -- invoke old tables soundness to get reqs for finished channels from constraints
   -- uses `soundChannels`, `old_constraints`, and `old_partial_balance`
   have finished_reqs : ∀ channel ∈ finished, ∀ table ∈ oldContext.tables,
@@ -927,20 +922,19 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
     intro table table_mem channel channel_mem
     have : channel.Consistent := consistent channel channel_mem
     apply guarantees_of_requirements_append (ts := vmContext)
-      (ss := oldContext) rfl vm_constraints.right (vm_reqs_disjoint _ channel_mem)
+      (ss := oldContext) rfl vm_constraints (vm_reqs_disjoint _ channel_mem)
       (combined_partial_balance _ channel_mem) (finished_reqs _ channel_mem) _ table_mem
   -- invoke `requirements_of_partial_guarantees_of_constraints` to get per-row grts → reqs for the vm channel,
   -- and use it in `verifier_guarantees`
   have reqs_of_grts (table) (h_table : table ∈ witness.vmTables) :=
     table.requirements_of_partial_guarantees_of_constraints (unfinished := vmChannel)
     (vmContext.data_consistent table h_table)
-    (vm_assumptions table h_table) (vm_constraints.right table h_table)
+    (vm_assumptions table h_table) (vm_constraints table h_table)
     (grts_subset_all table h_table) (finished_grts table h_table)
   have verifier_requirements :
       (ens.addVm vm names).VerifierChannelRequirements witness.publicInput witness.data
         vm.channel.toRaw := by
     exact vm.verifier_requirements (Environment.fromInput witness.publicInput witness.data)
-      verifier_constraints
   have vm_verifier_guarantees := witness.vmVerifierGuarantees vm_balance vm_constraints
     reqs_of_grts verifier_requirements
   have finished_verifier_guarantees : ∀ channel ∈ finished,
@@ -948,14 +942,13 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
     intro channel channel_mem
     letI : channel.Consistent := consistent channel channel_mem
     apply Ensemble.verifierChannelGuarantees_of_tableRequirements
-      verifier_constraints
     · right
       exact (reqs_disjoint channel channel_mem).1
     · exact balance channel (by simp [Ensemble.addVm, finished_subset channel_mem])
     intro table h_table
     by_cases h_vm : table ∈ witness.vmTables
     · apply table.requirements_of_not_mem_of_constraints witness.data
-        (vm_constraints.right table h_vm)
+        (vm_constraints table h_vm)
       exact vm_reqs_disjoint channel channel_mem table h_vm
     · have h_old : table ∈ oldContext.tables := by
         simp only [oldContext]

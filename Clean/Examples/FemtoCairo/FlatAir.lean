@@ -661,7 +661,8 @@ def vm {programSize : ℕ} (program : Fin programSize → F p)
   tables := [executionComponent program h_programSize initialState]
   unique_names := by simp [executionComponent]
   verifier := verifier program initialState
-  verifier_length_zero := by simp [verifier, circuit_norm]
+  verifier_interactions_only := by
+    simp [Operations.InteractionsOnly, verifier, circuit_norm]
   tables_channel := by
     rw [List.forall_iff_forall_mem]
     intro table htable

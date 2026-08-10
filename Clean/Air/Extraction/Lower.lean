@@ -15,9 +15,6 @@ inductive LoweringError where
   | nativeWitness (component operation : ℕ)
   | malformedWitnessLocals (component operation : ℕ)
   | legacyLookup (component : ℕ)
-  | verifierWitness (operation : ℕ)
-  | verifierConstraint (operation : ℕ)
-  | verifierLookup (operation : ℕ)
   | fixedDemandMode (component : ℕ)
   | fixedRows (component : ℕ)
   | fixedPadding (component expected actual : ℕ)
@@ -38,12 +35,6 @@ instance : ToString LoweringError where
         s!"component {component} witness operation {operation} has an invalid local reference"
     | .legacyLookup component =>
         s!"component {component} contains a legacy lookup; extraction supports channels only"
-    | .verifierWitness operation =>
-        s!"verifier operation {operation} is a witness; extraction supports verifier interactions only"
-    | .verifierConstraint operation =>
-        s!"verifier operation {operation} is a constraint; extraction supports verifier interactions only"
-    | .verifierLookup operation =>
-        s!"verifier operation {operation} is a legacy lookup; extraction supports verifier interactions only"
     | .fixedDemandMode component =>
         s!"fixed-column component {component} uses demand-driven generation"
     | .fixedRows component =>
@@ -110,13 +101,6 @@ private def lowerComponent (index : ℕ) (component : Component F) :
     interactions
   }
 
-private def validateVerifierOperations : ℕ → List (FlatOperation F) → Except LoweringError Unit
-  | _, [] => pure ()
-  | index, .interact _ :: operations => validateVerifierOperations (index + 1) operations
-  | index, .witness _ _ :: _ => throw (.verifierWitness index)
-  | index, .assert _ :: _ => throw (.verifierConstraint index)
-  | index, .lookup _ :: _ => throw (.verifierLookup index)
-
 private def validateFixedComponent (index : ℕ) (component : Component F)
     (mode : Mode F) (padding : Padding F) : Except LoweringError Unit := do
   match component.fixedColumns, mode with
@@ -144,7 +128,6 @@ def lower (ensemble : Ensemble F PublicIO) (config : Config F) :
   let components ← ensemble.tables.zipIdx.mapM fun (component, index) =>
     lowerComponent index component
   let verifierOperations := ensemble.verifierOperations.toFlat
-  validateVerifierOperations 0 verifierOperations
   let verifierInteractions := FlatOperation.interactions verifierOperations
   let verifierExpressions := verifierInteractions.flatMap fun interaction =>
     interaction.mult :: interaction.msg.toList
