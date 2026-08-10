@@ -289,13 +289,6 @@ def Assumptions (table : Table F) (data : ProverData F) : Prop :=
   ∀ row ∈ table.table,
     table.component.RowAssumptions (Environment.fromArray row data)
 
-def CircuitAssumptions (table : Table F) (data : ProverData F) : Prop :=
-  ∀ row ∈ table.table,
-    table.component.CircuitAssumptions (Environment.fromArray row data)
-
-def AssumptionsSufficient (table : Table F) (data : ProverData F) : Prop :=
-  table.Assumptions data → table.CircuitAssumptions data
-
 lemma circuitAssumptions (table : Table F) (consistent : table.DataConsistency data)
     (assumptions : table.Assumptions data)
     (row : Array F) (hrow : row ∈ table.table) :
@@ -327,11 +320,6 @@ lemma circuitAssumptions (table : Table F) (consistent : table.DataConsistency d
     have hi' : table.table[i.val] = row := hi
     simp [Component.proverRows, i.isLt, hi']
   · exact assumptions row hrow
-
-lemma assumptionsSufficient (table : Table F) (consistent : table.DataConsistency data) :
-    table.AssumptionsSufficient data := by
-  intro assumptions row hrow
-  exact table.circuitAssumptions consistent assumptions row hrow
 
 def Guarantees (table : Table F) (data : ProverData F) : Prop :=
   ∀ row ∈ table.table,
@@ -539,16 +527,16 @@ lemma guarantees_of_not_mem (table : Table F) (data : ProverData F) {channel : R
   assumption
 
 /-- Circuit soundness, lifted to full table level. -/
-theorem weakSoundness {table : Table F} (sufficient : table.AssumptionsSufficient data) :
+theorem weakSoundness {table : Table F} (consistent : table.DataConsistency data) :
     table.Assumptions data → table.Constraints data → table.Guarantees data →
     table.Spec data ∧ table.Requirements data := by
   intro assumptions constraints guarantees
   constructor
   · intro row hrow
-    exact (table.component.weakSoundness (sufficient assumptions row hrow)
+    exact (table.component.weakSoundness (table.circuitAssumptions consistent assumptions row hrow)
       (constraints row hrow) (guarantees row hrow)).left
   · intro row hrow
-    exact (table.component.weakSoundness (sufficient assumptions row hrow)
+    exact (table.component.weakSoundness (table.circuitAssumptions consistent assumptions row hrow)
       (constraints row hrow) (guarantees row hrow)).right
 
 /--
@@ -559,7 +547,7 @@ prove guarantees for.
 -/
 lemma requirements_of_partial_guarantees_of_constraints {table : Table F}
   {finished : List (RawChannel F)} {unfinished : RawChannel F} :
-  table.AssumptionsSufficient data →
+  table.DataConsistency data →
   table.Assumptions data →
   table.Constraints data →
   table.channelsWithGuarantees ⊆ unfinished :: finished →
@@ -567,7 +555,7 @@ lemma requirements_of_partial_guarantees_of_constraints {table : Table F}
     ∀ row ∈ table.table,
       table.component.operations.ChannelGuarantees unfinished (Environment.fromArray row data) →
       table.component.operations.ChannelRequirements unfinished (Environment.fromArray row data) := by
-  intro sufficient assumptions constraints subset finished_grts row h_row channel_grts
+  intro consistent assumptions constraints subset finished_grts row h_row channel_grts
   replace finished_grts channel hc := finished_grts channel hc row h_row
   set env := Environment.fromArray row data
   suffices table.component.operations.FullRequirements env by
@@ -575,7 +563,7 @@ lemma requirements_of_partial_guarantees_of_constraints {table : Table F}
     intro i hi _
     exact this i hi
   suffices table.component.operations.FullGuarantees env from
-    table.component.weakSoundness (sufficient assumptions row h_row)
+    table.component.weakSoundness (table.circuitAssumptions consistent assumptions row h_row)
       (constraints row h_row) this |>.right
   simp only [Component.guarantees_iff, Component.rowOperations]
   rw [GeneralFormalCircuit.guarantees_iff]
@@ -593,51 +581,51 @@ end Table
 structure TableContext (F : Type) [FiniteField F] where
   tables : List (Table F)
   data : ProverData F
-  assumptions_sufficient : ∀ table ∈ tables, table.AssumptionsSufficient data
+  data_consistent : ∀ table ∈ tables, table.DataConsistency data
 
 namespace TableContext
 def cons (table : Table F) (tables : TableContext F)
-    (sufficient : table.AssumptionsSufficient tables.data) : TableContext F where
+    (consistent : table.DataConsistency tables.data) : TableContext F where
   tables := table :: tables.tables
   data := tables.data
-  assumptions_sufficient := by
-    simp [sufficient]
-    apply tables.assumptions_sufficient
+  data_consistent := by
+    simp [consistent]
+    apply tables.data_consistent
 
-@[circuit_norm] lemma cons_tables {table : Table F} {tables : TableContext F} (sufficient) :
-  (cons table tables sufficient).tables = table :: tables.tables := rfl
+@[circuit_norm] lemma cons_tables {table : Table F} {tables : TableContext F} (consistent) :
+  (cons table tables consistent).tables = table :: tables.tables := rfl
 
-@[circuit_norm] lemma cons_data {table : Table F} {tables : TableContext F} (sufficient) :
-  (cons table tables sufficient).data = tables.data := rfl
+@[circuit_norm] lemma cons_data {table : Table F} {tables : TableContext F} (consistent) :
+  (cons table tables consistent).data = tables.data := rfl
 
 def induct {motive : TableContext F → Sort*}
   (nil : ∀ data, motive ⟨ [], data, by simp ⟩)
-  (cons : ∀ table tables sufficient, motive tables → motive (cons table tables sufficient))
+  (cons : ∀ table tables consistent, motive tables → motive (cons table tables consistent))
     (tables : TableContext F) : motive tables := by
-  rcases tables with ⟨ ts, data, assumptions_sufficient ⟩
+  rcases tables with ⟨ ts, data, data_consistent ⟩
   induction ts with
   | nil => exact nil data
   | cons table ts ih =>
-    have assumptions_sufficient' : ∀ table ∈ ts, table.AssumptionsSufficient data := by
+    have data_consistent' : ∀ table ∈ ts, table.DataConsistency data := by
       intro table h_table
-      apply assumptions_sufficient
+      apply data_consistent
       simp [h_table]
-    let tables : TableContext F := ⟨ ts, data, assumptions_sufficient' ⟩
-    have sufficient : table.AssumptionsSufficient tables.data := by
+    let tables : TableContext F := ⟨ ts, data, data_consistent' ⟩
+    have consistent : table.DataConsistency tables.data := by
       simp [tables]
-      exact assumptions_sufficient table (by simp)
-    apply cons table tables sufficient
-    exact ih assumptions_sufficient'
+      exact data_consistent table (by simp)
+    apply cons table tables consistent
+    exact ih data_consistent'
 
 def append (tables1 tables2 : TableContext F) (data_eq : tables1.data = tables2.data) : TableContext F where
   tables := tables1.tables ++ tables2.tables
   data := tables1.data
-  assumptions_sufficient := by
+  data_consistent := by
     simp [or_imp, forall_and]
     constructor
-    · apply tables1.assumptions_sufficient
+    · apply tables1.data_consistent
     rw [data_eq]
-    apply tables2.assumptions_sufficient
+    apply tables2.data_consistent
 
 @[circuit_norm] lemma append_tables {tables1 tables2 : TableContext F} (data_eq : tables1.data = tables2.data) :
   (append tables1 tables2 data_eq).tables = tables1.tables ++ tables2.tables := rfl
@@ -646,9 +634,9 @@ def append (tables1 tables2 : TableContext F) (data_eq : tables1.data = tables2.
   (append tables1 tables2 data_eq).data = tables1.data := rfl
 
 @[circuit_norm] lemma cons_append {table : Table F} {tables1 tables2 : TableContext F}
-  (sufficient : table.AssumptionsSufficient tables1.data) (data_eq : tables1.data = tables2.data) :
-  (cons table tables1 sufficient).append tables2 data_eq =
-    cons table (append tables1 tables2 data_eq) sufficient := rfl
+  (consistent : table.DataConsistency tables1.data) (data_eq : tables1.data = tables2.data) :
+  (cons table tables1 consistent).append tables2 data_eq =
+    cons table (append tables1 tables2 data_eq) consistent := rfl
 
 @[circuit_norm]
 abbrev components (tables : TableContext F) : List (Component F) :=
@@ -664,8 +652,8 @@ noncomputable abbrev interactionsWith (tables : TableContext F) (channel : RawCh
   tables.tables.flatMap (·.interactionsWith tables.data channel)
 
 @[circuit_norm] lemma interactionsWith_cons {table : Table F} {tables : TableContext F}
-  (sufficient : table.AssumptionsSufficient tables.data) {channel : RawChannel F} :
-  interactionsWith (cons table tables sufficient) channel =
+  (consistent : table.DataConsistency tables.data) {channel : RawChannel F} :
+  interactionsWith (cons table tables consistent) channel =
     table.interactionsWith tables.data channel ++ interactionsWith tables channel := by
   simp [interactionsWith, Table.interactionsWith, circuit_norm]
 

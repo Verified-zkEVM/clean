@@ -587,11 +587,14 @@ def generate (ensemble : Ensemble F PublicIO) (config : Config F) (publicInput :
 
 /-- Executable constraint check for the no-legacy-lookup initial milestone. -/
 def constraintsHold {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness ensemble) : Bool :=
-  witness.allTables.all fun table =>
+  ensemble.verifierOperations.lookups.isEmpty &&
+  (ensemble.verifierOperations.constraints.all fun constraint =>
+    constraint.eval (Environment.fromInput witness.publicInput witness.data) == 0) &&
+  (witness.tables.all fun table =>
     table.table.all fun row =>
       table.component.operations.lookups.isEmpty &&
       table.component.operations.constraints.all fun constraint =>
-        constraint.eval (Environment.fromArray row witness.data) == 0
+        constraint.eval (Environment.fromArray row witness.data) == 0)
 
 /-- Executable balance check using the same normalized worklist representation. -/
 def channelsBalanced {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness ensemble) : Bool :=
