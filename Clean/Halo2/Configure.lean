@@ -128,6 +128,24 @@ theorem Expression.selectorsOwnedBy_of_selectorFree
   | mul left right ihLeft ihRight =>
       exact ⟨ihLeft hfree.1, ihRight hfree.2⟩
 
+theorem Expression.selectorsCovered_of_selectorsOwnedBy
+    (owner : Selector) (expression : Expression F Query)
+    (howned : expression.SelectorsOwnedBy owner) :
+    expression.selectorsCovered
+      (fun selector => decide (selector = owner.index)) = true := by
+  induction expression with
+  | var query =>
+      cases query <;>
+        simp_all [Expression.SelectorsOwnedBy,
+          Expression.selectorsCovered]
+  | const value =>
+      rfl
+  | add left right ihLeft ihRight
+  | mul left right ihLeft ihRight =>
+      simp only [Expression.SelectorsOwnedBy,
+        Expression.selectorsCovered, Bool.and_eq_true] at howned ⊢
+      exact ⟨ihLeft howned.1, ihRight howned.2⟩
+
 /-- One named constraint of a custom gate. Rust: `Constraint<F>`. -/
 structure Constraint (F : Type) where
   name : String := ""
