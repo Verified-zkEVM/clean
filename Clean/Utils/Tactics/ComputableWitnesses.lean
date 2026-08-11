@@ -19,9 +19,9 @@ a child bundle name whose metadata is otherwise stuck under a binder).
    defs. `FormalCircuit`-variant bundles are proof boundaries and are **never**
    unfolded — their obligations go through the composition lemmas instead.
 2. **Destructure** struct variables via `provable_struct_simp`'s destructure pass
-   (with its `matchScrutinees` extension: the CW obligation has no value-level input
-   variable, so nothing else selects `input`, and `simp`/`grind` do not iota-reduce
-   `main`'s destructuring match against an opaque variable).
+   (the CW obligation has no value-level input variable, so `input`'s only
+   selectable footprint is `main`'s destructuring match, which `simp`/`grind` do
+   not iota-reduce against an opaque variable).
 3. **Split** the resulting conjunction into per-obligation leaves (`splitStep`):
    syntactic `And`/`∀` head dispatch — the goal is simp-normalized here, and a
    defeq-hidden shape is left whole as a leaf (unifying against it would
@@ -1095,14 +1095,13 @@ def runComputableWitnesses (extraTerms closeTerms : Array (TSyntax `term)) : Tac
   unless (← getGoals).isEmpty do
     let nGoalsBefore := (← getGoals).length
     let hypsBefore ← withMainContext do return (← getLCtx).getFVarIds.size
-    -- destructure-only reuse of `provable_struct_simp`: its selection and field-based
-    -- naming, plus `matchScrutinees` — the CW obligation has no value-level input
-    -- variable, so no eval-vs-variable equation selects `input` and `main`'s
-    -- destructuring match stays stuck. Its alternating simp must not run here (goal
-    -- is `circuit_norm`-normal, where the getElem lemmas loop) — the conditional
-    -- `simpPass` below re-normalizes
+    -- destructure-only reuse of `provable_struct_simp`: its selection (the CW
+    -- obligation has no value-level input variable, so `input`'s only selectable
+    -- footprint is `main`'s stuck destructuring match) and field-based naming. Its
+    -- alternating simp must not run here (goal is `circuit_norm`-normal, where the
+    -- getElem lemmas loop) — the conditional `simpPass` below re-normalizes
     for _ in [0:8] do
-      unless ← ProvableStructSimp.destructurePass (matchScrutinees := true) do break
+      unless ← ProvableStructSimp.destructurePass do break
     -- re-normalize only if a struct variable was destructured
     let changed ← do
       if (← getGoals).isEmpty then pure false

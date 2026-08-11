@@ -191,19 +191,17 @@ where
 /--
 Collect all struct variables to destructure, from the goal and all hypotheses:
 projection bases, variables equated with constructor literals, and eval arguments in
-equations (possibly inside conjunctions). With `matchScrutinees := true`, variables
-scrutinized by stuck `match` applications are selected too.
+equations (possibly inside conjunctions), and variables scrutinized by stuck `match`
+applications (a destructuring `let ⟨..⟩ := input` against an opaque variable).
 -/
-private def collectStructVarsToDestructure (matchScrutinees : Bool) :
-    TacticM (Array FVarId) :=
+private def collectStructVarsToDestructure : TacticM (Array FVarId) :=
   withMainContext do
     let mut candidates : Array FVarId := #[]
     let scan := fun (e : Expr) => do
       let mut acc ← projectionBaseVars e
       for (_, lhs, rhs) in ← extractEqualities e do
         acc := acc ++ (← equationVars lhs rhs)
-      if matchScrutinees then
-        acc := acc ++ (← matchScrutineeVars e)
+      acc := acc ++ (← matchScrutineeVars e)
       return acc
     for decl in (← getLCtx) do
       if decl.isImplementationDetail then continue
@@ -229,8 +227,8 @@ the goal is already in `circuit_norm` normal form — the alternating simp of
 element-map spelling that `circuit_norm` introduces; see the note on
 `structEvalSimpLemmas`).
 -/
-def destructurePass (matchScrutinees : Bool := false) : TacticM Bool := do
-  let toDestructure ← collectStructVarsToDestructure matchScrutinees
+def destructurePass : TacticM Bool := do
+  let toDestructure ← collectStructVarsToDestructure
   let mut progress := false
   for fvarId in toDestructure do
     try
