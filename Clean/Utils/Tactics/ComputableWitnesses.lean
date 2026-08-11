@@ -35,9 +35,9 @@ a child bundle name whose metadata is otherwise stuck under a binder).
      (`FormalCircuit.output_of_input_eq` instances, re-keyed at the goal's own eval
      spelling) plus universal metadata facts for binder-nested outputs;
    * the close routes by shape (`isEvalCongrEq`): vector/eval-congruence goals get the
-     staged vector ladder (`vecClose` — pointwise `getElem` lemmas first, window
-     unrolling only per branch after `split_ifs`), everything else `simp_all`/`grind`
-     (`baseClose`).
+     staged vector route (structural `simp_all`, close-hint step, then per-branch
+     `split_ifs` → `envUnify` → `grind`); everything else takes the base route
+     (`envUnify`, projection respelling, `grind` first, curated `simp_all` fallbacks).
 
 ## Key supporting pieces
 
@@ -103,36 +103,6 @@ elab "unfold_plain_circuit_consts" : tactic => do
 
 namespace ComputableWitnesses
 
-/--
-Split equalities between applications of the same structure constructor using the
-constructor's generated `injEq` theorem. This is supplied only to the controlled simp
-passes in `computable_witnesses`; it does not affect the global simp set.
--/
-def structEqSplitProc : Simproc := fun e => do
-  unless e.isAppOfArity ``Eq 3 do return .continue
-  let args := e.getAppArgs
-  let lhs := args[1]!.consumeMData
-  let rhs := args[2]!.consumeMData
-  let .const ctorName _ := lhs.getAppFn | return .continue
-  unless rhs.getAppFn.isConstOf ctorName do return .continue
-  let some (.ctorInfo info) := (← getEnv).find? ctorName | return .continue
-  unless info.numFields > 0 do return .continue
-  unless lhs.getAppNumArgs == info.numParams + info.numFields &&
-      rhs.getAppNumArgs == info.numParams + info.numFields do return .continue
-  let injEqName := ctorName ++ `injEq
-  unless (← getEnv).contains injEqName do return .continue
-  try
-    let params := lhs.getAppArgs[:info.numParams].toArray.map some
-    let lhsFields := lhs.getAppArgs[info.numParams:].toArray.map some
-    let rhsFields := rhs.getAppArgs[info.numParams:].toArray.map some
-    let proof ← withTransparency .default <|
-      mkAppOptM injEqName (params ++ lhsFields ++ rhsFields)
-    let some (_, _, conjunction) := (← inferType proof).eq? | return .continue
-    return .visit { expr := conjunction, proof? := some proof }
-  catch _ =>
-    return .continue
-
-simproc structEqSplit (_ = _) := structEqSplitProc
 
 /-- Heads under which concrete circuits' `localLength` metadata appears in
 computable-witness goals. -/
@@ -610,7 +580,7 @@ def runLeafDispatch (lemmasArray closeArray : Array (TSyntax `Lean.Parser.Tactic
     unless (← getGoals).isEmpty do
       try
         evalTactic (← `(tactic| simp only [circuit_norm, computable_witnesses_norm,
-          ComputableWitnesses.structEqSplit, $lemmasArray,*]))
+          $lemmasArray,*]))
       catch _ =>
         pure ()
   -- the window/elementwise route applies to eval-congruence goals: both sides are
@@ -733,6 +703,10 @@ def runLeafDispatch (lemmasArray closeArray : Array (TSyntax `Lean.Parser.Tactic
           else
             evalTactic (← `(tactic|
               all_goals (try (simp (disch := omega) only [$hga:ident]; try rfl))))
+    let attempt (act : TacticM Unit) : TacticM Bool := do
+      let st ← Tactic.saveState
+      try act; pure true
+      catch _ => st.restore; pure false
     if ← isEvalCongrEq then
       let vecMain : TacticM Unit := do
         evalTactic (← `(tactic|
@@ -768,10 +742,6 @@ def runLeafDispatch (lemmasArray closeArray : Array (TSyntax `Lean.Parser.Tactic
             envUnify
             evalTactic (← `(tactic| all_goals grind))
         setGoals []
-      let attempt (act : TacticM Unit) : TacticM Bool := do
-        let st ← Tactic.saveState
-        try act; pure true
-        catch _ => st.restore; pure false
       if ← attempt vecMain then return
       if ← attempt (evalTactic (← `(tactic|
           (refine Vector.ext fun j hj => ?_
@@ -782,17 +752,13 @@ def runLeafDispatch (lemmasArray closeArray : Array (TSyntax `Lean.Parser.Tactic
     else
       -- grind first: on already-dispatched leaves it is the cheapest closer by an
       -- order of magnitude; the curated simp_all forms only run when it fails
-      let attempt (t : TSyntax `tactic) : TacticM Bool := do
-        let st ← Tactic.saveState
-        try evalTactic t; pure true
-        catch _ => st.restore; pure false
       -- unify the environments first: legs whose goal is a pure witness-window fact
       -- close by rfl right here, and the rest reach grind with fewer distinct atoms
       envUnify
       if (← getGoals).isEmpty then return
-      if ← attempt (← `(tactic| grind)) then return
-      if ← attempt (← `(tactic|
-          (simp_all only [circuit_norm, computable_witnesses_norm]; done))) then return
+      if ← attempt (evalTactic (← `(tactic| grind))) then return
+      if ← attempt (evalTactic (← `(tactic|
+          (simp_all only [circuit_norm, computable_witnesses_norm]; done)))) then return
       evalTactic (← `(tactic| (simp_all [circuit_norm, computable_witnesses_norm]; done)))
   let leafDispatch : TacticM Unit := withMainContext do
     -- inaccessible hyp names (from intro1P) break the chainer's delab roundtrip
@@ -812,7 +778,7 @@ def runLeafDispatch (lemmasArray closeArray : Array (TSyntax `Lean.Parser.Tactic
     -- hypotheses via the close routes' `simp_all` instead
     try
       evalTactic (← `(tactic| simp only [circuit_norm, computable_witnesses_norm,
-        ComputableWitnesses.structEqSplit, reduceLocalLength, reduceOutputMetadata,
+        reduceLocalLength, reduceOutputMetadata,
         retypeVectorAliasEq] at *))
     catch _ => pure ()
     if (← getGoals).isEmpty then return
@@ -904,7 +870,7 @@ def runComputableWitnesses (extraTerms closeTerms : Array (TSyntax `term)) : Tac
     unless (← getGoals).isEmpty do
       try
         evalTactic (← `(tactic| simp only [circuit_norm, computable_witnesses_norm,
-          ComputableWitnesses.structEqSplit, $lemmasArray,*]))
+          $lemmasArray,*]))
       catch _ =>
         pure ()
   simpPass
@@ -983,28 +949,5 @@ elab_rules : tactic
         (terms.map (fun terms => terms.getElems) |>.getD #[])
         (closeTerms.map (fun terms => terms.getElems) |>.getD #[])
       runLeafDispatch lemmasArray closeArray
-
-/-- Diagnostic variant of `computable_witnesses` without the `simp_all` fallback, so
-`grind`'s failure state is visible. Not for committed proofs. -/
-syntax "computable_witnesses_probe" ("[" term,* "]")? : tactic
-
-elab_rules : tactic
-  | `(tactic| computable_witnesses_probe $[[$terms:term,*]]?) => do
-      let lemmasArray ← (terms.map (fun terms => terms.getElems) |>.getD #[]).mapM fun term =>
-        `(Lean.Parser.Tactic.simpLemma| $term:term)
-      evalTactic (← `(tactic| simp only [circuit_norm, computable_witnesses_norm,
-        ComputableWitnesses.structEqSplit, $lemmasArray,*]))
-      try evalTactic (← `(tactic| unfold $(mkIdent `main):ident)) catch _ => pure ()
-      evalTactic (← `(tactic| simp only [circuit_norm, computable_witnesses_norm,
-        ComputableWitnesses.structEqSplit, $lemmasArray,*]))
-      evalTactic (← `(tactic| intros))
-      destructureProvableStructVars
-      evalTactic (← `(tactic| simp only [circuit_norm, computable_witnesses_norm,
-        ComputableWitnesses.structEqSplit, $lemmasArray,*]))
-      evalTacticSeq (← `(tacticSeq|
-        apply And.intro
-        · intros
-          (try and_intros) <;> grind
-        · grind))
 
 end ComputableWitnesses
