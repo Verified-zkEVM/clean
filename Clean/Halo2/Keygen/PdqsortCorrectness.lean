@@ -865,4 +865,17 @@ theorem quicksort_sorted
     KeySorted key (quicksort array (lessBy key)).toList :=
   quicksort_sorted_of_contracts (orderingContracts key) array
 
+/-- The key sequence produced by legacy pdqsort is the canonical sorted key
+sequence. This deliberately forgets the unstable ordering of elements with equal
+keys, while retaining everything determined by the comparator. -/
+theorem quicksort_keys_eq_mergeSort
+    {T : Type} [Inhabited T] (array : Array T) (key : T → ℕ) :
+    (quicksort array (lessBy key)).toList.map key =
+      (array.toList.map key).mergeSort (· ≤ ·) := by
+  apply List.Perm.eq_of_sortedLE
+    (quicksort_sorted array key)
+    List.sortedLE_mergeSort
+  exact (quicksort_perm array (lessBy key)).map key |>.trans
+    (List.mergeSort_perm (array.toList.map key) (· ≤ ·)).symm
+
 end Halo2.FloorPlanner.Pdqsort
