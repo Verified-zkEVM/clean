@@ -10896,6 +10896,24 @@ def CircuitAllocations.Equivalent
     (left right : CircuitAllocations) : Prop :=
   ∀ column, left.getD column #[] = right.getD column #[]
 
+theorem CircuitAllocations.Equivalent.refl
+    (allocations : CircuitAllocations) : allocations.Equivalent allocations := by
+  intro column
+  rfl
+
+theorem CircuitAllocations.Equivalent.symm
+    {left right : CircuitAllocations} (h : left.Equivalent right) :
+    right.Equivalent left := by
+  intro column
+  exact (h column).symm
+
+theorem CircuitAllocations.Equivalent.trans
+    {left middle right : CircuitAllocations}
+    (hleft : left.Equivalent middle) (hright : middle.Equivalent right) :
+    left.Equivalent right := by
+  intro column
+  exact (hleft column).trans (hright column)
+
 theorem CircuitAllocations.Equivalent.agreesOn
     {left right : CircuitAllocations} (h : left.Equivalent right)
     (columns : List RegionColumn) : left.AgreesOn right columns := by
@@ -11120,7 +11138,7 @@ private def TrySpacesLaw
         ∃ space ∈ spaces,
           Allocations.SpaceAllows space row length
 
-private theorem within_space_of_ok
+theorem within_space_of_ok
     (spaceStart : ℕ) (spaceEnd : Option ℕ) (length row : ℕ)
     (hok : (match spaceEnd.map fun endRow =>
         (endRow : ℤ) - spaceStart - length with
@@ -11403,6 +11421,14 @@ def PlacementEffect
             (before.getD column #[]).insert row length
           else before.getD column #[]
 
+theorem PlacementEffect.equivalent_before_of_none
+    {before : CircuitAllocations} {columns : List RegionColumn}
+    {length : ℕ} {result : Option ℕ × CircuitAllocations}
+    (heffect : PlacementEffect before columns length result)
+    (hresult : result.1 = none) : result.2.Equivalent before := by
+  intro column
+  rw [heffect column, hresult]
+
 private def FirstFitEffect
     (fuel : ℕ) (allocations : CircuitAllocations)
     (columns : List RegionColumn) (length start : ℕ)
@@ -11589,6 +11615,347 @@ theorem firstFit_row_eq_start_of_fits
               have hwidth : (length : ℤ) ≤ stop - start := by omega
               simp [firstFit, hspaces, trySpaces, hwidth]
               rw [hrest]
+
+/-- Every column in a footprint admits the candidate interval. -/
+def FitsColumns (allocations : CircuitAllocations)
+    (columns : List RegionColumn) (start length : ℕ) : Prop :=
+  ∀ column ∈ columns,
+    (allocations.getD column #[]).Fits start length
+
+theorem FitsColumns.congruent
+    {left right : CircuitAllocations} {columns : List RegionColumn}
+    {start length : ℕ} (hequivalent : left.Equivalent right)
+    (hfits : FitsColumns left columns start length) :
+    FitsColumns right columns start length := by
+  intro column hcolumn
+  rw [← hequivalent column]
+  exact hfits column hcolumn
+
+theorem FitsColumns.append
+    {allocations : CircuitAllocations} {left right : List RegionColumn}
+    {start length : ℕ}
+    (hleft : FitsColumns allocations left start length)
+    (hright : FitsColumns allocations right start length) :
+    FitsColumns allocations (left ++ right) start length := by
+  intro column hcolumn
+  rw [List.mem_append] at hcolumn
+  exact hcolumn.elim (hleft column) (hright column)
+
+theorem FitsColumns.mono
+    {allocations : CircuitAllocations} {inner outer : List RegionColumn}
+    {start length : ℕ} (hfits : FitsColumns allocations outer start length)
+    (hsubset : inner ⊆ outer) : FitsColumns allocations inner start length := by
+  intro column hcolumn
+  exact hfits column (hsubset hcolumn)
+
+/-- The already-processed prefix fits every row still inside a recursive search
+window. -/
+def SearchPrefixFits (allocations : CircuitAllocations)
+    (processed : List RegionColumn) (length start : ℕ)
+    (slack : Option ℕ) : Prop :=
+  ∀ row, Within start slack length row →
+    FitsColumns allocations processed row length
+
+/-- The retained columns dominate a suffix when fitting all retained columns always
+implies fitting the suffix. -/
+def ColumnsDominate (allocations : CircuitAllocations)
+    (retained suffix : List RegionColumn) (length : ℕ) : Prop :=
+  ∀ row, FitsColumns allocations retained row length →
+    FitsColumns allocations suffix row length
+
+/-- Removing a suffix whose allocation constraints are already implied by retained
+columns preserves first-fit's selected row. -/
+theorem firstFit_drop_dominated_suffix
+    (fuel : ℕ) (left right : CircuitAllocations)
+    (processed retained suffix : List RegionColumn)
+    (length start : ℕ) (slack : Option ℕ)
+    (hvalidLeft : left.Valid) (hvalidRight : right.Valid)
+    (hequivalent : left.Equivalent right)
+    (hnodup : (retained ++ suffix).Nodup)
+    (hlength : 0 < length)
+    (hfuel : (retained ++ suffix).length ≤ fuel)
+    (hsearch : SearchPrefixFits left processed length start slack)
+    (hdominate : ColumnsDominate left (processed ++ retained) suffix length) :
+    (firstFit fuel left (retained ++ suffix) length start slack).1 =
+      (firstFit fuel right retained length start slack).1 := by
+  induction retained generalizing fuel left right processed start slack with
+  | nil =>
+      have hsuffixNodup : suffix.Nodup := by simpa using hnodup
+      have hsuffixFuel : suffix.length ≤ fuel := by simpa using hfuel
+      have hwithin : Within start slack length start := by
+        exact ⟨le_rfl, by intro available _; omega⟩
+      have hprocessed := hsearch start hwithin
+      have hsuffixFits : FitsColumns left suffix start length := by
+        apply hdominate start
+        simpa using hprocessed
+      have hfull := firstFit_row_eq_start_of_fits fuel left suffix
+        length start slack hvalidLeft hsuffixNodup hlength hsuffixFuel
+        hsuffixFits (by intro available _; omega)
+      simpa [firstFit] using hfull
+  | cons head rest inductionHypothesis =>
+      cases fuel with
+      | zero => simp at hfuel
+      | succ fuel =>
+          have hfullNodup : (head :: (rest ++ suffix)).Nodup := by
+            simpa only [List.cons_append] using hnodup
+          have hrestSuffixNodup : (rest ++ suffix).Nodup :=
+            List.nodup_cons.mp hfullNodup |>.2
+          have hheadRestSuffix : head ∉ rest ++ suffix :=
+            List.nodup_cons.mp hfullNodup |>.1
+          have hrestFuel : (rest ++ suffix).length ≤ fuel := by
+            simpa only [List.length_cons] using
+              Nat.le_of_succ_le_succ hfuel
+          let leftInitialized :=
+            left.insert head (left.getD head #[])
+          let rightInitialized :=
+            right.insert head (right.getD head #[])
+          have hleftInitializedValid :
+              CircuitAllocations.Valid leftInitialized :=
+            CircuitAllocations.Valid.insertSame hvalidLeft head
+          have hrightInitializedValid :
+              CircuitAllocations.Valid rightInitialized :=
+            CircuitAllocations.Valid.insertSame hvalidRight head
+          have hinitializedEquivalent :
+              CircuitAllocations.Equivalent leftInitialized
+                rightInitialized := by
+            intro column
+            simp only [leftInitialized, rightInitialized,
+              Std.HashMap.getD_insert]
+            split <;> rename_i heq
+            · have : head = column := beq_iff_eq.mp heq
+              subst column
+              exact congrArg (fun values => values) (hequivalent head)
+            · exact hequivalent column
+          have hleftInitialized :
+              CircuitAllocations.Equivalent leftInitialized left := by
+            intro column
+            simp only [leftInitialized, Std.HashMap.getD_insert]
+            split <;> rename_i heq
+            · exact congrArg (fun found => left.getD found #[])
+                (beq_iff_eq.mp heq)
+            · rfl
+          have hrightInitialized :
+              CircuitAllocations.Equivalent rightInitialized right := by
+            intro column
+            simp only [rightInitialized, Std.HashMap.getD_insert]
+            split <;> rename_i heq
+            · exact congrArg (fun found => right.getD found #[])
+                (beq_iff_eq.mp heq)
+            · rfl
+          have hspaces :
+              (left.getD head #[]).freeIntervals start
+                  (slack.map fun available => start + length + available) =
+                (right.getD head #[]).freeIntervals start
+                  (slack.map fun available => start + length + available) := by
+            rw [hequivalent head]
+          let spaces := (left.getD head #[]).freeIntervals start
+            (slack.map fun available => start + length + available)
+          have hspaceSafety : ∀ space ∈ spaces, ∀ row,
+              Allocations.SpaceAllows space row length →
+                (leftInitialized.getD head #[]).Fits row length := by
+            intro space hspace row hallows
+            have hfits := Allocations.freeIntervals_fits
+              (left.getD head #[]) start
+              (slack.map fun available => start + length + available)
+              (hvalidLeft head) hspace hallows
+            rw [hleftInitialized head]
+            exact hfits
+          have hspaceWithin : ∀ space ∈ spaces, ∀ row,
+              Allocations.SpaceAllows space row length →
+                Within start slack length row := by
+            intro space hspace row hallows
+            constructor
+            · exact (Allocations.freeIntervals_start_le _ _ _ hspace).trans
+                hallows.1
+            · intro available havailable
+              subst slack
+              obtain ⟨stop, hstop⟩ :=
+                Allocations.freeIntervals_bounded _ _ _ hspace
+              rcases space with ⟨spaceStart, spaceEnd⟩
+              simp only at hstop
+              subst spaceEnd
+              exact (hallows.2 stop rfl).trans
+                (Allocations.freeIntervals_end_le _ _ _ hspace)
+          have compareSpaces : ∀ (remaining : List (ℕ × Option ℕ))
+              (currentLeft currentRight : CircuitAllocations),
+              currentLeft.Valid → currentRight.Valid →
+              currentLeft.Equivalent currentRight →
+              currentLeft.Equivalent leftInitialized →
+              currentRight.Equivalent rightInitialized →
+              (∀ space ∈ remaining, ∀ row,
+                Allocations.SpaceAllows space row length →
+                  (currentLeft.getD head #[]).Fits row length) →
+              (∀ space ∈ remaining, ∀ row,
+                Allocations.SpaceAllows space row length →
+                  Within start slack length row) →
+              (trySpaces fuel currentLeft head (rest ++ suffix)
+                  length remaining).1 =
+                (trySpaces fuel currentRight head rest length remaining).1 := by
+            intro remaining
+            induction remaining with
+            | nil =>
+                intro currentLeft currentRight _ _ _ _ _ _ _
+                simp [trySpaces]
+            | cons space more spacesInduction =>
+                rcases space with ⟨spaceStart, spaceEnd⟩
+                intro currentLeft currentRight hcurrentLeftValid
+                  hcurrentRightValid hcurrentEquivalent hcurrentLeft
+                  hcurrentRight hremainingSafety hremainingWithin
+                let available : Option ℤ := spaceEnd.map fun stop =>
+                  (stop : ℤ) - spaceStart - length
+                let ok : Bool := match available with
+                  | some value => decide (value ≥ 0)
+                  | none => true
+                have havailable :
+                    (spaceEnd.map fun stop =>
+                      (stop : ℤ) - spaceStart - length) = available := rfl
+                by_cases hok : ok = true
+                · have hallowsOfWithin : ∀ row,
+                      Within spaceStart (available.map Int.toNat) length row →
+                        Allocations.SpaceAllows
+                          (spaceStart, spaceEnd) row length := by
+                    intro row hwithin
+                    apply within_space_of_ok spaceStart spaceEnd length row
+                      (by simpa only [ok, available] using hok)
+                    exact hwithin
+                  have hrecursiveSearch : SearchPrefixFits currentLeft
+                      (processed ++ [head]) length spaceStart
+                      (available.map Int.toNat) := by
+                    intro row hwithin
+                    have hallows := hallowsOfWithin row hwithin
+                    have houterWithin := hremainingWithin
+                      (spaceStart, spaceEnd) (by simp) row hallows
+                    have hprocessedFits := hsearch row houterWithin
+                    have hprocessedCurrent := hprocessedFits.congruent
+                      (hcurrentLeft.trans hleftInitialized).symm
+                    have hheadFits := hremainingSafety
+                      (spaceStart, spaceEnd) (by simp) row hallows
+                    exact hprocessedCurrent.append (by
+                      intro column hcolumn
+                      simp only [List.mem_singleton] at hcolumn
+                      subst column
+                      exact hheadFits)
+                  have hrecursiveDominate : ColumnsDominate currentLeft
+                      ((processed ++ [head]) ++ rest) suffix length := by
+                    intro row hfits
+                    have hcurrent : FitsColumns currentLeft
+                        (processed ++ head :: rest) row length := by
+                      simpa only [List.append_assoc,
+                        List.singleton_append] using hfits
+                    have horiginal := hcurrent.congruent
+                      (hcurrentLeft.trans hleftInitialized)
+                    have hsuffixFits := hdominate row horiginal
+                    exact hsuffixFits.congruent
+                      (hcurrentLeft.trans hleftInitialized).symm
+                  have hrecursiveRows := inductionHypothesis fuel
+                    currentLeft currentRight (processed ++ [head])
+                    spaceStart (available.map Int.toNat)
+                    hcurrentLeftValid hcurrentRightValid hcurrentEquivalent
+                    hrestSuffixNodup hrestFuel hrecursiveSearch
+                    hrecursiveDominate
+                  generalize hfull : firstFit fuel currentLeft
+                    (rest ++ suffix) length spaceStart
+                      (available.map Int.toNat) = fullResult at hrecursiveRows
+                  rcases fullResult with ⟨fullRow, fullAllocations⟩
+                  generalize hcore : firstFit fuel currentRight rest length
+                    spaceStart (available.map Int.toNat) = coreResult
+                      at hrecursiveRows
+                  rcases coreResult with ⟨coreRow, coreAllocations⟩
+                  dsimp only at hrecursiveRows
+                  cases fullRow with
+                  | some row =>
+                      have hcoreRow : coreRow = some row := hrecursiveRows.symm
+                      subst coreRow
+                      simp only [trySpaces]
+                      change ((if ok = true then _ else _) :
+                          Option ℕ × CircuitAllocations).1 =
+                        ((if ok = true then _ else _) :
+                          Option ℕ × CircuitAllocations).1
+                      simp only [if_pos hok]
+                      rw [havailable, hfull, hcore]
+                  | none =>
+                      have hcoreRow : coreRow = none := hrecursiveRows.symm
+                      subst coreRow
+                      have hfullEffect := firstFit_effect fuel currentLeft
+                        (rest ++ suffix) length spaceStart
+                        (available.map Int.toNat) hcurrentLeftValid
+                        hrestSuffixNodup hlength
+                      rw [hfull] at hfullEffect
+                      have hcoreEffect := firstFit_effect fuel currentRight
+                        rest length spaceStart (available.map Int.toNat)
+                        hcurrentRightValid
+                        hrestSuffixNodup.of_append_left hlength
+                      rw [hcore] at hcoreEffect
+                      have hfullEquivalent :=
+                        hfullEffect.equivalent_before_of_none rfl
+                      have hcoreEquivalent :=
+                        hcoreEffect.equivalent_before_of_none rfl
+                      have hnextEquivalent :
+                          fullAllocations.Equivalent coreAllocations :=
+                        hfullEquivalent.trans
+                          (hcurrentEquivalent.trans hcoreEquivalent.symm)
+                      have hnextSafety : ∀ next ∈ more, ∀ candidate,
+                          Allocations.SpaceAllows next candidate length →
+                            (fullAllocations.getD head #[]).Fits
+                              candidate length := by
+                        intro next hnext candidate hallows
+                        rw [hfullEquivalent head]
+                        exact hremainingSafety next (by simp [hnext])
+                          candidate hallows
+                      have hfullValid :=
+                        (firstFit_law fuel currentLeft (rest ++ suffix)
+                          length spaceStart (available.map Int.toNat)
+                          hcurrentLeftValid hrestSuffixNodup hlength).1.valid
+                      rw [hfull] at hfullValid
+                      have hcoreValid :=
+                        (firstFit_law fuel currentRight rest length spaceStart
+                          (available.map Int.toNat) hcurrentRightValid
+                          hrestSuffixNodup.of_append_left hlength).1.valid
+                      rw [hcore] at hcoreValid
+                      have hnext := spacesInduction fullAllocations
+                        coreAllocations hfullValid hcoreValid
+                        hnextEquivalent
+                        (hfullEquivalent.trans hcurrentLeft)
+                        (hcoreEquivalent.trans hcurrentRight) hnextSafety
+                        (by
+                          intro next hnext candidate hallows
+                          exact hremainingWithin next (by simp [hnext])
+                            candidate hallows)
+                      simp only [trySpaces]
+                      change ((if ok = true then _ else _) :
+                          Option ℕ × CircuitAllocations).1 =
+                        ((if ok = true then _ else _) :
+                          Option ℕ × CircuitAllocations).1
+                      simp only [if_pos hok]
+                      rw [havailable, hfull, hcore]
+                      exact hnext
+                · have hnextSafety : ∀ next ∈ more, ∀ candidate,
+                      Allocations.SpaceAllows next candidate length →
+                        (currentLeft.getD head #[]).Fits candidate length := by
+                    intro next hnext candidate hallows
+                    exact hremainingSafety next (by simp [hnext]) candidate hallows
+                  have hnext := spacesInduction currentLeft currentRight
+                    hcurrentLeftValid hcurrentRightValid hcurrentEquivalent
+                    hcurrentLeft hcurrentRight hnextSafety
+                    (by
+                      intro next hnext candidate hallows
+                      exact hremainingWithin next (by simp [hnext])
+                        candidate hallows)
+                  simp only [trySpaces]
+                  change ((if ok = true then _ else _) :
+                      Option ℕ × CircuitAllocations).1 =
+                    ((if ok = true then _ else _) :
+                      Option ℕ × CircuitAllocations).1
+                  simpa only [if_neg hok] using hnext
+          have hresult := compareSpaces spaces leftInitialized rightInitialized
+            hleftInitializedValid hrightInitializedValid hinitializedEquivalent
+            (CircuitAllocations.Equivalent.refl leftInitialized)
+            (CircuitAllocations.Equivalent.refl rightInitialized) hspaceSafety
+            hspaceWithin
+          simp only [List.cons_append, firstFit]
+          rw [← hspaces]
+          simpa only [leftInitialized, rightInitialized, spaces] using hresult
+
 
 private def FirstFitCongruent
     (fuel : ℕ) (allocations : CircuitAllocations)
