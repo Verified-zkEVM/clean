@@ -80,7 +80,7 @@ elab "unfold_formal_circuit_consts" : tactic => do
       (some noUnfold) (some unfoldTypes)
     for name in names do
       try
-        evalTactic (← `(tactic| unfold $(mkIdent name)))
+        replaceMainGoal [← Meta.unfoldTarget (← getMainGoal) name]
       catch _ =>
         pure ()
 
@@ -97,7 +97,7 @@ def unfoldPlainCircuitConsts : TacticM Unit := do
       let some ci := (← getEnv).find? name | continue
       unless ci.type.getForallBody.getAppFn.isConstOf `Circuit do continue
       try
-        evalTactic (← `(tactic| unfold $(mkIdent name)))
+        replaceMainGoal [← Meta.unfoldTarget (← getMainGoal) name]
       catch _ =>
         pure ()
 
