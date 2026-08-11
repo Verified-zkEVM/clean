@@ -13410,13 +13410,19 @@ theorem ColumnAllocationsDominate.fits
   intro interval hinterval
   exact hfits interval (hdominate interval hinterval)
 
-/-- A fixed physical anchor column participates in every region that uses each
+/-- A fixed physical anchor column participates whenever one summary uses a
 selector. -/
-def SelectorAnchoredBy (summaries : List RegionShapeSummary)
-    (anchor : ℕ → RegionColumn) : Prop :=
-  ∀ summary ∈ summaries, ∀ selector,
+def SummarySelectorsAnchoredBy
+    (summary : RegionShapeSummary) (anchor : ℕ → RegionColumn) : Prop :=
+  ∀ selector,
     RegionColumn.selector selector ∈ summary.columns →
       anchor selector ∈ physicalColumns summary.columns
+
+/-- Every summary in a reduced synthesis footprint satisfies the selector-anchor
+law. -/
+def SelectorAnchoredBy (summaries : List RegionShapeSummary)
+    (anchor : ℕ → RegionColumn) : Prop :=
+  summaries.Forall (fun summary => SummarySelectorsAnchoredBy summary anchor)
 
 /-- Current selector allocations are covered by the corresponding physical
 anchor allocation. -/
@@ -13721,11 +13727,10 @@ theorem slotShapeSummariesFrom_eq_withoutSelectors
   | nil => exact ⟨rfl, hphysical, hselectors⟩
   | cons summary rest inductionHypothesis =>
       rw [List.forall_cons] at hwellFormed
+      rw [SelectorAnchoredBy, List.forall_cons] at hanchors
       have hhead := placeSummary_withoutSelectors_law summary left right
         hvalidLeft hvalidRight hwellFormed.1 hphysical hselectors
-        (by
-          intro selector hselector
-          exact hanchors summary (by simp) selector hselector)
+        hanchors.1
       let fullHead := placeSummary summary left
       let physicalHead := placeSummary summary.withoutSelectors right
       have hfullValid := placeSummary_valid summary left hvalidLeft
@@ -13734,12 +13739,9 @@ theorem slotShapeSummariesFrom_eq_withoutSelectors
         RegionShapeSummary.withoutSelectors_wellFormed hwellFormed.1
       have hphysicalValid := placeSummary_valid summary.withoutSelectors right
         hvalidRight hphysicalWellFormed
-      have htailAnchors : SelectorAnchoredBy rest anchor := by
-        intro item hitem selector hselector
-        exact hanchors item (by simp [hitem]) selector hselector
       have htail := inductionHypothesis fullHead.2 physicalHead.2
         hwellFormed.2 hfullValid hphysicalValid hhead.2.1 hhead.2.2
-        htailAnchors
+        hanchors.2
       simp only [slotShapeSummariesFrom, List.map_cons]
       rw [hhead.1, htail.1]
       exact ⟨rfl, htail.2.1, htail.2.2⟩
