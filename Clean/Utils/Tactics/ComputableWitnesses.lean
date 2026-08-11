@@ -132,6 +132,55 @@ def simpLocalLength (e : Expr) : MetaM Simp.Result := do
     (simpTheorems := #[← ext.getTheorems]) (← getSimpCongrTheorems)
   return (← Meta.simp e ctx).1
 
+/-! ### Meta simp
+
+Every simp step of the tactic goes through `Lean.Meta.simpGoal`/`simpAll` with contexts
+built once per invocation (`CwSimp.build` below). Quoted `simp` syntax resolves lemma
+names at the use site, where an unresolvable name silently disables the entire call;
+the meta path fails loudly at build time and skips re-elaborating the lemma lists on
+every leaf. With the default `failIfUnchanged`, the meta calls keep quoted simp's
+fail-on-no-progress behavior, so `try`/`attempt` wrappers retain their meaning. -/
+
+/-- A registered simp attribute's theorem set, failing loudly if the set is unknown. -/
+def getAttrTheorems (attr : Name) : CoreM SimpTheorems := do
+  let some ext ← getSimpExtension? attr
+    | throwError "computable_witnesses: unknown simp set '{attr}'"
+  ext.getTheorems
+
+/-- A registered simp attribute's simproc set, failing loudly if the set is unknown. -/
+def getAttrSimprocs (attr : Name) : CoreM Simprocs := do
+  let some ext ← Simp.getSimprocExtension? attr
+    | throwError "computable_witnesses: unknown simproc set '{attr}'"
+  ext.getSimprocs
+
+/-- A `SimpTheorems` from global lemma names (compile-time-checked ``name``s). -/
+def theoremsOf (names : Array Name) : MetaM SimpTheorems :=
+  names.foldlM (init := {}) fun thms n => thms.addConst n
+
+/-- The meta form of `simp only [...]` on the main goal (`hyps := true` for
+`... at *`, which like the quoted form simps the non-dependent prop hypotheses). -/
+def metaSimp (ctx : Simp.Context) (procs : SimprocsArray := #[]) (hyps := false) :
+    TacticM Unit := withMainContext do
+  let g ← getMainGoal
+  let fvarIds ← if hyps then g.getNondepPropHyps else pure #[]
+  let (result?, _) ← Meta.simpGoal g ctx procs (fvarIdsToSimp := fvarIds)
+  match result? with
+  | none => replaceMainGoal []
+  | some (_, g') => replaceMainGoal [g']
+
+/-- The meta form of `simp_all only [...]` on the main goal. -/
+def metaSimpAll (ctx : Simp.Context) (procs : SimprocsArray := #[]) : TacticM Unit :=
+  withMainContext do
+    let (result?, _) ← Meta.simpAll (← getMainGoal) ctx procs
+    match result? with
+    | none => replaceMainGoal []
+    | some g => replaceMainGoal [g]
+
+/-- `circuit_norm`-only context and simprocs (the extension lookups are cached). -/
+def cnSimp : TacticM (Simp.Context × SimprocsArray) := do
+  return (← Simp.mkContext {} (simpTheorems := #[← getAttrTheorems `circuit_norm])
+    (← getSimpCongrTheorems), #[← getAttrSimprocs `circuit_norm])
+
 /-- Evaluate a closed ℕ-expression to a literal by folding `+`/`*` and whnf-reducing
 leaves (the shape `elaborate_circuit` leaves `localLength` metadata in: arithmetic over
 explicit-structure projections, whose whnf is a cheap literal-field lookup). Refuses to
@@ -423,12 +472,18 @@ elab "chain_output_facts" : tactic => withMainContext do
               pure (some (← mkForallFVars vs eqTy, ← mkLambdaFVars vs prf))
         else pure none
       let some (factTy, factPrf) := factData? | return
-      liftMetaTactic fun g => do
+      let factFVar ← withMainContext do
+        let g ← getMainGoal
         let g ← g.assert `o_meta factTy factPrf
-        let (_, g) ← g.intro1P
-        return [g]
+        let (fvarId, g) ← g.intro1P
+        replaceMainGoal [g]
+        pure fvarId
       -- goal only: `at *` would rewrite the fact with itself into `True`
-      try evalTactic (← `(tactic| simp only [$(mkIdent `o_meta):term])) catch _ => pure ()
+      try
+        withMainContext do
+          let thms ← ({} : SimpTheorems).add (.fvar factFVar) #[] (.fvar factFVar)
+          metaSimp (← Simp.mkContext {} (simpTheorems := #[thms]) (← getSimpCongrTheorems))
+      catch _ => pure ()
     try emit catch _ => pure ()
   withMainContext do
   let tgt ← instantiateMVars (← getMainTarget)
@@ -467,9 +522,12 @@ elab "chain_output_facts" : tactic => withMainContext do
                 exact $(mkIdent `ProverEnvironment.agreesBelow_of_le) $(mkIdent hAName)
                   (by simp only [reduceLocalLength]; omega)))
             else
-              evalTactic (← `(tactic| first
-                | assumption
-                | ((try simp only [circuit_norm]); grind)))
+              let closed ← try evalTactic (← `(tactic| assumption)); pure true
+                catch _ => pure false
+              unless closed do
+                let (cnCtx, cnProcs) ← cnSimp
+                try metaSimp cnCtx cnProcs catch _ => pure ()
+                evalTactic (← `(tactic| grind))
       let proof ← instantiateMVars (mkAppN lem ms)
       if proof.hasExprMVar then throwError "open premises"
       -- state the fact with freshly-synthesized (canonical) eval instances: the
@@ -571,17 +629,133 @@ def destructureProvableStructVars : TacticM Unit := do
       let subgoals ← goal.cases fvarId
       return subgoals.map (·.mvarId) |>.toList
 
+/-- Vector route, structural `simp_all` lemmas. -/
+def vecStructuralLemmas : Array Name := #[
+  ``eval_vector, ``Vector.map_mk, ``List.map_toArray, ``List.map_cons, ``List.map_nil,
+  ``Vector.mk.injEq, ``Array.mk.injEq, ``List.cons.injEq, ``and_true,
+  ``Vector.map_ofFn, ``Vector.ext_iff, ``Vector.getElem_ofFn, ``Function.comp_def,
+  ``Vector.getElem_map, ``Vector.getElem_append, ``Vector.getElem_mapFinRange,
+  ``Vector.getElem_mapIdx, ``Vector.getElem_set, ``Vector.getElem_mapRange]
+
+/-- Vector route, goal-only close-hint step lemmas. -/
+def closeHintLemmas : Array Name := #[
+  ``eval_vector, ``Vector.ext_iff, ``Vector.getElem_set, ``Vector.getElem_ofFn,
+  ``Vector.getElem_map, ``Vector.map_ofFn]
+
+/-- Vector route, per-branch (post-`split_ifs`) lemmas. -/
+def branchLemmas : Array Name := #[
+  ``ProvableType.eval_varFromOffset, ``eval_vector, ``Vector.mapRange_succ,
+  ``Vector.mapRange_zero, ``Vector.mk.injEq, ``Array.mk.injEq, ``List.cons.injEq,
+  ``and_true, ``Function.comp_apply]
+
+/-- `Vector.ext` fallback route's elementwise lemmas. -/
+def extElementLemmas : Array Name := #[
+  ``getElem_eval_vector, ``Vector.getElem_map, ``Vector.getElem_append,
+  ``Vector.getElem_mapFinRange, ``Vector.getElem_ofFn, ``Vector.getElem_mapIdx]
+
+/-- Simp contexts and simproc arrays for one `computable_witnesses` invocation, built
+once by `CwSimp.build` — hints are resolved there, loudly. -/
+structure CwSimp where
+  /-- Normalization: attribute sets + hints, with the in-scope `main` self-supplied. -/
+  normCtx : Simp.Context
+  /-- The two attribute sets' simprocs. -/
+  normProcs : SimprocsArray
+  /-- Attribute sets without hints: the leaf `at *` pass and the base-route
+  `simp_all only` fallback. -/
+  baseCtx : Simp.Context
+  /-- `normProcs` + the metadata dsimprocs (leaf `at *`, offset-premise discharge). -/
+  leafProcs : SimprocsArray
+  /-- Vector route, structural `simp_all`. -/
+  vecCtx : Simp.Context
+  /-- `circuit_norm` procs + `retypeVectorAliasEq` (vector-route steps). -/
+  vecProcs : SimprocsArray
+  /-- Vector route, goal-only close-hint step (norm + `closing` hints participate). -/
+  closeHintCtx : Simp.Context
+  /-- Vector route, per-branch simp after `split_ifs`. -/
+  branchCtx : Simp.Context
+  /-- `circuit_norm` simprocs alone. -/
+  cnProcs : SimprocsArray
+  /-- `Vector.ext` fallback route's elementwise lemmas. -/
+  extCtx : Simp.Context
+  /-- Final fallback: default simp set on top of the attribute sets. -/
+  fullCtx : Simp.Context
+  fullProcs : SimprocsArray
+
+/-- Resolve one hint term: a simp-set name contributes its whole set; a global theorem
+is added as a rewrite, a global definition as an unfold (the same paths quoted
+`simp [foo]` takes); anything else — local hypotheses included — elaborates as a term.
+Unknown names fail here, loudly, instead of silently disabling a downstream call. -/
+def addHint (thms : SimpTheorems) (sets : Array SimpTheorems) (t : TSyntax `term) :
+    TacticM (SimpTheorems × Array SimpTheorems) := do
+  if let `($id:ident) := t then
+    if let some ext ← getSimpExtension? id.getId then
+      return (thms, sets.push (← ext.getTheorems))
+    let declName? ← try pure (some (← resolveGlobalConstNoOverload id))
+      catch _ => pure none
+    if let some declName := declName? then
+      if ← isProp (← getConstInfo declName).type then
+        return (← thms.addConst declName, sets)
+      else
+        return (← thms.addDeclToUnfold declName, sets)
+  let e ← Tactic.elabTerm t none
+  if let .fvar fvarId := e then
+    return (← thms.add (.fvar fvarId) #[] e, sets)
+  return (← thms.add (.other (← mkFreshUserName `cw_hint)) #[] e, sets)
+
+/-- Build all simp machinery for one invocation. The in-scope `main` is self-supplied
+as an unfold (all resolutions — a constant absent from the goal contributes no
+rewrites). `closing` hints participate only in the close routes' goal-only steps, never
+in `simp_all`/`at *`/whole-circuit normalization, so recursive eval decompositions
+(e.g. `eval_vector_set`) stay affordable. -/
+def CwSimp.build (extraTerms closeTerms : Array (TSyntax `term)) : TacticM CwSimp := do
+  let cn ← getAttrTheorems `circuit_norm
+  let cwn ← getAttrTheorems `computable_witnesses_norm
+  let cnProcs : SimprocsArray := #[← getAttrSimprocs `circuit_norm]
+  let cwnProcs ← getAttrSimprocs `computable_witnesses_norm
+  let mut normHints : SimpTheorems := {}
+  for mainName in (← try resolveGlobalConst (mkIdent `main) catch _ => pure []) do
+    normHints ← normHints.addDeclToUnfold mainName
+  let mut hintSets : Array SimpTheorems := #[]
+  for t in extraTerms do
+    (normHints, hintSets) ← addHint normHints hintSets t
+  let mut closeHints := normHints
+  let mut closeSets := hintSets
+  for t in closeTerms do
+    (closeHints, closeSets) ← addHint closeHints closeSets t
+  let congr ← getSimpCongrTheorems
+  let normProcs := cnProcs.push cwnProcs
+  let mut leafProcs := normProcs
+  for p in [``reduceLocalLength, ``reduceOutputMetadata, ``retypeVectorAliasEq] do
+    leafProcs ← SimprocsArray.add leafProcs p (post := true)
+  let vecProcs ← SimprocsArray.add cnProcs ``retypeVectorAliasEq (post := true)
+  return {
+    normCtx := ← Simp.mkContext {}
+      (simpTheorems := #[cn, cwn] ++ hintSets ++ #[normHints]) congr
+    normProcs
+    baseCtx := ← Simp.mkContext {} (simpTheorems := #[cn, cwn]) congr
+    leafProcs
+    vecCtx := ← Simp.mkContext {}
+      (simpTheorems := #[cn, ← theoremsOf vecStructuralLemmas]) congr
+    vecProcs
+    closeHintCtx := ← Simp.mkContext {}
+      (simpTheorems := #[cn, ← theoremsOf closeHintLemmas] ++ closeSets ++ #[closeHints])
+      congr
+    branchCtx := ← Simp.mkContext {}
+      (simpTheorems := #[cn, ← theoremsOf branchLemmas] ++ closeSets ++ #[closeHints])
+      congr
+    cnProcs
+    extCtx := ← Simp.mkContext {} (simpTheorems := #[← theoremsOf extElementLemmas]) congr
+    fullCtx := ← Simp.mkContext {}
+      (simpTheorems := #[← getSimpTheorems, cn, cwn]) congr
+    fullProcs := #[← Simp.getSimprocs] ++ normProcs
+  }
+
 /-- The per-leaf dispatch/close stage of `computable_witnesses`, shared by the main
 entry (per split leaf) and the standalone `computable_witnesses_close`. -/
-def runLeafDispatch (lemmasArray closeArray : Array (TSyntax `Lean.Parser.Tactic.simpLemma)) :
-    TacticM Unit := do
+def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
   let simpPass : TacticM Unit := do
     unless (← getGoals).isEmpty do
-      try
-        evalTactic (← `(tactic| simp only [circuit_norm, computable_witnesses_norm,
-          $lemmasArray,*]))
-      catch _ =>
-        pure ()
+      try metaSimp cw.normCtx cw.normProcs catch _ => pure ()
   -- the window/elementwise route applies to eval-congruence goals: both sides are
   -- eval applications of the same variable term under the two environments (output
   -- windows, child-output metadata, vector states) — recognized by shape, whether
@@ -708,21 +882,12 @@ def runLeafDispatch (lemmasArray closeArray : Array (TSyntax `Lean.Parser.Tactic
       catch _ => st.restore; pure false
     if ← isEvalCongrEq then
       let vecMain : TacticM Unit := do
-        evalTactic (← `(tactic|
-          simp_all only [circuit_norm, eval_vector, Vector.map_mk, List.map_toArray,
-             List.map_cons, List.map_nil, retypeVectorAliasEq,
-             Vector.mk.injEq, Array.mk.injEq, List.cons.injEq, and_true,
-             Vector.map_ofFn, Vector.ext_iff, Vector.getElem_ofFn, Function.comp_def,
-             Vector.getElem_map, Vector.getElem_append,
-             Vector.getElem_mapFinRange, Vector.getElem_mapIdx,
-             Vector.getElem_set, Vector.getElem_mapRange]))
+        metaSimpAll cw.vecCtx cw.vecProcs
         -- user hints goal-only: in the `simp_all` above they would rewrite every
         -- chain-fact hypothesis (all legs' window facts) at every leaf — a
         -- heartbeat blowup for recursive eval decompositions (eval_vector_set)
-        evalTactic (← `(tactic|
-          (try simp only [circuit_norm, eval_vector, Vector.ext_iff, Vector.getElem_set,
-             Vector.getElem_ofFn, Vector.getElem_map, Vector.map_ofFn, retypeVectorAliasEq,
-             $closeArray,*])))
+        unless (← getGoals).isEmpty do
+          try metaSimp cw.closeHintCtx cw.vecProcs catch _ => pure ()
         let gs ← getGoals
         for g in gs do
           setGoals [g]
@@ -730,11 +895,7 @@ def runLeafDispatch (lemmasArray closeArray : Array (TSyntax `Lean.Parser.Tactic
           let gs2 ← getGoals
           for g2 in gs2 do
             setGoals [g2]
-            evalTactic (← `(tactic|
-              all_goals (try simp only [ProvableType.eval_varFromOffset, circuit_norm,
-                eval_vector, Vector.mapRange_succ, Vector.mapRange_zero, Vector.mk.injEq,
-                Array.mk.injEq, List.cons.injEq, and_true, Function.comp_apply,
-                $closeArray,*])))
+            try metaSimp cw.branchCtx cw.cnProcs catch _ => pure ()
             -- split conjunctions before unifying environments: window conjuncts then
             -- close by rfl inside envUnify, leaving grind only the input-derived parts
             evalTactic (← `(tactic| all_goals (try and_intros)))
@@ -742,11 +903,12 @@ def runLeafDispatch (lemmasArray closeArray : Array (TSyntax `Lean.Parser.Tactic
             evalTactic (← `(tactic| all_goals grind))
         setGoals []
       if ← attempt vecMain then return
-      if ← attempt (evalTactic (← `(tactic|
-          (refine Vector.ext fun j hj => ?_
-           simp only [getElem_eval_vector, Vector.getElem_map, Vector.getElem_append,
-             Vector.getElem_mapFinRange, Vector.getElem_ofFn, Vector.getElem_mapIdx]
-           (try split_ifs) <;> grind [Vector.getElem_map, getElem_eval_vector])))) then return
+      if ← attempt (do
+          evalTactic (← `(tactic| refine Vector.ext fun j hj => ?_))
+          metaSimp cw.extCtx
+          evalTactic (← `(tactic|
+            (try split_ifs) <;> grind [Vector.getElem_map, getElem_eval_vector]))) then
+        return
       evalTactic (← `(tactic| grind))
     else
       -- grind first: on already-dispatched leaves it is the cheapest closer by an
@@ -756,9 +918,12 @@ def runLeafDispatch (lemmasArray closeArray : Array (TSyntax `Lean.Parser.Tactic
       envUnify
       if (← getGoals).isEmpty then return
       if ← attempt (evalTactic (← `(tactic| grind))) then return
-      if ← attempt (evalTactic (← `(tactic|
-          (simp_all only [circuit_norm, computable_witnesses_norm]; done)))) then return
-      evalTactic (← `(tactic| (simp_all [circuit_norm, computable_witnesses_norm]; done)))
+      if ← attempt (do
+          metaSimpAll cw.baseCtx cw.normProcs
+          unless (← getGoals).isEmpty do throwError "open goals") then return
+      metaSimpAll cw.fullCtx cw.fullProcs
+      unless (← getGoals).isEmpty do
+        throwError "computable_witnesses: could not close goal"
   let leafDispatch : TacticM Unit := withMainContext do
     -- inaccessible hyp names (from intro1P) break the chainer's delab roundtrip
     try evalTactic (← `(tactic| expose_names)) catch _ => pure ()
@@ -775,11 +940,7 @@ def runLeafDispatch (lemmasArray closeArray : Array (TSyntax `Lean.Parser.Tactic
     -- hints (e.g. recursive eval decompositions like `eval_vector_set`) rewriting
     -- every chain fact in every hypothesis is a heartbeat blowup; hints reach
     -- hypotheses via the close routes' `simp_all` instead
-    try
-      evalTactic (← `(tactic| simp only [circuit_norm, computable_witnesses_norm,
-        reduceLocalLength, reduceOutputMetadata,
-        retypeVectorAliasEq] at *))
-    catch _ => pure ()
+    try metaSimp cw.baseCtx cw.leafProcs (hyps := true) catch _ => pure ()
     if (← getGoals).isEmpty then return
     evalTactic (← `(tactic| assert_local_lengths))
     withMainContext do
@@ -794,14 +955,19 @@ def runLeafDispatch (lemmasArray closeArray : Array (TSyntax `Lean.Parser.Tactic
         -- `WithHint`'s rule takes the input variable explicitly (extra underscore).
         let tryVariant (nm : Name) : TacticM Bool := do
           let st ← Tactic.saveState
-          let discharge ← `(term| (by
-            (try simp only [circuit_norm, computable_witnesses_norm,
-              reduceLocalLength, $lemmasArray,*]) <;> omega))
           try
             if nm == `GeneralFormalCircuit.WithHint.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq then
-              evalTactic (← `(tactic| refine $(mkIdent nm) _ _ $discharge fun h_agrees => ?_))
+              evalTactic (← `(tactic| refine $(mkIdent nm) _ _ ?_ fun h_agrees => ?_))
             else
-              evalTactic (← `(tactic| refine $(mkIdent nm) _ $discharge fun h_agrees => ?_))
+              evalTactic (← `(tactic| refine $(mkIdent nm) _ ?_ fun h_agrees => ?_))
+            -- the offset premise (first goal): normalize the length spellings, then
+            -- close arithmetically over the asserted lengths
+            let gs ← getGoals
+            let some offsetGoal := gs.head? | throwError "no offset premise goal"
+            setGoals [offsetGoal]
+            try metaSimp cw.normCtx cw.leafProcs catch _ => pure ()
+            unless (← getGoals).isEmpty do evalTactic (← `(tactic| omega))
+            setGoals gs.tail
             pure true
           catch _ =>
             st.restore
@@ -831,28 +997,8 @@ def runLeafDispatch (lemmasArray closeArray : Array (TSyntax `Lean.Parser.Tactic
           evalCloseRun
   leafDispatch
 
-/-- Elaborate the two user hint lists into simp-lemma arrays, self-supplying the current
-`main` (all resolutions — a constant absent from the goal contributes no rewrites).
-Returns `(lemmasArray, closeArray)`
-where `closeArray` additionally carries the `closing` hints — those participate only in
-the close routes' goal-only simp steps, never in `simp_all`/`at *`/whole-circuit
-normalization, so recursive eval decompositions (e.g. `eval_vector_set`) stay
-affordable. -/
-def elabHintArrays (extraTerms closeTerms : Array (TSyntax `term)) :
-    TacticM (Array (TSyntax `Lean.Parser.Tactic.simpLemma) ×
-      Array (TSyntax `Lean.Parser.Tactic.simpLemma)) := do
-  let mut lemmasArray ← extraTerms.mapM fun term =>
-    `(Lean.Parser.Tactic.simpLemma| $term:term)
-  let closeOnlyArray ← closeTerms.mapM fun term =>
-    `(Lean.Parser.Tactic.simpLemma| $term:term)
-  let mainNames ← try resolveGlobalConst (mkIdent `main) catch _ => pure []
-  for mainName in mainNames do
-    lemmasArray := lemmasArray.push
-      (← `(Lean.Parser.Tactic.simpLemma| $(mkIdent mainName):term))
-  return (lemmasArray, lemmasArray ++ closeOnlyArray)
-
 def runComputableWitnesses (extraTerms closeTerms : Array (TSyntax `term)) : TacticM Unit := do
-  let (lemmasArray, closeArray) ← elabHintArrays extraTerms closeTerms
+  let cw ← CwSimp.build extraTerms closeTerms
   -- expose the offset binder before the first simp: rewriting under it makes the whole
   -- pass pay simp's congruence-through-binder overhead (~12% measured). Introducing
   -- `input` as well would save more but drifts the operations spelling away from what
@@ -867,11 +1013,7 @@ def runComputableWitnesses (extraTerms closeTerms : Array (TSyntax `term)) : Tac
       evalTactic (← `(tactic| intro n))
   let simpPass : TacticM Unit := do
     unless (← getGoals).isEmpty do
-      try
-        evalTactic (← `(tactic| simp only [circuit_norm, computable_witnesses_norm,
-          $lemmasArray,*]))
-      catch _ =>
-        pure ()
+      try metaSimp cw.normCtx cw.normProcs catch _ => pure ()
   simpPass
   unless (← getGoals).isEmpty do
     -- One boundary rule, mirroring the library's own: plain-`Circuit`-typed constants
@@ -906,7 +1048,7 @@ def runComputableWitnesses (extraTerms closeTerms : Array (TSyntax `term)) : Tac
     let goals ← getGoals
     for g in goals do
       setGoals [g]
-      runLeafDispatch lemmasArray closeArray
+      runLeafDispatch cw
     setGoals []
 
 /--
@@ -944,9 +1086,9 @@ syntax "computable_witnesses_close" ("[" term,* "]")? ("closing " "[" term,* "]"
 
 elab_rules : tactic
   | `(tactic| computable_witnesses_close $[[$terms:term,*]]? $[closing [$closeTerms:term,*]]?) => do
-      let (lemmasArray, closeArray) ← elabHintArrays
+      let cw ← CwSimp.build
         (terms.map (fun terms => terms.getElems) |>.getD #[])
         (closeTerms.map (fun terms => terms.getElems) |>.getD #[])
-      runLeafDispatch lemmasArray closeArray
+      runLeafDispatch cw
 
 end ComputableWitnesses
