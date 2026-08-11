@@ -363,64 +363,22 @@ theorem absoluteRow_lt_usedRows_of_enableLookup_mem
   exact habsolute'.trans_le
     ((Nat.le_max_left _ _).trans (Nat.le_max_left _ _))
 
-/-- The number of domain rows required by synthesis, blinding, and Halo 2's
-mandatory terminal rows. -/
-def domainRowRequirement (cs : ConstraintSystem F) (usedRows : ℕ) : ℕ :=
-  max (usedRows + cs.blindingFactors + 1) cs.minimumRows
-
-/-- Bounds which identify `k` as the least power-of-two exponent fitting a row
-requirement. -/
-structure DomainExponentBounds (requiredRows k : ℕ) : Prop where
-  requiredRows_le_two_pow : requiredRows ≤ 2 ^ k
-  k_eq_zero_or_two_pow_pred_lt_requiredRows :
-    k = 0 ∨ 2 ^ (k - 1) < requiredRows
-
-theorem DomainExponentBounds.clog_eq
-    {requiredRows k : ℕ} (bounds : DomainExponentBounds requiredRows k) :
-    Nat.clog 2 requiredRows = k := by
-  have hupper : Nat.clog 2 requiredRows ≤ k :=
-    (Nat.clog_le_iff_le_pow (by omega)).mpr
-      bounds.requiredRows_le_two_pow
-  rcases bounds.k_eq_zero_or_two_pow_pred_lt_requiredRows with
-    hk | hlower
-  · omega
-  · have hlower' : k - 1 < Nat.clog 2 requiredRows :=
-      (Nat.lt_clog_iff_pow_lt (by omega)).mpr hlower
-    omega
-
 /-- The minimal domain exponent fitting an already-derived usable-row requirement. -/
-def minimalKForRows (cs : ConstraintSystem F) (usedRows : ℕ) : ℕ :=
-  Nat.clog 2 (domainRowRequirement cs usedRows)
-
-theorem DomainExponentBounds.minimalKForRows_eq
-    (cs : ConstraintSystem F) (usedRows k : ℕ)
-    (bounds : DomainExponentBounds (domainRowRequirement cs usedRows) k) :
-    minimalKForRows cs usedRows = k := by
-  exact bounds.clog_eq
+def minimalKForRows (cs : ConstraintSystem F) (requiredRows : ℕ) : ℕ :=
+  let blinding := cs.blindingFactors
+  -- `blinding + 3 = cs.minimumRows`, without recomputing the blinding count
+  let need := max (requiredRows + blinding + 1) (blinding + 3)
+  Nat.clog 2 need
 
 /-- The derived domain fits the requested usable rows and minimum-row requirement. -/
 theorem minimalKForRows_fits
     (cs : ConstraintSystem F) (requiredRows : ℕ) :
     max (requiredRows + cs.blindingFactors + 1) cs.minimumRows ≤
       2 ^ minimalKForRows cs requiredRows := by
-  simpa [minimalKForRows, domainRowRequirement] using
+  simpa [minimalKForRows, ConstraintSystem.minimumRows] using
     Nat.le_pow_clog (by omega : 1 < 2)
-      (max (requiredRows + cs.blindingFactors + 1) cs.minimumRows)
-
-/-- The compiler-selected exponent always carries its canonical identifying bounds. -/
-theorem minimalKForRows_bounds
-    (cs : ConstraintSystem F) (usedRows : ℕ) :
-    DomainExponentBounds
-      (domainRowRequirement cs usedRows)
-      (minimalKForRows cs usedRows) := by
-  constructor
-  · exact minimalKForRows_fits cs usedRows
-  · right
-    have hrequirement : 1 < domainRowRequirement cs usedRows := by
-      unfold domainRowRequirement ConstraintSystem.minimumRows
-      omega
-    simpa only [minimalKForRows] using
-      Nat.pow_pred_clog_lt_self (by omega : 1 < 2) hrequirement
+      (max (requiredRows + cs.blindingFactors + 1)
+        (cs.blindingFactors + 3))
 
 /--
 The minimal domain exponent for which the circuit's synthesis fits Halo 2's checks.

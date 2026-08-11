@@ -362,13 +362,6 @@ def usedRows
     (layout : PublicInputLayout PublicInput (publicInputColumns circuit)) : ℕ :=
   max (Halo2.usedRows (operations circuit)) layout.usedRows
 
-/-- The complete row requirement supplied to the power-of-two domain selector. -/
-def domainRowRequirement
-    (circuit : FormalCircuit F Unit Config unit unit)
-    (layout : PublicInputLayout PublicInput (publicInputColumns circuit)) : ℕ :=
-  Halo2.domainRowRequirement (constraintSystem circuit)
-    (usedRows circuit layout)
-
 def domainExponent
     (circuit : FormalCircuit F Unit Config unit unit)
     (layout : PublicInputLayout PublicInput (publicInputColumns circuit)) : ℕ :=
@@ -533,14 +526,6 @@ structure TopLevelCircuit
   publicInputLayout :
     PublicInputLayout PublicInput
       (TopLevelCompilation.publicInputColumns formalCircuit)
-  /-- The circuit's authoritative evaluation-domain exponent. -/
-  domainExponent : ℕ
-  /-- The reduced exponent is exactly the least power-of-two domain fitting the
-  compiler's complete row requirement. -/
-  domainExponentBounds :
-    DomainExponentBounds
-      (TopLevelCompilation.domainRowRequirement formalCircuit publicInputLayout)
-      domainExponent
   /-- The part of the extracted witness not contained in the public input. -/
   PrivateWitness : Type
   /-- Extract the private witness from a top-level execution, which starts at region zero. -/
@@ -835,24 +820,9 @@ theorem publicInputLayout_cells_snd_lt_usedRows
   exact (self.publicInputLayout.cells_snd_lt_usedRows i).trans_le
     (Nat.le_max_right _ _)
 
-/-- The reduced top-level exponent agrees with the compiler's minimal fitting
-domain. -/
-theorem domainExponent_eq_compilation
-    (self : TopLevelCircuit F Config PublicInput) :
-    self.domainExponent =
-      TopLevelCompilation.domainExponent
-        self.formalCircuit self.publicInputLayout := by
-  symm
-  exact self.domainExponentBounds.minimalKForRows_eq
-    self.constraintSystem self.usedRows self.domainExponent
-
-/-- The generic row bounds identify the circuit's exponent with `minimalKForRows`. -/
-theorem minimalKForRows_eq_domainExponent
-    (self : TopLevelCircuit F Config PublicInput) :
-    Halo2.minimalKForRows self.constraintSystem self.usedRows =
-      self.domainExponent := by
-  exact self.domainExponentBounds.minimalKForRows_eq
-    self.constraintSystem self.usedRows self.domainExponent
+/-- The smallest keygen domain exponent derived from this circuit. -/
+def domainExponent (self : TopLevelCircuit F Config PublicInput) : ℕ :=
+  TopLevelCompilation.domainExponent self.formalCircuit self.publicInputLayout
 
 /-- The size of the circuit's smallest fitting evaluation domain. -/
 def n (self : TopLevelCircuit F Config PublicInput) : ℕ :=
@@ -915,8 +885,8 @@ theorem usableRowsAt_domainExponent_le_n
 theorem usedRows_le_usableRowsAt_domainExponent
     (self : TopLevelCircuit F Config PublicInput) :
     self.usedRows ≤ self.usableRowsAt self.domainExponent := by
-  rw [self.domainExponent_eq_compilation]
-  simpa only [usedRows, usableRowsAt, blindingFactors, constraintSystem] using
+  simpa only [usedRows, usableRowsAt, domainExponent, blindingFactors,
+    constraintSystem] using
     TopLevelCompilation.usedRows_le_usableRowsAt_domainExponent
       self.formalCircuit self.publicInputLayout
 
@@ -926,7 +896,6 @@ theorem blindingFactors_add_three_le_domainSize
     self.blindingFactors + 3 ≤ self.n := by
   have hfit := Halo2.minimalKForRows_fits
     self.constraintSystem self.usedRows
-  rw [self.minimalKForRows_eq_domainExponent] at hfit
   have hminimum :
       self.constraintSystem.minimumRows ≤ 2 ^ self.domainExponent :=
     (Nat.le_max_right _ _).trans hfit
@@ -947,10 +916,12 @@ theorem blindingFactors_succ_lt_domainSize
     (self : TopLevelCircuit F Config PublicInput) :
     self.blindingFactors + 1 < self.n := by
   have hfit := (Nat.le_max_right _ _).trans
-    (Halo2.minimalKForRows_fits self.constraintSystem self.usedRows)
-  rw [self.minimalKForRows_eq_domainExponent] at hfit
+    (Halo2.minimalKForRows_fits
+      (TopLevelCompilation.constraintSystem self.formalCircuit)
+      (TopLevelCompilation.usedRows self.formalCircuit self.publicInputLayout))
   simp only [ConstraintSystem.minimumRows] at hfit
-  simp only [blindingFactors, n_eq_two_pow_domainExponent] at *
+  simp only [blindingFactors, n_eq_two_pow_domainExponent, domainExponent,
+    TopLevelCompilation.domainExponent, constraintSystem] at *
   omega
 
 /-- The canonical domain has strictly more rows than the blinding count. -/
@@ -1337,13 +1308,8 @@ theorem fixedRows_getD_length
     (column : ℕ)
     (hcolumn : column < self.fixedColumnCount) :
     (self.fixedRows.getD column []).length = self.n := by
-  have hlength := Layout.denseFixedColumns_getD_length
-    (2 ^ TopLevelCompilation.domainExponent
-      self.formalCircuit self.publicInputLayout)
-    self.fixedColumnCount self.fixedAssignments column hcolumn
-  rw [self.n_eq_two_pow_domainExponent,
-    self.domainExponent_eq_compilation]
-  exact hlength
+  apply Layout.denseFixedColumns_getD_length
+  exact hcolumn
 
 /--
 Read a compiled fixed column with Halo2's cyclic domain-row semantics.
@@ -1421,9 +1387,7 @@ def placedProverEnvironment
     (assignment : ProofAssignment F) :
     (self.environment assignment).usableRows =
       self.usableRowsAt self.domainExponent := by
-  simp only [environment, TopLevelCompilation.environment,
-    usableRowsAt, blindingFactors, constraintSystem]
-  rw [self.domainExponent_eq_compilation]
+  rfl
 
 @[simp] theorem placedEnvironment_place
     (self : TopLevelCircuit F Config PublicInput)
