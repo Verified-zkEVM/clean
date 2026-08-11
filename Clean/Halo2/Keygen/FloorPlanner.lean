@@ -2563,6 +2563,176 @@ private theorem OffsetScanExact.nodup
   rw [hexact]
   exact (List.nodup_range (n := block)).filter _
 
+omit [Inhabited T] in
+private theorem List.extract_advance
+    (items : List T) (start stop count : ℕ)
+    (hstart : start ≤ stop) :
+    items.extract (start + count) stop =
+      (items.extract start stop).drop count := by
+  have hstop : stop = start + (stop - start) := by omega
+  rw [hstop]
+  simp only [List.extract_eq_take_drop, List.drop_take,
+    List.drop_drop]
+  congr 1
+  omega
+
+private theorem OffsetScanExact.mem_take_iff
+    (block startIdx endIdx count : ℕ) (offsets : Array ℕ)
+    (keep : ℕ → Bool)
+    (hexact : OffsetScanExact block startIdx endIdx offsets keep)
+    (hend : endIdx ≤ offsets.size)
+    (hcount : count ≤ endIdx - startIdx) (offset : ℕ) :
+    offset ∈ ((List.range block).filter
+        (fun index => keep index = true)).take count ↔
+      ∃ index, index < count ∧
+        offset = offsets[startIdx + index]! := by
+  let active := (List.range block).filter
+    (fun index => keep index = true)
+  have hactiveEq :
+      active = offsets.toList.extract startIdx endIdx := by
+    exact hexact.symm
+  have hactiveLength : active.length = endIdx - startIdx := by
+    rw [hactiveEq]
+    simp [List.extract_eq_take_drop]
+    omega
+  constructor
+  · intro hmem
+    obtain ⟨index, hindex, hvalue⟩ := List.mem_iff_getElem.mp hmem
+    have hindexCount : index < count := by
+      rw [List.length_take, hactiveLength,
+        Nat.min_eq_left hcount] at hindex
+      exact hindex
+    have hindexRemaining : index < endIdx - startIdx :=
+      hindexCount.trans_le hcount
+    have hactiveValue :
+        active[index]'(by omega) = offsets[startIdx + index]! := by
+      have hvalue := offset_active_get! offsets startIdx endIdx index
+        hindexRemaining hend
+      simpa only [hactiveEq] using hvalue
+    refine ⟨index, hindexCount, ?_⟩
+    rw [← hvalue]
+    simpa only [List.getElem_take] using hactiveValue
+  · rintro ⟨index, hindexCount, rfl⟩
+    have hindexRemaining : index < endIdx - startIdx :=
+      hindexCount.trans_le hcount
+    have hactiveValue :
+        active[index]'(by omega) = offsets[startIdx + index]! := by
+      have hvalue := offset_active_get! offsets startIdx endIdx index
+        hindexRemaining hend
+      simpa only [hactiveEq] using hvalue
+    have hindexTake : index < (active.take count).length := by
+      simp [hactiveLength, Nat.min_eq_left hcount]
+      exact hindexCount
+    have hmem := List.getElem_mem (l := active.take count)
+      (n := index) hindexTake
+    simpa only [List.getElem_take, hactiveValue] using hmem
+
+omit [Inhabited T] in
+private theorem List.mem_drop_iff_of_nodup
+    (items : List T) (count : ℕ) (item : T)
+    (hnodup : items.Nodup) :
+    item ∈ items.drop count ↔
+      item ∈ items ∧ item ∉ items.take count := by
+  constructor
+  · intro hdrop
+    refine ⟨List.mem_of_mem_drop hdrop, ?_⟩
+    intro htake
+    exact (List.disjoint_take_drop hnodup (m := count)
+      (n := count) le_rfl) htake hdrop
+  · rintro ⟨hmem, hnotTake⟩
+    rw [← List.take_append_drop count items] at hmem
+    rcases List.mem_append.mp hmem with htake | hdrop
+    · exact (hnotTake htake).elim
+    · exact hdrop
+
+private theorem OffsetScanExact.consume
+    (block startIdx endIdx count : ℕ) (offsets : Array ℕ)
+    (before after : ℕ → Bool)
+    (hexact : OffsetScanExact block startIdx endIdx offsets before)
+    (hstart : startIdx ≤ endIdx) (hend : endIdx ≤ offsets.size)
+    (hcount : count ≤ endIdx - startIdx)
+    (hconsumed : ∀ index, index < count →
+      after offsets[startIdx + index]! = false)
+    (houtside : ∀ offset, offset < block →
+      (∀ index, index < count →
+        offset ≠ offsets[startIdx + index]!) →
+      after offset = before offset) :
+    OffsetScanExact block (startIdx + count) endIdx offsets after := by
+  let oldActive := (List.range block).filter
+    (fun index => before index = true)
+  let newActive := (List.range block).filter
+    (fun index => after index = true)
+  have holdNodup : oldActive.Nodup := by
+    exact (List.nodup_range (n := block)).filter _
+  have holdSorted : oldActive.SortedLT :=
+    ((List.sortedLT_range block).pairwise.filter _).sortedLT
+  have hnewSorted : newActive.SortedLT :=
+    ((List.sortedLT_range block).pairwise.filter _).sortedLT
+  have htailSorted : (oldActive.drop count).SortedLT :=
+    holdSorted.pairwise.drop.sortedLT
+  have htailEq : oldActive.drop count = newActive := by
+    apply htailSorted.eq_of_mem_iff hnewSorted
+    intro offset
+    rw [List.mem_drop_iff_of_nodup oldActive count offset holdNodup]
+    change
+      (offset ∈ (List.range block).filter
+          (fun index => before index = true) ∧
+        offset ∉ ((List.range block).filter
+          (fun index => before index = true)).take count) ↔
+      offset ∈ (List.range block).filter
+        (fun index => after index = true)
+    simp only [List.mem_filter, List.mem_range, decide_eq_true_eq]
+    constructor
+    · rintro ⟨⟨hoffset, hbefore⟩, hnotConsumed⟩
+      have hnotAddress : ∀ index, index < count →
+          offset ≠ offsets[startIdx + index]! := by
+        intro index hindex heq
+        apply hnotConsumed
+        rw [OffsetScanExact.mem_take_iff block startIdx endIdx count
+          offsets before hexact hend hcount offset]
+        exact ⟨index, hindex, heq⟩
+      exact ⟨hoffset, by rw [houtside offset hoffset hnotAddress, hbefore]⟩
+    · rintro ⟨hoffset, hafter⟩
+      have hnotAddress : ∀ index, index < count →
+          offset ≠ offsets[startIdx + index]! := by
+        intro index hindex heq
+        have := hconsumed index hindex
+        rw [← heq, hafter] at this
+        contradiction
+      have hnotConsumed :
+          offset ∉ ((List.range block).filter
+            (fun index => before index = true)).take count := by
+        rw [OffsetScanExact.mem_take_iff block startIdx endIdx count
+          offsets before hexact hend hcount offset]
+        rintro ⟨index, hindex, heq⟩
+        exact hnotAddress index hindex heq
+      refine ⟨⟨hoffset, ?_⟩, hnotConsumed⟩
+      rw [← houtside offset hoffset hnotAddress]
+      exact hafter
+  rw [OffsetScanExact, List.extract_advance offsets.toList
+    startIdx endIdx count hstart, hexact]
+  exact htailEq
+
+private def blockCycleOutput
+    (array : Array T) (l r : ℕ)
+    (offsetsL offsetsR : Array ℕ)
+    (startL startR count : ℕ) : Array T :=
+  let left := fun (index : ℕ) => l + offsetsL[index]!
+  let right := fun (index : ℕ) => r - offsetsR[index]! - 1
+  let tmp := array[left startL]!
+  let afterFirst := array.set! (left startL) array[right startR]!
+  let result : ℕ × ℕ × Array T := Id.run <|
+    forIn (List.range' 0 (count - 1))
+      (startL, startR, afterFirst) fun _ state =>
+        let nextStepLeft := state.1 + 1
+        let afterLeft := state.2.2.set! (right state.2.1)
+          state.2.2[left nextStepLeft]!
+        let nextStepRight := state.2.1 + 1
+        let afterRight := afterLeft.set! (left nextStepLeft)
+          afterLeft[right nextStepRight]!
+        pure (.yield (nextStepLeft, nextStepRight, afterRight))
+  result.2.2.set! (right result.2.1) tmp
+
 private theorem scanned_block_cycle_classifies
     (array : Array T) (pivot : T) (isLess : T → T → Bool)
     (l r blockL blockR : ℕ)
@@ -2579,25 +2749,14 @@ private theorem scanned_block_cycle_classifies
       (fun index => !isLess array[l + index]! pivot))
     (hexactR : OffsetScanExact blockR startR endR offsetsR
       (fun index => isLess array[r - 1 - index]! pivot)) :
-    let left := fun (index : ℕ) => l + offsetsL[index]!
-    let right := fun (index : ℕ) => r - offsetsR[index]! - 1
-    let tmp := array[left startL]!
-    let afterFirst := array.set! (left startL) array[right startR]!
-    let result : ℕ × ℕ × Array T := Id.run <|
-      forIn (List.range' 0 (count - 1))
-        (startL, startR, afterFirst) fun _ state =>
-          let nextStepLeft := state.1 + 1
-          let afterLeft := state.2.2.set! (right state.2.1)
-            state.2.2[left nextStepLeft]!
-          let nextStepRight := state.2.1 + 1
-          let afterRight := afterLeft.set! (left nextStepLeft)
-            afterLeft[right nextStepRight]!
-          pure (.yield (nextStepLeft, nextStepRight, afterRight))
-    let output := result.2.2.set! (right result.2.1) tmp
     (∀ index, index < count →
-      isLess output[left (startL + index)]! pivot = true) ∧
+      isLess (blockCycleOutput array l r offsetsL offsetsR
+        startL startR count)[l + offsetsL[startL + index]!]! pivot = true) ∧
     (∀ index, index < count →
-      isLess output[right (startR + index)]! pivot = false) := by
+      isLess (blockCycleOutput array l r offsetsL offsetsR
+        startL startR count)[r - offsetsR[startR + index]! - 1]!
+          pivot = false) := by
+  simp only [blockCycleOutput]
   let left := fun (index : ℕ) => l + offsetsL[index]!
   let right := fun (index : ℕ) => r - offsetsR[index]! - 1
   apply block_cycle_classifies array left right startL startR count
@@ -2656,6 +2815,75 @@ private theorem scanned_block_cycle_classifies
       omega
     simpa only [right, haddress] using hactive.2
 
+private theorem scanned_block_cycle_outside
+    (array : Array T) (pivot : T) (isLess : T → T → Bool)
+    (l r blockL blockR : ℕ)
+    (offsetsL offsetsR : Array ℕ)
+    (startL endL startR endR count position : ℕ)
+    (hlr : l ≤ r) (hrsize : r ≤ array.size)
+    (hblocks : blockL + blockR ≤ r - l)
+    (hstartL : startL ≤ endL) (hstartR : startR ≤ endR)
+    (hendL : endL ≤ offsetsL.size) (hendR : endR ≤ offsetsR.size)
+    (hcount : 0 < count)
+    (hcountL : count ≤ endL - startL)
+    (hcountR : count ≤ endR - startR)
+    (hexactL : OffsetScanExact blockL startL endL offsetsL
+      (fun index => !isLess array[l + index]! pivot))
+    (hexactR : OffsetScanExact blockR startR endR offsetsR
+      (fun index => isLess array[r - 1 - index]! pivot))
+    (houtL : ∀ index, index < count →
+      position ≠ l + offsetsL[startL + index]!)
+    (houtR : ∀ index, index < count →
+      position ≠ r - offsetsR[startR + index]! - 1) :
+    (blockCycleOutput array l r offsetsL offsetsR
+      startL startR count)[position]! = array[position]! := by
+  simp only [blockCycleOutput]
+  let left := fun (index : ℕ) => l + offsetsL[index]!
+  let right := fun (index : ℕ) => r - offsetsR[index]! - 1
+  apply block_cycle_outside array left right startL startR count position
+    hcount
+  · intro index hindex
+    have hactive := OffsetScanExact.active blockL startL endL offsetsL
+      _ hexactL hendL (startL + index) (by omega) (by omega)
+    simp only [left]
+    omega
+  · intro index hindex
+    have hactive := OffsetScanExact.active blockR startR endR offsetsR
+      _ hexactR hendR (startR + index) (by omega) (by omega)
+    simp only [right]
+    omega
+  · simpa only [left] using houtL
+  · simpa only [right] using houtR
+
+omit [Inhabited T] in
+private theorem left_block_address_lt_right_block_address
+    (l r blockL blockR leftOffset rightOffset : ℕ)
+    (hblocks : blockL + blockR ≤ r - l)
+    (hleft : leftOffset < blockL) (hright : rightOffset < blockR) :
+    l + leftOffset < r - rightOffset - 1 := by
+  omega
+
+omit [Inhabited T] in
+private theorem right_block_address_eq
+    (r blockR offset : ℕ) (hblockR : blockR ≤ r)
+    (hoffset : offset < blockR) :
+    r - 1 - offset = r - offset - 1 := by
+  omega
+
+omit [Inhabited T] in
+private theorem right_block_le
+    (l r blockL blockR : ℕ)
+    (hblocks : blockL + blockR ≤ r - l) : blockR ≤ r := by
+  omega
+
+omit [Inhabited T] in
+private theorem right_block_address_injective
+    (r leftOffset rightOffset : ℕ)
+    (hleft : leftOffset < r) (hright : rightOffset < r)
+    (heq : r - leftOffset - 1 = r - rightOffset - 1) :
+    leftOffset = rightOffset := by
+  omega
+
 private theorem refreshOffsets_bounds
     (block startIdx endIdx : ℕ) (offsets : Array ℕ)
     (keep : ℕ → Bool)
@@ -2688,24 +2916,48 @@ private def blockMutateArray
   let count := min (leftData.2.1 - leftData.1)
     (rightData.2.1 - rightData.1)
   if 0 < count then
-    let left := fun i => l + leftData.2.2[i]!
-    let right := fun i => r - rightData.2.2[i]! - 1
-    let tmp := a[left leftData.1]!
-    let afterFirst := a.set! (left leftData.1)
-      a[right rightData.1]!
-    let result : ℕ × ℕ × Array T := Id.run <|
-      forIn (List.range' 0 (count - 1))
-        (leftData.1, rightData.1, afterFirst) fun _ state =>
-          let startL' := state.1 + 1
-          let afterLeft := state.2.2.set! (right state.2.1)
-            state.2.2[left startL']!
-          let startR' := state.2.1 + 1
-          let afterRight := afterLeft.set! (left startL')
-            afterLeft[right startR']!
-          pure (.yield (startL', startR', afterRight))
-    result.2.2.set! (right result.2.1) tmp
+    blockCycleOutput a l r leftData.2.2 rightData.2.2
+      leftData.1 rightData.1 count
   else
     a
+
+private theorem blockMutateArray_eq_blockCycleOutput_of_pos
+    (a : Array T) (pivot : T) (isLess : T → T → Bool)
+    (l r blockL blockR : ℕ)
+    (offsetsL offsetsR : Array ℕ)
+    (startL endL startR endR : ℕ) :
+    let leftData := refreshOffsets blockL startL endL offsetsL
+      (fun index => !isLess a[l + index]! pivot)
+    let rightData := refreshOffsets blockR startR endR offsetsR
+      (fun index => isLess a[r - 1 - index]! pivot)
+    let count := min (leftData.2.1 - leftData.1)
+      (rightData.2.1 - rightData.1)
+    0 < count →
+      blockMutateArray a pivot isLess l r blockL blockR
+          offsetsL offsetsR startL endL startR endR =
+        blockCycleOutput a l r leftData.2.2 rightData.2.2
+          leftData.1 rightData.1 count := by
+  simp only
+  intro hcount
+  rw [blockMutateArray, if_pos hcount]
+
+private theorem blockMutateArray_eq_self_of_no_count
+    (a : Array T) (pivot : T) (isLess : T → T → Bool)
+    (l r blockL blockR : ℕ)
+    (offsetsL offsetsR : Array ℕ)
+    (startL endL startR endR : ℕ) :
+    let leftData := refreshOffsets blockL startL endL offsetsL
+      (fun index => !isLess a[l + index]! pivot)
+    let rightData := refreshOffsets blockR startR endR offsetsR
+      (fun index => isLess a[r - 1 - index]! pivot)
+    let count := min (leftData.2.1 - leftData.1)
+      (rightData.2.1 - rightData.1)
+    ¬0 < count →
+      blockMutateArray a pivot isLess l r blockL blockR
+        offsetsL offsetsR startL endL startR endR = a := by
+  simp only
+  intro hcount
+  rw [blockMutateArray, if_neg hcount]
 
 private theorem blockMutateArray_perm
     (a : Array T) (pivot : T) (isLess : T → T → Bool)
@@ -2756,6 +3008,198 @@ private theorem blockMutateArray_perm
     · exact hleft.2.2.2
     · exact hright.2.2.2
   next _ => exact .refl _
+
+private theorem blockMutateArray_offsets_exact
+    (a : Array T) (pivot : T) (isLess : T → T → Bool)
+    (l r blockL blockR : ℕ)
+    (offsetsL offsetsR : Array ℕ)
+    (startL endL startR endR : ℕ)
+    (hlr : l ≤ r) (hrsize : r ≤ a.size)
+    (hblocks : blockL + blockR ≤ r - l)
+    (hblockL : blockL ≤ offsetsL.size)
+    (hblockR : blockR ≤ offsetsR.size)
+    (hstartL : startL ≤ endL)
+    (hendL : startL ≠ endL → endL ≤ blockL)
+    (hstartR : startR ≤ endR)
+    (hendR : startR ≠ endR → endR ≤ blockR)
+    (hactiveL : startL ≠ endL →
+      ∀ j, j < endL → offsetsL[j]! < blockL)
+    (hactiveR : startR ≠ endR →
+      ∀ j, j < endR → offsetsR[j]! < blockR)
+    (hexactL : startL ≠ endL →
+      OffsetScanExact blockL startL endL offsetsL
+        (fun index => !isLess a[l + index]! pivot))
+    (hexactR : startR ≠ endR →
+      OffsetScanExact blockR startR endR offsetsR
+        (fun index => isLess a[r - 1 - index]! pivot)) :
+    let leftData := refreshOffsets blockL startL endL offsetsL
+      (fun index => !isLess a[l + index]! pivot)
+    let rightData := refreshOffsets blockR startR endR offsetsR
+      (fun index => isLess a[r - 1 - index]! pivot)
+    let count := min (leftData.2.1 - leftData.1)
+      (rightData.2.1 - rightData.1)
+    let output := blockMutateArray a pivot isLess l r blockL blockR
+      offsetsL offsetsR startL endL startR endR
+    OffsetScanExact blockL (leftData.1 + count) leftData.2.1
+        leftData.2.2 (fun index => !isLess output[l + index]! pivot) ∧
+      OffsetScanExact blockR (rightData.1 + count) rightData.2.1
+        rightData.2.2
+          (fun index => isLess output[r - 1 - index]! pivot) := by
+  let leftData := refreshOffsets blockL startL endL offsetsL
+    (fun index => !isLess a[l + index]! pivot)
+  let rightData := refreshOffsets blockR startR endR offsetsR
+    (fun index => isLess a[r - 1 - index]! pivot)
+  have hleftExact : OffsetScanExact blockL leftData.1 leftData.2.1
+      leftData.2.2 (fun index => !isLess a[l + index]! pivot) := by
+    simpa only [leftData] using refreshOffsets_exact blockL startL endL
+      offsetsL (fun index => !isLess a[l + index]! pivot)
+      hblockL hexactL
+  have hrightExact : OffsetScanExact blockR rightData.1 rightData.2.1
+      rightData.2.2 (fun index => isLess a[r - 1 - index]! pivot) := by
+    simpa only [rightData] using refreshOffsets_exact blockR startR endR
+      offsetsR (fun index => isLess a[r - 1 - index]! pivot)
+      hblockR hexactR
+  have hleft : leftData.1 ≤ leftData.2.1 ∧
+      leftData.2.1 ≤ blockL ∧
+      leftData.2.2.size = offsetsL.size ∧
+      ∀ j, j < leftData.2.1 → leftData.2.2[j]! < blockL := by
+    simpa only [leftData] using refreshOffsets_bounds blockL startL endL
+      offsetsL (fun index => !isLess a[l + index]! pivot)
+      hblockL hstartL hendL hactiveL
+  have hright : rightData.1 ≤ rightData.2.1 ∧
+      rightData.2.1 ≤ blockR ∧
+      rightData.2.2.size = offsetsR.size ∧
+      ∀ j, j < rightData.2.1 → rightData.2.2[j]! < blockR := by
+    simpa only [rightData] using refreshOffsets_bounds blockR startR endR
+      offsetsR (fun index => isLess a[r - 1 - index]! pivot)
+      hblockR hstartR hendR hactiveR
+  have hleftEndSize : leftData.2.1 ≤ leftData.2.2.size := by
+    exact hleft.2.1.trans (hblockL.trans_eq hleft.2.2.1.symm)
+  have hrightEndSize : rightData.2.1 ≤ rightData.2.2.size := by
+    exact hright.2.1.trans (hblockR.trans_eq hright.2.2.1.symm)
+  let count := min (leftData.2.1 - leftData.1)
+    (rightData.2.1 - rightData.1)
+  have hcountL : count ≤ leftData.2.1 - leftData.1 :=
+    min_le_left _ _
+  have hcountR : count ≤ rightData.2.1 - rightData.1 :=
+    min_le_right _ _
+  let output := blockMutateArray a pivot isLess l r blockL blockR
+    offsetsL offsetsR startL endL startR endR
+  by_cases hcount : 0 < count
+  · have houtput : output = blockCycleOutput a l r leftData.2.2
+        rightData.2.2 leftData.1 rightData.1 count := by
+      have hresult := blockMutateArray_eq_blockCycleOutput_of_pos
+        a pivot isLess l r blockL blockR offsetsL offsetsR
+        startL endL startR endR
+      simpa only [output, leftData, rightData, count] using hresult hcount
+    have hclassified := scanned_block_cycle_classifies a pivot isLess
+      l r blockL blockR leftData.2.2 rightData.2.2
+      leftData.1 leftData.2.1 rightData.1 rightData.2.1 count
+      hlr hrsize hblocks hleft.1 hright.1 hleftEndSize hrightEndSize
+      hcount hcountL hcountR hleftExact hrightExact
+    have hclassifiedOutput :
+        (∀ index, index < count →
+          isLess output[l + leftData.2.2[leftData.1 + index]!]!
+            pivot = true) ∧
+        (∀ index, index < count →
+          isLess output[r - rightData.2.2[rightData.1 + index]! - 1]!
+            pivot = false) := by
+      simpa only [houtput] using hclassified
+    constructor
+    · apply OffsetScanExact.consume blockL leftData.1 leftData.2.1
+        count leftData.2.2
+        (fun index => !isLess a[l + index]! pivot)
+        (fun index => !isLess output[l + index]! pivot)
+        hleftExact hleft.1 hleftEndSize hcountL
+      · intro index hindex
+        simpa using hclassifiedOutput.1 index hindex
+      · intro offset hoffset hnotConsumed
+        have hout := scanned_block_cycle_outside a pivot isLess
+          l r blockL blockR leftData.2.2 rightData.2.2
+          leftData.1 leftData.2.1 rightData.1 rightData.2.1
+          count (l + offset) hlr hrsize hblocks hleft.1 hright.1
+          hleftEndSize hrightEndSize hcount hcountL hcountR
+          hleftExact hrightExact
+          (by
+            intro index hindex heq
+            exact hnotConsumed index hindex
+              (Nat.add_left_cancel heq))
+          (by
+            intro index hindex heq
+            have hactive := OffsetScanExact.active blockR rightData.1
+              rightData.2.1 rightData.2.2 _ hrightExact
+              hrightEndSize (rightData.1 + index) (by omega) (by omega)
+            exact (left_block_address_lt_right_block_address
+              l r blockL blockR offset
+              rightData.2.2[rightData.1 + index]!
+              hblocks hoffset hactive.1).ne heq)
+        simpa only [houtput] using congrArg
+          (fun value => !isLess value pivot) hout
+    · apply OffsetScanExact.consume blockR rightData.1 rightData.2.1
+        count rightData.2.2
+        (fun index => isLess a[r - 1 - index]! pivot)
+        (fun index => isLess output[r - 1 - index]! pivot)
+        hrightExact hright.1 hrightEndSize hcountR
+      · intro index hindex
+        have haddress :
+            r - 1 - rightData.2.2[rightData.1 + index]! =
+              r - rightData.2.2[rightData.1 + index]! - 1 := by
+          have hactive := OffsetScanExact.active blockR rightData.1
+            rightData.2.1 rightData.2.2 _ hrightExact hrightEndSize
+            (rightData.1 + index) (by omega) (by omega)
+          exact right_block_address_eq r blockR
+            rightData.2.2[rightData.1 + index]!
+            (right_block_le l r blockL blockR hblocks) hactive.1
+        rw [haddress]
+        exact hclassifiedOutput.2 index hindex
+      · intro offset hoffset hnotConsumed
+        have hposition : r - 1 - offset = r - offset - 1 :=
+          right_block_address_eq r blockR offset
+            (right_block_le l r blockL blockR hblocks) hoffset
+        have hout := scanned_block_cycle_outside a pivot isLess
+          l r blockL blockR leftData.2.2 rightData.2.2
+          leftData.1 leftData.2.1 rightData.1 rightData.2.1
+          count (r - 1 - offset) hlr hrsize hblocks hleft.1 hright.1
+          hleftEndSize hrightEndSize hcount hcountL hcountR
+          hleftExact hrightExact
+          (by
+            intro index hindex
+            have hactive := OffsetScanExact.active blockL leftData.1
+              leftData.2.1 leftData.2.2 _ hleftExact hleftEndSize
+              (leftData.1 + index) (by omega) (by omega)
+            rw [hposition]
+            exact (left_block_address_lt_right_block_address
+              l r blockL blockR leftData.2.2[leftData.1 + index]!
+              offset hblocks hactive.1 hoffset).ne')
+          (by
+            intro index hindex
+            rw [hposition]
+            intro heq
+            apply hnotConsumed index hindex
+            have hactive := OffsetScanExact.active blockR rightData.1
+              rightData.2.1 rightData.2.2 _ hrightExact
+              hrightEndSize (rightData.1 + index) (by omega) (by omega)
+            have hblockRr := right_block_le l r blockL blockR hblocks
+            exact right_block_address_injective r offset
+              rightData.2.2[rightData.1 + index]!
+              (hoffset.trans_le hblockRr) (hactive.1.trans_le hblockRr) heq)
+        simpa only [houtput] using congrArg
+          (fun value => isLess value pivot) hout
+  · have hzero : count = 0 := by omega
+    have houtput : output = a := by
+      have hresult := blockMutateArray_eq_self_of_no_count
+        a pivot isLess l r blockL blockR offsetsL offsetsR
+        startL endL startR endR
+      simpa only [output, leftData, rightData, count] using hresult hcount
+    have hleftResult : OffsetScanExact blockL
+        (leftData.1 + count) leftData.2.1 leftData.2.2
+        (fun index => !isLess output[l + index]! pivot) := by
+      simpa only [hzero, Nat.add_zero, houtput] using hleftExact
+    have hrightResult : OffsetScanExact blockR
+        (rightData.1 + count) rightData.2.1 rightData.2.2
+        (fun index => isLess output[r - 1 - index]! pivot) := by
+      simpa only [hzero, Nat.add_zero, houtput] using hrightExact
+    exact ⟨hleftResult, hrightResult⟩
 
 omit [Inhabited T] in
 private theorem min_remaining_exhausts
