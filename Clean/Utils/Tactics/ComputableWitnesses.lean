@@ -153,9 +153,15 @@ def getAttrSimprocs (attr : Name) : CoreM Simprocs := do
     | throwError "computable_witnesses: unknown simproc set '{attr}'"
   ext.getSimprocs
 
-/-- A `SimpTheorems` from global lemma names (compile-time-checked ``name``s). -/
-def theoremsOf (names : Array Name) : MetaM SimpTheorems :=
-  names.foldlM (init := {}) fun thms n => thms.addConst n
+/-- The entry-0 base of every quoted `simp only`: `eq_self` and `iff_self`
+(`simpOnlyBuiltins`). Named lemmas are merged into this entry, so they take precedence
+over the attribute sets, which simp tries in array order after it. -/
+def simpOnlyBase : MetaM SimpTheorems :=
+  Lean.Elab.Tactic.simpOnlyBuiltins.foldlM (·.addConst ·) ({} : SimpTheorems)
+
+/-- Extend `init` with global lemma names (compile-time-checked ``name``s). -/
+def theoremsOf (names : Array Name) (init : SimpTheorems) : MetaM SimpTheorems :=
+  names.foldlM (init := init) fun thms n => thms.addConst n
 
 /-- The meta form of `simp only [...]` on the main goal (`hyps := true` for
 `... at *`, which like the quoted form simps the non-dependent prop hypotheses). -/
@@ -168,9 +174,12 @@ def metaSimp (ctx : Simp.Context) (procs : SimprocsArray := #[]) (hyps := false)
   | none => replaceMainGoal []
   | some (_, g') => replaceMainGoal [g']
 
-/-- The meta form of `simp_all only [...]` on the main goal. -/
+/-- The meta form of `simp_all only [...]` on the main goal. `simp_all` elaborates its
+config as `Simp.ConfigCtx`, so `contextual := true` is part of its semantics — set it
+here rather than in each stored context, which may be shared with `simp` positions. -/
 def metaSimpAll (ctx : Simp.Context) (procs : SimprocsArray := #[]) : TacticM Unit :=
   withMainContext do
+    let ctx ← ctx.setConfig { ctx.config with contextual := true }
     let (result?, _) ← Meta.simpAll (← getMainGoal) ctx procs
     match result? with
     | none => replaceMainGoal []
@@ -178,7 +187,8 @@ def metaSimpAll (ctx : Simp.Context) (procs : SimprocsArray := #[]) : TacticM Un
 
 /-- `circuit_norm`-only context and simprocs (the extension lookups are cached). -/
 def cnSimp : TacticM (Simp.Context × SimprocsArray) := do
-  return (← Simp.mkContext {} (simpTheorems := #[← getAttrTheorems `circuit_norm])
+  return (← Simp.mkContext {}
+    (simpTheorems := #[← simpOnlyBase, ← getAttrTheorems `circuit_norm])
     (← getSimpCongrTheorems), #[← getAttrSimprocs `circuit_norm])
 
 /-- Evaluate a closed ℕ-expression to a literal by folding `+`/`*` and whnf-reducing
@@ -481,7 +491,7 @@ elab "chain_output_facts" : tactic => withMainContext do
       -- goal only: `at *` would rewrite the fact with itself into `True`
       try
         withMainContext do
-          let thms ← ({} : SimpTheorems).add (.fvar factFVar) #[] (.fvar factFVar)
+          let thms ← (← simpOnlyBase).add (.fvar factFVar) #[] (.fvar factFVar)
           metaSimp (← Simp.mkContext {} (simpTheorems := #[thms]) (← getSimpCongrTheorems))
       catch _ => pure ()
     try emit catch _ => pure ()
@@ -712,7 +722,7 @@ def CwSimp.build (extraTerms closeTerms : Array (TSyntax `term)) : TacticM CwSim
   let cwn ← getAttrTheorems `computable_witnesses_norm
   let cnProcs : SimprocsArray := #[← getAttrSimprocs `circuit_norm]
   let cwnProcs ← getAttrSimprocs `computable_witnesses_norm
-  let mut normHints : SimpTheorems := {}
+  let mut normHints ← simpOnlyBase
   for mainName in (← try resolveGlobalConst (mkIdent `main) catch _ => pure []) do
     normHints ← normHints.addDeclToUnfold mainName
   let mut hintSets : Array SimpTheorems := #[]
@@ -730,21 +740,22 @@ def CwSimp.build (extraTerms closeTerms : Array (TSyntax `term)) : TacticM CwSim
   let vecProcs ← SimprocsArray.add cnProcs ``retypeVectorAliasEq (post := true)
   return {
     normCtx := ← Simp.mkContext {}
-      (simpTheorems := #[cn, cwn] ++ hintSets ++ #[normHints]) congr
+      (simpTheorems := #[normHints, cn, cwn] ++ hintSets) congr
     normProcs
-    baseCtx := ← Simp.mkContext {} (simpTheorems := #[cn, cwn]) congr
+    baseCtx := ← Simp.mkContext {} (simpTheorems := #[← simpOnlyBase, cn, cwn]) congr
     leafProcs
     vecCtx := ← Simp.mkContext {}
-      (simpTheorems := #[cn, ← theoremsOf vecStructuralLemmas]) congr
+      (simpTheorems := #[← theoremsOf vecStructuralLemmas (← simpOnlyBase), cn]) congr
     vecProcs
     closeHintCtx := ← Simp.mkContext {}
-      (simpTheorems := #[cn, ← theoremsOf closeHintLemmas] ++ closeSets ++ #[closeHints])
+      (simpTheorems := #[← theoremsOf closeHintLemmas closeHints, cn] ++ closeSets)
       congr
     branchCtx := ← Simp.mkContext {}
-      (simpTheorems := #[cn, ← theoremsOf branchLemmas] ++ closeSets ++ #[closeHints])
+      (simpTheorems := #[← theoremsOf branchLemmas closeHints, cn] ++ closeSets)
       congr
     cnProcs
-    extCtx := ← Simp.mkContext {} (simpTheorems := #[← theoremsOf extElementLemmas]) congr
+    extCtx := ← Simp.mkContext {}
+      (simpTheorems := #[← theoremsOf extElementLemmas (← simpOnlyBase)]) congr
     fullCtx := ← Simp.mkContext {}
       (simpTheorems := #[← getSimpTheorems, cn, cwn]) congr
     fullProcs := #[← Simp.getSimprocs] ++ normProcs
