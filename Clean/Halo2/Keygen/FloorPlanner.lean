@@ -13424,6 +13424,89 @@ def SelectorAnchoredBy (summaries : List RegionShapeSummary)
     (anchor : ℕ → RegionColumn) : Prop :=
   summaries.Forall (fun summary => SummarySelectorsAnchoredBy summary anchor)
 
+theorem SummarySelectorsAnchoredBy.ofColumns
+    {columns : List RegionColumn} {rowCount constantSiteCount : ℕ}
+    {anchor : ℕ → RegionColumn}
+    (hanchor : ∀ selector, .selector selector ∈ columns →
+      anchor selector ∈ physicalColumns columns) :
+    SummarySelectorsAnchoredBy
+      (RegionSynthesisSummary.ofColumns columns rowCount constantSiteCount
+        |>.toRegionShapeSummary)
+      anchor := by
+  intro selector hselector
+  rw [RegionSynthesisSummary.toRegionShapeSummary_columns,
+    RegionSynthesisSummary.ofColumns_columns]
+  rw [RegionSynthesisSummary.toRegionShapeSummary_columns,
+    RegionSynthesisSummary.ofColumns_columns,
+    mem_unionColumns_iff] at hselector
+  have hsource := hanchor selector (by simpa using hselector)
+  obtain ⟨kind, index, heq⟩ := exists_column_of_mem_physicalColumns hsource
+  have hphysical : .column kind index ∈ physicalColumns columns := by
+    simpa only [← heq] using hsource
+  rw [heq, column_mem_physicalColumns_iff, mem_unionColumns_iff]
+  exact Or.inr ((column_mem_physicalColumns_iff kind index columns).mp hphysical)
+
+theorem SummarySelectorsAnchoredBy.combine
+    {left right : RegionSynthesisSummary} {anchor : ℕ → RegionColumn}
+    (hleft : SummarySelectorsAnchoredBy left.toRegionShapeSummary anchor)
+    (hright : SummarySelectorsAnchoredBy right.toRegionShapeSummary anchor) :
+    SummarySelectorsAnchoredBy (left.combine right).toRegionShapeSummary anchor := by
+  intro selector hselector
+  rw [RegionSynthesisSummary.toRegionShapeSummary_columns,
+    RegionSynthesisSummary.combine_columns, mem_unionColumns_iff] at hselector
+  rcases hselector with hselector | hselector
+  · have hanchor := hleft selector (by simpa using hselector)
+    have hanchor' : anchor selector ∈ physicalColumns left.columns := by
+      simpa only [RegionSynthesisSummary.toRegionShapeSummary_columns] using hanchor
+    obtain ⟨kind, index, heq⟩ := exists_column_of_mem_physicalColumns hanchor
+    have hphysical : .column kind index ∈ physicalColumns left.columns := by
+      simpa only [← heq] using hanchor'
+    rw [heq, RegionSynthesisSummary.toRegionShapeSummary_columns,
+      RegionSynthesisSummary.combine_columns, column_mem_physicalColumns_iff,
+      mem_unionColumns_iff]
+    exact Or.inl
+      ((column_mem_physicalColumns_iff kind index left.columns).mp hphysical)
+  · have hanchor := hright selector (by simpa using hselector)
+    have hanchor' : anchor selector ∈ physicalColumns right.columns := by
+      simpa only [RegionSynthesisSummary.toRegionShapeSummary_columns] using hanchor
+    obtain ⟨kind, index, heq⟩ := exists_column_of_mem_physicalColumns hanchor
+    have hphysical : .column kind index ∈ physicalColumns right.columns := by
+      simpa only [← heq] using hanchor'
+    rw [heq, RegionSynthesisSummary.toRegionShapeSummary_columns,
+      RegionSynthesisSummary.combine_columns, column_mem_physicalColumns_iff,
+      mem_unionColumns_iff]
+    exact Or.inr
+      ((column_mem_physicalColumns_iff kind index right.columns).mp hphysical)
+
+theorem SelectorAnchoredBy.ofRegion
+    {summary : RegionSynthesisSummary} {anchor : ℕ → RegionColumn}
+    (hsummary : SummarySelectorsAnchoredBy summary.toRegionShapeSummary anchor) :
+    SelectorAnchoredBy (SynthesisSummary.ofRegion summary).regionShapes anchor := by
+  simpa [SelectorAnchoredBy] using hsummary
+
+theorem SelectorAnchoredBy.combine
+    {left right : SynthesisSummary} {anchor : ℕ → RegionColumn}
+    (hleft : SelectorAnchoredBy left.regionShapes anchor)
+    (hright : SelectorAnchoredBy right.regionShapes anchor) :
+    SelectorAnchoredBy (left.combine right).regionShapes anchor := by
+  simpa only [SelectorAnchoredBy, SynthesisSummary.combine_regionShapes,
+    List.forall_append] using And.intro hleft hright
+
+theorem SelectorAnchoredBy.replicate
+    {summary : SynthesisSummary} {anchor : ℕ → RegionColumn}
+    (hsummary : SelectorAnchoredBy summary.regionShapes anchor)
+    (count : ℕ) :
+    SelectorAnchoredBy (SynthesisSummary.replicate count summary).regionShapes
+      anchor := by
+  rw [SelectorAnchoredBy, SynthesisSummary.replicate_regionShapes,
+    List.forall_iff_forall_mem]
+  intro shape hshape
+  rw [List.mem_flatten] at hshape
+  obtain ⟨shapes, hshapes, hshape⟩ := hshape
+  have : shapes = summary.regionShapes := List.eq_of_mem_replicate hshapes
+  subst shapes
+  exact List.forall_iff_forall_mem.mp hsummary shape hshape
+
 /-- Current selector allocations are covered by the corresponding physical
 anchor allocation. -/
 def SelectorAllocationsDominatedBy (allocations : CircuitAllocations)

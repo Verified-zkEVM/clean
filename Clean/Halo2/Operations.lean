@@ -594,6 +594,16 @@ def RegionSynthesisSummary.toRegionShapeSummary
   columns := summary.columns
   rowCount := summary.rowCount
 
+@[circuit_norm, synthesis_summary_norm]
+theorem RegionSynthesisSummary.toRegionShapeSummary_columns
+    (summary : RegionSynthesisSummary) :
+    summary.toRegionShapeSummary.columns = summary.columns := rfl
+
+@[circuit_norm, synthesis_summary_norm]
+theorem RegionSynthesisSummary.toRegionShapeSummary_rowCount
+    (summary : RegionSynthesisSummary) :
+    summary.toRegionShapeSummary.rowCount = summary.rowCount := rfl
+
 /-- Exact synthesis summary of a region-operation stream. -/
 def regionSynthesisSummary : RegionOperations F → RegionSynthesisSummary
   | [] => {}
