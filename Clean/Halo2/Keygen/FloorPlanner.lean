@@ -517,6 +517,102 @@ theorem KeySorted.append_pivot
     · exact (hleftBound leftItem hleftItem).trans
         (hrightBound rightItem hrightItem)
 
+private theorem array_toList_getElem! (array : Array T) (index : ℕ) :
+    array.toList[index]! = array[index]! := by
+  by_cases hindex : index < array.size
+  · rw [getElem!_pos array.toList index (by simpa using hindex),
+      getElem!_pos array index hindex]
+    simp
+  · rw [getElem!_neg array.toList index (by simpa using hindex),
+      getElem!_neg array index hindex]
+
+theorem KeySorted.keysLE_take_succ
+    (key : T → ℕ) (items : List T) (index : ℕ)
+    (hsorted : KeySorted key items) (hindex : index < items.length) :
+    KeysLE key (items.take (index + 1)) (key items[index]!) := by
+  rw [KeySorted, List.sortedLE_iff_pairwise, List.pairwise_map] at hsorted
+  intro item hitem
+  obtain ⟨position, hposition⟩ := List.get_of_mem hitem
+  have hpositionLe : position.val ≤ index := by
+    have := position.isLt
+    simp only [List.length_take,
+      Nat.min_eq_left (show index + 1 ≤ items.length by omega)] at this
+    omega
+  have hrelation := hsorted.rel_get_of_le
+    (a := ⟨position.val, hpositionLe.trans_lt hindex⟩)
+    (b := ⟨index, hindex⟩) hpositionLe
+  rw [List.get_eq_getElem, List.get_eq_getElem] at hrelation
+  rw [← hposition]
+  simpa only [List.get_eq_getElem, List.getElem_take,
+    getElem!_pos items index hindex] using hrelation
+
+theorem KeySorted.keysGE_drop_succ
+    (key : T → ℕ) (items : List T) (index : ℕ)
+    (hsorted : KeySorted key items) (hindex : index < items.length) :
+    KeysGE key (items.drop (index + 1)) (key items[index]!) := by
+  rw [KeySorted, List.sortedLE_iff_pairwise, List.pairwise_map] at hsorted
+  intro item hitem
+  obtain ⟨position, hposition⟩ := List.get_of_mem hitem
+  have horiginalLt : index + 1 + position.val < items.length := by
+    have := position.isLt
+    simp only [List.length_drop] at this
+    omega
+  have hrelation := hsorted.rel_get_of_lt
+    (a := ⟨index, hindex⟩)
+    (b := ⟨index + 1 + position.val, horiginalLt⟩) (by
+      simp only [Fin.mk_lt_mk]
+      omega)
+  rw [List.get_eq_getElem, List.get_eq_getElem] at hrelation
+  rw [← hposition]
+  simpa only [List.get_eq_getElem, List.getElem_drop,
+    getElem!_pos items index hindex] using hrelation
+
+omit [Inhabited T] in
+theorem KeySorted.take (key : T → ℕ) (items : List T) (count : ℕ)
+    (h : KeySorted key items) : KeySorted key (items.take count) := by
+  rw [KeySorted, List.sortedLE_iff_pairwise, List.pairwise_map] at h ⊢
+  exact h.take
+
+omit [Inhabited T] in
+theorem KeySorted.drop (key : T → ℕ) (items : List T) (count : ℕ)
+    (h : KeySorted key items) : KeySorted key (items.drop count) := by
+  rw [KeySorted, List.sortedLE_iff_pairwise, List.pairwise_map] at h ⊢
+  exact h.drop
+
+omit [Inhabited T] in
+theorem KeySorted.set
+    (key : T → ℕ) (items : List T) (index : ℕ) (item : T)
+    (hsorted : KeySorted key items) (hindex : index < items.length)
+    (hprefix : KeysLE key (items.take index) (key item))
+    (hsuffix : KeysGE key (items.drop (index + 1)) (key item)) :
+    KeySorted key (items.set index item) := by
+  rw [List.set_eq_take_cons_drop item hindex]
+  exact KeySorted.append_pivot key _ item _
+    (KeySorted.take key items index hsorted)
+    (KeySorted.drop key items (index + 1) hsorted)
+    hprefix hsuffix
+
+private theorem take_append_last (items : List T) (hitems : 0 < items.length) :
+    items.take (items.length - 1) ++ [items[items.length - 1]!] = items := by
+  rw [← List.dropLast_eq_take,
+    getElem!_pos items (items.length - 1) (by omega),
+    ← List.getLast_eq_getElem]
+  exact List.dropLast_append_getLast (by
+    intro hnil
+    simp [hnil] at hitems)
+
+theorem KeySorted.keysLE_last
+    (key : T → ℕ) (items : List T)
+    (hsorted : KeySorted key items) (hitems : 0 < items.length) :
+    KeysLE key items (key items[items.length - 1]!) := by
+  rw [KeySorted, List.sortedLE_iff_pairwise, List.pairwise_map] at hsorted
+  intro item hitem
+  have hrelation := hsorted.rel_getLast hitem
+  rw [List.getLast_eq_getElem (by
+    intro hnil
+    simp [hnil] at hitems)] at hrelation
+  simpa [getElem!_pos items (items.length - 1) (by omega)] using hrelation
+
 /-- Stable insertion used to state the pure semantics of pdqsort's shifting
 insertion-sort primitive. Equal keys remain in their original order. -/
 def insertByKey (key : T → ℕ) (item : T) : List T → List T
@@ -672,6 +768,191 @@ def shiftTail (v : Array T) (isLess : T → T → Bool) : Array T := Id.run do
     hole := i
   v := v.set! hole tmp
   return v
+
+private theorem shiftTail_loop_sorted
+    (tmp : T) (key : T → ℕ) :
+    ∀ (n : ℕ) (array : Array T),
+      n < array.size →
+      KeySorted key array.toList →
+      KeysGE key (array.toList.drop (n + 1)) (key tmp) →
+      let output : Array T := Id.run do
+        pure PUnit.unit
+        pure PUnit.unit
+        let result ← forIn (List.range n).reverse
+          (⟨n, array⟩ : MProd ℕ (Array T))
+          fun index (result : MProd ℕ (Array T)) =>
+            if !lessBy key tmp (result.snd[index]!) then
+              pure (.done ⟨result.fst, result.snd⟩)
+            else do
+              pure PUnit.unit
+              pure PUnit.unit
+              pure (.yield ⟨index,
+                result.snd.set! (index + 1) (result.snd[index]!)⟩)
+        pure (result.snd.set! result.fst tmp)
+      KeySorted key output.toList := by
+  intro n
+  induction n with
+  | zero =>
+      intro array hindex hsorted hsuffix
+      have hresult := KeySorted.set key array.toList 0 tmp hsorted
+        (by simpa using hindex) (by simp [KeysLE]) (by simpa using hsuffix)
+      simpa [Array.set!] using hresult
+  | succ n inductionHypothesis =>
+      intro array hindex hsorted hsuffix
+      rw [List.range_succ, List.reverse_append]
+      simp only [List.reverse_singleton, List.singleton_append, List.forIn_cons]
+      split
+      · have hn : n < array.size :=
+          Nat.lt_trans (Nat.lt_succ_self n) hindex
+        have hbound := KeySorted.keysLE_take_succ key array.toList n hsorted
+          (by simpa using hn)
+        rw [array_toList_getElem!] at hbound
+        have hcompare : key array[n]! ≤ key tmp := by
+          simpa [lessBy] using (show (!lessBy key tmp array[n]!) = true from ‹_›)
+        have hresult := KeySorted.set key array.toList (n + 1) tmp hsorted
+          (by simpa using hindex) (by
+            intro item hitem
+            exact (hbound item hitem).trans hcompare)
+          (by simpa [Nat.add_assoc] using hsuffix)
+        simpa [Array.set!] using hresult
+      · let shifted := array.set! (n + 1) array[n]!
+        have hn : n < array.size := Nat.lt_trans (Nat.lt_succ_self n) hindex
+        have hshiftedSorted : KeySorted key shifted.toList := by
+          simp only [shifted, Array.set!, Array.toList_setIfInBounds]
+          apply KeySorted.set key array.toList (n + 1) array[n]! hsorted
+              (by simpa using hindex)
+          · have hbound :=
+              KeySorted.keysLE_take_succ key array.toList n hsorted hn
+            rw [array_toList_getElem!] at hbound
+            exact hbound
+          · have htail :=
+              KeySorted.keysGE_drop_succ key array.toList n hsorted hn
+            rw [array_toList_getElem!] at htail
+            intro item hitem
+            apply htail item
+            have hdrop : array.toList.drop (n + 1 + 1) =
+                (array.toList.drop (n + 1)).drop 1 := by
+              rw [List.drop_drop]
+            rw [hdrop] at hitem
+            exact List.drop_subset 1 _ hitem
+        have hshiftedSize : shifted.size = array.size := by
+          simp [shifted]
+        have hshiftedAt : shifted[n]! = array[n]! := by
+          simp [shifted, hn]
+        have hshiftedSuffix :
+            KeysGE key (shifted.toList.drop (n + 1)) (key tmp) := by
+          have htail := KeySorted.keysGE_drop_succ key shifted.toList n
+            hshiftedSorted (by simpa [hshiftedSize] using hn)
+          rw [array_toList_getElem!] at htail
+          intro item hitem
+          have hcompare : key tmp ≤ key shifted[n]! := by
+            have hless : key tmp < key array[n]! := by
+              simpa [lessBy] using
+                (show ¬(!lessBy key tmp array[n]!) = true from ‹_›)
+            simpa [hshiftedAt] using hless.le
+          exact hcompare.trans (htail item hitem)
+        simpa [shifted] using inductionHypothesis shifted
+          (by simpa [hshiftedSize] using hn) hshiftedSorted hshiftedSuffix
+
+/-- `shiftTail` preserves ordering when its initial prefix is already ordered. -/
+theorem shiftTail_sorted
+    (array : Array T) (key : T → ℕ)
+    (hprefix : KeySorted key
+      (array.toList.take (array.size - 1))) :
+    KeySorted key (shiftTail array (lessBy key)).toList := by
+  simp only [shiftTail]
+  split
+  · have hsize : array.size ≤ 1 := by omega
+    have hsmall : KeySorted key array.toList := by
+      rw [KeySorted, List.sortedLE_iff_pairwise,
+        List.pairwise_map, List.pairwise_iff_get]
+      intro left right horder
+      have hleft := left.isLt
+      have hright := right.isLt
+      simp only [Array.length_toList] at hleft hright
+      omega
+    simpa using hsmall
+  split
+  · have hsize : 2 ≤ array.size := by omega
+    have hbound := KeySorted.keysLE_last key
+      (array.toList.take (array.size - 1)) hprefix (by simp; omega)
+    have hlast :
+        (array.toList.take (array.size - 1))[
+          (array.toList.take (array.size - 1)).length - 1]! =
+          array[array.size - 2]! := by
+      rw [getElem!_pos _ _ (by simp; omega), getElem!_pos array _ (by omega)]
+      simp [List.getElem_take]
+      congr 1
+    rw [hlast] at hbound
+    have hcompare : key array[array.size - 2]! ≤
+        key array[array.size - 1]! := by
+      simpa [lessBy] using
+        (show (!lessBy key array[array.size - 1]!
+          array[array.size - 2]!) = true from ‹_›)
+    have hprefixBound : KeysLE key
+        (array.toList.take (array.size - 1))
+        (key array[array.size - 1]!) := by
+      intro item hitem
+      exact (hbound item hitem).trans hcompare
+    have hresult := KeySorted.append_pivot key _ array[array.size - 1]! []
+      hprefix (KeySorted.nil key) hprefixBound (by simp [KeysGE])
+    have hdecomposition :
+        array.toList.take (array.size - 1) ++
+          [array[array.size - 1]!] = array.toList := by
+      have hdecomposition := take_append_last array.toList (by simp; omega)
+      simp only [Array.length_toList] at hdecomposition
+      rw [array_toList_getElem!] at hdecomposition
+      exact hdecomposition
+    rw [hdecomposition] at hresult
+    simpa using hresult
+  · have hsize : 2 ≤ array.size := by omega
+    let shifted := array.set! (array.size - 1) array[array.size - 2]!
+    have hshiftedSorted : KeySorted key shifted.toList := by
+      simp only [shifted, Array.set!, Array.toList_setIfInBounds]
+      rw [List.set_eq_take_cons_drop array[array.size - 2]!
+        (by simp; omega)]
+      have hdrop : array.toList.drop (array.size - 1 + 1) = [] := by
+        simp
+        omega
+      rw [hdrop]
+      have hbound := KeySorted.keysLE_last key
+        (array.toList.take (array.size - 1)) hprefix (by simp; omega)
+      have hlast :
+          (array.toList.take (array.size - 1))[
+            (array.toList.take (array.size - 1)).length - 1]! =
+            array[array.size - 2]! := by
+        rw [getElem!_pos _ _ (by simp; omega), getElem!_pos array _ (by omega)]
+        simp [List.getElem_take]
+        congr 1
+      rw [hlast] at hbound
+      exact KeySorted.append_pivot key _ array[array.size - 2]! []
+        hprefix (KeySorted.nil key) hbound (by simp [KeysGE])
+    have hshiftedSuffix : KeysGE key
+        (shifted.toList.drop (array.size - 2 + 1))
+        (key array[array.size - 1]!) := by
+      have htail := KeySorted.keysGE_drop_succ key shifted.toList
+        (array.size - 2) hshiftedSorted (by simp [shifted]; omega)
+      rw [array_toList_getElem!] at htail
+      have hshiftedAt : shifted[array.size - 2]! =
+          array[array.size - 2]! := by
+        have hne : array.size - 2 ≠ array.size - 1 := by omega
+        unfold shifted
+        rw [getElem!_pos _ _ (by simp; omega),
+          getElem!_pos array _ (by omega)]
+        simp only [Array.set!]
+        rw [Array.getElem_setIfInBounds (by omega), if_neg hne.symm,
+          ← getElem!_pos array _ (by omega)]
+      rw [hshiftedAt] at htail
+      have hless : key array[array.size - 1]! <
+          key array[array.size - 2]! := by
+        simpa [lessBy] using
+          (show ¬(!lessBy key array[array.size - 1]!
+            array[array.size - 2]!) = true from ‹_›)
+      intro item hitem
+      exact hless.le.trans (htail item hitem)
+    simpa [shifted] using shiftTail_loop_sorted array[array.size - 1]! key
+      (array.size - 2) shifted (by simp [shifted]; omega)
+      hshiftedSorted hshiftedSuffix
 
 /-- `shift_head` (`sort.rs:35-78`): shift the first element right to its sorted position. -/
 def shiftHead (v : Array T) (isLess : T → T → Bool) : Array T := Id.run do
@@ -3206,6 +3487,98 @@ theorem insertionSort_perm (v : Array T) (isLess : T → T → Bool) :
     simp only [List.mem_range'] at hi
     omega
   · exact List.Perm.refl _
+
+private theorem insertion_range_sorted
+    (key : T → ℕ) :
+    ∀ (count start : ℕ) (current : Array T),
+      start + count ≤ current.size →
+      KeySorted key (current.toList.take start) →
+      KeySorted key
+        (((List.range' start count).foldl (fun array index =>
+          overwrite array 0
+            (shiftTail (array.extract 0 (index + 1)) (lessBy key)))
+          current).toList.take (start + count)) := by
+  intro count
+  induction count with
+  | zero =>
+      intro start current _ hsorted
+      simpa using hsorted
+  | succ count inductionHypothesis =>
+      intro start current hfit hsorted
+      rw [List.range'_succ, List.foldl_cons]
+      let prefixArray := current.extract 0 (start + 1)
+      let shifted := shiftTail prefixArray (lessBy key)
+      let next := overwrite current 0 shifted
+      have hprefixSize : prefixArray.size = start + 1 := by
+        simp [prefixArray]
+        omega
+      have hprefixSorted : KeySorted key
+          (prefixArray.toList.take (prefixArray.size - 1)) := by
+        simp only [prefixArray, Array.toList_extract,
+          List.extract_eq_take_drop, List.drop_zero, hprefixSize]
+        rw [show start + 1 - 1 = start by omega, List.take_take,
+          Nat.min_eq_left (by omega)]
+        exact hsorted
+      have hshiftedSorted : KeySorted key shifted.toList :=
+        shiftTail_sorted prefixArray key hprefixSorted
+      have hshiftedSize : shifted.size = prefixArray.size := by
+        have hperm := shiftTail_perm prefixArray (lessBy key)
+        simpa using hperm.length_eq
+      have hnextSize : next.size = current.size := by
+        simp [next, overwrite_size]
+      have hnextPrefix :
+          KeySorted key (next.toList.take (start + 1)) := by
+        have hoverwrite := overwrite_toList current 0 shifted (by
+          simp [hshiftedSize, hprefixSize]
+          omega)
+        simp only [List.take_zero, List.nil_append, Nat.zero_add] at hoverwrite
+        rw [hoverwrite]
+        rw [List.take_append_of_le_length]
+        · have hlength : shifted.toList.length = start + 1 := by
+            simp [hshiftedSize, hprefixSize]
+          rw [← hlength, List.take_length]
+          exact hshiftedSorted
+        · simp [hshiftedSize, hprefixSize]
+      have hresult := inductionHypothesis (start + 1) next
+        (by simp [hnextSize]; omega) hnextPrefix
+      unfold next shifted prefixArray at hresult
+      rw [show start + (count + 1) = start + 1 + count by omega]
+      exact hresult
+
+/-- The legacy insertion-sort implementation orders its output by the supplied key. -/
+theorem insertionSort_sorted (array : Array T) (key : T → ℕ) :
+    KeySorted key (insertionSort array (lessBy key)).toList := by
+  by_cases hempty : array.size = 0
+  · have hnil : array.toList = [] := by
+      apply List.eq_nil_of_length_eq_zero
+      simpa using hempty
+    have hresult : insertionSort array (lessBy key) = array := by
+      simp [insertionSort, hempty]
+    rw [hresult, hnil]
+    exact KeySorted.nil key
+  · have hprefix : KeySorted key (array.toList.take 1) := by
+      rw [KeySorted, List.sortedLE_iff_pairwise,
+        List.pairwise_map, List.pairwise_iff_get]
+      intro left right horder
+      have hleft := left.isLt
+      have hright := right.isLt
+      simp only [List.length_take] at hleft hright
+      omega
+    have hsorted := insertion_range_sorted key (array.size - 1) 1 array
+      (by omega) hprefix
+    rw [show 1 + (array.size - 1) = array.size by omega] at hsorted
+    have hlength :
+        (insertionSort array (lessBy key)).toList.length = array.size := by
+      have hperm := insertionSort_perm array (lessBy key)
+      simpa using hperm.length_eq
+    have hfold :
+        (List.range' 1 (array.size - 1)).foldl (fun current index =>
+          overwrite current 0
+            (shiftTail (current.extract 0 (index + 1)) (lessBy key))) array =
+          insertionSort array (lessBy key) := by
+      simp [insertionSort]
+    rw [hfold, ← hlength, List.take_length] at hsorted
+    exact hsorted
 
 private theorem siftDown_loop_perm
     (isLess : T → T → Bool) :
