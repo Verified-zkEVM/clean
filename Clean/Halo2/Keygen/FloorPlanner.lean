@@ -5684,6 +5684,83 @@ theorem overwrite_toList (a : Array T) (start : ℕ) (sub : Array T)
   simpa [List.range'_eq_map_range, ht] using
     fold_set_range_toList a sub start sub.size (Nat.le_refl _) hfit
 
+private theorem arrayToList_getElem!
+    (array : Array T) (index : ℕ) :
+    array.toList[index]! = array[index]! := by
+  by_cases hindex : index < array.size
+  · rw [getElem!_pos array.toList index (by simpa using hindex),
+      getElem!_pos array index hindex]
+    simp
+  · rw [getElem!_neg array.toList index (by simpa using hindex),
+      getElem!_neg array index hindex]
+
+/-- `overwrite` replaces exactly the requested interval and leaves every
+other entry unchanged. -/
+theorem overwrite_get!
+    (array sub : Array T) (start index : ℕ)
+    (hfit : start + sub.size ≤ array.size) :
+    (overwrite array start sub)[index]! =
+      if start ≤ index ∧ index < start + sub.size then
+        sub[index - start]!
+      else
+        array[index]! := by
+  have heq := congrArg (fun values : List T => values[index]!)
+    (overwrite_toList array start sub hfit)
+  dsimp only at heq
+  rw [arrayToList_getElem!] at heq
+  rw [heq]
+  by_cases hinside : start ≤ index ∧ index < start + sub.size
+  · rw [if_pos hinside]
+    simp only [List.getElem!_eq_getElem?_getD, List.getElem?_append]
+    have htake : (array.toList.take start).length = start := by
+      simp only [List.length_take, Array.length_toList]
+      omega
+    have hprefix :
+        (array.toList.take start ++ sub.toList).length =
+          start + sub.size := by simp [htake]
+    rw [if_pos (by rw [hprefix]; omega), htake,
+      if_neg (by omega)]
+    rw [List.getElem?_eq_getElem (by simp; omega), Option.getD_some]
+    rw [getElem!_pos sub (index - start) (by omega)]
+    exact Array.getElem_toList (xs := sub) (by omega)
+  · rw [if_neg hinside]
+    by_cases hbefore : index < start
+    · simp only [List.getElem!_eq_getElem?_getD, List.getElem?_append]
+      have htake : (array.toList.take start).length = start := by
+        simp only [List.length_take, Array.length_toList]
+        omega
+      have hprefix :
+          (array.toList.take start ++ sub.toList).length =
+            start + sub.size := by simp [htake]
+      rw [if_pos (by rw [hprefix]; omega),
+        if_pos (by rw [htake]; omega)]
+      rw [List.getElem?_eq_getElem (by
+        simp only [List.length_take, Array.length_toList]
+        omega), Option.getD_some, List.getElem_take]
+      rw [getElem!_pos array index (by omega)]
+      exact Array.getElem_toList (xs := array) (by omega)
+    · have hafter : start + sub.size ≤ index := by omega
+      simp only [List.getElem!_eq_getElem?_getD, List.getElem?_append]
+      have htake : (array.toList.take start).length = start := by
+        simp only [List.length_take, Array.length_toList]
+        omega
+      have hprefix :
+          (array.toList.take start ++ sub.toList).length =
+            start + sub.size := by simp [htake]
+      rw [if_neg (by rw [hprefix]; omega), hprefix]
+      by_cases horiginal : index < array.size
+      · rw [List.getElem?_eq_getElem (by
+            simp only [List.length_drop, Array.length_toList]
+            omega), Option.getD_some, List.getElem_drop]
+        rw [getElem!_pos array index horiginal]
+        simpa only [show start + sub.size + (index - (start + sub.size)) =
+            index by omega] using
+          Array.getElem_toList (xs := array) horiginal
+      · rw [List.getElem?_eq_none (by
+            simp only [List.length_drop, Array.length_toList]
+            omega), Option.getD_none,
+          getElem!_neg array index horiginal]
+
 theorem overwrite_perm_of_extract
     (a : Array T) (start : ℕ) (sub : Array T)
     (hfit : start + sub.size ≤ a.size)
@@ -7372,6 +7449,11 @@ private def scanRight :
       else
         right
 
+/-- Reversing and complementing a strict comparison turns the scans used by
+`partitionEqual` into the two scans used by `partitionP`. -/
+private def dualLess (isLess : T → T → Bool) (left right : T) : Bool :=
+  !isLess right left
+
 private theorem scanLeft_lt
     (indices : List ℕ) (left right bound : ℕ)
     (pivot : T) (array : Array T)
@@ -7596,6 +7678,244 @@ private theorem scanRight_forIn
       split
       · exact ih (right - 1)
       · rfl
+
+private theorem partitionScanLeft_forIn
+    (indices : List ℕ) (left right : ℕ)
+    (pivot : T) (array : Array T)
+    (isLess : T → T → Bool) :
+    (Id.run <| forIn indices left fun _ current =>
+      if current < right &&
+          isLess (array[1 + current]!) pivot then
+        do
+          pure PUnit.unit
+          pure (.yield (current + 1))
+      else
+        pure (.done current)) =
+      scanLeft indices left right pivot array (dualLess isLess) := by
+  simpa only [dualLess, Bool.not_not] using
+    scanLeft_forIn indices left right pivot array (dualLess isLess)
+
+private theorem partitionScanRight_forIn
+    (indices : List ℕ) (left right : ℕ)
+    (pivot : T) (array : Array T)
+    (isLess : T → T → Bool) :
+    (Id.run <| forIn indices right fun _ current =>
+      if left < current &&
+          !isLess (array[1 + (current - 1)]!) pivot then
+        do
+          pure PUnit.unit
+          pure (.yield (current - 1))
+      else
+        pure (.done current)) =
+      scanRight indices left right pivot array (dualLess isLess) := by
+  simpa only [dualLess] using
+    scanRight_forIn indices left right pivot array (dualLess isLess)
+
+private theorem partitionScanLeft_rangeAll
+    (indices : List ℕ) (left right : ℕ)
+    (pivot : T) (array : Array T)
+    (isLess : T → T → Bool) :
+    RangeAll array (1 + left)
+      (1 + scanLeft indices left right pivot array (dualLess isLess))
+      (fun item => isLess item pivot = true) := by
+  have h :=
+    scanLeft_rangeAll indices left right pivot array (dualLess isLess)
+  intro index hstart hstop
+  have hnot := h index hstart hstop
+  simp only [dualLess] at hnot
+  cases hvalue : isLess array[index]! pivot <;> simp_all
+
+private theorem partitionScanRight_rangeAll
+    (indices : List ℕ) (left right : ℕ)
+    (pivot : T) (array : Array T)
+    (isLess : T → T → Bool) :
+    RangeAll array
+      (1 + scanRight indices left right pivot array (dualLess isLess))
+      (1 + right) (fun item => isLess item pivot = false) := by
+  have h :=
+    scanRight_rangeAll indices left right pivot array (dualLess isLess)
+  intro index hstart hstop
+  have hnot := h index hstart hstop
+  simp only [dualLess] at hnot
+  cases hvalue : isLess array[index]! pivot <;> simp_all
+
+/-- `partitionP` places its selected pivot between the strictly-smaller and
+the remaining elements. -/
+theorem partitionP_order
+    (array : Array T) (pivotIndex : ℕ)
+    (isLess : T → T → Bool)
+    (hpivot : pivotIndex < array.size) :
+    let result := partitionP array pivotIndex isLess
+    RangeAll result.2 0 result.1.1
+        (fun item => isLess item result.2[result.1.1]! = true) ∧
+      RangeAll result.2 (result.1.1 + 1) result.2.size
+        (fun item => isLess item result.2[result.1.1]! = false) := by
+  simp only [partitionP,
+    Std.Legacy.Range.forIn_eq_forIn_range',
+    Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel,
+    Nat.div_one, Id.run_bind]
+  generalize hscanLeft :
+    (Id.run <| forIn
+      (List.range' 0 (swp array 0 pivotIndex).size) 0
+      fun _ left =>
+        if decide (left < (swp array 0 pivotIndex).size - 1) &&
+            isLess
+              (swp array 0 pivotIndex)[1 + left]!
+              (swp array 0 pivotIndex)[0]! then
+          do
+            pure PUnit.unit
+            pure (.yield (left + 1))
+        else
+          pure (.done left)) = left
+  generalize hscanRight :
+    (Id.run <| forIn
+      (List.range' 0 (swp array 0 pivotIndex).size)
+      ((swp array 0 pivotIndex).size - 1)
+      fun _ right =>
+        if decide (left < right) &&
+            !isLess
+              (swp array 0 pivotIndex)[1 + (right - 1)]!
+              (swp array 0 pivotIndex)[0]! then
+          do
+            pure PUnit.unit
+            pure (.yield (right - 1))
+        else
+          pure (.done right)) = right
+  generalize hblock :
+    partitionInBlocks
+      ((swp array 0 pivotIndex).extract
+        (1 + left) (1 + right))
+      (swp array 0 pivotIndex)[0]! isLess = block
+  let swapped := swp array 0 pivotIndex
+  let source := swapped.extract (1 + left) (1 + right)
+  let rewritten := overwrite swapped (1 + left) block.2
+  let middle := left + block.1
+  have hswappedSize : swapped.size = array.size := swp_size _ _ _
+  have hpositive : 0 < swapped.size := by
+    rw [hswappedSize]
+    omega
+  have hrange := partitionP_scan_bounds swapped isLess hpositive
+  dsimp only [swapped] at hrange
+  rw [hscanLeft, hscanRight] at hrange
+  have hrangeSwapped : left ≤ right ∧ right < swapped.size := by
+    simpa only [swapped] using hrange
+  have hleftDefinition := partitionScanLeft_forIn
+    (List.range' 0 swapped.size) 0 (swapped.size - 1)
+    swapped[0]! swapped isLess
+  dsimp only [swapped] at hleftDefinition
+  rw [hscanLeft] at hleftDefinition
+  have hrightDefinition := partitionScanRight_forIn
+    (List.range' 0 swapped.size) left (swapped.size - 1)
+    swapped[0]! swapped isLess
+  dsimp only [swapped] at hrightDefinition
+  rw [hscanRight] at hrightDefinition
+  have hleftOrder := partitionScanLeft_rangeAll
+    (List.range' 0 swapped.size) 0 (swapped.size - 1)
+    swapped[0]! swapped isLess
+  rw [← hleftDefinition] at hleftOrder
+  simp only [Nat.add_zero] at hleftOrder
+  have hrightOrder := partitionScanRight_rangeAll
+    (List.range' 0 swapped.size) left (swapped.size - 1)
+    swapped[0]! swapped isLess
+  rw [← hrightDefinition] at hrightOrder
+  have hblockContract := partitionInBlocks_contract
+    source swapped[0]! isLess
+  have hblockOrder := partitionInBlocks_order
+    source swapped[0]! isLess
+  dsimp only [source, swapped] at hblockContract hblockOrder
+  rw [hblock] at hblockContract hblockOrder
+  have hsourceSize : source.size = right - left := by
+    simp only [source, Array.size_extract]
+    omega
+  have hblockSize : block.2.size = source.size :=
+    array_size_eq_of_perm hblockContract.2
+  have hblockCount : block.1 ≤ block.2.size := by
+    rw [hblockSize]
+    simpa only [source, swapped] using hblockContract.1
+  have hfit : 1 + left + block.2.size ≤ swapped.size := by
+    rw [hblockSize, hsourceSize]
+    omega
+  have hmiddle : middle < rewritten.size := by
+    have hcount : block.1 ≤ source.size := by
+      simpa only [source, swapped] using hblockContract.1
+    simp only [middle, rewritten, overwrite_size]
+    rw [hsourceSize] at hcount
+    omega
+  have hprefix : RangeAll rewritten 1 (1 + middle)
+      (fun item => isLess item swapped[0]! = true) := by
+    intro index hindexStart hindexStop
+    simp only [middle] at hindexStop
+    rw [overwrite_get! swapped block.2 (1 + left) index hfit]
+    by_cases hbefore : index < 1 + left
+    · rw [if_neg (by omega)]
+      exact hleftOrder index hindexStart hbefore
+    · rw [if_pos (by
+          constructor
+          · omega
+          · rw [hblockSize, hsourceSize]
+            omega)]
+      apply hblockOrder.1 (index - (1 + left))
+      · omega
+      · omega
+  have hsuffix : RangeAll rewritten (1 + middle) rewritten.size
+      (fun item => isLess item swapped[0]! = false) := by
+    intro index hindexStart hindexStop
+    rw [overwrite_get! swapped block.2 (1 + left) index hfit]
+    by_cases hbeforeRight : index < 1 + right
+    · rw [if_pos (by
+          constructor
+          · simp only [middle] at hindexStart
+            omega
+          · rw [hblockSize, hsourceSize]
+            omega)]
+      apply hblockOrder.2 (index - (1 + left))
+      · simp only [middle] at hindexStart
+        omega
+      · rw [hblockSize, hsourceSize]
+        omega
+    · rw [if_neg (by
+          rw [hblockSize, hsourceSize]
+          omega)]
+      apply hrightOrder index
+      · omega
+      · have hrightStop : 1 + (swapped.size - 1) = swapped.size := by
+          omega
+        rw [hrightStop]
+        simpa only [rewritten, overwrite_size] using hindexStop
+  have hpivotValue : (swp rewritten 0 middle)[middle]! = swapped[0]! := by
+    rw [swp_get! rewritten 0 middle middle (by
+      simpa only [rewritten, overwrite_size] using hpositive) hmiddle]
+    have hzero : rewritten[0]! = swapped[0]! := by
+      simp only [rewritten]
+      rw [overwrite_get! swapped block.2 (1 + left) 0 hfit,
+        if_neg (by omega)]
+    by_cases hmiddleZero : middle = 0
+    · simp [hmiddleZero, hzero]
+    · simp [hmiddleZero, hzero]
+  show
+    RangeAll (swp rewritten 0 middle) 0 middle
+        (fun item => isLess item (swp rewritten 0 middle)[middle]! = true) ∧
+      RangeAll (swp rewritten 0 middle) (middle + 1)
+        (swp rewritten 0 middle).size
+        (fun item => isLess item (swp rewritten 0 middle)[middle]! = false)
+  constructor
+  · intro index hindexStart hindexStop
+    rw [hpivotValue,
+      swp_get! rewritten 0 middle index (by
+        simpa only [rewritten, overwrite_size] using hpositive) hmiddle]
+    by_cases hindexZero : index = 0
+    · rw [if_pos hindexZero]
+      exact hprefix middle (by omega) (by omega)
+    · rw [if_neg hindexZero, if_neg (by omega)]
+      exact hprefix index (by omega) (by omega)
+  · intro index hindexStart hindexStop
+    rw [hpivotValue,
+      swp_get! rewritten 0 middle index (by
+        simpa only [rewritten, overwrite_size] using hpositive) hmiddle,
+      if_neg (by omega), if_neg (by omega)]
+    apply hsuffix index
+    · omega
+    · simpa only [swp_size] using hindexStop
 
 private def partitionEqualLoop
     (indices scanIndices : List ℕ)
