@@ -7285,6 +7285,331 @@ theorem partialInsertionSort_perm (v : Array T)
     hinit
   simpa only [body, Inv] using hloop.1
 
+private theorem KeySorted.take_succ
+    (array : Array T) (key : T → ℕ) (index : ℕ)
+    (hpositive : 0 < index) (hindex : index < array.size)
+    (hsorted : KeySorted key (array.toList.take index))
+    (hnext : key array[index - 1]! ≤ key array[index]!) :
+    KeySorted key (array.toList.take (index + 1)) := by
+  rw [List.take_succ_eq_append_getElem (by simpa using hindex)]
+  rw [Array.getElem_toList hindex]
+  rw [getElem!_pos array index hindex] at hnext
+  apply KeySorted.append key _ _ hsorted (KeySorted.singleton key array[index])
+  intro left hleft right hright
+  simp only [List.mem_singleton] at hright
+  subst right
+  have hlength : (array.toList.take index).length = index := by
+    simp only [List.length_take, Array.length_toList]
+    omega
+  have hprefixBound := KeySorted.keysLE_last key
+    (array.toList.take index) hsorted (by omega)
+  have hleftLast := hprefixBound left hleft
+  have hlast : (array.toList.take index)[index - 1]! =
+      array[index - 1]! := by
+    rw [getElem!_pos _ _ (by rw [hlength]; omega),
+      List.getElem_take]
+    rw [Array.getElem_toList (by omega)]
+    rw [getElem!_pos array (index - 1) (by omega)]
+  rw [hlength, hlast] at hleftLast
+  exact hleftLast.trans hnext
+
+private theorem ascendingScan_sorted
+    (indices : List ℕ) (array : Array T) (key : T → ℕ)
+    (initial : ℕ) (hpositive : 0 < initial)
+    (hbound : initial ≤ array.size)
+    (hsorted : KeySorted key (array.toList.take initial)) :
+    let result := Id.run <| forIn indices initial fun _ index =>
+      if index < array.size &&
+          !lessBy key array[index]! array[index - 1]! then do
+        pure PUnit.unit
+        pure (.yield (index + 1))
+      else
+        pure (.done index)
+    0 < result ∧ result ≤ array.size ∧
+      KeySorted key (array.toList.take result) := by
+  induction indices generalizing initial with
+  | nil => exact ⟨hpositive, hbound, hsorted⟩
+  | cons _ indices inductionHypothesis =>
+      simp only [List.forIn_cons]
+      split
+      next hstep =>
+        simp only [Bool.and_eq_true, decide_eq_true_eq,
+          Bool.not_eq_true'] at hstep
+        have hnext : key array[initial - 1]! ≤ key array[initial]! := by
+          rw [lessBy_eq_false_iff] at hstep
+          exact hstep.2
+        exact inductionHypothesis (initial + 1) (by omega) (by omega)
+          (KeySorted.take_succ array key initial hpositive hstep.1
+            hsorted hnext)
+      next _ => exact ⟨hpositive, hbound, hsorted⟩
+
+private theorem swp_toList_take_before
+    (array : Array T) (left right stop : ℕ)
+    (hleft : left < array.size) (hright : right < array.size)
+    (hstopLeft : stop ≤ left) (hstopRight : stop ≤ right) :
+    (swp array left right).toList.take stop =
+      array.toList.take stop := by
+  apply List.ext_getElem
+  · simp only [List.length_take, Array.length_toList, swp_size]
+  · intro index hindexLeft hindexRight
+    rw [List.getElem_take, List.getElem_take]
+    have hindex : index < array.size := by
+      have := hindexRight
+      simp only [List.length_take, Array.length_toList] at this
+      omega
+    have hindexStop : index < stop := by
+      have := hindexRight
+      simp only [List.length_take, Array.length_toList] at this
+      omega
+    rw [Array.getElem_toList (by simpa only [swp_size] using hindex),
+      Array.getElem_toList hindex,
+      ← getElem!_pos (swp array left right) index
+        (by simpa only [swp_size] using hindex),
+      ← getElem!_pos array index hindex,
+      swp_get! array left right index hleft hright,
+      getElem!_pos array index hindex,
+      if_neg (by omega), if_neg (by omega)]
+
+private theorem partialInsertionMutation_prefix_sorted
+    (array : Array T) (key : T → ℕ) (index : ℕ)
+    (hpositive : 0 < index) (hindex : index < array.size)
+    (hsorted : KeySorted key (array.toList.take index)) :
+    let swapped := swp array (index - 1) index
+    let sortedPrefix := shiftTail (swapped.extract 0 index) (lessBy key)
+    let prefixed := overwrite swapped 0 sortedPrefix
+    let suffix := shiftHead (prefixed.extract index prefixed.size) (lessBy key)
+    let output := overwrite prefixed index suffix
+    KeySorted key (output.toList.take index) := by
+  let swapped := swp array (index - 1) index
+  let prefixSource := swapped.extract 0 index
+  let sortedPrefix := shiftTail prefixSource (lessBy key)
+  let prefixed := overwrite swapped 0 sortedPrefix
+  let suffixSource := prefixed.extract index prefixed.size
+  let suffix := shiftHead suffixSource (lessBy key)
+  let output := overwrite prefixed index suffix
+  show KeySorted key (output.toList.take index)
+  have hswappedSize : swapped.size = array.size := swp_size _ _ _
+  have hprefixSourceSize : prefixSource.size = index := by
+    simp [prefixSource]
+    omega
+  have hbeforeSwap : swapped.toList.take (index - 1) =
+      array.toList.take (index - 1) := by
+    exact swp_toList_take_before array (index - 1) index (index - 1)
+      (by omega) hindex (Nat.le_refl _) (by omega)
+  have hbeforeSorted : KeySorted key
+      (prefixSource.toList.take (prefixSource.size - 1)) := by
+    have hsmaller := KeySorted.take key
+      (array.toList.take index) (index - 1) hsorted
+    have horiginal : KeySorted key (array.toList.take (index - 1)) := by
+      rw [List.take_take,
+        show min (index - 1) index = index - 1 by omega] at hsmaller
+      exact hsmaller
+    simp only [prefixSource, Array.toList_extract,
+      List.extract_eq_take_drop, List.drop_zero, Nat.sub_zero,
+      hprefixSourceSize, List.take_take]
+    rw [show min (index - 1) index = index - 1 by omega]
+    rw [hbeforeSwap]
+    exact horiginal
+  have hprefixSorted : KeySorted key sortedPrefix.toList :=
+    shiftTail_sorted prefixSource key hbeforeSorted
+  have hprefixPerm := shiftTail_perm prefixSource (lessBy key)
+  have hprefixSize : sortedPrefix.size = index := by
+    have := array_size_eq_of_perm hprefixPerm
+    rw [hprefixSourceSize] at this
+    exact this
+  have hprefixedSize : prefixed.size = array.size := by
+    simp [prefixed, overwrite_size, hswappedSize]
+  have hprefixedPrefix :
+      KeySorted key (prefixed.toList.take index) := by
+    have hoverwrite := overwrite_toList swapped 0 sortedPrefix (by
+      simp only [Nat.zero_add, hprefixSize]
+      omega)
+    simp only [List.take_zero, List.nil_append, Nat.zero_add] at hoverwrite
+    have hlength : sortedPrefix.toList.length = index := by
+      simp only [Array.length_toList, hprefixSize]
+    rw [hoverwrite, List.take_append_of_le_length (by omega),
+      ← hlength, List.take_length]
+    exact hprefixSorted
+  have hsuffixPerm := shiftHead_perm suffixSource (lessBy key)
+  have hsuffixSourceSize : suffixSource.size = prefixed.size - index := by
+    simp [suffixSource]
+  have hsuffixSize : suffix.size = prefixed.size - index := by
+    have := array_size_eq_of_perm hsuffixPerm
+    rw [hsuffixSourceSize] at this
+    exact this
+  have houtputPrefix : output.toList.take index =
+      prefixed.toList.take index := by
+    have hoverwrite := overwrite_toList prefixed index suffix (by
+      rw [hsuffixSize]
+      omega)
+    rw [hoverwrite]
+    rw [List.append_assoc]
+    rw [List.take_append_of_le_length (by
+      simp only [List.length_take, Array.length_toList]
+      omega)]
+    rw [List.take_of_length_le (by
+      simp only [List.length_take, Array.length_toList]
+      omega)]
+  rw [houtputPrefix]
+  exact hprefixedPrefix
+
+/-- A successful nearly-sorted fast path really has scanned a sorted prefix
+through the end of the array. -/
+theorem partialInsertionSort_sorted
+    (array : Array T) (key : T → ℕ)
+    (hsuccess :
+      (partialInsertionSort array (lessBy key)).1 = true) :
+    KeySorted key
+      (partialInsertionSort array (lessBy key)).2.toList := by
+  by_cases hempty : array.size = 0
+  · exfalso
+    norm_num [partialInsertionSort, hempty, List.range'_eq_map_range,
+      List.range_succ, List.forIn_cons] at hsuccess
+  · simp only [partialInsertionSort,
+      Std.Legacy.Range.forIn_eq_forIn_range',
+      Std.Legacy.Range.size, Nat.sub_zero, Nat.add_sub_cancel,
+      Nat.div_one] at hsuccess ⊢
+    let body :
+        ℕ → MProd ℕ (MProd (Option Bool) (Array T)) →
+          Id (ForInStep
+            (MProd ℕ (MProd (Option Bool) (Array T)))) :=
+      fun _ state =>
+        if state.snd.fst.isNone = true then do
+          let index ←
+            forIn (List.range' 0 (array.size + 1)) state.fst fun _ index =>
+              if (decide (index < array.size) &&
+                  !lessBy key state.snd.snd[index]!
+                    state.snd.snd[index - 1]!) = true then do
+                pure PUnit.unit
+                pure (.yield (index + 1))
+              else
+                pure (.done index)
+          if (index == array.size) = true then do
+            pure PUnit.unit
+            pure (.yield ⟨index, some true, state.snd.snd⟩)
+          else if array.size < 50 then do
+            pure PUnit.unit
+            pure (.yield ⟨index, some false, state.snd.snd⟩)
+          else do
+            pure PUnit.unit
+            pure (.yield
+              ⟨index, state.snd.fst,
+                overwrite
+                  (overwrite (swp state.snd.snd (index - 1) index) 0
+                    (shiftTail
+                      ((swp state.snd.snd (index - 1) index).extract 0 index)
+                      (lessBy key)))
+                  index
+                  (shiftHead
+                    ((overwrite (swp state.snd.snd (index - 1) index) 0
+                      (shiftTail
+                        ((swp state.snd.snd (index - 1) index).extract 0 index)
+                        (lessBy key))).extract index)
+                    (lessBy key))⟩)
+        else do
+          pure PUnit.unit
+          pure (.yield
+            ⟨state.fst, state.snd.fst, state.snd.snd⟩)
+    let Inv :=
+      fun state : MProd ℕ (MProd (Option Bool) (Array T)) =>
+        state.snd.snd.size = array.size ∧
+        (state.snd.fst.isNone = true →
+          0 < state.fst ∧ state.fst ≤ array.size ∧
+            KeySorted key (state.snd.snd.toList.take state.fst)) ∧
+        (state.snd.fst = some true →
+          KeySorted key state.snd.snd.toList)
+    have hbody :
+        ∀ outer ∈ List.range' 0 5, ∀ state, Inv state →
+          match (body outer state).run with
+          | .done next => Inv next
+          | .yield next => Inv next := by
+      intro outer houter state hinvariant
+      by_cases hnone : state.snd.fst.isNone = true
+      · simp only [body, hnone, ↓reduceIte, Id.run_bind]
+        generalize hscan :
+          (Id.run <| forIn (List.range' 0 (array.size + 1)) state.fst
+            fun _ index =>
+              if (decide (index < array.size) &&
+                  !lessBy key state.snd.snd[index]!
+                    state.snd.snd[index - 1]!) = true then do
+                pure PUnit.unit
+                pure (.yield (index + 1))
+              else
+                pure (.done index)) = index
+        have hstart := hinvariant.2.1 hnone
+        have hscanResult := ascendingScan_sorted
+          (List.range' 0 (array.size + 1)) state.snd.snd key
+          state.fst hstart.1 (by omega) hstart.2.2
+        rw [hinvariant.1] at hscanResult
+        rw [hscan] at hscanResult
+        by_cases hend : (index == array.size) = true
+        · simp only [hend, ↓reduceIte, Inv]
+          have hindex : index = array.size := by simpa using hend
+          refine ⟨hinvariant.1, by simp, ?_⟩
+          intro _
+          have hlength : state.snd.snd.toList.length = index := by
+            simp only [Array.length_toList, hinvariant.1, hindex]
+          have hsorted := hscanResult.2.2
+          rw [← hlength, List.take_length] at hsorted
+          exact hsorted
+        · simp only [hend]
+          by_cases hshort : array.size < 50
+          · simp only [hshort, ↓reduceIte, Inv]
+            exact ⟨hinvariant.1, by simp⟩
+          · simp only [hshort, ↓reduceIte, Inv]
+            have hindexLt : index < state.snd.snd.size := by
+              have hindexNe : index ≠ array.size := by
+                intro heq
+                exact hend (by simp [heq])
+              omega
+            have hmutationPerm := partialInsertionMutation_perm
+              state.snd.snd (lessBy key) index hscanResult.1 hindexLt
+            have hmutationSize := array_size_eq_of_perm hmutationPerm
+            refine ⟨hmutationSize.trans hinvariant.1,
+              fun _ => ⟨hscanResult.1, hscanResult.2.1, ?_⟩, ?_⟩
+            · exact partialInsertionMutation_prefix_sorted
+                state.snd.snd key index hscanResult.1 hindexLt
+                hscanResult.2.2
+            · intro himpossible
+              have : False := by
+                rw [himpossible] at hnone
+                simp at hnone
+              exact this.elim
+      · simp only [body, hnone, Inv]
+        exact hinvariant
+    have hinitial : Inv ⟨1, none, array⟩ := by
+      dsimp only [Inv]
+      refine ⟨rfl, ?_, by simp⟩
+      intro _
+      refine ⟨by omega, by omega, ?_⟩
+      have hsingle : KeySorted key (array.toList.take 1) := by
+        rw [KeySorted, List.sortedLE_iff_pairwise,
+          List.pairwise_map, List.pairwise_iff_get]
+        intro left right horder
+        have hleft := left.isLt
+        have hright := right.isLt
+        simp only [List.length_take] at hleft hright
+        omega
+      exact hsingle
+    have hloop := list_forIn_invariant
+      (List.range' 0 5) body Inv ⟨1, none, array⟩
+      (fun outer houter state next hinvariant hstep => by
+        have h := hbody outer houter state hinvariant
+        rcases hstep with hstep | hstep
+        · rw [hstep] at h
+          exact h
+        · rw [hstep] at h
+          exact h)
+      hinitial
+    let final := Id.run <| forIn (List.range' 0 5)
+      ⟨1, none, array⟩ body
+    change final.snd.fst.getD false = true at hsuccess
+    change KeySorted key final.snd.snd.toList
+    have hsuccessOption : final.snd.fst = some true := by
+      cases hoption : final.snd.fst <;> simp_all
+    have hfinalSorted := hloop.2.2 hsuccessOption
+    exact hfinalSorted
+
 omit [Inhabited T] in
 theorem extract_split_toList (a : Array T) (i : ℕ) :
     (a.extract 0 i ++ a.extract i a.size).toList = a.toList := by

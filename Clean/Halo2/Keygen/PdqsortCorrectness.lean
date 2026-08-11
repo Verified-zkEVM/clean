@@ -851,4 +851,18 @@ theorem heapsort_sorted
   rw [hdefinition]
   exact hsorted
 
+private def orderingContracts
+    {T : Type} [Inhabited T] (key : T → ℕ) :
+    OrderingContracts T key where
+  heapsort_sorted := fun array => heapsort_sorted array key
+  partialInsertionSort_sorted := fun array =>
+    partialInsertionSort_sorted array key
+
+/-- The complete legacy pdqsort implementation orders its output by the
+natural-number key used by V1 region placement. -/
+theorem quicksort_sorted
+    {T : Type} [Inhabited T] (array : Array T) (key : T → ℕ) :
+    KeySorted key (quicksort array (lessBy key)).toList :=
+  quicksort_sorted_of_contracts (orderingContracts key) array
+
 end Halo2.FloorPlanner.Pdqsort
