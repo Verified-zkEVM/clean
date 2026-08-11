@@ -11643,6 +11643,18 @@ theorem placeSummary_law
     ((sortRegionColumns_perm summary.columns).nodup_iff.mpr hnodup)
     hlength
 
+/-- Placing a well-formed reduced summary preserves allocation validity, including
+the empty-column case where first-fit is a no-op. -/
+theorem placeSummary_valid
+    (summary : RegionShapeSummary) (allocations : CircuitAllocations)
+    (hvalid : allocations.Valid) (hwellFormed : summary.WellFormed) :
+    (placeSummary summary allocations).2.Valid := by
+  by_cases hcolumns : summary.columns = []
+  · simp [placeSummary, hcolumns, sortRegionColumns, firstFit]
+    exact hvalid
+  · exact (placeSummary_law summary allocations hvalid hwellFormed.1
+      (hwellFormed.2 hcolumns)).1.valid
+
 /-- Index-free slotting of the reduced region summaries. This is the exact V1
 allocator with only the bookkeeping region index removed. -/
 def slotShapeSummariesFrom (summaries : List RegionShapeSummary)
@@ -12618,15 +12630,37 @@ def slottedSummaryEndFrom (summaries : List RegionShapeSummary)
   (summaries.zip starts).map (fun placed =>
     placed.2 + placed.1.rowCount) |>.foldl max 0
 
+/-- Exact end row obtained by slotting an index-free reduced summary, folded
+from an existing end row. -/
+def slotSummaryEndFromWith (initial : ℕ)
+    (summaries : List RegionShapeSummary)
+    (allocations : CircuitAllocations) : ℕ :=
+  (summaries.zip (slotShapeSummariesFrom summaries allocations).1).map
+    (fun placed => placed.2 + placed.1.rowCount) |>.foldl max initial
+
+theorem slotSummaryEndFromWith_cons
+    (initial : ℕ) (head : RegionShapeSummary)
+    (tail : List RegionShapeSummary)
+    (allocations : CircuitAllocations) :
+    slotSummaryEndFromWith initial (head :: tail) allocations =
+      let placed := placeSummary head allocations
+      slotSummaryEndFromWith
+        (max initial (placed.1.getD 0 + head.rowCount)) tail placed.2 := by
+  generalize hplaced : placeSummary head allocations = placed
+  rcases placed with ⟨row, updated⟩
+  unfold slotSummaryEndFromWith
+  simp only [slotShapeSummariesFrom, hplaced, List.zip_cons_cons,
+    List.map_cons, List.foldl_cons]
+
 /-- Exact end row obtained by slotting an index-free reduced summary. -/
 def slotSummaryEndFrom (summaries : List RegionShapeSummary)
     (allocations : CircuitAllocations) : ℕ :=
-  slottedSummaryEndFrom summaries
-    (slotShapeSummariesFrom summaries allocations).1
+  slotSummaryEndFromWith 0 summaries allocations
 
 /-- Swapping two disjoint regions changes neither their individual placements nor
 the final endpoint, including the placement of every following region. -/
-theorem slotSummaryEndFrom_swap
+theorem slotSummaryEndFromWith_swap
+    (initial : ℕ)
     (left right : RegionShapeSummary)
     (tail : List RegionShapeSummary)
     (allocations : CircuitAllocations)
@@ -12637,8 +12671,8 @@ theorem slotSummaryEndFrom_swap
     (hrightLength : 0 < right.rowCount)
     (hdisjoint : List.Disjoint left.columns right.columns)
     (htail : tail.Forall RegionShapeSummary.WellFormed) :
-    slotSummaryEndFrom (left :: right :: tail) allocations =
-      slotSummaryEndFrom (right :: left :: tail) allocations := by
+    slotSummaryEndFromWith initial (left :: right :: tail) allocations =
+      slotSummaryEndFromWith initial (right :: left :: tail) allocations := by
   have hcommute := placeSummary_commute left right allocations hvalid
     hleftNodup hrightNodup hleftLength hrightLength hdisjoint
   generalize hleftFirst : placeSummary left allocations = leftFirst
@@ -12671,16 +12705,137 @@ theorem slotSummaryEndFrom_swap
   have hsuffix := slotShapeSummariesFrom_equivalent tail
     leftThenRightAllocations rightThenLeftAllocations htail
     hleftThenRightLaw.1.valid hrightThenLeftLaw.1.valid hcommute.2.2
-  unfold slotSummaryEndFrom
+  unfold slotSummaryEndFromWith
   simp only [slotShapeSummariesFrom, hleftFirst, hrightFirst,
     hleftThenRight, hrightThenLeft]
   rw [hcommute.1, hcommute.2.1, hsuffix.1]
-  simp only [slottedSummaryEndFrom, List.zip_cons_cons, List.map_cons,
-    List.foldl_cons]
+  simp only [List.zip_cons_cons, List.map_cons, List.foldl_cons]
   congr 1
   rw [Nat.max_assoc, Nat.max_assoc,
     Nat.max_comm (leftRowAfterRight.getD 0 + left.rowCount)
       (rightRowAfterLeft.getD 0 + right.rowCount)]
+
+/-- The zero-based endpoint specialization of disjoint-region commutation. -/
+theorem slotSummaryEndFrom_swap
+    (left right : RegionShapeSummary)
+    (tail : List RegionShapeSummary)
+    (allocations : CircuitAllocations)
+    (hvalid : allocations.Valid)
+    (hleftNodup : left.columns.Nodup)
+    (hrightNodup : right.columns.Nodup)
+    (hleftLength : 0 < left.rowCount)
+    (hrightLength : 0 < right.rowCount)
+    (hdisjoint : List.Disjoint left.columns right.columns)
+    (htail : tail.Forall RegionShapeSummary.WellFormed) :
+    slotSummaryEndFrom (left :: right :: tail) allocations =
+      slotSummaryEndFrom (right :: left :: tail) allocations := by
+  exact slotSummaryEndFromWith_swap 0 left right tail allocations hvalid
+    hleftNodup hrightNodup hleftLength hrightLength hdisjoint htail
+
+/-- The disjoint swap theorem with the empty-region case derived from summary
+well-formedness. -/
+theorem slotSummaryEndFromWith_swap_of_wellFormed
+    (initial : ℕ) (left right : RegionShapeSummary)
+    (tail : List RegionShapeSummary)
+    (allocations : CircuitAllocations)
+    (hvalid : allocations.Valid)
+    (hleft : left.WellFormed) (hright : right.WellFormed)
+    (hdisjoint : List.Disjoint left.columns right.columns)
+    (htail : tail.Forall RegionShapeSummary.WellFormed) :
+    slotSummaryEndFromWith initial (left :: right :: tail) allocations =
+      slotSummaryEndFromWith initial (right :: left :: tail) allocations := by
+  by_cases hleftColumns : left.columns = []
+  · have hleftPlace : ∀ current,
+        placeSummary left current = (some 0, current) := by
+      intro current
+      simp [placeSummary, hleftColumns, sortRegionColumns, firstFit]
+    generalize hrightPlace : placeSummary right allocations = rightResult
+    rcases rightResult with ⟨rightRow, updated⟩
+    unfold slotSummaryEndFromWith
+    simp only [slotShapeSummariesFrom, hleftPlace, hrightPlace,
+      List.zip_cons_cons, List.map_cons, List.foldl_cons]
+    congr 1
+    rw [Nat.max_assoc, Nat.max_assoc,
+      Nat.max_comm ((some 0).getD 0 + left.rowCount)
+        (rightRow.getD 0 + right.rowCount)]
+  · by_cases hrightColumns : right.columns = []
+    · have hrightPlace : ∀ current,
+          placeSummary right current = (some 0, current) := by
+        intro current
+        simp [placeSummary, hrightColumns, sortRegionColumns, firstFit]
+      generalize hleftPlace : placeSummary left allocations = leftResult
+      rcases leftResult with ⟨leftRow, updated⟩
+      unfold slotSummaryEndFromWith
+      simp only [slotShapeSummariesFrom, hrightPlace, hleftPlace,
+        List.zip_cons_cons, List.map_cons, List.foldl_cons]
+      congr 1
+      rw [Nat.max_assoc, Nat.max_assoc,
+        Nat.max_comm (leftRow.getD 0 + left.rowCount)
+          ((some 0).getD 0 + right.rowCount)]
+    · exact slotSummaryEndFromWith_swap initial left right tail
+        allocations hvalid hleft.1 hright.1 (hleft.2 hleftColumns)
+        (hright.2 hrightColumns) hdisjoint htail
+
+/-- Every pair of summaries may be reordered without changing V1 placement: equal
+summaries trivially commute, while distinct summaries use disjoint columns. -/
+def PairwisePlacementCommutative
+    (summaries : List RegionShapeSummary) : Prop :=
+  ∀ left, left ∈ summaries → ∀ right, right ∈ summaries →
+    left = right ∨ List.Disjoint left.columns right.columns
+
+/-- Any permutation of a pairwise-commutative summary block has the same exact
+endpoint, even when followed by an arbitrary well-formed suffix. -/
+theorem slotSummaryEndFromWith_perm
+    {left right : List RegionShapeSummary} (hperm : left.Perm right)
+    (hwellFormed : left.Forall RegionShapeSummary.WellFormed)
+    (hcommutative : PairwisePlacementCommutative left)
+    (initial : ℕ) (allocations : CircuitAllocations)
+    (hvalid : allocations.Valid) (tail : List RegionShapeSummary)
+    (htail : tail.Forall RegionShapeSummary.WellFormed) :
+    slotSummaryEndFromWith initial (left ++ tail) allocations =
+      slotSummaryEndFromWith initial (right ++ tail) allocations := by
+  induction hperm generalizing initial allocations tail with
+  | nil => rfl
+  | cons head hperm inductionHypothesis =>
+      rw [List.forall_cons] at hwellFormed
+      generalize hplaced : placeSummary head allocations = placed
+      rcases placed with ⟨row, updated⟩
+      have hupdatedValid : updated.Valid := by
+        have hresult := placeSummary_valid head allocations hvalid
+          hwellFormed.1
+        rw [hplaced] at hresult
+        exact hresult
+      have hrest := inductionHypothesis hwellFormed.2 (by
+        intro first hfirst second hsecond
+        exact hcommutative first (by simp [hfirst]) second (by simp [hsecond]))
+        (max initial (row.getD 0 + head.rowCount)) updated hupdatedValid
+        tail htail
+      simpa only [List.cons_append, slotSummaryEndFromWith_cons,
+        hplaced] using hrest
+  | swap first second rest =>
+      rw [List.forall_cons, List.forall_cons] at hwellFormed
+      have hpair := hcommutative first (by simp) second (by simp)
+      rcases hpair with rfl | hdisjoint
+      · rfl
+      · symm
+        simpa only [List.cons_append] using
+          slotSummaryEndFromWith_swap_of_wellFormed initial first second
+            (rest ++ tail) allocations hvalid hwellFormed.2.1
+            hwellFormed.1 hdisjoint (by
+              rw [List.forall_append]
+              exact ⟨hwellFormed.2.2, htail⟩)
+  | trans hleft hright leftInduction rightInduction =>
+      exact (leftInduction hwellFormed hcommutative initial allocations
+        hvalid tail htail).trans
+          (rightInduction (by
+              rw [List.forall_iff_forall_mem]
+              intro summary hsummary
+              exact List.forall_iff_forall_mem.mp hwellFormed summary
+                (hleft.mem_iff.mpr hsummary)) (by
+              intro first hfirst second hsecond
+              exact hcommutative first (hleft.mem_iff.mpr hfirst)
+                second (hleft.mem_iff.mpr hsecond)) initial allocations
+            hvalid tail htail)
 
 /-- Forgetting shape indices changes no slotted endpoint, for any pair sequence. -/
 theorem slottedEndFrom_forgetIndices_eq
