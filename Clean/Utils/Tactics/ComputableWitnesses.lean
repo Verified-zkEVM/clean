@@ -18,13 +18,15 @@ a child bundle name whose metadata is otherwise stuck under a binder).
    `unfold_plain_circuit_consts` additionally unfolds plain-`Circuit`-typed wrapper
    defs. `FormalCircuit`-variant bundles are proof boundaries and are **never**
    unfolded — their obligations go through the composition lemmas instead.
-2. **Destructure** `ProvableStruct`-typed inputs (`simp`/`grind` do not iota-reduce
+2. **Destructure** struct variables via `provable_struct_simp`'s destructure pass
+   (with its `splitRowEval`/`matchScrutinees` extensions: `eval = eval` input
+   premises must decompose field-wise, and `simp`/`grind` do not iota-reduce
    `main`'s destructuring match against an opaque variable).
 3. **Split** the resulting conjunction into per-obligation leaves (`splitStep`):
-   syntactic `And`/`∀` fast paths first, then whnf-unifying probes under a local
-   heartbeat sub-budget — probing a still-folded group (e.g. a 32-wide
-   `Circuit.forEach`) would otherwise symbolically execute it. Goals headed by
-   `Subcircuit.ComputableWitnesses` stay whole.
+   syntactic `And`/`∀` head dispatch — the goal is simp-normalized here, and a
+   defeq-hidden shape is left whole as a leaf (unifying against it would
+   symbolically execute still-folded groups, e.g. a 32-wide `Circuit.forEach`).
+   Goals headed by `Subcircuit.ComputableWitnesses` stay whole.
 4. **Per leaf**: a leaf-local simp (including `reduceLocalLength` and, for leaves with
    a `Circuit.forEach` group, `ring_nf` + `Circuit.forEach.forAll`), then
    `assert_local_lengths`, then dispatch:
@@ -113,8 +115,9 @@ def localLengthHeads : List Name :=
    `Subcircuit.localLength, `Operations.localLength]
 
 /-- Run `x` under a local heartbeat sub-budget, converting a runtime timeout into
-`none`. Used for speculative defeq probes that would otherwise symbolically execute
-opaque terms and kill the whole tactic (the runtime exception escapes `try`). -/
+`none`. Used for `assert_local_lengths`' speculative length reductions, which would
+otherwise symbolically execute opaque terms and kill the whole tactic (the runtime
+exception escapes `try`). -/
 def withProbeBudget {α : Type} (x : MetaM α) : MetaM (Option α) :=
   tryCatchRuntimeEx
     (withCurrHeartbeats do
@@ -654,11 +657,9 @@ partial def splitStep (g : MVarId) (fuel : Nat) : MetaM (List MVarId) := do
   let t := (← instantiateMVars (← g.getType)).consumeMData
   -- child obligations stay whole for the composition rules
   if t.getAppFn.isConstOf `Subcircuit.ComputableWitnesses then return [g]
-  -- syntactic fast paths first; the whnf-unifying fallback also splits conjunctions
-  -- reachable only by definitional unfolding (`Operations.forAll` over bind-chains),
-  -- but under a sub-budget: whnf-unifying against a still-opaque group (e.g. a folded
-  -- 32-wide `Circuit.forEach`) symbolically executes it, and the runtime exception
-  -- escapes `try` — with the budget it degrades to keeping the leaf whole.
+  -- syntactic head dispatch only: the goal is simp-normalized here, so `And`/`∀`
+  -- structure is syntactic, and a defeq-hidden shape is a leaf for the close routes
+  -- (unifying against it would symbolically execute still-folded groups)
   if t.isAppOfArity ``And 2 then
     if let some gs ← observing? (g.apply (mkConst ``And.intro)) then
       return ← gs.foldlM (init := []) fun acc g' => do
@@ -666,14 +667,7 @@ partial def splitStep (g : MVarId) (fuel : Nat) : MetaM (List MVarId) := do
   if t.isForall then
     if let some (_, g') ← observing? g.intro1P then
       return ← splitStep g' (fuel - 1)
-  match ← withProbeBudget (observing? (g.apply (mkConst ``And.intro))) with
-  | some (some gs) =>
-    gs.foldlM (init := []) fun acc g' => do
-      return acc ++ (← splitStep g' (fuel - 1))
-  | _ =>
-    match ← withProbeBudget (observing? g.intro1P) with
-    | some (some (_, g')) => splitStep g' (fuel - 1)
-    | _ => return [g]
+  return [g]
 
 def splitStructure : TacticM Unit :=
   liftMetaTactic fun g => splitStep g 512
