@@ -337,6 +337,76 @@ theorem heapFrom_half (values : ℕ → ℕ) (bound : ℕ) :
   intro parent hparent child hchild hchildBound
   rcases hchild with rfl | rfl <;> omega
 
+theorem childOf_parent (index : ℕ) (hindex : 0 < index) :
+    ChildOf ((index - 1) / 2) index := by
+  unfold ChildOf
+  omega
+
+theorem HeapFrom.root_max
+    (values : ℕ → ℕ) (bound index : ℕ)
+    (hheap : HeapFrom values bound 0) (hindex : index < bound) :
+    values index ≤ values 0 := by
+  induction index using Nat.strong_induction_on with
+  | h index inductionHypothesis =>
+      by_cases hzero : index = 0
+      · subst index
+        exact Nat.le_refl _
+      · let parent := (index - 1) / 2
+        have hpositive : 0 < index := Nat.zero_lt_of_ne_zero hzero
+        have hparentBefore : parent < index := by
+          simp [parent]
+          omega
+        have hchild : ChildOf parent index := childOf_parent index hpositive
+        have hedge := hheap parent (by omega) index hchild hindex
+        exact hedge.trans (inductionHypothesis parent hparentBefore (by omega))
+
+theorem HeapFrom.after_root_swap
+    (values : ℕ → ℕ) (boundary : ℕ)
+    (hheap : HeapFrom values (boundary + 1) 0) :
+    HeapFrom (swapAt values 0 boundary) boundary 1 := by
+  intro parent hparent child hchild hchildBound
+  have hparentBefore := child_gt_parent hchild
+  have hold := hheap parent (by omega) child hchild (by omega)
+  have hparentZero : parent ≠ 0 := by omega
+  have hparentBoundary : parent ≠ boundary := by omega
+  have hchildZero : child ≠ 0 := by omega
+  have hchildBoundary : child ≠ boundary := by omega
+  simpa [swapAt, hparentZero, hparentBoundary,
+    hchildZero, hchildBoundary] using hold
+
+theorem heapsort_repairedPrefix_heap
+    {T : Type} [Inhabited T] (array : Array T) (key : T → ℕ)
+    (boundary : ℕ) (hboundary : 0 < boundary)
+    (hfit : boundary < array.size)
+    (hheap : HeapFrom (fun index => key array[index]!)
+      (boundary + 1) 0) :
+    let swapped := swp array 0 boundary
+    let prefixArray := swapped.extract 0 boundary
+    let repaired := siftDown prefixArray (lessBy key) 0
+    HeapFrom (fun index => key repaired[index]!) repaired.size 0 := by
+  let swapped := swp array 0 boundary
+  let prefixArray := swapped.extract 0 boundary
+  have hswappedValues := swp_values key array 0 boundary (by omega) hfit
+  have hswappedHeap := hheap.after_root_swap
+  rw [← hswappedValues] at hswappedHeap
+  have hprefixSize : prefixArray.size = boundary := by
+    simp [prefixArray, swapped, swp]
+    omega
+  have hprefixRead (index : ℕ) (hindex : index < boundary) :
+      prefixArray[index]! = swapped[index]! := by
+    rw [getElem!_pos prefixArray index (by omega),
+      getElem!_pos swapped index (by simp [swapped, swp]; omega)]
+    simp [prefixArray, Array.getElem_extract]
+  have hprefixHeap : HeapFrom (fun index => key prefixArray[index]!)
+      prefixArray.size 1 := by
+    intro parent hparent child hchild hchildBound
+    have hparentBefore := child_gt_parent hchild
+    have hold := hswappedHeap parent hparent child hchild (by omega)
+    dsimp only at hold ⊢
+    rw [hprefixRead parent (by omega), hprefixRead child (by omega)]
+    exact hold
+  exact siftDown_heapFrom prefixArray key 0 (by omega) hprefixHeap
+
 private theorem heapify_reverse
     {T : Type} [Inhabited T] (key : T → ℕ) :
     ∀ (count : ℕ) (array : Array T),
