@@ -9739,6 +9739,8 @@ structure OrderingContracts (T : Type) [Inhabited T] (key : T → ℕ) where
     ∀ array, (partialInsertionSort array (lessBy key)).1 = true →
       KeySorted key (partialInsertionSort array (lessBy key)).2.toList
 
+variable {key : T → ℕ}
+
 private def legacyDriverContracts : DriverContracts T :=
   driverContractsOfBlocksContract partitionInBlocks_perm_contract
 
