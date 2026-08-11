@@ -103,7 +103,6 @@ elab "unfold_plain_circuit_consts" : tactic => do
 
 namespace ComputableWitnesses
 
-
 /-- Heads under which concrete circuits' `localLength` metadata appears in
 computable-witness goals. -/
 def localLengthHeads : List Name :=
