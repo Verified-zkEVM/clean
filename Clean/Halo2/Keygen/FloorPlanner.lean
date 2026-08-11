@@ -13599,6 +13599,22 @@ def RegionShapeSummary.withoutSelectors
   columns := physicalColumns summary.columns
   rowCount := summary.rowCount
 
+@[simp] theorem RegionShapeSummary.withoutSelectors_key
+    (summary : RegionShapeSummary) :
+    summary.withoutSelectors.key = summary.key := by
+  unfold RegionShapeSummary.key RegionShapeSummary.adviceCols
+  simp only [RegionShapeSummary.withoutSelectors]
+  have hfilter :
+      (physicalColumns summary.columns).filter RegionColumn.isAdvice =
+        summary.columns.filter RegionColumn.isAdvice := by
+    rw [physicalColumns, List.filter_filter]
+    apply List.filter_congr
+    intro column _
+    cases column with
+    | selector => simp [RegionColumn.isAdvice]
+    | column kind index => cases kind <;> simp [RegionColumn.isAdvice]
+  rw [hfilter]
+
 
 namespace V1
 
@@ -14076,6 +14092,47 @@ def slottedSummaryEndFrom (summaries : List RegionShapeSummary)
     (starts : List ℕ) : ℕ :=
   (summaries.zip starts).map (fun placed =>
     placed.2 + placed.1.rowCount) |>.foldl max 0
+
+/-- Erasing selector columns preserves the endpoint projection for any fixed
+start-row sequence. -/
+theorem slottedSummaryEndFrom_map_withoutSelectors
+    (summaries : List RegionShapeSummary) (starts : List ℕ) :
+    slottedSummaryEndFrom
+        (summaries.map RegionShapeSummary.withoutSelectors) starts =
+      slottedSummaryEndFrom summaries starts := by
+  unfold slottedSummaryEndFrom
+  apply congrArg (List.foldl max 0)
+  induction summaries generalizing starts with
+  | nil => rfl
+  | cons summary rest inductionHypothesis =>
+      cases starts with
+      | nil => rfl
+      | cons start starts =>
+          simp only [List.map_cons, List.zip_cons_cons,
+            RegionShapeSummary.withoutSelectors]
+          rw [inductionHypothesis]
+
+/-- When selector allocations are dominated by physical anchor columns, erasing
+selectors preserves the exact endpoint as well as every chosen start row. -/
+theorem slotSummaryEndFrom_eq_withoutSelectors
+    (summaries : List RegionShapeSummary)
+    (left right : CircuitAllocations)
+    (hwellFormed : summaries.Forall RegionShapeSummary.WellFormed)
+    (hvalidLeft : left.Valid) (hvalidRight : right.Valid)
+    {anchor : ℕ → RegionColumn}
+    (hphysical : CircuitAllocations.PhysicalEquivalent left right)
+    (hselectors : SelectorAllocationsDominatedBy left anchor)
+    (hanchors : SelectorAnchoredBy summaries anchor) :
+    slottedSummaryEndFrom summaries
+        (slotShapeSummariesFrom summaries left).1 =
+      slottedSummaryEndFrom
+        (summaries.map RegionShapeSummary.withoutSelectors)
+        (slotShapeSummariesFrom
+          (summaries.map RegionShapeSummary.withoutSelectors) right).1 := by
+  have hstarts := (slotShapeSummariesFrom_eq_withoutSelectors summaries
+    left right hwellFormed hvalidLeft hvalidRight hphysical hselectors
+    hanchors).1
+  rw [← hstarts, slottedSummaryEndFrom_map_withoutSelectors]
 
 /-- Exact end row obtained by slotting an index-free reduced summary, folded
 from an existing end row. -/
