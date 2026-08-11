@@ -12898,7 +12898,7 @@ theorem perm_bubble (pivot : RegionShapeSummary)
 /-- For two key-sorted permutations, V1's endpoint is insensitive to the order
 within tied-key runs whenever tied summaries are equal or column-disjoint. -/
 theorem slotSummaryEndFromWith_eq_of_sorted_perm
-    (key : RegionShapeSummary → ℕ)
+    {K : Type} [LinearOrder K] (key : RegionShapeSummary → K)
     {left right : List RegionShapeSummary}
     (hperm : left.Perm right)
     (hsortedLeft : (left.map key).SortedLE)
@@ -12964,7 +12964,7 @@ theorem slotSummaryEndFromWith_eq_of_sorted_perm
       have hbeforeKeys : ∀ item, item ∈ before →
           key item = key pivot := by
         intro item hitem
-        apply Nat.le_antisymm
+        apply le_antisymm
         · exact hsortedRightAppend.2.2 (key item)
             (List.mem_map.mpr ⟨item, hitem, rfl⟩) (key pivot) (by simp)
         · exact hlower item (by simp [hitem])
