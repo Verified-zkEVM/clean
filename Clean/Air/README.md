@@ -32,6 +32,19 @@ The library currently provides two distinct arguments to establish soundness, co
 
 `Vm.lean` contains a construction aimed at "VM-like" components that perform one transition per row. Since VM components both pull from and push to one distinguished state channel, they cannot follow the theory of ordered lookup-channel soundness. Instead, we prove a dedicated soundness theorem that applies to a set of VM components added to an existing hierarchical ensemble; a typical modern zkVMs layout.
 
+`WitnessGeneration.lean` constructs ensemble witnesses from public input and a separately typed
+runtime prover input. Demand-driven components allocate rows from channel messages. Preallocated
+components initialize their prover-owned cells from constants or strided positions in the prover
+input, while the generic builder supplies any verifier-fixed prefix. Preallocated channel handlers
+identify an existing component interaction and a generated multiplicity column; messages and row
+indices are derived from completed rows rather than duplicated in generation metadata.
+
+The prover input is only an input to honest witness construction. Semantic `ProverData` is always
+derived from the final committed component inputs. Export currently permits `dataGet` only from
+stable cells of preallocated components and rejects reads from demand-generated or mutable cells.
+This makes the initial data snapshot used by witness generation agree with the final derived data
+at every readable location.
+
 ## Relation To Clean/Table
 
 `Clean/Table` is the older table infrastructure. Its `InductiveTable` interface models classic AIRs where a row transition may directly relate adjacent rows, by putting the output of one VM step in the same relative position as the input of the next step. `Clean.Air.Flat` instead models the modern one-row style: each component checks a single row in isolation, and all cross-row or cross-component structure is mediated by channels. The two layers are currently independent, but `Clean.Air` is intended to become the common home for AIR-style infrastructure, including future support for the older inductive table style now living under `Clean/Table`.

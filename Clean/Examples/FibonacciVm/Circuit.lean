@@ -355,22 +355,20 @@ def add8Mode : Mode (F p) := .demand {
   input := { cells := [.message 0, .message 1, .message 2, .multiplicity] }
 }
 
-/-- The byte provider has one fixed-value row and one multiplicity cell per byte. -/
-def bytesMode : Mode (F p) := .fixed
-  (bytesFixedColumns.rows.map fun fixed => fixed ++ #[0])
-  (bytesFixedColumns.rows.zipIdx.map fun (fixed, row) => {
-    channel := (BytesChannel (p := p)).name
-    direction := .pull
-    message := fixed
-    row
-    column := 1
-  })
+/-- The byte provider preallocates one verifier-fixed byte and one generated
+multiplicity cell per row. Its declared push interaction routes byte pulls back to
+the corresponding row. -/
+def bytesMode : Mode (F p) := .preallocated {
+  rows := (bytesFixedColumns (p := p)).rows.length
+  input := [.const 0]
+  handlers := [{ interaction := 0, column := 1 }]
+}
 
 /--
 Channel-driven witness-generation metadata, aligned with
 `fibonacciEnsemble.ensemble.tables = [fib8, add8, pushBytes]`.
 -/
-def config (fuel : ℕ) : Config (F p) where
+def config (fuel : ℕ) : Config (F p) unit where
   modes := [fibMode (p := p), add8Mode (p := p), bytesMode (p := p)]
   padding := [
     { input := #[0, 0, 0, 0], minimumRows := 32 },
@@ -383,7 +381,7 @@ def config (fuel : ℕ) : Config (F p) where
 def generate (publicInput : fieldTriple (F p)) (fuel : ℕ) :
     Except String (EnsembleWitness (fibonacciEnsemble (p := p)).ensemble) :=
   Air.Flat.WitnessGeneration.generate (fibonacciEnsemble (p := p)).ensemble
-    (config (p := p) fuel) publicInput
+    (config (p := p) fuel) publicInput ()
 
 end FibonacciWitness
 

@@ -24,7 +24,7 @@ fn field(value: u64) -> BabyBear {
 
 #[test]
 fn extracted_rust_generates_fibonacci_ensemble_witness() {
-    let witness = generated::generate(&[field(32), field(5), field(226)])
+    let witness = generated::generate(&[field(32), field(5), field(226)], &[])
         .expect("extracted Rust witness generation failed");
 
     assert_eq!(
@@ -50,7 +50,7 @@ fn extracted_rust_generates_fibonacci_ensemble_witness() {
 
 #[test]
 fn extracted_rust_coalesces_repeated_chip_pulls() {
-    let witness = generated::generate(&[field(400), field(219), field(61)])
+    let witness = generated::generate(&[field(400), field(219), field(61)], &[])
         .expect("extracted Rust witness generation failed");
 
     assert_eq!(
@@ -65,7 +65,7 @@ fn extracted_fibonacci_air_proves_and_verifies() {
     let public_values = vec![field(4096), field(59), field(29)];
     let witness_started = Instant::now();
     let witness =
-        generated::generate(&public_values).expect("extracted Rust witness generation failed");
+        generated::generate(&public_values, &[]).expect("extracted Rust witness generation failed");
 
     let traces = witness.into_traces().expect("invalid extracted traces");
     assert_eq!(
@@ -102,7 +102,7 @@ fn ensemble_api_reports_shape_errors() {
     let config = setup::test_config(7);
     let public_values = vec![field(32), field(5), field(226)];
     let witness =
-        generated::generate(&public_values).expect("extracted Rust witness generation failed");
+        generated::generate(&public_values, &[]).expect("extracted Rust witness generation failed");
     let traces = witness.into_traces().expect("invalid extracted traces");
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
     let airs = generated::FibonacciEnsembleProgramAir::all(&trace_heights)
@@ -138,6 +138,8 @@ struct Minimum64Program;
 impl<F: WitnessField> Program<F> for Minimum64Program {
     const FUEL: usize = <generated::FibonacciEnsembleProgram as Program<F>>::FUEL;
     const COMPONENTS: usize = <generated::FibonacciEnsembleProgram as Program<F>>::COMPONENTS;
+    const PUBLIC_INPUTS: usize = <generated::FibonacciEnsembleProgram as Program<F>>::PUBLIC_INPUTS;
+    const PROVER_INPUTS: usize = <generated::FibonacciEnsembleProgram as Program<F>>::PROVER_INPUTS;
     const FIXED_WIDTHS: &'static [usize] =
         <generated::FibonacciEnsembleProgram as Program<F>>::FIXED_WIDTHS;
     const COMPONENT_NAMES: &'static [&'static str] =
@@ -155,6 +157,10 @@ impl<F: WitnessField> Program<F> for Minimum64Program {
                 ..padding
             })
             .collect()
+    }
+
+    fn initial_rows(component: usize, prover_input: &[F]) -> Result<Vec<Vec<F>>, String> {
+        generated::FibonacciEnsembleProgram::initial_rows(component, prover_input)
     }
 
     fn complete_row(
@@ -179,8 +185,8 @@ fn verifier_rejects_a_valid_proof_at_the_wrong_height() {
     let config = setup::test_config(11);
     let public_values = vec![field(32), field(5), field(226)];
     let expected =
-        generated::generate(&public_values).expect("extracted Rust witness generation failed");
-    let wrong = witness_generation::generate::<BabyBear, Minimum64Program>(&public_values)
+        generated::generate(&public_values, &[]).expect("extracted Rust witness generation failed");
+    let wrong = witness_generation::generate::<BabyBear, Minimum64Program>(&public_values, &[])
         .expect("wrong-height witness generation failed");
 
     let wrong_traces = wrong.into_traces().expect("invalid wrong-height traces");

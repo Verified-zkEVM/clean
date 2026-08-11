@@ -224,11 +224,26 @@ public interactions: it has no witnesses, constraints, or lookups. Its assumptio
 and channel interactions enter ensemble soundness directly. Consequently, data consistency and
 constraint satisfaction apply only to actual committed component tables.
 
-FemtoCairo now exercises this substrate with indexed fixed program and memory providers, a
+FemtoCairo now exercises this substrate with an indexed fixed program provider, an indexed memory
+provider whose addresses are fixed and whose values are prover-committed, a
 channel-connected execution component, and a public final state. Its extracted Rust witness reads
 memory through the derived data, and the generated Plonky3 AIR proves and verifies an eight-step
 program with non-trivial AP- and FP-relative reads. This is a correctness substrate, not yet the
 realistically sized performance demonstration required for the final milestone.
+
+Witness-generation input is separate from semantic `ProverData`. An ensemble witness configuration
+declares a typed prover input that is serialized and supplied to the Lean or generated Rust builder
+at runtime. Preallocated component initializers copy declared cells from that input while fixed
+column prefixes come from the component and generated multiplicity cells start from constants.
+FemtoCairo therefore compiles its public program and address columns into the artifact but receives
+private memory values only when witness generation is invoked.
+
+Preallocated channel handlers refer to a component interaction and mutable input column. The
+builder evaluates the interaction to locate the matching row, rather than embedding messages or
+row numbers in generation metadata. For now, extracted `dataGet` operations may read only stable
+cells of preallocated components; reads from demand-generated tables or handler-mutated cells are
+rejected. This stated restriction ensures the generator's initial data view agrees with the final
+derived `ProverData` at every readable location without requiring fixed-point witness recomputation.
 
 ### Verifier-known trace shape must be bound
 

@@ -743,34 +743,21 @@ def executionMode {programSize : ℕ} (program : Fin programSize → F p)
 }
 
 def programMode {programSize : ℕ} (program : Fin programSize → F p) : Mode (F p) :=
-  let fixed := (programFixedColumns program).rows
-  .fixed
-    (fixed.map fun row => row ++ #[0])
-    (fixed.zipIdx.map fun (message, row) => {
-      channel := (ProgramChannel program).name
-      direction := .pull
-      message
-      row
-      column := 2
-    })
+  .preallocated {
+    rows := (programFixedColumns program).rows.length
+    input := [.const 0]
+    handlers := [{ interaction := 0, column := 2 }]
+  }
 
-def memoryMode {memorySize : ℕ} (memoryValues : Fin memorySize → F p) : Mode (F p) :=
-  let fixed := (memoryFixedColumns (p := p) memorySize).rows
-  .fixed
-    ((fixed.zip (List.finRange memorySize)).map fun (row, i) =>
-      row ++ #[memoryValues i, 0])
-    ((fixed.zip (List.finRange memorySize)).map fun (address, i) => {
-      channel := (MemoryChannel (p := p)).name
-      direction := .pull
-      message := address ++ #[memoryValues i]
-      row := i.val
-      column := 2
-    })
+def memoryMode (memorySize : ℕ) : Mode (F p) := .preallocated {
+  rows := memorySize
+  input := [.proverInput 0 1, .const 0]
+  handlers := [{ interaction := 0, column := 2 }]
+}
 
 def config {programSize memorySize : ℕ} (program : Fin programSize → F p)
-    (memoryValues : Fin memorySize → F p) (initialState : State (F p))
-    (executionRows fuel : ℕ) : Config (F p) where
-  modes := [executionMode program initialState, memoryMode memoryValues, programMode program]
+    (initialState : State (F p)) (executionRows fuel : ℕ) : Config (F p) (fields memorySize) where
+  modes := [executionMode program initialState, memoryMode memorySize, programMode program]
   padding := [
     { input := #[0, 0, 0], minimumRows := executionRows },
     { input := #[0, 0, 0], minimumRows := memorySize },
@@ -780,13 +767,13 @@ def config {programSize memorySize : ℕ} (program : Fin programSize → F p)
 
 def generate {programSize memorySize : ℕ} (program : Fin programSize → F p)
     (h_programSize : programSize < p) (h_memorySize : memorySize < p)
-    (memoryValues : Fin memorySize → F p) (initialState finalState : State (F p))
+    (memoryValues : fields memorySize (F p)) (initialState finalState : State (F p))
     (executionRows fuel : ℕ) :
     Except String (EnsembleWitness
       (soundEnsemble program h_programSize h_memorySize initialState).ensemble) :=
   Air.Flat.WitnessGeneration.generate
     (soundEnsemble program h_programSize h_memorySize initialState).ensemble
-    (config program memoryValues initialState executionRows fuel) finalState
+    (config program initialState executionRows fuel) finalState memoryValues
 
 end Witness
 

@@ -64,5 +64,8 @@ cargo test --manifest-path backends/plonky3/Cargo.toml
 cargo test --release --manifest-path backends/plonky3/Cargo.toml
 ```
 
-The backend is still experimental. In particular, the generated ensemble path intentionally rejects
-external `ProverData` and hint reads until their proof-system semantics are defined.
+The generated ensemble path accepts a separately serialized runtime prover input for initializing
+private committed columns. Clean's semantic `ProverData` is not supplied by the caller: it is
+derived from the final component rows. Extracted witness programs may read stable cells of
+preallocated component data; reads from demand-generated or mutable cells are rejected during
+extraction. External hint reads remain unsupported.
