@@ -109,6 +109,132 @@ theorem sortRegionColumns_perm (columns : List RegionColumn) :
     (r := fun left right : RegionColumn =>
       RegionColumn.lt left right = true) columns
 
+/-- Concrete columns in a region footprint. -/
+def physicalColumns (columns : List RegionColumn) : List RegionColumn :=
+  columns.filter fun
+    | .column _ _ => true
+    | .selector _ => false
+
+/-- Virtual selector columns in a region footprint. -/
+def selectorColumns (columns : List RegionColumn) : List RegionColumn :=
+  columns.filter fun
+    | .column _ _ => false
+    | .selector _ => true
+
+private theorem orderedInsert_append_of_rel_right
+    {alpha : Type} (relation : alpha → alpha → Prop)
+    [DecidableRel relation] (item : alpha) (left right : List alpha)
+    (hrel : ∀ candidate ∈ right, relation item candidate) :
+    List.orderedInsert relation item (left ++ right) =
+      List.orderedInsert relation item left ++ right := by
+  induction left with
+  | nil =>
+      cases right with
+      | nil => rfl
+      | cons head tail =>
+          simp only [List.nil_append, List.orderedInsert_cons]
+          rw [if_pos (hrel head (by simp))]
+          simp only [List.orderedInsert_nil, List.singleton_append]
+  | cons head tail inductionHypothesis =>
+      simp only [List.cons_append, List.orderedInsert_cons]
+      split <;> rename_i hitemHead
+      · rfl
+      · simp only [List.cons_append]
+        rw [inductionHypothesis]
+
+private theorem orderedInsert_append_of_not_rel_left
+    {alpha : Type} (relation : alpha → alpha → Prop)
+    [DecidableRel relation] (item : alpha) (left right : List alpha)
+    (hrel : ∀ candidate ∈ left, ¬ relation item candidate) :
+    List.orderedInsert relation item (left ++ right) =
+      left ++ List.orderedInsert relation item right := by
+  induction left with
+  | nil => rfl
+  | cons head tail inductionHypothesis =>
+      simp only [List.cons_append, List.orderedInsert_cons]
+      rw [if_neg (hrel head (by simp)), inductionHypothesis]
+      intro candidate hcandidate
+      exact hrel candidate (by simp [hcandidate])
+
+private theorem physical_lt_selector
+    (kind : ColumnKind) (column selector : ℕ) :
+    RegionColumn.lt (.column kind column) (.selector selector) = true := by
+  cases kind <;> simp [RegionColumn.lt, RegionColumn.ordKey,
+    RegionColumn.kindRank]
+
+private theorem selector_not_lt_physical
+    (kind : ColumnKind) (selector column : ℕ) :
+    RegionColumn.lt (.selector selector) (.column kind column) ≠ true := by
+  cases kind <;> simp [RegionColumn.lt, RegionColumn.ordKey,
+    RegionColumn.kindRank]
+
+private theorem sortRegionColumns_cons
+    (head : RegionColumn) (tail : List RegionColumn) :
+    sortRegionColumns (head :: tail) =
+      List.orderedInsert (fun left right =>
+        RegionColumn.lt left right = true) head
+        (sortRegionColumns tail) := by
+  rfl
+
+private theorem physicalColumns_column_cons
+    (kind : ColumnKind) (index : ℕ) (tail : List RegionColumn) :
+    physicalColumns (.column kind index :: tail) =
+      .column kind index :: physicalColumns tail := by
+  rfl
+
+private theorem physicalColumns_selector_cons
+    (selector : ℕ) (tail : List RegionColumn) :
+    physicalColumns (.selector selector :: tail) = physicalColumns tail := by
+  rfl
+
+private theorem selectorColumns_column_cons
+    (kind : ColumnKind) (index : ℕ) (tail : List RegionColumn) :
+    selectorColumns (.column kind index :: tail) = selectorColumns tail := by
+  rfl
+
+private theorem selectorColumns_selector_cons
+    (selector : ℕ) (tail : List RegionColumn) :
+    selectorColumns (.selector selector :: tail) =
+      .selector selector :: selectorColumns tail := by
+  rfl
+
+/-- The consensus column order places every concrete column before every virtual
+selector column. -/
+theorem sortRegionColumns_eq_physical_append_selectors
+    (columns : List RegionColumn) :
+    sortRegionColumns columns =
+      sortRegionColumns (physicalColumns columns) ++
+        sortRegionColumns (selectorColumns columns) := by
+  induction columns with
+  | nil => rfl
+  | cons head tail inductionHypothesis =>
+      cases head with
+      | column kind index =>
+          rw [sortRegionColumns_cons, physicalColumns_column_cons,
+            selectorColumns_column_cons, sortRegionColumns_cons]
+          rw [inductionHypothesis]
+          apply orderedInsert_append_of_rel_right
+          intro candidate hcandidate
+          have hsource := (sortRegionColumns_perm
+            (selectorColumns tail)).mem_iff.mp hcandidate
+          rw [selectorColumns, List.mem_filter] at hsource
+          rcases candidate with _ | selector
+          · simp at hsource
+          · exact physical_lt_selector kind index selector
+      | selector selector =>
+          rw [sortRegionColumns_cons, physicalColumns_selector_cons,
+            selectorColumns_selector_cons, sortRegionColumns_cons]
+          rw [inductionHypothesis]
+          apply orderedInsert_append_of_not_rel_left
+          intro candidate hcandidate
+          have hsource := (sortRegionColumns_perm
+            (physicalColumns tail)).mem_iff.mp hcandidate
+          rw [physicalColumns, List.mem_filter] at hsource
+          rcases candidate with ⟨kind, column⟩ | _
+          · exact selector_not_lt_physical kind selector column
+          · simp at hsource
+
+
 /-! ## Measurement pass (`v1.rs` `MeasurementPass` / `layouter.rs` `RegionShape`) -/
 
 /-- The shape of a region: its region index, the SET of columns it touches, and its row
@@ -10304,6 +10430,14 @@ theorem Allocations.mem_insert
     (start, length) ∈ (allocations.insert start length).toList := by
   simpa [insert] using mem_insertList allocations.toList start length
 
+theorem Allocations.mem_insert_iff
+    (allocations : Allocations) (start length : ℕ)
+    (interval : ℕ × ℕ) :
+    interval ∈ (allocations.insert start length).toList ↔
+      interval = (start, length) ∨ interval ∈ allocations.toList := by
+  simpa [insert] using
+    mem_insertList_iff allocations.toList start length interval
+
 theorem Allocations.mem_insert_of_mem
     (allocations : Allocations) (start length : ℕ)
     {allocated : ℕ × ℕ} (hallocated : allocated ∈ allocations.toList) :
@@ -11094,6 +11228,99 @@ def trySpaces (fuel : ℕ) (colAllocs : CircuitAllocations) (c : RegionColumn)
 termination_by (fuel, 1, spaces.length)
 
 end
+
+/-- Once fuel covers every remaining column, its exact value is unobservable. -/
+theorem firstFit_eq_of_sufficient_fuel
+    (columns : List RegionColumn) :
+    ∀ (leftFuel rightFuel : ℕ) (allocations : CircuitAllocations)
+      (length start : ℕ) (slack : Option ℕ),
+      columns.length ≤ leftFuel → columns.length ≤ rightFuel →
+      firstFit leftFuel allocations columns length start slack =
+        firstFit rightFuel allocations columns length start slack := by
+  induction columns with
+  | nil =>
+      intro leftFuel rightFuel allocations length start slack _ _
+      simp [firstFit]
+  | cons column rest inductionHypothesis =>
+      intro leftFuel rightFuel allocations length start slack
+        hleftFuel hrightFuel
+      cases leftFuel with
+      | zero => simp at hleftFuel
+      | succ leftFuel =>
+          cases rightFuel with
+          | zero => simp at hrightFuel
+          | succ rightFuel =>
+              have hleftRest : rest.length ≤ leftFuel := by
+                simpa using hleftFuel
+              have hrightRest : rest.length ≤ rightFuel := by
+                simpa using hrightFuel
+              let initialized := allocations.insert column
+                (allocations.getD column #[])
+              let spaces := (allocations.getD column #[]).freeIntervals start
+                (slack.map fun available => start + length + available)
+              have compareSpaces : ∀ (remaining : List (ℕ × Option ℕ))
+                  (current : CircuitAllocations),
+                  trySpaces leftFuel current column rest length remaining =
+                    trySpaces rightFuel current column rest length remaining := by
+                intro remaining
+                induction remaining with
+                | nil =>
+                    intro current
+                    simp [trySpaces]
+                | cons space more spacesInduction =>
+                    rcases space with ⟨spaceStart, spaceEnd⟩
+                    intro current
+                    let available : Option ℤ := spaceEnd.map fun stop =>
+                      (stop : ℤ) - spaceStart - length
+                    let ok : Bool := match available with
+                      | some value => decide (value ≥ 0)
+                      | none => true
+                    by_cases hok : ok = true
+                    · have hrecursive := inductionHypothesis leftFuel rightFuel
+                        current length spaceStart (available.map Int.toNat)
+                        hleftRest hrightRest
+                      generalize hleft : firstFit leftFuel current rest length
+                        spaceStart (available.map Int.toNat) = leftResult
+                          at hrecursive
+                      have hright := hrecursive.symm
+                      rcases leftResult with ⟨row, updated⟩
+                      cases row with
+                      | some row =>
+                          simp only [trySpaces]
+                          change ((if ok = true then _ else _) :
+                              Option ℕ × CircuitAllocations) =
+                            ((if ok = true then _ else _) :
+                              Option ℕ × CircuitAllocations)
+                          simp only [if_pos hok]
+                          have havailable :
+                              (spaceEnd.map fun stop =>
+                                (stop : ℤ) - spaceStart - length) =
+                                available := rfl
+                          rw [havailable, hleft, hright]
+                      | none =>
+                          have hnext := spacesInduction updated
+                          simp only [trySpaces]
+                          change ((if ok = true then _ else _) :
+                              Option ℕ × CircuitAllocations) =
+                            ((if ok = true then _ else _) :
+                              Option ℕ × CircuitAllocations)
+                          simp only [if_pos hok]
+                          have havailable :
+                              (spaceEnd.map fun stop =>
+                                (stop : ℤ) - spaceStart - length) =
+                                available := rfl
+                          rw [havailable, hleft, hright]
+                          exact hnext
+                    · have hnext := spacesInduction current
+                      simp only [trySpaces]
+                      change ((if ok = true then _ else _) :
+                          Option ℕ × CircuitAllocations) =
+                        ((if ok = true then _ else _) :
+                          Option ℕ × CircuitAllocations)
+                      simpa only [if_neg hok] using hnext
+              simp only [firstFit]
+              exact compareSpaces spaces initialized
+
 
 /-- A successful recursive placement remains inside its initial search window. -/
 def Within (start : ℕ) (slack : Option ℕ)
@@ -13130,6 +13357,395 @@ theorem activation_origin_regionIndex_unique
     hindices hleftOperation hrightOperation
     hleftActivation hrightActivation
   rw [← hleftAbsolute, ← hrightAbsolute]
+
+/-! ## Selector-free V1 placement -/
+
+namespace V1
+
+open Halo2 FloorPlanner
+
+theorem selector_mem_selectorColumns_iff
+    (selector : ℕ) (columns : List RegionColumn) :
+    RegionColumn.selector selector ∈ selectorColumns columns ↔
+      RegionColumn.selector selector ∈ columns := by
+  simp [selectorColumns]
+
+theorem column_mem_physicalColumns_iff
+    (kind : ColumnKind) (index : ℕ) (columns : List RegionColumn) :
+    RegionColumn.column kind index ∈ physicalColumns columns ↔
+      RegionColumn.column kind index ∈ columns := by
+  simp [physicalColumns]
+
+theorem exists_selector_of_mem_selectorColumns
+    {column : RegionColumn} {columns : List RegionColumn}
+    (hcolumn : column ∈ selectorColumns columns) :
+    ∃ selector, column = .selector selector := by
+  rw [selectorColumns, List.mem_filter] at hcolumn
+  rcases column with ⟨kind, index⟩ | selector
+  · simp at hcolumn
+  · exact ⟨selector, rfl⟩
+
+theorem exists_column_of_mem_physicalColumns
+    {column : RegionColumn} {columns : List RegionColumn}
+    (hcolumn : column ∈ physicalColumns columns) :
+    ∃ kind index, column = .column kind index := by
+  rw [physicalColumns, List.mem_filter] at hcolumn
+  rcases column with ⟨kind, index⟩ | selector
+  · exact ⟨kind, index, rfl⟩
+  · simp at hcolumn
+
+/-- Every interval allocated to `dominated` is also allocated to `dominant`. -/
+def ColumnAllocationsDominate (allocations : CircuitAllocations)
+    (dominant dominated : RegionColumn) : Prop :=
+  ∀ interval,
+    interval ∈ (allocations.getD dominated #[]).toList →
+      interval ∈ (allocations.getD dominant #[]).toList
+
+theorem ColumnAllocationsDominate.fits
+    {allocations : CircuitAllocations} {dominant dominated : RegionColumn}
+    (hdominate : ColumnAllocationsDominate allocations dominant dominated)
+    {start length : ℕ}
+    (hfits : (allocations.getD dominant #[]).Fits start length) :
+    (allocations.getD dominated #[]).Fits start length := by
+  intro interval hinterval
+  exact hfits interval (hdominate interval hinterval)
+
+/-- A fixed physical anchor column participates in every region that uses each
+selector. -/
+def SelectorAnchoredBy (summaries : List RegionShapeSummary)
+    (anchor : ℕ → RegionColumn) : Prop :=
+  ∀ summary ∈ summaries, ∀ selector,
+    RegionColumn.selector selector ∈ summary.columns →
+      anchor selector ∈ physicalColumns summary.columns
+
+/-- Current selector allocations are covered by the corresponding physical
+anchor allocation. -/
+def SelectorAllocationsDominatedBy (allocations : CircuitAllocations)
+    (anchor : ℕ → RegionColumn) : Prop :=
+  ∀ selector, ColumnAllocationsDominate allocations
+    (anchor selector) (.selector selector)
+
+theorem SelectorAllocationsDominatedBy.empty
+    (anchor : ℕ → RegionColumn) :
+    SelectorAllocationsDominatedBy (∅ : CircuitAllocations) anchor := by
+  intro selector interval hinterval
+  simp at hinterval
+
+theorem ColumnsDominate.of_selectorAnchors
+    {allocations : CircuitAllocations} {columns : List RegionColumn}
+    {length : ℕ} {anchor : ℕ → RegionColumn}
+    (hallocations : SelectorAllocationsDominatedBy allocations anchor)
+    (hanchors : ∀ selector,
+      RegionColumn.selector selector ∈ columns →
+        anchor selector ∈ physicalColumns columns) :
+    ColumnsDominate allocations (physicalColumns columns)
+      (selectorColumns columns) length := by
+  intro row hphysical column hcolumn
+  obtain ⟨selector, rfl⟩ := exists_selector_of_mem_selectorColumns hcolumn
+  have hsource := selector_mem_selectorColumns_iff selector columns |>.mp
+    hcolumn
+  exact (hallocations selector).fits
+    (hphysical (anchor selector) (hanchors selector hsource))
+
+theorem PlacementEffect.selectorAllocationsDominatedBy
+    {before : CircuitAllocations} {columns : List RegionColumn}
+    {length : ℕ} {result : Option ℕ × CircuitAllocations}
+    {anchor : ℕ → RegionColumn}
+    (heffect : PlacementEffect before columns length result)
+    (hbefore : SelectorAllocationsDominatedBy before anchor)
+    (hanchors : ∀ selector,
+      RegionColumn.selector selector ∈ columns →
+        anchor selector ∈ columns) :
+    SelectorAllocationsDominatedBy result.2 anchor := by
+  cases hrow : result.1 with
+  | none =>
+      intro selector interval hinterval
+      rw [heffect (.selector selector), hrow] at hinterval
+      rw [heffect (anchor selector), hrow]
+      exact hbefore selector interval hinterval
+  | some row =>
+      intro selector interval hinterval
+      rw [heffect (.selector selector), hrow] at hinterval
+      rw [heffect (anchor selector), hrow]
+      dsimp only at hinterval ⊢
+      by_cases hselector : RegionColumn.selector selector ∈ columns
+      · have hanchor := hanchors selector hselector
+        rw [if_pos hselector, Allocations.mem_insert_iff] at hinterval
+        rw [if_pos hanchor, Allocations.mem_insert_iff]
+        exact hinterval.imp_right (hbefore selector interval)
+      · rw [if_neg hselector] at hinterval
+        by_cases hanchor : anchor selector ∈ columns
+        · rw [if_pos hanchor, Allocations.mem_insert_iff]
+          exact Or.inr (hbefore selector interval hinterval)
+        · rw [if_neg hanchor]
+          exact hbefore selector interval hinterval
+
+
+end V1
+
+/-- Remove the virtual selector portion of one reduced footprint. -/
+def RegionShapeSummary.withoutSelectors
+    (summary : RegionShapeSummary) : RegionShapeSummary where
+  columns := physicalColumns summary.columns
+  rowCount := summary.rowCount
+
+
+namespace V1
+
+open Halo2 FloorPlanner
+
+/-- Selector columns do not influence the chosen row when their allocations are
+covered by physical anchors in the same region. -/
+theorem placeSummary_row_eq_withoutSelectors
+    (summary : RegionShapeSummary) (allocations : CircuitAllocations)
+    (hvalid : allocations.Valid) (hnodup : summary.columns.Nodup)
+    (hlength : 0 < summary.rowCount)
+    {anchor : ℕ → RegionColumn}
+    (hallocations : SelectorAllocationsDominatedBy allocations anchor)
+    (hanchors : ∀ selector,
+      RegionColumn.selector selector ∈ summary.columns →
+        anchor selector ∈ physicalColumns summary.columns) :
+    (placeSummary summary allocations).1 =
+      (placeSummary summary.withoutSelectors allocations).1 := by
+  let physical := sortRegionColumns (physicalColumns summary.columns)
+  let selectors := sortRegionColumns (selectorColumns summary.columns)
+  have hsplit : sortRegionColumns summary.columns = physical ++ selectors := by
+    exact sortRegionColumns_eq_physical_append_selectors summary.columns
+  have hsortedNodup : (physical ++ selectors).Nodup := by
+    rw [← hsplit]
+    exact (sortRegionColumns_perm summary.columns).nodup_iff.mpr hnodup
+  have hdominate : ColumnsDominate allocations physical selectors
+      summary.rowCount := by
+    have hbase : ColumnsDominate allocations
+        (physicalColumns summary.columns) (selectorColumns summary.columns)
+        summary.rowCount :=
+      ColumnsDominate.of_selectorAnchors hallocations hanchors
+    intro row hphysical
+    have hphysicalSource : FitsColumns allocations
+        (physicalColumns summary.columns) row summary.rowCount :=
+      hphysical.mono (fun column hcolumn =>
+        (sortRegionColumns_perm
+          (physicalColumns summary.columns)).mem_iff.mpr hcolumn)
+    have hselectorsSource := hbase row hphysicalSource
+    exact hselectorsSource.mono (fun column hcolumn =>
+      (sortRegionColumns_perm
+        (selectorColumns summary.columns)).mem_iff.mp hcolumn)
+  have hdrop := firstFit_drop_dominated_suffix
+    (physical ++ selectors).length allocations allocations [] physical
+      selectors summary.rowCount 0 none hvalid hvalid
+      (CircuitAllocations.Equivalent.refl allocations) hsortedNodup
+      hlength le_rfl (by
+        intro row hwithin column hcolumn
+        simp at hcolumn) hdominate
+  have hfuel := firstFit_eq_of_sufficient_fuel physical
+    (physical ++ selectors).length physical.length allocations
+      summary.rowCount 0 none (by simp) le_rfl
+  simp only [placeSummary, RegionShapeSummary.withoutSelectors]
+  rw [hsplit]
+  exact hdrop.trans (congrArg Prod.fst hfuel)
+
+/-- Allocation maps agree on every concrete planner column. -/
+def CircuitAllocations.PhysicalEquivalent
+    (left right : CircuitAllocations) : Prop :=
+  ∀ kind index,
+    left.getD (.column kind index) #[] =
+      right.getD (.column kind index) #[]
+
+theorem CircuitAllocations.PhysicalEquivalent.refl
+    (allocations : CircuitAllocations) :
+    CircuitAllocations.PhysicalEquivalent allocations allocations := by
+  intro kind index
+  rfl
+
+theorem CircuitAllocations.PhysicalEquivalent.agreesOn
+    {left right : CircuitAllocations}
+    (hequivalent : CircuitAllocations.PhysicalEquivalent left right)
+    (columns : List RegionColumn) :
+    left.AgreesOn right (physicalColumns columns) := by
+  intro column hcolumn
+  rw [physicalColumns, List.mem_filter] at hcolumn
+  rcases column with ⟨kind, index⟩ | selector
+  · exact hequivalent kind index
+  · simp at hcolumn
+
+theorem placeSummary_effect
+    (summary : RegionShapeSummary) (allocations : CircuitAllocations)
+    (hvalid : allocations.Valid) (hnodup : summary.columns.Nodup)
+    (hlength : 0 < summary.rowCount) :
+    PlacementEffect allocations (sortRegionColumns summary.columns)
+      summary.rowCount (placeSummary summary allocations) := by
+  exact firstFit_effect (sortRegionColumns summary.columns).length
+    allocations (sortRegionColumns summary.columns) summary.rowCount 0 none
+    hvalid ((sortRegionColumns_perm summary.columns).nodup_iff.mpr hnodup)
+    hlength
+
+theorem physical_mem_sorted_full_iff
+    (kind : ColumnKind) (index : ℕ) (columns : List RegionColumn) :
+    RegionColumn.column kind index ∈ sortRegionColumns columns ↔
+      RegionColumn.column kind index ∈
+        sortRegionColumns (physicalColumns columns) := by
+  rw [(sortRegionColumns_perm columns).mem_iff,
+    (sortRegionColumns_perm (physicalColumns columns)).mem_iff,
+    column_mem_physicalColumns_iff]
+
+theorem placeSummary_physicalEquivalent
+    (summary : RegionShapeSummary) (left right : CircuitAllocations)
+    (hvalidLeft : left.Valid) (hvalidRight : right.Valid)
+    (hnodup : summary.columns.Nodup) (hlength : 0 < summary.rowCount)
+    (hbefore : CircuitAllocations.PhysicalEquivalent left right)
+    (hrow : (placeSummary summary left).1 =
+      (placeSummary summary.withoutSelectors right).1) :
+    CircuitAllocations.PhysicalEquivalent (placeSummary summary left).2
+      (placeSummary summary.withoutSelectors right).2 := by
+  have hfullEffect := placeSummary_effect summary left hvalidLeft hnodup
+    hlength
+  have hphysicalNodup :
+      (physicalColumns summary.columns).Nodup := by
+    exact List.Nodup.filter _ hnodup
+  have hphysicalEffect := placeSummary_effect summary.withoutSelectors right
+    hvalidRight hphysicalNodup hlength
+  intro kind index
+  rw [hfullEffect (.column kind index),
+    hphysicalEffect (.column kind index), hrow]
+  cases hresult : (placeSummary summary.withoutSelectors right).1 with
+  | none =>
+      simpa only [hresult, RegionShapeSummary.withoutSelectors] using
+        hbefore kind index
+  | some row =>
+      simp only [RegionShapeSummary.withoutSelectors]
+      have hmember := physical_mem_sorted_full_iff kind index
+        summary.columns
+      by_cases hcolumn : RegionColumn.column kind index ∈
+          sortRegionColumns summary.columns
+      · rw [if_pos hcolumn, if_pos (hmember.mp hcolumn),
+          hbefore kind index]
+      · rw [if_neg hcolumn, if_neg (mt hmember.mpr hcolumn),
+          hbefore kind index]
+
+theorem placeSummary_withoutSelectors_row_congruent
+    (summary : RegionShapeSummary) (left right : CircuitAllocations)
+    (hvalidLeft : left.Valid) (hvalidRight : right.Valid)
+    (hnodup : summary.columns.Nodup) (hlength : 0 < summary.rowCount)
+    (hequivalent : CircuitAllocations.PhysicalEquivalent left right) :
+    (placeSummary summary.withoutSelectors left).1 =
+      (placeSummary summary.withoutSelectors right).1 := by
+  let columns := sortRegionColumns (physicalColumns summary.columns)
+  have hcolumnsNodup : columns.Nodup :=
+    (sortRegionColumns_perm (physicalColumns summary.columns)).nodup_iff.mpr
+      (List.Nodup.filter _ hnodup)
+  have hagree : left.AgreesOn right columns := by
+    intro column hcolumn
+    have hsource := (sortRegionColumns_perm
+      (physicalColumns summary.columns)).mem_iff.mp hcolumn
+    obtain ⟨kind, index, rfl⟩ :=
+      exists_column_of_mem_physicalColumns hsource
+    exact hequivalent kind index
+  have hcongruent := firstFit_congruent columns.length left columns
+    summary.rowCount 0 none right hvalidLeft hvalidRight hcolumnsNodup
+    hlength hagree
+  exact hcongruent.1
+
+theorem RegionShapeSummary.withoutSelectors_wellFormed
+    {summary : RegionShapeSummary} (hwellFormed : summary.WellFormed) :
+    summary.withoutSelectors.WellFormed := by
+  constructor
+  · exact List.Nodup.filter _ hwellFormed.1
+  · intro hcolumns
+    apply hwellFormed.2
+    intro hsource
+    apply hcolumns
+    simp [RegionShapeSummary.withoutSelectors, physicalColumns, hsource]
+
+/-- One full placement and one selector-free placement choose the same row and
+preserve the physical-agreement and selector-domination invariants. -/
+theorem placeSummary_withoutSelectors_law
+    (summary : RegionShapeSummary) (left right : CircuitAllocations)
+    (hvalidLeft : left.Valid) (hvalidRight : right.Valid)
+    (hwellFormed : summary.WellFormed)
+    {anchor : ℕ → RegionColumn}
+    (hbeforePhysical : CircuitAllocations.PhysicalEquivalent left right)
+    (hbeforeSelectors : SelectorAllocationsDominatedBy left anchor)
+    (hanchors : ∀ selector,
+      RegionColumn.selector selector ∈ summary.columns →
+        anchor selector ∈ physicalColumns summary.columns) :
+    let full := placeSummary summary left
+    let physical := placeSummary summary.withoutSelectors right
+    full.1 = physical.1 ∧
+      CircuitAllocations.PhysicalEquivalent full.2 physical.2 ∧
+      SelectorAllocationsDominatedBy full.2 anchor := by
+  by_cases hcolumns : summary.columns = []
+  · simp [placeSummary, hcolumns, RegionShapeSummary.withoutSelectors,
+      physicalColumns, sortRegionColumns, firstFit]
+    exact ⟨hbeforePhysical, hbeforeSelectors⟩
+  · have hlength := hwellFormed.2 hcolumns
+    have hleftPhysical := placeSummary_row_eq_withoutSelectors summary left
+      hvalidLeft hwellFormed.1 hlength hbeforeSelectors hanchors
+    have hphysicalCongruent :=
+      placeSummary_withoutSelectors_row_congruent summary left right
+        hvalidLeft hvalidRight hwellFormed.1 hlength hbeforePhysical
+    have hrow := hleftPhysical.trans hphysicalCongruent
+    have hnextPhysical := placeSummary_physicalEquivalent summary left right
+      hvalidLeft hvalidRight hwellFormed.1 hlength hbeforePhysical hrow
+    have hfullEffect := placeSummary_effect summary left hvalidLeft
+      hwellFormed.1 hlength
+    have hnextSelectors :=
+      PlacementEffect.selectorAllocationsDominatedBy hfullEffect
+        hbeforeSelectors (by
+        intro selector hselector
+        have hsource := (sortRegionColumns_perm summary.columns).mem_iff.mp
+          hselector
+        have hanchor := hanchors selector hsource
+        apply (sortRegionColumns_perm summary.columns).mem_iff.mpr
+        rw [physicalColumns, List.mem_filter] at hanchor
+        exact hanchor.1)
+    exact ⟨hrow, hnextPhysical, hnextSelectors⟩
+
+/-- Selector-free slotting computes exactly the same start rows as full V1 slotting
+when selectors have physical anchors. -/
+theorem slotShapeSummariesFrom_eq_withoutSelectors
+    (summaries : List RegionShapeSummary)
+    (left right : CircuitAllocations)
+    (hwellFormed : summaries.Forall RegionShapeSummary.WellFormed)
+    (hvalidLeft : left.Valid) (hvalidRight : right.Valid)
+    {anchor : ℕ → RegionColumn}
+    (hphysical : CircuitAllocations.PhysicalEquivalent left right)
+    (hselectors : SelectorAllocationsDominatedBy left anchor)
+    (hanchors : SelectorAnchoredBy summaries anchor) :
+    let full := slotShapeSummariesFrom summaries left
+    let physical := slotShapeSummariesFrom
+      (summaries.map RegionShapeSummary.withoutSelectors) right
+    full.1 = physical.1 ∧
+      CircuitAllocations.PhysicalEquivalent full.2 physical.2 ∧
+      SelectorAllocationsDominatedBy full.2 anchor := by
+  induction summaries generalizing left right with
+  | nil => exact ⟨rfl, hphysical, hselectors⟩
+  | cons summary rest inductionHypothesis =>
+      rw [List.forall_cons] at hwellFormed
+      have hhead := placeSummary_withoutSelectors_law summary left right
+        hvalidLeft hvalidRight hwellFormed.1 hphysical hselectors
+        (by
+          intro selector hselector
+          exact hanchors summary (by simp) selector hselector)
+      let fullHead := placeSummary summary left
+      let physicalHead := placeSummary summary.withoutSelectors right
+      have hfullValid := placeSummary_valid summary left hvalidLeft
+        hwellFormed.1
+      have hphysicalWellFormed :=
+        RegionShapeSummary.withoutSelectors_wellFormed hwellFormed.1
+      have hphysicalValid := placeSummary_valid summary.withoutSelectors right
+        hvalidRight hphysicalWellFormed
+      have htailAnchors : SelectorAnchoredBy rest anchor := by
+        intro item hitem selector hselector
+        exact hanchors item (by simp [hitem]) selector hselector
+      have htail := inductionHypothesis fullHead.2 physicalHead.2
+        hwellFormed.2 hfullValid hphysicalValid hhead.2.1 hhead.2.2
+        htailAnchors
+      simp only [slotShapeSummariesFrom, List.map_cons]
+      rw [hhead.1, htail.1]
+      exact ⟨rfl, htail.2.1, htail.2.2⟩
+
+
+end V1
 
 /-! ## The two planners -/
 
