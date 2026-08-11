@@ -1,4 +1,5 @@
 import Clean.Halo2.Operations
+import Mathlib.Data.List.Nodup
 import Mathlib.Data.List.Perm.Basic
 import Mathlib.Data.List.Sort
 import Mathlib.Data.List.TakeDrop
@@ -809,6 +810,28 @@ theorem swp_get!
     rw [getElem!_neg _ _ (by simpa [swp_size] using hindex)]
     simp [hindexLeft, hindexRight,
       getElem!_neg array index hindex]
+
+theorem set!_get!
+    (array : Array T) (target index : ℕ) (value : T)
+    (htarget : target < array.size) :
+    (array.set! target value)[index]! =
+      if index = target then value else array[index]! := by
+  by_cases hindex : index < array.size
+  · rw [getElem!_pos _ _ (by simpa [Array.set!] using hindex)]
+    simp only [Array.set!]
+    rw [Array.getElem_setIfInBounds (by simpa using hindex)]
+    by_cases heq : target = index
+    · rw [if_pos heq]
+      subst index
+      simp
+    · rw [if_neg heq]
+      simp [Ne.symm heq, getElem!_pos array index hindex]
+  · have hne : index ≠ target := by
+      intro heq
+      subst index
+      exact hindex htarget
+    rw [getElem!_neg _ _ (by simpa [Array.set!] using hindex)]
+    simp [hne, getElem!_neg array index hindex]
 
 theorem RangeAll.swp
     (array : Array T) (left right start stop : ℕ)
@@ -1640,6 +1663,476 @@ private theorem alternating_set_loop_perm
           (by simpa [Array.set!] using hleftAfter)
           (by simpa [Array.set!] using hrightNew)).trans hpLeft
 
+private def CycleStateInvariant
+    (arraySize : ℕ) (left right : ℕ → ℕ)
+    (sl sr count step : ℕ) (leftGood rightGood : T → Prop)
+    (state : ℕ × ℕ × Array T) : Prop :=
+  state.1 = sl + step ∧ state.2.1 = sr + step ∧
+    state.2.2.size = arraySize ∧
+    (∀ index, index ≤ step → index < count →
+      rightGood state.2.2[left (sl + index)]!) ∧
+    (∀ index, index < step →
+      leftGood state.2.2[right (sr + index)]!) ∧
+    (∀ index, step < index → index < count →
+      leftGood state.2.2[left (sl + index)]!) ∧
+    (∀ index, step ≤ index → index < count →
+      rightGood state.2.2[right (sr + index)]!)
+
+private theorem cycleStateInvariant_initial
+    (array : Array T) (left right : ℕ → ℕ)
+    (sl sr count : ℕ) (leftGood rightGood : T → Prop)
+    (hcount : 0 < count)
+    (hleftBound : ∀ index, index < count →
+      left (sl + index) < array.size)
+    (hleftInjective : ∀ i, i < count → ∀ j, j < count →
+      left (sl + i) = left (sl + j) → i = j)
+    (hcross : ∀ i, i < count → ∀ j, j < count →
+      left (sl + i) ≠ right (sr + j))
+    (hleftGood : ∀ index, index < count →
+      leftGood array[left (sl + index)]!)
+    (hrightGood : ∀ index, index < count →
+      rightGood array[right (sr + index)]!) :
+    CycleStateInvariant array.size left right sl sr count 0
+      leftGood rightGood
+      (sl, sr, array.set! (left sl) array[right sr]!) := by
+  unfold CycleStateInvariant
+  have hleftZero := hleftBound 0 hcount
+  refine ⟨rfl, rfl, by simp [Array.set!], ?_, ?_, ?_, ?_⟩
+  · intro index hindexZero hindexCount
+    have hindex : index = 0 := by omega
+    subst index
+    simp only [Nat.add_zero]
+    rw [set!_get! array (left sl) (left sl) array[right sr]!
+      hleftZero, if_pos rfl]
+    simpa using hrightGood 0 hcount
+  · intro index hindex
+    omega
+  · intro index hindexPositive hindexCount
+    rw [set!_get! array (left sl) (left (sl + index))
+      array[right sr]! hleftZero, if_neg]
+    · exact hleftGood index hindexCount
+    · intro heq
+      have := hleftInjective 0 hcount index hindexCount
+        (by simpa using heq.symm)
+      omega
+  · intro index hindexZero hindexCount
+    rw [set!_get! array (left sl) (right (sr + index))
+      array[right sr]! hleftZero, if_neg]
+    · exact hrightGood index hindexCount
+    · exact Ne.symm (hcross 0 hcount index hindexCount)
+
+private theorem cycleStateInvariant_step
+    (arraySize : ℕ) (left right : ℕ → ℕ)
+    (sl sr count step : ℕ) (leftGood rightGood : T → Prop)
+    (current : Array T)
+    (hnext : step + 1 < count)
+    (hleftBound : ∀ index, index < count →
+      left (sl + index) < arraySize)
+    (hrightBound : ∀ index, index < count →
+      right (sr + index) < arraySize)
+    (hleftInjective : ∀ i, i < count → ∀ j, j < count →
+      left (sl + i) = left (sl + j) → i = j)
+    (hrightInjective : ∀ i, i < count → ∀ j, j < count →
+      right (sr + i) = right (sr + j) → i = j)
+    (hcross : ∀ i, i < count → ∀ j, j < count →
+      left (sl + i) ≠ right (sr + j))
+    (hinvariant : CycleStateInvariant arraySize left right sl sr count step
+      leftGood rightGood (sl + step, sr + step, current)) :
+    let nextStep := step + 1
+    let afterLeft := current.set! (right (sr + step))
+      current[left (sl + nextStep)]!
+    let afterRight := afterLeft.set! (left (sl + nextStep))
+      afterLeft[right (sr + nextStep)]!
+    CycleStateInvariant arraySize left right sl sr count nextStep
+      leftGood rightGood
+      (sl + nextStep, sr + nextStep, afterRight) := by
+  rcases hinvariant with
+    ⟨_, _, hsize, hleftDone, hrightDone, hleftFuture, hrightFuture⟩
+  let nextStep := step + 1
+  let targetRight := right (sr + step)
+  let targetLeft := left (sl + nextStep)
+  let sourceLeft := left (sl + nextStep)
+  let sourceRight := right (sr + nextStep)
+  let afterLeft := current.set! targetRight current[sourceLeft]!
+  let afterRight := afterLeft.set! targetLeft afterLeft[sourceRight]!
+  have htargetRight : targetRight < current.size := by
+    rw [hsize]
+    exact hrightBound step (by omega)
+  have htargetLeft : targetLeft < afterLeft.size := by
+    simp only [afterLeft, Array.set!, Array.size_setIfInBounds]
+    rw [hsize]
+    exact hleftBound nextStep hnext
+  have hsourceRightNeTargetRight : sourceRight ≠ targetRight := by
+    intro heq
+    have := hrightInjective nextStep hnext step (by omega) (by
+      simpa [sourceRight, targetRight] using heq)
+    omega
+  have hsourceRightValue : afterLeft[sourceRight]! = current[sourceRight]! := by
+    simp only [afterLeft]
+    rw [set!_get! current targetRight sourceRight
+      current[sourceLeft]! htargetRight, if_neg hsourceRightNeTargetRight]
+  unfold CycleStateInvariant
+  refine ⟨rfl, rfl, by simp [hsize], ?_, ?_, ?_, ?_⟩
+  · intro index hindexDone hindexCount
+    rw [set!_get! afterLeft targetLeft
+      (left (sl + index)) afterLeft[sourceRight]! htargetLeft]
+    by_cases hnew : index = nextStep
+    · subst index
+      rw [if_pos rfl, hsourceRightValue]
+      exact hrightFuture nextStep (by omega) hnext
+    · rw [if_neg (by
+          intro heq
+          exact hnew (hleftInjective index hindexCount nextStep hnext
+            (by simpa [targetLeft] using heq)))]
+      simp only [afterLeft]
+      rw [set!_get! current targetRight
+        (left (sl + index)) current[sourceLeft]! htargetRight,
+        if_neg (hcross index hindexCount step (by omega))]
+      exact hleftDone index (by omega) hindexCount
+  · intro index hindexDone
+    have hindexCount : index < count := hindexDone.trans_le (by omega)
+    rw [set!_get! afterLeft targetLeft
+      (right (sr + index)) afterLeft[sourceRight]! htargetLeft,
+      if_neg (Ne.symm (hcross nextStep hnext index hindexCount))]
+    simp only [afterLeft]
+    rw [set!_get! current targetRight
+      (right (sr + index)) current[sourceLeft]! htargetRight]
+    by_cases hnew : index = step
+    · subst index
+      rw [if_pos rfl]
+      exact hleftFuture nextStep (by omega) hnext
+    · rw [if_neg (by
+          intro heq
+          exact hnew (hrightInjective index hindexCount step (by omega)
+            (by simpa [targetRight] using heq)))]
+      exact hrightDone index (by omega)
+  · intro index hindexFuture hindexCount
+    rw [set!_get! afterLeft targetLeft
+      (left (sl + index)) afterLeft[sourceRight]! htargetLeft,
+      if_neg (by
+        intro heq
+        have := hleftInjective index hindexCount nextStep hnext
+          (by simpa [targetLeft] using heq)
+        omega)]
+    simp only [afterLeft]
+    rw [set!_get! current targetRight
+      (left (sl + index)) current[sourceLeft]! htargetRight,
+      if_neg (hcross index hindexCount step (by omega))]
+    exact hleftFuture index (by omega) hindexCount
+  · intro index hindexFuture hindexCount
+    rw [set!_get! afterLeft targetLeft
+      (right (sr + index)) afterLeft[sourceRight]! htargetLeft,
+      if_neg (Ne.symm (hcross nextStep hnext index hindexCount))]
+    simp only [afterLeft]
+    rw [set!_get! current targetRight
+      (right (sr + index)) current[sourceLeft]! htargetRight,
+      if_neg (by
+        intro heq
+        have := hrightInjective index hindexCount step (by omega)
+          (by simpa [targetRight] using heq)
+        omega)]
+    exact hrightFuture index (by omega) hindexCount
+
+private theorem cycleStateInvariant_loop
+    (arraySize : ℕ) (left right : ℕ → ℕ)
+    (sl sr count : ℕ) (leftGood rightGood : T → Prop)
+    (hleftBound : ∀ index, index < count →
+      left (sl + index) < arraySize)
+    (hrightBound : ∀ index, index < count →
+      right (sr + index) < arraySize)
+    (hleftInjective : ∀ i, i < count → ∀ j, j < count →
+      left (sl + i) = left (sl + j) → i = j)
+    (hrightInjective : ∀ i, i < count → ∀ j, j < count →
+      right (sr + i) = right (sr + j) → i = j)
+    (hcross : ∀ i, i < count → ∀ j, j < count →
+      left (sl + i) ≠ right (sr + j)) :
+    ∀ (indices : List ℕ) (step : ℕ) (current : Array T),
+      step + indices.length = count - 1 →
+      CycleStateInvariant arraySize left right sl sr count step
+        leftGood rightGood (sl + step, sr + step, current) →
+      CycleStateInvariant arraySize left right sl sr count
+        (step + indices.length) leftGood rightGood
+        (Id.run <| forIn indices (sl + step, sr + step, current)
+          fun _ state =>
+            let nextStepLeft := state.1 + 1
+            let afterLeft := state.2.2.set! (right state.2.1)
+              state.2.2[left nextStepLeft]!
+            let nextStepRight := state.2.1 + 1
+            let afterRight := afterLeft.set! (left nextStepLeft)
+              afterLeft[right nextStepRight]!
+            pure (.yield (nextStepLeft, nextStepRight, afterRight))) := by
+  intro indices
+  induction indices with
+  | nil =>
+      intro step current hsteps hinvariant
+      simpa using hinvariant
+  | cons index indices inductionHypothesis =>
+      intro step current hsteps hinvariant
+      have hnext : step + 1 < count := by
+        simp only [List.length_cons] at hsteps
+        omega
+      have hstep := cycleStateInvariant_step arraySize left right
+        sl sr count step leftGood rightGood current hnext
+        hleftBound hrightBound hleftInjective hrightInjective hcross
+        hinvariant
+      let afterLeft := current.set! (right (sr + step))
+        current[left (sl + (step + 1))]!
+      let afterRight := afterLeft.set! (left (sl + (step + 1)))
+        afterLeft[right (sr + (step + 1))]!
+      change CycleStateInvariant arraySize left right sl sr count
+          (step + 1) leftGood rightGood
+          (sl + (step + 1), sr + (step + 1), afterRight) at hstep
+      simp only [List.forIn_cons, pure_bind]
+      have hrest := inductionHypothesis (step + 1) afterRight
+        (by
+          simp only [List.length_cons] at hsteps
+          omega)
+        hstep
+      simpa [afterLeft, afterRight, Nat.add_assoc,
+        Nat.add_comm, Nat.add_left_comm] using hrest
+
+private theorem block_cycle_classifies
+    (array : Array T) (left right : ℕ → ℕ)
+    (sl sr count : ℕ) (leftGood rightGood : T → Prop)
+    (hcount : 0 < count)
+    (hleftBound : ∀ index, index < count →
+      left (sl + index) < array.size)
+    (hrightBound : ∀ index, index < count →
+      right (sr + index) < array.size)
+    (hleftInjective : ∀ i, i < count → ∀ j, j < count →
+      left (sl + i) = left (sl + j) → i = j)
+    (hrightInjective : ∀ i, i < count → ∀ j, j < count →
+      right (sr + i) = right (sr + j) → i = j)
+    (hcross : ∀ i, i < count → ∀ j, j < count →
+      left (sl + i) ≠ right (sr + j))
+    (hleftGood : ∀ index, index < count →
+      leftGood array[left (sl + index)]!)
+    (hrightGood : ∀ index, index < count →
+      rightGood array[right (sr + index)]!) :
+    let tmp := array[left sl]!
+    let afterFirst := array.set! (left sl) array[right sr]!
+    let result : ℕ × ℕ × Array T := Id.run <|
+      forIn (List.range' 0 (count - 1))
+        (sl, sr, afterFirst) fun _ state =>
+          let nextStepLeft := state.1 + 1
+          let afterLeft := state.2.2.set! (right state.2.1)
+            state.2.2[left nextStepLeft]!
+          let nextStepRight := state.2.1 + 1
+          let afterRight := afterLeft.set! (left nextStepLeft)
+            afterLeft[right nextStepRight]!
+          pure (.yield (nextStepLeft, nextStepRight, afterRight))
+    let output := result.2.2.set! (right result.2.1) tmp
+    (∀ index, index < count →
+      rightGood output[left (sl + index)]!) ∧
+    (∀ index, index < count →
+      leftGood output[right (sr + index)]!) := by
+  let tmp := array[left sl]!
+  let afterFirst := array.set! (left sl) array[right sr]!
+  let result : ℕ × ℕ × Array T := Id.run <|
+    forIn (List.range' 0 (count - 1))
+      (sl, sr, afterFirst) fun _ state =>
+        let nextStepLeft := state.1 + 1
+        let afterLeft := state.2.2.set! (right state.2.1)
+          state.2.2[left nextStepLeft]!
+        let nextStepRight := state.2.1 + 1
+        let afterRight := afterLeft.set! (left nextStepLeft)
+          afterLeft[right nextStepRight]!
+        pure (.yield (nextStepLeft, nextStepRight, afterRight))
+  have hinitial := cycleStateInvariant_initial array left right sl sr count
+    leftGood rightGood hcount hleftBound hleftInjective hcross
+    hleftGood hrightGood
+  have hloop := cycleStateInvariant_loop array.size left right sl sr count
+    leftGood rightGood hleftBound hrightBound hleftInjective
+    hrightInjective hcross (List.range' 0 (count - 1)) 0 afterFirst
+    (by simp) (by simpa [afterFirst] using hinitial)
+  have hloopResult : CycleStateInvariant array.size left right sl sr count
+      (count - 1) leftGood rightGood result := by
+    simpa only [result, Nat.zero_add, List.length_range'] using hloop
+  rcases hloopResult with
+    ⟨hresultLeft, hresultRight, hresultSize,
+      hleftDone, hrightDone, hleftFuture, hrightFuture⟩
+  have hlast : count - 1 < count := by omega
+  have htarget : right result.2.1 < result.2.2.size := by
+    rw [hresultRight, hresultSize]
+    exact hrightBound (count - 1) hlast
+  let output := result.2.2.set! (right result.2.1) tmp
+  refine ⟨?_, ?_⟩
+  · intro index hindex
+    rw [set!_get! result.2.2 (right result.2.1)
+      (left (sl + index)) tmp htarget, if_neg]
+    · exact hleftDone index (by omega) hindex
+    · rw [hresultRight]
+      exact hcross index hindex (count - 1) hlast
+  · intro index hindex
+    rw [set!_get! result.2.2 (right result.2.1)
+      (right (sr + index)) tmp htarget]
+    by_cases hlastIndex : index = count - 1
+    · subst index
+      rw [hresultRight, if_pos rfl]
+      simpa [tmp] using hleftGood 0 hcount
+    · rw [hresultRight, if_neg (by
+          intro heq
+          exact hlastIndex (hrightInjective index hindex
+            (count - 1) hlast heq))]
+      exact hrightDone index (by omega)
+
+private theorem cycle_loop_outside
+    (array : Array T) (left right : ℕ → ℕ)
+    (sl sr count position : ℕ)
+    (hleftBound : ∀ index, index < count →
+      left (sl + index) < array.size)
+    (hrightBound : ∀ index, index < count →
+      right (sr + index) < array.size)
+    (houtLeft : ∀ index, index < count →
+      position ≠ left (sl + index))
+    (houtRight : ∀ index, index < count →
+      position ≠ right (sr + index)) :
+    ∀ (indices : List ℕ) (step : ℕ) (current : Array T),
+      step + indices.length = count - 1 →
+      current.size = array.size → current[position]! = array[position]! →
+      let result : ℕ × ℕ × Array T := Id.run <|
+        forIn indices (sl + step, sr + step, current) fun _ state =>
+          let nextStepLeft := state.1 + 1
+          let afterLeft := state.2.2.set! (right state.2.1)
+            state.2.2[left nextStepLeft]!
+          let nextStepRight := state.2.1 + 1
+          let afterRight := afterLeft.set! (left nextStepLeft)
+            afterLeft[right nextStepRight]!
+          pure (.yield (nextStepLeft, nextStepRight, afterRight))
+      result.2.2[position]! = array[position]! := by
+  intro indices
+  induction indices with
+  | nil =>
+      intro step current hsteps hsize hvalue
+      simpa using hvalue
+  | cons index indices inductionHypothesis =>
+      intro step current hsteps hsize hvalue
+      have hnext : step + 1 < count := by
+        simp only [List.length_cons] at hsteps
+        omega
+      let afterLeft := current.set! (right (sr + step))
+        current[left (sl + (step + 1))]!
+      let afterRight := afterLeft.set! (left (sl + (step + 1)))
+        afterLeft[right (sr + (step + 1))]!
+      have htargetRight : right (sr + step) < current.size := by
+        rw [hsize]
+        exact hrightBound step (by omega)
+      have htargetLeft : left (sl + (step + 1)) < afterLeft.size := by
+        simp only [afterLeft, Array.set!, Array.size_setIfInBounds]
+        rw [hsize]
+        exact hleftBound (step + 1) hnext
+      have hafterLeft : afterLeft[position]! = array[position]! := by
+        simp only [afterLeft]
+        rw [set!_get! current (right (sr + step)) position
+          current[left (sl + (step + 1))]! htargetRight,
+          if_neg (houtRight step (by omega)), hvalue]
+      have hafterRight : afterRight[position]! = array[position]! := by
+        simp only [afterRight]
+        rw [set!_get! afterLeft (left (sl + (step + 1))) position
+          afterLeft[right (sr + (step + 1))]! htargetLeft,
+          if_neg (houtLeft (step + 1) hnext), hafterLeft]
+      simp only [List.forIn_cons, pure_bind]
+      have hrest := inductionHypothesis (step + 1) afterRight
+        (by
+          simp only [List.length_cons] at hsteps
+          omega)
+        (by simp [afterRight, afterLeft, hsize]) hafterRight
+      simpa [afterLeft, afterRight, Nat.add_assoc,
+        Nat.add_comm, Nat.add_left_comm] using hrest
+
+private theorem cycle_loop_shape
+    (left right : ℕ → ℕ) (sl sr : ℕ) :
+    ∀ (indices : List ℕ) (step : ℕ) (current : Array T),
+      let result : ℕ × ℕ × Array T := Id.run <|
+        forIn indices (sl + step, sr + step, current) fun _ state =>
+          let nextStepLeft := state.1 + 1
+          let afterLeft := state.2.2.set! (right state.2.1)
+            state.2.2[left nextStepLeft]!
+          let nextStepRight := state.2.1 + 1
+          let afterRight := afterLeft.set! (left nextStepLeft)
+            afterLeft[right nextStepRight]!
+          pure (.yield (nextStepLeft, nextStepRight, afterRight))
+      result.1 = sl + step + indices.length ∧
+      result.2.1 = sr + step + indices.length ∧
+      result.2.2.size = current.size := by
+  intro indices
+  induction indices with
+  | nil => simp
+  | cons index indices inductionHypothesis =>
+      intro step current
+      let afterLeft := current.set! (right (sr + step))
+        current[left (sl + (step + 1))]!
+      let afterRight := afterLeft.set! (left (sl + (step + 1)))
+        afterLeft[right (sr + (step + 1))]!
+      simp only [List.forIn_cons, pure_bind]
+      have hrest := inductionHypothesis (step + 1) afterRight
+      simpa [afterLeft, afterRight, Nat.add_assoc,
+        Nat.add_comm, Nat.add_left_comm] using hrest
+
+private theorem block_cycle_outside
+    (array : Array T) (left right : ℕ → ℕ)
+    (sl sr count position : ℕ) (hcount : 0 < count)
+    (hleftBound : ∀ index, index < count →
+      left (sl + index) < array.size)
+    (hrightBound : ∀ index, index < count →
+      right (sr + index) < array.size)
+    (houtLeft : ∀ index, index < count →
+      position ≠ left (sl + index))
+    (houtRight : ∀ index, index < count →
+      position ≠ right (sr + index)) :
+    let tmp := array[left sl]!
+    let afterFirst := array.set! (left sl) array[right sr]!
+    let result : ℕ × ℕ × Array T := Id.run <|
+      forIn (List.range' 0 (count - 1))
+        (sl, sr, afterFirst) fun _ state =>
+          let nextStepLeft := state.1 + 1
+          let afterLeft := state.2.2.set! (right state.2.1)
+            state.2.2[left nextStepLeft]!
+          let nextStepRight := state.2.1 + 1
+          let afterRight := afterLeft.set! (left nextStepLeft)
+            afterLeft[right nextStepRight]!
+          pure (.yield (nextStepLeft, nextStepRight, afterRight))
+    let output := result.2.2.set! (right result.2.1) tmp
+    output[position]! = array[position]! := by
+  let tmp := array[left sl]!
+  let afterFirst := array.set! (left sl) array[right sr]!
+  let result : ℕ × ℕ × Array T := Id.run <|
+    forIn (List.range' 0 (count - 1))
+      (sl, sr, afterFirst) fun _ state =>
+        let nextStepLeft := state.1 + 1
+        let afterLeft := state.2.2.set! (right state.2.1)
+          state.2.2[left nextStepLeft]!
+        let nextStepRight := state.2.1 + 1
+        let afterRight := afterLeft.set! (left nextStepLeft)
+          afterLeft[right nextStepRight]!
+        pure (.yield (nextStepLeft, nextStepRight, afterRight))
+  have hleftZero := hleftBound 0 hcount
+  have hafterFirst : afterFirst[position]! = array[position]! := by
+    simp only [afterFirst]
+    rw [set!_get! array (left sl) position array[right sr]!
+      hleftZero, if_neg (by simpa using houtLeft 0 hcount)]
+  have hloop := cycle_loop_outside array left right sl sr count position
+    hleftBound hrightBound houtLeft houtRight
+    (List.range' 0 (count - 1)) 0 afterFirst
+    (by simp) (by simp [afterFirst]) hafterFirst
+  have hresultValue : result.2.2[position]! = array[position]! := by
+    simpa only [result, Nat.zero_add] using hloop
+  have hshape := cycle_loop_shape (T := T) left right sl sr
+    (List.range' 0 (count - 1)) 0 afterFirst
+  have hresultRight : result.2.1 = sr + (count - 1) := by
+    simpa only [result, Nat.zero_add, List.length_range'] using hshape.2.1
+  have hresultSize : result.2.2.size = array.size := by
+    simpa [result, afterFirst] using hshape.2.2
+  have htarget : right result.2.1 < result.2.2.size := by
+    rw [hresultRight, hresultSize]
+    exact hrightBound (count - 1) (by omega)
+  show (result.2.2.set! (right result.2.1) tmp)[position]! = array[position]!
+  rw [set!_get! result.2.2 (right result.2.1) position tmp htarget,
+    if_neg]
+  · exact hresultValue
+  · rw [hresultRight]
+    exact houtRight (count - 1) (by omega)
+
 private theorem block_cycle_perm
     (a : Array T) (left right : ℕ → ℕ)
     (sl sr count : ℕ)
@@ -1954,6 +2447,214 @@ private theorem refreshOffsets_fresh_prefix
   refine ⟨trivial, ?_⟩
   rw [hrange]
   simpa only [Nat.zero_add, List.take_zero, List.nil_append] using hscan
+
+private def OffsetScanExact
+    (block startIdx endIdx : ℕ) (offsets : Array ℕ)
+    (keep : ℕ → Bool) : Prop :=
+  offsets.toList.extract startIdx endIdx =
+    (List.range block).filter (fun index => keep index = true)
+
+private theorem refreshOffsets_exact
+    (block startIdx endIdx : ℕ) (offsets : Array ℕ)
+    (keep : ℕ → Bool) (hblock : block ≤ offsets.size)
+    (hpending : startIdx ≠ endIdx →
+      OffsetScanExact block startIdx endIdx offsets keep) :
+    let result := refreshOffsets block startIdx endIdx offsets keep
+    OffsetScanExact block result.1 result.2.1 result.2.2 keep := by
+  by_cases hfresh : startIdx = endIdx
+  · have hfacts := refreshOffsets_fresh_prefix block startIdx endIdx
+      offsets keep hblock hfresh
+    let result := refreshOffsets block startIdx endIdx offsets keep
+    change result.1 = 0 ∧
+      result.2.1 = ((List.range block).filter
+        (fun index => keep index = true)).length ∧
+      result.2.2.toList.take result.2.1 =
+        (List.range block).filter (fun index => keep index = true)
+      at hfacts
+    change OffsetScanExact block result.1 result.2.1 result.2.2 keep
+    rw [hfacts.1, hfacts.2.1]
+    simp only [OffsetScanExact, List.extract_eq_take_drop,
+      List.drop_zero, Nat.sub_zero]
+    simpa only [hfacts.2.1] using hfacts.2.2
+  · simpa [refreshOffsets, hfresh] using hpending hfresh
+
+private theorem offset_active_mem
+    (offsets : Array ℕ) (startIdx endIdx index : ℕ)
+    (hstart : startIdx ≤ index) (hend : index < endIdx)
+    (hbound : endIdx ≤ offsets.size) :
+    offsets[index]! ∈ offsets.toList.extract startIdx endIdx := by
+  rw [List.extract_eq_take_drop]
+  let position := index - startIdx
+  have hposition : position <
+      ((offsets.toList.drop startIdx).take
+        (endIdx - startIdx)).length := by
+    simp [position]
+    omega
+  have hmem := List.getElem_mem
+    (l := (offsets.toList.drop startIdx).take (endIdx - startIdx))
+    (n := position) hposition
+  have hindex : index < offsets.size := hend.trans_le hbound
+  have hvalue :
+      ((offsets.toList.drop startIdx).take
+        (endIdx - startIdx))[position] = offsets[index]! := by
+    rw [getElem!_pos offsets index hindex]
+    simp only [List.getElem_take, List.getElem_drop,
+      Array.getElem_toList]
+    congr
+    simp [position]
+    omega
+  rw [hvalue] at hmem
+  exact hmem
+
+private theorem OffsetScanExact.mem_iff
+    (block startIdx endIdx : ℕ) (offsets : Array ℕ)
+    (keep : ℕ → Bool)
+    (hexact : OffsetScanExact block startIdx endIdx offsets keep)
+    (offset : ℕ) :
+    offset ∈ offsets.toList.extract startIdx endIdx ↔
+      offset < block ∧ keep offset = true := by
+  rw [hexact, List.mem_filter, List.mem_range]
+  simp
+
+private theorem OffsetScanExact.active
+    (block startIdx endIdx : ℕ) (offsets : Array ℕ)
+    (keep : ℕ → Bool)
+    (hexact : OffsetScanExact block startIdx endIdx offsets keep)
+    (hbound : endIdx ≤ offsets.size)
+    (index : ℕ) (hstart : startIdx ≤ index) (hend : index < endIdx) :
+    offsets[index]! < block ∧ keep offsets[index]! = true := by
+  rw [← hexact.mem_iff]
+  exact offset_active_mem offsets startIdx endIdx index
+    hstart hend hbound
+
+private theorem offset_active_get!
+    (offsets : Array ℕ) (startIdx endIdx position : ℕ)
+    (hposition : position < endIdx - startIdx)
+    (hbound : endIdx ≤ offsets.size) :
+    (offsets.toList.extract startIdx endIdx)[position]'(by
+      simp [List.extract_eq_take_drop]
+      omega) =
+      offsets[startIdx + position]! := by
+  have hindex : startIdx + position < offsets.size := by omega
+  rw [getElem!_pos offsets (startIdx + position) hindex]
+  simp only [List.extract_eq_take_drop, List.getElem_take,
+    List.getElem_drop, Array.getElem_toList]
+
+private theorem OffsetScanExact.injective
+    (block startIdx endIdx : ℕ) (offsets : Array ℕ)
+    (keep : ℕ → Bool)
+    (hexact : OffsetScanExact block startIdx endIdx offsets keep)
+    (hbound : endIdx ≤ offsets.size) :
+    ∀ i, i < endIdx - startIdx → ∀ j, j < endIdx - startIdx →
+      offsets[startIdx + i]! = offsets[startIdx + j]! → i = j := by
+  intro i hi j hj hequal
+  have hnodup : (offsets.toList.extract startIdx endIdx).Nodup := by
+    rw [hexact]
+    exact (List.nodup_range (n := block)).filter _
+  rw [← offset_active_get! offsets startIdx endIdx i hi hbound,
+    ← offset_active_get! offsets startIdx endIdx j hj hbound] at hequal
+  exact hnodup.getElem_inj_iff.mp hequal
+
+private theorem OffsetScanExact.nodup
+    (block startIdx endIdx : ℕ) (offsets : Array ℕ)
+    (keep : ℕ → Bool)
+    (hexact : OffsetScanExact block startIdx endIdx offsets keep) :
+    (offsets.toList.extract startIdx endIdx).Nodup := by
+  rw [hexact]
+  exact (List.nodup_range (n := block)).filter _
+
+private theorem scanned_block_cycle_classifies
+    (array : Array T) (pivot : T) (isLess : T → T → Bool)
+    (l r blockL blockR : ℕ)
+    (offsetsL offsetsR : Array ℕ)
+    (startL endL startR endR count : ℕ)
+    (hlr : l ≤ r) (hrsize : r ≤ array.size)
+    (hblocks : blockL + blockR ≤ r - l)
+    (hstartL : startL ≤ endL) (hstartR : startR ≤ endR)
+    (hendL : endL ≤ offsetsL.size) (hendR : endR ≤ offsetsR.size)
+    (hcount : 0 < count)
+    (hcountL : count ≤ endL - startL)
+    (hcountR : count ≤ endR - startR)
+    (hexactL : OffsetScanExact blockL startL endL offsetsL
+      (fun index => !isLess array[l + index]! pivot))
+    (hexactR : OffsetScanExact blockR startR endR offsetsR
+      (fun index => isLess array[r - 1 - index]! pivot)) :
+    let left := fun (index : ℕ) => l + offsetsL[index]!
+    let right := fun (index : ℕ) => r - offsetsR[index]! - 1
+    let tmp := array[left startL]!
+    let afterFirst := array.set! (left startL) array[right startR]!
+    let result : ℕ × ℕ × Array T := Id.run <|
+      forIn (List.range' 0 (count - 1))
+        (startL, startR, afterFirst) fun _ state =>
+          let nextStepLeft := state.1 + 1
+          let afterLeft := state.2.2.set! (right state.2.1)
+            state.2.2[left nextStepLeft]!
+          let nextStepRight := state.2.1 + 1
+          let afterRight := afterLeft.set! (left nextStepLeft)
+            afterLeft[right nextStepRight]!
+          pure (.yield (nextStepLeft, nextStepRight, afterRight))
+    let output := result.2.2.set! (right result.2.1) tmp
+    (∀ index, index < count →
+      isLess output[left (startL + index)]! pivot = true) ∧
+    (∀ index, index < count →
+      isLess output[right (startR + index)]! pivot = false) := by
+  let left := fun (index : ℕ) => l + offsetsL[index]!
+  let right := fun (index : ℕ) => r - offsetsR[index]! - 1
+  apply block_cycle_classifies array left right startL startR count
+    (fun item => isLess item pivot = false)
+    (fun item => isLess item pivot = true) hcount
+  · intro index hindex
+    have hactive := OffsetScanExact.active blockL startL endL offsetsL
+      _ hexactL hendL (startL + index)
+      (by omega) (by omega)
+    simp only [left]
+    omega
+  · intro index hindex
+    have hactive := OffsetScanExact.active blockR startR endR offsetsR
+      _ hexactR hendR (startR + index)
+      (by omega) (by omega)
+    simp only [right]
+    omega
+  · intro i hi j hj heq
+    have hoffset : offsetsL[startL + i]! = offsetsL[startL + j]! := by
+      simpa only [left, Nat.add_left_cancel_iff] using heq
+    exact OffsetScanExact.injective blockL startL endL offsetsL _
+      hexactL hendL i (by omega) j (by omega) hoffset
+  · intro i hi j hj heq
+    have hiActive := OffsetScanExact.active blockR startR endR offsetsR
+      _ hexactR hendR (startR + i)
+      (by omega) (by omega)
+    have hjActive := OffsetScanExact.active blockR startR endR offsetsR
+      _ hexactR hendR (startR + j)
+      (by omega) (by omega)
+    have hoffset : offsetsR[startR + i]! = offsetsR[startR + j]! := by
+      simp only [right] at heq
+      omega
+    exact OffsetScanExact.injective blockR startR endR offsetsR _
+      hexactR hendR i (by omega) j (by omega) hoffset
+  · intro i hi j hj heq
+    have hleftActive := OffsetScanExact.active blockL startL endL offsetsL
+      _ hexactL hendL (startL + i)
+      (by omega) (by omega)
+    have hrightActive := OffsetScanExact.active blockR startR endR offsetsR
+      _ hexactR hendR (startR + j)
+      (by omega) (by omega)
+    simp only [left, right] at heq
+    omega
+  · intro index hindex
+    have hactive := OffsetScanExact.active blockL startL endL offsetsL
+      _ hexactL hendL (startL + index)
+      (by omega) (by omega)
+    simpa only [left, Bool.not_eq_true'] using hactive.2
+  · intro index hindex
+    have hactive := OffsetScanExact.active blockR startR endR offsetsR
+      _ hexactR hendR (startR + index)
+      (by omega) (by omega)
+    have haddress :
+        r - 1 - offsetsR[startR + index]! =
+          r - offsetsR[startR + index]! - 1 := by
+      omega
+    simpa only [right, haddress] using hactive.2
 
 private theorem refreshOffsets_bounds
     (block startIdx endIdx : ℕ) (offsets : Array ℕ)
