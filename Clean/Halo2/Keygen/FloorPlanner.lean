@@ -289,6 +289,29 @@ theorem measureRegions_eq_synthesisSummary_regionShapes
               inductionHypothesis initial
   exact general ops 0
 
+/-- Every index-free region summary produced by synthesis satisfies the local
+representation facts required by V1. -/
+theorem synthesisSummary_regionShapes_wellFormed
+    (operations : Operations F) :
+    (synthesisSummary operations).regionShapes.Forall
+      RegionShapeSummary.WellFormed := by
+  have hmeasured := measureRegions_wellFormed operations
+  rw [measureRegions_eq_synthesisSummary_regionShapes] at hmeasured
+  have general : ∀ (initial : ℕ) (summaries : List RegionShapeSummary),
+      (indexRegionSummaries initial summaries).Forall RegionShape.WellFormed →
+        summaries.Forall RegionShapeSummary.WellFormed := by
+    intro initial summaries
+    induction summaries generalizing initial with
+    | nil => simp
+    | cons summary rest inductionHypothesis =>
+        intro hwellFormed
+        simp only [indexRegionSummaries, List.forall_cons,
+          RegionShape.WellFormed, RegionShapeSummary.WellFormed,
+          measureRegionSummary] at hwellFormed ⊢
+        exact ⟨hwellFormed.1,
+          inductionHypothesis (initial + 1) hwellFormed.2⟩
+  exact general 0 _ hmeasured
+
 /-- Total length occupied in one planner column.  Shared-column intervals are
 row-disjoint under V1, so this compositional sum is exact. -/
 def columnOccupiedLength (shapes : List RegionShape) (column : RegionColumn) : ℕ :=
