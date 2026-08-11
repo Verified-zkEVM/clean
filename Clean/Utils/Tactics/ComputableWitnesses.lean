@@ -87,7 +87,7 @@ elab "unfold_formal_circuit_consts" : tactic => do
 /-- Like `unfold_formal_circuit_consts`, but unfolds only constants whose type lands in
 plain `Circuit` — inner wrapper defs like `add32` — never `FormalCircuit`-variant bundles,
 so child subcircuits stay opaque for the composition machinery. -/
-elab "unfold_plain_circuit_consts" : tactic => do
+def unfoldPlainCircuitConsts : TacticM Unit := do
   withMainContext do
     let noUnfold ← labelled `explicit_circuit_no_unfold
     let unfoldTypes ← labelled `explicit_circuit_unfold_type
@@ -100,6 +100,8 @@ elab "unfold_plain_circuit_consts" : tactic => do
         evalTactic (← `(tactic| unfold $(mkIdent name)))
       catch _ =>
         pure ()
+
+elab "unfold_plain_circuit_consts" : tactic => unfoldPlainCircuitConsts
 
 namespace ComputableWitnesses
 
@@ -191,6 +193,42 @@ def cnSimp : TacticM (Simp.Context × SimprocsArray) := do
     (simpTheorems := #[← simpOnlyBase, ← getAttrTheorems `circuit_norm])
     (← getSimpCongrTheorems), #[← getAttrSimprocs `circuit_norm])
 
+/-- Meta `grind` (default configuration) on the main goal. -/
+def metaGrind : TacticM Unit := do
+  Lean.Elab.Tactic.grind (← getMainGoal) {} (only := false) (ps := #[]) (seq? := none)
+
+/-- Meta `intros` on the main goal. -/
+def metaIntros : TacticM Unit := do
+  let (_, g) ← (← getMainGoal).intros
+  replaceMainGoal [g]
+
+/-- Meta `intros` on every goal. -/
+def metaIntrosAll : TacticM Unit := do
+  let mut acc := #[]
+  for g in (← getGoals) do
+    let (_, g') ← g.intros
+    acc := acc.push g'
+  setGoals acc.toList
+
+/-- Meta `and_intros`: recursively split a syntactic `And` goal. Syntactic matching
+only — the close routes' goals are simp-normalized here, and whnf-matching a defeq-
+hidden conjunction could execute an operations list. -/
+partial def andIntrosCore (g : MVarId) : MetaM (List MVarId) := do
+  let t := (← instantiateMVars (← g.getType)).consumeMData
+  unless t.isAppOfArity ``And 2 do return [g]
+  let gs ← g.applyConst ``And.intro
+  let mut acc := []
+  for g' in gs do
+    acc := acc ++ (← andIntrosCore g')
+  return acc
+
+/-- Meta `beta_reduce` on the main goal's target. -/
+def betaReduceGoal : TacticM Unit := withMainContext do
+  let g ← getMainGoal
+  let t ← instantiateMVars (← g.getType)
+  let t' ← Core.betaReduce t
+  unless t' == t do replaceMainGoal [← g.change t']
+
 /-- Evaluate a closed ℕ-expression to a literal by folding `+`/`*` and whnf-reducing
 leaves (the shape `elaborate_circuit` leaves `localLength` metadata in: arithmetic over
 explicit-structure projections, whose whnf is a cheap literal-field lookup). Refuses to
@@ -228,7 +266,7 @@ application in the goal. `Subcircuit`'s offset index makes these terms unrewrita
 fine, so each equation is proved by `circuit_norm` simp plus a defeq step on the reduced
 form only. As hypotheses, `grind`'s arithmetic and `omega` can bridge the offset
 spellings. -/
-elab "assert_local_lengths" : tactic => withMainContext do
+def assertLocalLengths : TacticM Unit := withMainContext do
   let tgt ← instantiateMVars (← getMainTarget)
   -- scan hypotheses too: after the structural split, length terms often live in
   -- intro'd premises rather than the leaf's conclusion
@@ -275,6 +313,8 @@ elab "assert_local_lengths" : tactic => withMainContext do
       let (_, goal) ← goal.intro1P
       return [goal]
     i := i + 1
+
+elab "assert_local_lengths" : tactic => assertLocalLengths
 
 /-- Definitional reduction of concrete `localLength` metadata to numerals. As a
 `dsimproc` the rewrite is a defeq step, so it also applies inside `Subcircuit`'s
@@ -417,8 +457,8 @@ the `c.localLength v` bound — and re-key the fact at the goal's own eval spell
 (the lemma's conclusion uses a different, defeq eval-instance atom; `grind` congruence
 works on syntactic atoms). `grind` cannot run simprocs, so letting it instantiate the
 composition rules would re-create opaque length atoms. -/
-elab "chain_output_facts" : tactic => withMainContext do
-  try evalTactic (← `(tactic| beta_reduce)) catch _ => pure ()
+def chainOutputFacts : TacticM Unit := withMainContext do
+  try betaReduceGoal catch _ => pure ()
   let tgt ← instantiateMVars (← getMainTarget)
   -- Universal child-output metadata facts. Binder-nested outputs (e.g. inside a
   -- `Vector.mapFinRange` lambda) cannot be chained per instance — the term has loose
@@ -528,16 +568,42 @@ elab "chain_output_facts" : tactic => withMainContext do
           if (← inferType mty).isProp then
             setGoals [mid]
             if mty.getAppFn.isConstOf `ProverEnvironment.AgreesBelow then
-              evalTactic (← `(tactic|
-                exact $(mkIdent `ProverEnvironment.agreesBelow_of_le) $(mkIdent hAName)
-                  (by simp only [reduceLocalLength]; omega)))
+              let hA ← mid.withContext do
+                let some decl := (← mid.getDecl).lctx.findFromUserName? hAName
+                  | throwError "agreement hypothesis vanished"
+                pure decl.toExpr
+              -- apply the bare constant: the tighter bound is fixed only by conclusion
+              -- unification, so the term cannot be pre-built (`mkAppM` rejects open
+              -- metavariables); assigning the agreement premise then pins the bound
+              let gs ← mid.apply
+                (← mkConstWithFreshMVarLevels `ProverEnvironment.agreesBelow_of_le)
+              let mut leGoal? := none
+              for g in gs do
+                let gty ← instantiateMVars (← g.getType)
+                if gty.getAppFn.isConstOf `ProverEnvironment.AgreesBelow then
+                  g.withContext do
+                    unless ← isDefEq gty (← inferType hA) do
+                      throwError "agreement hypothesis does not match"
+                    g.assign hA
+                else if (← inferType gty).isProp then
+                  -- the `≤` side condition; apply also lists the bound's own ℕ
+                  -- metavariable as a goal, solved by the assignment above
+                  leGoal? := some g
+              if let some leGoal := leGoal? then
+                setGoals [leGoal]
+                metaSimp (← Simp.mkContext {} (simpTheorems := #[← simpOnlyBase])
+                    (← getSimpCongrTheorems))
+                  (← SimprocsArray.add #[] ``reduceLocalLength (post := true))
+                unless (← getGoals).isEmpty do Omega.omegaDefault
+              else
+                setGoals []
             else
-              let closed ← try evalTactic (← `(tactic| assumption)); pure true
+              let closed ← try (← getMainGoal).assumption; replaceMainGoal []; pure true
                 catch _ => pure false
               unless closed do
                 let (cnCtx, cnProcs) ← cnSimp
                 try metaSimp cnCtx cnProcs catch _ => pure ()
-                evalTactic (← `(tactic| grind))
+                metaGrind
       let proof ← instantiateMVars (mkAppN lem ms)
       if proof.hasExprMVar then throwError "open premises"
       -- state the fact with freshly-synthesized (canonical) eval instances: the
@@ -579,6 +645,8 @@ elab "chain_output_facts" : tactic => withMainContext do
           done := true
         catch _ =>
           st.restore
+
+elab "chain_output_facts" : tactic => chainOutputFacts
 
 partial def splitStep (g : MVarId) (fuel : Nat) : MetaM (List MVarId) := do
   if fuel == 0 then return [g]
@@ -862,7 +930,7 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
     -- letting grind e-match its way through the window arithmetic
     let envUnify : TacticM Unit := do
       unless (← getGoals).isEmpty do
-        evalTactic (← `(tactic| all_goals intros))
+        metaIntrosAll
         let hga? ← withMainContext do
           let mut found : Option (Lean.Ident × Bool) := none
           for decl in ← getLCtx do
@@ -902,25 +970,35 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
         let gs ← getGoals
         for g in gs do
           setGoals [g]
-          evalTactic (← `(tactic| (intros; (try split_ifs))))
+          metaIntros
+          evalTactic (← `(tactic| (try split_ifs)))
           let gs2 ← getGoals
           for g2 in gs2 do
             setGoals [g2]
             try metaSimp cw.branchCtx cw.cnProcs catch _ => pure ()
             -- split conjunctions before unifying environments: window conjuncts then
             -- close by rfl inside envUnify, leaving grind only the input-derived parts
-            evalTactic (← `(tactic| all_goals (try and_intros)))
+            let mut split := []
+            for g' in (← getGoals) do
+              split := split ++ (← try andIntrosCore g' catch _ => pure [g'])
+            setGoals split
             envUnify
-            evalTactic (← `(tactic| all_goals grind))
+            for g' in (← getGoals) do
+              setGoals [g']
+              metaGrind
         setGoals []
       if ← attempt vecMain then return
       if ← attempt (do
-          evalTactic (← `(tactic| refine Vector.ext fun j hj => ?_))
+          let [g] ← (← getMainGoal).applyConst ``Vector.ext
+            | throwError "Vector.ext: unexpected goals"
+          let (_, g) ← g.intro `j
+          let (_, g) ← g.intro `hj
+          replaceMainGoal [g]
           metaSimp cw.extCtx
           evalTactic (← `(tactic|
             (try split_ifs) <;> grind [Vector.getElem_map, getElem_eval_vector]))) then
         return
-      evalTactic (← `(tactic| grind))
+      metaGrind
     else
       -- grind first: on already-dispatched leaves it is the cheapest closer by an
       -- order of magnitude; the curated simp_all forms only run when it fails
@@ -928,7 +1006,7 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
       -- close by rfl right here, and the rest reach grind with fewer distinct atoms
       envUnify
       if (← getGoals).isEmpty then return
-      if ← attempt (evalTactic (← `(tactic| grind))) then return
+      if ← attempt metaGrind then return
       if ← attempt (do
           metaSimpAll cw.baseCtx cw.normProcs
           unless (← getGoals).isEmpty do throwError "open goals") then return
@@ -937,7 +1015,7 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
         throwError "computable_witnesses: could not close goal"
   let leafDispatch : TacticM Unit := withMainContext do
     -- inaccessible hyp names (from intro1P) break the chainer's delab roundtrip
-    try evalTactic (← `(tactic| expose_names)) catch _ => pure ()
+    try replaceMainGoal [← (← getMainGoal).exposeNames] catch _ => pure ()
     -- offset arithmetic into the shape `Circuit.forEach.forAll` matches (the manual
     -- proofs' `ring_nf` step) — only for leaves that actually contain a forEach
     -- group; elsewhere ring_nf re-spells offsets out from under the omega discharge
@@ -953,7 +1031,7 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
     -- hypotheses via the close routes' `simp_all` instead
     try metaSimp cw.baseCtx cw.leafProcs (hyps := true) catch _ => pure ()
     if (← getGoals).isEmpty then return
-    evalTactic (← `(tactic| assert_local_lengths))
+    assertLocalLengths
     withMainContext do
       let t := (← instantiateMVars (← getMainTarget)).consumeMData
       let .const headName _ := t.getAppFn | evalCloseRun
@@ -967,18 +1045,27 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
         let tryVariant (nm : Name) : TacticM Bool := do
           let st ← Tactic.saveState
           try
-            if nm == `GeneralFormalCircuit.WithHint.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq then
-              evalTactic (← `(tactic| refine $(mkIdent nm) _ _ ?_ fun h_agrees => ?_))
-            else
-              evalTactic (← `(tactic| refine $(mkIdent nm) _ ?_ fun h_agrees => ?_))
-            -- the offset premise (first goal): normalize the length spellings, then
-            -- close arithmetically over the asserted lengths
-            let gs ← getGoals
-            let some offsetGoal := gs.head? | throwError "no offset premise goal"
+            let gs ← (← getMainGoal).apply (← mkConstWithFreshMVarLevels nm)
+            -- two premise goals survive unification: the `m = n` offset equation and
+            -- the `OnlyAccessedBelow` continuation — identified by shape, not
+            -- position (`OnlyAccessedBelow` is only definitionally a `∀`, so the
+            -- non-`Eq` goal is the continuation; `intro` unfolds it to a binder)
+            let mut offsetGoal? := none
+            let mut contGoal? := none
+            for g in gs do
+              if (← instantiateMVars (← g.getType)).isAppOfArity ``Eq 3 then
+                offsetGoal? := some g
+              else
+                contGoal? := some g
+            let some offsetGoal := offsetGoal? | throwError "no offset premise goal"
+            let some contGoal := contGoal? | throwError "no continuation goal"
+            let (_, contGoal) ← contGoal.intro `h_agrees
+            -- offset premise: normalize the length spellings, then close
+            -- arithmetically over the asserted lengths
             setGoals [offsetGoal]
             try metaSimp cw.normCtx cw.leafProcs catch _ => pure ()
-            unless (← getGoals).isEmpty do evalTactic (← `(tactic| omega))
-            setGoals gs.tail
+            unless (← getGoals).isEmpty do Omega.omegaDefault
+            setGoals [contGoal]
             pure true
           catch _ =>
             st.restore
@@ -993,7 +1080,7 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
         if applied then
           simpPass
           unless (← getGoals).isEmpty do
-            evalTactic (← `(tactic| (try chain_output_facts)))
+            try chainOutputFacts catch _ => pure ()
             unless (← getGoals).isEmpty do
               evalCloseRun
         else
@@ -1001,9 +1088,9 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
           -- and metadata spellings are not grind-reachable in raw form
           simpPass
           unless (← getGoals).isEmpty do
-            evalTactic (← `(tactic| grind))
+            metaGrind
       else
-        evalTactic (← `(tactic| (try chain_output_facts)))
+        try chainOutputFacts catch _ => pure ()
         unless (← getGoals).isEmpty do
           evalCloseRun
   leafDispatch
@@ -1021,7 +1108,8 @@ def runComputableWitnesses (extraTerms closeTerms : Array (TSyntax `term)) : Tac
       let t' ← Meta.deltaExpand t (· == `FormalCircuitBase.ComputableWitnesses)
       unless t' == t do
         liftMetaTactic fun g => do return [← g.change t']
-      evalTactic (← `(tactic| intro n))
+      let (_, g) ← (← getMainGoal).intro `n
+      replaceMainGoal [g]
   let simpPass : TacticM Unit := do
     unless (← getGoals).isEmpty do
       try metaSimp cw.normCtx cw.normProcs catch _ => pure ()
@@ -1033,12 +1121,12 @@ def runComputableWitnesses (extraTerms closeTerms : Array (TSyntax `term)) : Tac
     -- `c.output`/`toSubcircuit` spellings the composition machinery patterns on, and
     -- leaving a wrapper folded makes And-unification whnf-execute the whole circuit).
     let tBefore ← withMainContext do instantiateMVars (← getMainTarget)
-    try evalTactic (← `(tactic| unfold_plain_circuit_consts)) catch _ => pure ()
+    try unfoldPlainCircuitConsts catch _ => pure ()
     -- re-normalize only if the unfold exposed anything
     let tAfter ← withMainContext do instantiateMVars (← getMainTarget)
     unless tAfter == tBefore do simpPass
   unless (← getGoals).isEmpty do
-    evalTactic (← `(tactic| intros))
+    metaIntros
   unless (← getGoals).isEmpty do
     let nGoalsBefore := (← getGoals).length
     let hypsBefore ← withMainContext do return (← getLCtx).getFVarIds.size
