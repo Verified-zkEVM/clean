@@ -466,6 +466,17 @@ theorem RangeAll.append
   · exact hleft index hstart hmiddle
   · exact hright index (by omega) hstop
 
+theorem RangeAll.transfer
+    {before after : Array T} {start stop : ℕ}
+    {predicate : T → Prop}
+    (hbefore : RangeAll before start stop predicate)
+    (heq : ∀ index, start ≤ index → index < stop →
+      after[index]! = before[index]!) :
+    RangeAll after start stop predicate := by
+  intro index hstart hstop
+  rw [heq index hstart hstop]
+  exact hbefore index hstart hstop
+
 omit [Inhabited T] in
 theorem KeySorted.nil (key : T → ℕ) : KeySorted key [] := by
   rw [KeySorted, List.sortedLE_iff_pairwise]
@@ -2713,6 +2724,59 @@ private theorem OffsetScanExact.consume
     startIdx endIdx count hstart, hexact]
   exact htailEq
 
+private theorem OffsetScanExact.exhausted
+    (block index : ℕ) (offsets : Array ℕ) (keep : ℕ → Bool)
+    (hexact : OffsetScanExact block index index offsets keep) :
+    ∀ offset, offset < block → keep offset = false := by
+  have hnone : (List.range block).filter
+      (fun offset => keep offset = true) = [] := by
+    rw [← hexact]
+    simp [List.extract_eq_take_drop]
+  intro offset hoffset
+  by_cases hkeep : keep offset = true
+  · have hmem : offset ∈ (List.range block).filter
+        (fun offset => keep offset = true) := by
+      simp [hoffset, hkeep]
+    rw [hnone] at hmem
+    simp at hmem
+  · exact Bool.eq_false_of_not_eq_true hkeep
+
+private theorem exhausted_left_block_rangeAll
+    (array : Array T) (pivot : T) (isLess : T → T → Bool)
+    (l block index : ℕ) (offsets : Array ℕ)
+    (hexact : OffsetScanExact block index index offsets
+      (fun offset => !isLess array[l + offset]! pivot)) :
+    RangeAll array l (l + block)
+      (fun item => isLess item pivot = true) := by
+  intro position hposition hstop
+  let offset := position - l
+  have hoffset : offset < block := by omega
+  have haddress : l + offset = position := by omega
+  have hgood := OffsetScanExact.exhausted block index offsets
+    (fun offset => !isLess array[l + offset]! pivot) hexact
+    offset hoffset
+  have hgood' : (!isLess array[l + offset]! pivot) = false := by
+    simpa only using hgood
+  rw [haddress] at hgood'
+  simpa using hgood'
+
+private theorem exhausted_right_block_rangeAll
+    (array : Array T) (pivot : T) (isLess : T → T → Bool)
+    (r block index : ℕ) (offsets : Array ℕ)
+    (hblock : block ≤ r)
+    (hexact : OffsetScanExact block index index offsets
+      (fun offset => isLess array[r - 1 - offset]! pivot)) :
+    RangeAll array (r - block) r
+      (fun item => isLess item pivot = false) := by
+  intro position hposition hstop
+  let offset := r - 1 - position
+  have hoffset : offset < block := by omega
+  have haddress : r - 1 - offset = position := by omega
+  have hgood := OffsetScanExact.exhausted block index offsets
+    (fun offset => isLess array[r - 1 - offset]! pivot) hexact
+    offset hoffset
+  simpa only [haddress] using hgood
+
 private def blockCycleOutput
     (array : Array T) (l r : ℕ)
     (offsetsL offsetsR : Array ℕ)
@@ -2732,6 +2796,32 @@ private def blockCycleOutput
           afterLeft[right nextStepRight]!
         pure (.yield (nextStepLeft, nextStepRight, afterRight))
   result.2.2.set! (right result.2.1) tmp
+
+private theorem blockCycleOutput_size
+    (array : Array T) (l r : ℕ)
+    (offsetsL offsetsR : Array ℕ)
+    (startL startR count : ℕ) :
+    (blockCycleOutput array l r offsetsL offsetsR
+      startL startR count).size = array.size := by
+  let left := fun (index : ℕ) => l + offsetsL[index]!
+  let right := fun (index : ℕ) => r - offsetsR[index]! - 1
+  let afterFirst := array.set! (left startL) array[right startR]!
+  let result : ℕ × ℕ × Array T := Id.run <|
+    forIn (List.range' 0 (count - 1))
+      (startL, startR, afterFirst) fun _ state =>
+        let nextStepLeft := state.1 + 1
+        let afterLeft := state.2.2.set! (right state.2.1)
+          state.2.2[left nextStepLeft]!
+        let nextStepRight := state.2.1 + 1
+        let afterRight := afterLeft.set! (left nextStepLeft)
+          afterLeft[right nextStepRight]!
+        pure (.yield (nextStepLeft, nextStepRight, afterRight))
+  have hshape := cycle_loop_shape (T := T) left right startL startR
+    (List.range' 0 (count - 1)) 0 afterFirst
+  have hresultSize : result.2.2.size = array.size := by
+    simpa [result, afterFirst] using hshape.2.2
+  simpa [blockCycleOutput, left, right, result, Array.set!]
+    using hresultSize
 
 private theorem scanned_block_cycle_classifies
     (array : Array T) (pivot : T) (isLess : T → T → Bool)
@@ -2884,6 +2974,22 @@ private theorem right_block_address_injective
     leftOffset = rightOffset := by
   omega
 
+omit [Inhabited T] in
+private theorem left_block_address_mem_interval
+    (l r blockL blockR offset : ℕ)
+    (hblocks : blockL + blockR ≤ r - l)
+    (hoffset : offset < blockL) :
+    l ≤ l + offset ∧ l + offset < r := by
+  omega
+
+omit [Inhabited T] in
+private theorem right_block_address_mem_interval
+    (l r blockL blockR offset : ℕ)
+    (hblocks : blockL + blockR ≤ r - l)
+    (hoffset : offset < blockR) :
+    l ≤ r - offset - 1 ∧ r - offset - 1 < r := by
+  omega
+
 private theorem refreshOffsets_bounds
     (block startIdx endIdx : ℕ) (offsets : Array ℕ)
     (keep : ℕ → Bool)
@@ -2920,6 +3026,18 @@ private def blockMutateArray
       leftData.1 rightData.1 count
   else
     a
+
+private theorem blockMutateArray_size
+    (a : Array T) (pivot : T) (isLess : T → T → Bool)
+    (l r blockL blockR : ℕ)
+    (offsetsL offsetsR : Array ℕ)
+    (startL endL startR endR : ℕ) :
+    (blockMutateArray a pivot isLess l r blockL blockR
+      offsetsL offsetsR startL endL startR endR).size = a.size := by
+  rw [blockMutateArray]
+  split
+  · exact blockCycleOutput_size a l r _ _ _ _ _
+  · rfl
 
 private theorem blockMutateArray_eq_blockCycleOutput_of_pos
     (a : Array T) (pivot : T) (isLess : T → T → Bool)
@@ -3044,7 +3162,9 @@ private theorem blockMutateArray_offsets_exact
         leftData.2.2 (fun index => !isLess output[l + index]! pivot) ∧
       OffsetScanExact blockR (rightData.1 + count) rightData.2.1
         rightData.2.2
-          (fun index => isLess output[r - 1 - index]! pivot) := by
+          (fun index => isLess output[r - 1 - index]! pivot) ∧
+      ∀ position, position < l ∨ r ≤ position →
+        output[position]! = a[position]! := by
   let leftData := refreshOffsets blockL startL endL offsetsL
     (fun index => !isLess a[l + index]! pivot)
   let rightData := refreshOffsets blockR startR endR offsetsR
@@ -3092,6 +3212,12 @@ private theorem blockMutateArray_offsets_exact
         a pivot isLess l r blockL blockR offsetsL offsetsR
         startL endL startR endR
       simpa only [output, leftData, rightData, count] using hresult hcount
+    have houtputRaw :
+        blockMutateArray a pivot isLess l r blockL blockR
+            offsetsL offsetsR startL endL startR endR =
+          blockCycleOutput a l r leftData.2.2 rightData.2.2
+            leftData.1 rightData.1 count := by
+      simpa only [output] using houtput
     have hclassified := scanned_block_cycle_classifies a pivot isLess
       l r blockL blockR leftData.2.2 rightData.2.2
       leftData.1 leftData.2.1 rightData.1 rightData.2.1 count
@@ -3105,7 +3231,7 @@ private theorem blockMutateArray_offsets_exact
           isLess output[r - rightData.2.2[rightData.1 + index]! - 1]!
             pivot = false) := by
       simpa only [houtput] using hclassified
-    constructor
+    refine ⟨?_, ?_, ?_⟩
     · apply OffsetScanExact.consume blockL leftData.1 leftData.2.1
         count leftData.2.2
         (fun index => !isLess a[l + index]! pivot)
@@ -3185,12 +3311,38 @@ private theorem blockMutateArray_offsets_exact
               (hoffset.trans_le hblockRr) (hactive.1.trans_le hblockRr) heq)
         simpa only [houtput] using congrArg
           (fun value => isLess value pivot) hout
+    · intro position hposition
+      rw [houtputRaw]
+      apply scanned_block_cycle_outside a pivot isLess
+        l r blockL blockR leftData.2.2 rightData.2.2
+        leftData.1 leftData.2.1 rightData.1 rightData.2.1
+        count position hlr hrsize hblocks hleft.1 hright.1
+        hleftEndSize hrightEndSize hcount hcountL hcountR
+        hleftExact hrightExact
+      · intro index hindex
+        have hactive := OffsetScanExact.active blockL leftData.1
+          leftData.2.1 leftData.2.2 _ hleftExact hleftEndSize
+          (leftData.1 + index) (by omega) (by omega)
+        have hmem := left_block_address_mem_interval l r blockL blockR
+          leftData.2.2[leftData.1 + index]! hblocks hactive.1
+        rcases hposition with hbefore | hafter <;> omega
+      · intro index hindex
+        have hactive := OffsetScanExact.active blockR rightData.1
+          rightData.2.1 rightData.2.2 _ hrightExact hrightEndSize
+          (rightData.1 + index) (by omega) (by omega)
+        have hmem := right_block_address_mem_interval l r blockL blockR
+          rightData.2.2[rightData.1 + index]! hblocks hactive.1
+        rcases hposition with hbefore | hafter <;> omega
   · have hzero : count = 0 := by omega
     have houtput : output = a := by
       have hresult := blockMutateArray_eq_self_of_no_count
         a pivot isLess l r blockL blockR offsetsL offsetsR
         startL endL startR endR
       simpa only [output, leftData, rightData, count] using hresult hcount
+    have houtputRaw :
+        blockMutateArray a pivot isLess l r blockL blockR
+          offsetsL offsetsR startL endL startR endR = a := by
+      simpa only [output] using houtput
     have hleftResult : OffsetScanExact blockL
         (leftData.1 + count) leftData.2.1 leftData.2.2
         (fun index => !isLess output[l + index]! pivot) := by
@@ -3199,7 +3351,8 @@ private theorem blockMutateArray_offsets_exact
         (rightData.1 + count) rightData.2.1 rightData.2.2
         (fun index => isLess output[r - 1 - index]! pivot) := by
       simpa only [hzero, Nat.add_zero, houtput] using hrightExact
-    exact ⟨hleftResult, hrightResult⟩
+    exact ⟨hleftResult, hrightResult, fun position _ =>
+      congrArg (fun array => array[position]!) houtputRaw⟩
 
 omit [Inhabited T] in
 private theorem min_remaining_exhausts
@@ -3293,6 +3446,34 @@ private theorem forIn_step_post
           simpa [hresult] using
             ih result (hyield i initial result hinitial hresult)
 
+omit [Inhabited T] in
+private theorem forIn_step_decreasing_post
+    {ι S : Type} (P Q : S → Prop) (measure : S → ℕ)
+    (step : ι → S → ForInStep S)
+    (hyield : ∀ i s s', P s → step i s = .yield s' →
+      P s' ∧ measure s' < measure s)
+    (hdone : ∀ i s s', P s → step i s = .done s' → Q s') :
+    ∀ (indices : List ι) (initial : S),
+      P initial → measure initial < indices.length →
+      Q (Id.run <|
+        forIn indices initial fun i s => pure (step i s)) := by
+  intro indices
+  induction indices with
+  | nil =>
+      intro initial hinitial hfuel
+      simp at hfuel
+  | cons index indices inductionHypothesis =>
+      intro initial hinitial hfuel
+      simp only [List.forIn_cons]
+      cases hresult : step index initial with
+      | done result =>
+          simpa [hresult] using hdone index initial result hinitial hresult
+      | yield result =>
+          have hnext := hyield index initial result hinitial hresult
+          simpa [hresult] using inductionHypothesis result hnext.1 (by
+            simp only [List.length_cons] at hfuel
+            omega)
+
 private structure BlockCoreResult (T : Type) where
   v : Array T
   l : ℕ
@@ -3331,6 +3512,42 @@ private def blockCore
     endR := rightData.2.1
     offsetsR := rightData.2.2
   }
+
+private theorem blockCore_offsets_exact
+    (a : Array T) (pivot : T) (isLess : T → T → Bool)
+    (l r blockL blockR : ℕ)
+    (offsetsL offsetsR : Array ℕ)
+    (startL endL startR endR : ℕ)
+    (hlr : l ≤ r) (hrsize : r ≤ a.size)
+    (hblocks : blockL + blockR ≤ r - l)
+    (hblockL : blockL ≤ offsetsL.size)
+    (hblockR : blockR ≤ offsetsR.size)
+    (hstartL : startL ≤ endL)
+    (hendL : startL ≠ endL → endL ≤ blockL)
+    (hstartR : startR ≤ endR)
+    (hendR : startR ≠ endR → endR ≤ blockR)
+    (hactiveL : startL ≠ endL →
+      ∀ j, j < endL → offsetsL[j]! < blockL)
+    (hactiveR : startR ≠ endR →
+      ∀ j, j < endR → offsetsR[j]! < blockR)
+    (hexactL : startL ≠ endL →
+      OffsetScanExact blockL startL endL offsetsL
+        (fun index => !isLess a[l + index]! pivot))
+    (hexactR : startR ≠ endR →
+      OffsetScanExact blockR startR endR offsetsR
+        (fun index => isLess a[r - 1 - index]! pivot)) :
+    let core := blockCore a pivot isLess l r blockL blockR
+      offsetsL offsetsR startL endL startR endR
+    OffsetScanExact blockL core.startL core.endL core.offsetsL
+        (fun index => !isLess core.v[l + index]! pivot) ∧
+      OffsetScanExact blockR core.startR core.endR core.offsetsR
+        (fun index => isLess core.v[r - 1 - index]! pivot) ∧
+      ∀ position, position < l ∨ r ≤ position →
+        core.v[position]! = a[position]! := by
+  simpa only [blockCore] using blockMutateArray_offsets_exact
+    a pivot isLess l r blockL blockR offsetsL offsetsR
+    startL endL startR endR hlr hrsize hblocks hblockL hblockR
+    hstartL hendL hstartR hendR hactiveL hactiveR hexactL hexactR
 
 private theorem blockCore_perm
     (a : Array T) (pivot : T) (isLess : T → T → Bool)
@@ -3511,6 +3728,28 @@ private def BlockCleanupInv
     ∀ j, j < state.endR →
       state.offsetsR[j]! < state.r)
 
+private def BlockOrderInv
+    (pivot : T) (isLess : T → T → Bool)
+    (state : BlockLoopState T) : Prop :=
+  RangeAll state.v 0 state.l
+      (fun item => isLess item pivot = true) ∧
+    RangeAll state.v state.r state.v.size
+      (fun item => isLess item pivot = false) ∧
+    (state.startL ≠ state.endL →
+      OffsetScanExact state.blockL state.startL state.endL
+        state.offsetsL
+        (fun offset => !isLess state.v[state.l + offset]! pivot)) ∧
+    (state.startR ≠ state.endR →
+      OffsetScanExact state.blockR state.startR state.endR
+        state.offsetsR
+        (fun offset => isLess state.v[state.r - 1 - offset]! pivot))
+
+private def BlockDoneShape (state : BlockLoopState T) : Prop :=
+  (state.startL < state.endL →
+      state.l + state.blockL = state.r) ∧
+    (state.startR < state.endR →
+      state.r - state.blockR = state.l)
+
 omit [Inhabited T] in
 private theorem blockPreInv_cleanup
     (original : Array T) (state : BlockLoopState T)
@@ -3552,6 +3791,100 @@ private theorem blockCore_cursor_eq
       result.r =
         (if result.startR = result.endR then r - blockR else r) := by
   simp [blockCore]
+
+private theorem blockCore_orderInv
+    (a : Array T) (pivot : T) (isLess : T → T → Bool)
+    (l r blockL blockR : ℕ)
+    (offsetsL offsetsR : Array ℕ)
+    (startL endL startR endR : ℕ)
+    (hlr : l ≤ r) (hrsize : r ≤ a.size)
+    (hblocks : blockL + blockR ≤ r - l)
+    (hblockL : blockL ≤ offsetsL.size)
+    (hblockR : blockR ≤ offsetsR.size)
+    (hstartL : startL ≤ endL)
+    (hendL : startL ≠ endL → endL ≤ blockL)
+    (hstartR : startR ≤ endR)
+    (hendR : startR ≠ endR → endR ≤ blockR)
+    (hactiveL : startL ≠ endL →
+      ∀ j, j < endL → offsetsL[j]! < blockL)
+    (hactiveR : startR ≠ endR →
+      ∀ j, j < endR → offsetsR[j]! < blockR)
+    (hprefix : RangeAll a 0 l
+      (fun item => isLess item pivot = true))
+    (hsuffix : RangeAll a r a.size
+      (fun item => isLess item pivot = false))
+    (hexactL : startL ≠ endL →
+      OffsetScanExact blockL startL endL offsetsL
+        (fun offset => !isLess a[l + offset]! pivot))
+    (hexactR : startR ≠ endR →
+      OffsetScanExact blockR startR endR offsetsR
+        (fun offset => isLess a[r - 1 - offset]! pivot)) :
+    let core := blockCore a pivot isLess l r blockL blockR
+      offsetsL offsetsR startL endL startR endR
+    BlockOrderInv pivot isLess (blockCoreState blockL blockR core) := by
+  let core := blockCore a pivot isLess l r blockL blockR
+    offsetsL offsetsR startL endL startR endR
+  have hcoreExact :
+      OffsetScanExact blockL core.startL core.endL core.offsetsL
+          (fun offset => !isLess core.v[l + offset]! pivot) ∧
+        OffsetScanExact blockR core.startR core.endR core.offsetsR
+          (fun offset => isLess core.v[r - 1 - offset]! pivot) ∧
+        ∀ position, position < l ∨ r ≤ position →
+          core.v[position]! = a[position]! := by
+    simpa only [core] using blockCore_offsets_exact a pivot isLess
+      l r blockL blockR offsetsL offsetsR startL endL startR endR
+      hlr hrsize hblocks hblockL hblockR hstartL hendL
+      hstartR hendR hactiveL hactiveR hexactL hexactR
+  have hcursor :
+      core.l =
+          (if core.startL = core.endL then l + blockL else l) ∧
+        core.r =
+          (if core.startR = core.endR then r - blockR else r) := by
+    simpa only [core] using blockCore_cursor_eq a pivot isLess
+      l r blockL blockR offsetsL offsetsR startL endL startR endR
+  have hprefixTransfer : RangeAll core.v 0 l
+      (fun item => isLess item pivot = true) :=
+    RangeAll.transfer hprefix (by
+      intro position _ hposition
+      exact hcoreExact.2.2 position (Or.inl hposition))
+  have hsuffixTransfer : RangeAll core.v r core.v.size
+      (fun item => isLess item pivot = false) := by
+    have hcoreSize : core.v.size = a.size := by
+      simpa only [core, blockCore] using blockMutateArray_size
+        a pivot isLess l r blockL blockR offsetsL offsetsR
+        startL endL startR endR
+    rw [hcoreSize]
+    apply RangeAll.transfer hsuffix
+    intro position hposition hsize
+    exact hcoreExact.2.2 position (Or.inr hposition)
+  unfold BlockOrderInv
+  simp only [blockCoreState]
+  constructor
+  · by_cases hdone : core.startL = core.endL
+    · rw [hcursor.1, if_pos hdone]
+      apply RangeAll.append hprefixTransfer
+      exact exhausted_left_block_rangeAll core.v pivot isLess
+        l blockL core.endL core.offsetsL (by simpa [hdone] using hcoreExact.1)
+    · rw [hcursor.1, if_neg hdone]
+      exact hprefixTransfer
+  constructor
+  · by_cases hdone : core.startR = core.endR
+    · rw [hcursor.2, if_pos hdone]
+      apply RangeAll.append
+      · exact exhausted_right_block_rangeAll core.v pivot isLess
+          r blockR core.endR core.offsetsR
+          (right_block_le l r blockL blockR hblocks)
+          (by simpa [hdone] using hcoreExact.2.1)
+      · exact hsuffixTransfer
+    · rw [hcursor.2, if_neg hdone]
+      exact hsuffixTransfer
+  constructor
+  · intro hpending
+    rw [hcursor.1, if_neg hpending]
+    exact hcoreExact.1
+  · intro hpending
+    rw [hcursor.2, if_neg hpending]
+    exact hcoreExact.2.1
 
 omit [Inhabited T] in
 private theorem blockCleanupInv_coreState
@@ -3907,13 +4240,164 @@ private theorem blockLoopStep_cleanup
   · simpa [blockLoopStep, gap, pendingL, pendingR, adjusted,
       hdone] using hcleanup
 
+private theorem blockLoopStep_order
+    (original : Array T) (pivot : T)
+    (isLess : T → T → Bool) (state : BlockLoopState T)
+    (hpre : BlockPreInv original state)
+    (horder : BlockOrderInv pivot isLess state) :
+    match blockLoopStep pivot isLess state with
+    | .done result =>
+        BlockOrderInv pivot isLess result ∧ BlockDoneShape result
+    | .yield result => BlockOrderInv pivot isLess result := by
+  rcases state with
+    ⟨a, l, r, blockL, blockR, startL, endL, offsetsL,
+      startR, endR, offsetsR⟩
+  simp only [BlockPreInv] at hpre
+  rcases hpre with
+    ⟨hperm, hsize, hlr, hrsize, hblockLEq, hblockREq,
+      hsizeL, hsizeR, hstartL, hendL, hstartR, hendR,
+      hactiveL, hactiveR, hatMostOne, hpendingL, hpendingR⟩
+  simp only [BlockOrderInv] at horder
+  rcases horder with ⟨hprefix, hsuffix, hexactL, hexactR⟩
+  let gap := r - l
+  let pendingL := decide (startL < endL)
+  let pendingR := decide (startR < endR)
+  let adjusted := adjustBlockSizes gap blockL blockR pendingL pendingR
+  have hadjust := adjustBlockSizes_bounds gap blockL blockR
+    pendingL pendingR
+    (by
+      intro hlarge
+      exact ⟨by omega, by omega, by omega⟩)
+    (by
+      intro hdone hpending
+      have hp : startL < endL := by simpa [pendingL] using hpending
+      exact ⟨hblockLEq, hpendingL hp⟩)
+    (by
+      intro hdone hpending
+      have hp : startR < endR := by simpa [pendingR] using hpending
+      exact ⟨hblockREq, hpendingR hp⟩)
+  have hadjustLeft : startL ≠ endL → adjusted.1 = blockL := by
+    intro hne
+    have hp : startL < endL := by omega
+    simp only [adjusted, adjustBlockSizes]
+    by_cases hdone : gap ≤ 2 * 128 <;> simp [hdone, pendingL, hp]
+  have hadjustRight : startR ≠ endR → adjusted.2 = blockR := by
+    intro hne
+    have hp : startR < endR := by omega
+    have hleftFalse : pendingL = false := by
+      simp only [pendingL, decide_eq_false_iff_not]
+      intro hpLeft
+      exact hatMostOne ⟨hpLeft, hp⟩
+    simp only [adjusted, adjustBlockSizes]
+    by_cases hdone : gap ≤ 2 * 128 <;>
+      simp [hdone, pendingR, hp, hleftFalse]
+  let core := blockCore a pivot isLess l r adjusted.1 adjusted.2
+    offsetsL offsetsR startL endL startR endR
+  have hcoreOrder : BlockOrderInv pivot isLess
+      (blockCoreState adjusted.1 adjusted.2 core) := by
+    simpa only [core] using blockCore_orderInv a pivot isLess
+      l r adjusted.1 adjusted.2 offsetsL offsetsR
+      startL endL startR endR hlr (by omega) hadjust.2.2
+      (hadjust.1.trans_eq hsizeL.symm)
+      (hadjust.2.1.trans_eq hsizeR.symm)
+      hstartL (fun hne => by
+        rw [hadjustLeft hne]
+        simpa only [hblockLEq] using hendL)
+      hstartR (fun hne => by
+        rw [hadjustRight hne]
+        simpa only [hblockREq] using hendR)
+      (by
+        intro hne j hj
+        rw [hadjustLeft hne]
+        simpa only [hblockLEq] using hactiveL j hj)
+      (by
+        intro hne j hj
+        rw [hadjustRight hne]
+        simpa only [hblockREq] using hactiveR j hj)
+      hprefix hsuffix
+      (by
+        intro hne
+        rw [hadjustLeft hne]
+        simpa only [hblockLEq] using hexactL hne)
+      (by
+        intro hne
+        rw [hadjustRight hne]
+        simpa only [hblockREq] using hexactR hne)
+  by_cases hdone : gap ≤ 2 * 128
+  · have hadjustDone : adjusted.1 + adjusted.2 = gap :=
+      (adjustBlockSizes_done gap blockL blockR pendingL pendingR hdone
+        (by
+          intro hpending
+          have hp : startL < endL := by simpa [pendingL] using hpending
+          exact ⟨hblockLEq, hpendingL hp⟩)
+        (by
+          intro hpending
+          have hp : startR < endR := by simpa [pendingR] using hpending
+          exact ⟨hblockREq, hpendingR hp⟩)).2.2
+    have hoffsets := blockCore_offset_bounds a pivot isLess
+      l r adjusted.1 adjusted.2 offsetsL offsetsR
+      startL endL startR endR hsizeL hsizeR hadjust.1 hadjust.2.1
+      hstartL (fun hne => by
+        rw [hadjustLeft hne]
+        simpa only [hblockLEq] using hendL)
+      hstartR (fun hne => by
+        rw [hadjustRight hne]
+        simpa only [hblockREq] using hendR)
+      (by
+        intro hne j hj
+        rw [hadjustLeft hne]
+        simpa only [hblockLEq] using hactiveL j hj)
+      (by
+        intro hne j hj
+        rw [hadjustRight hne]
+        simpa only [hblockREq] using hactiveR j hj)
+    have hexhaust : core.startL = core.endL ∨
+        core.startR = core.endR := by
+      simpa only [core] using hoffsets.2.2.2.2.2.2.2.2
+    have hcursor :
+        core.l =
+            (if core.startL = core.endL then l + adjusted.1 else l) ∧
+          core.r =
+            (if core.startR = core.endR then r - adjusted.2 else r) := by
+      simpa only [core] using blockCore_cursor_eq a pivot isLess
+        l r adjusted.1 adjusted.2 offsetsL offsetsR
+        startL endL startR endR
+    have hshape : BlockDoneShape
+        (blockCoreState adjusted.1 adjusted.2 core) := by
+      unfold BlockDoneShape
+      simp only [blockCoreState]
+      constructor
+      · intro hpending
+        have hdoneR : core.startR = core.endR := by
+          rcases hexhaust with hdoneL | hdoneR
+          · omega
+          · exact hdoneR
+        rw [hcursor.1, if_neg (ne_of_lt hpending),
+          hcursor.2, if_pos hdoneR]
+        simp only [gap] at hadjustDone
+        omega
+      · intro hpending
+        have hdoneL : core.startL = core.endL := by
+          rcases hexhaust with hdoneL | hdoneR
+          · exact hdoneL
+          · omega
+        rw [hcursor.1, if_pos hdoneL,
+          hcursor.2, if_neg (ne_of_lt hpending)]
+        simp only [gap] at hadjustDone
+        omega
+    simpa [blockLoopStep, gap, pendingL, pendingR, adjusted,
+      core, hdone] using And.intro hcoreOrder hshape
+  · simpa [blockLoopStep, gap, pendingL, pendingR, adjusted,
+      core, hdone] using hcoreOrder
+
 private theorem blockLoopStep_yield_pre
     (original : Array T) (pivot : T)
     (isLess : T → T → Bool)
     (state result : BlockLoopState T)
     (hinv : BlockPreInv original state)
     (hstep : blockLoopStep pivot isLess state = .yield result) :
-    BlockPreInv original result := by
+    BlockPreInv original result ∧
+      result.r - result.l < state.r - state.l := by
   rcases state with
     ⟨a, l, r, blockL, blockR, startL, endL, offsetsL,
       startR, endR, offsetsR⟩
@@ -3977,6 +4461,20 @@ private theorem blockLoopStep_yield_pre
     at hcursorEqRaw
   have hpendingGap := yielded_core_pending_gap core l r
     hgap hcExhaust hcursorEqRaw.1 hcursorEqRaw.2
+  have hgapDecrease : core.r - core.l < r - l := by
+    rcases hcExhaust with hdoneL | hdoneR
+    · rw [hcursorEqRaw.1, if_pos hdoneL]
+      by_cases hdoneRight : core.startR = core.endR
+      · rw [hcursorEqRaw.2, if_pos hdoneRight]
+        omega
+      · rw [hcursorEqRaw.2, if_neg hdoneRight]
+        omega
+    · rw [hcursorEqRaw.2, if_pos hdoneR]
+      by_cases hdoneLeft : core.startL = core.endL
+      · rw [hcursorEqRaw.1, if_pos hdoneLeft]
+        omega
+      · rw [hcursorEqRaw.1, if_neg hdoneLeft]
+        omega
   have hcoreSize : core.v.size = original.size := by
     simpa using hcorePerm.length_eq
   have hcoreASize : core.v.size = a.size := by omega
@@ -3985,11 +4483,12 @@ private theorem blockLoopStep_yield_pre
         core.startR < core.endR) := by
     intro hpending
     rcases hcExhaust with hdoneL | hdoneR <;> omega
-  exact blockPreInv_coreState original core hcorePerm hcoreSize
-    hcursorRaw.1 (hcursorRaw.2.trans_eq hcoreASize.symm)
-    hcSizeL hcSizeR hcStartL hcEndL hcStartR hcEndR
-    hcActiveL hcActiveR hatMostOneCore
-    hpendingGap.1 hpendingGap.2
+  exact ⟨blockPreInv_coreState original core hcorePerm hcoreSize
+      hcursorRaw.1 (hcursorRaw.2.trans_eq hcoreASize.symm)
+      hcSizeL hcSizeR hcStartL hcEndL hcStartR hcEndR
+      hcActiveL hcActiveR hatMostOneCore
+      hpendingGap.1 hpendingGap.2,
+    hgapDecrease⟩
 
 private theorem blockLoop_contract
     (v : Array T) (pivot : T) (isLess : T → T → Bool) :
@@ -4028,7 +4527,7 @@ private theorem blockLoop_contract
     (fun _ state => blockLoopStep pivot isLess state)
   · intro _ state result hinv hstep
     exact blockLoopStep_yield_pre v pivot isLess
-      state result hinv hstep
+      state result hinv hstep |>.1
   · intro _ state result hinv hstep
     have hout := blockLoopStep_cleanup v pivot isLess state hinv
     rw [hstep] at hout
@@ -4036,6 +4535,66 @@ private theorem blockLoop_contract
   · exact blockPreInv_cleanup v
   · show BlockPreInv v initial
     simp [BlockPreInv, initial]
+
+private theorem blockLoop_order_contract
+    (v : Array T) (pivot : T) (isLess : T → T → Bool) :
+    let initial : BlockLoopState T := {
+      v := v
+      l := 0
+      r := v.size
+      blockL := 128
+      blockR := 128
+      startL := 0
+      endL := 0
+      offsetsL := Array.replicate 128 0
+      startR := 0
+      endR := 0
+      offsetsR := Array.replicate 128 0
+    }
+    let result := Id.run <|
+      forIn (List.range' 0 (v.size + 4)) initial
+        fun _ state => pure (blockLoopStep pivot isLess state)
+    BlockCleanupInv v result ∧ BlockOrderInv pivot isLess result ∧
+      BlockDoneShape result := by
+  let initial : BlockLoopState T := {
+    v := v
+    l := 0
+    r := v.size
+    blockL := 128
+    blockR := 128
+    startL := 0
+    endL := 0
+    offsetsL := Array.replicate 128 0
+    startR := 0
+    endR := 0
+    offsetsR := Array.replicate 128 0
+  }
+  apply forIn_step_decreasing_post
+    (fun state => BlockPreInv v state ∧
+      BlockOrderInv pivot isLess state)
+    (fun state => BlockCleanupInv v state ∧
+      BlockOrderInv pivot isLess state ∧ BlockDoneShape state)
+    (fun state => state.r - state.l)
+    (fun _ state => blockLoopStep pivot isLess state)
+  · intro _ state result hinv hstep
+    have hprogress := blockLoopStep_yield_pre v pivot isLess
+      state result hinv.1 hstep
+    have horder := blockLoopStep_order v pivot isLess state
+      hinv.1 hinv.2
+    rw [hstep] at horder
+    exact ⟨⟨hprogress.1, horder⟩, hprogress.2⟩
+  · intro _ state result hinv hstep
+    have hcleanup := blockLoopStep_cleanup v pivot isLess state hinv.1
+    have horder := blockLoopStep_order v pivot isLess state
+      hinv.1 hinv.2
+    rw [hstep] at hcleanup horder
+    exact ⟨hcleanup, horder.1, horder.2⟩
+  · constructor
+    · show BlockPreInv v initial
+      simp [BlockPreInv, initial]
+    · show BlockOrderInv pivot isLess initial
+      simp [BlockOrderInv, initial, RangeAll.empty]
+  · simp
 
 private def partitionInBlocksFactored
     (v : Array T) (pivot : T)
