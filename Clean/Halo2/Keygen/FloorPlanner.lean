@@ -14164,6 +14164,92 @@ def slotSummaryEndFromWith (initial : ℕ)
   (summaries.zip (slotShapeSummariesFrom summaries allocations).1).map
     (fun placed => placed.2 + placed.1.rowCount) |>.foldl max initial
 
+/-- The endpoint and final allocation state produced by a summary sequence. Keeping
+the two together makes compact block replacement compositional. -/
+def slotSummaryStateFromWith (initial : ℕ)
+    (summaries : List RegionShapeSummary)
+    (allocations : CircuitAllocations) : ℕ × CircuitAllocations :=
+  match summaries with
+  | [] => (initial, allocations)
+  | summary :: rest =>
+      let placed := placeSummary summary allocations
+      slotSummaryStateFromWith
+        (max initial (placed.1.getD 0 + summary.rowCount)) rest placed.2
+
+theorem slotSummaryStateFromWith_fst
+    (initial : ℕ) (summaries : List RegionShapeSummary)
+    (allocations : CircuitAllocations) :
+    (slotSummaryStateFromWith initial summaries allocations).1 =
+      slotSummaryEndFromWith initial summaries allocations := by
+  induction summaries generalizing initial allocations with
+  | nil => rfl
+  | cons summary rest inductionHypothesis =>
+      generalize hplaced : placeSummary summary allocations = placed
+      rcases placed with ⟨row, updated⟩
+      have hcons :
+          slotSummaryEndFromWith initial (summary :: rest) allocations =
+            slotSummaryEndFromWith
+              (max initial (row.getD 0 + summary.rowCount)) rest updated := by
+        unfold slotSummaryEndFromWith
+        simp only [slotShapeSummariesFrom, hplaced, List.zip_cons_cons,
+          List.map_cons, List.foldl_cons]
+      rw [hcons]
+      simp only [slotSummaryStateFromWith, hplaced]
+      exact inductionHypothesis _ _
+
+theorem slotSummaryStateFromWith_snd
+    (initial : ℕ) (summaries : List RegionShapeSummary)
+    (allocations : CircuitAllocations) :
+    (slotSummaryStateFromWith initial summaries allocations).2 =
+      (slotShapeSummariesFrom summaries allocations).2 := by
+  induction summaries generalizing initial allocations with
+  | nil => rfl
+  | cons summary rest inductionHypothesis =>
+      generalize hplaced : placeSummary summary allocations = placed
+      rcases placed with ⟨row, updated⟩
+      simp only [slotSummaryStateFromWith, slotShapeSummariesFrom, hplaced]
+      exact inductionHypothesis _ _
+
+theorem slotSummaryStateFromWith_append
+    (initial : ℕ) (left right : List RegionShapeSummary)
+    (allocations : CircuitAllocations) :
+    slotSummaryStateFromWith initial (left ++ right) allocations =
+      let leftResult :=
+        slotSummaryStateFromWith initial left allocations
+      slotSummaryStateFromWith leftResult.1 right leftResult.2 := by
+  induction left generalizing initial allocations with
+  | nil => rfl
+  | cons summary rest inductionHypothesis =>
+      generalize hplaced : placeSummary summary allocations = placed
+      rcases placed with ⟨row, updated⟩
+      simp only [List.cons_append, slotSummaryStateFromWith, hplaced]
+      exact inductionHypothesis _ _
+
+/-- Repeatedly place one compact summary block while retaining its repetition
+count. -/
+def slotSummaryStateRepeated (count : ℕ)
+    (summaries : List RegionShapeSummary) (initial : ℕ)
+    (allocations : CircuitAllocations) : ℕ × CircuitAllocations :=
+  match count with
+  | 0 => (initial, allocations)
+  | count + 1 =>
+      let first := slotSummaryStateFromWith initial summaries allocations
+      slotSummaryStateRepeated count summaries first.1 first.2
+
+theorem slotSummaryStateFromWith_flatten_replicate
+    (count : ℕ) (summaries : List RegionShapeSummary)
+    (initial : ℕ) (allocations : CircuitAllocations) :
+    slotSummaryStateFromWith initial
+        (List.replicate count summaries).flatten allocations =
+      slotSummaryStateRepeated count summaries initial allocations := by
+  induction count generalizing initial allocations with
+  | zero => rfl
+  | succ count inductionHypothesis =>
+      rw [List.replicate_succ, List.flatten_cons,
+        slotSummaryStateFromWith_append]
+      simp only [slotSummaryStateRepeated]
+      rw [inductionHypothesis]
+
 theorem slotSummaryEndFromWith_cons
     (initial : ℕ) (head : RegionShapeSummary)
     (tail : List RegionShapeSummary)
