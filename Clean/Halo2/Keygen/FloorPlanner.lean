@@ -2587,6 +2587,21 @@ private theorem List.extract_advance
   congr 1
   omega
 
+omit [Inhabited T] in
+private theorem List.extract_shrink
+    (items : List T) (start stop : ℕ) (hstart : start < stop)
+    (hstop : stop ≤ items.length) :
+    items.extract start (stop - 1) =
+      (items.extract start stop).dropLast := by
+  have hlength : (items.extract start stop).length = stop - start := by
+    simp [List.extract_eq_take_drop]
+    omega
+  rw [List.dropLast_eq_take, hlength]
+  simp only [List.extract_eq_take_drop]
+  rw [List.take_take, Nat.min_eq_left (by omega)]
+  apply congrArg (fun count => (items.drop start).take count)
+  omega
+
 private theorem OffsetScanExact.mem_take_iff
     (block startIdx endIdx count : ℕ) (offsets : Array ℕ)
     (keep : ℕ → Bool)
@@ -2637,6 +2652,84 @@ private theorem OffsetScanExact.mem_take_iff
     have hmem := List.getElem_mem (l := active.take count)
       (n := index) hindexTake
     simpa only [List.getElem_take, hactiveValue] using hmem
+
+private theorem OffsetScanExact.getLast
+    (block startIdx endIdx : ℕ) (offsets : Array ℕ)
+    (keep : ℕ → Bool)
+    (hexact : OffsetScanExact block startIdx endIdx offsets keep)
+    (hstart : startIdx < endIdx) (hend : endIdx ≤ offsets.size) :
+    let active := (List.range block).filter
+      (fun index => keep index = true)
+    active.getLast (by
+      intro heq
+      have := congrArg List.length heq
+      simp only [List.length_nil] at this
+      have hlength : active.length = endIdx - startIdx := by
+        have hactiveEq : active = offsets.toList.extract startIdx endIdx :=
+          hexact.symm
+        rw [hactiveEq]
+        simp [List.extract_eq_take_drop]
+        omega
+      omega) = offsets[endIdx - 1]! := by
+  let active := (List.range block).filter
+    (fun index => keep index = true)
+  have hactiveEq : active = offsets.toList.extract startIdx endIdx :=
+    hexact.symm
+  have hlength : active.length = endIdx - startIdx := by
+    rw [hactiveEq]
+    simp [List.extract_eq_take_drop]
+    omega
+  have hremaining : endIdx - startIdx - 1 < endIdx - startIdx := by omega
+  have hvalue := offset_active_get! offsets startIdx endIdx
+    (endIdx - startIdx - 1) hremaining hend
+  show active.getLast _ = offsets[endIdx - 1]!
+  rw [List.getLast_eq_getElem]
+  have hindex : startIdx + (endIdx - startIdx - 1) = endIdx - 1 := by
+    omega
+  have hextractLength :
+      (offsets.toList.extract startIdx endIdx).length =
+        endIdx - startIdx := by
+    rw [← hactiveEq]
+    exact hlength
+  simpa only [hactiveEq, hextractLength, hindex] using hvalue
+
+private theorem OffsetScanExact.gt_last_false
+    (block startIdx endIdx : ℕ) (offsets : Array ℕ)
+    (keep : ℕ → Bool)
+    (hexact : OffsetScanExact block startIdx endIdx offsets keep)
+    (hstart : startIdx < endIdx) (hend : endIdx ≤ offsets.size)
+    (offset : ℕ) (hoffset : offset < block)
+    (hgt : offsets[endIdx - 1]! < offset) : keep offset = false := by
+  let active := (List.range block).filter
+    (fun index => keep index = true)
+  have hsorted : active.SortedLT :=
+    ((List.sortedLT_range block).pairwise.filter _).sortedLT
+  have hnonempty : active ≠ [] := by
+    intro heq
+    have hlength : active.length = endIdx - startIdx := by
+      have hactiveEq : active =
+          offsets.toList.extract startIdx endIdx := hexact.symm
+      rw [hactiveEq]
+      simp [List.extract_eq_take_drop]
+      omega
+    rw [heq] at hlength
+    simp at hlength
+    omega
+  have hlast : active.getLast hnonempty = offsets[endIdx - 1]! := by
+    simpa only [active] using OffsetScanExact.getLast
+      block startIdx endIdx offsets keep hexact hstart hend
+  by_cases hkeep : keep offset = true
+  · have hmem : offset ∈ active := by
+      simp [active, hoffset, hkeep]
+    have hne : offset ≠ active.getLast hnonempty := by
+      rw [hlast]
+      omega
+    have hdrop : offset ∈ active.dropLast :=
+      List.mem_dropLast_of_mem_of_ne_getLast hmem hne
+    have hlt := hsorted.pairwise.rel_dropLast_getLast hdrop
+    rw [hlast] at hlt
+    omega
+  · exact Bool.eq_false_of_not_eq_true hkeep
 
 omit [Inhabited T] in
 private theorem List.mem_drop_iff_of_nodup
@@ -2722,6 +2815,81 @@ private theorem OffsetScanExact.consume
       exact hafter
   rw [OffsetScanExact, List.extract_advance offsets.toList
     startIdx endIdx count hstart, hexact]
+  exact htailEq
+
+private theorem OffsetScanExact.shrinkLast
+    (block startIdx endIdx : ℕ) (offsets : Array ℕ)
+    (before after : ℕ → Bool)
+    (hexact : OffsetScanExact block startIdx endIdx offsets before)
+    (hstart : startIdx < endIdx) (hend : endIdx ≤ offsets.size)
+    (hlast : offsets[endIdx - 1]! < block - 1 →
+      after offsets[endIdx - 1]! = false)
+    (houtside : ∀ offset, offset < block - 1 →
+      offset ≠ offsets[endIdx - 1]! →
+      after offset = before offset) :
+    OffsetScanExact (block - 1) startIdx (endIdx - 1) offsets after := by
+  let oldActive := (List.range block).filter
+    (fun offset => before offset = true)
+  let newActive := (List.range (block - 1)).filter
+    (fun offset => after offset = true)
+  have holdSorted : oldActive.SortedLT :=
+    ((List.sortedLT_range block).pairwise.filter _).sortedLT
+  have hnewSorted : newActive.SortedLT :=
+    ((List.sortedLT_range (block - 1)).pairwise.filter _).sortedLT
+  have holdNonempty : oldActive ≠ [] := by
+    intro heq
+    have hlength : oldActive.length = endIdx - startIdx := by
+      have hactiveEq : oldActive =
+          offsets.toList.extract startIdx endIdx := hexact.symm
+      rw [hactiveEq]
+      simp [List.extract_eq_take_drop]
+      omega
+    rw [heq] at hlength
+    simp at hlength
+    omega
+  have hgetLast : oldActive.getLast holdNonempty = offsets[endIdx - 1]! := by
+    simpa only [oldActive] using OffsetScanExact.getLast
+      block startIdx endIdx offsets before hexact hstart hend
+  have hlastActive := OffsetScanExact.active block startIdx endIdx offsets
+    before hexact hend (endIdx - 1) (by omega) (by omega)
+  have htailSorted : oldActive.dropLast.SortedLT := by
+    rw [List.dropLast_eq_take]
+    exact holdSorted.pairwise.take.sortedLT
+  have htailEq : oldActive.dropLast = newActive := by
+    apply htailSorted.eq_of_mem_iff hnewSorted
+    intro offset
+    change
+      (offset ∈ ((List.range block).filter
+        (fun offset => before offset = true)).dropLast) ↔
+      offset ∈ (List.range (block - 1)).filter
+        (fun offset => after offset = true)
+    simp only [List.mem_filter, List.mem_range, decide_eq_true_eq]
+    constructor
+    · intro hmem
+      have hbeforeMem := List.mem_of_mem_dropLast hmem
+      have hbefore : before offset = true := by
+        simpa [oldActive] using (List.mem_filter.mp hbeforeMem).2
+      have hoffsetLast : offset < offsets[endIdx - 1]! := by
+        have hrel := holdSorted.pairwise.rel_dropLast_getLast hmem
+        simpa only [hgetLast] using hrel
+      have hoffset : offset < block - 1 := by omega
+      have hne : offset ≠ offsets[endIdx - 1]! := by omega
+      exact ⟨hoffset, by rw [houtside offset hoffset hne, hbefore]⟩
+    · rintro ⟨hoffset, hafter⟩
+      have hne : offset ≠ offsets[endIdx - 1]! := by
+        intro heq
+        have hlastFalse := hlast (by omega)
+        rw [← heq, hafter] at hlastFalse
+        contradiction
+      have hbefore : before offset = true := by
+        rw [← houtside offset hoffset hne]
+        exact hafter
+      have hmem : offset ∈ oldActive := by
+        simp [oldActive, show offset < block by omega, hbefore]
+      apply List.mem_dropLast_of_mem_of_ne_getLast hmem
+      simpa only [hgetLast] using hne
+  rw [OffsetScanExact, List.extract_shrink offsets.toList
+    startIdx endIdx hstart hend, hexact]
   exact htailEq
 
 private theorem OffsetScanExact.exhausted
@@ -3354,6 +3522,345 @@ private theorem blockMutateArray_offsets_exact
     exact ⟨hleftResult, hrightResult, fun position _ =>
       congrArg (fun array => array[position]!) houtputRaw⟩
 
+private theorem cleanupLeftStep_order
+    (array : Array T) (pivot : T) (isLess : T → T → Bool)
+    (start endIdx left right : ℕ) (offsets : Array ℕ)
+    (hstart : start < endIdx) (hlr : left ≤ right)
+    (hright : right ≤ array.size) (hend : endIdx ≤ offsets.size)
+    (hprefix : RangeAll array 0 left
+      (fun item => isLess item pivot = true))
+    (hsuffix : RangeAll array right array.size
+      (fun item => isLess item pivot = false))
+    (hexact : OffsetScanExact (right - left) start endIdx offsets
+      (fun offset => !isLess array[left + offset]! pivot)) :
+    let next := swp array (left + offsets[endIdx - 1]!) (right - 1)
+    RangeAll next 0 left (fun item => isLess item pivot = true) ∧
+      RangeAll next (right - 1) next.size
+        (fun item => isLess item pivot = false) ∧
+      OffsetScanExact (right - 1 - left) start (endIdx - 1) offsets
+        (fun offset => !isLess next[left + offset]! pivot) := by
+  let block := right - left
+  let last := offsets[endIdx - 1]!
+  let hole := left + last
+  let edge := right - 1
+  let next := swp array hole edge
+  have hlast := OffsetScanExact.active block start endIdx offsets
+    (fun offset => !isLess array[left + offset]! pivot)
+    (by simpa only [block] using hexact) hend (endIdx - 1)
+    (by omega) (by omega)
+  have hrightPositive : 0 < right := by
+    simp only [block] at hlast
+    omega
+  have hhole : hole < array.size := by
+    simp only [hole, block] at *
+    omega
+  have hedge : edge < array.size := by
+    simp only [edge]
+    omega
+  have hnextSize : next.size = array.size := by
+    simp [next, swp_size]
+  have hnextPrefix : RangeAll next 0 left
+      (fun item => isLess item pivot = true) := by
+    apply RangeAll.swp array hole edge 0 left _ hhole hedge hprefix
+    · intro _ hstop
+      simp only [hole] at hstop
+      omega
+    · intro _ hstop
+      simp only [edge] at hstop
+      omega
+  have hholeBad : isLess array[hole]! pivot = false := by
+    have hbad := hlast.2
+    simpa only [hole, last, Bool.not_eq_true'] using hbad
+  have hnextEdge : isLess next[edge]! pivot = false := by
+    show isLess (swp array hole edge)[edge]! pivot = false
+    by_cases heq : edge = hole
+    · rw [swp_get! array hole edge edge hhole hedge, if_pos heq]
+      simpa only [heq] using hholeBad
+    · rw [swp_get! array hole edge edge hhole hedge,
+        if_neg heq, if_pos rfl]
+      exact hholeBad
+  have hnextSuffixBase : RangeAll next right next.size
+      (fun item => isLess item pivot = false) := by
+    rw [hnextSize]
+    apply RangeAll.swp array hole edge right array.size _ hhole hedge hsuffix
+    · intro hposition _
+      simp only [hole, block] at hposition hlast
+      omega
+    · intro hposition _
+      simp only [edge] at hposition
+      omega
+  have hnextSuffixPoint : RangeAll next edge right
+      (fun item => isLess item pivot = false) := by
+    intro position hposition hstop
+    have hpositionEq : position = edge := by
+      simp only [edge] at *
+      omega
+    simpa only [hpositionEq] using hnextEdge
+  have hnextSuffix : RangeAll next edge next.size
+      (fun item => isLess item pivot = false) := by
+    apply RangeAll.append hnextSuffixPoint hnextSuffixBase
+  have hnextExact : OffsetScanExact (block - 1) start
+      (endIdx - 1) offsets
+      (fun offset => !isLess next[left + offset]! pivot) := by
+    apply OffsetScanExact.shrinkLast block start endIdx offsets
+      (fun offset => !isLess array[left + offset]! pivot)
+      (fun offset => !isLess next[left + offset]! pivot)
+      (by simpa only [block] using hexact) hstart hend
+    · intro hlastBeforeEdge
+      have hedgeGood := OffsetScanExact.gt_last_false block start endIdx
+        offsets (fun offset => !isLess array[left + offset]! pivot)
+        (by simpa only [block] using hexact) hstart hend
+        (block - 1) (by omega) (by simpa only [last] using hlastBeforeEdge)
+      have haddress : left + (block - 1) = edge := by
+        simp only [block, edge]
+        omega
+      have hedgeGood' :
+          (!isLess array[left + (block - 1)]! pivot) = false := by
+        simpa only using hedgeGood
+      rw [swp_get! array hole edge (left + last) hhole hedge,
+        if_pos rfl]
+      rw [haddress] at hedgeGood'
+      exact hedgeGood'
+    · intro offset hoffset hne
+      have hpositionNeHole : left + offset ≠ hole := by
+        simp only [hole, last]
+        intro heq
+        exact hne (Nat.add_left_cancel heq)
+      have hpositionNeEdge : left + offset ≠ edge := by
+        simp only [block, edge] at hoffset ⊢
+        omega
+      rw [swp_get! array hole edge (left + offset) hhole hedge,
+        if_neg hpositionNeHole, if_neg hpositionNeEdge]
+  have hblockEq : block - 1 = right - 1 - left := by
+    simp only [block] at *
+    omega
+  simpa only [next, hole, last, edge, hblockEq] using
+    And.intro hnextPrefix (And.intro hnextSuffix hnextExact)
+
+private theorem cleanupLeft_order
+    (indices : List ℕ) (pivot : T) (isLess : T → T → Bool)
+    (start left : ℕ) (offsets : Array ℕ) :
+    ∀ (endIdx right : ℕ) (array : Array T),
+      start ≤ endIdx → endIdx - start < indices.length →
+      left ≤ right → right ≤ array.size → endIdx ≤ offsets.size →
+      RangeAll array 0 left (fun item => isLess item pivot = true) →
+      RangeAll array right array.size
+        (fun item => isLess item pivot = false) →
+      OffsetScanExact (right - left) start endIdx offsets
+        (fun offset => !isLess array[left + offset]! pivot) →
+      let result := cleanupLeft indices start left offsets
+        ⟨endIdx, right, array⟩
+      RangeAll result.2.2 0 result.2.1
+          (fun item => isLess item pivot = true) ∧
+        RangeAll result.2.2 result.2.1 result.2.2.size
+          (fun item => isLess item pivot = false) := by
+  induction indices with
+  | nil =>
+      intro endIdx right array hstart hfuel
+      simp at hfuel
+  | cons index indices inductionHypothesis =>
+      intro endIdx right array hstart hfuel hlr hright hend
+        hprefix hsuffix hexact
+      rw [cleanupLeft_cons]
+      by_cases hactive : start < endIdx
+      · rw [if_pos hactive]
+        have hstep := cleanupLeftStep_order array pivot isLess
+          start endIdx left right offsets hactive hlr hright hend
+          hprefix hsuffix hexact
+        have hlast := OffsetScanExact.active (right - left) start endIdx
+          offsets (fun offset => !isLess array[left + offset]! pivot)
+          hexact hend (endIdx - 1) (by omega) (by omega)
+        have hleftLtRight : left < right := by omega
+        let next := swp array (left + offsets[endIdx - 1]!) (right - 1)
+        have hnextSize : next.size = array.size := by simp [next, swp_size]
+        apply inductionHypothesis (endIdx - 1) (right - 1) next
+        · omega
+        · simp only [List.length_cons] at hfuel
+          omega
+        · omega
+        · rw [hnextSize]
+          omega
+        · omega
+        · simpa only [next] using hstep.1
+        · simpa only [next] using hstep.2.1
+        · simpa only [next] using hstep.2.2
+      · rw [if_neg hactive]
+        have hdone : start = endIdx := by omega
+        have hmiddle : RangeAll array left right
+            (fun item => isLess item pivot = true) := by
+          have hexhausted := exhausted_left_block_rangeAll array pivot
+            isLess left (right - left) endIdx offsets (by
+              simpa only [hdone] using hexact)
+          simpa only [Nat.add_sub_of_le hlr] using hexhausted
+        exact ⟨RangeAll.append hprefix hmiddle, hsuffix⟩
+
+private theorem cleanupRightStep_order
+    (array : Array T) (pivot : T) (isLess : T → T → Bool)
+    (start endIdx left right : ℕ) (offsets : Array ℕ)
+    (hstart : start < endIdx) (hlr : left ≤ right)
+    (hright : right ≤ array.size) (hend : endIdx ≤ offsets.size)
+    (hprefix : RangeAll array 0 left
+      (fun item => isLess item pivot = true))
+    (hsuffix : RangeAll array right array.size
+      (fun item => isLess item pivot = false))
+    (hexact : OffsetScanExact (right - left) start endIdx offsets
+      (fun offset => isLess array[right - 1 - offset]! pivot)) :
+    let next := swp array left (right - offsets[endIdx - 1]! - 1)
+    RangeAll next 0 (left + 1) (fun item => isLess item pivot = true) ∧
+      RangeAll next right next.size
+        (fun item => isLess item pivot = false) ∧
+      OffsetScanExact (right - (left + 1)) start (endIdx - 1) offsets
+        (fun offset => isLess next[right - 1 - offset]! pivot) := by
+  let block := right - left
+  let last := offsets[endIdx - 1]!
+  let hole := right - last - 1
+  let edge := left
+  let next := swp array edge hole
+  have hlast := OffsetScanExact.active block start endIdx offsets
+    (fun offset => isLess array[right - 1 - offset]! pivot)
+    (by simpa only [block] using hexact) hend (endIdx - 1)
+    (by omega) (by omega)
+  have hleftLtRight : left < right := by
+    simp only [block] at hlast
+    omega
+  have hedge : edge < array.size := by simp only [edge]; omega
+  have hhole : hole < array.size := by simp only [hole, block] at *; omega
+  have hnextSize : next.size = array.size := by simp [next, swp_size]
+  have hholeGood : isLess array[hole]! pivot = true := by
+    have haddress : right - 1 - last = hole := by
+      simp only [hole]
+      omega
+    rw [← haddress]
+    simpa only [last] using hlast.2
+  have hnextEdge : isLess next[edge]! pivot = true := by
+    show isLess (swp array edge hole)[edge]! pivot = true
+    rw [swp_get! array edge hole edge hedge hhole, if_pos rfl]
+    exact hholeGood
+  have hnextPrefixBase : RangeAll next 0 left
+      (fun item => isLess item pivot = true) := by
+    apply RangeAll.swp array edge hole 0 left _ hedge hhole hprefix
+    · intro _ hstop
+      simp only [edge] at hstop
+      omega
+    · intro _ hstop
+      simp only [hole, block] at hstop hlast
+      omega
+  have hnextPrefixPoint : RangeAll next left (left + 1)
+      (fun item => isLess item pivot = true) := by
+    intro position hposition hstop
+    have hpositionEq : position = edge := by simp only [edge]; omega
+    simpa only [hpositionEq] using hnextEdge
+  have hnextPrefix : RangeAll next 0 (left + 1)
+      (fun item => isLess item pivot = true) :=
+    RangeAll.append hnextPrefixBase hnextPrefixPoint
+  have hnextSuffix : RangeAll next right next.size
+      (fun item => isLess item pivot = false) := by
+    rw [hnextSize]
+    apply RangeAll.swp array edge hole right array.size _ hedge hhole hsuffix
+    · intro hposition _
+      simp only [edge] at hposition
+      omega
+    · intro hposition _
+      simp only [hole, block] at hposition hlast
+      omega
+  have hnextExact : OffsetScanExact (block - 1) start
+      (endIdx - 1) offsets
+      (fun offset => isLess next[right - 1 - offset]! pivot) := by
+    apply OffsetScanExact.shrinkLast block start endIdx offsets
+      (fun offset => isLess array[right - 1 - offset]! pivot)
+      (fun offset => isLess next[right - 1 - offset]! pivot)
+      (by simpa only [block] using hexact) hstart hend
+    · intro hlastBeforeEdge
+      have hedgeGood := OffsetScanExact.gt_last_false block start endIdx
+        offsets (fun offset => isLess array[right - 1 - offset]! pivot)
+        (by simpa only [block] using hexact) hstart hend
+        (block - 1) (by omega) (by simpa only [last] using hlastBeforeEdge)
+      have haddress : right - 1 - (block - 1) = edge := by
+        simp only [block, edge]
+        omega
+      have hedgeGood' :
+          isLess array[right - 1 - (block - 1)]! pivot = false := by
+        simpa only using hedgeGood
+      rw [swp_get! array edge hole (right - 1 - last) hedge hhole]
+      have htarget : right - 1 - last = hole := by simp [hole]; omega
+      rw [if_neg (by omega), if_pos htarget]
+      rw [haddress] at hedgeGood'
+      exact hedgeGood'
+    · intro offset hoffset hne
+      have hpositionNeHole : right - 1 - offset ≠ hole := by
+        simp only [hole, last]
+        intro heq
+        exact hne (right_block_address_injective right offset last
+          (by simp only [block] at *; omega)
+          (by simp only [block] at hlast; omega) (by omega))
+      have hpositionNeEdge : right - 1 - offset ≠ edge := by
+        simp only [block, edge] at hoffset ⊢
+        omega
+      rw [swp_get! array edge hole (right - 1 - offset) hedge hhole,
+        if_neg hpositionNeEdge, if_neg hpositionNeHole]
+  have hblockEq : block - 1 = right - (left + 1) := by
+    simp only [block] at *
+    omega
+  simpa only [next, edge, hole, last, hblockEq] using
+    And.intro hnextPrefix (And.intro hnextSuffix hnextExact)
+
+private theorem cleanupRight_order
+    (indices : List ℕ) (pivot : T) (isLess : T → T → Bool)
+    (start right : ℕ) (offsets : Array ℕ) :
+    ∀ (endIdx left : ℕ) (array : Array T),
+      start ≤ endIdx → endIdx - start < indices.length →
+      left ≤ right → right ≤ array.size → endIdx ≤ offsets.size →
+      RangeAll array 0 left (fun item => isLess item pivot = true) →
+      RangeAll array right array.size
+        (fun item => isLess item pivot = false) →
+      OffsetScanExact (right - left) start endIdx offsets
+        (fun offset => isLess array[right - 1 - offset]! pivot) →
+      let result := cleanupRight indices start right offsets
+        ⟨endIdx, left, array⟩
+      RangeAll result.2.2 0 result.2.1
+          (fun item => isLess item pivot = true) ∧
+        RangeAll result.2.2 result.2.1 result.2.2.size
+          (fun item => isLess item pivot = false) := by
+  induction indices with
+  | nil =>
+      intro endIdx left array hstart hfuel
+      simp at hfuel
+  | cons index indices inductionHypothesis =>
+      intro endIdx left array hstart hfuel hlr hright hend
+        hprefix hsuffix hexact
+      rw [cleanupRight_cons]
+      by_cases hactive : start < endIdx
+      · rw [if_pos hactive]
+        have hstep := cleanupRightStep_order array pivot isLess
+          start endIdx left right offsets hactive hlr hright hend
+          hprefix hsuffix hexact
+        have hlast := OffsetScanExact.active (right - left) start endIdx
+          offsets (fun offset => isLess array[right - 1 - offset]! pivot)
+          hexact hend (endIdx - 1) (by omega) (by omega)
+        have hleftLtRight : left < right := by omega
+        let next := swp array left (right - offsets[endIdx - 1]! - 1)
+        have hnextSize : next.size = array.size := by simp [next, swp_size]
+        apply inductionHypothesis (endIdx - 1) (left + 1) next
+        · omega
+        · simp only [List.length_cons] at hfuel
+          omega
+        · omega
+        · rw [hnextSize]
+          omega
+        · omega
+        · simpa only [next] using hstep.1
+        · simpa only [next] using hstep.2.1
+        · simpa only [next] using hstep.2.2
+      · rw [if_neg hactive]
+        have hdone : start = endIdx := by omega
+        have hmiddle : RangeAll array left right
+            (fun item => isLess item pivot = false) := by
+          have hexhausted := exhausted_right_block_rangeAll array pivot
+            isLess right (right - left) endIdx offsets (by omega) (by
+              simpa only [hdone] using hexact)
+          simpa only [Nat.sub_sub_self hlr] using hexhausted
+        exact ⟨hprefix, RangeAll.append hmiddle hsuffix⟩
+
 omit [Inhabited T] in
 private theorem min_remaining_exhausts
     (startL endL startR endR : ℕ)
@@ -3745,10 +4252,14 @@ private def BlockOrderInv
         (fun offset => isLess state.v[state.r - 1 - offset]! pivot))
 
 private def BlockDoneShape (state : BlockLoopState T) : Prop :=
-  (state.startL < state.endL →
+  state.offsetsL.size = 128 ∧ state.offsetsR.size = 128 ∧
+    state.endL ≤ 128 ∧ state.endR ≤ 128 ∧
+    (state.startL < state.endL →
       state.l + state.blockL = state.r) ∧
     (state.startR < state.endR →
-      state.r - state.blockR = state.l)
+      state.l + state.blockR = state.r) ∧
+    (state.startL = state.endL → state.startR = state.endR →
+      state.l = state.r)
 
 omit [Inhabited T] in
 private theorem blockPreInv_cleanup
@@ -4351,9 +4862,18 @@ private theorem blockLoopStep_order
         intro hne j hj
         rw [hadjustRight hne]
         simpa only [hblockREq] using hactiveR j hj)
-    have hexhaust : core.startL = core.endL ∨
-        core.startR = core.endR := by
-      simpa only [core] using hoffsets.2.2.2.2.2.2.2.2
+    have hoffsetsCore :
+        core.startL ≤ core.endL ∧ core.endL ≤ adjusted.1 ∧
+        core.offsetsL.size = 128 ∧
+        (∀ j, j < core.endL → core.offsetsL[j]! < adjusted.1) ∧
+        core.startR ≤ core.endR ∧ core.endR ≤ adjusted.2 ∧
+        core.offsetsR.size = 128 ∧
+        (∀ j, j < core.endR → core.offsetsR[j]! < adjusted.2) ∧
+        (core.startL = core.endL ∨ core.startR = core.endR) := by
+      simpa only [core] using hoffsets
+    rcases hoffsetsCore with
+      ⟨_, hcoreEndL, hcoreSizeL, _, _, hcoreEndR,
+        hcoreSizeR, _, hexhaust⟩
     have hcursor :
         core.l =
             (if core.startL = core.endL then l + adjusted.1 else l) ∧
@@ -4366,7 +4886,9 @@ private theorem blockLoopStep_order
         (blockCoreState adjusted.1 adjusted.2 core) := by
       unfold BlockDoneShape
       simp only [blockCoreState]
-      constructor
+      refine ⟨hcoreSizeL, hcoreSizeR,
+        hcoreEndL.trans hadjust.1, hcoreEndR.trans hadjust.2.1,
+        ?_, ?_, ?_⟩
       · intro hpending
         have hdoneR : core.startR = core.endR := by
           rcases hexhaust with hdoneL | hdoneR
@@ -4383,6 +4905,10 @@ private theorem blockLoopStep_order
           · omega
         rw [hcursor.1, if_pos hdoneL,
           hcursor.2, if_neg (ne_of_lt hpending)]
+        simp only [gap] at hadjustDone
+        omega
+      · intro hdoneL hdoneR
+        rw [hcursor.1, if_pos hdoneL, hcursor.2, if_pos hdoneR]
         simp only [gap] at hadjustDone
         omega
     simpa [blockLoopStep, gap, pendingL, pendingR, adjusted,
@@ -4628,6 +5154,39 @@ private def partitionInBlocksFactored
   else
     (state.l, state.v)
 
+private theorem partitionInBlocksFactored_eq
+    (v : Array T) (pivot : T) (isLess : T → T → Bool) :
+    let initial : BlockLoopState T := {
+      v := v
+      l := 0
+      r := v.size
+      blockL := 128
+      blockR := 128
+      startL := 0
+      endL := 0
+      offsetsL := Array.replicate 128 0
+      startR := 0
+      endR := 0
+      offsetsR := Array.replicate 128 0
+    }
+    let state := Id.run <|
+      forIn (List.range' 0 (v.size + 4)) initial
+        fun _ state => pure (blockLoopStep pivot isLess state)
+    partitionInBlocksFactored v pivot isLess =
+      if state.startL < state.endL then
+        let result := cleanupLeft (List.range' 0 (128 + 1))
+          state.startL state.l state.offsetsL
+          ⟨state.endL, state.r, state.v⟩
+        (result.2.1, result.2.2)
+      else if state.startR < state.endR then
+        let result := cleanupRight (List.range' 0 (128 + 1))
+          state.startR state.r state.offsetsR
+          ⟨state.endR, state.l, state.v⟩
+        (result.2.1, result.2.2)
+      else
+        (state.l, state.v) := by
+  rfl
+
 theorem partitionInBlocksFactored_contract
     (v : Array T) (pivot : T) (isLess : T → T → Bool) :
     let result := partitionInBlocksFactored v pivot isLess
@@ -4702,6 +5261,94 @@ theorem partitionInBlocksFactored_contract
     · simp only [if_neg hpendingR]
       exact ⟨by omega, hperm⟩
 
+theorem partitionInBlocksFactored_order
+    (v : Array T) (pivot : T) (isLess : T → T → Bool) :
+    let result := partitionInBlocksFactored v pivot isLess
+    RangeAll result.2 0 result.1
+        (fun item => isLess item pivot = true) ∧
+      RangeAll result.2 result.1 result.2.size
+        (fun item => isLess item pivot = false) := by
+  let initial : BlockLoopState T := {
+    v := v
+    l := 0
+    r := v.size
+    blockL := 128
+    blockR := 128
+    startL := 0
+    endL := 0
+    offsetsL := Array.replicate 128 0
+    startR := 0
+    endR := 0
+    offsetsR := Array.replicate 128 0
+  }
+  let state := Id.run <|
+    forIn (List.range' 0 (v.size + 4)) initial
+      fun _ state => pure (blockLoopStep pivot isLess state)
+  have hinv := blockLoop_order_contract v pivot isLess
+  have htyped : BlockCleanupInv v state ∧
+      BlockOrderInv pivot isLess state ∧ BlockDoneShape state := by
+    simpa only [initial, state] using hinv
+  rcases htyped with ⟨hcleanup, horder, hshape⟩
+  simp only [BlockCleanupInv] at hcleanup
+  rcases hcleanup with
+    ⟨hperm, hlr, hrsize, hsize, hstartL, hstartR,
+      hatMostOne, hleft, hright⟩
+  simp only [BlockOrderInv] at horder
+  rcases horder with ⟨hprefix, hsuffix, hexactL, hexactR⟩
+  simp only [BlockDoneShape] at hshape
+  rcases hshape with
+    ⟨hsizeL, hsizeR, hendL, hendR, hleftShape,
+      hrightShape, hclosed⟩
+  have hpartition : partitionInBlocksFactored v pivot isLess =
+      (if state.startL < state.endL then
+        let result := cleanupLeft (List.range' 0 (128 + 1))
+          state.startL state.l state.offsetsL
+          ⟨state.endL, state.r, state.v⟩
+        (result.2.1, result.2.2)
+      else if state.startR < state.endR then
+        let result := cleanupRight (List.range' 0 (128 + 1))
+          state.startR state.r state.offsetsR
+          ⟨state.endR, state.l, state.v⟩
+        (result.2.1, result.2.2)
+      else (state.l, state.v)) := by
+    simpa only [initial, state] using
+      partitionInBlocksFactored_eq v pivot isLess
+  rw [hpartition]
+  by_cases hpendingL : state.startL < state.endL
+  · simp only [if_pos hpendingL]
+    have hblock : state.blockL = state.r - state.l := by
+      have := hleftShape hpendingL
+      omega
+    have hresult := cleanupLeft_order (T := T)
+      (List.range' 0 (128 + 1)) pivot isLess
+      state.startL state.l state.offsetsL
+      state.endL state.r state.v hstartL (by
+        simp
+        omega) hlr hrsize (by omega) hprefix hsuffix (by
+          simpa only [hblock] using
+            hexactL (ne_of_lt hpendingL))
+    simpa only [initial, state] using hresult
+  · simp only [if_neg hpendingL]
+    by_cases hpendingR : state.startR < state.endR
+    · simp only [if_pos hpendingR]
+      have hblock : state.blockR = state.r - state.l := by
+        have := hrightShape hpendingR
+        omega
+      have hresult := cleanupRight_order (T := T)
+        (List.range' 0 (128 + 1)) pivot isLess
+        state.startR state.r state.offsetsR
+        state.endR state.l state.v hstartR (by
+          simp
+          omega) hlr hrsize (by omega) hprefix hsuffix (by
+            simpa only [hblock] using
+              hexactR (ne_of_lt hpendingR))
+      simpa only [initial, state] using hresult
+    · simp only [if_neg hpendingR]
+      have hdoneL : state.startL = state.endL := by omega
+      have hdoneR : state.startR = state.endR := by omega
+      have hlrEq : state.l = state.r := hclosed hdoneL hdoneR
+      exact ⟨hprefix, by simpa only [hlrEq] using hsuffix⟩
+
 /-- `partition_in_blocks` (`sort.rs:233-465`), implemented through the
 proved phase decomposition above. -/
 def partitionInBlocks (v : Array T) (pivot : T)
@@ -4715,6 +5362,18 @@ theorem partitionInBlocks_contract
     result.1 ≤ v.size ∧ List.Perm result.2.toList v.toList := by
   simpa only [partitionInBlocks] using
     partitionInBlocksFactored_contract v pivot isLess
+
+/-- The block partition places precisely the `isLess` elements before its
+split and all remaining elements after it. -/
+theorem partitionInBlocks_order
+    (v : Array T) (pivot : T) (isLess : T → T → Bool) :
+    let result := partitionInBlocks v pivot isLess
+    RangeAll result.2 0 result.1
+        (fun item => isLess item pivot = true) ∧
+      RangeAll result.2 result.1 result.2.size
+        (fun item => isLess item pivot = false) := by
+  simpa only [partitionInBlocks] using
+    partitionInBlocksFactored_order v pivot isLess
 
 /-- `partition` (`sort.rs:474-521`): partition around `v[pivotIdx]`. Returns
 `((#elements < pivot, was_already_partitioned), mutated slice)`. -/
