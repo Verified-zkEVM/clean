@@ -1774,6 +1774,83 @@ private theorem scan_offsets_aux
             omega
       simpa [offsets', endIdx'] using And.intro htotal hout.2
 
+omit [Inhabited T] in
+private theorem take_set!_self_succ
+    {U : Type} (array : Array U) (index : ℕ) (value : U)
+    (hindex : index < array.size) :
+    (array.set! index value).toList.take (index + 1) =
+      array.toList.take index ++ [value] := by
+  simp only [Array.set!, Array.toList_setIfInBounds]
+  rw [List.set_eq_take_cons_drop value (by simpa using hindex),
+    List.take_append]
+  have hlength : (array.toList.take index).length = index := by
+    simp
+    omega
+  simp [hlength]
+
+omit [Inhabited T] in
+private theorem scan_offsets_prefix
+    (keep : ℕ → Bool) :
+    ∀ (indices : List ℕ) (endIdx : ℕ) (offsets : Array ℕ),
+      endIdx + indices.length ≤ offsets.size →
+      let result : ℕ × Array ℕ := Id.run <|
+        forIn indices (endIdx, offsets) fun i state =>
+          let offsets' := state.2.set! state.1 i
+          let endIdx' :=
+            if keep i = true then state.1 + 1 else state.1
+          pure (.yield (endIdx', offsets'))
+      let kept := indices.filter (fun index => keep index = true)
+      result.1 = endIdx + kept.length ∧
+        result.2.toList.take result.1 =
+          offsets.toList.take endIdx ++ kept := by
+  intro indices
+  induction indices with
+  | nil =>
+      intro endIdx offsets hcapacity
+      simp
+  | cons index indices inductionHypothesis =>
+      intro endIdx offsets hcapacity
+      simp only [List.forIn_cons, pure_bind]
+      let offsets' := offsets.set! endIdx index
+      by_cases hkeep : keep index = true
+      · have hend : endIdx < offsets.size := by
+          simp only [List.length_cons] at hcapacity
+          omega
+        have hrestCapacity : endIdx + 1 + indices.length ≤ offsets'.size := by
+          simp [offsets']
+          simp only [List.length_cons] at hcapacity
+          omega
+        have hrest := inductionHypothesis (endIdx + 1) offsets'
+          hrestCapacity
+        dsimp only at hrest
+        dsimp only [offsets'] at hrest
+        have hkeepBool : decide (keep index = true) = true := by
+          simp [hkeep]
+        rw [List.filter_cons]
+        simp only [hkeepBool, if_true]
+        simp only [hkeep, if_true]
+        constructor
+        · simp only [List.length_cons]
+          omega
+        · rw [hrest.2, take_set!_self_succ offsets endIdx index hend]
+          simp only [List.append_assoc, List.singleton_append]
+      · have hrestCapacity : endIdx + indices.length ≤ offsets'.size := by
+          simp [offsets']
+          simp only [List.length_cons] at hcapacity
+          omega
+        have hrest := inductionHypothesis endIdx offsets' hrestCapacity
+        dsimp only at hrest
+        dsimp only [offsets'] at hrest
+        have hkeepBool : decide (keep index = true) ≠ true := by
+          simp [hkeep]
+        rw [List.filter_cons]
+        simp only [hkeepBool]
+        simp only [hkeep, Bool.false_eq_true, if_false]
+        constructor
+        · exact hrest.1
+        · rw [hrest.2]
+          simp [List.take_set_of_le]
+
 private theorem scan_offsets_bounds
     (block : ℕ) (offsets : Array ℕ) (keep : ℕ → Bool)
     (hblock : block ≤ offsets.size) :
@@ -1857,6 +1934,26 @@ private def refreshOffsets
     (0, result.1, result.2)
   else
     (startIdx, endIdx, offsets)
+
+private theorem refreshOffsets_fresh_prefix
+    (block startIdx endIdx : ℕ) (offsets : Array ℕ)
+    (keep : ℕ → Bool) (hblock : block ≤ offsets.size)
+    (hfresh : startIdx = endIdx) :
+    let result := refreshOffsets block startIdx endIdx offsets keep
+    let kept := (List.range block).filter
+      (fun index => keep index = true)
+    result.1 = 0 ∧ result.2.1 = kept.length ∧
+      result.2.2.toList.take result.2.1 = kept := by
+  simp only [refreshOffsets, hfresh, ↓reduceIte]
+  have hscan := scan_offsets_prefix keep
+    (List.range' 0 block) 0 offsets (by simpa using hblock)
+  dsimp only at hscan
+  have hrange : List.range' 0 block = List.range block := by
+    simp [List.range'_eq_map_range]
+  rw [hrange] at hscan
+  refine ⟨trivial, ?_⟩
+  rw [hrange]
+  simpa only [Nat.zero_add, List.take_zero, List.nil_append] using hscan
 
 private theorem refreshOffsets_bounds
     (block startIdx endIdx : ℕ) (offsets : Array ℕ)
