@@ -124,6 +124,12 @@ def RegionShape.WellFormed (shape : RegionShape) : Prop :=
   shape.columns.Nodup ∧
     (shape.columns ≠ [] → 0 < shape.rowCount)
 
+/-- The index-free form of the local representation facts required by V1. -/
+def RegionShapeSummary.WellFormed
+    (summary : RegionShapeSummary) : Prop :=
+  summary.columns.Nodup ∧
+    (summary.columns ≠ [] → 0 < summary.rowCount)
+
 /-- Add a column to a shape's set (dedup; first-seen order — the list is re-sorted by
 `RegionColumn::Ord` at slotting, and the advice-count/row-count are order-independent). -/
 def addCol (cols : List RegionColumn) (c : RegionColumn) : List RegionColumn :=
@@ -10728,6 +10734,17 @@ def CircuitAllocations.AgreesOn (left right : CircuitAllocations)
   ∀ column, column ∈ columns →
     left.getD column #[] = right.getD column #[]
 
+/-- Allocation maps with the same observable interval sequence in every column. -/
+def CircuitAllocations.Equivalent
+    (left right : CircuitAllocations) : Prop :=
+  ∀ column, left.getD column #[] = right.getD column #[]
+
+theorem CircuitAllocations.Equivalent.agreesOn
+    {left right : CircuitAllocations} (h : left.Equivalent right)
+    (columns : List RegionColumn) : left.AgreesOn right columns := by
+  intro column _
+  exact h column
+
 theorem CircuitAllocations.AgreesOn.mono
     {left right : CircuitAllocations} {inner outer : List RegionColumn}
     (h : left.AgreesOn right outer) (hsubset : inner ⊆ outer) :
@@ -11392,6 +11409,35 @@ theorem firstFit_congruent
       hrestNodup hcolumnRest hlength hagree
     simpa only [trySpaces, hok] using hresult
 
+/-- Extensionally equal allocation maps remain equal after the same first-fit
+placement, and produce the same start row. -/
+theorem firstFit_equivalent
+    (fuel : ℕ) (left right : CircuitAllocations)
+    (columns : List RegionColumn) (length start : ℕ)
+    (slack : Option ℕ)
+    (hvalidLeft : left.Valid) (hvalidRight : right.Valid)
+    (hnodup : columns.Nodup) (hlength : 0 < length)
+    (hequivalent : left.Equivalent right) :
+    let leftResult := firstFit fuel left columns length start slack
+    let rightResult := firstFit fuel right columns length start slack
+    leftResult.1 = rightResult.1 ∧
+      leftResult.2.Equivalent rightResult.2 := by
+  have hlocal := firstFit_congruent fuel left columns length start slack
+    right hvalidLeft hvalidRight hnodup hlength
+      (hequivalent.agreesOn columns)
+  have hleftLaw := firstFit_law fuel left columns length start slack
+    hvalidLeft hnodup hlength
+  have hrightLaw := firstFit_law fuel right columns length start slack
+    hvalidRight hnodup hlength
+  constructor
+  · exact hlocal.1
+  · intro column
+    by_cases hcolumn : column ∈ columns
+    · exact hlocal.2 column hcolumn
+    · rw [hleftLaw.1.sameOutside column hcolumn,
+          hrightLaw.1.sameOutside column hcolumn]
+      exact hequivalent column
+
 private theorem trySpaces_success_of_final_unbounded
     (initialSpaces : List (ℕ × Option ℕ))
     (fuel : ℕ) (allocations : CircuitAllocations)
@@ -11576,6 +11622,27 @@ theorem slotInFrom_flatten_replicate
       simp only [slotInRepeated]
       rw [inductionHypothesis]
 
+/-- Place one index-free reduced region summary. -/
+def placeSummary (summary : RegionShapeSummary)
+    (allocations : CircuitAllocations) :
+    Option ℕ × CircuitAllocations :=
+  let columns := sortRegionColumns summary.columns
+  firstFit columns.length allocations columns summary.rowCount 0 none
+
+/-- The generic first-fit law, specialized to one reduced region summary. -/
+theorem placeSummary_law
+    (summary : RegionShapeSummary) (allocations : CircuitAllocations)
+    (hvalid : allocations.Valid) (hnodup : summary.columns.Nodup)
+    (hlength : 0 < summary.rowCount) :
+    PlacementLaw allocations (sortRegionColumns summary.columns)
+      summary.rowCount (placeSummary summary allocations) ∧
+      ∀ row, (placeSummary summary allocations).1 = some row →
+        Within 0 none summary.rowCount row := by
+  exact firstFit_law (sortRegionColumns summary.columns).length allocations
+    (sortRegionColumns summary.columns) summary.rowCount 0 none hvalid
+    ((sortRegionColumns_perm summary.columns).nodup_iff.mpr hnodup)
+    hlength
+
 /-- Index-free slotting of the reduced region summaries. This is the exact V1
 allocator with only the bookkeeping region index removed. -/
 def slotShapeSummariesFrom (summaries : List RegionShapeSummary)
@@ -11584,9 +11651,7 @@ def slotShapeSummariesFrom (summaries : List RegionShapeSummary)
   match summaries with
   | [] => ([], allocations)
   | summary :: rest =>
-      let columns := sortRegionColumns summary.columns
-      let (row?, updated) := firstFit columns.length allocations columns
-        summary.rowCount 0 none
+      let (row?, updated) := placeSummary summary allocations
       let (starts, finalAllocations) :=
         slotShapeSummariesFrom rest updated
       (row?.getD 0 :: starts, finalAllocations)
@@ -11606,7 +11671,7 @@ theorem slotInFrom_forgetIndices
         shape.rowCount 0 none = first
       rcases first with ⟨row?, updated⟩
       simp only [slotInFrom, slotShapeSummariesFrom, List.map_cons,
-        RegionShape.toSummary, columns, hfirst]
+        RegionShape.toSummary, placeSummary, columns, hfirst]
       have ih := inductionHypothesis updated
       have ihStarts :
           (slotInFrom rest updated).1.map (·.2) =
@@ -11637,7 +11702,8 @@ theorem slotInFrom_indexRegionSummaries
         summary.rowCount 0 none = first
       rcases first with ⟨row?, updated⟩
       simp only [indexRegionSummaries, slotInFrom, measureRegionSummary,
-        List.map_cons, columns, hfirst, slotShapeSummariesFrom]
+        List.map_cons, columns, hfirst, slotShapeSummariesFrom,
+        placeSummary]
       have ih := inductionHypothesis (initial + 1) updated
       have ihStarts :
           (slotInFrom (indexRegionSummaries (initial + 1) rest)
@@ -11662,11 +11728,9 @@ theorem slotShapeSummariesFrom_append
   induction left generalizing allocations with
   | nil => rfl
   | cons summary rest inductionHypothesis =>
-      let columns := sortRegionColumns summary.columns
-      generalize hfirst : firstFit columns.length allocations columns
-        summary.rowCount 0 none = first
+      generalize hfirst : placeSummary summary allocations = first
       rcases first with ⟨row?, updated⟩
-      simp only [List.cons_append, slotShapeSummariesFrom, columns, hfirst]
+      simp only [List.cons_append, slotShapeSummariesFrom, hfirst]
       rw [inductionHypothesis]
 
 /-- Repeated index-free slotting of one already-reduced summary block. -/
@@ -11695,6 +11759,165 @@ theorem slotShapeSummariesFrom_flatten_replicate
         slotShapeSummariesFrom_append]
       simp only [slotShapeSummariesRepeated]
       rw [inductionHypothesis]
+
+/-- Extensionally equal allocation states produce the same starts and remain
+extensionally equal after slotting any well-formed summary sequence. -/
+theorem slotShapeSummariesFrom_equivalent
+    (summaries : List RegionShapeSummary)
+    (left right : CircuitAllocations)
+    (hwellFormed : summaries.Forall RegionShapeSummary.WellFormed)
+    (hvalidLeft : left.Valid) (hvalidRight : right.Valid)
+    (hequivalent : left.Equivalent right) :
+    let leftResult := slotShapeSummariesFrom summaries left
+    let rightResult := slotShapeSummariesFrom summaries right
+    leftResult.1 = rightResult.1 ∧
+      leftResult.2.Equivalent rightResult.2 := by
+  induction summaries generalizing left right with
+  | nil => exact ⟨rfl, hequivalent⟩
+  | cons summary rest inductionHypothesis =>
+      rw [List.forall_cons] at hwellFormed
+      have hhead := hwellFormed.1
+      have htail := hwellFormed.2
+      let columns := sortRegionColumns summary.columns
+      have hcolumnsNodup : columns.Nodup :=
+        (sortRegionColumns_perm summary.columns).nodup_iff.mpr hhead.1
+      by_cases hcolumns : summary.columns = []
+      · have hsorted : columns = [] := by
+          simp [columns, hcolumns, sortRegionColumns]
+        simp only [slotShapeSummariesFrom, placeSummary, columns,
+          hsorted, firstFit]
+        have hrest := inductionHypothesis left right htail hvalidLeft
+          hvalidRight hequivalent
+        exact ⟨congrArg (List.cons 0) hrest.1, hrest.2⟩
+      · have hlength : 0 < summary.rowCount := hhead.2 hcolumns
+        have hfirst := firstFit_equivalent columns.length left right
+          columns summary.rowCount 0 none hvalidLeft hvalidRight
+          hcolumnsNodup hlength hequivalent
+        have hleftLaw := firstFit_law columns.length left columns
+          summary.rowCount 0 none hvalidLeft hcolumnsNodup hlength
+        have hrightLaw := firstFit_law columns.length right columns
+          summary.rowCount 0 none hvalidRight hcolumnsNodup hlength
+        generalize hleft :
+          firstFit columns.length left columns summary.rowCount 0 none =
+            leftFirst at hfirst hleftLaw ⊢
+        generalize hright :
+          firstFit columns.length right columns summary.rowCount 0 none =
+            rightFirst at hfirst hrightLaw ⊢
+        rcases leftFirst with ⟨leftRow, leftUpdated⟩
+        rcases rightFirst with ⟨rightRow, rightUpdated⟩
+        dsimp only at hfirst
+        have hrest := inductionHypothesis leftUpdated rightUpdated htail
+          hleftLaw.1.valid hrightLaw.1.valid hfirst.2
+        simp only [slotShapeSummariesFrom, placeSummary, columns,
+          hleft, hright]
+        rw [hfirst.1]
+        exact
+          ⟨congrArg (List.cons (rightRow.getD 0)) hrest.1, hrest.2⟩
+
+/-- Placing regions with disjoint column footprints commutes: each receives the
+same row, and both orders leave the same observable allocation state. -/
+theorem placeSummary_commute
+    (left right : RegionShapeSummary)
+    (allocations : CircuitAllocations)
+    (hvalid : allocations.Valid)
+    (hleftNodup : left.columns.Nodup)
+    (hrightNodup : right.columns.Nodup)
+    (hleftLength : 0 < left.rowCount)
+    (hrightLength : 0 < right.rowCount)
+    (hdisjoint : List.Disjoint left.columns right.columns) :
+    let leftFirst := placeSummary left allocations
+    let leftThenRight := placeSummary right leftFirst.2
+    let rightFirst := placeSummary right allocations
+    let rightThenLeft := placeSummary left rightFirst.2
+    leftFirst.1 = rightThenLeft.1 ∧
+      rightFirst.1 = leftThenRight.1 ∧
+      leftThenRight.2.Equivalent rightThenLeft.2 := by
+  let leftColumns := sortRegionColumns left.columns
+  let rightColumns := sortRegionColumns right.columns
+  have hleftColumnsNodup : leftColumns.Nodup :=
+    (sortRegionColumns_perm left.columns).nodup_iff.mpr hleftNodup
+  have hrightColumnsNodup : rightColumns.Nodup :=
+    (sortRegionColumns_perm right.columns).nodup_iff.mpr hrightNodup
+  have hsortedDisjoint : List.Disjoint leftColumns rightColumns := by
+    intro column hleftColumn hrightColumn
+    exact hdisjoint
+      ((sortRegionColumns_perm left.columns).mem_iff.mp hleftColumn)
+      ((sortRegionColumns_perm right.columns).mem_iff.mp hrightColumn)
+  simp only [placeSummary]
+  generalize hleftFirst :
+    firstFit leftColumns.length allocations leftColumns
+      left.rowCount 0 none = leftFirst
+  rcases leftFirst with ⟨leftRow, leftAllocations⟩
+  generalize hrightFirst :
+    firstFit rightColumns.length allocations rightColumns
+      right.rowCount 0 none = rightFirst
+  rcases rightFirst with ⟨rightRow, rightAllocations⟩
+  generalize hleftThenRight :
+    firstFit rightColumns.length leftAllocations rightColumns
+      right.rowCount 0 none = leftThenRight
+  rcases leftThenRight with
+    ⟨rightRowAfterLeft, leftThenRightAllocations⟩
+  generalize hrightThenLeft :
+    firstFit leftColumns.length rightAllocations leftColumns
+      left.rowCount 0 none = rightThenLeft
+  rcases rightThenLeft with
+    ⟨leftRowAfterRight, rightThenLeftAllocations⟩
+  have hleftLaw := firstFit_law leftColumns.length allocations
+    leftColumns left.rowCount 0 none hvalid hleftColumnsNodup hleftLength
+  have hrightLaw := firstFit_law rightColumns.length allocations
+    rightColumns right.rowCount 0 none hvalid hrightColumnsNodup
+      hrightLength
+  rw [hleftFirst] at hleftLaw
+  rw [hrightFirst] at hrightLaw
+  have hrightAgreement :
+      allocations.AgreesOn leftAllocations rightColumns := by
+    intro column hcolumn
+    symm
+    exact hleftLaw.1.sameOutside column (by
+      intro hleftColumn
+      exact hsortedDisjoint hleftColumn hcolumn)
+  have hleftAgreement :
+      allocations.AgreesOn rightAllocations leftColumns := by
+    intro column hcolumn
+    symm
+    exact hrightLaw.1.sameOutside column (by
+      intro hrightColumn
+      exact hsortedDisjoint hcolumn hrightColumn)
+  have hrightCongruent := firstFit_congruent rightColumns.length
+    allocations rightColumns right.rowCount 0 none leftAllocations
+    hvalid hleftLaw.1.valid hrightColumnsNodup hrightLength
+    hrightAgreement
+  have hleftCongruent := firstFit_congruent leftColumns.length
+    allocations leftColumns left.rowCount 0 none rightAllocations
+    hvalid hrightLaw.1.valid hleftColumnsNodup hleftLength hleftAgreement
+  rw [hrightFirst, hleftThenRight] at hrightCongruent
+  rw [hleftFirst, hrightThenLeft] at hleftCongruent
+  have hleftThenRightLaw := firstFit_law rightColumns.length
+    leftAllocations rightColumns right.rowCount 0 none
+    hleftLaw.1.valid hrightColumnsNodup hrightLength
+  have hrightThenLeftLaw := firstFit_law leftColumns.length
+    rightAllocations leftColumns left.rowCount 0 none
+    hrightLaw.1.valid hleftColumnsNodup hleftLength
+  rw [hleftThenRight] at hleftThenRightLaw
+  rw [hrightThenLeft] at hrightThenLeftLaw
+  dsimp only at hrightCongruent hleftCongruent ⊢
+  constructor
+  · exact hleftCongruent.1
+  constructor
+  · exact hrightCongruent.1
+  · intro column
+    by_cases hleftColumn : column ∈ leftColumns
+    · rw [hleftThenRightLaw.1.sameOutside column (by
+            intro hrightColumn
+            exact hsortedDisjoint hleftColumn hrightColumn)]
+      exact hleftCongruent.2 column hleftColumn
+    · by_cases hrightColumn : column ∈ rightColumns
+      · rw [← hrightCongruent.2 column hrightColumn,
+            hrightThenLeftLaw.1.sameOutside column hleftColumn]
+      · rw [hleftThenRightLaw.1.sameOutside column hrightColumn,
+            hleftLaw.1.sameOutside column hleftColumn,
+            hrightThenLeftLaw.1.sameOutside column hleftColumn,
+            hrightLaw.1.sameOutside column hrightColumn]
 
 /-- Pair shapes with the starts returned in the same slotting order. -/
 def placedShapes (shapes : List RegionShape)
@@ -12394,6 +12617,70 @@ def slottedSummaryEndFrom (summaries : List RegionShapeSummary)
     (starts : List ℕ) : ℕ :=
   (summaries.zip starts).map (fun placed =>
     placed.2 + placed.1.rowCount) |>.foldl max 0
+
+/-- Exact end row obtained by slotting an index-free reduced summary. -/
+def slotSummaryEndFrom (summaries : List RegionShapeSummary)
+    (allocations : CircuitAllocations) : ℕ :=
+  slottedSummaryEndFrom summaries
+    (slotShapeSummariesFrom summaries allocations).1
+
+/-- Swapping two disjoint regions changes neither their individual placements nor
+the final endpoint, including the placement of every following region. -/
+theorem slotSummaryEndFrom_swap
+    (left right : RegionShapeSummary)
+    (tail : List RegionShapeSummary)
+    (allocations : CircuitAllocations)
+    (hvalid : allocations.Valid)
+    (hleftNodup : left.columns.Nodup)
+    (hrightNodup : right.columns.Nodup)
+    (hleftLength : 0 < left.rowCount)
+    (hrightLength : 0 < right.rowCount)
+    (hdisjoint : List.Disjoint left.columns right.columns)
+    (htail : tail.Forall RegionShapeSummary.WellFormed) :
+    slotSummaryEndFrom (left :: right :: tail) allocations =
+      slotSummaryEndFrom (right :: left :: tail) allocations := by
+  have hcommute := placeSummary_commute left right allocations hvalid
+    hleftNodup hrightNodup hleftLength hrightLength hdisjoint
+  generalize hleftFirst : placeSummary left allocations = leftFirst
+    at hcommute
+  rcases leftFirst with ⟨leftRow, leftAllocations⟩
+  generalize hrightFirst : placeSummary right allocations = rightFirst
+    at hcommute
+  rcases rightFirst with ⟨rightRow, rightAllocations⟩
+  generalize hleftThenRight :
+    placeSummary right leftAllocations = leftThenRight at hcommute
+  rcases leftThenRight with
+    ⟨rightRowAfterLeft, leftThenRightAllocations⟩
+  generalize hrightThenLeft :
+    placeSummary left rightAllocations = rightThenLeft at hcommute
+  rcases rightThenLeft with
+    ⟨leftRowAfterRight, rightThenLeftAllocations⟩
+  simp only [hleftThenRight, hrightThenLeft] at hcommute
+  have hleftLaw := placeSummary_law left allocations hvalid
+    hleftNodup hleftLength
+  have hrightLaw := placeSummary_law right allocations hvalid
+    hrightNodup hrightLength
+  rw [hleftFirst] at hleftLaw
+  rw [hrightFirst] at hrightLaw
+  have hleftThenRightLaw := placeSummary_law right leftAllocations
+    hleftLaw.1.valid hrightNodup hrightLength
+  have hrightThenLeftLaw := placeSummary_law left rightAllocations
+    hrightLaw.1.valid hleftNodup hleftLength
+  rw [hleftThenRight] at hleftThenRightLaw
+  rw [hrightThenLeft] at hrightThenLeftLaw
+  have hsuffix := slotShapeSummariesFrom_equivalent tail
+    leftThenRightAllocations rightThenLeftAllocations htail
+    hleftThenRightLaw.1.valid hrightThenLeftLaw.1.valid hcommute.2.2
+  unfold slotSummaryEndFrom
+  simp only [slotShapeSummariesFrom, hleftFirst, hrightFirst,
+    hleftThenRight, hrightThenLeft]
+  rw [hcommute.1, hcommute.2.1, hsuffix.1]
+  simp only [slottedSummaryEndFrom, List.zip_cons_cons, List.map_cons,
+    List.foldl_cons]
+  congr 1
+  rw [Nat.max_assoc, Nat.max_assoc,
+    Nat.max_comm (leftRowAfterRight.getD 0 + left.rowCount)
+      (rightRowAfterLeft.getD 0 + right.rowCount)]
 
 /-- Forgetting shape indices changes no slotted endpoint, for any pair sequence. -/
 theorem slottedEndFrom_forgetIndices_eq
