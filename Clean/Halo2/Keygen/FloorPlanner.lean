@@ -152,6 +152,16 @@ def measureRegionSummary (idx : ℕ) (summary : RegionShapeSummary) : RegionShap
     columns := summary.columns
     rowCount := summary.rowCount }
 
+/-- Forget the bookkeeping index of a measured region. -/
+def RegionShape.toSummary (shape : RegionShape) : RegionShapeSummary where
+  columns := shape.columns
+  rowCount := shape.rowCount
+
+@[simp] theorem measureRegionSummary_toSummary
+    (index : ℕ) (summary : RegionShapeSummary) :
+    (measureRegionSummary index summary).toSummary = summary := by
+  rfl
+
 /-- Add consecutive region indices to an ordered reduced shape sequence. -/
 def indexRegionSummaries : ℕ → List RegionShapeSummary → List RegionShape
   | _, [] => []
@@ -6412,6 +6422,181 @@ def slotIn (shapes : List RegionShape) :
     List (ℕ × ℕ) × CircuitAllocations :=
   slotInFrom shapes ∅
 
+/-- Slotting preserves the input region-index sequence in its result pairs. -/
+theorem slotInFrom_indices (shapes : List RegionShape)
+    (allocations : CircuitAllocations) :
+    (slotInFrom shapes allocations).1.map (·.1) =
+      shapes.map RegionShape.index := by
+  induction shapes generalizing allocations with
+  | nil => rfl
+  | cons shape rest inductionHypothesis =>
+      simp only [slotInFrom, List.map_cons]
+      rw [inductionHypothesis]
+
+/-- Slotting from an empty allocation map preserves region indices. -/
+theorem slotIn_indices (shapes : List RegionShape) :
+    (slotIn shapes).1.map (·.1) = shapes.map RegionShape.index := by
+  exact slotInFrom_indices shapes ∅
+
+/-- Slot two shape blocks without flattening their compositional boundary. -/
+theorem slotInFrom_append (left right : List RegionShape)
+    (allocations : CircuitAllocations) :
+    slotInFrom (left ++ right) allocations =
+      let leftResult := slotInFrom left allocations
+      let rightResult := slotInFrom right leftResult.2
+      (leftResult.1 ++ rightResult.1, rightResult.2) := by
+  induction left generalizing allocations with
+  | nil => rfl
+  | cons shape rest inductionHypothesis =>
+      simp only [List.cons_append, slotInFrom]
+      rw [inductionHypothesis]
+
+/-- Repeatedly slot one already-reduced block, retaining the repetition count rather
+than requiring callers to expand a `List.replicate`. -/
+def slotInRepeated (count : ℕ) (shapes : List RegionShape)
+    (allocations : CircuitAllocations) :
+    List (ℕ × ℕ) × CircuitAllocations :=
+  match count with
+  | 0 => ([], allocations)
+  | count + 1 =>
+      let first := slotInFrom shapes allocations
+      let rest := slotInRepeated count shapes first.2
+      (first.1 ++ rest.1, rest.2)
+
+/-- Slotting a replicated reduced block is exactly `slotInRepeated`; the proof keeps
+`List.replicate` intact and inducts only over its compact repetition count. -/
+theorem slotInFrom_flatten_replicate
+    (count : ℕ) (shapes : List RegionShape)
+    (allocations : CircuitAllocations) :
+    slotInFrom (List.replicate count shapes).flatten allocations =
+      slotInRepeated count shapes allocations := by
+  induction count generalizing allocations with
+  | zero => rfl
+  | succ count inductionHypothesis =>
+      rw [List.replicate_succ, List.flatten_cons, slotInFrom_append]
+      simp only [slotInRepeated]
+      rw [inductionHypothesis]
+
+/-- Index-free slotting of the reduced region summaries. This is the exact V1
+allocator with only the bookkeeping region index removed. -/
+def slotShapeSummariesFrom (summaries : List RegionShapeSummary)
+    (allocations : CircuitAllocations) :
+    List ℕ × CircuitAllocations :=
+  match summaries with
+  | [] => ([], allocations)
+  | summary :: rest =>
+      let columns := sortRegionColumns summary.columns
+      let (row?, updated) := firstFit columns.length allocations columns
+        summary.rowCount 0 none
+      let (starts, finalAllocations) :=
+        slotShapeSummariesFrom rest updated
+      (row?.getD 0 :: starts, finalAllocations)
+
+/-- Forgetting all region indices before slotting preserves starts and allocation
+state. -/
+theorem slotInFrom_forgetIndices
+    (shapes : List RegionShape) (allocations : CircuitAllocations) :
+    ((slotInFrom shapes allocations).1.map (·.2),
+      (slotInFrom shapes allocations).2) =
+      slotShapeSummariesFrom (shapes.map RegionShape.toSummary) allocations := by
+  induction shapes generalizing allocations with
+  | nil => rfl
+  | cons shape rest inductionHypothesis =>
+      let columns := sortRegionColumns shape.columns
+      generalize hfirst : firstFit columns.length allocations columns
+        shape.rowCount 0 none = first
+      rcases first with ⟨row?, updated⟩
+      simp only [slotInFrom, slotShapeSummariesFrom, List.map_cons,
+        RegionShape.toSummary, columns, hfirst]
+      have ih := inductionHypothesis updated
+      have ihStarts :
+          (slotInFrom rest updated).1.map (·.2) =
+            (slotShapeSummariesFrom
+              (rest.map RegionShape.toSummary) updated).1 := by
+        simpa using congrArg Prod.fst ih
+      have ihAllocations :
+          (slotInFrom rest updated).2 =
+            (slotShapeSummariesFrom
+              (rest.map RegionShape.toSummary) updated).2 := by
+        simpa using congrArg Prod.snd ih
+      rw [ihStarts, ihAllocations]
+
+/-- Removing region indices before slotting changes only the index component of
+the returned pairs, never starts or allocation state. -/
+theorem slotInFrom_indexRegionSummaries
+    (initial : ℕ) (summaries : List RegionShapeSummary)
+    (allocations : CircuitAllocations) :
+    ((slotInFrom (indexRegionSummaries initial summaries) allocations).1.map
+        (·.2),
+      (slotInFrom (indexRegionSummaries initial summaries) allocations).2) =
+      slotShapeSummariesFrom summaries allocations := by
+  induction summaries generalizing initial allocations with
+  | nil => rfl
+  | cons summary rest inductionHypothesis =>
+      let columns := sortRegionColumns summary.columns
+      generalize hfirst : firstFit columns.length allocations columns
+        summary.rowCount 0 none = first
+      rcases first with ⟨row?, updated⟩
+      simp only [indexRegionSummaries, slotInFrom, measureRegionSummary,
+        List.map_cons, columns, hfirst, slotShapeSummariesFrom]
+      have ih := inductionHypothesis (initial + 1) updated
+      have ihStarts :
+          (slotInFrom (indexRegionSummaries (initial + 1) rest)
+            updated).1.map (·.2) =
+            (slotShapeSummariesFrom rest updated).1 := by
+        simpa using congrArg Prod.fst ih
+      have ihAllocations :
+          (slotInFrom (indexRegionSummaries (initial + 1) rest)
+            updated).2 =
+            (slotShapeSummariesFrom rest updated).2 := by
+        simpa using congrArg Prod.snd ih
+      rw [ihStarts, ihAllocations]
+
+/-- Index-free slotting composes over summary concatenation. -/
+theorem slotShapeSummariesFrom_append
+    (left right : List RegionShapeSummary)
+    (allocations : CircuitAllocations) :
+    slotShapeSummariesFrom (left ++ right) allocations =
+      let leftResult := slotShapeSummariesFrom left allocations
+      let rightResult := slotShapeSummariesFrom right leftResult.2
+      (leftResult.1 ++ rightResult.1, rightResult.2) := by
+  induction left generalizing allocations with
+  | nil => rfl
+  | cons summary rest inductionHypothesis =>
+      let columns := sortRegionColumns summary.columns
+      generalize hfirst : firstFit columns.length allocations columns
+        summary.rowCount 0 none = first
+      rcases first with ⟨row?, updated⟩
+      simp only [List.cons_append, slotShapeSummariesFrom, columns, hfirst]
+      rw [inductionHypothesis]
+
+/-- Repeated index-free slotting of one already-reduced summary block. -/
+def slotShapeSummariesRepeated (count : ℕ)
+    (summaries : List RegionShapeSummary)
+    (allocations : CircuitAllocations) :
+    List ℕ × CircuitAllocations :=
+  match count with
+  | 0 => ([], allocations)
+  | count + 1 =>
+      let first := slotShapeSummariesFrom summaries allocations
+      let rest := slotShapeSummariesRepeated count summaries first.2
+      (first.1 ++ rest.1, rest.2)
+
+/-- Evaluate a compact `List.replicate` summary by induction over its count. -/
+theorem slotShapeSummariesFrom_flatten_replicate
+    (count : ℕ) (summaries : List RegionShapeSummary)
+    (allocations : CircuitAllocations) :
+    slotShapeSummariesFrom
+        (List.replicate count summaries).flatten allocations =
+      slotShapeSummariesRepeated count summaries allocations := by
+  induction count generalizing allocations with
+  | zero => rfl
+  | succ count inductionHypothesis =>
+      rw [List.replicate_succ, List.flatten_cons,
+        slotShapeSummariesFrom_append]
+      simp only [slotShapeSummariesRepeated]
+      rw [inductionHypothesis]
+
 /-- Pair shapes with the starts returned in the same slotting order. -/
 def placedShapes (shapes : List RegionShape)
     (pairs : List (ℕ × ℕ)) : List (RegionShape × ℕ) :=
@@ -7097,6 +7282,167 @@ def placementEndFrom (shapes : List RegionShape) (regionStarts : List ℕ) : ℕ
   shapes.map (fun shape =>
     regionStarts.getD shape.index 0 + shape.rowCount)
     |>.foldl max 0
+
+/-- One past the final row in slotting order. Unlike `placementEndFrom`, this
+projection does not restore region-index order and therefore forgets indices entirely. -/
+def slottedEndFrom (shapes : List RegionShape)
+    (pairs : List (ℕ × ℕ)) : ℕ :=
+  (placedShapes shapes pairs).map (fun placed =>
+    placed.2 + placed.1.rowCount) |>.foldl max 0
+
+/-- The same endpoint projection directly over the index-free synthesis summary. -/
+def slottedSummaryEndFrom (summaries : List RegionShapeSummary)
+    (starts : List ℕ) : ℕ :=
+  (summaries.zip starts).map (fun placed =>
+    placed.2 + placed.1.rowCount) |>.foldl max 0
+
+/-- Forgetting shape indices changes no slotted endpoint, for any pair sequence. -/
+theorem slottedEndFrom_forgetIndices_eq
+    (shapes : List RegionShape) (pairs : List (ℕ × ℕ)) :
+    slottedEndFrom shapes pairs =
+      slottedSummaryEndFrom (shapes.map RegionShape.toSummary)
+        (pairs.map (·.2)) := by
+  unfold slottedEndFrom placedShapes slottedSummaryEndFrom
+  apply congrArg (List.foldl max 0)
+  induction shapes generalizing pairs with
+  | nil => rfl
+  | cons shape rest inductionHypothesis =>
+      cases pairs with
+      | nil => rfl
+      | cons pair pairs =>
+          simp only [List.map_cons, List.zip_cons_cons,
+            RegionShape.toSummary]
+          rw [inductionHypothesis]
+
+/-- The exact endpoint of slotting can be computed entirely in the reduced,
+index-free summary language. -/
+theorem slottedEndFrom_eq_slottedSummaryEndFrom
+    (shapes : List RegionShape) (allocations : CircuitAllocations) :
+    slottedEndFrom shapes (slotInFrom shapes allocations).1 =
+      slottedSummaryEndFrom (shapes.map RegionShape.toSummary)
+        (slotShapeSummariesFrom
+          (shapes.map RegionShape.toSummary) allocations).1 := by
+  rw [slottedEndFrom_forgetIndices_eq]
+  have hslot := slotInFrom_forgetIndices shapes allocations
+  have hstarts :
+      (slotInFrom shapes allocations).1.map (·.2) =
+        (slotShapeSummariesFrom
+          (shapes.map RegionShape.toSummary) allocations).1 := by
+    simpa using congrArg Prod.fst hslot
+  rw [hstarts]
+
+/-- Indexing a summary sequence changes no slotted endpoint, for any returned
+pair sequence. -/
+theorem slottedEndFrom_indexRegionSummaries_eq
+    (initial : ℕ) (summaries : List RegionShapeSummary)
+    (pairs : List (ℕ × ℕ)) :
+    slottedEndFrom (indexRegionSummaries initial summaries) pairs =
+      slottedSummaryEndFrom summaries (pairs.map (·.2)) := by
+  unfold slottedEndFrom placedShapes slottedSummaryEndFrom
+  apply congrArg (List.foldl max 0)
+  induction summaries generalizing initial pairs with
+  | nil => rfl
+  | cons summary rest inductionHypothesis =>
+      cases pairs with
+      | nil => rfl
+      | cons pair pairs =>
+          simp only [indexRegionSummaries, List.map_cons,
+            List.zip_cons_cons, measureRegionSummary]
+          rw [inductionHypothesis]
+
+/-- Region indices are irrelevant to the endpoint of an actual slotted summary
+sequence. -/
+theorem slottedEndFrom_indexRegionSummaries
+    (initial : ℕ) (summaries : List RegionShapeSummary)
+    (allocations : CircuitAllocations) :
+    slottedEndFrom (indexRegionSummaries initial summaries)
+        (slotInFrom (indexRegionSummaries initial summaries) allocations).1 =
+      slottedSummaryEndFrom summaries
+        (slotShapeSummariesFrom summaries allocations).1 := by
+  rw [slottedEndFrom_indexRegionSummaries_eq]
+  have hslot := slotInFrom_indexRegionSummaries
+    initial summaries allocations
+  have hstarts :
+      (slotInFrom (indexRegionSummaries initial summaries) allocations).1.map
+          (·.2) =
+        (slotShapeSummariesFrom summaries allocations).1 := by
+    simpa using congrArg Prod.fst hslot
+  rw [hstarts]
+
+private theorem placedShapeEnds_eq
+    (allPairs : List (ℕ × ℕ)) (shapes : List RegionShape)
+    (starts : List ℕ)
+    (hindices : allPairs.map (·.1) = shapes.map RegionShape.index)
+    (hstarts : ∀ pair ∈ allPairs,
+      starts.getD pair.1 0 = pair.2) :
+    (placedShapes shapes allPairs).map (fun placed =>
+      placed.2 + placed.1.rowCount) =
+      shapes.map (fun shape =>
+        starts.getD shape.index 0 + shape.rowCount) := by
+  induction shapes generalizing allPairs with
+  | nil => rfl
+  | cons shape rest inductionHypothesis =>
+      cases allPairs with
+      | nil => simp at hindices
+      | cons pair pairs =>
+          simp only [List.map_cons, List.cons.injEq] at hindices
+          simp only [placedShapes, List.map_cons, List.zip_cons_cons]
+          rw [← hstarts pair (by simp), hindices.1]
+          congr 1
+          exact inductionHypothesis
+            pairs hindices.2
+            (by
+              intro candidate hcandidate
+              exact hstarts candidate (by simp [hcandidate]))
+
+/-- `placementEndFrom` can be evaluated directly in the planner's slotting order.
+The final index-restoration sort is irrelevant to the endpoint. -/
+theorem placementEndFrom_planCandidate_eq_slottedEndFrom
+    (shapes : List RegionShape)
+    (hindices : shapes.map RegionShape.index = List.range shapes.length) :
+    placementEndFrom shapes (planCandidate shapes).1 =
+      let sortedDesc :=
+        (Pdqsort.quicksort shapes.toArray
+          (fun left right => left.key < right.key)).reverse.toList
+      slottedEndFrom sortedDesc (slotIn sortedDesc).1 := by
+  let sortedDesc :=
+    (Pdqsort.quicksort shapes.toArray
+      (fun left right => left.key < right.key)).reverse.toList
+  let pairs := (slotIn sortedDesc).1
+  let starts := (sortPairsByIndex pairs).map (·.2)
+  have hsorted : sortedDesc.Perm shapes := by
+    have hquick := Pdqsort.quicksort_perm shapes.toArray
+      (fun left right => left.key < right.key)
+    exact (by
+      simpa [sortedDesc] using
+        (List.reverse_perm
+          (Pdqsort.quicksort shapes.toArray
+            (fun left right => left.key < right.key)).toList).trans hquick)
+  have hpairsIndices : pairs.map (·.1) =
+      sortedDesc.map RegionShape.index := by
+    exact slotIn_indices sortedDesc
+  have hpairsRange : (pairs.map (·.1)).Perm
+      (List.range shapes.length) := by
+    rw [hpairsIndices]
+    simpa only [hindices] using hsorted.map RegionShape.index
+  have hsortedIndices :
+      (sortPairsByIndex pairs).map (·.1) =
+        List.range shapes.length :=
+    sortPairsByIndex_fst_eq_range pairs shapes.length hpairsRange
+  have hstarts : ∀ pair ∈ pairs,
+      starts.getD pair.1 0 = pair.2 := by
+    intro pair hpair
+    exact starts_getD_of_pair_mem pairs shapes.length
+      hsortedIndices hpair
+  have hends := placedShapeEnds_eq
+    pairs sortedDesc starts hpairsIndices hstarts
+  have hpermEnds := hsorted.map (fun shape =>
+    starts.getD shape.index 0 + shape.rowCount)
+  change
+    (shapes.map (fun shape =>
+      starts.getD shape.index 0 + shape.rowCount)).foldl max 0 = _
+  rw [← hpermEnds.foldl_eq 0, ← hends]
+  rfl
 
 theorem shape_end_le_placementEndFrom_of_mem
     (shapes : List RegionShape) (regionStarts : List ℕ)
