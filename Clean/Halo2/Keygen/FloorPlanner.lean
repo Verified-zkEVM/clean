@@ -13478,6 +13478,27 @@ theorem SummarySelectorsAnchoredBy.combine
     exact Or.inr
       ((column_mem_physicalColumns_iff kind index right.columns).mp hphysical)
 
+theorem SummarySelectorsAnchoredBy.empty (anchor : ℕ → RegionColumn) :
+    SummarySelectorsAnchoredBy
+      ({} : RegionSynthesisSummary).toRegionShapeSummary anchor := by
+  intro selector hselector
+  simp only [RegionSynthesisSummary.toRegionShapeSummary_columns] at hselector
+  simp at hselector
+
+theorem SummarySelectorsAnchoredBy.foldr_combine
+    {summaries : List RegionSynthesisSummary} {anchor : ℕ → RegionColumn}
+    (hsummaries : summaries.Forall fun summary =>
+      SummarySelectorsAnchoredBy summary.toRegionShapeSummary anchor) :
+    SummarySelectorsAnchoredBy
+      (summaries.foldr RegionSynthesisSummary.combine {}
+        |>.toRegionShapeSummary)
+      anchor := by
+  induction summaries with
+  | nil => exact SummarySelectorsAnchoredBy.empty anchor
+  | cons summary rest inductionHypothesis =>
+      rw [List.forall_cons] at hsummaries
+      exact hsummaries.1.combine (inductionHypothesis hsummaries.2)
+
 theorem SelectorAnchoredBy.ofRegion
     {summary : RegionSynthesisSummary} {anchor : ℕ → RegionColumn}
     (hsummary : SummarySelectorsAnchoredBy summary.toRegionShapeSummary anchor) :
