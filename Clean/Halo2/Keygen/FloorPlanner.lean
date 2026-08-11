@@ -302,6 +302,17 @@ def indexRegionSummaries : ℕ → List RegionShapeSummary → List RegionShape
       measureRegionSummary index summary ::
         indexRegionSummaries (index + 1) rest
 
+@[simp] theorem indexRegionSummaries_toSummary
+    (initial : ℕ) (summaries : List RegionShapeSummary) :
+    (indexRegionSummaries initial summaries).map RegionShape.toSummary =
+      summaries := by
+  induction summaries generalizing initial with
+  | nil => rfl
+  | cons summary rest inductionHypothesis =>
+      simp only [indexRegionSummaries, List.map_cons,
+        measureRegionSummary_toSummary, List.cons.injEq, true_and]
+      exact inductionHypothesis (initial + 1)
+
 theorem measureRegion_eq_measureRegionSummary
     (index : ℕ) (body : RegionOperations F) :
     measureRegion index body =
@@ -14973,6 +14984,91 @@ theorem columnOccupiedLength_le_placementEndFrom
 the planner's internal per-column allocation map. -/
 def placementEnd (ops : Operations F) : ℕ :=
   placementEndFrom (measureRegions ops) (starts ops)
+
+/-- The exact index-free summary order consumed by V1 after its legacy pdqsort. -/
+def sortedSummaryOrder (ops : Operations F) : List RegionShapeSummary :=
+  let shapes := measureRegions ops
+  (Pdqsort.quicksort shapes.toArray
+    (fun left right => left.key < right.key)).reverse.toList.map
+      RegionShape.toSummary
+
+theorem sortedSummaryOrder_perm_synthesisSummary (ops : Operations F) :
+    (sortedSummaryOrder ops).Perm
+      (synthesisSummary ops).regionShapes := by
+  let shapes := measureRegions ops
+  let sorted :=
+    (Pdqsort.quicksort shapes.toArray
+      (fun left right => left.key < right.key)).toList
+  have hquick : sorted.Perm shapes := by
+    exact Pdqsort.quicksort_perm shapes.toArray
+      (fun left right => left.key < right.key)
+  have hsorted : sorted.reverse.Perm shapes :=
+    (List.reverse_perm sorted).trans hquick
+  have hsummaries := hsorted.map RegionShape.toSummary
+  have hforget :
+      (measureRegions ops).map RegionShape.toSummary =
+        (synthesisSummary ops).regionShapes := by
+    rw [measureRegions_eq_synthesisSummary_regionShapes,
+      indexRegionSummaries_toSummary]
+  rw [← hforget]
+  simpa only [sortedSummaryOrder, shapes, sorted,
+    Array.toList_reverse] using hsummaries
+
+/-- V1's placement endpoint is exactly the result of running the reduced summary
+planner in its consensus sort order. -/
+theorem placementEnd_eq_slotSummaryEndFrom (ops : Operations F) :
+    placementEnd ops =
+      slotSummaryEndFrom (sortedSummaryOrder ops) ∅ := by
+  unfold placementEnd starts
+  rw [planOperations_eq]
+  have hindices := measureRegions_indices_eq_range ops
+  have hlength : (measureRegions ops).length = ops.regionCount := by
+    have := congrArg List.length hindices
+    simpa using this
+  rw [← hlength] at hindices
+  rw [placementEndFrom_planCandidate_eq_slottedEndFrom
+    (measureRegions ops) hindices]
+  let sortedDesc :=
+    (Pdqsort.quicksort (measureRegions ops).toArray
+      (fun left right => left.key < right.key)).reverse.toList
+  have hsummary := slottedEndFrom_eq_slottedSummaryEndFrom
+    sortedDesc (∅ : CircuitAllocations)
+  simpa only [sortedSummaryOrder, sortedDesc, slotIn,
+    slotSummaryEndFrom, slotSummaryEndFromWith] using hsummary
+
+/-- When virtual selectors are anchored by physical columns, the exact V1
+endpoint can be computed after erasing selectors from the consensus-sorted
+summary stream. -/
+theorem placementEnd_eq_slotSummaryEndFrom_withoutSelectors
+    (ops : Operations F) (anchor : ℕ → RegionColumn)
+    (hanchors : SelectorAnchoredBy
+      (synthesisSummary ops).regionShapes anchor) :
+    placementEnd ops =
+      slotSummaryEndFrom
+        ((sortedSummaryOrder ops).map
+          RegionShapeSummary.withoutSelectors) ∅ := by
+  let sorted := sortedSummaryOrder ops
+  have hperm := sortedSummaryOrder_perm_synthesisSummary ops
+  have hsourceWellFormed := synthesisSummary_regionShapes_wellFormed ops
+  have hsortedWellFormed :
+      sorted.Forall RegionShapeSummary.WellFormed := by
+    rw [List.forall_iff_forall_mem]
+    intro summary hsummary
+    exact List.forall_iff_forall_mem.mp hsourceWellFormed summary
+      (hperm.mem_iff.mp hsummary)
+  have hsortedAnchors : SelectorAnchoredBy sorted anchor := by
+    rw [SelectorAnchoredBy, List.forall_iff_forall_mem]
+    intro summary hsummary
+    exact List.forall_iff_forall_mem.mp hanchors summary
+      (hperm.mem_iff.mp hsummary)
+  rw [placementEnd_eq_slotSummaryEndFrom]
+  have herasure := slotSummaryEndFrom_eq_withoutSelectors sorted ∅ ∅
+    hsortedWellFormed CircuitAllocations.Valid.empty
+    CircuitAllocations.Valid.empty
+    (CircuitAllocations.PhysicalEquivalent.refl ∅)
+    (SelectorAllocationsDominatedBy.empty anchor) hsortedAnchors
+  simpa only [sorted, slotSummaryEndFrom, slotSummaryEndFromWith]
+    using herasure
 
 def rowOccupiedIn (shapes : List RegionShape) (regionStarts : List ℕ)
     (column : RegionColumn) (row : ℕ) : Bool :=
