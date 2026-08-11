@@ -332,4 +332,47 @@ theorem siftDown_heapFrom
     (RepairInvariant.initial _ _ _ hheap)
   simpa [siftDown] using hresult
 
+theorem heapFrom_half (values : ℕ → ℕ) (bound : ℕ) :
+    HeapFrom values bound (bound / 2) := by
+  intro parent hparent child hchild hchildBound
+  rcases hchild with rfl | rfl <;> omega
+
+private theorem heapify_reverse
+    {T : Type} [Inhabited T] (key : T → ℕ) :
+    ∀ (count : ℕ) (array : Array T),
+      count ≤ array.size →
+      HeapFrom (fun index => key array[index]!) array.size count →
+      let result := (List.range count).reverse.foldl
+        (fun current node => siftDown current (lessBy key) node) array
+      HeapFrom (fun index => key result[index]!) result.size 0 := by
+  intro count
+  induction count with
+  | zero =>
+      intro array _ hheap
+      simpa using hheap
+  | succ count inductionHypothesis =>
+      intro array hcount hheap
+      rw [List.range_succ, List.reverse_append]
+      simp only [List.reverse_singleton, List.singleton_append, List.foldl_cons]
+      have hnode : count < array.size := by omega
+      let next := siftDown array (lessBy key) count
+      have hnextHeap : HeapFrom (fun index => key next[index]!)
+          next.size count :=
+        siftDown_heapFrom array key count hnode hheap
+      have hnextSize : next.size = array.size := by
+        have hperm := siftDown_perm array (lessBy key) count hnode
+        simpa using hperm.length_eq
+      have hresult := inductionHypothesis next (by omega) hnextHeap
+      simpa [next] using hresult
+
+/-- Bottom-up heap construction produces a max-heap. -/
+theorem heapify
+    {T : Type} [Inhabited T] (array : Array T) (key : T → ℕ) :
+    let result := (List.range (array.size / 2)).reverse.foldl
+      (fun current node => siftDown current (lessBy key) node) array
+    HeapFrom (fun index => key result[index]!) result.size 0 := by
+  apply heapify_reverse key (array.size / 2) array
+  · exact Nat.div_le_self _ _
+  · exact heapFrom_half _ _
+
 end Halo2.FloorPlanner.Pdqsort
