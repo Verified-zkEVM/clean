@@ -10722,6 +10722,31 @@ def CircuitAllocations.Records
   ∀ column ∈ columns,
     (start, length) ∈ (allocations.getD column #[]).toList
 
+/-- Two allocation maps agree on the columns observable by a region. -/
+def CircuitAllocations.AgreesOn (left right : CircuitAllocations)
+    (columns : List RegionColumn) : Prop :=
+  ∀ column, column ∈ columns →
+    left.getD column #[] = right.getD column #[]
+
+theorem CircuitAllocations.AgreesOn.mono
+    {left right : CircuitAllocations} {inner outer : List RegionColumn}
+    (h : left.AgreesOn right outer) (hsubset : inner ⊆ outer) :
+    left.AgreesOn right inner := by
+  intro column hcolumn
+  exact h column (hsubset hcolumn)
+
+theorem CircuitAllocations.AgreesOn.insert
+    {left right : CircuitAllocations} {columns : List RegionColumn}
+    (h : left.AgreesOn right columns) (column : RegionColumn)
+    {leftValue rightValue : Allocations} (hvalue : leftValue = rightValue) :
+    CircuitAllocations.AgreesOn (left.insert column leftValue)
+      (right.insert column rightValue) columns := by
+  intro candidate hcandidate
+  rw [Std.HashMap.getD_insert, Std.HashMap.getD_insert]
+  split
+  next => rw [hvalue]
+  next => exact h candidate hcandidate
+
 theorem CircuitAllocations.Valid.empty :
     (∅ : CircuitAllocations).Valid := by
   intro column
@@ -11189,6 +11214,183 @@ theorem firstFit_law
       intro row hrow
       obtain ⟨space, hspace, hallows⟩ := hwitness row hrow
       exact ⟨space, by simp [hspace], hallows⟩⟩
+
+private def FirstFitCongruent
+    (fuel : ℕ) (allocations : CircuitAllocations)
+    (columns : List RegionColumn) (length start : ℕ)
+    (slack : Option ℕ) : Prop :=
+  ∀ other, allocations.Valid → other.Valid → columns.Nodup →
+    0 < length → allocations.AgreesOn other columns →
+    let left := firstFit fuel allocations columns length start slack
+    let right := firstFit fuel other columns length start slack
+    left.1 = right.1 ∧ left.2.AgreesOn right.2 columns
+
+private def TrySpacesCongruent
+    (fuel : ℕ) (allocations : CircuitAllocations)
+    (column : RegionColumn) (rest : List RegionColumn)
+    (length : ℕ) (spaces : List (ℕ × Option ℕ)) : Prop :=
+  ∀ other, allocations.Valid → other.Valid → rest.Nodup →
+    column ∉ rest → 0 < length →
+    allocations.AgreesOn other (column :: rest) →
+    let left := trySpaces fuel allocations column rest length spaces
+    let right := trySpaces fuel other column rest length spaces
+    left.1 = right.1 ∧ left.2.AgreesOn right.2 (column :: rest)
+
+/-- First-fit's result on a region depends only on that region's columns. -/
+theorem firstFit_congruent
+    (fuel : ℕ) (allocations : CircuitAllocations)
+    (columns : List RegionColumn) (length start : ℕ)
+    (slack : Option ℕ) :
+    FirstFitCongruent fuel allocations columns length start slack := by
+  apply firstFit.induct (regionLen := length)
+    (motive1 := fun fuel allocations columns start slack =>
+      FirstFitCongruent fuel allocations columns length start slack)
+    (motive2 := fun fuel allocations column rest spaces =>
+      TrySpacesCongruent fuel allocations column rest length spaces)
+  all_goals simp only [FirstFitCongruent, TrySpacesCongruent]
+  case case1 =>
+    intro fuel allocations start slack other _ _ _ _ _
+    simp only [firstFit]
+    exact ⟨True.intro, by intro column hcolumn; simp at hcolumn⟩
+  case case2 =>
+    intro allocations start slack head tail other _ _ hnodup _ hagree
+    simp only [firstFit]
+    exact ⟨True.intro, hagree⟩
+  case case3 =>
+    intro allocations start slack fuel column rest inductionHypothesis
+      other hvalidLeft hvalidRight hnodup hlength hagree
+    have hrestNodup := List.nodup_cons.mp hnodup |>.2
+    have hcolumnRest := List.nodup_cons.mp hnodup |>.1
+    have hcolumn := hagree column (by simp)
+    let leftInitialized :=
+      allocations.insert column (allocations.getD column #[])
+    let rightInitialized :=
+      other.insert column (other.getD column #[])
+    have hinitializedAgree :
+        CircuitAllocations.AgreesOn leftInitialized rightInitialized
+          (column :: rest) := by
+      apply CircuitAllocations.AgreesOn.insert hagree
+      exact hcolumn
+    have hinitializedValidLeft : CircuitAllocations.Valid leftInitialized :=
+      CircuitAllocations.Valid.insertSame hvalidLeft column
+    have hinitializedValidRight : CircuitAllocations.Valid rightInitialized :=
+      CircuitAllocations.Valid.insertSame hvalidRight column
+    have hresult := inductionHypothesis rightInitialized
+      hinitializedValidLeft hinitializedValidRight hrestNodup
+      hcolumnRest hlength hinitializedAgree
+    simpa only [firstFit, leftInitialized, rightInitialized,
+      hcolumn] using hresult
+  case case4 =>
+    intro fuel allocations column rest other _ _ _ _ _ hagree
+    simp only [trySpaces]
+    exact ⟨True.intro, hagree⟩
+  case case5 =>
+    intro fuel allocations column rest spaceStart spaceEnd more hok
+      leftRecursive row hleftRecursive firstInduction
+      other hvalidLeft hvalidRight hrestNodup hcolumnRest hlength hagree
+    have hrestAgree := CircuitAllocations.AgreesOn.mono hagree (by
+      intro candidate hcandidate
+      exact List.mem_cons_of_mem column hcandidate)
+    have hfirst := firstInduction other hvalidLeft hvalidRight
+      hrestNodup hlength hrestAgree
+    simp only [trySpaces, hok, if_true, hleftRecursive] at hfirst ⊢
+    generalize hrightRecursive :
+      firstFit fuel other rest length spaceStart
+        ((spaceEnd.map fun endRow =>
+          (endRow : ℤ) - spaceStart - length).map Int.toNat) = rightResult
+    rcases rightResult with ⟨rightRow, rightRecursive⟩
+    rw [hrightRecursive] at hfirst
+    dsimp only at hfirst
+    have hrow : rightRow = some row := hfirst.1.symm
+    rw [hrow]
+    constructor
+    · rfl
+    · have hrecursiveAgree :
+          leftRecursive.AgreesOn rightRecursive (column :: rest) := by
+        intro candidate hcandidate
+        simp only [List.mem_cons] at hcandidate
+        rcases hcandidate with rfl | hcandidate
+        · have hleftLaw := firstFit_law fuel allocations rest length
+            spaceStart
+            ((spaceEnd.map fun endRow =>
+              (endRow : ℤ) - spaceStart - length).map Int.toNat)
+            hvalidLeft hrestNodup hlength
+          have hrightLaw := firstFit_law fuel other rest length
+            spaceStart
+            ((spaceEnd.map fun endRow =>
+              (endRow : ℤ) - spaceStart - length).map Int.toNat)
+            hvalidRight hrestNodup hlength
+          rw [hleftRecursive] at hleftLaw
+          rw [hrightRecursive, hrow] at hrightLaw
+          have hleftColumn :
+              leftRecursive.getD candidate #[] =
+                allocations.getD candidate #[] :=
+            hleftLaw.1.sameOutside candidate hcolumnRest
+          have hrightColumn :
+              rightRecursive.getD candidate #[] = other.getD candidate #[] :=
+            hrightLaw.1.sameOutside candidate hcolumnRest
+          rw [hleftColumn, hrightColumn]
+          exact hagree candidate (by simp)
+        · exact hfirst.2 candidate hcandidate
+      apply CircuitAllocations.AgreesOn.insert hrecursiveAgree
+      exact congrArg (fun values => values.insert row length)
+        (hrecursiveAgree column (by simp))
+  case case6 =>
+    intro fuel allocations column rest spaceStart spaceEnd more hok
+      leftRecursive hleftRecursive firstInduction spacesInduction
+      other hvalidLeft hvalidRight hrestNodup hcolumnRest hlength hagree
+    have hrestAgree := CircuitAllocations.AgreesOn.mono hagree (by
+      intro candidate hcandidate
+      exact List.mem_cons_of_mem column hcandidate)
+    have hfirst := firstInduction other hvalidLeft hvalidRight
+      hrestNodup hlength hrestAgree
+    generalize hrightRecursive :
+      firstFit fuel other rest length spaceStart
+        ((spaceEnd.map fun endRow =>
+          (endRow : ℤ) - spaceStart - length).map Int.toNat) = rightResult
+    rcases rightResult with ⟨rightRow, rightRecursive⟩
+    rw [hleftRecursive, hrightRecursive] at hfirst
+    dsimp only at hfirst
+    have hrightRow : rightRow = none := hfirst.1.symm
+    have hleftLaw := firstFit_law fuel allocations rest length
+      spaceStart
+      ((spaceEnd.map fun endRow =>
+        (endRow : ℤ) - spaceStart - length).map Int.toNat)
+      hvalidLeft hrestNodup hlength
+    have hrightLaw := firstFit_law fuel other rest length
+      spaceStart
+      ((spaceEnd.map fun endRow =>
+        (endRow : ℤ) - spaceStart - length).map Int.toNat)
+      hvalidRight hrestNodup hlength
+    rw [hleftRecursive] at hleftLaw
+    rw [hrightRecursive, hrightRow] at hrightLaw
+    have hrecursiveAgree :
+        leftRecursive.AgreesOn rightRecursive (column :: rest) := by
+      intro candidate hcandidate
+      simp only [List.mem_cons] at hcandidate
+      rcases hcandidate with rfl | hcandidate
+      · have hleftColumn :
+            leftRecursive.getD candidate #[] =
+              allocations.getD candidate #[] :=
+          hleftLaw.1.sameOutside candidate hcolumnRest
+        have hrightColumn :
+            rightRecursive.getD candidate #[] = other.getD candidate #[] :=
+          hrightLaw.1.sameOutside candidate hcolumnRest
+        rw [hleftColumn, hrightColumn]
+        exact hagree candidate (by simp)
+      · exact hfirst.2 candidate hcandidate
+    have hremaining := spacesInduction rightRecursive
+      hleftLaw.1.valid hrightLaw.1.valid hrestNodup hcolumnRest
+      hlength hrecursiveAgree
+    simpa only [trySpaces, hok, if_true, hleftRecursive,
+      hrightRecursive, hrightRow] using hremaining
+  case case7 =>
+    intro fuel allocations column rest spaceStart spaceEnd more hok
+      inductionHypothesis other hvalidLeft hvalidRight hrestNodup
+      hcolumnRest hlength hagree
+    have hresult := inductionHypothesis other hvalidLeft hvalidRight
+      hrestNodup hcolumnRest hlength hagree
+    simpa only [trySpaces, hok] using hresult
 
 private theorem trySpaces_success_of_final_unbounded
     (initialSpaces : List (ℕ × Option ℕ))
