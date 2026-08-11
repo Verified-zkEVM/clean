@@ -12581,6 +12581,28 @@ def placeSummary (summary : RegionShapeSummary)
   let columns := sortRegionColumns summary.columns
   firstFit columns.length allocations columns summary.rowCount 0 none
 
+/-- Two reduced summaries are placement-equivalent when the floor planner sees
+the same sorted column footprint and height. This deliberately ignores the stored
+order of the column set. -/
+def RegionShapeSummary.PlacementEquivalent
+    (left right : RegionShapeSummary) : Prop :=
+  sortRegionColumns left.columns = sortRegionColumns right.columns ∧
+    left.rowCount = right.rowCount
+
+theorem RegionShapeSummary.PlacementEquivalent.symm
+    {left right : RegionShapeSummary}
+    (hequivalent : left.PlacementEquivalent right) :
+    right.PlacementEquivalent left :=
+  ⟨hequivalent.1.symm, hequivalent.2.symm⟩
+
+theorem placeSummary_eq_of_placementEquivalent
+    {left right : RegionShapeSummary}
+    (hequivalent : left.PlacementEquivalent right)
+    (allocations : CircuitAllocations) :
+    placeSummary left allocations = placeSummary right allocations := by
+  simp only [placeSummary]
+  rw [hequivalent.1, hequivalent.2]
+
 /-- The generic first-fit law, specialized to one reduced region summary. -/
 theorem placeSummary_law
     (summary : RegionShapeSummary) (allocations : CircuitAllocations)
@@ -14161,6 +14183,19 @@ def slotSummaryEndFrom (summaries : List RegionShapeSummary)
     (allocations : CircuitAllocations) : ℕ :=
   slotSummaryEndFromWith 0 summaries allocations
 
+/-- Placement-equivalent summaries may be exchanged without changing either the
+endpoint or the allocator state seen by the suffix. -/
+theorem slotSummaryEndFromWith_swap_of_placementEquivalent
+    (initial : ℕ) (left right : RegionShapeSummary)
+    (tail : List RegionShapeSummary) (allocations : CircuitAllocations)
+    (hequivalent : left.PlacementEquivalent right) :
+    slotSummaryEndFromWith initial (left :: right :: tail) allocations =
+      slotSummaryEndFromWith initial (right :: left :: tail) allocations := by
+  have hplace : ∀ current,
+      placeSummary left current = placeSummary right current :=
+    placeSummary_eq_of_placementEquivalent hequivalent
+  simp only [slotSummaryEndFromWith_cons, hplace, hequivalent.2]
+
 /-- Swapping two disjoint regions changes neither their individual placements nor
 the final endpoint, including the placement of every following region. -/
 theorem slotSummaryEndFromWith_swap
@@ -14348,7 +14383,8 @@ theorem slotSummaryEndFromWith_bubble
     (hwellBefore : before.Forall RegionShapeSummary.WellFormed)
     (hwellPivot : pivot.WellFormed)
     (hcommutes : ∀ item, item ∈ before →
-      item = pivot ∨ List.Disjoint item.columns pivot.columns)
+      item.PlacementEquivalent pivot ∨
+        List.Disjoint item.columns pivot.columns)
     (initial : ℕ) (allocations : CircuitAllocations)
     (hvalid : allocations.Valid)
     (hwellSuffix : suffix.Forall RegionShapeSummary.WellFormed)
@@ -14380,8 +14416,11 @@ theorem slotSummaryEndFromWith_bubble
         simpa only [List.cons_append, slotSummaryEndFromWith_cons,
           hplaced] using hrest
       have hpair := hcommutes head (by simp)
-      rcases hpair with rfl | hdisjoint
-      · simpa only [List.cons_append] using hbubbled
+      rcases hpair with hequivalent | hdisjoint
+      · exact hbubbled.trans (by
+          simpa only [List.cons_append] using
+            slotSummaryEndFromWith_swap_of_placementEquivalent initial head
+              pivot ((rest ++ suffix) ++ tail) allocations hequivalent)
       · exact hbubbled.trans (by
           simpa only [List.cons_append] using
             slotSummaryEndFromWith_swap_of_wellFormed initial head pivot
@@ -14400,8 +14439,9 @@ theorem perm_bubble (pivot : RegionShapeSummary)
         (List.Perm.swap pivot head (rest ++ suffix))
 
 /-- For two key-sorted permutations, V1's endpoint is insensitive to the order
-within tied-key runs whenever tied summaries are equal or column-disjoint. -/
-theorem slotSummaryEndFromWith_eq_of_sorted_perm
+within tied-key runs whenever tied summaries are placement-equivalent or
+column-disjoint. -/
+theorem slotSummaryEndFromWith_eq_of_sorted_perm_interchangeable
     {K : Type} [LinearOrder K] (key : RegionShapeSummary → K)
     {left right : List RegionShapeSummary}
     (hperm : left.Perm right)
@@ -14410,7 +14450,8 @@ theorem slotSummaryEndFromWith_eq_of_sorted_perm
     (hwellFormed : left.Forall RegionShapeSummary.WellFormed)
     (hties : ∀ first, first ∈ left → ∀ second, second ∈ left →
       key first = key second →
-        first = second ∨ List.Disjoint first.columns second.columns)
+        first.PlacementEquivalent second ∨
+          List.Disjoint first.columns second.columns)
     (initial : ℕ) (allocations : CircuitAllocations)
     (hvalid : allocations.Valid) (tail : List RegionShapeSummary)
     (hwellTail : tail.Forall RegionShapeSummary.WellFormed) :
@@ -14525,6 +14566,31 @@ theorem slotSummaryEndFromWith_eq_of_sorted_perm
         simpa only [List.cons_append, slotSummaryEndFromWith_cons,
           hplaced] using hrest
       exact hconsRest.trans hbubble.symm
+
+/-- The common special case where tied summaries are definitionally the same or
+column-disjoint. -/
+theorem slotSummaryEndFromWith_eq_of_sorted_perm
+    {K : Type} [LinearOrder K] (key : RegionShapeSummary → K)
+    {left right : List RegionShapeSummary}
+    (hperm : left.Perm right)
+    (hsortedLeft : (left.map key).SortedLE)
+    (hsortedRight : (right.map key).SortedLE)
+    (hwellFormed : left.Forall RegionShapeSummary.WellFormed)
+    (hties : ∀ first, first ∈ left → ∀ second, second ∈ left →
+      key first = key second →
+        first = second ∨ List.Disjoint first.columns second.columns)
+    (initial : ℕ) (allocations : CircuitAllocations)
+    (hvalid : allocations.Valid) (tail : List RegionShapeSummary)
+    (hwellTail : tail.Forall RegionShapeSummary.WellFormed) :
+    slotSummaryEndFromWith initial (left ++ tail) allocations =
+      slotSummaryEndFromWith initial (right ++ tail) allocations := by
+  exact slotSummaryEndFromWith_eq_of_sorted_perm_interchangeable key hperm
+    hsortedLeft hsortedRight hwellFormed (by
+      intro first hfirst second hsecond hkey
+      rcases hties first hfirst second hsecond hkey with rfl | hdisjoint
+      · exact Or.inl ⟨rfl, rfl⟩
+      · exact Or.inr hdisjoint)
+    initial allocations hvalid tail hwellTail
 
 /-- Forgetting shape indices changes no slotted endpoint, for any pair sequence. -/
 theorem slottedEndFrom_forgetIndices_eq

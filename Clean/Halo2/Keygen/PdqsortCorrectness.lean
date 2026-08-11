@@ -884,14 +884,15 @@ def stableRegionSort (summaries : List RegionShapeSummary) :
   summaries.mergeSort fun left right => left.key ≤ right.key
 
 /-- Legacy pdqsort and the stable canonical region sort have the same exact V1
-endpoint whenever tied summaries are equal or column-disjoint. -/
-theorem V1.slotSummaryEndFromWith_quicksort_eq_stableRegionSort
+endpoint whenever tied summaries are placement-equivalent or column-disjoint. -/
+theorem V1.slotSummaryEndFromWith_quicksort_eq_stableRegionSort_interchangeable
     (summaries : List RegionShapeSummary)
     (hwellFormed : summaries.Forall RegionShapeSummary.WellFormed)
     (hties : ∀ first, first ∈ summaries →
       ∀ second, second ∈ summaries →
       first.key = second.key →
-        first = second ∨ List.Disjoint first.columns second.columns)
+        first.PlacementEquivalent second ∨
+          List.Disjoint first.columns second.columns)
     (initial : ℕ) (allocations : CircuitAllocations)
     (hvalid : allocations.Valid) (tail : List RegionShapeSummary)
     (hwellTail : tail.Forall RegionShapeSummary.WellFormed) :
@@ -948,12 +949,14 @@ theorem V1.slotSummaryEndFromWith_quicksort_eq_stableRegionSort
   have hactualTies : ∀ first, first ∈ actualAscending.reverse →
       ∀ second, second ∈ actualAscending.reverse →
       first.key = second.key →
-        first = second ∨ List.Disjoint first.columns second.columns := by
+        first.PlacementEquivalent second ∨
+          List.Disjoint first.columns second.columns := by
     intro first hfirst second hsecond hkey
     exact hties first
       (hactualPerm.mem_iff.mp (List.mem_reverse.mp hfirst)) second
       (hactualPerm.mem_iff.mp (List.mem_reverse.mp hsecond)) hkey
-  have hresult := V1.slotSummaryEndFromWith_eq_of_sorted_perm
+  have hresult :=
+    V1.slotSummaryEndFromWith_eq_of_sorted_perm_interchangeable
     (key := fun summary : RegionShapeSummary =>
       (show OrderDual ℕ from summary.key))
     (hactualReversePerm.trans hcanonicalReversePerm.symm)
@@ -961,5 +964,32 @@ theorem V1.slotSummaryEndFromWith_quicksort_eq_stableRegionSort
     initial allocations hvalid tail hwellTail
   simpa only [actualAscending, canonicalAscending, stableRegionSort,
     Array.toList_reverse] using hresult
+
+/-- The common specialization where tied summaries are literally equal or
+column-disjoint. -/
+theorem V1.slotSummaryEndFromWith_quicksort_eq_stableRegionSort
+    (summaries : List RegionShapeSummary)
+    (hwellFormed : summaries.Forall RegionShapeSummary.WellFormed)
+    (hties : ∀ first, first ∈ summaries →
+      ∀ second, second ∈ summaries →
+      first.key = second.key →
+        first = second ∨ List.Disjoint first.columns second.columns)
+    (initial : ℕ) (allocations : CircuitAllocations)
+    (hvalid : allocations.Valid) (tail : List RegionShapeSummary)
+    (hwellTail : tail.Forall RegionShapeSummary.WellFormed) :
+    let actual :=
+      (quicksort summaries.toArray
+        (lessBy RegionShapeSummary.key)).reverse.toList
+    let canonical := (stableRegionSort summaries).reverse
+    V1.slotSummaryEndFromWith initial (actual ++ tail) allocations =
+      V1.slotSummaryEndFromWith initial (canonical ++ tail) allocations := by
+  exact
+    V1.slotSummaryEndFromWith_quicksort_eq_stableRegionSort_interchangeable
+      summaries hwellFormed (by
+        intro first hfirst second hsecond hkey
+        rcases hties first hfirst second hsecond hkey with rfl | hdisjoint
+        · exact Or.inl ⟨rfl, rfl⟩
+        · exact Or.inr hdisjoint)
+      initial allocations hvalid tail hwellTail
 
 end Halo2.FloorPlanner.Pdqsort
