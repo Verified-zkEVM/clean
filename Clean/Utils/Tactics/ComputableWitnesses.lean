@@ -867,9 +867,8 @@ def runLeafDispatch (lemmasArray closeArray : Array (TSyntax `Lean.Parser.Tactic
   leafDispatch
 
 /-- Elaborate the two user hint lists into simp-lemma arrays, self-supplying the current
-`main` (all resolutions — a constant absent from the goal contributes no rewrites) and,
-when it exists here, `Circuit.forEach.forAll` (an unresolvable name inside a simp call
-does not error, it silently disables the entire call). Returns `(lemmasArray, closeArray)`
+`main` (all resolutions — a constant absent from the goal contributes no rewrites).
+Returns `(lemmasArray, closeArray)`
 where `closeArray` additionally carries the `closing` hints — those participate only in
 the close routes' goal-only simp steps, never in `simp_all`/`at *`/whole-circuit
 normalization, so recursive eval decompositions (e.g. `eval_vector_set`) stay
@@ -885,9 +884,6 @@ def elabHintArrays (extraTerms closeTerms : Array (TSyntax `term)) :
   for mainName in mainNames do
     lemmasArray := lemmasArray.push
       (← `(Lean.Parser.Tactic.simpLemma| $(mkIdent mainName):term))
-  if (← getEnv).contains `Circuit.forEach.forAll then
-    lemmasArray := lemmasArray.push
-      (← `(Lean.Parser.Tactic.simpLemma| $(mkIdent `Circuit.forEach.forAll):term))
   return (lemmasArray, lemmasArray ++ closeOnlyArray)
 
 def runComputableWitnesses (extraTerms closeTerms : Array (TSyntax `term)) : TacticM Unit := do
