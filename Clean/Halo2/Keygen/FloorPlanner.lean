@@ -401,6 +401,249 @@ namespace Pdqsort
 
 variable {T : Type} [Inhabited T]
 
+/-! ### Ordering vocabulary
+
+The legacy implementation receives a Boolean comparator.  Its floor-planner use is
+always a comparison through a natural-number key, so state the semantic contract at
+that exact level: this avoids manufacturing an unrelated non-strict order from an
+arbitrary Boolean function while remaining generic in the element type and key.
+-/
+
+/-- The comparator used by the verified ordering interface. -/
+def lessBy (key : T → ℕ) (left right : T) : Bool :=
+  decide (key left < key right)
+
+omit [Inhabited T] in
+theorem lessBy_eq_true_iff (key : T → ℕ) (left right : T) :
+    lessBy key left right = true ↔ key left < key right := by
+  simp [lessBy]
+
+omit [Inhabited T] in
+theorem lessBy_eq_false_iff (key : T → ℕ) (left right : T) :
+    lessBy key left right = false ↔ key right ≤ key left := by
+  simp [lessBy]
+
+/-- A list is nondecreasing in the supplied natural-number key. -/
+def KeySorted (key : T → ℕ) (items : List T) : Prop :=
+  (items.map key).SortedLE
+
+/-- Every key in `items` is at most `bound`. -/
+def KeysLE (key : T → ℕ) (items : List T) (bound : ℕ) : Prop :=
+  ∀ item ∈ items, key item ≤ bound
+
+/-- Every key in `items` is at least `bound`. -/
+def KeysGE (key : T → ℕ) (items : List T) (bound : ℕ) : Prop :=
+  ∀ item ∈ items, bound ≤ key item
+
+/-- A pointwise predicate over the half-open array interval `[start, stop)`. -/
+def RangeAll (array : Array T) (start stop : ℕ) (predicate : T → Prop) : Prop :=
+  ∀ index, start ≤ index → index < stop → predicate array[index]!
+
+theorem RangeAll.mono
+    {array : Array T} {outerStart outerStop innerStart innerStop : ℕ}
+    {predicate : T → Prop}
+    (h : RangeAll array outerStart outerStop predicate)
+    (hstart : outerStart ≤ innerStart) (hstop : innerStop ≤ outerStop) :
+    RangeAll array innerStart innerStop predicate := by
+  intro index hindexStart hindexStop
+  exact h index (hstart.trans hindexStart) (hindexStop.trans_le hstop)
+
+theorem RangeAll.empty
+    (array : Array T) (index : ℕ) (predicate : T → Prop) :
+    RangeAll array index index predicate := by
+  intro _ _ h
+  omega
+
+omit [Inhabited T] in
+theorem KeySorted.nil (key : T → ℕ) : KeySorted key [] := by
+  rw [KeySorted, List.sortedLE_iff_pairwise]
+  exact List.Pairwise.nil
+
+omit [Inhabited T] in
+theorem KeySorted.singleton (key : T → ℕ) (item : T) :
+    KeySorted key [item] := by
+  rw [KeySorted, List.sortedLE_iff_pairwise]
+  exact List.Pairwise.cons (by simp) List.Pairwise.nil
+
+omit [Inhabited T] in
+theorem KeySorted.append
+    (key : T → ℕ) (left right : List T)
+    (hleft : KeySorted key left) (hright : KeySorted key right)
+    (hcross : ∀ a ∈ left, ∀ b ∈ right, key a ≤ key b) :
+    KeySorted key (left ++ right) := by
+  rw [KeySorted, List.map_append, List.sortedLE_iff_pairwise] at *
+  exact List.pairwise_append.mpr ⟨hleft, hright, by
+    intro a ha b hb
+    rw [List.mem_map] at ha hb
+    obtain ⟨a, ha, rfl⟩ := ha
+    obtain ⟨b, hb, rfl⟩ := hb
+    exact hcross a ha b hb⟩
+
+omit [Inhabited T] in
+theorem KeysLE.perm
+    (key : T → ℕ) {left right : List T}
+    (hperm : left.Perm right) {bound : ℕ}
+    (h : KeysLE key left bound) : KeysLE key right bound := by
+  intro item hitem
+  exact h item (hperm.mem_iff.mpr hitem)
+
+omit [Inhabited T] in
+theorem KeysGE.perm
+    (key : T → ℕ) {left right : List T}
+    (hperm : left.Perm right) {bound : ℕ}
+    (h : KeysGE key left bound) : KeysGE key right bound := by
+  intro item hitem
+  exact h item (hperm.mem_iff.mpr hitem)
+
+omit [Inhabited T] in
+theorem KeySorted.append_pivot
+    (key : T → ℕ) (left : List T) (pivot : T) (right : List T)
+    (hleft : KeySorted key left) (hright : KeySorted key right)
+    (hleftBound : KeysLE key left (key pivot))
+    (hrightBound : KeysGE key right (key pivot)) :
+    KeySorted key (left ++ pivot :: right) := by
+  apply KeySorted.append key left (pivot :: right) hleft
+  · rw [KeySorted, List.map_cons, List.sortedLE_iff_pairwise,
+      List.pairwise_cons]
+    exact ⟨by
+      intro value hvalue
+      rw [List.mem_map] at hvalue
+      obtain ⟨item, hitem, rfl⟩ := hvalue
+      exact hrightBound item hitem, hright.pairwise⟩
+  · intro leftItem hleftItem rightItem hrightItem
+    rw [List.mem_cons] at hrightItem
+    rcases hrightItem with rfl | hrightItem
+    · exact hleftBound leftItem hleftItem
+    · exact (hleftBound leftItem hleftItem).trans
+        (hrightBound rightItem hrightItem)
+
+/-- Stable insertion used to state the pure semantics of pdqsort's shifting
+insertion-sort primitive. Equal keys remain in their original order. -/
+def insertByKey (key : T → ℕ) (item : T) : List T → List T
+  | [] => [item]
+  | head :: rest =>
+      if key item < key head then
+        item :: head :: rest
+      else
+        head :: insertByKey key item rest
+
+omit [Inhabited T] in
+theorem mem_insertByKey_iff
+    (key : T → ℕ) (item candidate : T) (items : List T) :
+    candidate ∈ insertByKey key item items ↔
+      candidate = item ∨ candidate ∈ items := by
+  induction items with
+  | nil => simp [insertByKey]
+  | cons head rest inductionHypothesis =>
+      simp only [insertByKey]
+      split <;> simp_all [or_left_comm]
+
+omit [Inhabited T] in
+theorem insertByKey_perm
+    (key : T → ℕ) (item : T) (items : List T) :
+    (insertByKey key item items).Perm (item :: items) := by
+  induction items with
+  | nil => exact .refl _
+  | cons head rest inductionHypothesis =>
+      simp only [insertByKey]
+      split
+      · exact .refl _
+      · exact (inductionHypothesis.cons head).trans (.swap _ _ _)
+
+omit [Inhabited T] in
+theorem insertByKey_eq_append
+    (key : T → ℕ) (item : T) (items : List T)
+    (hbound : KeysLE key items (key item)) :
+    insertByKey key item items = items ++ [item] := by
+  induction items with
+  | nil => rfl
+  | cons head rest inductionHypothesis =>
+      have hhead := hbound head (by simp)
+      have hnotBefore : ¬key item < key head := by omega
+      rw [Pdqsort.insertByKey, if_neg hnotBefore,
+        inductionHypothesis (by
+          intro candidate hcandidate
+          exact hbound candidate (by simp [hcandidate])),
+        List.cons_append]
+
+omit [Inhabited T] in
+theorem KeySorted.insertByKey
+    (key : T → ℕ) (item : T) (items : List T)
+    (hitems : KeySorted key items) :
+    KeySorted key (insertByKey key item items) := by
+  rw [KeySorted, List.sortedLE_iff_pairwise] at hitems ⊢
+  induction items with
+  | nil =>
+      exact List.Pairwise.cons (by simp) List.Pairwise.nil
+  | cons head rest inductionHypothesis =>
+      change List.Pairwise (fun left right : ℕ => left ≤ right)
+        (key head :: rest.map key) at hitems
+      rw [List.pairwise_cons] at hitems
+      by_cases hbefore : key item < key head
+      · rw [Pdqsort.insertByKey, if_pos hbefore, List.map_cons, List.map_cons,
+          List.pairwise_cons]
+        exact ⟨by
+          intro value hvalue
+          rw [List.mem_cons] at hvalue
+          rcases hvalue with rfl | hvalue
+          · exact hbefore.le
+          · exact hbefore.le.trans (hitems.1 value hvalue),
+          List.Pairwise.cons hitems.1 hitems.2⟩
+      · rw [Pdqsort.insertByKey, if_neg hbefore, List.map_cons, List.pairwise_cons]
+        have hrestSorted := inductionHypothesis hitems.2
+        refine ⟨?_, hrestSorted⟩
+        intro value hvalue
+        rw [List.mem_map] at hvalue
+        obtain ⟨candidate, hcandidate, rfl⟩ := hvalue
+        rw [mem_insertByKey_iff] at hcandidate
+        rcases hcandidate with rfl | hcandidate
+        · omega
+        · exact hitems.1 (key candidate) (by
+            rw [List.mem_map]
+            exact ⟨_, hcandidate, rfl⟩)
+
+/-- Pure left-to-right insertion sort matching the small-slice path's stable
+equal-key behavior. -/
+def insertionSortByKey (key : T → ℕ) (items : List T) : List T :=
+  items.foldl (fun sorted item => insertByKey key item sorted) []
+
+omit [Inhabited T] in
+theorem insertionSortByKey_sorted (key : T → ℕ) (items : List T) :
+    KeySorted key (insertionSortByKey key items) := by
+  unfold insertionSortByKey
+  generalize hsorted : ([] : List T) = sorted
+  have hinitial : KeySorted key sorted := by
+    rw [← hsorted]
+    exact KeySorted.nil key
+  clear hsorted
+  induction items generalizing sorted with
+  | nil => exact hinitial
+  | cons item rest inductionHypothesis =>
+      simp only [List.foldl_cons]
+      exact inductionHypothesis _
+        (KeySorted.insertByKey key item sorted hinitial)
+
+omit [Inhabited T] in
+theorem insertionSortByKey_perm (key : T → ℕ) (items : List T) :
+    (insertionSortByKey key items).Perm items := by
+  unfold insertionSortByKey
+  have hfold : ∀ (remaining accumulator : List T),
+      (remaining.foldl
+        (fun sorted item => insertByKey key item sorted) accumulator).Perm
+        (remaining.reverse ++ accumulator) := by
+    intro remaining
+    induction remaining with
+    | nil => intro accumulator; exact .refl _
+    | cons item rest inductionHypothesis =>
+        intro accumulator
+        simp only [List.foldl_cons, List.reverse_cons, List.append_assoc]
+        exact (inductionHypothesis (insertByKey key item accumulator)).trans
+          ((List.Perm.refl rest.reverse).append
+            (insertByKey_perm key item accumulator))
+  have hresult := hfold items []
+  rw [List.append_nil] at hresult
+  exact hresult.trans (List.reverse_perm items)
+
 /-- Swap two array entries by index (`slice::swap`). -/
 @[inline] def swp (a : Array T) (i j : ℕ) : Array T :=
   let x := a[i]!
