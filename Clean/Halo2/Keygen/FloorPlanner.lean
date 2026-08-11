@@ -10358,6 +10358,129 @@ def Allocations.SpaceAllows
   space.1 ≤ start ∧
     ∀ stop, space.2 = some stop → start + length ≤ stop
 
+/-- If the requested interval already fits at the search boundary, the scan either
+publishes that boundary as its first free interval or reaches the final free interval
+without advancing it. -/
+private theorem Allocations.scanFreeIntervals_head_of_fits
+    (items : List (ℕ × ℕ)) (start length : ℕ)
+    (endBound : Option ℕ)
+    (hvalid : items.Pairwise IntervalBefore)
+    (hfits : ∀ allocated ∈ items,
+      RowIntervalsDisjoint start length allocated.1 allocated.2)
+    (hlength : 0 < length)
+    (hbound : ∀ stop, endBound = some stop → start + length ≤ stop) :
+    let result := scanFreeIntervals endBound items start
+    (∃ stop rest,
+      result.1 = (start, stop) :: rest ∧
+        SpaceAllows (start, stop) start length) ∨
+      (result.1 = [] ∧ result.2 = start) := by
+  induction items with
+  | nil =>
+      exact Or.inr ⟨rfl, rfl⟩
+  | cons head rest inductionHypothesis =>
+      have hrestValid := List.pairwise_cons.mp hvalid |>.2
+      have hrestFits : ∀ allocated ∈ rest,
+          RowIntervalsDisjoint start length allocated.1 allocated.2 := by
+        intro allocated hallocated
+        exact hfits allocated (by simp [hallocated])
+      have hheadFits := hfits head (by simp)
+      rcases hheadFits with hcandidateBefore | hheadBefore
+      · cases endBound with
+        | none =>
+            simp only [scanFreeIntervals, Bool.not_false, ↓reduceIte]
+            have hgap : start < head.1 := by omega
+            rw [if_pos hgap]
+            exact Or.inl ⟨some head.1,
+              (scanFreeIntervals none rest
+                (max start (head.1 + head.2))).1,
+              rfl, ⟨le_rfl, by
+                intro stop hstop
+                simp only [Option.some.injEq] at hstop
+                subst stop
+                exact hcandidateBefore⟩⟩
+        | some endRow =>
+            by_cases hpast : endRow ≤ head.1
+            · simp only [scanFreeIntervals, hpast, decide_true,
+                Bool.not_true]
+              exact inductionHypothesis hrestValid hrestFits
+            · simp only [scanFreeIntervals, hpast, decide_false,
+                Bool.not_false, ↓reduceIte]
+              have hgap : start < head.1 := by omega
+              rw [if_pos hgap]
+              exact Or.inl ⟨some head.1,
+                (scanFreeIntervals (some endRow) rest
+                  (max start (head.1 + head.2))).1,
+                rfl, ⟨le_rfl, by
+                  intro stop hstop
+                  simp only [Option.some.injEq] at hstop
+                  subst stop
+                  exact hcandidateBefore⟩⟩
+      · have hheadEnd : head.1 + head.2 ≤ start := hheadBefore
+        have hnotPast : ∀ endRow, endBound = some endRow →
+            ¬ endRow ≤ head.1 := by
+          intro endRow hend hpast
+          have := hbound endRow hend
+          omega
+        cases endBound with
+        | none =>
+            simp only [scanFreeIntervals, Bool.not_false, ↓reduceIte]
+            have hnoGap : ¬ start < head.1 := by omega
+            rw [if_neg hnoGap, max_eq_left hheadEnd]
+            exact inductionHypothesis hrestValid hrestFits
+        | some endRow =>
+            have hpast : ¬ endRow ≤ head.1 := hnotPast endRow rfl
+            simp only [scanFreeIntervals, hpast, decide_false,
+              Bool.not_false, ↓reduceIte]
+            have hnoGap : ¬ start < head.1 := by omega
+            rw [if_neg hnoGap, max_eq_left hheadEnd]
+            exact inductionHypothesis hrestValid hrestFits
+
+/-- A fitting interval at the requested start is the first interval enumerated by
+`freeIntervals`. -/
+theorem Allocations.freeIntervals_starts_with_of_fits
+    (allocations : Allocations) (start length : ℕ)
+    (endBound : Option ℕ)
+    (hvalid : allocations.Valid)
+    (hfits : allocations.Fits start length)
+    (hlength : 0 < length)
+    (hbound : ∀ stop, endBound = some stop → start + length ≤ stop) :
+    ∃ stop rest,
+      allocations.freeIntervals start endBound = (start, stop) :: rest ∧
+        SpaceAllows (start, stop) start length := by
+  have hscan := scanFreeIntervals_head_of_fits allocations.toList
+    start length endBound (by simpa [Valid] using hvalid) hfits hlength hbound
+  cases endBound with
+  | none =>
+      rcases hscan with ⟨stop, rest, hresult, hallows⟩ | ⟨hresult, hend⟩
+      · refine ⟨stop, rest ++ [((scanFreeIntervals none
+            allocations.toList start).2, none)], ?_, hallows⟩
+        simp only [freeIntervals, hresult, List.cons_append]
+      · refine ⟨none, [], ?_, ⟨le_rfl, by simp⟩⟩
+        simp [freeIntervals, hresult, hend]
+  | some endRow =>
+      have hstartEnd : start < endRow := by
+        have := hbound endRow rfl
+        omega
+      rcases hscan with ⟨stop, rest, hresult, hallows⟩ | ⟨hresult, hend⟩
+      · simp only [freeIntervals, hresult]
+        split <;> rename_i hfinal
+        · exact ⟨stop, rest ++
+            [((scanFreeIntervals (some endRow)
+              allocations.toList start).2, some endRow)], by
+              simp only [List.cons_append], hallows⟩
+        · exact ⟨stop, rest, rfl, hallows⟩
+      · have hfinal :
+            (scanFreeIntervals (some endRow)
+              allocations.toList start).2 < endRow := by
+          rw [hend]
+          exact hstartEnd
+        refine ⟨some endRow, [], ?_, ⟨le_rfl, ?_⟩⟩
+        · simp [freeIntervals, hresult, hend, hstartEnd]
+        · intro stop hstop
+          have : stop = endRow := Option.some.inj hstop.symm
+          subst stop
+          exact hbound endRow rfl
+
 private def Allocations.EndsBefore
     (items : List (ℕ × ℕ)) (row : ℕ) : Prop :=
   ∀ item ∈ items, item.1 + item.2 ≤ row
@@ -11265,6 +11388,207 @@ theorem firstFit_law
       intro row hrow
       obtain ⟨space, hspace, hallows⟩ := hwitness row hrow
       exact ⟨space, by simp [hspace], hallows⟩⟩
+
+/-- A first-fit search changes a participating column by exactly one insertion on
+success, and leaves every observable allocation unchanged on failure. -/
+def PlacementEffect
+    (before : CircuitAllocations) (columns : List RegionColumn)
+    (length : ℕ) (result : Option ℕ × CircuitAllocations) : Prop :=
+  ∀ column,
+    result.2.getD column #[] =
+      match result.1 with
+      | none => before.getD column #[]
+      | some row =>
+          if column ∈ columns then
+            (before.getD column #[]).insert row length
+          else before.getD column #[]
+
+private def FirstFitEffect
+    (fuel : ℕ) (allocations : CircuitAllocations)
+    (columns : List RegionColumn) (length start : ℕ)
+    (slack : Option ℕ) : Prop :=
+  allocations.Valid → columns.Nodup → 0 < length →
+    PlacementEffect allocations columns length
+      (firstFit fuel allocations columns length start slack)
+
+private def TrySpacesEffect
+    (fuel : ℕ) (allocations : CircuitAllocations)
+    (column : RegionColumn) (rest : List RegionColumn)
+    (length : ℕ) (spaces : List (ℕ × Option ℕ)) : Prop :=
+  allocations.Valid → rest.Nodup → column ∉ rest → 0 < length →
+    PlacementEffect allocations (column :: rest) length
+      (trySpaces fuel allocations column rest length spaces)
+
+/-- Exact first-fit allocation effect. This proposition is intentionally separate
+from `PlacementLaw`: consumers that only need safety do not pay to normalize the
+algorithm's exact update. -/
+theorem firstFit_effect
+    (fuel : ℕ) (allocations : CircuitAllocations)
+    (columns : List RegionColumn) (length start : ℕ)
+    (slack : Option ℕ) :
+    FirstFitEffect fuel allocations columns length start slack := by
+  apply firstFit.induct (regionLen := length)
+    (motive1 := fun fuel allocations columns start slack =>
+      FirstFitEffect fuel allocations columns length start slack)
+    (motive2 := fun fuel allocations column rest spaces =>
+      TrySpacesEffect fuel allocations column rest length spaces)
+  all_goals simp only [FirstFitEffect, TrySpacesEffect]
+  case case1 =>
+    intro fuel allocations start slack _ _ _ column
+    simp [firstFit]
+  case case2 =>
+    intro allocations start slack head tail _ _ _ column
+    simp [firstFit]
+  case case3 =>
+    intro allocations start slack fuel column rest inductionHypothesis
+      hvalid hnodup hlength
+    have hrestNodup := List.nodup_cons.mp hnodup |>.2
+    have hcolumnRest := List.nodup_cons.mp hnodup |>.1
+    let initialized :=
+      allocations.insert column (allocations.getD column #[])
+    have hinitializedValid : CircuitAllocations.Valid initialized :=
+      CircuitAllocations.Valid.insertSame hvalid column
+    have heffect := inductionHypothesis hinitializedValid hrestNodup
+      hcolumnRest hlength
+    simp only [firstFit]
+    intro candidate
+    have hinitialized :
+        initialized.getD candidate #[] = allocations.getD candidate #[] := by
+      simp only [initialized, Std.HashMap.getD_insert]
+      split <;> rename_i heq
+      · exact congrArg (fun found => allocations.getD found #[])
+          (beq_iff_eq.mp heq)
+      · rfl
+    specialize heffect candidate
+    rw [heffect, hinitialized]
+  case case4 =>
+    intro fuel allocations column rest _ _ _ _ candidate
+    simp [trySpaces]
+  case case5 =>
+    intro fuel allocations column rest spaceStart spaceEnd more hok
+      recursiveAllocations row hrecursive inductionHypothesis
+      hvalid hnodup hcolumn hlength
+    have hrecursiveEffect := inductionHypothesis hvalid hnodup hlength
+    rw [hrecursive] at hrecursiveEffect
+    simp only [trySpaces, hok, if_true, hrecursive]
+    intro candidate
+    simp only [PlacementEffect] at hrecursiveEffect ⊢
+    rw [Std.HashMap.getD_insert]
+    split <;> rename_i heq
+    · have hcandidate : column = candidate := beq_iff_eq.mp heq
+      subst candidate
+      rw [if_pos (by simp)]
+      rw [hrecursiveEffect]
+      simp [hcolumn]
+    · have hcandidate : column ≠ candidate := by
+        intro h
+        subst candidate
+        simp at heq
+      rw [hrecursiveEffect]
+      by_cases hrest : candidate ∈ rest
+      · simp [hrest]
+      · simp [hrest, hcandidate.symm]
+  case case6 =>
+    intro fuel allocations column rest spaceStart spaceEnd more hok
+      recursiveAllocations hrecursive firstInduction spacesInduction
+      hvalid hnodup hcolumn hlength
+    have hrecursiveEffect := firstInduction hvalid hnodup hlength
+    rw [hrecursive] at hrecursiveEffect
+    have hrecursiveValid :=
+      (firstFit_law fuel allocations rest length spaceStart
+        ((spaceEnd.map fun endRow =>
+          (endRow : ℤ) - spaceStart - length).map Int.toNat)
+        hvalid hnodup hlength).1.valid
+    rw [hrecursive] at hrecursiveValid
+    have hremainingEffect := spacesInduction hrecursiveValid hnodup
+      hcolumn hlength
+    simp only [trySpaces, hok, if_true, hrecursive]
+    intro candidate
+    simp only [PlacementEffect] at hrecursiveEffect hremainingEffect ⊢
+    specialize hrecursiveEffect candidate
+    specialize hremainingEffect candidate
+    rw [hremainingEffect, hrecursiveEffect]
+  case case7 =>
+    intro fuel allocations column rest spaceStart spaceEnd more hok
+      inductionHypothesis hvalid hnodup hcolumn hlength
+    simpa only [trySpaces, hok] using
+      inductionHypothesis hvalid hnodup hcolumn hlength
+
+/-- If the requested row fits every column, first-fit accepts it immediately. -/
+theorem firstFit_row_eq_start_of_fits
+    (fuel : ℕ) (allocations : CircuitAllocations)
+    (columns : List RegionColumn) (length start : ℕ)
+    (slack : Option ℕ)
+    (hvalid : allocations.Valid) (hnodup : columns.Nodup)
+    (hlength : 0 < length) (hfuel : columns.length ≤ fuel)
+    (hfits : ∀ column ∈ columns,
+      (allocations.getD column #[]).Fits start length)
+    (hbound : ∀ available, slack = some available →
+      start + length ≤ start + length + available) :
+    (firstFit fuel allocations columns length start slack).1 = some start := by
+  induction columns generalizing fuel allocations slack with
+  | nil =>
+      simp [firstFit]
+  | cons column rest inductionHypothesis =>
+      cases fuel with
+      | zero => simp at hfuel
+      | succ fuel =>
+          have hrestNodup := List.nodup_cons.mp hnodup |>.2
+          have hcolumnRest := List.nodup_cons.mp hnodup |>.1
+          have hrestFuel : rest.length ≤ fuel := by
+            simpa using hfuel
+          let initialized :=
+            allocations.insert column (allocations.getD column #[])
+          have hinitializedValid : CircuitAllocations.Valid initialized :=
+            CircuitAllocations.Valid.insertSame hvalid column
+          have hinitialized : ∀ candidate,
+              initialized.getD candidate #[] =
+                allocations.getD candidate #[] := by
+            intro candidate
+            simp only [initialized, Std.HashMap.getD_insert]
+            split <;> rename_i heq
+            · exact congrArg (fun found => allocations.getD found #[])
+                (beq_iff_eq.mp heq)
+            · rfl
+          have hrestFits : ∀ candidate ∈ rest,
+              (initialized.getD candidate #[]).Fits start length := by
+            intro candidate hcandidate
+            rw [hinitialized]
+            exact hfits candidate (by simp [hcandidate])
+          obtain ⟨stop, more, hspaces, hallows⟩ :=
+            Allocations.freeIntervals_starts_with_of_fits
+              (allocations.getD column #[]) start length
+              (slack.map fun available => start + length + available)
+              (hvalid column) (hfits column (by simp)) hlength (by
+                intro stop hstop
+                obtain ⟨available, havailable, rfl⟩ :=
+                  Option.map_eq_some_iff.mp hstop
+                exact hbound available havailable)
+          cases stop with
+          | none =>
+              have hrest := inductionHypothesis fuel initialized none
+                hinitializedValid hrestNodup hrestFuel hrestFits (by simp)
+              dsimp only [initialized] at hrest
+              simp [firstFit, hspaces, trySpaces]
+              rw [hrest]
+          | some stop =>
+              have hstop : start + length ≤ stop := hallows.2 stop rfl
+              have hrest := inductionHypothesis fuel initialized
+                (some ((stop : ℤ) - start - length).toNat)
+                hinitializedValid hrestNodup hrestFuel hrestFits (by
+                  intro available havailable
+                  simp only [Option.some.injEq] at havailable
+                  subst available
+                  omega)
+              dsimp only [initialized] at hrest
+              have hslack :
+                  ((stop : ℤ) - start - length).toNat =
+                    stop - start - length := by
+                omega
+              rw [hslack] at hrest
+              have hwidth : (length : ℤ) ≤ stop - start := by omega
+              simp [firstFit, hspaces, trySpaces, hwidth]
+              rw [hrest]
 
 private def FirstFitCongruent
     (fuel : ℕ) (allocations : CircuitAllocations)
