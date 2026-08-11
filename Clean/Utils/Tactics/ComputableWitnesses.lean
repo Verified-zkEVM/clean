@@ -19,8 +19,8 @@ a child bundle name whose metadata is otherwise stuck under a binder).
    defs. `FormalCircuit`-variant bundles are proof boundaries and are **never**
    unfolded — their obligations go through the composition lemmas instead.
 2. **Destructure** struct variables via `provable_struct_simp`'s destructure pass
-   (with its `splitRowEval`/`matchScrutinees` extensions: `eval = eval` input
-   premises must decompose field-wise, and `simp`/`grind` do not iota-reduce
+   (with its `matchScrutinees` extension: the CW obligation has no value-level input
+   variable, so nothing else selects `input`, and `simp`/`grind` do not iota-reduce
    `main`'s destructuring match against an opaque variable).
 3. **Split** the resulting conjunction into per-obligation leaves (`splitStep`):
    syntactic `And`/`∀` head dispatch — the goal is simp-normalized here, and a
@@ -1096,12 +1096,13 @@ def runComputableWitnesses (extraTerms closeTerms : Array (TSyntax `term)) : Tac
     let nGoalsBefore := (← getGoals).length
     let hypsBefore ← withMainContext do return (← getLCtx).getFVarIds.size
     -- destructure-only reuse of `provable_struct_simp`: its selection and field-based
-    -- naming, with `splitRowEval` so the `eval = eval` input premises decompose
-    -- field-wise; its alternating simp must not run here (goal is `circuit_norm`-normal,
-    -- where the getElem lemmas loop) — the conditional `simpPass` below re-normalizes
+    -- naming, plus `matchScrutinees` — the CW obligation has no value-level input
+    -- variable, so no eval-vs-variable equation selects `input` and `main`'s
+    -- destructuring match stays stuck. Its alternating simp must not run here (goal
+    -- is `circuit_norm`-normal, where the getElem lemmas loop) — the conditional
+    -- `simpPass` below re-normalizes
     for _ in [0:8] do
-      unless ← ProvableStructSimp.destructurePass (splitRowEval := true)
-        (matchScrutinees := true) do break
+      unless ← ProvableStructSimp.destructurePass (matchScrutinees := true) do break
     -- re-normalize only if a struct variable was destructured
     let changed ← do
       if (← getGoals).isEmpty then pure false

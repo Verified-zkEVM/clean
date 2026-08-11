@@ -139,13 +139,12 @@ Variables in an equality that drive destructuring:
   variable on the other side (so the resulting constructor equality splits into
   variable-free field equations).
 
-By default, `eval = eval` equations between opaque structs are left alone: they are
-row-level facts, meant to be used whole. With `splitRowEval := true` their variable
-arguments are destructured too, so the equation decomposes into per-field equalities —
-the policy `computable_witnesses` needs for its input-congruence premises.
+`eval = eval` equations between opaque structs are left alone: nothing here selects
+their variables. (For `computable_witnesses`, whose input premises have exactly this
+two-environment shape, selection happens through the stuck `match` scrutinees instead —
+once the variable is in constructor form, `structEqSplit` decomposes the premise.)
 -/
-private def equationVars (lhs rhs : Expr) (splitRowEval : Bool) :
-    MetaM (Array FVarId) := do
+private def equationVars (lhs rhs : Expr) : MetaM (Array FVarId) := do
   let mut out : Array FVarId := #[]
   for (side, other) in #[(lhs.consumeMData, rhs.consumeMData), (rhs.consumeMData, lhs.consumeMData)] do
     if ← isMkConstructor side then
@@ -157,9 +156,6 @@ private def equationVars (lhs rhs : Expr) (splitRowEval : Bool) :
           out := out.push argId
         if let .fvar otherId := other then
           out := out.push otherId
-    if splitRowEval && isEvalApp side && isEvalApp other then
-      if let some (.fvar argId) := side.getAppArgs.back? then
-        out := out.push argId
   return out
 
 /--
@@ -198,14 +194,14 @@ projection bases, variables equated with constructor literals, and eval argument
 equations (possibly inside conjunctions). With `matchScrutinees := true`, variables
 scrutinized by stuck `match` applications are selected too.
 -/
-private def collectStructVarsToDestructure (splitRowEval matchScrutinees : Bool) :
+private def collectStructVarsToDestructure (matchScrutinees : Bool) :
     TacticM (Array FVarId) :=
   withMainContext do
     let mut candidates : Array FVarId := #[]
     let scan := fun (e : Expr) => do
       let mut acc ← projectionBaseVars e
       for (_, lhs, rhs) in ← extractEqualities e do
-        acc := acc ++ (← equationVars lhs rhs splitRowEval)
+        acc := acc ++ (← equationVars lhs rhs)
       if matchScrutinees then
         acc := acc ++ (← matchScrutineeVars e)
       return acc
@@ -233,9 +229,8 @@ the goal is already in `circuit_norm` normal form — the alternating simp of
 element-map spelling that `circuit_norm` introduces; see the note on
 `structEvalSimpLemmas`).
 -/
-def destructurePass (splitRowEval : Bool := false) (matchScrutinees : Bool := false) :
-    TacticM Bool := do
-  let toDestructure ← collectStructVarsToDestructure splitRowEval matchScrutinees
+def destructurePass (matchScrutinees : Bool := false) : TacticM Bool := do
+  let toDestructure ← collectStructVarsToDestructure matchScrutinees
   let mut progress := false
   for fvarId in toDestructure do
     try
@@ -269,13 +264,13 @@ conjunctions. Opaque struct variables not involved in any such fact stay folded.
 
 Runs to a fixpoint and never fails; it just stops when no pass makes progress.
 -/
-def provableStructSimp (splitRowEval : Bool := false) : TacticM Unit := do
+def provableStructSimp : TacticM Unit := do
   -- fixpoint: `cases` strictly consumes struct variables (new ones only appear for
   -- nested structs, of smaller depth) and simp fails once nothing rewrites; the counter
   -- is a safety net only
   for _ in [0:100] do
     if (← getGoals).isEmpty then return
-    let destructured ← destructurePass splitRowEval
+    let destructured ← destructurePass
     let simplified ← simpPass
     unless destructured || simplified do return
 
