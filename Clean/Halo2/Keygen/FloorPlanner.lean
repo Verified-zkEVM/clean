@@ -477,6 +477,59 @@ theorem RangeAll.transfer
   rw [heq index hstart hstop]
   exact hbefore index hstart hstop
 
+/-- A range predicate applies to every member of the corresponding extracted
+array. -/
+theorem RangeAll.forall_mem_extract
+    {array : Array T} {start stop : ℕ} {predicate : T → Prop}
+    (h : RangeAll array start stop predicate)
+    (hstart : start ≤ stop) (hstop : stop ≤ array.size) :
+    ∀ item ∈ (array.extract start stop).toList, predicate item := by
+  intro item hitem
+  obtain ⟨position, hposition⟩ := List.get_of_mem hitem
+  have hpositionBound : position.val < stop - start := by
+    have := position.isLt
+    have hbounds : position.val < stop - start ∧
+        position.val < array.size - start := by
+      simpa [Array.size_extract, Nat.min_eq_left hstop] using this
+    exact hbounds.1
+  have hitemValue : item = array[start + position.val]! := by
+    rw [← hposition, List.get_eq_getElem,
+      Array.getElem_toList position.isLt,
+      Array.getElem_extract position.isLt]
+    rw [getElem!_pos array (start + position.val) (by omega)]
+  rw [hitemValue]
+  exact h (start + position.val) (by omega) (by omega)
+
+theorem RangeAll.keysLE_extract
+    (key : T → ℕ) (array : Array T) (start stop bound : ℕ)
+    (h : RangeAll array start stop (fun item => key item ≤ bound))
+    (hstart : start ≤ stop) (hstop : stop ≤ array.size) :
+    KeysLE key (array.extract start stop).toList bound :=
+  h.forall_mem_extract hstart hstop
+
+theorem RangeAll.keysGE_extract
+    (key : T → ℕ) (array : Array T) (start stop bound : ℕ)
+    (h : RangeAll array start stop (fun item => bound ≤ key item))
+    (hstart : start ≤ stop) (hstop : stop ≤ array.size) :
+    KeysGE key (array.extract start stop).toList bound :=
+  h.forall_mem_extract hstart hstop
+
+omit [Inhabited T] in
+theorem KeySorted.of_constant
+    (key : T → ℕ) (items : List T) (value : ℕ)
+    (h : ∀ item ∈ items, key item = value) :
+    KeySorted key items := by
+  rw [KeySorted, List.sortedLE_iff_pairwise, List.pairwise_map]
+  induction items with
+  | nil => exact List.Pairwise.nil
+  | cons head rest inductionHypothesis =>
+      rw [List.pairwise_cons]
+      refine ⟨?_, inductionHypothesis (by
+        intro item hitem
+        exact h item (by simp [hitem]))⟩
+      intro item hitem
+      rw [h head (by simp), h item (by simp [hitem])]
+
 omit [Inhabited T] in
 theorem KeySorted.nil (key : T → ℕ) : KeySorted key [] := by
   rw [KeySorted, List.sortedLE_iff_pairwise]
@@ -527,6 +580,15 @@ theorem KeysGE.get!
   have hlistIndex : index < array.toList.length := by simpa using hindex
   have hmem := List.getElem_mem (l := array.toList) (n := index) hlistIndex
   simpa only [Array.getElem_toList hindex] using hmem
+
+theorem KeysGE.extract
+    (key : T → ℕ) (array : Array T) (start stop bound : ℕ)
+    (h : KeysGE key array.toList bound)
+    (hstart : start ≤ stop) (hstop : stop ≤ array.size) :
+    KeysGE key (array.extract start stop).toList bound := by
+  apply RangeAll.keysGE_extract key array start stop bound _ hstart hstop
+  intro index _ hindex
+  exact KeysGE.get! key array bound index h (by omega)
 
 omit [Inhabited T] in
 theorem KeySorted.append_pivot
@@ -9311,6 +9373,427 @@ theorem quicksort_perm
   quicksort_perm_of_contracts
     (driverContractsOfBlocksContract partitionInBlocks_perm_contract)
     array isLess
+
+/-! ## Ordering correctness of the recursive driver -/
+
+/-- The predecessor carried by pdqsort is a lower bound for the current
+recursive slice. -/
+def PredecessorBound
+    (key : T → ℕ) (array : Array T) : Option T → Prop
+  | none => True
+  | some predecessor => KeysGE key array.toList (key predecessor)
+
+omit [Inhabited T] in
+theorem PredecessorBound.perm
+    (key : T → ℕ) {left right : Array T} {pred : Option T}
+    (hperm : left.toList.Perm right.toList)
+    (h : PredecessorBound key left pred) :
+    PredecessorBound key right pred := by
+  cases pred with
+  | none => trivial
+  | some predecessor =>
+      exact KeysGE.perm key hperm h
+
+theorem PredecessorBound.extract
+    (key : T → ℕ) (array : Array T) (start stop : ℕ)
+    {pred : Option T} (h : PredecessorBound key array pred)
+    (hstart : start ≤ stop) (hstop : stop ≤ array.size) :
+    PredecessorBound key (array.extract start stop) pred := by
+  cases pred with
+  | none => trivial
+  | some predecessor =>
+      exact KeysGE.extract key array start stop (key predecessor)
+        h hstart hstop
+
+/-- The two ordering facts not supplied by the recursive partition proof:
+heapsort's fallback and the successful nearly-sorted fast path. -/
+structure OrderingContracts (T : Type) [Inhabited T] (key : T → ℕ) where
+  heapsort_sorted :
+    ∀ array, KeySorted key (heapsort array (lessBy key)).toList
+  partialInsertionSort_sorted :
+    ∀ array, (partialInsertionSort array (lessBy key)).1 = true →
+      KeySorted key (partialInsertionSort array (lessBy key)).2.toList
+
+private def legacyDriverContracts : DriverContracts T :=
+  driverContractsOfBlocksContract partitionInBlocks_perm_contract
+
+theorem recurse_perm
+    (fuel : ℕ) (array : Array T) (isLess : T → T → Bool)
+    (pred : Option T) (limit : ℕ)
+    (wasBalanced wasPartitioned : Bool) :
+    List.Perm
+      (recurse fuel array isLess pred limit
+        wasBalanced wasPartitioned).toList
+      array.toList :=
+  recurse_perm_of_contracts legacyDriverContracts
+    fuel array isLess pred limit wasBalanced wasPartitioned
+
+private theorem recursePartition_sorted
+    (rec : Array T → Option T → ℕ → Bool → Bool → Array T)
+    (hrecSorted : ∀ array pred limit wasBalanced wasPartitioned,
+      PredecessorBound key array pred →
+      KeySorted key
+        (rec array pred limit wasBalanced wasPartitioned).toList)
+    (hrecPerm : ∀ array pred limit wasBalanced wasPartitioned,
+      List.Perm
+        (rec array pred limit wasBalanced wasPartitioned).toList
+        array.toList)
+    (array : Array T) (pred : Option T) (limit len pivot : ℕ)
+    (hpivot : pivot < array.size)
+    (hlower : PredecessorBound key array pred) :
+    KeySorted key
+      (recursePartition rec array (lessBy key) pred limit len pivot).toList := by
+  unfold recursePartition
+  generalize hpartition :
+    partitionP array pivot (lessBy key) = result
+  rcases result with ⟨⟨middle, wasPartitioned⟩, partitioned⟩
+  dsimp only
+  have hpartitionPerm :=
+    legacyDriverContracts.partitionP_perm array pivot (lessBy key) hpivot
+  have hmiddle :=
+    legacyDriverContracts.partitionP_bound array pivot (lessBy key) hpivot
+  have hpartitionOrder :=
+    partitionP_order array pivot (lessBy key) hpivot
+  rw [hpartition] at hpartitionPerm hmiddle hpartitionOrder
+  dsimp only at hpartitionPerm hmiddle hpartitionOrder
+  let pivotValue := partitioned[middle]!
+  let left := partitioned.extract 0 middle
+  let right := partitioned.extract (middle + 1) partitioned.size
+  have hleftRange : RangeAll partitioned 0 middle
+      (fun item => key item ≤ key pivotValue) := by
+    intro index hstart hstop
+    have hless := hpartitionOrder.1 index hstart hstop
+    change lessBy key partitioned[index]! partitioned[middle]! = true at hless
+    rw [lessBy_eq_true_iff] at hless
+    simpa only [pivotValue] using hless.le
+  have hrightRange : RangeAll partitioned (middle + 1) partitioned.size
+      (fun item => key pivotValue ≤ key item) := by
+    intro index hstart hstop
+    have hnotLess := hpartitionOrder.2 index hstart hstop
+    change lessBy key partitioned[index]! partitioned[middle]! = false at hnotLess
+    rw [lessBy_eq_false_iff] at hnotLess
+    simpa only [pivotValue] using hnotLess
+  have hleftBound : KeysLE key left.toList (key pivotValue) := by
+    apply RangeAll.keysLE_extract key partitioned 0 middle
+      (key pivotValue) hleftRange <;> omega
+  have hrightBound : KeysGE key right.toList (key pivotValue) := by
+    apply RangeAll.keysGE_extract key partitioned (middle + 1)
+      partitioned.size (key pivotValue) hrightRange <;> omega
+  have hpartitionedLower : PredecessorBound key partitioned pred :=
+    PredecessorBound.perm key hpartitionPerm.symm hlower
+  have hleftLower : PredecessorBound key left pred := by
+    apply PredecessorBound.extract key partitioned 0 middle
+      hpartitionedLower <;> omega
+  have hleftSorted := hrecSorted left pred limit true true hleftLower
+  have hrightSorted (balanced partitionedFlag : Bool) :=
+    hrecSorted right (some pivotValue) limit balanced partitionedFlag hrightBound
+  have hleftOutputBound (balanced partitionedFlag : Bool) :
+      KeysLE key
+        (rec left pred limit balanced partitionedFlag).toList
+        (key pivotValue) :=
+    KeysLE.perm key
+      (hrecPerm left pred limit balanced partitionedFlag).symm
+      hleftBound
+  have hrightOutputBound (balanced partitionedFlag : Bool) :
+      KeysGE key
+        (rec right (some pivotValue) limit balanced partitionedFlag).toList
+        (key pivotValue) :=
+    KeysGE.perm key
+      (hrecPerm right (some pivotValue) limit balanced partitionedFlag).symm
+      hrightBound
+  split
+  · simp only [Array.toList_append, List.append_assoc]
+    exact KeySorted.append_pivot key _ pivotValue _
+      hleftSorted (hrightSorted _ _)
+      (hleftOutputBound _ _) (hrightOutputBound _ _)
+  · simp only [Array.toList_append, List.append_assoc]
+    exact KeySorted.append_pivot key _ pivotValue _
+      (hrecSorted left pred limit _ _ hleftLower)
+      (hrightSorted true true)
+      (hleftOutputBound _ _) (hrightOutputBound true true)
+
+private theorem recursePred_sorted
+    (rec : Array T → Option T → ℕ → Bool → Bool → Array T)
+    (hrecSorted : ∀ array pred limit wasBalanced wasPartitioned,
+      PredecessorBound key array pred →
+      KeySorted key
+        (rec array pred limit wasBalanced wasPartitioned).toList)
+    (hrecPerm : ∀ array pred limit wasBalanced wasPartitioned,
+      List.Perm
+        (rec array pred limit wasBalanced wasPartitioned).toList
+        array.toList)
+    (array : Array T) (pred : Option T) (limit len : ℕ)
+    (wasBalanced wasPartitioned : Bool) (pivot : ℕ)
+    (hpivot : pivot < array.size)
+    (hlower : PredecessorBound key array pred) :
+    KeySorted key
+      (recursePred rec array (lessBy key) pred limit len
+        wasBalanced wasPartitioned pivot).toList := by
+  cases pred with
+  | none =>
+      simp only [recursePred]
+      exact recursePartition_sorted rec hrecSorted hrecPerm
+        array none limit len pivot hpivot hlower
+  | some predecessor =>
+      simp only [recursePred]
+      split
+      next hfast =>
+        have hpivotLower : key predecessor ≤ key array[pivot]! :=
+          KeysGE.get! key array (key predecessor) pivot hlower hpivot
+        have hpivotUpper : key array[pivot]! ≤ key predecessor := by
+          change (!lessBy key predecessor array[pivot]!) = true at hfast
+          cases hcomparison : lessBy key predecessor array[pivot]! with
+          | false =>
+              rw [lessBy_eq_false_iff] at hcomparison
+              exact hcomparison
+          | true => simp_all
+        have hpivotKey : key array[pivot]! = key predecessor := by omega
+        have hpartitionOrder := partitionEqual_ordered
+          array pivot key hpivot (by
+            intro item hitem
+            rw [hpivotKey]
+            exact hlower item hitem)
+        have hpartitionPerm :=
+          legacyDriverContracts.partitionEqual_perm
+            array pivot (lessBy key) hpivot
+        have hpartitionBounds :=
+          legacyDriverContracts.partitionEqual_bound
+            array pivot (lessBy key) hpivot
+        generalize hpartition :
+          partitionEqual array pivot (lessBy key) = result
+        rcases result with ⟨middle, partitioned⟩
+        rw [hpartition] at hpartitionOrder hpartitionPerm hpartitionBounds
+        dsimp only at hpartitionOrder hpartitionPerm hpartitionBounds ⊢
+        let head := partitioned.extract 0 middle
+        let tail := partitioned.extract middle partitioned.size
+        have hheadEqual : ∀ item ∈ head.toList,
+            key item = key predecessor := by
+          intro item hitem
+          have hmember := hpartitionOrder.1.forall_mem_extract
+            (by omega) (by omega) item hitem
+          exact hmember.trans hpivotKey
+        have hheadSorted : KeySorted key head.toList :=
+          KeySorted.of_constant key head.toList (key predecessor) hheadEqual
+        have hheadBound : KeysLE key head.toList (key predecessor) := by
+          intro item hitem
+          exact (hheadEqual item hitem).le
+        have htailBound : KeysGE key tail.toList (key predecessor) := by
+          apply RangeAll.keysGE_extract key partitioned middle
+            partitioned.size (key predecessor) _ (by omega) (by omega)
+          intro index hstart hstop
+          have hgreater := hpartitionOrder.2 index hstart hstop
+          omega
+        have htailSorted := hrecSorted tail (some predecessor) limit
+          wasBalanced wasPartitioned htailBound
+        have htailOutputBound : KeysGE key
+            (rec tail (some predecessor) limit
+              wasBalanced wasPartitioned).toList
+            (key predecessor) :=
+          KeysGE.perm key
+            (hrecPerm tail (some predecessor) limit
+              wasBalanced wasPartitioned).symm htailBound
+        simp only [Array.toList_append]
+        exact KeySorted.append key head.toList _ hheadSorted htailSorted (by
+          intro leftItem hleftItem rightItem hrightItem
+          exact (hheadBound leftItem hleftItem).trans
+            (htailOutputBound rightItem hrightItem))
+      next _ =>
+        exact recursePartition_sorted rec hrecSorted hrecPerm
+          array (some predecessor) limit len pivot hpivot hlower
+
+private theorem recurseAfterPivot_sorted
+    (contracts : OrderingContracts T key)
+    (rec : Array T → Option T → ℕ → Bool → Bool → Array T)
+    (hrecSorted : ∀ array pred limit wasBalanced wasPartitioned,
+      PredecessorBound key array pred →
+      KeySorted key
+        (rec array pred limit wasBalanced wasPartitioned).toList)
+    (hrecPerm : ∀ array pred limit wasBalanced wasPartitioned,
+      List.Perm
+        (rec array pred limit wasBalanced wasPartitioned).toList
+        array.toList)
+    (array : Array T) (pred : Option T) (limit len : ℕ)
+    (wasBalanced wasPartitioned likelySorted : Bool) (pivot : ℕ)
+    (hpivot : pivot < array.size)
+    (hlower : PredecessorBound key array pred) :
+    KeySorted key
+      (recurseAfterPivot rec array (lessBy key) pred limit len
+        wasBalanced wasPartitioned likelySorted pivot).toList := by
+  cases wasBalanced <;> cases wasPartitioned <;> cases likelySorted
+  all_goals
+    simp only [recurseAfterPivot, Bool.false_and, Bool.true_and,
+      if_true]
+  all_goals
+    first
+    | exact recursePred_sorted rec hrecSorted hrecPerm
+        array pred limit len _ _ pivot hpivot hlower
+    | skip
+  generalize hpartial :
+    partialInsertionSort array (lessBy key) = partialResult
+  rcases partialResult with ⟨sorted, partiallySorted⟩
+  split
+  next hsorted =>
+    have hresult := contracts.partialInsertionSort_sorted array
+    rw [hpartial] at hresult
+    exact hresult hsorted
+  next _ =>
+    have hpartialPerm :=
+      legacyDriverContracts.partialInsertionSort_perm
+        array (lessBy key)
+    rw [hpartial] at hpartialPerm
+    dsimp only at hpartialPerm
+    have hpartialLower :
+        PredecessorBound key partiallySorted pred :=
+      PredecessorBound.perm key hpartialPerm.symm hlower
+    have hpartialSize : partiallySorted.size = array.size :=
+      size_eq_of_perm hpartialPerm
+    exact recursePred_sorted rec hrecSorted hrecPerm
+      partiallySorted pred limit len true true pivot
+      (by omega) hpartialLower
+
+private theorem recurseChoose_sorted
+    (contracts : OrderingContracts T key)
+    (rec : Array T → Option T → ℕ → Bool → Bool → Array T)
+    (hrecSorted : ∀ array pred limit wasBalanced wasPartitioned,
+      PredecessorBound key array pred →
+      KeySorted key
+        (rec array pred limit wasBalanced wasPartitioned).toList)
+    (hrecPerm : ∀ array pred limit wasBalanced wasPartitioned,
+      List.Perm
+        (rec array pred limit wasBalanced wasPartitioned).toList
+        array.toList)
+    (array : Array T) (pred : Option T) (limit len : ℕ)
+    (wasBalanced wasPartitioned : Bool)
+    (hsize : 0 < array.size)
+    (hlower : PredecessorBound key array pred) :
+    KeySorted key
+      (recurseChoose rec array (lessBy key) pred limit len
+        wasBalanced wasPartitioned).toList := by
+  unfold recurseChoose
+  generalize hchoose : choosePivot array (lessBy key) = result
+  rcases result with ⟨⟨pivot, likelySorted⟩, chosen⟩
+  have hchoosePerm :=
+    legacyDriverContracts.choosePivot_perm array (lessBy key)
+  have hpivot :=
+    legacyDriverContracts.choosePivot_bound array (lessBy key) hsize
+  rw [hchoose] at hchoosePerm hpivot
+  dsimp only at hchoosePerm hpivot ⊢
+  have hchosenLower : PredecessorBound key chosen pred :=
+    PredecessorBound.perm key hchoosePerm.symm hlower
+  exact recurseAfterPivot_sorted contracts rec hrecSorted hrecPerm
+    chosen pred limit len wasBalanced wasPartitioned likelySorted pivot
+    hpivot hchosenLower
+
+private theorem recurseLong_sorted
+    (contracts : OrderingContracts T key)
+    (rec : Array T → Option T → ℕ → Bool → Bool → Array T)
+    (hrecSorted : ∀ array pred limit wasBalanced wasPartitioned,
+      PredecessorBound key array pred →
+      KeySorted key
+        (rec array pred limit wasBalanced wasPartitioned).toList)
+    (hrecPerm : ∀ array pred limit wasBalanced wasPartitioned,
+      List.Perm
+        (rec array pred limit wasBalanced wasPartitioned).toList
+        array.toList)
+    (array : Array T) (pred : Option T) (limit len : ℕ)
+    (wasBalanced wasPartitioned : Bool)
+    (hsize : 0 < array.size)
+    (hlower : PredecessorBound key array pred) :
+    KeySorted key
+      (recurseLong rec array (lessBy key) pred limit len
+        wasBalanced wasPartitioned).toList := by
+  cases wasBalanced with
+  | false =>
+      simp only [recurseLong, Bool.not_false, ↓reduceIte]
+      have hbreak := legacyDriverContracts.breakPatterns_perm array
+      have hbreakSize : 0 < (breakPatterns array).size := by
+        have := size_eq_of_perm hbreak
+        omega
+      have hbreakLower :
+          PredecessorBound key (breakPatterns array) pred :=
+        PredecessorBound.perm key hbreak.symm hlower
+      exact recurseChoose_sorted contracts rec hrecSorted hrecPerm
+        (breakPatterns array) pred (limit - 1) len false wasPartitioned
+        hbreakSize hbreakLower
+  | true =>
+      simp only [recurseLong, Bool.not_true]
+      exact recurseChoose_sorted contracts rec hrecSorted hrecPerm
+        array pred limit len true wasPartitioned hsize hlower
+
+private theorem recurseStep_sorted
+    (contracts : OrderingContracts T key)
+    (rec : Array T → Option T → ℕ → Bool → Bool → Array T)
+    (hrecSorted : ∀ array pred limit wasBalanced wasPartitioned,
+      PredecessorBound key array pred →
+      KeySorted key
+        (rec array pred limit wasBalanced wasPartitioned).toList)
+    (hrecPerm : ∀ array pred limit wasBalanced wasPartitioned,
+      List.Perm
+        (rec array pred limit wasBalanced wasPartitioned).toList
+        array.toList)
+    (array : Array T) (pred : Option T) (limit : ℕ)
+    (wasBalanced wasPartitioned : Bool)
+    (hlower : PredecessorBound key array pred) :
+    KeySorted key
+      (recurseStep rec array (lessBy key) pred limit
+        wasBalanced wasPartitioned).toList := by
+  unfold recurseStep
+  by_cases hsmall : array.size ≤ 20
+  · simp only [hsmall, ↓reduceIte]
+    exact insertionSort_sorted array key
+  · simp only [hsmall, ↓reduceIte]
+    by_cases hlimit : limit == 0
+    · simp only [hlimit]
+      exact contracts.heapsort_sorted array
+    · simp only [hlimit]
+      exact recurseLong_sorted contracts rec hrecSorted hrecPerm
+        array pred limit array.size wasBalanced wasPartitioned
+        (by omega) hlower
+
+theorem recurse_sorted_of_contracts
+    (contracts : OrderingContracts T key) :
+    ∀ (fuel : ℕ) (array : Array T) (pred : Option T) (limit : ℕ)
+      (wasBalanced wasPartitioned : Bool),
+      PredecessorBound key array pred →
+      KeySorted key
+        (recurse fuel array (lessBy key) pred limit
+          wasBalanced wasPartitioned).toList := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro array pred limit wasBalanced wasPartitioned hlower
+      exact contracts.heapsort_sorted array
+  | succ fuel inductionHypothesis =>
+      intro array pred limit wasBalanced wasPartitioned hlower
+      rw [recurse]
+      exact recurseStep_sorted contracts
+        (fun array pred limit wasBalanced wasPartitioned =>
+          recurse fuel array (lessBy key) pred limit
+            wasBalanced wasPartitioned)
+        (fun array pred limit wasBalanced wasPartitioned =>
+          inductionHypothesis array pred limit
+            wasBalanced wasPartitioned)
+        (fun array pred limit wasBalanced wasPartitioned =>
+          recurse_perm fuel array (lessBy key) pred limit
+            wasBalanced wasPartitioned)
+        array pred limit wasBalanced wasPartitioned hlower
+
+theorem quicksort_sorted_of_contracts
+    (contracts : OrderingContracts T key) (array : Array T) :
+    KeySorted key (quicksort array (lessBy key)).toList := by
+  unfold quicksort
+  split
+  next hzero =>
+    have hsize : array.size = 0 := by simpa using hzero
+    have hempty : array.toList = [] := by
+      apply List.eq_nil_of_length_eq_zero
+      simpa using hsize
+    rw [hempty]
+    exact KeySorted.nil key
+  next _ =>
+    exact recurse_sorted_of_contracts contracts
+      (array.size + 1) array none (Nat.log2 array.size + 1)
+      true true trivial
 
 end Pdqsort
 
