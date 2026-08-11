@@ -1,4 +1,5 @@
 import Clean.Circuit.Explicit
+import Clean.Utils.Tactics.ProvableStructSimp
 
 /-!
 # `computable_witnesses`
@@ -677,36 +678,6 @@ partial def splitStep (g : MVarId) (fuel : Nat) : MetaM (List MVarId) := do
 def splitStructure : TacticM Unit :=
   liftMetaTactic fun g => splitStep g 512
 
-/-- Find a local variable of `ProvableStruct` type (e.g. an opaque circuit input) that can be
-destructured: `simp`/`grind` do not iota-reduce the `match` coming from `main`'s destructuring
-`let` against an opaque variable, so the tactic case-splits such variables up front. -/
-def findProvableStructVar : TacticM (Option FVarId) :=
-  withMainContext do
-    for decl in ← getLCtx do
-      if decl.isImplementationDetail then continue
-      -- `.instances` whnf, not `.reducible`: inputs are typed through the `Var M F` class
-      -- projection, which does not reduce at reducible transparency
-      let ty ← withTransparency .instances <| whnf (← instantiateMVars decl.type)
-      let .const tyName _ := ty.getAppFn | continue
-      unless isStructure (← getEnv) tyName do continue
-      let args := ty.getAppArgs
-      unless args.size ≥ 1 do continue
-      let M := mkAppN ty.getAppFn args.pop
-      let inst ← try? do
-        synthInstance (← mkAppM ``ProvableStruct #[M])
-      if inst.isSome then
-        return some decl.fvarId
-    return none
-
-/-- Destructure all `ProvableStruct`-typed local variables (fixpoint, bounded). -/
-def destructureProvableStructVars : TacticM Unit := do
-  for _ in [0:8] do
-    if (← getGoals).isEmpty then return
-    let some fvarId ← findProvableStructVar | return
-    liftMetaTactic fun goal => do
-      let subgoals ← goal.cases fvarId
-      return subgoals.map (·.mvarId) |>.toList
-
 /-- Vector route, structural `simp_all` lemmas. -/
 def vecStructuralLemmas : Array Name := #[
   ``eval_vector, ``Vector.map_mk, ``List.map_toArray, ``List.map_cons, ``List.map_nil,
@@ -1130,7 +1101,13 @@ def runComputableWitnesses (extraTerms closeTerms : Array (TSyntax `term)) : Tac
   unless (← getGoals).isEmpty do
     let nGoalsBefore := (← getGoals).length
     let hypsBefore ← withMainContext do return (← getLCtx).getFVarIds.size
-    destructureProvableStructVars
+    -- destructure-only reuse of `provable_struct_simp`: its selection and field-based
+    -- naming, with `splitRowEval` so the `eval = eval` input premises decompose
+    -- field-wise; its alternating simp must not run here (goal is `circuit_norm`-normal,
+    -- where the getElem lemmas loop) — the conditional `simpPass` below re-normalizes
+    for _ in [0:8] do
+      unless ← ProvableStructSimp.destructurePass (splitRowEval := true)
+        (matchScrutinees := true) do break
     -- re-normalize only if a struct variable was destructured
     let changed ← do
       if (← getGoals).isEmpty then pure false
