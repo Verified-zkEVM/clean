@@ -4,6 +4,16 @@ import Clean.Halo2.Keygen.FloorPlanner
 
 namespace Halo2.FloorPlanner.Pdqsort
 
+private theorem arrayToList_getElem!
+    {T : Type} [Inhabited T] (array : Array T) (index : ℕ) :
+    array.toList[index]! = array[index]! := by
+  by_cases hindex : index < array.size
+  · rw [getElem!_pos array.toList index (by simpa using hindex),
+      getElem!_pos array index hindex]
+    simp
+  · rw [getElem!_neg array.toList index (by simpa using hindex),
+      getElem!_neg array index hindex]
+
 def ChildOf (parent child : ℕ) : Prop :=
   child = 2 * parent + 1 ∨ child = 2 * parent + 2
 
@@ -407,6 +417,298 @@ theorem heapsort_repairedPrefix_heap
     exact hold
   exact siftDown_heapFrom prefixArray key 0 (by omega) hprefixHeap
 
+theorem swp_drop
+    {T : Type} [Inhabited T] (array : Array T) (boundary : ℕ)
+    (hboundary : 0 < boundary) (hfit : boundary < array.size) :
+    (swp array 0 boundary).toList.drop boundary =
+      array[0]! :: array.toList.drop (boundary + 1) := by
+  simp only [swp, Array.set!, Array.toList_setIfInBounds]
+  rw [List.set_eq_take_cons_drop array[0]! (by simp; omega)]
+  rw [List.set_eq_take_cons_drop array[boundary]! (by simp; omega)]
+  simp only [List.take_zero, List.nil_append, Nat.zero_add]
+  rw [List.drop_append]
+  have hmin : min boundary (array.size - 1 + 1) = boundary := by
+    rw [Nat.min_eq_left]
+    omega
+  simp [List.length_take, hmin]
+
+theorem heapsort_step_drop
+    {T : Type} [Inhabited T] (array : Array T) (key : T → ℕ)
+    (boundary : ℕ) (hboundary : 0 < boundary)
+    (hfit : boundary < array.size) :
+    let swapped := swp array 0 boundary
+    let prefixArray := swapped.extract 0 boundary
+    let repaired := siftDown prefixArray (lessBy key) 0
+    let next := overwrite swapped 0 repaired
+    next.toList.drop boundary =
+      array[0]! :: array.toList.drop (boundary + 1) := by
+  let swapped := swp array 0 boundary
+  let prefixArray := swapped.extract 0 boundary
+  let repaired := siftDown prefixArray (lessBy key) 0
+  let next := overwrite swapped 0 repaired
+  suffices next.toList.drop boundary =
+      array[0]! :: array.toList.drop (boundary + 1) by
+    simpa [next, repaired, prefixArray, swapped] using this
+  have hprefixSize : prefixArray.size = boundary := by
+    simp [prefixArray, swapped, swp]
+    omega
+  have hrepairedSize : repaired.size = boundary := by
+    have hperm := siftDown_perm prefixArray (lessBy key) 0 (by omega)
+    simpa [hprefixSize] using hperm.length_eq
+  have hoverwrite := overwrite_toList swapped 0 repaired (by
+    simp [swapped, swp, hrepairedSize]
+    omega)
+  simp only [List.take_zero, List.nil_append, Nat.zero_add] at hoverwrite
+  rw [hoverwrite, List.drop_append]
+  simp [hrepairedSize, swapped, swp_drop array boundary hboundary hfit]
+
+theorem heapsort_step_heap
+    {T : Type} [Inhabited T] (array : Array T) (key : T → ℕ)
+    (boundary : ℕ) (hboundary : 0 < boundary)
+    (hfit : boundary < array.size)
+    (hheap : HeapFrom (fun index => key array[index]!)
+      (boundary + 1) 0) :
+    let swapped := swp array 0 boundary
+    let prefixArray := swapped.extract 0 boundary
+    let repaired := siftDown prefixArray (lessBy key) 0
+    let next := overwrite swapped 0 repaired
+    HeapFrom (fun index => key next[index]!) boundary 0 := by
+  let swapped := swp array 0 boundary
+  let prefixArray := swapped.extract 0 boundary
+  let repaired := siftDown prefixArray (lessBy key) 0
+  let next := overwrite swapped 0 repaired
+  suffices HeapFrom (fun index => key next[index]!) boundary 0 by
+    simpa [next, repaired, prefixArray, swapped] using this
+  have hrepairedHeap := heapsort_repairedPrefix_heap
+    array key boundary hboundary hfit hheap
+  dsimp only at hrepairedHeap
+  have hprefixSize : prefixArray.size = boundary := by
+    simp [prefixArray, swapped, swp]
+    omega
+  have hrepairedSize : repaired.size = boundary := by
+    have hperm := siftDown_perm prefixArray (lessBy key) 0 (by omega)
+    simpa [hprefixSize] using hperm.length_eq
+  have hnextSize : next.size = array.size := by
+    simp [next, overwrite_size, swapped, swp]
+  have hoverwrite := overwrite_toList swapped 0 repaired (by
+    simp [swapped, swp, hrepairedSize]
+    omega)
+  simp only [List.take_zero, List.nil_append, Nat.zero_add] at hoverwrite
+  have hprefixList : next.toList.take boundary = repaired.toList := by
+    rw [hoverwrite, List.take_append_of_le_length]
+    · simp [hrepairedSize]
+    · simp [hrepairedSize]
+  have hread (index : ℕ) (hindex : index < boundary) :
+      next[index]! = repaired[index]! := by
+    have hlistRead := congrArg (fun items : List T => items[index]!) hprefixList
+    dsimp only at hlistRead
+    rw [← arrayToList_getElem! next index,
+      ← arrayToList_getElem! repaired index]
+    have htake : (next.toList.take boundary)[index]! =
+        next.toList[index]! := by
+      rw [getElem!_pos _ index (by
+          simp [hnextSize]
+          omega),
+        getElem!_pos _ index (by simp [hnextSize]; omega)]
+      exact List.getElem_take
+    rw [htake] at hlistRead
+    exact hlistRead
+  intro parent hparent child hchild hchildBound
+  have hparentBefore := child_gt_parent hchild
+  have hold := hrepairedHeap parent hparent child hchild (by
+    rw [hrepairedSize]
+    exact hchildBound)
+  dsimp only at hold ⊢
+  rw [hread parent (by omega), hread child hchildBound]
+  exact hold
+
+theorem heapsort_step_prefix_le_root
+    {T : Type} [Inhabited T] (array : Array T) (key : T → ℕ)
+    (boundary : ℕ) (hboundary : 0 < boundary)
+    (hfit : boundary < array.size)
+    (hheap : HeapFrom (fun index => key array[index]!)
+      (boundary + 1) 0) :
+    let swapped := swp array 0 boundary
+    let prefixArray := swapped.extract 0 boundary
+    let repaired := siftDown prefixArray (lessBy key) 0
+    let next := overwrite swapped 0 repaired
+    KeysLE key (next.toList.take boundary) (key array[0]!) := by
+  let swapped := swp array 0 boundary
+  let prefixArray := swapped.extract 0 boundary
+  let repaired := siftDown prefixArray (lessBy key) 0
+  let next := overwrite swapped 0 repaired
+  suffices KeysLE key (next.toList.take boundary) (key array[0]!) by
+    simpa [next, repaired, prefixArray, swapped] using this
+  have hprefixSize : prefixArray.size = boundary := by
+    simp [prefixArray, swapped, swp]
+    omega
+  have hrepairedSize : repaired.size = boundary := by
+    have hperm := siftDown_perm prefixArray (lessBy key) 0 (by omega)
+    simpa [hprefixSize] using hperm.length_eq
+  have hoverwrite := overwrite_toList swapped 0 repaired (by
+    simp [swapped, swp, hrepairedSize]
+    omega)
+  simp only [List.take_zero, List.nil_append, Nat.zero_add] at hoverwrite
+  have hprefixList : next.toList.take boundary = repaired.toList := by
+    rw [hoverwrite, List.take_append_of_le_length]
+    · simp [hrepairedSize]
+    · simp [hrepairedSize]
+  rw [hprefixList]
+  have hperm := siftDown_perm prefixArray (lessBy key) 0 (by omega)
+  apply KeysLE.perm key hperm.symm
+  intro item hitem
+  obtain ⟨position, hposition⟩ := List.get_of_mem hitem
+  have hpositionBound : position.val < boundary := by
+    have := position.isLt
+    simpa [hprefixSize] using this
+  have hprefixRead : prefixArray[position.val]! = swapped[position.val]! := by
+    rw [getElem!_pos prefixArray _ (by omega),
+      getElem!_pos swapped _ (by simp [swapped, swp]; omega)]
+    simp [prefixArray, Array.getElem_extract]
+  have hitemEq : item = prefixArray[position.val]! := by
+    rw [← arrayToList_getElem!]
+    simpa [getElem!_pos prefixArray.toList position.val position.isLt,
+      List.get_eq_getElem] using hposition.symm
+  rw [hitemEq, hprefixRead]
+  by_cases hzero : position.val = 0
+  · rw [hzero]
+    have hread := congrFun (swp_values key array 0 boundary (by omega) hfit) 0
+    rw [hread]
+    simpa [swapAt, hboundary.ne'] using
+      hheap.root_max _ _ boundary (by omega)
+  · have hnotBoundary : position.val ≠ boundary := by omega
+    have hread := congrFun (swp_values key array 0 boundary (by omega) hfit)
+      position.val
+    rw [hread]
+    simp only [swapAt, if_neg hzero, if_neg hnotBoundary]
+    exact hheap.root_max _ _ position.val (by omega)
+
+def CrossBoundary {T : Type}
+    (key : T → ℕ) (items : List T) (boundary : ℕ) : Prop :=
+  ∀ left ∈ items.take boundary, ∀ right ∈ items.drop boundary,
+    key left ≤ key right
+
+def ExtractionInvariant {T : Type}
+    [Inhabited T] (key : T → ℕ) (array : Array T) (boundary : ℕ) : Prop :=
+  HeapFrom (fun index => key array[index]!) boundary 0 ∧
+    KeySorted key (array.toList.drop boundary) ∧
+      CrossBoundary key array.toList boundary
+
+theorem ExtractionInvariant.step
+    {T : Type} [Inhabited T] (array : Array T) (key : T → ℕ)
+    (boundary : ℕ) (hboundary : 0 < boundary)
+    (hfit : boundary < array.size)
+    (hinvariant : ExtractionInvariant key array (boundary + 1)) :
+    let swapped := swp array 0 boundary
+    let prefixArray := swapped.extract 0 boundary
+    let repaired := siftDown prefixArray (lessBy key) 0
+    let next := overwrite swapped 0 repaired
+    ExtractionInvariant key next boundary := by
+  let swapped := swp array 0 boundary
+  let prefixArray := swapped.extract 0 boundary
+  let repaired := siftDown prefixArray (lessBy key) 0
+  let next := overwrite swapped 0 repaired
+  suffices ExtractionInvariant key next boundary by
+    simpa [next, repaired, prefixArray, swapped] using this
+  have hnextHeap := heapsort_step_heap array key boundary hboundary hfit
+    hinvariant.1
+  have hnextDrop := heapsort_step_drop array key boundary hboundary hfit
+  have hnextPrefix := heapsort_step_prefix_le_root
+    array key boundary hboundary hfit hinvariant.1
+  dsimp only at hnextHeap hnextDrop hnextPrefix
+  have hrootMem : array[0]! ∈ array.toList.take (boundary + 1) := by
+    rw [getElem!_pos array 0 (by omega)]
+    have hzero : 0 < (array.toList.take (boundary + 1)).length := by
+      simp
+      omega
+    have hmem : (array.toList.take (boundary + 1))[0]'hzero ∈
+        array.toList.take (boundary + 1) := List.getElem_mem hzero
+    simpa [List.getElem_take] using hmem
+  have hrootToOldSuffix : KeysGE key
+      (array.toList.drop (boundary + 1)) (key array[0]!) := by
+    intro item hitem
+    exact hinvariant.2.2 array[0]! hrootMem item hitem
+  refine ⟨hnextHeap, ?_, ?_⟩
+  · rw [hnextDrop, KeySorted, List.map_cons,
+      List.sortedLE_iff_pairwise, List.pairwise_cons]
+    refine ⟨?_, ?_⟩
+    · intro value hvalue
+      rw [List.mem_map] at hvalue
+      obtain ⟨item, hitem, rfl⟩ := hvalue
+      exact hrootToOldSuffix item hitem
+    · simpa [KeySorted, List.sortedLE_iff_pairwise] using hinvariant.2.1
+  · intro left hleft right hright
+    rw [hnextDrop] at hright
+    rw [List.mem_cons] at hright
+    rcases hright with rfl | hright
+    · exact hnextPrefix left hleft
+    · exact (hnextPrefix left hleft).trans
+        (hrootToOldSuffix right hright)
+
+theorem ExtractionInvariant.initial
+    {T : Type} [Inhabited T] (array : Array T) (key : T → ℕ)
+    (hheap : HeapFrom (fun index => key array[index]!) array.size 0) :
+    ExtractionInvariant key array array.size := by
+  refine ⟨hheap, ?_, ?_⟩
+  · rw [show array.toList.drop array.size = [] by simp]
+    exact KeySorted.nil key
+  · intro _ _ right hright
+    rw [show array.toList.drop array.size = [] by simp] at hright
+    exact (List.not_mem_nil hright).elim
+
+private theorem extraction_reverse_sorted
+    {T : Type} [Inhabited T] (key : T → ℕ) :
+    ∀ (count : ℕ) (array : Array T),
+      count ≤ array.size →
+      ExtractionInvariant key array count →
+      KeySorted key
+        ((List.range count).reverse.foldl (fun current boundary =>
+          if boundary ≥ 1 then
+            let swapped := swp current 0 boundary
+            let prefixArray := swapped.extract 0 boundary
+            let repaired := siftDown prefixArray (lessBy key) 0
+            overwrite swapped 0 repaired
+          else current) array).toList := by
+  intro count
+  induction count with
+  | zero =>
+      intro array _ hinvariant
+      simpa using hinvariant.2.1
+  | succ count inductionHypothesis =>
+      intro array hcount hinvariant
+      rw [List.range_succ, List.reverse_append]
+      simp only [List.reverse_singleton, List.singleton_append, List.foldl_cons]
+      by_cases hzero : count = 0
+      · subst count
+        simp only [ge_iff_le, Nat.reduceLeDiff, List.range_zero,
+          List.reverse_nil, List.foldl_nil]
+        have hleftSorted : KeySorted key (array.toList.take 1) := by
+          rw [KeySorted, List.sortedLE_iff_pairwise,
+            List.pairwise_map, List.pairwise_iff_get]
+          intro left right horder
+          have hleft := left.isLt
+          have hright := right.isLt
+          simp only [List.length_take] at hleft hright
+          omega
+        have hresult := KeySorted.append key (array.toList.take 1)
+          (array.toList.drop 1) hleftSorted hinvariant.2.1
+          hinvariant.2.2
+        rw [List.take_append_drop] at hresult
+        exact hresult
+      · have hpositive : 0 < count := Nat.zero_lt_of_ne_zero hzero
+        simp only [ge_iff_le, show 1 ≤ count by omega, if_true]
+        let swapped := swp array 0 count
+        let prefixArray := swapped.extract 0 count
+        let repaired := siftDown prefixArray (lessBy key) 0
+        let next := overwrite swapped 0 repaired
+        have hnextInvariant := hinvariant.step array key count hpositive
+          (by omega)
+        dsimp only at hnextInvariant
+        have hnextSize : next.size = array.size := by
+          simp [next, overwrite_size, swapped, swp]
+        have hresult := inductionHypothesis next (by omega) hnextInvariant
+        simpa [next, repaired, prefixArray, swapped] using hresult
+
 private theorem heapify_reverse
     {T : Type} [Inhabited T] (key : T → ℕ) :
     ∀ (count : ℕ) (array : Array T),
@@ -444,5 +746,109 @@ theorem heapify
   apply heapify_reverse key (array.size / 2) array
   · exact Nat.div_le_self _ _
   · exact heapFrom_half _ _
+
+private theorem heapify_reverse_size
+    {T : Type} [Inhabited T] (key : T → ℕ) :
+    ∀ (count : ℕ) (array : Array T),
+      count ≤ array.size →
+      ((List.range count).reverse.foldl
+        (fun current node => siftDown current (lessBy key) node) array).size =
+        array.size := by
+  intro count
+  induction count with
+  | zero => intro; simp
+  | succ count inductionHypothesis =>
+      intro array hcount
+      rw [List.range_succ, List.reverse_append]
+      simp only [List.reverse_singleton, List.singleton_append, List.foldl_cons]
+      have hnode : count < array.size := by omega
+      have hnextSize : (siftDown array (lessBy key) count).size = array.size := by
+        have hperm := siftDown_perm array (lessBy key) count hnode
+        simpa using hperm.length_eq
+      rw [inductionHypothesis (siftDown array (lessBy key) count) (by omega),
+        hnextSize]
+
+/-- Bottom-up heap construction preserves the array length. -/
+theorem heapify_size
+    {T : Type} [Inhabited T] (array : Array T) (key : T → ℕ) :
+    ((List.range (array.size / 2)).reverse.foldl
+      (fun current node => siftDown current (lessBy key) node) array).size =
+      array.size :=
+  heapify_reverse_size key (array.size / 2) array (Nat.div_le_self _ _)
+
+private theorem forIn_yield_eq_foldl
+    {State Item : Type} (items : List Item) (initial : State)
+    (step : State → Item → State) :
+    Id.run (forIn items initial fun item state =>
+      pure (.yield (step state item))) = items.foldl step initial := by
+  induction items generalizing initial with
+  | nil => rfl
+  | cons item items inductionHypothesis =>
+      simp only [List.forIn_cons, List.foldl_cons]
+      exact inductionHypothesis _
+
+private theorem forIn_yield_eq_pure_foldl
+    {State Item : Type} (items : List Item) (initial : State)
+    (step : State → Item → State) :
+    forIn items initial (fun item state =>
+      (pure (.yield (step state item)) : Id (ForInStep State))) =
+      (pure (items.foldl step initial) : Id State) := by
+  induction items generalizing initial with
+  | nil => rfl
+  | cons item items inductionHypothesis =>
+      simp only [List.forIn_cons]
+      exact inductionHypothesis _
+
+private theorem forIn_if_yield_eq_pure_foldl
+    {State Item : Type} (items : List Item) (initial : State)
+    (condition : Item → Prop) [DecidablePred condition]
+    (yes no : State → Item → State) :
+    forIn items initial (fun item state =>
+      if condition item then (pure (.yield (yes state item)) : Id (ForInStep State))
+      else (pure (.yield (no state item)) : Id (ForInStep State))) =
+      (pure (items.foldl (fun state item =>
+        if condition item then yes state item else no state item) initial) : Id State) := by
+  induction items generalizing initial with
+  | nil => rfl
+  | cons item items inductionHypothesis =>
+      simp only [List.forIn_cons, List.foldl_cons]
+      by_cases hcondition : condition item
+      · rw [if_pos hcondition, if_pos hcondition]
+        simp only [pure_bind]
+        exact inductionHypothesis _
+      · rw [if_neg hcondition, if_neg hcondition]
+        simp only [pure_bind]
+        exact inductionHypothesis _
+
+/-- The legacy heapsort fallback orders its output by the supplied key. -/
+theorem heapsort_sorted
+    {T : Type} [Inhabited T] (array : Array T) (key : T → ℕ) :
+    KeySorted key (heapsort array (lessBy key)).toList := by
+  let heapified := (List.range (array.size / 2)).reverse.foldl
+    (fun current node => siftDown current (lessBy key) node) array
+  have hheap : HeapFrom (fun index => key heapified[index]!)
+      heapified.size 0 := heapify array key
+  have hheapifiedSize : heapified.size = array.size := heapify_size array key
+  have hinvariant := ExtractionInvariant.initial heapified key hheap
+  rw [hheapifiedSize] at hinvariant
+  have hsorted := extraction_reverse_sorted key array.size heapified
+    (by omega) hinvariant
+  have hdefinition :
+      heapsort array (lessBy key) =
+        (List.range array.size).reverse.foldl (fun current boundary =>
+          if boundary ≥ 1 then
+            let swapped := swp current 0 boundary
+            let prefixArray := swapped.extract 0 boundary
+            let repaired := siftDown prefixArray (lessBy key) 0
+            overwrite swapped 0 repaired
+          else current) heapified := by
+    simp only [heapsort]
+    simp only [pure_bind]
+    rw [forIn_yield_eq_pure_foldl]
+    simp only [pure_bind]
+    rw [forIn_if_yield_eq_pure_foldl]
+    simp [heapified]
+  rw [hdefinition]
+  exact hsorted
 
 end Halo2.FloorPlanner.Pdqsort
