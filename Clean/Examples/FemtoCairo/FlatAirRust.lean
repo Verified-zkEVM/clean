@@ -1,11 +1,11 @@
 import Clean.Air.Extraction.Rust
 import Clean.Examples.FemtoCairo.FlatAir
-import Clean.Examples.FemtoCairo.Plonky3MemoryTestData
+import Clean.Examples.FemtoCairo.FlatAirTestData
 import Clean.Utils.Primes
 
 open Examples.FemtoCairo
 open Examples.FemtoCairo.Types
-open Examples.FemtoCairo.Plonky3MemoryTestData
+open Examples.FemtoCairo.FlatAirTestData
 
 private theorem h_memorySize : 8 < pBabybear := by native_decide
 

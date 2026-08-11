@@ -4,23 +4,22 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-tracing = "0.1"
-
 # Plonky3 dependencies pinned to one revision; batch-stark carries the isolated public-lookup patch.
 p3-air = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-batch-stark = { path = "vendor/p3-batch-stark" }
-p3-baby-bear = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-challenger = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-commit = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
-p3-dft = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-field = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
-p3-fri = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-matrix = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
-p3-merkle-tree = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-lookup = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
-p3-symmetric = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-uni-stark = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 p3-util = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
+
+[dev-dependencies]
+p3-baby-bear = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
+p3-dft = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
+p3-fri = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
+p3-merkle-tree = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
+p3-symmetric = { git = "https://github.com/Plonky3/Plonky3", rev = "47e442f" }
 rand = "0.10"
+serde_json = "1.0"

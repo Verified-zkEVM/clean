@@ -1,6 +1,6 @@
 import Clean.Air.Extraction.Lower
 import Clean.Examples.FemtoCairo.FlatAir
-import Clean.Examples.FemtoCairo.Plonky3MemoryTestData
+import Clean.Examples.FemtoCairo.FlatAirTestData
 import Clean.Utils.Primes
 
 namespace Examples.FemtoCairo.FlatAirTest
@@ -9,7 +9,7 @@ open Air.Flat
 open Examples.FemtoCairo
 open Examples.FemtoCairo.Types
 open Examples.FemtoCairo.FlatAir
-open Examples.FemtoCairo.Plonky3MemoryTestData
+open Examples.FemtoCairo.FlatAirTestData
 open Air.Flat.WitnessGeneration
 
 private def memoryValues : fields 8 (F pBabybear) :=
