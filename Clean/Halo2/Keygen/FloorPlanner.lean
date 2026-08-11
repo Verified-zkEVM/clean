@@ -389,6 +389,17 @@ def RegionShape.adviceCols (s : RegionShape) : ℕ :=
 (`strategy.rs:202-214`). -/
 def RegionShape.key (s : RegionShape) : ℕ := s.adviceCols * s.rowCount
 
+/-- Index-free advice-column count used by V1's sort key. -/
+def RegionShapeSummary.adviceCols (summary : RegionShapeSummary) : ℕ :=
+  (summary.columns.filter RegionColumn.isAdvice).length
+
+/-- The V1 sort key on an index-free reduced region summary. -/
+def RegionShapeSummary.key (summary : RegionShapeSummary) : ℕ :=
+  summary.adviceCols * summary.rowCount
+
+theorem RegionShape.toSummary_key (shape : RegionShape) :
+    shape.toSummary.key = shape.key := rfl
+
 /-! ## Legacy pdqsort (`floor-planner-v1-legacy-pdqsort`)
 
 The Action circuit shapes have MANY tied sort keys (e.g. every "witness message piece"

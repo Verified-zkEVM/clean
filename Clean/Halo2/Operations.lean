@@ -586,6 +586,7 @@ are supplied later by the enclosing layouter sequence. -/
 structure RegionShapeSummary where
   columns : List RegionColumn
   rowCount : ℕ
+deriving Inhabited
 
 /-- Forget deferred-constant metadata when publishing a region to the V1 planner. -/
 def RegionSynthesisSummary.toRegionShapeSummary
