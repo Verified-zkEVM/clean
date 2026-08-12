@@ -1,6 +1,6 @@
 import Clean.Circuit
 
-variable {F : Type} [FiniteField F] [DecidableEq F]
+variable {F : Type} [FiniteField F]
 variable {Message : TypeMap} [ProvableType Message]
 
 /-
@@ -255,7 +255,6 @@ See `Vm.lean` for a detailed motivation and application of the main theorem,
 `guarantees_of_requirements_of_requirements_of_guarantees`.
 -/
 
-omit [DecidableEq F] in
 lemma one_ne_neg_one [Fact (ringChar F ≠ 2)] : (1 : F) ≠ -1 :=
   Ne.symm (Ring.neg_one_ne_one_of_char_ne_two ‹Fact (ringChar F ≠ 2)›.out)
 

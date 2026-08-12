@@ -7,28 +7,26 @@ namespace Verifier
 
 /-- Operations emitted by a public verifier program. New verifier-only primitives belong here. -/
 inductive Operation (F : Type) [FiniteField F] where
-  /-- Pull one message from a channel, obtaining its guarantee. -/
-  | pull (interaction : AbstractInteraction F)
-      (requirements : ∀ env, interaction.Requirements env)
-  /-- Emit a message with a public multiplicity, creating a channel requirement. -/
-  | emit (interaction : AbstractInteraction F) (doesNotAssume : interaction.assumeGuarantees = false)
+  /-- Append an interaction whose non-assumed side holds unconditionally. -/
+  | interact (interaction : AbstractInteraction F)
+      (otherSide : ∀ env, if interaction.assumeGuarantees then
+        interaction.Requirements env else interaction.Guarantees env)
 
 namespace Operation
 
 @[circuit_norm]
 def interaction : Operation F → AbstractInteraction F
-  | .pull interaction _ => interaction
-  | .emit interaction _ => interaction
+  | .interact interaction _ => interaction
 
 @[circuit_norm]
 def guaranteeChannel : Operation F → Option (RawChannel F)
-  | .pull interaction _ => some interaction.channel
-  | .emit _ _ => none
+  | .interact interaction _ =>
+      if interaction.assumeGuarantees then some interaction.channel else none
 
 @[circuit_norm]
 def requirementChannel : Operation F → Option (RawChannel F)
-  | .pull _ _ => none
-  | .emit interaction _ => some interaction.channel
+  | .interact interaction _ =>
+      if interaction.assumeGuarantees then none else some interaction.channel
 
 end Operation
 
@@ -70,14 +68,17 @@ lemma inChannelsOrGuaranteesFull (operations : Operations F) (env : Environment 
   intro interaction h_interaction
   simp only [interactions, List.mem_map] at h_interaction
   obtain ⟨operation, h_operation, rfl⟩ := h_interaction
-  cases operation with
-  | pull interaction _ =>
-      left
-      rw [channelsWithGuarantees, List.mem_filterMap]
-      exact ⟨.pull interaction _, h_operation, rfl⟩
-  | emit interaction doesNotAssume =>
-      right
-      simp [Operation.interaction, AbstractInteraction.Guarantees, doesNotAssume]
+  obtain ⟨interaction, otherSide⟩ := operation
+  by_cases assumes : interaction.assumeGuarantees
+  · left
+    rw [channelsWithGuarantees, List.mem_filterMap]
+    refine ⟨.interact interaction otherSide, h_operation, ?_⟩
+    simp only [Operation.guaranteeChannel, Operation.interaction, assumes, if_true]
+  · right
+    change interaction.Guarantees env
+    have assumes_false : interaction.assumeGuarantees = false :=
+      Bool.eq_false_of_not_eq_true assumes
+    simpa only [assumes_false, Bool.false_eq_true, if_false] using otherSide env
 
 lemma inChannelsOrRequirementsFull (operations : Operations F) (env : Environment F) :
     operations.circuitOperations.InChannelsOrRequirementsFull
@@ -86,14 +87,18 @@ lemma inChannelsOrRequirementsFull (operations : Operations F) (env : Environmen
   intro interaction h_interaction
   simp only [interactions, List.mem_map] at h_interaction
   obtain ⟨operation, h_operation, rfl⟩ := h_interaction
-  cases operation with
-  | pull interaction requirements =>
-      right
-      exact requirements env
-  | emit interaction doesNotAssume =>
-      left
-      rw [channelsWithRequirements, List.mem_filterMap]
-      exact ⟨.emit interaction doesNotAssume, h_operation, rfl⟩
+  obtain ⟨interaction, otherSide⟩ := operation
+  by_cases assumes : interaction.assumeGuarantees
+  · right
+    change interaction.Requirements env
+    simpa only [assumes, if_true] using otherSide env
+  · left
+    rw [channelsWithRequirements, List.mem_filterMap]
+    refine ⟨.interact interaction otherSide, h_operation, ?_⟩
+    have assumes_false : interaction.assumeGuarantees = false :=
+      Bool.eq_false_of_not_eq_true assumes
+    simp only [Operation.requirementChannel, Operation.interaction, assumes_false,
+      Bool.false_eq_true, if_false]
 
 end Operations
 
@@ -143,13 +148,18 @@ def addOperation (operation : Operation F) : Verifier F Unit :=
 @[circuit_norm]
 def emit {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (mult : Expression F) (message : Message (Expression F)) : Verifier F Unit :=
-  addOperation (.emit (channel.emitted mult message).toRaw (by rfl))
+  addOperation (.interact (channel.emitted mult message).toRaw (by
+    intro env
+    change (channel.emitted mult message).toRaw.Guarantees env
+    intro assumes
+    exact Bool.noConfusion assumes))
 
 @[circuit_norm]
 def pull {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (message : Message (Expression F)) : Verifier F Unit :=
-  addOperation (.pull (channel.pulled message).toRaw (by
+  addOperation (.interact (channel.pulled message).toRaw (by
     intro env
+    change (channel.pulled message).toRaw.Requirements env
     rw [ChannelInteraction.toRaw_requirements]
     change Expression.eval env (-1 : Expression F) ≠ -1 →
       Expression.eval env (-1 : Expression F) ≠ 0 → _
@@ -164,6 +174,10 @@ def push {Message : TypeMap} [ProvableType Message] (channel : Channel F Message
 structure Program (F : Type) [FiniteField F]
     (PublicIO : TypeMap) [ProvableType PublicIO] where
   main : Var PublicIO F → Verifier F Unit
+  Spec : PublicIO F → ProverData F → Prop := fun _ _ => True
+  soundness : ∀ env,
+    ((main (varFromOffset PublicIO 0)).operations.circuitOperations).FullGuarantees env →
+      Spec (eval env (varFromOffset (F := F) PublicIO 0)) env.data := by simp
 
 namespace Program
 

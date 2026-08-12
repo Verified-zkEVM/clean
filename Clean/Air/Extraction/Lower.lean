@@ -6,7 +6,7 @@ namespace Air.Flat.Extraction
 
 open Air.Flat.WitnessGeneration
 
-variable {F : Type} [FiniteField F] [DecidableEq F]
+variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
 variable {ProverInput : TypeMap} [ProvableType ProverInput]
 

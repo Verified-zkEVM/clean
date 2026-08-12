@@ -17,7 +17,7 @@ Unchanged nested interactions are therefore never counted twice.
 
 namespace Air.Flat.WitnessGeneration
 
-variable {F : Type} [FiniteField F] [DecidableEq F]
+variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
 variable {ProverInput : TypeMap} [ProvableType ProverInput]
 

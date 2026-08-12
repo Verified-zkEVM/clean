@@ -260,6 +260,13 @@ def fibonacciVerifier : Verifier.Program (F p) fieldTriple where
     -- push initial state, pull the final state
     Verifier.pull FibonacciChannel (n, x, y)
     Verifier.push FibonacciChannel (0, 0, 1)
+  Spec
+  | (n, x, y), _ => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
+  soundness := by
+    intro env guarantees
+    simp only [circuit_norm, Operations.FullGuarantees, FibonacciChannel,
+      AbstractInteraction.Guarantees, Channel.toRaw, explicit_provable_type] at guarantees ⊢
+    exact guarantees
 
 def fib8Component : Component (F p) where
   circuit := fib8
@@ -276,8 +283,7 @@ def fibonacciVm : VmTables (F p) fieldTriple where
     · exact Or.inl h
     · exact Or.inr (sub_eq_zero.mp h)
   verifier_channel := by
-    refine ⟨varFromOffset fieldTriple 0, (0, 0, 1), ?_⟩
-    simp [fibonacciVerifier, circuit_norm]
+    simp [fibonacciVerifier, circuit_norm, ChannelInteraction.toRaw]
   verifier_requirements env := by
     simp only [circuit_norm, fibonacciVerifier, FibonacciChannel, ZMod.val_zero, ZMod.val_one]
     exact ⟨ 0, rfl, rfl ⟩
@@ -383,11 +389,8 @@ theorem fibonacci_soundness : ∀ (n x y : F p),
     ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val := by
   intro n x y statement
   convert fibonacciEnsemble.soundness (n, x, y) ?assumptions statement
-  · simp [circuit_norm, fibonacciEnsemble, fibonacciVm, fibonacciVerifier,
-      Ensemble.VerifierGuarantees, Operations.FullGuarantees,
-      AbstractInteraction.Guarantees, Channel.toRaw, FibonacciChannel,
-      explicit_provable_type]
-    exact fun _ _ _ => ⟨fun _ _ => #[]⟩
+  · simp only [circuit_norm, fibonacciEnsemble, fibonacciVm, fibonacciVerifier]
+    tauto
   · simp only [circuit_norm, fibonacciEnsemble, fibonacciVm, fibonacciVerifier]
 
 /-

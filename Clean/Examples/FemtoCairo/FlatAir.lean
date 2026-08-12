@@ -631,6 +631,12 @@ def verifier {programSize : ℕ} (program : Fin programSize → F p)
   main finalState := do
     Verifier.pull (StateChannel program initialState) finalState
     Verifier.push (StateChannel program initialState) (const initialState)
+  Spec finalState data := (StateChannel program initialState).Guarantees finalState data
+  soundness := by
+    intro env guarantees
+    simp only [circuit_norm, Operations.FullGuarantees,
+      AbstractInteraction.Guarantees, Channel.toRaw] at guarantees ⊢
+    exact guarantees
 
 def vm {programSize : ℕ} (program : Fin programSize → F p)
     (h_programSize : programSize < p) (initialState : State (F p)) :
@@ -652,8 +658,7 @@ def vm {programSize : ℕ} (program : Fin programSize → F p)
     · intro env _
       exact Or.inr rfl
   verifier_channel := by
-    refine ⟨varFromOffset State 0, const initialState, ?_⟩
-    simp [verifier, circuit_norm]
+    simp [verifier, circuit_norm, ChannelInteraction.toRaw]
   verifier_requirements env := by
     simp only [verifier, StateChannel, circuit_norm]
     exact ⟨0, rfl⟩

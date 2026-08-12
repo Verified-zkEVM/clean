@@ -90,6 +90,18 @@ abbrev verifierOperations (ens : Ensemble F PublicIO) : Operations F :=
 def VerifierGuarantees (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : ProverData F) : Prop :=
   ens.verifierOperations.FullGuarantees (.fromInput publicInput data)
 
+@[circuit_norm]
+def VerifierSpec (ens : Ensemble F PublicIO) (publicInput : PublicIO F)
+    (data : ProverData F) : Prop :=
+  ens.verifier.Spec publicInput data
+
+lemma verifierSoundness (ens : Ensemble F PublicIO) (publicInput : PublicIO F)
+    (data : ProverData F) :
+    ens.VerifierGuarantees publicInput data → ens.VerifierSpec publicInput data := by
+  intro guarantees
+  have soundness := ens.verifier.soundness (.fromInput publicInput data) guarantees
+  simpa only [VerifierSpec, ProvableType.eval_fromInput_varFromOffset_zero] using soundness
+
 def VerifierChannelGuarantees (ens : Ensemble F PublicIO) (publicInput : PublicIO F)
     (data : ProverData F) (channel : RawChannel F) : Prop :=
   ens.verifierOperations.ChannelGuarantees channel (.fromInput publicInput data)
@@ -192,7 +204,8 @@ def Assumptions {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Pr
   witness.tableContext.Assumptions
 
 def Spec {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Prop :=
-  ∀ table ∈ witness.tables, table.Spec witness.data
+  ens.VerifierSpec witness.publicInput witness.data ∧
+    ∀ table ∈ witness.tables, table.Spec witness.data
 
 def interactions {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : List (Interaction F) :=
   ens.verifierOperations.interactionValues (.fromInput witness.publicInput witness.data) ++
@@ -219,7 +232,8 @@ noncomputable def interactionsWith {ens : Ensemble F PublicIO} (witness : Ensemb
 
 @[circuit_norm] lemma spec_iff {ens : Ensemble F PublicIO}
     (witness : EnsembleWitness ens) :
-  witness.Spec ↔ ∀ table ∈ witness.tables, table.Spec witness.data := by
+  witness.Spec ↔ ens.VerifierSpec witness.publicInput witness.data ∧
+    ∀ table ∈ witness.tables, table.Spec witness.data := by
   rfl
 
 lemma mem_interactionsWith {witness : EnsembleWitness ens}
@@ -268,20 +282,19 @@ lemma interactionsWith_of_verifier_empty {ens : Ensemble F PublicIO} {witness : 
 
 /-- The ensemble interactions with a particular channel are balanced. -/
 @[circuit_norm]
-abbrev BalancedChannel [DecidableEq F] {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens)
+abbrev BalancedChannel {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens)
     (channel : RawChannel F) : Prop :=
   BalancedInteractions (witness.interactionsWith channel)
 
 /-- All ensemble interactions with all ensemble channels are balanced. -/
 @[circuit_norm]
-def BalancedChannels [DecidableEq F] {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Prop :=
+def BalancedChannels {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Prop :=
   ∀ channel ∈ ens.channels, BalancedChannel witness channel
 end EnsembleWitness
 
 /- ## Soundness, Completeness and related definitions -/
 
 namespace Ensemble
-variable [DecidableEq F]
 
 /--
 The raw "statement" that a proof about an ensemble makes. Could also be called "relation".
@@ -309,7 +322,7 @@ def Completeness (ens : Ensemble F PublicIO) (Assumptions Spec : PublicIO F → 
   ∀ publicInput, Assumptions publicInput → Spec publicInput → ens.Statement publicInput
 end Ensemble
 
-structure FormalEnsemble (F : Type) [FiniteField F] [DecidableEq F]
+structure FormalEnsemble (F : Type) [FiniteField F]
     (PublicIO : TypeMap) [ProvableType PublicIO] where
   ensemble : Ensemble F PublicIO
   Assumptions : PublicIO F → Prop := fun _ => True
@@ -318,7 +331,6 @@ structure FormalEnsemble (F : Type) [FiniteField F] [DecidableEq F]
   -- completeness : ensemble.Completeness Assumptions Spec
 
 namespace Ensemble
-variable [DecidableEq F]
 
 /--
 "Table soundness" means that we can prove the spec for each table,
@@ -333,7 +345,7 @@ def TableSoundness (ens : Ensemble F PublicIO) : Prop :=
     witness.BalancedChannels →
     witness.Spec
 
-/-- The table specs imply the ensemble's public specification. -/
+/-- The verifier spec and table specs imply the ensemble's public specification. -/
 def SpecConsistency (ens : Ensemble F PublicIO) (Spec : PublicIO F → Prop) : Prop :=
   ∀ (witness : EnsembleWitness ens),
     -- TODO maybe we could add balanced channels + channel reqs / grts here as well, to enable you to prove
