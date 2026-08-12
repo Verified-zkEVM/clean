@@ -14314,6 +14314,40 @@ theorem placeSummary_effect
     hvalid ((sortRegionColumns_perm summary.columns).nodup_iff.mpr hnodup)
     hlength
 
+/-- A subinterval of a fitting interval also fits. -/
+theorem Allocations.Fits.monoInterval
+    {allocations : Allocations} {outerStart outerLength start length : ℕ}
+    (hfits : allocations.Fits outerStart outerLength)
+    (hstart : outerStart ≤ start)
+    (hend : start + length ≤ outerStart + outerLength) :
+    allocations.Fits start length := by
+  intro allocated hallocated
+  have hdisjoint := hfits allocated hallocated
+  unfold RowIntervalsDisjoint at hdisjoint ⊢
+  omega
+
+/-- Fitting after an insertion means fitting before it and avoiding the newly
+inserted interval. -/
+theorem Allocations.fits_insert_iff
+    {allocations : Allocations} {insertStart insertLength start length : ℕ} :
+    (allocations.insert insertStart insertLength).Fits start length ↔
+      allocations.Fits start length ∧
+        RowIntervalsDisjoint start length insertStart insertLength := by
+  constructor
+  · intro hfits
+    constructor
+    · intro allocated hallocated
+      exact hfits allocated
+        (Allocations.mem_insert_of_mem allocations insertStart insertLength
+          hallocated)
+    · exact hfits (insertStart, insertLength)
+        (Allocations.mem_insert allocations insertStart insertLength)
+  · rintro ⟨hfits, hinserted⟩ allocated hallocated
+    rw [Allocations.mem_insert_iff] at hallocated
+    rcases hallocated with rfl | hallocated
+    · exact hinserted
+    · exact hfits allocated hallocated
+
 /-! ## Extensional allocation views
 
 Concrete planner traces should reason about per-column interval sequences, not the
@@ -14336,6 +14370,16 @@ def FitsColumns (view : AllocationView) (columns : List RegionColumn)
     (start length : ℕ) : Prop :=
   ∀ column ∈ columns, (view column).Fits start length
 
+theorem FitsColumns.monoInterval
+    {view : AllocationView} {columns : List RegionColumn}
+    {outerStart outerLength start length : ℕ}
+    (hfits : view.FitsColumns columns outerStart outerLength)
+    (hstart : outerStart ≤ start)
+    (hend : start + length ≤ outerStart + outerLength) :
+    view.FitsColumns columns start length := by
+  intro column hcolumn
+  exact Allocations.Fits.monoInterval (hfits column hcolumn) hstart hend
+
 def LeastFit (view : AllocationView) (columns : List RegionColumn)
     (length row : ℕ) : Prop :=
   FitsColumns view columns row length ∧
@@ -14346,6 +14390,76 @@ def insert (view : AllocationView) (columns : List RegionColumn)
   if column ∈ columns then
     (view column).insert start length
   else view column
+
+theorem fitsColumns_insert_iff
+    {view : AllocationView} {insertColumns columns : List RegionColumn}
+    {insertStart insertLength start length : ℕ} :
+    (view.insert insertColumns insertStart insertLength).FitsColumns
+        columns start length ↔
+      view.FitsColumns columns start length ∧
+        ∀ column, column ∈ columns → column ∈ insertColumns →
+          RowIntervalsDisjoint start length insertStart insertLength := by
+  constructor
+  · intro hfits
+    constructor
+    · intro column hcolumn
+      by_cases hinsert : column ∈ insertColumns
+      · exact Allocations.fits_insert_iff.mp
+          (by simpa [insert, hinsert] using hfits column hcolumn) |>.1
+      · simpa [insert, hinsert] using hfits column hcolumn
+    · intro column hcolumn hinsert
+      exact Allocations.fits_insert_iff.mp
+        (by simpa [insert, hinsert] using hfits column hcolumn) |>.2
+  · rintro ⟨hfits, hinserted⟩ column hcolumn
+    by_cases hinsert : column ∈ insertColumns
+    · simpa [insert, hinsert, Allocations.fits_insert_iff]
+        using And.intro (hfits column hcolumn)
+          (hinserted column hcolumn hinsert)
+    · simpa [insert, hinsert] using hfits column hcolumn
+
+/-- Once a least fitting interval has been inserted, the adjacent interval is
+the next least fit whenever the enclosing run was free beforehand. -/
+theorem leastFit_insert_next
+    {view : AllocationView} {columns : List RegionColumn}
+    {start length remaining : ℕ}
+    (hcolumns : columns ≠ []) (hlength : 0 < length)
+    (hleast : view.LeastFit columns length start)
+    (hfree : view.FitsColumns columns start ((remaining + 2) * length)) :
+    (view.insert columns start length).LeastFit columns length
+      (start + length) := by
+  constructor
+  · rw [fitsColumns_insert_iff]
+    constructor
+    · apply hfree.monoInterval
+      · omega
+      · simp only [Nat.add_mul]
+        omega
+    · intro column _ _
+      unfold RowIntervalsDisjoint
+      omega
+  · intro candidate hcandidate
+    rw [fitsColumns_insert_iff] at hcandidate
+    have hstart : start ≤ candidate := hleast.2 candidate hcandidate.1
+    obtain ⟨column, hcolumn⟩ := List.exists_mem_of_ne_nil columns hcolumns
+    have hdisjoint := hcandidate.2 column hcolumn hcolumn
+    unfold RowIntervalsDisjoint at hdisjoint
+    omega
+
+theorem fitsColumns_insert_tail
+    {view : AllocationView} {columns : List RegionColumn}
+    {start length remaining : ℕ}
+    (hfree : view.FitsColumns columns start ((remaining + 2) * length)) :
+    (view.insert columns start length).FitsColumns columns
+      (start + length) ((remaining + 1) * length) := by
+  rw [fitsColumns_insert_iff]
+  constructor
+  · apply hfree.monoInterval
+    · omega
+    · simp only [Nat.add_mul]
+      omega
+  · intro column _ _
+    unfold RowIntervalsDisjoint
+    omega
 
 theorem Represents.valid
     {allocations : CircuitAllocations} {view : AllocationView}
@@ -14928,6 +15042,74 @@ theorem slotSummaryStateFromWith_flatten_replicate
         slotSummaryStateFromWith_append]
       simp only [slotSummaryStateRepeated]
       rw [inductionHypothesis]
+
+/-- If a free run begins at the current least fit, repeated copies of one
+summary occupy that run consecutively. The repetition count stays symbolic in
+both the hypotheses and the result. -/
+theorem slotSummaryStateRepeated_single_fst_eq
+    (count : ℕ) (summary : RegionShapeSummary)
+    (initial : ℕ) (allocations : CircuitAllocations)
+    (view : AllocationView) (start : ℕ)
+    (hrepresents : view.Represents allocations)
+    (hvalid : view.Valid)
+    (hnodup : summary.columns.Nodup)
+    (hcolumns : summary.columns ≠ [])
+    (hlength : 0 < summary.rowCount)
+    (hleast : view.LeastFit (sortRegionColumns summary.columns)
+      summary.rowCount start)
+    (hfree : view.FitsColumns (sortRegionColumns summary.columns) start
+      ((count + 1) * summary.rowCount))
+    (hinitial : initial ≤ start + summary.rowCount) :
+    (slotSummaryStateRepeated (count + 1) [summary]
+      initial allocations).1 = start + (count + 1) * summary.rowCount := by
+  induction count generalizing initial allocations view start with
+  | zero =>
+      obtain ⟨updated, hplaced, _⟩ :=
+        view.placeSummary_eq_of_leastFit summary allocations start
+          hrepresents hvalid hnodup hlength hleast
+      rw [slotSummaryStateRepeated]
+      simp only [slotSummaryStateFromWith, hplaced, Option.getD_some,
+        max_eq_right hinitial]
+      rw [slotSummaryStateRepeated]
+      omega
+  | succ count inductionHypothesis =>
+      let columns := sortRegionColumns summary.columns
+      have hsortedColumns : columns ≠ [] := by
+        intro hempty
+        have hlengths := (sortRegionColumns_perm summary.columns).length_eq
+        have : summary.columns.length = 0 := by
+          simpa [columns, hempty] using hlengths.symm
+        exact hcolumns (List.eq_nil_of_length_eq_zero this)
+      obtain ⟨updated, hplaced, hupdatedRepresents⟩ :=
+        view.placeSummary_eq_of_leastFit summary allocations start
+          hrepresents hvalid hnodup hlength hleast
+      have hactualValid : allocations.Valid := hrepresents.valid hvalid
+      have hsummaryWellFormed : summary.WellFormed :=
+        ⟨hnodup, fun _ => hlength⟩
+      have hupdatedValidActual : updated.Valid := by
+        have hresult := placeSummary_valid summary allocations hactualValid
+          hsummaryWellFormed
+        rw [hplaced] at hresult
+        exact hresult
+      have hupdatedValid :
+          (view.insert columns start summary.rowCount).Valid := by
+        intro column
+        rw [← hupdatedRepresents column]
+        exact hupdatedValidActual column
+      have hnextLeast := view.leastFit_insert_next hsortedColumns hlength
+        hleast hfree
+      have htailFree := view.fitsColumns_insert_tail hfree
+      have hrecursive := inductionHypothesis
+        (start + summary.rowCount) updated
+        (view.insert columns start summary.rowCount)
+        (start + summary.rowCount) hupdatedRepresents hupdatedValid
+        hnextLeast htailFree (by omega)
+      rw [show count.succ + 1 = (count + 1) + 1 by omega,
+        slotSummaryStateRepeated]
+      simp only [slotSummaryStateFromWith, hplaced, Option.getD_some,
+        max_eq_right hinitial]
+      simp only [Nat.add_mul] at hrecursive ⊢
+      omega
 
 theorem slotSummaryEndFromWith_cons
     (initial : ℕ) (head : RegionShapeSummary)
