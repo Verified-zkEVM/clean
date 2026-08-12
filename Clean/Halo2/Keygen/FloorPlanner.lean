@@ -14570,6 +14570,24 @@ theorem insertRepeated_insert_comm
         simpa [Nat.add_mul, Nat.add_assoc, Nat.add_comm,
           Nat.add_left_comm] using hnext
 
+theorem insertRepeated_add
+    (view : AllocationView) (columns : List RegionColumn)
+    (start length leftCount rightCount : ℕ) :
+    (view.insertRepeated columns start length leftCount).insertRepeated
+        columns (start + leftCount * length) length rightCount =
+      view.insertRepeated columns start length (leftCount + rightCount) := by
+  induction leftCount generalizing view start with
+  | zero => simp [insertRepeated]
+  | succ leftCount inductionHypothesis =>
+      rw [show leftCount.succ + rightCount =
+          (leftCount + rightCount).succ by omega]
+      simp only [insertRepeated]
+      rw [show start + leftCount.succ * length =
+          start + length + leftCount * length by
+            rw [Nat.succ_mul]
+            omega]
+      exact inductionHypothesis _ _
+
 theorem insert_valid
     {view : AllocationView} {columns : List RegionColumn}
     {start length : ℕ} (hvalid : view.Valid)
@@ -15784,6 +15802,29 @@ theorem slotSummaryBlocksState_eq
       simp only [blocks, List.map_cons, slotSummaryBlocksState,
         endpointFrom, finalView]
       exact ⟨by rw [← hfirst.1]; exact htail.1, htail.2⟩
+
+/-- Two lawful compact traces with the same endpoint and final allocation view
+produce extensionally equivalent planner states. -/
+theorem slotSummaryBlocksState_equivalent
+    (left right : List PlannedSummaryBlock)
+    (initial : ℕ) (allocations : CircuitAllocations)
+    (view : AllocationView)
+    (hrepresents : view.Represents allocations)
+    (hvalid : view.Valid) (hleft : Lawful view left)
+    (hright : Lawful view right)
+    (hendpoint : endpointFrom initial left = endpointFrom initial right)
+    (hfinalView : finalView view left = finalView view right) :
+    SummaryStateEquivalent
+      (slotSummaryBlocksState (blocks left) initial allocations)
+      (slotSummaryBlocksState (blocks right) initial allocations) := by
+  have hleftResult := slotSummaryBlocksState_eq left initial allocations view
+    hrepresents hvalid hleft
+  have hrightResult := slotSummaryBlocksState_eq right initial allocations view
+    hrepresents hvalid hright
+  constructor
+  · exact hleftResult.1.trans (hendpoint.trans hrightResult.1.symm)
+  · intro column
+    rw [hleftResult.2 column, hrightResult.2 column, hfinalView]
 
 end PlannedSummaryBlock
 
