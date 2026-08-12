@@ -1398,7 +1398,7 @@ elab "keygen_registration" : tactic => do
     KeygenRegistration.finishConfigureGoals
 
 macro "keygen_registration" " [" definitions:Lean.Parser.Tactic.simpLemma,* "]" : tactic =>
-  `(tactic| (dsimp only [$definitions,*]; keygen_registration))
+  `(tactic| (dsimp only [$definitions,*] <;> keygen_registration))
 
 elab "configure_route" : tactic => do
   let goal ← getMainGoal
