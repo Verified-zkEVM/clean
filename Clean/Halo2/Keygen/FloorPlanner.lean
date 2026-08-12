@@ -15241,6 +15241,51 @@ theorem slotSummaryStateFromWith_snd
       simp only [slotSummaryStateFromWith, slotShapeSummariesFrom, hplaced]
       exact inductionHypothesis _ _
 
+/-- Planner states agree when their endpoints agree and their allocation maps
+contain the same observable interval sequences. -/
+def SummaryStateEquivalent
+    (left right : ℕ × CircuitAllocations) : Prop :=
+  left.1 = right.1 ∧ left.2.Equivalent right.2
+
+theorem SummaryStateEquivalent.refl
+    (state : ℕ × CircuitAllocations) :
+    SummaryStateEquivalent state state :=
+  ⟨rfl, CircuitAllocations.Equivalent.refl state.2⟩
+
+theorem SummaryStateEquivalent.symm
+    {left right : ℕ × CircuitAllocations}
+    (hequivalent : SummaryStateEquivalent left right) :
+    SummaryStateEquivalent right left :=
+  ⟨hequivalent.1.symm, hequivalent.2.symm⟩
+
+theorem SummaryStateEquivalent.trans
+    {left middle right : ℕ × CircuitAllocations}
+    (hleft : SummaryStateEquivalent left middle)
+    (hright : SummaryStateEquivalent middle right) :
+    SummaryStateEquivalent left right :=
+  ⟨hleft.1.trans hright.1, hleft.2.trans hright.2⟩
+
+/-- A well-formed suffix preserves equivalent planner states. -/
+theorem slotSummaryStateFromWith_equivalent
+    (summaries : List RegionShapeSummary)
+    (hwellFormed : summaries.Forall RegionShapeSummary.WellFormed)
+    {left right : ℕ × CircuitAllocations}
+    (hvalidLeft : left.2.Valid) (hvalidRight : right.2.Valid)
+    (hequivalent : SummaryStateEquivalent left right) :
+    SummaryStateEquivalent
+      (slotSummaryStateFromWith left.1 summaries left.2)
+      (slotSummaryStateFromWith right.1 summaries right.2) := by
+  have hslot := slotShapeSummariesFrom_equivalent summaries left.2 right.2
+    hwellFormed hvalidLeft hvalidRight hequivalent.2
+  constructor
+  · rw [slotSummaryStateFromWith_fst,
+      slotSummaryStateFromWith_fst]
+    unfold slotSummaryEndFromWith
+    rw [hslot.1, hequivalent.1]
+  · rw [slotSummaryStateFromWith_snd,
+      slotSummaryStateFromWith_snd]
+    exact hslot.2
+
 theorem slotSummaryStateFromWith_append
     (initial : ℕ) (left right : List RegionShapeSummary)
     (allocations : CircuitAllocations) :
@@ -15724,6 +15769,159 @@ theorem slotSummaryEndFromWith_swap
   rw [Nat.max_assoc, Nat.max_assoc,
     Nat.max_comm (leftRowAfterRight.getD 0 + left.rowCount)
       (rightRowAfterLeft.getD 0 + right.rowCount)]
+
+/-- Swapping two disjoint well-formed summaries preserves the complete planner
+state up to extensional allocation-map equality. -/
+theorem slotSummaryStateFromWith_swap
+    (initial : ℕ) (left right : RegionShapeSummary)
+    (tail : List RegionShapeSummary)
+    (allocations : CircuitAllocations)
+    (hvalid : allocations.Valid)
+    (hleft : left.WellFormed) (hright : right.WellFormed)
+    (hdisjoint : List.Disjoint left.columns right.columns)
+    (htail : tail.Forall RegionShapeSummary.WellFormed) :
+    SummaryStateEquivalent
+      (slotSummaryStateFromWith initial (left :: right :: tail) allocations)
+      (slotSummaryStateFromWith initial (right :: left :: tail) allocations) := by
+  by_cases hleftColumns : left.columns = []
+  · have hleftPlace : ∀ current,
+        placeSummary left current = (some 0, current) := by
+      intro current
+      simp [placeSummary, hleftColumns, sortRegionColumns, firstFit]
+    generalize hrightPlace : placeSummary right allocations = rightResult
+    rcases rightResult with ⟨rightRow, updated⟩
+    have hrightLaw := placeSummary_valid right allocations hvalid hright
+    rw [hrightPlace] at hrightLaw
+    have hprefix : SummaryStateEquivalent
+        (max (max initial left.rowCount)
+            (rightRow.getD 0 + right.rowCount), updated)
+        (max (max initial (rightRow.getD 0 + right.rowCount))
+            left.rowCount, updated) := by
+      exact ⟨by omega, CircuitAllocations.Equivalent.refl updated⟩
+    simpa only [slotSummaryStateFromWith, hleftPlace, hrightPlace,
+      Option.getD_some, zero_add] using
+        slotSummaryStateFromWith_equivalent tail htail hrightLaw hrightLaw
+          hprefix
+  · by_cases hrightColumns : right.columns = []
+    · have hrightPlace : ∀ current,
+          placeSummary right current = (some 0, current) := by
+        intro current
+        simp [placeSummary, hrightColumns, sortRegionColumns, firstFit]
+      generalize hleftPlace : placeSummary left allocations = leftResult
+      rcases leftResult with ⟨leftRow, updated⟩
+      have hleftLaw := placeSummary_valid left allocations hvalid hleft
+      rw [hleftPlace] at hleftLaw
+      have hprefix : SummaryStateEquivalent
+          (max (max initial (leftRow.getD 0 + left.rowCount))
+              right.rowCount, updated)
+          (max (max initial right.rowCount)
+              (leftRow.getD 0 + left.rowCount), updated) := by
+        exact ⟨by omega, CircuitAllocations.Equivalent.refl updated⟩
+      simpa only [slotSummaryStateFromWith, hleftPlace, hrightPlace,
+        Option.getD_some, zero_add] using
+          slotSummaryStateFromWith_equivalent tail htail hleftLaw hleftLaw
+            hprefix
+    · have hcommute := placeSummary_commute left right allocations hvalid
+        hleft.1 hright.1 (hleft.2 hleftColumns)
+        (hright.2 hrightColumns) hdisjoint
+      generalize hleftFirst : placeSummary left allocations = leftFirst
+        at hcommute
+      rcases leftFirst with ⟨leftRow, leftAllocations⟩
+      generalize hrightFirst : placeSummary right allocations = rightFirst
+        at hcommute
+      rcases rightFirst with ⟨rightRow, rightAllocations⟩
+      generalize hleftThenRight :
+        placeSummary right leftAllocations = leftThenRight at hcommute
+      rcases leftThenRight with
+        ⟨rightRowAfterLeft, leftThenRightAllocations⟩
+      generalize hrightThenLeft :
+        placeSummary left rightAllocations = rightThenLeft at hcommute
+      rcases rightThenLeft with
+        ⟨leftRowAfterRight, rightThenLeftAllocations⟩
+      simp only [hleftThenRight, hrightThenLeft] at hcommute
+      have hleftLaw := placeSummary_law left allocations hvalid hleft.1
+        (hleft.2 hleftColumns)
+      have hrightLaw := placeSummary_law right allocations hvalid hright.1
+        (hright.2 hrightColumns)
+      rw [hleftFirst] at hleftLaw
+      rw [hrightFirst] at hrightLaw
+      have hleftThenRightLaw := placeSummary_law right leftAllocations
+        hleftLaw.1.valid hright.1 (hright.2 hrightColumns)
+      have hrightThenLeftLaw := placeSummary_law left rightAllocations
+        hrightLaw.1.valid hleft.1 (hleft.2 hleftColumns)
+      rw [hleftThenRight] at hleftThenRightLaw
+      rw [hrightThenLeft] at hrightThenLeftLaw
+      have hprefix : SummaryStateEquivalent
+          (max (max initial (leftRow.getD 0 + left.rowCount))
+              (rightRowAfterLeft.getD 0 + right.rowCount),
+            leftThenRightAllocations)
+          (max (max initial (rightRow.getD 0 + right.rowCount))
+              (leftRowAfterRight.getD 0 + left.rowCount),
+            rightThenLeftAllocations) := by
+        constructor
+        · rw [hcommute.1, hcommute.2.1]
+          omega
+        · exact hcommute.2.2
+      simpa only [slotSummaryStateFromWith, hleftFirst, hrightFirst,
+        hleftThenRight, hrightThenLeft] using
+          slotSummaryStateFromWith_equivalent tail htail
+            hleftThenRightLaw.1.valid hrightThenLeftLaw.1.valid hprefix
+
+/-- Reordering a pairwise-commutative summary stream preserves the complete
+planner state up to extensional allocation equality. -/
+theorem slotSummaryStateFromWith_perm
+    {left right : List RegionShapeSummary} (hperm : left.Perm right)
+    (hwellFormed : left.Forall RegionShapeSummary.WellFormed)
+    (hcommutative : ∀ first, first ∈ left → ∀ second, second ∈ left →
+      first = second ∨ List.Disjoint first.columns second.columns)
+    (initial : ℕ) (allocations : CircuitAllocations)
+    (hvalid : allocations.Valid) :
+    SummaryStateEquivalent
+      (slotSummaryStateFromWith initial left allocations)
+      (slotSummaryStateFromWith initial right allocations) := by
+  induction hperm generalizing initial allocations with
+  | nil => exact SummaryStateEquivalent.refl _
+  | cons head hperm inductionHypothesis =>
+      rw [List.forall_cons] at hwellFormed
+      generalize hplaced : placeSummary head allocations = placed
+      rcases placed with ⟨row, updated⟩
+      have hupdatedValid : updated.Valid := by
+        have hresult := placeSummary_valid head allocations hvalid
+          hwellFormed.1
+        rw [hplaced] at hresult
+        exact hresult
+      simpa only [slotSummaryStateFromWith, hplaced] using
+        inductionHypothesis hwellFormed.2 (by
+          intro first hfirst second hsecond
+          exact hcommutative first (by simp [hfirst]) second
+            (by simp [hsecond]))
+          (max initial (row.getD 0 + head.rowCount)) updated hupdatedValid
+  | swap first second rest =>
+      rw [List.forall_cons, List.forall_cons] at hwellFormed
+      have hpair := hcommutative first (by simp) second (by simp)
+      rcases hpair with rfl | hdisjoint
+      · exact SummaryStateEquivalent.refl _
+      · exact (slotSummaryStateFromWith_swap initial first second rest
+          allocations hvalid hwellFormed.2.1 hwellFormed.1 hdisjoint
+          hwellFormed.2.2).symm
+  | @trans left middle right hleft hright leftInduction rightInduction =>
+      have hmiddleWellFormed :
+          middle.Forall RegionShapeSummary.WellFormed := by
+        rw [List.forall_iff_forall_mem]
+        intro summary hsummary
+        exact List.forall_iff_forall_mem.mp hwellFormed summary
+          (hleft.mem_iff.mpr hsummary)
+      have hmiddleCommutative : ∀
+          (first : RegionShapeSummary), first ∈ middle →
+          ∀ (second : RegionShapeSummary), second ∈ middle →
+          first = second ∨ List.Disjoint first.columns second.columns := by
+        intro first hfirst second hsecond
+        exact hcommutative first (hleft.mem_iff.mpr hfirst) second
+          (hleft.mem_iff.mpr hsecond)
+      exact (leftInduction hwellFormed hcommutative initial allocations
+        hvalid).trans
+          (rightInduction hmiddleWellFormed hmiddleCommutative initial
+            allocations hvalid)
 
 /-- The zero-based endpoint specialization of disjoint-region commutation. -/
 theorem slotSummaryEndFrom_swap
