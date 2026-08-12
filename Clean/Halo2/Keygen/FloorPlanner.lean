@@ -14283,6 +14283,16 @@ theorem SynthesisSummary.replicate_physicalRegionShapes
       rw [List.replicate_succ, List.flatten_cons, List.map_append,
         List.replicate_succ, List.flatten_cons, inductionHypothesis]
 
+theorem Multiset.coe_flatten_replicate {α : Type} (count : ℕ)
+    (items : List α) :
+    ((List.replicate count items).flatten : Multiset α) =
+      count • (items : Multiset α) := by
+  induction count with
+  | zero => rfl
+  | succ count inductionHypothesis =>
+      rw [List.replicate_succ, List.flatten_cons, ← Multiset.coe_add,
+        inductionHypothesis, add_nsmul, one_nsmul, add_comm]
+
 theorem SynthesisSummary.foldr_combine_physicalRegionShapes
     (summaries : List SynthesisSummary) :
     (summaries.foldr SynthesisSummary.combine {}).physicalRegionShapes =
