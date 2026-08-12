@@ -13288,6 +13288,24 @@ theorem slotShapeSummariesFrom_append
       simp only [List.cons_append, slotShapeSummariesFrom, hfirst]
       rw [inductionHypothesis]
 
+/-- Replacing every reduced region shape by a placement-equivalent shape preserves
+the complete index-free planner result. This is the compositional boundary used by
+concrete circuits to publish canonical physical summaries without preserving the
+incidental first-seen order of their column sets. -/
+theorem slotShapeSummariesFrom_eq_of_forall₂_placementEquivalent
+    {left right : List RegionShapeSummary}
+    (hequivalent : List.Forall₂ RegionShapeSummary.PlacementEquivalent
+      left right)
+    (allocations : CircuitAllocations) :
+    slotShapeSummariesFrom left allocations =
+      slotShapeSummariesFrom right allocations := by
+  induction hequivalent generalizing allocations with
+  | nil => rfl
+  | cons hhead _ inductionHypothesis =>
+      simp only [slotShapeSummariesFrom]
+      rw [placeSummary_eq_of_placementEquivalent hhead,
+        inductionHypothesis]
+
 /-- Repeated index-free slotting of one already-reduced summary block. -/
 def slotShapeSummariesRepeated (count : ℕ)
     (summaries : List RegionShapeSummary)
