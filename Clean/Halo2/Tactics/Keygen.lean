@@ -47,6 +47,7 @@ attribute [keygen_norm]
   ConfigureDelta.permutationRequests_queryAny
   ConfigureDelta.permutationRequests_queriedCells
   RegionOperation.KeygenRegistered Operation.KeygenRegistered
+  KeygenRequirements.inputPermutationColumns
   RegionOperation.LookupActivationWellFormed
   Operation.LookupActivationsWellFormed
   RegionOperations.LookupActivationsWellFormed
@@ -87,6 +88,7 @@ attribute [keygen_spine]
   operations_constrainConstant operations_assignAdviceFromInstance
   operations_cellAt operations_cellVec
   RegionOperation.KeygenRegistered Operation.KeygenRegistered
+  KeygenRequirements.inputPermutationColumns
   RegionOperation.LookupActivationWellFormed
   Operation.LookupActivationsWellFormed
   RegionOperations.LookupActivationsWellFormed
