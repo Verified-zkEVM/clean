@@ -370,6 +370,26 @@ def minimalKForRows (cs : ConstraintSystem F) (requiredRows : ℕ) : ℕ :=
   let need := max (requiredRows + blinding + 1) (blinding + 3)
   Nat.clog 2 need
 
+/-- Identify an exact minimal domain exponent from the two adjacent power-of-two
+bounds on Halo 2's complete row requirement. -/
+theorem minimalKForRows_eq_succ_of
+    (cs : ConstraintSystem F) (requiredRows k : ℕ)
+    (hlower :
+      2 ^ k <
+        max (requiredRows + cs.blindingFactors + 1) cs.minimumRows)
+    (hupper :
+      max (requiredRows + cs.blindingFactors + 1) cs.minimumRows ≤
+        2 ^ (k + 1)) :
+    minimalKForRows cs requiredRows = k + 1 := by
+  unfold minimalKForRows
+  dsimp only
+  apply Nat.le_antisymm
+  · apply (Nat.clog_le_iff_le_pow (by omega)).2
+    simpa only [ConstraintSystem.minimumRows] using hupper
+  · rw [← Nat.lt_iff_add_one_le]
+    apply (Nat.lt_clog_iff_pow_lt (by omega)).2
+    simpa only [ConstraintSystem.minimumRows] using hlower
+
 /-- The derived domain fits the requested usable rows and minimum-row requirement. -/
 theorem minimalKForRows_fits
     (cs : ConstraintSystem F) (requiredRows : ℕ) :
