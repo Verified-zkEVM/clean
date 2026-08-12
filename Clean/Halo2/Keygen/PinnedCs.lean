@@ -372,7 +372,7 @@ theorem Operation.instanceRowExtent_le_synthesisSummary_of_mem
 /-- Every copied cell covered by the compiler law lies inside V1's region endpoint. -/
 theorem Operations.copiedCell_rowExtent_le_placementEnd
     (operations : Operations F)
-    (hassigned : operations.CopyCellsAssigned 0 [])
+    (hassigned : operations.CopyCellsCovered 0 [])
     (cell : Cell) (hcell : cell ∈ operations.copiedCells) :
     cell.rowExtent (FloorPlanner.V1.starts operations) ≤
       FloorPlanner.V1.placementEnd operations := by
@@ -384,7 +384,7 @@ theorem Operations.copiedCell_rowExtent_le_placementEnd
 the placed regions and exact absolute-instance summary. -/
 theorem Operation.copyRowExtent_le_placementEnd_max_instanceRowExtent
     (operations : Operations F)
-    (hassigned : operations.CopyCellsAssigned 0 [])
+    (hassigned : operations.CopyCellsCovered 0 [])
     (operation : Operation F) (hoperation : operation ∈ operations) :
     operation.copyRowExtent (FloorPlanner.V1.starts operations) ≤
       max (FloorPlanner.V1.placementEnd operations)
@@ -447,7 +447,7 @@ theorem Operation.copyRowExtent_le_placementEnd_max_instanceRowExtent
 /-- Copy provenance removes the copy stream as an independent source of row growth. -/
 theorem Operations.copyRowExtent_le_placementEnd_max_instanceRowExtent
     (operations : Operations F)
-    (hassigned : operations.CopyCellsAssigned 0 []) :
+    (hassigned : operations.CopyCellsCovered 0 []) :
     (operations.map (Operation.copyRowExtent
       (FloorPlanner.V1.starts operations))).foldl max 0 ≤
       max (FloorPlanner.V1.placementEnd operations)
@@ -467,6 +467,7 @@ theorem usedRows_le_summaryExtents
       max (FloorPlanner.V1.placementEnd operations)
         (max (FloorPlanner.synthesisSummary operations).tableRowExtent
           (FloorPlanner.synthesisSummary operations).instanceRowExtent) := by
+  have hcovered := operations.copyCellsCovered_of_assigned 0 [] hassigned
   unfold usedRows
   rw [← synthesisSummary_tableRowExtent_eq]
   apply Nat.max_le.mpr
@@ -474,7 +475,7 @@ theorem usedRows_le_summaryExtents
   · exact Nat.max_le.mpr ⟨Nat.le_max_left _ _,
       (Nat.le_max_left _ _).trans (Nat.le_max_right _ _)⟩
   · exact (Operations.copyRowExtent_le_placementEnd_max_instanceRowExtent
-      operations hassigned).trans (by
+      operations hcovered).trans (by
         exact Nat.max_le.mpr ⟨Nat.le_max_left _ _,
           (Nat.le_max_right _ _).trans (Nat.le_max_right _ _)⟩)
 
