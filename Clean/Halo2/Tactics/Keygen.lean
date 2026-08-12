@@ -151,6 +151,26 @@ attribute [keygen_spine] RegionCircuit.operations_ite List.forall_ite
 
 variable {F α β : Type}
 
+@[keygen_norm, keygen_spine]
+theorem RegionCircuit.operations_pair
+    [FiniteField F]
+    (output : RegionIndex → α)
+    (operations : RegionIndex → RegionOperations F)
+    (region : RegionIndex) :
+    RegionCircuit.operations (fun self => (output self, operations self)) region =
+      operations region := rfl
+
+@[keygen_norm, keygen_spine]
+theorem Circuit.operations_triple
+    [FiniteField F]
+    (output : RegionIndex → α)
+    (operations : RegionIndex → Operations F)
+    (nextRegion : RegionIndex → RegionIndex)
+    (region : RegionIndex) :
+    Circuit.operations
+        (fun self => (output self, operations self, nextRegion self)) region =
+      operations region := rfl
+
 theorem Configure.mem_gates_delta_bind_left
     (program : Configure F α) (next : α → Configure F β)
     (counts : ConfigureCounts) (gate : Gate F)
