@@ -15832,6 +15832,30 @@ theorem slotSummaryBlocksState_equivalent
   · intro column
     rw [hleftResult.2 column, hrightResult.2 column, hfinalView]
 
+theorem slotSummaryBlocksState_equivalent_of_represents
+    (left right : List PlannedSummaryBlock)
+    (leftInitial rightInitial : ℕ)
+    (leftAllocations rightAllocations : CircuitAllocations)
+    (view : AllocationView)
+    (hleftRepresents : view.Represents leftAllocations)
+    (hrightRepresents : view.Represents rightAllocations)
+    (hvalid : view.Valid) (hleft : Lawful view left)
+    (hright : Lawful view right)
+    (hendpoint : endpointFrom leftInitial left =
+      endpointFrom rightInitial right)
+    (hfinalView : finalView view left = finalView view right) :
+    SummaryStateEquivalent
+      (slotSummaryBlocksState (blocks left) leftInitial leftAllocations)
+      (slotSummaryBlocksState (blocks right) rightInitial rightAllocations) := by
+  have hleftResult := slotSummaryBlocksState_eq left leftInitial
+    leftAllocations view hleftRepresents hvalid hleft
+  have hrightResult := slotSummaryBlocksState_eq right rightInitial
+    rightAllocations view hrightRepresents hvalid hright
+  constructor
+  · exact hleftResult.1.trans (hendpoint.trans hrightResult.1.symm)
+  · intro column
+    rw [hleftResult.2 column, hrightResult.2 column, hfinalView]
+
 end PlannedSummaryBlock
 
 theorem slotSummaryEndFromWith_cons
