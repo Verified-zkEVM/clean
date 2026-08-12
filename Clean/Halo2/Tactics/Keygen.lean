@@ -1383,6 +1383,8 @@ stay opaque for explicit discharge through the compositional registration lemmas
 elab "keygen_registration" : tactic => do
   trace[Halo2.keygen] "keygen_registration: introductions"
   evalTactic (← `(tactic| intros))
+  if (← getGoals).isEmpty then
+    return
   trace[Halo2.keygen] "keygen_registration: configure preparation"
   KeygenRegistration.prepareConfigure
   trace[Halo2.keygen] "keygen_registration: initial normalization"
