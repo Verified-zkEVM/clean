@@ -14291,6 +14291,98 @@ theorem placeSummary_effect
     hvalid ((sortRegionColumns_perm summary.columns).nodup_iff.mpr hnodup)
     hlength
 
+/-! ## Extensional allocation views
+
+Concrete planner traces should reason about per-column interval sequences, not the
+implementation details of `Std.HashMap`. An `AllocationView` is that extensional
+interface; the following transition theorem crosses the implementation boundary once.
+-/
+
+abbrev AllocationView := RegionColumn → Allocations
+
+namespace AllocationView
+
+def Represents
+    (allocations : CircuitAllocations) (view : AllocationView) : Prop :=
+  ∀ column, allocations.getD column #[] = view column
+
+def Valid (view : AllocationView) : Prop :=
+  ∀ column, (view column).Valid
+
+def FitsColumns (view : AllocationView) (columns : List RegionColumn)
+    (start length : ℕ) : Prop :=
+  ∀ column ∈ columns, (view column).Fits start length
+
+def LeastFit (view : AllocationView) (columns : List RegionColumn)
+    (length row : ℕ) : Prop :=
+  FitsColumns view columns row length ∧
+    ∀ candidate, FitsColumns view columns candidate length → row ≤ candidate
+
+def insert (view : AllocationView) (columns : List RegionColumn)
+    (start length : ℕ) : AllocationView := fun column =>
+  if column ∈ columns then
+    (view column).insert start length
+  else view column
+
+theorem Represents.valid
+    {allocations : CircuitAllocations} {view : AllocationView}
+    (hrepresents : Represents allocations view) (hvalid : view.Valid) :
+    allocations.Valid := by
+  intro column
+  rw [hrepresents column]
+  exact hvalid column
+
+theorem Represents.leastFit
+    {allocations : CircuitAllocations} {view : AllocationView}
+    (hrepresents : Represents allocations view)
+    {columns : List RegionColumn} {length row : ℕ}
+    (hleast : view.LeastFit columns length row) :
+    FloorPlanner.LeastFit allocations columns length row := by
+  constructor
+  · intro column hcolumn
+    rw [hrepresents column]
+    exact hleast.1 column hcolumn
+  · intro candidate hfits
+    apply hleast.2 candidate
+    intro column hcolumn
+    rw [← hrepresents column]
+    exact hfits column hcolumn
+
+/-- Place one summary using only an extensional allocation view. The returned view
+is the old view with the chosen interval inserted in every participating column. -/
+theorem placeSummary_eq_of_leastFit
+    (summary : RegionShapeSummary) (allocations : CircuitAllocations)
+    (view : AllocationView) (row : ℕ)
+    (hrepresents : Represents allocations view) (hvalid : view.Valid)
+    (hnodup : summary.columns.Nodup) (hlength : 0 < summary.rowCount)
+    (hleast : view.LeastFit (sortRegionColumns summary.columns)
+      summary.rowCount row) :
+    ∃ updated,
+      placeSummary summary allocations = (some row, updated) ∧
+        Represents updated
+          (view.insert (sortRegionColumns summary.columns)
+            row summary.rowCount) := by
+  have hactualValid := hrepresents.valid hvalid
+  have hrow := placeSummary_row_eq_of_leastFit summary allocations row
+    hactualValid hnodup hlength (hrepresents.leastFit hleast)
+  generalize hplaced : placeSummary summary allocations = placed at hrow
+  rcases placed with ⟨rowOption, updated⟩
+  simp only at hrow
+  have : rowOption = some row := hrow
+  subst rowOption
+  have heffect := placeSummary_effect summary allocations hactualValid
+    hnodup hlength
+  rw [hplaced] at heffect
+  refine ⟨updated, rfl, ?_⟩
+  intro column
+  rw [heffect column]
+  simp only [insert]
+  split
+  next => rw [hrepresents column]
+  next => rw [hrepresents column]
+
+end AllocationView
+
 theorem physical_mem_sorted_full_iff
     (kind : ColumnKind) (index : ℕ) (columns : List RegionColumn) :
     RegionColumn.column kind index ∈ sortRegionColumns columns ↔
