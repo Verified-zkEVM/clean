@@ -14547,6 +14547,12 @@ def insertRepeated (view : AllocationView) (columns : List RegionColumn)
       insertRepeated (view.insert columns start length) columns
         (start + length) length count
 
+theorem insertRepeated_one
+    (view : AllocationView) (columns : List RegionColumn)
+    (start length : ℕ) :
+    view.insertRepeated columns start length 1 =
+      view.insert columns start length := rfl
+
 /-- A compact repeated run commutes with an insertion whose start differs from
 every start in the run. -/
 theorem insertRepeated_insert_comm
