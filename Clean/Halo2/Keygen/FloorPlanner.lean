@@ -539,10 +539,12 @@ theorem synthesisSummary_columnOccupancy_eq
             congr 1
             simpa only [] using inductionHypothesis (initial + 1)
         | constrainInstance cell instanceColumn row =>
-            simpa only [synthesisSummary, indexedRegions] using
+            simpa only [synthesisSummary, SynthesisSummary.combine,
+              SynthesisSummary.ofInstanceRow, Nat.zero_add, indexedRegions] using
               inductionHypothesis initial
         | loadTable table values =>
-            simpa only [synthesisSummary, indexedRegions] using
+            simpa only [synthesisSummary, SynthesisSummary.combine,
+              SynthesisSummary.ofTableValues, Nat.zero_add, indexedRegions] using
               inductionHypothesis initial
   simpa only [measureRegions] using general ops 0
 
@@ -17388,10 +17390,12 @@ theorem constantValues_length
               SynthesisSummary.ofRegion, regionConstantValues_length]
             rw [inductionHypothesis]
         | constrainInstance cell column row =>
-            simpa only [indexedRegions, synthesisSummary] using
+            simpa only [indexedRegions, synthesisSummary, SynthesisSummary.combine,
+              SynthesisSummary.ofInstanceRow, Nat.zero_add] using
               inductionHypothesis initial
         | loadTable table values =>
-            simpa only [indexedRegions, synthesisSummary] using
+            simpa only [indexedRegions, synthesisSummary, SynthesisSummary.combine,
+              SynthesisSummary.ofTableValues, Nat.zero_add] using
               inductionHypothesis initial
   exact general ops 0
 

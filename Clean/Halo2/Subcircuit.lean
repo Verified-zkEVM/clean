@@ -397,6 +397,10 @@ theorem FormalCircuit.foldSynthesisSummary_eq_replicate
           FloorPlanner.SynthesisSummary.replicate]
       · simp [FormalCircuit.foldSynthesisSummary,
           FloorPlanner.SynthesisSummary.replicate]
+      · simp [FormalCircuit.foldSynthesisSummary,
+          FloorPlanner.SynthesisSummary.replicate]
+      · simp [FormalCircuit.foldSynthesisSummary,
+          FloorPlanner.SynthesisSummary.replicate]
   | m + 1 => by
       rw [FormalCircuit.foldSynthesisSummary,
         FormalCircuit.foldSynthesisSummary_eq_replicate summary hsummary hcolumns m,
