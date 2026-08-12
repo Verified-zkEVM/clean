@@ -1036,13 +1036,22 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
           catch _ =>
             st.restore
             pure false
-        let mut applied := false
-        for nm in [`FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq,
-            `GeneralFormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq,
-            `GeneralFormalCircuit.WithHint.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq,
-            `FormalAssertion.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq] do
-          unless applied do
-            if ← tryVariant nm then applied := true
+        -- dispatch on the bundle kind, read off the goal's `toSubcircuit` spelling
+        let variants : List (Name × Name) := [
+          (`FormalCircuit.toSubcircuit,
+           `FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq),
+          (`GeneralFormalCircuit.toSubcircuit,
+           `GeneralFormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq),
+          (`GeneralFormalCircuit.WithHint.toSubcircuit,
+           `GeneralFormalCircuit.WithHint.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq),
+          (`FormalAssertion.toSubcircuit,
+           `FormalAssertion.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq)]
+        let nm? := t.getAppArgs.findSome? fun a =>
+          variants.findSome? fun (tsc, nm) =>
+            if a.getAppFn.isConstOf tsc then some nm else none
+        let applied ← match nm? with
+          | some nm => tryVariant nm
+          | none => pure false
         if applied then
           simpPass
           unless (← getGoals).isEmpty do
@@ -1050,11 +1059,7 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
             unless (← getGoals).isEmpty do
               evalCloseRun
         else
-          -- no composition rule applied: still normalize before grind — witness IR
-          -- and metadata spellings are not grind-reachable in raw form
-          simpPass
-          unless (← getGoals).isEmpty do
-            metaGrind
+          metaGrind
       else
         try chainOutputFacts catch _ => pure ()
         unless (← getGoals).isEmpty do
