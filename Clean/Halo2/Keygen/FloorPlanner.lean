@@ -15173,6 +15173,40 @@ def slotSummaryStateFromWith (initial : ℕ)
       slotSummaryStateFromWith
         (max initial (placed.1.getD 0 + summary.rowCount)) rest placed.2
 
+/-- Replacing every reduced region shape by a placement-equivalent shape preserves
+the endpoint and final allocation state. -/
+theorem slotSummaryStateFromWith_eq_of_forall₂_placementEquivalent
+    {left right : List RegionShapeSummary}
+    (hequivalent : List.Forall₂ RegionShapeSummary.PlacementEquivalent
+      left right) (initial : ℕ) (allocations : CircuitAllocations) :
+    slotSummaryStateFromWith initial left allocations =
+      slotSummaryStateFromWith initial right allocations := by
+  induction hequivalent generalizing initial allocations with
+  | nil => rfl
+  | @cons left right leftTail rightTail hhead _ inductionHypothesis =>
+      simp only [slotSummaryStateFromWith]
+      rw [placeSummary_eq_of_placementEquivalent hhead]
+      rw [hhead.2]
+      exact inductionHypothesis _ _
+
+/-- A permutation after applying a projection can be lifted to a permutation of
+the original list whose corresponding entries have equal projections. -/
+theorem exists_perm_forall₂_of_map_perm {A B : Type} (project : A → B)
+    {left right : List A}
+    (hperm : (left.map project).Perm (right.map project)) :
+    ∃ aligned, aligned.Perm right ∧
+      List.Forall₂ (fun first second => project first = project second)
+        left aligned := by
+  have hcomposed :
+      Relation.Comp (fun projected original => projected = original.map project)
+        List.Perm (left.map project) right := by
+    rw [List.eq_map_comp_perm]
+    exact hperm
+  obtain ⟨aligned, hprojected, haligned⟩ := hcomposed
+  refine ⟨aligned, haligned, ?_⟩
+  simpa only [← List.forall₂_map_left_iff,
+    ← List.forall₂_map_right_iff, List.forall₂_eq_eq_eq] using hprojected
+
 theorem slotSummaryStateFromWith_fst
     (initial : ℕ) (summaries : List RegionShapeSummary)
     (allocations : CircuitAllocations) :
@@ -16028,6 +16062,67 @@ theorem slotSummaryEndFromWith_eq_of_sorted_perm
       · exact Or.inl ⟨rfl, rfl⟩
       · exact Or.inr hdisjoint)
     initial allocations hvalid tail hwellTail
+
+/-- Two key-sorted streams with the same normalized physical shapes produce the
+same V1 endpoint. The normalization equality may reorder equal-key shapes; the
+usual tie-interchangeability condition makes that reordering harmless. -/
+theorem slotSummaryEndFromWith_eq_of_normalized_perm
+    {left right : List RegionShapeSummary}
+    (hnormalized :
+      (left.map RegionShapeSummary.normalized).Perm
+        (right.map RegionShapeSummary.normalized))
+    (hsortedLeft :
+      (left.map (fun summary => (summary.key : OrderDual ℕ))).SortedLE)
+    (hsortedRight :
+      (right.map (fun summary => (summary.key : OrderDual ℕ))).SortedLE)
+    (hwellFormed : right.Forall RegionShapeSummary.WellFormed)
+    (hties : ∀ first, first ∈ right → ∀ second, second ∈ right →
+      first.key = second.key →
+        first.PlacementEquivalent second ∨
+          List.Disjoint first.columns second.columns)
+    (initial : ℕ) (allocations : CircuitAllocations)
+    (hvalid : allocations.Valid) :
+    slotSummaryEndFromWith initial left allocations =
+      slotSummaryEndFromWith initial right allocations := by
+  obtain ⟨aligned, haligned, hequivalent⟩ :=
+    exists_perm_forall₂_of_map_perm RegionShapeSummary.normalized hnormalized
+  have hplacement :
+      List.Forall₂ RegionShapeSummary.PlacementEquivalent left aligned :=
+    hequivalent.imp fun _ _ hnormalizedEq =>
+      RegionShapeSummary.placementEquivalent_iff_normalized_eq.mpr
+        hnormalizedEq
+  have hleftAligned :
+      slotSummaryEndFromWith initial left allocations =
+        slotSummaryEndFromWith initial aligned allocations := by
+    rw [← slotSummaryStateFromWith_fst,
+      ← slotSummaryStateFromWith_fst]
+    exact congrArg Prod.fst
+      (slotSummaryStateFromWith_eq_of_forall₂_placementEquivalent
+        hplacement initial allocations)
+  have hkeys :
+      left.map (fun summary => (summary.key : OrderDual ℕ)) =
+        aligned.map (fun summary => (summary.key : OrderDual ℕ)) := by
+    rw [← List.forall₂_eq_eq_eq]
+    simpa only [List.forall₂_map_left_iff,
+      List.forall₂_map_right_iff] using hplacement.imp (fun first second h =>
+        congrArg (fun summary => (summary.key : OrderDual ℕ))
+          (RegionShapeSummary.placementEquivalent_iff_normalized_eq.mp h) |>
+            (RegionShapeSummary.normalized_key_eq first ▸
+              RegionShapeSummary.normalized_key_eq second ▸ ·))
+  have hsortedAligned :
+      (aligned.map (fun summary => (summary.key : OrderDual ℕ))).SortedLE := by
+    rw [← hkeys]
+    exact hsortedLeft
+  have hrightAligned :=
+    slotSummaryEndFromWith_eq_of_sorted_perm_interchangeable
+      (key := fun summary : RegionShapeSummary =>
+        (show OrderDual ℕ from summary.key)) haligned.symm hsortedRight
+      hsortedAligned hwellFormed (by
+        intro first hfirst second hsecond hkey
+        exact hties first hfirst second hsecond
+          (show first.key = second.key from hkey))
+      initial allocations hvalid [] (by simp)
+  exact hleftAligned.trans (by simpa using hrightAligned.symm)
 
 /-- Forgetting shape indices changes no slotted endpoint, for any pair sequence. -/
 theorem slottedEndFrom_forgetIndices_eq

@@ -993,3 +993,23 @@ theorem V1.slotSummaryEndFromWith_quicksort_eq_stableRegionSort
       initial allocations hvalid tail hwellTail
 
 end Halo2.FloorPlanner.Pdqsort
+
+namespace Halo2.FloorPlanner.V1
+
+/-- The reduced summary stream consumed by V1 is sorted by descending advice
+area, independently of any concrete circuit. -/
+theorem sortedSummaryOrder_key_sorted {F : Type} (ops : Operations F) :
+    ((sortedSummaryOrder ops).map fun summary =>
+      (summary.key : OrderDual ℕ)).SortedLE := by
+  let shapes := measureRegions ops
+  have hsorted :
+      ((Pdqsort.quicksort shapes.toArray
+        (Pdqsort.lessBy RegionShape.key)).toList.reverse.map fun shape =>
+          (shape.key : OrderDual ℕ)).SortedLE := by
+    have hascending :=
+      Pdqsort.quicksort_sorted shapes.toArray RegionShape.key |>.reverse
+    simpa only [List.map_reverse] using hascending
+  simpa only [sortedSummaryOrder, shapes, List.map_map,
+    Array.toList_reverse, RegionShape.toSummary_key, Pdqsort.lessBy] using hsorted
+
+end Halo2.FloorPlanner.V1
