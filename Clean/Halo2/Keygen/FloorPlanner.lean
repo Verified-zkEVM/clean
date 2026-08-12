@@ -15132,6 +15132,35 @@ theorem slotSummaryStateFromWith_flatten_replicate
       simp only [slotSummaryStateRepeated]
       rw [inductionHypothesis]
 
+/-- Evaluate a sequence of repeated singleton-summary blocks without expanding
+any block into a concrete list. -/
+def slotSummaryBlocksState (blocks : List (ℕ × RegionShapeSummary))
+    (initial : ℕ) (allocations : CircuitAllocations) :
+    ℕ × CircuitAllocations :=
+  match blocks with
+  | [] => (initial, allocations)
+  | (count, summary) :: rest =>
+      let first := slotSummaryStateRepeated count [summary]
+        initial allocations
+      slotSummaryBlocksState rest first.1 first.2
+
+theorem slotSummaryStateFromWith_flatMap_replicate
+    (blocks : List (ℕ × RegionShapeSummary))
+    (initial : ℕ) (allocations : CircuitAllocations) :
+    slotSummaryStateFromWith initial
+        (blocks.flatMap fun block =>
+          List.replicate block.1 block.2) allocations =
+      slotSummaryBlocksState blocks initial allocations := by
+  induction blocks generalizing initial allocations with
+  | nil => rfl
+  | cons block rest inductionHypothesis =>
+      rcases block with ⟨count, summary⟩
+      rw [List.flatMap_cons, slotSummaryStateFromWith_append,
+        ← List.flatten_replicate_singleton,
+        slotSummaryStateFromWith_flatten_replicate]
+      simp only [slotSummaryBlocksState]
+      exact inductionHypothesis _ _
+
 /-- If a free run begins at the current least fit, repeated copies of one
 summary occupy that run consecutively. Besides the endpoint, expose an
 extensional view of the resulting allocation state so consecutive compact
