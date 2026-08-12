@@ -1381,6 +1381,8 @@ configure/synthesis heads that still block a registration goal. Formal-circuit c
 stay opaque for explicit discharge through the compositional registration lemmas.
 -/
 elab "keygen_registration" : tactic => do
+  if (← getGoals).isEmpty then
+    return
   trace[Halo2.keygen] "keygen_registration: introductions"
   evalTactic (← `(tactic| intros))
   if (← getGoals).isEmpty then
