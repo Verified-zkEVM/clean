@@ -1627,21 +1627,29 @@ attribute [synthesis_summary_norm]
   regionOperationRowExtent
   regionOperationShapeColumns
   regionOperationConstantSiteCount
+  regionOperationInstanceRowExtent
   RegionSynthesisSummary.combine_columns
   RegionSynthesisSummary.combine_rowCount
   RegionSynthesisSummary.combine_constantSiteCount
+  RegionSynthesisSummary.combine_instanceRowExtent
   RegionSynthesisSummary.ofOperation_columns
   RegionSynthesisSummary.ofOperation_rowCount
   RegionSynthesisSummary.ofOperation_constantSiteCount
+  RegionSynthesisSummary.ofOperation_instanceRowExtent
   regionSynthesisSummary_nil_columns
   regionSynthesisSummary_nil_rowCount
   regionSynthesisSummary_nil_constantSiteCount
+  regionSynthesisSummary_nil_instanceRowExtent
   SynthesisSummary.combine_columns
   SynthesisSummary.combine_columnOccupancy
   SynthesisSummary.combine_constantSiteCount
+  SynthesisSummary.combine_tableRowExtent
+  SynthesisSummary.combine_instanceRowExtent
   SynthesisSummary.ofRegion_columns
   SynthesisSummary.ofRegion_columnOccupancy
   SynthesisSummary.ofRegion_constantSiteCount
+  SynthesisSummary.ofRegion_tableRowExtent
+  SynthesisSummary.ofRegion_instanceRowExtent
   synthesisSummary_nil_columns
   synthesisSummary_nil_columnOccupancy
   synthesisSummary_nil_constantSiteCount

@@ -66,7 +66,8 @@ attribute [keygen_norm]
   Operations.KeygenRegistered.loadTable_cons
   List.forall_append List.forall_cons
   List.flatMap_cons List.flatMap_append
-  List.mem_append List.mem_cons List.mem_singleton List.not_mem_nil
+  List.mem_append List.mem_cons List.mem_singleton List.mem_flatMap List.mem_map
+  List.not_mem_nil
   List.nil_append List.append_nil List.append_assoc
   and_self and_true true_and
   or_self or_true true_or or_false false_or
@@ -106,7 +107,7 @@ attribute [keygen_spine]
   Operations.KeygenRegistered.loadTable_cons
   List.forall_append List.forall_cons
   List.flatMap_cons List.flatMap_append
-  List.mem_append List.mem_cons List.mem_singleton
+  List.mem_append List.mem_cons List.mem_singleton List.mem_flatMap List.mem_map
   List.nil_append List.append_nil List.append_assoc
   and_self and_true true_and
   or_self or_true true_or or_false false_or
