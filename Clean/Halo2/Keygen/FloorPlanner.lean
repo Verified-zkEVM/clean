@@ -14584,6 +14584,20 @@ theorem fitsColumns_insertRepeated_succ_iff
           exact (rowIntervalsDisjoint_adjacent_iff start length insertStart
             insertLength ((count + 1) * insertLength) hlength).mpr hcombined |>.2
 
+theorem fitsColumns_insertRepeated_iff_of_pos
+    {view : AllocationView} {insertColumns columns : List RegionColumn}
+    {insertStart insertLength start length count : ℕ}
+    (hcount : 0 < count) (hlength : 0 < length) :
+    (view.insertRepeated insertColumns insertStart insertLength count).FitsColumns
+        columns start length ↔
+      view.FitsColumns columns start length ∧
+        ∀ column, column ∈ columns → column ∈ insertColumns →
+          RowIntervalsDisjoint start length insertStart
+            (count * insertLength) := by
+  obtain ⟨preceding, rfl⟩ := Nat.exists_eq_succ_of_ne_zero
+    (Nat.ne_of_gt hcount)
+  exact fitsColumns_insertRepeated_succ_iff preceding hlength
+
 /-- Once a least fitting interval has been inserted, the adjacent interval is
 the next least fit whenever the enclosing run was free beforehand. -/
 theorem leastFit_insert_next
