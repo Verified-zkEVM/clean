@@ -15476,6 +15476,19 @@ def TraceLawfulAfter (placed : List PlannedSummaryBlock) :
         ¬ FitsAfterAt placed block candidate block.summary.rowCount) ∧
       TraceLawfulAfter (placed ++ [block]) rest
 
+def traceLawfulAfterDecidable
+    (placed trace : List PlannedSummaryBlock) :
+    Decidable (TraceLawfulAfter placed trace) := by
+  induction trace generalizing placed with
+  | nil => exact isTrue trivial
+  | cons block rest inductionHypothesis =>
+      letI : Decidable
+          (TraceLawfulAfter (placed ++ [block]) rest) :=
+        inductionHypothesis (placed ++ [block])
+      unfold TraceLawfulAfter RegionShapeSummary.WellFormed FitsAfterAt
+        RowIntervalsDisjoint
+      infer_instance
+
 private theorem fitsColumns_finalView_iff_fitsAfterAt
     (initial : AllocationView) (placed : List PlannedSummaryBlock)
     (block : PlannedSummaryBlock) (start length : ℕ)
