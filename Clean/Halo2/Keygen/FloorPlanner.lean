@@ -14224,6 +14224,30 @@ def RegionShapeSummary.withoutSelectors
     | column kind index => cases kind <;> simp [RegionColumn.isAdvice]
   rw [hfilter]
 
+/-- The exact selector-free region stream consumed by physical V1 placement. -/
+def SynthesisSummary.physicalRegionShapes
+    (summary : SynthesisSummary) : List RegionShapeSummary :=
+  summary.regionShapes.map RegionShapeSummary.withoutSelectors
+
+theorem SynthesisSummary.combine_physicalRegionShapes
+    (left right : SynthesisSummary) :
+    (left.combine right).physicalRegionShapes =
+      left.physicalRegionShapes ++ right.physicalRegionShapes := by
+  unfold SynthesisSummary.physicalRegionShapes
+  rw [SynthesisSummary.combine_regionShapes, List.map_append]
+
+theorem SynthesisSummary.replicate_physicalRegionShapes
+    (count : ℕ) (summary : SynthesisSummary) :
+    (SynthesisSummary.replicate count summary).physicalRegionShapes =
+      (List.replicate count summary.physicalRegionShapes).flatten := by
+  unfold SynthesisSummary.physicalRegionShapes
+  rw [SynthesisSummary.replicate_regionShapes]
+  induction count with
+  | zero => rfl
+  | succ count inductionHypothesis =>
+      rw [List.replicate_succ, List.flatten_cons, List.map_append,
+        List.replicate_succ, List.flatten_cons, inductionHypothesis]
+
 
 namespace V1
 
