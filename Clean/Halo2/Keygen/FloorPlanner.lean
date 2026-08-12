@@ -15712,6 +15712,17 @@ theorem slotSummaryEndFromWith_swap_of_placementEquivalent
     placeSummary_eq_of_placementEquivalent hequivalent
   simp only [slotSummaryEndFromWith_cons, hplace, hequivalent.2]
 
+theorem slotSummaryStateFromWith_swap_of_placementEquivalent
+    (initial : ℕ) (left right : RegionShapeSummary)
+    (tail : List RegionShapeSummary) (allocations : CircuitAllocations)
+    (hequivalent : left.PlacementEquivalent right) :
+    slotSummaryStateFromWith initial (left :: right :: tail) allocations =
+      slotSummaryStateFromWith initial (right :: left :: tail) allocations := by
+  have hplace : ∀ current,
+      placeSummary left current = placeSummary right current :=
+    placeSummary_eq_of_placementEquivalent hequivalent
+  simp only [slotSummaryStateFromWith, hplace, hequivalent.2]
+
 /-- Swapping two disjoint regions changes neither their individual placements nor
 the final endpoint, including the placement of every following region. -/
 theorem slotSummaryEndFromWith_swap
@@ -16098,6 +16109,62 @@ theorem slotSummaryEndFromWith_bubble
                 rw [List.forall_append, List.forall_append]
                 exact ⟨⟨hwellBefore.2, hwellSuffix⟩, hwellTail⟩))
 
+/-- Complete-state form of bubbling one summary across a commuting prefix. -/
+theorem slotSummaryStateFromWith_bubble
+    (pivot : RegionShapeSummary)
+    (before suffix : List RegionShapeSummary)
+    (hwellBefore : before.Forall RegionShapeSummary.WellFormed)
+    (hwellPivot : pivot.WellFormed)
+    (hcommutes : ∀ item, item ∈ before →
+      item.PlacementEquivalent pivot ∨
+        List.Disjoint item.columns pivot.columns)
+    (initial : ℕ) (allocations : CircuitAllocations)
+    (hvalid : allocations.Valid)
+    (hwellSuffix : suffix.Forall RegionShapeSummary.WellFormed) :
+    SummaryStateEquivalent
+      (slotSummaryStateFromWith initial
+        (before ++ pivot :: suffix) allocations)
+      (slotSummaryStateFromWith initial
+        (pivot :: before ++ suffix) allocations) := by
+  induction before generalizing initial allocations with
+  | nil => exact SummaryStateEquivalent.refl _
+  | cons head rest inductionHypothesis =>
+      rw [List.forall_cons] at hwellBefore
+      generalize hplaced : placeSummary head allocations = placed
+      rcases placed with ⟨row, updated⟩
+      have hupdatedValid : updated.Valid := by
+        have hresult := placeSummary_valid head allocations hvalid
+          hwellBefore.1
+        rw [hplaced] at hresult
+        exact hresult
+      have hrest := inductionHypothesis hwellBefore.2 (by
+          intro item hitem
+          exact hcommutes item (by simp [hitem]))
+        (max initial (row.getD 0 + head.rowCount)) updated hupdatedValid
+      have hbubbled : SummaryStateEquivalent
+          (slotSummaryStateFromWith initial
+            (head :: rest ++ pivot :: suffix) allocations)
+          (slotSummaryStateFromWith initial
+            (head :: pivot :: rest ++ suffix) allocations) := by
+        simpa only [List.cons_append, slotSummaryStateFromWith, hplaced]
+          using hrest
+      have hpair := hcommutes head (by simp)
+      rcases hpair with hequivalent | hdisjoint
+      · exact hbubbled.trans (by
+          have hswap := slotSummaryStateFromWith_swap_of_placementEquivalent
+            initial head pivot (rest ++ suffix) allocations hequivalent
+          simpa only [List.cons_append, hswap] using
+            SummaryStateEquivalent.refl
+              (slotSummaryStateFromWith initial
+                (pivot :: head :: rest ++ suffix) allocations))
+      · exact hbubbled.trans (by
+          simpa only [List.cons_append] using
+            slotSummaryStateFromWith_swap initial head pivot
+              (rest ++ suffix) allocations hvalid hwellBefore.1 hwellPivot
+              hdisjoint (by
+                rw [List.forall_append]
+                exact ⟨hwellBefore.2, hwellSuffix⟩))
+
 theorem perm_bubble (pivot : RegionShapeSummary)
     (before suffix : List RegionShapeSummary) :
     (before ++ pivot :: suffix).Perm (pivot :: before ++ suffix) := by
@@ -16236,6 +16303,131 @@ theorem slotSummaryEndFromWith_eq_of_sorted_perm_interchangeable
           hplaced] using hrest
       exact hconsRest.trans hbubble.symm
 
+/-- Complete-state form of sorted-permutation interchangeability. -/
+theorem slotSummaryStateFromWith_eq_of_sorted_perm_interchangeable
+    {K : Type} [LinearOrder K] (key : RegionShapeSummary → K)
+    {left right : List RegionShapeSummary}
+    (hperm : left.Perm right)
+    (hsortedLeft : (left.map key).SortedLE)
+    (hsortedRight : (right.map key).SortedLE)
+    (hwellFormed : left.Forall RegionShapeSummary.WellFormed)
+    (hties : ∀ first, first ∈ left → ∀ second, second ∈ left →
+      key first = key second →
+        first.PlacementEquivalent second ∨
+          List.Disjoint first.columns second.columns)
+    (initial : ℕ) (allocations : CircuitAllocations)
+    (hvalid : allocations.Valid) :
+    SummaryStateEquivalent
+      (slotSummaryStateFromWith initial left allocations)
+      (slotSummaryStateFromWith initial right allocations) := by
+  induction left generalizing right initial allocations with
+  | nil =>
+      have : right = [] := hperm.symm.eq_nil
+      subst right
+      exact SummaryStateEquivalent.refl _
+  | cons pivot rest inductionHypothesis =>
+      have hpivotRight : pivot ∈ right := hperm.subset (by simp)
+      obtain ⟨before, suffix, hright⟩ := List.mem_iff_append.mp hpivotRight
+      subst right
+      rw [List.forall_cons] at hwellFormed
+      have hsortedLeftCons := hsortedLeft
+      rw [List.sortedLE_iff_pairwise, List.map_cons,
+        List.pairwise_cons] at hsortedLeftCons
+      have hsortedRightAppend := hsortedRight
+      rw [List.sortedLE_iff_pairwise, List.map_append, List.map_cons,
+        List.pairwise_append] at hsortedRightAppend
+      have hkeysEqual :
+          (key pivot :: rest.map key) =
+            before.map key ++ key pivot :: suffix.map key :=
+        List.Perm.eq_of_sortedLE hsortedLeft (by
+          simpa only [List.map_append, List.map_cons] using hsortedRight)
+          (by simpa only [List.map_append, List.map_cons] using hperm.map key)
+      have hlower : ∀ item,
+          item ∈ before ++ pivot :: suffix → key pivot ≤ key item := by
+        intro item hitem
+        cases before with
+        | nil =>
+            simp only [List.nil_append] at hitem
+            rw [List.mem_cons] at hitem
+            rcases hitem with rfl | hitem
+            · exact le_rfl
+            · exact List.pairwise_cons.mp hsortedRightAppend.2.1 |>.1
+                (key item) (List.mem_map.mpr ⟨item, hitem, rfl⟩)
+        | cons head beforeRest =>
+            simp only [List.map_cons, List.cons_append, List.cons.injEq]
+              at hkeysEqual
+            simp only [List.cons_append] at hitem
+            rw [List.mem_cons] at hitem
+            rcases hitem with rfl | hitem
+            · exact hkeysEqual.1.le
+            · have hrightCons :
+                  (key head :: (beforeRest ++ pivot :: suffix).map key).Pairwise
+                    (· ≤ ·) := by
+                simpa only [List.sortedLE_iff_pairwise, List.map_cons] using
+                  hsortedRight
+              rw [List.pairwise_cons] at hrightCons
+              exact hkeysEqual.1.le.trans
+                (hrightCons.1 (key item)
+                  (List.mem_map.mpr ⟨item, hitem, rfl⟩))
+      have hbeforeKeys : ∀ item, item ∈ before →
+          key item = key pivot := by
+        intro item hitem
+        apply le_antisymm
+        · exact hsortedRightAppend.2.2 (key item)
+            (List.mem_map.mpr ⟨item, hitem, rfl⟩) (key pivot) (by simp)
+        · exact hlower item (by simp [hitem])
+      have hwellRight :
+          (before ++ pivot :: suffix).Forall
+            RegionShapeSummary.WellFormed := by
+        rw [List.forall_iff_forall_mem]
+        intro summary hsummary
+        exact List.forall_iff_forall_mem.mp
+          (by rw [List.forall_cons]; exact hwellFormed) summary
+          (hperm.mem_iff.mpr hsummary)
+      rw [List.forall_append, List.forall_cons] at hwellRight
+      have hbubble := slotSummaryStateFromWith_bubble pivot before suffix
+        hwellRight.1 hwellFormed.1 (by
+          intro item hitem
+          have hpair := hties pivot (by simp) item
+            (hperm.mem_iff.mpr (by simp [hitem]))
+            (hbeforeKeys item hitem).symm
+          rcases hpair with heq | hdisjoint
+          · exact Or.inl heq.symm
+          · exact Or.inr hdisjoint.symm)
+        initial allocations hvalid hwellRight.2.2
+      have htailPerm : rest.Perm (before ++ suffix) := by
+        apply List.Perm.cons_inv
+        exact hperm.trans (perm_bubble pivot before suffix)
+      have htailSorted : ((before ++ suffix).map key).SortedLE := by
+        rw [List.sortedLE_iff_pairwise, List.map_append,
+          List.pairwise_append]
+        exact ⟨hsortedRightAppend.1,
+          (List.pairwise_cons.mp hsortedRightAppend.2.1).2, by
+            intro leftKey hleftKey rightKey hrightKey
+            exact hsortedRightAppend.2.2 leftKey hleftKey rightKey
+              (by simp [hrightKey])⟩
+      generalize hplaced : placeSummary pivot allocations = placed
+      rcases placed with ⟨row, updated⟩
+      have hupdatedValid : updated.Valid := by
+        have hresult := placeSummary_valid pivot allocations hvalid
+          hwellFormed.1
+        rw [hplaced] at hresult
+        exact hresult
+      have hrest := inductionHypothesis htailPerm (by
+          rw [List.sortedLE_iff_pairwise]
+          exact hsortedLeftCons.2)
+        htailSorted hwellFormed.2 (by
+          intro first hfirst second hsecond hkey
+          exact hties first (by simp [hfirst]) second (by simp [hsecond]) hkey)
+        (max initial (row.getD 0 + pivot.rowCount)) updated hupdatedValid
+      have hconsRest : SummaryStateEquivalent
+          (slotSummaryStateFromWith initial (pivot :: rest) allocations)
+          (slotSummaryStateFromWith initial
+            (pivot :: before ++ suffix) allocations) := by
+        simpa only [List.cons_append, slotSummaryStateFromWith, hplaced]
+          using hrest
+      exact hconsRest.trans hbubble.symm
+
 /-- The common special case where tied summaries are definitionally the same or
 column-disjoint. -/
 theorem slotSummaryEndFromWith_eq_of_sorted_perm
@@ -16327,6 +16519,68 @@ theorem slotSummaryEndFromWith_eq_of_normalized_perm
           (show first.key = second.key from hkey))
       initial allocations hvalid tail hwellTail
   exact hleftAligned.trans hrightAligned.symm
+
+/-- Complete-state form of normalized sorted-permutation equivalence. -/
+theorem slotSummaryStateFromWith_eq_of_normalized_perm
+    {left right : List RegionShapeSummary}
+    (hnormalized :
+      (left.map RegionShapeSummary.normalized).Perm
+        (right.map RegionShapeSummary.normalized))
+    (hsortedLeft :
+      (left.map (fun summary => (summary.key : OrderDual ℕ))).SortedLE)
+    (hsortedRight :
+      (right.map (fun summary => (summary.key : OrderDual ℕ))).SortedLE)
+    (hwellFormed : right.Forall RegionShapeSummary.WellFormed)
+    (hties : ∀ first, first ∈ right → ∀ second, second ∈ right →
+      first.key = second.key →
+        first.PlacementEquivalent second ∨
+          List.Disjoint first.columns second.columns)
+    (initial : ℕ) (allocations : CircuitAllocations)
+    (hvalid : allocations.Valid) :
+    SummaryStateEquivalent
+      (slotSummaryStateFromWith initial left allocations)
+      (slotSummaryStateFromWith initial right allocations) := by
+  obtain ⟨aligned, haligned, hequivalent⟩ :=
+    exists_perm_forall₂_of_map_perm RegionShapeSummary.normalized hnormalized
+  have hplacement :
+      List.Forall₂ RegionShapeSummary.PlacementEquivalent left aligned :=
+    hequivalent.imp fun _ _ hnormalizedEq =>
+      RegionShapeSummary.placementEquivalent_iff_normalized_eq.mpr
+        hnormalizedEq
+  have hleftAligned :
+      slotSummaryStateFromWith initial left allocations =
+        slotSummaryStateFromWith initial aligned allocations :=
+    slotSummaryStateFromWith_eq_of_forall₂_placementEquivalent
+      hplacement initial allocations
+  have hkeys :
+      left.map (fun summary => (summary.key : OrderDual ℕ)) =
+        aligned.map (fun summary => (summary.key : OrderDual ℕ)) := by
+    rw [← List.forall₂_eq_eq_eq]
+    simpa only [List.forall₂_map_left_iff,
+      List.forall₂_map_right_iff] using hplacement.imp (fun first second h =>
+        congrArg (fun summary => (summary.key : OrderDual ℕ))
+          (RegionShapeSummary.placementEquivalent_iff_normalized_eq.mp h) |>
+            (RegionShapeSummary.normalized_key_eq first ▸
+              RegionShapeSummary.normalized_key_eq second ▸ ·))
+  have hsortedAligned :
+      (aligned.map (fun summary => (summary.key : OrderDual ℕ))).SortedLE := by
+    rw [← hkeys]
+    exact hsortedLeft
+  have hrightAligned :=
+    slotSummaryStateFromWith_eq_of_sorted_perm_interchangeable
+      (key := fun summary : RegionShapeSummary =>
+        (show OrderDual ℕ from summary.key)) haligned.symm hsortedRight
+      hsortedAligned hwellFormed (by
+        intro first hfirst second hsecond hkey
+        exact hties first hfirst second hsecond
+          (show first.key = second.key from hkey))
+      initial allocations hvalid
+  have hleftEquivalent : SummaryStateEquivalent
+      (slotSummaryStateFromWith initial left allocations)
+      (slotSummaryStateFromWith initial aligned allocations) := by
+    rw [hleftAligned]
+    exact SummaryStateEquivalent.refl _
+  exact hleftEquivalent.trans hrightAligned.symm
 
 /-- Forgetting shape indices changes no slotted endpoint, for any pair sequence. -/
 theorem slottedEndFrom_forgetIndices_eq
