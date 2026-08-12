@@ -65,6 +65,7 @@ attribute [keygen_norm]
   Operations.KeygenRegistered.constrainInstance_cons
   Operations.KeygenRegistered.loadTable_cons
   List.forall_append List.forall_cons
+  List.flatMap_cons List.flatMap_append
   List.mem_append List.mem_cons List.mem_singleton List.not_mem_nil
   List.nil_append List.append_nil List.append_assoc
   and_self and_true true_and
@@ -104,6 +105,7 @@ attribute [keygen_spine]
   Operations.KeygenRegistered.constrainInstance_cons
   Operations.KeygenRegistered.loadTable_cons
   List.forall_append List.forall_cons
+  List.flatMap_cons List.flatMap_append
   List.mem_append List.mem_cons List.mem_singleton
   List.nil_append List.append_nil List.append_assoc
   and_self and_true true_and
