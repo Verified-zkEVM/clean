@@ -1398,6 +1398,10 @@ elab "keygen_registration" : tactic => do
   trace[Halo2.keygen] "keygen_registration: structural close"
   KeygenRegistration.close
   if !(← getGoals).isEmpty then
+    evalTactic (← `(tactic|
+      simp_all! +zetaDelta (config := { failIfUnchanged := false }) only [
+        keygen_spine, keygen_norm, keygen_output_norm]))
+  if !(← getGoals).isEmpty then
     trace[Halo2.keygen] "keygen_registration: configure fallback"
     KeygenRegistration.finishConfigureGoals
 
