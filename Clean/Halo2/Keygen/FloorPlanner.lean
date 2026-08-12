@@ -10334,6 +10334,54 @@ def Allocations.insertList (start length : ℕ) :
 def Allocations.insert (a : Allocations) (start len : ℕ) : Allocations :=
   (insertList start len a.toList).toArray
 
+private theorem Allocations.insertList_comm_of_ne
+    (items : List (ℕ × ℕ)) {leftStart rightStart leftLength rightLength : ℕ}
+    (hne : leftStart ≠ rightStart) :
+    insertList rightStart rightLength
+        (insertList leftStart leftLength items) =
+      insertList leftStart leftLength
+        (insertList rightStart rightLength items) := by
+  induction items with
+  | nil =>
+      simp only [insertList]
+      by_cases horder : leftStart < rightStart
+      · simp [horder, Nat.not_lt.mpr (Nat.le_of_lt horder)]
+      · have hreverse : rightStart < leftStart := by omega
+        simp [horder, hreverse]
+  | cons head rest inductionHypothesis =>
+      by_cases hleft : leftStart < head.1
+      · by_cases hright : rightStart < head.1
+        · by_cases horder : leftStart < rightStart
+          · have hnotReverse : ¬ rightStart < leftStart := by omega
+            simp only [insertList, hleft, hright, horder, hnotReverse,
+              if_pos, if_false]
+          · have hreverse : rightStart < leftStart := by omega
+            simp only [insertList, hleft, hright, horder, hreverse,
+              if_pos, if_false]
+        · have hnotRightLeft : ¬ rightStart < leftStart := by omega
+          simp only [insertList, hleft, hright, hnotRightLeft,
+            if_pos, if_false]
+      · by_cases hright : rightStart < head.1
+        · have hnotLeftRight : ¬ leftStart < rightStart := by omega
+          simp only [insertList, hleft, hright, hnotLeftRight,
+            if_pos, if_false]
+        · simp only [insertList, hleft, hright, if_false]
+          rw [inductionHypothesis]
+
+/-- Intervals with distinct starts are inserted in a canonical order,
+independently of insertion order. -/
+theorem Allocations.insert_comm_of_ne
+    (allocations : Allocations)
+    {leftStart rightStart leftLength rightLength : ℕ}
+    (hne : leftStart ≠ rightStart) :
+    (allocations.insert leftStart leftLength).insert
+        rightStart rightLength =
+      (allocations.insert rightStart rightLength).insert
+        leftStart leftLength := by
+  simp only [insert]
+  congr 1
+  simpa using insertList_comm_of_ne allocations.toList hne
+
 /-- Strict row ordering carried by adjacent allocated intervals. -/
 def Allocations.IntervalBefore (left right : ℕ × ℕ) : Prop :=
   left.1 + left.2 ≤ right.1
@@ -14472,6 +14520,23 @@ def insert (view : AllocationView) (columns : List RegionColumn)
     (view column).insert start length
   else view column
 
+theorem insert_comm_of_ne
+    (view : AllocationView) (leftColumns rightColumns : List RegionColumn)
+    {leftStart rightStart leftLength rightLength : ℕ}
+    (hne : leftStart ≠ rightStart) :
+    (view.insert leftColumns leftStart leftLength).insert
+        rightColumns rightStart rightLength =
+      (view.insert rightColumns rightStart rightLength).insert
+        leftColumns leftStart leftLength := by
+  funext column
+  by_cases hleft : column ∈ leftColumns <;>
+    by_cases hright : column ∈ rightColumns
+  · simpa [insert, hleft, hright] using
+      Allocations.insert_comm_of_ne (view column) hne
+  · simp [insert, hleft, hright]
+  · simp [insert, hleft, hright]
+  · simp [insert, hleft, hright]
+
 /-- Insert a consecutive run of equal-width intervals into the same columns.
 The repetition count remains symbolic, so clients can compose compact planner
 summaries without expanding `List.replicate`. -/
@@ -14481,6 +14546,29 @@ def insertRepeated (view : AllocationView) (columns : List RegionColumn)
   | count + 1 =>
       insertRepeated (view.insert columns start length) columns
         (start + length) length count
+
+/-- A compact repeated run commutes with an insertion whose start differs from
+every start in the run. -/
+theorem insertRepeated_insert_comm
+    (view : AllocationView) (columns otherColumns : List RegionColumn)
+    (start length otherStart otherLength count : ℕ)
+    (hne : ∀ index, index < count →
+      start + index * length ≠ otherStart) :
+    (view.insertRepeated columns start length count).insert
+        otherColumns otherStart otherLength =
+      (view.insert otherColumns otherStart otherLength).insertRepeated
+        columns start length count := by
+  induction count generalizing view start with
+  | zero => rfl
+  | succ count inductionHypothesis =>
+      simp only [insertRepeated]
+      rw [inductionHypothesis]
+      · rw [insert_comm_of_ne]
+        simpa using hne 0 (Nat.zero_lt_succ count)
+      · intro index hindex
+        have hnext := hne (index + 1) (by omega)
+        simpa [Nat.add_mul, Nat.add_assoc, Nat.add_comm,
+          Nat.add_left_comm] using hnext
 
 theorem insert_valid
     {view : AllocationView} {columns : List RegionColumn}
@@ -15240,6 +15328,25 @@ theorem slotSummaryStateFromWith_snd
       rcases placed with ⟨row, updated⟩
       simp only [slotSummaryStateFromWith, slotShapeSummariesFrom, hplaced]
       exact inductionHypothesis _ _
+
+/-- Slotting well-formed summaries preserves the allocation invariant. -/
+theorem slotSummaryStateFromWith_valid
+    (initial : ℕ) (summaries : List RegionShapeSummary)
+    (allocations : CircuitAllocations)
+    (hwellFormed : summaries.Forall RegionShapeSummary.WellFormed)
+    (hvalid : allocations.Valid) :
+    (slotSummaryStateFromWith initial summaries allocations).2.Valid := by
+  induction summaries generalizing initial allocations with
+  | nil => exact hvalid
+  | cons summary rest inductionHypothesis =>
+      rw [List.forall_cons] at hwellFormed
+      generalize hplaced : placeSummary summary allocations = placed
+      rcases placed with ⟨row, updated⟩
+      have hupdated := placeSummary_valid summary allocations hvalid
+        hwellFormed.1
+      rw [hplaced] at hupdated
+      simp only [slotSummaryStateFromWith, hplaced]
+      exact inductionHypothesis _ _ hwellFormed.2 hupdated
 
 /-- Planner states agree when their endpoints agree and their allocation maps
 contain the same observable interval sequences. -/
