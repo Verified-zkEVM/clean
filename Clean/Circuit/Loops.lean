@@ -63,8 +63,8 @@ lemma forAll_flatten_abstract (circuit : Fin m → Circuit F β) (constant : Con
     set k' := constant'.localLength
     have : k' = k := rfl
     rw [this] at ih
-    have : ((circuit 0).operations n).localLength + n = n + constant.localLength := by
-      rw [←constant.localLength_eq 0 n]; ac_rfl
+    have : n + ((circuit 0).operations n).localLength = n + constant.localLength := by
+      rw [←constant.localLength_eq 0 n]
     rw [this]
     ring_nf at ih ⊢
     rw [ih]

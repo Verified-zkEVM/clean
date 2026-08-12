@@ -967,9 +967,7 @@ theorem main_computableWitnesses (n : ℕ) :
           exact hc (by simp only [circuit_norm]; exact take_eq hp) hag
         · intro _ _ _ hc hp
           exact hc (by simp only [circuit_norm]; exact take_eq hp)
-      · rw [Nat.add_comm (Operations.localLength (main (((input.take ((m + 3) / 2)).cast (by omega) :
-          Vector (Expression (F p)) ((m + 3) / 2))) offset).2) offset]
-        have h2 := (ih2 (offset + Operations.localLength (main (((input.take ((m + 3) / 2)).cast (by omega) :
+      · have h2 := (ih2 (offset + Operations.localLength (main (((input.take ((m + 3) / 2)).cast (by omega) :
             Vector (Expression (F p)) ((m + 3) / 2))) offset).2)
           (((input.drop ((m + 3) / 2)).cast (by omega) :
             Vector (Expression (F p)) (m + 3 - (m + 3) / 2))) env env').1

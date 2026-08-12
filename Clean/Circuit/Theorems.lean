@@ -147,9 +147,9 @@ theorem forAll_cons {condition : _root_.Condition F} {offset : ℕ} {op : FlatOp
 
 lemma forAll_append {condition : _root_.Condition F} {ops ops' : List (FlatOperation F)} (n : ℕ) :
   forAll n condition (ops ++ ops') ↔
-    forAll n condition ops ∧ forAll (localLength ops + n) condition ops' := by
+    forAll n condition ops ∧ forAll (n + localLength ops) condition ops' := by
   induction ops generalizing n with
-  | nil => simp only [List.nil_append, forAll, localLength, zero_add, true_and]
+  | nil => simp only [List.nil_append, forAll, localLength, add_zero, true_and]
   | cons op ops ih =>
     specialize ih (n + op.singleLocalLength)
     simp_all +arith [forAll_cons, localLength_cons, and_assoc]
@@ -372,9 +372,9 @@ theorem bind_forAll' {f : Circuit F α} {g : α → Circuit F β} :
 
 @[circuit_norm] theorem ConstraintsHold.append_localWitnesses {as bs : Operations F} (n : ℕ) :
   env_p.UsesLocalWitnessesCompleteness n (as ++ bs)
-  ↔ env_p.UsesLocalWitnessesCompleteness n as ∧ env_p.UsesLocalWitnessesCompleteness (as.localLength + n) bs := by
+  ↔ env_p.UsesLocalWitnessesCompleteness n as ∧ env_p.UsesLocalWitnessesCompleteness (n + as.localLength) bs := by
   rw [env_p.usesLocalWitnessesCompleteness_iff_forAll, Operations.forAll_append,
-    ←env_p.usesLocalWitnessesCompleteness_iff_forAll n, ←env_p.usesLocalWitnessesCompleteness_iff_forAll (as.localLength + n)]
+    ←env_p.usesLocalWitnessesCompleteness_iff_forAll n, ←env_p.usesLocalWitnessesCompleteness_iff_forAll (n + as.localLength)]
 
 @[circuit_norm] theorem ConstraintsHold.bind_usesLocalWitnesses {f : Circuit F α} {g : α → Circuit F β} (n : ℕ) :
   env_p.UsesLocalWitnessesCompleteness n ((f >>= g).operations n)

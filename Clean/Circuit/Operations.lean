@@ -1288,7 +1288,7 @@ theorem forAll_empty {condition : Condition F} {n : ℕ} : forAll n condition []
 @[circuit_norm]
 theorem forAll_append {condition : Condition F} {offset : ℕ} {as bs: Operations F} :
   forAll offset condition (as ++ bs) ↔
-    forAll offset condition as ∧ forAll (as.localLength + offset) condition bs := by
+    forAll offset condition as ∧ forAll (offset + as.localLength) condition bs := by
   induction as using induct generalizing offset with
   | empty => simp [forAll_empty, localLength]
   | witness _ _ _ ih | assert _ _ ih | lookup _ _ ih | subcircuit _ _ ih | interact _ _ ih =>

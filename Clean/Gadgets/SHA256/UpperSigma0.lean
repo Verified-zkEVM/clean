@@ -161,7 +161,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [upperSigma0, xor32]
-  obtain ⟨h_env1, h_env2, -⟩ := h_env
+  obtain ⟨h_env1, h_env2⟩ := h_env
   refine ⟨fun i => ?_, fun i => ?_⟩
   · have hr2 := eval_rotr32 env.toEnvironment input_var input h_input 2 i
     have hr13 := eval_rotr32 env.toEnvironment input_var input h_input 13 i
@@ -184,7 +184,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
     have hr22 := eval_rotr32 env.toEnvironment input_var input h_input 22 i
     have h1 := h_env1 i
     have h2 := h_env2 i
-    simp only [circuit_norm, mul_zero, zero_add] at h2
+    simp only [circuit_norm, mul_zero] at h2
     rw [show (i₀ + (32 + 32 * 0) + ↑i) = i₀ + 32 + ↑i from by ring, h2, h1, hr2, hr13, hr22]
     have b2 : input[(i + 2).val] = (0 : F p) ∨ input[(i + 2).val] = 1 := h_assumptions (i + 2)
     have b13 : input[(i + 13).val] = (0 : F p) ∨ input[(i + 13).val] = 1 := h_assumptions (i + 13)
@@ -217,7 +217,7 @@ def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
   computableWitnesses := by
     intro n input env env'
     simp only [circuit_norm, main, upperSigma0, xor32, rotr32, Vector.ext_iff]
-    refine ⟨⟨fun h hag => ?_, fun h hag => ?_, ?_⟩, fun h hag => ?_⟩
+    refine ⟨⟨fun h hag => ?_, fun h hag => ?_⟩, fun h hag => ?_⟩
     · intro i hi
       simp only [circuit_norm, Vector.getElem_rotate]
       -- grind needs the `% 32`-index instantiations supplied (retested 2026-08-07: with
@@ -231,9 +231,6 @@ def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
       simp only [circuit_norm, Vector.getElem_rotate]
       have hr3 := h ((i + 22) % 32) (by omega)
       grind
-    · -- assert-only forEach group: no witnesses, trivially computable
-      ring_nf
-      simp only [Circuit.forEach.forAll, circuit_norm]
     · grind
 
 end UpperSigma0

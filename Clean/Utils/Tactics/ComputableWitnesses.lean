@@ -991,14 +991,6 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
   let leafDispatch : TacticM Unit := withMainContext do
     -- inaccessible hyp names (from intro1P) break the chainer's delab roundtrip
     try replaceMainGoal [← (← getMainGoal).exposeNames] catch _ => pure ()
-    -- offset arithmetic into the shape `Circuit.forEach.forAll` matches (the manual
-    -- proofs' `ring_nf` step) — only for leaves that actually contain a forEach
-    -- group; elsewhere ring_nf re-spells offsets out from under the omega discharge
-    let hasForEach ← withMainContext do
-      let t ← instantiateMVars (← getMainTarget)
-      pure (t.find? fun e => e.getAppFn.isConstOf `Circuit.forEach).isSome
-    if hasForEach then
-      try evalTactic (← `(tactic| ring_nf)) catch _ => pure ()
     -- leaf-local simp (normalizes loop-instantiated lengths), then dispatch
     -- deliberately WITHOUT the user hints: this simp hits `at *`, and close-stage
     -- hints (e.g. recursive eval decompositions like `eval_vector_set`) rewriting

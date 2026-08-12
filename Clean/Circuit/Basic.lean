@@ -568,7 +568,7 @@ theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} {prop : Conditi
   ((f >>= g).operations n).forAll n prop ↔
     (f.operations n).forAll n prop ∧ (((g (f.output n)).operations (n + f.localLength n)).forAll (n + f.localLength n)) prop := by
   have h_ops : (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (n + f.localLength n) := rfl
-  rw [h_ops, Operations.forAll_append, add_comm n]
+  rw [h_ops, Operations.forAll_append]
 
 end Circuit
 
