@@ -14438,6 +14438,8 @@ abbrev AllocationView := RegionColumn → Allocations
 
 namespace AllocationView
 
+def empty : AllocationView := fun _ => #[]
+
 def Represents
     (allocations : CircuitAllocations) (view : AllocationView) : Prop :=
   ∀ column, allocations.getD column #[] = view column
@@ -15433,6 +15435,115 @@ theorem lawful_append (initial : AllocationView)
       simp only [List.cons_append, Lawful, finalView,
         inductionHypothesis]
       tauto
+
+/-- Whether a proposed block at `start` avoids every compact block already
+placed. The formulation uses finite `List.Forall` predicates so concrete
+reduced traces can discharge it with the kernel evaluator. -/
+def FitsAfterAt (placed : List PlannedSummaryBlock)
+    (block : PlannedSummaryBlock) (start length : ℕ) : Prop :=
+  placed.Forall fun earlier =>
+    block.summary.columns.Forall fun column =>
+      column ∈ earlier.summary.columns →
+        RowIntervalsDisjoint start length earlier.start
+          (earlier.count * earlier.summary.rowCount)
+
+theorem FitsAfterAt.monoLength
+    {placed : List PlannedSummaryBlock} {block : PlannedSummaryBlock}
+    {start outerLength length : ℕ}
+    (hfits : FitsAfterAt placed block start outerLength)
+    (hlength : length ≤ outerLength) :
+    FitsAfterAt placed block start length := by
+  apply hfits.imp
+  intro earlier hearlier
+  apply hearlier.imp
+  intro column hcolumn hmember
+  have hdisjoint := hcolumn hmember
+  unfold RowIntervalsDisjoint at hdisjoint ⊢
+  omega
+
+/-- A finite, compact certificate that every stated start is exactly the least
+fit after the preceding blocks. -/
+def TraceLawfulAfter (placed : List PlannedSummaryBlock) :
+    List PlannedSummaryBlock → Prop
+  | [] => True
+  | block :: rest =>
+      0 < block.count ∧
+      block.summary.WellFormed ∧
+      block.summary.columns ≠ [] ∧
+      FitsAfterAt placed block block.start
+        (block.count * block.summary.rowCount) ∧
+      ((List.range block.start).Forall fun candidate =>
+        ¬ FitsAfterAt placed block candidate block.summary.rowCount) ∧
+      TraceLawfulAfter (placed ++ [block]) rest
+
+private theorem fitsColumns_finalView_iff_fitsAfterAt
+    (initial : AllocationView) (placed : List PlannedSummaryBlock)
+    (block : PlannedSummaryBlock) (start length : ℕ)
+    (hcounts : placed.Forall fun earlier => 0 < earlier.count)
+    (hlength : 0 < length) :
+    (finalView initial placed).FitsColumns
+        (sortRegionColumns block.summary.columns) start length ↔
+      initial.FitsColumns (sortRegionColumns block.summary.columns) start
+          length ∧ FitsAfterAt placed block start length := by
+  induction placed generalizing initial with
+  | nil => simp [finalView, FitsAfterAt]
+  | cons earlier rest inductionHypothesis =>
+      rw [List.forall_cons] at hcounts
+      simp only [finalView]
+      rw [inductionHypothesis _ hcounts.2,
+        AllocationView.fitsColumns_insertRepeated_iff_of_pos
+          hcounts.1 hlength]
+      simp [FitsAfterAt, List.forall_iff_forall_mem,
+        mem_sortRegionColumns_iff]
+      constructor
+      · rintro ⟨⟨hinitial, hearlier⟩, hrest⟩
+        exact ⟨hinitial, hearlier, hrest⟩
+      · rintro ⟨hinitial, hearlier, hrest⟩
+        exact ⟨⟨hinitial, hearlier⟩, hrest⟩
+
+private theorem emptyPlannerView_fitsColumns
+    (columns : List RegionColumn) (start length : ℕ) :
+    AllocationView.empty.FitsColumns
+      columns start length := by
+  intro column hcolumn
+  simp [AllocationView.empty, Allocations.Fits]
+
+theorem lawful_of_traceLawfulAfter
+    (placed trace : List PlannedSummaryBlock)
+    (hcounts : placed.Forall fun earlier => 0 < earlier.count)
+    (hlawful : TraceLawfulAfter placed trace) :
+    Lawful
+      (finalView AllocationView.empty placed)
+      trace := by
+  induction trace generalizing placed with
+  | nil => trivial
+  | cons block rest inductionHypothesis =>
+      rcases hlawful with
+        ⟨hcount, hwellFormed, hcolumns, hfits, hleast, hrest⟩
+      unfold Lawful
+      refine ⟨hcount, hwellFormed, hcolumns, ?_, ?_, ?_⟩
+      · constructor
+        · rw [fitsColumns_finalView_iff_fitsAfterAt _ _ _ _ _ hcounts
+              (hwellFormed.2 hcolumns)]
+          exact ⟨emptyPlannerView_fitsColumns _ _ _,
+            hfits.monoLength (Nat.le_mul_of_pos_left _ hcount)⟩
+        · intro candidate hcandidateFits
+          by_contra hcandidate
+          have hcandidateLt : candidate < block.start := by omega
+          have hnotFits := List.forall_iff_forall_mem.mp hleast candidate
+            (List.mem_range.mpr hcandidateLt)
+          apply hnotFits
+          rw [fitsColumns_finalView_iff_fitsAfterAt _ _ _ _ _ hcounts
+              (hwellFormed.2 hcolumns)] at hcandidateFits
+          exact hcandidateFits.2
+      · rw [fitsColumns_finalView_iff_fitsAfterAt _ _ _ _ _ hcounts
+            (Nat.mul_pos hcount (hwellFormed.2 hcolumns))]
+        constructor
+        · exact emptyPlannerView_fitsColumns _ _ _
+        · exact hfits
+      · simpa [finalView_append, finalView] using
+          inductionHypothesis (placed ++ [block])
+            (by simpa using And.intro hcounts hcount) hrest
 
 theorem slotSummaryBlocksState_eq
     (trace : List PlannedSummaryBlock)
