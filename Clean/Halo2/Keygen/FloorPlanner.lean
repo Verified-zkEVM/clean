@@ -15177,11 +15177,10 @@ theorem slotSummaryStateRepeated_single_eq
     (hleast : view.LeastFit (sortRegionColumns summary.columns)
       summary.rowCount start)
     (hfree : view.FitsColumns (sortRegionColumns summary.columns) start
-      ((count + 1) * summary.rowCount))
-    (hinitial : initial ≤ start + summary.rowCount) :
+      ((count + 1) * summary.rowCount)) :
     let result := slotSummaryStateRepeated (count + 1) [summary]
       initial allocations
-    result.1 = start + (count + 1) * summary.rowCount ∧
+    result.1 = max initial (start + (count + 1) * summary.rowCount) ∧
       (view.insertRepeated (sortRegionColumns summary.columns) start
         summary.rowCount (count + 1)).Represents result.2 := by
   induction count generalizing initial allocations view start with
@@ -15190,7 +15189,7 @@ theorem slotSummaryStateRepeated_single_eq
         view.placeSummary_eq_of_leastFit summary allocations start
           hrepresents hvalid hnodup hlength hleast
       simp only [slotSummaryStateRepeated, slotSummaryStateFromWith, hplaced,
-        Option.getD_some, max_eq_right hinitial, AllocationView.insertRepeated]
+        Option.getD_some, AllocationView.insertRepeated]
       exact ⟨by omega, hupdatedRepresents⟩
   | succ count inductionHypothesis =>
       let columns := sortRegionColumns summary.columns
@@ -15220,14 +15219,14 @@ theorem slotSummaryStateRepeated_single_eq
         hleast hfree
       have htailFree := view.fitsColumns_insert_tail hfree
       have hrecursive := inductionHypothesis
-        (start + summary.rowCount) updated
+        (max initial (start + summary.rowCount)) updated
         (view.insert columns start summary.rowCount)
         (start + summary.rowCount) hupdatedRepresents hupdatedValid
-        hnextLeast htailFree (by omega)
+        hnextLeast htailFree
       rw [show count.succ + 1 = (count + 1) + 1 by omega,
         slotSummaryStateRepeated]
       simp only [slotSummaryStateFromWith, hplaced, Option.getD_some,
-        max_eq_right hinitial, AllocationView.insertRepeated]
+        AllocationView.insertRepeated]
       exact ⟨by
           simp only [Nat.add_mul] at hrecursive ⊢
           omega,
@@ -15251,8 +15250,11 @@ theorem slotSummaryStateRepeated_single_fst_eq
     (slotSummaryStateRepeated (count + 1) [summary]
       initial allocations).1 = start + (count + 1) * summary.rowCount :=
   (slotSummaryStateRepeated_single_eq count summary initial allocations
-    view start hrepresents hvalid hnodup hcolumns hlength hleast hfree
-    hinitial).1
+    view start hrepresents hvalid hnodup hcolumns hlength hleast hfree).1.trans
+      (max_eq_right (hinitial.trans (by
+        exact Nat.add_le_add_left
+          (Nat.le_mul_of_pos_left summary.rowCount (Nat.succ_pos count))
+          start)))
 
 theorem slotSummaryEndFromWith_cons
     (initial : ℕ) (head : RegionShapeSummary)
