@@ -13158,6 +13158,33 @@ def RegionShapeSummary.PlacementEquivalent
   sortRegionColumns left.columns = sortRegionColumns right.columns ∧
     left.rowCount = right.rowCount
 
+/-- Canonical representative of a reduced physical shape, quotienting the
+incidental first-seen order of its columns. -/
+def RegionShapeSummary.normalized
+    (summary : RegionShapeSummary) : RegionShapeSummary :=
+  { summary with columns := sortRegionColumns summary.columns }
+
+theorem RegionShapeSummary.placementEquivalent_iff_normalized_eq
+    {left right : RegionShapeSummary} :
+    left.PlacementEquivalent right ↔ left.normalized = right.normalized := by
+  simp only [PlacementEquivalent, normalized]
+  constructor
+  · rintro ⟨hcolumns, hrows⟩
+    cases left
+    cases right
+    simp_all
+  · intro heq
+    injection heq with hcolumns hrows
+    exact ⟨hcolumns, hrows⟩
+
+theorem RegionShapeSummary.normalized_key_eq
+    (summary : RegionShapeSummary) :
+    summary.normalized.key = summary.key := by
+  unfold normalized RegionShapeSummary.key RegionShapeSummary.adviceCols
+  have hlength := ((sortRegionColumns_perm summary.columns).filter
+    RegionColumn.isAdvice).length_eq
+  exact congrArg (fun count => count * summary.rowCount) hlength
+
 theorem RegionShapeSummary.PlacementEquivalent.symm
     {left right : RegionShapeSummary}
     (hequivalent : left.PlacementEquivalent right) :
