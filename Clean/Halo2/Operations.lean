@@ -1739,35 +1739,35 @@ def RegionOperations.CopyCellsCovered (operations : RegionOperations F)
     cell ∈ inputCells ++ operations.assignedCells region
 
 /-- Execution-order-sensitive copy provenance inside one region. -/
-def RegionOperations.CopyCellsAssignedFrom (region : RegionIndex) :
-    List Cell → RegionOperations F → Prop
-  | _, [] => True
-  | available, .assignAdvice column row _ :: rest =>
+def RegionOperations.CopyCellsAssignedFrom (region : RegionIndex)
+    (available : List Cell) : RegionOperations F → Prop
+  | [] => True
+  | .assignAdvice column row _ :: rest =>
       CopyCellsAssignedFrom region (.of region row column :: available) rest
-  | available, .assignFixed column row _ :: rest =>
+  | .assignFixed column row _ :: rest =>
       CopyCellsAssignedFrom region (.of region row column :: available) rest
-  | available, .constrainEqual left right :: rest =>
+  | .constrainEqual left right :: rest =>
       left ∈ available ∧ right ∈ available ∧
         CopyCellsAssignedFrom region available rest
-  | available, .constrainConstant cell _ :: rest =>
+  | .constrainConstant cell _ :: rest =>
       cell ∈ available ∧ CopyCellsAssignedFrom region available rest
-  | available, .constrainInstance cell _ _ :: rest =>
+  | .constrainInstance cell _ _ :: rest =>
       cell ∈ available ∧ CopyCellsAssignedFrom region available rest
-  | available, _ :: rest => CopyCellsAssignedFrom region available rest
+  | _ :: rest => CopyCellsAssignedFrom region available rest
 
 def RegionOperations.CopyCellsAssigned (operations : RegionOperations F)
     (region : RegionIndex) (inputCells : List Cell) : Prop :=
   CopyCellsAssignedFrom region inputCells operations
 
 /-- Available cells after executing one region body. -/
-def RegionOperations.assignedCellsAfter (region : RegionIndex) :
-    List Cell → RegionOperations F → List Cell
-  | available, [] => available
-  | available, .assignAdvice column row _ :: rest =>
+def RegionOperations.assignedCellsAfter (region : RegionIndex)
+    (available : List Cell) : RegionOperations F → List Cell
+  | [] => available
+  | .assignAdvice column row _ :: rest =>
       assignedCellsAfter region (.of region row column :: available) rest
-  | available, .assignFixed column row _ :: rest =>
+  | .assignFixed column row _ :: rest =>
       assignedCellsAfter region (.of region row column :: available) rest
-  | available, _ :: rest => assignedCellsAfter region available rest
+  | _ :: rest => assignedCellsAfter region available rest
 
 /-- Cells assigned by a layouter stream, with the same region-index walk used by V1. -/
 def Operations.assignedCellsFrom : Operations F → RegionIndex → List Cell
@@ -1791,16 +1791,16 @@ def Operations.copiedCells (operations : Operations F) : List Cell :=
   operations.flatMap Operation.copiedCells
 
 /-- Execution-order-sensitive copy provenance through the layouter stream. -/
-def Operations.CopyCellsAssignedFrom :
-    RegionIndex → List Cell → Operations F → Prop
-  | _, _, [] => True
-  | region, available, .region _ body :: rest =>
+def Operations.CopyCellsAssignedFrom (region : RegionIndex)
+    (available : List Cell) : Operations F → Prop
+  | [] => True
+  | .region _ body :: rest =>
       body.CopyCellsAssignedFrom region available ∧
         CopyCellsAssignedFrom (region + 1)
           (body.assignedCellsAfter region available) rest
-  | region, available, .constrainInstance cell _ _ :: rest =>
+  | .constrainInstance cell _ _ :: rest =>
       cell ∈ available ∧ CopyCellsAssignedFrom region available rest
-  | region, available, .loadTable _ _ :: rest =>
+  | .loadTable _ _ :: rest =>
       CopyCellsAssignedFrom region available rest
 
 def Operations.CopyCellsAssigned (operations : Operations F)
