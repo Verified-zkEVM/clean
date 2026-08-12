@@ -467,6 +467,24 @@ theorem ofColumns_combine_ofColumns
   · rfl
   · rfl
 
+/-- Combining a reduced summary whose columns are already covered by the left
+summary changes only the numerical footprint. This keeps compositional summaries
+compact when a later operation reuses an existing region footprint. -/
+theorem ofColumns_combine_ofColumns_of_subset
+    (leftColumns rightColumns : List RegionColumn)
+    (leftRows rightRows leftConstants rightConstants : ℕ)
+    (hsubset : ∀ column ∈ rightColumns, column ∈ leftColumns) :
+    (ofColumns leftColumns leftRows leftConstants).combine
+        (ofColumns rightColumns rightRows rightConstants) =
+      ofColumns leftColumns (max leftRows rightRows)
+        (leftConstants + rightConstants) := by
+  rw [ofColumns_combine_ofColumns]
+  apply RegionSynthesisSummary.ext
+  · exact unionColumns_normalize_append_redundant
+      leftColumns rightColumns hsubset
+  · rfl
+  · rfl
+
 /-- Deferred-constant requests of a reduced summary fold are the sum of the
 component requests. -/
 @[synthesis_summary_norm]
