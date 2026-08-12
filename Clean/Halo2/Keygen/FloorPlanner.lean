@@ -14236,6 +14236,14 @@ theorem SynthesisSummary.combine_physicalRegionShapes
   unfold SynthesisSummary.physicalRegionShapes
   rw [SynthesisSummary.combine_regionShapes, List.map_append]
 
+theorem SynthesisSummary.ofRegion_physicalRegionShapes
+    (summary : RegionSynthesisSummary) :
+    (SynthesisSummary.ofRegion summary).physicalRegionShapes =
+      [summary.toRegionShapeSummary.withoutSelectors] := by
+  unfold SynthesisSummary.physicalRegionShapes
+  rw [SynthesisSummary.ofRegion_regionShapes]
+  rfl
+
 theorem SynthesisSummary.replicate_physicalRegionShapes
     (count : ℕ) (summary : SynthesisSummary) :
     (SynthesisSummary.replicate count summary).physicalRegionShapes =
