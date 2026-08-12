@@ -1872,6 +1872,31 @@ def RegionOperations.assignedCellsAfter (region : RegionIndex)
   operations.foldl (fun cells operation =>
     operation.assignedCells region ++ cells) available
 
+@[keygen_norm, keygen_spine]
+theorem RegionOperations.copyCellsAssignedFrom_append_iff
+    (region : RegionIndex) (available : List Cell)
+    (left right : RegionOperations F) :
+    CopyCellsAssignedFrom region available (left ++ right) ↔
+      CopyCellsAssignedFrom region available left ∧
+        CopyCellsAssignedFrom region
+          (left.assignedCellsAfter region available) right := by
+  induction left generalizing available with
+  | nil =>
+      simp only [List.nil_append, assignedCellsAfter, List.foldl_nil,
+        copyCellsAssignedFrom_nil_iff, true_and]
+  | cons operation rest inductionHypothesis =>
+      cases operation <;>
+        simp only [List.cons_append, assignedCellsAfter, List.foldl_cons,
+          RegionOperation.assignedCells,
+          copyCellsAssignedFrom_assignAdvice_iff,
+          copyCellsAssignedFrom_assignFixed_iff,
+          copyCellsAssignedFrom_enableGate_iff,
+          copyCellsAssignedFrom_enableLookup_iff,
+          copyCellsAssignedFrom_constrainEqual_iff,
+          copyCellsAssignedFrom_constrainConstant_iff,
+          copyCellsAssignedFrom_constrainInstance_iff,
+          inductionHypothesis, List.nil_append, and_assoc]
+
 /-- Cells assigned by a layouter stream, with the same region-index walk used by V1. -/
 def Operations.assignedCellsFrom : Operations F → RegionIndex → List Cell
   | [], _ => []
