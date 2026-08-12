@@ -485,6 +485,18 @@ theorem ofColumns_combine_ofColumns_of_subset
   · rfl
   · rfl
 
+/-- Repeated source columns may be removed before constructing a reduced region
+summary. -/
+theorem ofColumns_append_redundant
+    (left right : List RegionColumn) (rowCount constantSiteCount : ℕ)
+    (hsubset : ∀ column ∈ right, column ∈ left) :
+    ofColumns (left ++ right) rowCount constantSiteCount =
+      ofColumns left rowCount constantSiteCount := by
+  apply RegionSynthesisSummary.ext
+  · exact unionColumns_normalize_append_redundant left right hsubset
+  · rfl
+  · rfl
+
 /-- Deferred-constant requests of a reduced summary fold are the sum of the
 component requests. -/
 @[synthesis_summary_norm]
