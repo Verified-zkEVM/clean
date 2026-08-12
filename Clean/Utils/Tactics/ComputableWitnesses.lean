@@ -38,7 +38,7 @@ a child bundle name whose metadata is otherwise stuck under a binder).
      list — leaving the `OnlyAccessedBelow` premise;
    * `chain_output_facts` derives child-output congruence facts
      (`FormalCircuit.output_of_input_eq` instances, re-keyed at the goal's own eval
-     spelling) plus universal metadata facts for binder-nested outputs;
+     spelling);
    * the close routes by shape (`isEvalCongrEq`): vector/eval-congruence goals get the
      staged vector route (structural `simp_all`, close-hint step, then per-branch
      `split_ifs` → `envUnify` → `grind`); everything else takes the base route
@@ -392,82 +392,6 @@ works on syntactic atoms). `grind` cannot run simprocs, so letting it instantiat
 composition rules would re-create opaque length atoms. -/
 def chainOutputFacts : TacticM Unit := withMainContext do
   try betaReduceGoal catch _ => pure ()
-  let tgt ← instantiateMVars (← getMainTarget)
-  -- Universal child-output metadata facts. Binder-nested outputs (e.g. inside a
-  -- `Vector.mapFinRange` lambda) cannot be chained per instance — the term has loose
-  -- bvars — and `grind` does not look under binders. Instead, state
-  -- `∀ v m, c.output v m = <reduced>` once per closed output prefix (bundle constant
-  -- plus instances), prove it by the `circuit_norm` reduction of the metadata
-  -- projection (cheap: `elaborate_circuit` stores it explicitly), and rewrite it
-  -- through goal and hypotheses — `simp` rewrites under binders.
-  let outputArity := (← getConstInfo `FormalCircuitBase.output).type.getForallBinderNames.length
-  let prefixes ← IO.mkRef (#[] : Array Expr)
-  tgt.forEach fun e => do
-    unless e.getAppFn.isConstOf `FormalCircuitBase.output do return ()
-    -- exact arity only: every partial application along the spine is also visited
-    unless e.getAppNumArgs == outputArity do return ()
-    -- binder-nested occurrences only: closed occurrences are handled per instance by
-    -- the chaining loop below, and rewriting them away would detach the goal's atoms
-    -- from the chained `o_chain` facts
-    unless e.hasLooseBVars do return ()
-    let pfx := e.appFn!.appFn!
-    if pfx.hasLooseBVars || pfx.hasMVar then return ()
-    prefixes.modify fun a => if a.contains pfx then a else a.push pfx
-  for pfx in (← prefixes.get) do
-    let emit : TacticM Unit := do
-      let factData? ← forallBoundedTelescope (← inferType pfx) (some 2) fun vs _ => do
-        if vs.size = 2 then do
-          let app := mkAppN pfx vs
-          let r ← simpLocalLength app
-          if r.expr != app then do
-            let eqTy ← mkEq app r.expr
-            let prf ← match r.proof? with
-              | some pr => pure pr
-              | none => mkExpectedTypeHint (← mkEqRefl app) eqTy
-            pure (some (← mkForallFVars vs eqTy, ← mkLambdaFVars vs prf))
-          else do
-            -- named bundles reduce definitionally, not by simp: the metadata is an
-            -- explicit structure field (the manual-proof `hout := fun _ _ => rfl`).
-            -- Unfold ONLY the bundle constant and its projection — full `whnf` would
-            -- keep going through `varFromOffset` into an exploded element-literal that
-            -- no eval simp lemma matches.
-            -- environment-clean reduction (no addDeclToUnfold: it generates the
-            -- constant's equation lemmas in this module, colliding on import when a
-            -- sibling module does the same for a shared child bundle)
-            let bundleHeads : List Name :=
-              [`FormalCircuitBase, `FormalCircuit, `GeneralFormalCircuit,
-               `GeneralFormalCircuit.WithHint, `FormalAssertion, `ElaboratedCircuit]
-            let names ← IO.mkRef (#[`FormalCircuitBase.output, `ElaboratedCircuit.output] : Array Name)
-            pfx.appArg!.forEach fun sub => do
-              let .const c _ := sub | return ()
-              let some ci := (← getEnv).find? c | return ()
-              if bundleHeads.contains ci.type.getForallBody.getAppFn.constName then
-                names.modify (·.push c)
-            let allowed ← names.get
-            let ctx ← Simp.mkContext
-              { zeta := true, beta := true, proj := true, iota := true, instances := true }
-              (simpTheorems := #[]) (← getSimpCongrTheorems)
-            let w := (← Meta.dsimp (← Meta.deltaExpand app (allowed.contains ·)) ctx).1
-            if w == app || w.getAppFn.isConstOf `FormalCircuitBase.output then pure none
-            else do
-              let eqTy ← mkEq app w
-              let prf ← mkExpectedTypeHint (← mkEqRefl app) eqTy
-              pure (some (← mkForallFVars vs eqTy, ← mkLambdaFVars vs prf))
-        else pure none
-      let some (factTy, factPrf) := factData? | return
-      let factFVar ← withMainContext do
-        let g ← getMainGoal
-        let g ← g.assert `o_meta factTy factPrf
-        let (fvarId, g) ← g.intro1P
-        replaceMainGoal [g]
-        pure fvarId
-      -- goal only: `at *` would rewrite the fact with itself into `True`
-      try
-        withMainContext do
-          let thms ← (← simpOnlyBase).add (.fvar factFVar) #[] (.fvar factFVar)
-          metaSimp (← Simp.mkContext {} (simpTheorems := #[thms]) (← getSimpCongrTheorems))
-      catch _ => pure ()
-    try emit catch _ => pure ()
   withMainContext do
   let tgt ← instantiateMVars (← getMainTarget)
   let mut hA? : Option (Name × Expr × Expr) := none
@@ -620,11 +544,6 @@ def branchLemmas : Array Name := #[
   ``Vector.mapRange_zero, ``Vector.mk.injEq, ``Array.mk.injEq, ``List.cons.injEq,
   ``and_true, ``Function.comp_apply]
 
-/-- `Vector.ext` fallback route's elementwise lemmas. -/
-def extElementLemmas : Array Name := #[
-  ``getElem_eval_vector, ``Vector.getElem_map, ``Vector.getElem_append,
-  ``Vector.getElem_mapFinRange, ``Vector.getElem_ofFn, ``Vector.getElem_mapIdx]
-
 /-- Simp contexts and simproc arrays for one `computable_witnesses` invocation, built
 once by `CwSimp.build` — hints are resolved there, loudly. -/
 structure CwSimp where
@@ -647,8 +566,6 @@ structure CwSimp where
   branchCtx : Simp.Context
   /-- `circuit_norm` simprocs alone. -/
   cnProcs : SimprocsArray
-  /-- `Vector.ext` fallback route's elementwise lemmas. -/
-  extCtx : Simp.Context
   /-- Theorem-free context for the standalone output-metadata dsimp step. -/
   dsimpCtx : Simp.Context
   /-- `reduceOutputMetadata` alone, for that step. -/
@@ -721,8 +638,6 @@ def CwSimp.build (extraTerms closeTerms : Array (TSyntax `term)) : TacticM CwSim
       (simpTheorems := #[← theoremsOf branchLemmas closeHints, cn] ++ closeSets)
       congr
     cnProcs
-    extCtx := ← Simp.mkContext {}
-      (simpTheorems := #[← theoremsOf extElementLemmas (← simpOnlyBase)]) congr
     dsimpCtx := ← Simp.mkContext {} (simpTheorems := #[]) congr
     outputMetaProcs
     fullCtx := ← Simp.mkContext {}
@@ -833,29 +748,22 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
       unless (← getGoals).isEmpty do
         metaIntrosAll
         let hga? ← withMainContext do
-          let mut found : Option (Lean.Ident × Bool) := none
+          let mut found : Option Lean.Ident := none
           for decl in ← getLCtx do
             if decl.isImplementationDetail then continue
             let ty ← instantiateMVars decl.type
             if ty.getAppFn.isConstOf `ProverEnvironment.AgreesBelow then
-              found := some (mkIdent decl.userName, true)
+              found := some (mkIdent decl.userName)
             else if ty.isAppOfArity ``And 2 then
               -- the unfolded form: (∀ i < b, env.get i = env'.get i) ∧ hint ∧ data
               let l := ty.appFn!.appArg!
               if l.isForall && (l.find? fun e =>
                   e.getAppFn.isConstOf `Environment.get).isSome then
-                found := some (mkIdent decl.userName, true)
-            else if ty.isForall && (ty.find? fun e =>
-                e.getAppFn.isConstOf `Environment.get).isSome then
-              found := some (mkIdent decl.userName, false)
+                found := some (mkIdent decl.userName)
           pure found
-        if let some (hga, proj) := hga? then
-          if proj then
-            evalTactic (← `(tactic|
-              all_goals (try (simp (disch := omega) only [($hga).1]; try rfl))))
-          else
-            evalTactic (← `(tactic|
-              all_goals (try (simp (disch := omega) only [$hga:ident]; try rfl))))
+        if let some hga := hga? then
+          evalTactic (← `(tactic|
+            all_goals (try (simp (disch := omega) only [($hga).1]; try rfl))))
     let attempt (act : TacticM Unit) : TacticM Bool := do
       let st ← Tactic.saveState
       try act; pure true
@@ -889,16 +797,6 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
               metaGrind
         setGoals []
       if ← attempt vecMain then return
-      if ← attempt (do
-          let [g] ← (← getMainGoal).applyConst ``Vector.ext
-            | throwError "Vector.ext: unexpected goals"
-          let (_, g) ← g.intro `j
-          let (_, g) ← g.intro `hj
-          replaceMainGoal [g]
-          metaSimp cw.extCtx
-          evalTactic (← `(tactic|
-            (try split_ifs) <;> grind [Vector.getElem_map, getElem_eval_vector]))) then
-        return
       metaGrind
     else
       -- grind first: on already-dispatched leaves it is the cheapest closer by an
@@ -1046,10 +944,7 @@ def runComputableWitnesses (extraTerms closeTerms : Array (TSyntax `term)) : Tac
   unless (← getGoals).isEmpty do
     -- deterministic split to leaves
     splitStructure
-    -- per-leaf: cheap normalization + head dispatch
-    -- Base close plus one shape-dispatched route: `Vector.ext` is only ever correct on
-    -- an equality of vectors, so it is selected by inspecting the goal, not tried
-    -- blindly in an alternatives chain.
+    -- per-leaf: head dispatch, then the shape-selected close route
     let goals ← getGoals
     for g in goals do
       setGoals [g]
