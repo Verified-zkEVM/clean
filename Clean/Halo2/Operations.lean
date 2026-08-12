@@ -583,7 +583,7 @@ end RegionSynthesisSummary
 
 /-- The operation-independent portion of one V1 region measurement. Region indices
 are supplied later by the enclosing layouter sequence. -/
-structure RegionShapeSummary where
+@[ext] structure RegionShapeSummary where
   columns : List RegionColumn
   rowCount : ℕ
 deriving Inhabited
