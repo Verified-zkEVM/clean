@@ -14470,6 +14470,16 @@ def insert (view : AllocationView) (columns : List RegionColumn)
     (view column).insert start length
   else view column
 
+/-- Insert a consecutive run of equal-width intervals into the same columns.
+The repetition count remains symbolic, so clients can compose compact planner
+summaries without expanding `List.replicate`. -/
+def insertRepeated (view : AllocationView) (columns : List RegionColumn)
+    (start length : ℕ) : ℕ → AllocationView
+  | 0 => view
+  | count + 1 =>
+      insertRepeated (view.insert columns start length) columns
+        (start + length) length count
+
 theorem fitsColumns_insert_iff
     {view : AllocationView} {insertColumns columns : List RegionColumn}
     {insertStart insertLength start length : ℕ} :
@@ -15123,9 +15133,10 @@ theorem slotSummaryStateFromWith_flatten_replicate
       rw [inductionHypothesis]
 
 /-- If a free run begins at the current least fit, repeated copies of one
-summary occupy that run consecutively. The repetition count stays symbolic in
-both the hypotheses and the result. -/
-theorem slotSummaryStateRepeated_single_fst_eq
+summary occupy that run consecutively. Besides the endpoint, expose an
+extensional view of the resulting allocation state so consecutive compact
+blocks can be composed without expanding the repetition. -/
+theorem slotSummaryStateRepeated_single_eq
     (count : ℕ) (summary : RegionShapeSummary)
     (initial : ℕ) (allocations : CircuitAllocations)
     (view : AllocationView) (start : ℕ)
@@ -15139,18 +15150,19 @@ theorem slotSummaryStateRepeated_single_fst_eq
     (hfree : view.FitsColumns (sortRegionColumns summary.columns) start
       ((count + 1) * summary.rowCount))
     (hinitial : initial ≤ start + summary.rowCount) :
-    (slotSummaryStateRepeated (count + 1) [summary]
-      initial allocations).1 = start + (count + 1) * summary.rowCount := by
+    let result := slotSummaryStateRepeated (count + 1) [summary]
+      initial allocations
+    result.1 = start + (count + 1) * summary.rowCount ∧
+      (view.insertRepeated (sortRegionColumns summary.columns) start
+        summary.rowCount (count + 1)).Represents result.2 := by
   induction count generalizing initial allocations view start with
   | zero =>
-      obtain ⟨updated, hplaced, _⟩ :=
+      obtain ⟨updated, hplaced, hupdatedRepresents⟩ :=
         view.placeSummary_eq_of_leastFit summary allocations start
           hrepresents hvalid hnodup hlength hleast
-      rw [slotSummaryStateRepeated]
-      simp only [slotSummaryStateFromWith, hplaced, Option.getD_some,
-        max_eq_right hinitial]
-      rw [slotSummaryStateRepeated]
-      omega
+      simp only [slotSummaryStateRepeated, slotSummaryStateFromWith, hplaced,
+        Option.getD_some, max_eq_right hinitial, AllocationView.insertRepeated]
+      exact ⟨by omega, hupdatedRepresents⟩
   | succ count inductionHypothesis =>
       let columns := sortRegionColumns summary.columns
       have hsortedColumns : columns ≠ [] := by
@@ -15186,9 +15198,32 @@ theorem slotSummaryStateRepeated_single_fst_eq
       rw [show count.succ + 1 = (count + 1) + 1 by omega,
         slotSummaryStateRepeated]
       simp only [slotSummaryStateFromWith, hplaced, Option.getD_some,
-        max_eq_right hinitial]
-      simp only [Nat.add_mul] at hrecursive ⊢
-      omega
+        max_eq_right hinitial, AllocationView.insertRepeated]
+      exact ⟨by
+          simp only [Nat.add_mul] at hrecursive ⊢
+          omega,
+        hrecursive.2⟩
+
+/-- Endpoint-only form of `slotSummaryStateRepeated_single_eq`. -/
+theorem slotSummaryStateRepeated_single_fst_eq
+    (count : ℕ) (summary : RegionShapeSummary)
+    (initial : ℕ) (allocations : CircuitAllocations)
+    (view : AllocationView) (start : ℕ)
+    (hrepresents : view.Represents allocations)
+    (hvalid : view.Valid)
+    (hnodup : summary.columns.Nodup)
+    (hcolumns : summary.columns ≠ [])
+    (hlength : 0 < summary.rowCount)
+    (hleast : view.LeastFit (sortRegionColumns summary.columns)
+      summary.rowCount start)
+    (hfree : view.FitsColumns (sortRegionColumns summary.columns) start
+      ((count + 1) * summary.rowCount))
+    (hinitial : initial ≤ start + summary.rowCount) :
+    (slotSummaryStateRepeated (count + 1) [summary]
+      initial allocations).1 = start + (count + 1) * summary.rowCount :=
+  (slotSummaryStateRepeated_single_eq count summary initial allocations
+    view start hrepresents hvalid hnodup hcolumns hlength hleast hfree
+    hinitial).1
 
 theorem slotSummaryEndFromWith_cons
     (initial : ℕ) (head : RegionShapeSummary)
