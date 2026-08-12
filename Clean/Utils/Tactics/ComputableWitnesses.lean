@@ -156,11 +156,14 @@ def theoremsOf (names : Array Name) (init : SimpTheorems) : MetaM SimpTheorems :
 
 /-- The meta form of `simp only [...]` on the main goal (`hyps := true` for
 `... at *`, which like the quoted form simps the non-dependent prop hypotheses). -/
-def metaSimp (ctx : Simp.Context) (procs : SimprocsArray := #[]) (hyps := false) :
-    TacticM Unit := withMainContext do
+def metaSimp (ctx : Simp.Context) (procs : SimprocsArray := #[]) (hyps := false)
+    (tag : Option String := none) : TacticM Unit := withMainContext do
   let g ← getMainGoal
   let fvarIds ← if hyps then g.getNondepPropHyps else pure #[]
-  let (result?, _) ← Meta.simpGoal g ctx procs (fvarIdsToSimp := fvarIds)
+  let (result?, stats) ← Meta.simpGoal g ctx procs (fvarIdsToSimp := fvarIds)
+  if let some tag := tag then
+    for origin in stats.usedTheorems.toArray do
+      dbg_trace "CWL {tag} {origin.key}"
   match result? with
   | none => replaceMainGoal []
   | some (_, g') => replaceMainGoal [g']
@@ -168,10 +171,14 @@ def metaSimp (ctx : Simp.Context) (procs : SimprocsArray := #[]) (hyps := false)
 /-- The meta form of `simp_all only [...]` on the main goal. `simp_all` elaborates its
 config as `Simp.ConfigCtx`, so `contextual := true` is part of its semantics — set it
 here rather than in each stored context, which may be shared with `simp` positions. -/
-def metaSimpAll (ctx : Simp.Context) (procs : SimprocsArray := #[]) : TacticM Unit :=
+def metaSimpAll (ctx : Simp.Context) (procs : SimprocsArray := #[])
+    (tag : Option String := none) : TacticM Unit :=
   withMainContext do
     let ctx ← ctx.setConfig { ctx.config with contextual := true }
-    let (result?, _) ← Meta.simpAll (← getMainGoal) ctx procs
+    let (result?, stats) ← Meta.simpAll (← getMainGoal) ctx procs
+    if let some tag := tag then
+      for origin in stats.usedTheorems.toArray do
+        dbg_trace "CWL {tag} {origin.key}"
     match result? with
     | none => replaceMainGoal []
     | some g => replaceMainGoal [g]
@@ -527,24 +534,27 @@ partial def splitStep (g : MVarId) (fuel : Nat) : MetaM (List MVarId) := do
 def splitStructure : TacticM Unit :=
   liftMetaTactic fun g => splitStep g 512
 
-/-- Vector route, structural `simp_all` lemmas. -/
+/-- Vector route, structural `simp_all`: vector eval decomposition and elementwise
+access. Every member fired in the usage measurement at 815dc9b1 (1–75 each). -/
 def vecStructuralLemmas : Array Name := #[
   ``eval_vector, ``Vector.map_mk, ``List.map_toArray, ``List.map_cons, ``List.map_nil,
-  ``Vector.mk.injEq, ``Array.mk.injEq, ``List.cons.injEq, ``and_true,
+  ``Array.mk.injEq, ``List.cons.injEq, ``and_true,
   ``Vector.map_ofFn, ``Vector.ext_iff, ``Vector.getElem_ofFn, ``Function.comp_def,
   ``Vector.getElem_map, ``Vector.getElem_append, ``Vector.getElem_mapFinRange,
   ``Vector.getElem_mapIdx, ``Vector.getElem_set, ``Vector.getElem_mapRange]
 
-/-- Vector route, goal-only close-hint step lemmas. -/
+/-- Vector route, goal-only close-hint step: the pointwise residue the structural pass
+leaves for the `closing` hints to decompose (each member 5 fires at 815dc9b1, matching
+the hint fires; three further members measured 0 and were dropped). -/
 def closeHintLemmas : Array Name := #[
-  ``eval_vector, ``Vector.ext_iff, ``Vector.getElem_set, ``Vector.getElem_ofFn,
-  ``Vector.getElem_map, ``Vector.map_ofFn]
+  ``Vector.ext_iff, ``Vector.getElem_ofFn, ``Vector.map_ofFn]
 
-/-- Vector route, per-branch (post-`split_ifs`) lemmas. -/
+/-- Vector route, per-branch (post-`split_ifs`): `varFromOffset` window expansion
+(members fired 5–30× at 815dc9b1; five injectivity/misc members measured 0 and were
+dropped). -/
 def branchLemmas : Array Name := #[
-  ``ProvableType.eval_varFromOffset, ``eval_vector, ``Vector.mapRange_succ,
-  ``Vector.mapRange_zero, ``Vector.mk.injEq, ``Array.mk.injEq, ``List.cons.injEq,
-  ``and_true, ``Function.comp_apply]
+  ``ProvableType.eval_varFromOffset, ``Vector.mapRange_succ, ``Vector.mapRange_zero,
+  ``Function.comp_apply]
 
 /-- Simp contexts and simproc arrays for one `computable_witnesses` invocation, built
 once by `CwSimp.build` — hints are resolved there, loudly. -/
@@ -664,7 +674,10 @@ entry (per split leaf) and the standalone `computable_witnesses_close`.
 Usage counts quoted in comments below are from an instrumented full-library build at
 815dc9b1 (one count per close decision, all `computable_witnesses` invocations); they
 justify each branch's existence and ordering, and will drift as the library grows.
-Routing at that state: 112 leaves took the vector route, 160 the base route. -/
+Routing at that state: 112 leaves took the vector route, 160 the base route.
+To re-measure, pass `(tag := "...")` to the `metaSimp`/`metaSimpAll` calls of interest
+(logs each fired lemma via `dbg_trace`, which survives state restore) and histogram the
+build output. -/
 def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
   let simpPass : TacticM Unit := do
     unless (← getGoals).isEmpty do
