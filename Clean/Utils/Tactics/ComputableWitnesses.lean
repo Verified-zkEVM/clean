@@ -22,13 +22,16 @@ a child bundle name whose metadata is otherwise stuck under a binder).
    (the CW obligation has no value-level input variable, so `input`'s only
    selectable footprint is `main`'s destructuring match, which `simp`/`grind` do
    not iota-reduce against an opaque variable).
-3. **Split** the resulting conjunction into per-obligation leaves (`splitStep`):
+3. **Reduce child-output metadata** (`reduceOutputMetadata`, a standalone
+   theorem-free dsimp step): after every normalization pass — reduced
+   `varFromOffset` windows drift into exploded element literals under further
+   theorem rewriting — and directly before the split.
+4. **Split** the resulting conjunction into per-obligation leaves (`splitStep`):
    syntactic `And`/`∀` head dispatch — the goal is simp-normalized here, and a
    defeq-hidden shape is left whole as a leaf (unifying against it would
    symbolically execute still-folded groups, e.g. a 32-wide `Circuit.forEach`).
    Goals headed by `Subcircuit.ComputableWitnesses` stay whole.
-4. **Per leaf**: a leaf-local simp (including `reduceLocalLength` and, for leaves with
-   a `Circuit.forEach` group, `ring_nf` + `Circuit.forEach.forAll`), then
+5. **Per leaf**: for leaves with a `Circuit.forEach` group, `ring_nf`; then
    `assert_local_lengths`, then dispatch:
    * a `Subcircuit.ComputableWitnesses` head is refined with the `_of_offset_eq`
      composition rules — separate offset metavariables, with the `m = n` premise
@@ -52,7 +55,7 @@ a child bundle name whose metadata is otherwise stuck under a binder).
   executes the list (quadratic vector pushes for `mapFinRange`-built circuits);
   `assert_local_lengths` handles those spellings with a `circuit_norm`-simp-first
   reduction and asserts the equations as hypotheses with propositional proofs.
-* `reduceOutputMetadata` (dsimproc, used in the close): definitional in-place
+* `reduceOutputMetadata` (dsimproc, its own pre-split step): definitional in-place
   reduction of child output metadata, including binder-nested and parameterized
   children which no closed universal fact can state.
 * `@[computable_witnesses_metadata]` (label attribute): opt-in marker for Var-typed
@@ -706,8 +709,8 @@ structure CwSimp where
   /-- Attribute sets without hints: the leaf `at *` pass and the base-route
   `simp_all only` fallback. -/
   baseCtx : Simp.Context
-  /-- `normProcs` + the metadata dsimprocs (leaf `at *`, offset-premise discharge). -/
-  leafProcs : SimprocsArray
+  /-- `normProcs` + `reduceOutputMetadata`, for the offset-premise discharge. -/
+  dischargeProcs : SimprocsArray
   /-- Vector route, structural `simp_all`. -/
   vecCtx : Simp.Context
   /-- `circuit_norm` procs + `retypeVectorAliasEq` (vector-route steps). -/
@@ -720,6 +723,10 @@ structure CwSimp where
   cnProcs : SimprocsArray
   /-- `Vector.ext` fallback route's elementwise lemmas. -/
   extCtx : Simp.Context
+  /-- Theorem-free context for the standalone output-metadata dsimp step. -/
+  dsimpCtx : Simp.Context
+  /-- `reduceOutputMetadata` alone, for that step. -/
+  outputMetaProcs : SimprocsArray
   /-- Final fallback: default simp set on top of the attribute sets. -/
   fullCtx : Simp.Context
   fullProcs : SimprocsArray
@@ -766,17 +773,18 @@ def CwSimp.build (extraTerms closeTerms : Array (TSyntax `term)) : TacticM CwSim
   for t in closeTerms do
     (closeHints, closeSets) ← addHint closeHints closeSets t
   let congr ← getSimpCongrTheorems
-  let normProcs := cnProcs.push cwnProcs
-  let mut leafProcs := normProcs
-  for p in [``reduceLocalLength, ``reduceOutputMetadata, ``retypeVectorAliasEq] do
-    leafProcs ← SimprocsArray.add leafProcs p (post := true)
+  let mut normProcs := cnProcs.push cwnProcs
+  for p in [``reduceLocalLength, ``retypeVectorAliasEq] do
+    normProcs ← SimprocsArray.add normProcs p (post := true)
+  let dischargeProcs ← SimprocsArray.add normProcs ``reduceOutputMetadata (post := true)
+  let outputMetaProcs ← SimprocsArray.add #[] ``reduceOutputMetadata (post := true)
   let vecProcs ← SimprocsArray.add cnProcs ``retypeVectorAliasEq (post := true)
   return {
     normCtx := ← Simp.mkContext {}
       (simpTheorems := #[normHints, cn, cwn] ++ hintSets) congr
     normProcs
     baseCtx := ← Simp.mkContext {} (simpTheorems := #[← simpOnlyBase, cn, cwn]) congr
-    leafProcs
+    dischargeProcs
     vecCtx := ← Simp.mkContext {}
       (simpTheorems := #[← theoremsOf vecStructuralLemmas (← simpOnlyBase), cn]) congr
     vecProcs
@@ -789,6 +797,8 @@ def CwSimp.build (extraTerms closeTerms : Array (TSyntax `term)) : TacticM CwSim
     cnProcs
     extCtx := ← Simp.mkContext {}
       (simpTheorems := #[← theoremsOf extElementLemmas (← simpOnlyBase)]) congr
+    dsimpCtx := ← Simp.mkContext {} (simpTheorems := #[]) congr
+    outputMetaProcs
     fullCtx := ← Simp.mkContext {}
       (simpTheorems := #[← getSimpTheorems, cn, cwn]) congr
     fullProcs := #[← Simp.getSimprocs] ++ normProcs
@@ -994,7 +1004,6 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
     -- hints (e.g. recursive eval decompositions like `eval_vector_set`) rewriting
     -- every chain fact in every hypothesis is a heartbeat blowup; hints reach
     -- hypotheses via the close routes' `simp_all` instead
-    try metaSimp cw.baseCtx cw.leafProcs (hyps := true) catch _ => pure ()
     if (← getGoals).isEmpty then return
     assertLocalLengths
     withMainContext do
@@ -1028,7 +1037,7 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
             -- offset premise: normalize the length spellings, then close
             -- arithmetically over the asserted lengths
             setGoals [offsetGoal]
-            try metaSimp cw.normCtx cw.leafProcs catch _ => pure ()
+            try metaSimp cw.normCtx cw.dischargeProcs catch _ => pure ()
             unless (← getGoals).isEmpty do Omega.omegaDefault
             setGoals [contGoal]
             pure true
@@ -1108,6 +1117,10 @@ def runComputableWitnesses (extraTerms closeTerms : Array (TSyntax `term)) : Tac
       else if (← getGoals).length != nGoalsBefore then pure true
       else withMainContext do return (← getLCtx).getFVarIds.size != hypsBefore
     if changed then simpPass
+  unless (← getGoals).isEmpty do
+    -- child-output metadata reduction as its own step: after every normalization
+    -- pass (reduced windows drift under further rewriting), directly before the split
+    try metaSimp cw.dsimpCtx cw.outputMetaProcs catch _ => pure ()
   unless (← getGoals).isEmpty do
     -- deterministic split to leaves
     splitStructure
