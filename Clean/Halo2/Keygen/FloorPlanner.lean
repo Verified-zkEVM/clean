@@ -15276,6 +15276,19 @@ theorem slotSummaryStateFromWith_flatMap_replicate
       simp only [slotSummaryBlocksState]
       exact inductionHypothesis _ _
 
+theorem slotSummaryStateFromWith_replicate_empty
+    (count initial : ℕ) (allocations : CircuitAllocations) :
+    slotSummaryStateFromWith initial
+      (List.replicate count { columns := [], rowCount := 0 }) allocations =
+        (initial, allocations) := by
+  induction count generalizing initial allocations with
+  | zero => rfl
+  | succ count inductionHypothesis =>
+      rw [List.replicate_succ]
+      simp only [slotSummaryStateFromWith]
+      simp [placeSummary, sortRegionColumns, firstFit]
+      exact inductionHypothesis _ _
+
 /-- If a free run begins at the current least fit, repeated copies of one
 summary occupy that run consecutively. Besides the endpoint, expose an
 extensional view of the resulting allocation state so consecutive compact
