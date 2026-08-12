@@ -19,6 +19,7 @@ private def sectionIdFunction : ℕ := 3
 private def sectionIdMemory   : ℕ := 5
 private def sectionIdExport   : ℕ := 7
 private def sectionIdCode     : ℕ := 10
+private def sectionIdData     : ℕ := 11
 
 -- Block type encodings
 private def blockTypeEmpty : UInt8 := 0x40
@@ -319,6 +320,17 @@ def Module.toBinary (m : Module) : Except String ByteArray := do
     ) (putULEB128 ByteArray.empty funcs.length)
     let subsec := putULEB128 ByteArray.empty nameSubsectionFunctionNames |> fun a => putULEB128 a nameMap.size |> fun a => a ++ nameMap
     pure (encodeString ByteArray.empty "name" ++ subsec)
+  -- Data section (id 11): active segments initializing signal memory, e.g. the
+  -- constant signal 0 = 1 (matching the Circom convention of static init).
+  -- Per segment: memidx u32 (0), offset expr (i32.const + end), size, bytes.
+  let dataSec := m.dataSegments.foldl (fun arr seg =>
+    let (offset, bytes) := seg
+    let arr := putULEB128 arr 0  -- memidx 0 (the single memory)
+    let arr := arr.push opI32Const |> fun a => putSLEB128 a (offset : ℤ)
+    let arr := arr.push opEnd
+    let arr := putULEB128 arr bytes.length
+    bytes.foldl (fun a b => a.push (UInt8.ofNat b)) arr
+  ) (putULEB128 ByteArray.empty m.dataSegments.length)
   -- Assemble: magic + version + sections
   let arr := wasmMagic.foldl (fun a b => a.push b) ByteArray.empty
   let arr := wasmVersion.foldl (fun a b => a.push b) arr
@@ -327,6 +339,7 @@ def Module.toBinary (m : Module) : Except String ByteArray := do
   let arr := putSection arr sectionIdMemory memSec
   let arr := putSection arr sectionIdExport exportSec
   let arr := putSection arr sectionIdCode codeSec
+  let arr := putSection arr sectionIdData dataSec
   let arr := putSection arr customSectionName nameSec  -- custom section = name section
   pure arr
 

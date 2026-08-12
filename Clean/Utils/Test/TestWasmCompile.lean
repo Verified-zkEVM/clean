@@ -61,13 +61,13 @@ def expectBinaryError (label needle : String) (r : Except String ByteArray) : IO
 
 /-! ## Empty circuits -/
 
-#eval! expectBinaryOk "empty circuit binary validates" "" (compileModule p1009 0 ([] : List (Operation (F p1009))) 1)
-#eval! expectOk "empty circuit R1CS exports" "\"n8\"" (compileR1CS p1009 0 0 ([] : List (Operation (F p1009))) 1)
+#eval! expectBinaryOk "empty circuit binary validates" "" (compileModule p1009 0 [] [] ([] : List (Operation (F p1009))) 1)
+#eval! expectOk "empty circuit R1CS exports" "\"n8\"" (compileR1CS p1009 0 [] [] ([] : List (Operation (F p1009))) 1)
 
 /-! ## numWords validation -/
 
-#eval! expectBinaryError "BN254 with 1 word rejected" "2^32" (compileModule Specs.Poseidon.BN254_PRIME 0 ([] : List (Operation Specs.Poseidon.F)) 1)
-#eval! expectBinaryOk "BN254 with 4 words compiles" "" (compileModule Specs.Poseidon.BN254_PRIME 0 ([] : List (Operation Specs.Poseidon.F)) 4)
+#eval! expectBinaryError "BN254 with 1 word rejected" "2^32" (compileModule Specs.Poseidon.BN254_PRIME 0 [] [] ([] : List (Operation Specs.Poseidon.F)) 1)
+#eval! expectBinaryOk "BN254 with 4 words compiles" "" (compileModule Specs.Poseidon.BN254_PRIME 0 [] [] ([] : List (Operation Specs.Poseidon.F)) 4)
 
 /-! ## Witness arithmetic -/
 
@@ -75,7 +75,7 @@ def expectBinaryError (label needle : String) (r : Except String ByteArray) : IO
 def addOps : List (Operation (F p1009)) :=
   [.witness 1 (.ir [] (.lit #v[.add (.expr (.var ⟨0⟩)) (.const 5)]))]
 
-#eval! expectBinaryOk "witness addition compiles" "" (compileModule p1009 1 addOps 1)
+#eval! expectBinaryOk "witness addition compiles" "" (compileModule p1009 1 [] [] addOps 1)
 
 /-- One input `x`, witness `w = x`, assert `w - x = 0`. -/
 def assertOps : List (Operation (F p1009)) :=
@@ -83,20 +83,35 @@ def assertOps : List (Operation (F p1009)) :=
    .assert (.add (.var ⟨1⟩) (.mul (.const (-1)) (.var ⟨0⟩)))]
 
 #eval! expectOk "assert exports a constraint" "nConstraints"
-  (compileR1CS p1009 1 1 assertOps 1)
+  (compileR1CS p1009 1 [] [] assertOps 1)
+
+/-! ## Binary .r1cs export (r1csfile format) -/
+
+#eval! do
+  let binary ← match compileR1CSBin p1009 1 [] [] assertOps 1 with
+    | .ok b => pure b
+    | .error e => throw <| IO.userError s!"FAIL: compileR1CSBin: {e}"
+  let path := "/tmp/test_bin_r1cs.r1cs"
+  IO.FS.writeBinFile (System.FilePath.mk path) binary
+  let r ← IO.Process.output { cmd := "snarkjs", args := #["r1cs", "info", path] }
+  if r.exitCode ≠ 0 then throw <| IO.userError s!"FAIL: snarkjs r1cs info: {r.stderr}"
+  if !hasSubstr r.stdout "# of Constraints: 1" then throw <| IO.userError "FAIL: expected 1 constraint"
+  if !hasSubstr r.stdout "# of Wires: 3" then throw <| IO.userError "FAIL: expected 3 wires"
+  if !hasSubstr r.stdout "# of Outputs: 0" then throw <| IO.userError "FAIL: expected 0 outputs (none declared)"
+  IO.println "OK: binary R1CS validates with snarkjs r1cs info"
 
 /-! ## Unsupported constructs are rejected with errors -/
 
-#eval! expectBinaryError "native witness rejected" "native" (compileModule p1009 0 ([.witness 1 (.native fun _ => #v[1])] : List (Operation (F p1009))) 1)
+#eval! expectBinaryError "native witness rejected" "native" (compileModule p1009 0 [] [] ([.witness 1 (.native fun _ => #v[1])] : List (Operation (F p1009))) 1)
 
-#eval! expectBinaryOk "append compiles" "" (compileModule p1009 0 ([.witness 2 (.ir [] (.append (.lit #v[.const 0]) (.lit #v[.const 1])))] : List (Operation (F p1009))) 1)
+#eval! expectBinaryOk "append compiles" "" (compileModule p1009 0 [] [] ([.witness 2 (.ir [] (.append (.lit #v[.const 0]) (.lit #v[.const 1])))] : List (Operation (F p1009))) 1)
 
-#eval! expectBinaryOk "listGet compiles" "" (compileModule p1009 0 ([.witness 1 (.ir [] (.lit #v[.listGet [.const 0] (.const 0)]))] : List (Operation (F p1009))) 1)
+#eval! expectBinaryOk "listGet compiles" "" (compileModule p1009 0 [] [] ([.witness 1 (.ir [] (.lit #v[.listGet [.const 0] (.const 0)]))] : List (Operation (F p1009))) 1)
 
-#eval! expectBinaryOk "multi-word val compiles" "" (compileModule Specs.Poseidon.BN254_PRIME 0 ([.witness 1 (.ir [.letU (.val (.const 1))] (.lit #v[.const 0]))] : List (Operation Specs.Poseidon.F)) 4)
+#eval! expectBinaryOk "multi-word val compiles" "" (compileModule Specs.Poseidon.BN254_PRIME 0 [] [] ([.witness 1 (.ir [.letU (.val (.const 1))] (.lit #v[.const 0]))] : List (Operation Specs.Poseidon.F)) 4)
 
 #eval! expectError "R1CS rejects native witness" "native"
-  (compileR1CS p1009 0 0
+  (compileR1CS p1009 0 [] []
     ([.witness 1 (.native fun _ => #v[1])] : List (Operation (F p1009))) 1)
 
 /-! ## let-step indexing: steps don't shift circuit variable indices -/
@@ -111,10 +126,10 @@ def letStepOps : List (Operation (F p1009)) :=
    .witness 1 (.ir [] (.lit #v[.const 42])),
    .assert (.add (.var ⟨2⟩) (.mul (.const (-1 : F p1009)) (.var ⟨1⟩)))]
 
-#eval! expectBinaryOk "let-step circuit compiles" "" (compileModule p1009 1 letStepOps 1)
+#eval! expectBinaryOk "let-step circuit compiles" "" (compileModule p1009 1 [] [] letStepOps 1)
 
 #eval! expectOk "let-step R1CS exports" "\"nConstraints\""
-  (compileR1CS p1009 1 1 letStepOps 1)
+  (compileR1CS p1009 1 [] [] letStepOps 1)
 
 /-! ## New u64 IR constructors (flt, bit, bitsOf, envRange) -/
 
@@ -125,7 +140,7 @@ def fltOps : List (Operation (F p1009)) :=
     .ite (.flt (.expr (.var ⟨0⟩)) (.const 5))
       (.const 1) (.const 0)]))]
 
-#eval! expectBinaryOk "flt compiles" "" (compileModule p1009 1 fltOps 1)
+#eval! expectBinaryOk "flt compiles" "" (compileModule p1009 1 [] [] fltOps 1)
 
 /-- Witness program using `BExpr.bit` (bit test):
     w = if bit 2 of x is set then 1 else 0. -/
@@ -134,25 +149,25 @@ def bitOps : List (Operation (F p1009)) :=
     .ite (.bit (.expr (.var ⟨0⟩)) 2)
       (.const 1) (.const 0)]))]
 
-#eval! expectBinaryOk "bit compiles" "" (compileModule p1009 1 bitOps 1)
+#eval! expectBinaryOk "bit compiles" "" (compileModule p1009 1 [] [] bitOps 1)
 
 /-- Witness program using `VExpr.bitsOf`: 8 low bits of x. -/
 def bitsOfOps : List (Operation (F p1009)) :=
   [.witness 8 (.ir [] (.bitsOf (.expr (.var ⟨0⟩))))]
 
-#eval! expectBinaryOk "bitsOf compiles" "" (compileModule p1009 1 bitsOfOps 1)
+#eval! expectBinaryOk "bitsOf compiles" "" (compileModule p1009 1 [] [] bitsOfOps 1)
 
 /-- Witness program using `VExpr.envRange`: witness env cells 0..1 (the input twice). -/
 def envRangeOps : List (Operation (F p1009)) :=
   [.witness 2 (.ir [] (.envRange 0))]
 
-#eval! expectBinaryOk "envRange compiles" "" (compileModule p1009 1 envRangeOps 1)
+#eval! expectBinaryOk "envRange compiles" "" (compileModule p1009 1 [] [] envRangeOps 1)
 
 /-! ## Binary path validation with simple circuits -/
 
 #eval! do
   -- Empty circuit: binary must validate
-  let r := compileModule p1009 0 ([] : List (Operation (F p1009))) 1
+  let r := compileModule p1009 0 [] [] ([] : List (Operation (F p1009))) 1
   match r with
   | .error e => throw <| IO.userError s!"FAIL empty binary: {e}"
   | .ok binary =>
@@ -163,7 +178,7 @@ def envRangeOps : List (Operation (F p1009)) :=
 
 #eval! do
   -- Witness addition circuit (single-word): binary must validate
-  let r := compileModule p1009 1 addOps 1
+  let r := compileModule p1009 1 [] [] addOps 1
   match r with
   | .error e => throw <| IO.userError s!"FAIL addOps binary: {e}"
   | .ok binary =>
@@ -177,7 +192,7 @@ def envRangeOps : List (Operation (F p1009)) :=
 #eval! do
   let ops : List (Operation Specs.Poseidon.F) :=
     (Circomlib.Poseidon.Poseidon1.circuit.main (varFromOffset field 0)).operations 1
-  let result := compileModule Specs.Poseidon.BN254_PRIME 1 ops 4
+  let result := compileModule Specs.Poseidon.BN254_PRIME 1 [] [] ops 4
   match result with
   | .error e => throw <| IO.userError s!"FAIL: Poseidon1: {e}"
   | .ok binary =>
@@ -226,5 +241,158 @@ def envRangeOps : List (Operation (F p1009)) :=
         else
           IO.println s!"OK: Poseidon1({input}) matches ground truth"
     IO.println s!"OK: Poseidon1 → wasm-validate + snarkjs (3 inputs verified vs ground truth, {binary.size} bytes WASM)"
+
+/-! ## Audit regression tests (2026-08 audit) -/
+
+/-- Write the input JSON, run `snarkjs wtns calculate`, and parse all witness
+    signals from the .wtns file (n8 read from the file header). -/
+def witnessFor (wasmPath inputJson : String) : IO (List ℕ) := do
+  let inPath := "/tmp/audit_input.json"
+  IO.FS.writeFile (System.FilePath.mk inPath) inputJson
+  let r ← IO.Process.output { cmd := "snarkjs", args := #["wtns", "calculate", wasmPath, inPath, "/tmp/audit_witness.wtns"] }
+  if r.exitCode ≠ 0 then throw <| IO.userError s!"FAIL: snarkjs: {r.stderr}"
+  let bytes ← IO.FS.readBinFile (System.FilePath.mk "/tmp/audit_witness.wtns")
+  let u32At (off : ℕ) : ℕ := (List.range 4).foldl (fun acc i => acc + (bytes.get! (off + i)).toNat * 256^i) 0
+  let n8 := u32At 24
+  let nWit := u32At (28 + n8)  -- after n8 u32 + prime (n8 bytes)
+  let dataOff := 44 + n8
+  (List.range nWit).mapM fun idx =>
+    pure <| (List.range n8).foldl (fun acc i => acc * 256 + (bytes.get! (dataOff + idx * n8 + n8 - 1 - i)).toNat) 0
+
+/-- Compile to a wasm file and run snarkjs on the given input JSON. -/
+def compileAndWitness (fieldPrime numInputs : ℕ) [Fact fieldPrime.Prime]
+    (inputNames : List String) (outputVarIdx : List ℕ)
+    (ops : List (Operation (F fieldPrime))) (numWords : ℕ) (path inputJson : String) : IO (List ℕ) := do
+  let wasm ← match compileModule fieldPrime numInputs inputNames outputVarIdx ops numWords with
+    | .ok b => pure b
+    | .error e => throw <| IO.userError s!"compileModule: {e}"
+  IO.FS.writeBinFile (System.FilePath.mk path) wasm
+  witnessFor path inputJson
+
+/-! ### C1: `a·b === z` asserts keep R1CS signal numbering in sync with the witness -/
+
+#eval! do
+  let ops : List (Operation (F p1009)) :=
+    [.assert (.add (.mul (.var ⟨0⟩) (.var ⟨1⟩)) (.mul (.const (-1)) (.var ⟨2⟩)))]
+  let r1cs ← match compileR1CS p1009 3 [] [] ops 1 with
+    | .ok s => pure s
+    | .error e => throw <| IO.userError e
+  -- 1 const + 3 inputs + 1 intermediate for a·b.
+  if !hasSubstr r1cs "\"nVars\": 5" then throw <| IO.userError "FAIL: C1: expected nVars=5"
+  if !hasSubstr r1cs "\"nConstraints\": 2" then throw <| IO.userError "FAIL: C1: expected 2 constraints"
+  let wit ← compileAndWitness p1009 3 [] [] ops 1 "/tmp/audit_c1.wasm" "{\"in\": [\"3\", \"4\", \"12\"]}"
+  if wit.length ≠ 5 then throw <| IO.userError s!"FAIL: C1: witness length {wit.length} ≠ nVars 5"
+  IO.println "OK: C1 a*b === z keeps R1CS numbering in sync"
+
+/-! ### H1: let-step locals sized by the TOTAL step count (not the max) -/
+
+#eval! do
+  let stepOps : List (Operation (F p1009)) :=
+    (List.range 4).map fun _ =>
+      .witness 1 (.ir [.letF (.expr (.var ⟨0⟩))] (.lit #v[.bit (.localVar 0) 0]))
+  let wit ← compileAndWitness p1009 1 [] [] stepOps 1 "/tmp/audit_h1.wasm" "{\"in\": [\"5\"]}"
+  -- 4 witnesses, each = bit 0 of the input (5 → 1), plus const + input.
+  let expected := [1, 5, 1, 1, 1, 1]
+  if wit ≠ expected then throw <| IO.userError s!"FAIL: H1: got {wit}, expected {expected}"
+  IO.println "OK: H1 scratch region sized by total steps"
+
+/-! ### H2: $fadd carry corner (a_i = b_i = 2^64-1 with carry-in 1) -/
+
+#eval! do
+  let p := Specs.Poseidon.BN254_PRIME
+  -- mont(x) = 2^128-1 (limbs [2^64-1, 2^64-1, 0, 0]) and
+  -- mont(y) = 2^128-2^64+1 (limbs [1, 2^64-1, 0, 0]): limb 1 of $fadd hits the
+  -- a = b = 2^64-1, carry-in 1 corner.
+  let rInv := Nat.gcdA (2^256) p % p  -- R⁻¹ mod p (Bézout coefficient)
+  let x := (((2^128 : ℕ) - 1) * rInv) % p
+  let y := (((2^128 : ℕ) - (2^64 : ℕ) + 1) * rInv) % p
+  let ops : List (Operation Specs.Poseidon.F) :=
+    [.witness 1 (.ir [] (.lit #v[.add (.expr (.var ⟨0⟩)) (.expr (.var ⟨1⟩))]))]
+  let wit ← compileAndWitness p 2 [] [] ops 4 "/tmp/audit_h2.wasm"
+    (String.intercalate "" ["{\"in\": [\"", toString x, "\", \"", toString y, "\"]}"])
+  let expected := (x + y) % p
+  if wit.getD 3 0 ≠ expected then
+    throw <| IO.userError s!"FAIL: H2: got signal 3 = {wit.getD 3 0}, expected {expected}"
+  IO.println "OK: H2 $fadd carry corner"
+
+/-! ### H3: nested flt inside a multi-word comparison operand -/
+
+#eval! do
+  let p := Specs.Poseidon.BN254_PRIME
+  let ops : List (Operation Specs.Poseidon.F) :=
+    [.witness 1 (.ir [] (.lit #v[
+      .ite (.flt (.expr (.var ⟨0⟩)) (.ite (.flt (.expr (.var ⟨1⟩)) (.const 5)) (.const 1) (.const 0)))
+        (.const 1) (.const 0)]))]
+  -- x=0, y=3: inner flt(3,5) = 1 → inner ite = 1 → outer flt(0,1) = 1 → w = 1.
+  let wit ← compileAndWitness p 2 [] [] ops 4 "/tmp/audit_h3.wasm" "{\"in\": [\"0\", \"3\"]}"
+  if wit.getD 3 0 ≠ 1 then throw <| IO.userError s!"FAIL: H3: got signal 3 = {wit.getD 3 0}, expected 1"
+  IO.println "OK: H3 nested flt does not clobber the outer capture"
+
+/-! ### H4: multi-word feq emits valid WASM -/
+
+#eval! do
+  let p := Specs.Poseidon.BN254_PRIME
+  let ops : List (Operation Specs.Poseidon.F) :=
+    [.witness 1 (.ir [] (.lit #v[.ite (.feq (.expr (.var ⟨0⟩)) (.const 1)) (.const 7) (.const 8)]))]
+  let wit1 ← compileAndWitness p 1 [] [] ops 4 "/tmp/audit_h4.wasm" "{\"in\": \"1\"}"
+  let wit2 ← compileAndWitness p 1 [] [] ops 4 "/tmp/audit_h4b.wasm" "{\"in\": \"2\"}"
+  if wit1.getD 2 0 ≠ 7 then throw <| IO.userError s!"FAIL: H4: feq(x,1) for x=1 gave {wit1.getD 2 0}, expected 7"
+  if wit2.getD 2 0 ≠ 8 then throw <| IO.userError s!"FAIL: H4: feq(x,1) for x=2 gave {wit2.getD 2 0}, expected 8"
+  IO.println "OK: H4 multi-word feq validates and computes"
+
+/-! ### H5: listGet index survives an `.ite` element (single-word) -/
+
+#eval! do
+  let ops : List (Operation (F p1009)) :=
+    [.witness 1 (.ir [] (.lit #v[
+      .listGet [.ite (.lt (.const 0) (.const 1)) (.expr (.var ⟨0⟩)) (.expr (.var ⟨1⟩)), .const 7] (.const 0)]))]
+  -- Element 0 = ite(true, x0, x1) = x0; index 0 selects it.
+  let wit ← compileAndWitness p1009 2 [] [] ops 1 "/tmp/audit_h5.wasm" "{\"in\": [\"5\", \"6\"]}"
+  if wit.getD 3 0 ≠ 5 then throw <| IO.userError s!"FAIL: H5: got signal 3 = {wit.getD 3 0}, expected 5"
+  IO.println "OK: H5 listGet index survives ite elements"
+
+/-! ### H6: multi-word listGet selector is in Montgomery form -/
+
+#eval! do
+  let p := Specs.Poseidon.BN254_PRIME
+  let ops : List (Operation Specs.Poseidon.F) :=
+    [.witness 1 (.ir [] (.lit #v[.listGet [.expr (.var ⟨0⟩), .const 7] (.const 0)]))]
+  let wit ← compileAndWitness p 1 [] [] ops 4 "/tmp/audit_h6.wasm" "{\"in\": \"5\"}"
+  if wit.getD 2 0 ≠ 5 then throw <| IO.userError s!"FAIL: H6: got signal 2 = {wit.getD 2 0}, expected 5"
+  IO.println "OK: H6 multi-word listGet selects in Montgomery form"
+
+/-! ### D1: strict input names reject unknown keys (like circom) -/
+
+#eval! do
+  let ops : List (Operation (F p1009)) :=
+    [.witness 1 (.ir [] (.lit #v[.add (.expr (.var ⟨0⟩)) (.expr (.var ⟨1⟩))]))]
+  let wasm ← match compileModule p1009 2 ["a", "b"] [] ops 1 with
+    | .ok b => pure b
+    | .error e => throw <| IO.userError s!"compileModule: {e}"
+  let path := "/tmp/audit_d1.wasm"
+  IO.FS.writeBinFile (System.FilePath.mk path) wasm
+  -- Standard circom format works: one key per input.
+  let wit ← witnessFor path "{\"a\": \"3\", \"b\": \"4\"}"
+  if wit.getD 3 0 ≠ 7 then throw <| IO.userError s!"FAIL: D1: w = {wit.getD 3 0}, expected 7"
+  -- A misspelled key must be rejected ("Signal not found").
+  IO.FS.writeFile (System.FilePath.mk "/tmp/audit_typo.json") "{\"a\": \"3\", \"typo\": \"4\"}"
+  let r ← IO.Process.output { cmd := "snarkjs", args := #["wtns", "calculate", path, "/tmp/audit_typo.json", "/tmp/audit_witness.wtns"] }
+  if r.exitCode = 0 then throw <| IO.userError "FAIL: D1: unknown input key silently accepted"
+  IO.println "OK: D1 strict input names reject unknown keys"
+
+/-! ### D2: outputs-first layout puts the output at signal 1 -/
+
+#eval! do
+  let ops : List (Operation (F p1009)) :=
+    [.witness 1 (.ir [] (.lit #v[.add (.expr (.var ⟨0⟩)) (.const 5)]))]
+  let r1cs ← match compileR1CS p1009 1 ["x"] [1] ops 1 with
+    | .ok s => pure s
+    | .error e => throw <| IO.userError e
+  if !hasSubstr r1cs "\"nOutputs\": 1" then throw <| IO.userError "FAIL: D2: nOutputs != 1"
+  let wit ← compileAndWitness p1009 1 ["x"] [1] ops 1 "/tmp/audit_d2.wasm" "{\"x\": \"5\"}"
+  -- Outputs-first: signal 1 = w (= 10), signal 2 = x (= 5).
+  if wit.getD 1 0 ≠ 10 then throw <| IO.userError s!"FAIL: D2: output signal 1 = {wit.getD 1 0}, expected 10"
+  if wit.getD 2 0 ≠ 5 then throw <| IO.userError s!"FAIL: D2: input signal 2 = {wit.getD 2 0}, expected 5"
+  IO.println "OK: D2 outputs-first layout"
 
 end TestWasmCompile

@@ -59,6 +59,19 @@ private def snarkjsPatchVersion    : ℕ := 0
 
 -- WASM locals layout
 private def getWitnessFixedLocals : ℕ := 3  -- $i(0), $tmp(1), $idx(2)
+-- One extra i64 local above the shared scratch region holds the runtime
+-- `listGet` index (element subexpressions would clobber it inside the region).
+private def listGetIdxSlots : ℕ := 1
+-- Size of the SHARED scratch region reserved at `vm.scratchBase` for
+-- expression compilers. `.flt`/`.feq` (multi-word) capture both operands
+-- (2*nw locals); `.ite`/`.bit`/`listGet`/`.bitsOf` use nw (or 1). Single-word
+-- still needs 1 local (`.ite`/`.bit`/`listGet` capture at `scratchBase`).
+-- Keeping this small lets large circuits (e.g. Keccak's 31K witnesses) stay
+-- within the WASM 50K-local limit.
+private def scratchReserve (nw : ℕ) : ℕ := if nw = 1 then 1 else 2 * nw
+-- getInputSignalSize returns -1 (0xFFFFFFFF) for unknown input names.
+private def signalNotFound : ℕ := 2^32 - 1
+
 /-! ## Instruction builder -/
 
 structure CodeBuilder where
@@ -98,6 +111,7 @@ def i32.load (off : ℕ := 0) : Instr := .memLoad .i32 off alignmentI32
 def i32.store (off : ℕ := 0) : Instr := .memStore .i32 off alignmentI32
 def i32.wrap_i64 : Instr := .unop .i32 .wrap_i64
 def i32.eqz : Instr := .relop .i32 .eqz
+def i32.eq : Instr := .relop .i32 .eq
 def i32.and : Instr := .binop .i32 .and
 
 -- Local access (by index)
@@ -249,7 +263,7 @@ def pushCoeff (c numWords : ℕ) : List Instr :=
     Requires p odd (true for all field primes used here).
     Returns n' = -p⁻¹ mod 2^64 (i.e. 2^64 − p⁻¹, since p⁻¹ ≠ 0 for odd p). -/
 def montNPrime (p : ℕ) : ℕ :=
-  let m : ℕ := 2^64
+  let m : ℕ := limbModulus
   let x1 := (1 * (2 - (p : ℤ) * 1)) % m
   let x2 := (x1 * (2 - (p : ℤ) * x1)) % m
   let x3 := (x2 * (2 - (p : ℤ) * x2)) % m
@@ -259,12 +273,12 @@ def montNPrime (p : ℕ) : ℕ :=
   -- n' = -p⁻¹ mod 2^64 = 2^64 − p⁻¹ (p⁻¹ ≠ 0 since p is odd)
   (m - Int.toNat (x6 % m)) % m
 
-/-- Montgomery radix R = 2^(N*64) mod p (the Montgomery form of 1). -/
-def montR (p numWords : ℕ) : ℕ := (2^(numWords * 64)) % p
+/-- Montgomery radix R = 2^(N*limbBits) mod p (the Montgomery form of 1). -/
+def montR (p numWords : ℕ) : ℕ := (2^(numWords * limbBits)) % p
 
 /-- R² mod p — the constant to convert a normal-form value to Montgomery form
     (montMul(x, R²) = x·R²·R⁻¹ = x·R). -/
-def montR2 (p numWords : ℕ) : ℕ := (2^(2 * numWords * 64)) % p
+def montR2 (p numWords : ℕ) : ℕ := (2^(2 * numWords * limbBits)) % p
 
 /--
 Generate multi-word modular multiplication AST Func using CIOS Montgomery
@@ -378,11 +392,19 @@ def genFadd (p numWords : ℕ) : Func :=
   let addLimb0 : List Instr :=
     [ local.get 0, local.get N, i64.add, local.set (ri 0),
       local.get (ri 0), local.get 0, i64.lt_u, i64.extend_i32_u, local.set cIdx ]
+  -- Two-operand adds so each carry-out is detected individually:
+  --   t = a + b;  carry1 = t < a;  r = t + c;  carry2 = r < t;  carry = carry1 | carry2
+  -- (The single-step `(r < a) | (r < b)` test misses a = b = 2^64-1 with
+  -- carry-in 1, where r = 2^64-1 = a = b but the true carry-out is 1.)
+  -- `tmpBase` holds the transient `t`; the conditional subtraction later
+  -- overwrites the whole tmp region before reading it.
   let addRest : List Instr := (List.range (N-1)) >>= fun i =>
     let idx := i + 1
-    [ local.get idx, local.get (N + idx), i64.add, local.get cIdx, i64.add, local.set (ri idx),
-      local.get (ri idx), local.get idx, i64.lt_u, i64.extend_i32_u,
-      local.get (ri idx), local.get (N + idx), i64.lt_u, i64.extend_i32_u, i64.or, local.set cIdx ]
+    [ local.get idx, local.get (N + idx), i64.add, local.tee tmpBase,
+      local.get idx, i64.lt_u, i64.extend_i32_u,
+      local.get tmpBase, local.get cIdx, i64.add, local.set (ri idx),
+      local.get (ri idx), local.get tmpBase, i64.lt_u, i64.extend_i32_u,
+      i64.or, local.set cIdx ]
   -- Init prime limbs
   let initP : List Instr := (pLimbs.zip (List.range N)) >>= fun (val, i) =>
     [ i64.const val, local.set (pBase + i) ]
@@ -456,6 +478,8 @@ def genMultiWordArith (p numWords : ℕ) : List Func :=
     they are accessed via `FExpr.localVar` / `U64Expr.localVar` using a direct offset,
     never through `lookup`. -/
 structure VarMap where
+  /-- Number of public input signals. -/
+  numInputs : ℕ := 0
   env : List (ℕ × ℕ) := []
   /-- Next free WASM local index for witness outputs (grows contiguously). -/
   nextLocal : ℕ := 0
@@ -476,10 +500,18 @@ structure VarMap where
       Sharing one region keeps the total local count low enough for the
       WASM 50K-local limit even with tens of thousands of witnesses. -/
   scratchBase : ℕ := 0
+  /-- Number of declared output witnesses (0 when `outputVars` is empty). -/
+  numOutputs : ℕ := 0
+  /-- Circuit-variable indices of the circuit's output witnesses, in output
+      order. When non-empty, the signal layout is outputs-first:
+      signal 0 = constant, 1..numOutputs = outputs, then inputs, then the
+      remaining witnesses (see `signalOfVar`). -/
+  outputVars : List ℕ := []
 deriving Inhabited
 
 def VarMap.init (numInputs : ℕ) (numWords : ℕ) (prime : ℕ := 0) : VarMap :=
-  { env := List.range numInputs |>.map fun i => (i, i * numWords)
+  { numInputs
+    env := List.range numInputs |>.map fun i => (i, i * numWords)
     nextLocal := numInputs * numWords
     numWords
     prime }
@@ -494,9 +526,29 @@ def VarMap.alloc (vm : VarMap) (m : ℕ) (baseVarIdx : ℕ) : VarMap × List ℕ
   let nw := vm.numWords
   let wasmLocals := List.range (m * nw) |>.map fun i => vm.nextLocal + i
   let newEnv := (List.range m |>.map fun i => (baseVarIdx + i, vm.nextLocal + i * nw)) ++ vm.env
-  ({ env := newEnv, nextLocal := vm.nextLocal + m * nw, loopIdx := vm.loopIdx,
-     letBase := vm.letBase, numWords := nw, prime := vm.prime, scratchBase := vm.scratchBase },
+  ({ numInputs := vm.numInputs, env := newEnv, nextLocal := vm.nextLocal + m * nw, loopIdx := vm.loopIdx,
+     letBase := vm.letBase, numWords := nw, prime := vm.prime, scratchBase := vm.scratchBase,
+     numOutputs := vm.numOutputs, outputVars := vm.outputVars },
     wasmLocals)
+
+/-- The R1CS signal number of circuit variable `v` in the outputs-first layout:
+    signal 0 = the constant 1, signals 1..numOutputs = the declared output
+    witnesses (in `outputVars` order), then the inputs, then the remaining
+    witnesses in variable order. With no outputs declared this is the plain
+    `1 + v` layout. -/
+def signalOfVar (vm : VarMap) (v : ℕ) : ℕ :=
+  match vm.outputVars.findIdx? (fun o => o = v) with
+  | some j => 1 + j
+  | none =>
+    if v < vm.numInputs then 1 + vm.numOutputs + v
+    else 1 + vm.numOutputs + vm.numInputs + (v - vm.numInputs) - (vm.outputVars.countP (fun o => o < v))
+
+/-- 64-bit FNV-1a hash (offset basis 0xCBF29CE484222325, prime 0x100000001B3),
+    matching the `fnvHash` in circom_runtime (snarkjs). Input names must be
+    ASCII: circom hashes UTF-16 code units, which equal the UTF-8 bytes for
+    ASCII strings. -/
+def fnv1a64 (s : String) : ℕ :=
+  s.toUTF8.foldl (fun h b => ((h ^^^ b.toNat) * 0x100000001B3) % limbModulus) 0xCBF29CE484222325
 
 /-! ## AST-based expression compilers (for CodeBuilder) -/
 
@@ -535,6 +587,37 @@ def compileExpr (vm : VarMap) : Expression F → CodeBuilder → Except String C
     let cb ← compileExpr vm e cb
     pure (cb.push (call "$fmul"))
 
+/-! Whether a witness expression contains a `.listGet` anywhere, used to reject
+    nested listGet (the runtime index slot is shared). -/
+mutual
+  def containsListGet (e : FExpr F) : Bool :=
+    match e with
+    | .expr _ | .const _ | .localVar _ => false
+    | .add x y | .mul x y => containsListGet x || containsListGet y
+    | .inv x => containsListGet x
+    | .ofU64 n => containsListGetU n
+    | .ite c t e' => containsListGetB c || containsListGet t || containsListGet e'
+    | .listGet _ _ => true
+    | .dataGet _ _ _ _ | .hintGet _ _ _ _ => false
+
+  def containsListGetU (e : U64Expr F) : Bool :=
+    match e with
+    | .const _ | .idx | .localVar _ => false
+    | .val x => containsListGet x
+    | .add x y | .mul x y | .div x y | .mod x y | .land x y | .lor x y | .lxor x y
+    | .shiftL x y | .shiftR x y => containsListGetU x || containsListGetU y
+    | .ite c t e' => containsListGetB c || containsListGetU t || containsListGetU e'
+
+  def containsListGetB (b : BExpr F) : Bool :=
+    match b with
+    | .true | .false => false
+    | .feq x y | .flt x y => containsListGet x || containsListGet y
+    | .neq x y | .lt x y => containsListGetU x || containsListGetU y
+    | .bit x _ => containsListGet x
+    | .not b' => containsListGetB b'
+    | .and x y => containsListGetB x || containsListGetB y
+end
+
 mutual
 /-- Compile a list of FExprs into a select-sum chain for `listGet`.
     Structurally recursive on the list, mirroring `FExpr.evalList`. -/
@@ -542,9 +625,15 @@ def compileFExprList (vm : VarMap) (idxLocal nw : ℕ) : (k : ℕ) → List (FEx
   | _, [] => pure []
   | k, e :: es => do
     let elemCB ← compileFExpr vm e {}
+    -- isK = (idx == k), a plain 0/1 i64.
     let isK : List Instr := [local.get idxLocal, i64.const k, i64.eq, i64.extend_i32_u]
+    -- The selector is a field operand of $fmul, so in Montgomery mode it must
+    -- be montR (the Montgomery form of 1) when selected, 0 otherwise — a raw 1
+    -- would silently scale the element by R⁻¹. Recompute isK per limb so no
+    -- extra local is needed.
     let selAsField : List Instr := if nw = 1 then isK
-      else isK ++ (List.replicate (nw-1) (i64.const 0))
+      else (List.range nw) >>= fun w =>
+        isK ++ [i64.const ((montR vm.prime nw >>> (w * limbBits)) % limbModulus), i64.mul]
     let accumulate := if k = 0 then [] else [call "$fadd"]
     let rest ← compileFExprList vm idxLocal nw (k + 1) es
     pure (elemCB.build ++ selAsField ++ [call "$fmul"] ++ accumulate ++ rest)
@@ -597,14 +686,21 @@ def compileFExpr (vm : VarMap) : FExpr F → CodeBuilder → Except String CodeB
     -- Emit a chain of field selects: for each k, sel_k = (i == k ? xs[k] : 0),
     -- summed. (Indices outside the list read 0, matching `FExpr.eval`.)
     let nw := vm.numWords
-    -- Compile the index once, capture to a temp local so each element can re-push it.
-    let idxCB ← compileU64Expr vm i cb
-    let idxLocal := vm.scratchBase
-    let captureIdx : List Instr := [local.set idxLocal]
-    -- Compile each element (via the non-mutual list helper, so termination holds)
-    -- and emit the select-sum chain.
-    let selInstrs ← compileFExprList vm idxLocal nw 0 xs
-    pure (idxCB.pushList captureIdx |>.pushList selInstrs)
+    -- The index is captured ABOVE the shared scratch region: element
+    -- subexpressions (.ite/.bit/.flt/.feq) write scratchBase..scratchBase+2nw
+    -- and would clobber a captured index inside it. Nested listGet cannot
+    -- reuse the single slot, so it is rejected at compile time.
+    if xs.any fun e => containsListGet e then
+      .error "compileFExpr: nested listGet is not supported (the index slot is shared)"
+    else do
+      -- Compile the index once, capture to the dedicated slot so each element can re-push it.
+      let idxCB ← compileU64Expr vm i cb
+      let idxLocal := vm.scratchBase + scratchReserve nw
+      let captureIdx : List Instr := [local.set idxLocal]
+      -- Compile each element (via the non-mutual list helper, so termination holds)
+      -- and emit the select-sum chain.
+      let selInstrs ← compileFExprList vm idxLocal nw 0 xs
+      pure (idxCB.pushList captureIdx |>.pushList selInstrs)
   | .dataGet _ _ _ _, _ => .error "compileFExpr: dataGet is not yet supported"
   | .hintGet _ _ _ _, _ => .error "compileFExpr: hintGet is not yet supported"
 
@@ -664,22 +760,23 @@ def compileBExpr (vm : VarMap) : BExpr F → CodeBuilder → Except String CodeB
       let cb ← compileFExpr vm e cb
       pure (cb.push i64.eq)
     else do
-      -- Multi-word: capture both operands to temp locals, compare pairwise, AND-reduce.
-      -- Compile `a` first (its nested ite may use tmpBase as scratch), capture to
-      -- upper half; then compile `e` to the lower half.
+      -- Multi-word: compile both operands first (both stay on the stack, `a`
+      -- deepest), then capture the top operand (`e`) first and `a` second, so
+      -- no nested comparison inside `e` can clobber a captured operand — the
+      -- shared scratch region is only written between the captures and the reads.
       let tmpBase := vm.scratchBase
       let aCB ← compileFExpr vm a {}
       let eCB ← compileFExpr vm e {}
       -- Capture: highest limb first (reverse order matches stack top)
-      let captureA : List Instr := (List.range nw).reverse.map fun w => local.set (tmpBase + nw + w)
       let captureE : List Instr := (List.range nw).reverse.map fun w => local.set (tmpBase + w)
+      let captureA : List Instr := (List.range nw).reverse.map fun w => local.set (tmpBase + nw + w)
       -- Compare pairwise: a_i vs e_i, producing i32 results (i64.eq gives i32)
       let cmpAll : List Instr := (List.range nw) >>= fun i =>
         [ local.get (tmpBase + nw + i), local.get (tmpBase + i), i64.eq ]
-      -- AND-reduce all comparison results
-      let andAll : List Instr := (List.range (nw-1)).map fun _ => i64.and
-      pure (cb.pushList aCB.build |>.pushList captureA |>.pushList eCB.build |>.pushList captureE
-              |>.pushList cmpAll |>.pushList andAll |>.push i32.wrap_i64)
+      -- AND-reduce the i32 comparison results
+      let andAll : List Instr := (List.range (nw-1)).map fun _ => i32.and
+      pure (cb.pushList aCB.build |>.pushList eCB.build |>.pushList captureE
+              |>.pushList captureA |>.pushList cmpAll |>.pushList andAll)
   | .lt a e, cb => do
     let cb ← compileU64Expr vm a cb
     let cb ← compileU64Expr vm e cb
@@ -703,12 +800,16 @@ def compileBExpr (vm : VarMap) : BExpr F → CodeBuilder → Except String CodeB
     else do
       -- Convert both operands from Montgomery on the stack (montMul(x, 1) = x),
       -- then capture to temp locals, compare highest limb first.
+      -- Both operands are compiled before anything is captured: `e` sits on top
+      -- of the stack, so it is converted and captured first, then `a`. A nested
+      -- comparison inside `e` uses the shared scratch region before the outer
+      -- captures are written, so it cannot clobber them.
       let tmpBase := vm.scratchBase
       let aCB ← compileFExpr vm a {}
       let eCB ← compileFExpr vm e {}
       let fromMont : List Instr := pushCoeff 1 nw ++ [call "$fmul"]
-      let captureA : List Instr := (List.range nw).reverse.map fun w => local.set (tmpBase + nw + w)
       let captureE : List Instr := (List.range nw).reverse.map fun w => local.set (tmpBase + w)
+      let captureA : List Instr := (List.range nw).reverse.map fun w => local.set (tmpBase + nw + w)
       -- Multi-limb unsigned comparison, highest limb first, as nested ifElse:
       --   if a_{nw-1} < e_{nw-1} then 1
       --   else if a_{nw-1} > e_{nw-1} then 0
@@ -723,8 +824,8 @@ def compileBExpr (vm : VarMap) : BExpr F → CodeBuilder → Except String CodeB
             .ifElse "" (some .i32) [i32.const 1]
               ([ local.get (tmpBase + nw + i), local.get (tmpBase + i), i64.gt_u,
                  .ifElse "" (some .i32) [i32.const 0] (cmpChain (i - 1)) ]) ]
-      pure (cb.pushList aCB.build |>.pushList fromMont |>.pushList captureA
-              |>.pushList eCB.build |>.pushList fromMont |>.pushList captureE
+      pure (cb.pushList aCB.build |>.pushList eCB.build |>.pushList fromMont
+              |>.pushList captureE |>.pushList fromMont |>.pushList captureA
               |>.pushList (cmpChain (nw - 1)))
   | .bit x i, cb => do
     -- Test bit `i` of `FiniteField.val x`: limb i/64, bit i%64 (constant i).
@@ -788,11 +889,8 @@ def addLinCombs (a b : List (ℕ × F)) : List (ℕ × F) :=
 open Expression (var const add mul) in
 def flattenExpr (vm : VarMap) : (e : Expression F) → FlattenState F → (List (ℕ × F) × FlattenState F)
   | .var i, st =>
-    -- R1CS signal = 1 + circuit-variable index.
-    -- VarMap.lookup returns a WASM local index (= circuit-var-index * numWords for the
-    -- default layout). Dividing by numWords recovers the circuit-variable index,
-    -- which is the corresponding R1CS signal number (offset by 1 for the constant signal).
-    ([(1 + vm.lookup i.index / vm.numWords, (1 : F))], st)
+    -- R1CS signal = the variable's position in the outputs-first signal layout.
+    ([(signalOfVar vm i.index, (1 : F))], st)
   | .const c, st => ([(0, c)], st)
   | .add a b, st =>
     let (la, st1) := flattenExpr vm a st
@@ -898,30 +996,21 @@ def discoverAndCompileIntermediates (vm : VarMap) (flatOps : List (FlatOperation
   let (_, locals, instrs) := buildAST 0 [] [] intConstraintsRev
   (numInt, locals.reverse, instrs)
 
-/-- Size of the shared scratch region reserved at `vm.scratchBase` for
-    expression compilers. `.flt`/`.feq` (multi-word) capture both operands
-    (2*nw locals); `.ite`/`.bit`/`listGet`/`.bitsOf` use nw (or 1). Single-word
-    still needs 1 local (`.ite`/`.bit`/`listGet` capture at `scratchBase`).
-    Keeping this small lets large circuits (e.g. Keccak's 31K witnesses) stay
-    within the WASM 50K-local limit. -/
-def scratchReserve (nw : ℕ) : ℕ := if nw = 1 then 1 else 2 * nw
-
 /-- compile let-steps (letF/letN) to instructions.
     Steps are allocated at `vm.nextLocal` (direct WASM local allocation,
     NOT through `vm.alloc` — they are not circuit variables).
     Sets `letBase` to the first step's WASM local index.
-    Returns the same `vi` unchanged (steps don't occupy circuit-variable slots).
+    Returns the updated VarMap (its `nextLocal` advanced past the step slots).
     Step-expression scratch uses the shared `vm.scratchBase`, so steps allocate
     only their own `nw`-limb slots. -/
-def compileSteps (vm : VarMap) (vi : ℕ) (steps : List (Step F)) :
-    Except String (VarMap × ℕ × List Instr) :=
+def compileSteps (vm : VarMap) (steps : List (Step F)) :
+    Except String (VarMap × List Instr) := do
   let nw := vm.numWords
   let stepBase := vm.nextLocal
-  let (vmInit, _) := (steps.foldl (fun (v : VarMap × ℕ) _ =>
-    ({ v.1 with nextLocal := v.1.nextLocal + nw, letBase := stepBase }, v.2)
-  ) (vm, vi))
+  let vmInit : VarMap := steps.foldl (fun v _ =>
+    { v with nextLocal := v.nextLocal + nw, letBase := stepBase }) vm
   let vmB := { vmInit with letBase := stepBase }
-  steps.foldlM (fun ((vm, idx, instrs) : VarMap × ℕ × List Instr) step => do
+  let (vmF, _, instrs) ← steps.foldlM (fun ((vm, idx, instrs) : VarMap × ℕ × List Instr) step => do
     let wasmBase := stepBase + idx * nw
     let locs := List.range nw |>.map fun w => wasmBase + w
     match step with
@@ -938,6 +1027,7 @@ def compileSteps (vm : VarMap) (vi : ℕ) (steps : List (Step F)) :
         | base :: highs => local.set base :: (highs >>= fun idx' => [i64.const 0, local.set idx'])
       pure (vm, idx + 1, instrs ++ cb.build ++ capture)
   ) (vmB, 0, [])
+  pure (vmF, instrs)
 
 /-- compile a list of FExpr literals to instructions.
     Expression scratch uses the shared `vm.scratchBase`; each output slot is
@@ -1029,7 +1119,7 @@ def processFlatOps :
     List (FlatOperation F) → VarMap → ℕ → List Instr → Except String (VarMap × ℕ × List Instr)
   | [], vm, finalVarIdx, instrs => pure (vm, finalVarIdx, instrs)
   | .witness _ (.ir steps vexpr) :: rest, vm, vi, acc => do
-    let (vmS, _, stepInstrs) ← compileSteps vm vi steps
+    let (vmS, stepInstrs) ← compileSteps vm steps
     let (vmOut, viOut, outInstrs) ← compileVExpr vmS vi stepInstrs vexpr
     processFlatOps rest vmOut viOut (acc ++ outInstrs)
   | .witness _ (.native _) :: _, _, _, _ =>
@@ -1051,8 +1141,16 @@ def processFlatOps :
     `numWords` must be at least `ceil(bitLength(fieldPrime) / limbBits)`, and
     `numWords = 1` additionally requires `fieldPrime ≤ 2^32` so that products
     of two field elements fit in an i64 before modular reduction.
+    `inputNames` enables strict snarkjs input validation: when non-empty (one
+    name per input) the module matches the FNV-1a hash of each input.json key
+    and rejects unknown keys, like circom. When empty, any key is accepted
+    (the value array must hold all `numInputs` elements).
+    `outputVarIdx` (circuit-variable indices of the outputs) switches the
+    signal layout to outputs-first — signal 0 = constant, 1..nOutputs = the
+    outputs, then inputs, then remaining witnesses — so snarkjs's public
+    signals match the circuit's real outputs. Empty keeps the plain layout.
     Returns an error for inputs the compiler does not support. -/
-def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWords : ℕ) :
+def compileModule (fieldPrime numInputs : ℕ) (inputNames : List String := []) (outputVarIdx : List ℕ := []) (ops : List (Operation F)) (numWords : ℕ) :
     Except String ByteArray := do
   let nw := numWords
   -- Validate that numWords is sufficient for the prime.
@@ -1064,26 +1162,38 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
     throw s!"compileModule: numWords=1 requires a prime <= 2^32 to avoid i64.mul overflow; got a {primeBits}-bit prime, use numWords = {max minWords minMultiWordWords}"
   if nw * limbBits < primeBits then
     throw s!"compileModule: numWords={nw} is insufficient for a {primeBits}-bit prime; need at least {minWords} words"
+  if !inputNames.isEmpty ∧ inputNames.length ≠ numInputs then
+    throw s!"compileModule: {inputNames.length} input names for {numInputs} inputs (either none, or one per input)"
+  if outputVarIdx.length ≠ outputVarIdx.eraseDups.length then
+    throw "compileModule: outputVarIdx must not contain duplicate variables"
+  if !(outputVarIdx.all fun v => v ≥ numInputs) then
+    throw "compileModule: outputVarIdx must be witness circuit variables (indices ≥ numInputs)"
+  let numOutputs := outputVarIdx.length
   let flatOps := Operations.toFlat ops
-  -- Pre-pass: count the total witness slots (per flat op) and the maximum
-  -- number of let-steps in any single witness op, so the SHARED scratch
-  -- region can be placed above all witness and step locals.
-  let (witnessTotal, maxSteps) := flatOps.foldl
+  -- Pre-pass: count the total witness slots (per flat op) and the TOTAL
+  -- number of let-steps across all ops. compileSteps allocates step locals
+  -- cumulatively from vm.nextLocal (never reused), so the sum — not the max —
+  -- determines how far the locals extend; the SHARED scratch region must sit
+  -- above all witness and step locals or later outputs land inside it.
+  let (witnessTotal, stepTotal) := flatOps.foldl
     (fun ((w, s) : ℕ × ℕ) (op : FlatOperation F) =>
       match op with
-      | .witness m (.ir steps _) => (w + m, max s steps.length)
+      | .witness m (.ir steps _) => (w + m, s + steps.length)
       | .witness m (.native _) => (w + m, s)
       | _ => (w, s))
     (0, 0)
   let witnessEnd := numInputs * nw + witnessTotal * nw
-  let stepEnd := witnessEnd + maxSteps * nw
+  let stepEnd := witnessEnd + stepTotal * nw
   -- vi starts at numInputs so that circuit variable indices (which start at 0 for
   -- inputs) align with VarMap entries. vm.alloc adds (vi, local) for each witness,
   -- and pushVar uses the circuit variable index from the witness IR directly.
-  let vm := { (VarMap.init numInputs nw fieldPrime) with scratchBase := stepEnd }
+  let baseVm : VarMap := VarMap.init numInputs nw fieldPrime
+  let vm := { baseVm with scratchBase := stepEnd, numOutputs := numOutputs, outputVars := outputVarIdx }
   let (finalVm, finalVarIdx, bodyInstrs) ← processFlatOps flatOps vm numInputs []
   -- finalVarIdx = numInputs + total witness outputs (steps don't count)
   let witnessCount := finalVarIdx - numInputs
+  if !(outputVarIdx.all fun v => v < finalVarIdx) then
+    throw "compileModule: outputVarIdx contains a variable outside the witness range"
   let n32 := nw * i32PerLimb
   let srwmBase := srwmBaseAddress
   -- Signal array must be 8-byte aligned for i64.store/i64.load
@@ -1104,9 +1214,11 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   let outputStores : List Instr := (List.range witnessCount) >>= fun i =>
     let elemIdx := numInputs + i  -- circuit variable index of this witness
     let wasmBase := finalVm.lookup elemIdx
+    -- Each witness is stored at its outputs-first signal position.
+    let signalIdx := signalOfVar finalVm elemIdx
     if nw = 1 then
       (List.range nw) >>= fun w =>
-        [ i32.const (signalBase + (1 + numInputs + i) * signalBytes + w * bytesPerI64),
+        [ i32.const (signalBase + signalIdx * signalBytes + w * bytesPerI64),
           local.get (wasmBase + w),
           .memStore .i64 0 alignmentI64 ]
     else
@@ -1119,7 +1231,7 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
       let convert := pushCoeff 1 nw ++ [call "$fmul"]
       let capture := (List.range nw).reverse.map fun w => local.set (tmpBase + w)
       let storeAll := (List.range nw) >>= fun w =>
-        [ i32.const (signalBase + (1 + numInputs + i) * signalBytes + w * bytesPerI64),
+        [ i32.const (signalBase + signalIdx * signalBytes + w * bytesPerI64),
           local.get (tmpBase + w), .memStore .i64 0 alignmentI64 ]
       pushVal ++ convert ++ capture ++ storeAll
   -- Build the compute function
@@ -1128,11 +1240,13 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   let computeFunc : Func := {
     name := "$compute"
     params := inputParams
-    -- nw extra scratch locals at the end are used by outputStores for the
-    -- from-Montgomery conversion of each witness before storing.
-    -- Declare locals up to the end of the shared scratch region
-    -- (scratchBase + scratchReserve nw), minus the params (numInputs*nw).
-    locals := (List.replicate (finalVm.scratchBase + scratchReserve nw - numInputs*nw) ("", .i64)) ++ [("$idx", .i64)]
+    -- The tail of the scratch region is used by outputStores for the
+    -- from-Montgomery conversion of each witness before storing, and one
+    -- extra slot above it holds the runtime `listGet` index.
+    -- Declare locals up to the end of the shared scratch region plus the
+    -- index slot (scratchBase + scratchReserve nw + listGetIdxSlots),
+    -- minus the params (numInputs*nw).
+    locals := (List.replicate (finalVm.scratchBase + scratchReserve nw + listGetIdxSlots - numInputs*nw) ("", .i64)) ++ [("$idx", .i64)]
     body := bodyInstrs ++ outputStores
   }
   -- Build getWitness body
@@ -1143,8 +1257,9 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   -- (normal form), then convert to Montgomery form (montMul(x, R²) = x·R)
   -- for the multi-word compute function.
   let inputLoads : List Instr := (List.range numInputs) >>= fun i =>
+    -- Inputs sit after the outputs in the outputs-first signal layout.
     let loadAll := (List.range nw) >>= fun w =>
-      [ i32.const (signalBase + (1 + i) * signalBytes + w * bytesPerI64),
+      [ i32.const (signalBase + (1 + numOutputs + i) * signalBytes + w * bytesPerI64),
         .memLoad .i64 0 alignmentI64,
         local.set (getWitnessFixedLocals + i * nw + w) ]
     let convert := if nw = 1 then []
@@ -1197,9 +1312,17 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
       exportName := some "getInputSignalSize"
       params := [("", .i32), ("", .i32)]
       results := [.i32]
-      -- The circuit has one input signal name holding `numInputs` field
-      -- elements; snarkjs requires the count to match the JSON array length.
-      body := [i32.const numInputs] },
+      -- Strict mode (inputNames provided): match the FNV-1a hash of each input
+      -- name; every named input holds 1 field element. An unknown key returns
+      -- -1, so snarkjs errors "Signal not found" (like circom).
+      -- Lenient mode (no names): return numInputs for any key — the value
+      -- count of a single key holding all inputs.
+      body := if inputNames.isEmpty then [i32.const numInputs]
+        else List.foldr (fun (hmsb, hlsb) acc =>
+          [local.get 0, i32.const hmsb, i32.eq, local.get 1, i32.const hlsb, i32.eq, i32.and,
+           .ifElse "" (some .i32) [i32.const 1] acc])
+          [i32.const signalNotFound]
+          (inputNames.map fun n => let h := fnv1a64 n; (h >>> 32, h % 2^32)) },
     { name := "$getInputSize"
       exportName := some "getInputSize"
       results := [.i32]
@@ -1211,22 +1334,37 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
     { name := "$setInputSignal"
       exportName := some "setInputSignal"
       params := [("$hMSB", .i32), ("$hLSB", .i32), ("$idx", .i32)]
+      locals := [("$addr", .i32)]
       -- The Circom 2 ABI calls setInputSignal(hMSB, hLSB, i) once per FIELD
       -- ELEMENT i (not per limb). snarkjs writes the value to SRWM via
       --   writeSharedRWMemory(j, arrFr[n32-1-j])
       -- where toArray32 produces MOST-significant word first (res.unshift),
       -- so SRWM word j = the j-th least significant word of the value, i.e.
       -- SRWM is LSW-first. Limb w (bits 64w..64w+63) = SRWM[2w] | SRWM[2w+1]<<32.
-      -- Store all nw limbs of element $idx at signalBase + (1+idx)*signalBytes.
+      -- The input's signal address is resolved into $addr, then all nw limbs
+      -- are stored there. Strict mode: match the FNV-1a hash of the input name
+      -- (trap on an unknown hash — snarkjs never sends one after the size
+      -- check). Lenient mode: element index $idx selects the input directly.
+      -- The input slot sits after the outputs in the outputs-first layout.
       body :=
-        ((List.range nw) >>= fun w =>
-          [ i32.const (signalBase + signalBytes),
-            local.get 2, i32.const signalBytes, .binop .i32 .mul, .binop .i32 .add,
-            i32.const (w * bytesPerI64), .binop .i32 .add,
+        let addrIdx : ℕ := 3  -- first local after the three params
+        let storeLimbs : List Instr := (List.range nw) >>= fun w =>
+          [ local.get addrIdx, i32.const (w * bytesPerI64), .binop .i32 .add,
             i32.const (srwmBase + 2*w*bytesPerI32), .memLoad .i32 0 alignmentI32, .unop .i64 .extend_i32_u,
             i32.const (srwmBase + (2*w+1)*bytesPerI32), .memLoad .i32 0 alignmentI32, .unop .i64 .extend_i32_u,
             i64.const hiWordShift, i64.shl, i64.or,
-            .memStore .i64 0 alignmentI64 ])
+            .memStore .i64 0 alignmentI64 ]
+        if inputNames.isEmpty then
+          [ i32.const (signalBase + (1 + numOutputs) * signalBytes),
+            local.get 2, i32.const signalBytes, .binop .i32 .mul, .binop .i32 .add,
+            local.set addrIdx ] ++ storeLimbs
+        else
+          let addrChain := (List.zip (List.range inputNames.length) inputNames).foldr (fun (j, n) acc =>
+            let h := fnv1a64 n
+            [local.get 0, i32.const (h >>> 32), i32.eq, local.get 1, i32.const (h % 2^32), i32.eq, i32.and,
+             .ifElse "" (some .i32) [i32.const (signalBase + (1 + numOutputs + j) * signalBytes)] acc])
+            [.unreachable]
+          (addrChain ++ [local.set addrIdx]) ++ storeLimbs
     },
     { name := "$getWitness"
       exportName := some "getWitness"
@@ -1263,11 +1401,26 @@ def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWo
   let signalInit : List ℕ := 1 :: (List.replicate (signalBytes - 1) 0)
   let memNeeded := signalBase + totalSignals * signalBytes
   let memPages := (memNeeded + wasmPageMask) / wasmPageSize  -- ceil division
+  -- The Circom 2 ABI's `witness()` takes no arguments (inputs live in memory
+  -- after setInputSignal); it runs the same compute path as getWitness's
+  -- recompute branch. (circom_runtime never calls it — generation is driven by
+  -- init + setInputSignal + getWitness — but keep the export ABI-correct.)
+  let witnessFunc : Func := {
+    name := "$witness"
+    exportName := some "witness"
+    params := []
+    results := []
+    -- Keep the local layout identical to getWitness (which has the `$i` param
+    -- at index 0): a dummy slot at 0, then $tmp(1), $idx(2), inputs, ints —
+    -- inputLoads/inputPush index them via getWitnessFixedLocals.
+    locals := [("", ValType.i32), ("$tmp", ValType.i32), ("$idx", ValType.i64)] ++ gwInputLocals ++ intLocals
+    body := inputLoads ++ inputPush ++ [call "$compute"] ++ intCode
+      ++ [ i32.const signalBase, i32.const constSignalValue, i32.store 0,
+           i32.const computedFlagAddr, i32.const computedFlagSet, i32.store 0 ]
+  }
   let module : Ast.Module := {
     memoryPages := memPages
     dataSegments := [(signalBase, signalInit)]
-    funcs := arithFuncs ++ [computeFunc,
-      { computeFunc with name := "$witness", exportName := some "witness" }]
-      ++ abiFuncs
+    funcs := arithFuncs ++ [computeFunc, witnessFunc] ++ abiFuncs
   }
   Binary.Module.toBinary module

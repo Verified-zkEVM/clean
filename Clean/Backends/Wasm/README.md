@@ -3,7 +3,7 @@
 A compiler written in Lean that turns [Clean](https://github.com/VanshSahay/clean) circuits into standalone artifacts the [snarkjs](https://github.com/iden3/snarkjs) toolchain can consume directly:
 
 - **Binary WASM witness-generation modules** implementing the [Circom 2 witness-calculator ABI](https://github.com/iden3/circom_runtime/blob/master/js/witness_calculator.js) , `snarkjs wtns calculate circuit.wasm input.json witness.wtns` works out of the box.
-- **R1CS constraint files** in JSON format, also snarkjs-compatible.
+- **R1CS constraint files** in two formats: a pretty-printed JSON object, and the binary `.r1cs` format consumed directly by `snarkjs r1cs info`, `groth16 setup`, and the other `r1cs` subcommands.
 
 Because the compiler itself is written in Lean, every output is built from the same formal definitions the rest of Clean's verification machinery uses, and the end-to-end test harness checks generated witnesses against Lean ground truth.
 
@@ -12,7 +12,7 @@ Because the compiler itself is written in Lean, every output is built from the s
 - **Circom 2 ABI compatibility** : the emitted module exports the full witness-calculator interface (`init`, `witness`, `getWitness`, `setInputSignal`, ...), so it drops into the standard snarkjs flow without wrappers.
 - **Multiprecision field arithmetic** : Montgomery multiplication for BN254 and other primes up to 254 bits, written in Lean and checked end-to-end against Lean ground truth; single-word fast paths for primes ≤ 2³².
 - **Never silently wrong** : the compiler is total: every unsupported instruction or unknown label fails at *compile time* with a descriptive `Except String` error instead of emitting a broken or incorrect module (see [Error handling](#error-handling)).
-- **No runtime dependencies** : the output is a self-contained binary `.wasm` file plus a `.json` R1CS file; no Lean runtime or WASI needed.
+- **No runtime dependencies** : the output is a self-contained binary `.wasm` file plus `.r1cs`/`.json` constraint files; no Lean runtime or WASI needed.
 - **Multi-word arithmetic** : fields larger than one 64-bit limb (e.g. BN254, 4 limbs) are fully supported, including Montgomery-form representation and conversion at boundaries.
 
 
@@ -30,7 +30,7 @@ List (Operation F)
         ▼
 List (FlatOperation F)
         ├──► Compile.lean ──► Ast.lean (typed WASM AST) ──► Binary.lean (binary encoder) ──► .wasm
-        └──► R1CS.lean ──► R1CS JSON (constraints + prime metadata)
+        └──► R1CS.lean ──► R1CS JSON + binary .r1cs (constraints + prime metadata)
 ```
 
 
@@ -39,7 +39,7 @@ List (FlatOperation F)
 | `Compile.lean` | Flattening pass, witness-generation code generation, all ABI functions              |
 | `Ast.lean`     | Typed WASM AST (instructions, functions, modules, binary opcodes)                   |
 | `Binary.lean`  | LEB128/binary encoding of the AST into a `.wasm` byte array, with validation errors |
-| `R1CS.lean`    | Quadratic-constraint extraction and JSON serialization                              |
+| `R1CS.lean`    | Quadratic-constraint extraction, JSON serialization, binary `.r1cs` encoding       |
 
 
 
@@ -59,18 +59,19 @@ open Backends.Wasm
 def addOps : List (Operation (F p1009)) :=
   [.witness 1 (.ir [] (.lit #v[.add (.expr (.var ⟨0⟩)) (.const 5)]))]
 
--- Single-word: primes ≤ 2^32 (small test fields)
-def wasm : Except String ByteArray := compileModule p1009 1 addOps 1
+-- Single-word: primes ≤ 2^32 (small test fields); input name "x", output = witness 1.
+def wasm : Except String ByteArray := compileModule p1009 1 ["x"] [1] addOps 1
 
 -- The operations of a larger circuit, offset by its public inputs (here: 1).
 def ops : List (Operation Specs.Poseidon.F) :=
   (Circomlib.Poseidon.Poseidon1.circuit.main (varFromOffset field 0)).operations 1
 
--- Multi-word: BN254 needs 4 64-bit limbs
-def wasmBN254 : Except String ByteArray := compileModule BN254_PRIME 1 ops 4
+-- Multi-word: BN254 needs 4 64-bit limbs; input "in", output witness 402.
+def wasmBN254 : Except String ByteArray := compileModule BN254_PRIME 1 ["in"] [402] ops 4
 
--- R1CS constraints for the same circuit
-def r1csJson : Except String String := compileR1CS BN254_PRIME 1 1 ops 4
+-- R1CS constraints for the same circuit, as JSON and as binary .r1cs
+def r1csJson : Except String String := compileR1CS BN254_PRIME 1 ["in"] [402] ops 4
+def r1csBin : Except String ByteArray := compileR1CSBin BN254_PRIME 1 ["in"] [402] ops 4
 ```
 
 To use the output, write the bytes to a file and hand them to snarkjs:
@@ -88,17 +89,20 @@ A complete end-to-end example (including `wasm-validate` and a ground-truth comp
 ### `compileModule`
 
 ```lean
-def compileModule (fieldPrime numInputs : ℕ) (ops : List (Operation F)) (numWords : ℕ) :
+def compileModule (fieldPrime numInputs : ℕ) (inputNames : List String := [])
+    (outputVarIdx : List ℕ := []) (ops : List (Operation F)) (numWords : ℕ) :
     Except String ByteArray
 ```
 
 
-| Parameter    | Meaning                                                                        |
-| ------------ | ------------------------------------------------------------------------------ |
-| `fieldPrime` | The field prime (e.g. `1009` for small test fields, `BN254_PRIME` for BN254)   |
-| `numInputs`  | Number of public input signals                                                 |
-| `ops`        | The circuit's operations (`Operations F`), e.g. `circuit.operations numInputs` |
-| `numWords`   | Number of 64-bit limbs per field element (see below)                           |
+| Parameter       | Meaning                                                                        |
+| --------------- | ------------------------------------------------------------------------------ |
+| `fieldPrime`    | The field prime (e.g. `1009` for small test fields, `BN254_PRIME` for BN254)   |
+| `numInputs`     | Number of public input signals                                                 |
+| `inputNames`    | Optional input names (one per input). When given, the module validates input.json keys by FNV-1a hash, like circom: unknown keys are rejected. When empty, any key is accepted and the value array must hold all `numInputs` elements (see [Inputs](#inputs)). |
+| `outputVarIdx`  | Optional circuit-variable indices of the output witnesses. When given, the signal layout is outputs-first (see [Signal layout](#signal-layout)) and `groth16 public.json` contains the real outputs. |
+| `ops`           | The circuit's operations (`Operations F`), e.g. `circuit.operations numInputs` |
+| `numWords`      | Number of 64-bit limbs per field element (see below)                           |
 
 
 Returns the binary WASM module, or an error describing the problem.
@@ -106,11 +110,29 @@ Returns the binary WASM module, or an error describing the problem.
 ### `compileR1CS`
 
 ```lean
-def compileR1CS (fieldPrime numInputs numOutputs : ℕ) (ops : List (Operation F)) (numWords : ℕ) :
+def compileR1CS (fieldPrime numInputs : ℕ) (inputNames : List String := [])
+    (outputVarIdx : List ℕ := []) (ops : List (Operation F)) (numWords : ℕ) :
     Except String String
 ```
 
-Same inputs as `compileModule` (plus `numOutputs`, the number of public output signals) and returns the R1CS constraint system as a pretty-printed JSON string.
+Same inputs as `compileModule` and returns the R1CS constraint system as a pretty-printed JSON string.
+
+### `compileR1CSBin`
+
+```lean
+def compileR1CSBin (fieldPrime numInputs : ℕ) (inputNames : List String := [])
+    (outputVarIdx : List ℕ := []) (ops : List (Operation F)) (numWords : ℕ) :
+    Except String ByteArray
+```
+
+Same inputs and constraint pipeline as `compileR1CS`, returned as a binary `.r1cs` file (the r1csfile format read by snarkjs). This is what `groth16 setup` consumes:
+
+```bash
+snarkjs r1cs info circuit.r1cs
+snarkjs groth16 setup circuit.r1cs pot_final.ptau circuit.zkey
+```
+
+For field elements smaller than 64 bits the coefficient byte width is padded up to the field's word size (`8·⌈bitLength/64⌉`), which is what snarkjs's reader expects; the encoded values are unchanged.
 
 ### Choosing `numWords`
 
@@ -150,7 +172,7 @@ All u64-sorted (`U64Expr`) arithmetic is performed on single 64-bit words with W
 
 ## Error handling
 
-Both entry points return `Except String`. Anything the compiler cannot represent — an unsupported instruction, an unknown label or function name, a `native` witness, insufficient `numWords`, a lookup in R1CS — fails at compile time with a descriptive message. There are no silent fallbacks: the encoder emits `.error` for unknown instructions instead of an opcode that would fail deep inside snarkjs, and label resolution never falls back to depth 0.
+All entry points return `Except String`. Anything the compiler cannot represent — an unsupported instruction, an unknown label or function name, a `native` witness, insufficient `numWords`, a lookup in R1CS — fails at compile time with a descriptive message. There are no silent fallbacks: the encoder emits `.error` for unknown instructions instead of an opcode that would fail deep inside snarkjs, and label resolution never falls back to depth 0.
 
 ## Output format
 
@@ -180,9 +202,16 @@ The generated WASM module exports:
 
 
 
+### Inputs
+
+snarkjs dispatches on the FNV-1a hash of each `input.json` key (circom's convention). Two modes:
+
+- **With `inputNames`**: one key per input, each holding exactly one field element — the standard circom format, `{"a": "3", "b": "4"}`. Unknown or misspelled keys are rejected ("Signal not found"), like circom.
+- **Without names (lenient)**: any single key whose value array holds all `numInputs` elements, e.g. `{"in": ["3", "4"]}`. The key name is ignored.
+
 ### Signal layout
 
-Signal `0` is the constant signal (`1`); signals `1..numInputs` are the public inputs; the remaining signals are the circuit's witnesses in variable order. Witness values are produced in Montgomery form internally and converted back to normal form before being stored to shared memory.
+Signal `0` is the constant signal (`1`). Without `outputVarIdx`, signals `1..numInputs` are the public inputs, followed by the circuit's witnesses in variable order and the intermediate signals induced by asserts. With `outputVarIdx`, the layout is **outputs-first** (the circom convention): signal `0` = constant, signals `1..numOutputs` = the declared output witnesses (in `outputVarIdx` order), then the inputs, then the remaining witnesses — so snarkjs's `groth16 public.json` contains the circuit's real outputs and inputs. Witness values are produced in Montgomery form internally and converted back to normal form before being stored to shared memory.
 
 ### Using with snarkjs
 
@@ -226,7 +255,8 @@ For writing circuit witnesses, see `[doc/witgen-authoring.md](../../../doc/witge
 
 - **WASM local limit**: each witness output occupies `numWords` locals in the compute function, plus a shared scratch region of `2·numWords` and `numWords` per let-step. Circuits with tens of thousands of multi-word witnesses can approach WASM's 50,000-locals-per-function limit (e.g. SHA256Compress's 80K two-limb witnesses exceed it). Single-word circuits use no scratch and stay well under the limit.
 - `dataGet`**/**`hintGet`: these read committed/uncommitted prover data from the Lean environment, which is not representable in a standalone WASM module; they are rejected with `.error`.
-- **R1CS export**: lookups and interactions cannot be expressed as quadratic constraints and are rejected (see [Supported operations](#supported-operations)).
+- **R1CS export**: lookups and interactions cannot be expressed as quadratic constraints and are rejected (see [Supported operations](#supported-operations)). Note that snarkjs's `r1cs export json` only works for primes of known curves (e.g. BN254); `r1cs info` and `groth16 setup` work for any prime.
+- **`init(sanityCheck)`**: the Circom 2 `init` flag that enables constraint checking during witness generation is accepted but ignored — the module does not verify its own constraints at runtime. Use `snarkjs wtns check` on a supported curve instead.
 
 ## References
 
