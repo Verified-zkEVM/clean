@@ -692,6 +692,13 @@ theorem exists_rotation_mem_instanceQueries_of_publicInputLayout_cell
 def operations (self : TopLevelCircuit F Config PublicInput) : Operations F :=
   TopLevelCompilation.operations self.formalCircuit
 
+/-- Every copied cell in a closed top-level circuit is assigned before use. -/
+theorem operationsCopyCellsAssigned
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.operations.CopyCellsAssigned 0 [] := by
+  exact self.formalCircuit.operationsCopyCellsAssigned
+    () () self.noCallerRequirements
+
 /-- Exact compositional footprint published by the formal circuit. -/
 def synthesisSummary (self : TopLevelCircuit F Config PublicInput) :
     FloorPlanner.SynthesisSummary :=
