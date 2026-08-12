@@ -14480,6 +14480,19 @@ def insertRepeated (view : AllocationView) (columns : List RegionColumn)
       insertRepeated (view.insert columns start length) columns
         (start + length) length count
 
+theorem insert_valid
+    {view : AllocationView} {columns : List RegionColumn}
+    {start length : ℕ} (hvalid : view.Valid)
+    (hfits : view.FitsColumns columns start length)
+    (hlength : 0 < length) :
+    (view.insert columns start length).Valid := by
+  intro column
+  by_cases hcolumn : column ∈ columns
+  · simp only [insert, hcolumn, ↓reduceIte]
+    exact Allocations.Valid.insert (view column) start length
+      (hvalid column) (hfits column hcolumn) hlength
+  · simpa [insert, hcolumn] using hvalid column
+
 theorem fitsColumns_insert_iff
     {view : AllocationView} {insertColumns columns : List RegionColumn}
     {insertStart insertLength start length : ℕ} :
@@ -14549,6 +14562,27 @@ theorem fitsColumns_insert_tail
   · intro column _ _
     unfold RowIntervalsDisjoint
     omega
+
+theorem insertRepeated_valid
+    (count : ℕ) {view : AllocationView} {columns : List RegionColumn}
+    {start length : ℕ} (hvalid : view.Valid)
+    (hfits : view.FitsColumns columns start ((count + 1) * length))
+    (hlength : 0 < length) :
+    (view.insertRepeated columns start length (count + 1)).Valid := by
+  induction count generalizing view start with
+  | zero =>
+      simp only [insertRepeated]
+      exact AllocationView.insert_valid hvalid
+        (hfits.monoInterval (by omega) (by omega)) hlength
+  | succ count inductionHypothesis =>
+      rw [show count.succ + 1 = (count + 1) + 1 by omega,
+        insertRepeated]
+      apply inductionHypothesis
+      · exact AllocationView.insert_valid hvalid
+          (hfits.monoInterval (by omega) (by
+            simp only [Nat.add_mul] at hfits ⊢
+            omega)) hlength
+      · exact view.fitsColumns_insert_tail hfits
 
 theorem Represents.valid
     {allocations : CircuitAllocations} {view : AllocationView}
@@ -15255,6 +15289,84 @@ theorem slotSummaryStateRepeated_single_fst_eq
         exact Nat.add_le_add_left
           (Nat.le_mul_of_pos_left summary.rowCount (Nat.succ_pos count))
           start)))
+
+/-- One compact, already-planned run of equal region summaries. -/
+structure PlannedSummaryBlock where
+  count : ℕ
+  summary : RegionShapeSummary
+  start : ℕ
+
+namespace PlannedSummaryBlock
+
+def blocks (trace : List PlannedSummaryBlock) :
+    List (ℕ × RegionShapeSummary) :=
+  trace.map fun block => (block.count, block.summary)
+
+def endpointFrom (initial : ℕ) : List PlannedSummaryBlock → ℕ
+  | [] => initial
+  | block :: rest =>
+      endpointFrom
+        (max initial (block.start + block.count * block.summary.rowCount))
+        rest
+
+def finalView (initial : AllocationView) :
+    List PlannedSummaryBlock → AllocationView
+  | [] => initial
+  | block :: rest =>
+      finalView
+        (initial.insertRepeated (sortRegionColumns block.summary.columns)
+          block.start block.summary.rowCount block.count)
+        rest
+
+def Lawful (initial : AllocationView) :
+    List PlannedSummaryBlock → Prop
+  | [] => True
+  | block :: rest =>
+      0 < block.count ∧
+      block.summary.WellFormed ∧
+      block.summary.columns ≠ [] ∧
+      initial.LeastFit (sortRegionColumns block.summary.columns)
+        block.summary.rowCount block.start ∧
+      initial.FitsColumns (sortRegionColumns block.summary.columns)
+        block.start (block.count * block.summary.rowCount) ∧
+      Lawful
+        (initial.insertRepeated (sortRegionColumns block.summary.columns)
+          block.start block.summary.rowCount block.count)
+        rest
+
+theorem slotSummaryBlocksState_eq
+    (trace : List PlannedSummaryBlock)
+    (initial : ℕ) (allocations : CircuitAllocations)
+    (view : AllocationView)
+    (hrepresents : view.Represents allocations)
+    (hvalid : view.Valid) (hlawful : Lawful view trace) :
+    let result := slotSummaryBlocksState (blocks trace) initial allocations
+    result.1 = endpointFrom initial trace ∧
+      (finalView view trace).Represents result.2 := by
+  induction trace generalizing initial allocations view with
+  | nil => exact ⟨rfl, hrepresents⟩
+  | cons block rest inductionHypothesis =>
+      rcases block with ⟨blockCount, summary, start⟩
+      rcases hlawful with
+        ⟨hcount, hwellFormed, hcolumns, hleast, hfits, hrest⟩
+      obtain ⟨count, rfl⟩ := Nat.exists_eq_succ_of_ne_zero
+        (Nat.ne_of_gt hcount)
+      let first := slotSummaryStateRepeated (count + 1) [summary]
+        initial allocations
+      have hfirst := slotSummaryStateRepeated_single_eq count summary
+        initial allocations view start hrepresents hvalid
+        hwellFormed.1 hcolumns (hwellFormed.2 hcolumns) hleast hfits
+      have hnextValid := view.insertRepeated_valid count hvalid hfits
+        (hwellFormed.2 hcolumns)
+      have htail := inductionHypothesis first.1 first.2
+        (view.insertRepeated (sortRegionColumns summary.columns)
+          start summary.rowCount (count + 1))
+        hfirst.2 hnextValid hrest
+      simp only [blocks, List.map_cons, slotSummaryBlocksState,
+        endpointFrom, finalView]
+      exact ⟨by rw [← hfirst.1]; exact htail.1, htail.2⟩
+
+end PlannedSummaryBlock
 
 theorem slotSummaryEndFromWith_cons
     (initial : ℕ) (head : RegionShapeSummary)
