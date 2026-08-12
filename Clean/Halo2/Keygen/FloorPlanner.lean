@@ -15659,6 +15659,27 @@ theorem lawful_append (initial : AllocationView)
         inductionHypothesis]
       tauto
 
+theorem Lawful.finalView_valid
+    {initial : AllocationView} {trace : List PlannedSummaryBlock}
+    (hlawful : Lawful initial trace) (hvalid : initial.Valid) :
+    (finalView initial trace).Valid := by
+  induction trace generalizing initial with
+  | nil => exact hvalid
+  | cons block rest inductionHypothesis =>
+      rcases hlawful with
+        ⟨hcount, hwellFormed, hcolumns, hleast, hfits, hrest⟩
+      obtain ⟨count, hcountEq⟩ := Nat.exists_eq_succ_of_ne_zero
+        (Nat.ne_of_gt hcount)
+      simp only [finalView]
+      apply inductionHypothesis hrest
+      have hfits' : initial.FitsColumns
+          (sortRegionColumns block.summary.columns) block.start
+          ((count + 1) * block.summary.rowCount) := by
+        simpa only [hcountEq] using hfits
+      have hnext := initial.insertRepeated_valid count hvalid hfits'
+        (hwellFormed.2 hcolumns)
+      simpa only [hcountEq] using hnext
+
 /-- Whether a proposed block at `start` avoids every compact block already
 placed. The formulation uses finite `List.Forall` predicates so concrete
 reduced traces can discharge it with the kernel evaluator. -/
