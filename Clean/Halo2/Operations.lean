@@ -131,6 +131,8 @@ exact summary without exposing their operation lists. -/
 
 namespace FloorPlanner
 
+attribute [synthesis_summary_norm] Nat.zero_max Nat.max_zero Nat.max_self
+
 /-- A concrete or virtual column participating in a region's floor-planner shape. -/
 inductive RegionColumn where
   | column : ColumnKind → ℕ → RegionColumn
