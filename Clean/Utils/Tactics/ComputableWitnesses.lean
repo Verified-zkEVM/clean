@@ -645,6 +645,17 @@ def CwSimp.build (extraTerms closeTerms : Array (TSyntax `term)) : TacticM CwSim
     fullProcs := #[← Simp.getSimprocs] ++ normProcs
   }
 
+/-- If `tgt` is `ty` or a conjunct of the `And`-tree `ty`, a proof of `tgt` from
+`proof : ty`, by the `And.left`/`And.right` projection chain. -/
+partial def conjunctProof? (tgt ty proof : Expr) : Option Expr :=
+  if ty == tgt then some proof
+  else if ty.isAppOfArity ``And 2 then
+    let l := ty.appFn!.appArg!
+    let r := ty.appArg!
+    conjunctProof? tgt l (mkApp3 (mkConst ``And.left) l r proof) <|>
+      conjunctProof? tgt r (mkApp3 (mkConst ``And.right) l r proof)
+  else none
+
 /-- The per-leaf dispatch/close stage of `computable_witnesses`, shared by the main
 entry (per split leaf) and the standalone `computable_witnesses_close`. -/
 def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
@@ -727,8 +738,10 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
     let tgt ← instantiateMVars (← getMainTarget)
     for decl in ← getLCtx do
       if decl.isImplementationDetail then continue
-      if (← instantiateMVars decl.type) == tgt then
-        (← getMainGoal).assign decl.toExpr
+      -- conjuncts too: input premises arrive as component conjunctions, and a leaf
+      -- goal that is one component should not cost a grind
+      if let some proof := conjunctProof? tgt (← instantiateMVars decl.type) decl.toExpr then
+        (← getMainGoal).assign proof
         replaceMainGoal []
         return
     throwError "syntacticAssumption: no match"
