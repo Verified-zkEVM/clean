@@ -109,6 +109,11 @@ theorem sortRegionColumns_perm (columns : List RegionColumn) :
     (r := fun left right : RegionColumn =>
       RegionColumn.lt left right = true) columns
 
+@[keygen_norm] theorem mem_sortRegionColumns_iff
+    (column : RegionColumn) (columns : List RegionColumn) :
+    column ∈ sortRegionColumns columns ↔ column ∈ columns :=
+  (sortRegionColumns_perm columns).mem_iff
+
 /-- Concrete columns in a region footprint. -/
 def physicalColumns (columns : List RegionColumn) : List RegionColumn :=
   columns.filter fun
