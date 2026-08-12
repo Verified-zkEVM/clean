@@ -16081,9 +16081,10 @@ theorem slotSummaryEndFromWith_eq_of_normalized_perm
         first.PlacementEquivalent second ∨
           List.Disjoint first.columns second.columns)
     (initial : ℕ) (allocations : CircuitAllocations)
-    (hvalid : allocations.Valid) :
-    slotSummaryEndFromWith initial left allocations =
-      slotSummaryEndFromWith initial right allocations := by
+    (hvalid : allocations.Valid) (tail : List RegionShapeSummary)
+    (hwellTail : tail.Forall RegionShapeSummary.WellFormed) :
+    slotSummaryEndFromWith initial (left ++ tail) allocations =
+      slotSummaryEndFromWith initial (right ++ tail) allocations := by
   obtain ⟨aligned, haligned, hequivalent⟩ :=
     exists_perm_forall₂_of_map_perm RegionShapeSummary.normalized hnormalized
   have hplacement :
@@ -16092,13 +16093,18 @@ theorem slotSummaryEndFromWith_eq_of_normalized_perm
       RegionShapeSummary.placementEquivalent_iff_normalized_eq.mpr
         hnormalizedEq
   have hleftAligned :
-      slotSummaryEndFromWith initial left allocations =
-        slotSummaryEndFromWith initial aligned allocations := by
+      slotSummaryEndFromWith initial (left ++ tail) allocations =
+        slotSummaryEndFromWith initial (aligned ++ tail) allocations := by
+    have htailPlacement :
+        List.Forall₂ RegionShapeSummary.PlacementEquivalent tail tail := by
+      rw [List.forall₂_same]
+      intro summary _
+      exact ⟨rfl, rfl⟩
     rw [← slotSummaryStateFromWith_fst,
       ← slotSummaryStateFromWith_fst]
     exact congrArg Prod.fst
       (slotSummaryStateFromWith_eq_of_forall₂_placementEquivalent
-        hplacement initial allocations)
+        (List.rel_append hplacement htailPlacement) initial allocations)
   have hkeys :
       left.map (fun summary => (summary.key : OrderDual ℕ)) =
         aligned.map (fun summary => (summary.key : OrderDual ℕ)) := by
@@ -16121,8 +16127,8 @@ theorem slotSummaryEndFromWith_eq_of_normalized_perm
         intro first hfirst second hsecond hkey
         exact hties first hfirst second hsecond
           (show first.key = second.key from hkey))
-      initial allocations hvalid [] (by simp)
-  exact hleftAligned.trans (by simpa using hrightAligned.symm)
+      initial allocations hvalid tail hwellTail
+  exact hleftAligned.trans hrightAligned.symm
 
 /-- Forgetting shape indices changes no slotted endpoint, for any pair sequence. -/
 theorem slottedEndFrom_forgetIndices_eq
