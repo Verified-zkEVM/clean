@@ -384,7 +384,9 @@ partial def collectOutputsGo (e : Expr) (seen : IO.Ref (Std.HashSet Expr))
       unless (← instantiateMVars (← inferType e)).isForall do
         acc.modify (·.push e)
 
-/-- Forward-chain child-output equality facts: for each collected output term, build
+/-- Forward-chain child-output equality facts (11 facts chained library-wide, 8 of
+them re-keyed; an o_meta universal-fact emitter for binder-nested outputs measured 0
+and was deleted): for each collected output term, build
 `output_of_input_eq` in tactic context — where the definitional dsimprocs can normalize
 the `c.localLength v` bound — and re-key the fact at the goal's own eval spelling
 (the lemma's conclusion uses a different, defeq eval-instance atom; `grind` congruence
@@ -657,7 +659,12 @@ partial def conjunctProof? (tgt ty proof : Expr) : Option Expr :=
   else none
 
 /-- The per-leaf dispatch/close stage of `computable_witnesses`, shared by the main
-entry (per split leaf) and the standalone `computable_witnesses_close`. -/
+entry (per split leaf) and the standalone `computable_witnesses_close`.
+
+Usage counts quoted in comments below are from an instrumented full-library build at
+815dc9b1 (one count per close decision, all `computable_witnesses` invocations); they
+justify each branch's existence and ordering, and will drift as the library grows.
+Routing at that state: 112 leaves took the vector route, 160 the base route. -/
 def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
   let simpPass : TacticM Unit := do
     unless (← getGoals).isEmpty do
@@ -734,6 +741,8 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
   -- `assumption` isDefEq-matches the goal against every hypothesis; a mismatched
   -- pair of large vector terms whnf-executes them (heartbeat blowup). Syntactic
   -- matching is enough here: the chain re-keys facts at the goal's own spelling.
+  -- closed 16 leaves whole-hypothesis; the conjunct extension fired 5× on the
+  -- close-heavy batch (Gates/FemtoCairo/BLAKE3/SHA256Round/ThetaD)
   let syntacticAssumption : TacticM Unit := withMainContext do
     let tgt ← instantiateMVars (← getMainTarget)
     for decl in ← getLCtx do
@@ -760,6 +769,8 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
     let envUnify : TacticM Unit := do
       unless (← getGoals).isEmpty do
         metaIntrosAll
+        -- 233 agreement hypotheses found, all in these two spellings; a bare-∀
+        -- spelling branch measured 0 and was deleted
         let hga? ← withMainContext do
           let mut found : Option Lean.Ident := none
           for decl in ← getLCtx do
@@ -809,6 +820,8 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
               setGoals [g']
               metaGrind
         setGoals []
+      -- vecMain closed 103 of 112 vector-route leaves; grind the other 9 (a
+      -- `Vector.ext` elementwise fallback between them measured 0 and was deleted)
       if ← attempt vecMain then return
       metaGrind
     else
@@ -816,6 +829,8 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
       -- order of magnitude; the curated simp_all forms only run when it fails
       -- unify the environments first: legs whose goal is a pure witness-window fact
       -- close by rfl right here, and the rest reach grind with fewer distinct atoms
+      -- base-route closers by measured frequency: envUnify closes 49 outright,
+      -- grind 91, the curated simp_all 5, the default-set simp_all 15
       envUnify
       if (← getGoals).isEmpty then return
       if ← attempt metaGrind then return
@@ -873,6 +888,7 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
             st.restore
             pure false
         -- dispatch on the bundle kind, read off the goal's `toSubcircuit` spelling
+        -- (129 dispatches, 0 unrecognized spellings)
         let variants : List (Name × Name) := [
           (`FormalCircuit.toSubcircuit,
            `FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq),
