@@ -175,6 +175,76 @@ def Operation.tableRowExtent : Operation F → ℕ
   | .loadTable _ values => values.length + 1
   | _ => 0
 
+/-- One past every absolute instance row named by an operation. -/
+def Operation.instanceRowExtent : Operation F → ℕ
+  | .region _ body =>
+      (body.map FloorPlanner.regionOperationInstanceRowExtent).foldl max 0
+  | .constrainInstance _ _ row => row + 1
+  | .loadTable _ _ => 0
+
+private theorem foldl_max_eq_max_foldl_max_zero
+    (values : List ℕ) (initial : ℕ) :
+    values.foldl max initial = max initial (values.foldl max 0) := by
+  induction values generalizing initial with
+  | nil => simp
+  | cons value rest inductionHypothesis =>
+      rw [List.foldl_cons, inductionHypothesis (max initial value),
+        List.foldl_cons]
+      simp only [Nat.zero_max]
+      rw [inductionHypothesis value]
+      ac_rfl
+
+/-- The exact table endpoint is part of the reduced synthesis summary. -/
+theorem synthesisSummary_tableRowExtent_eq
+    (operations : Operations F) :
+    (FloorPlanner.synthesisSummary operations).tableRowExtent =
+      (operations.map Operation.tableRowExtent).foldl max 0 := by
+  induction operations with
+  | nil => rfl
+  | cons operation rest inductionHypothesis =>
+      cases operation <;>
+        simp only [FloorPlanner.synthesisSummary,
+          FloorPlanner.SynthesisSummary.combine_tableRowExtent,
+          FloorPlanner.SynthesisSummary.ofRegion_tableRowExtent,
+          FloorPlanner.SynthesisSummary.ofInstanceRow_tableRowExtent,
+          FloorPlanner.SynthesisSummary.ofTableValues,
+          Operation.tableRowExtent, List.map_cons, List.foldl_cons,
+          inductionHypothesis, Nat.zero_max]
+      split <;> simp_all [← foldl_max_eq_max_foldl_max_zero]
+
+/-- The exact absolute-instance endpoint is part of the reduced synthesis summary. -/
+theorem synthesisSummary_instanceRowExtent_eq
+    (operations : Operations F) :
+    (FloorPlanner.synthesisSummary operations).instanceRowExtent =
+      (operations.map Operation.instanceRowExtent).foldl max 0 := by
+  have regionSummary : ∀ (body : RegionOperations F),
+      (FloorPlanner.regionSynthesisSummary body).instanceRowExtent =
+        (body.map FloorPlanner.regionOperationInstanceRowExtent).foldl max 0 := by
+    intro body
+    induction body with
+    | nil => rfl
+    | cons operation rest inductionHypothesis =>
+        simp only [FloorPlanner.regionSynthesisSummary,
+          FloorPlanner.RegionSynthesisSummary.combine_instanceRowExtent,
+          FloorPlanner.RegionSynthesisSummary.ofOperation_instanceRowExtent,
+          List.map_cons, List.foldl_cons, inductionHypothesis]
+        exact (foldl_max_eq_max_foldl_max_zero
+          (rest.map FloorPlanner.regionOperationInstanceRowExtent)
+          (FloorPlanner.regionOperationInstanceRowExtent operation)).symm
+  induction operations with
+  | nil => rfl
+  | cons operation rest inductionHypothesis =>
+      cases operation <;>
+        simp only [FloorPlanner.synthesisSummary,
+          FloorPlanner.SynthesisSummary.combine_instanceRowExtent,
+          FloorPlanner.SynthesisSummary.ofRegion_instanceRowExtent,
+          FloorPlanner.SynthesisSummary.ofInstanceRow_instanceRowExtent,
+          FloorPlanner.SynthesisSummary.ofTableValues_instanceRowExtent,
+          Operation.instanceRowExtent, List.map_cons, List.foldl_cons,
+          inductionHypothesis, regionSummary, Nat.zero_max]
+      all_goals exact (foldl_max_eq_max_foldl_max_zero
+        (rest.map Operation.instanceRowExtent) _).symm
+
 /--
 The rows guarded by Halo 2's `usable_rows` checks during key generation or proving:
 floor-planned assignments and selector activations, loaded-table assignments and fill
@@ -191,6 +261,222 @@ def usedRows (ops : Operations F) : ℕ :=
   let copyEnd :=
     (ops.map (Operation.copyRowExtent starts)).foldl max 0
   max (max regionEnd tableEnd) copyEnd
+
+/-- Membership in the assignment summary identifies a measured local row. -/
+theorem RegionOperations.rowOffset_succ_le_regionSynthesisSummary_of_mem_assignedCells
+    (body : RegionOperations F) (region : RegionIndex) (cell : Cell)
+    (hcell : cell ∈ body.assignedCells region) :
+    cell.regionIndex = region ∧
+      cell.rowOffset + 1 ≤ (FloorPlanner.regionSynthesisSummary body).rowCount := by
+  rw [RegionOperations.assignedCells, List.mem_flatMap] at hcell
+  obtain ⟨operation, hoperation, hcell⟩ := hcell
+  cases operation with
+  | assignAdvice column row compute =>
+      simp only [RegionOperation.assignedCells, List.mem_singleton] at hcell
+      subst cell
+      exact ⟨Cell.of_regionIndex region row column, by
+        simpa only [Cell.of_rowOffset] using
+          FloorPlanner.regionOperationRowExtent_le_synthesisSummary_of_mem
+            body (.assignAdvice column row compute) hoperation⟩
+  | assignFixed column row value =>
+      simp only [RegionOperation.assignedCells, List.mem_singleton] at hcell
+      subst cell
+      exact ⟨Cell.of_regionIndex region row column, by
+        simpa only [Cell.of_rowOffset] using
+          FloorPlanner.regionOperationRowExtent_le_synthesisSummary_of_mem
+            body (.assignFixed column row value) hoperation⟩
+  | enableGate gate row =>
+      simp only [RegionOperation.assignedCells, List.not_mem_nil] at hcell
+  | enableLookup argument selectors row =>
+      simp only [RegionOperation.assignedCells, List.not_mem_nil] at hcell
+  | constrainEqual left right =>
+      simp only [RegionOperation.assignedCells, List.not_mem_nil] at hcell
+  | constrainConstant assigned value =>
+      simp only [RegionOperation.assignedCells, List.not_mem_nil] at hcell
+  | constrainInstance assigned column row =>
+      simp only [RegionOperation.assignedCells, List.not_mem_nil] at hcell
+
+/-- The assignment summary uses precisely the same region-index walk as V1. -/
+theorem Operations.indexedRegion_of_mem_assignedCellsFrom
+    (operations : Operations F) (initial : RegionIndex) (cell : Cell)
+    (hcell : cell ∈ operations.assignedCellsFrom initial) :
+    ∃ region body,
+      (region, body) ∈ (indexedRegions operations initial).1 ∧
+        cell ∈ body.assignedCells region := by
+  induction operations generalizing initial with
+  | nil => simp [Operations.assignedCellsFrom] at hcell
+  | cons operation rest inductionHypothesis =>
+      cases operation with
+      | region name body =>
+          rw [Operations.assignedCellsFrom, List.mem_append] at hcell
+          rcases hcell with hbody | hrest
+          · exact ⟨initial, body, by simp [indexedRegions], hbody⟩
+          · obtain ⟨region, assignedBody, hregion, hassigned⟩ :=
+              inductionHypothesis (initial + 1) hrest
+            exact ⟨region, assignedBody, by simp [indexedRegions, hregion], hassigned⟩
+      | constrainInstance cell column row =>
+          exact inductionHypothesis initial hcell
+      | loadTable column values =>
+          exact inductionHypothesis initial hcell
+
+/-- Every cell recorded as assigned by synthesis lies within V1's placed regions. -/
+theorem Operations.assignedCell_rowExtent_le_placementEnd
+    (operations : Operations F) (cell : Cell)
+    (hcell : cell ∈ operations.assignedCells) :
+    cell.rowExtent (FloorPlanner.V1.starts operations) ≤
+      FloorPlanner.V1.placementEnd operations := by
+  obtain ⟨region, body, hregion, hassigned⟩ :=
+    Operations.indexedRegion_of_mem_assignedCellsFrom operations 0 cell hcell
+  obtain ⟨hcellRegion, hrow⟩ :=
+    RegionOperations.rowOffset_succ_le_regionSynthesisSummary_of_mem_assignedCells
+      body region cell hassigned
+  have hshape : FloorPlanner.measureRegion region body ∈
+      FloorPlanner.measureRegions operations := by
+    exact List.mem_map.mpr ⟨(region, body), hregion, rfl⟩
+  rw [FloorPlanner.V1.placementEnd]
+  rw [Cell.rowExtent, hcellRegion, Nat.add_assoc]
+  exact (Nat.add_le_add_left hrow
+    ((FloorPlanner.V1.starts operations).getD region 0)).trans (by
+      simpa only [FloorPlanner.measureRegion_rowCount] using
+        FloorPlanner.V1.shape_end_le_placementEndFrom_of_mem
+          (FloorPlanner.measureRegions operations)
+          (FloorPlanner.V1.starts operations)
+          (FloorPlanner.measureRegion region body) hshape)
+
+private theorem foldl_max_le
+    (values : List ℕ) (bound : ℕ)
+    (hvalues : ∀ value ∈ values, value ≤ bound) :
+    values.foldl max 0 ≤ bound := by
+  induction values with
+  | nil => exact Nat.zero_le bound
+  | cons value rest inductionHypothesis =>
+      rw [List.foldl_cons, foldl_max_eq_max_foldl_max_zero]
+      exact Nat.max_le.mpr ⟨hvalues value (by simp),
+        inductionHypothesis (by
+          intro candidate hcandidate
+          exact hvalues candidate (by simp [hcandidate]))⟩
+
+/-- Every operation's absolute-instance endpoint is covered by the exact reduced
+synthesis summary. -/
+theorem Operation.instanceRowExtent_le_synthesisSummary_of_mem
+    (operations : Operations F) (operation : Operation F)
+    (hoperation : operation ∈ operations) :
+    operation.instanceRowExtent ≤
+      (FloorPlanner.synthesisSummary operations).instanceRowExtent := by
+  rw [synthesisSummary_instanceRowExtent_eq]
+  exact FloorPlanner.value_le_foldl_max_of_mem
+    (operations.map Operation.instanceRowExtent) id 0
+    operation.instanceRowExtent
+    (List.mem_map.mpr ⟨operation, hoperation, rfl⟩)
+
+/-- Every copied cell covered by the compiler law lies inside V1's region endpoint. -/
+theorem Operations.copiedCell_rowExtent_le_placementEnd
+    (operations : Operations F)
+    (hassigned : operations.CopyCellsAssigned 0 [])
+    (cell : Cell) (hcell : cell ∈ operations.copiedCells) :
+    cell.rowExtent (FloorPlanner.V1.starts operations) ≤
+      FloorPlanner.V1.placementEnd operations := by
+  have hassignedCell := hassigned cell hcell
+  simp only [List.nil_append] at hassignedCell
+  exact operations.assignedCell_rowExtent_le_placementEnd cell hassignedCell
+
+/-- Under copy-cell provenance, one operation's complete copy footprint is bounded by
+the placed regions and exact absolute-instance summary. -/
+theorem Operation.copyRowExtent_le_placementEnd_max_instanceRowExtent
+    (operations : Operations F)
+    (hassigned : operations.CopyCellsAssigned 0 [])
+    (operation : Operation F) (hoperation : operation ∈ operations) :
+    operation.copyRowExtent (FloorPlanner.V1.starts operations) ≤
+      max (FloorPlanner.V1.placementEnd operations)
+        (FloorPlanner.synthesisSummary operations).instanceRowExtent := by
+  have copiedCellBound (cell : Cell)
+      (hcell : cell ∈ operation.copiedCells) :
+      cell.rowExtent (FloorPlanner.V1.starts operations) ≤
+        FloorPlanner.V1.placementEnd operations := by
+    apply operations.copiedCell_rowExtent_le_placementEnd hassigned cell
+    exact List.mem_flatMap.mpr ⟨operation, hoperation, hcell⟩
+  have instanceBound :=
+    Operation.instanceRowExtent_le_synthesisSummary_of_mem
+      operations operation hoperation
+  cases operation with
+  | region name body =>
+      apply foldl_max_le
+      intro extent hextent
+      obtain ⟨regionOperation, hregionOperation, rfl⟩ := List.mem_map.mp hextent
+      have copiedInRegion {candidate : Cell}
+          (hcandidate : candidate ∈ regionOperation.copiedCells) :
+          candidate ∈ (Operation.region name body).copiedCells := by
+        rw [Operation.copiedCells, RegionOperations.copiedCells,
+          List.mem_flatMap]
+        exact ⟨regionOperation, hregionOperation, hcandidate⟩
+      cases regionOperation with
+      | assignAdvice => simp [RegionOperation.copyRowExtent]
+      | assignFixed => simp [RegionOperation.copyRowExtent]
+      | enableGate => simp [RegionOperation.copyRowExtent]
+      | enableLookup => simp [RegionOperation.copyRowExtent]
+      | constrainEqual left right =>
+          simp only [RegionOperation.copyRowExtent, Nat.max_le]
+          exact ⟨(copiedCellBound left (copiedInRegion (by
+            simp [RegionOperation.copiedCells]))).trans
+              (Nat.le_max_left _ _),
+            (copiedCellBound right (copiedInRegion (by
+              simp [RegionOperation.copiedCells]))).trans
+              (Nat.le_max_left _ _)⟩
+      | constrainConstant cell value =>
+          exact (copiedCellBound cell (copiedInRegion (by
+            simp [RegionOperation.copiedCells]))).trans
+                (Nat.le_max_left _ _)
+      | constrainInstance cell column row =>
+          simp only [RegionOperation.copyRowExtent, Nat.max_le]
+          refine ⟨(copiedCellBound cell (copiedInRegion (by
+            simp [RegionOperation.copiedCells]))).trans
+                (Nat.le_max_left _ _), ?_⟩
+          apply (FloorPlanner.value_le_foldl_max_of_mem
+            (body.map FloorPlanner.regionOperationInstanceRowExtent) id 0
+            (row + 1) (List.mem_map.mpr
+              ⟨.constrainInstance cell column row, hregionOperation, rfl⟩)).trans
+          exact instanceBound.trans (Nat.le_max_right _ _)
+  | constrainInstance cell column row =>
+      simp only [Operation.copyRowExtent, Nat.max_le]
+      exact ⟨(copiedCellBound cell (by
+          simp [Operation.copiedCells])).trans (Nat.le_max_left _ _),
+        instanceBound.trans (Nat.le_max_right _ _)⟩
+  | loadTable column values =>
+      simp [Operation.copyRowExtent]
+
+/-- Copy provenance removes the copy stream as an independent source of row growth. -/
+theorem Operations.copyRowExtent_le_placementEnd_max_instanceRowExtent
+    (operations : Operations F)
+    (hassigned : operations.CopyCellsAssigned 0 []) :
+    (operations.map (Operation.copyRowExtent
+      (FloorPlanner.V1.starts operations))).foldl max 0 ≤
+      max (FloorPlanner.V1.placementEnd operations)
+        (FloorPlanner.synthesisSummary operations).instanceRowExtent := by
+  apply foldl_max_le
+  intro extent hextent
+  obtain ⟨operation, hoperation, rfl⟩ := List.mem_map.mp hextent
+  exact Operation.copyRowExtent_le_placementEnd_max_instanceRowExtent
+    operations hassigned operation hoperation
+
+/-- The exact generic compiler bound: under copy provenance, all Halo 2 usable-row
+checks are covered by V1 placement plus the reduced table and instance summaries. -/
+theorem usedRows_le_summaryExtents
+    (operations : Operations F)
+    (hassigned : operations.CopyCellsAssigned 0 []) :
+    usedRows operations ≤
+      max (FloorPlanner.V1.placementEnd operations)
+        (max (FloorPlanner.synthesisSummary operations).tableRowExtent
+          (FloorPlanner.synthesisSummary operations).instanceRowExtent) := by
+  unfold usedRows
+  rw [← synthesisSummary_tableRowExtent_eq]
+  apply Nat.max_le.mpr
+  constructor
+  · exact Nat.max_le.mpr ⟨Nat.le_max_left _ _,
+      (Nat.le_max_left _ _).trans (Nat.le_max_right _ _)⟩
+  · exact (Operations.copyRowExtent_le_placementEnd_max_instanceRowExtent
+      operations hassigned).trans (by
+        exact Nat.max_le.mpr ⟨Nat.le_max_left _ _,
+          (Nat.le_max_right _ _).trans (Nat.le_max_right _ _)⟩)
 
 /-- A region operation's copy footprint is bounded by its enclosing region's
 copy footprint. -/
@@ -432,14 +718,15 @@ theorem FormalCircuit.operationsKeygenCoherent
       ((c.synthesize (c.configure ci {}).1 input).operations) := by
   rcases hrequirements with
     ⟨hconfig, hgates, hlookups, hpermutationColumns,
-      hinputPermutationColumns⟩
+      hinputCells⟩
   let program := c.configure ci
   let counts :=
     ConfigureCounts.ofConstraintSystem ({} : ConstraintSystem F)
   have hregistered :=
     c.elaborated.registered ci counts hconfig input 0
   simp only [hgates, hlookups, hpermutationColumns,
-    hinputPermutationColumns input, List.nil_append, List.append_nil] at hregistered
+    KeygenRequirements.inputPermutationColumns, hinputCells input,
+    List.map_nil, List.nil_append, List.append_nil] at hregistered
   have happlied :=
     hregistered.applyConfigureDelta
       ({} : ConstraintSystem F)

@@ -51,6 +51,12 @@ attribute [keygen_norm]
   Operation.LookupActivationsWellFormed
   RegionOperations.LookupActivationsWellFormed
   Operations.LookupActivationsWellFormed
+  RegionOperation.assignedCells RegionOperation.copiedCells
+  RegionOperations.assignedCells RegionOperations.copiedCells
+  RegionOperations.CopyCellsAssigned
+  Operation.copiedCells
+  Operations.assignedCellsFrom Operations.assignedCells
+  Operations.copiedCells Operations.CopyCellsAssigned
   LookupArgument.lookupActivationWellFormed_enable
   selectorEnabledAtIndex_cons_self complexSelectorEnabledAtIndex_cons_self
   Operations.KeygenRegistered.nil Operations.KeygenRegistered.append
@@ -85,6 +91,12 @@ attribute [keygen_spine]
   Operation.LookupActivationsWellFormed
   RegionOperations.LookupActivationsWellFormed
   Operations.LookupActivationsWellFormed
+  RegionOperation.assignedCells RegionOperation.copiedCells
+  RegionOperations.assignedCells RegionOperations.copiedCells
+  RegionOperations.CopyCellsAssigned
+  Operation.copiedCells
+  Operations.assignedCellsFrom Operations.assignedCells
+  Operations.copiedCells Operations.CopyCellsAssigned
   Operations.KeygenRegistered.nil Operations.KeygenRegistered.append
   Operations.KeygenRegistered.region_cons
   Operations.KeygenRegistered.constrainInstance_cons
@@ -772,6 +784,7 @@ def simpCallRouting (expression : Expr) : SimpM Simp.Result := do
         expression.getAppFn.isConstOf ``KeygenRequirements.gates ||
           expression.getAppFn.isConstOf ``KeygenRequirements.lookups ||
           expression.getAppFn.isConstOf ``KeygenRequirements.permutationColumns ||
+          expression.getAppFn.isConstOf ``KeygenRequirements.inputCells ||
           expression.getAppFn.isConstOf ``KeygenRequirements.inputPermutationColumns
     | return exposed
   let arguments := requirementProjection.getAppArgs

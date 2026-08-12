@@ -154,6 +154,15 @@ class ElaboratedCircuit (F : Type) [FiniteField F]
         (program.delta counts).permutationRequests ++
         keygenRequirements.inputPermutationColumns configInput hconfig input) := by
     keygen_registration
+  /-- Every copy endpoint is either a declared caller input or assigned by synthesis. -/
+  copyCellsAssigned :
+    ∀ (configInput : ConfigInput) (counts : ConfigureCounts)
+      (hconfig : keygenRequirements.configLawful configInput)
+      (input : Var Input F) (i : RegionIndex),
+    let program := configure configInput
+    ((synthesize (program.output counts) input).operations i).CopyCellsAssigned i
+      (keygenRequirements.inputCells configInput hconfig input) := by
+    keygen_registration
   /-- Every lookup activation enables its master and only its declared selectors. -/
   lookupActivationsWellFormed :
     ∀ (config : Config) (input : Var Input F) (i : RegionIndex),
@@ -1128,6 +1137,16 @@ class ElaboratedRegionCircuit (F : Type) [FiniteField F]
             (program.delta counts).permutationRequests ++
             keygenRequirements.inputPermutationColumns configInput hconfig input)) := by
     keygen_registration
+  /-- Region-level copy endpoints are either declared inputs or locally assigned. -/
+  copyCellsAssigned :
+    ∀ (configInput : ConfigInput) (counts : ConfigureCounts)
+      (hconfig : keygenRequirements.configLawful configInput)
+      (offset : ℕ) (input : Var Input F) (region : RegionIndex),
+    let program := configure configInput
+    ((synthesize
+      (program.output counts) offset input).operations region).CopyCellsAssigned region
+        (keygenRequirements.inputCells configInput hconfig input) := by
+    keygen_registration
   /-- Every region lookup activation enables its master and only declared selectors. -/
   lookupActivationsWellFormed :
     ∀ (config : Config) (offset : ℕ)
@@ -2082,6 +2101,13 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
         simpa only [assignRegion, Circuit.operations,
           Operations.KeygenRegistered, Operation.KeygenRegistered,
           List.Forall, and_true] using hregistered
+      copyCellsAssigned := by
+        intro configInput counts hconfig input region
+        have hassigned := child.elaborated.copyCellsAssigned
+          configInput counts hconfig 0 input region
+        simpa [assignRegion, Circuit.operations,
+          Operations.CopyCellsAssigned, Operations.copiedCells,
+          Operations.assignedCellsFrom, RegionOperations.CopyCellsAssigned] using hassigned
       lookupActivationsWellFormed := by
         intro config input region
         have hlawful := child.elaborated.lookupActivationsWellFormed

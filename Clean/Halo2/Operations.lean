@@ -1678,9 +1678,17 @@ structure KeygenRequirements (F ConfigInput InputVar : Type) where
   gates : ∀ input, configLawful input → List (Gate F) := fun _ _ => []
   lookups : ∀ input, configLawful input → List (LookupArgument F) := fun _ _ => []
   permutationColumns : ∀ input, configLawful input → List AnyColumn := fun _ _ => []
-  /-- Equality-enabled columns required by the concrete cells passed to synthesis. -/
-  inputPermutationColumns : ∀ configInput, configLawful configInput →
-      InputVar → List AnyColumn := fun _ _ _ => []
+  /-- Concrete caller-owned cells that synthesis may use in copy constraints. -/
+  inputCells : ∀ configInput, configLawful configInput →
+      InputVar → List Cell := fun _ _ _ => []
+
+/-- Equality-enabled columns required by the concrete cells passed to synthesis. -/
+def KeygenRequirements.inputPermutationColumns
+    {ConfigInput InputVar : Type}
+    (self : KeygenRequirements F ConfigInput InputVar)
+    (configInput : ConfigInput) (configLawful : self.configLawful configInput)
+    (input : InputVar) : List AnyColumn :=
+  (self.inputCells configInput configLawful input).map Cell.column
 
 /-- A configure input has no keygen requirements left for an enclosing circuit. -/
 structure KeygenRequirements.EmptyAt
@@ -1691,8 +1699,63 @@ structure KeygenRequirements.EmptyAt
   gates_eq : self.gates input configLawful = []
   lookups_eq : self.lookups input configLawful = []
   permutationColumns_eq : self.permutationColumns input configLawful = []
-  inputPermutationColumns_eq : ∀ inputVar,
-    self.inputPermutationColumns input configLawful inputVar = []
+  inputCells_eq : ∀ inputVar,
+    self.inputCells input configLawful inputVar = []
+
+/-! ## Copy-cell provenance -/
+
+/-- Cells created by assignments in one concrete region. -/
+def RegionOperation.assignedCells (region : RegionIndex) : RegionOperation F → List Cell
+  | .assignAdvice column row _ => [.of region row column]
+  | .assignFixed column row _ => [.of region row column]
+  | _ => []
+
+/-- Cells referenced as regional endpoints of copy constraints. -/
+def RegionOperation.copiedCells : RegionOperation F → List Cell
+  | .constrainEqual left right => [left, right]
+  | .constrainConstant cell _ => [cell]
+  | .constrainInstance cell _ _ => [cell]
+  | _ => []
+
+def RegionOperations.assignedCells (operations : RegionOperations F)
+    (region : RegionIndex) : List Cell :=
+  operations.flatMap (RegionOperation.assignedCells region)
+
+def RegionOperations.copiedCells (operations : RegionOperations F) : List Cell :=
+  operations.flatMap RegionOperation.copiedCells
+
+def RegionOperations.CopyCellsAssigned (operations : RegionOperations F)
+    (region : RegionIndex) (inputCells : List Cell) : Prop :=
+  ∀ cell ∈ operations.copiedCells,
+    cell ∈ inputCells ++ operations.assignedCells region
+
+/-- Cells assigned by a layouter stream, with the same region-index walk used by V1. -/
+def Operations.assignedCellsFrom : Operations F → RegionIndex → List Cell
+  | [], _ => []
+  | .region _ body :: rest, region =>
+      body.assignedCells region ++ assignedCellsFrom rest (region + 1)
+  | .constrainInstance _ _ _ :: rest, region => assignedCellsFrom rest region
+  | .loadTable _ _ :: rest, region => assignedCellsFrom rest region
+
+def Operations.assignedCells (operations : Operations F) : List Cell :=
+  operations.assignedCellsFrom 0
+
+/-- Cells referenced by one copy-like layouter operation. -/
+def Operation.copiedCells : Operation F → List Cell
+  | .region _ body => body.copiedCells
+  | .constrainInstance cell _ _ => [cell]
+  | .loadTable _ _ => []
+
+/-- Cells referenced by every copy-like operation in a layouter stream. -/
+def Operations.copiedCells (operations : Operations F) : List Cell :=
+  operations.flatMap Operation.copiedCells
+
+/-- Every copied regional cell was either supplied by the caller or created by an
+assignment in this synthesis stream. -/
+def Operations.CopyCellsAssigned (operations : Operations F)
+    (initialRegion : RegionIndex) (inputCells : List Cell) : Prop :=
+  ∀ cell ∈ operations.copiedCells,
+    cell ∈ inputCells ++ operations.assignedCellsFrom initialRegion
 
 /--
 Static registration of one region operation in explicit configure-produced gate and
