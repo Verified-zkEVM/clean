@@ -12364,6 +12364,39 @@ def FitsColumns (allocations : CircuitAllocations)
   ∀ column ∈ columns,
     (allocations.getD column #[]).Fits start length
 
+/-- A row is the first common fit for a footprint. This is the declarative
+counterpart of V1's operational first-fit search. -/
+def LeastFit (allocations : CircuitAllocations)
+    (columns : List RegionColumn) (length row : ℕ) : Prop :=
+  FitsColumns allocations columns row length ∧
+    ∀ candidate, FitsColumns allocations columns candidate length →
+      row ≤ candidate
+
+/-- The operational allocator chooses a declaratively least fitting row. -/
+theorem firstFit_eq_of_leastFit
+    (fuel : ℕ) (allocations : CircuitAllocations)
+    (columns : List RegionColumn) (length start row : ℕ)
+    (slack : Option ℕ)
+    (hvalid : allocations.Valid) (hnodup : columns.Nodup)
+    (hlength : 0 < length) (hfuel : columns.length ≤ fuel)
+    (hstart : start ≤ row)
+    (hbound : ∀ available, slack = some available →
+      row + length ≤ start + length + available)
+    (hleast : LeastFit allocations columns length row) :
+    ∃ updated,
+      firstFit fuel allocations columns length start slack =
+        (some row, updated) := by
+  obtain ⟨found, updated, hresult, hfoundLe⟩ :=
+    firstFit_row_le_fitting_candidate fuel allocations columns length
+      start slack row hvalid hnodup hlength hfuel hstart hbound hleast.1
+  have hlaw := firstFit_law fuel allocations columns length start slack
+    hvalid hnodup hlength
+  rw [hresult] at hlaw
+  have hrowLe : row ≤ found := hleast.2 found (hlaw.1.fits found rfl)
+  have : found = row := Nat.le_antisymm hfoundLe hrowLe
+  subst found
+  exact ⟨updated, hresult⟩
+
 theorem FitsColumns.congruent
     {left right : CircuitAllocations} {columns : List RegionColumn}
     {start length : ℕ} (hequivalent : left.Equivalent right)
@@ -13095,6 +13128,22 @@ def placeSummary (summary : RegionShapeSummary)
     Option ℕ × CircuitAllocations :=
   let columns := sortRegionColumns summary.columns
   firstFit columns.length allocations columns summary.rowCount 0 none
+
+/-- A declaratively least fitting row determines the exact row selected when a
+reduced summary is placed. -/
+theorem placeSummary_row_eq_of_leastFit
+    (summary : RegionShapeSummary) (allocations : CircuitAllocations)
+    (row : ℕ) (hvalid : allocations.Valid)
+    (hnodup : summary.columns.Nodup) (hlength : 0 < summary.rowCount)
+    (hleast : LeastFit allocations (sortRegionColumns summary.columns)
+      summary.rowCount row) :
+    (placeSummary summary allocations).1 = some row := by
+  obtain ⟨updated, hresult⟩ := firstFit_eq_of_leastFit
+    (sortRegionColumns summary.columns).length allocations
+    (sortRegionColumns summary.columns) summary.rowCount 0 row none
+    hvalid ((sortRegionColumns_perm summary.columns).nodup_iff.mpr hnodup)
+    hlength le_rfl (Nat.zero_le row) (by simp) hleast
+  simp only [placeSummary, hresult]
 
 /-- Two reduced summaries are placement-equivalent when the floor planner sees
 the same sorted column footprint and height. This deliberately ignores the stored
