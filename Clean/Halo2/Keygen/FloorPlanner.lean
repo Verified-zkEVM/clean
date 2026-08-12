@@ -14519,6 +14519,71 @@ theorem fitsColumns_insert_iff
           (hinserted column hcolumn hinsert)
     · simpa [insert, hinsert] using hfits column hcolumn
 
+private theorem rowIntervalsDisjoint_adjacent_iff
+    (start length insertStart insertLength tailLength : ℕ)
+    (hlength : 0 < length) :
+    RowIntervalsDisjoint start length insertStart insertLength ∧
+        RowIntervalsDisjoint start length (insertStart + insertLength)
+          tailLength ↔
+      RowIntervalsDisjoint start length insertStart
+        (insertLength + tailLength) := by
+  unfold RowIntervalsDisjoint
+  omega
+
+/-- For future placement, a nonempty repeated run behaves as its single
+contiguous occupied interval. This keeps repetition counts symbolic while
+checking later blocks. -/
+theorem fitsColumns_insertRepeated_succ_iff
+    {view : AllocationView} {insertColumns columns : List RegionColumn}
+    {insertStart insertLength start length : ℕ} (count : ℕ)
+    (hlength : 0 < length) :
+    (view.insertRepeated insertColumns insertStart insertLength
+        (count + 1)).FitsColumns columns start length ↔
+      view.FitsColumns columns start length ∧
+        ∀ column, column ∈ columns → column ∈ insertColumns →
+          RowIntervalsDisjoint start length insertStart
+            ((count + 1) * insertLength) := by
+  induction count generalizing view insertStart with
+  | zero =>
+      simp only [insertRepeated, fitsColumns_insert_iff, Nat.zero_add,
+        Nat.one_mul]
+  | succ count inductionHypothesis =>
+      change
+        ((view.insert insertColumns insertStart insertLength).insertRepeated
+          insertColumns (insertStart + insertLength) insertLength
+            (count + 1)).FitsColumns columns start length ↔ _
+      rw [inductionHypothesis, fitsColumns_insert_iff]
+      constructor
+      · rintro ⟨⟨hview, hfirst⟩, htail⟩
+        refine ⟨hview, ?_⟩
+        intro column hcolumn hinsert
+        have hcombined :=
+          (rowIntervalsDisjoint_adjacent_iff start length insertStart
+            insertLength ((count + 1) * insertLength) hlength).mp
+              ⟨hfirst column hcolumn hinsert,
+                htail column hcolumn hinsert⟩
+        simpa [Nat.add_mul, two_mul, Nat.add_comm, Nat.add_left_comm,
+          Nat.add_assoc] using hcombined
+      · rintro ⟨hview, hall⟩
+        constructor
+        · refine ⟨hview, ?_⟩
+          intro column hcolumn hinsert
+          have hwhole := hall column hcolumn hinsert
+          have hcombined : RowIntervalsDisjoint start length insertStart
+              (insertLength + (count + 1) * insertLength) := by
+            simpa [Nat.add_mul, two_mul, Nat.add_comm, Nat.add_left_comm,
+              Nat.add_assoc] using hwhole
+          exact (rowIntervalsDisjoint_adjacent_iff start length insertStart
+            insertLength ((count + 1) * insertLength) hlength).mpr hcombined |>.1
+        · intro column hcolumn hinsert
+          have hwhole := hall column hcolumn hinsert
+          have hcombined : RowIntervalsDisjoint start length insertStart
+              (insertLength + (count + 1) * insertLength) := by
+            simpa [Nat.add_mul, two_mul, Nat.add_comm, Nat.add_left_comm,
+              Nat.add_assoc] using hwhole
+          exact (rowIntervalsDisjoint_adjacent_iff start length insertStart
+            insertLength ((count + 1) * insertLength) hlength).mpr hcombined |>.2
+
 /-- Once a least fitting interval has been inserted, the adjacent interval is
 the next least fit whenever the enclosing run was free beforehand. -/
 theorem leastFit_insert_next
