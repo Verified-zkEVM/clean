@@ -1739,35 +1739,138 @@ def RegionOperations.CopyCellsCovered (operations : RegionOperations F)
     cell ∈ inputCells ++ operations.assignedCells region
 
 /-- Execution-order-sensitive copy provenance inside one region. -/
-def RegionOperations.CopyCellsAssignedFrom (region : RegionIndex)
-    (available : List Cell) : RegionOperations F → Prop
-  | [] => True
-  | .assignAdvice column row _ :: rest =>
-      CopyCellsAssignedFrom region (.of region row column :: available) rest
-  | .assignFixed column row _ :: rest =>
-      CopyCellsAssignedFrom region (.of region row column :: available) rest
-  | .constrainEqual left right :: rest =>
-      left ∈ available ∧ right ∈ available ∧
-        CopyCellsAssignedFrom region available rest
-  | .constrainConstant cell _ :: rest =>
-      cell ∈ available ∧ CopyCellsAssignedFrom region available rest
-  | .constrainInstance cell _ _ :: rest =>
-      cell ∈ available ∧ CopyCellsAssignedFrom region available rest
-  | _ :: rest => CopyCellsAssignedFrom region available rest
+inductive RegionOperations.CopyCellsAssignedFrom (region : RegionIndex) :
+    List Cell → RegionOperations F → Prop where
+  | nil available : CopyCellsAssignedFrom region available []
+  | assignAdvice available column row compute rest :
+      CopyCellsAssignedFrom region (.of region row column :: available) rest →
+        CopyCellsAssignedFrom region available
+          (.assignAdvice column row compute :: rest)
+  | assignFixed available column row value rest :
+      CopyCellsAssignedFrom region (.of region row column :: available) rest →
+        CopyCellsAssignedFrom region available (.assignFixed column row value :: rest)
+  | enableGate available gate row rest :
+      CopyCellsAssignedFrom region available rest →
+        CopyCellsAssignedFrom region available (.enableGate gate row :: rest)
+  | enableLookup available lookup selectors row rest :
+      CopyCellsAssignedFrom region available rest →
+        CopyCellsAssignedFrom region available
+          (.enableLookup lookup selectors row :: rest)
+  | constrainEqual available left right rest :
+      left ∈ available → right ∈ available →
+        CopyCellsAssignedFrom region available rest →
+          CopyCellsAssignedFrom region available (.constrainEqual left right :: rest)
+  | constrainConstant available cell value rest :
+      cell ∈ available → CopyCellsAssignedFrom region available rest →
+        CopyCellsAssignedFrom region available (.constrainConstant cell value :: rest)
+  | constrainInstance available cell column row rest :
+      cell ∈ available → CopyCellsAssignedFrom region available rest →
+        CopyCellsAssignedFrom region available
+          (.constrainInstance cell column row :: rest)
 
 def RegionOperations.CopyCellsAssigned (operations : RegionOperations F)
     (region : RegionIndex) (inputCells : List Cell) : Prop :=
   CopyCellsAssignedFrom region inputCells operations
 
+@[keygen_norm, keygen_spine]
+theorem RegionOperations.copyCellsAssignedFrom_nil_iff
+    (region : RegionIndex) (available : List Cell) :
+    CopyCellsAssignedFrom (F := F) region available [] ↔ True := by
+  constructor
+  · intro _
+    trivial
+  · intro _
+    exact .nil available
+
+@[keygen_norm, keygen_spine]
+theorem RegionOperations.copyCellsAssignedFrom_assignAdvice_iff
+    (region : RegionIndex) (available : List Cell) (column : Column .advice)
+    (row : ℕ) (compute : WitgenIR F 1) (rest : RegionOperations F) :
+    CopyCellsAssignedFrom region available (.assignAdvice column row compute :: rest) ↔
+      CopyCellsAssignedFrom region (.of region row column :: available) rest := by
+  constructor
+  · intro h
+    cases h with | assignAdvice _ _ _ _ _ hrest => exact hrest
+  · exact CopyCellsAssignedFrom.assignAdvice available column row compute rest
+
+@[keygen_norm, keygen_spine]
+theorem RegionOperations.copyCellsAssignedFrom_assignFixed_iff
+    (region : RegionIndex) (available : List Cell) (column : Column .fixed)
+    (row : ℕ) (value : F) (rest : RegionOperations F) :
+    CopyCellsAssignedFrom region available (.assignFixed column row value :: rest) ↔
+      CopyCellsAssignedFrom region (.of region row column :: available) rest := by
+  constructor
+  · intro h
+    cases h with | assignFixed _ _ _ _ _ hrest => exact hrest
+  · exact CopyCellsAssignedFrom.assignFixed available column row value rest
+
+@[keygen_norm, keygen_spine]
+theorem RegionOperations.copyCellsAssignedFrom_enableGate_iff
+    (region : RegionIndex) (available : List Cell) (gate : Gate F)
+    (row : ℕ) (rest : RegionOperations F) :
+    CopyCellsAssignedFrom region available (.enableGate gate row :: rest) ↔
+      CopyCellsAssignedFrom region available rest := by
+  constructor
+  · intro h
+    cases h with | enableGate _ _ _ _ hrest => exact hrest
+  · exact CopyCellsAssignedFrom.enableGate available gate row rest
+
+@[keygen_norm, keygen_spine]
+theorem RegionOperations.copyCellsAssignedFrom_enableLookup_iff
+    (region : RegionIndex) (available : List Cell) (lookup : LookupArgument F)
+    (selectors : List Selector) (row : ℕ) (rest : RegionOperations F) :
+    CopyCellsAssignedFrom region available
+        (.enableLookup lookup selectors row :: rest) ↔
+      CopyCellsAssignedFrom region available rest := by
+  constructor
+  · intro h
+    cases h with | enableLookup _ _ _ _ _ hrest => exact hrest
+  · exact CopyCellsAssignedFrom.enableLookup available lookup selectors row rest
+
+@[keygen_norm, keygen_spine]
+theorem RegionOperations.copyCellsAssignedFrom_constrainEqual_iff
+    (region : RegionIndex) (available : List Cell) (left right : Cell)
+    (rest : RegionOperations F) :
+    CopyCellsAssignedFrom region available (.constrainEqual left right :: rest) ↔
+      left ∈ available ∧ right ∈ available ∧
+        CopyCellsAssignedFrom region available rest := by
+  constructor
+  · intro h
+    cases h with | constrainEqual _ _ _ _ hleft hright hrest =>
+      exact ⟨hleft, hright, hrest⟩
+  · rintro ⟨hleft, hright, hrest⟩
+    exact .constrainEqual available left right rest hleft hright hrest
+
+@[keygen_norm, keygen_spine]
+theorem RegionOperations.copyCellsAssignedFrom_constrainConstant_iff
+    (region : RegionIndex) (available : List Cell) (cell : Cell)
+    (value : F) (rest : RegionOperations F) :
+    CopyCellsAssignedFrom region available (.constrainConstant cell value :: rest) ↔
+      cell ∈ available ∧ CopyCellsAssignedFrom region available rest := by
+  constructor
+  · intro h
+    cases h with | constrainConstant _ _ _ _ hcell hrest => exact ⟨hcell, hrest⟩
+  · rintro ⟨hcell, hrest⟩
+    exact .constrainConstant available cell value rest hcell hrest
+
+@[keygen_norm, keygen_spine]
+theorem RegionOperations.copyCellsAssignedFrom_constrainInstance_iff
+    (region : RegionIndex) (available : List Cell) (cell : Cell)
+    (column : Column .instance) (row : ℕ) (rest : RegionOperations F) :
+    CopyCellsAssignedFrom region available
+        (.constrainInstance cell column row :: rest) ↔
+      cell ∈ available ∧ CopyCellsAssignedFrom region available rest := by
+  constructor
+  · intro h
+    cases h with | constrainInstance _ _ _ _ _ hcell hrest => exact ⟨hcell, hrest⟩
+  · rintro ⟨hcell, hrest⟩
+    exact .constrainInstance available cell column row rest hcell hrest
+
 /-- Available cells after executing one region body. -/
 def RegionOperations.assignedCellsAfter (region : RegionIndex)
-    (available : List Cell) : RegionOperations F → List Cell
-  | [] => available
-  | .assignAdvice column row _ :: rest =>
-      assignedCellsAfter region (.of region row column :: available) rest
-  | .assignFixed column row _ :: rest =>
-      assignedCellsAfter region (.of region row column :: available) rest
-  | _ :: rest => assignedCellsAfter region available rest
+    (available : List Cell) (operations : RegionOperations F) : List Cell :=
+  operations.foldl (fun cells operation =>
+    operation.assignedCells region ++ cells) available
 
 /-- Cells assigned by a layouter stream, with the same region-index walk used by V1. -/
 def Operations.assignedCellsFrom : Operations F → RegionIndex → List Cell
@@ -1791,17 +1894,69 @@ def Operations.copiedCells (operations : Operations F) : List Cell :=
   operations.flatMap Operation.copiedCells
 
 /-- Execution-order-sensitive copy provenance through the layouter stream. -/
-def Operations.CopyCellsAssignedFrom (region : RegionIndex)
-    (available : List Cell) : Operations F → Prop
-  | [] => True
-  | .region _ body :: rest =>
+inductive Operations.CopyCellsAssignedFrom :
+    RegionIndex → List Cell → Operations F → Prop where
+  | nil region available : CopyCellsAssignedFrom region available []
+  | region region available name body rest :
+      body.CopyCellsAssignedFrom region available →
+        CopyCellsAssignedFrom (region + 1)
+          (body.assignedCellsAfter region available) rest →
+            CopyCellsAssignedFrom region available (.region name body :: rest)
+  | constrainInstance region available cell column row rest :
+      cell ∈ available → CopyCellsAssignedFrom region available rest →
+        CopyCellsAssignedFrom region available
+          (.constrainInstance cell column row :: rest)
+  | loadTable region available column values rest :
+      CopyCellsAssignedFrom region available rest →
+        CopyCellsAssignedFrom region available (.loadTable column values :: rest)
+
+@[keygen_norm, keygen_spine]
+theorem Operations.copyCellsAssignedFrom_nil_iff
+    (region : RegionIndex) (available : List Cell) :
+    CopyCellsAssignedFrom (F := F) region available [] ↔ True := by
+  constructor
+  · intro _
+    trivial
+  · intro _
+    exact .nil region available
+
+@[keygen_norm, keygen_spine]
+theorem Operations.copyCellsAssignedFrom_region_iff
+    (region : RegionIndex) (available : List Cell) (name : String)
+    (body : RegionOperations F) (rest : Operations F) :
+    CopyCellsAssignedFrom region available (.region name body :: rest) ↔
       body.CopyCellsAssignedFrom region available ∧
         CopyCellsAssignedFrom (region + 1)
-          (body.assignedCellsAfter region available) rest
-  | .constrainInstance cell _ _ :: rest =>
-      cell ∈ available ∧ CopyCellsAssignedFrom region available rest
-  | .loadTable _ _ :: rest =>
-      CopyCellsAssignedFrom region available rest
+          (body.assignedCellsAfter region available) rest := by
+  constructor
+  · intro h
+    cases h with | region _ _ _ _ _ hbody hrest => exact ⟨hbody, hrest⟩
+  · rintro ⟨hbody, hrest⟩
+    exact .region region available name body rest hbody hrest
+
+@[keygen_norm, keygen_spine]
+theorem Operations.copyCellsAssignedFrom_constrainInstance_iff
+    (region : RegionIndex) (available : List Cell) (cell : Cell)
+    (column : Column .instance) (row : ℕ) (rest : Operations F) :
+    CopyCellsAssignedFrom region available
+        (.constrainInstance cell column row :: rest) ↔
+      cell ∈ available ∧ CopyCellsAssignedFrom region available rest := by
+  constructor
+  · intro h
+    cases h with | constrainInstance _ _ _ _ _ _ hcell hrest => exact ⟨hcell, hrest⟩
+  · rintro ⟨hcell, hrest⟩
+    exact .constrainInstance region available cell column row rest hcell hrest
+
+@[keygen_norm, keygen_spine]
+theorem Operations.copyCellsAssignedFrom_loadTable_iff
+    (region : RegionIndex) (available : List Cell) (column : TableColumn)
+    (values : List F) (rest : Operations F) :
+    CopyCellsAssignedFrom region available (.loadTable column values :: rest) ↔
+      CopyCellsAssignedFrom region available rest := by
+  constructor
+  · intro h
+    cases h with | loadTable _ _ _ _ _ hrest => exact hrest
+  · exact CopyCellsAssignedFrom.loadTable region available column values rest
 
 def Operations.CopyCellsAssigned (operations : Operations F)
     (initialRegion : RegionIndex) (inputCells : List Cell) : Prop :=
@@ -1818,13 +1973,13 @@ theorem RegionOperations.mem_assignedCellsAfter_iff
     (available : List Cell) (cell : Cell) :
     cell ∈ operations.assignedCellsAfter region available ↔
       cell ∈ available ++ operations.assignedCells region := by
+  unfold assignedCellsAfter assignedCells
   induction operations generalizing available with
-  | nil => simp [assignedCellsAfter, assignedCells]
+  | nil => simp
   | cons operation rest inductionHypothesis =>
-      cases operation <;>
-        simp [assignedCellsAfter, assignedCells,
-          RegionOperation.assignedCells, inductionHypothesis,
-          or_left_comm]
+      simp only [List.foldl_cons, List.flatMap_cons]
+      rw [inductionHypothesis]
+      cases operation <;> simp [RegionOperation.assignedCells, or_left_comm]
 
 theorem RegionOperations.copyCellsCovered_of_assignedFrom
     (operations : RegionOperations F) (region : RegionIndex)
@@ -1837,25 +1992,33 @@ theorem RegionOperations.copyCellsCovered_of_assignedFrom
       intro cell hcell
       cases operation with
       | assignAdvice column row value =>
+          cases hassigned with
+          | assignAdvice _ _ _ _ _ hassignedRest =>
           have hrest := inductionHypothesis
-            (.of region row column :: available) hassigned cell hcell
+            (.of region row column :: available) hassignedRest cell hcell
           simp only [List.mem_append, List.mem_cons,
             assignedCells, List.flatMap_cons, RegionOperation.assignedCells,
             List.singleton_append] at hrest ⊢
           tauto
       | assignFixed column row value =>
+          cases hassigned with
+          | assignFixed _ _ _ _ _ hassignedRest =>
           have hrest := inductionHypothesis
-            (.of region row column :: available) hassigned cell hcell
+            (.of region row column :: available) hassignedRest cell hcell
           simp only [List.mem_append, List.mem_cons,
             assignedCells, List.flatMap_cons, RegionOperation.assignedCells,
             List.singleton_append] at hrest ⊢
           tauto
       | enableGate gate row =>
-          exact inductionHypothesis available hassigned cell hcell
+          cases hassigned with
+          | enableGate _ _ _ _ hassignedRest =>
+            exact inductionHypothesis available hassignedRest cell hcell
       | enableLookup lookup selectors row =>
-          exact inductionHypothesis available hassigned cell hcell
+          cases hassigned with
+          | enableLookup _ _ _ _ _ hassignedRest =>
+            exact inductionHypothesis available hassignedRest cell hcell
       | constrainEqual left right =>
-          simp only [CopyCellsAssignedFrom] at hassigned
+          rw [copyCellsAssignedFrom_constrainEqual_iff] at hassigned
           simp only [copiedCells, List.flatMap_cons,
             RegionOperation.copiedCells, List.mem_append] at hcell
           simp only [assignedCells, List.flatMap_cons,
@@ -1867,7 +2030,7 @@ theorem RegionOperations.copyCellsCovered_of_assignedFrom
             · exact List.mem_append_left _ hassigned.2.1
           · exact inductionHypothesis available hassigned.2.2 cell hrest
       | constrainConstant copied value =>
-          simp only [CopyCellsAssignedFrom] at hassigned
+          rw [copyCellsAssignedFrom_constrainConstant_iff] at hassigned
           simp only [copiedCells, List.flatMap_cons,
             RegionOperation.copiedCells, List.mem_append] at hcell
           simp only [assignedCells, List.flatMap_cons,
@@ -1878,7 +2041,7 @@ theorem RegionOperations.copyCellsCovered_of_assignedFrom
             exact List.mem_append_left _ hassigned.1
           · exact inductionHypothesis available hassigned.2 cell hrest
       | constrainInstance copied column row =>
-          simp only [CopyCellsAssignedFrom] at hassigned
+          rw [RegionOperations.copyCellsAssignedFrom_constrainInstance_iff] at hassigned
           simp only [copiedCells, List.flatMap_cons,
             RegionOperation.copiedCells, List.mem_append] at hcell
           simp only [assignedCells, List.flatMap_cons,
@@ -1900,7 +2063,7 @@ theorem Operations.copyCellsCovered_of_assignedFrom
       cases operation with
       | region name body =>
           intro cell hcell
-          simp only [CopyCellsAssignedFrom] at hassigned
+          rw [copyCellsAssignedFrom_region_iff] at hassigned
           rw [Operations.copiedCells, List.mem_flatMap] at hcell
           rcases hcell with ⟨candidate, hcandidate, hcell⟩
           rw [List.mem_cons] at hcandidate
@@ -1922,7 +2085,7 @@ theorem Operations.copyCellsCovered_of_assignedFrom
             · exact Or.inr (List.mem_append_right _ hrestAssigned)
       | constrainInstance copied column row =>
           intro cell hcell
-          simp only [CopyCellsAssignedFrom] at hassigned
+          rw [Operations.copyCellsAssignedFrom_constrainInstance_iff] at hassigned
           rw [Operations.copiedCells, List.mem_flatMap] at hcell
           rcases hcell with ⟨candidate, hcandidate, hcell⟩
           rw [List.mem_cons] at hcandidate
@@ -1933,7 +2096,9 @@ theorem Operations.copyCellsCovered_of_assignedFrom
           · exact inductionHypothesis initialRegion available hassigned.2 cell
               (List.mem_flatMap.mpr ⟨candidate, hrest, hcell⟩)
       | loadTable column values =>
-          exact inductionHypothesis initialRegion available hassigned
+          cases hassigned with
+          | loadTable _ _ _ _ _ hassignedRest =>
+            exact inductionHypothesis initialRegion available hassignedRest
 
 theorem Operations.copyCellsCovered_of_assigned
     (operations : Operations F) (initialRegion : RegionIndex)

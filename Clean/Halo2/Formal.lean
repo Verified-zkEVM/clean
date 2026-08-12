@@ -2105,10 +2105,11 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
         intro configInput counts hconfig input region
         have hassigned := child.elaborated.copyCellsAssigned
           configInput counts hconfig 0 input region
-        simpa [assignRegion, Circuit.operations,
-          Operations.CopyCellsAssigned, Operations.CopyCellsAssignedFrom,
-          RegionOperations.CopyCellsAssignedFrom,
-          RegionOperations.assignedCellsAfter] using hassigned
+        simp only [assignRegion, Circuit.operations,
+          Operations.CopyCellsAssigned]
+        rw [
+          Operations.copyCellsAssignedFrom_region_iff]
+        exact ⟨hassigned, .nil _ _⟩
       lookupActivationsWellFormed := by
         intro config input region
         have hlawful := child.elaborated.lookupActivationsWellFormed

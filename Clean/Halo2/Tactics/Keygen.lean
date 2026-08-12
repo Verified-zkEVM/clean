@@ -54,11 +54,11 @@ attribute [keygen_norm]
   Operations.LookupActivationsWellFormed
   RegionOperation.assignedCells RegionOperation.copiedCells
   RegionOperations.assignedCells RegionOperations.copiedCells
-  RegionOperations.CopyCellsAssignedFrom RegionOperations.CopyCellsAssigned
+  RegionOperations.CopyCellsAssigned
   RegionOperations.assignedCellsAfter
   Operation.copiedCells
   Operations.assignedCellsFrom Operations.assignedCells
-  Operations.copiedCells Operations.CopyCellsAssignedFrom Operations.CopyCellsAssigned
+  Operations.copiedCells Operations.CopyCellsAssigned
   LookupArgument.lookupActivationWellFormed_enable
   selectorEnabledAtIndex_cons_self complexSelectorEnabledAtIndex_cons_self
   Operations.KeygenRegistered.nil Operations.KeygenRegistered.append
@@ -98,11 +98,11 @@ attribute [keygen_spine]
   Operations.LookupActivationsWellFormed
   RegionOperation.assignedCells RegionOperation.copiedCells
   RegionOperations.assignedCells RegionOperations.copiedCells
-  RegionOperations.CopyCellsAssignedFrom RegionOperations.CopyCellsAssigned
+  RegionOperations.CopyCellsAssigned
   RegionOperations.assignedCellsAfter
   Operation.copiedCells
   Operations.assignedCellsFrom Operations.assignedCells
-  Operations.copiedCells Operations.CopyCellsAssignedFrom Operations.CopyCellsAssigned
+  Operations.copiedCells Operations.CopyCellsAssigned
   Operations.KeygenRegistered.nil Operations.KeygenRegistered.append
   Operations.KeygenRegistered.region_cons
   Operations.KeygenRegistered.constrainInstance_cons
