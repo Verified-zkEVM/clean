@@ -15472,22 +15472,10 @@ def TraceLawfulAfter (placed : List PlannedSummaryBlock) :
       block.summary.columns ≠ [] ∧
       FitsAfterAt placed block block.start
         (block.count * block.summary.rowCount) ∧
-      ((List.range block.start).Forall fun candidate =>
-        ¬ FitsAfterAt placed block candidate block.summary.rowCount) ∧
+      (∀ candidate,
+        FitsAfterAt placed block candidate block.summary.rowCount →
+          block.start ≤ candidate) ∧
       TraceLawfulAfter (placed ++ [block]) rest
-
-def traceLawfulAfterDecidable
-    (placed trace : List PlannedSummaryBlock) :
-    Decidable (TraceLawfulAfter placed trace) := by
-  induction trace generalizing placed with
-  | nil => exact isTrue trivial
-  | cons block rest inductionHypothesis =>
-      letI : Decidable
-          (TraceLawfulAfter (placed ++ [block]) rest) :=
-        inductionHypothesis (placed ++ [block])
-      unfold TraceLawfulAfter RegionShapeSummary.WellFormed FitsAfterAt
-        RowIntervalsDisjoint
-      infer_instance
 
 private theorem fitsColumns_finalView_iff_fitsAfterAt
     (initial : AllocationView) (placed : List PlannedSummaryBlock)
@@ -15541,11 +15529,7 @@ theorem lawful_of_traceLawfulAfter
           exact ⟨emptyPlannerView_fitsColumns _ _ _,
             hfits.monoLength (Nat.le_mul_of_pos_left _ hcount)⟩
         · intro candidate hcandidateFits
-          by_contra hcandidate
-          have hcandidateLt : candidate < block.start := by omega
-          have hnotFits := List.forall_iff_forall_mem.mp hleast candidate
-            (List.mem_range.mpr hcandidateLt)
-          apply hnotFits
+          apply hleast candidate
           rw [fitsColumns_finalView_iff_fitsAfterAt _ _ _ _ _ hcounts
               (hwellFormed.2 hcolumns)] at hcandidateFits
           exact hcandidateFits.2
