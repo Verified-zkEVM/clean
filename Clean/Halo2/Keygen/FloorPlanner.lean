@@ -14248,6 +14248,16 @@ theorem SynthesisSummary.replicate_physicalRegionShapes
       rw [List.replicate_succ, List.flatten_cons, List.map_append,
         List.replicate_succ, List.flatten_cons, inductionHypothesis]
 
+theorem SynthesisSummary.foldr_combine_physicalRegionShapes
+    (summaries : List SynthesisSummary) :
+    (summaries.foldr SynthesisSummary.combine {}).physicalRegionShapes =
+      summaries.flatMap SynthesisSummary.physicalRegionShapes := by
+  induction summaries with
+  | nil => rfl
+  | cons summary rest inductionHypothesis =>
+      rw [List.foldr_cons, SynthesisSummary.combine_physicalRegionShapes,
+        List.flatMap_cons, inductionHypothesis]
+
 
 namespace V1
 
