@@ -15413,6 +15413,27 @@ def Lawful (initial : AllocationView) :
           block.start block.summary.rowCount block.count)
         rest
 
+theorem finalView_append (initial : AllocationView)
+    (left right : List PlannedSummaryBlock) :
+    finalView initial (left ++ right) =
+      finalView (finalView initial left) right := by
+  induction left generalizing initial with
+  | nil => rfl
+  | cons block rest inductionHypothesis =>
+      simp only [List.cons_append, finalView]
+      exact inductionHypothesis _
+
+theorem lawful_append (initial : AllocationView)
+    (left right : List PlannedSummaryBlock) :
+    Lawful initial (left ++ right) ↔
+      Lawful initial left ∧ Lawful (finalView initial left) right := by
+  induction left generalizing initial with
+  | nil => simp [Lawful, finalView]
+  | cons block rest inductionHypothesis =>
+      simp only [List.cons_append, Lawful, finalView,
+        inductionHypothesis]
+      tauto
+
 theorem slotSummaryBlocksState_eq
     (trace : List PlannedSummaryBlock)
     (initial : ℕ) (allocations : CircuitAllocations)
