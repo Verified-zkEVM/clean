@@ -31,8 +31,7 @@ a child bundle name whose metadata is otherwise stuck under a binder).
    defeq-hidden shape is left whole as a leaf (unifying against it would
    symbolically execute still-folded groups, e.g. a 32-wide `Circuit.forEach`).
    Goals headed by `Subcircuit.ComputableWitnesses` stay whole.
-5. **Per leaf**: for leaves with a `Circuit.forEach` group, `ring_nf`; then
-   `assert_local_lengths`, then dispatch:
+5. **Per leaf**: dispatch by goal head:
    * a `Subcircuit.ComputableWitnesses` head is refined with the `_of_offset_eq`
      composition rules — separate offset metavariables, with the `m = n` premise
      discharged arithmetically, so unification never defeq-executes an operations
@@ -53,8 +52,8 @@ a child bundle name whose metadata is otherwise stuck under a binder).
   where propositional rewrites cannot build a motive. It never touches
   `Operations.localLength` of a raw operations list — computing that by `whnf`
   executes the list (quadratic vector pushes for `mapFinRange`-built circuits);
-  `assert_local_lengths` handles those spellings with a `circuit_norm`-simp-first
-  reduction and asserts the equations as hypotheses with propositional proofs.
+  those spellings normalize propositionally via `circuit_norm`'s `localLength`
+  distribution and `toSubcircuit_localLength` projection lemmas.
 * `reduceOutputMetadata` (dsimproc, its own pre-split step): definitional in-place
   reduction of child output metadata, including binder-nested and parameterized
   children which no closed universal fact can state.
@@ -110,23 +109,6 @@ def unfoldPlainCircuitConsts : TacticM Unit := do
 elab "unfold_plain_circuit_consts" : tactic => unfoldPlainCircuitConsts
 
 namespace ComputableWitnesses
-
-/-- Heads under which concrete circuits' `localLength` metadata appears in
-computable-witness goals. -/
-def localLengthHeads : List Name :=
-  [`FormalCircuitBase.localLength, `ElaboratedCircuit.localLength,
-   `Subcircuit.localLength, `Operations.localLength]
-
-/-- Run `x` under a local heartbeat sub-budget, converting a runtime timeout into
-`none`. Used for `assert_local_lengths`' speculative length reductions, which would
-otherwise symbolically execute opaque terms and kill the whole tactic (the runtime
-exception escapes `try`). -/
-def withProbeBudget {α : Type} (x : MetaM α) : MetaM (Option α) :=
-  tryCatchRuntimeEx
-    (withCurrHeartbeats do
-      withTheReader Core.Context (fun ctx => { ctx with maxHeartbeats := 1000000 }) do
-        some <$> x)
-    (fun _ => pure none)
 
 /-- Reduce a `localLength`-shaped term with the `circuit_norm` simp set — the same way
 soundness proofs obtain lengths. This turns `Operations.localLength` of concrete
@@ -266,62 +248,6 @@ partial def natValOf (e : Expr) : MetaM (Option Nat) := do
       let e' ← try withDefault <| whnf e catch _ => return none
       if e' == e then return none
       natValOf e'
-
-/-- Assert `localLength = <numeral>` equations for every closed `localLength`
-application in the goal. `Subcircuit`'s offset index makes these terms unrewritable by
-`simp` in dependent positions (no motive) — but a standalone copy of the term simplifies
-fine, so each equation is proved by `circuit_norm` simp plus a defeq step on the reduced
-form only. As hypotheses, `grind`'s arithmetic and `omega` can bridge the offset
-spellings. -/
-def assertLocalLengths : TacticM Unit := withMainContext do
-  let tgt ← instantiateMVars (← getMainTarget)
-  -- scan hypotheses too: after the structural split, length terms often live in
-  -- intro'd premises rather than the leaf's conclusion
-  let mut scan := #[tgt]
-  for decl in ← getLCtx do
-    unless decl.isImplementationDetail do
-      scan := scan.push (← instantiateMVars decl.type)
-  let seen ← IO.mkRef ((∅ : Std.HashSet Expr))
-  let eqs ← IO.mkRef (#[] : Array (Expr × Simp.Result × Option Nat))
-  for tgt in scan do
-   tgt.forEach fun e => do
-    let .const name _ := e.getAppFn | return ()
-    unless localLengthHeads.contains name do return ()
-    if e.hasLooseBVars || e.hasMVar then return ()
-    if (← seen.get).contains e then return ()
-    seen.modify (·.insert e)
-    unless (← try inferType e catch _ => return ()).isConstOf `Nat do return ()
-    -- budgeted: simp/whnf on exotic length spellings (e.g. folded `forEach` groups)
-    -- can be a runaway; skip the term rather than kill the tactic
-    let some r ← withProbeBudget (try simpLocalLength e catch _ => pure { expr := e }) | return ()
-    let some k? ← withProbeBudget (try natValOf r.expr catch _ => pure none) | return ()
-    if k?.isNone && r.expr == e then return ()
-    eqs.modify (·.push (e, r, k?))
-  let mut i := 0
-  for (e, r, k?) in (← eqs.get) do
-    -- symbolic lengths (parameterized circuits, e.g. `Num2Bits.circuit (n+1)`) assert
-    -- their simp normal form instead of a numeral — omega gets the bound arithmetic
-    -- either way
-    let lit := match k? with | some k => mkNatLit k | none => r.expr
-    let eqType ← mkEq e lit
-    -- the defeq gap is only between the simp-reduced form and the numeral (cheap
-    -- metadata projections + arithmetic); the reduction from the original spelling is
-    -- carried by the simp proof, so neither elaborator nor kernel ever defeq-executes
-    -- the raw operations list
-    let finish ← mkExpectedTypeHint (← mkEqRefl r.expr) (← mkEq r.expr lit)
-    -- re-key at the original spelling: simp states its proof for the beta/projection
-    -- normal form of `e`; the hint bridges that (cheap) defeq gap so users of the
-    -- hypothesis see exactly the goal's spelling
-    let proof ← match r.proof? with
-      | some p => mkExpectedTypeHint (← mkEqTrans p finish) eqType
-      | none => mkExpectedTypeHint finish eqType
-    liftMetaTactic fun goal => do
-      let goal ← goal.assert (Name.mkSimple s!"h_ll_{i}") eqType proof
-      let (_, goal) ← goal.intro1P
-      return [goal]
-    i := i + 1
-
-elab "assert_local_lengths" : tactic => assertLocalLengths
 
 /-- Definitional reduction of concrete `localLength` metadata to numerals. As a
 `dsimproc` the rewrite is a defeq step, so it also applies inside `Subcircuit`'s
@@ -997,7 +923,6 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
     -- every chain fact in every hypothesis is a heartbeat blowup; hints reach
     -- hypotheses via the close routes' `simp_all` instead
     if (← getGoals).isEmpty then return
-    assertLocalLengths
     withMainContext do
       let t := (← instantiateMVars (← getMainTarget)).consumeMData
       let .const headName _ := t.getAppFn | evalCloseRun
@@ -1027,7 +952,7 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
             let some contGoal := contGoal? | throwError "no continuation goal"
             let (_, contGoal) ← contGoal.intro `h_agrees
             -- offset premise: normalize the length spellings, then close
-            -- arithmetically over the asserted lengths
+            -- arithmetically
             setGoals [offsetGoal]
             try metaSimp cw.normCtx cw.dischargeProcs catch _ => pure ()
             unless (← getGoals).isEmpty do Omega.omegaDefault
@@ -1157,8 +1082,8 @@ elab_rules : tactic
         (closeTerms.map (fun terms => terms.getElems) |>.getD #[])
 
 /-- Run only the per-leaf dispatch/close stage of `computable_witnesses` on the current
-goal: leaf-local normalization, `assert_local_lengths`, subcircuit composition-rule
-dispatch, child-output chaining, and the shape-dispatched close routes. For manual
+goal: subcircuit composition-rule dispatch, child-output chaining, and the
+shape-dispatched close routes. For manual
 proofs that do the structural decomposition themselves — each machine-closable leg
 becomes `computable_witnesses_close`, and only legs needing a bespoke lemma stay
 hand-written. Accepts the same two hint lists as `computable_witnesses`. -/
