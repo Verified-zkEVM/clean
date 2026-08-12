@@ -766,6 +766,7 @@ theorem regionSynthesisSummary_cons_constantSiteCount
       regionOperationConstantSiteCount operation +
         (regionSynthesisSummary rest).constantSiteCount := rfl
 
+@[circuit_norm, synthesis_summary_norm]
 theorem regionSynthesisSummary_cons_instanceRowExtent
     (operation : RegionOperation F) (rest : RegionOperations F) :
     (regionSynthesisSummary (operation :: rest)).instanceRowExtent =
