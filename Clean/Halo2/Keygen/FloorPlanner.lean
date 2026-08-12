@@ -15477,6 +15477,18 @@ def TraceLawfulAfter (placed : List PlannedSummaryBlock) :
           block.start ≤ candidate) ∧
       TraceLawfulAfter (placed ++ [block]) rest
 
+theorem traceLawfulAfter_append
+    (placed left right : List PlannedSummaryBlock) :
+    TraceLawfulAfter placed (left ++ right) ↔
+      TraceLawfulAfter placed left ∧
+        TraceLawfulAfter (placed ++ left) right := by
+  induction left generalizing placed with
+  | nil => simp [TraceLawfulAfter]
+  | cons block rest inductionHypothesis =>
+      simp only [List.cons_append, TraceLawfulAfter,
+        inductionHypothesis, List.append_assoc]
+      tauto
+
 private theorem fitsColumns_finalView_iff_fitsAfterAt
     (initial : AllocationView) (placed : List PlannedSummaryBlock)
     (block : PlannedSummaryBlock) (start length : ℕ)
