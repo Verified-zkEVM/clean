@@ -507,7 +507,7 @@ theorem synthChecks_output (G : Generators) (R : FixedBase)
 
 /-! ## The bundle (factored: standalone elaborated/contract/proofs) -/
 
-open Specs.Sinsemilla (hashToPoint hashToPointB SpecOrBreak)
+open Specs.Sinsemilla (hashToPoint HashGuarded)
 open CompElliptic.Fields.Pasta (Fq)
 
 @[keygen_norm]
@@ -664,10 +664,11 @@ def rcmExtract (cfg : Config) (_ : Var Inputs Fp) (i₀ : RegionIndex)
     (env : Placed Environment Fp) : Vector Fp 85 × Fq :=
   Ecc.MulFixed.FullWidth.fwExtract cfg.mulConfig (i₀ + 25) env
 
-/-- Breaks-as-data commitment contract (zcash/ironwood#45): either the Sinsemilla
-chain over the note's canonical chunks is defined and the output is the commitment
-`B + [rcm]R`, or the incomplete-addition escape is exhibited as a valid break
-(`Specs.Sinsemilla.ValidBreak`).
+/-- The commitment contract in the specification's guarded ⊥-model (§4.17.4's
+`NoteCommit(…) ∈ {cm, ⊥}`): whenever the Sinsemilla chain over the note's canonical
+chunks is defined, the output is the commitment `B + [rcm]R`. Exceptional chains
+are not constrained here; the security layer recomputes them from the same chunks
+and consumes them as breaks.
 
 The 64-bit value bound is exported (from the `ValueCanonicity` gate): without it the
 statement can't type `v` as §4.17.4 does — `noteScalars` bitranges truncate `v` at 64
@@ -676,10 +677,10 @@ def Spec (G : Generators) (Q : Point Fp) (R : FixedBase)
     (input : Value Inputs Fp) (output : Value Point Fp)
     (rcm : Vector Fp 85 × Fq) : Prop :=
   (show Fp from input.value).val < 2 ^ 64 ∧
-  SpecOrBreak G.S Q (fun B => output = B + (rcm.2 • R : Point Fp))
-    (hashToPointB G.S Q
-      (NoteCommit.noteScalars ⟨input.gdX, input.gdY⟩
-        ⟨input.pkdX, input.pkdY⟩ input.value input.rho input.psi).chunks)
+  HashGuarded G.S Q
+    (NoteCommit.noteScalars ⟨input.gdX, input.gdY⟩
+      ⟨input.pkdX, input.pkdY⟩ input.value input.rho input.psi).chunks
+    (fun B => output = B + (rcm.2 • R : Point Fp))
 
 def ProverAssumptions (G : Generators) (Q : Point Fp)
     (input : ProverValue Inputs Fp) (_ : Vector Fp 85 × Fq)

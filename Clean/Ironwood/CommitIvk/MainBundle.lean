@@ -14,8 +14,8 @@ namespace Zcash.Circuits.CommitIvk.Main
 open Halo2
 open Ecc.MulFixed (FixedBase)
 open Specs (bitrange)
-open Specs.Sinsemilla (Generators hashToPoint hashToPointB SpecOrBreak
-  commitIvkChunks breaksOfGuarded chunksOf_mem_lt)
+open Specs.Sinsemilla (Generators hashToPoint HashGuarded
+  commitIvkChunks chunksOf_mem_lt)
 open CompElliptic.Fields.Pasta (Fq)
 open NoteCommit.Main (brWit currentRegion)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
@@ -266,10 +266,8 @@ theorem soundness (G : Generators) (R : FixedBase) (Q : Point Fp)
     (by with_unfolding_all exact hDv)
     hak hnk
   -- ── land the Spec ──
-  simp only [Spec]
+  simp only [Spec, Specs.Sinsemilla.HashGuarded]
   rw [hiak, hink] at hchunks
-  refine breaksOfGuarded (Or.inl hQ) (fun m hm => G.S_onCurve (chunksOf_mem_lt (by
-    simpa [Specs.Sinsemilla.commitIvkChunks] using hm))) ?_
   intro B hB
   rw [← hchunks] at hB
   obtain ⟨-, hOut⟩ := hContract B hB

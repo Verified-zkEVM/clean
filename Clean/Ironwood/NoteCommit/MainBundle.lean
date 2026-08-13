@@ -1071,13 +1071,9 @@ theorem soundness (G : Generators) (R : FixedBase)
      by rw [← hz1gEq]; exact hGgS.2, hGhS.2⟩
     hGvalS.1
   -- ── land the Spec ──
-  simp only [Spec]
+  simp only [Spec, Specs.Sinsemilla.HashGuarded]
   obtain ⟨higdX, higdY, hipkdX, hipkdY, hival, hirho, hipsi, -⟩ := h_input
   refine ⟨hival ▸ hGvalS.1, ?_⟩
-  refine Specs.Sinsemilla.breaksOfGuarded (Or.inl hQ)
-    (fun m hm => G.S_onCurve (Specs.Sinsemilla.chunksOf_mem_lt (by
-      simpa [NoteCommit.NoteCommitScalars.chunks,
-        Specs.Sinsemilla.noteCommitChunks] using hm))) ?_
   intro B hB
   rw [higdX, higdY, hipkdX, hipkdY, hival, hirho, hipsi] at hchunksEq
   rw [show (NoteCommit.noteScalars ⟨input_gdX, input_gdY⟩

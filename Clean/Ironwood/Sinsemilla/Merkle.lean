@@ -37,8 +37,7 @@ namespace Zcash.Circuits.Sinsemilla.Merkle
 
 open Halo2
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
-open Specs.Sinsemilla (Generators merkleChunks hashToPoint hashToPointB
-  BreakData ValidBreak SpecOrBreak breaksOfGuarded)
+open Specs.Sinsemilla (Generators merkleChunks hashToPoint)
 open Specs (K bitrange bitrange_lt bitrange_zero bitrange_eq_div_of_lt)
 open Sinsemilla (pieceWord pieceZ)
 
@@ -1591,7 +1590,7 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
       rw [← h_output]
       exact hpx
 
-/-! ### Merkle path (`MerkleStep` / `MerkleRoot`, lifted verbatim) -/
+/-! ### Merkle path (`MerkleStep`, lifted verbatim) -/
 
 def depth : ℕ := 32
 
@@ -1601,173 +1600,6 @@ def MerkleStep (G : Generators) (Q : Point Fp) (l : ℕ) (node node' : Fp) : Pro
   ∃ lv rv : ℕ, lv < 2 ^ 255 ∧ rv < 2 ^ 255 ∧
     ((lv : Fp) = node ∨ (rv : Fp) = node) ∧
     ∀ B, hashToPoint G.S Q (merkleChunks l lv rv) = some B → node' = B.x
-
-/-- The Merkle root after `k` layers. Donor `Merkle.MerkleRoot`. -/
-def MerkleRoot (G : Generators) (Q : Point Fp) : ℕ → Fp → ℕ → Fp → Prop
-  | _, node, 0, root => root = node
-  | l, node, k + 1, root =>
-    ∃ mid, MerkleStep G Q l node mid ∧ MerkleRoot G Q (l + 1) mid k root
-
-/-- One escape-free Merkle step. Unlike `MerkleStep`, this records that the
-Sinsemilla hash is defined, so the parent is its actual `x`-coordinate. Together
-with `MerkleBreakAt`, this is the Merkle-path breaks-as-data refinement requested
-by zcash/ironwood#45. -/
-def MerkleStepStrict (G : Generators) (Q : Point Fp) (l : ℕ)
-    (node node' : Fp) : Prop :=
-  ∃ lv rv : ℕ, lv < 2 ^ 255 ∧ rv < 2 ^ 255 ∧
-    ((lv : Fp) = node ∨ (rv : Fp) = node) ∧
-    ∃ B, hashToPoint G.S Q (merkleChunks l lv rv) = some B ∧ node' = B.x
-
-/-- An escape-free Merkle root chain. This is the defined-hash branch of the
-Merkle-path breaks-as-data refinement requested by zcash/ironwood#45. -/
-def MerkleRootStrict (G : Generators) (Q : Point Fp) : ℕ → Fp → ℕ → Fp → Prop
-  | _, node, 0, root => root = node
-  | l, node, k + 1, root =>
-    ∃ mid, MerkleStepStrict G Q l node mid ∧
-      MerkleRootStrict G Q (l + 1) mid k root
-
-/-- A valid Sinsemilla escape exhibited at layer `l + j` of a `k`-layer Merkle
-window. The layer index is retained as part of the breaks-as-data witness requested
-by zcash/ironwood#45. -/
-def MerkleBreakAt (G : Generators) (Q : Point Fp) (l k : ℕ) : Prop :=
-  ∃ j, j < k ∧ ∃ br : BreakData, ValidBreak G.S Q br ∧
-    ∃ lv rv : ℕ, lv < 2 ^ 255 ∧ rv < 2 ^ 255 ∧
-      br.pre ++ br.chunk :: br.rest = merkleChunks (l + j) lv rv
-
-private theorem merkleChunks_mem_lt {l lv rv m : ℕ}
-    (h : m ∈ merkleChunks l lv rv) : m < 2 ^ K := by
-  simp only [merkleChunks, List.mem_map, List.mem_range] at h
-  obtain ⟨j, -, rfl⟩ := h
-  exact Nat.mod_lt _ (Nat.two_pow_pos K)
-
-theorem MerkleStepStrict.toMerkleStep (G : Generators) (Q : Point Fp)
-    {l : ℕ} {node node' : Fp} (h : MerkleStepStrict G Q l node node') :
-    MerkleStep G Q l node node' := by
-  obtain ⟨lv, rv, hlv, hrv, hnode, B, hB, hout⟩ := h
-  refine ⟨lv, rv, hlv, hrv, hnode, ?_⟩
-  intro B' hB'
-  rw [hB] at hB'
-  cases hB'
-  exact hout
-
-/-- Refine a guarded Merkle step into its defined-hash case or an exhibited break. -/
-theorem MerkleStep.strictOrBreak (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
-    {l : ℕ} {node node' : Fp} (h : MerkleStep G Q l node node') :
-    MerkleStepStrict G Q l node node' ∨ MerkleBreakAt G Q l 1 := by
-  obtain ⟨lv, rv, hlv, hrv, hnode, hcontract⟩ := h
-  have hsob := breaksOfGuarded (S := G.S) (Q := Q)
-    (chunks := merkleChunks l lv rv) (Or.inl hQ)
-    (fun m hm => G.S_onCurve (merkleChunks_mem_lt hm)) hcontract
-  cases hB : hashToPointB G.S Q (merkleChunks l lv rv) with
-  | inl B =>
-    simp only [SpecOrBreak, hB] at hsob
-    exact Or.inl ⟨lv, rv, hlv, hrv, hnode, B,
-      Specs.Sinsemilla.hashToPointB_inl hB, hsob⟩
-  | inr br =>
-    simp only [SpecOrBreak, hB] at hsob
-    have hsplit := (Specs.Sinsemilla.hashToPointB_inr hB).1
-    exact Or.inr ⟨0, by omega, br, hsob, lv, rv, hlv, hrv, by
-      rw [Nat.add_zero]
-      exact hsplit.symm⟩
-
-theorem MerkleRootStrict.toMerkleRoot (G : Generators) (Q : Point Fp)
-    {l : ℕ} {node : Fp} {k : ℕ} {root : Fp}
-    (h : MerkleRootStrict G Q l node k root) : MerkleRoot G Q l node k root := by
-  induction k generalizing l node with
-  | zero => exact h
-  | succ k ih =>
-    obtain ⟨mid, hstep, hrest⟩ := h
-    exact ⟨mid, hstep.toMerkleStep G Q, ih hrest⟩
-
-/-- Chain two escape-free `MerkleRootStrict` segments. -/
-theorem MerkleRootStrict.trans (G : Generators) (Q : Point Fp) {l a m r : _}
-    {k k' : ℕ} (h1 : MerkleRootStrict G Q l a k m)
-    (h2 : MerkleRootStrict G Q (l + k) m k' r) :
-    MerkleRootStrict G Q l a (k + k') r := by
-  induction k generalizing l a with
-  | zero =>
-    simp only [MerkleRootStrict] at h1
-    subst h1
-    simpa using h2
-  | succ n ih =>
-    obtain ⟨mid, hstep, hrest⟩ := h1
-    rw [show n + 1 + k' = (n + k') + 1 from by omega, MerkleRootStrict]
-    exact ⟨mid, hstep,
-      ih hrest (by rwa [show l + 1 + n = l + (n + 1) from by omega])⟩
-
-/-- Shift a break in a later window back into the combined window. -/
-theorem MerkleBreakAt.shift (G : Generators) (Q : Point Fp) {l k k' : ℕ}
-    (h : MerkleBreakAt G Q (l + k) k') : MerkleBreakAt G Q l (k + k') := by
-  obtain ⟨j, hj, br, hbr, lv, rv, hlv, hrv, hmsg⟩ := h
-  refine ⟨k + j, by omega, br, hbr, lv, rv, hlv, hrv, ?_⟩
-  rw [show l + (k + j) = l + k + j from by omega]
-  exact hmsg
-
-/-- Enlarge the layer window containing an exhibited break. -/
-theorem MerkleBreakAt.mono (G : Generators) (Q : Point Fp) {l k k' : ℕ}
-    (hkk : k ≤ k') (h : MerkleBreakAt G Q l k) : MerkleBreakAt G Q l k' := by
-  obtain ⟨j, hj, br, hbr, lv, rv, hlv, hrv, hmsg⟩ := h
-  exact ⟨j, lt_of_lt_of_le hj hkk, br, hbr, lv, rv, hlv, hrv, hmsg⟩
-
-/-- Chain two `MerkleRoot` segments. -/
-theorem MerkleRoot.trans (G : Generators) (Q : Point Fp) {l a m r : _} {k k' : ℕ}
-    (h1 : MerkleRoot G Q l a k m) (h2 : MerkleRoot G Q (l + k) m k' r) :
-    MerkleRoot G Q l a (k + k') r := by
-  induction k generalizing l a with
-  | zero =>
-    simp only [MerkleRoot] at h1
-    subst h1
-    simpa using h2
-  | succ n ih =>
-    obtain ⟨mid, hstep, hrest⟩ := h1
-    rw [show n + 1 + k' = (n + k') + 1 from by omega, MerkleRoot]
-    exact ⟨mid, hstep,
-      ih hrest (by rwa [show l + 1 + n = l + (n + 1) from by omega])⟩
-
-/-- Forward induction: a chain of `MerkleStep`s assembles into a `MerkleRoot`. Donor
-`Merkle.merkleRoot_of_steps`. -/
-theorem merkleRoot_of_steps (G : Generators) (Q : Point Fp) (f : ℕ → Fp) (l : ℕ) :
-    ∀ k, (∀ i, i < k → MerkleStep G Q (l + i) (f i) (f (i + 1))) →
-      MerkleRoot G Q l (f 0) k (f k) := by
-  intro k
-  induction k generalizing l f with
-  | zero => intro _; rfl
-  | succ k ih =>
-    intro h
-    refine ⟨f 1, ?_, ?_⟩
-    · have h0 := h 0 (Nat.succ_pos k)
-      simpa using h0
-    · have hres := ih (l := l + 1) (f := fun i => f (i + 1)) (fun i hi => by
-        have hi' := h (i + 1) (by omega)
-        have : l + 1 + i = l + (i + 1) := by omega
-        rw [this]; exact hi')
-      simpa using hres
-
-/-- A chain of guarded Merkle steps is either wholly strict or exhibits the first
-window in which a valid Sinsemilla break occurs. -/
-theorem merkleRootStrict_or_break_of_steps (G : Generators) (Q : Point Fp)
-    (hQ : Q.OnCurve) (f : ℕ → Fp) (l : ℕ) :
-    ∀ k, (∀ i, i < k → MerkleStep G Q (l + i) (f i) (f (i + 1))) →
-      MerkleRootStrict G Q l (f 0) k (f k) ∨ MerkleBreakAt G Q l k := by
-  intro k
-  induction k generalizing l f with
-  | zero =>
-    intro _
-    exact Or.inl rfl
-  | succ k ih =>
-    intro h
-    have hfirst := MerkleStep.strictOrBreak G Q hQ (h 0 (Nat.succ_pos k))
-    rcases hfirst with hfirst | hbreak
-    · have hrest := ih (l := l + 1) (f := fun i => f (i + 1)) (fun i hi => by
-        have hi' := h (i + 1) (by omega)
-        rw [show l + 1 + i = l + (i + 1) from by omega]
-        exact hi')
-      rcases hrest with hrest | hbreak
-      · exact Or.inl ⟨f 1, by simpa using hfirst, by simpa using hrest⟩
-      · exact Or.inr (by
-          simpa [Nat.add_comm] using
-            MerkleBreakAt.shift G Q (l := l) (k := 1) hbreak)
-    · exact Or.inr (MerkleBreakAt.mono G Q (by omega) hbreak)
 
 /-! ### `Layer` (CondSwap + HashLayer)
 
@@ -2475,9 +2307,10 @@ private theorem layerAtConfigured_lookups
 
 /-- Rust `MerklePath::calculate_root` (`merkle.rs`): the 32-layer serial fold of
 `Layer.circuit` (layer `i` at `l = i`), fed by the per-layer sibling/position-bit witness
-programs. Its spec preserves the original `MerkleRoot` contract and additionally
-records either an escape-free strict chain or an exhibited layer escape, as required
-by the breaks-as-data convention of zcash/ironwood#45. -/
+programs. Its spec is the extraction-friendly `ExactMerklePathData` chain (zcash/ironwood#97):
+the literal 255-bit child encodings and swap bits of every layer, with each layer's hash
+in the guarded ⊥-model. Escapes are not turned into break statements here — the security
+layer recomputes them from the exported encodings. -/
 def circuit :
     FormalCircuit Fp
       (CondSwap.Config × Config × LookupRangeCheck.Config 10)
@@ -2526,12 +2359,10 @@ def circuit :
         (i₀ + 8 * j + 1) env }
 
   Spec input output wit :=
-    MerkleRoot G Q l₀ input.node d output ∧
-      (MerkleRootStrict G Q l₀ input.node d output ∨ MerkleBreakAt G Q l₀ d) ∧
-      ExactMerklePathData G Q l₀ d input.node output
-        (fun j => HashLayer.leftEncoding (wit j).encoding)
-        (fun j => HashLayer.rightEncoding (wit j).encoding)
-        (fun j => decide ((wit j).swap = 1))
+    ExactMerklePathData G Q l₀ d input.node output
+      (fun j => HashLayer.leftEncoding (wit j).encoding)
+      (fun j => HashLayer.rightEncoding (wit j).encoding)
+      (fun j => decide ((wit j).swap = 1))
 
   ProverAssumptions input wit _ :=
     (pathNode G Q l₀ (fun j => (wit j).pair) input.node d).isSome
@@ -2547,30 +2378,6 @@ def circuit :
     rw [FormalCircuit.foldCall_operations, FormalCircuit.foldOps_constraints] at hc
     subcircuit_rw at hc
     -- the per-layer contract, `l = i`
-    have hstep : ∀ i : Fin d, MerkleStep G Q (l₀ + ↑i)
-        ((eval (⟨place, env⟩ : Placed Environment Fp)
-          (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg
-            { node := input_var_node } i₀ ↑i).1 : Value Layer.Input Fp).node)
-        (eval (⟨place, env⟩ : Placed Environment Fp)
-          ((layerAt G Q hQ l₀ wsib wswap ↑i).output cfg
-            (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg
-              { node := input_var_node } i₀ ↑i).1
-            (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg
-              { node := input_var_node } i₀ ↑i).2)) := by
-      intro i
-      have h : MerkleStep G Q ((l₀ + ↑i) % 2 ^ 10)
-          ((eval (⟨place, env⟩ : Placed Environment Fp)
-            (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg
-              { node := input_var_node } i₀ ↑i).1 : Value Layer.Input Fp).node)
-          (eval (⟨place, env⟩ : Placed Environment Fp)
-            ((layerAt G Q hQ l₀ wsib wswap ↑i).output cfg
-              (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg
-                { node := input_var_node } i₀ ↑i).1
-              (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg
-                { node := input_var_node } i₀ ↑i).2)) :=
-        (hc i ⟨_hE.1, _hE.2.1, _hE.2.2⟩ trivial).1
-      rwa [Nat.mod_eq_of_lt (show l₀ + (↑i : ℕ) < 2 ^ 10 from by
-        have := i.isLt; omega)] at h
     have hExactStep : ∀ i : Fin d, ExactMerkleStep G Q (l₀ + ↑i)
         ((eval (⟨place, env⟩ : Placed Environment Fp)
           (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg
@@ -2590,43 +2397,6 @@ def circuit :
       have h := (hc i ⟨_hE.1, _hE.2.1, _hE.2.2⟩ trivial).2
       rwa [Nat.mod_eq_of_lt (show l₀ + (↑i : ℕ) < 2 ^ 10 from by
         have := i.isLt; omega)] at h
-    have hstepChain : ∀ i, i < d → MerkleStep G Q (l₀ + i)
-        ((eval (⟨place, env⟩ : Placed Environment Fp)
-          (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg
-            { node := input_var_node } i₀ i).1 : Value Layer.Input Fp).node)
-        ((eval (⟨place, env⟩ : Placed Environment Fp)
-          (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg
-            { node := input_var_node } i₀ (i + 1)).1 : Value Layer.Input Fp).node) := by
-      intro i hi
-      have h := hstep ⟨i, hi⟩
-      rw [show (eval (⟨place, env⟩ : Placed Environment Fp)
-          (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg
-            { node := input_var_node } i₀ (i + 1)).1 : Value Layer.Input Fp).node
-        = eval (⟨place, env⟩ : Placed Environment Fp)
-          ((layerAt G Q hQ l₀ wsib wswap i).output cfg
-            (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg
-              { node := input_var_node } i₀ i).1
-            (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg
-              { node := input_var_node } i₀ i).2) from by
-        rw [show (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg
-            { node := input_var_node } i₀ (i + 1)).1
-          = toInput ((layerAt G Q hQ l₀ wsib wswap i).output cfg
-            (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg
-              { node := input_var_node } i₀ i).1
-            (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg
-              { node := input_var_node } i₀ i).2) from rfl]
-        rw [input_eval_node]
-        rfl]
-      exact h
-    -- Assemble both the original root and the strict-or-break refinement.
-    have hroot := merkleRoot_of_steps G Q
-      (fun k => (eval (⟨place, env⟩ : Placed Environment Fp)
-        (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg
-          { node := input_var_node } i₀ k).1 : Value Layer.Input Fp).node) l₀ d hstepChain
-    have hrefined := merkleRootStrict_or_break_of_steps G Q hQ
-      (fun k => (eval (⟨place, env⟩ : Placed Environment Fp)
-        (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg
-          { node := input_var_node } i₀ k).1 : Value Layer.Input Fp).node) l₀ d hstepChain
     -- land the endpoints
     have hf0 : (eval (⟨place, env⟩ : Placed Environment Fp)
         (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg
@@ -2651,7 +2421,6 @@ def circuit :
           from by simp only [circuit_norm]]
       exact h_output
     rw [← hf0, ← hfd]
-    refine ⟨hroot, hrefined, ?_⟩
     refine ⟨fun k => (eval (⟨place, env⟩ : Placed Environment Fp)
       (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap) toInput cfg
         { node := input_var_node } i₀ k).1 : Value Layer.Input Fp).node, rfl, rfl, ?_⟩
