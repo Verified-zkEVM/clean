@@ -529,6 +529,13 @@ theorem addFormal_output_cells (config : Config) (input : Var Inputs Fp)
         y := .of self 1 config.yQR } := by
   rfl
 
+@[keygen_norm]
+theorem addFormal_inputCells (config : Config)
+    (configured : addFormal.Configured config) (input : Var Inputs Fp) :
+    configured.inputCells input =
+      [input.p.x.cell, input.p.y.cell, input.q.x.cell, input.q.y.cell] := by
+  rfl
+
 /-- The complete-addition region's positional output cells. -/
 theorem add_output_cells (config : Config) (offset : ℕ) (input : Var Inputs Fp)
     (self : RegionIndex) :

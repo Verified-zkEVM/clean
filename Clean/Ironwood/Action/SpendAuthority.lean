@@ -64,6 +64,53 @@ def synthesisSummary
     (FloorPlanner.SynthesisSummary.ofRegion
       (Ecc.Add.synthesisSummary cfg.2 0))
 
+theorem synthesize_copyCellsAssignedFrom
+    (G : FixedBase)
+    (cfg : Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config)
+    (input : Var Input Fp) (self : RegionIndex)
+    (configuredFullWidth : (Ecc.MulFixed.FullWidth.circuit G).Configured cfg.1)
+    (configuredAdd : Ecc.Add.addFormal.Configured cfg.2) :
+    ((do
+        let alphaCommitment ←
+          (Ecc.MulFixed.FullWidth.circuit G).call cfg.1 input.alpha
+        Ecc.Add.addFormal.call cfg.2 { p := alphaCommitment, q := input.akP })
+      |>.operations self).CopyCellsAssignedFrom self
+        [input.akP.x.cell, input.akP.y.cell] := by
+  let fullWidthOps := ((Ecc.MulFixed.FullWidth.circuit G).call
+    cfg.1 input.alpha).operations self
+  let fullWidthOutput := (Ecc.MulFixed.FullWidth.circuit G).output
+    cfg.1 input.alpha self
+  have hfullWidth : fullWidthOps.CopyCellsAssignedFrom self
+      [input.akP.x.cell, input.akP.y.cell] := by
+    apply (Ecc.MulFixed.FullWidth.circuit G).call_copyCellsAssignedFrom
+      cfg.1 configuredFullWidth input.alpha self
+    intro cell hcell
+    rw [Ecc.MulFixed.FullWidth.circuit_inputCells_eq] at hcell
+    contradiction
+  have houtput := Ecc.MulFixed.FullWidth.circuit_call_output_cells_assigned
+    G cfg.1 input.alpha self
+  have hadd : ((Ecc.Add.addFormal.call cfg.2
+      { p := fullWidthOutput, q := input.akP }).operations (self + 2))
+      |>.CopyCellsAssignedFrom (self + 2)
+        ([input.akP.x.cell, input.akP.y.cell] ++
+          fullWidthOps.assignedCellsFrom self) := by
+    apply Ecc.Add.addFormal.call_copyCellsAssignedFrom
+      cfg.2 configuredAdd { p := fullWidthOutput, q := input.akP } (self + 2)
+    intro cell hcell
+    rw [Ecc.Add.addFormal_inputCells] at hcell
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+    rcases hcell with rfl | rfl | rfl | rfl
+    · exact List.mem_append_right _ houtput.1
+    · exact List.mem_append_right _ houtput.2
+    · simp
+    · simp
+  have hall := hfullWidth.append (by
+    simpa only [fullWidthOps, FormalCircuit.call_regionCount', Nat.add_zero] using hadd)
+  simpa only [Circuit.operations_bind, Circuit.operations_pure,
+    FormalCircuit.call_regionCount', FormalCircuit.output_call',
+    FormalCircuit.nextRegionIndex_call', Nat.add_zero, fullWidthOps,
+    fullWidthOutput] using hall
+
 /-- Rust `Circuit::synthesize`'s spend-authority block: `[alpha] SpendAuthG` (the
 `FullWidth` bundle) plus `ak_P`. `Spec` is knowledge soundness at the extracted
 randomizer: `rk = [alpha] SpendAuthG + ak_P` for the `alpha` read off the witnessed
@@ -83,7 +130,26 @@ def circuit (G : FixedBase) : FormalCircuit Fp
 
   elaborated :=
     { keygenRequirements := keygenRequirements G
-      registered := by keygen_registration
+      registered := by
+        intro cfg counts hconfig input self
+        simp only [Circuit.operations_bind, Circuit.operations_pure,
+          Operations.KeygenRegistered.append, circuit_norm]
+        constructor
+        · apply (Ecc.MulFixed.FullWidth.circuit G).call_keygenRegistered
+            cfg.1 hconfig.1 input.alpha self <;> keygen_registration
+        · apply Ecc.Add.addFormal.call_keygenRegistered
+            cfg.2 hconfig.2 _ (self + 2) <;> keygen_registration
+      copyCellsAssigned := by
+        intro cfg _ hconfig input self
+        simpa only [keygen_norm, keygen_spine, circuit_norm] using
+          synthesize_copyCellsAssignedFrom G cfg input self hconfig.1 hconfig.2
+      lookupActivationsWellFormed cfg input self := by
+        simp only [Circuit.operations_bind, Circuit.operations_pure,
+          Operations.LookupActivationsWellFormed, List.forall_append,
+          circuit_norm]
+        exact ⟨(Ecc.MulFixed.FullWidth.circuit G)
+            |>.call_lookupActivationsWellFormed cfg.1 input.alpha self,
+          Ecc.Add.addFormal.call_lookupActivationsWellFormed cfg.2 _ (self + 2)⟩
       output cfg _ i :=
         { x := .of (i + 2) 1 cfg.2.xQR,
           y := .of (i + 2) 1 cfg.2.yQR }

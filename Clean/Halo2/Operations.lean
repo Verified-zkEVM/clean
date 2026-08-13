@@ -2768,6 +2768,19 @@ def Operations.regionCount : Operations F → ℕ
   | .constrainInstance _ _ _ :: ops => Operations.regionCount ops
   | .loadTable _ _ :: ops => Operations.regionCount ops
 
+theorem Operations.assignedCellsFrom_append
+    (left right : Operations F) (region : RegionIndex) :
+    (left ++ right).assignedCellsFrom region =
+      left.assignedCellsFrom region ++
+        right.assignedCellsFrom (region + left.regionCount) := by
+  induction left generalizing region with
+  | nil => simp only [List.nil_append, assignedCellsFrom, regionCount, Nat.add_zero,
+      List.nil_append]
+  | cons operation rest ih =>
+      cases operation <;>
+        simp only [List.cons_append, assignedCellsFrom, regionCount, ih,
+          List.append_assoc, Nat.add_assoc]
+
 /-- Copy provenance composes across appended layouter streams. The second stream may
 use every caller cell and every cell assigned by the first stream. -/
 theorem Operations.CopyCellsAssignedFrom.append

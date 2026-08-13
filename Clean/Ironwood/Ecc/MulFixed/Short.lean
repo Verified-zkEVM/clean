@@ -1853,6 +1853,69 @@ theorem circuit_synthesisSummary_constantSiteCount
   rw [circuit_synthesisSummary_eq]
   exact circuitSynthesisSummary_constantSiteCount config
 
+@[keygen_output_norm]
+theorem circuit_output_cells
+    (B : FixedBase) (config : Config) (input : Var Inputs Fp)
+    (self : RegionIndex) :
+    (circuit B).output config input self =
+      { x := .of (self + 1) 1 config.superConfig.addConfig.xQR,
+        y := .of (self + 1) 1 config.superConfig.addConfig.yP } := by
+  rfl
+
+@[circuit_norm]
+theorem circuit_regionCount (B : FixedBase) (input : Var Inputs Fp) :
+    (circuit B).regionCount input = 2 := by
+  rfl
+
+@[keygen_norm]
+theorem circuit_inputCells_eq
+    (B : FixedBase) {config : Config}
+    (configured : (circuit B).Configured config) (input : Var Inputs Fp) :
+    configured.inputCells input =
+      [input.magnitude.cell, input.sign.cell] := by
+  rfl
+
+theorem circuit_call_output_cells_assigned
+    (B : FixedBase) (config : Config) (input : Var Inputs Fp)
+    (self : RegionIndex) :
+    let output := (circuit B).output config input self
+    output.x.cell ∈ Operations.assignedCellsFrom
+        (((circuit B).call config input).operations self) self ∧
+      output.y.cell ∈ Operations.assignedCellsFrom
+        (((circuit B).call config input).operations self) self := by
+  rw [circuit_output_cells]
+  rw [FormalCircuit.call_operations]
+  let innerOutput := (innerRegion B.toData config 0 input.magnitude).output self
+  have hadd := Add.add_output_cells_assigned config.superConfig.addConfig 0
+    ⟨innerOutput.mulB, innerOutput.acc⟩ (self + 1) []
+  dsimp only at hadd
+  simp only [RegionOperations.mem_assignedCellsAfter_iff, List.nil_append,
+    Add.add_output_cells, AssignedCell.of_cell] at hadd
+  have hmsw :
+      (AssignedCell.of (self + 1) 1
+          config.superConfig.addConfig.xQR : AssignedCell Fp).cell ∈
+        ((mswRegion config innerOutput.acc innerOutput.mulB input.sign
+          innerOutput.zs[21]).operations (self + 1)).assignedCells (self + 1) ∧
+      (AssignedCell.of (self + 1) 1
+          config.superConfig.addConfig.yP : AssignedCell Fp).cell ∈
+        ((mswRegion config innerOutput.acc innerOutput.mulB input.sign
+          innerOutput.zs[21]).operations (self + 1)).assignedCells (self + 1) := by
+    constructor
+    · simp only [mswRegion, circuit_norm, RegionOperations.assignedCells,
+        List.flatMap_append, List.flatMap_cons, RegionOperation.assignedCells,
+        List.singleton_append, List.flatMap_nil, List.append_nil,
+        List.mem_append, List.mem_cons]
+      exact Or.inl hadd.1
+    · simp only [mswRegion, circuit_norm, RegionOperations.assignedCells,
+        List.flatMap_append, List.flatMap_cons, RegionOperation.assignedCells,
+        List.singleton_append, List.flatMap_nil, List.append_nil,
+        List.mem_append, List.mem_cons]
+  simp only [circuit, synthesize, Circuit.operations_bind,
+    operations_assignRegion, output_assignRegion, nextRegionIndex_assignRegion,
+    List.singleton_append, List.append_nil, Operations.assignedCellsFrom,
+    List.mem_append]
+  exact ⟨Or.inr hmsw.1, Or.inr hmsw.2⟩
+
 derive_contract_bridges circuit (B : FixedBase) := circuit B
 
 end Zcash.Circuits.Ecc.MulFixed.Short

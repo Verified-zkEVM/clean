@@ -483,6 +483,20 @@ theorem forRangeVar'_forall (property : RegionOperation F → Prop)
         ((body i.val (rows i.val)).operations self).Forall property :=
   loopAux_forall property _ _ _ _
 
+/-- A variable-stride loop is copy-lawful when each symbolic round is copy-lawful
+from the caller's original input cells. -/
+@[keygen_norm, keygen_helper]
+theorem forRangeVar'_copyCellsAssignedFrom
+    (rows : ℕ → ℕ) (m : ℕ)
+    (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) (available : List Cell)
+    (hbody : ∀ i : Fin m,
+      ((body i.val (rows i.val)).operations self)
+        |>.CopyCellsAssignedFrom self available) :
+    ((forRangeVar' rows m body).operations self)
+      |>.CopyCellsAssignedFrom self available :=
+  loopAux_copyCellsAssignedFrom rows body self available m hbody
+
 @[circuit_norm ↓]
 theorem forRangeVar'_constraints (rows : ℕ → ℕ) (m : ℕ)
     (body : (i : ℕ) → ℕ → RegionCircuit F Unit)

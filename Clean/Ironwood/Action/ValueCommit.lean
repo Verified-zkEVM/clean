@@ -72,6 +72,100 @@ def synthesisSummary
       (FloorPlanner.SynthesisSummary.ofRegion
         (Ecc.Add.synthesisSummary cfg.2.2 0)))
 
+theorem synthesize_copyCellsAssignedFrom
+    (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase)
+    (cfg : Ecc.MulFixed.Short.Config × Ecc.MulFixed.FullWidth.Config ×
+      Ecc.Add.Config)
+    (input : Var Inputs Fp) (self : RegionIndex)
+    (configuredShort : (Ecc.MulFixed.Short.circuit V).Configured cfg.1)
+    (configuredFullWidth : (Ecc.MulFixed.FullWidth.circuit R).Configured cfg.2.1)
+    (configuredAdd : Ecc.Add.addFormal.Configured cfg.2.2) :
+    ((do
+        let commitment ← (Ecc.MulFixed.Short.circuit V).call cfg.1
+          ⟨input.magnitude, input.sign⟩
+        let blind ← (Ecc.MulFixed.FullWidth.circuit R).call cfg.2.1 input.rcv
+        Ecc.Add.addFormal.call cfg.2.2 { p := commitment, q := blind })
+      |>.operations self).CopyCellsAssignedFrom self
+        [input.magnitude.cell, input.sign.cell] := by
+  let shortInput : Var Ecc.MulFixed.Short.Inputs Fp :=
+    ⟨input.magnitude, input.sign⟩
+  let shortOps := ((Ecc.MulFixed.Short.circuit V).call
+    cfg.1 shortInput).operations self
+  let shortOutput := (Ecc.MulFixed.Short.circuit V).output
+    cfg.1 shortInput self
+  have hshort : shortOps.CopyCellsAssignedFrom self
+      [input.magnitude.cell, input.sign.cell] := by
+    apply (Ecc.MulFixed.Short.circuit V).call_copyCellsAssignedFrom
+      cfg.1 configuredShort shortInput self
+    intro cell hcell
+    rw [Ecc.MulFixed.Short.circuit_inputCells_eq] at hcell
+    simpa only [shortInput] using hcell
+  have hshortOutput := Ecc.MulFixed.Short.circuit_call_output_cells_assigned
+    V cfg.1 shortInput self
+  let fullWidthOps := ((Ecc.MulFixed.FullWidth.circuit R).call
+    cfg.2.1 input.rcv).operations (self + 2)
+  let fullWidthOutput := (Ecc.MulFixed.FullWidth.circuit R).output
+    cfg.2.1 input.rcv (self + 2)
+  have hfullWidth : fullWidthOps.CopyCellsAssignedFrom (self + 2)
+      ([input.magnitude.cell, input.sign.cell] ++ shortOps.assignedCellsFrom self) := by
+    apply (Ecc.MulFixed.FullWidth.circuit R).call_copyCellsAssignedFrom
+      cfg.2.1 configuredFullWidth input.rcv (self + 2)
+    intro cell hcell
+    rw [Ecc.MulFixed.FullWidth.circuit_inputCells_eq] at hcell
+    contradiction
+  have hfullWidthOutput := Ecc.MulFixed.FullWidth.circuit_call_output_cells_assigned
+    R cfg.2.1 input.rcv (self + 2)
+  let prefixOps := shortOps ++ fullWidthOps
+  have hprefix : prefixOps.CopyCellsAssignedFrom self
+      [input.magnitude.cell, input.sign.cell] := by
+    apply hshort.append
+    simpa only [shortOps, FormalCircuit.call_regionCount', Nat.add_zero] using hfullWidth
+  have hadd : ((Ecc.Add.addFormal.call cfg.2.2
+      { p := shortOutput, q := fullWidthOutput }).operations (self + 4))
+      |>.CopyCellsAssignedFrom (self + 4)
+        ([input.magnitude.cell, input.sign.cell] ++
+          prefixOps.assignedCellsFrom self) := by
+    apply Ecc.Add.addFormal.call_copyCellsAssignedFrom cfg.2.2 configuredAdd
+      { p := shortOutput, q := fullWidthOutput } (self + 4)
+    intro cell hcell
+    rw [Ecc.Add.addFormal_inputCells] at hcell
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+    rcases hcell with rfl | rfl | rfl | rfl
+    · apply List.mem_append_right
+      simpa only [prefixOps, shortOps, fullWidthOps,
+        Operations.assignedCellsFrom_append,
+        FormalCircuit.call_regionCount', Nat.add_zero] using
+        List.mem_append_left (fullWidthOps.assignedCellsFrom (self + 2))
+          hshortOutput.1
+    · apply List.mem_append_right
+      simpa only [prefixOps, shortOps, fullWidthOps,
+        Operations.assignedCellsFrom_append,
+        FormalCircuit.call_regionCount', Nat.add_zero] using
+        List.mem_append_left (fullWidthOps.assignedCellsFrom (self + 2))
+          hshortOutput.2
+    · apply List.mem_append_right
+      simpa only [prefixOps, shortOps, fullWidthOps,
+        Operations.assignedCellsFrom_append,
+        FormalCircuit.call_regionCount', Nat.add_zero] using
+        List.mem_append_right (shortOps.assignedCellsFrom self)
+          hfullWidthOutput.1
+    · apply List.mem_append_right
+      simpa only [prefixOps, shortOps, fullWidthOps,
+        Operations.assignedCellsFrom_append,
+        FormalCircuit.call_regionCount', Nat.add_zero] using
+        List.mem_append_right (shortOps.assignedCellsFrom self)
+          hfullWidthOutput.2
+  have hall := hprefix.append (by
+    simpa only [prefixOps, shortOps, fullWidthOps,
+      FormalCircuit.call_regionCount', Operations.regionCount_append,
+      Nat.add_zero, Nat.add_assoc] using hadd)
+  simpa only [Circuit.operations_bind, Circuit.operations_pure,
+    FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call',
+    FormalCircuit.call_regionCount', Ecc.MulFixed.Short.circuit_regionCount,
+    Ecc.MulFixed.FullWidth.circuit_regionCount,
+    List.append_assoc, Nat.add_assoc, Nat.add_zero, shortInput, shortOps,
+    shortOutput, fullWidthOps, fullWidthOutput, prefixOps] using hall
+
 /-! ## The `value_commit_orchard` bundle -/
 
 /-- Rust `gadget.rs::value_commit_orchard`: `[v] ValueCommitV` (short signed), `[rcv]
@@ -97,7 +191,33 @@ def circuit (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
 
   elaborated :=
     { keygenRequirements := keygenRequirements V R
-      registered := by keygen_registration
+      registered := by
+        intro cfg counts hconfig input self
+        simp only [Circuit.operations_bind, Circuit.operations_pure,
+          Operations.KeygenRegistered.append, circuit_norm]
+        exact ⟨by
+          apply (Ecc.MulFixed.Short.circuit V).call_keygenRegistered
+              cfg.1 hconfig.1 _ self <;> keygen_registration,
+          by
+            apply (Ecc.MulFixed.FullWidth.circuit R).call_keygenRegistered
+                cfg.2.1 hconfig.2.1 input.rcv (self + 2) <;> keygen_registration,
+          by
+            apply Ecc.Add.addFormal.call_keygenRegistered cfg.2.2
+                hconfig.2.2 _ (self + 4) <;> keygen_registration⟩
+      copyCellsAssigned := by
+        intro cfg _ hconfig input self
+        simpa only [keygen_norm, keygen_spine, circuit_norm] using
+          synthesize_copyCellsAssignedFrom V R cfg input self
+            hconfig.1 hconfig.2.1 hconfig.2.2
+      lookupActivationsWellFormed cfg input self := by
+        simp only [Circuit.operations_bind, Circuit.operations_pure,
+          Operations.LookupActivationsWellFormed, List.forall_append,
+          circuit_norm]
+        exact ⟨(Ecc.MulFixed.Short.circuit V)
+            |>.call_lookupActivationsWellFormed cfg.1 _ self,
+          (Ecc.MulFixed.FullWidth.circuit R)
+            |>.call_lookupActivationsWellFormed cfg.2.1 input.rcv (self + 2),
+          Ecc.Add.addFormal.call_lookupActivationsWellFormed cfg.2.2 _ (self + 4)⟩
       output cfg _ i :=
         { x := .of (i + 4) 1 cfg.2.2.xQR,
           y := .of (i + 4) 1 cfg.2.2.yQR }
