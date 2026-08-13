@@ -931,8 +931,10 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
           evalCloseRun
   leafDispatch
 
-def runComputableWitnesses (extraTerms closeTerms : Array (TSyntax `term)) : TacticM Unit := do
-  let cw ← CwSimp.build extraTerms closeTerms
+/-- The pipeline's normalization half: entry, main simp (with hints), wrapper unfold,
+intros, struct destructuring, and the pre-split output-metadata reduction — everything
+before the split. Shared by `computable_witnesses` and `computable_witnesses_start`. -/
+def runStart (cw : CwSimp) : TacticM Unit := do
   -- expose the offset binder before the first simp: rewriting under it makes the whole
   -- pass pay simp's congruence-through-binder overhead (~12% measured). Introducing
   -- `input` as well would save more but drifts the operations spelling away from what
@@ -983,6 +985,10 @@ def runComputableWitnesses (extraTerms closeTerms : Array (TSyntax `term)) : Tac
     -- child-output metadata reduction as its own step: after every normalization
     -- pass (reduced windows drift under further rewriting), directly before the split
     try metaSimp cw.dsimpCtx cw.outputMetaProcs catch _ => pure ()
+
+def runComputableWitnesses (extraTerms closeTerms : Array (TSyntax `term)) : TacticM Unit := do
+  let cw ← CwSimp.build extraTerms closeTerms
+  runStart cw
   unless (← getGoals).isEmpty do
     -- deterministic split to leaves
     splitStructure
@@ -1018,12 +1024,29 @@ elab_rules : tactic
       runComputableWitnesses (terms.map (fun terms => terms.getElems) |>.getD #[])
         (closeTerms.map (fun terms => terms.getElems) |>.getD #[])
 
+/-- Run only the pipeline's normalization half on the current goal: entry, the main
+`circuit_norm` + `computable_witnesses_norm` simp (with the in-scope `main`
+self-supplied and any hints), wrapper unfold, intros, struct destructuring, and the
+pre-split output-metadata reduction. For manual proofs: start with
+`computable_witnesses_start`, do the structural decomposition by hand, and finish each
+machine-closable leg with `computable_witnesses_close` — the pair covers exactly the
+full tactic's pipeline, so the dispatch stage's preconditions hold by construction.
+Accepts the same two hint lists as `computable_witnesses`. -/
+syntax "computable_witnesses_start" ("[" term,* "]")? ("closing " "[" term,* "]")? : tactic
+
+elab_rules : tactic
+  | `(tactic| computable_witnesses_start $[[$terms:term,*]]? $[closing [$closeTerms:term,*]]?) => do
+      let cw ← CwSimp.build
+        (terms.map (fun terms => terms.getElems) |>.getD #[])
+        (closeTerms.map (fun terms => terms.getElems) |>.getD #[])
+      runStart cw
+
 /-- Run only the per-leaf dispatch/close stage of `computable_witnesses` on the current
 goal: subcircuit composition-rule dispatch, child-output chaining, and the
-shape-dispatched close routes. For manual
-proofs that do the structural decomposition themselves — each machine-closable leg
-becomes `computable_witnesses_close`, and only legs needing a bespoke lemma stay
-hand-written. Accepts the same two hint lists as `computable_witnesses`. -/
+shape-dispatched close routes. The counterpart of `computable_witnesses_start`: the
+goal must be in the normalization half's normal form (`circuit_norm`-normal, child
+outputs reduced), which starting from `computable_witnesses_start` guarantees.
+Accepts the same two hint lists as `computable_witnesses`. -/
 syntax "computable_witnesses_close" ("[" term,* "]")? ("closing " "[" term,* "]")? : tactic
 
 elab_rules : tactic
