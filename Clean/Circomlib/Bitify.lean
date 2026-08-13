@@ -76,6 +76,10 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
     ∧ (∀ i (_ : i < n), bits[i] = 0 ∨ bits[i] = 1)
     ∧ fieldFromBits bits = input
 
+  -- the honest witness is the exact bit decomposition — strict wrappers (alias-checked
+  -- parents) need this to show the alias constraint is satisfiable
+  ProverSpec input bits _ := bits = fieldToBits n input
+
   soundness := by
     circuit_proof_start
     simp only [lc_eq] at h_holds
@@ -95,16 +99,18 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
     circuit_proof_start
     simp only [lc_eq, Fin.forall_iff, mul_eq_zero] at h_env ⊢
     let bits := Vector.mapRange n fun i => env.get (i₀ + i)
-    constructor
-    · intro i hi
-      rw [h_env i hi]
-      rcases Nat.mod_two_eq_zero_or_one (input.val >>> i) with h | h <;> simp [h]
-    show fieldFromBits bits = input
-    have : bits = fieldToBits n input := by
+    have hbits : bits = fieldToBits n input := by
       rw [Vector.ext_iff]
       intro i hi
       simp only [bits, Vector.getElem_mapRange, h_env i hi, getElem_fieldToBits]
-    rw [this, fieldFromBits_fieldToBits h_assumptions]
+    refine ⟨⟨?_, ?_⟩, ?_⟩
+    · intro i hi
+      rw [h_env i hi]
+      rcases Nat.mod_two_eq_zero_or_one (input.val >>> i) with h | h <;> simp [h]
+    · show fieldFromBits bits = input
+      rw [hbits, fieldFromBits_fieldToBits h_assumptions]
+    · simp only [Vector.map_mapRange, circuit_norm]
+      exact hbits
 
 -- the main circuit implementation makes a stronger statement assuming 2^n < p
 def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
