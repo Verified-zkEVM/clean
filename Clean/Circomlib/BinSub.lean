@@ -291,14 +291,12 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
   -- Manual: witness IR over input bits with a symbolic width bound; needs the file's
   -- decomposition facts and induction the tactic's close cannot do.
   computableWitnesses := by
-    intro n' input env env'
     computable_witnesses_start
     -- both witnesses read `lin`, a Fin.foldl the grind rules cannot see under; its
     -- evaluations are bridged through `inputLinearSub_eval_eq_sub`
-    have bridge := inputLinearSub_eval_eq_sub env.toEnvironment input _ rfl
-    have bridge' := inputLinearSub_eval_eq_sub env'.toEnvironment input _ rfl
-    simp only [inputLinearSub, Fin.getElem_fin] at bridge bridge'
-    refine ⟨⟨fun h h_ag => ?_, fun h h_ag => ?_⟩, fun h h_ag => ?_⟩
+    all_goals have bridge := inputLinearSub_eval_eq_sub env.toEnvironment input _ rfl
+    all_goals have bridge' := inputLinearSub_eval_eq_sub env'.toEnvironment input _ rfl
+    all_goals simp only [inputLinearSub, Fin.getElem_fin] at bridge bridge'
     · ext i hi
       simp only [circuit_norm]
       rw [bridge, bridge', h]

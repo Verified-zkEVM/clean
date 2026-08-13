@@ -46,20 +46,15 @@ def concat
   -- lemma is hinted — and the offset bounds need `h_localLength_stable` applied at specific
   -- output instantiations.
   computableWitnesses := by
-    intro n input env env'
     computable_witnesses_start
-    refine ⟨⟨?_, ?_⟩, ?_⟩
     -- circuit1's witnesses are computable directly from the shared input agreement
-    · intro h_input_agrees
-      exact circuit1.toSubcircuit_computableWitnesses h_input_agrees
+    · exact circuit1.toSubcircuit_computableWitnesses h
     -- circuit2's witnesses need circuit1's *output* to only access below its offset
-    · intro h_input_agrees
-      apply circuit2.toSubcircuit_computableWitnesses_onlyAccessedBelow
-      exact circuit1.output_onlyAccessedBelow (fun _ => h_input_agrees)
+    · apply circuit2.toSubcircuit_computableWitnesses_onlyAccessedBelow
+      exact circuit1.output_onlyAccessedBelow (fun _ => h)
     -- the composite output agrees, chaining circuit1's then circuit2's output
-    · intro h_input_agrees h_agrees
-      refine circuit2.output_of_input_eq
-        (circuit1.output_of_input_eq h_input_agrees ?_) ?_
+    · refine circuit2.output_of_input_eq
+        (circuit1.output_of_input_eq h ?_) ?_
       -- the composite `localLength` reduces to `ll₁ + ll₂`, then the offset bounds are `omega`-able
       · exact ProverEnvironment.agreesBelow_of_le h_agrees
           (by simp +instances only [circuit_norm, explicit_circuit_norm]; omega)

@@ -335,7 +335,6 @@ def circuit : FormalCircuit (F p) Inputs (ProvableVector U32 8) := {
   -- them as `n + 9 + 4 + 4 + 5376` chains, and simp keys don't bridge that arithmetic.
   computableWitnesses := by
     computable_witnesses_start
-    refine ⟨⟨fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_⟩, fun h h_agrees => ?_⟩
     · computable_witnesses_close [bytesToWords] closing [eval_vector_set,
         U32.ByteVector.eval_fromLimbs, U32.ByteVector.fromLimbs_inj]
     · computable_witnesses_close [bytesToWords] closing [eval_vector_set,

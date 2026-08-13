@@ -615,14 +615,8 @@ def circuit : FormalCircuit (F p) SHA256Block SHA256Schedule where
   -- Manual: leaves need the whole-input congruence lifted elementwise through
   -- state[i]/Vector.map spellings; the tactic's close lacks these lifting lemmas.
   computableWitnesses := by
-    intro n input env env'
     computable_witnesses_start [messageSchedule]
-    -- `Vector.get` spellings in `scheduleStep` bridge to `getElem` by rfl
-    have hget : ∀ (v : Vector (fields 32 (Expression (F p))) 64) (i : Fin 64),
-        v.get i = v[i.val] := fun _ _ => rfl
-    constructor
-    · intro i
-      obtain ⟨iv, hiv⟩ := i
+    · obtain ⟨iv, hiv⟩ := i
       have hLL : Operations.localLength
           ((scheduleStep (default : SHA256Schedule (Expression (F p)))
             ⟨iv, hiv⟩) 0).2 = 227 := scheduleStep_localLength _ _ 0
@@ -640,8 +634,8 @@ def circuit : FormalCircuit (F p) SHA256Block SHA256Schedule where
       all_goals
         simp only [circuit_norm]
         (try and_intros) <;> grind
-    · intro h hag
-      exact varSchedule_eval_congr (i₀ := n) h 48 (by omega) fun j hj => hag.1 j (by omega)
+    · exact varSchedule_eval_congr (i₀ := n) h 48 (by omega)
+        fun j hj => h_agrees.1 j (by omega)
 
 end MessageSchedule
 end Gadgets.SHA256

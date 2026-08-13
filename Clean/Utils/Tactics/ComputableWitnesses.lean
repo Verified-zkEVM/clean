@@ -514,6 +514,13 @@ def chainOutputFacts : TacticM Unit := withMainContext do
 
 elab "chain_output_facts" : tactic => chainOutputFacts
 
+/-- The agreement premise, in either spelling (folded `AgreesBelow` or the unfolded
+`(∀ i < b, env.get i = env'.get i) ∧ hint ∧ data` triple). -/
+def isAgreementShape (t : Expr) : Bool :=
+  t.getAppFn.isConstOf `ProverEnvironment.AgreesBelow ||
+    (t.isAppOfArity ``And 2 && t.appFn!.appArg!.isForall &&
+      (t.appFn!.appArg!.find? fun e => e.getAppFn.isConstOf `Environment.get).isSome)
+
 partial def splitStep (g : MVarId) (fuel : Nat) : MetaM (List MVarId) := do
   if fuel == 0 then return [g]
   let t := (← instantiateMVars (← g.getType)).consumeMData
@@ -527,7 +534,17 @@ partial def splitStep (g : MVarId) (fuel : Nat) : MetaM (List MVarId) := do
       return ← gs.foldlM (init := []) fun acc g' => do
         return acc ++ (← splitStep g' (fuel - 1))
   if t.isForall then
-    if let some (_, g') ← observing? g.intro1P then
+    -- accessible, predictable premise names, so manual per-leaf proofs never intro:
+    -- the goal's own binder name where it has one, `h_agrees` for the agreement
+    -- premise, `h` (freshened: `h_1`, … for later ones) for other anonymous prop
+    -- premises — the input premise comes first in a leaf and is always `h`
+    let bn := t.bindingName!
+    let name ← if bn.hasMacroScopes || bn == `_ || bn.isInternal then
+        let base := if isAgreementShape (t.bindingDomain!.consumeMData) then
+          `h_agrees else `h
+        g.withContext do pure ((← getLCtx).getUnusedName base)
+      else pure bn
+    if let some (_, g') ← observing? (g.intro name) then
       return ← splitStep g' (fuel - 1)
   return [g]
 
@@ -931,9 +948,10 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
           evalCloseRun
   leafDispatch
 
-/-- The pipeline's normalization half: entry, main simp (with hints), wrapper unfold,
-intros, struct destructuring, and the pre-split output-metadata reduction — everything
-before the split. Shared by `computable_witnesses` and `computable_witnesses_start`. -/
+/-- The pipeline up to the leaves: entry, main simp (with hints), wrapper unfold,
+intros, struct destructuring, output-metadata reduction, and the split — one goal per
+obligation leaf, premises intro'd with predictable names (`h`, `h_agrees`, or the
+binder's own name). Shared by `computable_witnesses` and `computable_witnesses_start`. -/
 def runStart (cw : CwSimp) : TacticM Unit := do
   -- expose the offset binder before the first simp: rewriting under it makes the whole
   -- pass pay simp's congruence-through-binder overhead (~12% measured). Introducing
@@ -985,19 +1003,25 @@ def runStart (cw : CwSimp) : TacticM Unit := do
     -- child-output metadata reduction as its own step: after every normalization
     -- pass (reduced windows drift under further rewriting), directly before the split
     try metaSimp cw.dsimpCtx cw.outputMetaProcs catch _ => pure ()
+  unless (← getGoals).isEmpty do
+    -- deterministic split to leaves, premises intro'd with predictable names;
+    -- expose binder-intro'd names (`input`, `env`, `env'`) for manual per-leaf proofs
+    splitStructure
+    let goals ← getGoals
+    let mut exposed := []
+    for g in goals do
+      exposed := exposed ++ [← g.exposeNames]
+    setGoals exposed
 
 def runComputableWitnesses (extraTerms closeTerms : Array (TSyntax `term)) : TacticM Unit := do
   let cw ← CwSimp.build extraTerms closeTerms
   runStart cw
-  unless (← getGoals).isEmpty do
-    -- deterministic split to leaves
-    splitStructure
-    -- per-leaf: head dispatch, then the shape-selected close route
-    let goals ← getGoals
-    for g in goals do
-      setGoals [g]
-      runLeafDispatch cw
-    setGoals []
+  -- per-leaf: head dispatch, then the shape-selected close route
+  let goals ← getGoals
+  for g in goals do
+    setGoals [g]
+    runLeafDispatch cw
+  setGoals []
 
 /--
 Prove the standard computable-witness obligation. Default tactic for the
@@ -1024,14 +1048,14 @@ elab_rules : tactic
       runComputableWitnesses (terms.map (fun terms => terms.getElems) |>.getD #[])
         (closeTerms.map (fun terms => terms.getElems) |>.getD #[])
 
-/-- Run only the pipeline's normalization half on the current goal: entry, the main
-`circuit_norm` + `computable_witnesses_norm` simp (with the in-scope `main`
-self-supplied and any hints), wrapper unfold, intros, struct destructuring, and the
-pre-split output-metadata reduction. For manual proofs: start with
-`computable_witnesses_start`, do the structural decomposition by hand, and finish each
-machine-closable leg with `computable_witnesses_close` — the pair covers exactly the
-full tactic's pipeline, so the dispatch stage's preconditions hold by construction.
-Accepts the same two hint lists as `computable_witnesses`. -/
+/-- Run the pipeline up to the leaves on the current goal: the main `circuit_norm` +
+`computable_witnesses_norm` simp (with the in-scope `main` self-supplied and any
+hints), wrapper unfold, intros, struct destructuring, output-metadata reduction, and
+the split — leaving one goal per obligation leaf, premises intro'd as `h`/`h_agrees`
+(or the binder's own name). For manual proofs: `computable_witnesses_start`, then per
+leaf either `computable_witnesses_close` or an explicit argument — the pair composes
+to exactly the full tactic, so the dispatch stage's preconditions hold by
+construction. Accepts the same two hint lists as `computable_witnesses`. -/
 syntax "computable_witnesses_start" ("[" term,* "]")? ("closing " "[" term,* "]")? : tactic
 
 elab_rules : tactic

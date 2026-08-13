@@ -404,13 +404,8 @@ def circuit : FormalCircuit (F p) Inputs SHA256State := {
   -- Manual: compound of the SHA256Round/Schedule leaves (elementwise input lifting
   -- plus Add32-family witness IR); see those gadgets' comments.
   computableWitnesses := by
-    intro n input env env'
-    obtain ⟨state, schedule⟩ := input
     computable_witnesses_start
-    constructor
-    · intro i
-      obtain ⟨iv, hiv⟩ := i
-      intro h
+    · obtain ⟨iv, hiv⟩ := i
       rw [foldlAcc_eq_stateVar]
       refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
         (by try rfl; try omega) fun h_agrees => ?_
@@ -425,8 +420,7 @@ def circuit : FormalCircuit (F p) Inputs SHA256State := {
         refine Vector.ext fun j hj => ?_
         simp only [Vector.getElem_map, constWord32, Vector.getElem_ofFn, circuit_norm]
       · exact hSch iv (by omega)
-    · intro h h_agrees
-      have hIn := fun (jj : ℕ) (hjj : jj < 8) => map_eval_getElem_congr h.1 jj hjj
+    · have hIn := fun (jj : ℕ) (hjj : jj < 8) => map_eval_getElem_congr h.1 jj hjj
       exact stateVar_eval_congr_composite (i₀ := n) (k := 64) hIn (by omega)
         (fun j hj => h_agrees.1 j (by omega))
 }

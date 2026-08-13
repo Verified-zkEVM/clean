@@ -425,12 +425,9 @@ def circuit : FormalCircuit (F p) Inputs (fields 32) where
   -- its eval-congruence rests on this file's bit-decomposition lemmas (evalBitsNat_congr),
   -- which the tactic's generic close cannot invent.
   computableWitnesses := by
-    intro n input env env'
-    obtain ⟨a, b⟩ := input
     computable_witnesses_start [add32]
-    refine ⟨⟨fun h hag => ?_, fun h hag => ?_⟩, fun h hag => ?_⟩ <;>
-      have key := evalBitsNat_congr (a := a) h.1 <;>
-      have keyb := evalBitsNat_congr (a := b) h.2
+    all_goals have key := evalBitsNat_congr (a := input_a) h.1
+    all_goals have keyb := evalBitsNat_congr (a := input_b) h.2
     · -- z-vector program: elementwise, with the let-step's value congruent via the keys
       ext i hi
       simp only [circuit_norm, bitsVal_eval, key, keyb]

@@ -252,13 +252,8 @@ def circuit : FormalCircuit (F p) Inputs SHA256State where
   -- Manual: leaves need the whole-input congruence lifted elementwise through
   -- state[i]/Vector.map spellings; the tactic's close lacks these lifting lemmas.
   computableWitnesses := by
-    intro n input env env'
-    obtain ⟨state, k, w⟩ := input
     computable_witnesses_start [sha256Round]
-    refine ⟨⟨fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_,
-             fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_⟩,
-      fun h h_agrees => ?output⟩
-    case output => exact output_eval_congr h.1 h_agrees
+    all_goals try exact output_eval_congr h.1 h_agrees
     all_goals
       exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
         (by rfl) fun h_agrees => by

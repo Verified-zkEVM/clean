@@ -40,9 +40,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
   -- Manual: the witness structure matches on the round permutation constant; the
   -- tactic has no case-split step for data-dependent operation lists.
   computableWitnesses := by
-    intro n input env env'
     computable_witnesses_start
-    refine ⟨⟨fun h => ?_, fun h => ?_⟩, fun h h_agrees => ?_⟩
     · exact FormalCircuit.toSubcircuit_computableWitnesses _
         (by simp only [circuit_norm] at h ⊢; exact h)
     · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _

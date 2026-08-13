@@ -100,11 +100,7 @@ def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   -- elementwise decomposition of the nested set-chains exceeds the heartbeat budget, so
   -- the whole circuit keeps the linear named-window chain.
   computableWitnesses := by
-    intro n input env env'
-    obtain ⟨state, message⟩ := input
     computable_witnesses_start
-    refine ⟨⟨fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_,
-             fun h => ?_, fun h => ?_⟩, fun h h_agrees => ?_⟩
     · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
         (by omega) fun h_agrees => by
           simp only [circuit_norm]

@@ -458,17 +458,14 @@ def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
   computableWitnesses := by
     intro n input env env'
     computable_witnesses_start [lowerSigma0, xor32, rotr32, shr32, Vector.ext_iff]
-    refine ⟨⟨fun h hag => ?_, fun h hag => ?_⟩, fun h hag => ?_⟩
-    · intro i hi
-      simp only [circuit_norm, Vector.getElem_rotate]
+    · simp only [circuit_norm, Vector.getElem_rotate]
       -- grind needs the `% 32`-index instantiations supplied (retested 2026-08-07: with
       -- `Nat.mod_lt` it finds the atoms but still leaves the `.val`-xor congruence open);
       -- the two explicit `have`s are the minimal patch
       have h7 := h ((i + 7) % 32) (by omega)
       have h18 := h ((i + 18) % 32) (by omega)
       grind
-    · intro i hi
-      have hz := hag.1 (n + i) (by omega)
+    · have hz := h_agrees.1 (n + i) (by omega)
       split_ifs with hc
       · have h3 := h (i + 3 % 32) (by omega)
         grind
