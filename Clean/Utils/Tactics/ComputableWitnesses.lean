@@ -1031,13 +1031,6 @@ elab_rules : tactic
       let cw ← CwSimp.build
         (terms.map (fun terms => terms.getElems) |>.getD #[])
         (closeTerms.map (fun terms => terms.getElems) |>.getD #[])
-      -- establish the pipeline's preconditions on this goal explicitly (no-ops when
-      -- the caller already normalized): `runLeafDispatch` expects `circuit_norm`
-      -- normal form and reduced child-output metadata
-      unless (← getGoals).isEmpty do
-        try metaSimp cw.normCtx cw.normProcs catch _ => pure ()
-      unless (← getGoals).isEmpty do
-        try metaSimp cw.dsimpCtx cw.outputMetaProcs catch _ => pure ()
       runLeafDispatch cw
 
 end ComputableWitnesses
