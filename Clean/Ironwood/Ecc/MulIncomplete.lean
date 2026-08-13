@@ -325,6 +325,28 @@ theorem loop_output (n w : ℕ) (cfg : Config) (o : ℕ) (iv : Witgen.MOver Fp (
       = { exit := reads cfg (o + n) self,
           zs := Vector.ofFn (fun j => AssignedCell.of self (o + 1 + j) cfg.z) } := rfl
 
+/-- A nonempty loop assigns the first running-sum cell named by its output. -/
+theorem loop_first_z_cell_assigned (n w : ℕ) (hn : 0 < n)
+    (cfg : Config) (offset : ℕ)
+    (input : Var (Unconstrained field) Fp) (self : RegionIndex) :
+    Cell.of self (offset + 1) cfg.z ∈
+      RegionOperations.assignedCells
+        (((loop n w).call cfg offset input).operations self) self := by
+  rw [FormalRegionCircuit.call_operations]
+  simp only [loop]
+  rw [loopProgram_operations,
+    RegionCircuit.forRange'_operations]
+  have hround := round_output_z_cell_assigned w cfg offset input self
+  simp only [RegionOperations.assignedCells, List.mem_flatMap] at hround ⊢
+  obtain ⟨operation, hoperation, hcell⟩ := hround
+  refine ⟨operation, ?_, hcell⟩
+  rw [List.mem_flatten]
+  refine ⟨((round w).call cfg offset input).operations self, ?_, hoperation⟩
+  rw [List.mem_ofFn]
+  exact ⟨⟨0, hn⟩, by
+    simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+      List.append_nil, Nat.add_zero, Nat.zero_mul]⟩
+
 /-- What `numBits` constrained double-and-add rounds guarantee: some bit sequence enters the
 running sums, and an in-range accumulator `[m]·base` exits as `[accScalar m bits numBits]·base`. -/
 def RoundInvariant (numBits : ℕ) (z : Fp) (base acc : Point Fp)
@@ -773,6 +795,15 @@ def double_and_add (n : ℕ) (w : ℕ) :
       exact hlast
 
 /-- The complete incomplete-multiplication bundle exposes its reduced footprint. -/
+@[keygen_output_norm]
+theorem double_and_add_output (n w : ℕ) (cfg : Config) (offset : ℕ)
+    (input : Var Inputs Fp) (self : RegionIndex) :
+    (double_and_add n w).output cfg offset input self =
+      { acc :=
+          { x := .of self (offset + n + 2) cfg.xA
+            y := .of self (offset + n + 2) cfg.lambda1 }
+        zs := Vector.ofFn fun j => .of self (offset + 1 + j.val) cfg.z } := rfl
+
 @[synthesis_summary_norm]
 theorem double_and_add_synthesisSummary_eq
     (n w : ℕ) (cfg : Config) (offset : ℕ)

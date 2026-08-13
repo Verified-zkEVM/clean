@@ -778,7 +778,7 @@ theorem startCopy_synthesisSummary (cfg : Config) (input : Var Inputs Fp)
         ((startCopy cfg input offset).operations region) =
       .ofColumns [.column .advice cfg.zComplete.index] (offset + 1) 0 := by
   apply FloorPlanner.RegionSynthesisSummary.ext <;>
-    simp only [startCopy, circuit_norm, synthesis_summary_norm, Nat.max_zero]
+    simp only [startCopy, circuit_norm, synthesis_summary_norm]
 
 /-- The accumulator threaded through complete-addition rounds is initially the
 external accumulator and thereafter occupies the complete-addition output columns. -/
@@ -1203,6 +1203,52 @@ def assign_region (numBits : ℕ) (w : ℕ) :
       exact accPoint_valid hBaseV hAcc0V (kBitsWindow input_alpha w) numBits
     · -- accumulator value
       exact hOutAcc.symm.trans haccN
+
+/-- A nonempty complete-multiplication region returns the accumulator assigned by
+its final round. -/
+theorem assignRegion_output_acc_cells_assigned
+    (numBits w : ℕ) (hnumBits : 0 < numBits)
+    (cfg : Config) (offset : ℕ) (input : Var Inputs Fp)
+    (region : RegionIndex) (available : List Cell) :
+    let output := (assign_region numBits w).output cfg offset input region
+    output.acc.x.cell ∈
+        (((assign_region numBits w).call cfg offset input).operations region
+          |>.assignedCellsAfter region available) ∧
+      output.acc.y.cell ∈
+        (((assign_region numBits w).call cfg offset input).operations region
+          |>.assignedCellsAfter region available) := by
+  obtain ⟨k, rfl⟩ := Nat.exists_eq_succ_of_ne_zero (by omega : numBits ≠ 0)
+  dsimp only
+  rw [show ((assign_region (k + 1) w).output cfg offset input region).acc.x =
+      AssignedCell.of region (offset + 2 * k + 2) cfg.addConfig.xQR from rfl,
+    show ((assign_region (k + 1) w).output cfg offset input region).acc.y =
+      AssignedCell.of region (offset + 2 * k + 2) cfg.addConfig.yQR from rfl]
+  rw [FormalRegionCircuit.call_operations]
+  simp only [assign_region]
+  rw [assignRegionSynthesize_operations]
+  simp only [keygen_output_norm,
+    RegionOperations.mem_assignedCellsAfter_iff,
+    RegionOperations.assignedCells, List.flatMap_append, List.mem_append]
+  have hround := round_output_cells_assigned w k cfg (offset + k * 2)
+    { alpha := input.alpha, base := input.base, z := input.z,
+      acc := RegionCircuit.foldAcc (fun j => offset + j * 2)
+        ({ x := input.xA, y := input.yA } : Point (AssignedCell Fp))
+        (fun i r acc => do
+          let out ← (round w i).call cfg r
+            { alpha := input.alpha, base := input.base, z := input.z, acc }
+          pure out.acc) k region }
+    region []
+  dsimp only at hround
+  simp only [round_output, AssignedCell.of_cell,
+    RegionOperations.mem_assignedCellsAfter_iff, List.nil_append] at hround
+  rw [RegionCircuit.foldRange, RegionCircuit.foldRangeVar,
+    RegionCircuit.foldRangeVarAux_operations_succ]
+  simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    List.append_nil, List.flatMap_append, List.mem_append]
+  exact ⟨Or.inr (Or.inl (Or.inr (Or.inr (by
+      simpa only [AssignedCell.of_cell, Nat.mul_comm] using hround.1)))),
+    Or.inr (Or.inl (Or.inr (Or.inr (by
+      simpa only [AssignedCell.of_cell, Nat.mul_comm] using hround.2))))⟩
 
 /-- The complete-multiplication bundle exposes its reduced footprint. -/
 @[synthesis_summary_norm]

@@ -2119,6 +2119,39 @@ theorem circuit_synthesisSummary_eq (B : FixedBase) (cfg : Config)
     (circuit B).elaborated.synthesisSummary cfg input region =
       circuitSynthesisSummary cfg := rfl
 
+@[keygen_norm]
+theorem circuit_inputCells_eq (B : FixedBase) {cfg : Config}
+    (configured : (circuit B).Configured cfg) (input : Var field Fp) :
+    configured.inputCells input = [input.cell] := rfl
+
+/-- Both coordinates returned by the base-field fixed-base multiplication call are
+assigned by its second region. -/
+theorem circuit_call_output_cells_assigned
+    (B : FixedBase) (config : Config) (input : Var field Fp)
+    (self : RegionIndex) :
+    let output := (circuit B).output config input self
+    output.x.cell ∈ Operations.assignedCellsFrom
+        (((circuit B).call config input).operations self) self ∧
+      output.y.cell ∈ Operations.assignedCellsFrom
+        (((circuit B).call config input).operations self) self := by
+  rw [show (circuit B).output config input self =
+      { x := .of (self + 1) 1 config.superConfig.addConfig.xQR,
+        y := .of (self + 1) 1 config.superConfig.addConfig.yQR } from rfl]
+  rw [FormalCircuit.call_operations]
+  let innerOutput := (inner B).output config 0 ⟨input⟩ self
+  have hadd := Add.add_output_cells_assigned config.superConfig.addConfig 0
+    ⟨innerOutput.mulB, innerOutput.acc⟩ (self + 1) []
+  dsimp only at hadd
+  simp only [RegionOperations.mem_assignedCellsAfter_iff, List.nil_append,
+    Add.add_output_cells, AssignedCell.of_cell] at hadd
+  simp only [circuit, synthesize, Circuit.operations_bind,
+    operations_assignRegion, output_assignRegion, nextRegionIndex_assignRegion,
+    List.singleton_append, Operations.assignedCellsFrom, List.mem_append]
+  exact ⟨Or.inr (Or.inl (by simpa only [innerOutput,
+      FormalRegionCircuit.output_call, Nat.zero_add] using hadd.1)),
+    Or.inr (Or.inl (by simpa only [innerOutput,
+      FormalRegionCircuit.output_call, Nat.zero_add] using hadd.2))⟩
+
 derive_contract_bridges circuit (B : FixedBase) := circuit B
 
 end Zcash.Circuits.Ecc.MulFixed.BaseFieldElem

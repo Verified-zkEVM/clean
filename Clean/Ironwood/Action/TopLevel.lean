@@ -1,7 +1,6 @@
 import Clean.Halo2.TopLevel
 import Clean.Ironwood.Action.PublicInput
-import Clean.Ironwood.Action.ConfigureCertificates
-import Clean.Ironwood.Action.RealBases
+import Clean.Ironwood.Action.Spec
 
 /-!
 # The deployed Orchard Action as a closed top-level circuit
@@ -12,7 +11,7 @@ namespace Zcash.Circuits.Action
 open Halo2
 open Circuit
 
-private theorem initialGeneratorTableIdx_mem
+theorem initialGeneratorTableIdx_mem
     (cfg : Config) (i : RegionIndex) :
     Operation.loadTable cfg.sinsemilla1.generatorTable.tableIdx
         ((List.range (2 ^ Specs.K)).map (Nat.cast : ℕ → Fp)) ∈
@@ -68,6 +67,11 @@ private theorem circuit_configure_eq :
 private theorem circuit_synthesize_eq (cfg : Config) :
     (circuit Specs.Sinsemilla.orchardGenerators orchardBases).synthesize cfg =
       mainPost Specs.Sinsemilla.orchardGenerators orchardBases cfg :=
+  rfl
+
+private theorem circuit_envAssumptions_eq (cfg : Config) :
+    (circuit Specs.Sinsemilla.orchardGenerators orchardBases).EnvAssumptions cfg =
+      EnvAssumptions cfg :=
   rfl
 
 /--
@@ -138,7 +142,7 @@ private theorem actionQueryRequirements :
     Circuit.elaboratedPost, Circuit.configureElaborated]
   trivial
 
-def actionCircuit : TopLevelCircuit Fp Config PublicInputs where
+def Internal.actionCircuitImpl : TopLevelCircuit Fp Config PublicInputs where
   formalCircuit :=
     circuit Specs.Sinsemilla.orchardGenerators orchardBases
   noCallerRequirements := ⟨(), rfl, rfl, rfl, fun _ => rfl⟩
@@ -171,12 +175,10 @@ def actionCircuit : TopLevelCircuit Fp Config PublicInputs where
   extractPrivate := fun cfg env =>
     PrivateWitness.ofActionData (extractPost cfg () 0 env)
   combine := combine
-  Spec := fun inputs privateWitness =>
-    SpecPost Specs.Sinsemilla.orchardGenerators orchardBases
-      () () (combine inputs privateWitness)
+  Spec := ActionSpec
   spec_iff := by
     intros
-    rfl
+    exact actionSpec_iff_specPost _ _
   extract_factorization := by
     dsimp
     intro env
@@ -187,15 +189,150 @@ def actionCircuit : TopLevelCircuit Fp Config PublicInputs where
           (configure Specs.Sinsemilla.orchardGenerators {}).1 () 0 env)) =
       extractPost
         (configure Specs.Sinsemilla.orchardGenerators {}).1 () 0 env
-    have hprimary :
-        (configure Specs.Sinsemilla.orchardGenerators {}).1.primary = ⟨0⟩ := by
-      rfl
-    rw [← PublicInputs.ofActionData_extractPost _ _ _ hprimary]
+    rw [← PublicInputs.ofActionData_extractPost
+      (configure Specs.Sinsemilla.orchardGenerators {}).1 0 env (by
+        simp [PublicInputs.layout, PublicInputLayout.cells,
+          PublicInputLayout.cellList]
+        rfl)]
     exact combine_parts
       (extractPost
         (configure Specs.Sinsemilla.orchardGenerators {}).1 () 0 env)
   assumptions_eq := rfl
   closesEnvironment := configured_closesEnvironment
+
+/-- The concrete Action implementation and its opening equation, kept behind an
+opaque reduction barrier. Runtime evaluation still computes the implementation;
+proofs cross the boundary only through the API below. -/
+private opaque actionCircuitPacked :
+    { top : TopLevelCircuit Fp Config PublicInputs //
+      top = Internal.actionCircuitImpl } :=
+  ⟨Internal.actionCircuitImpl, rfl⟩
+
+/-- The deployed Orchard Action circuit, opaque to definitional equality. -/
+def actionCircuit : TopLevelCircuit Fp Config PublicInputs :=
+  actionCircuitPacked.val
+
+/-- Controlled implementation opening for the Action integration layer. This is
+deliberately not a simp lemma. -/
+theorem Internal.actionCircuit_eq_impl :
+    actionCircuit = Internal.actionCircuitImpl :=
+  actionCircuitPacked.property
+
+/-- Action's configured primary column witnesses that its permutation family is
+nonempty. -/
+theorem actionCircuit_permutationColumns_nonempty :
+    actionCircuit.permutationColumns ≠ [] := by
+  rw [Internal.actionCircuit_eq_impl]
+  let program := Circuit.configure Specs.Sinsemilla.orchardGenerators
+  let primary := (program.output {}).primary.toAny
+  have hprimary : primary ∈ (program.run {}).2.permutationColumns :=
+    (Configure.mem_permutationColumns_run_iff program {} primary).mpr
+      (Or.inr (by
+        simpa only [program, primary] using
+          Circuit.configure_output_primary_mem_permutationRequests
+            Specs.Sinsemilla.orchardGenerators {}))
+  exact List.ne_nil_of_mem hprimary
+
+/-- Action's closed configure run allocates ten advice columns. -/
+theorem actionCircuit_numAdviceColumns_eq :
+    actionCircuit.constraintSystem.numAdviceColumns = 10 := by
+  rw [Internal.actionCircuit_eq_impl]
+  exact Circuit.configure_finalCounts_numAdviceColumns
+    Specs.Sinsemilla.orchardGenerators
+
+/-- Action's closed configure run allocates fourteen fixed columns. -/
+theorem actionCircuit_numFixedColumns_eq :
+    actionCircuit.constraintSystem.numFixedColumns = 14 := by
+  rw [Internal.actionCircuit_eq_impl]
+  exact Circuit.configure_finalCounts_numFixedColumns
+    Specs.Sinsemilla.orchardGenerators
+
+/-- Action's closed configure run allocates one instance column. -/
+theorem actionCircuit_numInstanceColumns_eq :
+    actionCircuit.constraintSystem.numInstanceColumns = 1 := by
+  rw [Internal.actionCircuit_eq_impl]
+  exact Circuit.configure_finalCounts_numInstanceColumns
+    Specs.Sinsemilla.orchardGenerators
+
+set_option maxRecDepth 10000 in
+/-- Action's configured query depth requires five blinding rows. -/
+theorem actionCircuit_blindingFactors_eq :
+    actionCircuit.blindingFactors = 5 := by
+  rw [Internal.actionCircuit_eq_impl]
+  unfold TopLevelCircuit.blindingFactors TopLevelCircuit.constraintSystem
+    TopLevelCompilation.constraintSystem Internal.actionCircuitImpl
+  configure_norm
+
+/-- Action's public instance layout occupies ten rows. -/
+theorem actionCircuit_publicInputLayout_usedRows_eq :
+    actionCircuit.publicInputLayout.usedRows = 10 := by
+  rw [Internal.actionCircuit_eq_impl]
+  rfl
+
+/-- The opaque circuit's private-witness field is the public Action witness type. -/
+theorem actionCircuit_privateWitness_eq :
+    actionCircuit.PrivateWitness = PrivateWitness := by
+  rw [Internal.actionCircuit_eq_impl]
+  rfl
+
+/-- Action public inputs are serialized according to their canonical layout. -/
+theorem actionCircuit_publicInputRows
+    (input : PublicInputs Fp) (column : Column .instance) :
+    actionCircuit.publicInputRows input column =
+      PublicInputs.layout.rows input column := by
+  rw [Internal.actionCircuit_eq_impl]
+  rfl
+
+/-- The primary Action instance column is exactly the public-input element vector. -/
+theorem actionCircuit_publicInputRows_zero (input : PublicInputs Fp) :
+    actionCircuit.publicInputRows input ⟨0⟩ = (toElements input).toList := by
+  rw [actionCircuit_publicInputRows]
+  cases input
+  rfl
+
+/-- Every undeclared Action instance column serializes as zero rows. -/
+theorem actionCircuit_publicInputRows_ne_zero
+    (input : PublicInputs Fp) {column : ℕ} (hcolumn : column ≠ 0) :
+    ∀ i, (actionCircuit.publicInputRows input ⟨column⟩).getD i 0 = 0 := by
+  have hzero : ∀ x ∈ actionCircuit.publicInputRows input ⟨column⟩, x = (0 : Fp) := by
+    intro x hx
+    rw [actionCircuit_publicInputRows, PublicInputLayout.rows] at hx
+    obtain ⟨row, -, rfl⟩ := List.mem_map.mp hx
+    rw [List.idxOf_eq_length (by
+      simp only [PublicInputs.layout, PublicInputLayout.cellList]
+      simp
+      intro _ hindex
+      exact hcolumn hindex.symm)]
+    have hlen : (toElements input).toList.length ≤ PublicInputs.layout.cellList.length := by
+      simp only [PublicInputLayout.cellList_length, Vector.length_toList]
+      exact le_refl _
+    exact List.getD_eq_default _ _ hlen
+  intro i
+  rcases lt_or_ge i (actionCircuit.publicInputRows input ⟨column⟩).length with h | h
+  · rw [List.getD_eq_getElem _ _ h]
+    exact hzero _ (List.getElem_mem h)
+  · exact List.getD_eq_default _ _ h
+
+private theorem actionCircuit_spec_iff_of_eq
+    (top : TopLevelCircuit Fp Config PublicInputs)
+    (htop : top = Internal.actionCircuitImpl)
+    (input : PublicInputs Fp) (privateWitness : PrivateWitness) :
+    ActionSpec input privateWitness ↔
+      top.Spec input
+        (cast ((congrArg (fun circuit => circuit.PrivateWitness) htop).trans (by rfl)).symm
+          privateWitness) := by
+  cases htop
+  rfl
+
+/-- The Orchard Action spec is the opaque circuit's internal spec after
+transporting the public private-witness type across the circuit boundary. -/
+theorem actionCircuit_spec_iff
+    (input : PublicInputs Fp) (privateWitness : PrivateWitness) :
+    ActionSpec input privateWitness ↔
+      actionCircuit.Spec input
+        (actionCircuit_privateWitness_eq.symm ▸ privateWitness) := by
+  exact actionCircuit_spec_iff_of_eq actionCircuit
+    Internal.actionCircuit_eq_impl input privateWitness
 
 /-- The semantic conclusion for every Action proved in one Halo 2 bundle. -/
 def BundleStatement {numProofs : ℕ}

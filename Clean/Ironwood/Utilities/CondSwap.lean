@@ -235,6 +235,45 @@ theorem swap_output_bSwapped_column (wb : WitgenIR Fp 1)
   unfold FormalRegionCircuit.output swap
   rfl
 
+/-- The two cells returned by a swap, in their configured columns. -/
+@[keygen_output_norm]
+theorem swap_output_eq (wb : WitgenIR Fp 1)
+    (wswap : Placed ProverEnvironment Fp → Bool) (cfg : Config)
+    (offset : ℕ) (input : Var Input Fp) (self : RegionIndex) :
+    (swap wb wswap).output cfg offset input self =
+      { aSwapped := AssignedCell.of self offset cfg.aSwapped
+        bSwapped := AssignedCell.of self offset cfg.bSwapped } := by
+  unfold FormalRegionCircuit.output swap
+  rfl
+
+/-- The extracted swap flag is the value of the flag cell assigned by the
+conditional-swap region. -/
+theorem swap_extract_snd_eq (wb : WitgenIR Fp 1)
+    (wswap : Placed ProverEnvironment Fp → Bool) (cfg : Config)
+    (offset : ℕ) (input : Var Input Fp) (self : RegionIndex)
+    (env : Placed Environment Fp) :
+    ((swap wb wswap).extract cfg offset input self env).2 =
+      env.env.advice cfg.swap ((env.place self + offset : ℕ) : ℤ) := by
+  rw [show ((swap wb wswap).extract cfg offset input self env).2 =
+      eval env (AssignedCell.of self offset cfg.swap : Var field Fp) from by
+    unfold FormalRegionCircuit.extract swap
+    rfl]
+  simpa only [ProvableType.Halo2.eval_field] using
+    AssignedCell.eval_of_advice env.place env.env self offset cfg.swap
+
+/-- Both cells returned by a conditional swap are assigned by its region. -/
+theorem swap_call_output_cells_assigned (wb : WitgenIR Fp 1)
+    (wswap : Placed ProverEnvironment Fp → Bool) (cfg : Config)
+    (offset : ℕ) (input : Var Input Fp) (self : RegionIndex) :
+    let output := (swap wb wswap).output cfg offset input self
+    output.aSwapped.cell ∈
+        (((swap wb wswap).call cfg offset input).operations self).assignedCells self ∧
+      output.bSwapped.cell ∈
+        (((swap wb wswap).call cfg offset input).operations self).assignedCells self := by
+  rw [swap_output_eq, FormalRegionCircuit.call_operations]
+  simp only [swap, circuit_norm, RegionOperations.assignedCells, List.flatMap_cons,
+    RegionOperation.assignedCells, List.mem_cons]
+
 /-- A configured swap exposes its input and both output columns for equality. -/
 @[keygen_norm]
 theorem swap_configured_permutationColumns_eq (wb : WitgenIR Fp 1)

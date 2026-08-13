@@ -387,6 +387,17 @@ def circuit (wb1 wd1 : WitgenIR Fp 1) :
         simp only [CommitIvk.toDonor, CommitIvk.Gate.Spec]
         exact ⟨hpa1, hpa2, hpa3, hpa4, hpa5, hpa6, hpa7, hpa8, hpa9⟩
 
+@[keygen_norm]
+theorem circuit_inputCells (wb1 wd1 : WitgenIR Fp 1)
+    {cfg : Config × LookupRangeCheck.Config 10}
+    (configured : (circuit wb1 wd1).Configured cfg)
+    (input : Var Inputs Fp) :
+    configured.inputCells input =
+      [input.ak.cell, input.a.cell, input.bWhole.cell, input.b0.cell,
+        input.b2.cell, input.z13A.cell, input.nk.cell, input.c.cell,
+        input.dWhole.cell, input.d0.cell, input.z13C.cell] := by
+  rfl
+
 @[synthesis_summary_norm]
 theorem circuit_synthesisSummary_eq (wb1 wd1 : WitgenIR Fp 1)
     (cfg : Config × LookupRangeCheck.Config 10) (input : Var Inputs Fp)

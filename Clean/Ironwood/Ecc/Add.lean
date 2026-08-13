@@ -565,6 +565,23 @@ theorem add_output_cells_assigned (config : Config) (offset : ℕ)
       List.flatMap_cons, RegionOperation.assignedCells, List.singleton_append,
       List.mem_cons, true_or]
 
+/-- Both coordinates returned by the layouter-level complete-addition call are
+assigned in its single region. -/
+theorem addFormal_call_output_cells_assigned
+    (config : Config) (input : Var Inputs Fp) (self : RegionIndex) :
+    let output := addFormal.output config input self
+    output.x.cell ∈ Operations.assignedCellsFrom
+        ((addFormal.call config input).operations self) self ∧
+      output.y.cell ∈ Operations.assignedCellsFrom
+        ((addFormal.call config input).operations self) self := by
+  rw [addFormal_output_cells, FormalCircuit.call_operations]
+  have hassigned := add_output_cells_assigned config 0 input self []
+  rw [FormalRegionCircuit.call_operations] at hassigned
+  simp only [addFormal, FormalRegionCircuit.toFormal, operations_assignRegion,
+    Operations.assignedCellsFrom, List.append_nil]
+  simpa only [add_output_cells, AssignedCell.of_cell,
+    RegionOperations.mem_assignedCellsAfter_iff, List.nil_append] using hassigned
+
 /-- The layouter-level complete addition returns its coordinates in `xQR` and `yQR`. -/
 @[keygen_norm, keygen_output_norm]
 theorem addFormal_output_x_column (config : Config) (input : Var Inputs Fp)

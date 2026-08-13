@@ -73,9 +73,10 @@ def configure (advices : Fin 10 → Column .advice)
     ((configure advices lagrangeCoeffs rangeCheck).delta counts).lookups = [] := by
   simp [configure, WitnessPoint.configure, AddIncomplete.add, Add.add,
     Mul.configure, MulIncomplete.configure, MulComplete.configure,
-    MulOverflow.configure, MulFixed.configure, MulFixed.FullWidth.configure,
-    MulFixed.Short.configure, MulFixed.BaseFieldElem.configure,
-    DecomposeRunningSum.configure]
+    MulOverflow.configure, MulFixed.configure,
+    DecomposeRunningSum.configure,
+    MulFixed.FullWidth.configure,
+    MulFixed.Short.configure, MulFixed.BaseFieldElem.configure]
 
 @[reducible] private def configureInferred
     (advices : Fin 10 → Column .advice)
@@ -95,9 +96,10 @@ private theorem configure_selectorRequirements
   simp [keygen_norm, WitnessPoint.configure,
     AddIncomplete.add, Add.add, Mul.configure,
     MulIncomplete.configure, MulComplete.configure, MulOverflow.configure,
-    MulFixed.configure, MulFixed.FullWidth.configure,
-    MulFixed.Short.configure, MulFixed.BaseFieldElem.configure,
-    DecomposeRunningSum.configure]
+    MulFixed.configure,
+    DecomposeRunningSum.configure,
+    MulFixed.FullWidth.configure,
+    MulFixed.Short.configure, MulFixed.BaseFieldElem.configure]
 
 instance (advices : Fin 10 → Column .advice)
     (lagrangeCoeffs : Fin 8 → Column .fixed)

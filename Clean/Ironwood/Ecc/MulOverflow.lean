@@ -465,6 +465,13 @@ theorem circuit_synthesisSummary_eq (K : ℕ) (hKW : K * numWords K = 130)
     (circuit K hKW).elaborated.synthesisSummary cfg input region =
       circuitSynthesisSummary K cfg := rfl
 
+@[keygen_norm]
+theorem circuit_inputCells (K : ℕ) (hKW : K * numWords K = 130)
+    {cfg : Config K} (configured : (circuit K hKW).Configured cfg)
+    (input : Var Inputs Fp) :
+    configured.inputCells input =
+      [input.alpha.cell, input.z0.cell, input.z130.cell, input.k254.cell] := rfl
+
 end MulOverflow
 
 end Zcash.Circuits.Ecc

@@ -194,6 +194,39 @@ def circuit (G : FixedBase) : FormalCircuit Fp
     have hAl := alphaCommitment_spec env_assumptions
     exact ⟨env_assumptions, by rw [hAl]; exact G.smul_valid _, assumptions⟩
 
+@[keygen_norm]
+theorem circuit_inputCells_eq (G : FixedBase) {config}
+    (configured : (circuit G).Configured config) (input : Var Input Fp) :
+    configured.inputCells input = [input.akP.x.cell, input.akP.y.cell] := by
+  rfl
+
+/-- Both coordinates returned by the spend-authority call are assigned by its
+final addition region. -/
+theorem circuit_call_output_cells_assigned
+    (G : FixedBase) (config : Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config)
+    (input : Var Input Fp) (region : RegionIndex) :
+    let output := (circuit G).output config input region
+    output.x.cell ∈
+        (((circuit G).call config input).operations region).assignedCellsFrom region ∧
+      output.y.cell ∈
+        (((circuit G).call config input).operations region).assignedCellsFrom region := by
+  have houtput : (circuit G).output config input region =
+      { x := .of (region + 2) 1 config.2.xQR,
+        y := .of (region + 2) 1 config.2.yQR } := rfl
+  rw [houtput]
+  rw [FormalCircuit.call_operations]
+  let product := (Ecc.MulFixed.FullWidth.circuit G).output
+    config.1 input.alpha region
+  have hadd := Ecc.Add.addFormal_call_output_cells_assigned config.2
+    { p := product, q := input.akP } (region + 2)
+  simp only [circuit, Circuit.operations_bind, Circuit.operations_pure,
+    FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call',
+    FormalCircuit.call_regionCount', Operations.assignedCellsFrom_append,
+    Ecc.MulFixed.FullWidth.circuit_regionCount, Ecc.Add.addFormal_output_cells,
+    List.mem_append, AssignedCell.of_cell, Nat.add_assoc,
+    product] at hadd ⊢
+  exact ⟨Or.inr (Or.inl hadd.1), Or.inr (Or.inl hadd.2)⟩
+
 @[synthesis_summary_norm]
 theorem circuit_synthesisSummary_eq (G : FixedBase)
     (config : Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config)

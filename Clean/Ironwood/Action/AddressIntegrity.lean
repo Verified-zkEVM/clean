@@ -53,6 +53,79 @@ def synthesisSummary
       (Ecc.WitnessPoint.pointNonIdSynthesisSummary cfg.2 0)).combine
         (FloorPlanner.SynthesisSummary.ofRegion {}))
 
+theorem synthesize_copyCellsAssignedFrom
+    (cfg : Ecc.Mul.Config × Ecc.WitnessPoint.Config)
+    (input : Var Input Fp) (self : RegionIndex)
+    (configuredMul : Ecc.Mul.mul.Configured cfg.1)
+    (configuredPoint : Ecc.WitnessPoint.pointNonIdFormal.Configured cfg.2) :
+    ((do
+        let derived ← Ecc.Mul.mul.call cfg.1
+          { alpha := input.ivk, base := input.gDOld }
+        let pkDOld ← Ecc.WitnessPoint.pointNonIdFormal.call cfg.2 input.pkDOld
+        assignRegion "constrain equal" (do
+          constrainEqual derived.x pkDOld.x
+          constrainEqual derived.y pkDOld.y)
+        pure pkDOld).operations self).CopyCellsAssignedFrom self
+      [input.ivk.cell, input.gDOld.x.cell, input.gDOld.y.cell] := by
+  let mulOps := (Ecc.Mul.mul.call cfg.1
+    { alpha := input.ivk, base := input.gDOld }).operations self
+  let mulOutput := Ecc.Mul.mul.output cfg.1
+    { alpha := input.ivk, base := input.gDOld } self
+  have hmul : mulOps.CopyCellsAssignedFrom self
+      [input.ivk.cell, input.gDOld.x.cell, input.gDOld.y.cell] := by
+    apply Ecc.Mul.mul.call_copyCellsAssignedFrom cfg.1 configuredMul _ self
+    intro cell hcell
+    rw [Ecc.Mul.mul_inputCells] at hcell
+    simpa only [List.mem_cons, List.not_mem_nil, or_false] using hcell
+  let pointRegion := self + Ecc.Mul.mul.regionCount
+    { alpha := input.ivk, base := input.gDOld }
+  let pointOps := (Ecc.WitnessPoint.pointNonIdFormal.call
+    cfg.2 input.pkDOld).operations pointRegion
+  let pointOutput := Ecc.WitnessPoint.pointNonIdFormal.output
+    cfg.2 input.pkDOld pointRegion
+  have hpoint : pointOps.CopyCellsAssignedFrom pointRegion
+      ([input.ivk.cell, input.gDOld.x.cell, input.gDOld.y.cell] ++
+        mulOps.assignedCellsFrom self) := by
+    apply Ecc.WitnessPoint.pointNonIdFormal.call_copyCellsAssignedFrom
+      cfg.2 configuredPoint input.pkDOld pointRegion
+    intro cell hcell
+    rw [Ecc.WitnessPoint.pointNonIdFormal_inputCells] at hcell
+    contradiction
+  have hmulOutput := Ecc.Mul.mul_call_output_cells_assigned cfg.1
+    { alpha := input.ivk, base := input.gDOld } self
+  have hpointOutput :=
+    Ecc.WitnessPoint.pointNonIdFormal_call_output_cells_assigned
+      cfg.2 input.pkDOld pointRegion
+  have hequality :
+      ((assignRegion "constrain equal" (do
+          constrainEqual mulOutput.x pointOutput.x
+          constrainEqual mulOutput.y pointOutput.y)).operations
+        (pointRegion + 1)).CopyCellsAssignedFrom (pointRegion + 1)
+          (([input.ivk.cell, input.gDOld.x.cell, input.gDOld.y.cell] ++
+              mulOps.assignedCellsFrom self) ++
+            pointOps.assignedCellsFrom pointRegion) := by
+    simp only [operations_assignRegion,
+      Operations.copyCellsAssignedFrom_region_iff,
+      Operations.copyCellsAssignedFrom_nil_iff,
+      RegionCircuit.operations_bind, operations_constrainEqual,
+      RegionOperations.copyCellsAssignedFrom_append_iff,
+      RegionOperations.copyCellsAssignedFrom_constrainEqual_iff,
+      RegionOperations.copyCellsAssignedFrom_nil_iff,
+      RegionOperations.assignedCellsAfter, List.foldl_cons, List.foldl_nil,
+      RegionOperation.assignedCells, List.nil_append, and_true]
+    exact ⟨⟨List.mem_append_left _ (List.mem_append_right _ hmulOutput.1),
+        List.mem_append_right _ hpointOutput.1⟩,
+      ⟨List.mem_append_left _ (List.mem_append_right _ hmulOutput.2),
+        List.mem_append_right _ hpointOutput.2⟩⟩
+  have hright := hpoint.append (by
+    simpa only [pointOps, FormalCircuit.call_regionCount', Nat.add_zero] using hequality)
+  have hall := hmul.append (by
+    simpa only [mulOps, pointRegion, FormalCircuit.call_regionCount'] using hright)
+  simpa only [mulOps, mulOutput, pointRegion, pointOps, pointOutput,
+    Circuit.operations_bind, Circuit.operations_pure,
+    FormalCircuit.nextRegionIndex_call', FormalCircuit.output_call',
+    FormalCircuit.call_regionCount', Nat.add_zero] using hall
+
 /-- Rust `Circuit::synthesize`'s diversified-address-integrity block (post-`commit_ivk`):
 `[ivk] g_d_old` (variable-base `Ecc.Mul`), the witnessed `pk_d_old`, and the equality
 constraint between them. `Spec` is knowledge soundness at the input `ivk` cell:
@@ -85,7 +158,34 @@ def circuit : FormalCircuit Fp
               configured.1.permutationColumns ++ configured.2.permutationColumns
           inputCells _ _ input :=
             [input.ivk.cell, input.gDOld.x.cell, input.gDOld.y.cell] }
-      registered := by keygen_registration
+      registered := by
+        intro cfg counts hconfig input self
+        simp only [Configure.output_pure, Configure.delta_pure,
+          Circuit.operations_bind, operations_assignRegion,
+          Circuit.operations_pure, Operations.KeygenRegistered.append,
+          Operations.KeygenRegistered.region_cons,
+          Operations.KeygenRegistered.nil, and_true, circuit_norm]
+        exact ⟨by
+          apply Ecc.Mul.mul.call_keygenRegistered
+            cfg.1 hconfig.1 { alpha := input.ivk, base := input.gDOld } self <;>
+              keygen_registration,
+          by
+            apply Ecc.WitnessPoint.pointNonIdFormal.call_keygenRegistered
+              cfg.2 hconfig.2 input.pkDOld (self + 4) <;>
+              keygen_registration,
+          by keygen_registration⟩
+      copyCellsAssigned := by
+        intro cfg _ hconfig input self
+        simpa only [keygen_norm] using
+          synthesize_copyCellsAssignedFrom cfg input self hconfig.1 hconfig.2
+      lookupActivationsWellFormed cfg input self := by
+        simp only [Circuit.operations_bind, operations_assignRegion,
+          Circuit.operations_pure, Operations.LookupActivationsWellFormed,
+          List.forall_append, circuit_norm]
+        exact ⟨Ecc.Mul.mul.call_lookupActivationsWellFormed
+            cfg.1 { alpha := input.ivk, base := input.gDOld } self,
+          Ecc.WitnessPoint.pointNonIdFormal.call_lookupActivationsWellFormed
+            cfg.2 input.pkDOld (self + 4)⟩
       output cfg _ i :=
         { x := .of (i + 4) 0 cfg.2.x,
           y := .of (i + 4) 0 cfg.2.y }
@@ -151,6 +251,37 @@ def circuit : FormalCircuit Fp
     -- because our framework did the right thing throughout, a trivially composing
     -- parent is trivially complete
     grind
+
+@[keygen_norm]
+theorem circuit_inputCells_eq {config}
+    (configured : circuit.Configured config) (input : Var Input Fp) :
+    configured.inputCells input =
+      [input.ivk.cell, input.gDOld.x.cell, input.gDOld.y.cell] := by
+  rfl
+
+/-- Both coordinates returned by address integrity are the cells assigned by
+the point-witness child. -/
+theorem circuit_call_output_cells_assigned
+    (config : Ecc.Mul.Config × Ecc.WitnessPoint.Config)
+    (input : Var Input Fp) (region : RegionIndex) :
+    let output := circuit.output config input region
+    output.x.cell ∈
+        ((circuit.call config input).operations region).assignedCellsFrom region ∧
+      output.y.cell ∈
+        ((circuit.call config input).operations region).assignedCellsFrom region := by
+  have houtput : circuit.output config input region =
+      { x := .of (region + 4) 0 config.2.x,
+        y := .of (region + 4) 0 config.2.y } := rfl
+  rw [houtput]
+  rw [FormalCircuit.call_operations]
+  have hpoint := Ecc.WitnessPoint.pointNonIdFormal_call_output_cells_assigned
+    config.2 input.pkDOld (region + 4)
+  simp only [circuit, Circuit.operations_bind, Circuit.operations_pure,
+    operations_assignRegion, FormalCircuit.output_call',
+    FormalCircuit.nextRegionIndex_call', FormalCircuit.call_regionCount',
+    Operations.assignedCellsFrom_append, circuit_norm, List.mem_append,
+    Nat.add_assoc, Nat.reduceAdd] at hpoint ⊢
+  exact ⟨Or.inr (Or.inl hpoint.1), Or.inr (Or.inl hpoint.2)⟩
 
 @[synthesis_summary_norm]
 theorem circuit_synthesisSummary_eq

@@ -182,6 +182,11 @@ theorem operations_constrainInstance (cell : AssignedCell F) (col : Column .inst
     (constrainInstance cell col row).operations i = [.constrainInstance cell.cell col row] := rfl
 
 @[circuit_norm]
+theorem nextRegionIndex_constrainInstance (cell : AssignedCell F)
+    (col : Column .instance) (row : ℕ) (i : RegionIndex) :
+    (constrainInstance cell col row).nextRegionIndex i = i := rfl
+
+@[circuit_norm]
 theorem operations_loadTable (tbl : TableColumn) (values : List F) (i : RegionIndex) :
     (loadTable tbl values).operations i = [.loadTable tbl values] := rfl
 

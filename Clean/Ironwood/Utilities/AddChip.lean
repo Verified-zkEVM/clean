@@ -136,6 +136,28 @@ chip (`add_chip.rs`: `assign_region(|| "c = a + b", …)`). -/
 def addFormal :=
   add.toFormal "c = a + b"
 
+/-- The layouter add's result cell is assigned by its sole region. -/
+theorem addFormal_call_output_cell_assigned (cfg : Config)
+    (input : Var Inputs Fp) (self : RegionIndex) :
+    (addFormal.output cfg input self).cell ∈ Operations.assignedCellsFrom
+      ((addFormal.call cfg input).operations self) self := by
+  rw [show addFormal.output cfg input self = .of self 0 cfg.c from rfl]
+  rw [FormalCircuit.call_operations]
+  rw [show addFormal.synthesize cfg input =
+      assignRegion "c = a + b" (add.synthesize cfg 0 input) from rfl]
+  simp only [assignRegion, Circuit.operations, Operations.assignedCellsFrom,
+    List.mem_append, List.not_mem_nil, or_false]
+  change Cell.of self 0 cfg.c ∈
+    ((synthesize cfg 0 input).operations self |>.assignedCells self)
+  simp only [synthesize, circuit_norm, RegionOperations.assignedCells,
+    List.flatMap_cons, RegionOperation.assignedCells, List.singleton_append,
+    List.mem_cons, true_or]
+
+@[keygen_norm]
+theorem addFormal_inputCells (cfg : Config)
+    (configured : addFormal.Configured cfg) (input : Var Inputs Fp) :
+    configured.inputCells input = [input.a.cell, input.b.cell] := rfl
+
 @[synthesis_summary_norm]
 theorem addFormal_synthesisSummary_eq
     (cfg : Config) (input : Var Inputs Fp) (region : RegionIndex) :

@@ -67,6 +67,43 @@ theorem witnessMessagePiece_nextRegionIndex
     (witnessMessagePiece cfg w).nextRegionIndex region = region + 1 := by
   simp only [witnessMessagePiece, circuit_norm]
 
+@[circuit_norm]
+theorem witnessMessagePiece_regionCount
+    (cfg : Sinsemilla.HashPiece.Config) (w : WitgenIR Fp 1)
+    (region : RegionIndex) :
+    ((witnessMessagePiece cfg w).operations region).regionCount = 1 := by
+  simp only [witnessMessagePiece, operations_assignRegion,
+    Operations.regionCount]
+
+/-- Assigning a message piece has no keygen requirements. -/
+@[keygen_norm, keygen_helper]
+theorem witnessMessagePiece_keygenRegistered
+    {gates : List (Gate Fp)} {lookups : List (LookupArgument Fp)}
+    {permutationColumns : List AnyColumn}
+    (cfg : Sinsemilla.HashPiece.Config) (w : WitgenIR Fp 1)
+    (region : RegionIndex) :
+    ((witnessMessagePiece cfg w).operations region).KeygenRegistered
+      gates lookups permutationColumns := by
+  unfold witnessMessagePiece
+  keygen_registration
+
+/-- Witnessing a message piece introduces no copy endpoints. -/
+theorem witnessMessagePiece_copyCellsAssignedFrom
+    (cfg : Sinsemilla.HashPiece.Config) (w : WitgenIR Fp 1)
+    (region : RegionIndex) (available : List Cell) :
+    ((witnessMessagePiece cfg w).operations region)
+      |>.CopyCellsAssignedFrom region available := by
+  simp only [witnessMessagePiece, circuit_norm, keygen_spine]
+
+/-- Witnessing a message piece does not introduce malformed lookup
+activations. -/
+theorem witnessMessagePiece_lookupActivationsWellFormed
+    (cfg : Sinsemilla.HashPiece.Config) (w : WitgenIR Fp 1)
+    (region : RegionIndex) :
+    ((witnessMessagePiece cfg w).operations region)
+      |>.LookupActivationsWellFormed := by
+  simp only [witnessMessagePiece, circuit_norm, keygen_spine]
+
 /-- Witnessing a message piece requests no deferred constants. -/
 @[synthesis_summary_norm]
 theorem witnessMessagePiece_synthesisSummary_constantSiteCount
@@ -83,6 +120,16 @@ theorem witnessMessagePiece_output_column (cfg : Sinsemilla.HashPiece.Config)
     (w : WitgenIR Fp 1) (i : RegionIndex) :
     ((witnessMessagePiece cfg w).output i).cell.column = cfg.witnessPieces := by
   simp only [witnessMessagePiece, circuit_norm]
+
+/-- The cell returned by a message-piece witness was assigned in its region. -/
+theorem witnessMessagePiece_output_cell_assigned
+    (cfg : Sinsemilla.HashPiece.Config) (w : WitgenIR Fp 1)
+    (i : RegionIndex) :
+    ((witnessMessagePiece cfg w).output i).cell ∈
+      Operations.assignedCellsFrom ((witnessMessagePiece cfg w).operations i) i := by
+  simp only [witnessMessagePiece, circuit_norm, Operations.assignedCellsFrom,
+    RegionOperations.assignedCells, List.flatMap_cons,
+    RegionOperation.assignedCells, List.singleton_append, List.mem_cons, true_or]
 
 /-! ## The layouter-level `hash_message`
 
@@ -308,10 +355,51 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
             input.pieces.toList.map (·.cell) }
       registered := by
         intro cfg counts hconfig offset input region
+        let hchain : (Sinsemilla.Chain.circuit G ns fun _ => Q.y).Configured cfg :=
+          FormalRegionCircuit.Configured.ofPure _ cfg () rfl
         keygen_registration [hashRegionSynthesize]
+        apply (Sinsemilla.Chain.circuit G ns fun _ => Q.y)
+          |>.callPacked_keygenRegistered cfg hchain offset input region
+        · simp only [hchain, FormalRegionCircuit.Configured.ofPure_gates,
+            FormalRegionCircuit.keygenRequirements,
+            Sinsemilla.Chain.circuit, ElaboratedRegionCircuit.keygenRequirements,
+            List.mem_cons] at *
+          aesop
+        · simp only [hchain, FormalRegionCircuit.Configured.ofPure_lookups,
+            FormalRegionCircuit.keygenRequirements,
+            Sinsemilla.Chain.circuit, ElaboratedRegionCircuit.keygenRequirements,
+            List.mem_cons] at *
+          aesop
+        · simp only [hchain,
+            FormalRegionCircuit.Configured.ofPure_permutationColumns,
+            FormalRegionCircuit.keygenRequirements,
+            Sinsemilla.Chain.circuit, ElaboratedRegionCircuit.keygenRequirements,
+            List.mem_cons, List.mem_append, List.mem_map] at *
+          aesop
+        · simp only [hchain, FormalRegionCircuit.Configured.ofPure_inputCells,
+            FormalRegionCircuit.keygenRequirements,
+            Sinsemilla.Chain.circuit, ElaboratedRegionCircuit.keygenRequirements,
+            List.forall_iff_forall_mem]
+          intro cell hcell
+          simp only [List.mem_append, List.mem_cons, List.mem_map]
+          right
+          rcases List.mem_map.mp hcell with ⟨assigned, hassigned, rfl⟩
+          exact ⟨assigned.cell, ⟨assigned, hassigned, rfl⟩, rfl⟩
       copyCellsAssigned := by
         intro cfg counts hconfig offset input region
-        keygen_registration [hashRegionSynthesize]
+        let hchain : (Sinsemilla.Chain.circuit G ns fun _ => Q.y).Configured cfg :=
+          FormalRegionCircuit.Configured.ofPure _ cfg () rfl
+        keygen_registration [hashRegionSynthesize, z1Cells]
+        · apply (Sinsemilla.Chain.circuit G ns fun _ => Q.y)
+            |>.callPacked_copyCellsAssignedFrom cfg hchain offset input region
+          intro cell hcell
+          simp only [hchain, FormalRegionCircuit.Configured.ofPure_inputCells,
+            FormalRegionCircuit.keygenRequirements,
+            Sinsemilla.Chain.circuit, ElaboratedRegionCircuit.keygenRequirements,
+            List.mem_map] at hcell
+          simp only [List.mem_cons]
+          exact Or.inr (Or.inr (List.mem_map.mpr hcell))
+        · exact RegionOperations.CopyCellsAssignedFrom.nil _
       output cfg offset input self :=
         { point :=
             { x := AssignedCell.of self
@@ -574,6 +662,14 @@ theorem Configured.permutationColumns_eq (G : Generators) (ns : List ℕ) (Q : P
     ElaboratedRegionCircuit.keygenRequirements, hashRegion,
     Configure.delta_pure, List.append_nil]
 
+@[keygen_norm]
+theorem hashCircuit_inputCells (G : Generators) (ns : List ℕ) (Q : Point Fp)
+    (hQ : Q.OnCurve) (hns : ns ≠ [])
+    {cfg : Sinsemilla.HashPiece.Config}
+    (configured : (hashCircuit G ns Q hQ hns).Configured cfg)
+    (input : Var (Sinsemilla.Chain.Inputs ns.length) Fp) :
+    configured.inputCells input = input.pieces.toList.map (·.cell) := rfl
+
 /-- A hash-to-point capability exported by one HashPiece configure run. -/
 def hashConfigureCertificate (G : Generators) (ns : List ℕ)
     (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ [])
@@ -669,6 +765,28 @@ def hashMessage (G : Generators) (ns : List ℕ) (cfg : Sinsemilla.HashPiece.Con
     Circuit Fp (Var (Output ns.length) Fp) :=
   (hashCircuit G ns Q hQ hns).call cfg pieces
 
+@[circuit_norm]
+theorem hashMessage_regionCount
+    (G : Generators) (ns : List ℕ) (cfg : Sinsemilla.HashPiece.Config)
+    (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ [])
+    (pieces : Var (Sinsemilla.Chain.Inputs ns.length) Fp)
+    (region : RegionIndex) :
+    ((hashMessage G ns cfg Q hQ hns pieces).operations region).regionCount = 1 := by
+  simp only [hashMessage, FormalCircuit.call_regionCount, hashCircuit,
+    FormalRegionCircuit.toFormal_regionCount]
+
+@[circuit_norm]
+theorem hashMessage_nextRegionIndex
+    (G : Generators) (ns : List ℕ) (cfg : Sinsemilla.HashPiece.Config)
+    (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ [])
+    (pieces : Var (Sinsemilla.Chain.Inputs ns.length) Fp)
+    (region : RegionIndex) :
+    (hashMessage G ns cfg Q hQ hns pieces).nextRegionIndex region = region + 1 := by
+  unfold hashMessage
+  rw [FormalCircuit.nextRegionIndex_call]
+  simp only [FormalCircuit.call_regionCount, hashCircuit,
+    FormalRegionCircuit.toFormal_regionCount]
+
 @[synthesis_summary_norm]
 theorem hashMessage_synthesisSummary
     (G : Generators) (ns : List ℕ) (config : Sinsemilla.HashPiece.Config)
@@ -719,6 +837,120 @@ theorem hashCircuit_output_point_y (G : Generators) (ns : List ℕ) (Q : Point F
     (pieces : Var (Sinsemilla.Chain.Inputs ns.length) Fp) (i : RegionIndex) :
     ((hashCircuit G ns Q hQ hns).output cfg pieces i).point.y
       = AssignedCell.of i (0 + Sinsemilla.Chain.prefixRows ns ns.length) cfg.lambda1 := rfl
+
+/-- Both point coordinates returned by hash-to-point were assigned by its region. -/
+theorem hashCircuit_call_output_point_cells_assigned
+    (G : Generators) (ns : List ℕ) (Q : Point Fp)
+    (hQ : Q.OnCurve) (hns : ns ≠ [])
+    (cfg : Sinsemilla.HashPiece.Config)
+    (input : Var (Sinsemilla.Chain.Inputs ns.length) Fp)
+    (self : RegionIndex) :
+    let output := (hashCircuit G ns Q hQ hns).output cfg input self
+    output.point.x.cell ∈ Operations.assignedCellsFrom
+        (((hashCircuit G ns Q hQ hns).call cfg input).operations self) self ∧
+      output.point.y.cell ∈ Operations.assignedCellsFrom
+        (((hashCircuit G ns Q hQ hns).call cfg input).operations self) self := by
+  dsimp only
+  rw [hashCircuit_output_point_x, hashCircuit_output_point_y,
+    FormalCircuit.call_operations]
+  simp only [hashCircuit, FormalRegionCircuit.toFormal, hashRegion,
+    operations_assignRegion, Operations.assignedCellsFrom]
+  simp only [hashRegionSynthesize, RegionCircuit.operations_bind, circuit_norm,
+    RegionOperations.assignedCells, RegionOperation.assignedCells,
+    List.flatMap_cons, List.flatMap_append, List.mem_append, List.append_nil]
+  have h := Sinsemilla.Chain.circuit_output_point_cells_assigned G ns
+    (fun _ => Q.y) hns cfg 0 input self []
+  dsimp only at h
+  rw [Sinsemilla.Chain.output_point_x,
+    Sinsemilla.Chain.output_point_y] at h
+  simp only [RegionOperations.mem_assignedCellsAfter_iff, List.nil_append,
+    AssignedCell.of_cell, Nat.zero_add] at h
+  rw [FormalRegionCircuit.call_operations]
+  exact ⟨Or.inr (Or.inr (Or.inl h.1)),
+    Or.inr (Or.inr (Or.inl h.2))⟩
+
+/-- Every running-sum cell of every piece is assigned by the corresponding
+symbolic chain slot. -/
+theorem hashCircuit_call_z_cell_assigned
+    (G : Generators) (ns : List ℕ) (Q : Point Fp)
+    (hQ : Q.OnCurve) (hns : ns ≠ [])
+    (cfg : Sinsemilla.HashPiece.Config)
+    (input : Var (Sinsemilla.Chain.Inputs ns.length) Fp)
+    (self : RegionIndex) (i : Fin ns.length)
+    (r : Fin (ns.getD i.val 0 + 1)) :
+    Cell.of self (Sinsemilla.Chain.prefixRows ns i.val + r.val) cfg.bits ∈
+      Operations.assignedCellsFrom
+        (((hashCircuit G ns Q hQ hns).call cfg input).operations self) self := by
+  rw [FormalCircuit.call_operations]
+  simp only [hashCircuit, FormalRegionCircuit.toFormal, hashRegion,
+    operations_assignRegion, Operations.assignedCellsFrom]
+  simp only [hashRegionSynthesize, RegionCircuit.operations_bind, circuit_norm,
+    RegionOperations.assignedCells, RegionOperation.assignedCells,
+    List.flatMap_cons, List.flatMap_append, List.mem_append, List.append_nil]
+  have h := Sinsemilla.Chain.circuit_z_cell_assigned G ns
+    (fun _ => Q.y) cfg 0 input self [] i r
+  simp only [RegionOperations.mem_assignedCellsAfter_iff, List.nil_append,
+    Nat.zero_add] at h
+  rw [FormalRegionCircuit.call_operations]
+  exact Or.inr (Or.inr (Or.inl h))
+
+/-- Each `z₁` output belonging to a nontrivial piece was assigned by that piece's
+symbolic chain slot. -/
+theorem hashCircuit_call_output_z1_cell_assigned
+    (G : Generators) (ns : List ℕ) (Q : Point Fp)
+    (hQ : Q.OnCurve) (hns : ns ≠ [])
+    (cfg : Sinsemilla.HashPiece.Config)
+    (input : Var (Sinsemilla.Chain.Inputs ns.length) Fp)
+    (self : RegionIndex) (i : Fin ns.length)
+    (hi : 0 < ns.getD i.val 0) :
+    ((hashCircuit G ns Q hQ hns).output cfg input self).z1s[i].cell ∈
+      Operations.assignedCellsFrom
+        (((hashCircuit G ns Q hQ hns).call cfg input).operations self) self := by
+  rw [hashCircuit_output_z1s]
+  simpa only [Fin.getElem_fin, Vector.getElem_ofFn, AssignedCell.of_cell,
+    Nat.zero_add] using hashCircuit_call_z_cell_assigned
+      G ns Q hQ hns cfg input self i ⟨1, by omega⟩
+
+/-- The `hashMessage` spelling of
+`hashCircuit_call_output_z1_cell_assigned`. -/
+theorem hashMessage_output_z1_cell_assigned
+    (G : Generators) (ns : List ℕ) (cfg : Sinsemilla.HashPiece.Config)
+    (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ [])
+    (input : Var (Sinsemilla.Chain.Inputs ns.length) Fp)
+    (self : RegionIndex) (i : Fin ns.length)
+    (hi : 0 < ns.getD i.val 0) :
+    ((hashMessage G ns cfg Q hQ hns input).output self).z1s[i].cell ∈
+      Operations.assignedCellsFrom
+        ((hashMessage G ns cfg Q hQ hns input).operations self) self := by
+  simpa only [hashMessage, FormalCircuit.output_call] using
+    hashCircuit_call_output_z1_cell_assigned
+      G ns Q hQ hns cfg input self i hi
+
+/-- Both point coordinates returned by the layouter-level hash call were assigned
+by its single region. -/
+theorem hashMessage_output_point_cells_assigned
+    (G : Generators) (ns : List ℕ) (cfg : Sinsemilla.HashPiece.Config)
+    (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ [])
+    (input : Var (Sinsemilla.Chain.Inputs ns.length) Fp)
+    (self : RegionIndex) :
+    let output := (hashMessage G ns cfg Q hQ hns input).output self
+    output.point.x.cell ∈ Operations.assignedCellsFrom
+        ((hashMessage G ns cfg Q hQ hns input).operations self) self ∧
+      output.point.y.cell ∈ Operations.assignedCellsFrom
+        ((hashMessage G ns cfg Q hQ hns input).operations self) self := by
+  simpa only [hashMessage, FormalCircuit.output_call] using
+    hashCircuit_call_output_point_cells_assigned
+      G ns Q hQ hns cfg input self
+
+/-- The `hashMessage` spelling of the hash circuit's x-coordinate output cell. -/
+theorem hashMessage_output_point_x (G : Generators) (ns : List ℕ)
+    (cfg : Sinsemilla.HashPiece.Config) (Q : Point Fp) (hQ : Q.OnCurve)
+    (hns : ns ≠ []) (input : Var (Sinsemilla.Chain.Inputs ns.length) Fp)
+    (self : RegionIndex) :
+    ((hashMessage G ns cfg Q hQ hns input).output self).point.x =
+      AssignedCell.of self (0 + Sinsemilla.Chain.prefixRows ns ns.length) cfg.xA := by
+  simpa only [hashMessage, FormalCircuit.output_call] using
+    hashCircuit_output_point_x G ns Q hQ hns cfg input self
 
 /-- The hash bundle's output record. -/
 theorem hashCircuit_output_eq (G : Generators) (ns : List ℕ) (Q : Point Fp)
