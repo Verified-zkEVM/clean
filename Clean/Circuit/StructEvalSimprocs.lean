@@ -134,6 +134,7 @@ def structEvalProjectionEvalProc : Simproc :=
 
 simproc structEvalProjectionExpr (Expression.eval _ _) := structEvalProjectionExprProc
 attribute [circuit_norm] structEvalProjectionExpr
+attribute [computable_witnesses_norm] structEvalProjectionExpr
 
 /--
 Evaluate struct *literals* component-wise:
@@ -252,6 +253,7 @@ def structEqSplitProc : Simproc := fun e => do
 
 simproc structEqSplit (_ = _) := structEqSplitProc
 attribute [circuit_norm] structEqSplit
+attribute [computable_witnesses_norm] structEqSplit
 
 /-!
 The surface `simproc … (ProvableStruct.eval _ _)` syntax cannot express these patterns:
@@ -270,6 +272,8 @@ run_cmd Command.liftTermElabM do
   registerSimproc ``ProvableStruct.structEvalProjectionEvalProc (← mkKeys ``Eval.eval)
 
 attribute [circuit_norm] ProvableStruct.structEvalProjectionProc
+  ProvableStruct.structEvalLiteralProc ProvableStruct.structEvalProjectionEvalProc
+attribute [computable_witnesses_norm] ProvableStruct.structEvalProjectionProc
   ProvableStruct.structEvalLiteralProc ProvableStruct.structEvalProjectionEvalProc
 
 end ProvableStruct

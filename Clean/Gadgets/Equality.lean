@@ -169,6 +169,7 @@ instance : HasAssertEq (M (Expression F)) F where
   assert_eq := @assertEquals F _ M _
 
 attribute [circuit_norm] HasAssertEq.assert_eq
+attribute [computable_witnesses_norm] HasAssertEq.assert_eq
 infix:50 " === " => HasAssertEq.assert_eq
 
 -- Defines a unified `<==` notation for witness assignment with equality assertion in circuits.
@@ -192,6 +193,7 @@ instance {n : ℕ} : HasAssignEq (Vector (Expression F) n) F :=
   inferInstanceAs (HasAssignEq (fields n (Expression F)) F)
 
 attribute [circuit_norm] HasAssignEq.assignEq
+attribute [computable_witnesses_norm] HasAssignEq.assignEq
 
 -- Custom syntax to allow `let var <== expr` without monadic arrow
 syntax "let " ident " <== " term : doElem

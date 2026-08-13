@@ -272,6 +272,9 @@ def reduceLocalLengthCore : Simp.DSimproc := fun e => do
   let w := (← try withDefault <| whnf e catch _ => return .continue).headBeta
   if w == e then return .continue
   let leaked := w.find? fun sub =>
+    -- raw structure projections (abstract bundles, e.g. `circuit1.elaborated.1`):
+    -- a spelling no downstream lemma or `omega` atom keys on
+    sub.isProj ||
     sub.getAppFn.isConstOf `FormalCircuitBase.localLength ||
     sub.getAppFn.isConstOf `ElaboratedCircuit.localLength ||
     sub.getAppFn.isConstOf `Operations.localLength ||
@@ -342,6 +345,9 @@ def reduceOutputMetadataCore : Simp.DSimproc := fun e => do
   -- accept only metadata-explicit results: a bundle whose `output` falls back to
   -- `(main v n).1` reduces to a worse spelling than the original — the chainer's
   -- per-instance facts key on the `output` form
+  -- likewise bail on raw structure projections (abstract bundles reduce to
+  -- `circuit.1.3.3`-style spellings nothing downstream keys on)
+  if (w.find? Expr.isProj).isSome then return .continue
   let leakedCircuit ← IO.mkRef false
   w.forEach fun sub => do
     let .const c _ := sub | return ()
@@ -410,6 +416,15 @@ structure CwSimp where
   branchCtx : Simp.Context
   /-- `circuit_norm` simprocs alone. -/
   cnProcs : SimprocsArray
+  /-- Compositional laws pass: `computable_witnesses_norm` + `main` + hints, no
+  `circuit_norm` — decomposes the obligation along the property-level laws without
+  materializing the operations list. -/
+  lawsCtx : Simp.Context
+  /-- `computable_witnesses_norm` simprocs + `reduceLocalLength` for the laws pass. -/
+  lawsProcs : SimprocsArray
+  /-- Base route: outside-in respelling of scalar evals of vector-element projections,
+  so grind's congruence connects them to the compact whole-input hypothesis. -/
+  respellCtx : Simp.Context
   /-- Theorem-free context for the standalone output-metadata dsimp step. -/
   dsimpCtx : Simp.Context
   /-- `reduceOutputMetadata` alone, for that step. -/
@@ -664,6 +679,15 @@ def CwSimp.build (extraTerms : Array (TSyntax `term)) : TacticM CwSimp :=
     branchCtx := ← Simp.mkContext {}
       (simpTheorems := #[← theoremsOf branchLemmas normHints, cn] ++ hintSets)
       congr
+    lawsCtx := ← Simp.mkContext {} (simpTheorems := #[normHints, cwn] ++ hintSets) congr
+    lawsProcs := ← SimprocsArray.add #[cwnProcs] ``reduceLocalLength (post := true)
+    respellCtx := ← Simp.mkContext {} (simpTheorems := #[← do
+      let mut t : SimpTheorems := {}
+      t ← t.addConst ``ProvableType.eval_fieldPair_fst (inv := true)
+      t ← t.addConst ``ProvableType.eval_fieldPair_snd (inv := true)
+      t ← t.addConst ``ProvableType.getElem_eval_fields
+      t ← t.addConst ``getElem_eval_vector
+      pure t]) congr
     cnProcs
     dsimpCtx := ← Simp.mkContext {} (simpTheorems := #[]) congr
     outputMetaProcs
@@ -856,6 +880,16 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
       -- grind 91, the curated simp_all 5, the default-set simp_all 15
       envUnify
       if (← getGoals).isEmpty then return
+      -- respell scalar evals of vector-element projections outside-in
+      -- (`Expression.eval env c[i].1` → `((eval env c)[i]).1`), so grind's congruence
+      -- connects them to the compact whole-input hypothesis
+      let mut remaining := []
+      for g in (← getGoals) do
+        setGoals [g]
+        try metaSimp cw.respellCtx catch _ => pure ()
+        remaining := remaining ++ (← getGoals)
+      setGoals remaining
+      if remaining.isEmpty then return
       if ← attempt metaGrind then return
       if ← attempt (do
           metaSimpAll cw.baseCtx cw.normProcs
@@ -962,7 +996,14 @@ def runStart (cw : CwSimp) : TacticM Unit := do
   let simpPass : TacticM Unit := do
     unless (← getGoals).isEmpty do
       try metaSimp cw.normCtx cw.normProcs catch _ => pure ()
-  simpPass
+  let lawsPass : TacticM Unit := do
+    unless (← getGoals).isEmpty do
+      try metaSimp cw.lawsCtx cw.lawsProcs catch _ => pure ()
+  -- the obligation is stated compositionally (input premise hoisted, per-node content
+  -- via `Circuit.ComputableWitnesses`): decompose along the composition laws first —
+  -- no operations list is materialized. The `circuit_norm` pass runs as a backstop
+  -- when remnants survive (loop combinators, recursive `main`s).
+  lawsPass
   unless (← getGoals).isEmpty do
     -- One boundary rule, mirroring the library's own: plain-`Circuit`-typed constants
     -- are the current circuit's own structure and always unfold; `FormalCircuit`-variant
@@ -971,11 +1012,43 @@ def runStart (cw : CwSimp) : TacticM Unit := do
     -- leaving a wrapper folded makes And-unification whnf-execute the whole circuit).
     let tBefore ← withMainContext do instantiateMVars (← getMainTarget)
     try unfoldPlainCircuitConsts catch _ => pure ()
-    -- re-normalize only if the unfold exposed anything
+    -- decompose what the unfold exposed
     let tAfter ← withMainContext do instantiateMVars (← getMainTarget)
-    unless tAfter == tBefore do simpPass
+    unless tAfter == tBefore do lawsPass
+  let incomplete ← do
+    if (← getGoals).isEmpty then pure false
+    else withMainContext do
+      let mainNames ← try resolveGlobalConst (mkIdent `main) catch _ => pure []
+      let t ← instantiateMVars (← getMainTarget)
+      pure ((t.find? fun e =>
+        e.getAppFn.isConstOf `Circuit.ComputableWitnesses ||
+        e.getAppFn.isConstOf `Operations.forAll ||
+        e.getAppFn.isConstOf `Circuit.bind ||
+        mainNames.any (fun m => e.getAppFn.isConstOf m)).isSome)
+  if incomplete then
+    simpPass
+    unless (← getGoals).isEmpty do
+      let tBefore ← withMainContext do instantiateMVars (← getMainTarget)
+      try unfoldPlainCircuitConsts catch _ => pure ()
+      let tAfter ← withMainContext do instantiateMVars (← getMainTarget)
+      unless tAfter == tBefore do simpPass
+  else
+    -- laws decomposed the whole obligation: one `circuit_norm` pass over the (small,
+    -- operations-free) result normalizes the leaf content the laws leave verbatim —
+    -- witness-IR evals, child metadata spellings
+    simpPass
   unless (← getGoals).isEmpty do
-    metaIntros
+    -- intro the remaining binders; the hoisted input premise gets the name `h`, which
+    -- the manual corpus' leaves reference
+    let (fvars, g) ← (← getMainGoal).intros
+    let mut g := g
+    let mut named := false
+    for fv in fvars do
+      unless named do
+        if ← g.withContext do isProp (← fv.getDecl).type then
+          g ← g.rename fv `h
+          named := true
+    replaceMainGoal [g]
   unless (← getGoals).isEmpty do
     let nGoalsBefore := (← getGoals).length
     let hypsBefore ← withMainContext do return (← getLCtx).getFVarIds.size
@@ -991,7 +1064,19 @@ def runStart (cw : CwSimp) : TacticM Unit := do
       if (← getGoals).isEmpty then pure false
       else if (← getGoals).length != nGoalsBefore then pure true
       else withMainContext do return (← getLCtx).getFVarIds.size != hypsBefore
-    if changed then simpPass
+    if changed then
+      simpPass
+      -- the hoisted input premise `h` was intro'd before destructuring; bring it to
+      -- the goal's normal form (struct literals component-split, evals decomposed) —
+      -- goal-only passes no longer reach it as a hypothesis
+      try withMainContext do
+        if let some decl := (← getLCtx).findFromUserName? `h then
+          let (result?, _) ← Meta.simpGoal (← getMainGoal) cw.normCtx cw.normProcs
+            (simplifyTarget := false) (fvarIdsToSimp := #[decl.fvarId])
+          match result? with
+          | none => replaceMainGoal []
+          | some (_, g') => replaceMainGoal [g']
+      catch _ => pure ()
   unless (← getGoals).isEmpty do
     -- child-output metadata reduction as its own step: after every normalization
     -- pass (reduced windows drift under further rewriting), directly before the split

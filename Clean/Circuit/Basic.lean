@@ -456,12 +456,14 @@ A circuit has _computable witnesses_ when witness generators only depend on the 
 plus the shared `hint` and `data` (which witnesses can be computed from as well).
 This allows us to compute a concrete environment from witnesses, by successively extending an array with new witnesses.
 -/
+@[circuit_norm]
 def Operations.ComputableWitnesses (ops : Operations F) (n : ℕ) (env env' : ProverEnvironment F) : Prop :=
   ops.forAll n {
     witness n' _ compute := env.AgreesBelow n' env' → compute.eval env = compute.eval env'
     subcircuit n' _ s := s.ComputableWitnesses n' env env'
   }
 
+@[circuit_norm]
 def Circuit.ComputableWitnesses (circuit : Circuit F α) (n : ℕ) (env env' : ProverEnvironment F) :=
   (circuit.operations n).ComputableWitnesses n env env'
 
@@ -570,7 +572,81 @@ theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} {prop : Conditi
   have h_ops : (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (n + f.localLength n) := rfl
   rw [h_ops, Operations.forAll_append]
 
+/-!
+Composition laws for `Circuit.ComputableWitnesses`, stated directly at the property
+level: the property of a compound circuit rewrites into properties of its parts, and
+leaf circuits rewrite into their final content — witness windows for witness
+operations, `True` for asserts and lookups (whose payloads are never inspected), and a
+per-node obligation for subcircuits (see `Clean.Circuit.Subcircuit`). No law mentions
+operations lists, `forAll`, or condition records.
+-/
+section computableWitnessesLaws
+variable {n : ℕ} {env env' : ProverEnvironment F}
+
+@[computable_witnesses_norm]
+theorem computableWitnesses_bind {f : Circuit F α} {g : α → Circuit F β} :
+    (f >>= g).ComputableWitnesses n env env' ↔
+      f.ComputableWitnesses n env env' ∧
+      (g (f.output n)).ComputableWitnesses (n + f.localLength n) env env' := by
+  simp only [ComputableWitnesses, Operations.ComputableWitnesses, bind_forAll]
+
+@[computable_witnesses_norm]
+theorem computableWitnesses_pure (a : α) :
+    (pure a : Circuit F α).ComputableWitnesses n env env' ↔ True := by
+  simp [Circuit.pure_def, ComputableWitnesses, Operations.ComputableWitnesses,
+    Circuit.operations, Operations.forAll]
+
+@[computable_witnesses_norm]
+theorem computableWitnesses_map {f : Circuit F α} (g : α → β) :
+    ((g <$> f).ComputableWitnesses n env env') ↔ f.ComputableWitnesses n env env' := by
+  rw [ComputableWitnesses, Operations.ComputableWitnesses, map_operations_eq]; rfl
+
+@[computable_witnesses_norm]
+theorem computableWitnesses_witnessVar (ir : WitgenIR F 1) :
+    (witnessVar ir : Circuit F _).ComputableWitnesses n env env' ↔
+      (env.AgreesBelow n env' → ir.eval env = ir.eval env') := by
+  simp [witnessVar, ComputableWitnesses, Operations.ComputableWitnesses,
+    Circuit.operations, Operations.forAll]
+
+@[computable_witnesses_norm]
+theorem computableWitnesses_witnessField (e : Witgen.FExpr F) :
+    (witnessField e : Circuit F _).ComputableWitnesses n env env' ↔
+      (env.AgreesBelow n env' →
+        (Witgen.WitgenIR.ofFExpr e).eval env = (Witgen.WitgenIR.ofFExpr e).eval env') := by
+  simp [witnessField, ComputableWitnesses, Operations.ComputableWitnesses,
+    Circuit.operations, Operations.forAll]
+
+@[computable_witnesses_norm]
+theorem computableWitnesses_witnessVector {m : ℕ} (out : Witgen.VExpr F m) :
+    (witnessVector m out : Circuit F _).ComputableWitnesses n env env' ↔
+      (env.AgreesBelow n env' →
+        (Witgen.WitgenIR.ir [] out).eval env = (Witgen.WitgenIR.ir [] out).eval env') := by
+  simp [witnessVector, ComputableWitnesses, Operations.ComputableWitnesses,
+    Circuit.operations, Operations.forAll]
+
+@[computable_witnesses_norm]
+theorem computableWitnesses_assertZero (e : Expression F) :
+    (assertZero e : Circuit F Unit).ComputableWitnesses n env env' ↔ True := by
+  simp [assertZero, ComputableWitnesses, Operations.ComputableWitnesses,
+    Circuit.operations, Operations.forAll]
+
+@[computable_witnesses_norm]
+theorem computableWitnesses_lookup {Row : TypeMap} [ProvableType Row] (table : Table F Row)
+    (entry : Row (Expression F)) :
+    (lookup table entry : Circuit F Unit).ComputableWitnesses n env env' ↔ True := by
+  simp [lookup, ComputableWitnesses, Operations.ComputableWitnesses,
+    Circuit.operations, Operations.forAll]
+
+end computableWitnessesLaws
 end Circuit
+
+@[computable_witnesses_norm]
+theorem witnessIR_computableWitnesses {M : TypeMap} [ProvableType M] {n : ℕ}
+    {env env' : ProverEnvironment F} (ir : WitgenIR F (size M)) :
+    (witnessIR M ir : Circuit F _).ComputableWitnesses n env env' ↔
+      (env.AgreesBelow n env' → ir.eval env = ir.eval env') := by
+  simp [witnessIR, Circuit.ComputableWitnesses, Operations.ComputableWitnesses,
+    Circuit.operations, Operations.forAll]
 
 -- `circuit_norm` attributes
 

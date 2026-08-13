@@ -622,7 +622,7 @@ def circuit : FormalCircuit (F p) SHA256Block SHA256Schedule where
             ⟨iv, hiv⟩) 0).2 = 227 := scheduleStep_localLength _ _ 0
       rw [hLL, foldlAcc_eq_varSchedule n input iv hiv]
       simp only [circuit_norm, scheduleStep]
-      refine ⟨fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_⟩
+      refine ⟨?_, ?_, ?_, ?_, ?_⟩
       · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
           (by simp only [circuit_norm]) fun h_agrees => ?_
         have hsched := varSchedule_eval_congr (i₀ := n) h iv (by omega)

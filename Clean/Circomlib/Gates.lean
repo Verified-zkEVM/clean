@@ -929,6 +929,7 @@ theorem main_computableWitnesses (n : ℕ) :
       have ih2 := ih ((m + 3) - (m + 3) / 2) (by omega)
       intro offset input env env'
       simp only [circuit_norm, main]
+      intro hp
       -- the recursive calls are inlined: their operations are discharged by weakening the
       -- induction hypotheses' conditions (child input equality follows from the parent's)
       have sub_eq : ∀ (hp : Vector.map (Expression.eval env.toEnvironment) input =
@@ -958,33 +959,25 @@ theorem main_computableWitnesses (n : ℕ) :
               (((input.drop ((m + 3) / 2)).cast (by omega) : Vector (Expression (F p)) (m + 3 - (m + 3) / 2))) :=
         fun hp => sub_eq hp (((input.drop ((m + 3) / 2)).cast (by omega) : Vector (Expression (F p)) (m + 3 - (m + 3) / 2)))
           fun i hi => ⟨i + (m + 3) / 2, by omega, by rw [Vector.getElem_cast, Vector.getElem_drop]; congr 1; omega⟩
-      refine ⟨⟨?_, ?_, fun hp => ?_⟩, fun hp hag => ?_⟩
+      refine ⟨⟨?_, ?_, ?_⟩, fun hag => ?_⟩
       · have h1 := (ih1 offset (((input.take ((m + 3) / 2)).cast (by omega) :
-          Vector (Expression (F p)) ((m + 3) / 2))) env env').1
-        refine Operations.forAll_mono ?_ (by intro _ _ _; trivial) (by intro _ _ _; trivial)
-          (by intro _ _ _; trivial) ?_ h1
-        · intro _ _ _ hc hp hag
-          exact hc (by simp only [circuit_norm]; exact take_eq hp) hag
-        · intro _ _ _ hc hp
-          exact hc (by simp only [circuit_norm]; exact take_eq hp)
+          Vector (Expression (F p)) ((m + 3) / 2))) env env'
+          (by simp only [circuit_norm]; exact take_eq hp)).1
+        simpa only [circuit_norm] using h1
       · have h2 := (ih2 (offset + Operations.localLength (main (((input.take ((m + 3) / 2)).cast (by omega) :
             Vector (Expression (F p)) ((m + 3) / 2))) offset).2)
           (((input.drop ((m + 3) / 2)).cast (by omega) :
-            Vector (Expression (F p)) (m + 3 - (m + 3) / 2))) env env').1
-        refine Operations.forAll_mono ?_ (by intro _ _ _; trivial) (by intro _ _ _; trivial)
-          (by intro _ _ _; trivial) ?_ h2
-        · intro _ _ _ hc hp hag
-          exact hc (by simp only [circuit_norm]; exact drop_eq hp) hag
-        · intro _ _ _ hc hp
-          exact hc (by simp only [circuit_norm]; exact drop_eq hp)
+            Vector (Expression (F p)) (m + 3 - (m + 3) / 2))) env env'
+          (by simp only [circuit_norm]; exact drop_eq hp)).1
+        simpa only [circuit_norm] using h2
       · -- the AND node consumes the two recursive outputs, which are determined below the
         -- node's offset by the induction hypotheses' output halves
         refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
           (by omega) fun h_agrees => ?_
         simp only [circuit_norm]
         refine Prod.ext ?_ ?_
-        · simpa only [circuit_norm] using (ih1 offset _ env env').2
-            (by simp only [circuit_norm]; exact take_eq hp)
+        · simpa only [circuit_norm] using (ih1 offset _ env env'
+              (by simp only [circuit_norm]; exact take_eq hp)).2
             (ProverEnvironment.agreesBelow_of_le h_agrees (by
               have e1 := localLength_eq ((m + 3) / 2)
                 (((input.take ((m + 3) / 2)).cast (by omega) :
@@ -999,8 +992,8 @@ theorem main_computableWitnesses (n : ℕ) :
                     Vector (Expression (F p)) ((m + 3) / 2))) = (m + 3) / 2 - 1 := rfl
               simp only [Circuit.localLength] at e1 e2
               omega))
-        · simpa only [circuit_norm] using (ih2 _ _ env env').2
-            (by simp only [circuit_norm]; exact drop_eq hp)
+        · simpa only [circuit_norm] using (ih2 _ _ env env'
+              (by simp only [circuit_norm]; exact drop_eq hp)).2
             (ProverEnvironment.agreesBelow_of_le h_agrees (by
               have e1 := localLength_eq ((m + 3) / 2)
                 (((input.take ((m + 3) / 2)).cast (by omega) :
