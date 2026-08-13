@@ -80,5 +80,4 @@ the constructive extractor: for any assignment satisfying the constraints, the
 def orchardActionCircuit :
     FormalCircuit Fp Unit Circuit.Config unit unit :=
   Circuit.circuit Specs.Sinsemilla.orchardGenerators orchardBases
-
 end Zcash.Circuits.Action

@@ -128,6 +128,9 @@ structure PrivateWitness where
   pkdOld : Point Fp
   gdNew : Point Fp
   pkdNew : Point Fp
+  leftEncoding : Fin 32 → ℕ
+  rightEncoding : Fin 32 → ℕ
+  merkleSide : Fin 32 → Bool
   merklePath : ℕ → Fp × Fp
   rcv : Vector Fp 85 × Fq
   alpha : Vector Fp 85 × Fq
@@ -153,6 +156,9 @@ def ofActionData (data : Circuit.ActionData) : PrivateWitness where
   pkdOld := data.pkdOld
   gdNew := data.gdNew
   pkdNew := data.pkdNew
+  leftEncoding := data.leftEncoding
+  rightEncoding := data.rightEncoding
+  merkleSide := data.merkleSide
   merklePath := data.merklePath
   rcv := data.rcv
   alpha := data.alpha
@@ -189,6 +195,9 @@ def combine (inputs : PublicInputs Fp) (privateWitness : PrivateWitness) :
   pkdOld := privateWitness.pkdOld
   gdNew := privateWitness.gdNew
   pkdNew := privateWitness.pkdNew
+  leftEncoding := privateWitness.leftEncoding
+  rightEncoding := privateWitness.rightEncoding
+  merkleSide := privateWitness.merkleSide
   merklePath := privateWitness.merklePath
   rcv := privateWitness.rcv
   alpha := privateWitness.alpha

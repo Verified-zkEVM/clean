@@ -26,7 +26,7 @@ open Specs.Sinsemilla (Generators)
 open Ecc
 open Sinsemilla
 open Specs (bitrange bitrange_lt bitrange_add cast_bitrange_val)
-open Specs.Sinsemilla (hashToPointB ValidBreak SpecOrBreak breaksOfGuarded chunksOf_mem_lt)
+open Specs.Sinsemilla (HashGuarded chunksOf_mem_lt)
 open Specs.Sinsemilla (chunksOf chunksOf_mod chunksOf_eq_of_mod_eq noteCommitMessage noteCommitChunks
   noteCommitChunks_tiling hashToPoint sum_head_shift sum_digits_lt digit_of_sum
   chunksOf_eq_map_of_sum chunksOf_eq_map_of_cast_sum

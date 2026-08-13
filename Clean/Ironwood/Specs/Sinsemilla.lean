@@ -50,6 +50,21 @@ the identity to `(0, 0)`, so `.x` is exactly `Extract⊥` on defined results. -/
 def hash (S : ℕ → Point Fp) (Q : Point Fp) (chunks : List ℕ) : Option Fp :=
   (hashToPoint S Q chunks).map (·.x)
 
+/-- The specification's literal ⊥-model contract (§5.4.1.9): whenever the Sinsemilla
+chain over `chunks` is defined, the payload predicate holds of the hash point. This
+is the shape of every exported circuit statement about a Sinsemilla hash — a concrete
+property of the partial hash function, with no break vocabulary. The security layer
+recomputes the escape data (`hashToPointB`) from the same witnessed chunks and
+consumes the escapes as breaks; see `specOrBreak_hashToPointB_iff_guarded`. -/
+def HashGuarded (S : ℕ → Point Fp) (Q : Point Fp) (chunks : List ℕ)
+    (P : Point Fp → Prop) : Prop :=
+  ∀ B, hashToPoint S Q chunks = some B → P B
+
+theorem HashGuarded.mono {S : ℕ → Point Fp} {Q : Point Fp} {chunks : List ℕ}
+    {P P' : Point Fp → Prop} (h : ∀ B, P B → P' B)
+    (hg : HashGuarded S Q chunks P) : HashGuarded S Q chunks P' :=
+  fun B hB => h B (hg B hB)
+
 /--
 The Sinsemilla generator constants: the per-chunk generators
 `S(j) = GroupHash("z.cash:SinsemillaS", j)` for `j < 2^K`, packaged with the property
