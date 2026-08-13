@@ -46,8 +46,8 @@ def concat
   -- lemma is hinted — and the offset bounds need `h_localLength_stable` applied at specific
   -- output instantiations.
   computableWitnesses := by
-    simp only [circuit_norm]
-    intros n input env env'
+    intro n input env env'
+    computable_witnesses_start
     refine ⟨⟨?_, ?_⟩, ?_⟩
     -- circuit1's witnesses are computable directly from the shared input agreement
     · intro h_input_agrees

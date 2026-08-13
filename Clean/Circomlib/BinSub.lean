@@ -292,7 +292,7 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
   -- decomposition facts and induction the tactic's close cannot do.
   computableWitnesses := by
     intro n' input env env'
-    simp only [circuit_norm, computable_witnesses_norm, main]
+    computable_witnesses_start
     -- both witnesses read `lin`, a Fin.foldl the grind rules cannot see under; its
     -- evaluations are bridged through `inputLinearSub_eval_eq_sub`
     have bridge := inputLinearSub_eval_eq_sub env.toEnvironment input _ rfl

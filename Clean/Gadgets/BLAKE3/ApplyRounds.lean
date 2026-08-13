@@ -41,7 +41,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
   -- tactic has no case-split step for data-dependent operation lists.
   computableWitnesses := by
     intro n input env env'
-    simp only [circuit_norm]
+    computable_witnesses_start
     refine ⟨⟨fun h => ?_, fun h => ?_⟩, fun h h_agrees => ?_⟩
     · exact FormalCircuit.toSubcircuit_computableWitnesses _
         (by simp only [circuit_norm] at h ⊢; exact h)
@@ -49,18 +49,15 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
         (by try omega) fun h_agrees => by
           simp only [circuit_norm]
           grind
-    · have eR : ∀ v, (Round.circuit (p:=p)).localLength v = 768 :=
-        fun _ => by simp only [circuit_norm, Round.circuit]
-      have eP : ∀ v, (Permute.circuit (p:=p)).localLength v = 0 :=
-        fun _ => by simp only [circuit_norm, Permute.circuit]
-      simp only [circuit_norm, output]
+    · simp only [circuit_norm, output]
       refine ⟨FormalCircuit.output_of_input_eq (Round.circuit (p:=p)) (n := n)
           (by simp only [circuit_norm]; exact h)
-          (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eR]; omega)),
-          FormalCircuit.output_of_input_eq (Permute.circuit (p:=p))
-          (n := n + (Round.circuit (p:=p)).localLength input)
-          (congrArg (fun s : Round.Inputs (F p) => s.message) h)
-          (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eR, eP]; omega))⟩
+          (ProverEnvironment.agreesBelow_of_le h_agrees
+            (by simp only [circuit_norm, Round.circuit]; omega)),
+          FormalCircuit.output_of_input_eq (Permute.circuit (p:=p)) (n := n + 768)
+          h.2
+          (ProverEnvironment.agreesBelow_of_le h_agrees
+            (by simp only [circuit_norm, Permute.circuit]; omega))⟩
   elaborated := by elaborate_circuit_with {
     output input offset := output input offset
   }

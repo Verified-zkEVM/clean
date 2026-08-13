@@ -427,7 +427,7 @@ def circuit : FormalCircuit (F p) Inputs (fields 32) where
   computableWitnesses := by
     intro n input env env'
     obtain ⟨a, b⟩ := input
-    simp only [circuit_norm, main, add32]
+    computable_witnesses_start [add32]
     refine ⟨⟨fun h hag => ?_, fun h hag => ?_⟩, fun h hag => ?_⟩ <;>
       have key := evalBitsNat_congr (a := a) h.1 <;>
       have keyb := evalBitsNat_congr (a := b) h.2

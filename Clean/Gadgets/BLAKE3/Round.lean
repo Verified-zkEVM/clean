@@ -102,9 +102,7 @@ def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   computableWitnesses := by
     intro n input env env'
     obtain ⟨state, message⟩ := input
-    have eG : ∀ (a b c d : Fin 16) v, (G.circuit (p:=p) a b c d).localLength v = 96 :=
-      fun _ _ _ _ _ => rfl
-    simp only [circuit_norm, main, eG]
+    computable_witnesses_start
     refine ⟨⟨fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_,
              fun h => ?_, fun h => ?_⟩, fun h h_agrees => ?_⟩
     · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
@@ -115,7 +113,7 @@ def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
           · exact G.state_elem_congr h.2 0
           · exact G.state_elem_congr h.2 1
     · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [eG]; try omega)) fun h_agrees => by
+        (by rfl) fun h_agrees => by
           have s1 := G.output_eval_congr (a := 0) (b := 4) (c := 8) (d := 12) (n := n) h.1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
           simp only [circuit_norm]
           refine ⟨?_, ?_, ?_⟩
@@ -123,7 +121,7 @@ def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
           · exact G.state_elem_congr h.2 2
           · exact G.state_elem_congr h.2 3
     · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [eG]; try omega)) fun h_agrees => by
+        (by rfl) fun h_agrees => by
           have s1 := G.output_eval_congr (a := 0) (b := 4) (c := 8) (d := 12) (n := n) h.1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
           have s2 := G.output_eval_congr (a := 1) (b := 5) (c := 9) (d := 13) (n := n + 96) s1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
           simp only [circuit_norm]
@@ -132,7 +130,7 @@ def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
           · exact G.state_elem_congr h.2 4
           · exact G.state_elem_congr h.2 5
     · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [eG]; try omega)) fun h_agrees => by
+        (by rfl) fun h_agrees => by
           have s1 := G.output_eval_congr (a := 0) (b := 4) (c := 8) (d := 12) (n := n) h.1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
           have s2 := G.output_eval_congr (a := 1) (b := 5) (c := 9) (d := 13) (n := n + 96) s1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
           have s3 := G.output_eval_congr (a := 2) (b := 6) (c := 10) (d := 14) (n := n + 192) s2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
@@ -142,7 +140,7 @@ def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
           · exact G.state_elem_congr h.2 6
           · exact G.state_elem_congr h.2 7
     · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [eG]; try omega)) fun h_agrees => by
+        (by rfl) fun h_agrees => by
           have s1 := G.output_eval_congr (a := 0) (b := 4) (c := 8) (d := 12) (n := n) h.1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
           have s2 := G.output_eval_congr (a := 1) (b := 5) (c := 9) (d := 13) (n := n + 96) s1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
           have s3 := G.output_eval_congr (a := 2) (b := 6) (c := 10) (d := 14) (n := n + 192) s2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
@@ -153,7 +151,7 @@ def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
           · exact G.state_elem_congr h.2 8
           · exact G.state_elem_congr h.2 9
     · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [eG]; try omega)) fun h_agrees => by
+        (by rfl) fun h_agrees => by
           have s1 := G.output_eval_congr (a := 0) (b := 4) (c := 8) (d := 12) (n := n) h.1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
           have s2 := G.output_eval_congr (a := 1) (b := 5) (c := 9) (d := 13) (n := n + 96) s1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
           have s3 := G.output_eval_congr (a := 2) (b := 6) (c := 10) (d := 14) (n := n + 192) s2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
@@ -165,7 +163,7 @@ def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
           · exact G.state_elem_congr h.2 10
           · exact G.state_elem_congr h.2 11
     · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [eG]; try omega)) fun h_agrees => by
+        (by rfl) fun h_agrees => by
           have s1 := G.output_eval_congr (a := 0) (b := 4) (c := 8) (d := 12) (n := n) h.1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
           have s2 := G.output_eval_congr (a := 1) (b := 5) (c := 9) (d := 13) (n := n + 96) s1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
           have s3 := G.output_eval_congr (a := 2) (b := 6) (c := 10) (d := 14) (n := n + 192) s2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
@@ -178,7 +176,7 @@ def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
           · exact G.state_elem_congr h.2 12
           · exact G.state_elem_congr h.2 13
     · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by first | omega | (simp only [eG]; try omega)) fun h_agrees => by
+        (by rfl) fun h_agrees => by
           have s1 := G.output_eval_congr (a := 0) (b := 4) (c := 8) (d := 12) (n := n) h.1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
           have s2 := G.output_eval_congr (a := 1) (b := 5) (c := 9) (d := 13) (n := n + 96) s1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
           have s3 := G.output_eval_congr (a := 2) (b := 6) (c := 10) (d := 14) (n := n + 192) s2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))

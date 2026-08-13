@@ -406,15 +406,14 @@ def circuit : FormalCircuit (F p) Inputs SHA256State := {
   computableWitnesses := by
     intro n input env env'
     obtain ⟨state, schedule⟩ := input
-    have eS : ∀ x, (SHA256Round.circuit (p:=p)).localLength x = 455 := fun _ => rfl
-    simp only [circuit_norm, main, eS]
+    computable_witnesses_start
     constructor
     · intro i
       obtain ⟨iv, hiv⟩ := i
       intro h
       rw [foldlAcc_eq_stateVar]
       refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by try simp only [eS]; try omega) fun h_agrees => ?_
+        (by try rfl; try omega) fun h_agrees => ?_
       have hIn := fun (jj : ℕ) (hjj : jj < 8) => map_eval_getElem_congr h.1 jj hjj
       have hsv := stateVar_eval_congr_composite (i₀ := n) (k := iv) hIn (by omega)
         (fun j hj => h_agrees.1 j (by omega))

@@ -24,6 +24,10 @@ Per step, `scheduleStep` creates:
 -/
 
 /-- One step of the message schedule: compute w[j] for j = i.val + 16. -/
+-- kept folded through `computable_witnesses_start`'s wrapper unfold: the manual
+-- computableWitnesses proof bridges the foldl accumulator through
+-- `foldlAcc_eq_varSchedule`, which keys on the folded spelling
+@[explicit_circuit_no_unfold]
 def scheduleStep (w : SHA256Schedule (Expression (F p))) (i : Fin 48) :
     Circuit (F p) (SHA256Schedule (Expression (F p))) := do
   let j := i.val + 16
@@ -612,7 +616,7 @@ def circuit : FormalCircuit (F p) SHA256Block SHA256Schedule where
   -- state[i]/Vector.map spellings; the tactic's close lacks these lifting lemmas.
   computableWitnesses := by
     intro n input env env'
-    simp only [circuit_norm, main, messageSchedule]
+    computable_witnesses_start [messageSchedule]
     -- `Vector.get` spellings in `scheduleStep` bridge to `getElem` by rfl
     have hget : ∀ (v : Vector (fields 32 (Expression (F p))) 64) (i : Fin 64),
         v.get i = v[i.val] := fun _ _ => rfl

@@ -334,10 +334,7 @@ def circuit : FormalCircuit (F p) Inputs (ProvableVector U32 8) := {
   -- offsets to `n + 5393`-style numerals while the lemma (matching the metadata) spells
   -- them as `n + 9 + 4 + 4 + 5376` chains, and simp keys don't bridge that arithmetic.
   computableWitnesses := by
-    intro n input env env'
-    obtain ⟨⟨chaining_value, chunk_counter, blocks_compressed⟩,
-      buffer_len, buffer_data, base_flags⟩ := input
-    simp only [circuit_norm, main]
+    computable_witnesses_start
     refine ⟨⟨fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_⟩, fun h h_agrees => ?_⟩
     · computable_witnesses_close [bytesToWords] closing [eval_vector_set,
         U32.ByteVector.eval_fromLimbs, U32.ByteVector.fromLimbs_inj]
