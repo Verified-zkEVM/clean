@@ -254,21 +254,13 @@ def circuit : FormalCircuit (F p) Inputs SHA256State where
   computableWitnesses := by
     computable_witnesses_start [sha256Round]
     · computable_witnesses_close
-    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by rfl) fun h_agrees => by
-        have hel := fun (jj : ℕ) (hjj : jj < 8) => map_eval_getElem_congr h.1 jj hjj
-        simp only [circuit_norm]
-        and_intros <;> grind
+    · computable_witnesses_close [map_eval_getElem_congr h.1]
     · computable_witnesses_close
     · computable_witnesses_close
     · computable_witnesses_close
     · computable_witnesses_close
     · computable_witnesses_close
-    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by rfl) fun h_agrees => by
-        have hel := fun (jj : ℕ) (hjj : jj < 8) => map_eval_getElem_congr h.1 jj hjj
-        simp only [circuit_norm]
-        and_intros <;> grind
+    · computable_witnesses_close [map_eval_getElem_congr h.1]
     · computable_witnesses_close
     · computable_witnesses_close
     · computable_witnesses_close

@@ -620,8 +620,8 @@ def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   -- Manual: compound of Round's leaves at eight-round scale; see Round's comment.
   computableWitnesses := by
     computable_witnesses_start [initializeStateVector]
-    · exact FormalCircuit.toSubcircuit_computableWitnesses _
-        (by simp only [circuit_norm]; exact ⟨initState_eval_congr h.1 h.2.2.1 h.2.2.2.1 h.2.2.2.2.1 h.2.2.2.2.2, h.2.1⟩)
+    · computable_witnesses_close
+        [initState_eval_congr h.1 h.2.2.1 h.2.2.2.1 h.2.2.2.2.1 h.2.2.2.2.2]
     · exact FormalCircuit.output_of_input_eq _
         (by simp only [circuit_norm];
             exact ⟨initState_eval_congr h.1 h.2.2.1 h.2.2.2.1 h.2.2.2.2.1 h.2.2.2.2.2, h.2.1⟩)
