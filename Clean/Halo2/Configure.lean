@@ -52,6 +52,9 @@ variable {F : Type}
 Verbatim-port counterparts of Rust `meta.query_*` inside `create_gate` closures.
 -/
 
+-- TODO HALO2 these should probably return `Query`, and there should be the necessary TC machinery
+-- for just using `Query` as part of an Expression.
+
 @[circuit_norm, query_correct]
 def querySelector (s : Selector) : Expression F Query := var (.selector s)
 /-- Rust `query_fixed` takes no rotation in this halo2 version (always the current row);
@@ -200,6 +203,7 @@ structure Gate (F : Type) where
   determine. Entries are the same pure atoms the constraints use. Selector atoms do NOT
   belong here (selectors get no query index). Deliberately no default value: every gate
   author must transcribe the order from the Rust chip's `create_gate` closure. -/
+  -- TODO HALO2 why is this a list of `Expression F Query` and not just `Query`??
   queriedCells : List (Expression F Query)
   constraints : List (Constraint F)
   /-- Selector compression preserves vanishing in the direction required for
@@ -514,6 +518,7 @@ structure ConstraintSystem (F : Type) where
   `#guard` this. A poison list rather than `panic!` because `panic!` reduces silently to
   `default` under kernel evaluation (`#guard`/`decide`), which would hide the error in
   exactly the places that check the query layouts. -/
+  -- TODO HALO2 delete this, should be covered by gate wellformedness
   invalidQueriedCells : List String := []
 
 /-!
@@ -735,6 +740,7 @@ theorem Expression.QueryAllocated.mono
   | const | add | mul =>
       simp_all [Expression.QueryAllocated]
 
+-- TODO HALO2 it's silly to use a separate type from ConfigureCounts here
 /--
 The additive allocation contribution of a configure program.
 
@@ -803,6 +809,7 @@ def ConfigureCounts.ofConstraintSystem (cs : ConstraintSystem F) :
     ConfigureCounts.ofConstraintSystem ({} : ConstraintSystem F) = {} :=
   rfl
 
+-- TODO HALO2 is there any reason to not have the counts be part of this delta?
 /--
 The append-only contribution of a configure program.
 
@@ -1134,6 +1141,8 @@ theorem numSelectors_le_finalCounts
     counts.numSelectors ≤ (program.finalCounts counts).numSelectors :=
   (program.counts_componentwiseLE_finalCounts counts).numSelectors
 
+-- TODO HALO2 this has the wrong input type: it only depends on counts, the rest of
+-- `initial` is thrown away.
 def run (program : Configure F α) (initial : ConstraintSystem F) :
     α × ConstraintSystem F :=
   let counts := ConfigureCounts.ofConstraintSystem initial
@@ -1146,6 +1155,9 @@ theorem run_fst (program : Configure F α) (initial : ConstraintSystem F) :
     (program.run initial).1 =
       program.output (ConfigureCounts.ofConstraintSystem initial) :=
   rfl
+
+-- TODO HALO2 are we missing a `Configure.constraintSystem` method as the canonical spelling
+-- for `(program.run initial).2`? I see a lot of `.2` in this file
 
 @[simp] theorem run_numAdviceColumns
     (program : Configure F α) (initial : ConstraintSystem F) :
@@ -1506,7 +1518,7 @@ def enableConstant (col : Column .fixed) : Configure F Unit :=
     ((), {
       fixedQueries := [(col, 0)]
       constants := [col]
-      permutationRequests := [col.toAny]
+      permutationRequests := [col]
     }, {})⟩
 
 /-- Rust: `meta.lookup_table_column()`. -/
