@@ -629,7 +629,6 @@ theorem mswRegionSynthesisSummary_constantSiteCount (cfg : Config) :
   simp only [mswRegionSynthesisSummary, synthesis_summary_norm,
     Add.synthesisSummary]
 
-
 set_option linter.all false in
 /-- The inner region's soundness, standalone (own declaration budget). -/
 private theorem short_inner_soundness (B : FixedBase) (cfg : Config) (offset : ℕ) :

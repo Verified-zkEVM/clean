@@ -239,7 +239,6 @@ theorem sortRegionColumns_eq_physical_append_selectors
           · exact selector_not_lt_physical kind selector column
           · simp at hsource
 
-
 /-! ## Measurement pass (`v1.rs` `MeasurementPass` / `layouter.rs` `RegionShape`) -/
 
 /-- The shape of a region: its region index, the SET of columns it touches, and its row
@@ -11631,7 +11630,6 @@ theorem firstFit_eq_of_sufficient_fuel
               simp only [firstFit]
               exact compareSpaces spaces initialized
 
-
 /-- A successful recursive placement remains inside its initial search window. -/
 def Within (start : ℕ) (slack : Option ℕ)
     (length row : ℕ) : Prop :=
@@ -12785,7 +12783,6 @@ theorem firstFit_drop_dominated_suffix
           simp only [List.cons_append, firstFit]
           rw [← hspaces]
           simpa only [leftInitialized, rightInitialized, spaces] using hresult
-
 
 private def FirstFitCongruent
     (fuel : ℕ) (allocations : CircuitAllocations)
@@ -14276,7 +14273,6 @@ theorem PlacementEffect.selectorAllocationsDominatedBy
         · rw [if_neg hanchor]
           exact hbefore selector interval hinterval
 
-
 end V1
 
 /-- Remove the virtual selector portion of one reduced footprint. -/
@@ -14352,7 +14348,6 @@ theorem SynthesisSummary.foldr_combine_physicalRegionShapes
   | cons summary rest inductionHypothesis =>
       rw [List.foldr_cons, SynthesisSummary.combine_physicalRegionShapes,
         List.flatMap_cons, inductionHypothesis]
-
 
 namespace V1
 
@@ -14998,7 +14993,6 @@ theorem slotShapeSummariesFrom_eq_withoutSelectors
       simp only [slotShapeSummariesFrom, List.map_cons]
       rw [hhead.1, htail.1]
       exact ⟨rfl, htail.2.1, htail.2.2⟩
-
 
 end V1
 

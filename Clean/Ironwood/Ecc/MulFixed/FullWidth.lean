@@ -638,7 +638,6 @@ theorem innerRegion_synthesisSummary_constantSiteCount
     RegionCircuit.operations_pure, FloorPlanner.regionSynthesisSummary_append,
     synthesis_summary_norm]
 
-
 /-- Reduce the witness tables' `getElem!` at the hint digit (`hintWindowVal < 8`). -/
 private theorem ofFn8_get_hint (f : Fin 8 → Fp) (env : Placed ProverEnvironment Fp)
     (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85) (w : ℕ) :

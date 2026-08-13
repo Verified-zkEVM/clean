@@ -234,7 +234,6 @@ theorem pointNonIdFormal_synthesisSummary_eq (config : Config)
       FloorPlanner.SynthesisSummary.ofRegion
         (pointNonIdSynthesisSummary config 0) := rfl
 
-
 /-- The non-identity witness circuit's two positional output cells. -/
 @[keygen_output_norm]
 theorem pointNonIdFormal_output_cells (config : Config)
