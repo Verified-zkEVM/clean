@@ -168,7 +168,7 @@ def circuit (a b c d : Fin 16) : FormalCircuit (F p) Inputs BLAKE3State where
   soundness := soundness a b c d
   completeness := completeness a b c d
   computableWitnesses := by
-    computable_witnesses closing [eval_vector_set, U32.ByteVector.eval_fromLimbs,
+    computable_witnesses [eval_vector_set, U32.ByteVector.eval_fromLimbs,
       U32.ByteVector.fromLimbs_inj]
 
 end Gadgets.BLAKE3.G

@@ -328,20 +328,20 @@ lemma output_take8_eq {env env' : ProverEnvironment (F p)} {n : ℕ}
 
 def circuit : FormalCircuit (F p) Inputs (ProvableVector U32 8) := {
   main, elaborated, Assumptions, Spec, soundness, completeness
-  -- Manual: with `computable_witnesses [bytesToWords] closing [eval_vector_set, …]`
+  -- Manual: with `computable_witnesses [bytesToWords, eval_vector_set, …]`
   -- every leg closes except the output: its `take 8` of a varFromOffset literal needs
   -- `output_take8_eq`, which cannot fire as a hint — the tactic normalizes the window
   -- offsets to `n + 5393`-style numerals while the lemma (matching the metadata) spells
   -- them as `n + 9 + 4 + 4 + 5376` chains, and simp keys don't bridge that arithmetic.
   computableWitnesses := by
     computable_witnesses_start
-    · computable_witnesses_close [bytesToWords] closing [eval_vector_set,
+    · computable_witnesses_close [bytesToWords, eval_vector_set,
         U32.ByteVector.eval_fromLimbs, U32.ByteVector.fromLimbs_inj]
-    · computable_witnesses_close [bytesToWords] closing [eval_vector_set,
+    · computable_witnesses_close [bytesToWords, eval_vector_set,
         U32.ByteVector.eval_fromLimbs, U32.ByteVector.fromLimbs_inj]
-    · computable_witnesses_close [bytesToWords] closing [eval_vector_set,
+    · computable_witnesses_close [bytesToWords, eval_vector_set,
         U32.ByteVector.eval_fromLimbs, U32.ByteVector.fromLimbs_inj]
-    · computable_witnesses_close [bytesToWords] closing [eval_vector_set,
+    · computable_witnesses_close [bytesToWords, eval_vector_set,
         U32.ByteVector.eval_fromLimbs, U32.ByteVector.fromLimbs_inj]
     -- the output leg needs `output_take8_eq`: its offset spelling
     -- (`n + 9 + 4 + 4 + 5376` chains) is not reachable by the closer's normalization

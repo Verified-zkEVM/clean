@@ -95,7 +95,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   main, elaborated, Assumptions, Spec, soundness, completeness
-  -- Manual: `computable_witnesses_close closing [eval_vector_set, …]` handles legs whose
+  -- Manual: `computable_witnesses_close [eval_vector_set, …]` handles legs whose
   -- input carries at most two expanded G-output chains, but from the fourth leg on the
   -- elementwise decomposition of the nested set-chains exceeds the heartbeat budget, so
   -- the whole circuit keeps the linear named-window chain.

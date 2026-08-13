@@ -561,7 +561,7 @@ def vecStructuralLemmas : Array Name := #[
   ``Vector.getElem_mapIdx, ``Vector.getElem_set, ``Vector.getElem_mapRange]
 
 /-- Vector route, goal-only close-hint step: the pointwise residue the structural pass
-leaves for the `closing` hints to decompose (each member 5 fires at 815dc9b1, matching
+leaves for user hints to decompose (each member 5 fires at 815dc9b1, matching
 the hint fires; three further members measured 0 and were dropped). -/
 def closeHintLemmas : Array Name := #[
   ``Vector.ext_iff, ``Vector.getElem_ofFn, ``Vector.map_ofFn]
@@ -589,7 +589,7 @@ structure CwSimp where
   vecCtx : Simp.Context
   /-- `circuit_norm` procs + `retypeVectorAliasEq` (vector-route steps). -/
   vecProcs : SimprocsArray
-  /-- Vector route, goal-only close-hint step (norm + `closing` hints participate). -/
+  /-- Vector route, goal-only close-hint step (user hints participate). -/
   closeHintCtx : Simp.Context
   /-- Vector route, per-branch simp after `split_ifs`. -/
   branchCtx : Simp.Context
@@ -626,10 +626,10 @@ def addHint (thms : SimpTheorems) (sets : Array SimpTheorems) (t : TSyntax `term
 
 /-- Build all simp machinery for one invocation. The in-scope `main` is self-supplied
 as an unfold (all resolutions — a constant absent from the goal contributes no
-rewrites). `closing` hints participate only in the close routes' goal-only steps, never
-in `simp_all`/`at *`/whole-circuit normalization, so recursive eval decompositions
-(e.g. `eval_vector_set`) stay affordable. -/
-def CwSimp.build (extraTerms closeTerms : Array (TSyntax `term)) : TacticM CwSimp :=
+rewrites). User hints participate in the goal-only passes and the offset-premise
+discharge, never in the `simp_all` steps (`vecCtx`/`baseCtx`/`fullCtx` carry no hints),
+so recursive eval decompositions (e.g. `eval_vector_set`) stay affordable. -/
+def CwSimp.build (extraTerms : Array (TSyntax `term)) : TacticM CwSimp :=
   -- hints may reference the local context (hypotheses, applied terms over local
   -- variables), so elaboration needs the main goal's context
   withMainContext do
@@ -643,10 +643,6 @@ def CwSimp.build (extraTerms closeTerms : Array (TSyntax `term)) : TacticM CwSim
   let mut hintSets : Array SimpTheorems := #[]
   for t in extraTerms do
     (normHints, hintSets) ← addHint normHints hintSets t
-  let mut closeHints := normHints
-  let mut closeSets := hintSets
-  for t in closeTerms do
-    (closeHints, closeSets) ← addHint closeHints closeSets t
   let congr ← getSimpCongrTheorems
   let mut normProcs := cnProcs.push cwnProcs
   for p in [``reduceLocalLength, ``retypeVectorAliasEq] do
@@ -664,10 +660,10 @@ def CwSimp.build (extraTerms closeTerms : Array (TSyntax `term)) : TacticM CwSim
       (simpTheorems := #[← theoremsOf vecStructuralLemmas (← simpOnlyBase), cn]) congr
     vecProcs
     closeHintCtx := ← Simp.mkContext {}
-      (simpTheorems := #[← theoremsOf closeHintLemmas closeHints, cn] ++ closeSets)
+      (simpTheorems := #[← theoremsOf closeHintLemmas normHints, cn] ++ hintSets)
       congr
     branchCtx := ← Simp.mkContext {}
-      (simpTheorems := #[← theoremsOf branchLemmas closeHints, cn] ++ closeSets)
+      (simpTheorems := #[← theoremsOf branchLemmas normHints, cn] ++ hintSets)
       congr
     cnProcs
     dsimpCtx := ← Simp.mkContext {} (simpTheorems := #[]) congr
@@ -1016,8 +1012,8 @@ def runStart (cw : CwSimp) : TacticM Unit := do
       exposed := exposed ++ [← g.exposeNames]
     setGoals exposed
 
-def runComputableWitnesses (extraTerms closeTerms : Array (TSyntax `term)) : TacticM Unit := do
-  let cw ← CwSimp.build extraTerms closeTerms
+def runComputableWitnesses (extraTerms : Array (TSyntax `term)) : TacticM Unit := do
+  let cw ← CwSimp.build extraTerms
   runStart cw
   -- per-leaf: head dispatch, then the shape-selected close route
   let goals ← getGoals
@@ -1036,20 +1032,16 @@ shape.
 
 Extra simp lemmas may be supplied as `computable_witnesses [lemma₁, lemma₂]` — e.g. a
 child bundle name to reduce its `output`/`localLength` metadata when witness expressions
-embed the child's output under a binder, where `grind`'s E-matching cannot reach it.
-
-A second hint list `computable_witnesses [..] closing [lemma₁, lemma₂]` participates only
-in the close routes' goal-only simp steps, after the goal is split to leaves. Use it for
-rewrites that decompose evaluation recursively (`eval_vector_set`, `eval_fromLimbs`-style
-lemmas): in the normalization positions those would rewrite every chain-fact hypothesis
-or the whole-circuit goal and blow the heartbeat budget.
+embed the child's output under a binder, where `grind`'s E-matching cannot reach it, or
+rewrites that decompose evaluation (`eval_vector_set`, `eval_fromLimbs`-style lemmas).
+Hints act in the goal-only simp steps and the offset-premise discharge; the `simp_all`
+steps never see them, so recursive decompositions stay affordable.
 -/
-syntax "computable_witnesses" ("[" term,* "]")? ("closing " "[" term,* "]")? : tactic
+syntax "computable_witnesses" ("[" term,* "]")? : tactic
 
 elab_rules : tactic
-  | `(tactic| computable_witnesses $[[$terms:term,*]]? $[closing [$closeTerms:term,*]]?) =>
+  | `(tactic| computable_witnesses $[[$terms:term,*]]?) =>
       runComputableWitnesses (terms.map (fun terms => terms.getElems) |>.getD #[])
-        (closeTerms.map (fun terms => terms.getElems) |>.getD #[])
 
 /-- Run the pipeline up to the leaves on the current goal: the main `circuit_norm` +
 `computable_witnesses_norm` simp (with the in-scope `main` self-supplied and any
@@ -1058,14 +1050,12 @@ the split — leaving one goal per obligation leaf, premises intro'd as `h`/`h_a
 (or the binder's own name). For manual proofs: `computable_witnesses_start`, then per
 leaf either `computable_witnesses_close` or an explicit argument — the pair composes
 to exactly the full tactic, so the dispatch stage's preconditions hold by
-construction. Accepts the same two hint lists as `computable_witnesses`. -/
-syntax "computable_witnesses_start" ("[" term,* "]")? ("closing " "[" term,* "]")? : tactic
+construction. Accepts the same hint list as `computable_witnesses`. -/
+syntax "computable_witnesses_start" ("[" term,* "]")? : tactic
 
 elab_rules : tactic
-  | `(tactic| computable_witnesses_start $[[$terms:term,*]]? $[closing [$closeTerms:term,*]]?) => do
-      let cw ← CwSimp.build
-        (terms.map (fun terms => terms.getElems) |>.getD #[])
-        (closeTerms.map (fun terms => terms.getElems) |>.getD #[])
+  | `(tactic| computable_witnesses_start $[[$terms:term,*]]?) => do
+      let cw ← CwSimp.build (terms.map (fun terms => terms.getElems) |>.getD #[])
       runStart cw
 
 /-- Run only the per-leaf dispatch/close stage of `computable_witnesses` on the current
@@ -1073,14 +1063,12 @@ goal: subcircuit composition-rule dispatch, child-output chaining, and the
 shape-dispatched close routes. The counterpart of `computable_witnesses_start`: the
 goal must be in the normalization half's normal form (`circuit_norm`-normal, child
 outputs reduced), which starting from `computable_witnesses_start` guarantees.
-Accepts the same two hint lists as `computable_witnesses`. -/
-syntax "computable_witnesses_close" ("[" term,* "]")? ("closing " "[" term,* "]")? : tactic
+Accepts the same hint list as `computable_witnesses`. -/
+syntax "computable_witnesses_close" ("[" term,* "]")? : tactic
 
 elab_rules : tactic
-  | `(tactic| computable_witnesses_close $[[$terms:term,*]]? $[closing [$closeTerms:term,*]]?) => do
-      let cw ← CwSimp.build
-        (terms.map (fun terms => terms.getElems) |>.getD #[])
-        (closeTerms.map (fun terms => terms.getElems) |>.getD #[])
+  | `(tactic| computable_witnesses_close $[[$terms:term,*]]?) => do
+      let cw ← CwSimp.build (terms.map (fun terms => terms.getElems) |>.getD #[])
       runLeafDispatch cw
 
 end ComputableWitnesses
