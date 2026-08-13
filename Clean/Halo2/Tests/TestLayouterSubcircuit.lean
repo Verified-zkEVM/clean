@@ -53,22 +53,59 @@ second child's (`output.Valid`). -/
 def parent :
     FormalCircuit Fp (Column .advice × Column .advice) WitnessPoint.Config
       (Unconstrained Point) Point where
-  configure := fun cols => WitnessPoint.configure cols.1 cols.2
+  configure := witnessPointL.configure
   synthesize config input := do
     let _ ← witnessPointL.call config input
     witnessPointR.call config input
   elaborated := {
+    keygenRequirements := witnessPointL.keygenRequirements
     registered := by
       intro configInput counts hconfig input i
       simp only [Circuit.operations_bind,
         Operations.KeygenRegistered.append]
       constructor
-      · exact witnessPointL.call_keygenRegistered_ofCertificate
-          (witnessPointL.configureCertificate configInput counts hconfig)
-          input i
-      · exact witnessPointR.call_keygenRegistered_ofCertificate
-          (witnessPointR.configureCertificate configInput counts hconfig)
-          input _
+      · exact witnessPointL.call_keygenRegistered_exact
+          ((witnessPointL.configure configInput).output counts)
+          (FormalCircuit.Configured.ofOutput witnessPointL
+            configInput counts hconfig) input i
+      · exact witnessPointR.call_keygenRegistered_exact
+          ((witnessPointR.configure configInput).output counts)
+          (FormalCircuit.Configured.ofOutput witnessPointR
+            configInput counts hconfig) input _
+    copyCellsAssigned := by
+      intro configInput counts hconfig input i
+      simp only [Circuit.operations_bind]
+      apply Operations.CopyCellsAssignedFrom.append
+      · apply witnessPointL.call_copyCellsAssignedFrom
+          ((witnessPointL.configure configInput).output counts)
+          (FormalCircuit.Configured.ofOutput witnessPointL
+            configInput counts hconfig) input i
+        intro cell hcell
+        exact hcell
+      · rw [← FormalCircuit.nextRegionIndex_call]
+        apply witnessPointR.call_copyCellsAssignedFrom
+          ((witnessPointL.configure configInput).output counts)
+          ((FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
+            configInput counts hconfig).toFormal :
+              witnessPointR.Configured
+                ((witnessPointL.configure configInput).output counts)) input _
+        intro cell hcell
+        exact List.mem_append_left _ hcell
+    lookupActivationsWellFormed := by
+      intro config input i
+      simp only [Circuit.operations_bind,
+        Operations.LookupActivationsWellFormed, List.forall_append]
+      exact ⟨witnessPointL.call_lookupActivationsWellFormed config input i,
+        witnessPointR.call_lookupActivationsWellFormed config input _⟩
+    synthesisSummary := fun config input i =>
+      (witnessPointL.elaborated.synthesisSummary config input i).combine
+        (witnessPointR.elaborated.synthesisSummary config input (i + 1))
+    synthesisSummary_eq := by
+      intro config input i
+      simp only [Circuit.operations_bind,
+        FloorPlanner.synthesisSummary_append,
+        FormalCircuit.call_synthesisSummary]
+      congr 1
     regionCount _ := 2 }
   Spec _ output _ := output.Valid
   -- both children's witnessed cells (regions `i₀` and `i₀ + 1`), so each child's

@@ -95,7 +95,7 @@ private structure ConfigureShared where
 /-- The ten advice-column allocations at the start of Action configuration. Kept as a
 small configure program so its elaborated metadata composes without reducing the full
 Action configure chain. -/
-private def configureAdvices : Configure Fp (Fin 10 → Column .advice) := do
+def configureAdvices : Configure Fp (Fin 10 → Column .advice) := do
   let a0 ← adviceColumn; let a1 ← adviceColumn; let a2 ← adviceColumn
   let a3 ← adviceColumn; let a4 ← adviceColumn; let a5 ← adviceColumn
   let a6 ← adviceColumn; let a7 ← adviceColumn; let a8 ← adviceColumn
@@ -126,7 +126,7 @@ private instance : ElaboratedConfigure configureAdvices :=
   configureAdvicesInferred.closeSelectorRequirements
     configureAdvices_selectorRequirements
 
-private def configureAdviceEqualitiesLow (advices : Fin 10 → Column .advice) :
+def configureAdviceEqualitiesLow (advices : Fin 10 → Column .advice) :
     Configure Fp Unit := do
   enableEquality (advices 0); enableEquality (advices 1)
   enableEquality (advices 2); enableEquality (advices 3)
@@ -162,7 +162,7 @@ private instance (advices : Fin 10 → Column .advice) :
   (configureAdviceEqualitiesLowInferred advices).closeSelectorRequirements
     (configureAdviceEqualitiesLow_selectorRequirements advices)
 
-private def configureAdviceEqualitiesHigh (advices : Fin 10 → Column .advice) :
+def configureAdviceEqualitiesHigh (advices : Fin 10 → Column .advice) :
     Configure Fp Unit := do
   enableEquality (advices 5)
   enableEquality (advices 6); enableEquality (advices 7)
@@ -199,7 +199,7 @@ private instance (advices : Fin 10 → Column .advice) :
     (configureAdviceEqualitiesHigh_selectorRequirements advices)
 
 /-- Equality registration for the public input and the ten Action advice columns. -/
-private def configureEqualities
+def configureEqualities
     (primary : Column .instance) (advices : Fin 10 → Column .advice) :
     Configure Fp Unit := do
   enableEquality primary
@@ -255,7 +255,7 @@ private theorem configureEqualities_primaryPermutationColumn
   exact Configure.mem_permutationRequests_delta_enableEquality primary counts
 
 /-- The eight Lagrange columns and their constant-enabled first column. -/
-private def configureLagrange : Configure Fp (Fin 8 → Column .fixed) := do
+def configureLagrange : Configure Fp (Fin 8 → Column .fixed) := do
   let l0 ← fixedColumn; let l1 ← fixedColumn; let l2 ← fixedColumn
   let l3 ← fixedColumn; let l4 ← fixedColumn; let l5 ← fixedColumn
   let l6 ← fixedColumn; let l7 ← fixedColumn
@@ -287,7 +287,7 @@ private instance : ElaboratedConfigure configureLagrange :=
     configureLagrange_selectorRequirements
 
 /-- The shared columns and chips allocated before the range-check configuration. -/
-private def configureShared : Configure Fp ConfigureShared := do
+def configureShared : Configure Fp ConfigureShared := do
   -- circuit.rs:273-284 — the ten advice columns
   let advices ← configureAdvices
   -- circuit.rs:290-329 — `q_orchard` + the top-level checks gate
@@ -734,7 +734,7 @@ theorem configure_fixedColumn_indices (G : Generators) :
     Ecc.MulComplete.configure, Ecc.MulOverflow.configure,
     Ecc.MulFixed.configure, Ecc.MulFixed.FullWidth.configure,
     Ecc.MulFixed.Short.configure, Ecc.MulFixed.BaseFieldElem.configure,
-    DecomposeRunningSum.configure, CondSwap.configure,
+    Ecc.MulFixed.configureResult, CondSwap.configure,
     Sinsemilla.Merkle.Gate.configure,
     NoteCommit.DecomposeB.configure, NoteCommit.DecomposeD.configure,
     NoteCommit.DecomposeE.configure, NoteCommit.DecomposeG.configure,
@@ -742,6 +742,21 @@ theorem configure_fixedColumn_indices (G : Generators) :
     NoteCommit.PkdCanonicity.configure, NoteCommit.ValueCanonicity.configure,
     NoteCommit.RhoCanonicity.configure, NoteCommit.PsiCanonicity.configure,
     NoteCommit.YCanonicity.configure]
+
+/-- The closed Action configuration allocates ten advice columns. -/
+theorem configure_finalCounts_numAdviceColumns (G : Generators) :
+    ((configure G).finalCounts {}).numAdviceColumns = 10 := by
+  configure_norm
+
+/-- The closed Action configuration allocates fourteen fixed columns. -/
+theorem configure_finalCounts_numFixedColumns (G : Generators) :
+    ((configure G).finalCounts {}).numFixedColumns = 14 := by
+  configure_norm
+
+/-- The closed Action configuration allocates one instance column. -/
+theorem configure_finalCounts_numInstanceColumns (G : Generators) :
+    ((configure G).finalCounts {}).numInstanceColumns = 1 := by
+  configure_norm
 
 private instance elaboratedConfigure (G : Generators) : ElaboratedConfigure (configure G) := by
   unfold configure
@@ -764,7 +779,8 @@ private theorem configure_queryRequirements (G : Generators) (counts) :
   simp +arith [configureBase, configureChips, configureShared,
     configureAdvices, configureAdviceEqualitiesLow,
     configureAdviceEqualitiesHigh, configureEqualities, configureLagrange,
-    lookupTableColumn, AddChip.configure, LookupRangeCheck.configure, Poseidon.configure,
+    lookupTableColumn, AddChip.configure, LookupRangeCheck.configure,
+    Poseidon.configure,
     Sinsemilla.HashPiece.configure, Sinsemilla.Merkle.configure,
     CommitIvk.configure, NoteCommit.configure,
     Ecc.configure, Ecc.WitnessPoint.configure, Ecc.AddIncomplete.add,
@@ -772,7 +788,8 @@ private theorem configure_queryRequirements (G : Generators) (counts) :
     Ecc.MulComplete.configure, Ecc.MulOverflow.configure,
     Ecc.MulFixed.configure, Ecc.MulFixed.FullWidth.configure,
     Ecc.MulFixed.Short.configure, Ecc.MulFixed.BaseFieldElem.configure,
-    DecomposeRunningSum.configure, Configure.finalCounts_numAdviceColumns,
+    Ecc.MulFixed.configureResult, DecomposeRunningSum.configure,
+    Configure.finalCounts_numAdviceColumns,
     Configure.finalCounts_numFixedColumns,
     Configure.finalCounts_numInstanceColumns]
 
@@ -895,7 +912,7 @@ abbrev WitnessData (F : Type) := PrivateInputs.ProverValue F
 /-!
 ## Top-level prover hints
 
-The top-level Action circuit has no verifier-visible input. Its prover choices enter
+The top-level Action circuit has no verifier-visible input.  Its prover choices enter
 through one fixed witness program built from `ProverEnvironment.hint`: key generation
 sees this program but does not evaluate it, while witness generation evaluates the same
 program against the prover's runtime hint map.
@@ -926,7 +943,7 @@ private def merkleSiblingHint (i : ℕ) : WitgenIR Fp 1 :=
   .ofFExpr (.hintGet "orchard.action.merkle_sibling" 1 (.const i) 0)
 
 /--
-A Merkle swap hint at layer `i`. This remains the existing native escape hatch for
+A Merkle swap hint at layer `i`.  This remains the existing native escape hatch for
 now, but reads the same `ProverHint` store as structured `hintGet`; it can later become
 `UnconstrainedBool` without changing the top-level circuit interface.
 -/
@@ -937,7 +954,7 @@ private def merkleSwapHint (i : ℕ) :
       ((.hintGet "orchard.action.merkle_swap" 1 (.const i) 0) : FExpr Fp) == 1
 
 /--
-The one fixed private-witness program of the top-level Action circuit. All actual
+The one fixed private-witness program of the top-level Action circuit.  All actual
 values are chosen at proving time through `ProverHint`; callers do not parameterize
 synthesis with alternative witness programs.
 -/
@@ -971,6 +988,27 @@ def loadPrivate (col : Column .advice) (w : WitgenIR Fp 1) :
     Circuit Fp (AssignedCell Fp) :=
   assignRegion "load private" (assignAdvice col 0 w)
 
+/-- A private-witness load copies no pre-existing cells. -/
+theorem loadPrivate_copyCellsAssignedFrom
+    (col : Column .advice) (w : WitgenIR Fp 1) (region : RegionIndex)
+    (available : List Cell) :
+    ((loadPrivate col w).operations region).CopyCellsAssignedFrom
+      region available := by
+  unfold loadPrivate
+  keygen_registration
+
+/-- The cell returned by a private-witness load is assigned in its region. -/
+theorem loadPrivate_output_cell_assigned
+    (col : Column .advice) (w : WitgenIR Fp 1) (region : RegionIndex) :
+    ((loadPrivate col w).output region).cell ∈
+      ((loadPrivate col w).operations region).assignedCellsFrom region := by
+  simp only [loadPrivate, output_assignRegion, output_assignAdvice,
+    operations_assignRegion, operations_assignAdvice,
+    Operations.assignedCellsFrom,
+    RegionOperations.assignedCells, RegionOperation.assignedCells,
+    List.flatMap_cons, List.flatMap_nil, List.mem_append, List.mem_cons,
+    List.not_mem_nil, AssignedCell.of_cell, or_false]
+
 /-- The shared witness cells (stage A's outputs). -/
 structure WitnessCells where
   psiOld : AssignedCell Fp
@@ -981,6 +1019,11 @@ structure WitnessCells where
   nk : AssignedCell Fp
   vOld : AssignedCell Fp
   vNew : AssignedCell Fp
+
+def WitnessCells.copyInputCells (cells : WitnessCells) : List Cell :=
+  [cells.psiOld.cell, cells.rhoOld.cell, cells.cmOld.x.cell, cells.cmOld.y.cell,
+    cells.gdOld.x.cell, cells.gdOld.y.cell, cells.akP.x.cell, cells.akP.y.cell,
+    cells.nk.cell, cells.vOld.cell, cells.vNew.cell]
 
 /-- Stage A (8 regions after the table load): the shared witness regions
 (`circuit.rs:467-532`). -/
@@ -1008,9 +1051,13 @@ structure CheckCells where
   nfOld : AssignedCell Fp
   pkdOld : Var Point Fp
 
+def CheckCells.copyInputCells (cells : CheckCells) : List Cell :=
+  [cells.root.cell, cells.magnitude.cell, cells.sign.cell, cells.nfOld.cell,
+    cells.pkdOld.x.cell, cells.pkdOld.y.cell]
+
 /-- Stage B (295 regions): the Merkle path, value-commit / nullifier / spend-authority /
 diversified-address integrity (`circuit.rs:535-693`). -/
-def synthChecks (G : Generators) (B : Bases) (W : Witnesses Fp) (cfg : Config)
+def synthChecksProgram (G : Generators) (B : Bases) (W : Witnesses Fp) (cfg : Config)
     (wc : WitnessCells) : Circuit Fp CheckCells := do
   -- circuit.rs:535-548 — the Merkle path (leaf = cm_old.extract_p); 16 layers per
   -- Sinsemilla instance (`merkle.rs:122-126`, `chips[i / layers_per_chip]`)
@@ -1053,6 +1100,23 @@ def synthChecks (G : Generators) (B : Bases) (W : Witnesses Fp) (cfg : Config)
     { ivk := ivk, gDOld := wc.gdOld, pkDOld := W.pkDOld }
   pure { root, magnitude, sign, nfOld, pkdOld }
 
+private opaque synthChecksPacked :
+    { f : Generators → Bases → Witnesses Fp → Config → WitnessCells →
+        Circuit Fp CheckCells //
+      ∀ G B W cfg wc, f G B W cfg wc = synthChecksProgram G B W cfg wc } :=
+  ⟨synthChecksProgram, by intros; rfl⟩
+
+/-- Stage B behind a reduction barrier. Use `synthChecks_eq` when a proof intentionally
+inspects the synthesis program. -/
+def synthChecks (G : Generators) (B : Bases) (W : Witnesses Fp) (cfg : Config)
+    (wc : WitnessCells) : Circuit Fp CheckCells :=
+  synthChecksPacked.val G B W cfg wc
+
+theorem synthChecks_eq (G : Generators) (B : Bases) (W : Witnesses Fp)
+    (cfg : Config) (wc : WitnessCells) :
+    synthChecks G B W cfg wc = synthChecksProgram G B W cfg wc :=
+  synthChecksPacked.property G B W cfg wc
+
 /-- Stage C's outputs: the new-note diversified-address cells (the Rust `AddressPoints`
 half the cross-address stage reads; the old halves live in `WitnessCells`/`CheckCells`). -/
 structure NoteCells where
@@ -1083,7 +1147,7 @@ def orchardChecksRegionSynthesisSummary (cfg : Config) :
       .column .advice (cfg.advices 6).index,
       .column .advice (cfg.advices 7).index,
       .selector cfg.qOrchard.index]
-    1 0
+    1 0 (ENABLE_OUTPUT + 1)
 
 @[synthesis_summary_norm]
 theorem orchardChecksRegion_synthesisSummary_eq (cfg : Config)
@@ -1095,11 +1159,12 @@ theorem orchardChecksRegion_synthesisSummary_eq (cfg : Config)
   apply FloorPlanner.RegionSynthesisSummary.ext <;>
     simp only [synthOrchardChecks, orchardChecksRegionSynthesisSummary,
       orchardGate, circuit_norm, synthesis_summary_norm]
-  all_goals simp only [Nat.max_self]
+  unfold ANCHOR ENABLE_SPEND ENABLE_OUTPUT
+  omega
 
 /-- Stage C (91 regions): old/new note-commitment integrity and the final
 `"Orchard circuit checks"` region (`circuit.rs:696-826`). -/
-def synthNotes (G : Generators) (B : Bases) (W : Witnesses Fp) (cfg : Config)
+def synthNotesProgram (G : Generators) (B : Bases) (W : Witnesses Fp) (cfg : Config)
     (wc : WitnessCells) (cc : CheckCells) : Circuit Fp NoteCells := do
   -- circuit.rs:696-729 — old note commitment integrity
   let derivedCmOld ← (NoteCommit.Main.circuit G B.noteCommitR
@@ -1129,6 +1194,24 @@ def synthNotes (G : Generators) (B : Bases) (W : Witnesses Fp) (cfg : Config)
   -- circuit.rs:781-826 — the final `"Orchard circuit checks"` region
   assignRegion "Orchard circuit checks" (synthOrchardChecks cfg wc cc)
   pure { gdNew, pkdNew }
+
+private opaque synthNotesPacked :
+    { f : Generators → Bases → Witnesses Fp → Config → WitnessCells →
+        CheckCells → Circuit Fp NoteCells //
+      ∀ G B W cfg wc cc,
+        f G B W cfg wc cc = synthNotesProgram G B W cfg wc cc } :=
+  ⟨synthNotesProgram, by intros; rfl⟩
+
+/-- Stage C behind a reduction barrier. Use `synthNotes_eq` when a proof intentionally
+inspects the synthesis program. -/
+def synthNotes (G : Generators) (B : Bases) (W : Witnesses Fp) (cfg : Config)
+    (wc : WitnessCells) (cc : CheckCells) : Circuit Fp NoteCells :=
+  synthNotesPacked.val G B W cfg wc cc
+
+theorem synthNotes_eq (G : Generators) (B : Bases) (W : Witnesses Fp)
+    (cfg : Config) (wc : WitnessCells) (cc : CheckCells) :
+    synthNotes G B W cfg wc cc = synthNotesProgram G B W cfg wc cc :=
+  synthNotesPacked.property G B W cfg wc cc
 
 /-! ## Reduced synthesis summaries -/
 
@@ -1160,6 +1243,27 @@ def synthWitnessSynthesisSummary (cfg : Config) :
     load, load, point, nonId, nonId, load, load, load].foldr
     FloorPlanner.SynthesisSummary.combine {}
 
+theorem synthWitnessSynthesisSummary_physicalRegionShapes (cfg : Config) :
+    (synthWitnessSynthesisSummary cfg).physicalRegionShapes =
+      [Sinsemilla.loadSynthesisSummary,
+        loadPrivateSynthesisSummary (cfg.advices 0),
+        loadPrivateSynthesisSummary (cfg.advices 0),
+        FloorPlanner.SynthesisSummary.ofRegion
+          (Ecc.WitnessPoint.pointSynthesisSummary
+            cfg.eccConfig.witnessPoint 0),
+        FloorPlanner.SynthesisSummary.ofRegion
+          (Ecc.WitnessPoint.pointNonIdSynthesisSummary
+            cfg.eccConfig.witnessPoint 0),
+        FloorPlanner.SynthesisSummary.ofRegion
+          (Ecc.WitnessPoint.pointNonIdSynthesisSummary
+            cfg.eccConfig.witnessPoint 0),
+        loadPrivateSynthesisSummary (cfg.advices 0),
+        loadPrivateSynthesisSummary (cfg.advices 0),
+        loadPrivateSynthesisSummary (cfg.advices 0)].flatMap
+          FloorPlanner.SynthesisSummary.physicalRegionShapes := by
+  unfold synthWitnessSynthesisSummary
+  exact FloorPlanner.SynthesisSummary.foldr_combine_physicalRegionShapes _
+
 @[synthesis_summary_norm]
 theorem synthWitness_synthesisSummary_eq (G : Generators)
     (W : Witnesses Fp) (cfg : Config) (region : RegionIndex) :
@@ -1183,11 +1287,16 @@ def synthChecksSynthesisSummary (cfg : Config) :
     ValueCommit.synthesisSummary
       (cfg.eccConfig.mulFixedShort, cfg.eccConfig.mulFixedFull,
         cfg.eccConfig.add),
+    FloorPlanner.SynthesisSummary.ofInstanceRow CV_NET_X,
+    FloorPlanner.SynthesisSummary.ofInstanceRow CV_NET_Y,
     DeriveNullifier.synthesisSummary
       (cfg.poseidonConfig, cfg.addChipConfig,
         cfg.eccConfig.mulFixedBaseField, cfg.eccConfig.add),
+    FloorPlanner.SynthesisSummary.ofInstanceRow NF_OLD,
     SpendAuthority.synthesisSummary
       (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add),
+    FloorPlanner.SynthesisSummary.ofInstanceRow RK_X,
+    FloorPlanner.SynthesisSummary.ofInstanceRow RK_Y,
     CommitIvk.Main.synthesisSummary
       { gate := cfg.commitIvkConfig, hashConfig := cfg.sinsemilla1,
         lookupConfig := cfg.lookupConfig,
@@ -1197,6 +1306,33 @@ def synthChecksSynthesisSummary (cfg : Config) :
       (cfg.eccConfig.mul, cfg.eccConfig.witnessPoint)].foldr
         FloorPlanner.SynthesisSummary.combine {}
 
+theorem synthChecksSynthesisSummary_physicalRegionShapes (cfg : Config) :
+    (synthChecksSynthesisSummary cfg).physicalRegionShapes =
+      [Sinsemilla.Merkle.CalculateRoot.synthesisSummary 16
+          (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig),
+        Sinsemilla.Merkle.CalculateRoot.synthesisSummary 16
+          (cfg.merkle2.condSwap, cfg.merkle2, cfg.lookupConfig),
+        loadPrivateSynthesisSummary (cfg.advices 9),
+        loadPrivateSynthesisSummary (cfg.advices 9),
+        ValueCommit.synthesisSummary
+          (cfg.eccConfig.mulFixedShort, cfg.eccConfig.mulFixedFull,
+            cfg.eccConfig.add),
+        DeriveNullifier.synthesisSummary
+          (cfg.poseidonConfig, cfg.addChipConfig,
+            cfg.eccConfig.mulFixedBaseField, cfg.eccConfig.add),
+        SpendAuthority.synthesisSummary
+          (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add),
+        CommitIvk.Main.synthesisSummary
+          { gate := cfg.commitIvkConfig, hashConfig := cfg.sinsemilla1,
+            lookupConfig := cfg.lookupConfig,
+            mulConfig := cfg.eccConfig.mulFixedFull,
+            addConfig := cfg.eccConfig.add },
+        AddressIntegrity.synthesisSummary
+          (cfg.eccConfig.mul, cfg.eccConfig.witnessPoint)].flatMap
+            FloorPlanner.SynthesisSummary.physicalRegionShapes := by
+  unfold synthChecksSynthesisSummary
+  exact FloorPlanner.SynthesisSummary.foldr_combine_physicalRegionShapes _
+
 @[synthesis_summary_norm]
 theorem synthChecks_synthesisSummary_eq (G : Generators) (B : Bases)
     (W : Witnesses Fp) (cfg : Config) (cells : WitnessCells)
@@ -1204,7 +1340,7 @@ theorem synthChecks_synthesisSummary_eq (G : Generators) (B : Bases)
     FloorPlanner.synthesisSummary
         ((synthChecks G B W cfg cells).operations region) =
       synthChecksSynthesisSummary cfg := by
-  simp only [synthChecks, synthChecksSynthesisSummary, circuit_norm,
+  simp only [synthChecks_eq, synthChecksProgram, synthChecksSynthesisSummary, circuit_norm,
     synthesis_summary_norm, List.foldr_cons, List.foldr_nil,
     FloorPlanner.SynthesisSummary.combine_empty]
 
@@ -1232,8 +1368,34 @@ def synthNotesSynthesisSummary (cfg : Config) :
   let copyRegion := FloorPlanner.SynthesisSummary.ofRegion {}
   [noteOld, copyRegion, nonId, nonId,
     loadPrivateSynthesisSummary (cfg.advices 0), noteNew,
+    FloorPlanner.SynthesisSummary.ofInstanceRow CMX,
     orchardChecksSynthesisSummary cfg].foldr
       FloorPlanner.SynthesisSummary.combine {}
+
+theorem synthNotesSynthesisSummary_physicalRegionShapes (cfg : Config) :
+    (synthNotesSynthesisSummary cfg).physicalRegionShapes =
+      [NoteCommit.Main.synthesisSummary
+          { gates := cfg.noteCommitOld, hashConfig := cfg.sinsemilla1,
+            lookupConfig := cfg.lookupConfig,
+            mulConfig := cfg.eccConfig.mulFixedFull,
+            addConfig := cfg.eccConfig.add },
+        FloorPlanner.SynthesisSummary.ofRegion {},
+        FloorPlanner.SynthesisSummary.ofRegion
+          (Ecc.WitnessPoint.pointNonIdSynthesisSummary
+            cfg.eccConfig.witnessPoint 0),
+        FloorPlanner.SynthesisSummary.ofRegion
+          (Ecc.WitnessPoint.pointNonIdSynthesisSummary
+            cfg.eccConfig.witnessPoint 0),
+        loadPrivateSynthesisSummary (cfg.advices 0),
+        NoteCommit.Main.synthesisSummary
+          { gates := cfg.noteCommitNew, hashConfig := cfg.sinsemilla2,
+            lookupConfig := cfg.lookupConfig,
+            mulConfig := cfg.eccConfig.mulFixedFull,
+            addConfig := cfg.eccConfig.add },
+        orchardChecksSynthesisSummary cfg].flatMap
+          FloorPlanner.SynthesisSummary.physicalRegionShapes := by
+  unfold synthNotesSynthesisSummary
+  exact FloorPlanner.SynthesisSummary.foldr_combine_physicalRegionShapes _
 
 @[synthesis_summary_norm]
 theorem synthNotes_synthesisSummary_eq (G : Generators) (B : Bases)
@@ -1242,7 +1404,7 @@ theorem synthNotes_synthesisSummary_eq (G : Generators) (B : Bases)
     FloorPlanner.synthesisSummary
         ((synthNotes G B W cfg witnessCells checkCells).operations region) =
       synthNotesSynthesisSummary cfg := by
-  simp only [synthNotes, synthNotesSynthesisSummary,
+  simp only [synthNotes_eq, synthNotesProgram, synthNotesSynthesisSummary,
     orchardChecksSynthesisSummary, circuit_norm, synthesis_summary_norm,
     List.foldr_cons, List.foldr_nil,
     FloorPlanner.SynthesisSummary.combine_empty]
@@ -1296,11 +1458,10 @@ theorem crossAddressRow_synthesisSummary_eq (cfg : Config)
     FloorPlanner.regionSynthesisSummary
         ((synthCrossAddressRow cfg oldCell newCell row).operations region) =
       FloorPlanner.RegionSynthesisSummary.ofColumns
-        (crossAddressColumns cfg) (row + 1) 4 := by
+        (crossAddressColumns cfg) (row + 1) 4 (DISABLE_CROSS_ADDRESS + 1) := by
   apply FloorPlanner.RegionSynthesisSummary.ext <;>
     simp only [synthCrossAddressRow, crossAddressColumns, orchardGate, circuit_norm,
       synthesis_summary_norm]
-  all_goals simp only [Nat.max_self]
 
 /-- Ironwood `Circuit::synthesize_cross_address_checks` (`circuit.rs:920-1035`): the
 `"post-NU 6.3 cross-address checks"` region — one row per address coordinate. -/
@@ -1317,7 +1478,7 @@ def synthCrossAddressChecksSynthesisSummary (cfg : Config) :
     FloorPlanner.SynthesisSummary :=
   FloorPlanner.SynthesisSummary.ofRegion
     (FloorPlanner.RegionSynthesisSummary.repeatColumns
-      (crossAddressColumns cfg) 0 1 1 4 4)
+      (crossAddressColumns cfg) 0 1 1 4 4 (DISABLE_CROSS_ADDRESS + 1))
 
 @[synthesis_summary_norm]
 theorem synthCrossAddressChecks_synthesisSummary_eq
@@ -1335,12 +1496,13 @@ theorem synthCrossAddressChecks_synthesisSummary_eq
             let (oldCell, newCell) := coords[row]!
             synthCrossAddressRow cfg oldCell newCell row).operations region) =
         FloorPlanner.RegionSynthesisSummary.repeatColumns
-          (crossAddressColumns cfg) 0 1 1 4 4 := by
+          (crossAddressColumns cfg) 0 1 1 4 4
+            (DISABLE_CROSS_ADDRESS + 1) := by
     rw [RegionCircuit.forRange'_regionSynthesisSummary]
     simp only [crossAddressRow_synthesisSummary_eq]
     simpa only [Nat.zero_add, Nat.one_mul] using
       (FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns
-        (crossAddressColumns cfg) 0 1 1 4 4)
+        (crossAddressColumns cfg) 0 1 1 4 4 (DISABLE_CROSS_ADDRESS + 1))
   rw [synthCrossAddressChecks, operations_assignRegion,
     FloorPlanner.synthesisSummary_region_cons,
     FloorPlanner.synthesisSummary_nil,

@@ -391,6 +391,40 @@ theorem loop_output (G : Generators) (n : ℕ) (cfg : Config) (o : ℕ) (iv : As
       = { exit := reads cfg (o + n) self,
           zs := Vector.ofFn (fun j => AssignedCell.of self (o + 1 + j) cfg.bits) } := rfl
 
+/-- Every running-sum cell returned by the loop was assigned by its round. -/
+theorem loop_output_z_cell_assigned (G : Generators) (n : ℕ)
+    (cfg : Config) (offset : ℕ) (piece : AssignedCell Fp)
+    (self : RegionIndex) (available : List Cell) (r : Fin n) :
+    ((loop G n).output cfg offset piece self).zs[r].cell ∈
+      (((loop G n).call cfg offset piece).operations self
+        |>.assignedCellsAfter self available) := by
+  rw [loop_output, FormalRegionCircuit.call_operations]
+  simp only [loop, RegionCircuit.operations_bind,
+    RegionCircuit.operations_pure, HashPiece.operations_readState,
+    operations_cellVec, List.append_nil,
+    RegionOperations.mem_assignedCellsAfter_iff, List.mem_append]
+  right
+  rw [RegionOperations.assignedCells, RegionCircuit.forRange'_operations]
+  have hround := round_output_z_cell_assigned G r.val cfg
+    (offset + r.val) piece self []
+  rw [round_output] at hround
+  simp only [reads, AssignedCell.of_cell,
+    RegionOperations.mem_assignedCellsAfter_iff, List.nil_append] at hround
+  obtain ⟨operation, hoperation, hcell⟩ := List.mem_flatMap.mp hround
+  apply List.mem_flatMap.mpr
+  refine ⟨operation, ?_, ?_⟩
+  · apply List.mem_flatten.mpr
+    let body : RegionCircuit Fp Unit := do
+      let _ ← (round G r.val).call cfg (offset + r.val) piece
+      pure ()
+    refine ⟨body.operations self, ?_, ?_⟩
+    · simpa only [body, Nat.mul_one] using List.mem_ofFn.mpr ⟨r, rfl⟩
+    · simpa only [body, RegionCircuit.operations_bind,
+        RegionCircuit.operations_pure, List.append_nil] using hoperation
+  · have hrow : offset + r.val + 1 = offset + 1 + r.val := by omega
+    simpa only [Fin.getElem_fin, Vector.getElem_ofFn,
+      AssignedCell.of_cell, hrow] using hcell
+
 /-! ## The `hash_piece` bundle (edges)
 
 The `z_0` piece copy, the init-row slopes (word 0's — the init materializes round 0's
@@ -893,5 +927,72 @@ theorem piece_output (G : Generators) (w : ℕ) (final : Bool)
                     lambda2 := .of self (o + w) cfg.lambda2 },
           xANext := .of self (o + w + 1) cfg.xA,
           zs := Vector.ofFn (fun r => .of self (o + r.val) cfg.bits) } := rfl
+
+/-- The exit accumulator x-coordinate returned by a hash piece is assigned by its
+last edge operation. -/
+theorem circuit_output_xANext_cell_assigned (G : Generators) (w : ℕ)
+    (final : Bool) (yaIn : Placed Environment Fp → Fp) (cfg : Config)
+    (offset : ℕ) (piece : AssignedCell Fp) (self : RegionIndex)
+    (available : List Cell) :
+    ((circuit G w final yaIn).output cfg offset piece self).xANext.cell ∈
+      (((circuit G w final yaIn).call cfg offset piece).operations self
+        |>.assignedCellsAfter self available) := by
+  rw [FormalRegionCircuit.call_operations, piece_output]
+  simp only [circuit, circuitBody, circuit_norm, AssignedCell.of_cell,
+    RegionOperations.mem_assignedCellsAfter_iff, List.mem_append,
+    RegionOperations.assignedCells, List.flatMap_append, List.flatMap_cons,
+    RegionOperation.assignedCells, List.singleton_append, List.mem_cons,
+    true_or, or_true]
+
+/-- Every running-sum cell returned by a hash piece is assigned either by the
+initial copy (`z₀`) or its corresponding symbolic loop round. -/
+theorem circuit_output_z_cell_assigned (G : Generators) (w : ℕ)
+    (final : Bool) (yaIn : Placed Environment Fp → Fp)
+    (cfg : Config) (offset : ℕ) (piece : AssignedCell Fp)
+    (self : RegionIndex) (available : List Cell) (r : Fin (w + 1)) :
+    ((circuit G w final yaIn).output cfg offset piece self).zs[r].cell ∈
+      (((circuit G w final yaIn).call cfg offset piece).operations self
+        |>.assignedCellsAfter self available) := by
+  rcases r with ⟨r, hr⟩
+  by_cases hzero : r = 0
+  · subst r
+    rw [FormalRegionCircuit.call_operations, piece_output]
+    simp only [Fin.getElem_fin, Vector.getElem_ofFn, circuit, circuitBody,
+      circuit_norm, AssignedCell.of_cell,
+      RegionOperations.mem_assignedCellsAfter_iff, List.mem_append,
+      RegionOperations.assignedCells, List.flatMap_append, List.flatMap_cons,
+      RegionOperation.assignedCells, List.singleton_append, List.mem_cons,
+      Nat.add_zero, true_or]
+  · let j : Fin w := ⟨r - 1, by omega⟩
+    have hloop := loop_output_z_cell_assigned G w cfg offset piece self
+      available j
+    rw [loop_output] at hloop
+    have hrow : offset + 1 + j.val = offset + r := by
+      simp only [j]
+      omega
+    simp only [Fin.getElem_fin, Vector.getElem_ofFn, AssignedCell.of_cell,
+      RegionOperations.mem_assignedCellsAfter_iff, List.mem_append,
+      hrow] at hloop
+    rw [FormalRegionCircuit.call_operations, piece_output]
+    simp only [Fin.getElem_fin, Vector.getElem_ofFn, circuit, circuitBody,
+      circuit_norm, AssignedCell.of_cell,
+      RegionOperations.mem_assignedCellsAfter_iff, List.mem_append,
+      RegionOperations.assignedCells, List.flatMap_append, List.flatMap_cons,
+      RegionOperation.assignedCells, List.singleton_append, List.mem_cons]
+    rcases hloop with havailable | hassigned
+    · exact Or.inl havailable
+    · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl hassigned)))))
+
+/-- The first interior running sum returned by a nontrivial hash piece is assigned
+by the first loop round. -/
+theorem circuit_output_z1_cell_assigned (G : Generators) (w : ℕ)
+    (hw : 0 < w) (final : Bool) (yaIn : Placed Environment Fp → Fp)
+    (cfg : Config) (offset : ℕ) (piece : AssignedCell Fp)
+    (self : RegionIndex) (available : List Cell) :
+    ((circuit G w final yaIn).output cfg offset piece self).zs[1].cell ∈
+      (((circuit G w final yaIn).call cfg offset piece).operations self
+        |>.assignedCellsAfter self available) :=
+  circuit_output_z_cell_assigned G w final yaIn cfg offset piece self available
+    ⟨1, by omega⟩
 
 end Zcash.Circuits.Sinsemilla.HashPiece

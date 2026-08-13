@@ -139,84 +139,95 @@ def addInputRegionSynthesisSummary (cfg : Config) (offset : ℕ) :
       .column .advice (cfg.state 2).index]
     (offset + 3) 0
 
+def addInputRegionSynthesize (cfg : Config) (offset : ℕ)
+    (input : Var Sponge.AddInputInput Fp) : RegionCircuit Fp (Var State Fp) := do
+  (padAndAddGate cfg).enable (offset + 1)
+  let i0 ← copyAdvice input.initialState.x0 (cfg.state 0) offset
+  let i1 ← copyAdvice input.initialState.x1 (cfg.state 1) offset
+  let i2 ← copyAdvice input.initialState.x2 (cfg.state 2) offset
+  let w0 ← assignAdvice (cfg.state 0) (offset + 1) (readCellWit input.input.x0)
+  constrainEqual input.input.x0 w0
+  let w1 ← assignAdvice (cfg.state 1) (offset + 1) (readCellWit input.input.x1)
+  constrainEqual input.input.x1 w1
+  let o0 ← assignAdvice (cfg.state 0) (offset + 2) (addWit i0 w0)
+  let o1 ← assignAdvice (cfg.state 1) (offset + 2) (addWit i1 w1)
+  let o2 ← assignAdvice (cfg.state 2) (offset + 2) (readCellWit i2)
+  pure { x0 := o0, x1 := o1, x2 := o2 }
+
+@[implicit_reducible]
+def addInputRegionElaborated : ElaboratedRegionCircuit Fp Config Config
+    Sponge.AddInputInput State pure addInputRegionSynthesize where
+  keygenRequirements :=
+    { gates cfg _ := [padAndAddGate cfg]
+      permutationColumns cfg _ :=
+        [cfg.state 0, cfg.state 1, cfg.state 2]
+      inputCells _ _ input :=
+        [input.initialState.x0.cell, input.initialState.x1.cell,
+          input.initialState.x2.cell, input.input.x0.cell,
+          input.input.x1.cell] }
+  output cfg offset _ self :=
+    { x0 := .of self (offset + 2) (cfg.state 0)
+      x1 := .of self (offset + 2) (cfg.state 1)
+      x2 := .of self (offset + 2) (cfg.state 2) }
+  synthesisSummary cfg offset _ _ :=
+    addInputRegionSynthesisSummary cfg offset
+  copyCellsAssigned := by
+    keygen_registration [addInputRegionSynthesize]
+  lookupActivationsWellFormed := by
+    keygen_registration [addInputRegionSynthesize]
+  synthesisSummary_eq := by
+    intro cfg _ _ _
+    apply FloorPlanner.RegionSynthesisSummary.ext
+    · simp only [addInputRegionSynthesize, addInputRegionSynthesisSummary, circuit_norm,
+        synthesis_summary_norm, configure_selector_norm]
+      refine (FloorPlanner.unionColumns_normalize_append_redundant
+        [.selector cfg.sPadAndAdd.index,
+          .column .advice (cfg.state 0).index,
+          .column .advice (cfg.state 1).index,
+          .column .advice (cfg.state 2).index]
+        [.column .advice (cfg.state 0).index,
+          .column .advice (cfg.state 1).index,
+          .column .advice (cfg.state 0).index,
+          .column .advice (cfg.state 1).index,
+          .column .advice (cfg.state 2).index] ?_).symm
+      intro column hcolumn
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn ⊢
+      tauto
+    · simp only [addInputRegionSynthesize, addInputRegionSynthesisSummary, circuit_norm,
+        synthesis_summary_norm, configure_selector_norm]
+      omega
+    · simp only [addInputRegionSynthesize, addInputRegionSynthesisSummary, circuit_norm,
+        synthesis_summary_norm, configure_selector_norm]
+    · simp only [addInputRegionSynthesize, addInputRegionSynthesisSummary, circuit_norm,
+        synthesis_summary_norm, configure_selector_norm]
+  output_eq := by
+    intro _ _ _ _
+    rfl
+
 /-- Rust `Pow5Chip::add_input`'s region body (`pow5.rs:310-396`), `ConstantLength<2>`
 shape (both rate words are `Message` cells): `s_pad_and_add` at row 1, the initial state
 copied at row 0, the input words copied at row 1, the summed output at row 2. `Spec` is
 the donor `Sponge.AddInput.value`. -/
 def addInputRegion : FormalRegionCircuit Fp Config Config Sponge.AddInputInput State where
   configure := pure
-  elaborated :=
-    { keygenRequirements :=
-        { gates cfg _ := [padAndAddGate cfg]
-          permutationColumns cfg _ :=
-            [cfg.state 0, cfg.state 1, cfg.state 2]
-          inputCells _ _ input :=
-            [input.initialState.x0.cell, input.initialState.x1.cell,
-              input.initialState.x2.cell, input.input.x0.cell,
-              input.input.x1.cell] }
-      output cfg offset _ self :=
-        { x0 := .of self (offset + 2) (cfg.state 0)
-          x1 := .of self (offset + 2) (cfg.state 1)
-          x2 := .of self (offset + 2) (cfg.state 2) }
-      synthesisSummary cfg offset _ _ :=
-        addInputRegionSynthesisSummary cfg offset
-      synthesisSummary_eq := by
-        intro cfg _ _ _
-        apply FloorPlanner.RegionSynthesisSummary.ext
-        · simp only [addInputRegionSynthesisSummary, circuit_norm,
-            synthesis_summary_norm, configure_selector_norm]
-          refine (FloorPlanner.unionColumns_normalize_append_redundant
-            [.selector cfg.sPadAndAdd.index,
-              .column .advice (cfg.state 0).index,
-              .column .advice (cfg.state 1).index,
-              .column .advice (cfg.state 2).index]
-            [.column .advice (cfg.state 0).index,
-              .column .advice (cfg.state 1).index,
-              .column .advice (cfg.state 0).index,
-              .column .advice (cfg.state 1).index,
-              .column .advice (cfg.state 2).index] ?_).symm
-          intro column hcolumn
-          simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn ⊢
-          tauto
-        · simp only [addInputRegionSynthesisSummary, circuit_norm,
-            synthesis_summary_norm, configure_selector_norm]
-          omega
-        · simp only [addInputRegionSynthesisSummary, circuit_norm,
-            synthesis_summary_norm, configure_selector_norm]
-        · simp only [addInputRegionSynthesisSummary, circuit_norm,
-            synthesis_summary_norm, configure_selector_norm]
-      output_eq := by
-        intro _ _ _ _
-        rfl }
+  elaborated := addInputRegionElaborated
 
-  synthesize cfg offset (input : Var Sponge.AddInputInput Fp) := do
-    (padAndAddGate cfg).enable (offset + 1)
-    let i0 ← copyAdvice input.initialState.x0 (cfg.state 0) offset
-    let i1 ← copyAdvice input.initialState.x1 (cfg.state 1) offset
-    let i2 ← copyAdvice input.initialState.x2 (cfg.state 2) offset
-    -- pow5.rs:356-362 — `assign_advice` + explicit `constrain_equal(cell, var)`
-    -- (source-left orientation, unlike `copy_advice`)
-    let w0 ← assignAdvice (cfg.state 0) (offset + 1) (readCellWit input.input.x0)
-    constrainEqual input.input.x0 w0
-    let w1 ← assignAdvice (cfg.state 1) (offset + 1) (readCellWit input.input.x1)
-    constrainEqual input.input.x1 w1
-    let o0 ← assignAdvice (cfg.state 0) (offset + 2) (addWit i0 w0)
-    let o1 ← assignAdvice (cfg.state 1) (offset + 2) (addWit i1 w1)
-    let o2 ← assignAdvice (cfg.state 2) (offset + 2) (readCellWit i2)
-    pure { x0 := o0, x1 := o1, x2 := o2 }
+  synthesize := addInputRegionSynthesize
 
   Spec input out _ := out = Sponge.AddInput.value input
   ProverSpec input out _ _ := out = Sponge.AddInput.value input
 
   soundness := by
-    circuit_proof_start [padAndAddGate, Sponge.AddInput.value]
+    circuit_proof_start [addInputRegionElaborated, addInputRegionSynthesize,
+      padAndAddGate, Sponge.AddInput.value]
     obtain ⟨⟨g0, g1, g2⟩, c0, c1, c2, c3, c4⟩ := hc
     rw [c0, ← c3] at g0
     rw [c1, ← c4] at g1
     rw [c2] at g2
     exact ⟨by linear_combination -g0, by linear_combination -g1, by linear_combination -g2⟩
   completeness := by
-    circuit_proof_start [padAndAddGate, Sponge.AddInput.value, readCell]
+    circuit_proof_start [addInputRegionElaborated, addInputRegionSynthesize, padAndAddGate,
+      Sponge.AddInput.value, readCell]
     exact ⟨⟨by ring, by ring, by ring⟩,
       h_output.1.symm, h_output.2.1.symm, h_output.2.2.symm⟩
 
@@ -279,7 +290,7 @@ theorem addInputRegion_output_cells_assigned (cfg : Config) (offset : ℕ)
     RegionOperations.mem_assignedCellsAfter_iff, List.mem_append]
   repeat' apply And.intro
   all_goals right
-  all_goals simp only [addInputRegion, circuit_norm,
+  all_goals simp only [addInputRegion, addInputRegionSynthesize, circuit_norm,
     RegionOperations.assignedCells, List.flatMap_cons,
     RegionOperation.assignedCells, List.singleton_append,
     List.mem_cons, true_or]
@@ -465,6 +476,34 @@ def hash (capacity : Fp) :
     rw [h2]
     rw [h_input.1, h_input.2]
     rfl
+
+/-- The digest returned by the one-block hash is assigned by its final permutation
+region. -/
+theorem hash_call_output_cell_assigned (capacity : Fp) (cfg : Config)
+    (input : Var Sponge.Rate2 Fp) (self : RegionIndex) :
+    ((hash capacity).output cfg input self).cell ∈
+      Operations.assignedCellsFrom
+        (((hash capacity).call cfg input).operations self) self := by
+  rw [show (hash capacity).output cfg input self =
+      .of (self + 2) 36 (cfg.state 0) from rfl]
+  rw [FormalCircuit.call_operations]
+  simp only [hash, synthesize, circuit_norm, Operations.assignedCellsFrom,
+    List.mem_append]
+  right
+  right
+  let initOutput := (initRegion capacity).output cfg 0 () self
+  let absorbed := addInputRegion.output cfg 0
+    { initialState := initOutput, input := input } (self + 1)
+  have h := permuteRegion_output_cells_assigned cfg 0 absorbed (self + 2) []
+  simp only [RegionOperations.mem_assignedCellsAfter_iff, List.nil_append] at h
+  simpa only [absorbed, initOutput, FormalRegionCircuit.output_call,
+    Nat.zero_add] using h.1
+
+@[keygen_norm]
+theorem hash_inputCells (capacity : Fp) (cfg : Config)
+    (configured : (hash capacity).Configured cfg)
+    (input : Var Sponge.Rate2 Fp) :
+    configured.inputCells input = [input.x0.cell, input.x1.cell] := rfl
 
 /-- The hash circuit exposes its reduced three-region footprint directly. -/
 @[synthesis_summary_norm]

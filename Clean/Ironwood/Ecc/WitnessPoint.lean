@@ -220,6 +220,31 @@ def pointFormal :=
 def pointNonIdFormal :=
   pointNonId.toFormal "witness non-identity point"
 
+/-- The point-witness circuit's two positional output cells. -/
+@[keygen_output_norm]
+theorem pointFormal_output_cells (config : Config)
+    (input : Var (Unconstrained Point) Fp) (self : RegionIndex) :
+    pointFormal.output config input self =
+      { x := .of self 0 config.x, y := .of self 0 config.y } := by
+  rfl
+
+/-- Both coordinates returned by the point-witness call are assigned in its single
+region. -/
+theorem pointFormal_call_output_cells_assigned
+    (config : Config) (input : Var (Unconstrained Point) Fp)
+    (self : RegionIndex) :
+    let output := pointFormal.output config input self
+    output.x.cell ∈ Operations.assignedCellsFrom
+        ((pointFormal.call config input).operations self) self ∧
+      output.y.cell ∈ Operations.assignedCellsFrom
+        ((pointFormal.call config input).operations self) self := by
+  rw [pointFormal_output_cells, FormalCircuit.call_operations]
+  simp only [pointFormal, FormalRegionCircuit.toFormal, point,
+    operations_assignRegion, Operations.assignedCellsFrom, circuit_norm,
+    RegionOperations.assignedCells, RegionOperation.assignedCells,
+    List.flatMap_cons, List.flatMap_nil, List.mem_cons,
+    AssignedCell.of_cell, true_or]
+
 @[synthesis_summary_norm]
 theorem pointFormal_synthesisSummary_eq (config : Config)
     (input : Var (Unconstrained Point) Fp) (region : RegionIndex) :
@@ -241,6 +266,53 @@ theorem pointNonIdFormal_output_cells (config : Config)
     pointNonIdFormal.output config input self =
       { x := .of self 0 config.x, y := .of self 0 config.y } := by
   rfl
+
+@[keygen_norm]
+theorem pointNonIdFormal_inputCells (config : Config)
+    (configured : pointNonIdFormal.Configured config)
+    (input : Var (Unconstrained Point) Fp) :
+    configured.inputCells input = [] := by
+  rfl
+
+/-- Both coordinates returned by the non-identity witness call are assigned in its
+single region. -/
+theorem pointNonIdFormal_call_output_cells_assigned
+    (config : Config) (input : Var (Unconstrained Point) Fp)
+    (self : RegionIndex) :
+    let output := pointNonIdFormal.output config input self
+    output.x.cell ∈ Operations.assignedCellsFrom
+        ((pointNonIdFormal.call config input).operations self) self ∧
+      output.y.cell ∈ Operations.assignedCellsFrom
+        ((pointNonIdFormal.call config input).operations self) self := by
+  rw [pointNonIdFormal_output_cells, FormalCircuit.call_operations]
+  simp only [pointNonIdFormal, FormalRegionCircuit.toFormal,
+    operations_assignRegion, Operations.assignedCellsFrom, pointNonId,
+    circuit_norm, RegionOperations.assignedCells,
+    RegionOperation.assignedCells, List.flatMap_cons, List.flatMap_nil,
+    List.mem_cons, AssignedCell.of_cell, true_or]
+
+@[keygen_norm]
+theorem pointFormal_call_operations_copyFree (config : Config)
+    (input : Var (Unconstrained Point) Fp) (self : RegionIndex) :
+    ((pointFormal.call config input).operations self).Forall fun operation =>
+      operation.copiedCells = [] := by
+  rw [FormalCircuit.call_operations]
+  simp only [pointFormal, FormalRegionCircuit.toFormal, point, circuit_norm,
+    Operation.copiedCells, RegionOperations.copiedCells,
+    RegionOperation.copiedCells, List.flatMap_cons, List.flatMap_nil,
+    List.nil_append]
+
+@[keygen_norm]
+theorem pointNonIdFormal_call_operations_copyFree (config : Config)
+    (input : Var (Unconstrained Point) Fp) (self : RegionIndex) :
+    ((pointNonIdFormal.call config input).operations self).Forall fun operation =>
+      operation.copiedCells = [] := by
+  rw [FormalCircuit.call_operations]
+  simp only [pointNonIdFormal, FormalRegionCircuit.toFormal, pointNonId,
+    circuit_norm,
+    Operation.copiedCells, RegionOperations.copiedCells,
+    RegionOperation.copiedCells, List.flatMap_cons, List.flatMap_nil,
+    List.nil_append]
 
 derive_contract_bridges pointFormal := pointFormal
 

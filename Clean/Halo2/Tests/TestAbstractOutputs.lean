@@ -90,6 +90,8 @@ the second call's chunk input becomes the opaque local; then the outer (second) 
 def passthrough : FormalRegionCircuit Fp Unit Unit Point Point where
   configure := fun _ => pure ()
   synthesize _ _ input := pure input
+  elaborated := {
+    synthesisSummary := fun _ _ _ _ => {} }
   Spec input output _ := input.Valid → output.Valid
   ProverAssumptions input _ _ := input.Valid
   ProverSpec input output _ _ := output = input

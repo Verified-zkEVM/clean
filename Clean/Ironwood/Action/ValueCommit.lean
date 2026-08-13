@@ -290,6 +290,56 @@ theorem circuit_synthesisSummary_eq
     ((circuit V R).elaborated.synthesisSummary config input region) =
       synthesisSummary config := rfl
 
+/-- The value-commitment circuit's two positional output cells. -/
+@[keygen_output_norm]
+theorem circuit_output_cells
+    (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase)
+    (config : Ecc.MulFixed.Short.Config × Ecc.MulFixed.FullWidth.Config ×
+      Ecc.Add.Config) (input : Var Inputs Fp) (region : RegionIndex) :
+    (circuit V R).output config input region =
+      { x := .of (region + 4) 1 config.2.2.xQR,
+        y := .of (region + 4) 1 config.2.2.yQR } := by
+  rfl
+
+@[keygen_norm]
+theorem circuit_inputCells_eq
+    (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase) {config}
+    (configured : (circuit V R).Configured config) (input : Var Inputs Fp) :
+    configured.inputCells input = [input.magnitude.cell, input.sign.cell] := by
+  rfl
+
+/-- Both coordinates returned by the value-commitment call are assigned by its
+final addition region. -/
+theorem circuit_call_output_cells_assigned
+    (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase)
+    (config : Ecc.MulFixed.Short.Config × Ecc.MulFixed.FullWidth.Config ×
+      Ecc.Add.Config) (input : Var Inputs Fp) (region : RegionIndex) :
+    let output := (circuit V R).output config input region
+    output.x.cell ∈
+        (((circuit V R).call config input).operations region).assignedCellsFrom region ∧
+      output.y.cell ∈
+        (((circuit V R).call config input).operations region).assignedCellsFrom region := by
+  rw [circuit_output_cells]
+  rw [FormalCircuit.call_operations]
+  let shortInput : Var Ecc.MulFixed.Short.Inputs Fp :=
+    ⟨input.magnitude, input.sign⟩
+  let shortOutput := (Ecc.MulFixed.Short.circuit V).output
+    config.1 shortInput region
+  let fullWidthOutput := (Ecc.MulFixed.FullWidth.circuit R).output
+    config.2.1 input.rcv (region + 2)
+  have hadd := Ecc.Add.addFormal_call_output_cells_assigned config.2.2
+    { p := shortOutput, q := fullWidthOutput } (region + 4)
+  simp only [Ecc.Add.addFormal_output_cells, shortInput, shortOutput,
+    fullWidthOutput] at hadd
+  simp only [circuit, Circuit.operations_bind, Circuit.operations_pure,
+    FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call',
+    FormalCircuit.call_regionCount', Operations.assignedCellsFrom_append,
+    Ecc.MulFixed.Short.circuit_regionCount,
+    Ecc.MulFixed.FullWidth.circuit_regionCount, List.mem_append,
+    AssignedCell.of_cell, Nat.add_assoc, Nat.reduceAdd]
+  exact ⟨Or.inr (Or.inr (Or.inl hadd.1)),
+    Or.inr (Or.inr (Or.inl hadd.2))⟩
+
 /-- A value commitment requests only the short scalar's strict-decomposition
 constant allocation. -/
 @[synthesis_summary_norm]

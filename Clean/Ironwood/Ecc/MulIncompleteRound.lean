@@ -841,6 +841,18 @@ theorem last_gates {w : State Fp} {m : ℕ} {k k' : Bool} (hH : w.Honest m k) :
   · simp only [State.stepY, step_xA_eq, State.yA2, State.xR]
     ring
 
+/-- The round assigns the next running-sum cell that its output names. -/
+theorem round_output_z_cell_assigned (i : ℕ) (cfg : Config) (offset : ℕ)
+    (input : Var (Unconstrained field) Fp) (self : RegionIndex) :
+    Cell.of self (offset + 1) cfg.z ∈
+      RegionOperations.assignedCells
+        (((round i).call cfg offset input).operations self) self := by
+  rw [FormalRegionCircuit.call_operations]
+  simp only [round, RegionCircuit.operations_bind, operations_readState,
+    operations_enable, operations_assignAdvice, RegionOperations.assignedCells,
+    List.flatMap_cons, RegionOperation.assignedCells, List.singleton_append,
+    List.nil_append, List.mem_cons, true_or]
+
 /-- The round's output variable: the next row's neighborhood (position-determined). -/
 @[circuit_norm]
 theorem round_output (i : ℕ) (cfg : Config) (o : ℕ)

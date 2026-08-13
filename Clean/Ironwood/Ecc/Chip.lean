@@ -73,9 +73,9 @@ def configure (advices : Fin 10 → Column .advice)
     ((configure advices lagrangeCoeffs rangeCheck).delta counts).lookups = [] := by
   simp [configure, WitnessPoint.configure, AddIncomplete.add, Add.add,
     Mul.configure, MulIncomplete.configure, MulComplete.configure,
-    MulOverflow.configure, MulFixed.configure, MulFixed.FullWidth.configure,
-    MulFixed.Short.configure, MulFixed.BaseFieldElem.configure,
-    DecomposeRunningSum.configure]
+    MulOverflow.configure, MulFixed.configure, MulFixed.configureTail_delta_lookups,
+    MulFixed.FullWidth.configure,
+    MulFixed.Short.configure, MulFixed.BaseFieldElem.configure]
 
 @[reducible] private def configureInferred
     (advices : Fin 10 → Column .advice)
@@ -95,9 +95,9 @@ private theorem configure_selectorRequirements
   simp [keygen_norm, WitnessPoint.configure,
     AddIncomplete.add, Add.add, Mul.configure,
     MulIncomplete.configure, MulComplete.configure, MulOverflow.configure,
-    MulFixed.configure, MulFixed.FullWidth.configure,
-    MulFixed.Short.configure, MulFixed.BaseFieldElem.configure,
-    DecomposeRunningSum.configure]
+    MulFixed.configure,
+    MulFixed.FullWidth.configure,
+    MulFixed.Short.configure, MulFixed.BaseFieldElem.configure]
 
 instance (advices : Fin 10 → Column .advice)
     (lagrangeCoeffs : Fin 8 → Column .fixed)
@@ -111,6 +111,8 @@ instance (advices : Fin 10 → Column .advice)
           WitnessPoint.configure, AddIncomplete.add, Add.add, Mul.configure,
           MulIncomplete.configure, MulComplete.configure,
           MulOverflow.configure, MulFixed.configure,
+          MulFixed.configureTail, MulFixed.configureProgram,
+          MulFixed.configureGate, MulFixed.configureResult,
           MulFixed.FullWidth.configure, MulFixed.Short.configure,
           MulFixed.BaseFieldElem.configure,
           DecomposeRunningSum.configure]
@@ -540,7 +542,9 @@ theorem mem_mulFixed_gates (advices : Fin 10 → Column .advice)
   rw [Configure.delta_bind, ConfigureDelta.gates_append]
   apply List.mem_append_left
   unfold configure at hgate
-  simpa [MulFixed.configure, MulFixed.Short.configure,
+  simpa [MulFixed.configure, MulFixed.configureTail,
+    MulFixed.configureProgram, MulFixed.configureGate,
+    MulFixed.configureResult, MulFixed.Short.configure,
     DecomposeRunningSum.configure] using hgate
 
 /-- All ECC capabilities needed by the Action-level fixed-base wrappers. -/

@@ -118,6 +118,23 @@ theorem bundle_synthesisSummary_eq (wb1 : WitgenIR Fp 1) (cfg : Config)
 
 derive_contract_bridges bundle (wb1 : WitgenIR Fp 1) := bundle wb1
 
+/-- The returned `b₁` cell is assigned by the enclosing call. -/
+theorem bundle_call_output_cell_assigned (wb1 : WitgenIR Fp 1)
+    (name : String) (cfg : Config) (input : Var Inputs Fp)
+    (self : RegionIndex) :
+    (((bundle wb1).toFormal name).output cfg input self).cell ∈
+      Operations.assignedCellsFrom
+        ((((bundle wb1).toFormal name).call cfg input).operations self) self := by
+  have houtput : ((bundle wb1).toFormal name).output cfg input self =
+      AssignedCell.of self 0 cfg.colR := by
+    show ((bundle wb1).synthesize cfg 0 input).output self = _
+    simp only [bundle, circuit_norm, RegionCircuit.output_bind, Nat.zero_add]
+  rw [houtput, FormalCircuit.call_operations]
+  simp only [FormalRegionCircuit.toFormal, bundle, circuit_norm,
+    Operations.assignedCellsFrom, RegionOperations.assignedCells,
+    List.flatMap_cons, RegionOperation.assignedCells, List.mem_cons,
+    AssignedCell.of_cell]
+
 end DecomposeB
 
 namespace DecomposeD
@@ -211,6 +228,23 @@ theorem bundle_synthesisSummary_eq (wd0 : WitgenIR Fp 1) (cfg : Config)
       synthesisSummary cfg offset := rfl
 
 derive_contract_bridges bundle (wd0 : WitgenIR Fp 1) := bundle wd0
+
+/-- The returned `d₀` cell is assigned by the enclosing call. -/
+theorem bundle_call_output_cell_assigned (wd0 : WitgenIR Fp 1)
+    (name : String) (cfg : Config) (input : Var Inputs Fp)
+    (self : RegionIndex) :
+    (((bundle wd0).toFormal name).output cfg input self).cell ∈
+      Operations.assignedCellsFrom
+        ((((bundle wd0).toFormal name).call cfg input).operations self) self := by
+  have houtput : ((bundle wd0).toFormal name).output cfg input self =
+      AssignedCell.of self 0 cfg.colM := by
+    show ((bundle wd0).synthesize cfg 0 input).output self = _
+    simp only [bundle, circuit_norm, RegionCircuit.output_bind, Nat.zero_add]
+  rw [houtput, FormalCircuit.call_operations]
+  simp only [FormalRegionCircuit.toFormal, bundle, circuit_norm,
+    Operations.assignedCellsFrom, RegionOperations.assignedCells,
+    List.flatMap_cons, RegionOperation.assignedCells, List.mem_cons,
+    AssignedCell.of_cell]
 
 end DecomposeD
 
@@ -373,6 +407,23 @@ theorem bundle_synthesisSummary_eq (wg0 : WitgenIR Fp 1) (cfg : Config)
 
 derive_contract_bridges bundle (wg0 : WitgenIR Fp 1) := bundle wg0
 
+/-- The returned `g₀` cell is assigned by the enclosing call. -/
+theorem bundle_call_output_cell_assigned (wg0 : WitgenIR Fp 1)
+    (name : String) (cfg : Config) (input : Var Inputs Fp)
+    (self : RegionIndex) :
+    (((bundle wg0).toFormal name).output cfg input self).cell ∈
+      Operations.assignedCellsFrom
+        ((((bundle wg0).toFormal name).call cfg input).operations self) self := by
+  have houtput : ((bundle wg0).toFormal name).output cfg input self =
+      AssignedCell.of self 0 cfg.colM := by
+    show ((bundle wg0).synthesize cfg 0 input).output self = _
+    simp only [bundle, circuit_norm, RegionCircuit.output_bind, Nat.zero_add]
+  rw [houtput, FormalCircuit.call_operations]
+  simp only [FormalRegionCircuit.toFormal, bundle, circuit_norm,
+    Operations.assignedCellsFrom, RegionOperations.assignedCells,
+    List.flatMap_cons, RegionOperation.assignedCells, List.mem_cons,
+    AssignedCell.of_cell]
+
 end DecomposeG
 
 namespace DecomposeH
@@ -455,6 +506,23 @@ theorem bundle_synthesisSummary_eq (wh1 : WitgenIR Fp 1) (cfg : Config)
       synthesisSummary cfg offset := rfl
 
 derive_contract_bridges bundle (wh1 : WitgenIR Fp 1) := bundle wh1
+
+/-- The returned `h₁` cell is assigned by the enclosing call. -/
+theorem bundle_call_output_cell_assigned (wh1 : WitgenIR Fp 1)
+    (name : String) (cfg : Config) (input : Var Inputs Fp)
+    (self : RegionIndex) :
+    (((bundle wh1).toFormal name).output cfg input self).cell ∈
+      Operations.assignedCellsFrom
+        ((((bundle wh1).toFormal name).call cfg input).operations self) self := by
+  have houtput : ((bundle wh1).toFormal name).output cfg input self =
+      AssignedCell.of self 0 cfg.colR := by
+    show ((bundle wh1).synthesize cfg 0 input).output self = _
+    simp only [bundle, circuit_norm, RegionCircuit.output_bind]
+  rw [houtput, FormalCircuit.call_operations]
+  simp only [FormalRegionCircuit.toFormal, bundle, circuit_norm,
+    Operations.assignedCellsFrom, RegionOperations.assignedCells,
+    List.flatMap_cons, RegionOperation.assignedCells, List.mem_cons,
+    AssignedCell.of_cell]
 
 end DecomposeH
 

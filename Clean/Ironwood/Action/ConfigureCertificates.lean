@@ -38,7 +38,7 @@ private theorem configure_output_lookupConfig (G : Generators)
 Transport the whole ECC configure certificate through Action's single direct ECC bind.
 No ECC child configuration is opened above this boundary.
 -/
-def eccConfigureCertificate (G : Generators) (counts : ConfigureCounts) :
+opaque eccConfigureCertificate (G : Generators) (counts : ConfigureCounts) :
     Ecc.ConfigureCertificate
       (configureBase.output counts).advices
       (configureBase.output counts).lagrangeCoeffs
@@ -284,8 +284,8 @@ private theorem sinsemilla1_generatorTable_fixedQuery_mem_actionConfigure
       (Sinsemilla.HashPiece.generatorLookup G
         ((configure G).output counts).sinsemilla1).tables by
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn
-      rcases hcolumn with rfl | rfl | rfl <;>
-        simp [Sinsemilla.HashPiece.generatorLookup])
+      rcases hcolumn with hcolumn | hcolumn | hcolumn <;>
+        subst column <;> simp [Sinsemilla.HashPiece.generatorLookup])
   exact hregistered
 
 /-- Action-facing view of the two capabilities produced by a Merkle configure. -/
@@ -654,7 +654,7 @@ private theorem commitIvkGate_mem (G : Generators) (counts : ConfigureCounts) :
   simp
 
 /-- Transport all capabilities from Action's shared configure prefix at once. -/
-def baseConfigureCertificate (G : Generators) (counts : ConfigureCounts) :
+opaque baseConfigureCertificate (G : Generators) (counts : ConfigureCounts) :
     ConfigureBaseCertificate counts (actionConfigureContext G counts) :=
   (configureBaseCertificate counts).mono
     (by
@@ -684,7 +684,7 @@ private def addChipCertificate (G : Generators) (counts : ConfigureCounts) :
   (baseConfigureCertificate G counts).addChip
 
 /-- The first 16-layer Merkle fold, assembled only from direct child capabilities. -/
-def merkle1Certificate (G : Generators) (B : Bases)
+opaque merkle1Certificate (G : Generators) (B : Bases)
     (counts : ConfigureCounts) :
     (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
       B.merkleQ_onCurve 0 16 (by norm_num) hintWitnesses.merkleSib
@@ -712,7 +712,7 @@ def merkle1Certificate (G : Generators) (B : Bases)
     hintWitnesses.merkleSib hintWitnesses.merkleSwap layer
 
 /-- The second 16-layer Merkle fold, assembled only from direct child capabilities. -/
-def merkle2Certificate (G : Generators) (B : Bases)
+opaque merkle2Certificate (G : Generators) (B : Bases)
     (counts : ConfigureCounts) :
     (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
       B.merkleQ_onCurve 16 16 (by norm_num)
@@ -742,7 +742,7 @@ def merkle2Certificate (G : Generators) (B : Bases)
     (fun i => hintWitnesses.merkleSwap (16 + i)) layer
 
 /-- CommitIvk, assembled from the direct Action chip capabilities. -/
-def commitIvkCertificate (G : Generators) (B : Bases)
+opaque commitIvkCertificate (G : Generators) (B : Bases)
     (counts : ConfigureCounts) :
     (CommitIvk.Main.circuit G B.commitIvkR B.ivkQ
       B.ivkQ_onCurve).ConfigurationCertificate
@@ -854,7 +854,7 @@ private theorem noteCommitNewDirectGates (G : Generators)
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hgate ⊢
     aesop
 
-def noteCommitOldCertificate (G : Generators) (B : Bases)
+opaque noteCommitOldCertificate (G : Generators) (B : Bases)
     (counts : ConfigureCounts) :
     (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
       B.noteQ_onCurve).ConfigurationCertificate
@@ -890,7 +890,7 @@ def noteCommitOldCertificate (G : Generators) (B : Bases)
           all_goals exact base.advicePermutationColumn _
         · exact commit.permutationColumns_of_configured column hcommit)
 
-def noteCommitNewCertificate (G : Generators) (B : Bases)
+opaque noteCommitNewCertificate (G : Generators) (B : Bases)
     (counts : ConfigureCounts) :
     (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
       B.noteQ_onCurve).ConfigurationCertificate
@@ -927,7 +927,7 @@ def noteCommitNewCertificate (G : Generators) (B : Bases)
         · exact commit.permutationColumns_of_configured column hcommit)
 
 /-- ValueCommit's three borrowed ECC capabilities, composed without reopening ECC. -/
-def valueCommitCertificate (G : Generators) (B : Bases)
+opaque valueCommitCertificate (G : Generators) (B : Bases)
     (counts : ConfigureCounts) :
     (ValueCommit.circuit B.valueCommitV B.valueCommitR).ConfigurationCertificate
       (((configure G).output counts).eccConfig.mulFixedShort,
@@ -978,7 +978,7 @@ def valueCommitCertificate (G : Generators) (B : Bases)
       · exact (baseConfigureCertificate G counts).advicePermutationColumn 3
 
 /-- SpendAuthority's two borrowed ECC capabilities, composed without reopening ECC. -/
-def spendAuthorityCertificate (G : Generators) (B : Bases)
+opaque spendAuthorityCertificate (G : Generators) (B : Bases)
     (counts : ConfigureCounts) :
     (SpendAuthority.circuit B.spendAuthG).ConfigurationCertificate
       (((configure G).output counts).eccConfig.mulFixedFull,
@@ -1018,7 +1018,7 @@ def spendAuthorityCertificate (G : Generators) (B : Bases)
       · exact (baseConfigureCertificate G counts).advicePermutationColumn 3
 
 /-- AddressIntegrity's variable-base multiplication and point-witness capabilities. -/
-def addressIntegrityCertificate (G : Generators)
+opaque addressIntegrityCertificate (G : Generators)
     (counts : ConfigureCounts) :
     AddressIntegrity.circuit.ConfigurationCertificate
       (((configure G).output counts).eccConfig.mul,
@@ -1073,7 +1073,7 @@ def addressIntegrityCertificate (G : Generators)
         column hwitness
 
 /-- DeriveNullifier composed from its two direct chip certificates and two ECC capabilities. -/
-def deriveNullifierCertificate (G : Generators) (B : Bases)
+opaque deriveNullifierCertificate (G : Generators) (B : Bases)
     (counts : ConfigureCounts) :
     (DeriveNullifier.circuit B.nullifierK).ConfigurationCertificate
       (((configure G).output counts).poseidonConfig,

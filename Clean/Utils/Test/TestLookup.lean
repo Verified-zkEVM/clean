@@ -31,8 +31,8 @@ open Halo2 Zcash.Circuits
 /-- `q_lookup`, `q_running`: the range-check gating selectors (complex,
 `lookup_range_check.rs:320-321`). Concrete indices so the per-row activation valuation
 reduces to literals in the shape pins below. -/
-def qLookup : Selector := ⟨0, false⟩
-def qRunning : Selector := ⟨1, false⟩
+def qLookup : ComplexSelector := ⟨0⟩
+def qRunning : ComplexSelector := ⟨1⟩
 
 /-- The range-check lookup argument, verbatim input shape from `lookup-design.md` §1.4
 (K = 4): `q_lookup · (q_running · (z_cur − 2^K·z_next) + (1 − q_running) · z_cur)`,
@@ -48,8 +48,8 @@ def rcArg (z : Column .advice) (tbl : TableColumn) : LookupArgument Fp where
     [qL * (qR * (zCur - (2 ^ 4 : Fp) * zNext) + (1 - qR) * zCur)]
   tables := [queryFixed tbl.inner]
   inputsNoSimpleSelectors := by
-    simp [qLookup, qRunning, Expression.NoSimpleSelectors]
-  tablesFree := by simp [Expression.SelectorFree, queryFixed]
+    keygen_registration [qLookup, qRunning]
+  tablesFree := by selector_free
   arity := rfl
 
 -- (a-1) Running-sum row: `enableLookup … [qLookup, qRunning] row` — both selectors on.

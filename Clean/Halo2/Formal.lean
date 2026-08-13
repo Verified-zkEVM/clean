@@ -1055,6 +1055,66 @@ theorem call_copyCellsAssignedFrom
     configInput counts hconfig input i).mono
   simpa [Configured.inputCells] using hinputCells
 
+/-- Copy provenance composes through a monadic bind when the first circuit's
+`nextRegionIndex` agrees with the region count of its operation stream. -/
+theorem bind_copyCellsAssignedFrom
+    {α β : Type} (first : Circuit F α) (next : α → Circuit F β)
+    (region : RegionIndex) (available : List Cell)
+    (hfirst : (first.operations region).CopyCellsAssignedFrom region available)
+    (hnextRegion : first.nextRegionIndex region =
+      region + (first.operations region).regionCount)
+    (hnext : ((next (first.output region)).operations
+      (first.nextRegionIndex region)).CopyCellsAssignedFrom
+        (first.nextRegionIndex region)
+        (available ++ (first.operations region).assignedCellsFrom region)) :
+    (((first >>= next).operations region).CopyCellsAssignedFrom region available) := by
+  rw [Circuit.operations_bind]
+  apply hfirst.append
+  rwa [← hnextRegion]
+
+/-- Copy provenance composes through one public-instance constraint. -/
+theorem constrainInstance_bind_copyCellsAssignedFrom
+    {Output : Type} (cell : AssignedCell F) (column : Column .instance)
+    (row : ℕ) (next : Unit → Circuit F Output) (region : RegionIndex)
+    (available : List Cell) (hcell : cell.cell ∈ available)
+    (hnext : ((next ()).operations region).CopyCellsAssignedFrom
+      region available) :
+    (((constrainInstance cell column row >>= next).operations region)
+      |>.CopyCellsAssignedFrom region available) := by
+  simp only [Circuit.operations_bind, operations_constrainInstance,
+    nextRegionIndex_constrainInstance, constrainInstance, Circuit.output,
+    List.cons_append, List.nil_append,
+    Operations.copyCellsAssignedFrom_constrainInstance_iff]
+  exact ⟨hcell, hnext⟩
+
+/-- Copy provenance composes across a formal-circuit call without opening the
+child's operation stream. -/
+theorem call_bind_copyCellsAssignedFrom
+    {β : Type}
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (config : Config) (configured : self.Configured config)
+    (input : Var Input F) (next : Var Output F → Circuit F β)
+    (region : RegionIndex) (available : List Cell)
+    (hinput : ∀ cell, cell ∈ configured.inputCells input → cell ∈ available)
+    (hnext : ((next (self.output config input region)).operations
+      (region + self.regionCount input)).CopyCellsAssignedFrom
+        (region + self.regionCount input)
+        (available ++ ((self.call config input).operations region).assignedCellsFrom
+          region)) :
+    (((self.call config input >>= next).operations region)
+      |>.CopyCellsAssignedFrom region available) := by
+  have hnextRegion :
+      (self.call config input).nextRegionIndex region =
+        region + self.regionCount input := by
+    show (self.call config input region).2.2 = region + self.regionCount input
+    rw [self.call_eq]
+  apply bind_copyCellsAssignedFrom
+  · exact self.call_copyCellsAssignedFrom config configured input region hinput
+  · rw [hnextRegion, FormalCircuit.regionCount,
+      self.elaborated.regionCount_eq, self.call_operations]
+  · rw [hnextRegion, self.call_output]
+    exact hnext
+
 /-- Copy provenance in the opaque call spelling exposed after spine normalization. -/
 theorem callPacked_copyCellsAssignedFrom
     (self : FormalCircuit F ConfigInput Config Input Output)
@@ -2332,6 +2392,12 @@ theorem toFormal_keygenRequirements
     (child.toFormal name).keygenRequirements =
       child.keygenRequirements :=
   rfl
+
+@[circuit_norm]
+theorem toFormal_regionCount
+    (child : FormalRegionCircuit F ConfigInput Config Input Output)
+    (name : String := child.name) (input : Var Input F) :
+    (child.toFormal name).regionCount input = 1 := rfl
 
 @[circuit_norm, synthesis_summary_norm]
 theorem toFormal_synthesisSummary_columns

@@ -465,6 +465,15 @@ theorem toFormal_proverAssumptions_eq {CI Cfg : Type} {In Out : TypeMap}
     (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) :
     (b.toFormal name).ProverAssumptions = b.ProverAssumptions := rfl
 
+/-- Pointwise contract transport for a lifted region circuit. This keeps a caller's
+possibly large concrete input opaque while crossing the `toFormal` boundary. -/
+theorem toFormal_proverAssumptions_iff {CI Cfg : Type} {In Out : TypeMap}
+    [ProvableType In] [ProvableType Out]
+    (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String)
+    (input : Value In Fp) (witness : b.Witness Fp) (hint : ProverHint Fp) :
+    (b.toFormal name).ProverAssumptions input witness hint ↔
+      b.ProverAssumptions input witness hint := Iff.rfl
+
 theorem toFormal_extract_eq {CI Cfg : Type} {In Out : TypeMap}
     [ProvableType In] [ProvableType Out]
     (b : FormalRegionCircuit Fp CI Cfg In Out) (name : String) (cfg : Cfg)
@@ -512,6 +521,13 @@ theorem synthDecompositions_regionCount (cfg : Config) (input : Var Inputs Fp)
   simp only [synthDecompositions, circuit_norm, Circuit.operations_bind,
     Circuit.operations_pure, Operations.regionCount_append]
 
+@[circuit_norm]
+theorem synthDecompositions_nextRegionIndex (cfg : Config)
+    (input : Var Inputs Fp) (pcs : PieceCells) (ccs : CheckCells)
+    (iHash i : RegionIndex) :
+    (synthDecompositions cfg input pcs ccs iHash).nextRegionIndex i = i + 5 := by
+  simp only [synthDecompositions, circuit_norm]
+
 theorem synthGdPkdValueCanonicity_regionCount (cfg : Config)
     (input : Var Inputs Fp) (pcs : PieceCells) (ccs : CheckCells)
     (gcs : GateCells) (iHash : RegionIndex) (i : RegionIndex) :
@@ -519,6 +535,14 @@ theorem synthGdPkdValueCanonicity_regionCount (cfg : Config)
       ((synthGdPkdValueCanonicity cfg input pcs ccs gcs iHash).operations i) = 3 := by
   simp only [synthGdPkdValueCanonicity, circuit_norm, Circuit.operations_bind,
     Circuit.operations_pure, Operations.regionCount_append]
+
+@[circuit_norm]
+theorem synthGdPkdValueCanonicity_nextRegionIndex (cfg : Config)
+    (input : Var Inputs Fp) (pcs : PieceCells) (ccs : CheckCells)
+    (gcs : GateCells) (iHash i : RegionIndex) :
+    (synthGdPkdValueCanonicity cfg input pcs ccs gcs iHash).nextRegionIndex i =
+      i + 3 := by
+  simp only [synthGdPkdValueCanonicity, circuit_norm]
 
 theorem synthRhoPsiCanonicity_regionCount (cfg : Config)
     (input : Var Inputs Fp) (pcs : PieceCells) (ccs : CheckCells)
@@ -704,6 +728,66 @@ theorem synthPieces_output (cfg : Config) (input : Var Inputs Fp)
           h0 := .of (i + 13) 0 cfg.lookupConfig.runningSum } := by
   rfl
 
+@[circuit_norm] theorem synthPieces_output_a (cfg : Config)
+    (input : Var Inputs Fp) (i : RegionIndex) :
+    ((synthPieces cfg input).output i).a =
+      .of i 0 cfg.hashConfig.witnessPieces := by
+  rw [synthPieces_output]
+
+@[circuit_norm] theorem synthPieces_output_b0 (cfg : Config)
+    (input : Var Inputs Fp) (i : RegionIndex) :
+    ((synthPieces cfg input).output i).b0 =
+      .of (i + 1) 0 cfg.lookupConfig.runningSum := by
+  rw [synthPieces_output]
+
+@[circuit_norm] theorem synthPieces_output_b3 (cfg : Config)
+    (input : Var Inputs Fp) (i : RegionIndex) :
+    ((synthPieces cfg input).output i).b3 =
+      .of (i + 2) 0 cfg.lookupConfig.runningSum := by
+  rw [synthPieces_output]
+
+@[circuit_norm] theorem synthPieces_output_c (cfg : Config)
+    (input : Var Inputs Fp) (i : RegionIndex) :
+    ((synthPieces cfg input).output i).c =
+      .of (i + 4) 0 cfg.hashConfig.witnessPieces := by
+  rw [synthPieces_output]
+
+@[circuit_norm] theorem synthPieces_output_d2 (cfg : Config)
+    (input : Var Inputs Fp) (i : RegionIndex) :
+    ((synthPieces cfg input).output i).d2 =
+      .of (i + 5) 0 cfg.lookupConfig.runningSum := by
+  rw [synthPieces_output]
+
+@[circuit_norm] theorem synthPieces_output_e0 (cfg : Config)
+    (input : Var Inputs Fp) (i : RegionIndex) :
+    ((synthPieces cfg input).output i).e0 =
+      .of (i + 7) 0 cfg.lookupConfig.runningSum := by
+  rw [synthPieces_output]
+
+@[circuit_norm] theorem synthPieces_output_e1 (cfg : Config)
+    (input : Var Inputs Fp) (i : RegionIndex) :
+    ((synthPieces cfg input).output i).e1 =
+      .of (i + 8) 0 cfg.lookupConfig.runningSum := by
+  rw [synthPieces_output]
+
+@[circuit_norm] theorem synthPieces_output_f (cfg : Config)
+    (input : Var Inputs Fp) (i : RegionIndex) :
+    ((synthPieces cfg input).output i).f =
+      .of (i + 10) 0 cfg.hashConfig.witnessPieces := by
+  rw [synthPieces_output]
+
+@[circuit_norm] theorem synthPieces_output_g1 (cfg : Config)
+    (input : Var Inputs Fp) (i : RegionIndex) :
+    ((synthPieces cfg input).output i).g1 =
+      .of (i + 11) 0 cfg.lookupConfig.runningSum := by
+  rw [synthPieces_output]
+
+@[circuit_norm] theorem synthPieces_output_h0 (cfg : Config)
+    (input : Var Inputs Fp) (i : RegionIndex) :
+    ((synthPieces cfg input).output i).h0 =
+      .of (i + 13) 0 cfg.lookupConfig.runningSum := by
+  rw [synthPieces_output]
+
 @[keygen_output_norm]
 theorem synthChecks_output (G : Generators) (R : FixedBase)
     (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
@@ -736,9 +820,73 @@ theorem synthChecks_output (G : Generators) (R : FixedBase)
   rw [YCanonicityCheck.circuit_call_regionCount, YCanonicityCheck.circuit_call_regionCount, Sinsemilla.CommitDomain.commit_call_regionCount]
   rfl
 
+@[circuit_norm] theorem synthChecks_output_aZs_z0
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (iHash i : RegionIndex) :
+    ((synthChecks G R Q hQ cfg input pcs iHash).output i).aZs.z0 =
+      .of (i + 14) 0 cfg.lookupConfig.runningSum := by
+  rw [synthChecks_output]
+
+@[circuit_norm] theorem synthChecks_output_aZs_zLast
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (iHash i : RegionIndex) :
+    ((synthChecks G R Q hQ cfg input pcs iHash).output i).aZs.zLast =
+      .of (i + 14) 13 cfg.lookupConfig.runningSum := by
+  rw [synthChecks_output]
+
+@[circuit_norm] theorem synthChecks_output_bZs_z0
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (iHash i : RegionIndex) :
+    ((synthChecks G R Q hQ cfg input pcs iHash).output i).bZs.z0 =
+      .of (i + 15) 0 cfg.lookupConfig.runningSum := by
+  rw [synthChecks_output]
+
+@[circuit_norm] theorem synthChecks_output_bZs_zLast
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (iHash i : RegionIndex) :
+    ((synthChecks G R Q hQ cfg input pcs iHash).output i).bZs.zLast =
+      .of (i + 15) 14 cfg.lookupConfig.runningSum := by
+  rw [synthChecks_output]
+
+@[circuit_norm] theorem synthChecks_output_eZs_z0
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (iHash i : RegionIndex) :
+    ((synthChecks G R Q hQ cfg input pcs iHash).output i).eZs.z0 =
+      .of (i + 16) 0 cfg.lookupConfig.runningSum := by
+  rw [synthChecks_output]
+
+@[circuit_norm] theorem synthChecks_output_eZs_zLast
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (iHash i : RegionIndex) :
+    ((synthChecks G R Q hQ cfg input pcs iHash).output i).eZs.zLast =
+      .of (i + 16) 14 cfg.lookupConfig.runningSum := by
+  rw [synthChecks_output]
+
+@[circuit_norm] theorem synthChecks_output_gZs_z0
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (iHash i : RegionIndex) :
+    ((synthChecks G R Q hQ cfg input pcs iHash).output i).gZs.z0 =
+      .of (i + 17) 0 cfg.lookupConfig.runningSum := by
+  rw [synthChecks_output]
+
+@[circuit_norm] theorem synthChecks_output_gZs_zLast
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (iHash i : RegionIndex) :
+    ((synthChecks G R Q hQ cfg input pcs iHash).output i).gZs.zLast =
+      .of (i + 17) 13 cfg.lookupConfig.runningSum := by
+  rw [synthChecks_output]
+
 /-! ## The bundle (factored: standalone elaborated/contract/proofs) -/
 
-open Specs.Sinsemilla (hashToPoint HashGuarded)
+open Specs.Sinsemilla (hashToPoint hashToPointB SpecOrBreak)
 open CompElliptic.Fields.Pasta (Fq)
 
 /-- Equality-enabled columns used by NoteCommit's local copy operations, together with
@@ -1043,12 +1191,13 @@ theorem synthChecks_keygenRegistered
         FormalCircuit.keygenRequirements,
         ElaboratedCircuit.keygenRequirements] at h ⊢
       aesop
-    · intro column h
-      simp [YCanonicityCheck.circuit, keygenRequirements, permutationColumns,
-        NoteCommit.permutationColumns,
+    · simp only [YCanonicityCheck.circuit,
         FormalCircuit.keygenRequirements,
-        ElaboratedCircuit.keygenRequirements] at h ⊢
-      aesop
+        ElaboratedCircuit.keygenRequirements, List.forall_cons,
+        List.forall_nil, and_true]
+      apply List.mem_append_left
+      apply List.mem_append_right
+      simp [keygenRequirements, KeygenRequirements.inputPermutationColumns]
   constructor
   · apply FormalCircuit.call_keygenRegistered_ofOutput
       (YCanonicityCheck.circuit (brWit input.pkdY 0 1))
@@ -1069,12 +1218,13 @@ theorem synthChecks_keygenRegistered
         FormalCircuit.keygenRequirements,
         ElaboratedCircuit.keygenRequirements] at h ⊢
       aesop
-    · intro column h
-      simp [YCanonicityCheck.circuit, keygenRequirements, permutationColumns,
-        NoteCommit.permutationColumns,
+    · simp only [YCanonicityCheck.circuit,
         FormalCircuit.keygenRequirements,
-        ElaboratedCircuit.keygenRequirements] at h ⊢
-      aesop
+        ElaboratedCircuit.keygenRequirements, List.forall_cons,
+        List.forall_nil, and_true]
+      apply List.mem_append_left
+      apply List.mem_append_right
+      simp [keygenRequirements, KeygenRequirements.inputPermutationColumns]
   constructor
   · apply FormalCircuit.call_keygenRegistered
       (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil)
@@ -1088,19 +1238,14 @@ theorem synthChecks_keygenRegistered
     · intro column h
       exact List.mem_append_left _ (List.mem_append_left _
         (List.mem_append_right _ h))
-    · intro column h
+    · rw [Sinsemilla.CommitDomain.commit_inputCells,
+        List.forall_iff_forall_mem]
+      intro cell hcell
       apply List.mem_append_right
-      simp only [Sinsemilla.CommitDomain.commit,
-        Sinsemilla.CommitDomain.keygenRequirements,
-        FormalCircuit.Configured.inputPermutationColumns,
-        FormalCircuit.keygenRequirements,
-        ElaboratedCircuit.keygenRequirements] at h
       simp only [Vector.toList, List.map_cons, List.map_nil, List.mem_cons,
-        List.not_mem_nil, or_false] at h
-      simp only [PieceCells.permutationColumns, List.mem_cons,
-        List.not_mem_nil, or_false]
-      rcases h with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
-        simp
+        List.not_mem_nil, or_false] at hcell
+      rcases hcell with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl <;>
+        simp [PieceCells.permutationColumns]
   have hRunningSum : cfg.lookupConfig.runningSum.toAny ∈
       (keygenRequirements G R Q hQ).permutationColumns cfg configured ++
         (keygenRequirements G R Q hQ).inputPermutationColumns cfg configured input ++
@@ -1122,6 +1267,42 @@ theorem synthChecks_keygenRegistered
     · simp [keygenRequirements]
     · exact hRunningSum
 
+private theorem pureRegionCall_keygenRegistered
+    {Config : Type} {Input Output : TypeMap}
+    [ProvableType Input] [ProvableType Output]
+    (child : FormalRegionCircuit Fp Config Config Input Output)
+    (name : String) (cfg : Config) (input : Var Input Fp) (self : RegionIndex)
+    (hconfigured : child.keygenRequirements.configLawful cfg)
+    (hconfigure : child.configure cfg = pure cfg)
+    {targetGates : List (Gate Fp)} {targetLookups : List (LookupArgument Fp)}
+    {targetPermutationColumns : List AnyColumn}
+    (hgates : ∀ gate, gate ∈ child.keygenRequirements.gates cfg hconfigured →
+      gate ∈ targetGates)
+    (hlookups : ∀ lookup, lookup ∈ child.keygenRequirements.lookups cfg hconfigured →
+      lookup ∈ targetLookups)
+    (hpermutationColumns : ∀ column,
+      column ∈ child.keygenRequirements.permutationColumns cfg hconfigured →
+        column ∈ targetPermutationColumns)
+    (hinputCells : (child.keygenRequirements.inputCells cfg hconfigured input).Forall
+      fun cell => cell.column ∈ targetPermutationColumns) :
+    (((child.toFormal name).call cfg input).operations self).KeygenRegistered
+      targetGates targetLookups targetPermutationColumns := by
+  let lifted := child.toFormal name
+  have hliftedConfigure : lifted.configure cfg = pure cfg := by
+    simpa only [lifted, FormalRegionCircuit.toFormal] using hconfigure
+  let configured := FormalCircuit.Configured.ofPure
+    lifted cfg hconfigured hliftedConfigure
+  apply lifted.call_keygenRegistered cfg configured input self
+  · simpa only [configured, lifted, FormalCircuit.Configured.ofPure_gates,
+      FormalRegionCircuit.toFormal_keygenRequirements] using hgates
+  · simpa only [configured, lifted, FormalCircuit.Configured.ofPure_lookups,
+      FormalRegionCircuit.toFormal_keygenRequirements] using hlookups
+  · simpa only [configured, lifted,
+      FormalCircuit.Configured.ofPure_permutationColumns,
+      FormalRegionCircuit.toFormal_keygenRequirements] using hpermutationColumns
+  · simpa only [configured, lifted, FormalCircuit.Configured.ofPure_inputCells,
+      FormalRegionCircuit.toFormal_keygenRequirements] using hinputCells
+
 theorem synthDecompositions_keygenRegistered
     (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
     (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
@@ -1133,22 +1314,110 @@ theorem synthDecompositions_keygenRegistered
       ((keygenRequirements G R Q hQ).permutationColumns cfg configured ++
         (keygenRequirements G R Q hQ).inputPermutationColumns cfg configured input ++
         pcs.permutationColumns ++ ccs.permutationColumns) := by
-  have hB := fun column =>
-    mem_permutationColumns_of_decomposeB (column := column) cfg configured.permutationColumns
-  have hD := fun column =>
-    mem_permutationColumns_of_decomposeD (column := column) cfg configured.permutationColumns
-  have hE := fun column =>
-    mem_permutationColumns_of_decomposeE (column := column) cfg configured.permutationColumns
-  have hG := fun column =>
-    mem_permutationColumns_of_decomposeG (column := column) cfg configured.permutationColumns
-  have hH := fun column =>
-    mem_permutationColumns_of_decomposeH (column := column) cfg configured.permutationColumns
-  have hZ := fun i j =>
-    zCell_column_mem_permutationColumns cfg configured.permutationColumns iHash i j
+  have hB : ∀ {column : AnyColumn},
+      column ∈ ([cfg.gates.b.colL, cfg.gates.b.colM,
+        cfg.gates.b.colR] : List AnyColumn) →
+      column ∈ permutationColumns cfg configured.permutationColumns :=
+    mem_permutationColumns_of_decomposeB cfg configured.permutationColumns
+  have hD : ∀ {column : AnyColumn},
+      column ∈ ([cfg.gates.d.colL, cfg.gates.d.colM,
+        cfg.gates.d.colR] : List AnyColumn) →
+      column ∈ permutationColumns cfg configured.permutationColumns :=
+    mem_permutationColumns_of_decomposeD cfg configured.permutationColumns
+  have hE : ∀ {column : AnyColumn},
+      column ∈ ([cfg.gates.e.colL, cfg.gates.e.colM,
+        cfg.gates.e.colR] : List AnyColumn) →
+      column ∈ permutationColumns cfg configured.permutationColumns :=
+    mem_permutationColumns_of_decomposeE cfg configured.permutationColumns
+  have hG : ∀ {column : AnyColumn},
+      column ∈ ([cfg.gates.g.colL, cfg.gates.g.colM] : List AnyColumn) →
+      column ∈ permutationColumns cfg configured.permutationColumns :=
+    mem_permutationColumns_of_decomposeG cfg configured.permutationColumns
+  have hH : ∀ {column : AnyColumn},
+      column ∈ ([cfg.gates.h.colL, cfg.gates.h.colM,
+        cfg.gates.h.colR] : List AnyColumn) →
+      column ∈ permutationColumns cfg configured.permutationColumns :=
+    mem_permutationColumns_of_decomposeH cfg configured.permutationColumns
+  have hZ : ∀ i j,
+      (zCell cfg.hashConfig iHash i j).cell.column ∈
+        permutationColumns cfg configured.permutationColumns :=
+    zCell_column_mem_permutationColumns cfg configured.permutationColumns iHash
   simp only [synthDecompositions, Circuit.operations_bind,
     Operations.KeygenRegistered.append]
   repeat' apply And.intro
-  all_goals keygen_registration
+  · apply pureRegionCall_keygenRegistered
+      (DecomposeB.bundle (brWit input.gdX 254 1))
+      "NoteCommit MessagePiece b" cfg.gates.b
+      { b := pcs.b, b0 := pcs.b0, b2 := ccs.b2, b3 := pcs.b3 }
+      _ () (by rfl)
+    keygen_registration
+  · apply pureRegionCall_keygenRegistered
+      (DecomposeD.bundle (brWit input.pkdX 254 1))
+      "NoteCommit MessagePiece d" cfg.gates.d
+      { d := pcs.d, d1 := ccs.d1, d2 := pcs.d2,
+        d3 := zCell cfg.hashConfig iHash 3 1 }
+      _ () (by rfl)
+    keygen_registration
+  · apply pureRegionCall_keygenRegistered
+      DecomposeE.bundle "NoteCommit MessagePiece e" cfg.gates.e
+      { e := pcs.e, e0 := pcs.e0, e1 := pcs.e1 } _ () (by rfl)
+    keygen_registration
+  · apply pureRegionCall_keygenRegistered
+      (DecomposeG.bundle (brWit input.rho 254 1))
+      "NoteCommit MessagePiece g" cfg.gates.g
+      { g := pcs.g, g1 := pcs.g1,
+        g2 := zCell cfg.hashConfig iHash 6 1 }
+      _ () (by rfl)
+    · intro gate hgate
+      simp only [DecomposeG.bundle, FormalRegionCircuit.keygenRequirements,
+        ElaboratedRegionCircuit.keygenRequirements, List.mem_singleton] at hgate
+      subst gate
+      simp [keygenRequirements]
+    · intro lookup hlookup
+      simp only [DecomposeG.bundle, FormalRegionCircuit.keygenRequirements,
+        ElaboratedRegionCircuit.keygenRequirements, List.not_mem_nil] at hlookup
+    · intro column hcolumn
+      apply List.mem_append_left
+      apply List.mem_append_left
+      apply List.mem_append_left
+      exact hG hcolumn
+    · simp only [DecomposeG.bundle, FormalRegionCircuit.keygenRequirements,
+        ElaboratedRegionCircuit.keygenRequirements, List.forall_cons,
+        List.forall_nil, and_true]
+      refine ⟨?_, ?_, List.mem_append_left _ (List.mem_append_left _
+        (List.mem_append_left _ (hZ 6 1)))⟩
+      · apply List.mem_append_left
+        apply List.mem_append_right
+        simp only [PieceCells.permutationColumns, List.mem_cons, true_or,
+          or_true]
+      · apply List.mem_append_left
+        apply List.mem_append_right
+        simp only [PieceCells.permutationColumns, List.mem_cons, true_or, or_true]
+  · apply pureRegionCall_keygenRegistered
+      (DecomposeH.bundle (brWit input.psi 254 1))
+      "NoteCommit MessagePiece h" cfg.gates.h
+      { h := pcs.h, h0 := pcs.h0 } _ () (by rfl)
+    · intro gate hgate
+      simp only [DecomposeH.bundle, FormalRegionCircuit.keygenRequirements,
+        ElaboratedRegionCircuit.keygenRequirements, List.mem_singleton] at hgate
+      subst gate
+      simp [keygenRequirements]
+    · intro lookup hlookup
+      simp only [DecomposeH.bundle, FormalRegionCircuit.keygenRequirements,
+        ElaboratedRegionCircuit.keygenRequirements, List.not_mem_nil] at hlookup
+    · intro column hcolumn
+      apply List.mem_append_left
+      apply List.mem_append_left
+      apply List.mem_append_left
+      simpa only [keygenRequirements] using
+        mem_permutationColumns_of_decomposeH
+          cfg configured.permutationColumns hcolumn
+    · simp only [DecomposeH.bundle, FormalRegionCircuit.keygenRequirements,
+        ElaboratedRegionCircuit.keygenRequirements, List.forall_cons,
+        List.forall_nil, and_true]
+      constructor <;> apply List.mem_append_left <;>
+        apply List.mem_append_right <;> simp [PieceCells.permutationColumns]
+  · simp only [Circuit.operations_pure, Operations.KeygenRegistered.nil]
 
 theorem synthGdPkdValueCanonicity_keygenRegistered
     (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
@@ -1163,18 +1432,51 @@ theorem synthGdPkdValueCanonicity_keygenRegistered
         (keygenRequirements G R Q hQ).inputPermutationColumns cfg configured input ++
         pcs.permutationColumns ++ ccs.permutationColumns ++
         gcs.permutationColumns) := by
-  have hGd := fun column =>
-    mem_permutationColumns_of_gd (column := column) cfg configured.permutationColumns
-  have hPkd := fun column =>
-    mem_permutationColumns_of_pkd (column := column) cfg configured.permutationColumns
-  have hValue := fun column =>
-    mem_permutationColumns_of_value (column := column) cfg configured.permutationColumns
-  have hZ := fun i j =>
-    zCell_column_mem_permutationColumns cfg configured.permutationColumns iHash i j
+  have hGd : ∀ {column : AnyColumn},
+      column ∈ ([cfg.gates.gd.colL, cfg.gates.gd.colM,
+        cfg.gates.gd.colR, cfg.gates.gd.colZ] : List AnyColumn) →
+      column ∈ permutationColumns cfg configured.permutationColumns :=
+    mem_permutationColumns_of_gd cfg configured.permutationColumns
+  have hPkd : ∀ {column : AnyColumn},
+      column ∈ ([cfg.gates.pkd.colL, cfg.gates.pkd.colM,
+        cfg.gates.pkd.colR, cfg.gates.pkd.colZ] : List AnyColumn) →
+      column ∈ permutationColumns cfg configured.permutationColumns :=
+    mem_permutationColumns_of_pkd cfg configured.permutationColumns
+  have hValue : ∀ {column : AnyColumn},
+      column ∈ ([cfg.gates.value.colL, cfg.gates.value.colM,
+        cfg.gates.value.colR, cfg.gates.value.colZ] : List AnyColumn) →
+      column ∈ permutationColumns cfg configured.permutationColumns :=
+    mem_permutationColumns_of_value cfg configured.permutationColumns
+  have hZ : ∀ i j,
+      (zCell cfg.hashConfig iHash i j).cell.column ∈
+        permutationColumns cfg configured.permutationColumns :=
+    zCell_column_mem_permutationColumns cfg configured.permutationColumns iHash
   simp only [synthGdPkdValueCanonicity, Circuit.operations_bind,
     Operations.KeygenRegistered.append]
   repeat' apply And.intro
-  all_goals keygen_registration
+  · apply pureRegionCall_keygenRegistered
+      GdCanonicity.bundle "NoteCommit input g_d" cfg.gates.gd
+      { gdX := input.gdX, b0 := pcs.b0, b1 := gcs.b1, a := pcs.a,
+        aPrime := ccs.aZs.z0,
+        z13A := zCell cfg.hashConfig iHash 0 13,
+        z13APrime := ccs.aZs.zLast }
+      _ () (by rfl)
+    keygen_registration
+  · apply pureRegionCall_keygenRegistered
+      PkdCanonicity.bundle "NoteCommit input pk_d" cfg.gates.pkd
+      { pkdX := input.pkdX, b3 := pcs.b3, d0 := gcs.d0, c := pcs.c,
+        b3CPrime := ccs.bZs.z0,
+        z13C := zCell cfg.hashConfig iHash 2 13,
+        z14B3CPrime := ccs.bZs.zLast }
+      _ () (by rfl)
+    keygen_registration
+  · apply pureRegionCall_keygenRegistered
+      ValueCanonicity.bundle "NoteCommit input value" cfg.gates.value
+      { value := input.value, d2 := pcs.d2,
+        d3 := zCell cfg.hashConfig iHash 3 1, e0 := pcs.e0 }
+      _ () (by rfl)
+    keygen_registration
+  · simp only [Circuit.operations_pure, Operations.KeygenRegistered.nil]
 
 theorem synthRhoPsiCanonicity_keygenRegistered
     (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
@@ -1189,16 +1491,41 @@ theorem synthRhoPsiCanonicity_keygenRegistered
         (keygenRequirements G R Q hQ).inputPermutationColumns cfg configured input ++
         pcs.permutationColumns ++ ccs.permutationColumns ++
         gcs.permutationColumns) := by
-  have hRho := fun column =>
-    mem_permutationColumns_of_rho (column := column) cfg configured.permutationColumns
-  have hPsi := fun column =>
-    mem_permutationColumns_of_psi (column := column) cfg configured.permutationColumns
-  have hZ := fun i j =>
-    zCell_column_mem_permutationColumns cfg configured.permutationColumns iHash i j
+  have hRho : ∀ {column : AnyColumn},
+      column ∈ ([cfg.gates.rho.colL, cfg.gates.rho.colM,
+        cfg.gates.rho.colR, cfg.gates.rho.colZ] : List AnyColumn) →
+      column ∈ permutationColumns cfg configured.permutationColumns :=
+    mem_permutationColumns_of_rho cfg configured.permutationColumns
+  have hPsi : ∀ {column : AnyColumn},
+      column ∈ ([cfg.gates.psi.colL, cfg.gates.psi.colM,
+        cfg.gates.psi.colR, cfg.gates.psi.colZ] : List AnyColumn) →
+      column ∈ permutationColumns cfg configured.permutationColumns :=
+    mem_permutationColumns_of_psi cfg configured.permutationColumns
+  have hZ : ∀ i j,
+      (zCell cfg.hashConfig iHash i j).cell.column ∈
+        permutationColumns cfg configured.permutationColumns :=
+    zCell_column_mem_permutationColumns cfg configured.permutationColumns iHash
   simp only [synthRhoPsiCanonicity, Circuit.operations_bind,
     Operations.KeygenRegistered.append]
   repeat' apply And.intro
-  all_goals keygen_registration
+  · apply pureRegionCall_keygenRegistered
+      RhoCanonicity.bundle "NoteCommit input rho" cfg.gates.rho
+      { rho := input.rho, e1 := pcs.e1, g0 := gcs.g0, f := pcs.f,
+        e1FPrime := ccs.eZs.z0,
+        z13F := zCell cfg.hashConfig iHash 5 13,
+        z14E1FPrime := ccs.eZs.zLast }
+      _ () (by rfl)
+    keygen_registration
+  · apply pureRegionCall_keygenRegistered
+      PsiCanonicity.bundle "NoteCommit input psi" cfg.gates.psi
+      { psi := input.psi, h0 := pcs.h0, g1 := pcs.g1, h1 := gcs.h1,
+        g2 := zCell cfg.hashConfig iHash 6 1,
+        g1G2Prime := ccs.gZs.z0,
+        z13G := zCell cfg.hashConfig iHash 6 13,
+        z13G1G2Prime := ccs.gZs.zLast }
+      _ () (by rfl)
+    keygen_registration
+  · simp only [Circuit.operations_pure, Operations.KeygenRegistered.nil]
 
 theorem synthCanonicity_keygenRegistered
     (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
@@ -1368,6 +1695,710 @@ theorem synth_output_eq (G : Generators) (R : FixedBase)
     Sinsemilla.CommitDomain.commit_output_cells]
   simp only [output, Nat.reduceAdd, Nat.add_assoc]
 
+private theorem synthPieces_copyCellsAssigned
+    (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex) :
+    ((synthPieces cfg input).operations self).CopyCellsAssigned self
+      [input.gdX.cell, input.gdY.cell, input.pkdX.cell, input.pkdY.cell,
+        input.value.cell, input.rho.cell, input.psi.cell] := by
+  simp only [synthPieces, Circuit.operations_bind, Circuit.operations_pure,
+    List.append_nil]
+  apply Operations.CopyCellsAssignedFrom.append
+  · apply Sinsemilla.HashToPoint.witnessMessagePiece_copyCellsAssignedFrom
+  · apply Operations.CopyCellsAssignedFrom.append
+    · apply LookupRangeCheck.witnessShortCheck_copyCellsAssignedFrom
+    · apply Operations.CopyCellsAssignedFrom.append
+      · apply LookupRangeCheck.witnessShortCheck_copyCellsAssignedFrom
+      · apply Operations.CopyCellsAssignedFrom.append
+        · apply Sinsemilla.HashToPoint.witnessMessagePiece_copyCellsAssignedFrom
+        · apply Operations.CopyCellsAssignedFrom.append
+          · apply Sinsemilla.HashToPoint.witnessMessagePiece_copyCellsAssignedFrom
+          · apply Operations.CopyCellsAssignedFrom.append
+            · apply LookupRangeCheck.witnessShortCheck_copyCellsAssignedFrom
+            · apply Operations.CopyCellsAssignedFrom.append
+              · apply Sinsemilla.HashToPoint.witnessMessagePiece_copyCellsAssignedFrom
+              · apply Operations.CopyCellsAssignedFrom.append
+                · apply LookupRangeCheck.witnessShortCheck_copyCellsAssignedFrom
+                · apply Operations.CopyCellsAssignedFrom.append
+                  · apply LookupRangeCheck.witnessShortCheck_copyCellsAssignedFrom
+                  · apply Operations.CopyCellsAssignedFrom.append
+                    · apply Sinsemilla.HashToPoint.witnessMessagePiece_copyCellsAssignedFrom
+                    · apply Operations.CopyCellsAssignedFrom.append
+                      · apply Sinsemilla.HashToPoint.witnessMessagePiece_copyCellsAssignedFrom
+                      · apply Operations.CopyCellsAssignedFrom.append
+                        · apply LookupRangeCheck.witnessShortCheck_copyCellsAssignedFrom
+                        · apply Operations.CopyCellsAssignedFrom.append
+                          · apply Sinsemilla.HashToPoint.witnessMessagePiece_copyCellsAssignedFrom
+                          · apply Operations.CopyCellsAssignedFrom.append
+                            · apply LookupRangeCheck.witnessShortCheck_copyCellsAssignedFrom
+                            · apply Sinsemilla.HashToPoint.witnessMessagePiece_copyCellsAssignedFrom
+
+private theorem synthPieces_output_cells_assigned
+    (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex) :
+    let pcs := (synthPieces cfg input).output self
+    [pcs.a.cell, pcs.b.cell, pcs.c.cell, pcs.d.cell, pcs.e.cell,
+      pcs.f.cell, pcs.g.cell, pcs.h.cell, pcs.b0.cell, pcs.b3.cell,
+      pcs.d2.cell, pcs.e0.cell, pcs.e1.cell, pcs.g1.cell,
+      pcs.h0.cell].Forall fun cell =>
+        cell ∈ ((synthPieces cfg input).operations self).assignedCellsFrom self := by
+  rw [synthPieces_output]
+  simp only [synthPieces, Sinsemilla.HashToPoint.witnessMessagePiece,
+    LookupRangeCheck.witnessShortCheck, circuit_norm,
+    Operations.assignedCellsFrom, RegionOperations.assignedCells,
+    RegionOperation.assignedCells,
+    List.flatMap_cons, List.mem_append, List.mem_cons, true_or]
+
+private theorem synthChecks_copyCellsAssignedFrom
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (iHash self : RegionIndex) (available : List Cell)
+    (configured : (keygenRequirements G R Q hQ).configLawful cfg)
+    (havailable : [input.gdY.cell, input.pkdY.cell, pcs.a.cell,
+      pcs.b.cell, pcs.c.cell, pcs.d.cell, pcs.e.cell, pcs.f.cell,
+      pcs.g.cell, pcs.h.cell].Forall fun cell => cell ∈ available) :
+    ((synthChecks G R Q hQ cfg input pcs iHash).operations self)
+      |>.CopyCellsAssignedFrom self available := by
+  simp only [synthChecks, Circuit.operations_bind, Circuit.operations_pure,
+    List.append_nil, yc_call_nextRegionIndex, commit_call_nextRegionIndex,
+    LookupRangeCheck.witnessCheck_nextRegionIndex]
+  apply Operations.CopyCellsAssignedFrom.append
+  · apply (YCanonicityCheck.circuit (brWit input.gdY 0 1))
+      |>.call_copyCellsAssignedFrom _
+        (FormalCircuit.Configured.ofPure
+          (YCanonicityCheck.circuit (brWit input.gdY 0 1))
+          (cfg.gates.y, cfg.lookupConfig) () rfl) _ _
+    intro cell hcell
+    rw [YCanonicityCheck.circuit_inputCells] at hcell
+    simp only [List.mem_singleton] at hcell
+    subst cell
+    exact havailable.1
+  · apply Operations.CopyCellsAssignedFrom.append
+    · rw [YCanonicityCheck.circuit_call_regionCount]
+      apply (YCanonicityCheck.circuit (brWit input.pkdY 0 1))
+        |>.call_copyCellsAssignedFrom _
+          (FormalCircuit.Configured.ofPure
+            (YCanonicityCheck.circuit (brWit input.pkdY 0 1))
+            (cfg.gates.y, cfg.lookupConfig) () rfl) _ _
+      intro cell hcell
+      rw [YCanonicityCheck.circuit_inputCells] at hcell
+      simp only [List.mem_singleton] at hcell
+      subst cell
+      exact List.mem_append_left _ havailable.2.1
+    · rw [YCanonicityCheck.circuit_call_regionCount]
+      apply Operations.CopyCellsAssignedFrom.append
+      · rw [YCanonicityCheck.circuit_call_regionCount]
+        apply (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil)
+          |>.call_copyCellsAssignedFrom _ configured _ _
+        rw [Sinsemilla.CommitDomain.commit_inputCells]
+        intro cell hcell
+        simp only [Vector.toList, List.map_cons, List.map_nil,
+          List.mem_cons, List.not_mem_nil, or_false] at hcell
+        rcases hcell with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+        all_goals apply List.mem_append_left
+        all_goals apply List.mem_append_left
+        · exact havailable.2.2.1
+        · exact havailable.2.2.2.1
+        · exact havailable.2.2.2.2.1
+        · exact havailable.2.2.2.2.2.1
+        · exact havailable.2.2.2.2.2.2.1
+        · exact havailable.2.2.2.2.2.2.2.1
+        · exact havailable.2.2.2.2.2.2.2.2.1
+        · exact havailable.2.2.2.2.2.2.2.2.2
+      · rw [YCanonicityCheck.circuit_call_regionCount,
+          Sinsemilla.CommitDomain.commit_call_regionCount]
+        apply Operations.CopyCellsAssignedFrom.append
+        · apply LookupRangeCheck.witnessCheck_copyCellsAssignedFrom
+        · rw [LookupRangeCheck.witnessCheck_regionCount]
+          apply Operations.CopyCellsAssignedFrom.append
+          · apply LookupRangeCheck.witnessCheck_copyCellsAssignedFrom
+          · rw [LookupRangeCheck.witnessCheck_regionCount]
+            apply Operations.CopyCellsAssignedFrom.append
+            · apply LookupRangeCheck.witnessCheck_copyCellsAssignedFrom
+            · rw [LookupRangeCheck.witnessCheck_regionCount]
+              apply LookupRangeCheck.witnessCheck_copyCellsAssignedFrom
+
+/-- The stage-2 outputs consumed by decomposition were assigned by their
+respective child calls. -/
+private theorem synthChecks_decomposition_cells_assigned
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (iHash self : RegionIndex) (hiHash : iHash = self + 12) :
+    let ccs := (synthChecks G R Q hQ cfg input pcs iHash).output self
+    [ccs.b2.cell, ccs.d1.cell,
+      (zCell cfg.hashConfig iHash 3 1).cell,
+      (zCell cfg.hashConfig iHash 6 1).cell].Forall fun cell =>
+        cell ∈ (((synthChecks G R Q hQ cfg input pcs iHash).operations self)
+          |>.assignedCellsFrom self) := by
+  subst iHash
+  have hy1 := YCanonicityCheck.circuit_call_output_cell_assigned
+    (brWit input.gdY 0 1) (cfg.gates.y, cfg.lookupConfig)
+    { y := input.gdY } self
+  have hy2 := YCanonicityCheck.circuit_call_output_cell_assigned
+    (brWit input.pkdY 0 1) (cfg.gates.y, cfg.lookupConfig)
+    { y := input.pkdY } (self + 5)
+  have hz3 := Sinsemilla.CommitDomain.commit_call_hash_z1_cell_assigned
+    G ns R Q hQ ns_ne_nil (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
+    { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h],
+      r := input.rcm } (self + 10) ⟨3, by norm_num [ns]⟩ (by norm_num [ns])
+  have hz6 := Sinsemilla.CommitDomain.commit_call_hash_z1_cell_assigned
+    G ns R Q hQ ns_ne_nil (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
+    { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h],
+      r := input.rcm } (self + 10) ⟨6, by norm_num [ns]⟩ (by norm_num [ns])
+  simp only [YCanonicityCheck.circuit_output] at hy1 hy2
+  simp only [Sinsemilla.HashToPoint.hashCircuit_output_z1s,
+    Fin.getElem_fin, Vector.getElem_ofFn, Nat.zero_add,
+    Nat.add_assoc] at hz3 hz6
+  rw [synthChecks_output]
+  simp only [List.forall_cons, List.forall_nil, and_true]
+  simp only [synthChecks, Circuit.operations_bind, Circuit.operations_pure,
+    List.append_nil, Operations.assignedCellsFrom_append,
+    FormalCircuit.nextRegionIndex_call,
+    YCanonicityCheck.circuit_call_regionCount,
+    Sinsemilla.CommitDomain.commit_call_regionCount,
+    LookupRangeCheck.witnessCheck_regionCount, List.mem_append,
+    Nat.add_assoc]
+  exact ⟨Or.inl hy1, Or.inr (Or.inl hy2),
+    Or.inr (Or.inr (Or.inl hz3)),
+    Or.inr (Or.inr (Or.inl hz6))⟩
+
+/-- Both coordinates returned by the commitment child are assigned in stage 2. -/
+theorem synthChecks_output_cm_cells_assigned
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (iHash self : RegionIndex) :
+    let cm := (synthChecks G R Q hQ cfg input pcs iHash).output self |>.cm
+    cm.x.cell ∈ ((synthChecks G R Q hQ cfg input pcs iHash).operations self
+        |>.assignedCellsFrom self) ∧
+      cm.y.cell ∈ ((synthChecks G R Q hQ cfg input pcs iHash).operations self
+        |>.assignedCellsFrom self) := by
+  have hcommit := Sinsemilla.CommitDomain.commit_call_output_cells_assigned
+    G ns R Q hQ ns_ne_nil (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
+    { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h],
+      r := input.rcm } (self + 10)
+  rw [synthChecks_output]
+  simp only [synthChecks, Circuit.operations_bind, Circuit.operations_pure,
+    List.append_nil, Operations.assignedCellsFrom_append,
+    FormalCircuit.nextRegionIndex_call,
+    YCanonicityCheck.circuit_call_regionCount,
+    Sinsemilla.CommitDomain.commit_call_regionCount,
+    LookupRangeCheck.witnessCheck_regionCount, List.mem_append,
+    Nat.add_assoc]
+  exact ⟨Or.inr (Or.inr (Or.inl hcommit.1)),
+    Or.inr (Or.inr (Or.inl hcommit.2))⟩
+
+/-- The stage-2 range-check and hash cells consumed by canonicity were assigned
+by their respective children. -/
+private theorem synthChecks_canonicity_cells_assigned
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (iHash self : RegionIndex) (hiHash : iHash = self + 12) :
+    let ccs := (synthChecks G R Q hQ cfg input pcs iHash).output self
+    [ccs.aZs.z0.cell, ccs.aZs.zLast.cell,
+      ccs.bZs.z0.cell, ccs.bZs.zLast.cell,
+      ccs.eZs.z0.cell, ccs.eZs.zLast.cell,
+      ccs.gZs.z0.cell, ccs.gZs.zLast.cell,
+      (zCell cfg.hashConfig iHash 0 13).cell,
+      (zCell cfg.hashConfig iHash 2 13).cell,
+      (zCell cfg.hashConfig iHash 3 1).cell,
+      (zCell cfg.hashConfig iHash 5 13).cell,
+      (zCell cfg.hashConfig iHash 6 1).cell,
+      (zCell cfg.hashConfig iHash 6 13).cell].Forall fun cell =>
+        cell ∈ (((synthChecks G R Q hQ cfg input pcs iHash).operations self)
+          |>.assignedCellsFrom self) := by
+  subst iHash
+  have ha := LookupRangeCheck.witnessCheck_output_cells_assigned
+    10 13 false (by simp) cfg.lookupConfig
+    (GdCanonicityCheck.aPrimeWit pcs.a) (self + 14)
+  have hb := LookupRangeCheck.witnessCheck_output_cells_assigned
+    10 14 false (by simp) cfg.lookupConfig
+    (PkdCanonicityCheck.b3CPrimeWit pcs.b3 pcs.c) (self + 15)
+  have he := LookupRangeCheck.witnessCheck_output_cells_assigned
+    10 14 false (by simp) cfg.lookupConfig
+    (RhoCanonicityCheck.e1FPrimeWit pcs.e1 pcs.f) (self + 16)
+  have hg := LookupRangeCheck.witnessCheck_output_cells_assigned
+    10 13 false (by simp) cfg.lookupConfig
+    (PsiCanonicityCheck.g1G2PrimeWit pcs.g1
+      (zCell cfg.hashConfig (self + 12) 6 1)) (self + 17)
+  have hz0 := Sinsemilla.CommitDomain.commit_call_hash_z_cell_assigned
+    G ns R Q hQ ns_ne_nil (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
+    { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h],
+      r := input.rcm } (self + 10)
+    ⟨0, by norm_num [ns]⟩ ⟨13, by norm_num [ns]⟩
+  have hz2 := Sinsemilla.CommitDomain.commit_call_hash_z_cell_assigned
+    G ns R Q hQ ns_ne_nil (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
+    { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h],
+      r := input.rcm } (self + 10)
+    ⟨2, by norm_num [ns]⟩ ⟨13, by norm_num [ns]⟩
+  have hz3 := Sinsemilla.CommitDomain.commit_call_hash_z_cell_assigned
+    G ns R Q hQ ns_ne_nil (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
+    { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h],
+      r := input.rcm } (self + 10)
+    ⟨3, by norm_num [ns]⟩ ⟨1, by norm_num [ns]⟩
+  have hz5 := Sinsemilla.CommitDomain.commit_call_hash_z_cell_assigned
+    G ns R Q hQ ns_ne_nil (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
+    { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h],
+      r := input.rcm } (self + 10)
+    ⟨5, by norm_num [ns]⟩ ⟨13, by norm_num [ns]⟩
+  have hz6a := Sinsemilla.CommitDomain.commit_call_hash_z_cell_assigned
+    G ns R Q hQ ns_ne_nil (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
+    { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h],
+      r := input.rcm } (self + 10)
+    ⟨6, by norm_num [ns]⟩ ⟨1, by norm_num [ns]⟩
+  have hz6b := Sinsemilla.CommitDomain.commit_call_hash_z_cell_assigned
+    G ns R Q hQ ns_ne_nil (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
+    { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h],
+      r := input.rcm } (self + 10)
+    ⟨6, by norm_num [ns]⟩ ⟨13, by norm_num [ns]⟩
+  simp only [LookupRangeCheck.witnessCheck_output] at ha hb he hg
+  rw [synthChecks_output]
+  simp only [List.forall_cons, List.forall_nil, and_true]
+  simp only [synthChecks, Circuit.operations_bind, Circuit.operations_pure,
+    List.append_nil, Operations.assignedCellsFrom_append,
+    FormalCircuit.nextRegionIndex_call,
+    YCanonicityCheck.circuit_call_regionCount,
+    Sinsemilla.CommitDomain.commit_call_regionCount,
+    LookupRangeCheck.witnessCheck_regionCount, List.mem_append,
+    Nat.add_assoc]
+  exact ⟨Or.inr (Or.inr (Or.inr (Or.inl ha.1))),
+    Or.inr (Or.inr (Or.inr (Or.inl ha.2))),
+    Or.inr (Or.inr (Or.inr (Or.inr (Or.inl hb.1)))),
+    Or.inr (Or.inr (Or.inr (Or.inr (Or.inl hb.2)))),
+    Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl he.1))))),
+    Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl he.2))))),
+    Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr hg.1))))),
+    Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr hg.2))))),
+    Or.inr (Or.inr (Or.inl hz0)), Or.inr (Or.inr (Or.inl hz2)),
+    Or.inr (Or.inr (Or.inl hz3)), Or.inr (Or.inr (Or.inl hz5)),
+    Or.inr (Or.inr (Or.inl hz6a)), Or.inr (Or.inr (Or.inl hz6b))⟩
+
+private def synthDecompositionsInputCells (cfg : Config)
+    (input : Var Inputs Fp) (pcs : PieceCells) (ccs : CheckCells)
+    (iHash : RegionIndex) : List Cell :=
+  [input.gdX.cell, input.pkdX.cell, input.rho.cell, input.psi.cell,
+    pcs.b.cell, pcs.b0.cell, ccs.b2.cell, pcs.b3.cell,
+    pcs.d.cell, ccs.d1.cell, pcs.d2.cell,
+    (zCell cfg.hashConfig iHash 3 1).cell,
+    pcs.e.cell, pcs.e0.cell, pcs.e1.cell,
+    pcs.g.cell, pcs.g1.cell, (zCell cfg.hashConfig iHash 6 1).cell,
+    pcs.h.cell, pcs.h0.cell]
+
+private theorem pureRegionCall_copyCellsAssignedFrom
+    {Config : Type} {Input Output : TypeMap}
+    [ProvableType Input] [ProvableType Output]
+    (child : FormalRegionCircuit Fp Config Config Input Output)
+    (name : String) (cfg : Config) (input : Var Input Fp)
+    (self : RegionIndex) (available : List Cell)
+    (hconfigured : child.keygenRequirements.configLawful cfg)
+    (hconfigure : child.configure cfg = pure cfg)
+    (hinputCells : (child.keygenRequirements.inputCells cfg hconfigured input).Forall
+      fun cell => cell ∈ available) :
+    (((child.toFormal name).call cfg input).operations self)
+      |>.CopyCellsAssignedFrom self available := by
+  let lifted := child.toFormal name
+  have hliftedConfigure : lifted.configure cfg = pure cfg := by
+    simpa only [lifted, FormalRegionCircuit.toFormal] using hconfigure
+  let configured := FormalCircuit.Configured.ofPure
+    lifted cfg hconfigured hliftedConfigure
+  apply lifted.call_copyCellsAssignedFrom cfg configured input self
+  simpa only [configured, lifted, FormalCircuit.Configured.ofPure_inputCells,
+    FormalRegionCircuit.toFormal_keygenRequirements,
+    List.forall_iff_forall_mem] using
+      List.forall_iff_forall_mem.mp hinputCells
+
+private theorem synthDecompositions_copyCellsAssignedFrom
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (ccs : CheckCells) (iHash self : RegionIndex) :
+    ((synthDecompositions cfg input pcs ccs iHash).operations self)
+      |>.CopyCellsAssignedFrom self
+        (synthDecompositionsInputCells cfg input pcs ccs iHash) := by
+  simp only [synthDecompositions, Circuit.operations_bind,
+    Circuit.operations_pure, List.append_nil,
+    FormalCircuit.nextRegionIndex_call', Nat.add_assoc]
+  apply Operations.CopyCellsAssignedFrom.append
+  · apply pureRegionCall_copyCellsAssignedFrom
+      (DecomposeB.bundle (brWit input.gdX 254 1))
+      "NoteCommit MessagePiece b" cfg.gates.b
+      { b := pcs.b, b0 := pcs.b0, b2 := ccs.b2, b3 := pcs.b3 } _
+      (synthDecompositionsInputCells cfg input pcs ccs iHash) () (by rfl)
+    keygen_registration [synthDecompositionsInputCells]
+  · rw [toFormal_call_regionCount]
+    apply Operations.CopyCellsAssignedFrom.append
+    · apply (pureRegionCall_copyCellsAssignedFrom
+        (DecomposeD.bundle (brWit input.pkdX 254 1))
+        "NoteCommit MessagePiece d" cfg.gates.d
+        { d := pcs.d, d1 := ccs.d1, d2 := pcs.d2,
+          d3 := zCell cfg.hashConfig iHash 3 1 } _
+        (synthDecompositionsInputCells cfg input pcs ccs iHash) () (by rfl)
+        (by keygen_registration [synthDecompositionsInputCells])).mono
+      intro cell hcell
+      exact List.mem_append_left _ hcell
+    · rw [toFormal_call_regionCount]
+      apply Operations.CopyCellsAssignedFrom.append
+      · apply (pureRegionCall_copyCellsAssignedFrom DecomposeE.bundle
+          "NoteCommit MessagePiece e" cfg.gates.e
+          { e := pcs.e, e0 := pcs.e0, e1 := pcs.e1 } _
+          (synthDecompositionsInputCells cfg input pcs ccs iHash) () (by rfl)
+          (by keygen_registration [synthDecompositionsInputCells])).mono
+        intro cell hcell
+        exact List.mem_append_left _ (List.mem_append_left _ hcell)
+      · rw [toFormal_call_regionCount]
+        apply Operations.CopyCellsAssignedFrom.append
+        · apply (pureRegionCall_copyCellsAssignedFrom
+            (DecomposeG.bundle (brWit input.rho 254 1))
+            "NoteCommit MessagePiece g" cfg.gates.g
+            { g := pcs.g, g1 := pcs.g1,
+              g2 := zCell cfg.hashConfig iHash 6 1 } _
+            (synthDecompositionsInputCells cfg input pcs ccs iHash) () (by rfl)
+            (by keygen_registration [synthDecompositionsInputCells])).mono
+          intro cell hcell
+          exact List.mem_append_left _
+            (List.mem_append_left _ (List.mem_append_left _ hcell))
+        · rw [toFormal_call_regionCount]
+          apply (pureRegionCall_copyCellsAssignedFrom
+            (DecomposeH.bundle (brWit input.psi 254 1))
+            "NoteCommit MessagePiece h" cfg.gates.h
+            { h := pcs.h, h0 := pcs.h0 } _
+            (synthDecompositionsInputCells cfg input pcs ccs iHash) () (by rfl)
+            (by keygen_registration [synthDecompositionsInputCells])).mono
+          intro cell hcell
+          exact List.mem_append_left _ (List.mem_append_left _
+            (List.mem_append_left _ (List.mem_append_left _ hcell)))
+
+/-- The four cells returned by the decomposition children were assigned by
+those child calls. -/
+private theorem synthDecompositions_output_cells_assigned
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (ccs : CheckCells) (iHash self : RegionIndex) :
+    let gcs := (synthDecompositions cfg input pcs ccs iHash).output self
+    [gcs.b1.cell, gcs.d0.cell, gcs.g0.cell, gcs.h1.cell].Forall fun cell =>
+      cell ∈ (((synthDecompositions cfg input pcs ccs iHash).operations self)
+        |>.assignedCellsFrom self) := by
+  have hb := DecomposeB.bundle_call_output_cell_assigned
+    (brWit input.gdX 254 1) "NoteCommit MessagePiece b" cfg.gates.b
+    { b := pcs.b, b0 := pcs.b0, b2 := ccs.b2, b3 := pcs.b3 } self
+  have hd := DecomposeD.bundle_call_output_cell_assigned
+    (brWit input.pkdX 254 1) "NoteCommit MessagePiece d" cfg.gates.d
+    { d := pcs.d, d1 := ccs.d1, d2 := pcs.d2,
+      d3 := zCell cfg.hashConfig iHash 3 1 } (self + 1)
+  have hg := DecomposeG.bundle_call_output_cell_assigned
+    (brWit input.rho 254 1) "NoteCommit MessagePiece g" cfg.gates.g
+    { g := pcs.g, g1 := pcs.g1,
+      g2 := zCell cfg.hashConfig iHash 6 1 } (self + 3)
+  have hh := DecomposeH.bundle_call_output_cell_assigned
+    (brWit input.psi 254 1) "NoteCommit MessagePiece h" cfg.gates.h
+    { h := pcs.h, h0 := pcs.h0 } (self + 4)
+  simp only [decomposeB_toFormal_output, decomposeD_toFormal_output,
+    decomposeG_toFormal_output, decomposeH_toFormal_output] at hb hd hg hh
+  rw [synthDecompositions_output]
+  simp only [List.forall_cons, List.forall_nil, and_true]
+  simp only [synthDecompositions, Circuit.operations_bind,
+    Circuit.operations_pure, List.append_nil,
+    FormalCircuit.nextRegionIndex_call']
+  repeat' rw [toFormal_call_regionCount]
+  simp only [Operations.assignedCellsFrom_append, List.mem_append]
+  repeat' rw [toFormal_call_regionCount]
+  simp only [Nat.add_assoc]
+  exact ⟨Or.inl hb, Or.inr (Or.inl hd),
+    Or.inr (Or.inr (Or.inr (Or.inl hg))),
+    Or.inr (Or.inr (Or.inr (Or.inr hh)))⟩
+
+private def synthCanonicityInputCells (cfg : Config)
+    (input : Var Inputs Fp) (pcs : PieceCells) (ccs : CheckCells)
+    (gcs : GateCells) (iHash : RegionIndex) : List Cell :=
+  [input.gdX.cell, pcs.b0.cell, gcs.b1.cell, pcs.a.cell,
+    ccs.aZs.z0.cell, (zCell cfg.hashConfig iHash 0 13).cell,
+    ccs.aZs.zLast.cell,
+    input.pkdX.cell, pcs.b3.cell, gcs.d0.cell, pcs.c.cell,
+    ccs.bZs.z0.cell, (zCell cfg.hashConfig iHash 2 13).cell,
+    ccs.bZs.zLast.cell,
+    input.value.cell, pcs.d2.cell,
+    (zCell cfg.hashConfig iHash 3 1).cell, pcs.e0.cell,
+    input.rho.cell, pcs.e1.cell, gcs.g0.cell, pcs.f.cell,
+    ccs.eZs.z0.cell, (zCell cfg.hashConfig iHash 5 13).cell,
+    ccs.eZs.zLast.cell,
+    input.psi.cell, pcs.h0.cell, pcs.g1.cell, gcs.h1.cell,
+    (zCell cfg.hashConfig iHash 6 1).cell, ccs.gZs.z0.cell,
+    (zCell cfg.hashConfig iHash 6 13).cell, ccs.gZs.zLast.cell]
+
+private theorem synthGdPkdValueCanonicity_copyCellsAssignedFrom
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (ccs : CheckCells) (gcs : GateCells) (iHash self : RegionIndex) :
+    ((synthGdPkdValueCanonicity cfg input pcs ccs gcs iHash).operations self)
+      |>.CopyCellsAssignedFrom self
+        (synthCanonicityInputCells cfg input pcs ccs gcs iHash) := by
+  simp only [synthGdPkdValueCanonicity, Circuit.operations_bind,
+    Circuit.operations_pure, List.append_nil,
+    FormalCircuit.nextRegionIndex_call', Nat.add_assoc]
+  apply Operations.CopyCellsAssignedFrom.append
+  · apply pureRegionCall_copyCellsAssignedFrom
+      GdCanonicity.bundle "NoteCommit input g_d" cfg.gates.gd
+      { gdX := input.gdX, b0 := pcs.b0, b1 := gcs.b1, a := pcs.a,
+        aPrime := ccs.aZs.z0,
+        z13A := zCell cfg.hashConfig iHash 0 13,
+        z13APrime := ccs.aZs.zLast }
+      _ (synthCanonicityInputCells cfg input pcs ccs gcs iHash)
+      () (by rfl)
+    keygen_registration [synthCanonicityInputCells]
+  · rw [toFormal_call_regionCount]
+    apply Operations.CopyCellsAssignedFrom.append
+    · apply (pureRegionCall_copyCellsAssignedFrom
+        PkdCanonicity.bundle "NoteCommit input pk_d" cfg.gates.pkd
+        { pkdX := input.pkdX, b3 := pcs.b3, d0 := gcs.d0, c := pcs.c,
+          b3CPrime := ccs.bZs.z0,
+          z13C := zCell cfg.hashConfig iHash 2 13,
+          z14B3CPrime := ccs.bZs.zLast }
+        _ (synthCanonicityInputCells cfg input pcs ccs gcs iHash)
+        () (by rfl)
+        (by keygen_registration [synthCanonicityInputCells])).mono
+      intro cell hcell
+      exact List.mem_append_left _ hcell
+    · rw [toFormal_call_regionCount]
+      apply (pureRegionCall_copyCellsAssignedFrom
+        ValueCanonicity.bundle "NoteCommit input value" cfg.gates.value
+        { value := input.value, d2 := pcs.d2,
+          d3 := zCell cfg.hashConfig iHash 3 1, e0 := pcs.e0 }
+        _ (synthCanonicityInputCells cfg input pcs ccs gcs iHash)
+        () (by rfl)
+        (by keygen_registration [synthCanonicityInputCells])).mono
+      intro cell hcell
+      exact List.mem_append_left _ (List.mem_append_left _ hcell)
+
+private theorem synthRhoPsiCanonicity_copyCellsAssignedFrom
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (ccs : CheckCells) (gcs : GateCells) (iHash self : RegionIndex) :
+    ((synthRhoPsiCanonicity cfg input pcs ccs gcs iHash).operations self)
+      |>.CopyCellsAssignedFrom self
+        (synthCanonicityInputCells cfg input pcs ccs gcs iHash) := by
+  simp only [synthRhoPsiCanonicity, Circuit.operations_bind,
+    Circuit.operations_pure, List.append_nil,
+    FormalCircuit.nextRegionIndex_call', Nat.add_assoc]
+  apply Operations.CopyCellsAssignedFrom.append
+  · apply pureRegionCall_copyCellsAssignedFrom
+      RhoCanonicity.bundle "NoteCommit input rho" cfg.gates.rho
+      { rho := input.rho, e1 := pcs.e1, g0 := gcs.g0, f := pcs.f,
+        e1FPrime := ccs.eZs.z0,
+        z13F := zCell cfg.hashConfig iHash 5 13,
+        z14E1FPrime := ccs.eZs.zLast }
+      _ (synthCanonicityInputCells cfg input pcs ccs gcs iHash)
+      () (by rfl)
+    keygen_registration [synthCanonicityInputCells]
+  · rw [toFormal_call_regionCount]
+    apply (pureRegionCall_copyCellsAssignedFrom
+      PsiCanonicity.bundle "NoteCommit input psi" cfg.gates.psi
+      { psi := input.psi, h0 := pcs.h0, g1 := pcs.g1, h1 := gcs.h1,
+        g2 := zCell cfg.hashConfig iHash 6 1,
+        g1G2Prime := ccs.gZs.z0,
+        z13G := zCell cfg.hashConfig iHash 6 13,
+        z13G1G2Prime := ccs.gZs.zLast }
+      _ (synthCanonicityInputCells cfg input pcs ccs gcs iHash)
+      () (by rfl)
+      (by keygen_registration [synthCanonicityInputCells])).mono
+    intro cell hcell
+    exact List.mem_append_left _ hcell
+
+private theorem synthCanonicity_copyCellsAssignedFrom
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (ccs : CheckCells) (gcs : GateCells) (iHash self : RegionIndex) :
+    ((synthCanonicity cfg input pcs ccs gcs iHash).operations self)
+      |>.CopyCellsAssignedFrom self
+        (synthCanonicityInputCells cfg input pcs ccs gcs iHash) := by
+  simp only [synthCanonicity, Circuit.operations_bind]
+  apply Operations.CopyCellsAssignedFrom.append
+  · apply synthGdPkdValueCanonicity_copyCellsAssignedFrom
+  · rw [synthGdPkdValueCanonicity_regionCount,
+      synthGdPkdValueCanonicity_nextRegionIndex]
+    apply (synthRhoPsiCanonicity_copyCellsAssignedFrom
+      cfg input pcs ccs gcs iHash _).mono
+    intro cell hcell
+    exact List.mem_append_left _ hcell
+
+private theorem synth_copyCellsAssigned
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex)
+    (configured : (keygenRequirements G R Q hQ).configLawful cfg) :
+    ((synth G R Q hQ cfg input).operations self).CopyCellsAssigned self
+      ((keygenRequirements G R Q hQ).inputCells cfg configured input) := by
+  simp only [keygenRequirements, synth, currentRegion_operations,
+    currentRegion_nextRegionIndex, currentRegion_output,
+    Circuit.operations_bind, Circuit.operations_pure, List.append_nil,
+    List.nil_append]
+  apply Operations.CopyCellsAssignedFrom.append
+  · exact synthPieces_copyCellsAssigned cfg input self
+  · apply Operations.CopyCellsAssignedFrom.append
+    · rw [synthPieces_regionCount]
+      apply synthChecks_copyCellsAssignedFrom G R Q hQ cfg input _ _ _ _ configured
+      rw [synthPieces_output]
+      have hpieces := synthPieces_output_cells_assigned cfg input self
+      simp only [List.forall_cons, List.forall_nil, and_true] at hpieces ⊢
+      simp only [List.mem_append, List.mem_cons, List.not_mem_nil, or_false]
+      exact ⟨Or.inl (by simp), Or.inl (by simp), Or.inr hpieces.1,
+        Or.inr hpieces.2.1, Or.inr hpieces.2.2.1,
+        Or.inr hpieces.2.2.2.1, Or.inr hpieces.2.2.2.2.1,
+        Or.inr hpieces.2.2.2.2.2.1, Or.inr hpieces.2.2.2.2.2.2.1,
+        Or.inr hpieces.2.2.2.2.2.2.2.1⟩
+    · simp only [synthGates, Circuit.operations_bind]
+      apply Operations.CopyCellsAssignedFrom.append
+      · rw [synthPieces_regionCount, synthChecks_regionCount,
+          synthPieces_nextRegionIndex, synthChecks_nextRegionIndex]
+        have hpieces := synthPieces_output_cells_assigned cfg input self
+        have hchecks := synthChecks_decomposition_cells_assigned
+          G R Q hQ cfg input ((synthPieces cfg input).output self)
+          (self + 27) (self + 15) (by norm_num [Nat.add_assoc])
+        apply (synthDecompositions_copyCellsAssignedFrom
+          cfg input _ _ _ _).mono
+        intro cell hcell
+        simp only [synthDecompositionsInputCells, List.mem_cons,
+          List.not_mem_nil, or_false] at hcell
+        simp only [List.forall_cons, List.forall_nil, and_true] at hpieces hchecks
+        rcases hpieces with
+          ⟨ha, hb, hc, hd, he, hf, hg, hh, hb0, hb3, hd2, he0, he1, hg1, hh0⟩
+        rcases hchecks with ⟨hb2, hd1, hz3, hz6⟩
+        simp only [List.mem_append]
+        aesop
+      · have hpieces := synthPieces_output_cells_assigned cfg input self
+        have hchecks := synthChecks_canonicity_cells_assigned
+          G R Q hQ cfg input ((synthPieces cfg input).output self)
+          (self + 27) (self + 15) (by norm_num [Nat.add_assoc])
+        have hgates := synthDecompositions_output_cells_assigned
+          cfg input ((synthPieces cfg input).output self)
+          ((synthChecks G R Q hQ cfg input
+            ((synthPieces cfg input).output self) (self + 27)).output
+              (self + 15))
+          (self + 27) (self + 33)
+        rw [synthPieces_regionCount, synthChecks_regionCount,
+          synthDecompositions_regionCount, synthPieces_nextRegionIndex,
+          synthChecks_nextRegionIndex, synthDecompositions_nextRegionIndex]
+        apply (synthCanonicity_copyCellsAssignedFrom
+          cfg input _ _ _ _ _).mono
+        intro cell hcell
+        simp only [synthCanonicityInputCells, List.mem_cons,
+          List.not_mem_nil, or_false] at hcell
+        simp only [List.forall_cons, List.forall_nil, and_true] at hpieces hchecks hgates
+        rcases hpieces with
+          ⟨ha, hb, hc, hd, he, hf, hg, hh, hb0, hb3, hd2, he0, he1, hg1, hh0⟩
+        rcases hchecks with
+          ⟨haz0, hazLast, hbz0, hbzLast, hez0, hezLast, hgz0, hgzLast,
+            hz0, hz2, hz3, hz5, hz6, hz6Last⟩
+        rcases hgates with ⟨hb1, hd0, hg0, hh1⟩
+        simp only [List.mem_append]
+        aesop
+
+private theorem synthPieces_lookupActivationsWellFormed
+    (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex) :
+    ((synthPieces cfg input).operations self).LookupActivationsWellFormed := by
+  simp only [synthPieces, Circuit.operations_bind, Circuit.operations_pure,
+    Operations.LookupActivationsWellFormed, List.forall_append,
+    List.forall_nil, and_true]
+  exact ⟨
+    Sinsemilla.HashToPoint.witnessMessagePiece_lookupActivationsWellFormed
+      cfg.hashConfig (brWit input.gdX 0 250) _,
+    LookupRangeCheck.witnessShortCheck_lookupActivationsWellFormed
+      10 4 cfg.lookupConfig (brWit input.gdX 250 4) _,
+    LookupRangeCheck.witnessShortCheck_lookupActivationsWellFormed
+      10 4 cfg.lookupConfig (brWit input.pkdX 0 4) _,
+    Sinsemilla.HashToPoint.witnessMessagePiece_lookupActivationsWellFormed
+      cfg.hashConfig (bWit input.gdX input.gdY input.pkdX) _,
+    Sinsemilla.HashToPoint.witnessMessagePiece_lookupActivationsWellFormed
+      cfg.hashConfig (brWit input.pkdX 4 250) _,
+    LookupRangeCheck.witnessShortCheck_lookupActivationsWellFormed
+      10 8 cfg.lookupConfig (brWit input.value 0 8) _,
+    Sinsemilla.HashToPoint.witnessMessagePiece_lookupActivationsWellFormed
+      cfg.hashConfig (dWit input.pkdX input.pkdY input.value) _,
+    LookupRangeCheck.witnessShortCheck_lookupActivationsWellFormed
+      10 6 cfg.lookupConfig (brWit input.value 58 6) _,
+    LookupRangeCheck.witnessShortCheck_lookupActivationsWellFormed
+      10 4 cfg.lookupConfig (brWit input.rho 0 4) _,
+    Sinsemilla.HashToPoint.witnessMessagePiece_lookupActivationsWellFormed
+      cfg.hashConfig (eWit input.value input.rho) _,
+    Sinsemilla.HashToPoint.witnessMessagePiece_lookupActivationsWellFormed
+      cfg.hashConfig (brWit input.rho 4 250) _,
+    LookupRangeCheck.witnessShortCheck_lookupActivationsWellFormed
+      10 9 cfg.lookupConfig (brWit input.psi 0 9) _,
+    Sinsemilla.HashToPoint.witnessMessagePiece_lookupActivationsWellFormed
+      cfg.hashConfig (gWit input.rho input.psi) _,
+    LookupRangeCheck.witnessShortCheck_lookupActivationsWellFormed
+      10 5 cfg.lookupConfig (brWit input.psi 249 5) _,
+    Sinsemilla.HashToPoint.witnessMessagePiece_lookupActivationsWellFormed
+      cfg.hashConfig (hWit input.psi) _⟩
+
+private theorem synthChecks_lookupActivationsWellFormed
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (iHash self : RegionIndex) :
+    ((synthChecks G R Q hQ cfg input pcs iHash).operations self)
+      |>.LookupActivationsWellFormed := by
+  simp only [synthChecks, Circuit.operations_bind, Circuit.operations_pure,
+    Operations.LookupActivationsWellFormed, List.forall_append,
+    List.forall_nil, and_true]
+  exact ⟨
+    (YCanonicityCheck.circuit (brWit input.gdY 0 1))
+      |>.call_lookupActivationsWellFormed _ _ _,
+    (YCanonicityCheck.circuit (brWit input.pkdY 0 1))
+      |>.call_lookupActivationsWellFormed _ _ _,
+    (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil)
+      |>.call_lookupActivationsWellFormed _ _ _,
+    LookupRangeCheck.witnessCheck_lookupActivationsWellFormed
+      10 13 false _ cfg.lookupConfig (GdCanonicityCheck.aPrimeWit pcs.a) _,
+    LookupRangeCheck.witnessCheck_lookupActivationsWellFormed
+      10 14 false _ cfg.lookupConfig
+        (PkdCanonicityCheck.b3CPrimeWit pcs.b3 pcs.c) _,
+    LookupRangeCheck.witnessCheck_lookupActivationsWellFormed
+      10 14 false _ cfg.lookupConfig
+        (RhoCanonicityCheck.e1FPrimeWit pcs.e1 pcs.f) _,
+    LookupRangeCheck.witnessCheck_lookupActivationsWellFormed
+      10 13 false _ cfg.lookupConfig
+        (PsiCanonicityCheck.g1G2PrimeWit pcs.g1
+          (zCell cfg.hashConfig iHash 6 1)) _⟩
+
+private theorem synthDecompositions_lookupActivationsWellFormed
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (ccs : CheckCells) (iHash self : RegionIndex) :
+    ((synthDecompositions cfg input pcs ccs iHash).operations self)
+      |>.LookupActivationsWellFormed := by
+  simp only [synthDecompositions, Circuit.operations_bind,
+    Circuit.operations_pure, Operations.LookupActivationsWellFormed,
+    List.forall_append, List.forall_nil, and_true]
+  exact ⟨
+    ((DecomposeB.bundle (brWit input.gdX 254 1)).toFormal
+      "NoteCommit MessagePiece b").call_lookupActivationsWellFormed _ _ _,
+    ((DecomposeD.bundle (brWit input.pkdX 254 1)).toFormal
+      "NoteCommit MessagePiece d").call_lookupActivationsWellFormed _ _ _,
+    (DecomposeE.bundle.toFormal
+      "NoteCommit MessagePiece e").call_lookupActivationsWellFormed _ _ _,
+    ((DecomposeG.bundle (brWit input.rho 254 1)).toFormal
+      "NoteCommit MessagePiece g").call_lookupActivationsWellFormed _ _ _,
+    ((DecomposeH.bundle (brWit input.psi 254 1)).toFormal
+      "NoteCommit MessagePiece h").call_lookupActivationsWellFormed _ _ _⟩
+
+private theorem synthGdPkdValueCanonicity_lookupActivationsWellFormed
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (ccs : CheckCells) (gcs : GateCells) (iHash self : RegionIndex) :
+    ((synthGdPkdValueCanonicity cfg input pcs ccs gcs iHash).operations self)
+      |>.LookupActivationsWellFormed := by
+  simp only [synthGdPkdValueCanonicity, Circuit.operations_bind,
+    Circuit.operations_pure, Operations.LookupActivationsWellFormed,
+    List.forall_append, List.forall_nil, and_true]
+  exact ⟨
+    (GdCanonicity.bundle.toFormal
+      "NoteCommit input g_d").call_lookupActivationsWellFormed _ _ _,
+    (PkdCanonicity.bundle.toFormal
+      "NoteCommit input pk_d").call_lookupActivationsWellFormed _ _ _,
+    (ValueCanonicity.bundle.toFormal
+      "NoteCommit input value").call_lookupActivationsWellFormed _ _ _⟩
+
+private theorem synthRhoPsiCanonicity_lookupActivationsWellFormed
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (ccs : CheckCells) (gcs : GateCells) (iHash self : RegionIndex) :
+    ((synthRhoPsiCanonicity cfg input pcs ccs gcs iHash).operations self)
+      |>.LookupActivationsWellFormed := by
+  simp only [synthRhoPsiCanonicity, Circuit.operations_bind,
+    Circuit.operations_pure, Operations.LookupActivationsWellFormed,
+    List.forall_append, List.forall_nil, and_true]
+  exact ⟨
+    (RhoCanonicity.bundle.toFormal
+      "NoteCommit input rho").call_lookupActivationsWellFormed _ _ _,
+    (PsiCanonicity.bundle.toFormal
+      "NoteCommit input psi").call_lookupActivationsWellFormed _ _ _⟩
+
 /-- Canonical elaborated metadata, with fully reduced output and synthesis summary. -/
 instance elaborated (G : Generators) (R : FixedBase)
     (Q : Point Fp) (hQ : Q.OnCurve) :
@@ -1377,28 +2408,24 @@ instance elaborated (G : Generators) (R : FixedBase)
   registered configInput _ configured input self := by
     simpa using synth_keygenRegistered
       G R Q hQ configInput input self configured
+  copyCellsAssigned cfg _ configured input self :=
+    synth_copyCellsAssigned G R Q hQ cfg input self configured
   lookupActivationsWellFormed config input region := by
     simp only [synth, Circuit.operations_bind, currentRegion_operations,
       Circuit.operations_pure, Operations.LookupActivationsWellFormed,
       List.forall_append, List.forall_nil, true_and, and_true]
-    constructor
-    · unfold synthPieces
-      keygen_registration
-    constructor
-    · unfold synthChecks
-      keygen_registration
+    refine ⟨synthPieces_lookupActivationsWellFormed config input region,
+      synthChecks_lookupActivationsWellFormed G R Q hQ config input _ _ _, ?_⟩
     · simp only [synthGates, Circuit.operations_bind,
         List.forall_append]
-      constructor
-      · unfold synthDecompositions
-        keygen_registration
-      · simp only [synthCanonicity, Circuit.operations_bind,
-          List.forall_append]
-        constructor
-        · unfold synthGdPkdValueCanonicity
-          keygen_registration
-        · unfold synthRhoPsiCanonicity
-          keygen_registration
+      refine ⟨synthDecompositions_lookupActivationsWellFormed
+        config input _ _ _ _, ?_⟩
+      simp only [synthCanonicity, Circuit.operations_bind,
+        List.forall_append]
+      exact ⟨synthGdPkdValueCanonicity_lookupActivationsWellFormed
+          config input _ _ _ _ _,
+        synthRhoPsiCanonicity_lookupActivationsWellFormed
+          config input _ _ _ _ _⟩
   output cfg _ self := output cfg self
   regionCount _ := 43
   synthesisSummary cfg _ _ := synthesisSummary cfg
@@ -1425,11 +2452,10 @@ def rcmExtract (cfg : Config) (_ : Var Inputs Fp) (i₀ : RegionIndex)
     (env : Placed Environment Fp) : Vector Fp 85 × Fq :=
   Ecc.MulFixed.FullWidth.fwExtract cfg.mulConfig (i₀ + 25) env
 
-/-- The commitment contract in the specification's guarded ⊥-model (§4.17.4's
-`NoteCommit(…) ∈ {cm, ⊥}`): whenever the Sinsemilla chain over the note's canonical
-chunks is defined, the output is the commitment `B + [rcm]R`. Exceptional chains
-are not constrained here; the security layer recomputes them from the same chunks
-and consumes them as breaks.
+/-- Breaks-as-data commitment contract (zcash/ironwood#45): either the Sinsemilla
+chain over the note's canonical chunks is defined and the output is the commitment
+`B + [rcm]R`, or the incomplete-addition escape is exhibited as a valid break
+(`Specs.Sinsemilla.ValidBreak`).
 
 The 64-bit value bound is exported (from the `ValueCanonicity` gate): without it the
 statement can't type `v` as §4.17.4 does — `noteScalars` bitranges truncate `v` at 64
@@ -1438,10 +2464,10 @@ def Spec (G : Generators) (Q : Point Fp) (R : FixedBase)
     (input : Value Inputs Fp) (output : Value Point Fp)
     (rcm : Vector Fp 85 × Fq) : Prop :=
   (show Fp from input.value).val < 2 ^ 64 ∧
-  HashGuarded G.S Q
-    (NoteCommit.noteScalars ⟨input.gdX, input.gdY⟩
-      ⟨input.pkdX, input.pkdY⟩ input.value input.rho input.psi).chunks
-    (fun B => output = B + (rcm.2 • R : Point Fp))
+  SpecOrBreak G.S Q (fun B => output = B + (rcm.2 • R : Point Fp))
+    (hashToPointB G.S Q
+      (NoteCommit.noteScalars ⟨input.gdX, input.gdY⟩
+        ⟨input.pkdX, input.pkdY⟩ input.value input.rho input.psi).chunks)
 
 def ProverAssumptions (G : Generators) (Q : Point Fp)
     (input : ProverValue Inputs Fp) (_ : Vector Fp 85 × Fq)

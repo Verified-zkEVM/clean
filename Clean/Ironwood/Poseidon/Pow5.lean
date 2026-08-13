@@ -135,7 +135,7 @@ theorem padAndAddGate_selector (cfg : Config) :
   enableEquality (rcB 1).toAny
   enableEquality (rcB 2).toAny
 
-instance (state : Fin 3 → Column .advice)
+private instance (state : Fin 3 → Column .advice)
     (rcB : Fin 3 → Column .fixed) :
     ElaboratedConfigure (configureEqualities state rcB) := by
   unfold configureEqualities
@@ -146,7 +146,7 @@ instance (state : Fin 3 → Column .advice)
   createGate (partialRoundsGate cfg)
   createGate (padAndAddGate cfg)
 
-instance (cfg : Config) : ElaboratedConfigure (configureGates cfg) := by
+private instance (cfg : Config) : ElaboratedConfigure (configureGates cfg) := by
   unfold configureGates
   infer_instance
 
@@ -195,7 +195,7 @@ theorem state_mem_configure_permutationRequests
     apply Configure.mem_permutationRequests_delta_bind_left
     exact Configure.mem_permutationRequests_delta_enableEquality _ _
 
-@[reducible] def configureElaborated
+@[reducible] private def configureElaborated
     (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
     (rcA rcB : Fin 3 → Column .fixed) :
     ElaboratedConfigure (configure state partialSbox rcA rcB) := by

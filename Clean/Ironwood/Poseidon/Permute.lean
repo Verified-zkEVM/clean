@@ -319,6 +319,53 @@ theorem permuteRegion_inputCells (cfg : Config)
     FormalRegionCircuit.Configured.inputCells hconfigured input =
       [input.x0.cell, input.x1.cell, input.x2.cell] := rfl
 
+/-- Every coordinate returned by the Poseidon permutation is assigned by its final
+full round. The proof only opens the four-round tail, not the 28-round middle loop. -/
+theorem permuteRegion_output_cells_assigned (cfg : Config) (offset : ℕ)
+    (input : Var State Fp) (self : RegionIndex) (available : List Cell) :
+    let output := permuteRegion.output cfg offset input self
+    output.x0.cell ∈
+        ((permuteRegion.call cfg offset input).operations self
+          |>.assignedCellsAfter self available) ∧
+      output.x1.cell ∈
+        ((permuteRegion.call cfg offset input).operations self
+          |>.assignedCellsAfter self available) ∧
+      output.x2.cell ∈
+        ((permuteRegion.call cfg offset input).operations self
+          |>.assignedCellsAfter self available) := by
+  rw [show permuteRegion.output cfg offset input self =
+      stateRow cfg (offset + 36) self from rfl]
+  rw [FormalRegionCircuit.call_operations]
+  simp only [permuteRegion, permuteSynthesize, RegionCircuit.operations_bind,
+    circuit_norm, RegionOperations.mem_assignedCellsAfter_iff,
+    RegionOperations.assignedCells, List.flatMap_append, List.flatMap_cons,
+    RegionOperation.assignedCells, List.singleton_append, List.mem_append,
+    List.mem_cons]
+  repeat' apply And.intro
+  all_goals right
+  all_goals right
+  all_goals right
+  all_goals right
+  all_goals right
+  all_goals right
+  all_goals rw [RegionCircuit.forRange'_operations]
+  all_goals simp only [List.ofFn, Fin.foldr_succ, Fin.foldr_zero,
+    List.flatten_cons, List.flatten_nil, List.append_nil,
+    List.flatMap_append, List.mem_append]
+  all_goals right
+  all_goals right
+  all_goals right
+  all_goals
+    have h := fullRound_output_cells_assigned 63 cfg (offset + 35) () self []
+    simp only [RegionOperations.mem_assignedCellsAfter_iff, List.nil_append] at h
+    first
+      | simpa only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+          List.append_nil, Nat.mul_one, Nat.add_assoc] using h.1
+      | simpa only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+          List.append_nil, Nat.mul_one, Nat.add_assoc] using h.2.1
+      | simpa only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+          List.append_nil, Nat.mul_one, Nat.add_assoc] using h.2.2
+
 derive_contract_bridges permuteRegion := permuteRegion
 
 end Zcash.Circuits.Poseidon

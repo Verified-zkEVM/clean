@@ -73,11 +73,13 @@ def orchardBases : Circuit.Bases where
 instantiated at the real deployed constants — the certified fixed bases, the `Q`
 points, and the kernel-verified Sinsemilla generator table.
 
-The prover's private data enters through the fixed `hintWitnesses` program, which is
-evaluated against the prover's runtime hint map. Soundness is knowledge soundness at
-the constructive extractor: for any assignment satisfying the constraints, the
-`ActionData` read off the cells satisfies the §4.17.4 spec. -/
+The circuit input is `unit`. Prover choices enter through the circuit's fixed
+`hintWitnesses` program, which reads the runtime `ProverHint`; they are not supplied as
+caller-selected synthesis input. Soundness is knowledge soundness at the constructive
+extractor: for ANY assignment satisfying the constraints, the `ActionData` read off
+the cells satisfies the §4.17.4 spec. -/
 def orchardActionCircuit :
     FormalCircuit Fp Unit Circuit.Config unit unit :=
   Circuit.circuit Specs.Sinsemilla.orchardGenerators orchardBases
+
 end Zcash.Circuits.Action

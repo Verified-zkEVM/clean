@@ -481,10 +481,26 @@ def configure (advices : Fin 10 → Column .advice) : Configure Fp Config := do
   createGate (gate cfg)
   return cfg
 
-instance (advices : Fin 10 → Column .advice) :
+@[configure_selector_norm, keygen_norm] theorem configure_delta_lookups
+    (advices : Fin 10 → Column .advice) (counts) :
+    ((configure advices).delta counts).lookups = [] := by
+  simp [configure]
+
+@[reducible] private def configureInferred (advices : Fin 10 → Column .advice) :
     ElaboratedConfigure (configure advices) := by
   unfold configure
   infer_instance
+
+private theorem configure_selectorRequirements
+    (advices : Fin 10 → Column .advice) (counts) :
+    (configureInferred advices).selectorRequirements counts := by
+  dsimp only [configureInferred, configure]
+  simp [configure_selector_norm]
+
+instance (advices : Fin 10 → Column .advice) :
+    ElaboratedConfigure (configure advices) :=
+  (configureInferred advices).closeSelectorRequirements
+    (configure_selectorRequirements advices)
 
 end YCanonicity
 

@@ -401,46 +401,65 @@ def ofColumns (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
 whose `i`th repetition occupies through
 `offset + stride * i + rowCount` and requests `constantSiteCount` constants. -/
 def repeatColumns (columns : List RegionColumn) (offset stride rowCount
-    constantSiteCount count : ℕ) : RegionSynthesisSummary :=
+    constantSiteCount count : ℕ) (instanceRowExtent : ℕ := 0) :
+    RegionSynthesisSummary :=
   if count = 0 then {}
   else
     ofColumns columns
       (offset + stride * (count - 1) + rowCount)
-      (count * constantSiteCount)
+      (count * constantSiteCount) instanceRowExtent
 
 @[circuit_norm, synthesis_summary_norm]
 theorem repeatColumns_columns (columns : List RegionColumn)
-    (offset stride rowCount constantSiteCount count : ℕ) :
-    (repeatColumns columns offset stride rowCount constantSiteCount count).columns =
+    (offset stride rowCount constantSiteCount count : ℕ)
+    (instanceRowExtent : ℕ := 0) :
+    (repeatColumns columns offset stride rowCount constantSiteCount count
+      instanceRowExtent).columns =
       if count = 0 then [] else unionColumns [] columns := by
   cases count <;> rfl
 
 @[circuit_norm, synthesis_summary_norm]
 theorem repeatColumns_rowCount (columns : List RegionColumn)
-    (offset stride rowCount constantSiteCount count : ℕ) :
-    (repeatColumns columns offset stride rowCount constantSiteCount count).rowCount =
+    (offset stride rowCount constantSiteCount count : ℕ)
+    (instanceRowExtent : ℕ := 0) :
+    (repeatColumns columns offset stride rowCount constantSiteCount count
+      instanceRowExtent).rowCount =
       if count = 0 then 0 else offset + stride * (count - 1) + rowCount := by
   cases count <;> rfl
 
 @[circuit_norm, synthesis_summary_norm]
 theorem repeatColumns_constantSiteCount (columns : List RegionColumn)
-    (offset stride rowCount constantSiteCount count : ℕ) :
-    (repeatColumns columns offset stride rowCount constantSiteCount count).constantSiteCount =
+    (offset stride rowCount constantSiteCount count : ℕ)
+    (instanceRowExtent : ℕ := 0) :
+    (repeatColumns columns offset stride rowCount constantSiteCount count
+      instanceRowExtent).constantSiteCount =
       count * constantSiteCount := by
   cases count <;> simp [repeatColumns, ofColumns]
 
+@[circuit_norm, synthesis_summary_norm]
+theorem repeatColumns_instanceRowExtent (columns : List RegionColumn)
+    (offset stride rowCount constantSiteCount count : ℕ)
+    (instanceRowExtent : ℕ := 0) :
+    (repeatColumns columns offset stride rowCount constantSiteCount count
+      instanceRowExtent).instanceRowExtent =
+        if count = 0 then 0 else instanceRowExtent := by
+  cases count <;> rfl
+
 @[circuit_norm, synthesis_summary_norm] theorem ofColumns_columns
-    (columns : List RegionColumn) (rowCount constantSiteCount : ℕ) :
-    (ofColumns columns rowCount constantSiteCount).columns =
+    (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
+    (instanceRowExtent : ℕ := 0) :
+    (ofColumns columns rowCount constantSiteCount instanceRowExtent).columns =
       unionColumns [] columns := rfl
 
 @[circuit_norm, synthesis_summary_norm] theorem ofColumns_rowCount
-    (columns : List RegionColumn) (rowCount constantSiteCount : ℕ) :
-    (ofColumns columns rowCount constantSiteCount).rowCount = rowCount := rfl
+    (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
+    (instanceRowExtent : ℕ := 0) :
+    (ofColumns columns rowCount constantSiteCount instanceRowExtent).rowCount = rowCount := rfl
 
 @[circuit_norm, synthesis_summary_norm] theorem ofColumns_constantSiteCount
-    (columns : List RegionColumn) (rowCount constantSiteCount : ℕ) :
-    (ofColumns columns rowCount constantSiteCount).constantSiteCount =
+    (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
+    (instanceRowExtent : ℕ := 0) :
+    (ofColumns columns rowCount constantSiteCount instanceRowExtent).constantSiteCount =
       constantSiteCount := rfl
 
 @[circuit_norm, synthesis_summary_norm] theorem ofColumns_instanceRowExtent
@@ -570,11 +589,14 @@ theorem empty_combine_ofColumns (columns : List RegionColumn)
 
 private theorem foldr_ofColumns_eq_repeatColumns_combine
     (columns : List RegionColumn) (offset stride rowCount constantSiteCount count : ℕ)
+    (instanceRowExtent : ℕ)
     (accumulator : RegionSynthesisSummary) (haccumulator : accumulator.columns.Nodup) :
     (List.ofFn fun i : Fin count =>
-      ofColumns columns (offset + stride * i.val + rowCount) constantSiteCount).foldr
+      ofColumns columns (offset + stride * i.val + rowCount) constantSiteCount
+        instanceRowExtent).foldr
         combine accumulator =
-      (repeatColumns columns offset stride rowCount constantSiteCount count).combine
+      (repeatColumns columns offset stride rowCount constantSiteCount count
+        instanceRowExtent).combine
         accumulator := by
   induction count generalizing accumulator with
   | zero =>
@@ -619,11 +641,14 @@ private theorem foldr_ofColumns_eq_repeatColumns_combine
 /-- Folding repeated identical region shapes reduces to a constant-size summary. -/
 @[synthesis_summary_norm]
 theorem foldr_ofColumns_eq_repeatColumns
-    (columns : List RegionColumn) (offset stride rowCount constantSiteCount count : ℕ) :
+    (columns : List RegionColumn) (offset stride rowCount constantSiteCount count : ℕ)
+    (instanceRowExtent : ℕ := 0) :
     (List.ofFn fun i : Fin count =>
-      ofColumns columns (offset + stride * i.val + rowCount) constantSiteCount).foldr
+      ofColumns columns (offset + stride * i.val + rowCount) constantSiteCount
+        instanceRowExtent).foldr
         combine {} =
-      repeatColumns columns offset stride rowCount constantSiteCount count := by
+      repeatColumns columns offset stride rowCount constantSiteCount count
+        instanceRowExtent := by
   rw [foldr_ofColumns_eq_repeatColumns_combine]
   · exact combine_empty _
   · simp
@@ -973,6 +998,17 @@ theorem regionSynthesisSummary_constrainConstant_cons_constantSiteCount
         1 + (regionSynthesisSummary rest).constantSiteCount := by
   rw [regionSynthesisSummary_cons_constantSiteCount]
   rfl
+
+/-- An advice assignment contributes its concrete one-column summary before the
+remaining operations. -/
+@[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_assignAdvice_cons
+    (column : Column .advice) (row : ℕ) (value : WitgenIR F 1)
+    (rest : RegionOperations F) :
+    regionSynthesisSummary (.assignAdvice column row value :: rest) =
+      (RegionSynthesisSummary.ofColumns
+        [.column .advice column.index] (row + 1) 0).combine
+          (regionSynthesisSummary rest) := rfl
 
 /-- A single advice assignment reduces to its concrete one-column summary. -/
 @[circuit_norm, synthesis_summary_norm]
@@ -2068,6 +2104,36 @@ theorem Operations.copyCellsAssignedFrom_loadTable_iff
     cases h with | loadTable _ _ _ _ _ hrest => exact hrest
   · exact CopyCellsAssignedFrom.loadTable region available column values rest
 
+/-- A layouter stream containing no copy-like operation is lawful for every incoming
+cell state. -/
+@[keygen_helper]
+theorem Operations.copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
+    (operations : Operations F) (region : RegionIndex)
+    (available : List Cell)
+    (hoperations : operations.Forall fun operation =>
+      operation.copiedCells = []) :
+    operations.CopyCellsAssignedFrom region available := by
+  induction operations generalizing region available with
+  | nil => exact .nil region available
+  | cons operation rest inductionHypothesis =>
+      rw [List.forall_cons] at hoperations
+      cases operation with
+      | region name body =>
+          apply Operations.CopyCellsAssignedFrom.region region available name body rest
+          · apply RegionOperations.copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
+            rw [List.forall_iff_forall_mem]
+            simpa only [Operation.copiedCells, RegionOperations.copiedCells,
+              List.flatMap_eq_nil_iff] using hoperations.1
+          · exact inductionHypothesis (region := region + 1)
+              (available := body.assignedCellsAfter region available) hoperations.2
+      | constrainInstance cell column row =>
+          simp only [Operation.copiedCells, List.cons_ne_nil] at hoperations
+          exact False.elim hoperations.1
+      | loadTable column values =>
+          exact .loadTable region available column values rest
+            (inductionHypothesis (region := region) (available := available)
+              hoperations.2)
+
 def Operations.CopyCellsAssigned (operations : Operations F)
     (initialRegion : RegionIndex) (inputCells : List Cell) : Prop :=
   CopyCellsAssignedFrom initialRegion inputCells operations
@@ -2592,6 +2658,14 @@ def Operations.LookupActivationsWellFormed
     (operations : Operations F) : Prop :=
   operations.Forall Operation.LookupActivationsWellFormed
 
+/-- Lookup-activation well-formedness composes over sequential operation fragments. -/
+theorem Operations.LookupActivationsWellFormed.append
+    {left right : Operations F}
+    (hleft : left.LookupActivationsWellFormed)
+    (hright : right.LookupActivationsWellFormed) :
+    (left ++ right).LookupActivationsWellFormed :=
+  List.forall_append.mpr ⟨hleft, hright⟩
+
 /-- A gate never activates a selector used as an auxiliary by a configured lookup. -/
 @[circuit_norm]
 def Gate.AvoidsLookupAuxiliarySelectors
@@ -2780,6 +2854,20 @@ theorem Operations.assignedCellsFrom_append
       cases operation <;>
         simp only [List.cons_append, assignedCellsFrom, regionCount, ih,
           List.append_assoc, Nat.add_assoc]
+
+theorem Operations.mem_assignedCellsFrom_append_left
+    {left right : Operations F} {region : RegionIndex} {cell : Cell}
+    (hcell : cell ∈ left.assignedCellsFrom region) :
+    cell ∈ (left ++ right).assignedCellsFrom region := by
+  rw [Operations.assignedCellsFrom_append]
+  exact List.mem_append_left _ hcell
+
+theorem Operations.mem_assignedCellsFrom_append_right
+    {left right : Operations F} {region : RegionIndex} {cell : Cell}
+    (hcell : cell ∈ right.assignedCellsFrom (region + left.regionCount)) :
+    cell ∈ (left ++ right).assignedCellsFrom region := by
+  rw [Operations.assignedCellsFrom_append]
+  exact List.mem_append_right _ hcell
 
 /-- Copy provenance composes across appended layouter streams. The second stream may
 use every caller cell and every cell assigned by the first stream. -/

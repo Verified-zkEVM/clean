@@ -206,6 +206,30 @@ def fullRound (r : ℕ) : FormalRegionCircuit Fp Config Config unit State where
     exact ⟨⟨by ring, by ring, by ring⟩,
       h_output.1.symm, h_output.2.1.symm, h_output.2.2.symm⟩
 
+/-- Every coordinate returned by a full Poseidon round is assigned by that round. -/
+theorem fullRound_output_cells_assigned (r : ℕ) (cfg : Config) (offset : ℕ)
+    (input : Var unit Fp) (self : RegionIndex) (available : List Cell) :
+    let output := (fullRound r).output cfg offset input self
+    output.x0.cell ∈
+        (((fullRound r).call cfg offset input).operations self
+          |>.assignedCellsAfter self available) ∧
+      output.x1.cell ∈
+        (((fullRound r).call cfg offset input).operations self
+          |>.assignedCellsAfter self available) ∧
+      output.x2.cell ∈
+        (((fullRound r).call cfg offset input).operations self
+          |>.assignedCellsAfter self available) := by
+  rw [show (fullRound r).output cfg offset input self =
+      stateRow cfg (offset + 1) self from rfl]
+  rw [FormalRegionCircuit.call_operations]
+  simp only [stateRow, AssignedCell.of_cell,
+    RegionOperations.mem_assignedCellsAfter_iff, List.mem_append]
+  repeat' apply And.intro
+  all_goals right
+  all_goals simp only [fullRound, fullRoundSynthesize, circuit_norm,
+    RegionOperations.assignedCells, List.flatMap_cons,
+    RegionOperation.assignedCells, List.singleton_append, List.mem_cons, true_or]
+
 /-- `M⁻¹ · (M · r) = r` in the gate's exact sum shape, with the `r`-components free for
 unification against the honest-witness goal. -/
 private theorem nextInv_cancel (j : Fin 3) (r0 r1 r2 : Fp) :

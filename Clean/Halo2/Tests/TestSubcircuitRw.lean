@@ -43,14 +43,30 @@ open Halo2
 def regionParent :
     FormalRegionCircuit Fp (Column .advice × Column .advice) WitnessPoint.Config
       (Unconstrained Point) Point where
-  configure := fun cols => WitnessPoint.configure cols.1 cols.2
+  configure := WitnessPoint.point.configure
   synthesize config offset input := WitnessPoint.point.call config offset input
   elaborated := {
+    keygenRequirements := WitnessPoint.point.keygenRequirements
     registered := by
       intro configInput counts hconfig offset input region
-      exact WitnessPoint.point.call_keygenRegistered_ofCertificate
-        (WitnessPoint.point.configureCertificate configInput counts hconfig)
-        offset input region }
+      exact WitnessPoint.point.call_keygenRegistered_exact
+        ((WitnessPoint.point.configure configInput).output counts)
+        (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
+          configInput counts hconfig) offset input region
+    copyCellsAssigned := by
+      intro configInput counts hconfig offset input region
+      apply WitnessPoint.point.call_copyCellsAssignedFrom
+        ((WitnessPoint.point.configure configInput).output counts)
+        (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
+          configInput counts hconfig) offset input region
+      intro cell hcell
+      exact hcell
+    synthesisSummary := fun config offset input region =>
+      WitnessPoint.point.elaborated.synthesisSummary config offset input region
+    synthesisSummary_eq := by
+      intro config offset input region
+      exact (WitnessPoint.point.call_synthesisSummary
+        config offset input region).symm }
   Spec _ output _ := output.Valid
   Witness := Point
   extract := fun config offset _ self env =>
@@ -91,17 +107,38 @@ scaling test: `circuit_norm` splits the parent's `++` and isolates the folded ca
 def regionParentWithOp :
     FormalRegionCircuit Fp (Column .advice × Column .advice) WitnessPoint.Config
       (Unconstrained Point) Point where
-  configure := fun cols => WitnessPoint.configure cols.1 cols.2
+  configure := WitnessPoint.point.configure
   synthesize config offset input := do
     let _ ← assignAdvice config.x (offset + 1) (Witgen.MOver.toIRScalar (Point.x <$> input))
     WitnessPoint.point.call config offset input
   elaborated := {
+    keygenRequirements := WitnessPoint.point.keygenRequirements
     registered := by
       intro configInput counts hconfig offset input region
       simp only [keygen_spine]
-      exact WitnessPoint.point.call_keygenRegistered_ofCertificate
-        (WitnessPoint.point.configureCertificate configInput counts hconfig)
-        offset input region }
+      exact WitnessPoint.point.call_keygenRegistered_exact
+        ((WitnessPoint.point.configure configInput).output counts)
+        (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
+          configInput counts hconfig) offset input region
+    copyCellsAssigned := by
+      intro configInput counts hconfig offset input region
+      simp only [keygen_spine]
+      apply WitnessPoint.point.call_copyCellsAssignedFrom
+        ((WitnessPoint.point.configure configInput).output counts)
+        (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
+          configInput counts hconfig) offset input region
+      intro cell hcell
+      exact List.mem_cons_of_mem _ hcell
+    synthesisSummary := fun config offset input region =>
+      (FloorPlanner.RegionSynthesisSummary.ofColumns
+        [.column .advice config.x.index] (offset + 2) 0).combine
+      (WitnessPoint.point.elaborated.synthesisSummary config offset input region)
+    synthesisSummary_eq := by
+      intro config offset input region
+      simp only [RegionCircuit.operations_bind,
+        FloorPlanner.regionSynthesisSummary_append,
+        FormalRegionCircuit.call_synthesisSummary]
+      congr 1 }
   Spec _ output _ := output.Valid
   Witness := Point
   extract := fun config offset _ self env =>
@@ -151,22 +188,59 @@ level AND the `toFormal` bridge. -/
 def layouterParent :
     FormalCircuit Fp (Column .advice × Column .advice) WitnessPoint.Config
       (Unconstrained Point) Point where
-  configure := fun cols => WitnessPoint.configure cols.1 cols.2
+  configure := witnessPointL.configure
   synthesize config input := do
     let _ ← witnessPointL.call config input
     witnessPointR.call config input
   elaborated := {
+    keygenRequirements := witnessPointL.keygenRequirements
     registered := by
       intro configInput counts hconfig input i
       simp only [Circuit.operations_bind,
         Operations.KeygenRegistered.append]
       constructor
-      · exact witnessPointL.call_keygenRegistered_ofCertificate
-          (witnessPointL.configureCertificate configInput counts hconfig)
-          input i
-      · exact witnessPointR.call_keygenRegistered_ofCertificate
-          (witnessPointR.configureCertificate configInput counts hconfig)
-          input _
+      · exact witnessPointL.call_keygenRegistered_exact
+          ((witnessPointL.configure configInput).output counts)
+          (FormalCircuit.Configured.ofOutput witnessPointL
+            configInput counts hconfig) input i
+      · exact witnessPointR.call_keygenRegistered_exact
+          ((witnessPointR.configure configInput).output counts)
+          (FormalCircuit.Configured.ofOutput witnessPointR
+            configInput counts hconfig) input _
+    copyCellsAssigned := by
+      intro configInput counts hconfig input i
+      simp only [Circuit.operations_bind]
+      apply Operations.CopyCellsAssignedFrom.append
+      · apply witnessPointL.call_copyCellsAssignedFrom
+          ((witnessPointL.configure configInput).output counts)
+          (FormalCircuit.Configured.ofOutput witnessPointL
+            configInput counts hconfig) input i
+        intro cell hcell
+        exact hcell
+      · rw [← FormalCircuit.nextRegionIndex_call]
+        apply witnessPointR.call_copyCellsAssignedFrom
+          ((witnessPointL.configure configInput).output counts)
+          ((FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
+            configInput counts hconfig).toFormal :
+              witnessPointR.Configured
+                ((witnessPointL.configure configInput).output counts)) input _
+        intro cell hcell
+        exact List.mem_append_left _ hcell
+    lookupActivationsWellFormed := by
+      intro config input i
+      simp only [Circuit.operations_bind,
+        Operations.LookupActivationsWellFormed, List.forall_append]
+      exact ⟨witnessPointL.call_lookupActivationsWellFormed config input i,
+        witnessPointR.call_lookupActivationsWellFormed config input _⟩
+    synthesisSummary := fun config input i =>
+      (witnessPointL.elaborated.synthesisSummary config input i).combine
+        (witnessPointR.elaborated.synthesisSummary config input (i + 1))
+    synthesisSummary_eq := by
+      intro config input i
+      simp only [Circuit.operations_bind,
+        FloorPlanner.synthesisSummary_append,
+        FormalCircuit.call_synthesisSummary]
+      congr 1
     regionCount _ := 2 }
   Spec _ output _ := output.Valid
   Witness := ProvablePair Point Point
@@ -222,6 +296,8 @@ def passthrough :
     FormalRegionCircuit Fp Unit Unit Point Point where
   configure := fun _ => pure ()
   synthesize _ _ input := pure input
+  elaborated := {
+    synthesisSummary := fun _ _ _ _ => {} }
   Spec input output _ := input.Valid → output.Valid
   ProverAssumptions input _ _ := input.Valid
   ProverSpec input output _ _ := output = input
@@ -247,6 +323,15 @@ def chainedParent :
   synthesize config offset input := do
     let mid ← passthrough.call config offset input
     passthrough.call config offset mid
+  elaborated := {
+    synthesisSummary := fun _ _ _ _ => {}
+    synthesisSummary_eq := by
+      intro config offset input region
+      simp only [RegionCircuit.operations_bind,
+        FloorPlanner.regionSynthesisSummary_append,
+        FormalRegionCircuit.call_synthesisSummary]
+      exact (FloorPlanner.RegionSynthesisSummary.empty_combine {}
+        (by simp)).symm }
   Spec input output _ := input.Valid → output.Valid
   ProverAssumptions input _ _ := input.Valid
 

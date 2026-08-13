@@ -1142,4 +1142,18 @@ theorem round_output (G : Generators) (i : ℕ) (cfg : Config) (o : ℕ) (iv : A
     (self : RegionIndex) :
     (round G i).output cfg o iv self = reads cfg (o + 1) self := rfl
 
+/-- The running-sum cell returned by a round is assigned by that round. -/
+theorem round_output_z_cell_assigned (G : Generators) (i : ℕ)
+    (cfg : Config) (offset : ℕ) (piece : AssignedCell Fp)
+    (self : RegionIndex) (available : List Cell) :
+    ((round G i).output cfg offset piece self).z.cell ∈
+      (((round G i).call cfg offset piece).operations self
+        |>.assignedCellsAfter self available) := by
+  rw [FormalRegionCircuit.call_operations, round_output]
+  simp only [round, circuit_norm, reads, AssignedCell.of_cell,
+    RegionOperations.mem_assignedCellsAfter_iff, RegionOperations.assignedCells,
+    List.mem_append, List.flatMap_cons,
+    RegionOperation.assignedCells, List.singleton_append, List.mem_cons,
+    true_or]
+
 end Zcash.Circuits.Sinsemilla.HashPiece

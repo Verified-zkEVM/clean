@@ -47,25 +47,69 @@ def double : FormalCircuit Fp
   elaborated := {
     keygenRequirements :=
       { configLawful input := Add.add.Configured input.2
-        gates _ configured := configured.gates
-        lookups _ configured := configured.lookups }
+        gates _ configured := configured.toFormal.gates
+        lookups _ configured := configured.toFormal.lookups
+        permutationColumns _ configured := configured.toFormal.permutationColumns }
     registered := by
       intro configInput counts hconfig input i
-      simp only [keygen_spine]
-      change Add.add.Configured configInput.2 at hconfig
-      apply Add.addFormal.call_keygenRegistered configInput.2 hconfig.toFormal
-      · intro gate hgate
-        simpa only [FormalRegionCircuit.Configured.toFormal,
-          FormalCircuit.Configured.gates,
-          FormalRegionCircuit.Configured.gates,
-          FormalRegionCircuit.toFormal_keygenRequirements,
-          List.append_nil] using hgate
-      · intro argument hargument
-        simpa only [FormalRegionCircuit.Configured.toFormal,
-          FormalCircuit.Configured.lookups,
-          FormalRegionCircuit.Configured.lookups,
-          FormalRegionCircuit.toFormal_keygenRequirements,
-          List.append_nil] using hargument
+      simp only [Configure.output_bind,
+        Configure.output_pure, Circuit.operations_bind,
+        Circuit.operations_pure, List.append_nil,
+        nextRegionIndex_assignRegion, output_assignRegion,
+        RegionCircuit.output_bind, output_assignAdvice,
+        RegionCircuit.output_pure]
+      rw [Operations.KeygenRegistered.append]
+      constructor
+      · keygen_registration
+      · apply Add.addFormal.call_keygenRegistered configInput.2 hconfig.toFormal
+        · intro gate hgate
+          apply List.mem_append_left
+          exact hgate
+        · intro lookup hlookup
+          apply List.mem_append_left
+          exact hlookup
+        · intro column hcolumn
+          apply List.mem_append_left
+          apply List.mem_append_left
+          exact hcolumn
+        · simp only [Add.addFormal_inputCells, List.forall_cons,
+            List.forall_nil, and_true]
+          and_intros <;> keygen_registration
+    copyCellsAssigned := by
+      intro configInput counts hconfig input i
+      simp only [Configure.output_bind,
+        Configure.output_pure, Circuit.operations_bind,
+        Circuit.operations_pure, List.append_nil,
+        nextRegionIndex_assignRegion, output_assignRegion,
+        RegionCircuit.output_bind, output_assignAdvice,
+        RegionCircuit.output_pure]
+      apply Operations.CopyCellsAssignedFrom.append
+      · keygen_registration
+      · simp only [keygen_spine]
+        apply Add.addFormal.call_copyCellsAssignedFrom
+          configInput.2 hconfig.toFormal _ _
+        intro cell hcell
+        simp only [Add.addFormal_inputCells, List.mem_cons] at hcell
+        rcases hcell with hcell | hcell | hcell | hcell <;>
+          simp_all [AssignedCell.of]
+    lookupActivationsWellFormed := by keygen_registration [keygen_spine]
+    synthesisSummary := fun config input i =>
+      (FloorPlanner.SynthesisSummary.ofRegion
+        (.ofColumns
+          [.column .advice config.1.1.index,
+            .column .advice config.1.2.index]
+          1 0)).combine
+        (Add.addFormal.elaborated.synthesisSummary config.2
+          { p := { x := .of i 0 config.1.1, y := .of i 0 config.1.2 },
+            q := { x := .of i 0 config.1.1, y := .of i 0 config.1.2 } }
+          (i + 1))
+    synthesisSummary_eq := by
+      intro config input i
+      simp only [Circuit.operations_bind,
+        Circuit.operations_pure, List.append_nil,
+        FloorPlanner.synthesisSummary_append,
+        FormalCircuit.call_synthesisSummary]
+      congr 1
     regionCount _ := 2 }
 
   Spec _ output _ := output.Valid

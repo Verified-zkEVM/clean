@@ -44,13 +44,14 @@ example (place : RegionIndex → ℕ) (self : RegionIndex) (env : Environment Fp
           arity := rfl }
         [s] row).Constraints place self env
       ↔ ∃ tableRow : ℕ, tableRow < env.usableRows ∧
-          i0.eval (Query.eval env (fun j => if j ∈ [s].map Selector.index then 1 else 0)
+          i0.eval (Query.eval env (fun j => if j ∈ [s.toSelector.index] then 1 else 0)
               (place self + row : ℕ)) = env.fixed c0 (tableRow : ℤ) ∧
-          i1.eval (Query.eval env (fun j => if j ∈ [s].map Selector.index then 1 else 0)
+          i1.eval (Query.eval env (fun j => if j ∈ [s.toSelector.index] then 1 else 0)
               (place self + row : ℕ)) = env.fixed c1 (tableRow : ℤ) ∧
-          i2.eval (Query.eval env (fun j => if j ∈ [s].map Selector.index then 1 else 0)
+          i2.eval (Query.eval env (fun j => if j ∈ [s.toSelector.index] then 1 else 0)
               (place self + row : ℕ)) = env.fixed c2 (tableRow : ℤ) := by
   simp only [RegionOperation.constraints_enableLookup, List.map_cons, List.map_nil,
     List.cons.injEq, and_true, queryFixed, Expression.eval, Query.eval, add_zero]
+  rfl
 
 end Halo2.TupleLookup.Test

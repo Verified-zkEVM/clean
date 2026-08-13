@@ -706,6 +706,29 @@ theorem shortRangeCheck_synthesisSummary_constantSiteCount
   rw [ElaboratedRegionCircuit.synthesisSummary_constantSiteCount_eq]
   simp only [shortRangeCheck, circuit_norm]
 
+/-- Gates exposed by a configured short range check. -/
+theorem shortRangeCheck_configured_gates_eq
+    (K numBits : ℕ) {cfg : Config K}
+    (configured : (shortRangeCheck K numBits).Configured cfg) :
+    configured.gates = [bitshiftGate K cfg] := by
+  rcases configured with ⟨configInput, counts, hconfig, outputEq⟩
+  cases outputEq
+  simp only [keygen_norm, FormalRegionCircuit.Configured.gates,
+    FormalRegionCircuit.keygenRequirements,
+    ElaboratedRegionCircuit.keygenRequirements, shortRangeCheck,
+    List.singleton_append]
+
+theorem shortRangeCheck_configured_lookups_eq
+    (K numBits : ℕ) {cfg : Config K}
+    (configured : (shortRangeCheck K numBits).Configured cfg) :
+    configured.lookups = [rangeCheckLookup K cfg] := by
+  rcases configured with ⟨configInput, counts, hconfig, outputEq⟩
+  cases outputEq
+  simp only [keygen_norm, FormalRegionCircuit.Configured.lookups,
+    FormalRegionCircuit.keygenRequirements,
+    ElaboratedRegionCircuit.keygenRequirements, shortRangeCheck,
+    List.singleton_append]
+
 /-- The short range check registers exactly its running-sum column for equality. -/
 @[keygen_norm]
 theorem shortRangeCheck_configured_permutationColumns_eq
@@ -1802,6 +1825,13 @@ theorem witnessCheckDecomposed_nextRegionIndex
     (witnessCheckDecomposed cfg w).nextRegionIndex region = region + 1 := by
   simp only [witnessCheckDecomposed, circuit_norm]
 
+@[circuit_norm]
+theorem witnessCheckDecomposed_regionCount
+    (cfg : Config 10) (w : WitgenIR Fp 1) (region : RegionIndex) :
+    ((witnessCheckDecomposed cfg w).operations region).regionCount = 1 := by
+  simp only [witnessCheckDecomposed, operations_assignRegion,
+    Operations.regionCount]
+
 /-- A decomposed witness check introduces no unassigned copy endpoints. -/
 theorem witnessCheckDecomposed_copyCellsAssignedFrom
     (cfg : Config 10) (w : WitgenIR Fp 1) (i : RegionIndex)
@@ -1944,6 +1974,14 @@ theorem witnessShortCheck_nextRegionIndex
     (region : RegionIndex) :
     (witnessShortCheck K numBits cfg w).nextRegionIndex region = region + 1 := by
   simp only [witnessShortCheck, circuit_norm]
+
+@[circuit_norm]
+theorem witnessShortCheck_regionCount
+    (K numBits : ℕ) (cfg : Config K) (w : WitgenIR Fp 1)
+    (region : RegionIndex) :
+    ((witnessShortCheck K numBits cfg w).operations region).regionCount = 1 := by
+  simp only [witnessShortCheck, operations_assignRegion,
+    Operations.regionCount]
 
 /-- A short witness check introduces no unassigned copy endpoints. -/
 theorem witnessShortCheck_copyCellsAssignedFrom
@@ -2112,6 +2150,20 @@ theorem witnessCheckDecomposed_output_cells_assigned
   · simpa only [Nat.zero_add] using
       rangeCell_mem_rangeCheckLoop_assignedCells
         10 cfg (AssignedCell.of i 0 cfg.runningSum) 0 25 13 i (by omega) (by omega)
+
+/-- Exact cells returned by a word-wise witness check. -/
+theorem witnessCheck_output
+    (K numWords : ℕ) (strict : Bool)
+    (hstrict : strict = true → 0 < numWords) (cfg : Config K)
+    (w : WitgenIR Fp 1) (i : RegionIndex) :
+    (witnessCheck K numWords strict cfg w hstrict).output i =
+      { z0 := AssignedCell.of i 0 cfg.runningSum
+        zLast := AssignedCell.of i numWords cfg.runningSum } := by
+  simp only [witnessCheck, circuit_norm]
+  unfold FormalRegionCircuit.output
+  rw [(rangeCheckAt K numWords strict hstrict).elaborated.output_eq]
+  simpa only [rangeCheckAt, Nat.zero_add] using
+    rangeCheckAtBody_output K numWords strict cfg 0 () i
 
 /-- Both cells returned by `witnessCheck` stay in its running-sum column. -/
 @[keygen_norm, keygen_output_norm]
