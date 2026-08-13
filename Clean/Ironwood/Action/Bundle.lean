@@ -183,6 +183,13 @@ structure ActionData where
   pkdOld : Point Fp
   gdNew : Point Fp
   pkdNew : Point Fp
+  /-- The literal 255-bit representatives consumed by each Merkle hash.  These are
+  reconstructed from the three decomposition pieces, rather than from the reduced
+  node field elements. -/
+  leftEncoding : Fin 32 → ℕ
+  rightEncoding : Fin 32 → ℕ
+  /-- The cond-swap position flag (`true` means the running node is the right child). -/
+  merkleSide : Fin 32 → Bool
   merklePath : ℕ → Fp × Fp
   rcv : Vector Fp 85 × Fq
   alpha : Vector Fp 85 × Fq
@@ -231,6 +238,27 @@ def extract (cfg : Config) (_ : Var PrivateInputs Fp) (i₀ : RegionIndex)
             cellRead env (i₀ + 347) 0 cfg.eccConfig.witnessPoint.y⟩
   pkdNew := ⟨cellRead env (i₀ + 348) 0 cfg.eccConfig.witnessPoint.x,
              cellRead env (i₀ + 348) 0 cfg.eccConfig.witnessPoint.y⟩
+  leftEncoding := fun j =>
+    let k := j.val
+    let mcfg := if k < 16 then cfg.merkle1 else cfg.merkle2
+    let base := if k < 16 then i₀ + 8 + 8 * k else i₀ + 136 + 8 * (k - 16)
+    let a := (cellRead env (base + 1) 0 mcfg.sinsemilla.witnessPieces).val
+    let b := (cellRead env (base + 4) 0 mcfg.sinsemilla.witnessPieces).val
+    let b1 := (cellRead env (base + 2) 0 cfg.lookupConfig.runningSum).val
+    a / 2 ^ 10 + 2 ^ 240 * (b % 2 ^ 10 + 2 ^ 10 * b1)
+  rightEncoding := fun j =>
+    let k := j.val
+    let mcfg := if k < 16 then cfg.merkle1 else cfg.merkle2
+    let base := if k < 16 then i₀ + 8 + 8 * k else i₀ + 136 + 8 * (k - 16)
+    let c := (cellRead env (base + 5) 0 mcfg.sinsemilla.witnessPieces).val
+    let b2 := (cellRead env (base + 3) 0 cfg.lookupConfig.runningSum).val
+    b2 + 2 ^ 5 * c
+  merkleSide := fun j =>
+    let k := j.val
+    if k < 16 then
+      cellRead env (i₀ + 8 + 8 * k) 0 cfg.merkle1.condSwap.swap = 1
+    else
+      cellRead env (i₀ + 136 + 8 * (k - 16)) 0 cfg.merkle2.condSwap.swap = 1
   merklePath := fun j =>
     if j < 16 then
       (cellRead env (i₀ + 8 + 8 * j) 0 cfg.merkle1.condSwap.b,
@@ -252,6 +280,18 @@ def extractBase (cfg : Config) (_ : Var unit Fp) (i₀ : RegionIndex)
 /-! ## The statement (§4.17.4, knowledge-sound, breaks-as-data) -/
 
 open NoteCommit (noteScalars)
+
+/-- Total views of the Action's fixed-size Merkle exports.  Values beyond depth
+32 are irrelevant to `ExactMerklePathData`, but the total functions make its
+interface directly usable by the ledger bridge. -/
+def merkleLeftEncoding (wit : ActionData) : ℕ → ℕ := fun i =>
+  if h : i < 32 then wit.leftEncoding ⟨i, h⟩ else 0
+
+def merkleRightEncoding (wit : ActionData) : ℕ → ℕ := fun i =>
+  if h : i < 32 then wit.rightEncoding ⟨i, h⟩ else 0
+
+def merkleSide (wit : ActionData) : ℕ → Bool := fun i =>
+  if h : i < 32 then wit.merkleSide ⟨i, h⟩ else false
 
 /-- The Orchard Action statement over the extracted data: every §4.17.4 clause, with
 the Sinsemilla escapes exhibited as data and the fixed-base scalars knowledge-sound at
@@ -302,6 +342,8 @@ def SpecBase (G : Generators) (B : Bases) (wit : ActionData) : Prop :=
     Sinsemilla.Merkle.MerkleRoot G B.merkleQ 0 wit.cmOld.x 32 root ∧
     (Sinsemilla.Merkle.MerkleRootStrict G B.merkleQ 0 wit.cmOld.x 32 root ∨
       Sinsemilla.Merkle.MerkleBreakAt G B.merkleQ 0 32) ∧
+    Sinsemilla.Merkle.ExactMerklePathData G B.merkleQ 0 32 wit.cmOld.x root
+      (merkleLeftEncoding wit) (merkleRightEncoding wit) (merkleSide wit) ∧
     wit.vOld * (root - wit.anchor) = 0) ∧
   -- the remaining `q_orchard` value checks
   wit.vOld - wit.vNew = wit.magnitude * wit.sign ∧
@@ -1075,15 +1117,34 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
   · -- Merkle path validity + the anchor check
     obtain ⟨hOv, hOn, hOm, hOs, hOr, hOa, hOes, hOeo, hGate⟩ := hOrch
     have hRoot := Sinsemilla.Merkle.MerkleRoot.trans G B.merkleQ hM1S.1 hM2S.1
+    have hExact := Sinsemilla.Merkle.ExactMerklePathData.trans G B.merkleQ
+      0 16 16 _ _ _ _ _ _ _ _ _ hM1S.2.2 hM2S.2.2
+    norm_num at hExact
     simp only [orchardGate, Gate.withSelector, circuit_norm, List.Forall] at hGate
     have h := hGate.2.1
     rw [hOv, hOr, hOa] at h
-    refine ⟨_, by with_unfolding_all exact hRoot, ?_, by with_unfolding_all exact h⟩
-    rcases hM1S.2 with hM1Strict | hM1Break
-    · rcases hM2S.2 with hM2Strict | hM2Break
-      · with_unfolding_all exact Or.inl (Sinsemilla.Merkle.MerkleRootStrict.trans G B.merkleQ hM1Strict hM2Strict)
-      · exact Or.inr (Sinsemilla.Merkle.MerkleBreakAt.shift G B.merkleQ (l := 0) (k := 16) (k' := 16) hM2Break)
-    · exact Or.inr (Sinsemilla.Merkle.MerkleBreakAt.mono G B.merkleQ (by omega) hM1Break)
+    refine ⟨_, by with_unfolding_all exact hRoot, ?_, ?_, by with_unfolding_all exact h⟩
+    · rcases hM1S.2.1 with hM1Strict | hM1Break
+      · rcases hM2S.2.1 with hM2Strict | hM2Break
+        · with_unfolding_all exact Or.inl (Sinsemilla.Merkle.MerkleRootStrict.trans G B.merkleQ hM1Strict hM2Strict)
+        · exact Or.inr (Sinsemilla.Merkle.MerkleBreakAt.shift G B.merkleQ (l := 0) (k := 16) (k' := 16) hM2Break)
+      · exact Or.inr (Sinsemilla.Merkle.MerkleBreakAt.mono G B.merkleQ (by omega) hM1Break)
+    · rcases hExact with ⟨nodes, h0, hd, hs⟩
+      refine ⟨nodes, by with_unfolding_all exact h0,
+        by with_unfolding_all exact hd, ?_⟩
+      intro i hi
+      have hstep := hs i hi
+      by_cases h16 : i < 16
+      · simp only [merkleLeftEncoding, merkleRightEncoding, merkleSide,
+          dif_pos hi, h16, if_true] at ⊢
+        simpa [Sinsemilla.Merkle.CalculateRoot.circuit,
+          Sinsemilla.Merkle.HashLayer.circuit, Sinsemilla.Merkle.HashLayer.leftEncoding,
+          Sinsemilla.Merkle.HashLayer.rightEncoding, circuit_norm, Nat.add_assoc, h16] using hstep
+      · simp only [merkleLeftEncoding, merkleRightEncoding, merkleSide,
+          dif_pos hi, h16, if_false] at ⊢
+        simpa [Sinsemilla.Merkle.CalculateRoot.circuit,
+          Sinsemilla.Merkle.HashLayer.circuit, Sinsemilla.Merkle.HashLayer.leftEncoding,
+          Sinsemilla.Merkle.HashLayer.rightEncoding, circuit_norm, Nat.add_assoc, h16] using hstep
   · -- `v_old − v_new = magnitude · sign`
     obtain ⟨hOv, hOn, hOm, hOs, hOr, hOa, hOes, hOeo, hGate⟩ := hOrch
     simp only [orchardGate, Gate.withSelector, circuit_norm, List.Forall] at hGate
@@ -1320,16 +1381,14 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
           { node := AssignedCell.of (i₀ + 2) 0 cfg.eccConfig.witnessPoint.x }
           (i₀ + 8)) : Fp) = mid := by
       refine hM1der.2 mid ?_
-      rw [show ((Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve
+      rw [show (fun j => ((Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve
           0 16 (by norm_num) input_var_merkleSib input_var_merkleSwap).extract
           (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig) _ (i₀ + 8)
-          (⟨place, env.toEnvironment⟩ : Placed Environment Fp))
+          (⟨place, env.toEnvironment⟩ : Placed Environment Fp) j).pair)
         = fun j => ((eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
-            (AssignedCell.of (i₀ + 8 + 8 * j) 0 cfg.merkle1.condSwap.b
-              : Var field Fp) : Fp),
+            (AssignedCell.of (i₀ + 8 + 8 * j) 0 cfg.merkle1.condSwap.b : Var field Fp) : Fp),
           (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
-            (AssignedCell.of (i₀ + 8 + 8 * j) 0 cfg.merkle1.condSwap.swap
-              : Var field Fp) : Fp)) from by
+            (AssignedCell.of (i₀ + 8 + 8 * j) 0 cfg.merkle1.condSwap.swap : Var field Fp) : Fp)) from by
         funext j
         with_unfolding_all rfl]
       rw [Sinsemilla.Merkle.CalculateRoot.pathNode_congr G B.merkleQ 0 _ 16
@@ -1386,17 +1445,15 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
               (i₀ + 8) }
           (i₀ + 136)) : Fp) = root := by
       refine hM2der.2 root ?_
-      rw [show ((Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve
+      rw [show (fun j => ((Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve
           16 16 (by norm_num) (fun i => input_var_merkleSib (16 + i))
           (fun i => input_var_merkleSwap (16 + i))).extract
           (cfg.merkle2.condSwap, cfg.merkle2, cfg.lookupConfig) _ (i₀ + 136)
-          (⟨place, env.toEnvironment⟩ : Placed Environment Fp))
+          (⟨place, env.toEnvironment⟩ : Placed Environment Fp) j).pair)
         = fun j => ((eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
-            (AssignedCell.of (i₀ + 136 + 8 * j) 0 cfg.merkle2.condSwap.b
-              : Var field Fp) : Fp),
+            (AssignedCell.of (i₀ + 136 + 8 * j) 0 cfg.merkle2.condSwap.b : Var field Fp) : Fp),
           (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
-            (AssignedCell.of (i₀ + 136 + 8 * j) 0 cfg.merkle2.condSwap.swap
-              : Var field Fp) : Fp)) from by
+            (AssignedCell.of (i₀ + 136 + 8 * j) 0 cfg.merkle2.condSwap.swap : Var field Fp) : Fp)) from by
         funext j
         with_unfolding_all rfl]
       rw [Sinsemilla.Merkle.CalculateRoot.pathNode_congr₂ G B.merkleQ 16 16
