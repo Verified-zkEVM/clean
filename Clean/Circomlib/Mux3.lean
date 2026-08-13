@@ -98,8 +98,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
       output[i] = (c[i])[idx]
 
   computableWitnesses := by
-    computable_witnesses [eval_vector, Vector.ext_iff, explicit_provable_type,
-      Vector.getElem_map]
+    computable_witnesses
 
   soundness := by
     circuit_proof_start

@@ -411,6 +411,28 @@ instance [CircuitType α] [CircuitType β] :
     CoeFun (GeneralFormalCircuit.WithHint F β α) (fun _ => Var β F → Circuit F (Var α F)) where
   coe circuit input := subcircuitWithHintAssertion circuit input
 
+/- `computable_witnesses_norm`: respell coercion applications as the named inclusion
+constants the composition laws key on. The LHSs are written as bare applications so
+the elaborator inserts exactly the `CoeFun` spelling call sites carry — `simp`'s
+discrimination tree cannot see through the coercion head, though `rw` can. -/
+
+@[computable_witnesses_norm]
+theorem formalCircuit_coe_eq (circuit : FormalCircuit F β α) (b : Var β F) :
+    circuit b = subcircuit circuit b := rfl
+
+@[computable_witnesses_norm]
+theorem formalAssertion_coe_eq (circuit : FormalAssertion F β) (b : Var β F) :
+    circuit b = assertion circuit b := rfl
+
+@[computable_witnesses_norm]
+theorem generalFormalCircuit_coe_eq (circuit : GeneralFormalCircuit F β α) (b : Var β F) :
+    circuit b = subcircuitWithAssertion circuit b := rfl
+
+@[computable_witnesses_norm]
+theorem generalFormalCircuitWithHint_coe_eq [CircuitType α] [CircuitType β]
+    (circuit : GeneralFormalCircuit.WithHint F β α) (b : Var β F) :
+    circuit b = subcircuitWithHintAssertion circuit b := rfl
+
 -- subcircuit composability for `ComputableWitnesses`
 
 /--

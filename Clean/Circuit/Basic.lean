@@ -401,6 +401,25 @@ theorem Witnessable.witnessIR_provableVector {m : ℕ} (α : TypeMap) [NonEmptyP
     Witnessable.witnessIR (F := F) (value := ProvableVector α m)
       (var := Var (ProvableVector α m)) code = _root_.witnessIR (ProvableVector α m) code := rfl
 
+/- `computable_witnesses_norm` counterparts: the projections rewrite to the NAMED
+primitives — whose composition laws then apply — never to raw state-function
+closures (the `circuit_norm` field-instance spellings above). -/
+
+@[computable_witnesses_norm]
+theorem Witnessable.witness_field_named (e : Witgen.FExpr F) :
+    Witnessable.witness (F := F) (value := field) (var := Expression) e =
+      Circuit.witnessField e := rfl
+
+@[computable_witnesses_norm]
+theorem Witnessable.witnessIR_field_named (code : WitgenIR F 1) :
+    Witnessable.witnessIR (F := F) (value := field) (var := Expression) code =
+      Circuit.witnessVar code >>= fun v => pure (var v) := rfl
+
+attribute [computable_witnesses_norm] Witnessable.witness_fields
+  Witnessable.witness_provable Witnessable.witness_provableVector
+  Witnessable.witnessIR_fields Witnessable.witnessIR_provable
+  Witnessable.witnessIR_provableVector witnessNative witnessVectorProgram witnessProgram
+
 -- witness generation
 
 /-- Build a `ProverEnvironment` from a witness list and a specific prover hint. -/
@@ -456,14 +475,12 @@ A circuit has _computable witnesses_ when witness generators only depend on the 
 plus the shared `hint` and `data` (which witnesses can be computed from as well).
 This allows us to compute a concrete environment from witnesses, by successively extending an array with new witnesses.
 -/
-@[circuit_norm]
 def Operations.ComputableWitnesses (ops : Operations F) (n : ℕ) (env env' : ProverEnvironment F) : Prop :=
   ops.forAll n {
     witness n' _ compute := env.AgreesBelow n' env' → compute.eval env = compute.eval env'
     subcircuit n' _ s := s.ComputableWitnesses n' env env'
   }
 
-@[circuit_norm]
 def Circuit.ComputableWitnesses (circuit : Circuit F α) (n : ℕ) (env env' : ProverEnvironment F) :=
   (circuit.operations n).ComputableWitnesses n env env'
 
@@ -565,6 +582,12 @@ theorem bind_output_eq (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
 theorem map_output_eq (f : Circuit F α) (g : α → β) (n : ℕ) :
   (g <$> f).output n = g (f.output n) := rfl
 
+/- Metadata distribution for the `computable_witnesses` laws path: the bind law's
+offsets and inputs (`n + f.localLength n`, `g (f.output n)`) reduce structurally,
+never through an operations list. -/
+attribute [computable_witnesses_norm] pure_localLength_eq bind_localLength_eq
+  map_localLength_eq pure_output_eq bind_output_eq map_output_eq
+
 @[circuit_norm]
 theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} {prop : Condition F} :
   ((f >>= g).operations n).forAll n prop ↔
@@ -637,8 +660,52 @@ theorem computableWitnesses_lookup {Row : TypeMap} [ProvableType Row] (table : T
   simp [lookup, ComputableWitnesses, Operations.ComputableWitnesses,
     Circuit.operations, Operations.forAll]
 
+/- Leaf metadata for the laws path: each witness primitive's `localLength`/`output`
+in explicit form (numeral lengths, `varFromOffset`/`var` windows). -/
+
+@[computable_witnesses_norm]
+theorem witnessVar_localLength (ir : WitgenIR F 1) (n : ℕ) :
+    (witnessVar ir : Circuit F _).localLength n = 1 := rfl
+
+@[computable_witnesses_norm]
+theorem witnessVar_output (ir : WitgenIR F 1) (n : ℕ) :
+    (witnessVar ir : Circuit F _).output n = ⟨n⟩ := rfl
+
+@[computable_witnesses_norm]
+theorem witnessField_localLength (e : Witgen.FExpr F) (n : ℕ) :
+    (witnessField e : Circuit F _).localLength n = 1 := rfl
+
+@[computable_witnesses_norm]
+theorem witnessField_output (e : Witgen.FExpr F) (n : ℕ) :
+    (witnessField e : Circuit F _).output n = var ⟨n⟩ := rfl
+
+@[computable_witnesses_norm]
+theorem witnessVector_localLength (m : ℕ) (out : Witgen.VExpr F m) (n : ℕ) :
+    (witnessVector m out : Circuit F _).localLength n = m := rfl
+
+@[computable_witnesses_norm]
+theorem witnessVector_output (m : ℕ) (out : Witgen.VExpr F m) (n : ℕ) :
+    (witnessVector m out : Circuit F _).output n = varFromOffset (fields m) n := rfl
+
+@[computable_witnesses_norm]
+theorem assertZero_localLength (e : Expression F) (n : ℕ) :
+    (assertZero e : Circuit F Unit).localLength n = 0 := rfl
+
+@[computable_witnesses_norm]
+theorem lookup_localLength {Row : TypeMap} [ProvableType Row] (table : Table F Row)
+    (entry : Row (Expression F)) (n : ℕ) :
+    (lookup table entry : Circuit F Unit).localLength n = 0 := rfl
+
 end computableWitnessesLaws
 end Circuit
+
+@[computable_witnesses_norm]
+theorem witnessIR_localLength {M : TypeMap} [ProvableType M] (ir : WitgenIR F (size M)) (n : ℕ) :
+    (witnessIR M ir : Circuit F _).localLength n = size M := rfl
+
+@[computable_witnesses_norm]
+theorem witnessIR_output {M : TypeMap} [ProvableType M] (ir : WitgenIR F (size M)) (n : ℕ) :
+    (witnessIR M ir : Circuit F _).output n = varFromOffset M n := rfl
 
 @[computable_witnesses_norm]
 theorem witnessIR_computableWitnesses {M : TypeMap} [ProvableType M] {n : ℕ}

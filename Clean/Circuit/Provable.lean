@@ -258,6 +258,13 @@ instance (priority := high) : ProvableType (fields n) where
 
 @[grind norm] theorem size_fields (n : ℕ) : size (fields n) = n := rfl
 
+@[circuit_norm, computable_witnesses_norm]
+theorem toElements_fields {F : Type} {n : ℕ} (x : fields n F) : toElements x = x := rfl
+
+@[circuit_norm, computable_witnesses_norm]
+theorem fromElements_fields {F : Type} {n : ℕ} (v : Vector F n) :
+    fromElements (M := fields n) v = v := rfl
+
 instance {n : ℕ} : NonEmptyProvableType (fields (n + 1)) where
   nonempty := Nat.zero_lt_succ n
 

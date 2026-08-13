@@ -542,7 +542,7 @@ theorem WitgenIR.eval_ofFExpr_expr (e : Expression F)
 /-- Elementwise evaluation of expression-copying witnesses, keyed on `getElem` so it
 fires regardless of how the expression vector was built (matches the codebase's
 getElem-first simp discipline). -/
-@[circuit_norm ↓]
+@[circuit_norm ↓, computable_witnesses_norm ↓]
 theorem WitgenIR.getElem_eval_ofExprs {n : ℕ}
     (es : Vector (Expression F) n) (env : ProverEnvironment F) (i : ℕ) (hi : i < n) :
     ((ofExprs es).eval env)[i] = es[i].eval env.toEnvironment := by

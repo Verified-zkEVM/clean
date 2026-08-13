@@ -911,12 +911,29 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
   let leafDispatch : TacticM Unit := withMainContext do
     -- inaccessible hyp names (from intro1P) break the chainer's delab roundtrip
     try replaceMainGoal [← (← getMainGoal).exposeNames] catch _ => pure ()
-    -- leaf-local simp (normalizes loop-instantiated lengths), then dispatch
-    -- deliberately WITHOUT the user hints: this simp hits `at *`, and close-stage
-    -- hints (e.g. recursive eval decompositions like `eval_vector_set`) rewriting
-    -- every chain fact in every hypothesis is a heartbeat blowup; hints reach
-    -- hypotheses via the close routes' `simp_all` instead
     if (← getGoals).isEmpty then return
+    -- inclusion-headed leaves (`(subcircuit c b).ComputableWitnesses …`): respell to
+    -- the `toSubcircuit` form via the inclusion laws. `rw`'s unifier handles this;
+    -- simp's discrimination tree cannot — the laws' `Var`-typed result slot keys
+    -- differently from call sites' projected spelling.
+    withMainContext do
+      let t := (← instantiateMVars (← getMainTarget)).consumeMData
+      if t.getAppFn.isConstOf `Circuit.ComputableWitnesses then
+        let inclusions : List (Name × Name) := [
+          (`subcircuit, `subcircuit_computableWitnesses),
+          (`assertion, `assertion_computableWitnesses),
+          (`subcircuitWithAssertion, `subcircuitWithAssertion_computableWitnesses),
+          (`subcircuitWithHintAssertion, `subcircuitWithHintAssertion_computableWitnesses)]
+        let law? := t.getAppArgs.findSome? fun a =>
+          inclusions.findSome? fun (incl, law) =>
+            if a.getAppFn.isConstOf incl then some law else none
+        if let some law := law? then
+          try
+            let g ← getMainGoal
+            let r ← g.rewrite (← instantiateMVars (← g.getType))
+              (← mkConstWithFreshMVarLevels law)
+            replaceMainGoal [← g.replaceTargetEq r.eNew r.eqProof]
+          catch _ => pure ()
     withMainContext do
       let t := (← instantiateMVars (← getMainTarget)).consumeMData
       let .const headName _ := t.getAppFn | evalCloseRun
@@ -1011,9 +1028,10 @@ def runStart (cw : CwSimp) : TacticM Unit := do
     unless (← getGoals).isEmpty do
       try metaSimp cw.lawsCtx cw.lawsProcs catch _ => pure ()
   -- the obligation is stated compositionally (input premise hoisted, per-node content
-  -- via `Circuit.ComputableWitnesses`): decompose along the composition laws first —
-  -- no operations list is materialized. The `circuit_norm` pass runs as a backstop
-  -- when remnants survive (loop combinators, recursive `main`s).
+  -- via `Circuit.ComputableWitnesses`): the `computable_witnesses_norm` laws are the
+  -- ONLY decomposition — the property definitions are not `circuit_norm`-unfoldable,
+  -- so no pass can materialize an operations list. `circuit_norm` first appears in
+  -- the close routes, after subcircuit dispatch.
   lawsPass
   unless (← getGoals).isEmpty do
     -- One boundary rule, mirroring the library's own: plain-`Circuit`-typed constants
@@ -1026,6 +1044,10 @@ def runStart (cw : CwSimp) : TacticM Unit := do
     -- decompose what the unfold exposed
     let tAfter ← withMainContext do instantiateMVars (← getMainTarget)
     unless tAfter == tBefore do lawsPass
+  -- MIGRATION BACKSTOP: leaves the laws cannot yet close (their close-route shapes
+  -- are still being adapted) fall back to the materialized path. The property
+  -- definitions are not simp-unfoldable by design, so materialization is an explicit
+  -- tactic decision here — env-clean delta by name — never a simp-set side effect.
   let incomplete ← do
     if (← getGoals).isEmpty then pure false
     else withMainContext do
@@ -1037,12 +1059,18 @@ def runStart (cw : CwSimp) : TacticM Unit := do
         e.getAppFn.isConstOf `Circuit.bind ||
         mainNames.any (fun m => e.getAppFn.isConstOf m)).isSome)
   if incomplete then
+    withMainContext do
+      let t ← instantiateMVars (← getMainTarget)
+      let t' ← Meta.deltaExpand t fun nm =>
+        nm == `Circuit.ComputableWitnesses || nm == `Operations.ComputableWitnesses
+      unless t' == t do liftMetaTactic fun g => do return [← g.change t']
     simpPass
     unless (← getGoals).isEmpty do
       let tBefore ← withMainContext do instantiateMVars (← getMainTarget)
       try unfoldPlainCircuitConsts catch _ => pure ()
       let tAfter ← withMainContext do instantiateMVars (← getMainTarget)
       unless tAfter == tBefore do simpPass
+
   unless (← getGoals).isEmpty do
     -- intro the remaining ∀-binders but STOP at the hoisted input premise: left in
     -- the goal, every goal-only pass reaches it through destructuring, and the split

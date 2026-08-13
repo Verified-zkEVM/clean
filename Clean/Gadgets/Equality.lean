@@ -111,7 +111,7 @@ lemma channelsWithRequirements_eq :
 from the `ComputableWitnesses` offset `n` matters: a parent's `circuit_norm` can reduce the free
 `n` while the offset inside the type index stays unreduced (dependent motive), so a same-offset
 statement stops matching. -/
-@[circuit_norm]
+@[circuit_norm, computable_witnesses_norm]
 theorem toSubcircuit_computableWitnesses {m n : ℕ} (input : Var (ProvablePair M M) F)
     {env env' : ProverEnvironment F} :
     ((circuit M).toSubcircuit m input).ComputableWitnesses n env env' := by

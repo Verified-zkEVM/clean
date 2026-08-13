@@ -1390,4 +1390,62 @@ theorem interactions_mapFinRange (m : ℕ) [NeZero m] (body : Fin m → Circuit 
   congr
   funext i
   simp [Vector.getElem_finRange]
+
+/-! ## `Circuit.ComputableWitnesses` laws for the loop combinators
+
+Property-level restatements of the `forAll` bridges above (see the primitive laws in
+`Clean.Circuit.Basic` and the subcircuit inclusions in `Clean.Circuit.Subcircuit`): a
+loop's obligation is the per-iteration obligation at the strided offset. Definitional
+wrappers — the `forAll` form appears only inside the bridges' proofs.
+
+STAGED, not yet `@[computable_witnesses_norm]`: wiring these into the laws pass changes
+the leaf shapes loop circuits present to the close routes (measured: 7 corpus files
+regress — BinSub, Gates, Mux1/2, FemtoCairo, Add32, LowerSigma0). Until the close
+routes are adapted, loop combinators stay remnants for the tactic's materialization
+backstop. -/
+section computableWitnessesLaws
+variable {env env' : ProverEnvironment F}
+
+theorem forEach.computableWitnesses {m n : ℕ} [Inhabited α] {xs : Vector α m}
+    {body : α → Circuit F Unit} {constant : ConstantLength body} :
+    (forEach xs body constant).ComputableWitnesses n env env' ↔
+      ∀ i : Fin m,
+        (body xs[i.val]).ComputableWitnesses (n + i * (body default).localLength) env env' :=
+  forEach.forAll
+
+theorem map.computableWitnesses {m n : ℕ} [Inhabited α] {xs : Vector α m} {body : α → Circuit F β}
+    {constant : ConstantLength body} :
+    (map xs body constant).ComputableWitnesses n env env' ↔
+      ∀ i : Fin m,
+        (body xs[i.val]).ComputableWitnesses (n + i * (body default).localLength) env env' :=
+  map.forAll
+
+theorem mapFinRange.computableWitnesses {m n : ℕ} [NeZero m] {body : Fin m → Circuit F β}
+    {constant : ConstantLength body} :
+    (mapFinRange m body constant).ComputableWitnesses n env env' ↔
+      ∀ i : Fin m, (body i).ComputableWitnesses (n + i * (body 0).localLength) env env' :=
+  mapFinRange.forAll
+
+theorem foldl.computableWitnesses {m n : ℕ} [NeZero m] [Inhabited β] [Inhabited α]
+    {xs : Vector α m} {init : β} {body : β → α → Circuit F β}
+    {const_out : ConstantOutput fun (s, a) => body s a}
+    {constant : ConstantLength fun (s, a) => body s a} :
+    (foldl xs init body const_out constant).ComputableWitnesses n env env' ↔
+      (body init (xs[0]'(NeZero.pos m))).ComputableWitnesses n env env' ∧
+      ∀ (i : ℕ) (hi : i + 1 < m),
+        let k := (body default default).localLength;
+        let acc := (body default xs[i]).output (n + i*k);
+        (body acc xs[i + 1]).ComputableWitnesses (n + (i + 1)*k) env env' :=
+  foldl.forAll
+
+theorem foldlRange.computableWitnesses {m n : ℕ} [Inhabited β] {init : β}
+    {body : β → Fin m → Circuit F β}
+    {constant : ConstantLength fun (s, a) => body s a} :
+    (foldlRange m init body constant).ComputableWitnesses n env env' ↔
+      ∀ i : Fin m,
+        (body (FoldlM.foldlAcc n (Vector.finRange m) body init i) i).ComputableWitnesses
+          (n + i * (body default i).localLength) env env' :=
+  foldlRange.forAll
+
+end computableWitnessesLaws
 end Circuit
