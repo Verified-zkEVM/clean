@@ -40,7 +40,7 @@ a child bundle name whose metadata is otherwise stuck under a binder).
      (`FormalCircuit.output_of_input_eq` instances, re-keyed at the goal's own eval
      spelling);
    * the close routes by shape (`isEvalCongrEq`): vector/eval-congruence goals get the
-     staged vector route (structural `simp_all`, close-hint step, then per-branch
+     staged vector route (structural `simp_all`, then per-branch
      `split_ifs` → `envUnify` → `grind`); everything else takes the base route
      (`envUnify`, projection respelling, `grind` first, curated `simp_all` fallbacks).
 
@@ -391,6 +391,33 @@ partial def collectOutputsGo (e : Expr) (seen : IO.Ref (Std.HashSet Expr))
       unless (← instantiateMVars (← inferType e)).isForall do
         acc.modify (·.push e)
 
+/-- Simp contexts and simproc arrays for one `computable_witnesses` invocation, built
+once by `CwSimp.build` — hints are resolved there, loudly. -/
+structure CwSimp where
+  /-- Normalization: attribute sets + hints, with the in-scope `main` self-supplied. -/
+  normCtx : Simp.Context
+  /-- The two attribute sets' simprocs. -/
+  normProcs : SimprocsArray
+  /-- Base-route `simp_all only` fallback: attribute sets + hints. -/
+  baseCtx : Simp.Context
+  /-- `normProcs` + `reduceOutputMetadata`, for the offset-premise discharge. -/
+  dischargeProcs : SimprocsArray
+  /-- Vector route, structural `simp_all`. -/
+  vecCtx : Simp.Context
+  /-- `circuit_norm` procs + `retypeVectorAliasEq` (vector-route steps). -/
+  vecProcs : SimprocsArray
+  /-- Vector route, per-branch simp after `split_ifs`. -/
+  branchCtx : Simp.Context
+  /-- `circuit_norm` simprocs alone. -/
+  cnProcs : SimprocsArray
+  /-- Theorem-free context for the standalone output-metadata dsimp step. -/
+  dsimpCtx : Simp.Context
+  /-- `reduceOutputMetadata` alone, for that step. -/
+  outputMetaProcs : SimprocsArray
+  /-- Final fallback: default simp set on top of the attribute sets. -/
+  fullCtx : Simp.Context
+  fullProcs : SimprocsArray
+
 /-- Forward-chain child-output equality facts (11 facts chained library-wide, 8 of
 them re-keyed; an o_meta universal-fact emitter for binder-nested outputs measured 0
 and was deleted): for each collected output term, build
@@ -399,7 +426,7 @@ the `c.localLength v` bound — and re-key the fact at the goal's own eval spell
 (the lemma's conclusion uses a different, defeq eval-instance atom; `grind` congruence
 works on syntactic atoms). `grind` cannot run simprocs, so letting it instantiate the
 composition rules would re-create opaque length atoms. -/
-def chainOutputFacts : TacticM Unit := withMainContext do
+def chainOutputFacts (cw? : Option CwSimp := none) : TacticM Unit := withMainContext do
   try betaReduceGoal catch _ => pure ()
   withMainContext do
   let tgt ← instantiateMVars (← getMainTarget)
@@ -457,9 +484,14 @@ def chainOutputFacts : TacticM Unit := withMainContext do
                   leGoal? := some g
               if let some leGoal := leGoal? then
                 setGoals [leGoal]
-                metaSimp (← Simp.mkContext {} (simpTheorems := #[← simpOnlyBase])
-                    (← getSimpCongrTheorems))
-                  (← SimprocsArray.add #[] ``reduceLocalLength (post := true))
+                let (ctx, procs) ← match cw? with
+                  | some cw => pure (cw.normCtx, cw.dischargeProcs)
+                  | none => do
+                      let ctx ← Simp.mkContext {}
+                        (simpTheorems := #[← simpOnlyBase]) (← getSimpCongrTheorems)
+                      pure (ctx,
+                        ← SimprocsArray.add #[] ``reduceLocalLength (post := true))
+                metaSimp ctx procs
                 unless (← getGoals).isEmpty do Omega.omegaDefault
               else
                 setGoals []
@@ -467,8 +499,10 @@ def chainOutputFacts : TacticM Unit := withMainContext do
               let closed ← try (← getMainGoal).assumption; replaceMainGoal []; pure true
                 catch _ => pure false
               unless closed do
-                let (cnCtx, cnProcs) ← cnSimp
-                try metaSimp cnCtx cnProcs catch _ => pure ()
+                let (ctx, procs) ← match cw? with
+                  | some cw => pure (cw.normCtx, cw.normProcs)
+                  | none => cnSimp
+                try metaSimp ctx procs catch _ => pure ()
                 metaGrind
       let proof ← instantiateMVars (mkAppN lem ms)
       if proof.hasExprMVar then throwError "open premises"
@@ -560,48 +594,12 @@ def vecStructuralLemmas : Array Name := #[
   ``Vector.getElem_map, ``Vector.getElem_append, ``Vector.getElem_mapFinRange,
   ``Vector.getElem_mapIdx, ``Vector.getElem_set, ``Vector.getElem_mapRange]
 
-/-- Vector route, goal-only close-hint step: the pointwise residue the structural pass
-leaves for user hints to decompose (each member 5 fires at 815dc9b1, matching
-the hint fires; three further members measured 0 and were dropped). -/
-def closeHintLemmas : Array Name := #[
-  ``Vector.ext_iff, ``Vector.getElem_ofFn, ``Vector.map_ofFn]
-
 /-- Vector route, per-branch (post-`split_ifs`): `varFromOffset` window expansion
 (members fired 5–30× at 815dc9b1; five injectivity/misc members measured 0 and were
 dropped). -/
 def branchLemmas : Array Name := #[
   ``ProvableType.eval_varFromOffset, ``Vector.mapRange_succ, ``Vector.mapRange_zero,
   ``Function.comp_apply]
-
-/-- Simp contexts and simproc arrays for one `computable_witnesses` invocation, built
-once by `CwSimp.build` — hints are resolved there, loudly. -/
-structure CwSimp where
-  /-- Normalization: attribute sets + hints, with the in-scope `main` self-supplied. -/
-  normCtx : Simp.Context
-  /-- The two attribute sets' simprocs. -/
-  normProcs : SimprocsArray
-  /-- Attribute sets without hints: the leaf `at *` pass and the base-route
-  `simp_all only` fallback. -/
-  baseCtx : Simp.Context
-  /-- `normProcs` + `reduceOutputMetadata`, for the offset-premise discharge. -/
-  dischargeProcs : SimprocsArray
-  /-- Vector route, structural `simp_all`. -/
-  vecCtx : Simp.Context
-  /-- `circuit_norm` procs + `retypeVectorAliasEq` (vector-route steps). -/
-  vecProcs : SimprocsArray
-  /-- Vector route, goal-only close-hint step (user hints participate). -/
-  closeHintCtx : Simp.Context
-  /-- Vector route, per-branch simp after `split_ifs`. -/
-  branchCtx : Simp.Context
-  /-- `circuit_norm` simprocs alone. -/
-  cnProcs : SimprocsArray
-  /-- Theorem-free context for the standalone output-metadata dsimp step. -/
-  dsimpCtx : Simp.Context
-  /-- `reduceOutputMetadata` alone, for that step. -/
-  outputMetaProcs : SimprocsArray
-  /-- Final fallback: default simp set on top of the attribute sets. -/
-  fullCtx : Simp.Context
-  fullProcs : SimprocsArray
 
 /-- Resolve one hint term: a simp-set name contributes its whole set; a global theorem
 is added as a rewrite, a global definition as an unfold (the same paths quoted
@@ -626,9 +624,11 @@ def addHint (thms : SimpTheorems) (sets : Array SimpTheorems) (t : TSyntax `term
 
 /-- Build all simp machinery for one invocation. The in-scope `main` is self-supplied
 as an unfold (all resolutions — a constant absent from the goal contributes no
-rewrites). User hints participate in the goal-only passes and the offset-premise
-discharge, never in the `simp_all` steps (`vecCtx`/`baseCtx`/`fullCtx` carry no hints),
-so recursive eval decompositions (e.g. `eval_vector_set`) stay affordable. -/
+rewrites). User hints participate in every theorem-bearing step — one invocation, one
+normal form, applied to hypotheses and goal alike, so tactic-derived facts (keyed at
+the goal's spelling when derived) never drift from a goal that hints keep rewriting.
+The only theorem-free step is the output-metadata dsimp, whose product decays under
+theorem rewriting. -/
 def CwSimp.build (extraTerms : Array (TSyntax `term)) : TacticM CwSimp :=
   -- hints may reference the local context (hypotheses, applied terms over local
   -- variables), so elaboration needs the main goal's context
@@ -654,14 +654,13 @@ def CwSimp.build (extraTerms : Array (TSyntax `term)) : TacticM CwSimp :=
     normCtx := ← Simp.mkContext {}
       (simpTheorems := #[normHints, cn, cwn] ++ hintSets) congr
     normProcs
-    baseCtx := ← Simp.mkContext {} (simpTheorems := #[← simpOnlyBase, cn, cwn]) congr
+    baseCtx := ← Simp.mkContext {} (simpTheorems := #[normHints, cn, cwn] ++ hintSets)
+      congr
     dischargeProcs
     vecCtx := ← Simp.mkContext {}
-      (simpTheorems := #[← theoremsOf vecStructuralLemmas (← simpOnlyBase), cn]) congr
-    vecProcs
-    closeHintCtx := ← Simp.mkContext {}
-      (simpTheorems := #[← theoremsOf closeHintLemmas normHints, cn] ++ hintSets)
+      (simpTheorems := #[← theoremsOf vecStructuralLemmas normHints, cn] ++ hintSets)
       congr
+    vecProcs
     branchCtx := ← Simp.mkContext {}
       (simpTheorems := #[← theoremsOf branchLemmas normHints, cn] ++ hintSets)
       congr
@@ -669,7 +668,7 @@ def CwSimp.build (extraTerms : Array (TSyntax `term)) : TacticM CwSimp :=
     dsimpCtx := ← Simp.mkContext {} (simpTheorems := #[]) congr
     outputMetaProcs
     fullCtx := ← Simp.mkContext {}
-      (simpTheorems := #[← getSimpTheorems, cn, cwn]) congr
+      (simpTheorems := #[← getSimpTheorems, normHints, cn, cwn] ++ hintSets) congr
     fullProcs := #[← Simp.getSimprocs] ++ normProcs
   }
 
@@ -824,11 +823,6 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
     if ← isEvalCongrEq then
       let vecMain : TacticM Unit := do
         metaSimpAll cw.vecCtx cw.vecProcs
-        -- user hints goal-only: in the `simp_all` above they would rewrite every
-        -- chain-fact hypothesis (all legs' window facts) at every leaf — a
-        -- heartbeat blowup for recursive eval decompositions (eval_vector_set)
-        unless (← getGoals).isEmpty do
-          try metaSimp cw.closeHintCtx cw.vecProcs catch _ => pure ()
         let gs ← getGoals
         for g in gs do
           setGoals [g]
@@ -936,13 +930,13 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
         if applied then
           simpPass
           unless (← getGoals).isEmpty do
-            try chainOutputFacts catch _ => pure ()
+            try chainOutputFacts (some cw) catch _ => pure ()
             unless (← getGoals).isEmpty do
               evalCloseRun
         else
           metaGrind
       else
-        try chainOutputFacts catch _ => pure ()
+        try chainOutputFacts (some cw) catch _ => pure ()
         unless (← getGoals).isEmpty do
           evalCloseRun
   leafDispatch
