@@ -129,7 +129,8 @@ def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
             List.append_nil, List.singleton_append]
         · simp only [pointSynthesisSummary, circuit_norm, pointGate]
           omega
-        · simp only [pointSynthesisSummary, circuit_norm, pointGate] }
+        all_goals simp only [pointSynthesisSummary, circuit_norm, pointGate,
+          synthesis_summary_norm] }
 
   Spec _ output _ := output.Valid
   ProverAssumptions input _ _ := input.Valid
@@ -190,7 +191,8 @@ def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Confi
             List.singleton_append]
         · simp only [pointNonIdSynthesisSummary, circuit_norm, pointNonIdGate]
           omega
-        · simp only [pointNonIdSynthesisSummary, circuit_norm, pointNonIdGate] }
+        all_goals simp only [pointNonIdSynthesisSummary, circuit_norm, pointNonIdGate,
+          synthesis_summary_norm] }
 
   Spec _ output _ := output.OnCurve
   -- honest-prover precondition: the witnessed point is genuinely on-curve. The Rust errors

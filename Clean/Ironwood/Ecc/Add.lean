@@ -376,9 +376,8 @@ def add : FormalRegionCircuit Fp
 
   elaborated :=
     { keygenRequirements :=
-        { inputPermutationColumns _ _ input :=
-            [input.p.x.cell.column, input.p.y.cell.column,
-              input.q.x.cell.column, input.q.y.cell.column] }
+        { inputCells _ _ input :=
+            [input.p.x.cell, input.p.y.cell, input.q.x.cell, input.q.y.cell] }
       output config offset _ self :=
         { x := .of self (offset + 1) config.xQR,
           y := .of self (offset + 1) config.yQR }
@@ -396,7 +395,8 @@ def add : FormalRegionCircuit Fp
             List.append_nil, List.nil_append, List.singleton_append]
         · simp only [synthesisSummary, circuit_norm, gate]
           omega
-        · simp only [synthesisSummary, circuit_norm, gate] }
+        · simp only [synthesisSummary, circuit_norm, gate]
+        · simp only [synthesisSummary, circuit_norm, gate, synthesis_summary_norm] }
 
   synthesize config offset (input : Inputs (AssignedCell Fp)) := do
     -- enable `q_add` selector at `offset`
@@ -521,7 +521,7 @@ theorem addFormal_synthesisSummary_constantSiteCount
 
 /-- The layouter-level complete addition has the same positional output as its single
 region. -/
-@[keygen_norm]
+@[keygen_norm, keygen_output_norm]
 theorem addFormal_output_cells (config : Config) (input : Var Inputs Fp)
     (self : RegionIndex) :
     addFormal.output config input self =
@@ -536,14 +536,36 @@ theorem add_output_cells (config : Config) (offset : ℕ) (input : Var Inputs Fp
       { x := .of self (offset + 1) config.xQR,
         y := .of self (offset + 1) config.yQR } := rfl
 
-/-- The layouter-level complete addition returns its coordinates in `xQR` and `yQR`. -/
 @[keygen_norm]
+theorem add_inputCells (config : Config) (hconfigured : add.Configured config)
+    (input : Var Inputs Fp) :
+    FormalRegionCircuit.Configured.inputCells hconfigured input =
+      [input.p.x.cell, input.p.y.cell, input.q.x.cell, input.q.y.cell] := rfl
+
+/-- Both coordinates returned by complete addition are assigned by its call body. -/
+theorem add_output_cells_assigned (config : Config) (offset : ℕ)
+    (input : Var Inputs Fp) (self : RegionIndex) (available : List Cell) :
+    let output := add.output config offset input self
+    output.x.cell ∈
+        (((add.call config offset input).operations self).assignedCellsAfter self available) ∧
+      output.y.cell ∈
+        (((add.call config offset input).operations self).assignedCellsAfter self available) := by
+  rw [FormalRegionCircuit.call_operations]
+  simp only [add_output_cells, AssignedCell.of_cell,
+    RegionOperations.mem_assignedCellsAfter_iff, List.mem_append]
+  constructor <;> right <;>
+    simp only [add, circuit_norm, RegionOperations.assignedCells,
+      List.flatMap_cons, RegionOperation.assignedCells, List.singleton_append,
+      List.mem_cons, true_or]
+
+/-- The layouter-level complete addition returns its coordinates in `xQR` and `yQR`. -/
+@[keygen_norm, keygen_output_norm]
 theorem addFormal_output_x_column (config : Config) (input : Var Inputs Fp)
     (self : RegionIndex) :
     (addFormal.output config input self).x.cell.column = config.xQR := by
   rfl
 
-@[keygen_norm]
+@[keygen_norm, keygen_output_norm]
 theorem addFormal_output_y_column (config : Config) (input : Var Inputs Fp)
     (self : RegionIndex) :
     (addFormal.output config input self).y.cell.column = config.yQR := by

@@ -577,8 +577,8 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
           permutationColumns _ configured :=
             configured.1.permutationColumns ++ configured.2.1.permutationColumns ++
               configured.2.2.1.permutationColumns ++ configured.2.2.2.permutationColumns
-          inputPermutationColumns _ _ input :=
-            [input.base.x.cell.column, input.base.y.cell.column] }
+          inputCells _ _ input :=
+            [input.base.x.cell, input.base.y.cell] }
       registered := by
         keygen_registration
       output cfg _ _ self :=
@@ -1030,8 +1030,8 @@ def keygenRequirements :
   permutationColumns input configured :=
     ([input.2.1.runningSum, input.2.2 3, input.2.2 0,
       input.2.2 1, input.2.2 7] : List AnyColumn) ++ configured.permutationColumns
-  inputPermutationColumns _ _ input :=
-    [input.alpha.cell.column, input.base.x.cell.column, input.base.y.cell.column]
+  inputCells _ _ input :=
+    [input.alpha.cell, input.base.x.cell, input.base.y.cell]
 
 @[keygen_norm]
 private theorem doubleAndAddRequirements_gates

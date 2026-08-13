@@ -94,7 +94,8 @@ def initRegion (capacity : Fp) : FormalRegionCircuit Fp Config Config unit State
             synthesis_summary_norm]
         · simp only [initRegionSynthesisSummary, circuit_norm,
             synthesis_summary_norm]
-          omega
+        · simp only [initRegionSynthesisSummary, circuit_norm,
+            synthesis_summary_norm]
         · simp only [initRegionSynthesisSummary, circuit_norm,
             synthesis_summary_norm]
       output_eq := by
@@ -149,12 +150,10 @@ def addInputRegion : FormalRegionCircuit Fp Config Config Sponge.AddInputInput S
         { gates cfg _ := [padAndAddGate cfg]
           permutationColumns cfg _ :=
             [cfg.state 0, cfg.state 1, cfg.state 2]
-          inputPermutationColumns _ _ input :=
-            [input.initialState.x0.cell.column,
-              input.initialState.x1.cell.column,
-              input.initialState.x2.cell.column,
-              input.input.x0.cell.column,
-              input.input.x1.cell.column] }
+          inputCells _ _ input :=
+            [input.initialState.x0.cell, input.initialState.x1.cell,
+              input.initialState.x2.cell, input.input.x0.cell,
+              input.input.x1.cell] }
       output cfg offset _ self :=
         { x0 := .of self (offset + 2) (cfg.state 0)
           x1 := .of self (offset + 2) (cfg.state 1)
@@ -182,6 +181,8 @@ def addInputRegion : FormalRegionCircuit Fp Config Config Sponge.AddInputInput S
         · simp only [addInputRegionSynthesisSummary, circuit_norm,
             synthesis_summary_norm, configure_selector_norm]
           omega
+        · simp only [addInputRegionSynthesisSummary, circuit_norm,
+            synthesis_summary_norm, configure_selector_norm]
         · simp only [addInputRegionSynthesisSummary, circuit_norm,
             synthesis_summary_norm, configure_selector_norm]
       output_eq := by
@@ -226,9 +227,62 @@ theorem addInputRegion_synthesisSummary (cfg : Config) (offset : ℕ)
     addInputRegion.elaborated.synthesisSummary cfg offset input self =
       addInputRegionSynthesisSummary cfg offset := rfl
 
+@[keygen_norm]
+theorem addInputRegion_inputCells (cfg : Config)
+    (hconfigured : addInputRegion.Configured cfg)
+    (input : Var Sponge.AddInputInput Fp) :
+    FormalRegionCircuit.Configured.inputCells hconfigured input =
+      [input.initialState.x0.cell, input.initialState.x1.cell,
+        input.initialState.x2.cell, input.input.x0.cell,
+        input.input.x1.cell] := rfl
+
 derive_contract_bridges initRegion (capacity : Fp) := initRegion capacity
 
 derive_contract_bridges addInputRegion := addInputRegion
+
+theorem initRegion_output_cells_assigned (capacity : Fp) (cfg : Config)
+    (offset : ℕ) (region : RegionIndex) (available : List Cell) :
+    let output := (initRegion capacity).output cfg offset () region
+    output.x0.cell ∈
+        (((initRegion capacity).call cfg offset ()).operations region
+          |>.assignedCellsAfter region available) ∧
+      output.x1.cell ∈
+        (((initRegion capacity).call cfg offset ()).operations region
+          |>.assignedCellsAfter region available) ∧
+      output.x2.cell ∈
+        (((initRegion capacity).call cfg offset ()).operations region
+          |>.assignedCellsAfter region available) := by
+  rw [FormalRegionCircuit.call_operations]
+  simp only [initRegion_output, RegionOperations.mem_assignedCellsAfter_iff,
+    List.mem_append]
+  repeat' apply And.intro
+  all_goals right
+  all_goals simp only [initRegion, circuit_norm, RegionOperations.assignedCells,
+    List.flatMap_cons, RegionOperation.assignedCells, List.singleton_append,
+    List.mem_cons, true_or]
+
+theorem addInputRegion_output_cells_assigned (cfg : Config) (offset : ℕ)
+    (input : Var Sponge.AddInputInput Fp) (region : RegionIndex)
+    (available : List Cell) :
+    let output := addInputRegion.output cfg offset input region
+    output.x0.cell ∈
+        ((addInputRegion.call cfg offset input).operations region
+          |>.assignedCellsAfter region available) ∧
+      output.x1.cell ∈
+        ((addInputRegion.call cfg offset input).operations region
+          |>.assignedCellsAfter region available) ∧
+      output.x2.cell ∈
+        ((addInputRegion.call cfg offset input).operations region
+          |>.assignedCellsAfter region available) := by
+  rw [FormalRegionCircuit.call_operations]
+  simp only [addInputRegion_output,
+    RegionOperations.mem_assignedCellsAfter_iff, List.mem_append]
+  repeat' apply And.intro
+  all_goals right
+  all_goals simp only [addInputRegion, circuit_norm,
+    RegionOperations.assignedCells, List.flatMap_cons,
+    RegionOperation.assignedCells, List.singleton_append,
+    List.mem_cons, true_or]
 
 /-- The region count of `hash`: three regions. -/
 private theorem hash_regionCount (capacity : Fp) (cfg : Config)
@@ -283,12 +337,73 @@ def hash (capacity : Fp) :
             [padAndAddGate cfg, fullRoundGate cfg, partialRoundsGate cfg]
           permutationColumns cfg _ :=
             [cfg.state 0, cfg.state 1, cfg.state 2]
-          inputPermutationColumns _ _ input :=
-            [input.x0.cell.column, input.x1.cell.column] }
+          inputCells _ _ input :=
+            [input.x0.cell, input.x1.cell] }
       output cfg _ i := .of (i + 2) 36 (cfg.state 0)
       regionCount _ := 3
       synthesisSummary cfg _ _ := hashSynthesisSummary cfg
-      registered := by keygen_registration [synthesize]
+      registered := by
+        keygen_registration [synthesize]
+        case left =>
+          apply FormalRegionCircuit.callPacked_keygenRegistered
+            (self := addInputRegion) (hconfigured := by
+              apply FormalRegionCircuit.Configured.ofPure
+              · trivial
+              · rfl)
+          all_goals keygen_registration
+        case right =>
+          apply FormalRegionCircuit.callPacked_keygenRegistered
+            (self := permuteRegion) (hconfigured := by
+              apply FormalRegionCircuit.Configured.ofPure
+              · trivial
+              · rfl)
+          all_goals keygen_registration
+      copyCellsAssigned := by
+        intro configInput counts hconfig input i
+        keygen_registration [synthesize]
+        case left =>
+          apply FormalRegionCircuit.callPacked_copyCellsAssignedFrom
+            (self := addInputRegion) (hconfigured := by
+              apply FormalRegionCircuit.Configured.ofPure
+              · trivial
+              · rfl)
+          intro cell hcell
+          rw [addInputRegion_inputCells] at hcell
+          simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+          have hinit := initRegion_output_cells_assigned capacity configInput 0 i
+            [input.x0.cell, input.x1.cell]
+          rcases hcell with rfl | rfl | rfl | rfl | rfl
+          · simpa only [FormalRegionCircuit.callPacked_operations] using hinit.1
+          · simpa only [FormalRegionCircuit.callPacked_operations] using hinit.2.1
+          · simpa only [FormalRegionCircuit.callPacked_operations] using hinit.2.2
+          · apply RegionOperations.mem_assignedCellsAfter_of_mem
+            simp
+          · apply RegionOperations.mem_assignedCellsAfter_of_mem
+            simp
+        case right =>
+          simp only [nextRegionIndex_assignRegion]
+          apply FormalRegionCircuit.callPacked_copyCellsAssignedFrom
+            (self := permuteRegion) (hconfigured := by
+              apply FormalRegionCircuit.Configured.ofPure
+              · trivial
+              · rfl)
+          intro cell hcell
+          rw [permuteRegion_inputCells] at hcell
+          simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+          let initial := [input.x0.cell, input.x1.cell]
+          let initOutput := (initRegion capacity).output configInput 0 () i
+          let afterInit :=
+            ((initRegion capacity).call configInput 0 ()).operations i
+              |>.assignedCellsAfter i initial
+          have hadd := addInputRegion_output_cells_assigned configInput 0
+            { initialState := initOutput, input := input } (i + 1) afterInit
+          rcases hcell with rfl | rfl | rfl
+          · simpa only [afterInit, initial,
+              FormalRegionCircuit.callPacked_operations] using hadd.1
+          · simpa only [afterInit, initial,
+              FormalRegionCircuit.callPacked_operations] using hadd.2.1
+          · simpa only [afterInit, initial,
+              FormalRegionCircuit.callPacked_operations] using hadd.2.2
       output_eq := by
         intro _ _ _
         simp only [synthesize, circuit_norm, keygen_output_norm, stateRow]
@@ -296,7 +411,14 @@ def hash (capacity : Fp) :
       synthesisSummary_eq := by
         intro _ _ _
         simp only [hashSynthesisSummary, synthesize, circuit_norm,
-          synthesis_summary_norm] }
+          synthesis_summary_norm]
+      lookupActivationsWellFormed := by
+        keygen_registration [synthesize]
+        all_goals first
+          | exact FormalRegionCircuit.callPacked_lookupActivationsWellFormed
+              addInputRegion _ 0 _ _
+          | exact FormalRegionCircuit.callPacked_lookupActivationsWellFormed
+              permuteRegion _ 0 _ _ }
 
   Spec input output _ :=
     output = Hash.HashPaddedBlock.value roundConstants capacity input

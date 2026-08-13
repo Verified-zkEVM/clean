@@ -154,7 +154,14 @@ theorem loopSynthesisSummary_eq (n w : ℕ) (cfg : Config) (offset : ℕ)
   { keygenRequirements := { gates cfg _ := [qMul2Gate cfg] }
     synthesisSummary cfg offset _ _ := loopSynthesisSummary n cfg offset
     synthesisSummary_eq := loopSynthesisSummary_eq n w
-    registered := by keygen_registration }
+    registered := by keygen_registration
+    copyCellsAssigned := by
+      intro configInput counts hconfig offset input region
+      simp only [Configure.output_pure, RegionOperations.CopyCellsAssigned]
+      rw [loopProgram_operations]
+      apply RegionCircuit.forRange'_copyCellsAssignedFrom
+      intro i
+      keygen_registration }
 
 def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field) (LoopOut n) where
   configure := pure
@@ -303,6 +310,13 @@ theorem loop_regionSynthesisSummary_eq (n w : ℕ) (cfg : Config) (offset : ℕ)
   simpa only [loop] using
     (loopSynthesisSummary_eq n w cfg offset alpha self).symm
 
+/-- The loop circuit exposes its reduced synthesis footprint. -/
+@[synthesis_summary_norm]
+theorem loop_synthesisSummary_eq (n w : ℕ) (cfg : Config) (offset : ℕ)
+    (alpha : Var (Unconstrained field) Fp) (self : RegionIndex) :
+    (loop n w).elaborated.synthesisSummary cfg offset alpha self =
+      loopSynthesisSummary n cfg offset := rfl
+
 /-- The loop's output variable: exit neighborhood + interstitial z cells (rfl). -/
 @[circuit_norm]
 theorem loop_output (n w : ℕ) (cfg : Config) (o : ℕ) (iv : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp))
@@ -370,10 +384,9 @@ def double_and_add (n : ℕ) (w : ℕ) :
         { permutationColumns input _ :=
             let (_, xA, xP, yP, _, _) := input
             [xA, xP, yP]
-          inputPermutationColumns _ _ input :=
-            [input.z.cell.column, input.acc.x.cell.column,
-              input.acc.y.cell.column, input.base.x.cell.column,
-              input.base.y.cell.column] }
+          inputCells _ _ input :=
+            [input.z.cell, input.acc.x.cell, input.acc.y.cell,
+              input.base.x.cell, input.base.y.cell] }
       synthesisSummary cfg offset _ _ :=
         doubleAndAddSynthesisSummary n cfg offset
       synthesisSummary_eq := by
@@ -382,14 +395,14 @@ def double_and_add (n : ℕ) (w : ℕ) :
         apply FloorPlanner.RegionSynthesisSummary.ext
         · simp only [circuit_norm, synthesis_summary_norm,
             FloorPlanner.RegionSynthesisSummary.ofColumns_columns]
-          rw [loop_regionSynthesisSummary_eq n w cfg offset input.alpha self]
         · simp only [circuit_norm, synthesis_summary_norm,
-            FloorPlanner.RegionSynthesisSummary.ofColumns_rowCount]
-          rw [loop_regionSynthesisSummary_eq n w cfg offset input.alpha self]
+            FloorPlanner.RegionSynthesisSummary.ofColumns_rowCount,
+            loopSynthesisSummary]
           omega
         · simp only [circuit_norm, synthesis_summary_norm,
             FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount]
-          rw [loop_regionSynthesisSummary_eq n w cfg offset input.alpha self]
+        · simp only [circuit_norm, synthesis_summary_norm,
+            FloorPlanner.RegionSynthesisSummary.ofColumns_instanceRowExtent]
       output cfg offset _ self :=
         { acc :=
             { x := .of self (offset + n + 2) cfg.xA
@@ -397,7 +410,9 @@ def double_and_add (n : ℕ) (w : ℕ) :
           zs := Vector.ofFn fun j => .of self (offset + 1 + j.val) cfg.z }
       output_eq := by
         intro _ _ _ _
-        simp only [circuit_norm, keygen_output_norm] }
+        simp only [circuit_norm, keygen_output_norm]
+      registered := by keygen_registration
+      copyCellsAssigned := by keygen_registration }
 
   synthesize cfg offset (input : Var Inputs Fp) := do
     -- start copies (Rust execution order), materializing round 0's neighborhood

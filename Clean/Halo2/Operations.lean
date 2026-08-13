@@ -1874,6 +1874,14 @@ def RegionOperations.assignedCellsAfter (region : RegionIndex)
   operations.foldl (fun cells operation =>
     operation.assignedCells region ++ cells) available
 
+theorem RegionOperations.assignedCellsAfter_append
+    (left right : RegionOperations F) (region : RegionIndex)
+    (available : List Cell) :
+    (left ++ right).assignedCellsAfter region available =
+      right.assignedCellsAfter region
+        (left.assignedCellsAfter region available) := by
+  simp only [assignedCellsAfter, List.foldl_append]
+
 @[keygen_norm, keygen_spine]
 theorem RegionOperations.copyCellsAssignedFrom_append_iff
     (region : RegionIndex) (available : List Cell)
@@ -1898,6 +1906,81 @@ theorem RegionOperations.copyCellsAssignedFrom_append_iff
           copyCellsAssignedFrom_constrainConstant_iff,
           copyCellsAssignedFrom_constrainInstance_iff,
           inductionHypothesis, List.nil_append, and_assoc]
+
+/-- Copy provenance remains valid when the caller makes more cells available. -/
+theorem RegionOperations.CopyCellsAssignedFrom.mono
+    {operations : RegionOperations F} {region : RegionIndex}
+    {available larger : List Cell}
+    (hassigned : operations.CopyCellsAssignedFrom region available)
+    (havailable : ∀ cell, cell ∈ available → cell ∈ larger) :
+    operations.CopyCellsAssignedFrom region larger := by
+  induction hassigned generalizing larger with
+  | nil => exact .nil larger
+  | assignAdvice available column row compute rest hassigned inductionHypothesis =>
+      exact .assignAdvice larger column row compute rest
+        (inductionHypothesis fun cell hcell => by
+          simp only [List.mem_cons] at hcell ⊢
+          rcases hcell with rfl | hcell
+          · exact Or.inl rfl
+          · exact Or.inr (havailable cell hcell))
+  | assignFixed available column row value rest hassigned inductionHypothesis =>
+      exact .assignFixed larger column row value rest
+        (inductionHypothesis fun cell hcell => by
+          simp only [List.mem_cons] at hcell ⊢
+          rcases hcell with rfl | hcell
+          · exact Or.inl rfl
+          · exact Or.inr (havailable cell hcell))
+  | enableGate available gate row rest hassigned inductionHypothesis =>
+      exact .enableGate larger gate row rest
+        (inductionHypothesis havailable)
+  | enableLookup available lookup selectors row rest hassigned inductionHypothesis =>
+      exact .enableLookup larger lookup selectors row rest
+        (inductionHypothesis havailable)
+  | constrainEqual available left right rest hleft hright hassigned
+      inductionHypothesis =>
+      exact .constrainEqual larger left right rest
+        (havailable left hleft) (havailable right hright)
+        (inductionHypothesis havailable)
+  | constrainConstant available cell value rest hcell hassigned inductionHypothesis =>
+      exact .constrainConstant larger cell value rest
+        (havailable cell hcell) (inductionHypothesis havailable)
+  | constrainInstance available cell column row rest hcell hassigned
+      inductionHypothesis =>
+      exact .constrainInstance larger cell column row rest
+        (havailable cell hcell) (inductionHypothesis havailable)
+
+/-- A region fragment containing no copy-like operation is lawful for every incoming
+cell state. -/
+@[keygen_helper]
+theorem RegionOperations.copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
+    (operations : RegionOperations F) (region : RegionIndex)
+    (available : List Cell)
+    (hoperations : operations.Forall fun operation =>
+      operation.copiedCells = []) :
+    operations.CopyCellsAssignedFrom region available := by
+  induction operations generalizing available with
+  | nil => exact .nil available
+  | cons operation rest inductionHypothesis =>
+      rw [List.forall_cons] at hoperations
+      cases operation with
+      | assignAdvice column row compute =>
+          exact .assignAdvice available column row compute rest
+            (inductionHypothesis _ hoperations.2)
+      | assignFixed column row value =>
+          exact .assignFixed available column row value rest
+            (inductionHypothesis _ hoperations.2)
+      | enableGate gate row =>
+          exact .enableGate available gate row rest
+            (inductionHypothesis _ hoperations.2)
+      | enableLookup lookup selectors row =>
+          exact .enableLookup available lookup selectors row rest
+            (inductionHypothesis _ hoperations.2)
+      | constrainEqual left right =>
+          cases hoperations.1
+      | constrainConstant cell value =>
+          cases hoperations.1
+      | constrainInstance cell column row =>
+          cases hoperations.1
 
 /-- Cells assigned by a layouter stream, with the same region-index walk used by V1. -/
 def Operations.assignedCellsFrom : Operations F → RegionIndex → List Cell
@@ -2007,6 +2090,41 @@ theorem RegionOperations.mem_assignedCellsAfter_iff
       simp only [List.foldl_cons, List.flatMap_cons]
       rw [inductionHypothesis]
       cases operation <;> simp [RegionOperation.assignedCells, or_left_comm]
+
+theorem RegionOperations.mem_assignedCellsAfter_of_mem
+    (operations : RegionOperations F) (region : RegionIndex)
+    (available : List Cell) (cell : Cell) (hcell : cell ∈ available) :
+    cell ∈ operations.assignedCellsAfter region available := by
+  rw [mem_assignedCellsAfter_iff, List.mem_append]
+  exact Or.inl hcell
+
+/-- Layouter-level copy provenance remains valid when the caller makes more cells
+available. -/
+theorem Operations.CopyCellsAssignedFrom.mono
+    {operations : Operations F} {region : RegionIndex}
+    {available larger : List Cell}
+    (hassigned : operations.CopyCellsAssignedFrom region available)
+    (havailable : ∀ cell, cell ∈ available → cell ∈ larger) :
+    operations.CopyCellsAssignedFrom region larger := by
+  induction hassigned generalizing larger with
+  | nil currentRegion => exact .nil currentRegion larger
+  | region region available name body rest hbody hrest restInduction =>
+      apply Operations.CopyCellsAssignedFrom.region region larger name body rest
+      · exact hbody.mono havailable
+      · apply restInduction
+        intro cell hcell
+        rw [RegionOperations.mem_assignedCellsAfter_iff] at hcell ⊢
+        simp only [List.mem_append] at hcell ⊢
+        rcases hcell with hcell | hcell
+        · exact Or.inl (havailable cell hcell)
+        · exact Or.inr hcell
+  | constrainInstance region available cell column row rest hcell hassigned
+      inductionHypothesis =>
+      exact .constrainInstance region larger cell column row rest
+        (havailable cell hcell) (inductionHypothesis havailable)
+  | loadTable region available column values rest hassigned inductionHypothesis =>
+      exact .loadTable region larger column values rest
+        (inductionHypothesis havailable)
 
 theorem RegionOperations.copyCellsCovered_of_assignedFrom
     (operations : RegionOperations F) (region : RegionIndex)
@@ -2649,6 +2767,43 @@ def Operations.regionCount : Operations F → ℕ
   | .region _ _ :: ops => 1 + Operations.regionCount ops
   | .constrainInstance _ _ _ :: ops => Operations.regionCount ops
   | .loadTable _ _ :: ops => Operations.regionCount ops
+
+/-- Copy provenance composes across appended layouter streams. The second stream may
+use every caller cell and every cell assigned by the first stream. -/
+theorem Operations.CopyCellsAssignedFrom.append
+    {left right : Operations F} {region : RegionIndex} {available : List Cell}
+    (hleft : left.CopyCellsAssignedFrom region available)
+    (hright : right.CopyCellsAssignedFrom (region + left.regionCount)
+      (available ++ left.assignedCellsFrom region)) :
+    (left ++ right).CopyCellsAssignedFrom region available := by
+  induction hleft with
+  | nil => simpa [Operations.regionCount, Operations.assignedCellsFrom] using hright
+  | region current available name body rest hbody hrest ih =>
+      rw [List.cons_append, Operations.copyCellsAssignedFrom_region_iff]
+      refine ⟨hbody, ih ?_⟩
+      have h := hright.mono (larger :=
+          body.assignedCellsAfter current available ++
+            rest.assignedCellsFrom (current + 1)) (by
+        intro cell hcell
+        simp only [Operations.assignedCellsFrom, List.mem_append] at hcell ⊢
+        rcases hcell with hcell | hcell
+        · left
+          rw [RegionOperations.mem_assignedCellsAfter_iff, List.mem_append]
+          exact Or.inl hcell
+        · rcases hcell with hbodyCell | hrestCell
+          · left
+            rw [RegionOperations.mem_assignedCellsAfter_iff, List.mem_append]
+            exact Or.inr hbodyCell
+          · exact Or.inr hrestCell)
+      simpa only [Operations.regionCount, Nat.add_assoc] using h
+  | constrainInstance current available cell column row rest hcell hrest ih =>
+      rw [List.cons_append, Operations.copyCellsAssignedFrom_constrainInstance_iff]
+      refine ⟨hcell, ih ?_⟩
+      simpa [Operations.regionCount, Operations.assignedCellsFrom] using hright
+  | loadTable current available column values rest hrest ih =>
+      rw [List.cons_append, Operations.copyCellsAssignedFrom_loadTable_iff]
+      apply ih
+      simpa [Operations.regionCount, Operations.assignedCellsFrom] using hright
 
 section Semantics
 variable [FiniteField F]

@@ -555,6 +555,8 @@ def shortRangeCheck (K numBits : ℕ) :
           omega
         · simp only [shortRangeCheckSynthesisSummary, circuit_norm,
             FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount]
+        · simp only [shortRangeCheckSynthesisSummary, circuit_norm,
+            synthesis_summary_norm]
       registered := by keygen_registration }
 
   -- Ambient preconditions discharged by the caller: (1) the table is loaded — every usable
@@ -879,6 +881,7 @@ theorem rangeCheckRound_synthesisSummary (K : ℕ) (cfg : Config K)
     omega
   · simp only [rangeCheckRound, circuit_norm,
       FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount]
+  · simp only [rangeCheckRound, circuit_norm, synthesis_summary_norm]
 
 /-- The running-sum loop: `numWords` independent rounds via `RegionCircuit.forRange'` (stride 1,
 round `idx` at base row `offset + idx`). Its `RegionOperations.Constraints` / `ExtendsWitnesses`
@@ -888,6 +891,62 @@ split, under `circuit_norm`, into `∀ i : Fin numWords, <round i's predicate>` 
 def rangeCheckLoop (K : ℕ) (cfg : Config K) (element : AssignedCell Fp) (offset numWords : ℕ) :
     RegionCircuit Fp Unit :=
   RegionCircuit.forRange' offset 1 numWords (fun idx row => rangeCheckRound K cfg element idx row)
+
+@[keygen_norm]
+theorem rangeCheckLoop_copyCellsAssignedFrom (K : ℕ) (cfg : Config K)
+    (element : AssignedCell Fp) (offset numWords : ℕ) (self : RegionIndex)
+    (available : List Cell) :
+    ((rangeCheckLoop K cfg element offset numWords).operations self)
+      |>.CopyCellsAssignedFrom self available := by
+  unfold rangeCheckLoop
+  apply RegionCircuit.forRange'_copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
+  intro i
+  simp only [rangeCheckRound, circuit_norm, RegionOperation.copiedCells, List.Forall]
+
+@[keygen_norm]
+theorem finalCell_mem_rangeCheckLoop_assignedCellsAfter (K : ℕ) (cfg : Config K)
+    (element : AssignedCell Fp) (offset numWords : ℕ) (self : RegionIndex)
+    (available : List Cell)
+    (hzero : numWords = 0 → Cell.of self offset cfg.runningSum ∈ available) :
+    Cell.of self (offset + numWords) cfg.runningSum ∈
+      ((rangeCheckLoop K cfg element offset numWords).operations self).assignedCellsAfter
+        self available := by
+  rw [RegionOperations.mem_assignedCellsAfter_iff, List.mem_append]
+  cases numWords with
+  | zero =>
+      exact Or.inl (by simpa using hzero rfl)
+  | succ n =>
+      right
+      unfold rangeCheckLoop RegionCircuit.forRange'
+      rw [RegionCircuit.loopAux_operations_succ]
+      simp only [RegionOperations.assignedCells, List.flatMap_append, List.mem_append]
+      right
+      simp only [rangeCheckRound, circuit_norm, RegionOperation.assignedCells,
+        List.flatMap_cons, List.flatMap_nil, List.append_nil, List.mem_singleton,
+        Nat.mul_one]
+      rw [Nat.add_assoc]
+
+/-- Every positive running-sum row through `numWords` is assigned by its unique
+range-check round. -/
+theorem rangeCell_mem_rangeCheckLoop_assignedCells (K : ℕ) (cfg : Config K)
+    (element : AssignedCell Fp) (offset numWords idx : ℕ)
+    (self : RegionIndex) (hpos : 0 < idx) (hle : idx ≤ numWords) :
+    Cell.of self (offset + idx) cfg.runningSum ∈
+      ((rangeCheckLoop K cfg element offset numWords).operations self).assignedCells self := by
+  induction numWords with
+  | zero => omega
+  | succ n inductionHypothesis =>
+      unfold rangeCheckLoop RegionCircuit.forRange'
+      rw [RegionCircuit.loopAux_operations_succ]
+      simp only [RegionOperations.assignedCells, List.flatMap_append, List.mem_append]
+      rcases Nat.eq_or_lt_of_le hle with rfl | hlt
+      · right
+        simp only [rangeCheckRound, circuit_norm,
+          RegionOperation.assignedCells, List.flatMap_cons, List.flatMap_nil,
+          List.append_nil, List.mem_singleton, Nat.mul_one]
+        simp only [Nat.add_assoc]
+      · left
+        exact inductionHypothesis (by omega)
 
 /-- Reduced synthesis footprint of the running-sum loop. -/
 def rangeCheckLoopSummary (K : ℕ) (cfg : Config K) (offset numWords : ℕ) :
@@ -921,6 +980,9 @@ theorem rangeCheckLoop_synthesisSummary (K : ℕ) (cfg : Config K)
           RegionCircuit.operations_pure, rangeCheckLoopSummary,
           FloorPlanner.regionSynthesisSummary_nil_constantSiteCount,
           FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount]
+      · simp [rangeCheckLoop, RegionCircuit.forRange', RegionCircuit.loopAux,
+          RegionCircuit.operations_pure, rangeCheckLoopSummary,
+          synthesis_summary_norm]
   | succ n inductionHypothesis =>
       rw [rangeCheckLoop, RegionCircuit.forRange',
         RegionCircuit.loopAux_operations_succ,
@@ -954,6 +1016,7 @@ theorem rangeCheckLoop_synthesisSummary (K : ℕ) (cfg : Config K)
       · simp [rangeCheckLoopSummary,
           FloorPlanner.RegionSynthesisSummary.combine_constantSiteCount,
           FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount]
+      · simp [rangeCheckLoopSummary, synthesis_summary_norm]
 
 /-- The running sum read off the environment: `z_j = env.advice runningSum` at absolute
 row `place self + (offset + j)`. The chain the telescoping algebra runs over. -/
@@ -1070,6 +1133,80 @@ def rangeCheckSynthesisSummary (K numWords : ℕ) (strict : Bool)
           .column .advice cfg.runningSum.index])
     (offset + numWords + 1) (if strict then 1 else 0)
 
+/-- Copied-in word-wise range-check synthesis, factored so its reduced elaboration and
+semantic bundle share one named operation program. -/
+def rangeCheckBody (K numWords : ℕ) (strict : Bool) (cfg : Config K) (offset : ℕ)
+    (input : Inputs (AssignedCell Fp)) : RegionCircuit Fp (Output (AssignedCell Fp)) := do
+  let _z0 ← copyAdvice input.element cfg.runningSum offset
+  rangeCheckLoop K cfg input.element offset numWords
+  let zLast ← cellAt cfg.runningSum (offset + numWords)
+  if strict then constrainConstant zLast (0 : Fp)
+  let z0 ← cellAt cfg.runningSum offset
+  return { z0, zLast }
+
+@[implicit_reducible]
+def rangeCheckElaborated (K numWords : ℕ) (strict : Bool) :
+    ElaboratedRegionCircuit Fp (Config K) (Config K) Inputs Output
+      (fun cfg => pure cfg) (rangeCheckBody K numWords strict) :=
+  { keygenRequirements :=
+      { lookups cfg _ := [rangeCheckLookup K cfg]
+        permutationColumns cfg _ := [cfg.runningSum]
+        inputCells _ _ input := [input.element.cell] }
+    synthesisSummary cfg offset _ _ :=
+      rangeCheckSynthesisSummary K numWords strict cfg offset
+    output cfg offset _ self :=
+      { z0 := AssignedCell.of self offset cfg.runningSum
+        zLast := AssignedCell.of self (offset + numWords) cfg.runningSum }
+    output_eq := by
+      intro cfg offset input self
+      cases strict <;> simp only [rangeCheckBody, circuit_norm, Bool.false_eq_true,
+        if_false, if_true]
+    synthesisSummary_eq := by
+      intro cfg offset input self
+      apply FloorPlanner.RegionSynthesisSummary.ext
+      all_goals
+        simp only [rangeCheckBody, circuit_norm, synthesis_summary_norm]
+        by_cases hn : numWords = 0 <;> cases strict <;>
+          simp [rangeCheckSynthesisSummary, rangeCheckLoopSummary, hn, circuit_norm,
+            synthesis_summary_norm]
+    registered := by keygen_registration [rangeCheckBody]
+    copyCellsAssigned := by
+      intro configInput counts hconfig offset input region
+      cases strict with
+      | false =>
+          keygen_registration [rangeCheckBody]
+          simp only [Bool.false_eq_true, if_false,
+            RegionOperations.copyCellsAssignedFrom_nil_iff]
+      | true =>
+          simp only [rangeCheckBody, if_true, RegionCircuit.operations_bind,
+            RegionCircuit.operations_pure, operations_copyAdvice, operations_cellAt,
+            operations_constrainConstant, RegionOperations.CopyCellsAssigned,
+            RegionOperations.copyCellsAssignedFrom_append_iff,
+            RegionOperations.copyCellsAssignedFrom_assignAdvice_iff,
+            RegionOperations.copyCellsAssignedFrom_constrainEqual_iff,
+            RegionOperations.copyCellsAssignedFrom_constrainConstant_iff,
+            RegionOperations.copyCellsAssignedFrom_nil_iff,
+            Configure.output_pure, RegionOperations.assignedCellsAfter,
+            List.foldl_cons, List.foldl_nil, RegionOperation.assignedCells,
+            List.nil_append]
+          refine ⟨⟨by simp, by simp, trivial⟩, ?_, ⟨?_, trivial⟩, trivial⟩
+          · simpa only [List.singleton_append] using
+              rangeCheckLoop_copyCellsAssignedFrom K configInput input.element
+                offset numWords region
+                  [Cell.of region offset configInput.runningSum, input.element.cell]
+          · simpa only [output_cellAt, AssignedCell.of_cell, List.singleton_append]
+              using finalCell_mem_rangeCheckLoop_assignedCellsAfter K configInput
+                input.element offset numWords region
+                [Cell.of region offset configInput.runningSum, input.element.cell]
+                (by intro hzero; subst numWords; simp) }
+
+@[circuit_norm]
+theorem rangeCheckElaborated_output (K numWords : ℕ) (strict : Bool)
+    (cfg : Config K) (offset : ℕ) (input : Var Inputs Fp) (self : RegionIndex) :
+    (rangeCheckElaborated K numWords strict).output cfg offset input self =
+      { z0 := AssignedCell.of self offset cfg.runningSum
+        zLast := AssignedCell.of self (offset + numWords) cfg.runningSum } := rfl
+
 /-- The `range_check` gadget (`lookup_range_check.rs:171-241`), region-level, parameterized
 by `numWords` and `strict`. Copies `element` into `running_sum` at `offset` (`z_0`), runs the
 `numWords`-round running-sum loop, and — when `strict` — constrains the final `z_{numWords}`
@@ -1082,34 +1219,8 @@ soundly available (the tail is unconstrained). `strict = true`: additionally
 def rangeCheck (K numWords : ℕ) (strict : Bool) :
     FormalRegionCircuit Fp (Config K) (Config K) Inputs Output where
   configure := fun cfg => pure cfg
-
-  synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
-    -- copy `element` into `running_sum` at `offset` as `z_0` (Rust `copy_check`/`witness_check`)
-    let _z0 ← copyAdvice input.element cfg.runningSum offset
-    -- the running-sum loop: `numWords` rounds
-    rangeCheckLoop K cfg input.element offset numWords
-    let zLast ← cellAt cfg.runningSum (offset + numWords)
-    -- strict mode: constrain the final running sum to 0
-    if strict then constrainConstant zLast (0 : Fp)
-    let z0 ← cellAt cfg.runningSum offset
-    return { z0, zLast }
-
-  elaborated :=
-    { keygenRequirements :=
-        { lookups cfg _ := [rangeCheckLookup K cfg]
-          permutationColumns cfg _ := [cfg.runningSum]
-          inputPermutationColumns _ _ input := [input.element.cell.column] }
-      synthesisSummary cfg offset _ _ :=
-        rangeCheckSynthesisSummary K numWords strict cfg offset
-      synthesisSummary_eq := by
-        intro cfg offset input self
-        apply FloorPlanner.RegionSynthesisSummary.ext
-        all_goals
-          simp only [circuit_norm, synthesis_summary_norm]
-          by_cases hn : numWords = 0 <;> cases strict <;>
-            simp [rangeCheckSynthesisSummary, rangeCheckLoopSummary, hn, circuit_norm,
-              synthesis_summary_norm]
-      registered := by keygen_registration }
+  synthesize := rangeCheckBody K numWords strict
+  elaborated := rangeCheckElaborated K numWords strict
 
   -- Same env-level preconditions as `shortRangeCheck`: the table is loaded (`TableLoaded`),
   -- and `q_lookup`/`q_running` are distinct selectors (they are allocated separately in
@@ -1153,7 +1264,8 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
     -- empty unfold list: the cell-naming lemmas (`output_cellAt`/`operations_cellAt`) and the
     -- bind/append/copy composition lemmas are all `@[circuit_norm]` and fire from the set — nothing
     -- gadget-specific is needed to reach the loop's folded chunk (maintainer's blocks criterion).
-    circuit_proof_start
+    circuit_proof_start [rangeCheckLoop]
+    obtain ⟨hOz0, hOzLast⟩ := h_output
     obtain ⟨hTable, _hDistinct⟩ := _hE
     obtain ⟨hUsable, hTableLt, _hTableEq⟩ := hTable
     obtain ⟨hCopy, hLoop, _hTailC⟩ := hc
@@ -1165,21 +1277,25 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
       offset hTableLt numWords hLoop
     -- z_0 = element (copy)
     have hz0 : f 0 = input_element := by
-      simp only [hf_def, zChain, add_zero]; rw [hCopy]
+      calc
+        f 0 = output_z0 := by simpa only [hf_def, zChain, add_zero] using hOz0
+        _ = input_element := hCopy
     -- the telescoping decomposition (soundly available regardless of `strict`)
     obtain ⟨lo, hlo, htel⟩ := chain_telescope K f numWords hwords
     -- resolve the output cells (case on `strict` to compute the tail ops)
     rcases hbstrict : strict with _ | _ <;>
       simp only [hbstrict, circuit_norm,
-        Bool.false_eq_true, if_true, if_false] at _hTailC h_output ⊢ <;>
-      obtain ⟨hOz0, hOzLast⟩ := h_output <;>
-      -- output_z0 = advice runningSum offset = f 0 ; output_zLast = advice … = f numWords
+        Bool.false_eq_true, if_true, if_false] at _hTailC ⊢ <;>
       rw [show output_z0 = f 0 from by rw [← hOz0]; simp only [hf_def, zChain, add_zero],
-          show output_zLast = f numWords from by rw [← hOzLast]; simp only [hf_def, zChain]]
+        show output_zLast = f numWords from by rw [← hOzLast]; simp only [hf_def, zChain]]
     · -- strict = false: telescoped decomposition, strict conjunct already discharged by simp
       exact ⟨hz0, lo, hlo, by rw [← hz0]; push_cast; exact htel⟩
     · -- strict = true: the tail's `constrainConstant` gives f numWords = 0
-      have hzLast0 : f numWords = 0 := by simp only [hf_def, zChain]; exact _hTailC
+      have hzLast0 : f numWords = 0 := by
+        rw [← show output_zLast = f numWords from by
+          rw [← hOzLast]
+          simp only [hf_def, zChain]]
+        exact _hTailC
       refine ⟨hz0, ⟨lo, hlo, ?_⟩, hzLast0, ?_⟩
       · rw [← hz0]; push_cast; exact htel
       · rw [← hz0]; exact chain_element_lt K numWords hA.1 f hwords hzLast0
@@ -1191,7 +1307,7 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
     -- empty unfold list: `operations_cellAt` and the bind/append/copy composition lemmas are all
     -- `@[circuit_norm]` and fire from the set (maintainer's blocks criterion — nothing
     -- gadget-specific reaches the loop's folded chunk).
-    circuit_proof_start
+    circuit_proof_start [rangeCheckLoop]
     obtain ⟨hTable, hDistinct⟩ := _hE
     obtain ⟨hUsable, _hTableLt, hTableEq⟩ := hTable
     simp only [Placed.toEnvironment_env] at hTableEq hUsable
@@ -1239,9 +1355,7 @@ def rangeCheck (K numWords : ℕ) (strict : Bool) :
       rw [← heInput, ← hzn]
       -- reduce `h_output` to its component equations (the `if` on `strict` blocks `.output`, but the
       -- output literal `{ z0, zLast }` is identical in both branches) and read off `output_zLast`
-      cases strict <;>
-        · simp only [circuit_norm, Bool.false_eq_true, if_false, if_true] at h_output
-          exact h_output.2.symm
+      exact h_output.2.symm
 
 @[synthesis_summary_norm]
 theorem rangeCheck_synthesisSummary_eq
@@ -1271,25 +1385,33 @@ def rangeCheckAtSynthesisSummary (K numWords : ℕ) (strict : Bool)
     (if numWords = 0 then 0 else offset + numWords + 1)
     (if strict then 1 else 0)
 
+def rangeCheckAtBody (K numWords : ℕ) (strict : Bool) (cfg : Config K)
+    (offset : ℕ) (_ : Unit) : RegionCircuit Fp (Output (AssignedCell Fp)) := do
+  let z0 ← cellAt cfg.runningSum offset
+  rangeCheckLoop K cfg z0 offset numWords
+  let zLast ← cellAt cfg.runningSum (offset + numWords)
+  if strict then constrainConstant zLast (0 : Fp)
+  return { z0, zLast }
+
+@[circuit_norm]
+theorem rangeCheckAtBody_output (K numWords : ℕ) (strict : Bool) (cfg : Config K)
+    (offset : ℕ) (input : Unit) (self : RegionIndex) :
+    (rangeCheckAtBody K numWords strict cfg offset input).output self =
+      { z0 := AssignedCell.of self offset cfg.runningSum
+        zLast := AssignedCell.of self (offset + numWords) cfg.runningSum } := by
+  cases strict <;> rfl
+
 /-- Rust `witness_check`'s check body (`lookup_range_check.rs:142-162`), POSITIONAL: the
 element "must have been assigned to `running_sum` at `offset`" by the caller (Rust
 `witness_check` does the `assign_advice` itself; the Lean caller witnesses the cell and
 composes this check — the `witnessShortCheck` pattern). Contracts mirror `rangeCheck`,
 with the copied-in element replaced by the positional cell (the extraction data, following
 `shortRangeCheck`). -/
-def rangeCheckAt (K numWords : ℕ) (strict : Bool) :
+def rangeCheckAt (K numWords : ℕ) (strict : Bool)
+    (hstrict : strict = true → 0 < numWords := by simp_all) :
     FormalRegionCircuit Fp (Config K) (Config K) unit Output where
   configure := fun cfg => pure cfg
-
-  synthesize cfg offset _ := do
-    -- the caller-assigned `element` at `offset` (`z_0`)
-    let z0 ← cellAt cfg.runningSum offset
-    -- the running-sum loop: `numWords` rounds
-    rangeCheckLoop K cfg z0 offset numWords
-    let zLast ← cellAt cfg.runningSum (offset + numWords)
-    -- strict mode: constrain the final running sum to 0
-    if strict then constrainConstant zLast (0 : Fp)
-    return { z0, zLast }
+  synthesize := rangeCheckAtBody K numWords strict
 
   elaborated :=
     { keygenRequirements :=
@@ -1303,9 +1425,44 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool) :
         all_goals
           simp only [circuit_norm, synthesis_summary_norm]
           by_cases hn : numWords = 0 <;> cases strict <;>
-            simp [rangeCheckAtSynthesisSummary, rangeCheckLoopSummary, hn, circuit_norm,
-              synthesis_summary_norm]
-      registered := by keygen_registration }
+          simp [rangeCheckAtBody, rangeCheckAtSynthesisSummary, rangeCheckLoopSummary,
+            hn, circuit_norm, synthesis_summary_norm]
+      registered := by keygen_registration
+      copyCellsAssigned := by
+        intro configInput counts hconfig offset input region
+        cases hb : strict with
+        | false =>
+            simp only [rangeCheckAtBody, Bool.false_eq_true, if_false,
+              Configure.output_pure, RegionCircuit.operations_bind,
+              RegionCircuit.operations_pure, operations_cellAt,
+              RegionOperations.CopyCellsAssigned,
+              RegionOperations.copyCellsAssignedFrom_append_iff,
+              RegionOperations.copyCellsAssignedFrom_nil_iff,
+              RegionOperations.assignedCellsAfter, List.foldl_nil,
+              true_and, and_true]
+            exact rangeCheckLoop_copyCellsAssignedFrom K configInput
+              (AssignedCell.of region offset configInput.runningSum)
+              offset numWords region []
+        | true =>
+            simp only [rangeCheckAtBody, if_true, Configure.output_pure,
+              RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+              operations_cellAt, operations_constrainConstant,
+              RegionOperations.CopyCellsAssigned,
+              RegionOperations.copyCellsAssignedFrom_append_iff,
+              RegionOperations.copyCellsAssignedFrom_constrainConstant_iff,
+              RegionOperations.copyCellsAssignedFrom_nil_iff,
+              RegionOperations.assignedCellsAfter, List.foldl_nil,
+              true_and, and_true]
+            refine ⟨rangeCheckLoop_copyCellsAssignedFrom K configInput
+              (AssignedCell.of region offset configInput.runningSum)
+              offset numWords region [], ?_⟩
+            simpa only [output_cellAt, AssignedCell.of_cell] using
+              finalCell_mem_rangeCheckLoop_assignedCellsAfter K configInput
+                (AssignedCell.of region offset configInput.runningSum)
+                offset numWords region [] (by
+                  intro hzero
+                  have := hstrict hb
+                  omega) }
 
   EnvAssumptions cfg env :=
     TableLoaded K cfg env.env ∧ cfg.qLookup.index ≠ cfg.qRunning.index
@@ -1330,7 +1487,7 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool) :
     output.z0 = elt ∧ output.zLast = ((elt.val / 2 ^ (K * numWords) : ℕ) : Fp)
 
   soundness := by
-    circuit_proof_start
+    circuit_proof_start [rangeCheckAtBody, rangeCheckLoop]
     obtain ⟨hTable, _hDistinct⟩ := _hE
     obtain ⟨hUsable, hTableLt, _hTableEq⟩ := hTable
     obtain ⟨hLoop, _hTailC⟩ := hc
@@ -1354,7 +1511,7 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool) :
       · exact chain_element_lt K numWords hA.1 f hwords hzLast0
 
   completeness := by
-    circuit_proof_start
+    circuit_proof_start [rangeCheckAtBody, rangeCheckLoop]
     obtain ⟨hTable, hDistinct⟩ := _hE
     obtain ⟨hUsable, _hTableLt, hTableEq⟩ := hTable
     simp only [Placed.toEnvironment_env] at hTableEq hUsable
@@ -1402,19 +1559,21 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool) :
 
 @[synthesis_summary_norm]
 theorem rangeCheckAt_synthesisSummary_eq
-    (K numWords : ℕ) (strict : Bool) (cfg : Config K) (offset : ℕ)
+    (K numWords : ℕ) (strict : Bool) (hstrict : strict = true → 0 < numWords)
+    (cfg : Config K) (offset : ℕ)
     (region : RegionIndex) :
     FloorPlanner.regionSynthesisSummary
-        (((rangeCheckAt K numWords strict).synthesize cfg offset ()).operations region) =
+        (((rangeCheckAt K numWords strict hstrict).synthesize cfg offset ()).operations region) =
       rangeCheckAtSynthesisSummary K numWords strict cfg offset :=
-  (rangeCheckAt K numWords strict).elaborated.synthesisSummary_eq
+  (rangeCheckAt K numWords strict hstrict).elaborated.synthesisSummary_eq
     cfg offset () region |>.symm
 
 @[synthesis_summary_norm]
 theorem rangeCheckAt_elaborated_synthesisSummary_eq
-    (K numWords : ℕ) (strict : Bool) (cfg : Config K) (offset : ℕ)
+    (K numWords : ℕ) (strict : Bool) (hstrict : strict = true → 0 < numWords)
+    (cfg : Config K) (offset : ℕ)
     (region : RegionIndex) :
-    (rangeCheckAt K numWords strict).elaborated.synthesisSummary
+    (rangeCheckAt K numWords strict hstrict).elaborated.synthesisSummary
         cfg offset () region =
       rangeCheckAtSynthesisSummary K numWords strict cfg offset := rfl
 
@@ -1434,6 +1593,24 @@ def rangeCheckAtDecomposedSynthesisSummary (numWords : ℕ)
       .column .advice cfg.runningSum.index]
     (offset + numWords + 1) 1
 
+def rangeCheckAtDecomposedBody (numWords : ℕ) (cfg : Config 10) (offset : ℕ) (_ : Unit) :
+    RegionCircuit Fp (DecomposedOutput (AssignedCell Fp)) := do
+  let z0 ← cellAt cfg.runningSum offset
+  rangeCheckLoop 10 cfg z0 offset numWords
+  let zLast ← cellAt cfg.runningSum (offset + numWords)
+  constrainConstant zLast (0 : Fp)
+  let z1 ← cellAt cfg.runningSum (offset + 1)
+  let z13 ← cellAt cfg.runningSum (offset + 13)
+  return { z0, z1, z13 }
+
+@[circuit_norm]
+theorem rangeCheckAtDecomposedBody_output (numWords : ℕ) (cfg : Config 10)
+    (offset : ℕ) (input : Unit) (self : RegionIndex) :
+    (rangeCheckAtDecomposedBody numWords cfg offset input).output self =
+      { z0 := AssignedCell.of self offset cfg.runningSum
+        z1 := AssignedCell.of self (offset + 1) cfg.runningSum
+        z13 := AssignedCell.of self (offset + 13) cfg.runningSum } := rfl
+
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD) in
 /-- The positional strict 25-word running-sum check exposing `z_1`/`z_13` (donor
 `CopyCheck.Decomposed`, positional): Rust `witness_check(j, 25, true)` as consumed by
@@ -1444,14 +1621,7 @@ def rangeCheckAtDecomposed (numWords : ℕ) (h13 : 13 ≤ numWords)
     FormalRegionCircuit Fp (Config 10) (Config 10) unit DecomposedOutput where
   configure := fun cfg => pure cfg
 
-  synthesize cfg offset _ := do
-    let z0 ← cellAt cfg.runningSum offset
-    rangeCheckLoop 10 cfg z0 offset numWords
-    let zLast ← cellAt cfg.runningSum (offset + numWords)
-    constrainConstant zLast (0 : Fp)
-    let z1 ← cellAt cfg.runningSum (offset + 1)
-    let z13 ← cellAt cfg.runningSum (offset + 13)
-    return { z0, z1, z13 }
+  synthesize := rangeCheckAtDecomposedBody numWords
 
   elaborated :=
     { keygenRequirements :=
@@ -1464,9 +1634,26 @@ def rangeCheckAtDecomposed (numWords : ℕ) (h13 : 13 ≤ numWords)
         have hn : numWords ≠ 0 := by omega
         apply FloorPlanner.RegionSynthesisSummary.ext
         all_goals
-          simp [rangeCheckAtDecomposedSynthesisSummary, rangeCheckLoopSummary, hn, circuit_norm,
-            synthesis_summary_norm]
-      registered := by keygen_registration }
+          simp [rangeCheckAtDecomposedBody, rangeCheckAtDecomposedSynthesisSummary,
+            rangeCheckLoopSummary, hn, circuit_norm, synthesis_summary_norm]
+      registered := by keygen_registration
+      copyCellsAssigned := by
+        intro configInput counts hconfig offset input region
+        simp only [rangeCheckAtDecomposedBody, Configure.output_pure,
+          RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+          operations_cellAt, operations_constrainConstant,
+          RegionOperations.CopyCellsAssigned,
+          RegionOperations.copyCellsAssignedFrom_append_iff,
+          RegionOperations.copyCellsAssignedFrom_constrainConstant_iff,
+          RegionOperations.copyCellsAssignedFrom_nil_iff,
+          RegionOperations.assignedCellsAfter, List.foldl_nil]
+        simp only [true_and, and_true]
+        refine ⟨rangeCheckLoop_copyCellsAssignedFrom 10 configInput
+          (AssignedCell.of region offset configInput.runningSum) offset numWords region [], ?_⟩
+        simpa only [output_cellAt, AssignedCell.of_cell] using
+          finalCell_mem_rangeCheckLoop_assignedCellsAfter 10 configInput
+            (AssignedCell.of region offset configInput.runningSum) offset numWords region []
+            (by intro hzero; omega) }
 
   EnvAssumptions cfg env :=
     TableLoaded 10 cfg env.env ∧ cfg.qLookup.index ≠ cfg.qRunning.index
@@ -1486,7 +1673,7 @@ def rangeCheckAtDecomposed (numWords : ℕ) (h13 : 13 ≤ numWords)
     output.z13 = ((elt.val / 2 ^ 130 : ℕ) : Fp)
 
   soundness := by
-    circuit_proof_start
+    circuit_proof_start [rangeCheckAtDecomposedBody, rangeCheckLoop]
     obtain ⟨hTable, _hDistinct⟩ := _hE
     obtain ⟨hUsable, hTableLt, _hTableEq⟩ := hTable
     obtain ⟨hLoop, hTailC⟩ := hc
@@ -1510,7 +1697,7 @@ def rangeCheckAtDecomposed (numWords : ℕ) (h13 : 13 ≤ numWords)
         chain_read 10 numWords hpow f hwords hzLast0 13 (by omega)
 
   completeness := by
-    circuit_proof_start
+    circuit_proof_start [rangeCheckAtDecomposedBody, rangeCheckLoop]
     obtain ⟨hTable, hDistinct⟩ := _hE
     obtain ⟨hUsable, _hTableLt, hTableEq⟩ := hTable
     simp only [Placed.toEnvironment_env] at hTableEq hUsable
@@ -1596,7 +1783,7 @@ theorem witnessCheckDecomposed_synthesisSummary
       ((witnessCheckDecomposed cfg w).operations region) =
         witnessCheckDecomposedSynthesisSummary cfg := by
   simp only [witnessCheckDecomposedSynthesisSummary, witnessCheckDecomposed,
-    operations_assignRegion, RegionCircuit.operations_bind]
+    operations_assignRegion, RegionCircuit.operations_bind, synthesis_summary_norm]
   apply congrArg FloorPlanner.SynthesisSummary.ofRegion
   apply FloorPlanner.RegionSynthesisSummary.ext
   · simp only [operations_assignAdvice, synthesis_summary_norm,
@@ -1606,12 +1793,29 @@ theorem witnessCheckDecomposed_synthesisSummary
     norm_num
   · simp only [operations_assignAdvice, synthesis_summary_norm,
       rangeCheckAtDecomposedSynthesisSummary, Nat.zero_add]
+  · simp only [operations_assignAdvice, synthesis_summary_norm,
+      rangeCheckAtDecomposedSynthesisSummary]
 
 @[circuit_norm]
 theorem witnessCheckDecomposed_nextRegionIndex
     (cfg : Config 10) (w : WitgenIR Fp 1) (region : RegionIndex) :
     (witnessCheckDecomposed cfg w).nextRegionIndex region = region + 1 := by
   simp only [witnessCheckDecomposed, circuit_norm]
+
+/-- A decomposed witness check introduces no unassigned copy endpoints. -/
+theorem witnessCheckDecomposed_copyCellsAssignedFrom
+    (cfg : Config 10) (w : WitgenIR Fp 1) (i : RegionIndex)
+    (available : List Cell) :
+    ((witnessCheckDecomposed cfg w).operations i)
+      |>.CopyCellsAssignedFrom i available := by
+  simp only [witnessCheckDecomposed, circuit_norm, keygen_norm, keygen_spine]
+
+/-- The decomposed witness wrapper preserves its child's lookup activation law. -/
+theorem witnessCheckDecomposed_lookupActivationsWellFormed
+    (cfg : Config 10) (w : WitgenIR Fp 1) (i : RegionIndex) :
+    ((witnessCheckDecomposed cfg w).operations i)
+      |>.LookupActivationsWellFormed := by
+  simp only [witnessCheckDecomposed, circuit_norm, keygen_norm, keygen_spine]
 
 /-! ## `copy_check` — the layouter-level range-check wrapper
 
@@ -1654,14 +1858,40 @@ theorem copyCheck_synthesisSummary_eq (K numWords : ℕ) (strict : Bool)
     Nat.zero_add]
 
 /-- The range-check wrapper's final cell stays in the configured running-sum column. -/
-@[keygen_norm]
+@[keygen_norm, keygen_output_norm]
 theorem copyCheck_output_zLast_column (K numWords : ℕ) (strict : Bool)
     (cfg : Config K) (input : Var Inputs Fp) (i : RegionIndex) :
     ((copyCheck K numWords strict).output cfg input i).zLast.cell.column = cfg.runningSum := by
   unfold FormalCircuit.output
   rw [(copyCheck K numWords strict).elaborated.output_eq]
-  simp only [copyCheck, FormalRegionCircuit.toFormal, rangeCheck, circuit_norm]
-  split <;> rfl
+  simp only [copyCheck, FormalRegionCircuit.toFormal, rangeCheck, rangeCheckBody,
+    circuit_norm]
+  cases strict <;> rfl
+
+/-- Both cells returned by `copyCheck` were assigned by its single region. -/
+theorem copyCheck_output_cells_assigned
+    (K numWords : ℕ) (strict : Bool) (cfg : Config K)
+    (input : Var Inputs Fp) (i : RegionIndex) :
+    let output := (copyCheck K numWords strict).output cfg input i
+    output.z0.cell ∈ Operations.assignedCellsFrom
+        (((copyCheck K numWords strict).synthesize cfg input).operations i) i ∧
+      output.zLast.cell ∈ Operations.assignedCellsFrom
+        (((copyCheck K numWords strict).synthesize cfg input).operations i) i := by
+  unfold FormalCircuit.output
+  rw [(copyCheck K numWords strict).elaborated.output_eq]
+  simp only [copyCheck, FormalRegionCircuit.toFormal, rangeCheck, rangeCheckBody,
+    circuit_norm, Operations.assignedCellsFrom, ite_self, AssignedCell.of_cell]
+  constructor
+  · simp only [RegionOperations.assignedCells,
+      List.flatMap_cons, RegionOperation.assignedCells, List.singleton_append,
+      List.mem_cons, true_or]
+  · have h := finalCell_mem_rangeCheckLoop_assignedCellsAfter K cfg
+      input.element 0 numWords i
+      [Cell.of i 0 cfg.runningSum] (by simp)
+    rw [RegionOperations.mem_assignedCellsAfter_iff] at h
+    split <;> simp_all only [RegionOperations.assignedCells, List.flatMap_append,
+      List.flatMap_cons, RegionOperation.assignedCells, List.singleton_append,
+      List.flatMap_nil, List.append_nil, List.nil_append, Nat.zero_add]
 
 /-- Rust `witness_short_check` (`lookup_range_check.rs:271-294`): its own
 `"Range check {num_bits} bits"` region, witnessing the element from the caller-supplied
@@ -1699,8 +1929,14 @@ theorem witnessShortCheck_synthesisSummary
     operations_assignRegion, synthesis_summary_norm]
   apply congrArg FloorPlanner.SynthesisSummary.ofRegion
   apply FloorPlanner.RegionSynthesisSummary.ext
-  all_goals simp only [shortRangeCheck, circuit_norm, synthesis_summary_norm]
-  omega
+  · simp only [shortRangeCheck, circuit_norm, synthesis_summary_norm]
+  · simp only [shortRangeCheck, circuit_norm, synthesis_summary_norm]
+    omega
+  · simp only [shortRangeCheck, circuit_norm, synthesis_summary_norm]
+  · simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+      operations_assignAdvice, FormalRegionCircuit.call_synthesisSummary,
+      shortRangeCheck_elaborated_synthesisSummary_eq, synthesis_summary_norm,
+      shortRangeCheckSynthesisSummary]
 
 @[circuit_norm]
 theorem witnessShortCheck_nextRegionIndex
@@ -1708,6 +1944,22 @@ theorem witnessShortCheck_nextRegionIndex
     (region : RegionIndex) :
     (witnessShortCheck K numBits cfg w).nextRegionIndex region = region + 1 := by
   simp only [witnessShortCheck, circuit_norm]
+
+/-- A short witness check introduces no unassigned copy endpoints. -/
+theorem witnessShortCheck_copyCellsAssignedFrom
+    (K numBits : ℕ) (cfg : Config K) (w : WitgenIR Fp 1)
+    (i : RegionIndex) (available : List Cell) :
+    ((witnessShortCheck K numBits cfg w).operations i)
+      |>.CopyCellsAssignedFrom i available := by
+  simp only [witnessShortCheck, circuit_norm, keygen_norm, keygen_spine]
+
+/-- The short witness wrapper preserves its child's lookup activation law. -/
+theorem witnessShortCheck_lookupActivationsWellFormed
+    (K numBits : ℕ) (cfg : Config K) (w : WitgenIR Fp 1)
+    (i : RegionIndex) :
+    ((witnessShortCheck K numBits cfg w).operations i)
+      |>.LookupActivationsWellFormed := by
+  simp only [witnessShortCheck, circuit_norm, keygen_norm, keygen_spine]
 
 /-- Witnessing a short range check preserves the child's single deferred
 constant request. -/
@@ -1723,20 +1975,31 @@ theorem witnessShortCheck_synthesisSummary_constantSiteCount
   simp only [shortRangeCheck, circuit_norm]
 
 /-- The cell returned by `witnessShortCheck` stays in the configured running-sum column. -/
-@[keygen_norm]
+@[keygen_norm, keygen_output_norm]
 theorem witnessShortCheck_output_column (K numBits : ℕ) (cfg : Config K)
     (w : WitgenIR Fp 1) (i : RegionIndex) :
     ((witnessShortCheck K numBits cfg w).output i).cell.column = cfg.runningSum := by
   simp only [witnessShortCheck, circuit_norm]
 
+/-- The cell returned by `witnessShortCheck` was assigned in its single region. -/
+theorem witnessShortCheck_output_cell_assigned (K numBits : ℕ) (cfg : Config K)
+    (w : WitgenIR Fp 1) (i : RegionIndex) :
+    ((witnessShortCheck K numBits cfg w).output i).cell ∈
+      Operations.assignedCellsFrom
+        ((witnessShortCheck K numBits cfg w).operations i) i := by
+  simp only [witnessShortCheck, circuit_norm, Operations.assignedCellsFrom,
+    RegionOperations.assignedCells, List.flatMap_cons,
+    RegionOperation.assignedCells, List.singleton_append, List.mem_cons, true_or]
+
 /-- Rust `witness_check` (`lookup_range_check.rs:143-161`): its own `"Witness element"`
 region, witnessing the element at `(running_sum, 0)` from the caller-supplied program
 `w`, then the positional word-wise `rangeCheckAt`. Returns the `(z0, zLast)` cells. -/
 def witnessCheck (K numWords : ℕ) (strict : Bool) (cfg : Config K)
-    (w : WitgenIR Fp 1) : Circuit Fp (Var Output Fp) :=
+    (w : WitgenIR Fp 1) (hstrict : strict = true → 0 < numWords := by simp_all) :
+    Circuit Fp (Var Output Fp) :=
   assignRegion "Witness element" (do
     let _elt ← assignAdvice cfg.runningSum 0 w
-    (rangeCheckAt K numWords strict).call cfg 0 ())
+    (rangeCheckAt K numWords strict hstrict).call cfg 0 ())
 
 /-- Reduced layouter footprint of a word-wise witness check. -/
 def witnessCheckSynthesisSummary (K numWords : ℕ)
@@ -1755,13 +2018,14 @@ def witnessCheckSynthesisSummary (K numWords : ℕ)
 stream. -/
 @[synthesis_summary_norm]
 theorem witnessCheck_synthesisSummary
-    (K numWords : ℕ) (strict : Bool) (cfg : Config K)
+    (K numWords : ℕ) (strict : Bool) (hstrict : strict = true → 0 < numWords)
+    (cfg : Config K)
     (w : WitgenIR Fp 1) (region : RegionIndex) :
     FloorPlanner.synthesisSummary
-      ((witnessCheck K numWords strict cfg w).operations region) =
+      ((witnessCheck K numWords strict cfg w hstrict).operations region) =
         witnessCheckSynthesisSummary K numWords strict cfg := by
   simp only [witnessCheckSynthesisSummary, witnessCheck,
-    operations_assignRegion, RegionCircuit.operations_bind]
+    operations_assignRegion, RegionCircuit.operations_bind, synthesis_summary_norm]
   apply congrArg FloorPlanner.SynthesisSummary.ofRegion
   apply FloorPlanner.RegionSynthesisSummary.ext
   · simp only [operations_assignAdvice, synthesis_summary_norm,
@@ -1771,63 +2035,154 @@ theorem witnessCheck_synthesisSummary
     split <;> omega
   · simp only [operations_assignAdvice, synthesis_summary_norm,
       rangeCheckAtSynthesisSummary, Nat.zero_add]
+  · simp only [operations_assignAdvice, synthesis_summary_norm,
+      rangeCheckAtSynthesisSummary]
 
 @[circuit_norm]
 theorem witnessCheck_nextRegionIndex
-    (K numWords : ℕ) (strict : Bool) (cfg : Config K)
+    (K numWords : ℕ) (strict : Bool) (hstrict : strict = true → 0 < numWords)
+    (cfg : Config K)
     (w : WitgenIR Fp 1) (region : RegionIndex) :
-    (witnessCheck K numWords strict cfg w).nextRegionIndex region =
+    (witnessCheck K numWords strict cfg w hstrict).nextRegionIndex region =
       region + 1 := by
   simp only [witnessCheck, circuit_norm]
 
+@[circuit_norm]
+theorem witnessCheck_regionCount
+    (K numWords : ℕ) (strict : Bool) (hstrict : strict = true → 0 < numWords)
+    (cfg : Config K) (w : WitgenIR Fp 1) (region : RegionIndex) :
+    ((witnessCheck K numWords strict cfg w hstrict).operations region).regionCount = 1 := by
+  simp only [witnessCheck, circuit_norm, Operations.regionCount]
+
 /-- Every cell returned by the decomposed witness check stays in the running-sum column. -/
-@[keygen_norm]
+@[keygen_norm, keygen_output_norm]
 theorem witnessCheckDecomposed_output_z0_column (cfg : Config 10)
     (w : WitgenIR Fp 1) (i : RegionIndex) :
     ((witnessCheckDecomposed cfg w).output i).z0.cell.column = cfg.runningSum := by
   simp only [witnessCheckDecomposed, circuit_norm]
   unfold FormalRegionCircuit.output
   rw [(rangeCheckAtDecomposed 25 (by norm_num) (by norm_num)).elaborated.output_eq]
-  simp only [rangeCheckAtDecomposed, circuit_norm]
+  simp only [rangeCheckAtDecomposed, rangeCheckAtDecomposedBody, circuit_norm,
+    AssignedCell.of_cell, Cell.of_column]
 
-@[keygen_norm]
+@[keygen_norm, keygen_output_norm]
 theorem witnessCheckDecomposed_output_z1_column (cfg : Config 10)
     (w : WitgenIR Fp 1) (i : RegionIndex) :
     ((witnessCheckDecomposed cfg w).output i).z1.cell.column = cfg.runningSum := by
   simp only [witnessCheckDecomposed, circuit_norm]
   unfold FormalRegionCircuit.output
   rw [(rangeCheckAtDecomposed 25 (by norm_num) (by norm_num)).elaborated.output_eq]
-  simp only [rangeCheckAtDecomposed, circuit_norm]
+  simp only [rangeCheckAtDecomposed, rangeCheckAtDecomposedBody, circuit_norm,
+    AssignedCell.of_cell, Cell.of_column]
 
-@[keygen_norm]
+@[keygen_norm, keygen_output_norm]
 theorem witnessCheckDecomposed_output_z13_column (cfg : Config 10)
     (w : WitgenIR Fp 1) (i : RegionIndex) :
     ((witnessCheckDecomposed cfg w).output i).z13.cell.column = cfg.runningSum := by
   simp only [witnessCheckDecomposed, circuit_norm]
   unfold FormalRegionCircuit.output
   rw [(rangeCheckAtDecomposed 25 (by norm_num) (by norm_num)).elaborated.output_eq]
-  simp only [rangeCheckAtDecomposed, circuit_norm]
+  simp only [rangeCheckAtDecomposed, rangeCheckAtDecomposedBody, circuit_norm,
+    AssignedCell.of_cell, Cell.of_column]
+
+/-- The three exposed cells of the decomposed witness check were assigned in its
+single region. -/
+theorem witnessCheckDecomposed_output_cells_assigned
+    (cfg : Config 10) (w : WitgenIR Fp 1) (i : RegionIndex) :
+    let output := (witnessCheckDecomposed cfg w).output i
+    output.z0.cell ∈ Operations.assignedCellsFrom
+        ((witnessCheckDecomposed cfg w).operations i) i ∧
+      output.z1.cell ∈ Operations.assignedCellsFrom
+        ((witnessCheckDecomposed cfg w).operations i) i ∧
+      output.z13.cell ∈ Operations.assignedCellsFrom
+        ((witnessCheckDecomposed cfg w).operations i) i := by
+  simp only [witnessCheckDecomposed, circuit_norm]
+  unfold FormalRegionCircuit.output
+  rw [(rangeCheckAtDecomposed 25 (by norm_num) (by norm_num)).elaborated.output_eq]
+  rw [(rangeCheckAtDecomposed 25 (by norm_num) (by norm_num)).call_operations]
+  simp only [rangeCheckAtDecomposed, rangeCheckAtDecomposedBody, circuit_norm,
+    Operations.assignedCellsFrom, AssignedCell.of_cell]
+  simp only [RegionOperations.assignedCells, List.flatMap_cons,
+    RegionOperation.assignedCells, List.singleton_append, List.flatMap_append,
+    List.flatMap_nil, List.append_nil, List.mem_cons]
+  refine ⟨Or.inl trivial, Or.inr ?_, Or.inr ?_⟩
+  · simpa only [Nat.zero_add] using
+      rangeCell_mem_rangeCheckLoop_assignedCells
+        10 cfg (AssignedCell.of i 0 cfg.runningSum) 0 25 1 i (by omega) (by omega)
+  · simpa only [Nat.zero_add] using
+      rangeCell_mem_rangeCheckLoop_assignedCells
+        10 cfg (AssignedCell.of i 0 cfg.runningSum) 0 25 13 i (by omega) (by omega)
 
 /-- Both cells returned by `witnessCheck` stay in its running-sum column. -/
-@[keygen_norm]
+@[keygen_norm, keygen_output_norm]
 theorem witnessCheck_output_z0_column (K numWords : ℕ) (strict : Bool)
-    (cfg : Config K) (w : WitgenIR Fp 1) (i : RegionIndex) :
-    ((witnessCheck K numWords strict cfg w).output i).z0.cell.column = cfg.runningSum := by
+    (hstrict : strict = true → 0 < numWords) (cfg : Config K)
+    (w : WitgenIR Fp 1) (i : RegionIndex) :
+    ((witnessCheck K numWords strict cfg w hstrict).output i).z0.cell.column = cfg.runningSum := by
   simp only [witnessCheck, circuit_norm]
   unfold FormalRegionCircuit.output
-  rw [(rangeCheckAt K numWords strict).elaborated.output_eq]
-  simp only [rangeCheckAt, circuit_norm]
-  split <;> rfl
+  rw [(rangeCheckAt K numWords strict hstrict).elaborated.output_eq]
+  simp only [rangeCheckAt, rangeCheckAtBody, circuit_norm]
+  cases strict <;> rfl
 
-@[keygen_norm]
+@[keygen_norm, keygen_output_norm]
 theorem witnessCheck_output_zLast_column (K numWords : ℕ) (strict : Bool)
-    (cfg : Config K) (w : WitgenIR Fp 1) (i : RegionIndex) :
-    ((witnessCheck K numWords strict cfg w).output i).zLast.cell.column = cfg.runningSum := by
+    (hstrict : strict = true → 0 < numWords) (cfg : Config K)
+    (w : WitgenIR Fp 1) (i : RegionIndex) :
+    ((witnessCheck K numWords strict cfg w hstrict).output i).zLast.cell.column = cfg.runningSum := by
   simp only [witnessCheck, circuit_norm]
   unfold FormalRegionCircuit.output
-  rw [(rangeCheckAt K numWords strict).elaborated.output_eq]
-  simp only [rangeCheckAt, circuit_norm]
-  split <;> rfl
+  rw [(rangeCheckAt K numWords strict hstrict).elaborated.output_eq]
+  simp only [rangeCheckAt, rangeCheckAtBody, circuit_norm]
+  cases strict <;> rfl
+
+/-- Both cells returned by `witnessCheck` were assigned by its single region. -/
+theorem witnessCheck_output_cells_assigned
+    (K numWords : ℕ) (strict : Bool)
+    (hstrict : strict = true → 0 < numWords) (cfg : Config K)
+    (w : WitgenIR Fp 1) (i : RegionIndex) :
+    let output := (witnessCheck K numWords strict cfg w hstrict).output i
+    output.z0.cell ∈ Operations.assignedCellsFrom
+        ((witnessCheck K numWords strict cfg w hstrict).operations i) i ∧
+      output.zLast.cell ∈ Operations.assignedCellsFrom
+        ((witnessCheck K numWords strict cfg w hstrict).operations i) i := by
+  simp only [witnessCheck, circuit_norm]
+  unfold FormalRegionCircuit.output
+  rw [(rangeCheckAt K numWords strict hstrict).elaborated.output_eq]
+  rw [(rangeCheckAt K numWords strict hstrict).call_operations]
+  simp only [rangeCheckAt, rangeCheckAtBody, circuit_norm,
+    Operations.assignedCellsFrom, ite_self, AssignedCell.of_cell]
+  constructor
+  · simp only [RegionOperations.assignedCells,
+      List.flatMap_cons, RegionOperation.assignedCells, List.singleton_append,
+      List.mem_cons, true_or]
+  · have h := finalCell_mem_rangeCheckLoop_assignedCellsAfter K cfg
+      (AssignedCell.of i 0 cfg.runningSum) 0 numWords i
+      [Cell.of i 0 cfg.runningSum] (by simp)
+    rw [RegionOperations.mem_assignedCellsAfter_iff] at h
+    split <;> simp_all only [RegionOperations.assignedCells, List.flatMap_append,
+      List.flatMap_cons, RegionOperation.assignedCells, List.singleton_append,
+      List.flatMap_nil, List.append_nil, Nat.zero_add]
+
+/-- A witness check introduces no unassigned copy endpoints, regardless of the
+cells already available to its caller. -/
+theorem witnessCheck_copyCellsAssignedFrom
+    (K numWords : ℕ) (strict : Bool)
+    (hstrict : strict = true → 0 < numWords) (cfg : Config K)
+    (w : WitgenIR Fp 1) (i : RegionIndex) (available : List Cell) :
+    ((witnessCheck K numWords strict cfg w hstrict).operations i)
+      |>.CopyCellsAssignedFrom i available := by
+  simp only [witnessCheck, circuit_norm, keygen_norm, keygen_spine]
+
+/-- The lookup activation inside a witness check inherits the packaged law of its
+positional range-check child. -/
+theorem witnessCheck_lookupActivationsWellFormed
+    (K numWords : ℕ) (strict : Bool)
+    (hstrict : strict = true → 0 < numWords) (cfg : Config K)
+    (w : WitgenIR Fp 1) (i : RegionIndex) :
+    ((witnessCheck K numWords strict cfg w hstrict).operations i)
+      |>.LookupActivationsWellFormed := by
+  simp only [witnessCheck, circuit_norm, keygen_norm, keygen_spine]
 
 @[keygen_norm, keygen_helper]
 theorem witnessShortCheck_keygenRegistered
@@ -1847,11 +2202,12 @@ theorem witnessShortCheck_keygenRegistered
 theorem witnessCheck_keygenRegistered
     {gates : List (Gate Fp)} {lookups : List (LookupArgument Fp)}
     {permutationColumns : List AnyColumn}
-    (K numWords : ℕ) (strict : Bool) (cfg : Config K)
+    (K numWords : ℕ) (strict : Bool) (hstrict : strict = true → 0 < numWords)
+    (cfg : Config K)
     (w : WitgenIR Fp 1) (i : RegionIndex)
     (hlookup : rangeCheckLookup K cfg ∈ lookups)
     (hpermutation : (cfg.runningSum : AnyColumn) ∈ permutationColumns) :
-    ((witnessCheck K numWords strict cfg w).operations i).KeygenRegistered
+    ((witnessCheck K numWords strict cfg w hstrict).operations i).KeygenRegistered
       gates lookups permutationColumns := by
   unfold witnessCheck
   keygen_registration
@@ -1898,8 +2254,9 @@ def shortRangeConfigureCertificate (K numBits : ℕ)
     subst column
     simp only [keygen_norm, cfg, configure]
 
-derive_contract_bridges rangeCheckAt (K numWords : ℕ) (strict : Bool) :=
-  rangeCheckAt K numWords strict
+derive_contract_bridges rangeCheckAt (K numWords : ℕ) (strict : Bool)
+  (hstrict : strict = true → 0 < numWords) :=
+  rangeCheckAt K numWords strict hstrict
 
 derive_contract_bridges rangeCheckAtDecomposed (numWords : ℕ) (h13 : 13 ≤ numWords)
   (hpow : 10 * numWords ≤ 254) := rangeCheckAtDecomposed numWords h13 hpow

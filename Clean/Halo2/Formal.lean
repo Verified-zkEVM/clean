@@ -601,6 +601,15 @@ def Configured.inputPermutationColumns
     (FormalCircuit.Configured.configInput configured)
     (FormalCircuit.Configured.configLawful configured) input
 
+/-- Cells supplied by the concrete input of this call. -/
+def Configured.inputCells
+    {self : FormalCircuit F ConfigInput Config Input Output}
+    {config : Config} (configured : self.Configured config)
+    (input : Var Input F) : List Cell :=
+  self.keygenRequirements.inputCells
+    (FormalCircuit.Configured.configInput configured)
+    (FormalCircuit.Configured.configLawful configured) input
+
 /-- Use a layouter certificate through the familiar `Configured.gates` interface. -/
 theorem ConfigurationCertificate.gates_of_configured
     {self : FormalCircuit F ConfigInput Config Input Output}
@@ -671,6 +680,17 @@ theorem ConfigurationCertificate.permutationColumns_of_configured
         (Configured.ofPure self config hconfig hconfigure) input =
       self.keygenRequirements.inputPermutationColumns config hconfig input := by
   simp [Configured.inputPermutationColumns, Configured.ofPure]
+
+@[keygen_norm] theorem Configured.ofPure_inputCells
+    (self : FormalCircuit F Config Config Input Output)
+    (config : Config)
+    (hconfig : self.keygenRequirements.configLawful config)
+    (hconfigure : self.configure config = pure config)
+    (input : Var Input F) :
+    Configured.inputCells
+        (Configured.ofPure self config hconfig hconfigure) input =
+      self.keygenRequirements.inputCells config hconfig input := by
+  simp [Configured.inputCells, Configured.ofPure]
 
 @[simp, keygen_norm] theorem Configured.ofOutput_gates
     (self : FormalCircuit F ConfigInput Config Input Output)
@@ -828,6 +848,25 @@ theorem call_eq (self : FormalCircuit F ConfigInput Config Input Output)
          i + self.regionCount input) :=
   (callPacked F ConfigInput Config Input Output).property self config input i
 
+/-- The output projection of the opaque packed-call implementation is the circuit's declared
+output. This is the normalization boundary used when reduction exposes the packed runtime form
+before the public `call` accessor can be recognized. -/
+@[circuit_norm]
+theorem callPacked_output (self : FormalCircuit F ConfigInput Config Input Output)
+    (config : Config) (input : Var Input F) (i : RegionIndex) :
+    ((callPacked F ConfigInput Config Input Output).val self config input i).1 =
+      self.output config input i :=
+  congrArg (fun t => t.1) ((callPacked F ConfigInput Config Input Output).property
+    self config input i)
+
+/-- The operation projection of a packed circuit call is the public call's operation
+stream. -/
+@[keygen_norm, keygen_spine]
+theorem callPacked_operations (self : FormalCircuit F ConfigInput Config Input Output)
+    (config : Config) (input : Var Input F) (i : RegionIndex) :
+    ((callPacked F ConfigInput Config Input Output).val self config input i).2.1 =
+      (self.call config input).operations i := rfl
+
 /-- The chunk-opening equation, `callOps`-spelled (for sites that unfolded
 `call`/`operations` first). NOT `@[circuit_norm]`. -/
 theorem callOps_eq (self : FormalCircuit F ConfigInput Config Input Output)
@@ -835,6 +874,12 @@ theorem callOps_eq (self : FormalCircuit F ConfigInput Config Input Output)
     self.callOps config input i = (self.synthesize config input).operations i :=
   congrArg (fun t => t.2.1)
     ((callPacked F ConfigInput Config Input Output).property self config input i)
+
+@[circuit_norm, keygen_output_norm]
+theorem call_output (self : FormalCircuit F ConfigInput Config Input Output)
+    (config : Config) (input : Var Input F) (i : RegionIndex) :
+    (self.call config input).output i = self.output config input i :=
+  self.callPacked_output config input i
 
 /-- The chunk-opening equation: a `call`'s operations are the child's `synthesize`
 operations. Deliberately NOT `@[circuit_norm]` — chunks stay folded in parent proofs;
@@ -920,9 +965,8 @@ theorem call_keygenRegistered
     (hpermutationColumns : ∀ column,
       column ∈ Configured.permutationColumns hconfigured →
         column ∈ targetPermutationColumns)
-    (hinputPermutationColumns : ∀ column,
-      column ∈ Configured.inputPermutationColumns hconfigured input →
-        column ∈ targetPermutationColumns) :
+    (hinputCells : (Configured.inputCells hconfigured input).Forall fun cell =>
+      cell.column ∈ targetPermutationColumns) :
     ((self.call config input).operations i).KeygenRegistered
       targetGates targetLookups targetPermutationColumns := by
   rcases hconfigured with ⟨configInput, counts, hconfig, rfl⟩
@@ -937,8 +981,11 @@ theorem call_keygenRegistered
         rcases hcolumn with hcolumn | hcolumn
         · exact hpermutationColumns column (by
             simpa [Configured.permutationColumns] using hcolumn)
-        · exact hinputPermutationColumns column (by
-            simpa [Configured.inputPermutationColumns] using hcolumn))
+        · rw [KeygenRequirements.inputPermutationColumns,
+            List.mem_map] at hcolumn
+          obtain ⟨cell, hcell, rfl⟩ := hcolumn
+          exact List.forall_iff_forall_mem.mp hinputCells cell (by
+            simpa [Configured.inputCells] using hcell))
 
 /-- Registration certificate specialized to a configure output. Its premises expose
 the caller requirements and local configure delta directly. -/
@@ -962,10 +1009,9 @@ theorem call_keygenRegistered_ofOutput
       column ∈ self.keygenRequirements.permutationColumns configInput hconfig ++
         ((self.configure configInput).delta counts).permutationRequests →
       column ∈ targetPermutationColumns)
-    (hinputPermutationColumns : ∀ column,
-      column ∈
-        self.keygenRequirements.inputPermutationColumns configInput hconfig input →
-      column ∈ targetPermutationColumns) :
+    (hinputCells :
+      (self.keygenRequirements.inputCells configInput hconfig input).Forall fun cell =>
+        cell.column ∈ targetPermutationColumns) :
     ((self.call
       ((self.configure configInput).output counts) input).operations i).KeygenRegistered
         targetGates targetLookups targetPermutationColumns := by
@@ -975,8 +1021,7 @@ theorem call_keygenRegistered_ofOutput
   · simpa [Configured.lookups, Configured.ofOutput] using hlookups
   · simpa [Configured.permutationColumns, Configured.ofOutput] using
       hpermutationColumns
-  · simpa [Configured.inputPermutationColumns, Configured.ofOutput] using
-      hinputPermutationColumns
+  · simpa [Configured.inputCells, Configured.ofOutput] using hinputCells
 
 /-- A folded call is registered in exactly the arguments carried by its configured
 handle. This conclusion shape exposes every input needed by `grind`. -/
@@ -991,7 +1036,35 @@ theorem call_keygenRegistered_exact
   self.call_keygenRegistered config hconfigured input i
     (fun _ h => h) (fun _ h => h)
     (fun _ h => List.mem_append_left _ h)
-    (fun _ h => List.mem_append_right _ h)
+    (List.forall_iff_forall_mem.mpr fun _ h =>
+      List.mem_append_right _ <| List.mem_map_of_mem h)
+
+/-- A child call's packaged copy-provenance law remains valid in any caller state
+containing its declared input cells. -/
+@[keygen_norm]
+theorem call_copyCellsAssignedFrom
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (config : Config) (hconfigured : self.Configured config)
+    (input : Var Input F) (i : RegionIndex) {available : List Cell}
+    (hinputCells : ∀ cell,
+      cell ∈ Configured.inputCells hconfigured input → cell ∈ available) :
+    ((self.call config input).operations i).CopyCellsAssignedFrom i available := by
+  rcases hconfigured with ⟨configInput, counts, hconfig, rfl⟩
+  rw [self.call_operations]
+  apply (self.elaborated.copyCellsAssigned
+    configInput counts hconfig input i).mono
+  simpa [Configured.inputCells] using hinputCells
+
+/-- Copy provenance in the opaque call spelling exposed after spine normalization. -/
+theorem callPacked_copyCellsAssignedFrom
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (config : Config) (hconfigured : self.Configured config)
+    (input : Var Input F) (i : RegionIndex) {available : List Cell}
+    (hinputCells : ∀ cell,
+      cell ∈ Configured.inputCells hconfigured input → cell ∈ available) :
+    (((callPacked F ConfigInput Config Input Output).val self
+      config input i).2.1).CopyCellsAssignedFrom i available :=
+  self.call_copyCellsAssignedFrom config hconfigured input i hinputCells
 
 /-- Lookup activations in a child call obey the lookup's local selector declaration. -/
 theorem call_lookupActivationsWellFormed
@@ -1032,14 +1105,13 @@ theorem callPacked_keygenRegistered
     (hpermutationColumns : ∀ column,
       column ∈ Configured.permutationColumns hconfigured →
         column ∈ targetPermutationColumns)
-    (hinputPermutationColumns : ∀ column,
-      column ∈ Configured.inputPermutationColumns hconfigured input →
-        column ∈ targetPermutationColumns) :
+    (hinputCells : (Configured.inputCells hconfigured input).Forall fun cell =>
+      cell.column ∈ targetPermutationColumns) :
     (((callPacked F ConfigInput Config Input Output).val
       self config input i).2.1).KeygenRegistered targetGates targetLookups
         targetPermutationColumns :=
   call_keygenRegistered self config hconfigured input i hgates hlookups
-    hpermutationColumns hinputPermutationColumns
+    hpermutationColumns hinputCells
 
 /--
 A lawful layouter child remains registered when called inside a parent whose available
@@ -1572,6 +1644,15 @@ def Configured.inputPermutationColumns
     (FormalRegionCircuit.Configured.configInput configured)
     (FormalRegionCircuit.Configured.configLawful configured) input
 
+/-- Cells supplied by the concrete input of this region call. -/
+def Configured.inputCells
+    {self : FormalRegionCircuit F ConfigInput Config Input Output}
+    {config : Config} (configured : self.Configured config)
+    (input : Var Input F) : List Cell :=
+  self.keygenRequirements.inputCells
+    (FormalRegionCircuit.Configured.configInput configured)
+    (FormalRegionCircuit.Configured.configLawful configured) input
+
 /-- Region-level certificate elimination through `Configured.gates`. -/
 theorem ConfigurationCertificate.gates_of_configured
     {self : FormalRegionCircuit F ConfigInput Config Input Output}
@@ -1642,6 +1723,17 @@ theorem ConfigurationCertificate.permutationColumns_of_configured
         (Configured.ofPure self config hconfig hconfigure) input =
       self.keygenRequirements.inputPermutationColumns config hconfig input := by
   simp [Configured.inputPermutationColumns, Configured.ofPure]
+
+@[keygen_norm] theorem Configured.ofPure_inputCells
+    (self : FormalRegionCircuit F Config Config Input Output)
+    (config : Config)
+    (hconfig : self.keygenRequirements.configLawful config)
+    (hconfigure : self.configure config = pure config)
+    (input : Var Input F) :
+    Configured.inputCells
+        (Configured.ofPure self config hconfig hconfigure) input =
+      self.keygenRequirements.inputCells config hconfig input := by
+  simp [Configured.inputCells, Configured.ofPure]
 
 @[simp, keygen_norm] theorem Configured.ofOutput_gates
     (self : FormalRegionCircuit F ConfigInput Config Input Output)
@@ -1773,6 +1865,28 @@ theorem call_eq (self : FormalRegionCircuit F ConfigInput Config Input Output)
          (self.synthesize config offset input).operations region) :=
   (callPacked F ConfigInput Config Input Output).property self config offset input region
 
+/-- Region-circuit analogue of `FormalCircuit.callPacked_output`. -/
+@[circuit_norm]
+theorem callPacked_output (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (config : Config) (offset : ℕ) (input : Var Input F) (region : RegionIndex) :
+    ((callPacked F ConfigInput Config Input Output).val self config offset input region).1 =
+      self.output config offset input region :=
+  congrArg (fun t => t.1) ((callPacked F ConfigInput Config Input Output).property
+    self config offset input region)
+
+/-- Keep a packed region call opaque while exposing the operation-list projection to
+keygen normalization. -/
+@[keygen_norm, keygen_spine]
+theorem callPacked_operations (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (config : Config) (offset : ℕ) (input : Var Input F)
+    (region : RegionIndex) :
+    RegionCircuit.operations
+        (fun current => (callPacked F ConfigInput Config Input Output).val
+          self config offset input current)
+        region =
+      ((callPacked F ConfigInput Config Input Output).val
+        self config offset input region).2 := rfl
+
 /-- The chunk-opening equation, `callOps`-spelled. NOT `@[circuit_norm]`. -/
 theorem callOps_eq (self : FormalRegionCircuit F ConfigInput Config Input Output)
     (config : Config) (offset : ℕ) (input : Var Input F) (region : RegionIndex) :
@@ -1780,6 +1894,14 @@ theorem callOps_eq (self : FormalRegionCircuit F ConfigInput Config Input Output
       = (self.synthesize config offset input).operations region :=
   congrArg (fun t => t.2)
     ((callPacked F ConfigInput Config Input Output).property self config offset input region)
+
+@[circuit_norm, keygen_output_norm]
+theorem call_output (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (config : Config) (offset : ℕ) (input : Var Input F)
+    (region : RegionIndex) :
+    (self.call config offset input).output region =
+      self.output config offset input region :=
+  self.callPacked_output config offset input region
 
 /-- The chunk-opening equation for region-level calls; see
 `FormalCircuit.call_operations`. NOT `@[circuit_norm]`. -/
@@ -1889,9 +2011,8 @@ theorem call_keygenRegistered
     (hpermutationColumns : ∀ column,
       column ∈ Configured.permutationColumns hconfigured →
         column ∈ targetPermutationColumns)
-    (hinputPermutationColumns : ∀ column,
-      column ∈ Configured.inputPermutationColumns hconfigured input →
-        column ∈ targetPermutationColumns) :
+    (hinputCells : (Configured.inputCells hconfigured input).Forall fun cell =>
+      cell.column ∈ targetPermutationColumns) :
     ((self.call config offset input).operations region).Forall
         (RegionOperation.KeygenRegistered targetGates targetLookups
           targetPermutationColumns) := by
@@ -1908,8 +2029,11 @@ theorem call_keygenRegistered
       rcases hcolumn with hcolumn | hcolumn
       · exact hpermutationColumns column (by
           simpa [Configured.permutationColumns] using hcolumn)
-      · exact hinputPermutationColumns column (by
-          simpa [Configured.inputPermutationColumns] using hcolumn))
+      · rw [KeygenRequirements.inputPermutationColumns,
+          List.mem_map] at hcolumn
+        obtain ⟨cell, hcell, rfl⟩ := hcolumn
+        exact List.forall_iff_forall_mem.mp hinputCells cell (by
+          simpa [Configured.inputCells] using hcell))
 
 /-- Region-level registration certificate specialized to a configure output. -/
 theorem call_keygenRegistered_ofOutput
@@ -1932,10 +2056,9 @@ theorem call_keygenRegistered_ofOutput
       column ∈ self.keygenRequirements.permutationColumns configInput hconfig ++
         ((self.configure configInput).delta counts).permutationRequests →
       column ∈ targetPermutationColumns)
-    (hinputPermutationColumns : ∀ column,
-      column ∈
-        self.keygenRequirements.inputPermutationColumns configInput hconfig input →
-      column ∈ targetPermutationColumns) :
+    (hinputCells :
+      (self.keygenRequirements.inputCells configInput hconfig input).Forall fun cell =>
+        cell.column ∈ targetPermutationColumns) :
     ((self.call ((self.configure configInput).output counts) offset input).operations
       region).Forall
         (RegionOperation.KeygenRegistered targetGates targetLookups
@@ -1946,8 +2069,7 @@ theorem call_keygenRegistered_ofOutput
   · simpa [Configured.lookups, Configured.ofOutput] using hlookups
   · simpa [Configured.permutationColumns, Configured.ofOutput] using
       hpermutationColumns
-  · simpa [Configured.inputPermutationColumns, Configured.ofOutput] using
-      hinputPermutationColumns
+  · simpa [Configured.inputCells, Configured.ofOutput] using hinputCells
 
 /-- Region-level exact-arguments counterpart of
 `FormalCircuit.call_keygenRegistered_exact`. -/
@@ -1963,7 +2085,38 @@ theorem call_keygenRegistered_exact
   self.call_keygenRegistered config hconfigured offset input region
     (fun _ h => h) (fun _ h => h)
     (fun _ h => List.mem_append_left _ h)
-    (fun _ h => List.mem_append_right _ h)
+    (List.forall_iff_forall_mem.mpr fun _ h =>
+      List.mem_append_right _ <| List.mem_map_of_mem h)
+
+/-- A region child call's packaged copy-provenance law remains valid in any caller
+state containing its declared input cells. -/
+@[keygen_norm]
+theorem call_copyCellsAssignedFrom
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (config : Config) (hconfigured : self.Configured config)
+    (offset : ℕ) (input : Var Input F) (region : RegionIndex)
+    {available : List Cell}
+    (hinputCells : ∀ cell,
+      cell ∈ Configured.inputCells hconfigured input → cell ∈ available) :
+    ((self.call config offset input).operations region)
+      |>.CopyCellsAssignedFrom region available := by
+  rcases hconfigured with ⟨configInput, counts, hconfig, rfl⟩
+  rw [self.call_operations]
+  apply (self.elaborated.copyCellsAssigned
+    configInput counts hconfig offset input region).mono
+  simpa [Configured.inputCells] using hinputCells
+
+/-- Region copy provenance in the opaque spelling exposed after spine normalization. -/
+theorem callPacked_copyCellsAssignedFrom
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (config : Config) (hconfigured : self.Configured config)
+    (offset : ℕ) (input : Var Input F) (region : RegionIndex)
+    {available : List Cell}
+    (hinputCells : ∀ cell,
+      cell ∈ Configured.inputCells hconfigured input → cell ∈ available) :
+    (((callPacked F ConfigInput Config Input Output).val self
+      config offset input region).2).CopyCellsAssignedFrom region available :=
+  self.call_copyCellsAssignedFrom config hconfigured offset input region hinputCells
 
 /-- Lookup activations in a region child call obey the lookup's local selector declaration. -/
 theorem call_lookupActivationsWellFormed
@@ -2007,15 +2160,14 @@ theorem callPacked_keygenRegistered
     (hpermutationColumns : ∀ column,
       column ∈ Configured.permutationColumns hconfigured →
         column ∈ targetPermutationColumns)
-    (hinputPermutationColumns : ∀ column,
-      column ∈ Configured.inputPermutationColumns hconfigured input →
-        column ∈ targetPermutationColumns) :
+    (hinputCells : (Configured.inputCells hconfigured input).Forall fun cell =>
+      cell.column ∈ targetPermutationColumns) :
     (((callPacked F ConfigInput Config Input Output).val
       self config offset input region).2).Forall
         (RegionOperation.KeygenRegistered targetGates targetLookups
           targetPermutationColumns) :=
   call_keygenRegistered self config hconfigured offset input region hgates hlookups
-    hpermutationColumns hinputPermutationColumns
+    hpermutationColumns hinputCells
 
 /--
 A lawful region child remains registered when called inside a parent whose available
@@ -2253,10 +2405,14 @@ end FormalRegionCircuit
 attribute [keygen_call]
   FormalCircuit.callPacked_keygenRegistered
   FormalCircuit.call_keygenRegistered
+  FormalCircuit.callPacked_copyCellsAssignedFrom
+  FormalCircuit.call_copyCellsAssignedFrom
   FormalCircuit.callPacked_lookupActivationsWellFormed
   FormalCircuit.call_lookupActivationsWellFormed
   FormalRegionCircuit.callPacked_keygenRegistered
   FormalRegionCircuit.call_keygenRegistered
+  FormalRegionCircuit.callPacked_copyCellsAssignedFrom
+  FormalRegionCircuit.call_copyCellsAssignedFrom
   FormalRegionCircuit.callPacked_lookupActivationsWellFormed
   FormalRegionCircuit.call_lookupActivationsWellFormed
 

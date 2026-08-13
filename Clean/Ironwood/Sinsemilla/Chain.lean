@@ -339,7 +339,7 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
         { gates cfg _ := [sinsemillaGate cfg]
           lookups cfg _ := [HashPiece.generatorLookup G cfg]
           permutationColumns cfg _ := [cfg.bits]
-          inputPermutationColumns _ _ input := [input.cell.column] }
+          inputCells _ _ input := [input.cell] }
       synthesisSummary cfg base _ _ := slotSynthesisSummary ns i cfg base
       synthesisSummary_eq := by
         intro _ _ _ _
@@ -1141,8 +1141,8 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
         { gates cfg _ := [sinsemillaGate cfg]
           lookups cfg _ := [HashPiece.generatorLookup G cfg]
           permutationColumns cfg _ := [cfg.bits]
-          inputPermutationColumns _ _ input :=
-            input.pieces.toList.map (·.cell.column) }
+          inputCells _ _ input :=
+            input.pieces.toList.map (·.cell) }
       output cfg offset _ self := circuitOutputCells cfg ns offset self
       synthesisSummary cfg offset _ _ := circuitSynthesisSummary ns cfg offset
       output_eq := by

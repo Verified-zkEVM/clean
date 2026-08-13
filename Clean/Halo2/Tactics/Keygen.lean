@@ -527,9 +527,9 @@ def directCallBundleArguments (bundleTypes : Array Name)
   return bundles
 
 /--
-Find the first application whose head contains a tagged call and which directly carries
-a formal-circuit bundle. This follows the opaque call wrapper without inspecting the
-types of every argument in the surrounding synthesis proposition.
+Find the rightmost application whose head contains a tagged call and which directly
+carries a formal-circuit bundle. Operation-list arguments occur after the accumulated
+available-cell state, which may itself mention earlier calls.
 -/
 partial def taggedCallBundlesIn (callExpressions bundleTypes : Array Name)
     (expression : Expr) : MetaM (Array Expr) := do
@@ -540,7 +540,7 @@ partial def taggedCallBundlesIn (callExpressions bundleTypes : Array Name)
     let bundles ← directCallBundleArguments bundleTypes expression
     if !bundles.isEmpty then
       return bundles
-  for argument in expression.getAppArgs do
+  for argument in expression.getAppArgs.reverse do
     let bundles ← taggedCallBundlesIn callExpressions bundleTypes argument
     if !bundles.isEmpty then
       return bundles
@@ -568,7 +568,7 @@ partial def formalCallBundlesIn (bundleTypes : Array Name)
       return #[expression]
   catch _ =>
     pure ()
-  for argument in expression.getAppArgs do
+  for argument in expression.getAppArgs.reverse do
     let bundles ← formalCallBundlesIn bundleTypes argument
     if !bundles.isEmpty then
       return bundles
@@ -1085,6 +1085,106 @@ partial def proveConfigureRoute (goal : MVarId) (sourceHead : Option Name)
           pure ()
   return false
 
+/-- Close a concrete `List.Forall` cell-routing obligation one list cell at a time. -/
+partial def proveConcreteForall (goal : MVarId) (fuel : Nat := 256) : SimpM Bool := do
+  if fuel == 0 then
+    return false
+  let target ← instantiateMVars (← goal.getType)
+  unless target.isAppOfArity ``List.Forall 3 do
+    return false
+  let values := target.getAppArgs[2]!
+  if values.isAppOfArity ``List.nil 1 then
+    let simplified ← simpCallRouting target
+    let some proof ← proofOfSimpTrue? simplified
+      | return false
+    goal.assign proof
+    return true
+  unless values.isAppOfArity ``List.cons 3 do
+    return false
+  let targetArguments := target.getAppArgs
+  let valueArguments := values.getAppArgs
+  let elementType := targetArguments[0]!
+  let [elementLevel] := target.getAppFn.constLevels!
+    | return false
+  let forallCons := mkAppN (mkConst ``List.forall_cons [elementLevel])
+    #[elementType, targetArguments[1]!, valueArguments[1]!, valueArguments[2]!]
+  let implication ← mkAppM ``Iff.mpr #[forallCons]
+  let [conjunctionGoal] ← goal.apply implication
+    | return false
+  let goals ← conjunctionGoal.applyConst ``And.intro
+  let [headGoal, tailGoal] := goals
+    | return false
+  let simplified ← headGoal.withContext do
+    simpCallRouting (← instantiateMVars (← headGoal.getType))
+  let some proof ← proofOfSimpTrue? simplified
+    | trace[Halo2.keygen] "concrete routing head residual:\n{simplified.expr}"
+      return false
+  headGoal.assign proof
+  tailGoal.withContext do
+    proveConcreteForall tailGoal (fuel - 1)
+
+/-- Reduce a declared input-cell list, then prove its `List.Forall` routing property
+structurally. Ordinary pointwise list inclusions are first converted to `List.Forall`. -/
+def proveListRoutingPremise (goal : MVarId) : SimpM Bool := do
+  let metaState ← getThe Meta.State
+  try
+    let target ← instantiateMVars (← goal.getType)
+    let normalizedGoal ←
+      if target.isAppOfArity ``List.Forall 3 then
+        pure goal
+      else
+        let some (elementType, property, values) ←
+            forallTelescopeReducing target (fun xs body => do
+              unless xs.size == 2 do
+                return none
+              let element := xs[0]!
+              let membership := xs[1]!
+              if body.containsFVar membership.fvarId! then
+                return none
+              let membershipType ← inferType membership
+              let membershipArguments := membershipType.getAppArgs
+              unless 2 ≤ membershipArguments.size do
+                return none
+              let values := membershipArguments[membershipArguments.size - 2]!
+              if values.containsFVar element.fvarId! then
+                return none
+              let property ← mkLambdaFVars #[element] body
+              let elementType ← inferType element
+              return some (elementType, property, values))
+          | throwError "routing premise is not pointwise list inclusion"
+        let valuesType ← whnf (← inferType values)
+        let [elementLevel] := valuesType.getAppFn.constLevels!
+          | throwError "routing source is not a List"
+        let characterization := mkAppN
+          (mkConst ``List.forall_iff_forall_mem [elementLevel])
+          #[elementType, property, values]
+        let forward ← mkAppM ``Iff.mp #[characterization]
+        let forwardType ← whnf (← inferType forward)
+        unless forwardType.isForall do
+          throwError "invalid List.Forall characterization"
+        let sourceProof ← mkFreshExprSyntheticOpaqueMVar forwardType.bindingDomain!
+        let routedProof := mkApp forward sourceProof
+        goal.assign routedProof
+        pure sourceProof.mvarId!
+    let target ← instantiateMVars (← normalizedGoal.getType)
+    unless target.isAppOfArity ``List.Forall 3 do
+      throwError "pointwise list inclusion did not normalize to List.Forall"
+    let arguments := target.getAppArgs
+    let values := arguments[2]!
+    let simplifiedValues ← simpCallRouting values
+    let forallFunction := mkAppN target.getAppFn arguments[:2]
+    let normalizedTarget := mkApp forallFunction simplifiedValues.expr
+    let targetEquality ← mkCongrArg forallFunction (← simplifiedValues.getProof)
+    let concreteGoal ← normalizedGoal.replaceTargetEq normalizedTarget targetEquality
+    let closed ← concreteGoal.withContext do
+      proveConcreteForall concreteGoal
+    unless closed do
+      throwError "concrete list-routing premise was not solved"
+    return closed
+  catch _ =>
+    set metaState
+    return false
+
 /-- Introduce a routing premise and prove its final membership by bind traversal. -/
 def proveConfigureRoutingPremise (goal : MVarId) : MetaM Bool := do
   let metaState ← getThe Meta.State
@@ -1156,6 +1256,9 @@ def proveWithCallCertificate?
         if ← proveConfigureRoutingPremise sideCondition then
           trace[Halo2.keygen] "routed configure premise"
           continue
+        if ← proveListRoutingPremise sideCondition then
+          trace[Halo2.keygen] "routed list-membership premise"
+          continue
         let mut simplified ← Simp.simp sideTarget
         let mut proof? ← proofOfSimpTrue? simplified
         if proof?.isNone then
@@ -1208,7 +1311,15 @@ simproc callRegistration
 simproc regionCallRegistration
     (List.Forall _ _) := callRegistrationSimproc
 
-attribute [keygen_norm] callRegistration regionCallRegistration
+simproc callCopyCellsAssignedFrom
+    (Operations.CopyCellsAssignedFrom _ _ _) := callRegistrationSimproc
+
+simproc regionCallCopyCellsAssignedFrom
+    (RegionOperations.CopyCellsAssignedFrom _ _ _) := callRegistrationSimproc
+
+attribute [keygen_norm]
+  callRegistration regionCallRegistration
+  callCopyCellsAssignedFrom regionCallCopyCellsAssignedFrom
 
 /-- Target and hypothesis types used to detect normalization progress. -/
 def goalContextTypes : TacticM (Array Expr) := withMainContext do

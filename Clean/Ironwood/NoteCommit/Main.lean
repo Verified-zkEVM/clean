@@ -981,10 +981,9 @@ def keygenRequirements (G : Generators) (R : FixedBase)
     [LookupRangeCheck.rangeCheckLookup 10 cfg.lookupConfig] ++
       configured.lookups
   permutationColumns cfg configured := permutationColumns cfg configured.permutationColumns
-  inputPermutationColumns _ _ input :=
-    [input.gdX.cell.column, input.gdY.cell.column,
-      input.pkdX.cell.column, input.pkdY.cell.column,
-      input.value.cell.column, input.rho.cell.column, input.psi.cell.column]
+  inputCells _ _ input :=
+    [input.gdX.cell, input.gdY.cell, input.pkdX.cell, input.pkdY.cell,
+      input.value.cell, input.rho.cell, input.psi.cell]
 
 @[keygen_helper]
 theorem synthPieces_keygenRegistered

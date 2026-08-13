@@ -174,6 +174,63 @@ def assignLoop (W : ℕ) (cfg : Config) (alpha : AssignedCell Fp) (offset numWin
     let _z ← assignAdvice cfg.z (row + 1) (zWitness W (idx + 1) alpha)
     return ())
 
+@[keygen_norm]
+theorem enableLoop_copyCellsAssignedFrom (W : ℕ) (cfg : Config)
+    (offset numWindows : ℕ) (self : RegionIndex) (available : List Cell) :
+    ((enableLoop W cfg offset numWindows).operations self).CopyCellsAssignedFrom
+      self available := by
+  unfold enableLoop
+  apply RegionCircuit.forRange'_copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
+  intro i
+  simp only [circuit_norm, RegionOperation.copiedCells, List.Forall]
+
+@[keygen_norm]
+theorem assignLoop_copyCellsAssignedFrom (W : ℕ) (cfg : Config)
+    (alpha : AssignedCell Fp) (offset numWindows : ℕ) (self : RegionIndex)
+    (available : List Cell) :
+    ((assignLoop W cfg alpha offset numWindows).operations self).CopyCellsAssignedFrom
+      self available := by
+  unfold assignLoop
+  apply RegionCircuit.forRange'_copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
+  intro i
+  simp only [circuit_norm, RegionOperation.copiedCells, List.Forall]
+
+@[keygen_norm]
+theorem finalCell_mem_assignLoop_assignedCellsAfter (W : ℕ) (cfg : Config)
+    (alpha : AssignedCell Fp) (offset numWindows : ℕ) (self : RegionIndex)
+    (available : List Cell)
+    (hinitial : Cell.of self offset cfg.z ∈ available) :
+    Cell.of self (offset + numWindows) cfg.z ∈
+      ((assignLoop W cfg alpha offset numWindows).operations self).assignedCellsAfter
+        self available := by
+  rw [RegionOperations.mem_assignedCellsAfter_iff, List.mem_append]
+  cases numWindows with
+  | zero =>
+      exact Or.inl (by simpa using hinitial)
+  | succ n =>
+      right
+      unfold assignLoop RegionCircuit.forRange'
+      rw [RegionCircuit.loopAux_operations_succ]
+      simp only [RegionOperations.assignedCells, List.flatMap_append, List.mem_append]
+      right
+      simp only [circuit_norm, RegionOperation.assignedCells,
+        List.flatMap_cons, List.flatMap_nil, List.append_nil, List.mem_singleton,
+        Nat.mul_one]
+      rw [Nat.add_assoc]
+
+/-- Strict running-sum synthesis, factored so the reduced elaboration and semantic bundle
+share one named operation program. -/
+def body (W numWindows : ℕ) (cfg : Config) (offset : ℕ)
+    (input : Inputs (AssignedCell Fp)) :
+    RegionCircuit Fp (Output (numWindows + 1) (AssignedCell Fp)) := do
+  let _z0 ← copyAdvice input.alpha cfg.z offset
+  enableLoop W cfg offset numWindows
+  assignLoop W cfg input.alpha offset numWindows
+  let zLast ← cellAt cfg.z (offset + numWindows)
+  constrainConstant zLast (0 : Fp)
+  let zs ← cellVec cfg.z (fun j => offset + j) (numWindows + 1)
+  return { zs }
+
 def enableLoopSynthesisSummary (cfg : Config)
     (offset numWindows : ℕ) : FloorPlanner.RegionSynthesisSummary :=
   .repeatColumns [.selector cfg.qRangeCheck.index]
@@ -217,6 +274,7 @@ theorem assignLoopSynthesisSummary_eq (W : ℕ) (cfg : Config)
       FloorPlanner.RegionSynthesisSummary.ofColumns_rowCount, Nat.mul_one]
   · simp only [circuit_norm,
       FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount]
+  · simp only [circuit_norm, synthesis_summary_norm]
 
 def copyDecomposeSynthesisSummary (numWindows : ℕ) (cfg : Config)
     (offset : ℕ) : FloorPlanner.RegionSynthesisSummary :=
@@ -350,6 +408,45 @@ theorem shift_word_eq (W V w : ℕ) :
   rw [hsplit]
   linear_combination -hcast
 
+@[implicit_reducible]
+def elaborated (W numWindows : ℕ) :
+    ElaboratedRegionCircuit Fp (Selector × Column .advice) Config Inputs
+      (Output (numWindows + 1))
+      (fun (q, z) => configure W q z) (body W numWindows) :=
+  { keygenRequirements :=
+      { inputCells _ _ input := [input.alpha.cell] }
+    synthesisSummary cfg offset _ _ :=
+      copyDecomposeSynthesisSummary numWindows cfg offset
+    synthesisSummary_eq := by
+      intro cfg offset input self
+      unfold copyDecomposeSynthesisSummary
+      apply FloorPlanner.RegionSynthesisSummary.ext
+      · simp only [body, circuit_norm, enableLoopSynthesisSummary_eq,
+          assignLoopSynthesisSummary_eq,
+          FloorPlanner.RegionSynthesisSummary.ofColumns_columns,
+          FloorPlanner.unionColumns_nil_right,
+          FloorPlanner.unionColumns_assoc]
+      · simp only [body, circuit_norm, enableLoopSynthesisSummary_eq,
+          assignLoopSynthesisSummary_eq,
+          FloorPlanner.RegionSynthesisSummary.ofColumns_rowCount,
+          Nat.max_zero]
+      · simp only [body, circuit_norm, enableLoopSynthesisSummary_eq,
+          assignLoopSynthesisSummary_eq,
+          FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount]
+      · simp only [body, circuit_norm, enableLoopSynthesisSummary_eq,
+          assignLoopSynthesisSummary_eq, synthesis_summary_norm]
+    registered := by keygen_registration [configure, enableEquality, body]
+    copyCellsAssigned := by
+      keygen_registration [body]
+      apply finalCell_mem_assignLoop_assignedCellsAfter
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      simp
+    output cfg offset _ self :=
+      { zs := Vector.ofFn fun j => AssignedCell.of self (offset + j) cfg.z }
+    output_eq := by
+      intro cfg offset input self
+      simp only [body, circuit_norm] }
+
 /-- Strict `copy_decompose` (`decompose_running_sum.rs:121-133, 139-205`): copy `α` in as
 `z_0`, enable the range-check gate on all `numWindows` rows, assign the interior running
 sums, and constrain the final `z_numWindows` to `0`.
@@ -361,42 +458,8 @@ unique modulo the field size when `2^{W·numWindows}` exceeds it (the `mul_fixed
 def copyDecompose (W numWindows : ℕ) :
     FormalRegionCircuit Fp (Selector × Column .advice) Config Inputs (Output (numWindows + 1)) where
   configure := fun (q, z) => configure W q z
-
-  elaborated :=
-    { keygenRequirements :=
-        { inputPermutationColumns _ _ input := [input.alpha.cell.column] }
-      synthesisSummary cfg offset _ _ :=
-        copyDecomposeSynthesisSummary numWindows cfg offset
-      synthesisSummary_eq := by
-        intro cfg offset input self
-        unfold copyDecomposeSynthesisSummary
-        apply FloorPlanner.RegionSynthesisSummary.ext
-        · simp only [circuit_norm, enableLoopSynthesisSummary_eq,
-            assignLoopSynthesisSummary_eq,
-            FloorPlanner.RegionSynthesisSummary.ofColumns_columns,
-            FloorPlanner.unionColumns_nil_right,
-            FloorPlanner.unionColumns_assoc]
-        · simp only [circuit_norm, enableLoopSynthesisSummary_eq,
-            assignLoopSynthesisSummary_eq,
-            FloorPlanner.RegionSynthesisSummary.ofColumns_rowCount,
-            Nat.max_zero]
-        · simp only [circuit_norm, enableLoopSynthesisSummary_eq,
-            assignLoopSynthesisSummary_eq,
-            FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount]
-      registered := by keygen_registration [configure, enableEquality] }
-
-  synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
-    -- `copy_decompose`: `z_0` is a copy of `α` (line 130)
-    let _z0 ← copyAdvice input.alpha cfg.z offset
-    -- enable the range-check gate on every window row (lines 161-164)
-    enableLoop W cfg offset numWindows
-    -- assign the interior running sums `z_1 … z_numWindows` (lines 166-196)
-    assignLoop W cfg input.alpha offset numWindows
-    -- strict: constrain the final running sum to zero (lines 199-202)
-    let zLast ← cellAt cfg.z (offset + numWindows)
-    constrainConstant zLast (0 : Fp)
-    let zs ← cellVec cfg.z (fun j => offset + j) (numWindows + 1)
-    return { zs }
+  synthesize := body W numWindows
+  elaborated := elaborated W numWindows
 
   Assumptions _ := True
 
@@ -414,10 +477,10 @@ def copyDecompose (W numWindows : ℕ) :
       out.zs[w.val] = ((input.alpha.val / 2 ^ (W * w.val) : ℕ) : Fp)
 
   soundness := by
-    circuit_proof_start
+    circuit_proof_start [body]
     obtain ⟨hCopy, hEnables, hLast⟩ := hc
-    -- the enable chunk → per-row range-poly facts
-    simp only [rangeCheckGate, circuit_norm, mul_one, one_mul] at hEnables
+    simp only [enableLoop, rangeCheckGate, circuit_norm, mul_one, one_mul] at hEnables
+    simp only [assignLoop, circuit_norm] at hLast
     -- the running sum read off the env
     set f : ℕ → Fp := fun j =>
       env.advice cfg.z ((place self + (offset + j) : ℕ) : ℤ) with hf
@@ -445,9 +508,9 @@ def copyDecompose (W numWindows : ℕ) :
       exact hshifts w.val (by omega)
 
   completeness := by
-    circuit_proof_start
-    obtain ⟨hCopyWit, hAssignWit⟩ := hwit
-    simp only [circuit_norm, zWitness, mul_one] at hAssignWit
+    circuit_proof_start [body]
+    obtain ⟨hCopyWit, _hEnableWit, hAssignWit⟩ := hwit
+    simp only [assignLoop, circuit_norm, zWitness, mul_one] at hAssignWit
     -- the honest z-chain: `z_j = ↑(α.val ≫ (W·j))`
     have hz : ∀ j, j ≤ numWindows →
         env.advice cfg.z ((place self + (offset + j) : ℕ) : ℤ)
@@ -461,9 +524,10 @@ def copyDecompose (W numWindows : ℕ) :
         rw [show offset + (j - 1) + 1 = offset + j from by omega,
           show W * (j - 1 + 1) = W * j from by rw [Nat.sub_add_cancel hjpos]] at h
         exact h
+    simp only [assignLoop, circuit_norm]
     refine ⟨⟨?_, ?_⟩, ?_⟩
     · -- the range-check gate holds on every row: the honest word is `↑(b % 2^W)`
-      simp only [rangeCheckGate, circuit_norm, mul_one, one_mul]
+      simp only [enableLoop, rangeCheckGate, circuit_norm, mul_one, one_mul]
       intro i
       rw [eval_rangeCheckExpr, rangeCheckPoly_eq_zero_iff,
         inRange_iff_exists_lt _ (Nat.two_pow_pos W)]
@@ -521,6 +585,15 @@ theorem copyDecompose_configured_permutationColumns_eq
     copyDecompose, configure, permutationColumns, List.singleton_append]
 
 /-- The strict decomposition's only input copy comes from `alpha`. -/
+@[keygen_norm]
+theorem copyDecompose_configured_inputCells_eq
+    (W numWindows : ℕ) {config : Config}
+    (configured : (copyDecompose W numWindows).Configured config)
+    (input : Var Inputs Fp) :
+    configured.inputCells input = [input.alpha.cell] := by
+  rfl
+
+/-- The strict decomposition's input therefore requires equality on `alpha`'s column. -/
 @[keygen_norm]
 theorem copyDecompose_configured_inputPermutationColumns_eq
     (W numWindows : ℕ) {config : Config}

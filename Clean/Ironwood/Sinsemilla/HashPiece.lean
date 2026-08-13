@@ -190,7 +190,19 @@ def loop (G : Generators) (n : ℕ) : FormalRegionCircuit Fp Config Config field
         simp only [circuit_norm, synthesis_summary_norm, Nat.mul_one]
         simpa [loopSynthesisSummary, roundSynthesisSummary, Nat.add_assoc] using
           (FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns
-            (roundColumns cfg) offset 1 2 0 n).symm }
+            (roundColumns cfg) offset 1 2 0 n).symm
+      copyCellsAssigned := by
+        intro configInput counts hconfig offset input region
+        simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+          RegionOperations.CopyCellsAssigned]
+        rw [RegionOperations.copyCellsAssignedFrom_append_iff]
+        constructor
+        · apply RegionCircuit.forRange'_copyCellsAssignedFrom
+          intro i
+          keygen_registration
+        · apply RegionOperations.copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
+          simp only [circuit_norm, RegionOperation.copiedCells,
+            List.Forall] }
 
   synthesize cfg offset (piece : AssignedCell Fp) := do
     RegionCircuit.forRange' offset 1 n (fun r o => do
@@ -518,61 +530,80 @@ def circuitSynthesisSummary (w : ℕ) (cfg : Config) (offset : ℕ) :
           .selector cfg.qS1.index]
         (offset + w + 2) 0))
 
+def circuitBody (G : Generators) (w : ℕ) (final : Bool)
+    (yaIn : Placed Environment Fp → Fp) (cfg : Config) (offset : ℕ)
+    (piece : AssignedCell Fp) : RegionCircuit Fp (Output (w + 1) (AssignedCell Fp)) := do
+  let _z0 ← copyAdvice piece cfg.bits offset
+  let w0 ← readState cfg offset
+  let _xP ← assignAdvice cfg.xP offset (initXPWit G piece)
+  let _l1 ← assignAdvice cfg.lambda1 offset (initLWit G piece w0.row.xA yaIn (·.1))
+  let _l2 ← assignAdvice cfg.lambda2 offset (initLWit G piece w0.row.xA yaIn (·.2.1))
+  let _lp ← (loop G w).call cfg offset piece
+  let ex ← readState cfg (offset + w)
+  let _q ← assignFixed cfg.qS2 (offset + w) (qS2Boundary final)
+  let _xf ← assignAdvice cfg.xA (offset + w + 1) (exitXAWit ex)
+  (generatorLookup G cfg).enable [] (offset + w)
+  let first0 ← cellAt cfg.xA offset
+  let firstXP ← cellAt cfg.xP offset
+  let firstL1 ← cellAt cfg.lambda1 offset
+  let firstL2 ← cellAt cfg.lambda2 offset
+  let last0 ← cellAt cfg.xA (offset + w)
+  let lastXP ← cellAt cfg.xP (offset + w)
+  let lastL1 ← cellAt cfg.lambda1 (offset + w)
+  let lastL2 ← cellAt cfg.lambda2 (offset + w)
+  let xANext ← cellAt cfg.xA (offset + w + 1)
+  let zsCells ← cellVec cfg.bits (fun r => offset + r) (w + 1)
+  return {
+    first := { xA := first0, xP := firstXP, lambda1 := firstL1, lambda2 := firstL2 },
+    last := { xA := last0, xP := lastXP, lambda1 := lastL1, lambda2 := lastL2 },
+    xANext := xANext,
+    zs := zsCells }
+
+@[keygen_norm]
+def circuitKeygenRequirements (G : Generators) :
+    KeygenRequirements Fp Config (Var field Fp) where
+  gates cfg _ := [sinsemillaGate cfg]
+  lookups cfg _ := [generatorLookup G cfg]
+  permutationColumns cfg _ := [cfg.bits]
+  inputCells _ _ input := [input.cell]
+
+theorem circuitBody_copyCellsAssigned (G : Generators) (w : ℕ) (final : Bool)
+    (yaIn : Placed Environment Fp → Fp) (cfg : Config) (offset : ℕ)
+    (input : Var field Fp) (region : RegionIndex) :
+    ((circuitBody G w final yaIn cfg offset input).operations region)
+      |>.CopyCellsAssignedFrom region [input.cell] := by
+  unfold circuitBody
+  simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    RegionOperations.copyCellsAssignedFrom_append_iff]
+  repeat' apply And.intro
+  all_goals first
+    | (apply RegionOperations.copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
+       simp only [circuit_norm, RegionOperation.copiedCells, List.Forall] <;> done)
+    | keygen_registration
+
 def circuit (G : Generators) (w : ℕ) (final : Bool)
     (yaIn : Placed Environment Fp → Fp) :
     FormalRegionCircuit Fp Config Config field (Output (w + 1)) where
   name := "sinsemilla hash_piece"
   configure := pure
   elaborated :=
-    { keygenRequirements :=
-        { gates cfg _ := [sinsemillaGate cfg]
-          lookups cfg _ := [generatorLookup G cfg]
-          permutationColumns cfg _ := [cfg.bits]
-          inputPermutationColumns _ _ input := [input.cell.column] }
+    { keygenRequirements := circuitKeygenRequirements G
       synthesisSummary cfg offset _ _ := circuitSynthesisSummary w cfg offset
       synthesisSummary_eq := by
         intro cfg offset piece self
         cases w <;> apply FloorPlanner.RegionSynthesisSummary.ext
         all_goals simp only [circuitSynthesisSummary,
-            loopSynthesisSummary, roundColumns,
+            circuitBody, loopSynthesisSummary, roundColumns,
             circuit_norm, synthesis_summary_norm,
             FloorPlanner.RegionSynthesisSummary.ofColumns_columns,
             FloorPlanner.RegionSynthesisSummary.ofColumns_rowCount]
-        all_goals try omega }
+        all_goals try omega
+      copyCellsAssigned := by
+        intro configInput counts hconfig offset input region
+        simpa only [Configure.output_pure, circuitKeygenRequirements]
+          using circuitBody_copyCellsAssigned G w final yaIn configInput offset input region }
 
-  synthesize cfg offset (piece : AssignedCell Fp) := do
-    -- z_0 = copy of the piece into the `bits` column (the only copy — the entering
-    -- `x_a` is positional, Rust `hash_piece`'s "not copied" rule)
-    let _z0 ← copyAdvice piece cfg.bits offset
-    let w0 ← readState cfg offset
-    -- the init-row slopes: word 0's generator x and the `rowValue` slopes of the
-    -- entering accumulator (positional x_a + the `yaIn` thread)
-    let _xP ← assignAdvice cfg.xP offset (initXPWit G piece)
-    let _l1 ← assignAdvice cfg.lambda1 offset (initLWit G piece w0.row.xA yaIn (·.1))
-    let _l2 ← assignAdvice cfg.lambda2 offset (initLWit G piece w0.row.xA yaIn (·.2.1))
-    -- the interior word rounds
-    let _lp ← (loop G w).call cfg offset piece
-    -- the last-word edge at row `offset + w`
-    let ex ← readState cfg (offset + w)
-    let _q ← assignFixed cfg.qS2 (offset + w) (qS2Boundary final)
-    let _xf ← assignAdvice cfg.xA (offset + w + 1) (exitXAWit ex)
-    (generatorLookup G cfg).enable [] (offset + w)
-    -- name the output cells (fixed rows)
-    let first0 ← cellAt cfg.xA offset
-    let firstXP ← cellAt cfg.xP offset
-    let firstL1 ← cellAt cfg.lambda1 offset
-    let firstL2 ← cellAt cfg.lambda2 offset
-    let last0 ← cellAt cfg.xA (offset + w)
-    let lastXP ← cellAt cfg.xP (offset + w)
-    let lastL1 ← cellAt cfg.lambda1 (offset + w)
-    let lastL2 ← cellAt cfg.lambda2 (offset + w)
-    let xANext ← cellAt cfg.xA (offset + w + 1)
-    let zsCells ← cellVec cfg.bits (fun r => offset + r) (w + 1)
-    return {
-      first := { xA := first0, xP := firstXP, lambda1 := firstL1, lambda2 := firstL2 },
-      last := { xA := last0, xP := lastXP, lambda1 := lastL1, lambda2 := lastL2 },
-      xANext := xANext,
-      zs := zsCells }
+  synthesize := circuitBody G w final yaIn
 
   Witness := fieldPair
   extract cfg offset _ self env :=

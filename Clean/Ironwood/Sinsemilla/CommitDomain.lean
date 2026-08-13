@@ -158,8 +158,8 @@ def keygenRequirements (G : Generators) (ns : List ℕ)
   permutationColumns _ configured :=
     configured.1.permutationColumns ++ configured.2.1.permutationColumns ++
       configured.2.2.permutationColumns
-  inputPermutationColumns _ _ input :=
-    input.pieces.toList.map (·.cell.column)
+  inputCells _ _ input :=
+    input.pieces.toList.map (·.cell)
 
 def commitSynthesisSummary (ns : List ℕ)
     (cfg : Ecc.MulFixed.FullWidth.Config × HashPiece.Config × Ecc.Add.Config) :

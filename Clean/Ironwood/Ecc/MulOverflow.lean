@@ -203,6 +203,7 @@ theorem gateRegion_synthesisSummary
   · simp only [gateRegion, circuit_norm, synthesis_summary_norm]
     omega
   · simp only [gateRegion, circuit_norm, synthesis_summary_norm]
+  · simp only [gateRegion, circuit_norm, synthesis_summary_norm]
 
 /-- The layouter-level `overflow_check` body: the three faithful sibling regions plus the
 copyCheck child. -/
@@ -319,14 +320,34 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
     { keygenRequirements :=
         { lookups input _ := [LookupRangeCheck.rangeCheckLookup K input.1]
           permutationColumns input _ := [input.1.runningSum]
-          inputPermutationColumns _ _ input :=
-            [input.alpha.cell.column, input.z0.cell.column,
-              input.z130.cell.column, input.k254.cell.column] }
+          inputCells _ _ input :=
+            [input.alpha.cell, input.z0.cell,
+              input.z130.cell, input.k254.cell] }
       registered := by
         keygen_registration
       output _ _ _ := ()
       regionCount _ := 3
       synthesisSummary cfg _ _ := circuitSynthesisSummary K cfg
+      copyCellsAssigned := by
+        intro configInput counts hconfig input i
+        simp only [synthesize, circuit_norm]
+        unfold Operations.CopyCellsAssigned
+        rw [Operations.copyCellsAssignedFrom_region_iff]
+        refine ⟨by keygen_registration, ?_⟩
+        apply Operations.CopyCellsAssignedFrom.append
+        · keygen_registration
+        · have hdec := LookupRangeCheck.copyCheck_output_cells_assigned
+            K (numWords K) false
+            ((configure K configInput.1 configInput.2.1 configInput.2.2.1
+              configInput.2.2.2).output counts).lookupConfig
+            { element := AssignedCell.of i 0
+                ((configure K configInput.1 configInput.2.1 configInput.2.2.1
+                  configInput.2.2.2).output counts).adv0 }
+            (i + 1)
+          rw [← (LookupRangeCheck.copyCheck K (numWords K) false).call_operations]
+            at hdec
+          simp only [gateRegion, circuit_norm, keygen_norm, keygen_spine]
+          simp_all
       output_eq := by intro _ _ _; rfl
       regionCount_eq := fun cfg input i => (synthesize_regionCount K cfg input i).symm
       synthesisSummary_eq := by

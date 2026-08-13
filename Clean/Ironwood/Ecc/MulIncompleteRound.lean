@@ -344,7 +344,7 @@ def reads (cfg : Config) (offset : ℕ) (self : RegionIndex) : State (AssignedCe
 def readState (cfg : Config) (offset : ℕ) : RegionCircuit Fp (State (AssignedCell Fp)) :=
   fun self => (reads cfg offset self, [])
 
-@[circuit_norm]
+@[circuit_norm, keygen_spine]
 theorem operations_readState (cfg : Config) (offset : ℕ) (self : RegionIndex) :
     (readState cfg offset).operations self = [] := rfl
 
@@ -678,7 +678,8 @@ def round (i : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field)
             List.append_nil, List.nil_append, List.singleton_append]
         · simp only [circuit_norm]
           omega
-        · simp only [circuit_norm] }
+        · simp only [circuit_norm]
+        · simp only [circuit_norm, synthesis_summary_norm] }
 
   Witness := State
   extract cfg offset _ self env := eval env (reads cfg offset self)

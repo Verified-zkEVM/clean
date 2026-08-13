@@ -94,9 +94,8 @@ def permuteElaborated :
       { gates cfg _ := [fullRoundGate cfg, partialRoundsGate cfg]
         permutationColumns cfg _ :=
           [cfg.state 0, cfg.state 1, cfg.state 2]
-        inputPermutationColumns _ _ input :=
-          [input.x0.cell.column, input.x1.cell.column,
-            input.x2.cell.column] }
+        inputCells _ _ input :=
+          [input.x0.cell, input.x1.cell, input.x2.cell] }
     output cfg offset _ self := stateRow cfg (offset + 36) self
     synthesisSummary cfg offset _ _ :=
       permuteSynthesisSummary cfg offset
@@ -118,9 +117,22 @@ def permuteElaborated :
           partialRoundSynthesisSummary, circuit_norm, synthesis_summary_norm,
           Nat.mul_one,
           FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount]
+      · simp only [permuteSynthesize, fullRoundSynthesisSummary,
+          partialRoundSynthesisSummary, circuit_norm, synthesis_summary_norm,
+          Nat.mul_one]
     output_eq := by
       intro _ _ _ _
-      simp only [permuteSynthesize, circuit_norm] }
+      simp only [permuteSynthesize, circuit_norm]
+    copyCellsAssigned := by
+      intro configInput counts hconfig offset input region
+      simp only [permuteSynthesize, RegionCircuit.operations_bind,
+        RegionOperations.CopyCellsAssigned,
+        RegionOperations.copyCellsAssignedFrom_append_iff]
+      repeat' apply And.intro
+      all_goals first
+        | (apply RegionOperations.copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
+           simp only [circuit_norm, RegionOperation.copiedCells, List.Forall] <;> done)
+        | keygen_registration }
 
 /-- Chain a per-row step family into a `Fin.foldl` (the donor `Permute.value` shape). -/
 private theorem foldl_of_steps (f : ℕ → State Fp → State Fp) (st : ℕ → State Fp)
@@ -300,6 +312,12 @@ theorem permuteRegion_synthesisSummary (cfg : Config) (offset : ℕ)
     (input : Var State Fp) (self : RegionIndex) :
     permuteRegion.elaborated.synthesisSummary cfg offset input self =
       permuteSynthesisSummary cfg offset := rfl
+
+@[keygen_norm]
+theorem permuteRegion_inputCells (cfg : Config)
+    (hconfigured : permuteRegion.Configured cfg) (input : Var State Fp) :
+    FormalRegionCircuit.Configured.inputCells hconfigured input =
+      [input.x0.cell, input.x1.cell, input.x2.cell] := rfl
 
 derive_contract_bridges permuteRegion := permuteRegion
 

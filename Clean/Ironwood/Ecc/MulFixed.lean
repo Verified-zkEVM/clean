@@ -338,6 +338,8 @@ theorem fixedConstantsWindow_synthesisSummary_eq
     omega
   · simp only [fixedConstantsWindowSynthesisSummary, fixedConstantsWindow,
       circuit_norm]
+  · simp only [fixedConstantsWindowSynthesisSummary, fixedConstantsWindow,
+      circuit_norm, synthesis_summary_norm]
 
 @[synthesis_summary_norm]
 theorem fixedConstantsLoop_synthesisSummary_eq
@@ -381,6 +383,18 @@ theorem fixedConstantsLoop_keygenRegistered
     ((fixedConstantsLoop toggle B cfg offset numWindows).operations self).Forall
       (RegionOperation.KeygenRegistered gates lookups permutationColumns) := by
   simp only [fixedConstantsLoop, RegionCircuit.forRange'_forall]
+  intro i
+  unfold fixedConstantsWindow
+  keygen_registration
+
+/-- Fixed-table loading assigns cells and selectors but introduces no copy endpoints. -/
+@[keygen_norm, keygen_helper]
+theorem fixedConstantsLoop_copyCellsAssignedFrom
+    (toggle : Gate Fp) (B : FixedBaseData) (cfg : Config)
+    (offset numWindows : ℕ) (self : RegionIndex) (available : List Cell) :
+    ((fixedConstantsLoop toggle B cfg offset numWindows).operations self)
+      |>.CopyCellsAssignedFrom self available := by
+  apply RegionCircuit.forRange'_copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
   intro i
   unfold fixedConstantsWindow
   keygen_registration
@@ -452,6 +466,8 @@ theorem processWindow_combine_addIncomplete_synthesisSummary
       FloorPlanner.RegionSynthesisSummary.combine_constantSiteCount,
       FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount,
       Nat.zero_add]
+  · simp only [processWindowSynthesisSummary, AddIncomplete.synthesisSummary,
+      windowStepSynthesisSummary, synthesis_summary_norm]
 
 @[synthesis_summary_norm]
 theorem reduced_windowStep_synthesisSummary (cfg : Config) (row : ℕ) :
@@ -474,6 +490,7 @@ theorem reduced_windowStep_synthesisSummary (cfg : Config) (row : ℕ) :
   · simp only [FloorPlanner.RegionSynthesisSummary.ofColumns_rowCount]
     omega
   · rfl
+  · simp only [FloorPlanner.RegionSynthesisSummary.ofColumns_instanceRowExtent]
 
 @[synthesis_summary_norm]
 theorem processWindow_synthesisSummary_eq
@@ -482,11 +499,15 @@ theorem processWindow_synthesisSummary_eq
     FloorPlanner.regionSynthesisSummary
         ((processWindow B tbl cfg alpha w row).operations self) =
       processWindowSynthesisSummary cfg row := by
-  apply FloorPlanner.RegionSynthesisSummary.ext <;>
-    simp only [processWindowSynthesisSummary, processWindow, circuit_norm]
-  omega
+  apply FloorPlanner.RegionSynthesisSummary.ext
+  · simp only [processWindowSynthesisSummary, processWindow, circuit_norm]
+  · simp only [processWindowSynthesisSummary, processWindow, circuit_norm]
+    omega
+  · simp only [processWindowSynthesisSummary, processWindow, circuit_norm]
+  · simp only [processWindowSynthesisSummary, processWindow, circuit_norm,
+      synthesis_summary_norm]
 
-@[keygen_norm]
+@[keygen_norm, keygen_output_norm]
 theorem processWindow_output_x_column (B : FixedBaseData)
     (table : ℕ → ℕ → Point Fp) (cfg : Config) (alpha : AssignedCell Fp)
     (w row : ℕ) (self : RegionIndex) :
@@ -494,13 +515,52 @@ theorem processWindow_output_x_column (B : FixedBaseData)
       cfg.addConfig.xP := by
   simp only [processWindow, circuit_norm]
 
-@[keygen_norm]
+@[keygen_norm, keygen_output_norm]
 theorem processWindow_output_y_column (B : FixedBaseData)
     (table : ℕ → ℕ → Point Fp) (cfg : Config) (alpha : AssignedCell Fp)
     (w row : ℕ) (self : RegionIndex) :
     ((processWindow B table cfg alpha w row).output self).y.cell.column =
       cfg.addConfig.yP := by
   simp only [processWindow, circuit_norm]
+
+/-- A window witness only assigns cells; it introduces no copy endpoints. -/
+@[keygen_norm, keygen_helper]
+theorem processWindow_copyCellsAssignedFrom (B : FixedBaseData)
+    (table : ℕ → ℕ → Point Fp) (cfg : Config) (alpha : AssignedCell Fp)
+    (w row : ℕ) (self : RegionIndex) (available : List Cell) :
+    ((processWindow B table cfg alpha w row).operations self)
+      |>.CopyCellsAssignedFrom self available := by
+  simp only [processWindow, circuit_norm, keygen_norm, keygen_spine]
+
+/-- Both coordinates returned by a window witness were assigned by that witness. -/
+theorem processWindow_output_cells_assigned (B : FixedBaseData)
+    (table : ℕ → ℕ → Point Fp) (cfg : Config) (alpha : AssignedCell Fp)
+    (w row : ℕ) (self : RegionIndex) (available : List Cell) :
+    let output := (processWindow B table cfg alpha w row).output self
+    output.x.cell ∈
+        ((processWindow B table cfg alpha w row).operations self
+          |>.assignedCellsAfter self available) ∧
+      output.y.cell ∈
+        ((processWindow B table cfg alpha w row).operations self
+          |>.assignedCellsAfter self available) := by
+  simp only [processWindow, circuit_norm, AssignedCell.of_cell,
+    RegionOperations.mem_assignedCellsAfter_iff, List.mem_append]
+  constructor <;> right <;>
+    simp only [RegionOperations.assignedCells, List.flatMap_cons,
+      RegionOperation.assignedCells, List.singleton_append,
+      List.flatMap_nil, List.mem_cons, true_or, or_true]
+
+/-- One serial middle-window step: witness the next table point, then add it to the
+accumulator written by the preceding step. -/
+abbrev windowChainStep (cfg : Config)
+    (processW : ℕ → ℕ → RegionCircuit Fp (Point (AssignedCell Fp)))
+    (i row : ℕ) : RegionCircuit Fp Unit := do
+  let mulB ← processW (i + 2) row
+  let qx ← cellAt cfg.addIncompleteConfig.xQR row
+  let qy ← cellAt cfg.addIncompleteConfig.yQR row
+  let _ ← AddIncomplete.add.call cfg.addIncompleteConfig row
+    ⟨mulB, { x := qx, y := qy }⟩
+  return ()
 
 /-- The shared window chain: `initialize_accumulator` (window 0), the incomplete-addition loop
 over windows `1..numWindows−2` (window 1's accumulator q-copy is REAL — the window-0 point; later
@@ -514,17 +574,262 @@ def windowChain (cfg : Config)
   let acc0 ← processW 0 offset
   let mulB1 ← processW 1 (offset + 1)
   let _a1 ← AddIncomplete.add.call cfg.addIncompleteConfig (offset + 1) ⟨mulB1, acc0⟩
-  RegionCircuit.forRange' (offset + 2) 1 (numWindows - 3) (fun i row => do
-    let mulB ← processW (i + 2) row
-    let qx ← cellAt cfg.addIncompleteConfig.xQR row
-    let qy ← cellAt cfg.addIncompleteConfig.yQR row
-    let _ ← AddIncomplete.add.call cfg.addIncompleteConfig row
-      ⟨mulB, { x := qx, y := qy }⟩
-    return ())
+  RegionCircuit.forRange' (offset + 2) 1 (numWindows - 3)
+    (windowChainStep cfg processW)
   let mulB ← processW (numWindows - 1) (offset + (numWindows - 1))
   let accX ← cellAt cfg.addIncompleteConfig.xQR (offset + (numWindows - 1))
   let accY ← cellAt cfg.addIncompleteConfig.yQR (offset + (numWindows - 1))
   return ({ x := accX, y := accY }, mulB)
+
+private theorem windowChainStep_copyCellsAssignedFrom
+    (cfg : Config) (hconfigured : AddIncomplete.add.Configured cfg.addIncompleteConfig)
+    (self : RegionIndex)
+    (processW : ℕ → ℕ → RegionCircuit Fp (Point (AssignedCell Fp)))
+    (hprocess : ∀ w row available,
+      ((processW w row).operations self).CopyCellsAssignedFrom self available)
+    (hprocessOutput : ∀ w row available,
+      let output := (processW w row).output self
+      output.x.cell ∈
+          ((processW w row).operations self).assignedCellsAfter self available ∧
+        output.y.cell ∈
+          ((processW w row).operations self).assignedCellsAfter self available)
+    (i row : ℕ) (available : List Cell)
+    (haccX : Cell.of self row cfg.addIncompleteConfig.xQR ∈ available)
+    (haccY : Cell.of self row cfg.addIncompleteConfig.yQR ∈ available) :
+    let operations := (windowChainStep cfg processW i row).operations self
+    operations.CopyCellsAssignedFrom self available ∧
+      Cell.of self (row + 1) cfg.addIncompleteConfig.xQR ∈
+        operations.assignedCellsAfter self available ∧
+      Cell.of self (row + 1) cfg.addIncompleteConfig.yQR ∈
+        operations.assignedCellsAfter self available := by
+  simp only [windowChainStep, circuit_norm]
+  let processOperations := (processW (i + 2) row).operations self
+  let processOutput := (processW (i + 2) row).output self
+  let addInput : Var AddIncomplete.Inputs Fp :=
+    ⟨processOutput,
+      ⟨AssignedCell.of self row cfg.addIncompleteConfig.xQR,
+        AssignedCell.of self row cfg.addIncompleteConfig.yQR⟩⟩
+  let addOperations :=
+    (AddIncomplete.add.call cfg.addIncompleteConfig row addInput).operations self
+  have hprocessLaw := hprocess (i + 2) row available
+  have hout := hprocessOutput (i + 2) row available
+  have haddLaw : addOperations.CopyCellsAssignedFrom self
+      (processOperations.assignedCellsAfter self available) := by
+    apply AddIncomplete.add.call_copyCellsAssignedFrom
+      cfg.addIncompleteConfig hconfigured row _ self
+    intro cell hcell
+    rw [AddIncomplete.Configured.inputCells_eq] at hcell
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+    rcases hcell with rfl | rfl | rfl | rfl
+    · exact hout.1
+    · exact hout.2
+    · exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ haccX
+    · exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ haccY
+  have haddOutput := AddIncomplete.add_output_cells_assigned
+    cfg.addIncompleteConfig row addInput
+      self (processOperations.assignedCellsAfter self available)
+  refine ⟨?_, ?_, ?_⟩
+  · rw [RegionOperations.copyCellsAssignedFrom_append_iff]
+    exact ⟨hprocessLaw, haddLaw⟩
+  · rw [RegionOperations.assignedCellsAfter_append]
+    exact haddOutput.1
+  · rw [RegionOperations.assignedCellsAfter_append]
+    exact haddOutput.2
+
+private theorem windowChainLoop_copyCellsAssignedFrom
+    (cfg : Config) (hconfigured : AddIncomplete.add.Configured cfg.addIncompleteConfig)
+    (self : RegionIndex)
+    (processW : ℕ → ℕ → RegionCircuit Fp (Point (AssignedCell Fp)))
+    (hprocess : ∀ w row available,
+      ((processW w row).operations self).CopyCellsAssignedFrom self available)
+    (hprocessOutput : ∀ w row available,
+      let output := (processW w row).output self
+      output.x.cell ∈
+          ((processW w row).operations self).assignedCellsAfter self available ∧
+        output.y.cell ∈
+          ((processW w row).operations self).assignedCellsAfter self available)
+    (offset k : ℕ) (available : List Cell)
+    (haccX : Cell.of self (offset + 2) cfg.addIncompleteConfig.xQR ∈ available)
+    (haccY : Cell.of self (offset + 2) cfg.addIncompleteConfig.yQR ∈ available) :
+    RegionOperations.CopyCellsAssignedFrom self available
+        ((RegionCircuit.loopAux (fun i => offset + 2 + i * 1)
+          (windowChainStep cfg processW) k).operations self) ∧
+      Cell.of self (offset + 2 + k) cfg.addIncompleteConfig.xQR ∈
+        RegionOperations.assignedCellsAfter self available
+          ((RegionCircuit.loopAux (fun i => offset + 2 + i * 1)
+            (windowChainStep cfg processW) k).operations self) ∧
+      Cell.of self (offset + 2 + k) cfg.addIncompleteConfig.yQR ∈
+        RegionOperations.assignedCellsAfter self available
+          ((RegionCircuit.loopAux (fun i => offset + 2 + i * 1)
+            (windowChainStep cfg processW) k).operations self) := by
+  induction k with
+  | zero =>
+      simp only [RegionCircuit.loopAux, circuit_norm, Nat.add_zero]
+      exact ⟨RegionOperations.CopyCellsAssignedFrom.nil available,
+        haccX, haccY⟩
+  | succ k inductionHypothesis =>
+      have hstep := windowChainStep_copyCellsAssignedFrom cfg hconfigured self
+        processW hprocess hprocessOutput k (offset + 2 + k * 1)
+        (RegionOperations.assignedCellsAfter self available
+          ((RegionCircuit.loopAux (fun i => offset + 2 + i * 1)
+            (windowChainStep cfg processW) k).operations self))
+        (by simpa only [Nat.mul_one] using inductionHypothesis.2.1)
+        (by simpa only [Nat.mul_one] using inductionHypothesis.2.2)
+      rw [RegionCircuit.loopAux_operations_succ]
+      refine ⟨?_, ?_, ?_⟩
+      · rw [RegionOperations.copyCellsAssignedFrom_append_iff]
+        exact ⟨inductionHypothesis.1, hstep.1⟩
+      · rw [RegionOperations.assignedCellsAfter_append]
+        simpa only [Nat.mul_one, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm]
+          using hstep.2.1
+      · rw [RegionOperations.assignedCellsAfter_append]
+        simpa only [Nat.mul_one, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm]
+          using hstep.2.2
+
+/-- Copy endpoints in the shared window chain are assigned by the chain itself or
+provided as input to its per-window witness program. -/
+theorem windowChain_copyCellsAssignedFrom
+    (cfg : Config) (hconfigured : AddIncomplete.add.Configured cfg.addIncompleteConfig)
+    (self : RegionIndex)
+    (processW : ℕ → ℕ → RegionCircuit Fp (Point (AssignedCell Fp)))
+    (hprocess : ∀ w row available,
+      ((processW w row).operations self).CopyCellsAssignedFrom self available)
+    (hprocessOutput : ∀ w row available,
+      let output := (processW w row).output self
+      output.x.cell ∈
+          ((processW w row).operations self).assignedCellsAfter self available ∧
+        output.y.cell ∈
+          ((processW w row).operations self).assignedCellsAfter self available)
+    (offset numWindows : ℕ) (hnumWindows : 3 ≤ numWindows)
+    (available : List Cell) :
+    let chain := windowChain cfg processW offset numWindows
+    (chain.operations self).CopyCellsAssignedFrom self available ∧
+      (chain.output self).1.x.cell ∈
+        (chain.operations self).assignedCellsAfter self available ∧
+      (chain.output self).1.y.cell ∈
+        (chain.operations self).assignedCellsAfter self available ∧
+      (chain.output self).2.x.cell ∈
+        (chain.operations self).assignedCellsAfter self available ∧
+      (chain.output self).2.y.cell ∈
+        (chain.operations self).assignedCellsAfter self available := by
+  let op0 := (processW 0 offset).operations self
+  let op1 := (processW 1 (offset + 1)).operations self
+  let input : Var AddIncomplete.Inputs Fp :=
+    ⟨(processW 1 (offset + 1)).output self,
+      (processW 0 offset).output self⟩
+  let addOps :=
+    (AddIncomplete.add.call cfg.addIncompleteConfig (offset + 1) input).operations self
+  let loopOps :=
+    (RegionCircuit.forRange' (offset + 2) 1 (numWindows - 3)
+      (windowChainStep cfg processW)).operations self
+  let lastOps :=
+    (processW (numWindows - 1) (offset + (numWindows - 1))).operations self
+  have h0 := hprocess 0 offset available
+  have hout0 := hprocessOutput 0 offset available
+  have h1 := hprocess 1 (offset + 1) (op0.assignedCellsAfter self available)
+  have hout1 := hprocessOutput 1 (offset + 1)
+    (op0.assignedCellsAfter self available)
+  have h01 : (op0 ++ op1).CopyCellsAssignedFrom self available := by
+    rw [RegionOperations.copyCellsAssignedFrom_append_iff]
+    exact ⟨h0, h1⟩
+  have hadd : addOps.CopyCellsAssignedFrom self
+      ((op0 ++ op1).assignedCellsAfter self available) := by
+    apply AddIncomplete.add.call_copyCellsAssignedFrom
+      cfg.addIncompleteConfig hconfigured (offset + 1) input self
+    intro cell hcell
+    rw [AddIncomplete.Configured.inputCells_eq] at hcell
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+    rcases hcell with rfl | rfl | rfl | rfl
+    · rw [RegionOperations.assignedCellsAfter_append]
+      exact hout1.1
+    · rw [RegionOperations.assignedCellsAfter_append]
+      exact hout1.2
+    · rw [RegionOperations.assignedCellsAfter_append]
+      exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ hout0.1
+    · rw [RegionOperations.assignedCellsAfter_append]
+      exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ hout0.2
+  have h01add : ((op0 ++ op1) ++ addOps).CopyCellsAssignedFrom self available := by
+    rw [RegionOperations.copyCellsAssignedFrom_append_iff]
+    exact ⟨h01, hadd⟩
+  have haddOutput := AddIncomplete.add_output_cells_assigned
+    cfg.addIncompleteConfig (offset + 1) input self
+      ((op0 ++ op1).assignedCellsAfter self available)
+  have hloop := windowChainLoop_copyCellsAssignedFrom cfg hconfigured self
+    processW hprocess hprocessOutput offset (numWindows - 3)
+    (((op0 ++ op1) ++ addOps).assignedCellsAfter self available)
+    (by
+      rw [RegionOperations.assignedCellsAfter_append]
+      simpa only [Nat.add_assoc] using haddOutput.1)
+    (by
+      rw [RegionOperations.assignedCellsAfter_append]
+      simpa only [Nat.add_assoc] using haddOutput.2)
+  have hprefix : (((op0 ++ op1) ++ addOps) ++ loopOps)
+      |>.CopyCellsAssignedFrom self available := by
+    rw [RegionOperations.copyCellsAssignedFrom_append_iff]
+    exact ⟨h01add, hloop.1⟩
+  have hlast := hprocess (numWindows - 1) (offset + (numWindows - 1))
+    ((((op0 ++ op1) ++ addOps) ++ loopOps).assignedCellsAfter self available)
+  have hlastOutput := hprocessOutput
+    (numWindows - 1) (offset + (numWindows - 1))
+    ((((op0 ++ op1) ++ addOps) ++ loopOps).assignedCellsAfter self available)
+  have hall : ((((op0 ++ op1) ++ addOps) ++ loopOps) ++ lastOps)
+      |>.CopyCellsAssignedFrom self available := by
+    rw [RegionOperations.copyCellsAssignedFrom_append_iff]
+    exact ⟨hprefix, hlast⟩
+  have hlastRow : offset + 2 + (numWindows - 3) =
+      offset + (numWindows - 1) := by omega
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩
+  · simpa only [windowChain, RegionCircuit.operations_bind,
+      RegionCircuit.operations_pure, operations_cellAt, List.append_nil,
+      List.append_assoc] using hall
+  · simp only [windowChain, circuit_norm, RegionOperations.assignedCellsAfter_append]
+    apply RegionOperations.mem_assignedCellsAfter_of_mem
+    rw [← hlastRow]
+    simpa only [op0, op1, addOps, loopOps, RegionCircuit.forRange',
+      RegionOperations.assignedCellsAfter_append, Nat.mul_one] using
+      hloop.2.1
+  · simp only [windowChain, circuit_norm, RegionOperations.assignedCellsAfter_append]
+    apply RegionOperations.mem_assignedCellsAfter_of_mem
+    rw [← hlastRow]
+    simpa only [op0, op1, addOps, loopOps, RegionCircuit.forRange',
+      RegionOperations.assignedCellsAfter_append, Nat.mul_one] using
+      hloop.2.2
+  · simpa only [windowChain, circuit_norm,
+      RegionOperations.assignedCellsAfter_append] using hlastOutput.1
+  · simpa only [windowChain, circuit_norm,
+      RegionOperations.assignedCellsAfter_append] using hlastOutput.2
+
+@[synthesis_summary_norm]
+theorem windowChainStep_synthesisSummary_eq
+    (cfg : Config)
+    (processW : ℕ → ℕ → RegionCircuit Fp (Point (AssignedCell Fp)))
+    (i row : ℕ) (self : RegionIndex)
+    (hprocess : FloorPlanner.regionSynthesisSummary
+      ((processW (i + 2) row).operations self) =
+        processWindowSynthesisSummary cfg row) :
+    FloorPlanner.regionSynthesisSummary
+        ((windowChainStep cfg processW i row).operations self) =
+      windowStepSynthesisSummary cfg row := by
+  simp only [windowChainStep, circuit_norm,
+    FloorPlanner.regionSynthesisSummary_append, hprocess,
+    synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem windowChainStep_synthesisSummary_constantSiteCount
+    (cfg : Config)
+    (processW : ℕ → ℕ → RegionCircuit Fp (Point (AssignedCell Fp)))
+    (i row : ℕ) (self : RegionIndex)
+    (hprocess : (FloorPlanner.regionSynthesisSummary
+      ((processW (i + 2) row).operations self)).constantSiteCount = 0) :
+    (FloorPlanner.regionSynthesisSummary
+      ((windowChainStep cfg processW i row).operations self)).constantSiteCount = 0 := by
+  simp only [windowChainStep, circuit_norm,
+    FloorPlanner.regionSynthesisSummary_append,
+    FloorPlanner.RegionSynthesisSummary.combine_constantSiteCount,
+    hprocess, Nat.zero_add]
+  rw [← AddIncomplete.add.elaborated.synthesisSummary_eq,
+    AddIncomplete.add_synthesisSummary_eq]
+  exact AddIncomplete.synthesisSummary_constantSiteCount _ _
 
 /-- Reduced footprint of the shared window chain. The caller supplies a window
 witness whose footprint is `processWindowSynthesisSummary`. -/
@@ -556,7 +861,7 @@ theorem windowChain_synthesisSummary_eq
           FloorPlanner.RegionSynthesisSummary.combine {} =
         FloorPlanner.RegionSynthesisSummary.repeatColumns
           (windowStepColumns cfg) (offset + 2) 1 2 0 (numWindows - 3) := by
-    simpa [Nat.add_assoc] using
+    simpa only [Nat.one_mul, Nat.add_assoc] using
       (FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns
         (windowStepColumns cfg) (offset + 2) 1 2 0 (numWindows - 3))
   unfold windowChainSynthesisSummary
@@ -564,7 +869,6 @@ theorem windowChain_synthesisSummary_eq
     RegionCircuit.operations_bind, RegionCircuit.operations_pure,
     FloorPlanner.regionSynthesisSummary_append, operations_cellAt,
     synthesis_summary_norm, hprocess, Nat.mul_one,
-    FloorPlanner.RegionSynthesisSummary.empty_combine_ofColumns,
     FloorPlanner.RegionSynthesisSummary.combine_empty,
     processWindowSynthesisSummary, AddIncomplete.synthesisSummary, hrepeat]
 
@@ -593,7 +897,7 @@ theorem windowChain_synthesisSummary_constantSiteCount_eq_zero
     RegionCircuit.operations_pure, FloorPlanner.regionSynthesisSummary_append,
     synthesis_summary_norm]
   simp only [hprocessW, operations_cellAt, synthesis_summary_norm,
-    AddIncomplete.synthesisSummary, List.map_ofFn, Function.comp_def]
+    List.map_ofFn, Function.comp_def]
   simp
 
 /-- The standard fixed-base window witness program requests no deferred constants. -/
@@ -654,7 +958,7 @@ theorem windowChain_processWindow_keygenRegistered
       column ∈ Add.permutationColumns cfg.addConfig → column ∈ permutationColumns) :
     ((windowChain cfg (processWindow B table cfg alpha) offset numWindows).operations self).Forall
       (RegionOperation.KeygenRegistered gates lookups permutationColumns) := by
-  unfold windowChain processWindow
+  unfold windowChain windowChainStep processWindow
   simp only [keygen_spine, operations_assignAdvice, operations_cellAt,
     List.forall_cons, List.forall_nil, RegionOperation.KeygenRegistered]
   constructor
@@ -662,37 +966,24 @@ theorem windowChain_processWindow_keygenRegistered
       AddIncomplete.add cfg.addIncompleteConfig configured
       (offset + 1) _ self hgates hlookups hpermutationColumns
       (by
-        intro column h
-        rw [AddIncomplete.Configured.inputPermutationColumns_eq] at h
-        simp only [circuit_norm] at h
-        rcases h with h | h | h | h
-        · apply hprocessColumns column
-          simp [Add.permutationColumns, h]
-        · apply hprocessColumns column
-          simp [Add.permutationColumns, h]
-        · apply hprocessColumns column
-          simp [Add.permutationColumns, h]
-        · apply hprocessColumns column
-          simp [Add.permutationColumns, h])
+        rw [AddIncomplete.Configured.inputCells_eq]
+        simp only [circuit_norm]
+        refine ⟨hprocessColumns _ (by simp [Add.permutationColumns]),
+          hprocessColumns _ (by simp [Add.permutationColumns]),
+          hprocessColumns _ (by simp [Add.permutationColumns]),
+          hprocessColumns _ (by simp [Add.permutationColumns])⟩)
   · intro i
     exact FormalRegionCircuit.call_keygenRegistered
       AddIncomplete.add cfg.addIncompleteConfig configured
       (offset + 2 + i * 1) _ self hgates hlookups hpermutationColumns
       (by
-        intro column h
-        rw [AddIncomplete.Configured.inputPermutationColumns_eq] at h
-        simp only [circuit_norm] at h
-        rcases h with h | h | h | h
-        · apply hprocessColumns column
-          simp [Add.permutationColumns, h]
-        · apply hprocessColumns column
-          simp [Add.permutationColumns, h]
-        · apply hpermutationColumns column
-          rw [AddIncomplete.Configured.permutationColumns_eq]
-          simp [AddIncomplete.permutationColumns, h]
-        · apply hpermutationColumns column
-          rw [AddIncomplete.Configured.permutationColumns_eq]
-          simp [AddIncomplete.permutationColumns, h])
+        rw [AddIncomplete.Configured.inputCells_eq]
+        simp only [circuit_norm]
+        refine ⟨hprocessColumns _ (by simp [Add.permutationColumns]),
+          hprocessColumns _ (by simp [Add.permutationColumns]), ?_⟩
+        constructor <;> apply hpermutationColumns <;>
+          rw [AddIncomplete.Configured.permutationColumns_eq] <;>
+          simp [AddIncomplete.permutationColumns])
 
 /-! ## Shared proof helpers for the wrapper bundles
 

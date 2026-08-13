@@ -289,8 +289,8 @@ def keygenRequirements (G : Generators) (R : FixedBase) (Q : Point Fp)
     [LookupRangeCheck.rangeCheckLookup 10 cfg.lookupConfig] ++ configured.lookups
   permutationColumns cfg configured :=
     permutationColumns cfg configured.permutationColumns
-  inputPermutationColumns _ _ input :=
-    [input.ak.cell.column, input.nk.cell.column]
+  inputCells _ _ input :=
+    [input.ak.cell, input.nk.cell]
 
 @[keygen_helper]
 theorem synthPieces_keygenRegistered

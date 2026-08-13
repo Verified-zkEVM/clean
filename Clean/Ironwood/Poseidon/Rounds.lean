@@ -123,7 +123,8 @@ def fullRoundSynthesize (r : ℕ) (cfg : Config) (offset : ℕ)
           List.nil_append, List.singleton_append]
       · simp only [fullRoundSynthesize, circuit_norm]
         omega
-      · simp only [fullRoundSynthesize, circuit_norm] }
+      · simp only [fullRoundSynthesize, circuit_norm]
+      · simp only [fullRoundSynthesize, circuit_norm, synthesis_summary_norm] }
 
 def partialRoundSynthesize (r : ℕ) (cfg : Config) (offset : ℕ)
     (_ : Var unit Fp) : RegionCircuit Fp (Var State Fp) := do
@@ -170,7 +171,8 @@ def partialRoundSynthesize (r : ℕ) (cfg : Config) (offset : ℕ)
           List.append_nil, List.nil_append, List.singleton_append]
       · simp only [partialRoundSynthesize, circuit_norm]
         omega
-      · simp only [partialRoundSynthesize, circuit_norm] }
+      · simp only [partialRoundSynthesize, circuit_norm]
+      · simp only [partialRoundSynthesize, circuit_norm, synthesis_summary_norm] }
 
 /-- Rust `Pow5State::full_round` at source round `r` (`pow5.rs:434-459` + `round`,
 552-592): enable `s_full` at `offset`, load the `rc_a` round constants at `offset`,

@@ -430,6 +430,28 @@ structure ChunkMatch where
   whereas `regionIdx` diverges — so witness matching compares THIS, not `regionIdx`. -/
   opsIdx : Expr
 
+/-- Peel the empty prefix left behind when a monadic call is projected through a packed
+result. This is an administrative `Circuit` bind, not part of the child call boundary. -/
+private def stripEmptyAppend (operations : Expr) : Expr :=
+  let fn := operations.getAppFn
+  let args := operations.getAppArgs
+  if fn.isConstOf ``List.append && args.size == 3 && args[1]!.getAppFn.isConstOf ``List.nil then
+    args[2]!
+  else
+    operations
+
+/-- Recover the pair underneath a second projection. Depending on elaboration, projections
+appear either as `Prod.snd` applications or kernel projection nodes. -/
+private def prodSndArg? (expression : Expr) : Option Expr :=
+  match expression with
+  | .proj typeName 1 pair => if typeName == ``Prod then some pair else none
+  | _ =>
+    let args := expression.getAppArgs
+    if expression.getAppFn.isConstOf ``Prod.snd && !args.isEmpty then
+      some args[args.size - 1]!
+    else
+      none
+
 /-- Recognize a call-keyed constraint chunk. On the `Constraints`/`RegionOperations.Constraints`
 head, dig into the `ops` argument for the `call` application and read the child contract's
 arguments off it. `isDefEq` (at `.default` transparency) confirms the `ops` argument is the
@@ -451,6 +473,7 @@ def matchChunk? (e : Expr) : MetaM (Option ChunkMatch) := do
       pure (false, args[2]!, args[3]!, args[5]!, args[4]!)
     else
       return none
+  let ops := stripEmptyAppend ops
   -- `ops` should be `(child.call …).operations regionIdx`, i.e.
   --   region:   RegionCircuit.operations (child.call config offset input) self
   --   layouter: Circuit.operations       (child.call config input) i₀
@@ -461,6 +484,46 @@ def matchChunk? (e : Expr) : MetaM (Option ChunkMatch) := do
   let ok := (isRegion && opsName == ``RegionCircuit.operations)
     || (!isRegion && opsName == ``Circuit.operations)
   unless ok && opsArgs.size ≥ 5 do
+    -- `RegionCircuit.operations`/`Circuit.operations` can reduce to the public packed
+    -- call projections while the call itself remains opaque. Accept that equivalent
+    -- boundary directly instead of depending on a particular transparency path.
+    if isRegion && opsName == ``Prod.snd then
+      let packed := opsArgs[opsArgs.size - 1]!
+      let packedArgs := packed.getAppArgs
+      if packedArgs.size ≥ 5 then
+        let first := packedArgs.size - 5
+        let childType ← whnfR (← inferType packedArgs[first]!)
+        let .const childTypeName _ := childType.getAppFn | return none
+        let childTypeArgs := childType.getAppArgs
+        if childTypeName == ``FormalRegionCircuit && childTypeArgs.size == 8 then
+          return some {
+            isRegion := true
+            F := childTypeArgs[0]!, finiteField := childTypeArgs[1]!
+            CI := childTypeArgs[2]!, Cfg := childTypeArgs[3]!
+            Input := childTypeArgs[4]!, Output := childTypeArgs[5]!
+            ctInput := childTypeArgs[6]!, ctOutput := childTypeArgs[7]!
+            child := packedArgs[first]!, config := packedArgs[first + 1]!,
+            offset? := some packedArgs[first + 2]!, input := packedArgs[first + 3]!,
+            place := place, env := env, regionIdx := regionIdx, opsIdx := packedArgs[first + 4]! }
+    if !isRegion && opsName == ``Prod.fst then
+      let tail := opsArgs[opsArgs.size - 1]!
+      if let some packed := prodSndArg? tail then
+        let packedArgs := packed.getAppArgs
+        if packedArgs.size ≥ 4 then
+          let first := packedArgs.size - 4
+          let childType ← whnfR (← inferType packedArgs[first]!)
+          let .const childTypeName _ := childType.getAppFn | return none
+          let childTypeArgs := childType.getAppArgs
+          if childTypeName == ``FormalCircuit && childTypeArgs.size == 8 then
+            return some {
+              isRegion := false
+              F := childTypeArgs[0]!, finiteField := childTypeArgs[1]!
+              CI := childTypeArgs[2]!, Cfg := childTypeArgs[3]!
+              Input := childTypeArgs[4]!, Output := childTypeArgs[5]!
+              ctInput := childTypeArgs[6]!, ctOutput := childTypeArgs[7]!
+              child := packedArgs[first]!, config := packedArgs[first + 1]!, offset? := none
+              input := packedArgs[first + 2]!, place := place, env := env, regionIdx := regionIdx
+              opsIdx := packedArgs[first + 3]! }
     trace[Halo2.subcircuit_rw] "skip: ops accessor mismatch ({opsName})"
     return none
   -- args: [F, inst, α, (child.call …), regionIdx]
@@ -806,10 +869,34 @@ def witnessMatches? (c : ChunkMatch) (cand : Expr)
     else if headName == ``Halo2.ExtendsWitnesses && args.size == 6 then pure (false, args[4]!)
     else return false
   unless isRegion == c.isRegion do return false
+  let ops := stripEmptyAppend ops
   -- dig out the call term and compare child/config/(offset)/input/regionIdx
   let opsFn := ops.getAppFn
   let .const opsName _ := opsFn | return false
   let opsArgs := ops.getAppArgs
+  let idxTarget := if useOpsIdx then c.opsIdx else c.regionIdx
+  if isRegion && opsName == ``Prod.snd then
+    let packed := opsArgs[opsArgs.size - 1]!
+    let packedArgs := packed.getAppArgs
+    if packedArgs.size ≥ 5 then
+      let first := packedArgs.size - 5
+      return ← withTransparency .reducible do
+        return (← isDefEq packedArgs[first]! c.child)
+          && (← isDefEq packedArgs[first + 1]! c.config)
+          && (← isDefEq packedArgs[first + 2]! c.offset?.get!)
+          && (← isDefEq packedArgs[first + 3]! c.input)
+          && (← isDefEq packedArgs[first + 4]! idxTarget)
+  if !isRegion && opsName == ``Prod.fst then
+    let tail := opsArgs[opsArgs.size - 1]!
+    if let some packed := prodSndArg? tail then
+      let packedArgs := packed.getAppArgs
+      if packedArgs.size ≥ 4 then
+        let first := packedArgs.size - 4
+        return ← withTransparency .reducible do
+          return (← isDefEq packedArgs[first]! c.child)
+            && (← isDefEq packedArgs[first + 1]! c.config)
+            && (← isDefEq packedArgs[first + 2]! c.input)
+            && (← isDefEq packedArgs[first + 3]! idxTarget)
   let callTerm ←
     if isRegion && opsName == ``RegionCircuit.operations && opsArgs.size ≥ 5 then pure opsArgs[3]!
     else if !isRegion && opsName == ``Circuit.operations && opsArgs.size ≥ 5 then pure opsArgs[3]!
@@ -832,7 +919,6 @@ def witnessMatches? (c : ChunkMatch) (cand : Expr)
   -- preceding `operations`) and diverges. Matching on `opsIdx` is what let the cps2
   -- driver drop the relaxed-transparency pass entirely. The v1 driver keeps the
   -- `regionIdx` compare (default) verbatim.
-  let idxTarget := if useOpsIdx then c.opsIdx else c.regionIdx
   if isRegion && callName == ``FormalRegionCircuit.call && callArgs.size == 12 then
     withTransparency .reducible do
       return (← isDefEq callArgs[8]! c.child) && (← isDefEq callArgs[9]! c.config)

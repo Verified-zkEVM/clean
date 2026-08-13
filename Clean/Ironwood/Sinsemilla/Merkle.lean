@@ -283,11 +283,10 @@ def elaborated (l : Fp) :
       (fun cfg offset input => body cfg l input offset) :=
   { keygenRequirements :=
       { permutationColumns input _ := permutationColumns input
-        inputPermutationColumns _ _ input :=
-          [input.aWhole.cell.column, input.bWhole.cell.column,
-            input.cWhole.cell.column, input.leftNode.cell.column,
-            input.rightNode.cell.column, input.z1A.cell.column,
-            input.z1B.cell.column, input.b1.cell.column, input.b2.cell.column] }
+        inputCells _ _ input :=
+          [input.aWhole.cell, input.bWhole.cell, input.cWhole.cell,
+            input.leftNode.cell, input.rightNode.cell, input.z1A.cell,
+            input.z1B.cell, input.b1.cell, input.b2.cell] }
     synthesisSummary cfg offset _ _ := synthesisSummary cfg offset
     synthesisSummary_eq := fun cfg offset input self =>
       synthesisSummary_eq cfg l input offset self
@@ -1175,8 +1174,8 @@ def HashLayer.keygenRequirements (G : Generators) (Q : Point Fp)
   permutationColumns cfg configured :=
     configured.1.permutationColumns ++ configured.2.1.permutationColumns ++
       configured.2.2.permutationColumns ++ [cfg.1.sinsemilla.witnessPieces.toAny]
-  inputPermutationColumns _ _ input :=
-    [input.left.cell.column, input.right.cell.column]
+  inputCells _ _ input :=
+    [input.left.cell, input.right.cell]
 
 private theorem HashLayer.hashMessage_keygenRegistered
     (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
@@ -2007,7 +2006,7 @@ theorem merkleRoot_of_steps (G : Generators) (Q : Point Fp) (f : ℕ → Fp) (l 
       simpa using hres
 
 /-- A hash-layer output stays in the hash chip's `xA` column. -/
-@[keygen_norm]
+@[keygen_norm, keygen_output_norm]
 theorem HashLayer.circuit_output_column (G : Generators) (Q : Point Fp)
     (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10)
     (cfg : Config) (lcfg : LookupRangeCheck.Config 10)
@@ -2214,7 +2213,7 @@ def Layer.keygenRequirements (G : Generators) (Q : Point Fp)
   lookups _ configured := configured.1.lookups ++ configured.2.lookups
   permutationColumns _ configured :=
     configured.1.permutationColumns ++ configured.2.permutationColumns
-  inputPermutationColumns _ _ input := [input.node.cell.column]
+  inputCells _ _ input := [input.node.cell]
 
 /-- Reduced footprint of one conditional-swap and hash layer. -/
 def Layer.synthesisSummary (ccfg : CondSwap.Config) (cfg : Config)
@@ -2444,7 +2443,7 @@ theorem Layer.circuit_synthesisSummary_constantSiteCount
     HashLayer.circuit_synthesisSummary_constantSiteCount]
 
 /-- A Merkle-layer output stays in the hash chip's `xA` column. -/
-@[keygen_norm]
+@[keygen_norm, keygen_output_norm]
 theorem Layer.circuit_output_column (G : Generators) (Q : Point Fp)
     (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10)
     (wsib : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool)
@@ -2768,7 +2767,7 @@ def keygenRequirements :
   gates _ configured := configured.gates
   lookups _ configured := configured.lookups
   permutationColumns _ configured := configured.permutationColumns
-  inputPermutationColumns _ _ input := [input.node.cell.column]
+  inputCells _ _ input := [input.node.cell]
 
 @[keygen_configured]
 private def layerAtConfigured
@@ -3240,7 +3239,7 @@ theorem circuit_synthesisSummary_eq
       synthesisSummary d config := rfl
 
 /-- The calculate-root output column is determined by the fold shape alone. -/
-@[keygen_norm]
+@[keygen_norm, keygen_output_norm]
 theorem circuit_output_column
     (cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10)
     (input : Var Layer.Input Fp) (region : RegionIndex) :

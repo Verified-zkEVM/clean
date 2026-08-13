@@ -548,10 +548,10 @@ theorem FormalCircuit.foldCall_keygenRegistered
     (hpermutationColumns : ∀ i column,
       column ∈ (configured i).permutationColumns →
         column ∈ targetPermutationColumns)
-    (hinputPermutationColumns : ∀ i column,
-      column ∈ (configured i).inputPermutationColumns
-          (FormalCircuit.foldState c toInput config init i₀ i).1 →
-        column ∈ targetPermutationColumns) :
+    (hinputCells : ∀ i,
+      ((configured i).inputCells
+          (FormalCircuit.foldState c toInput config init i₀ i).1).Forall fun cell ↦
+        cell.column ∈ targetPermutationColumns) :
     ((FormalCircuit.foldCall c toInput config init m).operations i₀).KeygenRegistered
       targetGates targetLookups targetPermutationColumns := by
   rw [Operations.KeygenRegistered, FormalCircuit.foldCall_forall]
@@ -561,7 +561,7 @@ theorem FormalCircuit.foldCall_keygenRegistered
     (FormalCircuit.foldState c toInput config init i₀ i).1
     (FormalCircuit.foldState c toInput config init i₀ i).2
     (hgates i) (hlookups i) (hpermutationColumns i)
-    (hinputPermutationColumns i)
+    (hinputCells i)
 
 /-- The soundness-side split: `Constraints` of the fold is the per-round folded chunks. -/
 theorem FormalCircuit.foldOps_constraints (place : RegionIndex → ℕ) (env : Environment F)

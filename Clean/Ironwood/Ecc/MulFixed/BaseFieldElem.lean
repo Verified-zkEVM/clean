@@ -224,7 +224,7 @@ theorem witnessCheck13_synthesisSummary_eq
   simpa only [witnessCheck13SynthesisSummary, witnessCheck13,
     LookupRangeCheck.witnessCheck, circuit_norm] using
       LookupRangeCheck.witnessCheck_synthesisSummary
-        10 13 false cfg w self
+        10 13 false (by simp) cfg w self
 
 /-- Reduced footprint of the three-row canonicity block. -/
 def canonicityRegionSynthesisSummary (cfg : Config) :
@@ -256,6 +256,9 @@ theorem canonicityRegion_synthesisSummary_eq
     omega
   · simp only [canonicityRegionSynthesisSummary, canonicityRegion,
       circuit_norm, canonGate]
+  · simp only [canonicityRegionSynthesisSummary, canonicityRegion,
+      circuit_norm, canonGate]
+    omega
 
 /-! ## The inner-region bundle (proof boundary for region 1)
 
@@ -362,7 +365,7 @@ def innerKeygenRequirements :
     runningSumKeygenRequirements.lookups cfg.superConfig configured
   permutationColumns cfg configured :=
     runningSumKeygenRequirements.permutationColumns cfg.superConfig configured
-  inputPermutationColumns _ _ input := [input.alpha.cell.column]
+  inputCells _ _ input := [input.alpha.cell]
 
 @[keygen_helper]
 theorem innerCopyDecompose_keygenRegistered
@@ -391,16 +394,9 @@ theorem innerCopyDecompose_keygenRegistered
         FormalRegionCircuit.Configured.ofOutput] using h
     rw [DecomposeRunningSum.copyDecompose_configured_permutationColumns_eq] at h'
     keygen_registration
-  · intro column h
-    have h' : column ∈
-        (FormalRegionCircuit.Configured.ofOutput (copyDecompose 3 85)
-          (cfg.superConfig.runningSumConfig.qRangeCheck,
-            cfg.superConfig.runningSumConfig.z) {} ()).inputPermutationColumns
-              ⟨alpha⟩ := by
-      simpa [FormalRegionCircuit.Configured.inputPermutationColumns,
-        FormalRegionCircuit.Configured.ofOutput] using h
-    rw [DecomposeRunningSum.copyDecompose_configured_inputPermutationColumns_eq] at h'
-    keygen_registration
+  · simp only [KeygenRequirements.inputCells, List.forall_cons,
+      List.forall_nil, and_true]
+    simp [innerKeygenRequirements]
 
 @[keygen_helper]
 theorem innerWindowChain_keygenRegistered
@@ -446,6 +442,8 @@ bundle's default `{}`), local so the standalone proofs can state
   registered configInput counts configured offset input self := by
     simpa using
       innerRegion_keygenRegistered B configInput offset input.alpha self configured
+  copyCellsAssigned configInput counts configured offset input self := by
+    simp only [innerRegion, circuit_norm, keygen_norm, keygen_spine]
   lookupActivationsWellFormed config offset input region := by
     simp only [innerRegion, RegionCircuit.operations_bind,
       RegionCircuit.operations_pure,
@@ -1439,7 +1437,7 @@ def keygenRequirements : KeygenRequirements Fp
     runningSumKeygenRequirements.permutationColumns input.2.2 configured.1 ++
       configured.2.permutationColumns ++
         ([input.2.1.runningSum] : List AnyColumn)
-  inputPermutationColumns _ _ input := [input.cell.column]
+  inputCells _ _ input := [input.cell]
 
 @[keygen_helper]
 theorem synthesize_keygenRegistered

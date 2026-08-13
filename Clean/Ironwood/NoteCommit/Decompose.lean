@@ -56,9 +56,8 @@ def bundle (wb1 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
         { gates cfg _ := [gate cfg]
           permutationColumns cfg _ :=
             [cfg.colL, cfg.colM, cfg.colR]
-          inputPermutationColumns _ _ input :=
-            [input.b.cell.column, input.b0.cell.column,
-              input.b2.cell.column, input.b3.cell.column] }
+          inputCells _ _ input :=
+            [input.b.cell, input.b0.cell, input.b2.cell, input.b3.cell] }
       synthesisSummary config offset _ _ :=
         synthesisSummary config offset
       synthesisSummary_eq := by
@@ -71,7 +70,8 @@ def bundle (wb1 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
             List.nil_append, List.singleton_append]
         · simp only [circuit_norm]
           omega
-        · simp only [circuit_norm] }
+        · simp only [circuit_norm]
+        · simp only [circuit_norm, synthesis_summary_norm] }
 
   synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
     (gate cfg).enable offset
@@ -150,9 +150,8 @@ def bundle (wd0 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
         { gates cfg _ := [gate cfg]
           permutationColumns cfg _ :=
             [cfg.colL, cfg.colM, cfg.colR]
-          inputPermutationColumns _ _ input :=
-            [input.d.cell.column, input.d1.cell.column,
-              input.d2.cell.column, input.d3.cell.column] }
+          inputCells _ _ input :=
+            [input.d.cell, input.d1.cell, input.d2.cell, input.d3.cell] }
       synthesisSummary config offset _ _ :=
         synthesisSummary config offset
       synthesisSummary_eq := by
@@ -165,7 +164,8 @@ def bundle (wd0 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
             List.nil_append, List.singleton_append]
         · simp only [circuit_norm]
           omega
-        · simp only [circuit_norm] }
+        · simp only [circuit_norm]
+        · simp only [circuit_norm, synthesis_summary_norm] }
 
   synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
     (gate cfg).enable offset
@@ -240,9 +240,8 @@ def bundle : FormalRegionCircuit Fp Config Config Inputs unit where
         { gates cfg _ := [gate cfg]
           permutationColumns cfg _ :=
             [cfg.colL, cfg.colM, cfg.colR]
-          inputPermutationColumns _ _ input :=
-            [input.e.cell.column, input.e0.cell.column,
-              input.e1.cell.column] }
+          inputCells _ _ input :=
+            [input.e.cell, input.e0.cell, input.e1.cell] }
       synthesisSummary config offset _ _ :=
         synthesisSummary config offset
       synthesisSummary_eq := by
@@ -255,7 +254,8 @@ def bundle : FormalRegionCircuit Fp Config Config Inputs unit where
             List.nil_append, List.singleton_append]
         · simp only [circuit_norm]
           omega
-        · simp only [circuit_norm] }
+        · simp only [circuit_norm]
+        · simp only [circuit_norm, synthesis_summary_norm] }
 
   synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
     (gate cfg).enable offset
@@ -315,9 +315,8 @@ def bundle (wg0 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
     { keygenRequirements :=
         { gates cfg _ := [gate cfg]
           permutationColumns cfg _ := [cfg.colL, cfg.colM]
-          inputPermutationColumns _ _ input :=
-            [input.g.cell.column, input.g1.cell.column,
-              input.g2.cell.column] }
+          inputCells _ _ input :=
+            [input.g.cell, input.g1.cell, input.g2.cell] }
       synthesisSummary config offset _ _ :=
         synthesisSummary config offset
       synthesisSummary_eq := by
@@ -330,7 +329,8 @@ def bundle (wg0 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
             List.nil_append, List.singleton_append]
         · simp only [circuit_norm]
           omega
-        · simp only [circuit_norm] }
+        · simp only [circuit_norm]
+        · simp only [circuit_norm, synthesis_summary_norm] }
 
   synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
     (gate cfg).enable offset
@@ -401,8 +401,8 @@ def bundle (wh1 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
         { gates cfg _ := [gate cfg]
           permutationColumns cfg _ :=
             [cfg.colL, cfg.colM, cfg.colR]
-          inputPermutationColumns _ _ input :=
-            [input.h.cell.column, input.h0.cell.column] }
+          inputCells _ _ input :=
+            [input.h.cell, input.h0.cell] }
       synthesisSummary config offset _ _ :=
         synthesisSummary config offset
       synthesisSummary_eq := by
@@ -415,7 +415,8 @@ def bundle (wh1 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
             List.nil_append, List.singleton_append]
         · simp only [circuit_norm]
           omega
-        · simp only [circuit_norm] }
+        · simp only [circuit_norm]
+        · simp only [circuit_norm, synthesis_summary_norm] }
 
   synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
     (gate cfg).enable offset

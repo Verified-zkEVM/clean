@@ -60,8 +60,8 @@ def keygenRequirements
           cfg.1.superConfig.addConfig.yP,
           cfg.2.1.superConfig.addConfig.xQR,
           cfg.2.1.superConfig.addConfig.yQR] : List AnyColumn)
-  inputPermutationColumns _ _ input :=
-    [input.magnitude.cell.column, input.sign.cell.column]
+  inputCells _ _ input :=
+    [input.magnitude.cell, input.sign.cell]
 
 def synthesisSummary
     (cfg : Ecc.MulFixed.Short.Config × Ecc.MulFixed.FullWidth.Config ×

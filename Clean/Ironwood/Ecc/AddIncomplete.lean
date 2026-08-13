@@ -103,9 +103,8 @@ def add : FormalRegionCircuit Fp
 
   elaborated :=
     { keygenRequirements :=
-        { inputPermutationColumns _ _ input :=
-            [input.p.x.cell.column, input.p.y.cell.column,
-              input.q.x.cell.column, input.q.y.cell.column] }
+        { inputCells _ _ input :=
+            [input.p.x.cell, input.p.y.cell, input.q.x.cell, input.q.y.cell] }
       synthesisSummary config offset _ _ := synthesisSummary config offset
       synthesisSummary_eq := by
         intro _ _ _ _
@@ -117,7 +116,8 @@ def add : FormalRegionCircuit Fp
             List.append_nil, List.nil_append, List.singleton_append]
         · simp only [synthesisSummary, circuit_norm, gate]
           omega
-        · simp only [synthesisSummary, circuit_norm, gate] }
+        all_goals simp only [synthesisSummary, circuit_norm, gate,
+          synthesis_summary_norm] }
 
   synthesize config offset (input : Inputs (AssignedCell Fp)) := do
     -- enable `q_add_incomplete` selector at `offset`
@@ -201,6 +201,31 @@ theorem Configured.permutationColumns_eq {config : Config}
   simp only [keygen_norm, FormalRegionCircuit.Configured.permutationColumns,
     FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
     add, permutationColumns, List.singleton_append]
+
+@[keygen_norm]
+theorem Configured.inputCells_eq {config : Config}
+    (configured : add.Configured config) (input : Var Inputs Fp) :
+    configured.inputCells input =
+      [input.p.x.cell, input.p.y.cell, input.q.x.cell, input.q.y.cell] := by
+  rfl
+
+/-- Both coordinates returned by incomplete addition are assigned by its call body. -/
+theorem add_output_cells_assigned (config : Config) (offset : ℕ)
+    (input : Var Inputs Fp) (self : RegionIndex) (available : List Cell) :
+    let output := add.output config offset input self
+    output.x.cell ∈
+        (((add.call config offset input).operations self).assignedCellsAfter self available) ∧
+      output.y.cell ∈
+        (((add.call config offset input).operations self).assignedCellsAfter self available) := by
+  rw [FormalRegionCircuit.call_operations]
+  simp only [FormalRegionCircuit.output]
+  rw [add.elaborated.output_eq]
+  simp only [add, circuit_norm, AssignedCell.of_cell,
+    RegionOperations.mem_assignedCellsAfter_iff, List.mem_append]
+  constructor <;> right <;>
+    simp only [RegionOperations.assignedCells, List.flatMap_cons,
+      RegionOperation.assignedCells, List.singleton_append,
+      List.flatMap_nil, List.nil_append, List.mem_cons, true_or, or_true]
 
 @[keygen_norm]
 theorem Configured.inputPermutationColumns_eq {config : Config}

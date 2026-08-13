@@ -110,7 +110,7 @@ def swap (wb : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool) :
       { gates cfg _ := [swapGate cfg]
         permutationColumns input _ :=
           [input.a, input.aSwapped, input.bSwapped]
-        inputPermutationColumns _ _ input := [input.a.cell.column] }
+        inputCells _ _ input := [input.a.cell] }
       output := fun cfg offset _ self =>
         { aSwapped := AssignedCell.of self offset cfg.aSwapped
           bSwapped := AssignedCell.of self offset cfg.bSwapped }
@@ -136,7 +136,8 @@ def swap (wb : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool) :
             List.nil_append, List.singleton_append]
         · simp only [circuit_norm, swapGate]
           omega
-        · simp only [circuit_norm, swapGate] }
+        · simp only [circuit_norm, swapGate]
+        · simp only [circuit_norm, swapGate, synthesis_summary_norm] }
 
   synthesize cfg offset (input : Input (AssignedCell Fp)) := do
     -- cond_swap.rs:97 — q_swap first
@@ -217,7 +218,7 @@ theorem swap_synthesisSummary_eq
         (offset + 1) 0 := rfl
 
 /-- The first swap output stays in its configured advice column. -/
-@[keygen_norm]
+@[keygen_norm, keygen_output_norm]
 theorem swap_output_aSwapped_column (wb : WitgenIR Fp 1)
     (wswap : Placed ProverEnvironment Fp → Bool) (cfg : Config)
     (offset : ℕ) (input : Var Input Fp) (self : RegionIndex) :
@@ -226,7 +227,7 @@ theorem swap_output_aSwapped_column (wb : WitgenIR Fp 1)
   rfl
 
 /-- The second swap output stays in its configured advice column. -/
-@[keygen_norm]
+@[keygen_norm, keygen_output_norm]
 theorem swap_output_bSwapped_column (wb : WitgenIR Fp 1)
     (wswap : Placed ProverEnvironment Fp → Bool) (cfg : Config)
     (offset : ℕ) (input : Var Input Fp) (self : RegionIndex) :

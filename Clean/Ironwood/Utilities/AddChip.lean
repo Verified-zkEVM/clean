@@ -98,8 +98,7 @@ def add : FormalRegionCircuit Fp Config Config Inputs field where
     { keygenRequirements :=
         { gates cfg _ := [addGate cfg]
           permutationColumns input _ := [input.a, input.b]
-          inputPermutationColumns _ _ input :=
-            [input.a.cell.column, input.b.cell.column] }
+          inputCells _ _ input := [input.a.cell, input.b.cell] }
       registered := by keygen_registration [synthesize]
       output cfg offset _ self := .of self offset cfg.c
       synthesisSummary cfg offset _ _ := synthesisSummary cfg offset
@@ -116,7 +115,8 @@ def add : FormalRegionCircuit Fp Config Config Inputs field where
             List.nil_append, List.singleton_append]
         · simp only [synthesisSummary, synthesize, circuit_norm, addGate]
           omega
-        · simp only [synthesisSummary, synthesize, circuit_norm, addGate] }
+        all_goals simp only [synthesisSummary, synthesize, circuit_norm, addGate]
+        all_goals omega }
 
   Spec input output _ := output = input.a + input.b
   ProverSpec input output _ _ := output = input.a + input.b

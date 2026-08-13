@@ -231,6 +231,53 @@ theorem forRange'_forall (property : RegionOperation F → Prop)
         ((body i.val (offset + i.val * stride)).operations self).Forall property :=
   loopAux_forall property _ _ _ _
 
+/-- A copy-free loop is lawful for every incoming cell state. This packages the
+operation-local `copiedCells = []` proof through the loop decomposition without
+expanding the loop's operation list. -/
+@[keygen_helper]
+theorem forRange'_copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
+    (offset stride m : ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) (available : List Cell)
+    (hbody : ∀ i : Fin m,
+      ((body i.val (offset + i.val * stride)).operations self).Forall
+        fun operation => operation.copiedCells = []) :
+    ((forRange' offset stride m body).operations self).CopyCellsAssignedFrom
+      self available := by
+  apply RegionOperations.copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
+  exact (forRange'_forall _ _ _ _ _ _).2 hbody
+
+/-- A loop is copy-lawful when each symbolic round is copy-lawful from the caller's
+original input cells. Earlier rounds can only add cells, so the per-round proofs
+remain valid as the loop state grows. -/
+@[keygen_helper]
+theorem loopAux_copyCellsAssignedFrom
+    (rows : ℕ → ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) (available : List Cell) (k : ℕ)
+    (hbody : ∀ i : Fin k,
+      ((body i.val (rows i.val)).operations self).CopyCellsAssignedFrom
+        self available) :
+    ((loopAux rows body k).operations self).CopyCellsAssignedFrom self available := by
+  induction k with
+  | zero => exact .nil available
+  | succ n inductionHypothesis =>
+      rw [loopAux_operations_succ,
+        RegionOperations.copyCellsAssignedFrom_append_iff]
+      have hprefix := inductionHypothesis (fun i => hbody i.castSucc)
+      exact ⟨hprefix, (hbody (Fin.last n)).mono fun cell hcell =>
+        RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ cell hcell⟩
+
+/-- Constant-stride specialization of `loopAux_copyCellsAssignedFrom`. -/
+@[keygen_norm, keygen_helper]
+theorem forRange'_copyCellsAssignedFrom
+    (offset stride m : ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) (available : List Cell)
+    (hbody : ∀ i : Fin m,
+      ((body i.val (offset + i.val * stride)).operations self)
+        |>.CopyCellsAssignedFrom self available) :
+    ((forRange' offset stride m body).operations self)
+      |>.CopyCellsAssignedFrom self available :=
+  loopAux_copyCellsAssignedFrom _ _ self available m hbody
+
 /-- A region loop requests no deferred constant cells when every iteration requests
 none. The proof composes the exact summaries without unfolding any iteration body. -/
 theorem forRange'_regionSynthesisSummary_constantSiteCount_eq_zero
@@ -589,6 +636,43 @@ theorem foldRangeVarAux_operations (rows : ℕ → ℕ) (init : β)
     simp only [Fin.val_last, Fin.val_castSucc, List.flatten_cons, List.flatten_nil,
       List.append_nil]
 
+/-- Copy provenance through a serial fold. The invariant records exactly which
+cells of the running accumulator are available after the preceding rounds. -/
+theorem foldRangeVarAux_copyCellsAssignedFrom
+    (invariant : List Cell → β → Prop)
+    (rows : ℕ → ℕ) (init : β)
+    (body : (i : ℕ) → ℕ → β → RegionCircuit F β)
+    (self : RegionIndex) (available : List Cell)
+    (hinit : invariant available init)
+    (hbodyCopy : ∀ i cells acc, invariant cells acc →
+      ((body i (rows i) acc).operations self).CopyCellsAssignedFrom self cells)
+    (hbodyInvariant : ∀ i cells acc, invariant cells acc →
+      invariant
+        ((body i (rows i) acc).operations self |>.assignedCellsAfter self cells)
+        ((body i (rows i) acc).output self)) :
+    ∀ k,
+      ((foldRangeVarAux rows init body k).operations self
+          |>.CopyCellsAssignedFrom self available) ∧
+        invariant
+          ((foldRangeVarAux rows init body k).operations self
+            |>.assignedCellsAfter self available)
+          (foldAcc rows init body k self) := by
+  intro k
+  induction k with
+  | zero =>
+      exact ⟨.nil available, hinit⟩
+  | succ k inductionHypothesis =>
+      rcases inductionHypothesis with ⟨hprefixCopy, hprefixInvariant⟩
+      have hroundCopy := hbodyCopy k _ _ hprefixInvariant
+      have hroundInvariant := hbodyInvariant k _ _ hprefixInvariant
+      constructor
+      · rw [foldRangeVarAux_operations_succ,
+          RegionOperations.copyCellsAssignedFrom_append_iff]
+        exact ⟨hprefixCopy, hroundCopy⟩
+      · simpa only [foldRangeVarAux_operations_succ, foldAcc_succ,
+          RegionOperations.assignedCellsAfter, List.foldl_append] using
+          hroundInvariant
+
 /-- An operation-local law over a serial fold reduces to the law for every round,
 with the accumulator kept in its closed `foldAcc` form. -/
 theorem foldRangeVarAux_forall (property : RegionOperation F → Prop)
@@ -690,6 +774,28 @@ theorem foldRangeVar_extendsWitnesses (rows : ℕ → ℕ) (m : ℕ) (init : β)
 def foldRange (offset stride m : ℕ) (init : β)
     (body : (i : ℕ) → ℕ → β → RegionCircuit F β) : RegionCircuit F β :=
   foldRangeVar (fun i => offset + i * stride) m init body
+
+/-- Constant-stride specialization of
+`foldRangeVarAux_copyCellsAssignedFrom`. -/
+theorem foldRange_copyCellsAssignedFrom
+    (invariant : List Cell → β → Prop)
+    (offset stride m : ℕ) (init : β)
+    (body : (i : ℕ) → ℕ → β → RegionCircuit F β)
+    (self : RegionIndex) (available : List Cell)
+    (hinit : invariant available init)
+    (hbodyCopy : ∀ i cells acc, invariant cells acc →
+      ((body i (offset + i * stride) acc).operations self
+        |>.CopyCellsAssignedFrom self cells))
+    (hbodyInvariant : ∀ i cells acc, invariant cells acc →
+      invariant
+        ((body i (offset + i * stride) acc).operations self
+          |>.assignedCellsAfter self cells)
+        ((body i (offset + i * stride) acc).output self)) :
+    ((foldRange offset stride m init body).operations self
+      |>.CopyCellsAssignedFrom self available) :=
+  (foldRangeVarAux_copyCellsAssignedFrom invariant
+    (fun i => offset + i * stride) init body self available
+    hinit hbodyCopy hbodyInvariant m).1
 
 @[circuit_norm]
 theorem foldRange_output (offset stride m : ℕ) (init : β)

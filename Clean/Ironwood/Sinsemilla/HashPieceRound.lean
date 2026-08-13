@@ -1042,7 +1042,8 @@ def round (G : Generators) (i : ℕ) : FormalRegionCircuit Fp Config Config fiel
             List.nil_append, List.singleton_append, List.map_cons, List.map_nil]
         · simp only [roundSynthesisSummary, roundColumns, circuit_norm]
           omega
-        · simp only [roundSynthesisSummary, circuit_norm] }
+        · simp only [roundSynthesisSummary, circuit_norm]
+        · simp only [roundSynthesisSummary, circuit_norm, synthesis_summary_norm] }
 
   synthesize cfg offset (piece : AssignedCell Fp) := do
     let w ← readState cfg offset

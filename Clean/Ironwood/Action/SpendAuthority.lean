@@ -54,8 +54,8 @@ def keygenRequirements (G : FixedBase) : KeygenRequirements Fp
     configured.1.permutationColumns ++ configured.2.permutationColumns ++
       ([cfg.1.superConfig.addConfig.xQR,
         cfg.1.superConfig.addConfig.yQR] : List AnyColumn)
-  inputPermutationColumns _ _ input :=
-    [input.akP.x.cell.column, input.akP.y.cell.column]
+  inputCells _ _ input :=
+    [input.akP.x.cell, input.akP.y.cell]
 
 def synthesisSummary
     (cfg : Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config) :

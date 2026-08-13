@@ -83,9 +83,8 @@ def circuit : FormalCircuit Fp
             ([cfg.1.addConfig.xQR, cfg.1.addConfig.yQR,
               cfg.2.x, cfg.2.y] : List AnyColumn) ++
               configured.1.permutationColumns ++ configured.2.permutationColumns
-          inputPermutationColumns _ _ input :=
-            [input.ivk.cell.column, input.gDOld.x.cell.column,
-              input.gDOld.y.cell.column] }
+          inputCells _ _ input :=
+            [input.ivk.cell, input.gDOld.x.cell, input.gDOld.y.cell] }
       registered := by keygen_registration
       output cfg _ i :=
         { x := .of (i + 4) 0 cfg.2.x,

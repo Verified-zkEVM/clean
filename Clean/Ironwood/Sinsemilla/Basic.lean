@@ -50,8 +50,9 @@ def load (G : Generators) (cfg : GeneratorTableConfig) : Circuit Fp Unit := do
   loadTable cfg.tableX ((List.range (2 ^ K)).map (fun j => (G.S j).x))
   loadTable cfg.tableY ((List.range (2 ^ K)).map (fun j => (G.S j).y))
 
-/-- Table loading allocates no layouter regions and requests no deferred constants. -/
-def loadSynthesisSummary : FloorPlanner.SynthesisSummary := {}
+/-- The exact absolute-row footprint of the generator-table loads. -/
+def loadSynthesisSummary : FloorPlanner.SynthesisSummary where
+  tableRowExtent := 2 ^ K + 1
 
 @[synthesis_summary_norm]
 theorem load_synthesisSummary_eq (G : Generators)
@@ -60,7 +61,9 @@ theorem load_synthesisSummary_eq (G : Generators)
       loadSynthesisSummary := by
   simp only [load, loadSynthesisSummary, circuit_norm,
     FloorPlanner.synthesisSummary_loadTable_cons,
-    FloorPlanner.synthesisSummary_nil]
+    FloorPlanner.synthesisSummary_nil, FloorPlanner.SynthesisSummary.ofTableValues,
+    FloorPlanner.SynthesisSummary.combine, List.length_map, List.length_range]
+  simp
 
 /-- The generator-table-contents predicate a Sinsemilla consumer's `EnvAssumptions`
 references — the three-column analogue of `LookupRangeCheck.TableLoaded`. Three conjuncts

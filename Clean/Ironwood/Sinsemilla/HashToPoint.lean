@@ -78,7 +78,7 @@ theorem witnessMessagePiece_synthesisSummary_constantSiteCount
   simp only [witnessMessagePieceSynthesisSummary, synthesis_summary_norm]
 
 /-- A witnessed message piece stays in the chip's witness-piece column. -/
-@[keygen_norm]
+@[keygen_norm, keygen_output_norm]
 theorem witnessMessagePiece_output_column (cfg : Sinsemilla.HashPiece.Config)
     (w : WitgenIR Fp 1) (i : RegionIndex) :
     ((witnessMessagePiece cfg w).output i).cell.column = cfg.witnessPieces := by
@@ -304,8 +304,8 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
               Sinsemilla.HashPiece.sinsemillaGate cfg]
           lookups cfg _ := [Sinsemilla.HashPiece.generatorLookup G cfg]
           permutationColumns cfg _ := [cfg.xA, cfg.lambda1, cfg.bits]
-          inputPermutationColumns _ _ input :=
-            input.pieces.toList.map (·.cell.column) }
+          inputCells _ _ input :=
+            input.pieces.toList.map (·.cell) }
       output cfg offset input self :=
         { point :=
             { x := AssignedCell.of self

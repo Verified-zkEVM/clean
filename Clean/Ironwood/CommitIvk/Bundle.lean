@@ -111,15 +111,12 @@ def bundleElaborated (wb1 wd1 : WitgenIR Fp 1) :
   { keygenRequirements :=
       { gates cfg _ := [gate cfg]
         permutationColumns cfg _ := permutationColumns cfg
-        inputPermutationColumns _ _ input :=
-          [input.ak.cell.column, input.a.cell.column,
-            input.bWhole.cell.column, input.b0.cell.column,
-            input.b2.cell.column, input.z13A.cell.column,
-            input.aPrime.cell.column, input.z13APrime.cell.column,
-            input.nk.cell.column, input.c.cell.column,
-            input.dWhole.cell.column, input.d0.cell.column,
-            input.z13C.cell.column, input.b2CPrime.cell.column,
-            input.z14B2CPrime.cell.column] }
+        inputCells _ _ input :=
+          [input.ak.cell, input.a.cell, input.bWhole.cell, input.b0.cell,
+            input.b2.cell, input.z13A.cell, input.aPrime.cell,
+            input.z13APrime.cell, input.nk.cell, input.c.cell,
+            input.dWhole.cell, input.d0.cell, input.z13C.cell,
+            input.b2CPrime.cell, input.z14B2CPrime.cell] }
     synthesisSummary cfg offset _ _ := synthesisSummary cfg offset
     synthesisSummary_eq := by
       intro _ _ _ _
@@ -130,7 +127,10 @@ def bundleElaborated (wb1 wd1 : WitgenIR Fp 1) :
           synthesis_summary_norm]
         omega
       · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
-          synthesis_summary_norm] }
+          synthesis_summary_norm]
+      · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+          synthesis_summary_norm]
+    copyCellsAssigned := by keygen_registration [bundleSynthesize] }
 
 /-- Rust `CommitIvkChip` canonicity `assign` (`commit_ivk.rs:519-660`), parameterized by
 the `b_1`/`d_1` witness programs. The `(b1, d1)` readings are the extraction data;

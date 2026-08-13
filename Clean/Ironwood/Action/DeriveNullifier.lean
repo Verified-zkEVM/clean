@@ -102,9 +102,9 @@ def keygenRequirements (K : FixedBase) : KeygenRequirements Fp
         ([cfg.1.state 0, cfg.2.1.c,
           cfg.2.2.1.superConfig.addConfig.xQR,
           cfg.2.2.1.superConfig.addConfig.yQR] : List AnyColumn)
-  inputPermutationColumns _ _ input :=
-    [input.nk.cell.column, input.rho.cell.column, input.psi.cell.column,
-      input.cm.x.cell.column, input.cm.y.cell.column]
+  inputCells _ _ input :=
+    [input.nk.cell, input.rho.cell, input.psi.cell,
+      input.cm.x.cell, input.cm.y.cell]
 
 def synthesisSummary
     (cfg : Poseidon.Config × AddChip.Config ×
