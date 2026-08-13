@@ -549,50 +549,45 @@ theorem completeness : Completeness (F p) main Assumptions := by
     rw [← getElem_eval_vector, CircuitType.eval_var_fields] at this
     exact this
 
+set_option maxRecDepth 2048 in
 def circuit : FormalCircuit (F p) Inputs SHA256State := {
   main, elaborated, Assumptions, Spec, soundness
   completeness := by simp only [completeness]
   -- Manual: compound of the SHA256Round/Schedule leaves (elementwise input lifting
-  -- plus Add32-family witness IR); see those gadgets' comments.
+  -- plus Add32-family witness IR); see those gadgets' comments. maxRecDepth: the
+  -- Add32 leg unifies `SHA256Rounds.circuit.output` against its 64-step unfolding.
   computableWitnesses := by
-    intro n input env env'
-    obtain ⟨state, block⟩ := input
-    have eM : ∀ x, (MessageSchedule.circuit (p:=p)).localLength x = 10896 := fun _ => rfl
-    have eR : ∀ x, (SHA256Rounds.circuit (p:=p)).localLength x = 29120 := fun _ => rfl
-    have eA : ∀ x, (Add32.circuit (p:=p)).localLength x = 33 := fun _ => rfl
-    simp only [circuit_norm, main, eM, eR, eA]
-    refine ⟨⟨fun h => ?_, fun h => ?_, fun i h => ?_⟩, fun h h_agrees => ?_⟩
-    · exact FormalCircuit.toSubcircuit_computableWitnesses _ (by exact h.2)
+    computable_witnesses_start
+    · computable_witnesses_close
     · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by simp only [eM]; try omega) fun h_agrees => ?_
+        (by rfl) fun h_agrees => ?_
       simp only [circuit_norm]
-      refine ⟨?_, ?_⟩
-      · exact h.1
-      · exact FormalCircuit.output_of_input_eq _ (by exact h.2)
-          (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eM]; omega))
+      refine ⟨h.1, ?_⟩
+      exact FormalCircuit.output_of_input_eq (MessageSchedule.circuit (p:=p))
+        (input_var := input_block) (n := n) h.2
+        (ProverEnvironment.agreesBelow_of_le h_agrees (by
+          have eM : ∀ x, (MessageSchedule.circuit (p:=p)).localLength x = 10896 := fun _ => rfl
+          simp only [eM]; omega))
     · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by try simp only [eM, eA]; try omega) fun h_agrees => ?_
+        (by rfl) fun h_agrees => ?_
       have oR := FormalCircuit.output_of_input_eq (SHA256Rounds.circuit (p:=p))
-        (input_var := ⟨state, (MessageSchedule.circuit (p:=p)).output block n⟩) (n := n + 10896)
+        (input_var := ⟨input_state, (MessageSchedule.circuit (p:=p)).output input_block n⟩)
+        (n := n + 10896)
         (by simp only [circuit_norm]
-            refine ⟨?_, ?_⟩
-            · exact h.1
-            · exact FormalCircuit.output_of_input_eq _ (by exact h.2)
-                (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eM]; omega)))
-        (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [eR]; omega))
+            refine ⟨h.1, ?_⟩
+            exact FormalCircuit.output_of_input_eq (MessageSchedule.circuit (p:=p))
+              (input_var := input_block) (n := n) h.2
+              (ProverEnvironment.agreesBelow_of_le h_agrees (by
+                have eM : ∀ x, (MessageSchedule.circuit (p:=p)).localLength x = 10896 := fun _ => rfl
+                simp only [eM]; omega)))
+        (ProverEnvironment.agreesBelow_of_le h_agrees (by
+          have eR : ∀ x, (SHA256Rounds.circuit (p:=p)).localLength x = 29120 := fun _ => rfl
+          simp only [eR]; omega))
       have hb := fun (jj : ℕ) (hjj : jj < 8) => map_eval_getElem_congr oR jj hjj
       have ha := fun (jj : ℕ) (hjj : jj < 8) => map_eval_getElem_congr h.1 jj hjj
       simp only [circuit_norm]
-      refine ⟨?_, ?_⟩
-      · exact ha i.val i.isLt
-      · exact hb i.val i.isLt
-    · -- output: fresh witness windows only
-      simp only [circuit_norm, eval_vector]
-      refine Vector.ext fun j hj => ?_
-      simp only [Vector.getElem_map, Vector.getElem_mapFinRange]
-      refine Vector.ext fun i2 hi2 => ?_
-      simp only [circuit_norm, Vector.getElem_map, Vector.getElem_mapRange]
-      exact h_agrees.1 _ (by omega)
+      exact ⟨ha i.val i.isLt, hb i.val i.isLt⟩
+    · computable_witnesses_close
 }
 
 end CompressBlock
