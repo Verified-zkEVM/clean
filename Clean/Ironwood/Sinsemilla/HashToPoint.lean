@@ -306,6 +306,12 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
           permutationColumns cfg _ := [cfg.xA, cfg.lambda1, cfg.bits]
           inputCells _ _ input :=
             input.pieces.toList.map (·.cell) }
+      registered := by
+        intro cfg counts hconfig offset input region
+        keygen_registration [hashRegionSynthesize]
+      copyCellsAssigned := by
+        intro cfg counts hconfig offset input region
+        keygen_registration [hashRegionSynthesize]
       output cfg offset input self :=
         { point :=
             { x := AssignedCell.of self
