@@ -84,16 +84,6 @@ theorem soundness : Soundness (Input:=ProvablePair α α) (Output:=field) F (mai
 theorem completeness : Completeness (Input:=ProvablePair α α) (Output:=field) F (main (α:=α)) Assumptions := by
   circuit_proof_start [IsZero.circuit, IsZero.elaborated, IsZero.Assumptions]
 
-theorem computableWitnesses : FormalCircuitBase.ComputableWitnesses (Input:=ProvablePair α α) (main (F:=F)) := by
-  simp only [circuit_norm, main, IsZero.circuit, diffs]
-  intro n input env env'
-  constructor
-  · intro h_input
-    apply IsZero.circuit.toSubcircuit_computableWitnesses_onlyAccessedBelow
-    simp_rw [computable_witnesses_norm, ProvableType.eval_fromElements]
-    grind
-  grind
-
 def circuit : FormalCircuit F (ProvablePair α α) field where
   main
   elaborated
@@ -101,6 +91,6 @@ def circuit : FormalCircuit F (ProvablePair α α) field where
   Spec
   soundness
   completeness
-  computableWitnesses
+  computableWitnesses := by computable_witnesses [diffs, ProvableType.eval_fromElements]
 
 end Gadgets.IsEqual

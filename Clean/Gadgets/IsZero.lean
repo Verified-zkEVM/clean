@@ -129,9 +129,6 @@ lemma eval_fin_foldl_mul {env : ProverEnvironment F} {n m : ℕ} :
   | zero => simp [Expression.eval]
   | succ m ih => simp only [Fin.foldl_succ_last, Fin.val_castSucc, Expression.eval, ih]
 
-theorem computableWitnesses : FormalCircuitBase.ComputableWitnesses (main (F:=F) (M:=M)) := by
-  computable_witnesses [IsZeroField.circuit, eval_fin_foldl_mul]
-
 def circuit [DecidableEq (M F)] : FormalCircuit F M field where
   main
   elaborated
@@ -139,6 +136,6 @@ def circuit [DecidableEq (M F)] : FormalCircuit F M field where
   Spec
   soundness
   completeness
-  computableWitnesses
+  computableWitnesses := by computable_witnesses [IsZeroField.circuit, eval_fin_foldl_mul]
 
 end Gadgets.IsZero

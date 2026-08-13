@@ -619,18 +619,15 @@ def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   main, elaborated, Assumptions, Spec, soundness, completeness
   -- Manual: compound of Round's leaves at eight-round scale; see Round's comment.
   computableWitnesses := by
-    intro n input env env'
-    obtain ⟨chaining_value, block_words, counter_high, counter_low, block_len, flags⟩ := input
-    have e7 : ∀ v, (sevenRoundsApplyStyle (p:=p)).localLength v = 5376 := fun _ => rfl
-    simp only [circuit_norm, main, initializeStateVector]
-    refine ⟨fun h => ?_, fun h h_agrees => ?_⟩
+    computable_witnesses_start [initializeStateVector]
     · exact FormalCircuit.toSubcircuit_computableWitnesses _
         (by simp only [circuit_norm]; exact ⟨initState_eval_congr h.1 h.2.2.1 h.2.2.2.1 h.2.2.2.2.1 h.2.2.2.2.2, h.2.1⟩)
-    · simp only [circuit_norm]
-      exact FormalCircuit.output_of_input_eq _
+    · exact FormalCircuit.output_of_input_eq _
         (by simp only [circuit_norm];
             exact ⟨initState_eval_congr h.1 h.2.2.1 h.2.2.2.1 h.2.2.2.2.1 h.2.2.2.2.2, h.2.1⟩)
-        (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only [e7]; omega))
+        (ProverEnvironment.agreesBelow_of_le h_agrees (by
+          have e7 : ∀ v, (sevenRoundsApplyStyle (p:=p)).localLength v = 5376 := fun _ => rfl
+          simp only [e7]; omega))
 }
 
 end Gadgets.BLAKE3.ApplyRounds
