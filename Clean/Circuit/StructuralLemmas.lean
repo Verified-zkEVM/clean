@@ -56,13 +56,11 @@ def concat
     · refine circuit2.output_of_input_eq
         (circuit1.output_of_input_eq h ?_) ?_
       -- the composite `localLength` reduces to `ll₁ + ll₂`, then the offset bounds are `omega`-able
-      -- `Nat.add_eq`: the laws path's metadata reduction spells the composite bound
-      -- with raw `Nat.add`, which `omega` treats as an atom
       · exact ProverEnvironment.agreesBelow_of_le h_agrees
-          (by simp +instances only [circuit_norm, explicit_circuit_norm, Nat.add_eq]; omega)
+          (by simp +instances only [circuit_norm, explicit_circuit_norm]; omega)
       · refine ProverEnvironment.agreesBelow_of_le h_agrees ?_
         have hs := h_localLength_stable (circuit1.output input n) (circuit1.output input 0)
-        simp +instances only [circuit_norm, explicit_circuit_norm, Nat.add_eq] at hs ⊢
+        simp +instances only [circuit_norm, explicit_circuit_norm] at hs ⊢
         omega
 
 @[circuit_norm]

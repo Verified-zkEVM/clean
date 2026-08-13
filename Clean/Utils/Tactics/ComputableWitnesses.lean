@@ -280,6 +280,17 @@ def reduceLocalLengthCore : Simp.DSimproc := fun e => do
     sub.getAppFn.isConstOf `Operations.localLength ||
     sub.getAppFn.isConstOf `Circuit
   if leaked.isSome then return .continue
+  -- canonicalize whnf's raw `Nat.add` to the `+` spelling downstream lemmas and
+  -- `omega` atoms key on
+  let w := w.replace fun sub =>
+    if sub.isAppOfArity ``Nat.add 2 then
+      let a := sub.appFn!.appArg!
+      let b := sub.appArg!
+      some (mkApp6 (mkConst ``HAdd.hAdd [.zero, .zero, .zero])
+        (mkConst ``Nat) (mkConst ``Nat) (mkConst ``Nat)
+        (mkApp2 (mkConst ``instHAdd [.zero]) (mkConst ``Nat) (mkConst ``instAddNat))
+        a b)
+    else none
   return .visit w
 
 /- shape-only pattern: the localLength constants live downstream of this file, so they
@@ -1032,22 +1043,17 @@ def runStart (cw : CwSimp) : TacticM Unit := do
       try unfoldPlainCircuitConsts catch _ => pure ()
       let tAfter ← withMainContext do instantiateMVars (← getMainTarget)
       unless tAfter == tBefore do simpPass
-  else
-    -- laws decomposed the whole obligation: one `circuit_norm` pass over the (small,
-    -- operations-free) result normalizes the leaf content the laws leave verbatim —
-    -- witness-IR evals, child metadata spellings
-    simpPass
   unless (← getGoals).isEmpty do
-    -- intro the remaining binders; the hoisted input premise gets the name `h`, which
-    -- the manual corpus' leaves reference
-    let (fvars, g) ← (← getMainGoal).intros
-    let mut g := g
-    let mut named := false
-    for fv in fvars do
-      unless named do
-        if ← g.withContext do isProp (← fv.getDecl).type then
-          g ← g.rename fv `h
-          named := true
+    -- intro the remaining ∀-binders but STOP at the hoisted input premise: left in
+    -- the goal, every goal-only pass reaches it through destructuring, and the split
+    -- intros it under its standard name — no hypothesis-directed re-normalization
+    let mut g ← getMainGoal
+    for _ in [0:32] do
+      let t ← instantiateMVars (← g.getType)
+      unless t.isForall do break
+      if ← g.withContext do isProp t.bindingDomain! then break
+      let (_, g') ← g.intro1P
+      g := g'
     replaceMainGoal [g]
   unless (← getGoals).isEmpty do
     let nGoalsBefore := (← getGoals).length
@@ -1065,18 +1071,7 @@ def runStart (cw : CwSimp) : TacticM Unit := do
       else if (← getGoals).length != nGoalsBefore then pure true
       else withMainContext do return (← getLCtx).getFVarIds.size != hypsBefore
     if changed then
-      simpPass
-      -- the hoisted input premise `h` was intro'd before destructuring; bring it to
-      -- the goal's normal form (struct literals component-split, evals decomposed) —
-      -- goal-only passes no longer reach it as a hypothesis
-      try withMainContext do
-        if let some decl := (← getLCtx).findFromUserName? `h then
-          let (result?, _) ← Meta.simpGoal (← getMainGoal) cw.normCtx cw.normProcs
-            (simplifyTarget := false) (fvarIdsToSimp := #[decl.fvarId])
-          match result? with
-          | none => replaceMainGoal []
-          | some (_, g') => replaceMainGoal [g']
-      catch _ => pure ()
+      if incomplete then simpPass else lawsPass
   unless (← getGoals).isEmpty do
     -- child-output metadata reduction as its own step: after every normalization
     -- pass (reduced windows drift under further rewriting), directly before the split

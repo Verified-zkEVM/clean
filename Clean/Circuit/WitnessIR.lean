@@ -424,6 +424,20 @@ theorem WitgenIR.eval_ofExprs [FiniteField F] {n : ℕ} (es : Vector (Expression
   ext i hi
   simp [ofExprs, WitgenIR.eval, VExpr.eval, FExpr.eval, evalSteps]
 
+/-- Congruence normal form for expression-copying witness leaves (`<==`): the
+`computable_witnesses` laws leave such a leaf as an equality of the same IR's evals
+under two environments — the IR layer drops out and the obligation is the copied
+expressions' own eval congruence, the spelling the input premise and the close
+vocabulary are stated at. Keyed on the whole equality: either environment side alone
+is not a normal form. -/
+@[computable_witnesses_norm]
+theorem WitgenIR.eval_ofExprs_congr [FiniteField F] {n : ℕ} (es : Vector (Expression F) n)
+    (env env' : ProverEnvironment F) :
+    ((ofExprs es).eval env = (ofExprs es).eval env') ↔
+      es.map (Expression.eval env.toEnvironment)
+        = es.map (Expression.eval env'.toEnvironment) := by
+  simp only [eval_ofExprs]
+
 attribute [circuit_norm] Array.getElem?_singleton
 
 /- Witness-IR `BExpr` conditions surface in goals as `decide P = true` (via the
