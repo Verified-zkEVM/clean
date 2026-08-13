@@ -623,17 +623,41 @@ def circuit : FormalCircuit (F p) SHA256Block SHA256Schedule where
       rw [hLL, foldlAcc_eq_varSchedule n input iv hiv]
       simp only [circuit_norm, scheduleStep]
       refine ⟨fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_⟩
-      all_goals
-        refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+      · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
           (by simp only [circuit_norm]) fun h_agrees => ?_
-      all_goals
         have hsched := varSchedule_eval_congr (i₀ := n) h iv (by omega)
           (fun j hj => h_agrees.1 j (by omega))
-      all_goals
         have hel := fun jj (hjj : jj < 64) => map_eval_getElem_congr hsched jj hjj
-      all_goals
         simp only [circuit_norm]
-        (try and_intros) <;> grind
+        grind
+      · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+          (by simp only [circuit_norm]) fun h_agrees => ?_
+        have hsched := varSchedule_eval_congr (i₀ := n) h iv (by omega)
+          (fun j hj => h_agrees.1 j (by omega))
+        have hel := fun jj (hjj : jj < 64) => map_eval_getElem_congr hsched jj hjj
+        simp only [circuit_norm]
+        grind
+      · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+          (by simp only [circuit_norm]) fun h_agrees => ?_
+        have hsched := varSchedule_eval_congr (i₀ := n) h iv (by omega)
+          (fun j hj => h_agrees.1 j (by omega))
+        have hel := fun jj (hjj : jj < 64) => map_eval_getElem_congr hsched jj hjj
+        simp only [circuit_norm]
+        and_intros <;> grind
+      · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+          (by simp only [circuit_norm]) fun h_agrees => ?_
+        have hsched := varSchedule_eval_congr (i₀ := n) h iv (by omega)
+          (fun j hj => h_agrees.1 j (by omega))
+        have hel := fun jj (hjj : jj < 64) => map_eval_getElem_congr hsched jj hjj
+        simp only [circuit_norm]
+        and_intros <;> grind
+      · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+          (by simp only [circuit_norm]) fun h_agrees => ?_
+        have hsched := varSchedule_eval_congr (i₀ := n) h iv (by omega)
+          (fun j hj => h_agrees.1 j (by omega))
+        have hel := fun jj (hjj : jj < 64) => map_eval_getElem_congr hsched jj hjj
+        simp only [circuit_norm]
+        and_intros <;> grind
     · exact varSchedule_eval_congr (i₀ := n) h 48 (by omega)
         fun j hj => h_agrees.1 j (by omega)
 

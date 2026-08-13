@@ -41,12 +41,8 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
   -- tactic has no case-split step for data-dependent operation lists.
   computableWitnesses := by
     computable_witnesses_start
-    · exact FormalCircuit.toSubcircuit_computableWitnesses _
-        (by simp only [circuit_norm] at h ⊢; exact h)
-    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by try omega) fun h_agrees => by
-          simp only [circuit_norm]
-          grind
+    · computable_witnesses_close
+    · computable_witnesses_close
     · simp only [circuit_norm, output]
       refine ⟨FormalCircuit.output_of_input_eq (Round.circuit (p:=p)) (n := n)
           (by simp only [circuit_norm]; exact h)

@@ -629,7 +629,10 @@ as an unfold (all resolutions — a constant absent from the goal contributes no
 rewrites). `closing` hints participate only in the close routes' goal-only steps, never
 in `simp_all`/`at *`/whole-circuit normalization, so recursive eval decompositions
 (e.g. `eval_vector_set`) stay affordable. -/
-def CwSimp.build (extraTerms closeTerms : Array (TSyntax `term)) : TacticM CwSimp := do
+def CwSimp.build (extraTerms closeTerms : Array (TSyntax `term)) : TacticM CwSimp :=
+  -- hints may reference the local context (hypotheses, applied terms over local
+  -- variables), so elaboration needs the main goal's context
+  withMainContext do
   let cn ← getAttrTheorems `circuit_norm
   let cwn ← getAttrTheorems `computable_witnesses_norm
   let cnProcs : SimprocsArray := #[← getAttrSimprocs `circuit_norm]

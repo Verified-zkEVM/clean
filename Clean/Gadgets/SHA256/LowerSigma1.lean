@@ -242,7 +242,7 @@ def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
       · have h3 := h (i + 10 % 32) (by omega)
         grind
       · grind
-    · grind
+    · computable_witnesses_close
 
 end LowerSigma1
 end Gadgets.SHA256

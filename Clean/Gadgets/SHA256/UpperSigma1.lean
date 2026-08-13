@@ -228,7 +228,7 @@ def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
       simp only [circuit_norm, Vector.getElem_rotate]
       have hr3 := h ((i + 25) % 32) (by omega)
       grind
-    · grind
+    · computable_witnesses_close
 
 end UpperSigma1
 end Gadgets.SHA256

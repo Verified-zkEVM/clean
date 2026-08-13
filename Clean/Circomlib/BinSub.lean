@@ -296,12 +296,13 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
     -- evaluations are bridged through `inputLinearSub_eval_eq_sub`
     all_goals have bridge := inputLinearSub_eval_eq_sub env.toEnvironment input _ rfl
     all_goals have bridge' := inputLinearSub_eval_eq_sub env'.toEnvironment input _ rfl
-    all_goals simp only [inputLinearSub, Fin.getElem_fin] at bridge bridge'
-    · ext i hi
+    · simp only [inputLinearSub, Fin.getElem_fin] at bridge bridge'
+      ext i hi
       simp only [circuit_norm]
       rw [bridge, bridge', h]
-    · rw [bridge, bridge', h]
-    · grind
+    · simp only [inputLinearSub, Fin.getElem_fin] at bridge bridge'
+      rw [bridge, bridge', h]
+    · computable_witnesses_close
 
   soundness := by
     circuit_proof_start

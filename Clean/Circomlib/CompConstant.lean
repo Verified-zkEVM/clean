@@ -130,29 +130,17 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
   -- Manual: selector/pair-vector evaluations under binders (toElements spellings over
   -- 127 windows); grind cannot reach them and the close lacks the decomposition.
   computableWitnesses := by
-    unfold FormalCircuitBase.ComputableWitnesses
-    intros n input env env'
-    simp only [circuit_norm, computable_witnesses_norm, Vector.ext_iff]
-    unfold_formal_circuit_consts
-    simp only [circuit_norm, computable_witnesses_norm]
-    apply And.intro
-    · and_intros
-      · simp only [circuit_norm, explicit_provable_type,
-          apply_ite (Expression.eval env.toEnvironment),
-          apply_ite (Expression.eval env'.toEnvironment)]
-        grind
-      · intros _ h_agrees _ _
-        apply eval_sum_eq_of_eval_eq
-        intro i
-        simp only [Vector.getElem_mapRange, circuit_norm]
-        grind
-      · intro
-        apply GeneralFormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq
-        · rfl
-        · simp only [circuit_norm]
-          grind
-      · grind
-    · grind
+    computable_witnesses_start [Vector.ext_iff]
+    · computable_witnesses_close [explicit_provable_type,
+        apply_ite (Expression.eval env.toEnvironment),
+        apply_ite (Expression.eval env'.toEnvironment)]
+    · apply eval_sum_eq_of_eval_eq
+      intro i
+      simp only [Vector.getElem_mapRange, circuit_norm]
+      grind
+    · computable_witnesses_close
+    · computable_witnesses_close
+    · computable_witnesses_close
 
   soundness := by
     circuit_proof_start [Num2Bits.circuit]

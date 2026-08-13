@@ -253,14 +253,26 @@ def circuit : FormalCircuit (F p) Inputs SHA256State where
   -- state[i]/Vector.map spellings; the tactic's close lacks these lifting lemmas.
   computableWitnesses := by
     computable_witnesses_start [sha256Round]
-    all_goals try exact output_eval_congr h.1 h_agrees
-    all_goals
-      exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+    · computable_witnesses_close
+    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
         (by rfl) fun h_agrees => by
-          have hel := fun (jj : ℕ) (hjj : jj < 8) => map_eval_getElem_congr h.1 jj hjj
-          simp only [circuit_norm]
-          and_intros <;> grind
-
+        have hel := fun (jj : ℕ) (hjj : jj < 8) => map_eval_getElem_congr h.1 jj hjj
+        simp only [circuit_norm]
+        and_intros <;> grind
+    · computable_witnesses_close
+    · computable_witnesses_close
+    · computable_witnesses_close
+    · computable_witnesses_close
+    · computable_witnesses_close
+    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+        (by rfl) fun h_agrees => by
+        have hel := fun (jj : ℕ) (hjj : jj < 8) => map_eval_getElem_congr h.1 jj hjj
+        simp only [circuit_norm]
+        and_intros <;> grind
+    · computable_witnesses_close
+    · computable_witnesses_close
+    · computable_witnesses_close
+    · exact output_eval_congr h.1 h_agrees
 end SHA256Round
 end Gadgets.SHA256
 end
