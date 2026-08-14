@@ -80,6 +80,14 @@ def Expression.NoSimpleSelectors : Expression F Query → Prop
   | .mul left right =>
       left.NoSimpleSelectors ∧ right.NoSimpleSelectors
 
+/-- Halo 2's expression degree: queries have degree one, constants degree zero,
+sums take the maximum, and products add. -/
+def Expression.degree {F L : Type} : Expression F L → ℕ
+  | .var _ => 1
+  | .const _ => 0
+  | .add left right => max left.degree right.degree
+  | .mul left right => left.degree + right.degree
+
 @[circuit_norm, keygen_norm]
 theorem Expression.noSimpleSelectors_queryComplexSelector
     (selector : ComplexSelector) :
@@ -338,6 +346,59 @@ structure LookupArgument (F : Type) where
   /-- `lookup` receives pairs and unzips them, so both tuple sides have equal arity. -/
   arity : inputs.length = tables.length
 
+/-- Halo 2's lookup-argument degree: `max 4 (2 + input + table)`, where
+`input` and `table` are the largest degrees on the respective tuple sides. -/
+def LookupArgument.requiredDegree (argument : LookupArgument F) : ℕ :=
+  let inputDegree :=
+    argument.inputs.foldl (fun current expression =>
+      max current expression.degree) 1
+  let tableDegree :=
+    argument.tables.foldl (fun current expression =>
+      max current expression.degree) 1
+  max 4 (2 + inputDegree + tableDegree)
+
+private theorem foldl_max_eq_max_foldl_max_zero
+    (values : List ℕ) (initial : ℕ) :
+    values.foldl max initial = max initial (values.foldl max 0) := by
+  induction values generalizing initial with
+  | nil => simp
+  | cons value rest inductionHypothesis =>
+      rw [List.foldl_cons, inductionHypothesis (max initial value),
+        List.foldl_cons]
+      simp only [Nat.zero_max]
+      rw [inductionHypothesis value]
+      ac_rfl
+
+private theorem foldl_max_append (left right : List ℕ) :
+    (left ++ right).foldl max 0 =
+      max (left.foldl max 0) (right.foldl max 0) := by
+  rw [List.foldl_append, foldl_max_eq_max_foldl_max_zero]
+
+/-- The degree contributed by configured gate and lookup arguments, including Halo 2's
+permutation baseline of three. This small value composes by `max`. -/
+def constraintDegree
+    (gates : List (Gate F)) (lookups : List (LookupArgument F)) : ℕ :=
+  let lookupDegree := (lookups.map LookupArgument.requiredDegree).foldl max 0
+  let gateDegree := ((gates.flatMap fun gate =>
+    gate.constraints.map (fun constraint => constraint.poly)).map
+      Expression.degree).foldl max 0
+  max 3 (max lookupDegree gateDegree)
+
+theorem three_le_constraintDegree
+    (gates : List (Gate F)) (lookups : List (LookupArgument F)) :
+    3 ≤ constraintDegree gates lookups := by
+  simp [constraintDegree]
+
+theorem constraintDegree_append
+    (leftGates rightGates : List (Gate F))
+    (leftLookups rightLookups : List (LookupArgument F)) :
+    constraintDegree (leftGates ++ rightGates) (leftLookups ++ rightLookups) =
+      max (constraintDegree leftGates leftLookups)
+        (constraintDegree rightGates rightLookups) := by
+  simp only [constraintDegree, List.map_append, foldl_max_append,
+    List.flatMap_append]
+  omega
+
 deriving instance DecidableEq for Constraint
 deriving instance DecidableEq for Gate
 deriving instance DecidableEq for LookupArgument
@@ -520,6 +581,15 @@ structure ConstraintSystem (F : Type) where
   exactly the places that check the query layouts. -/
   -- TODO HALO2 delete this, should be covered by gate wellformedness
   invalidQueriedCells : List String := []
+
+/-- Flatten a constraint system's gates to its ordered constraint-polynomial list. -/
+def flatGates (cs : ConstraintSystem F) : List (Expression F Query) :=
+  cs.gates.flatMap fun gate => gate.constraints.map (fun constraint => constraint.poly)
+
+/-- Halo 2's `ConstraintSystem::degree`: the maximum of the permutation argument's
+constant degree three, lookup requirements, and gate-polynomial degrees. -/
+def csDegree (cs : ConstraintSystem F) : ℕ :=
+  constraintDegree cs.gates cs.lookups
 
 /-!
 ## Query registration
@@ -826,6 +896,10 @@ structure ConfigureDelta (F : Type) where
   instanceQueries : List (Column .instance × Rotation) := []
   invalidQueriedCells : List String := []
 
+/-- Exact degree of the gate and lookup arguments emitted by this configure delta. -/
+def ConfigureDelta.constraintDegree (delta : ConfigureDelta F) : ℕ :=
+  Halo2.constraintDegree delta.gates delta.lookups
+
 /-- An ordinary query is registered by this configure contribution. Selectors are
 allocated separately and therefore do not occupy a query-layout slot. -/
 def ConfigureDelta.RegistersQuery
@@ -894,6 +968,16 @@ def ConfigureDelta.append (left right : ConfigureDelta F) : ConfigureDelta F whe
     delta.append ({} : ConfigureDelta F) = delta := by
   cases delta
   simp [ConfigureDelta.append]
+
+@[simp] theorem ConfigureDelta.constraintDegree_append
+    (left right : ConfigureDelta F) :
+    (left.append right).constraintDegree =
+      max left.constraintDegree right.constraintDegree := by
+  change Halo2.constraintDegree (left.gates ++ right.gates)
+      (left.lookups ++ right.lookups) =
+    max (Halo2.constraintDegree left.gates left.lookups)
+      (Halo2.constraintDegree right.gates right.lookups)
+  exact Halo2.constraintDegree_append _ _ _ _
 
 theorem ConfigureDelta.RegistersQuery.append_left
     {left right : ConfigureDelta F} {query : Query}
@@ -1065,6 +1149,16 @@ def ConfigureDelta.apply (delta : ConfigureDelta F)
   invalidQueriedCells :=
     initial.invalidQueriedCells ++ delta.invalidQueriedCells
 
+theorem ConfigureDelta.csDegree_apply
+    (delta : ConfigureDelta F) (initial : ConstraintSystem F)
+    (counts : ConfigureCounts) :
+    csDegree (delta.apply initial counts) =
+      max (csDegree initial) delta.constraintDegree := by
+  simpa only [csDegree, ConfigureDelta.apply,
+    ConfigureDelta.constraintDegree] using
+    Halo2.constraintDegree_append initial.gates delta.gates
+      initial.lookups delta.lookups
+
 /--
 The configure monad, in the same append-only style as `Circuit`.
 
@@ -1148,6 +1242,14 @@ def run (program : Configure F α) (initial : ConstraintSystem F) :
   let counts := ConfigureCounts.ofConstraintSystem initial
   let (output, delta, countDelta) := program.plan counts
   (output, delta.apply initial (countDelta.apply counts))
+
+theorem csDegree_run (program : Configure F α)
+    (initial : ConstraintSystem F) :
+    csDegree (program.run initial).2 =
+      max (csDegree initial)
+        (program.delta
+          (ConfigureCounts.ofConstraintSystem initial)).constraintDegree := by
+  exact ConfigureDelta.csDegree_apply _ _ _
 
 /-- Running a configure program returns the same value as its compositional
 `output` projection at the initial constraint system's allocation counts. -/
@@ -3295,6 +3397,10 @@ that freshly allocated column. Most reusable child configurations emit no instan
 queries, so the metadata and its proof both default to the empty list.
 -/
 class ElaboratedConfigure (program : Configure F α) where
+  /-- Exact reduced degree of the gates and lookups emitted by this program. -/
+  constraintDegree : ConfigureCounts → ℕ
+  constraintDegree_eq : ∀ counts,
+    (program.delta counts).constraintDegree = constraintDegree counts
   instanceQueries :
     ConfigureCounts → List (Column .instance × Rotation) := fun _ => []
   instanceQueries_eq : ∀ counts,
@@ -3405,8 +3511,29 @@ at or after its incoming selector count. -/
       elaborated.instanceQueries counts :=
   elaborated.instanceQueries_eq counts
 
+@[simp] theorem ElaboratedConfigure.delta_constraintDegree
+    (program : Configure F α) [elaborated : ElaboratedConfigure program]
+    (counts : ConfigureCounts) :
+    (program.delta counts).constraintDegree =
+      elaborated.constraintDegree counts :=
+  elaborated.constraintDegree_eq counts
+
+/-- A closed configure program's reduced degree is exactly the degree of the
+constraint system obtained by running it from the empty state. -/
+theorem ElaboratedConfigure.csDegree_run_empty
+    (program : Configure F α) [elaborated : ElaboratedConfigure program] :
+    csDegree (program.run {}).2 = elaborated.constraintDegree {} := by
+  rw [Configure.csDegree_run, ConfigureCounts.ofConstraintSystem_empty]
+  have hdegree : csDegree ({} : ConstraintSystem F) ≤
+      (program.delta {}).constraintDegree := by
+    simp [csDegree, ConfigureDelta.constraintDegree,
+      Halo2.constraintDegree]
+  rw [Nat.max_eq_right hdegree, elaborated.constraintDegree_eq]
+
 instance ElaboratedConfigure.pure (value : α) :
     ElaboratedConfigure (pure value : Configure F α) where
+  constraintDegree _ := 3
+  constraintDegree_eq := by intro counts; rfl
   instanceQueries_eq := by
     intro counts
     rfl
@@ -3425,6 +3552,15 @@ instance ElaboratedConfigure.bind {β : Type}
     (next : α → Configure F β)
     [nextElaborated : ∀ value, ElaboratedConfigure (next value)] :
     ElaboratedConfigure (program >>= next) where
+  constraintDegree counts :=
+    max (programElaborated.constraintDegree counts)
+      ((nextElaborated (program.output counts)).constraintDegree
+        (program.finalCounts counts))
+  constraintDegree_eq := by
+    intro counts
+    rw [Configure.delta_bind, ConfigureDelta.constraintDegree_append,
+      programElaborated.constraintDegree_eq,
+      (nextElaborated (program.output counts)).constraintDegree_eq]
   instanceQueries counts :=
     programElaborated.instanceQueries counts ++
       (nextElaborated (program.output counts)).instanceQueries
@@ -3510,6 +3646,8 @@ instance ElaboratedConfigure.bind {β : Type}
 
 instance ElaboratedConfigure.adviceColumn :
     ElaboratedConfigure (adviceColumn : Configure F (Column .advice)) where
+  constraintDegree _ := 3
+  constraintDegree_eq := by intro counts; rfl
   instanceQueries_eq := Configure.delta_adviceColumn_instanceQueries
   selectorSummary _ := {}
   selectorRequirements _ := True
@@ -3523,6 +3661,8 @@ instance ElaboratedConfigure.adviceColumn :
 
 instance ElaboratedConfigure.fixedColumn :
     ElaboratedConfigure (fixedColumn : Configure F (Column .fixed)) where
+  constraintDegree _ := 3
+  constraintDegree_eq := by intro counts; rfl
   instanceQueries_eq := Configure.delta_fixedColumn_instanceQueries
   selectorSummary _ := {}
   selectorRequirements _ := True
@@ -3536,6 +3676,8 @@ instance ElaboratedConfigure.fixedColumn :
 
 instance ElaboratedConfigure.instanceColumn :
     ElaboratedConfigure (instanceColumn : Configure F (Column .instance)) where
+  constraintDegree _ := 3
+  constraintDegree_eq := by intro counts; rfl
   instanceQueries_eq := Configure.delta_instanceColumn_instanceQueries
   selectorSummary _ := {}
   selectorRequirements _ := True
@@ -3549,6 +3691,8 @@ instance ElaboratedConfigure.instanceColumn :
 
 instance ElaboratedConfigure.selector :
     ElaboratedConfigure (selector : Configure F Selector) where
+  constraintDegree _ := 3
+  constraintDegree_eq := by intro counts; rfl
   instanceQueries_eq := Configure.delta_selector_instanceQueries
   selectorSummary _ := {}
   selectorRequirements _ := True
@@ -3563,6 +3707,8 @@ instance ElaboratedConfigure.selector :
 
 instance ElaboratedConfigure.complexSelector :
     ElaboratedConfigure (complexSelector : Configure F ComplexSelector) where
+  constraintDegree _ := 3
+  constraintDegree_eq := by intro counts; rfl
   instanceQueries_eq := Configure.delta_complexSelector_instanceQueries
   selectorSummary _ := {}
   selectorRequirements _ := True
@@ -3577,6 +3723,11 @@ instance ElaboratedConfigure.complexSelector :
 
 instance ElaboratedConfigure.enableEquality (column : AnyColumn) :
     ElaboratedConfigure (enableEquality (F := F) column) where
+  constraintDegree _ := 3
+  constraintDegree_eq := by
+    intro counts
+    rcases column with ⟨kind, index⟩
+    cases kind <;> rfl
   instanceQueries _ :=
     match column with
     | ⟨.instance, index⟩ => [(⟨index⟩, 0)]
@@ -3622,6 +3773,8 @@ instance ElaboratedConfigure.enableEquality (column : AnyColumn) :
 
 instance ElaboratedConfigure.enableConstant (column : Column .fixed) :
     ElaboratedConfigure (enableConstant (F := F) column) where
+  constraintDegree _ := 3
+  constraintDegree_eq := by intro counts; rfl
   instanceQueries_eq :=
     Configure.delta_enableConstant_instanceQueries column
   selectorSummary _ := {}
@@ -3656,6 +3809,11 @@ instance ElaboratedConfigure.enableConstant (column : Column .fixed) :
 
 instance ElaboratedConfigure.createGate (gate : Gate F) :
     ElaboratedConfigure (createGate gate) where
+  constraintDegree _ := Halo2.constraintDegree [gate] []
+  constraintDegree_eq := by
+    intro counts
+    simp [ConfigureDelta.constraintDegree, Configure.delta,
+      Halo2.createGate]
   instanceQueries := fun _ =>
     ConfigureDelta.instanceQueriesOfCells gate.queriedCells
   instanceQueries_eq :=
@@ -3725,6 +3883,10 @@ instance ElaboratedConfigure.lookup
       (tableMap.map Prod.fst).Forall Expression.NoSimpleSelectors) :
     ElaboratedConfigure (lookup queriedCells masterSelector tableMap hqueries
       hnoSimpleSelectors) where
+  constraintDegree counts :=
+    ((Halo2.lookup queriedCells masterSelector tableMap hqueries
+      hnoSimpleSelectors).delta counts).constraintDegree
+  constraintDegree_eq := by intro counts; rfl
   instanceQueries := fun _ =>
     ConfigureDelta.instanceQueriesOfCells queriedCells
   instanceQueries_eq :=

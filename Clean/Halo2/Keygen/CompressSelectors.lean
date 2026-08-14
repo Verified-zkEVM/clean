@@ -28,14 +28,6 @@ placement (`Clean.Halo2.Keygen.FloorPlanner`).
 
 namespace Halo2.Expression
 
-/-- halo2 `Expression::degree`: queries and selectors are degree `1`, constants `0`,
-sums take the max, products add. -/
-def degree {F L : Type} : Expression F L → ℕ
-  | .var _ => 1
-  | .const _ => 0
-  | .add a b => max a.degree b.degree
-  | .mul a b => a.degree + b.degree
-
 /-- halo2 `Expression::extract_simple_selector`, first-found: the simple selector
 occurring in the expression, if any (the constraint system enforces at most one). -/
 def simpleSelector? {F : Type} : Expression F Query → Option Selector
@@ -134,18 +126,6 @@ end Halo2.Expression
 namespace Halo2
 
 variable {F : Type}
-
-/-- halo2 `lookup::Argument::required_degree`: `max 4 (2 + input + table)` over the
-argument's expression degrees (each at least `1`). -/
-def LookupArgument.requiredDegree (l : LookupArgument F) : ℕ :=
-  let inputDeg := l.inputs.foldl (fun m e => max m e.degree) 1
-  let tableDeg := l.tables.foldl (fun m e => max m e.degree) 1
-  max 4 (2 + inputDeg + tableDeg)
-
-/-- Flatten a `ConstraintSystem`'s gates to the ordered list of all constraint polynomials
-(mirrors halo2 `PinnedGates`' `flat_map(polynomials)`). -/
-def flatGates (cs : ConstraintSystem F) : List (Expression F Query) :=
-  cs.gates.flatMap (fun g => g.constraints.map (·.poly))
 
 /-! ## The selector-compression map -/
 
@@ -475,14 +455,6 @@ theorem selectorMaxDegrees_eq_zero_of_complexGateSelectors
   rw [selectorMaxDegrees, getElem!_pos result selector hresultBound]
   rw [getElem?_pos result selector hresultBound] at hfold
   exact Option.some.inj hfold
-
-/-- halo2 `ConstraintSystem::degree`: the max of the permutation argument's constant
-`3`, the lookups' required degrees, and the gate degrees (no `minimum_degree` — Clean's
-constraint system does not model it and Orchard never sets one). -/
-def csDegree (cs : ConstraintSystem F) : ℕ :=
-  let lookupDeg := cs.lookups.foldl (fun m l => max m l.requiredDegree) 1
-  let gateDeg := (flatGates cs).foldl (fun m p => max m p.degree) 0
-  max 3 (max lookupDeg gateDeg)
 
 /-- The per-selector activation table from `activations`' `(selector, absRow)` pairs, as
 `numSelectors` rows of `n` booleans. -/

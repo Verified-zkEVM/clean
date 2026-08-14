@@ -322,6 +322,13 @@ private theorem configureShared_delta_lookups (counts) :
     (configureShared.delta counts).lookups = [] := by
   simp [configureShared, AddChip.configure, keygen_norm]
 
+private theorem configureShared_constraintDegree (counts) :
+    (configureShared.delta counts).constraintDegree = 3 := by
+  simp [ConfigureDelta.constraintDegree, Halo2.constraintDegree,
+    configureShared_delta_gates, configureShared_delta_lookups,
+    orchardGate, AddChip.addGate, Expression.degree,
+    querySelector, queryAdvice, Gate.withSelector]
+
 @[configure_selector_norm, keygen_norm]
 private theorem configureShared_qOrchard_index (counts) :
     (configureShared.output counts).qOrchard.index = counts.numSelectors := by
@@ -344,8 +351,11 @@ private theorem configureShared_selectorRequirements (counts) :
   simp [keygen_norm]
 
 private instance : ElaboratedConfigure configureShared :=
-  configureSharedInferred.closeSelectorRequirements
+  let elaborated := configureSharedInferred.closeSelectorRequirements
     configureShared_selectorRequirements
+  { elaborated with
+    constraintDegree _ := 3
+    constraintDegree_eq := configureShared_constraintDegree }
 
 /-- Every advice column allocated by the shared Action prefix is registered for equality. -/
 private theorem configureShared_advicePermutationColumn
@@ -420,9 +430,17 @@ private theorem configureBase_selectorRequirements (counts) :
   dsimp only [configureBaseInferred, configure_selector_norm, configureBase]
   simp [configure_selector_norm]
 
+private theorem configureBase_constraintDegree (counts) :
+    (configureBase.delta counts).constraintDegree = 6 := by
+  rw [configureBaseInferred.constraintDegree_eq]
+  rfl
+
 private instance : ElaboratedConfigure configureBase :=
-  configureBaseInferred.closeSelectorRequirements
+  let elaborated := configureBaseInferred.closeSelectorRequirements
     configureBase_selectorRequirements
+  { elaborated with
+    constraintDegree _ := 6
+    constraintDegree_eq := configureBase_constraintDegree }
 
 /-- Equality registration from the shared prefix survives the range-check suffix. -/
 private theorem configureBase_advicePermutationColumn
@@ -794,7 +812,8 @@ private theorem configure_queryRequirements (G : Generators) (counts) :
     Configure.finalCounts_numInstanceColumns]
 
 /-- Reduced configure metadata shared by both Action synthesis bundles. Public
-instance-query and selector requirements are stored in their compact normal forms. -/
+instance-query, selector requirements, and constraint degree are stored in their
+compact normal forms. -/
 @[reducible] def configureElaborated (G : Generators) :
     ElaboratedConfigure (configure G) :=
   let inferred : ElaboratedConfigure (configure G) := inferInstance

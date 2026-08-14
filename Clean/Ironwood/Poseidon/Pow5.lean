@@ -202,10 +202,22 @@ theorem state_mem_configure_permutationRequests
   dsimp only [configure]
   infer_instance
 
+private theorem configure_constraintDegree
+    (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
+    (rcA rcB : Fin 3 → Column .fixed) (counts) :
+    ((configure state partialSbox rcA rcB).delta counts).constraintDegree = 6 := by
+  simp [ConfigureDelta.constraintDegree, Halo2.constraintDegree,
+    configure, configureEqualities, configureGates,
+    fullRoundGate, partialRoundsGate, padAndAddGate, pow5Expr,
+    Expression.degree, querySelector, queryAdvice, queryFixed,
+    Gate.withSelector]
+
 instance (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
     (rcA rcB : Fin 3 → Column .fixed) :
     ElaboratedConfigure (configure state partialSbox rcA rcB) :=
   ({ configureElaborated state partialSbox rcA rcB with
+    constraintDegree _ := 6
+    constraintDegree_eq := configure_constraintDegree state partialSbox rcA rcB
     selectorRequirements _ := True
     lookupSelectorsCompatible := by
       intro counts _

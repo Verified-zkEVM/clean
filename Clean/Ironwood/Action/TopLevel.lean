@@ -254,6 +254,12 @@ theorem actionCircuit_numInstanceColumns_eq :
   exact Circuit.configure_finalCounts_numInstanceColumns
     Specs.Sinsemilla.orchardGenerators
 
+/-- Action's configured gates and lookups have exact Halo 2 degree nine. -/
+theorem actionCircuit_constraintDegree_eq :
+    actionCircuit.constraintDegree = 9 := by
+  rw [Internal.actionCircuit_eq_impl]
+  rfl
+
 set_option maxRecDepth 10000 in
 /-- Action's configured query depth requires five blinding rows. -/
 theorem actionCircuit_blindingFactors_eq :

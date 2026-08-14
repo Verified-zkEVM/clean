@@ -303,6 +303,17 @@ def constraintSystem
     ConstraintSystem F :=
   (circuit.configure () {}).2
 
+/-- Exact reduced degree emitted by the closed circuit's configure program. -/
+def constraintDegree
+    (circuit : FormalCircuit F Unit Config unit unit) : ℕ :=
+  (circuit.elaborated.configureInfo ()).constraintDegree {}
+
+theorem constraintSystem_csDegree
+    (circuit : FormalCircuit F Unit Config unit unit) :
+    csDegree (constraintSystem circuit) = constraintDegree circuit := by
+  simpa only [constraintSystem, constraintDegree] using
+    ElaboratedConfigure.csDegree_run_empty (circuit.configure ())
+
 /-- Instance-query requests emitted by this circuit's configure program. -/
 def configureInstanceQueries
     (circuit : FormalCircuit F Unit Config unit unit) :
@@ -577,6 +588,15 @@ def config (self : TopLevelCircuit F Config PublicInput) : Config :=
 def constraintSystem (self : TopLevelCircuit F Config PublicInput) :
     ConstraintSystem F :=
   TopLevelCompilation.constraintSystem self.formalCircuit
+
+/-- Exact constraint-system degree from reduced configure metadata. -/
+def constraintDegree (self : TopLevelCircuit F Config PublicInput) : ℕ :=
+  TopLevelCompilation.constraintDegree self.formalCircuit
+
+theorem constraintSystem_csDegree
+    (self : TopLevelCircuit F Config PublicInput) :
+    csDegree self.constraintSystem = self.constraintDegree :=
+  TopLevelCompilation.constraintSystem_csDegree self.formalCircuit
 
 /-- The permutation chunk width derived from the circuit's constraint system. -/
 def chunkLen (self : TopLevelCircuit F Config PublicInput) : ℕ :=

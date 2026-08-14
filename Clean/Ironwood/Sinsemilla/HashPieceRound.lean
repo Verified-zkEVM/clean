@@ -421,6 +421,19 @@ set_option synthInstance.maxSize 2048 in
   unfold configure
   infer_instance
 
+private theorem configure_constraintDegree
+    (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
+    (witnessPieces : Column .advice) (fixedYQ : Column .fixed)
+    (genTable : GeneratorTableConfig) (counts) :
+    ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).delta
+      counts).constraintDegree = 7 := by
+  simp [ConfigureDelta.constraintDegree, Halo2.constraintDegree,
+    configure_gates, configure_lookups,
+    initialYQGate, sinsemillaGate, generatorLookup,
+    qS3Expr, yPExpr, xRExpr, yAExpr,
+    LookupArgument.requiredDegree, Expression.degree,
+    querySelector, queryAdvice, queryFixed, Gate.withSelector]
+
 instance (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
     (witnessPieces : Column .advice) (fixedYQ : Column .fixed)
     (genTable : GeneratorTableConfig) :
@@ -428,6 +441,9 @@ instance (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
       (configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable) :=
   ({ configureElaborated G xA xP bits lambda1 lambda2 witnessPieces fixedYQ
       genTable with
+    constraintDegree _ := 7
+    constraintDegree_eq := configure_constraintDegree G xA xP bits lambda1 lambda2
+      witnessPieces fixedYQ genTable
     selectorRequirements _ := True
     lookupSelectorsCompatible := by
       intro counts _

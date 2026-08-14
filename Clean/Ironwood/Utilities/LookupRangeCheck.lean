@@ -263,6 +263,17 @@ theorem gate_lookupSelectorsCompatible_configure_output
   unfold configure
   rfl
 
+/-- The range-check lookup and bitshift gate have exact combined degree six. -/
+theorem configure_constraintDegree (K : ℕ)
+    (runningSum : Column .advice) (tableIdx : TableColumn)
+    (counts : ConfigureCounts) :
+    ((configure K runningSum tableIdx).delta counts).constraintDegree = 6 := by
+  simp [ConfigureDelta.constraintDegree, Halo2.constraintDegree,
+    configure_delta_gates, configure_delta_lookups,
+    rangeCheckLookup, rangeCheckLookupFor, rangeCheckInputFor,
+    bitshiftGate, LookupArgument.requiredDegree, Expression.degree,
+    querySelector, queryAdvice, queryFixed, Gate.withSelector]
+
 @[reducible] private def configureInferred
     (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn) :
     ElaboratedConfigure (configure K runningSum tableIdx) := by
@@ -293,9 +304,12 @@ private theorem configure_externalSelectorSummary
 
 instance (K : ℕ) (runningSum : Column .advice) (tableIdx : TableColumn) :
     ElaboratedConfigure (configure K runningSum tableIdx) :=
-  ((configureInferred K runningSum tableIdx).closeSelectorRequirements
+  let elaborated := ((configureInferred K runningSum tableIdx).closeSelectorRequirements
     (configure_selectorRequirements K runningSum tableIdx)).withExternalSelectorSummary
       (fun _ => {}) (configure_externalSelectorSummary K runningSum tableIdx)
+  { elaborated with
+    constraintDegree _ := 6
+    constraintDegree_eq := configure_constraintDegree K runningSum tableIdx }
 
 /-! ## The table loader
 
