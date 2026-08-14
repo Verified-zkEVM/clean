@@ -813,6 +813,11 @@ def placement (self : TopLevelCircuit F Config PublicInput) :
 def usedRows (self : TopLevelCircuit F Config PublicInput) : ℕ :=
   TopLevelCompilation.usedRows self.formalCircuit self.publicInputLayout
 
+theorem usedRows_eq_max (self : TopLevelCircuit F Config PublicInput) :
+    self.usedRows =
+      max (Halo2.usedRows self.operations) self.publicInputLayout.usedRows := by
+  rfl
+
 /-- The complete synthesis operation footprint is included in top-level row usage. -/
 theorem operations_usedRows_le_usedRows
     (self : TopLevelCircuit F Config PublicInput) :

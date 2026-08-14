@@ -1334,6 +1334,43 @@ def HashLayer.synthesisSummary (cfg : Config)
               (FloorPlanner.SynthesisSummary.ofRegion
                 (Gate.synthesisSummary cfg.gate 0)))))))
 
+/-- Fully reduced physical shape of the Merkle hash-to-point region. -/
+def HashLayer.hashPhysicalShape (cfg : Sinsemilla.HashPiece.Config) :
+    FloorPlanner.RegionShapeSummary :=
+  (HashToPoint.hashRegionSynthesisSummary HashLayer.merkleNs cfg 0
+    |>.toRegionShapeSummary).withoutSelectors
+
+@[synthesis_summary_norm]
+theorem HashLayer.hashCircuitSynthesisSummary_physicalShapes_eq
+    (cfg : Sinsemilla.HashPiece.Config) :
+    (HashToPoint.hashCircuitSynthesisSummary HashLayer.merkleNs cfg
+      |>.physicalRegionShapes) = [HashLayer.hashPhysicalShape cfg] := by
+  simp only [HashToPoint.hashCircuitSynthesisSummary,
+    FloorPlanner.SynthesisSummary.ofRegion_physicalRegionShapes,
+    HashLayer.hashPhysicalShape]
+
+@[synthesis_summary_norm]
+theorem HashLayer.synthesisSummary_physicalShapes_eq
+    (cfg : Config) (lookupCfg : LookupRangeCheck.Config 10) :
+    (HashLayer.synthesisSummary cfg lookupCfg).physicalRegionShapes =
+      (HashToPoint.witnessMessagePieceSynthesisSummary cfg.sinsemilla
+          |>.physicalRegionShapes) ++
+      (LookupRangeCheck.witnessShortCheckSynthesisSummary 10 lookupCfg
+          |>.physicalRegionShapes) ++
+      (LookupRangeCheck.witnessShortCheckSynthesisSummary 10 lookupCfg
+          |>.physicalRegionShapes) ++
+      (HashToPoint.witnessMessagePieceSynthesisSummary cfg.sinsemilla
+          |>.physicalRegionShapes) ++
+      (HashToPoint.witnessMessagePieceSynthesisSummary cfg.sinsemilla
+          |>.physicalRegionShapes) ++
+      [HashLayer.hashPhysicalShape cfg.sinsemilla] ++
+      (FloorPlanner.SynthesisSummary.ofRegion
+          (Gate.synthesisSummary cfg.gate 0) |>.physicalRegionShapes) := by
+  unfold HashLayer.synthesisSummary
+  simp only [FloorPlanner.SynthesisSummary.combine_physicalRegionShapes,
+    HashLayer.hashCircuitSynthesisSummary_physicalShapes_eq,
+    List.append_assoc]
+
 theorem HashLayer.synthesisSummary_eq (G : Generators) (Q : Point Fp)
     (hQ : Q.OnCurve) (l : ℕ) (cfg : Config)
     (lookupCfg : LookupRangeCheck.Config 10) (input : Var HashLayer.Input Fp)
@@ -2701,6 +2738,24 @@ def Layer.synthesisSummary (ccfg : CondSwap.Config) (cfg : Config)
         1 0)).combine
     (HashLayer.synthesisSummary cfg lookupCfg)
 
+@[synthesis_summary_norm]
+theorem Layer.synthesisSummary_physicalShapes_eq
+    (ccfg : CondSwap.Config) (cfg : Config)
+    (lookupCfg : LookupRangeCheck.Config 10) :
+    (Layer.synthesisSummary ccfg cfg lookupCfg).physicalRegionShapes =
+      (FloorPlanner.SynthesisSummary.ofRegion
+          (FloorPlanner.RegionSynthesisSummary.ofColumns
+            [.selector ccfg.qSwap.index,
+              .column .advice ccfg.a.index,
+              .column .advice ccfg.b.index,
+              .column .advice ccfg.swap.index,
+              .column .advice ccfg.aSwapped.index,
+              .column .advice ccfg.bSwapped.index]
+            1 0) |>.physicalRegionShapes) ++
+      (HashLayer.synthesisSummary cfg lookupCfg).physicalRegionShapes := by
+  unfold Layer.synthesisSummary
+  exact FloorPlanner.SynthesisSummary.combine_physicalRegionShapes _ _
+
 theorem Layer.synthesisSummary_eq (G : Generators) (Q : Point Fp)
     (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10)
     (wsib : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool)
@@ -3514,6 +3569,15 @@ def synthesisSummary
     : FloorPlanner.SynthesisSummary :=
   FloorPlanner.SynthesisSummary.replicate d
     (Layer.synthesisSummary cfg.1 cfg.2.1 cfg.2.2)
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_physicalShapes_eq
+    (cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10) :
+    (synthesisSummary d cfg).physicalRegionShapes =
+      (List.replicate d
+        (Layer.synthesisSummary cfg.1 cfg.2.1 cfg.2.2).physicalRegionShapes).flatten := by
+  unfold synthesisSummary
+  exact FloorPlanner.SynthesisSummary.replicate_physicalRegionShapes _ _
 
 theorem synthesisSummary_eq
     (cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10)
