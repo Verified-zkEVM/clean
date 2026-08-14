@@ -117,6 +117,26 @@ def synthesisSummary
         (FloorPlanner.SynthesisSummary.ofRegion
           (Ecc.Add.synthesisSummary cfg.2.2.2 0))))
 
+@[synthesis_summary_norm]
+theorem synthesisSummary_tableRowExtent_eq
+    (cfg : Poseidon.Config × AddChip.Config ×
+      Ecc.MulFixed.BaseFieldElem.Config × Ecc.Add.Config) :
+    (synthesisSummary cfg).tableRowExtent = 0 := by
+  simp only [synthesisSummary, Poseidon.hashSynthesisSummary,
+    synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_instanceRowExtent_eq
+    (cfg : Poseidon.Config × AddChip.Config ×
+      Ecc.MulFixed.BaseFieldElem.Config × Ecc.Add.Config) :
+    (synthesisSummary cfg).instanceRowExtent = 0 := by
+  simp only [synthesisSummary, Poseidon.hashSynthesisSummary,
+    Poseidon.initRegionSynthesisSummary,
+    Poseidon.addInputRegionSynthesisSummary,
+    Poseidon.permuteSynthesisSummary,
+    AddChip.synthesisSummary, synthesis_summary_norm]
+  simp
+
 def synthesize (K : FixedBase)
     (cfg : Poseidon.Config × AddChip.Config ×
       Ecc.MulFixed.BaseFieldElem.Config × Ecc.Add.Config)

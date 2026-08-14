@@ -324,6 +324,13 @@ def fixedConstantsLoopSynthesisSummary
     offset 1 1 0 numWindows
 
 @[synthesis_summary_norm]
+theorem fixedConstantsLoopSynthesisSummary_instanceRowExtent_eq
+    (toggle : Gate Fp) (cfg : Config) (offset numWindows : ℕ) :
+    (fixedConstantsLoopSynthesisSummary toggle cfg offset numWindows).instanceRowExtent = 0 := by
+  simp only [fixedConstantsLoopSynthesisSummary, synthesis_summary_norm]
+  simp
+
+@[synthesis_summary_norm]
 theorem fixedConstantsWindow_synthesisSummary_eq
     (toggle : Gate Fp) (B : FixedBaseData) (cfg : Config)
     (w row : ℕ) (self : RegionIndex) :
@@ -842,6 +849,14 @@ def windowChainSynthesisSummary (cfg : Config)
             (windowStepColumns cfg) (offset + 2) 1 2 0
               (numWindows - 3)).combine
           (processWindowSynthesisSummary cfg (offset + (numWindows - 1))))))
+
+@[synthesis_summary_norm]
+theorem windowChainSynthesisSummary_instanceRowExtent_eq
+    (cfg : Config) (offset numWindows : ℕ) :
+    (windowChainSynthesisSummary cfg offset numWindows).instanceRowExtent = 0 := by
+  simp only [windowChainSynthesisSummary, processWindowSynthesisSummary,
+    AddIncomplete.synthesisSummary, synthesis_summary_norm]
+  simp
 
 @[synthesis_summary_norm]
 theorem windowChain_synthesisSummary_eq

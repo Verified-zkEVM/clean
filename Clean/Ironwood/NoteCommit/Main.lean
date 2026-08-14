@@ -660,6 +660,38 @@ def synthesisSummary (cfg : Config) : FloorPlanner.SynthesisSummary :=
       (synthGatesSynthesisSummary cfg))
 
 @[synthesis_summary_norm]
+theorem synthesisSummary_tableRowExtent_eq (cfg : Config) :
+    (synthesisSummary cfg).tableRowExtent = 0 := by
+  simp only [synthesisSummary, synthPiecesSynthesisSummary,
+    synthChecksSynthesisSummary, synthGatesSynthesisSummary,
+    LookupRangeCheck.witnessCheckSynthesisSummary,
+    LookupRangeCheck.witnessCheckDecomposedSynthesisSummary,
+    LookupRangeCheck.witnessShortCheckSynthesisSummary,
+    Sinsemilla.HashToPoint.witnessMessagePieceSynthesisSummary,
+    YCanonicityCheck.synthesisSummary,
+    Sinsemilla.CommitDomain.commitSynthesisSummary,
+    List.foldr_cons, List.foldr_nil, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_instanceRowExtent_eq (cfg : Config) :
+    (synthesisSummary cfg).instanceRowExtent = 0 := by
+  simp only [synthesisSummary, synthPiecesSynthesisSummary,
+    synthChecksSynthesisSummary, synthGatesSynthesisSummary,
+    LookupRangeCheck.witnessCheckSynthesisSummary,
+    LookupRangeCheck.witnessCheckDecomposedSynthesisSummary,
+    LookupRangeCheck.witnessShortCheckSynthesisSummary,
+    Sinsemilla.HashToPoint.witnessMessagePieceSynthesisSummary,
+    YCanonicityCheck.synthesisSummary,
+    Sinsemilla.CommitDomain.commitSynthesisSummary,
+    DecomposeB.synthesisSummary, DecomposeD.synthesisSummary,
+    DecomposeE.synthesisSummary, DecomposeG.synthesisSummary,
+    DecomposeH.synthesisSummary, GdCanonicity.synthesisSummary,
+    PkdCanonicity.synthesisSummary, ValueCanonicity.synthesisSummary,
+    RhoCanonicity.synthesisSummary, PsiCanonicity.synthesisSummary,
+    YCanonicity.synthesisSummary,
+    List.foldr_cons, List.foldr_nil, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
 theorem synthPieces_synthesisSummary_eq (cfg : Config)
     (input : Var Inputs Fp) (region : RegionIndex) :
     FloorPlanner.synthesisSummary ((synthPieces cfg input).operations region) =

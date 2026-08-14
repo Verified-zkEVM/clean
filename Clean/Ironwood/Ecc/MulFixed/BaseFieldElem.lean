@@ -1435,6 +1435,20 @@ def circuitSynthesisSummary (cfg : Config) :
           (canonicityRegionSynthesisSummary cfg))))
 
 @[synthesis_summary_norm]
+theorem circuitSynthesisSummary_tableRowExtent_eq (cfg : Config) :
+    (circuitSynthesisSummary cfg).tableRowExtent = 0 := by
+  simp only [circuitSynthesisSummary, witnessCheck13SynthesisSummary,
+    LookupRangeCheck.witnessCheckSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_instanceRowExtent_eq (cfg : Config) :
+    (circuitSynthesisSummary cfg).instanceRowExtent = 0 := by
+  simp only [circuitSynthesisSummary, innerRegionSynthesisSummary,
+    witnessCheck13SynthesisSummary, canonicityRegionSynthesisSummary,
+    LookupRangeCheck.witnessCheckSynthesisSummary,
+    synthesis_summary_norm]
+
+@[synthesis_summary_norm]
 theorem synthesize_synthesisSummary_eq
     (B : FixedBase) (cfg : Config) (alpha : AssignedCell Fp)
     (self : RegionIndex) :

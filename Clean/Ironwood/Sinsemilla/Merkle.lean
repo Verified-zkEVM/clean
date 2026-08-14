@@ -260,6 +260,11 @@ def synthesisSummary (cfg : Config) (offset : ℕ) :
       .column .advice cfg.b2.index]
     (offset + 2) 1
 
+@[synthesis_summary_norm]
+theorem synthesisSummary_instanceRowExtent_eq (cfg : Config) (offset : ℕ) :
+    (synthesisSummary cfg offset).instanceRowExtent = 0 := by
+  simp only [synthesisSummary, synthesis_summary_norm]
+
 theorem synthesisSummary_eq (cfg : Config) (l : Fp)
     (input : Var Inputs Fp) (offset : ℕ) (self : RegionIndex) :
     synthesisSummary cfg offset =
@@ -1334,20 +1339,43 @@ def HashLayer.synthesisSummary (cfg : Config)
               (FloorPlanner.SynthesisSummary.ofRegion
                 (Gate.synthesisSummary cfg.gate 0)))))))
 
+@[synthesis_summary_norm]
+theorem HashLayer.synthesisSummary_tableRowExtent_eq
+    (cfg : Config) (lookupCfg : LookupRangeCheck.Config 10) :
+    (HashLayer.synthesisSummary cfg lookupCfg).tableRowExtent = 0 := by
+  simp only [HashLayer.synthesisSummary,
+    HashToPoint.witnessMessagePieceSynthesisSummary,
+    LookupRangeCheck.witnessShortCheckSynthesisSummary,
+    synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem HashLayer.synthesisSummary_instanceRowExtent_eq
+    (cfg : Config) (lookupCfg : LookupRangeCheck.Config 10) :
+    (HashLayer.synthesisSummary cfg lookupCfg).instanceRowExtent = 0 := by
+  simp only [HashLayer.synthesisSummary,
+    HashToPoint.witnessMessagePieceSynthesisSummary,
+    LookupRangeCheck.witnessShortCheckSynthesisSummary,
+    synthesis_summary_norm]
+
 /-- Fully reduced physical shape of the Merkle hash-to-point region. -/
 def HashLayer.hashPhysicalShape (cfg : Sinsemilla.HashPiece.Config) :
     FloorPlanner.RegionShapeSummary :=
-  (HashToPoint.hashRegionSynthesisSummary HashLayer.merkleNs cfg 0
-    |>.toRegionShapeSummary).withoutSelectors
+  HashToPoint.hashPhysicalShape HashLayer.merkleNs cfg
+
+theorem HashLayer.hashPhysicalShape_eq
+    (cfg : Sinsemilla.HashPiece.Config) :
+    HashLayer.hashPhysicalShape cfg =
+      (HashToPoint.hashRegionSynthesisSummary HashLayer.merkleNs cfg 0
+        |>.toRegionShapeSummary).withoutSelectors := by
+  rw [HashLayer.hashPhysicalShape, HashToPoint.hashPhysicalShape_eq]
 
 @[synthesis_summary_norm]
 theorem HashLayer.hashCircuitSynthesisSummary_physicalShapes_eq
     (cfg : Sinsemilla.HashPiece.Config) :
     (HashToPoint.hashCircuitSynthesisSummary HashLayer.merkleNs cfg
       |>.physicalRegionShapes) = [HashLayer.hashPhysicalShape cfg] := by
-  simp only [HashToPoint.hashCircuitSynthesisSummary,
-    FloorPlanner.SynthesisSummary.ofRegion_physicalRegionShapes,
-    HashLayer.hashPhysicalShape]
+  rw [HashToPoint.hashCircuitSynthesisSummary_physicalShapes_eq]
+  rfl
 
 @[synthesis_summary_norm]
 theorem HashLayer.synthesisSummary_physicalShapes_eq
@@ -2739,6 +2767,20 @@ def Layer.synthesisSummary (ccfg : CondSwap.Config) (cfg : Config)
     (HashLayer.synthesisSummary cfg lookupCfg)
 
 @[synthesis_summary_norm]
+theorem Layer.synthesisSummary_tableRowExtent_eq
+    (ccfg : CondSwap.Config) (cfg : Config)
+    (lookupCfg : LookupRangeCheck.Config 10) :
+    (Layer.synthesisSummary ccfg cfg lookupCfg).tableRowExtent = 0 := by
+  simp only [Layer.synthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem Layer.synthesisSummary_instanceRowExtent_eq
+    (ccfg : CondSwap.Config) (cfg : Config)
+    (lookupCfg : LookupRangeCheck.Config 10) :
+    (Layer.synthesisSummary ccfg cfg lookupCfg).instanceRowExtent = 0 := by
+  simp only [Layer.synthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
 theorem Layer.synthesisSummary_physicalShapes_eq
     (ccfg : CondSwap.Config) (cfg : Config)
     (lookupCfg : LookupRangeCheck.Config 10) :
@@ -3569,6 +3611,20 @@ def synthesisSummary
     : FloorPlanner.SynthesisSummary :=
   FloorPlanner.SynthesisSummary.replicate d
     (Layer.synthesisSummary cfg.1 cfg.2.1 cfg.2.2)
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_tableRowExtent_eq
+    (cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10) :
+    (synthesisSummary d cfg).tableRowExtent = 0 := by
+  simp only [synthesisSummary, synthesis_summary_norm]
+  simp
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_instanceRowExtent_eq
+    (cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10) :
+    (synthesisSummary d cfg).instanceRowExtent = 0 := by
+  simp only [synthesisSummary, synthesis_summary_norm]
+  simp
 
 @[synthesis_summary_norm]
 theorem synthesisSummary_physicalShapes_eq

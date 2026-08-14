@@ -64,6 +64,18 @@ def synthesisSummary
     (FloorPlanner.SynthesisSummary.ofRegion
       (Ecc.Add.synthesisSummary cfg.2 0))
 
+@[synthesis_summary_norm]
+theorem synthesisSummary_tableRowExtent_eq
+    (cfg : Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config) :
+    (synthesisSummary cfg).tableRowExtent = 0 := by
+  simp only [synthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_instanceRowExtent_eq
+    (cfg : Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config) :
+    (synthesisSummary cfg).instanceRowExtent = 0 := by
+  simp only [synthesisSummary, synthesis_summary_norm]
+
 theorem synthesize_copyCellsAssignedFrom
     (G : FixedBase)
     (cfg : Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config)

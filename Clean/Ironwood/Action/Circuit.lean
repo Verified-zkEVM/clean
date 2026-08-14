@@ -1247,6 +1247,23 @@ def synthWitnessSynthesisSummary (cfg : Config) :
     load, load, point, nonId, nonId, load, load, load].foldr
     FloorPlanner.SynthesisSummary.combine {}
 
+@[synthesis_summary_norm]
+theorem synthWitnessSynthesisSummary_tableRowExtent_eq (cfg : Config) :
+    (synthWitnessSynthesisSummary cfg).tableRowExtent = 1025 := by
+  simp only [synthWitnessSynthesisSummary, Sinsemilla.loadSynthesisSummary,
+    loadPrivateSynthesisSummary, List.foldr_cons, List.foldr_nil,
+    synthesis_summary_norm, Specs.K]
+  norm_num
+
+@[synthesis_summary_norm]
+theorem synthWitnessSynthesisSummary_instanceRowExtent_eq (cfg : Config) :
+    (synthWitnessSynthesisSummary cfg).instanceRowExtent = 0 := by
+  simp only [synthWitnessSynthesisSummary, Sinsemilla.loadSynthesisSummary,
+    loadPrivateSynthesisSummary,
+    Ecc.WitnessPoint.pointSynthesisSummary,
+    Ecc.WitnessPoint.pointNonIdSynthesisSummary,
+    List.foldr_cons, List.foldr_nil, synthesis_summary_norm]
+
 theorem synthWitnessSynthesisSummary_physicalRegionShapes (cfg : Config) :
     (synthWitnessSynthesisSummary cfg).physicalRegionShapes =
       [Sinsemilla.loadSynthesisSummary,
@@ -1309,6 +1326,34 @@ def synthChecksSynthesisSummary (cfg : Config) :
     AddressIntegrity.synthesisSummary
       (cfg.eccConfig.mul, cfg.eccConfig.witnessPoint)].foldr
         FloorPlanner.SynthesisSummary.combine {}
+
+@[synthesis_summary_norm]
+theorem synthChecksSynthesisSummary_tableRowExtent_eq (cfg : Config) :
+    (synthChecksSynthesisSummary cfg).tableRowExtent = 0 := by
+  simp only [synthChecksSynthesisSummary,
+    Sinsemilla.Merkle.CalculateRoot.synthesisSummary_tableRowExtent_eq,
+    ValueCommit.synthesisSummary_tableRowExtent_eq,
+    DeriveNullifier.synthesisSummary_tableRowExtent_eq,
+    SpendAuthority.synthesisSummary_tableRowExtent_eq,
+    CommitIvk.Main.synthesisSummary_tableRowExtent_eq,
+    AddressIntegrity.synthesisSummary_tableRowExtent_eq,
+    loadPrivateSynthesisSummary,
+    List.foldr_cons, List.foldr_nil, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem synthChecksSynthesisSummary_instanceRowExtent_eq (cfg : Config) :
+    (synthChecksSynthesisSummary cfg).instanceRowExtent = 6 := by
+  simp only [synthChecksSynthesisSummary,
+    Sinsemilla.Merkle.CalculateRoot.synthesisSummary_instanceRowExtent_eq,
+    ValueCommit.synthesisSummary_instanceRowExtent_eq,
+    DeriveNullifier.synthesisSummary_instanceRowExtent_eq,
+    SpendAuthority.synthesisSummary_instanceRowExtent_eq,
+    CommitIvk.Main.synthesisSummary_instanceRowExtent_eq,
+    AddressIntegrity.synthesisSummary_instanceRowExtent_eq,
+    loadPrivateSynthesisSummary,
+    CV_NET_X, CV_NET_Y, NF_OLD, RK_X, RK_Y,
+    List.foldr_cons, List.foldr_nil, synthesis_summary_norm]
+  norm_num
 
 theorem synthChecksSynthesisSummary_physicalRegionShapes (cfg : Config) :
     (synthChecksSynthesisSummary cfg).physicalRegionShapes =
@@ -1378,6 +1423,25 @@ def synthNotesSynthesisSummary (cfg : Config) :
     FloorPlanner.SynthesisSummary.ofInstanceRow CMX,
     orchardChecksSynthesisSummary cfg].foldr
       FloorPlanner.SynthesisSummary.combine {}
+
+@[synthesis_summary_norm]
+theorem synthNotesSynthesisSummary_tableRowExtent_eq (cfg : Config) :
+    (synthNotesSynthesisSummary cfg).tableRowExtent = 0 := by
+  simp only [synthNotesSynthesisSummary,
+    NoteCommit.Main.synthesisSummary_tableRowExtent_eq,
+    orchardChecksSynthesisSummary, loadPrivateSynthesisSummary,
+    List.foldr_cons, List.foldr_nil, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem synthNotesSynthesisSummary_instanceRowExtent_eq (cfg : Config) :
+    (synthNotesSynthesisSummary cfg).instanceRowExtent = 9 := by
+  simp only [synthNotesSynthesisSummary,
+    NoteCommit.Main.synthesisSummary_instanceRowExtent_eq,
+    Ecc.WitnessPoint.pointNonIdSynthesisSummary,
+    orchardChecksSynthesisSummary, orchardChecksRegionSynthesisSummary,
+    loadPrivateSynthesisSummary, CMX, ENABLE_OUTPUT,
+    List.foldr_cons, List.foldr_nil, synthesis_summary_norm]
+  norm_num
 
 theorem synthNotesSynthesisSummary_physicalRegionShapes (cfg : Config) :
     (synthNotesSynthesisSummary cfg).physicalRegionShapes =
@@ -1496,6 +1560,18 @@ def synthCrossAddressChecksSynthesisSummary (cfg : Config) :
   FloorPlanner.SynthesisSummary.ofRegion
     (FloorPlanner.RegionSynthesisSummary.repeatColumns
       (crossAddressColumns cfg) 0 1 1 4 4 (DISABLE_CROSS_ADDRESS + 1))
+
+@[synthesis_summary_norm]
+theorem synthCrossAddressChecksSynthesisSummary_tableRowExtent_eq (cfg : Config) :
+    (synthCrossAddressChecksSynthesisSummary cfg).tableRowExtent = 0 := by
+  simp only [synthCrossAddressChecksSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem synthCrossAddressChecksSynthesisSummary_instanceRowExtent_eq (cfg : Config) :
+    (synthCrossAddressChecksSynthesisSummary cfg).instanceRowExtent = 10 := by
+  simp only [synthCrossAddressChecksSynthesisSummary, synthesis_summary_norm,
+    DISABLE_CROSS_ADDRESS]
+  norm_num
 
 @[synthesis_summary_norm]
 theorem synthCrossAddressChecks_synthesisSummary_eq

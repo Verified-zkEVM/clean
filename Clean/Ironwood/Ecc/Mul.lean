@@ -524,6 +524,11 @@ def mainCircuitSynthesisSummary (cfg : Config) :
                 (offLsb + 2) 0).combine
               (Add.synthesisSummary cfg.addConfig offLsb))))))
 
+@[synthesis_summary_norm]
+theorem mainCircuitSynthesisSummary_instanceRowExtent_eq (cfg : Config) :
+    (mainCircuitSynthesisSummary cfg).instanceRowExtent = 0 := by
+  simp only [mainCircuitSynthesisSummary, synthesis_summary_norm]
+
 theorem mainCircuitSynthesisSummary_eq (cfg : Config)
     (input : Var Inputs Fp) (self : RegionIndex) :
     mainCircuitSynthesisSummary cfg =
@@ -1505,6 +1510,16 @@ def mulSynthesisSummary (cfg : Config) : FloorPlanner.SynthesisSummary :=
   (FloorPlanner.SynthesisSummary.ofRegion
       (mainCircuitSynthesisSummary cfg)).combine
     (MulOverflow.circuitSynthesisSummary 10 cfg.overflowConfig)
+
+@[synthesis_summary_norm]
+theorem mulSynthesisSummary_tableRowExtent_eq (cfg : Config) :
+    (mulSynthesisSummary cfg).tableRowExtent = 0 := by
+  simp only [mulSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem mulSynthesisSummary_instanceRowExtent_eq (cfg : Config) :
+    (mulSynthesisSummary cfg).instanceRowExtent = 0 := by
+  simp only [mulSynthesisSummary, synthesis_summary_norm]
 
 /-- The region count of `synthesize`: the main double-and-add region (1) plus the overflow
 check's three sibling regions (`MulOverflow.circuit`'s regionCount, 3) = 4. -/

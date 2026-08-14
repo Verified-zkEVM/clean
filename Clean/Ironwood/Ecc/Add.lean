@@ -358,6 +358,11 @@ def synthesisSummary (config : Config) (offset : ℕ) :
 theorem synthesisSummary_constantSiteCount (config : Config) (offset : ℕ) :
     (synthesisSummary config offset).constantSiteCount = 0 := rfl
 
+@[synthesis_summary_norm]
+theorem synthesisSummary_instanceRowExtent_eq (config : Config) (offset : ℕ) :
+    (synthesisSummary config offset).instanceRowExtent = 0 := by
+  simp only [synthesisSummary, synthesis_summary_norm]
+
 def add : FormalRegionCircuit Fp
     (Column .advice × Column .advice × Column .advice × Column .advice ×
       Column .advice × Column .advice × Column .advice × Column .advice × Column .advice)

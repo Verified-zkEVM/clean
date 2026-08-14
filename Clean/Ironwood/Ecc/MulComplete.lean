@@ -843,6 +843,14 @@ def circuitSynthesisSummary (numBits : ℕ) (cfg : Config)
       [.column .advice cfg.zComplete.index] (offset + 1) 0).combine
     (roundsSynthesisSummary numBits cfg offset)
 
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_instanceRowExtent_eq
+    (numBits : ℕ) (cfg : Config) (offset : ℕ) :
+    (circuitSynthesisSummary numBits cfg offset).instanceRowExtent = 0 := by
+  simp only [circuitSynthesisSummary, roundsSynthesisSummary,
+    synthesis_summary_norm]
+  simp
+
 def assignRegionSynthesize (numBits w : ℕ) (cfg : Config) (offset : ℕ)
     (input : Var Inputs Fp) : RegionCircuit Fp (Var (Output numBits) Fp) := do
   startCopy cfg input offset

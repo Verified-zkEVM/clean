@@ -562,6 +562,22 @@ theorem foldr_combine_constantSiteCount
       simp only [List.foldr_cons, combine_constantSiteCount,
         List.map_cons, List.sum_cons, inductionHypothesis]
 
+/-- A fold of region summaries that never touch instance rows also never touches
+instance rows. -/
+@[synthesis_summary_norm]
+theorem foldr_combine_instanceRowExtent_eq_zero
+    (summaries : List RegionSynthesisSummary)
+    (hzero : ∀ summary ∈ summaries, summary.instanceRowExtent = 0) :
+    (summaries.foldr combine {}).instanceRowExtent = 0 := by
+  induction summaries with
+  | nil => simp only [List.foldr_nil]
+  | cons summary rest inductionHypothesis =>
+      simp only [List.foldr_cons, combine_instanceRowExtent]
+      rw [hzero summary (List.mem_cons_self),
+        inductionHypothesis (fun child hchild =>
+          hzero child (List.mem_cons_of_mem summary hchild))]
+      simp only [max_self]
+
 @[circuit_norm, synthesis_summary_norm] theorem combine_empty
     (summary : RegionSynthesisSummary) :
     summary.combine {} = summary := by
@@ -683,7 +699,7 @@ are supplied later by the enclosing layouter sequence. -/
 @[ext] structure RegionShapeSummary where
   columns : List RegionColumn
   rowCount : ℕ
-deriving Inhabited
+deriving Inhabited, DecidableEq, Repr, BEq, ReflBEq, LawfulBEq
 
 /-- Forget deferred-constant metadata when publishing a region to the V1 planner. -/
 def RegionSynthesisSummary.toRegionShapeSummary

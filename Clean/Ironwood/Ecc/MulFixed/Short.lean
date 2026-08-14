@@ -1841,6 +1841,17 @@ theorem circuitSynthesisSummary_constantSiteCount
     (circuitSynthesisSummary config).constantSiteCount = 1 := by
   simp only [circuitSynthesisSummary, synthesis_summary_norm]
 
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_instanceRowExtent_eq (config : Config) :
+    (circuitSynthesisSummary config).instanceRowExtent = 0 := by
+  simp only [circuitSynthesisSummary, innerRegionSynthesisSummary,
+    mswRegionSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_tableRowExtent_eq (config : Config) :
+    (circuitSynthesisSummary config).tableRowExtent = 0 := by
+  simp only [circuitSynthesisSummary, synthesis_summary_norm]
+
 /-- Short fixed-base multiplication requests exactly its strict decomposition's
 single deferred constant allocation. -/
 @[synthesis_summary_norm]

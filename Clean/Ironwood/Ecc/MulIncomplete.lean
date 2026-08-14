@@ -393,6 +393,14 @@ def doubleAndAddSynthesisSummary (n : ℕ) (cfg : Config) (offset : ℕ) :
           .column .advice cfg.lambda1.index]
         (offset + n + 3) 0))
 
+@[synthesis_summary_norm]
+theorem doubleAndAddSynthesisSummary_instanceRowExtent_eq
+    (n : ℕ) (cfg : Config) (offset : ℕ) :
+    (doubleAndAddSynthesisSummary n cfg offset).instanceRowExtent = 0 := by
+  simp only [doubleAndAddSynthesisSummary, loopSynthesisSummary,
+    synthesis_summary_norm]
+  simp
+
 def double_and_add (n : ℕ) (w : ℕ) :
     FormalRegionCircuit Fp
       (Column .advice × Column .advice × Column .advice × Column .advice ×

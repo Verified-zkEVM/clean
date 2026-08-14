@@ -307,6 +307,19 @@ def circuitSynthesisSummary (K : ℕ) (cfg : Config K)
             .selector cfg.qOverflow.index]
           3 0)))
 
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_tableRowExtent_eq (K : ℕ) (cfg : Config K) :
+    (circuitSynthesisSummary K cfg).tableRowExtent = 0 := by
+  simp only [circuitSynthesisSummary,
+    LookupRangeCheck.copyCheckSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_instanceRowExtent_eq (K : ℕ) (cfg : Config K) :
+    (circuitSynthesisSummary K cfg).instanceRowExtent = 0 := by
+  simp only [circuitSynthesisSummary,
+    LookupRangeCheck.copyCheckSynthesisSummary,
+    synthesis_summary_norm]
+
 def circuit (K : ℕ) (hKW : K * numWords K = 130) :
     FormalCircuit Fp (LookupRangeCheck.Config K × Column .advice × Column .advice ×
       Column .advice) (Config K) Inputs unit where

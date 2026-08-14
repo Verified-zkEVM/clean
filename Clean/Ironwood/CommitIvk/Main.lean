@@ -201,6 +201,29 @@ def synthesisSummary (cfg : Config) : FloorPlanner.SynthesisSummary :=
       (Canonicity.circuitSynthesisSummary cfg.gate cfg.lookupConfig))
 
 @[synthesis_summary_norm]
+theorem synthesisSummary_tableRowExtent_eq (cfg : Config) :
+    (synthesisSummary cfg).tableRowExtent = 0 := by
+  simp only [synthesisSummary, synthPiecesSynthesisSummary,
+    Sinsemilla.CommitDomain.commitSynthesisSummary,
+    Canonicity.circuitSynthesisSummary, List.foldr_cons, List.foldr_nil,
+    LookupRangeCheck.witnessShortCheckSynthesisSummary,
+    LookupRangeCheck.witnessCheckSynthesisSummary,
+    Sinsemilla.HashToPoint.witnessMessagePieceSynthesisSummary,
+    synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_instanceRowExtent_eq (cfg : Config) :
+    (synthesisSummary cfg).instanceRowExtent = 0 := by
+  simp only [synthesisSummary, synthPiecesSynthesisSummary,
+    Sinsemilla.CommitDomain.commitSynthesisSummary,
+    Canonicity.circuitSynthesisSummary, List.foldr_cons, List.foldr_nil,
+    LookupRangeCheck.witnessShortCheckSynthesisSummary,
+    LookupRangeCheck.witnessCheckSynthesisSummary,
+    Sinsemilla.HashToPoint.witnessMessagePieceSynthesisSummary,
+    CommitIvk.synthesisSummary,
+    synthesis_summary_norm]
+
+@[synthesis_summary_norm]
 theorem synthPieces_synthesisSummary_eq (cfg : Config)
     (ak nk : AssignedCell Fp) (region : RegionIndex) :
     FloorPlanner.synthesisSummary

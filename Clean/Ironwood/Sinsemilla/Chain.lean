@@ -1333,6 +1333,18 @@ def circuitSynthesisSummary (ns : List ℕ) (cfg : Config) (offset : ℕ) :
       (offset + prefixRows ns ns.length + 1) 0)
 
 @[synthesis_summary_norm]
+theorem circuitSynthesisSummary_instanceRowExtent_eq
+    (ns : List ℕ) (cfg : Config) (offset : ℕ) :
+    (circuitSynthesisSummary ns cfg offset).instanceRowExtent = 0 := by
+  simp only [circuitSynthesisSummary, synthesis_summary_norm]
+  apply FloorPlanner.RegionSynthesisSummary.foldr_combine_instanceRowExtent_eq_zero
+  intro summary hsummary
+  rw [List.mem_ofFn] at hsummary
+  obtain ⟨i, rfl⟩ := hsummary
+  simp only [slotIterationSynthesisSummary, slotSynthesisSummary,
+    synthesis_summary_norm]
+
+@[synthesis_summary_norm]
 theorem circuitSynthesisSummary_constantSiteCount
     (ns : List ℕ) (cfg : Config) (offset : ℕ) :
     (circuitSynthesisSummary ns cfg offset).constantSiteCount = 0 := by

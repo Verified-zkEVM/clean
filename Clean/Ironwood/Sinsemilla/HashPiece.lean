@@ -564,6 +564,14 @@ def circuitSynthesisSummary (w : ℕ) (cfg : Config) (offset : ℕ) :
           .selector cfg.qS1.index]
         (offset + w + 2) 0))
 
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_instanceRowExtent_eq (w : ℕ)
+    (cfg : Config) (offset : ℕ) :
+    (circuitSynthesisSummary w cfg offset).instanceRowExtent = 0 := by
+  simp only [circuitSynthesisSummary, loopSynthesisSummary,
+    synthesis_summary_norm]
+  simp
+
 def circuitBody (G : Generators) (w : ℕ) (final : Bool)
     (yaIn : Placed Environment Fp → Fp) (cfg : Config) (offset : ℕ)
     (piece : AssignedCell Fp) : RegionCircuit Fp (Output (w + 1) (AssignedCell Fp)) := do

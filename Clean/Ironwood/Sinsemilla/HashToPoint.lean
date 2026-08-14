@@ -623,6 +623,54 @@ def hashCircuitSynthesisSummary (ns : List ℕ)
     (hashRegionSynthesisSummary ns config 0)
 
 @[synthesis_summary_norm]
+theorem hashCircuitSynthesisSummary_tableRowExtent_eq (ns : List ℕ)
+    (config : Sinsemilla.HashPiece.Config) :
+    (hashCircuitSynthesisSummary ns config).tableRowExtent = 0 := by
+  simp only [hashCircuitSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem hashCircuitSynthesisSummary_instanceRowExtent_eq (ns : List ℕ)
+    (config : Sinsemilla.HashPiece.Config) :
+    (hashCircuitSynthesisSummary ns config).instanceRowExtent = 0 := by
+  simp only [hashCircuitSynthesisSummary, hashRegionSynthesisSummary,
+    synthesis_summary_norm]
+
+private opaque hashPhysicalShapePacked :
+    { shape : List ℕ → Sinsemilla.HashPiece.Config →
+        FloorPlanner.RegionShapeSummary //
+      ∀ ns config,
+        shape ns config =
+          (hashRegionSynthesisSummary ns config 0
+            |>.toRegionShapeSummary).withoutSelectors } :=
+  ⟨fun ns config =>
+      (hashRegionSynthesisSummary ns config 0
+        |>.toRegionShapeSummary).withoutSelectors,
+    by intros; rfl⟩
+
+/-- The selector-free physical shape of one hash-to-point region. The reduction
+barrier keeps concrete planner proofs from unfolding the full hash stack
+accidentally; `hashPhysicalShape_eq` opens it deliberately. -/
+def hashPhysicalShape (ns : List ℕ)
+    (config : Sinsemilla.HashPiece.Config) : FloorPlanner.RegionShapeSummary :=
+  hashPhysicalShapePacked.val ns config
+
+theorem hashPhysicalShape_eq (ns : List ℕ)
+    (config : Sinsemilla.HashPiece.Config) :
+    hashPhysicalShape ns config =
+      (hashRegionSynthesisSummary ns config 0
+        |>.toRegionShapeSummary).withoutSelectors :=
+  hashPhysicalShapePacked.property ns config
+
+@[synthesis_summary_norm]
+theorem hashCircuitSynthesisSummary_physicalShapes_eq
+    (ns : List ℕ) (config : Sinsemilla.HashPiece.Config) :
+    (hashCircuitSynthesisSummary ns config).physicalRegionShapes =
+      [hashPhysicalShape ns config] := by
+  simp only [hashCircuitSynthesisSummary,
+    FloorPlanner.SynthesisSummary.ofRegion_physicalRegionShapes,
+    hashPhysicalShape_eq]
+
+@[synthesis_summary_norm]
 theorem hashCircuit_synthesisSummary
     (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
     (hns : ns ≠ []) (config : Sinsemilla.HashPiece.Config)

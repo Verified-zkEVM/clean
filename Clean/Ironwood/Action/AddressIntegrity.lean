@@ -53,6 +53,19 @@ def synthesisSummary
       (Ecc.WitnessPoint.pointNonIdSynthesisSummary cfg.2 0)).combine
         (FloorPlanner.SynthesisSummary.ofRegion {}))
 
+@[synthesis_summary_norm]
+theorem synthesisSummary_tableRowExtent_eq
+    (cfg : Ecc.Mul.Config × Ecc.WitnessPoint.Config) :
+    (synthesisSummary cfg).tableRowExtent = 0 := by
+  simp only [synthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_instanceRowExtent_eq
+    (cfg : Ecc.Mul.Config × Ecc.WitnessPoint.Config) :
+    (synthesisSummary cfg).instanceRowExtent = 0 := by
+  simp only [synthesisSummary, Ecc.WitnessPoint.pointNonIdSynthesisSummary,
+    synthesis_summary_norm]
+
 theorem synthesize_copyCellsAssignedFrom
     (cfg : Ecc.Mul.Config × Ecc.WitnessPoint.Config)
     (input : Var Input Fp) (self : RegionIndex)

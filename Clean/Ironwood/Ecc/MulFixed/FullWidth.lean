@@ -96,6 +96,13 @@ def witnessScalarLoopSynthesisSummary (cfg : Config) (offset : ℕ) :
       [.column .advice cfg.superConfig.window.index] offset 1 1 0 85)
 
 @[synthesis_summary_norm]
+theorem witnessScalarLoopSynthesisSummary_instanceRowExtent_eq
+    (cfg : Config) (offset : ℕ) :
+    (witnessScalarLoopSynthesisSummary cfg offset).instanceRowExtent = 0 := by
+  simp only [witnessScalarLoopSynthesisSummary, synthesis_summary_norm]
+  norm_num
+
+@[synthesis_summary_norm]
 theorem witnessScalarLoop_synthesisSummary_eq
     (cfg : Config)
     (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
@@ -1585,6 +1592,17 @@ theorem circuitSynthesisSummary_constantSiteCount (config : Config) :
     (circuitSynthesisSummary config).constantSiteCount = 0 := by
   simp only [circuitSynthesisSummary, synthesis_summary_norm,
     innerRegionSynthesisSummary, Add.synthesisSummary]
+
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_instanceRowExtent_eq (config : Config) :
+    (circuitSynthesisSummary config).instanceRowExtent = 0 := by
+  simp only [circuitSynthesisSummary, innerRegionSynthesisSummary,
+    Add.synthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_tableRowExtent_eq (config : Config) :
+    (circuitSynthesisSummary config).tableRowExtent = 0 := by
+  simp only [circuitSynthesisSummary, synthesis_summary_norm]
 
 /-- Full-width fixed-base multiplication requests no deferred constant allocations. -/
 @[synthesis_summary_norm]
