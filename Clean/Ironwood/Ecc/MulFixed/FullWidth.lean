@@ -781,8 +781,8 @@ private theorem fw_completeness_chain (B : FixedBase) (cfg : Config) (offset : �
       exact ⟨hx, hy⟩)
     ⟨if_pos rfl, if_pos rfl⟩
     (by
-      intro j hj1 hj83 hass
-      obtain ⟨hOnP, hOnQ, hne⟩ := hass
+      intro j hj1 hj83 hAssumptions
+      obtain ⟨hOnP, hOnQ, hne⟩ := hAssumptions
       dsimp only at hOnP hOnQ hne ⊢
       rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)]
       rcases Nat.lt_or_ge j 2 with hj2 | hj2
@@ -1181,8 +1181,8 @@ private theorem fw_inner_soundness (B : FixedBase) (windows : Vector (Witgen.MOv
         exact ⟨hx, hy⟩)
       ⟨if_pos rfl, if_pos rfl⟩
       (by
-        intro j hj1 hj83 hass
-        obtain ⟨hOnP, hOnQ, hne⟩ := hass
+        intro j hj1 hj83 hAssumptions
+        obtain ⟨hOnP, hOnQ, hne⟩ := hAssumptions
         dsimp only at hOnP hOnQ hne ⊢
         rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)]
         rcases Nat.lt_or_ge j 2 with hj2 | hj2

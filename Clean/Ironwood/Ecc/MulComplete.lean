@@ -452,7 +452,7 @@ def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs Roun
             (hconfigured := hconfig)
         all_goals intro cell hcell
         all_goals simp only [Add.add_inputCells, List.mem_cons, List.not_mem_nil, or_false] at hcell
-        · have htmp := Add.add_output_cells_assigned configInput.addConfig offset
+        · have hOutputCellsAssigned := Add.add_output_cells_assigned configInput.addConfig offset
             { p := { x := input.base.x, y := AssignedCell.of region offset configInput.addConfig.yP },
               q := input.acc } region
             [Cell.of region offset configInput.addConfig.yP,
@@ -462,8 +462,8 @@ def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs Roun
           rcases hcell with rfl | rfl | rfl | rfl
           · exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ (by simp)
           · exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ (by simp)
-          · simpa only [RegionCircuit.operations] using htmp.1
-          · simpa only [RegionCircuit.operations] using htmp.2
+          · simpa only [RegionCircuit.operations] using hOutputCellsAssigned.1
+          · simpa only [RegionCircuit.operations] using hOutputCellsAssigned.2
         }
 
   -- acc, base are valid Pallas points (complete addition is exceptional-case-free).

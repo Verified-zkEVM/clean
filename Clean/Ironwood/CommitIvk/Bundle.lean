@@ -256,7 +256,8 @@ def bundle (wb1 wd1 : WitgenIR Fp 1) :
     have hiz13A : AssignedCell.eval env.place env.env.toEnvironment input_var.z13A = input.z13A := congrArg Inputs.z13A h_input
     have hiaPrime : AssignedCell.eval env.place env.env.toEnvironment input_var.aPrime = input.aPrime := congrArg Inputs.aPrime h_input
     have hiz13APrime : AssignedCell.eval env.place env.env.toEnvironment input_var.z13APrime = input.z13APrime := congrArg Inputs.z13APrime h_input
-    have hink : AssignedCell.eval env.place env.env.toEnvironment input_var.nk = input.nk := congrArg Inputs.nk h_input
+    have hInputNk : AssignedCell.eval env.place env.env.toEnvironment input_var.nk = input.nk :=
+      congrArg Inputs.nk h_input
     have hic : AssignedCell.eval env.place env.env.toEnvironment input_var.c = input.c := congrArg Inputs.c h_input
     have hidWhole : AssignedCell.eval env.place env.env.toEnvironment input_var.dWhole = input.dWhole := congrArg Inputs.dWhole h_input
     have hid0 : AssignedCell.eval env.place env.env.toEnvironment input_var.d0 = input.d0 := congrArg Inputs.d0 h_input
@@ -277,7 +278,7 @@ def bundle (wb1 wd1 : WitgenIR Fp 1) :
     rw [← hibWhole, ← hib0, ← hib2, ← hwb, ← hwb0, ← hwb2] at he3
     rw [← hidWhole, ← hid0, ← hwd, ← hwd0] at he4
     rw [← hia, ← hib0, ← hiak, ← hwa, ← hwb0, ← hwak] at he5
-    rw [← hib2, ← hic, ← hid0, ← hink, ← hwb2, ← hwc, ← hwd0, ← hwnk] at he6
+    rw [← hib2, ← hic, ← hid0, ← hInputNk, ← hwb2, ← hwc, ← hwd0, ← hwnk] at he6
     rw [← hib0, ← hwb0] at he7
     rw [← hiz13A, ← hwz13a] at he8
     rw [← hia, ← hiaPrime, ← hwa, ← hwap] at he9

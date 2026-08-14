@@ -301,8 +301,8 @@ def circuit (wb1 wd1 : WitgenIR Fp 1) :
     rw [rangeCheckAt_output, rangeCheckAt_output] at hGate
     simp only [gateChild_assumptions_eq, gateChild_spec_eq, gateChild_extract_cells,
       circuit_norm] at hGate
-    obtain ⟨hiak, hia, hib, hib0, hib2, hiz13a, hink, hic, hid, hid0, hiz13c⟩ := h_input
-    simp only [hiak, hia, hib, hib0, hib2, hiz13a, hink, hic, hid, hid0, hiz13c] at hGate
+    obtain ⟨hiak, hia, hib, hib0, hib2, hiz13a, hInputNk, hic, hid, hid0, hiz13c⟩ := h_input
+    simp only [hiak, hia, hib, hib0, hib2, hiz13a, hInputNk, hic, hid, hid0, hiz13c] at hGate
     rw [← hz0a] at htelA
     rw [← hz0b] at htelB
     have hGSpec := hGate trivial
@@ -340,7 +340,7 @@ def circuit (wb1 wd1 : WitgenIR Fp 1) :
     simp only [circuit_norm, show (10 * 14 : ℕ) = 140 from by norm_num] at hCSb hCPb
     obtain ⟨hz0b, loB, hloB, htelB⟩ := hCSb
     obtain ⟨hz0bP, hzLastB⟩ := hCPb
-    obtain ⟨hiak, hia, hib, hib0, hib2, hiz13a, hink, hic, hid, hid0, hiz13c⟩ := h_input
+    obtain ⟨hiak, hia, hib, hib0, hib2, hiz13a, hInputNk, hic, hid, hid0, hiz13c⟩ := h_input
     obtain ⟨hpa1, hpa2, hpa3, hpa4, hpa5, hpa6, hpa7, hpa8, hpa9⟩ := hPA
     refine ⟨⟨?_, ?_, ?_⟩, ⟨?_, ?_, ?_⟩, trivial, ?_, ?_⟩
     · rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]
@@ -365,7 +365,7 @@ def circuit (wb1 wd1 : WitgenIR Fp 1) :
     · -- the gate child's honest-prover precondition: tails + shifts + the donor `Spec`
       rw [rangeCheckAt_output, rangeCheckAt_output]
       simp only [gateChild_proverAssumptions_eq, gateChild_extract_cells, circuit_norm]
-      rw [hiak, hia, hib, hib0, hib2, hiz13a, hink, hic, hid, hid0, hiz13c]
+      rw [hiak, hia, hib, hib0, hib2, hiz13a, hInputNk, hic, hid, hid0, hiz13c]
       rw [hia] at hWaP
       rw [hib2, hic] at hWbP
       refine ⟨?_, ?_, hWaP, by rw [hWbP]; ring, ?_⟩
