@@ -3396,6 +3396,33 @@ private theorem foldState_node_column_mem
         G Q hQ _ _ _ _ (layerAtConfigured G Q hQ l₀ wsib wswap configured m)
       simpa only [layerAtConfigured_permutationColumns] using hcolumn
 
+/-- The node carried by a nonempty fold is the output cell assigned by its last
+layer. -/
+private theorem foldState_succ_node_cell_mem_assigned
+    (cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10)
+    (input : Var Layer.Input Fp) (region : RegionIndex) (m : ℕ) :
+    (FormalCircuit.foldState
+        (layerAt G Q hQ l₀ wsib wswap) toInput cfg input region (m + 1)).1.node.cell ∈
+      (FormalCircuit.foldOps (layerAt G Q hQ l₀ wsib wswap)
+        toInput cfg input region (m + 1)).assignedCellsFrom region := by
+  simp only [FormalCircuit.foldState, toInput]
+  rw [FormalCircuit.foldOps]
+  apply Operations.mem_assignedCellsFrom_append_right
+  rw [show region + Operations.regionCount
+          (FormalCircuit.foldOps (layerAt G Q hQ l₀ wsib wswap)
+            toInput cfg input region m) =
+        (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap)
+          toInput cfg input region m).2 from
+      FormalCircuit.foldOps_regionCount
+        (layerAt G Q hQ l₀ wsib wswap) toInput cfg input region m]
+  exact Layer.circuit_call_output_cell_assigned
+    G Q hQ ((l₀ + m) % 2 ^ 10) (Nat.mod_lt _ (by norm_num))
+    (wsib m) (wswap m) _
+    (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap)
+      toInput cfg input region m).1
+    (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap)
+      toInput cfg input region m).2
+
 /-- Every node carried by the fold is either its original input or the output cell
 assigned by an earlier layer. -/
 private theorem foldState_node_cell_mem
@@ -3407,25 +3434,9 @@ private theorem foldState_node_cell_mem
         (FormalCircuit.foldOps (layerAt G Q hQ l₀ wsib wswap)
           toInput cfg input region m).assignedCellsFrom region
   | 0 => by simp [FormalCircuit.foldState, FormalCircuit.foldOps]
-  | m + 1 => by
-      simp only [FormalCircuit.foldState, toInput]
-      rw [FormalCircuit.foldOps]
-      apply List.mem_append_right
-      apply Operations.mem_assignedCellsFrom_append_right
-      rw [show region + Operations.regionCount
-              (FormalCircuit.foldOps (layerAt G Q hQ l₀ wsib wswap)
-                toInput cfg input region m) =
-            (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap)
-              toInput cfg input region m).2 from
-          FormalCircuit.foldOps_regionCount
-            (layerAt G Q hQ l₀ wsib wswap) toInput cfg input region m]
-      exact Layer.circuit_call_output_cell_assigned
-        G Q hQ ((l₀ + m) % 2 ^ 10) (Nat.mod_lt _ (by norm_num))
-        (wsib m) (wswap m) _
-        (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap)
-          toInput cfg input region m).1
-        (FormalCircuit.foldState (layerAt G Q hQ l₀ wsib wswap)
-          toInput cfg input region m).2
+  | m + 1 => List.mem_append_right _
+      (foldState_succ_node_cell_mem_assigned G Q hQ l₀ wsib wswap
+        cfg input region m)
 
 /-- A nonempty Merkle fold carries the last layer's `xA` output column; the empty
 fold returns its input cell unchanged. -/
@@ -3976,6 +3987,18 @@ theorem circuit_call_output_cell_mem_input_or_assigned
   exact
     foldState_node_cell_mem (G := G) (Q := Q) (hQ := hQ) (l₀ := l₀)
       (wsib := wsib) (wswap := wswap) cfg input region d
+
+/-- A nonempty calculate-root fold returns a cell assigned by one of its layers. -/
+theorem circuit_call_output_cell_assigned
+    (cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10)
+    (input : Var Layer.Input Fp) (region : RegionIndex) (hd : 0 < d) :
+    ((circuit G Q hQ l₀ d hld wsib wswap).output cfg input region).cell ∈
+      (((circuit G Q hQ l₀ d hld wsib wswap).call cfg input).operations region
+        |>.assignedCellsFrom region) := by
+  obtain ⟨m, rfl⟩ := Nat.exists_eq_succ_of_ne_zero (Nat.ne_of_gt hd)
+  rw [circuit_output_eq, circuit_call_operations_eq]
+  exact foldState_succ_node_cell_mem_assigned G Q hQ l₀ wsib wswap
+    cfg input region m
 
 /-- A calculate-root fold requests exactly four deferred constants per Merkle
 layer. -/

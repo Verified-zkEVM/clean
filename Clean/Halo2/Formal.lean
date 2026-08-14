@@ -203,6 +203,42 @@ class ElaboratedCircuit (F : Type) [FiniteField F]
         FormalCircuit.call_synthesisSummary,
         FormalCircuit.call_synthesisSummary']
 
+/-- Package a registration proof for a circuit with no caller-supplied keygen
+requirements. This keeps the empty-requirements reduction independent of a
+potentially large concrete synthesis program. -/
+theorem ElaboratedCircuit.noRequirements_registered
+    {F : Type} [FiniteField F]
+    {ConfigInput Config : Type} {Input Output : TypeMap}
+    [CircuitType Input] [CircuitType Output]
+    (configure : ConfigInput → Configure F Config)
+    (synthesize : Config → Var Input F → Circuit F (Var Output F))
+    (hregistered : ∀ configInput counts input i,
+      ((synthesize ((configure configInput).output counts) input).operations i)
+        |>.KeygenRegistered ((configure configInput).delta counts).gates
+          ((configure configInput).delta counts).lookups
+          ((configure configInput).delta counts).permutationRequests) :
+    ∀ (configInput : ConfigInput) (counts : ConfigureCounts)
+      (hconfig : ({} : KeygenRequirements F ConfigInput (Var Input F)).configLawful
+        configInput)
+      (input : Var Input F) (i : RegionIndex),
+    let program := configure configInput
+    ((synthesize (program.output counts) input).operations i).KeygenRegistered
+      (({} : KeygenRequirements F ConfigInput (Var Input F)).gates
+          configInput hconfig ++ (program.delta counts).gates)
+      (({} : KeygenRequirements F ConfigInput (Var Input F)).lookups
+          configInput hconfig ++ (program.delta counts).lookups)
+      (({} : KeygenRequirements F ConfigInput (Var Input F)).permutationColumns
+          configInput hconfig ++ (program.delta counts).permutationRequests ++
+        ({} : KeygenRequirements F ConfigInput (Var Input F)).inputPermutationColumns
+          configInput hconfig input) := by
+  intro configInput counts hconfig input i
+  cases hconfig
+  simpa only [KeygenRequirements.gates, KeygenRequirements.lookups,
+    KeygenRequirements.permutationColumns,
+    KeygenRequirements.inputPermutationColumns, KeygenRequirements.inputCells,
+    List.nil_append, List.append_nil, List.map_nil] using
+      hregistered configInput counts input i
+
 section SynthesisSummary
 variable [CircuitType Input] [CircuitType Output]
     {ConfigInput Config : Type}

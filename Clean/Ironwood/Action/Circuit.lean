@@ -734,7 +734,7 @@ theorem configure_fixedColumn_indices (G : Generators) :
     Ecc.MulComplete.configure, Ecc.MulOverflow.configure,
     Ecc.MulFixed.configure, Ecc.MulFixed.FullWidth.configure,
     Ecc.MulFixed.Short.configure, Ecc.MulFixed.BaseFieldElem.configure,
-    Ecc.MulFixed.configureResult, CondSwap.configure,
+    DecomposeRunningSum.configure, CondSwap.configure,
     Sinsemilla.Merkle.Gate.configure,
     NoteCommit.DecomposeB.configure, NoteCommit.DecomposeD.configure,
     NoteCommit.DecomposeE.configure, NoteCommit.DecomposeG.configure,
@@ -788,7 +788,7 @@ private theorem configure_queryRequirements (G : Generators) (counts) :
     Ecc.MulComplete.configure, Ecc.MulOverflow.configure,
     Ecc.MulFixed.configure, Ecc.MulFixed.FullWidth.configure,
     Ecc.MulFixed.Short.configure, Ecc.MulFixed.BaseFieldElem.configure,
-    Ecc.MulFixed.configureResult, DecomposeRunningSum.configure,
+    DecomposeRunningSum.configure,
     Configure.finalCounts_numAdviceColumns,
     Configure.finalCounts_numFixedColumns,
     Configure.finalCounts_numInstanceColumns]
@@ -1123,6 +1123,10 @@ structure NoteCells where
   gdNew : Var Point Fp
   pkdNew : Var Point Fp
 
+def NoteCells.copyInputCells (cells : NoteCells) : List Cell :=
+  [cells.gdNew.x.cell, cells.gdNew.y.cell,
+    cells.pkdNew.x.cell, cells.pkdNew.y.cell]
+
 def synthOrchardChecks (cfg : Config) (witnessCells : WitnessCells)
     (checkCells : CheckCells) : RegionCircuit Fp Unit := do
   let _ ← copyAdvice witnessCells.vOld (cfg.advices 0) 0
@@ -1331,7 +1335,10 @@ theorem synthChecksSynthesisSummary_physicalRegionShapes (cfg : Config) :
           (cfg.eccConfig.mul, cfg.eccConfig.witnessPoint)].flatMap
             FloorPlanner.SynthesisSummary.physicalRegionShapes := by
   unfold synthChecksSynthesisSummary
-  exact FloorPlanner.SynthesisSummary.foldr_combine_physicalRegionShapes _
+  rw [FloorPlanner.SynthesisSummary.foldr_combine_physicalRegionShapes]
+  simp only [List.flatMap_cons, List.flatMap_nil,
+    FloorPlanner.SynthesisSummary.ofInstanceRow_physicalRegionShapes,
+    List.nil_append]
 
 @[synthesis_summary_norm]
 theorem synthChecks_synthesisSummary_eq (G : Generators) (B : Bases)
@@ -1395,7 +1402,10 @@ theorem synthNotesSynthesisSummary_physicalRegionShapes (cfg : Config) :
         orchardChecksSynthesisSummary cfg].flatMap
           FloorPlanner.SynthesisSummary.physicalRegionShapes := by
   unfold synthNotesSynthesisSummary
-  exact FloorPlanner.SynthesisSummary.foldr_combine_physicalRegionShapes _
+  rw [FloorPlanner.SynthesisSummary.foldr_combine_physicalRegionShapes]
+  simp only [List.flatMap_cons, List.flatMap_nil,
+    FloorPlanner.SynthesisSummary.ofInstanceRow_physicalRegionShapes,
+    List.nil_append]
 
 @[synthesis_summary_norm]
 theorem synthNotes_synthesisSummary_eq (G : Generators) (B : Bases)
@@ -1417,6 +1427,13 @@ structure AddressPoints (F : Type) where
   gdNew : Point F
   pkdNew : Point F
 deriving ProvableStruct
+
+/-- The base-circuit output cells consumed by the cross-address copy constraints. -/
+def AddressPoints.copyInputCells (points : Var AddressPoints Fp) : List Cell :=
+  [points.gdOld.x.cell, points.gdOld.y.cell,
+    points.pkdOld.x.cell, points.pkdOld.y.cell,
+    points.gdNew.x.cell, points.gdNew.y.cell,
+    points.pkdNew.x.cell, points.pkdNew.y.cell]
 
 /-- Columns occupied by each cross-address row. -/
 def crossAddressColumns (cfg : Config) :
@@ -1573,6 +1590,19 @@ theorem synthCrossAddressChecks_keygenRegistered
     | simpa only [keygen_output_norm] using hadvice 0
     | rename_i row
       fin_cases row <;> simp_all
+
+@[keygen_helper]
+theorem synthCrossAddressChecks_copyCellsAssigned
+    (cfg : Config) (points : Var AddressPoints Fp) (region : RegionIndex) :
+    ((synthCrossAddressChecks cfg points).operations region)
+      |>.CopyCellsAssignedFrom region points.copyInputCells := by
+  unfold synthCrossAddressChecks
+  simp only [operations_assignRegion, keygen_spine]
+  apply RegionCircuit.forRange'_copyCellsAssignedFrom
+  intro index
+  fin_cases index <;>
+    simp only [AddressPoints.copyInputCells, synthCrossAddressRow, keygen_spine] <;>
+    keygen_registration
 
 /-- Rust `Circuit::synthesize_base` (`circuit.rs:461-828`): the staged witness /
 integrity-check / note-commitment composition, returning the `AddressPoints` the

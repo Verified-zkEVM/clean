@@ -340,6 +340,12 @@ theorem operations_assignAdviceFromInstance (instCol : Column .instance) (instRo
       = [.assignAdvice col row (instanceGet instCol instRow),
          .constrainInstance (Cell.of self row col) instCol instRow] := rfl
 
+@[circuit_norm, keygen_norm]
+theorem output_assignAdviceFromInstance (instCol : Column .instance) (instRow : ℕ)
+    (col : Column .advice) (row : ℕ) (self : RegionIndex) :
+    (assignAdviceFromInstance (F := F) instCol instRow col row).output self =
+      AssignedCell.of self row col := rfl
+
 -- `List.Forall` over a concrete list decomposes into a conjunction; `add_zero` clears
 -- rotation-0 query offsets so cell reads share the row form `↑(place self + row)`.
 attribute [circuit_norm] List.forall_cons add_zero

@@ -14317,6 +14317,10 @@ theorem SynthesisSummary.ofRegion_physicalRegionShapes
   rw [SynthesisSummary.ofRegion_regionShapes]
   rfl
 
+theorem SynthesisSummary.ofInstanceRow_physicalRegionShapes (row : ℕ) :
+    (SynthesisSummary.ofInstanceRow row).physicalRegionShapes = [] := by
+  rfl
+
 theorem SynthesisSummary.replicate_physicalRegionShapes
     (count : ℕ) (summary : SynthesisSummary) :
     (SynthesisSummary.replicate count summary).physicalRegionShapes =
