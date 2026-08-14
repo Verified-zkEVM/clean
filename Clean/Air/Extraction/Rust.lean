@@ -13,7 +13,7 @@ namespace Air.Flat.Extraction.Rust
 open Air.Flat.WitnessGeneration
 open Air.Flat.Extraction
 
-variable {F : Type} [FiniteField F] [DecidableEq F]
+variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
 variable {ProverInput : TypeMap} [ProvableType ProverInput]
 

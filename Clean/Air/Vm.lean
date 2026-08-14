@@ -1,7 +1,7 @@
 import Clean.Air.FlatEnsemble
 import Clean.Air.OrderedChannel
 
-variable {F : Type} [FiniteField F] [DecidableEq F]
+variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
 
 /-
@@ -44,15 +44,13 @@ structure VmStep (Message : TypeMap) [ProvableType Message] (F : Type) where
   pull : Var Message F
   push : Var Message F
 
-structure VmTables (F : Type) [FiniteField F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO] where
+structure VmTables (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO] where
   {Message : TypeMap} [provableMessage : ProvableType Message]
   channel : Channel F Message
 
   tables : List (Component F)
   unique_names : (tables.map (·.circuit.name)).Nodup
-  verifier : GeneralFormalCircuit F PublicIO unit
-  verifier_interactions_only : Operations.InteractionsOnly
-      ((verifier.main (varFromOffset PublicIO 0)).operations (size PublicIO))
+  verifier : Verifier.Program F PublicIO
 
   tables_channel : tables.Forall fun table =>
     ∃ enabled : Expression F, ∃ pull push : Var Message F,
@@ -61,16 +59,14 @@ structure VmTables (F : Type) [FiniteField F] [DecidableEq F] (PublicIO : TypeMa
       ∀ env, ConstraintsHold.Shallow env table.rowOperations →
         Expression.eval env enabled = 0 ∨ Expression.eval env enabled = 1
 
-  -- the verifier pulls and pushes to the channel, and doesn't push anything else
-  verifier_channel : ∃ m1 m2, ⟨ channel, [(channel.pulled m1).toRaw, (channel.pushed m2).toRaw] ⟩ ∈
-    verifier.exposedChannels (varFromOffset PublicIO 0) (size PublicIO)
+  -- The public verifier pulls the final state and pushes the initial state on the VM channel.
+  verifier_channel : ∃ m1 m2, verifier.interactions =
+    [(channel.pulled m1).toRaw, (channel.pushed m2).toRaw]
 
   -- verifier requirements hold unconditionally (without relying on channel guarantees)
   verifier_requirements :
-    let offset := size PublicIO;
-    let input_var := varFromOffset PublicIO 0;
     ∀ env,
-      Operations.ChannelRequirements channel env (verifier.main input_var |>.operations offset)
+      Operations.ChannelRequirements channel env verifier.circuitOperations
 
 instance (vm : VmTables F PublicIO) : ProvableType vm.Message := vm.provableMessage
 
@@ -79,12 +75,12 @@ def VmTables.toEnsemble (vm : VmTables F PublicIO) : Ensemble F PublicIO where
   tables := vm.tables
   unique_names := vm.unique_names
   verifier := vm.verifier
-  verifier_interactions_only := vm.verifier_interactions_only
 
 /--
 Soundness for a VM ensemble is simple:
-- the ensemble spec is just the verifier spec
-- the verifier spec can be proven from table constraints and balance for all channels
+- the ensemble spec is the verifier spec
+- the verifier spec follows from verifier guarantees
+- verifier guarantees follow from table constraints and channel balance
 -/
 def Ensemble.SoundVmChannel (ens : Ensemble F PublicIO) : Prop :=
   ∀ (witness : EnsembleWitness ens),
@@ -93,35 +89,28 @@ def Ensemble.SoundVmChannel (ens : Ensemble F PublicIO) : Prop :=
     witness.BalancedChannels →
       ens.VerifierGuarantees witness.publicInput witness.data
 
-structure SoundVmEnsemble (F : Type) [FiniteField F] [DecidableEq F] (PublicIO : TypeMap) [ProvableType PublicIO]
+structure SoundVmEnsemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO]
     extends ensemble : Ensemble F PublicIO where
   soundVmChannel : ensemble.SoundVmChannel
 
 namespace SoundVmEnsemble
-def toFormal (F : Type) [FiniteField F] [DecidableEq F] (ens : SoundVmEnsemble F PublicIO)
+def toFormal (F : Type) [FiniteField F] (ens : SoundVmEnsemble F PublicIO)
   -- TODO is this useful in practice? Right now, tables don't have access to public input so that's weird
   (ExtraAssumptions : PublicIO F → ProverData F → Prop)
   (extraAssumptionsConsistency : ∀ publicInput data, ExtraAssumptions publicInput data →
     ∀ table ∈ ens.ensemble.tables, ∀ input, table.Assumptions input data) :
     FormalEnsemble F PublicIO where
   ensemble := ens.ensemble
-  Assumptions publicInput := ∀ data,
-    ens.verifier.Assumptions publicInput data ∧
-    ExtraAssumptions publicInput data
+  Assumptions publicInput := ∀ data, ExtraAssumptions publicInput data
   Spec publicInput := ∃ data, ens.VerifierSpec publicInput data
   soundness := by
     simp only [Ensemble.Soundness, Ensemble.Statement]
     intro input assumptions ⟨witness, input_eq, constraints, balance⟩
     use witness.data
-    obtain ⟨verifier_assumptions, extra_assumptions⟩ := assumptions witness.data
+    have extra_assumptions := assumptions witness.data
     simp only [← input_eq, circuit_norm] at *
     have soundVm := ens.soundVmChannel witness ?assumptions constraints balance
-    convert (ens.verifier.original_full_soundness _ _ _ ?_ ?_ soundVm).1
-    · rw [ProvableType.eval_fromInput_varFromOffset_zero]
-    · rw [ProvableType.eval_fromInput_varFromOffset_zero]
-      exact verifier_assumptions
-    · exact ens.ensemble.verifier_interactions_only.constraintsHold _
-    refine ⟨verifier_assumptions, ?_⟩
+    exact ens.ensemble.verifierSoundness witness.publicInput witness.data soundVm
     intro table h_table row h_row
     simp only [Component.RowAssumptions]
     have hcomponent := EnsembleWitness.mem_component_of_mem h_table
@@ -141,7 +130,7 @@ variable {ens : SoundVmEnsemble F PublicIO} {ExtraAssumptions : PublicIO F → P
 
 @[circuit_norm] lemma toFormal_assumptions publicInput :
   (ens.toFormal F ExtraAssumptions eac).Assumptions publicInput ↔
-    ∀ data, ens.ensemble.verifier.Assumptions publicInput data ∧ ExtraAssumptions publicInput data := by
+    ∀ data, ExtraAssumptions publicInput data := by
   simp only [toFormal, circuit_norm]
 end SoundVmEnsemble
 end Air.Flat
@@ -268,10 +257,9 @@ noncomputable def verifierPush (vm : VmTables F PublicIO) : Var vm.Message F :=
 
 /-- Concrete version of VmTables.verifier_channel -/
 theorem verifier_channel' (vm : VmTables F PublicIO) :
-  ⟨ vm.channel,
+  vm.verifier.interactions =
     [(vm.channel.pulled vm.verifierPull).toRaw,
-      (vm.channel.pushed vm.verifierPush).toRaw] ⟩ ∈
-    vm.verifier.exposedChannels (varFromOffset PublicIO 0) (size PublicIO) :=
+      (vm.channel.pushed vm.verifierPush).toRaw] :=
   vm.verifier_channel.choose_spec.choose_spec
 
 noncomputable def verifierStep (vm : VmTables F PublicIO) : VmStep vm.Message F where
@@ -290,8 +278,23 @@ lemma verifierInteractionsWith_eq {vm : VmTables F PublicIO} :
   vm.toEnsemble.verifierOperations.interactionsWith vm.channel.toRaw = [
     (vm.channel.pulledIf vm.verifierStep.enabled vm.verifierStep.pull).toRaw,
     (vm.channel.pushedIf vm.verifierStep.enabled vm.verifierStep.push).toRaw ] := by
-  exact vm.verifier.interactionsWith_eq_of_mem_exposedChannels
-    (varFromOffset PublicIO 0) (size PublicIO) _ vm.verifier_channel'
+  classical
+  change vm.verifier.circuitOperations.interactionsWith vm.channel.toRaw = _
+  rw [Operations.interactionsWith,
+    Verifier.Operations.circuitOperations_interactions]
+  change List.filter (fun (interaction : AbstractInteraction F) ↦
+    decide (interaction.channel = vm.channel.toRaw))
+    vm.verifier.interactions = _
+  rw [vm.verifier_channel']
+  simp only [verifierStep]
+  simp only [Channel.pulledIf, Channel.pushedIf, pulledIf_one_eq_pulled,
+    pushedIf_one_eq_pushed]
+  have pull_channel : (vm.channel.pulled vm.verifierPull).toRaw.channel =
+      vm.channel.toRaw := rfl
+  have push_channel : (vm.channel.pushed vm.verifierPush).toRaw.channel =
+      vm.channel.toRaw := rfl
+  simp [pull_channel, push_channel]
+  constructor <;> rfl
 end VmTables
 
 namespace Ensemble
@@ -302,7 +305,6 @@ def addVm (ens : Ensemble F PublicIO) (vm : VmTables F PublicIO)
   tables := vm.tables ++ ens.tables
   unique_names
   verifier := vm.verifier
-  verifier_interactions_only := vm.verifier_interactions_only
 
 @[circuit_norm] lemma addVm_channels (ens : Ensemble F PublicIO) (vm : VmTables F PublicIO) (names) :
   (ens.addVm vm names).channels = vm.channel.toRaw :: ens.channels := rfl
@@ -310,10 +312,6 @@ def addVm (ens : Ensemble F PublicIO) (vm : VmTables F PublicIO)
   (ens.addVm vm names).tables = vm.tables ++ ens.tables := rfl
 @[circuit_norm] lemma addVm_verifier (ens : Ensemble F PublicIO) (vm : VmTables F PublicIO) (names) :
   (ens.addVm vm names).verifier = vm.verifier := rfl
-@[circuit_norm] lemma addVm_verifierComponent (ens : Ensemble F PublicIO)
-    (vm : VmTables F PublicIO) (names) :
-  (ens.addVm vm names).verifierComponent = vm.toEnsemble.verifierComponent := rfl
-
 end Ensemble
 
 namespace EnsembleWitness
@@ -810,7 +808,6 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
       exact witness.data_consistent table (List.mem_of_mem_drop htable)
   }
   set vmChannel := vm.channel.toRaw
-  rcases assumptions with ⟨verifier_assumptions, table_assumptions⟩
   -- the vm channel interactions are constrained to vm tables
   have vmInteractions_eq : witness.interactionsWith vmChannel =
       witness.vmInteractionsWith vmChannel := by
@@ -852,36 +849,40 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
     exact constraints table (List.mem_of_mem_take table_mem)
   have old_assumptions : oldContext.Assumptions := by
     intro table table_mem
-    exact table_assumptions table (List.mem_of_mem_drop table_mem)
+    exact assumptions table (List.mem_of_mem_drop table_mem)
   have vm_assumptions : ∀ table ∈ witness.vmTables,
       table.Assumptions witness.data := by
     intro table table_mem
-    exact table_assumptions table (List.mem_of_mem_take table_mem)
+    exact assumptions table (List.mem_of_mem_take table_mem)
   -- establish partial balance + specialize to old ensemble
   have ordered_finished : ∀ channel ∈ finished,
-      OrderedChannel channel (vm.toEnsemble.verifierComponent :: vm.tables ++ ens.tables) := by
+      (ens.addVm vm names).OrderedChannel channel := by
     intro channel channel_mem
-    rw [orderedChannel_append]
+    rw [Ensemble.OrderedChannel]
     constructor
-    · apply orderedChannel_of_no_requirements
-      simp only [List.forall_mem_cons]
-      exact ⟨(reqs_disjoint channel channel_mem).1,
-        fun table h_table => (reqs_disjoint channel channel_mem).2 table h_table⟩
-    constructor
-    · exact (orderedChannel_cons _ _ _).mp
-        (soundChannels.right.left channel channel_mem) |>.right.left
     · right
-      simp only [List.flatMap_cons, List.mem_append, not_or]
-      exact ⟨(reqs_disjoint channel channel_mem).1,
-        by simpa using (reqs_disjoint channel channel_mem).2⟩
+      exact (reqs_disjoint channel channel_mem).1
+    constructor
+    · rw [Ensemble.addVm_tables, orderedChannel_append]
+      exact ⟨
+        orderedChannel_of_no_requirements (by
+          intro table h_table
+          change channel ∉ table.circuit.channelsWithRequirements
+          exact (reqs_disjoint channel channel_mem).2 table h_table),
+        (soundChannels.right.left channel channel_mem).right.left,
+        orderedChannelLt_of_no_requirements (by
+          intro table h_table
+          change channel ∉ table.circuit.channelsWithRequirements
+          exact (reqs_disjoint channel channel_mem).2 table h_table)⟩
+    · right
+      rw [Ensemble.addVm_verifier, List.flatMap_singleton,
+        Air.Flat.verifier_channelInterface_requirements]
+      exact (reqs_disjoint channel channel_mem).1
   have partial_balance : ∀ channel ∈ finished,
       PartialBalancedChannel witness.tableContext channel := by
     intro channel channel_mem
     apply Ensemble.partialBalancedChannel_of_balancedChannel
-    · change OrderedChannel channel
-        ((ens.addVm vm names).verifierComponent :: (ens.addVm vm names).tables)
-      rw [Ensemble.addVm_verifierComponent, Ensemble.addVm_tables]
-      exact ordered_finished channel channel_mem
+    · exact ordered_finished channel channel_mem
     · exact balance channel (by simp [Ensemble.addVm, finished_subset channel_mem])
   have old_partial_balance : ∀ channel ∈ finished,
       PartialBalancedChannel oldContext channel := by
@@ -905,10 +906,8 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
       ?soundChannels old_assumptions old_constraints old_partial_balance table table_mem
       |>.right channel channel_mem |>.right
     have old_sound_channels : _root_.SoundChannels ens.tables finished := ⟨
-      fun component h_component => soundChannels.left component
-        (by simp [Ensemble.allComponents, h_component]),
-      fun channel h_channel => (orderedChannel_cons _ _ _).mp
-        (soundChannels.right.left channel h_channel) |>.right.left,
+      ens.channelsWithGuarantees_subset_iff.mp soundChannels.left |>.right,
+      fun channel h_channel => (soundChannels.right.left channel h_channel).right.left,
       soundChannels.right.right⟩
     simpa only [oldContext, old_components_eq] using old_sound_channels
   -- invoke `guarantees_of_requirements_append` to get grts for finished channels in vm tables
@@ -965,7 +964,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
     rcases List.mem_cons.mp (grts_subset.1 h_channel) with rfl | h_finished
     · exact vm_verifier_guarantees
     · exact finished_verifier_guarantees channel h_finished
-  · exact vm.verifier.in_channels_or_guarantees_full _ _ _
+  · exact vm.verifier.operations.inChannelsOrGuaranteesFull _
 end Ensemble
 
 namespace SoundEnsemble

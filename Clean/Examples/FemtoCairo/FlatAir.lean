@@ -627,32 +627,16 @@ def executionComponent {programSize : ℕ} (program : Fin programSize → F p)
   circuit := executeStep program h_programSize initialState
 
 def verifier {programSize : ℕ} (program : Fin programSize → F p)
-    (initialState : State (F p)) : GeneralFormalCircuit (F p) State unit where
+    (initialState : State (F p)) : Verifier.Program (F p) State where
   main finalState := do
-    (StateChannel program initialState).pull finalState
-    (StateChannel program initialState).push (const initialState)
-
-  exposedChannels finalState _ := expose (StateChannel program initialState)
-    [pulled finalState, pushed (const initialState)]
-  exposedChannels_eq := by simp only [circuit_norm]
-
-  ProverAssumptions finalState data _ :=
-    (StateChannel program initialState).Guarantees finalState data
-
-  Spec finalState _ data :=
-    (StateChannel program initialState).Guarantees finalState data
-
-  channelsWithRequirements := [(StateChannel program initialState).toRaw]
-
+    Verifier.pull (StateChannel program initialState) finalState
+    Verifier.push (StateChannel program initialState) (const initialState)
+  Spec finalState data := (StateChannel program initialState).Guarantees finalState data
   soundness := by
-    circuit_proof_start [StateChannel]
-    constructor
-    · exact h_holds
-    · exact ⟨0, rfl⟩
-
-  completeness := by
-    circuit_proof_start [StateChannel]
-    exact h_assumptions
+    intro env guarantees
+    simp only [circuit_norm, Operations.FullGuarantees,
+      AbstractInteraction.Guarantees, Channel.toRaw] at guarantees ⊢
+    exact guarantees
 
 def vm {programSize : ℕ} (program : Fin programSize → F p)
     (h_programSize : programSize < p) (initialState : State (F p)) :
@@ -661,8 +645,6 @@ def vm {programSize : ℕ} (program : Fin programSize → F p)
   tables := [executionComponent program h_programSize initialState]
   unique_names := by simp [executionComponent]
   verifier := verifier program initialState
-  verifier_interactions_only := by
-    simp [Operations.InteractionsOnly, verifier, circuit_norm]
   tables_channel := by
     rw [List.forall_iff_forall_mem]
     intro table htable
@@ -675,7 +657,8 @@ def vm {programSize : ℕ} (program : Fin programSize → F p)
     · simp [executionComponent, executeStep, circuit_norm]
     · intro env _
       exact Or.inr rfl
-  verifier_channel := by simp [verifier, circuit_norm]
+  verifier_channel := by
+    simp [verifier, circuit_norm, ChannelInteraction.toRaw]
   verifier_requirements env := by
     simp only [verifier, StateChannel, circuit_norm]
     exact ⟨0, rfl⟩

@@ -255,36 +255,18 @@ example (input : Var Fib8Input (F p)) :
   infer_explicit_circuit
 
 -- completing Fibonacci channel with input and output
-def fibonacciVerifier : GeneralFormalCircuit (F p) fieldTriple unit where
+def fibonacciVerifier : Verifier.Program (F p) fieldTriple where
   main | (n, x, y) => do
     -- push initial state, pull the final state
-    FibonacciChannel.pull (n, x, y)
-    FibonacciChannel.push (0, 0, 1)
-
-  exposedChannels
-  | (n, x, y), _ =>
-    expose FibonacciChannel [ pulled (n, x, y), pushed (0, 0, 1) ]
-
-  ProverAssumptions
-  | (n, x, y), _, _ => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
+    Verifier.pull FibonacciChannel (n, x, y)
+    Verifier.push FibonacciChannel (0, 0, 1)
   Spec
-  | (n, x, y), _, _ => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
-  channelsWithRequirements := [ FibonacciChannel.toRaw ]
+  | (n, x, y), _ => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
   soundness := by
-    circuit_proof_start [FibonacciChannel]
-    rcases input with ⟨ n, x, y ⟩
-    simp only [Prod.mk.injEq] at h_input
-    simp_all only [circuit_norm, ZMod.val_zero, ZMod.val_one]
-    exact ⟨ 0, rfl, rfl ⟩
-  completeness := by
-    circuit_proof_start [FibonacciChannel]
-    rcases input with ⟨ n, x, y ⟩
-    simp only [Prod.mk.injEq] at h_input
-    simpa [circuit_norm, reduceIte] using h_assumptions
-
-example (input : Var fieldTriple (F p)) :
-    ExplicitCircuit (fibonacciVerifier.main input) := by
-  infer_explicit_circuit
+    intro env guarantees
+    simp only [circuit_norm, Operations.FullGuarantees, FibonacciChannel,
+      AbstractInteraction.Guarantees, Channel.toRaw, explicit_provable_type] at guarantees ⊢
+    exact guarantees
 
 def fib8Component : Component (F p) where
   circuit := fib8
@@ -294,15 +276,14 @@ def fibonacciVm : VmTables (F p) fieldTriple where
   tables := [fib8Component]
   unique_names := by simp [fib8Component]
   verifier := fibonacciVerifier
-  verifier_interactions_only := by
-    simp [Operations.InteractionsOnly, circuit_norm, fibonacciVerifier]
   tables_channel := by
     simp [circuit_norm, fib8Component, fib8, Component.rowInputVar, Component.rowOperations]
     intro env h
     rcases h with h | h
     · exact Or.inl h
     · exact Or.inr (sub_eq_zero.mp h)
-  verifier_channel := by simp [circuit_norm, fibonacciVerifier]
+  verifier_channel := by
+    simp [fibonacciVerifier, circuit_norm, ChannelInteraction.toRaw]
   verifier_requirements env := by
     simp only [circuit_norm, fibonacciVerifier, FibonacciChannel, ZMod.val_zero, ZMod.val_one]
     exact ⟨ 0, rfl, rfl ⟩
