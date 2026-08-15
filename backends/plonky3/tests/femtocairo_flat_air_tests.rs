@@ -55,11 +55,11 @@ fn extracted_femtocairo_accepts_runtime_private_memories() {
         .into_traces()
         .expect("second runtime memory produced invalid traces");
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
-    let airs = generated::FemtoCairoFlatAirProgramAir::all(&trace_heights)
+    let statement = generated::FemtoCairoFlatAirProgramStatement::<BabyBear>::new(&trace_heights)
         .expect("invalid generated AIR shape");
-    let (proof, _) = prove_ensemble(&config, &airs, traces, &public_values)
+    let (proof, _) = prove_ensemble(&config, &statement, traces, &public_values)
         .expect("second runtime memory produced an invalid proving shape");
-    verify_ensemble(&config, &airs, &proof, &public_values)
+    verify_ensemble(&config, &statement, &proof, &public_values)
         .expect("proof with the second runtime memory failed verification");
 }
 
@@ -95,10 +95,10 @@ fn extracted_femtocairo_air_proves_and_verifies() {
     );
 
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
-    let airs = generated::FemtoCairoFlatAirProgramAir::all(&trace_heights)
+    let statement = generated::FemtoCairoFlatAirProgramStatement::<BabyBear>::new(&trace_heights)
         .expect("invalid generated AIR shape");
     let (proof, _) =
-        prove_ensemble(&config, &airs, traces, &public_values).expect("invalid proving shape");
-    verify_ensemble(&config, &airs, &proof, &public_values)
+        prove_ensemble(&config, &statement, traces, &public_values).expect("invalid proving shape");
+    verify_ensemble(&config, &statement, &proof, &public_values)
         .expect("extracted FemtoCairo AIR proof failed verification");
 }

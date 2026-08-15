@@ -5,7 +5,7 @@ use clean_backend::witness_generation::{
     Aggregation, DemandMode, Direction, EnsembleWitness, InputCell, Interaction, Mode, Padding,
     PreallocatedHandler, Program, WitnessData, WitnessField, WitnessGenerationError,
 };
-use clean_backend::{GeneratedAir, GeneratedAirSpec, GeneratedLookup};
+use clean_backend::{GeneratedAirSpec, GeneratedEnsemble, GeneratedLookup};
 use p3_air::lookup::Direction as LookupDirection;
 use p3_air::{AirBuilderWithPublicValues, SymbolicExpression, SymbolicVariable};
 use p3_field::{Field, PrimeCharacteristicRing};
@@ -827,6 +827,8 @@ impl GeneratedAirSpec for FemtoCairoFlatAirProgramAirSpec {
     const WIDTHS: &'static [usize] = &[33, 2, 1];
     const FIXED_WIDTHS: &'static [usize] = &[0, 1, 2];
     const FIXED_HEIGHTS: &'static [usize] = &[0, 8, 32];
+    const INTERACTIONS_PER_ROW: &'static [usize] = &[12, 1, 1];
+    const VERIFIER_INTERACTIONS: usize = 2;
 
     fn fixed_trace<F: Field + PrimeCharacteristicRing>(
         component: usize,
@@ -1399,7 +1401,8 @@ impl GeneratedAirSpec for FemtoCairoFlatAirProgramAirSpec {
     }
 }
 
-pub type FemtoCairoFlatAirProgramAir = GeneratedAir<FemtoCairoFlatAirProgramAirSpec>;
+pub type FemtoCairoFlatAirProgramStatement<F> =
+    GeneratedEnsemble<F, FemtoCairoFlatAirProgramAirSpec>;
 
 pub struct FemtoCairoFlatAirProgram;
 

@@ -11,9 +11,15 @@ This crate proves channel-based Clean AIR ensembles with Plonky3.
    power-of-two height.
 4. `src/generated_air.rs` supplies the shared Plonky3 `Air` implementation and registers generated
    channel lookups.
-5. `src/ensemble_prover.rs` validates statement shape and proves or verifies the component batch.
-   Verifier-only interactions are derived from public inputs and enter the global channel argument
-   directly, without a synthetic verifier AIR or trace.
+5. `src/ensemble_prover.rs` proves or verifies an opaque generated statement containing every
+   component AIR exactly once in canonical order. Verifier-only interactions are derived from
+   public inputs and enter the global channel argument directly, without a synthetic verifier AIR
+   or trace.
+
+Statement construction binds component trace heights, exact fixed heights, and the complete
+component inventory. It also checks the Clean channel-soundness side condition
+`verifier interactions + Σ(trace height × interactions per row) < field order` before proving or
+verification. Individual component AIRs cannot be assembled through the public API.
 
 The Fibonacci example is documented in
 [`Clean/Examples/FibonacciVm/README.md`](../../Clean/Examples/FibonacciVm/README.md). The generated

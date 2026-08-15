@@ -78,18 +78,18 @@ fn extracted_fibonacci_air_proves_and_verifies() {
     );
 
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
-    let airs = generated::FibonacciEnsembleProgramAir::all(&trace_heights)
+    let statement = generated::FibonacciEnsembleProgramStatement::<BabyBear>::new(&trace_heights)
         .expect("invalid generated AIR shape");
     let witness_elapsed = witness_started.elapsed();
     let proving_started = Instant::now();
     let (proof, _) =
-        prove_ensemble(&config, &airs, traces, &public_values).expect("invalid proving shape");
+        prove_ensemble(&config, &statement, traces, &public_values).expect("invalid proving shape");
     let proving_elapsed = proving_started.elapsed();
     let proof_json_bytes = serde_json::to_vec(&proof)
         .expect("proof serialization failed")
         .len();
     let verification_started = Instant::now();
-    verify_ensemble(&config, &airs, &proof, &public_values)
+    verify_ensemble(&config, &statement, &proof, &public_values)
         .expect("extracted Fibonacci AIR proof failed verification");
     eprintln!(
         "4096 steps: witness+padding={witness_elapsed:?}, proving={proving_elapsed:?}, verification={:?}, proof_json={proof_json_bytes} bytes",
@@ -105,17 +105,39 @@ fn ensemble_api_reports_shape_errors() {
         generated::generate(&public_values, &[]).expect("extracted Rust witness generation failed");
     let traces = witness.into_traces().expect("invalid extracted traces");
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
-    let airs = generated::FibonacciEnsembleProgramAir::all(&trace_heights)
+    let statement = generated::FibonacciEnsembleProgramStatement::<BabyBear>::new(&trace_heights)
         .expect("invalid generated AIR shape");
+    assert_eq!(statement.component_count(), 3);
+    assert_eq!(statement.trace_heights(), trace_heights);
+    assert_eq!(statement.interaction_count(), 418);
+    let different_dynamic_shape =
+        generated::FibonacciEnsembleProgramStatement::<BabyBear>::new(&[64, 32, 256])
+            .expect("valid alternative dynamic shape");
+    assert!(matches!(
+        prove_ensemble(
+            &config,
+            &different_dynamic_shape,
+            traces.clone(),
+            &public_values,
+        ),
+        Err(EnsembleShapeError::StatementTraceHeight {
+            component: 0,
+            expected: 64,
+            actual: 32,
+        })
+    ));
     let mut traces = traces;
     traces.pop();
 
     assert!(matches!(
-        prove_ensemble(&config, &airs, traces, &public_values),
-        Err(EnsembleShapeError::TraceCount { airs: 3, traces: 2 })
+        prove_ensemble(&config, &statement, traces, &public_values),
+        Err(EnsembleShapeError::TraceCount {
+            expected: 3,
+            actual: 2,
+        })
     ));
     assert!(matches!(
-        generated::FibonacciEnsembleProgramAir::all(&trace_heights[..2]),
+        generated::FibonacciEnsembleProgramStatement::<BabyBear>::new(&trace_heights[..2]),
         Err(EnsembleShapeError::ComponentCount {
             expected: 3,
             trace_heights: 2,
@@ -124,12 +146,21 @@ fn ensemble_api_reports_shape_errors() {
     let mut wrong_fixed_height = trace_heights.clone();
     wrong_fixed_height[2] = 128;
     assert!(matches!(
-        generated::FibonacciEnsembleProgramAir::all(&wrong_fixed_height),
+        generated::FibonacciEnsembleProgramStatement::<BabyBear>::new(&wrong_fixed_height),
         Err(EnsembleShapeError::FixedTraceHeight {
             component: 2,
             expected: 256,
             actual: 128,
         })
+    ));
+
+    let excessive_interactions = [1usize << 30, 1, 256];
+    assert!(matches!(
+        generated::FibonacciEnsembleProgramStatement::<BabyBear>::new(&excessive_interactions),
+        Err(EnsembleShapeError::InteractionCountBound {
+            interactions,
+            field_order,
+        }) if interactions >= field_order as u128
     ));
 }
 
@@ -191,15 +222,21 @@ fn verifier_rejects_a_valid_proof_at_the_wrong_height() {
 
     let wrong_traces = wrong.into_traces().expect("invalid wrong-height traces");
     let wrong_heights = wrong_traces.iter().map(Matrix::height).collect::<Vec<_>>();
-    let wrong_airs = generated::FibonacciEnsembleProgramAir::all(&wrong_heights)
-        .expect("invalid wrong-height AIR shape");
-    let (wrong_proof, _) = prove_ensemble(&config, &wrong_airs, wrong_traces, &public_values)
+    let wrong_statement =
+        generated::FibonacciEnsembleProgramStatement::<BabyBear>::new(&wrong_heights)
+            .expect("invalid wrong-height AIR shape");
+    let (wrong_proof, _) = prove_ensemble(&config, &wrong_statement, wrong_traces, &public_values)
         .expect("invalid wrong-height proving shape");
-    verify_ensemble(&config, &wrong_airs, &wrong_proof, &public_values)
+    verify_ensemble(&config, &wrong_statement, &wrong_proof, &public_values)
         .expect("the wrong-height proof must be otherwise valid");
     let altered_public_values = vec![field(32), field(6), field(226)];
     assert!(matches!(
-        verify_ensemble(&config, &wrong_airs, &wrong_proof, &altered_public_values),
+        verify_ensemble(
+            &config,
+            &wrong_statement,
+            &wrong_proof,
+            &altered_public_values,
+        ),
         Err(EnsembleVerificationError::Proof(_))
     ));
 
@@ -208,10 +245,11 @@ fn verifier_rejects_a_valid_proof_at_the_wrong_height() {
         .iter()
         .map(Matrix::height)
         .collect::<Vec<_>>();
-    let expected_airs = generated::FibonacciEnsembleProgramAir::all(&expected_heights)
-        .expect("invalid expected AIR shape");
+    let expected_statement =
+        generated::FibonacciEnsembleProgramStatement::<BabyBear>::new(&expected_heights)
+            .expect("invalid expected AIR shape");
     assert!(matches!(
-        verify_ensemble(&config, &expected_airs, &wrong_proof, &public_values),
+        verify_ensemble(&config, &expected_statement, &wrong_proof, &public_values),
         Err(EnsembleVerificationError::Shape(
             EnsembleShapeError::ProofDegreeBits { .. }
         ))
