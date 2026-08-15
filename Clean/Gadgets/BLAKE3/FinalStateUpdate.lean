@@ -80,7 +80,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   specialize c14 (chaining_value_norm 6) (state_norm 14)
   specialize c15 (chaining_value_norm 7) (state_norm 15)
 
-  simp [circuit_norm, eval_vector, BLAKE3State.value, BLAKE3State.Normalized, finalStateUpdate]
+  simp [circuit_norm, BLAKE3State.value, BLAKE3State.Normalized, finalStateUpdate]
   ring_nf
   simp only [c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, and_self,
     true_and]

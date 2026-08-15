@@ -428,6 +428,7 @@ theorem formalAssertion_coe_eq (circuit : FormalAssertion F β) (b : Var β F) :
 theorem generalFormalCircuit_coe_eq (circuit : GeneralFormalCircuit F β α) (b : Var β F) :
     circuit b = subcircuitWithAssertion circuit b := rfl
 
+omit [ProvableType α] [ProvableType β] in
 @[computable_witnesses_norm]
 theorem generalFormalCircuitWithHint_coe_eq [CircuitType α] [CircuitType β]
     (circuit : GeneralFormalCircuit.WithHint F β α) (b : Var β F) :
@@ -567,7 +568,7 @@ in `Clean.Circuit.Basic`): each inclusion is exactly one per-node obligation.
 
 @[computable_witnesses_norm]
 theorem subcircuit_computableWitnesses (circuit : FormalCircuit F β' α') (b : Var β' F) :
-    (subcircuit circuit b).ComputableWitnesses n env env' ↔
+    Circuit.ComputableWitnesses (α := α' (Expression F)) (subcircuit circuit b) n env env' ↔
       (circuit.toSubcircuit n b).ComputableWitnesses n env env' := by
   simp [subcircuit, Circuit.ComputableWitnesses, Operations.ComputableWitnesses,
     Circuit.operations, Operations.forAll]
@@ -582,7 +583,8 @@ theorem assertion_computableWitnesses (circuit : FormalAssertion F β') (b : Var
 @[computable_witnesses_norm]
 theorem subcircuitWithAssertion_computableWitnesses (circuit : GeneralFormalCircuit F β' α')
     (b : Var β' F) :
-    (subcircuitWithAssertion circuit b).ComputableWitnesses n env env' ↔
+    Circuit.ComputableWitnesses (α := α' (Expression F))
+      (subcircuitWithAssertion circuit b) n env env' ↔
       (circuit.toSubcircuit n b).ComputableWitnesses n env env' := by
   simp [subcircuitWithAssertion, Circuit.ComputableWitnesses, Operations.ComputableWitnesses,
     Circuit.operations, Operations.forAll]

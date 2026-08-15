@@ -103,6 +103,10 @@ def fromLimbs {F} (v : Vector F 8) : U64 F := fromElements v
 def map {α β : Type} (x : U64 α) (f : α → β) : U64 β :=
   ⟨ f x.x0, f x.x1, f x.x2, f x.x3, f x.x4, f x.x5, f x.x6, f x.x7 ⟩
 
+-- a struct-literal builder: unfolds for the `computable_witnesses` normal form so the
+-- struct literal machinery decomposes mapped inputs
+attribute [computable_witnesses_norm] map
+
 def vals (x : U64 (F p)) : U64 ℕ := x.map ZMod.val
 
 /--

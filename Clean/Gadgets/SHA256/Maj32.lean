@@ -215,15 +215,15 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   have h_ai : ∀ i : Fin 32, Expression.eval env input_var_a[i.val] = input_a[i] := by
     intro i
     have := Vector.ext_iff.mp h_input_a i i.isLt
-    simp [Vector.getElem_map] at this; exact this
+    simp only [Vector.getElem_map] at this; exact this
   have h_bi : ∀ i : Fin 32, Expression.eval env input_var_b[i.val] = input_b[i] := by
     intro i
     have := Vector.ext_iff.mp h_input_b i i.isLt
-    simp [Vector.getElem_map] at this; exact this
+    simp only [Vector.getElem_map] at this; exact this
   have h_ci : ∀ i : Fin 32, Expression.eval env input_var_c[i.val] = input_c[i] := by
     intro i
     have := Vector.ext_iff.mp h_input_c i i.isLt
-    simp [Vector.getElem_map] at this; exact this
+    simp only [Vector.getElem_map] at this; exact this
   -- Extract the two sets of constraints from h_holds
   obtain ⟨h_holds_t, h_holds_z⟩ := h_holds
   -- t[i] = a[i] * b[i]

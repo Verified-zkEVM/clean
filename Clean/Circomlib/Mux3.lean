@@ -169,6 +169,7 @@ def circuit : FormalCircuit (F p) Inputs field where
   main := main
 
   computableWitnesses := by
+    set_option maxRecDepth 2048 in
     computable_witnesses [eval_vector, Vector.ext_iff, Vector.getElem_map]
 
   Assumptions input :=
@@ -189,9 +190,7 @@ def circuit : FormalCircuit (F p) Inputs field where
   soundness := by
     circuit_proof_start [MultiMux3.circuit]
     specialize h_holds h_assumptions 0 (by omega)
-    simp only [circuit_norm, eval_vector] at h_holds
-    rw [← h_input.1]
-    simp only [Vector.getElem_map]
+    simp only [circuit_norm] at h_holds
     exact h_holds
 
   completeness := by

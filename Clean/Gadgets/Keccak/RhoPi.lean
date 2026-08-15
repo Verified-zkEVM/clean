@@ -38,7 +38,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
-  simp only [eval_vector, Vector.getElem_map, KeccakState.value, rhoPi_loop]
+  simp only [Vector.getElem_map, KeccakState.value, rhoPi_loop]
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input

@@ -131,7 +131,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
     simp only [show ∀ a b : ℕ, (a + b) % 2 ^ 32 = _root_.add32 a b from fun _ _ => rfl] at v_newa v_newe
     -- Push the outer `Vector.map valueBits ∘ eval env` inside the literal #v[...] and unfold the
     -- spec, so both sides become explicit 8-element vectors with matching slot shapes.
-    simp only [eval_vector, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil,
+    try simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil,
       circuit_norm]
     simp only [Specs.SHA256.sha256Round, Vector.getElem_map]
     rw [v_newa, v_newe, e 0 (by omega), e 1 (by omega), e 2 (by omega),
@@ -140,21 +140,29 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
     intro i
     fin_cases i
     · convert s_newa.2 using 1
-      rw [← getElem_eval_vector, CircuitType.eval_var_fields]; congr 1
+      try rw [← getElem_eval_vector, CircuitType.eval_var_fields]
+      congr 1
     · convert (h_eval 0 (by omega)).symm ▸ h_a using 1
-      rw [← getElem_eval_vector, CircuitType.eval_var_fields]; congr 1
+      try rw [← getElem_eval_vector, CircuitType.eval_var_fields]
+      congr 1
     · convert (h_eval 1 (by omega)).symm ▸ h_b using 1
-      rw [← getElem_eval_vector, CircuitType.eval_var_fields]; congr 1
+      try rw [← getElem_eval_vector, CircuitType.eval_var_fields]
+      congr 1
     · convert (h_eval 2 (by omega)).symm ▸ h_c using 1
-      rw [← getElem_eval_vector, CircuitType.eval_var_fields]; congr 1
+      try rw [← getElem_eval_vector, CircuitType.eval_var_fields]
+      congr 1
     · convert s_newe.2 using 1
-      rw [← getElem_eval_vector, CircuitType.eval_var_fields]; congr 1
+      try rw [← getElem_eval_vector, CircuitType.eval_var_fields]
+      congr 1
     · convert (h_eval 4 (by omega)).symm ▸ h_e using 1
-      rw [← getElem_eval_vector, CircuitType.eval_var_fields]; congr 1
+      try rw [← getElem_eval_vector, CircuitType.eval_var_fields]
+      congr 1
     · convert (h_eval 5 (by omega)).symm ▸ h_f using 1
-      rw [← getElem_eval_vector, CircuitType.eval_var_fields]; congr 1
+      try rw [← getElem_eval_vector, CircuitType.eval_var_fields]
+      congr 1
     · convert (h_eval 6 (by omega)).symm ▸ h_g using 1
-      rw [← getElem_eval_vector, CircuitType.eval_var_fields]; congr 1
+      try rw [← getElem_eval_vector, CircuitType.eval_var_fields]
+      congr 1
 
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [sha256Round, UpperSigma1.circuit, UpperSigma0.circuit,
@@ -264,7 +272,9 @@ def circuit : FormalCircuit (F p) Inputs SHA256State where
     · computable_witnesses_close
     · computable_witnesses_close
     · computable_witnesses_close
-    · exact output_eval_congr h.1 h_agrees
+    · exact (CircuitType.eval_expression_prover_to_verifier (M := SHA256State) env _).trans
+        ((output_eval_congr h.1 h_agrees).trans
+          (CircuitType.eval_expression_prover_to_verifier (M := SHA256State) env' _).symm)
 end SHA256Round
 end Gadgets.SHA256
 end

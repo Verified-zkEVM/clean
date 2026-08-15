@@ -175,11 +175,11 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   obtain ⟨he, hf, hg⟩ := h_assumptions
   obtain ⟨h_input_e, h_input_f, h_input_g⟩ := h_input
   have h_ei : ∀ i : Fin 32, Expression.eval env input_var_e[i.val] = input_e[i] := by
-    intro i; have := Vector.ext_iff.mp h_input_e i i.isLt; simp [Vector.getElem_map] at this; exact this
+    intro i; have := Vector.ext_iff.mp h_input_e i i.isLt; simp only [Vector.getElem_map] at this; exact this
   have h_fi : ∀ i : Fin 32, Expression.eval env input_var_f[i.val] = input_f[i] := by
-    intro i; have := Vector.ext_iff.mp h_input_f i i.isLt; simp [Vector.getElem_map] at this; exact this
+    intro i; have := Vector.ext_iff.mp h_input_f i i.isLt; simp only [Vector.getElem_map] at this; exact this
   have h_gi : ∀ i : Fin 32, Expression.eval env input_var_g[i.val] = input_g[i] := by
-    intro i; have := Vector.ext_iff.mp h_input_g i i.isLt; simp [Vector.getElem_map] at this; exact this
+    intro i; have := Vector.ext_iff.mp h_input_g i i.isLt; simp only [Vector.getElem_map] at this; exact this
   have h_eq : ∀ i : Fin 32, env.get (i₀ + i.val) = input_g[i] + input_e[i] * (input_f[i] - input_g[i]) := by
     intro i
     have h := h_holds i; rw [h_ei i, h_fi i, h_gi i] at h
@@ -200,11 +200,11 @@ theorem completeness : Completeness (F p) main Assumptions := by
   obtain ⟨he, hf, hg⟩ := h_assumptions
   obtain ⟨h_input_e, h_input_f, h_input_g⟩ := h_input
   have h_ei : ∀ i : Fin 32, Expression.eval env.toEnvironment input_var_e[i.val] = input_e[i] := by
-    intro i; have := Vector.ext_iff.mp h_input_e i i.isLt; simp [Vector.getElem_map] at this; exact this
+    intro i; have := Vector.ext_iff.mp h_input_e i i.isLt; simp only [Vector.getElem_map] at this; exact this
   have h_fi : ∀ i : Fin 32, Expression.eval env.toEnvironment input_var_f[i.val] = input_f[i] := by
-    intro i; have := Vector.ext_iff.mp h_input_f i i.isLt; simp [Vector.getElem_map] at this; exact this
+    intro i; have := Vector.ext_iff.mp h_input_f i i.isLt; simp only [Vector.getElem_map] at this; exact this
   have h_gi : ∀ i : Fin 32, Expression.eval env.toEnvironment input_var_g[i.val] = input_g[i] := by
-    intro i; have := Vector.ext_iff.mp h_input_g i i.isLt; simp [Vector.getElem_map] at this; exact this
+    intro i; have := Vector.ext_iff.mp h_input_g i i.isLt; simp only [Vector.getElem_map] at this; exact this
   intro i
   replace h_env := h_env i
   simp only [circuit_norm, Fin.isLt, reduceDIte] at h_env

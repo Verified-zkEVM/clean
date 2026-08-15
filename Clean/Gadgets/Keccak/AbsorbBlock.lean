@@ -109,6 +109,7 @@ def circuit : FormalCircuit (F p) Input KeccakState where
   elaborated := elaborated
   Assumptions := Assumptions
   Spec := Spec
+  computableWitnesses := by computable_witnesses [Xor64.circuit]
   soundness := soundness
   completeness := completeness
 end Gadgets.Keccak256.AbsorbBlock

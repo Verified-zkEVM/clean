@@ -101,90 +101,98 @@ def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   -- the whole circuit keeps the linear named-window chain.
   computableWitnesses := by
     computable_witnesses_start
-    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by omega) fun h_agrees => by
-          simp only [circuit_norm]
-          refine ⟨?_, ?_, ?_⟩
-          · exact h.1
-          · exact G.state_elem_congr h.2 0
-          · exact G.state_elem_congr h.2 1
-    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by rfl) fun h_agrees => by
-          have s1 := G.output_eval_congr (a := 0) (b := 4) (c := 8) (d := 12) (n := n) h.1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          simp only [circuit_norm]
-          refine ⟨?_, ?_, ?_⟩
-          · exact s1
-          · exact G.state_elem_congr h.2 2
-          · exact G.state_elem_congr h.2 3
-    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by rfl) fun h_agrees => by
-          have s1 := G.output_eval_congr (a := 0) (b := 4) (c := 8) (d := 12) (n := n) h.1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          have s2 := G.output_eval_congr (a := 1) (b := 5) (c := 9) (d := 13) (n := n + 96) s1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          simp only [circuit_norm]
-          refine ⟨?_, ?_, ?_⟩
-          · exact s2
-          · exact G.state_elem_congr h.2 4
-          · exact G.state_elem_congr h.2 5
-    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by rfl) fun h_agrees => by
-          have s1 := G.output_eval_congr (a := 0) (b := 4) (c := 8) (d := 12) (n := n) h.1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          have s2 := G.output_eval_congr (a := 1) (b := 5) (c := 9) (d := 13) (n := n + 96) s1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          have s3 := G.output_eval_congr (a := 2) (b := 6) (c := 10) (d := 14) (n := n + 192) s2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          simp only [circuit_norm]
-          refine ⟨?_, ?_, ?_⟩
-          · exact s3
-          · exact G.state_elem_congr h.2 6
-          · exact G.state_elem_congr h.2 7
-    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by rfl) fun h_agrees => by
-          have s1 := G.output_eval_congr (a := 0) (b := 4) (c := 8) (d := 12) (n := n) h.1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          have s2 := G.output_eval_congr (a := 1) (b := 5) (c := 9) (d := 13) (n := n + 96) s1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          have s3 := G.output_eval_congr (a := 2) (b := 6) (c := 10) (d := 14) (n := n + 192) s2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          have s4 := G.output_eval_congr (a := 3) (b := 7) (c := 11) (d := 15) (n := n + 288) s3 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          simp only [circuit_norm]
-          refine ⟨?_, ?_, ?_⟩
-          · exact s4
-          · exact G.state_elem_congr h.2 8
-          · exact G.state_elem_congr h.2 9
-    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by rfl) fun h_agrees => by
-          have s1 := G.output_eval_congr (a := 0) (b := 4) (c := 8) (d := 12) (n := n) h.1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          have s2 := G.output_eval_congr (a := 1) (b := 5) (c := 9) (d := 13) (n := n + 96) s1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          have s3 := G.output_eval_congr (a := 2) (b := 6) (c := 10) (d := 14) (n := n + 192) s2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          have s4 := G.output_eval_congr (a := 3) (b := 7) (c := 11) (d := 15) (n := n + 288) s3 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          have s5 := G.output_eval_congr (a := 0) (b := 5) (c := 10) (d := 15) (n := n + 384) s4 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          simp only [circuit_norm]
-          refine ⟨?_, ?_, ?_⟩
-          · exact s5
-          · exact G.state_elem_congr h.2 10
-          · exact G.state_elem_congr h.2 11
-    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by rfl) fun h_agrees => by
-          have s1 := G.output_eval_congr (a := 0) (b := 4) (c := 8) (d := 12) (n := n) h.1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          have s2 := G.output_eval_congr (a := 1) (b := 5) (c := 9) (d := 13) (n := n + 96) s1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          have s3 := G.output_eval_congr (a := 2) (b := 6) (c := 10) (d := 14) (n := n + 192) s2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          have s4 := G.output_eval_congr (a := 3) (b := 7) (c := 11) (d := 15) (n := n + 288) s3 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          have s5 := G.output_eval_congr (a := 0) (b := 5) (c := 10) (d := 15) (n := n + 384) s4 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          have s6 := G.output_eval_congr (a := 1) (b := 6) (c := 11) (d := 12) (n := n + 480) s5 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          simp only [circuit_norm]
-          refine ⟨?_, ?_, ?_⟩
-          · exact s6
-          · exact G.state_elem_congr h.2 12
-          · exact G.state_elem_congr h.2 13
-    · exact FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by rfl) fun h_agrees => by
-          have s1 := G.output_eval_congr (a := 0) (b := 4) (c := 8) (d := 12) (n := n) h.1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          have s2 := G.output_eval_congr (a := 1) (b := 5) (c := 9) (d := 13) (n := n + 96) s1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          have s3 := G.output_eval_congr (a := 2) (b := 6) (c := 10) (d := 14) (n := n + 192) s2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          have s4 := G.output_eval_congr (a := 3) (b := 7) (c := 11) (d := 15) (n := n + 288) s3 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          have s5 := G.output_eval_congr (a := 0) (b := 5) (c := 10) (d := 15) (n := n + 384) s4 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          have s6 := G.output_eval_congr (a := 1) (b := 6) (c := 11) (d := 12) (n := n + 480) s5 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          have s7 := G.output_eval_congr (a := 2) (b := 7) (c := 8) (d := 13) (n := n + 576) s6 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-          simp only [circuit_norm]
-          refine ⟨?_, ?_, ?_⟩
-          · exact s7
-          · exact G.state_elem_congr h.2 14
-          · exact G.state_elem_congr h.2 15
+    · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq
+        (G.circuit (p := p) 0 4 8 12) ?hoff1 fun h_agrees => ?_
+      case hoff1 => omega
+      simp only [circuit_norm]
+      refine ⟨?_, ?_, ?_⟩
+      · exact h.1
+      · exact G.state_elem_congr h.2 0
+      · exact G.state_elem_congr h.2 1
+    · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq
+        _ ?hoff2 fun h_agrees => ?_
+      case hoff2 => rfl
+      have s1 := G.output_eval_congr (a := 0) (b := 4) (c := 8) (d := 12) (n := n) h.1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      simp only [circuit_norm]
+      refine ⟨?_, ?_, ?_⟩
+      · exact s1
+      · exact G.state_elem_congr h.2 2
+      · exact G.state_elem_congr h.2 3
+    · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq
+        _ ?hoff3 fun h_agrees => ?_
+      case hoff3 => rfl
+      have s1 := G.output_eval_congr (a := 0) (b := 4) (c := 8) (d := 12) (n := n) h.1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      have s2 := G.output_eval_congr (a := 1) (b := 5) (c := 9) (d := 13) (n := n + 96) s1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      simp only [circuit_norm]
+      refine ⟨?_, ?_, ?_⟩
+      · exact s2
+      · exact G.state_elem_congr h.2 4
+      · exact G.state_elem_congr h.2 5
+    · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq
+        _ ?hoff4 fun h_agrees => ?_
+      case hoff4 => rfl
+      have s1 := G.output_eval_congr (a := 0) (b := 4) (c := 8) (d := 12) (n := n) h.1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      have s2 := G.output_eval_congr (a := 1) (b := 5) (c := 9) (d := 13) (n := n + 96) s1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      have s3 := G.output_eval_congr (a := 2) (b := 6) (c := 10) (d := 14) (n := n + 192) s2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      simp only [circuit_norm]
+      refine ⟨?_, ?_, ?_⟩
+      · exact s3
+      · exact G.state_elem_congr h.2 6
+      · exact G.state_elem_congr h.2 7
+    · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq
+        _ ?hoff5 fun h_agrees => ?_
+      case hoff5 => rfl
+      have s1 := G.output_eval_congr (a := 0) (b := 4) (c := 8) (d := 12) (n := n) h.1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      have s2 := G.output_eval_congr (a := 1) (b := 5) (c := 9) (d := 13) (n := n + 96) s1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      have s3 := G.output_eval_congr (a := 2) (b := 6) (c := 10) (d := 14) (n := n + 192) s2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      have s4 := G.output_eval_congr (a := 3) (b := 7) (c := 11) (d := 15) (n := n + 288) s3 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      simp only [circuit_norm]
+      refine ⟨?_, ?_, ?_⟩
+      · exact s4
+      · exact G.state_elem_congr h.2 8
+      · exact G.state_elem_congr h.2 9
+    · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq
+        _ ?hoff6 fun h_agrees => ?_
+      case hoff6 => rfl
+      have s1 := G.output_eval_congr (a := 0) (b := 4) (c := 8) (d := 12) (n := n) h.1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      have s2 := G.output_eval_congr (a := 1) (b := 5) (c := 9) (d := 13) (n := n + 96) s1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      have s3 := G.output_eval_congr (a := 2) (b := 6) (c := 10) (d := 14) (n := n + 192) s2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      have s4 := G.output_eval_congr (a := 3) (b := 7) (c := 11) (d := 15) (n := n + 288) s3 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      have s5 := G.output_eval_congr (a := 0) (b := 5) (c := 10) (d := 15) (n := n + 384) s4 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      simp only [circuit_norm]
+      refine ⟨?_, ?_, ?_⟩
+      · exact s5
+      · exact G.state_elem_congr h.2 10
+      · exact G.state_elem_congr h.2 11
+    · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq
+        _ ?hoff7 fun h_agrees => ?_
+      case hoff7 => rfl
+      have s1 := G.output_eval_congr (a := 0) (b := 4) (c := 8) (d := 12) (n := n) h.1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      have s2 := G.output_eval_congr (a := 1) (b := 5) (c := 9) (d := 13) (n := n + 96) s1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      have s3 := G.output_eval_congr (a := 2) (b := 6) (c := 10) (d := 14) (n := n + 192) s2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      have s4 := G.output_eval_congr (a := 3) (b := 7) (c := 11) (d := 15) (n := n + 288) s3 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      have s5 := G.output_eval_congr (a := 0) (b := 5) (c := 10) (d := 15) (n := n + 384) s4 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      have s6 := G.output_eval_congr (a := 1) (b := 6) (c := 11) (d := 12) (n := n + 480) s5 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      simp only [circuit_norm]
+      refine ⟨?_, ?_, ?_⟩
+      · exact s6
+      · exact G.state_elem_congr h.2 12
+      · exact G.state_elem_congr h.2 13
+    · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq
+        _ ?hoff8 fun h_agrees => ?_
+      case hoff8 => rfl
+      have s1 := G.output_eval_congr (a := 0) (b := 4) (c := 8) (d := 12) (n := n) h.1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      have s2 := G.output_eval_congr (a := 1) (b := 5) (c := 9) (d := 13) (n := n + 96) s1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      have s3 := G.output_eval_congr (a := 2) (b := 6) (c := 10) (d := 14) (n := n + 192) s2 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      have s4 := G.output_eval_congr (a := 3) (b := 7) (c := 11) (d := 15) (n := n + 288) s3 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      have s5 := G.output_eval_congr (a := 0) (b := 5) (c := 10) (d := 15) (n := n + 384) s4 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      have s6 := G.output_eval_congr (a := 1) (b := 6) (c := 11) (d := 12) (n := n + 480) s5 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      have s7 := G.output_eval_congr (a := 2) (b := 7) (c := 8) (d := 13) (n := n + 576) s6 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+      simp only [circuit_norm]
+      refine ⟨?_, ?_, ?_⟩
+      · exact s7
+      · exact G.state_elem_congr h.2 14
+      · exact G.state_elem_congr h.2 15
     · -- output = the eighth G output
       have s1 := G.output_eval_congr (a := 0) (b := 4) (c := 8) (d := 12) (n := n) h.1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
       have s2 := G.output_eval_congr (a := 1) (b := 5) (c := 9) (d := 13) (n := n + 96) s1 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
@@ -194,7 +202,10 @@ def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
       have s6 := G.output_eval_congr (a := 1) (b := 6) (c := 11) (d := 12) (n := n + 480) s5 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
       have s7 := G.output_eval_congr (a := 2) (b := 7) (c := 8) (d := 13) (n := n + 576) s6 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
       have s8 := G.output_eval_congr (a := 3) (b := 4) (c := 9) (d := 14) (n := n + 672) s7 (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
-      exact s8
+      exact (CircuitType.eval_expression_prover_to_verifier
+          (M := ProvableVector U32 16) env _).trans
+        (s8.trans (CircuitType.eval_expression_prover_to_verifier
+          (M := ProvableVector U32 16) env' _).symm)
 }
 
 end Gadgets.BLAKE3.Round

@@ -77,8 +77,8 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
       output[i] = (c[i])[idx]
 
   computableWitnesses := by
-    computable_witnesses [eval_vector, Vector.ext_iff, explicit_provable_type,
-      Vector.getElem_map]
+    set_option maxRecDepth 2048 in
+    computable_witnesses
 
   soundness := by
     circuit_proof_start
@@ -148,7 +148,10 @@ def circuit : FormalCircuit (F p) Inputs field where
   main := main
 
   computableWitnesses := by
-    computable_witnesses [eval_vector, Vector.ext_iff, Vector.getElem_map]
+    -- the 4-way selector's distributed expression nest exceeds the default
+    -- recursion depth during normalization
+    set_option maxRecDepth 2048 in
+    computable_witnesses
 
   Assumptions input :=
     let ⟨_, s⟩ := input
@@ -167,9 +170,7 @@ def circuit : FormalCircuit (F p) Inputs field where
   soundness := by
     circuit_proof_start [MultiMux2.circuit]
     specialize h_holds h_assumptions 0 (by omega)
-    simp only [circuit_norm, eval_vector] at h_holds
-    rw [← h_input.1]
-    simp only [Vector.getElem_map]
+    simp only [circuit_norm] at h_holds
     exact h_holds
 
   completeness := by

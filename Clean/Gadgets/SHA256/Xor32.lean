@@ -105,11 +105,11 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   have h_ai : ∀ i : Fin 32, Expression.eval env input_var_a[i.val] = input_a[i] := by
     intro i
     have := Vector.ext_iff.mp h_input_a i i.isLt
-    simp [Vector.getElem_map] at this; exact this
+    simp only [Vector.getElem_map] at this; exact this
   have h_bi : ∀ i : Fin 32, Expression.eval env input_var_b[i.val] = input_b[i] := by
     intro i
     have := Vector.ext_iff.mp h_input_b i i.isLt
-    simp [Vector.getElem_map] at this; exact this
+    simp only [Vector.getElem_map] at this; exact this
   -- h_holds: env.get(i₀+i) = a[i] + b[i] - 2*a[i]*b[i]
   have h_eq : ∀ i : Fin 32, env.get (i₀ + i.val) = input_a[i] + input_b[i] - 2 * input_a[i] * input_b[i] := by
     intro i
@@ -142,9 +142,9 @@ theorem completeness : Completeness (F p) main Assumptions := by
   obtain ⟨ha, hb⟩ := h_assumptions
   obtain ⟨h_input_a, h_input_b⟩ := h_input
   have h_ai : ∀ i : Fin 32, Expression.eval env.toEnvironment input_var_a[i.val] = input_a[i] := by
-    intro i; have := Vector.ext_iff.mp h_input_a i i.isLt; simp [Vector.getElem_map] at this; exact this
+    intro i; have := Vector.ext_iff.mp h_input_a i i.isLt; simp only [Vector.getElem_map] at this; exact this
   have h_bi : ∀ i : Fin 32, Expression.eval env.toEnvironment input_var_b[i.val] = input_b[i] := by
-    intro i; have := Vector.ext_iff.mp h_input_b i i.isLt; simp [Vector.getElem_map] at this; exact this
+    intro i; have := Vector.ext_iff.mp h_input_b i i.isLt; simp only [Vector.getElem_map] at this; exact this
   intro i
   -- the witness generator computes in `u64`; these bounds let the wrapping simplify away
   have ha_lt : ZMod.val (Expression.eval env.toEnvironment input_var_a[i.val]) < 2 ^ 64 := by

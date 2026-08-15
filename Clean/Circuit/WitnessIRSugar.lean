@@ -151,6 +151,7 @@ class EqCond (α β : Type) (F : outParam Type) where
   eqCond : α → β → BExpr F
 
 @[inherit_doc EqCond.eqCond] infix:50 " =? " => EqCond.eqCond
+attribute [circuit_norm, computable_witnesses_norm] EqCond.eqCond
 
 instance : EqCond (FExpr F) (FExpr F) F := ⟨.feq⟩
 instance : EqCond (Expression F) (FExpr F) F where eqCond x y := .feq x y
@@ -369,24 +370,96 @@ variable [FiniteField F] {value : TypeMap} [ProvableType value]
 -- TODO WITGENIR the simp behavior currently takes an ugly low-level path because we were
 -- too lazy to craft a high-level path that works in all cases
 
-@[circuit_norm]
 def eval (env : ProverEnvironment F) (program : M F (value (FExpr F))) : value F :=
   let (out, steps) := program #[]
   Witgen.eval { env, locals := evalSteps env steps.toList } out
 
-@[circuit_norm]
 def evalBool (env : ProverEnvironment F) (program : M F (BExpr F)) : Bool :=
   let (out, steps) := program #[]
   out.eval { env, locals := evalSteps env steps.toList }
 
-@[circuit_norm]
 def evalU64 (env : ProverEnvironment F) (program : M F (U64Expr F)) : UInt64 :=
   let (out, steps) := program #[]
   out.eval { env, locals := evalSteps env steps.toList }
 
+/-! ## The high-level eval normal form (ported from PR 430's design)
+
+`M.eval`/`evalBool`/`evalU64` are NOT `@[circuit_norm]` def-unfolds. Shape-keyed
+lemmas reduce `pure` programs; the discriminating simproc below unfolds `eval env p`
+only when the program's run reduces (concrete). Hint-derived programs stay whole
+`eval env p` atoms — the spelling caller facts are stated at. -/
+
+@[circuit_norm, computable_witnesses_norm]
 theorem eval_pure (out : value (FExpr F)) (env : ProverEnvironment F) :
     eval env (fun s => (out, s)) = Witgen.eval { env } out := by
   rfl
+
+@[circuit_norm, computable_witnesses_norm]
+theorem eval_pure' (out : value (FExpr F)) (env : ProverEnvironment F) :
+    eval env (pure out) = Witgen.eval { env } out := rfl
+
+@[circuit_norm, computable_witnesses_norm]
+theorem evalBool_pure (out : BExpr F) (env : ProverEnvironment F) :
+    evalBool env (pure out) = out.eval { env } := rfl
+
+@[circuit_norm, computable_witnesses_norm]
+theorem evalBool_pure' (out : BExpr F) (env : ProverEnvironment F) :
+    evalBool env (fun s => (out, s)) = out.eval { env } := rfl
+
+@[circuit_norm, computable_witnesses_norm]
+theorem evalU64_pure (out : U64Expr F) (env : ProverEnvironment F) :
+    evalU64 env (pure out) = out.eval { env } := rfl
+
+@[circuit_norm, computable_witnesses_norm]
+theorem evalU64_pure' (out : U64Expr F) (env : ProverEnvironment F) :
+    evalU64 env (fun s => (out, s)) = out.eval { env } := rfl
+
+/-- Shape lemma for the standard boolean-hint witness program `do return (← p).toField`:
+its field evaluation is determined by the boolean evaluation of `p`, keeping opaque hint
+programs as whole `evalBool` atoms. -/
+@[circuit_norm, computable_witnesses_norm]
+theorem eval_bind_toField (p : M F (BExpr F)) (env : ProverEnvironment F) :
+    eval (value := field) env (p >>= fun b => pure b.toField) =
+      if evalBool env p then 1 else 0 := by with_unfolding_all rfl
+
+/-- Raw-run twin of `eval_bind_toField`: the same program after `M.bind_def`/`M.pure_def`
+have unfolded the bind. Both spellings reduce to the same `evalBool` atom form. -/
+@[circuit_norm, computable_witnesses_norm]
+theorem eval_toField_run (p : M F (BExpr F)) (env : ProverEnvironment F) :
+    eval (value := field) env (fun s => ((p s).1.toField, (p s).2)) =
+      if evalBool env p then 1 else 0 := by with_unfolding_all rfl
+
+open Lean Meta Simp in
+/-- The discriminating reduce (PR 430's `evalReduce`): unfold `eval env p` only when
+the program is CONCRETE — its run `p #[]` whnf-reduces to a pair. A hint-derived or
+opaque program stays the whole-program atom. -/
+private def evalReduceCore (e : Expr) : SimpM Simp.Step := do
+  let fn := e.getAppFn
+  unless fn.isConstOf ``Witgen.M.eval || fn.isConstOf ``Witgen.M.evalBool
+      || fn.isConstOf ``Witgen.M.evalU64 do
+    return .continue
+  let args := e.getAppArgs
+  if args.size < 2 then return .continue
+  let program ← instantiateMVars args[args.size - 1]!
+  let programTy ← withDefault <| whnf (← inferType program)
+  let .forallE _ domTy _ _ := programTy | return .continue
+  let some elemTy := domTy.getAppArgs.back? | return .continue
+  let empty ← mkAppOptM ``Array.empty #[some elemTy]
+  let w ← withDefault <| whnf (mkApp program empty)
+  unless w.isAppOf ``Prod.mk do return .continue
+  let eqName := fn.constName!.str "eq_1"
+  let some pf ← (try? (mkAppM eqName #[args[args.size - 2]!, program])) | return .continue
+  let some (_, _, rhs) := (← inferType pf).eq? | return .continue
+  return .visit { expr := rhs, proof? := some pf }
+
+open Lean Meta Simp in
+simproc evalReduce (Witgen.M.eval _ _) := evalReduceCore
+open Lean Meta Simp in
+simproc evalReduceBool (Witgen.M.evalBool _ _) := evalReduceCore
+open Lean Meta Simp in
+simproc evalReduceU64 (Witgen.M.evalU64 _ _) := evalReduceCore
+attribute [circuit_norm] evalReduce evalReduceBool evalReduceU64
+attribute [computable_witnesses_norm] evalReduce evalReduceBool evalReduceU64
 
 /-- Assemble a witness program from a builder computation returning the output vector. -/
 @[circuit_norm]
@@ -475,13 +548,13 @@ instance [Field F] : Inhabited (Var (Unconstrained value) F) :=
     (env : Environment F) (v : Var (Unconstrained value) F) :
     eval env v = () := by rfl
 
-@[circuit_norm] lemma eval_unconstrained_prover [FiniteField F]
+@[circuit_norm, computable_witnesses_norm] lemma eval_unconstrained_prover [FiniteField F]
     (env : ProverEnvironment F) (v : Var (Unconstrained value) F) :
     eval env v = M.eval (value := value) env v := by
   rw [CircuitType.eval_prover (M := Unconstrained value)]
   rfl
 
-@[circuit_norm] lemma eval_unconstrained_prover' [FiniteField F] :
+@[circuit_norm, computable_witnesses_norm] lemma eval_unconstrained_prover' [FiniteField F] :
   @eval (ProverEnvironment F) (M F (value (FExpr F))) (value F) (CircuitType.proverEval (Unconstrained value))
     = M.eval := by
   with_unfolding_all rfl
@@ -523,13 +596,13 @@ instance : Inhabited (Var UnconstrainedBool F) :=
     (env : Environment F) (v : Var UnconstrainedBool F) :
     eval env v = () := by rfl
 
-@[circuit_norm] lemma eval_unconstrainedBool_prover [FiniteField F]
+@[circuit_norm, computable_witnesses_norm] lemma eval_unconstrainedBool_prover [FiniteField F]
     (env : ProverEnvironment F) (v : Var UnconstrainedBool F) :
     eval env v = M.evalBool env v := by
   rw [CircuitType.eval_prover (M := UnconstrainedBool)]
   rfl
 
-@[circuit_norm] lemma eval_unconstrainedBool_prover' [FiniteField F] :
+@[circuit_norm, computable_witnesses_norm] lemma eval_unconstrainedBool_prover' [FiniteField F] :
   @eval (ProverEnvironment F) (M F (BExpr F)) Bool (CircuitType.proverEval UnconstrainedBool)
     = M.evalBool := by
   with_unfolding_all rfl
@@ -571,13 +644,13 @@ instance : Inhabited (Var UnconstrainedU64 F) :=
     (env : Environment F) (v : Var UnconstrainedU64 F) :
     eval env v = () := by rfl
 
-@[circuit_norm] lemma eval_unconstrainedU64_prover [FiniteField F]
+@[circuit_norm, computable_witnesses_norm] lemma eval_unconstrainedU64_prover [FiniteField F]
     (env : ProverEnvironment F) (v : Var UnconstrainedU64 F) :
     eval env v = M.evalU64 env v := by
   rw [CircuitType.eval_prover (M := UnconstrainedU64)]
   rfl
 
-@[circuit_norm] lemma eval_unconstrainedU64_prover' [FiniteField F] :
+@[circuit_norm, computable_witnesses_norm] lemma eval_unconstrainedU64_prover' [FiniteField F] :
   @eval (ProverEnvironment F) (M F (U64Expr F)) UInt64 (CircuitType.proverEval UnconstrainedU64)
     = M.evalU64 := by
   with_unfolding_all rfl

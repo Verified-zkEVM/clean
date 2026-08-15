@@ -927,9 +927,9 @@ theorem main_computableWitnesses (n : ℕ) :
     | m + 3 =>
       have ih1 := ih ((m + 3) / 2) (by omega)
       have ih2 := ih ((m + 3) - (m + 3) / 2) (by omega)
-      intro offset input env env'
-      simp only [circuit_norm, main]
-      intro hp
+      intro offset input env env' hp
+      simp only [circuit_norm] at hp
+      simp only [computable_witnesses_norm, main]
       -- the recursive calls are inlined: their operations are discharged by weakening the
       -- induction hypotheses' conditions (child input equality follows from the parent's)
       have sub_eq : ∀ (hp : Vector.map (Expression.eval env.toEnvironment) input =
@@ -972,8 +972,9 @@ theorem main_computableWitnesses (n : ℕ) :
         simpa only [circuit_norm] using h2
       · -- the AND node consumes the two recursive outputs, which are determined below the
         -- node's offset by the induction hypotheses' output halves
-        refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-          (by omega) fun h_agrees => ?_
+        refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq
+          (AND.circuit (p := p)) ?hoff fun h_agrees => ?_
+        case hoff => omega
         simp only [circuit_norm]
         refine Prod.ext ?_ ?_
         · simpa only [circuit_norm] using (ih1 offset _ env env'
@@ -990,7 +991,7 @@ theorem main_computableWitnesses (n : ℕ) :
               have e3 : (elaboratedMain (p := p) ((m + 3) / 2)).localLength
                   (((input.take ((m + 3) / 2)).cast (by omega) :
                     Vector (Expression (F p)) ((m + 3) / 2))) = (m + 3) / 2 - 1 := rfl
-              simp only [Circuit.localLength] at e1 e2
+              simp only [Circuit.localLength] at e1 e2 ⊢
               omega))
         · simpa only [circuit_norm] using (ih2 _ _ env env'
               (by simp only [circuit_norm]; exact drop_eq hp)).2
@@ -1006,11 +1007,11 @@ theorem main_computableWitnesses (n : ℕ) :
               have e3 : (elaboratedMain (p := p) (m + 3 - (m + 3) / 2)).localLength
                   (((input.drop ((m + 3) / 2)).cast (by omega) :
                     Vector (Expression (F p)) (m + 3 - (m + 3) / 2))) = m + 3 - (m + 3) / 2 - 1 := rfl
-              simp only [Circuit.localLength] at e1 e2
+              simp only [Circuit.localLength] at e1 e2 ⊢
               omega))
       · -- output: unfold one recursion step so the AND node's output variable is exposed,
         -- and reduce the recursive localLengths so its index is in the agreement range
-        simp only [circuit_norm, AND.circuit] at hag ⊢
+        simp only [circuit_norm] at hag ⊢
         have e1 := localLength_eq ((m + 3) / 2)
           (((input.take ((m + 3) / 2)).cast (by omega) :
             Vector (Expression (F p)) ((m + 3) / 2))) offset
@@ -1019,8 +1020,35 @@ theorem main_computableWitnesses (n : ℕ) :
             Vector (Expression (F p)) (m + 3 - (m + 3) / 2)))
           (offset + Operations.localLength (main (((input.take ((m + 3) / 2)).cast (by omega) :
             Vector (Expression (F p)) ((m + 3) / 2))) offset).2)
-        simp only [Circuit.localLength] at e1 e2
-        grind
+        simp only [Circuit.localLength] at e1 e2 ⊢
+        simp only [main, computable_witnesses_norm]
+        rw [← ProvableType.eval_field, ← ProvableType.eval_field]
+        apply FormalCircuit.output_of_input_eq (AND.circuit (p := p))
+        case h_agrees =>
+          apply ProverEnvironment.agreesBelow_of_le hag
+          have e3 : ∀ x, (AND.circuit (p := p)).localLength x = 1 := fun _ => rfl
+          simp only [circuit_norm, e3] at e1 e2 ⊢
+          omega
+        simp only [circuit_norm]
+        refine Prod.ext ?_ ?_
+        · have H := ih1 offset
+            (((input.take ((m + 3) / 2)).cast (by omega) :
+              Vector (Expression (F p)) ((m + 3) / 2))) env env'
+            (by simp only [circuit_norm]; exact take_eq hp)
+          simpa only [circuit_norm] using H.2
+            (ProverEnvironment.agreesBelow_of_le hag (by
+              simp only [circuit_norm] at e1 ⊢
+              omega))
+        · have H := ih2
+            (offset + Operations.localLength (main (((input.take ((m + 3) / 2)).cast (by omega) :
+              Vector (Expression (F p)) ((m + 3) / 2))) offset).2)
+            (((input.drop ((m + 3) / 2)).cast (by omega) :
+              Vector (Expression (F p)) (m + 3 - (m + 3) / 2))) env env'
+            (by simp only [circuit_norm]; exact drop_eq hp)
+          simpa only [circuit_norm] using H.2
+            (ProverEnvironment.agreesBelow_of_le hag (by
+              simp only [circuit_norm] at e1 e2 ⊢
+              omega))
 
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main

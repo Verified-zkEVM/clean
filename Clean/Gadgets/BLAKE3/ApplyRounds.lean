@@ -44,14 +44,15 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     · computable_witnesses_close
     · computable_witnesses_close
     · simp only [circuit_norm, output]
-      refine ⟨FormalCircuit.output_of_input_eq (Round.circuit (p:=p)) (n := n)
+      refine ⟨?_, ?_⟩
+      · exact FormalCircuit.output_of_input_eq (Round.circuit (p:=p)) (n := n)
           (by simp only [circuit_norm]; exact h)
-          (ProverEnvironment.agreesBelow_of_le h_agrees
-            (by simp only [circuit_norm, Round.circuit]; omega)),
-          FormalCircuit.output_of_input_eq (Permute.circuit (p:=p)) (n := n + 768)
-          h.2
-          (ProverEnvironment.agreesBelow_of_le h_agrees
-            (by simp only [circuit_norm, Permute.circuit]; omega))⟩
+          (ProverEnvironment.agreesBelow_of_le h_agrees (by
+            have e : ∀ x, (Round.circuit (p:=p)).localLength x = 768 := fun _ => rfl
+            simp only [e]; omega))
+      · refine Vector.ext fun j hj => ?_
+        try simp only [Vector.getElem_ofFn, Function.comp_apply]
+        grind
   elaborated := by elaborate_circuit_with {
     output input offset := output input offset
   }
@@ -66,11 +67,12 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
 
   soundness := by
     circuit_proof_start [Round.circuit, Permute.circuit,
-      Round.Assumptions, Permute.Assumptions, Round.Spec, Permute.Spec]
+      Round.Assumptions, Permute.Assumptions, Round.Spec, Permute.Spec, output]
     rcases h_holds with ⟨ h_holds1, h_holds2 ⟩
     specialize h_holds1 h_assumptions
     specialize h_holds2 h_assumptions.right
-    exact ⟨ h_holds1.1, h_holds1.2, h_holds2 ⟩
+    refine ⟨ h_holds1.1, h_holds1.2, ?_ ⟩
+    exact h_holds2
   completeness := by
     circuit_proof_start [Round.circuit, Permute.circuit,
       Round.Assumptions, Permute.Assumptions]
@@ -467,7 +469,8 @@ lemma initial_state_and_messages_are_normalized
     fin_cases i
     -- First 8 elements are from chaining_value
     case «0» | «1» | «2» | «3» | «4» | «5» | «6» | «7» =>
-      state_vec_norm_simp; simp [h_chaining_value_normalized]
+      state_vec_norm_simp
+      exact h_chaining_value_normalized _ (by omega)
     -- Next 4 are IV constants
     case «8» | «9» | «10» | «11» => state_vec_norm_simp_simple
     -- Last 4 are counter_low, counter_high, block_len, flags
@@ -622,12 +625,25 @@ def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
     computable_witnesses_start [initializeStateVector]
     · computable_witnesses_close
         [initState_eval_congr h.1 h.2.2.1 h.2.2.2.1 h.2.2.2.2.1 h.2.2.2.2.2]
-    · exact FormalCircuit.output_of_input_eq _
-        (by simp only [circuit_norm];
+    · have hs := FormalCircuit.output_of_input_eq (sevenRoundsApplyStyle (p := p))
+        (input_var := ⟨initializeStateVector
+          ⟨input_chaining_value, input_block_words, input_counter_high,
+           input_counter_low, input_block_len, input_flags⟩, input_block_words⟩)
+        (n := n)
+        (by simp only [ProvableStruct.eval_eq_eval, ProvableStruct.structEvalLiteralProc,
+              ProvableStruct.structEqSplit, initializeStateVector]
             exact ⟨initState_eval_congr h.1 h.2.2.1 h.2.2.2.1 h.2.2.2.2.1 h.2.2.2.2.2, h.2.1⟩)
         (ProverEnvironment.agreesBelow_of_le h_agrees (by
-          have e7 : ∀ v, (sevenRoundsApplyStyle (p:=p)).localLength v = 5376 := fun _ => rfl
-          simp only [e7]; omega))
+          have e7 : ∀ v, (sevenRoundsApplyStyle (p := p)).localLength v = 5376 := fun _ => rfl
+          simp only [e7]
+          omega))
+      have hbr := (CircuitType.eval_expression_prover_to_verifier
+          (M := BLAKE3State) env _).trans
+        (hs.trans (CircuitType.eval_expression_prover_to_verifier
+          (M := BLAKE3State) env' _).symm)
+      delta elaborated
+      simp only [main, subcircuit_output]
+      exact hbr
 }
 
 end Gadgets.BLAKE3.ApplyRounds

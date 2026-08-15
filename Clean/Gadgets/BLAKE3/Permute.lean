@@ -20,16 +20,18 @@ def Spec (state : BLAKE3State (F p)) (out : BLAKE3State (F p)) :=
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start
   simp only [BLAKE3State.value, Vector.map, ↓Fin.getElem_fin,
-    eval_vector, Vector.toArray_ofFn, Array.map_map, permute, Vector.getElem_mk, Array.getElem_map,
+    Vector.toArray_ofFn, Array.map_map, permute, Vector.getElem_mk, Array.getElem_map,
     ↓Vector.getElem_toArray, Vector.mk_eq]
   constructor
   · ext i hi
     · simp only [Array.size_map, Array.size_ofFn]
     simp only [Array.getElem_map, Array.getElem_ofFn]
-    rw [Function.comp_apply, getElem_eval_vector, h_input]
+    rw [Function.comp_apply]; try rw [getElem_eval_vector]
+    rw [h_input]
   · simp [BLAKE3State.Normalized]
     intro i
-    rw [getElem_eval_vector, h_input]
+    try rw [getElem_eval_vector]
+    rw [h_input]
     simp only [BLAKE3State.Normalized] at h_assumptions
     fin_cases i <;> simp only [msgPermutation, h_assumptions]
 

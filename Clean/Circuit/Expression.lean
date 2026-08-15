@@ -194,6 +194,10 @@ lemma eval_sub (env : Environment F) (a b : Expression F) :
   show Expression.eval env (a + -b) = _
   rw [eval_add, eval_neg, ← sub_eq_add_neg]
 
+/- The eval-congruence layer of the `computable_witnesses` normal form distributes
+eval over the expression algebra. -/
+attribute [computable_witnesses_norm] eval_mul eval_add eval_neg eval_sub
+
 /-- Expression.eval distributes over Fin.foldl with addition -/
 lemma eval_foldl (env : Environment F) (n : ℕ)
     (f : Expression F → Fin n → Expression F) (init : Expression F)

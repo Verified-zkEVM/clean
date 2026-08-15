@@ -123,6 +123,7 @@ theorem decodeInstructionSoundness : GeneralFormalCircuit.Soundness (F p) (Input
 def decodeInstruction : GeneralFormalCircuit (F p) field DecodedInstruction where
   main := decodeInstructionMain
   Spec := decodeInstructionSpec
+  computableWitnesses := by computable_witnesses [decodeInstructionMain, Gadgets.toBits]
   soundness := decodeInstructionSoundness
 
   ProverAssumptions

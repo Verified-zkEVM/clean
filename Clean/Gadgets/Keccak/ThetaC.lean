@@ -39,7 +39,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 
   -- rewrite goal
   apply KeccakRow.normalized_value_ext
-  simp only [thetaC_loop, circuit_norm, eval_vector, KeccakState.value]
+  simp only [thetaC_loop, circuit_norm, KeccakState.value]
 
   -- simplify constraints
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input

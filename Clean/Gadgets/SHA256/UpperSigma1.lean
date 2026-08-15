@@ -216,9 +216,13 @@ def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
   -- sigma-specific decomposition facts, beyond the tactic's generic close.
   computableWitnesses := by
     computable_witnesses_start [upperSigma1, xor32, rotr32, Vector.ext_iff]
-    · computable_witnesses_close [Vector.getElem_rotate,
-        h ((i + 6) % 32) (by omega), h ((i + 11) % 32) (by omega)]
-    · computable_witnesses_close [Vector.getElem_rotate, h ((i + 25) % 32) (by omega)]
+    · simp only [circuit_norm, Vector.getElem_rotate]
+      simp only [ProvableType.getElem_eval_fields,
+        h ((i + 6 % 32) % 32) (by omega), h ((i + 11 % 32) % 32) (by omega)]
+    · simp only [circuit_norm, Vector.getElem_rotate]
+      have hz := h_agrees.1 (n + i) (by omega)
+      have hr := h ((i + 25 % 32) % 32) (by omega)
+      grind
     · computable_witnesses_close
 
 end UpperSigma1

@@ -100,7 +100,7 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (main a b c d) Assumption
     · rw [Function.comp_apply, ←h_input.left, getElem_eval_vector]
 
   · intro i
-    simp only [eval_vector, Vector.map_set, ↓Vector.getElem_set]
+    simp only [eval_vector_set, ↓Vector.getElem_set]
     repeat' split
     · exact c11.right
     · simp only [U32.Normalized, explicit_provable_type, Vector.map_mk, List.map_toArray,
@@ -112,7 +112,7 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (main a b c d) Assumption
         List.map_cons, List.map_nil, fromElements] at c9 ⊢
       simp +arith only [Nat.reducePow, Nat.add_mod_mod, Nat.reduceMod] at c9 ⊢
       exact c9.right
-    · simp only [Vector.getElem_map, getElem_eval_vector, h_input, h_assumptions]
+    · simp only [h_input, h_assumptions]
 
 theorem completeness (a b c d : Fin 16) : Completeness (F p) (main a b c d) Assumptions := by
   circuit_proof_start [BLAKE3State.Normalized]

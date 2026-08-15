@@ -272,14 +272,23 @@ def reduceLocalLengthCore : Simp.DSimproc := fun e => do
   let w := (← try withDefault <| whnf e catch _ => return .continue).headBeta
   if w == e then return .continue
   let leaked := w.find? fun sub =>
-    -- raw structure projections (abstract bundles, e.g. `circuit1.elaborated.1`):
-    -- a spelling no downstream lemma or `omega` atom keys on
-    sub.isProj ||
     sub.getAppFn.isConstOf `FormalCircuitBase.localLength ||
     sub.getAppFn.isConstOf `ElaboratedCircuit.localLength ||
     sub.getAppFn.isConstOf `Operations.localLength ||
     sub.getAppFn.isConstOf `Circuit
   if leaked.isSome then return .continue
+  -- bail on raw projections OF BUNDLES (`circuit1.elaborated.1`-style, abstract
+  -- circuits): spellings no downstream lemma or `omega` atom keys on. Projections
+  -- of input structs are legitimate content.
+  let bundleProjHeads : List Name :=
+    [`FormalCircuitBase, `FormalCircuit, `GeneralFormalCircuit,
+     `GeneralFormalCircuit.WithHint, `FormalAssertion, `ElaboratedCircuit]
+  let bundleProj ← IO.mkRef false
+  w.forEach fun sub => do
+    if sub.isProj then
+      let ty ← try inferType sub.projExpr! catch _ => return ()
+      if bundleProjHeads.contains ty.getAppFn.constName then bundleProj.set true
+  if (← bundleProj.get) then return .continue
   -- canonicalize whnf's raw `Nat.add` to the `+` spelling downstream lemmas and
   -- `omega` atoms key on
   let w := w.replace fun sub =>
@@ -291,6 +300,15 @@ def reduceLocalLengthCore : Simp.DSimproc := fun e => do
         (mkApp2 (mkConst ``instHAdd [.zero]) (mkConst ``Nat) (mkConst ``instAddNat))
         a b)
     else none
+  -- recursive helpers delta-expand to recursor junk, not explicit lengths
+  let recLeak ← IO.mkRef false
+  w.forEach fun sub => do
+    let .const c _ := sub | return ()
+    let str := c.toString
+    if str.endsWith "brecOn" || str.endsWith "brecOn.go"
+        || c == ``WellFounded.fix || c == ``WellFounded.fixF then
+      recLeak.set true
+  if (← recLeak.get) then return .continue
   return .visit w
 
 /- shape-only pattern: the localLength constants live downstream of this file, so they
@@ -356,9 +374,15 @@ def reduceOutputMetadataCore : Simp.DSimproc := fun e => do
   -- accept only metadata-explicit results: a bundle whose `output` falls back to
   -- `(main v n).1` reduces to a worse spelling than the original — the chainer's
   -- per-instance facts key on the `output` form
-  -- likewise bail on raw structure projections (abstract bundles reduce to
-  -- `circuit.1.3.3`-style spellings nothing downstream keys on)
-  if (w.find? Expr.isProj).isSome then return .continue
+  -- likewise bail on raw structure projections OF BUNDLES (abstract bundles reduce
+  -- to `circuit.1.3.3`-style spellings nothing downstream keys on); projections of
+  -- input structs (`input.chaining_value`) are legitimate content
+  let bundleProj ← IO.mkRef false
+  w.forEach fun sub => do
+    if sub.isProj then
+      let ty ← try inferType sub.projExpr! catch _ => return ()
+      if bundleHeads.contains ty.getAppFn.constName then bundleProj.set true
+  if (← bundleProj.get) then return .continue
   let leakedCircuit ← IO.mkRef false
   w.forEach fun sub => do
     let .const c _ := sub | return ()
@@ -366,6 +390,16 @@ def reduceOutputMetadataCore : Simp.DSimproc := fun e => do
     if ci.type.getForallBody.getAppFn.isConstOf `Circuit then
       leakedCircuit.set true
   if (← leakedCircuit.get) then return .continue
+  -- a recursive helper (e.g. a `varSchedule` chain) delta-expands to recursor
+  -- junk (`brecOn`/`WellFounded.fix`) rather than a metadata-explicit form
+  let recLeak ← IO.mkRef false
+  w.forEach fun sub => do
+    let .const c _ := sub | return ()
+    let str := c.toString
+    if str.endsWith "brecOn" || str.endsWith "brecOn.go"
+        || c == ``WellFounded.fix || c == ``WellFounded.fixF then
+      recLeak.set true
+  if (← recLeak.get) then return .continue
   return .visit w
 
 dsimproc_decl reduceOutputMetadata (_) := reduceOutputMetadataCore
@@ -857,7 +891,7 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
       catch _ => st.restore; pure false
     if ← isEvalCongrEq then
       let vecMain : TacticM Unit := do
-        metaSimpAll cw.vecCtx cw.vecProcs
+        try metaSimpAll cw.vecCtx cw.vecProcs catch _ => pure () -- DEBUG
         let gs ← getGoals
         for g in gs do
           setGoals [g]
@@ -867,6 +901,11 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
           for g2 in gs2 do
             setGoals [g2]
             try metaSimp cw.branchCtx cw.cnProcs catch _ => pure ()
+            -- outside-in respelling of scalar evals of element projections, until
+            -- goal atoms meet the compact input premise's derivable forms (same
+            -- step as the base route)
+            unless (← getGoals).isEmpty do
+              try metaSimp cw.respellCtx catch _ => pure ()
             -- split conjunctions before unifying environments: window conjuncts then
             -- close by rfl inside envUnify, leaving grind only the input-derived parts
             let mut split := []
@@ -905,9 +944,12 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
       if ← attempt (do
           metaSimpAll cw.baseCtx cw.normProcs
           unless (← getGoals).isEmpty do throwError "open goals") then return
-      metaSimpAll cw.fullCtx cw.fullProcs
+      -- last resort; the huge mixed set can blow recursion depth on goals it
+      -- cannot close — surface the residue, not the crash
+      try metaSimpAll cw.fullCtx cw.fullProcs
+      catch _ => throwError "computable_witnesses: could not close goal\n{← getMainGoal}"
       unless (← getGoals).isEmpty do
-        throwError "computable_witnesses: could not close goal"
+        throwError "computable_witnesses: could not close goal\n{← getMainGoal}"
   let leafDispatch : TacticM Unit := withMainContext do
     -- inaccessible hyp names (from intro1P) break the chainer's delab roundtrip
     try replaceMainGoal [← (← getMainGoal).exposeNames] catch _ => pure ()
@@ -1021,9 +1063,6 @@ def runStart (cw : CwSimp) : TacticM Unit := do
         liftMetaTactic fun g => do return [← g.change t']
       let (_, g) ← (← getMainGoal).intro `n
       replaceMainGoal [g]
-  let simpPass : TacticM Unit := do
-    unless (← getGoals).isEmpty do
-      try metaSimp cw.normCtx cw.normProcs catch _ => pure ()
   let lawsPass : TacticM Unit := do
     unless (← getGoals).isEmpty do
       try metaSimp cw.lawsCtx cw.lawsProcs catch _ => pure ()
@@ -1044,32 +1083,6 @@ def runStart (cw : CwSimp) : TacticM Unit := do
     -- decompose what the unfold exposed
     let tAfter ← withMainContext do instantiateMVars (← getMainTarget)
     unless tAfter == tBefore do lawsPass
-  -- MIGRATION BACKSTOP: leaves the laws cannot yet close (their close-route shapes
-  -- are still being adapted) fall back to the materialized path. The property
-  -- definitions are not simp-unfoldable by design, so materialization is an explicit
-  -- tactic decision here — env-clean delta by name — never a simp-set side effect.
-  let incomplete ← do
-    if (← getGoals).isEmpty then pure false
-    else withMainContext do
-      let mainNames ← try resolveGlobalConst (mkIdent `main) catch _ => pure []
-      let t ← instantiateMVars (← getMainTarget)
-      pure ((t.find? fun e =>
-        e.getAppFn.isConstOf `Circuit.ComputableWitnesses ||
-        e.getAppFn.isConstOf `Operations.forAll ||
-        e.getAppFn.isConstOf `Circuit.bind ||
-        mainNames.any (fun m => e.getAppFn.isConstOf m)).isSome)
-  if incomplete then
-    withMainContext do
-      let t ← instantiateMVars (← getMainTarget)
-      let t' ← Meta.deltaExpand t fun nm =>
-        nm == `Circuit.ComputableWitnesses || nm == `Operations.ComputableWitnesses
-      unless t' == t do liftMetaTactic fun g => do return [← g.change t']
-    simpPass
-    unless (← getGoals).isEmpty do
-      let tBefore ← withMainContext do instantiateMVars (← getMainTarget)
-      try unfoldPlainCircuitConsts catch _ => pure ()
-      let tAfter ← withMainContext do instantiateMVars (← getMainTarget)
-      unless tAfter == tBefore do simpPass
 
   unless (← getGoals).isEmpty do
     -- intro the remaining ∀-binders but STOP at the hoisted input premise: left in
@@ -1098,12 +1111,13 @@ def runStart (cw : CwSimp) : TacticM Unit := do
       if (← getGoals).isEmpty then pure false
       else if (← getGoals).length != nGoalsBefore then pure true
       else withMainContext do return (← getLCtx).getFVarIds.size != hypsBefore
-    if changed then
-      if incomplete then simpPass else lawsPass
+    if changed then lawsPass
   unless (← getGoals).isEmpty do
     -- child-output metadata reduction as its own step: after every normalization
     -- pass (reduced windows drift under further rewriting), directly before the split
     try metaSimp cw.dsimpCtx cw.outputMetaProcs catch _ => pure ()
+    -- the reduction exposes content (set-chains over windows) the laws normalize
+    lawsPass
   unless (← getGoals).isEmpty do
     -- deterministic split to leaves, premises intro'd with predictable names;
     -- expose binder-intro'd names (`input`, `env`, `env'`) for manual per-leaf proofs
