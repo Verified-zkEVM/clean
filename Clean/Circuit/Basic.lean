@@ -626,66 +626,6 @@ theorem computableWitnesses_pure' (a : α) :
     Circuit.ComputableWitnesses (fun _ => (a, [])) n env env' ↔ True :=
   computableWitnesses_pure a
 
-/-- Offset-dependent pure (`fun m => (f m, [])`, e.g. a return value assembled from
-child output windows): no operations, so trivially computable. -/
-@[computable_witnesses_norm]
-theorem computableWitnesses_pure_dep (f : ℕ → α) :
-    Circuit.ComputableWitnesses (fun m => (f m, [])) n env env' ↔ True := by
-  simp [ComputableWitnesses, Operations.ComputableWitnesses, Operations.forAll]
-
-/- Raw explicit-list spelling: a circuit fragment surviving as
-`fun m => (out m, [op, …])` decomposes op-by-op. -/
-
-@[computable_witnesses_norm]
-theorem computableWitnesses_raw (out : ℕ → α) (ops : ℕ → Operations F) :
-    Circuit.ComputableWitnesses (fun m => (out m, ops m)) n env env' ↔
-      Operations.ComputableWitnesses (ops n) n env env' := Iff.rfl
-
-@[computable_witnesses_norm]
-theorem _root_.Operations.computableWitnesses_nil :
-    Operations.ComputableWitnesses ([] : Operations F) n env env' ↔ True := by
-  simp [Operations.ComputableWitnesses, Operations.forAll]
-
-@[computable_witnesses_norm]
-theorem _root_.Operations.computableWitnesses_cons_witness (m : ℕ) (c : WitgenIR F m)
-    (ops : Operations F) :
-    Operations.ComputableWitnesses (.witness m c :: ops) n env env' ↔
-      ((env.AgreesBelow n env' → c.eval env = c.eval env') ∧
-        Operations.ComputableWitnesses ops (n + m) env env') := by
-  simp [Operations.ComputableWitnesses, Operations.forAll_cons, Operation.localLength,
-    Condition.apply]
-
-@[computable_witnesses_norm]
-theorem _root_.Operations.computableWitnesses_cons_assert (e : Expression F) (ops : Operations F) :
-    Operations.ComputableWitnesses (.assert e :: ops) n env env' ↔
-      Operations.ComputableWitnesses ops n env env' := by
-  simp [Operations.ComputableWitnesses, Operations.forAll_cons, Operation.localLength,
-    Condition.apply]
-
-@[computable_witnesses_norm]
-theorem _root_.Operations.computableWitnesses_cons_lookup (l : Lookup F) (ops : Operations F) :
-    Operations.ComputableWitnesses (.lookup l :: ops) n env env' ↔
-      Operations.ComputableWitnesses ops n env env' := by
-  simp [Operations.ComputableWitnesses, Operations.forAll_cons, Operation.localLength,
-    Condition.apply]
-
-@[computable_witnesses_norm]
-theorem _root_.Operations.computableWitnesses_cons_interact (i : AbstractInteraction F)
-    (ops : Operations F) :
-    Operations.ComputableWitnesses (.interact i :: ops) n env env' ↔
-      Operations.ComputableWitnesses ops n env env' := by
-  simp [Operations.ComputableWitnesses, Operations.forAll_cons, Operation.localLength,
-    Condition.apply]
-
-@[computable_witnesses_norm]
-theorem _root_.Operations.computableWitnesses_cons_subcircuit {m : ℕ} (s : Subcircuit F m)
-    (ops : Operations F) :
-    Operations.ComputableWitnesses (.subcircuit s :: ops) n env env' ↔
-      (s.ComputableWitnesses n env env' ∧
-        Operations.ComputableWitnesses ops (n + s.localLength) env env') := by
-  simp [Operations.ComputableWitnesses, Operations.forAll_cons, Operation.localLength,
-    Condition.apply]
-
 @[computable_witnesses_norm]
 theorem computableWitnesses_map {f : Circuit F α} (g : α → β) :
     ((g <$> f).ComputableWitnesses n env env') ↔ f.ComputableWitnesses n env env' := by

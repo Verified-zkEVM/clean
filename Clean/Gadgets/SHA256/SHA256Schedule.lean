@@ -667,7 +667,8 @@ def circuit : FormalCircuit (F p) SHA256Block SHA256Schedule where
         simp only [circuit_norm, ComputableWitnesses.reduceOutputMetadata,
           ComputableWitnesses.reduceLocalLength, hout]
         and_intros <;> grind
-      · apply FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq
+      · simp only [circuit_norm]
+        apply FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq
           (Add32.circuit (p := p))
           (by simp only [circuit_norm])
         intro h_agrees
