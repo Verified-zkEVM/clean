@@ -69,7 +69,6 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     ∀ i (_ : i < n),
       output[i] = if s = 0 then (c[i]).1 else (c[i]).2
 
-
   soundness := by
     circuit_proof_start
     intro i hi
@@ -131,7 +130,6 @@ def main (input : Var Inputs (F p)) := do
 
 def circuit : FormalCircuit (F p) Inputs field where
   main := main
-
 
   Assumptions input :=
     let ⟨_, s⟩ := input

@@ -76,7 +76,6 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
         split <;> split <;> decide
       output[i] = (c[i])[idx]
 
-
   soundness := by
     circuit_proof_start
     obtain ⟨h_s10, h_out⟩ := h_holds
@@ -143,7 +142,6 @@ def main (input : Var Inputs (F p)) := do
 
 def circuit : FormalCircuit (F p) Inputs field where
   main := main
-
 
   Assumptions input :=
     let ⟨_, s⟩ := input
