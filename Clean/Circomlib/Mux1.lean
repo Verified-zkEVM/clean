@@ -69,6 +69,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     ∀ i (_ : i < n),
       output[i] = if s = 0 then (c[i]).1 else (c[i]).2
 
+
   soundness := by
     circuit_proof_start
     intro i hi
@@ -77,8 +78,10 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     rw [h_holds_i, h_input.2, ← h_input.1]
     simp only [← getElem_eval_vector, circuit_norm]
     rcases h_assumptions with h0 | h1
-    · simp [h0]
-    · simp [h1]
+    · simp only [h0, mul_zero, zero_add, if_pos]
+    · simp only [h1, mul_one]
+      rw [if_neg one_ne_zero]
+      ring
 
   completeness := by
     circuit_proof_start
@@ -129,6 +132,7 @@ def main (input : Var Inputs (F p)) := do
 def circuit : FormalCircuit (F p) Inputs field where
   main := main
 
+
   Assumptions input :=
     let ⟨_, s⟩ := input
     IsBool s
@@ -140,7 +144,7 @@ def circuit : FormalCircuit (F p) Inputs field where
   soundness := by
     circuit_proof_start [MultiMux1.circuit]
     specialize h_holds h_assumptions 0 (by omega)
-    simp only [circuit_norm, eval_vector] at h_holds
+    simp only [circuit_norm] at h_holds
     rw [← h_input.1]
     simp only [Vector.getElem_map]
     exact h_holds

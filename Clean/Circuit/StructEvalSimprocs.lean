@@ -135,6 +135,149 @@ def structEvalProjectionEvalProc : Simproc :=
 simproc structEvalProjectionExpr (Expression.eval _ _) := structEvalProjectionExprProc
 attribute [circuit_norm] structEvalProjectionExpr
 
+/-- Root of a projection/getElem chain: walk through `GetElem.getElem` and `Prod`
+projections to the underlying subject. -/
+private partial def chainRoot (e : Expr) : Expr :=
+  if e.isAppOfArity ``GetElem.getElem 8 then chainRoot e.getAppArgs[5]!
+  else if e.isAppOfArity ``Prod.fst 3 || e.isAppOfArity ``Prod.snd 3 then
+    chainRoot e.appArg!
+  else if e.isProj then chainRoot e.projExpr!
+  else if e.getAppFn.isConstOf ``ProvableType.toElements && e.getAppNumArgs ≥ 1 then
+    -- `toElements` is a projection-like wrapper: chains through it stay opaque
+    chainRoot e.appArg!
+  else e
+
+/-- The vector-atom side of the struct decomposition's balancing act, for the
+`computable_witnesses` normal form: scalar evals whose subject chains down to an
+OPAQUE root (a free variable — an input) fold OUTWARD toward the whole-atom eval the
+input premise is stated at (`Expression.eval env x[i] ~~> (eval env x)[i]`,
+`Expression.eval env t.1 ~~> (eval env t).1`). Constructed subjects (map/literal-built)
+are left for the inward element lemmas — the same literal/opaque discrimination that
+keeps the struct pair confluent. -/
+private def vectorAtomLiftCore (e : Expr) : SimpM Simp.Step := do
+  let args := e.getAppArgs
+  unless e.getAppFn.isConstOf ``Expression.eval && args.size ≥ 2 do
+    return .continue
+  let env := args[args.size - 2]!
+  let subject := args[args.size - 1]!
+  unless (chainRoot subject).isFVar do return .continue
+  -- getElem of an opaque-rooted vector: lift to getElem-of-eval. ONLY for vectors of
+  -- provable elements: their folded `eval` head is a stable atom. For raw expression
+  -- vectors (`fields`) the head iota-reduces back to map-form via the instance
+  -- literal, which would cycle against `getElem_map` — there the SCALAR spelling is
+  -- the canonical form and the lift declines.
+  if subject.isAppOfArity ``GetElem.getElem 8 then
+    let gArgs := subject.getAppArgs
+    let xs := gArgs[5]!
+    let i := gArgs[6]!
+    let hval := gArgs[7]!
+    try
+      let xsType ← withDefault <| whnf (← inferType xs)
+      unless xsType.isAppOf ``Vector do return .continue
+      if (xsType.getAppArgs[0]!).isAppOf ``Expression then return .continue
+      let proof ← withDefault <| mkAppM ``getElem_eval_vector #[env, xs, i, hval]
+      let some (lhs0, rhs0) := (← inferType proof).eq?.map (fun (_, l, r) => (l, r))
+        | return .continue
+      unless ← withDefault <| isDefEq lhs0 e do return .continue
+      return .visit { expr := rhs0, proof? := some proof }
+    catch _ => return .continue
+  -- Prod projection of an opaque-rooted pair: lift to projection-of-eval
+  let (isFst, t) :=
+    if subject.isAppOfArity ``Prod.fst 3 then (true, subject.appArg!)
+    else if subject.isAppOfArity ``Prod.snd 3 then (false, subject.appArg!)
+    else (false, subject)
+  if subject.isAppOfArity ``Prod.fst 3 || subject.isAppOfArity ``Prod.snd 3 then
+    try
+      -- stability: `Eval.eval` of an Expression-component pair iota-reduces back to
+      -- the component literal (instance-literal projection) — the scalar spelling is
+      -- canonical there, and the `grind =` pair lemmas provide the connect
+      let tType ← withDefault <| whnf (← inferType t)
+      if tType.isAppOf ``Prod &&
+          ((tType.getAppArgs[0]!).isAppOf ``Expression ||
+           (tType.getAppArgs[1]!).isAppOf ``Expression) then
+        return .continue
+      let lemmaName := if isFst then ``ProvableType.eval_fieldPair_fst
+        else ``ProvableType.eval_fieldPair_snd
+      let proof ← withDefault <| Meta.mkAppM lemmaName #[env, t]
+      let some (lhs0, rhs0) := (← inferType proof).eq?.map (fun (_, l, r) => (l, r))
+        | return .continue
+      -- the lemma reads `(eval env t).1 = Expression.eval env t.1`; we fold, so swap
+      unless ← withDefault <| isDefEq rhs0 e do return .continue
+      return .visit { expr := lhs0, proof? := some (← Meta.mkEqSymm proof) }
+    catch _ => return .continue
+  return .continue
+
+simproc vectorAtomLift (Expression.eval _ _) := vectorAtomLiftCore
+
+/-- The `Eval.eval`-headed link of the same chains (`eval env x[i] ~~> (eval env x)[i]`
+for opaque-rooted provable-vector subjects). -/
+private def vectorAtomLiftEvalCore (e : Expr) : SimpM Simp.Step := do
+  let args := e.getAppArgs
+  unless e.getAppFn.isConstOf ``Eval.eval && args.size ≥ 2 do
+    return .continue
+  let env := args[args.size - 2]!
+  let subject := args[args.size - 1]!
+  unless (chainRoot subject).isFVar do return .continue
+  unless subject.isAppOfArity ``GetElem.getElem 8 do return .continue
+  let gArgs := subject.getAppArgs
+  let xs := gArgs[5]!
+  let i := gArgs[6]!
+  let hval := gArgs[7]!
+  try
+    let xsType ← withDefault <| whnf (← inferType xs)
+    unless xsType.isAppOf ``Vector do return .continue
+    if (xsType.getAppArgs[0]!).isAppOf ``Expression then return .continue
+    let proof ← withDefault <| mkAppM ``getElem_eval_vector #[env, xs, i, hval]
+    let some (lhs0, rhs0) := (← inferType proof).eq?.map (fun (_, l, r) => (l, r))
+      | return .continue
+    unless ← withDefault <| isDefEq lhs0 e do return .continue
+    return .visit { expr := rhs0, proof? := some proof }
+  catch _ => return .continue
+
+simproc vectorAtomLiftEval (Eval.eval _ _) := vectorAtomLiftEvalCore
+
+/-- Constructor heads that classify a vector subject as CONSTRUCTED: these decompose
+inward. The complement — chains rooted in a free variable — folds outward via the
+atom lifts. The two classes are disjoint and each rewrite's output stays in reach of
+its own class only, which is what makes the bidirectional pair terminate (see the
+struct literal/projection pair above for the same argument). -/
+private def constructedVectorHeads : List Name :=
+  [``Vector.map, ``Vector.mapRange, ``Vector.mapFinRange, ``Vector.mapIdx,
+   ``Vector.ofFn, ``Vector.mk, ``Vector.append, ``Vector.cast,
+   ``Vector.replicate, ``Vector.listCons,
+   -- concrete witness-window literals
+   ``ProvableType.varFromOffset]
+   -- NOT `Vector.set`/`Vector.push`: set-chains have their own compact normal form
+   -- (`eval_vector_set` — eval commutes with set, no whole-vector decomposition)
+
+/-- The inward side of the vector balancing act: `eval` of a CONSTRUCTED vector
+decomposes to the element map (`eval env (Vector.map f v) ~~> (Vector.map f v).map
+(eval env)`, and then the element lemmas continue). Opaque subjects deliberately stay
+folded whole-vector atoms — the spelling input premises are stated at. Replaces the
+unconditional `eval_fields ↓` / `eval_vector` membership in the shared sets. -/
+private def vectorEvalLiteralCore (e : Expr) : SimpM Simp.Step := do
+  let args := e.getAppArgs
+  unless e.getAppFn.isConstOf ``Eval.eval && args.size ≥ 2 do
+    return .continue
+  let env := args[args.size - 2]!
+  let subject := args[args.size - 1]!
+  let .const hd _ := subject.getAppFn | return .continue
+  unless constructedVectorHeads.contains hd do return .continue
+  for lemmaName in [``ProvableType.eval_fields, ``eval_vector] do
+    try
+      let proof ← withDefault <| mkAppM lemmaName #[env, subject]
+      let some (_, lhs0, rhs0) := (← inferType proof).eq? | continue
+      -- alias-typed subjects (`U32`, `SHA256State`, …) carry their own `Eval`
+      -- instances and hide behind regular defs; validate at full transparency
+      -- (the struct projection lift's precedent for pure-validation checks)
+      unless ← withTransparency .all <| isDefEq lhs0 e do continue
+      return .visit { expr := rhs0, proof? := some proof }
+    catch _ => continue
+  return .continue
+
+simproc vectorEvalLiteral (Eval.eval _ _) := vectorEvalLiteralCore
+attribute [circuit_norm] vectorEvalLiteral
+
 /--
 Evaluate struct *literals* component-wise:
 

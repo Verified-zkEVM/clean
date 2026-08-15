@@ -97,6 +97,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
         split <;> split <;> split <;> decide
       output[i] = (c[i])[idx]
 
+
   soundness := by
     circuit_proof_start
     obtain ⟨h_s10, h_out⟩ := h_holds
@@ -165,6 +166,7 @@ def main (input : Var Inputs (F p)) := do
 def circuit : FormalCircuit (F p) Inputs field where
   main := main
 
+
   Assumptions input :=
     let ⟨_, s⟩ := input
     IsBool s[0] ∧ IsBool s[1] ∧ IsBool s[2]
@@ -183,9 +185,7 @@ def circuit : FormalCircuit (F p) Inputs field where
   soundness := by
     circuit_proof_start [MultiMux3.circuit]
     specialize h_holds h_assumptions 0 (by omega)
-    simp only [circuit_norm, eval_vector] at h_holds
-    rw [← h_input.1]
-    simp only [Vector.getElem_map]
+    simp only [circuit_norm] at h_holds
     exact h_holds
 
   completeness := by

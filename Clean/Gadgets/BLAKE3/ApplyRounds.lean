@@ -37,7 +37,8 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     let state ← Round.circuit input
     let permuted_message ← Permute.circuit input.message
     return ⟨state, permuted_message⟩
-
+  -- Manual: the witness structure matches on the round permutation constant; the
+  -- tactic has no case-split step for data-dependent operation lists.
   elaborated := by elaborate_circuit_with {
     output input offset := output input offset
   }
@@ -52,11 +53,12 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
 
   soundness := by
     circuit_proof_start [Round.circuit, Permute.circuit,
-      Round.Assumptions, Permute.Assumptions, Round.Spec, Permute.Spec]
+      Round.Assumptions, Permute.Assumptions, Round.Spec, Permute.Spec, output]
     rcases h_holds with ⟨ h_holds1, h_holds2 ⟩
     specialize h_holds1 h_assumptions
     specialize h_holds2 h_assumptions.right
-    exact ⟨ h_holds1.1, h_holds1.2, h_holds2 ⟩
+    refine ⟨ h_holds1.1, h_holds1.2, ?_ ⟩
+    exact h_holds2
   completeness := by
     circuit_proof_start [Round.circuit, Permute.circuit,
       Round.Assumptions, Permute.Assumptions]
@@ -453,7 +455,8 @@ lemma initial_state_and_messages_are_normalized
     fin_cases i
     -- First 8 elements are from chaining_value
     case «0» | «1» | «2» | «3» | «4» | «5» | «6» | «7» =>
-      state_vec_norm_simp; simp [h_chaining_value_normalized]
+      state_vec_norm_simp
+      exact h_chaining_value_normalized _ (by omega)
     -- Next 4 are IV constants
     case «8» | «9» | «10» | «11» => state_vec_norm_simp_simple
     -- Last 4 are counter_low, counter_high, block_len, flags
@@ -539,9 +542,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
     exact h_input
   · simp only [Assumptions]
     aesop
-
--- Unfortunately @[simps! (config := {isSimp := false, attrs := [`circuit_norm]})] timeouts.
--- Therefore I had to add simplification rules `circuit_assumptions_is` and `circuit_spec_is` manually.
+set_option maxRecDepth 8192 in
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   main, elaborated, Assumptions, Spec, soundness, completeness
 }
