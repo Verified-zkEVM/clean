@@ -174,8 +174,9 @@ private def vectorAtomLiftCore (e : Expr) : SimpM Simp.Step := do
     try
       let xsType ← withDefault <| whnf (← inferType xs)
       unless xsType.isAppOf ``Vector do return .continue
-      -- pair-element vectors stay scalar-canonical (their element eval defeq-collapses,
-      -- so a folded element atom self-loops against the pair projection lemmas)
+      -- pair-element vectors are handled by the projection-chain branch below (their
+      -- element type is not `Expression`, so a bare `v[i]` access cannot be
+      -- `Expression.eval`-headed in the first place)
       let elemTy ← withDefault <| whnf (xsType.getAppArgs[0]!)
       if elemTy.isAppOf ``Prod then return .continue
       -- expression-element vectors (`fields` spelling) fold via the fields lemma,
@@ -183,6 +184,43 @@ private def vectorAtomLiftCore (e : Expr) : SimpM Simp.Step := do
       let lemmaName := if elemTy.isAppOf ``Expression then
         ``ProvableType.getElem_eval_fields else ``getElem_eval_vector
       let proof ← withDefault <| mkAppM lemmaName #[env, xs, i, hval]
+      let some (lhs0, rhs0) := (← inferType proof).eq?.map (fun (_, l, r) => (l, r))
+        | return .continue
+      unless ← withDefault <| isDefEq lhs0 e do return .continue
+      return .visit { expr := rhs0, proof? := some proof }
+    catch _ => return .continue
+  -- Projection chain through a pair-element vector access:
+  -- `Expression.eval env (c[i]).1  ~~>  ((eval env c)[i]).1`.
+  -- The fold goes all the way to the whole-vector atom in ONE step: the intermediate
+  -- spelling `(eval env c[i]).1` (eval of the pair ELEMENT) must never be produced —
+  -- the pair Eval instance defeq-collapses, so that spelling self-loops against the
+  -- scalar-canonical `eval_fieldPair` projection lemmas. The final spelling has no
+  -- pair-typed eval node at all (getElem and `.1/.2` sit outside at value level).
+  let (isFst, t) :=
+    if subject.isAppOfArity ``Prod.fst 3 then (true, subject.appArg!)
+    else if subject.isAppOfArity ``Prod.snd 3 then (false, subject.appArg!)
+    else (false, subject)
+  if (subject.isAppOfArity ``Prod.fst 3 || subject.isAppOfArity ``Prod.snd 3) &&
+      t.isAppOfArity ``GetElem.getElem 8 then
+    let gArgs := t.getAppArgs
+    let xs := gArgs[5]!
+    let i := gArgs[6]!
+    let hval := gArgs[7]!
+    try
+      let xsType ← withDefault <| whnf (← inferType xs)
+      unless xsType.isAppOf ``Vector do return .continue
+      let elemTy ← withDefault <| whnf (xsType.getAppArgs[0]!)
+      unless elemTy.isAppOf ``Prod do return .continue
+      -- (eval env c[i]).proj = Expression.eval env (c[i]).proj  — the fieldPair lemma
+      let projLemma := if isFst then ``ProvableType.eval_fieldPair_fst
+        else ``ProvableType.eval_fieldPair_snd
+      let pProj ← withDefault <| mkAppM projLemma #[env, t]
+      -- eval env (c[i]) = (eval env c)[i]  — the vector fold, projected
+      let pVec ← withDefault <| mkAppM ``getElem_eval_vector #[env, xs, i, hval]
+      let projFn := if isFst then ``Prod.fst else ``Prod.snd
+      let pVecProj ← withDefault <| mkAppM ``congrArg #[← mkAppOptM projFn #[none, none], pVec]
+      -- e = Expression.eval env (c[i]).proj = (eval env c[i]).proj = ((eval env c)[i]).proj
+      let proof ← withDefault <| mkAppM ``Eq.trans #[← mkAppM ``Eq.symm #[pProj], pVecProj]
       let some (lhs0, rhs0) := (← inferType proof).eq?.map (fun (_, l, r) => (l, r))
         | return .continue
       unless ← withDefault <| isDefEq lhs0 e do return .continue
@@ -211,7 +249,6 @@ private def vectorAtomLiftEvalCore (e : Expr) : SimpM Simp.Step := do
     let xsType ← withDefault <| whnf (← inferType xs)
     unless xsType.isAppOf ``Vector do return .continue
     let elemTy ← withDefault <| whnf (xsType.getAppArgs[0]!)
-    if elemTy.isAppOf ``Prod then return .continue
     let lemmaName := if elemTy.isAppOf ``Expression then
       ``ProvableType.getElem_eval_fields else ``getElem_eval_vector
     let proof ← withDefault <| mkAppM lemmaName #[env, xs, i, hval]
