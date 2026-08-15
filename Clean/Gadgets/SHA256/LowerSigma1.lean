@@ -122,6 +122,7 @@ instance elaborated : ElaboratedCircuit (F p) (fields 32) (fields 32) main := by
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [lowerSigma1, xor32]
+  rw [CircuitType.eval_var_fields] at h_input
   obtain ⟨h_holds1, h_holds2⟩ := h_holds
   have ha : ∀ i : Fin 32, input[i] = 0 ∨ input[i] = 1 := h_assumptions
   have h_r17 : ∀ i : Fin 32, Expression.eval env (rotr32 17 input_var)[i.val] = input[(i + 17).val] :=
@@ -169,6 +170,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [lowerSigma1, xor32]
+  rw [CircuitType.eval_var_fields] at h_input
   obtain ⟨h_env1, h_env2, -⟩ := h_env
   refine ⟨fun i => ?_, fun i => ?_⟩
   · have hr17 := eval_rotr32 env.toEnvironment input_var input h_input 17 i

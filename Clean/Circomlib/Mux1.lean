@@ -143,8 +143,6 @@ def circuit : FormalCircuit (F p) Inputs field where
     circuit_proof_start [MultiMux1.circuit]
     specialize h_holds h_assumptions 0 (by omega)
     simp only [circuit_norm] at h_holds
-    rw [← h_input.1]
-    simp only [Vector.getElem_map]
     exact h_holds
 
   completeness := by

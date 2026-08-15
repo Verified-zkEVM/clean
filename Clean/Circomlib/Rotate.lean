@@ -44,11 +44,9 @@ def circuit (n r : ℕ) [NeZero n] : FormalCircuit (F p) (fields n) (fields n) w
     rw [Vector.getElem_rotate]
     simp only [Vector.get]
     -- Use h_input: eval input_var = input
-    simp only [← h_input, Vector.getElem_map]
-    congr 1
+    simp only [← h_input]
     -- Normalize array/vector indexing
     simp only [Vector.getElem_toArray]
-    congr 1
     -- Prove index equality via Fin arithmetic
     simp [Fin.val_cast, Fin.val_add]
 

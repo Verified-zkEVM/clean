@@ -229,6 +229,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [add32]
   obtain ⟨ha, hb⟩ := h_assumptions
   obtain ⟨h_input_a, h_input_b⟩ := h_input
+  rw [CircuitType.eval_var_fields] at h_input_a h_input_b
   obtain ⟨h_z_bool, h_cout_bool, h_lin⟩ := h_holds
   rw [z_var_eval env i₀]
   -- Boolean properties
@@ -308,6 +309,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [add32]
   obtain ⟨ha, hb⟩ := h_assumptions
   obtain ⟨h_input_a, h_input_b⟩ := h_input
+  rw [CircuitType.eval_var_fields] at h_input_a h_input_b
   obtain ⟨h_env_z, h_env_cout⟩ := h_env
   -- The witnessed values are `evalBitsNat` of the inputs, which equal `valueBits`
   have h_evalBits_a : evalBitsNat env input_var_a = valueBits input_a :=

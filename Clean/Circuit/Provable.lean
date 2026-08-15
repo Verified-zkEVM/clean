@@ -258,16 +258,6 @@ instance (priority := high) : ProvableType (fields n) where
 
 @[grind norm] theorem size_fields (n : ℕ) : size (fields n) = n := rfl
 
-/-- Map-congruence for the eval-congruence layer: an equality of two maps over the
-SAME vector is the elementwise equality of the mapped functions (whole-equality
-keying — either side alone is not a normal form). -/
-theorem map_eq_map_iff_of_getElem {α β : Type} {n : ℕ} (f g : α → β) (v : Vector α n) :
-    Vector.map f v = Vector.map g v ↔ ∀ i (hi : i < n), f v[i] = g v[i] := by
-  simp only [Vector.ext_iff, Vector.getElem_map]
-
-/- Constructed vector subjects decompose inward (the counterpart of the opaque-root
-outward lift in `StructEvalSimprocs.vectorAtomLift`). -/
-
 /-- `fromElements` is injective (round-trip with `toElements`); as an iff the
 congruence laws reach the element vectors inside. -/
 theorem fromElements_eq_iff {F : Type} {M : TypeMap} [ProvableType M]
@@ -300,27 +290,27 @@ instance {n : ℕ} : VerifierEval F (fields n (Expression F)) (fields n F) :=
 instance {n : ℕ} : ProverEval F (fields n (Expression F)) (fields n F) :=
   proverEval (fields n)
 
-@[circuit_norm] lemma eval_var_fields {n : ℕ} (env : Environment F) (x : Var (fields n) F) :
+lemma eval_var_fields {n : ℕ} (env : Environment F) (x : Var (fields n) F) :
     eval env x = (x : fields n (Expression F)).map (Expression.eval env) := by
   unfold eval
   change ProvableType.eval (M:=fields n) env x =
     (x : fields n (Expression F)).map (Expression.eval env)
   rfl
 
-@[circuit_norm] lemma eval_fields_dispatch {n : ℕ} (env : Environment F) (x : fields n (Expression F)) :
+lemma eval_fields_dispatch {n : ℕ} (env : Environment F) (x : fields n (Expression F)) :
     @eval (Environment F) (fields n (Expression F)) (fields n F)
       (verifierEval (fields n)) env x =
       x.map (Expression.eval env) := by
   exact eval_var_fields env x
 
-@[circuit_norm] lemma eval_var_fields_prover {n : ℕ} (env : ProverEnvironment F) (x : Var (fields n) F) :
+lemma eval_var_fields_prover {n : ℕ} (env : ProverEnvironment F) (x : Var (fields n) F) :
     eval env x = (x : fields n (Expression F)).map (Expression.eval env.toEnvironment) := by
   unfold eval
   change ProvableType.eval (M:=fields n) env.toEnvironment x =
     (x : fields n (Expression F)).map (Expression.eval env.toEnvironment)
   rfl
 
-@[circuit_norm] lemma eval_fields_dispatch_prover {n : ℕ} (env : ProverEnvironment F)
+lemma eval_fields_dispatch_prover {n : ℕ} (env : ProverEnvironment F)
     (x : fields n (Expression F)) :
     @eval (ProverEnvironment F) (fields n (Expression F)) (fields n F)
       (proverEval (fields n)) env x =
@@ -609,13 +599,6 @@ theorem eval_fields (env : Environment F) (x : fields n (Expression F)) :
   rw [CircuitType.eval_expression]
   rfl
 
-/-- Prover-environment twin of `eval_fields`; elements land at the verifier spelling
-(the normal form input premises are stated at). -/
-@[grind norm]
-theorem eval_fields_prover (env : ProverEnvironment F) (x : fields n (Expression F)) :
-    Eval.eval env x = x.map (Expression.eval env.toEnvironment) := by
-  rw [CircuitType.eval_expression_prover_to_verifier, eval_fields]
-
 @[circuit_norm] lemma const_fields {F} (x : fields n F) :
   const x = x.map Expression.const := by simp [circuit_norm, const, explicit_provable_type]
 
@@ -824,12 +807,6 @@ theorem eval_vector (env : Environment F)
   rw [Vector.flatten_toChunks]
   simp [explicit_provable_type]
 
-/-- Prover-environment twin of `eval_vector`; elements land at the verifier spelling. -/
-theorem eval_vector_prover (env : ProverEnvironment F)
-    (x : ProvableVector α n (Expression F)) :
-    eval env x = x.map (eval env.toEnvironment) := by
-  rw [CircuitType.eval_expression_prover_to_verifier, eval_vector]
-
 @[grind norm, grind =]
 theorem getElem_eval_vector (env : Environment F) (x : ProvableVector α n (Expression F)) (i : ℕ) (h : i < n) :
     eval env x[i] = (eval env x)[i] := by
@@ -845,18 +822,6 @@ theorem eval_vector_set (env : Environment F) (x : ProvableVector α n (Expressi
     (i : ℕ) (h : i < n) (a : α (Expression F)) :
     eval env (x.set i a) = (eval env x).set i (eval env a) := by
   simp only [eval_vector, Vector.map_set]
-
-/-- Prover-environment twin of `eval_vector_set`. -/
-theorem eval_vector_set_prover (env : ProverEnvironment F)
-    (x : ProvableVector α n (Expression F)) (i : ℕ) (h : i < n) (a : α (Expression F)) :
-    eval env (x.set i a) = (eval env x).set i (eval env a) := by
-  have hv := CircuitType.eval_expression_prover_to_verifier (M := ProvableVector α n)
-    (env := env) (v := Vector.set x i a h)
-  have hx := CircuitType.eval_expression_prover_to_verifier (M := ProvableVector α n)
-    (env := env) (v := x)
-  have ha := CircuitType.eval_expression_prover_to_verifier (M := α) (env := env) (v := a)
-  rw [hv, hx, ha]
-  exact eval_vector_set env.toEnvironment x i h a
 
 lemma eval_vector_eq_get {n : ℕ} (env : Environment F)
     (vars : Vector (M (Expression F)) n) (vals : Vector (M F) n)

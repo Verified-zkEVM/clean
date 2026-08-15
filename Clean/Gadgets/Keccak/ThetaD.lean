@@ -38,17 +38,13 @@ def Spec (row : KeccakRow (F p)) (out : KeccakRow (F p)) : Prop :=
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   intro i0 env row_var row h_input row_norm h_holds
-  simp only [circuit_norm, eval_vector] at h_input
   dsimp only [Assumptions] at row_norm
   dsimp only [circuit_norm, Spec, main, Xor64.circuit, Rotation64.circuit, Fin.reduceSub] at h_holds ⊢
   simp only [circuit_norm, Xor64.Assumptions, Xor64.Spec, Rotation64.Assumptions, Rotation64.Spec] at h_holds
   simp only [and_imp, add_assoc, Nat.reduceAdd] at h_holds
-  simp only [circuit_norm, KeccakRow.normalized_iff, KeccakRow.value, eval_vector]
+  simp only [circuit_norm, KeccakRow.normalized_iff, KeccakRow.value]
 
-  have s (i : ℕ) (hi : i < 5) : eval env (row_var[i]) = row[i] := by
-    rw [←h_input, Vector.getElem_map]
-
-  simp only [s] at h_holds
+  simp only [h_input] at h_holds
   obtain ⟨ h_rot0, h_xor0, h_rot1, h_xor1, h_rot2, h_xor2, h_rot3, h_xor3, h_rot4, h_xor4 ⟩ := h_holds
 
   specialize h_rot0 (row_norm 1)
@@ -76,7 +72,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [Xor64.circuit, Rotation64.circuit]
   simp only [KeccakRow.normalized_iff] at h_assumptions
-  simp_all only [circuit_norm, getElem_eval_vector,
+  simp_all only [circuit_norm,
     Xor64.Assumptions, Xor64.Spec, Rotation64.Assumptions, Rotation64.Spec,
     add_assoc, seval, true_and]
 

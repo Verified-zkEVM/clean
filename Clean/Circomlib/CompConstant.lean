@@ -118,9 +118,7 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
 
     have h_input_eval : ∀ j : ℕ, (hj : j < 254) → input_var[j].eval env = input[j] := by
       intro j hj
-      have := congrArg (fun v => v[j]) h_input
-      simp only [Vector.getElem_map] at this
-      exact this
+      rw [ProvableType.getElem_eval_fields _ input_var j hj, h_input]
 
     have h_parts' :
         ∀ i : Fin 127,
@@ -134,7 +132,7 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
       simp only [circuit_norm]
       have hi2 : (i : ℕ) * 2 < 254 := by omega
       have hi2p1 : (i : ℕ) * 2 + 1 < 254 := by omega
-      simp only [h_input_eval _ hi2, h_input_eval _ hi2p1]
+      simp only [h_input]
       simp only [computePart, bCoeff, aCoeff, Bool.and_eq_true]
       have h_pow_le : (2 : ℕ)^(i : ℕ) ≤ 2^128 := Nat.pow_le_pow_right (by omega) (by omega : (i : ℕ) ≤ 128)
       have h_int_eq_nat_sub : ((2^128 - 2^(i : ℕ) : ℤ) : F p) = ((2^128 - 2^(i : ℕ) : ℕ) : F p) := by
@@ -206,9 +204,7 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
 
     have h_input_eval : ∀ j : ℕ, (hj : j < 254) → input_var[j].eval env = input[j] := by
       intro j hj
-      have := congrArg (fun v => v[j]) h_input
-      simp only [Vector.getElem_map] at this
-      exact this
+      rw [ProvableType.getElem_eval_fields _ input_var j hj, h_input]
 
     have h_parts' :
         ∀ i : Fin 127,
@@ -221,7 +217,7 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
       simp only [circuit_norm]
       have hi2 : (i : ℕ) * 2 < 254 := by omega
       have hi2p1 : (i : ℕ) * 2 + 1 < 254 := by omega
-      simp only [h_input_eval _ hi2, h_input_eval _ hi2p1]
+      simp only [h_input]
       simp only [computePart, bCoeff, aCoeff, Bool.and_eq_true]
       have h_pow_le : (2 : ℕ)^(i : ℕ) ≤ 2^128 := Nat.pow_le_pow_right (by omega) (by omega : (i : ℕ) ≤ 128)
       have h_int_eq_nat_sub : ((2^128 - 2^(i : ℕ) : ℤ) : F p) = ((2^128 - 2^(i : ℕ) : ℕ) : F p) := by

@@ -129,6 +129,9 @@ lemma eval_bytesToWords (env : Environment (F p))
   rw [Vector.ext_iff]
   intro i hi
   simp only [Vector.getElem_map, Vector.getElem_ofFn, U32.eval_of_literal]
+  simp only [U32.mk.injEq]
+  refine ⟨?_, ?_, ?_, ?_⟩ <;>
+    exact ProvableType.getElem_eval_fields env input_var_buffer_data _ (by omega)
 
 omit p_large_enough in
 lemma eval_take_normalized (env : Environment (F p)) (v : BLAKE3State (Expression (F p)))
@@ -183,7 +186,6 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
       clear h_compress' h_Or32_2 h_Or32_1 h_IsZero h_Compress
       rw [eval_bytesToWords]
       have h_buf : (eval env input_var_buffer_data : BLAKE3Buffer (F p)) = input_buffer_data := by
-        simp only [circuit_norm]
         exact h_input.2.2.1
       rw [h_buf]
       simp only [bytesToWords, Specs.BLAKE3.bytesToWords]

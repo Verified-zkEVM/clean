@@ -57,6 +57,8 @@ theorem soundness : Soundness (Input:=ProvablePair α α) (Output:=field) F (mai
       (toElements input.1)[i] - (toElements input.2)[i] := by
     intro i hi
     simp only [diffs, Vector.getElem_mapFinRange, circuit_norm]
+    rw [← ProvableType.getElem_eval_fields env (toElements input_var.1) i hi,
+      ← ProvableType.getElem_eval_fields env (toElements input_var.2) i hi]
     erw [ProvableType.getElem_eval_toElements input_var.1 i, ProvableType.getElem_eval_toElements input_var.2 i,
       h_x, h_y]
   -- Helper: (toElements 0)[i] = 0
