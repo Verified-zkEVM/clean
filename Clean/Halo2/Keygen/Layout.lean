@@ -394,6 +394,14 @@ cannot substitute arbitrary fixed cells, placements, or constants allocations.
 /-- One compiled fixed-cell assignment `(column, absolute row, field value)`. -/
 abbrev FixedAssignment (F : Type) := ℕ × ℕ × F
 
+namespace FixedAssignment
+
+/-- The fixed cell addressed by one sparse assignment. -/
+def cell (assignment : FixedAssignment F) : ℕ × ℕ :=
+  (assignment.1, assignment.2.1)
+
+end FixedAssignment
+
 /-- Loaded-table assignments, including Halo2's default-fill over all usable rows. -/
 def tableAssignments (usable : ℕ) : Operations F → List (FixedAssignment F)
   | [] => []
@@ -449,14 +457,50 @@ def dedupAssignments
       ∅
   values.toList.map fun ((column, row), value) => (column, row, value)
 
+/-- Hash-map deduplication emits at most one assignment for each fixed cell. -/
+theorem dedupAssignments_cells_nodup
+    (assignments : List (FixedAssignment F)) :
+    (dedupAssignments assignments).map FixedAssignment.cell |>.Nodup := by
+  let values : Std.HashMap (ℕ × ℕ) F :=
+    assignments.foldl
+      (fun values (column, row, value) =>
+        values.insert (column, row) value)
+      ∅
+  have hcellMap :
+      FixedAssignment.cell ∘
+          (fun (entry : (ℕ × ℕ) × F) =>
+            (entry.1.1, entry.1.2, entry.2)) =
+        Prod.fst := by
+    funext entry
+    rcases entry with ⟨⟨column, row⟩, value⟩
+    rfl
+  rw [show dedupAssignments assignments =
+      values.toList.map
+        (fun entry => (entry.1.1, entry.1.2, entry.2)) from rfl,
+    List.map_map, hcellMap, Std.HashMap.map_fst_toList_eq_keys]
+  exact values.nodup_keys
+
 /-- Sort field-valued assignments canonically by `(column, row)`. -/
 def sortAssignments
     (assignments : List (FixedAssignment F)) : List (FixedAssignment F) :=
-  assignments.toArray.qsort
+  assignments.mergeSort
     (fun (leftColumn, leftRow, _) (rightColumn, rightRow, _) =>
       leftColumn < rightColumn ∨
         (leftColumn = rightColumn ∧ leftRow < rightRow))
-    |>.toList
+
+/-- Canonical sorting changes only assignment order. -/
+theorem sortAssignments_perm
+    (assignments : List (FixedAssignment F)) :
+    (sortAssignments assignments).Perm assignments := by
+  exact List.mergeSort_perm _ _
+
+/-- Canonical sorting preserves fixed-cell uniqueness. -/
+theorem sortAssignments_cells_nodup
+    (assignments : List (FixedAssignment F))
+    (hnodup : (assignments.map FixedAssignment.cell).Nodup) :
+    ((sortAssignments assignments).map FixedAssignment.cell).Nodup := by
+  exact ((sortAssignments_perm assignments).map FixedAssignment.cell).nodup_iff.mpr
+    hnodup
 
 /--
 Compile every fixed cell of a closed circuit: tables, V1 deferred constants, compressed
@@ -476,6 +520,15 @@ def compileFixed [FiniteField F]
       ++ selectorAssignments selectorMap (activations starts regions)
       ++ regionAssignments starts regions))
 
+/-- The fixed compiler emits at most one value for each fixed cell. -/
+theorem compileFixed_cells_nodup [FiniteField F]
+    (usable : ℕ) (selectorMap : SelCompressMap)
+    (constraintSystem : ConstraintSystem F) (operations : Operations F) :
+    ((compileFixed usable selectorMap constraintSystem operations).map
+      FixedAssignment.cell).Nodup := by
+  apply sortAssignments_cells_nodup
+  apply dedupAssignments_cells_nodup
+
 /-- Scatter one fixed assignment into a rectangular dense-column accumulator. -/
 def scatterFixed [Zero F] (numColumns : ℕ) (columns : Array (Array F))
     (assignment : FixedAssignment F) : Array (Array F) :=
@@ -484,6 +537,58 @@ def scatterFixed [Zero F] (numColumns : ℕ) (columns : Array (Array F))
     columns.modify column fun values => values.set! row value
   else
     columns
+
+private def fixedCell? (columns : Array (Array F))
+    (column row : ℕ) : Option F :=
+  columns[column]?.bind fun values => values[row]?
+
+private theorem fixedCell?_scatterFixed [Zero F]
+    {numRows numColumns : ℕ} {columns : Array (Array F)}
+    (hcolumns : columns.size = numColumns)
+    (hrows : ∀ column (hcolumn : column < columns.size),
+      columns[column].size = numRows)
+    (assignment : FixedAssignment F)
+    (column row : ℕ) (hcolumn : column < numColumns)
+    (hrow : row < numRows) :
+    fixedCell? (scatterFixed numColumns columns assignment) column row =
+      if assignment.cell = (column, row) then some assignment.2.2
+      else fixedCell? columns column row := by
+  rcases assignment with ⟨assignedColumn, assignedRow, value⟩
+  simp only [FixedAssignment.cell, scatterFixed]
+  have hcolumnCurrent : column < columns.size := by
+    simpa only [hcolumns] using hcolumn
+  have hrowCurrent : row < columns[column].size := by
+    simpa only [hrows column hcolumnCurrent] using hrow
+  split
+  next hassignedColumn =>
+    by_cases hsameColumn : assignedColumn = column
+    · subst assignedColumn
+      by_cases hsameRow : assignedRow = row
+      · subst assignedRow
+        simp only [fixedCell?, Array.getElem?_modify]
+        rw [Array.getElem?_eq_getElem hcolumnCurrent]
+        simp only [Option.map_some, Option.bind_some, Array.set!, if_true]
+        rw [Array.getElem?_eq_getElem (by simpa using hrowCurrent)]
+        rw [Array.getElem_setIfInBounds hrowCurrent]
+        simp
+      · have hpair : (column, assignedRow) ≠ (column, row) := by
+          simp [hsameRow]
+        simp only [fixedCell?, Array.getElem?_modify]
+        rw [Array.getElem?_eq_getElem hcolumnCurrent]
+        simp only [Option.map_some, Option.bind_some, Array.set!, if_true]
+        rw [Array.getElem?_eq_getElem (by simpa using hrowCurrent)]
+        rw [Array.getElem_setIfInBounds (by simpa using hrowCurrent)]
+        simp [hsameRow, hpair]
+    · have hpair : (assignedColumn, assignedRow) ≠ (column, row) := by
+        simp [hsameColumn]
+      simp [fixedCell?, Array.getElem?_modify, hsameColumn, hpair]
+  next hassignedColumn =>
+    have hne : (assignedColumn, assignedRow) ≠ (column, row) := by
+      intro hequal
+      injection hequal with hequal
+      subst assignedColumn
+      exact hassignedColumn hcolumn
+    simp [fixedCell?, hne]
 
 /--
 Compile sparse fixed assignments into `numColumns` dense columns of `numRows` values.
@@ -542,6 +647,67 @@ private theorem scatterFixed_fold_sized [Zero F]
       have hnext := scatterFixed_sized hcolumns hrows assignment
       exact inductionHypothesis hnext.1 hnext.2
 
+private theorem fixedCell?_scatterFixed_fold_eq_of_forall_cell_ne [Zero F]
+    {numRows numColumns : ℕ}
+    (assignments : List (FixedAssignment F))
+    {columns : Array (Array F)}
+    (hcolumns : columns.size = numColumns)
+    (hrows : ∀ column (hcolumn : column < columns.size),
+      columns[column].size = numRows)
+    (column row : ℕ) (hcolumn : column < numColumns)
+    (hrow : row < numRows)
+    (havoids : ∀ assignment ∈ assignments,
+      assignment.cell ≠ (column, row)) :
+    fixedCell? (assignments.foldl (scatterFixed numColumns) columns) column row =
+      fixedCell? columns column row := by
+  induction assignments generalizing columns with
+  | nil => rfl
+  | cons assignment rest inductionHypothesis =>
+      simp only [List.foldl_cons]
+      have hnext := scatterFixed_sized hcolumns hrows assignment
+      rw [inductionHypothesis hnext.1 hnext.2]
+      · rw [fixedCell?_scatterFixed hcolumns hrows assignment column row hcolumn hrow]
+        simp only [if_neg (havoids assignment List.mem_cons_self)]
+      · intro remaining hremaining
+        exact havoids remaining (List.mem_cons_of_mem assignment hremaining)
+
+private theorem fixedCell?_scatterFixed_fold_eq_of_mem [Zero F]
+    {numRows numColumns : ℕ}
+    (assignments : List (FixedAssignment F))
+    {columns : Array (Array F)}
+    (hcolumns : columns.size = numColumns)
+    (hrows : ∀ column (hcolumn : column < columns.size),
+      columns[column].size = numRows)
+    (assignment : FixedAssignment F) (hassignment : assignment ∈ assignments)
+    (hnodup : (assignments.map FixedAssignment.cell).Nodup)
+    (hcolumn : assignment.1 < numColumns)
+    (hrow : assignment.2.1 < numRows) :
+    fixedCell? (assignments.foldl (scatterFixed numColumns) columns)
+        assignment.1 assignment.2.1 =
+      some assignment.2.2 := by
+  induction assignments generalizing columns with
+  | nil => simp at hassignment
+  | cons current rest inductionHypothesis =>
+      have hrestNodup : (rest.map FixedAssignment.cell).Nodup :=
+        (List.nodup_cons.mp hnodup).2
+      rcases List.mem_cons.mp hassignment with hcurrent | hrest
+      · subst current
+        simp only [List.foldl_cons]
+        rw [fixedCell?_scatterFixed_fold_eq_of_forall_cell_ne rest]
+        · rw [fixedCell?_scatterFixed hcolumns hrows assignment
+              assignment.1 assignment.2.1 hcolumn hrow]
+          simp [FixedAssignment.cell]
+        · exact (scatterFixed_sized hcolumns hrows assignment).1
+        · exact (scatterFixed_sized hcolumns hrows assignment).2
+        · exact hcolumn
+        · exact hrow
+        · intro remaining hremaining hequal
+          exact (List.nodup_cons.mp hnodup).1
+            (List.mem_map.mpr ⟨remaining, hremaining, hequal⟩)
+      · simp only [List.foldl_cons]
+        have hnext := scatterFixed_sized hcolumns hrows current
+        exact inductionHypothesis hnext.1 hnext.2 hrest hrestNodup
+
 /-- Dense compilation emits exactly the requested number of fixed columns. -/
 @[simp] theorem denseFixedColumns_length [Zero F]
     (numRows numColumns : ℕ)
@@ -576,5 +742,49 @@ theorem denseFixedColumns_getD_length [Zero F]
   simp only [denseFixedColumns, List.getElem_map,
     Array.getElem_toList, Array.length_toList]
   exact hshape.2 column hresultColumn
+
+/-- Every retained in-bounds sparse assignment is realized by dense compilation. -/
+theorem denseFixedColumns_getD_getD_eq_of_mem [Zero F]
+    (numRows numColumns : ℕ)
+    (assignments : List (FixedAssignment F))
+    (assignment : FixedAssignment F) (hassignment : assignment ∈ assignments)
+    (hnodup : (assignments.map FixedAssignment.cell).Nodup)
+    (hcolumn : assignment.1 < numColumns)
+    (hrow : assignment.2.1 < numRows) :
+    ((denseFixedColumns numRows numColumns assignments).getD assignment.1 []).getD
+        assignment.2.1 0 =
+      assignment.2.2 := by
+  let initial : Array (Array F) :=
+    Array.replicate numColumns (Array.replicate numRows 0)
+  let result := assignments.foldl (scatterFixed numColumns) initial
+  have hshape := scatterFixed_fold_sized assignments
+    (columns := initial) (numRows := numRows) (numColumns := numColumns)
+    (by simp [initial]) (by simp [initial])
+  have hresultColumn : assignment.1 < result.size := by
+    rw [hshape.1]
+    exact hcolumn
+  have hresultRow : assignment.2.1 < result[assignment.1].size := by
+    rw [hshape.2 assignment.1 hresultColumn]
+    exact hrow
+  have hrealizes := fixedCell?_scatterFixed_fold_eq_of_mem assignments
+    (columns := initial) (numRows := numRows) (numColumns := numColumns)
+    (by simp [initial]) (by simp [initial]) assignment hassignment hnodup
+    hcolumn hrow
+  have hvalue : result[assignment.1][assignment.2.1] = assignment.2.2 := by
+    simp only [fixedCell?] at hrealizes
+    rw [Array.getElem?_eq_getElem hresultColumn, Option.bind_some,
+      Array.getElem?_eq_getElem hresultRow] at hrealizes
+    exact Option.some.inj hrealizes
+  have hdenseColumn :
+      assignment.1 < (denseFixedColumns numRows numColumns assignments).length := by
+    simpa only [denseFixedColumns_length] using hcolumn
+  rw [List.getD_eq_getElem _ _ hdenseColumn]
+  have hdenseRow : assignment.2.1 <
+      (denseFixedColumns numRows numColumns assignments)[assignment.1].length := by
+    simpa only [denseFixedColumns, List.getElem_map, Array.getElem_toList,
+      Array.length_toList, initial, result] using hresultRow
+  rw [List.getD_eq_getElem _ _ hdenseRow]
+  simpa only [denseFixedColumns, List.getElem_map, Array.getElem_toList,
+    initial, result] using hvalue
 
 end Halo2.Layout

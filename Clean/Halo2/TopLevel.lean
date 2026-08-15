@@ -1329,6 +1329,12 @@ def fixedRows
     (self : TopLevelCircuit F Config PublicInput) : List (List F) :=
   TopLevelCompilation.fixedRows self.formalCircuit self.publicInputLayout
 
+/-- Sparse top-level fixed compilation contains at most one value per cell. -/
+theorem fixedAssignments_cells_nodup
+    (self : TopLevelCircuit F Config PublicInput) :
+    (self.fixedAssignments.map Layout.FixedAssignment.cell).Nodup := by
+  apply Layout.compileFixed_cells_nodup
+
 @[simp] theorem fixedRows_length
     (self : TopLevelCircuit F Config PublicInput) :
     self.fixedRows.length = self.fixedColumnCount := by
@@ -1342,6 +1348,21 @@ theorem fixedRows_getD_length
     (self.fixedRows.getD column []).length = self.n := by
   apply Layout.denseFixedColumns_getD_length
   exact hcolumn
+
+/-- Every in-bounds sparse top-level assignment is realized by its dense fixed rows. -/
+theorem fixedRows_getD_getD_eq_of_mem
+    (self : TopLevelCircuit F Config PublicInput)
+    (assignment : Layout.FixedAssignment F)
+    (hassignment : assignment ∈ self.fixedAssignments)
+    (hcolumn : assignment.1 < self.fixedColumnCount)
+    (hrow : assignment.2.1 < self.n) :
+    (self.fixedRows.getD assignment.1 []).getD assignment.2.1 0 =
+      assignment.2.2 := by
+  apply Layout.denseFixedColumns_getD_getD_eq_of_mem
+  · exact hassignment
+  · exact self.fixedAssignments_cells_nodup
+  · exact hcolumn
+  · exact hrow
 
 /--
 Read a compiled fixed column with Halo2's cyclic domain-row semantics.
