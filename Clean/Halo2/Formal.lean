@@ -250,6 +250,44 @@ class ElaboratedCircuit (F : Type) [FiniteField F]
         hregistered
       keygen_registration
     | keygen_registration
+  /-- Reduced equations describing the physical anchors needed by lookup
+  selectors which may be read while disabled. -/
+  lookupSelectorAnchorRequirements :
+    Config → Var Input F → RegionIndex →
+      List (ℕ × FloorPlanner.RegionColumn) := fun _ _ _ => []
+  /-- The reduced anchor equations suffice to anchor every auxiliary selector in
+  each region that reads it. -/
+  lookupSelectorsAnchoredBy_of_registered :
+    ∀ (configInput : ConfigInput) (counts : ConfigureCounts)
+      (_hconfig : keygenRequirements.configLawful configInput)
+      (input : Var Input F) (i : RegionIndex)
+      (anchor : ℕ → FloorPlanner.RegionColumn),
+    SelectorAnchorRequirementsSatisfied
+        (lookupSelectorAnchorRequirements
+          ((configure configInput).output counts) input i) anchor →
+      Operations.KeygenRegistered
+        ((synthesize ((configure configInput).output counts) input).operations i)
+          (keygenRequirements.gates configInput _hconfig ++
+            ((configure configInput).delta counts).gates)
+          (keygenRequirements.lookups configInput _hconfig ++
+            ((configure configInput).delta counts).lookups)
+          (keygenRequirements.fixedColumns configInput _hconfig ++
+            (configure configInput).fixedColumns counts)
+          (keygenRequirements.permutationColumns configInput _hconfig ++
+            ((configure configInput).delta counts).permutationRequests ++
+            keygenRequirements.inputPermutationColumns configInput _hconfig input) →
+      Operations.LookupSelectorsAnchoredBy
+        ((synthesize ((configure configInput).output counts) input).operations i)
+        anchor := by
+    intro configInput counts hconfig input i anchor _ hregistered
+    solve
+    | exact Operations.LookupSelectorsAnchoredBy.of_registered_noLookups
+        hregistered anchor
+    | apply Operations.LookupSelectorsAnchoredBy.of_registered_auxiliarySelectors_nil
+        hregistered (anchor := anchor)
+      keygen_registration
+    | keygen_registration
+    | keygen_registration
   output : Config → Var Input F → RegionIndex → Var Output F :=
     fun config input i => (synthesize config input).output i
   regionCount : Var Input F → ℕ := fun _ => 0
@@ -340,6 +378,28 @@ theorem ElaboratedCircuit.lookupSelectorAssignmentsAgree
       |>.LookupSelectorAssignmentsAgree :=
   self.lookupSelectorAssignmentsAgree_of_registered
     configInput counts hconfig input i
+    (self.registered configInput counts hconfig input i)
+
+/-- Lookup-selector anchoring obtained from the reduced anchor equations and the
+circuit's registration certificate. -/
+theorem ElaboratedCircuit.lookupSelectorsAnchoredBy
+    {F : Type} [FiniteField F]
+    {ConfigInput Config : Type} {Input Output : TypeMap}
+    [CircuitType Input] [CircuitType Output]
+    {configure : ConfigInput → Configure F Config}
+    {synthesize : Config → Var Input F → Circuit F (Var Output F)}
+    (self : ElaboratedCircuit F ConfigInput Config Input Output configure synthesize)
+    (configInput : ConfigInput) (counts : ConfigureCounts)
+    (hconfig : self.keygenRequirements.configLawful configInput)
+    (input : Var Input F) (i : RegionIndex)
+    (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchor : SelectorAnchorRequirementsSatisfied
+      (self.lookupSelectorAnchorRequirements
+        ((configure configInput).output counts) input i) anchor) :
+    ((synthesize ((configure configInput).output counts) input).operations i)
+      |>.LookupSelectorsAnchoredBy anchor :=
+  self.lookupSelectorsAnchoredBy_of_registered
+    configInput counts hconfig input i anchor hanchor
     (self.registered configInput counts hconfig input i)
 
 section SynthesisSummary
@@ -1435,6 +1495,34 @@ theorem callPacked_lookupSelectorAssignmentsAgree
       config input i).2.1).LookupSelectorAssignmentsAgree :=
   self.call_lookupSelectorAssignmentsAgree config configured input i
 
+/-- Physical lookup-selector anchoring inherited by a layouter child call. -/
+theorem call_lookupSelectorsAnchoredBy
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (config : Config) (configured : self.Configured config)
+    (input : Var Input F) (i : RegionIndex)
+    (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchor : SelectorAnchorRequirementsSatisfied
+      (self.elaborated.lookupSelectorAnchorRequirements config input i)
+      anchor) :
+    ((self.call config input).operations i).LookupSelectorsAnchoredBy anchor := by
+  rcases configured with ⟨configInput, counts, hconfig, rfl⟩
+  rw [self.call_operations]
+  exact self.elaborated.lookupSelectorsAnchoredBy
+    configInput counts hconfig input i anchor hanchor
+
+theorem callPacked_lookupSelectorsAnchoredBy
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (config : Config) (configured : self.Configured config)
+    (input : Var Input F) (i : RegionIndex)
+    (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchor : SelectorAnchorRequirementsSatisfied
+      (self.elaborated.lookupSelectorAnchorRequirements config input i)
+      anchor) :
+    (((callPacked F ConfigInput Config Input Output).val self
+      config input i).2.1).LookupSelectorsAnchoredBy anchor :=
+  self.call_lookupSelectorsAnchoredBy
+    config configured input i anchor hanchor
+
 /-- Registration certificate in the exact opaque spelling exposed after operation-spine
 normalization. -/
 theorem callPacked_keygenRegistered
@@ -1617,6 +1705,47 @@ class ElaboratedRegionCircuit (F : Type) [FiniteField F]
     | apply RegionOperations.lookupSelectorAssignmentsAgree_of_forall_isNotLookup
       keygen_registration
     | keygen_registration
+  /-- Reduced physical-anchor equations for auxiliary selectors read by this
+  region circuit. -/
+  lookupSelectorAnchorRequirements :
+    Config → ℕ → Var Input F → RegionIndex →
+      List (ℕ × FloorPlanner.RegionColumn) := fun _ _ _ _ => []
+  /-- The reduced equations physically anchor every auxiliary selector read in
+  this region. -/
+  lookupSelectorsAnchoredBy_of_registered :
+    ∀ (configInput : ConfigInput) (counts : ConfigureCounts)
+      (_hconfig : keygenRequirements.configLawful configInput)
+      (offset : ℕ) (input : Var Input F) (region : RegionIndex)
+      (anchor : ℕ → FloorPlanner.RegionColumn),
+    SelectorAnchorRequirementsSatisfied
+        (lookupSelectorAnchorRequirements
+          ((configure configInput).output counts) offset input region) anchor →
+      List.Forall
+          (RegionOperation.KeygenRegistered
+            (keygenRequirements.gates configInput _hconfig ++
+              ((configure configInput).delta counts).gates)
+            (keygenRequirements.lookups configInput _hconfig ++
+              ((configure configInput).delta counts).lookups)
+            (keygenRequirements.fixedColumns configInput _hconfig ++
+              (configure configInput).fixedColumns counts)
+            (keygenRequirements.permutationColumns configInput _hconfig ++
+              ((configure configInput).delta counts).permutationRequests ++
+              keygenRequirements.inputPermutationColumns configInput _hconfig input))
+        ((synthesize ((configure configInput).output counts) offset input).operations region) →
+      RegionOperations.LookupSelectorsAnchoredBy
+        ((synthesize ((configure configInput).output counts) offset input).operations region)
+        anchor := by
+    intro configInput counts hconfig offset input region anchor _ hregistered
+    solve
+    | exact RegionOperations.LookupSelectorsAnchoredBy.of_registered_noLookups
+        hregistered anchor
+    | apply
+        RegionOperations.LookupSelectorsAnchoredBy.of_registered_auxiliarySelectors_nil
+          hregistered (anchor := anchor)
+      keygen_registration
+    | apply RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
+      keygen_registration
+    | keygen_registration
   output : Config → ℕ → Var Input F → RegionIndex → Var Output F :=
     fun config offset input self =>
       (synthesize config offset input).output self
@@ -1670,6 +1799,24 @@ theorem ElaboratedRegionCircuit.lookupSelectorAssignmentsAgree
       |>.LookupSelectorAssignmentsAgree :=
   self.lookupSelectorAssignmentsAgree_of_registered
     configInput counts hconfig offset input region
+    (self.registered configInput counts hconfig offset input region)
+
+/-- Region lookup-selector anchoring obtained from reduced anchor equations and
+registration. -/
+theorem ElaboratedRegionCircuit.lookupSelectorsAnchoredBy
+    (self : ElaboratedRegionCircuit F ConfigInput Config Input Output
+      configure synthesize)
+    (configInput : ConfigInput) (counts : ConfigureCounts)
+    (hconfig : self.keygenRequirements.configLawful configInput)
+    (offset : ℕ) (input : Var Input F) (region : RegionIndex)
+    (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchor : SelectorAnchorRequirementsSatisfied
+      (self.lookupSelectorAnchorRequirements
+        ((configure configInput).output counts) offset input region) anchor) :
+    ((synthesize ((configure configInput).output counts) offset input).operations region)
+      |>.LookupSelectorsAnchoredBy anchor :=
+  self.lookupSelectorsAnchoredBy_of_registered
+    configInput counts hconfig offset input region anchor hanchor
     (self.registered configInput counts hconfig offset input region)
 
 @[circuit_norm ↓]
@@ -2681,6 +2828,35 @@ theorem callPacked_lookupSelectorAssignmentsAgree
   self.call_lookupSelectorAssignmentsAgree
     config configured offset input region
 
+/-- Physical lookup-selector anchoring inherited by a region child call. -/
+theorem call_lookupSelectorsAnchoredBy
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (config : Config) (configured : self.Configured config)
+    (offset : ℕ) (input : Var Input F) (region : RegionIndex)
+    (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchor : SelectorAnchorRequirementsSatisfied
+      (self.elaborated.lookupSelectorAnchorRequirements
+        config offset input region) anchor) :
+    ((self.call config offset input).operations region)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  rcases configured with ⟨configInput, counts, hconfig, rfl⟩
+  rw [self.call_operations]
+  exact self.elaborated.lookupSelectorsAnchoredBy
+    configInput counts hconfig offset input region anchor hanchor
+
+theorem callPacked_lookupSelectorsAnchoredBy
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (config : Config) (configured : self.Configured config)
+    (offset : ℕ) (input : Var Input F) (region : RegionIndex)
+    (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchor : SelectorAnchorRequirementsSatisfied
+      (self.elaborated.lookupSelectorAnchorRequirements
+        config offset input region) anchor) :
+    (((callPacked F ConfigInput Config Input Output).val self
+      config offset input region).2).LookupSelectorsAnchoredBy anchor :=
+  self.call_lookupSelectorsAnchoredBy
+    config configured offset input region anchor hanchor
+
 /-- Region registration certificate in the opaque spelling exposed after spine
 normalization. -/
 theorem callPacked_keygenRegistered
@@ -2841,6 +3017,17 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
         simpa only [assignRegion, Circuit.operations,
           Operations.LookupSelectorAssignmentsAgree,
           Operation.LookupSelectorAssignmentsAgree, List.Forall, and_true] using hagrees
+      lookupSelectorAnchorRequirements config input region :=
+        child.elaborated.lookupSelectorAnchorRequirements config 0 input region
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro configInput counts hconfig input region anchor hanchor _
+        have hchild := child.elaborated.lookupSelectorsAnchoredBy_of_registered
+          configInput counts hconfig 0 input region anchor hanchor
+          (child.elaborated.registered
+            configInput counts hconfig 0 input region)
+        simpa only [assignRegion, Circuit.operations,
+          Operations.LookupSelectorsAnchoredBy, List.forall_cons,
+          List.forall_nil, and_true] using hchild
       output config input i :=
         child.output config 0 input i
       regionCount _ := 1
@@ -3014,6 +3201,8 @@ attribute [keygen_call]
   FormalCircuit.call_lookupActivationsWellFormed
   FormalCircuit.callPacked_lookupSelectorAssignmentsAgree
   FormalCircuit.call_lookupSelectorAssignmentsAgree
+  FormalCircuit.callPacked_lookupSelectorsAnchoredBy
+  FormalCircuit.call_lookupSelectorsAnchoredBy
   FormalRegionCircuit.callPacked_keygenRegistered
   FormalRegionCircuit.call_keygenRegistered
   FormalRegionCircuit.callPacked_copyCellsAssignedFrom
@@ -3022,6 +3211,8 @@ attribute [keygen_call]
   FormalRegionCircuit.call_lookupActivationsWellFormed
   FormalRegionCircuit.callPacked_lookupSelectorAssignmentsAgree
   FormalRegionCircuit.call_lookupSelectorAssignmentsAgree
+  FormalRegionCircuit.callPacked_lookupSelectorsAnchoredBy
+  FormalRegionCircuit.call_lookupSelectorsAnchoredBy
 
 attribute [keygen_call_expression]
   FormalCircuit.call

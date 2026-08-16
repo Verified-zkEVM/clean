@@ -189,18 +189,6 @@ theorem sortRegionColumns_perm (columns : List RegionColumn) :
     column ∈ sortRegionColumns columns ↔ column ∈ columns :=
   (sortRegionColumns_perm columns).mem_iff
 
-/-- Concrete columns in a region footprint. -/
-def physicalColumns (columns : List RegionColumn) : List RegionColumn :=
-  columns.filter fun
-    | .column _ _ => true
-    | .selector _ => false
-
-/-- Virtual selector columns in a region footprint. -/
-def selectorColumns (columns : List RegionColumn) : List RegionColumn :=
-  columns.filter fun
-    | .column _ _ => false
-    | .selector _ => true
-
 private theorem orderedInsert_append_of_rel_right
     {alpha : Type} (relation : alpha → alpha → Prop)
     [DecidableRel relation] (item : alpha) (left right : List alpha)

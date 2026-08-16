@@ -845,6 +845,12 @@ def configure (G : Generators) : Configure Fp Config := do
       (configureBase.output counts).advices := by
   simp [configure, configureChips]
 
+@[keygen_norm] theorem configure_output_lookupConfig (G : Generators)
+    (counts : ConfigureCounts) :
+    ((configure G).output counts).lookupConfig =
+      (configureBase.output counts).lookupConfig := by
+  simp [configure, configureChips]
+
 @[keygen_norm] theorem configure_output_eccConfig (G : Generators)
     (counts : ConfigureCounts) :
     ((configure G).output counts).eccConfig =
@@ -853,6 +859,24 @@ def configure (G : Generators) : Configure Fp Config := do
         (configureBase.output counts).lookupConfig).output
           (configureBase.finalCounts counts) := by
   simp [configure, configureChips]
+
+@[keygen_norm]
+theorem configure_output_mulFixedBaseField_lookupConfig
+    (G : Generators) (counts : ConfigureCounts) :
+    ((configure G).output counts).eccConfig.mulFixedBaseField.lookupConfig =
+      ((configure G).output counts).lookupConfig := by
+  rw [configure_output_eccConfig,
+    Ecc.configure_output_mulFixedBaseField_lookupConfig,
+    configure_output_lookupConfig]
+
+@[keygen_norm]
+theorem configure_output_mul_overflow_lookupConfig
+    (G : Generators) (counts : ConfigureCounts) :
+    ((configure G).output counts).eccConfig.mul.overflowConfig.lookupConfig =
+      ((configure G).output counts).lookupConfig := by
+  rw [configure_output_eccConfig,
+    Ecc.configure_output_mul_overflow_lookupConfig,
+    configure_output_lookupConfig]
 
 @[keygen_norm] theorem configure_output_witnessPoint_x (G : Generators)
     (counts : ConfigureCounts) :
@@ -2125,6 +2149,20 @@ theorem synthCrossAddressChecks_lookupSelectorAssignmentsAgree
     simp only [synthCrossAddressRow, circuit_norm,
       RegionOperation.IsNotLookup]
   · exact Operations.lookupSelectorAssignmentsAgree_nil
+
+theorem synthCrossAddressChecks_lookupSelectorsAnchoredBy
+    (config : Config) (points : Var AddressPoints Fp)
+    (region : RegionIndex) (anchor : ℕ → FloorPlanner.RegionColumn) :
+    ((synthCrossAddressChecks config points).operations region)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  rw [synthCrossAddressChecks, operations_assignRegion]
+  apply Operations.LookupSelectorsAnchoredBy.region_cons
+  · apply RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
+    rw [RegionCircuit.forRange'_forall]
+    intro index
+    simp only [synthCrossAddressRow, circuit_norm,
+      RegionOperation.IsNotLookup]
+  · exact Operations.LookupSelectorsAnchoredBy.nil anchor
 
 @[keygen_helper]
 theorem synthCrossAddressChecks_keygenRegistered

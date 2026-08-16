@@ -64,6 +64,13 @@ instance (superConfig : MulFixed.Config) :
   infer_instance
 
 @[keygen_norm]
+theorem configure_delta_lookups (superConfig : MulFixed.Config)
+    (counts : ConfigureCounts) :
+    ((configure superConfig).delta counts).lookups = [] := by
+  unfold configure
+  rfl
+
+@[keygen_norm]
 def innerKeygenRequirements : KeygenRequirements Fp Config Unit where
   configLawful cfg :=
     AddIncomplete.add.Configured cfg.superConfig.addIncompleteConfig ×
@@ -380,7 +387,6 @@ theorem windowChain_processWindowH_keygenRegistered
     (offset numWindows : ℕ) (self : RegionIndex)
     (configured : AddIncomplete.add.Configured cfg.superConfig.addIncompleteConfig)
     (hgates : ∀ gate, gate ∈ configured.gates → gate ∈ gates)
-    (hlookups : ∀ argument, argument ∈ configured.lookups → argument ∈ lookups)
     (hpermutationColumns : ∀ column,
       column ∈ configured.permutationColumns → column ∈ permutationColumns)
     (hprocessColumns : ∀ column,
@@ -418,9 +424,9 @@ theorem innerRegion_keygenRegistered
     intro i
     unfold MulFixed.fixedConstantsWindow
     keygen_registration
-  · apply windowChain_processWindowH_keygenRegistered <;>
+  · apply windowChain_processWindowH_keygenRegistered
+      (configured := configured.1) <;>
       keygen_registration
-    simp_all only [or_true]
 
 theorem innerRegion_copyCellsAssignedFrom_and_outputAssigned
     (B : FixedBaseData) (cfg : Config) (offset : ℕ)
@@ -1462,6 +1468,19 @@ def circuit (B : FixedBase) :
             (by keygen_registration) (by keygen_registration)
             (by keygen_registration) (by keygen_registration)
         · keygen_registration
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro configInput counts hconfig _ _ anchor _ hregistered
+        rcases hconfig with ⟨configuredIncomplete, configuredAdd, _⟩
+        have hlookups :
+            (runningSumKeygenRequirements.lookups configInput
+                configuredIncomplete ++ configuredAdd.lookups) ++
+              ((configure configInput).delta counts).lookups = [] := by
+          simp only [keygen_norm,
+            AddIncomplete.Configured.lookups_eq_nil configuredIncomplete,
+            Add.Configured.lookups_eq_nil configuredAdd]
+        rw [hlookups] at hregistered
+        exact Operations.LookupSelectorsAnchoredBy.of_registered_noLookups
+          hregistered anchor
       lookupActivationsWellFormed config scalar region := by
         simp only [synthesize, Circuit.operations_bind,
           operations_assignRegion, Operations.LookupActivationsWellFormed]
@@ -1708,6 +1727,19 @@ theorem circuit_inputCells_eq
     (input : Var UnconstrainedNat Fp) :
     configured.inputCells input = [] := by
   rfl
+
+@[keygen_norm]
+theorem Configured.lookups_eq_nil
+    (B : FixedBase) {config : Config}
+    (configured : (circuit B).Configured config) :
+    configured.lookups = [] := by
+  rcases configured with ⟨configInput, counts, hconfig, outputEq⟩
+  cases outputEq
+  simp only [FormalCircuit.Configured.lookups,
+    FormalCircuit.keygenRequirements, ElaboratedCircuit.keygenRequirements,
+    circuit, keygen_norm,
+    AddIncomplete.Configured.lookups_eq_nil hconfig.1,
+    Add.Configured.lookups_eq_nil hconfig.2.1]
 
 theorem circuit_call_output_cells_assigned
     (B : FixedBase) (config : Config) (input : Var UnconstrainedNat Fp)

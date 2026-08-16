@@ -43,12 +43,6 @@ theorem actionConfigureContext_permutationColumns (G : Generators)
       ((configure G).delta counts).permutationRequests := by
   rfl
 
-private theorem configure_output_lookupConfig (G : Generators)
-    (counts : ConfigureCounts) :
-    ((configure G).output counts).lookupConfig =
-      (configureBase.output counts).lookupConfig :=
-  rfl
-
 /--
 Transport the whole ECC configure certificate through Action's single direct ECC bind.
 No ECC child configuration is opened above this boundary.

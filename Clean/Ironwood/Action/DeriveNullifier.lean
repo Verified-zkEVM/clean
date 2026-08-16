@@ -204,6 +204,28 @@ def circuit (K : FixedBase) : FormalCircuit Fp
               cfg.2.2.1 hconfig.2.2.1 _ _,
           Ecc.Add.addFormal.call_lookupSelectorAssignmentsAgree
             cfg.2.2.2 hconfig.2.2.2 _ _⟩
+      lookupSelectorAnchorRequirements cfg _ _ :=
+        LookupRangeCheck.lookupSelectorAnchorRequirements
+          cfg.2.2.1.lookupConfig
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro cfg _ hconfig input self anchor hanchor _
+        simp only [synthesize, Circuit.operations_bind,
+          Circuit.operations_pure, List.append_nil, circuit_norm]
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact (Poseidon.hash (Hash.ConstantLength.capacity 2))
+            |>.call_lookupSelectorsAnchoredBy
+              cfg.1 hconfig.1 _ self anchor (by trivial)
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact AddChip.addFormal.call_lookupSelectorsAnchoredBy
+            cfg.2.1 hconfig.2.1 _ (self + 3) anchor (by trivial)
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact (Ecc.MulFixed.BaseFieldElem.circuit K)
+            |>.call_lookupSelectorsAnchoredBy cfg.2.2.1 hconfig.2.2.1 _
+              (self + 4) anchor (by
+                simpa only [Ecc.MulFixed.BaseFieldElem.circuit_lookupSelectorAnchorRequirements]
+                  using hanchor)
+        · exact Ecc.Add.addFormal.call_lookupSelectorsAnchoredBy
+            cfg.2.2.2 hconfig.2.2.2 _ (self + 8) anchor (by trivial)
       fixedWritesLawful := by
         intro cfg _ hconfig input self
         apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree
@@ -392,6 +414,16 @@ theorem circuit_call_output_cell_assigned
     Ecc.Add.addFormal_output_cells, List.mem_append, AssignedCell.of_cell,
     Nat.add_assoc, Nat.reduceAdd, hash, scalar, product] at hadd ⊢
   exact Or.inr (Or.inr (Or.inr hadd.1))
+
+@[keygen_norm]
+theorem circuit_lookupSelectorAnchorRequirements
+    (K : FixedBase)
+    (config : Poseidon.Config × AddChip.Config ×
+      Ecc.MulFixed.BaseFieldElem.Config × Ecc.Add.Config)
+    (input : Var Input Fp) (region : RegionIndex) :
+    (circuit K).elaborated.lookupSelectorAnchorRequirements config input region =
+      LookupRangeCheck.lookupSelectorAnchorRequirements
+        config.2.2.1.lookupConfig := rfl
 
 @[synthesis_summary_norm]
 theorem circuit_synthesisSummary_eq (K : FixedBase)

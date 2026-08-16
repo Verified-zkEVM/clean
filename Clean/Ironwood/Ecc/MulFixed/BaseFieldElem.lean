@@ -232,6 +232,17 @@ theorem witnessCheck13_lookupSelectorAssignmentsAgree
       10 13 false (by simp) cfg w region
 
 @[keygen_norm, keygen_spine]
+theorem witnessCheck13_lookupSelectorsAnchoredBy
+    (cfg : LookupRangeCheck.Config 10) (w : WitgenIR Fp 1)
+    (region : RegionIndex) (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchor : SelectorAnchorRequirementsSatisfied
+      (LookupRangeCheck.lookupSelectorAnchorRequirements cfg) anchor) :
+    ((witnessCheck13 cfg w).operations region).LookupSelectorsAnchoredBy anchor := by
+  simpa only [witnessCheck13, LookupRangeCheck.witnessCheck, circuit_norm] using
+    LookupRangeCheck.witnessCheck_lookupSelectorsAnchoredBy
+      10 13 false (by simp) cfg w region anchor hanchor
+
+@[keygen_norm, keygen_spine]
 theorem canonicityRegion_lookupSelectorAssignmentsAgree
     (cfg : Config) (alpha z84 alphaPrime z13 z44 z43 : AssignedCell Fp)
     (region : RegionIndex) :
@@ -1894,6 +1905,40 @@ def circuit (B : FixedBase) : FormalCircuit Fp
         · exact Add.add.call_lookupActivationsWellFormed
             config.superConfig.addConfig 0 _ (region + 1)
         constructor <;> keygen_registration
+      lookupSelectorAnchorRequirements cfg _ _ :=
+        LookupRangeCheck.lookupSelectorAnchorRequirements cfg.lookupConfig
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro configInput counts configured alpha self anchor hanchor _
+        let program := configure configInput.1 configInput.2.1 configInput.2.2
+        let cfg := program.output counts
+        let innerConfigured : (inner B).Configured cfg :=
+          FormalRegionCircuit.Configured.ofPure (inner B) cfg
+            (by simpa [cfg, program, configure] using
+              (⟨configured.1, configured.2.2⟩ :
+                innerKeygenRequirements.configLawful cfg)) rfl
+        let addConfigured : Add.add.Configured cfg.superConfig.addConfig := by
+          simpa [cfg, program, configure] using configured.2.1
+        simp only [synthesize, Circuit.operations_bind,
+          Circuit.operations_pure, operations_assignRegion, List.append_nil]
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact (inner B).call_lookupSelectorsAnchoredBy
+            cfg innerConfigured 0 ⟨alpha⟩ self anchor (by trivial)
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact Add.add.call_lookupSelectorsAnchoredBy
+            cfg.superConfig.addConfig addConfigured 0 _ (self + 1)
+              anchor (by trivial)
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact witnessCheck13_lookupSelectorsAnchoredBy cfg.lookupConfig
+            (alphaZeroPrimeWit
+              ((inner B).call cfg 0 ⟨alpha⟩ |>.output self).zs[0]
+              ((inner B).call cfg 0 ⟨alpha⟩ |>.output self).zs[84])
+            (self + 2) anchor (by
+              simpa only [program, cfg,
+                LookupRangeCheck.lookupSelectorAnchorRequirements] using hanchor)
+        · apply Operations.LookupSelectorsAnchoredBy.region_cons
+          · apply RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
+            simp only [canonicityRegion, circuit_norm, RegionOperation.IsNotLookup]
+          · exact Operations.LookupSelectorsAnchoredBy.nil anchor
       output cfg _ i :=
         { x := .of (i + 1) 1 cfg.superConfig.addConfig.xQR
           y := .of (i + 1) 1 cfg.superConfig.addConfig.yQR }
@@ -2326,6 +2371,13 @@ theorem circuit_synthesisSummary_eq (B : FixedBase) (cfg : Config)
 theorem circuit_inputCells_eq (B : FixedBase) {cfg : Config}
     (configured : (circuit B).Configured cfg) (input : Var field Fp) :
     configured.inputCells input = [input.cell] := rfl
+
+@[keygen_norm]
+theorem circuit_lookupSelectorAnchorRequirements
+    (B : FixedBase) (cfg : Config) (input : Var field Fp)
+    (region : RegionIndex) :
+    (circuit B).elaborated.lookupSelectorAnchorRequirements cfg input region =
+      LookupRangeCheck.lookupSelectorAnchorRequirements cfg.lookupConfig := rfl
 
 /-- Both coordinates returned by the base-field fixed-base multiplication call are
 assigned by its second region. -/

@@ -153,6 +153,17 @@ def circuit (G : FixedBase) : FormalCircuit Fp
             cfg.1 hconfig.1 input.alpha self <;> keygen_registration
         · apply Ecc.Add.addFormal.call_keygenRegistered
             cfg.2 hconfig.2 _ (self + 2) <;> keygen_registration
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro cfg counts hconfig input self anchor _ hregistered
+        have hlookups :
+            (keygenRequirements G).lookups cfg hconfig ++
+              ((pure cfg : Configure Fp _).delta counts).lookups = [] := by
+          simp only [keygenRequirements, keygen_norm,
+            Ecc.MulFixed.FullWidth.Configured.lookups_eq_nil G hconfig.1,
+            Ecc.Add.addFormal_lookups_eq_nil hconfig.2]
+        rw [hlookups] at hregistered
+        exact Operations.LookupSelectorsAnchoredBy.of_registered_noLookups
+          hregistered anchor
       lookupSelectorAssignmentsAgree_of_registered := by
         intro cfg counts hconfig input self program operations _hregistered
         simp only [operations, program, Configure.output_pure,

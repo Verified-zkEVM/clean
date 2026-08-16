@@ -165,6 +165,39 @@ theorem mem_rangeCheckLookup_auxiliarySelectorIndices (K : ℕ) (cfg : Config K)
       Expression.selectorIndices_queryAdvice, List.mem_singleton] at hselector
     tauto
 
+/-- Registration against the range-check lookup, together with the running-sum
+column's presence in the region footprint, physically anchors every auxiliary
+selector read by that lookup. -/
+theorem lookupSelectorsAnchoredBy_of_registered
+    {K : ℕ} {cfg : Config K} {operations : RegionOperations Fp}
+    {gates : List (Gate Fp)} {fixedColumns : List (Column .fixed)}
+    {permutationColumns : List AnyColumn}
+    {anchor : ℕ → FloorPlanner.RegionColumn}
+    (hregistered : operations.Forall
+      (RegionOperation.KeygenRegistered gates [rangeCheckLookup K cfg]
+        fixedColumns permutationColumns))
+    (hanchor : anchor cfg.qRunning.index =
+      .column .advice cfg.runningSum.index)
+    (hphysical : (.column .advice cfg.runningSum.index :
+      FloorPlanner.RegionColumn) ∈ FloorPlanner.physicalColumns
+        (FloorPlanner.regionSynthesisSummary operations).columns) :
+    operations.LookupSelectorsAnchoredBy anchor := by
+  intro argument enabled row hlookup selector hselector
+  have hargument : argument ∈ [rangeCheckLookup K cfg] := by
+    simpa only [RegionOperation.KeygenRegistered] using
+      List.forall_iff_forall_mem.mp hregistered _ hlookup
+  rw [List.mem_singleton] at hargument
+  subst argument
+  rw [mem_rangeCheckLookup_auxiliarySelectorIndices K cfg hselector,
+    hanchor]
+  exact hphysical
+
+/-- The single physical anchor needed by the range-check lookup's auxiliary
+`qRunning` selector. -/
+def lookupSelectorAnchorRequirements {K : ℕ} (cfg : Config K) :
+    List (ℕ × FloorPlanner.RegionColumn) :=
+  [(cfg.qRunning.index, .column .advice cfg.runningSum.index)]
+
 /-- The "Short lookup bitshift" gate, ported verbatim from `configure`
 (`lookup_range_check.rs:370-384`). Reads `word` at `Rotation::prev()` (−1), `shifted_word`
 at `Rotation::cur()` (0), `inv_two_pow_s` at `Rotation::next()` (+1); the single constraint
@@ -600,6 +633,21 @@ def shortRangeCheck (K numBits : ℕ) :
         · simp only [shortRangeCheckSynthesisSummary, circuit_norm,
             synthesis_summary_norm]
       registered := by keygen_registration
+      lookupSelectorAnchorRequirements cfg _ _ _ :=
+        LookupRangeCheck.lookupSelectorAnchorRequirements cfg
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro configInput counts hconfig offset input region anchor hanchor
+          hregistered
+        apply lookupSelectorsAnchoredBy_of_registered
+          (K := K) (cfg := configInput) (anchor := anchor)
+        · simpa only [keygen_norm] using hregistered
+        · simpa only [lookupSelectorAnchorRequirements,
+            SelectorAnchorRequirementsSatisfied] using hanchor
+        · rw [FloorPlanner.V1.column_mem_physicalColumns_iff,
+            FloorPlanner.regionSynthesisSummary_columns_eq_unionColumns,
+            FloorPlanner.mem_unionColumns_iff]
+          right
+          simp [circuit_norm, FloorPlanner.regionOperationShapeColumns]
       lookupSelectorAssignmentsAgree_of_registered := by
         intro configInput counts hconfig offset input region
         dsimp only
@@ -1155,6 +1203,21 @@ theorem rangeCheckLoop_synthesisSummary (K : ℕ) (cfg : Config K)
           FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount]
       · simp [rangeCheckLoopSummary, synthesis_summary_norm]
 
+/-- A nonempty running-sum loop physically occupies its running-sum advice
+column. -/
+theorem runningSum_mem_rangeCheckLoop_physicalColumns
+    (K : ℕ) (cfg : Config K) (element : AssignedCell Fp)
+    (offset numWords : ℕ) (self : RegionIndex) (hpositive : 0 < numWords) :
+    (.column .advice cfg.runningSum.index : FloorPlanner.RegionColumn) ∈
+      FloorPlanner.physicalColumns
+        (FloorPlanner.regionSynthesisSummary
+          ((rangeCheckLoop K cfg element offset numWords).operations self)).columns := by
+  rw [rangeCheckLoop_synthesisSummary]
+  simp [rangeCheckLoopSummary, Nat.ne_of_gt hpositive,
+    FloorPlanner.V1.column_mem_physicalColumns_iff,
+    FloorPlanner.RegionSynthesisSummary.ofColumns_columns,
+    FloorPlanner.mem_unionColumns_iff]
+
 /-- The running sum read off the environment: `z_j = env.advice runningSum` at absolute
 row `place self + (offset + j)`. The chain the telescoping algebra runs over. -/
 def zChain (K : ℕ) (cfg : Config K) (place : RegionIndex → ℕ) (self : RegionIndex)
@@ -1330,6 +1393,20 @@ def rangeCheckElaborated (K numWords : ℕ) (strict : Bool) :
           simp [rangeCheckSynthesisSummary, rangeCheckLoopSummary, hn, circuit_norm,
             synthesis_summary_norm]
     registered := by keygen_registration [rangeCheckBody]
+    lookupSelectorAnchorRequirements cfg _ _ _ :=
+      LookupRangeCheck.lookupSelectorAnchorRequirements cfg
+    lookupSelectorsAnchoredBy_of_registered := by
+      intro configInput counts hconfig offset input region anchor hanchor
+        hregistered
+      apply lookupSelectorsAnchoredBy_of_registered
+        (K := K) (cfg := configInput) (anchor := anchor)
+      · simpa only [keygen_norm] using hregistered
+      · simpa only [lookupSelectorAnchorRequirements,
+          SelectorAnchorRequirementsSatisfied] using hanchor
+      · apply
+          FloorPlanner.adviceColumn_mem_physicalColumns_regionSynthesisSummary_of_assignAdvice_mem
+          (row := offset) (value := .ofFExpr (.expr input.element))
+        simp [rangeCheckBody, circuit_norm]
     lookupSelectorAssignmentsAgree_of_registered := by
       intro configInput counts hconfig offset input region
       dsimp only
@@ -1616,6 +1693,36 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool)
           simp [rangeCheckAtBody, rangeCheckAtSynthesisSummary, rangeCheckLoopSummary,
             hn, circuit_norm, synthesis_summary_norm]
       registered := by keygen_registration
+      lookupSelectorAnchorRequirements cfg _ _ _ :=
+        LookupRangeCheck.lookupSelectorAnchorRequirements cfg
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro configInput counts hconfig offset input region anchor hanchor
+          hregistered
+        cases numWords with
+        | zero =>
+            have hfalse : strict = false := by
+              cases hstrict' : strict
+              · rfl
+              · have := hstrict hstrict'
+                omega
+            subst strict
+            apply RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
+            keygen_registration [rangeCheckAtBody, rangeCheckLoop,
+              RegionCircuit.forRange', RegionCircuit.loopAux]
+        | succ numWords =>
+            apply lookupSelectorsAnchoredBy_of_registered
+              (K := K) (cfg := configInput) (anchor := anchor)
+            · simpa only [keygen_norm] using hregistered
+            · simpa only [lookupSelectorAnchorRequirements,
+                SelectorAnchorRequirementsSatisfied] using hanchor
+            · simp only [rangeCheckAtBody, circuit_norm]
+              rw [FloorPlanner.V1.column_mem_physicalColumns_iff,
+                FloorPlanner.mem_unionColumns_iff]
+              left
+              exact (FloorPlanner.V1.column_mem_physicalColumns_iff _ _ _).mp
+                (runningSum_mem_rangeCheckLoop_physicalColumns
+                  K configInput (AssignedCell.of region offset configInput.runningSum)
+                  offset (numWords + 1) region (by omega))
       lookupSelectorAssignmentsAgree_of_registered := by
         intro configInput counts hconfig offset input region
         dsimp only
@@ -1865,6 +1972,22 @@ def rangeCheckAtDecomposed (numWords : ℕ) (h13 : 13 ≤ numWords)
           simp [rangeCheckAtDecomposedBody, rangeCheckAtDecomposedSynthesisSummary,
             rangeCheckLoopSummary, hn, circuit_norm, synthesis_summary_norm]
       registered := by keygen_registration
+      lookupSelectorAnchorRequirements cfg _ _ _ :=
+        LookupRangeCheck.lookupSelectorAnchorRequirements cfg
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro configInput counts hconfig offset input region anchor hanchor
+          hregistered
+        apply lookupSelectorsAnchoredBy_of_registered
+          (K := 10) (cfg := configInput) (anchor := anchor)
+        · simpa only [keygen_norm] using hregistered
+        · simpa only [lookupSelectorAnchorRequirements,
+            SelectorAnchorRequirementsSatisfied] using hanchor
+        · simp only [rangeCheckAtDecomposedBody, circuit_norm]
+          rw [FloorPlanner.V1.column_mem_physicalColumns_iff]
+          exact (FloorPlanner.V1.column_mem_physicalColumns_iff _ _ _).mp
+            (runningSum_mem_rangeCheckLoop_physicalColumns
+              10 configInput (AssignedCell.of region offset configInput.runningSum)
+              offset numWords region (by omega))
       lookupSelectorAssignmentsAgree_of_registered := by
         intro configInput counts hconfig offset input region
         dsimp only
@@ -2085,6 +2208,28 @@ theorem witnessCheckDecomposed_lookupSelectorAssignmentsAgree
       |>.LookupSelectorAssignmentsAgree := by
   simp only [witnessCheckDecomposed, circuit_norm, keygen_norm, keygen_spine]
 
+/-- The decomposed witness wrapper preserves the range-check lookup's physical
+selector anchor. -/
+@[keygen_norm, keygen_spine]
+theorem witnessCheckDecomposed_lookupSelectorsAnchoredBy
+    (cfg : Config 10) (w : WitgenIR Fp 1) (i : RegionIndex)
+    (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchor : SelectorAnchorRequirementsSatisfied
+      (lookupSelectorAnchorRequirements cfg) anchor) :
+    ((witnessCheckDecomposed cfg w).operations i)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  simp only [witnessCheckDecomposed, operations_assignRegion,
+    Operations.LookupSelectorsAnchoredBy, List.forall_cons,
+    List.forall_nil, and_true, RegionCircuit.operations_bind]
+  apply RegionOperations.LookupSelectorsAnchoredBy.append
+  · apply RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
+    trivial
+  · exact (rangeCheckAtDecomposed 25 (by norm_num) (by norm_num))
+      |>.call_lookupSelectorsAnchoredBy cfg
+        (FormalRegionCircuit.Configured.ofOutput
+          (rangeCheckAtDecomposed 25 (by norm_num) (by norm_num)) cfg {} (by exact ()))
+        0 () i anchor hanchor
+
 /-! ## `copy_check` — the layouter-level range-check wrapper
 
 Rust `LookupRangeCheck::copy_check` (`lookup_range_check.rs:124-140`): a
@@ -2287,6 +2432,28 @@ theorem witnessShortCheck_lookupSelectorAssignmentsAgree
     ((witnessShortCheck K numBits cfg w).operations i)
       |>.LookupSelectorAssignmentsAgree := by
   simp only [witnessShortCheck, circuit_norm, keygen_norm, keygen_spine]
+
+/-- The short witness wrapper preserves the range-check lookup's physical
+selector anchor. -/
+@[keygen_norm, keygen_spine]
+theorem witnessShortCheck_lookupSelectorsAnchoredBy
+    (K numBits : ℕ) (cfg : Config K) (w : WitgenIR Fp 1)
+    (i : RegionIndex) (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchor : SelectorAnchorRequirementsSatisfied
+      (lookupSelectorAnchorRequirements cfg) anchor) :
+    ((witnessShortCheck K numBits cfg w).operations i)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  simp only [witnessShortCheck, operations_assignRegion,
+    Operations.LookupSelectorsAnchoredBy, List.forall_cons,
+    List.forall_nil, and_true, RegionCircuit.operations_bind,
+    RegionCircuit.operations_pure, List.append_nil]
+  apply RegionOperations.LookupSelectorsAnchoredBy.append
+  · apply RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
+    trivial
+  · exact (shortRangeCheck K numBits).call_lookupSelectorsAnchoredBy cfg
+      (FormalRegionCircuit.Configured.ofOutput
+        (shortRangeCheck K numBits) cfg {} (by exact ()))
+      0 () i anchor hanchor
 
 /-- Witnessing a short range check preserves the child's single deferred
 constant request. -/
@@ -2554,6 +2721,30 @@ theorem witnessCheck_lookupSelectorAssignmentsAgree
     ((witnessCheck K numWords strict cfg w hstrict).operations i)
       |>.LookupSelectorAssignmentsAgree := by
   simp only [witnessCheck, circuit_norm, keygen_norm, keygen_spine]
+
+/-- The witness wrapper preserves the range-check lookup's physical selector
+anchor. -/
+@[keygen_norm, keygen_spine]
+theorem witnessCheck_lookupSelectorsAnchoredBy
+    (K numWords : ℕ) (strict : Bool)
+    (hstrict : strict = true → 0 < numWords) (cfg : Config K)
+    (w : WitgenIR Fp 1) (i : RegionIndex)
+    (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchor : SelectorAnchorRequirementsSatisfied
+      (lookupSelectorAnchorRequirements cfg) anchor) :
+    ((witnessCheck K numWords strict cfg w hstrict).operations i)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  simp only [witnessCheck, operations_assignRegion,
+    Operations.LookupSelectorsAnchoredBy, List.forall_cons,
+    List.forall_nil, and_true, RegionCircuit.operations_bind]
+  apply RegionOperations.LookupSelectorsAnchoredBy.append
+  · apply RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
+    trivial
+  · exact (rangeCheckAt K numWords strict hstrict).call_lookupSelectorsAnchoredBy
+      cfg
+      (FormalRegionCircuit.Configured.ofOutput
+        (rangeCheckAt K numWords strict hstrict) cfg {} (by exact ()))
+      0 () i anchor hanchor
 
 @[keygen_norm, keygen_helper]
 theorem witnessShortCheck_keygenRegistered

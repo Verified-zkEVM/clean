@@ -169,6 +169,18 @@ def isAdvice : RegionColumn → Bool
 
 end RegionColumn
 
+/-- Concrete columns in a region footprint. -/
+def physicalColumns (columns : List RegionColumn) : List RegionColumn :=
+  columns.filter fun
+    | .column _ _ => true
+    | .selector _ => false
+
+/-- Virtual selector columns in a region footprint. -/
+def selectorColumns (columns : List RegionColumn) : List RegionColumn :=
+  columns.filter fun
+    | .column _ _ => false
+    | .selector _ => true
+
 /-- Add a column to a first-seen-order finite set. -/
 def addColumn (columns : List RegionColumn) (column : RegionColumn) :
     List RegionColumn :=
@@ -1164,6 +1176,21 @@ theorem mem_regionSynthesisSummary_columns_of_mem
       rcases hoperation with rfl | hrest
       · exact .inl ((mem_unionColumns_iff _ _ _).2 (.inr hcolumn))
       · exact .inr (inductionHypothesis hrest)
+
+/-- An advice assignment records its physical column in the region's reduced
+synthesis footprint. -/
+theorem adviceColumn_mem_physicalColumns_regionSynthesisSummary_of_assignAdvice_mem
+    (operations : RegionOperations F) (column : Column .advice)
+    (row : ℕ) (value : WitgenIR F 1)
+    (hoperation : .assignAdvice column row value ∈ operations) :
+    RegionColumn.column .advice column.index ∈
+      physicalColumns (regionSynthesisSummary operations).columns := by
+  rw [physicalColumns, List.mem_filter]
+  constructor
+  · apply mem_regionSynthesisSummary_columns_of_mem operations
+      (.assignAdvice column row value) hoperation
+    simp [regionOperationShapeColumns]
+  · trivial
 
 /-- A region program which never requests a deferred constant cell has zero
 constant-allocation demand. -/
@@ -3701,6 +3728,248 @@ theorem Operations.lookupSelectorAssignmentsAgree_of_keygenRegistered_auxiliaryS
       exact RegionOperations.lookupSelectorAssignmentsAgree_of_keygenRegistered_auxiliarySelectors_nil
         hregisteredOperation hlookups
   | constrainInstance | loadTable => trivial
+
+/-! ## Physical lookup-selector anchoring -/
+
+/-- Every auxiliary selector read by a lookup is physically anchored in the
+lookup's region. Unlike selector activation anchoring, this also covers selectors
+which that particular lookup deliberately leaves disabled. -/
+@[keygen_norm]
+def RegionOperations.LookupSelectorsAnchoredBy
+    (operations : RegionOperations F)
+    (anchor : ℕ → FloorPlanner.RegionColumn) : Prop :=
+  ∀ argument enabled row,
+    .enableLookup argument enabled row ∈ operations →
+      ∀ selector ∈ argument.auxiliarySelectorIndices,
+        anchor selector ∈ FloorPlanner.physicalColumns
+          (FloorPlanner.regionSynthesisSummary operations).columns
+
+/-- Every lookup region in a layouter operation stream physically anchors the
+auxiliary selectors read by its lookup expressions. -/
+@[keygen_norm]
+def Operations.LookupSelectorsAnchoredBy
+    (operations : Operations F)
+    (anchor : ℕ → FloorPlanner.RegionColumn) : Prop :=
+  operations.Forall fun operation =>
+    match operation with
+    | .region _ body => body.LookupSelectorsAnchoredBy anchor
+    | _ => True
+
+/-- A concrete selector-to-column requirement is satisfied by an anchor map. -/
+@[keygen_norm]
+def SelectorAnchorRequirementsSatisfied
+    (requirements : List (ℕ × FloorPlanner.RegionColumn))
+    (anchor : ℕ → FloorPlanner.RegionColumn) : Prop :=
+  requirements.Forall fun requirement =>
+    anchor requirement.1 = requirement.2
+
+@[keygen_norm]
+theorem SelectorAnchorRequirementsSatisfied.append
+    (left right : List (ℕ × FloorPlanner.RegionColumn))
+    (anchor : ℕ → FloorPlanner.RegionColumn) :
+    SelectorAnchorRequirementsSatisfied (left ++ right) anchor ↔
+      SelectorAnchorRequirementsSatisfied left anchor ∧
+        SelectorAnchorRequirementsSatisfied right anchor := by
+  simp [SelectorAnchorRequirementsSatisfied, List.forall_append]
+
+theorem RegionOperations.LookupSelectorsAnchoredBy.of_registered_auxiliarySelectors_nil
+    {operations : RegionOperations F}
+    {gates : List (Gate F)} {lookups : List (LookupArgument F)}
+    {fixedColumns : List (Column .fixed)}
+    {permutationColumns : List AnyColumn}
+    (hregistered : operations.Forall
+      (RegionOperation.KeygenRegistered gates lookups fixedColumns
+        permutationColumns))
+    (hlookups : lookups.Forall fun argument =>
+      argument.auxiliarySelectorIndices = [])
+    (anchor : ℕ → FloorPlanner.RegionColumn) :
+    operations.LookupSelectorsAnchoredBy anchor := by
+  intro argument enabled row hoperation selector hselector
+  have hregisteredOperation :=
+    List.forall_iff_forall_mem.mp hregistered _ hoperation
+  have hnil := List.forall_iff_forall_mem.mp hlookups
+    argument hregisteredOperation
+  rw [hnil] at hselector
+  exact (List.not_mem_nil hselector).elim
+
+/-- A region registered against no lookups has no selector reads to anchor. -/
+theorem RegionOperations.LookupSelectorsAnchoredBy.of_registered_noLookups
+    {operations : RegionOperations F}
+    {gates : List (Gate F)} {fixedColumns : List (Column .fixed)}
+    {permutationColumns : List AnyColumn}
+    (hregistered : operations.Forall
+      (RegionOperation.KeygenRegistered gates [] fixedColumns
+        permutationColumns))
+    (anchor : ℕ → FloorPlanner.RegionColumn) :
+    operations.LookupSelectorsAnchoredBy anchor := by
+  intro argument enabled row hoperation
+  have hregisteredOperation :=
+    List.forall_iff_forall_mem.mp hregistered _ hoperation
+  exact (List.not_mem_nil hregisteredOperation).elim
+
+/-- A region containing no lookup activations has no lookup-selector reads to
+anchor, independently of its configured lookup capabilities. -/
+theorem RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
+    {operations : RegionOperations F}
+    (hoperations : operations.Forall RegionOperation.IsNotLookup)
+    (anchor : ℕ → FloorPlanner.RegionColumn) :
+    operations.LookupSelectorsAnchoredBy anchor := by
+  intro argument enabled row hoperation
+  have hnotLookup := List.forall_iff_forall_mem.mp hoperations _ hoperation
+  simp [RegionOperation.IsNotLookup] at hnotLookup
+
+/-- Physical lookup-selector anchoring is preserved when two operation fragments
+share a region: either fragment's physical footprint is included in the combined
+footprint. -/
+theorem RegionOperations.LookupSelectorsAnchoredBy.append
+    {left right : RegionOperations F}
+    {anchor : ℕ → FloorPlanner.RegionColumn}
+    (hleft : left.LookupSelectorsAnchoredBy anchor)
+    (hright : right.LookupSelectorsAnchoredBy anchor) :
+    (left ++ right).LookupSelectorsAnchoredBy anchor := by
+  intro argument enabled row hlookup selector hselector
+  rw [List.mem_append] at hlookup
+  have liftPhysical
+      (source other : RegionOperations F)
+      (hsource : anchor selector ∈
+        FloorPlanner.physicalColumns
+          (FloorPlanner.regionSynthesisSummary source).columns) :
+      anchor selector ∈ FloorPlanner.physicalColumns
+        (FloorPlanner.regionSynthesisSummary (source ++ other)).columns := by
+    rw [FloorPlanner.physicalColumns, List.mem_filter] at hsource ⊢
+    constructor
+    · rw [FloorPlanner.regionSynthesisSummary_append,
+        FloorPlanner.RegionSynthesisSummary.combine_columns,
+        FloorPlanner.mem_unionColumns_iff]
+      exact .inl hsource.1
+    · exact hsource.2
+  rcases hlookup with hlookup | hlookup
+  · exact liftPhysical left right
+      (hleft argument enabled row hlookup selector hselector)
+  · rw [FloorPlanner.regionSynthesisSummary_append]
+    rw [FloorPlanner.physicalColumns, List.mem_filter]
+    have hsource := hright argument enabled row hlookup selector hselector
+    rw [FloorPlanner.physicalColumns, List.mem_filter] at hsource
+    constructor
+    · rw [FloorPlanner.RegionSynthesisSummary.combine_columns,
+        FloorPlanner.mem_unionColumns_iff]
+      exact .inr hsource.1
+    · exact hsource.2
+
+theorem Operations.LookupSelectorsAnchoredBy.of_registered_auxiliarySelectors_nil
+    {operations : Operations F}
+    {gates : List (Gate F)} {lookups : List (LookupArgument F)}
+    {fixedColumns : List (Column .fixed)}
+    {permutationColumns : List AnyColumn}
+    (hregistered : operations.KeygenRegistered
+      gates lookups fixedColumns permutationColumns)
+    (hlookups : lookups.Forall fun argument =>
+      argument.auxiliarySelectorIndices = [])
+    (anchor : ℕ → FloorPlanner.RegionColumn) :
+    operations.LookupSelectorsAnchoredBy anchor := by
+  rw [Operations.LookupSelectorsAnchoredBy, List.forall_iff_forall_mem]
+  intro operation hoperation
+  have hregisteredOperation :=
+    List.forall_iff_forall_mem.mp hregistered operation hoperation
+  cases operation with
+  | region name body =>
+      exact RegionOperations.LookupSelectorsAnchoredBy.of_registered_auxiliarySelectors_nil
+        hregisteredOperation hlookups anchor
+  | constrainInstance | loadTable => trivial
+
+/-- Layouter operations registered against no lookups have no selector reads to
+anchor. -/
+theorem Operations.LookupSelectorsAnchoredBy.of_registered_noLookups
+    {operations : Operations F}
+    {gates : List (Gate F)} {fixedColumns : List (Column .fixed)}
+    {permutationColumns : List AnyColumn}
+    (hregistered : operations.KeygenRegistered gates [] fixedColumns
+      permutationColumns)
+    (anchor : ℕ → FloorPlanner.RegionColumn) :
+    operations.LookupSelectorsAnchoredBy anchor := by
+  rw [Operations.LookupSelectorsAnchoredBy, List.forall_iff_forall_mem]
+  intro operation hoperation
+  have hregisteredOperation :=
+    List.forall_iff_forall_mem.mp hregistered operation hoperation
+  cases operation with
+  | region name body =>
+      exact RegionOperations.LookupSelectorsAnchoredBy.of_registered_noLookups
+        hregisteredOperation anchor
+  | constrainInstance | loadTable => trivial
+
+theorem Operations.LookupSelectorsAnchoredBy.nil
+    (anchor : ℕ → FloorPlanner.RegionColumn) :
+    Operations.LookupSelectorsAnchoredBy ([] : Operations F) anchor := by
+  simp [Operations.LookupSelectorsAnchoredBy]
+
+@[keygen_norm, keygen_spine]
+theorem Operations.lookupSelectorsAnchoredBy_append_iff
+    (left right : Operations F) (anchor : ℕ → FloorPlanner.RegionColumn) :
+    (left ++ right).LookupSelectorsAnchoredBy anchor ↔
+      left.LookupSelectorsAnchoredBy anchor ∧
+        right.LookupSelectorsAnchoredBy anchor := by
+  simp [Operations.LookupSelectorsAnchoredBy, List.forall_append]
+
+@[keygen_norm, keygen_spine]
+theorem Operations.lookupSelectorsAnchoredBy_region_cons_iff
+    (name : String) (body : RegionOperations F) (rest : Operations F)
+    (anchor : ℕ → FloorPlanner.RegionColumn) :
+    Operations.LookupSelectorsAnchoredBy ((.region name body) :: rest) anchor ↔
+      body.LookupSelectorsAnchoredBy anchor ∧
+        rest.LookupSelectorsAnchoredBy anchor := by
+  simp [Operations.LookupSelectorsAnchoredBy]
+
+@[keygen_norm, keygen_spine]
+theorem Operations.lookupSelectorsAnchoredBy_constrainInstance_cons_iff
+    (cell : Cell) (column : Column .instance) (row : ℕ)
+    (rest : Operations F) (anchor : ℕ → FloorPlanner.RegionColumn) :
+    Operations.LookupSelectorsAnchoredBy
+        ((.constrainInstance cell column row) :: rest) anchor ↔
+      rest.LookupSelectorsAnchoredBy anchor := by
+  simp [Operations.LookupSelectorsAnchoredBy]
+
+@[keygen_norm, keygen_spine]
+theorem Operations.lookupSelectorsAnchoredBy_loadTable_cons_iff
+    (column : TableColumn) (values : List F) (rest : Operations F)
+    (anchor : ℕ → FloorPlanner.RegionColumn) :
+    Operations.LookupSelectorsAnchoredBy
+        ((.loadTable column values) :: rest) anchor ↔
+      rest.LookupSelectorsAnchoredBy anchor := by
+  simp [Operations.LookupSelectorsAnchoredBy]
+
+theorem Operations.LookupSelectorsAnchoredBy.append
+    {left right : Operations F}
+    {anchor : ℕ → FloorPlanner.RegionColumn}
+    (hleft : left.LookupSelectorsAnchoredBy anchor)
+    (hright : right.LookupSelectorsAnchoredBy anchor) :
+    (left ++ right).LookupSelectorsAnchoredBy anchor := by
+  simpa [Operations.LookupSelectorsAnchoredBy, List.forall_append] using
+    And.intro hleft hright
+
+theorem Operations.LookupSelectorsAnchoredBy.region_cons
+    {name : String} {body : RegionOperations F} {rest : Operations F}
+    {anchor : ℕ → FloorPlanner.RegionColumn}
+    (hbody : body.LookupSelectorsAnchoredBy anchor)
+    (hrest : rest.LookupSelectorsAnchoredBy anchor) :
+    Operations.LookupSelectorsAnchoredBy
+      ((.region name body : Operation F) :: rest) anchor := by
+  simpa [Operations.LookupSelectorsAnchoredBy] using And.intro hbody hrest
+
+theorem Operations.LookupSelectorsAnchoredBy.constrainInstance_cons
+    {cell : Cell} {column : Column .instance} {row : ℕ}
+    {rest : Operations F} {anchor : ℕ → FloorPlanner.RegionColumn}
+    (hrest : rest.LookupSelectorsAnchoredBy anchor) :
+    Operations.LookupSelectorsAnchoredBy
+      ((.constrainInstance cell column row : Operation F) :: rest) anchor := by
+  simpa [Operations.LookupSelectorsAnchoredBy] using hrest
+
+theorem Operations.LookupSelectorsAnchoredBy.loadTable_cons
+    {column : TableColumn} {values : List F}
+    {rest : Operations F} {anchor : ℕ → FloorPlanner.RegionColumn}
+    (hrest : rest.LookupSelectorsAnchoredBy anchor) :
+    Operations.LookupSelectorsAnchoredBy
+      ((.loadTable column values : Operation F) :: rest) anchor := by
+  simpa [Operations.LookupSelectorsAnchoredBy] using hrest
 
 /-- A lookup activation enables its mandatory master selector and no selector outside
 the lookup's declared selector set. This property is local to the operation and is

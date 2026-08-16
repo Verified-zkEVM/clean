@@ -135,6 +135,18 @@ def circuit :
           inputCells _ _ input :=
             [input.gdX.cell, input.b0.cell, input.b1.cell,
               input.a.cell, input.z13A.cell] }
+      lookupSelectorAnchorRequirements cfg _ _ :=
+        LookupRangeCheck.lookupSelectorAnchorRequirements cfg.2
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro cfg counts _ _ i anchor hanchor _
+        simp only [synth, Circuit.operations_bind,
+          Circuit.operations_pure, List.append_nil, circuit_norm]
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact LookupRangeCheck.witnessCheck_lookupSelectorsAnchoredBy
+            10 13 false (by simp) cfg.2 _ i anchor hanchor
+        · exact gateChild.call_lookupSelectorsAnchoredBy cfg.1
+            (FormalCircuit.Configured.ofOutput gateChild cfg.1 counts
+              (by keygen_registration)) _ (i + 1) anchor (by trivial)
       copyCellsAssigned := by
         intro configInput counts hconfig input i
         simp only [synth, circuit_norm]
@@ -341,6 +353,18 @@ def circuit :
           inputCells _ _ input :=
             [input.pkdX.cell, input.b3.cell, input.d0.cell,
               input.c.cell, input.z13C.cell] }
+      lookupSelectorAnchorRequirements cfg _ _ :=
+        LookupRangeCheck.lookupSelectorAnchorRequirements cfg.2
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro cfg counts _ _ i anchor hanchor _
+        simp only [synth, Circuit.operations_bind,
+          Circuit.operations_pure, List.append_nil, circuit_norm]
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact LookupRangeCheck.witnessCheck_lookupSelectorsAnchoredBy
+            10 14 false (by simp) cfg.2 _ i anchor hanchor
+        · exact gateChild.call_lookupSelectorsAnchoredBy cfg.1
+            (FormalCircuit.Configured.ofOutput gateChild cfg.1 counts
+              (by keygen_registration)) _ (i + 1) anchor (by trivial)
       copyCellsAssigned := by
         intro configInput counts hconfig input i
         simp only [synth, circuit_norm]
@@ -541,6 +565,18 @@ def circuit :
           inputCells _ _ input :=
             [input.rho.cell, input.e1.cell, input.g0.cell,
               input.f.cell, input.z13F.cell] }
+      lookupSelectorAnchorRequirements cfg _ _ :=
+        LookupRangeCheck.lookupSelectorAnchorRequirements cfg.2
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro cfg counts _ _ i anchor hanchor _
+        simp only [synth, Circuit.operations_bind,
+          Circuit.operations_pure, List.append_nil, circuit_norm]
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact LookupRangeCheck.witnessCheck_lookupSelectorsAnchoredBy
+            10 14 false (by simp) cfg.2 _ i anchor hanchor
+        · exact gateChild.call_lookupSelectorsAnchoredBy cfg.1
+            (FormalCircuit.Configured.ofOutput gateChild cfg.1 counts
+              (by keygen_registration)) _ (i + 1) anchor (by trivial)
       copyCellsAssigned := by
         intro configInput counts hconfig input i
         simp only [synth, circuit_norm]
@@ -740,6 +776,18 @@ def circuit :
           inputCells _ _ input :=
             [input.psi.cell, input.h0.cell, input.g1.cell,
               input.h1.cell, input.g2.cell, input.z13G.cell] }
+      lookupSelectorAnchorRequirements cfg _ _ :=
+        LookupRangeCheck.lookupSelectorAnchorRequirements cfg.2
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro cfg counts _ _ i anchor hanchor _
+        simp only [synth, Circuit.operations_bind,
+          Circuit.operations_pure, List.append_nil, circuit_norm]
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact LookupRangeCheck.witnessCheck_lookupSelectorsAnchoredBy
+            10 13 false (by simp) cfg.2 _ i anchor hanchor
+        · exact gateChild.call_lookupSelectorsAnchoredBy cfg.1
+            (FormalCircuit.Configured.ofOutput gateChild cfg.1 counts
+              (by keygen_registration)) _ (i + 1) anchor (by trivial)
       copyCellsAssigned := by
         intro configInput counts hconfig input i
         simp only [synth, circuit_norm]

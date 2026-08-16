@@ -258,6 +258,20 @@ def commit (G : Generators) (ns : List ℕ)
               cfg.2.1 hconfig.2.1 _ _,
           Ecc.Add.addFormal.call_lookupSelectorAssignmentsAgree
             cfg.2.2 hconfig.2.2 _ _⟩
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro cfg _ hconfig input self anchor _ _
+        simp only [synthesize, Circuit.operations_bind,
+          Circuit.operations_pure, List.append_nil, circuit_norm]
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact (Ecc.MulFixed.FullWidth.circuit R)
+            |>.call_lookupSelectorsAnchoredBy
+              cfg.1 hconfig.1 input.r self anchor (by trivial)
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact (HashToPoint.hashCircuit G ns Q hQ hns)
+            |>.call_lookupSelectorsAnchoredBy
+              cfg.2.1 hconfig.2.1 _ (self + 2) anchor (by trivial)
+        · exact Ecc.Add.addFormal.call_lookupSelectorsAnchoredBy
+            cfg.2.2 hconfig.2.2 _ (self + 3) anchor (by trivial)
       copyCellsAssigned := by
         intro cfg counts configured input self
         simp only [synthesize, Circuit.operations_bind, Circuit.operations_pure,

@@ -578,6 +578,19 @@ theorem Configured.lookups_eq_nil {config : Config}
     FormalRegionCircuit.keygenRequirements,
     ElaboratedRegionCircuit.keygenRequirements, add, circuit_norm, keygen_norm]
 
+@[keygen_norm]
+theorem addFormal_lookups_eq_nil {config : Config}
+    (configured : addFormal.Configured config) :
+    configured.lookups = [] := by
+  rcases configured with ⟨configInput, counts, hconfig, outputEq⟩
+  cases outputEq
+  simpa only [FormalCircuit.Configured.lookups,
+    FormalCircuit.keygenRequirements, ElaboratedCircuit.keygenRequirements,
+    addFormal, FormalRegionCircuit.toFormal] using
+    (Configured.lookups_eq_nil
+      (⟨configInput, counts, hconfig, rfl⟩ :
+        add.Configured ((add.configure configInput).output counts)))
+
 /-- Both coordinates returned by complete addition are assigned by its call body. -/
 theorem add_output_cells_assigned (config : Config) (offset : ℕ)
     (input : Var Inputs Fp) (self : RegionIndex) (available : List Cell) :

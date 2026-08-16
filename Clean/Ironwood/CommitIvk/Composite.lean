@@ -226,6 +226,26 @@ def circuit (wb1 wd1 : WitgenIR Fp 1) :
             ((LookupRangeCheck.witnessCheck 10 13 false cfg.2
               (aPrimeWit input.a)).nextRegionIndex i), ?_⟩
         exact (gateChild wb1 wd1).call_lookupActivationsWellFormed _ _ _
+      lookupSelectorAnchorRequirements cfg _ _ :=
+        LookupRangeCheck.lookupSelectorAnchorRequirements cfg.2
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro cfg counts hconfig input i anchor hanchor _
+        simp only [synth, Circuit.operations_bind, Circuit.operations_pure,
+          List.append_nil]
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact LookupRangeCheck.witnessCheck_lookupSelectorsAnchoredBy
+            10 13 false synth._proof_2 cfg.2 (aPrimeWit input.a) i
+            anchor hanchor
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact LookupRangeCheck.witnessCheck_lookupSelectorsAnchoredBy
+            10 14 false synth._proof_4 cfg.2 (b2CPrimeWit input.b2 input.c)
+            ((LookupRangeCheck.witnessCheck 10 13 false cfg.2
+              (aPrimeWit input.a)).nextRegionIndex i) anchor hanchor
+        · exact (gateChild wb1 wd1).call_lookupSelectorsAnchoredBy
+            cfg.1
+            (FormalCircuit.Configured.ofOutput
+              (gateChild wb1 wd1) cfg.1 counts (by keygen_registration))
+            _ _ anchor (by trivial)
       output_eq := by intro _ _ _; rfl
       regionCount_eq := fun (gcfg, lcfg) input i =>
         (synth_regionCount wb1 wd1 gcfg lcfg input i).symm

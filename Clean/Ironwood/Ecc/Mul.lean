@@ -1035,6 +1035,11 @@ def mainElaborated : ElaboratedRegionCircuit Fp Config Config Inputs MainOutputs
       RegionOperations.lookupSelectorAssignmentsAgree_of_keygenRegistered_noLookups
     simpa only [mainKeygenRequirements_lookups_eq_nil, program,
       Configure.delta_pure, List.nil_append] using hregistered
+  lookupSelectorsAnchoredBy_of_registered := by
+    intro cfg counts hconfig offset input region anchor _ hregistered
+    apply RegionOperations.LookupSelectorsAnchoredBy.of_registered_noLookups
+    simpa only [mainKeygenRequirements_lookups_eq_nil,
+      Configure.delta_pure, List.nil_append] using hregistered
   lookupActivationsWellFormed := by keygen_registration [mainSynthesize]
   output cfg _ _ self :=
     { result :=
@@ -1925,6 +1930,23 @@ private theorem synthesize_copyCellsAssigned
       |>.call_lookupSelectorAssignmentsAgree
         (program.output counts).overflowConfig
         (overflowConfigured configInput counts) _ _
+  lookupSelectorAnchorRequirements cfg _ _ :=
+    LookupRangeCheck.lookupSelectorAnchorRequirements
+      cfg.overflowConfig.lookupConfig
+  lookupSelectorsAnchoredBy_of_registered := by
+    intro configInput counts hconfig input region anchor hanchor _
+    let cfg := (configure configInput.1 configInput.2.1 configInput.2.2).output counts
+    simp only [synthesize, Circuit.operations_bind,
+      Circuit.operations_pure, List.append_nil]
+    apply Operations.LookupSelectorsAnchoredBy.append
+    · exact (mainCircuit.toFormal "variable-base scalar mul")
+        |>.call_lookupSelectorsAnchoredBy cfg
+          (mainConfigured configInput counts hconfig) input region anchor (by trivial)
+    · exact (MulOverflow.circuit 10 hKW10)
+        |>.call_lookupSelectorsAnchoredBy cfg.overflowConfig
+          (overflowConfigured configInput counts) _ _ anchor (by
+            simpa only [MulOverflow.circuit_lookupSelectorAnchorRequirements]
+              using hanchor)
   lookupActivationsWellFormed config input region := by
     simp only [synthesize, Circuit.operations_bind,
       Circuit.operations_pure, Operations.LookupActivationsWellFormed,

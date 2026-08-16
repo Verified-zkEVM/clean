@@ -444,6 +444,10 @@ def elaborated (W numWindows : ℕ) :
       · simp only [body, circuit_norm, enableLoopSynthesisSummary_eq,
           assignLoopSynthesisSummary_eq, synthesis_summary_norm]
     registered := by keygen_registration [configure, enableEquality, body]
+    lookupSelectorsAnchoredBy_of_registered := by
+      intro _ _ _ _ _ _ anchor _ _
+      apply RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
+      keygen_registration [body]
     copyCellsAssigned := by
       keygen_registration [body]
       apply finalCell_mem_assignLoop_assignedCellsAfter

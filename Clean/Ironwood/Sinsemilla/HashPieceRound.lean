@@ -1120,7 +1120,13 @@ def round (G : Generators) (i : ℕ) : FormalRegionCircuit Fp Config Config fiel
         intro column row left right hleft hright
         simp only [Configure.output_pure, circuit_norm, List.mem_cons,
           List.not_mem_nil, or_false] at hleft hright
-        grind }
+        grind
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro _ _ _ _ _ _ anchor _ hregistered
+        apply
+          RegionOperations.LookupSelectorsAnchoredBy.of_registered_auxiliarySelectors_nil
+            hregistered (anchor := anchor)
+        keygen_registration [generatorLookup_auxiliarySelectorIndices] }
 
   synthesize cfg offset (piece : AssignedCell Fp) := do
     let w ← readState cfg offset

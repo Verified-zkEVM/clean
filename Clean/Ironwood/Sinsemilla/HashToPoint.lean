@@ -132,6 +132,17 @@ theorem witnessMessagePiece_lookupSelectorAssignmentsAgree
   simp only [witnessMessagePiece, operations_assignRegion,
     keygen_norm, keygen_spine]
 
+theorem witnessMessagePiece_lookupSelectorsAnchoredBy
+    (cfg : Sinsemilla.HashPiece.Config) (w : WitgenIR Fp 1)
+    (region : RegionIndex) (anchor : ℕ → FloorPlanner.RegionColumn) :
+    ((witnessMessagePiece cfg w).operations region)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  simp only [witnessMessagePiece, operations_assignRegion,
+    Operations.LookupSelectorsAnchoredBy, List.forall_cons,
+    List.forall_nil, and_true]
+  apply RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
+  trivial
+
 /-- Witnessing a message piece requests no deferred constants. -/
 @[synthesis_summary_norm]
 theorem witnessMessagePiece_synthesisSummary_constantSiteCount

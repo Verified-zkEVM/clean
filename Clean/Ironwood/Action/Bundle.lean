@@ -168,6 +168,26 @@ theorem main_synthesisSummary_eq (G : Generators) (B : Bases)
   rw [main, CircuitPreIronwood.synthesize,
     synthesizeBase_synthesisSummary_eq]
 
+private theorem loadPrivate_lookupSelectorsAnchoredBy
+    (column : Column .advice) (witness : WitgenIR Fp 1)
+    (region : RegionIndex) (anchor : ℕ → FloorPlanner.RegionColumn) :
+    ((loadPrivate column witness).operations region)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  simp only [loadPrivate, operations_assignRegion]
+  apply Operations.LookupSelectorsAnchoredBy.region_cons
+  · apply RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
+    keygen_registration
+  · exact Operations.LookupSelectorsAnchoredBy.nil anchor
+
+private theorem constrainInstance_lookupSelectorsAnchoredBy
+    (cell : AssignedCell Fp) (column : Column .instance) (row : ℕ)
+    (region : RegionIndex) (anchor : ℕ → FloorPlanner.RegionColumn) :
+    ((constrainInstance cell column row).operations region)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  simp only [operations_constrainInstance]
+  exact Operations.LookupSelectorsAnchoredBy.constrainInstance_cons
+    (Operations.LookupSelectorsAnchoredBy.nil anchor)
+
 /-! ## The extracted data -/
 
 /-- Everything the Action statement speaks about, read off a satisfying assignment:
@@ -841,6 +861,39 @@ private theorem synthWitness_lookupSelectorAssignmentsAgree
     | simp [RegionOperations.LookupSelectorAssignmentsAgree,
         RegionOperation.LookupSelectorAssignmentsAgreeWith]
 
+private theorem synthWitness_lookupSelectorsAnchoredBy
+    (G : Generators) (counts : ConfigureCounts) (i : RegionIndex)
+    (anchor : ℕ → FloorPlanner.RegionColumn) :
+    let cfg := (configure G).output counts
+    ((synthWitness G hintWitnesses cfg).operations i)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  have hpoint :=
+    (eccFullConfigureCertificate G counts).witnessPointFormal.configured
+  have hpointNonId :=
+    (eccFullConfigureCertificate G counts).witnessPointNonIdFormal.configured
+  unfold synthWitness
+  simp only [Circuit.operations_bind, Circuit.operations_pure, List.append_nil]
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact Sinsemilla.load_lookupSelectorsAnchoredBy G _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact loadPrivate_lookupSelectorsAnchoredBy _ _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact loadPrivate_lookupSelectorsAnchoredBy _ _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact Ecc.WitnessPoint.pointFormal.call_lookupSelectorsAnchoredBy
+      _ hpoint _ _ anchor (by trivial)
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact Ecc.WitnessPoint.pointNonIdFormal.call_lookupSelectorsAnchoredBy
+      _ hpointNonId _ _ anchor (by trivial)
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact Ecc.WitnessPoint.pointNonIdFormal.call_lookupSelectorsAnchoredBy
+      _ hpointNonId _ _ anchor (by trivial)
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact loadPrivate_lookupSelectorsAnchoredBy _ _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact loadPrivate_lookupSelectorsAnchoredBy _ _ _ anchor
+  · exact loadPrivate_lookupSelectorsAnchoredBy _ _ _ anchor
+
 private theorem synthChecks_keygenRegistered (G : Generators) (B : Bases)
     (counts : ConfigureCounts) (i : RegionIndex) :
     let cfg := (configure G).output counts
@@ -1221,6 +1274,99 @@ private theorem synthChecks_lookupSelectorAssignmentsAgree
     | simp [RegionOperations.LookupSelectorAssignmentsAgree,
         RegionOperation.LookupSelectorAssignmentsAgreeWith]
 
+private theorem synthChecks_lookupSelectorsAnchoredBy
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (cfg : Config) (hcfg : cfg = (configure G).output counts)
+    (wc : WitnessCells) (i : RegionIndex)
+    (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchor : SelectorAnchorRequirementsSatisfied
+      (LookupRangeCheck.lookupSelectorAnchorRequirements cfg.lookupConfig) anchor) :
+    ((synthChecks G B hintWitnesses cfg wc).operations i)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  have hmerkle1 := synthChecksMerkle1Configured G B counts cfg hcfg
+  have hmerkle2 := synthChecksMerkle2Configured G B counts cfg hcfg
+  have hvalueCommit := synthChecksValueCommitConfigured G B counts cfg hcfg
+  have hderiveNullifier :=
+    synthChecksDeriveNullifierConfigured G B counts cfg hcfg
+  have hspendAuthority :=
+    synthChecksSpendAuthorityConfigured G B counts cfg hcfg
+  have hcommitIvk := synthChecksCommitIvkConfigured G B counts cfg hcfg
+  have haddressIntegrity :=
+    synthChecksAddressIntegrityConfigured G counts cfg hcfg
+  have hbaseLookup : cfg.eccConfig.mulFixedBaseField.lookupConfig =
+      cfg.lookupConfig := by
+    subst cfg
+    exact configure_output_mulFixedBaseField_lookupConfig G counts
+  have hmulLookup : cfg.eccConfig.mul.overflowConfig.lookupConfig =
+      cfg.lookupConfig := by
+    subst cfg
+    exact configure_output_mul_overflow_lookupConfig G counts
+  rw [synthChecks_eq]
+  unfold synthChecksProgram loadPrivate
+  simp only [Circuit.operations_bind, Circuit.operations_pure, List.append_nil]
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+      B.merkleQ_onCurve 0 16 (by norm_num)
+      hintWitnesses.merkleSib hintWitnesses.merkleSwap)
+        |>.call_lookupSelectorsAnchoredBy
+          (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig)
+          hmerkle1 _ _ anchor hanchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+      B.merkleQ_onCurve 16 16 (by norm_num)
+      (fun j => hintWitnesses.merkleSib (16 + j))
+      (fun j => hintWitnesses.merkleSwap (16 + j)))
+        |>.call_lookupSelectorsAnchoredBy
+          (cfg.merkle2.condSwap, cfg.merkle2, cfg.lookupConfig)
+          hmerkle2 _ _ anchor hanchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact loadPrivate_lookupSelectorsAnchoredBy
+      (cfg.advices 9) _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact loadPrivate_lookupSelectorsAnchoredBy
+      (cfg.advices 9) _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact (ValueCommit.circuit B.valueCommitV B.valueCommitR)
+      |>.call_lookupSelectorsAnchoredBy
+        (cfg.eccConfig.mulFixedShort, cfg.eccConfig.mulFixedFull,
+          cfg.eccConfig.add) hvalueCommit _ _ anchor (by trivial)
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact constrainInstance_lookupSelectorsAnchoredBy _ _ _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact constrainInstance_lookupSelectorsAnchoredBy _ _ _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact (DeriveNullifier.circuit B.nullifierK)
+      |>.call_lookupSelectorsAnchoredBy
+        (cfg.poseidonConfig, cfg.addChipConfig,
+          cfg.eccConfig.mulFixedBaseField, cfg.eccConfig.add)
+        hderiveNullifier _ _ anchor (by
+          simpa only [DeriveNullifier.circuit_lookupSelectorAnchorRequirements,
+            hbaseLookup] using hanchor)
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact constrainInstance_lookupSelectorsAnchoredBy _ _ _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact (SpendAuthority.circuit B.spendAuthG)
+      |>.call_lookupSelectorsAnchoredBy
+        (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add)
+        hspendAuthority _ _ anchor (by trivial)
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact constrainInstance_lookupSelectorsAnchoredBy _ _ _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact constrainInstance_lookupSelectorsAnchoredBy _ _ _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact (CommitIvk.Main.circuit G B.commitIvkR B.ivkQ B.ivkQ_onCurve)
+      |>.call_lookupSelectorsAnchoredBy
+        { gate := cfg.commitIvkConfig, hashConfig := cfg.sinsemilla1,
+          lookupConfig := cfg.lookupConfig,
+          mulConfig := cfg.eccConfig.mulFixedFull,
+          addConfig := cfg.eccConfig.add }
+        hcommitIvk _ _ anchor hanchor
+  · exact AddressIntegrity.circuit.call_lookupSelectorsAnchoredBy
+      (cfg.eccConfig.mul, cfg.eccConfig.witnessPoint)
+      haddressIntegrity _ _ anchor (by
+        simpa only [AddressIntegrity.circuit_lookupSelectorAnchorRequirements,
+          hmulLookup] using hanchor)
+
 private theorem synthChecks_loadedTableColumns_eq_nil
     (G : Generators) (B : Bases) (cfg : Config)
     (wc : WitnessCells) (i : RegionIndex) :
@@ -1478,6 +1624,62 @@ private theorem synthNotes_lookupSelectorAssignmentsAgree
         hpoint
     | simp [RegionOperations.LookupSelectorAssignmentsAgree,
         RegionOperation.LookupSelectorAssignmentsAgreeWith]
+
+private theorem synthNotes_lookupSelectorsAnchoredBy
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (wc : WitnessCells) (cc : CheckCells) (i : RegionIndex)
+    (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchor : SelectorAnchorRequirementsSatisfied
+      (LookupRangeCheck.lookupSelectorAnchorRequirements
+        ((configure G).output counts).lookupConfig) anchor) :
+    let cfg := (configure G).output counts
+    ((synthNotes G B hintWitnesses cfg wc cc).operations i)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  have hold := (noteCommitOldCertificate G B counts).configured
+  have hnew := (noteCommitNewCertificate G B counts).configured
+  have hpoint :=
+    (eccConfigureCertificate G counts).witnessPointNonIdFormal.configured
+  let cfg := (configure G).output counts
+  simp only
+  rw [synthNotes_eq]
+  unfold synthNotesProgram
+  simp only [Circuit.operations_bind, Circuit.operations_pure, List.append_nil]
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact (NoteCommit.Main.circuit G B.noteCommitR B.noteQ B.noteQ_onCurve)
+      |>.call_lookupSelectorsAnchoredBy
+        { gates := cfg.noteCommitOld, hashConfig := cfg.sinsemilla1,
+          lookupConfig := cfg.lookupConfig,
+          mulConfig := cfg.eccConfig.mulFixedFull,
+          addConfig := cfg.eccConfig.add }
+        hold _ _ anchor hanchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · apply Operations.LookupSelectorsAnchoredBy.region_cons
+    · apply RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
+      keygen_registration
+    · exact Operations.LookupSelectorsAnchoredBy.nil anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact Ecc.WitnessPoint.pointNonIdFormal.call_lookupSelectorsAnchoredBy
+      cfg.eccConfig.witnessPoint hpoint _ _ anchor (by trivial)
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact Ecc.WitnessPoint.pointNonIdFormal.call_lookupSelectorsAnchoredBy
+      cfg.eccConfig.witnessPoint hpoint _ _ anchor (by trivial)
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact loadPrivate_lookupSelectorsAnchoredBy
+      (cfg.advices 0) _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact (NoteCommit.Main.circuit G B.noteCommitR B.noteQ B.noteQ_onCurve)
+      |>.call_lookupSelectorsAnchoredBy
+        { gates := cfg.noteCommitNew, hashConfig := cfg.sinsemilla2,
+          lookupConfig := cfg.lookupConfig,
+          mulConfig := cfg.eccConfig.mulFixedFull,
+          addConfig := cfg.eccConfig.add }
+        hnew _ _ anchor hanchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact constrainInstance_lookupSelectorsAnchoredBy _ _ _ _ anchor
+  · apply Operations.LookupSelectorsAnchoredBy.region_cons
+    · apply RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
+      keygen_registration
+    · exact Operations.LookupSelectorsAnchoredBy.nil anchor
 
 private theorem synthNotes_loadedTableColumns_eq_nil
     (G : Generators) (B : Bases) (cfg : Config)
@@ -1792,6 +1994,18 @@ instance elaborated (G : Generators) (B : Bases) :
     exact ⟨synthWitness_lookupSelectorAssignmentsAgree G counts i,
       synthChecks_lookupSelectorAssignmentsAgree G B counts _ rfl _ _,
       synthNotes_lookupSelectorAssignmentsAgree G B counts _ _ _⟩
+  lookupSelectorAnchorRequirements cfg _ _ :=
+    LookupRangeCheck.lookupSelectorAnchorRequirements cfg.lookupConfig
+  lookupSelectorsAnchoredBy_of_registered := by
+    intro configInput counts hconfig input i anchor hanchor _
+    simp only [main, CircuitPreIronwood.synthesize, synthesizeBase,
+      Circuit.operations_bind, Circuit.operations_pure, keygen_norm,
+      keygen_spine]
+    exact ⟨synthWitness_lookupSelectorsAnchoredBy G counts i anchor,
+      synthChecks_lookupSelectorsAnchoredBy
+        G B counts _ rfl _ _ anchor hanchor,
+      synthNotes_lookupSelectorsAnchoredBy
+        G B counts _ _ _ anchor hanchor⟩
   fixedWritesLawful := by
     intro configInput counts hconfig input i
     exact main_fixedWritesLawful G B counts i
@@ -3273,6 +3487,25 @@ private theorem mainPost_lookupSelectorAssignmentsAgree
       () i
   · exact synthCrossAddressChecks_lookupSelectorAssignmentsAgree config _ _
 
+private theorem mainPost_lookupSelectorsAnchoredBy
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (i : RegionIndex) (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchor : SelectorAnchorRequirementsSatisfied
+      (LookupRangeCheck.lookupSelectorAnchorRequirements
+        ((configure G).output counts).lookupConfig) anchor) :
+    let config := (configure G).output counts
+    ((mainPost G B config ()).operations i)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  let config := (configure G).output counts
+  dsimp only [mainPost]
+  simp only [Circuit.operations_bind, Circuit.operations_pure, List.append_nil]
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact (baseCircuit G B).call_lookupSelectorsAnchoredBy config
+      (FormalCircuit.Configured.ofOutput (baseCircuit G B) () counts ())
+      () i anchor hanchor
+  · exact synthCrossAddressChecks_lookupSelectorsAnchoredBy
+      config _ _ anchor
+
 instance elaboratedPost (G : Generators) (B : Bases) :
     ElaboratedCircuit Fp Unit Config unit unit
       (fun _ => configure G) (mainPost G B) where
@@ -3301,6 +3534,14 @@ instance elaboratedPost (G : Generators) (B : Bases) :
     cases input
     simpa only [operations, program] using
       mainPost_lookupSelectorAssignmentsAgree G B counts i
+  lookupSelectorAnchorRequirements cfg _ _ :=
+    LookupRangeCheck.lookupSelectorAnchorRequirements cfg.lookupConfig
+  lookupSelectorsAnchoredBy_of_registered := by
+    intro configInput counts hconfig input i anchor hanchor _
+    cases configInput
+    cases input
+    simpa only [Configure.output_pure] using
+      mainPost_lookupSelectorsAnchoredBy G B counts i anchor hanchor
   lookupActivationsWellFormed := by
     intro config input i
     cases input

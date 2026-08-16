@@ -349,6 +349,32 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
               input.z130.cell, input.k254.cell] }
       registered := by
         keygen_registration
+      lookupSelectorAnchorRequirements cfg _ _ :=
+        LookupRangeCheck.lookupSelectorAnchorRequirements cfg.lookupConfig
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro configInput counts hconfig input i anchor hanchor _
+        simp only [synthesize, circuit_norm, keygen_norm, keygen_spine,
+          Operations.LookupSelectorsAnchoredBy]
+        constructor
+        · simp
+        constructor
+        · exact (LookupRangeCheck.copyCheck K (numWords K) false)
+            |>.call_lookupSelectorsAnchoredBy
+              ((configure K configInput.1 configInput.2.1
+                configInput.2.2.1 configInput.2.2.2).output counts).lookupConfig
+              (FormalCircuit.Configured.ofOutput
+                (LookupRangeCheck.copyCheck K (numWords K) false)
+                ((configure K configInput.1 configInput.2.1
+                  configInput.2.2.1 configInput.2.2.2).output counts).lookupConfig
+                counts (by keygen_registration))
+              { element := AssignedCell.of i 0
+                  ((configure K configInput.1 configInput.2.1
+                    configInput.2.2.1 configInput.2.2.2).output counts).adv0 }
+              (i + 1) anchor (by
+                simpa only [LookupRangeCheck.lookupSelectorAnchorRequirements,
+                  SelectorAnchorRequirementsSatisfied] using hanchor)
+        · apply RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
+          simp only [gateRegion, circuit_norm, RegionOperation.IsNotLookup]
       lookupSelectorAssignmentsAgree_of_registered := by
         intro configInput counts hconfig input i
         dsimp only
@@ -502,6 +528,13 @@ theorem circuit_inputCells (K : ℕ) (hKW : K * numWords K = 130)
     (input : Var Inputs Fp) :
     configured.inputCells input =
       [input.alpha.cell, input.z0.cell, input.z130.cell, input.k254.cell] := rfl
+
+@[keygen_norm]
+theorem circuit_lookupSelectorAnchorRequirements
+    (K : ℕ) (hKW : K * numWords K = 130) (cfg : Config K)
+    (input : Var Inputs Fp) (region : RegionIndex) :
+    (circuit K hKW).elaborated.lookupSelectorAnchorRequirements cfg input region =
+      LookupRangeCheck.lookupSelectorAnchorRequirements cfg.lookupConfig := rfl
 
 end MulOverflow
 

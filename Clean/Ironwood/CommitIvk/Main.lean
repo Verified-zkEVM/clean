@@ -504,6 +504,36 @@ private theorem synthPieces_lookupSelectorAssignmentsAgree
   simp only [synthPieces, Circuit.operations_bind, Circuit.operations_pure,
     keygen_norm, keygen_spine]
 
+private theorem synthPieces_lookupSelectorsAnchoredBy
+    (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex)
+    (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchor : SelectorAnchorRequirementsSatisfied
+      (LookupRangeCheck.lookupSelectorAnchorRequirements cfg.lookupConfig) anchor) :
+    ((synthPieces cfg input.ak input.nk).operations self)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  simp only [synthPieces, Circuit.operations_bind, Circuit.operations_pure,
+    List.append_nil]
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact Sinsemilla.HashToPoint.witnessMessagePiece_lookupSelectorsAnchoredBy
+      cfg.hashConfig _ self anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact LookupRangeCheck.witnessShortCheck_lookupSelectorsAnchoredBy
+      10 4 cfg.lookupConfig _ _ anchor hanchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact LookupRangeCheck.witnessShortCheck_lookupSelectorsAnchoredBy
+      10 5 cfg.lookupConfig _ _ anchor hanchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact Sinsemilla.HashToPoint.witnessMessagePiece_lookupSelectorsAnchoredBy
+      cfg.hashConfig _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact Sinsemilla.HashToPoint.witnessMessagePiece_lookupSelectorsAnchoredBy
+      cfg.hashConfig _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact LookupRangeCheck.witnessShortCheck_lookupSelectorsAnchoredBy
+      10 9 cfg.lookupConfig _ _ anchor hanchor
+  · exact Sinsemilla.HashToPoint.witnessMessagePiece_lookupSelectorsAnchoredBy
+      cfg.hashConfig _ _ anchor
+
 private theorem synth_copyCellsAssigned
     (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
     (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex)
@@ -595,6 +625,22 @@ instance elaborated (G : Generators) (R : FixedBase) (Q : Point Fp)
       G R Q hQ configInput input self configured
   copyCellsAssigned cfg _ configured input self :=
     synth_copyCellsAssigned G R Q hQ cfg input self configured
+  lookupSelectorAnchorRequirements cfg _ _ :=
+    LookupRangeCheck.lookupSelectorAnchorRequirements cfg.lookupConfig
+  lookupSelectorsAnchoredBy_of_registered := by
+    intro cfg _ hconfig input self anchor hanchor _
+    simp only [Configure.output_pure] at hanchor
+    simp only [Configure.output_pure, synth,
+      NoteCommit.Main.currentRegion_operations, Circuit.operations_bind,
+      Circuit.operations_pure, List.append_nil, keygen_norm, keygen_spine]
+    exact ⟨synthPieces_lookupSelectorsAnchoredBy cfg input _ anchor hanchor,
+      (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil)
+        |>.call_lookupSelectorsAnchoredBy
+          (cfg.mulConfig, cfg.hashConfig, cfg.addConfig) hconfig _ _ anchor (by trivial),
+      (CommitIvk.Canonicity.circuit
+        (brWit input.ak 254 1) (brWit input.nk 254 1))
+          |>.call_lookupSelectorsAnchoredBy (cfg.gate, cfg.lookupConfig)
+            (FormalCircuit.Configured.ofPure _ _ () rfl) _ _ anchor hanchor⟩
   lookupSelectorAssignmentsAgree_of_registered := by
     intro cfg counts hconfig input self program operations _hregistered
     simp only [operations, program, Configure.output_pure, synth,

@@ -559,6 +559,26 @@ theorem FormalCircuit.foldCall_lookupSelectorAssignmentsAgree
     (FormalCircuit.foldState c toInput config init i₀ i).1
     (FormalCircuit.foldState c toInput config init i₀ i).2
 
+/-- Physical lookup-selector anchoring composes over a serial fold from the
+packaged law of each folded child. -/
+theorem FormalCircuit.foldCall_lookupSelectorsAnchoredBy
+    (m : ℕ) (configured : ∀ i : Fin m, (c i).Configured config)
+    (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchor : ∀ i : Fin m, SelectorAnchorRequirementsSatisfied
+      ((c i).elaborated.lookupSelectorAnchorRequirements config
+        (FormalCircuit.foldState c toInput config init i₀ i).1
+        (FormalCircuit.foldState c toInput config init i₀ i).2)
+      anchor) :
+    ((FormalCircuit.foldCall c toInput config init m).operations i₀)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  rw [Operations.LookupSelectorsAnchoredBy,
+    FormalCircuit.foldCall_forall]
+  intro i
+  exact (c i).call_lookupSelectorsAnchoredBy config (configured i)
+    (FormalCircuit.foldState c toInput config init i₀ i).1
+    (FormalCircuit.foldState c toInput config init i₀ i).2
+    anchor (hanchor i)
+
 /-- Register a serial fold compositionally from one configured handle per round and
 an invariant covering the equality columns of each folded input. -/
 theorem FormalCircuit.foldCall_keygenRegistered

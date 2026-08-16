@@ -195,6 +195,14 @@ instance (z xA xP yP lambda1 lambda2 : Column .advice) :
   unfold configure
   infer_instance
 
+@[keygen_norm]
+theorem configure_delta_lookups
+    (z xA xP yP lambda1 lambda2 : Column .advice)
+    (counts : ConfigureCounts) :
+    ((configure z xA xP yP lambda1 lambda2).delta counts).lookups = [] := by
+  unfold configure
+  rfl
+
 /-! ## Inputs / Output
 
 Mirrors `DoubleAndAdd.Input`/`Output`, plus the scalar cell `alpha` the bits derive from. -/

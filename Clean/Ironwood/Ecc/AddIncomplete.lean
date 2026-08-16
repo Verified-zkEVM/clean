@@ -202,6 +202,16 @@ theorem Configured.fixedColumns_eq_nil {config : Config}
   constructor
 
 @[keygen_norm]
+theorem Configured.lookups_eq_nil {config : Config}
+    (configured : add.Configured config) :
+    configured.lookups = [] := by
+  rcases configured with ⟨configInput, counts, hconfig, outputEq⟩
+  cases outputEq
+  simp only [FormalRegionCircuit.Configured.lookups,
+    FormalRegionCircuit.keygenRequirements,
+    ElaboratedRegionCircuit.keygenRequirements, add, keygen_norm]
+
+@[keygen_norm]
 theorem Configured.permutationColumns_eq {config : Config}
     (configured : add.Configured config) :
     configured.permutationColumns = permutationColumns config := by

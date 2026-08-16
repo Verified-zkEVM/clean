@@ -1634,8 +1634,8 @@ def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Poi
             (by keygen_registration) (by keygen_registration)
             (by keygen_registration) (by keygen_registration)
         · apply mswRegion_keygenRegistered
-            _ _ _ _ _ _ configuredAdd <;>
-              keygen_registration
+            _ _ _ _ _ _ configuredAdd
+          keygen_registration
       lookupActivationsWellFormed config input self := by
         simp only [synthesize, Circuit.operations_bind, operations_assignRegion,
           Operations.LookupActivationsWellFormed]

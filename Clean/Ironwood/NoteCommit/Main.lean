@@ -1384,6 +1384,26 @@ private theorem pureRegionCall_lookupSelectorAssignmentsAgree
     (FormalCircuit.Configured.ofPure lifted cfg hconfigured hliftedConfigure)
     input self
 
+private theorem pureRegionCall_lookupSelectorsAnchoredBy
+    {Config : Type} {Input Output : TypeMap}
+    [ProvableType Input] [ProvableType Output]
+    (child : FormalRegionCircuit Fp Config Config Input Output)
+    (name : String) (cfg : Config) (input : Var Input Fp) (self : RegionIndex)
+    (hconfigured : child.keygenRequirements.configLawful cfg)
+    (hconfigure : child.configure cfg = pure cfg)
+    (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchor : SelectorAnchorRequirementsSatisfied
+      (child.elaborated.lookupSelectorAnchorRequirements cfg 0 input self) anchor) :
+    (((child.toFormal name).call cfg input).operations self)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  let lifted := child.toFormal name
+  have hliftedConfigure : lifted.configure cfg = pure cfg := by
+    simpa only [lifted, FormalRegionCircuit.toFormal] using hconfigure
+  exact lifted.call_lookupSelectorsAnchoredBy cfg
+    (FormalCircuit.Configured.ofPure lifted cfg hconfigured hliftedConfigure)
+    input self anchor (by
+      simpa only [lifted, FormalRegionCircuit.toFormal] using hanchor)
+
 theorem synthDecompositions_keygenRegistered
     (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
     (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
@@ -2488,6 +2508,96 @@ private theorem synthChecks_lookupSelectorAssignmentsAgree
     (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil)
       |>.call_lookupSelectorAssignmentsAgree _ configured _ _⟩
 
+private theorem synthPieces_lookupSelectorsAnchoredBy
+    (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex)
+    (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchor : SelectorAnchorRequirementsSatisfied
+      (LookupRangeCheck.lookupSelectorAnchorRequirements cfg.lookupConfig) anchor) :
+    ((synthPieces cfg input).operations self).LookupSelectorsAnchoredBy anchor := by
+  simp only [synthPieces, Circuit.operations_bind, Circuit.operations_pure,
+    List.append_nil]
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact Sinsemilla.HashToPoint.witnessMessagePiece_lookupSelectorsAnchoredBy
+      cfg.hashConfig _ self anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact LookupRangeCheck.witnessShortCheck_lookupSelectorsAnchoredBy
+      10 4 cfg.lookupConfig _ _ anchor hanchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact LookupRangeCheck.witnessShortCheck_lookupSelectorsAnchoredBy
+      10 4 cfg.lookupConfig _ _ anchor hanchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact Sinsemilla.HashToPoint.witnessMessagePiece_lookupSelectorsAnchoredBy
+      cfg.hashConfig _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact Sinsemilla.HashToPoint.witnessMessagePiece_lookupSelectorsAnchoredBy
+      cfg.hashConfig _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact LookupRangeCheck.witnessShortCheck_lookupSelectorsAnchoredBy
+      10 8 cfg.lookupConfig _ _ anchor hanchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact Sinsemilla.HashToPoint.witnessMessagePiece_lookupSelectorsAnchoredBy
+      cfg.hashConfig _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact LookupRangeCheck.witnessShortCheck_lookupSelectorsAnchoredBy
+      10 6 cfg.lookupConfig _ _ anchor hanchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact LookupRangeCheck.witnessShortCheck_lookupSelectorsAnchoredBy
+      10 4 cfg.lookupConfig _ _ anchor hanchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact Sinsemilla.HashToPoint.witnessMessagePiece_lookupSelectorsAnchoredBy
+      cfg.hashConfig _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact Sinsemilla.HashToPoint.witnessMessagePiece_lookupSelectorsAnchoredBy
+      cfg.hashConfig _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact LookupRangeCheck.witnessShortCheck_lookupSelectorsAnchoredBy
+      10 9 cfg.lookupConfig _ _ anchor hanchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact Sinsemilla.HashToPoint.witnessMessagePiece_lookupSelectorsAnchoredBy
+      cfg.hashConfig _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact LookupRangeCheck.witnessShortCheck_lookupSelectorsAnchoredBy
+      10 5 cfg.lookupConfig _ _ anchor hanchor
+  · exact Sinsemilla.HashToPoint.witnessMessagePiece_lookupSelectorsAnchoredBy
+      cfg.hashConfig _ _ anchor
+
+private theorem synthChecks_lookupSelectorsAnchoredBy
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (iHash self : RegionIndex)
+    (configured : (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).Configured
+      (cfg.mulConfig, cfg.hashConfig, cfg.addConfig))
+    (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchor : SelectorAnchorRequirementsSatisfied
+      (LookupRangeCheck.lookupSelectorAnchorRequirements cfg.lookupConfig) anchor) :
+    ((synthChecks G R Q hQ cfg input pcs iHash).operations self)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  simp only [synthChecks, Circuit.operations_bind, Circuit.operations_pure,
+    List.append_nil]
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact (YCanonicityCheck.circuit (brWit input.gdY 0 1))
+      |>.call_lookupSelectorsAnchoredBy (cfg.gates.y, cfg.lookupConfig)
+        (FormalCircuit.Configured.ofPure _ _ () rfl) _ self anchor hanchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact (YCanonicityCheck.circuit (brWit input.pkdY 0 1))
+      |>.call_lookupSelectorsAnchoredBy (cfg.gates.y, cfg.lookupConfig)
+        (FormalCircuit.Configured.ofPure _ _ () rfl) _ _ anchor hanchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil)
+      |>.call_lookupSelectorsAnchoredBy
+        (cfg.mulConfig, cfg.hashConfig, cfg.addConfig) configured _ _ anchor (by trivial)
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact LookupRangeCheck.witnessCheck_lookupSelectorsAnchoredBy
+      10 13 false (by simp) cfg.lookupConfig _ _ anchor hanchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact LookupRangeCheck.witnessCheck_lookupSelectorsAnchoredBy
+      10 14 false (by simp) cfg.lookupConfig _ _ anchor hanchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact LookupRangeCheck.witnessCheck_lookupSelectorsAnchoredBy
+      10 14 false (by simp) cfg.lookupConfig _ _ anchor hanchor
+  · exact LookupRangeCheck.witnessCheck_lookupSelectorsAnchoredBy
+      10 13 false (by simp) cfg.lookupConfig _ _ anchor hanchor
+
 private theorem synthDecompositions_lookupActivationsWellFormed
     (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
     (ccs : CheckCells) (iHash self : RegionIndex) :
@@ -2587,6 +2697,111 @@ private theorem synthRhoPsiCanonicity_lookupSelectorAssignmentsAgree
   exact pureRegionCall_lookupSelectorAssignmentsAgree PsiCanonicity.bundle
     "NoteCommit input psi" cfg.gates.psi _ _ () (by rfl)
 
+private theorem synthDecompositions_lookupSelectorsAnchoredBy
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (ccs : CheckCells) (iHash self : RegionIndex)
+    (anchor : ℕ → FloorPlanner.RegionColumn) :
+    ((synthDecompositions cfg input pcs ccs iHash).operations self)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  simp only [synthDecompositions, Circuit.operations_bind,
+    Circuit.operations_pure, List.append_nil]
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact pureRegionCall_lookupSelectorsAnchoredBy
+      (DecomposeB.bundle (brWit input.gdX 254 1))
+      "NoteCommit MessagePiece b" cfg.gates.b
+      { b := pcs.b, b0 := pcs.b0, b2 := ccs.b2, b3 := pcs.b3 }
+      self () rfl anchor (by trivial)
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact pureRegionCall_lookupSelectorsAnchoredBy
+      (DecomposeD.bundle (brWit input.pkdX 254 1))
+      "NoteCommit MessagePiece d" cfg.gates.d
+      { d := pcs.d, d1 := ccs.d1, d2 := pcs.d2,
+        d3 := zCell cfg.hashConfig iHash 3 1 }
+      _ () rfl anchor (by trivial)
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact pureRegionCall_lookupSelectorsAnchoredBy
+      DecomposeE.bundle "NoteCommit MessagePiece e" cfg.gates.e
+      { e := pcs.e, e0 := pcs.e0, e1 := pcs.e1 }
+      _ () rfl anchor (by trivial)
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact pureRegionCall_lookupSelectorsAnchoredBy
+      (DecomposeG.bundle (brWit input.rho 254 1))
+      "NoteCommit MessagePiece g" cfg.gates.g
+      { g := pcs.g, g1 := pcs.g1,
+        g2 := zCell cfg.hashConfig iHash 6 1 }
+      _ () rfl anchor (by trivial)
+  · exact pureRegionCall_lookupSelectorsAnchoredBy
+      (DecomposeH.bundle (brWit input.psi 254 1))
+      "NoteCommit MessagePiece h" cfg.gates.h
+      { h := pcs.h, h0 := pcs.h0 } _ () rfl anchor (by trivial)
+
+private theorem synthGdPkdValueCanonicity_lookupSelectorsAnchoredBy
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (ccs : CheckCells) (gcs : GateCells) (iHash self : RegionIndex)
+    (anchor : ℕ → FloorPlanner.RegionColumn) :
+    ((synthGdPkdValueCanonicity cfg input pcs ccs gcs iHash).operations self)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  simp only [synthGdPkdValueCanonicity, Circuit.operations_bind,
+    Circuit.operations_pure, List.append_nil]
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact pureRegionCall_lookupSelectorsAnchoredBy
+      GdCanonicity.bundle "NoteCommit input g_d" cfg.gates.gd
+      { gdX := input.gdX, b0 := pcs.b0, b1 := gcs.b1, a := pcs.a,
+        aPrime := ccs.aZs.z0, z13A := zCell cfg.hashConfig iHash 0 13,
+        z13APrime := ccs.aZs.zLast }
+      self () rfl anchor (by trivial)
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact pureRegionCall_lookupSelectorsAnchoredBy
+      PkdCanonicity.bundle "NoteCommit input pk_d" cfg.gates.pkd
+      { pkdX := input.pkdX, b3 := pcs.b3, d0 := gcs.d0, c := pcs.c,
+        b3CPrime := ccs.bZs.z0, z13C := zCell cfg.hashConfig iHash 2 13,
+        z14B3CPrime := ccs.bZs.zLast }
+      _ () rfl anchor (by trivial)
+  · exact pureRegionCall_lookupSelectorsAnchoredBy
+      ValueCanonicity.bundle "NoteCommit input value" cfg.gates.value
+      { value := input.value, d2 := pcs.d2,
+        d3 := zCell cfg.hashConfig iHash 3 1, e0 := pcs.e0 }
+      _ () rfl anchor (by trivial)
+
+private theorem synthRhoPsiCanonicity_lookupSelectorsAnchoredBy
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (ccs : CheckCells) (gcs : GateCells) (iHash self : RegionIndex)
+    (anchor : ℕ → FloorPlanner.RegionColumn) :
+    ((synthRhoPsiCanonicity cfg input pcs ccs gcs iHash).operations self)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  simp only [synthRhoPsiCanonicity, Circuit.operations_bind,
+    Circuit.operations_pure, List.append_nil]
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact pureRegionCall_lookupSelectorsAnchoredBy
+      RhoCanonicity.bundle "NoteCommit input rho" cfg.gates.rho
+      { rho := input.rho, e1 := pcs.e1, g0 := gcs.g0, f := pcs.f,
+        e1FPrime := ccs.eZs.z0, z13F := zCell cfg.hashConfig iHash 5 13,
+        z14E1FPrime := ccs.eZs.zLast }
+      self () rfl anchor (by trivial)
+  · exact pureRegionCall_lookupSelectorsAnchoredBy
+      PsiCanonicity.bundle "NoteCommit input psi" cfg.gates.psi
+      { psi := input.psi, h0 := pcs.h0, g1 := pcs.g1, h1 := gcs.h1,
+        g2 := zCell cfg.hashConfig iHash 6 1, g1G2Prime := ccs.gZs.z0,
+        z13G := zCell cfg.hashConfig iHash 6 13,
+        z13G1G2Prime := ccs.gZs.zLast }
+      _ () rfl anchor (by trivial)
+
+private theorem synthGates_lookupSelectorsAnchoredBy
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (ccs : CheckCells) (iHash self : RegionIndex)
+    (anchor : ℕ → FloorPlanner.RegionColumn) :
+    ((synthGates cfg input pcs ccs iHash).operations self)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  simp only [synthGates, synthCanonicity, Circuit.operations_bind]
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact synthDecompositions_lookupSelectorsAnchoredBy
+      cfg input pcs ccs iHash self anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact synthGdPkdValueCanonicity_lookupSelectorsAnchoredBy
+      cfg input pcs ccs _ iHash _ anchor
+  · exact synthRhoPsiCanonicity_lookupSelectorsAnchoredBy
+      cfg input pcs ccs _ iHash _ anchor
+
 private theorem synthGates_lookupSelectorAssignmentsAgree
     (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
     (ccs : CheckCells) (iHash self : RegionIndex) :
@@ -2671,6 +2886,18 @@ instance elaborated (G : Generators) (R : FixedBase)
       G R Q hQ configInput input self configured
   copyCellsAssigned cfg _ configured input self :=
     synth_copyCellsAssigned G R Q hQ cfg input self configured
+  lookupSelectorAnchorRequirements cfg _ _ :=
+    LookupRangeCheck.lookupSelectorAnchorRequirements cfg.lookupConfig
+  lookupSelectorsAnchoredBy_of_registered := by
+    intro cfg _ hconfig input self anchor hanchor _
+    simp only [Configure.output_pure] at hanchor
+    simp only [Configure.output_pure, synth, currentRegion_operations,
+      Circuit.operations_bind, Circuit.operations_pure, List.append_nil,
+      keygen_norm, keygen_spine]
+    exact ⟨synthPieces_lookupSelectorsAnchoredBy cfg input _ anchor hanchor,
+      synthChecks_lookupSelectorsAnchoredBy
+        G R Q hQ cfg input _ _ _ hconfig anchor hanchor,
+      synthGates_lookupSelectorsAnchoredBy cfg input _ _ _ _ anchor⟩
   lookupSelectorAssignmentsAgree_of_registered := by
     intro cfg counts hconfig input self program operations _hregistered
     simp only [operations, program, Configure.output_pure, synth,

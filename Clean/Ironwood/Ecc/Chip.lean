@@ -66,6 +66,24 @@ def configure (advices : Fin 10 → Column .advice)
   return { witnessPoint, addIncomplete, add, mul, mulFixedFull, mulFixedShort,
            mulFixedBaseField }
 
+@[keygen_norm]
+theorem configure_output_mul_overflow_lookupConfig
+    (advices : Fin 10 → Column .advice)
+    (lagrangeCoeffs : Fin 8 → Column .fixed)
+    (rangeCheck : LookupRangeCheck.Config 10) (counts : ConfigureCounts) :
+    ((configure advices lagrangeCoeffs rangeCheck).output counts).mul.overflowConfig.lookupConfig =
+      rangeCheck := by
+  simp [configure, Mul.configure, MulOverflow.configure]
+
+@[keygen_norm]
+theorem configure_output_mulFixedBaseField_lookupConfig
+    (advices : Fin 10 → Column .advice)
+    (lagrangeCoeffs : Fin 8 → Column .fixed)
+    (rangeCheck : LookupRangeCheck.Config 10) (counts : ConfigureCounts) :
+    ((configure advices lagrangeCoeffs rangeCheck).output counts).mulFixedBaseField.lookupConfig =
+      rangeCheck := by
+  simp [configure, MulFixed.BaseFieldElem.configure]
+
 @[configure_selector_norm, keygen_norm] theorem configure_delta_lookups
     (advices : Fin 10 → Column .advice)
     (lagrangeCoeffs : Fin 8 → Column .fixed)

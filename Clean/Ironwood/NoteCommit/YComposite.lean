@@ -347,7 +347,29 @@ def circuit (wlsb : WitgenIR Fp 1) :
           cfg.2 (jWit wlsb input.y) (i + 2), ?_⟩
         refine ⟨LookupRangeCheck.witnessCheck_lookupActivationsWellFormed
           10 13 false synth._proof_2 cfg.2 _ (i + 3), ?_⟩
-        exact (gateChild wlsb input).call_lookupActivationsWellFormed _ _ _ }
+        exact (gateChild wlsb input).call_lookupActivationsWellFormed _ _ _
+      lookupSelectorAnchorRequirements cfg _ _ :=
+        LookupRangeCheck.lookupSelectorAnchorRequirements cfg.2
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro cfg counts hconfig input i anchor hanchor _
+        simp only [synth, Circuit.operations_bind]
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact LookupRangeCheck.witnessShortCheck_lookupSelectorsAnchoredBy
+            10 9 cfg.2 (k0Wit input.y) i anchor hanchor
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact LookupRangeCheck.witnessShortCheck_lookupSelectorsAnchoredBy
+            10 4 cfg.2 (k2Wit input.y) (i + 1) anchor hanchor
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact LookupRangeCheck.witnessCheckDecomposed_lookupSelectorsAnchoredBy
+            cfg.2 (jWit wlsb input.y) (i + 2) anchor hanchor
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact LookupRangeCheck.witnessCheck_lookupSelectorsAnchoredBy
+            10 13 false synth._proof_2 cfg.2 _ (i + 3) anchor hanchor
+        · exact (gateChild wlsb input).call_lookupSelectorsAnchoredBy
+            cfg.1
+            (FormalCircuit.Configured.ofOutput
+              (gateChild wlsb input) cfg.1 counts (by keygen_registration))
+            _ _ anchor (by trivial) }
 
   EnvAssumptions := fun (_, lcfg) env =>
     LookupRangeCheck.TableLoaded 10 lcfg env.env ∧

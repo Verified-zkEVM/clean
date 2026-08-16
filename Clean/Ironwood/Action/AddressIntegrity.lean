@@ -197,6 +197,26 @@ def circuit : FormalCircuit Fp
         rw [FormalCircuit.nextRegionIndex_call', Ecc.Mul.mul_call_regionCount]
         exact Ecc.WitnessPoint.pointNonIdFormal.call_lookupSelectorAssignmentsAgree
           cfg.2 hconfig.2 input.pkDOld (self + 4)
+      lookupSelectorAnchorRequirements cfg _ _ :=
+        LookupRangeCheck.lookupSelectorAnchorRequirements
+          cfg.1.overflowConfig.lookupConfig
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro cfg _ hconfig input self anchor hanchor _
+        simp only [Configure.output_pure, Circuit.operations_bind,
+          operations_assignRegion, Circuit.operations_pure, List.append_nil]
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact Ecc.Mul.mul.call_lookupSelectorsAnchoredBy
+            cfg.1 hconfig.1 { alpha := input.ivk, base := input.gDOld }
+              self anchor hanchor
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact Ecc.WitnessPoint.pointNonIdFormal.call_lookupSelectorsAnchoredBy
+            cfg.2 hconfig.2 input.pkDOld _ anchor (by trivial)
+        · apply Operations.LookupSelectorsAnchoredBy.region_cons
+          · apply RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
+            simp only [RegionOperation.IsNotLookup, RegionCircuit.operations_bind,
+              operations_constrainEqual,
+              List.forall_append, List.forall_cons, List.forall_nil, and_self]
+          · exact Operations.LookupSelectorsAnchoredBy.nil anchor
       copyCellsAssigned := by
         intro cfg _ hconfig input self
         simpa only [keygen_norm] using
@@ -319,6 +339,14 @@ theorem circuit_call_output_cells_assigned
     Operations.assignedCellsFrom_append, circuit_norm, List.mem_append,
     Nat.add_assoc, Nat.reduceAdd] at hpoint ⊢
   exact ⟨Or.inr (Or.inl hpoint.1), Or.inr (Or.inl hpoint.2)⟩
+
+@[keygen_norm]
+theorem circuit_lookupSelectorAnchorRequirements
+    (config : Ecc.Mul.Config × Ecc.WitnessPoint.Config)
+    (input : Var Input Fp) (region : RegionIndex) :
+    circuit.elaborated.lookupSelectorAnchorRequirements config input region =
+      LookupRangeCheck.lookupSelectorAnchorRequirements
+        config.1.overflowConfig.lookupConfig := rfl
 
 @[synthesis_summary_norm]
 theorem circuit_synthesisSummary_eq

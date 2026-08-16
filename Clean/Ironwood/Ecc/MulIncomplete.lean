@@ -477,6 +477,12 @@ def double_and_add (n : ℕ) (w : ℕ) :
         intro _ _ _ _
         simp only [circuit_norm, keygen_output_norm]
       registered := by keygen_registration
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro _ _ _ _ _ _ anchor _ hregistered
+        rw [configure_delta_lookups] at hregistered
+        simp only [List.nil_append, List.append_nil] at hregistered
+        exact RegionOperations.LookupSelectorsAnchoredBy.of_registered_noLookups
+          hregistered anchor
       copyCellsAssigned := by keygen_registration }
 
   synthesize cfg offset (input : Var Inputs Fp) := do

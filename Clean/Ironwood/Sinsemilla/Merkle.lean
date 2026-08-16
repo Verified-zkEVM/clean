@@ -1576,6 +1576,35 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
               LookupRangeCheck.shortRangeCheck_configured_permutationColumns_eq,
               KeygenRequirements.inputPermutationColumns]
           · trivial
+      lookupSelectorAnchorRequirements cfg _ _ :=
+        LookupRangeCheck.lookupSelectorAnchorRequirements cfg.2
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro cfg _ hconfig input i anchor hanchor _
+        simp only [HashLayer.synthesize, Circuit.operations_bind,
+          Circuit.operations_pure, List.append_nil, circuit_norm]
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact HashToPoint.witnessMessagePiece_lookupSelectorsAnchoredBy
+            cfg.1.sinsemilla _ i anchor
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact LookupRangeCheck.witnessShortCheck_lookupSelectorsAnchoredBy
+            10 5 cfg.2 _ (i + 1) anchor hanchor
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact LookupRangeCheck.witnessShortCheck_lookupSelectorsAnchoredBy
+            10 5 cfg.2 _ (i + 2) anchor hanchor
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact HashToPoint.witnessMessagePiece_lookupSelectorsAnchoredBy
+            cfg.1.sinsemilla _ (i + 3) anchor
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact HashToPoint.witnessMessagePiece_lookupSelectorsAnchoredBy
+            cfg.1.sinsemilla _ (i + 4) anchor
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ (by decide))
+            |>.call_lookupSelectorsAnchoredBy cfg.1.sinsemilla hconfig.2.1 _
+              (i + 5) anchor (by trivial)
+        · apply Operations.LookupSelectorsAnchoredBy.region_cons
+          · exact (Gate.circuit (l : Fp)).call_lookupSelectorsAnchoredBy
+              cfg.1.gate hconfig.2.2 0 _ _ anchor (by trivial)
+          · exact Operations.LookupSelectorsAnchoredBy.nil anchor
       lookupSelectorAssignmentsAgree_of_registered := by
         intro configInput counts hconfig input i program operations _hregistered
         simp only [operations, program, Configure.output_pure,
@@ -2268,6 +2297,16 @@ theorem HashLayer.circuit_synthesisSummary_eq
     (HashLayer.circuit G Q hQ l hl).elaborated.synthesisSummary
       cfg input region = HashLayer.synthesisSummary cfg.1 cfg.2 := rfl
 
+@[keygen_norm]
+theorem HashLayer.circuit_lookupSelectorAnchorRequirements
+    (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
+    (l : ℕ) (hl : l < 2 ^ 10)
+    (cfg : Config × LookupRangeCheck.Config 10)
+    (input : Var HashLayer.Input Fp) (region : RegionIndex) :
+    (HashLayer.circuit G Q hQ l hl).elaborated.lookupSelectorAnchorRequirements
+      cfg input region =
+        LookupRangeCheck.lookupSelectorAnchorRequirements cfg.2 := rfl
+
 /-! ### Merkle path (`MerkleStep` / `MerkleRoot`, lifted verbatim) -/
 
 def depth : ℕ := 32
@@ -2958,6 +2997,19 @@ def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
         · apply (HashLayer.circuit G Q hQ l hl).call_keygenRegistered
             (cfg.2.1, cfg.2.2) hconfig.2 _ (self + 1) <;>
               keygen_registration
+      lookupSelectorAnchorRequirements cfg _ _ :=
+        LookupRangeCheck.lookupSelectorAnchorRequirements cfg.2.2
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro cfg _ hconfig input self anchor hanchor _
+        simp only [Circuit.operations_bind, operations_assignRegion, circuit_norm]
+        apply Operations.LookupSelectorsAnchoredBy.region_cons
+        · exact (CondSwap.swap wsib wswap).call_lookupSelectorsAnchoredBy
+            cfg.1 hconfig.1 0 { a := input.node } self anchor (by trivial)
+        · exact (HashLayer.circuit G Q hQ l hl)
+            |>.call_lookupSelectorsAnchoredBy (cfg.2.1, cfg.2.2) hconfig.2 _
+              (self + 1) anchor (by
+                simpa only [HashLayer.circuit_lookupSelectorAnchorRequirements]
+                  using hanchor)
       lookupSelectorAssignmentsAgree_of_registered := by
         intro cfg counts hconfig input self program operations _hregistered
         simp only [operations, program, Configure.output_pure,
@@ -3200,6 +3252,17 @@ derive_contract_bridges Layer.circuit (G : Generators) (Q : Point Fp)
   (hQ : Q.OnCurve) (l : ℕ) (hl : l < 2 ^ 10)
   (wsib : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool) :=
     Layer.circuit G Q hQ l hl wsib wswap
+
+@[keygen_norm]
+theorem Layer.circuit_lookupSelectorAnchorRequirements
+    (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve)
+    (l : ℕ) (hl : l < 2 ^ 10) (wsib : WitgenIR Fp 1)
+    (wswap : Placed ProverEnvironment Fp → Bool)
+    (cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10)
+    (input : Var Layer.Input Fp) (region : RegionIndex) :
+    (Layer.circuit G Q hQ l hl wsib wswap).elaborated.lookupSelectorAnchorRequirements
+        cfg input region =
+        LookupRangeCheck.lookupSelectorAnchorRequirements cfg.2.2 := rfl
 
 /-- A complete layer returns the x-coordinate cell assigned by its hash child. -/
 theorem Layer.circuit_call_output_cell_assigned
@@ -3862,6 +3925,20 @@ def circuit :
           (c := layerAt G Q hQ l₀ wsib wswap) (toInput := toInput)
           (config := cfg) (init := input) (i₀ := region) d
           (fun i => layerAtConfigured G Q hQ l₀ wsib wswap hconfig i)
+      lookupSelectorAnchorRequirements cfg _ _ :=
+        LookupRangeCheck.lookupSelectorAnchorRequirements cfg.2.2
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro cfg _ hconfig input region anchor hanchor _
+        simp only [synthesize, Circuit.operations_bind,
+          Circuit.operations_pure, List.append_nil]
+        apply FormalCircuit.foldCall_lookupSelectorsAnchoredBy
+          (c := layerAt G Q hQ l₀ wsib wswap) (toInput := toInput)
+          (config := cfg) (init := input) (i₀ := region) d
+          (fun i => layerAtConfigured G Q hQ l₀ wsib wswap hconfig i)
+          anchor
+        intro i
+        simpa only [layerAt,
+          Layer.circuit_lookupSelectorAnchorRequirements] using hanchor
       fixedWritesLawful := by
         intro cfg _ hconfig input region
         apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree

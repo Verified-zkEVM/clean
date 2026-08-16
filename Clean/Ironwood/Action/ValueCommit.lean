@@ -231,6 +231,20 @@ def circuit (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
           Ecc.MulFixed.FullWidth.circuit_regionCount,
           Nat.add_assoc,
           keygen_norm, keygen_spine]
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro cfg _ hconfig input self anchor _ _
+        simp only [Circuit.operations_bind, Circuit.operations_pure,
+          List.append_nil, circuit_norm]
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact (Ecc.MulFixed.Short.circuit V)
+            |>.call_lookupSelectorsAnchoredBy cfg.1 hconfig.1 _ self
+              anchor (by trivial)
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact (Ecc.MulFixed.FullWidth.circuit R)
+            |>.call_lookupSelectorsAnchoredBy cfg.2.1 hconfig.2.1 input.rcv
+              (self + 2) anchor (by trivial)
+        · exact Ecc.Add.addFormal.call_lookupSelectorsAnchoredBy
+            cfg.2.2 hconfig.2.2 _ (self + 4) anchor (by trivial)
       copyCellsAssigned := by
         intro cfg _ hconfig input self
         simpa only [keygen_norm, keygen_spine, circuit_norm] using

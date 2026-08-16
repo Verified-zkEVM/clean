@@ -398,6 +398,57 @@ def roundSynthesize (w iter : ℕ) (cfg : Config) (offset : ℕ)
   let zOut ← cellAt cfg.zComplete (offset + 2)
   return { acc := acc', z := zOut }
 
+theorem roundSynthesize_lookupSelectorsAnchoredBy
+    (w iter : ℕ) (cfg : Config) (configured : Add.add.Configured cfg.addConfig)
+    (offset : ℕ) (input : Var RoundInputs Fp) (region : RegionIndex)
+    (anchor : ℕ → FloorPlanner.RegionColumn) :
+    ((roundSynthesize w iter cfg offset input).operations region)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  simp only [roundSynthesize, RegionCircuit.operations_bind,
+    RegionCircuit.operations_pure, List.append_nil]
+  repeat' apply RegionOperations.LookupSelectorsAnchoredBy.append
+  all_goals first
+    | exact Add.add.call_lookupSelectorsAnchoredBy cfg.addConfig
+        configured offset _ region anchor (by trivial)
+    | exact Add.add.call_lookupSelectorsAnchoredBy cfg.addConfig
+        configured (offset + 1) _ region anchor (by trivial)
+    | (apply RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
+       simp only [circuit_norm, RegionOperation.IsNotLookup])
+
+theorem roundSynthesize_copyCellsAssigned
+    (w iter : ℕ) (cfg : Config) (configured : Add.add.Configured cfg.addConfig)
+    (offset : ℕ) (input : Var RoundInputs Fp) (region : RegionIndex) :
+    ((roundSynthesize w iter cfg offset input).operations region)
+      |>.CopyCellsAssigned region
+        [input.base.x.cell, input.base.y.cell,
+          input.acc.x.cell, input.acc.y.cell] := by
+  simp only [roundSynthesize, RegionCircuit.operations_bind,
+    RegionCircuit.operations_pure, RegionOperations.CopyCellsAssigned,
+    RegionOperations.copyCellsAssignedFrom_append_iff]
+  repeat' apply And.intro
+  all_goals first
+    | (apply RegionOperations.copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
+       simp only [circuit_norm, RegionOperation.copiedCells, List.Forall] <;> done)
+    | keygen_registration
+  all_goals
+    apply FormalRegionCircuit.callPacked_copyCellsAssignedFrom (self := Add.add)
+      (hconfigured := configured)
+  all_goals intro cell hcell
+  all_goals simp only [Add.add_inputCells, List.mem_cons,
+    List.not_mem_nil, or_false] at hcell
+  · have hOutputCellsAssigned := Add.add_output_cells_assigned cfg.addConfig offset
+      { p := { x := input.base.x, y := AssignedCell.of region offset cfg.addConfig.yP },
+        q := input.acc } region
+      [Cell.of region offset cfg.addConfig.yP,
+        Cell.of region (offset + 1) cfg.zComplete,
+        Cell.of region (offset + 2) cfg.zComplete,
+        input.base.x.cell, input.base.y.cell, input.acc.x.cell, input.acc.y.cell]
+    rcases hcell with rfl | rfl | rfl | rfl
+    · exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ (by simp)
+    · exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ (by simp)
+    · simpa only [RegionCircuit.operations] using hOutputCellsAssigned.1
+    · simpa only [RegionCircuit.operations] using hOutputCellsAssigned.2
+
 def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs RoundOutput where
   configure := pure
 
@@ -437,33 +488,14 @@ def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs Roun
         · simp only [roundSynthesisSummary, roundColumns, roundSynthesize,
             Add.synthesisSummary, circuit_norm, synthesis_summary_norm]
       registered := by keygen_registration [roundSynthesize]
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro configInput counts configured offset input region anchor _ _
+        exact roundSynthesize_lookupSelectorsAnchoredBy
+          w iter configInput configured offset input region anchor
       copyCellsAssigned := by
         intro configInput counts hconfig offset input region
-        simp only [roundSynthesize, RegionCircuit.operations_bind,
-          RegionCircuit.operations_pure, RegionOperations.CopyCellsAssigned,
-          RegionOperations.copyCellsAssignedFrom_append_iff]
-        repeat' apply And.intro
-        all_goals first
-          | (apply RegionOperations.copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
-             simp only [circuit_norm, RegionOperation.copiedCells, List.Forall] <;> done)
-          | keygen_registration
-        all_goals
-          apply FormalRegionCircuit.callPacked_copyCellsAssignedFrom (self := Add.add)
-            (hconfigured := hconfig)
-        all_goals intro cell hcell
-        all_goals simp only [Add.add_inputCells, List.mem_cons, List.not_mem_nil, or_false] at hcell
-        · have hOutputCellsAssigned := Add.add_output_cells_assigned configInput.addConfig offset
-            { p := { x := input.base.x, y := AssignedCell.of region offset configInput.addConfig.yP },
-              q := input.acc } region
-            [Cell.of region offset configInput.addConfig.yP,
-              Cell.of region (offset + 1) configInput.zComplete,
-              Cell.of region (offset + 2) configInput.zComplete,
-              input.base.x.cell, input.base.y.cell, input.acc.x.cell, input.acc.y.cell]
-          rcases hcell with rfl | rfl | rfl | rfl
-          · exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ (by simp)
-          · exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ (by simp)
-          · simpa only [RegionCircuit.operations] using hOutputCellsAssigned.1
-          · simpa only [RegionCircuit.operations] using hOutputCellsAssigned.2
+        exact roundSynthesize_copyCellsAssigned
+          w iter configInput hconfig offset input region
         }
 
   -- acc, base are valid Pallas points (complete addition is exceptional-case-free).
