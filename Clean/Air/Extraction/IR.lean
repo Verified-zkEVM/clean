@@ -17,7 +17,7 @@ namespace Air.Flat.Extraction
 
 open Air.Flat.WitnessGeneration
 
-variable {F : Type} [FiniteField F] [DecidableEq F]
+variable {F : Type} [FiniteField F]
 
 inductive LocalSort where
   | field
@@ -30,7 +30,7 @@ private def localHasSort (locals : List LocalSort) (index : ℕ) (sort : LocalSo
 mutual
 
 def fexprWellFormed (locals : List LocalSort) : Witgen.FExpr F → Bool
-  | .expr _ | .const _ => true
+  | .expr _ | .const _ | .index => true
   | .localVar index => localHasSort locals index .field
   | .add left right | .mul left right =>
       fexprWellFormed locals left && fexprWellFormed locals right
@@ -41,6 +41,8 @@ def fexprWellFormed (locals : List LocalSort) : Witgen.FExpr F → Bool
         fexprWellFormed locals elseValue
   | .listGet values index =>
       fexprListWellFormed locals values && u64exprWellFormed locals index
+  | .listGetAtIndex values => fexprListWellFormed locals values
+  | .proverInputGet index => u64exprWellFormed locals index
   | .dataGet _ _ row _ | .hintGet _ _ row _ => u64exprWellFormed locals row
 
 def fexprListWellFormed (locals : List LocalSort) : List (Witgen.FExpr F) → Bool
@@ -106,17 +108,32 @@ structure WitnessBlock (F : Type) [FiniteField F] where
 namespace WitnessBlock
 
 /-- Lean semantics for the backend-facing structured witness block. -/
-def eval (block : WitnessBlock F) (environment : ProverEnvironment F) : Vector F block.outputWidth :=
+def eval (block : WitnessBlock F) (environment : ProverEnvironment F)
+    (row : ℕ := 0) (proverInput : Array F := #[]) : Vector F block.outputWidth :=
   block.output.eval {
     env := environment
-    locals := Witgen.evalSteps environment block.steps
+    locals := Witgen.evalSteps environment block.steps #[] row proverInput
+    idx := row
+    proverInput
   }
 
 end WitnessBlock
 
 /-- A backend-facing component with explicit shape and only same-row operations. -/
+structure FixedColumnsProgram (F : Type) [FiniteField F] where
+  height : ℕ
+  program : WitnessBlock F
+
+namespace FixedColumnsProgram
+
+abbrev width (fixed : FixedColumnsProgram F) : ℕ := fixed.program.outputWidth
+
+end FixedColumnsProgram
+
 structure ComponentProgram (F : Type) [FiniteField F] where
+  name : String
   inputWidth : ℕ
+  fixedColumns : Option (FixedColumnsProgram F)
   width : ℕ
   witnesses : List (WitnessBlock F)
   constraints : List (Expression F)
@@ -160,6 +177,7 @@ end ComponentProgram
 /-- Complete typed artifact consumed by source-code backends. -/
 structure Program (F : Type) [FiniteField F] where
   publicInputWidth : ℕ
+  proverInputWidth : ℕ
   components : List (ComponentProgram F)
   verifierInteractions : List (AbstractInteraction F)
   modes : List (Mode F)

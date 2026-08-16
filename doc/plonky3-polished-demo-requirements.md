@@ -1,11 +1,11 @@
 # Plonky3 Backend and FemtoCairo Demo Requirements
 
-## Status
+## Scope
 
-This document records requirements and architectural decisions for the final Clean grant
-milestone. It intentionally does not prescribe a detailed implementation plan. Open design
-questions are collected separately so that implementation choices do not silently become
-requirements.
+This document specifies the requirements and architectural decisions for the polished
+Clean/Plonky3 FemtoCairo demonstration. It does not track implementation status or development
+history; implementation status belongs in the code and tests. Open design questions are collected
+separately so that implementation choices do not silently become requirements.
 
 ## Objective
 
@@ -18,14 +18,14 @@ integration convenience must not be obtained by weakening the proved relation.
 The work should also leave behind a reusable Plonky3 backend rather than an integration whose
 architecture or data formats are specific to FemtoCairo.
 
-## Delivery milestone 1: generic ensemble witness generation
+## Generic ensemble witness generation
 
-Before changing the Plonky3 backend, Clean must gain a generic, executable way to construct an
+Clean must provide a generic, executable way to construct an
 `Air.Flat.EnsembleWitness` for an arbitrary ensemble. This facility is a Clean/AIR and witness-IR
 feature, not a Plonky3 or Fibonacci feature, and must be testable with the Lean reference evaluator
 in isolation.
 
-Ensemble witness generation is driven automatically by channel imbalance. The verifier circuit's
+Ensemble witness generation is driven automatically by channel imbalance. The verifier's
 interactions are evaluated from the public input and seed a deterministic worklist; the verifier
 does not produce a component table.
 Opposite interactions carrying the same channel message cancel. Any remaining interaction is
@@ -67,7 +67,7 @@ multiplicities. This behavior is obtained from generic modes and component decla
 a bespoke Fibonacci trace algorithm.
 
 The generation declarations and worklist operations must be structured, exportable witness IR.
-The existing `WitgenIR F m` is row-local and fixed-output-size, so the implementation may extend it
+`WitgenIR F m` is row-local and fixed-output-size, so the implementation may extend it
 or compose it with an ensemble-level IR. In either case, the exportable representation must cover
 multi-table allocation, deterministic worklist iteration, row updates, and accumulator/scan
 computations without embedding native Lean closures.
@@ -77,7 +77,7 @@ backend-independent: it produces component traces and public inputs, not Plonky3
 proofs. The generated Rust implementation must agree with the Lean reference evaluator and must
 not interpret witness JSON in the proving hot path.
 
-This milestone does not require a formal completeness proof for the ensemble witness generator.
+This work does not require a formal completeness proof for the ensemble witness generator.
 In particular, it need not prove for all valid inputs that the generated tables satisfy every
 constraint and balance every channel. Structural properties needed to construct an
 `EnsembleWitness`—component identity and ordering, row widths, shared data, and public input—must
@@ -88,11 +88,7 @@ the constraints or channel relation checked by the proof system. Lean tests must
 generated witnesses and check their constraints and channel balance even though the general
 completeness theorem is deferred.
 
-External `ProverData` semantics are outside this first milestone. The initial implementation may
-support only generators and component witness programs that do not read external data, and must
-reject unsupported data-dependent programs rather than ignore them.
-
-### Ensemble-witness milestone acceptance criteria
+### Ensemble-witness acceptance criteria
 
 1. A generic Lean API associates explicit row-generation modes with components of an arbitrary
    `Air.Flat.Ensemble`, without example-specific logic in the builder.
@@ -117,26 +113,22 @@ reject unsupported data-dependent programs rather than ignore them.
 11. The interface and trusted status are documented: the generator is not completeness-proved and
    generated witness correctness is not part of the soundness argument.
 
-## Delivery milestone 2: Plonky3 support for `FibonacciWithChannels`
+## Plonky3 support for `FibonacciWithChannels`
 
-The first backend target is the `fibonacciEnsemble` defined in
-`Clean/Examples/FibonacciVm/Circuit.lean`. It exercises multiple same-row AIR components, a
-verifier/public-input circuit, conditional multiplicities, and the static, lookup-like, and
+The reusable backend substrate must support the `fibonacciEnsemble` defined in
+`Clean/Examples/FibonacciVm/Circuit.lean`. It exercises multiple same-row AIR components,
+verifier-supplied public interactions, conditional multiplicities, and the static, lookup-like, and
 VM-state `bytes`, `add8`, and `fibonacci` channels.
 
-None of these channel guarantees depends semantically on external `ProverData`. Therefore this
-slice establishes the reusable backend substrate before addressing FemtoCairo's unresolved
-external-data semantics.
+None of these channel guarantees depends semantically on external `ProverData`. Passing the
+Fibonacci acceptance criteria therefore demonstrates the reusable channel backend, but does not
+by itself satisfy the external-data or FemtoCairo demonstration requirements.
 
-All otherwise applicable backend requirements in this document apply. In particular, this slice
-must use generated direct Rust constraints, the generated ensemble witness code from milestone 1,
+All otherwise applicable backend requirements in this document apply. In particular, the
+Fibonacci path must use generated direct Rust constraints, generated ensemble witness code,
 generic multi-component channel support, public inputs, verifier-bound trace metadata,
-documentation, and CI. It must not extend legacy `Clean/Table`, use the existing FemtoCairo
+documentation, and CI. It must not extend legacy `Clean/Table`, depend on a FemtoCairo-specific
 adapter, interpret constraint JSON in the proving hot path, or invoke Lean during Rust proving.
-
-Completing this slice deliberately defers, but does not resolve or remove, the requirements for
-sound external-data binding and the FemtoCairo demo. Those remain release blockers for the final
-grant milestone.
 
 ### Fibonacci backend acceptance criteria
 
@@ -164,14 +156,13 @@ grant milestone.
 ### Soundness correspondence is a release blocker
 
 The proof-system relation implemented by the backend must imply the relation stated and proved in
-Clean. A known semantic weakening is a blocker for the polished demo, even if honest witness
+Clean. Any semantic weakening is a blocker for the polished demo, even if honest witness
 generation happens to produce valid traces.
 
-In particular, the current FemtoCairo bridge interprets a dynamic memory table as an unordered
-relation of `(address, value)` tuples. Clean's `MemoryTable.Contains` instead requires the entry for
-address `i` to agree with row `i` of the external memory data. Tuple membership is strictly weaker:
-a permuted table can satisfy the backend lookup while violating the Clean predicate. The polished
-demo must not ship with this mismatch or an equivalent weakening.
+Indexed memory semantics must not be represented merely as an unordered relation of
+`(address, value)` tuples. When the Clean statement identifies address `i` with row `i`, the
+backend relation must establish that same indexed correspondence. Tuple membership alone is
+strictly weaker because it permits permutations that violate the Clean predicate.
 
 ### Channels are the target abstraction
 
@@ -188,7 +179,7 @@ Channel-based FemtoCairo reasoning needs a sound way to represent external `Prov
 program and memory data. It is insufficient for this data to exist only as an uncommitted host
 runtime object used by honest witness generation.
 
-The eventual design must relate the external data used in Clean propositions and channel
+The design must relate the external data used in Clean propositions and channel
 guarantees to data committed or otherwise bound by the proof. From the verifier's perspective,
 the same data must govern:
 
@@ -197,17 +188,46 @@ the same data must govern:
 - channel guarantees and requirements;
 - the final Clean-level specification.
 
-The exact representation is still an open design question.
+The intended representation is component-derived data: named component tables determine the
+corresponding `ProverData` entries by construction, rather than accepting a separate uncommitted
+object and postulating consistency.
+
+Component names are unique and serve as `ProverData` keys. Each entry contains the component's
+complete serialized circuit inputs. Runtime prover input used to construct a witness is a separate
+concept and must not become an independently trusted semantic data source. Any witness-generation
+read must agree with the data derived from the final committed rows; programs for which this
+agreement cannot be established must be rejected explicitly.
+
+### Fixed columns have indexed Lean semantics
+
+Verifier-known columns are part of the Clean component model, not constraints patched into the
+Rust backend. A fixed component declares its exact ordered fixed rows. Semantic table row `i` must
+have the declared fixed prefix at `i`, while only the remaining columns are prover-committed.
+
+The component proof receives the row index and the equality between the evaluated fixed input and
+the declared value at that index. Fixed columns therefore discharge facts such as the byte-table
+bound (`i < 256`) inside Lean soundness. Their declared height is exact: the witness generator may
+not power-of-two-pad such a component beyond that height, and the verifier rejects a proof shape
+whose main trace height differs from the fixed trace height.
+
+### The verifier is not an AIR component
+
+The verifier contributes public boundary interactions directly to the ensemble channel argument;
+it does not create a synthetic component table. Its operation language is append-only and permits
+only verifier operations by construction. It has no circuit witnesses, row constraints, legacy
+lookups, assumptions, or completeness obligation. It may carry a semantic specification and the
+soundness argument that its interactions establish that specification. The operation language may
+be extended deliberately if future verifier functionality requires it.
 
 ### Verifier-known trace shape must be bound
 
 Verifier-known static trace heights and other static shape metadata must not be accepted from the
 proof without validation.
 
-The issue identified by GitHub PR #419 is part of this work. Its regression coverage must use a
-fully valid proof generated at an unexpected height. Merely mutating `degree_bits` on an existing
-proof is not sufficient, because the current verifier already rejects that mutation when checking
-the cryptographic opening.
+Regression coverage must use a fully valid proof generated at an unexpected height and verify that
+the intended verifier statement rejects it. Merely mutating `degree_bits` on an existing proof is
+not sufficient because that tests the cryptographic opening rather than binding of statement
+metadata.
 
 ### Public inputs are required
 
@@ -217,6 +237,11 @@ and be checked by the verifier.
 
 The main demonstrated claim must not be expressed solely through constants hard-coded into a
 generated circuit artifact.
+
+For FemtoCairo, the verifier supplies the public execution-boundary interactions. The public output
+must identify the claimed final machine state, and the Clean specification must relate it to a
+bounded execution from the verifier-known initial state using the proof-bound program and memory
+data.
 
 ### The full pipeline must exercise realistic scale
 
@@ -318,9 +343,9 @@ constraint evaluator.
 - A wrong Rust witness generator may remain a completeness failure, but it must not be able to
   compensate for missing or weakened constraints.
 
-Whether the Lean-to-Rust translation itself must be formally verified is an open question. Until
-then, the generator is part of the trusted computing base and requires small, auditable lowering
-rules plus differential and negative testing.
+Whether the Lean-to-Rust translation itself must be formally verified is an open question. Unless
+it is formally verified, the generator is part of the trusted computing base and requires small,
+auditable lowering rules plus differential and negative testing.
 
 ## Performance and demonstration requirements
 
@@ -367,44 +392,22 @@ The polished milestone is acceptable only when all of the following hold:
 4. The proof binds and verifies meaningful public input/output.
 5. External program/memory data used by FemtoCairo is soundly related to proof-committed data and
    channel guarantees.
-6. The known unordered-tuple weakening of `MemoryTable.Contains` is absent; an adversarial test
-   demonstrates that the former mismatch cannot be exploited.
+6. Indexed memory semantics cannot be satisfied through unordered tuple membership; an adversarial
+   permutation test demonstrates this.
 7. A valid proof produced at a verifier-unexpected static height is rejected.
 8. A realistically sized FemtoCairo workload proves and verifies, with reproducible proving-time
    measurements.
 9. A non-FemtoCairo example uses the same backend interface.
 10. The maintained workflow is documented and runs in CI.
-11. The remaining trusted boundary and any explicitly unsupported features are documented.
-12. No known semantic weakening relative to the claimed Clean specification remains open.
+11. The trusted boundary and any explicitly unsupported features are documented.
+12. The backend relation has no semantic weakening relative to the claimed Clean specification.
 
 ## Open design questions
 
-- How should proof-committed data realize `ProverData` used in Clean specifications and channel
-  guarantees?
-- Should the new model bind an external-data object to component traces, or should components and
-  channels replace semantic uses of `ProverData` entirely?
-- What extensions to `Clean/Air` are required to express this relation and prove ensemble
-  soundness?
-- What public-input/output statement should the FemtoCairo demo prove?
 - Which trace heights are static, dynamic, or public, and what bounds apply to dynamic heights?
 - What is the minimum realistic FemtoCairo workload, and which instructions and memory behaviors
   must it exercise?
-- Which non-FemtoCairo example best demonstrates backend generality?
 - Which fields and Plonky3 configurations must the first polished version support?
-- What is the generated Rust artifact layout and build integration?
 - How much of the Lean-to-Rust lowering should be formally verified versus covered by an explicit
   trusted boundary and differential tests?
 - What exact migration threshold permits deprecating and then removing `Clean/Table`?
-
-## Known current-state issues to preserve as regression targets
-
-- Dynamic FemtoCairo memory is weakened from indexed-array semantics to unordered tuple
-  membership.
-- A valid proof at an unexpected main trace height is accepted by the current verifier.
-- Public-input support is not connected to Clean's exported expression format.
-- Constraints are interpreted from JSON in the Rust AIR implementation.
-- FemtoCairo witnesses and traces are generated by executing Lean during Rust tests.
-- The current FemtoCairo artifact and adapter hard-code program and memory table structure.
-- Current examples are too small to demonstrate realistic proving throughput.
-- Backend documentation and CI cover stale or partial commands rather than one maintained full
-  workflow.

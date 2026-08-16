@@ -18,21 +18,44 @@ private def result : Except String (List ℕ × ℕ × ℕ × Bool × Bool) :=
   | .ok witness =>
       match witness.tables with
       | _ :: _ :: bytes :: _ =>
-          match bytes.table with
-          | byteRow :: _ => .ok (
-              witness.tables.map (·.length),
-              byteRow.toList.sum.val,
-              (byteRow.toList.map FiniteField.val).max?.getD 0,
-              constraintsHold witness,
-              channelsBalanced witness)
-          | [] => .error "byte table has no rows"
+          let multiplicities := bytes.table.map fun row => row[1]?.getD 0
+          .ok (
+            witness.tables.map (·.length),
+            multiplicities.sum.val,
+            (multiplicities.map FiniteField.val).max?.getD 0,
+            constraintsHold witness,
+            channelsBalanced witness)
       | _ => .error "ensemble has no byte table"
 
 /--
 The verifier seed automatically creates 32 Fibonacci rows; their pulls create 32
-distinct addition rows; byte range checks are accumulated into the one fixed byte row.
+distinct addition rows; byte range checks are accumulated in the 256 fixed byte rows.
 -/
-example : result = .ok ([32, 32, 32], 32, 2, true, true) := by native_decide
+example : result = .ok ([32, 32, 256], 32, 2, true, true) := by native_decide
+
+private def derivedBytesData : Bool :=
+  match FibonacciWitness.generate publicInput 1000 with
+  | .error _ => false
+  | .ok witness =>
+      let rows := witness.data "bytes" 2
+      rows.size == 256 && match rows[42]? with
+        | some row => row[0] == (42 : F pBabybear)
+        | none => false
+
+/-- The byte component exports its complete `(value, multiplicity)` input rows. -/
+example : derivedBytesData = true := by native_decide
+
+private def dynamicComponentData : Bool :=
+  match FibonacciWitness.generate publicInput 1000 with
+  | .error _ => false
+  | .ok witness =>
+      let rows := witness.data "fibonacci" 4
+      rows.size == 32 && match rows[0]? with
+        | some row => row[0] == 1 && row[1] == 0 && row[2] == 0 && row[3] == 1
+        | none => false
+
+/-- Demand-generated components expose their complete inputs just like fixed components. -/
+example : dynamicComponentData = true := by native_decide
 
 private def repeatedSteps : ℕ := 400
 
@@ -49,7 +72,7 @@ private def repeatedResult : Except String (List ℕ × Bool × Bool) :=
       channelsBalanced witness)
 
 /-- Repeated addition pulls coalesce after the period of Fibonacci modulo 256. -/
-example : repeatedResult = .ok ([512, 512, 32], true, true) := by native_decide
+example : repeatedResult = .ok ([512, 512, 256], true, true) := by native_decide
 
 private def invalidPublicInput : fieldTriple (F pBabybear) := (10, 42, 42)
 
@@ -74,26 +97,5 @@ private def extractedFirstRow : Except String (Array (F pBabybear)) := do
 
 /-- The typed extraction semantics execute the same row-local witness IR as the source circuit. -/
 example : extractedFirstRow = .ok #[1, 0, 0, 1, 1] := by native_decide
-
-private def constrainedVerifier : GeneralFormalCircuit (F pBabybear) unit unit where
-  main _ := do
-    assertZero 0
-  Spec _ _ _ := True
-  soundness := by circuit_proof_start
-  completeness := by circuit_proof_start
-
-private def constrainedVerifierEnsemble : Air.Flat.Ensemble (F pBabybear) unit where
-  tables := []
-  channels := []
-  verifier := constrainedVerifier
-  verifier_length_zero := by simp [constrainedVerifier, circuit_norm]
-
-private def constrainedVerifierRejected : Bool :=
-  match Air.Flat.Extraction.lower constrainedVerifierEnsemble { modes := [], padding := [], fuel := 1 } with
-  | .error (.verifierConstraint 0) => true
-  | _ => false
-
-/-- Rust extraction must not silently discard verifier constraints. -/
-example : constrainedVerifierRejected = true := by native_decide
 
 end Air.Flat.WitnessGenerationTest

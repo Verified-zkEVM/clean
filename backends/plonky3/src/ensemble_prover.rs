@@ -2,7 +2,7 @@
 
 use alloc::vec::Vec;
 
-use p3_air::Air;
+use p3_air::{Air, BaseAir};
 #[cfg(all(debug_assertions, not(doc)))]
 use p3_batch_stark::DebugConstraintBuilderWithLookups;
 use p3_batch_stark::{
@@ -17,7 +17,10 @@ use p3_uni_stark::{SymbolicAirBuilder, SymbolicExpression, VerificationError};
 use p3_util::log2_strict_usize;
 
 use crate::witness_generation::{Interaction, WitnessField};
-use crate::{EnsembleAir, EnsembleShapeError, PcsError, StarkGenericConfig, Val};
+use crate::{
+    EnsembleShapeError, GeneratedAir, GeneratedAirSpec, GeneratedEnsemble, PcsError,
+    StarkGenericConfig, Val,
+};
 
 fn public_lookups<F: WitnessField>(interactions: Vec<Interaction<F>>) -> Vec<PublicLookup<F>> {
     interactions
@@ -80,10 +83,10 @@ where
 {
 }
 
-/// Prove a collection of generated AIR components and their padded traces.
-pub fn prove_ensemble<SC, A>(
+/// Prove a complete generated ensemble and its canonically ordered padded traces.
+pub fn prove_ensemble<SC, P>(
     config: &SC,
-    airs: &[A],
+    ensemble: &GeneratedEnsemble<Val<SC>, P>,
     traces: Vec<RowMajorMatrix<Val<SC>>>,
     public_values: &[Val<SC>],
 ) -> Result<(BatchProof<SC>, ProverData<SC>), EnsembleShapeError>
@@ -92,18 +95,18 @@ where
     SC::Challenge: BasedVectorSpace<Val<SC>>,
     SymbolicExpression<SC::Challenge>: From<SymbolicExpression<Val<SC>>>,
     Val<SC>: WitnessField,
-    A: ProverAir<SC> + EnsembleAir<Val<SC>>,
+    P: GeneratedAirSpec,
+    GeneratedAir<P>: ProverAir<SC>,
 {
-    let Some(first_air) = airs.first() else {
-        return Err(EnsembleShapeError::NoComponents);
-    };
+    let airs = ensemble.airs();
+    let trace_heights = ensemble.trace_heights();
     if airs.len() != traces.len() {
         return Err(EnsembleShapeError::TraceCount {
-            airs: airs.len(),
-            traces: traces.len(),
+            expected: airs.len(),
+            actual: traces.len(),
         });
     }
-    let expected_public_values = first_air.public_value_count();
+    let expected_public_values = P::PUBLIC_VALUES;
     if public_values.len() != expected_public_values {
         return Err(EnsembleShapeError::PublicValueCount {
             expected: expected_public_values,
@@ -124,6 +127,13 @@ where
                 height: trace.height(),
             });
         }
+        if trace.height() != trace_heights[component] {
+            return Err(EnsembleShapeError::StatementTraceHeight {
+                component,
+                expected: trace_heights[component],
+                actual: trace.height(),
+            });
+        }
     }
     let log_degrees = traces
         .iter()
@@ -142,15 +152,15 @@ where
             lookups: lookups.clone(),
         })
         .collect::<Vec<_>>();
-    let public_lookups = public_lookups(first_air.verifier_interactions(public_values));
+    let public_lookups = public_lookups(P::verifier_interactions(public_values));
     let proof = prove_batch_with_public_lookups(config, &instances, &prover_data, &public_lookups);
     Ok((proof, prover_data))
 }
 
-/// Verify a proof produced for direct generated ensemble AIR code.
-pub fn verify_ensemble<SC, A>(
+/// Verify a proof against a complete generated ensemble statement.
+pub fn verify_ensemble<SC, P>(
     config: &SC,
-    airs: &[A],
+    ensemble: &GeneratedEnsemble<Val<SC>, P>,
     proof: &BatchProof<SC>,
     public_values: &[Val<SC>],
 ) -> Result<(), EnsembleVerificationError<PcsError<SC>>>
@@ -158,18 +168,15 @@ where
     SC: StarkGenericConfig,
     SC::Challenge: BasedVectorSpace<Val<SC>>,
     SymbolicExpression<SC::Challenge>: From<SymbolicExpression<Val<SC>>>,
-    A: Air<SymbolicAirBuilder<Val<SC>, SC::Challenge>>
+    P: GeneratedAirSpec,
+    GeneratedAir<P>: Air<SymbolicAirBuilder<Val<SC>, SC::Challenge>>
         + for<'a> Air<VerifierConstraintFolderWithLookups<'a, SC>>
-        + EnsembleAir<Val<SC>>
         + Clone,
     Val<SC>: WitnessField,
 {
-    let Some(first_air) = airs.first() else {
-        return Err(EnsembleVerificationError::Shape(
-            EnsembleShapeError::NoComponents,
-        ));
-    };
-    let expected_public_values = first_air.public_value_count();
+    let airs = ensemble.airs();
+    let trace_heights = ensemble.trace_heights();
+    let expected_public_values = P::PUBLIC_VALUES;
     if public_values.len() != expected_public_values {
         return Err(EnsembleVerificationError::Shape(
             EnsembleShapeError::PublicValueCount {
@@ -178,17 +185,9 @@ where
             },
         ));
     }
-    for (component, air) in airs.iter().enumerate() {
-        let height = air.trace_height();
-        if height == 0 || !height.is_power_of_two() {
-            return Err(EnsembleVerificationError::Shape(
-                EnsembleShapeError::TraceHeight { component, height },
-            ));
-        }
-    }
-    let expected_degree_bits = airs
+    let expected_degree_bits = trace_heights
         .iter()
-        .map(|air| log2_strict_usize(air.trace_height()) + config.is_zk())
+        .map(|height| log2_strict_usize(*height) + config.is_zk())
         .collect::<Vec<_>>();
     if proof.degree_bits != expected_degree_bits {
         return Err(EnsembleVerificationError::Shape(
@@ -205,7 +204,7 @@ where
         .iter()
         .map(|_| public_values.to_vec())
         .collect::<Vec<_>>();
-    let public_lookups = public_lookups(first_air.verifier_interactions(public_values));
+    let public_lookups = public_lookups(P::verifier_interactions(public_values));
     verify_batch_with_public_lookups(
         config,
         airs,

@@ -21,9 +21,6 @@ import Clean.Examples.Add32Explicit
 import Clean.Examples.ToJson
 import Clean.Examples.HintExample
 import Clean.Examples.FemtoCairo.FemtoCairo
-import Clean.Examples.FemtoCairo.Plonky3Helpers
-import Clean.Examples.FemtoCairo.Plonky3TestData
-import Clean.Examples.FemtoCairo.Plonky3MemoryTestData
 import Clean.Air.WitnessGeneration
 import Clean.Air.Extraction.Rust
 import Clean.Tables.Fibonacci8

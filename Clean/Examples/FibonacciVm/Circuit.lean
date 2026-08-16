@@ -39,17 +39,71 @@ def BytesTable : StaticLookupChannel (F p) field where
 
 abbrev BytesChannel : Channel (F p) field := .fromStatic _ _ BytesTable
 
--- bytes "circuit" that just pushes all bytes
--- probably shouldn't be a "circuit" at all
-def pushBytes : GeneralFormalCircuit (F p) (fields 256) unit where
-  main multiplicities := do
-    let _  ← .mapFinRange 256 fun ⟨ i, _ ⟩ =>
-      BytesChannel.emit multiplicities[i] (const i)
+structure BytesInput F where
+  value : F
+  multiplicity : F
+deriving ProvableStruct
+
+/-- One byte-channel row. Its byte value is supplied by an indexed fixed column. -/
+def pushBytes : GeneralFormalCircuit (F p) BytesInput unit where
+  name := "bytes"
+  main | { value, multiplicity } => do
+    BytesChannel.emit multiplicity value
 
   channelsWithRequirements := [ BytesChannel.toRaw ]
+  Assumptions
+  | { value, .. }, _ => ∃ i : Fin 256, value = ByteUtils.fromByte i
+  ProverAssumptions
+  | { value, .. }, _, _ => ∃ i : Fin 256, value = ByteUtils.fromByte i
   Spec _ _ _ := True
-  soundness := by circuit_proof_start [BytesTable]
+  soundness := by
+    circuit_proof_start [BytesTable]
+    obtain ⟨byteIndex, hvalue⟩ := h_assumptions
+    rw [hvalue]
+    intro _ _
+    exact ByteUtils.fromByte_lt byteIndex
   completeness := by circuit_proof_start
+
+def bytesFixedColumns : FixedColumns (F p) where
+  height := 256
+  program := .ofFExprs #v[.index]
+  valid := by rfl
+
+def bytesComponent : Component (F p) where
+  circuit := pushBytes
+  fixedColumns := some bytesFixedColumns
+  fixed_width_le_input := by change 1 ≤ 2; omega
+  Assumptions := fun _ _ => True
+  assumptions_imply_circuit := by
+    intro i row data hfixed _ _
+    rcases hfixed with ⟨hi, hrow⟩
+    simp only [pushBytes]
+    have hi' : i < 256 := by simpa [bytesFixedColumns] using hi
+    let byteIndex : Fin 256 := ⟨i, hi'⟩
+    refine ⟨byteIndex, ?_⟩
+    have hrow' : row.extract 0 1 = #[(i : F p)] := by
+      simpa [bytesFixedColumns, FixedColumns.width, FixedColumns.row,
+        Witgen.RowProgram.ofFExprs, Witgen.RowProgram.eval, Witgen.VExpr.eval,
+        Witgen.FExpr.eval, Witgen.evalSteps] using hrow
+    change row[0]?.getD 0 = ByteUtils.fromByte byteIndex
+    have hextractSize : (row.extract 0 1).size = 1 := by simp [hrow']
+    have hrowSize : 0 < row.size := by
+      rw [Array.size_extract] at hextractSize
+      omega
+    have hextract : 0 < (row.extract 0 1).size := by omega
+    calc
+      row[0]?.getD 0 = (row.extract 0 1)[0]?.getD 0 := by
+        rw [Array.getElem?_eq_getElem hrowSize, Array.getElem?_eq_getElem hextract]
+        simp only [Array.getElem_extract, Nat.zero_add]
+      _ = ByteUtils.fromByte byteIndex := by
+        rw [hrow']
+        have hip : i < p := by
+          have hp := pGt.out
+          omega
+        have hval : (i : F p).val = i := ZMod.val_natCast_of_lt hip
+        symm
+        have hcastLt : (i : F p).val < 256 := by rw [hval]; exact hi'
+        simpa [byteIndex, hval] using ByteUtils.fromByte_eq (p := p) (i : F p) hcastLt
 
 def Add8Channel : Channel (F p) fieldTriple where
   name := "add8"
@@ -66,6 +120,7 @@ deriving ProvableStruct
 
 /-- Proves x + y = z (mod 256) -/
 def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
+  name := "add8"
   main | { x, y, z, m } => do
     -- range-check z using the bytes channel
     -- (x and y are guaranteed to be range-checked from earlier interactions)
@@ -116,6 +171,9 @@ example (input : Var Add8Inputs (F p)) :
     ExplicitCircuit (add8.main input) := by
   infer_explicit_circuit
 
+def add8Component : Component (F p) where
+  circuit := add8
+
 def fibonacci : ℕ → (ℕ × ℕ)
   | 0 => (0, 1)
   | n + 1 =>
@@ -145,6 +203,7 @@ structure Fib8Input F where
 deriving ProvableStruct
 
 def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
+  name := "fibonacci"
   main | { enabled, n, x, y } => do
     -- boolean constraint for `enabled`
     -- has to be inline, channels with requirements proof doesn't handle subcircuits
@@ -207,61 +266,66 @@ example (input : Var Fib8Input (F p)) :
   infer_explicit_circuit
 
 -- completing Fibonacci channel with input and output
-def fibonacciVerifier : GeneralFormalCircuit (F p) fieldTriple unit where
+def fibonacciVerifier : Verifier.Program (F p) fieldTriple where
   main | (n, x, y) => do
     -- push initial state, pull the final state
-    FibonacciChannel.pull (n, x, y)
-    FibonacciChannel.push (0, 0, 1)
-
-  exposedChannels
-  | (n, x, y), _ =>
-    expose FibonacciChannel [ pulled (n, x, y), pushed (0, 0, 1) ]
-
-  ProverAssumptions
-  | (n, x, y), _, _ => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
+    Verifier.pull FibonacciChannel (n, x, y)
+    Verifier.push FibonacciChannel (0, 0, 1)
   Spec
-  | (n, x, y), _, _ => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
-  channelsWithRequirements := [ FibonacciChannel.toRaw ]
+  | (n, x, y), _ => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
   soundness := by
-    circuit_proof_start [FibonacciChannel]
-    rcases input with ⟨ n, x, y ⟩
-    simp only [Prod.mk.injEq] at h_input
-    simp_all only [circuit_norm, ZMod.val_zero, ZMod.val_one]
-    exact ⟨ 0, rfl, rfl ⟩
-  completeness := by
-    circuit_proof_start [FibonacciChannel]
-    rcases input with ⟨ n, x, y ⟩
-    simp only [Prod.mk.injEq] at h_input
-    simpa [circuit_norm, reduceIte] using h_assumptions
+    intro env guarantees
+    simp only [circuit_norm, Operations.FullGuarantees, FibonacciChannel,
+      AbstractInteraction.Guarantees, Channel.toRaw, explicit_provable_type] at guarantees ⊢
+    exact guarantees
 
-example (input : Var fieldTriple (F p)) :
-    ExplicitCircuit (fibonacciVerifier.main input) := by
-  infer_explicit_circuit
+def fib8Component : Component (F p) where
+  circuit := fib8
 
 def fibonacciVm : VmTables (F p) fieldTriple where
   channel := FibonacciChannel
-  tables := [⟨ fib8 ⟩]
+  tables := [fib8Component]
+  unique_names := by simp [fib8Component]
   verifier := fibonacciVerifier
-  verifier_length_zero := by simp [circuit_norm, fibonacciVerifier]
-  tables_channel := by simp [circuit_norm, fib8, sub_eq_zero]
-  verifier_channel := by simp [circuit_norm, fibonacciVerifier]
+  tables_channel := by
+    simp [circuit_norm, fib8Component, fib8, Component.rowInputVar, Component.rowOperations]
+    intro env h
+    rcases h with h | h
+    · exact Or.inl h
+    · exact Or.inr (sub_eq_zero.mp h)
+  verifier_channel := by
+    simp [fibonacciVerifier, circuit_norm, ChannelInteraction.toRaw]
   verifier_requirements env := by
     simp only [circuit_norm, fibonacciVerifier, FibonacciChannel, ZMod.val_zero, ZMod.val_one]
     exact ⟨ 0, rfl, rfl ⟩
 
 def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
-  |>.addTable ⟨ pushBytes ⟩
-    (by simp [circuit_norm, pushBytes]) (by simp [circuit_norm, pushBytes])
+  |>.addTable bytesComponent
+    (List.Subset.refl _)
+    (by simp [circuit_norm, bytesComponent, pushBytes])
   |>.addFinishedChannel BytesChannel.toRaw
-  |>.addTable ⟨ add8 ⟩
-    (by simp +instances [circuit_norm, add8]) (by simp [circuit_norm, add8])
+  |>.addTable add8Component
+    (by simp +instances [circuit_norm, add8Component, add8])
+    (by simp [circuit_norm, add8Component, add8])
+    (by
+      simp only [SoundEnsemble.addFinishedChannel_tables, SoundEnsemble.addTable_tables,
+        SoundEnsemble.empty_tables, List.map_cons, List.map_nil, List.mem_singleton]
+      simp [add8Component, add8, bytesComponent, pushBytes])
   |>.addFinishedChannel Add8Channel.toRaw
   |>.addVm fibonacciVm
-    (by simp +instances [circuit_norm, fibonacciVm, add8, pushBytes, Add8Channel, FibonacciChannel])
-    (by simp +instances [circuit_norm, fibonacciVm, fib8, fibonacciVerifier])
-    (by simp [circuit_norm, fibonacciVm, fib8, fibonacciVerifier, Add8Channel, FibonacciChannel])
+    (by simp +instances [circuit_norm, fibonacciVm, add8Component, add8, bytesComponent, pushBytes,
+      Add8Channel, FibonacciChannel])
+    (by simp +instances [circuit_norm, fibonacciVm, fib8Component, fib8, fibonacciVerifier])
+    (by simp [circuit_norm, fibonacciVm, fib8Component, fib8, fibonacciVerifier,
+      Add8Channel, FibonacciChannel])
+    (by
+      simp only [SoundEnsemble.addFinishedChannel_tables, SoundEnsemble.addTable_tables,
+        SoundEnsemble.empty_tables, List.map_append, List.map_cons, List.map_nil]
+      simp [fibonacciVm, fib8Component, fib8, add8Component, add8,
+        bytesComponent, pushBytes])
   |>.toFormal _ (fun _ _ => True)
-    (by simp [circuit_norm, fibonacciVm, add8, pushBytes, fib8])
+    (by simp [circuit_norm, fibonacciVm, fib8Component, add8Component, add8,
+      bytesComponent, pushBytes, fib8])
 
 namespace FibonacciWitness
 
@@ -283,30 +347,26 @@ def add8Mode : Mode (F p) := .demand {
   input := { cells := [.message 0, .message 1, .message 2, .multiplicity] }
 }
 
-/--
-The current byte provider has one fixed row with one multiplicity input per byte.
-Each byte-channel pull updates the corresponding slot.
--/
-def bytesMode : Mode (F p) := .fixed
-  [Array.replicate 256 0]
-  ((List.range 256).map fun (value : ℕ) => {
-    channel := (BytesChannel (p := p)).name
-    direction := .pull
-    message := #[(value : F p)]
-    row := 0
-    column := value
-  })
+/-- The byte provider preallocates one verifier-fixed byte and one generated
+multiplicity cell per row. Its declared push interaction routes byte pulls back to
+the corresponding row. -/
+def bytesMode : Mode (F p) := .preallocated {
+  rows := (bytesFixedColumns (p := p)).height
+  input := .ofFExprs #v[.const 0]
+  input_valid := by rfl
+  handlers := [{ interaction := 0, column := 1 }]
+}
 
 /--
 Channel-driven witness-generation metadata, aligned with
 `fibonacciEnsemble.ensemble.tables = [fib8, add8, pushBytes]`.
 -/
-def config (fuel : ℕ) : Config (F p) where
+def config (fuel : ℕ) : Config (F p) unit where
   modes := [fibMode (p := p), add8Mode (p := p), bytesMode (p := p)]
   padding := [
     { input := #[0, 0, 0, 0], minimumRows := 32 },
     { input := #[0, 0, 0, 0], minimumRows := 32 },
-    { input := Array.replicate 256 0, minimumRows := 32 }
+    { input := #[0, 0], minimumRows := 256 }
   ]
   fuel := fuel
 
@@ -314,7 +374,7 @@ def config (fuel : ℕ) : Config (F p) where
 def generate (publicInput : fieldTriple (F p)) (fuel : ℕ) :
     Except String (EnsembleWitness (fibonacciEnsemble (p := p)).ensemble) :=
   Air.Flat.WitnessGeneration.generate (fibonacciEnsemble (p := p)).ensemble
-    (config (p := p) fuel) publicInput
+    (config (p := p) fuel) publicInput ()
 
 end FibonacciWitness
 
@@ -353,6 +413,7 @@ def FalseChannel : Channel (F p) unit where
   Guarantees _ _ := False
 
 def falseCircuit : GeneralFormalCircuit (F p) unit unit where
+  name := "false"
   main _ := do
     FalseChannel.pull ()
     return
@@ -363,5 +424,5 @@ def falseCircuit : GeneralFormalCircuit (F p) unit unit where
 
 def falseEnsemble := SoundEnsemble.empty (F p) unit
   |>.addFinishedChannel FalseChannel.toRaw
-  |>.addTable ⟨ falseCircuit ⟩
+  |>.addTable { circuit := falseCircuit }
     (by simp [circuit_norm, falseCircuit]) (by simp [circuit_norm, falseCircuit])
