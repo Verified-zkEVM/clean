@@ -1420,6 +1420,20 @@ theorem fixedRows_getD_getD_eq_of_mem
   · exact hcolumn
   · exact hrow
 
+/-- Every in-domain fixed cell absent from the compiled sparse assignment stream is
+zero in the canonical dense rows. -/
+theorem fixedRows_getD_getD_eq_zero_of_not_mem
+    (self : TopLevelCircuit F Config PublicInput)
+    (column row : ℕ)
+    (habsent : (column, row) ∉
+      self.fixedAssignments.map Layout.FixedAssignment.cell)
+    (hcolumn : column < self.fixedColumnCount)
+    (hrow : row < self.n) :
+    (self.fixedRows.getD column []).getD row 0 = 0 := by
+  exact Layout.denseFixedColumns_getD_getD_eq_zero_of_not_mem
+    self.n self.fixedColumnCount self.fixedAssignments
+    column row habsent hcolumn hrow
+
 /--
 Read a compiled fixed column with Halo2's cyclic domain-row semantics.
 
@@ -1626,6 +1640,16 @@ theorem lookupActivationsWellFormed
     self.operations.LookupActivationsWellFormed := by
   exact self.formalCircuit.elaborated.lookupActivationsWellFormed
     self.config () 0
+
+/-- Every synthesized lookup operation agrees with every lookup-selector activation
+at the same region-local row. -/
+theorem lookupSelectorAssignmentsAgree
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.operations.LookupSelectorAssignmentsAgree := by
+  rcases self.noCallerRequirements with
+    ⟨hconfig, _, _, _, _, _, _⟩
+  exact self.formalCircuit.elaborated.lookupSelectorAssignmentsAgree
+    () {} hconfig () 0
 
 /-- Configure composition keeps every gate and lookup selector compatible with every
 configured lookup's master-selector discipline. -/

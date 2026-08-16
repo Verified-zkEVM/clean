@@ -439,6 +439,82 @@ private theorem fst_eq_of_mem_zipIdx_of_snd_eq
     (List.mk_mem_zipIdx_iff_getElem?.mp hleft).symm.trans
       (List.mk_mem_zipIdx_iff_getElem?.mp hright)
 
+/-- A singleton selector-compression column belongs to exactly one selector. -/
+theorem process_entry_selector_eq_of_singleton_column
+    (selectors : List SelectorDescription) (maxDegree : ℕ)
+    (left right : ℕ × SelCompress)
+    (hleft : left ∈ (process selectors maxDegree).entries)
+    (hright : right ∈ (process selectors maxDegree).entries)
+    (hsingleton : left.2.combinationLen = 1)
+    (hcolumn : left.2.packedCol = right.2.packedCol) :
+    left.1 = right.1 := by
+  let degreeZero := selectors.filter (·.maxDegree = 0)
+  let remaining := selectors.filter (·.maxDegree ≠ 0)
+  let combinations :=
+    buildCombinations maxDegree remaining.length remaining
+  change left ∈
+      (degreeZero.zipIdx.map fun (description, column) =>
+        (description.selector, SelCompress.mk column 1 1)) ++
+      (combinations.zipIdx.flatMap fun (combination, column) =>
+        combination.zipIdx.map fun (description, position) =>
+          (description.selector,
+            SelCompress.mk (degreeZero.length + column)
+              combination.length (position + 1))) at hleft
+  change right ∈
+      (degreeZero.zipIdx.map fun (description, column) =>
+        (description.selector, SelCompress.mk column 1 1)) ++
+      (combinations.zipIdx.flatMap fun (combination, column) =>
+        combination.zipIdx.map fun (description, position) =>
+          (description.selector,
+            SelCompress.mk (degreeZero.length + column)
+              combination.length (position + 1))) at hright
+  rw [List.mem_append] at hleft hright
+  rcases hleft with hleft | hleft <;> rcases hright with hright | hright
+  · obtain ⟨leftIndexed, hleftIndexed, rfl⟩ := List.mem_map.mp hleft
+    obtain ⟨rightIndexed, hrightIndexed, rfl⟩ := List.mem_map.mp hright
+    exact congrArg SelectorDescription.selector <|
+      fst_eq_of_mem_zipIdx_of_snd_eq degreeZero
+        hleftIndexed hrightIndexed hcolumn
+  · obtain ⟨leftIndexed, hleftIndexed, rfl⟩ := List.mem_map.mp hleft
+    rw [List.mem_flatMap] at hright
+    obtain ⟨rightCombination, hrightCombination, hright⟩ := hright
+    obtain ⟨rightIndexed, _, rfl⟩ := List.mem_map.mp hright
+    have hleftColumn := List.snd_lt_of_mem_zipIdx hleftIndexed
+    have hrightColumn := List.snd_lt_of_mem_zipIdx hrightCombination
+    simp only at hcolumn
+    omega
+  · rw [List.mem_flatMap] at hleft
+    obtain ⟨leftCombination, hleftCombination, hleft⟩ := hleft
+    obtain ⟨leftIndexed, _, rfl⟩ := List.mem_map.mp hleft
+    obtain ⟨rightIndexed, hrightIndexed, rfl⟩ := List.mem_map.mp hright
+    have hleftColumn := List.snd_lt_of_mem_zipIdx hleftCombination
+    have hrightColumn := List.snd_lt_of_mem_zipIdx hrightIndexed
+    simp only at hcolumn
+    omega
+  · rw [List.mem_flatMap] at hleft hright
+    obtain ⟨leftCombination, hleftCombination, hleft⟩ := hleft
+    obtain ⟨rightCombination, hrightCombination, hright⟩ := hright
+    obtain ⟨leftIndexed, hleftIndexed, rfl⟩ := List.mem_map.mp hleft
+    obtain ⟨rightIndexed, hrightIndexed, rfl⟩ := List.mem_map.mp hright
+    rcases leftCombination with ⟨leftItems, leftColumn⟩
+    rcases rightCombination with ⟨rightItems, rightColumn⟩
+    rcases leftIndexed with ⟨leftDescription, leftPosition⟩
+    rcases rightIndexed with ⟨rightDescription, rightPosition⟩
+    simp only at hcolumn hsingleton
+    have hcombinationColumn : leftColumn = rightColumn := by omega
+    have hcombination : leftItems = rightItems :=
+      fst_eq_of_mem_zipIdx_of_snd_eq combinations
+        hleftCombination hrightCombination hcombinationColumn
+    subst rightItems
+    have hleftPosition : leftPosition < leftItems.length := by
+      simpa only using List.snd_lt_of_mem_zipIdx hleftIndexed
+    have hrightPosition : rightPosition < leftItems.length := by
+      simpa only using List.snd_lt_of_mem_zipIdx hrightIndexed
+    have hposition : leftPosition = rightPosition := by omega
+    exact congrArg SelectorDescription.selector <|
+      fst_eq_of_mem_zipIdx_of_snd_eq leftItems
+        hleftIndexed hrightIndexed hposition
+
 /-- Coactivated selector writes that `process` places in one packed column carry the
 same assigned root. -/
 theorem process_entry_roots_agree_of_activated
@@ -1007,6 +1083,62 @@ theorem deriveSelCompressMap_lookup_packedColumn
   · change source.packedCol + cs.numFixedColumns =
       cs.numFixedColumns + source.packedCol
     omega
+
+/-- A singleton packed column in a circuit-derived selector map identifies its
+selector uniquely. -/
+theorem deriveSelCompressMap_lookup_selector_eq_of_singleton_column
+    (cs : ConstraintSystem F) (n : ℕ) (acts : List (ℕ × ℕ))
+    {leftSelector rightSelector : ℕ} {left right : SelCompress}
+    (hleftLookup : (deriveSelCompressMap cs n acts).lookup leftSelector =
+      some left)
+    (hrightLookup : (deriveSelCompressMap cs n acts).lookup rightSelector =
+      some right)
+    (hsingleton : left.combinationLen = 1)
+    (hcolumn : left.packedCol = right.packedCol) :
+    leftSelector = rightSelector := by
+  let table := activationTable n cs.numSelectors acts
+  let degrees := selectorMaxDegrees cs
+  let descriptions := (List.range cs.numSelectors).map fun index =>
+    SelectorDescription.mk index table[index]! degrees[index]!
+  let packing := process descriptions (csDegree cs)
+  have hleftEntry := SelCompressMap.mem_entries_of_lookup
+    (deriveSelCompressMap cs n acts) hleftLookup
+  have hrightEntry := SelCompressMap.mem_entries_of_lookup
+    (deriveSelCompressMap cs n acts) hrightLookup
+  change (leftSelector, left) ∈
+    packing.entries.map (fun (sourceSelector, source) =>
+      (sourceSelector,
+        { source with
+          packedCol := source.packedCol + cs.numFixedColumns })) at hleftEntry
+  change (rightSelector, right) ∈
+    packing.entries.map (fun (sourceSelector, source) =>
+      (sourceSelector,
+        { source with
+          packedCol := source.packedCol + cs.numFixedColumns })) at hrightEntry
+  obtain ⟨⟨leftSourceSelector, leftSource⟩,
+    hleftSource, hleftEq⟩ := List.mem_map.mp hleftEntry
+  obtain ⟨⟨rightSourceSelector, rightSource⟩,
+    hrightSource, hrightEq⟩ := List.mem_map.mp hrightEntry
+  have hsourceSingleton : leftSource.combinationLen = 1 := by
+    have hleftCombination :=
+      congrArg (fun entry => entry.2.combinationLen) hleftEq
+    simp only at hleftCombination
+    omega
+  have hsourceColumn : leftSource.packedCol = rightSource.packedCol := by
+    have hleftPacked := congrArg (fun entry => entry.2.packedCol) hleftEq
+    have hrightPacked := congrArg (fun entry => entry.2.packedCol) hrightEq
+    simp only at hleftPacked hrightPacked
+    omega
+  have hsourceSelector :=
+    process_entry_selector_eq_of_singleton_column
+      descriptions (csDegree cs)
+      (leftSourceSelector, leftSource)
+      (rightSourceSelector, rightSource)
+      hleftSource hrightSource hsourceSingleton hsourceColumn
+  have hleftKey := congrArg Prod.fst hleftEq
+  have hrightKey := congrArg Prod.fst hrightEq
+  simp only at hleftKey hrightKey hsourceSelector
+  omega
 
 /-- Coactivated entries in a circuit-derived selector map agree whenever compression
 places them in the same packed fixed column. -/

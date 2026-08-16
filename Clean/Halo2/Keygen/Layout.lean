@@ -1806,6 +1806,57 @@ theorem denseFixedColumns_getD_length [Zero F]
     Array.getElem_toList, Array.length_toList]
   exact hshape.2 column hresultColumn
 
+/-- An in-range cell with no sparse assignment retains the dense compiler's zero
+initial value. -/
+theorem denseFixedColumns_getD_getD_eq_zero_of_not_mem [Zero F]
+    (numRows numColumns : ℕ)
+    (assignments : List (FixedAssignment F))
+    (column row : ℕ)
+    (habsent : (column, row) ∉ assignments.map FixedAssignment.cell)
+    (hcolumn : column < numColumns) (hrow : row < numRows) :
+    ((denseFixedColumns numRows numColumns assignments).getD column []).getD
+        row 0 = 0 := by
+  let initial : Array (Array F) :=
+    Array.replicate numColumns (Array.replicate numRows 0)
+  let result := assignments.foldl (scatterFixed numColumns) initial
+  have hshape := scatterFixed_fold_sized assignments
+    (columns := initial) (numRows := numRows) (numColumns := numColumns)
+    (by simp [initial]) (by simp [initial])
+  have hresultColumn : column < result.size := by
+    rw [hshape.1]
+    exact hcolumn
+  have hresultRow : row < result[column].size := by
+    rw [hshape.2 column hresultColumn]
+    exact hrow
+  have hpreserved := fixedCell?_scatterFixed_fold_eq_of_forall_cell_ne
+    assignments (columns := initial) (numRows := numRows)
+    (numColumns := numColumns) (by simp [initial]) (by simp [initial])
+    column row hcolumn hrow (by
+      intro assignment hassignment hequal
+      exact habsent (List.mem_map.mpr ⟨assignment, hassignment, hequal⟩))
+  have hvalue : result[column][row] = 0 := by
+    simp only [fixedCell?] at hpreserved
+    rw [Array.getElem?_eq_getElem hresultColumn, Option.bind_some,
+      Array.getElem?_eq_getElem hresultRow] at hpreserved
+    have hinitialColumn : column < initial.size := by
+      simp [initial, hcolumn]
+    have hinitialRow : row < initial[column].size := by
+      simpa [initial] using hrow
+    rw [Array.getElem?_eq_getElem hinitialColumn, Option.bind_some,
+      Array.getElem?_eq_getElem hinitialRow] at hpreserved
+    simpa [initial] using Option.some.inj hpreserved
+  have hdenseColumn :
+      column < (denseFixedColumns numRows numColumns assignments).length := by
+    simpa only [denseFixedColumns_length] using hcolumn
+  rw [List.getD_eq_getElem _ _ hdenseColumn]
+  have hdenseRow : row <
+      (denseFixedColumns numRows numColumns assignments)[column].length := by
+    simpa only [denseFixedColumns, List.getElem_map, Array.getElem_toList,
+      Array.length_toList, initial, result] using hresultRow
+  rw [List.getD_eq_getElem _ _ hdenseRow]
+  simpa only [denseFixedColumns, List.getElem_map, Array.getElem_toList,
+    initial, result] using hvalue
+
 /-- Every retained in-bounds sparse assignment is realized by dense compilation. -/
 theorem denseFixedColumns_getD_getD_eq_of_mem [Zero F]
     (numRows numColumns : ℕ)
