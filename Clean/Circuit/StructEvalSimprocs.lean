@@ -287,17 +287,21 @@ private def vectorEvalLiteralCore (e : Expr) : SimpM Simp.Step := do
   let subject := args[args.size - 1]!
   let .const hd _ := subject.getAppFn | return .continue
   unless constructedVectorHeads.contains hd do return .continue
-  for lemmaName in [``ProvableType.eval_fields, ``eval_vector] do
-    try
-      let proof ← withDefault <| mkAppM lemmaName #[env, subject]
-      let some (_, lhs0, rhs0) := (← inferType proof).eq? | continue
-      -- alias-typed subjects (`U32`, `SHA256State`, …) carry their own `Eval`
-      -- instances and hide behind regular defs; validate at full transparency
-      -- (the struct projection lift's precedent for pure-validation checks)
-      unless ← withTransparency .all <| isDefEq lhs0 e do continue
-      return .visit { expr := rhs0, proof? := some proof }
-    catch _ => continue
-  return .continue
+  -- dispatch on the element type instead of trying lemmas in sequence
+  let subjectTy ← withDefault <| whnf (← inferType subject)
+  unless subjectTy.isAppOf ``Vector do return .continue
+  let elemTy ← withDefault <| whnf (subjectTy.getAppArgs[0]!)
+  let lemmaName := if elemTy.isAppOf ``Expression then
+    ``ProvableType.eval_fields else ``eval_vector
+  try
+    let proof ← withDefault <| mkAppM lemmaName #[env, subject]
+    let some (_, lhs0, rhs0) := (← inferType proof).eq? | return .continue
+    -- alias-typed subjects (`U32`, `SHA256State`, …) carry their own `Eval`
+    -- instances and hide behind regular defs; validate at full transparency
+    -- (the struct projection lift's precedent for pure-validation checks)
+    unless lhs0 == e || (← withTransparency .all <| isDefEq lhs0 e) do return .continue
+    return .visit { expr := rhs0, proof? := some proof }
+  catch _ => return .continue
 
 simproc vectorEvalLiteral (Eval.eval _ _) := vectorEvalLiteralCore
 attribute [circuit_norm] vectorEvalLiteral

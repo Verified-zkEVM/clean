@@ -152,11 +152,11 @@ instance : VerifierEval F (M (Expression F)) (M F) := verifierEval M
 
 /-- Normalize the `Var M F`-spelled type argument of eval terms to the concrete
 `M (Expression F)` spelling (`rfl`, but the two elaborate to distinct terms): per the
-normal-form doctrine above, and so that eval atoms are congruent inside `grind`. -/
-@[circuit_norm] lemma eval_var_concrete (env : Environment F) (v : Var M F) :
+normal-form doctrine above. -/
+@[circuit_norm] lemma eval_var_expression (env : Environment F) (v : Var M F) :
     eval env v = eval env (v : M (Expression F)) := rfl
 
-@[circuit_norm] lemma eval_var_concrete_prover (env : ProverEnvironment F) (v : Var M F) :
+@[circuit_norm] lemma eval_var_expression_prover (env : ProverEnvironment F) (v : Var M F) :
     eval env v = eval env (v : M (Expression F)) := rfl
 
 @[circuit_norm] lemma eval_var_prover_to_verifier (env : ProverEnvironment F) (v : Var M F) :
@@ -765,21 +765,15 @@ lemma eval_vector_eq_get {n : ℕ} (env : Environment F)
     (eval env (vars[i] : M (Expression F)) : M F) = vals[i] := by
   rw [getElem_eval_vector, h]
 
-/-- `eval` commutes with `Vector.set`, so vectors updated entry by entry (state-update
-circuits) evaluate without unfolding the whole vector. Paired with the outward-oriented
-`getElem_eval_vector` normal form, this lets `grind` compute `(eval env (v.set i a))[j]`
-elementwise via `Vector.getElem_set`. -/
-@[grind =]
+/-- `eval` commutes with `Vector.set`. -/
 theorem eval_vector_set (env : Environment F) (x : ProvableVector α n (Expression F))
     (i : ℕ) (h : i < n) (a : α (Expression F)) :
     eval env (x.set i a) = (eval env x).set i (eval env a) := by
   simp only [eval_vector, Vector.map_set]
 
-/-- Chain fold through a pair-element vector access, all the way to the whole-vector
-atom (used by `StructEvalSimprocs.vectorAtomLift`; fixed element `TypeMap` so the
-simproc can elaborate it without higher-order unification). The intermediate spelling
-`(eval env c[i]).1` must never appear — the pair `Eval` instance defeq-collapses, so it
-self-loops against the scalar-canonical `eval_fieldPair` projections. -/
+/-- Chain fold through a pair-element vector access, straight to the whole-vector atom
+(used by `StructEvalSimprocs.vectorAtomLift`; fixed element `TypeMap` so the simproc
+can elaborate it without higher-order unification). -/
 theorem eval_fst_getElem_pairVector {n : ℕ} (env : Environment F)
     (c : Vector (fieldPair (Expression F)) n) (i : ℕ) (hi : i < n) :
     Expression.eval env ((c[i]'hi).1) =
