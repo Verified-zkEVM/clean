@@ -631,6 +631,13 @@ theorem permutationColumns_nodup
   apply Configure.permutationColumns_run_nodup
   simp
 
+/-- The configure interpreter retains each constants column only at its first request. -/
+theorem constantColumns_nodup
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.constraintSystem.constants.Nodup := by
+  apply Configure.constants_run_nodup
+  simp
+
 private def flattenColumn
     (counts : ConfigureCounts) : AnyColumn → ℕ
   | ⟨.advice, index⟩ => index
@@ -719,6 +726,24 @@ theorem operationsCopyCellsAssigned
   exact self.formalCircuit.operationsCopyCellsAssigned
     () () self.noCallerRequirements
 
+/-- The closed synthesis stream inherits its circuit-local fixed-write discipline. -/
+theorem fixedWritesLawful
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.operations.FixedWritesLawful self.constraintSystem.constants := by
+  rcases self.noCallerRequirements with
+    ⟨hconfig, _, _, _, hconstantColumns, _, _⟩
+  let program := self.formalCircuit.configure ()
+  have hsource := self.formalCircuit.elaborated.fixedWritesLawful
+    () {} hconfig () 0
+  simp only [hconstantColumns, List.nil_append] at hsource
+  apply hsource.mono_constantColumns
+  intro column hcolumn
+  have hrun : column ∈ (program.run {}).2.constants := by
+    simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
+      program] using hcolumn
+  exact (Configure.mem_constants_run_iff program {} column).mp hrun
+    |>.resolve_left (by simp)
+
 /-- Exact compositional footprint published by the formal circuit. -/
 def synthesisSummary (self : TopLevelCircuit F Config PublicInput) :
     FloorPlanner.SynthesisSummary :=
@@ -762,14 +787,45 @@ theorem constantColumn_mem_permutationColumns
   have hlawful : delta.QueriesLawful (program.finalCounts {}) :=
     self.formalCircuit.queriesLawful () {} self.queryRequirements
   have hdelta : column ∈ delta.constants := by
-    simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
-      program, Configure.run, Configure.delta, ConfigureDelta.apply,
-      List.nil_append] using hcolumn
+    have hrun : column ∈ (program.run {}).2.constants := by
+      simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
+        program] using hcolumn
+    exact (Configure.mem_constants_run_iff program {} column).mp hrun
+      |>.resolve_left (by simp)
   have hrequest : column.toAny ∈ delta.permutationRequests :=
     List.forall_iff_forall_mem.mp
       hlawful.constants_permutationRequests column hdelta
   exact (Configure.mem_permutationColumns_run_iff program {} column.toAny).mpr
     (Or.inr hrequest)
+
+/-- Every configured constants column lies in the circuit's fixed-column prefix. -/
+theorem constantColumn_index_lt_numFixedColumns
+    (self : TopLevelCircuit F Config PublicInput)
+    {column : Column .fixed}
+    (hcolumn : column ∈ self.constraintSystem.constants) :
+    column.index < self.constraintSystem.numFixedColumns := by
+  let program := self.formalCircuit.configure ()
+  let delta := program.delta {}
+  have hlawful : delta.QueriesLawful (program.finalCounts {}) :=
+    self.formalCircuit.queriesLawful () {} self.queryRequirements
+  have hdelta : column ∈ delta.constants := by
+    have hrun : column ∈ (program.run {}).2.constants := by
+      simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
+        program] using hcolumn
+    exact (Configure.mem_constants_run_iff program {} column).mp hrun
+      |>.resolve_left (by simp)
+  have hrequest : column.toAny ∈ delta.permutationRequests :=
+    List.forall_iff_forall_mem.mp
+      hlawful.constants_permutationRequests column hdelta
+  have hregistered := List.forall_iff_forall_mem.mp
+    hlawful.permutationRequests_registered column.toAny hrequest
+  have hfixedQuery : (column, 0) ∈ delta.fixedQueries := by
+    exact hregistered
+  have hbound := List.forall_iff_forall_mem.mp
+    hlawful.fixedQueries_fst_lt_numFixedColumns
+      (column, 0) hfixedQuery
+  simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
+    program, Configure.finalCounts] using hbound
 
 /-- Every V1 constant allocation uses an equality-enabled constants column. -/
 theorem constantAssignmentColumn_mem_permutationColumns
@@ -1469,6 +1525,38 @@ theorem keygenCoherent
     self.KeygenCoherent := by
   exact self.formalCircuit.operationsKeygenCoherent
     () () self.noCallerRequirements
+
+/-- Every raw fixed write emitted by a lawful top-level circuit survives the canonical
+last-write compiler. -/
+theorem mem_fixedAssignments_of_mem_raw
+    (self : TopLevelCircuit F Config PublicInput)
+    (assignment : Layout.FixedAssignment F)
+    (hassignment : assignment ∈
+      Layout.rawAssignments
+        (self.usableRowsAt self.domainExponent)
+        self.selectorMap self.constraintSystem self.operations) :
+    assignment ∈ self.fixedAssignments := by
+  apply Layout.mem_compileFixed_of_mem_raw
+  · apply Layout.rawAssignments_agree_deriveSelCompressMap
+    · exact self.fixedWritesLawful
+    · exact self.keygenCoherent
+    · exact self.constantColumns_nodup
+    · rw [List.forall_iff_forall_mem]
+      intro column hcolumn
+      exact self.constantColumn_index_lt_numFixedColumns hcolumn
+    · intro activation hactivation
+      have hplacement := FloorPlanner.V1.activation_row_lt_placementEnd
+        self.operations hactivation
+      exact hplacement.trans_le <|
+        (Halo2.V1_placementEnd_le_usedRows self.operations).trans <|
+          self.operations_usedRows_le_usedRows.trans <|
+            self.usedRows_le_usableRowsAt_domainExponent.trans
+              self.usableRowsAt_domainExponent_le_n
+  · simpa only [selectorMap, TopLevelCompilation.selectorMap,
+      selectorActivations, TopLevelCompilation.selectorActivations,
+      regionStarts, TopLevelCompilation.regionStarts,
+      fixedAssignments, TopLevelCompilation.fixedAssignments,
+      usableRowsAt, n] using hassignment
 
 /-- Every synthesized lookup activation enables its master and only selectors declared
 by that lookup. -/

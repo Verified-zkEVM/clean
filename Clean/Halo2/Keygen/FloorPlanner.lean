@@ -62,6 +62,34 @@ def indexedRegions : Operations F → ℕ → List (ℕ × RegionOperations F) �
   | .constrainInstance _ _ _ :: rest, i => indexedRegions rest i
   | .loadTable _ _ :: rest, i => indexedRegions rest i
 
+/-- Every indexed region comes from an actual region operation in the source stream. -/
+theorem exists_region_mem_of_mem_indexedRegions
+    (operations : Operations F) (initial : ℕ)
+    {index : ℕ} {body : RegionOperations F}
+    (hregion : (index, body) ∈ (indexedRegions operations initial).1) :
+    ∃ name, .region name body ∈ operations := by
+  induction operations generalizing initial with
+  | nil => simp [indexedRegions] at hregion
+  | cons operation rest inductionHypothesis =>
+      cases operation with
+      | region name currentBody =>
+          simp only [indexedRegions, List.mem_cons] at hregion
+          rcases hregion with hcurrent | hrest
+          · injection hcurrent with _ hbody
+            subst body
+            exact ⟨name, by simp⟩
+          · obtain ⟨sourceName, hsource⟩ :=
+              inductionHypothesis (initial + 1) hrest
+            exact ⟨sourceName, by simp [hsource]⟩
+      | constrainInstance cell column row =>
+          obtain ⟨sourceName, hsource⟩ :=
+            inductionHypothesis initial hregion
+          exact ⟨sourceName, by simp [hsource]⟩
+      | loadTable table values =>
+          obtain ⟨sourceName, hsource⟩ :=
+            inductionHypothesis initial hregion
+          exact ⟨sourceName, by simp [hsource]⟩
+
 /-- Selector-activation rows: `(selectorIndex, absRow)` for every `enableGate` (its own
 selector) and `enableLookup` (each enabled selector) across all regions. `place` maps a
 region index to its start row. -/
@@ -492,6 +520,41 @@ theorem indexedRegions_indices_eq_range
       | loadTable table values =>
           simpa only [indexedRegions, Operations.regionCount] using
             inductionHypothesis initial
+
+private theorem eq_of_mem_of_map_nodup
+    {α β : Type} (items : List α) (key : α → β)
+    (hnodup : (items.map key).Nodup)
+    {left right : α} (hleft : left ∈ items) (hright : right ∈ items)
+    (hkey : key left = key right) :
+    left = right := by
+  induction items with
+  | nil => simp at hleft
+  | cons head rest inductionHypothesis =>
+      rw [List.map_cons, List.nodup_cons] at hnodup
+      simp only [List.mem_cons] at hleft hright
+      rcases hleft with rfl | hleft <;> rcases hright with rfl | hright
+      · rfl
+      · exfalso
+        exact hnodup.1 (List.mem_map.mpr ⟨right, hright, hkey.symm⟩)
+      · exfalso
+        exact hnodup.1 (List.mem_map.mpr ⟨left, hleft, hkey⟩)
+      · exact inductionHypothesis hnodup.2 hleft hright
+
+/-- The region index assigned by `indexedRegions` uniquely identifies its body. -/
+theorem indexedRegions_eq_of_index_eq
+    (operations : Operations F) (initial : ℕ)
+    {left right : ℕ × RegionOperations F}
+    (hleft : left ∈ (indexedRegions operations initial).1)
+    (hright : right ∈ (indexedRegions operations initial).1)
+    (hindex : left.1 = right.1) :
+    left = right := by
+  apply eq_of_mem_of_map_nodup
+    (indexedRegions operations initial).1 Prod.fst
+  · rw [indexedRegions_indices_eq_range]
+    exact List.nodup_range'
+  · exact hleft
+  · exact hright
+  · exact hindex
 
 theorem measureRegions_indices_nodup (ops : Operations F) :
     ((measureRegions ops).map (·.index)).Nodup := by
@@ -17077,6 +17140,48 @@ the planner's internal per-column allocation map. -/
 def placementEnd (ops : Operations F) : ℕ :=
   placementEndFrom (measureRegions ops) (starts ops)
 
+/-- Every synthesized selector activation lies below V1's placed-region endpoint. -/
+theorem activation_row_lt_placementEnd
+    (operations : Operations F) {selector row : ℕ}
+    (hactivation : (selector, row) ∈
+      activations (starts operations) (indexedRegions operations 0).1) :
+    row < placementEnd operations := by
+  rw [activations, List.mem_flatMap] at hactivation
+  obtain ⟨⟨index, body⟩, hregion, hbody⟩ := hactivation
+  rw [List.mem_flatMap] at hbody
+  obtain ⟨operation, hoperation, hmapped⟩ := hbody
+  have hshape : measureRegion index body ∈ measureRegions operations :=
+    List.mem_map.mpr ⟨(index, body), hregion, rfl⟩
+  have hend := shape_end_le_placementEndFrom_of_mem
+    (measureRegions operations) (starts operations)
+    (measureRegion index body) hshape
+  cases operation with
+  | enableGate gate localRow =>
+      simp only [List.mem_singleton] at hmapped
+      injection hmapped with _ hrow
+      subst row
+      have hlocal : localRow < (measureRegion index body).rowCount := by
+        have hbound := regionOperationRowExtent_le_synthesisSummary_of_mem
+          body (.enableGate gate localRow) hoperation
+        simpa only [measureRegion_rowCount,
+          regionOperationRowExtent] using hbound
+      unfold placementEnd
+      simp only [measureRegion] at hend hlocal
+      omega
+  | enableLookup argument enabled localRow =>
+      rw [List.mem_map] at hmapped
+      obtain ⟨sourceSelector, _, hequal⟩ := hmapped
+      injection hequal with _ hrow
+      subst row
+      have hlocal := row_lt_measureRegion_of_enableLookup_mem
+        index body argument enabled localRow hoperation
+      unfold placementEnd
+      simp only [measureRegion] at hend hlocal
+      omega
+  | assignAdvice | assignFixed | constrainEqual | constrainConstant |
+      constrainInstance =>
+      simp at hmapped
+
 /-- The exact index-free summary order consumed by V1 after its legacy pdqsort. -/
 def sortedSummaryOrder (ops : Operations F) : List RegionShapeSummary :=
   let shapes := measureRegions ops
@@ -17446,6 +17551,78 @@ def constantAssignments (ops : Operations F) (constCols : List ℕ) :
     (constantFreeRowsFrom shapes regionStarts endRow c).map fun row => (c, row)
   (positions.zip (constantValues ops)).map fun ((c, row), v) => (v, c, row)
 
+private theorem constantFreeRowsFrom_nodup
+    (shapes : List RegionShape) (regionStarts : List ℕ)
+    (endRow column : ℕ) :
+    (constantFreeRowsFrom shapes regionStarts endRow column).Nodup := by
+  exact List.Nodup.filter _ List.nodup_range
+
+private theorem constantPositions_nodup
+    (ops : Operations F) (constCols : List ℕ)
+    (hcolumns : constCols.Nodup) :
+    (constCols.flatMap fun column =>
+      (constantFreeRows ops column).map fun row => (column, row)).Nodup := by
+  induction constCols with
+  | nil => exact List.nodup_nil
+  | cons column columns inductionHypothesis =>
+      rw [List.nodup_cons] at hcolumns
+      simp only [List.flatMap_cons]
+      apply List.Nodup.append
+      · apply List.Nodup.map
+        · intro left right hequal
+          exact congrArg Prod.snd hequal
+        · exact constantFreeRowsFrom_nodup _ _ _ _
+      · exact inductionHypothesis hcolumns.2
+      · rw [List.disjoint_left]
+        intro entry hcurrent hrest
+        rw [List.mem_map] at hcurrent
+        obtain ⟨row, _, rfl⟩ := hcurrent
+        rw [List.mem_flatMap] at hrest
+        obtain ⟨otherColumn, hotherColumn, hother⟩ := hrest
+        rw [List.mem_map] at hother
+        obtain ⟨otherRow, _, hentry⟩ := hother
+        have hcolumn : column = otherColumn := by
+          injection hentry.symm
+        exact hcolumns.1 (hcolumn ▸ hotherColumn)
+
+private theorem map_fst_zip_nodup
+    {α β : Type}
+    (left : List α) (right : List β)
+    (hleft : left.Nodup) :
+    ((left.zip right).map Prod.fst).Nodup := by
+  induction left generalizing right with
+  | nil => simp
+  | cons head tail inductionHypothesis =>
+      cases right with
+      | nil => simp
+      | cons value rest =>
+          rw [List.nodup_cons] at hleft
+          simp only [List.zip_cons_cons, List.map_cons, List.nodup_cons]
+          constructor
+          · intro hhead
+            rw [List.mem_map] at hhead
+            obtain ⟨entry, hentry, hequal⟩ := hhead
+            exact hleft.1 (hequal ▸ (List.of_mem_zip hentry).1)
+          · exact inductionHypothesis rest hleft.2
+
+/-- V1 never allocates two deferred constants at the same fixed cell when its configured
+constants columns are unique. -/
+theorem constantAssignments_cells_nodup
+    (ops : Operations F) (constCols : List ℕ)
+    (hcolumns : constCols.Nodup) :
+    ((constantAssignments ops constCols).map fun assignment =>
+      (assignment.2.1, assignment.2.2)).Nodup := by
+  let shapes := measureRegions ops
+  let regionStarts := starts ops
+  let endRow := placementEndFrom shapes regionStarts
+  let positions : List (ℕ × ℕ) := constCols.flatMap fun column =>
+    (constantFreeRowsFrom shapes regionStarts endRow column).map fun row =>
+      (column, row)
+  have hpositions : positions.Nodup := by
+    exact constantPositions_nodup ops constCols hcolumns
+  simp only [constantAssignments, List.map_map]
+  exact map_fst_zip_nodup positions (constantValues ops) hpositions
+
 /-- The compositional capacity law is sufficient for V1 to allocate every deferred
 constant site; `zip` therefore does not truncate the constant-value stream. -/
 theorem constantValues_length_le_constantAssignments_length
@@ -17527,6 +17704,32 @@ theorem constantAssignments_column_mem
   obtain ⟨rfl, rfl⟩ := Prod.mk.inj hposition
   obtain ⟨rfl, rfl, rfl⟩ := hequal
   exact hcolumn
+
+/-- V1 allocates deferred constants only in cells left unoccupied by placed regions. -/
+theorem constantAssignments_row_not_occupied
+    (ops : Operations F) (constCols : List ℕ)
+    {value : F} {column row : ℕ}
+    (hassignment :
+      (value, column, row) ∈ constantAssignments ops constCols) :
+    rowOccupied ops (.column .fixed column) row = false := by
+  let positions : List (ℕ × ℕ) := constCols.flatMap fun currentColumn =>
+    (constantFreeRows ops currentColumn).map fun currentRow =>
+      (currentColumn, currentRow)
+  rw [constantAssignments, List.mem_map] at hassignment
+  obtain ⟨⟨⟨foundColumn, foundRow⟩, foundValue⟩,
+    hzipped, hequal⟩ := hassignment
+  have hposition : (foundColumn, foundRow) ∈ positions :=
+    (List.of_mem_zip hzipped).1
+  dsimp only [positions] at hposition
+  rw [List.mem_flatMap] at hposition
+  obtain ⟨currentColumn, _, hposition⟩ := hposition
+  rw [List.mem_map] at hposition
+  obtain ⟨currentRow, hfree, hposition⟩ := hposition
+  obtain ⟨rfl, rfl⟩ := Prod.mk.inj hposition
+  obtain ⟨rfl, rfl, rfl⟩ := hequal
+  rw [constantFreeRows, constantFreeRowsFrom,
+    List.mem_filter] at hfree
+  simpa [rowOccupied] using hfree.2
 
 /-- Every V1 constant allocation lies below the final placed-region end. -/
 theorem constantAssignments_row_lt_placementEnd

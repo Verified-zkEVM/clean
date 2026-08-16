@@ -3239,6 +3239,25 @@ structure Operations.FixedWritesLawful
   loadedTableColumns_disjoint_constantColumns :
     operations.loadedTableColumns.Disjoint constantColumns
 
+/-- Fixed-write lawfulness is preserved when the available constants columns are
+narrowed. -/
+theorem Operations.FixedWritesLawful.mono_constantColumns
+    {operations : Operations F}
+    {source target : List (Column .fixed)}
+    (hlawful : operations.FixedWritesLawful source)
+    (hsubset : ∀ column ∈ target, column ∈ source) :
+    operations.FixedWritesLawful target where
+  regionAssignmentsAgree := hlawful.regionAssignmentsAgree
+  loadedTableColumns_nodup := hlawful.loadedTableColumns_nodup
+  loadedTableColumns_disjoint_regionFixedColumns :=
+    hlawful.loadedTableColumns_disjoint_regionFixedColumns
+  loadedTableColumns_disjoint_constantColumns := by
+    rw [List.disjoint_left]
+    intro column htable htarget
+    exact List.disjoint_left.mp
+      hlawful.loadedTableColumns_disjoint_constantColumns
+      htable (hsubset column htarget)
+
 theorem Operations.FixedWritesLawful.append
     {left right : Operations F} {constantColumns : List (Column .fixed)}
     (hleft : left.FixedWritesLawful constantColumns)

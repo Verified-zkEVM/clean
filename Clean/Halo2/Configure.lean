@@ -1156,7 +1156,7 @@ def ConfigureDelta.apply (delta : ConfigureDelta F)
   permutationColumns :=
     appendFirstEncounters initial.permutationColumns
       delta.permutationRequests
-  constants := initial.constants ++ delta.constants
+  constants := appendFirstEncounters initial.constants delta.constants
   adviceQueries :=
     appendFirstEncounters initial.adviceQueries delta.adviceQueries
   fixedQueries :=
@@ -1165,6 +1165,19 @@ def ConfigureDelta.apply (delta : ConfigureDelta F)
     appendFirstEncounters initial.instanceQueries delta.instanceQueries
   invalidQueriedCells :=
     initial.invalidQueriedCells ++ delta.invalidQueriedCells
+
+theorem ConfigureDelta.mem_constants_apply
+    (delta : ConfigureDelta F) (initial : ConstraintSystem F)
+    (counts : ConfigureCounts) (column : Column .fixed) :
+    column ∈ (delta.apply initial counts).constants ↔
+      column ∈ initial.constants ∨ column ∈ delta.constants := by
+  exact mem_appendFirstEncounters column initial.constants delta.constants
+
+theorem ConfigureDelta.constants_nodup_apply
+    (delta : ConfigureDelta F) (initial : ConstraintSystem F)
+    (counts : ConfigureCounts) (hinitial : initial.constants.Nodup) :
+    (delta.apply initial counts).constants.Nodup := by
+  exact nodup_appendFirstEncounters initial.constants delta.constants hinitial
 
 theorem ConfigureDelta.csDegree_apply
     (delta : ConfigureDelta F) (initial : ConstraintSystem F)
@@ -1362,12 +1375,29 @@ theorem mem_permutationColumns_run_iff
             (ConfigureCounts.ofConstraintSystem initial)).permutationRequests := by
   simp only [run, delta, ConfigureDelta.apply, mem_appendFirstEncounters]
 
+theorem mem_constants_run_iff
+    (program : Configure F α) (initial : ConstraintSystem F)
+    (column : Column .fixed) :
+    column ∈ (program.run initial).2.constants ↔
+      column ∈ initial.constants ∨
+        column ∈
+          (program.delta
+            (ConfigureCounts.ofConstraintSystem initial)).constants := by
+  simp only [run, delta, ConfigureDelta.apply, mem_appendFirstEncounters]
+
 /-- Configure interpretation preserves the first-encounter invariant of the
 permutation-column list. -/
 theorem permutationColumns_run_nodup
     (program : Configure F α) (initial : ConstraintSystem F)
     (hinitial : initial.permutationColumns.Nodup) :
     (program.run initial).2.permutationColumns.Nodup := by
+  exact nodup_appendFirstEncounters _ _ hinitial
+
+/-- Configure interpretation retains each constants column only at its first request. -/
+theorem constants_run_nodup
+    (program : Configure F α) (initial : ConstraintSystem F)
+    (hinitial : initial.constants.Nodup) :
+    (program.run initial).2.constants.Nodup := by
   exact nodup_appendFirstEncounters _ _ hinitial
 
 instance : CoeFun (Configure F α)
