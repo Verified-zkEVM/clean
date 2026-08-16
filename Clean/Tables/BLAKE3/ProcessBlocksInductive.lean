@@ -74,7 +74,7 @@ def circuit : FormalAssertion (F p) ProcessBlocksState where
 
   soundness := by
     circuit_proof_start [ProcessBlocksState.Normalized, U32.AssertNormalized.circuit]
-    simp_all -- provable_vector_simp wanted
+    simp_all
 
   completeness := by
     circuit_proof_all [U32.AssertNormalized.circuit, ProcessBlocksState.Normalized,

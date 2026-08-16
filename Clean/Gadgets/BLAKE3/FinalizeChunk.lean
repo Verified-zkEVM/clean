@@ -114,14 +114,14 @@ def Spec (input : Inputs (F p)) (output : ProvableVector U32 8 (F p)) : Prop :=
   output.map U32.value = Specs.BLAKE3.finalizeChunk chunk_state input.base_flags.value ∧
   (∀ i : Fin 8, output[i].Normalized)
 
-lemma ZMod_val_chunkEnd :
+private lemma ZMod_val_chunkEnd :
     ZMod.val (n:=p) ↑chunkEnd = 2 := by
   have := p_large_enough.elim
   simp only [ZMod.val_natCast, chunkEnd, pow_one]
   rw [Nat.mod_eq_of_lt]; omega
 
 omit p_large_enough in
-lemma eval_bytesToWords (env : Environment (F p))
+private lemma eval_bytesToWords (env : Environment (F p))
     (input_var_buffer_data : BLAKE3Buffer (Expression (F p))) :
   eval env (bytesToWords input_var_buffer_data : ProvableVector U32 16 (Expression (F p))) =
       bytesToWords (eval env input_var_buffer_data : BLAKE3Buffer (F p)) := by
@@ -134,7 +134,7 @@ lemma eval_bytesToWords (env : Environment (F p))
     exact ProvableType.getElem_eval_fields env input_var_buffer_data _ (by omega)
 
 omit p_large_enough in
-lemma eval_take_normalized (env : Environment (F p)) (v : BLAKE3State (Expression (F p)))
+private lemma eval_take_normalized (env : Environment (F p)) (v : BLAKE3State (Expression (F p)))
     (h : ∀ i : Fin 16, (eval env v : BLAKE3State (F p))[i.val].Normalized) (i : ℕ) (h_i : i < 8) :
     ((eval env (v.take 8) : ProvableVector U32 8 (F p))[i]'(by omega)).Normalized := by
   have h_eq : (eval env (v.take 8) : ProvableVector U32 8 (F p)) =
