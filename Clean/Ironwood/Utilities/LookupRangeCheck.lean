@@ -717,6 +717,19 @@ theorem shortRangeCheck_elaborated_synthesisSummary_eq
     (shortRangeCheck K numBits).elaborated.synthesisSummary cfg offset () region =
       shortRangeCheckSynthesisSummary cfg offset := rfl
 
+@[keygen_norm]
+theorem shortRangeCheck_keygenRequirements_fixedColumns
+    (K numBits : ℕ) (cfg : Config K)
+    (hcfg : (shortRangeCheck K numBits).keygenRequirements.configLawful cfg) :
+    (shortRangeCheck K numBits).keygenRequirements.fixedColumns cfg hcfg = [] :=
+  rfl
+
+@[keygen_norm]
+theorem shortRangeCheck_configure_fixedColumns
+    (K numBits : ℕ) (cfg : Config K) (counts : ConfigureCounts) :
+    ((shortRangeCheck K numBits).configure cfg).fixedColumns counts = [] := by
+  simp [shortRangeCheck]
+
 /-- A short range check requests one deferred constant cell for the inverse
 power-of-two value. -/
 @[synthesis_summary_norm]

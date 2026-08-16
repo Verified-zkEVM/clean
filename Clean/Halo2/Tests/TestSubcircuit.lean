@@ -54,6 +54,12 @@ def parent :
           configInput counts hconfig) offset input region
       intro cell hcell
       exact hcell
+    fixedAssignmentsAgree := by
+      intro configInput counts hconfig offset input region
+      exact WitnessPoint.point.call_fixedAssignmentsAgree
+        ((WitnessPoint.point.configure configInput).output counts)
+        (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
+          configInput counts hconfig) offset input region
     synthesisSummary := fun config offset input region =>
       WitnessPoint.point.elaborated.synthesisSummary config offset input region
     synthesisSummary_eq := by
@@ -121,6 +127,14 @@ def parentWithOp :
           configInput counts hconfig) offset input region
       intro cell hcell
       exact List.mem_cons_of_mem _ hcell
+    fixedAssignmentsAgree := by
+      intro configInput counts hconfig offset input region
+      simp only [RegionCircuit.operations_bind]
+      apply (WitnessPoint.point.call_fixedAssignmentsAgree
+        ((WitnessPoint.point.configure configInput).output counts)
+        (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
+          configInput counts hconfig) offset input region).append_left
+      keygen_registration
     synthesisSummary := fun config offset input region =>
       (FloorPlanner.RegionSynthesisSummary.ofColumns
         [.column .advice config.x.index] (offset + 2) 0).combine

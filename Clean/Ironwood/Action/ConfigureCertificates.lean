@@ -19,6 +19,21 @@ private def actionConfigureContext (G : Generators) (counts : ConfigureCounts) :
     KeygenContext Fp :=
   { gates := ((configure G).delta counts).gates
     lookups := ((configure G).delta counts).lookups
+    fixedColumns := ((configure G).output counts).regionFixedColumns
+    permutationColumns := ((configure G).delta counts).permutationRequests }
+
+@[keygen_norm]
+theorem actionConfigureContext_fixedColumns (G : Generators)
+    (counts : ConfigureCounts) :
+    (actionConfigureContext G counts).fixedColumns =
+      ((configure G).output counts).regionFixedColumns := by
+  rfl
+
+private def actionFullConfigureContext (G : Generators)
+    (counts : ConfigureCounts) : KeygenContext Fp :=
+  { gates := ((configure G).delta counts).gates
+    lookups := ((configure G).delta counts).lookups
+    fixedColumns := (configure G).fixedColumns counts
     permutationColumns := ((configure G).delta counts).permutationRequests }
 
 @[keygen_norm]
@@ -49,7 +64,17 @@ opaque eccConfigureCertificate (G : Generators) (counts : ConfigureCounts) :
     (configureBase.output counts).advices
     (configureBase.output counts).lagrangeCoeffs
     (configureBase.output counts).lookupConfig
-    (configureBase.finalCounts counts)).mono
+    (configureBase.finalCounts counts)
+    (Ecc.configureOutputFixedColumnsLawful
+      (configureBase.output counts).advices
+      (configureBase.output counts).lagrangeCoeffs
+      (configureBase.output counts).lookupConfig
+      (configureBase.finalCounts counts)
+      (configureBase_lagrangeCoeffs_nodup counts)
+      (by
+        intro column hcolumn
+        obtain ⟨index, rfl⟩ := List.mem_ofFn.mp hcolumn
+        exact configureBase_lagrangeCoeff_index_lt_finalCounts counts index))).mono
     (by
       intro gate hgate
       simp only [Ecc.configureContext] at hgate
@@ -79,6 +104,17 @@ opaque eccConfigureCertificate (G : Generators) (counts : ConfigureCounts) :
         exact hecc)
     (by
       intro column hcolumn
+      simp only [Ecc.configureContext, List.mem_append] at hcolumn
+      simp only [actionConfigureContext]
+      rcases hcolumn with hlagrange | hecc
+      · obtain ⟨index, rfl⟩ := List.mem_ofFn.mp hlagrange
+        exact configureBase_lagrangeCoeff_mem_regionFixedColumns G counts index
+      · rw [Ecc.configure_fixedColumns, List.mem_singleton] at hecc
+        rw [hecc]
+        simpa only [configure_output_eccConfig] using
+          configure_output_fixedZ_mem_regionFixedColumns G counts)
+    (by
+      intro column hcolumn
       simp only [Ecc.configureContext, List.mem_cons] at hcolumn
       simp only [actionConfigureContext]
       rcases hcolumn with hrange | hecc
@@ -91,6 +127,23 @@ opaque eccConfigureCertificate (G : Generators) (counts : ConfigureCounts) :
         unfold configureChips
         apply Configure.mem_permutationRequests_delta_bind_left
         exact hecc)
+
+/-- The same ECC capabilities in the complete Action configure context. The witness
+stage also loads the generator table, so its aggregate registration theorem uses this
+larger context. -/
+def eccFullConfigureCertificate (G : Generators) (counts : ConfigureCounts) :
+    Ecc.ConfigureCertificate
+      (configureBase.output counts).advices
+      (configureBase.output counts).lagrangeCoeffs
+      (configureBase.output counts).lookupConfig
+      (configureBase.finalCounts counts)
+      (actionFullConfigureContext G counts) :=
+  (eccConfigureCertificate G counts).mono
+    (fun _ hgate => hgate)
+    (fun _ hlookup => hlookup)
+    (List.forall_iff_forall_mem.mp
+      (configure_regionFixedColumns_forall_fixedColumns G counts))
+    (fun _ hcolumn => hcolumn)
 
 /-- The fixed-base coordinate gate is one of the gates emitted by the complete Action
 configure program. -/
@@ -152,11 +205,20 @@ private def poseidonHashCertificate (G : Generators) (counts : ConfigureCounts) 
   let base := configureBase.output counts
   let eccCounts := (Ecc.configure base.advices base.lagrangeCoeffs
     base.lookupConfig).finalCounts (configureBase.finalCounts counts)
+  have hfixedColumns :
+      ((Poseidon.configure
+        ![base.advices 6, base.advices 7, base.advices 8] (base.advices 5)
+        ![base.lagrangeCoeffs 2, base.lagrangeCoeffs 3, base.lagrangeCoeffs 4]
+        ![base.lagrangeCoeffs 5, base.lagrangeCoeffs 6,
+          base.lagrangeCoeffs 7]).output eccCounts).FixedColumnsLawful := by
+    constructor
+    simpa [Poseidon.configure, Poseidon.Config.fixedColumns, base] using
+      (configureBase_lagrangeCoeffs_nodup counts).tail.tail
   apply (Poseidon.hashConfigureCertificate (Poseidon.Hash.ConstantLength.capacity 2)
     ![base.advices 6, base.advices 7, base.advices 8] (base.advices 5)
     ![base.lagrangeCoeffs 2, base.lagrangeCoeffs 3, base.lagrangeCoeffs 4]
     ![base.lagrangeCoeffs 5, base.lagrangeCoeffs 6, base.lagrangeCoeffs 7]
-    eccCounts).mono
+    eccCounts hfixedColumns).mono
   · intro gate hgate
     simp only [actionConfigureContext]
     unfold configure
@@ -173,6 +235,17 @@ private def poseidonHashCertificate (G : Generators) (counts : ConfigureCounts) 
     apply Configure.mem_lookups_delta_bind_right
     apply Configure.mem_lookups_delta_bind_left
     exact hargument
+  · intro column hcolumn
+    simp [Poseidon.configure, Poseidon.Config.fixedColumns] at hcolumn
+    rcases hcolumn with rfl | rfl | rfl | rfl | rfl | rfl
+    all_goals
+      simp only [actionConfigureContext]
+    · exact configureBase_lagrangeCoeff_mem_regionFixedColumns G counts 2
+    · exact configureBase_lagrangeCoeff_mem_regionFixedColumns G counts 3
+    · exact configureBase_lagrangeCoeff_mem_regionFixedColumns G counts 4
+    · exact configureBase_lagrangeCoeff_mem_regionFixedColumns G counts 5
+    · exact configureBase_lagrangeCoeff_mem_regionFixedColumns G counts 6
+    · exact configureBase_lagrangeCoeff_mem_regionFixedColumns G counts 7
   · intro column hcolumn
     simp only [actionConfigureContext]
     unfold configure
@@ -198,10 +271,23 @@ private def sinsemilla1HashCertificate (G : Generators) (ns : List ℕ)
     ![base.lagrangeCoeffs 2, base.lagrangeCoeffs 3, base.lagrangeCoeffs 4]
     ![base.lagrangeCoeffs 5, base.lagrangeCoeffs 6,
       base.lagrangeCoeffs 7]).finalCounts eccCounts
+  have hfixedYQ :
+      (base.lagrangeCoeffs 0).index < poseidonCounts.numFixedColumns := by
+    apply (configureBase_lagrangeCoeff_index_lt_finalCounts counts 0).trans_le
+    exact le_trans
+      (Configure.counts_componentwiseLE_finalCounts
+        (Ecc.configure base.advices base.lagrangeCoeffs base.lookupConfig)
+        chipsCounts).numFixedColumns
+      (Configure.counts_componentwiseLE_finalCounts
+        (Poseidon.configure
+          ![base.advices 6, base.advices 7, base.advices 8] (base.advices 5)
+          ![base.lagrangeCoeffs 2, base.lagrangeCoeffs 3, base.lagrangeCoeffs 4]
+          ![base.lagrangeCoeffs 5, base.lagrangeCoeffs 6,
+            base.lagrangeCoeffs 7]) eccCounts).numFixedColumns
   apply (Sinsemilla.HashToPoint.hashConfigureCertificate G
     ns Q hQ hns (base.advices 0) (base.advices 1) (base.advices 2)
     (base.advices 3) (base.advices 4) (base.advices 6)
-    (base.lagrangeCoeffs 0) base.genTable poseidonCounts).mono
+    (base.lagrangeCoeffs 0) base.genTable poseidonCounts hfixedYQ).mono
   · intro gate hgate
     simp only [actionConfigureContext]
     unfold configure
@@ -220,6 +306,18 @@ private def sinsemilla1HashCertificate (G : Generators) (ns : List ℕ)
     apply Configure.mem_lookups_delta_bind_right
     apply Configure.mem_lookups_delta_bind_left
     simpa [base, chipsCounts, eccCounts, poseidonCounts] using hargument
+  · intro column hcolumn
+    simp only [List.mem_cons] at hcolumn
+    rcases hcolumn with hfixedYQ | hhash
+    · subst column
+      simp only [actionConfigureContext]
+      exact configureBase_lagrangeCoeff_mem_regionFixedColumns G counts 0
+    · simp only [actionConfigureContext]
+      rw [Sinsemilla.HashPiece.configure_fixedColumns,
+        List.mem_singleton] at hhash
+      rw [hhash]
+      simpa [base, chipsCounts, eccCounts, poseidonCounts] using
+        configure_output_sinsemilla1_qS2_mem_regionFixedColumns G counts
   · intro column hcolumn
     simp only [actionConfigureContext]
     unfold configure
@@ -241,9 +339,8 @@ private theorem sinsemilla1Gate_mem_actionConfigure (G : Generators)
   apply Or.inl
   have hconfig : certificate.configInput = ((configure G).output counts).sinsemilla1 := by
     simpa using certificate.output_eq
-  rw [hconfig]
-  simp [Sinsemilla.HashToPoint.hashCircuit, Sinsemilla.HashToPoint.hashRegion,
-    FormalRegionCircuit.keygenRequirements,
+  simp [hconfig, Sinsemilla.HashToPoint.hashCircuit,
+    Sinsemilla.HashToPoint.hashRegion, FormalRegionCircuit.keygenRequirements,
     ElaboratedRegionCircuit.keygenRequirements]
 
 private theorem sinsemilla1Lookup_mem_actionConfigure (G : Generators)
@@ -257,9 +354,8 @@ private theorem sinsemilla1Lookup_mem_actionConfigure (G : Generators)
   apply Or.inl
   have hconfig : certificate.configInput = ((configure G).output counts).sinsemilla1 := by
     simpa using certificate.output_eq
-  rw [hconfig]
-  simp [Sinsemilla.HashToPoint.hashCircuit, Sinsemilla.HashToPoint.hashRegion,
-    FormalRegionCircuit.keygenRequirements,
+  simp [hconfig, Sinsemilla.HashToPoint.hashCircuit,
+    Sinsemilla.HashToPoint.hashRegion, FormalRegionCircuit.keygenRequirements,
     ElaboratedRegionCircuit.keygenRequirements]
 
 private theorem sinsemilla1_qS2_fixedQuery_mem_actionConfigure
@@ -345,6 +441,11 @@ private def merkle1Capabilities (G : Generators) (counts : ConfigureCounts) :
         hashConfig, hashCounts] using hargument)
     (by
       intro column hcolumn
+      simp only [actionConfigureContext]
+      rw [Sinsemilla.Merkle.configure_fixedColumns] at hcolumn
+      exact (List.not_mem_nil hcolumn).elim)
+    (by
+      intro column hcolumn
       simp only [List.mem_append] at hcolumn
       rcases hcolumn with hgateColumns | hmerkle
       · have hhash :=
@@ -407,10 +508,29 @@ private def sinsemilla2HashCertificate (G : Generators) (ns : List ℕ)
     (base.lagrangeCoeffs 0) base.genTable
   let merkle1 := Sinsemilla.Merkle.configure (hash1.output poseidonCounts)
   let hash2Counts := merkle1.finalCounts (hash1.finalCounts poseidonCounts)
+  have hfixedYQ :
+      (base.lagrangeCoeffs 1).index < hash2Counts.numFixedColumns := by
+    apply (configureBase_lagrangeCoeff_index_lt_finalCounts counts 1).trans_le
+    exact le_trans
+      (Configure.counts_componentwiseLE_finalCounts
+        (Ecc.configure base.advices base.lagrangeCoeffs base.lookupConfig)
+        chipsCounts).numFixedColumns <|
+      le_trans
+        (Configure.counts_componentwiseLE_finalCounts
+          (Poseidon.configure
+            ![base.advices 6, base.advices 7, base.advices 8] (base.advices 5)
+            ![base.lagrangeCoeffs 2, base.lagrangeCoeffs 3, base.lagrangeCoeffs 4]
+            ![base.lagrangeCoeffs 5, base.lagrangeCoeffs 6,
+              base.lagrangeCoeffs 7]) eccCounts).numFixedColumns <|
+        le_trans
+          (Configure.counts_componentwiseLE_finalCounts
+            hash1 poseidonCounts).numFixedColumns
+          (Configure.counts_componentwiseLE_finalCounts
+            merkle1 (hash1.finalCounts poseidonCounts)).numFixedColumns
   apply (Sinsemilla.HashToPoint.hashConfigureCertificate G
     ns Q hQ hns (base.advices 5) (base.advices 6) (base.advices 7)
     (base.advices 8) (base.advices 9) (base.advices 7)
-    (base.lagrangeCoeffs 1) base.genTable hash2Counts).mono
+    (base.lagrangeCoeffs 1) base.genTable hash2Counts hfixedYQ).mono
   · intro gate hgate
     simp only [actionConfigureContext]
     unfold configure
@@ -436,6 +556,19 @@ private def sinsemilla2HashCertificate (G : Generators) (ns : List ℕ)
     simpa [base, chipsCounts, eccCounts, poseidonCounts, hash1, merkle1,
       hash2Counts] using hargument
   · intro column hcolumn
+    simp only [List.mem_cons] at hcolumn
+    rcases hcolumn with hfixedYQ | hhash
+    · subst column
+      simp only [actionConfigureContext]
+      exact configureBase_lagrangeCoeff_mem_regionFixedColumns G counts 1
+    · simp only [actionConfigureContext]
+      rw [Sinsemilla.HashPiece.configure_fixedColumns,
+        List.mem_singleton] at hhash
+      rw [hhash]
+      simpa [base, chipsCounts, eccCounts, poseidonCounts, hash1, merkle1,
+        hash2Counts] using
+        configure_output_sinsemilla2_qS2_mem_regionFixedColumns G counts
+  · intro column hcolumn
     simp only [actionConfigureContext]
     unfold configure
     apply Configure.mem_permutationRequests_delta_bind_right
@@ -459,9 +592,8 @@ private theorem sinsemilla2Gate_mem_actionConfigure (G : Generators)
   apply Or.inl
   have hconfig : certificate.configInput = ((configure G).output counts).sinsemilla2 := by
     simpa using certificate.output_eq
-  rw [hconfig]
-  simp [Sinsemilla.HashToPoint.hashCircuit, Sinsemilla.HashToPoint.hashRegion,
-    FormalRegionCircuit.keygenRequirements,
+  simp [hconfig, Sinsemilla.HashToPoint.hashCircuit,
+    Sinsemilla.HashToPoint.hashRegion, FormalRegionCircuit.keygenRequirements,
     ElaboratedRegionCircuit.keygenRequirements]
 
 private theorem sinsemilla2_qS2_fixedQuery_mem_actionConfigure
@@ -588,6 +720,11 @@ private def merkle2Capabilities (G : Generators) (counts : ConfigureCounts) :
         hash2Counts, hash2, hashConfig, hashCounts] using hargument)
     (by
       intro column hcolumn
+      simp only [actionConfigureContext]
+      rw [Sinsemilla.Merkle.configure_fixedColumns] at hcolumn
+      exact (List.not_mem_nil hcolumn).elim)
+    (by
+      intro column hcolumn
       simp only [List.mem_append] at hcolumn
       rcases hcolumn with hgateColumns | hmerkle
       · have hhash :=
@@ -655,23 +792,29 @@ private theorem commitIvkGate_mem (G : Generators) (counts : ConfigureCounts) :
 
 /-- Transport all capabilities from Action's shared configure prefix at once. -/
 opaque baseConfigureCertificate (G : Generators) (counts : ConfigureCounts) :
-    ConfigureBaseCertificate counts (actionConfigureContext G counts) :=
+    ConfigureBaseCertificate counts (actionFullConfigureContext G counts) :=
   (configureBaseCertificate counts).mono
     (by
       intro gate hgate
-      simp only [actionConfigureContext]
+      simp only [actionFullConfigureContext]
       unfold configure
       apply Configure.mem_gates_delta_bind_left
       exact hgate)
     (by
       intro argument hargument
-      simp only [actionConfigureContext]
+      simp only [actionFullConfigureContext]
       unfold configure
       apply Configure.mem_lookups_delta_bind_left
       exact hargument)
     (by
       intro column hcolumn
-      simp only [actionConfigureContext]
+      simp only [actionFullConfigureContext]
+      unfold configure
+      apply Configure.mem_fixedColumns_bind_left
+      exact hcolumn)
+    (by
+      intro column hcolumn
+      simp only [actionFullConfigureContext]
       unfold configure
       apply Configure.mem_permutationRequests_delta_bind_left
       exact hcolumn)
@@ -680,8 +823,49 @@ opaque baseConfigureCertificate (G : Generators) (counts : ConfigureCounts) :
 private def addChipCertificate (G : Generators) (counts : ConfigureCounts) :
     AddChip.addFormal.ConfigurationCertificate
       ((configure G).output counts).addChipConfig
-      (actionConfigureContext G counts) :=
-  (baseConfigureCertificate G counts).addChip
+      (actionConfigureContext G counts) := by
+  let source := (baseConfigureCertificate G counts).addChip
+  let certificate : AddChip.addFormal.ConfigurationCertificate
+      (configureBase.output counts).addChipConfig
+      (actionConfigureContext G counts) := source.retargetWithoutFixedColumns
+    (by
+      intro gate hgate
+      simpa only [actionFullConfigureContext, actionConfigureContext] using hgate)
+    (by
+      intro argument hargument
+      simpa only [actionFullConfigureContext, actionConfigureContext] using hargument)
+    (by
+      simp only [AddChip.addFormal_keygenRequirements_fixedColumns,
+        AddChip.addFormal_configure_fixedColumns, List.nil_append])
+    (by
+      intro column hcolumn
+      simpa only [actionFullConfigureContext, actionConfigureContext] using hcolumn)
+  simpa [source, configure, configureChips] using certificate
+
+private def shortRangeCertificate (G : Generators) (counts : ConfigureCounts)
+    (numBits : ℕ) :
+    (LookupRangeCheck.shortRangeCheck 10 numBits).ConfigurationCertificate
+      ((configure G).output counts).lookupConfig
+      (actionConfigureContext G counts) := by
+  let source := (baseConfigureCertificate G counts).shortRange numBits
+  let certificate :
+      (LookupRangeCheck.shortRangeCheck 10 numBits).ConfigurationCertificate
+        (configureBase.output counts).lookupConfig
+        (actionConfigureContext G counts) := source.retargetWithoutFixedColumns
+    (by
+      intro gate hgate
+      simpa only [actionFullConfigureContext, actionConfigureContext] using hgate)
+    (by
+      intro argument hargument
+      simpa only [actionFullConfigureContext, actionConfigureContext] using hargument)
+    (by
+      simp only [LookupRangeCheck.shortRangeCheck_keygenRequirements_fixedColumns,
+        LookupRangeCheck.shortRangeCheck_configure_fixedColumns,
+        List.nil_append])
+    (by
+      intro column hcolumn
+      simpa only [actionFullConfigureContext, actionConfigureContext] using hcolumn)
+  simpa [source, configure, configureChips] using certificate
 
 /-- The first 16-layer Merkle fold, assembled only from direct child capabilities. -/
 opaque merkle1Certificate (G : Generators) (B : Bases)
@@ -693,7 +877,7 @@ opaque merkle1Certificate (G : Generators) (B : Bases)
           ((configure G).output counts).merkle1,
           ((configure G).output counts).lookupConfig)
         (actionConfigureContext G counts) := by
-  let range := (baseConfigureCertificate G counts).shortRange 5
+  let range := shortRangeCertificate G counts 5
   let hash := sinsemilla1HashCertificate G
     Sinsemilla.Merkle.HashLayer.merkleNs B.merkleQ B.merkleQ_onCurve
     (by decide) counts
@@ -701,7 +885,8 @@ opaque merkle1Certificate (G : Generators) (B : Bases)
     G B.merkleQ B.merkleQ_onCurve 0 (by norm_num)
     range hash ((merkle1Capabilities G counts).gate 0)
     (by
-      simpa [configure, configureChips] using
+      simpa [configure, configureChips, actionFullConfigureContext,
+        actionConfigureContext] using
         (baseConfigureCertificate G counts).advicePermutationColumn 6)
   let layer := Sinsemilla.Merkle.Layer.configurationCertificate
     G B.merkleQ B.merkleQ_onCurve 0 (by norm_num)
@@ -722,7 +907,7 @@ opaque merkle2Certificate (G : Generators) (B : Bases)
           ((configure G).output counts).merkle2,
           ((configure G).output counts).lookupConfig)
         (actionConfigureContext G counts) := by
-  let range := (baseConfigureCertificate G counts).shortRange 5
+  let range := shortRangeCertificate G counts 5
   let hash := sinsemilla2HashCertificate G
     Sinsemilla.Merkle.HashLayer.merkleNs B.merkleQ B.merkleQ_onCurve
     (by decide) counts
@@ -730,7 +915,8 @@ opaque merkle2Certificate (G : Generators) (B : Bases)
     G B.merkleQ B.merkleQ_onCurve 16 (by norm_num)
     range hash ((merkle2Capabilities G counts).gate 16)
     (by
-      simpa [configure, configureChips] using
+      simpa [configure, configureChips, actionFullConfigureContext,
+        actionConfigureContext] using
         (baseConfigureCertificate G counts).advicePermutationColumn 7)
   let layer := Sinsemilla.Merkle.Layer.configurationCertificate
     G B.merkleQ B.merkleQ_onCurve 16 (by norm_num)
@@ -963,6 +1149,16 @@ opaque valueCommitCertificate (G : Generators) (B : Bases)
   · intro column hcolumn
     simp only [ValueCommit.circuit, FormalCircuit.keygenRequirements,
       ElaboratedCircuit.keygenRequirements, ValueCommit.keygenRequirements,
+      Configure.fixedColumns_pure, List.append_nil, List.mem_append] at hcolumn
+    rcases hcolumn with (hshort | hfull) | hadd
+    · exact (ecc.mulFixedShort B.valueCommitV).fixedColumns_of_configured
+        column hshort
+    · exact (ecc.mulFixedFull B.valueCommitR).fixedColumns_of_configured
+        column hfull
+    · exact ecc.addFormal.fixedColumns_of_configured column hadd
+  · intro column hcolumn
+    simp only [ValueCommit.circuit, FormalCircuit.keygenRequirements,
+      ElaboratedCircuit.keygenRequirements, ValueCommit.keygenRequirements,
       Configure.delta_pure, List.append_nil, List.mem_append] at hcolumn
     rcases hcolumn with ((hshort | hfull) | hadd) | hdirect
     · exact (ecc.mulFixedShort B.valueCommitV).permutationColumns_of_configured
@@ -1004,6 +1200,14 @@ opaque spendAuthorityCertificate (G : Generators) (B : Bases)
     rcases hargument with hfull | hadd
     · exact (ecc.mulFixedFull B.spendAuthG).lookups_of_configured argument hfull
     · exact ecc.addFormal.lookups_of_configured argument hadd
+  · intro column hcolumn
+    simp only [SpendAuthority.circuit, FormalCircuit.keygenRequirements,
+      ElaboratedCircuit.keygenRequirements, SpendAuthority.keygenRequirements,
+      Configure.fixedColumns_pure, List.append_nil, List.mem_append] at hcolumn
+    rcases hcolumn with hfull | hadd
+    · exact (ecc.mulFixedFull B.spendAuthG).fixedColumns_of_configured
+        column hfull
+    · exact ecc.addFormal.fixedColumns_of_configured column hadd
   · intro column hcolumn
     simp only [SpendAuthority.circuit, FormalCircuit.keygenRequirements,
       ElaboratedCircuit.keygenRequirements, SpendAuthority.keygenRequirements,
@@ -1059,6 +1263,14 @@ opaque addressIntegrityCertificate (G : Generators)
     · exact ecc.witnessPointNonIdFormal.lookups_of_configured argument hwitness
   · intro column hcolumn
     simp only [AddressIntegrity.circuit, FormalCircuit.keygenRequirements,
+      ElaboratedCircuit.keygenRequirements, Configure.fixedColumns_pure,
+      List.append_nil, List.mem_append] at hcolumn
+    rcases hcolumn with hmul | hwitness
+    · exact ecc.mul.fixedColumns_of_configured column hmul
+    · exact ecc.witnessPointNonIdFormal.fixedColumns_of_configured
+        column hwitness
+  · intro column hcolumn
+    simp only [AddressIntegrity.circuit, FormalCircuit.keygenRequirements,
       ElaboratedCircuit.keygenRequirements, Configure.delta_pure,
       List.append_nil, List.mem_append, List.mem_cons, List.not_mem_nil,
       or_false] at hcolumn
@@ -1110,6 +1322,16 @@ opaque deriveNullifierCertificate (G : Generators) (B : Bases)
     · exact addChip.lookups_of_configured argument haddChip
     · exact (ecc.mulFixedBaseField B.nullifierK).lookups_of_configured argument hbase
     · exact ecc.addFormal.lookups_of_configured argument haddLookup
+  · intro column hcolumn
+    simp only [DeriveNullifier.circuit, FormalCircuit.keygenRequirements,
+      ElaboratedCircuit.keygenRequirements, DeriveNullifier.keygenRequirements,
+      Configure.fixedColumns_pure, List.append_nil, List.mem_append] at hcolumn
+    rcases hcolumn with ((hposeidon | haddChip) | hbase) | hadd
+    · exact poseidon.fixedColumns_of_configured column hposeidon
+    · exact addChip.fixedColumns_of_configured column haddChip
+    · exact (ecc.mulFixedBaseField B.nullifierK).fixedColumns_of_configured
+        column hbase
+    · exact ecc.addFormal.fixedColumns_of_configured column hadd
   · intro column hcolumn
     simp only [DeriveNullifier.circuit, FormalCircuit.keygenRequirements,
       ElaboratedCircuit.keygenRequirements, DeriveNullifier.keygenRequirements,

@@ -400,6 +400,16 @@ def configure (scfg : HashPiece.Config) : Configure Fp Config := do
     ((configure scfg).delta counts).lookups = [] := by
   simp [configure, CondSwap.configure, Gate.configure]
 
+@[keygen_norm] theorem configure_delta_constants
+    (scfg : HashPiece.Config) (counts) :
+    ((configure scfg).delta counts).constants = [] := by
+  simp [configure, CondSwap.configure, Gate.configure]
+
+@[keygen_norm] theorem configure_fixedColumns
+    (scfg : HashPiece.Config) (counts) :
+    (configure scfg).fixedColumns counts = [] := by
+  simp [configure, CondSwap.configure, Gate.configure]
+
 @[reducible] private def configureInferred (scfg : HashPiece.Config) :
     ElaboratedConfigure (configure scfg) := by
   unfold configure

@@ -2860,6 +2860,148 @@ def Operations.regionFixedColumns (operations : Operations F) :
     | .region _ body => body.fixedColumns
     | _ => []
 
+theorem RegionOperations.mem_synthesisSummary_columns_of_mem_fixedColumns
+    {operations : RegionOperations F} {column : Column .fixed}
+    (hcolumn : column ∈ operations.fixedColumns) :
+    .column .fixed column.index ∈
+      (FloorPlanner.regionSynthesisSummary operations).columns := by
+  rw [RegionOperations.fixedColumns, List.mem_filterMap] at hcolumn
+  obtain ⟨operation, hoperation, hcolumn⟩ := hcolumn
+  cases operation <;> simp_all
+  exact FloorPlanner.mem_regionSynthesisSummary_columns_of_mem
+    operations _ hoperation _ (by simp [FloorPlanner.regionOperationShapeColumns])
+
+theorem RegionOperations.mem_fixedColumns_of_mem_synthesisSummary_column
+    {operations : RegionOperations F} {index : ℕ}
+    (hcolumn : .column .fixed index ∈
+      (FloorPlanner.regionSynthesisSummary operations).columns) :
+    (Column.mk index : Column .fixed) ∈ operations.fixedColumns := by
+  rw [FloorPlanner.regionSynthesisSummary_columns_eq_unionColumns] at hcolumn
+  have hflat : .column .fixed index ∈
+      operations.flatMap FloorPlanner.regionOperationShapeColumns :=
+    (FloorPlanner.mem_unionColumns_iff _ _ _).mp hcolumn |>.resolve_left (by simp)
+  rw [List.mem_flatMap] at hflat
+  obtain ⟨operation, hoperation, hshape⟩ := hflat
+  cases operation with
+  | assignFixed column row value =>
+      simp only [FloorPlanner.regionOperationShapeColumns,
+        List.mem_singleton] at hshape
+      cases hshape
+      rw [RegionOperations.fixedColumns, List.mem_filterMap]
+      exact ⟨.assignFixed column row value, hoperation, rfl⟩
+  | _ => simp [FloorPlanner.regionOperationShapeColumns] at hshape
+
+theorem Operations.mem_regionFixedColumns_of_mem_synthesisSummary_column
+    {operations : Operations F} {index : ℕ}
+    (hcolumn : .column .fixed index ∈
+      (FloorPlanner.synthesisSummary operations).columns) :
+    (Column.mk index : Column .fixed) ∈ operations.regionFixedColumns := by
+  induction operations with
+  | nil =>
+      rw [FloorPlanner.synthesisSummary_nil_columns] at hcolumn
+      exact (List.not_mem_nil hcolumn).elim
+  | cons operation rest inductionHypothesis =>
+      cases operation with
+      | region name body =>
+          rw [FloorPlanner.synthesisSummary_region_cons_columns] at hcolumn
+          rcases (FloorPlanner.mem_unionColumns_iff _ _ _).mp hcolumn with
+            hbody | hrest
+          · simp only [Operations.regionFixedColumns, List.flatMap_cons,
+              List.mem_append]
+            exact Or.inl
+              (RegionOperations.mem_fixedColumns_of_mem_synthesisSummary_column hbody)
+          · simp only [Operations.regionFixedColumns, List.flatMap_cons,
+              List.mem_append]
+            exact Or.inr (inductionHypothesis hrest)
+      | constrainInstance cell column row =>
+          rw [FloorPlanner.synthesisSummary_constrainInstance_cons_columns] at hcolumn
+          simpa [Operations.regionFixedColumns] using inductionHypothesis hcolumn
+      | loadTable table values =>
+          rw [FloorPlanner.synthesisSummary_loadTable_cons_columns] at hcolumn
+          simpa [Operations.regionFixedColumns] using inductionHypothesis hcolumn
+
+theorem Operations.KeygenRegistered.mem_fixedColumns_of_mem_regionFixedColumns
+    {operations : Operations F} {gates : List (Gate F)}
+    {lookups : List (LookupArgument F)}
+    {fixedColumns : List (Column .fixed)}
+    {permutationColumns : List AnyColumn}
+    (hregistered : operations.KeygenRegistered gates lookups fixedColumns
+      permutationColumns)
+    {column : Column .fixed} (hcolumn : column ∈ operations.regionFixedColumns) :
+    column ∈ fixedColumns := by
+  rw [Operations.regionFixedColumns, List.mem_flatMap] at hcolumn
+  obtain ⟨operation, hoperation, hcolumn⟩ := hcolumn
+  cases operation with
+  | region name body =>
+      rw [Operations.KeygenRegistered,
+        List.forall_iff_forall_mem] at hregistered
+      have hbody := hregistered (.region name body) hoperation
+      simp only [Operation.KeygenRegistered] at hbody
+      simp only [RegionOperations.fixedColumns, List.mem_filterMap] at hcolumn
+      obtain ⟨regionOperation, hregionOperation, hcolumn⟩ := hcolumn
+      cases regionOperation with
+      | assignFixed assignedColumn row value =>
+          cases hcolumn
+          exact List.forall_iff_forall_mem.mp hbody
+            (.assignFixed column row value) hregionOperation
+      | _ => simp at hcolumn
+  | _ => simp at hcolumn
+
+theorem FloorPlanner.mem_synthesisSummary_columns_of_mem_region
+    (operations : Operations F) (name : String)
+    (body : RegionOperations F) (hbody : .region name body ∈ operations)
+    (column : RegionColumn)
+    (hcolumn : column ∈ (regionSynthesisSummary body).columns) :
+    column ∈ (synthesisSummary operations).columns := by
+  induction operations with
+  | nil => simp at hbody
+  | cons operation rest inductionHypothesis =>
+      rw [List.mem_cons] at hbody
+      cases operation with
+      | region headName headBody =>
+          rw [synthesisSummary_region_cons_columns]
+          apply (mem_unionColumns_iff _ _ _).2
+          rcases hbody with hhead | hrest
+          · cases hhead
+            exact .inl hcolumn
+          · exact .inr (inductionHypothesis hrest)
+      | constrainInstance =>
+          rw [synthesisSummary_constrainInstance_cons_columns]
+          rcases hbody with hfalse | hrest
+          · cases hfalse
+          · exact inductionHypothesis hrest
+      | loadTable =>
+          rw [synthesisSummary_loadTable_cons_columns]
+          rcases hbody with hfalse | hrest
+          · cases hfalse
+          · exact inductionHypothesis hrest
+
+theorem Operations.mem_synthesisSummary_columns_of_mem_regionFixedColumns
+    {operations : Operations F} {column : Column .fixed}
+    (hcolumn : column ∈ operations.regionFixedColumns) :
+    .column .fixed column.index ∈
+      (FloorPlanner.synthesisSummary operations).columns := by
+  rw [Operations.regionFixedColumns, List.mem_flatMap] at hcolumn
+  obtain ⟨operation, hoperation, hcolumn⟩ := hcolumn
+  cases operation with
+  | region name body =>
+      exact FloorPlanner.mem_synthesisSummary_columns_of_mem_region
+        operations name body hoperation _
+        (RegionOperations.mem_synthesisSummary_columns_of_mem_fixedColumns hcolumn)
+  | constrainInstance => simp at hcolumn
+  | loadTable => simp at hcolumn
+
+theorem Operations.disjoint_regionFixedColumns_of_summary
+    (operations : Operations F) (columns : List (Column .fixed))
+    (hcolumns : ∀ column ∈ columns,
+      .column .fixed column.index ∉
+        (FloorPlanner.synthesisSummary operations).columns) :
+    columns.Disjoint operations.regionFixedColumns := by
+  rw [List.disjoint_left]
+  intro column hcolumn hregion
+  exact hcolumns column hcolumn
+    (operations.mem_synthesisSummary_columns_of_mem_regionFixedColumns hregion)
+
 /-- Nonempty lookup-table columns written by a layouter stream. -/
 def Operations.loadedTableColumns (operations : Operations F) :
     List (Column .fixed) :=
@@ -2868,6 +3010,71 @@ def Operations.loadedTableColumns (operations : Operations F) :
     | .loadTable table values =>
         if values = [] then none else some table.inner
     | _ => none
+
+@[simp] theorem Operations.loadedTableColumns_nil :
+    Operations.loadedTableColumns ([] : Operations F) = [] :=
+  rfl
+
+@[simp] theorem Operations.loadedTableColumns_region_cons
+    (name : String) (body : RegionOperations F) (rest : Operations F) :
+    Operations.loadedTableColumns (.region name body :: rest) =
+      rest.loadedTableColumns :=
+  rfl
+
+@[simp] theorem Operations.loadedTableColumns_constrainInstance_cons
+    (cell : Cell) (column : Column .instance) (row : ℕ)
+    (rest : Operations F) :
+    Operations.loadedTableColumns (.constrainInstance cell column row :: rest) =
+      rest.loadedTableColumns :=
+  rfl
+
+@[simp] theorem Operations.loadedTableColumns_loadTable_cons
+    (table : TableColumn) (values : List F) (rest : Operations F) :
+    Operations.loadedTableColumns (.loadTable table values :: rest) =
+      (if values = [] then [] else [table.inner]) ++ rest.loadedTableColumns := by
+  by_cases hvalues : values = [] <;>
+    simp [Operations.loadedTableColumns, hvalues]
+
+@[simp] theorem Operations.regionFixedColumns_append
+    (left right : Operations F) :
+    (left ++ right).regionFixedColumns =
+      left.regionFixedColumns ++ right.regionFixedColumns := by
+  simp [Operations.regionFixedColumns]
+
+@[simp] theorem Operations.loadedTableColumns_append
+    (left right : Operations F) :
+    (left ++ right).loadedTableColumns =
+      left.loadedTableColumns ++ right.loadedTableColumns := by
+  simp [Operations.loadedTableColumns]
+
+theorem Operations.regionFixedColumns_eq_nil_of_summary
+    {operations : Operations F}
+    (hcolumns : ∀ index,
+      .column .fixed index ∉
+        (FloorPlanner.synthesisSummary operations).columns) :
+    operations.regionFixedColumns = [] := by
+  rw [List.eq_nil_iff_forall_not_mem]
+  intro column hcolumn
+  exact hcolumns column.index
+    (operations.mem_synthesisSummary_columns_of_mem_regionFixedColumns hcolumn)
+
+theorem Operations.regionAssignmentsAgree_of_regionFixedColumns_eq_nil
+    {operations : Operations F}
+    (hcolumns : operations.regionFixedColumns = []) :
+    operations.Forall Operation.FixedAssignmentsAgree := by
+  apply List.forall_iff_forall_mem.mpr
+  intro operation hoperation
+  cases operation with
+  | region name body =>
+      apply RegionOperations.fixedAssignmentsAgree_of_fixedColumns_eq_nil
+      apply List.eq_nil_iff_forall_not_mem.mpr
+      intro column hcolumn
+      have : column ∈ operations.regionFixedColumns := by
+        rw [Operations.regionFixedColumns, List.mem_flatMap]
+        exact ⟨.region name body, hoperation, hcolumn⟩
+      rw [hcolumns] at this
+      exact List.not_mem_nil this
+  | _ => trivial
 
 /-- A layouter operation performs no fixed-column write. -/
 def Operation.HasNoFixedWrites : Operation F → Prop
@@ -2878,6 +3085,27 @@ def Operation.HasNoFixedWrites : Operation F → Prop
 /-- A layouter stream performs neither regional fixed writes nor nonempty table loads. -/
 def Operations.HasNoFixedWrites (operations : Operations F) : Prop :=
   operations.Forall Operation.HasNoFixedWrites
+
+/-- A stream with no fixed writes has no region-written fixed columns. -/
+theorem Operations.HasNoFixedWrites.regionFixedColumns_eq_nil
+    {operations : Operations F}
+    (hoperations : operations.HasNoFixedWrites) :
+    operations.regionFixedColumns = [] := by
+  rw [Operations.regionFixedColumns, List.flatMap_eq_nil_iff]
+  intro operation hoperation
+  have hlawful :=
+    List.forall_iff_forall_mem.mp hoperations operation hoperation
+  cases operation with
+  | region name body =>
+      apply List.eq_nil_iff_forall_not_mem.mpr
+      intro column hcolumn
+      simp only [RegionOperations.fixedColumns, List.mem_filterMap] at hcolumn
+      obtain ⟨operation, hoperation, hfixed⟩ := hcolumn
+      have hnoFixed :=
+        List.forall_iff_forall_mem.mp hlawful operation hoperation
+      cases operation <;> simp_all [RegionOperation.HasNoFixedAssignment]
+  | constrainInstance => rfl
+  | loadTable => rfl
 
 /-- A reduced layouter footprint with no fixed writes certifies its source stream. -/
 theorem FloorPlanner.SynthesisSummary.HasNoFixedWrites.hasNoFixedWrites
@@ -3010,6 +3238,65 @@ structure Operations.FixedWritesLawful
     operations.loadedTableColumns.Disjoint operations.regionFixedColumns
   loadedTableColumns_disjoint_constantColumns :
     operations.loadedTableColumns.Disjoint constantColumns
+
+theorem Operations.FixedWritesLawful.append
+    {left right : Operations F} {constantColumns : List (Column .fixed)}
+    (hleft : left.FixedWritesLawful constantColumns)
+    (hright : right.FixedWritesLawful constantColumns)
+    (htables : left.loadedTableColumns.Disjoint right.loadedTableColumns)
+    (hleftTables : left.loadedTableColumns.Disjoint right.regionFixedColumns)
+    (hrightTables : right.loadedTableColumns.Disjoint left.regionFixedColumns) :
+    (left ++ right).FixedWritesLawful constantColumns := by
+  constructor
+  · exact List.forall_append.mpr
+      ⟨hleft.regionAssignmentsAgree, hright.regionAssignmentsAgree⟩
+  · simp only [Operations.loadedTableColumns, List.filterMap_append]
+    exact List.Nodup.append hleft.loadedTableColumns_nodup
+      hright.loadedTableColumns_nodup htables
+  · simp only [Operations.loadedTableColumns, Operations.regionFixedColumns,
+      List.filterMap_append, List.flatMap_append]
+    exact List.disjoint_append_left.mpr
+      ⟨List.disjoint_append_right.mpr
+          ⟨hleft.loadedTableColumns_disjoint_regionFixedColumns,
+            hleftTables⟩,
+        List.disjoint_append_right.mpr
+          ⟨hrightTables, hright.loadedTableColumns_disjoint_regionFixedColumns⟩⟩
+  · simp only [Operations.loadedTableColumns, List.filterMap_append]
+    exact List.disjoint_append_left.mpr
+      ⟨hleft.loadedTableColumns_disjoint_constantColumns,
+        hright.loadedTableColumns_disjoint_constantColumns⟩
+
+/-- Compose three synthesis stages when only the first stage loads tables. The two
+cross-stage obligations then reduce to showing that the first stage's tables are
+disjoint from each later stage's region-written fixed columns. -/
+theorem Operations.FixedWritesLawful.append_noLaterTables
+    {first middle last : Operations F}
+    {constantColumns : List (Column .fixed)}
+    (hfirst : first.FixedWritesLawful constantColumns)
+    (hmiddle : middle.FixedWritesLawful constantColumns)
+    (hlast : last.FixedWritesLawful constantColumns)
+    (hmiddleTables : middle.loadedTableColumns = [])
+    (hlastTables : last.loadedTableColumns = [])
+    (hfirstMiddle : first.loadedTableColumns.Disjoint middle.regionFixedColumns)
+    (hfirstLast : first.loadedTableColumns.Disjoint last.regionFixedColumns) :
+    (first ++ (middle ++ last)).FixedWritesLawful constantColumns := by
+  have hmiddleLast := Operations.FixedWritesLawful.append hmiddle hlast
+    (by rw [hmiddleTables]; exact List.disjoint_nil_left _)
+    (by rw [hmiddleTables]; exact List.disjoint_nil_left _)
+    (by rw [hlastTables]; exact List.disjoint_nil_left _)
+  have hmiddleLastTables :
+      (middle ++ last).loadedTableColumns = [] := by
+    have happend : (middle ++ last).loadedTableColumns =
+        middle.loadedTableColumns ++ last.loadedTableColumns := by
+      simp only [Operations.loadedTableColumns, List.filterMap_append]
+    rw [happend, hmiddleTables, hlastTables, List.nil_append]
+  apply Operations.FixedWritesLawful.append hfirst hmiddleLast
+  · rw [hmiddleLastTables]
+    exact List.disjoint_nil_right _
+  · simp only [Operations.regionFixedColumns, List.flatMap_append]
+    exact List.disjoint_append_right.mpr ⟨hfirstMiddle, hfirstLast⟩
+  · rw [hmiddleLastTables]
+    exact List.disjoint_nil_left _
 
 /-- A stream with no fixed writes satisfies the complete fixed-write law for any
 constant-column capability. -/

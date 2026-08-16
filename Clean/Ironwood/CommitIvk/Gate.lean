@@ -84,6 +84,11 @@ def configure (advices : Fin 10 → Column .advice) : Configure Fp Config := do
     ((configure advices).delta counts).lookups = [] := by
   simp [configure]
 
+@[keygen_norm] theorem configure_delta_constants
+    (advices : Fin 10 → Column .advice) (counts) :
+    ((configure advices).delta counts).constants = [] := by
+  simp [configure]
+
 @[reducible] private def configureInferred (advices : Fin 10 → Column .advice) :
     ElaboratedConfigure (configure advices) := by
   unfold configure

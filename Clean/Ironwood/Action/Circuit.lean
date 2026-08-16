@@ -52,6 +52,19 @@ structure Config where
   noteCommitNew : NoteCommit.Config
   lookupConfig : LookupRangeCheck.Config 10
 
+/-- Fixed columns on which Action synthesis may write inside regions. Table ownership
+is deliberately separate: these are exactly the non-table fixed allocations. -/
+def Config.regionFixedColumns (cfg : Config) : List (Column .fixed) :=
+  List.ofFn cfg.eccConfig.mulFixedShort.superConfig.lagrangeCoeffs ++
+    [cfg.eccConfig.mulFixedShort.superConfig.fixedZ,
+      cfg.sinsemilla1.qS2, cfg.sinsemilla2.qS2]
+
+/-- The three fixed columns owned by the Action generator-table load. -/
+def Config.generatorTableColumns (cfg : Config) : List (Column .fixed) :=
+  [cfg.sinsemilla1.generatorTable.tableIdx.inner,
+    cfg.sinsemilla1.generatorTable.tableX.inner,
+    cfg.sinsemilla1.generatorTable.tableY.inner]
+
 /-- The `"Orchard circuit checks"` gate (`circuit.rs:290-329`): the four top-level value
 checks over `advices[0..8]` at the current row, in the source's constraint order. -/
 def orchardGate (qOrchard : Selector) (advices : Fin 10 → Column .advice) : Gate Fp :=
@@ -262,6 +275,37 @@ def configureLagrange : Configure Fp (Fin 8 → Column .fixed) := do
   enableConstant l0
   return ![l0, l1, l2, l3, l4, l5, l6, l7]
 
+@[keygen_norm]
+theorem configureLagrange_fixedColumns (counts : ConfigureCounts) :
+    configureLagrange.fixedColumns counts =
+      List.ofFn (configureLagrange.output counts) := by
+  simp [configureLagrange]
+
+theorem configureLagrange_output_mem_fixedColumns
+    (counts : ConfigureCounts) (index : Fin 8) :
+    configureLagrange.output counts index ∈
+      configureLagrange.fixedColumns counts := by
+  rw [configureLagrange_fixedColumns]
+  exact List.mem_ofFn.mpr ⟨index, rfl⟩
+
+theorem configureLagrange_output_nodup (counts : ConfigureCounts) :
+    (List.ofFn (configureLagrange.output counts)).Nodup := by
+  rw [← configureLagrange_fixedColumns]
+  exact Configure.fixedColumns_nodup _ _
+
+@[keygen_norm]
+theorem configureLagrange_output_index (counts : ConfigureCounts)
+    (index : Fin 8) :
+    (configureLagrange.output counts index).index =
+      counts.numFixedColumns + index := by
+  fin_cases index <;> simp [configureLagrange]
+
+@[keygen_norm]
+theorem configureLagrange_delta_constants (counts : ConfigureCounts) :
+    (configureLagrange.delta counts).constants =
+      [configureLagrange.output counts 0] := by
+  simp [configureLagrange, ConfigureDelta.append]
+
 @[configure_selector_norm, keygen_norm]
 private theorem configureLagrange_delta_gates (counts) :
     (configureLagrange.delta counts).gates = [] := by
@@ -321,6 +365,14 @@ private theorem configureShared_delta_gates (counts) :
 private theorem configureShared_delta_lookups (counts) :
     (configureShared.delta counts).lookups = [] := by
   simp [configureShared, AddChip.configure, keygen_norm]
+
+@[keygen_norm]
+  private theorem configureShared_delta_constants (counts) :
+    (configureShared.delta counts).constants =
+      [(configureShared.output counts).lagrangeCoeffs 0] := by
+  simp [configureShared, configureAdvices, configureEqualities,
+    configureAdviceEqualitiesLow, configureAdviceEqualitiesHigh,
+    AddChip.configure, configureLagrange_delta_constants, keygen_norm]
 
 private theorem configureShared_constraintDegree (counts) :
     (configureShared.delta counts).constraintDegree = 3 := by
@@ -421,6 +473,97 @@ def configureBase : Configure Fp ConfigureBase := do
     (shared.advices 9) shared.genTable.tableIdx
   return { shared with lookupConfig }
 
+@[keygen_norm]
+private theorem configureBase_delta_constants (counts) :
+    (configureBase.delta counts).constants =
+      [(configureBase.output counts).lagrangeCoeffs 0] := by
+  simp [configureBase, LookupRangeCheck.configure, keygen_norm]
+
+@[keygen_norm]
+theorem configureBase_genTable_tableIdx_index (counts : ConfigureCounts) :
+    (configureBase.output counts).genTable.tableIdx.inner.index =
+      counts.numFixedColumns := by
+  simp [configureBase, configureShared, configureAdvices, AddChip.configure]
+
+@[keygen_norm]
+theorem configureBase_genTable_tableX_index (counts : ConfigureCounts) :
+    (configureBase.output counts).genTable.tableX.inner.index =
+      counts.numFixedColumns + 1 := by
+  simp [configureBase, configureShared, configureAdvices, AddChip.configure]
+
+@[keygen_norm]
+theorem configureBase_genTable_tableY_index (counts : ConfigureCounts) :
+    (configureBase.output counts).genTable.tableY.inner.index =
+      counts.numFixedColumns + 2 := by
+  simp [configureBase, configureShared, configureAdvices, AddChip.configure]
+
+theorem configureBase_genTable_columns_nodup (counts : ConfigureCounts) :
+    [(configureBase.output counts).genTable.tableIdx.inner,
+      (configureBase.output counts).genTable.tableX.inner,
+      (configureBase.output counts).genTable.tableY.inner].Nodup := by
+  apply List.nodup_cons.mpr
+  constructor
+  · intro hmem
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hmem
+    rcases hmem with heq | heq
+    · have := congrArg Column.index heq
+      simp only [configureBase_genTable_tableIdx_index,
+        configureBase_genTable_tableX_index] at this
+      omega
+    · have := congrArg Column.index heq
+      simp only [configureBase_genTable_tableIdx_index,
+        configureBase_genTable_tableY_index] at this
+      omega
+  · apply List.nodup_cons.mpr
+    constructor
+    · intro hmem
+      simp only [List.mem_singleton] at hmem
+      have := congrArg Column.index hmem
+      simp only [configureBase_genTable_tableX_index,
+        configureBase_genTable_tableY_index] at this
+      omega
+    · exact List.nodup_singleton _
+
+theorem configureBase_lagrangeCoeff_mem_fixedColumns
+    (counts : ConfigureCounts) (index : Fin 8) :
+    (configureBase.output counts).lagrangeCoeffs index ∈
+      configureBase.fixedColumns counts := by
+  unfold configureBase
+  apply Configure.mem_fixedColumns_bind_left
+  unfold configureShared
+  apply Configure.mem_fixedColumns_bind_right
+  apply Configure.mem_fixedColumns_bind_right
+  apply Configure.mem_fixedColumns_bind_right
+  apply Configure.mem_fixedColumns_bind_right
+  apply Configure.mem_fixedColumns_bind_right
+  apply Configure.mem_fixedColumns_bind_right
+  apply Configure.mem_fixedColumns_bind_right
+  apply Configure.mem_fixedColumns_bind_right
+  apply Configure.mem_fixedColumns_bind_right
+  apply Configure.mem_fixedColumns_bind_left
+  exact configureLagrange_output_mem_fixedColumns _ index
+
+theorem configureBase_lagrangeCoeffs_nodup (counts : ConfigureCounts) :
+    (List.ofFn (configureBase.output counts).lagrangeCoeffs).Nodup := by
+  unfold configureBase configureShared
+  exact configureLagrange_output_nodup _
+
+@[keygen_norm]
+theorem configureBase_lagrangeCoeff_index
+    (counts : ConfigureCounts) (index : Fin 8) :
+    ((configureBase.output counts).lagrangeCoeffs index).index =
+      counts.numFixedColumns + 3 + index := by
+  unfold configureBase configureShared
+  simpa only using configureLagrange_output_index
+    ({ counts with numFixedColumns := counts.numFixedColumns + 3 }) index
+
+theorem configureBase_lagrangeCoeff_index_lt_finalCounts
+    (counts : ConfigureCounts) (index : Fin 8) :
+    ((configureBase.output counts).lagrangeCoeffs index).index <
+      (configureBase.finalCounts counts).numFixedColumns := by
+  exact (Configure.mem_fixedColumns_iff _ _ _).mp
+    (configureBase_lagrangeCoeff_mem_fixedColumns counts index) |>.2
+
 @[reducible] private def configureBaseInferred : ElaboratedConfigure configureBase := by
   unfold configureBase
   infer_instance
@@ -503,13 +646,15 @@ def mono {counts : ConfigureCounts} {source target : KeygenContext Fp}
     (certificate : ConfigureBaseCertificate counts source)
     (gates : ∀ gate, gate ∈ source.gates → gate ∈ target.gates)
     (lookups : ∀ argument, argument ∈ source.lookups → argument ∈ target.lookups)
+    (fixedColumns : ∀ column,
+      column ∈ source.fixedColumns → column ∈ target.fixedColumns)
     (permutationColumns : ∀ column,
       column ∈ source.permutationColumns → column ∈ target.permutationColumns) :
     ConfigureBaseCertificate counts target where
   orchardGate := gates _ certificate.orchardGate
-  addChip := certificate.addChip.mono gates lookups permutationColumns
+  addChip := certificate.addChip.mono gates lookups fixedColumns permutationColumns
   shortRange numBits :=
-    (certificate.shortRange numBits).mono gates lookups permutationColumns
+    (certificate.shortRange numBits).mono gates lookups fixedColumns permutationColumns
   bitshiftGate := gates _ certificate.bitshiftGate
   rangeLookup := lookups _ certificate.rangeLookup
   advicePermutationColumn index :=
@@ -524,6 +669,7 @@ def configureBaseCertificate (counts : ConfigureCounts) :
     ConfigureBaseCertificate counts
       { gates := (configureBase.delta counts).gates
         lookups := (configureBase.delta counts).lookups
+        fixedColumns := configureBase.fixedColumns counts
         permutationColumns := (configureBase.delta counts).permutationRequests } := by
   let base := configureBase.output counts
   let shared := configureShared.output counts
@@ -549,6 +695,15 @@ def configureBaseCertificate (counts : ConfigureCounts) :
     · intro argument hargument
       simp [AddChip.configure] at hargument
     · intro column hcolumn
+      unfold configureBase
+      apply Configure.mem_fixedColumns_bind_left
+      unfold configureShared
+      apply Configure.mem_fixedColumns_bind_right
+      apply Configure.mem_fixedColumns_bind_right
+      apply Configure.mem_fixedColumns_bind_right
+      apply Configure.mem_fixedColumns_bind_left
+      exact hcolumn
+    · intro column hcolumn
       simp only [List.mem_append, List.mem_cons, List.not_mem_nil,
         or_false] at hcolumn
       rcases hcolumn with (hcolumn | hcolumn) | hcolumn
@@ -571,6 +726,11 @@ def configureBaseCertificate (counts : ConfigureCounts) :
       unfold configureBase
       apply Configure.mem_lookups_delta_bind_right
       exact hargument
+    · intro column hcolumn
+      simp only
+      unfold configureBase
+      apply Configure.mem_fixedColumns_bind_right
+      exact hcolumn
     · intro column hcolumn
       simp only
       unfold configureBase
@@ -651,6 +811,17 @@ private instance (G : Generators) (base : ConfigureBase) :
           (configureChipsInferred G base).externalSelectorSummary_eq]
         simp only [configure_selector_norm])
 
+@[keygen_norm]
+private theorem configureChips_delta_constants (G : Generators)
+    (base : ConfigureBase) (counts : ConfigureCounts) :
+    ((configureChips G base).delta counts).constants = [] := by
+  simp [configureChips, Ecc.configure_delta_constants,
+    Poseidon.configure_delta_constants,
+    Sinsemilla.HashPiece.configure_delta_constants,
+    Sinsemilla.Merkle.configure_delta_constants,
+    CommitIvk.configure_delta_constants,
+    NoteCommit.configure_delta_constants, keygen_norm]
+
 /-- Rust `Circuit::configure` (`circuit.rs:271-459`), VK-exact registration order. -/
 def configure (G : Generators) : Configure Fp Config := do
   let base ← configureBase
@@ -720,6 +891,219 @@ def configure (G : Generators) : Configure Fp Config := do
       (configureBase.output counts).advices 5 := by
   simp [configure, configureChips, Sinsemilla.HashPiece.configure,
     Sinsemilla.Merkle.configure]
+
+/-- The fixed-column allocation interface of Action configure, relative to its input
+counts. The three lookup-table columns precede every region-written fixed column. -/
+theorem configure_fixedColumn_indices_from (G : Generators)
+    (counts : ConfigureCounts) :
+    let cfg := (configure G).output counts
+    cfg.sinsemilla1.generatorTable.tableIdx.inner.index =
+        counts.numFixedColumns ∧
+    cfg.sinsemilla1.generatorTable.tableX.inner.index =
+        counts.numFixedColumns + 1 ∧
+    cfg.sinsemilla1.generatorTable.tableY.inner.index =
+        counts.numFixedColumns + 2 ∧
+    (cfg.eccConfig.mulFixedShort.superConfig.lagrangeCoeffs 0).index =
+        counts.numFixedColumns + 3 ∧
+    (cfg.eccConfig.mulFixedShort.superConfig.lagrangeCoeffs 1).index =
+        counts.numFixedColumns + 4 ∧
+    (cfg.eccConfig.mulFixedShort.superConfig.lagrangeCoeffs 2).index =
+        counts.numFixedColumns + 5 ∧
+    (cfg.eccConfig.mulFixedShort.superConfig.lagrangeCoeffs 3).index =
+        counts.numFixedColumns + 6 ∧
+    (cfg.eccConfig.mulFixedShort.superConfig.lagrangeCoeffs 4).index =
+        counts.numFixedColumns + 7 ∧
+    (cfg.eccConfig.mulFixedShort.superConfig.lagrangeCoeffs 5).index =
+        counts.numFixedColumns + 8 ∧
+    (cfg.eccConfig.mulFixedShort.superConfig.lagrangeCoeffs 6).index =
+        counts.numFixedColumns + 9 ∧
+    (cfg.eccConfig.mulFixedShort.superConfig.lagrangeCoeffs 7).index =
+        counts.numFixedColumns + 10 ∧
+    cfg.eccConfig.mulFixedShort.superConfig.fixedZ.index =
+        counts.numFixedColumns + 11 ∧
+    cfg.sinsemilla1.qS2.index = counts.numFixedColumns + 12 ∧
+    cfg.sinsemilla2.qS2.index = counts.numFixedColumns + 13 := by
+  simp [configure, configureBase, configureChips, configureShared,
+    configureAdvices, configureAdviceEqualitiesLow,
+    configureAdviceEqualitiesHigh, configureEqualities, configureLagrange,
+    lookupTableColumn, AddChip.configure, LookupRangeCheck.configure,
+    Poseidon.configure, Sinsemilla.HashPiece.configure,
+    Sinsemilla.Merkle.configure, CommitIvk.configure, NoteCommit.configure,
+    Ecc.configure, Ecc.WitnessPoint.configure, Ecc.AddIncomplete.add,
+    Ecc.Add.add, Ecc.Mul.configure, Ecc.MulIncomplete.configure,
+    Ecc.MulComplete.configure, Ecc.MulOverflow.configure,
+    Ecc.MulFixed.configure, Ecc.MulFixed.FullWidth.configure,
+    Ecc.MulFixed.Short.configure, Ecc.MulFixed.BaseFieldElem.configure,
+    DecomposeRunningSum.configure, CondSwap.configure,
+    Sinsemilla.Merkle.Gate.configure,
+    NoteCommit.DecomposeB.configure, NoteCommit.DecomposeD.configure,
+    NoteCommit.DecomposeE.configure, NoteCommit.DecomposeG.configure,
+    NoteCommit.DecomposeH.configure, NoteCommit.GdCanonicity.configure,
+    NoteCommit.PkdCanonicity.configure, NoteCommit.ValueCanonicity.configure,
+    NoteCommit.RhoCanonicity.configure, NoteCommit.PsiCanonicity.configure,
+    NoteCommit.YCanonicity.configure]
+
+@[keygen_norm]
+theorem configure_delta_constants (G : Generators)
+    (counts : ConfigureCounts) :
+    ((configure G).delta counts).constants =
+      [(configureBase.output counts).lagrangeCoeffs 0] := by
+  simp [configure, configureBase_delta_constants,
+    configureChips_delta_constants, keygen_norm]
+
+@[keygen_norm]
+theorem configure_output_lagrangeCoeffs (G : Generators)
+    (counts : ConfigureCounts) :
+    ((configure G).output counts).eccConfig.mulFixedShort.superConfig.lagrangeCoeffs =
+      (configureBase.output counts).lagrangeCoeffs := by
+  simp [configure_output_eccConfig, Ecc.configure, Ecc.MulFixed.configure,
+    Ecc.MulFixed.Short.configure, keygen_norm]
+
+@[keygen_norm]
+theorem configure_output_lagrangeCoeff_index (G : Generators)
+    (counts : ConfigureCounts) (index : Fin 8) :
+    (((configure G).output counts).eccConfig.mulFixedShort.superConfig.lagrangeCoeffs
+      index).index = counts.numFixedColumns + 3 + index := by
+  rw [configure_output_lagrangeCoeffs,
+    configureBase_lagrangeCoeff_index]
+
+theorem configure_output_lagrangeCoeff_mem_regionFixedColumns
+    (G : Generators) (counts : ConfigureCounts) (index : Fin 8) :
+    ((configure G).output counts).eccConfig.mulFixedShort.superConfig.lagrangeCoeffs
+        index ∈ ((configure G).output counts).regionFixedColumns := by
+  rw [Config.regionFixedColumns, List.mem_append]
+  exact Or.inl (List.mem_ofFn.mpr ⟨index, rfl⟩)
+
+theorem configureBase_lagrangeCoeff_mem_regionFixedColumns
+    (G : Generators) (counts : ConfigureCounts) (index : Fin 8) :
+    (configureBase.output counts).lagrangeCoeffs index ∈
+      ((configure G).output counts).regionFixedColumns := by
+  rw [← configure_output_lagrangeCoeffs G counts]
+  exact configure_output_lagrangeCoeff_mem_regionFixedColumns G counts index
+
+theorem configure_output_fixedZ_mem_regionFixedColumns
+    (G : Generators) (counts : ConfigureCounts) :
+    ((configure G).output counts).eccConfig.mulFixedShort.superConfig.fixedZ ∈
+      ((configure G).output counts).regionFixedColumns := by
+  simp [Config.regionFixedColumns]
+
+theorem configure_output_sinsemilla1_qS2_mem_regionFixedColumns
+    (G : Generators) (counts : ConfigureCounts) :
+    ((configure G).output counts).sinsemilla1.qS2 ∈
+      ((configure G).output counts).regionFixedColumns := by
+  simp [Config.regionFixedColumns]
+
+theorem configure_output_sinsemilla2_qS2_mem_regionFixedColumns
+    (G : Generators) (counts : ConfigureCounts) :
+    ((configure G).output counts).sinsemilla2.qS2 ∈
+      ((configure G).output counts).regionFixedColumns := by
+  simp [Config.regionFixedColumns]
+
+private theorem lt_add_three_of_eq_add_zero_or_one_or_two
+    {base value : ℕ}
+    (hvalue : value = base ∨ value = base + 1 ∨ value = base + 2) :
+    value < base + 3 := by
+  omega
+
+private theorem add_three_le_of_eq_add_eleven_or_twelve_or_thirteen
+    {base value : ℕ}
+    (hvalue : value = base + 11 ∨ value = base + 12 ∨ value = base + 13) :
+    base + 3 ≤ value := by
+  omega
+
+private theorem add_three_le_of_lagrange_index
+    {base value : ℕ} (index : Fin 8)
+    (hvalue : base + 3 + index = value) :
+    base + 3 ≤ value := by
+  omega
+
+theorem configure_output_generatorTableColumns_disjoint_regionFixedColumns
+    (G : Generators) (counts : ConfigureCounts) :
+    let cfg := (configure G).output counts
+    cfg.generatorTableColumns.Disjoint cfg.regionFixedColumns := by
+  have hindices := configure_fixedColumn_indices_from G counts
+  simp only at hindices
+  rcases hindices with
+    ⟨htableIdx, htableX, htableY,
+      _, _, _, _, _, _, _, _, hfixedZ, hqS21, hqS22⟩
+  have hgenerator : ∀ column ∈
+      ((configure G).output counts).generatorTableColumns,
+      column.index < counts.numFixedColumns + 3 := by
+    intro column hcolumn
+    have hindex : column.index ∈
+        ((configure G).output counts).generatorTableColumns.map Column.index :=
+      List.mem_map_of_mem hcolumn
+    simp only [Config.generatorTableColumns, List.map_cons, List.map_nil,
+      List.mem_cons, List.not_mem_nil, or_false] at hindex
+    rw [htableIdx, htableX, htableY] at hindex
+    exact lt_add_three_of_eq_add_zero_or_one_or_two hindex
+  have hregionColumn : ∀ column ∈
+      ((configure G).output counts).regionFixedColumns,
+      counts.numFixedColumns + 3 ≤ column.index := by
+    intro column hcolumn
+    rw [Config.regionFixedColumns, List.mem_append] at hcolumn
+    rcases hcolumn with hlagrange | hrest
+    · obtain ⟨index, hindex⟩ := List.mem_ofFn.mp hlagrange
+      have hcolumnIndex := congrArg Column.index hindex
+      rw [configure_output_lagrangeCoeff_index] at hcolumnIndex
+      exact add_three_le_of_lagrange_index index hcolumnIndex
+    · have hindex : column.index ∈
+          [((configure G).output counts).eccConfig.mulFixedShort.superConfig.fixedZ,
+            ((configure G).output counts).sinsemilla1.qS2,
+            ((configure G).output counts).sinsemilla2.qS2].map Column.index :=
+        List.mem_map_of_mem hrest
+      simp only [List.map_cons, List.map_nil, List.mem_cons,
+        List.not_mem_nil, or_false] at hindex
+      rw [hfixedZ, hqS21, hqS22] at hindex
+      exact add_three_le_of_eq_add_eleven_or_twelve_or_thirteen hindex
+  rw [List.disjoint_left]
+  intro column htable hregion
+  exact (Nat.not_lt_of_ge (hregionColumn column hregion))
+    (hgenerator column htable)
+
+theorem configure_output_generatorTableColumns_nodup
+    (G : Generators) (counts : ConfigureCounts) :
+    ((configure G).output counts).generatorTableColumns.Nodup := by
+  simpa [Config.generatorTableColumns, configure, configureChips,
+    Sinsemilla.HashPiece.configure] using
+      configureBase_genTable_columns_nodup counts
+
+/-- Action configuration allocates fourteen fixed columns after any ambient configure
+prefix. -/
+@[keygen_norm]
+theorem configure_finalCounts_numFixedColumns_from (G : Generators)
+    (counts : ConfigureCounts) :
+    ((configure G).finalCounts counts).numFixedColumns =
+      counts.numFixedColumns + 14 := by
+  configure_norm
+
+/-- Every fixed column used by Action regions is among the columns allocated by Action's
+configure program. -/
+theorem configure_regionFixedColumns_forall_fixedColumns
+    (G : Generators) (counts : ConfigureCounts) :
+    ((configure G).output counts).regionFixedColumns.Forall
+      (fun column => column ∈ (configure G).fixedColumns counts) := by
+  rw [List.forall_iff_forall_mem]
+  intro column hcolumn
+  rw [Configure.mem_fixedColumns_iff,
+    configure_finalCounts_numFixedColumns_from]
+  have hindices := configure_fixedColumn_indices_from G counts
+  simp only at hindices
+  rcases hindices with
+    ⟨_, _, _, _, _, _, _, _, _, _, _, hfixedZ, hqS21, hqS22⟩
+  rw [Config.regionFixedColumns, List.mem_append] at hcolumn
+  rcases hcolumn with hlagrange | hrest
+  · obtain ⟨index, rfl⟩ := List.mem_ofFn.mp hlagrange
+    rw [configure_output_lagrangeCoeff_index]
+    constructor <;> omega
+  · simp only [List.mem_cons, List.not_mem_nil, or_false] at hrest
+    rcases hrest with rfl | rfl | rfl
+    · rw [hfixedZ]
+      omega
+    · rw [hqS21]
+      omega
+    · rw [hqS22]
+      omega
 
 /-- The fixed-column identities exported by the closed Action configuration. Keeping
 this allocation summary next to `configure` lets later lawfulness proofs reason about
@@ -1185,6 +1569,19 @@ theorem orchardChecksRegion_synthesisSummary_eq (cfg : Config)
   unfold ANCHOR ENABLE_SPEND ENABLE_OUTPUT
   omega
 
+theorem synthOrchardChecks_fixedAssignmentsAgree (cfg : Config)
+    (witnessCells : WitnessCells) (checkCells : CheckCells)
+    (region : RegionIndex) :
+    (synthOrchardChecks cfg witnessCells checkCells).operations region
+      |>.FixedAssignmentsAgree := by
+  apply RegionOperations.HasNoFixedAssignments.fixedAssignmentsAgree
+  apply FloorPlanner.RegionSynthesisSummary.HasNoFixedColumns.hasNoFixedAssignments
+  rw [orchardChecksRegion_synthesisSummary_eq]
+  rw [orchardChecksRegionSynthesisSummary]
+  apply (FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns
+    _ _ _ (ENABLE_OUTPUT + 1)).2
+  simp
+
 /-- Stage C (91 regions): old/new note-commitment integrity and the final
 `"Orchard circuit checks"` region (`circuit.rs:696-826`). -/
 def synthNotesProgram (G : Generators) (B : Bases) (W : Witnesses Fp) (cfg : Config)
@@ -1283,6 +1680,17 @@ theorem synthWitnessSynthesisSummary_instanceRowExtent_eq (cfg : Config) :
     Ecc.WitnessPoint.pointNonIdSynthesisSummary,
     List.foldr_cons, List.foldr_nil, synthesis_summary_norm]
 
+@[synthesis_summary_norm]
+theorem synthWitnessSynthesisSummary_hasNoRegionFixedColumns
+    (cfg : Config) :
+    ∀ index, .column .fixed index ∉
+      (synthWitnessSynthesisSummary cfg).columns := by
+  intro index
+  simp [synthWitnessSynthesisSummary, Sinsemilla.loadSynthesisSummary,
+    loadPrivateSynthesisSummary, Ecc.WitnessPoint.pointSynthesisSummary,
+    Ecc.WitnessPoint.pointNonIdSynthesisSummary, synthesis_summary_norm,
+    FloorPlanner.mem_unionColumns_iff]
+
 theorem synthWitnessSynthesisSummary_physicalRegionShapes (cfg : Config) :
     (synthWitnessSynthesisSummary cfg).physicalRegionShapes =
       [Sinsemilla.loadSynthesisSummary,
@@ -1313,6 +1721,35 @@ theorem synthWitness_synthesisSummary_eq (G : Generators)
   simp only [synthWitness, synthWitnessSynthesisSummary, circuit_norm,
     synthesis_summary_norm, List.foldr_cons, List.foldr_nil,
     FloorPlanner.SynthesisSummary.combine_empty]
+
+theorem synthWitness_loadedTableColumns_eq (G : Generators)
+    (W : Witnesses Fp) (cfg : Config) (region : RegionIndex) :
+    ((synthWitness G W cfg).operations region).loadedTableColumns =
+      [cfg.sinsemilla1.generatorTable.tableIdx.inner,
+        cfg.sinsemilla1.generatorTable.tableX.inner,
+        cfg.sinsemilla1.generatorTable.tableY.inner] := by
+  have hpoint : ∀ input i,
+      ((Ecc.WitnessPoint.pointFormal.call
+        cfg.eccConfig.witnessPoint input).operations i).loadedTableColumns = [] := by
+    intro input i
+    apply Operations.loadedTableColumns_eq_nil_of_tableRowExtent_eq_zero
+    rw [Ecc.WitnessPoint.pointFormal.call_synthesisSummary]
+    simp [Ecc.WitnessPoint.pointSynthesisSummary, synthesis_summary_norm]
+  have hpointNonId : ∀ input i,
+      ((Ecc.WitnessPoint.pointNonIdFormal.call
+        cfg.eccConfig.witnessPoint input).operations i).loadedTableColumns = [] := by
+    intro input i
+    apply Operations.loadedTableColumns_eq_nil_of_tableRowExtent_eq_zero
+    rw [Ecc.WitnessPoint.pointNonIdFormal.call_synthesisSummary]
+    simp [Ecc.WitnessPoint.pointNonIdSynthesisSummary, synthesis_summary_norm]
+  simp only [synthWitness, Sinsemilla.load, loadPrivate, circuit_norm,
+    Operations.loadedTableColumns_append,
+    Operations.loadedTableColumns_nil,
+    Operations.loadedTableColumns_region_cons,
+    Operations.loadedTableColumns_loadTable_cons,
+    hpoint, hpointNonId, List.append_nil, List.nil_append,
+    List.cons_append, Specs.K]
+  norm_num
 
 /-- Exact reduced footprint of the Action integrity-check stage. -/
 def synthChecksSynthesisSummary (cfg : Config) :
@@ -1660,10 +2097,24 @@ theorem synthCrossAddressChecks_synthesisSummary_fixedOccupancy
     crossAddressColumns, synthesis_summary_norm]
   simp [FloorPlanner.mem_unionColumns_iff]
 
+theorem synthCrossAddressChecks_hasNoFixedWrites
+    (config : Config) (points : Var AddressPoints Fp)
+    (region : RegionIndex) :
+    ((synthCrossAddressChecks config points).operations region).HasNoFixedWrites := by
+  apply FloorPlanner.SynthesisSummary.HasNoFixedWrites.hasNoFixedWrites
+  rw [synthCrossAddressChecks_synthesisSummary_eq,
+    synthCrossAddressChecksSynthesisSummary,
+    FloorPlanner.SynthesisSummary.hasNoFixedWrites_ofRegion]
+  apply (FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_repeatColumns
+    _ 0 1 1 4 4 (DISABLE_CROSS_ADDRESS + 1)).2
+  right
+  simp [crossAddressColumns]
+
 @[keygen_helper]
 theorem synthCrossAddressChecks_keygenRegistered
     (cfg : Config) (pts : Var AddressPoints Fp)
     (gates : List (Gate Fp)) (lookups : List (LookupArgument Fp))
+    (fixedColumns : List (Column .fixed))
     (permutationColumns : List AnyColumn) (i : RegionIndex)
     (hadvice : ∀ index, (cfg.advices index).toAny ∈ permutationColumns)
     (hprimary : cfg.primary.toAny ∈ permutationColumns)
@@ -1677,7 +2128,7 @@ theorem synthCrossAddressChecks_keygenRegistered
     (hpkdNewY : pts.pkdNew.y.cell.column ∈ permutationColumns)
     (horchard : orchardGate cfg.qOrchard cfg.advices ∈ gates) :
     ((synthCrossAddressChecks cfg pts).operations i).KeygenRegistered
-      gates lookups permutationColumns := by
+      gates lookups fixedColumns permutationColumns := by
   simp only [synthCrossAddressChecks, keygen_spine]
   keygen_registration
   all_goals

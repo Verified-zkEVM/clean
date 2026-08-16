@@ -201,6 +201,15 @@ def synthesisSummary (cfg : Config) : FloorPlanner.SynthesisSummary :=
       (Canonicity.circuitSynthesisSummary cfg.gate cfg.lookupConfig))
 
 @[synthesis_summary_norm]
+theorem synthPiecesSynthesisSummary_hasNoFixedWrites (cfg : Config) :
+    (synthPiecesSynthesisSummary cfg).HasNoFixedWrites := by
+  simp only [synthPiecesSynthesisSummary,
+    Sinsemilla.HashToPoint.witnessMessagePieceSynthesisSummary,
+    LookupRangeCheck.witnessShortCheckSynthesisSummary,
+    List.foldr_cons, List.foldr_nil, synthesis_summary_norm]
+  simp
+
+@[synthesis_summary_norm]
 theorem synthesisSummary_tableRowExtent_eq (cfg : Config) :
     (synthesisSummary cfg).tableRowExtent = 0 := by
   simp only [synthesisSummary, synthPiecesSynthesisSummary,
@@ -310,6 +319,7 @@ def keygenRequirements (G : Generators) (R : FixedBase) (Q : Point Fp)
       configured.gates
   lookups cfg configured :=
     [LookupRangeCheck.rangeCheckLookup 10 cfg.lookupConfig] ++ configured.lookups
+  fixedColumns _ configured := configured.fixedColumns
   permutationColumns cfg configured :=
     permutationColumns cfg configured.permutationColumns
   inputCells _ _ input :=
@@ -323,6 +333,7 @@ theorem synthPieces_keygenRegistered
     ((synthPieces cfg input.ak input.nk).operations self).KeygenRegistered
       ((keygenRequirements G R Q hQ).gates cfg configured)
       ((keygenRequirements G R Q hQ).lookups cfg configured)
+      ((keygenRequirements G R Q hQ).fixedColumns cfg configured)
       ((keygenRequirements G R Q hQ).permutationColumns cfg configured ++
         (keygenRequirements G R Q hQ).inputPermutationColumns
           cfg configured input) := by
@@ -342,6 +353,7 @@ theorem synth_keygenRegistered
     ((synth G R Q hQ cfg input).operations self).KeygenRegistered
       ((keygenRequirements G R Q hQ).gates cfg configured)
       ((keygenRequirements G R Q hQ).lookups cfg configured)
+      ((keygenRequirements G R Q hQ).fixedColumns cfg configured)
       ((keygenRequirements G R Q hQ).permutationColumns cfg configured ++
         (keygenRequirements G R Q hQ).inputPermutationColumns
           cfg configured input) := by
@@ -392,6 +404,9 @@ theorem synth_keygenRegistered
         (cfg.mulConfig, cfg.hashConfig, cfg.addConfig) configured _ (self + 7)
     case hgates => keygen_registration
     case hlookups => keygen_registration
+    case hfixedColumns =>
+      intro column hcolumn
+      exact hcolumn
     case hpermutationColumns => exact hChild
     case hinputCells =>
       rw [Sinsemilla.CommitDomain.commit_inputCells,
@@ -413,6 +428,11 @@ theorem synth_keygenRegistered
       (cfg.gate, cfg.lookupConfig) childConfigured _ (self + 11)
     case hgates => keygen_registration
     case hlookups => keygen_registration
+    case hfixedColumns =>
+      intro column hcolumn
+      simp only [childConfigured, child,
+        FormalCircuit.Configured.ofPure_fixedColumns] at hcolumn
+      contradiction
     case hpermutationColumns =>
       intro column hcolumn
       simpa only [childConfigured, child,
@@ -568,6 +588,30 @@ instance elaborated (G : Generators) (R : FixedBase) (Q : Point Fp)
       G R Q hQ configInput input self configured
   copyCellsAssigned cfg _ configured input self :=
     synth_copyCellsAssigned G R Q hQ cfg input self configured
+  fixedWritesLawful := by
+    intro cfg _ configured input self
+    apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree
+    · simp only [Configure.output_pure, synth, Circuit.operations_bind,
+        NoteCommit.Main.currentRegion_operations, Circuit.operations_pure,
+        List.forall_append, circuit_norm]
+      refine ⟨?_, ?_, ?_⟩
+      · have hnoFixed : Operations.HasNoFixedWrites
+            ((synthPieces cfg input.ak input.nk).operations self) := by
+          apply FloorPlanner.SynthesisSummary.HasNoFixedWrites.hasNoFixedWrites
+          rw [synthPieces_synthesisSummary_eq]
+          exact synthPiecesSynthesisSummary_hasNoFixedWrites cfg
+        exact (hnoFixed.fixedWritesLawful
+          (constantColumns := [])).regionAssignmentsAgree
+      · exact (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil)
+          |>.call_fixedAssignmentsAgree
+            (cfg.mulConfig, cfg.hashConfig, cfg.addConfig) configured _ _
+      · exact (CommitIvk.Canonicity.circuit
+          (brWit input.ak 254 1) (brWit input.nk 254 1))
+            |>.call_fixedAssignmentsAgree
+              (cfg.gate, cfg.lookupConfig)
+              (FormalCircuit.Configured.ofPure _ _ () (by rfl)) _ _
+    · rw [synth_synthesisSummary_eq]
+      exact synthesisSummary_tableRowExtent_eq cfg
   lookupActivationsWellFormed cfg input self := by
     simp only [synth, Circuit.operations_bind,
       NoteCommit.Main.currentRegion_operations,

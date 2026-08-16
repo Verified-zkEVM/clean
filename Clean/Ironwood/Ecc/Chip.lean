@@ -78,6 +78,32 @@ def configure (advices : Fin 10 → Column .advice)
     MulFixed.FullWidth.configure,
     MulFixed.Short.configure, MulFixed.BaseFieldElem.configure]
 
+@[keygen_norm] theorem configure_delta_constants
+    (advices : Fin 10 → Column .advice)
+    (lagrangeCoeffs : Fin 8 → Column .fixed)
+    (rangeCheck : LookupRangeCheck.Config 10) (counts) :
+    ((configure advices lagrangeCoeffs rangeCheck).delta counts).constants = [] := by
+  simp [configure, WitnessPoint.configure, AddIncomplete.add, Add.add,
+    Mul.configure, MulIncomplete.configure, MulComplete.configure,
+    MulOverflow.configure, MulFixed.configure,
+    DecomposeRunningSum.configure,
+    MulFixed.FullWidth.configure,
+    MulFixed.Short.configure, MulFixed.BaseFieldElem.configure]
+
+@[keygen_norm] theorem configure_fixedColumns
+    (advices : Fin 10 → Column .advice)
+    (lagrangeCoeffs : Fin 8 → Column .fixed)
+    (rangeCheck : LookupRangeCheck.Config 10) (counts) :
+    (configure advices lagrangeCoeffs rangeCheck).fixedColumns counts =
+      [((configure advices lagrangeCoeffs rangeCheck).output counts)
+        |>.mulFixedShort.superConfig.fixedZ] := by
+  simp [configure, WitnessPoint.configure, AddIncomplete.add, Add.add,
+    Mul.configure, MulIncomplete.configure, MulComplete.configure,
+    MulOverflow.configure, MulFixed.configure,
+    DecomposeRunningSum.configure,
+    MulFixed.FullWidth.configure,
+    MulFixed.Short.configure, MulFixed.BaseFieldElem.configure]
+
 @[reducible] private def configureInferred
     (advices : Fin 10 → Column .advice)
     (lagrangeCoeffs : Fin 8 → Column .fixed)
@@ -684,6 +710,46 @@ def mono
     (certificate.mulFixedBaseField B).mono gates lookups fixedColumns permutationColumns
 
 end ConfigureCertificate
+
+/-- The fixed-column law required by the fixed-base children follows from the
+borrowed Lagrange columns being distinct and allocated before the ECC configure run. -/
+def configureOutputFixedColumnsLawful
+    (advices : Fin 10 → Column .advice)
+    (lagrangeCoeffs : Fin 8 → Column .fixed)
+    (rangeCheck : LookupRangeCheck.Config 10) (counts : ConfigureCounts)
+    (hnodup : (List.ofFn lagrangeCoeffs).Nodup)
+    (hbound : ∀ column ∈ List.ofFn lagrangeCoeffs,
+      column.index < counts.numFixedColumns) :
+    ((configure advices lagrangeCoeffs rangeCheck).output counts)
+      |>.mulFixedShort.superConfig.FixedColumnsLawful := by
+  let witnessProgram := WitnessPoint.configure (advices 0) (advices 1)
+  let addIncompleteProgram := AddIncomplete.add.configure
+    (advices 0, advices 1, advices 2, advices 3)
+  let addProgram := Add.add.configure
+    (advices 0, advices 1, advices 2, advices 3, advices 4,
+      advices 5, advices 6, advices 7, advices 8)
+  let witnessCounts := witnessProgram.finalCounts counts
+  let addIncompleteCounts := addIncompleteProgram.finalCounts witnessCounts
+  let addCounts := addProgram.finalCounts addIncompleteCounts
+  let addConfig := addProgram.output addIncompleteCounts
+  let addIncompleteConfig := addIncompleteProgram.output witnessCounts
+  let mulProgram := Mul.configure addConfig rangeCheck advices
+  let mulCounts := mulProgram.finalCounts addCounts
+  apply MulFixed.configureOutputFixedColumnsLawful
+  · exact hnodup
+  · intro column hcolumn
+    apply (hbound column hcolumn).trans_le
+    exact le_trans
+      (Configure.counts_componentwiseLE_finalCounts
+        witnessProgram counts).numFixedColumns <|
+      le_trans
+        (Configure.counts_componentwiseLE_finalCounts
+          addIncompleteProgram witnessCounts).numFixedColumns <|
+        le_trans
+          (Configure.counts_componentwiseLE_finalCounts
+            addProgram addIncompleteCounts).numFixedColumns
+          (Configure.counts_componentwiseLE_finalCounts
+            mulProgram addCounts).numFixedColumns
 
 /-- Construct the fixed-base Action-facing ECC capabilities once in the ECC owner. -/
 def configureCertificate (advices : Fin 10 → Column .advice)

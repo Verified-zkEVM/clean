@@ -766,6 +766,11 @@ def configurationCertificate (G : Generators) (R : FixedBase)
     · exact commit.lookups_of_configured required hcommit
   · intro required hrequired
     simp only [circuit, FormalCircuit.keygenRequirements,
+      elaborated, keygenRequirements, Configure.fixedColumns_pure,
+      List.append_nil] at hrequired
+    exact commit.fixedColumns_of_configured required hrequired
+  · intro required hrequired
+    simp only [circuit, FormalCircuit.keygenRequirements,
       elaborated, keygenRequirements, Configure.delta_pure,
       List.append_nil] at hrequired
     exact requiredPermutationColumns required hrequired

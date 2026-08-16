@@ -49,6 +49,7 @@ def double : FormalCircuit Fp
       { configLawful input := Add.add.Configured input.2
         gates _ configured := configured.toFormal.gates
         lookups _ configured := configured.toFormal.lookups
+        fixedColumns _ configured := configured.toFormal.fixedColumns
         permutationColumns _ configured := configured.toFormal.permutationColumns }
     registered := by
       intro configInput counts hconfig input i
@@ -68,6 +69,9 @@ def double : FormalCircuit Fp
         · intro lookup hlookup
           apply List.mem_append_left
           exact hlookup
+        · intro column hcolumn
+          apply List.mem_append_left
+          exact hcolumn
         · intro column hcolumn
           apply List.mem_append_left
           apply List.mem_append_left
@@ -92,6 +96,16 @@ def double : FormalCircuit Fp
         simp only [Add.addFormal_inputCells, List.mem_cons] at hcell
         rcases hcell with hcell | hcell | hcell | hcell <;>
           simp_all [AssignedCell.of]
+    fixedWritesLawful := by
+      intro configInput counts hconfig input i
+      apply Operations.HasNoFixedWrites.fixedWritesLawful
+      simp only [Configure.output_bind, Configure.output_pure,
+        Circuit.operations_bind, Circuit.operations_pure, List.append_nil,
+        Operations.HasNoFixedWrites, List.forall_append]
+      constructor
+      · keygen_registration
+      · apply Add.addFormal.call_hasNoFixedWrites
+        simp only [Add.addFormal_synthesisSummary_eq, synthesis_summary_norm]
     lookupActivationsWellFormed := by keygen_registration [keygen_spine]
     synthesisSummary := fun config input i =>
       (FloorPlanner.SynthesisSummary.ofRegion

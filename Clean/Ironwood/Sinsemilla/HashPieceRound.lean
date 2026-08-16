@@ -240,6 +240,24 @@ def configure (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
   createGate (sinsemillaGate cfg)
   return cfg
 
+@[keygen_norm] theorem configure_delta_constants
+    (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
+    (witnessPieces : Column .advice) (fixedYQ : Column .fixed)
+    (genTable : GeneratorTableConfig) (counts) :
+    ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).delta
+      counts).constants = [] := by
+  simp [configure]
+
+@[keygen_norm] theorem configure_fixedColumns
+    (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
+    (witnessPieces : Column .advice) (fixedYQ : Column .fixed)
+    (genTable : GeneratorTableConfig) (counts) :
+    (configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).fixedColumns
+        counts =
+      [((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).output
+        counts).qS2] := by
+  simp [configure]
+
 @[keygen_norm]
 theorem configure_output_qS2_index
     (G : Generators) (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)

@@ -136,6 +136,23 @@ chip (`add_chip.rs`: `assign_region(|| "c = a + b", …)`). -/
 def addFormal :=
   add.toFormal "c = a + b"
 
+theorem addFormal_configure :
+    addFormal.configure = add.configure :=
+  rfl
+
+@[keygen_norm]
+theorem addFormal_keygenRequirements_fixedColumns
+    (cfg : Config) (hcfg : addFormal.keygenRequirements.configLawful cfg) :
+    addFormal.keygenRequirements.fixedColumns cfg hcfg = [] :=
+  rfl
+
+@[keygen_norm]
+theorem addFormal_configure_fixedColumns
+    (cfg : Config) (counts : ConfigureCounts) :
+    (addFormal.configure cfg).fixedColumns counts = [] := by
+  rw [addFormal_configure]
+  simp [add]
+
 /-- The layouter add's result cell is assigned by its sole region. -/
 theorem addFormal_call_output_cell_assigned (cfg : Config)
     (input : Var Inputs Fp) (self : RegionIndex) :

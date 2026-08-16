@@ -132,6 +132,36 @@ def mono
   permutationColumns column hcolumn :=
     permutationColumns column (certificate.permutationColumns column hcolumn)
 
+/-- Retarget a configured capability whose circuit requests no fixed-write columns.
+Unlike `mono`, this does not require the ambient source context's unrelated fixed
+columns to embed into the target. -/
+def retargetWithoutFixedColumns
+    {ConfigInput Config InputVar : Type}
+    {requirements : KeygenRequirements F ConfigInput InputVar}
+    {configure : ConfigInput → Configure F Config}
+    {config : Config} {source target : KeygenContext F}
+    (certificate : ConfigurationCertificate requirements configure config source)
+    (gates : ∀ gate, gate ∈ source.gates → gate ∈ target.gates)
+    (lookups : ∀ argument, argument ∈ source.lookups → argument ∈ target.lookups)
+    (hfixed : requirements.fixedColumns certificate.configInput
+        certificate.configLawful ++
+      (configure certificate.configInput).fixedColumns certificate.counts = [])
+    (permutationColumns : ∀ column,
+      column ∈ source.permutationColumns → column ∈ target.permutationColumns) :
+    ConfigurationCertificate requirements configure config target where
+  configInput := certificate.configInput
+  counts := certificate.counts
+  configLawful := certificate.configLawful
+  output_eq := certificate.output_eq
+  gates gate hgate := gates gate (certificate.gates gate hgate)
+  lookups argument hargument :=
+    lookups argument (certificate.lookups argument hargument)
+  fixedColumns column hcolumn := by
+    rw [hfixed] at hcolumn
+    exact (List.not_mem_nil hcolumn).elim
+  permutationColumns column hcolumn :=
+    permutationColumns column (certificate.permutationColumns column hcolumn)
+
 end ConfigurationCertificate
 
 /--
@@ -1036,6 +1066,27 @@ theorem call_fixedAssignmentsAgree
       Operation.FixedAssignmentsAgree :=
   (self.call_fixedWritesLawful config configured input region)
     |>.regionAssignmentsAgree
+
+/-- A fixed column appearing in a configured circuit's exact reduced synthesis
+summary belongs to that circuit's declared fixed-column interface. -/
+theorem Configured.mem_fixedColumns_of_mem_synthesisSummary
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    {config : Config} (configured : self.Configured config)
+    (input : Var Input F) (region : RegionIndex) (index : ℕ)
+    (hcolumn : .column .fixed index ∈
+      (self.elaborated.synthesisSummary config input region).columns) :
+    (Column.mk index : Column .fixed) ∈ configured.fixedColumns := by
+  rcases configured with ⟨configInput, counts, hconfig, houtput⟩
+  subst config
+  have hactual : .column .fixed index ∈
+      (FloorPlanner.synthesisSummary
+        ((self.synthesize ((self.configure configInput).output counts) input).operations
+          region)).columns := by
+    rw [← self.elaborated.synthesisSummary_columns_eq]
+    exact hcolumn
+  exact (self.elaborated.registered configInput counts hconfig input region)
+    |>.mem_fixedColumns_of_mem_regionFixedColumns
+      (Operations.mem_regionFixedColumns_of_mem_synthesisSummary_column hactual)
 
 @[circuit_norm, synthesis_summary_norm]
 theorem call_synthesisSummary' {Output : TypeMap} [ProvableType Output]
@@ -2702,6 +2753,16 @@ theorem toFormal_keygenRequirements
       child.keygenRequirements :=
   rfl
 
+/-- Lifting a region circuit does not change its configure program. This API lemma keeps
+clients from relying on reduction through the full `toFormal` package. It is deliberately
+not a global normalization rule: rewriting this projection inside elaborated-circuit
+summaries would disrupt their dedicated reduced forms. -/
+theorem toFormal_configure
+    (child : FormalRegionCircuit F ConfigInput Config Input Output)
+    (name : String := child.name) :
+    (child.toFormal name).configure = child.configure :=
+  rfl
+
 @[circuit_norm]
 theorem toFormal_regionCount
     (child : FormalRegionCircuit F ConfigInput Config Input Output)
@@ -2727,6 +2788,21 @@ theorem toFormal_synthesisSummary
     (child.toFormal name).elaborated.synthesisSummary config input region =
       FloorPlanner.SynthesisSummary.ofRegion
         (child.elaborated.synthesisSummary config 0 input region) := rfl
+
+/-- A lifted region circuit has no layouter-level fixed writes whenever its reduced
+region summary has no fixed columns. -/
+theorem toFormal_synthesisSummary_hasNoFixedWrites
+    (child : FormalRegionCircuit F ConfigInput Config Input Output)
+    (name : String) (config : Config) (input : Var Input F)
+    (region : RegionIndex)
+    (hsummary :
+      (child.elaborated.synthesisSummary config 0 input region)
+        |>.HasNoFixedColumns) :
+    ((child.toFormal name).elaborated.synthesisSummary config input region)
+      |>.HasNoFixedWrites := by
+  rw [toFormal_synthesisSummary,
+    FloorPlanner.SynthesisSummary.hasNoFixedWrites_ofRegion]
+  exact hsummary
 
 @[circuit_norm, synthesis_summary_norm]
 theorem toFormal_synthesisSummary_columnOccupancy

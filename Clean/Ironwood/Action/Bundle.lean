@@ -760,6 +760,7 @@ private theorem synthWitness_keygenRegistered (G : Generators)
     ((synthWitness G hintWitnesses cfg).operations i).KeygenRegistered
       ((configure G).delta counts).gates
       ((configure G).delta counts).lookups
+      ((configure G).fixedColumns counts)
       ((configure G).delta counts).permutationRequests := by
   have hadvice := configure_output_advice_mem_permutationRequests G counts
   have hwitnessX := configure_output_witnessPoint_x_mem_permutationRequests G counts
@@ -770,10 +771,52 @@ private theorem synthWitness_keygenRegistered (G : Generators)
   all_goals
     first
     | apply Ecc.WitnessPoint.pointFormal.call_keygenRegistered_ofCertificate
-        (eccConfigureCertificate G counts).witnessPointFormal
+        (eccFullConfigureCertificate G counts).witnessPointFormal
     | apply Ecc.WitnessPoint.pointNonIdFormal.call_keygenRegistered_ofCertificate
-        (eccConfigureCertificate G counts).witnessPointNonIdFormal
+        (eccFullConfigureCertificate G counts).witnessPointNonIdFormal
   all_goals simp only [keygen_norm]
+
+private theorem disjoint_of_forall_mem_right
+    {α : Type} {left right superset : List α}
+    (hdisjoint : left.Disjoint superset)
+    (hsubset : right.Forall (· ∈ superset)) :
+    left.Disjoint right := by
+  rw [List.disjoint_left] at hdisjoint ⊢
+  intro value hleft hright
+  exact hdisjoint hleft
+    (List.forall_iff_forall_mem.mp hsubset value hright)
+
+private theorem synthWitness_fixedWritesLawful (G : Generators)
+    (counts : ConfigureCounts) (i : RegionIndex) :
+    let cfg := (configure G).output counts
+    ((synthWitness G hintWitnesses cfg).operations i).FixedWritesLawful
+      ((configure G).delta counts).constants := by
+  let cfg := (configure G).output counts
+  have hregionColumns :
+      ((synthWitness G hintWitnesses cfg).operations i).regionFixedColumns = [] := by
+    apply Operations.regionFixedColumns_eq_nil_of_summary
+    intro index
+    rw [synthWitness_synthesisSummary_eq]
+    exact synthWitnessSynthesisSummary_hasNoRegionFixedColumns cfg index
+  constructor
+  · exact Operations.regionAssignmentsAgree_of_regionFixedColumns_eq_nil
+      hregionColumns
+  · rw [synthWitness_loadedTableColumns_eq]
+    exact configure_output_generatorTableColumns_nodup G counts
+  · rw [hregionColumns]
+    exact List.disjoint_nil_right _
+  · rw [synthWitness_loadedTableColumns_eq, configure_delta_constants,
+      List.disjoint_left]
+    intro column htable hconstant
+    simp only [List.mem_singleton] at hconstant
+    subst column
+    have hdisjoint :
+        ((configure G).output counts).generatorTableColumns.Disjoint
+          ((configure G).output counts).regionFixedColumns :=
+      configure_output_generatorTableColumns_disjoint_regionFixedColumns G counts
+    rw [Config.generatorTableColumns, List.disjoint_left] at hdisjoint
+    exact hdisjoint htable
+      (configureBase_lagrangeCoeff_mem_regionFixedColumns G counts 0)
 
 private theorem synthChecks_keygenRegistered (G : Generators) (B : Bases)
     (counts : ConfigureCounts) (i : RegionIndex) :
@@ -783,6 +826,7 @@ private theorem synthChecks_keygenRegistered (G : Generators) (B : Bases)
       (witness.nextRegionIndex i)).KeygenRegistered
         ((configure G).delta counts).gates
         ((configure G).delta counts).lookups
+        ((configure G).output counts).regionFixedColumns
         ((configure G).delta counts).permutationRequests := by
   have hadvice := configure_output_advice_mem_permutationRequests G counts
   have hprimary := configure_output_primary_mem_permutationRequests G counts
@@ -852,6 +896,7 @@ private theorem synthNotes_keygenRegistered (G : Generators) (B : Bases)
         (checks.nextRegionIndex (witness.nextRegionIndex i))).KeygenRegistered
           ((configure G).delta counts).gates
           ((configure G).delta counts).lookups
+          ((configure G).output counts).regionFixedColumns
           ((configure G).delta counts).permutationRequests := by
   have hadvice := configure_output_advice_mem_permutationRequests G counts
   have hprimary := configure_output_primary_mem_permutationRequests G counts
@@ -880,6 +925,72 @@ private theorem synthNotes_keygenRegistered (G : Generators) (B : Bases)
     synthWitness_output, synthChecks_output,
     actionConfigureContext_permutationColumns,
     Nat.reduceEqDiff, if_false]
+
+private theorem synthChecks_regionFixedColumns_forall
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (i : RegionIndex) :
+    let cfg := (configure G).output counts
+    let witness := synthWitness G hintWitnesses cfg
+    ((synthChecks G B hintWitnesses cfg (witness.output i)).operations
+      (witness.nextRegionIndex i)).regionFixedColumns.Forall
+        (fun column => column ∈ cfg.regionFixedColumns) := by
+  rw [List.forall_iff_forall_mem]
+  intro column hcolumn
+  exact (synthChecks_keygenRegistered G B counts i)
+    |>.mem_fixedColumns_of_mem_regionFixedColumns hcolumn
+
+private theorem synthNotes_regionFixedColumns_forall
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (i : RegionIndex) :
+    let cfg := (configure G).output counts
+    let witness := synthWitness G hintWitnesses cfg
+    let checks := synthChecks G B hintWitnesses cfg (witness.output i)
+    ((synthNotes G B hintWitnesses cfg (witness.output i)
+      (checks.output (witness.nextRegionIndex i))).operations
+        (checks.nextRegionIndex (witness.nextRegionIndex i))).regionFixedColumns.Forall
+          (fun column => column ∈ cfg.regionFixedColumns) := by
+  rw [List.forall_iff_forall_mem]
+  intro column hcolumn
+  exact (synthNotes_keygenRegistered G B counts i)
+    |>.mem_fixedColumns_of_mem_regionFixedColumns hcolumn
+
+private theorem synthChecks_keygenRegistered_full
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (i : RegionIndex) :
+    let cfg := (configure G).output counts
+    let witness := synthWitness G hintWitnesses cfg
+    ((synthChecks G B hintWitnesses cfg (witness.output i)).operations
+      (witness.nextRegionIndex i)).KeygenRegistered
+        ((configure G).delta counts).gates
+        ((configure G).delta counts).lookups
+        ((configure G).fixedColumns counts)
+        ((configure G).delta counts).permutationRequests := by
+  apply (synthChecks_keygenRegistered G B counts i).mono
+  · exact fun _ hgate => hgate
+  · exact fun _ hlookup => hlookup
+  · exact List.forall_iff_forall_mem.mp
+      (configure_regionFixedColumns_forall_fixedColumns G counts)
+  · exact fun _ hcolumn => hcolumn
+
+private theorem synthNotes_keygenRegistered_full
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (i : RegionIndex) :
+    let cfg := (configure G).output counts
+    let witness := synthWitness G hintWitnesses cfg
+    let checks := synthChecks G B hintWitnesses cfg (witness.output i)
+    ((synthNotes G B hintWitnesses cfg (witness.output i)
+      (checks.output (witness.nextRegionIndex i))).operations
+        (checks.nextRegionIndex (witness.nextRegionIndex i))).KeygenRegistered
+          ((configure G).delta counts).gates
+          ((configure G).delta counts).lookups
+          ((configure G).fixedColumns counts)
+          ((configure G).delta counts).permutationRequests := by
+  apply (synthNotes_keygenRegistered G B counts i).mono
+  · exact fun _ hgate => hgate
+  · exact fun _ hlookup => hlookup
+  · exact List.forall_iff_forall_mem.mp
+      (configure_regionFixedColumns_forall_fixedColumns G counts)
+  · exact fun _ hcolumn => hcolumn
 
 private theorem synthWitness_copyCellsAssigned (G : Generators)
     (counts : ConfigureCounts) (i : RegionIndex) :
@@ -980,6 +1091,72 @@ private def synthChecksAddressIntegrityConfigured
       (cfg.eccConfig.mul, cfg.eccConfig.witnessPoint) := by
   rw [hcfg]
   exact (addressIntegrityCertificate G counts).configured
+
+private theorem synthChecks_fixedAssignmentsAgree
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (cfg : Config) (hcfg : cfg = (configure G).output counts)
+    (wc : WitnessCells) (i : RegionIndex) :
+    ((synthChecks G B hintWitnesses cfg wc).operations i).Forall
+      Operation.FixedAssignmentsAgree := by
+  have hmerkle1 := synthChecksMerkle1Configured G B counts cfg hcfg
+  have hmerkle2 := synthChecksMerkle2Configured G B counts cfg hcfg
+  have hvalueCommit := synthChecksValueCommitConfigured G B counts cfg hcfg
+  have hderiveNullifier :=
+    synthChecksDeriveNullifierConfigured G B counts cfg hcfg
+  have hspendAuthority :=
+    synthChecksSpendAuthorityConfigured G B counts cfg hcfg
+  have hcommitIvk := synthChecksCommitIvkConfigured G B counts cfg hcfg
+  have haddressIntegrity :=
+    synthChecksAddressIntegrityConfigured G counts cfg hcfg
+  rw [synthChecks_eq]
+  unfold synthChecksProgram loadPrivate
+  simp only [keygen_spine]
+  repeat' first
+    | (guard_target =~ (_ ∧ _); constructor)
+  all_goals
+    first
+    | apply
+        (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+          B.merkleQ_onCurve 0 16 (by norm_num)
+          hintWitnesses.merkleSib
+          hintWitnesses.merkleSwap).call_fixedAssignmentsAgree _ hmerkle1
+    | apply
+        (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+          B.merkleQ_onCurve 16 16 (by norm_num)
+          (fun j => hintWitnesses.merkleSib (16 + j))
+          (fun j => hintWitnesses.merkleSwap
+            (16 + j))).call_fixedAssignmentsAgree _ hmerkle2
+    | apply (ValueCommit.circuit B.valueCommitV
+        B.valueCommitR).call_fixedAssignmentsAgree _ hvalueCommit
+    | apply (DeriveNullifier.circuit
+        B.nullifierK).call_fixedAssignmentsAgree _ hderiveNullifier
+    | apply (SpendAuthority.circuit
+        B.spendAuthG).call_fixedAssignmentsAgree _ hspendAuthority
+    | apply (CommitIvk.Main.circuit G B.commitIvkR B.ivkQ
+        B.ivkQ_onCurve).call_fixedAssignmentsAgree _ hcommitIvk
+    | apply AddressIntegrity.circuit.call_fixedAssignmentsAgree _
+        haddressIntegrity
+    | simp [Operation.FixedAssignmentsAgree,
+        RegionOperations.FixedAssignmentsAgree]
+
+private theorem synthChecks_fixedWritesLawful
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (cfg : Config) (hcfg : cfg = (configure G).output counts)
+    (wc : WitnessCells) (i : RegionIndex) :
+    ((synthChecks G B hintWitnesses cfg wc).operations i).FixedWritesLawful
+      ((configure G).delta counts).constants := by
+  apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree
+    (synthChecks_fixedAssignmentsAgree G B counts cfg hcfg wc i)
+  rw [synthChecks_synthesisSummary_eq,
+    synthChecksSynthesisSummary_tableRowExtent_eq]
+
+private theorem synthChecks_loadedTableColumns_eq_nil
+    (G : Generators) (B : Bases) (cfg : Config)
+    (wc : WitnessCells) (i : RegionIndex) :
+    ((synthChecks G B hintWitnesses cfg wc).operations i).loadedTableColumns = [] := by
+  apply Operations.loadedTableColumns_eq_nil_of_tableRowExtent_eq_zero
+  rw [synthChecks_synthesisSummary_eq,
+    synthChecksSynthesisSummary_tableRowExtent_eq]
 
 private theorem synthChecks_copyCellsAssigned (G : Generators) (B : Bases)
     (counts : ConfigureCounts) (cfg : Config)
@@ -1161,6 +1338,55 @@ private theorem synthChecks_copyCellsAssigned (G : Generators) (B : Bases)
                               aesop
                             simp only [Circuit.operations_pure,
                               Operations.copyCellsAssignedFrom_nil_iff]
+
+private theorem synthNotes_fixedAssignmentsAgree
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (wc : WitnessCells) (cc : CheckCells) (i : RegionIndex) :
+    let cfg := (configure G).output counts
+    ((synthNotes G B hintWitnesses cfg wc cc).operations i).Forall
+      Operation.FixedAssignmentsAgree := by
+  have hold := (noteCommitOldCertificate G B counts).configured
+  have hnew := (noteCommitNewCertificate G B counts).configured
+  have hpoint :=
+    (eccConfigureCertificate G counts).witnessPointNonIdFormal.configured
+  let cfg := (configure G).output counts
+  simp only
+  rw [synthNotes_eq]
+  unfold synthNotesProgram loadPrivate
+  simp only [keygen_spine]
+  repeat' first
+    | (guard_target =~ (_ ∧ _); constructor)
+  all_goals
+    first
+    | apply (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
+        B.noteQ_onCurve).call_fixedAssignmentsAgree _ hold
+    | apply (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
+        B.noteQ_onCurve).call_fixedAssignmentsAgree _ hnew
+    | apply Ecc.WitnessPoint.pointNonIdFormal.call_fixedAssignmentsAgree _
+        hpoint
+    | exact synthOrchardChecks_fixedAssignmentsAgree cfg wc cc _
+    | simp [Operation.FixedAssignmentsAgree,
+        RegionOperations.FixedAssignmentsAgree]
+
+private theorem synthNotes_fixedWritesLawful
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (wc : WitnessCells) (cc : CheckCells) (i : RegionIndex) :
+    let cfg := (configure G).output counts
+    ((synthNotes G B hintWitnesses cfg wc cc).operations i).FixedWritesLawful
+      ((configure G).delta counts).constants := by
+  let cfg := (configure G).output counts
+  apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree
+    (synthNotes_fixedAssignmentsAgree G B counts wc cc i)
+  rw [synthNotes_synthesisSummary_eq,
+    synthNotesSynthesisSummary_tableRowExtent_eq]
+
+private theorem synthNotes_loadedTableColumns_eq_nil
+    (G : Generators) (B : Bases) (cfg : Config)
+    (wc : WitnessCells) (cc : CheckCells) (i : RegionIndex) :
+    ((synthNotes G B hintWitnesses cfg wc cc).operations i).loadedTableColumns = [] := by
+  apply Operations.loadedTableColumns_eq_nil_of_tableRowExtent_eq_zero
+  rw [synthNotes_synthesisSummary_eq,
+    synthNotesSynthesisSummary_tableRowExtent_eq]
 
 private theorem synthNotes_copyCellsAssigned (G : Generators) (B : Bases)
     (counts : ConfigureCounts) (wc : WitnessCells) (cc : CheckCells)
@@ -1392,6 +1618,49 @@ private theorem main_output_copyInputCells_assigned
     List.mem_append] at hwitness hchecks hnotes ⊢
   aesop
 
+private theorem main_fixedWritesLawful (G : Generators) (B : Bases)
+    (counts : ConfigureCounts) (i : RegionIndex) :
+    ((main G B ((configure G).output counts) ()).operations i).FixedWritesLawful
+      ((configure G).delta counts).constants := by
+  let cfg := (configure G).output counts
+  let witness := synthWitness G hintWitnesses cfg
+  let checks := synthChecks G B hintWitnesses cfg (witness.output i)
+  let checksRegion := witness.nextRegionIndex i
+  let notes := synthNotes G B hintWitnesses cfg (witness.output i)
+    (checks.output checksRegion)
+  let notesRegion := checks.nextRegionIndex checksRegion
+  have hwitness := synthWitness_fixedWritesLawful G counts i
+  have hchecks := synthChecks_fixedWritesLawful G B counts cfg rfl
+    (witness.output i) checksRegion
+  have hnotes := synthNotes_fixedWritesLawful G B counts
+    (witness.output i) (checks.output checksRegion) notesRegion
+  have hchecksTables :
+      (checks.operations checksRegion).loadedTableColumns = [] :=
+    synthChecks_loadedTableColumns_eq_nil G B cfg (witness.output i) checksRegion
+  have hnotesTables :
+      (notes.operations notesRegion).loadedTableColumns = [] :=
+    synthNotes_loadedTableColumns_eq_nil G B cfg (witness.output i)
+      (checks.output checksRegion) notesRegion
+  have hchecksColumns := synthChecks_regionFixedColumns_forall G B counts i
+  have hnotesColumns := synthNotes_regionFixedColumns_forall G B counts i
+  have htableColumns :=
+    configure_output_generatorTableColumns_disjoint_regionFixedColumns G counts
+  have hwitnessChecks :
+      (witness.operations i).loadedTableColumns.Disjoint
+        (checks.operations checksRegion).regionFixedColumns := by
+    rw [synthWitness_loadedTableColumns_eq]
+    exact disjoint_of_forall_mem_right htableColumns hchecksColumns
+  have hwitnessNotes :
+      (witness.operations i).loadedTableColumns.Disjoint
+        (notes.operations notesRegion).regionFixedColumns := by
+    rw [synthWitness_loadedTableColumns_eq]
+    exact disjoint_of_forall_mem_right htableColumns hnotesColumns
+  simp only [main, CircuitPreIronwood.synthesize, synthesizeBase,
+    Circuit.operations_bind, Circuit.operations_pure, List.append_nil]
+  exact Operations.FixedWritesLawful.append_noLaterTables
+    hwitness hchecks hnotes hchecksTables hnotesTables
+      hwitnessChecks hwitnessNotes
+
 instance elaborated (G : Generators) (B : Bases) :
     ElaboratedCircuit Fp Unit Config unit AddressPoints
       (fun _ => configure G) (main G B) where
@@ -1413,9 +1682,12 @@ instance elaborated (G : Generators) (B : Bases) :
         synthWitness_keygenRegistered G counts i
     · constructor
       · simpa only [List.map_nil, List.append_nil] using
-          synthChecks_keygenRegistered G B counts i
+          synthChecks_keygenRegistered_full G B counts i
       · simpa only [List.map_nil, List.append_nil] using
-          synthNotes_keygenRegistered G B counts i
+          synthNotes_keygenRegistered_full G B counts i
+  fixedWritesLawful := by
+    intro configInput counts hconfig input i
+    exact main_fixedWritesLawful G B counts i
   copyCellsAssigned := by
     intro configInput counts hconfig input i
     simp only [main, CircuitPreIronwood.synthesize, synthesizeBase,
@@ -2783,6 +3055,7 @@ private theorem synthCrossAddressChecks_baseOutput_keygenRegistered
       |>.operations crossRegion).KeygenRegistered
         ((configure G).delta counts |>.gates)
         ((configure G).delta counts |>.lookups)
+        ((configure G).fixedColumns counts)
         ((configure G).delta counts |>.permutationRequests) := by
   apply synthCrossAddressChecks_keygenRegistered
   · exact configure_output_advice_mem_permutationRequests G counts
@@ -2800,6 +3073,7 @@ private theorem mainPost_keygenRegistered
     ((mainPost G B ((configure G).output counts) ()).operations i)
       |>.KeygenRegistered ((configure G).delta counts).gates
         ((configure G).delta counts).lookups
+        ((configure G).fixedColumns counts)
         ((configure G).delta counts).permutationRequests := by
   dsimp only [mainPost]
   simp only [keygen_spine]
@@ -2838,6 +3112,32 @@ private theorem mainPost_copyCellsAssigned
       (List.forall_iff_forall_mem.mp
         (main_output_copyInputCells_assigned G B counts i) cell hcell)
 
+private theorem mainPost_fixedWritesLawful
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (i : RegionIndex) :
+    ((mainPost G B ((configure G).output counts) ()).operations i)
+      |>.FixedWritesLawful ((configure G).delta counts).constants := by
+  let cfg := (configure G).output counts
+  have hbase := (elaborated G B).fixedWritesLawful () counts () () i
+  have hcrossNoFixed := synthCrossAddressChecks_hasNoFixedWrites cfg
+    ((baseCircuit G B).output cfg () i) (i + 394)
+  have hcross := hcrossNoFixed.fixedWritesLawful
+    (constantColumns := ((configure G).delta counts).constants)
+  have hcrossTables := hcrossNoFixed.loadedTableColumns_eq_nil
+  have hcrossRegionColumns := hcrossNoFixed.regionFixedColumns_eq_nil
+  dsimp only [mainPost]
+  simp only [Circuit.operations_bind, Circuit.operations_pure, List.append_nil]
+  rw [(baseCircuit G B).call_operations,
+    (baseCircuit G B).nextRegionIndex_call', base_call_regionCount,
+    FormalCircuit.output_call']
+  apply Operations.FixedWritesLawful.append hbase hcross
+  · rw [hcrossTables]
+    exact List.disjoint_nil_right _
+  · rw [hcrossRegionColumns]
+    exact List.disjoint_nil_right _
+  · rw [hcrossTables]
+    exact List.disjoint_nil_left _
+
 private theorem mainPost_lookupActivationsWellFormed
     (G : Generators) (B : Bases) (config : Config) (i : RegionIndex) :
     ((mainPost G B config ()).operations i).LookupActivationsWellFormed := by
@@ -2859,6 +3159,11 @@ instance elaboratedPost (G : Generators) (B : Bases) :
     cases configInput
     cases input
     exact mainPost_keygenRegistered G B counts i)
+  fixedWritesLawful := by
+    intro configInput counts hconfig input i
+    cases configInput
+    cases input
+    exact mainPost_fixedWritesLawful G B counts i
   copyCellsAssigned := by
     intro configInput counts hconfig input i
     cases configInput

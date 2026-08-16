@@ -61,6 +61,12 @@ def regionParent :
           configInput counts hconfig) offset input region
       intro cell hcell
       exact hcell
+    fixedAssignmentsAgree := by
+      intro configInput counts hconfig offset input region
+      exact WitnessPoint.point.call_fixedAssignmentsAgree
+        ((WitnessPoint.point.configure configInput).output counts)
+        (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
+          configInput counts hconfig) offset input region
     synthesisSummary := fun config offset input region =>
       WitnessPoint.point.elaborated.synthesisSummary config offset input region
     synthesisSummary_eq := by
@@ -129,6 +135,14 @@ def regionParentWithOp :
           configInput counts hconfig) offset input region
       intro cell hcell
       exact List.mem_cons_of_mem _ hcell
+    fixedAssignmentsAgree := by
+      intro configInput counts hconfig offset input region
+      simp only [RegionCircuit.operations_bind]
+      apply (WitnessPoint.point.call_fixedAssignmentsAgree
+        ((WitnessPoint.point.configure configInput).output counts)
+        (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
+          configInput counts hconfig) offset input region).append_left
+      keygen_registration
     synthesisSummary := fun config offset input region =>
       (FloorPlanner.RegionSynthesisSummary.ofColumns
         [.column .advice config.x.index] (offset + 2) 0).combine
@@ -226,6 +240,18 @@ def layouterParent :
                 ((witnessPointL.configure configInput).output counts)) input _
         intro cell hcell
         exact List.mem_append_left _ hcell
+    fixedWritesLawful := by
+      intro configInput counts hconfig input i
+      apply Operations.HasNoFixedWrites.fixedWritesLawful
+      simp only [Circuit.operations_bind, Operations.HasNoFixedWrites,
+        List.forall_append]
+      constructor
+      · apply witnessPointL.call_hasNoFixedWrites
+        apply FormalRegionCircuit.toFormal_synthesisSummary_hasNoFixedWrites
+        exact WitnessPoint.pointSynthesisSummary_hasNoFixedColumns _ _
+      · apply witnessPointR.call_hasNoFixedWrites
+        apply FormalRegionCircuit.toFormal_synthesisSummary_hasNoFixedWrites
+        exact WitnessPoint.pointSynthesisSummary_hasNoFixedColumns _ _
     lookupActivationsWellFormed := by
       intro config input i
       simp only [Circuit.operations_bind,
@@ -316,6 +342,11 @@ def passthrough :
     simp only [circuit_norm] at h_input h_output ⊢
     rw [← h_output, h_input]
 
+@[synthesis_summary_norm]
+theorem passthrough_synthesisSummary (config : Unit) (offset : ℕ)
+    (input : Var Point Fp) (region : RegionIndex) :
+    passthrough.elaborated.synthesisSummary config offset input region = {} := rfl
+
 /-- Region parent chaining `passthrough` twice: the second call's input is the first's output. -/
 def chainedParent :
     FormalRegionCircuit Fp Unit Unit Point Point where
@@ -331,7 +362,19 @@ def chainedParent :
         FloorPlanner.regionSynthesisSummary_append,
         FormalRegionCircuit.call_synthesisSummary]
       exact (FloorPlanner.RegionSynthesisSummary.empty_combine {}
-        (by simp)).symm }
+        (by simp)).symm
+    fixedAssignmentsAgree := by
+      intro _ _ _ offset input region
+      apply RegionOperations.HasNoFixedAssignments.fixedAssignmentsAgree
+      simp only [RegionCircuit.operations_bind,
+        RegionOperations.HasNoFixedAssignments, List.forall_append]
+      constructor
+      · apply passthrough.call_hasNoFixedAssignments
+        rw [passthrough_synthesisSummary]
+        simp [FloorPlanner.RegionSynthesisSummary.HasNoFixedColumns]
+      · apply passthrough.call_hasNoFixedAssignments
+        rw [passthrough_synthesisSummary]
+        simp [FloorPlanner.RegionSynthesisSummary.HasNoFixedColumns] }
   Spec input output _ := input.Valid → output.Valid
   ProverAssumptions input _ _ := input.Valid
 

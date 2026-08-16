@@ -102,6 +102,13 @@ def pointSynthesisSummary (config : Config) (offset : ℕ) :
       .column .advice config.y.index]
     (offset + 1) 0
 
+@[synthesis_summary_norm]
+theorem pointSynthesisSummary_hasNoFixedColumns (config : Config) (offset : ℕ) :
+    (pointSynthesisSummary config offset).HasNoFixedColumns := by
+  simp only [pointSynthesisSummary,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
+
 def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
     (Unconstrained Point) Point where
   configure | (x, y) => configure x y

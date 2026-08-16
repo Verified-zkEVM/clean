@@ -564,6 +564,15 @@ def configure (advices : Fin 10 → Column .advice) : Configure Fp Config := do
     ValueCanonicity.configure, RhoCanonicity.configure,
     PsiCanonicity.configure, YCanonicity.configure]
 
+@[keygen_norm] theorem configure_delta_constants
+    (advices : Fin 10 → Column .advice) (counts) :
+    ((configure advices).delta counts).constants = [] := by
+  simp [configure, DecomposeB.configure, DecomposeD.configure,
+    DecomposeE.configure, DecomposeG.configure, DecomposeH.configure,
+    GdCanonicity.configure, PkdCanonicity.configure,
+    ValueCanonicity.configure, RhoCanonicity.configure,
+    PsiCanonicity.configure, YCanonicity.configure]
+
 @[reducible] private def configureInferred (advices : Fin 10 → Column .advice) :
     ElaboratedConfigure (configure advices) := by
   unfold configure

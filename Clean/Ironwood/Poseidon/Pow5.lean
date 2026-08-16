@@ -178,6 +178,12 @@ def configure (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
     ((configure state partialSbox rcA rcB).delta counts).lookups = [] := by
   simp [configure, configureEqualities, configureGates]
 
+@[keygen_norm] theorem configure_delta_constants
+    (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
+    (rcA rcB : Fin 3 → Column .fixed) (counts) :
+    ((configure state partialSbox rcA rcB).delta counts).constants = [] := by
+  simp [configure, configureEqualities, configureGates]
+
 /-- Every state column is equality-enabled by the Pow5 configure program. -/
 theorem state_mem_configure_permutationRequests
     (state : Fin 3 → Column .advice) (partialSbox : Column .advice)

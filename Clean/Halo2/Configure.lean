@@ -971,6 +971,11 @@ def ConfigureDelta.append (left right : ConfigureDelta F) : ConfigureDelta F whe
   invalidQueriedCells :=
     left.invalidQueriedCells ++ right.invalidQueriedCells
 
+@[simp] theorem ConfigureDelta.append_constants
+    (left right : ConfigureDelta F) :
+    (left.append right).constants = left.constants ++ right.constants :=
+  rfl
+
 @[simp] theorem ConfigureDelta.empty_append (delta : ConfigureDelta F) :
     ({} : ConfigureDelta F).append delta = delta := by
   cases delta
@@ -1212,6 +1217,14 @@ def fixedColumns (program : Configure F α)
     (counts : ConfigureCounts) : List (Column .fixed) :=
   (List.range' counts.numFixedColumns
     (program.countDelta counts).numFixedColumns).map Column.mk
+
+theorem fixedColumns_nodup (program : Configure F α)
+    (counts : ConfigureCounts) :
+    (program.fixedColumns counts).Nodup := by
+  apply List.Nodup.map
+  · intro left right heq
+    exact congrArg Column.index heq
+  · exact List.nodup_range'
 
 theorem mem_fixedColumns_iff
     (program : Configure F α) (counts : ConfigureCounts)
@@ -1639,6 +1652,12 @@ theorem Configure.delta_enableEquality_permutationRequests
   rcases column with ⟨kind, index⟩
   cases kind <;> rfl
 
+@[simp] theorem Configure.delta_enableEquality_constants
+    (column : AnyColumn) (counts : ConfigureCounts) :
+    ((enableEquality (F := F) column).delta counts).constants = [] := by
+  rcases column with ⟨kind, index⟩
+  cases kind <;> rfl
+
 theorem Configure.plan_enableEquality_permutationRequests
     (column : AnyColumn) (counts : ConfigureCounts) :
     ((enableEquality (F := F) column).plan counts).2.1.permutationRequests = [column] := by
@@ -1656,6 +1675,11 @@ def enableConstant (col : Column .fixed) : Configure F Unit :=
       permutationRequests := [col]
     }, {})⟩
 
+@[simp] theorem Configure.delta_enableConstant_constants
+    (column : Column .fixed) (counts : ConfigureCounts) :
+    ((enableConstant (F := F) column).delta counts).constants = [column] :=
+  rfl
+
 /-- Rust: `meta.lookup_table_column()`. -/
 def lookupTableColumn : Configure F TableColumn := do
   return { inner := ← fixedColumn }
@@ -1668,6 +1692,11 @@ def lookupTableColumn : Configure F TableColumn := do
 @[simp] theorem Configure.delta_lookupTableColumn_lookups
     (counts : ConfigureCounts) :
     ((lookupTableColumn : Configure F TableColumn).delta counts).lookups = [] :=
+  rfl
+
+@[simp] theorem Configure.delta_lookupTableColumn_constants
+    (counts : ConfigureCounts) :
+    ((lookupTableColumn : Configure F TableColumn).delta counts).constants = [] :=
   rfl
 
 /-- Rust: `meta.create_gate(name, |meta| Constraints::with_selector(guard, [...]))`.
@@ -2700,6 +2729,39 @@ theorem ConfigureDelta.selectorSummary_bounded
             simp [ConfigureDelta.append, ConfigureDelta.queriedCell]
   exact aux cells {}
 
+@[simp] theorem ConfigureDelta.constants_queriedCells
+    (owner : String) (cells : List (Expression F Query)) :
+    (ConfigureDelta.queriedCells owner cells).constants = [] := by
+  unfold ConfigureDelta.queriedCells
+  have aux :
+      ∀ (remaining : List (Expression F Query)) (delta : ConfigureDelta F),
+        (remaining.foldl
+          (fun current cell =>
+            current.append (ConfigureDelta.queriedCell owner cell))
+          delta).constants = delta.constants := by
+    intro remaining
+    induction remaining with
+    | nil =>
+        intro delta
+        rfl
+    | cons cell remaining ih =>
+        intro delta
+        rw [List.foldl_cons, ih]
+        cases cell with
+        | var query =>
+            cases query <;>
+              simp [ConfigureDelta.append, ConfigureDelta.queriedCell]
+        | const
+        | add
+        | mul =>
+            simp [ConfigureDelta.append, ConfigureDelta.queriedCell]
+  exact aux cells {}
+
+@[simp] theorem Configure.delta_createGate_constants
+    (gate : Gate F) (counts : ConfigureCounts) :
+    ((createGate gate).delta counts).constants = [] := by
+  simp [Configure.delta, createGate]
+
 theorem ConfigureDelta.permutationRequests_queriedCells
     (owner : String) (cells : List (Expression F Query)) :
     (ConfigureDelta.queriedCells owner cells).permutationRequests = [] := by
@@ -2752,6 +2814,18 @@ private theorem foldlTableDelta_lookups
       rw [List.foldl_cons, ih]
       simp [ConfigureDelta.append]
 
+private theorem foldlTableDelta_constants
+    (tables : List TableColumn) (delta : ConfigureDelta F) :
+    (tables.foldl
+      (fun current table =>
+        current.append { fixedQueries := [(table.inner, 0)] })
+      delta).constants = delta.constants := by
+  induction tables generalizing delta with
+  | nil => rfl
+  | cons table tables ih =>
+      rw [List.foldl_cons, ih]
+      simp [ConfigureDelta.append]
+
 @[simp] theorem Configure.delta_lookup_gates
     (queriedCells : List (Expression F Query))
     (masterSelector : ComplexSelector)
@@ -2764,6 +2838,19 @@ private theorem foldlTableDelta_lookups
       hnoSimpleSelectors).delta counts).gates = [] := by
   unfold Configure.delta lookup
   simp [ConfigureDelta.fixedQueriesOfColumns, foldlTableDelta_gates]
+
+@[simp] theorem Configure.delta_lookup_constants
+    (queriedCells : List (Expression F Query))
+    (masterSelector : ComplexSelector)
+    (tableMap : List (Expression F Query × TableColumn))
+    (hqueries : LookupQueriesDeclared queriedCells tableMap)
+    (hnoSimpleSelectors :
+      (tableMap.map Prod.fst).Forall Expression.NoSimpleSelectors)
+    (counts : ConfigureCounts) :
+    ((lookup queriedCells masterSelector tableMap hqueries
+      hnoSimpleSelectors).delta counts).constants = [] := by
+  unfold Configure.delta lookup
+  simp [ConfigureDelta.fixedQueriesOfColumns, foldlTableDelta_constants]
 
 @[simp, keygen_norm] theorem Configure.delta_enableConstant_gates
     (column : Column .fixed) (counts : ConfigureCounts) :
@@ -2866,6 +2953,45 @@ variable {α β : Type}
     fixedColumns (pure value : Configure F α) counts = [] := by
   simp [fixedColumns]
 
+@[simp] theorem fixedColumns_adviceColumn (counts : ConfigureCounts) :
+    fixedColumns (adviceColumn : Configure F (Column .advice)) counts = [] := by
+  simp [fixedColumns, countDelta, adviceColumn]
+
+@[simp] theorem fixedColumns_instanceColumn (counts : ConfigureCounts) :
+    fixedColumns (instanceColumn : Configure F (Column .instance)) counts = [] := by
+  simp [fixedColumns, countDelta, instanceColumn]
+
+@[simp] theorem fixedColumns_selector (counts : ConfigureCounts) :
+    fixedColumns (selector : Configure F Selector) counts = [] := by
+  simp [fixedColumns, countDelta, selector]
+
+@[simp] theorem fixedColumns_complexSelector (counts : ConfigureCounts) :
+    fixedColumns (complexSelector : Configure F ComplexSelector) counts = [] := by
+  simp [fixedColumns, countDelta, complexSelector]
+
+@[simp] theorem fixedColumns_enableEquality
+    (column : AnyColumn) (counts : ConfigureCounts) :
+    fixedColumns (enableEquality (F := F) column) counts = [] := by
+  simp [fixedColumns, countDelta, enableEquality]
+
+@[simp] theorem fixedColumns_createGate
+    (gate : Gate F) (counts : ConfigureCounts) :
+    fixedColumns (createGate gate) counts = [] := by
+  simp [fixedColumns, countDelta, createGate]
+
+@[simp] theorem fixedColumns_lookup
+    (queriedCells : List (Expression F Query))
+    (masterSelector : ComplexSelector)
+    (tableMap : List (Expression F Query × TableColumn))
+    (hqueries : LookupQueriesDeclared queriedCells tableMap)
+    (hnoSimpleSelectors :
+      (tableMap.map Prod.fst).Forall Expression.NoSimpleSelectors)
+    (counts : ConfigureCounts) :
+    fixedColumns
+      (lookup queriedCells masterSelector tableMap hqueries hnoSimpleSelectors)
+      counts = [] := by
+  simp [fixedColumns, countDelta, lookup]
+
 @[simp] theorem fixedColumns_bind
     (program : Configure F α) (next : α → Configure F β)
     (counts : ConfigureCounts) :
@@ -2903,6 +3029,17 @@ theorem mem_fixedColumns_bind_right
       [⟨counts.numFixedColumns⟩] := by
   simp [fixedColumns, countDelta, fixedColumn]
 
+@[simp] theorem fixedColumns_lookupTableColumn (counts : ConfigureCounts) :
+    fixedColumns (lookupTableColumn : Configure F TableColumn) counts =
+      [⟨counts.numFixedColumns⟩] := by
+  unfold lookupTableColumn
+  simp
+
+@[simp] theorem fixedColumns_enableConstant
+    (column : Column .fixed) (counts : ConfigureCounts) :
+    fixedColumns (enableConstant (F := F) column) counts = [] :=
+  rfl
+
 @[simp] theorem output_adviceColumn (counts : ConfigureCounts) :
     output (adviceColumn : Configure F (Column .advice)) counts =
       ⟨counts.numAdviceColumns⟩ :=
@@ -2920,6 +3057,16 @@ theorem mem_fixedColumns_bind_right
 
 @[simp] theorem finalCounts_fixedColumn (counts : ConfigureCounts) :
     finalCounts (fixedColumn : Configure F (Column .fixed)) counts =
+      { counts with numFixedColumns := counts.numFixedColumns + 1 } :=
+  rfl
+
+@[simp] theorem output_lookupTableColumn (counts : ConfigureCounts) :
+    output (lookupTableColumn : Configure F TableColumn) counts =
+      { inner := ⟨counts.numFixedColumns⟩ } :=
+  rfl
+
+@[simp] theorem finalCounts_lookupTableColumn (counts : ConfigureCounts) :
+    finalCounts (lookupTableColumn : Configure F TableColumn) counts =
       { counts with numFixedColumns := counts.numFixedColumns + 1 } :=
   rfl
 

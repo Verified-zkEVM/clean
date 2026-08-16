@@ -101,6 +101,20 @@ theorem load_operations (G : Generators) (cfg : GeneratorTableConfig) (i : Regio
         .loadTable cfg.tableX ((List.range (2 ^ K)).map (fun j => (G.S j).x)),
         .loadTable cfg.tableY ((List.range (2 ^ K)).map (fun j => (G.S j).y)) ] := rfl
 
+theorem load_fixedWritesLawful (G : Generators) (cfg : GeneratorTableConfig)
+    (region : RegionIndex) (constantColumns : List (Column .fixed))
+    (hnodup : [cfg.tableIdx.inner, cfg.tableX.inner,
+      cfg.tableY.inner].Nodup)
+    (hconstants : [cfg.tableIdx.inner, cfg.tableX.inner,
+      cfg.tableY.inner].Disjoint constantColumns) :
+    ((load G cfg).operations region).FixedWritesLawful constantColumns := by
+  rw [load_operations]
+  constructor
+  · simp [Operation.FixedAssignmentsAgree]
+  · simpa [Operations.loadedTableColumns, Specs.K] using hnodup
+  · simp [Operations.loadedTableColumns, Operations.regionFixedColumns, Specs.K]
+  · simpa [Operations.loadedTableColumns, Specs.K] using hconstants
+
 /-- Contents of the `tableIdx` column: block row `r ∈ [0, 2^K)` holds `↑r`. Proven from the
 `loadTable` explicit-block conjunct alone (mirrors `LookupRangeCheck.load_tableIdx_eq`). -/
 theorem load_tableIdx_eq (G : Generators) (cfg : GeneratorTableConfig)

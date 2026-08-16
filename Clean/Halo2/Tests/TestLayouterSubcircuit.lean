@@ -91,6 +91,18 @@ def parent :
                 ((witnessPointL.configure configInput).output counts)) input _
         intro cell hcell
         exact List.mem_append_left _ hcell
+    fixedWritesLawful := by
+      intro configInput counts hconfig input i
+      apply Operations.HasNoFixedWrites.fixedWritesLawful
+      simp only [Circuit.operations_bind, Operations.HasNoFixedWrites,
+        List.forall_append]
+      constructor
+      · apply witnessPointL.call_hasNoFixedWrites
+        apply FormalRegionCircuit.toFormal_synthesisSummary_hasNoFixedWrites
+        exact WitnessPoint.pointSynthesisSummary_hasNoFixedColumns _ _
+      · apply witnessPointR.call_hasNoFixedWrites
+        apply FormalRegionCircuit.toFormal_synthesisSummary_hasNoFixedWrites
+        exact WitnessPoint.pointSynthesisSummary_hasNoFixedColumns _ _
     lookupActivationsWellFormed := by
       intro config input i
       simp only [Circuit.operations_bind,
