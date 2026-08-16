@@ -184,9 +184,10 @@ lemma valueBits_rotr32_eq (k : Fin 32) (x : fields 32 (F p)) (hx : Normalized x)
 /-! ## eval helpers for rotr32 / shr32 -/
 
 lemma eval_rotr32 (env : Environment (F p)) (input_var : fields 32 (Expression (F p)))
-    (input : fields 32 (F p)) (h_input : Vector.map (Expression.eval env) input_var = input)
+    (input : fields 32 (F p)) (h_input : eval env input_var = input)
     (k : Fin 32) (i : Fin 32) :
     Expression.eval env (rotr32 k input_var)[i.val] = input[(i + k).val] := by
+  rw [CircuitType.eval_var_fields] at h_input
   unfold rotr32
   rw [Vector.getElem_rotate]
   subst h_input
@@ -232,10 +233,11 @@ lemma valueBits_shr32_eq (k : Fin 32) (x : fields 32 (F p)) (hx : Normalized x) 
           (Nat.lt_of_le_of_lt (Nat.div_le_self _ _) hval_lt) pow_le)]
 
 lemma eval_shr32 (env : Environment (F p)) (input_var : fields 32 (Expression (F p)))
-    (input : fields 32 (F p)) (h_input : Vector.map (Expression.eval env) input_var = input)
+    (input : fields 32 (F p)) (h_input : eval env input_var = input)
     (k : Fin 32) (i : Fin 32) :
     Expression.eval env (shr32 k input_var)[i.val] =
       if h : i.val + k.val < 32 then input[i.val + k.val]'h else 0 := by
+  rw [CircuitType.eval_var_fields] at h_input
   unfold shr32; rw [Vector.getElem_ofFn]; subst h_input
   split
   · next h => rw [Vector.getElem_map]
@@ -345,7 +347,6 @@ instance elaborated : ElaboratedCircuit (F p) (fields 32) (fields 32) main := by
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [lowerSigma0, xor32]
-  rw [CircuitType.eval_var_fields] at h_input
   obtain ⟨h_holds1, h_holds2⟩ := h_holds
   have ha : ∀ i : Fin 32, input[i] = 0 ∨ input[i] = 1 := h_assumptions
   have h_r7  : ∀ i : Fin 32, Expression.eval env (rotr32 7 input_var)[i.val]  = input[(i + 7).val]  :=
@@ -396,7 +397,6 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [lowerSigma0, xor32]
-  rw [CircuitType.eval_var_fields] at h_input
   obtain ⟨h_env1, h_env2, -⟩ := h_env
   refine ⟨fun i => ?_, fun i => ?_⟩
   · have hr7 := eval_rotr32 env.toEnvironment input_var input h_input 7 i

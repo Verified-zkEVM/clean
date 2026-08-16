@@ -292,7 +292,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
         simp only [ProvableStruct.vectorEvalLiteral, Vector.map_mk, List.map_toArray,
           List.map_cons, List.map_nil, Vector.getElem_mk,
           List.getElem_toArray] at h_norm ⊢
-        with_unfolding_all exact h_norm ⟨j, hj⟩
+        exact h_norm ⟨j, hj⟩
   obtain ⟨h_val_64, h_norm_64⟩ := h_inv 64 (le_refl 64)
   refine ⟨⟨h_val_64, ?_⟩, ?_⟩
   · intro i
@@ -339,7 +339,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
       rw [getElem_eval_vector]
       simp only [ProvableStruct.vectorEvalLiteral, Vector.map_mk, List.map_toArray,
         List.map_cons, List.map_nil, Vector.getElem_mk, List.getElem_toArray]
-      with_unfolding_all exact h_norm ⟨j, hj⟩
+      exact h_norm ⟨j, hj⟩
   intro i
   refine ⟨?_, ?_, ?_⟩
   · intro j

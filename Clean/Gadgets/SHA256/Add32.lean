@@ -124,8 +124,9 @@ omit h_large in
 /-- fromBitsExpr evaluated at concrete inputs = (valueBits bits : F p) -/
 private lemma fromBitsExpr_eval_normalized (env : Environment (F p))
     (bits_var : Var (fields 32) (F p)) (bits : Vector (F p) 32)
-    (h_eval : Vector.map (Expression.eval env) bits_var = bits) :
+    (h_eval : eval env bits_var = bits) :
     Expression.eval env (fromBitsExpr bits_var) = (valueBits bits : F p) := by
+  rw [CircuitType.eval_var_fields] at h_eval
   show Expression.eval env (Utils.Bits.fieldFromBitsExpr bits_var) = _
   simp only [Utils.Bits.fieldFromBits_eval]
   rw [h_eval, fieldFromBits_eq_valueBits]
@@ -134,7 +135,7 @@ omit h_large in
 /-- For normalized bits with p > 2^32, (fromBitsExpr bits_var).val = valueBits bits -/
 private lemma fromBitsExpr_val_eq (env : Environment (F p))
     (bits_var : Var (fields 32) (F p)) (bits : Vector (F p) 32)
-    (h_eval : Vector.map (Expression.eval env) bits_var = bits)
+    (h_eval : eval env bits_var = bits)
     (h_norm : Normalized bits) (hp : 2^32 < p) :
     (Expression.eval env (fromBitsExpr bits_var)).val = valueBits bits := by
   rw [fromBitsExpr_eval_normalized env bits_var bits h_eval]
@@ -169,8 +170,9 @@ omit h_large in
 /-- evalBitsNat env a = valueBits a when the variables evaluate to a -/
 private lemma evalBitsNat_eq_valueBits (env : ProverEnvironment (F p))
     (a_var : Var (fields 32) (F p)) (a : fields 32 (F p))
-    (h : Vector.map (Expression.eval env.toEnvironment) a_var = a) :
+    (h : eval env.toEnvironment a_var = a) :
     evalBitsNat env a_var = valueBits a := by
+  rw [CircuitType.eval_var_fields] at h
   subst h
   unfold evalBitsNat valueBits
   apply Finset.sum_congr rfl
@@ -229,7 +231,6 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [add32]
   obtain ⟨ha, hb⟩ := h_assumptions
   obtain ⟨h_input_a, h_input_b⟩ := h_input
-  rw [CircuitType.eval_var_fields] at h_input_a h_input_b
   obtain ⟨h_z_bool, h_cout_bool, h_lin⟩ := h_holds
   rw [z_var_eval env i₀]
   -- Boolean properties
@@ -255,9 +256,10 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
     fromBitsExpr_val_eq env input_var_a input_a h_input_a ha hp32
   have h_fb : (Expression.eval env (fromBitsExpr input_var_b)).val = valueBits input_b :=
     fromBitsExpr_val_eq env input_var_b input_b h_input_b hb hp32
-  have h_z_eval : Vector.map (Expression.eval env)
+  have h_z_eval : eval env
       (Vector.mapRange 32 fun i => (var {index := i₀ + i} : Expression (F p))) =
-      Vector.ofFn fun i : Fin 32 => env.get (i₀ + i.val) := z_var_eval env i₀
+      Vector.ofFn fun i : Fin 32 => env.get (i₀ + i.val) := by
+    rw [CircuitType.eval_var_fields]; exact z_var_eval env i₀
   have h_fz : (Expression.eval env (fromBitsExpr
       (Vector.mapRange 32 fun i => (var {index := i₀ + i} : Expression (F p))))).val = vz :=
     fromBitsExpr_val_eq env _ _ h_z_eval h_z_norm hp32
@@ -309,7 +311,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [add32]
   obtain ⟨ha, hb⟩ := h_assumptions
   obtain ⟨h_input_a, h_input_b⟩ := h_input
-  rw [CircuitType.eval_var_fields] at h_input_a h_input_b
   obtain ⟨h_env_z, h_env_cout⟩ := h_env
   -- The witnessed values are `evalBitsNat` of the inputs, which equal `valueBits`
   have h_evalBits_a : evalBitsNat env input_var_a = valueBits input_a :=
