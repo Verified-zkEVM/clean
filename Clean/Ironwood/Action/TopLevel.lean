@@ -223,6 +223,8 @@ nonempty. -/
 theorem actionCircuit_permutationColumns_nonempty :
     actionCircuit.permutationColumns ≠ [] := by
   rw [Internal.actionCircuit_eq_impl]
+  simp only [TopLevelCircuit.permutationColumns,
+    TopLevelCircuit.constraintSystem, Internal.actionCircuitImpl]
   let program := Circuit.configure Specs.Sinsemilla.orchardGenerators
   let primary := (program.output {}).primary.toAny
   have hprimary : primary ∈ (program.run {}).2.permutationColumns :=
@@ -237,22 +239,28 @@ theorem actionCircuit_permutationColumns_nonempty :
 theorem actionCircuit_numAdviceColumns_eq :
     actionCircuit.constraintSystem.numAdviceColumns = 10 := by
   rw [Internal.actionCircuit_eq_impl]
-  exact Circuit.configure_finalCounts_numAdviceColumns
-    Specs.Sinsemilla.orchardGenerators
+  simpa only [Internal.actionCircuitImpl, TopLevelCircuit.constraintSystem,
+    TopLevelCompilation.constraintSystem, Circuit.circuit] using
+      Circuit.configure_finalCounts_numAdviceColumns
+        Specs.Sinsemilla.orchardGenerators
 
 /-- Action's closed configure run allocates fourteen fixed columns. -/
 theorem actionCircuit_numFixedColumns_eq :
     actionCircuit.constraintSystem.numFixedColumns = 14 := by
   rw [Internal.actionCircuit_eq_impl]
-  exact Circuit.configure_finalCounts_numFixedColumns
-    Specs.Sinsemilla.orchardGenerators
+  simpa only [Internal.actionCircuitImpl, TopLevelCircuit.constraintSystem,
+    TopLevelCompilation.constraintSystem, Circuit.circuit] using
+      Circuit.configure_finalCounts_numFixedColumns
+        Specs.Sinsemilla.orchardGenerators
 
 /-- Action's closed configure run allocates one instance column. -/
 theorem actionCircuit_numInstanceColumns_eq :
     actionCircuit.constraintSystem.numInstanceColumns = 1 := by
   rw [Internal.actionCircuit_eq_impl]
-  exact Circuit.configure_finalCounts_numInstanceColumns
-    Specs.Sinsemilla.orchardGenerators
+  simpa only [Internal.actionCircuitImpl, TopLevelCircuit.constraintSystem,
+    TopLevelCompilation.constraintSystem, Circuit.circuit] using
+      Circuit.configure_finalCounts_numInstanceColumns
+        Specs.Sinsemilla.orchardGenerators
 
 /-- Action's configured gates and lookups have exact Halo 2 degree nine. -/
 theorem actionCircuit_constraintDegree_eq :
@@ -266,7 +274,8 @@ theorem actionCircuit_blindingFactors_eq :
     actionCircuit.blindingFactors = 5 := by
   rw [Internal.actionCircuit_eq_impl]
   unfold TopLevelCircuit.blindingFactors TopLevelCircuit.constraintSystem
-    TopLevelCompilation.constraintSystem Internal.actionCircuitImpl
+    TopLevelCompilation.constraintSystem
+  simp only [Internal.actionCircuitImpl, Circuit.circuit]
   configure_norm
 
 /-- Action's public instance layout occupies ten rows. -/
@@ -325,10 +334,11 @@ private theorem actionCircuit_spec_iff_of_eq
     (input : PublicInputs Fp) (privateWitness : PrivateWitness) :
     ActionSpec input privateWitness ↔
       top.Spec input
-        (cast ((congrArg (fun circuit => circuit.PrivateWitness) htop).trans (by rfl)).symm
+        (cast ((congrArg (fun circuit => circuit.PrivateWitness) htop).trans
+          (by simp only [Internal.actionCircuitImpl])).symm
           privateWitness) := by
   cases htop
-  rfl
+  simp [Internal.actionCircuitImpl]
 
 /-- The Orchard Action spec is the opaque circuit's internal spec after
 transporting the public private-witness type across the circuit boundary. -/
