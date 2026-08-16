@@ -1123,6 +1123,103 @@ private theorem fixedAssignment_cells_disjoint_of_column_bounds
   have := hright rightAssignment hrightAssignment
   omega
 
+private theorem tableColumnAssignment_row_lt
+    (usable column : ℕ) (values : List F)
+    (hvalues : values.length ≤ usable)
+    {assignment : FixedAssignment F}
+    (hassignment : assignment ∈
+      tableColumnAssignments usable column values) :
+    assignment.2.1 < usable := by
+  rcases values with _ | ⟨first, rest⟩
+  · simp [tableColumnAssignments] at hassignment
+  · simp only [tableColumnAssignments, List.mem_append] at hassignment
+    rcases hassignment with hblock | hfill
+    · rw [List.mem_map] at hblock
+      obtain ⟨⟨value, row⟩, hrow, rfl⟩ := hblock
+      change row < usable
+      have hrowBound := List.snd_lt_of_mem_zipIdx hrow
+      omega
+    · rw [List.mem_map] at hfill
+      obtain ⟨row, hrow, rfl⟩ := hfill
+      change (first :: rest).length + row < usable
+      have hrowBound := List.mem_range.mp hrow
+      omega
+
+private theorem tableAssignment_row_lt
+    (usable : ℕ) (operations : Operations F)
+    (hloads : ∀ table values, .loadTable table values ∈ operations →
+      values.length ≤ usable)
+    {assignment : FixedAssignment F}
+    (hassignment : assignment ∈ tableAssignments usable operations) :
+    assignment.2.1 < usable := by
+  induction operations with
+  | nil => simp [tableAssignments] at hassignment
+  | cons operation rest inductionHypothesis =>
+      cases operation with
+      | region name body | constrainInstance cell column row =>
+          apply inductionHypothesis
+          · intro table values hload
+            exact hloads table values (by simp [hload])
+          · exact hassignment
+      | loadTable table values =>
+          simp only [tableAssignments, List.mem_append] at hassignment
+          rcases hassignment with hcurrent | hrest
+          · exact tableColumnAssignment_row_lt usable table.inner.index values
+              (hloads table values (by simp)) hcurrent
+          · apply inductionHypothesis
+            · intro otherTable otherValues hload
+              exact hloads otherTable otherValues (by simp [hload])
+            · exact hrest
+
+private theorem regionAssignment_row_lt_placementEnd
+    (operations : Operations F)
+    {assignment : FixedAssignment F}
+    (hassignment : assignment ∈
+      regionAssignments (FloorPlanner.V1.starts operations)
+        (indexedRegions operations 0).1) :
+    assignment.2.1 < FloorPlanner.V1.placementEnd operations := by
+  obtain ⟨index, body, column, localRow,
+    hregion, hoperation, _, hrow⟩ :=
+      mem_regionAssignments _ _ hassignment
+  have hshape : FloorPlanner.measureRegion index body ∈
+      FloorPlanner.measureRegions operations :=
+    List.mem_map.mpr ⟨(index, body), hregion, rfl⟩
+  have hend := FloorPlanner.V1.shape_end_le_placementEndFrom_of_mem
+    (FloorPlanner.measureRegions operations)
+    (FloorPlanner.V1.starts operations)
+    (FloorPlanner.measureRegion index body) hshape
+  have hlocal : localRow <
+      (FloorPlanner.measureRegion index body).rowCount := by
+    have hbound := FloorPlanner.regionOperationRowExtent_le_synthesisSummary_of_mem
+      body (.assignFixed column localRow assignment.2.2) hoperation
+    simpa only [FloorPlanner.measureRegion_rowCount,
+      FloorPlanner.regionOperationRowExtent] using hbound
+  rw [hrow]
+  unfold place FloorPlanner.V1.placementEnd
+  exact (Nat.add_lt_add_left hlocal _).trans_le hend
+
+private theorem selectorAssignment_bounds [FiniteField F]
+    (constraintSystem : ConstraintSystem F) (n : ℕ)
+    (selectorActivations : List (ℕ × ℕ))
+    (hrows : ∀ activation ∈ selectorActivations, activation.2 < n)
+    {assignment : FixedAssignment F}
+    (hassignment : assignment ∈
+      selectorAssignments
+        (deriveSelCompressMap constraintSystem n selectorActivations)
+        selectorActivations) :
+    assignment.2.1 < n ∧
+      assignment.1 < constraintSystem.numFixedColumns +
+        (deriveSelCompressMap constraintSystem n selectorActivations).newFixedCols := by
+  obtain ⟨selector, row, compressed, hactivation, hlookup, hequal⟩ :=
+    exists_activation_lookup_of_mem_selectorAssignments
+      (deriveSelCompressMap constraintSystem n selectorActivations)
+      selectorActivations hassignment
+  obtain ⟨index, hindex, hcolumn⟩ :=
+    deriveSelCompressMap_lookup_packedColumn
+      constraintSystem n selectorActivations hlookup
+  rw [hequal, hcolumn]
+  exact ⟨hrows (selector, row) hactivation, by omega⟩
+
 /-- The ordered fixed-write stream before Halo 2's last-write deduplication. -/
 def rawAssignments [FiniteField F]
     (usable : ℕ) (selectorMap : SelCompressMap)
@@ -1136,6 +1233,58 @@ def rawAssignments [FiniteField F]
         (constraintSystem.constants.map (·.index)))
     ++ selectorAssignments selectorMap (activations starts regions)
     ++ regionAssignments starts regions
+
+/-- Every raw fixed write lies within the fixed-column and evaluation-domain bounds
+computed from the same constraint system and operation stream. -/
+theorem rawAssignments_bounds_deriveSelCompressMap [FiniteField F]
+    (usable n : ℕ) (constraintSystem : ConstraintSystem F)
+    (operations : Operations F)
+    (hcoherent : OperationsKeygenCoherent constraintSystem operations)
+    (hconstantBounds : constraintSystem.constants.Forall fun column =>
+      column.index < constraintSystem.numFixedColumns)
+    (hloads : ∀ table values, .loadTable table values ∈ operations →
+      values.length ≤ usable)
+    (husable : usable ≤ n)
+    (hplacement : FloorPlanner.V1.placementEnd operations ≤ n)
+    (hactivationRows : ∀ activation ∈
+      activations (FloorPlanner.V1.starts operations)
+        (indexedRegions operations 0).1,
+      activation.2 < n)
+    {assignment : FixedAssignment F}
+    (hassignment : assignment ∈
+      rawAssignments usable
+        (deriveSelCompressMap constraintSystem n
+          (activations (FloorPlanner.V1.starts operations)
+            (indexedRegions operations 0).1))
+        constraintSystem operations) :
+    assignment.1 < constraintSystem.numFixedColumns +
+        (deriveSelCompressMap constraintSystem n
+          (activations (FloorPlanner.V1.starts operations)
+            (indexedRegions operations 0).1)).newFixedCols ∧
+      assignment.2.1 < n := by
+  simp only [rawAssignments] at hassignment
+  rcases List.mem_append.mp hassignment with hprefix | hregion
+  rcases List.mem_append.mp hprefix with hprefix | hselector
+  rcases List.mem_append.mp hprefix with htable | hconstant
+  · exact ⟨(tableAssignment_column_lt_numFixedColumns usable
+      constraintSystem operations hcoherent htable).trans_le (Nat.le_add_right _ _),
+      (tableAssignment_row_lt usable operations hloads htable).trans_le husable⟩
+  · obtain ⟨value, hsource, _⟩ :=
+      exists_constantAssignment_of_mem _ hconstant
+    exact ⟨(constantAssignment_column_lt_numFixedColumns operations
+      constraintSystem.constants constraintSystem.numFixedColumns
+      hconstantBounds hconstant).trans_le (Nat.le_add_right _ _),
+      (FloorPlanner.V1.constantAssignments_row_lt_placementEnd
+        operations (constraintSystem.constants.map (·.index))
+        hsource).trans_le
+          hplacement⟩
+  · have hbounds := selectorAssignment_bounds constraintSystem n
+      (activations (FloorPlanner.V1.starts operations)
+        (indexedRegions operations 0).1) hactivationRows hselector
+    exact ⟨hbounds.2, hbounds.1⟩
+  · exact ⟨(regionAssignment_column_lt_numFixedColumns constraintSystem
+      operations hcoherent hregion).trans_le (Nat.le_add_right _ _),
+      (regionAssignment_row_lt_placementEnd operations hregion).trans_le hplacement⟩
 
 /-- The four generic fixed-write sources agree under the circuit and planner laws:
 tables own disjoint columns, deferred constants use region-free cells, selector
