@@ -415,9 +415,13 @@ def provideProgram {programSize : ℕ} (program : Fin programSize → F p) :
 
 def programFixedColumns {programSize : ℕ} (program : Fin programSize → F p) :
     FixedColumns (F p) where
-  width := 2
-  rows := List.finRange programSize |>.map fun i => #[(i.val : F p), program i]
-  uniform_width := by simp
+  height := programSize
+  program := .ofFExprs #v[
+    .index,
+    .listGetAtIndex ((Vector.ofFn program).toList.map .const)
+  ]
+  valid := by simp [Witgen.RowProgram.Valid, Witgen.RowProgram.ofFExprs,
+    Witgen.VExpr.validForRow, Witgen.FExpr.validForRow]
 
 def programComponent {programSize : ℕ} (program : Fin programSize → F p)
     (h_programSize : programSize < p) :
@@ -432,12 +436,13 @@ def programComponent {programSize : ℕ} (program : Fin programSize → F p)
     simp only [provideProgram]
     change ∃ h : (row[0]?.getD 0).val < programSize,
       row[1]?.getD 0 = program ⟨(row[0]?.getD 0).val, h⟩
-    have hrow' : row.extract 0 2 = #[(i : F p), program ⟨i, by
-        simpa [programFixedColumns] using hi⟩] := by
-      simpa [programFixedColumns] using hrow
     have hi' : i < programSize := by simpa [programFixedColumns] using hi
-    have hextractSize : (row.extract 0 2).size = 2 := by
-      simpa [programFixedColumns] using congrArg Array.size hrow
+    have hrow' : row.extract 0 2 = #[(i : F p), program ⟨i, hi'⟩] := by
+      simpa [programFixedColumns, FixedColumns.width, FixedColumns.row,
+        Witgen.RowProgram.ofFExprs, Witgen.RowProgram.eval, Witgen.VExpr.eval,
+        Witgen.FExpr.eval, Witgen.evalSteps,
+        Witgen.evalList_map_vector_const, hi'] using hrow
+    have hextractSize : (row.extract 0 2).size = 2 := by simp [hrow']
     have hrowSize : 2 ≤ row.size := by
       rw [Array.size_extract] at hextractSize
       omega
@@ -475,9 +480,9 @@ def provideMemory : GeneralFormalCircuit (F p) ProviderInput unit where
   completeness := by circuit_proof_start
 
 def memoryFixedColumns (memorySize : ℕ) : FixedColumns (F p) where
-  width := 1
-  rows := List.finRange memorySize |>.map fun address => #[(address.val : F p)]
-  uniform_width := by simp
+  height := memorySize
+  program := .ofFExprs #v[.index]
+  valid := by rfl
 
 def memoryComponent (memorySize : ℕ) (h_memorySize : memorySize < p) : Component (F p) where
   circuit := provideMemory
@@ -495,9 +500,10 @@ def memoryComponent (memorySize : ℕ) (h_memorySize : memorySize < p) : Compone
       some (inputRow ProviderInput row) at hdata
     have hi : i < memorySize := by simpa [memoryFixedColumns] using hi
     have hrow' : row.extract 0 1 = #[(i : F p)] := by
-      simpa [memoryFixedColumns] using hrow
-    have hextractSize : (row.extract 0 1).size = 1 := by
-      simpa [memoryFixedColumns] using congrArg Array.size hrow
+      simpa [memoryFixedColumns, FixedColumns.width, FixedColumns.row,
+        Witgen.RowProgram.ofFExprs, Witgen.RowProgram.eval, Witgen.VExpr.eval,
+        Witgen.FExpr.eval, Witgen.evalSteps] using hrow
+    have hextractSize : (row.extract 0 1).size = 1 := by simp [hrow']
     have hrowSize : 0 < row.size := by
       rw [Array.size_extract] at hextractSize
       omega
@@ -727,14 +733,16 @@ def executionMode {programSize : ℕ} (program : Fin programSize → F p)
 
 def programMode {programSize : ℕ} (program : Fin programSize → F p) : Mode (F p) :=
   .preallocated {
-    rows := (programFixedColumns program).rows.length
-    input := [.const 0]
+    rows := (programFixedColumns program).height
+    input := .ofFExprs #v[.const 0]
+    input_valid := by rfl
     handlers := [{ interaction := 0, column := 2 }]
   }
 
 def memoryMode (memorySize : ℕ) : Mode (F p) := .preallocated {
   rows := memorySize
-  input := [.proverInput 0 1, .const 0]
+  input := .ofFExprs #v[.proverInputGet .idx, .const 0]
+  input_valid := by rfl
   handlers := [{ interaction := 0, column := 2 }]
 }
 

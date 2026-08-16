@@ -65,9 +65,9 @@ def pushBytes : GeneralFormalCircuit (F p) BytesInput unit where
   completeness := by circuit_proof_start
 
 def bytesFixedColumns : FixedColumns (F p) where
-  width := 1
-  rows := List.finRange 256 |>.map fun i => #[ByteUtils.fromByte i]
-  uniform_width := by simp
+  height := 256
+  program := .ofFExprs #v[.index]
+  valid := by rfl
 
 def bytesComponent : Component (F p) where
   circuit := pushBytes
@@ -78,12 +78,15 @@ def bytesComponent : Component (F p) where
     intro i row data hfixed _ _
     rcases hfixed with ⟨hi, hrow⟩
     simp only [pushBytes]
-    let byteIndex : Fin 256 := ⟨i, by simpa [bytesFixedColumns] using hi⟩
+    have hi' : i < 256 := by simpa [bytesFixedColumns] using hi
+    let byteIndex : Fin 256 := ⟨i, hi'⟩
     refine ⟨byteIndex, ?_⟩
-    simp [bytesFixedColumns] at hrow
+    have hrow' : row.extract 0 1 = #[(i : F p)] := by
+      simpa [bytesFixedColumns, FixedColumns.width, FixedColumns.row,
+        Witgen.RowProgram.ofFExprs, Witgen.RowProgram.eval, Witgen.VExpr.eval,
+        Witgen.FExpr.eval, Witgen.evalSteps] using hrow
     change row[0]?.getD 0 = ByteUtils.fromByte byteIndex
-    have hextractSize : (row.extract 0 1).size = 1 := by
-      simpa using congrArg Array.size hrow
+    have hextractSize : (row.extract 0 1).size = 1 := by simp [hrow']
     have hrowSize : 0 < row.size := by
       rw [Array.size_extract] at hextractSize
       omega
@@ -92,7 +95,15 @@ def bytesComponent : Component (F p) where
       row[0]?.getD 0 = (row.extract 0 1)[0]?.getD 0 := by
         rw [Array.getElem?_eq_getElem hrowSize, Array.getElem?_eq_getElem hextract]
         simp only [Array.getElem_extract, Nat.zero_add]
-      _ = ByteUtils.fromByte byteIndex := by rw [hrow]; rfl
+      _ = ByteUtils.fromByte byteIndex := by
+        rw [hrow']
+        have hip : i < p := by
+          have hp := pGt.out
+          omega
+        have hval : (i : F p).val = i := ZMod.val_natCast_of_lt hip
+        symm
+        have hcastLt : (i : F p).val < 256 := by rw [hval]; exact hi'
+        simpa [byteIndex, hval] using ByteUtils.fromByte_eq (p := p) (i : F p) hcastLt
 
 def Add8Channel : Channel (F p) fieldTriple where
   name := "add8"
@@ -340,8 +351,9 @@ def add8Mode : Mode (F p) := .demand {
 multiplicity cell per row. Its declared push interaction routes byte pulls back to
 the corresponding row. -/
 def bytesMode : Mode (F p) := .preallocated {
-  rows := (bytesFixedColumns (p := p)).rows.length
-  input := [.const 0]
+  rows := (bytesFixedColumns (p := p)).height
+  input := .ofFExprs #v[.const 0]
+  input_valid := by rfl
   handlers := [{ interaction := 0, column := 1 }]
 }
 

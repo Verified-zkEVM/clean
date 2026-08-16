@@ -55,6 +55,7 @@ mutual
 def FExpr.toJson : FExpr F → Json
   | .expr e => Json.mkObj [("type", "expr"), ("expr", Lean.toJson e)]
   | .const c => Json.mkObj [("type", "const"), ("value", Lean.toJson c)]
+  | .index => Json.mkObj [("type", "index")]
   | .localVar i => Json.mkObj [("type", "localVar"), ("index", Lean.toJson i)]
   | .add x y => Json.mkObj [("type", "add"), ("lhs", x.toJson), ("rhs", y.toJson)]
   | .mul x y => Json.mkObj [("type", "mul"), ("lhs", x.toJson), ("rhs", y.toJson)]
@@ -64,6 +65,9 @@ def FExpr.toJson : FExpr F → Json
       ("cond", c.toJson), ("then", t.toJson), ("else", e.toJson)]
   | .listGet xs i => Json.mkObj [("type", "listGet"),
       ("items", Json.arr (FExpr.listToJson xs).toArray), ("index", i.toJson)]
+  | .listGetAtIndex xs => Json.mkObj [("type", "listGetAtIndex"),
+      ("items", Json.arr (FExpr.listToJson xs).toArray)]
+  | .proverInputGet i => Json.mkObj [("type", "proverInputGet"), ("index", i.toJson)]
   | .dataGet key n row col => Json.mkObj [("type", "dataGet"),
       ("table", Lean.toJson key), ("width", Lean.toJson n),
       ("row", row.toJson), ("col", Lean.toJson col.val)]

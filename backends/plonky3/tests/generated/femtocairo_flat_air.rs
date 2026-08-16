@@ -35,47 +35,46 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
             input.len()
         ));
     }
+    let _prover_input: &[F] = &[];
     let mut row = input.to_vec();
     {
         let mut output = Vec::with_capacity(1);
         output.push(
-            [
-                F::from_canonical_u64(212u64),
-                F::from_canonical_u64(1u64),
-                F::from_canonical_u64(2u64),
-                F::from_canonical_u64(8u64),
-                F::from_canonical_u64(213u64),
-                F::from_canonical_u64(3u64),
-                F::from_canonical_u64(4u64),
-                F::from_canonical_u64(14u64),
-                F::from_canonical_u64(244u64),
-                F::from_canonical_u64(1u64),
-                F::from_canonical_u64(10u64),
-                F::from_canonical_u64(15u64),
-                F::from_canonical_u64(233u64),
-                F::from_canonical_u64(5u64),
-                F::from_canonical_u64(2u64),
-                F::from_canonical_u64(30u64),
-                F::from_canonical_u64(220u64),
-                F::from_canonical_u64(100u64),
-                F::from_canonical_u64(3u64),
-                F::from_canonical_u64(107u64),
-                F::from_canonical_u64(212u64),
-                F::from_canonical_u64(4u64),
-                F::from_canonical_u64(5u64),
-                F::from_canonical_u64(12u64),
-                F::from_canonical_u64(252u64),
-                F::from_canonical_u64(0u64),
-                F::from_canonical_u64(0u64),
-                F::from_canonical_u64(0u64),
-                F::from_canonical_u64(0u64),
-                F::from_canonical_u64(0u64),
-                F::from_canonical_u64(0u64),
-                F::from_canonical_u64(0u64),
-            ]
-            .get(((row.get(0).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize)
-            .copied()
-            .unwrap_or(F::ZERO),
+            match ((row.get(0).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize {
+                0 => F::from_u64(212u64),
+                1 => F::from_u64(1u64),
+                2 => F::from_u64(2u64),
+                3 => F::from_u64(8u64),
+                4 => F::from_u64(213u64),
+                5 => F::from_u64(3u64),
+                6 => F::from_u64(4u64),
+                7 => F::from_u64(14u64),
+                8 => F::from_u64(244u64),
+                9 => F::from_u64(1u64),
+                10 => F::from_u64(10u64),
+                11 => F::from_u64(15u64),
+                12 => F::from_u64(233u64),
+                13 => F::from_u64(5u64),
+                14 => F::from_u64(2u64),
+                15 => F::from_u64(30u64),
+                16 => F::from_u64(220u64),
+                17 => F::from_u64(100u64),
+                18 => F::from_u64(3u64),
+                19 => F::from_u64(107u64),
+                20 => F::from_u64(212u64),
+                21 => F::from_u64(4u64),
+                22 => F::from_u64(5u64),
+                23 => F::from_u64(12u64),
+                24 => F::from_u64(252u64),
+                25 => F::from_u64(0u64),
+                26 => F::from_u64(0u64),
+                27 => F::from_u64(0u64),
+                28 => F::from_u64(0u64),
+                29 => F::from_u64(0u64),
+                30 => F::from_u64(0u64),
+                31 => F::from_u64(0u64),
+                _ => F::ZERO,
+            },
         );
         debug_assert_eq!(output.len(), 1);
         row.extend(output);
@@ -83,46 +82,43 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
     {
         let mut output = Vec::with_capacity(1);
         output.push(
-            [
-                F::from_canonical_u64(212u64),
-                F::from_canonical_u64(1u64),
-                F::from_canonical_u64(2u64),
-                F::from_canonical_u64(8u64),
-                F::from_canonical_u64(213u64),
-                F::from_canonical_u64(3u64),
-                F::from_canonical_u64(4u64),
-                F::from_canonical_u64(14u64),
-                F::from_canonical_u64(244u64),
-                F::from_canonical_u64(1u64),
-                F::from_canonical_u64(10u64),
-                F::from_canonical_u64(15u64),
-                F::from_canonical_u64(233u64),
-                F::from_canonical_u64(5u64),
-                F::from_canonical_u64(2u64),
-                F::from_canonical_u64(30u64),
-                F::from_canonical_u64(220u64),
-                F::from_canonical_u64(100u64),
-                F::from_canonical_u64(3u64),
-                F::from_canonical_u64(107u64),
-                F::from_canonical_u64(212u64),
-                F::from_canonical_u64(4u64),
-                F::from_canonical_u64(5u64),
-                F::from_canonical_u64(12u64),
-                F::from_canonical_u64(252u64),
-                F::from_canonical_u64(0u64),
-                F::from_canonical_u64(0u64),
-                F::from_canonical_u64(0u64),
-                F::from_canonical_u64(0u64),
-                F::from_canonical_u64(0u64),
-                F::from_canonical_u64(0u64),
-                F::from_canonical_u64(0u64),
-            ]
-            .get(
-                (((row.get(0).copied().unwrap_or(F::ZERO)).canonical_u64()).wrapping_add(1u64))
-                    as usize,
-            )
-            .copied()
-            .unwrap_or(F::ZERO),
+            match (((row.get(0).copied().unwrap_or(F::ZERO)).canonical_u64()).wrapping_add(1u64))
+                as usize
+            {
+                0 => F::from_u64(212u64),
+                1 => F::from_u64(1u64),
+                2 => F::from_u64(2u64),
+                3 => F::from_u64(8u64),
+                4 => F::from_u64(213u64),
+                5 => F::from_u64(3u64),
+                6 => F::from_u64(4u64),
+                7 => F::from_u64(14u64),
+                8 => F::from_u64(244u64),
+                9 => F::from_u64(1u64),
+                10 => F::from_u64(10u64),
+                11 => F::from_u64(15u64),
+                12 => F::from_u64(233u64),
+                13 => F::from_u64(5u64),
+                14 => F::from_u64(2u64),
+                15 => F::from_u64(30u64),
+                16 => F::from_u64(220u64),
+                17 => F::from_u64(100u64),
+                18 => F::from_u64(3u64),
+                19 => F::from_u64(107u64),
+                20 => F::from_u64(212u64),
+                21 => F::from_u64(4u64),
+                22 => F::from_u64(5u64),
+                23 => F::from_u64(12u64),
+                24 => F::from_u64(252u64),
+                25 => F::from_u64(0u64),
+                26 => F::from_u64(0u64),
+                27 => F::from_u64(0u64),
+                28 => F::from_u64(0u64),
+                29 => F::from_u64(0u64),
+                30 => F::from_u64(0u64),
+                31 => F::from_u64(0u64),
+                _ => F::ZERO,
+            },
         );
         debug_assert_eq!(output.len(), 1);
         row.extend(output);
@@ -130,46 +126,43 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
     {
         let mut output = Vec::with_capacity(1);
         output.push(
-            [
-                F::from_canonical_u64(212u64),
-                F::from_canonical_u64(1u64),
-                F::from_canonical_u64(2u64),
-                F::from_canonical_u64(8u64),
-                F::from_canonical_u64(213u64),
-                F::from_canonical_u64(3u64),
-                F::from_canonical_u64(4u64),
-                F::from_canonical_u64(14u64),
-                F::from_canonical_u64(244u64),
-                F::from_canonical_u64(1u64),
-                F::from_canonical_u64(10u64),
-                F::from_canonical_u64(15u64),
-                F::from_canonical_u64(233u64),
-                F::from_canonical_u64(5u64),
-                F::from_canonical_u64(2u64),
-                F::from_canonical_u64(30u64),
-                F::from_canonical_u64(220u64),
-                F::from_canonical_u64(100u64),
-                F::from_canonical_u64(3u64),
-                F::from_canonical_u64(107u64),
-                F::from_canonical_u64(212u64),
-                F::from_canonical_u64(4u64),
-                F::from_canonical_u64(5u64),
-                F::from_canonical_u64(12u64),
-                F::from_canonical_u64(252u64),
-                F::from_canonical_u64(0u64),
-                F::from_canonical_u64(0u64),
-                F::from_canonical_u64(0u64),
-                F::from_canonical_u64(0u64),
-                F::from_canonical_u64(0u64),
-                F::from_canonical_u64(0u64),
-                F::from_canonical_u64(0u64),
-            ]
-            .get(
-                (((row.get(0).copied().unwrap_or(F::ZERO)).canonical_u64()).wrapping_add(2u64))
-                    as usize,
-            )
-            .copied()
-            .unwrap_or(F::ZERO),
+            match (((row.get(0).copied().unwrap_or(F::ZERO)).canonical_u64()).wrapping_add(2u64))
+                as usize
+            {
+                0 => F::from_u64(212u64),
+                1 => F::from_u64(1u64),
+                2 => F::from_u64(2u64),
+                3 => F::from_u64(8u64),
+                4 => F::from_u64(213u64),
+                5 => F::from_u64(3u64),
+                6 => F::from_u64(4u64),
+                7 => F::from_u64(14u64),
+                8 => F::from_u64(244u64),
+                9 => F::from_u64(1u64),
+                10 => F::from_u64(10u64),
+                11 => F::from_u64(15u64),
+                12 => F::from_u64(233u64),
+                13 => F::from_u64(5u64),
+                14 => F::from_u64(2u64),
+                15 => F::from_u64(30u64),
+                16 => F::from_u64(220u64),
+                17 => F::from_u64(100u64),
+                18 => F::from_u64(3u64),
+                19 => F::from_u64(107u64),
+                20 => F::from_u64(212u64),
+                21 => F::from_u64(4u64),
+                22 => F::from_u64(5u64),
+                23 => F::from_u64(12u64),
+                24 => F::from_u64(252u64),
+                25 => F::from_u64(0u64),
+                26 => F::from_u64(0u64),
+                27 => F::from_u64(0u64),
+                28 => F::from_u64(0u64),
+                29 => F::from_u64(0u64),
+                30 => F::from_u64(0u64),
+                31 => F::from_u64(0u64),
+                _ => F::ZERO,
+            },
         );
         debug_assert_eq!(output.len(), 1);
         row.extend(output);
@@ -177,46 +170,43 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
     {
         let mut output = Vec::with_capacity(1);
         output.push(
-            [
-                F::from_canonical_u64(212u64),
-                F::from_canonical_u64(1u64),
-                F::from_canonical_u64(2u64),
-                F::from_canonical_u64(8u64),
-                F::from_canonical_u64(213u64),
-                F::from_canonical_u64(3u64),
-                F::from_canonical_u64(4u64),
-                F::from_canonical_u64(14u64),
-                F::from_canonical_u64(244u64),
-                F::from_canonical_u64(1u64),
-                F::from_canonical_u64(10u64),
-                F::from_canonical_u64(15u64),
-                F::from_canonical_u64(233u64),
-                F::from_canonical_u64(5u64),
-                F::from_canonical_u64(2u64),
-                F::from_canonical_u64(30u64),
-                F::from_canonical_u64(220u64),
-                F::from_canonical_u64(100u64),
-                F::from_canonical_u64(3u64),
-                F::from_canonical_u64(107u64),
-                F::from_canonical_u64(212u64),
-                F::from_canonical_u64(4u64),
-                F::from_canonical_u64(5u64),
-                F::from_canonical_u64(12u64),
-                F::from_canonical_u64(252u64),
-                F::from_canonical_u64(0u64),
-                F::from_canonical_u64(0u64),
-                F::from_canonical_u64(0u64),
-                F::from_canonical_u64(0u64),
-                F::from_canonical_u64(0u64),
-                F::from_canonical_u64(0u64),
-                F::from_canonical_u64(0u64),
-            ]
-            .get(
-                (((row.get(0).copied().unwrap_or(F::ZERO)).canonical_u64()).wrapping_add(3u64))
-                    as usize,
-            )
-            .copied()
-            .unwrap_or(F::ZERO),
+            match (((row.get(0).copied().unwrap_or(F::ZERO)).canonical_u64()).wrapping_add(3u64))
+                as usize
+            {
+                0 => F::from_u64(212u64),
+                1 => F::from_u64(1u64),
+                2 => F::from_u64(2u64),
+                3 => F::from_u64(8u64),
+                4 => F::from_u64(213u64),
+                5 => F::from_u64(3u64),
+                6 => F::from_u64(4u64),
+                7 => F::from_u64(14u64),
+                8 => F::from_u64(244u64),
+                9 => F::from_u64(1u64),
+                10 => F::from_u64(10u64),
+                11 => F::from_u64(15u64),
+                12 => F::from_u64(233u64),
+                13 => F::from_u64(5u64),
+                14 => F::from_u64(2u64),
+                15 => F::from_u64(30u64),
+                16 => F::from_u64(220u64),
+                17 => F::from_u64(100u64),
+                18 => F::from_u64(3u64),
+                19 => F::from_u64(107u64),
+                20 => F::from_u64(212u64),
+                21 => F::from_u64(4u64),
+                22 => F::from_u64(5u64),
+                23 => F::from_u64(12u64),
+                24 => F::from_u64(252u64),
+                25 => F::from_u64(0u64),
+                26 => F::from_u64(0u64),
+                27 => F::from_u64(0u64),
+                28 => F::from_u64(0u64),
+                29 => F::from_u64(0u64),
+                30 => F::from_u64(0u64),
+                31 => F::from_u64(0u64),
+                _ => F::ZERO,
+            },
         );
         debug_assert_eq!(output.len(), 1);
         row.extend(output);
@@ -225,7 +215,7 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
         let mut output = Vec::with_capacity(8);
         let bits_value = (row.get(3).copied().unwrap_or(F::ZERO)).canonical_u64();
         for bit in 0u32..8u32 {
-            output.push(F::from_canonical_u64((bits_value >> bit) & 1));
+            output.push(F::from_u64((bits_value >> bit) & 1));
         }
         debug_assert_eq!(output.len(), 8);
         row.extend(output);
@@ -233,23 +223,21 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
     {
         let mut output = Vec::with_capacity(1);
         output.push(
-            ((((((F::from_canonical_u64(1u64)
-                + (F::from_canonical_u64(2013265920u64)
-                    * row.get(9).copied().unwrap_or(F::ZERO)))
-                + (F::from_canonical_u64(2013265920u64)
-                    * row.get(10).copied().unwrap_or(F::ZERO)))
+            ((((((F::from_u64(1u64)
+                + (F::from_u64(2013265920u64) * row.get(9).copied().unwrap_or(F::ZERO)))
+                + (F::from_u64(2013265920u64) * row.get(10).copied().unwrap_or(F::ZERO)))
                 + (row.get(9).copied().unwrap_or(F::ZERO)
                     * row.get(10).copied().unwrap_or(F::ZERO)))
                 * (row.get(1).copied().unwrap_or(F::ZERO)
                     + row.get(4).copied().unwrap_or(F::ZERO)))
                 + ((row.get(9).copied().unwrap_or(F::ZERO)
-                    + (F::from_canonical_u64(2013265920u64)
+                    + (F::from_u64(2013265920u64)
                         * (row.get(9).copied().unwrap_or(F::ZERO)
                             * row.get(10).copied().unwrap_or(F::ZERO))))
                     * (row.get(1).copied().unwrap_or(F::ZERO)
                         + row.get(4).copied().unwrap_or(F::ZERO))))
                 + ((row.get(10).copied().unwrap_or(F::ZERO)
-                    + (F::from_canonical_u64(2013265920u64)
+                    + (F::from_u64(2013265920u64)
                         * (row.get(9).copied().unwrap_or(F::ZERO)
                             * row.get(10).copied().unwrap_or(F::ZERO))))
                     * (row.get(2).copied().unwrap_or(F::ZERO)
@@ -272,11 +260,9 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
     {
         let mut output = Vec::with_capacity(1);
         output.push(
-            ((((F::from_canonical_u64(1u64)
-                + (F::from_canonical_u64(2013265920u64)
-                    * row.get(9).copied().unwrap_or(F::ZERO)))
-                + (F::from_canonical_u64(2013265920u64)
-                    * row.get(10).copied().unwrap_or(F::ZERO)))
+            ((((F::from_u64(1u64)
+                + (F::from_u64(2013265920u64) * row.get(9).copied().unwrap_or(F::ZERO)))
+                + (F::from_u64(2013265920u64) * row.get(10).copied().unwrap_or(F::ZERO)))
                 + (row.get(9).copied().unwrap_or(F::ZERO)
                     * row.get(10).copied().unwrap_or(F::ZERO)))
                 * row.get(16).copied().unwrap_or(F::ZERO)),
@@ -298,21 +284,19 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
     {
         let mut output = Vec::with_capacity(1);
         output.push(
-            (((((((F::from_canonical_u64(1u64)
-                + (F::from_canonical_u64(2013265920u64)
-                    * row.get(9).copied().unwrap_or(F::ZERO)))
-                + (F::from_canonical_u64(2013265920u64)
-                    * row.get(10).copied().unwrap_or(F::ZERO)))
+            (((((((F::from_u64(1u64)
+                + (F::from_u64(2013265920u64) * row.get(9).copied().unwrap_or(F::ZERO)))
+                + (F::from_u64(2013265920u64) * row.get(10).copied().unwrap_or(F::ZERO)))
                 + (row.get(9).copied().unwrap_or(F::ZERO)
                     * row.get(10).copied().unwrap_or(F::ZERO)))
                 * row.get(18).copied().unwrap_or(F::ZERO))
                 + ((row.get(9).copied().unwrap_or(F::ZERO)
-                    + (F::from_canonical_u64(2013265920u64)
+                    + (F::from_u64(2013265920u64)
                         * (row.get(9).copied().unwrap_or(F::ZERO)
                             * row.get(10).copied().unwrap_or(F::ZERO))))
                     * row.get(16).copied().unwrap_or(F::ZERO)))
                 + ((row.get(10).copied().unwrap_or(F::ZERO)
-                    + (F::from_canonical_u64(2013265920u64)
+                    + (F::from_u64(2013265920u64)
                         * (row.get(9).copied().unwrap_or(F::ZERO)
                             * row.get(10).copied().unwrap_or(F::ZERO))))
                     * row.get(16).copied().unwrap_or(F::ZERO)))
@@ -326,23 +310,21 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
     {
         let mut output = Vec::with_capacity(1);
         output.push(
-            ((((((F::from_canonical_u64(1u64)
-                + (F::from_canonical_u64(2013265920u64)
-                    * row.get(11).copied().unwrap_or(F::ZERO)))
-                + (F::from_canonical_u64(2013265920u64)
-                    * row.get(12).copied().unwrap_or(F::ZERO)))
+            ((((((F::from_u64(1u64)
+                + (F::from_u64(2013265920u64) * row.get(11).copied().unwrap_or(F::ZERO)))
+                + (F::from_u64(2013265920u64) * row.get(12).copied().unwrap_or(F::ZERO)))
                 + (row.get(11).copied().unwrap_or(F::ZERO)
                     * row.get(12).copied().unwrap_or(F::ZERO)))
                 * (row.get(1).copied().unwrap_or(F::ZERO)
                     + row.get(5).copied().unwrap_or(F::ZERO)))
                 + ((row.get(11).copied().unwrap_or(F::ZERO)
-                    + (F::from_canonical_u64(2013265920u64)
+                    + (F::from_u64(2013265920u64)
                         * (row.get(11).copied().unwrap_or(F::ZERO)
                             * row.get(12).copied().unwrap_or(F::ZERO))))
                     * (row.get(1).copied().unwrap_or(F::ZERO)
                         + row.get(5).copied().unwrap_or(F::ZERO))))
                 + ((row.get(12).copied().unwrap_or(F::ZERO)
-                    + (F::from_canonical_u64(2013265920u64)
+                    + (F::from_u64(2013265920u64)
                         * (row.get(11).copied().unwrap_or(F::ZERO)
                             * row.get(12).copied().unwrap_or(F::ZERO))))
                     * (row.get(2).copied().unwrap_or(F::ZERO)
@@ -365,11 +347,9 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
     {
         let mut output = Vec::with_capacity(1);
         output.push(
-            ((((F::from_canonical_u64(1u64)
-                + (F::from_canonical_u64(2013265920u64)
-                    * row.get(11).copied().unwrap_or(F::ZERO)))
-                + (F::from_canonical_u64(2013265920u64)
-                    * row.get(12).copied().unwrap_or(F::ZERO)))
+            ((((F::from_u64(1u64)
+                + (F::from_u64(2013265920u64) * row.get(11).copied().unwrap_or(F::ZERO)))
+                + (F::from_u64(2013265920u64) * row.get(12).copied().unwrap_or(F::ZERO)))
                 + (row.get(11).copied().unwrap_or(F::ZERO)
                     * row.get(12).copied().unwrap_or(F::ZERO)))
                 * row.get(21).copied().unwrap_or(F::ZERO)),
@@ -391,21 +371,19 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
     {
         let mut output = Vec::with_capacity(1);
         output.push(
-            (((((((F::from_canonical_u64(1u64)
-                + (F::from_canonical_u64(2013265920u64)
-                    * row.get(11).copied().unwrap_or(F::ZERO)))
-                + (F::from_canonical_u64(2013265920u64)
-                    * row.get(12).copied().unwrap_or(F::ZERO)))
+            (((((((F::from_u64(1u64)
+                + (F::from_u64(2013265920u64) * row.get(11).copied().unwrap_or(F::ZERO)))
+                + (F::from_u64(2013265920u64) * row.get(12).copied().unwrap_or(F::ZERO)))
                 + (row.get(11).copied().unwrap_or(F::ZERO)
                     * row.get(12).copied().unwrap_or(F::ZERO)))
                 * row.get(23).copied().unwrap_or(F::ZERO))
                 + ((row.get(11).copied().unwrap_or(F::ZERO)
-                    + (F::from_canonical_u64(2013265920u64)
+                    + (F::from_u64(2013265920u64)
                         * (row.get(11).copied().unwrap_or(F::ZERO)
                             * row.get(12).copied().unwrap_or(F::ZERO))))
                     * row.get(21).copied().unwrap_or(F::ZERO)))
                 + ((row.get(12).copied().unwrap_or(F::ZERO)
-                    + (F::from_canonical_u64(2013265920u64)
+                    + (F::from_u64(2013265920u64)
                         * (row.get(11).copied().unwrap_or(F::ZERO)
                             * row.get(12).copied().unwrap_or(F::ZERO))))
                     * row.get(21).copied().unwrap_or(F::ZERO)))
@@ -419,23 +397,21 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
     {
         let mut output = Vec::with_capacity(1);
         output.push(
-            ((((((F::from_canonical_u64(1u64)
-                + (F::from_canonical_u64(2013265920u64)
-                    * row.get(13).copied().unwrap_or(F::ZERO)))
-                + (F::from_canonical_u64(2013265920u64)
-                    * row.get(14).copied().unwrap_or(F::ZERO)))
+            ((((((F::from_u64(1u64)
+                + (F::from_u64(2013265920u64) * row.get(13).copied().unwrap_or(F::ZERO)))
+                + (F::from_u64(2013265920u64) * row.get(14).copied().unwrap_or(F::ZERO)))
                 + (row.get(13).copied().unwrap_or(F::ZERO)
                     * row.get(14).copied().unwrap_or(F::ZERO)))
                 * (row.get(1).copied().unwrap_or(F::ZERO)
                     + row.get(6).copied().unwrap_or(F::ZERO)))
                 + ((row.get(13).copied().unwrap_or(F::ZERO)
-                    + (F::from_canonical_u64(2013265920u64)
+                    + (F::from_u64(2013265920u64)
                         * (row.get(13).copied().unwrap_or(F::ZERO)
                             * row.get(14).copied().unwrap_or(F::ZERO))))
                     * (row.get(1).copied().unwrap_or(F::ZERO)
                         + row.get(6).copied().unwrap_or(F::ZERO))))
                 + ((row.get(14).copied().unwrap_or(F::ZERO)
-                    + (F::from_canonical_u64(2013265920u64)
+                    + (F::from_u64(2013265920u64)
                         * (row.get(13).copied().unwrap_or(F::ZERO)
                             * row.get(14).copied().unwrap_or(F::ZERO))))
                     * (row.get(2).copied().unwrap_or(F::ZERO)
@@ -458,11 +434,9 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
     {
         let mut output = Vec::with_capacity(1);
         output.push(
-            ((((F::from_canonical_u64(1u64)
-                + (F::from_canonical_u64(2013265920u64)
-                    * row.get(13).copied().unwrap_or(F::ZERO)))
-                + (F::from_canonical_u64(2013265920u64)
-                    * row.get(14).copied().unwrap_or(F::ZERO)))
+            ((((F::from_u64(1u64)
+                + (F::from_u64(2013265920u64) * row.get(13).copied().unwrap_or(F::ZERO)))
+                + (F::from_u64(2013265920u64) * row.get(14).copied().unwrap_or(F::ZERO)))
                 + (row.get(13).copied().unwrap_or(F::ZERO)
                     * row.get(14).copied().unwrap_or(F::ZERO)))
                 * row.get(26).copied().unwrap_or(F::ZERO)),
@@ -484,21 +458,19 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
     {
         let mut output = Vec::with_capacity(1);
         output.push(
-            (((((((F::from_canonical_u64(1u64)
-                + (F::from_canonical_u64(2013265920u64)
-                    * row.get(13).copied().unwrap_or(F::ZERO)))
-                + (F::from_canonical_u64(2013265920u64)
-                    * row.get(14).copied().unwrap_or(F::ZERO)))
+            (((((((F::from_u64(1u64)
+                + (F::from_u64(2013265920u64) * row.get(13).copied().unwrap_or(F::ZERO)))
+                + (F::from_u64(2013265920u64) * row.get(14).copied().unwrap_or(F::ZERO)))
                 + (row.get(13).copied().unwrap_or(F::ZERO)
                     * row.get(14).copied().unwrap_or(F::ZERO)))
                 * row.get(28).copied().unwrap_or(F::ZERO))
                 + ((row.get(13).copied().unwrap_or(F::ZERO)
-                    + (F::from_canonical_u64(2013265920u64)
+                    + (F::from_u64(2013265920u64)
                         * (row.get(13).copied().unwrap_or(F::ZERO)
                             * row.get(14).copied().unwrap_or(F::ZERO))))
                     * row.get(26).copied().unwrap_or(F::ZERO)))
                 + ((row.get(14).copied().unwrap_or(F::ZERO)
-                    + (F::from_canonical_u64(2013265920u64)
+                    + (F::from_u64(2013265920u64)
                         * (row.get(13).copied().unwrap_or(F::ZERO)
                             * row.get(14).copied().unwrap_or(F::ZERO))))
                     * row.get(26).copied().unwrap_or(F::ZERO)))
@@ -513,16 +485,16 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
         let mut output = Vec::with_capacity(3);
         output.push(
             if ((row.get(7).copied().unwrap_or(F::ZERO) * row.get(8).copied().unwrap_or(F::ZERO))
-                == F::from_canonical_u64(1u64))
+                == F::from_u64(1u64))
             {
                 row.get(19).copied().unwrap_or(F::ZERO)
             } else {
-                (row.get(0).copied().unwrap_or(F::ZERO) + F::from_canonical_u64(4u64))
+                (row.get(0).copied().unwrap_or(F::ZERO) + F::from_u64(4u64))
             },
         );
         output.push(
             if ((row.get(7).copied().unwrap_or(F::ZERO) * row.get(8).copied().unwrap_or(F::ZERO))
-                == F::from_canonical_u64(1u64))
+                == F::from_u64(1u64))
             {
                 row.get(24).copied().unwrap_or(F::ZERO)
             } else {
@@ -531,7 +503,7 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
         );
         output.push(
             if ((row.get(7).copied().unwrap_or(F::ZERO) * row.get(8).copied().unwrap_or(F::ZERO))
-                == F::from_canonical_u64(1u64))
+                == F::from_u64(1u64))
             {
                 row.get(29).copied().unwrap_or(F::ZERO)
             } else {
@@ -554,7 +526,7 @@ fn component_0_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
     vec![
         Interaction {
             channel: "state",
-            multiplicity: (F::from_canonical_u64(2013265920u64) * F::from_canonical_u64(1u64)),
+            multiplicity: (F::from_u64(2013265920u64) * F::from_u64(1u64)),
             message: vec![
                 row.get(0).copied().unwrap_or(F::ZERO),
                 row.get(1).copied().unwrap_or(F::ZERO),
@@ -564,7 +536,7 @@ fn component_0_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
         },
         Interaction {
             channel: "program",
-            multiplicity: (F::from_canonical_u64(2013265920u64) * F::from_canonical_u64(1u64)),
+            multiplicity: (F::from_u64(2013265920u64) * F::from_u64(1u64)),
             message: vec![
                 row.get(0).copied().unwrap_or(F::ZERO),
                 row.get(3).copied().unwrap_or(F::ZERO),
@@ -573,34 +545,34 @@ fn component_0_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
         },
         Interaction {
             channel: "program",
-            multiplicity: (F::from_canonical_u64(2013265920u64) * F::from_canonical_u64(1u64)),
+            multiplicity: (F::from_u64(2013265920u64) * F::from_u64(1u64)),
             message: vec![
-                (row.get(0).copied().unwrap_or(F::ZERO) + F::from_canonical_u64(1u64)),
+                (row.get(0).copied().unwrap_or(F::ZERO) + F::from_u64(1u64)),
                 row.get(4).copied().unwrap_or(F::ZERO),
             ],
             assume_guarantees: true,
         },
         Interaction {
             channel: "program",
-            multiplicity: (F::from_canonical_u64(2013265920u64) * F::from_canonical_u64(1u64)),
+            multiplicity: (F::from_u64(2013265920u64) * F::from_u64(1u64)),
             message: vec![
-                (row.get(0).copied().unwrap_or(F::ZERO) + F::from_canonical_u64(2u64)),
+                (row.get(0).copied().unwrap_or(F::ZERO) + F::from_u64(2u64)),
                 row.get(5).copied().unwrap_or(F::ZERO),
             ],
             assume_guarantees: true,
         },
         Interaction {
             channel: "program",
-            multiplicity: (F::from_canonical_u64(2013265920u64) * F::from_canonical_u64(1u64)),
+            multiplicity: (F::from_u64(2013265920u64) * F::from_u64(1u64)),
             message: vec![
-                (row.get(0).copied().unwrap_or(F::ZERO) + F::from_canonical_u64(3u64)),
+                (row.get(0).copied().unwrap_or(F::ZERO) + F::from_u64(3u64)),
                 row.get(6).copied().unwrap_or(F::ZERO),
             ],
             assume_guarantees: true,
         },
         Interaction {
             channel: "memory",
-            multiplicity: (F::from_canonical_u64(2013265920u64) * F::from_canonical_u64(1u64)),
+            multiplicity: (F::from_u64(2013265920u64) * F::from_u64(1u64)),
             message: vec![
                 row.get(15).copied().unwrap_or(F::ZERO),
                 row.get(16).copied().unwrap_or(F::ZERO),
@@ -609,7 +581,7 @@ fn component_0_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
         },
         Interaction {
             channel: "memory",
-            multiplicity: (F::from_canonical_u64(2013265920u64) * F::from_canonical_u64(1u64)),
+            multiplicity: (F::from_u64(2013265920u64) * F::from_u64(1u64)),
             message: vec![
                 row.get(17).copied().unwrap_or(F::ZERO),
                 row.get(18).copied().unwrap_or(F::ZERO),
@@ -618,7 +590,7 @@ fn component_0_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
         },
         Interaction {
             channel: "memory",
-            multiplicity: (F::from_canonical_u64(2013265920u64) * F::from_canonical_u64(1u64)),
+            multiplicity: (F::from_u64(2013265920u64) * F::from_u64(1u64)),
             message: vec![
                 row.get(20).copied().unwrap_or(F::ZERO),
                 row.get(21).copied().unwrap_or(F::ZERO),
@@ -627,7 +599,7 @@ fn component_0_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
         },
         Interaction {
             channel: "memory",
-            multiplicity: (F::from_canonical_u64(2013265920u64) * F::from_canonical_u64(1u64)),
+            multiplicity: (F::from_u64(2013265920u64) * F::from_u64(1u64)),
             message: vec![
                 row.get(22).copied().unwrap_or(F::ZERO),
                 row.get(23).copied().unwrap_or(F::ZERO),
@@ -636,7 +608,7 @@ fn component_0_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
         },
         Interaction {
             channel: "memory",
-            multiplicity: (F::from_canonical_u64(2013265920u64) * F::from_canonical_u64(1u64)),
+            multiplicity: (F::from_u64(2013265920u64) * F::from_u64(1u64)),
             message: vec![
                 row.get(25).copied().unwrap_or(F::ZERO),
                 row.get(26).copied().unwrap_or(F::ZERO),
@@ -645,7 +617,7 @@ fn component_0_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
         },
         Interaction {
             channel: "memory",
-            multiplicity: (F::from_canonical_u64(2013265920u64) * F::from_canonical_u64(1u64)),
+            multiplicity: (F::from_u64(2013265920u64) * F::from_u64(1u64)),
             message: vec![
                 row.get(27).copied().unwrap_or(F::ZERO),
                 row.get(28).copied().unwrap_or(F::ZERO),
@@ -654,7 +626,7 @@ fn component_0_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
         },
         Interaction {
             channel: "state",
-            multiplicity: F::from_canonical_u64(1u64),
+            multiplicity: F::from_u64(1u64),
             message: vec![
                 row.get(30).copied().unwrap_or(F::ZERO),
                 row.get(31).copied().unwrap_or(F::ZERO),
@@ -672,6 +644,7 @@ fn component_1<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
             input.len()
         ));
     }
+    let _prover_input: &[F] = &[];
     let row = input.to_vec();
 
     if row.len() != 3 {
@@ -699,6 +672,7 @@ fn component_2<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
             input.len()
         ));
     }
+    let _prover_input: &[F] = &[];
     let row = input.to_vec();
 
     if row.len() != 3 {
@@ -719,76 +693,94 @@ fn component_2_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
     }]
 }
 
+fn component_1_fixed_row<F: Field + PrimeCharacteristicRing>(row: u64) -> Vec<F> {
+    let _prover_input: &[F] = &[];
+
+    let mut output = Vec::with_capacity(1);
+    output.push(F::from_u64(row));
+    debug_assert_eq!(output.len(), 1);
+    output
+}
+
+fn component_2_fixed_row<F: Field + PrimeCharacteristicRing>(row: u64) -> Vec<F> {
+    let _prover_input: &[F] = &[];
+
+    let mut output = Vec::with_capacity(2);
+    output.push(F::from_u64(row));
+    output.push(match (row) as usize {
+        0 => F::from_u64(212u64),
+        1 => F::from_u64(1u64),
+        2 => F::from_u64(2u64),
+        3 => F::from_u64(8u64),
+        4 => F::from_u64(213u64),
+        5 => F::from_u64(3u64),
+        6 => F::from_u64(4u64),
+        7 => F::from_u64(14u64),
+        8 => F::from_u64(244u64),
+        9 => F::from_u64(1u64),
+        10 => F::from_u64(10u64),
+        11 => F::from_u64(15u64),
+        12 => F::from_u64(233u64),
+        13 => F::from_u64(5u64),
+        14 => F::from_u64(2u64),
+        15 => F::from_u64(30u64),
+        16 => F::from_u64(220u64),
+        17 => F::from_u64(100u64),
+        18 => F::from_u64(3u64),
+        19 => F::from_u64(107u64),
+        20 => F::from_u64(212u64),
+        21 => F::from_u64(4u64),
+        22 => F::from_u64(5u64),
+        23 => F::from_u64(12u64),
+        24 => F::from_u64(252u64),
+        25 => F::from_u64(0u64),
+        26 => F::from_u64(0u64),
+        27 => F::from_u64(0u64),
+        28 => F::from_u64(0u64),
+        29 => F::from_u64(0u64),
+        30 => F::from_u64(0u64),
+        31 => F::from_u64(0u64),
+        _ => F::ZERO,
+    });
+    debug_assert_eq!(output.len(), 2);
+    output
+}
+
 fn component_0_initial_rows<F: WitnessField>(_prover_input: &[F]) -> Result<Vec<Vec<F>>, String> {
     Ok(vec![])
 }
 
 fn component_1_initial_rows<F: WitnessField>(prover_input: &[F]) -> Result<Vec<Vec<F>>, String> {
-    let fixed_rows: Vec<Vec<F>> = vec![
-        vec![F::from_canonical_u64(0u64)],
-        vec![F::from_canonical_u64(1u64)],
-        vec![F::from_canonical_u64(2u64)],
-        vec![F::from_canonical_u64(3u64)],
-        vec![F::from_canonical_u64(4u64)],
-        vec![F::from_canonical_u64(5u64)],
-        vec![F::from_canonical_u64(6u64)],
-        vec![F::from_canonical_u64(7u64)],
-    ];
-    fixed_rows
-        .into_iter()
-        .enumerate()
-        .map(|(row, mut input)| {
-            input.extend(vec![
-                *prover_input.get(0 + row * 1).ok_or_else(|| {
-                    format!("prover input has no element at index {}", 0 + row * 1)
-                })?,
-                F::from_canonical_u64(0u64),
-            ]);
+    let _prover_input = prover_input;
+    (0u64..8u64)
+        .map(|row| {
+            let mut input = component_1_fixed_row::<F>(row);
+
+            let mut output = Vec::with_capacity(2);
+            output.push(
+                _prover_input
+                    .get((row) as usize)
+                    .copied()
+                    .unwrap_or(F::ZERO),
+            );
+            output.push(F::from_u64(0u64));
+            debug_assert_eq!(output.len(), 2);
+            input.extend(output);
             Ok(input)
         })
         .collect()
 }
 
-fn component_2_initial_rows<F: WitnessField>(_prover_input: &[F]) -> Result<Vec<Vec<F>>, String> {
-    let fixed_rows: Vec<Vec<F>> = vec![
-        vec![F::from_canonical_u64(0u64), F::from_canonical_u64(212u64)],
-        vec![F::from_canonical_u64(1u64), F::from_canonical_u64(1u64)],
-        vec![F::from_canonical_u64(2u64), F::from_canonical_u64(2u64)],
-        vec![F::from_canonical_u64(3u64), F::from_canonical_u64(8u64)],
-        vec![F::from_canonical_u64(4u64), F::from_canonical_u64(213u64)],
-        vec![F::from_canonical_u64(5u64), F::from_canonical_u64(3u64)],
-        vec![F::from_canonical_u64(6u64), F::from_canonical_u64(4u64)],
-        vec![F::from_canonical_u64(7u64), F::from_canonical_u64(14u64)],
-        vec![F::from_canonical_u64(8u64), F::from_canonical_u64(244u64)],
-        vec![F::from_canonical_u64(9u64), F::from_canonical_u64(1u64)],
-        vec![F::from_canonical_u64(10u64), F::from_canonical_u64(10u64)],
-        vec![F::from_canonical_u64(11u64), F::from_canonical_u64(15u64)],
-        vec![F::from_canonical_u64(12u64), F::from_canonical_u64(233u64)],
-        vec![F::from_canonical_u64(13u64), F::from_canonical_u64(5u64)],
-        vec![F::from_canonical_u64(14u64), F::from_canonical_u64(2u64)],
-        vec![F::from_canonical_u64(15u64), F::from_canonical_u64(30u64)],
-        vec![F::from_canonical_u64(16u64), F::from_canonical_u64(220u64)],
-        vec![F::from_canonical_u64(17u64), F::from_canonical_u64(100u64)],
-        vec![F::from_canonical_u64(18u64), F::from_canonical_u64(3u64)],
-        vec![F::from_canonical_u64(19u64), F::from_canonical_u64(107u64)],
-        vec![F::from_canonical_u64(20u64), F::from_canonical_u64(212u64)],
-        vec![F::from_canonical_u64(21u64), F::from_canonical_u64(4u64)],
-        vec![F::from_canonical_u64(22u64), F::from_canonical_u64(5u64)],
-        vec![F::from_canonical_u64(23u64), F::from_canonical_u64(12u64)],
-        vec![F::from_canonical_u64(24u64), F::from_canonical_u64(252u64)],
-        vec![F::from_canonical_u64(25u64), F::from_canonical_u64(0u64)],
-        vec![F::from_canonical_u64(26u64), F::from_canonical_u64(0u64)],
-        vec![F::from_canonical_u64(27u64), F::from_canonical_u64(0u64)],
-        vec![F::from_canonical_u64(28u64), F::from_canonical_u64(0u64)],
-        vec![F::from_canonical_u64(29u64), F::from_canonical_u64(0u64)],
-        vec![F::from_canonical_u64(30u64), F::from_canonical_u64(0u64)],
-        vec![F::from_canonical_u64(31u64), F::from_canonical_u64(0u64)],
-    ];
-    fixed_rows
-        .into_iter()
-        .enumerate()
-        .map(|(_row, mut input)| {
-            input.extend(vec![F::from_canonical_u64(0u64)]);
+fn component_2_initial_rows<F: WitnessField>(prover_input: &[F]) -> Result<Vec<Vec<F>>, String> {
+    let _prover_input = prover_input;
+    (0u64..32u64)
+        .map(|row| {
+            let mut input = component_2_fixed_row::<F>(row);
+
+            let mut output = Vec::with_capacity(1);
+            output.push(F::from_u64(0u64));
+            debug_assert_eq!(output.len(), 1);
+            input.extend(output);
             Ok(input)
         })
         .collect()
@@ -798,7 +790,7 @@ fn public_interactions<F: WitnessField>(public_input: &[F]) -> Vec<Interaction<F
     vec![
         Interaction {
             channel: "state",
-            multiplicity: (F::from_canonical_u64(2013265920u64) * F::from_canonical_u64(1u64)),
+            multiplicity: (F::from_u64(2013265920u64) * F::from_u64(1u64)),
             message: vec![
                 public_input.get(0).copied().unwrap_or(F::ZERO),
                 public_input.get(1).copied().unwrap_or(F::ZERO),
@@ -808,12 +800,8 @@ fn public_interactions<F: WitnessField>(public_input: &[F]) -> Vec<Interaction<F
         },
         Interaction {
             channel: "state",
-            multiplicity: F::from_canonical_u64(1u64),
-            message: vec![
-                F::from_canonical_u64(0u64),
-                F::from_canonical_u64(0u64),
-                F::from_canonical_u64(0u64),
-            ],
+            multiplicity: F::from_u64(1u64),
+            message: vec![F::from_u64(0u64), F::from_u64(0u64), F::from_u64(0u64)],
             assume_guarantees: false,
         },
     ]
@@ -835,88 +823,20 @@ impl GeneratedAirSpec for FemtoCairoFlatAirProgramAirSpec {
     ) -> Option<RowMajorMatrix<F>> {
         match component {
             0 => None,
-            1 => Some(RowMajorMatrix::new(
-                vec![
-                    F::from_u64(0u64),
-                    F::from_u64(1u64),
-                    F::from_u64(2u64),
-                    F::from_u64(3u64),
-                    F::from_u64(4u64),
-                    F::from_u64(5u64),
-                    F::from_u64(6u64),
-                    F::from_u64(7u64),
-                ],
-                1,
-            )),
-            2 => Some(RowMajorMatrix::new(
-                vec![
-                    F::from_u64(0u64),
-                    F::from_u64(212u64),
-                    F::from_u64(1u64),
-                    F::from_u64(1u64),
-                    F::from_u64(2u64),
-                    F::from_u64(2u64),
-                    F::from_u64(3u64),
-                    F::from_u64(8u64),
-                    F::from_u64(4u64),
-                    F::from_u64(213u64),
-                    F::from_u64(5u64),
-                    F::from_u64(3u64),
-                    F::from_u64(6u64),
-                    F::from_u64(4u64),
-                    F::from_u64(7u64),
-                    F::from_u64(14u64),
-                    F::from_u64(8u64),
-                    F::from_u64(244u64),
-                    F::from_u64(9u64),
-                    F::from_u64(1u64),
-                    F::from_u64(10u64),
-                    F::from_u64(10u64),
-                    F::from_u64(11u64),
-                    F::from_u64(15u64),
-                    F::from_u64(12u64),
-                    F::from_u64(233u64),
-                    F::from_u64(13u64),
-                    F::from_u64(5u64),
-                    F::from_u64(14u64),
-                    F::from_u64(2u64),
-                    F::from_u64(15u64),
-                    F::from_u64(30u64),
-                    F::from_u64(16u64),
-                    F::from_u64(220u64),
-                    F::from_u64(17u64),
-                    F::from_u64(100u64),
-                    F::from_u64(18u64),
-                    F::from_u64(3u64),
-                    F::from_u64(19u64),
-                    F::from_u64(107u64),
-                    F::from_u64(20u64),
-                    F::from_u64(212u64),
-                    F::from_u64(21u64),
-                    F::from_u64(4u64),
-                    F::from_u64(22u64),
-                    F::from_u64(5u64),
-                    F::from_u64(23u64),
-                    F::from_u64(12u64),
-                    F::from_u64(24u64),
-                    F::from_u64(252u64),
-                    F::from_u64(25u64),
-                    F::from_u64(0u64),
-                    F::from_u64(26u64),
-                    F::from_u64(0u64),
-                    F::from_u64(27u64),
-                    F::from_u64(0u64),
-                    F::from_u64(28u64),
-                    F::from_u64(0u64),
-                    F::from_u64(29u64),
-                    F::from_u64(0u64),
-                    F::from_u64(30u64),
-                    F::from_u64(0u64),
-                    F::from_u64(31u64),
-                    F::from_u64(0u64),
-                ],
-                2,
-            )),
+            1 => Some({
+                let mut values = Vec::with_capacity(8 * 1);
+                for row in 0u64..8u64 {
+                    values.extend(component_1_fixed_row::<F>(row));
+                }
+                RowMajorMatrix::new(values, 1)
+            }),
+            2 => Some({
+                let mut values = Vec::with_capacity(32 * 2);
+                for row in 0u64..32u64 {
+                    values.extend(component_2_fixed_row::<F>(row));
+                }
+                RowMajorMatrix::new(values, 2)
+            }),
             _ => unreachable!("invalid generated AIR component"),
         }
     }
@@ -1448,27 +1368,15 @@ impl<F: WitnessField> Program<F> for FemtoCairoFlatAirProgram {
     fn padding() -> Vec<Padding<F>> {
         vec![
             Padding {
-                input: vec![
-                    F::from_canonical_u64(0u64),
-                    F::from_canonical_u64(0u64),
-                    F::from_canonical_u64(0u64),
-                ],
+                input: vec![F::from_u64(0u64), F::from_u64(0u64), F::from_u64(0u64)],
                 minimum_rows: 8,
             },
             Padding {
-                input: vec![
-                    F::from_canonical_u64(0u64),
-                    F::from_canonical_u64(0u64),
-                    F::from_canonical_u64(0u64),
-                ],
+                input: vec![F::from_u64(0u64), F::from_u64(0u64), F::from_u64(0u64)],
                 minimum_rows: 8,
             },
             Padding {
-                input: vec![
-                    F::from_canonical_u64(0u64),
-                    F::from_canonical_u64(0u64),
-                    F::from_canonical_u64(0u64),
-                ],
+                input: vec![F::from_u64(0u64), F::from_u64(0u64), F::from_u64(0u64)],
                 minimum_rows: 32,
             },
         ]

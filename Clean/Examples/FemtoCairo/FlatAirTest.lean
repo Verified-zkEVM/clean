@@ -61,7 +61,8 @@ private def unstableDataReadRejected : Bool :=
     Witness.config (memorySize := 8) testProgram initialState 8 1000
   let mutableMemory : Mode (F pBabybear) := .preallocated {
     rows := 8
-    input := [.proverInput 0 1, .const 0]
+    input := .ofFExprs #v[.proverInputGet .idx, .const 0]
+    input_valid := by rfl
     handlers := [{ interaction := 0, column := 1 }]
   }
   let config : Config (F pBabybear) (fields 8) :=

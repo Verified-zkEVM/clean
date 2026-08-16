@@ -5,18 +5,24 @@ variable {F : Type} [FiniteField F]
 variable {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
 
 /-- Public, index-addressed columns supplied by the verifier rather than committed by the prover.
-They occupy a prefix of each component's logical row, so the row circuit and its operation list
-remain independent of the row index. -/
+The structured row program is evaluated identically in Lean and extracted backends; fixed-column
+values are no longer stored or exported as a fully materialized trace. -/
 structure FixedColumns (F : Type) where
-  width : ℕ
-  rows : List (Array F)
-  uniform_width : ∀ row ∈ rows, row.size = width
+  height : ℕ
+  program : Witgen.RowProgram F
+  valid : program.Valid .fixed
 
 namespace FixedColumns
 
+abbrev width (fixed : FixedColumns F) : ℕ := fixed.program.width
+
+def row (fixed : FixedColumns F) (i : ℕ) : Array F :=
+  (fixed.program.eval i).toArray
+
 /-- The full semantic rows have exactly the declared fixed prefix at every row index. -/
 abbrev RowsMatch (fixed : FixedColumns F) (rows : List (Array F)) : Prop :=
-  rows.map (fun row => row.extract 0 fixed.width) = fixed.rows
+  rows.map (fun row => row.extract 0 fixed.width) =
+    (List.range fixed.height).map fixed.row
 
 end FixedColumns
 
@@ -24,8 +30,7 @@ end FixedColumns
 def FixedRowAt (fixedColumns : Option (FixedColumns F)) (i : ℕ) (row : Array F) : Prop :=
   match fixedColumns with
   | none => True
-  | some fixed => ∃ hi : i < fixed.rows.length,
-      row.extract 0 fixed.width = fixed.rows[i]'hi
+  | some fixed => i < fixed.height ∧ row.extract 0 fixed.width = fixed.row i
 
 def inputRow (Input : TypeMap) [ProvableType Input] (row : Array F) : Vector F (size Input) :=
   ⟨(List.ofFn (fun i : Fin (size Input) => row[i.val]?.getD 0)).toArray, by simp⟩
@@ -300,18 +305,19 @@ lemma circuitAssumptions (table : Table F) (consistent : table.DataConsistency d
     | some fixed =>
       have hmatch := table.fixed_rows_match
       simp only [Component.fixedRowsMatch, hcolumns] at hmatch
-      have hlength : table.table.length = fixed.rows.length := by
+      have hlength : table.table.length = fixed.height := by
         simpa using congrArg List.length hmatch
-      have hfixedIndex : i.val < fixed.rows.length := by omega
-      refine ⟨hfixedIndex, ?_⟩
+      refine ⟨by omega, ?_⟩
       have hprefix := congrArg (fun rows => rows[i.val]?) hmatch
-      have hmappedIndex : i.val < (table.table.map
+      have hleft : i.val < (table.table.map
           (fun candidate => candidate.extract 0 fixed.width)).length := by
         simp only [List.length_map]
         exact i.isLt
-      rw [List.getElem?_eq_getElem hmappedIndex,
-        List.getElem?_eq_getElem hfixedIndex] at hprefix
-      simp only [List.getElem_map, Option.some.injEq] at hprefix
+      have hright : i.val < ((List.range fixed.height).map fixed.row).length := by
+        simp only [List.length_map, List.length_range]
+        omega
+      rw [List.getElem?_eq_getElem hleft, List.getElem?_eq_getElem hright] at hprefix
+      simp only [List.getElem_map, List.getElem_range, Option.some.injEq] at hprefix
       have hi' : table.table[i.val] = row := hi
       rw [hi'] at hprefix
       exact hprefix

@@ -18,15 +18,21 @@ variable {PublicIO : TypeMap} [ProvableType PublicIO]
 variable {ProverInput : TypeMap} [ProvableType ProverInput]
 
 private def field (value : F) : String :=
-  s!"F::from_canonical_u64({FiniteField.val value}u64)"
-
-private def airField (value : F) : String :=
   s!"F::from_u64({FiniteField.val value}u64)"
 
 private def quoted (value : String) : String := reprStr value
 
 private def commaSep (values : List String) : String :=
   String.intercalate ", " values
+
+private def constantValues? : List (Witgen.FExpr F) → Option (List F)
+  | [] => some []
+  | .const value :: values => return value :: (← constantValues? values)
+  | _ => none
+
+private def constantLookupToRust (index : String) (values : List F) : String :=
+  let cases := values.zipIdx.map fun (value, i) => s!"{i} => {field value}"
+  s!"match ({index}) as usize \{ {commaSep cases}, _ => F::ZERO }"
 
 private def exprToRust (row : String) : Expression F → String
   | .var cell => s!"{row}.get({cell.index}).copied().unwrap_or(F::ZERO)"
@@ -40,6 +46,7 @@ private def fexprToRust (locals : Array LocalSort) (row idx : String) :
     Witgen.FExpr F → Except String String
   | .expr expression => pure (exprToRust row expression)
   | .const value => pure (field value)
+  | .index => pure s!"F::from_u64({idx})"
   | .localVar index =>
       match locals[index]? with
       | some .field => pure s!"local_{index}"
@@ -47,12 +54,24 @@ private def fexprToRust (locals : Array LocalSort) (row idx : String) :
   | .add left right => return s!"({← fexprToRust locals row idx left} + {← fexprToRust locals row idx right})"
   | .mul left right => return s!"({← fexprToRust locals row idx left} * {← fexprToRust locals row idx right})"
   | .inv value => return s!"({← fexprToRust locals row idx value}).inverse_or_zero()"
-  | .ofU64 value => return s!"F::from_canonical_u64({← u64exprToRust locals row idx value})"
+  | .ofU64 value => return s!"F::from_u64({← u64exprToRust locals row idx value})"
   | .ite condition thenValue elseValue =>
       return s!"if {← bexprToRust locals row idx condition} \{ {← fexprToRust locals row idx thenValue} } else \{ {← fexprToRust locals row idx elseValue} }"
   | .listGet values index => do
-      let values ← fexprListToRust locals row idx values
-      return s!"[{commaSep values}].get(({← u64exprToRust locals row idx index}) as usize).copied().unwrap_or(F::ZERO)"
+      let index ← u64exprToRust locals row idx index
+      match constantValues? values with
+      | some values => pure (constantLookupToRust index values)
+      | none =>
+          let values ← fexprListToRust locals row idx values
+          return s!"[{commaSep values}].get(({index}) as usize).copied().unwrap_or(F::ZERO)"
+  | .listGetAtIndex values => do
+      match constantValues? values with
+      | some values => pure (constantLookupToRust idx values)
+      | none =>
+          let values ← fexprListToRust locals row idx values
+          return s!"[{commaSep values}].get(({idx}) as usize).copied().unwrap_or(F::ZERO)"
+  | .proverInputGet index =>
+      return s!"_prover_input.get(({← u64exprToRust locals row idx index}) as usize).copied().unwrap_or(F::ZERO)"
   | .dataGet key width dataRow column =>
       return s!"_data.get({quoted key}, {width}, ({← u64exprToRust locals row idx dataRow}) as usize, {column.val})"
   | .hintGet .. => throw "external prover hints cannot be rendered for Rust yet"
@@ -103,12 +122,12 @@ private def stepSort : Witgen.Step F → LocalSort
   | .letF _ => .field
   | .letU _ => .u64
 
-private def stepsToRust (steps : List (Witgen.Step F)) (row : String) : Except String String := do
+private def stepsToRust (steps : List (Witgen.Step F)) (row idx : String) : Except String String := do
   let locals := steps.map stepSort |>.toArray
   let lines ← steps.zipIdx.mapM fun (step, index) =>
     match step with
-    | .letF value => return s!"        let local_{index}: F = {← fexprToRust locals row "0u64" value};"
-    | .letU value => return s!"        let local_{index}: u64 = {← u64exprToRust locals row "0u64" value};"
+    | .letF value => return s!"        let local_{index}: F = {← fexprToRust locals row idx value};"
+    | .letU value => return s!"        let local_{index}: u64 = {← u64exprToRust locals row idx value};"
   return String.intercalate "\n" lines
 
 private def vexprPushRust (locals : Array LocalSort) (row output idx : String) :
@@ -124,15 +143,41 @@ private def vexprPushRust (locals : Array LocalSort) (row output idx : String) :
       pure s!"        for idx in 0usize..{n}usize \{\n            {output}.push({row}.get({offset}usize + idx).copied().unwrap_or(F::ZERO));\n        }"
   | n, .bitsOf value => do
       let value ← fexprToRust locals row idx value
-      return s!"        let bits_value = ({value}).canonical_u64();\n        for bit in 0u32..{n}u32 \{\n            {output}.push(F::from_canonical_u64((bits_value >> bit) & 1));\n        }"
+      return s!"        let bits_value = ({value}).canonical_u64();\n        for bit in 0u32..{n}u32 \{\n            {output}.push(F::from_u64((bits_value >> bit) & 1));\n        }"
   | _, .append left right =>
       return s!"{← vexprPushRust locals row output idx left}\n{← vexprPushRust locals row output idx right}"
 
 private def witnessBlockToRust (block : WitnessBlock F) (row : String) : Except String String := do
   let locals := block.steps.map stepSort |>.toArray
-  let stepCode ← stepsToRust block.steps row
+  let stepCode ← stepsToRust block.steps row "0u64"
   let outputCode ← vexprPushRust locals row "output" "0u64" block.output
   return s!"{stepCode}\n        let mut output = Vec::with_capacity({block.outputWidth});\n{outputCode}\n        debug_assert_eq!(output.len(), {block.outputWidth});\n        {row}.extend(output);"
+
+private def rowProgramToRust (program : Witgen.RowProgram F) (rowIndex : String) :
+    Except String String := do
+  let locals := program.steps.map stepSort |>.toArray
+  let stepCode ← stepsToRust program.steps "&[]" rowIndex
+  let outputCode ← vexprPushRust locals "&[]" "output" rowIndex program.output
+  return s!"{stepCode}\n        let mut output = Vec::with_capacity({program.width});\n{outputCode}\n        debug_assert_eq!(output.len(), {program.width});"
+
+private def fixedProgramToRust (program : WitnessBlock F) (rowIndex : String) :
+    Except String String := do
+  let locals := program.steps.map stepSort |>.toArray
+  let stepCode ← stepsToRust program.steps "&[]" rowIndex
+  let outputCode ← vexprPushRust locals "&[]" "output" rowIndex program.output
+  return s!"{stepCode}\n        let mut output = Vec::with_capacity({program.outputWidth});\n{outputCode}\n        debug_assert_eq!(output.len(), {program.outputWidth});"
+
+private def fixedRowFunctionToRust (index : ℕ) (component : ComponentProgram F) :
+    Except String (Option String) :=
+  match component.fixedColumns with
+  | none => pure none
+  | some fixed => do
+      let program ← fixedProgramToRust fixed.program "row"
+      return some s!"fn component_{index}_fixed_row<F: Field + PrimeCharacteristicRing>(row: u64) -> Vec<F> \{
+    let _prover_input: &[F] = &[];
+{program}
+    output
+}"
 
 private def witnessBlocksToRust (blocks : List (WitnessBlock F)) : Except String String := do
   let rendered ← blocks.mapM fun block =>
@@ -200,27 +245,33 @@ private def lookupCaseToRust (index fixedWidth : ℕ) (fixed main : String)
     interactions.map (lookupToRust fixedWidth fixed main)
   s!"            {index} => \{\n{lookups}\n            }"
 
-private def fixedColumnsToRust (component : ComponentProgram F) : String :=
+private def fixedColumnsToRust (index : ℕ) (component : ComponentProgram F) : Except String String :=
   match component.fixedColumns with
-  | none => "None"
+  | none => pure "None"
   | some fixed =>
-      let values := commaSep <| fixed.rows.flatMap fun row => row.toList.map airField
-      s!"Some(RowMajorMatrix::new(vec![{values}], {fixed.width}))"
+      pure s!"Some(\{
+        let mut values = Vec::with_capacity({fixed.height} * {fixed.width});
+        for row in 0u64..{fixed.height}u64 \{
+            values.extend(component_{index}_fixed_row::<F>(row));
+        }
+        RowMajorMatrix::new(values, {fixed.width})
+    })"
 
-private def airToRust (name : String) (program : Program F) : String :=
+private def airToRust (name : String) (program : Program F) : Except String String := do
   let widths := program.components.map (toString ∘ componentCommittedWidth)
   let fixedWidths := program.components.map (toString ∘ componentFixedWidth)
   let fixedHeights := program.components.map fun component =>
-    toString (component.fixedColumns.map (·.rows.length) |>.getD 0)
+    toString (component.fixedColumns.map (·.height) |>.getD 0)
   let interactionsPerRow := program.components.map fun component =>
     toString component.interactions.length
   let constraintCases := String.intercalate "\n" <|
     program.components.zipIdx.map fun (component, index) => constraintCaseToRust index component
   let tableCases := String.intercalate "\n" <| program.components.zipIdx.map fun (component, index) =>
     lookupCaseToRust index (componentFixedWidth component) "fixed" "local" component.interactions
-  let fixedCases := String.intercalate "\n" <| program.components.zipIdx.map fun (component, index) =>
-    s!"            {index} => {fixedColumnsToRust component},"
-  s!"#[derive(Clone, Debug)]\n\
+  let fixedCases ← program.components.zipIdx.mapM fun (component, index) => do
+    return s!"            {index} => {← fixedColumnsToRust index component},"
+  let fixedCases := String.intercalate "\n" fixedCases
+  return s!"#[derive(Clone, Debug)]\n\
 pub struct {name}AirSpec;\n\
 \n\
 impl GeneratedAirSpec for {name}AirSpec \{\n\
@@ -274,7 +325,7 @@ private def componentToRust (index : ℕ) (component : ComponentProgram F) : Exc
   let witgen ← witnessBlocksToRust component.witnesses
   let mutable := if component.witnesses.isEmpty then "" else "mut "
   let interactions := interactionsToRust "row" component.interactions
-  return s!"fn component_{index}<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<Vec<F>, String> \{\n    if input.len() != {component.inputWidth} \{ return Err(format!(\"component input has width \{}, expected {component.inputWidth}\", input.len())); }\n    let {mutable}row = input.to_vec();\n{witgen}\n    if row.len() != {component.width} \{ return Err(format!(\"generated row has width \{}, expected {component.width}\", row.len())); }\n    Ok(row)\n}\n\nfn component_{index}_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> \{\n    {interactions}\n}"
+  return s!"fn component_{index}<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<Vec<F>, String> \{\n    if input.len() != {component.inputWidth} \{ return Err(format!(\"component input has width \{}, expected {component.inputWidth}\", input.len())); }\n    let _prover_input: &[F] = &[];\n    let {mutable}row = input.to_vec();\n{witgen}\n    if row.len() != {component.width} \{ return Err(format!(\"generated row has width \{}, expected {component.width}\", row.len())); }\n    Ok(row)\n}\n\nfn component_{index}_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> \{\n    {interactions}\n}"
 
 private def inputCellToRust : InputCell F → String
   | .message index => s!"InputCell::Message({index})"
@@ -291,11 +342,6 @@ private def aggregationToRust : Aggregation → String
 
 private def rowToRust (row : Array F) : String :=
   s!"vec![{commaSep (row.toList.map field)}]"
-
-private def preallocatedCellToRust (row : String) : PreallocatedCell F → String
-  | .proverInput offset stride =>
-      s!"*prover_input.get({offset} + {row} * {stride}).ok_or_else(|| format!(\"prover input has no element at index \{}\", {offset} + {row} * {stride}))?"
-  | .const value => field value
 
 private def preallocatedHandlerToRust (component : ComponentProgram F)
     (handler : PreallocatedHandler) : Except String String := do
@@ -314,24 +360,21 @@ private def modeToRust (component : ComponentProgram F) : Mode F → Except Stri
       return s!"Mode::Preallocated \{ handlers: vec![{commaSep handlers}] }"
 
 private def initialRowsToRust (index : ℕ) (component : ComponentProgram F) (mode : Mode F) :
-    String :=
+    Except String String :=
   match mode with
   | .demand _ =>
-      s!"fn component_{index}_initial_rows<F: WitnessField>(_prover_input: &[F]) -> Result<Vec<Vec<F>>, String> \{ Ok(vec![]) }"
-  | .preallocated mode =>
-      let fixedRows := match component.fixedColumns with
-        | none => s!"vec![vec![]; {mode.rows}]"
-        | some fixed => s!"vec![{commaSep (fixed.rows.map rowToRust)}]"
-      let usesProverInput := mode.input.any fun
-        | .proverInput .. => true
-        | .const _ => false
-      let proverInput := if usesProverInput then "prover_input" else "_prover_input"
-      let row := if usesProverInput then "row" else "_row"
-      let suffix := commaSep (mode.input.map (preallocatedCellToRust row))
-      s!"fn component_{index}_initial_rows<F: WitnessField>({proverInput}: &[F]) -> Result<Vec<Vec<F>>, String> \{
-    let fixed_rows: Vec<Vec<F>> = {fixedRows};
-    fixed_rows.into_iter().enumerate().map(|({row}, mut input)| \{
-        input.extend(vec![{suffix}]);
+      pure s!"fn component_{index}_initial_rows<F: WitnessField>(_prover_input: &[F]) -> Result<Vec<Vec<F>>, String> \{ Ok(vec![]) }"
+  | .preallocated mode => do
+      let suffix ← rowProgramToRust mode.input "row"
+      let fixed ← match component.fixedColumns with
+        | none => pure "        let mut input = Vec::new();"
+        | some _ => pure s!"        let mut input = component_{index}_fixed_row::<F>(row);"
+      return s!"fn component_{index}_initial_rows<F: WitnessField>(prover_input: &[F]) -> Result<Vec<Vec<F>>, String> \{
+    let _prover_input = prover_input;
+    (0u64..{mode.rows}u64).map(|row| \{
+{fixed}
+{suffix}
+        input.extend(output);
         Ok(input)
     }).collect()
 }"
@@ -358,10 +401,13 @@ fn safe_rem(left: u64, right: u64) -> u64 { if right == 0 { 0 } else { left % ri
 def programToRust (name : String) (program : Program F) : Except String String := do
   let components ← program.components.zipIdx.mapM fun (component, index) =>
     componentToRust index component
-  let initialRows := (program.components.zip program.modes).zipIdx.map fun
+  let fixedRows ← program.components.zipIdx.filterMapM fun (component, index) =>
+    fixedRowFunctionToRust index component
+  let components := components ++ fixedRows
+  let initialRows ← (program.components.zip program.modes).zipIdx.mapM fun
     | ((component, mode), index) => initialRowsToRust index component mode
   let verifier := interactionsToRust "public_input" program.verifierInteractions
-  let air := airToRust name program
+  let air ← airToRust name program
   let modes ← (program.components.zip program.modes).mapM fun (component, mode) =>
     modeToRust component mode
   let modes := commaSep modes
