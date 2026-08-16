@@ -499,9 +499,6 @@ set_option maxRecDepth 2048 in
 def circuit : FormalCircuit (F p) Inputs SHA256State := {
   main, elaborated, Assumptions, Spec, soundness
   completeness := by simp only [completeness]
-  -- Manual: compound of the SHA256Round/Schedule leaves (elementwise input lifting
-  -- plus Add32-family witness IR); see those gadgets' comments. maxRecDepth: the
-  -- Add32 leg unifies `SHA256Rounds.circuit.output` against its 64-step unfolding.
 }
 
 end CompressBlock

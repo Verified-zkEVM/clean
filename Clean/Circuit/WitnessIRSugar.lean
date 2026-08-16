@@ -151,7 +151,6 @@ class EqCond (α β : Type) (F : outParam Type) where
   eqCond : α → β → BExpr F
 
 @[inherit_doc EqCond.eqCond] infix:50 " =? " => EqCond.eqCond
-attribute [circuit_norm] EqCond.eqCond
 
 instance : EqCond (FExpr F) (FExpr F) F := ⟨.feq⟩
 instance : EqCond (Expression F) (FExpr F) F where eqCond x y := .feq x y

@@ -194,8 +194,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
   · exact ⟨h_d, n_t1⟩
 def circuit : FormalCircuit (F p) Inputs SHA256State where
   main; elaborated; Assumptions; Spec; soundness; completeness
-  -- Manual: leaves need the whole-input congruence lifted elementwise through
-  -- state[i]/Vector.map spellings; the tactic's close lacks these lifting lemmas.
 end SHA256Round
 end Gadgets.SHA256
 end

@@ -147,10 +147,9 @@ private partial def chainRoot (e : Expr) : Expr :=
     chainRoot e.appArg!
   else e
 
-/-- The vector-atom side of the struct decomposition's balancing act, for the
-`computable_witnesses` normal form: scalar evals whose subject chains down to an
-OPAQUE root (a free variable — an input) fold OUTWARD toward the whole-atom eval the
-input premise is stated at (`Expression.eval env x[i] ~~> (eval env x)[i]`,
+/-- The vector-atom side of the struct decomposition's balancing act: scalar evals
+whose subject chains down to an OPAQUE root (a free variable — an input) fold OUTWARD
+toward the whole-atom eval the input premise is stated at (`Expression.eval env x[i] ~~> (eval env x)[i]`,
 `Expression.eval env t.1 ~~> (eval env t).1`). Constructed subjects (map/literal-built)
 are left for the inward element lemmas — the same literal/opaque discrimination that
 keeps the struct pair confluent. -/
