@@ -102,28 +102,12 @@ lemma foldlAcc_eq_stateVar (i₀ : ℕ)
       i₀ (Vector.finRange 64)
       (fun s (i : Fin 64) => subcircuit SHA256Round.circuit
         { state := s,
-          k := constWord32 Specs.SHA256.K[i].toNat,
-          w := input_var_schedule[i] })
+          k := constWord32 (Specs.SHA256.K[i.val]'i.isLt).toNat,
+          w := input_var_schedule[i.val]'i.isLt })
       input_var_state ⟨k, h⟩ =
         stateVar i₀ input_var_state k := by
   simp only [Circuit.FoldlM.foldlAcc, Vector.getElem_finRange]
   exact fin_foldl_eq_stateVar _ _ _
-
-/-- `foldlAcc_eq_stateVar` in the val-getElem spelling the soundness pipeline's
-`circuit_norm` normal form produces. -/
-lemma foldlAcc_eq_stateVar' (i₀ : ℕ)
-    (input_var_state : SHA256State (Expression (F p)))
-    (input_var_schedule : SHA256Schedule (Expression (F p)))
-    (k : ℕ) (h : k < 64) :
-    Circuit.FoldlM.foldlAcc (β := SHA256State (Expression (F p)))
-      i₀ (Vector.finRange 64)
-      (fun s (i : Fin 64) => subcircuit SHA256Round.circuit
-        { state := s,
-          k := constWord32 (Specs.SHA256.K[i.val]'i.isLt).toNat,
-          w := input_var_schedule[i.val]'i.isLt })
-      input_var_state ⟨k, h⟩ =
-        stateVar i₀ input_var_state k :=
-  foldlAcc_eq_stateVar i₀ input_var_state input_var_schedule k h
 
 omit [Fact (p > 2 ^ 33)] in
 /-- Helper: `constWord32 n` evaluated is always normalized (bits are 0 or 1). -/
@@ -259,7 +243,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
       have hk'' : k < 64 := by omega
       obtain ⟨ih_val, ih_norm⟩ := ih hk'
       specialize h_holds ⟨k, hk''⟩
-      rw [foldlAcc_eq_stateVar' i₀ input_var_state input_var_schedule k hk''] at h_holds
+      rw [foldlAcc_eq_stateVar i₀ input_var_state input_var_schedule k hk''] at h_holds
       simp only [circuit_norm, SHA256Round.circuit, SHA256Round.elaborated,
         SHA256Round.Spec, SHA256Round.Assumptions] at h_holds
       have h2 : Normalized (eval env (constWord32 (p:=p) Specs.SHA256.K[k].toNat)) := by
@@ -322,7 +306,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
       have hk' : k ≤ 64 := by omega
       have hk'' : k < 64 := by omega
       specialize h_env ⟨k, hk''⟩
-      rw [foldlAcc_eq_stateVar' i₀ input_var_state input_var_schedule k hk''] at h_env
+      rw [foldlAcc_eq_stateVar i₀ input_var_state input_var_schedule k hk''] at h_env
       simp only [circuit_norm, SHA256Round.circuit, SHA256Round.elaborated,
         SHA256Round.Spec, SHA256Round.Assumptions] at h_env
       have h2 : Normalized (eval env.toEnvironment (constWord32 (p:=p) Specs.SHA256.K[k].toNat)) := by
@@ -344,7 +328,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
   refine ⟨?_, ?_, ?_⟩
   · intro j
     have h := h_inv i.val (le_of_lt i.isLt) j.val j.isLt
-    rw [← foldlAcc_eq_stateVar' i₀ input_var_state input_var_schedule i.val i.isLt] at h
+    rw [← foldlAcc_eq_stateVar i₀ input_var_state input_var_schedule i.val i.isLt] at h
     rw [getElem_eval_vector] at h
     have heq : (⟨i.val, i.isLt⟩ : Fin 64) = i := Fin.ext rfl
     rw [heq] at h

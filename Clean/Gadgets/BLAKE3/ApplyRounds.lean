@@ -37,6 +37,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     let state ← Round.circuit input
     let permuted_message ← Permute.circuit input.message
     return ⟨state, permuted_message⟩
+
   elaborated := by elaborate_circuit_with {
     output input offset := output input offset
   }
@@ -55,8 +56,7 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     rcases h_holds with ⟨ h_holds1, h_holds2 ⟩
     specialize h_holds1 h_assumptions
     specialize h_holds2 h_assumptions.right
-    refine ⟨ h_holds1.1, h_holds1.2, ?_ ⟩
-    exact h_holds2
+    exact ⟨ h_holds1.1, h_holds1.2, h_holds2 ⟩
   completeness := by
     circuit_proof_start [Round.circuit, Permute.circuit,
       Round.Assumptions, Permute.Assumptions]
@@ -540,7 +540,9 @@ theorem completeness : Completeness (F p) main Assumptions := by
     exact h_input
   · simp only [Assumptions]
     aesop
-set_option maxRecDepth 8192 in
+
+-- Unfortunately @[simps! (config := {isSimp := false, attrs := [`circuit_norm]})] timeouts.
+-- Therefore I had to add simplification rules `circuit_assumptions_is` and `circuit_spec_is` manually.
 def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
   main, elaborated, Assumptions, Spec, soundness, completeness
 }
