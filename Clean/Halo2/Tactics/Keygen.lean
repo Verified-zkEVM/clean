@@ -54,6 +54,7 @@ attribute [keygen_norm]
   Operation.LookupActivationsWellFormed
   RegionOperations.LookupActivationsWellFormed
   Operations.LookupActivationsWellFormed
+  RegionOperation.IsNotLookup
   RegionOperation.assignedCells RegionOperation.copiedCells
   RegionOperations.assignedCells RegionOperations.copiedCells
   RegionOperations.CopyCellsAssigned
@@ -102,6 +103,7 @@ attribute [keygen_spine]
   Operation.LookupActivationsWellFormed
   RegionOperations.LookupActivationsWellFormed
   Operations.LookupActivationsWellFormed
+  RegionOperation.IsNotLookup
   RegionOperation.assignedCells RegionOperation.copiedCells
   RegionOperations.assignedCells RegionOperations.copiedCells
   RegionOperations.CopyCellsAssigned
@@ -1333,9 +1335,16 @@ simproc callCopyCellsAssignedFrom
 simproc regionCallCopyCellsAssignedFrom
     (RegionOperations.CopyCellsAssignedFrom _ _ _) := callRegistrationSimproc
 
+simproc callLookupSelectorAssignmentsAgree
+    (Operations.LookupSelectorAssignmentsAgree _) := callRegistrationSimproc
+
+simproc regionCallLookupSelectorAssignmentsAgree
+    (RegionOperations.LookupSelectorAssignmentsAgree _) := callRegistrationSimproc
+
 attribute [keygen_norm]
   callRegistration regionCallRegistration
   callCopyCellsAssignedFrom regionCallCopyCellsAssignedFrom
+  callLookupSelectorAssignmentsAgree regionCallLookupSelectorAssignmentsAgree
 
 /-- Target and hypothesis types used to detect normalization progress. -/
 def goalContextTypes : TacticM (Array Expr) := withMainContext do
@@ -1514,7 +1523,8 @@ def finishConfigureGoals : TacticM Unit := do
   for goal in ← getGoals do
     setGoals [goal]
     prepareConfigure
-    close
+    if !(← getGoals).isEmpty then
+      close
     remaining := remaining ++ (← getGoals)
   setGoals remaining
 

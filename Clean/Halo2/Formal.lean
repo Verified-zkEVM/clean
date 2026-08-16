@@ -224,6 +224,32 @@ class ElaboratedCircuit (F : Type) [FiniteField F]
     ∀ (config : Config) (input : Var Input F) (i : RegionIndex),
     ((synthesize config input).operations i).LookupActivationsWellFormed := by
     keygen_registration
+  /-- Lookup-local selector valuations agree with every activation at the same row. -/
+  lookupSelectorAssignmentsAgree_of_registered :
+    ∀ (configInput : ConfigInput) (counts : ConfigureCounts)
+      (_hconfig : keygenRequirements.configLawful configInput)
+      (input : Var Input F) (i : RegionIndex),
+    let program := configure configInput
+    let operations := (synthesize (program.output counts) input).operations i
+    (hregistered : operations.KeygenRegistered
+        (keygenRequirements.gates configInput _hconfig ++ (program.delta counts).gates)
+        (keygenRequirements.lookups configInput _hconfig ++ (program.delta counts).lookups)
+        (keygenRequirements.fixedColumns configInput _hconfig ++
+          program.fixedColumns counts)
+        (keygenRequirements.permutationColumns configInput _hconfig ++
+          (program.delta counts).permutationRequests ++
+          keygenRequirements.inputPermutationColumns configInput _hconfig input)) →
+      Operations.LookupSelectorAssignmentsAgree operations := by
+    intro configInput counts hconfig input i program operations hregistered
+    solve
+    | clear_value operations
+      exact Operations.lookupSelectorAssignmentsAgree_of_keygenRegistered_noLookups
+        hregistered
+    | clear_value operations
+      apply Operations.lookupSelectorAssignmentsAgree_of_keygenRegistered_auxiliarySelectors_nil
+        hregistered
+      keygen_registration
+    | keygen_registration
   output : Config → Var Input F → RegionIndex → Var Output F :=
     fun config input i => (synthesize config input).output i
   regionCount : Var Input F → ℕ := fun _ => 0
@@ -297,6 +323,24 @@ theorem ElaboratedCircuit.noRequirements_registered
     KeygenRequirements.inputPermutationColumns, KeygenRequirements.inputCells,
     List.nil_append, List.append_nil, List.map_nil] using
       hregistered configInput counts input i
+
+/-- Lookup-selector assignment agreement obtained from the circuit's registration
+certificate and its circuit-local law. -/
+theorem ElaboratedCircuit.lookupSelectorAssignmentsAgree
+    {F : Type} [FiniteField F]
+    {ConfigInput Config : Type} {Input Output : TypeMap}
+    [CircuitType Input] [CircuitType Output]
+    {configure : ConfigInput → Configure F Config}
+    {synthesize : Config → Var Input F → Circuit F (Var Output F)}
+    (self : ElaboratedCircuit F ConfigInput Config Input Output configure synthesize)
+    (configInput : ConfigInput) (counts : ConfigureCounts)
+    (hconfig : self.keygenRequirements.configLawful configInput)
+    (input : Var Input F) (i : RegionIndex) :
+    ((synthesize ((configure configInput).output counts) input).operations i)
+      |>.LookupSelectorAssignmentsAgree :=
+  self.lookupSelectorAssignmentsAgree_of_registered
+    configInput counts hconfig input i
+    (self.registered configInput counts hconfig input i)
 
 section SynthesisSummary
 variable [CircuitType Input] [CircuitType Output]
@@ -1010,6 +1054,19 @@ theorem callPacked_operations (self : FormalCircuit F ConfigInput Config Input O
     ((callPacked F ConfigInput Config Input Output).val self config input i).2.1 =
       (self.call config input).operations i := rfl
 
+/-- The packed call under the `Circuit.operations` projection used by monadic
+composition. -/
+@[keygen_norm, keygen_spine]
+theorem callPacked_circuit_operations
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (config : Config) (input : Var Input F) (i : RegionIndex) :
+    Circuit.operations
+        (fun current => (callPacked F ConfigInput Config Input Output).val
+          self config input current)
+        i =
+      ((callPacked F ConfigInput Config Input Output).val
+        self config input i).2.1 := rfl
+
 /-- The chunk-opening equation, `callOps`-spelled (for sites that unfolded
 `call`/`operations` first). NOT `@[circuit_norm]`. -/
 theorem callOps_eq (self : FormalCircuit F ConfigInput Config Input Output)
@@ -1359,6 +1416,25 @@ theorem callPacked_lookupActivationsWellFormed
         |>.LookupActivationsWellFormed :=
   self.call_lookupActivationsWellFormed config input i
 
+/-- Lookup-selector assignment agreement inherited by a layouter child call. -/
+theorem call_lookupSelectorAssignmentsAgree
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (config : Config) (configured : self.Configured config)
+    (input : Var Input F) (i : RegionIndex) :
+    ((self.call config input).operations i).LookupSelectorAssignmentsAgree := by
+  rcases configured with ⟨configInput, counts, hconfig, rfl⟩
+  rw [self.call_operations]
+  exact self.elaborated.lookupSelectorAssignmentsAgree
+    configInput counts hconfig input i
+
+theorem callPacked_lookupSelectorAssignmentsAgree
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (config : Config) (configured : self.Configured config)
+    (input : Var Input F) (i : RegionIndex) :
+    (((callPacked F ConfigInput Config Input Output).val self
+      config input i).2.1).LookupSelectorAssignmentsAgree :=
+  self.call_lookupSelectorAssignmentsAgree config configured input i
+
 /-- Registration certificate in the exact opaque spelling exposed after operation-spine
 normalization. -/
 theorem callPacked_keygenRegistered
@@ -1511,6 +1587,36 @@ class ElaboratedRegionCircuit (F : Type) [FiniteField F]
     ((synthesize config offset input).operations region)
       |>.LookupActivationsWellFormed := by
     keygen_registration
+  /-- Lookup-local selector valuations agree with every activation in the region. -/
+  lookupSelectorAssignmentsAgree_of_registered :
+    ∀ (configInput : ConfigInput) (counts : ConfigureCounts)
+      (_hconfig : keygenRequirements.configLawful configInput)
+      (offset : ℕ) (input : Var Input F) (region : RegionIndex),
+    let program := configure configInput
+    let operations := (synthesize (program.output counts) offset input).operations region
+    (hregistered : operations.Forall
+        (RegionOperation.KeygenRegistered
+          (keygenRequirements.gates configInput _hconfig ++ (program.delta counts).gates)
+          (keygenRequirements.lookups configInput _hconfig ++ (program.delta counts).lookups)
+          (keygenRequirements.fixedColumns configInput _hconfig ++
+            program.fixedColumns counts)
+          (keygenRequirements.permutationColumns configInput _hconfig ++
+            (program.delta counts).permutationRequests ++
+            keygenRequirements.inputPermutationColumns configInput _hconfig input))) →
+      RegionOperations.LookupSelectorAssignmentsAgree operations := by
+    intro configInput counts hconfig offset input region program operations hregistered
+    solve
+    | clear_value operations
+      exact RegionOperations.lookupSelectorAssignmentsAgree_of_keygenRegistered_noLookups
+        hregistered
+    | clear_value operations
+      apply
+        RegionOperations.lookupSelectorAssignmentsAgree_of_keygenRegistered_auxiliarySelectors_nil
+          hregistered
+      keygen_registration
+    | apply RegionOperations.lookupSelectorAssignmentsAgree_of_forall_isNotLookup
+      keygen_registration
+    | keygen_registration
   output : Config → ℕ → Var Input F → RegionIndex → Var Output F :=
     fun config offset input self =>
       (synthesize config offset input).output self
@@ -1551,6 +1657,20 @@ variable [CircuitType Input] [CircuitType Output]
     {configure : ConfigInput → Configure F Config}
     {synthesize :
       Config → ℕ → Var Input F → RegionCircuit F (Var Output F)}
+
+/-- Region lookup-selector assignment agreement obtained by combining registration
+with the circuit-local law. -/
+theorem ElaboratedRegionCircuit.lookupSelectorAssignmentsAgree
+    (self : ElaboratedRegionCircuit F ConfigInput Config Input Output
+      configure synthesize)
+    (configInput : ConfigInput) (counts : ConfigureCounts)
+    (hconfig : self.keygenRequirements.configLawful configInput)
+    (offset : ℕ) (input : Var Input F) (region : RegionIndex) :
+    ((synthesize ((configure configInput).output counts) offset input).operations region)
+      |>.LookupSelectorAssignmentsAgree :=
+  self.lookupSelectorAssignmentsAgree_of_registered
+    configInput counts hconfig offset input region
+    (self.registered configInput counts hconfig offset input region)
 
 @[circuit_norm ↓]
 theorem ElaboratedRegionCircuit.synthesisSummary_columns_eq
@@ -2538,6 +2658,29 @@ theorem callPacked_lookupActivationsWellFormed
   self.call_lookupActivationsWellFormed
     config offset input region
 
+/-- Lookup-selector assignment agreement inherited by a region child call. -/
+theorem call_lookupSelectorAssignmentsAgree
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (config : Config) (configured : self.Configured config)
+    (offset : ℕ) (input : Var Input F)
+    (region : RegionIndex) :
+    ((self.call config offset input).operations region)
+      |>.LookupSelectorAssignmentsAgree := by
+  rcases configured with ⟨configInput, counts, hconfig, rfl⟩
+  rw [self.call_operations]
+  exact self.elaborated.lookupSelectorAssignmentsAgree
+    configInput counts hconfig offset input region
+
+theorem callPacked_lookupSelectorAssignmentsAgree
+    (self : FormalRegionCircuit F ConfigInput Config Input Output)
+    (config : Config) (configured : self.Configured config)
+    (offset : ℕ) (input : Var Input F)
+    (region : RegionIndex) :
+    (((callPacked F ConfigInput Config Input Output).val self
+      config offset input region).2).LookupSelectorAssignmentsAgree :=
+  self.call_lookupSelectorAssignmentsAgree
+    config configured offset input region
+
 /-- Region registration certificate in the opaque spelling exposed after spine
 normalization. -/
 theorem callPacked_keygenRegistered
@@ -2689,6 +2832,15 @@ def toFormal (child : FormalRegionCircuit F ConfigInput Config Input Output)
         simpa only [assignRegion, Circuit.operations,
           Operations.LookupActivationsWellFormed,
           Operation.LookupActivationsWellFormed, List.Forall, and_true] using hlawful
+      lookupSelectorAssignmentsAgree_of_registered := by
+        intro configInput counts hconfig input region
+        dsimp only
+        intro _hregistered
+        have hagrees := child.elaborated.lookupSelectorAssignmentsAgree
+          configInput counts hconfig 0 input region
+        simpa only [assignRegion, Circuit.operations,
+          Operations.LookupSelectorAssignmentsAgree,
+          Operation.LookupSelectorAssignmentsAgree, List.Forall, and_true] using hagrees
       output config input i :=
         child.output config 0 input i
       regionCount _ := 1
@@ -2860,12 +3012,16 @@ attribute [keygen_call]
   FormalCircuit.call_copyCellsAssignedFrom
   FormalCircuit.callPacked_lookupActivationsWellFormed
   FormalCircuit.call_lookupActivationsWellFormed
+  FormalCircuit.callPacked_lookupSelectorAssignmentsAgree
+  FormalCircuit.call_lookupSelectorAssignmentsAgree
   FormalRegionCircuit.callPacked_keygenRegistered
   FormalRegionCircuit.call_keygenRegistered
   FormalRegionCircuit.callPacked_copyCellsAssignedFrom
   FormalRegionCircuit.call_copyCellsAssignedFrom
   FormalRegionCircuit.callPacked_lookupActivationsWellFormed
   FormalRegionCircuit.call_lookupActivationsWellFormed
+  FormalRegionCircuit.callPacked_lookupSelectorAssignmentsAgree
+  FormalRegionCircuit.call_lookupSelectorAssignmentsAgree
 
 attribute [keygen_call_expression]
   FormalCircuit.call

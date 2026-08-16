@@ -248,6 +248,16 @@ def commit (G : Generators) (ns : List ℕ)
         · apply Ecc.Add.addFormal.call_keygenRegistered
             configInput.2.2 configured.2.2 _ (self + 3) <;>
               keygen_registration
+      lookupSelectorAssignmentsAgree_of_registered := by
+        intro cfg counts hconfig input self program operations _hregistered
+        simp only [operations, program, Configure.output_pure, synthesize,
+          Circuit.operations_bind, Circuit.operations_pure,
+          keygen_norm, keygen_spine]
+        exact ⟨(HashToPoint.hashCircuit G ns Q hQ hns)
+            |>.call_lookupSelectorAssignmentsAgree
+              cfg.2.1 hconfig.2.1 _ _,
+          Ecc.Add.addFormal.call_lookupSelectorAssignmentsAgree
+            cfg.2.2 hconfig.2.2 _ _⟩
       copyCellsAssigned := by
         intro cfg counts configured input self
         simp only [synthesize, Circuit.operations_bind, Circuit.operations_pure,

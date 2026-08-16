@@ -1309,4 +1309,15 @@ theorem Configured.permutationColumns_eq (numBits w : ℕ) {cfg : Config}
     _ = Add.permutationColumns configInput.2 ++ ([configInput.1] : List AnyColumn) := by
       rw [Add.Configured.permutationColumns_eq hconfig]
 
+theorem Configured.lookups_eq_nil (numBits w : ℕ) {cfg : Config}
+    (configured : (assign_region numBits w).Configured cfg) :
+    configured.lookups = [] := by
+  rcases configured with ⟨configInput, counts, hconfig, outputEq⟩
+  cases outputEq
+  simp only [FormalRegionCircuit.Configured.lookups,
+    FormalRegionCircuit.keygenRequirements,
+    ElaboratedRegionCircuit.keygenRequirements, assign_region, configure,
+    keygen_norm]
+  exact Add.Configured.lookups_eq_nil hconfig
+
 end Zcash.Circuits.Ecc.MulComplete

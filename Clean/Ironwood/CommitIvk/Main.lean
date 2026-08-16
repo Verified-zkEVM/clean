@@ -497,6 +497,13 @@ private theorem synthPieces_lookupActivationsWellFormed
     Sinsemilla.HashToPoint.witnessMessagePiece_lookupActivationsWellFormed
       cfg.hashConfig (dWit input.nk) _⟩
 
+private theorem synthPieces_lookupSelectorAssignmentsAgree
+    (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex) :
+    ((synthPieces cfg input.ak input.nk).operations self)
+      |>.LookupSelectorAssignmentsAgree := by
+  simp only [synthPieces, Circuit.operations_bind, Circuit.operations_pure,
+    keygen_norm, keygen_spine]
+
 private theorem synth_copyCellsAssigned
     (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
     (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex)
@@ -588,6 +595,17 @@ instance elaborated (G : Generators) (R : FixedBase) (Q : Point Fp)
       G R Q hQ configInput input self configured
   copyCellsAssigned cfg _ configured input self :=
     synth_copyCellsAssigned G R Q hQ cfg input self configured
+  lookupSelectorAssignmentsAgree_of_registered := by
+    intro cfg counts hconfig input self program operations _hregistered
+    simp only [operations, program, Configure.output_pure, synth,
+      NoteCommit.Main.currentRegion_operations, Circuit.operations_bind,
+      Circuit.operations_pure, keygen_norm, keygen_spine]
+    exact ⟨synthPieces_lookupSelectorAssignmentsAgree cfg input self,
+      (CommitIvk.Canonicity.circuit
+        (brWit input.ak 254 1) (brWit input.nk 254 1))
+          |>.call_lookupSelectorAssignmentsAgree
+            (cfg.gate, cfg.lookupConfig)
+            (FormalCircuit.Configured.ofPure _ _ () (by rfl)) _ _⟩
   fixedWritesLawful := by
     intro cfg _ configured input self
     apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree

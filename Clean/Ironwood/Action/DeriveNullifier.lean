@@ -192,6 +192,18 @@ def circuit (K : FixedBase) : FormalCircuit Fp
             apply Ecc.Add.addFormal.call_keygenRegistered cfg.2.2.2
                 hconfig.2.2.2 _ (self + 8) <;>
               keygen_registration⟩
+      lookupSelectorAssignmentsAgree_of_registered := by
+        intro cfg counts hconfig input self program operations _hregistered
+        simp only [operations, program, Configure.output_pure, synthesize,
+          Circuit.operations_bind, Circuit.operations_pure,
+          keygen_norm, keygen_spine]
+        exact ⟨AddChip.addFormal.call_lookupSelectorAssignmentsAgree
+            cfg.2.1 hconfig.2.1 _ _,
+          (Ecc.MulFixed.BaseFieldElem.circuit K)
+            |>.call_lookupSelectorAssignmentsAgree
+              cfg.2.2.1 hconfig.2.2.1 _ _,
+          Ecc.Add.addFormal.call_lookupSelectorAssignmentsAgree
+            cfg.2.2.2 hconfig.2.2.2 _ _⟩
       fixedWritesLawful := by
         intro cfg _ hconfig input self
         apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree

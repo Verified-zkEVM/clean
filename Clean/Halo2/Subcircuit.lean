@@ -545,6 +545,20 @@ theorem FormalCircuit.foldCall_fixedAssignmentsAgree
     (FormalCircuit.foldState c toInput config init i₀ i).1
     (FormalCircuit.foldState c toInput config init i₀ i).2
 
+/-- Lookup-selector assignment agreement composes over a serial fold from the
+configured law of each folded child. -/
+@[keygen_norm, keygen_spine]
+theorem FormalCircuit.foldCall_lookupSelectorAssignmentsAgree
+    (m : ℕ) (configured : ∀ i : Fin m, (c i).Configured config) :
+    ((FormalCircuit.foldCall c toInput config init m).operations i₀)
+      |>.LookupSelectorAssignmentsAgree := by
+  rw [Operations.LookupSelectorAssignmentsAgree,
+    FormalCircuit.foldCall_forall]
+  intro i
+  exact (c i).call_lookupSelectorAssignmentsAgree config (configured i)
+    (FormalCircuit.foldState c toInput config init i₀ i).1
+    (FormalCircuit.foldState c toInput config init i₀ i).2
+
 /-- Register a serial fold compositionally from one configured handle per round and
 an invariant covering the equality columns of each folded input. -/
 theorem FormalCircuit.foldCall_keygenRegistered

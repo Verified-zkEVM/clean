@@ -349,6 +349,13 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
               input.z130.cell, input.k254.cell] }
       registered := by
         keygen_registration
+      lookupSelectorAssignmentsAgree_of_registered := by
+        intro configInput counts hconfig input i
+        dsimp only
+        intro _hregistered
+        simp only [synthesize, circuit_norm, keygen_norm, keygen_spine]
+        apply RegionOperations.lookupSelectorAssignmentsAgree_of_forall_isNotLookup
+        simp only [gateRegion, circuit_norm, RegionOperation.IsNotLookup]
       output _ _ _ := ()
       regionCount _ := 3
       synthesisSummary cfg _ _ := circuitSynthesisSummary K cfg

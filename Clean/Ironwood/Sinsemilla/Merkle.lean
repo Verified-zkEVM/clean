@@ -1576,6 +1576,16 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
               LookupRangeCheck.shortRangeCheck_configured_permutationColumns_eq,
               KeygenRequirements.inputPermutationColumns]
           · trivial
+      lookupSelectorAssignmentsAgree_of_registered := by
+        intro configInput counts hconfig input i program operations _hregistered
+        simp only [operations, program, Configure.output_pure,
+          HashLayer.synthesize, Circuit.operations_bind,
+          Circuit.operations_pure, operations_assignRegion,
+          keygen_norm, keygen_spine]
+        exact (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ
+            HashLayer.synthesize._proof_1)
+          |>.call_lookupSelectorAssignmentsAgree
+            configInput.1.sinsemilla hconfig.2.1 _ _
       fixedWritesLawful := by
         intro cfg _ hconfig input self
         apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree
@@ -2948,6 +2958,14 @@ def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
         · apply (HashLayer.circuit G Q hQ l hl).call_keygenRegistered
             (cfg.2.1, cfg.2.2) hconfig.2 _ (self + 1) <;>
               keygen_registration
+      lookupSelectorAssignmentsAgree_of_registered := by
+        intro cfg counts hconfig input self program operations _hregistered
+        simp only [operations, program, Configure.output_pure,
+          Circuit.operations_bind, operations_assignRegion,
+          keygen_norm, keygen_spine]
+        exact (HashLayer.circuit G Q hQ l hl)
+          |>.call_lookupSelectorAssignmentsAgree
+            (cfg.2.1, cfg.2.2) hconfig.2 _ (self + 1)
       fixedWritesLawful := by
         intro cfg _ hconfig input self
         apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree
@@ -3836,6 +3854,14 @@ def circuit :
       synthesisSummary cfg _ _ := synthesisSummary d cfg
       synthesisSummary_eq := synthesisSummary_eq G Q hQ l₀ d wsib wswap
       registered := synthesize_keygenRegistered G Q hQ l₀ d wsib wswap
+      lookupSelectorAssignmentsAgree_of_registered := by
+        intro cfg counts hconfig input region program operations _hregistered
+        simp only [operations, program, Configure.output_pure, synthesize,
+          Circuit.operations_bind, Circuit.operations_pure, List.append_nil]
+        exact FormalCircuit.foldCall_lookupSelectorAssignmentsAgree
+          (c := layerAt G Q hQ l₀ wsib wswap) (toInput := toInput)
+          (config := cfg) (init := input) (i₀ := region) d
+          (fun i => layerAtConfigured G Q hQ l₀ wsib wswap hconfig i)
       fixedWritesLawful := by
         intro cfg _ hconfig input region
         apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree

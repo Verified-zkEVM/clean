@@ -189,6 +189,14 @@ def circuit : FormalCircuit Fp
               cfg.2 hconfig.2 input.pkDOld (self + 4) <;>
               keygen_registration,
           by keygen_registration⟩
+      lookupSelectorAssignmentsAgree_of_registered := by
+        intro cfg counts hconfig input self program operations _hregistered
+        simp only [operations, program, Configure.output_pure,
+          Circuit.operations_bind, operations_assignRegion,
+          Circuit.operations_pure, keygen_norm, keygen_spine]
+        rw [FormalCircuit.nextRegionIndex_call', Ecc.Mul.mul_call_regionCount]
+        exact Ecc.WitnessPoint.pointNonIdFormal.call_lookupSelectorAssignmentsAgree
+          cfg.2 hconfig.2 input.pkDOld (self + 4)
       copyCellsAssigned := by
         intro cfg _ hconfig input self
         simpa only [keygen_norm] using

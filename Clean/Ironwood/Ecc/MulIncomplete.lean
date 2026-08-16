@@ -866,4 +866,14 @@ theorem Configured.permutationColumns_eq (n w : ℕ) {cfg : Config}
     double_and_add, configure, keygen_norm, List.singleton_append]
   rfl
 
+theorem Configured.lookups_eq_nil (n w : ℕ) {cfg : Config}
+    (configured : (double_and_add n w).Configured cfg) :
+    configured.lookups = [] := by
+  rcases configured with ⟨configInput, counts, hconfig, outputEq⟩
+  cases outputEq
+  simp only [FormalRegionCircuit.Configured.lookups,
+    FormalRegionCircuit.keygenRequirements,
+    ElaboratedRegionCircuit.keygenRequirements, double_and_add, configure,
+    keygen_norm]
+
 end Zcash.Circuits.Ecc.MulIncomplete

@@ -221,6 +221,16 @@ def circuit (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
           by
             apply Ecc.Add.addFormal.call_keygenRegistered cfg.2.2
                 hconfig.2.2 _ (self + 4) <;> keygen_registration⟩
+      lookupSelectorAssignmentsAgree_of_registered := by
+        intro cfg counts hconfig input self program operations _hregistered
+        simp only [operations, program, Configure.output_pure,
+          Circuit.operations_bind, Circuit.operations_pure,
+          FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call',
+          FormalCircuit.call_regionCount',
+          Ecc.MulFixed.Short.circuit_regionCount,
+          Ecc.MulFixed.FullWidth.circuit_regionCount,
+          Nat.add_assoc,
+          keygen_norm, keygen_spine]
       copyCellsAssigned := by
         intro cfg _ hconfig input self
         simpa only [keygen_norm, keygen_spine, circuit_norm] using

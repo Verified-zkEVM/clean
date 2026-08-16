@@ -3392,6 +3392,316 @@ def RegionOperation.ActivatesSelectorAt
       SelectorEnabledAtIndex enabled selector ∧ operationRow = row
   | _ => False
 
+/-- A lookup operation, rather than a gate, activates `selector` at `row`. Gate
+activations are already ruled out for lookup auxiliary selectors by
+`LookupSelectorsLawful`. -/
+@[circuit_norm]
+def RegionOperation.ActivatesLookupSelectorAt
+    (selector row : ℕ) : RegionOperation F → Prop
+  | .enableLookup _ enabled operationRow =>
+      SelectorEnabledAtIndex enabled selector ∧ operationRow = row
+  | _ => False
+
+/-- A lookup operation's local selector valuation agrees with every activation in the
+surrounding region at the lookup's row. Non-lookup operations impose no condition. -/
+@[circuit_norm]
+def RegionOperation.LookupSelectorAssignmentsAgreeWith
+    (operations : RegionOperations F) : RegionOperation F → Prop
+  | .enableLookup argument enabled row =>
+      argument.auxiliarySelectorIndices.Forall fun selector =>
+        operations.Forall fun operation =>
+          operation.ActivatesLookupSelectorAt selector row →
+            SelectorEnabledAtIndex enabled selector
+  | _ => True
+
+/-- Every lookup operation agrees with the region-wide selector activations. The
+`List.Forall` presentation follows the operation stream compositionally. -/
+@[circuit_norm]
+def RegionOperations.LookupSelectorAssignmentsAgree
+    (operations : RegionOperations F) : Prop :=
+  operations.Forall (RegionOperation.LookupSelectorAssignmentsAgreeWith operations)
+
+/-- A local sufficient condition for selector agreement: every lookup activation
+enables all of the auxiliary selectors used by its own lookup expression. -/
+@[circuit_norm]
+def RegionOperation.EnablesLookupAuxiliarySelectors : RegionOperation F → Prop
+  | .enableLookup argument enabled _ =>
+      argument.auxiliarySelectorIndices.Forall
+        (SelectorEnabledAtIndex enabled)
+  | _ => True
+
+/-- Whether an operation is not a lookup activation. -/
+@[circuit_norm]
+def RegionOperation.IsNotLookup : RegionOperation F → Prop
+  | .enableLookup _ _ _ => False
+  | _ => True
+
+/-- A non-lookup prefix is invisible to every lookup operation's agreement check. -/
+@[keygen_norm]
+theorem RegionOperation.lookupSelectorAssignmentsAgreeWith_cons_iff
+    {leading current : RegionOperation F} {operations : RegionOperations F}
+    (hleading : leading.IsNotLookup) :
+    current.LookupSelectorAssignmentsAgreeWith (leading :: operations) ↔
+      current.LookupSelectorAssignmentsAgreeWith operations := by
+  have hnoActivation : ∀ selector row,
+      ¬leading.ActivatesLookupSelectorAt selector row := by
+    intro selector row
+    cases leading <;>
+      simp_all [RegionOperation.IsNotLookup,
+        RegionOperation.ActivatesLookupSelectorAt]
+  cases current <;>
+    simp [RegionOperation.LookupSelectorAssignmentsAgreeWith, hnoActivation]
+
+/-- Pointwise agreement for a tail is likewise unchanged by a non-lookup prefix. -/
+@[keygen_norm]
+theorem RegionOperations.forall_lookupSelectorAssignmentsAgreeWith_cons_iff
+    {leading : RegionOperation F} {operations : RegionOperations F}
+    (hleading : leading.IsNotLookup) :
+    operations.Forall
+        (RegionOperation.LookupSelectorAssignmentsAgreeWith (leading :: operations)) ↔
+      operations.LookupSelectorAssignmentsAgree := by
+  constructor <;> intro hagrees <;>
+    apply List.forall_iff_forall_mem.mpr <;>
+    intro operation hoperation
+  · exact (RegionOperation.lookupSelectorAssignmentsAgreeWith_cons_iff
+      hleading).mp (List.forall_iff_forall_mem.mp hagrees operation hoperation)
+  · exact (RegionOperation.lookupSelectorAssignmentsAgreeWith_cons_iff
+      hleading).mpr (List.forall_iff_forall_mem.mp hagrees operation hoperation)
+
+/-- Prepending a non-lookup operation does not change lookup-selector agreement. -/
+@[keygen_norm]
+theorem RegionOperations.lookupSelectorAssignmentsAgree_cons_iff
+    {operation : RegionOperation F} {operations : RegionOperations F}
+    (hoperation : operation.IsNotLookup) :
+    RegionOperations.LookupSelectorAssignmentsAgree (operation :: operations) ↔
+      operations.LookupSelectorAssignmentsAgree := by
+  have hnoActivation : ∀ selector row,
+      ¬operation.ActivatesLookupSelectorAt selector row := by
+    intro selector row
+    cases operation <;>
+      simp_all [RegionOperation.IsNotLookup,
+        RegionOperation.ActivatesLookupSelectorAt]
+  constructor
+  · intro hagrees
+    apply List.forall_iff_forall_mem.mpr
+    intro current hcurrent
+    have hcurrentAgreement := List.forall_iff_forall_mem.mp hagrees current
+      (by simp [hcurrent])
+    cases current with
+    | enableLookup argument enabled row =>
+        apply List.forall_iff_forall_mem.mpr
+        intro selector hselector
+        have hselectorAgreement :=
+          List.forall_iff_forall_mem.mp hcurrentAgreement selector hselector
+        apply List.forall_iff_forall_mem.mpr
+        intro other hother
+        exact List.forall_iff_forall_mem.mp hselectorAgreement other
+          (List.mem_cons_of_mem operation hother)
+    | _ => trivial
+  · intro hagrees
+    rw [RegionOperations.LookupSelectorAssignmentsAgree, List.forall_cons]
+    constructor
+    · cases operation <;>
+        simp_all [RegionOperation.IsNotLookup,
+          RegionOperation.LookupSelectorAssignmentsAgreeWith]
+    · apply List.forall_iff_forall_mem.mpr
+      intro current hcurrent
+      have hcurrentAgreement :=
+        List.forall_iff_forall_mem.mp hagrees current hcurrent
+      cases current with
+      | enableLookup argument enabled row =>
+          apply List.forall_iff_forall_mem.mpr
+          intro selector hselector
+          rw [List.forall_cons]
+          exact ⟨fun hactivation => False.elim
+            (hnoActivation selector row hactivation),
+            List.forall_iff_forall_mem.mp hcurrentAgreement selector hselector⟩
+      | _ => trivial
+
+/-- A region containing no lookup operations satisfies lookup-selector agreement. -/
+theorem RegionOperations.lookupSelectorAssignmentsAgree_of_forall_isNotLookup
+    {operations : RegionOperations F}
+    (hoperations : operations.Forall RegionOperation.IsNotLookup) :
+    operations.LookupSelectorAssignmentsAgree := by
+  induction operations with
+  | nil => simp [RegionOperations.LookupSelectorAssignmentsAgree]
+  | cons operation operations inductionHypothesis =>
+      rw [List.forall_cons] at hoperations
+      exact (RegionOperations.lookupSelectorAssignmentsAgree_cons_iff
+        hoperations.1).mpr (inductionHypothesis hoperations.2)
+
+/-- Enabling every lookup's own auxiliary selectors makes agreement with surrounding
+activations immediate. This is useful for uniform-mode lookup loops; circuits that
+deliberately leave an auxiliary selector off can prove agreement from row separation. -/
+theorem RegionOperations.lookupSelectorAssignmentsAgree_of_enablesLookupAuxiliarySelectors
+    {operations : RegionOperations F}
+    (henabled : operations.Forall
+      RegionOperation.EnablesLookupAuxiliarySelectors) :
+    operations.LookupSelectorAssignmentsAgree := by
+  apply List.forall_iff_forall_mem.mpr
+  intro operation hoperation
+  have henabledOperation :=
+    List.forall_iff_forall_mem.mp henabled operation hoperation
+  cases operation with
+  | enableLookup argument enabled row =>
+      apply List.forall_iff_forall_mem.mpr
+      intro selector hselector
+      have hselectorEnabled :=
+        List.forall_iff_forall_mem.mp henabledOperation selector hselector
+      apply List.forall_iff_forall_mem.mpr
+      intro _ _ _
+      exact hselectorEnabled
+  | _ => trivial
+
+@[keygen_norm, keygen_spine]
+theorem RegionOperations.lookupSelectorAssignmentsAgree_nil :
+    RegionOperations.LookupSelectorAssignmentsAgree ([] : RegionOperations F) := by
+  simp [RegionOperations.LookupSelectorAssignmentsAgree]
+
+/-- Layouter-level lift of lookup-selector assignment agreement. -/
+@[circuit_norm]
+def Operation.LookupSelectorAssignmentsAgree : Operation F → Prop
+  | .region _ body => body.LookupSelectorAssignmentsAgree
+  | _ => True
+
+/-- Every synthesized region has lookup-selector assignments consistent with its
+operation-local lookup semantics. -/
+@[circuit_norm]
+def Operations.LookupSelectorAssignmentsAgree
+    (operations : Operations F) : Prop :=
+  operations.Forall Operation.LookupSelectorAssignmentsAgree
+
+@[keygen_norm, keygen_spine]
+theorem Operations.lookupSelectorAssignmentsAgree_nil :
+    Operations.LookupSelectorAssignmentsAgree ([] : Operations F) := by
+  simp [Operations.LookupSelectorAssignmentsAgree]
+
+@[keygen_norm, keygen_spine]
+theorem Operations.lookupSelectorAssignmentsAgree_append
+    (left right : Operations F) :
+    Operations.LookupSelectorAssignmentsAgree (left ++ right) ↔
+      left.LookupSelectorAssignmentsAgree ∧ right.LookupSelectorAssignmentsAgree := by
+  simp [Operations.LookupSelectorAssignmentsAgree]
+
+@[keygen_norm, keygen_spine]
+theorem Operations.lookupSelectorAssignmentsAgree_region_cons
+    (name : String) (body : RegionOperations F) (rest : Operations F) :
+    Operations.LookupSelectorAssignmentsAgree (.region name body :: rest) ↔
+      body.LookupSelectorAssignmentsAgree ∧ rest.LookupSelectorAssignmentsAgree := by
+  simp [Operations.LookupSelectorAssignmentsAgree,
+    Operation.LookupSelectorAssignmentsAgree]
+
+@[keygen_norm, keygen_spine]
+theorem Operations.lookupSelectorAssignmentsAgree_constrainInstance_cons
+    (cell : Cell) (column : Column .instance) (row : ℕ) (rest : Operations F) :
+    Operations.LookupSelectorAssignmentsAgree
+        (.constrainInstance cell column row :: rest) ↔
+      rest.LookupSelectorAssignmentsAgree := by
+  simp [Operations.LookupSelectorAssignmentsAgree,
+    Operation.LookupSelectorAssignmentsAgree]
+
+@[keygen_norm, keygen_spine]
+theorem Operations.lookupSelectorAssignmentsAgree_loadTable_cons
+    (column : TableColumn) (values : List F) (rest : Operations F) :
+    Operations.LookupSelectorAssignmentsAgree (.loadTable column values :: rest) ↔
+      rest.LookupSelectorAssignmentsAgree := by
+  simp [Operations.LookupSelectorAssignmentsAgree,
+    Operation.LookupSelectorAssignmentsAgree]
+
+/-- Under assignment agreement, an auxiliary selector is enabled by a lookup exactly
+when some operation activates it at the same region-local row. -/
+theorem RegionOperations.selectorEnabledAtIndex_iff_exists_activatesLookupSelectorAt
+    {operations : RegionOperations F}
+    (hagrees : operations.LookupSelectorAssignmentsAgree)
+    {argument : LookupArgument F} {enabled : List Selector} {row selector : ℕ}
+    (hlookup : .enableLookup argument enabled row ∈ operations)
+    (hselector : selector ∈ argument.auxiliarySelectorIndices) :
+    SelectorEnabledAtIndex enabled selector ↔
+      ∃ operation ∈ operations,
+        operation.ActivatesLookupSelectorAt selector row := by
+  constructor
+  · intro henabled
+    exact ⟨.enableLookup argument enabled row, hlookup, henabled, rfl⟩
+  · rintro ⟨operation, hoperation, hactivation⟩
+    have hlookupAgreement :=
+      List.forall_iff_forall_mem.mp hagrees _ hlookup
+    have hselectorAgreement :=
+      List.forall_iff_forall_mem.mp hlookupAgreement _ hselector
+    exact List.forall_iff_forall_mem.mp hselectorAgreement
+      operation hoperation hactivation
+
+/-- A region registered against no lookup arguments cannot contain a lookup
+activation, so lookup-selector assignment agreement is automatic. -/
+theorem RegionOperations.lookupSelectorAssignmentsAgree_of_keygenRegistered_noLookups
+    {operations : RegionOperations F} {gates : List (Gate F)}
+    {fixedColumns : List (Column .fixed)} {permutationColumns : List AnyColumn}
+    (hregistered : operations.Forall
+      (RegionOperation.KeygenRegistered gates [] fixedColumns permutationColumns)) :
+    operations.LookupSelectorAssignmentsAgree := by
+  apply List.forall_iff_forall_mem.mpr
+  intro operation hoperation
+  have hregisteredOperation :=
+    List.forall_iff_forall_mem.mp hregistered operation hoperation
+  cases operation <;>
+    simp_all [RegionOperation.KeygenRegistered,
+      RegionOperation.LookupSelectorAssignmentsAgreeWith]
+
+/-- A region whose registered lookup arguments have no auxiliary selectors satisfies
+lookup-selector assignment agreement automatically. -/
+theorem RegionOperations.lookupSelectorAssignmentsAgree_of_keygenRegistered_auxiliarySelectors_nil
+    {operations : RegionOperations F} {gates : List (Gate F)}
+    {lookups : List (LookupArgument F)}
+    {fixedColumns : List (Column .fixed)} {permutationColumns : List AnyColumn}
+    (hregistered : operations.Forall
+      (RegionOperation.KeygenRegistered gates lookups fixedColumns permutationColumns))
+    (hlookups : lookups.Forall fun argument => argument.auxiliarySelectorIndices = []) :
+    operations.LookupSelectorAssignmentsAgree := by
+  apply List.forall_iff_forall_mem.mpr
+  intro operation hoperation
+  have hregisteredOperation :=
+    List.forall_iff_forall_mem.mp hregistered operation hoperation
+  cases operation with
+  | enableLookup argument enabled row =>
+      have hnil := List.forall_iff_forall_mem.mp hlookups argument hregisteredOperation
+      simp [RegionOperation.LookupSelectorAssignmentsAgreeWith, hnil]
+  | _ => trivial
+
+/-- Layouter operations registered against no lookup arguments satisfy lookup-selector
+assignment agreement region by region. -/
+theorem Operations.lookupSelectorAssignmentsAgree_of_keygenRegistered_noLookups
+    {operations : Operations F} {gates : List (Gate F)}
+    {fixedColumns : List (Column .fixed)} {permutationColumns : List AnyColumn}
+    (hregistered : operations.KeygenRegistered
+      gates [] fixedColumns permutationColumns) :
+    operations.LookupSelectorAssignmentsAgree := by
+  apply List.forall_iff_forall_mem.mpr
+  intro operation hoperation
+  have hregisteredOperation :=
+    List.forall_iff_forall_mem.mp hregistered operation hoperation
+  cases operation with
+  | region name body =>
+      exact RegionOperations.lookupSelectorAssignmentsAgree_of_keygenRegistered_noLookups
+        hregisteredOperation
+  | constrainInstance | loadTable => trivial
+
+/-- Layouter-level lift of the auxiliary-selector-free registration criterion. -/
+theorem Operations.lookupSelectorAssignmentsAgree_of_keygenRegistered_auxiliarySelectors_nil
+    {operations : Operations F} {gates : List (Gate F)}
+    {lookups : List (LookupArgument F)}
+    {fixedColumns : List (Column .fixed)} {permutationColumns : List AnyColumn}
+    (hregistered : operations.KeygenRegistered gates lookups fixedColumns permutationColumns)
+    (hlookups : lookups.Forall fun argument => argument.auxiliarySelectorIndices = []) :
+    operations.LookupSelectorAssignmentsAgree := by
+  apply List.forall_iff_forall_mem.mpr
+  intro operation hoperation
+  have hregisteredOperation :=
+    List.forall_iff_forall_mem.mp hregistered operation hoperation
+  cases operation with
+  | region name body =>
+      exact RegionOperations.lookupSelectorAssignmentsAgree_of_keygenRegistered_auxiliarySelectors_nil
+        hregisteredOperation hlookups
+  | constrainInstance | loadTable => trivial
+
 /-- A lookup activation enables its mandatory master selector and no selector outside
 the lookup's declared selector set. This property is local to the operation and is
 therefore stable under circuit composition. -/

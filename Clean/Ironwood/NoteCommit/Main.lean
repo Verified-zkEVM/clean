@@ -1368,6 +1368,22 @@ private theorem pureRegionCall_keygenRegistered
   · simpa only [configured, lifted, FormalCircuit.Configured.ofPure_inputCells,
       FormalRegionCircuit.toFormal_keygenRequirements] using hinputCells
 
+private theorem pureRegionCall_lookupSelectorAssignmentsAgree
+    {Config : Type} {Input Output : TypeMap}
+    [ProvableType Input] [ProvableType Output]
+    (child : FormalRegionCircuit Fp Config Config Input Output)
+    (name : String) (cfg : Config) (input : Var Input Fp) (self : RegionIndex)
+    (hconfigured : child.keygenRequirements.configLawful cfg)
+    (hconfigure : child.configure cfg = pure cfg) :
+    (((child.toFormal name).call cfg input).operations self)
+      |>.LookupSelectorAssignmentsAgree := by
+  let lifted := child.toFormal name
+  have hliftedConfigure : lifted.configure cfg = pure cfg := by
+    simpa only [lifted, FormalRegionCircuit.toFormal] using hconfigure
+  exact lifted.call_lookupSelectorAssignmentsAgree cfg
+    (FormalCircuit.Configured.ofPure lifted cfg hconfigured hliftedConfigure)
+    input self
+
 theorem synthDecompositions_keygenRegistered
     (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
     (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
@@ -1427,7 +1443,29 @@ theorem synthDecompositions_keygenRegistered
   · apply pureRegionCall_keygenRegistered
       DecomposeE.bundle "NoteCommit MessagePiece e" cfg.gates.e
       { e := pcs.e, e0 := pcs.e0, e1 := pcs.e1 } _ () (by rfl)
-    keygen_registration
+    · intro gate hgate
+      simp only [DecomposeE.bundle, FormalRegionCircuit.keygenRequirements,
+        ElaboratedRegionCircuit.keygenRequirements, List.mem_singleton] at hgate
+      subst gate
+      simp [keygenRequirements]
+    · intro lookup hlookup
+      simp only [DecomposeE.bundle, FormalRegionCircuit.keygenRequirements,
+        ElaboratedRegionCircuit.keygenRequirements, List.not_mem_nil] at hlookup
+    · intro column hcolumn
+      simp only [DecomposeE.bundle, FormalRegionCircuit.keygenRequirements,
+        ElaboratedRegionCircuit.keygenRequirements, List.not_mem_nil] at hcolumn
+    · intro column hcolumn
+      apply List.mem_append_left
+      apply List.mem_append_left
+      apply List.mem_append_left
+      exact hE hcolumn
+    · simp only [DecomposeE.bundle, FormalRegionCircuit.keygenRequirements,
+        ElaboratedRegionCircuit.keygenRequirements, List.forall_cons,
+        List.forall_nil, and_true]
+      repeat' apply And.intro
+      all_goals apply List.mem_append_left
+      all_goals apply List.mem_append_right
+      all_goals simp [PieceCells.permutationColumns]
   · apply pureRegionCall_keygenRegistered
       (DecomposeG.bundle (brWit input.rho 254 1))
       "NoteCommit MessagePiece g" cfg.gates.g
@@ -2426,6 +2464,30 @@ private theorem synthChecks_lookupActivationsWellFormed
         (PsiCanonicityCheck.g1G2PrimeWit pcs.g1
           (zCell cfg.hashConfig iHash 6 1)) _⟩
 
+private theorem synthPieces_lookupSelectorAssignmentsAgree
+    (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex) :
+    ((synthPieces cfg input).operations self)
+      |>.LookupSelectorAssignmentsAgree := by
+  simp only [synthPieces, Circuit.operations_bind, Circuit.operations_pure,
+    keygen_norm, keygen_spine]
+
+private theorem synthChecks_lookupSelectorAssignmentsAgree
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (iHash self : RegionIndex)
+    (configured : (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).Configured
+      (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)) :
+    ((synthChecks G R Q hQ cfg input pcs iHash).operations self)
+      |>.LookupSelectorAssignmentsAgree := by
+  simp only [synthChecks, Circuit.operations_bind, Circuit.operations_pure,
+    keygen_norm, keygen_spine]
+  exact ⟨
+    (YCanonicityCheck.circuit (brWit input.pkdY 0 1))
+      |>.call_lookupSelectorAssignmentsAgree _
+        (FormalCircuit.Configured.ofPure _ _ () (by rfl)) _ _,
+    (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil)
+      |>.call_lookupSelectorAssignmentsAgree _ configured _ _⟩
+
 private theorem synthDecompositions_lookupActivationsWellFormed
     (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
     (ccs : CheckCells) (iHash self : RegionIndex) :
@@ -2445,6 +2507,32 @@ private theorem synthDecompositions_lookupActivationsWellFormed
       "NoteCommit MessagePiece g").call_lookupActivationsWellFormed _ _ _,
     ((DecomposeH.bundle (brWit input.psi 254 1)).toFormal
       "NoteCommit MessagePiece h").call_lookupActivationsWellFormed _ _ _⟩
+
+private theorem synthDecompositions_lookupSelectorAssignmentsAgree
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (ccs : CheckCells) (iHash self : RegionIndex) :
+    ((synthDecompositions cfg input pcs ccs iHash).operations self)
+      |>.LookupSelectorAssignmentsAgree := by
+  simp only [synthDecompositions, Circuit.operations_bind,
+    Circuit.operations_pure, keygen_norm, keygen_spine]
+  exact ⟨
+    pureRegionCall_lookupSelectorAssignmentsAgree
+      (DecomposeD.bundle (brWit input.pkdX 254 1))
+      "NoteCommit MessagePiece d" cfg.gates.d
+      { d := pcs.d, d1 := ccs.d1, d2 := pcs.d2,
+        d3 := zCell cfg.hashConfig iHash 3 1 } _ () (by rfl),
+    pureRegionCall_lookupSelectorAssignmentsAgree
+      DecomposeE.bundle "NoteCommit MessagePiece e" cfg.gates.e
+      { e := pcs.e, e0 := pcs.e0, e1 := pcs.e1 } _ () (by rfl),
+    pureRegionCall_lookupSelectorAssignmentsAgree
+      (DecomposeG.bundle (brWit input.rho 254 1))
+      "NoteCommit MessagePiece g" cfg.gates.g
+      { g := pcs.g, g1 := pcs.g1,
+        g2 := zCell cfg.hashConfig iHash 6 1 } _ () (by rfl),
+    pureRegionCall_lookupSelectorAssignmentsAgree
+      (DecomposeH.bundle (brWit input.psi 254 1))
+      "NoteCommit MessagePiece h" cfg.gates.h
+      { h := pcs.h, h0 := pcs.h0 } _ () (by rfl)⟩
 
 private theorem synthGdPkdValueCanonicity_lookupActivationsWellFormed
     (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
@@ -2475,6 +2563,43 @@ private theorem synthRhoPsiCanonicity_lookupActivationsWellFormed
       "NoteCommit input rho").call_lookupActivationsWellFormed _ _ _,
     (PsiCanonicity.bundle.toFormal
       "NoteCommit input psi").call_lookupActivationsWellFormed _ _ _⟩
+
+private theorem synthGdPkdValueCanonicity_lookupSelectorAssignmentsAgree
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (ccs : CheckCells) (gcs : GateCells) (iHash self : RegionIndex) :
+    ((synthGdPkdValueCanonicity cfg input pcs ccs gcs iHash).operations self)
+      |>.LookupSelectorAssignmentsAgree := by
+  simp only [synthGdPkdValueCanonicity, Circuit.operations_bind,
+    Circuit.operations_pure, keygen_norm, keygen_spine]
+  exact ⟨
+    pureRegionCall_lookupSelectorAssignmentsAgree PkdCanonicity.bundle
+      "NoteCommit input pk_d" cfg.gates.pkd _ _ () (by rfl),
+    pureRegionCall_lookupSelectorAssignmentsAgree ValueCanonicity.bundle
+      "NoteCommit input value" cfg.gates.value _ _ () (by rfl)⟩
+
+private theorem synthRhoPsiCanonicity_lookupSelectorAssignmentsAgree
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (ccs : CheckCells) (gcs : GateCells) (iHash self : RegionIndex) :
+    ((synthRhoPsiCanonicity cfg input pcs ccs gcs iHash).operations self)
+      |>.LookupSelectorAssignmentsAgree := by
+  simp only [synthRhoPsiCanonicity, Circuit.operations_bind,
+    Circuit.operations_pure, keygen_norm, keygen_spine]
+  exact pureRegionCall_lookupSelectorAssignmentsAgree PsiCanonicity.bundle
+    "NoteCommit input psi" cfg.gates.psi _ _ () (by rfl)
+
+private theorem synthGates_lookupSelectorAssignmentsAgree
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (ccs : CheckCells) (iHash self : RegionIndex) :
+    ((synthGates cfg input pcs ccs iHash).operations self)
+      |>.LookupSelectorAssignmentsAgree := by
+  simp only [synthGates, synthCanonicity, Circuit.operations_bind,
+    Operations.lookupSelectorAssignmentsAgree_append]
+  exact ⟨synthDecompositions_lookupSelectorAssignmentsAgree
+      cfg input pcs ccs iHash self,
+    synthGdPkdValueCanonicity_lookupSelectorAssignmentsAgree
+      cfg input pcs ccs _ iHash _,
+    synthRhoPsiCanonicity_lookupSelectorAssignmentsAgree
+      cfg input pcs ccs _ iHash _⟩
 
 private theorem synthPieces_fixedWritesLawful
     (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex)
@@ -2546,6 +2671,15 @@ instance elaborated (G : Generators) (R : FixedBase)
       G R Q hQ configInput input self configured
   copyCellsAssigned cfg _ configured input self :=
     synth_copyCellsAssigned G R Q hQ cfg input self configured
+  lookupSelectorAssignmentsAgree_of_registered := by
+    intro cfg counts hconfig input self program operations _hregistered
+    simp only [operations, program, Configure.output_pure, synth,
+      currentRegion_operations, Circuit.operations_bind,
+      Circuit.operations_pure, keygen_norm, keygen_spine]
+    exact ⟨synthPieces_lookupSelectorAssignmentsAgree cfg input self,
+      synthChecks_lookupSelectorAssignmentsAgree
+        G R Q hQ cfg input _ _ _ hconfig,
+      synthGates_lookupSelectorAssignmentsAgree cfg input _ _ _ _⟩
   fixedWritesLawful := by
     intro cfg counts hconfig input self
     simp only [Configure.output_pure] at hconfig ⊢

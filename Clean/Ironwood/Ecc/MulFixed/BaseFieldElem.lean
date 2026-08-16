@@ -223,6 +223,23 @@ def canonicityRegion (cfg : Config) (alpha z84 alphaPrime z13 z44 z43 : Assigned
   let _ ← copyAdvice z43 (cfg.canonAdvices 2) 2
   return ()
 
+@[keygen_norm, keygen_spine]
+theorem witnessCheck13_lookupSelectorAssignmentsAgree
+    (cfg : LookupRangeCheck.Config 10) (w : WitgenIR Fp 1) (region : RegionIndex) :
+    ((witnessCheck13 cfg w).operations region).LookupSelectorAssignmentsAgree := by
+  simpa only [witnessCheck13, LookupRangeCheck.witnessCheck, circuit_norm] using
+    LookupRangeCheck.witnessCheck_lookupSelectorAssignmentsAgree
+      10 13 false (by simp) cfg w region
+
+@[keygen_norm, keygen_spine]
+theorem canonicityRegion_lookupSelectorAssignmentsAgree
+    (cfg : Config) (alpha z84 alphaPrime z13 z44 z43 : AssignedCell Fp)
+    (region : RegionIndex) :
+    ((canonicityRegion cfg alpha z84 alphaPrime z13 z44 z43).operations region)
+      |>.LookupSelectorAssignmentsAgree := by
+  apply RegionOperations.lookupSelectorAssignmentsAgree_of_forall_isNotLookup
+  simp only [canonicityRegion, circuit_norm, RegionOperation.IsNotLookup]
+
 /-- Reduced footprint of the 13-word witness-check region. -/
 def witnessCheck13SynthesisSummary
     (cfg : LookupRangeCheck.Config 10) :
@@ -1852,6 +1869,20 @@ def circuit (B : FixedBase) : FormalCircuit Fp
   elaborated :=
     { keygenRequirements := keygenRequirements
       registered := synthesize_keygenRegistered B
+      lookupSelectorAssignmentsAgree_of_registered := by
+        intro configInput counts configured alpha self program operations _hregistered
+        let cfg := program.output counts
+        let innerConfigured : (inner B).Configured cfg :=
+          FormalRegionCircuit.Configured.ofPure (inner B) cfg
+            (by simpa [cfg, program, configure] using
+              (⟨configured.1, configured.2.2⟩ :
+                innerKeygenRequirements.configLawful cfg)) rfl
+        let addConfigured : Add.add.Configured cfg.superConfig.addConfig := by
+          simpa [cfg, program, configure] using configured.2.1
+        simp only [operations, synthesize, Circuit.operations_bind,
+          Circuit.operations_pure, operations_assignRegion,
+          output_assignRegion, nextRegionIndex_assignRegion,
+          keygen_norm, keygen_spine]
       lookupActivationsWellFormed config alpha region := by
         simp only [synthesize, Circuit.operations_bind,
           Circuit.operations_pure, operations_assignRegion,

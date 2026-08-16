@@ -570,6 +570,14 @@ theorem add_inputCells (config : Config) (hconfigured : add.Configured config)
     FormalRegionCircuit.Configured.inputCells hconfigured input =
       [input.p.x.cell, input.p.y.cell, input.q.x.cell, input.q.y.cell] := rfl
 
+theorem Configured.lookups_eq_nil {config : Config}
+    (configured : add.Configured config) : configured.lookups = [] := by
+  rcases configured with ⟨configInput, counts, hconfig, outputEq⟩
+  cases outputEq
+  simp only [FormalRegionCircuit.Configured.lookups,
+    FormalRegionCircuit.keygenRequirements,
+    ElaboratedRegionCircuit.keygenRequirements, add, circuit_norm, keygen_norm]
+
 /-- Both coordinates returned by complete addition are assigned by its call body. -/
 theorem add_output_cells_assigned (config : Config) (offset : ℕ)
     (input : Var Inputs Fp) (self : RegionIndex) (available : List Cell) :

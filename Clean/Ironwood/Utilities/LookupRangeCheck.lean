@@ -145,6 +145,26 @@ theorem qRunning_declared_by_rangeCheckLookup (K : ℕ) (cfg : Config K) :
     List.mem_cons] using
     qRunning_mem_rangeCheckLookup_selectorIndices K cfg
 
+@[keygen_norm]
+theorem mem_rangeCheckLookup_auxiliarySelectorIndices (K : ℕ) (cfg : Config K)
+    {selector : ℕ}
+    (hselector : selector ∈ (rangeCheckLookup K cfg).auxiliarySelectorIndices) :
+    selector = cfg.qRunning.index := by
+  simp only [rangeCheckLookup, rangeCheckLookupFor,
+    LookupArgument.auxiliarySelectorIndices, List.mem_filter] at hselector
+  rcases hselector with ⟨hselector, hne⟩
+  simp only [rangeCheckInputFor, List.flatMap_cons, List.flatMap_nil,
+    List.append_nil, Expression.selectorIndices, List.mem_append,
+    List.not_mem_nil] at hselector
+  rcases hselector with hselector | hselector
+  · have hmaster : selector = cfg.qLookup.index := by
+      simpa only [Expression.selectorIndices_querySelector,
+        List.mem_singleton] using hselector
+    exact False.elim ((bne_iff_ne.mp hne) hmaster)
+  · simp only [Expression.selectorIndices_querySelector,
+      Expression.selectorIndices_queryAdvice, List.mem_singleton] at hselector
+    tauto
+
 /-- The "Short lookup bitshift" gate, ported verbatim from `configure`
 (`lookup_range_check.rs:370-384`). Reads `word` at `Rotation::prev()` (−1), `shifted_word`
 at `Rotation::cur()` (0), `inv_two_pow_s` at `Rotation::next()` (+1); the single constraint
@@ -579,7 +599,29 @@ def shortRangeCheck (K numBits : ℕ) :
             FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount]
         · simp only [shortRangeCheckSynthesisSummary, circuit_norm,
             synthesis_summary_norm]
-      registered := by keygen_registration }
+      registered := by keygen_registration
+      lookupSelectorAssignmentsAgree_of_registered := by
+        intro configInput counts hconfig offset input region
+        dsimp only
+        intro _hregistered
+        simp only [circuit_norm, rangeCheckLookup,
+          RegionOperations.LookupSelectorAssignmentsAgree,
+          RegionOperation.LookupSelectorAssignmentsAgreeWith,
+          RegionOperation.ActivatesLookupSelectorAt,
+          SelectorEnabledAtIndex]
+        constructor
+        · apply List.forall_iff_forall_mem.mpr
+          intro _ _
+          constructor
+          · exact fun h => h
+          · rintro ⟨_, hrow⟩
+            omega
+        · apply List.forall_iff_forall_mem.mpr
+          intro _ _
+          constructor
+          · rintro ⟨_, hrow⟩
+            omega
+          · exact fun h => h }
 
   -- Ambient preconditions discharged by the caller: (1) the table is loaded — every usable
   -- table row holds a value `< 2^K`, the block holds exact contents, and the block fits the
@@ -702,6 +744,18 @@ def shortRangeCheck (K numBits : ℕ) :
       rw [hPowSplitFp]; field_simp; ring
     · -- the honest-prover contract: the output IS the extraction cell
       exact hOut.symm
+
+@[keygen_norm, keygen_spine]
+theorem shortRangeCheck_call_lookupSelectorAssignmentsAgree
+    (K numBits : ℕ) (cfg : Config K) (offset : ℕ)
+    (input : Unit) (region : RegionIndex) :
+    (((shortRangeCheck K numBits).call cfg offset input).operations region)
+      |>.LookupSelectorAssignmentsAgree :=
+  (shortRangeCheck K numBits).call_lookupSelectorAssignmentsAgree
+    cfg
+    (FormalRegionCircuit.Configured.ofPure
+      (shortRangeCheck K numBits) cfg (by keygen_registration) rfl)
+    offset input region
 
 @[synthesis_summary_norm]
 theorem shortRangeCheck_synthesisSummary_eq
@@ -920,6 +974,19 @@ def rangeCheckRound (K : ℕ) (cfg : Config K) (element : AssignedCell Fp) (idx 
   let _z ← assignAdvice cfg.runningSum (row + 1) (zWitness K (idx + 1) element)
   return ()
 
+@[keygen_norm]
+theorem rangeCheckRound_enablesLookupAuxiliarySelectors
+    (K : ℕ) (cfg : Config K) (element : AssignedCell Fp) (idx row : ℕ)
+    (self : RegionIndex) :
+    ((rangeCheckRound K cfg element idx row).operations self).Forall
+      RegionOperation.EnablesLookupAuxiliarySelectors := by
+  simp only [rangeCheckRound, circuit_norm,
+    RegionOperation.EnablesLookupAuxiliarySelectors]
+  apply List.forall_iff_forall_mem.mpr
+  intro selector hselector
+  rw [mem_rangeCheckLookup_auxiliarySelectorIndices K cfg hselector]
+  exact ⟨cfg.qRunning, by simp, by simp⟩
+
 theorem rangeCheckRound_synthesisSummary (K : ℕ) (cfg : Config K)
     (element : AssignedCell Fp) (idx row : ℕ) (self : RegionIndex) :
     FloorPlanner.regionSynthesisSummary
@@ -949,6 +1016,18 @@ split, under `circuit_norm`, into `∀ i : Fin numWords, <round i's predicate>` 
 def rangeCheckLoop (K : ℕ) (cfg : Config K) (element : AssignedCell Fp) (offset numWords : ℕ) :
     RegionCircuit Fp Unit :=
   RegionCircuit.forRange' offset 1 numWords (fun idx row => rangeCheckRound K cfg element idx row)
+
+@[keygen_norm]
+theorem rangeCheckLoop_enablesLookupAuxiliarySelectors
+    (K : ℕ) (cfg : Config K) (element : AssignedCell Fp)
+    (offset numWords : ℕ) (self : RegionIndex) :
+    ((rangeCheckLoop K cfg element offset numWords).operations self).Forall
+      RegionOperation.EnablesLookupAuxiliarySelectors := by
+  unfold rangeCheckLoop RegionCircuit.forRange'
+  rw [RegionCircuit.loopAux_forall]
+  intro i
+  exact rangeCheckRound_enablesLookupAuxiliarySelectors
+    K cfg element i (offset + i * 1) self
 
 @[keygen_norm]
 theorem rangeCheckLoop_copyCellsAssignedFrom (K : ℕ) (cfg : Config K)
@@ -1210,6 +1289,21 @@ def rangeCheckBody (K numWords : ℕ) (strict : Bool) (cfg : Config K) (offset :
   let z0 ← cellAt cfg.runningSum offset
   return { z0, zLast }
 
+@[keygen_norm]
+theorem rangeCheckBody_lookupSelectorAssignmentsAgree
+    (K numWords : ℕ) (strict : Bool) (cfg : Config K) (offset : ℕ)
+    (input : Inputs (AssignedCell Fp)) (self : RegionIndex) :
+    ((rangeCheckBody K numWords strict cfg offset input).operations self)
+      |>.LookupSelectorAssignmentsAgree := by
+  apply
+    RegionOperations.lookupSelectorAssignmentsAgree_of_enablesLookupAuxiliarySelectors
+  simp only [rangeCheckBody, circuit_norm,
+    RegionOperation.EnablesLookupAuxiliarySelectors, List.forall_append]
+  constructor
+  · exact rangeCheckLoop_enablesLookupAuxiliarySelectors
+      K cfg input.element offset numWords self
+  · cases strict <;> simp [RegionOperation.EnablesLookupAuxiliarySelectors]
+
 @[implicit_reducible]
 def rangeCheckElaborated (K numWords : ℕ) (strict : Bool) :
     ElaboratedRegionCircuit Fp (Config K) (Config K) Inputs Output
@@ -1236,6 +1330,12 @@ def rangeCheckElaborated (K numWords : ℕ) (strict : Bool) :
           simp [rangeCheckSynthesisSummary, rangeCheckLoopSummary, hn, circuit_norm,
             synthesis_summary_norm]
     registered := by keygen_registration [rangeCheckBody]
+    lookupSelectorAssignmentsAgree_of_registered := by
+      intro configInput counts hconfig offset input region
+      dsimp only
+      intro _hregistered
+      exact rangeCheckBody_lookupSelectorAssignmentsAgree
+        K numWords strict configInput offset input region
     copyCellsAssigned := by
       intro configInput counts hconfig offset input region
       cases strict with
@@ -1467,6 +1567,20 @@ def rangeCheckAtBody (K numWords : ℕ) (strict : Bool) (cfg : Config K)
   if strict then constrainConstant zLast (0 : Fp)
   return { z0, zLast }
 
+@[keygen_norm]
+theorem rangeCheckAtBody_lookupSelectorAssignmentsAgree
+    (K numWords : ℕ) (strict : Bool) (cfg : Config K) (offset : ℕ)
+    (input : Unit) (self : RegionIndex) :
+    ((rangeCheckAtBody K numWords strict cfg offset input).operations self)
+      |>.LookupSelectorAssignmentsAgree := by
+  apply
+    RegionOperations.lookupSelectorAssignmentsAgree_of_enablesLookupAuxiliarySelectors
+  simp only [rangeCheckAtBody, circuit_norm, List.forall_append]
+  constructor
+  · exact rangeCheckLoop_enablesLookupAuxiliarySelectors
+      K cfg (AssignedCell.of self offset cfg.runningSum) offset numWords self
+  · cases strict <;> simp [RegionOperation.EnablesLookupAuxiliarySelectors]
+
 @[circuit_norm]
 theorem rangeCheckAtBody_output (K numWords : ℕ) (strict : Bool) (cfg : Config K)
     (offset : ℕ) (input : Unit) (self : RegionIndex) :
@@ -1502,6 +1616,12 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool)
           simp [rangeCheckAtBody, rangeCheckAtSynthesisSummary, rangeCheckLoopSummary,
             hn, circuit_norm, synthesis_summary_norm]
       registered := by keygen_registration
+      lookupSelectorAssignmentsAgree_of_registered := by
+        intro configInput counts hconfig offset input region
+        dsimp only
+        intro _hregistered
+        exact rangeCheckAtBody_lookupSelectorAssignmentsAgree
+          K numWords strict configInput offset input region
       copyCellsAssigned := by
         intro configInput counts hconfig offset input region
         cases hb : strict with
@@ -1631,6 +1751,19 @@ def rangeCheckAt (K numWords : ℕ) (strict : Bool)
         · simp only [circuit_norm, Bool.false_eq_true, if_false, if_true] at h_output
           exact h_output.2.symm
 
+@[keygen_norm, keygen_spine]
+theorem rangeCheckAt_call_lookupSelectorAssignmentsAgree
+    (K numWords : ℕ) (strict : Bool)
+    (hstrict : strict = true → 0 < numWords) (cfg : Config K)
+    (offset : ℕ) (input : Unit) (region : RegionIndex) :
+    (((rangeCheckAt K numWords strict hstrict).call cfg offset input).operations region)
+      |>.LookupSelectorAssignmentsAgree :=
+  (rangeCheckAt K numWords strict hstrict).call_lookupSelectorAssignmentsAgree
+    cfg
+    (FormalRegionCircuit.Configured.ofPure
+      (rangeCheckAt K numWords strict hstrict) cfg (by keygen_registration) rfl)
+    offset input region
+
 @[synthesis_summary_norm]
 theorem rangeCheckAt_synthesisSummary_eq
     (K numWords : ℕ) (strict : Bool) (hstrict : strict = true → 0 < numWords)
@@ -1685,6 +1818,19 @@ def rangeCheckAtDecomposedBody (numWords : ℕ) (cfg : Config 10) (offset : ℕ)
   let z13 ← cellAt cfg.runningSum (offset + 13)
   return { z0, z1, z13 }
 
+@[keygen_norm]
+theorem rangeCheckAtDecomposedBody_lookupSelectorAssignmentsAgree
+    (numWords : ℕ) (cfg : Config 10) (offset : ℕ)
+    (input : Unit) (self : RegionIndex) :
+    ((rangeCheckAtDecomposedBody numWords cfg offset input).operations self)
+      |>.LookupSelectorAssignmentsAgree := by
+  apply
+    RegionOperations.lookupSelectorAssignmentsAgree_of_enablesLookupAuxiliarySelectors
+  simp only [rangeCheckAtDecomposedBody, circuit_norm,
+    RegionOperation.EnablesLookupAuxiliarySelectors, List.forall_append]
+  exact rangeCheckLoop_enablesLookupAuxiliarySelectors
+    10 cfg (AssignedCell.of self offset cfg.runningSum) offset numWords self
+
 @[circuit_norm]
 theorem rangeCheckAtDecomposedBody_output (numWords : ℕ) (cfg : Config 10)
     (offset : ℕ) (input : Unit) (self : RegionIndex) :
@@ -1719,6 +1865,12 @@ def rangeCheckAtDecomposed (numWords : ℕ) (h13 : 13 ≤ numWords)
           simp [rangeCheckAtDecomposedBody, rangeCheckAtDecomposedSynthesisSummary,
             rangeCheckLoopSummary, hn, circuit_norm, synthesis_summary_norm]
       registered := by keygen_registration
+      lookupSelectorAssignmentsAgree_of_registered := by
+        intro configInput counts hconfig offset input region
+        dsimp only
+        intro _hregistered
+        exact rangeCheckAtDecomposedBody_lookupSelectorAssignmentsAgree
+          numWords configInput offset input region
       copyCellsAssigned := by
         intro configInput counts hconfig offset input region
         simp only [rangeCheckAtDecomposedBody, Configure.output_pure,
@@ -1925,6 +2077,14 @@ theorem witnessCheckDecomposed_lookupActivationsWellFormed
       |>.LookupActivationsWellFormed := by
   simp only [witnessCheckDecomposed, circuit_norm, keygen_norm, keygen_spine]
 
+/-- The decomposed witness wrapper preserves lookup-selector agreement. -/
+@[keygen_norm, keygen_spine]
+theorem witnessCheckDecomposed_lookupSelectorAssignmentsAgree
+    (cfg : Config 10) (w : WitgenIR Fp 1) (i : RegionIndex) :
+    ((witnessCheckDecomposed cfg w).operations i)
+      |>.LookupSelectorAssignmentsAgree := by
+  simp only [witnessCheckDecomposed, circuit_norm, keygen_norm, keygen_spine]
+
 /-! ## `copy_check` — the layouter-level range-check wrapper
 
 Rust `LookupRangeCheck::copy_check` (`lookup_range_check.rs:124-140`): a
@@ -1942,6 +2102,18 @@ def copyCheck (K numWords : ℕ) (strict : Bool) :
     FormalCircuit Fp (Config K) (Config K) Inputs Output :=
   (rangeCheck K numWords strict).toFormal
     s!"{numWords} words range check"
+
+@[keygen_norm, keygen_spine]
+theorem copyCheck_call_lookupSelectorAssignmentsAgree
+    (K numWords : ℕ) (strict : Bool) (cfg : Config K)
+    (input : Var Inputs Fp) (region : RegionIndex) :
+    (((copyCheck K numWords strict).call cfg input).operations region)
+      |>.LookupSelectorAssignmentsAgree :=
+  (copyCheck K numWords strict).call_lookupSelectorAssignmentsAgree
+    cfg
+    (FormalCircuit.Configured.ofPure
+      (copyCheck K numWords strict) cfg () rfl)
+    input region
 
 def copyCheckSynthesisSummary (K numWords : ℕ) (strict : Bool)
     (cfg : Config K) : FloorPlanner.SynthesisSummary :=
@@ -2105,6 +2277,15 @@ theorem witnessShortCheck_lookupActivationsWellFormed
     (i : RegionIndex) :
     ((witnessShortCheck K numBits cfg w).operations i)
       |>.LookupActivationsWellFormed := by
+  simp only [witnessShortCheck, circuit_norm, keygen_norm, keygen_spine]
+
+/-- The short witness wrapper preserves lookup-selector agreement. -/
+@[keygen_norm, keygen_spine]
+theorem witnessShortCheck_lookupSelectorAssignmentsAgree
+    (K numBits : ℕ) (cfg : Config K) (w : WitgenIR Fp 1)
+    (i : RegionIndex) :
+    ((witnessShortCheck K numBits cfg w).operations i)
+      |>.LookupSelectorAssignmentsAgree := by
   simp only [witnessShortCheck, circuit_norm, keygen_norm, keygen_spine]
 
 /-- Witnessing a short range check preserves the child's single deferred
@@ -2362,6 +2543,16 @@ theorem witnessCheck_lookupActivationsWellFormed
     (w : WitgenIR Fp 1) (i : RegionIndex) :
     ((witnessCheck K numWords strict cfg w hstrict).operations i)
       |>.LookupActivationsWellFormed := by
+  simp only [witnessCheck, circuit_norm, keygen_norm, keygen_spine]
+
+/-- The witness wrapper preserves lookup-selector agreement. -/
+@[keygen_norm, keygen_spine]
+theorem witnessCheck_lookupSelectorAssignmentsAgree
+    (K numWords : ℕ) (strict : Bool)
+    (hstrict : strict = true → 0 < numWords) (cfg : Config K)
+    (w : WitgenIR Fp 1) (i : RegionIndex) :
+    ((witnessCheck K numWords strict cfg w hstrict).operations i)
+      |>.LookupSelectorAssignmentsAgree := by
   simp only [witnessCheck, circuit_norm, keygen_norm, keygen_spine]
 
 @[keygen_norm, keygen_helper]

@@ -2110,6 +2110,22 @@ theorem synthCrossAddressChecks_hasNoFixedWrites
   right
   simp [crossAddressColumns]
 
+@[keygen_norm]
+theorem synthCrossAddressChecks_lookupSelectorAssignmentsAgree
+    (config : Config) (points : Var AddressPoints Fp)
+    (region : RegionIndex) :
+    ((synthCrossAddressChecks config points).operations region)
+      |>.LookupSelectorAssignmentsAgree := by
+  rw [synthCrossAddressChecks, operations_assignRegion,
+    Operations.lookupSelectorAssignmentsAgree_region_cons]
+  constructor
+  · apply RegionOperations.lookupSelectorAssignmentsAgree_of_forall_isNotLookup
+    rw [RegionCircuit.forRange'_forall]
+    intro index
+    simp only [synthCrossAddressRow, circuit_norm,
+      RegionOperation.IsNotLookup]
+  · exact Operations.lookupSelectorAssignmentsAgree_nil
+
 @[keygen_helper]
 theorem synthCrossAddressChecks_keygenRegistered
     (cfg : Config) (pts : Var AddressPoints Fp)

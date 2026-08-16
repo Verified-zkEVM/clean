@@ -123,6 +123,15 @@ theorem witnessMessagePiece_lookupActivationsWellFormed
       |>.LookupActivationsWellFormed := by
   simp only [witnessMessagePiece, circuit_norm, keygen_spine]
 
+@[keygen_norm, keygen_spine]
+theorem witnessMessagePiece_lookupSelectorAssignmentsAgree
+    (cfg : Sinsemilla.HashPiece.Config) (w : WitgenIR Fp 1)
+    (region : RegionIndex) :
+    ((witnessMessagePiece cfg w).operations region)
+      |>.LookupSelectorAssignmentsAgree := by
+  simp only [witnessMessagePiece, operations_assignRegion,
+    keygen_norm, keygen_spine]
+
 /-- Witnessing a message piece requests no deferred constants. -/
 @[synthesis_summary_norm]
 theorem witnessMessagePiece_synthesisSummary_constantSiteCount

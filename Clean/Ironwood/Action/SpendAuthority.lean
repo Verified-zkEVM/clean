@@ -153,6 +153,14 @@ def circuit (G : FixedBase) : FormalCircuit Fp
             cfg.1 hconfig.1 input.alpha self <;> keygen_registration
         · apply Ecc.Add.addFormal.call_keygenRegistered
             cfg.2 hconfig.2 _ (self + 2) <;> keygen_registration
+      lookupSelectorAssignmentsAgree_of_registered := by
+        intro cfg counts hconfig input self program operations _hregistered
+        simp only [operations, program, Configure.output_pure,
+          Circuit.operations_bind, Circuit.operations_pure,
+          FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call',
+          FormalCircuit.call_regionCount',
+          Ecc.MulFixed.FullWidth.circuit_regionCount,
+          keygen_norm, keygen_spine]
       copyCellsAssigned := by
         intro cfg _ hconfig input self
         simpa only [keygen_norm, keygen_spine, circuit_norm] using

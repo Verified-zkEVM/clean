@@ -803,6 +803,7 @@ private theorem synthWitness_fixedWritesLawful (G : Generators)
       hregionColumns
   · rw [synthWitness_loadedTableColumns_eq]
     exact configure_output_generatorTableColumns_nodup G counts
+
   · rw [hregionColumns]
     exact List.disjoint_nil_right _
   · rw [synthWitness_loadedTableColumns_eq, configure_delta_constants,
@@ -817,6 +818,28 @@ private theorem synthWitness_fixedWritesLawful (G : Generators)
     rw [Config.generatorTableColumns, List.disjoint_left] at hdisjoint
     exact hdisjoint htable
       (configureBase_lagrangeCoeff_mem_regionFixedColumns G counts 0)
+
+private theorem synthWitness_lookupSelectorAssignmentsAgree
+    (G : Generators) (counts : ConfigureCounts) (i : RegionIndex) :
+    let cfg := (configure G).output counts
+    ((synthWitness G hintWitnesses cfg).operations i)
+      |>.LookupSelectorAssignmentsAgree := by
+  have hpoint :=
+    (eccFullConfigureCertificate G counts).witnessPointFormal.configured
+  have hpointNonId :=
+    (eccFullConfigureCertificate G counts).witnessPointNonIdFormal.configured
+  dsimp only [synthWitness, loadPrivate, Sinsemilla.load]
+  simp only [keygen_spine]
+  repeat' first
+    | (guard_target =~ (_ ∧ _); constructor)
+  all_goals
+    first
+    | apply Ecc.WitnessPoint.pointFormal.call_lookupSelectorAssignmentsAgree _
+        hpoint
+    | apply Ecc.WitnessPoint.pointNonIdFormal.call_lookupSelectorAssignmentsAgree _
+        hpointNonId
+    | simp [RegionOperations.LookupSelectorAssignmentsAgree,
+        RegionOperation.LookupSelectorAssignmentsAgreeWith]
 
 private theorem synthChecks_keygenRegistered (G : Generators) (B : Bases)
     (counts : ConfigureCounts) (i : RegionIndex) :
@@ -1150,6 +1173,54 @@ private theorem synthChecks_fixedWritesLawful
   rw [synthChecks_synthesisSummary_eq,
     synthChecksSynthesisSummary_tableRowExtent_eq]
 
+private theorem synthChecks_lookupSelectorAssignmentsAgree
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (cfg : Config) (hcfg : cfg = (configure G).output counts)
+    (wc : WitnessCells) (i : RegionIndex) :
+    ((synthChecks G B hintWitnesses cfg wc).operations i)
+      |>.LookupSelectorAssignmentsAgree := by
+  have hmerkle1 := synthChecksMerkle1Configured G B counts cfg hcfg
+  have hmerkle2 := synthChecksMerkle2Configured G B counts cfg hcfg
+  have hvalueCommit := synthChecksValueCommitConfigured G B counts cfg hcfg
+  have hderiveNullifier :=
+    synthChecksDeriveNullifierConfigured G B counts cfg hcfg
+  have hspendAuthority :=
+    synthChecksSpendAuthorityConfigured G B counts cfg hcfg
+  have hcommitIvk := synthChecksCommitIvkConfigured G B counts cfg hcfg
+  have haddressIntegrity :=
+    synthChecksAddressIntegrityConfigured G counts cfg hcfg
+  rw [synthChecks_eq]
+  unfold synthChecksProgram loadPrivate
+  simp only [keygen_spine]
+  repeat' first
+    | (guard_target =~ (_ ∧ _); constructor)
+  all_goals
+    first
+    | apply
+        (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+          B.merkleQ_onCurve 0 16 (by norm_num)
+          hintWitnesses.merkleSib
+          hintWitnesses.merkleSwap).call_lookupSelectorAssignmentsAgree _
+            hmerkle1
+    | apply
+        (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+          B.merkleQ_onCurve 16 16 (by norm_num)
+          (fun j => hintWitnesses.merkleSib (16 + j))
+          (fun j => hintWitnesses.merkleSwap
+            (16 + j))).call_lookupSelectorAssignmentsAgree _ hmerkle2
+    | apply (ValueCommit.circuit B.valueCommitV
+        B.valueCommitR).call_lookupSelectorAssignmentsAgree _ hvalueCommit
+    | apply (DeriveNullifier.circuit
+        B.nullifierK).call_lookupSelectorAssignmentsAgree _ hderiveNullifier
+    | apply (SpendAuthority.circuit
+        B.spendAuthG).call_lookupSelectorAssignmentsAgree _ hspendAuthority
+    | apply (CommitIvk.Main.circuit G B.commitIvkR B.ivkQ
+        B.ivkQ_onCurve).call_lookupSelectorAssignmentsAgree _ hcommitIvk
+    | apply AddressIntegrity.circuit.call_lookupSelectorAssignmentsAgree _
+        haddressIntegrity
+    | simp [RegionOperations.LookupSelectorAssignmentsAgree,
+        RegionOperation.LookupSelectorAssignmentsAgreeWith]
+
 private theorem synthChecks_loadedTableColumns_eq_nil
     (G : Generators) (B : Bases) (cfg : Config)
     (wc : WitnessCells) (i : RegionIndex) :
@@ -1379,6 +1450,34 @@ private theorem synthNotes_fixedWritesLawful
     (synthNotes_fixedAssignmentsAgree G B counts wc cc i)
   rw [synthNotes_synthesisSummary_eq,
     synthNotesSynthesisSummary_tableRowExtent_eq]
+
+private theorem synthNotes_lookupSelectorAssignmentsAgree
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (wc : WitnessCells) (cc : CheckCells) (i : RegionIndex) :
+    let cfg := (configure G).output counts
+    ((synthNotes G B hintWitnesses cfg wc cc).operations i)
+      |>.LookupSelectorAssignmentsAgree := by
+  have hold := (noteCommitOldCertificate G B counts).configured
+  have hnew := (noteCommitNewCertificate G B counts).configured
+  have hpoint :=
+    (eccConfigureCertificate G counts).witnessPointNonIdFormal.configured
+  let cfg := (configure G).output counts
+  simp only
+  rw [synthNotes_eq]
+  unfold synthNotesProgram loadPrivate
+  simp only [keygen_spine]
+  repeat' first
+    | (guard_target =~ (_ ∧ _); constructor)
+  all_goals
+    first
+    | apply (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
+        B.noteQ_onCurve).call_lookupSelectorAssignmentsAgree _ hold
+    | apply (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
+        B.noteQ_onCurve).call_lookupSelectorAssignmentsAgree _ hnew
+    | apply Ecc.WitnessPoint.pointNonIdFormal.call_lookupSelectorAssignmentsAgree _
+        hpoint
+    | simp [RegionOperations.LookupSelectorAssignmentsAgree,
+        RegionOperation.LookupSelectorAssignmentsAgreeWith]
 
 private theorem synthNotes_loadedTableColumns_eq_nil
     (G : Generators) (B : Bases) (cfg : Config)
@@ -1685,6 +1784,14 @@ instance elaborated (G : Generators) (B : Bases) :
           synthChecks_keygenRegistered_full G B counts i
       · simpa only [List.map_nil, List.append_nil] using
           synthNotes_keygenRegistered_full G B counts i
+  lookupSelectorAssignmentsAgree_of_registered := by
+    intro configInput counts hconfig input i program operations _hregistered
+    simp only [operations, program, main, CircuitPreIronwood.synthesize,
+      synthesizeBase, Circuit.operations_bind, Circuit.operations_pure,
+      keygen_norm, keygen_spine]
+    exact ⟨synthWitness_lookupSelectorAssignmentsAgree G counts i,
+      synthChecks_lookupSelectorAssignmentsAgree G B counts _ rfl _ _,
+      synthNotes_lookupSelectorAssignmentsAgree G B counts _ _ _⟩
   fixedWritesLawful := by
     intro configInput counts hconfig input i
     exact main_fixedWritesLawful G B counts i
@@ -3149,6 +3256,23 @@ private theorem mainPost_lookupActivationsWellFormed
     exact (elaborated G B).lookupActivationsWellFormed config () i
   · keygen_registration [synthCrossAddressChecks]
 
+private theorem mainPost_lookupSelectorAssignmentsAgree
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (i : RegionIndex) :
+    let config := (configure G).output counts
+    ((mainPost G B config ()).operations i)
+      |>.LookupSelectorAssignmentsAgree := by
+  let config := (configure G).output counts
+  dsimp only [mainPost]
+  simp only [Circuit.operations_bind, Circuit.operations_pure,
+    List.append_nil,
+    Operations.lookupSelectorAssignmentsAgree_append]
+  constructor
+  · exact (baseCircuit G B).call_lookupSelectorAssignmentsAgree config
+      (FormalCircuit.Configured.ofOutput (baseCircuit G B) () counts ())
+      () i
+  · exact synthCrossAddressChecks_lookupSelectorAssignmentsAgree config _ _
+
 instance elaboratedPost (G : Generators) (B : Bases) :
     ElaboratedCircuit Fp Unit Config unit unit
       (fun _ => configure G) (mainPost G B) where
@@ -3171,6 +3295,12 @@ instance elaboratedPost (G : Generators) (B : Bases) :
     cases input
     simpa only [KeygenRequirements.inputCells] using
       mainPost_copyCellsAssigned G B counts i
+  lookupSelectorAssignmentsAgree_of_registered := by
+    intro configInput counts hconfig input i program operations _hregistered
+    cases configInput
+    cases input
+    simpa only [operations, program] using
+      mainPost_lookupSelectorAssignmentsAgree G B counts i
   lookupActivationsWellFormed := by
     intro config input i
     cases input

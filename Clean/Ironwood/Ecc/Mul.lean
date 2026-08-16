@@ -593,6 +593,15 @@ theorem mainKeygenRequirements_lookups (cfg : Config)
         configured.2.2.1.lookups ++ configured.2.2.2.lookups := rfl
 
 @[keygen_norm]
+theorem mainKeygenRequirements_lookups_eq_nil (cfg : Config)
+    (configured : mainKeygenRequirements.configLawful cfg) :
+    mainKeygenRequirements.lookups cfg configured = [] := by
+  rw [mainKeygenRequirements_lookups]
+  simp only [Add.Configured.lookups_eq_nil,
+    MulIncomplete.Configured.lookups_eq_nil,
+    MulComplete.Configured.lookups_eq_nil, List.nil_append]
+
+@[keygen_norm]
 theorem mainKeygenRequirements_fixedColumns (cfg : Config)
     (configured : mainKeygenRequirements.configLawful cfg) :
     mainKeygenRequirements.fixedColumns cfg configured =
@@ -1019,6 +1028,13 @@ def mainElaborated : ElaboratedRegionCircuit Fp Config Config Inputs MainOutputs
     intro cfg counts hconfig offset input region
     simpa only [Configure.output_pure, mainKeygenRequirements] using
       mainSynthesize_copyCellsAssigned cfg hconfig input region
+  lookupSelectorAssignmentsAgree_of_registered := by
+    intro cfg counts hconfig offset input region program operations hregistered
+    clear_value operations
+    apply
+      RegionOperations.lookupSelectorAssignmentsAgree_of_keygenRegistered_noLookups
+    simpa only [mainKeygenRequirements_lookups_eq_nil, program,
+      Configure.delta_pure, List.nil_append] using hregistered
   lookupActivationsWellFormed := by keygen_registration [mainSynthesize]
   output cfg _ _ self :=
     { result :=
@@ -1901,6 +1917,14 @@ private theorem synthesize_copyCellsAssigned
     rw [synthesize_synthesisSummary_eq]
     exact mulSynthesisSummary_hasNoFixedWrites
       ((configure configInput.1 configInput.2.1 configInput.2.2).output counts)
+  lookupSelectorAssignmentsAgree_of_registered := by
+    intro configInput counts hconfig input region program operations _hregistered
+    simp only [operations, synthesize, Circuit.operations_bind,
+      Circuit.operations_pure, keygen_norm, keygen_spine]
+    exact (MulOverflow.circuit 10 hKW10)
+      |>.call_lookupSelectorAssignmentsAgree
+        (program.output counts).overflowConfig
+        (overflowConfigured configInput counts) _ _
   lookupActivationsWellFormed config input region := by
     simp only [synthesize, Circuit.operations_bind,
       Circuit.operations_pure, Operations.LookupActivationsWellFormed,
