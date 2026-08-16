@@ -96,6 +96,9 @@ def keygenRequirements (K : FixedBase) : KeygenRequirements Fp
   lookups _ configured :=
     configured.1.lookups ++ configured.2.1.lookups ++
       configured.2.2.1.lookups ++ configured.2.2.2.lookups
+  fixedColumns _ configured :=
+    configured.1.fixedColumns ++ configured.2.1.fixedColumns ++
+      configured.2.2.1.fixedColumns ++ configured.2.2.2.fixedColumns
   permutationColumns cfg configured :=
     configured.1.permutationColumns ++ configured.2.1.permutationColumns ++
       configured.2.2.1.permutationColumns ++ configured.2.2.2.permutationColumns ++
@@ -189,6 +192,25 @@ def circuit (K : FixedBase) : FormalCircuit Fp
             apply Ecc.Add.addFormal.call_keygenRegistered cfg.2.2.2
                 hconfig.2.2.2 _ (self + 8) <;>
               keygen_registration⟩
+      fixedWritesLawful := by
+        intro cfg _ hconfig input self
+        apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree
+        · simp only [Configure.output_pure, synthesize,
+            Circuit.operations_bind, Circuit.operations_pure,
+            List.forall_append, circuit_norm]
+          constructor
+          · exact (Poseidon.hash (Hash.ConstantLength.capacity 2))
+              |>.call_fixedAssignmentsAgree cfg.1 hconfig.1 _ self
+          constructor
+          · exact AddChip.addFormal.call_fixedAssignmentsAgree
+              cfg.2.1 hconfig.2.1 _ (self + 3)
+          constructor
+          · exact (Ecc.MulFixed.BaseFieldElem.circuit K)
+              |>.call_fixedAssignmentsAgree cfg.2.2.1 hconfig.2.2.1 _
+                (self + 4)
+          · exact Ecc.Add.addFormal.call_fixedAssignmentsAgree
+              cfg.2.2.2 hconfig.2.2.2 _ (self + 8)
+        · simp only [synthesize, circuit_norm, synthesis_summary_norm]
       copyCellsAssigned := by
         intro cfg counts hconfig input self
         simp only [synthesize, Circuit.operations_bind, Circuit.operations_pure,

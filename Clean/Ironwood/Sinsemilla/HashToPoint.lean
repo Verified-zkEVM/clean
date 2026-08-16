@@ -51,6 +51,14 @@ def witnessMessagePieceSynthesisSummary
       [.column .advice cfg.witnessPieces.index] 1 0)
 
 @[synthesis_summary_norm]
+theorem witnessMessagePieceSynthesisSummary_hasNoFixedWrites
+    (cfg : Sinsemilla.HashPiece.Config) :
+    (witnessMessagePieceSynthesisSummary cfg).HasNoFixedWrites := by
+  simp only [witnessMessagePieceSynthesisSummary, synthesis_summary_norm]
+  intro index hcolumn
+  simp at hcolumn
+
+@[synthesis_summary_norm]
 theorem witnessMessagePiece_synthesisSummary
     (cfg : Sinsemilla.HashPiece.Config) (w : WitgenIR Fp 1)
     (region : RegionIndex) :
@@ -59,6 +67,16 @@ theorem witnessMessagePiece_synthesisSummary
         witnessMessagePieceSynthesisSummary cfg := by
   simp only [witnessMessagePieceSynthesisSummary, witnessMessagePiece,
     operations_assignRegion, circuit_norm, synthesis_summary_norm]
+
+theorem witnessMessagePiece_fixedWritesLawful
+    (cfg : Sinsemilla.HashPiece.Config) (w : WitgenIR Fp 1)
+    (region : RegionIndex) (constantColumns : List (Column .fixed)) :
+    ((witnessMessagePiece cfg w).operations region)
+      |>.FixedWritesLawful constantColumns := by
+  apply Operations.HasNoFixedWrites.fixedWritesLawful
+  apply FloorPlanner.SynthesisSummary.HasNoFixedWrites.hasNoFixedWrites
+  rw [witnessMessagePiece_synthesisSummary]
+  exact witnessMessagePieceSynthesisSummary_hasNoFixedWrites cfg
 
 @[circuit_norm]
 theorem witnessMessagePiece_nextRegionIndex

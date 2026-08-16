@@ -2782,6 +2782,11 @@ def RegionOperations.FixedAssignmentsAgree
       .assignFixed column row right ∈ operations →
         left = right
 
+/-- A layouter operation's region-local fixed assignments are unambiguous. -/
+def Operation.FixedAssignmentsAgree : Operation F → Prop
+  | .region _ body => body.FixedAssignmentsAgree
+  | _ => True
+
 /-- A stream containing no fixed writes has unambiguous fixed assignments. -/
 theorem RegionOperations.HasNoFixedAssignments.fixedAssignmentsAgree
     {operations : RegionOperations F}
@@ -2999,10 +3004,7 @@ separates different regions, and its constants allocator uses the remaining cell
 -/
 structure Operations.FixedWritesLawful
     (operations : Operations F) (constantColumns : List (Column .fixed)) : Prop where
-  regionAssignmentsAgree : operations.Forall fun operation =>
-    match operation with
-    | .region _ body => body.FixedAssignmentsAgree
-    | _ => True
+  regionAssignmentsAgree : operations.Forall Operation.FixedAssignmentsAgree
   loadedTableColumns_nodup : operations.loadedTableColumns.Nodup
   loadedTableColumns_disjoint_regionFixedColumns :
     operations.loadedTableColumns.Disjoint operations.regionFixedColumns
@@ -3036,10 +3038,7 @@ law. This is the compositional constructor used by wrappers whose children may w
 fixed cells but do not load tables. -/
 theorem Operations.FixedWritesLawful.ofRegionAssignmentsAgree
     {operations : Operations F} {constantColumns : List (Column .fixed)}
-    (hregions : operations.Forall fun operation =>
-      match operation with
-      | .region _ body => body.FixedAssignmentsAgree
-      | _ => True)
+    (hregions : operations.Forall Operation.FixedAssignmentsAgree)
     (htable : (FloorPlanner.synthesisSummary operations).tableRowExtent = 0) :
     operations.FixedWritesLawful constantColumns := by
   have hloaded :=

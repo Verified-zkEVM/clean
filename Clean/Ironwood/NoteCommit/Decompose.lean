@@ -46,6 +46,13 @@ def synthesisSummary (config : Config) (offset : ℕ) :
       .column .advice config.colR.index]
     (offset + 2) 0
 
+@[synthesis_summary_norm]
+theorem synthesisSummary_hasNoFixedColumns (config : Config) (offset : ℕ) :
+    (synthesisSummary config offset).HasNoFixedColumns := by
+  unfold synthesisSummary
+  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
+
 /-- Rust `DecomposeB::assign` (`note_commit.rs:179-215`), parameterized by the `b_1`
 witness program (Rust: `RangeConstrained::bitrange_of(gd_x, 254..255)`). Output is the
 witnessed `b_1` cell; `Spec` is the donor `DecomposeB.Gate.Spec`. -/
@@ -157,6 +164,13 @@ def synthesisSummary (config : Config) (offset : ℕ) :
       .column .advice config.colR.index]
     (offset + 2) 0
 
+@[synthesis_summary_norm]
+theorem synthesisSummary_hasNoFixedColumns (config : Config) (offset : ℕ) :
+    (synthesisSummary config offset).HasNoFixedColumns := by
+  unfold synthesisSummary
+  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
+
 /-- Rust `DecomposeD::assign` (`note_commit.rs:297-340`), parameterized by the `d_0`
 witness program (bit 254 of `x(pk_d)`). Output is the witnessed `d_0` cell; `Spec` is
 the donor `DecomposeD.Gate.Spec`. -/
@@ -265,6 +279,13 @@ def synthesisSummary (config : Config) (offset : ℕ) :
       .column .advice config.colR.index]
     (offset + 1) 0
 
+@[synthesis_summary_norm]
+theorem synthesisSummary_hasNoFixedColumns (config : Config) (offset : ℕ) :
+    (synthesisSummary config offset).HasNoFixedColumns := by
+  unfold synthesisSummary
+  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
+
 /-- Rust `DecomposeE::assign` (`note_commit.rs:418-448`): pure copies, no in-gate
 witness. `Spec` is the donor `DecomposeE.Gate.Spec`. -/
 def bundle : FormalRegionCircuit Fp Config Config Inputs unit where
@@ -339,6 +360,13 @@ def synthesisSummary (config : Config) (offset : ℕ) :
       .column .advice config.colL.index,
       .column .advice config.colM.index]
     (offset + 2) 0
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_hasNoFixedColumns (config : Config) (offset : ℕ) :
+    (synthesisSummary config offset).HasNoFixedColumns := by
+  unfold synthesisSummary
+  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
 
 /-- Rust `DecomposeG::assign` (`note_commit.rs:540-575`), parameterized by the `g_0`
 witness program (bit 254 of `rho`). Output is the witnessed `g_0` cell; `Spec` is the
@@ -441,6 +469,13 @@ def synthesisSummary (config : Config) (offset : ℕ) :
       .column .advice config.colM.index,
       .column .advice config.colR.index]
     (offset + 1) 0
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_hasNoFixedColumns (config : Config) (offset : ℕ) :
+    (synthesisSummary config offset).HasNoFixedColumns := by
+  unfold synthesisSummary
+  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
 
 /-- Rust `DecomposeH::assign` (`note_commit.rs:660-694`), parameterized by the `h_1`
 witness program (bit 254 of `psi`). Output is the witnessed `h_1` cell; `Spec` is the

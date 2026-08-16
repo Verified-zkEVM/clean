@@ -533,6 +533,18 @@ theorem FormalCircuit.foldCall_forall (property : Operation F → Prop) (m : ℕ
   rw [FormalCircuit.foldCall_operations,
     FormalCircuit.foldOps_forall c toInput config init i₀]
 
+/-- Fixed-assignment agreement composes over a serial fold from the configured
+law of each folded child. -/
+theorem FormalCircuit.foldCall_fixedAssignmentsAgree
+    (m : ℕ) (configured : ∀ i : Fin m, (c i).Configured config) :
+    ((FormalCircuit.foldCall c toInput config init m).operations i₀).Forall
+      Operation.FixedAssignmentsAgree := by
+  rw [FormalCircuit.foldCall_forall]
+  intro i
+  exact (c i).call_fixedAssignmentsAgree config (configured i)
+    (FormalCircuit.foldState c toInput config init i₀ i).1
+    (FormalCircuit.foldState c toInput config init i₀ i).2
+
 /-- Register a serial fold compositionally from one configured handle per round and
 an invariant covering the equality columns of each folded input. -/
 theorem FormalCircuit.foldCall_keygenRegistered

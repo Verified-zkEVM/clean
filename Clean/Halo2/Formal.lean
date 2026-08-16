@@ -1032,10 +1032,8 @@ theorem call_fixedAssignmentsAgree
     (self : FormalCircuit F ConfigInput Config Input Output)
     (config : Config) (configured : self.Configured config)
     (input : Var Input F) (region : RegionIndex) :
-    ((self.call config input).operations region).Forall fun operation =>
-      match operation with
-      | .region _ body => body.FixedAssignmentsAgree
-      | _ => True :=
+    ((self.call config input).operations region).Forall
+      Operation.FixedAssignmentsAgree :=
   (self.call_fixedWritesLawful config configured input region)
     |>.regionAssignmentsAgree
 

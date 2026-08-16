@@ -155,6 +155,9 @@ def keygenRequirements (G : Generators) (ns : List ℕ)
   lookups _ configured :=
     configured.1.lookups ++ configured.2.1.lookups ++
       configured.2.2.lookups
+  fixedColumns _ configured :=
+    configured.1.fixedColumns ++ configured.2.1.fixedColumns ++
+      configured.2.2.fixedColumns
   permutationColumns _ configured :=
     configured.1.permutationColumns ++ configured.2.1.permutationColumns ++
       configured.2.2.permutationColumns
@@ -168,6 +171,12 @@ def commitSynthesisSummary (ns : List ℕ)
     ((HashToPoint.hashCircuitSynthesisSummary ns cfg.2.1).combine
       (FloorPlanner.SynthesisSummary.ofRegion
         (Ecc.Add.synthesisSummary cfg.2.2 0)))
+
+@[synthesis_summary_norm]
+theorem commitSynthesisSummary_tableRowExtent_eq (ns : List ℕ)
+    (cfg : Ecc.MulFixed.FullWidth.Config × HashPiece.Config × Ecc.Add.Config) :
+    (commitSynthesisSummary ns cfg).tableRowExtent = 0 := by
+  simp only [commitSynthesisSummary, synthesis_summary_norm]
 
 def synthesize (G : Generators) (ns : List ℕ) (R : FixedBase)
     (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ [])
@@ -219,6 +228,10 @@ def commit (G : Generators) (ns : List ℕ)
             simp only [keygenRequirements, Configure.delta_pure,
               List.append_nil, List.mem_append]
             exact Or.inl (Or.inr hlookup)
+          · intro column hcolumn
+            simp only [keygenRequirements, Configure.fixedColumns_pure,
+              List.append_nil, List.mem_append]
+            exact Or.inl (Or.inr hcolumn)
           · intro column hcolumn
             simp only [keygenRequirements, Configure.delta_pure,
               KeygenRequirements.inputPermutationColumns,
@@ -273,6 +286,27 @@ def commit (G : Generators) (ns : List ℕ)
             · exact Or.inr (Or.inl
                 (Ecc.MulFixed.FullWidth.circuit_call_output_cells_assigned
                   R cfg.1 input.r self).2)
+      fixedWritesLawful := by
+        intro cfg _ hconfig input self
+        apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree
+        · simpa only [Configure.output_pure, synthesize,
+            Circuit.operations_bind, Circuit.operations_pure,
+            List.forall_append, circuit_norm, Nat.add_assoc] using
+            And.intro
+              ((Ecc.MulFixed.FullWidth.circuit R).call_fixedAssignmentsAgree
+                cfg.1 hconfig.1 input.r self)
+              (And.intro
+                ((HashToPoint.hashCircuit G ns Q hQ hns)
+                  |>.call_fixedAssignmentsAgree cfg.2.1 hconfig.2.1
+                    { pieces := input.pieces } (self + 2))
+                (Ecc.Add.addFormal.call_fixedAssignmentsAgree
+                  cfg.2.2 hconfig.2.2
+                    { p := (HashToPoint.hashCircuit G ns Q hQ hns).output
+                        cfg.2.1 { pieces := input.pieces } (self + 2) |>.point,
+                      q := (Ecc.MulFixed.FullWidth.circuit R).output
+                        cfg.1 input.r self }
+                    (self + 3)))
+        · simp only [synthesize, circuit_norm, synthesis_summary_norm]
       lookupActivationsWellFormed := by
         intro cfg input self
         simp only [synthesize, Circuit.operations_bind, Circuit.operations_pure,
@@ -484,6 +518,14 @@ def configurationCertificate (G : Generators) (ns : List ℕ)
     · exact mul.lookups_of_configured required hrequired
     · exact hash.lookups_of_configured required hrequired
     · exact add.lookups_of_configured required hrequired
+  · intro column hcolumn
+    simp only [commit, FormalCircuit.keygenRequirements,
+      ElaboratedCircuit.keygenRequirements, keygenRequirements,
+      Configure.fixedColumns_pure, List.append_nil, List.mem_append] at hcolumn
+    rcases hcolumn with (hmul | hhash) | hadd
+    · exact mul.fixedColumns_of_configured column hmul
+    · exact hash.fixedColumns_of_configured column hhash
+    · exact add.fixedColumns_of_configured column hadd
   · intro column hcolumn
     simp only [commit, FormalCircuit.keygenRequirements,
       ElaboratedCircuit.keygenRequirements, keygenRequirements,

@@ -660,6 +660,22 @@ def synthesisSummary (cfg : Config) : FloorPlanner.SynthesisSummary :=
       (synthGatesSynthesisSummary cfg))
 
 @[synthesis_summary_norm]
+theorem synthPiecesSynthesisSummary_hasNoFixedWrites (cfg : Config) :
+    (synthPiecesSynthesisSummary cfg).HasNoFixedWrites := by
+  simp only [synthPiecesSynthesisSummary,
+    Sinsemilla.HashToPoint.witnessMessagePieceSynthesisSummary,
+    LookupRangeCheck.witnessShortCheckSynthesisSummary,
+    List.foldr_cons, List.foldr_nil, synthesis_summary_norm]
+  simp
+
+@[synthesis_summary_norm]
+theorem synthGatesSynthesisSummary_hasNoFixedWrites (cfg : Config) :
+    (synthGatesSynthesisSummary cfg).HasNoFixedWrites := by
+  simp only [synthGatesSynthesisSummary, List.foldr_cons, List.foldr_nil,
+    synthesis_summary_norm]
+  simp
+
+@[synthesis_summary_norm]
 theorem synthesisSummary_tableRowExtent_eq (cfg : Config) :
     (synthesisSummary cfg).tableRowExtent = 0 := by
   simp only [synthesisSummary, synthPiecesSynthesisSummary,
@@ -1160,6 +1176,7 @@ def keygenRequirements (G : Generators) (R : FixedBase)
   lookups cfg configured :=
     [LookupRangeCheck.rangeCheckLookup 10 cfg.lookupConfig] ++
       configured.lookups
+  fixedColumns _ configured := configured.fixedColumns
   permutationColumns cfg configured := permutationColumns cfg configured.permutationColumns
   inputCells _ _ input :=
     [input.gdX.cell, input.gdY.cell, input.pkdX.cell, input.pkdY.cell,
@@ -1173,6 +1190,7 @@ theorem synthPieces_keygenRegistered
     ((synthPieces cfg input).operations self).KeygenRegistered
       ((keygenRequirements G R Q hQ).gates cfg configured)
       ((keygenRequirements G R Q hQ).lookups cfg configured)
+      ((keygenRequirements G R Q hQ).fixedColumns cfg configured)
       ((keygenRequirements G R Q hQ).permutationColumns cfg configured ++
         (keygenRequirements G R Q hQ).inputPermutationColumns cfg configured input) := by
   have hBitshift : LookupRangeCheck.bitshiftGate 10 cfg.lookupConfig ∈
@@ -1197,6 +1215,7 @@ theorem synthChecks_keygenRegistered
       self).KeygenRegistered
         ((keygenRequirements G R Q hQ).gates cfg configured)
         ((keygenRequirements G R Q hQ).lookups cfg configured)
+        ((keygenRequirements G R Q hQ).fixedColumns cfg configured)
       ((keygenRequirements G R Q hQ).permutationColumns cfg configured ++
           (keygenRequirements G R Q hQ).inputPermutationColumns cfg configured input ++
           pcs.permutationColumns) := by
@@ -1217,6 +1236,9 @@ theorem synthChecks_keygenRegistered
         FormalCircuit.keygenRequirements,
         ElaboratedCircuit.keygenRequirements] at h ⊢
       exact Or.inl h
+    · intro column h
+      simp [YCanonicityCheck.circuit, FormalCircuit.keygenRequirements,
+        ElaboratedCircuit.keygenRequirements] at h
     · intro column h
       simp [YCanonicityCheck.circuit, keygenRequirements, permutationColumns,
         NoteCommit.permutationColumns,
@@ -1245,6 +1267,9 @@ theorem synthChecks_keygenRegistered
         ElaboratedCircuit.keygenRequirements] at h ⊢
       exact Or.inl h
     · intro column h
+      simp [YCanonicityCheck.circuit, FormalCircuit.keygenRequirements,
+        ElaboratedCircuit.keygenRequirements] at h
+    · intro column h
       simp [YCanonicityCheck.circuit, keygenRequirements, permutationColumns,
         NoteCommit.permutationColumns,
         FormalCircuit.keygenRequirements,
@@ -1267,6 +1292,8 @@ theorem synthChecks_keygenRegistered
     · intro argument h
       simp only [keygenRequirements, List.mem_append]
       exact Or.inr h
+    · intro column h
+      exact h
     · intro column h
       exact List.mem_append_left _ (List.mem_append_left _
         (List.mem_append_right _ h))
@@ -1307,18 +1334,22 @@ private theorem pureRegionCall_keygenRegistered
     (hconfigured : child.keygenRequirements.configLawful cfg)
     (hconfigure : child.configure cfg = pure cfg)
     {targetGates : List (Gate Fp)} {targetLookups : List (LookupArgument Fp)}
+    {targetFixedColumns : List (Column .fixed)}
     {targetPermutationColumns : List AnyColumn}
     (hgates : ∀ gate, gate ∈ child.keygenRequirements.gates cfg hconfigured →
       gate ∈ targetGates)
     (hlookups : ∀ lookup, lookup ∈ child.keygenRequirements.lookups cfg hconfigured →
       lookup ∈ targetLookups)
+    (hfixedColumns : ∀ column,
+      column ∈ child.keygenRequirements.fixedColumns cfg hconfigured →
+        column ∈ targetFixedColumns)
     (hpermutationColumns : ∀ column,
       column ∈ child.keygenRequirements.permutationColumns cfg hconfigured →
         column ∈ targetPermutationColumns)
     (hinputCells : (child.keygenRequirements.inputCells cfg hconfigured input).Forall
       fun cell => cell.column ∈ targetPermutationColumns) :
     (((child.toFormal name).call cfg input).operations self).KeygenRegistered
-      targetGates targetLookups targetPermutationColumns := by
+      targetGates targetLookups targetFixedColumns targetPermutationColumns := by
   let lifted := child.toFormal name
   have hliftedConfigure : lifted.configure cfg = pure cfg := by
     simpa only [lifted, FormalRegionCircuit.toFormal] using hconfigure
@@ -1329,6 +1360,8 @@ private theorem pureRegionCall_keygenRegistered
       FormalRegionCircuit.toFormal_keygenRequirements] using hgates
   · simpa only [configured, lifted, FormalCircuit.Configured.ofPure_lookups,
       FormalRegionCircuit.toFormal_keygenRequirements] using hlookups
+  · simpa only [configured, lifted, FormalCircuit.Configured.ofPure_fixedColumns,
+      FormalRegionCircuit.toFormal_keygenRequirements] using hfixedColumns
   · simpa only [configured, lifted,
       FormalCircuit.Configured.ofPure_permutationColumns,
       FormalRegionCircuit.toFormal_keygenRequirements] using hpermutationColumns
@@ -1343,6 +1376,7 @@ theorem synthDecompositions_keygenRegistered
     ((synthDecompositions cfg input pcs ccs iHash).operations self).KeygenRegistered
       ((keygenRequirements G R Q hQ).gates cfg configured)
       ((keygenRequirements G R Q hQ).lookups cfg configured)
+      ((keygenRequirements G R Q hQ).fixedColumns cfg configured)
       ((keygenRequirements G R Q hQ).permutationColumns cfg configured ++
         (keygenRequirements G R Q hQ).inputPermutationColumns cfg configured input ++
         pcs.permutationColumns ++ ccs.permutationColumns) := by
@@ -1409,6 +1443,9 @@ theorem synthDecompositions_keygenRegistered
       simp only [DecomposeG.bundle, FormalRegionCircuit.keygenRequirements,
         ElaboratedRegionCircuit.keygenRequirements, List.not_mem_nil] at hlookup
     · intro column hcolumn
+      simp only [DecomposeG.bundle, FormalRegionCircuit.keygenRequirements,
+        ElaboratedRegionCircuit.keygenRequirements, List.not_mem_nil] at hcolumn
+    · intro column hcolumn
       apply List.mem_append_left
       apply List.mem_append_left
       apply List.mem_append_left
@@ -1438,6 +1475,9 @@ theorem synthDecompositions_keygenRegistered
       simp only [DecomposeH.bundle, FormalRegionCircuit.keygenRequirements,
         ElaboratedRegionCircuit.keygenRequirements, List.not_mem_nil] at hlookup
     · intro column hcolumn
+      simp only [DecomposeH.bundle, FormalRegionCircuit.keygenRequirements,
+        ElaboratedRegionCircuit.keygenRequirements, List.not_mem_nil] at hcolumn
+    · intro column hcolumn
       apply List.mem_append_left
       apply List.mem_append_left
       apply List.mem_append_left
@@ -1460,6 +1500,7 @@ theorem synthGdPkdValueCanonicity_keygenRegistered
       self).KeygenRegistered
       ((keygenRequirements G R Q hQ).gates cfg configured)
       ((keygenRequirements G R Q hQ).lookups cfg configured)
+      ((keygenRequirements G R Q hQ).fixedColumns cfg configured)
       ((keygenRequirements G R Q hQ).permutationColumns cfg configured ++
         (keygenRequirements G R Q hQ).inputPermutationColumns cfg configured input ++
         pcs.permutationColumns ++ ccs.permutationColumns ++
@@ -1519,6 +1560,7 @@ theorem synthRhoPsiCanonicity_keygenRegistered
       self).KeygenRegistered
       ((keygenRequirements G R Q hQ).gates cfg configured)
       ((keygenRequirements G R Q hQ).lookups cfg configured)
+      ((keygenRequirements G R Q hQ).fixedColumns cfg configured)
       ((keygenRequirements G R Q hQ).permutationColumns cfg configured ++
         (keygenRequirements G R Q hQ).inputPermutationColumns cfg configured input ++
         pcs.permutationColumns ++ ccs.permutationColumns ++
@@ -1567,6 +1609,7 @@ theorem synthCanonicity_keygenRegistered
     ((synthCanonicity cfg input pcs ccs gcs iHash).operations self).KeygenRegistered
       ((keygenRequirements G R Q hQ).gates cfg configured)
       ((keygenRequirements G R Q hQ).lookups cfg configured)
+      ((keygenRequirements G R Q hQ).fixedColumns cfg configured)
       ((keygenRequirements G R Q hQ).permutationColumns cfg configured ++
         (keygenRequirements G R Q hQ).inputPermutationColumns cfg configured input ++
         pcs.permutationColumns ++ ccs.permutationColumns ++
@@ -1586,6 +1629,7 @@ theorem synthGates_keygenRegistered
     ((synthGates cfg input pcs ccs iHash).operations self).KeygenRegistered
       ((keygenRequirements G R Q hQ).gates cfg configured)
       ((keygenRequirements G R Q hQ).lookups cfg configured)
+      ((keygenRequirements G R Q hQ).fixedColumns cfg configured)
       ((keygenRequirements G R Q hQ).permutationColumns cfg configured ++
         (keygenRequirements G R Q hQ).inputPermutationColumns cfg configured input ++
         pcs.permutationColumns ++ ccs.permutationColumns) := by
@@ -1596,7 +1640,7 @@ theorem synthGates_keygenRegistered
       G R Q hQ cfg input pcs ccs iHash self configured
   · apply (synthCanonicity_keygenRegistered
       G R Q hQ cfg input pcs ccs _ iHash _ configured).mono
-      (fun _ h => h) (fun _ h => h)
+      (fun _ h => h) (fun _ h => h) (fun _ h => h)
     intro column hcolumn
     rw [List.mem_append] at hcolumn
     rcases hcolumn with hcolumn | hcolumn
@@ -1638,6 +1682,7 @@ theorem synth_keygenRegistered
     ((synth G R Q hQ cfg input).operations self).KeygenRegistered
       ((keygenRequirements G R Q hQ).gates cfg configured)
       ((keygenRequirements G R Q hQ).lookups cfg configured)
+      ((keygenRequirements G R Q hQ).fixedColumns cfg configured)
       ((keygenRequirements G R Q hQ).permutationColumns cfg configured ++
         (keygenRequirements G R Q hQ).inputPermutationColumns cfg configured input) := by
   simp only [synth, Circuit.operations_bind, currentRegion_operations,
@@ -1657,7 +1702,7 @@ theorem synth_keygenRegistered
   · exact synthPieces_keygenRegistered G R Q hQ cfg input self configured
   constructor
   · apply (synthChecks_keygenRegistered G R Q hQ cfg input _ _ _ configured).mono
-      (fun _ h => h) (fun _ h => h)
+      (fun _ h => h) (fun _ h => h) (fun _ h => h)
     intro column hcolumn
     rw [List.mem_append] at hcolumn
     rcases hcolumn with hcolumn | hcolumn
@@ -1666,7 +1711,7 @@ theorem synth_keygenRegistered
       exact synthPieces_output_permutationColumns
         cfg input configured.permutationColumns self column hcolumn
   · apply (synthGates_keygenRegistered G R Q hQ cfg input _ _ _ _ configured).mono
-      (fun _ h => h) (fun _ h => h)
+      (fun _ h => h) (fun _ h => h) (fun _ h => h)
     intro column hcolumn
     rw [List.mem_append] at hcolumn
     rcases hcolumn with hcolumn | hcolumn
@@ -2431,6 +2476,65 @@ private theorem synthRhoPsiCanonicity_lookupActivationsWellFormed
     (PsiCanonicity.bundle.toFormal
       "NoteCommit input psi").call_lookupActivationsWellFormed _ _ _⟩
 
+private theorem synthPieces_fixedWritesLawful
+    (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex)
+    (constantColumns : List (Column .fixed)) :
+    ((synthPieces cfg input).operations self)
+      |>.FixedWritesLawful constantColumns := by
+  apply Operations.HasNoFixedWrites.fixedWritesLawful
+  apply FloorPlanner.SynthesisSummary.HasNoFixedWrites.hasNoFixedWrites
+  rw [synthPieces_synthesisSummary_eq]
+  exact synthPiecesSynthesisSummary_hasNoFixedWrites cfg
+
+private theorem synthChecks_fixedAssignmentsAgree
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (iHash self : RegionIndex)
+    (configured : (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).Configured
+      (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)) :
+    ((synthChecks G R Q hQ cfg input pcs iHash).operations self).Forall
+      Operation.FixedAssignmentsAgree := by
+  simp only [synthChecks, Circuit.operations_bind, Circuit.operations_pure,
+    List.forall_append, circuit_norm]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · simpa only using (YCanonicityCheck.circuit (brWit input.gdY 0 1))
+      |>.call_fixedAssignmentsAgree (cfg.gates.y, cfg.lookupConfig)
+        (FormalCircuit.Configured.ofPure _ _ () (by rfl))
+        { y := input.gdY } self
+  · simpa only using (YCanonicityCheck.circuit (brWit input.pkdY 0 1))
+      |>.call_fixedAssignmentsAgree (cfg.gates.y, cfg.lookupConfig)
+        (FormalCircuit.Configured.ofPure _ _ () (by rfl))
+        { y := input.pkdY } (self + 5)
+  · simpa only using (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil)
+      |>.call_fixedAssignmentsAgree
+        (cfg.mulConfig, cfg.hashConfig, cfg.addConfig) configured
+        { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d, pcs.e, pcs.f, pcs.g, pcs.h],
+          r := input.rcm } (self + 5 + 5)
+  · exact (LookupRangeCheck.witnessCheck_fixedWritesLawful
+      10 13 false (by simp) cfg.lookupConfig
+      (GdCanonicityCheck.aPrimeWit pcs.a) _ []).regionAssignmentsAgree
+  · exact (LookupRangeCheck.witnessCheck_fixedWritesLawful
+      10 14 false (by simp) cfg.lookupConfig
+      (PkdCanonicityCheck.b3CPrimeWit pcs.b3 pcs.c) _ []).regionAssignmentsAgree
+  · exact (LookupRangeCheck.witnessCheck_fixedWritesLawful
+      10 14 false (by simp) cfg.lookupConfig
+      (RhoCanonicityCheck.e1FPrimeWit pcs.e1 pcs.f) _ []).regionAssignmentsAgree
+  · exact (LookupRangeCheck.witnessCheck_fixedWritesLawful
+      10 13 false (by simp) cfg.lookupConfig
+      (PsiCanonicityCheck.g1G2PrimeWit pcs.g1
+        (zCell cfg.hashConfig iHash 6 1)) _ []).regionAssignmentsAgree
+
+private theorem synthGates_fixedWritesLawful
+    (cfg : Config) (input : Var Inputs Fp) (pcs : PieceCells)
+    (ccs : CheckCells) (iHash self : RegionIndex)
+    (constantColumns : List (Column .fixed)) :
+    ((synthGates cfg input pcs ccs iHash).operations self)
+      |>.FixedWritesLawful constantColumns := by
+  apply Operations.HasNoFixedWrites.fixedWritesLawful
+  apply FloorPlanner.SynthesisSummary.HasNoFixedWrites.hasNoFixedWrites
+  rw [synthGates_synthesisSummary_eq]
+  exact synthGatesSynthesisSummary_hasNoFixedWrites cfg
+
 /-- Canonical elaborated metadata, with fully reduced output and synthesis summary. -/
 instance elaborated (G : Generators) (R : FixedBase)
     (Q : Point Fp) (hQ : Q.OnCurve) :
@@ -2442,6 +2546,21 @@ instance elaborated (G : Generators) (R : FixedBase)
       G R Q hQ configInput input self configured
   copyCellsAssigned cfg _ configured input self :=
     synth_copyCellsAssigned G R Q hQ cfg input self configured
+  fixedWritesLawful := by
+    intro cfg counts hconfig input self
+    simp only [Configure.output_pure] at hconfig ⊢
+    apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree
+    · simp only [synth, currentRegion_operations, Circuit.operations_bind,
+        Circuit.operations_pure, List.forall_append, circuit_norm]
+      exact ⟨(synthPieces_fixedWritesLawful cfg input self [])
+          |>.regionAssignmentsAgree,
+        synthChecks_fixedAssignmentsAgree G R Q hQ cfg input
+          ((synthPieces cfg input).output self) (self + 27)
+          ((synthPieces cfg input).nextRegionIndex self) hconfig,
+        (synthGates_fixedWritesLawful cfg input _ _ _ _ [])
+          |>.regionAssignmentsAgree⟩
+    · rw [synth_synthesisSummary_eq]
+      exact synthesisSummary_tableRowExtent_eq cfg
   lookupActivationsWellFormed config input region := by
     simp only [synth, Circuit.operations_bind, currentRegion_operations,
       Circuit.operations_pure, Operations.LookupActivationsWellFormed,

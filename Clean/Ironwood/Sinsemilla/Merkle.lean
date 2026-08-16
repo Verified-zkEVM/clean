@@ -265,6 +265,13 @@ theorem synthesisSummary_instanceRowExtent_eq (cfg : Config) (offset : ℕ) :
     (synthesisSummary cfg offset).instanceRowExtent = 0 := by
   simp only [synthesisSummary, synthesis_summary_norm]
 
+@[synthesis_summary_norm]
+theorem synthesisSummary_hasNoFixedColumns (cfg : Config) (offset : ℕ) :
+    (synthesisSummary cfg offset).HasNoFixedColumns := by
+  simp only [synthesisSummary, synthesis_summary_norm]
+  intro index hcolumn
+  simp at hcolumn
+
 theorem synthesisSummary_eq (cfg : Config) (l : Fp)
     (input : Var Inputs Fp) (offset : ℕ) (self : RegionIndex) :
     synthesisSummary cfg offset =
@@ -433,11 +440,14 @@ def mono {scfg : HashPiece.Config} {counts : ConfigureCounts}
     (certificate : ConfigureCertificate scfg counts source)
     (gates : ∀ gate, gate ∈ source.gates → gate ∈ target.gates)
     (lookups : ∀ argument, argument ∈ source.lookups → argument ∈ target.lookups)
+    (fixedColumns : ∀ column,
+      column ∈ source.fixedColumns → column ∈ target.fixedColumns)
     (permutationColumns : ∀ column,
       column ∈ source.permutationColumns → column ∈ target.permutationColumns) :
     ConfigureCertificate scfg counts target where
-  condSwap wb wswap := (certificate.condSwap wb wswap).mono gates lookups permutationColumns
-  gate l := (certificate.gate l).mono gates lookups permutationColumns
+  condSwap wb wswap :=
+    (certificate.condSwap wb wswap).mono gates lookups fixedColumns permutationColumns
+  gate l := (certificate.gate l).mono gates lookups fixedColumns permutationColumns
 
 end ConfigureCertificate
 
@@ -446,6 +456,7 @@ def configureCertificate (scfg : HashPiece.Config) (counts : ConfigureCounts) :
     ConfigureCertificate scfg counts
       { gates := (configure scfg |>.delta counts).gates
         lookups := (configure scfg |>.delta counts).lookups
+        fixedColumns := (configure scfg).fixedColumns counts
         permutationColumns :=
           Gate.permutationColumns
             (scfg.xA, scfg.xP, scfg.bits, scfg.lambda1, scfg.lambda2,
@@ -469,6 +480,9 @@ def configureCertificate (scfg : HashPiece.Config) (counts : ConfigureCounts) :
       unfold configure
       apply Configure.mem_lookups_delta_bind_left
       exact hargument
+    · intro column hcolumn
+      unfold configure
+      exact Configure.mem_fixedColumns_bind_left _ _ _ hcolumn
     · intro column hcolumn
       simp only [List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at hcolumn
       rcases hcolumn with (hcolumn | hcolumn) | hcolumn
@@ -502,6 +516,14 @@ def configureCertificate (scfg : HashPiece.Config) (counts : ConfigureCounts) :
       rcases hargument with hargument | hargument
       · exact False.elim (List.not_mem_nil hargument)
       · simpa [gateInput, swapProgram] using hargument
+    · intro column hcolumn
+      simp only [Gate.circuit, FormalRegionCircuit.keygenRequirements,
+        ElaboratedRegionCircuit.keygenRequirements, List.mem_append] at hcolumn
+      rcases hcolumn with hcolumn | hcolumn
+      · exact False.elim (List.not_mem_nil hcolumn)
+      unfold configure
+      apply Configure.mem_fixedColumns_bind_right
+      simpa [gateInput, swapProgram] using hcolumn
     · intro column hcolumn
       simp only [Gate.circuit, FormalRegionCircuit.keygenRequirements,
         ElaboratedRegionCircuit.keygenRequirements, List.mem_append] at hcolumn
@@ -1227,6 +1249,9 @@ def HashLayer.keygenRequirements (G : Generators) (Q : Point Fp)
     configured.1.gates ++ configured.2.1.gates ++ configured.2.2.gates
   lookups _ configured :=
     configured.1.lookups ++ configured.2.1.lookups ++ configured.2.2.lookups
+  fixedColumns _ configured :=
+    configured.1.fixedColumns ++ configured.2.1.fixedColumns ++
+      configured.2.2.fixedColumns
   permutationColumns cfg configured :=
     configured.1.permutationColumns ++ configured.2.1.permutationColumns ++
       configured.2.2.permutationColumns ++ [cfg.1.sinsemilla.witnessPieces.toAny]
@@ -1255,6 +1280,8 @@ private theorem HashLayer.hashMessage_keygenRegistered
         ((pure configInput : Configure Fp _).delta counts).gates)
       ((HashLayer.keygenRequirements G Q hQ l).lookups configInput hconfig ++
         ((pure configInput : Configure Fp _).delta counts).lookups)
+      ((HashLayer.keygenRequirements G Q hQ l).fixedColumns configInput hconfig ++
+        (pure configInput : Configure Fp _).fixedColumns counts)
       ((HashLayer.keygenRequirements G Q hQ l).permutationColumns
           configInput hconfig ++
         ((pure configInput : Configure Fp _).delta counts).permutationRequests ++
@@ -1266,6 +1293,9 @@ private theorem HashLayer.hashMessage_keygenRegistered
       List.append_nil, List.mem_append] at *
     grind
   · simp only [HashLayer.keygenRequirements, Configure.delta_pure,
+      List.append_nil, List.mem_append] at *
+    grind
+  · simp only [HashLayer.keygenRequirements, Configure.fixedColumns_pure,
       List.append_nil, List.mem_append] at *
     grind
   · simp only [HashLayer.keygenRequirements, Configure.delta_pure,
@@ -1299,6 +1329,8 @@ private theorem HashLayer.gate_keygenRegistered
         ((pure configInput : Configure Fp _).delta counts).gates)
       ((HashLayer.keygenRequirements G Q hQ l).lookups configInput hconfig ++
         ((pure configInput : Configure Fp _).delta counts).lookups)
+      ((HashLayer.keygenRequirements G Q hQ l).fixedColumns configInput hconfig ++
+        (pure configInput : Configure Fp _).fixedColumns counts)
       ((HashLayer.keygenRequirements G Q hQ l).permutationColumns
           configInput hconfig ++
         ((pure configInput : Configure Fp _).delta counts).permutationRequests ++
@@ -1315,6 +1347,9 @@ private theorem HashLayer.gate_keygenRegistered
     · simp only [HashLayer.keygenRequirements, Configure.delta_pure,
         List.append_nil, List.mem_append] at *
       grind
+    · simp only [HashLayer.keygenRequirements, Configure.fixedColumns_pure,
+        List.append_nil, List.mem_append] at *
+      grind
     · simp only [HashLayer.keygenRequirements, Configure.delta_pure,
         List.append_nil, List.mem_append] at *
       grind
@@ -1324,7 +1359,7 @@ private theorem HashLayer.gate_keygenRegistered
       simp only [FormalRegionCircuit.Configured.inputPermutationColumns,
         KeygenRequirements.inputPermutationColumns, List.mem_map]
       exact ⟨cell, hcell, rfl⟩
-  · exact Operations.KeygenRegistered.nil _ _ _
+  · exact Operations.KeygenRegistered.nil _ _ _ _
 
 /-- Reduced layouter footprint of one Merkle hash layer. -/
 def HashLayer.synthesisSummary (cfg : Config)
@@ -1531,6 +1566,42 @@ def HashLayer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
               LookupRangeCheck.shortRangeCheck_configured_permutationColumns_eq,
               KeygenRequirements.inputPermutationColumns]
           · trivial
+      fixedWritesLawful := by
+        intro cfg _ hconfig input self
+        apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree
+        · simp only [Configure.output_pure, HashLayer.synthesize,
+            Circuit.operations_bind, Circuit.operations_pure,
+            List.forall_append, circuit_norm]
+          constructor
+          · exact (HashToPoint.witnessMessagePiece_fixedWritesLawful
+              cfg.1.sinsemilla (HashLayer.waWit l input.left) self [])
+              |>.regionAssignmentsAgree
+          constructor
+          · exact (LookupRangeCheck.witnessShortCheck_fixedWritesLawful
+              10 5 cfg.2 (HashLayer.wb1Wit input.left) (self + 1) [])
+              |>.regionAssignmentsAgree
+          constructor
+          · exact (LookupRangeCheck.witnessShortCheck_fixedWritesLawful
+              10 5 cfg.2 (HashLayer.wb2Wit input.right) (self + 2) [])
+              |>.regionAssignmentsAgree
+          constructor
+          · exact (HashToPoint.witnessMessagePiece_fixedWritesLawful
+              cfg.1.sinsemilla (HashLayer.wbWit input.left input.right)
+                (self + 1 + 2) []) |>.regionAssignmentsAgree
+          constructor
+          · exact (HashToPoint.witnessMessagePiece_fixedWritesLawful
+              cfg.1.sinsemilla (HashLayer.wcWit input.right)
+                (self + 2 + 2) []) |>.regionAssignmentsAgree
+          constructor
+          · unfold HashToPoint.hashMessage
+            exact (HashToPoint.hashCircuit G HashLayer.merkleNs Q hQ
+              (by decide)).call_fixedAssignmentsAgree
+                cfg.1.sinsemilla hconfig.2.1 _ (self + 3 + 2)
+          · exact (Gate.circuit (l : Fp)).call_fixedAssignmentsAgree
+              cfg.1.gate hconfig.2.2 0 _ _
+        · simp only [Configure.output_pure]
+          rw [← HashLayer.synthesisSummary_eq G Q hQ l cfg.1 cfg.2 input self]
+          exact HashLayer.synthesisSummary_tableRowExtent_eq cfg.1 cfg.2
       copyCellsAssigned := by
         intro configInput counts hconfig input i
         unfold HashLayer.synthesize
@@ -2685,6 +2756,14 @@ def HashLayer.configurationCertificate (G : Generators) (Q : Point Fp)
   · intro required hrequired
     simp only [HashLayer.circuit, FormalCircuit.keygenRequirements,
       ElaboratedCircuit.keygenRequirements, HashLayer.keygenRequirements,
+      Configure.fixedColumns_pure, List.append_nil, List.mem_append] at hrequired
+    rcases hrequired with (hrequired | hrequired) | hrequired
+    · exact range.fixedColumns_of_configured required hrequired
+    · exact hash.fixedColumns_of_configured required hrequired
+    · exact gate.fixedColumns_of_configured required hrequired
+  · intro required hrequired
+    simp only [HashLayer.circuit, FormalCircuit.keygenRequirements,
+      ElaboratedCircuit.keygenRequirements, HashLayer.keygenRequirements,
       Configure.delta_pure, List.append_nil, List.mem_append, List.mem_cons,
       List.not_mem_nil, or_false] at hrequired
     rcases hrequired with ((hrequired | hrequired) | hrequired) | hrequired
@@ -2748,6 +2827,8 @@ def Layer.keygenRequirements (G : Generators) (Q : Point Fp)
       (HashLayer.circuit G Q hQ l hl).Configured (cfg.2.1, cfg.2.2)
   gates _ configured := configured.1.gates ++ configured.2.gates
   lookups _ configured := configured.1.lookups ++ configured.2.lookups
+  fixedColumns _ configured :=
+    configured.1.fixedColumns ++ configured.2.fixedColumns
   permutationColumns _ configured :=
     configured.1.permutationColumns ++ configured.2.permutationColumns
   inputCells _ _ input := [input.node.cell]
@@ -2857,6 +2938,21 @@ def Layer.circuit (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve) (l : ℕ)
         · apply (HashLayer.circuit G Q hQ l hl).call_keygenRegistered
             (cfg.2.1, cfg.2.2) hconfig.2 _ (self + 1) <;>
               keygen_registration
+      fixedWritesLawful := by
+        intro cfg _ hconfig input self
+        apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree
+        · simp only [Configure.output_pure, Circuit.operations_bind,
+            operations_assignRegion, circuit_norm]
+          constructor
+          · exact (CondSwap.swap wsib wswap).call_fixedAssignmentsAgree
+              cfg.1 hconfig.1 0 { a := input.node } self
+          · exact (HashLayer.circuit G Q hQ l hl)
+              |>.call_fixedAssignmentsAgree (cfg.2.1, cfg.2.2) hconfig.2 _
+                (self + 1)
+        · simp only [Configure.output_pure]
+          rw [← Layer.synthesisSummary_eq G Q hQ l hl wsib wswap
+            cfg.1 cfg.2.1 cfg.2.2 input self]
+          exact Layer.synthesisSummary_tableRowExtent_eq cfg.1 cfg.2.1 cfg.2.2
       copyCellsAssigned := by
         intro cfg counts hconfig input self
         simp only [Configure.output_pure, Circuit.operations_bind,
@@ -3180,6 +3276,13 @@ def Layer.configurationCertificate (G : Generators) (Q : Point Fp)
   · intro required hrequired
     simp only [Layer.circuit, FormalCircuit.keygenRequirements,
       ElaboratedCircuit.keygenRequirements, Layer.keygenRequirements,
+      Configure.fixedColumns_pure, List.append_nil, List.mem_append] at hrequired
+    rcases hrequired with hrequired | hrequired
+    · exact swap.fixedColumns_of_configured required hrequired
+    · exact hash.fixedColumns_of_configured required hrequired
+  · intro required hrequired
+    simp only [Layer.circuit, FormalCircuit.keygenRequirements,
+      ElaboratedCircuit.keygenRequirements, Layer.keygenRequirements,
       Configure.delta_pure, List.append_nil, List.mem_append] at hrequired
     rcases hrequired with hrequired | hrequired
     · exact swap.permutationColumns_of_configured required hrequired
@@ -3415,6 +3518,25 @@ private theorem retargetLayerConfigured_lookups
   rfl
 
 @[keygen_norm]
+private theorem retargetLayerConfigured_fixedColumns
+    {cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10}
+    {l l' : ℕ} {hl : l < 2 ^ 10} {hl' : l' < 2 ^ 10}
+    {wb wb' : WitgenIR Fp 1}
+    {swapWitness swapWitness' : Placed ProverEnvironment Fp → Bool}
+    (configured : (Layer.circuit G Q hQ l hl wb swapWitness).Configured cfg) :
+    (retargetLayerConfigured G Q hQ
+      (l' := l') (hl' := hl') (wb' := wb')
+      (swapWitness' := swapWitness') configured).fixedColumns =
+        configured.fixedColumns := by
+  rcases configured with ⟨configInput, counts,
+    ⟨swapConfigured, hashConfigured⟩, output_eq⟩
+  rcases swapConfigured with ⟨swapInput, swapCounts, swapLawful, swapOutput⟩
+  rcases hashConfigured with ⟨hashInput, hashCounts,
+    ⟨rangeConfigured, hashToPointConfigured, gateConfigured⟩, hashOutput⟩
+  rcases gateConfigured with ⟨gateInput, gateCounts, gateLawful, gateOutput⟩
+  rfl
+
+@[keygen_norm]
 private theorem retargetLayerConfigured_permutationColumns
     {cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10}
     {l l' : ℕ} {hl : l < 2 ^ 10} {hl' : l' < 2 ^ 10}
@@ -3442,6 +3564,7 @@ def keygenRequirements :
     (layerAt G Q hQ l₀ wsib wswap 0).Configured cfg
   gates _ configured := configured.gates
   lookups _ configured := configured.lookups
+  fixedColumns _ configured := configured.fixedColumns
   permutationColumns _ configured := configured.permutationColumns
   inputCells _ _ input := [input.node.cell]
 
@@ -3467,6 +3590,14 @@ private theorem layerAtConfigured_lookups
     (layerAtConfigured G Q hQ l₀ wsib wswap configured i).lookups =
       configured.lookups :=
   retargetLayerConfigured_lookups G Q hQ configured
+
+@[keygen_norm]
+private theorem layerAtConfigured_fixedColumns
+    {cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10}
+    (configured : (layerAt G Q hQ l₀ wsib wswap 0).Configured cfg) (i : ℕ) :
+    (layerAtConfigured G Q hQ l₀ wsib wswap configured i).fixedColumns =
+      configured.fixedColumns :=
+  retargetLayerConfigured_fixedColumns G Q hQ configured
 
 @[keygen_norm]
 private theorem layerAtConfigured_permutationColumns
@@ -3573,6 +3704,8 @@ private theorem synthesize_keygenRegistered :
         (program.delta counts).gates)
       ((keygenRequirements G Q hQ l₀ wsib wswap).lookups configInput hconfig ++
         (program.delta counts).lookups)
+      ((keygenRequirements G Q hQ l₀ wsib wswap).fixedColumns configInput hconfig ++
+        program.fixedColumns counts)
       ((keygenRequirements G Q hQ l₀ wsib wswap).permutationColumns configInput hconfig ++
         (program.delta counts).permutationRequests ++
         (keygenRequirements G Q hQ l₀ wsib wswap).inputPermutationColumns
@@ -3594,6 +3727,10 @@ private theorem synthesize_keygenRegistered :
     rw [layerAtConfigured_lookups] at hargument
     simpa only [keygenRequirements, Configure.delta_pure,
       List.append_nil] using hargument
+  · intro i column hcolumn
+    rw [layerAtConfigured_fixedColumns] at hcolumn
+    simpa only [keygenRequirements, Configure.fixedColumns_pure,
+      List.append_nil] using hcolumn
   · intro i column hcolumn
     rw [layerAtConfigured_permutationColumns] at hcolumn
     simp only [keygenRequirements, Configure.delta_pure,
@@ -3689,6 +3826,19 @@ def circuit :
       synthesisSummary cfg _ _ := synthesisSummary d cfg
       synthesisSummary_eq := synthesisSummary_eq G Q hQ l₀ d wsib wswap
       registered := synthesize_keygenRegistered G Q hQ l₀ d wsib wswap
+      fixedWritesLawful := by
+        intro cfg _ hconfig input region
+        apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree
+        · simp only [Configure.output_pure, synthesize,
+            Circuit.operations_bind, Circuit.operations_pure,
+            List.forall_append, List.forall_nil, and_true]
+          exact FormalCircuit.foldCall_fixedAssignmentsAgree
+            (c := layerAt G Q hQ l₀ wsib wswap) (toInput := toInput)
+            (config := cfg) (init := input) (i₀ := region) d
+            (fun i => layerAtConfigured G Q hQ l₀ wsib wswap hconfig i)
+        · simp only [Configure.output_pure]
+          rw [← synthesisSummary_eq G Q hQ l₀ d wsib wswap cfg input region]
+          exact synthesisSummary_tableRowExtent_eq d cfg
       copyCellsAssigned := by
         intro cfg counts hconfig input region
         simp only [synthesize, Configure.output_pure,
@@ -4164,6 +4314,11 @@ def configurationCertificate
       ElaboratedCircuit.keygenRequirements, keygenRequirements,
       Configure.delta_pure, List.append_nil] at hrequired
     exact layer.lookups_of_configured required hrequired
+  · intro required hrequired
+    simp only [circuit, FormalCircuit.keygenRequirements,
+      ElaboratedCircuit.keygenRequirements, keygenRequirements,
+      Configure.fixedColumns_pure, List.append_nil] at hrequired
+    exact layer.fixedColumns_of_configured required hrequired
   · intro required hrequired
     simp only [circuit, FormalCircuit.keygenRequirements,
       ElaboratedCircuit.keygenRequirements, keygenRequirements,

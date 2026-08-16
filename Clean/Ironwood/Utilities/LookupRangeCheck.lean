@@ -1874,6 +1874,16 @@ theorem witnessCheckDecomposed_synthesisSummary
   · simp only [operations_assignAdvice, synthesis_summary_norm,
       rangeCheckAtDecomposedSynthesisSummary]
 
+theorem witnessCheckDecomposed_fixedWritesLawful
+    (cfg : Config 10) (w : WitgenIR Fp 1) (region : RegionIndex)
+    (constantColumns : List (Column .fixed)) :
+    ((witnessCheckDecomposed cfg w).operations region)
+      |>.FixedWritesLawful constantColumns := by
+  apply Operations.HasNoFixedWrites.fixedWritesLawful
+  apply FloorPlanner.SynthesisSummary.HasNoFixedWrites.hasNoFixedWrites
+  rw [witnessCheckDecomposed_synthesisSummary]
+  exact witnessCheckDecomposedSynthesisSummary_hasNoFixedWrites cfg
+
 @[circuit_norm]
 theorem witnessCheckDecomposed_nextRegionIndex
     (cfg : Config 10) (w : WitgenIR Fp 1) (region : RegionIndex) :
@@ -2043,6 +2053,16 @@ theorem witnessShortCheck_synthesisSummary
       shortRangeCheck_elaborated_synthesisSummary_eq, synthesis_summary_norm,
       shortRangeCheckSynthesisSummary]
 
+theorem witnessShortCheck_fixedWritesLawful
+    (K numBits : ℕ) (cfg : Config K) (w : WitgenIR Fp 1)
+    (region : RegionIndex) (constantColumns : List (Column .fixed)) :
+    ((witnessShortCheck K numBits cfg w).operations region)
+      |>.FixedWritesLawful constantColumns := by
+  apply Operations.HasNoFixedWrites.fixedWritesLawful
+  apply FloorPlanner.SynthesisSummary.HasNoFixedWrites.hasNoFixedWrites
+  rw [witnessShortCheck_synthesisSummary]
+  exact witnessShortCheckSynthesisSummary_hasNoFixedWrites K cfg
+
 @[circuit_norm]
 theorem witnessShortCheck_nextRegionIndex
     (K numBits : ℕ) (cfg : Config K) (w : WitgenIR Fp 1)
@@ -2159,6 +2179,17 @@ theorem witnessCheck_synthesisSummary
       rangeCheckAtSynthesisSummary, Nat.zero_add]
   · simp only [operations_assignAdvice, synthesis_summary_norm,
       rangeCheckAtSynthesisSummary]
+
+theorem witnessCheck_fixedWritesLawful
+    (K numWords : ℕ) (strict : Bool) (hstrict : strict = true → 0 < numWords)
+    (cfg : Config K) (w : WitgenIR Fp 1) (region : RegionIndex)
+    (constantColumns : List (Column .fixed)) :
+    ((witnessCheck K numWords strict cfg w hstrict).operations region)
+      |>.FixedWritesLawful constantColumns := by
+  apply Operations.HasNoFixedWrites.fixedWritesLawful
+  apply FloorPlanner.SynthesisSummary.HasNoFixedWrites.hasNoFixedWrites
+  rw [witnessCheck_synthesisSummary]
+  exact witnessCheckSynthesisSummary_hasNoFixedWrites K numWords strict cfg
 
 @[circuit_norm]
 theorem witnessCheck_nextRegionIndex
