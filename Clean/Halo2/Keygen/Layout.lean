@@ -963,6 +963,26 @@ private theorem mem_foldl_hashSet_insert_iff
       simp only [Std.HashSet.mem_insert, beq_iff_eq, List.mem_cons]
       aesop
 
+/-- Every activated selector with a compression-map entry is emitted as the
+corresponding packed fixed assignment. -/
+theorem mem_selectorAssignments_of_activation [FiniteField F]
+    (selectorMap : SelCompressMap) (selectorActivations : List (ℕ × ℕ))
+    {selector row : ℕ} {compressed : SelCompress}
+    (hactivation : (selector, row) ∈ selectorActivations)
+    (hlookup : selectorMap.lookup selector = some compressed) :
+    (compressed.packedCol, row,
+      (FiniteField.fromNat compressed.assignedRoot : F)) ∈
+        selectorAssignments selectorMap selectorActivations := by
+  simp only [SelCompressMap.lookup, Option.map_eq_some_iff] at hlookup
+  obtain ⟨entry, hfind, hcompressed⟩ := hlookup
+  unfold selectorAssignments
+  rw [List.mem_filterMap]
+  refine ⟨(selector, row), ?_, ?_⟩
+  · rw [Std.HashSet.mem_toList, mem_foldl_hashSet_insert_iff]
+    exact Or.inr hactivation
+  · simp only [hfind, Option.map_some]
+    rw [← hcompressed]
+
 /-- Every packed selector assignment retains its source activation and map entry. -/
 theorem exists_activation_lookup_of_mem_selectorAssignments [FiniteField F]
     (selectorMap : SelCompressMap) (selectorActivations : List (ℕ × ℕ))
