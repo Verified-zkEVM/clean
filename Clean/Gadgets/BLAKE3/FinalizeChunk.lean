@@ -166,8 +166,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
     h_Or32_2.2.1 h_Or32_2.2.2.1 h_Or32_2.2.2.2.1 h_Or32_2.2.2.2.2
   simp_all only [Fin.getElem_fin, Nat.cast_ofNat, BLAKE3State.value]
   have h_compress' := congrArg (fun v => v.take 8) h_Compress.1
-  simp only [Vector.map_take, eval_vector] at h_compress'
-  rw [← eval_vector] at h_compress'
+  simp only [Vector.map_take] at h_compress'
   simp only [Vector.take_eq_extract, Vector.extract_mk, Nat.sub_zero, List.extract_toArray,
     List.extract_eq_take_drop, tsub_zero, List.drop_zero, List.take_succ_cons,
     List.take_zero] at h_compress'
