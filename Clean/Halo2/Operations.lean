@@ -387,6 +387,10 @@ theorem unionColumns_normalized_nil_left (columns : List RegionColumn) :
 
 namespace RegionSynthesisSummary
 
+/-- The reduced region footprint contains no fixed-column writes. -/
+def HasNoFixedColumns (summary : RegionSynthesisSummary) : Prop :=
+  ∀ index, .column .fixed index ∉ summary.columns
+
 /-- A reduced region summary from its distinct-column source list and exact numerical
 footprint. -/
 def ofColumns (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
@@ -396,6 +400,22 @@ def ofColumns (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
   rowCount := rowCount
   constantSiteCount := constantSiteCount
   instanceRowExtent := instanceRowExtent
+
+@[synthesis_summary_norm]
+theorem hasNoFixedColumns_ofColumns
+    (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
+    (instanceRowExtent : ℕ := 0) :
+    HasNoFixedColumns
+        (ofColumns columns rowCount constantSiteCount instanceRowExtent) ↔
+      ∀ index, .column .fixed index ∉ columns := by
+  constructor
+  · intro hsummary index hcolumn
+    exact hsummary index
+      ((mem_unionColumns_iff [] columns _).2 (.inr hcolumn))
+  · intro hcolumns index hcolumn
+    rcases (mem_unionColumns_iff [] columns _).1 hcolumn with hnil | hsource
+    · exact (List.not_mem_nil hnil).elim
+    · exact hcolumns index hsource
 
 /-- The closed-form summary of `count` repetitions of the same column shape,
 whose `i`th repetition occupies through
@@ -417,6 +437,19 @@ theorem repeatColumns_columns (columns : List RegionColumn)
       instanceRowExtent).columns =
       if count = 0 then [] else unionColumns [] columns := by
   cases count <;> rfl
+
+@[synthesis_summary_norm]
+theorem hasNoFixedColumns_repeatColumns
+    (columns : List RegionColumn)
+    (offset stride rowCount constantSiteCount count : ℕ)
+    (instanceRowExtent : ℕ := 0) :
+    (repeatColumns columns offset stride rowCount constantSiteCount count
+        instanceRowExtent).HasNoFixedColumns ↔
+      count = 0 ∨ ∀ index, .column .fixed index ∉ columns := by
+  by_cases hcount : count = 0
+  · subst count
+    simp [repeatColumns, HasNoFixedColumns]
+  · simp [repeatColumns, hcount, hasNoFixedColumns_ofColumns]
 
 @[circuit_norm, synthesis_summary_norm]
 theorem repeatColumns_rowCount (columns : List RegionColumn)
@@ -472,6 +505,14 @@ def combine (left right : RegionSynthesisSummary) : RegionSynthesisSummary where
   rowCount := max left.rowCount right.rowCount
   constantSiteCount := left.constantSiteCount + right.constantSiteCount
   instanceRowExtent := max left.instanceRowExtent right.instanceRowExtent
+
+@[synthesis_summary_norm]
+theorem hasNoFixedColumns_combine
+    (left right : RegionSynthesisSummary) :
+    (left.combine right).HasNoFixedColumns ↔
+      left.HasNoFixedColumns ∧ right.HasNoFixedColumns := by
+  simp only [HasNoFixedColumns, combine, mem_unionColumns_iff, not_or]
+  aesop
 
 theorem combine_assoc (left middle right : RegionSynthesisSummary) :
     left.combine (middle.combine right) =
@@ -1168,6 +1209,12 @@ already-reduced V1 measurement input without retaining any region operations. -/
 
 namespace SynthesisSummary
 
+/-- The reduced layouter footprint contains neither regional fixed writes nor
+nonempty table loads. -/
+def HasNoFixedWrites (summary : SynthesisSummary) : Prop :=
+  (∀ index, .column .fixed index ∉ summary.columns) ∧
+    summary.tableRowExtent = 0
+
 def combine (left right : SynthesisSummary) : SynthesisSummary where
   columns := unionColumns left.columns right.columns
   columnOccupancy := fun column =>
@@ -1176,6 +1223,14 @@ def combine (left right : SynthesisSummary) : SynthesisSummary where
   regionShapes := left.regionShapes ++ right.regionShapes
   tableRowExtent := max left.tableRowExtent right.tableRowExtent
   instanceRowExtent := max left.instanceRowExtent right.instanceRowExtent
+
+@[synthesis_summary_norm]
+theorem hasNoFixedWrites_combine (left right : SynthesisSummary) :
+    (left.combine right).HasNoFixedWrites ↔
+      left.HasNoFixedWrites ∧ right.HasNoFixedWrites := by
+  simp only [HasNoFixedWrites, combine, mem_unionColumns_iff,
+    not_or, Nat.max_eq_zero_iff]
+  aesop
 
 theorem combine_assoc (left middle right : SynthesisSummary) :
     left.combine (middle.combine right) =
@@ -1197,6 +1252,16 @@ def replicate (count : ℕ) (summary : SynthesisSummary) : SynthesisSummary wher
   regionShapes := (List.replicate count summary.regionShapes).flatten
   tableRowExtent := if count = 0 then 0 else summary.tableRowExtent
   instanceRowExtent := if count = 0 then 0 else summary.instanceRowExtent
+
+@[synthesis_summary_norm]
+theorem hasNoFixedWrites_replicate (count : ℕ)
+    (summary : SynthesisSummary) :
+    (replicate count summary).HasNoFixedWrites ↔
+      count = 0 ∨ summary.HasNoFixedWrites := by
+  by_cases hcount : count = 0
+  · subst count
+    simp [HasNoFixedWrites, replicate]
+  · simp [HasNoFixedWrites, replicate, hcount]
 
 @[circuit_norm, synthesis_summary_norm]
 theorem replicate_columns (count : ℕ) (summary : SynthesisSummary) :
@@ -1325,6 +1390,16 @@ def ofRegion (summary : RegionSynthesisSummary) : SynthesisSummary where
 def ofInstanceRow (row : ℕ) : SynthesisSummary where
   instanceRowExtent := row + 1
 
+@[synthesis_summary_norm]
+theorem hasNoFixedWrites_ofRegion (summary : RegionSynthesisSummary) :
+    (ofRegion summary).HasNoFixedWrites ↔ summary.HasNoFixedColumns := by
+  simp [HasNoFixedWrites, ofRegion, RegionSynthesisSummary.HasNoFixedColumns]
+
+@[synthesis_summary_norm]
+theorem hasNoFixedWrites_ofInstanceRow (row : ℕ) :
+    (ofInstanceRow row).HasNoFixedWrites := by
+  simp [HasNoFixedWrites, ofInstanceRow]
+
 @[circuit_norm, synthesis_summary_norm]
 theorem ofInstanceRow_columns (row : ℕ) :
     (ofInstanceRow row).columns = [] := rfl
@@ -1352,6 +1427,11 @@ theorem ofInstanceRow_instanceRowExtent (row : ℕ) :
 /-- Reduced summary of one lookup-table load. -/
 def ofTableValues (values : List F) : SynthesisSummary where
   tableRowExtent := if values = [] then 0 else values.length + 1
+
+@[synthesis_summary_norm]
+theorem hasNoFixedWrites_ofTableValues (values : List F) :
+    (ofTableValues values).HasNoFixedWrites ↔ values = [] := by
+  simp [HasNoFixedWrites, ofTableValues]
 
 @[circuit_norm, synthesis_summary_norm]
 theorem ofTableValues_columns (values : List F) :
@@ -1722,6 +1802,34 @@ attribute [synthesis_summary_norm]
 
 end FloorPlanner
 
+/-- A region operation does not assign a fixed cell. -/
+def RegionOperation.HasNoFixedAssignment : RegionOperation F → Prop
+  | .assignFixed _ _ _ => False
+  | _ => True
+
+/-- A region stream contains no fixed-cell assignments. -/
+def RegionOperations.HasNoFixedAssignments
+    (operations : RegionOperations F) : Prop :=
+  operations.Forall RegionOperation.HasNoFixedAssignment
+
+/-- A reduced footprint without fixed columns certifies that the source program has
+no fixed assignments. -/
+theorem FloorPlanner.RegionSynthesisSummary.HasNoFixedColumns.hasNoFixedAssignments
+    {operations : RegionOperations F}
+    (hsummary :
+      (FloorPlanner.regionSynthesisSummary operations).HasNoFixedColumns) :
+    RegionOperations.HasNoFixedAssignments operations := by
+  apply List.forall_iff_forall_mem.mpr
+  intro operation hoperation
+  cases operation with
+  | assignFixed column row value =>
+      exact False.elim (hsummary column.index
+        (FloorPlanner.mem_regionSynthesisSummary_columns_of_mem operations
+          (.assignFixed column row value) hoperation
+          (.column .fixed column.index)
+          (by simp [FloorPlanner.regionOperationShapeColumns])))
+  | _ => trivial
+
 /-! ## Configure/synthesis registration -/
 
 /--
@@ -1740,6 +1848,8 @@ structure KeygenRequirements (F ConfigInput InputVar : Type) where
   configLawful : ConfigInput → Type := fun _ => Unit
   gates : ∀ input, configLawful input → List (Gate F) := fun _ _ => []
   lookups : ∀ input, configLawful input → List (LookupArgument F) := fun _ _ => []
+  fixedColumns : ∀ input, configLawful input → List (Column .fixed) := fun _ _ => []
+  constantColumns : ∀ input, configLawful input → List (Column .fixed) := fun _ _ => []
   permutationColumns : ∀ input, configLawful input → List AnyColumn := fun _ _ => []
   /-- Concrete caller-owned cells that synthesis may use in copy constraints. -/
   inputCells : ∀ configInput, configLawful configInput →
@@ -1761,6 +1871,8 @@ structure KeygenRequirements.EmptyAt
   configLawful : self.configLawful input
   gates_eq : self.gates input configLawful = []
   lookups_eq : self.lookups input configLawful = []
+  fixedColumns_eq : self.fixedColumns input configLawful = []
+  constantColumns_eq : self.constantColumns input configLawful = []
   permutationColumns_eq : self.permutationColumns input configLawful = []
   inputCells_eq : ∀ inputVar,
     self.inputCells input configLawful inputVar = []
@@ -2345,8 +2457,10 @@ which configure enabled equality.
 @[circuit_norm]
 def RegionOperation.KeygenRegistered
     (gates : List (Gate F)) (lookups : List (LookupArgument F))
+    (fixedColumns : List (Column .fixed))
     (permutationColumns : List AnyColumn) :
     RegionOperation F → Prop
+  | .assignFixed column _ _ => column ∈ fixedColumns
   | .enableGate gate _ => gate ∈ gates
   | .enableLookup argument _ _ => argument ∈ lookups
   | .constrainEqual left right =>
@@ -2360,13 +2474,15 @@ def RegionOperation.KeygenRegistered
 @[circuit_norm]
 def Operation.KeygenRegistered
     (gates : List (Gate F)) (lookups : List (LookupArgument F))
+    (fixedColumns : List (Column .fixed))
     (permutationColumns : List AnyColumn) :
     Operation F → Prop
   | .region _ body =>
-      body.Forall (RegionOperation.KeygenRegistered gates lookups permutationColumns)
+      body.Forall (RegionOperation.KeygenRegistered gates lookups fixedColumns
+        permutationColumns)
   | .constrainInstance cell column _ =>
       cell.column ∈ permutationColumns ∧ column.toAny ∈ permutationColumns
-  | _ => True
+  | .loadTable table _ => table.inner ∈ fixedColumns
 
 /--
 Every gate, lookup, and equality-dependent operation emitted by synthesis is covered
@@ -2375,34 +2491,42 @@ by the supplied configure-produced capabilities.
 def Operations.KeygenRegistered
     (operations : Operations F)
     (gates : List (Gate F)) (lookups : List (LookupArgument F))
+    (fixedColumns : List (Column .fixed))
     (permutationColumns : List AnyColumn) : Prop :=
-  operations.Forall (Operation.KeygenRegistered gates lookups permutationColumns)
+  operations.Forall (Operation.KeygenRegistered gates lookups fixedColumns
+    permutationColumns)
 
 @[circuit_norm]
 theorem Operations.KeygenRegistered.nil
     (gates : List (Gate F)) (lookups : List (LookupArgument F))
+    (fixedColumns : List (Column .fixed))
     (permutationColumns : List AnyColumn) :
-    Operations.KeygenRegistered [] gates lookups permutationColumns := by
+    Operations.KeygenRegistered [] gates lookups fixedColumns permutationColumns := by
   simp [Operations.KeygenRegistered]
 
 @[circuit_norm]
 theorem Operations.KeygenRegistered.append
     (left right : Operations F)
     (gates : List (Gate F)) (lookups : List (LookupArgument F))
+    (fixedColumns : List (Column .fixed))
     (permutationColumns : List AnyColumn) :
-    Operations.KeygenRegistered (left ++ right) gates lookups permutationColumns ↔
-      Operations.KeygenRegistered left gates lookups permutationColumns ∧
-        Operations.KeygenRegistered right gates lookups permutationColumns := by
+    Operations.KeygenRegistered (left ++ right) gates lookups fixedColumns
+        permutationColumns ↔
+      Operations.KeygenRegistered left gates lookups fixedColumns permutationColumns ∧
+        Operations.KeygenRegistered right gates lookups fixedColumns permutationColumns := by
   simp [Operations.KeygenRegistered]
 
 @[circuit_norm]
 theorem Operations.KeygenRegistered.region_cons
     (name : String) (body : RegionOperations F) (rest : Operations F)
     (gates : List (Gate F)) (lookups : List (LookupArgument F))
+    (fixedColumns : List (Column .fixed))
     (permutationColumns : List AnyColumn) :
-    Operations.KeygenRegistered (.region name body :: rest) gates lookups permutationColumns ↔
-      body.Forall (RegionOperation.KeygenRegistered gates lookups permutationColumns) ∧
-        Operations.KeygenRegistered rest gates lookups permutationColumns := by
+    Operations.KeygenRegistered (.region name body :: rest) gates lookups fixedColumns
+        permutationColumns ↔
+      body.Forall (RegionOperation.KeygenRegistered gates lookups fixedColumns
+        permutationColumns) ∧
+        Operations.KeygenRegistered rest gates lookups fixedColumns permutationColumns := by
   simp [Operations.KeygenRegistered, Operation.KeygenRegistered]
 
 @[circuit_norm]
@@ -2410,21 +2534,25 @@ theorem Operations.KeygenRegistered.constrainInstance_cons
     (cell : Cell) (column : Column .instance) (row : ℕ)
     (rest : Operations F)
     (gates : List (Gate F)) (lookups : List (LookupArgument F))
+    (fixedColumns : List (Column .fixed))
     (permutationColumns : List AnyColumn) :
     Operations.KeygenRegistered
-        (.constrainInstance cell column row :: rest) gates lookups permutationColumns ↔
+        (.constrainInstance cell column row :: rest) gates lookups fixedColumns
+          permutationColumns ↔
       cell.column ∈ permutationColumns ∧ column.toAny ∈ permutationColumns ∧
-        Operations.KeygenRegistered rest gates lookups permutationColumns := by
+        Operations.KeygenRegistered rest gates lookups fixedColumns permutationColumns := by
   simp [Operations.KeygenRegistered, Operation.KeygenRegistered, and_assoc]
 
 @[circuit_norm]
 theorem Operations.KeygenRegistered.loadTable_cons
     (table : TableColumn) (values : List F) (rest : Operations F)
     (gates : List (Gate F)) (lookups : List (LookupArgument F))
+    (fixedColumns : List (Column .fixed))
     (permutationColumns : List AnyColumn) :
     Operations.KeygenRegistered
-        (.loadTable table values :: rest) gates lookups permutationColumns ↔
-      Operations.KeygenRegistered rest gates lookups permutationColumns := by
+        (.loadTable table values :: rest) gates lookups fixedColumns permutationColumns ↔
+      table.inner ∈ fixedColumns ∧
+        Operations.KeygenRegistered rest gates lookups fixedColumns permutationColumns := by
   simp [Operations.KeygenRegistered, Operation.KeygenRegistered]
 
 /-- Registration is monotone in both configure-produced argument lists. -/
@@ -2432,15 +2560,20 @@ theorem Operations.KeygenRegistered.mono
     {operations : Operations F}
     {sourceGates targetGates : List (Gate F)}
     {sourceLookups targetLookups : List (LookupArgument F)}
+    {sourceFixedColumns targetFixedColumns : List (Column .fixed)}
     {sourcePermutationColumns targetPermutationColumns : List AnyColumn}
     (hregistered :
-      operations.KeygenRegistered sourceGates sourceLookups sourcePermutationColumns)
+      operations.KeygenRegistered sourceGates sourceLookups sourceFixedColumns
+        sourcePermutationColumns)
     (hgates : ∀ gate, gate ∈ sourceGates → gate ∈ targetGates)
     (hlookups :
       ∀ argument, argument ∈ sourceLookups → argument ∈ targetLookups)
+    (hfixedColumns : ∀ column,
+      column ∈ sourceFixedColumns → column ∈ targetFixedColumns)
     (hpermutationColumns : ∀ column,
       column ∈ sourcePermutationColumns → column ∈ targetPermutationColumns) :
-    operations.KeygenRegistered targetGates targetLookups targetPermutationColumns := by
+    operations.KeygenRegistered targetGates targetLookups targetFixedColumns
+      targetPermutationColumns := by
   rw [Operations.KeygenRegistered,
     List.forall_iff_forall_mem] at hregistered ⊢
   intro operation hoperation
@@ -2458,8 +2591,10 @@ theorem Operations.KeygenRegistered.mono
       | enableLookup argument selectors row =>
           exact hlookups argument hregionRegistered
       | assignAdvice
-      | assignFixed =>
+          =>
           trivial
+      | assignFixed column row value =>
+          exact hfixedColumns column hregionRegistered
       | constrainEqual left right =>
           exact ⟨hpermutationColumns left.column hregionRegistered.1,
             hpermutationColumns right.column hregionRegistered.2⟩
@@ -2472,26 +2607,29 @@ theorem Operations.KeygenRegistered.mono
       exact ⟨hpermutationColumns cell.column hoperationRegistered.1,
         hpermutationColumns column.toAny hoperationRegistered.2⟩
   | loadTable =>
-      trivial
+      exact hfixedColumns _ hoperationRegistered
 
 /-- Region-operation registration is monotone in both available argument lists. -/
 theorem RegionOperations.keygenRegistered_mono
     {operations : RegionOperations F}
     {sourceGates targetGates : List (Gate F)}
     {sourceLookups targetLookups : List (LookupArgument F)}
+    {sourceFixedColumns targetFixedColumns : List (Column .fixed)}
     {sourcePermutationColumns targetPermutationColumns : List AnyColumn}
     (hregistered :
       operations.Forall
         (RegionOperation.KeygenRegistered sourceGates sourceLookups
-          sourcePermutationColumns))
+          sourceFixedColumns sourcePermutationColumns))
     (hgates : ∀ gate, gate ∈ sourceGates → gate ∈ targetGates)
     (hlookups :
       ∀ argument, argument ∈ sourceLookups → argument ∈ targetLookups)
+    (hfixedColumns : ∀ column,
+      column ∈ sourceFixedColumns → column ∈ targetFixedColumns)
     (hpermutationColumns : ∀ column,
       column ∈ sourcePermutationColumns → column ∈ targetPermutationColumns) :
     operations.Forall
       (RegionOperation.KeygenRegistered targetGates targetLookups
-        targetPermutationColumns) := by
+        targetFixedColumns targetPermutationColumns) := by
   rw [List.forall_iff_forall_mem] at hregistered ⊢
   intro operation hoperation
   have hoperationRegistered := hregistered operation hoperation
@@ -2501,8 +2639,10 @@ theorem RegionOperations.keygenRegistered_mono
   | enableLookup argument selectors row =>
       exact hlookups argument hoperationRegistered
   | assignAdvice
-  | assignFixed =>
+      =>
       trivial
+  | assignFixed column row value =>
+      exact hfixedColumns column hoperationRegistered
   | constrainEqual left right =>
       exact ⟨hpermutationColumns left.column hoperationRegistered.1,
         hpermutationColumns right.column hoperationRegistered.2⟩
@@ -2518,19 +2658,26 @@ over any initial constraint system.
 -/
 theorem Operations.KeygenRegistered.applyConfigureDelta
     {operations : Operations F} {delta : ConfigureDelta F}
+    {fixedColumns : List (Column .fixed)}
     (initial : ConstraintSystem F) (counts : ConfigureCounts)
     (hregistered :
       operations.KeygenRegistered delta.gates delta.lookups
-        delta.permutationRequests) :
+        fixedColumns delta.permutationRequests)
+    (hfixedColumns : ∀ column ∈ fixedColumns,
+      column.index < counts.numFixedColumns) :
     operations.KeygenRegistered
       (delta.apply initial counts).gates
       (delta.apply initial counts).lookups
+      (delta.apply initial counts).fixedColumns
       (delta.apply initial counts).permutationColumns := by
   apply hregistered.mono
   · intro gate hgate
     exact List.mem_append_right initial.gates hgate
   · intro argument hargument
     exact List.mem_append_right initial.lookups hargument
+  · intro column hcolumn
+    rw [ConstraintSystem.mem_fixedColumns_iff]
+    exact hfixedColumns column hcolumn
   · intro column hcolumn
     rw [ConfigureDelta.apply, mem_appendFirstEncounters]
     exact Or.inr hcolumn
@@ -2539,24 +2686,28 @@ theorem Operations.KeygenRegistered.applyConfigureDelta
 @[circuit_norm]
 def RegionOperation.KeygenCoherent
     (cs : ConstraintSystem F) : RegionOperation F → Prop :=
-  RegionOperation.KeygenRegistered cs.gates cs.lookups cs.permutationColumns
+  RegionOperation.KeygenRegistered cs.gates cs.lookups cs.fixedColumns
+    cs.permutationColumns
 
 /-- Existing constraint-system spelling of configure/synthesis registration. -/
 @[circuit_norm]
 def Operation.KeygenCoherent
     (cs : ConstraintSystem F) : Operation F → Prop :=
-  Operation.KeygenRegistered cs.gates cs.lookups cs.permutationColumns
+  Operation.KeygenRegistered cs.gates cs.lookups cs.fixedColumns
+    cs.permutationColumns
 
 /-- Every synthesis-enabled argument was registered in a constraint system. -/
 def OperationsKeygenCoherent
     (cs : ConstraintSystem F) (operations : Operations F) : Prop :=
-  operations.KeygenRegistered cs.gates cs.lookups cs.permutationColumns
+  operations.KeygenRegistered cs.gates cs.lookups cs.fixedColumns
+    cs.permutationColumns
 
 @[circuit_norm]
 theorem OperationsKeygenCoherent.nil
     (cs : ConstraintSystem F) :
     OperationsKeygenCoherent cs [] := by
-  exact Operations.KeygenRegistered.nil cs.gates cs.lookups cs.permutationColumns
+  exact Operations.KeygenRegistered.nil cs.gates cs.lookups cs.fixedColumns
+    cs.permutationColumns
 
 /-- Configure/synthesis coherence composes across operation-stream append. -/
 @[circuit_norm]
@@ -2566,7 +2717,7 @@ theorem OperationsKeygenCoherent.append
       OperationsKeygenCoherent cs left ∧
         OperationsKeygenCoherent cs right := by
   exact Operations.KeygenRegistered.append
-    left right cs.gates cs.lookups cs.permutationColumns
+    left right cs.gates cs.lookups cs.fixedColumns cs.permutationColumns
 
 /-- A region is coherent exactly when each operation in its body is coherent. -/
 @[circuit_norm]
@@ -2577,7 +2728,7 @@ theorem OperationsKeygenCoherent.region_cons
       body.Forall (RegionOperation.KeygenCoherent cs) ∧
         OperationsKeygenCoherent cs rest := by
   exact Operations.KeygenRegistered.region_cons
-    name body rest cs.gates cs.lookups cs.permutationColumns
+    name body rest cs.gates cs.lookups cs.fixedColumns cs.permutationColumns
 
 @[circuit_norm]
 theorem OperationsKeygenCoherent.constrainInstance_cons
@@ -2589,26 +2740,264 @@ theorem OperationsKeygenCoherent.constrainInstance_cons
         column.toAny ∈ cs.permutationColumns ∧
         OperationsKeygenCoherent cs rest := by
   exact Operations.KeygenRegistered.constrainInstance_cons
-    cell column row rest cs.gates cs.lookups cs.permutationColumns
+    cell column row rest cs.gates cs.lookups cs.fixedColumns cs.permutationColumns
 
 @[circuit_norm]
 theorem OperationsKeygenCoherent.loadTable_cons
     (cs : ConstraintSystem F) (table : TableColumn)
     (values : List F) (rest : Operations F) :
     OperationsKeygenCoherent cs (.loadTable table values :: rest) ↔
-      OperationsKeygenCoherent cs rest := by
+      table.inner ∈ cs.fixedColumns ∧ OperationsKeygenCoherent cs rest := by
   exact Operations.KeygenRegistered.loadTable_cons
-    table values rest cs.gates cs.lookups cs.permutationColumns
+    table values rest cs.gates cs.lookups cs.fixedColumns cs.permutationColumns
 
 /-- Delta registration supplies coherence in every interpreted configure result. -/
 theorem Operations.KeygenRegistered.operationsKeygenCoherent_apply
     {operations : Operations F} {delta : ConfigureDelta F}
+    {fixedColumns : List (Column .fixed)}
     (initial : ConstraintSystem F) (counts : ConfigureCounts)
     (hregistered :
       operations.KeygenRegistered delta.gates delta.lookups
-        delta.permutationRequests) :
+        fixedColumns delta.permutationRequests)
+    (hfixedColumns : ∀ column ∈ fixedColumns,
+      column.index < counts.numFixedColumns) :
     OperationsKeygenCoherent (delta.apply initial counts) operations :=
-  hregistered.applyConfigureDelta initial counts
+  hregistered.applyConfigureDelta initial counts hfixedColumns
+
+/-! ## Fixed-write lawfulness -/
+
+/-- Fixed columns written by one region body. -/
+def RegionOperations.fixedColumns (operations : RegionOperations F) :
+    List (Column .fixed) :=
+  operations.filterMap fun operation =>
+    match operation with
+    | .assignFixed column _ _ => some column
+    | _ => none
+
+/-- Two writes to the same relative fixed cell in one region assign the same value. -/
+def RegionOperations.FixedAssignmentsAgree
+    (operations : RegionOperations F) : Prop :=
+  ∀ column row left right,
+    .assignFixed column row left ∈ operations →
+      .assignFixed column row right ∈ operations →
+        left = right
+
+/-- A stream containing no fixed writes has unambiguous fixed assignments. -/
+theorem RegionOperations.HasNoFixedAssignments.fixedAssignmentsAgree
+    {operations : RegionOperations F}
+    (hoperations : RegionOperations.HasNoFixedAssignments operations) :
+    operations.FixedAssignmentsAgree := by
+  intro column row left right hleft _
+  have hoperation := List.forall_iff_forall_mem.mp hoperations _ hleft
+  simp [RegionOperation.HasNoFixedAssignment] at hoperation
+
+/-- Appending a fixed-write-free suffix preserves fixed-assignment agreement. -/
+theorem RegionOperations.FixedAssignmentsAgree.append_right
+    {left right : RegionOperations F}
+    (hleft : left.FixedAssignmentsAgree)
+    (hright : right.HasNoFixedAssignments) :
+    (left ++ right).FixedAssignmentsAgree := by
+  intro column row x y hx hy
+  rw [List.mem_append] at hx hy
+  rcases hx with hx | hx <;> rcases hy with hy | hy
+  · exact hleft column row x y hx hy
+  · have hoperation := List.forall_iff_forall_mem.mp hright _ hy
+    simp [RegionOperation.HasNoFixedAssignment] at hoperation
+  · have hoperation := List.forall_iff_forall_mem.mp hright _ hx
+    simp [RegionOperation.HasNoFixedAssignment] at hoperation
+  · have hoperation := List.forall_iff_forall_mem.mp hright _ hx
+    simp [RegionOperation.HasNoFixedAssignment] at hoperation
+
+/-- Prepending a fixed-write-free prefix preserves fixed-assignment agreement. -/
+theorem RegionOperations.FixedAssignmentsAgree.append_left
+    {left right : RegionOperations F}
+    (hright : right.FixedAssignmentsAgree)
+    (hleft : left.HasNoFixedAssignments) :
+    (left ++ right).FixedAssignmentsAgree := by
+  intro column row x y hx hy
+  rw [List.mem_append] at hx hy
+  rcases hx with hx | hx <;> rcases hy with hy | hy
+  · have hoperation := List.forall_iff_forall_mem.mp hleft _ hx
+    simp [RegionOperation.HasNoFixedAssignment] at hoperation
+  · have hoperation := List.forall_iff_forall_mem.mp hleft _ hx
+    simp [RegionOperation.HasNoFixedAssignment] at hoperation
+  · have hoperation := List.forall_iff_forall_mem.mp hleft _ hy
+    simp [RegionOperation.HasNoFixedAssignment] at hoperation
+  · exact hright column row x y hx hy
+
+/-- A coherent fixed-writing fragment remains coherent between fixed-write-free
+prefix and suffix fragments. -/
+theorem RegionOperations.FixedAssignmentsAgree.between
+    {left middle right : RegionOperations F}
+    (hmiddle : middle.FixedAssignmentsAgree)
+    (hleft : left.HasNoFixedAssignments)
+    (hright : right.HasNoFixedAssignments) :
+    (left ++ middle ++ right).FixedAssignmentsAgree :=
+  hmiddle.append_left hleft |>.append_right hright
+
+/-- A region stream with no fixed-column writes has unambiguous fixed assignments. -/
+theorem RegionOperations.fixedAssignmentsAgree_of_fixedColumns_eq_nil
+    {operations : RegionOperations F}
+    (hcolumns : operations.fixedColumns = []) :
+    operations.FixedAssignmentsAgree := by
+  intro column row left right hleft _
+  have hcolumn : column ∈ operations.fixedColumns := by
+    rw [RegionOperations.fixedColumns, List.mem_filterMap]
+    exact ⟨.assignFixed column row left, hleft, rfl⟩
+  rw [hcolumns] at hcolumn
+  exact (List.not_mem_nil hcolumn).elim
+
+/-- Fixed columns used by region-local assignments in a layouter stream. -/
+def Operations.regionFixedColumns (operations : Operations F) :
+    List (Column .fixed) :=
+  operations.flatMap fun operation =>
+    match operation with
+    | .region _ body => body.fixedColumns
+    | _ => []
+
+/-- Nonempty lookup-table columns written by a layouter stream. -/
+def Operations.loadedTableColumns (operations : Operations F) :
+    List (Column .fixed) :=
+  operations.filterMap fun operation =>
+    match operation with
+    | .loadTable table values =>
+        if values = [] then none else some table.inner
+    | _ => none
+
+/-- A layouter operation performs no fixed-column write. -/
+def Operation.HasNoFixedWrites : Operation F → Prop
+  | .region _ body => RegionOperations.HasNoFixedAssignments body
+  | .loadTable _ values => values = []
+  | .constrainInstance _ _ _ => True
+
+/-- A layouter stream performs neither regional fixed writes nor nonempty table loads. -/
+def Operations.HasNoFixedWrites (operations : Operations F) : Prop :=
+  operations.Forall Operation.HasNoFixedWrites
+
+/-- A reduced layouter footprint with no fixed writes certifies its source stream. -/
+theorem FloorPlanner.SynthesisSummary.HasNoFixedWrites.hasNoFixedWrites
+    {operations : Operations F}
+    (hsummary :
+      (FloorPlanner.synthesisSummary operations).HasNoFixedWrites) :
+    Operations.HasNoFixedWrites operations := by
+  induction operations with
+  | nil => simp [Operations.HasNoFixedWrites]
+  | cons operation rest inductionHypothesis =>
+      unfold Operations.HasNoFixedWrites
+      rw [List.forall_cons]
+      cases operation with
+      | region name body =>
+          rw [FloorPlanner.synthesisSummary_region_cons] at hsummary
+          rcases hsummary with ⟨hcolumns, htable⟩
+          simp only [FloorPlanner.SynthesisSummary.combine_columns,
+            FloorPlanner.SynthesisSummary.ofRegion_columns] at hcolumns
+          simp only [FloorPlanner.SynthesisSummary.combine_tableRowExtent,
+            FloorPlanner.SynthesisSummary.ofRegion_tableRowExtent] at htable
+          constructor
+          · apply FloorPlanner.RegionSynthesisSummary.HasNoFixedColumns.hasNoFixedAssignments
+            intro index hcolumn
+            exact hcolumns index
+              ((FloorPlanner.mem_unionColumns_iff _ _ _).2 (.inl hcolumn))
+          · apply inductionHypothesis
+            constructor
+            · intro index hcolumn
+              exact hcolumns index
+                ((FloorPlanner.mem_unionColumns_iff _ _ _).2 (.inr hcolumn))
+            · omega
+      | constrainInstance cell column row =>
+          rw [FloorPlanner.synthesisSummary_constrainInstance_cons] at hsummary
+          rcases hsummary with ⟨hcolumns, htable⟩
+          simp only [FloorPlanner.SynthesisSummary.combine_columns,
+            FloorPlanner.SynthesisSummary.ofInstanceRow_columns] at hcolumns
+          simp only [FloorPlanner.SynthesisSummary.combine_tableRowExtent,
+            FloorPlanner.SynthesisSummary.ofInstanceRow_tableRowExtent] at htable
+          constructor
+          · trivial
+          · apply inductionHypothesis
+            constructor
+            · intro index hcolumn
+              exact hcolumns index
+                ((FloorPlanner.mem_unionColumns_iff _ _ _).2 (.inr hcolumn))
+            · omega
+      | loadTable table values =>
+          rw [FloorPlanner.synthesisSummary_loadTable_cons] at hsummary
+          rcases hsummary with ⟨hcolumns, htable⟩
+          simp only [FloorPlanner.SynthesisSummary.combine_columns,
+            FloorPlanner.SynthesisSummary.ofTableValues_columns,
+            FloorPlanner.unionColumns_empty_left,
+            FloorPlanner.synthesisSummary_columns_nodup rest] at hcolumns
+          simp only [FloorPlanner.SynthesisSummary.combine_tableRowExtent,
+            FloorPlanner.SynthesisSummary.ofTableValues] at htable
+          have hvalues : values = [] := by
+            split at htable <;> omega
+          constructor
+          · exact hvalues
+          · apply inductionHypothesis
+            exact ⟨hcolumns, by omega⟩
+
+/-- A no-fixed-write stream has no nonempty table-column owners. -/
+theorem Operations.HasNoFixedWrites.loadedTableColumns_eq_nil
+    {operations : Operations F}
+    (hoperations : Operations.HasNoFixedWrites operations) :
+    operations.loadedTableColumns = [] := by
+  induction operations with
+  | nil => rfl
+  | cons operation rest inductionHypothesis =>
+      rw [Operations.HasNoFixedWrites, List.forall_cons] at hoperations
+      cases operation with
+      | region name body =>
+          simpa [Operations.loadedTableColumns] using
+            inductionHypothesis hoperations.2
+      | constrainInstance cell column row =>
+          simpa [Operations.loadedTableColumns] using
+            inductionHypothesis hoperations.2
+      | loadTable table values =>
+          have hvalues := hoperations.1
+          change values = [] at hvalues
+          subst values
+          simpa [Operations.loadedTableColumns] using
+            inductionHypothesis hoperations.2
+
+/--
+The synthesis-local fixed-write discipline needed by keygen.
+
+Region-local duplicate writes may agree, while nonempty table columns are owned by one
+load and are disjoint from both region-written and constants columns. V1 placement then
+separates different regions, and its constants allocator uses the remaining cells.
+-/
+structure Operations.FixedWritesLawful
+    (operations : Operations F) (constantColumns : List (Column .fixed)) : Prop where
+  regionAssignmentsAgree : operations.Forall fun operation =>
+    match operation with
+    | .region _ body => body.FixedAssignmentsAgree
+    | _ => True
+  loadedTableColumns_nodup : operations.loadedTableColumns.Nodup
+  loadedTableColumns_disjoint_regionFixedColumns :
+    operations.loadedTableColumns.Disjoint operations.regionFixedColumns
+  loadedTableColumns_disjoint_constantColumns :
+    operations.loadedTableColumns.Disjoint constantColumns
+
+/-- A stream with no fixed writes satisfies the complete fixed-write law for any
+constant-column capability. -/
+theorem Operations.HasNoFixedWrites.fixedWritesLawful
+    {operations : Operations F} {constantColumns : List (Column .fixed)}
+    (hoperations : Operations.HasNoFixedWrites operations) :
+    operations.FixedWritesLawful constantColumns := by
+  have hloaded := hoperations.loadedTableColumns_eq_nil
+  constructor
+  · apply List.forall_iff_forall_mem.mpr
+    intro operation hoperation
+    have hlawful := List.forall_iff_forall_mem.mp hoperations operation hoperation
+    cases operation with
+    | region name body =>
+        exact RegionOperations.HasNoFixedAssignments.fixedAssignmentsAgree hlawful
+    | _ => trivial
+  · rw [hloaded]
+    exact List.nodup_nil
+  · rw [hloaded]
+    exact List.disjoint_nil_left _
+  · rw [hloaded]
+    exact List.disjoint_nil_left _
 
 /-! ## Selector activation vocabulary
 
@@ -2762,9 +3151,10 @@ compatibility imply the global master-selector discipline for one operation. -/
 theorem RegionOperation.lookupSelectorsLawful_of_registered
     {operation : RegionOperation F}
     {gates : List (Gate F)} {lookups : List (LookupArgument F)}
+    {fixedColumns : List (Column .fixed)}
     {permutationColumns : List AnyColumn}
     (hregistered : operation.KeygenRegistered
-      gates lookups permutationColumns)
+      gates lookups fixedColumns permutationColumns)
     (hactivation : operation.LookupActivationWellFormed)
     (hcompatible : Halo2.LookupSelectorsCompatible gates lookups) :
     operation.LookupSelectorsLawful lookups := by
@@ -2803,9 +3193,11 @@ theorem RegionOperation.lookupSelectorsLawful_of_registered
 theorem RegionOperations.lookupSelectorsLawful_of_registered
     {operations : RegionOperations F}
     {gates : List (Gate F)} {lookups : List (LookupArgument F)}
+    {fixedColumns : List (Column .fixed)}
     {permutationColumns : List AnyColumn}
     (hregistered : operations.Forall
-      (RegionOperation.KeygenRegistered gates lookups permutationColumns))
+      (RegionOperation.KeygenRegistered gates lookups fixedColumns
+        permutationColumns))
     (hactivations : operations.LookupActivationsWellFormed)
     (hcompatible : Halo2.LookupSelectorsCompatible gates lookups) :
     operations.LookupSelectorsLawful lookups := by
@@ -2820,9 +3212,10 @@ theorem RegionOperations.lookupSelectorsLawful_of_registered
 theorem Operation.lookupSelectorsLawful_of_registered
     {operation : Operation F}
     {gates : List (Gate F)} {lookups : List (LookupArgument F)}
+    {fixedColumns : List (Column .fixed)}
     {permutationColumns : List AnyColumn}
     (hregistered : operation.KeygenRegistered
-      gates lookups permutationColumns)
+      gates lookups fixedColumns permutationColumns)
     (hactivations : operation.LookupActivationsWellFormed)
     (hcompatible : Halo2.LookupSelectorsCompatible gates lookups) :
     operation.LookupSelectorsLawful lookups := by
@@ -2836,9 +3229,10 @@ theorem Operation.lookupSelectorsLawful_of_registered
 theorem Operations.lookupSelectorsLawful_of_registered
     {operations : Operations F}
     {gates : List (Gate F)} {lookups : List (LookupArgument F)}
+    {fixedColumns : List (Column .fixed)}
     {permutationColumns : List AnyColumn}
     (hregistered : operations.KeygenRegistered
-      gates lookups permutationColumns)
+      gates lookups fixedColumns permutationColumns)
     (hactivations : operations.LookupActivationsWellFormed)
     (hcompatible : Halo2.LookupSelectorsCompatible gates lookups) :
     operations.LookupSelectorsLawful lookups := by

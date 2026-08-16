@@ -36,6 +36,8 @@ attribute [keygen_norm]
   Configure.delta_selector Configure.delta_complexSelector
   Configure.delta_createGate
   Configure.output_bind Configure.output_pure
+  Configure.fixedColumns_bind Configure.fixedColumns_pure
+  Configure.fixedColumns_fixedColumn
   Configure.output_adviceColumn Configure.output_fixedColumn
   Configure.output_instanceColumn Configure.output_selector
   Configure.output_complexSelector Configure.output_enableEquality
@@ -55,6 +57,10 @@ attribute [keygen_norm]
   RegionOperation.assignedCells RegionOperation.copiedCells
   RegionOperations.assignedCells RegionOperations.copiedCells
   RegionOperations.CopyCellsAssigned
+  RegionOperations.fixedColumns RegionOperations.FixedAssignmentsAgree
+  RegionOperation.HasNoFixedAssignment RegionOperations.HasNoFixedAssignments
+  Operations.regionFixedColumns Operations.loadedTableColumns
+  Operation.HasNoFixedWrites Operations.HasNoFixedWrites
   RegionOperations.assignedCellsAfter
   Operation.copiedCells
   Operations.assignedCellsFrom Operations.assignedCells
@@ -99,6 +105,10 @@ attribute [keygen_spine]
   RegionOperation.assignedCells RegionOperation.copiedCells
   RegionOperations.assignedCells RegionOperations.copiedCells
   RegionOperations.CopyCellsAssigned
+  RegionOperations.fixedColumns RegionOperations.FixedAssignmentsAgree
+  RegionOperation.HasNoFixedAssignment RegionOperations.HasNoFixedAssignments
+  Operations.regionFixedColumns Operations.loadedTableColumns
+  Operation.HasNoFixedWrites Operations.HasNoFixedWrites
   RegionOperations.assignedCellsAfter
   Operation.copiedCells
   Operations.assignedCellsFrom Operations.assignedCells
@@ -242,9 +252,11 @@ theorem assignAdvice_keygenRegistered
     {F : Type} [FiniteField F]
     (column : Column .advice) (row : ℕ) (compute : WitgenIR F 1)
     (self : RegionIndex) (gates : List (Gate F)) (lookups : List (LookupArgument F))
+    (fixedColumns : List (Column .fixed))
     (permutationColumns : List AnyColumn) :
     ((assignAdvice column row compute).operations self).Forall
-      (RegionOperation.KeygenRegistered gates lookups permutationColumns) := by
+      (RegionOperation.KeygenRegistered gates lookups fixedColumns
+        permutationColumns) := by
   simp only [operations_assignAdvice, List.forall_cons,
     RegionOperation.KeygenRegistered, List.forall_nil, and_self]
 
@@ -428,7 +440,8 @@ partial def closeCallSideCondition
   let state ← saveState
   try
     evalTactic (← `(tactic|
-      first | assumption | exact () | rfl | simp_all only [keygen_norm]))
+      first | assumption | exact () | rfl |
+        simp_all only [keygen_norm, synthesis_summary_norm]))
   catch _ =>
     state.restore
   if (← getGoals).isEmpty then
@@ -449,7 +462,8 @@ partial def closeCallSideCondition
     return
   let state ← saveState
   try
-    evalTactic (← `(tactic| simp_all))
+    evalTactic (← `(tactic|
+      simp_all only [keygen_norm, synthesis_summary_norm]))
   catch _ =>
     state.restore
   if (← getGoals).isEmpty then
@@ -810,6 +824,8 @@ def simpCallRouting (expression : Expr) : SimpM Simp.Result := do
       exposed.expr.find? fun expression =>
         expression.getAppFn.isConstOf ``KeygenRequirements.gates ||
           expression.getAppFn.isConstOf ``KeygenRequirements.lookups ||
+          expression.getAppFn.isConstOf ``KeygenRequirements.fixedColumns ||
+          expression.getAppFn.isConstOf ``KeygenRequirements.constantColumns ||
           expression.getAppFn.isConstOf ``KeygenRequirements.permutationColumns ||
           expression.getAppFn.isConstOf ``KeygenRequirements.inputCells ||
           expression.getAppFn.isConstOf ``KeygenRequirements.inputPermutationColumns
@@ -1306,7 +1322,7 @@ def callRegistrationSimproc (target : Expr) : SimpM Simp.Step := do
   return .continue
 
 simproc callRegistration
-    (Operations.KeygenRegistered _ _ _ _) := callRegistrationSimproc
+    (Operations.KeygenRegistered _ _ _ _ _) := callRegistrationSimproc
 
 simproc regionCallRegistration
     (List.Forall _ _) := callRegistrationSimproc

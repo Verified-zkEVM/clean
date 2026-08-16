@@ -718,20 +718,22 @@ theorem FormalCircuit.operationsKeygenCoherent
       (c.configure ci {}).2
       ((c.synthesize (c.configure ci {}).1 input).operations) := by
   rcases hrequirements with
-    ⟨hconfig, hgates, hlookups, hpermutationColumns,
-      hinputCells⟩
+    ⟨hconfig, hgates, hlookups, hfixedColumns, hconstantColumns,
+      hpermutationColumns, hinputCells⟩
   let program := c.configure ci
   let counts :=
     ConfigureCounts.ofConstraintSystem ({} : ConstraintSystem F)
   have hregistered :=
     c.elaborated.registered ci counts hconfig input 0
-  simp only [hgates, hlookups, hpermutationColumns,
+  simp only [hgates, hlookups, hfixedColumns, hpermutationColumns,
     KeygenRequirements.inputPermutationColumns, hinputCells input,
     List.map_nil, List.nil_append, List.append_nil] at hregistered
   have happlied :=
     hregistered.applyConfigureDelta
       ({} : ConstraintSystem F)
-      (program.finalCounts counts)
+      (program.finalCounts counts) (by
+        intro column hcolumn
+        exact (Configure.mem_fixedColumns_iff program counts column).mp hcolumn |>.2)
   simpa only [program, counts, Configure.run,
     ConfigureCounts.ofConstraintSystem] using happlied
 
@@ -744,7 +746,7 @@ theorem FormalCircuit.operationsCopyCellsAssigned
         (Input := Input) (Output := Output) c) ci) :
     ((c.synthesize (c.configure ci {}).1 input).operations).CopyCellsAssigned 0 [] := by
   rcases hrequirements with
-    ⟨hconfig, _, _, _, hinputCells⟩
+    ⟨hconfig, _, _, _, _, _, hinputCells⟩
   let counts :=
     ConfigureCounts.ofConstraintSystem ({} : ConstraintSystem F)
   have hassigned :=

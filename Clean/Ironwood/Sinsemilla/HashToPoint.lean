@@ -79,11 +79,12 @@ theorem witnessMessagePiece_regionCount
 @[keygen_norm, keygen_helper]
 theorem witnessMessagePiece_keygenRegistered
     {gates : List (Gate Fp)} {lookups : List (LookupArgument Fp)}
+    {fixedColumns : List (Column .fixed)}
     {permutationColumns : List AnyColumn}
     (cfg : Sinsemilla.HashPiece.Config) (w : WitgenIR Fp 1)
     (region : RegionIndex) :
     ((witnessMessagePiece cfg w).operations region).KeygenRegistered
-      gates lookups permutationColumns := by
+      gates lookups fixedColumns permutationColumns := by
   unfold witnessMessagePiece
   keygen_registration
 
@@ -322,6 +323,21 @@ theorem hashRegionSynthesize_output (G : Generators) (ns : List ℕ)
   simp only [hashRegionSynthesize, circuit_norm, keygen_output_norm]
   exact ⟨rfl, rfl⟩
 
+theorem hashRegionSynthesize_assignFixed_mem_iff
+    (G : Generators) (ns : List ℕ) (Q : Point Fp)
+    (cfg : Sinsemilla.HashPiece.Config) (offset : ℕ)
+    (input : Var (Sinsemilla.Chain.Inputs ns.length) Fp)
+    (self : RegionIndex) (column : Column .fixed) (row : ℕ) (value : Fp) :
+    .assignFixed column row value ∈
+        (hashRegionSynthesize G ns Q cfg offset input).operations self ↔
+      (column = cfg.fixedYQ ∧ row = offset ∧ value = Q.y) ∨
+        .assignFixed column row value ∈
+          ((Sinsemilla.Chain.circuit G ns fun _ => Q.y).call
+            cfg offset input).operations self := by
+  simp only [hashRegionSynthesize, circuit_norm, List.mem_append]
+  rw [z1Cells_operations]
+  simp
+
 def hashRegionSynthesisSummary (ns : List ℕ)
     (cfg : Sinsemilla.HashPiece.Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
@@ -346,10 +362,12 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
 
   elaborated :=
     { keygenRequirements :=
-        { gates cfg _ :=
+        { configLawful cfg := Sinsemilla.HashPiece.Config.FixedColumnsLawful cfg
+          gates cfg _ :=
             [Sinsemilla.HashPiece.initialYQGate cfg,
               Sinsemilla.HashPiece.sinsemillaGate cfg]
           lookups cfg _ := [Sinsemilla.HashPiece.generatorLookup G cfg]
+          fixedColumns cfg _ := [cfg.fixedYQ, cfg.qS2]
           permutationColumns cfg _ := [cfg.xA, cfg.lambda1, cfg.bits]
           inputCells _ _ input :=
             input.pieces.toList.map (·.cell) }
@@ -370,6 +388,12 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
             Sinsemilla.Chain.circuit, ElaboratedRegionCircuit.keygenRequirements,
             List.mem_cons] at *
           aesop
+        · simp only [hchain,
+            FormalRegionCircuit.Configured.ofPure_fixedColumns,
+            FormalRegionCircuit.keygenRequirements,
+            Sinsemilla.Chain.circuit, ElaboratedRegionCircuit.keygenRequirements,
+            List.mem_singleton] at *
+          simp_all
         · simp only [hchain,
             FormalRegionCircuit.Configured.ofPure_permutationColumns,
             FormalRegionCircuit.keygenRequirements,
@@ -400,6 +424,42 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
           simp only [List.mem_cons]
           exact Or.inr (Or.inr (List.mem_map.mpr hcell))
         · exact RegionOperations.CopyCellsAssignedFrom.nil _
+      fixedAssignmentsAgree := by
+        intro cfg counts hconfig offset input region
+        let child := Sinsemilla.Chain.circuit G ns fun _ => Q.y
+        let hchain : child.Configured cfg :=
+          FormalRegionCircuit.Configured.ofPure _ cfg () rfl
+        have hchild := child.call_fixedAssignmentsAgree
+          cfg hchain offset input region
+        unfold RegionOperations.FixedAssignmentsAgree at hchild ⊢
+        intro column row left right hleft hright
+        rw [hashRegionSynthesize_assignFixed_mem_iff] at hleft hright
+        rcases hleft with hleft | hleft <;>
+          rcases hright with hright | hright
+        · exact hleft.2.2.trans hright.2.2.symm
+        · have hcolumn : column = cfg.qS2 := by
+            have := child.fixedColumn_mem_of_mem_call
+              cfg hchain offset input region column row right hright
+            simpa only [hchain,
+              FormalRegionCircuit.Configured.ofPure_fixedColumns,
+              FormalRegionCircuit.keygenRequirements, child,
+              Sinsemilla.Chain.circuit,
+              ElaboratedRegionCircuit.keygenRequirements,
+              List.mem_singleton] using this
+          exact False.elim (hconfig.qS2_ne_fixedYQ
+            (hcolumn.symm.trans hleft.1))
+        · have hcolumn : column = cfg.qS2 := by
+            have := child.fixedColumn_mem_of_mem_call
+              cfg hchain offset input region column row left hleft
+            simpa only [hchain,
+              FormalRegionCircuit.Configured.ofPure_fixedColumns,
+              FormalRegionCircuit.keygenRequirements, child,
+              Sinsemilla.Chain.circuit,
+              ElaboratedRegionCircuit.keygenRequirements,
+              List.mem_singleton] using this
+          exact False.elim (hconfig.qS2_ne_fixedYQ
+            (hcolumn.symm.trans hright.1))
+        · exact hchild column row left right hleft hright
       output cfg offset input self :=
         { point :=
             { x := AssignedCell.of self
@@ -723,7 +783,7 @@ def hashConfigureCertificate (G : Generators) (ns : List ℕ)
     (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ [])
     (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
     (fixedYQ : Column .fixed) (genTable : Sinsemilla.GeneratorTableConfig)
-    (counts : ConfigureCounts) :
+    (counts : ConfigureCounts) (hfixedYQ : fixedYQ.index < counts.numFixedColumns) :
     (hashCircuit G ns Q hQ hns).ConfigurationCertificate
       ((Sinsemilla.HashPiece.configure G xA xP bits lambda1 lambda2
         witnessPieces fixedYQ genTable).output counts)
@@ -731,12 +791,17 @@ def hashConfigureCertificate (G : Generators) (ns : List ℕ)
           witnessPieces fixedYQ genTable).delta counts).gates
         lookups := ((Sinsemilla.HashPiece.configure G xA xP bits lambda1 lambda2
           witnessPieces fixedYQ genTable).delta counts).lookups
+        fixedColumns := fixedYQ ::
+          (Sinsemilla.HashPiece.configure G xA xP bits lambda1 lambda2
+            witnessPieces fixedYQ genTable).fixedColumns counts
         permutationColumns :=
           ((Sinsemilla.HashPiece.configure G xA xP bits lambda1 lambda2
             witnessPieces fixedYQ genTable).delta counts).permutationRequests } := by
   let cfg := (Sinsemilla.HashPiece.configure G xA xP bits lambda1 lambda2
     witnessPieces fixedYQ genTable).output counts
-  apply ((hashRegion G ns Q hQ hns).configureCertificate cfg {} ()).mono
+  apply ((hashRegion G ns Q hQ hns).configureCertificate cfg {}
+    (Sinsemilla.HashPiece.configureOutputFixedColumnsLawful G xA xP bits
+      lambda1 lambda2 witnessPieces fixedYQ genTable counts hfixedYQ)).mono
   · intro gate hgate
     simp only [hashRegion, FormalRegionCircuit.keygenRequirements,
       ElaboratedRegionCircuit.keygenRequirements, Configure.delta_pure,
@@ -791,6 +856,16 @@ def hashConfigureCertificate (G : Generators) (ns : List ℕ)
     apply Configure.mem_lookups_delta_bind_left
     simp [cfg, Sinsemilla.HashPiece.configure, lookup, Configure.delta,
       ConfigureDelta.append, Sinsemilla.HashPiece.generatorLookup]
+  · intro column hcolumn
+    simp only [hashRegion, FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements, Configure.fixedColumns_pure,
+      List.append_nil, List.mem_cons, List.not_mem_nil, or_false] at hcolumn
+    rcases hcolumn with rfl | rfl
+    · simp
+    ·
+      apply List.mem_cons.mpr
+      right
+      simp [cfg, Sinsemilla.HashPiece.configure]
   · intro column hcolumn
     simp only [hashRegion, FormalRegionCircuit.keygenRequirements,
       ElaboratedRegionCircuit.keygenRequirements, Configure.delta_pure,

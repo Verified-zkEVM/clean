@@ -66,14 +66,16 @@ instance (superConfig : MulFixed.Config) :
 @[keygen_norm]
 def innerKeygenRequirements : KeygenRequirements Fp Config Unit where
   configLawful cfg :=
-    AddIncomplete.add.Configured cfg.superConfig.addIncompleteConfig
+    AddIncomplete.add.Configured cfg.superConfig.addIncompleteConfig ×
+      cfg.superConfig.FixedColumnsLawful
   gates cfg configured :=
     [fullWidthGate cfg] ++
-      runningSumKeygenRequirements.gates cfg.superConfig configured
+      runningSumKeygenRequirements.gates cfg.superConfig configured.1
   lookups cfg configured :=
-    runningSumKeygenRequirements.lookups cfg.superConfig configured
+    runningSumKeygenRequirements.lookups cfg.superConfig configured.1
+  fixedColumns cfg _ := MulFixed.fixedColumns cfg.superConfig
   permutationColumns cfg configured :=
-    runningSumKeygenRequirements.permutationColumns cfg.superConfig configured
+    runningSumKeygenRequirements.permutationColumns cfg.superConfig configured.1
 
 /-- `decompose_scalar_fixed`: enable `q_mul_fixed_full` on all `numWindows` rows, then
 witness the scalar's 3-bit windows `k[w]` into the `window` column — from the window
@@ -144,16 +146,27 @@ theorem witnessScalarLoopSynthesisSummary_constantSiteCount
     (witnessScalarLoopSynthesisSummary cfg offset).constantSiteCount = 0 := by
   simp only [witnessScalarLoopSynthesisSummary, synthesis_summary_norm]
 
+@[synthesis_summary_norm]
+theorem witnessScalarLoopSynthesisSummary_hasNoFixedColumns
+    (cfg : Config) (offset : ℕ) :
+    (witnessScalarLoopSynthesisSummary cfg offset).HasNoFixedColumns := by
+  simp only [witnessScalarLoopSynthesisSummary,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_combine,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_repeatColumns]
+  simp
+
 @[keygen_helper]
 theorem witnessScalarLoop_keygenRegistered
     {gates : List (Gate Fp)} {lookups : List (LookupArgument Fp)}
+    {fixedColumns : List (Column .fixed)}
     {permutationColumns : List AnyColumn}
     (cfg : Config)
     (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
     (offset : ℕ) (self : RegionIndex)
     (hfullWidth : fullWidthGate cfg ∈ gates) :
     ((witnessScalarLoop cfg windows offset).operations self).Forall
-      (RegionOperation.KeygenRegistered gates lookups permutationColumns) := by
+      (RegionOperation.KeygenRegistered gates lookups fixedColumns
+        permutationColumns) := by
   unfold witnessScalarLoop
   simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
     RegionCircuit.forRange'_forall, operations_enable, operations_assignAdvice,
@@ -323,6 +336,17 @@ def innerRegion (B : FixedBaseData) (cfg : Config) (offset : ℕ)
   let r ← MulFixed.windowChain cfg.superConfig (processWindowH B cfg windows) offset 85
   return { acc := r.1, mulB := r.2 }
 
+theorem innerRegion_operations_eq
+    (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
+    (self : RegionIndex) :
+    (innerRegion B cfg offset windows).operations self =
+      (witnessScalarLoop cfg windows offset).operations self ++
+        (fixedConstantsLoop (fullWidthGate cfg) B cfg.superConfig offset 85).operations self ++
+          (windowChain cfg.superConfig (processWindowH B cfg windows) offset 85).operations self := by
+  simp only [innerRegion, RegionCircuit.operations_bind,
+    RegionCircuit.operations_pure, List.append_nil, List.append_assoc]
+
 /-- Reduced footprint of the full-width inner region. -/
 def innerRegionSynthesisSummary (cfg : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
@@ -349,6 +373,7 @@ theorem innerRegion_synthesisSummary_eq
 @[keygen_helper]
 theorem windowChain_processWindowH_keygenRegistered
     {gates : List (Gate Fp)} {lookups : List (LookupArgument Fp)}
+    {fixedColumns : List (Column .fixed)}
     {permutationColumns : List AnyColumn}
     (B : FixedBaseData) (cfg : Config)
     (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
@@ -363,26 +388,22 @@ theorem windowChain_processWindowH_keygenRegistered
         column ∈ permutationColumns) :
     ((MulFixed.windowChain cfg.superConfig (processWindowH B cfg windows)
       offset numWindows).operations self).Forall
-        (RegionOperation.KeygenRegistered gates lookups permutationColumns) := by
+        (RegionOperation.KeygenRegistered gates lookups fixedColumns
+          permutationColumns) := by
   keygen_registration [MulFixed.windowChain]
 
 @[keygen_helper]
 theorem innerRegion_keygenRegistered
     (B : FixedBaseData) (cfg : Config) (offset : ℕ)
     (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
-    (self : RegionIndex) (counts : ConfigureCounts) (input : Unit)
-    (configured : AddIncomplete.add.Configured
-      cfg.superConfig.addIncompleteConfig) :
-    let program := (pure cfg : Configure Fp Config)
-    ((innerRegion B (program.output counts) offset windows).operations self).Forall
+    (self : RegionIndex)
+    (configured : innerKeygenRequirements.configLawful cfg) :
+    ((innerRegion B cfg offset windows).operations self).Forall
       (RegionOperation.KeygenRegistered
-        (innerKeygenRequirements.gates cfg configured ++ (program.delta counts).gates)
-        (innerKeygenRequirements.lookups cfg configured ++ (program.delta counts).lookups)
-        (innerKeygenRequirements.permutationColumns cfg configured ++
-          (program.delta counts).permutationRequests ++
-          innerKeygenRequirements.inputPermutationColumns cfg configured input)) := by
-  simp only [Configure.output_pure, Configure.delta_pure, innerKeygenRequirements,
-    List.append_nil]
+        (innerKeygenRequirements.gates cfg configured)
+        (innerKeygenRequirements.lookups cfg configured)
+        (innerKeygenRequirements.fixedColumns cfg configured)
+        (innerKeygenRequirements.permutationColumns cfg configured)) := by
   simp only [innerRegion, RegionCircuit.operations_bind,
     RegionCircuit.operations_pure, List.forall_append, List.forall_nil, and_true]
   constructor
@@ -590,6 +611,30 @@ def InnerProverSpec (B : FixedBase) (_ : ProverValue unit Fp)
   out.mulB.x = (Ecc.MulFixed.windowPoint B.point 84 ((ws[84]!).val)).x ∧
   out.mulB.y = (Ecc.MulFixed.windowPoint B.point 84 ((ws[84]!).val)).y
 
+theorem innerRegion_fixedAssignmentsAgree
+    (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (windows : Vector (Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)) 85)
+    (self : RegionIndex) (fixedColumnsLawful : cfg.superConfig.FixedColumnsLawful) :
+    ((innerRegion B cfg offset windows).operations self)
+      |>.FixedAssignmentsAgree := by
+  rw [innerRegion_operations_eq]
+  generalize fullWidthGate cfg = toggle
+  have hfixed :=
+    fixedConstantsLoop_fixedAssignmentsAgree
+      toggle B cfg.superConfig fixedColumnsLawful offset 85 self
+  have hchain := windowChain_hasNoFixedAssignments cfg.superConfig
+    (processWindowH B cfg windows) offset 85 self fun w row =>
+      processWindowH_synthesisSummary_eq B cfg windows w row self
+  apply hfixed.between
+  · unfold witnessScalarLoop RegionOperations.HasNoFixedAssignments
+    simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+      RegionCircuit.forRange'_forall, List.forall_append]
+    constructor <;> intro i <;>
+      simp only [operations_enable, operations_assignAdvice,
+        List.forall_cons, List.forall_nil,
+        RegionOperation.HasNoFixedAssignment, and_self]
+  · exact hchain
+
 seal innerRegion in
 /-- The elaborated-metadata instance for the inner region's synthesize lambda, with the
 output cells in explicit reduced form (`innerOutCells`) — computing the default output
@@ -602,10 +647,10 @@ instance innerElab (B : FixedBaseData)
   keygenRequirements :=
     innerKeygenRequirements
   registered configInput counts configured offset input self :=
-    innerRegion_keygenRegistered B configInput offset windows self counts input configured
+    innerRegion_keygenRegistered B configInput offset windows self configured
   copyCellsAssigned configInput _ configured offset _ self :=
     (innerRegion_copyCellsAssignedFrom_and_outputAssigned
-      B configInput offset windows self configured []).1
+      B configInput offset windows self configured.1 []).1
   lookupActivationsWellFormed config offset _ region := by
     simp only [innerRegion, RegionCircuit.operations_bind,
       RegionCircuit.operations_pure,
@@ -623,6 +668,9 @@ instance innerElab (B : FixedBaseData)
       intro w row
       unfold processWindowH
       keygen_registration
+  fixedAssignmentsAgree := by
+    intro configInput _ configured offset _ self
+    exact innerRegion_fixedAssignmentsAgree B configInput offset windows self configured.2
   output config offset _ self := innerOutCells config offset self
   synthesisSummary config offset _ _ :=
     innerRegionSynthesisSummary config offset
@@ -1392,25 +1440,27 @@ def circuit (B : FixedBase) :
     { keygenRequirements :=
         { configLawful cfg :=
             AddIncomplete.add.Configured cfg.addIncompleteConfig ×
-              Add.add.Configured cfg.addConfig
+              Add.add.Configured cfg.addConfig × cfg.FixedColumnsLawful
           gates cfg configured :=
-            runningSumKeygenRequirements.gates cfg configured.1 ++ configured.2.gates
+            runningSumKeygenRequirements.gates cfg configured.1 ++ configured.2.1.gates
           lookups cfg configured :=
-            runningSumKeygenRequirements.lookups cfg configured.1 ++ configured.2.lookups
+            runningSumKeygenRequirements.lookups cfg configured.1 ++ configured.2.1.lookups
+          fixedColumns cfg _ := MulFixed.fixedColumns cfg
           permutationColumns cfg configured :=
             runningSumKeygenRequirements.permutationColumns cfg configured.1 ++
-              configured.2.permutationColumns }
+              configured.2.1.permutationColumns }
       registered configInput counts configured scalar self := by
-        rcases configured with ⟨configuredAddIncomplete, configuredAdd⟩
+        rcases configured with
+          ⟨configuredAddIncomplete, configuredAdd, fixedColumnsLawful⟩
         simp only [keygen_norm, keygen_spine, configure, synthesize]
         have hinner := innerRegion_keygenRegistered B.toData
           { qMulFixedFull := { index := counts.numSelectors, simple := true },
             superConfig := configInput }
-          0 (scalarWindows scalar) self counts () configuredAddIncomplete
+          0 (scalarWindows scalar) self ⟨configuredAddIncomplete, fixedColumnsLawful⟩
         constructor
         · exact RegionOperations.keygenRegistered_mono hinner
             (by keygen_registration) (by keygen_registration)
-            (by keygen_registration)
+            (by keygen_registration) (by keygen_registration)
         · keygen_registration
       lookupActivationsWellFormed config scalar region := by
         simp only [synthesize, Circuit.operations_bind,
@@ -1433,9 +1483,32 @@ def circuit (B : FixedBase) :
         exact (synthesize_synthesisSummary_eq B.toData _ _ self).symm
       regionCount_eq := fun cfg scalar i =>
         (synthesize_regionCount B.toData cfg (scalarWindows scalar) i).symm
+      fixedWritesLawful := by
+        intro configInput counts hconfig scalar self
+        rcases hconfig with
+          ⟨configuredIncomplete, configuredAdd, fixedColumnsLawful⟩
+        let cfg := (configure configInput).output counts
+        let windows := scalarWindows scalar
+        have hinner := innerRegion_fixedAssignmentsAgree B.toData cfg 0 windows self
+          fixedColumnsLawful
+        have hadd := Add.add.call_fixedAssignmentsAgree
+          cfg.superConfig.addConfig configuredAdd 0
+          ⟨((innerRegion B.toData cfg 0 windows).output self).mulB,
+            ((innerRegion B.toData cfg 0 windows).output self).acc⟩
+          (self + 1)
+        constructor
+        · simpa only [synthesize, Circuit.operations_bind, operations_assignRegion,
+            List.forall_append, List.forall_cons, List.forall_nil, and_true,
+            windows] using And.intro hinner hadd
+        · simp [synthesize, Circuit.operations_bind, operations_assignRegion,
+            Operations.loadedTableColumns]
+        · simp [synthesize, Circuit.operations_bind, operations_assignRegion,
+            Operations.loadedTableColumns]
+        · simp [synthesize, Circuit.operations_bind, operations_assignRegion,
+            Operations.loadedTableColumns]
       copyCellsAssigned := by
         intro configInput counts hconfig scalar i
-        rcases hconfig with ⟨configuredIncomplete, configuredAdd⟩
+        rcases hconfig with ⟨configuredIncomplete, configuredAdd, _⟩
         exact synthesize_copyCellsAssignedFrom B.toData
           ((configure configInput).output counts) (scalarWindows scalar) i
           configuredIncomplete configuredAdd }
@@ -1671,7 +1744,7 @@ theorem Configured.addPermutationColumns_subset (B : FixedBase) {cfg : Config}
     circuit, List.mem_append]
   apply Or.inl
   apply Or.inr
-  rw [Add.Configured.permutationColumns_eq hconfig.2]
+  rw [Add.Configured.permutationColumns_eq hconfig.2.1]
   exact hcolumn
 
 derive_contract_bridges circuit (B : FixedBase) := circuit B

@@ -50,6 +50,13 @@ def synthesisSummary (cfg : Config) (offset : ℕ) :
       .column .advice cfg.colZ.index]
     (offset + 1) 0
 
+@[synthesis_summary_norm]
+theorem synthesisSummary_hasNoFixedColumns (cfg : Config) (offset : ℕ) :
+    (synthesisSummary cfg offset).HasNoFixedColumns := by
+  unfold synthesisSummary
+  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
+
 def bundleSynthesize (cfg : Config) (offset : ℕ)
     (input : Var Row Fp) : RegionCircuit Fp Unit := do
   (gate cfg).enable offset
@@ -146,6 +153,13 @@ def synthesisSummary (cfg : Config) (offset : ℕ) :
       .column .advice cfg.colZ.index,
       .selector cfg.qNotecommitGd.index]
     (offset + 2) 0
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_hasNoFixedColumns (cfg : Config) (offset : ℕ) :
+    (synthesisSummary cfg offset).HasNoFixedColumns := by
+  unfold synthesisSummary
+  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
 
 def bundleSynthesize (cfg : Config) (offset : ℕ)
     (input : Var Row Fp) : RegionCircuit Fp Unit := do
@@ -280,6 +294,13 @@ def synthesisSummary (cfg : Config) (offset : ℕ) :
       .selector cfg.qNotecommitPkd.index]
     (offset + 2) 0
 
+@[synthesis_summary_norm]
+theorem synthesisSummary_hasNoFixedColumns (cfg : Config) (offset : ℕ) :
+    (synthesisSummary cfg offset).HasNoFixedColumns := by
+  unfold synthesisSummary
+  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
+
 def bundleSynthesize (cfg : Config) (offset : ℕ)
     (input : Var Row Fp) : RegionCircuit Fp Unit := do
   let _x ← copyAdvice input.pkdX cfg.colL offset
@@ -412,6 +433,13 @@ def synthesisSummary (cfg : Config) (offset : ℕ) :
       .column .advice cfg.colZ.index,
       .selector cfg.qNotecommitRho.index]
     (offset + 2) 0
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_hasNoFixedColumns (cfg : Config) (offset : ℕ) :
+    (synthesisSummary cfg offset).HasNoFixedColumns := by
+  unfold synthesisSummary
+  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
 
 def bundleSynthesize (cfg : Config) (offset : ℕ)
     (input : Var Row Fp) : RegionCircuit Fp Unit := do
@@ -547,6 +575,13 @@ def synthesisSummary (cfg : Config) (offset : ℕ) :
       .column .advice cfg.colZ.index,
       .selector cfg.qNotecommitPsi.index]
     (offset + 2) 0
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_hasNoFixedColumns (cfg : Config) (offset : ℕ) :
+    (synthesisSummary cfg offset).HasNoFixedColumns := by
+  unfold synthesisSummary
+  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
 
 def bundleSynthesize (cfg : Config) (offset : ℕ)
     (input : Var Row Fp) : RegionCircuit Fp Unit := do
@@ -691,6 +726,13 @@ def synthesisSummary (cfg : Config) (offset : ℕ) :
       .column .advice (cfg.advices 8).index,
       .column .advice (cfg.advices 9).index]
     (offset + 2) 0
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_hasNoFixedColumns (cfg : Config) (offset : ℕ) :
+    (synthesisSummary cfg offset).HasNoFixedColumns := by
+  unfold synthesisSummary
+  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
 
 def bundleSynthesize (wlsb wk3 : WitgenIR Fp 1) (cfg : Config) (offset : ℕ)
     (input : Var Row Fp) : RegionCircuit Fp (Var field Fp) := do

@@ -524,6 +524,14 @@ def shortRangeCheckSynthesisSummary {K : ℕ} (cfg : Config K)
       .selector cfg.qBitshift.index]
     (offset + 3) 1
 
+@[synthesis_summary_norm]
+theorem shortRangeCheckSynthesisSummary_hasNoFixedColumns {K : ℕ}
+    (cfg : Config K) (offset : ℕ) :
+    (shortRangeCheckSynthesisSummary cfg offset).HasNoFixedColumns := by
+  unfold shortRangeCheckSynthesisSummary
+  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
+
 /-- Rust `short_range_check` (`lookup_range_check.rs:455-490`), POSITIONAL: the element
 "must have been assigned to `running_sum` at `offset`" by the caller (no copy — Rust has no
 copy-in short check; `witness_short_check` is the caller-side `assign_advice` + this).
@@ -1170,6 +1178,14 @@ def rangeCheckSynthesisSummary (K numWords : ℕ) (strict : Bool)
           .column .advice cfg.runningSum.index])
     (offset + numWords + 1) (if strict then 1 else 0)
 
+@[synthesis_summary_norm]
+theorem rangeCheckSynthesisSummary_hasNoFixedColumns
+    (K numWords : ℕ) (strict : Bool) (cfg : Config K) (offset : ℕ) :
+    (rangeCheckSynthesisSummary K numWords strict cfg offset).HasNoFixedColumns := by
+  unfold rangeCheckSynthesisSummary
+  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
+
 /-- Copied-in word-wise range-check synthesis, factored so its reduced elaboration and
 semantic bundle share one named operation program. -/
 def rangeCheckBody (K numWords : ℕ) (strict : Bool) (cfg : Config K) (offset : ℕ)
@@ -1422,6 +1438,14 @@ def rangeCheckAtSynthesisSummary (K numWords : ℕ) (strict : Bool)
     (if numWords = 0 then 0 else offset + numWords + 1)
     (if strict then 1 else 0)
 
+@[synthesis_summary_norm]
+theorem rangeCheckAtSynthesisSummary_hasNoFixedColumns
+    (K numWords : ℕ) (strict : Bool) (cfg : Config K) (offset : ℕ) :
+    (rangeCheckAtSynthesisSummary K numWords strict cfg offset).HasNoFixedColumns := by
+  unfold rangeCheckAtSynthesisSummary
+  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
+
 def rangeCheckAtBody (K numWords : ℕ) (strict : Bool) (cfg : Config K)
     (offset : ℕ) (_ : Unit) : RegionCircuit Fp (Output (AssignedCell Fp)) := do
   let z0 ← cellAt cfg.runningSum offset
@@ -1630,6 +1654,14 @@ def rangeCheckAtDecomposedSynthesisSummary (numWords : ℕ)
       .column .advice cfg.runningSum.index]
     (offset + numWords + 1) 1
 
+@[synthesis_summary_norm]
+theorem rangeCheckAtDecomposedSynthesisSummary_hasNoFixedColumns
+    (numWords : ℕ) (cfg : Config 10) (offset : ℕ) :
+    (rangeCheckAtDecomposedSynthesisSummary numWords cfg offset).HasNoFixedColumns := by
+  unfold rangeCheckAtDecomposedSynthesisSummary
+  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
+
 def rangeCheckAtDecomposedBody (numWords : ℕ) (cfg : Config 10) (offset : ℕ) (_ : Unit) :
     RegionCircuit Fp (DecomposedOutput (AssignedCell Fp)) := do
   let z0 ← cellAt cfg.runningSum offset
@@ -1814,6 +1846,15 @@ def witnessCheckDecomposedSynthesisSummary
       26 1)
 
 @[synthesis_summary_norm]
+theorem witnessCheckDecomposedSynthesisSummary_hasNoFixedWrites
+    (cfg : Config 10) :
+    (witnessCheckDecomposedSynthesisSummary cfg).HasNoFixedWrites := by
+  unfold witnessCheckDecomposedSynthesisSummary
+  rw [FloorPlanner.SynthesisSummary.hasNoFixedWrites_ofRegion,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
+
+@[synthesis_summary_norm]
 theorem witnessCheckDecomposed_synthesisSummary
     (cfg : Config 10) (w : WitgenIR Fp 1) (region : RegionIndex) :
     FloorPlanner.synthesisSummary
@@ -1891,6 +1932,15 @@ def copyCheckSynthesisSummary (K numWords : ℕ) (strict : Bool)
       (numWords + 1) (if strict then 1 else 0))
 
 @[synthesis_summary_norm]
+theorem copyCheckSynthesisSummary_hasNoFixedWrites
+    (K numWords : ℕ) (strict : Bool) (cfg : Config K) :
+    (copyCheckSynthesisSummary K numWords strict cfg).HasNoFixedWrites := by
+  unfold copyCheckSynthesisSummary
+  rw [FloorPlanner.SynthesisSummary.hasNoFixedWrites_ofRegion,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
+
+@[synthesis_summary_norm]
 theorem copyCheck_synthesisSummary_eq (K numWords : ℕ) (strict : Bool)
     (cfg : Config K) (input : Var Inputs Fp) (region : RegionIndex) :
     (copyCheck K numWords strict).elaborated.synthesisSummary cfg input region =
@@ -1961,6 +2011,17 @@ def witnessShortCheckSynthesisSummary
             .column .advice cfg.runningSum.index,
             .selector cfg.qBitshift.index]
           3 1))
+
+@[synthesis_summary_norm]
+theorem witnessShortCheckSynthesisSummary_hasNoFixedWrites
+    (K : ℕ) (cfg : Config K) :
+    (witnessShortCheckSynthesisSummary K cfg).HasNoFixedWrites := by
+  unfold witnessShortCheckSynthesisSummary
+  rw [FloorPlanner.SynthesisSummary.hasNoFixedWrites_ofRegion,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_combine,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
 
 @[synthesis_summary_norm]
 theorem witnessShortCheck_synthesisSummary
@@ -2065,6 +2126,15 @@ def witnessCheckSynthesisSummary (K numWords : ℕ)
             .selector cfg.qRunning.index,
             .column .advice cfg.runningSum.index])
       (numWords + 1) (if strict then 1 else 0))
+
+@[synthesis_summary_norm]
+theorem witnessCheckSynthesisSummary_hasNoFixedWrites
+    (K numWords : ℕ) (strict : Bool) (cfg : Config K) :
+    (witnessCheckSynthesisSummary K numWords strict cfg).HasNoFixedWrites := by
+  unfold witnessCheckSynthesisSummary
+  rw [FloorPlanner.SynthesisSummary.hasNoFixedWrites_ofRegion,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
 
 /-- `witnessCheckSynthesisSummary` is the exact summary of the helper's operation
 stream. -/
@@ -2253,6 +2323,7 @@ theorem witnessCheck_lookupActivationsWellFormed
 @[keygen_norm, keygen_helper]
 theorem witnessShortCheck_keygenRegistered
     {gates : List (Gate Fp)} {lookups : List (LookupArgument Fp)}
+    {fixedColumns : List (Column .fixed)}
     {permutationColumns : List AnyColumn}
     (K numBits : ℕ) (cfg : Config K) (w : WitgenIR Fp 1)
     (i : RegionIndex)
@@ -2260,13 +2331,14 @@ theorem witnessShortCheck_keygenRegistered
     (hlookup : rangeCheckLookup K cfg ∈ lookups)
     (hpermutation : (cfg.runningSum : AnyColumn) ∈ permutationColumns) :
     ((witnessShortCheck K numBits cfg w).operations i).KeygenRegistered
-      gates lookups permutationColumns := by
+      gates lookups fixedColumns permutationColumns := by
   unfold witnessShortCheck
   keygen_registration
 
 @[keygen_norm, keygen_helper]
 theorem witnessCheck_keygenRegistered
     {gates : List (Gate Fp)} {lookups : List (LookupArgument Fp)}
+    {fixedColumns : List (Column .fixed)}
     {permutationColumns : List AnyColumn}
     (K numWords : ℕ) (strict : Bool) (hstrict : strict = true → 0 < numWords)
     (cfg : Config K)
@@ -2274,19 +2346,20 @@ theorem witnessCheck_keygenRegistered
     (hlookup : rangeCheckLookup K cfg ∈ lookups)
     (hpermutation : (cfg.runningSum : AnyColumn) ∈ permutationColumns) :
     ((witnessCheck K numWords strict cfg w hstrict).operations i).KeygenRegistered
-      gates lookups permutationColumns := by
+      gates lookups fixedColumns permutationColumns := by
   unfold witnessCheck
   keygen_registration
 
 @[keygen_norm, keygen_helper]
 theorem witnessCheckDecomposed_keygenRegistered
     {gates : List (Gate Fp)} {lookups : List (LookupArgument Fp)}
+    {fixedColumns : List (Column .fixed)}
     {permutationColumns : List AnyColumn}
     (cfg : Config 10) (w : WitgenIR Fp 1) (i : RegionIndex)
     (hlookup : rangeCheckLookup 10 cfg ∈ lookups)
     (hpermutation : (cfg.runningSum : AnyColumn) ∈ permutationColumns) :
     ((witnessCheckDecomposed cfg w).operations i).KeygenRegistered
-      gates lookups permutationColumns := by
+      gates lookups fixedColumns permutationColumns := by
   unfold witnessCheckDecomposed
   keygen_registration
 
@@ -2298,6 +2371,7 @@ def shortRangeConfigureCertificate (K numBits : ℕ)
       ((configure K runningSum tableIdx).output counts)
       { gates := ((configure K runningSum tableIdx).delta counts).gates
         lookups := ((configure K runningSum tableIdx).delta counts).lookups
+        fixedColumns := (configure K runningSum tableIdx).fixedColumns counts
         permutationColumns :=
           ((configure K runningSum tableIdx).delta counts).permutationRequests } := by
   let cfg := (configure K runningSum tableIdx).output counts
@@ -2312,6 +2386,11 @@ def shortRangeConfigureCertificate (K numBits : ℕ)
       ElaboratedRegionCircuit.keygenRequirements, Configure.delta_pure,
       List.append_nil] at hargument
     simpa [cfg, keygen_norm] using hargument
+  · intro column hcolumn
+    simp only [shortRangeCheck, FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements, Configure.fixedColumns_pure,
+      List.append_nil] at hcolumn
+    exact False.elim (List.not_mem_nil hcolumn)
   · intro column hcolumn
     simp only [keygen_norm, shortRangeCheck,
       FormalRegionCircuit.keygenRequirements,

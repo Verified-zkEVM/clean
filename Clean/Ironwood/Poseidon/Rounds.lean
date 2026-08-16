@@ -105,7 +105,10 @@ def fullRoundSynthesize (r : ℕ) (cfg : Config) (offset : ℕ)
 @[reducible] def fullRoundElaborated (r : ℕ) :
     ElaboratedRegionCircuit Fp Config Config unit State pure
       (fullRoundSynthesize r) :=
-  { keygenRequirements := { gates cfg _ := [fullRoundGate cfg] }
+  { keygenRequirements :=
+      { configLawful cfg := Config.FixedColumnsLawful cfg
+        gates cfg _ := [fullRoundGate cfg]
+        fixedColumns cfg _ := cfg.fixedColumns }
     output config offset _ self := stateRow config (offset + 1) self
     synthesisSummary config offset _ _ :=
       fullRoundSynthesisSummary config offset
@@ -124,7 +127,24 @@ def fullRoundSynthesize (r : ℕ) (cfg : Config) (offset : ℕ)
       · simp only [fullRoundSynthesize, circuit_norm]
         omega
       · simp only [fullRoundSynthesize, circuit_norm]
-      · simp only [fullRoundSynthesize, circuit_norm, synthesis_summary_norm] }
+      · simp only [fullRoundSynthesize, circuit_norm, synthesis_summary_norm]
+    fixedAssignmentsAgree := by
+      intro configInput counts hconfig offset input region
+      unfold RegionOperations.FixedAssignmentsAgree
+      intro column row left right hleft hright
+      simp only [Configure.output_pure, fullRoundSynthesize, circuit_norm,
+        List.mem_cons, List.not_mem_nil, or_false] at hleft hright
+      simp at hleft hright
+      have hfixedColumns := hconfig.nodup
+      simp only [Config.fixedColumns, List.nodup_append] at hfixedColumns
+      have hrcA := List.nodup_ofFn.mp hfixedColumns.1
+      have hrcA01 : configInput.rcA 0 ≠ configInput.rcA 1 :=
+        hrcA.ne (show (0 : Fin 3) ≠ 1 by decide)
+      have hrcA02 : configInput.rcA 0 ≠ configInput.rcA 2 :=
+        hrcA.ne (show (0 : Fin 3) ≠ 2 by decide)
+      have hrcA12 : configInput.rcA 1 ≠ configInput.rcA 2 :=
+        hrcA.ne (show (1 : Fin 3) ≠ 2 by decide)
+      grind }
 
 def partialRoundSynthesize (r : ℕ) (cfg : Config) (offset : ℕ)
     (_ : Var unit Fp) : RegionCircuit Fp (Var State Fp) := do
@@ -153,7 +173,10 @@ def partialRoundSynthesize (r : ℕ) (cfg : Config) (offset : ℕ)
 @[reducible] def partialRoundElaborated (r : ℕ) :
     ElaboratedRegionCircuit Fp Config Config unit State pure
       (partialRoundSynthesize r) :=
-  { keygenRequirements := { gates cfg _ := [partialRoundsGate cfg] }
+  { keygenRequirements :=
+      { configLawful cfg := Config.FixedColumnsLawful cfg
+        gates cfg _ := [partialRoundsGate cfg]
+        fixedColumns cfg _ := cfg.fixedColumns }
     output config offset _ self := stateRow config (offset + 1) self
     synthesisSummary config offset _ _ :=
       partialRoundSynthesisSummary config offset
@@ -172,7 +195,35 @@ def partialRoundSynthesize (r : ℕ) (cfg : Config) (offset : ℕ)
       · simp only [partialRoundSynthesize, circuit_norm]
         omega
       · simp only [partialRoundSynthesize, circuit_norm]
-      · simp only [partialRoundSynthesize, circuit_norm, synthesis_summary_norm] }
+      · simp only [partialRoundSynthesize, circuit_norm, synthesis_summary_norm]
+    fixedAssignmentsAgree := by
+      intro configInput counts hconfig offset input region
+      unfold RegionOperations.FixedAssignmentsAgree
+      intro column row left right hleft hright
+      simp only [Configure.output_pure, partialRoundSynthesize, circuit_norm,
+        List.mem_cons, List.not_mem_nil, or_false] at hleft hright
+      simp at hleft hright
+      have hfixedColumns := hconfig.nodup
+      simp only [Config.fixedColumns, List.nodup_append] at hfixedColumns
+      have hrcA := List.nodup_ofFn.mp hfixedColumns.1
+      have hrcB := List.nodup_ofFn.mp hfixedColumns.2.1
+      have hrcA01 : configInput.rcA 0 ≠ configInput.rcA 1 :=
+        hrcA.ne (show (0 : Fin 3) ≠ 1 by decide)
+      have hrcA02 : configInput.rcA 0 ≠ configInput.rcA 2 :=
+        hrcA.ne (show (0 : Fin 3) ≠ 2 by decide)
+      have hrcA12 : configInput.rcA 1 ≠ configInput.rcA 2 :=
+        hrcA.ne (show (1 : Fin 3) ≠ 2 by decide)
+      have hrcB01 : configInput.rcB 0 ≠ configInput.rcB 1 :=
+        hrcB.ne (show (0 : Fin 3) ≠ 1 by decide)
+      have hrcB02 : configInput.rcB 0 ≠ configInput.rcB 2 :=
+        hrcB.ne (show (0 : Fin 3) ≠ 2 by decide)
+      have hrcB12 : configInput.rcB 1 ≠ configInput.rcB 2 :=
+        hrcB.ne (show (1 : Fin 3) ≠ 2 by decide)
+      have hrcAB : ∀ i j, configInput.rcA i ≠ configInput.rcB j := by
+        intro i j
+        exact hfixedColumns.2.2 _ (List.mem_ofFn.mpr ⟨i, rfl⟩) _
+          (List.mem_ofFn.mpr ⟨j, rfl⟩)
+      grind }
 
 /-- Rust `Pow5State::full_round` at source round `r` (`pow5.rs:434-459` + `round`,
 552-592): enable `s_full` at `offset`, load the `rc_a` round constants at `offset`,
@@ -310,6 +361,28 @@ theorem partialRound_synthesisSummary_eq (r : ℕ) (cfg : Config) (offset : ℕ)
     (input : Var unit Fp) (self : RegionIndex) :
     (partialRound r).elaborated.synthesisSummary cfg offset input self =
       partialRoundSynthesisSummary cfg offset := rfl
+
+/-- Every fixed assignment made by a full round is at its base row. -/
+theorem fullRound_assignFixed_row (roundIndex : ℕ) (cfg : Config)
+    (offset : ℕ) (input : Var unit Fp) (self : RegionIndex)
+    (column : Column .fixed) (row : ℕ) (value : Fp)
+    (hassignment : .assignFixed column row value ∈
+      ((fullRound roundIndex).call cfg offset input).operations self) :
+    row = offset := by
+  rw [FormalRegionCircuit.call_operations] at hassignment
+  simp [fullRound, fullRoundSynthesize, circuit_norm] at hassignment
+  grind
+
+/-- Every fixed assignment made by a partial round is at its base row. -/
+theorem partialRound_assignFixed_row (roundIndex : ℕ) (cfg : Config)
+    (offset : ℕ) (input : Var unit Fp) (self : RegionIndex)
+    (column : Column .fixed) (row : ℕ) (value : Fp)
+    (hassignment : .assignFixed column row value ∈
+      ((partialRound roundIndex).call cfg offset input).operations self) :
+    row = offset := by
+  rw [FormalRegionCircuit.call_operations] at hassignment
+  simp [partialRound, partialRoundSynthesize, circuit_norm] at hassignment
+  grind
 
 derive_contract_bridges fullRound (r : ℕ) := fullRound r
 

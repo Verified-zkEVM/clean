@@ -539,12 +539,15 @@ theorem FormalCircuit.foldCall_keygenRegistered
     (m : ℕ)
     {targetGates : List (Gate F)}
     {targetLookups : List (LookupArgument F)}
+    {targetFixedColumns : List (Column .fixed)}
     {targetPermutationColumns : List AnyColumn}
     (configured : ∀ i : Fin m, (c i).Configured config)
     (hgates : ∀ i gate,
       gate ∈ (configured i).gates → gate ∈ targetGates)
     (hlookups : ∀ i argument,
       argument ∈ (configured i).lookups → argument ∈ targetLookups)
+    (hfixedColumns : ∀ i column,
+      column ∈ (configured i).fixedColumns → column ∈ targetFixedColumns)
     (hpermutationColumns : ∀ i column,
       column ∈ (configured i).permutationColumns →
         column ∈ targetPermutationColumns)
@@ -553,14 +556,14 @@ theorem FormalCircuit.foldCall_keygenRegistered
           (FormalCircuit.foldState c toInput config init i₀ i).1).Forall fun cell ↦
         cell.column ∈ targetPermutationColumns) :
     ((FormalCircuit.foldCall c toInput config init m).operations i₀).KeygenRegistered
-      targetGates targetLookups targetPermutationColumns := by
+      targetGates targetLookups targetFixedColumns targetPermutationColumns := by
   rw [Operations.KeygenRegistered, FormalCircuit.foldCall_forall]
   intro i
   exact FormalCircuit.call_keygenRegistered
     (c i) config (configured i)
     (FormalCircuit.foldState c toInput config init i₀ i).1
     (FormalCircuit.foldState c toInput config init i₀ i).2
-    (hgates i) (hlookups i) (hpermutationColumns i)
+    (hgates i) (hlookups i) (hfixedColumns i) (hpermutationColumns i)
     (hinputCells i)
 
 /-- Copy provenance composes across a serial circuit fold when every round's

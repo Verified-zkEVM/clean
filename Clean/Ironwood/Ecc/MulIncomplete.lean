@@ -108,6 +108,15 @@ def loopSynthesisSummary (n : ℕ) (cfg : Config) (offset : ℕ) :
       .column .advice cfg.yP.index]
     offset 1 3 0 n
 
+/-- The repeated double-and-add rows use selectors and advice columns only. -/
+@[synthesis_summary_norm]
+theorem loopSynthesisSummary_hasNoFixedColumns
+    (n : ℕ) (cfg : Config) (offset : ℕ) :
+    (loopSynthesisSummary n cfg offset).HasNoFixedColumns := by
+  simp only [loopSynthesisSummary,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_repeatColumns]
+  simp
+
 def loopProgram (n w : ℕ) (cfg : Config) (offset : ℕ)
     (alpha : Var (Unconstrained field) Fp) : RegionCircuit Fp (Var (LoopOut n) Fp) := do
   RegionCircuit.forRange' offset 1 n (fun r o => do
@@ -148,6 +157,16 @@ theorem loopSynthesisSummary_eq (n w : ℕ) (cfg : Config) (offset : ℕ)
     (FormalRegionCircuit.call_synthesisSummary
       (round (w + i.val)) cfg (offset + i.val) alpha self).symm
 
+/-- The loop's operation stream performs no fixed-column assignments. -/
+theorem loopProgram_hasNoFixedAssignments
+    (n w : ℕ) (cfg : Config) (offset : ℕ)
+    (alpha : Var (Unconstrained field) Fp) (self : RegionIndex) :
+    ((loopProgram n w cfg offset alpha).operations self)
+      |>.HasNoFixedAssignments := by
+  apply FloorPlanner.RegionSynthesisSummary.HasNoFixedColumns.hasNoFixedAssignments
+  rw [← loopSynthesisSummary_eq]
+  exact loopSynthesisSummary_hasNoFixedColumns n cfg offset
+
 @[reducible] def loopElaborated (n w : ℕ) :
     ElaboratedRegionCircuit Fp Config Config (Unconstrained field) (LoopOut n)
       pure (loopProgram n w) :=
@@ -161,7 +180,12 @@ theorem loopSynthesisSummary_eq (n w : ℕ) (cfg : Config) (offset : ℕ)
       rw [loopProgram_operations]
       apply RegionCircuit.forRange'_copyCellsAssignedFrom
       intro i
-      keygen_registration }
+      keygen_registration
+    fixedAssignmentsAgree := by
+      intro configInput counts hconfig offset input region
+      exact (loopProgram_hasNoFixedAssignments n w
+        configInput offset input region)
+          |>.fixedAssignmentsAgree }
 
 def loop (n w : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field) (LoopOut n) where
   configure := pure
@@ -399,6 +423,17 @@ theorem doubleAndAddSynthesisSummary_instanceRowExtent_eq
     (doubleAndAddSynthesisSummary n cfg offset).instanceRowExtent = 0 := by
   simp only [doubleAndAddSynthesisSummary, loopSynthesisSummary,
     synthesis_summary_norm]
+  simp
+
+/-- The boundary rows and repeated interior rounds use no fixed columns. -/
+@[synthesis_summary_norm]
+theorem doubleAndAddSynthesisSummary_hasNoFixedColumns
+    (n : ℕ) (cfg : Config) (offset : ℕ) :
+    (doubleAndAddSynthesisSummary n cfg offset).HasNoFixedColumns := by
+  simp only [doubleAndAddSynthesisSummary,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_combine,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns,
+    loopSynthesisSummary_hasNoFixedColumns]
   simp
 
 def double_and_add (n : ℕ) (w : ℕ) :

@@ -231,6 +231,51 @@ theorem forRange'_forall (property : RegionOperation F → Prop)
         ((body i.val (offset + i.val * stride)).operations self).Forall property :=
   loopAux_forall property _ _ _ _
 
+/-- Fixed assignments from consecutive loop iterations agree when each iteration is
+internally lawful and writes only at its own base row. -/
+theorem forRange'_fixedAssignmentsAgree
+    (offset count : ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex)
+    (hagree : ∀ i : Fin count,
+      ((body i.val (offset + i.val * 1)).operations self).FixedAssignmentsAgree)
+    (hrow : ∀ (i : Fin count) column row value,
+      .assignFixed column row value ∈
+        (body i.val (offset + i.val * 1)).operations self →
+      row = offset + i.val * 1) :
+    ((forRange' offset 1 count body).operations self).FixedAssignmentsAgree := by
+  unfold RegionOperations.FixedAssignmentsAgree
+  intro column row left right hleft hright
+  rw [forRange'_operations, List.mem_flatten] at hleft hright
+  obtain ⟨leftOperations, hleftOperations, hleft⟩ := hleft
+  obtain ⟨rightOperations, hrightOperations, hright⟩ := hright
+  rw [List.mem_ofFn] at hleftOperations hrightOperations
+  obtain ⟨i, rfl⟩ := hleftOperations
+  obtain ⟨j, rfl⟩ := hrightOperations
+  have hleftRow := hrow i column row left hleft
+  have hrightRow := hrow j column row right hright
+  have hij : i = j := Fin.ext (by omega)
+  subst j
+  exact hagree i column row left right hleft hright
+
+/-- Fixed writes from a consecutive loop lie in its half-open row interval. -/
+theorem forRange'_assignFixed_row_bounds
+    (offset count : ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex)
+    (hrow : ∀ (i : Fin count) column row value,
+      .assignFixed column row value ∈
+        (body i.val (offset + i.val * 1)).operations self →
+      row = offset + i.val * 1)
+    (column : Column .fixed) (row : ℕ) (value : F)
+    (hassignment : .assignFixed column row value ∈
+      (forRange' offset 1 count body).operations self) :
+    offset ≤ row ∧ row < offset + count := by
+  rw [forRange'_operations, List.mem_flatten] at hassignment
+  obtain ⟨operations, hoperations, hassignment⟩ := hassignment
+  rw [List.mem_ofFn] at hoperations
+  obtain ⟨i, rfl⟩ := hoperations
+  rw [hrow i column row value hassignment]
+  omega
+
 /-- A copy-free loop is lawful for every incoming cell state. This packages the
 operation-local `copiedCells = []` proof through the loop decomposition without
 expanding the loop's operation list. -/
@@ -482,6 +527,44 @@ theorem forRangeVar'_forall (property : RegionOperation F → Prop)
       ∀ i : Fin m,
         ((body i.val (rows i.val)).operations self).Forall property :=
   loopAux_forall property _ _ _ _
+
+/-- Fixed assignments from a variable-stride loop agree when each iteration is
+internally lawful and its writes stay in the half-open interval before the next
+iteration. The interval-ordering premise is phrased separately so callers can
+derive it from compact partial-sum descriptions without expanding the loop. -/
+theorem forRangeVar'_fixedAssignmentsAgree
+    (rows : ℕ → ℕ) (count : ℕ)
+    (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex)
+    (hagree : ∀ i : Fin count,
+      ((body i.val (rows i.val)).operations self).FixedAssignmentsAgree)
+    (hrow : ∀ (i : Fin count) column row value,
+      .assignFixed column row value ∈
+          (body i.val (rows i.val)).operations self →
+        rows i.val ≤ row ∧ row < rows (i.val + 1))
+    (hordered : ∀ i j : Fin count, i.val < j.val →
+      rows (i.val + 1) ≤ rows j.val) :
+    ((forRangeVar' rows count body).operations self).FixedAssignmentsAgree := by
+  unfold RegionOperations.FixedAssignmentsAgree
+  intro column row left right hleft hright
+  rw [forRangeVar'_operations, List.mem_flatten] at hleft hright
+  obtain ⟨leftOperations, hleftOperations, hleft⟩ := hleft
+  obtain ⟨rightOperations, hrightOperations, hright⟩ := hright
+  rw [List.mem_ofFn] at hleftOperations hrightOperations
+  obtain ⟨i, rfl⟩ := hleftOperations
+  obtain ⟨j, rfl⟩ := hrightOperations
+  rcases hrow i column row left hleft with ⟨hileft, hiright⟩
+  rcases hrow j column row right hright with ⟨hjleft, hjright⟩
+  have hij : i = j := by
+    apply Fin.ext
+    by_contra hne
+    rcases Nat.lt_or_gt_of_ne hne with hij | hji
+    · have := hordered i j hij
+      omega
+    · have := hordered j i hji
+      omega
+  subst j
+  exact hagree i column row left right hleft hright
 
 /-- A variable-stride loop is copy-lawful when each symbolic round is copy-lawful
 from the caller's original input cells. -/

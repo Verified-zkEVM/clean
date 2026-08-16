@@ -851,6 +851,17 @@ theorem circuitSynthesisSummary_instanceRowExtent_eq
     synthesis_summary_norm]
   simp
 
+/-- The complete-phase region uses selectors and advice columns only. -/
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_hasNoFixedColumns
+    (numBits : ℕ) (cfg : Config) (offset : ℕ) :
+    (circuitSynthesisSummary numBits cfg offset).HasNoFixedColumns := by
+  simp only [circuitSynthesisSummary, roundsSynthesisSummary,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_combine,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_repeatColumns]
+  simp [roundColumns]
+
 def assignRegionSynthesize (numBits w : ℕ) (cfg : Config) (offset : ℕ)
     (input : Var Inputs Fp) : RegionCircuit Fp (Var (Output numBits) Fp) := do
   startCopy cfg input offset
@@ -886,6 +897,29 @@ theorem assignRegionSynthesize_output (numBits w : ℕ) (cfg : Config)
                 { alpha := input.alpha, base := input.base, z := input.z, acc }
               pure out.acc)).output region,
         zs := (zsCells cfg offset numBits).output region } := rfl
+
+@[synthesis_summary_norm]
+theorem assignRegionSynthesize_synthesisSummary_eq
+    (numBits w : ℕ) (cfg : Config) (offset : ℕ)
+    (input : Var Inputs Fp) (region : RegionIndex) :
+    circuitSynthesisSummary numBits cfg offset =
+      FloorPlanner.regionSynthesisSummary
+        ((assignRegionSynthesize numBits w cfg offset input).operations region) := by
+  rw [assignRegionSynthesize_operations]
+  apply FloorPlanner.RegionSynthesisSummary.ext <;>
+    simp only [circuitSynthesisSummary, roundsSynthesisSummary,
+      circuit_norm, synthesis_summary_norm,
+      foldr_roundSynthesisSummary_eq]
+
+/-- The complete-phase operation stream performs no fixed-column assignments. -/
+theorem assignRegionSynthesize_hasNoFixedAssignments
+    (numBits w : ℕ) (cfg : Config) (offset : ℕ)
+    (input : Var Inputs Fp) (region : RegionIndex) :
+    ((assignRegionSynthesize numBits w cfg offset input).operations region)
+      |>.HasNoFixedAssignments := by
+  apply FloorPlanner.RegionSynthesisSummary.HasNoFixedColumns.hasNoFixedAssignments
+  rw [← assignRegionSynthesize_synthesisSummary_eq]
+  exact circuitSynthesisSummary_hasNoFixedColumns numBits cfg offset
 
 def assign_region (numBits : ℕ) (w : ℕ) :
     FormalRegionCircuit Fp (Column .advice × Add.Config) Config Inputs (Output numBits) where
@@ -945,6 +979,7 @@ def assign_region (numBits : ℕ) (w : ℕ) :
                 ElaboratedRegionCircuit.keygenRequirements,
                 configure_delta_lookups, List.mem_append, List.not_mem_nil,
                 or_false, round] using hargument
+            case hfixedColumns => keygen_registration
             case hpermutationColumns => keygen_registration
             case hinputCells =>
               cases hval : i.val <;> keygen_registration
@@ -966,20 +1001,13 @@ def assign_region (numBits : ℕ) (w : ℕ) :
         rfl
       synthesisSummary_eq := by
         intro cfg offset input region
-        rw [assignRegionSynthesize_operations]
-        apply FloorPlanner.RegionSynthesisSummary.ext
-        · simp only [circuitSynthesisSummary, roundsSynthesisSummary,
-            circuit_norm, synthesis_summary_norm,
-            foldr_roundSynthesisSummary_eq]
-        · simp only [circuitSynthesisSummary, roundsSynthesisSummary,
-            circuit_norm, synthesis_summary_norm,
-            foldr_roundSynthesisSummary_eq]
-        · simp only [circuitSynthesisSummary, roundsSynthesisSummary,
-            circuit_norm, synthesis_summary_norm,
-            foldr_roundSynthesisSummary_eq]
-        · simp only [circuitSynthesisSummary, roundsSynthesisSummary,
-            circuit_norm, synthesis_summary_norm,
-            foldr_roundSynthesisSummary_eq]
+        exact assignRegionSynthesize_synthesisSummary_eq
+          numBits w cfg offset input region
+      fixedAssignmentsAgree := by
+        intro configInput counts hconfig offset input region
+        exact (assignRegionSynthesize_hasNoFixedAssignments numBits w
+          ((configure configInput.1 configInput.2).output counts)
+          offset input region).fixedAssignmentsAgree
       copyCellsAssigned := by
         intro configInput counts hconfig offset input region
         let cfg := (configure configInput.1 configInput.2).output counts

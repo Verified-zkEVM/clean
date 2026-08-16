@@ -91,7 +91,9 @@ def permuteElaborated :
     ElaboratedRegionCircuit Fp Config Config State State pure
       permuteSynthesize :=
   { keygenRequirements :=
-      { gates cfg _ := [fullRoundGate cfg, partialRoundsGate cfg]
+      { configLawful cfg := Config.FixedColumnsLawful cfg
+        gates cfg _ := [fullRoundGate cfg, partialRoundsGate cfg]
+        fixedColumns cfg _ := cfg.fixedColumns
         permutationColumns cfg _ :=
           [cfg.state 0, cfg.state 1, cfg.state 2]
         inputCells _ _ input :=
@@ -123,6 +125,129 @@ def permuteElaborated :
     output_eq := by
       intro _ _ _ _
       simp only [permuteSynthesize, circuit_norm]
+    fixedAssignmentsAgree := by
+      intro configInput counts hconfig offset input region
+      have hfirst :
+          ((RegionCircuit.forRange' offset 1 4 fun r o => do
+            let _ ← (fullRound r).call configInput o ()
+            pure ()).operations region).FixedAssignmentsAgree := by
+        apply RegionCircuit.forRange'_fixedAssignmentsAgree
+        · intro i
+          simpa only [FormalRegionCircuit.call_operations, Configure.output_pure,
+              RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+              List.append_nil]
+            using (fullRound i.val).elaborated.fixedAssignmentsAgree
+              configInput counts hconfig (offset + i.val * 1) () region
+        · intro i column row value hassignment
+          simp only [RegionCircuit.operations_bind,
+            RegionCircuit.operations_pure, List.append_nil] at hassignment
+          exact fullRound_assignFixed_row i.val configInput
+            (offset + i.val * 1) () region column row value hassignment
+      have hpartial :
+          ((RegionCircuit.forRange' (offset + 4) 1 28 fun r o => do
+            let _ ← (partialRound (4 + 2 * r)).call configInput o ()
+            pure ()).operations region).FixedAssignmentsAgree := by
+        apply RegionCircuit.forRange'_fixedAssignmentsAgree
+        · intro i
+          simpa only [FormalRegionCircuit.call_operations, Configure.output_pure,
+              RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+              List.append_nil]
+            using (partialRound (4 + 2 * i.val)).elaborated.fixedAssignmentsAgree
+              configInput counts hconfig (offset + 4 + i.val * 1) () region
+        · intro i column row value hassignment
+          simp only [RegionCircuit.operations_bind,
+            RegionCircuit.operations_pure, List.append_nil] at hassignment
+          exact partialRound_assignFixed_row (4 + 2 * i.val) configInput
+            (offset + 4 + i.val * 1) () region column row value hassignment
+      have hlast :
+          ((RegionCircuit.forRange' (offset + 32) 1 4 fun r o => do
+            let _ ← (fullRound (60 + r)).call configInput o ()
+            pure ()).operations region).FixedAssignmentsAgree := by
+        apply RegionCircuit.forRange'_fixedAssignmentsAgree
+        · intro i
+          simpa only [FormalRegionCircuit.call_operations, Configure.output_pure,
+              RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+              List.append_nil]
+            using (fullRound (60 + i.val)).elaborated.fixedAssignmentsAgree
+              configInput counts hconfig (offset + 32 + i.val * 1) () region
+        · intro i column row value hassignment
+          simp only [RegionCircuit.operations_bind,
+            RegionCircuit.operations_pure, List.append_nil] at hassignment
+          exact fullRound_assignFixed_row (60 + i.val) configInput
+            (offset + 32 + i.val * 1) () region column row value hassignment
+      have hfirstBounds : ∀ column row value,
+          .assignFixed column row value ∈
+              (RegionCircuit.forRange' offset 1 4 (fun r o => do
+                let _ ← (fullRound r).call configInput o ()
+                pure ())).operations region →
+            offset ≤ row ∧ row < offset + 4 := by
+        apply RegionCircuit.forRange'_assignFixed_row_bounds
+        intro i column row value hassignment
+        simp only [RegionCircuit.operations_bind,
+          RegionCircuit.operations_pure, List.append_nil] at hassignment
+        exact fullRound_assignFixed_row i.val configInput
+          (offset + i.val * 1) () region column row value hassignment
+      have hpartialBounds : ∀ column row value,
+          .assignFixed column row value ∈
+              (RegionCircuit.forRange' (offset + 4) 1 28 (fun r o => do
+                let _ ← (partialRound (4 + 2 * r)).call configInput o ()
+                pure ())).operations region →
+            offset + 4 ≤ row ∧ row < offset + 32 := by
+        intro column row value hassignment
+        have hbounds := RegionCircuit.forRange'_assignFixed_row_bounds
+          (offset + 4) 28 _ region
+          (fun i column row value hassignment => by
+            simp only [RegionCircuit.operations_bind,
+              RegionCircuit.operations_pure, List.append_nil] at hassignment
+            exact partialRound_assignFixed_row (4 + 2 * i.val) configInput
+              (offset + 4 + i.val * 1) () region column row value hassignment)
+          column row value hassignment
+        omega
+      have hlastBounds : ∀ column row value,
+          .assignFixed column row value ∈
+              (RegionCircuit.forRange' (offset + 32) 1 4 (fun r o => do
+                let _ ← (fullRound (60 + r)).call configInput o ()
+                pure ())).operations region →
+            offset + 32 ≤ row ∧ row < offset + 36 := by
+        intro column row value hassignment
+        have hbounds := RegionCircuit.forRange'_assignFixed_row_bounds
+          (offset + 32) 4 _ region
+          (fun i column row value hassignment => by
+            simp only [RegionCircuit.operations_bind,
+              RegionCircuit.operations_pure, List.append_nil] at hassignment
+            exact fullRound_assignFixed_row (60 + i.val) configInput
+              (offset + 32 + i.val * 1) () region column row value hassignment)
+          column row value hassignment
+        omega
+      unfold RegionOperations.FixedAssignmentsAgree
+      intro column row left right hleft hright
+      simp only [Configure.output_pure, permuteSynthesize,
+        RegionCircuit.operations_bind, operations_copyAdvice] at hleft hright
+      rw [operations_readStateRow] at hleft hright
+      simp at hleft hright
+      rcases hleft with hleft | hleft | hleft <;>
+        rcases hright with hright | hright | hright
+      · exact hfirst column row left right hleft hright
+      · have hleftBounds := hfirstBounds column row left hleft
+        have hrightBounds := hpartialBounds column row right hright
+        omega
+      · have hleftBounds := hfirstBounds column row left hleft
+        have hrightBounds := hlastBounds column row right hright
+        omega
+      · have hleftBounds := hpartialBounds column row left hleft
+        have hrightBounds := hfirstBounds column row right hright
+        omega
+      · exact hpartial column row left right hleft hright
+      · have hleftBounds := hpartialBounds column row left hleft
+        have hrightBounds := hlastBounds column row right hright
+        omega
+      · have hleftBounds := hlastBounds column row left hleft
+        have hrightBounds := hfirstBounds column row right hright
+        omega
+      · have hleftBounds := hlastBounds column row left hleft
+        have hrightBounds := hpartialBounds column row right hright
+        omega
+      · exact hlast column row left right hleft hright
     copyCellsAssigned := by
       intro configInput counts hconfig offset input region
       simp only [permuteSynthesize, RegionCircuit.operations_bind,

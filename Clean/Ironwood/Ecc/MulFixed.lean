@@ -69,6 +69,26 @@ structure Config where
   -- Configuration for `add_incomplete`.
   addIncompleteConfig : AddIncomplete.Config
 
+/-- Fixed columns written by the per-window constants loader. -/
+def fixedColumns (cfg : Config) : List (Column .fixed) :=
+  List.ofFn cfg.lagrangeCoeffs ++ [cfg.fixedZ]
+
+@[keygen_norm]
+theorem lagrangeCoeffs_mem_fixedColumns (cfg : Config) (i : Fin 8) :
+    cfg.lagrangeCoeffs i ∈ fixedColumns cfg := by
+  apply List.mem_append_left
+  exact List.mem_ofFn.mpr ⟨i, rfl⟩
+
+@[keygen_norm]
+theorem fixedZ_mem_fixedColumns (cfg : Config) :
+    cfg.fixedZ ∈ fixedColumns cfg := by
+  simp [fixedColumns]
+
+/-- The logical fixed-column roles used by fixed-base multiplication are
+pairwise distinct. -/
+structure Config.FixedColumnsLawful (config : Config) : Type where
+  nodup : (fixedColumns config).Nodup
+
 /-! ## The "Running sum coordinates check" gate -/
 
 /-- `window_pow[k] = (0..k).fold(Const 1, |acc,_| acc * window)` — the exact Rust AST: `1`,
@@ -184,6 +204,39 @@ def configure (lagrangeCoeffs : Fin 8 → Column .fixed) (window u : Column .adv
   createGate (coordsGate cfg)
   return cfg
 
+@[keygen_norm]
+theorem configure_output_fixedZ_index
+    (lagrangeCoeffs : Fin 8 → Column .fixed) (window u : Column .advice)
+    (addConfig : Add.Config) (addIncompleteConfig : AddIncomplete.Config)
+    (counts : ConfigureCounts) :
+    ((configure lagrangeCoeffs window u addConfig addIncompleteConfig).output
+      counts).fixedZ.index = counts.numFixedColumns := by
+  simp [configure, DecomposeRunningSum.configure]
+
+def configureOutputFixedColumnsLawful
+    (lagrangeCoeffs : Fin 8 → Column .fixed) (window u : Column .advice)
+    (addConfig : Add.Config) (addIncompleteConfig : AddIncomplete.Config)
+    (counts : ConfigureCounts)
+    (hnodup : (List.ofFn lagrangeCoeffs).Nodup)
+    (hbound : ∀ column ∈ List.ofFn lagrangeCoeffs,
+      column.index < counts.numFixedColumns) :
+    Config.FixedColumnsLawful
+      ((configure lagrangeCoeffs window u addConfig addIncompleteConfig).output
+        counts) := by
+  constructor
+  simp only [fixedColumns, List.nodup_append]
+  refine ⟨hnodup, List.nodup_singleton _, ?_⟩
+  intro column hcolumn fixed hfixed
+  simp only [List.mem_singleton] at hfixed
+  subst fixed
+  have hcolumn' : column ∈ List.ofFn lagrangeCoeffs := by
+    simpa [configure] using hcolumn
+  have hlt := hbound _ hcolumn'
+  intro heq
+  have := congrArg Column.index heq
+  simp only [configure_output_fixedZ_index] at this
+  omega
+
 instance (lagrangeCoeffs : Fin 8 → Column .fixed) (window u : Column .advice)
     (addConfig : Add.Config) (addIncompleteConfig : AddIncomplete.Config) :
     ElaboratedConfigure
@@ -282,12 +335,95 @@ def fixedConstantsWindow (toggle : Gate Fp) (B : FixedBaseData) (cfg : Config) (
   let _ ← assignFixed cfg.fixedZ row p.z
   return ()
 
+private def fixedConstantAssignments (B : FixedBaseData) (cfg : Config)
+    (w : ℕ) : List (Column .fixed × Fp) :=
+  let p := B.params w
+  [(cfg.lagrangeCoeffs 0, p.lagrange0),
+    (cfg.lagrangeCoeffs 1, p.lagrange1),
+    (cfg.lagrangeCoeffs 2, p.lagrange2),
+    (cfg.lagrangeCoeffs 3, p.lagrange3),
+    (cfg.lagrangeCoeffs 4, p.lagrange4),
+    (cfg.lagrangeCoeffs 5, p.lagrange5),
+    (cfg.lagrangeCoeffs 6, p.lagrange6),
+    (cfg.lagrangeCoeffs 7, p.lagrange7),
+    (cfg.fixedZ, p.z)]
+
+private theorem value_eq_of_map_fst_nodup
+    {pairs : List (Column .fixed × Fp)}
+    (hnodup : (pairs.map Prod.fst).Nodup)
+    {column : Column .fixed} {left right : Fp}
+    (hleft : (column, left) ∈ pairs) (hright : (column, right) ∈ pairs) :
+    left = right := by
+  induction pairs with
+  | nil => simp at hleft
+  | cons head tail ih =>
+      simp only [List.map_cons, List.nodup_cons] at hnodup
+      simp only [List.mem_cons] at hleft hright
+      rcases hleft with hleft | hleft <;>
+        rcases hright with hright | hright
+      · exact congrArg Prod.snd (hleft.trans hright.symm)
+      · have hmem : column ∈ tail.map Prod.fst := List.mem_map_of_mem hright
+        have heq := congrArg Prod.fst hleft
+        exact False.elim (hnodup.1 (heq ▸ hmem))
+      · have hmem : column ∈ tail.map Prod.fst := List.mem_map_of_mem hleft
+        have heq := congrArg Prod.fst hright
+        exact False.elim (hnodup.1 (heq ▸ hmem))
+      · exact ih hnodup.2 hleft hright
+
 /-- The per-window fixed columns and coords-toggle enables, one row per window, before any
 advice assignment. -/
 def fixedConstantsLoop (toggle : Gate Fp) (B : FixedBaseData) (cfg : Config)
     (offset numWindows : ℕ) : RegionCircuit Fp Unit :=
   RegionCircuit.forRange' offset 1 numWindows
     (fun w row => fixedConstantsWindow toggle B cfg w row)
+
+theorem fixedConstantsWindow_assignFixed_row
+    (toggle : Gate Fp) (B : FixedBaseData) (cfg : Config)
+    (w base : ℕ) (self : RegionIndex) (column : Column .fixed)
+    (row : ℕ) (value : Fp)
+    (hassignment : .assignFixed column row value ∈
+      (fixedConstantsWindow toggle B cfg w base).operations self) :
+    row = base := by
+  simp only [fixedConstantsWindow, circuit_norm, List.mem_cons,
+    List.not_mem_nil, or_false] at hassignment
+  aesop
+
+theorem fixedConstantsWindow_fixedAssignmentsAgree
+    (toggle : Gate Fp) (B : FixedBaseData) (cfg : Config)
+    (hlawful : cfg.FixedColumnsLawful) (w row : ℕ)
+    (self : RegionIndex) :
+    ((fixedConstantsWindow toggle B cfg w row).operations self)
+      |>.FixedAssignmentsAgree := by
+  unfold RegionOperations.FixedAssignmentsAgree
+  intro column assignmentRow left right hleft hright
+  have hleft' : (column, left) ∈ fixedConstantAssignments B cfg w := by
+    simp [fixedConstantsWindow, circuit_norm] at hleft
+    simp only [fixedConstantAssignments, List.mem_cons, List.not_mem_nil,
+      or_false, Prod.mk.injEq]
+    aesop
+  have hright' : (column, right) ∈ fixedConstantAssignments B cfg w := by
+    simp [fixedConstantsWindow, circuit_norm] at hright
+    simp only [fixedConstantAssignments, List.mem_cons, List.not_mem_nil,
+      or_false, Prod.mk.injEq]
+    aesop
+  have hcolumns :
+      (fixedConstantAssignments B cfg w).map Prod.fst = fixedColumns cfg := by
+    rfl
+  apply value_eq_of_map_fst_nodup (hcolumns ▸ hlawful.nodup) hleft' hright'
+
+theorem fixedConstantsLoop_fixedAssignmentsAgree
+    (toggle : Gate Fp) (B : FixedBaseData) (cfg : Config)
+    (hlawful : cfg.FixedColumnsLawful) (offset numWindows : ℕ)
+    (self : RegionIndex) :
+    ((fixedConstantsLoop toggle B cfg offset numWindows).operations self)
+      |>.FixedAssignmentsAgree := by
+  apply RegionCircuit.forRange'_fixedAssignmentsAgree
+  · intro i
+    exact fixedConstantsWindow_fixedAssignmentsAgree
+      toggle B cfg hlawful i.val (offset + i.val * 1) self
+  · intro i column row value hassignment
+    exact fixedConstantsWindow_assignFixed_row
+      toggle B cfg i.val (offset + i.val * 1) self column row value hassignment
 
 /-- Reduced footprint of one fixed-table row. -/
 def fixedConstantsWindowSynthesisSummary
@@ -383,12 +519,20 @@ theorem fixedConstantsLoopSynthesisSummary_constantSiteCount
 @[keygen_norm, keygen_helper]
 theorem fixedConstantsLoop_keygenRegistered
     {gates : List (Gate Fp)} {lookups : List (LookupArgument Fp)}
+    {targetFixedColumns : List (Column .fixed)}
     {permutationColumns : List AnyColumn}
     (toggle : Gate Fp) (B : FixedBaseData) (cfg : Config)
     (offset numWindows : ℕ) (self : RegionIndex)
-    (htoggle : toggle ∈ gates) :
+    (htoggle : toggle ∈ gates)
+    (hfixedColumns : ∀ column ∈ fixedColumns cfg,
+      column ∈ targetFixedColumns) :
     ((fixedConstantsLoop toggle B cfg offset numWindows).operations self).Forall
-      (RegionOperation.KeygenRegistered gates lookups permutationColumns) := by
+      (RegionOperation.KeygenRegistered gates lookups targetFixedColumns
+        permutationColumns) := by
+  have hlagrange (i : Fin 8) : cfg.lagrangeCoeffs i ∈ targetFixedColumns :=
+    hfixedColumns _ (List.mem_append_left _ (List.mem_ofFn.mpr ⟨i, rfl⟩))
+  have hfixedZ : cfg.fixedZ ∈ targetFixedColumns :=
+    hfixedColumns _ (List.mem_append_right _ (List.mem_singleton_self _))
   simp only [fixedConstantsLoop, RegionCircuit.forRange'_forall]
   intro i
   unfold fixedConstantsWindow
@@ -896,6 +1040,33 @@ theorem windowChainSynthesisSummary_constantSiteCount
     processWindowSynthesisSummary, AddIncomplete.synthesisSummary]
   simp
 
+/-- The shared window chain never writes fixed columns. -/
+@[synthesis_summary_norm]
+theorem windowChainSynthesisSummary_hasNoFixedColumns
+    (cfg : Config) (offset numWindows : ℕ) :
+    (windowChainSynthesisSummary cfg offset numWindows).HasNoFixedColumns := by
+  simp only [windowChainSynthesisSummary, processWindowSynthesisSummary,
+    AddIncomplete.synthesisSummary,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_combine,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_repeatColumns]
+  simp [windowStepColumns]
+
+/-- A window chain whose per-window witness has the standard advice-only footprint
+performs no fixed assignments. -/
+theorem windowChain_hasNoFixedAssignments
+    (cfg : Config)
+    (processW : ℕ → ℕ → RegionCircuit Fp (Point (AssignedCell Fp)))
+    (offset numWindows : ℕ) (self : RegionIndex)
+    (hprocess : ∀ w row,
+      FloorPlanner.regionSynthesisSummary ((processW w row).operations self) =
+        processWindowSynthesisSummary cfg row) :
+    ((windowChain cfg processW offset numWindows).operations self)
+      |>.HasNoFixedAssignments := by
+  apply FloorPlanner.RegionSynthesisSummary.HasNoFixedColumns.hasNoFixedAssignments
+  rw [windowChain_synthesisSummary_eq cfg processW offset numWindows self hprocess]
+  exact windowChainSynthesisSummary_hasNoFixedColumns cfg offset numWindows
+
 /-- The shared window chain requests no deferred constant allocations when its
 per-window witness program does not. -/
 theorem windowChain_synthesisSummary_constantSiteCount_eq_zero
@@ -961,25 +1132,29 @@ theorem windowChain_processWindow_lookupActivationsWellFormed
 @[keygen_helper]
 theorem windowChain_processWindow_keygenRegistered
     {gates : List (Gate Fp)} {lookups : List (LookupArgument Fp)}
+    {fixedColumns : List (Column .fixed)}
     {permutationColumns : List AnyColumn}
     (B : FixedBaseData) (table : ℕ → ℕ → Point Fp) (cfg : Config)
     (alpha : AssignedCell Fp) (offset numWindows : ℕ) (self : RegionIndex)
     (configured : AddIncomplete.add.Configured cfg.addIncompleteConfig)
     (hgates : ∀ gate, gate ∈ configured.gates → gate ∈ gates)
     (hlookups : ∀ argument, argument ∈ configured.lookups → argument ∈ lookups)
+    (hfixedColumns : ∀ column,
+      column ∈ configured.fixedColumns → column ∈ fixedColumns)
     (hpermutationColumns : ∀ column,
       column ∈ configured.permutationColumns → column ∈ permutationColumns)
     (hprocessColumns : ∀ column,
       column ∈ Add.permutationColumns cfg.addConfig → column ∈ permutationColumns) :
     ((windowChain cfg (processWindow B table cfg alpha) offset numWindows).operations self).Forall
-      (RegionOperation.KeygenRegistered gates lookups permutationColumns) := by
+      (RegionOperation.KeygenRegistered gates lookups fixedColumns
+        permutationColumns) := by
   unfold windowChain windowChainStep processWindow
   simp only [keygen_spine, operations_assignAdvice, operations_cellAt,
     List.forall_cons, List.forall_nil, RegionOperation.KeygenRegistered]
   constructor
   · exact FormalRegionCircuit.call_keygenRegistered
       AddIncomplete.add cfg.addIncompleteConfig configured
-      (offset + 1) _ self hgates hlookups hpermutationColumns
+      (offset + 1) _ self hgates hlookups hfixedColumns hpermutationColumns
       (by
         rw [AddIncomplete.Configured.inputCells_eq]
         simp only [circuit_norm]
@@ -990,7 +1165,7 @@ theorem windowChain_processWindow_keygenRegistered
   · intro i
     exact FormalRegionCircuit.call_keygenRegistered
       AddIncomplete.add cfg.addIncompleteConfig configured
-      (offset + 2 + i * 1) _ self hgates hlookups hpermutationColumns
+      (offset + 2 + i * 1) _ self hgates hlookups hfixedColumns hpermutationColumns
       (by
         rw [AddIncomplete.Configured.inputCells_eq]
         simp only [circuit_norm]

@@ -193,6 +193,15 @@ theorem add_synthesisSummary_constantSiteCount
   simp only [synthesisSummary, circuit_norm]
 
 @[keygen_norm]
+theorem Configured.fixedColumns_eq_nil {config : Config}
+    (configured : add.Configured config) :
+    configured.fixedColumns = [] := by
+  rcases configured with ⟨configInput, counts, hconfig, outputEq⟩
+  cases outputEq
+  simp only [FormalRegionCircuit.Configured.fixedColumns]
+  constructor
+
+@[keygen_norm]
 theorem Configured.permutationColumns_eq {config : Config}
     (configured : add.Configured config) :
     configured.permutationColumns = permutationColumns config := by

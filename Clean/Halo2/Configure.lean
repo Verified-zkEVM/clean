@@ -582,6 +582,18 @@ structure ConstraintSystem (F : Type) where
   -- TODO HALO2 delete this, should be covered by gate wellformedness
   invalidQueriedCells : List String := []
 
+/-- All fixed columns allocated in a completed constraint system. -/
+def ConstraintSystem.fixedColumns
+    (constraintSystem : ConstraintSystem F) : List (Column .fixed) :=
+  (List.range constraintSystem.numFixedColumns).map Column.mk
+
+theorem ConstraintSystem.mem_fixedColumns_iff
+    (constraintSystem : ConstraintSystem F) (column : Column .fixed) :
+    column ∈ constraintSystem.fixedColumns ↔
+      column.index < constraintSystem.numFixedColumns := by
+  rcases column with ⟨index⟩
+  simp [ConstraintSystem.fixedColumns]
+
 /-- Flatten a constraint system's gates to its ordered constraint-polynomial list. -/
 def flatGates (cs : ConstraintSystem F) : List (Expression F Query) :=
   cs.gates.flatMap fun gate => gate.constraints.map (fun constraint => constraint.poly)
@@ -1195,6 +1207,21 @@ def finalCounts (program : Configure F α) (counts : ConfigureCounts) :
     ConfigureCounts :=
   (program.countDelta counts).apply counts
 
+/-- Fixed columns allocated by this configure program, in allocation order. -/
+def fixedColumns (program : Configure F α)
+    (counts : ConfigureCounts) : List (Column .fixed) :=
+  (List.range' counts.numFixedColumns
+    (program.countDelta counts).numFixedColumns).map Column.mk
+
+theorem mem_fixedColumns_iff
+    (program : Configure F α) (counts : ConfigureCounts)
+    (column : Column .fixed) :
+    column ∈ program.fixedColumns counts ↔
+      counts.numFixedColumns ≤ column.index ∧
+        column.index < (program.finalCounts counts).numFixedColumns := by
+  rcases column with ⟨index⟩
+  simp [fixedColumns, finalCounts, ConfigureCountDelta.apply]
+
 theorem finalCounts_numAdviceColumns
     (program : Configure F α) (counts : ConfigureCounts) :
     (program.finalCounts counts).numAdviceColumns =
@@ -1587,6 +1614,12 @@ def enableEquality (c : AnyColumn) : Configure F Unit :=
       { permutationRequests := [c] }, {})⟩
 
 @[simp]
+theorem Configure.countDelta_enableEquality
+    (column : AnyColumn) (counts : ConfigureCounts) :
+    (enableEquality (F := F) column).countDelta counts = {} :=
+  rfl
+
+@[simp]
 theorem Configure.delta_enableEquality_gates
     (column : AnyColumn) (counts : ConfigureCounts) :
     ((enableEquality (F := F) column).delta counts).gates = [] := by
@@ -1644,6 +1677,12 @@ def createGate (gate : Gate F) : Configure F Unit :=
   ⟨fun _ =>
     ((), (ConfigureDelta.queriedCells gate.name gate.queriedCells).append
       { gates := [gate] }, {})⟩
+
+@[simp]
+theorem Configure.countDelta_createGate
+    (gate : Gate F) (counts : ConfigureCounts) :
+    (createGate gate).countDelta counts = {} :=
+  rfl
 
 /-- Rust: `meta.lookup(|meta| table_map)` (`circuit.rs:1056-1079`). `table_map` is a list
 of `(input, tableColumn)` pairs; each table column is wrapped as a rotation-0 fixed query
@@ -2821,6 +2860,48 @@ variable {α β : Type}
       (next (program.output counts)).finalCounts
         (program.finalCounts counts) :=
   by simp [finalCounts]
+
+@[simp] theorem fixedColumns_pure
+    (value : α) (counts : ConfigureCounts) :
+    fixedColumns (pure value : Configure F α) counts = [] := by
+  simp [fixedColumns]
+
+@[simp] theorem fixedColumns_bind
+    (program : Configure F α) (next : α → Configure F β)
+    (counts : ConfigureCounts) :
+    fixedColumns (program >>= next) counts =
+      program.fixedColumns counts ++
+        (next (program.output counts)).fixedColumns
+          (program.finalCounts counts) := by
+  simp only [fixedColumns, countDelta_bind,
+    ConfigureCountDelta.append, finalCounts_numFixedColumns]
+  rw [← List.map_append, List.range'_append_1]
+
+/-- Fixed columns allocated by the first half of a configure bind remain allocated by
+the composite program. -/
+theorem mem_fixedColumns_bind_left
+    (program : Configure F α) (next : α → Configure F β)
+    (counts : ConfigureCounts) {column : Column .fixed}
+    (hcolumn : column ∈ program.fixedColumns counts) :
+    column ∈ (program >>= next).fixedColumns counts := by
+  rw [fixedColumns_bind]
+  exact List.mem_append_left _ hcolumn
+
+/-- Fixed columns allocated by the second half of a configure bind are allocated by
+the composite program. -/
+theorem mem_fixedColumns_bind_right
+    (program : Configure F α) (next : α → Configure F β)
+    (counts : ConfigureCounts) {column : Column .fixed}
+    (hcolumn : column ∈
+      (next (program.output counts)).fixedColumns (program.finalCounts counts)) :
+    column ∈ (program >>= next).fixedColumns counts := by
+  rw [fixedColumns_bind]
+  exact List.mem_append_right _ hcolumn
+
+@[simp] theorem fixedColumns_fixedColumn (counts : ConfigureCounts) :
+    fixedColumns (fixedColumn : Configure F (Column .fixed)) counts =
+      [⟨counts.numFixedColumns⟩] := by
+  simp [fixedColumns, countDelta, fixedColumn]
 
 @[simp] theorem output_adviceColumn (counts : ConfigureCounts) :
     output (adviceColumn : Configure F (Column .advice)) counts =

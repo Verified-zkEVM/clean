@@ -307,6 +307,8 @@ def swapConfigureCertificate
       ((configure a b aSwapped bSwapped swapColumn).output counts)
       { gates := ((configure a b aSwapped bSwapped swapColumn).delta counts).gates
         lookups := ((configure a b aSwapped bSwapped swapColumn).delta counts).lookups
+        fixedColumns :=
+          (configure a b aSwapped bSwapped swapColumn).fixedColumns counts
         permutationColumns :=
           [aSwapped.toAny, bSwapped.toAny] ++
             ((configure a b aSwapped bSwapped swapColumn).delta counts).permutationRequests } := by
@@ -328,6 +330,10 @@ def swapConfigureCertificate
       ElaboratedRegionCircuit.keygenRequirements, Configure.delta_pure,
       List.append_nil] at hargument
     exact False.elim (List.not_mem_nil hargument)
+  · intro column hcolumn
+    simp only [keygen_norm, swap, cfg, configure,
+      FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements] at hcolumn
   · intro column hcolumn
     simp only [keygen_norm, swap, FormalRegionCircuit.keygenRequirements,
       ElaboratedRegionCircuit.keygenRequirements] at hcolumn

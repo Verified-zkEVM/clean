@@ -171,6 +171,7 @@ def addFormalConfigureCertificate (a b c : Column .advice)
       ((configure a b c).output counts)
       { gates := ((configure a b c).delta counts).gates
         lookups := ((configure a b c).delta counts).lookups
+        fixedColumns := (configure a b c).fixedColumns counts
         permutationColumns := ([a, b] : List AnyColumn) ++
           ((configure a b c).delta counts).permutationRequests } := by
   let cfg := (configure a b c).output counts
@@ -186,6 +187,10 @@ def addFormalConfigureCertificate (a b c : Column .advice)
       ElaboratedRegionCircuit.keygenRequirements, Configure.delta_pure,
       List.append_nil] at hargument
     exact False.elim (List.not_mem_nil hargument)
+  · intro column hcolumn
+    simp only [keygen_norm, add, cfg, configure,
+      FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements] at hcolumn
   · intro column hcolumn
     simpa only [keygen_norm, add, cfg, configure,
       FormalRegionCircuit.keygenRequirements,

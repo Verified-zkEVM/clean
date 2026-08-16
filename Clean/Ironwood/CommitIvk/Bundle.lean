@@ -81,6 +81,13 @@ def synthesisSummary (cfg : Config) (offset : ℕ) :
       .column .advice (cfg.advices 8).index]
     (offset + 2) 0
 
+@[synthesis_summary_norm]
+theorem synthesisSummary_hasNoFixedColumns (cfg : Config) (offset : ℕ) :
+    (synthesisSummary cfg offset).HasNoFixedColumns := by
+  unfold synthesisSummary
+  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
+
 @[circuit_norm]
 def bundleSynthesize (wb1 wd1 : WitgenIR Fp 1) (cfg : Config)
     (offset : ℕ) (input : Var Inputs Fp) : RegionCircuit Fp Unit := do

@@ -320,6 +320,17 @@ theorem circuitSynthesisSummary_instanceRowExtent_eq (K : ℕ) (cfg : Config K) 
     LookupRangeCheck.copyCheckSynthesisSummary,
     synthesis_summary_norm]
 
+/-- The overflow checker uses selectors and advice columns and performs no table load. -/
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_hasNoFixedWrites (K : ℕ) (cfg : Config K) :
+    (circuitSynthesisSummary K cfg).HasNoFixedWrites := by
+  simp only [circuitSynthesisSummary,
+    FloorPlanner.SynthesisSummary.hasNoFixedWrites_combine,
+    FloorPlanner.SynthesisSummary.hasNoFixedWrites_ofRegion,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns,
+    LookupRangeCheck.copyCheckSynthesisSummary_hasNoFixedWrites]
+  simp
+
 def circuit (K : ℕ) (hKW : K * numWords K = 130) :
     FormalCircuit Fp (LookupRangeCheck.Config K × Column .advice × Column .advice ×
       Column .advice) (Config K) Inputs unit where

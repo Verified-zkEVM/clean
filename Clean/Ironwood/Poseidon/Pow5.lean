@@ -41,6 +41,15 @@ structure Config where
   sPartial : Selector
   sPadAndAdd : Selector
 
+/-- Fixed columns used for Poseidon round constants, in allocation order. -/
+@[keygen_norm]
+def Config.fixedColumns (config : Config) : List (Column .fixed) :=
+  List.ofFn config.rcA ++ List.ofFn config.rcB
+
+/-- Evidence that the logical round-constant roles use distinct fixed columns. -/
+structure Config.FixedColumnsLawful (config : Config) : Type where
+  nodup : config.fixedColumns.Nodup
+
 /-- Rust `pow_5` (`pow5.rs:89-92`): `v² · v² · v`, in the source's exact association. -/
 @[selector_free, query_correct]
 def pow5Expr (v : Expression Fp Query) : Expression Fp Query :=

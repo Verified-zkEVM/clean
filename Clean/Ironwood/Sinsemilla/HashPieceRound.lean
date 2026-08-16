@@ -60,6 +60,12 @@ structure Config where
   -- The generator table columns.
   generatorTable : GeneratorTableConfig
 
+/-- The two fixed columns used by Sinsemilla remain distinct. This is a
+caller-supplied law because `fixedYQ` is allocated before `configure`, while
+`qS2` is allocated by it. -/
+structure Config.FixedColumnsLawful (config : Config) : Type where
+  qS2_ne_fixedYQ : config.qS2 ≠ config.fixedYQ
+
 /-! ## Gate expression builders
 
 `x_r`, `Y_A` are pure functions of the double-and-add columns at a rotation, inlined as
@@ -233,6 +239,35 @@ def configure (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
   createGate (initialYQGate cfg)
   createGate (sinsemillaGate cfg)
   return cfg
+
+@[keygen_norm]
+theorem configure_output_qS2_index
+    (G : Generators) (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).output
+      counts).qS2.index = counts.numFixedColumns := by
+  simp [configure]
+
+theorem configure_output_fixedYQ
+    (G : Generators) (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).output
+      counts).fixedYQ = fixedYQ := rfl
+
+def configureOutputFixedColumnsLawful
+    (G : Generators) (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) (hfixedYQ : fixedYQ.index < counts.numFixedColumns) :
+    Config.FixedColumnsLawful
+      ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).output
+        counts) := by
+  constructor
+  intro heq
+  have := congrArg Column.index heq
+  simp only [configure_output_qS2_index, configure_output_fixedYQ] at this
+  omega
 
 @[configure_selector_norm, keygen_norm] theorem configure_output_qS1_index
     (G : Generators) (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
@@ -1045,7 +1080,8 @@ def round (G : Generators) (i : ℕ) : FormalRegionCircuit Fp Config Config fiel
   elaborated :=
     { keygenRequirements :=
         { gates cfg _ := [sinsemillaGate cfg]
-          lookups cfg _ := [generatorLookup G cfg] }
+          lookups cfg _ := [generatorLookup G cfg]
+          fixedColumns cfg _ := [cfg.qS2] }
       synthesisSummary config offset _ _ := roundSynthesisSummary config offset
       synthesisSummary_eq := by
         intro _ _ _ _
@@ -1059,7 +1095,14 @@ def round (G : Generators) (i : ℕ) : FormalRegionCircuit Fp Config Config fiel
         · simp only [roundSynthesisSummary, roundColumns, circuit_norm]
           omega
         · simp only [roundSynthesisSummary, circuit_norm]
-        · simp only [roundSynthesisSummary, circuit_norm, synthesis_summary_norm] }
+        · simp only [roundSynthesisSummary, circuit_norm, synthesis_summary_norm]
+      fixedAssignmentsAgree := by
+        intro configInput counts hconfig offset input region
+        unfold RegionOperations.FixedAssignmentsAgree
+        intro column row left right hleft hright
+        simp only [Configure.output_pure, circuit_norm, List.mem_cons,
+          List.not_mem_nil, or_false] at hleft hright
+        grind }
 
   synthesize cfg offset (piece : AssignedCell Fp) := do
     let w ← readState cfg offset
@@ -1151,6 +1194,16 @@ theorem round_synthesisSummary_constantSiteCount
       config offset piece region).constantSiteCount = 0 := by
   rw [round_synthesisSummary_eq]
   simp only [roundSynthesisSummary, circuit_norm]
+
+/-- The round's only fixed write enables `qS2` at its base row. -/
+theorem round_assignFixed_mem_iff (G : Generators) (i : ℕ)
+    (cfg : Config) (offset : ℕ) (piece : AssignedCell Fp)
+    (self : RegionIndex) (column : Column .fixed) (row : ℕ) (value : Fp) :
+    .assignFixed column row value ∈
+        ((round G i).call cfg offset piece).operations self ↔
+      column = cfg.qS2 ∧ row = offset ∧ value = 1 := by
+  rw [FormalRegionCircuit.call_operations]
+  simp [round, circuit_norm]
 
 /-- The round's output variable: the next row's neighborhood (position-determined). -/
 @[circuit_norm]

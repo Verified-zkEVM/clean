@@ -119,6 +119,20 @@ theorem prefixRows_step (ns : List ℕ) (m : ℕ) (hm : m < ns.length) :
       rw [show (n :: rest).getD ((m - 1) + 1) 0 = rest.getD (m - 1) 0 from rfl]
       omega
 
+theorem prefixRows_succ_le (ns : List ℕ) (i : ℕ) :
+    prefixRows ns i ≤ prefixRows ns (i + 1) := by
+  induction ns generalizing i with
+  | nil => simp [prefixRows]
+  | cons n rest ih =>
+      cases i with
+      | zero => simp [prefixRows_zero, prefixRows_succ]
+      | succ i =>
+          simp only [prefixRows_succ]
+          exact Nat.add_le_add_left (ih i) (n + 1)
+
+theorem prefixRows_mono (ns : List ℕ) : Monotone (prefixRows ns) :=
+  monotone_nat_of_le_succ (prefixRows_succ_le ns)
+
 /-- The boundary entering-`y` value: the previous piece's exit `y`, derived from its last
 row and the next row's `x_a` (`y_exit = nextYA / 2`) — Rust's `Y<Value>` thread, positional. -/
 def boundaryYA (last : DoubleAndAddRow (AssignedCell Fp)) (xNext : AssignedCell Fp) :
@@ -338,12 +352,29 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
     { keygenRequirements :=
         { gates cfg _ := [sinsemillaGate cfg]
           lookups cfg _ := [HashPiece.generatorLookup G cfg]
+          fixedColumns cfg _ := [cfg.qS2]
           permutationColumns cfg _ := [cfg.bits]
           inputCells _ _ input := [input.cell] }
       synthesisSummary cfg base _ _ := slotSynthesisSummary ns i cfg base
       synthesisSummary_eq := by
         intro _ _ _ _
         simp only [slotSynthesisSummary, circuit_norm, synthesis_summary_norm]
+      fixedAssignmentsAgree := by
+        intro configInput counts hconfig base input region
+        let child := HashPiece.circuit G (ns.getD i 0)
+          (decide (i = ns.length - 1))
+          (if i = 0 then yaIn else boundaryYA
+            (HashPiece.reads configInput (base - 1) region).row
+            (AssignedCell.of region base configInput.xA))
+        have hchild : child.keygenRequirements.configLawful configInput := by
+          simpa only [child, HashPiece.circuit,
+            HashPiece.circuitKeygenRequirements] using hconfig
+        simpa only [Configure.output_pure, FormalRegionCircuit.call_operations,
+            RegionCircuit.operations_bind,
+            RegionCircuit.operations_pure, HashPiece.operations_readState,
+            HashPiece.operations_cellAt, List.nil_append, List.append_nil]
+          using child.elaborated.fixedAssignmentsAgree
+            configInput counts hchild base input region
       copyCellsAssigned := by
         intro configInput counts hconfig base input region
         simp only [Configure.output_pure, RegionCircuit.operations_bind,
@@ -430,6 +461,27 @@ def slot (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → Fp) 
         (by rw [hA'y]; by_cases hi : i = 0 <;> simp [hi, reads])
         hchain'
       exact hres
+
+/-- A slot's fixed writes are exactly those of its hash-piece child. -/
+theorem slot_assignFixed_mem_iff (G : Generators) (ns : List ℕ)
+    (yaIn : Placed Environment Fp → Fp) (i : ℕ) (cfg : Config)
+    (base : ℕ) (piece : AssignedCell Fp) (self : RegionIndex)
+    (column : Column .fixed) (row : ℕ) (value : Fp) :
+    .assignFixed column row value ∈
+        ((slot G ns yaIn i).call cfg base piece).operations self ↔
+      column = cfg.qS2 ∧
+        ((∃ j : Fin (ns.getD i 0),
+            row = base + j.val ∧ value = 1) ∨
+          row = base + ns.getD i 0 ∧
+            value = qS2Boundary (decide (i = ns.length - 1))) := by
+  rw [FormalRegionCircuit.call_operations]
+  simp only [slot, RegionCircuit.operations_bind,
+    RegionCircuit.operations_pure, HashPiece.operations_readState,
+    HashPiece.operations_cellAt, List.nil_append, List.append_nil]
+  rw [FormalRegionCircuit.call_operations]
+  exact HashPiece.circuitBody_assignFixed_mem_iff
+    G (ns.getD i 0) (decide (i = ns.length - 1)) _ cfg base piece self
+      column row value
 
 @[synthesis_summary_norm]
 theorem slot_synthesisSummary_eq
@@ -1115,6 +1167,73 @@ theorem slotIterationSynthesisSummary_constantSiteCount
     (slotIterationSynthesisSummary ns i cfg base).constantSiteCount = 0 := by
   simp only [slotIterationSynthesisSummary, synthesis_summary_norm]
 
+/-- Exact fixed writes of one chain iteration: the child writes its interior
+rows and both child and parent write the same boundary marker. -/
+theorem slotIteration_assignFixed_mem_iff
+    (G : Generators) (ns : List ℕ)
+    (yaIn : Placed Environment Fp → Fp) (i : ℕ) (cfg : Config)
+    (base : ℕ) (piece : AssignedCell Fp) (self : RegionIndex)
+    (column : Column .fixed) (row : ℕ) (value : Fp) :
+    .assignFixed column row value ∈ ((do
+        let _ ← (slot G ns yaIn i).call cfg base piece
+        let _ ← assignFixed cfg.qS2 (base + ns.getD i 0)
+          (qS2Boundary (decide (i = ns.length - 1)))
+        (sinsemillaGate cfg).enable (base + ns.getD i 0)).operations self) ↔
+      column = cfg.qS2 ∧
+        ((∃ j : Fin (ns.getD i 0),
+            row = base + j.val ∧ value = 1) ∨
+          row = base + ns.getD i 0 ∧
+            value = qS2Boundary (decide (i = ns.length - 1))) := by
+  simp only [RegionCircuit.operations_bind, circuit_norm, List.mem_append]
+  rw [slot_assignFixed_mem_iff]
+  aesop
+
+/-- Fixed writes within one chain iteration agree, including the intentionally
+duplicated boundary assignment shared by the child and its parent. -/
+theorem slotIteration_fixedAssignmentsAgree
+    (G : Generators) (ns : List ℕ)
+    (yaIn : Placed Environment Fp → Fp) (i : ℕ) (cfg : Config)
+    (base : ℕ) (piece : AssignedCell Fp) (self : RegionIndex) :
+    ((do
+        let _ ← (slot G ns yaIn i).call cfg base piece
+        let _ ← assignFixed cfg.qS2 (base + ns.getD i 0)
+          (qS2Boundary (decide (i = ns.length - 1)))
+        (sinsemillaGate cfg).enable (base + ns.getD i 0)).operations self)
+      |>.FixedAssignmentsAgree := by
+  unfold RegionOperations.FixedAssignmentsAgree
+  intro column row left right hleft hright
+  rw [slotIteration_assignFixed_mem_iff] at hleft hright
+  rcases hleft with ⟨_, hleft⟩
+  rcases hright with ⟨_, hright⟩
+  rcases hleft with hleft | hleft <;>
+    rcases hright with hright | hright
+  · rcases hleft with ⟨j, hleftRow, hleftValue⟩
+    rcases hright with ⟨k, hrightRow, hrightValue⟩
+    exact hleftValue.trans hrightValue.symm
+  · rcases hleft with ⟨j, hleftRow, hleftValue⟩
+    omega
+  · rcases hright with ⟨j, hrightRow, hrightValue⟩
+    omega
+  · exact hleft.2.trans hright.2.symm
+
+/-- One chain iteration's fixed writes stay in its allotted row interval. -/
+theorem slotIteration_assignFixed_row_bounds
+    (G : Generators) (ns : List ℕ)
+    (yaIn : Placed Environment Fp → Fp) (i : ℕ) (cfg : Config)
+    (base : ℕ) (piece : AssignedCell Fp) (self : RegionIndex)
+    (column : Column .fixed) (row : ℕ) (value : Fp)
+    (hassignment : .assignFixed column row value ∈ ((do
+      let _ ← (slot G ns yaIn i).call cfg base piece
+      let _ ← assignFixed cfg.qS2 (base + ns.getD i 0)
+        (qS2Boundary (decide (i = ns.length - 1)))
+      (sinsemillaGate cfg).enable (base + ns.getD i 0)).operations self)) :
+    base ≤ row ∧ row < base + ns.getD i 0 + 1 := by
+  rw [slotIteration_assignFixed_mem_iff] at hassignment
+  rcases hassignment.2 with ⟨j, hrow, _⟩ | ⟨hrow, _⟩
+  · rw [hrow]
+    omega
+  · omega
+
 theorem slotIteration_copyCellsAssignedFrom
     (G : Generators) (ns : List ℕ)
     (yaIn : Placed Environment Fp → Fp) (i : ℕ) (cfg : Config)
@@ -1380,6 +1499,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
     { keygenRequirements :=
         { gates cfg _ := [sinsemillaGate cfg]
           lookups cfg _ := [HashPiece.generatorLookup G cfg]
+          fixedColumns cfg _ := [cfg.qS2]
           permutationColumns cfg _ := [cfg.bits]
           inputCells _ _ input :=
             input.pieces.toList.map (·.cell) }
@@ -1410,6 +1530,34 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
           exact ⟨input.pieces[i]!, by simp, rfl⟩
         · apply RegionOperations.copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
           simp only [circuit_norm, RegionOperation.copiedCells, List.Forall]
+      fixedAssignmentsAgree := by
+        intro cfg counts hconfig offset input region
+        have hloop := RegionCircuit.forRangeVar'_fixedAssignmentsAgree
+          (fun i => offset + prefixRows ns i) ns.length
+          (fun i base => do
+            let _ ← (slot G ns yaIn i).call cfg base input.pieces[i]!
+            let _ ← assignFixed cfg.qS2 (base + ns.getD i 0)
+              (qS2Boundary (decide (i = ns.length - 1)))
+            (sinsemillaGate cfg).enable (base + ns.getD i 0)) region
+          (fun i => slotIteration_fixedAssignmentsAgree G ns yaIn i.val cfg
+            (offset + prefixRows ns i.val) input.pieces[i.val]! region)
+          (fun i column row value hassignment => by
+            have hbounds := slotIteration_assignFixed_row_bounds
+              G ns yaIn i.val cfg (offset + prefixRows ns i.val)
+                input.pieces[i.val]! region column row value hassignment
+            simp only [prefixRows_step ns i.val i.isLt]
+            omega)
+          (fun i j hij => by
+            apply Nat.add_le_add_left
+            exact prefixRows_mono ns (Nat.succ_le_iff.mpr hij))
+        unfold RegionOperations.FixedAssignmentsAgree at hloop ⊢
+        intro column row left right hleft hright
+        simp only [Configure.output_pure, RegionCircuit.operations_bind,
+          RegionCircuit.operations_pure, HashPiece.operations_readState,
+          HashPiece.operations_cellAt, operations_assignAdvice,
+          List.mem_append, List.mem_singleton] at hleft hright
+        simp at hleft hright
+        exact hloop column row left right hleft hright
       output cfg offset _ self := circuitOutputCells cfg ns offset self
       synthesisSummary cfg offset _ _ := circuitSynthesisSummary ns cfg offset
       output_eq := by

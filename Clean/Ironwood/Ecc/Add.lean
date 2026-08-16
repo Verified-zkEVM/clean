@@ -363,6 +363,13 @@ theorem synthesisSummary_instanceRowExtent_eq (config : Config) (offset : ℕ) :
     (synthesisSummary config offset).instanceRowExtent = 0 := by
   simp only [synthesisSummary, synthesis_summary_norm]
 
+@[synthesis_summary_norm]
+theorem synthesisSummary_hasNoFixedColumns (config : Config) (offset : ℕ) :
+    (synthesisSummary config offset).HasNoFixedColumns := by
+  simp only [synthesisSummary,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
+
 def add : FormalRegionCircuit Fp
     (Column .advice × Column .advice × Column .advice × Column .advice ×
       Column .advice × Column .advice × Column .advice × Column .advice × Column .advice)
@@ -456,6 +463,15 @@ def add : FormalRegionCircuit Fp
       region_6, region_7, region_8, region_9, region_10,
       ite_rXProgram_eq, ite_rYProgram_eq, ite_lambdaProgram_eq]
     exact polysZero_of_spec (spec_of_valid hpValid hqValid)
+
+@[keygen_norm]
+theorem Configured.fixedColumns_eq_nil {config : Config}
+    (configured : add.Configured config) :
+    configured.fixedColumns = [] := by
+  rcases configured with ⟨configInput, counts, hconfig, outputEq⟩
+  cases outputEq
+  simp only [FormalRegionCircuit.Configured.fixedColumns]
+  constructor
 
 @[keygen_norm]
 theorem Configured.permutationColumns_eq {config : Config}

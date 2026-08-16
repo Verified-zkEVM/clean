@@ -182,8 +182,9 @@ def loop (G : Generators) (n : ℕ) : FormalRegionCircuit Fp Config Config field
   configure := pure
   elaborated :=
     { keygenRequirements :=
-        { gates cfg _ := [sinsemillaGate cfg]
-          lookups cfg _ := [generatorLookup G cfg] }
+      { gates cfg _ := [sinsemillaGate cfg]
+        lookups cfg _ := [generatorLookup G cfg]
+        fixedColumns cfg _ := [cfg.qS2] }
       synthesisSummary cfg offset _ _ := loopSynthesisSummary n cfg offset
       synthesisSummary_eq := by
         intro cfg offset piece self
@@ -191,6 +192,20 @@ def loop (G : Generators) (n : ℕ) : FormalRegionCircuit Fp Config Config field
         simpa [loopSynthesisSummary, roundSynthesisSummary, Nat.add_assoc] using
           (FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns
             (roundColumns cfg) offset 1 2 0 n).symm
+      fixedAssignmentsAgree := by
+        intro configInput counts hconfig offset input region
+        unfold RegionOperations.FixedAssignmentsAgree
+        intro column row left right hleft hright
+        simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+          HashPiece.operations_readState, operations_cellVec, List.append_nil] at hleft hright
+        rw [RegionCircuit.forRange'_operations] at hleft hright
+        simp only [List.mem_flatten, List.mem_ofFn] at hleft hright
+        obtain ⟨_, ⟨i, rfl⟩, hleft⟩ := hleft
+        obtain ⟨_, ⟨j, rfl⟩, hright⟩ := hright
+        simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+          List.append_nil] at hleft hright
+        rw [round_assignFixed_mem_iff] at hleft hright
+        exact hleft.2.2.trans hright.2.2.symm
       copyCellsAssigned := by
         intro configInput counts hconfig offset input region
         simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
@@ -379,6 +394,32 @@ theorem loop_synthesisSummary_constantSiteCount
       config offset piece region).constantSiteCount = 0 := by
   rw [loop_synthesisSummary_eq]
   exact loopSynthesisSummary_constantSiteCount n config offset
+
+/-- The loop writes `qS2 = 1` exactly at its `n` consecutive round rows. -/
+theorem loop_assignFixed_mem_iff (G : Generators) (n : ℕ)
+    (cfg : Config) (offset : ℕ) (piece : AssignedCell Fp)
+    (self : RegionIndex) (column : Column .fixed) (row : ℕ) (value : Fp) :
+    .assignFixed column row value ∈
+        ((loop G n).call cfg offset piece).operations self ↔
+      column = cfg.qS2 ∧ (∃ i : Fin n, row = offset + i.val) ∧ value = 1 := by
+  rw [FormalRegionCircuit.call_operations]
+  simp only [loop, RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    HashPiece.operations_readState, operations_cellVec, List.append_nil]
+  rw [RegionCircuit.forRange'_operations]
+  simp only [List.mem_flatten, List.mem_ofFn]
+  constructor
+  · rintro ⟨operations, ⟨i, rfl⟩, hoperation⟩
+    simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+      List.append_nil] at hoperation
+    rw [round_assignFixed_mem_iff] at hoperation
+    rcases hoperation with ⟨hcolumn, hrow, hvalue⟩
+    exact ⟨hcolumn, ⟨i, by simpa using hrow⟩, hvalue⟩
+  · rintro ⟨hcolumn, ⟨i, hrow⟩, hvalue⟩
+    refine ⟨_, ⟨i, rfl⟩, ?_⟩
+    simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+      List.append_nil]
+    rw [round_assignFixed_mem_iff]
+    exact ⟨hcolumn, by simpa using hrow, hvalue⟩
 
 -- contract bridges for the `loop` child (opened by the piece bundle's proofs)
 derive_contract_bridges loopC (G : Generators) (n : ℕ) := loop G n
@@ -606,6 +647,7 @@ def circuitKeygenRequirements (G : Generators) :
     KeygenRequirements Fp Config (Var field Fp) where
   gates cfg _ := [sinsemillaGate cfg]
   lookups cfg _ := [generatorLookup G cfg]
+  fixedColumns cfg _ := [cfg.qS2]
   permutationColumns cfg _ := [cfg.bits]
   inputCells _ _ input := [input.cell]
 
@@ -622,6 +664,21 @@ theorem circuitBody_copyCellsAssigned (G : Generators) (w : ℕ) (final : Bool)
     | (apply RegionOperations.copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
        simp only [circuit_norm, RegionOperation.copiedCells, List.Forall] <;> done)
     | keygen_registration
+
+/-- The hash-piece body writes only its round selector column: `1` on each
+interior round and the circuit's boundary marker on its final row. -/
+theorem circuitBody_assignFixed_mem_iff (G : Generators) (w : ℕ)
+    (final : Bool) (yaIn : Placed Environment Fp → Fp) (cfg : Config)
+    (offset : ℕ) (piece : AssignedCell Fp) (self : RegionIndex)
+    (column : Column .fixed) (row : ℕ) (value : Fp) :
+    .assignFixed column row value ∈
+        (circuitBody G w final yaIn cfg offset piece).operations self ↔
+      column = cfg.qS2 ∧
+        ((∃ i : Fin w, row = offset + i.val ∧ value = 1) ∨
+          row = offset + w ∧ value = qS2Boundary final) := by
+  simp only [circuitBody, circuit_norm, List.mem_append]
+  rw [loop_assignFixed_mem_iff]
+  aesop
 
 def circuit (G : Generators) (w : ℕ) (final : Bool)
     (yaIn : Placed Environment Fp → Fp) :
@@ -640,6 +697,21 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
             FloorPlanner.RegionSynthesisSummary.ofColumns_columns,
             FloorPlanner.RegionSynthesisSummary.ofColumns_rowCount]
         all_goals try omega
+      fixedAssignmentsAgree := by
+        intro configInput counts hconfig offset input region
+        unfold RegionOperations.FixedAssignmentsAgree
+        intro column row left right hleft hright
+        simp only [circuitBody, circuit_norm, List.mem_append] at hleft hright
+        rw [loop_assignFixed_mem_iff] at hleft hright
+        simp at hleft hright
+        rcases hleft with hleft | hleft <;>
+          rcases hright with hright | hright
+        · exact hleft.2.2.trans hright.2.2.symm
+        · rcases hleft.2.1 with ⟨i, hi⟩
+          omega
+        · rcases hright.2.1 with ⟨i, hi⟩
+          omega
+        · exact hleft.2.2.trans hright.2.2.symm
       copyCellsAssigned := by
         intro configInput counts hconfig offset input region
         simpa only [Configure.output_pure, circuitKeygenRequirements]

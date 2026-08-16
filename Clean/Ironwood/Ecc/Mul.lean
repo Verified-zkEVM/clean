@@ -529,6 +529,18 @@ theorem mainCircuitSynthesisSummary_instanceRowExtent_eq (cfg : Config) :
     (mainCircuitSynthesisSummary cfg).instanceRowExtent = 0 := by
   simp only [mainCircuitSynthesisSummary, synthesis_summary_norm]
 
+/-- The complete double-and-add region uses selectors and advice columns only. -/
+@[synthesis_summary_norm]
+theorem mainCircuitSynthesisSummary_hasNoFixedColumns (cfg : Config) :
+    (mainCircuitSynthesisSummary cfg).HasNoFixedColumns := by
+  simp only [mainCircuitSynthesisSummary,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_combine,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns,
+    Add.synthesisSummary_hasNoFixedColumns,
+    MulIncomplete.doubleAndAddSynthesisSummary_hasNoFixedColumns,
+    MulComplete.circuitSynthesisSummary_hasNoFixedColumns]
+  simp
+
 theorem mainCircuitSynthesisSummary_eq (cfg : Config)
     (input : Var Inputs Fp) (self : RegionIndex) :
     mainCircuitSynthesisSummary cfg =
@@ -558,6 +570,9 @@ def mainKeygenRequirements : KeygenRequirements Fp Config (Var Inputs Fp) where
   lookups _ configured :=
     configured.1.lookups ++ configured.2.1.lookups ++
       configured.2.2.1.lookups ++ configured.2.2.2.lookups
+  fixedColumns _ configured :=
+    configured.1.fixedColumns ++ configured.2.1.fixedColumns ++
+      configured.2.2.1.fixedColumns ++ configured.2.2.2.fixedColumns
   permutationColumns _ configured :=
     configured.1.permutationColumns ++ configured.2.1.permutationColumns ++
       configured.2.2.1.permutationColumns ++ configured.2.2.2.permutationColumns
@@ -576,6 +591,14 @@ theorem mainKeygenRequirements_lookups (cfg : Config)
     mainKeygenRequirements.lookups cfg configured =
       configured.1.lookups ++ configured.2.1.lookups ++
         configured.2.2.1.lookups ++ configured.2.2.2.lookups := rfl
+
+@[keygen_norm]
+theorem mainKeygenRequirements_fixedColumns (cfg : Config)
+    (configured : mainKeygenRequirements.configLawful cfg) :
+    mainKeygenRequirements.fixedColumns cfg configured =
+      configured.1.fixedColumns ++ configured.2.1.fixedColumns ++
+        configured.2.2.1.fixedColumns ++
+          configured.2.2.2.fixedColumns := rfl
 
 @[keygen_norm]
 theorem mainKeygenRequirements_permutationColumns (cfg : Config)
@@ -623,6 +646,7 @@ theorem mainSynthesize_keygenRegistered
       (RegionOperation.KeygenRegistered
         (mainKeygenRequirements.gates cfg configured)
         (mainKeygenRequirements.lookups cfg configured)
+        (mainKeygenRequirements.fixedColumns cfg configured)
         (mainKeygenRequirements.permutationColumns cfg configured ++
           mainKeygenRequirements.inputPermutationColumns cfg configured input))
       ((mainSynthesize cfg input).operations region) := by
@@ -670,6 +694,10 @@ theorem mainSynthesize_keygenRegistered
     case hlookups =>
       intro argument hargument
       exact List.mem_append_right _ hargument
+    case hfixedColumns =>
+      intro column hcolumn
+      apply List.mem_append_right
+      exact List.mem_append_right _ hcolumn
     case hpermutationColumns =>
       intro column hcolumn
       apply List.mem_append_left
@@ -1006,6 +1034,12 @@ def mainElaborated : ElaboratedRegionCircuit Fp Config Config Inputs MainOutputs
   synthesisSummary_eq := by
     intro cfg _ input self
     exact mainCircuitSynthesisSummary_eq cfg input self
+  fixedAssignmentsAgree := by
+    intro configInput counts hconfig offset input region
+    apply RegionOperations.HasNoFixedAssignments.fixedAssignmentsAgree
+    apply FloorPlanner.RegionSynthesisSummary.HasNoFixedColumns.hasNoFixedAssignments
+    rw [← mainCircuitSynthesisSummary_eq]
+    exact mainCircuitSynthesisSummary_hasNoFixedColumns configInput
 
 /-- The main double-and-add region as a bundle. `Spec` is the pre-overflow seam: some bit
 families drive the three chained double-and-add phases plus the constraint-forced LSB, the
@@ -1521,6 +1555,25 @@ theorem mulSynthesisSummary_instanceRowExtent_eq (cfg : Config) :
     (mulSynthesisSummary cfg).instanceRowExtent = 0 := by
   simp only [mulSynthesisSummary, synthesis_summary_norm]
 
+/-- Variable-base multiplication performs no fixed-column writes. -/
+@[synthesis_summary_norm]
+theorem mulSynthesisSummary_hasNoFixedWrites (cfg : Config) :
+    (mulSynthesisSummary cfg).HasNoFixedWrites := by
+  simp only [mulSynthesisSummary,
+    FloorPlanner.SynthesisSummary.hasNoFixedWrites_combine,
+    FloorPlanner.SynthesisSummary.hasNoFixedWrites_ofRegion,
+    mainCircuitSynthesisSummary_hasNoFixedColumns,
+    MulOverflow.circuitSynthesisSummary_hasNoFixedWrites]
+  simp
+
+@[synthesis_summary_norm]
+theorem synthesize_synthesisSummary_eq (cfg : Config)
+    (input : Var Inputs Fp) (region : RegionIndex) :
+    FloorPlanner.synthesisSummary ((synthesize cfg input).operations region) =
+      mulSynthesisSummary cfg := by
+  simp only [mulSynthesisSummary, synthesize, circuit_norm,
+    synthesis_summary_norm]
+
 /-- The region count of `synthesize`: the main double-and-add region (1) plus the overflow
 check's three sibling regions (`MulOverflow.circuit`'s regionCount, 3) = 4. -/
 private theorem synthesize_regionCount (cfg : Config)
@@ -1537,6 +1590,7 @@ def keygenRequirements :
   gates _ configured := configured.gates
   lookups input configured :=
     LookupRangeCheck.rangeCheckLookup 10 input.2.1 :: configured.lookups
+  fixedColumns _ configured := configured.fixedColumns
   permutationColumns input configured :=
     ([input.2.1.runningSum, input.2.2 3, input.2.2 0,
       input.2.2 1, input.2.2 7] : List AnyColumn) ++ configured.permutationColumns
@@ -1655,6 +1709,8 @@ private theorem synthesize_keygenRegistered
         ((configure configInput.1 configInput.2.1 configInput.2.2).delta counts).gates)
       (keygenRequirements.lookups configInput hconfig ++
         ((configure configInput.1 configInput.2.1 configInput.2.2).delta counts).lookups)
+      (keygenRequirements.fixedColumns configInput hconfig ++
+        (configure configInput.1 configInput.2.1 configInput.2.2).fixedColumns counts)
       (keygenRequirements.permutationColumns configInput hconfig ++
         (((configure configInput.1 configInput.2.1 configInput.2.2).delta counts).permutationRequests ++
           keygenRequirements.inputPermutationColumns configInput hconfig input)) := by
@@ -1686,6 +1742,7 @@ private theorem synthesize_keygenRegistered
         FormalRegionCircuit.keygenRequirements, keygen_norm, configure,
         keygenRequirements] at hargument ⊢
       aesop
+    case hfixedColumns => keygen_registration
     case hpermutationColumns =>
       intro column hcolumn
       simp only [mainConfigured,
@@ -1719,6 +1776,7 @@ private theorem synthesize_keygenRegistered
         FormalCircuit.Configured.lookups, FormalCircuit.keygenRequirements,
         MulOverflow.circuit, ElaboratedCircuit.keygenRequirements] at hargument ⊢
       aesop
+    case hfixedColumns => keygen_registration
     case hpermutationColumns =>
       intro column hcolumn
       simp only [keygen_norm, configure, overflowConfigured,
@@ -1836,6 +1894,13 @@ private theorem synthesize_copyCellsAssigned
   keygenRequirements := keygenRequirements
   registered := synthesize_keygenRegistered
   copyCellsAssigned := synthesize_copyCellsAssigned
+  fixedWritesLawful := by
+    intro configInput counts hconfig input region
+    apply Operations.HasNoFixedWrites.fixedWritesLawful
+    apply FloorPlanner.SynthesisSummary.HasNoFixedWrites.hasNoFixedWrites
+    rw [synthesize_synthesisSummary_eq]
+    exact mulSynthesisSummary_hasNoFixedWrites
+      ((configure configInput.1 configInput.2.1 configInput.2.2).output counts)
   lookupActivationsWellFormed config input region := by
     simp only [synthesize, Circuit.operations_bind,
       Circuit.operations_pure, Operations.LookupActivationsWellFormed,

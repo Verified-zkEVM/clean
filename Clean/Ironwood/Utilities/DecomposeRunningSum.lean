@@ -580,6 +580,32 @@ theorem copyDecompose_synthesisSummary_constantSiteCount
   simpa only [copyDecompose] using
     copyDecomposeSynthesisSummary_constantSiteCount numWindows config offset
 
+/-- Strict decomposition never writes a fixed column. -/
+@[synthesis_summary_norm]
+theorem copyDecompose_synthesisSummary_hasNoFixedColumns
+    (W numWindows : ℕ) (config : Config) (offset : ℕ)
+    (input : Inputs (AssignedCell Fp)) (region : RegionIndex) :
+    ((copyDecompose W numWindows).elaborated.synthesisSummary
+      config offset input region).HasNoFixedColumns := by
+  rw [copyDecompose_synthesisSummary_eq]
+  simp only [copyDecomposeSynthesisSummary,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_combine,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_repeatColumns,
+    enableLoopSynthesisSummary, assignLoopSynthesisSummary]
+  simp
+
+/-- Strict decomposition registers no fixed columns. -/
+@[keygen_norm]
+theorem copyDecompose_configured_fixedColumns_eq_nil
+    (W numWindows : ℕ) {config : Config}
+    (configured : (copyDecompose W numWindows).Configured config) :
+    configured.fixedColumns = [] := by
+  rcases configured with ⟨configInput, counts, hconfig, outputEq⟩
+  cases outputEq
+  simp only [FormalRegionCircuit.Configured.fixedColumns]
+  constructor
+
 /-- The strict decomposition config registers exactly its running-sum column for equality. -/
 @[keygen_norm]
 theorem copyDecompose_configured_permutationColumns_eq
