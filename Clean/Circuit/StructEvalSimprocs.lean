@@ -306,6 +306,45 @@ private def vectorEvalLiteralCore (e : Expr) : SimpM Simp.Step := do
 simproc vectorEvalLiteral (Eval.eval _ _) := vectorEvalLiteralCore
 attribute [circuit_norm] vectorEvalLiteral
 
+/-- Length of a syntactic `List` literal (`List.cons … List.nil` spine), if closed. -/
+private partial def listLiteralLength? (l : Expr) : Option Nat :=
+  if l.isAppOfArity ``List.cons 3 then (listLiteralLength? l.appArg!).map (· + 1)
+  else if l.isAppOfArity ``List.nil 1 then some 0
+  else none
+
+/-- Refresh the size proof of a literal `Vector.mk` whose proof has gone stale:
+`Vector.mk xs h ~~> Vector.mk xs (h' : xs.size = n)` when `h`'s *stated* array is not
+the current `xs`.
+
+Simp rewrites inside `xs` (offset arithmetic in subcircuit-output literals) while
+keeping the original size proof via proof-irrelevant congruence. Any later lemma that
+binds the proof to a metavariable — `Vector.map_mk` matching `Vector.map ?f (Vector.mk
+?xs ?h)` — then `checkTypes` the stale proof against the rewritten `xs`, and that
+definitional comparison walks the two arrays element by element through unreduced
+`localLength` offsets: seconds per match. The refreshed proof is `Eq.refl n` hinted at
+`xs.size = n`, so the same `checkTypes` becomes a syntactic match, and the kernel
+validates the hint by eager `Array.size` reduction, which walks only the list spine and
+never inspects the elements. -/
+def vectorMkProofRefreshCore (e : Expr) : SimpM Simp.Step := do
+  unless e.isAppOfArity ``Vector.mk 4 do return .continue
+  let #[α, n, xs, h] := e.getAppArgs | return .continue
+  let some (_, szApp, _) := (← inferType h).eq? | return .continue
+  -- fire only on a stale proof over a closed literal array with a literal length,
+  -- where `Array.size xs` is guaranteed to reduce to `n` by spine-walking alone
+  if szApp.isAppOfArity ``Array.size 2 && szApp.appArg! == xs then return .continue
+  unless xs.isAppOfArity ``List.toArray 2 do return .continue
+  let some len := listLiteralLength? xs.appArg! | return .continue
+  unless n.nat? == some len do return .continue
+  let natTy := mkConst ``Nat
+  let szXs := mkApp2 (mkConst ``Array.size e.getAppFn.constLevels!) α xs
+  let freshH := mkApp2 (mkConst ``id [.zero])
+    (mkApp3 (mkConst ``Eq [.one]) natTy szXs n)
+    (mkApp2 (mkConst ``Eq.refl [.one]) natTy n)
+  return .visit { expr := mkApp4 e.getAppFn α n xs freshH, proof? := none }
+
+simproc vectorMkProofRefresh (Vector.mk _ _) := vectorMkProofRefreshCore
+attribute [circuit_norm] vectorMkProofRefresh
+
 /--
 Evaluate struct *literals* component-wise:
 
