@@ -142,6 +142,10 @@ def circuit : GeneralFormalCircuit (F p) (fields 254) field where
       ← fieldFromBits_eq_mapFinRange_cast]
     simp only [← h_input, circuit_norm]
     simp only [← Fin.getElem_fin, Bits2Num.lc_eq]
+    congr 2
+    ext i hi
+    simp only [Vector.getElem_mapFinRange]
+    exact ProvableType.getElem_eval_fields env input_var i hi
 
   completeness := by
     circuit_proof_start [Bits2Num.main, AliasCheck.circuit]

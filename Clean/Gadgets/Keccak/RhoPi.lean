@@ -38,12 +38,11 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
-  simp only [eval_vector, Vector.getElem_map, KeccakState.value, rhoPi_loop]
+  simp only [Vector.getElem_map, KeccakState.value, rhoPi_loop]
 
   -- simplify constraints
-  simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp only [KeccakState.Normalized] at h_assumptions
-  simp only [h_input, h_assumptions, circuit_norm,
+  simp only [h_assumptions, circuit_norm,
     Rotation64.Assumptions, Rotation64.Spec] at h_holds
 
   simp_all [rhoPiConstants, rotLeft64_eq_rotRight64]
@@ -52,7 +51,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start
 
   -- simplify assumptions
-  simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp only [KeccakState.Normalized] at h_assumptions
 
   -- simplify constraints (goal + environment) and apply assumptions

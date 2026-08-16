@@ -45,7 +45,7 @@ def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [G.circuit, G.elaborated]
   obtain ⟨h_state, h_message⟩ := h_assumptions
-  simp only [G.Assumptions, G.Spec, h_input, getElem_eval_vector, and_imp] at h_holds
+  simp only [G.Assumptions, G.Spec, and_imp] at h_holds
   obtain ⟨c1, c2, c3, c4, c5, c6, c7, c8⟩ := h_holds
   simp_all only [forall_const]
 

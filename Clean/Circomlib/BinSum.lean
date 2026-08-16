@@ -95,7 +95,7 @@ lemma inputLinearSum_eval_eq_sum {n ops : ℕ} [NeZero n]
   simp only [inputLinearSum, circuit_norm, eval_foldl, Fin.foldl_factor_const]
 
   -- Step 2: Replace Expression.eval env input[j][k] with input_val[j][k]
-  simp only [ProvableType.getElem_eval_fields, getElem_eval_vector, h_eval]
+  simp only [h_eval]
 
   rw [Fin.sum_interchange]
   simp only [fieldFromBits_as_sum]
