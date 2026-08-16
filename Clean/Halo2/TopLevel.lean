@@ -1558,17 +1558,16 @@ theorem mem_fixedAssignments_of_mem_raw
       fixedAssignments, TopLevelCompilation.fixedAssignments,
       usableRowsAt, n] using hassignment
 
-/-- Every raw fixed write emitted by a lawful top-level circuit is realized at the
-same cell and value in its canonical dense fixed columns. -/
-theorem fixedRows_getD_getD_eq_of_mem_raw
+/-- Every raw fixed write emitted by a lawful top-level circuit lies within its
+canonical fixed-column and evaluation-domain bounds. -/
+theorem fixedAssignment_bounds_of_mem_raw
     (self : TopLevelCircuit F Config PublicInput)
     (assignment : Layout.FixedAssignment F)
     (hassignment : assignment ∈
       Layout.rawAssignments
         (self.usableRowsAt self.domainExponent)
         self.selectorMap self.constraintSystem self.operations) :
-    (self.fixedRows.getD assignment.1 []).getD assignment.2.1 0 =
-      assignment.2.2 := by
+    assignment.1 < self.fixedColumnCount ∧ assignment.2.1 < self.n := by
   have hbounds := Layout.rawAssignments_bounds_deriveSelCompressMap
     (self.usableRowsAt self.domainExponent) self.n
     self.constraintSystem self.operations self.keygenCoherent
@@ -1600,11 +1599,25 @@ theorem fixedRows_getD_getD_eq_of_mem_raw
         selectorActivations, TopLevelCompilation.selectorActivations,
         regionStarts, TopLevelCompilation.regionStarts,
         usableRowsAt, n] using hassignment)
-  apply self.fixedRows_getD_getD_eq_of_mem assignment
+  exact ⟨by
+    simpa only [fixedColumnCount_eq, selectorMap,
+      TopLevelCompilation.selectorMap] using hbounds.1, hbounds.2⟩
+
+/-- Every raw fixed write emitted by a lawful top-level circuit is realized at the
+same cell and value in its canonical dense fixed columns. -/
+theorem fixedRows_getD_getD_eq_of_mem_raw
+    (self : TopLevelCircuit F Config PublicInput)
+    (assignment : Layout.FixedAssignment F)
+    (hassignment : assignment ∈
+      Layout.rawAssignments
+        (self.usableRowsAt self.domainExponent)
+        self.selectorMap self.constraintSystem self.operations) :
+    (self.fixedRows.getD assignment.1 []).getD assignment.2.1 0 =
+      assignment.2.2 := by
+  have hbounds := self.fixedAssignment_bounds_of_mem_raw assignment hassignment
+  exact self.fixedRows_getD_getD_eq_of_mem assignment
     (self.mem_fixedAssignments_of_mem_raw assignment hassignment)
-  · simpa only [fixedColumnCount_eq, selectorMap,
-      TopLevelCompilation.selectorMap] using hbounds.1
-  · exact hbounds.2
+    hbounds.1 hbounds.2
 
 /-- Every synthesized lookup activation enables its master and only selectors declared
 by that lookup. -/
