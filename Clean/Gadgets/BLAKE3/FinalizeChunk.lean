@@ -91,8 +91,7 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var (ProvableVector U32 8) 
     flags := final_flags
   }
   let final_state ← Compress.circuit compress_input
-  return #v[final_state[0], final_state[1], final_state[2], final_state[3],
-    final_state[4], final_state[5], final_state[6], final_state[7]]
+  return final_state.take 8
 
 instance elaborated : ElaboratedCircuit (F p) Inputs (ProvableVector U32 8) main := by
   elaborate_circuit
@@ -166,17 +165,18 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
     h_Or32_2.2.1 h_Or32_2.2.2.1 h_Or32_2.2.2.2.1 h_Or32_2.2.2.2.2
   simp_all only [Fin.getElem_fin, Nat.cast_ofNat, BLAKE3State.value]
   have h_compress' := congrArg (fun v => v.take 8) h_Compress.1
-  simp only [Vector.map_take] at h_compress'
+  simp only [Vector.map_take, eval_vector] at h_compress'
+  rw [← eval_vector] at h_compress'
   simp only [Vector.take_eq_extract, Vector.extract_mk, Nat.sub_zero, List.extract_toArray,
     List.extract_eq_take_drop, tsub_zero, List.drop_zero, List.take_succ_cons,
     List.take_zero] at h_compress'
   rw [← Vector.take_eq_extract] at h_compress'
   apply And.intro
-  · simp only [Vector.take_eq_extract]
-    simp only [Vector.map_mk, List.map_toArray, List.map_cons,
-      List.map_nil] at h_compress' ⊢
-    apply (congrArg Vector.toArray h_compress').trans
-    refine congrArg Vector.toArray ?_
+  · simp only [Vector.take_eq_extract, Vector.extract_mk, Nat.sub_zero, List.extract_toArray,
+    List.extract_eq_take_drop, tsub_zero, List.drop_zero, List.take_succ_cons, List.take_zero]
+    simp only [ProvableStruct.vectorEvalLiteral, Vector.map_mk, List.map_toArray,
+      List.map_cons, List.map_nil]
+    refine h_compress'.trans ?_
     simp only [finalizeChunk]
     apply congrArg (fun (v : Vector ℕ 16) => v.take 8)
     have : Vector.map U32.value (eval env (bytesToWords input_var_buffer_data)) =
@@ -208,27 +208,11 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   · rintro ⟨i, h_i⟩
     rcases h_Compress with ⟨h_Compress_value, h_Compress_Normalized⟩
     simp only [BLAKE3State.Normalized] at h_Compress_Normalized
-    try simp only [Nat.reduceAdd] at h_Compress_Normalized
-    have h0 := h_Compress_Normalized ⟨0, by omega⟩
-    have h1 := h_Compress_Normalized ⟨1, by omega⟩
-    have h2 := h_Compress_Normalized ⟨2, by omega⟩
-    have h3 := h_Compress_Normalized ⟨3, by omega⟩
-    have h4 := h_Compress_Normalized ⟨4, by omega⟩
-    have h5 := h_Compress_Normalized ⟨5, by omega⟩
-    have h6 := h_Compress_Normalized ⟨6, by omega⟩
-    have h7 := h_Compress_Normalized ⟨7, by omega⟩
-    simp only [Vector.getElem_mk, List.getElem_toArray,
-      List.getElem_cons_zero, List.getElem_cons_succ] at h0 h1 h2 h3 h4 h5 h6 h7
-    rcases i with _ | _ | _ | _ | _ | _ | _ | _ | i
-    · exact h0
-    · exact h1
-    · exact h2
-    · exact h3
-    · exact h4
-    · exact h5
-    · exact h6
-    · exact h7
-    · omega
+    refine eval_take_normalized env _ ?_ i h_i
+    intro j
+    simp only [ProvableStruct.vectorEvalLiteral, Vector.map_mk, List.map_toArray,
+      List.map_cons, List.map_nil]
+    exact h_Compress_Normalized j
 
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start
@@ -296,6 +280,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
         · omega
         · norm_num
       · exact h_or2.2
+
 def circuit : FormalCircuit (F p) Inputs (ProvableVector U32 8) := {
   main, elaborated, Assumptions, Spec, soundness, completeness
 }
