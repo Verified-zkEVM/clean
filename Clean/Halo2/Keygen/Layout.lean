@@ -1583,6 +1583,115 @@ theorem mem_compileFixed_of_mem_raw [FiniteField F]
   exact (sortAssignments_perm _).mem_iff.mpr
     (mem_dedupAssignments_of_mem _ hagrees hassignment)
 
+private theorem getElem?_foldl_insert_eq_none_of_not_mem
+    (assignments : List (FixedAssignment F))
+    (values : Std.HashMap (ℕ × ℕ) F) (cell : ℕ × ℕ)
+    (hinitial : values[cell]? = none)
+    (habsent : cell ∉ assignments.map FixedAssignment.cell) :
+    (assignments.foldl
+      (fun current (column, row, value) =>
+        current.insert (column, row) value)
+      values)[cell]? = none := by
+  induction assignments generalizing values with
+  | nil => exact hinitial
+  | cons assignment rest inductionHypothesis =>
+      simp only [List.foldl_cons]
+      apply inductionHypothesis
+      · rw [Std.HashMap.getElem?_insert]
+        have hne : assignment.cell ≠ cell := by
+          intro heq
+          exact habsent (by simp [heq])
+        have hne' : (assignment.1, assignment.2.1) ≠ cell := by
+          simpa only [FixedAssignment.cell] using hne
+        rw [if_neg (fun heq => hne' (beq_iff_eq.mp heq))]
+        exact hinitial
+      · intro hmem
+        apply habsent
+        simpa only [List.map_cons, List.mem_cons] using Or.inr hmem
+
+/-- Every cell retained by last-write deduplication originated in the input
+assignment stream. -/
+theorem cell_mem_of_mem_dedupAssignments
+    (assignments : List (FixedAssignment F))
+    {assignment : FixedAssignment F}
+    (hassignment : assignment ∈ dedupAssignments assignments) :
+    assignment.cell ∈ assignments.map FixedAssignment.cell := by
+  let values : Std.HashMap (ℕ × ℕ) F :=
+    assignments.foldl
+      (fun current (column, row, value) =>
+        current.insert (column, row) value) ∅
+  rw [show dedupAssignments assignments =
+      values.toList.map
+        (fun entry => (entry.1.1, entry.1.2, entry.2)) from rfl,
+    List.mem_map] at hassignment
+  obtain ⟨entry, hentry, heq⟩ := hassignment
+  have hvalue : values[assignment.cell]? = some assignment.2.2 := by
+    rw [Std.HashMap.mem_toList_iff_getElem?_eq_some] at hentry
+    obtain ⟨rfl, rfl, rfl⟩ := heq
+    exact hentry
+  by_contra habsent
+  have hnone : values[assignment.cell]? = none := by
+    apply getElem?_foldl_insert_eq_none_of_not_mem
+    · simp
+    · exact habsent
+  rw [hnone] at hvalue
+  contradiction
+
+/-- Every cell retained by fixed compilation originated in the raw compiler
+assignment stream. -/
+theorem cell_mem_raw_of_mem_compileFixed [FiniteField F]
+    (usable : ℕ) (selectorMap : SelCompressMap)
+    (constraintSystem : ConstraintSystem F) (operations : Operations F)
+    {assignment : FixedAssignment F}
+    (hassignment : assignment ∈
+      compileFixed usable selectorMap constraintSystem operations) :
+    assignment.cell ∈
+      (rawAssignments usable selectorMap constraintSystem operations).map
+        FixedAssignment.cell := by
+  rw [compileFixed] at hassignment
+  have hdedup := (sortAssignments_perm _).mem_iff.mp hassignment
+  exact cell_mem_of_mem_dedupAssignments _ hdedup
+
+/-- A raw write in the packed-selector column suffix comes from a selector
+activation. Tables, constants, and region-local fixed assignments all remain in
+the configure-allocated fixed-column prefix. -/
+theorem exists_selectorActivation_of_mem_rawAssignments_of_column_ge
+    [FiniteField F]
+    (usable : ℕ) (selectorMap : SelCompressMap)
+    (constraintSystem : ConstraintSystem F) (operations : Operations F)
+    (hcoherent : OperationsKeygenCoherent constraintSystem operations)
+    (hconstantBounds : constraintSystem.constants.Forall fun column =>
+      column.index < constraintSystem.numFixedColumns)
+    {assignment : FixedAssignment F}
+    (hassignment : assignment ∈
+      rawAssignments usable selectorMap constraintSystem operations)
+    (hcolumn : constraintSystem.numFixedColumns ≤ assignment.1) :
+    ∃ selector row compressed,
+      (selector, row) ∈ activations (FloorPlanner.V1.starts operations)
+          (indexedRegions operations 0).1 ∧
+        selectorMap.lookup selector = some compressed ∧
+        assignment = (compressed.packedCol, row,
+          FiniteField.fromNat compressed.assignedRoot) := by
+  simp only [rawAssignments] at hassignment
+  rcases List.mem_append.mp hassignment with hprefix | hregion
+  rcases List.mem_append.mp hprefix with hprefix | hselector
+  rcases List.mem_append.mp hprefix with htable | hconstant
+  · have hlt := tableAssignment_column_lt_numFixedColumns usable
+      constraintSystem operations hcoherent htable
+    omega
+  · have hlt := constantAssignment_column_lt_numFixedColumns operations
+      constraintSystem.constants constraintSystem.numFixedColumns
+      hconstantBounds hconstant
+    omega
+  · exact exists_activation_lookup_of_mem_selectorAssignments
+      selectorMap
+      (activations (FloorPlanner.V1.starts operations)
+        (indexedRegions operations 0).1)
+      hselector
+  · have hlt := regionAssignment_column_lt_numFixedColumns constraintSystem
+      operations hcoherent hregion
+    omega
+
 /-- The fixed compiler emits at most one value for each fixed cell. -/
 theorem compileFixed_cells_nodup [FiniteField F]
     (usable : ℕ) (selectorMap : SelCompressMap)

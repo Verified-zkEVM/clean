@@ -426,6 +426,102 @@ def process (selectors : List SelectorDescription) (maxDegree : ℕ) : SelCompre
   { newFixedCols := deg0.length + combs.length
     entries := deg0Entries ++ combEntries }
 
+private theorem process_lookup_singleton_of_degree_zero
+    (selectors : List SelectorDescription) (maxDegree selector : ℕ)
+    (hnodup : (selectors.map SelectorDescription.selector).Nodup)
+    (description : SelectorDescription)
+    (hdescription : description ∈ selectors)
+    (hselector : description.selector = selector)
+    (hdegree : description.maxDegree = 0) :
+    ∃ compressed,
+      (process selectors maxDegree).lookup selector = some compressed ∧
+        compressed.combinationLen = 1 ∧
+        compressed.assignedRoot = 1 := by
+  let degreeZero := selectors.filter (·.maxDegree = 0)
+  let remaining := selectors.filter (·.maxDegree ≠ 0)
+  let combinations :=
+    buildCombinations maxDegree remaining.length remaining
+  have hdegreeZero : description ∈ degreeZero := by
+    exact List.mem_filter.mpr ⟨hdescription, by simp [hdegree]⟩
+  obtain ⟨column, hcolumn, hcolumnEq⟩ :=
+    List.mem_iff_getElem.mp hdegreeZero
+  have hindexed : (description, column) ∈ degreeZero.zipIdx := by
+    rw [List.mk_mem_zipIdx_iff_getElem?, List.getElem?_eq_some_iff]
+    exact ⟨hcolumn, hcolumnEq⟩
+  let expected := SelCompress.mk column 1 1
+  have hexpected : (selector, expected) ∈
+      (process selectors maxDegree).entries := by
+    change (selector, expected) ∈
+      (degreeZero.zipIdx.map fun (source, index) =>
+        (source.selector, SelCompress.mk index 1 1)) ++
+      (combinations.zipIdx.flatMap fun (combination, index) =>
+        combination.zipIdx.map fun (source, position) =>
+          (source.selector,
+            SelCompress.mk (degreeZero.length + index)
+              combination.length (position + 1)))
+    apply List.mem_append_left
+    apply List.mem_map.mpr
+    exact ⟨(description, column), hindexed, by
+      simp only [expected, hselector]⟩
+  have hfindSome :
+      ((process selectors maxDegree).entries.find?
+        (fun candidate => candidate.1 = selector)).isSome = true := by
+    rw [List.find?_isSome]
+    exact ⟨(selector, expected), hexpected, by simp⟩
+  cases hfind : (process selectors maxDegree).entries.find?
+      (fun candidate => candidate.1 = selector) with
+  | none => simp [hfind] at hfindSome
+  | some entry =>
+      have hentry := List.mem_of_find?_eq_some hfind
+      have hentrySelector : entry.1 = selector := by
+        have := List.find?_some hfind
+        simpa only [decide_eq_true_eq] using this
+      have hsingleton : entry.2.combinationLen = 1 ∧
+          entry.2.assignedRoot = 1 := by
+        change entry ∈
+          (degreeZero.zipIdx.map fun (source, index) =>
+            (source.selector, SelCompress.mk index 1 1)) ++
+          (combinations.zipIdx.flatMap fun (combination, index) =>
+            combination.zipIdx.map fun (source, position) =>
+              (source.selector,
+                SelCompress.mk (degreeZero.length + index)
+                  combination.length (position + 1))) at hentry
+        rw [List.mem_append] at hentry
+        rcases hentry with hentry | hentry
+        · obtain ⟨indexed, _, rfl⟩ := List.mem_map.mp hentry
+          exact ⟨rfl, rfl⟩
+        · rw [List.mem_flatMap] at hentry
+          obtain ⟨indexedCombination, hcombination, hentry⟩ := hentry
+          obtain ⟨indexedDescription, hindexedDescription, hentryEq⟩ :=
+            List.mem_map.mp hentry
+          have hsourceRemaining : indexedDescription.1 ∈ remaining := by
+            have hcombinationMember : indexedCombination.1 ∈ combinations :=
+              List.fst_mem_of_mem_zipIdx hcombination
+            have hsources := forall_of_mem_buildCombinations
+              maxDegree remaining.length remaining indexedCombination.1
+              (fun source => source ∈ remaining)
+              (by
+                rw [List.forall_iff_forall_mem]
+                intro source hsource
+                exact hsource)
+              hcombinationMember
+            exact List.forall_iff_forall_mem.mp hsources
+              indexedDescription.1
+              (List.fst_mem_of_mem_zipIdx hindexedDescription)
+          have hsourceSelector : indexedDescription.1.selector = selector := by
+            exact (congrArg Prod.fst hentryEq).trans hentrySelector
+          have hsourceIn : indexedDescription.1 ∈ selectors :=
+            (List.mem_filter.mp hsourceRemaining).1
+          have hsourceEq : indexedDescription.1 = description :=
+            List.inj_on_of_nodup_map hnodup hsourceIn hdescription
+              (hsourceSelector.trans hselector.symm)
+          have hsourceDegree := (List.mem_filter.mp hsourceRemaining).2
+          rw [hsourceEq, hdegree] at hsourceDegree
+          simp at hsourceDegree
+      exact ⟨entry.2, by
+        simp only [SelCompressMap.lookup, hfind, Option.map_some],
+        hsingleton⟩
+
 private theorem fst_eq_of_mem_zipIdx_of_snd_eq
     {alpha : Type} (items : List alpha) {left right : alpha × ℕ}
     (hleft : left ∈ items.zipIdx) (hright : right ∈ items.zipIdx)
@@ -1049,6 +1145,64 @@ def deriveSelCompressMap (cs : ConstraintSystem F) (n : ℕ) (acts : List (ℕ �
   { newFixedCols := m.newFixedCols
     entries := m.entries.map fun (s, sc) =>
       (s, { sc with packedCol := sc.packedCol + cs.numFixedColumns }) }
+
+/-- Every allocated selector with compression degree zero receives its own packed
+fixed column, represented by the bare selector query (`combinationLen = 1`, root
+one). -/
+theorem deriveSelCompressMap_lookup_singleton_of_degree_zero
+    (cs : ConstraintSystem F) (n : ℕ)
+    (activations : List (ℕ × ℕ)) (selector : ℕ)
+    (hselector : selector < cs.numSelectors)
+    (hdegree : (selectorMaxDegrees cs)[selector]! = 0) :
+    ∃ compressed,
+      (deriveSelCompressMap cs n activations).lookup selector =
+          some compressed ∧
+        compressed.combinationLen = 1 ∧
+        compressed.assignedRoot = 1 := by
+  let table := activationTable n cs.numSelectors activations
+  let degrees := selectorMaxDegrees cs
+  let descriptions := (List.range cs.numSelectors).map fun index =>
+    SelectorDescription.mk index table[index]! degrees[index]!
+  let description :=
+    SelectorDescription.mk selector table[selector]! degrees[selector]!
+  have hdescription : description ∈ descriptions := by
+    apply List.mem_map.mpr
+    exact ⟨selector, List.mem_range.mpr hselector, rfl⟩
+  have hnoddop :
+      (descriptions.map SelectorDescription.selector).Nodup := by
+    unfold descriptions
+    rw [List.map_map]
+    have hprojection :
+        (SelectorDescription.selector ∘ fun index =>
+          SelectorDescription.mk index table[index]! degrees[index]!) = id := by
+      funext index
+      rfl
+    rw [hprojection, List.map_id]
+    exact (List.nodup_range : (List.range cs.numSelectors).Nodup)
+  obtain ⟨source, hsourceLookup, hsourceLength, hsourceRoot⟩ :=
+    process_lookup_singleton_of_degree_zero
+      descriptions (csDegree cs) selector hnoddop description
+      hdescription rfl (by simpa [description, degrees])
+  let compressed : SelCompress :=
+    { source with packedCol := source.packedCol + cs.numFixedColumns }
+  refine ⟨compressed, ?_, hsourceLength, hsourceRoot⟩
+  simp only [SelCompressMap.lookup, Option.map_eq_some_iff] at hsourceLookup
+  obtain ⟨entry, hfind, hentry⟩ := hsourceLookup
+  have hfind' :
+      List.find?
+          ((fun e => decide (e.1 = selector)) ∘ fun x =>
+            (x.1, { x.2 with
+              packedCol := x.2.packedCol + cs.numFixedColumns }))
+          (process
+            ((List.range cs.numSelectors).map fun index =>
+              SelectorDescription.mk index
+                (activationTable n cs.numSelectors activations)[index]!
+                (selectorMaxDegrees cs)[index]!)
+            (csDegree cs)).entries = some entry := by
+    simpa [descriptions, Function.comp_def] using hfind
+  simp only [deriveSelCompressMap, SelCompressMap.lookup, List.find?_map,
+    hfind', Option.map_some]
+  rw [hentry]
 
 /-- Every successful lookup in the circuit-derived map names one of the packed fixed
 columns allocated by selector compression. -/

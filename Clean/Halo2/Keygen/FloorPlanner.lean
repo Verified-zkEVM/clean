@@ -14035,6 +14035,55 @@ theorem row_lt_measureRegion_of_activatesSelectorAt
       constrainInstance =>
       contradiction
 
+/-- Distinct regions sharing a measured column cannot contain local rows at the
+same absolute position when their column intervals are disjoint. -/
+theorem region_rows_ne_of_sharedColumnIntervalsDisjoint
+    {shapes : List RegionShape} {starts : List ℕ}
+    (hplanner : SharedColumnIntervalsDisjoint shapes starts)
+    {leftIndex rightIndex : ℕ}
+    {leftBody rightBody : RegionOperations F}
+    (hleftShape : measureRegion leftIndex leftBody ∈ shapes)
+    (hrightShape : measureRegion rightIndex rightBody ∈ shapes)
+    (hindices : leftIndex ≠ rightIndex)
+    {column : RegionColumn} {leftRow rightRow : ℕ}
+    (hleftColumn : column ∈
+      (measureRegion leftIndex leftBody).columns)
+    (hrightColumn : column ∈
+      (measureRegion rightIndex rightBody).columns)
+    (hleftRow : leftRow < (measureRegion leftIndex leftBody).rowCount)
+    (hrightRow : rightRow < (measureRegion rightIndex rightBody).rowCount) :
+    starts.getD leftIndex 0 + leftRow ≠
+      starts.getD rightIndex 0 + rightRow := by
+  have hdisjoint :=
+    hplanner hleftShape hrightShape hindices
+      hleftColumn hrightColumn
+  change
+    RowIntervalsDisjoint
+      (starts.getD leftIndex 0)
+      (measureRegion leftIndex leftBody).rowCount
+      (starts.getD rightIndex 0)
+      (measureRegion rightIndex rightBody).rowCount at hdisjoint
+  intro hequal
+  rcases hdisjoint with hleftBefore | hrightBefore
+  · have habsLt :
+        starts.getD leftIndex 0 + leftRow <
+          starts.getD leftIndex 0 +
+            (measureRegion leftIndex leftBody).rowCount :=
+      Nat.add_lt_add_left hleftRow _
+    rw [hequal] at habsLt
+    exact (Nat.not_lt_of_ge
+      (hleftBefore.trans
+        (Nat.le_add_right (starts.getD rightIndex 0) rightRow))) habsLt
+  · have habsLt :
+        starts.getD rightIndex 0 + rightRow <
+          starts.getD rightIndex 0 +
+            (measureRegion rightIndex rightBody).rowCount :=
+      Nat.add_lt_add_left hrightRow _
+    rw [← hequal] at habsLt
+    exact (Nat.not_lt_of_ge
+      (hrightBefore.trans
+      (Nat.le_add_right (starts.getD leftIndex 0) leftRow))) habsLt
+
 /-- Distinct regions sharing a selector column cannot contain local rows at the same
 absolute position when their selector intervals are disjoint. -/
 theorem region_rows_ne_of_sharedSelectorIntervalsDisjoint
@@ -14055,8 +14104,7 @@ theorem region_rows_ne_of_sharedSelectorIntervalsDisjoint
     starts.getD leftIndex 0 + leftRow ≠
       starts.getD rightIndex 0 + rightRow := by
   have hdisjoint :=
-    hplanner hleftShape hrightShape hindices
-      hleftColumn hrightColumn
+    hplanner hleftShape hrightShape hindices hleftColumn hrightColumn
   change
     RowIntervalsDisjoint
       (starts.getD leftIndex 0)

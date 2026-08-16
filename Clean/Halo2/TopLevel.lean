@@ -938,6 +938,14 @@ def selectorMap
     (self : TopLevelCircuit F Config PublicInput) : SelCompressMap :=
   TopLevelCompilation.selectorMap self.formalCircuit self.publicInputLayout
 
+/-- The top-level selector map is the canonical compression of this circuit's
+constraint system and absolute selector activations. -/
+theorem selectorMap_eq_derive
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.selectorMap =
+      deriveSelCompressMap self.constraintSystem self.n
+        self.selectorActivations := rfl
+
 /-- The blinding-row count derived from the circuit's constraint system. -/
 def blindingFactors (self : TopLevelCircuit F Config PublicInput) : ℕ :=
   self.constraintSystem.blindingFactors
@@ -1572,6 +1580,22 @@ theorem mem_fixedAssignments_of_mem_raw
       fixedAssignments, TopLevelCompilation.fixedAssignments,
       usableRowsAt, n] using hassignment
 
+/-- Every cell retained in a top-level circuit's fixed assignment list originated
+in the compiler's raw write stream. -/
+theorem fixedAssignment_cell_mem_raw_of_mem
+    (self : TopLevelCircuit F Config PublicInput)
+    (assignment : Layout.FixedAssignment F)
+    (hassignment : assignment ∈ self.fixedAssignments) :
+    assignment.cell ∈
+      (Layout.rawAssignments
+        (self.usableRowsAt self.domainExponent)
+        self.selectorMap self.constraintSystem self.operations).map
+          Layout.FixedAssignment.cell := by
+  apply Layout.cell_mem_raw_of_mem_compileFixed
+  simpa only [fixedAssignments, TopLevelCompilation.fixedAssignments,
+    usableRowsAt, domainExponent, selectorMap, constraintSystem,
+    operations] using hassignment
+
 /-- Every raw fixed write emitted by a lawful top-level circuit lies within its
 canonical fixed-column and evaluation-domain bounds. -/
 theorem fixedAssignment_bounds_of_mem_raw
@@ -1737,6 +1761,344 @@ theorem lookupInputSelectorDegree_eq_zero
     have hdisjoint := List.forall_iff_forall_mem.mp hcompatible'.1
       selector hauxiliary
     omega
+
+/-- Every selector leaf in a lookup input is compiled as a bare query in its own
+packed fixed column. -/
+theorem lookupInputSelectorMap_singleton
+    (self : TopLevelCircuit F Config PublicInput)
+    (argument : LookupArgument F)
+    (hargument : argument ∈ self.constraintSystem.lookups)
+    (expression : Expression F Query)
+    (hexpression : expression ∈ argument.inputs)
+    {selector : ℕ} (hselector : selector ∈ expression.selectorIndices) :
+    ∃ compressed,
+      self.selectorMap.lookup selector = some compressed ∧
+        compressed.combinationLen = 1 ∧
+        compressed.assignedRoot = 1 ∧
+        compressed.packedCol < self.fixedColumnCount := by
+  have hbound := self.lookupInputsAllocated argument hargument
+    expression hexpression
+  have hallocated :=
+    (Expression.lt_selectorBound_of_mem_selectorIndices
+      expression hselector).trans_le hbound
+  have hdegree := self.lookupInputSelectorDegree_eq_zero
+    argument hargument expression hexpression hselector
+  obtain ⟨compressed, hlookup, hlength, hroot⟩ :=
+    deriveSelCompressMap_lookup_singleton_of_degree_zero
+      self.constraintSystem self.n self.selectorActivations selector
+      hallocated hdegree
+  have hcolumnData := deriveSelCompressMap_lookup_packedColumn
+    self.constraintSystem self.n self.selectorActivations hlookup
+  rw [← self.selectorMap_eq_derive] at hcolumnData
+  obtain ⟨index, hindex, hcolumn⟩ := hcolumnData
+  refine ⟨compressed, ?_, hlength, hroot, ?_⟩
+  · simpa only [self.selectorMap_eq_derive] using hlookup
+  · rw [self.fixedColumnCount_eq]
+    omega
+
+/-- The reduced lookup-selector anchor requirements of the closed top-level
+circuit. -/
+def lookupSelectorAnchorRequirements
+    (self : TopLevelCircuit F Config PublicInput) :
+    List (ℕ × FloorPlanner.RegionColumn) :=
+  self.formalCircuit.elaborated.lookupSelectorAnchorRequirements self.config () 0
+
+/-- A solution of the reduced top-level anchor equations physically anchors every
+lookup selector which may be read while disabled. -/
+theorem lookupSelectorsAnchoredBy
+    (self : TopLevelCircuit F Config PublicInput)
+    (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchor : SelectorAnchorRequirementsSatisfied
+      self.lookupSelectorAnchorRequirements anchor) :
+    self.operations.LookupSelectorsAnchoredBy anchor := by
+  rcases self.noCallerRequirements with ⟨hconfig, _, _, _, _, _, _⟩
+  exact self.formalCircuit.elaborated.lookupSelectorsAnchoredBy
+    () {} hconfig () 0 anchor hanchor
+
+/-- A lookup input selector is compiled into a singleton packed column whose value
+at the lookup row is exactly that operation's selector valuation. The disabled case
+uses physical selector anchoring and V1's shared-column separation to rule out an
+activation from another region. -/
+theorem lookupInputSelectorFixedValue
+    (self : TopLevelCircuit F Config PublicInput)
+    (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchored : self.operations.LookupSelectorsAnchoredBy anchor)
+    {region : RegionIndex} {body : RegionOperations F}
+    {argument : LookupArgument F} {enabled : List Selector} {row : ℕ}
+    (hregion : (region, body) ∈ (indexedRegions self.operations 0).1)
+    (hlookup : .enableLookup argument enabled row ∈ body)
+    (hargument : argument ∈ self.constraintSystem.lookups)
+    (expression : Expression F Query)
+    (hexpression : expression ∈ argument.inputs)
+    (selector : ℕ) (hselector : selector ∈ expression.selectorIndices) :
+    ∃ compressed,
+      self.selectorMap.lookup selector = some compressed ∧
+        compressed.combinationLen = 1 ∧
+        compressed.assignedRoot = 1 ∧
+        compressed.packedCol < self.fixedColumnCount ∧
+        (self.fixedRows.getD compressed.packedCol []).getD
+            (self.regionStarts.getD region 0 + row) 0 =
+          if ∃ candidate ∈ enabled, candidate.index = selector then 1 else 0 := by
+  classical
+  obtain ⟨compressed, hmap, hlength, hroot, hcolumn⟩ :=
+    self.lookupInputSelectorMap_singleton argument hargument expression
+      hexpression hselector
+  refine ⟨compressed, hmap, hlength, hroot, hcolumn, ?_⟩
+  have hrow : self.regionStarts.getD region 0 + row < self.n := by
+    exact (absoluteRow_lt_usedRows_of_enableLookup_mem self.operations
+      region body hregion argument enabled row hlookup).trans_le
+        (self.operations_usedRows_le_usedRows.trans
+          (self.usedRows_le_usableRowsAt_domainExponent.trans
+            self.usableRowsAt_domainExponent_le_n))
+  by_cases henabled : SelectorEnabledAtIndex enabled selector
+  · have hactivation :
+        (selector, self.regionStarts.getD region 0 + row) ∈
+          self.selectorActivations := by
+      rw [TopLevelCircuit.selectorActivations]
+      apply (mem_activations_iff _ _ _ _).mpr
+      exact ⟨region, body, .enableLookup argument enabled row, row,
+        hregion, hlookup, ⟨henabled, rfl⟩, rfl⟩
+    have hraw :
+        (compressed.packedCol,
+          self.regionStarts.getD region 0 + row,
+          FiniteField.fromNat compressed.assignedRoot) ∈
+          Layout.rawAssignments
+            (self.usableRowsAt self.domainExponent)
+            self.selectorMap self.constraintSystem self.operations := by
+      apply List.mem_append_left
+      apply List.mem_append_right
+      have hselectorAssignment :
+          (compressed.packedCol,
+            self.regionStarts.getD region 0 + row,
+            FiniteField.fromNat compressed.assignedRoot) ∈
+            Layout.selectorAssignments (F := F)
+              self.selectorMap self.selectorActivations :=
+        Layout.mem_selectorAssignments_of_activation
+          self.selectorMap self.selectorActivations hactivation hmap
+      simpa only [TopLevelCircuit.selectorActivations] using hselectorAssignment
+    have hvalue := self.fixedRows_getD_getD_eq_of_mem_raw _ hraw
+    have hone : (FiniteField.fromNat 1 : F) = 1 := by
+      apply FiniteField.ext
+      rw [FiniteField.val_fromNat]
+      · exact FiniteField.val_one.symm
+      · exact FiniteField.fieldSize_pos
+    rw [hroot, hone] at hvalue
+    change ∃ candidate ∈ enabled, candidate.index = selector at henabled
+    simpa only [henabled, ↓reduceIte] using hvalue
+  · have habsent :
+        (compressed.packedCol,
+          self.regionStarts.getD region 0 + row) ∉
+          self.fixedAssignments.map Layout.FixedAssignment.cell := by
+      intro hcell
+      obtain ⟨assignment, hassignment, hassignmentCell⟩ :=
+        List.mem_map.mp hcell
+      have hrawCell := self.fixedAssignment_cell_mem_raw_of_mem
+        assignment hassignment
+      obtain ⟨raw, hraw, hrawCellEq⟩ := List.mem_map.mp hrawCell
+      have hpacked : self.constraintSystem.numFixedColumns ≤ raw.1 := by
+        have htarget : raw.1 = compressed.packedCol := by
+          have hcell := hrawCellEq.trans hassignmentCell
+          exact congrArg Prod.fst hcell
+        obtain ⟨index, _, hpacked⟩ :=
+          deriveSelCompressMap_lookup_packedColumn
+            self.constraintSystem self.n self.selectorActivations
+            (by simpa only [self.selectorMap_eq_derive] using hmap)
+        rw [htarget, hpacked]
+        omega
+      obtain ⟨sourceSelector, sourceRow, sourceCompressed,
+          hsourceActivation, hsourceMap, hrawEq⟩ :=
+        Layout.exists_selectorActivation_of_mem_rawAssignments_of_column_ge
+          (self.usableRowsAt self.domainExponent) self.selectorMap
+          self.constraintSystem self.operations self.keygenCoherent
+          (by
+            rw [List.forall_iff_forall_mem]
+            intro column hcolumn
+            exact self.constantColumn_index_lt_numFixedColumns hcolumn)
+          hraw hpacked
+      have hsourceSelector : sourceSelector = selector := by
+        symm
+        apply deriveSelCompressMap_lookup_selector_eq_of_singleton_column
+          (leftSelector := selector) (rightSelector := sourceSelector)
+          self.constraintSystem self.n self.selectorActivations
+          (by simpa only [self.selectorMap_eq_derive] using hmap)
+          (by simpa only [self.selectorMap_eq_derive] using hsourceMap)
+          hlength
+        have hrawColumn := congrArg (fun entry => entry.1) hrawEq
+        have hcellColumn := congrArg Prod.fst
+          (hrawCellEq.trans hassignmentCell)
+        exact hcellColumn.symm.trans hrawColumn
+      subst sourceSelector
+      have hsourceRow : sourceRow = self.regionStarts.getD region 0 + row := by
+        have hrawRow := congrArg (fun entry => entry.2.1) hrawEq
+        have hcellRow := congrArg Prod.snd
+          (hrawCellEq.trans hassignmentCell)
+        exact hrawRow.symm.trans hcellRow
+      obtain ⟨sourceRegion, sourceBody, sourceOperation, sourceLocalRow,
+          hsourceRegion, hsourceOperation, hsourceActivates,
+          hsourceAbsolute⟩ :=
+        (mem_activations_iff self.regionStarts
+          (indexedRegions self.operations 0).1 selector sourceRow).mp
+          hsourceActivation
+      have hselectorNeMaster : selector ≠ argument.masterSelector.index := by
+        intro heq
+        apply henabled
+        obtain ⟨name, hregionOperation⟩ :=
+          exists_region_mem_of_mem_indexedRegions
+            self.operations 0 hregion
+        have hwellFormed := List.forall_iff_forall_mem.mp
+          (List.forall_iff_forall_mem.mp self.lookupActivationsWellFormed
+            (.region name body) hregionOperation)
+            (.enableLookup argument enabled row) hlookup
+        exact heq ▸ hwellFormed.1
+      have hauxiliary : selector ∈ argument.auxiliarySelectorIndices := by
+        rw [LookupArgument.auxiliarySelectorIndices, List.mem_filter]
+        exact ⟨List.mem_flatMap.mpr ⟨expression, hexpression, hselector⟩,
+          by simpa⟩
+      obtain ⟨targetName, htargetRegionOperation⟩ :=
+        exists_region_mem_of_mem_indexedRegions
+          self.operations 0 hregion
+      obtain ⟨sourceName, hsourceRegionOperation⟩ :=
+        exists_region_mem_of_mem_indexedRegions
+          self.operations 0 hsourceRegion
+      have htargetAnchored : body.LookupSelectorsAnchoredBy anchor :=
+        List.forall_iff_forall_mem.mp hanchored
+          (.region targetName body) htargetRegionOperation
+      have htargetAnchor := htargetAnchored argument enabled row hlookup
+        selector hauxiliary
+      have hsourceRegistered : sourceBody.Forall
+          (RegionOperation.KeygenCoherent self.constraintSystem) :=
+        List.forall_iff_forall_mem.mp self.keygenCoherent
+          (.region sourceName sourceBody) hsourceRegionOperation
+      have hsourceWellFormed : sourceBody.LookupActivationsWellFormed :=
+        List.forall_iff_forall_mem.mp self.lookupActivationsWellFormed
+          (.region sourceName sourceBody) hsourceRegionOperation
+      have hsourceAnchored : sourceBody.LookupSelectorsAnchoredBy anchor :=
+        List.forall_iff_forall_mem.mp hanchored
+          (.region sourceName sourceBody) hsourceRegionOperation
+      have hsourceAnchor : anchor selector ∈
+          FloorPlanner.physicalColumns
+            (FloorPlanner.regionSynthesisSummary sourceBody).columns := by
+        cases sourceOperation with
+        | enableGate gate sourceRow =>
+            rcases hsourceActivates with ⟨hgateSelector, rfl⟩
+            have hgateRegistered := List.forall_iff_forall_mem.mp
+              hsourceRegistered (.enableGate gate sourceRow) hsourceOperation
+            have hgateCompatible := List.forall_iff_forall_mem.mp
+              (List.forall_iff_forall_mem.mp
+                self.lookupSelectorsCompatible.1 gate hgateRegistered)
+              argument hargument
+            have havoids := List.forall_iff_forall_mem.mp hgateCompatible.1
+              selector hauxiliary
+            exact False.elim (havoids hgateSelector.symm)
+        | enableLookup sourceArgument sourceEnabled sourceRow =>
+            rcases hsourceActivates with ⟨hsourceEnabled, rfl⟩
+            have hsourceArgument := List.forall_iff_forall_mem.mp
+              hsourceRegistered
+              (.enableLookup sourceArgument sourceEnabled sourceRow)
+              hsourceOperation
+            have hsourceActivationWellFormed :=
+              List.forall_iff_forall_mem.mp hsourceWellFormed
+                (.enableLookup sourceArgument sourceEnabled sourceRow)
+                hsourceOperation
+            obtain ⟨candidate, hcandidate, hcandidateIndex⟩ := hsourceEnabled
+            have hdeclared := List.forall_iff_forall_mem.mp
+              hsourceActivationWellFormed.2 candidate hcandidate
+            have hsourceSelectorIndices :
+                selector ∈ sourceArgument.selectorIndices := by
+              rw [LookupArgument.selectorIndices, List.mem_cons]
+              rw [hcandidateIndex] at hdeclared
+              exact hdeclared
+            have hcompatible := List.forall_iff_forall_mem.mp
+              (List.forall_iff_forall_mem.mp
+                self.lookupSelectorsCompatible.2 sourceArgument hsourceArgument)
+              argument hargument
+            have hmasters : argument.masterSelector.index =
+                sourceArgument.masterSelector.index := by
+              exact List.forall_iff_forall_mem.mp hcompatible
+                selector hsourceSelectorIndices hauxiliary
+            have hsourceAuxiliary :
+                selector ∈ sourceArgument.auxiliarySelectorIndices := by
+              rw [LookupArgument.selectorIndices, List.mem_cons] at hsourceSelectorIndices
+              rcases hsourceSelectorIndices with hsourceMaster | hsourceAuxiliary
+              · exact False.elim (hselectorNeMaster
+                  (hsourceMaster.trans hmasters.symm))
+              · exact hsourceAuxiliary
+            exact hsourceAnchored sourceArgument sourceEnabled sourceRow
+              hsourceOperation selector hsourceAuxiliary
+        | assignAdvice | assignFixed | constrainEqual | constrainConstant |
+            constrainInstance =>
+            contradiction
+      have hregionEq : sourceRegion = region := by
+        by_contra hne
+        have hsourceShape : FloorPlanner.measureRegion sourceRegion sourceBody ∈
+            FloorPlanner.measureRegions self.operations :=
+          List.mem_map.mpr ⟨(sourceRegion, sourceBody), hsourceRegion, rfl⟩
+        have htargetShape : FloorPlanner.measureRegion region body ∈
+            FloorPlanner.measureRegions self.operations :=
+          List.mem_map.mpr ⟨(region, body), hregion, rfl⟩
+        have hsourceColumn : anchor selector ∈
+            (FloorPlanner.measureRegion sourceRegion sourceBody).columns :=
+          (List.mem_filter.mp hsourceAnchor).1
+        have htargetColumn : anchor selector ∈
+            (FloorPlanner.measureRegion region body).columns :=
+          (List.mem_filter.mp htargetAnchor).1
+        have hsourceLocal :=
+          FloorPlanner.row_lt_measureRegion_of_activatesSelectorAt
+            sourceRegion sourceBody hsourceOperation hsourceActivates
+        have htargetLocal := FloorPlanner.row_lt_measureRegion_of_enableLookup_mem
+          region body argument enabled row hlookup
+        have hneRows :=
+          FloorPlanner.region_rows_ne_of_sharedColumnIntervalsDisjoint
+            (FloorPlanner.V1.starts_sharedColumnIntervalsDisjoint self.operations)
+            hsourceShape htargetShape hne hsourceColumn htargetColumn
+            hsourceLocal htargetLocal
+        apply hneRows
+        change sourceRow =
+          (FloorPlanner.V1.starts self.operations).getD sourceRegion 0 +
+            sourceLocalRow at hsourceAbsolute
+        change sourceRow =
+          (FloorPlanner.V1.starts self.operations).getD region 0 + row at hsourceRow
+        exact hsourceAbsolute.symm.trans hsourceRow
+      subst sourceRegion
+      have hsourceBodyEq : sourceBody = body := by
+        exact congrArg Prod.snd
+          (FloorPlanner.indexedRegions_eq_of_index_eq self.operations 0
+            hsourceRegion hregion rfl)
+      subst sourceBody
+      have hsourceLocalRowEq : sourceLocalRow = row := by
+        rw [hsourceRow] at hsourceAbsolute
+        omega
+      subst sourceLocalRow
+      have hagrees := List.forall_iff_forall_mem.mp
+        self.lookupSelectorAssignmentsAgree
+        (.region targetName body) htargetRegionOperation
+      have hiff :=
+        RegionOperations.selectorEnabledAtIndex_iff_exists_activatesLookupSelectorAt
+          hagrees hlookup hauxiliary
+      apply henabled
+      apply hiff.mpr
+      refine ⟨sourceOperation, hsourceOperation, ?_⟩
+      cases sourceOperation with
+      | enableLookup sourceArgument sourceEnabled sourceRow =>
+          exact hsourceActivates
+      | enableGate gate sourceRow =>
+          have hgateRegistered := List.forall_iff_forall_mem.mp
+            hsourceRegistered (.enableGate gate sourceRow) hsourceOperation
+          have hgateCompatible := List.forall_iff_forall_mem.mp
+            (List.forall_iff_forall_mem.mp
+              self.lookupSelectorsCompatible.1 gate hgateRegistered)
+            argument hargument
+          have havoids := List.forall_iff_forall_mem.mp hgateCompatible.1
+            selector hauxiliary
+          exact False.elim (havoids hsourceActivates.1.symm)
+      | assignAdvice | assignFixed | constrainEqual | constrainConstant |
+          constrainInstance =>
+          contradiction
+    have hzero := self.fixedRows_getD_getD_eq_zero_of_not_mem
+      compressed.packedCol (self.regionStarts.getD region 0 + row)
+      habsent hcolumn hrow
+    change ¬∃ candidate ∈ enabled, candidate.index = selector at henabled
+    simpa only [henabled, ↓reduceIte] using hzero
 
 /-- Every query declaration emitted by the closed configure program is valid and
 names a column allocated by that program. -/
