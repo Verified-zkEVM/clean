@@ -165,6 +165,8 @@ def circuit : FormalCircuit Fp
               Ecc.WitnessPoint.pointNonIdFormal.Configured cfg.2
           gates _ configured := configured.1.gates ++ configured.2.gates
           lookups _ configured := configured.1.lookups ++ configured.2.lookups
+          fixedColumns _ configured :=
+            configured.1.fixedColumns ++ configured.2.fixedColumns
           permutationColumns cfg configured :=
             ([cfg.1.addConfig.xQR, cfg.1.addConfig.yQR,
               cfg.2.x, cfg.2.y] : List AnyColumn) ++
@@ -191,6 +193,20 @@ def circuit : FormalCircuit Fp
         intro cfg _ hconfig input self
         simpa only [keygen_norm] using
           synthesize_copyCellsAssignedFrom cfg input self hconfig.1 hconfig.2
+      fixedWritesLawful := by
+        intro cfg counts hconfig input self
+        apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree
+        · simp only [Configure.output_pure, Circuit.operations_bind,
+            operations_assignRegion, Circuit.operations_pure,
+            List.forall_append, circuit_norm]
+          exact ⟨Ecc.Mul.mul.call_fixedAssignmentsAgree cfg.1 hconfig.1
+              { alpha := input.ivk, base := input.gDOld } self,
+            Ecc.WitnessPoint.pointNonIdFormal.call_fixedAssignmentsAgree
+              cfg.2 hconfig.2 input.pkDOld (self + 4), by
+                apply RegionOperations.HasNoFixedAssignments.fixedAssignmentsAgree
+                simp [RegionOperations.HasNoFixedAssignments,
+                  RegionOperation.HasNoFixedAssignment]⟩
+        · simp only [circuit_norm, synthesis_summary_norm]
       lookupActivationsWellFormed cfg input self := by
         simp only [Circuit.operations_bind, operations_assignRegion,
           Circuit.operations_pure, Operations.LookupActivationsWellFormed,

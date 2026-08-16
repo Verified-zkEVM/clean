@@ -1014,6 +1014,31 @@ theorem call_synthesisSummary
   rw [self.call_operations]
   exact (self.elaborated.synthesisSummary_eq config input i).symm
 
+/-- A configured layouter-level call inherits its child's fixed-write law. -/
+theorem call_fixedWritesLawful
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (config : Config) (configured : self.Configured config)
+    (input : Var Input F) (region : RegionIndex) :
+    ((self.call config input).operations region)
+      |>.FixedWritesLawful configured.constantColumns := by
+  rcases configured with ⟨configInput, counts, hconfig, rfl⟩
+  rw [self.call_operations]
+  exact self.elaborated.fixedWritesLawful
+    configInput counts hconfig input region
+
+/-- A configured call inherits the region-agreement component independently of the
+parent's constant-column capability. -/
+theorem call_fixedAssignmentsAgree
+    (self : FormalCircuit F ConfigInput Config Input Output)
+    (config : Config) (configured : self.Configured config)
+    (input : Var Input F) (region : RegionIndex) :
+    ((self.call config input).operations region).Forall fun operation =>
+      match operation with
+      | .region _ body => body.FixedAssignmentsAgree
+      | _ => True :=
+  (self.call_fixedWritesLawful config configured input region)
+    |>.regionAssignmentsAgree
+
 @[circuit_norm, synthesis_summary_norm]
 theorem call_synthesisSummary' {Output : TypeMap} [ProvableType Output]
     (self : FormalCircuit F ConfigInput Config Input Output)

@@ -53,6 +53,9 @@ def keygenRequirements
   lookups _ configured :=
     configured.1.lookups ++ configured.2.1.lookups ++
       configured.2.2.lookups
+  fixedColumns _ configured :=
+    configured.1.fixedColumns ++ configured.2.1.fixedColumns ++
+      configured.2.2.fixedColumns
   permutationColumns cfg configured :=
     configured.1.permutationColumns ++ configured.2.1.permutationColumns ++
       configured.2.2.permutationColumns ++
@@ -223,6 +226,27 @@ def circuit (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
         simpa only [keygen_norm, keygen_spine, circuit_norm] using
           synthesize_copyCellsAssignedFrom V R cfg input self
             hconfig.1 hconfig.2.1 hconfig.2.2
+      fixedWritesLawful := by
+        intro cfg counts hconfig input self
+        apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree
+        · simpa only [Configure.output_pure, Circuit.operations_bind,
+            Circuit.operations_pure, List.forall_append, circuit_norm,
+            Nat.add_assoc] using
+            And.intro
+              ((Ecc.MulFixed.Short.circuit V).call_fixedAssignmentsAgree
+                cfg.1 hconfig.1
+                  { magnitude := input.magnitude, sign := input.sign } self)
+              (And.intro
+                ((Ecc.MulFixed.FullWidth.circuit R).call_fixedAssignmentsAgree
+                  cfg.2.1 hconfig.2.1 input.rcv (self + 2))
+                (Ecc.Add.addFormal.call_fixedAssignmentsAgree
+                  cfg.2.2 hconfig.2.2
+                    { p := (Ecc.MulFixed.Short.circuit V).output cfg.1
+                        { magnitude := input.magnitude, sign := input.sign } self,
+                      q := (Ecc.MulFixed.FullWidth.circuit R).output
+                        cfg.2.1 input.rcv (self + 2) }
+                    (self + 4)))
+        · simp only [circuit_norm, synthesis_summary_norm]
       lookupActivationsWellFormed cfg input self := by
         simp only [Circuit.operations_bind, Circuit.operations_pure,
           Operations.LookupActivationsWellFormed, List.forall_append,

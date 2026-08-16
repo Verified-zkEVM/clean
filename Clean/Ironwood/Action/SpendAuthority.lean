@@ -50,6 +50,8 @@ def keygenRequirements (G : FixedBase) : KeygenRequirements Fp
     configured.1.gates ++ configured.2.gates
   lookups _ configured :=
     configured.1.lookups ++ configured.2.lookups
+  fixedColumns _ configured :=
+    configured.1.fixedColumns ++ configured.2.fixedColumns
   permutationColumns cfg configured :=
     configured.1.permutationColumns ++ configured.2.permutationColumns ++
       ([cfg.1.superConfig.addConfig.xQR,
@@ -155,6 +157,21 @@ def circuit (G : FixedBase) : FormalCircuit Fp
         intro cfg _ hconfig input self
         simpa only [keygen_norm, keygen_spine, circuit_norm] using
           synthesize_copyCellsAssignedFrom G cfg input self hconfig.1 hconfig.2
+      fixedWritesLawful := by
+        intro cfg counts hconfig input self
+        apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree
+        · simpa only [Configure.output_pure, Circuit.operations_bind,
+            Circuit.operations_pure, List.forall_append, circuit_norm] using
+            And.intro
+              ((Ecc.MulFixed.FullWidth.circuit G).call_fixedAssignmentsAgree
+                cfg.1 hconfig.1 input.alpha self)
+              (Ecc.Add.addFormal.call_fixedAssignmentsAgree
+                cfg.2 hconfig.2
+                  { p := (Ecc.MulFixed.FullWidth.circuit G).output
+                      cfg.1 input.alpha self,
+                    q := input.akP }
+                  (self + 2))
+        · simp only [circuit_norm, synthesis_summary_norm]
       lookupActivationsWellFormed cfg input self := by
         simp only [Circuit.operations_bind, Circuit.operations_pure,
           Operations.LookupActivationsWellFormed, List.forall_append,

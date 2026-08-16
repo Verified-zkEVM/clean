@@ -2958,6 +2958,38 @@ theorem Operations.HasNoFixedWrites.loadedTableColumns_eq_nil
           simpa [Operations.loadedTableColumns] using
             inductionHypothesis hoperations.2
 
+/-- A zero table extent in the exact synthesis summary means that synthesis contains no
+nonempty table load. -/
+theorem Operations.loadedTableColumns_eq_nil_of_tableRowExtent_eq_zero
+    {operations : Operations F}
+    (htable : (FloorPlanner.synthesisSummary operations).tableRowExtent = 0) :
+    operations.loadedTableColumns = [] := by
+  induction operations with
+  | nil => rfl
+  | cons operation rest inductionHypothesis =>
+      cases operation with
+      | region name body =>
+          rw [FloorPlanner.synthesisSummary_region_cons] at htable
+          simp only [FloorPlanner.SynthesisSummary.combine_tableRowExtent,
+            FloorPlanner.SynthesisSummary.ofRegion_tableRowExtent,
+            max_eq_right (Nat.zero_le _)] at htable
+          simpa [Operations.loadedTableColumns] using inductionHypothesis htable
+      | constrainInstance cell column row =>
+          rw [FloorPlanner.synthesisSummary_constrainInstance_cons] at htable
+          simp only [FloorPlanner.SynthesisSummary.combine_tableRowExtent,
+            FloorPlanner.SynthesisSummary.ofInstanceRow_tableRowExtent,
+            max_eq_right (Nat.zero_le _)] at htable
+          simpa [Operations.loadedTableColumns] using inductionHypothesis htable
+      | loadTable table values =>
+          rw [FloorPlanner.synthesisSummary_loadTable_cons] at htable
+          simp only [FloorPlanner.SynthesisSummary.combine_tableRowExtent,
+            FloorPlanner.SynthesisSummary.ofTableValues,
+            Nat.max_eq_zero_iff] at htable
+          have hvalues : values = [] := by
+            split at htable <;> omega
+          subst values
+          simpa [Operations.loadedTableColumns] using inductionHypothesis htable.2
+
 /--
 The synthesis-local fixed-write discipline needed by keygen.
 
@@ -2992,6 +3024,28 @@ theorem Operations.HasNoFixedWrites.fixedWritesLawful
     | region name body =>
         exact RegionOperations.HasNoFixedAssignments.fixedAssignmentsAgree hlawful
     | _ => trivial
+  · rw [hloaded]
+    exact List.nodup_nil
+  · rw [hloaded]
+    exact List.disjoint_nil_left _
+  · rw [hloaded]
+    exact List.disjoint_nil_left _
+
+/-- Region-local agreement plus the absence of table loads is the complete fixed-write
+law. This is the compositional constructor used by wrappers whose children may write
+fixed cells but do not load tables. -/
+theorem Operations.FixedWritesLawful.ofRegionAssignmentsAgree
+    {operations : Operations F} {constantColumns : List (Column .fixed)}
+    (hregions : operations.Forall fun operation =>
+      match operation with
+      | .region _ body => body.FixedAssignmentsAgree
+      | _ => True)
+    (htable : (FloorPlanner.synthesisSummary operations).tableRowExtent = 0) :
+    operations.FixedWritesLawful constantColumns := by
+  have hloaded :=
+    Operations.loadedTableColumns_eq_nil_of_tableRowExtent_eq_zero htable
+  constructor
+  · exact hregions
   · rw [hloaded]
     exact List.nodup_nil
   · rw [hloaded]

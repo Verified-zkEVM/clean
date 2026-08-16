@@ -332,6 +332,11 @@ def hashSynthesisSummary (cfg : Config) :
       (FloorPlanner.SynthesisSummary.ofRegion
         (permuteSynthesisSummary cfg 0)))
 
+@[synthesis_summary_norm]
+theorem hashSynthesisSummary_tableRowExtent_eq (cfg : Config) :
+    (hashSynthesisSummary cfg).tableRowExtent = 0 := by
+  simp only [hashSynthesisSummary, synthesis_summary_norm]
+
 /-- Rust `Hash::<ConstantLength<2>>::hash` (`poseidon.rs:269-286`) on the Pow5 chip:
 initial state, pad-and-add, one permutation; the digest is `state[0]`. `Spec` is the
 donor one-block hash value `HashPaddedBlock.value`. -/
@@ -344,8 +349,10 @@ def hash (capacity : Fp) :
 
   elaborated :=
     { keygenRequirements :=
-        { gates cfg _ :=
+        { configLawful cfg := Config.FixedColumnsLawful cfg
+          gates cfg _ :=
             [padAndAddGate cfg, fullRoundGate cfg, partialRoundsGate cfg]
+          fixedColumns cfg _ := cfg.fixedColumns
           permutationColumns cfg _ :=
             [cfg.state 0, cfg.state 1, cfg.state 2]
           inputCells _ _ input :=
@@ -359,14 +366,14 @@ def hash (capacity : Fp) :
           apply FormalRegionCircuit.callPacked_keygenRegistered
             (self := addInputRegion) (hconfigured := by
               apply FormalRegionCircuit.Configured.ofPure
-              · trivial
+              · exact ()
               · rfl)
           all_goals keygen_registration
         case right =>
           apply FormalRegionCircuit.callPacked_keygenRegistered
             (self := permuteRegion) (hconfigured := by
               apply FormalRegionCircuit.Configured.ofPure
-              · trivial
+              · assumption
               · rfl)
           all_goals keygen_registration
       copyCellsAssigned := by
@@ -376,7 +383,7 @@ def hash (capacity : Fp) :
           apply FormalRegionCircuit.callPacked_copyCellsAssignedFrom
             (self := addInputRegion) (hconfigured := by
               apply FormalRegionCircuit.Configured.ofPure
-              · trivial
+              · exact ()
               · rfl)
           intro cell hcell
           rw [addInputRegion_inputCells] at hcell
@@ -396,7 +403,7 @@ def hash (capacity : Fp) :
           apply FormalRegionCircuit.callPacked_copyCellsAssignedFrom
             (self := permuteRegion) (hconfigured := by
               apply FormalRegionCircuit.Configured.ofPure
-              · trivial
+              · assumption
               · rfl)
           intro cell hcell
           rw [permuteRegion_inputCells] at hcell
@@ -415,6 +422,30 @@ def hash (capacity : Fp) :
               FormalRegionCircuit.callPacked_operations] using hadd.2.1
           · simpa only [afterInit, initial,
               FormalRegionCircuit.callPacked_operations] using hadd.2.2
+      fixedWritesLawful := by
+        intro cfg _ hconfig input self
+        apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree
+        · simp only [synthesize, Circuit.operations_bind,
+            operations_assignRegion, Circuit.operations_pure,
+            circuit_norm]
+          exact ⟨(initRegion capacity).call_fixedAssignmentsAgree cfg
+              (FormalRegionCircuit.Configured.ofPure
+                (initRegion capacity) cfg () rfl) 0 () self,
+            addInputRegion.call_fixedAssignmentsAgree cfg
+              (FormalRegionCircuit.Configured.ofPure
+                addInputRegion cfg () rfl) 0
+              { initialState := (initRegion capacity).output cfg 0 () self,
+                input := input }
+              (self + 1),
+            permuteRegion.call_fixedAssignmentsAgree cfg
+              (FormalRegionCircuit.Configured.ofPure
+                permuteRegion cfg hconfig rfl) 0
+              (addInputRegion.output cfg 0
+                { initialState := (initRegion capacity).output cfg 0 () self,
+                  input := input }
+                (self + 1))
+              (self + 2)⟩
+        · simp only [synthesize, circuit_norm, synthesis_summary_norm]
       output_eq := by
         intro _ _ _
         simp only [synthesize, circuit_norm, keygen_output_norm, stateRow]
@@ -515,15 +546,19 @@ theorem hash_synthesisSummary_eq (capacity : Fp) (cfg : Config)
 /-- The hash capability exported by one aggregate Poseidon configure run. -/
 def hashConfigureCertificate (capacity : Fp)
     (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
-    (rcA rcB : Fin 3 → Column .fixed) (counts : ConfigureCounts) :
+    (rcA rcB : Fin 3 → Column .fixed) (counts : ConfigureCounts)
+    (hfixedColumns :
+      ((configure state partialSbox rcA rcB).output counts).FixedColumnsLawful) :
     (hash capacity).ConfigurationCertificate
       ((configure state partialSbox rcA rcB).output counts)
       { gates := ((configure state partialSbox rcA rcB).delta counts).gates
         lookups := ((configure state partialSbox rcA rcB).delta counts).lookups
+        fixedColumns :=
+          ((configure state partialSbox rcA rcB).output counts).fixedColumns
         permutationColumns :=
           ((configure state partialSbox rcA rcB).delta counts).permutationRequests } := by
   let cfg := (configure state partialSbox rcA rcB).output counts
-  apply ((hash capacity).configureCertificate cfg {} ()).mono
+  apply ((hash capacity).configureCertificate cfg {} hfixedColumns).mono
   · intro gate hgate
     simp only [hash, FormalCircuit.keygenRequirements,
       ElaboratedCircuit.keygenRequirements, Configure.delta_pure,
@@ -534,6 +569,10 @@ def hashConfigureCertificate (capacity : Fp)
       ElaboratedCircuit.keygenRequirements, Configure.delta_pure,
       List.append_nil] at hargument
     exact False.elim (List.not_mem_nil hargument)
+  · intro column hcolumn
+    simpa only [hash, FormalCircuit.keygenRequirements,
+      ElaboratedCircuit.keygenRequirements, Configure.fixedColumns_pure,
+      List.append_nil] using hcolumn
   · intro column hcolumn
     simp only [hash, FormalCircuit.keygenRequirements,
       ElaboratedCircuit.keygenRequirements, Configure.delta_pure,
