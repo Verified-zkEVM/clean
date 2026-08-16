@@ -62,7 +62,7 @@ def Spec (input : Inputs (F p)) (out : SHA256State (F p)) : Prop :=
 omit [Fact (Nat.Prime p)] [Fact (p > 2 ^ 33)] in
 /-- Generic version of `output_eq`: for any bound `k`, the `Fin.foldl k` over our round body
     equals `stateVar i₀ input_var_state k`. -/
-lemma fin_foldl_eq_stateVar (i₀ : ℕ) (input_var_state : Var SHA256State (F p)) (k : ℕ) :
+private lemma fin_foldl_eq_stateVar (i₀ : ℕ) (input_var_state : Var SHA256State (F p)) (k : ℕ) :
     Fin.foldl k
       (fun (acc : Var SHA256State (F p)) (i : Fin k) =>
         #v[Vector.mapRange 32 fun i_1 => var { index := i₀ + i.val * 455 + 389 + i_1 },
@@ -94,7 +94,7 @@ lemma fin_foldl_eq_stateVar (i₀ : ℕ) (input_var_state : Var SHA256State (F p
     Uses `SHA256State (Expression (F p))` for the accumulator type (not the
     `Var SHA256State (F p)` alias) so the lemma's pattern matches `h_holds`
     syntactically — `rw` can't see through the alias. -/
-lemma foldlAcc_eq_stateVar (i₀ : ℕ)
+private lemma foldlAcc_eq_stateVar (i₀ : ℕ)
     (input_var_state : SHA256State (Expression (F p)))
     (input_var_schedule : SHA256Schedule (Expression (F p)))
     (k : ℕ) (h : k < 64) :
@@ -111,8 +111,9 @@ lemma foldlAcc_eq_stateVar (i₀ : ℕ)
 
 omit [Fact (p > 2 ^ 33)] in
 /-- Helper: `constWord32 n` evaluated is always normalized (bits are 0 or 1). -/
-lemma normalized_constWord32 (env : Environment (F p)) (n : ℕ) :
-    Normalized (Vector.map (Expression.eval env) (constWord32 (p:=p) n)) := by
+private lemma normalized_constWord32 (env : Environment (F p)) (n : ℕ) :
+    Normalized (eval env (constWord32 (p:=p) n)) := by
+  rw [CircuitType.eval_var_fields]
   intro i
   have h : (n / 2^i.val % 2 : ℕ) = 0 ∨ (n / 2^i.val % 2 : ℕ) = 1 := by omega
   rcases h with h | h
@@ -122,7 +123,7 @@ lemma normalized_constWord32 (env : Environment (F p)) (n : ℕ) :
     simp [constWord32, Expression.eval, h]
 
 /-- valueBits of `constWord32 n` equals `n` modulo `2^32`. -/
-lemma valueBits_constWord32 (env : Environment (F p)) (n : ℕ) :
+private lemma valueBits_constWord32 (env : Environment (F p)) (n : ℕ) :
     valueBits (Vector.map (Expression.eval env) (constWord32 (p:=p) n)) = n % 2^32 := by
   simp only [valueBits, constWord32]
   have h2 : ∀ i : Fin 32, ((n / 2^i.val % 2 : ℕ) : F p).val = n / 2^i.val % 2 := by
@@ -157,12 +158,12 @@ lemma valueBits_constWord32 (env : Environment (F p)) (n : ℕ) :
   exact key 32
 
 /-- For `n < 2^32`, valueBits of `constWord32 n` is `n`. -/
-lemma valueBits_constWord32_of_lt (env : Environment (F p)) {n : ℕ} (h : n < 2^32) :
+private lemma valueBits_constWord32_of_lt (env : Environment (F p)) {n : ℕ} (h : n < 2^32) :
     valueBits (Vector.map (Expression.eval env) (constWord32 (p:=p) n)) = n := by
   rw [valueBits_constWord32, Nat.mod_eq_of_lt h]
 
 /-- The value-level state at the end of round `k`. -/
-def valStateAfterRound (input_state : Vector ℕ 8)
+private def valStateAfterRound (input_state : Vector ℕ 8)
     (input_schedule : Vector ℕ 64) : ℕ → Vector ℕ 8
   | 0 => input_state
   | k + 1 =>
@@ -173,7 +174,7 @@ def valStateAfterRound (input_state : Vector ℕ 8)
       valStateAfterRound input_state input_schedule k
 
 /-- `sha256Compress` equals our `valStateAfterRound` at index 64. -/
-lemma sha256Compress_eq_valStateAfterRound
+private lemma sha256Compress_eq_valStateAfterRound
     (input_state : Vector ℕ 8) (input_schedule : Vector ℕ 64) :
     Specs.SHA256.sha256Compress input_state input_schedule =
       valStateAfterRound input_state input_schedule 64 := by
@@ -246,8 +247,8 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
       rw [foldlAcc_eq_stateVar i₀ input_var_state input_var_schedule k hk''] at h_holds
       simp only [circuit_norm, SHA256Round.circuit, SHA256Round.elaborated,
         SHA256Round.Spec, SHA256Round.Assumptions] at h_holds
-      have h2 : Normalized (eval env (constWord32 (p:=p) Specs.SHA256.K[k].toNat)) := by
-        rw [CircuitType.eval_var_fields]; exact normalized_constWord32 env _
+      have h2 : Normalized (eval env (constWord32 (p:=p) Specs.SHA256.K[k].toNat)) :=
+        normalized_constWord32 env _
       have h3 : Normalized (input_schedule[k]'hk'') := h_sched_norm ⟨k, hk''⟩
       -- Provide the IH-derived normalization assumption via a tactic that bridges
       -- via `getElem_eval_vector`.
@@ -309,8 +310,8 @@ theorem completeness : Completeness (F p) main Assumptions := by
       rw [foldlAcc_eq_stateVar i₀ input_var_state input_var_schedule k hk''] at h_env
       simp only [circuit_norm, SHA256Round.circuit, SHA256Round.elaborated,
         SHA256Round.Spec, SHA256Round.Assumptions] at h_env
-      have h2 : Normalized (eval env.toEnvironment (constWord32 (p:=p) Specs.SHA256.K[k].toNat)) := by
-        rw [CircuitType.eval_var_fields]; exact normalized_constWord32 _ _
+      have h2 : Normalized (eval env.toEnvironment (constWord32 (p:=p) Specs.SHA256.K[k].toNat)) :=
+        normalized_constWord32 _ _
       have h3 : Normalized (input_schedule[k]'hk'') := h_sched_norm ⟨k, hk''⟩
       have h_spec := h_env ⟨by
         intro i
@@ -333,8 +334,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
     have heq : (⟨i.val, i.isLt⟩ : Fin 64) = i := Fin.ext rfl
     rw [heq] at h
     exact h
-  · rw [CircuitType.eval_var_fields]
-    exact normalized_constWord32 _ _
+  · exact normalized_constWord32 _ _
   · exact h_sched_norm i
 
 set_option maxRecDepth 2048 in
