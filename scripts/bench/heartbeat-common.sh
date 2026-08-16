@@ -59,7 +59,8 @@ measure_heartbeats() {
     # (e.g. a sibling git worktree), the measurement would silently load a different
     # branch's library — refuse instead of reporting a number for the wrong code
     local foreign
-    foreign="$(grep -oE '"/[^"]*/\.lake/' "$repo/$setup" | sed 's/^"//; s|/\.lake/$||' | sort -u | grep -v "^$repo" || true)"
+    foreign="$(grep -oE '"/[^"]*/\.lake/' "$repo/$setup" | sed 's/^"//; s|/\.lake/$||' | sort -u |
+      awk -v repo="$repo" '!($0 == repo || index($0, repo "/.lake/") == 1)')"
     if [ -n "$foreign" ]; then
       echo "stale setup file: $repo/$setup references artifacts outside $repo:" >&2
       printf '  %s\n' $foreign >&2
