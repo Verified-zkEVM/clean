@@ -122,23 +122,23 @@ then elaborate as `@eval _ (M (Expression F)) (M F) ...` and can be applied by
 ordinary simplification.
 -/
 
-@[circuit_norm, grind norm] lemma var_of_provableType (F) :
+@[circuit_norm] lemma var_of_provableType (F) :
   Var M F = M (Expression F) := rfl
-@[circuit_norm, grind norm] lemma proverValue_of_provableType (F) :
+@[circuit_norm] lemma proverValue_of_provableType (F) :
   ProverValue M F = M F := rfl
-@[circuit_norm, grind norm] lemma value_of_provableType (F) :
+@[circuit_norm] lemma value_of_provableType (F) :
   Value M F = M F := rfl
-
--- Deliberately only one instance pair, keyed on the concrete `M (Expression F)` type:
--- a second `Var M F`-keyed pair would register distinct instance constants for defeq
--- types, splitting eval terms into incongruent `grind` atoms. `Var M F` reduces to
--- `M (Expression F)` during instance search.
-instance : VerifierEval F (M (Expression F)) (M F) := verifierEval M
-@[circuit_norm] instance : ProverEval F (M (Expression F)) (M F) := proverEval M
 
 @[reducible] instance {α : TypeMap} [ProvableType α] {elem : Type} {valid : Var α F → ℕ → Prop}
     [GetElem (α (Expression F)) ℕ elem valid] : GetElem (Var α F) ℕ elem valid :=
   (inferInstance : GetElem (α (Expression F)) ℕ elem valid)
+
+-- Deliberately only one instance pair, keyed on the concrete `M (Expression F)` type:
+-- a second `Var M F`-keyed pair would register distinct instance constants for defeq
+-- types, splitting eval terms into incongruent atoms. `Var M F` reduces to
+-- `M (Expression F)` during instance search.
+instance : VerifierEval F (M (Expression F)) (M F) := verifierEval M
+@[circuit_norm] instance : ProverEval F (M (Expression F)) (M F) := proverEval M
 
 @[explicit_provable_type] lemma eval_var (env : Environment F) (v : Var M F) :
     eval env v = ProvableType.eval env (v : M (Expression F)) := by
@@ -153,13 +153,13 @@ instance : VerifierEval F (M (Expression F)) (M F) := verifierEval M
 /-- Normalize the `Var M F`-spelled type argument of eval terms to the concrete
 `M (Expression F)` spelling (`rfl`, but the two elaborate to distinct terms): per the
 normal-form doctrine above, and so that eval atoms are congruent inside `grind`. -/
-@[circuit_norm, grind norm] lemma eval_var_concrete (env : Environment F) (v : Var M F) :
+@[circuit_norm] lemma eval_var_concrete (env : Environment F) (v : Var M F) :
     eval env v = eval env (v : M (Expression F)) := rfl
 
-@[circuit_norm, grind norm] lemma eval_var_concrete_prover (env : ProverEnvironment F) (v : Var M F) :
+@[circuit_norm] lemma eval_var_concrete_prover (env : ProverEnvironment F) (v : Var M F) :
     eval env v = eval env (v : M (Expression F)) := rfl
 
-@[circuit_norm, grind norm] lemma eval_var_prover_to_verifier (env : ProverEnvironment F) (v : Var M F) :
+@[circuit_norm] lemma eval_var_prover_to_verifier (env : ProverEnvironment F) (v : Var M F) :
     eval env v = eval env.toEnvironment v := by
   rw [eval_var_prover, eval_var]
 
@@ -171,7 +171,7 @@ normal-form doctrine above, and so that eval atoms are congruent inside `grind`.
     eval env v = ProvableType.eval env.toEnvironment v := by
   rw [eval_var_prover]
 
-@[circuit_norm, grind norm] lemma eval_expression_prover_to_verifier (env : ProverEnvironment F) (v : M (Expression F)) :
+@[circuit_norm] lemma eval_expression_prover_to_verifier (env : ProverEnvironment F) (v : M (Expression F)) :
     eval env v = eval env.toEnvironment v := by
   rw [eval_expression_prover, eval_expression]
 
@@ -216,8 +216,6 @@ instance : ProvableType field where
   fromElements := fun ⟨⟨[x]⟩, _⟩ => x
 instance : NonEmptyProvableType field where
 
-@[grind =] theorem size_field : size field = 1 := rfl
-
 namespace CircuitType
 
 instance : VerifierEval F (Expression F) F := verifierEval field
@@ -255,26 +253,6 @@ instance (priority := high) : ProvableType (fields n) where
   size := n
   toElements x := x
   fromElements v := v
-
-@[grind norm] theorem size_fields (n : ℕ) : size (fields n) = n := rfl
-
-/-- `fromElements` is injective (round-trip with `toElements`); as an iff the
-congruence laws reach the element vectors inside. -/
-theorem fromElements_eq_iff {F : Type} {M : TypeMap} [ProvableType M]
-    {v w : Vector F (size M)} :
-    fromElements (M := M) v = fromElements w ↔ v = w := by
-  constructor
-  · intro h
-    have := congrArg (ProvableType.toElements (M := M)) h
-    simpa only [ProvableType.toElements_fromElements] using this
-  · intro h; rw [h]
-
-@[circuit_norm]
-theorem toElements_fields {F : Type} {n : ℕ} (x : fields n F) : toElements x = x := rfl
-
-@[circuit_norm]
-theorem fromElements_fields {F : Type} {n : ℕ} (v : Vector F n) :
-    fromElements (M := fields n) v = v := rfl
 
 instance {n : ℕ} : NonEmptyProvableType (fields (n + 1)) where
   nonempty := Nat.zero_lt_succ n
@@ -368,8 +346,6 @@ attribute [circuit_norm] components
 -- `toComponents` is deliberately NOT in `circuit_norm`: unfolding it on an opaque struct
 -- leaves a stuck, un-keyable `match`. Struct evaluation is handled by the simprocs in
 -- `Clean.Circuit.StructEvalSimprocs` (literal decomposition + projection lift).
--- For `grind` (computable-witness proofs), unfolding is still the mechanism:
-attribute [grind unfold] components toComponents fromComponents
 
 namespace ProvableStruct
 -- convert between `ProvableTypeList` and a single flat `Vector` of field elements
@@ -430,11 +406,9 @@ variable {α : TypeMap} [ProvableStruct α] {F : Type} [FiniteField F]
 /--
 Alternative `eval` which evaluates each component separately.
 -/
-@[grind unfold]
 def eval (env : Environment F) (var : α (Expression F)) : α F :=
   toComponents var |> go (components α) |> fromComponents
 where
-  @[grind unfold]
   go: (cs : List WithProvableType) → ProvableTypeList (Expression F) cs → ProvableTypeList F cs
     | [], .nil => .nil
     | _ :: cs, .cons a as => .cons (Eval.eval env a) (go cs as)
@@ -446,7 +420,7 @@ This gets high priority and is applied before simplifying arguments,
 because we prefer `ProvableStruct.eval` if it's available:
 It preserves high-level components instead of unfolding everything down to field elements.
 -/
-@[circuit_norm ↓ high, grind norm]
+@[circuit_norm ↓ high]
 theorem eval_eq_eval {α : TypeMap} [ProvableStruct α] : ∀ (env : Environment F) (x : α (Expression F)),
     Eval.eval env x = ProvableStruct.eval env x := by
   intro env x
@@ -468,7 +442,7 @@ where
     -- recursively use this lemma!
     apply eval_eq_eval_aux
 
-@[circuit_norm ↓ high, grind norm]
+@[circuit_norm ↓ high]
 theorem eval_eq_eval_prover {α : TypeMap} [ProvableStruct α] (env : ProverEnvironment F)
     (x : α (Expression F)) :
     Eval.eval env x = ProvableStruct.eval env.toEnvironment x := by
@@ -547,11 +521,9 @@ end ProvableStruct
 namespace ProvableType
 variable {α : TypeMap} [ProvableType α]
 
-attribute [grind norm] Prod.mk.injEq
-
 -- resolve `eval`, `const` and `varFromOffset` for a few basic types
 
-@[circuit_norm ↓ high, grind =]
+@[circuit_norm ↓ high]
 theorem eval_field (env : Environment F) (x : field (Expression F)) :
     Eval.eval env x = Expression.eval env x := by
   rw [CircuitType.eval_expression]
@@ -564,11 +536,11 @@ end ProvableType
 
 namespace CircuitType
 
-@[circuit_norm, grind norm] lemma eval_expr (env : Environment F) (v : Expression F) :
+@[circuit_norm] lemma eval_expr (env : Environment F) (v : Expression F) :
   Eval.eval env v = Expression.eval env v := by
   exact ProvableType.eval_field env v
 
-@[circuit_norm, grind norm] lemma eval_expr_prover (env : ProverEnvironment F) (v : Expression F) :
+@[circuit_norm] lemma eval_expr_prover (env : ProverEnvironment F) (v : Expression F) :
   Eval.eval env v = Expression.eval env v := by
   unfold Eval.eval
   change ProvableType.eval (M:=field) env.toEnvironment v = Expression.eval env.toEnvironment v
@@ -593,7 +565,6 @@ variable {α : TypeMap} [ProvableType α]
 theorem varFromOffset_field {F} (offset : ℕ) :
   varFromOffset (F:=F) field offset = var ⟨offset⟩ := rfl
 
-@[grind norm]
 theorem eval_fields (env : Environment F) (x : fields n (Expression F)) :
   Eval.eval env x = x.map (Expression.eval env) := by
   rw [CircuitType.eval_expression]
@@ -606,7 +577,7 @@ theorem eval_fields (env : Environment F) (x : fields n (Expression F)) :
 theorem varFromOffset_fields {F} (offset : ℕ) :
   varFromOffset (F:=F) (fields n) offset = .mapRange n fun i => var ⟨offset + i⟩ := rfl
 
-@[circuit_norm ↓, grind norm]
+@[circuit_norm ↓]
 theorem eval_fieldPair (env : Environment F) (t : fieldPair (Expression F)) :
     Eval.eval env t = (Expression.eval env t.1, Expression.eval env t.2):= by
   simp [circuit_norm, explicit_provable_type]
@@ -671,27 +642,7 @@ lemma fromElements_eq_iff' {F} {B : Vector F (size M)} {A : M F} :
   · intro h
     rw [← h, fromElements_toElements]
 
-@[grind =]
-lemma toElements_inj_iff {F} {A B : M F} :
-    toElements A = toElements B ↔ A = B := by
-  constructor
-  · intro h
-    rw [← fromElements_toElements A, ← fromElements_toElements B, h]
-  · intro h
-    rw [h]
-
-@[grind =]
-lemma fromElements_inj_iff {F} {A B : Vector F (size M)} :
-    fromElements A = fromElements B ↔ A = B := by
-  constructor
-  · intro h
-    rw [← toElements_fromElements A, ← toElements_fromElements B, h]
-  · intro h
-    rw [h]
-
--- basic simp lemmas
-
-@[circuit_norm, grind norm]
+@[circuit_norm]
 theorem eval_const {env : Environment F} {x : α F} :
     Eval.eval env (const x) = x := by
   rw [CircuitType.eval_expression]
@@ -709,7 +660,6 @@ theorem eval_const_prover {F : Type} [FiniteField F] {α : TypeMap} [ProvableTyp
   exact (CircuitType.eval_expression_prover env (const x)).trans (by
     simpa only [CircuitType.eval_expression] using eval_const (env:=env.toEnvironment) (x:=x))
 
-@[grind =]
 theorem eval_varFromOffset (env : Environment F) (offset : ℕ) :
     (Eval.eval env (varFromOffset α offset : α (Expression F)) : α F) =
       fromElements (.mapRange (size α) fun i => env.get (offset + i)) := by
@@ -721,7 +671,6 @@ theorem eval_varFromOffset (env : Environment F) (offset : ℕ) :
   intro i hi
   simp only [Vector.getElem_map, Vector.getElem_mapRange, Expression.eval]
 
-@[grind =]
 theorem eval_varFromOffset_prover {α : TypeMap} [ProvableType α] (env : ProverEnvironment F) (offset : ℕ) :
     (Eval.eval env (varFromOffset α offset : α (Expression F)) : α F) =
       fromElements (.mapRange (size α) fun i => env.get (offset + i)) := by
@@ -750,14 +699,12 @@ theorem toElements_eval (env : Environment F)
   rw [CircuitType.eval_expression]
   simp only [eval, toElements_fromElements]
 
-@[grind =]
 theorem getElem_eval_toElements
   {env : Environment F} (x : α (Expression F)) (i : ℕ) (hi : i < size α) :
     Expression.eval env (toElements x)[i] = (toElements (Eval.eval env x))[i] := by
   rw [CircuitType.eval_expression]
   rw [eval, toElements_fromElements, Vector.getElem_map]
 
-@[grind =]
 theorem getElem_eval_fields (env : Environment F) (x : fields n (Expression F)) (i : ℕ) (hi : i < n) :
     Expression.eval env x[i] = (Eval.eval env x)[i] := by
   rw [CircuitType.eval_expression]
@@ -807,11 +754,16 @@ theorem eval_vector (env : Environment F)
   rw [Vector.flatten_toChunks]
   simp [explicit_provable_type]
 
-@[grind norm, grind =]
 theorem getElem_eval_vector (env : Environment F) (x : ProvableVector α n (Expression F)) (i : ℕ) (h : i < n) :
     eval env x[i] = (eval env x)[i] := by
   have h' := congrArg (fun xs : Vector (α F) n => xs[i]) (eval_vector env x)
   simpa only [Vector.getElem_map] using h'.symm
+
+lemma eval_vector_eq_get {n : ℕ} (env : Environment F)
+    (vars : Vector (M (Expression F)) n) (vals : Vector (M F) n)
+    (h : eval env vars = vals) (i : ℕ) (h_i : i < n) :
+    (eval env (vars[i] : M (Expression F)) : M F) = vals[i] := by
+  rw [getElem_eval_vector, h]
 
 /-- `eval` commutes with `Vector.set`, so vectors updated entry by entry (state-update
 circuits) evaluate without unfolding the whole vector. Paired with the outward-oriented
@@ -823,11 +775,26 @@ theorem eval_vector_set (env : Environment F) (x : ProvableVector α n (Expressi
     eval env (x.set i a) = (eval env x).set i (eval env a) := by
   simp only [eval_vector, Vector.map_set]
 
-lemma eval_vector_eq_get {n : ℕ} (env : Environment F)
-    (vars : Vector (M (Expression F)) n) (vals : Vector (M F) n)
-    (h : eval env vars = vals) (i : ℕ) (h_i : i < n) :
-    (eval env (vars[i] : M (Expression F)) : M F) = vals[i] := by
-  rw [getElem_eval_vector, h]
+/-- Chain fold through a pair-element vector access, all the way to the whole-vector
+atom (used by `StructEvalSimprocs.vectorAtomLift`; fixed element `TypeMap` so the
+simproc can elaborate it without higher-order unification). The intermediate spelling
+`(eval env c[i]).1` must never appear — the pair `Eval` instance defeq-collapses, so it
+self-loops against the scalar-canonical `eval_fieldPair` projections. -/
+theorem eval_fst_getElem_pairVector {n : ℕ} (env : Environment F)
+    (c : Vector (fieldPair (Expression F)) n) (i : ℕ) (hi : i < n) :
+    Expression.eval env ((c[i]'hi).1) =
+      (((eval env (c : ProvableVector fieldPair n (Expression F))) :
+        ProvableVector fieldPair n F)[i]'hi).1 :=
+  (ProvableType.eval_fieldPair_fst env (c[i]'hi)).symm.trans
+    (congrArg Prod.fst (getElem_eval_vector (α := fieldPair) env c i hi))
+
+theorem eval_snd_getElem_pairVector {n : ℕ} (env : Environment F)
+    (c : Vector (fieldPair (Expression F)) n) (i : ℕ) (hi : i < n) :
+    Expression.eval env ((c[i]'hi).2) =
+      (((eval env (c : ProvableVector fieldPair n (Expression F))) :
+        ProvableVector fieldPair n F)[i]'hi).2 :=
+  (ProvableType.eval_fieldPair_snd env (c[i]'hi)).symm.trans
+    (congrArg Prod.snd (getElem_eval_vector (α := fieldPair) env c i hi))
 
 lemma eval_vector_take {n : ℕ} (env : Environment F)
     (vars : ProvableVector M n (Expression F)) (i : ℕ) :
@@ -931,12 +898,12 @@ theorem eval_pair {α β: TypeMap} [ProvableType α] [ProvableType β] (env : En
 
 namespace CircuitType
 
-@[circuit_norm, grind =] lemma eval_var_pair {M N : TypeMap} [ProvableType M] [ProvableType N]
+@[circuit_norm] lemma eval_var_pair {M N : TypeMap} [ProvableType M] [ProvableType N]
     (env : Environment F) (p1 : M (Expression F)) (p2 : N (Expression F)) :
     eval env ((p1, p2) : ProvablePair M N (Expression F)) = (eval env p1, eval env p2) := by
   simp only [circuit_norm]
 
-@[circuit_norm, grind =] lemma eval_var_provablePair {M N : TypeMap} [ProvableType M] [ProvableType N]
+@[circuit_norm] lemma eval_var_provablePair {M N : TypeMap} [ProvableType M] [ProvableType N]
     (env : Environment F) (p : Var (ProvablePair M N) F) :
     eval env p = (eval env (p.1 : M (Expression F)), eval env (p.2 : N (Expression F))) := by
   exact eval_var_pair env p.1 p.2
@@ -948,7 +915,7 @@ namespace CircuitType
       (eval env (p.1 : M (Expression F)), eval env (p.2 : N (Expression F))) := by
   exact eval_var_pair env p.1 p.2
 
-@[circuit_norm, grind =] lemma eval_var_pair_prover {M N : TypeMap} [ProvableType M] [ProvableType N]
+@[circuit_norm] lemma eval_var_pair_prover {M N : TypeMap} [ProvableType M] [ProvableType N]
     (env : ProverEnvironment F) (p1 : M (Expression F)) (p2 : N (Expression F)) :
     eval env ((p1, p2) : ProvablePair M N (Expression F)) = (eval env p1, eval env p2) := by
   unfold eval
@@ -957,7 +924,7 @@ namespace CircuitType
   simp only [ProvableType.eval, toElements, fromElements, Vector.map_append]
   rw [Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
 
-@[circuit_norm, grind =] lemma eval_var_provablePair_prover {M N : TypeMap} [ProvableType M] [ProvableType N]
+@[circuit_norm] lemma eval_var_provablePair_prover {M N : TypeMap} [ProvableType M] [ProvableType N]
     (env : ProverEnvironment F) (p : Var (ProvablePair M N) F) :
     eval env p = (eval env (p.1 : M (Expression F)), eval env (p.2 : N (Expression F))) := by
   exact eval_var_pair_prover env p.1 p.2

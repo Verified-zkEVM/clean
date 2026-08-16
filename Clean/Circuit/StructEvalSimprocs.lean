@@ -211,16 +211,9 @@ private def vectorAtomLiftCore (e : Expr) : SimpM Simp.Step := do
       unless xsType.isAppOf ``Vector do return .continue
       let elemTy ← withDefault <| whnf (xsType.getAppArgs[0]!)
       unless elemTy.isAppOf ``Prod do return .continue
-      -- (eval env c[i]).proj = Expression.eval env (c[i]).proj  — the fieldPair lemma
-      let projLemma := if isFst then ``ProvableType.eval_fieldPair_fst
-        else ``ProvableType.eval_fieldPair_snd
-      let pProj ← withDefault <| mkAppM projLemma #[env, t]
-      -- eval env (c[i]) = (eval env c)[i]  — the vector fold, projected
-      let pVec ← withDefault <| mkAppM ``getElem_eval_vector #[env, xs, i, hval]
-      let projFn := if isFst then ``Prod.fst else ``Prod.snd
-      let pVecProj ← withDefault <| mkAppM ``congrArg #[← mkAppOptM projFn #[none, none], pVec]
-      -- e = Expression.eval env (c[i]).proj = (eval env c[i]).proj = ((eval env c)[i]).proj
-      let proof ← withDefault <| mkAppM ``Eq.trans #[← mkAppM ``Eq.symm #[pProj], pVecProj]
+      let chainLemma := if isFst then ``eval_fst_getElem_pairVector
+        else ``eval_snd_getElem_pairVector
+      let proof ← withDefault <| mkAppM chainLemma #[env, xs, i, hval]
       let some (lhs0, rhs0) := (← inferType proof).eq?.map (fun (_, l, r) => (l, r))
         | return .continue
       unless ← withDefault <| isDefEq lhs0 e do return .continue
@@ -251,7 +244,14 @@ private def vectorAtomLiftEvalCore (e : Expr) : SimpM Simp.Step := do
     let elemTy ← withDefault <| whnf (xsType.getAppArgs[0]!)
     let lemmaName := if elemTy.isAppOf ``Expression then
       ``ProvableType.getElem_eval_fields else ``getElem_eval_vector
-    let proof ← withDefault <| mkAppM lemmaName #[env, xs, i, hval]
+    -- pair elements: `mkAppM` cannot solve the higher-order unification assigning the
+    -- element `TypeMap`; pin `fieldPair` explicitly for Expression-component pairs
+    let proof ← withDefault <| do
+      if elemTy.isAppOf ``Prod then
+        Meta.mkAppOptM ``getElem_eval_vector
+          #[none, none, some (Lean.mkConst ``fieldPair), none, some env, some xs, some i, some hval]
+      else
+        mkAppM lemmaName #[env, xs, i, hval]
     let some (lhs0, rhs0) := (← inferType proof).eq?.map (fun (_, l, r) => (l, r))
       | return .continue
     unless ← withDefault <| isDefEq lhs0 e do return .continue
