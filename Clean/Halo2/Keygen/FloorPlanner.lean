@@ -102,6 +102,53 @@ def activations (starts : List ℕ) (regions : List (ℕ × RegionOperations F))
           enabled.map fun s => (s.index, starts.getD idx 0 + row)
       | _ => []
 
+/-- Membership in the selector-activation stream retains its source region,
+operation, and region-local row. -/
+theorem mem_activations_iff
+    (starts : List ℕ) (regions : List (ℕ × RegionOperations F))
+    (selector absoluteRow : ℕ) :
+    (selector, absoluteRow) ∈ activations starts regions ↔
+      ∃ index body operation localRow,
+        (index, body) ∈ regions ∧
+          operation ∈ body ∧
+          operation.ActivatesSelectorAt selector localRow ∧
+          absoluteRow = starts.getD index 0 + localRow := by
+  rw [activations, List.mem_flatMap]
+  constructor
+  · rintro ⟨⟨index, body⟩, hregion, hbody⟩
+    rw [List.mem_flatMap] at hbody
+    obtain ⟨operation, hoperation, hmapped⟩ := hbody
+    cases operation with
+    | enableGate gate row =>
+        simp only [List.mem_singleton, Prod.mk.injEq] at hmapped
+        exact ⟨index, body, .enableGate gate row, row,
+          hregion, hoperation, ⟨hmapped.1.symm, rfl⟩, hmapped.2⟩
+    | enableLookup argument enabled row =>
+        rw [List.mem_map] at hmapped
+        obtain ⟨candidate, hcandidate, hequal⟩ := hmapped
+        simp only [Prod.mk.injEq] at hequal
+        exact ⟨index, body, .enableLookup argument enabled row, row,
+          hregion, hoperation,
+          ⟨⟨candidate, hcandidate, hequal.1⟩, rfl⟩, hequal.2.symm⟩
+    | assignAdvice | assignFixed | constrainEqual | constrainConstant |
+        constrainInstance =>
+        simp at hmapped
+  · rintro ⟨index, body, operation, localRow,
+      hregion, hoperation, hactivation, rfl⟩
+    refine ⟨(index, body), hregion, ?_⟩
+    rw [List.mem_flatMap]
+    refine ⟨operation, hoperation, ?_⟩
+    cases operation with
+    | enableGate gate row =>
+        rcases hactivation with ⟨rfl, rfl⟩
+        simp
+    | enableLookup argument enabled row =>
+        rcases hactivation with ⟨⟨candidate, hcandidate, rfl⟩, rfl⟩
+        exact List.mem_map.mpr ⟨candidate, hcandidate, rfl⟩
+    | assignAdvice | assignFixed | constrainEqual | constrainConstant |
+        constrainInstance =>
+        contradiction
+
 end Halo2
 
 namespace Halo2.FloorPlanner
@@ -14000,11 +14047,9 @@ theorem row_lt_measureRegion_of_activatesSelectorAt
       constrainInstance =>
       contradiction
 
-/--
-Distinct regions whose selector intervals are disjoint cannot activate the same
-selector at the same absolute row.
--/
-theorem activation_rows_ne_of_sharedSelectorIntervalsDisjoint
+/-- Distinct regions sharing a selector column cannot contain local rows at the same
+absolute position when their selector intervals are disjoint. -/
+theorem region_rows_ne_of_sharedSelectorIntervalsDisjoint
     {shapes : List RegionShape} {starts : List ℕ}
     (hplanner : SharedSelectorIntervalsDisjoint shapes starts)
     {leftIndex rightIndex : ℕ}
@@ -14012,28 +14057,15 @@ theorem activation_rows_ne_of_sharedSelectorIntervalsDisjoint
     (hleftShape : measureRegion leftIndex leftBody ∈ shapes)
     (hrightShape : measureRegion rightIndex rightBody ∈ shapes)
     (hindices : leftIndex ≠ rightIndex)
-    {leftOperation rightOperation : RegionOperation F}
-    (hleftOperation : leftOperation ∈ leftBody)
-    (hrightOperation : rightOperation ∈ rightBody)
     {selector leftRow rightRow : ℕ}
-    (hleftActivation :
-      activatesSelectorAt selector leftRow leftOperation)
-    (hrightActivation :
-      activatesSelectorAt selector rightRow rightOperation) :
+    (hleftColumn : RegionColumn.selector selector ∈
+      (measureRegion leftIndex leftBody).columns)
+    (hrightColumn : RegionColumn.selector selector ∈
+      (measureRegion rightIndex rightBody).columns)
+    (hleftRow : leftRow < (measureRegion leftIndex leftBody).rowCount)
+    (hrightRow : rightRow < (measureRegion rightIndex rightBody).rowCount) :
     starts.getD leftIndex 0 + leftRow ≠
       starts.getD rightIndex 0 + rightRow := by
-  have hleftColumn :=
-    selector_mem_measureRegion_of_activatesSelectorAt
-      leftIndex leftBody hleftOperation hleftActivation
-  have hrightColumn :=
-    selector_mem_measureRegion_of_activatesSelectorAt
-      rightIndex rightBody hrightOperation hrightActivation
-  have hleftRow :=
-    row_lt_measureRegion_of_activatesSelectorAt
-      leftIndex leftBody hleftOperation hleftActivation
-  have hrightRow :=
-    row_lt_measureRegion_of_activatesSelectorAt
-      rightIndex rightBody hrightOperation hrightActivation
   have hdisjoint :=
     hplanner hleftShape hrightShape hindices
       hleftColumn hrightColumn
@@ -14062,7 +14094,40 @@ theorem activation_rows_ne_of_sharedSelectorIntervalsDisjoint
     rw [← hequal] at habsLt
     exact (Nat.not_lt_of_ge
       (hrightBefore.trans
-        (Nat.le_add_right (starts.getD leftIndex 0) leftRow))) habsLt
+      (Nat.le_add_right (starts.getD leftIndex 0) leftRow))) habsLt
+
+/--
+Distinct regions whose selector intervals are disjoint cannot activate the same
+selector at the same absolute row.
+-/
+theorem activation_rows_ne_of_sharedSelectorIntervalsDisjoint
+    {shapes : List RegionShape} {starts : List ℕ}
+    (hplanner : SharedSelectorIntervalsDisjoint shapes starts)
+    {leftIndex rightIndex : ℕ}
+    {leftBody rightBody : RegionOperations F}
+    (hleftShape : measureRegion leftIndex leftBody ∈ shapes)
+    (hrightShape : measureRegion rightIndex rightBody ∈ shapes)
+    (hindices : leftIndex ≠ rightIndex)
+    {leftOperation rightOperation : RegionOperation F}
+    (hleftOperation : leftOperation ∈ leftBody)
+    (hrightOperation : rightOperation ∈ rightBody)
+    {selector leftRow rightRow : ℕ}
+    (hleftActivation :
+      activatesSelectorAt selector leftRow leftOperation)
+    (hrightActivation :
+      activatesSelectorAt selector rightRow rightOperation) :
+    starts.getD leftIndex 0 + leftRow ≠
+      starts.getD rightIndex 0 + rightRow := by
+  apply region_rows_ne_of_sharedSelectorIntervalsDisjoint
+    hplanner hleftShape hrightShape hindices
+  · exact selector_mem_measureRegion_of_activatesSelectorAt
+      leftIndex leftBody hleftOperation hleftActivation
+  · exact selector_mem_measureRegion_of_activatesSelectorAt
+      rightIndex rightBody hrightOperation hrightActivation
+  · exact row_lt_measureRegion_of_activatesSelectorAt
+      leftIndex leftBody hleftOperation hleftActivation
+  · exact row_lt_measureRegion_of_activatesSelectorAt
+      rightIndex rightBody hrightOperation hrightActivation
 
 /--
 Under selector-interval disjointness, an absolute selector activation has a unique
