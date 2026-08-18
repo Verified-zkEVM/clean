@@ -56,6 +56,13 @@ deriving instance Hashable for Variable
 deriving instance DecidableEq for Expression
 deriving instance Hashable for Expression
 
+/-- Canonical-value hashing for field elements, so `Operations.witgenJsonShared?` is
+callable on any `FiniteField` without a consumer-side instance. Scoped rather than
+global: a blanket `Hashable` for every field type could collide with type-specific
+instances downstream — `open scoped Witgen` to use it, or supply your own. -/
+scoped instance instHashableOfVal [FiniteField F] : Hashable F :=
+  ⟨fun x => hash (FiniteField.val x)⟩
+
 /-! ## Structural equality and hashing -/
 
 section Beq
