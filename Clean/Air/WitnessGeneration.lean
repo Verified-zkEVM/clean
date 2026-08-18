@@ -556,11 +556,11 @@ private def padAndBalance (ensemble : Ensemble F PublicIO) (config : Config F Pr
       if tablesArePadded tables config.padding then return tables
       padAndBalance ensemble config prepared publicInput data fuel tables
 
-private structure AssembledTables (components : List (Component F)) where
+private structure AssembledTables (entries : List (Component F)) where
   tables : List (Table F)
-  same_length : components.length = tables.length
-  same_circuits : ∀ index (hindex : index < components.length),
-    components[index] = tables[index].component
+  same_length : entries.length = tables.length
+  same_circuits : ∀ index (hindex : index < entries.length),
+    entries[index] = tables[index].component
 
 private structure MatchedFixedRows (component : Component F) (rows : List (Array F)) where
   marker : Unit := ()
@@ -576,40 +576,53 @@ private def validateFixedRows (component : Component F) (rows : List (Array F)) 
       else
         .error "generated table does not match its fixed columns"
 
+/-- Assemble generated rows into committed traces.
+
+Only components with `windowRows = 1` are supported: generation for a multi-row window needs row
+`i+1` to be produced from row `i`, which this row-independent generator cannot express. A
+component with a wider window is refused here rather than being committed as a row-per-environment
+trace, which would silently check the wrong relation.
+
+The guard is on the component's own `windowRows`, so there is no tag a caller could set
+inconsistently with the circuit's actual footprint: `Component.window_size` ties `windowRows` to
+`circuit.size`. -/
 private def assembleTables :
-    (components : List (Component F)) → List (GeneratedTable F) →
-      Except String (AssembledTables components)
+    (entries : List (Component F)) → List (GeneratedTable F) →
+      Except String (AssembledTables entries)
   | [], [] => .ok {
       tables := []
       same_length := rfl
       same_circuits := by simp
     }
-  | component :: components, generated :: generatedTables => do
-      let rows := generated.rows.map (·.values)
-      if h : ∀ row ∈ rows, row.size = component.width then
-        match validateFixedRows component rows with
-        | .error error => .error error
-        | .ok matched => do
-          let table : Table F := {
-            component
-            table := rows
-            uniform_width := h
-            fixed_rows_match := matched.property
-          }
-          let rest ← assembleTables components generatedTables
-          return {
-            tables := table :: rest.tables
-            same_length := by simp [rest.same_length]
-            same_circuits := by
-              intro index hindex
-              cases index with
-              | zero => rfl
-              | succ index =>
-                  simp only [List.getElem_cons_succ]
-                  exact rest.same_circuits index (by simp at hindex; omega)
-          }
+  | component :: entries, generated :: generatedTables => do
+      if component.windowRows = 1 then
+        let rows := generated.rows.map (·.values)
+        if h : ∀ row ∈ rows, row.size = component.width then
+          match validateFixedRows component rows with
+          | .error error => .error error
+          | .ok matched => do
+            let table : Table F := {
+              component
+              table := rows
+              uniform_width := h
+              fixed_rows_match := matched.property
+            }
+            let rest ← assembleTables entries generatedTables
+            return {
+              tables := table :: rest.tables
+              same_length := by simp [rest.same_length]
+              same_circuits := by
+                intro index hindex
+                cases index with
+                | zero => rfl
+                | succ index =>
+                    simp only [List.getElem_cons_succ]
+                    exact rest.same_circuits index (by simp at hindex; omega)
+            }
+        else
+          throw "generated table contains a row of the wrong width"
       else
-        throw "generated table contains a row of the wrong width"
+        throw "witness generation for multi-row-window components is not supported yet"
   | _, _ => .error "generated-table count does not match ensemble component count"
 
 /-- Execute channel-driven generation and construct a structurally valid ensemble witness. -/
@@ -646,10 +659,10 @@ def generate (ensemble : Ensemble F PublicIO) (config : Config F ProverInput)
 /-- Executable constraint check for the no-legacy-lookup initial milestone. -/
 def constraintsHold {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness ensemble) : Bool :=
   witness.tables.all fun table =>
-    table.table.all fun row =>
+    (RowEnvs.envs (F:=F) table witness.data).all fun env =>
       table.component.operations.lookups.isEmpty &&
       table.component.operations.constraints.all fun constraint =>
-        constraint.eval (Environment.fromArray row witness.data) == 0
+        constraint.eval env == 0
 
 /-- Executable balance check using the same normalized worklist representation. -/
 def channelsBalanced {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness ensemble) : Bool :=

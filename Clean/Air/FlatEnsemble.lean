@@ -1,7 +1,7 @@
 /-
 This file defines flat AIR ensembles and what soundness and completeness mean for them.
 -/
-import Clean.Air.FlatComponent
+import Clean.Air.Entry
 import Clean.Air.Balance
 import Clean.Circuit.Verifier
 
@@ -20,6 +20,8 @@ class HasChannelInterface (F : Type) (α : Type u) where
 def channelInterface {α : Type u} [HasChannelInterface F α] (value : α) : ChannelInterface F :=
   HasChannelInterface.channelInterface value
 
+/-- A component exposes its circuit's channels; the window affects how often the circuit is
+checked, never which channels it talks on. -/
 instance : HasChannelInterface F (Component F) where
   channelInterface component :=
     { channelsWithGuarantees := component.circuit.channelsWithGuarantees
@@ -44,7 +46,9 @@ instance : HasChannelInterface F (Verifier.Program F PublicIO) where
 
 structure Ensemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO] where
   /-- Components form an ordered map: names are keys, while list order fixes the trace order
-  consumed by witness generation and backend extraction. -/
+  consumed by witness generation and backend extraction. Each component also records, via
+  `windowRows`, the shape of trace it is checked against -- which the witness is not free to
+  reinterpret. -/
   tables : List (Component F)
   unique_names : (tables.map (·.circuit.name)).Nodup
   channels : List (RawChannel F)
@@ -55,13 +59,19 @@ structure EnsembleWitness (ens : Ensemble F PublicIO) where
   tables : List (Table F)
   publicInput : PublicIO F
   same_length : ens.tables.length = tables.length
+  /-- Binds the witness to the ensemble by component.
+
+  This also pins how the trace is read: `Component.windowRows` records how many rows an
+  environment spans and `window_size` ties it to the circuit's footprint, so a prover cannot
+  commit a transition component as a flat trace. Under the older `Entry`/`TableKind` design that
+  had to be bound separately, because both readings imposed the same width obligation. -/
   same_circuits : ∀ i (hi : i < ens.tables.length),
     ens.tables[i] = tables[i].component
 
 /-- External prover data consists of the complete inputs of the committed component traces. -/
 def EnsembleWitness.data {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) :
     ProverData F :=
-  deriveProverData witness.tables
+  Table.deriveProverData witness.tables
 
 @[circuit_norm]
 lemma List.flatMap_subset_iff {α β : Type*} {f : α → List β} {l₁ : List α} {l₂ : List β} :
@@ -157,6 +167,7 @@ end Ensemble
 namespace EnsembleWitness
 variable {ens : Ensemble F PublicIO}
 
+/-- The witness's traces fill exactly the ensemble's components. -/
 @[circuit_norm]
 lemma tables_map_component (witness : EnsembleWitness ens) :
     witness.tables.map (·.component) = ens.tables := by
@@ -178,7 +189,8 @@ private lemma tableNamesNodup (witness : EnsembleWitness ens) :
 lemma data_consistent (witness : EnsembleWitness ens) :
     ∀ table ∈ witness.tables, table.DataConsistency witness.data := by
   intro table htable
-  exact deriveProverData_eq_of_mem witness.tables witness.tableNamesNodup
+  rw [Table.dataConsistency_iff]
+  exact Table.deriveProverData_eq_of_mem witness.tables witness.tableNamesNodup
     htable _
 
 def tableContext (witness : EnsembleWitness ens) : TableContext F where
@@ -222,12 +234,14 @@ noncomputable def interactionsWith {ens : Ensemble F PublicIO} (witness : Ensemb
 
 @[circuit_norm] lemma constraints_iff {ens : Ensemble F PublicIO}
     (witness : EnsembleWitness ens) :
-  witness.Constraints ↔ ∀ table ∈ witness.tables, table.Constraints witness.data := by
+  witness.Constraints ↔
+    ∀ table ∈ witness.tables, table.Constraints witness.data := by
   rfl
 
 @[circuit_norm] lemma assumptions_iff {ens : Ensemble F PublicIO}
     (witness : EnsembleWitness ens) :
-  witness.Assumptions ↔ ∀ table ∈ witness.tables, table.Assumptions witness.data := by
+  witness.Assumptions ↔
+    ∀ table ∈ witness.tables, table.Assumptions witness.data := by
   rfl
 
 @[circuit_norm] lemma spec_iff {ens : Ensemble F PublicIO}
@@ -253,7 +267,7 @@ lemma channel_eq_of_mem_interactionsWith {witness : EnsembleWitness ens}
       List.mem_map] at h_verifier
     obtain ⟨interaction, h_interaction, rfl⟩ := h_verifier
     exact Operations.channel_eq_of_mem_interactionsWith h_interaction
-  · exact table.channel_eq_of_mem_interactionsWith h_table
+  · exact RowEnvs.channel_eq_of_mem_interactionsWith (table:=table) h_table
 
 lemma verifierChannelRequirements_iff_forall {witness : EnsembleWitness ens}
     {channel : RawChannel F} :
@@ -393,6 +407,15 @@ def merge (ens1 ens2 : Ensemble F PublicIO)
 @[circuit_norm] lemma merge_verifier (ens1 ens2 : Ensemble F PublicIO) (unique_names) :
   (ens1.merge ens2 unique_names).verifier = ens2.verifier := rfl
 
+/--
+Add a component to the ensemble.
+
+There is no separate `addTransitionTable`: how often the circuit is checked, and against how many
+rows, is read off `table.windowRows`, so a transition component is added exactly like a flat one.
+Note an `n`-row transition trace imposes `n - 1` constraint instances and a trace of fewer than
+`windowRows` rows is unconstrained -- so boundary conditions must be pinned through channel
+interactions.
+-/
 def addTable (ens : Ensemble F PublicIO) (table : Component F)
     (fresh : table.circuit.name ∉ ens.tables.map (·.circuit.name)) : Ensemble F PublicIO :=
   { ens with

@@ -29,6 +29,7 @@ inductive LoweringError where
   | unstableDataRead (component operation : ℕ) (key : String) (column : ℕ)
   | componentVariable (component index width : ℕ)
   | verifierVariable (index width : ℕ)
+  | multiRowWindow (component windowRows : ℕ)
 deriving Repr, DecidableEq
 
 instance : ToString LoweringError where
@@ -69,6 +70,8 @@ instance : ToString LoweringError where
         s!"component {component} expression reads cell {index}, but its width is {width}"
     | .verifierVariable index width =>
         s!"verifier interaction reads public cell {index}, but the public input width is {width}"
+    | .multiRowWindow component windowRows =>
+        s!"component {component} spans {windowRows} trace rows, but the backend AIR is single-row"
 
 def expressionBadVariable (width : ℕ) : Expression F → Option ℕ
   | .var cell => if cell.index < width then none else some cell.index
@@ -110,6 +113,11 @@ private def lowerRowProgram (error : LoweringError) (program : Witgen.RowProgram
 
 private def lowerComponent (index : ℕ) (component : Component F) :
     Except LoweringError (ComponentProgram F) := do
+  -- The emitted Rust AIR reads `main.row_slice(0)` only, so it can express a single-row
+  -- relation. Refuse anything wider rather than emitting a program that checks a different
+  -- relation from the one verified here.
+  unless component.windowRows = 1 do
+    throw (.multiRowWindow index component.windowRows)
   let operations := component.rowOperations
   unless operations.lookups.isEmpty do
     throw (.legacyLookup index)
@@ -122,8 +130,11 @@ private def lowerComponent (index : ℕ) (component : Component F) :
   let interactions := operations.interactions
   let expressions := constraints ++ interactions.flatMap fun interaction =>
     interaction.mult :: interaction.msg.toList
-  match expressionsBadVariable component.width expressions with
-  | some cellIndex => throw (.componentVariable index cellIndex component.width)
+  -- Constraint expressions address the component's whole window, so the in-range bound is
+  -- `envWidth = windowRows * rowWidth`, not one row's width. Under the guard above these
+  -- coincide, but stating it as `envWidth` is what stays correct once wider windows lower.
+  match expressionsBadVariable component.envWidth expressions with
+  | some cellIndex => throw (.componentVariable index cellIndex component.envWidth)
   | none => pure ()
   return {
     name := component.circuit.name
@@ -217,15 +228,16 @@ private def witnessDataReads : {n : ℕ} → Witgen.WitgenIR F n → List DataRe
 
 private def validateDataReads (ensemble : Ensemble F PublicIO) (modes : List (Mode F)) :
     Except LoweringError Unit := do
-  for (component, componentIndex) in ensemble.tables.zipIdx do
-    for (operation, operationIndex) in component.rowOperations.toFlat.zipIdx do
+  for (entry, componentIndex) in ensemble.tables.zipIdx do
+    for (operation, operationIndex) in entry.rowOperations.toFlat.zipIdx do
       if let .witness _ code := operation then
         for read in witnessDataReads code do
           let some (target, mode) := (ensemble.tables.zip modes).find? fun (target, _) =>
               target.circuit.name == read.key
             | throw (.unknownDataRead componentIndex operationIndex read.key)
           unless read.width = target.rowOffset do
-            throw (.dataReadWidth componentIndex operationIndex read.key target.rowOffset read.width)
+            throw (.dataReadWidth componentIndex operationIndex read.key target.rowOffset
+              read.width)
           let unstable := match mode with
             | .demand _ => true
             | .preallocated preallocated =>
@@ -240,12 +252,12 @@ def lower (ensemble : Ensemble F PublicIO) (config : Config F ProverInput) :
     throw (.modeCount ensemble.tables.length config.modes.length)
   unless config.padding.length = ensemble.tables.length do
     throw (.paddingCount ensemble.tables.length config.padding.length)
-  for (((component, mode), padding), index) in
+  for (((entry, mode), padding), index) in
       ((ensemble.tables.zip config.modes).zip config.padding).zipIdx do
-    validateMode index component mode padding
+    validateMode index entry mode padding
   validateDataReads ensemble config.modes
-  let components ← ensemble.tables.zipIdx.mapM fun (component, index) =>
-    lowerComponent index component
+  let components ← ensemble.tables.zipIdx.mapM fun (entry, index) =>
+    lowerComponent index entry
   let verifierOperations := ensemble.verifierOperations.toFlat
   let verifierInteractions := FlatOperation.interactions verifierOperations
   let verifierExpressions := verifierInteractions.flatMap fun interaction =>
