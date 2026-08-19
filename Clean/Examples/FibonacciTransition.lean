@@ -150,7 +150,7 @@ example (t : Table (F p)) (h : t.component = fibTransitionComponent) : t.IsTrans
 cells of the window's second row. This is the per-circuit fact `Table.rowOutput_windowEnv` and
 `Table.transition_induction` key on, and it holds definitionally because `main` witnesses the
 next row's cells in order and returns them. -/
-example :
+lemma fibTransitionComponent_output :
     ((fibTransitionComponent (p:=p)).circuit (fibTransitionComponent (p:=p)).rowInputVar).output
         (fibTransitionComponent (p:=p)).rowOffset
       = varFromOffset (fibTransitionComponent (p:=p)).Output
@@ -230,21 +230,141 @@ def fibonacciTransitionEnsemble : SoundEnsemble (F p) fieldTriple :=
   |>.addBoundary seedEntry
   |>.addBoundary finalEntry
 
-/--
-**Target theorem.** The same public statement as `fibonacci_soundness`, reached through the
-transition window and the boundary assertions instead of a VM state channel.
+/-! ## From the step relation to the public specification -/
 
-Proof plan (steps 4 and 5 of the v2 plan): `tableSoundness_of_soundChannels` turns the
-ensemble's channel discipline into every table's `Spec`; for the transition table that is the
-adjacent-row relation at every window. The seed assertion pins row 0, the window-induction
-library carries `(x_i.val, y_i.val) = fibonacci k` (with `k % p = n_i.val`, and bytes by
-`fibonacci_bytes`) along the trace, stuttering where disabled; the final assertion transports
-the last row's state to the public input, and
-`soundness_of_tableSoundness_and_specConsistencyWithBoundaries` assembles the pieces.
+/-- The per-row invariant carried along the trace: the selector is boolean and the row holds a
+genuine Fibonacci pair, with the counter tracking its index mod `p`. -/
+def RowInv (row : Fib8Input (F p)) : Prop :=
+  IsBool row.enabled ∧
+    ∃ k : ℕ, (row.x.val, row.y.val) = fibonacci k ∧ k % p = row.n.val
+
+/-- One window preserves the invariant: a disabled row freezes the state, an enabled row
+advances the Fibonacci index by one. The byte bounds that discharge the conditional in
+`fibStep.Spec` come from the invariant itself, via `fibonacci_bytes`. -/
+lemma rowInv_step {curr next : Fib8Input (F p)} {data : ProverData (F p)}
+    (h : (fibStep (p:=p)).Spec curr next data) (hinv : RowInv curr) : RowInv next := by
+  obtain ⟨ce, cn, cx, cy⟩ := curr
+  obtain ⟨hb, k, hpair, hk⟩ := hinv
+  simp only [fibStep] at h
+  obtain ⟨-, hb', hfrozen, hadvance⟩ := h
+  obtain ⟨hx256, hy256⟩ : cx.val < 256 ∧ cy.val < 256 := fibonacci_bytes hpair
+  rcases hb with h0 | h1
+  · obtain ⟨he', hn', hx', hy'⟩ := hfrozen h0
+    exact ⟨Or.inl he', k, by rw [hx', hy']; exact hpair, by rw [hn']; exact hk⟩
+  · obtain ⟨hn', hx', hy'⟩ := hadvance h1
+    refine ⟨hb', k + 1, ?_, ?_⟩
+    · have hfib : fibonacci (k + 1) = (cy.val, (cx.val + cy.val) % 256) := by
+        simp [fibonacci, ← hpair]
+      rw [hfib, hx', hy' hx256 hy256]
+    · rw [hn', ZMod.val_add, ZMod.val_one, ← hk, Nat.mod_add_mod]
+
+/--
+`SpecConsistencyWithBoundaries` for the mixed ensemble.
+
+The two boundary entries resolve, by name uniqueness, to one and the same transition table.
+The seed assertion pins its row 0, `Table.transition_induction` carries `RowInv` along the
+trace -- the step relation coming from the table's `Spec`, i.e. from `TableSoundness` -- and
+the final assertion transports the last row's state to the public input.
+-/
+theorem fibonacciTransitionEnsemble_specConsistency :
+    (fibonacciTransitionEnsemble (p:=p)).SpecConsistencyWithBoundaries
+      (fun pub => ∃ k : ℕ, (pub.2.1.val, pub.2.2.val) = fibonacci k ∧ k % p = pub.1.val) := by
+  intro witness hspec hboundary
+  obtain ⟨-, htables⟩ := hspec
+  have hseed := hboundary seedEntry (by simp [circuit_norm, fibonacciTransitionEnsemble])
+  have hfinal := hboundary finalEntry (by simp [circuit_norm, fibonacciTransitionEnsemble])
+  simp only [Boundary.Entry.Spec] at hseed hfinal
+  obtain ⟨t, ht_mem, ht_name, rowL, hrowL, hfinal_spec⟩ := hfinal
+  obtain ⟨t', ht'_mem, ht'_name, row0, hrow0, hseed_spec⟩ := hseed
+  simp only [seedEntry, finalEntry] at ht_name ht'_name
+  -- the two entries name the same table: component names are unique in the witness
+  have hnodup : (witness.tables.map fun tb => tb.component.circuit.name).Nodup := by
+    have h1 : (witness.tables.map fun tb => tb.component.circuit.name)
+        = (fibonacciTransitionEnsemble (p:=p)).tables.map (·.circuit.name) := by
+      rw [← witness.tables_map_component, List.map_map]
+      rfl
+    rw [h1]
+    exact (fibonacciTransitionEnsemble (p:=p)).unique_names
+  have ht_eq : t' = t :=
+    List.inj_on_of_nodup_map hnodup ht'_mem ht_mem (ht'_name.trans ht_name.symm)
+  rw [ht_eq] at hrow0
+  -- and that table's component is the transition component
+  have hc : t.component = fibTransitionComponent (p:=p) := by
+    have hmem := witness.mem_component_of_mem ht_mem
+    simp only [circuit_norm, fibonacciTransitionEnsemble, List.mem_cons,
+      List.not_mem_nil, or_false] at hmem
+    rcases hmem with hc | hc | hc
+    · exact hc
+    · rw [hc] at ht_name; simp [add8Component, add8, fibStep] at ht_name
+    · rw [hc] at ht_name; simp [bytesComponent, pushBytes, fibStep] at ht_name
+  -- resolve the boundary rows to indexed rows
+  change t.table.head? = some row0 at hrow0
+  change t.table.getLast? = some rowL at hrowL
+  rw [List.head?_eq_getElem?] at hrow0
+  rw [List.getLast?_eq_getElem?] at hrowL
+  obtain ⟨hlen0, -⟩ := List.getElem?_eq_some_iff.mp hrow0
+  have hrow0! : t.table[0]! = row0 := by
+    rw [List.getElem!_eq_getElem?_getD, hrow0]; rfl
+  have hrowL! : t.table[t.table.length - 1]! = rowL := by
+    rw [List.getElem!_eq_getElem?_getD, hrowL]; rfl
+  -- the induction along the trace
+  have hind := Table.transition_induction (t := t)
+    (by show t.component.windowRows = 2; rw [hc]; rfl)
+    (htables t ht_mem)
+    (by rw [hc]; exact fibTransitionComponent_output)
+    (P := fun i => RowInv (valueFromOffset Fib8Input 0
+      (Environment.fromArray t.table[i]! witness.data)))
+    (by
+      -- base: the seed assertion pins row 0
+      rw [hrow0!]
+      have hspec0 : seedAssertion.RowSpec row0 witness.publicInput witness.data := hseed_spec
+      simp only [Boundary.Assertion.RowSpec, seedAssertion] at hspec0
+      obtain ⟨he, hn, hx, hy⟩ := hspec0
+      refine ⟨Or.inr he, 0, ?_, ?_⟩
+      · rw [hx, hy]; simp [fibonacci, ZMod.val_one]
+      · rw [hn]; simp)
+    (by
+      -- step: the window's Spec is the transition relation
+      intro i hi hstep hP
+      rw [hc] at hstep
+      exact rowInv_step hstep hP)
+  -- transport the invariant at the last row through the final assertion
+  have hlast := hind (t.table.length - 1) (by omega)
+  rw [hrowL!] at hlast
+  obtain ⟨-, k, hpair, hk⟩ := hlast
+  simp only [Boundary.Assertion.RowSpec, finalEntry, finalAssertion] at hfinal_spec
+  obtain ⟨hpn, hpx, hpy⟩ := hfinal_spec
+  refine ⟨k, ?_, ?_⟩
+  · rw [hpx, hpy]; exact hpair
+  · rw [hpn]; exact hk
+
+/-- The mixed ensemble bundled with its public specification, through the boundary-aware
+route (`toFormalWithBoundaries`). -/
+def fibonacciTransitionFormal : FormalEnsemble (F p) fieldTriple :=
+  (fibonacciTransitionEnsemble (p:=p)).toFormalWithBoundaries
+    (fun _ => True)
+    (fun pub => ∃ k : ℕ, (pub.2.1.val, pub.2.2.val) = fibonacci k ∧ k % p = pub.1.val)
+    (by
+      intro witness _
+      simp only [circuit_norm]
+      intro table htable env henv
+      have hmem := witness.mem_component_of_mem htable
+      simp only [circuit_norm, fibonacciTransitionEnsemble, List.mem_cons, List.not_mem_nil,
+        or_false] at hmem
+      rcases hmem with hc | hc | hc <;> rw [Table.component_eq, hc] <;>
+        simp [Component.RowAssumptions, fibTransitionComponent, add8Component, bytesComponent,
+          fibStep, add8, pushBytes, circuit_norm])
+    fibonacciTransitionEnsemble_specConsistency
+
+/--
+**The target theorem.** The same public statement as `fibonacci_soundness`, reached through
+the transition window and the boundary assertions instead of a VM state channel: any proof of
+the ensemble statement shows the public input is a Fibonacci state.
 -/
 theorem fibonacciTransition_soundness : ∀ (n x y : F p),
     (fibonacciTransitionEnsemble (p:=p)).ensemble.Statement (n, x, y) →
       ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val := by
-  sorry
+  intro n x y statement
+  exact (fibonacciTransitionFormal (p:=p)).soundness (n, x, y) trivial statement
 
 end Clean.Examples.FibonacciTransition
