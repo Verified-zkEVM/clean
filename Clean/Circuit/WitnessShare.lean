@@ -83,6 +83,9 @@ def FExpr.beq : FExpr F → FExpr F → Bool
   | .listGet xs i, .listGet ys j => FExpr.beqList xs ys && i.beq j
   | .dataGet k n r c, .dataGet k' n' r' c' => k == k' && n == n' && r.beq r' && c.val == c'.val
   | .hintGet k n r c, .hintGet k' n' r' c' => k == k' && n == n' && r.beq r' && c.val == c'.val
+  | .index, .index => true
+  | .listGetAtIndex xs, .listGetAtIndex ys => FExpr.beqList xs ys
+  | .proverInputGet i, .proverInputGet j => i.beq j
   | _, _ => false
 
 /-- Structural equality on expression lists (the `listGet` payload). -/
@@ -148,6 +151,9 @@ def FExpr.hashCode : FExpr F → UInt64
   | .listGet xs i => mixHash 9 (mixHash (FExpr.hashCodeList xs) i.hashCode)
   | .dataGet k n r c => mixHash 10 (mixHash (hash k) (mixHash (hash n) (mixHash r.hashCode (hash c.val))))
   | .hintGet k n r c => mixHash 11 (mixHash (hash k) (mixHash (hash n) (mixHash r.hashCode (hash c.val))))
+  | .index => 12
+  | .listGetAtIndex xs => mixHash 13 (FExpr.hashCodeList xs)
+  | .proverInputGet i => mixHash 14 i.hashCode
 
 /-- Structural hash on expression lists. -/
 def FExpr.hashCodeList : List (FExpr F) → UInt64
@@ -261,6 +267,13 @@ def shareF : FExpr F → StateM (ShareState F) (FExpr F)
   | .expr e => internF (.expr e)
   | .const c => pure (.const c)
   | .localVar i => do pure (oldRefF (← get).old i)
+  -- Index-dependent nodes are frozen at their step-context value, exactly as `.idx` is
+  -- in `shareU` and for the same reason: a shared node may be substituted into a
+  -- `mapRange` body, which re-binds the index. `.index` is `fromNat 0 = 0` here, and
+  -- `.listGetAtIndex xs` is `evalList _ 0 xs`, i.e. `.listGet xs (.const 0)`.
+  | .index => pure (.const 0)
+  | .listGetAtIndex xs => do internF (.listGet (← shareListF xs) (.const 0))
+  | .proverInputGet i => do internF (.proverInputGet (← shareU i))
   | .add x y => do internF (.add (← shareF x) (← shareF y))
   | .mul x y => do internF (.mul (← shareF x) (← shareF y))
   | .inv x => do internF (.inv (← shareF x))
@@ -327,6 +340,9 @@ def remapF (old : Array (FExpr F ⊕ U64Expr F)) : FExpr F → FExpr F
   | .ofU64 n => .ofU64 (remapU old n)
   | .ite c t e => .ite (remapB old c) (remapF old t) (remapF old e)
   | .listGet xs i => .listGet (remapListF old xs) (remapU old i)
+  | .index => .index
+  | .listGetAtIndex xs => .listGetAtIndex (remapListF old xs)
+  | .proverInputGet i => .proverInputGet (remapU old i)
   | .dataGet k n r c => .dataGet k n (remapU old r) c
   | .hintGet k n r c => .hintGet k n (remapU old r) c
 
@@ -455,6 +471,15 @@ theorem FExpr.beq_eq : ∀ (a b : FExpr F), FExpr.beq a b = true → a = b
   | .listGet xs i, b, h => by
     cases b <;> simp only [FExpr.beq, Bool.false_eq_true, Bool.and_eq_true] at h
     case listGet ys j => rw [FExpr.beqList_eq xs ys h.1, U64Expr.beq_eq i j h.2]
+  | .index, b, h => by
+    cases b <;> simp only [FExpr.beq, Bool.false_eq_true] at h
+    rfl
+  | .listGetAtIndex xs, b, h => by
+    cases b <;> simp only [FExpr.beq, Bool.false_eq_true] at h
+    case listGetAtIndex ys => rw [FExpr.beqList_eq xs ys h]
+  | .proverInputGet i, b, h => by
+    cases b <;> simp only [FExpr.beq, Bool.false_eq_true] at h
+    case proverInputGet j => rw [U64Expr.beq_eq i j h]
   | .dataGet k n r c, b, h => by
     cases b <;> simp only [FExpr.beq, Bool.false_eq_true, Bool.and_eq_true,
       beq_iff_eq] at h
@@ -583,6 +608,9 @@ def FExpr.scoped (n : ℕ) : FExpr F → Bool
   | .listGet xs i => FExpr.scopedList n xs && i.scoped n
   | .dataGet _ _ r _ => r.scoped n
   | .hintGet _ _ r _ => r.scoped n
+  | .index => true
+  | .listGetAtIndex xs => FExpr.scopedList n xs
+  | .proverInputGet i => i.scoped n
 
 /-- All `localVar` references below `n`, elementwise. -/
 def FExpr.scopedList (n : ℕ) : List (FExpr F) → Bool
@@ -645,6 +673,9 @@ theorem FExpr.scoped_mono {n m : ℕ} (hnm : n ≤ m) :
     exact ⟨FExpr.scopedList_mono hnm h.1, i.scoped_mono hnm h.2⟩
   | .dataGet _ _ r _, h => r.scoped_mono hnm h
   | .hintGet _ _ r _, h => r.scoped_mono hnm h
+  | .index, _ => rfl
+  | .listGetAtIndex xs, h => FExpr.scopedList_mono hnm h
+  | .proverInputGet i, h => i.scoped_mono hnm h
 
 /-- Scoping is monotone in the bound, elementwise. -/
 theorem FExpr.scopedList_mono {n m : ℕ} (hnm : n ≤ m) :
@@ -757,6 +788,11 @@ theorem FExpr.eval_congr_locals (h : ∀ i, i < n → loc[i]? = loc'[i]?) :
     simp only [FExpr.eval, U64Expr.eval_congr_locals h r hs]
   | .hintGet k m r c, hs => by
     simp only [FExpr.eval, U64Expr.eval_congr_locals h r hs]
+  | .index, _ => rfl
+  | .listGetAtIndex xs, hs => by
+    simp only [FExpr.eval, FExpr.evalList_congr_locals h xs hs]
+  | .proverInputGet i, hs => by
+    simp only [FExpr.eval, U64Expr.eval_congr_locals h i hs]
 
 /-- Elementwise `eval_congr_locals` (any index). -/
 theorem FExpr.evalList_congr_locals (h : ∀ i, i < n → loc[i]? = loc'[i]?) :
@@ -1360,6 +1396,25 @@ theorem shareF_spec : ∀ (x : FExpr F) {L : Array (F ⊕ UInt64)} {s : ShareSta
       exact (FExpr.evalList_congr_locals
         (fun j hj => (hi.ext.denote_agree j hj).symm) _ hxs.scope _).trans
         (hxs.evalList _)
+  | .index, L, s, hInv => by
+    show OkF env L s (.const 0, s) _
+    exact ⟨hInv, Extends.rfl, rfl, rfl, by simp only [FExpr.eval, FiniteField.fromNat_zero]⟩
+  | .listGetAtIndex xs, L, s, hInv => by
+    have hxs := shareListF_spec xs hInv
+    show OkF env L s (internF
+      (.listGet (shareListF xs s).1 (.const 0)) (shareListF xs s).2) _
+    refine ((internF_spec hxs.inv _ ?_).mono_start hxs.ext).of_val ?_
+    · simp only [FExpr.scoped, Bool.and_eq_true]
+      exact ⟨hxs.scope, rfl⟩
+    · simp only [FExpr.eval, U64Expr.eval]
+      exact hxs.evalList _
+  | .proverInputGet i, L, s, hInv => by
+    have hi := shareU_spec i hInv
+    show OkF env L s (internF (FExpr.proverInputGet (shareU i s).1) (shareU i s).2) _
+    refine ((internF_spec hi.inv (FExpr.proverInputGet (shareU i s).1) hi.scope).mono_start
+      hi.ext).of_val ?_
+    simp only [FExpr.eval]
+    rw [hi.eval]
   | .dataGet k n r c, L, s, hInv => by
     have hr := shareU_spec r hInv
     show OkF env L s (internF (FExpr.dataGet k n (shareU r s).1 c) (shareU r s).2) _
@@ -1621,6 +1676,9 @@ theorem remapF_scoped {old : Array (FExpr F ⊕ U64Expr F)} {n : ℕ}
   | .ite c t e => by
     simp only [remapF, FExpr.scoped, Bool.and_eq_true]
     exact ⟨⟨remapB_scoped hF hU c, remapF_scoped hF hU t⟩, remapF_scoped hF hU e⟩
+  | .index => rfl
+  | .listGetAtIndex xs => remapListF_scoped hF hU xs
+  | .proverInputGet i => remapU_scoped hF hU i
   | .listGet xs i => by
     simp only [remapF, FExpr.scoped, Bool.and_eq_true]
     exact ⟨remapListF_scoped hF hU xs, remapU_scoped hF hU i⟩
@@ -1731,6 +1789,12 @@ theorem remapF_spec (hInv : Inv env L s) : ∀ (x : FExpr F) (idx : ℕ),
   | .ite c t e, idx => by
     simp only [remapF, FExpr.eval, remapB_spec hInv c idx, remapF_spec hInv t idx,
       remapF_spec hInv e idx]
+  | .index, _ => rfl
+  | .listGetAtIndex xs, idx => by
+    simp only [remapF, FExpr.eval]
+    exact remapListF_spec hInv xs idx _
+  | .proverInputGet i, idx => by
+    simp only [remapF, FExpr.eval, remapU_spec hInv i idx]
   | .listGet xs i, idx => by
     simp only [remapF, FExpr.eval, remapU_spec hInv i idx]
     exact remapListF_spec hInv xs idx _
