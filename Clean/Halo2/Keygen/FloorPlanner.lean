@@ -14272,12 +14272,14 @@ def SelectorAnchoredBy (summaries : List RegionShapeSummary)
   summaries.Forall (fun summary => SummarySelectorsAnchoredBy summary anchor)
 
 theorem SummarySelectorsAnchoredBy.ofColumns
-    {columns : List RegionColumn} {rowCount constantSiteCount : ℕ}
+    {columns : List RegionColumn}
+    {rowCount constantSiteCount instanceRowExtent lookupActivationCount : ℕ}
     {anchor : ℕ → RegionColumn}
     (hanchor : ∀ selector, .selector selector ∈ columns →
       anchor selector ∈ physicalColumns columns) :
     SummarySelectorsAnchoredBy
       (RegionSynthesisSummary.ofColumns columns rowCount constantSiteCount
+        instanceRowExtent lookupActivationCount
         |>.toRegionShapeSummary)
       anchor := by
   intro selector hselector

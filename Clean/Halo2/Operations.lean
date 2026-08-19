@@ -511,34 +511,34 @@ theorem repeatColumns_lookupActivationCount (columns : List RegionColumn)
 
 @[circuit_norm, synthesis_summary_norm] theorem ofColumns_columns
     (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
-    (instanceRowExtent : ℕ := 0) (lookupActivationCount : ℕ := 0) :
+    {instanceRowExtent lookupActivationCount : ℕ} :
     (ofColumns columns rowCount constantSiteCount instanceRowExtent
       lookupActivationCount).columns =
       unionColumns [] columns := rfl
 
 @[circuit_norm, synthesis_summary_norm] theorem ofColumns_rowCount
     (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
-    (instanceRowExtent : ℕ := 0) (lookupActivationCount : ℕ := 0) :
+    {instanceRowExtent lookupActivationCount : ℕ} :
     (ofColumns columns rowCount constantSiteCount instanceRowExtent
       lookupActivationCount).rowCount = rowCount := rfl
 
 @[circuit_norm, synthesis_summary_norm] theorem ofColumns_constantSiteCount
     (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
-    (instanceRowExtent : ℕ := 0) (lookupActivationCount : ℕ := 0) :
+    {instanceRowExtent lookupActivationCount : ℕ} :
     (ofColumns columns rowCount constantSiteCount instanceRowExtent
       lookupActivationCount).constantSiteCount =
       constantSiteCount := rfl
 
 @[circuit_norm, synthesis_summary_norm] theorem ofColumns_lookupActivationCount
     (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
-    (instanceRowExtent : ℕ := 0) (lookupActivationCount : ℕ := 0) :
+    {instanceRowExtent lookupActivationCount : ℕ} :
     (ofColumns columns rowCount constantSiteCount
       instanceRowExtent lookupActivationCount).lookupActivationCount =
         lookupActivationCount := rfl
 
 @[circuit_norm, synthesis_summary_norm] theorem ofColumns_instanceRowExtent
-    (columns : List RegionColumn) (rowCount constantSiteCount instanceRowExtent : ℕ)
-    (lookupActivationCount : ℕ := 0) :
+    (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
+    {instanceRowExtent lookupActivationCount : ℕ} :
     (ofColumns columns rowCount constantSiteCount instanceRowExtent
       lookupActivationCount).instanceRowExtent =
       instanceRowExtent := rfl
