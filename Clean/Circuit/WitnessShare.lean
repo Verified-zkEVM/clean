@@ -2217,6 +2217,106 @@ theorem shareV_spec : ∀ {m : ℕ} (x : VExpr F m) {L : Array (F ⊕ UInt64)}
 
 end VSpec
 
+/-! ## Size, and sharing only when it pays
+
+`share` hoists **every** distinct non-trivial subterm into a step. On a program with real
+duplication that is a large win (an SP1 64-bit division witness: 1.22 GB → 1.04 MB
+serialized, and 25 whole-chip witness programs shrink in proportion). On a program with
+*none* it is a small loss: a single-use subterm becomes a `localVar` reference **plus** a
+step, one node more than leaving it inline.
+
+`shareIfSmaller` therefore keeps the rebuilt program only when it is syntactically
+smaller, so the pass can never be a regression, and `eval_shareIfSmaller` holds either
+way — by `eval_share` on one branch and by `rfl` on the other. The sizes are a proxy for
+emitted code size, so `.expr` subtrees are counted node-for-node rather than as leaves.
+
+The finer policy — hoist a subterm exactly when it is used at least twice — would need the
+pass to return *non-atomic* terms, which the `OkF.atom` invariant rules out (and with it
+`remapF`'s index-independence argument, which is what makes substitution into `mapRange`
+bodies sound). That is a deliberate follow-up rather than an oversight.
+-/
+
+section Size
+
+/-- Node count of a constraint expression, the leaves of the witness IR. -/
+def exprSize : Expression F → ℕ
+  | .var _ => 1
+  | .const _ => 1
+  | .add x y => 1 + exprSize x + exprSize y
+  | .mul x y => 1 + exprSize x + exprSize y
+
+mutual
+
+/-- Node count, a proxy for emitted code size. -/
+def FExpr.size : FExpr F → ℕ
+  | .expr e => exprSize e
+  | .const _ => 1
+  | .index => 1
+  | .localVar _ => 1
+  | .add x y => 1 + x.size + y.size
+  | .mul x y => 1 + x.size + y.size
+  | .inv x => 1 + x.size
+  | .ofU64 u => 1 + u.size
+  | .ite c t e => 1 + c.size + t.size + e.size
+  | .listGet xs i => 1 + FExpr.sizeList xs + i.size
+  | .listGetAtIndex xs => 1 + FExpr.sizeList xs
+  | .proverInputGet i => 1 + i.size
+  | .dataGet _ _ r _ => 1 + r.size
+  | .hintGet _ _ r _ => 1 + r.size
+
+/-- Node count, elementwise. -/
+def FExpr.sizeList : List (FExpr F) → ℕ
+  | [] => 0
+  | x :: xs => x.size + FExpr.sizeList xs
+
+/-- Node count. -/
+def U64Expr.size : U64Expr F → ℕ
+  | .const _ => 1
+  | .val x => 1 + x.size
+  | .idx => 1
+  | .localVar _ => 1
+  | .add x y | .mul x y | .div x y | .mod x y
+  | .land x y | .lor x y | .lxor x y
+  | .shiftL x y | .shiftR x y => 1 + x.size + y.size
+  | .ite c t e => 1 + c.size + t.size + e.size
+
+/-- Node count. -/
+def BExpr.size : BExpr F → ℕ
+  | .true => 1
+  | .false => 1
+  | .feq x y | .flt x y => 1 + x.size + y.size
+  | .neq x y | .lt x y => 1 + x.size + y.size
+  | .bit x _ => 1 + x.size
+  | .not b => 1 + b.size
+  | .and x y => 1 + x.size + y.size
+
+end
+
+/-- Node count. -/
+def VExpr.size {m : ℕ} : VExpr F m → ℕ
+  | .lit es => 1 + (es.toList.map FExpr.size).sum
+  | .mapRange _ body => 1 + body.size
+  | .envRange _ => 1
+  | .bitsOf x => 1 + x.size
+  | .append a b => 1 + a.size + b.size
+
+/-- Node count. -/
+def Step.size : Step F → ℕ
+  | .letF e => 1 + e.size
+  | .letU e => 1 + e.size
+
+/-- Node count of a whole witness program; `.native` closures are opaque, hence `0`. -/
+def WitgenIR.size {m : ℕ} : WitgenIR F m → ℕ
+  | .native _ => 0
+  | .ir steps out => (steps.map Step.size).sum + out.size
+
+end Size
+
+/-- `share`, but only where it pays: a program with no repeated subterms would otherwise
+grow by one node per hoisted term. See the section note above. -/
+def WitgenIR.shareIfSmaller {m : ℕ} (code : WitgenIR F m) : WitgenIR F m :=
+  if code.share.size < code.size then code.share else code
+
 /-- **Eval preservation**: `WitgenIR.share` rebuilds a witness program with every
 distinct subterm interned as a `let`-step, without changing its evaluation on any
 prover environment. This is what lets a serializer apply the pass unconditionally. -/
@@ -2238,6 +2338,15 @@ theorem WitgenIR.eval_share {m : ℕ} :
     have hV := shareV_spec (env := env) out hSteps
     show VExpr.eval _ (shareV out (shareSteps steps ({} : ShareState F)).2).1 = _
     exact hV.eval
+
+/-- **Eval preservation** for the never-worse variant: both branches are sound, by
+`eval_share` on the rebuilt program and by `rfl` on the original. -/
+theorem WitgenIR.eval_shareIfSmaller {m : ℕ} (ir : WitgenIR F m)
+    (env : ProverEnvironment F) : ir.shareIfSmaller.eval env = ir.eval env := by
+  unfold WitgenIR.shareIfSmaller
+  split
+  · exact ir.eval_share env
+  · rfl
 
 end Spec
 
