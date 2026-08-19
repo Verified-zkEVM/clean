@@ -408,6 +408,7 @@ def add : FormalRegionCircuit Fp
         · simp only [synthesisSummary, circuit_norm, gate]
           omega
         · simp only [synthesisSummary, circuit_norm, gate]
+        · simp only [synthesisSummary, circuit_norm, gate, synthesis_summary_norm]
         · simp only [synthesisSummary, circuit_norm, gate, synthesis_summary_norm] }
 
   synthesize config offset (input : Inputs (AssignedCell Fp)) := do

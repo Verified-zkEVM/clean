@@ -575,7 +575,7 @@ def shortRangeCheckSynthesisSummary {K : ℕ} (cfg : Config K)
     [.selector cfg.qLookup.index, .column .advice cfg.runningSum.index,
       .selector cfg.qLookup.index, .column .advice cfg.runningSum.index,
       .selector cfg.qBitshift.index]
-    (offset + 3) 1
+    (offset + 3) 1 (lookupActivationCount := 2)
 
 @[synthesis_summary_norm]
 theorem shortRangeCheckSynthesisSummary_hasNoFixedColumns {K : ℕ}
@@ -630,6 +630,8 @@ def shortRangeCheck (K numBits : ℕ) :
           omega
         · simp only [shortRangeCheckSynthesisSummary, circuit_norm,
             FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount]
+        · simp only [shortRangeCheckSynthesisSummary, circuit_norm,
+            synthesis_summary_norm]
         · simp only [shortRangeCheckSynthesisSummary, circuit_norm,
             synthesis_summary_norm]
       registered := by keygen_registration
@@ -1042,7 +1044,7 @@ theorem rangeCheckRound_synthesisSummary (K : ℕ) (cfg : Config K)
       .ofColumns
         [.selector cfg.qLookup.index, .selector cfg.qRunning.index,
           .column .advice cfg.runningSum.index]
-        (row + 2) 0 := by
+        (row + 2) 0 (lookupActivationCount := 1) := by
   apply FloorPlanner.RegionSynthesisSummary.ext
   · rw [FloorPlanner.regionSynthesisSummary_columns_eq_unionColumns]
     simp only [rangeCheckRound, circuit_norm, List.flatMap_cons,
@@ -1054,6 +1056,7 @@ theorem rangeCheckRound_synthesisSummary (K : ℕ) (cfg : Config K)
     omega
   · simp only [rangeCheckRound, circuit_norm,
       FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount]
+  · simp only [rangeCheckRound, circuit_norm, synthesis_summary_norm]
   · simp only [rangeCheckRound, circuit_norm, synthesis_summary_norm]
 
 /-- The running-sum loop: `numWords` independent rounds via `RegionCircuit.forRange'` (stride 1,
@@ -1141,7 +1144,7 @@ def rangeCheckLoopSummary (K : ℕ) (cfg : Config K) (offset numWords : ℕ) :
       [.selector cfg.qLookup.index, .selector cfg.qRunning.index,
         .column .advice cfg.runningSum.index])
     (if numWords = 0 then 0 else offset + numWords + 1)
-    0
+    0 (lookupActivationCount := numWords)
 
 @[synthesis_summary_norm]
 theorem rangeCheckLoop_synthesisSummary (K : ℕ) (cfg : Config K)
@@ -1165,6 +1168,9 @@ theorem rangeCheckLoop_synthesisSummary (K : ℕ) (cfg : Config K)
           RegionCircuit.operations_pure, rangeCheckLoopSummary,
           FloorPlanner.regionSynthesisSummary_nil_constantSiteCount,
           FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount]
+      · simp [rangeCheckLoop, RegionCircuit.forRange', RegionCircuit.loopAux,
+          RegionCircuit.operations_pure, rangeCheckLoopSummary,
+          synthesis_summary_norm]
       · simp [rangeCheckLoop, RegionCircuit.forRange', RegionCircuit.loopAux,
           RegionCircuit.operations_pure, rangeCheckLoopSummary,
           synthesis_summary_norm]
@@ -1201,6 +1207,7 @@ theorem rangeCheckLoop_synthesisSummary (K : ℕ) (cfg : Config K)
       · simp [rangeCheckLoopSummary,
           FloorPlanner.RegionSynthesisSummary.combine_constantSiteCount,
           FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount]
+      · simp [rangeCheckLoopSummary, synthesis_summary_norm]
       · simp [rangeCheckLoopSummary, synthesis_summary_norm]
 
 /-- A nonempty running-sum loop physically occupies its running-sum advice
@@ -1332,6 +1339,7 @@ def rangeCheckSynthesisSummary (K numWords : ℕ) (strict : Bool)
         [.selector cfg.qLookup.index, .selector cfg.qRunning.index,
           .column .advice cfg.runningSum.index])
     (offset + numWords + 1) (if strict then 1 else 0)
+    (lookupActivationCount := numWords)
 
 @[synthesis_summary_norm]
 theorem rangeCheckSynthesisSummary_hasNoFixedColumns
@@ -1627,6 +1635,7 @@ def rangeCheckAtSynthesisSummary (K numWords : ℕ) (strict : Bool)
         .column .advice cfg.runningSum.index])
     (if numWords = 0 then 0 else offset + numWords + 1)
     (if strict then 1 else 0)
+    (lookupActivationCount := numWords)
 
 @[synthesis_summary_norm]
 theorem rangeCheckAtSynthesisSummary_hasNoFixedColumns
@@ -1905,7 +1914,7 @@ def rangeCheckAtDecomposedSynthesisSummary (numWords : ℕ)
   .ofColumns
     [.selector cfg.qLookup.index, .selector cfg.qRunning.index,
       .column .advice cfg.runningSum.index]
-    (offset + numWords + 1) 1
+    (offset + numWords + 1) 1 (lookupActivationCount := numWords)
 
 @[synthesis_summary_norm]
 theorem rangeCheckAtDecomposedSynthesisSummary_hasNoFixedColumns
@@ -2131,7 +2140,7 @@ def witnessCheckDecomposedSynthesisSummary
         .selector cfg.qLookup.index,
         .selector cfg.qRunning.index,
         .column .advice cfg.runningSum.index]
-      26 1)
+      26 1 (lookupActivationCount := 25))
 
 @[synthesis_summary_norm]
 theorem witnessCheckDecomposedSynthesisSummary_hasNoFixedWrites
@@ -2157,6 +2166,8 @@ theorem witnessCheckDecomposed_synthesisSummary
   · simp only [operations_assignAdvice, synthesis_summary_norm,
       rangeCheckAtDecomposedSynthesisSummary]
     norm_num
+  · simp only [operations_assignAdvice, synthesis_summary_norm,
+      rangeCheckAtDecomposedSynthesisSummary]
   · simp only [operations_assignAdvice, synthesis_summary_norm,
       rangeCheckAtDecomposedSynthesisSummary, Nat.zero_add]
   · simp only [operations_assignAdvice, synthesis_summary_norm,
@@ -2269,7 +2280,8 @@ def copyCheckSynthesisSummary (K numWords : ℕ) (strict : Bool)
           [.selector cfg.qLookup.index,
             .selector cfg.qRunning.index,
             .column .advice cfg.runningSum.index])
-      (numWords + 1) (if strict then 1 else 0))
+      (numWords + 1) (if strict then 1 else 0)
+      (lookupActivationCount := numWords))
 
 @[synthesis_summary_norm]
 theorem copyCheckSynthesisSummary_hasNoFixedWrites
@@ -2350,7 +2362,7 @@ def witnessShortCheckSynthesisSummary
             .selector cfg.qLookup.index,
             .column .advice cfg.runningSum.index,
             .selector cfg.qBitshift.index]
-          3 1))
+          3 1 (lookupActivationCount := 2)))
 
 @[synthesis_summary_norm]
 theorem witnessShortCheckSynthesisSummary_hasNoFixedWrites
@@ -2378,6 +2390,10 @@ theorem witnessShortCheck_synthesisSummary
   · simp only [shortRangeCheck, circuit_norm, synthesis_summary_norm]
     omega
   · simp only [shortRangeCheck, circuit_norm, synthesis_summary_norm]
+  · simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+      operations_assignAdvice, FormalRegionCircuit.call_synthesisSummary,
+      shortRangeCheck_elaborated_synthesisSummary_eq, synthesis_summary_norm,
+      shortRangeCheckSynthesisSummary]
   · simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
       operations_assignAdvice, FormalRegionCircuit.call_synthesisSummary,
       shortRangeCheck_elaborated_synthesisSummary_eq, synthesis_summary_norm,
@@ -2506,7 +2522,8 @@ def witnessCheckSynthesisSummary (K numWords : ℕ)
           [.selector cfg.qLookup.index,
             .selector cfg.qRunning.index,
             .column .advice cfg.runningSum.index])
-      (numWords + 1) (if strict then 1 else 0))
+      (numWords + 1) (if strict then 1 else 0)
+      (lookupActivationCount := numWords))
 
 @[synthesis_summary_norm]
 theorem witnessCheckSynthesisSummary_hasNoFixedWrites
@@ -2539,7 +2556,9 @@ theorem witnessCheck_synthesisSummary
   · simp only [operations_assignAdvice, synthesis_summary_norm,
       rangeCheckAtSynthesisSummary, Nat.zero_add]
   · simp only [operations_assignAdvice, synthesis_summary_norm,
-      rangeCheckAtSynthesisSummary]
+      rangeCheckAtSynthesisSummary, Nat.zero_add]
+  · simp only [operations_assignAdvice, synthesis_summary_norm,
+      rangeCheckAtSynthesisSummary, Nat.zero_add]
 
 theorem witnessCheck_fixedWritesLawful
     (K numWords : ℕ) (strict : Bool) (hstrict : strict = true → 0 < numWords)

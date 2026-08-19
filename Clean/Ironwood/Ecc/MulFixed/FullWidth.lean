@@ -252,6 +252,8 @@ theorem processWindowH_synthesisSummary_eq
     omega
   · simp only [processWindowH, processWindowSynthesisSummary, circuit_norm]
   · simp only [processWindowH, processWindowSynthesisSummary, circuit_norm]
+  · simp only [processWindowH, processWindowSynthesisSummary, circuit_norm,
+      synthesis_summary_norm]
 
 @[keygen_norm, keygen_output_norm]
 theorem processWindowH_output_x_column (B : FixedBaseData) (cfg : Config)

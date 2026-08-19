@@ -288,6 +288,8 @@ theorem synthesisSummary_eq (cfg : Config) (l : Fp)
       FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount]
   · simp only [body, circuit_norm, synthesis_summary_norm,
       FloorPlanner.RegionSynthesisSummary.ofColumns_instanceRowExtent]
+  · simp only [body, circuit_norm, synthesis_summary_norm,
+      FloorPlanner.RegionSynthesisSummary.ofColumns_lookupActivationCount]
 
 @[implicit_reducible]
 def elaborated (l : Fp) :

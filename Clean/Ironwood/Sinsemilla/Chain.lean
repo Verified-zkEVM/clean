@@ -1160,6 +1160,9 @@ theorem slotIteration_synthesisSummary_eq
   · simp only [slotIterationSynthesisSummary, RegionCircuit.operations_bind,
       FloorPlanner.regionSynthesisSummary_append, circuit_norm,
       synthesis_summary_norm]
+  · simp only [slotIterationSynthesisSummary, RegionCircuit.operations_bind,
+      FloorPlanner.regionSynthesisSummary_append, circuit_norm,
+      synthesis_summary_norm]
 
 @[synthesis_summary_norm]
 theorem slotIterationSynthesisSummary_constantSiteCount
@@ -1580,6 +1583,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
           simp only [RegionCircuit.operations_bind,
             FloorPlanner.regionSynthesisSummary_append]
         · apply FloorPlanner.RegionSynthesisSummary.ext
+          · simp only [circuit_norm, synthesis_summary_norm]
           · simp only [circuit_norm, synthesis_summary_norm]
           · simp only [circuit_norm, synthesis_summary_norm]
           · simp only [circuit_norm, synthesis_summary_norm]

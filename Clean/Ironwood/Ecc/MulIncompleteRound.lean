@@ -687,6 +687,7 @@ def round (i : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field)
         · simp only [circuit_norm]
           omega
         · simp only [circuit_norm]
+        · simp only [circuit_norm, synthesis_summary_norm]
         · simp only [circuit_norm, synthesis_summary_norm] }
 
   Witness := State

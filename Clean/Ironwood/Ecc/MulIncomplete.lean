@@ -468,6 +468,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
             FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount]
         · simp only [circuit_norm, synthesis_summary_norm,
             FloorPlanner.RegionSynthesisSummary.ofColumns_instanceRowExtent]
+        · simp only [circuit_norm, synthesis_summary_norm]
       output cfg offset _ self :=
         { acc :=
             { x := .of self (offset + n + 2) cfg.xA

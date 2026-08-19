@@ -166,6 +166,7 @@ private def rowFam (cfg : Config) (pl : RegionIndex → ℕ) (e : ProverEnvironm
 def loopSynthesisSummary (n : ℕ) (cfg : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
   .repeatColumns (roundColumns cfg) offset 1 2 0 n
+    (lookupActivationCount := 1)
 
 /-- The reduced interior-loop summary contains no deferred constant requests. -/
 @[synthesis_summary_norm]
@@ -191,7 +192,8 @@ def loop (G : Generators) (n : ℕ) : FormalRegionCircuit Fp Config Config field
         simp only [circuit_norm, synthesis_summary_norm, Nat.mul_one]
         simpa [loopSynthesisSummary, roundSynthesisSummary, Nat.add_assoc] using
           (FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns
-            (roundColumns cfg) offset 1 2 0 n).symm
+            (roundColumns cfg) offset 1 2 0 n
+            (lookupActivationCount := 1)).symm
       fixedAssignmentsAgree := by
         intro configInput counts hconfig offset input region
         unfold RegionOperations.FixedAssignmentsAgree
@@ -603,7 +605,7 @@ def circuitSynthesisSummary (w : ℕ) (cfg : Config) (offset : ℕ) :
         [.column .fixed cfg.qS2.index,
           .column .advice cfg.xA.index,
           .selector cfg.qS1.index]
-        (offset + w + 2) 0))
+        (offset + w + 2) 0 (lookupActivationCount := 1)))
 
 @[synthesis_summary_norm]
 theorem circuitSynthesisSummary_instanceRowExtent_eq (w : ℕ)

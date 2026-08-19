@@ -91,6 +91,8 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
         · simp only [ValueCanonicity.synthesisSummary, bundleSynthesize, circuit_norm,
             synthesis_summary_norm]
         · simp only [ValueCanonicity.synthesisSummary, bundleSynthesize, circuit_norm,
+            synthesis_summary_norm]
+        · simp only [ValueCanonicity.synthesisSummary, bundleSynthesize, circuit_norm,
             synthesis_summary_norm] }
   Assumptions input := DAssumptions (toDonor input)
 
@@ -193,6 +195,8 @@ def bundleElaborated :
       · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
           synthesis_summary_norm]
         omega
+      · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+          synthesis_summary_norm]
       · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
           synthesis_summary_norm]
       · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
@@ -324,6 +328,8 @@ theorem bundleSynthesisSummary_eq (cfg : Config) (offset : ℕ)
   · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
       synthesis_summary_norm]
     omega
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
   · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
       synthesis_summary_norm]
   · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
@@ -468,6 +474,8 @@ theorem bundleSynthesisSummary_eq (cfg : Config) (offset : ℕ)
       synthesis_summary_norm]
   · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
       synthesis_summary_norm]
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
 
 /-- Rust `RhoCanonicity::assign` (`note_commit.rs:789-841`): pure copies (rows 0/1 of
 `col_l/m/r/z`), gate enabled at row 0. `Spec`/`Assumptions` are the donor
@@ -607,6 +615,8 @@ theorem bundleSynthesisSummary_eq (cfg : Config) (offset : ℕ)
   · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
       synthesis_summary_norm]
     omega
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
   · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
       synthesis_summary_norm]
   · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
@@ -767,6 +777,8 @@ theorem bundleSynthesisSummary_eq (wlsb wk3 : WitgenIR Fp 1)
   · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
       synthesis_summary_norm]
     omega
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
   · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
       synthesis_summary_norm]
   · simp only [synthesisSummary, bundleSynthesize, circuit_norm,

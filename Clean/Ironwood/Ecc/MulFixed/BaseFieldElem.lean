@@ -304,10 +304,12 @@ theorem canonicityRegion_synthesisSummary_eq
       circuit_norm, canonGate]
     omega
   · simp only [canonicityRegionSynthesisSummary, canonicityRegion,
-      circuit_norm, canonGate]
+      circuit_norm, canonGate, synthesis_summary_norm]
   · simp only [canonicityRegionSynthesisSummary, canonicityRegion,
       circuit_norm, canonGate]
     omega
+  · simp only [canonicityRegionSynthesisSummary, canonicityRegion,
+      circuit_norm, canonGate]
 
 @[synthesis_summary_norm]
 theorem canonicityRegionSynthesisSummary_hasNoFixedColumns (cfg : Config) :

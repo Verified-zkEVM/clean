@@ -385,6 +385,11 @@ theorem unionColumns_normalized_nil_left (columns : List RegionColumn) :
   | .constrainConstant _ _ => 1
   | _ => 0
 
+/-- The contribution of an operation to the number of activated lookup arguments. -/
+@[circuit_norm] def regionOperationLookupActivationCount : RegionOperation F → ℕ
+  | .enableLookup _ _ _ => 1
+  | _ => 0
+
 /-- The one-past-last absolute instance row named by a region operation. -/
 @[circuit_norm] def regionOperationInstanceRowExtent : RegionOperation F → ℕ
   | .constrainInstance _ _ row => row + 1
@@ -396,6 +401,7 @@ theorem unionColumns_normalized_nil_left (columns : List RegionColumn) :
   rowCount : ℕ := 0
   constantSiteCount : ℕ := 0
   instanceRowExtent : ℕ := 0
+  lookupActivationCount : ℕ := 0
 
 namespace RegionSynthesisSummary
 
@@ -406,19 +412,21 @@ def HasNoFixedColumns (summary : RegionSynthesisSummary) : Prop :=
 /-- A reduced region summary from its distinct-column source list and exact numerical
 footprint. -/
 def ofColumns (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
-    (instanceRowExtent : ℕ := 0) :
+    (instanceRowExtent : ℕ := 0) (lookupActivationCount : ℕ := 0) :
     RegionSynthesisSummary where
   columns := unionColumns [] columns
   rowCount := rowCount
   constantSiteCount := constantSiteCount
+  lookupActivationCount := lookupActivationCount
   instanceRowExtent := instanceRowExtent
 
 @[synthesis_summary_norm]
 theorem hasNoFixedColumns_ofColumns
     (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
-    (instanceRowExtent : ℕ := 0) :
+    (instanceRowExtent : ℕ := 0) {lookupActivationCount : ℕ} :
     HasNoFixedColumns
-        (ofColumns columns rowCount constantSiteCount instanceRowExtent) ↔
+        (ofColumns columns rowCount constantSiteCount instanceRowExtent
+          lookupActivationCount) ↔
       ∀ index, .column .fixed index ∉ columns := by
   constructor
   · intro hsummary index hcolumn
@@ -433,20 +441,22 @@ theorem hasNoFixedColumns_ofColumns
 whose `i`th repetition occupies through
 `offset + stride * i + rowCount` and requests `constantSiteCount` constants. -/
 def repeatColumns (columns : List RegionColumn) (offset stride rowCount
-    constantSiteCount count : ℕ) (instanceRowExtent : ℕ := 0) :
+    constantSiteCount count : ℕ) (instanceRowExtent : ℕ := 0)
+    (lookupActivationCount : ℕ := 0) :
     RegionSynthesisSummary :=
   if count = 0 then {}
   else
     ofColumns columns
       (offset + stride * (count - 1) + rowCount)
       (count * constantSiteCount) instanceRowExtent
+      (count * lookupActivationCount)
 
 @[circuit_norm, synthesis_summary_norm]
 theorem repeatColumns_columns (columns : List RegionColumn)
     (offset stride rowCount constantSiteCount count : ℕ)
-    (instanceRowExtent : ℕ := 0) :
+    (instanceRowExtent : ℕ := 0) {lookupActivationCount : ℕ} :
     (repeatColumns columns offset stride rowCount constantSiteCount count
-      instanceRowExtent).columns =
+      instanceRowExtent lookupActivationCount).columns =
       if count = 0 then [] else unionColumns [] columns := by
   cases count <;> rfl
 
@@ -454,9 +464,9 @@ theorem repeatColumns_columns (columns : List RegionColumn)
 theorem hasNoFixedColumns_repeatColumns
     (columns : List RegionColumn)
     (offset stride rowCount constantSiteCount count : ℕ)
-    (instanceRowExtent : ℕ := 0) :
+    (instanceRowExtent : ℕ := 0) {lookupActivationCount : ℕ} :
     (repeatColumns columns offset stride rowCount constantSiteCount count
-        instanceRowExtent).HasNoFixedColumns ↔
+        instanceRowExtent lookupActivationCount).HasNoFixedColumns ↔
       count = 0 ∨ ∀ index, .column .fixed index ∉ columns := by
   by_cases hcount : count = 0
   · subst count
@@ -466,56 +476,78 @@ theorem hasNoFixedColumns_repeatColumns
 @[circuit_norm, synthesis_summary_norm]
 theorem repeatColumns_rowCount (columns : List RegionColumn)
     (offset stride rowCount constantSiteCount count : ℕ)
-    (instanceRowExtent : ℕ := 0) :
+    (instanceRowExtent : ℕ := 0) {lookupActivationCount : ℕ} :
     (repeatColumns columns offset stride rowCount constantSiteCount count
-      instanceRowExtent).rowCount =
+      instanceRowExtent lookupActivationCount).rowCount =
       if count = 0 then 0 else offset + stride * (count - 1) + rowCount := by
   cases count <;> rfl
 
 @[circuit_norm, synthesis_summary_norm]
 theorem repeatColumns_constantSiteCount (columns : List RegionColumn)
     (offset stride rowCount constantSiteCount count : ℕ)
-    (instanceRowExtent : ℕ := 0) :
+    (instanceRowExtent : ℕ := 0) {lookupActivationCount : ℕ} :
     (repeatColumns columns offset stride rowCount constantSiteCount count
-      instanceRowExtent).constantSiteCount =
+      instanceRowExtent lookupActivationCount).constantSiteCount =
       count * constantSiteCount := by
   cases count <;> simp [repeatColumns, ofColumns]
 
 @[circuit_norm, synthesis_summary_norm]
 theorem repeatColumns_instanceRowExtent (columns : List RegionColumn)
     (offset stride rowCount constantSiteCount count : ℕ)
-    (instanceRowExtent : ℕ := 0) :
+    (instanceRowExtent : ℕ := 0) {lookupActivationCount : ℕ} :
     (repeatColumns columns offset stride rowCount constantSiteCount count
-      instanceRowExtent).instanceRowExtent =
+      instanceRowExtent lookupActivationCount).instanceRowExtent =
         if count = 0 then 0 else instanceRowExtent := by
   cases count <;> rfl
 
+@[circuit_norm, synthesis_summary_norm]
+theorem repeatColumns_lookupActivationCount (columns : List RegionColumn)
+    (offset stride rowCount constantSiteCount count : ℕ)
+    (instanceRowExtent : ℕ := 0) (lookupActivationCount : ℕ := 0) :
+    (repeatColumns columns offset stride rowCount constantSiteCount count
+      instanceRowExtent lookupActivationCount).lookupActivationCount =
+        count * lookupActivationCount := by
+  cases count <;> simp [repeatColumns, ofColumns]
+
 @[circuit_norm, synthesis_summary_norm] theorem ofColumns_columns
     (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
-    (instanceRowExtent : ℕ := 0) :
-    (ofColumns columns rowCount constantSiteCount instanceRowExtent).columns =
+    (instanceRowExtent : ℕ := 0) (lookupActivationCount : ℕ := 0) :
+    (ofColumns columns rowCount constantSiteCount instanceRowExtent
+      lookupActivationCount).columns =
       unionColumns [] columns := rfl
 
 @[circuit_norm, synthesis_summary_norm] theorem ofColumns_rowCount
     (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
-    (instanceRowExtent : ℕ := 0) :
-    (ofColumns columns rowCount constantSiteCount instanceRowExtent).rowCount = rowCount := rfl
+    (instanceRowExtent : ℕ := 0) (lookupActivationCount : ℕ := 0) :
+    (ofColumns columns rowCount constantSiteCount instanceRowExtent
+      lookupActivationCount).rowCount = rowCount := rfl
 
 @[circuit_norm, synthesis_summary_norm] theorem ofColumns_constantSiteCount
     (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
-    (instanceRowExtent : ℕ := 0) :
-    (ofColumns columns rowCount constantSiteCount instanceRowExtent).constantSiteCount =
+    (instanceRowExtent : ℕ := 0) (lookupActivationCount : ℕ := 0) :
+    (ofColumns columns rowCount constantSiteCount instanceRowExtent
+      lookupActivationCount).constantSiteCount =
       constantSiteCount := rfl
 
+@[circuit_norm, synthesis_summary_norm] theorem ofColumns_lookupActivationCount
+    (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
+    (instanceRowExtent : ℕ := 0) (lookupActivationCount : ℕ := 0) :
+    (ofColumns columns rowCount constantSiteCount
+      instanceRowExtent lookupActivationCount).lookupActivationCount =
+        lookupActivationCount := rfl
+
 @[circuit_norm, synthesis_summary_norm] theorem ofColumns_instanceRowExtent
-    (columns : List RegionColumn) (rowCount constantSiteCount instanceRowExtent : ℕ) :
-    (ofColumns columns rowCount constantSiteCount instanceRowExtent).instanceRowExtent =
+    (columns : List RegionColumn) (rowCount constantSiteCount instanceRowExtent : ℕ)
+    (lookupActivationCount : ℕ := 0) :
+    (ofColumns columns rowCount constantSiteCount instanceRowExtent
+      lookupActivationCount).instanceRowExtent =
       instanceRowExtent := rfl
 
 def combine (left right : RegionSynthesisSummary) : RegionSynthesisSummary where
   columns := unionColumns left.columns right.columns
   rowCount := max left.rowCount right.rowCount
   constantSiteCount := left.constantSiteCount + right.constantSiteCount
+  lookupActivationCount := left.lookupActivationCount + right.lookupActivationCount
   instanceRowExtent := max left.instanceRowExtent right.instanceRowExtent
 
 @[synthesis_summary_norm]
@@ -534,6 +566,7 @@ theorem combine_assoc (left middle right : RegionSynthesisSummary) :
   · exact (Nat.max_assoc _ _ _).symm
   · exact (Nat.add_assoc _ _ _).symm
   · exact (Nat.max_assoc _ _ _).symm
+  · exact (Nat.add_assoc _ _ _).symm
 
 @[circuit_norm, synthesis_summary_norm]
 theorem combine_columns (left right : RegionSynthesisSummary) :
@@ -548,6 +581,11 @@ theorem combine_rowCount (left right : RegionSynthesisSummary) :
     (left right : RegionSynthesisSummary) :
     (left.combine right).constantSiteCount =
       left.constantSiteCount + right.constantSiteCount := rfl
+
+@[circuit_norm, synthesis_summary_norm] theorem combine_lookupActivationCount
+    (left right : RegionSynthesisSummary) :
+    (left.combine right).lookupActivationCount =
+      left.lookupActivationCount + right.lookupActivationCount := rfl
 
 @[circuit_norm, synthesis_summary_norm] theorem combine_instanceRowExtent
     (left right : RegionSynthesisSummary) :
@@ -566,6 +604,7 @@ theorem ofColumns_combine_ofColumns
         (max leftRows rightRows) (leftConstants + rightConstants) := by
   apply RegionSynthesisSummary.ext
   · exact unionColumns_merge_normalized _ _
+  · rfl
   · rfl
   · rfl
   · rfl
@@ -588,6 +627,7 @@ theorem ofColumns_combine_ofColumns_of_subset
   · rfl
   · rfl
   · rfl
+  · rfl
 
 /-- Repeated source columns may be removed before constructing a reduced region
 summary. -/
@@ -598,6 +638,7 @@ theorem ofColumns_append_redundant
       ofColumns left rowCount constantSiteCount := by
   apply RegionSynthesisSummary.ext
   · exact unionColumns_normalize_append_redundant left right hsubset
+  · rfl
   · rfl
   · rfl
   · rfl
@@ -645,6 +686,7 @@ theorem empty_combine (summary : RegionSynthesisSummary)
   · simp [combine]
   · simp [combine]
   · simp [combine]
+  · simp [combine]
 
 /-- An explicitly reduced summary is a left identity target as well as a right
 identity source. -/
@@ -658,14 +700,14 @@ theorem empty_combine_ofColumns (columns : List RegionColumn)
 
 private theorem foldr_ofColumns_eq_repeatColumns_combine
     (columns : List RegionColumn) (offset stride rowCount constantSiteCount count : ℕ)
-    (instanceRowExtent : ℕ)
+    (instanceRowExtent lookupActivationCount : ℕ)
     (accumulator : RegionSynthesisSummary) (haccumulator : accumulator.columns.Nodup) :
     (List.ofFn fun i : Fin count =>
       ofColumns columns (offset + stride * i.val + rowCount) constantSiteCount
-        instanceRowExtent).foldr
+        instanceRowExtent lookupActivationCount).foldr
         combine accumulator =
       (repeatColumns columns offset stride rowCount constantSiteCount count
-        instanceRowExtent).combine
+        instanceRowExtent lookupActivationCount).combine
         accumulator := by
   induction count generalizing accumulator with
   | zero =>
@@ -683,6 +725,7 @@ private theorem foldr_ofColumns_eq_repeatColumns_combine
               exact unionColumns_empty_left _
                 (unionColumns_nodup _ _
                   (unionColumns_nodup [] columns (by simp)))
+            · simp [repeatColumns, combine, ofColumns]
             · simp [repeatColumns, combine, ofColumns]
             · simp [repeatColumns, combine, ofColumns]
             · simp [repeatColumns, combine, ofColumns]
@@ -704,6 +747,9 @@ private theorem foldr_ofColumns_eq_repeatColumns_combine
                 Nat.add_one_sub_one, Nat.succ_mul]
               omega
             · simp [repeatColumns, combine, ofColumns]
+            · simp [repeatColumns, combine, ofColumns, Nat.add_mul,
+                Nat.add_assoc]
+              omega
       · exact unionColumns_nodup _ _
           (unionColumns_nodup [] columns (by simp))
 
@@ -711,13 +757,13 @@ private theorem foldr_ofColumns_eq_repeatColumns_combine
 @[synthesis_summary_norm]
 theorem foldr_ofColumns_eq_repeatColumns
     (columns : List RegionColumn) (offset stride rowCount constantSiteCount count : ℕ)
-    (instanceRowExtent : ℕ := 0) :
+    (instanceRowExtent : ℕ := 0) (lookupActivationCount : ℕ := 0) :
     (List.ofFn fun i : Fin count =>
       ofColumns columns (offset + stride * i.val + rowCount) constantSiteCount
-        instanceRowExtent).foldr
+        instanceRowExtent lookupActivationCount).foldr
         combine {} =
       repeatColumns columns offset stride rowCount constantSiteCount count
-        instanceRowExtent := by
+        instanceRowExtent lookupActivationCount := by
   rw [foldr_ofColumns_eq_repeatColumns_combine]
   · exact combine_empty _
   · simp
@@ -726,6 +772,7 @@ def ofOperation (operation : RegionOperation F) : RegionSynthesisSummary where
   columns := unionColumns [] (regionOperationShapeColumns operation)
   rowCount := regionOperationRowExtent operation
   constantSiteCount := regionOperationConstantSiteCount operation
+  lookupActivationCount := regionOperationLookupActivationCount operation
   instanceRowExtent := regionOperationInstanceRowExtent operation
 
 @[circuit_norm] theorem ofOperation_columns (operation : RegionOperation F) :
@@ -739,6 +786,11 @@ def ofOperation (operation : RegionOperation F) : RegionSynthesisSummary where
     (operation : RegionOperation F) :
     (ofOperation operation).constantSiteCount =
       regionOperationConstantSiteCount operation := rfl
+
+@[circuit_norm] theorem ofOperation_lookupActivationCount
+    (operation : RegionOperation F) :
+    (ofOperation operation).lookupActivationCount =
+      regionOperationLookupActivationCount operation := rfl
 
 @[circuit_norm] theorem ofOperation_instanceRowExtent
     (operation : RegionOperation F) :
@@ -794,6 +846,9 @@ theorem regionSynthesisSummary_columns_nodup
 
 @[circuit_norm] theorem regionSynthesisSummary_nil_constantSiteCount :
     (regionSynthesisSummary ([] : RegionOperations F)).constantSiteCount = 0 := rfl
+
+@[circuit_norm] theorem regionSynthesisSummary_nil_lookupActivationCount :
+    (regionSynthesisSummary ([] : RegionOperations F)).lookupActivationCount = 0 := rfl
 
 @[circuit_norm] theorem regionSynthesisSummary_nil_instanceRowExtent :
     (regionSynthesisSummary ([] : RegionOperations F)).instanceRowExtent = 0 := rfl
@@ -863,6 +918,13 @@ theorem regionSynthesisSummary_cons_constantSiteCount
         (regionSynthesisSummary rest).constantSiteCount := rfl
 
 @[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_cons_lookupActivationCount
+    (operation : RegionOperation F) (rest : RegionOperations F) :
+    (regionSynthesisSummary (operation :: rest)).lookupActivationCount =
+      regionOperationLookupActivationCount operation +
+        (regionSynthesisSummary rest).lookupActivationCount := rfl
+
+@[circuit_norm, synthesis_summary_norm]
 theorem regionSynthesisSummary_cons_instanceRowExtent
     (operation : RegionOperation F) (rest : RegionOperations F) :
     (regionSynthesisSummary (operation :: rest)).instanceRowExtent =
@@ -907,6 +969,8 @@ theorem regionSynthesisSummary_constrainEqual_cons
   · exact regionSynthesisSummary_constrainEqual_cons_constantSiteCount left right rest
   · simp [regionSynthesisSummary_cons_instanceRowExtent,
       regionOperationInstanceRowExtent]
+  · simp [regionSynthesisSummary_cons_lookupActivationCount,
+      regionOperationLookupActivationCount]
 
 @[circuit_norm, synthesis_summary_norm]
 theorem regionSynthesisSummary_constrainConstant_cons_columns
@@ -1060,6 +1124,16 @@ theorem regionSynthesisSummary_enableLookup_cons_constantSiteCount
     regionOperationConstantSiteCount, Nat.zero_add]
 
 @[circuit_norm, synthesis_summary_norm]
+theorem regionSynthesisSummary_enableLookup_cons_lookupActivationCount
+    (lookup : LookupArgument F) (enabled : List Selector) (row : ℕ)
+    (rest : RegionOperations F) :
+    (regionSynthesisSummary
+      (.enableLookup lookup enabled row :: rest)).lookupActivationCount =
+        1 + (regionSynthesisSummary rest).lookupActivationCount := by
+  rw [regionSynthesisSummary_cons_lookupActivationCount]
+  rfl
+
+@[circuit_norm, synthesis_summary_norm]
 theorem regionSynthesisSummary_constrainConstant_cons_constantSiteCount
     (cell : Cell) (constant : F) (rest : RegionOperations F) :
     (regionSynthesisSummary
@@ -1097,6 +1171,7 @@ theorem regionSynthesisSummary_single_assignAdvice
       regionSynthesisSummary_nil_constantSiteCount,
       RegionSynthesisSummary.ofColumns_constantSiteCount]
   · exact regionSynthesisSummary_nil_instanceRowExtent (F := F)
+  · rfl
 
 /-- A single fixed assignment reduces to its concrete one-column summary. -/
 @[circuit_norm, synthesis_summary_norm]
@@ -1116,6 +1191,7 @@ theorem regionSynthesisSummary_single_assignFixed
       regionSynthesisSummary_nil_constantSiteCount,
       RegionSynthesisSummary.ofColumns_constantSiteCount]
   · exact regionSynthesisSummary_nil_instanceRowExtent (F := F)
+  · rfl
 
 /-- A single gate enable reduces to its selector-column summary. -/
 @[circuit_norm, synthesis_summary_norm]
@@ -1135,6 +1211,7 @@ theorem regionSynthesisSummary_single_enableGate
       regionSynthesisSummary_nil_constantSiteCount,
       RegionSynthesisSummary.ofColumns_constantSiteCount]
   · exact regionSynthesisSummary_nil_instanceRowExtent (F := F)
+  · rfl
 
 @[circuit_norm, synthesis_summary_norm]
 theorem regionSynthesisSummary_constrainInstance_cons_constantSiteCount
@@ -1233,6 +1310,7 @@ already-reduced V1 measurement input without retaining any region operations. -/
   regionShapes : List RegionShapeSummary := []
   tableRowExtent : ℕ := 0
   instanceRowExtent : ℕ := 0
+  lookupActivationCount : ℕ := 0
 
 namespace SynthesisSummary
 
@@ -1247,6 +1325,7 @@ def combine (left right : SynthesisSummary) : SynthesisSummary where
   columnOccupancy := fun column =>
     left.columnOccupancy column + right.columnOccupancy column
   constantSiteCount := left.constantSiteCount + right.constantSiteCount
+  lookupActivationCount := left.lookupActivationCount + right.lookupActivationCount
   regionShapes := left.regionShapes ++ right.regionShapes
   tableRowExtent := max left.tableRowExtent right.tableRowExtent
   instanceRowExtent := max left.instanceRowExtent right.instanceRowExtent
@@ -1270,12 +1349,14 @@ theorem combine_assoc (left middle right : SynthesisSummary) :
   · exact (List.append_assoc _ _ _).symm
   · exact (Nat.max_assoc _ _ _).symm
   · exact (Nat.max_assoc _ _ _).symm
+  · exact (Nat.add_assoc _ _ _).symm
 
 /-- Fully reduced summary of `count` identical layouter fragments. -/
 def replicate (count : ℕ) (summary : SynthesisSummary) : SynthesisSummary where
   columns := if count = 0 then [] else summary.columns
   columnOccupancy := fun column => count * summary.columnOccupancy column
   constantSiteCount := count * summary.constantSiteCount
+  lookupActivationCount := count * summary.lookupActivationCount
   regionShapes := (List.replicate count summary.regionShapes).flatten
   tableRowExtent := if count = 0 then 0 else summary.tableRowExtent
   instanceRowExtent := if count = 0 then 0 else summary.instanceRowExtent
@@ -1305,6 +1386,12 @@ theorem replicate_columnOccupancy (count : ℕ) (summary : SynthesisSummary)
 theorem replicate_constantSiteCount (count : ℕ) (summary : SynthesisSummary) :
     (replicate count summary).constantSiteCount =
       count * summary.constantSiteCount := rfl
+
+@[circuit_norm, synthesis_summary_norm]
+theorem replicate_lookupActivationCount (count : ℕ)
+    (summary : SynthesisSummary) :
+    (replicate count summary).lookupActivationCount =
+      count * summary.lookupActivationCount := rfl
 
 @[circuit_norm, synthesis_summary_norm]
 theorem replicate_regionShapes (count : ℕ) (summary : SynthesisSummary) :
@@ -1349,6 +1436,8 @@ theorem replicate_succ (count : ℕ) (summary : SynthesisSummary)
           inductionHypothesis, ← List.append_assoc]
   · cases count <;> simp [replicate, combine]
   · cases count <;> simp [replicate, combine]
+  · simp only [replicate_lookupActivationCount, combine, Nat.add_mul,
+      Nat.one_mul]
 
 @[circuit_norm, synthesis_summary_norm]
 theorem combine_columns (left right : SynthesisSummary) :
@@ -1364,6 +1453,11 @@ theorem combine_columns (left right : SynthesisSummary) :
     (left right : SynthesisSummary) :
     (left.combine right).constantSiteCount =
       left.constantSiteCount + right.constantSiteCount := rfl
+
+@[circuit_norm, synthesis_summary_norm] theorem combine_lookupActivationCount
+    (left right : SynthesisSummary) :
+    (left.combine right).lookupActivationCount =
+      left.lookupActivationCount + right.lookupActivationCount := rfl
 
 @[circuit_norm, synthesis_summary_norm] theorem combine_regionShapes
     (left right : SynthesisSummary) :
@@ -1391,6 +1485,7 @@ theorem combine_columns (left right : SynthesisSummary) :
   · simp [combine]
   · simp [combine]
   · simp [combine]
+  · simp [combine]
 
 theorem empty_combine (summary : SynthesisSummary)
     (hcolumns : summary.columns.Nodup) :
@@ -1403,12 +1498,14 @@ theorem empty_combine (summary : SynthesisSummary)
   · simp [combine]
   · simp [combine]
   · simp [combine]
+  · simp [combine]
 
 def ofRegion (summary : RegionSynthesisSummary) : SynthesisSummary where
   columns := summary.columns
   columnOccupancy := fun column =>
     if column ∈ summary.columns then summary.rowCount else 0
   constantSiteCount := summary.constantSiteCount
+  lookupActivationCount := summary.lookupActivationCount
   regionShapes := [summary.toRegionShapeSummary]
   tableRowExtent := 0
   instanceRowExtent := summary.instanceRowExtent
@@ -1438,6 +1535,10 @@ theorem ofInstanceRow_columnOccupancy (row : ℕ) (column : RegionColumn) :
 @[circuit_norm, synthesis_summary_norm]
 theorem ofInstanceRow_constantSiteCount (row : ℕ) :
     (ofInstanceRow row).constantSiteCount = 0 := rfl
+
+@[circuit_norm, synthesis_summary_norm]
+theorem ofInstanceRow_lookupActivationCount (row : ℕ) :
+    (ofInstanceRow row).lookupActivationCount = 0 := rfl
 
 @[circuit_norm, synthesis_summary_norm]
 theorem ofInstanceRow_regionShapes (row : ℕ) :
@@ -1473,6 +1574,10 @@ theorem ofTableValues_constantSiteCount (values : List F) :
     (ofTableValues values).constantSiteCount = 0 := rfl
 
 @[circuit_norm, synthesis_summary_norm]
+theorem ofTableValues_lookupActivationCount (values : List F) :
+    (ofTableValues values).lookupActivationCount = 0 := rfl
+
+@[circuit_norm, synthesis_summary_norm]
 theorem ofTableValues_regionShapes (values : List F) :
     (ofTableValues values).regionShapes = [] := rfl
 
@@ -1492,6 +1597,10 @@ theorem ofRegion_columns (summary : RegionSynthesisSummary) :
 @[circuit_norm, synthesis_summary_norm] theorem ofRegion_constantSiteCount
     (summary : RegionSynthesisSummary) :
     (ofRegion summary).constantSiteCount = summary.constantSiteCount := rfl
+
+@[circuit_norm, synthesis_summary_norm] theorem ofRegion_lookupActivationCount
+    (summary : RegionSynthesisSummary) :
+    (ofRegion summary).lookupActivationCount = summary.lookupActivationCount := rfl
 
 @[circuit_norm, synthesis_summary_norm] theorem ofRegion_regionShapes
     (summary : RegionSynthesisSummary) :
@@ -1613,6 +1722,9 @@ theorem synthesisSummary_columns_nodup (operations : Operations F) :
 @[circuit_norm] theorem synthesisSummary_nil_constantSiteCount :
     (synthesisSummary ([] : Operations F)).constantSiteCount = 0 := rfl
 
+@[circuit_norm] theorem synthesisSummary_nil_lookupActivationCount :
+    (synthesisSummary ([] : Operations F)).lookupActivationCount = 0 := rfl
+
 @[circuit_norm] theorem synthesisSummary_region_cons_columns
     (name : String) (body : RegionOperations F) (rest : Operations F) :
     (synthesisSummary (.region name body :: rest)).columns =
@@ -1632,6 +1744,12 @@ theorem synthesisSummary_columns_nodup (operations : Operations F) :
     (synthesisSummary (.region name body :: rest)).constantSiteCount =
       (regionSynthesisSummary body).constantSiteCount +
         (synthesisSummary rest).constantSiteCount := rfl
+
+@[circuit_norm] theorem synthesisSummary_region_cons_lookupActivationCount
+    (name : String) (body : RegionOperations F) (rest : Operations F) :
+    (synthesisSummary (.region name body :: rest)).lookupActivationCount =
+      (regionSynthesisSummary body).lookupActivationCount +
+        (synthesisSummary rest).lookupActivationCount := rfl
 
 @[circuit_norm] theorem synthesisSummary_constrainInstance_cons_columns
     (cell : Cell) (column : Column .instance) (row : ℕ)
@@ -1658,6 +1776,16 @@ theorem synthesisSummary_columns_nodup (operations : Operations F) :
   simp [synthesisSummary, SynthesisSummary.combine,
     SynthesisSummary.ofInstanceRow]
 
+@[circuit_norm]
+theorem synthesisSummary_constrainInstance_cons_lookupActivationCount
+    (cell : Cell) (column : Column .instance) (row : ℕ)
+    (rest : Operations F) :
+    (synthesisSummary
+      (.constrainInstance cell column row :: rest)).lookupActivationCount =
+        (synthesisSummary rest).lookupActivationCount := by
+  simp [synthesisSummary, SynthesisSummary.combine,
+    SynthesisSummary.ofInstanceRow]
+
 @[circuit_norm] theorem synthesisSummary_loadTable_cons_columns
     (column : TableColumn) (values : List F) (rest : Operations F) :
     (synthesisSummary (.loadTable column values :: rest)).columns =
@@ -1679,6 +1807,13 @@ theorem synthesisSummary_columns_nodup (operations : Operations F) :
   simp [synthesisSummary, SynthesisSummary.combine,
     SynthesisSummary.ofTableValues]
 
+@[circuit_norm] theorem synthesisSummary_loadTable_cons_lookupActivationCount
+    (column : TableColumn) (values : List F) (rest : Operations F) :
+    (synthesisSummary (.loadTable column values :: rest)).lookupActivationCount =
+      (synthesisSummary rest).lookupActivationCount := by
+  simp [synthesisSummary, SynthesisSummary.combine,
+    SynthesisSummary.ofTableValues]
+
 @[circuit_norm] theorem regionSynthesisSummary_append
     (left right : RegionOperations F) :
     regionSynthesisSummary (left ++ right) =
@@ -1692,6 +1827,7 @@ theorem synthesisSummary_columns_nodup (operations : Operations F) :
       · simp [RegionSynthesisSummary.combine]
       · simp [RegionSynthesisSummary.combine]
       · simp [RegionSynthesisSummary.combine]
+      · simp [RegionSynthesisSummary.combine]
   | cons operation rest inductionHypothesis =>
       simp only [List.cons_append, regionSynthesisSummary,
         inductionHypothesis]
@@ -1700,6 +1836,7 @@ theorem synthesisSummary_columns_nodup (operations : Operations F) :
       · simp [RegionSynthesisSummary.combine, Nat.max_assoc]
       · simp [RegionSynthesisSummary.combine, Nat.add_assoc]
       · simp [RegionSynthesisSummary.combine, Nat.max_assoc]
+      · simp [RegionSynthesisSummary.combine, Nat.add_assoc]
 
 /-- Columns of concatenated region fragments compose by unioning their reduced
 column summaries. -/
@@ -1748,6 +1885,21 @@ theorem regionSynthesisSummary_flatten_constantSiteCount
         RegionSynthesisSummary.combine_constantSiteCount, List.map_cons,
         List.sum_cons, inductionHypothesis]
 
+/-- Lookup activations of concatenated fragments are the sum of their exact counts. -/
+@[synthesis_summary_norm]
+theorem regionSynthesisSummary_flatten_lookupActivationCount
+    (fragments : List (RegionOperations F)) :
+    (regionSynthesisSummary fragments.flatten).lookupActivationCount =
+      (fragments.map fun operations =>
+        (regionSynthesisSummary operations).lookupActivationCount).sum := by
+  induction fragments with
+  | nil => simp only [List.flatten_nil, List.map_nil, List.sum_nil,
+      regionSynthesisSummary_nil_lookupActivationCount]
+  | cons fragment rest inductionHypothesis =>
+      rw [List.flatten_cons, regionSynthesisSummary_append,
+        RegionSynthesisSummary.combine_lookupActivationCount, List.map_cons,
+        List.sum_cons, inductionHypothesis]
+
 /-- A flattened stream is summarized compositionally from the already-reduced
 summary of each fragment. -/
 @[synthesis_summary_norm]
@@ -1778,6 +1930,7 @@ theorem regionSynthesisSummary_flatten
       · simp [SynthesisSummary.combine]
       · simp [SynthesisSummary.combine]
       · simp [SynthesisSummary.combine]
+      · simp [SynthesisSummary.combine]
   | cons operation rest inductionHypothesis =>
       cases operation <;>
         simp only [List.cons_append, synthesisSummary,
@@ -1789,41 +1942,51 @@ attribute [synthesis_summary_norm]
   regionOperationRowExtent
   regionOperationShapeColumns
   regionOperationConstantSiteCount
+  regionOperationLookupActivationCount
   regionOperationInstanceRowExtent
   RegionSynthesisSummary.combine_columns
   RegionSynthesisSummary.combine_rowCount
   RegionSynthesisSummary.combine_constantSiteCount
+  RegionSynthesisSummary.combine_lookupActivationCount
   RegionSynthesisSummary.combine_instanceRowExtent
   RegionSynthesisSummary.ofOperation_columns
   RegionSynthesisSummary.ofOperation_rowCount
   RegionSynthesisSummary.ofOperation_constantSiteCount
+  RegionSynthesisSummary.ofOperation_lookupActivationCount
   RegionSynthesisSummary.ofOperation_instanceRowExtent
   regionSynthesisSummary_nil_columns
   regionSynthesisSummary_nil_rowCount
   regionSynthesisSummary_nil_constantSiteCount
+  regionSynthesisSummary_nil_lookupActivationCount
   regionSynthesisSummary_nil_instanceRowExtent
   SynthesisSummary.combine_columns
   SynthesisSummary.combine_columnOccupancy
   SynthesisSummary.combine_constantSiteCount
+  SynthesisSummary.combine_lookupActivationCount
   SynthesisSummary.combine_tableRowExtent
   SynthesisSummary.combine_instanceRowExtent
   SynthesisSummary.ofRegion_columns
   SynthesisSummary.ofRegion_columnOccupancy
   SynthesisSummary.ofRegion_constantSiteCount
+  SynthesisSummary.ofRegion_lookupActivationCount
   SynthesisSummary.ofRegion_tableRowExtent
   SynthesisSummary.ofRegion_instanceRowExtent
   synthesisSummary_nil_columns
   synthesisSummary_nil_columnOccupancy
   synthesisSummary_nil_constantSiteCount
+  synthesisSummary_nil_lookupActivationCount
   synthesisSummary_region_cons_columns
   synthesisSummary_region_cons_columnOccupancy
   synthesisSummary_region_cons_constantSiteCount
+  synthesisSummary_region_cons_lookupActivationCount
   synthesisSummary_constrainInstance_cons_columns
   synthesisSummary_constrainInstance_cons_columnOccupancy
   synthesisSummary_constrainInstance_cons_constantSiteCount
+  synthesisSummary_constrainInstance_cons_lookupActivationCount
   synthesisSummary_loadTable_cons_columns
   synthesisSummary_loadTable_cons_columnOccupancy
   synthesisSummary_loadTable_cons_constantSiteCount
+  synthesisSummary_loadTable_cons_lookupActivationCount
   regionSynthesisSummary_append
   synthesisSummary_append
 

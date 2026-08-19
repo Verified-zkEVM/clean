@@ -122,6 +122,9 @@ def permuteElaborated :
       · simp only [permuteSynthesize, fullRoundSynthesisSummary,
           partialRoundSynthesisSummary, circuit_norm, synthesis_summary_norm,
           Nat.mul_one]
+      · simp only [permuteSynthesize, fullRoundSynthesisSummary,
+          partialRoundSynthesisSummary, circuit_norm, synthesis_summary_norm,
+          Nat.mul_one]
     output_eq := by
       intro _ _ _ _
       simp only [permuteSynthesize, circuit_norm]

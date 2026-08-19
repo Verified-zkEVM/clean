@@ -483,6 +483,8 @@ theorem fixedConstantsWindow_synthesisSummary_eq
       circuit_norm]
   · simp only [fixedConstantsWindowSynthesisSummary, fixedConstantsWindow,
       circuit_norm, synthesis_summary_norm]
+  · simp only [fixedConstantsWindowSynthesisSummary, fixedConstantsWindow,
+      circuit_norm, synthesis_summary_norm]
 
 @[synthesis_summary_norm]
 theorem fixedConstantsLoop_synthesisSummary_eq
@@ -619,6 +621,8 @@ theorem processWindow_combine_addIncomplete_synthesisSummary
       Nat.zero_add]
   · simp only [processWindowSynthesisSummary, AddIncomplete.synthesisSummary,
       windowStepSynthesisSummary, synthesis_summary_norm]
+  · simp only [processWindowSynthesisSummary, AddIncomplete.synthesisSummary,
+      windowStepSynthesisSummary, synthesis_summary_norm]
 
 @[synthesis_summary_norm]
 theorem reduced_windowStep_synthesisSummary (cfg : Config) (row : ℕ) :
@@ -642,6 +646,7 @@ theorem reduced_windowStep_synthesisSummary (cfg : Config) (row : ℕ) :
     omega
   · rfl
   · simp only [FloorPlanner.RegionSynthesisSummary.ofColumns_instanceRowExtent]
+  · rfl
 
 @[synthesis_summary_norm]
 theorem processWindow_synthesisSummary_eq
@@ -655,6 +660,8 @@ theorem processWindow_synthesisSummary_eq
   · simp only [processWindowSynthesisSummary, processWindow, circuit_norm]
     omega
   · simp only [processWindowSynthesisSummary, processWindow, circuit_norm]
+  · simp only [processWindowSynthesisSummary, processWindow, circuit_norm,
+      synthesis_summary_norm]
   · simp only [processWindowSynthesisSummary, processWindow, circuit_norm,
       synthesis_summary_norm]
 

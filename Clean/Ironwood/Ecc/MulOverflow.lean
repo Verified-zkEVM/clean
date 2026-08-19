@@ -204,6 +204,7 @@ theorem gateRegion_synthesisSummary
     omega
   · simp only [gateRegion, circuit_norm, synthesis_summary_norm]
   · simp only [gateRegion, circuit_norm, synthesis_summary_norm]
+  · simp only [gateRegion, circuit_norm, synthesis_summary_norm]
 
 /-- The layouter-level `overflow_check` body: the three faithful sibling regions plus the
 copyCheck child. -/

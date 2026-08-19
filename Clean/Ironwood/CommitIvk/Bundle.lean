@@ -137,6 +137,8 @@ def bundleElaborated (wb1 wd1 : WitgenIR Fp 1) :
           synthesis_summary_norm]
       · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
           synthesis_summary_norm]
+      · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+          synthesis_summary_norm]
     copyCellsAssigned := by keygen_registration [bundleSynthesize] }
 
 /-- Rust `CommitIvkChip` canonicity `assign` (`commit_ivk.rs:519-660`), parameterized by

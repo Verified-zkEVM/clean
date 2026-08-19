@@ -487,6 +487,8 @@ def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs Roun
             Add.synthesisSummary, circuit_norm, synthesis_summary_norm]
         · simp only [roundSynthesisSummary, roundColumns, roundSynthesize,
             Add.synthesisSummary, circuit_norm, synthesis_summary_norm]
+        · simp only [roundSynthesisSummary, roundColumns, roundSynthesize,
+            Add.synthesisSummary, circuit_norm, synthesis_summary_norm]
       registered := by keygen_registration [roundSynthesize]
       lookupSelectorsAnchoredBy_of_registered := by
         intro configInput counts configured offset input region anchor _ _

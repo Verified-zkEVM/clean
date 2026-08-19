@@ -78,6 +78,7 @@ def bundle (wb1 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
         · simp only [circuit_norm]
           omega
         · simp only [circuit_norm]
+        · simp only [circuit_norm, synthesis_summary_norm]
         · simp only [circuit_norm, synthesis_summary_norm] }
 
   synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
@@ -196,6 +197,7 @@ def bundle (wd0 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
         · simp only [circuit_norm]
           omega
         · simp only [circuit_norm]
+        · simp only [circuit_norm, synthesis_summary_norm]
         · simp only [circuit_norm, synthesis_summary_norm] }
 
   synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
@@ -310,6 +312,7 @@ def bundle : FormalRegionCircuit Fp Config Config Inputs unit where
         · simp only [circuit_norm]
           omega
         · simp only [circuit_norm]
+        · simp only [circuit_norm, synthesis_summary_norm]
         · simp only [circuit_norm, synthesis_summary_norm] }
 
   synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
@@ -392,6 +395,7 @@ def bundle (wg0 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
         · simp only [circuit_norm]
           omega
         · simp only [circuit_norm]
+        · simp only [circuit_norm, synthesis_summary_norm]
         · simp only [circuit_norm, synthesis_summary_norm] }
 
   synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
@@ -502,6 +506,7 @@ def bundle (wh1 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
         · simp only [circuit_norm]
           omega
         · simp only [circuit_norm]
+        · simp only [circuit_norm, synthesis_summary_norm]
         · simp only [circuit_norm, synthesis_summary_norm] }
 
   synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do

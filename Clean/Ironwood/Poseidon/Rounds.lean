@@ -128,6 +128,7 @@ def fullRoundSynthesize (r : ℕ) (cfg : Config) (offset : ℕ)
         omega
       · simp only [fullRoundSynthesize, circuit_norm]
       · simp only [fullRoundSynthesize, circuit_norm, synthesis_summary_norm]
+      · simp only [fullRoundSynthesize, circuit_norm, synthesis_summary_norm]
     fixedAssignmentsAgree := by
       intro configInput counts hconfig offset input region
       unfold RegionOperations.FixedAssignmentsAgree
@@ -195,6 +196,7 @@ def partialRoundSynthesize (r : ℕ) (cfg : Config) (offset : ℕ)
       · simp only [partialRoundSynthesize, circuit_norm]
         omega
       · simp only [partialRoundSynthesize, circuit_norm]
+      · simp only [partialRoundSynthesize, circuit_norm, synthesis_summary_norm]
       · simp only [partialRoundSynthesize, circuit_norm, synthesis_summary_norm]
     fixedAssignmentsAgree := by
       intro configInput counts hconfig offset input region

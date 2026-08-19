@@ -515,7 +515,7 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
           simp only [hashRegionSynthesisSummary, hashRegionSynthesize,
             circuit_norm, synthesis_summary_norm]
           rw [z1Cells_operations]
-          simp only [synthesis_summary_norm, Nat.max_zero]
+          simp only [synthesis_summary_norm, Nat.max_zero, Nat.add_zero]
         rw [← max_assoc, max_self, ← max_assoc, max_self]
       output_eq := by
         intro config offset input self

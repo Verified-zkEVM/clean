@@ -137,6 +137,7 @@ def swap (wb : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool) :
         · simp only [circuit_norm, swapGate]
           omega
         · simp only [circuit_norm, swapGate]
+        · simp only [circuit_norm, swapGate, synthesis_summary_norm]
         · simp only [circuit_norm, swapGate, synthesis_summary_norm] }
 
   synthesize cfg offset (input : Input (AssignedCell Fp)) := do

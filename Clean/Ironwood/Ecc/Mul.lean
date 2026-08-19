@@ -557,6 +557,8 @@ theorem mainCircuitSynthesisSummary_eq (cfg : Config)
       synthesis_summary_norm, configure_selector_norm]
   · simp only [mainCircuitSynthesisSummary, circuit_norm,
       synthesis_summary_norm, configure_selector_norm]
+  · simp only [mainCircuitSynthesisSummary, circuit_norm,
+      synthesis_summary_norm, configure_selector_norm]
 
 def mainKeygenRequirements : KeygenRequirements Fp Config (Var Inputs Fp) where
   configLawful cfg :=

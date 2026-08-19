@@ -98,6 +98,8 @@ def initRegion (capacity : Fp) : FormalRegionCircuit Fp Config Config unit State
             synthesis_summary_norm]
         · simp only [initRegionSynthesisSummary, circuit_norm,
             synthesis_summary_norm]
+        · simp only [initRegionSynthesisSummary, circuit_norm,
+            synthesis_summary_norm]
       output_eq := by
         intro cfg _ _ _
         rfl }
@@ -196,6 +198,8 @@ def addInputRegionElaborated : ElaboratedRegionCircuit Fp Config Config
     · simp only [addInputRegionSynthesize, addInputRegionSynthesisSummary, circuit_norm,
         synthesis_summary_norm, configure_selector_norm]
       omega
+    · simp only [addInputRegionSynthesize, addInputRegionSynthesisSummary, circuit_norm,
+        synthesis_summary_norm, configure_selector_norm]
     · simp only [addInputRegionSynthesize, addInputRegionSynthesisSummary, circuit_norm,
         synthesis_summary_norm, configure_selector_norm]
     · simp only [addInputRegionSynthesize, addInputRegionSynthesisSummary, circuit_norm,
