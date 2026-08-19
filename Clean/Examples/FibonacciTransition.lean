@@ -146,6 +146,18 @@ def fibTransitionComponent : Component (F p) where
 example (t : Table (F p)) (h : t.component = fibTransitionComponent) : t.IsTransition := by
   simp [Table.IsTransition, h, fibTransitionComponent]
 
+/-- The circuit's output variable is the canonical next-row layout -- cells `[4, 8)`, the low
+cells of the window's second row. This is the per-circuit fact `Table.rowOutput_windowEnv` and
+`Table.transition_induction` key on, and it holds definitionally because `main` witnesses the
+next row's cells in order and returns them. -/
+example :
+    ((fibTransitionComponent (p:=p)).circuit (fibTransitionComponent (p:=p)).rowInputVar).output
+        (fibTransitionComponent (p:=p)).rowOffset
+      = varFromOffset (fibTransitionComponent (p:=p)).Output
+          (fibTransitionComponent (p:=p)).rowWidth := by
+  show (fibStep).output (varFromOffset Fib8Input 0) 4 = varFromOffset Fib8Input 4
+  simp [fibStep, circuit_norm]
+
 /-! ## Boundary assertions
 
 The two ends of the trace, pinned the way a real AIR pins them: native first/last-row

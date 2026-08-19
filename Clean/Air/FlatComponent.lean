@@ -308,6 +308,62 @@ lemma windowRow_eq_append {t : Table F} {i : ℕ} (h : i ∈ t.windows) :
       List.getElem?_eq_getElem (t.lt_length_of_mem_windows h), Option.getD_some, Array.empty_append]
     exact foldl_append_eq_append _ _
 
+/-- Any in-range row of the trace has the component's row width. -/
+lemma row_size {t : Table F} {i : ℕ} (hi : i < t.table.length) :
+    (t.table[i]!).size = t.component.rowWidth := by
+  rw [List.getElem!_eq_getElem?_getD, List.getElem?_eq_getElem hi, Option.getD_some]
+  exact t.uniform_width _ (List.getElem_mem hi)
+
+omit [FiniteField F] in
+private lemma foldl_append_size (l : List (Array F)) (init : Array F) :
+    (l.foldl (· ++ ·) init).size = init.size + (l.map Array.size).sum := by
+  induction l generalizing init with
+  | nil => simp
+  | cons a as ih =>
+    simp only [List.foldl_cons, ih, Array.size_append, List.map_cons, List.sum_cons]
+    omega
+
+/-- A window spans `windowRows` rows of `rowWidth` cells each. -/
+lemma windowRow_size {t : Table F} {i : ℕ} (hi : i ∈ t.windows) :
+    (t.windowRow i).size = t.component.windowRows * t.component.rowWidth := by
+  rw [mem_windows_iff] at hi
+  rw [windowRow, foldl_append_size]
+  have hrows : ((List.range t.component.windowRows).map fun k => t.table[i + k]!).map Array.size
+      = List.replicate t.component.windowRows t.component.rowWidth := by
+    rw [List.map_map, List.eq_replicate_iff]
+    refine ⟨by simp, ?_⟩
+    intro s hs
+    simp only [List.mem_map, List.mem_range, Function.comp_apply] at hs
+    obtain ⟨k, hk, rfl⟩ := hs
+    exact t.row_size (by omega)
+  rw [hrows, List.sum_replicate, smul_eq_mul]
+  simp
+
+/--
+Reading any type at offset `0` of the window at `i` is reading it at offset `0` of row `i`,
+provided the read stays within one row. This generalizes `valueFromOffset_windowEnv` below
+beyond the component's own `Input`.
+-/
+lemma valueFromOffset_windowEnv_curr {t : Table F} {i : ℕ} (hi : i ∈ t.windows)
+    (data : ProverData F) (T : TypeMap) [ProvableType T]
+    (hT : size T ≤ t.component.rowWidth) :
+    valueFromOffset T 0 (t.windowEnv i data) =
+      valueFromOffset T 0 (Environment.fromArray t.table[i]! data) := by
+  obtain ⟨rest, hrest⟩ := windowRow_eq_append hi
+  have hgetElem : t.table[i]'(t.lt_length_of_mem_windows hi) = t.table[i]! := by
+    rw [List.getElem!_eq_getElem?_getD,
+      List.getElem?_eq_getElem (t.lt_length_of_mem_windows hi)]
+    rfl
+  rw [hgetElem] at hrest
+  simp only [valueFromOffset, windowEnv, Environment.fromArray, hrest]
+  congr 1
+  apply Vector.ext
+  intro j hj
+  simp only [Vector.getElem_mapRange, zero_add]
+  rw [Array.getElem?_append_left (by
+    rw [t.row_size (t.lt_length_of_mem_windows hi)]
+    omega)]
+
 /--
 The window's input cells are read identically from its first row alone and from the whole window,
 because they occupy the low `size Input` indices and `size Input ≤ rowWidth` (the component's
