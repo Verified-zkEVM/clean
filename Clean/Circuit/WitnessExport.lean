@@ -1,5 +1,6 @@
 import Clean.Circuit.Json
 import Clean.Circuit.Formal
+import Clean.Circuit.WitnessShare
 
 /-!
 # Witness-generation export (witgen IR plan, phase 6)
@@ -159,12 +160,9 @@ def FlatOperation.localLengthFold (ops : List (FlatOperation F)) : ℕ :=
     | .witness m _ => acc + m
     | _ => acc) 0
 
-/--
-Serialize the operations of a circuit for an external witgen implementation:
-the flattened operation list, each witness op carrying its IR program.
--/
-def Operations.witgenJson? (ops : Operations F) : Except String Json := do
-  let flat := ops.toFlat
+/-- Serialize a flat operation list for an external witgen implementation, each witness
+op carrying its IR program. -/
+def FlatOperation.witgenJsonList? (flat : List (FlatOperation F)) : Except String Json := do
   match Witgen.unexportableWitnesses flat with
   | [] => pure ()
   | bad => throw s!"witness operations at flat indices {bad} are native closures; port them to witness IR (or keep using the Lean reference interpreter)"
@@ -173,6 +171,29 @@ def Operations.witgenJson? (ops : Operations F) : Except String Json := do
     ("version", 1),
     ("localLength", toJson (FlatOperation.localLengthFold flat)),
     ("operations", Json.arr opsJson.toArray)]
+
+/--
+Serialize the operations of a circuit for an external witgen implementation:
+the flattened operation list, each witness op carrying its IR program.
+-/
+def Operations.witgenJson? (ops : Operations F) : Except String Json :=
+  FlatOperation.witgenJsonList? ops.toFlat
+
+/-- Rebuild a witness operation's program with `WitgenIR.share`
+(non-witness operations are unchanged). -/
+def FlatOperation.share [DecidableEq F] [Hashable F] : FlatOperation F → FlatOperation F
+  | .witness m code => .witness m code.share
+  | op => op
+
+/--
+Like `Operations.witgenJson?`, but each witness program is first rebuilt with
+`WitgenIR.share`, so its serialized size (and an external interpreter's evaluation
+cost) is proportional to its number of *distinct* subterms rather than its tree size.
+`WitgenIR.eval_share` proves the rebuilt programs evaluate identically.
+-/
+def Operations.witgenJsonShared? [DecidableEq F] [Hashable F] (ops : Operations F) :
+    Except String Json :=
+  FlatOperation.witgenJsonList? (ops.toFlat.map .share)
 
 /-! ## Dispatch for the user-facing commands
 

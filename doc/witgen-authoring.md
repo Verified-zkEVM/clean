@@ -4,7 +4,7 @@ Witness generators in Clean are written in a deep-embedded IR (`Clean/Circuit/Wi
 so that witness generation is _data_: serializable for Rust proving backends
 (`#witgen_json`), checkable (`#assert_exportable`), and still evaluated in Lean by a
 verified reference interpreter (`Circuit.witgen`). This guide shows the authoring
-surface; see `doc/witgen-ir-plan.md` for the design history.
+surface; the serialized JSON contract is specified in `doc/witgen-wire-format.md`.
 
 ## The common case: `witness` with typed expressions
 

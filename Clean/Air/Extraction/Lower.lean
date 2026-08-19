@@ -1,10 +1,12 @@
 import Clean.Air.Extraction.IR
+import Clean.Circuit.WitnessShare
 
 /-! Structural lowering from a flat Clean ensemble to the typed extraction program. -/
 
 namespace Air.Flat.Extraction
 
 open Air.Flat.WitnessGeneration
+open scoped Witgen
 
 variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
@@ -81,7 +83,7 @@ def expressionsBadVariable (width : ℕ) (expressions : List (Expression F)) : O
 
 private def lowerWitness (component operation : ℕ) {width : ℕ}
     (code : Witgen.WitgenIR F width) : Except LoweringError (WitnessBlock F) :=
-  match code with
+  match code.shareIfSmaller with
   | .native _ => .error (.nativeWitness component operation)
   | .ir steps output =>
       if h : witnessProgramWellFormed steps output then
