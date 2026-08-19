@@ -925,7 +925,7 @@ theorem main_computableWitnesses (n : ℕ) :
       have ih1 := ih ((m + 3) / 2) (by omega)
       have ih2 := ih ((m + 3) - (m + 3) / 2) (by omega)
       intro offset input env env' hp
-      simp only [circuit_norm] at hp
+      simp only [circuit_norm, ProvableType.eval_fields] at hp
       simp only [computable_witnesses_norm, main]
       -- the recursive calls are inlined: their operations are discharged by weakening the
       -- induction hypotheses' conditions (child input equality follows from the parent's)

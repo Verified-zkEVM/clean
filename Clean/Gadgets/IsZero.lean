@@ -115,7 +115,7 @@ theorem soundness [DecidableEq (M F)] : Soundness F (main (M:=M)) Assumptions Sp
   apply foldl_isZero_eq_one_iff
   · assumption
   · intro i _
-    have h := h_holds i
+    have h := h_fold i
     rw [← ProvableType.getElem_eval_fields env (toElements input_var) i.val i.isLt] at h
     exact h
 

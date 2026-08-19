@@ -308,7 +308,7 @@ first-order result. -/
 def VExpr.range (n : ℕ) (body : U64Expr F → FExpr F) : VExpr F n :=
   .mapRange n (body .idx)
 
-@[circuit_norm]
+@[circuit_norm, grind =]
 theorem VExpr.range_def (n : ℕ) (body : U64Expr F → FExpr F) :
     VExpr.range n body = .mapRange n (body .idx) := rfl
 

@@ -44,11 +44,11 @@ def circuit (n r : ℕ) [NeZero n] : FormalCircuit (F p) (fields n) (fields n) w
     rw [Vector.getElem_rotate]
     -- Use h_input: eval input_var = input
     simp only [← h_input]
-    -- Normalize array/vector indexing
-    simp only [Vector.getElem_toArray]
+    -- fold the scalar element eval to the whole-atom spelling
+    rw [ProvableType.getElem_eval_fields]
+    congr 1
     -- Prove index equality via Fin arithmetic
     simp only [Fin.val_add, Fin.val_ofNat]
-    congr 1
     exact Nat.add_mod_mod ..
 
   completeness := by
@@ -61,6 +61,8 @@ def circuit (n r : ℕ) [NeZero n] : FormalCircuit (F p) (fields n) (fields n) w
     rw [h_env ⟨i, hi⟩]
     -- simplify RHS to match
     rw [Vector.getElem_mapFinRange i hi]
+    rw [ProvableType.getElem_eval_fields]
+    simp only [h_input]
 
 end RotR
 end Circomlib

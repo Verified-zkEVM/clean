@@ -153,7 +153,7 @@ toward the whole-atom eval the input premise is stated at (`Expression.eval env 
 `Expression.eval env t.1 ~~> (eval env t).1`). Constructed subjects (map/literal-built)
 are left for the inward element lemmas — the same literal/opaque discrimination that
 keeps the struct pair confluent. -/
-private def vectorAtomLiftCore (e : Expr) : SimpM Simp.Step := do
+private def vectorAtomLiftCoreWith (foldFields : Bool) (e : Expr) : SimpM Simp.Step := do
   let args := e.getAppArgs
   unless e.getAppFn.isConstOf ``Expression.eval && args.size ≥ 2 do
     return .continue
@@ -178,6 +178,10 @@ private def vectorAtomLiftCore (e : Expr) : SimpM Simp.Step := do
       -- `Expression.eval`-headed in the first place)
       let elemTy ← withDefault <| whnf (xsType.getAppArgs[0]!)
       if elemTy.isAppOf ``Prod then return .continue
+      -- the scalar-canonical variant (witgen normal form) leaves expression-element
+      -- vectors at the scalar spelling: folding them cycles against `getElem_map`
+      -- once the witgen `evalReduce` procs unfold the whole-vector eval
+      if !foldFields && elemTy.isAppOf ``Expression then return .continue
       -- expression-element vectors (`fields` spelling) fold via the fields lemma,
       -- provable-element vectors via the ProvableVector one
       let lemmaName := if elemTy.isAppOf ``Expression then
@@ -199,7 +203,7 @@ private def vectorAtomLiftCore (e : Expr) : SimpM Simp.Step := do
     if subject.isAppOfArity ``Prod.fst 3 then (true, subject.appArg!)
     else if subject.isAppOfArity ``Prod.snd 3 then (false, subject.appArg!)
     else (false, subject)
-  if (subject.isAppOfArity ``Prod.fst 3 || subject.isAppOfArity ``Prod.snd 3) &&
+  if foldFields && (subject.isAppOfArity ``Prod.fst 3 || subject.isAppOfArity ``Prod.snd 3) &&
       t.isAppOfArity ``GetElem.getElem 8 then
     let gArgs := t.getAppArgs
     let xs := gArgs[5]!
@@ -220,12 +224,17 @@ private def vectorAtomLiftCore (e : Expr) : SimpM Simp.Step := do
     catch _ => return .continue
   return .continue
 
-simproc vectorAtomLift (Expression.eval _ _) := vectorAtomLiftCore
+simproc vectorAtomLift (Expression.eval _ _) := vectorAtomLiftCoreWith true
 attribute [circuit_norm] vectorAtomLift
+
+/-- Scalar-canonical twin of `vectorAtomLift` for the `computable_witnesses` normal
+form, where the witgen `evalReduce` procs keep expression-element vectors at the
+scalar spelling: folds only provable-element subjects. -/
+simproc vectorAtomLiftScalar (Expression.eval _ _) := vectorAtomLiftCoreWith false
 
 /-- The `Eval.eval`-headed link of the same chains (`eval env x[i] ~~> (eval env x)[i]`
 for opaque-rooted provable-vector subjects). -/
-private def vectorAtomLiftEvalCore (e : Expr) : SimpM Simp.Step := do
+private def vectorAtomLiftEvalCoreWith (foldFields : Bool) (e : Expr) : SimpM Simp.Step := do
   let args := e.getAppArgs
   unless e.getAppFn.isConstOf ``Eval.eval && args.size ≥ 2 do
     return .continue
@@ -241,6 +250,8 @@ private def vectorAtomLiftEvalCore (e : Expr) : SimpM Simp.Step := do
     let xsType ← withDefault <| whnf (← inferType xs)
     unless xsType.isAppOf ``Vector do return .continue
     let elemTy ← withDefault <| whnf (xsType.getAppArgs[0]!)
+    if !foldFields && (elemTy.isAppOf ``Expression || elemTy.isAppOf ``Prod) then
+      return .continue
     let lemmaName := if elemTy.isAppOf ``Expression then
       ``ProvableType.getElem_eval_fields else ``getElem_eval_vector
     -- pair elements: `mkAppM` cannot solve the higher-order unification assigning the
@@ -257,8 +268,11 @@ private def vectorAtomLiftEvalCore (e : Expr) : SimpM Simp.Step := do
     return .visit { expr := rhs0, proof? := some proof }
   catch _ => return .continue
 
-simproc vectorAtomLiftEval (Eval.eval _ _) := vectorAtomLiftEvalCore
+simproc vectorAtomLiftEval (Eval.eval _ _) := vectorAtomLiftEvalCoreWith true
 attribute [circuit_norm] vectorAtomLiftEval
+
+/-- Scalar-canonical twin of `vectorAtomLiftEval` (see `vectorAtomLiftScalar`). -/
+simproc vectorAtomLiftEvalScalar (Eval.eval _ _) := vectorAtomLiftEvalCoreWith false
 
 /-- Constructor heads that classify a vector subject as CONSTRUCTED: these decompose
 inward. The complement — chains rooted in a free variable — folds outward via the
@@ -486,7 +500,8 @@ attribute [circuit_norm] ProvableStruct.structEvalProjectionProc
 canonicalization. -/
 
 attribute [computable_witnesses_norm] structEvalProjectionExpr
-  vectorEvalLiteral vectorAtomLift vectorAtomLiftEval structEqSplit
+  vectorEvalLiteral vectorAtomLiftScalar vectorAtomLiftEvalScalar structEqSplit
 attribute [computable_witnesses_norm] ProvableStruct.structEvalProjectionProc
+  ProvableStruct.structEvalLiteralProc ProvableStruct.structEvalProjectionEvalProc
 
 end ProvableStruct

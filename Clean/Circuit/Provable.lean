@@ -870,12 +870,6 @@ lemma eval_vector_eq_get {n : ℕ} (env : Environment F)
     (eval env (vars[i] : M (Expression F)) : M F) = vals[i] := by
   rw [getElem_eval_vector, h]
 
-/-- `eval` commutes with `Vector.set`. -/
-theorem eval_vector_set (env : Environment F) (x : ProvableVector α n (Expression F))
-    (i : ℕ) (h : i < n) (a : α (Expression F)) :
-    eval env (x.set i a) = (eval env x).set i (eval env a) := by
-  simp only [eval_vector, Vector.map_set]
-
 /-- Chain fold through a pair-element vector access, straight to the whole-vector atom
 (used by `StructEvalSimprocs.vectorAtomLift`; fixed element `TypeMap` so the simproc
 can elaborate it without higher-order unification). -/

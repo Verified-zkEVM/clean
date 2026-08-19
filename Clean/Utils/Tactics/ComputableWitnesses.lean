@@ -648,7 +648,8 @@ def splitStructure : TacticM Unit :=
 /-- Vector route, structural `simp_all`: vector eval decomposition and elementwise
 access. Every member fired in the usage measurement at 815dc9b1 (1–75 each). -/
 def vecStructuralLemmas : Array Name := #[
-  ``eval_vector, ``Vector.map_mk, ``List.map_toArray, ``List.map_cons, ``List.map_nil,
+  ``eval_vector, ``ProvableType.eval_fields, ``ProvableType.eval_fields_prover,
+  ``Vector.map_mk, ``List.map_toArray, ``List.map_cons, ``List.map_nil,
   ``Array.mk.injEq, ``List.cons.injEq, ``and_true,
   ``Vector.map_ofFn, ``Vector.ext_iff, ``Vector.getElem_ofFn, ``Function.comp_def,
   ``Vector.getElem_map, ``Vector.getElem_append, ``Vector.getElem_mapFinRange,
@@ -695,7 +696,13 @@ def CwSimp.build (extraTerms : Array (TSyntax `term)) : TacticM CwSimp :=
   withMainContext do
   let cn ← getAttrTheorems `circuit_norm
   let cwn ← getAttrTheorems `computable_witnesses_norm
-  let cnProcs : SimprocsArray := #[← getAttrSimprocs `circuit_norm]
+  -- `circuit_norm`'s outward fold procs (fields/pair vectors) cycle against the
+  -- scalar-canonical witgen normal form (`getElem_map` + the `evalReduce` procs);
+  -- the cwn set carries their scalar twins (`vectorAtomLiftScalar` and friend), so
+  -- drop the folding originals from this tactic's contexts
+  let cnProcsRaw := (← getAttrSimprocs `circuit_norm)
+    |>.erase ``ProvableStruct.vectorAtomLift |>.erase ``ProvableStruct.vectorAtomLiftEval
+  let cnProcs : SimprocsArray := #[cnProcsRaw]
   let cwnProcs ← getAttrSimprocs `computable_witnesses_norm
   let mut normHints ← simpOnlyBase
   for mainName in (← try resolveGlobalConst (mkIdent `main) catch _ => pure []) do
@@ -891,7 +898,7 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
       catch _ => st.restore; pure false
     if ← isEvalCongrEq then
       let vecMain : TacticM Unit := do
-        try metaSimpAll cw.vecCtx cw.vecProcs catch _ => pure () -- DEBUG
+        try metaSimpAll cw.vecCtx cw.vecProcs catch _ => pure ()
         let gs ← getGoals
         for g in gs do
           setGoals [g]
