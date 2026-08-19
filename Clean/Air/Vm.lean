@@ -114,7 +114,7 @@ def toFormal (F : Type) [FiniteField F] (ens : SoundVmEnsemble F PublicIO)
   Spec publicInput := ∃ data, ens.VerifierSpec publicInput data
   soundness := by
     simp only [Ensemble.Soundness, Ensemble.Statement]
-    intro input assumptions ⟨witness, input_eq, constraints, balance⟩
+    intro input assumptions ⟨witness, input_eq, constraints, _boundaries, balance⟩
     use witness.data
     have extra_assumptions := assumptions witness.data
     simp only [← input_eq, circuit_norm] at *

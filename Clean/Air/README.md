@@ -73,7 +73,9 @@ The file previously carried a `TableKind` tag, an `Entry` (component + kind) and
 
 `Balance.lean` contains the channel multiset theory. It defines `BalancedInteractions`, proves permutation and counting lemmas, and provides the channel-level implication principles used by higher-level soundness proofs. It also defines `RawChannel.Consistent` and `RawChannel.Normal`; typed channels are normal by construction, and normal channels are consistent, so both properties are satisfied in practice. A highlight in `Balance.lean` is the "guarantees-to-requirements-reversal" theorem which provides the basis for soundness of VM channels.
 
-`FlatEnsemble.lean` defines AIR ensembles, `Flat.Ensemble` and their witnesses, `Flat.EnsembleWitness`. An ensemble has a list of components (which carry their own row spans, so flat and transition tables mix freely), channels, and an append-only verifier program. Components are added with `addTable`, whatever their span. The verifier contributes public interactions directly; its operation type cannot create witnesses, constraints, lookups, or a synthetic table. Its `Statement` is the raw proof-system relation: there exists a witness whose table constraints hold and whose table and verifier interactions are balanced. The ensemble file also defines soundness and completeness and the `FormalEnsemble` structure which bundles an ensemble with its `Spec`, `Assumptions` and the soundness proof (completeness is TODO).
+`Boundary.lean` defines **boundary assertions**, the direct route from a trace to the public input. A `Boundary.Assertion` is an assert-only constraint set — no witnesses, no lookups, no channel interactions — over the typed input prefix of a designated trace row (first or last, matching the two rows with native AIR selectors) and the public input, bundled with the semantic `Spec` it is proved to imply. A `Boundary.Entry` attaches an assertion to an ensemble table, keyed by component name (names are stable under `addTable`, which prepends; positional indices are not). An entry naming a missing table, or a table whose designated row does not exist, is *unsatisfiable* rather than vacuous. Boundary assertions are deliberately the same artifact as a backend's `when_first_row`/`when_last_row` constraints over public values — unlike channels, which a proof system implements as a logup argument. Together with a transition component they make classic shift-constraint AIR tables expressible: the transition constraint carries the row-to-row induction, a first-row assertion pins the seed, a last-row assertion exports the result, and channels remain for lookups and cross-component interactions.
+
+`FlatEnsemble.lean` defines AIR ensembles, `Flat.Ensemble` and their witnesses, `Flat.EnsembleWitness`. An ensemble has a list of components (which carry their own row spans, so flat and transition tables mix freely), channels, boundary assertions, and an append-only verifier program. Components are added with `addTable`, whatever their span, and boundary assertions with `addBoundary`. The verifier contributes public interactions directly; its operation type cannot create witnesses, constraints, lookups, or a synthetic table. Its `Statement` is the raw proof-system relation: there exists a witness whose table constraints hold, whose boundary assertions hold, and whose table and verifier interactions are balanced. The ensemble file also defines soundness and completeness and the `FormalEnsemble` structure which bundles an ensemble with its `Spec`, `Assumptions` and the soundness proof (completeness is TODO). For ensembles with boundary assertions, `SpecConsistencyWithBoundaries` is the consistency notion to prove: it receives the boundary specs alongside the table specs.
 
 **Ensemble-level soundness** is more than a simple lifting of per-circuit soundness: it requires that channel guarantees, which were _assumed_ as part of local circuit proofs, are shown to hold unconditionally from global channel balance and constraints.
 
@@ -123,6 +125,11 @@ what keeps the verified statement and the deployed artifact enforcing the same r
 - **`VmTables` are flat by construction.** `tables_windowRows` requires `windowRows = 1` of every
   VM component. This is not a new restriction: every VM obligation was already stated in terms of
   a single row's `rowOperations` at `rowOffset`, so VM components were always implicitly flat.
+- **Boundary assertions are Lean-only.** `Lower.lean` throws `LoweringError.boundaryAssertions`
+  for any ensemble that carries one, because `backends/plonky3` does not yet emit
+  `when_first_row`/`when_last_row` constraints or route public values into them. As with the
+  window guards, refusing is what keeps the verified `Statement` and the shipped artifact
+  enforcing the same relation.
 
 A worked example is in `Clean/Examples/FibonacciNextRow.lean`: Fibonacci with a next-row constraint
 in place of the state channel used by `Clean/Examples/FibonacciVm/Circuit.lean`. It proves the
@@ -137,7 +144,7 @@ The transition component is the `Clean.Air` answer to `TableOperation.everyRowEx
 
 Not ported from `Clean/Table`:
 
-- **Boundary constraints** (`TableOperation.boundary`). Until they exist, a transition ensemble must pin its boundaries through the verifier's public channel interactions. This is workable — it is how `Vm.lean` already seeds and terminates the VM state channel — but it is a genuine difference, and it is why a 0- or 1-row transition table being unconstrained is safe rather than a soundness hole.
+- **General boundary row indices** (`RowIndex.fromStart k` / `fromEnd k`). `Boundary.lean` covers the `TableOperation.boundary` use cases that back real AIRs — first and last row, the two rows with native selectors — but not interior rows, which no backend selector enforces for free.
 - **Windows wider than two rows.** `windowRows` is an arbitrary `ℕ` and `windows` is generic in it, so a 3-row window needs no new code at all — but nothing currently builds one, and `TransitionComponent.lean`'s `curr`/`next` spelling covers only the two-row case.
 - **`InductiveTable`** and its `Spec`-carrying inductive interface.
 

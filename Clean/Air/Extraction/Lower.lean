@@ -30,6 +30,7 @@ inductive LoweringError where
   | componentVariable (component index width : ℕ)
   | verifierVariable (index width : ℕ)
   | multiRowWindow (component windowRows : ℕ)
+  | boundaryAssertions (count : ℕ)
 deriving Repr, DecidableEq
 
 instance : ToString LoweringError where
@@ -72,6 +73,8 @@ instance : ToString LoweringError where
         s!"verifier interaction reads public cell {index}, but the public input width is {width}"
     | .multiRowWindow component windowRows =>
         s!"component {component} spans {windowRows} trace rows, but the backend AIR is single-row"
+    | .boundaryAssertions count =>
+        s!"ensemble carries {count} boundary assertions, but the backend has no boundary constraint support"
 
 def expressionBadVariable (width : ℕ) : Expression F → Option ℕ
   | .var cell => if cell.index < width then none else some cell.index
@@ -248,6 +251,11 @@ private def validateDataReads (ensemble : Ensemble F PublicIO) (modes : List (Mo
 /-- Lower and validate the backend-facing portion of an ensemble without producing source text. -/
 def lower (ensemble : Ensemble F PublicIO) (config : Config F ProverInput) :
     Except LoweringError (Program F) := do
+  -- The backend enforces no boundary constraints, so lowering an ensemble that carries any
+  -- would ship an artifact checking a weaker relation than the one verified here. Refuse,
+  -- like the `multiRowWindow` guard does for transition components.
+  unless ensemble.boundaries.isEmpty do
+    throw (.boundaryAssertions ensemble.boundaries.length)
   unless config.modes.length = ensemble.tables.length do
     throw (.modeCount ensemble.tables.length config.modes.length)
   unless config.padding.length = ensemble.tables.length do
