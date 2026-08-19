@@ -878,6 +878,13 @@ def circuitSynthesisSummary (numBits : ℕ) (cfg : Config)
     (roundsSynthesisSummary numBits cfg offset)
 
 @[synthesis_summary_norm]
+theorem circuitSynthesisSummary_lookupActivationCount
+    (numBits : ℕ) (cfg : Config) (offset : ℕ) :
+    (circuitSynthesisSummary numBits cfg offset).lookupActivationCount = 0 := by
+  simp only [circuitSynthesisSummary, roundsSynthesisSummary,
+    synthesis_summary_norm, Nat.mul_zero, Nat.zero_add]
+
+@[synthesis_summary_norm]
 theorem circuitSynthesisSummary_instanceRowExtent_eq
     (numBits : ℕ) (cfg : Config) (offset : ℕ) :
     (circuitSynthesisSummary numBits cfg offset).instanceRowExtent = 0 := by

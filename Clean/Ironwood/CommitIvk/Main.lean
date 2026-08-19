@@ -193,12 +193,26 @@ def synthPiecesSynthesisSummary (cfg : Config) :
   [piece, short, short, piece, piece, short, piece].foldr
     FloorPlanner.SynthesisSummary.combine {}
 
+@[synthesis_summary_norm]
+theorem synthPiecesSynthesisSummary_lookupActivationCount (cfg : Config) :
+    (synthPiecesSynthesisSummary cfg).lookupActivationCount = 6 := by
+  simp only [synthPiecesSynthesisSummary, synthesis_summary_norm,
+    List.map_cons, List.map_nil, List.sum_cons, List.sum_nil]
+  norm_num
+
 /-- Exact reduced footprint of the complete fourteen-region CommitIvk flow. -/
 def synthesisSummary (cfg : Config) : FloorPlanner.SynthesisSummary :=
   (synthPiecesSynthesisSummary cfg).combine
     ((Sinsemilla.CommitDomain.commitSynthesisSummary ns
         (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)).combine
       (Canonicity.circuitSynthesisSummary cfg.gate cfg.lookupConfig))
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_lookupActivationCount (cfg : Config) :
+    (synthesisSummary cfg).lookupActivationCount = 84 := by
+  simp only [synthesisSummary, ns, synthesis_summary_norm,
+    List.ofFn_succ, List.ofFn_zero, List.sum_cons, List.sum_nil]
+  norm_num
 
 @[synthesis_summary_norm]
 theorem synthPiecesSynthesisSummary_hasNoFixedWrites (cfg : Config) :

@@ -237,6 +237,12 @@ def synthesisSummary (gcfg : YCanonicity.Config)
           (FloorPlanner.SynthesisSummary.ofRegion
             (YCanonicity.synthesisSummary gcfg 0)))))
 
+@[synthesis_summary_norm]
+theorem synthesisSummary_lookupActivationCount
+    (gcfg : YCanonicity.Config) (lcfg : LookupRangeCheck.Config 10) :
+    (synthesisSummary gcfg lcfg).lookupActivationCount = 42 := by
+  simp only [synthesisSummary, synthesis_summary_norm]
+
 theorem synth_regionCount (wlsb : WitgenIR Fp 1) (gcfg : YCanonicity.Config)
     (lcfg : LookupRangeCheck.Config 10) (input : Inputs (AssignedCell Fp))
     (i : RegionIndex) :

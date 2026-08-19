@@ -891,4 +891,40 @@ derive_contract_bridges bundle (wlsb wk3 : WitgenIR Fp 1) := bundle wlsb wk3
 
 end YCanonicity
 
+@[synthesis_summary_norm]
+theorem ValueCanonicity.synthesisSummary_lookupActivationCount
+    (cfg : ValueCanonicity.Config) (offset : ℕ) :
+    (ValueCanonicity.synthesisSummary cfg offset).lookupActivationCount = 0 := by
+  simp only [ValueCanonicity.synthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem GdCanonicity.synthesisSummary_lookupActivationCount
+    (cfg : GdCanonicity.Config) (offset : ℕ) :
+    (GdCanonicity.synthesisSummary cfg offset).lookupActivationCount = 0 := by
+  simp only [GdCanonicity.synthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem PkdCanonicity.synthesisSummary_lookupActivationCount
+    (cfg : PkdCanonicity.Config) (offset : ℕ) :
+    (PkdCanonicity.synthesisSummary cfg offset).lookupActivationCount = 0 := by
+  simp only [PkdCanonicity.synthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem RhoCanonicity.synthesisSummary_lookupActivationCount
+    (cfg : RhoCanonicity.Config) (offset : ℕ) :
+    (RhoCanonicity.synthesisSummary cfg offset).lookupActivationCount = 0 := by
+  simp only [RhoCanonicity.synthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem PsiCanonicity.synthesisSummary_lookupActivationCount
+    (cfg : PsiCanonicity.Config) (offset : ℕ) :
+    (PsiCanonicity.synthesisSummary cfg offset).lookupActivationCount = 0 := by
+  simp only [PsiCanonicity.synthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem YCanonicity.synthesisSummary_lookupActivationCount
+    (cfg : YCanonicity.Config) (offset : ℕ) :
+    (YCanonicity.synthesisSummary cfg offset).lookupActivationCount = 0 := by
+  simp only [YCanonicity.synthesisSummary, synthesis_summary_norm]
+
 end Zcash.Circuits.NoteCommit

@@ -566,4 +566,34 @@ theorem bundle_call_output_cell_assigned (wh1 : WitgenIR Fp 1)
 
 end DecomposeH
 
+@[synthesis_summary_norm]
+theorem DecomposeB.synthesisSummary_lookupActivationCount
+    (cfg : DecomposeB.Config) (offset : ℕ) :
+    (DecomposeB.synthesisSummary cfg offset).lookupActivationCount = 0 := by
+  simp only [DecomposeB.synthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem DecomposeD.synthesisSummary_lookupActivationCount
+    (cfg : DecomposeD.Config) (offset : ℕ) :
+    (DecomposeD.synthesisSummary cfg offset).lookupActivationCount = 0 := by
+  simp only [DecomposeD.synthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem DecomposeE.synthesisSummary_lookupActivationCount
+    (cfg : DecomposeE.Config) (offset : ℕ) :
+    (DecomposeE.synthesisSummary cfg offset).lookupActivationCount = 0 := by
+  simp only [DecomposeE.synthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem DecomposeG.synthesisSummary_lookupActivationCount
+    (cfg : DecomposeG.Config) (offset : ℕ) :
+    (DecomposeG.synthesisSummary cfg offset).lookupActivationCount = 0 := by
+  simp only [DecomposeG.synthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem DecomposeH.synthesisSummary_lookupActivationCount
+    (cfg : DecomposeH.Config) (offset : ℕ) :
+    (DecomposeH.synthesisSummary cfg offset).lookupActivationCount = 0 := by
+  simp only [DecomposeH.synthesisSummary, synthesis_summary_norm]
+
 end Zcash.Circuits.NoteCommit

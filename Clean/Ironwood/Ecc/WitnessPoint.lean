@@ -103,6 +103,12 @@ def pointSynthesisSummary (config : Config) (offset : ℕ) :
     (offset + 1) 0
 
 @[synthesis_summary_norm]
+theorem pointSynthesisSummary_lookupActivationCount
+    (config : Config) (offset : ℕ) :
+    (pointSynthesisSummary config offset).lookupActivationCount = 0 := by
+  simp only [pointSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
 theorem pointSynthesisSummary_hasNoFixedColumns (config : Config) (offset : ℕ) :
     (pointSynthesisSummary config offset).HasNoFixedColumns := by
   simp only [pointSynthesisSummary,
@@ -171,6 +177,12 @@ def pointNonIdSynthesisSummary (config : Config) (offset : ℕ) :
       .column .advice config.x.index,
       .column .advice config.y.index]
     (offset + 1) 0
+
+@[synthesis_summary_norm]
+theorem pointNonIdSynthesisSummary_lookupActivationCount
+    (config : Config) (offset : ℕ) :
+    (pointNonIdSynthesisSummary config offset).lookupActivationCount = 0 := by
+  simp only [pointNonIdSynthesisSummary, synthesis_summary_norm]
 
 def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
     (Unconstrained Point) Point where

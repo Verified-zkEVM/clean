@@ -168,6 +168,12 @@ def loopSynthesisSummary (n : ℕ) (cfg : Config) (offset : ℕ) :
   .repeatColumns (roundColumns cfg) offset 1 2 0 n
     (lookupActivationCount := 1)
 
+@[synthesis_summary_norm]
+theorem loopSynthesisSummary_lookupActivationCount
+    (n : ℕ) (cfg : Config) (offset : ℕ) :
+    (loopSynthesisSummary n cfg offset).lookupActivationCount = n := by
+  simp only [loopSynthesisSummary, synthesis_summary_norm, Nat.mul_one]
+
 /-- The reduced interior-loop summary contains no deferred constant requests. -/
 @[synthesis_summary_norm]
 theorem loopSynthesisSummary_constantSiteCount
@@ -606,6 +612,13 @@ def circuitSynthesisSummary (w : ℕ) (cfg : Config) (offset : ℕ) :
           .column .advice cfg.xA.index,
           .selector cfg.qS1.index]
         (offset + w + 2) 0 (lookupActivationCount := 1)))
+
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_lookupActivationCount
+    (w : ℕ) (cfg : Config) (offset : ℕ) :
+    (circuitSynthesisSummary w cfg offset).lookupActivationCount = w + 1 := by
+  simp only [circuitSynthesisSummary, synthesis_summary_norm,
+    loopSynthesisSummary_lookupActivationCount, Nat.zero_add]
 
 @[synthesis_summary_norm]
 theorem circuitSynthesisSummary_instanceRowExtent_eq (w : ℕ)

@@ -261,6 +261,11 @@ def synthesisSummary (cfg : Config) (offset : ℕ) :
     (offset + 2) 1
 
 @[synthesis_summary_norm]
+theorem synthesisSummary_lookupActivationCount (cfg : Config) (offset : ℕ) :
+    (synthesisSummary cfg offset).lookupActivationCount = 0 := by
+  simp only [synthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
 theorem synthesisSummary_instanceRowExtent_eq (cfg : Config) (offset : ℕ) :
     (synthesisSummary cfg offset).instanceRowExtent = 0 := by
   simp only [synthesisSummary, synthesis_summary_norm]
@@ -1385,6 +1390,15 @@ def HashLayer.synthesisSummary (cfg : Config)
                 HashLayer.merkleNs cfg.sinsemilla).combine
               (FloorPlanner.SynthesisSummary.ofRegion
                 (Gate.synthesisSummary cfg.gate 0)))))))
+
+@[synthesis_summary_norm]
+theorem HashLayer.synthesisSummary_lookupActivationCount
+    (cfg : Config) (lookupCfg : LookupRangeCheck.Config 10) :
+    (HashLayer.synthesisSummary cfg lookupCfg).lookupActivationCount = 56 := by
+  simp only [HashLayer.synthesisSummary, HashLayer.merkleNs,
+    synthesis_summary_norm, List.ofFn_succ, List.ofFn_zero, List.sum_cons,
+    List.sum_nil]
+  norm_num
 
 @[synthesis_summary_norm]
 theorem HashLayer.synthesisSummary_tableRowExtent_eq
@@ -2909,6 +2923,13 @@ def Layer.synthesisSummary (ccfg : CondSwap.Config) (cfg : Config)
     (HashLayer.synthesisSummary cfg lookupCfg)
 
 @[synthesis_summary_norm]
+theorem Layer.synthesisSummary_lookupActivationCount
+    (ccfg : CondSwap.Config) (cfg : Config)
+    (lookupCfg : LookupRangeCheck.Config 10) :
+    (Layer.synthesisSummary ccfg cfg lookupCfg).lookupActivationCount = 56 := by
+  simp only [Layer.synthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
 theorem Layer.synthesisSummary_tableRowExtent_eq
     (ccfg : CondSwap.Config) (cfg : Config)
     (lookupCfg : LookupRangeCheck.Config 10) :
@@ -3841,6 +3862,12 @@ def synthesisSummary
     : FloorPlanner.SynthesisSummary :=
   FloorPlanner.SynthesisSummary.replicate d
     (Layer.synthesisSummary cfg.1 cfg.2.1 cfg.2.2)
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_lookupActivationCount
+    (cfg : CondSwap.Config × Config × LookupRangeCheck.Config 10) :
+    (synthesisSummary d cfg).lookupActivationCount = d * 56 := by
+  simp only [synthesisSummary, synthesis_summary_norm]
 
 @[synthesis_summary_norm]
 theorem synthesisSummary_tableRowExtent_eq

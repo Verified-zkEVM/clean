@@ -142,6 +142,12 @@ def circuitSynthesisSummary (gcfg : Config)
       (FloorPlanner.SynthesisSummary.ofRegion
         (CommitIvk.synthesisSummary gcfg 0)))
 
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_lookupActivationCount
+    (gcfg : Config) (lcfg : LookupRangeCheck.Config 10) :
+    (circuitSynthesisSummary gcfg lcfg).lookupActivationCount = 27 := by
+  simp only [circuitSynthesisSummary, synthesis_summary_norm]
+
 /-- Rust `CommitIvkChip` canonicity flow: the two shift `witness_check`s, then the
 `"Assign cells used in canonicity gate"` region. `Spec` is the donor composite payoff
 (`CommitIvk.Canonicity.Spec`): the canonical bit slices of `ak`/`nk` and

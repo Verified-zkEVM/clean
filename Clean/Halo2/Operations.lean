@@ -656,6 +656,19 @@ theorem foldr_combine_constantSiteCount
       simp only [List.foldr_cons, combine_constantSiteCount,
         List.map_cons, List.sum_cons, inductionHypothesis]
 
+/-- Lookup activations of a reduced summary fold are the sum of the component
+counts. -/
+@[synthesis_summary_norm]
+theorem foldr_combine_lookupActivationCount
+    (summaries : List RegionSynthesisSummary) :
+    (summaries.foldr combine {}).lookupActivationCount =
+      (summaries.map (fun summary => summary.lookupActivationCount)).sum := by
+  induction summaries with
+  | nil => rfl
+  | cons summary rest inductionHypothesis =>
+      simp only [List.foldr_cons, combine_lookupActivationCount,
+        List.map_cons, List.sum_cons, inductionHypothesis]
+
 /-- A fold of region summaries that never touch instance rows also never touches
 instance rows. -/
 @[synthesis_summary_norm]
@@ -1463,6 +1476,19 @@ theorem combine_columns (left right : SynthesisSummary) :
     (left right : SynthesisSummary) :
     (left.combine right).regionShapes =
       left.regionShapes ++ right.regionShapes := rfl
+
+/-- Lookup activations of a reduced layouter-summary fold are the sum of the
+component counts. -/
+@[synthesis_summary_norm]
+theorem foldr_combine_lookupActivationCount
+    (summaries : List SynthesisSummary) :
+    (summaries.foldr combine {}).lookupActivationCount =
+      (summaries.map (fun summary => summary.lookupActivationCount)).sum := by
+  induction summaries with
+  | nil => rfl
+  | cons summary rest inductionHypothesis =>
+      simp only [List.foldr_cons, combine_lookupActivationCount,
+        List.map_cons, List.sum_cons, inductionHypothesis]
 
 @[circuit_norm, synthesis_summary_norm] theorem combine_tableRowExtent
     (left right : SynthesisSummary) :

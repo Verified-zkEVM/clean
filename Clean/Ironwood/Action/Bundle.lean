@@ -3342,6 +3342,11 @@ def mainPostSynthesisSummary (cfg : Config) :
   (synthesizeBaseSynthesisSummary cfg).combine
     (synthCrossAddressChecksSynthesisSummary cfg)
 
+@[synthesis_summary_norm]
+theorem mainPostSynthesisSummary_lookupActivationCount (cfg : Config) :
+    (mainPostSynthesisSummary cfg).lookupActivationCount = 2424 := by
+  simp only [mainPostSynthesisSummary, synthesis_summary_norm]
+
 theorem mainPostSynthesisSummary_physicalRegionShapes (cfg : Config) :
     (mainPostSynthesisSummary cfg).physicalRegionShapes =
       (synthWitnessSynthesisSummary cfg).physicalRegionShapes ++

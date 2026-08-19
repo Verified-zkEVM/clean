@@ -618,6 +618,13 @@ def synthPiecesSynthesisSummary (cfg : Config) :
     piece, piece, short, piece, short, piece].foldr
       FloorPlanner.SynthesisSummary.combine {}
 
+@[synthesis_summary_norm]
+theorem synthPiecesSynthesisSummary_lookupActivationCount (cfg : Config) :
+    (synthPiecesSynthesisSummary cfg).lookupActivationCount = 14 := by
+  simp only [synthPiecesSynthesisSummary, synthesis_summary_norm,
+    List.map_cons, List.map_nil, List.sum_cons, List.sum_nil]
+  norm_num
+
 /-- Fully reduced footprint of the two y checks, commitment, and four word checks. -/
 def synthChecksSynthesisSummary (cfg : Config) :
     FloorPlanner.SynthesisSummary :=
@@ -636,6 +643,14 @@ def synthChecksSynthesisSummary (cfg : Config) :
       10 13 false cfg.lookupConfig].foldr
         FloorPlanner.SynthesisSummary.combine {}
 
+@[synthesis_summary_norm]
+theorem synthChecksSynthesisSummary_lookupActivationCount (cfg : Config) :
+    (synthChecksSynthesisSummary cfg).lookupActivationCount = 247 := by
+  simp only [synthChecksSynthesisSummary, ns, synthesis_summary_norm,
+    List.map_cons, List.map_nil, List.sum_cons, List.sum_nil,
+    List.ofFn_succ, List.ofFn_zero]
+  norm_num
+
 /-- Fully reduced footprint of the five decomposition and five canonicity regions. -/
 def synthGatesSynthesisSummary (cfg : Config) :
     FloorPlanner.SynthesisSummary :=
@@ -653,11 +668,23 @@ def synthGatesSynthesisSummary (cfg : Config) :
     region (PsiCanonicity.synthesisSummary cfg.gates.psi 0)].foldr
       FloorPlanner.SynthesisSummary.combine {}
 
+@[synthesis_summary_norm]
+theorem synthGatesSynthesisSummary_lookupActivationCount (cfg : Config) :
+    (synthGatesSynthesisSummary cfg).lookupActivationCount = 0 := by
+  simp only [synthGatesSynthesisSummary, synthesis_summary_norm,
+    List.map_cons, List.map_nil, List.sum_cons, List.sum_nil,
+    Nat.zero_add]
+
 /-- Exact reduced footprint of the complete 43-region NoteCommit flow. -/
 def synthesisSummary (cfg : Config) : FloorPlanner.SynthesisSummary :=
   (synthPiecesSynthesisSummary cfg).combine
     ((synthChecksSynthesisSummary cfg).combine
       (synthGatesSynthesisSummary cfg))
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_lookupActivationCount (cfg : Config) :
+    (synthesisSummary cfg).lookupActivationCount = 261 := by
+  simp only [synthesisSummary, synthesis_summary_norm]
 
 @[synthesis_summary_norm]
 theorem synthPiecesSynthesisSummary_hasNoFixedWrites (cfg : Config) :

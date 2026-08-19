@@ -173,6 +173,15 @@ def commitSynthesisSummary (ns : List ℕ)
         (Ecc.Add.synthesisSummary cfg.2.2 0)))
 
 @[synthesis_summary_norm]
+theorem commitSynthesisSummary_lookupActivationCount
+    (ns : List ℕ)
+    (cfg : Ecc.MulFixed.FullWidth.Config × HashPiece.Config × Ecc.Add.Config) :
+    (commitSynthesisSummary ns cfg).lookupActivationCount =
+      (List.ofFn fun i : Fin ns.length => ns.getD i.val 0 + 1).sum := by
+  simp only [commitSynthesisSummary, synthesis_summary_norm, Nat.zero_add,
+    Nat.add_zero]
+
+@[synthesis_summary_norm]
 theorem commitSynthesisSummary_tableRowExtent_eq (ns : List ℕ)
     (cfg : Ecc.MulFixed.FullWidth.Config × HashPiece.Config × Ecc.Add.Config) :
     (commitSynthesisSummary ns cfg).tableRowExtent = 0 := by

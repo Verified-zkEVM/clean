@@ -108,6 +108,12 @@ def loopSynthesisSummary (n : ℕ) (cfg : Config) (offset : ℕ) :
       .column .advice cfg.yP.index]
     offset 1 3 0 n
 
+@[synthesis_summary_norm]
+theorem loopSynthesisSummary_lookupActivationCount
+    (n : ℕ) (cfg : Config) (offset : ℕ) :
+    (loopSynthesisSummary n cfg offset).lookupActivationCount = 0 := by
+  simp only [loopSynthesisSummary, synthesis_summary_norm, Nat.mul_zero]
+
 /-- The repeated double-and-add rows use selectors and advice columns only. -/
 @[synthesis_summary_norm]
 theorem loopSynthesisSummary_hasNoFixedColumns
@@ -416,6 +422,13 @@ def doubleAndAddSynthesisSummary (n : ℕ) (cfg : Config) (offset : ℕ) :
           .column .advice cfg.xA.index,
           .column .advice cfg.lambda1.index]
         (offset + n + 3) 0))
+
+@[synthesis_summary_norm]
+theorem doubleAndAddSynthesisSummary_lookupActivationCount
+    (n : ℕ) (cfg : Config) (offset : ℕ) :
+    (doubleAndAddSynthesisSummary n cfg offset).lookupActivationCount = 0 := by
+  simp only [doubleAndAddSynthesisSummary, synthesis_summary_norm,
+    Nat.add_zero]
 
 @[synthesis_summary_norm]
 theorem doubleAndAddSynthesisSummary_instanceRowExtent_eq

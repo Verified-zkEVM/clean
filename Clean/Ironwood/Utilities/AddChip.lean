@@ -89,6 +89,11 @@ def synthesisSummary (cfg : Config) (offset : ℕ) :
       .column .advice cfg.c.index]
     (offset + 1) 0
 
+@[synthesis_summary_norm]
+theorem synthesisSummary_lookupActivationCount (cfg : Config) (offset : ℕ) :
+    (synthesisSummary cfg offset).lookupActivationCount = 0 := by
+  simp only [synthesisSummary, synthesis_summary_norm]
+
 def add : FormalRegionCircuit Fp Config Config Inputs field where
   configure := pure
 

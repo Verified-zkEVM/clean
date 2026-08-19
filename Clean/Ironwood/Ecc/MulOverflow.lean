@@ -309,6 +309,12 @@ def circuitSynthesisSummary (K : ℕ) (cfg : Config K)
           3 0)))
 
 @[synthesis_summary_norm]
+theorem circuitSynthesisSummary_lookupActivationCount (K : ℕ) (cfg : Config K) :
+    (circuitSynthesisSummary K cfg).lookupActivationCount = numWords K := by
+  simp only [circuitSynthesisSummary, synthesis_summary_norm, Nat.zero_add,
+    Nat.add_zero]
+
+@[synthesis_summary_norm]
 theorem circuitSynthesisSummary_tableRowExtent_eq (K : ℕ) (cfg : Config K) :
     (circuitSynthesisSummary K cfg).tableRowExtent = 0 := by
   simp only [circuitSynthesisSummary,

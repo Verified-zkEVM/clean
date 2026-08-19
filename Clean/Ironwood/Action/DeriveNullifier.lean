@@ -121,6 +121,13 @@ def synthesisSummary
           (Ecc.Add.synthesisSummary cfg.2.2.2 0))))
 
 @[synthesis_summary_norm]
+theorem synthesisSummary_lookupActivationCount
+    (cfg : Poseidon.Config × AddChip.Config ×
+      Ecc.MulFixed.BaseFieldElem.Config × Ecc.Add.Config) :
+    (synthesisSummary cfg).lookupActivationCount = 13 := by
+  simp only [synthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
 theorem synthesisSummary_tableRowExtent_eq
     (cfg : Poseidon.Config × AddChip.Config ×
       Ecc.MulFixed.BaseFieldElem.Config × Ecc.Add.Config) :

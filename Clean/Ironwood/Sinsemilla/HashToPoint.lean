@@ -51,6 +51,12 @@ def witnessMessagePieceSynthesisSummary
       [.column .advice cfg.witnessPieces.index] 1 0)
 
 @[synthesis_summary_norm]
+theorem witnessMessagePieceSynthesisSummary_lookupActivationCount
+    (cfg : Sinsemilla.HashPiece.Config) :
+    (witnessMessagePieceSynthesisSummary cfg).lookupActivationCount = 0 := by
+  simp only [witnessMessagePieceSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
 theorem witnessMessagePieceSynthesisSummary_hasNoFixedWrites
     (cfg : Sinsemilla.HashPiece.Config) :
     (witnessMessagePieceSynthesisSummary cfg).HasNoFixedWrites := by
@@ -386,6 +392,13 @@ def hashRegionSynthesisSummary (ns : List ℕ)
     (offset + 1) 1).combine
       (Sinsemilla.Chain.circuitSynthesisSummary ns cfg offset)
 
+@[synthesis_summary_norm]
+theorem hashRegionSynthesisSummary_lookupActivationCount
+    (ns : List ℕ) (cfg : Sinsemilla.HashPiece.Config) (offset : ℕ) :
+    (hashRegionSynthesisSummary ns cfg offset).lookupActivationCount =
+      (List.ofFn fun i : Fin ns.length => ns.getD i.val 0 + 1).sum := by
+  simp only [hashRegionSynthesisSummary, synthesis_summary_norm, Nat.zero_add]
+
 /-- The `hash_message` region bundle (public `Q`): `public_q_initialization` + the chain.
 `hns`: a Sinsemilla message is nonempty (for `ns = []` the trailing dummy row's `λ₁` is
 unconstrained, so the exit `y` would be unpinned). -/
@@ -719,6 +732,13 @@ def hashCircuitSynthesisSummary (ns : List ℕ)
     (config : Sinsemilla.HashPiece.Config) : FloorPlanner.SynthesisSummary :=
   FloorPlanner.SynthesisSummary.ofRegion
     (hashRegionSynthesisSummary ns config 0)
+
+@[synthesis_summary_norm]
+theorem hashCircuitSynthesisSummary_lookupActivationCount
+    (ns : List ℕ) (config : Sinsemilla.HashPiece.Config) :
+    (hashCircuitSynthesisSummary ns config).lookupActivationCount =
+      (List.ofFn fun i : Fin ns.length => ns.getD i.val 0 + 1).sum := by
+  simp only [hashCircuitSynthesisSummary, synthesis_summary_norm]
 
 @[synthesis_summary_norm]
 theorem hashCircuitSynthesisSummary_tableRowExtent_eq (ns : List ℕ)

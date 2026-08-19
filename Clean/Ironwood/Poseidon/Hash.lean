@@ -337,6 +337,13 @@ def hashSynthesisSummary (cfg : Config) :
         (permuteSynthesisSummary cfg 0)))
 
 @[synthesis_summary_norm]
+theorem hashSynthesisSummary_lookupActivationCount (cfg : Config) :
+    (hashSynthesisSummary cfg).lookupActivationCount = 0 := by
+  simp only [hashSynthesisSummary, initRegionSynthesisSummary,
+    addInputRegionSynthesisSummary, permuteSynthesisSummary,
+    synthesis_summary_norm]
+
+@[synthesis_summary_norm]
 theorem hashSynthesisSummary_tableRowExtent_eq (cfg : Config) :
     (hashSynthesisSummary cfg).tableRowExtent = 0 := by
   simp only [hashSynthesisSummary, synthesis_summary_norm]

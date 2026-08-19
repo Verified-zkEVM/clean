@@ -286,6 +286,14 @@ def copyDecomposeSynthesisSummary (numWindows : ℕ) (cfg : Config)
         (FloorPlanner.RegionSynthesisSummary.ofColumns [] 0 1)))
 
 @[synthesis_summary_norm]
+theorem copyDecomposeSynthesisSummary_lookupActivationCount
+    (numWindows : ℕ) (cfg : Config) (offset : ℕ) :
+    (copyDecomposeSynthesisSummary numWindows cfg offset).lookupActivationCount = 0 := by
+  simp only [copyDecomposeSynthesisSummary, enableLoopSynthesisSummary,
+    assignLoopSynthesisSummary, synthesis_summary_norm, Nat.mul_zero,
+    Nat.zero_add]
+
+@[synthesis_summary_norm]
 theorem copyDecomposeSynthesisSummary_instanceRowExtent_eq
     (numWindows : ℕ) (cfg : Config) (offset : ℕ) :
     (copyDecomposeSynthesisSummary numWindows cfg offset).instanceRowExtent = 0 := by

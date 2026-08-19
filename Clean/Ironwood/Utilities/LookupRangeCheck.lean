@@ -578,6 +578,12 @@ def shortRangeCheckSynthesisSummary {K : ℕ} (cfg : Config K)
     (offset + 3) 1 (lookupActivationCount := 2)
 
 @[synthesis_summary_norm]
+theorem shortRangeCheckSynthesisSummary_lookupActivationCount {K : ℕ}
+    (cfg : Config K) (offset : ℕ) :
+    (shortRangeCheckSynthesisSummary cfg offset).lookupActivationCount = 2 := by
+  simp only [shortRangeCheckSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
 theorem shortRangeCheckSynthesisSummary_hasNoFixedColumns {K : ℕ}
     (cfg : Config K) (offset : ℕ) :
     (shortRangeCheckSynthesisSummary cfg offset).HasNoFixedColumns := by
@@ -1147,6 +1153,13 @@ def rangeCheckLoopSummary (K : ℕ) (cfg : Config K) (offset numWords : ℕ) :
     0 (lookupActivationCount := numWords)
 
 @[synthesis_summary_norm]
+theorem rangeCheckLoopSummary_lookupActivationCount
+    (K : ℕ) (cfg : Config K) (offset numWords : ℕ) :
+    (rangeCheckLoopSummary K cfg offset numWords).lookupActivationCount =
+      numWords := by
+  simp only [rangeCheckLoopSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
 theorem rangeCheckLoop_synthesisSummary (K : ℕ) (cfg : Config K)
     (element : AssignedCell Fp) (offset numWords : ℕ) (self : RegionIndex) :
     FloorPlanner.regionSynthesisSummary
@@ -1340,6 +1353,13 @@ def rangeCheckSynthesisSummary (K numWords : ℕ) (strict : Bool)
           .column .advice cfg.runningSum.index])
     (offset + numWords + 1) (if strict then 1 else 0)
     (lookupActivationCount := numWords)
+
+@[synthesis_summary_norm]
+theorem rangeCheckSynthesisSummary_lookupActivationCount
+    (K numWords : ℕ) (strict : Bool) (cfg : Config K) (offset : ℕ) :
+    (rangeCheckSynthesisSummary K numWords strict cfg offset).lookupActivationCount =
+      numWords := by
+  simp only [rangeCheckSynthesisSummary, synthesis_summary_norm]
 
 @[synthesis_summary_norm]
 theorem rangeCheckSynthesisSummary_hasNoFixedColumns
@@ -1638,6 +1658,13 @@ def rangeCheckAtSynthesisSummary (K numWords : ℕ) (strict : Bool)
     (lookupActivationCount := numWords)
 
 @[synthesis_summary_norm]
+theorem rangeCheckAtSynthesisSummary_lookupActivationCount
+    (K numWords : ℕ) (strict : Bool) (cfg : Config K) (offset : ℕ) :
+    (rangeCheckAtSynthesisSummary K numWords strict cfg offset).lookupActivationCount =
+      numWords := by
+  simp only [rangeCheckAtSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
 theorem rangeCheckAtSynthesisSummary_hasNoFixedColumns
     (K numWords : ℕ) (strict : Bool) (cfg : Config K) (offset : ℕ) :
     (rangeCheckAtSynthesisSummary K numWords strict cfg offset).HasNoFixedColumns := by
@@ -1917,6 +1944,13 @@ def rangeCheckAtDecomposedSynthesisSummary (numWords : ℕ)
     (offset + numWords + 1) 1 (lookupActivationCount := numWords)
 
 @[synthesis_summary_norm]
+theorem rangeCheckAtDecomposedSynthesisSummary_lookupActivationCount
+    (numWords : ℕ) (cfg : Config 10) (offset : ℕ) :
+    (rangeCheckAtDecomposedSynthesisSummary numWords cfg offset).lookupActivationCount =
+      numWords := by
+  simp only [rangeCheckAtDecomposedSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
 theorem rangeCheckAtDecomposedSynthesisSummary_hasNoFixedColumns
     (numWords : ℕ) (cfg : Config 10) (offset : ℕ) :
     (rangeCheckAtDecomposedSynthesisSummary numWords cfg offset).HasNoFixedColumns := by
@@ -2143,6 +2177,12 @@ def witnessCheckDecomposedSynthesisSummary
       26 1 (lookupActivationCount := 25))
 
 @[synthesis_summary_norm]
+theorem witnessCheckDecomposedSynthesisSummary_lookupActivationCount
+    (cfg : Config 10) :
+    (witnessCheckDecomposedSynthesisSummary cfg).lookupActivationCount = 25 := by
+  simp only [witnessCheckDecomposedSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
 theorem witnessCheckDecomposedSynthesisSummary_hasNoFixedWrites
     (cfg : Config 10) :
     (witnessCheckDecomposedSynthesisSummary cfg).HasNoFixedWrites := by
@@ -2284,6 +2324,13 @@ def copyCheckSynthesisSummary (K numWords : ℕ) (strict : Bool)
       (lookupActivationCount := numWords))
 
 @[synthesis_summary_norm]
+theorem copyCheckSynthesisSummary_lookupActivationCount
+    (K numWords : ℕ) (strict : Bool) (cfg : Config K) :
+    (copyCheckSynthesisSummary K numWords strict cfg).lookupActivationCount =
+      numWords := by
+  simp only [copyCheckSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
 theorem copyCheckSynthesisSummary_hasNoFixedWrites
     (K numWords : ℕ) (strict : Bool) (cfg : Config K) :
     (copyCheckSynthesisSummary K numWords strict cfg).HasNoFixedWrites := by
@@ -2363,6 +2410,12 @@ def witnessShortCheckSynthesisSummary
             .column .advice cfg.runningSum.index,
             .selector cfg.qBitshift.index]
           3 1 (lookupActivationCount := 2)))
+
+@[synthesis_summary_norm]
+theorem witnessShortCheckSynthesisSummary_lookupActivationCount
+    (K : ℕ) (cfg : Config K) :
+    (witnessShortCheckSynthesisSummary K cfg).lookupActivationCount = 2 := by
+  simp only [witnessShortCheckSynthesisSummary, synthesis_summary_norm]
 
 @[synthesis_summary_norm]
 theorem witnessShortCheckSynthesisSummary_hasNoFixedWrites
@@ -2524,6 +2577,13 @@ def witnessCheckSynthesisSummary (K numWords : ℕ)
             .column .advice cfg.runningSum.index])
       (numWords + 1) (if strict then 1 else 0)
       (lookupActivationCount := numWords))
+
+@[synthesis_summary_norm]
+theorem witnessCheckSynthesisSummary_lookupActivationCount
+    (K numWords : ℕ) (strict : Bool) (cfg : Config K) :
+    (witnessCheckSynthesisSummary K numWords strict cfg).lookupActivationCount =
+      numWords := by
+  simp only [witnessCheckSynthesisSummary, synthesis_summary_norm]
 
 @[synthesis_summary_norm]
 theorem witnessCheckSynthesisSummary_hasNoFixedWrites

@@ -54,6 +54,12 @@ def synthesisSummary
         (FloorPlanner.SynthesisSummary.ofRegion {}))
 
 @[synthesis_summary_norm]
+theorem synthesisSummary_lookupActivationCount
+    (cfg : Ecc.Mul.Config × Ecc.WitnessPoint.Config) :
+    (synthesisSummary cfg).lookupActivationCount = 13 := by
+  simp only [synthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
 theorem synthesisSummary_tableRowExtent_eq
     (cfg : Ecc.Mul.Config × Ecc.WitnessPoint.Config) :
     (synthesisSummary cfg).tableRowExtent = 0 := by

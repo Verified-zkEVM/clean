@@ -1094,6 +1094,12 @@ def roundSynthesisSummary (config : Config) (offset : ℕ) :
   .ofColumns (roundColumns config) (offset + 2) 0
     (lookupActivationCount := 1)
 
+@[synthesis_summary_norm]
+theorem roundSynthesisSummary_lookupActivationCount
+    (config : Config) (offset : ℕ) :
+    (roundSynthesisSummary config offset).lookupActivationCount = 1 := by
+  simp only [roundSynthesisSummary, synthesis_summary_norm]
+
 def round (G : Generators) (i : ℕ) : FormalRegionCircuit Fp Config Config field State where
   configure := pure
   elaborated :=

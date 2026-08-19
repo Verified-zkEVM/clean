@@ -1473,6 +1473,12 @@ def circuitSynthesisSummary (cfg : Config) : FloorPlanner.SynthesisSummary :=
     (FloorPlanner.SynthesisSummary.ofRegion (mswRegionSynthesisSummary cfg))
 
 @[synthesis_summary_norm]
+theorem circuitSynthesisSummary_lookupActivationCount (cfg : Config) :
+    (circuitSynthesisSummary cfg).lookupActivationCount = 0 := by
+  simp only [circuitSynthesisSummary, innerRegionSynthesisSummary,
+    mswRegionSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
 theorem synthesize_synthesisSummary_eq
     (B : FixedBaseData) (cfg : Config) (input : Var Inputs Fp)
     (self : RegionIndex) :

@@ -1581,6 +1581,11 @@ def orchardChecksRegionSynthesisSummary (cfg : Config) :
     1 0 (ENABLE_OUTPUT + 1)
 
 @[synthesis_summary_norm]
+theorem orchardChecksRegionSynthesisSummary_lookupActivationCount (cfg : Config) :
+    (orchardChecksRegionSynthesisSummary cfg).lookupActivationCount = 0 := by
+  simp only [orchardChecksRegionSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
 theorem orchardChecksRegion_synthesisSummary_eq (cfg : Config)
     (witnessCells : WitnessCells) (checkCells : CheckCells)
     (region : RegionIndex) :
@@ -1667,6 +1672,12 @@ def loadPrivateSynthesisSummary (column : Column .advice) :
       [.column .advice column.index] 1 0)
 
 @[synthesis_summary_norm]
+theorem loadPrivateSynthesisSummary_lookupActivationCount
+    (column : Column .advice) :
+    (loadPrivateSynthesisSummary column).lookupActivationCount = 0 := by
+  simp only [loadPrivateSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
 theorem loadPrivate_synthesisSummary_eq (column : Column .advice)
     (witness : WitgenIR Fp 1) (region : RegionIndex) :
     FloorPlanner.synthesisSummary
@@ -1686,6 +1697,13 @@ def synthWitnessSynthesisSummary (cfg : Config) :
   [Sinsemilla.loadSynthesisSummary,
     load, load, point, nonId, nonId, load, load, load].foldr
     FloorPlanner.SynthesisSummary.combine {}
+
+@[synthesis_summary_norm]
+theorem synthWitnessSynthesisSummary_lookupActivationCount (cfg : Config) :
+    (synthWitnessSynthesisSummary cfg).lookupActivationCount = 0 := by
+  simp only [synthWitnessSynthesisSummary, Sinsemilla.loadSynthesisSummary,
+    synthesis_summary_norm, List.map_cons, List.map_nil, List.sum_cons,
+    List.sum_nil, Nat.zero_add]
 
 @[synthesis_summary_norm]
 theorem synthWitnessSynthesisSummary_tableRowExtent_eq (cfg : Config) :
@@ -1808,6 +1826,13 @@ def synthChecksSynthesisSummary (cfg : Config) :
         FloorPlanner.SynthesisSummary.combine {}
 
 @[synthesis_summary_norm]
+theorem synthChecksSynthesisSummary_lookupActivationCount (cfg : Config) :
+    (synthChecksSynthesisSummary cfg).lookupActivationCount = 1902 := by
+  simp only [synthChecksSynthesisSummary, synthesis_summary_norm,
+    List.map_cons, List.map_nil, List.sum_cons, List.sum_nil]
+  norm_num
+
+@[synthesis_summary_norm]
 theorem synthChecksSynthesisSummary_tableRowExtent_eq (cfg : Config) :
     (synthChecksSynthesisSummary cfg).tableRowExtent = 0 := by
   simp only [synthChecksSynthesisSummary,
@@ -1882,6 +1907,11 @@ def orchardChecksSynthesisSummary (cfg : Config) :
   FloorPlanner.SynthesisSummary.ofRegion
     (orchardChecksRegionSynthesisSummary cfg)
 
+@[synthesis_summary_norm]
+theorem orchardChecksSynthesisSummary_lookupActivationCount (cfg : Config) :
+    (orchardChecksSynthesisSummary cfg).lookupActivationCount = 0 := by
+  simp only [orchardChecksSynthesisSummary, synthesis_summary_norm]
+
 /-- Exact reduced footprint of the Action note-commitment stage. -/
 def synthNotesSynthesisSummary (cfg : Config) :
     FloorPlanner.SynthesisSummary :=
@@ -1903,6 +1933,13 @@ def synthNotesSynthesisSummary (cfg : Config) :
     FloorPlanner.SynthesisSummary.ofInstanceRow CMX,
     orchardChecksSynthesisSummary cfg].foldr
       FloorPlanner.SynthesisSummary.combine {}
+
+@[synthesis_summary_norm]
+theorem synthNotesSynthesisSummary_lookupActivationCount (cfg : Config) :
+    (synthNotesSynthesisSummary cfg).lookupActivationCount = 522 := by
+  simp only [synthNotesSynthesisSummary, synthesis_summary_norm,
+    List.map_cons, List.map_nil, List.sum_cons, List.sum_nil]
+  norm_num
 
 @[synthesis_summary_norm]
 theorem synthNotesSynthesisSummary_tableRowExtent_eq (cfg : Config) :
@@ -2040,6 +2077,11 @@ def synthCrossAddressChecksSynthesisSummary (cfg : Config) :
   FloorPlanner.SynthesisSummary.ofRegion
     (FloorPlanner.RegionSynthesisSummary.repeatColumns
       (crossAddressColumns cfg) 0 1 1 4 4 (DISABLE_CROSS_ADDRESS + 1))
+
+@[synthesis_summary_norm]
+theorem synthCrossAddressChecksSynthesisSummary_lookupActivationCount (cfg : Config) :
+    (synthCrossAddressChecksSynthesisSummary cfg).lookupActivationCount = 0 := by
+  simp only [synthCrossAddressChecksSynthesisSummary, synthesis_summary_norm]
 
 @[synthesis_summary_norm]
 theorem synthCrossAddressChecksSynthesisSummary_tableRowExtent_eq (cfg : Config) :
@@ -2221,6 +2263,11 @@ def synthesizeBaseSynthesisSummary (cfg : Config) :
   (synthWitnessSynthesisSummary cfg).combine
     ((synthChecksSynthesisSummary cfg).combine
       (synthNotesSynthesisSummary cfg))
+
+@[synthesis_summary_norm]
+theorem synthesizeBaseSynthesisSummary_lookupActivationCount (cfg : Config) :
+    (synthesizeBaseSynthesisSummary cfg).lookupActivationCount = 2424 := by
+  simp only [synthesizeBaseSynthesisSummary, synthesis_summary_norm]
 
 @[synthesis_summary_norm]
 theorem synthesizeBase_synthesisSummary_eq (G : Generators) (B : Bases)
