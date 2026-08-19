@@ -31,7 +31,7 @@ The compositional laws live with their subjects (`Clean.Circuit.Basic`,
 attribute [computable_witnesses_norm]
   FormalCircuitBase.ComputableWitnesses
   CircuitType.eval_expr_prover CircuitType.eval_expression_prover_to_verifier
-  CircuitType.eval_var_concrete CircuitType.eval_var_concrete_prover
+  CircuitType.eval_var_expression CircuitType.eval_var_expression_prover
   CircuitType.var_of_provableType CircuitType.proverValue_of_provableType
   CircuitType.value_of_provableType
   ProvableType.size ProvableType.toElements_fromElements ProvableType.fromElements_toElements
