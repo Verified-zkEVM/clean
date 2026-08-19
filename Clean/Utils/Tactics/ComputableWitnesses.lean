@@ -455,6 +455,7 @@ structure CwSimp where
   dischargeProcs : SimprocsArray
   /-- Vector route, structural `simp_all`. -/
   vecCtx : Simp.Context
+  vecLitCtx : Simp.Context
   /-- `circuit_norm` procs + `retypeVectorAliasEq` (vector-route steps). -/
   vecProcs : SimprocsArray
   /-- Vector route, per-branch simp after `split_ifs`. -/
@@ -645,6 +646,16 @@ partial def splitStep (g : MVarId) (fuel : Nat) : MetaM (List MVarId) := do
 def splitStructure : TacticM Unit :=
   liftMetaTactic fun g => splitStep g 512
 
+/-- Vector route, literal pre-pass: decompose literal-vector evals and split the
+resulting `mk = mk` equalities into componentwise conjuncts. Runs before
+`vecStructuralLemmas` so that literal leaves take the injEq route — `Vector.ext_iff`
+would otherwise rewrite them to a ∀-form whose symbolic index leaves list-`getElem`
+atoms nothing can reduce. -/
+def vecLiteralLemmas : Array Name := #[
+  ``eval_vector, ``ProvableType.eval_fields, ``ProvableType.eval_fields_prover,
+  ``Vector.map_mk, ``List.map_toArray, ``List.map_cons, ``List.map_nil,
+  ``Vector.mk.injEq, ``Array.mk.injEq, ``List.cons.injEq, ``and_true]
+
 /-- Vector route, structural `simp_all`: vector eval decomposition and elementwise
 access. Every member fired in the usage measurement at 815dc9b1 (1–75 each). -/
 def vecStructuralLemmas : Array Name := #[
@@ -726,6 +737,9 @@ def CwSimp.build (extraTerms : Array (TSyntax `term)) : TacticM CwSimp :=
     dischargeProcs
     vecCtx := ← Simp.mkContext {}
       (simpTheorems := #[← theoremsOf vecStructuralLemmas normHints, cn] ++ hintSets)
+      congr
+    vecLitCtx := ← Simp.mkContext {}
+      (simpTheorems := #[← theoremsOf vecLiteralLemmas normHints, cn] ++ hintSets)
       congr
     vecProcs
     branchCtx := ← Simp.mkContext {}
@@ -898,6 +912,7 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
       catch _ => st.restore; pure false
     if ← isEvalCongrEq then
       let vecMain : TacticM Unit := do
+        try metaSimpAll cw.vecLitCtx cw.vecProcs catch _ => pure ()
         try metaSimpAll cw.vecCtx cw.vecProcs catch _ => pure ()
         let gs ← getGoals
         for g in gs do

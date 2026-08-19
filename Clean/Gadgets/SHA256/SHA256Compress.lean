@@ -354,6 +354,61 @@ theorem completeness : Completeness (F p) main Assumptions := by
   · exact h_sched_norm i
 
 set_option maxRecDepth 2048 in
+omit [Fact (p > 2 ^ 33)] in
+/-- Env-agreement below `i₀ + k * 455` transfers to the variable-level state after `k`
+rounds, elementwise: initial entries evaluate through the input state, later entries are
+fresh witness windows below the bound. -/
+lemma stateVar_eval_congr {env env' : ProverEnvironment (F p)}
+    {input_var_state : SHA256State (Expression (F p))} {i₀ : ℕ}
+    (h : ∀ (jj : ℕ) (hjj : jj < 8),
+      Vector.map (Expression.eval env.toEnvironment) (input_var_state[jj]'hjj) =
+        Vector.map (Expression.eval env'.toEnvironment) (input_var_state[jj]'hjj)) :
+    ∀ k, k ≤ 64 → (∀ i < i₀ + k * 455, env.get i = env'.get i) →
+      ∀ (jj : ℕ) (hjj : jj < 8),
+        Vector.map (Expression.eval env.toEnvironment) ((stateVar i₀ input_var_state k)[jj]'hjj) =
+          Vector.map (Expression.eval env'.toEnvironment) ((stateVar i₀ input_var_state k)[jj]'hjj) := by
+  intro k
+  induction k with
+  | zero => intro _ _ jj hjj; exact h jj hjj
+  | succ k ih =>
+    intro hk hag jj hjj
+    have hk' : k ≤ 64 := by omega
+    have hag' : ∀ i < i₀ + k * 455, env.get i = env'.get i := fun i hi => hag i (by omega)
+    have hprev := ih hk' hag'
+    rcases jj with _|_|_|_|_|_|_|_|jj <;> simp only [stateVar]
+    · exact SHA256Round.mapRange_var_eval_congr (fun j => i₀ + k * 455 + 389 + j) hag (fun j hj => by omega)
+    · exact hprev 0 (by omega)
+    · exact hprev 1 (by omega)
+    · exact hprev 2 (by omega)
+    · exact SHA256Round.mapRange_var_eval_congr (fun j => i₀ + k * 455 + 422 + j) hag (fun j hj => by omega)
+    · exact hprev 4 (by omega)
+    · exact hprev 5 (by omega)
+    · exact hprev 6 (by omega)
+    · omega
+
+set_option maxRecDepth 2048 in
+omit [Fact (p > 2 ^ 33)] in
+/-- Composite form of `stateVar_eval_congr`, stated without ascriptions so it matches the
+framework's spelling of the accumulator eval; the instance-path defeq is paid once here. -/
+lemma stateVar_eval_congr_composite {env env' : ProverEnvironment (F p)}
+    {input_var_state : Var SHA256State (F p)} {i₀ k : ℕ}
+    (hIn : ∀ (jj : ℕ) (hjj : jj < 8),
+      Vector.map (Expression.eval env.toEnvironment) (input_var_state[jj]'hjj) =
+        Vector.map (Expression.eval env'.toEnvironment) (input_var_state[jj]'hjj))
+    (hk : k ≤ 64) (hag : ∀ i < i₀ + k * 455, env.get i = env'.get i) :
+    eval env.toEnvironment (stateVar i₀ input_var_state k) =
+      eval env'.toEnvironment (stateVar i₀ input_var_state k) := by
+  have hel := stateVar_eval_congr hIn k hk hag
+  have hm : Vector.map (eval env.toEnvironment) (stateVar i₀ input_var_state k) =
+      Vector.map (eval env'.toEnvironment) (stateVar i₀ input_var_state k) :=
+    Vector.ext fun jj hjj => by
+      simp only [Vector.getElem_map]
+      rw [ProvableType.eval_fields, ProvableType.eval_fields]
+      exact hel jj (by omega)
+  exact (eval_vector env.toEnvironment (stateVar i₀ input_var_state k)).trans
+    (hm.trans (eval_vector env'.toEnvironment (stateVar i₀ input_var_state k)).symm)
+
+set_option maxRecDepth 2048 in
 def circuit : FormalCircuit (F p) Inputs SHA256State := {
   main, elaborated, Assumptions, Spec, soundness
   completeness := by simp only [completeness]
@@ -375,7 +430,9 @@ def circuit : FormalCircuit (F p) Inputs SHA256State := {
       · -- the round constant: env-independent
         refine Vector.ext fun j hj => ?_
         simp only [Vector.getElem_map, constWord32, Vector.getElem_ofFn, circuit_norm]
-      · exact hSch iv (by omega)
+      · rw [← getElem_eval_vector, ← getElem_eval_vector,
+          ProvableType.eval_fields, ProvableType.eval_fields]
+        exact hSch iv (by omega)
     · have hIn := fun (jj : ℕ) (hjj : jj < 8) => map_eval_getElem_congr h.1 jj hjj
       have hs := stateVar_eval_congr_composite (i₀ := n) (k := 64) hIn (by omega)
         (fun j hj => h_agrees.1 j (by omega))
@@ -559,7 +616,12 @@ def circuit : FormalCircuit (F p) Inputs SHA256State := {
       have hb := fun (jj : ℕ) (hjj : jj < 8) => map_eval_getElem_congr oR jj hjj
       have ha := fun (jj : ℕ) (hjj : jj < 8) => map_eval_getElem_congr h.1 jj hjj
       simp only [circuit_norm]
-      exact ⟨ha i.val i.isLt, hb i.val i.isLt⟩
+      have ha' := ha i.val i.isLt
+      have hb' := hb i.val i.isLt
+      rw [← ProvableType.eval_fields, ← ProvableType.eval_fields,
+        getElem_eval_vector, getElem_eval_vector] at ha'
+      rw [← ProvableType.eval_fields, ← ProvableType.eval_fields] at hb'
+      exact ⟨ha', hb'⟩
     · computable_witnesses_close
 }
 

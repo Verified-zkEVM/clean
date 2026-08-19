@@ -217,7 +217,7 @@ def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
   computableWitnesses := by
     computable_witnesses_start [upperSigma0, xor32, rotr32, Vector.ext_iff]
     · simp only [circuit_norm, Vector.getElem_rotate]
-      simp only [ProvableType.getElem_eval_fields,
+      simp only [
         h ((i + 2 % 32) % 32) (by omega), h ((i + 13 % 32) % 32) (by omega)]
     · simp only [circuit_norm, Vector.getElem_rotate]
       have hz := h_agrees.1 (n + i) (by omega)

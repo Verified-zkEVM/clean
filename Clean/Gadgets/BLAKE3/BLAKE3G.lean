@@ -129,12 +129,15 @@ omit p_large_enough in
 lemma state_elem_congr {env env' : ProverEnvironment (F p)}
     {state : BLAKE3State (Expression (F p))}
     (h1 : eval env.toEnvironment state = eval env'.toEnvironment state) (i : Fin 16) :
-    eval env.toEnvironment state[(i : ℕ)] = eval env'.toEnvironment state[(i : ℕ)] :=
-  (getElem_eval_vector env.toEnvironment state i.val i.isLt).trans
-    ((congrArg (fun s : BLAKE3State (F p) => s[i]) h1).trans
-      (getElem_eval_vector env'.toEnvironment state i.val i.isLt).symm)
+    (eval env.toEnvironment state : BLAKE3State (F p))[(i : ℕ)] =
+      (eval env'.toEnvironment state : BLAKE3State (F p))[(i : ℕ)] :=
+  congrArg (fun s : BLAKE3State (F p) => s[i]) h1
 
 set_option maxRecDepth 2048 in
+-- the unreachable-tactic linter cannot see that the `first` fallback fires only for
+-- the pass-through entries (`case pos` breaks without it)
+set_option linter.unreachableTactic false in
+set_option linter.unusedTactic false in
 omit p_large_enough in
 /-- Env-agreement transfers to the output state: the four set slots are fresh witness
 windows below the bound, the remaining entries evaluate through the input state. -/
@@ -156,9 +159,7 @@ lemma output_eval_congr {env env' : ProverEnvironment (F p)}
               simp only [Vector.getElem_map, Vector.getElem_ofFn, circuit_norm]
               grind)
            | grind)
-      | (exact (getElem_eval_vector env.toEnvironment state j (by omega)).trans
-          ((congrArg (fun s : BLAKE3State (F p) => s[j]'(by omega)) h1).trans
-            (getElem_eval_vector env'.toEnvironment state j (by omega)).symm))
+      | (exact congrArg (fun s : BLAKE3State (F p) => s[j]'(by omega)) h1)
 
 def circuit (a b c d : Fin 16) : FormalCircuit (F p) Inputs BLAKE3State where
   main := main a b c d
