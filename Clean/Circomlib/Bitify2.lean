@@ -119,11 +119,18 @@ def circuit : GeneralFormalCircuit (F p) (fields 254) field where
     output.val = fromBits (input.map ZMod.val)
 
   soundness := by
-    circuit_proof_start [Bits2Num.circuit, AliasCheck.circuit]
-    obtain ⟨h_alias, h_b2n⟩ := h_holds
-    specialize h_alias h_assumptions
-    obtain ⟨h_out, -⟩ := h_b2n h_assumptions
-    rw [h_out, fieldFromBits, ZMod.val_natCast, Nat.mod_eq_of_lt h_alias]
+    circuit_proof_start [Bits2Num.main, AliasCheck.circuit]
+    set output := (env.get (i₀ + (127 + 1 + 135 + 1)))
+    simp_all only [implies_true, forall_const, fields]
+    obtain ⟨ h_bits, h_eq ⟩ := h_holds
+    rw [← ZMod.val_natCast_of_lt h_bits, ← Vector.mapFinRange_eq_map,
+      ← fieldFromBits_eq_mapFinRange_cast]
+    simp only [← h_input, circuit_norm]
+    simp only [← Fin.getElem_fin, Bits2Num.lc_eq]
+    congr 2
+    ext i hi
+    simp only [Vector.getElem_mapFinRange]
+    exact ProvableType.getElem_eval_fields env input_var i hi
 
   completeness := by
     circuit_proof_start [Bits2Num.circuit, AliasCheck.circuit]

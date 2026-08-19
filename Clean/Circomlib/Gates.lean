@@ -581,13 +581,10 @@ lemma completeness_two {p : ℕ} [Fact p.Prime]
   have h_binary0 : IsBool input[0] := h_assumptions 0 (by norm_num)
   have h_binary1 : IsBool input[1] := h_assumptions 1 (by norm_num)
 
+  simp only [circuit_norm] at h_env
   constructor
-  · have h_eval0 : Expression.eval env input_var[0] = input[0] := by simp [h_env, circuit_norm]
-    simp only [circuit_norm, h_eval0]
-    exact h_binary0
-  · have h_eval1 : Expression.eval env input_var[1] = input[1] := by simp [h_env, circuit_norm]
-    simp only [circuit_norm, h_eval1]
-    exact h_binary1
+  · rw [← h_env]; exact h_binary0
+  · rw [← h_env]; exact h_binary1
 
 theorem soundness {p : ℕ} [Fact p.Prime] (n : ℕ) :
     ∀ (offset : ℕ) (env : Environment (F p)) (input_var : Var (fields n) (F p))

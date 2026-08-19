@@ -43,8 +43,9 @@ def circuit (n r : ℕ) [NeZero n] : FormalCircuit (F p) (fields n) (fields n) w
     -- Simplify RHS: (input.rotate r)[i] = input[(i + r) % n]
     rw [Vector.getElem_rotate]
     -- Use h_input: eval input_var = input
-    simp only [← h_input, Vector.getElem_map]
-    congr 1
+    simp only [← h_input]
+    -- Normalize array/vector indexing
+    simp only [Vector.getElem_toArray]
     -- Prove index equality via Fin arithmetic
     simp only [Fin.val_add, Fin.val_ofNat]
     congr 1

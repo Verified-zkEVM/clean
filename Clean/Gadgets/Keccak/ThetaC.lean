@@ -41,9 +41,6 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   apply KeccakRow.normalized_value_ext
   simp only [thetaC_loop, circuit_norm, KeccakState.value]
 
-  -- simplify constraints
-  simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
-  simp only [circuit_norm, h_input] at h_holds
   have state_norm : ∀ {i : ℕ} (hi : i < 25), input[i].Normalized :=
     fun hi => h_assumptions ⟨ _, hi ⟩
   simp only [state_norm, and_self, forall_const, and_true] at h_holds
@@ -54,7 +51,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 
 theorem completeness : Completeness (F p) main Assumptions := by
   intro i0 env state_var h_env state h_input state_norm
-  simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
+  simp only [circuit_norm] at h_input
   simp only [h_input, circuit_norm,
     main, Xor64.circuit, Xor64.Assumptions, Xor64.Spec] at h_env ⊢
   have state_norm : ∀ (i : ℕ) (hi : i < 25), state[i].Normalized := fun i hi => state_norm ⟨ i, hi ⟩

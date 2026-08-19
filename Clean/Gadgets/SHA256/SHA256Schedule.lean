@@ -378,9 +378,7 @@ lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F p)))
     -- Establish normalization of indexed positions via IH.
     -- Bridge the raw `Vector.map (Expression.eval env)` spelling to `eval env` for the IH lemmas.
     have h_eval_get : ∀ (x : SHA256Schedule (Expression (F p))) (i : ℕ) (h : i < 64),
-        Vector.map (Expression.eval env) (x[i]'h) = eval env (x[i]'h) := by
-      intros x i h
-      rw [CircuitType.eval_var_fields]
+        eval env (Vector.get x ⟨i, h⟩) = eval env (x[i]'h) := fun _ _ _ => rfl
     have h_norm_m2 : Normalized (eval env ((varSchedule i₀ input_var k)[k + 16 - 2]'(by omega))) :=
       ih_norm (k + 16 - 2) (by omega)
     have h_norm_m7 : Normalized (eval env ((varSchedule i₀ input_var k)[k + 16 - 7]'(by omega))) :=
@@ -530,11 +528,8 @@ theorem completeness : Completeness (F p) (Input := SHA256Block) (Output := SHA2
       -- We need to show Normalized at slot j for varSchedule (k+1).
       obtain ⟨c_sig1, c_sig0, c_sum0, c_sum1, c_wj⟩ := h_step
       have h_eval_get : ∀ (x : SHA256Schedule (Expression (F p))) (i : ℕ) (h : i < 64),
-          Vector.map (Expression.eval env.toEnvironment) (x[i]'h) =
-            eval env.toEnvironment (x[i]'h) := by
-        intros x i h
-        rw [
-            CircuitType.eval_var_fields]
+          eval env.toEnvironment (Vector.get x ⟨i, h⟩) =
+            eval env.toEnvironment (x[i]'h) := fun _ _ _ => rfl
       have h_norm_m2 := ih (k + 16 - 2) (by omega)
       have h_norm_m7 := ih (k + 16 - 7) (by omega)
       have h_norm_m15 := ih (k + 16 - 15) (by omega)
@@ -586,10 +581,8 @@ theorem completeness : Completeness (F p) (Input := SHA256Block) (Output := SHA2
   -- Extract the chain from h_env_i.
   obtain ⟨e_sig1, e_sig0, e_sum0, e_sum1, e_wj⟩ := h_env_i
   have h_eval_get : ∀ (x : SHA256Schedule (Expression (F p))) (i : ℕ) (h : i < 64),
-      Vector.map (Expression.eval env.toEnvironment) (x[i]'h) =
-        eval env.toEnvironment (x[i]'h) := by
-    intros x i h
-    rw [CircuitType.eval_var_fields]
+      eval env.toEnvironment (Vector.get x ⟨i, h⟩) =
+        eval env.toEnvironment (x[i]'h) := fun _ _ _ => rfl
   have h_norm_m2 := ih (i.val + 16 - 2) (by omega)
   have h_norm_m7 := ih (i.val + 16 - 7) (by omega)
   have h_norm_m15 := ih (i.val + 16 - 15) (by omega)

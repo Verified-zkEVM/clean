@@ -115,7 +115,9 @@ theorem soundness [DecidableEq (M F)] : Soundness F (main (M:=M)) Assumptions Sp
   apply foldl_isZero_eq_one_iff
   · assumption
   · intro i _
-    exact h_fold i
+    have h := h_holds i
+    rw [← ProvableType.getElem_eval_fields env (toElements input_var) i.val i.isLt] at h
+    exact h
 
 theorem completeness : Completeness F (main (M:=M)) Assumptions := by
   circuit_proof_start [IsZeroField.circuit]

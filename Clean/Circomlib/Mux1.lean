@@ -77,8 +77,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     intro i hi
     have h_holds_i := congrArg (fun v => v[i]) h_holds
     simp only [circuit_norm, Vector.getElem_map, Vector.getElem_mapRange] at h_holds_i
-    rw [h_holds_i, h_input.2, ← h_input.1]
-    simp only [← getElem_eval_vector, circuit_norm]
+    rw [h_holds_i, h_input.2, h_input.1]
     rcases h_assumptions with h0 | h1
     · simp only [h0, mul_zero, zero_add, if_pos]
     · simp only [h1, mul_one]
@@ -96,6 +95,8 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
     -- Right side: eval of the computed expression
     have h_env_i := h_env ⟨i, hi⟩
     rw [h_env_i, h_input.2]
+    exact congrArg
+      (fun v => ((v[i]'hi).2 - (v[i]'hi).1) * input_s + (v[i]'hi).1) h_input.1.symm
 
 end MultiMux1
 
@@ -148,8 +149,6 @@ def circuit : FormalCircuit (F p) Inputs field where
     circuit_proof_start [MultiMux1.circuit]
     specialize h_holds h_assumptions 0 (by omega)
     simp only [circuit_norm] at h_holds
-    rw [← h_input.1]
-    simp only [Vector.getElem_map]
     exact h_holds
 
   completeness := by
