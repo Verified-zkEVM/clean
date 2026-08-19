@@ -959,6 +959,33 @@ def addFinishedChannel (soundEns : SoundEnsemble F PublicIO) (channel : RawChann
 @[circuit_norm] lemma addFinishedChannel_finished {channel : RawChannel F} [channel.Consistent] :
   (soundEns.addFinishedChannel channel).finished = channel :: soundEns.finished := rfl
 
+/-- Attach a boundary assertion. Boundaries touch neither the channel structure nor the table
+list, so every `SoundEnsemble` invariant carries over unchanged; only `Statement` (which gains
+the assertion as a conjunct) and `SpecConsistencyWithBoundaries` see the entry. -/
+def addBoundary (soundEns : SoundEnsemble F PublicIO) (entry : Boundary.Entry F PublicIO) :
+    SoundEnsemble F PublicIO where
+  ensemble := soundEns.ensemble.addBoundary entry
+  finished := soundEns.finished
+  finished_consistent := soundEns.finished_consistent
+  finished_subset := soundEns.finished_subset
+  subset_finished := soundEns.subset_finished
+  ordered_channels := soundEns.ordered_channels
+  verifier_empty := soundEns.verifier_empty
+
+variable {entry : Boundary.Entry F PublicIO} in
+section
+@[circuit_norm] lemma addBoundary_tables :
+  (soundEns.addBoundary entry).tables = soundEns.tables := rfl
+@[circuit_norm] lemma addBoundary_channels :
+  (soundEns.addBoundary entry).channels = soundEns.channels := rfl
+@[circuit_norm] lemma addBoundary_finished :
+  (soundEns.addBoundary entry).finished = soundEns.finished := rfl
+@[circuit_norm] lemma addBoundary_verifier :
+  (soundEns.addBoundary entry).verifier = soundEns.verifier := rfl
+@[circuit_norm] lemma addBoundary_boundaries :
+  (soundEns.addBoundary entry).boundaries = entry :: soundEns.boundaries := rfl
+end
+
 def toFormal (soundEns : SoundEnsemble F PublicIO)
     (Assumptions Spec : PublicIO F → Prop)
     (assumptionsConsistency : soundEns.AssumptionsConsistency Assumptions)
@@ -969,6 +996,23 @@ def toFormal (soundEns : SoundEnsemble F PublicIO)
   Spec := Spec
   soundness := by
     apply soundEns.soundness_of_tableSoundness_and_specConsistency
+      Assumptions Spec ?_ assumptionsConsistency specConsistency
+    apply soundEns.tableSoundness_of_soundChannels
+    use soundEns.finished, soundEns.finished_subset
+    exact soundEns.soundChannels
+
+/-- Like `toFormal`, but with `SpecConsistencyWithBoundaries`, so the public spec may draw on
+the ensemble's boundary assertions in addition to the table and verifier specs. -/
+def toFormalWithBoundaries (soundEns : SoundEnsemble F PublicIO)
+    (Assumptions Spec : PublicIO F → Prop)
+    (assumptionsConsistency : soundEns.AssumptionsConsistency Assumptions)
+    (specConsistency : soundEns.SpecConsistencyWithBoundaries Spec) :
+    FormalEnsemble F PublicIO where
+  ensemble := soundEns.ensemble
+  Assumptions := Assumptions
+  Spec := Spec
+  soundness := by
+    apply soundEns.soundness_of_tableSoundness_and_specConsistencyWithBoundaries
       Assumptions Spec ?_ assumptionsConsistency specConsistency
     apply soundEns.tableSoundness_of_soundChannels
     use soundEns.finished, soundEns.finished_subset
