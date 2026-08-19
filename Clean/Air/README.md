@@ -53,6 +53,8 @@ It also proves the component-level transport lemmas: instantiated component oper
 - `windows` / `windowRow` / `windowEnv`: the window at index `i` is the concatenation of rows `i … i + windowRows - 1`, evaluated as one environment. A window exists at `i` exactly when `i + windowRows ≤ length`, so an `n`-row table presents `n + 1 - windowRows` environments — `n` when flat, `n - 1` when transition (`windows_length`, restated as `Table.envs_length` in `Entry.lean`). Any bound on interaction count derived from table heights must use that number, in particular the `< ringChar F` side condition carried by `BalancedInteractions`.
 - `Flat.Table.circuitAssumptions`: supplies the fixed-row and derived-data facts at each row index.
 - `valueFromOffset_windowEnv`: the current row's input cells read identically from the row alone and from the whole window.
+- `row_size` and `windowRow_size`: an in-range row has width `rowWidth`, and a window therefore has width `windowRows * rowWidth`. These are the cell-level facts every window-index computation bottoms out in, and they are where `uniform_width` is actually consumed.
+- `valueFromOffset_windowEnv_curr`: the typed reading of the same fact — any `T` with `size T ≤ rowWidth` reads the same value from row `i` alone as from the window at `i`.
 
 The flat-specific predicates are additionally available in row-shaped form (`∀ row ∈ table.table`), with `envs_eq_of_flat` as the bridge to the shared `RowEnvs` results.
 
@@ -62,7 +64,15 @@ The flat-specific predicates are additionally available in row-shaped form (`∀
 - `Table.IsTransition` (`windowRows = 2`), `Table.pairs`, and `envs_eq_pairs` relating them back to `windows`.
 - `valueFromOffset_pairEnv`: the pair-shaped case of `valueFromOffset_windowEnv`.
 
-An `n`-row transition table imposes `n - 1` constraint instances, and a table of 0 or 1 rows is entirely unconstrained. The last row is never a window's `curr`; it appears only as the previous window's `next`. That is safe rather than a soundness hole only because boundary conditions are pinned through channel interactions — see "Not ported from `Clean/Table`" below. Note that `fixed_rows_match` still forces `table.length = fixed.height`: a fixed column covers *every* row including the last, which is a real committed row that the previous window reads.
+It also carries the **window-induction library**, which is what turns `Table.Spec` — the circuit's `Spec` at every window, i.e. what `TableSoundness` hands you — into an induction along the trace:
+
+- `windowRow_getElem_left` / `_right`: cell `j` of the window at `i` is cell `j` of row `i` for `j < rowWidth`, and cell `j - rowWidth` of row `i + 1` above it.
+- `valueFromOffset_windowEnv_next`: the typed counterpart, reading the *next* row's value out of the window. Unlike the `curr` case it needs no width bound, since the output occupies the window's upper row exactly.
+- `windowEnv_overlap`: consecutive windows agree on the row they share — the window at `i` reads row `i + 1` as its next row exactly as the window at `i + 1` reads it as its current row. This is what lets an invariant established at one window be consumed at the following one.
+- `rowInput_windowEnv` and `rowOutput_windowEnv`: the component-level readings, phrased in `Component.rowInput`/`output`. `rowOutput_windowEnv` takes the per-component fact that the circuit's output variable is the canonical next-row layout (`output rowInputVar rowOffset = varFromOffset Output rowWidth`) as a *hypothesis* rather than a `Component` field, so the library stays additive: components that do not need it are unaffected.
+- `Table.transition_induction`: the induction principle. Given `t.Spec data` and that hypothesis, any `P` that holds at row 0 and is preserved by the circuit's `Spec` across an adjacent pair holds at every row of the trace. Callers state their invariant over `valueFromOffset Input 0 (Environment.fromArray t.table[i]! data)` and never touch a window index.
+
+An `n`-row transition table imposes `n - 1` constraint instances, and a table of 0 or 1 rows is entirely unconstrained. The last row is never a window's `curr`; it appears only as the previous window's `next`. That is safe rather than a soundness hole only because the ends of the trace are pinned separately — by a boundary assertion (`Boundary.lean`) or by a channel interaction. Note that `fixed_rows_match` still forces `table.length = fixed.height`: a fixed column covers *every* row including the last, which is a real committed row that the previous window reads.
 
 `Entry.lean` connects tables to the ensemble:
 
@@ -135,6 +145,30 @@ A worked example is in `Clean/Examples/FibonacciNextRow.lean`: Fibonacci with a 
 in place of the state channel used by `Clean/Examples/FibonacciVm/Circuit.lean`. It proves the
 component's `completeness`, and that its `Spec` at a pair environment is exactly the recurrence
 between adjacent rows — the two things no component could do before the next-row-as-output layout.
+
+`Clean/Examples/FibonacciTransition.lean` takes that to an end-to-end statement, and is the example
+to read for how the pieces fit. It proves `fibonacciTransition_soundness`, the *same* public claim
+as `fibonacci_soundness`, from a mixed ensemble: a transition component carries the recurrence, two
+boundary assertions pin the seed and export the final state, and the byte-add lookup remains the
+only channel — the one interaction a proof system genuinely ships as a lookup. Three points worth
+lifting out of it:
+
+- **Padding.** Backends pad a committed trace to a power of two, and a last-row assertion reads the
+  last *committed* row, whatever it is. The component therefore carries a boolean `enabled` selector:
+  an enabled row advances the state, a disabled row freezes it — including the selector itself, so it
+  can never turn back on. The frozen state carried to the last row is exactly the state at the last
+  enabled row.
+- **Inline the selector's booleanity.** `GeneralFormalCircuit.requirementsChannelsLawful` sees only
+  the circuit's *inline* constraints, not those of subcircuits, so a selector gating a channel
+  interaction must be constrained boolean with a bare `assertZero (enabled * (enabled - 1))` rather
+  than through the `assertBool` gadget. Delegating it leaves the obligation unprovable, and moving
+  the channel into `channelsWithRequirements` is not an escape: `SoundEnsemble.addTable` requires a
+  component's requirement channels to be disjoint from the already-finished ones.
+- **Non-vacuity is checked in-file.** A conditional soundness theorem is worthless if its hypothesis
+  has no models, and the live hazard for a boundary ensemble is an entry naming a table the ensemble
+  does not carry — unsatisfiable, hence vacuously fine, hence silent. `boundary_entries_resolve`
+  rules that out, and two further theorems exhibit rows refuting the step relation and the seed
+  assertion, so neither spec is `True` in disguise.
 
 ## Relation To Clean/Table
 

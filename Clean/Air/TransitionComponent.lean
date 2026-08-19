@@ -81,13 +81,13 @@ lemma mem_pairs_iff {t : Table F} (h : t.IsTransition) {i : ℕ} {curr next : Ar
     rw [Table.mem_windows_iff, h] at hj
     have hlt : j + 1 < t.table.length := by omega
     refine ⟨hlt, ?_, ?_⟩
-    · rw [List.getElem!_eq_getElem?_getD, List.getElem?_eq_getElem (by omega)]; rfl
-    · rw [List.getElem!_eq_getElem?_getD, List.getElem?_eq_getElem hlt]; rfl
+    · exact (getElem!_pos t.table j (by omega)).symm
+    · exact (getElem!_pos t.table (j + 1) hlt).symm
   · rintro ⟨hi, rfl, rfl⟩
     refine ⟨i, ?_, rfl, ?_, ?_⟩
     · rw [Table.mem_windows_iff, h]; omega
-    · rw [List.getElem!_eq_getElem?_getD, List.getElem?_eq_getElem (by omega)]; rfl
-    · rw [List.getElem!_eq_getElem?_getD, List.getElem?_eq_getElem hi]; rfl
+    · exact getElem!_pos t.table i (by omega)
+    · exact getElem!_pos t.table (i + 1) hi
 
 /-- The current row of any pair is a row of the trace. -/
 lemma curr_mem_table {t : Table F} (h : t.IsTransition) {i : ℕ} {curr next : Array F}

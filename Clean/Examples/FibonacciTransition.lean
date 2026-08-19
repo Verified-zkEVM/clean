@@ -367,4 +367,37 @@ theorem fibonacciTransition_soundness : ∀ (n x y : F p),
   intro n x y statement
   exact (fibonacciTransitionFormal (p:=p)).soundness (n, x, y) trivial statement
 
+/-! ## Non-vacuity
+
+`fibonacciTransition_soundness` is a conditional statement, so it would be vacuously true if
+`Ensemble.Statement` had no models at all -- the caveat `falseEnsemble` makes at the end of
+`Clean/Examples/FibonacciVm/Circuit.lean`. The way *this* ensemble could fall into that trap is
+the one `Boundary.Entry` warns about: an entry naming a component absent from the ensemble is
+unsatisfiable rather than vacuous, so a typo in `seedEntry.table` would quietly turn the theorem
+above into a tautology. It does not occur here, and the specs the proof transports are refutable
+propositions rather than `True` in disguise.
+-/
+
+/-- Both boundary entries name a component the ensemble actually carries, so neither
+`Entry.Holds` -- nor, with it, `Ensemble.Statement` -- is unsatisfiable by construction. -/
+theorem boundary_entries_resolve :
+    ∃ component ∈ (fibonacciTransitionEnsemble (p:=p)).tables,
+      component.circuit.name = (seedEntry (p:=p)).table ∧
+        component.circuit.name = (finalEntry (p:=p)).table := by
+  refine ⟨fibTransitionComponent, ?_, rfl, rfl⟩
+  simp [fibonacciTransitionEnsemble, circuit_norm]
+
+/-- The step relation genuinely restricts adjacent rows: a disabled row may not turn the
+selector back on, so this pair of rows is not related by `fibStep.Spec`. -/
+theorem fibStep_spec_not_trivial (data : ProverData (F p)) :
+    ¬ (fibStep (p:=p)).Spec ⟨0, 0, 0, 0⟩ ⟨1, 0, 0, 0⟩ data := by
+  simp [fibStep]
+
+omit pGt in
+/-- The seed assertion rules out rows the transition constraints are perfectly happy with: the
+all-zero row steps to itself forever, but it is not a legal first row. -/
+theorem seedAssertion_spec_not_trivial (pub : fieldTriple (F p)) :
+    ¬ (seedAssertion (p:=p)).Spec ⟨0, 0, 0, 0⟩ pub := by
+  simp [seedAssertion]
+
 end Clean.Examples.FibonacciTransition

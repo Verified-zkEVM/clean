@@ -120,7 +120,7 @@ lemma Table.envs_eq_of_flat (table : Table F) (data : ProverData F)
   intro i h₁ h₂
   simp only [List.getElem_map, List.getElem_range] at *
   congr 1
-  rw [List.getElem!_eq_getElem?_getD, List.getElem?_eq_getElem (by simpa using h₂)]; rfl
+  rw [getElem!_pos _ _ (by simpa using h₂)]
 
 @[circuit_norm] lemma Table.component_eq (table : Table F) :
     RowEnvs.component (F:=F) table = table.component := rfl
@@ -311,7 +311,7 @@ lemma windowRow_eq_append {t : Table F} {i : ℕ} (h : i ∈ t.windows) :
 /-- Any in-range row of the trace has the component's row width. -/
 lemma row_size {t : Table F} {i : ℕ} (hi : i < t.table.length) :
     (t.table[i]!).size = t.component.rowWidth := by
-  rw [List.getElem!_eq_getElem?_getD, List.getElem?_eq_getElem hi, Option.getD_some]
+  rw [getElem!_pos t.table i hi]
   exact t.uniform_width _ (List.getElem_mem hi)
 
 omit [FiniteField F] in
@@ -350,10 +350,8 @@ lemma valueFromOffset_windowEnv_curr {t : Table F} {i : ℕ} (hi : i ∈ t.windo
     valueFromOffset T 0 (t.windowEnv i data) =
       valueFromOffset T 0 (Environment.fromArray t.table[i]! data) := by
   obtain ⟨rest, hrest⟩ := windowRow_eq_append hi
-  have hgetElem : t.table[i]'(t.lt_length_of_mem_windows hi) = t.table[i]! := by
-    rw [List.getElem!_eq_getElem?_getD,
-      List.getElem?_eq_getElem (t.lt_length_of_mem_windows hi)]
-    rfl
+  have hgetElem : t.table[i]'(t.lt_length_of_mem_windows hi) = t.table[i]! :=
+    (getElem!_pos t.table i (t.lt_length_of_mem_windows hi)).symm
   rw [hgetElem] at hrest
   simp only [valueFromOffset, windowEnv, Environment.fromArray, hrest]
   congr 1

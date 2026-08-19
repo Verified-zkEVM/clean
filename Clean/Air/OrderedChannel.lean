@@ -1023,8 +1023,7 @@ def toFormalWithBoundaries (soundEns : SoundEnsemble F PublicIO)
   soundness := by
     apply soundEns.soundness_of_tableSoundness_and_specConsistencyWithBoundaries
       Assumptions Spec ?_ assumptionsConsistency specConsistency
-    apply soundEns.tableSoundness_of_soundChannels
-    use soundEns.finished, soundEns.finished_subset
-    exact soundEns.soundChannels
+    exact soundEns.tableSoundness_of_soundChannels
+      ⟨soundEns.finished, soundEns.finished_subset, soundEns.soundChannels⟩
 end SoundEnsemble
 end Air.Flat
