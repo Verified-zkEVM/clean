@@ -1280,6 +1280,18 @@ def fixedColumnCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
       self.constraintSystem.numFixedColumns + self.selectorMap.newFixedCols := by
   simp [fixedColumnCount, pinnedCS, PinnedConstraintSystem.derive, projectCS]
 
+/-- Selector compression leaves the total fixed-column count bounded by the
+configured fixed columns plus the configured selectors. -/
+theorem fixedColumnCount_le_numFixedColumns_add_selectorCount
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.fixedColumnCount ≤
+      self.constraintSystem.numFixedColumns + self.selectorCount := by
+  rw [fixedColumnCount_eq, selectorCount]
+  exact Nat.add_le_add_left
+    (deriveSelCompressMap_newFixedCols_le_numSelectors
+      self.constraintSystem self.n self.selectorActivations)
+    self.constraintSystem.numFixedColumns
+
 /-- Every fixed column in the post-compression verifier constraint system has a query
 slot. Original columns are covered by the closed circuit's configure law; selector
 compression covers its appended suffix by construction. -/

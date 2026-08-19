@@ -308,6 +308,19 @@ def buildCombinations (maxDegree : ℕ) :
       let (comb, rem) := extendCombination maxDegree (s.maxDegree - 1) [s] rest
       comb :: buildCombinations maxDegree fuel rem
 
+/-- The greedy packer emits at most one combination per unit of recursion fuel. -/
+theorem buildCombinations_length_le (maxDegree fuel : ℕ)
+    (selectors : List SelectorDescription) :
+    (buildCombinations maxDegree fuel selectors).length ≤ fuel := by
+  induction fuel generalizing selectors with
+  | zero => simp [buildCombinations]
+  | succ fuel inductionHypothesis =>
+      cases selectors with
+      | nil => simp [buildCombinations]
+      | cons selector rest =>
+          simp only [buildCombinations, List.length_cons]
+          exact Nat.succ_le_succ (inductionHypothesis _)
+
 /-- The greedy inner loop preserves pairwise non-conflict of its chosen combination. -/
 theorem extendCombination_pairwise_nonconflicting
     (maxDegree d : ℕ) (comb selectors : List SelectorDescription)
@@ -425,6 +438,23 @@ def process (selectors : List SelectorDescription) (maxDegree : ℕ) : SelCompre
       (s.selector, SelCompress.mk (deg0.length + k) comb.length (p + 1))
   { newFixedCols := deg0.length + combs.length
     entries := deg0Entries ++ combEntries }
+
+/-- Selector compression allocates no more fixed columns than source selectors. -/
+theorem process_newFixedCols_le_length
+    (selectors : List SelectorDescription) (maxDegree : ℕ) :
+    (process selectors maxDegree).newFixedCols ≤ selectors.length := by
+  let degreeZero := selectors.filter (·.maxDegree = 0)
+  let remaining := selectors.filter (·.maxDegree ≠ 0)
+  have hcombinations := buildCombinations_length_le
+    maxDegree remaining.length remaining
+  have hpartition :
+      degreeZero.length + remaining.length = selectors.length := by
+    have hlength := List.length_eq_length_filter_add
+      (l := selectors) (fun selector => decide (selector.maxDegree = 0))
+    simpa [degreeZero, remaining] using hlength.symm
+  have hbound := Nat.add_le_add_left hcombinations degreeZero.length
+  simpa only [process, degreeZero, remaining] using
+    hbound.trans_eq hpartition
 
 private theorem process_lookup_singleton_of_degree_zero
     (selectors : List SelectorDescription) (maxDegree selector : ℕ)
@@ -1145,6 +1175,19 @@ def deriveSelCompressMap (cs : ConstraintSystem F) (n : ℕ) (acts : List (ℕ �
   { newFixedCols := m.newFixedCols
     entries := m.entries.map fun (s, sc) =>
       (s, { sc with packedCol := sc.packedCol + cs.numFixedColumns }) }
+
+/-- Circuit-derived selector compression allocates at most one new fixed column per
+configured selector. -/
+theorem deriveSelCompressMap_newFixedCols_le_numSelectors
+    (cs : ConstraintSystem F) (n : ℕ) (acts : List (ℕ × ℕ)) :
+    (deriveSelCompressMap cs n acts).newFixedCols ≤ cs.numSelectors := by
+  let table := activationTable n cs.numSelectors acts
+  let degrees := selectorMaxDegrees cs
+  let descriptions := (List.range cs.numSelectors).map fun index =>
+    SelectorDescription.mk index table[index]! degrees[index]!
+  have hbound := process_newFixedCols_le_length descriptions (csDegree cs)
+  simpa only [deriveSelCompressMap, descriptions, List.length_map,
+    List.length_range] using hbound
 
 /-- Every allocated selector with compression degree zero receives its own packed
 fixed column, represented by the bare selector query (`combinationLen = 1`, root
