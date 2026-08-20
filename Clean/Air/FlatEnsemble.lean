@@ -1,7 +1,7 @@
 /-
 This file defines flat AIR ensembles and what soundness and completeness mean for them.
 -/
-import Clean.Air.Entry
+import Clean.Air.TableContext
 import Clean.Air.Balance
 import Clean.Air.Boundary
 import Clean.Circuit.Verifier
@@ -68,9 +68,8 @@ structure EnsembleWitness (ens : Ensemble F PublicIO) where
   /-- Binds the witness to the ensemble by component.
 
   This also pins how the trace is read: `Component.windowRows` records how many rows an
-  environment spans and `window_size` ties it to the circuit's footprint, so a prover cannot
-  commit a transition component as a flat trace. Under the older `Entry`/`TableKind` design that
-  had to be bound separately, because both readings imposed the same width obligation. -/
+  environment spans and `window_size` ties it to the circuit's footprint, so binding the component
+  is enough -- a prover cannot commit a transition component as a flat trace. -/
   same_circuits : ∀ i (hi : i < ens.tables.length),
     ens.tables[i] = tables[i].component
 

@@ -47,7 +47,7 @@ the base case, since the seed it pushes is `fibPair 0` literally. The public cla
 guarantee the verifier receives from its own pull.
 
 This matters for the ensemble: `Ensemble.SpecConsistency` sees only `witness.Spec`, not channel
-balance (there is a `TODO` to that effect at `Clean/Air/FlatEnsemble.lean:363`), so a boundary
+balance (see the `TODO` on `Ensemble.SpecConsistency` itself), so a boundary
 argument resting on balance alone would not reach the public spec. Routing it through
 `Guarantees` -- the same device `FibonacciVm` uses -- keeps it available.
 -/
@@ -101,8 +101,8 @@ One Fibonacci step, with the next row as the circuit's **output**.
 
 `main` witnesses the next row's three cells and constrains its pair to `(y, x + y)`. Because those
 cells belong to this instantiation, they are pinned by `UsesLocalWitnessesCompleteness`, which is
-what makes `completeness` provable -- the defect the adversarial review found in the previous
-design, where the next row was owned by nobody.
+what makes `completeness` provable. A next row lying outside the circuit's footprint would be
+owned by nobody, and no instantiation could pin it.
 
 The boundary interactions are gated on each row's own selector, so the prover chooses which rows
 participate; `assertBool` on both selectors is what stops a fractional selector from splitting one
@@ -333,9 +333,10 @@ this shape -- `FibonacciVm` closes the identical loop on `FibonacciChannel`. But
 
     tables_windowRows : tables.Forall (fun table => table.windowRows = 1)
 
-(`Clean/Air/Vm.lean:61`), and this component has `windowRows = 2`. That field is not incidental:
-the VM soundness argument reads a table's environments as one-per-row throughout
-(`Vm.lean:492`, `:559`, `:967`, all via `vmTables_windowRows_eq_one`).
+(`VmTables.tables_windowRows`), and this component has `windowRows = 2`. That field is not
+incidental:
+the VM soundness argument reads a table's environments as one-per-row throughout, at every use of
+`vmTables_windowRows_eq_one`.
 
 So a transition component cannot presently reach a public spec through *either* route: the
 ordered-channel route rejects the cycle, and the VM route rejects the window. Closing this means

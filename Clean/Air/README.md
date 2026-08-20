@@ -48,7 +48,7 @@ It also proves the component-level transport lemmas: instantiated component oper
 
 - `Flat.Table`: concrete list of rows for one component. There is one `Table` type regardless of span.
 - `Flat.Table.envs`: the list of environments the component's circuit is checked at — one per window. Every trace-level predicate (`Constraints`, `Assumptions`, `Guarantees`, `Requirements`, `Spec`, the `Channel*` family), every interaction collection, and `weakSoundness` quantify over it and never inspect an individual environment, which is why they apply to any window size.
-- `windows` / `windowRow` / `windowEnv`: the window at index `i` is the concatenation of rows `i … i + windowRows - 1`, evaluated as one environment. A window exists at `i` exactly when `i + windowRows ≤ length`, so an `n`-row table presents `n + 1 - windowRows` environments — `n` when flat, `n - 1` when transition (`windows_length`, restated as `Table.envs_length` in `Entry.lean`). Any bound on interaction count derived from table heights must use that number, in particular the `< ringChar F` side condition carried by `BalancedInteractions`.
+- `windows` / `windowRow` / `windowEnv`: the window at index `i` is the concatenation of rows `i … i + windowRows - 1`, evaluated as one environment. A window exists at `i` exactly when `i + windowRows ≤ length`, so an `n`-row table presents `n + 1 - windowRows` environments — `n` when flat, `n - 1` when transition (`windows_length`, restated as `Table.envs_length` in `TableContext.lean`). Any bound on interaction count derived from table heights must use that number, in particular the `< ringChar F` side condition carried by `BalancedInteractions`.
 - `Flat.Table.circuitAssumptions`: supplies the fixed-row and derived-data facts at each row index.
 - `valueFromOffset_windowEnv`: the current row's input cells read identically from the row alone and from the whole window.
 - `row_size` and `windowRow_size`: an in-range row has width `rowWidth`, and a window therefore has width `windowRows * rowWidth`. These are the cell-level facts every window-index computation bottoms out in, and they are where `uniform_width` is actually consumed.
@@ -72,12 +72,10 @@ It also carries the **window-induction library**, which is what turns `Table.Spe
 
 An `n`-row transition table imposes `n - 1` constraint instances, and a table of 0 or 1 rows is entirely unconstrained. The last row is never a window's `curr`; it appears only as the previous window's `next`. That is safe rather than a soundness hole only because the ends of the trace are pinned separately — by a boundary assertion (`Boundary.lean`) or by a channel interaction. Note that `fixed_rows_match` still forces `table.length = fixed.height`: a fixed column covers *every* row including the last, which is a real committed row that the previous window reads.
 
-`Entry.lean` connects tables to the ensemble:
+`TableContext.lean` connects tables to the ensemble:
 
 - `Flat.Table.deriveProverData`: each named component is the source of its circuit-input rows. Keyed on rows rather than environments — a transition table is *constrained* on windows, but its *data* is still one input row per trace row, so this does not depend on `windowRows`.
 - `Flat.TableContext`: a bundle of committed tables sharing one prover data object. Every operation on it quantifies over each table's `envs`, so it applies uniformly to any window size.
-
-The file previously carried a `TableKind` tag, an `Entry` (component + kind) and an `EntryTable` sum type, because flat and transition traces were distinct types one ensemble had to hold together. `windowRows` replaced all three.
 
 `Balance.lean` contains the channel multiset theory. It defines `BalancedInteractions`, proves permutation and counting lemmas, and provides the channel-level implication principles used by higher-level soundness proofs. It also defines `RawChannel.Consistent` and `RawChannel.Normal`; typed channels are normal by construction, and normal channels are consistent, so both properties are satisfied in practice. A highlight in `Balance.lean` is the "guarantees-to-requirements-reversal" theorem which provides the basis for soundness of VM channels.
 

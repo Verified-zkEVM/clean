@@ -55,9 +55,10 @@ A component *does* say how many trace rows its environment spans, via `windowRow
 component checked against a single row, 2 for a transition component checked against two adjacent
 rows laid side by side. Communication with other components is expressed by channel interactions.
 
-The window is recorded here, on the object the verifier commits to, rather than as a separate tag
-on the ensemble entry. `window_size` ties it to the circuit's own cell footprint, which is what
-makes the reading of an environment derivable from the component instead of a prover choice.
+The window is recorded here, on the object the verifier commits to, rather than alongside the
+trace. `window_size` ties it to the circuit's own cell footprint, which is what makes the reading
+of an environment derivable from the component instead of a prover choice: committing a
+transition component as a flat trace is not merely forbidden, it is unstateable.
 
 For a transition component the layout is what makes both completeness and the spec work out:
 
@@ -75,7 +76,7 @@ structure Component (F : Type) [FiniteField F] where
   /-- The width of a single trace row. The circuit's footprint spans `windowRows` of them. -/
   rowWidth : ℕ := circuit.size
   /-- The circuit's cells tile exactly `windowRows` rows. This is the law that makes the window
-  derivable from the component, and it is why no separate `TableKind` tag is needed. -/
+  derivable from the component rather than a separate, reinterpretable annotation. -/
   window_size : circuit.size = windowRows * rowWidth := by simp
   windowRows_pos : 0 < windowRows := by simp
   /-- The circuit's input occupies the low cells of the window's *first* row.

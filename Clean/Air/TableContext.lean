@@ -1,18 +1,10 @@
 /-
-The `TableContext`: a bundle of committed traces sharing one prover data object.
+The `TableContext`: a bundle of committed traces sharing one prover data object, together with
+the derivation of `ProverData` from those traces.
 
-This file used to carry a `TableKind` tag, an `Entry` (component + kind) and an `EntryTable` sum
-type, because a flat and a transition trace were distinct types that a single ensemble had to
-hold together. That is no longer needed: `Component.windowRows` records how many rows an
-environment spans, and `Component.window_size` ties it to the circuit's own footprint, so there is
-one `Table` type and the window is *derivable from the component* rather than being a separate tag
-the prover could reinterpret.
-
-That is a strictly stronger arrangement than the tag it replaces. The old design needed
-`EnsembleWitness.same_circuits` to bind the kind as well as the component, precisely because both
-kinds imposed the same width obligation and so were freely interchangeable. Now committing a
-transition component as a flat trace is not merely forbidden -- it is unstateable, since the
-component itself carries the window.
+Nothing here depends on how many rows an environment spans. `deriveProverData` is keyed on trace
+*rows* -- a transition table is constrained on windows, but its data is still one input row per
+row -- and every `TableContext` operation quantifies over each table's `envs`.
 -/
 import Clean.Air.TransitionComponent
 
