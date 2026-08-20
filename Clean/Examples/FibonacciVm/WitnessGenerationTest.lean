@@ -18,7 +18,7 @@ private def result : Except String (List ℕ × ℕ × ℕ × Bool × Bool) :=
   | .ok witness =>
       match witness.tables with
       | _ :: _ :: bytes :: _ =>
-          let multiplicities := bytes.rows.map fun row => row[1]?.getD 0
+          let multiplicities := bytes.table.map fun row => row[1]?.getD 0
           .ok (
             witness.tables.map (·.length),
             multiplicities.sum.val,
