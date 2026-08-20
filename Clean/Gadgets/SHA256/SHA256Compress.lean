@@ -414,7 +414,9 @@ def circuit : FormalCircuit (F p) Inputs SHA256State := {
       · -- the round constant: env-independent
         refine Vector.ext fun j hj => ?_
         simp only [Vector.getElem_map, constWord32, Vector.getElem_ofFn, circuit_norm]
-      · exact hSch iv (by omega)
+      · rw [← getElem_eval_vector, ← getElem_eval_vector,
+          ProvableType.eval_fields, ProvableType.eval_fields]
+        exact hSch iv (by omega)
     · have hIn := fun (jj : ℕ) (hjj : jj < 8) => map_eval_getElem_congr h.1 jj hjj
       exact stateVar_eval_congr_composite (i₀ := n) (k := 64) hIn (by omega)
         (fun j hj => h_agrees.1 j (by omega))
@@ -565,7 +567,10 @@ def circuit : FormalCircuit (F p) Inputs SHA256State := {
   -- Add32 leg unifies `SHA256Rounds.circuit.output` against its 64-step unfolding.
   computableWitnesses := by
     computable_witnesses_start
-    · computable_witnesses_close
+    · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+        (by rfl) fun h_agrees => ?_
+      simp only [circuit_norm]
+      exact h.2
     · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
         (by rfl) fun h_agrees => ?_
       simp only [circuit_norm]
@@ -593,7 +598,12 @@ def circuit : FormalCircuit (F p) Inputs SHA256State := {
       have hb := fun (jj : ℕ) (hjj : jj < 8) => map_eval_getElem_congr oR jj hjj
       have ha := fun (jj : ℕ) (hjj : jj < 8) => map_eval_getElem_congr h.1 jj hjj
       simp only [circuit_norm]
-      exact ⟨ha i.val i.isLt, hb i.val i.isLt⟩
+      have ha' := ha i.val i.isLt
+      have hb' := hb i.val i.isLt
+      rw [← ProvableType.eval_fields, ← ProvableType.eval_fields,
+        getElem_eval_vector, getElem_eval_vector] at ha'
+      rw [← ProvableType.eval_fields, ← ProvableType.eval_fields] at hb'
+      exact ⟨ha', hb'⟩
     · computable_witnesses_close
 }
 

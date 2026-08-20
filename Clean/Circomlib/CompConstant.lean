@@ -131,9 +131,24 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
   -- 127 windows); grind cannot reach them and the close lacks the decomposition.
   computableWitnesses := by
     computable_witnesses_start [Vector.ext_iff]
-    · computable_witnesses_close [explicit_provable_type,
+    · -- the parts vector copies expressions over the input: transport its element
+      -- evals through the whole-input congruence, atom by atom
+      have h' : ∀ (j : ℕ) (hj : j < 254),
+          Expression.eval env.toEnvironment (input[j]'hj) =
+            Expression.eval env'.toEnvironment (input[j]'hj) := fun j hj =>
+        (ProvableType.getElem_eval_fields env.toEnvironment input j hj).trans
+          ((h j hj).trans
+            (ProvableType.getElem_eval_fields env'.toEnvironment input j hj).symm)
+      rw [ProvableType.getElem_eval_toElements, ProvableType.getElem_eval_toElements]
+      congr 1
+      simp only [circuit_norm]
+      refine Vector.ext fun j hj => ?_
+      refine congrArg (fun v : Vector (F p) 127 =>
+        (ProvableType.toElements (M := fields 127) v)[j]'hj) ?_
+      refine Vector.ext fun k hk => ?_
+      simp only [Vector.getElem_map, Vector.getElem_ofFn, circuit_norm,
         apply_ite (Expression.eval env.toEnvironment),
-        apply_ite (Expression.eval env'.toEnvironment)]
+        apply_ite (Expression.eval env'.toEnvironment), h']
     · apply eval_sum_eq_of_eval_eq
       intro i
       simp only [Vector.getElem_mapRange, circuit_norm]

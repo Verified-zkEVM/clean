@@ -75,7 +75,7 @@ theorem output_map_eval_congr {Input : TypeMap} [ProvableType Input] {sz : ℕ}
       Vector.map (Expression.eval env'.toEnvironment) (circuit.output input_var n) := by
   have h := FormalCircuit.output_of_input_eq circuit input_eq
     (ProverEnvironment.agreesBelow_of_le h_agrees hm)
-  simp only [circuit_norm] at h
+  simp only [circuit_norm, ProvableType.eval_fields] at h
   exact h
 
 grind_pattern output_map_eval_congr =>
@@ -93,7 +93,7 @@ theorem map_eval_getElem_congr {env env' : ProverEnvironment (F p)} {m : ℕ}
   simp only [eval_vector] at hxs
   have h := congrArg (fun v => v[i]'hi) hxs
   simp only [Vector.getElem_map] at h
-  simp only [circuit_norm] at h ⊢
+  simp only [ProvableType.eval_fields] at h
   exact h
 
 end Gadgets.SHA256

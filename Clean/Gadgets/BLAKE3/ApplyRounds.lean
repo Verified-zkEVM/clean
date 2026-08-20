@@ -47,11 +47,13 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
       refine ⟨FormalCircuit.output_of_input_eq (Round.circuit (p:=p)) (n := n)
           (by simp only [circuit_norm]; exact h)
           (ProverEnvironment.agreesBelow_of_le h_agrees
-            (by simp only [circuit_norm, Round.circuit]; omega)),
-          FormalCircuit.output_of_input_eq (Permute.circuit (p:=p)) (n := n + 768)
+            (by simp only [circuit_norm, Round.circuit]; omega)), ?_⟩
+      have h2 := FormalCircuit.output_of_input_eq (Permute.circuit (p:=p)) (n := n + 768)
           h.2
           (ProverEnvironment.agreesBelow_of_le h_agrees
-            (by simp only [circuit_norm, Permute.circuit]; omega))⟩
+            (by simp only [circuit_norm, Permute.circuit]; omega))
+      simp only [circuit_norm, Permute.circuit] at h2
+      exact h2
   elaborated := by elaborate_circuit_with {
     output input offset := output input offset
   }
@@ -623,9 +625,10 @@ def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
     computable_witnesses_start [initializeStateVector]
     · computable_witnesses_close
         [initState_eval_congr h.1 h.2.2.1 h.2.2.2.1 h.2.2.2.2.1 h.2.2.2.2.2]
-    · exact FormalCircuit.output_of_input_eq _
-        (by simp only [circuit_norm];
-            exact ⟨initState_eval_congr h.1 h.2.2.1 h.2.2.2.1 h.2.2.2.2.1 h.2.2.2.2.2, h.2.1⟩)
+    · have hin := initState_eval_congr h.1 h.2.2.1 h.2.2.2.1 h.2.2.2.2.1 h.2.2.2.2.2
+      simp only [circuit_norm] at hin
+      exact FormalCircuit.output_of_input_eq _
+        (by simp only [circuit_norm]; exact ⟨hin, h.2.1⟩)
         (ProverEnvironment.agreesBelow_of_le h_agrees (by
           have e7 : ∀ v, (sevenRoundsApplyStyle (p:=p)).localLength v = 5376 := fun _ => rfl
           simp only [e7]; omega))

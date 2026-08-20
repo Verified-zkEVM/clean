@@ -15,13 +15,16 @@ theorem allZero.soundness {offset : ℕ} {env : Environment F} {n} {xs : Vector 
   simp only [allZero, circuit_norm]
   intro h_holds x hx
   obtain ⟨i, hi, rfl⟩ := Vector.getElem_of_mem hx
-  exact h_holds ⟨i, hi⟩
+  have h := h_holds ⟨i, hi⟩
+  rw [← ProvableType.getElem_eval_fields env xs i hi] at h
+  exact h
 
 theorem allZero.completeness {offset : ℕ} {env : ProverEnvironment F} {n} {xs : Vector (Expression F) n} :
     (∀ x ∈ xs, x.eval env = 0) →
     ConstraintsHold.Completeness env ((allZero xs).operations offset) := by
   simp only [allZero, circuit_norm]
   intro h_holds i
+  rw [← ProvableType.getElem_eval_fields env.toEnvironment xs i.val i.isLt]
   exact h_holds xs[i] (Vector.mem_of_getElem rfl)
 
 namespace Equality
@@ -111,7 +114,7 @@ lemma channelsWithRequirements_eq :
 from the `ComputableWitnesses` offset `n` matters: a parent's `circuit_norm` can reduce the free
 `n` while the offset inside the type index stays unreduced (dependent motive), so a same-offset
 statement stops matching. -/
-@[circuit_norm]
+@[circuit_norm, computable_witnesses_norm]
 theorem toSubcircuit_computableWitnesses {m n : ℕ} (input : Var (ProvablePair M M) F)
     {env env' : ProverEnvironment F} :
     ((circuit M).toSubcircuit m input).ComputableWitnesses n env env' := by
@@ -169,6 +172,7 @@ instance : HasAssertEq (M (Expression F)) F where
   assert_eq := @assertEquals F _ M _
 
 attribute [circuit_norm] HasAssertEq.assert_eq
+attribute [computable_witnesses_norm] HasAssertEq.assert_eq
 infix:50 " === " => HasAssertEq.assert_eq
 
 -- Defines a unified `<==` notation for witness assignment with equality assertion in circuits.
@@ -192,6 +196,7 @@ instance {n : ℕ} : HasAssignEq (Vector (Expression F) n) F :=
   inferInstanceAs (HasAssignEq (fields n (Expression F)) F)
 
 attribute [circuit_norm] HasAssignEq.assignEq
+attribute [computable_witnesses_norm] HasAssignEq.assignEq
 
 -- Custom syntax to allow `let var <== expr` without monadic arrow
 syntax "let " ident " <== " term : doElem

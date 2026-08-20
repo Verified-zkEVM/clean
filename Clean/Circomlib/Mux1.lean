@@ -70,7 +70,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
       output[i] = if s = 0 then (c[i]).1 else (c[i]).2
 
   computableWitnesses := by
-    computable_witnesses [eval_vector, Vector.ext_iff, explicit_provable_type]
+    computable_witnesses
 
   soundness := by
     circuit_proof_start

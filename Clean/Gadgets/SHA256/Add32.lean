@@ -43,9 +43,9 @@ lemma bitsVal_eval (ctx : Witgen.Ctx (F p)) (a : Var (fields 32) (F p)) :
 
 omit h_large in
 lemma evalBitsNat_congr {env env' : ProverEnvironment (F p)} {a : Var (fields 32) (F p)}
-    (h : Vector.map (Expression.eval env.toEnvironment) a =
-      Vector.map (Expression.eval env'.toEnvironment) a) :
+    (h : (eval env.toEnvironment a : fields 32 (F p)) = eval env'.toEnvironment a) :
     evalBitsNat env a = evalBitsNat env' a := by
+  rw [ProvableType.eval_fields, ProvableType.eval_fields] at h
   rw [evalBitsNat, evalBitsNat]
   refine Finset.sum_congr rfl fun i _ => ?_
   have hi := congrArg (fun v => v[i.val]'(by omega)) h
@@ -84,7 +84,7 @@ theorem Inputs.eval_mk {F : Type} [FiniteField F] (env : Environment F)
     (a b : fields 32 (Expression F)) :
     eval env ({ a := a, b := b } : Inputs (Expression F)) =
       { a := Vector.map (Expression.eval env) a, b := Vector.map (Expression.eval env) b } := by
-  simp only [circuit_norm]
+  simp only [circuit_norm, ProvableType.eval_fields]
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
   add32 input.a input.b

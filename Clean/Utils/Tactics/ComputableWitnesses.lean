@@ -592,14 +592,14 @@ resulting `mk = mk` equalities into componentwise conjuncts. Runs before
 would otherwise rewrite them to a ∀-form whose symbolic index leaves list-`getElem`
 atoms nothing can reduce. -/
 def vecLiteralLemmas : Array Name := #[
-  ``eval_vector, ``ProvableType.eval_fields, ``ProvableType.eval_fields_prover,
+  ``eval_vector, ``ProvableType.eval_fields,
   ``Vector.map_mk, ``List.map_toArray, ``List.map_cons, ``List.map_nil,
   ``Vector.mk.injEq, ``Array.mk.injEq, ``List.cons.injEq, ``and_true]
 
 /-- Vector route, structural `simp_all`: vector eval decomposition and elementwise
 access. Every member fired in the usage measurement at 815dc9b1 (1–75 each). -/
 def vecStructuralLemmas : Array Name := #[
-  ``eval_vector, ``ProvableType.eval_fields, ``ProvableType.eval_fields_prover,
+  ``eval_vector, ``ProvableType.eval_fields,
   ``Vector.map_mk, ``List.map_toArray, ``List.map_cons, ``List.map_nil,
   ``Array.mk.injEq, ``List.cons.injEq, ``and_true,
   ``Vector.map_ofFn, ``Vector.ext_iff, ``Vector.getElem_ofFn, ``Function.comp_def,

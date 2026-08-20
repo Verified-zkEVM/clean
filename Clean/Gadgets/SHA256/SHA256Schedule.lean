@@ -377,10 +377,6 @@ lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F p)))
     obtain ⟨c_sig1, c_sig0, c_sum0, c_sum1, c_wj⟩ := h_step
     -- Establish normalization of indexed positions via IH.
     -- Bridge the raw `Vector.map (Expression.eval env)` spelling to `eval env` for the IH lemmas.
-    have h_eval_get : ∀ (x : SHA256Schedule (Expression (F p))) (i : ℕ) (h : i < 64),
-        Vector.map (Expression.eval env) (x[i]'h) = eval env (x[i]'h) := by
-      intros x i h
-      rw [CircuitType.eval_var_fields]
     have h_norm_m2 : Normalized (eval env ((varSchedule i₀ input_var k)[k + 16 - 2]'(by omega))) :=
       ih_norm (k + 16 - 2) (by omega)
     have h_norm_m7 : Normalized (eval env ((varSchedule i₀ input_var k)[k + 16 - 7]'(by omega))) :=
@@ -390,14 +386,10 @@ lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F p)))
     have h_norm_m16 : Normalized (eval env ((varSchedule i₀ input_var k)[k + 16 - 16]'(by omega))) :=
       ih_norm (k + 16 - 16) (by omega)
     -- Apply specs in order: sig1, sig0, sum0, sum1, wj.
-    rw [h_eval_get] at c_sig1
     obtain ⟨v_sig1, n_sig1⟩ := c_sig1 h_norm_m2
-    rw [h_eval_get] at c_sig0
     obtain ⟨v_sig0, n_sig0⟩ := c_sig0 h_norm_m15
-    rw [h_eval_get] at c_sum0
     obtain ⟨v_sum0, n_sum0⟩ := c_sum0 n_sig1 h_norm_m7
     obtain ⟨v_sum1, n_sum1⟩ := c_sum1 n_sum0 n_sig0
-    rw [h_eval_get] at c_wj
     obtain ⟨v_wj, n_wj⟩ := c_wj n_sum1 h_norm_m16
     -- Now compose values: wj's value should equal valSchedule's k+16 slot.
     refine ⟨?_, ?_⟩
@@ -529,24 +521,14 @@ theorem completeness : Completeness (F p) (Input := SHA256Block) (Output := SHA2
         at h_step
       -- We need to show Normalized at slot j for varSchedule (k+1).
       obtain ⟨c_sig1, c_sig0, c_sum0, c_sum1, c_wj⟩ := h_step
-      have h_eval_get : ∀ (x : SHA256Schedule (Expression (F p))) (i : ℕ) (h : i < 64),
-          Vector.map (Expression.eval env.toEnvironment) (x[i]'h) =
-            eval env.toEnvironment (x[i]'h) := by
-        intros x i h
-        rw [
-            CircuitType.eval_var_fields]
       have h_norm_m2 := ih (k + 16 - 2) (by omega)
       have h_norm_m7 := ih (k + 16 - 7) (by omega)
       have h_norm_m15 := ih (k + 16 - 15) (by omega)
       have h_norm_m16 := ih (k + 16 - 16) (by omega)
-      rw [h_eval_get] at c_sig1
       obtain ⟨_, n_sig1⟩ := c_sig1 h_norm_m2
-      rw [h_eval_get] at c_sig0
       obtain ⟨_, n_sig0⟩ := c_sig0 h_norm_m15
-      rw [h_eval_get] at c_sum0
       obtain ⟨_, n_sum0⟩ := c_sum0 n_sig1 h_norm_m7
       obtain ⟨_, n_sum1⟩ := c_sum1 n_sum0 n_sig0
-      rw [h_eval_get] at c_wj
       obtain ⟨_, n_wj⟩ := c_wj n_sum1 h_norm_m16
       intro j hj
       simp only [varSchedule, dif_pos hk'']
@@ -585,29 +567,21 @@ theorem completeness : Completeness (F p) (Input := SHA256Block) (Output := SHA2
   -- Now we need to provide the chain of normalized assumptions.
   -- Extract the chain from h_env_i.
   obtain ⟨e_sig1, e_sig0, e_sum0, e_sum1, e_wj⟩ := h_env_i
-  have h_eval_get : ∀ (x : SHA256Schedule (Expression (F p))) (i : ℕ) (h : i < 64),
-      Vector.map (Expression.eval env.toEnvironment) (x[i]'h) =
-        eval env.toEnvironment (x[i]'h) := by
-    intros x i h
-    rw [CircuitType.eval_var_fields]
   have h_norm_m2 := ih (i.val + 16 - 2) (by omega)
   have h_norm_m7 := ih (i.val + 16 - 7) (by omega)
   have h_norm_m15 := ih (i.val + 16 - 15) (by omega)
   have h_norm_m16 := ih (i.val + 16 - 16) (by omega)
-  rw [h_eval_get] at e_sig1
   obtain ⟨_, n_sig1⟩ := e_sig1 h_norm_m2
-  rw [h_eval_get] at e_sig0
   obtain ⟨_, n_sig0⟩ := e_sig0 h_norm_m15
-  rw [h_eval_get] at e_sum0
   obtain ⟨_, n_sum0⟩ := e_sum0 n_sig1 h_norm_m7
   obtain ⟨_, n_sum1⟩ := e_sum1 n_sum0 n_sig0
   -- The goal is the chain of ProverAssumptions = R1CS Assumptions = Normalized.
   refine ⟨?_, ?_, ?_, ?_, ?_⟩
-  · rw [h_eval_get]; exact h_norm_m2
-  · rw [h_eval_get]; exact h_norm_m15
-  · rw [h_eval_get]; exact ⟨n_sig1, h_norm_m7⟩
+  · exact h_norm_m2
+  · exact h_norm_m15
+  · exact ⟨n_sig1, h_norm_m7⟩
   · exact ⟨n_sum0, n_sig0⟩
-  · rw [h_eval_get]; exact ⟨n_sum1, h_norm_m16⟩
+  · exact ⟨n_sum1, h_norm_m16⟩
 
 def circuit : FormalCircuit (F p) SHA256Block SHA256Schedule where
   main; elaborated; Assumptions; Spec; soundness;
