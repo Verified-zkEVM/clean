@@ -30,6 +30,7 @@ inductive LoweringError where
   | componentVariable (component index width : ℕ)
   | verifierVariable (index width : ℕ)
   | multiRowWindow (component windowRows : ℕ)
+  | transitionMode (component : ℕ)
   | boundaryAssertions (count : ℕ)
 deriving Repr, DecidableEq
 
@@ -73,6 +74,8 @@ instance : ToString LoweringError where
         s!"verifier interaction reads public cell {index}, but the public input width is {width}"
     | .multiRowWindow component windowRows =>
         s!"component {component} spans {windowRows} trace rows, but the backend AIR is single-row"
+    | .transitionMode component =>
+        s!"component {component} uses transition generation, which the backend does not support"
     | .boundaryAssertions count =>
         s!"ensemble carries {count} boundary assertions, but the backend has no boundary constraint support"
 
@@ -155,6 +158,7 @@ private def validateMode (index : ℕ) (component : Component F)
   match component.fixedColumns, mode with
   | none, _ => pure ()
   | some _, .demand _ => throw (.fixedDemandMode index)
+  | some _, .transition _ => throw (.transitionMode index)
   | some fixed, .preallocated preallocated =>
       unless preallocated.rows = fixed.height do
         throw (.preallocatedRows index fixed.height preallocated.rows)
@@ -163,6 +167,9 @@ private def validateMode (index : ℕ) (component : Component F)
         throw (.fixedPadding index fixed.height paddedHeight)
   match mode with
   | .demand _ => pure ()
+  -- the emitted Rust prover generates rows independently; a chained transition trace is
+  -- inexpressible there, mirroring the `multiRowWindow` refusal on the constraint side
+  | .transition _ => throw (.transitionMode index)
   | .preallocated preallocated =>
       let expectedWidth := component.rowOffset - fixedWidth
       unless preallocated.input.width = expectedWidth do
@@ -243,6 +250,8 @@ private def validateDataReads (ensemble : Ensemble F PublicIO) (modes : List (Mo
               read.width)
           let unstable := match mode with
             | .demand _ => true
+            -- chain-generated rows are not stable preallocated cells
+            | .transition _ => true
             | .preallocated preallocated =>
                 preallocated.handlers.any fun handler => handler.column = read.column
           if unstable then

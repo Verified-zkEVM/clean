@@ -102,21 +102,20 @@ at every readable location.
 
 ## Current limits of the transition kind
 
-Transition components are supported by the Lean model and its soundness theory, but not yet by the
-executable layers. Both layers **refuse** them rather than silently mis-handling them, which is
-what keeps the verified statement and the deployed artifact enforcing the same relation:
+Transition components are supported by the Lean model, its soundness theory, and Lean-side
+witness generation, but not yet by extraction. Whatever an executable layer cannot express it
+**refuses** rather than silently mis-handling, which is what keeps the verified statement and
+the deployed artifact enforcing the same relation:
 
-- **Witness generation** refuses them. `assembleTables` throws unless `windowRows = 1`. Generation
-  is row-independent, whereas a multi-row window needs row `i+1` to be produced from row `i`. The
-  guard is on the component's own `windowRows`, so there is no tag a caller could set
-  inconsistently with the circuit's actual footprint.
-
-  Design for the follow-up, so it is not re-derived: model it on
-  `Clean/Table/WitnessGeneration.lean`'s `generateNextRow` — fold the component's witness
-  generators over a partially built `next_row`, the environment reading cells `< rowWidth` from
-  `cur_row` and `≥ rowWidth` from `next_row`, so later witnesses chain on earlier ones.
-  `completeRow` is currently a `map` over rows and would become a fold, since row `i+1` must be
-  produced once and reused as row `i+1`'s input.
+- **Witness generation** supports them through `Mode.transition`: a seed row program plus a
+  committed row count. Generation is a chain — `input_eq_rowWidth` makes the current row the
+  circuit's whole input and the witness block exactly the next row, so one witness-generator run
+  per window (`transitionStep`) extends the trace by one row, with the accumulator playing the
+  two-row window environment (cells `< rowWidth` = current row, `≥ rowWidth` = the partially
+  built next row). Padding continues the chain rather than stamping `Padding.input`, so padded
+  suffixes satisfy the transition constraints by construction; interactions are accounted per
+  window (`n` rows → `n − 1` windows), matching `Table.envs` on the assembled trace. Windows
+  wider than two rows are still refused by `assembleTables`.
 - **Extraction** covers same-row operations only. `Lower.lean` throws `LoweringError.multiRowWindow`
   unless `windowRows = 1`, and bounds variables by `Component.envWidth` (the whole window) rather
   than one row's width. `Air/Extraction/IR.lean`'s `ComponentProgram` needs a transition variant;

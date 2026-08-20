@@ -358,6 +358,8 @@ private def modeToRust (component : ComponentProgram F) : Mode F → Except Stri
   | .preallocated mode => do
       let handlers ← mode.handlers.mapM (preallocatedHandlerToRust component)
       return s!"Mode::Preallocated \{ handlers: vec![{commaSep handlers}] }"
+  -- unreachable: `lower` throws `LoweringError.transitionMode` before Rust emission
+  | .transition _ => throw "transition generation cannot be rendered for Rust"
 
 private def initialRowsToRust (index : ℕ) (component : ComponentProgram F) (mode : Mode F) :
     Except String String :=
@@ -378,6 +380,8 @@ private def initialRowsToRust (index : ℕ) (component : ComponentProgram F) (mo
         Ok(input)
     }).collect()
 }"
+  -- unreachable: `lower` throws `LoweringError.transitionMode` before Rust emission
+  | .transition _ => throw "transition generation cannot be rendered for Rust"
 
 private def paddingToRust (padding : Padding F) : String :=
   s!"Padding \{ input: {rowToRust padding.input}, minimum_rows: {padding.minimumRows} }"
