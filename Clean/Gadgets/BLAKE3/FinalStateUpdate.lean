@@ -55,7 +55,7 @@ def Spec (input : Inputs (F p)) (out : BLAKE3State (F p)) :=
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [Xor32.circuit, Xor32.elaborated]
 
-  simp only [Xor32.Assumptions, getElem_eval_vector, h_input, Xor32.Spec, and_imp] at h_holds
+  simp only [Xor32.Assumptions, Xor32.Spec, and_imp] at h_holds
 
   ring_nf at h_holds
 
@@ -80,7 +80,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   specialize c14 (chaining_value_norm 6) (state_norm 14)
   specialize c15 (chaining_value_norm 7) (state_norm 15)
 
-  simp [circuit_norm, eval_vector, BLAKE3State.value, BLAKE3State.Normalized, finalStateUpdate]
+  simp [circuit_norm, BLAKE3State.value, BLAKE3State.Normalized, finalStateUpdate]
   ring_nf
   simp only [c0, c1, c2, c3, c4, c5, c6, c7, c8, c9, c10, c11, c12, c13, c14, c15, and_self,
     true_and]
@@ -96,8 +96,8 @@ theorem completeness : Completeness (F p) main Assumptions := by
   obtain ⟨state_norm, chaining_value_norm⟩ := h_assumptions
 
   dsimp only [main, circuit_norm, Xor32.circuit, Xor32.elaborated] at h_env ⊢
-  simp only [h_input_state, h_input_cv, circuit_norm, and_imp,
-    Xor32.Assumptions, Xor32.Spec, getElem_eval_vector] at h_env ⊢
+  simp only [circuit_norm, and_imp,
+    Xor32.Assumptions, Xor32.Spec] at h_env ⊢
 
   -- Prove all normalization facts from the universal hypotheses
   refine ⟨⟨state_norm 0, state_norm 8⟩, ⟨state_norm 1, state_norm 9⟩,

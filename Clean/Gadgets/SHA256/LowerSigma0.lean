@@ -184,9 +184,10 @@ lemma valueBits_rotr32_eq (k : Fin 32) (x : fields 32 (F p)) (hx : Normalized x)
 /-! ## eval helpers for rotr32 / shr32 -/
 
 lemma eval_rotr32 (env : Environment (F p)) (input_var : fields 32 (Expression (F p)))
-    (input : fields 32 (F p)) (h_input : Vector.map (Expression.eval env) input_var = input)
+    (input : fields 32 (F p)) (h_input : eval env input_var = input)
     (k : Fin 32) (i : Fin 32) :
     Expression.eval env (rotr32 k input_var)[i.val] = input[(i + k).val] := by
+  rw [CircuitType.eval_var_fields] at h_input
   unfold rotr32
   rw [Vector.getElem_rotate]
   subst h_input
@@ -232,10 +233,11 @@ lemma valueBits_shr32_eq (k : Fin 32) (x : fields 32 (F p)) (hx : Normalized x) 
           (Nat.lt_of_le_of_lt (Nat.div_le_self _ _) hval_lt) pow_le)]
 
 lemma eval_shr32 (env : Environment (F p)) (input_var : fields 32 (Expression (F p)))
-    (input : fields 32 (F p)) (h_input : Vector.map (Expression.eval env) input_var = input)
+    (input : fields 32 (F p)) (h_input : eval env input_var = input)
     (k : Fin 32) (i : Fin 32) :
     Expression.eval env (shr32 k input_var)[i.val] =
       if h : i.val + k.val < 32 then input[i.val + k.val]'h else 0 := by
+  rw [CircuitType.eval_var_fields] at h_input
   unfold shr32; rw [Vector.getElem_ofFn]; subst h_input
   split
   · next h => rw [Vector.getElem_map]

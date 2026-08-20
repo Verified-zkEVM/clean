@@ -93,7 +93,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   simp only [UpperSigma1.Assumptions, UpperSigma0.Assumptions,
     Ch32.Assumptions, Maj32.Assumptions, Add32.Assumptions,
     UpperSigma1.Spec, UpperSigma0.Spec,
-    Ch32.Spec, Maj32.Spec, Add32.Spec, h_eval, and_imp] at h_holds
+    Ch32.Spec, Maj32.Spec, Add32.Spec, and_imp] at h_holds
   obtain ⟨c_sig1, c_ch, c_t10, c_t11, c_t12, c_t1, c_sig0, c_maj, c_t2, c_newa, c_newe⟩ := h_holds
   have h_a : Normalized input_state[0] := h_state_norm 0
   have h_b : Normalized input_state[1] := h_state_norm 1
@@ -131,30 +131,23 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
     simp only [show ∀ a b : ℕ, (a + b) % 2 ^ 32 = _root_.add32 a b from fun _ _ => rfl] at v_newa v_newe
     -- Push the outer `Vector.map valueBits ∘ eval env` inside the literal #v[...] and unfold the
     -- spec, so both sides become explicit 8-element vectors with matching slot shapes.
-    simp only [eval_vector, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil,
+    try simp only [Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil,
       circuit_norm]
     simp only [Specs.SHA256.sha256Round, Vector.getElem_map]
-    rw [v_newa, v_newe, e 0 (by omega), e 1 (by omega), e 2 (by omega),
-      e 4 (by omega), e 5 (by omega), e 6 (by omega)]
+    rw [v_newa, v_newe]
   · -- Normalized for each position
     intro i
     fin_cases i
     · convert s_newa.2 using 1
-      rw [← getElem_eval_vector, CircuitType.eval_var_fields]; congr 1
-    · convert (h_eval 0 (by omega)).symm ▸ h_a using 1
-      rw [← getElem_eval_vector, CircuitType.eval_var_fields]; congr 1
-    · convert (h_eval 1 (by omega)).symm ▸ h_b using 1
-      rw [← getElem_eval_vector, CircuitType.eval_var_fields]; congr 1
-    · convert (h_eval 2 (by omega)).symm ▸ h_c using 1
-      rw [← getElem_eval_vector, CircuitType.eval_var_fields]; congr 1
+      congr 1
+    · exact h_a
+    · exact h_b
+    · exact h_c
     · convert s_newe.2 using 1
-      rw [← getElem_eval_vector, CircuitType.eval_var_fields]; congr 1
-    · convert (h_eval 4 (by omega)).symm ▸ h_e using 1
-      rw [← getElem_eval_vector, CircuitType.eval_var_fields]; congr 1
-    · convert (h_eval 5 (by omega)).symm ▸ h_f using 1
-      rw [← getElem_eval_vector, CircuitType.eval_var_fields]; congr 1
-    · convert (h_eval 6 (by omega)).symm ▸ h_g using 1
-      rw [← getElem_eval_vector, CircuitType.eval_var_fields]; congr 1
+      congr 1
+    · exact h_e
+    · exact h_f
+    · exact h_g
 
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [sha256Round, UpperSigma1.circuit, UpperSigma0.circuit,
@@ -178,32 +171,27 @@ theorem completeness : Completeness (F p) main Assumptions := by
     UpperSigma1.Spec, UpperSigma0.Spec,
     Ch32.Spec, Maj32.Spec, Add32.Spec, and_imp] at h_env ⊢
   obtain ⟨e_sig1, e_ch, e_t10, e_t11, e_t12, e_t1, e_sig0, e_maj, e_t2, e_newa, e_newe⟩ := h_env
-  rw [h_eval 4 (by omega)] at e_sig1
   obtain ⟨v_sig1, n_sig1⟩ := e_sig1 h_e
-  rw [h_eval 4 (by omega), h_eval 5 (by omega), h_eval 6 (by omega)] at e_ch
   obtain ⟨v_ch, n_ch⟩ := e_ch h_e h_f h_g
-  rw [h_eval 7 (by omega)] at e_t10
   obtain ⟨v_t10, n_t10⟩ := e_t10 h_h n_sig1
   obtain ⟨v_t11, n_t11⟩ := e_t11 n_t10 n_ch
   obtain ⟨v_t12, n_t12⟩ := e_t12 n_t11 h_k_norm
   obtain ⟨_, n_t1⟩ := e_t1 n_t12 h_w_norm
-  rw [h_eval 0 (by omega)] at e_sig0
   obtain ⟨v_sig0, n_sig0⟩ := e_sig0 h_a
-  rw [h_eval 0 (by omega), h_eval 1 (by omega), h_eval 2 (by omega)] at e_maj
   obtain ⟨_, n_maj⟩ := e_maj h_a h_b h_c
   -- Goal: the chain of assumptions for the subcircuits
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · rw [h_eval 4 (by omega)]; exact h_e
-  · rw [h_eval 4 (by omega), h_eval 5 (by omega), h_eval 6 (by omega)]; exact ⟨h_e, h_f, h_g⟩
-  · rw [h_eval 7 (by omega)]; exact ⟨h_h, n_sig1⟩
+  · exact h_e
+  · exact ⟨h_e, h_f, h_g⟩
+  · exact ⟨h_h, n_sig1⟩
   · exact ⟨n_t10, n_ch⟩
   · exact ⟨n_t11, h_k_norm⟩
   · exact ⟨n_t12, h_w_norm⟩
-  · rw [h_eval 0 (by omega)]; exact h_a
-  · rw [h_eval 0 (by omega), h_eval 1 (by omega), h_eval 2 (by omega)]; exact ⟨h_a, h_b, h_c⟩
+  · exact h_a
+  · exact ⟨h_a, h_b, h_c⟩
   · exact ⟨n_sig0, n_maj⟩
   · exact ⟨n_t1, by simp_all⟩
-  · rw [h_eval 3 (by omega)]; exact ⟨h_d, n_t1⟩
+  · exact ⟨h_d, n_t1⟩
 
 omit [Fact (p > 2 ^ 33)] in
 /-- Env-agreement transfers to a fresh window of witness variables (own heartbeat budget). -/
@@ -265,6 +253,9 @@ def circuit : FormalCircuit (F p) Inputs SHA256State where
     · computable_witnesses_close
     · computable_witnesses_close
     · exact output_eval_congr h.1 h_agrees
+
+def circuit : FormalCircuit (F p) Inputs SHA256State where
+  main; elaborated; Assumptions; Spec; soundness; completeness
 end SHA256Round
 end Gadgets.SHA256
 end

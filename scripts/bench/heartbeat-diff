@@ -22,7 +22,13 @@ if [ -f "$current_setup" ]; then
 else
   current="$(measure_heartbeats "$repo" "$module" "$heartbeat_check")"
 fi
-baseline_commit="$(git -C "$repo" rev-parse --verify "$baseline^{commit}")"
+# resolve the baseline against a fresh fetch — a stale local branch (e.g. a `main`
+# far behind origin) would otherwise silently become the comparison point
+if git -C "$repo" fetch origin "$baseline" 2>/dev/null; then
+  baseline_commit="$(git -C "$repo" rev-parse --verify FETCH_HEAD)"
+else
+  baseline_commit="$(git -C "$repo" rev-parse --verify "$baseline^{commit}")"
+fi
 
 {
   echo "Waiting for baseline worktree lock..." >&2
