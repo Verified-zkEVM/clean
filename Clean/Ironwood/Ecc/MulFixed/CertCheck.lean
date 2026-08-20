@@ -681,6 +681,40 @@ theorem checkNonSquare_sound {x : ℕ} (h : checkNonSquare x = true) :
   have : (2 : Fp) = 0 := by linear_combination -hcast
   exact two_ne_zero this
 
+/-- A single kernel-checked quadratic non-residue used to certify all of the fixed-base
+table non-residues by multiplication with a nonzero square. -/
+theorem thirteen_not_isSquare : ¬ IsSquare (13 : Fp) := by
+  set_option maxRecDepth 4000 in
+  exact checkNonSquare_sound (by decide +kernel)
+
+/-- Cheap certification that `x` is a non-square: exhibit a nonzero `root` such that
+`x = 13 * root²`, where `13` is the fixed non-square above. -/
+def checkNonSquareRoot (x root : ℕ) : Bool :=
+  root < P && !(root == 0) && mulm 13 (mulm root root) == x
+
+theorem checkNonSquareRoot_sound {x root : ℕ}
+    (h : checkNonSquareRoot x root = true) :
+    ¬ IsSquare ((x : ℕ) : Fp) := by
+  simp only [checkNonSquareRoot, Bool.and_eq_true, decide_eq_true_eq,
+    Bool.not_eq_true', beq_eq_false_iff_ne, beq_iff_eq] at h
+  obtain ⟨⟨hroot, hroot0⟩, heq⟩ := h
+  have hrootFp : ((root : ℕ) : Fp) ≠ 0 := by
+    intro hz
+    exact hroot0 ((cast_eq_zero_iff hroot).mp hz)
+  have heqFp := congrArg (Nat.cast (R := Fp)) heq
+  rw [cast_mulm, cast_mulm] at heqFp
+  push_cast at heqFp
+  intro hxSquare
+  obtain ⟨s, hs⟩ := hxSquare
+  apply thirteen_not_isSquare
+  refine ⟨s / (root : Fp), ?_⟩
+  field_simp [hrootFp]
+  calc
+    13 * ((root : Fp) ^ 2) = 13 * ((root : Fp) * (root : Fp)) := by ring
+    _ = (x : Fp) := heqFp
+    _ = s * s := hs
+    _ = s ^ 2 := by ring
+
 /-- On-curve check for a `ℕ` point (`y² = x³ + 5`). -/
 def checkOnCurve (x y : ℕ) : Bool :=
   x < P && y < P && mulm y y == (mulm (mulm x x) x + 5) % P
@@ -701,11 +735,12 @@ theorem checkOnCurve_sound {x y : ℕ} (h : checkOnCurve x y = true) :
 /-! ### The full certificate and the `FixedBase` constructors -/
 
 /-- A full fixed-base certificate: the chain data plus the dumped `z`/coefficient/u
-tables. -/
+tables and the roots witnessing each `z - y` as `13` times a nonzero square. -/
 structure FullCert extends BaseCert where
   zs : List ℕ
   coeffs : List (List ℕ)
   us : List (List ℕ)
+  nonSquareRoots : List (List ℕ)
 
 /-- The certified x/y coordinate of entry `(w, k)`. -/
 def entryX (numLower : ℕ) (c : BaseCert) (w k : ℕ) : ℕ := (certEntry numLower c w k).1
@@ -718,15 +753,32 @@ def checkFull (numLower : ℕ) (c : FullCert) : Bool :=
   (c.zs.length == numLower + 1) &&
   (c.coeffs.length == numLower + 1) &&
   (c.us.length == numLower + 1) &&
+  (c.nonSquareRoots.length == numLower + 1) &&
   (List.range (numLower + 1)).all fun w =>
     (c.coeffs[w]!.length == 8) &&
+    (c.nonSquareRoots[w]!.length == 8) &&
     checkInterp c.coeffs[w]!
       ((List.range 8).map fun k => entryX numLower c.toBaseCert w k) &&
     checkU c.zs[w]! c.us[w]!
       ((List.range 8).map fun k => entryY numLower c.toBaseCert w k) &&
     (List.range 8).all fun k =>
       (entryY numLower c.toBaseCert w k < P) &&
-      checkNonSquare (subm c.zs[w]! (entryY numLower c.toBaseCert w k))
+      checkNonSquareRoot (subm c.zs[w]! (entryY numLower c.toBaseCert w k))
+        ((c.nonSquareRoots[w]!)[k]!)
+
+theorem checkBase_eq_true_of_checkFull_eq_true {numLower : ℕ} {c : FullCert}
+    (h : checkFull numLower c = true) :
+    checkBase numLower c.toBaseCert = true := by
+  simp only [checkFull, Bool.and_eq_true] at h
+  obtain ⟨⟨⟨⟨⟨⟨hbase, honc⟩, hzs⟩, hcoeffs⟩, hus⟩, hroots⟩, hwindows⟩ := h
+  exact hbase
+
+theorem checkOnCurve_eq_true_of_checkFull_eq_true {numLower : ℕ} {c : FullCert}
+    (h : checkFull numLower c = true) :
+    checkOnCurve c.base.1 c.base.2 = true := by
+  simp only [checkFull, Bool.and_eq_true] at h
+  obtain ⟨⟨⟨⟨⟨⟨hbase, honc⟩, hzs⟩, hcoeffs⟩, hus⟩, hroots⟩, hwindows⟩ := h
+  exact honc
 
 /-- The per-window facts `checkFull` certifies, at the `Fp` level. -/
 theorem checkFull_window_facts {numLower : ℕ} {c : FullCert}
@@ -739,9 +791,9 @@ theorem checkFull_window_facts {numLower : ℕ} {c : FullCert}
       ¬ IsSquare (((c.zs[w]! : ℕ) : Fp) - ((entryY numLower c.toBaseCert w k : ℕ) : Fp)) := by
   simp only [checkFull, Bool.and_eq_true, beq_iff_eq, List.all_eq_true,
     List.mem_range] at h
-  obtain ⟨⟨⟨⟨⟨hbase, honc⟩, hzl⟩, hcl⟩, hul⟩, hwin⟩ := h
+  obtain ⟨⟨⟨⟨⟨⟨hbase, honc⟩, hzl⟩, hcl⟩, hul⟩, hrl⟩, hwin⟩ := h
   intro w hw k hk
-  obtain ⟨⟨⟨hc8, hinterp⟩, hu⟩, hns⟩ := hwin w hw
+  obtain ⟨⟨⟨⟨hc8, hr8⟩, hinterp⟩, hu⟩, hns⟩ := hwin w hw
   refine ⟨?_, ?_, ?_⟩
   · -- interpolation
     simp only [checkInterp, Bool.and_eq_true, beq_iff_eq, List.all_eq_true,
@@ -777,7 +829,7 @@ theorem checkFull_window_facts {numLower : ℕ} {c : FullCert}
     ring
   · -- non-squareness
     obtain ⟨hylt, hnsk⟩ := hns k hk
-    have := checkNonSquare_sound hnsk
+    have := checkNonSquareRoot_sound hnsk
     rwa [cast_subm _ (Nat.le_of_lt (of_decide_eq_true hylt))] at this
 
 open Point in
@@ -785,53 +837,32 @@ open Point in
 def ofCert (c : FullCert) (h : checkFull 84 c = true) :
     Ecc.MulFixed.FixedBase where
   point := pointOf c.base
-  onCurve := by
-    have h' := h
-    simp only [checkFull, Bool.and_eq_true] at h'
-    exact checkOnCurve_sound h'.1.1.1.1.2
+  onCurve := checkOnCurve_sound (checkOnCurve_eq_true_of_checkFull_eq_true h)
   params := fun w => mkParams c.zs[w]! c.coeffs[w]!
   u := fun w k => ((c.us[w]!)[k]! : Fp)
   interpolate_eq := by
     intro w hw k hk
-    have hbase : checkBase 84 c.toBaseCert = true := by
-      have h' := h
-      simp only [checkFull, Bool.and_eq_true] at h'
-      exact h'.1.1.1.1.1
+    have hbase := checkBase_eq_true_of_checkFull_eq_true h
     have hwp := cert_windowPoint_eq
-      (by
-        have h' := h
-        simp only [checkFull, Bool.and_eq_true] at h'
-        exact checkOnCurve_sound h'.1.1.1.1.2)
+      (checkOnCurve_sound (checkOnCurve_eq_true_of_checkFull_eq_true h))
       hbase w hw k hk
     have := (checkFull_window_facts h w (by omega) k hk).1
     rw [this, ← hwp]
     rfl
   u_mul_u := by
     intro w hw k hk
-    have hbase : checkBase 84 c.toBaseCert = true := by
-      have h' := h
-      simp only [checkFull, Bool.and_eq_true] at h'
-      exact h'.1.1.1.1.1
+    have hbase := checkBase_eq_true_of_checkFull_eq_true h
     have hwp := cert_windowPoint_eq
-      (by
-        have h' := h
-        simp only [checkFull, Bool.and_eq_true] at h'
-        exact checkOnCurve_sound h'.1.1.1.1.2)
+      (checkOnCurve_sound (checkOnCurve_eq_true_of_checkFull_eq_true h))
       hbase w hw k hk
     have := (checkFull_window_facts h w (by omega) k hk).2.1
     rw [this, ← hwp]
     rfl
   z_sub_y_not_square := by
     intro w hw k hk
-    have hbase : checkBase 84 c.toBaseCert = true := by
-      have h' := h
-      simp only [checkFull, Bool.and_eq_true] at h'
-      exact h'.1.1.1.1.1
+    have hbase := checkBase_eq_true_of_checkFull_eq_true h
     have hwp := cert_windowPoint_eq
-      (by
-        have h' := h
-        simp only [checkFull, Bool.and_eq_true] at h'
-        exact checkOnCurve_sound h'.1.1.1.1.2)
+      (checkOnCurve_sound (checkOnCurve_eq_true_of_checkFull_eq_true h))
       hbase w hw k hk
     have := (checkFull_window_facts h w (by omega) k hk).2.2
     rw [← hwp]
@@ -896,36 +927,30 @@ open Point in
 def ofCertShort (c : FullCert) (h : checkFull 21 c = true) :
     Ecc.MulFixed.Short.FixedBase where
   point := pointOf c.base
-  onCurve := by
-    have h' := h
-    simp only [checkFull, Bool.and_eq_true] at h'
-    exact checkOnCurve_sound h'.1.1.1.1.2
+  onCurve := checkOnCurve_sound (checkOnCurve_eq_true_of_checkFull_eq_true h)
   params := fun w => mkParams c.zs[w]! c.coeffs[w]!
   u := fun w k => ((c.us[w]!)[k]! : Fp)
   interpolate_eq := by
     intro w hw k hk
-    have h' := h
-    simp only [checkFull, Bool.and_eq_true] at h'
-    have hwp := cert_windowPoint_eq_short (checkOnCurve_sound h'.1.1.1.1.2)
-      h'.1.1.1.1.1 w hw k hk
+    have hwp := cert_windowPoint_eq_short
+      (checkOnCurve_sound (checkOnCurve_eq_true_of_checkFull_eq_true h))
+      (checkBase_eq_true_of_checkFull_eq_true h) w hw k hk
     have := (checkFull_window_facts h w (by omega) k hk).1
     rw [this, ← hwp]
     rfl
   u_mul_u := by
     intro w hw k hk
-    have h' := h
-    simp only [checkFull, Bool.and_eq_true] at h'
-    have hwp := cert_windowPoint_eq_short (checkOnCurve_sound h'.1.1.1.1.2)
-      h'.1.1.1.1.1 w hw k hk
+    have hwp := cert_windowPoint_eq_short
+      (checkOnCurve_sound (checkOnCurve_eq_true_of_checkFull_eq_true h))
+      (checkBase_eq_true_of_checkFull_eq_true h) w hw k hk
     have := (checkFull_window_facts h w (by omega) k hk).2.1
     rw [this, ← hwp]
     rfl
   z_sub_y_not_square := by
     intro w hw k hk
-    have h' := h
-    simp only [checkFull, Bool.and_eq_true] at h'
-    have hwp := cert_windowPoint_eq_short (checkOnCurve_sound h'.1.1.1.1.2)
-      h'.1.1.1.1.1 w hw k hk
+    have hwp := cert_windowPoint_eq_short
+      (checkOnCurve_sound (checkOnCurve_eq_true_of_checkFull_eq_true h))
+      (checkBase_eq_true_of_checkFull_eq_true h) w hw k hk
     have := (checkFull_window_facts h w (by omega) k hk).2.2
     rw [← hwp]
     exact this
