@@ -465,7 +465,9 @@ def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
       split_ifs with hc
       · have h3 := h (i + 3 % 32) (by omega)
         grind
-      · grind
+      · have h3 := h ((i + 3 % 32) % 32) (by omega)
+        simp only [circuit_norm]
+        grind
     · computable_witnesses_close
 
 end LowerSigma0

@@ -604,15 +604,6 @@ scalar evals of this getElem, where the whole-vector `eval_varFromOffset` cannot
     (varFromOffset (F := F) (fields n) offset)[i]'hi = var ⟨offset + i⟩ := by
   simp [varFromOffset_fields, Vector.getElem_mapRange]
 
-/-- Fully evaluated window access in one step: `grind`'s matcher does not reduce
-through e-classes, so the composition with the `var`-case of `eval` cannot be left
-to the engine. -/
-@[grind =] theorem eval_getElem_varFromOffset_fields (env : Environment F)
-    (offset i : ℕ) (hi : i < n) :
-    Expression.eval env ((varFromOffset (F := F) (fields n) offset)[i]'hi) =
-      env.get (offset + i) := by
-  rw [getElem_varFromOffset_fields]
-  rfl
 
 @[circuit_norm ↓, grind norm]
 theorem eval_fieldPair (env : Environment F) (t : fieldPair (Expression F)) :
