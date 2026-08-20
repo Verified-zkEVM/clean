@@ -187,85 +187,48 @@ example (t : Table (F p)) (h : t.component = fibComponent) : t.IsTransition := b
 /-! ## From the local step relation to the global sequence
 
 `weakSoundness` gives `Table.Spec`, which is `Component.Spec` at every window -- the step relation
-on every adjacent pair, and nothing more. The theorems below turn that into a statement about the
-whole trace. The induction is the entire content of a boundary condition: without `hseed` pinning
-row 0, `steps` alone is satisfied by any translate of the sequence.
+on every adjacent pair, and nothing more. `Table.transition_induction` turns that into a statement
+about the whole trace, and the induction is the entire content of a boundary condition: without
+`hseed` pinning row 0, the step relation alone is satisfied by any translate of the sequence.
+
+All window plumbing lives in the library. What this example supplies is the one per-component
+fact the induction keys on (`fibComponent_output`) and the arithmetic of `fibPair`.
 -/
 
-/-- Reading a row's pair. -/
-def pairAt (t : Table (F p)) (i : ℕ) : F p × F p :=
-  ((t.table[i]!)[1]!, (t.table[i]!)[2]!)
+/-- The circuit's output variable is the canonical next-row layout: cells `[3, 6)`, the low cells
+of the window's second row. This is the hypothesis `Table.transition_induction` takes rather than
+a `Component` field, and it holds definitionally because `main` witnesses the next row's cells in
+order and returns them. -/
+lemma fibComponent_output :
+    ((fibComponent (p:=p)).circuit (fibComponent (p:=p)).rowInputVar).output
+        (fibComponent (p:=p)).rowOffset
+      = varFromOffset (fibComponent (p:=p)).Output (fibComponent (p:=p)).rowWidth := by
+  show (fibStep (p:=p)).output (varFromOffset Row 0) 3 = varFromOffset Row 3
+  simp [fibStep, circuit_norm]
 
-/--
-The step relation, extracted from the component's `Spec` at the window starting at `i`.
+/-- Row `i` of the trace, read as the component's typed input. This is exactly the reading
+`Table.transition_induction` states its step relation over, so no cell indexing is needed. -/
+def rowAt (t : Table (F p)) (data : ProverData (F p)) (i : ℕ) : Row (F p) :=
+  valueFromOffset Row 0 (Environment.fromArray t.table[i]! data)
 
-This is the bridge: `Component.Spec` is stated about `rowInput`/`rowOutput` of an environment,
-and this restates it as a relation between two *indexed rows* of the trace, which is the form
-induction can consume.
--/
-lemma rowInput_windowEnv {t : Table (F p)} (hc : t.component = fibComponent)
-    {data : ProverData (F p)} {i : ℕ} (hi : i ∈ t.windows) :
-    (fibComponent (p:=p)).rowInput (t.windowEnv i data) =
-      { isBoundary := (t.table[i]!)[0]!, x := (pairAt t i).1, y := (pairAt t i).2 } := by
-  show valueFromOffset Row 0 (t.windowEnv i data) = _
-  have hw := Table.valueFromOffset_windowEnv (t:=t) hi data
-  rw [hc] at hw
-  rw [show valueFromOffset Row 0 (t.windowEnv i data)
-        = valueFromOffset (fibComponent (p:=p)).Input 0 (t.windowEnv i data) from rfl, hw]
-  -- the row has width 3, so all three reads are in range
-  have hsize : (t.table[i]'(t.lt_length_of_mem_windows hi)).size = 3 := by
-    have := t.uniform_width _ (List.getElem_mem (t.lt_length_of_mem_windows hi))
-    rw [this, Component.width, hc]
-    rfl
-  show fromElements (Vector.mapRange (size Row) fun j => _) = _
-  simp [pairAt, explicit_provable_type, circuit_norm,
-    List.getElem!_eq_getElem?_getD, List.getElem?_eq_getElem (t.lt_length_of_mem_windows hi),
-    hsize]
+/-- The running pair at row `i`. -/
+def pairAt (t : Table (F p)) (data : ProverData (F p)) (i : ℕ) : F p × F p :=
+  ((rowAt t data i).x, (rowAt t data i).y)
 
-lemma rowOutput_windowEnv {t : Table (F p)} (hc : t.component = fibComponent)
-    {data : ProverData (F p)} {i : ℕ} (hi : i ∈ t.windows) :
-    ((fibComponent (p:=p)).rowOutput (t.windowEnv i data)).x = (pairAt t (i + 1)).1 ∧
-    ((fibComponent (p:=p)).rowOutput (t.windowEnv i data)).y = (pairAt t (i + 1)).2 := by
-  have htr : t.IsTransition := by simp [Table.IsTransition, hc, fibComponent]
-  -- the window is `curr ++ next`, and the output cells 3,4,5 land in `next`
-  have henv : t.windowEnv i data = Transition.pairEnv t.table[i]! t.table[i + 1]! data := by
-    simp only [Table.windowEnv, Transition.pairEnv, Table.windowRow_eq_pair htr]
-  -- `curr` has width 3, so cell `3 + j` of the window is cell `j` of `next`
-  have hcurr : (t.table[i]!).size = 3 := by
-    have hlt := t.lt_length_of_mem_windows hi
-    rw [List.getElem!_eq_getElem?_getD, List.getElem?_eq_getElem hlt, Option.getD_some]
-    have := t.uniform_width _ (List.getElem_mem hlt)
-    rw [this, Component.width, hc]
-    rfl
-  rw [henv]
-  -- name the output var concretely, so the `.output` projection reduces before simp runs
-  have hout : (fibComponent (p:=p)).rowOutput (Transition.pairEnv t.table[i]! t.table[i + 1]! data)
-      = eval (Transition.pairEnv t.table[i]! t.table[i + 1]! data)
-          ((fibStep (p:=p)).output (varFromOffset Row 0) 3) := rfl
-  rw [hout]
-  -- `hcurr` in the form the append lemma needs
-  have hsz : (t.table[i]?.getD default : Array (F p)).size = 3 := by
-    rw [← hcurr, List.getElem!_eq_getElem?_getD]
-  constructor <;>
-    simp [fibStep, pairAt, Transition.pairEnv, explicit_provable_type, circuit_norm,
-      Array.getElem?_append_right, hsz, Array.getElem!_eq_getD] <;> rfl
-
-lemma pairAt_succ_of_spec {t : Table (F p)} (hc : t.component = fibComponent)
-    {data : ProverData (F p)} (hspec : t.Spec data)
-    {i : ℕ} (hi : i ∈ t.windows) :
-    pairAt t (i + 1) = ((pairAt t i).2, (pairAt t i).1 + (pairAt t i).2) := by
-  have h := hspec _ (Table.mem_envs_of_mem_windows hi (data:=data))
-  rw [hc] at h
-  unfold Component.Spec at h
-  obtain ⟨hx, hy⟩ := rowOutput_windowEnv (p:=p) hc (data:=data) hi
-  -- rewrite the *reads* first: unfolding `fibComponent` would destroy these patterns
-  rw [rowInput_windowEnv hc hi] at h
-  -- unfold only the circuit's `Spec`, leaving `rowOutput`'s `fibComponent` intact so that
-  -- `hx`/`hy` still match syntactically
-  rw [show (fibComponent (p:=p)).circuit = fibStep from rfl] at h
-  simp only [fibStep] at h
-  rw [hx, hy] at h
-  exact Prod.ext h.1 h.2
+/-- One window preserves the closed form: the component's `Spec` says the next row's pair is the
+Fibonacci successor of the current one, and `fibPair_succ` is the same equation over `ℕ`. -/
+lemma fibPair_step {curr next : Row (F p)} {data : ProverData (F p)} {k : ℕ}
+    (hstep : (fibStep (p:=p)).Spec curr next data)
+    (hcurr : (curr.x, curr.y) = (((fibPair k).1 : F p), ((fibPair k).2 : F p))) :
+    (next.x, next.y) = (((fibPair (k + 1)).1 : F p), ((fibPair (k + 1)).2 : F p)) := by
+  obtain ⟨b, x, y⟩ := curr
+  simp only [fibStep] at hstep
+  obtain ⟨hx, hy⟩ := hstep
+  simp only [Prod.mk.injEq] at hcurr ⊢
+  refine ⟨by rw [hx, hcurr.2, fibPair_succ], ?_⟩
+  rw [hy, hcurr.1, hcurr.2, fibPair_succ]
+  push_cast
+  ring
 
 /--
 The trace is the Fibonacci sequence, in closed form.
@@ -275,19 +238,16 @@ window and the seed on row 0.
 -/
 theorem pairAt_eq_fibPair {t : Table (F p)} (hc : t.component = fibComponent)
     {data : ProverData (F p)} (hspec : t.Spec data)
-    (hseed : pairAt t 0 = (((fibPair 0).1 : F p), ((fibPair 0).2 : F p)))
+    (hseed : pairAt t data 0 = (((fibPair 0).1 : F p), ((fibPair 0).2 : F p)))
     {i : ℕ} (hi : i < t.table.length) :
-    pairAt t i = (((fibPair i).1 : F p), ((fibPair i).2 : F p)) := by
-  induction i with
-  | zero => simpa using hseed
-  | succ n ih =>
-    -- row `n + 1` exists, so the window at `n` exists (it needs rows `n` and `n + 1`)
-    have hwin : n ∈ t.windows := by
-      rw [Table.mem_windows_iff, hc]
-      simp only [fibComponent]
-      omega
-    rw [pairAt_succ_of_spec hc hspec hwin, ih (by omega)]
-    simp [fibPair]
+    pairAt t data i = (((fibPair i).1 : F p), ((fibPair i).2 : F p)) := by
+  refine Table.transition_induction (t := t)
+    (by show t.component.windowRows = 2; rw [hc]; rfl)
+    hspec (by rw [hc]; exact fibComponent_output)
+    (P := fun i => pairAt t data i = (((fibPair i).1 : F p), ((fibPair i).2 : F p)))
+    hseed (fun j _ hstep hj => ?_) i hi
+  rw [hc] at hstep
+  exact fibPair_step hstep hj
 
 /-! ## The boundary verifier
 
@@ -334,9 +294,8 @@ this shape -- `FibonacciVm` closes the identical loop on `FibonacciChannel`. But
     tables_windowRows : tables.Forall (fun table => table.windowRows = 1)
 
 (`VmTables.tables_windowRows`), and this component has `windowRows = 2`. That field is not
-incidental:
-the VM soundness argument reads a table's environments as one-per-row throughout, at every use of
-`vmTables_windowRows_eq_one`.
+incidental: the VM soundness argument reads a table's environments as one-per-row throughout, at
+every use of `vmTables_windowRows_eq_one`.
 
 So a transition component cannot presently reach a public spec through *either* route: the
 ordered-channel route rejects the cycle, and the VM route rejects the window. Closing this means
@@ -347,6 +306,11 @@ example, and is left as follow-up work.
 What is proved here stops one step short of that: `pairAt_eq_fibPair` gives the closed form for
 the whole trace from the step relation plus a seed, and `fibStep.soundness` carries the seed along
 the channel. Only the final hand-off to `Ensemble.Spec` is missing.
+
+`Clean/Examples/FibonacciTransition.lean` is the same window machinery taken all the way to a
+public theorem, by anchoring the trace with boundary assertions instead of a channel cycle. This
+file is kept as the record of the gap: a transition component whose *only* channel is a
+pull/push cycle fits neither route.
 -/
 
 end Clean.Examples.FibonacciNextRow

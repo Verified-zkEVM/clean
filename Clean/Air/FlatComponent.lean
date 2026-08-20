@@ -225,29 +225,6 @@ noncomputable def interactionssWith (table : Table F) (data : ProverData F)
   (table.envs data).map fun env =>
     table.component.operations.interactionValuesWith channel env
 
-/-
-Unfolding lemmas for the interaction collections. Downstream proofs reason about the underlying
-`flatMap`/`map` structure, so these expose it without making the definitions themselves reducible.
-
-Deliberately *not* `@[circuit_norm]`: as simp lemmas they fire ahead of `forall_interactions_iff`
-and friends, which expect the collections still folded. Name them explicitly where the underlying
-list structure is actually needed.
--/
-
-lemma interactions_def (table : Table F) (data : ProverData F) :
-    table.interactions data = (table.envs data).flatMap fun env =>
-      table.component.operations.interactionValues env := rfl
-
-lemma interactionsWith_def (table : Table F) (data : ProverData F)
-    (channel : RawChannel F) :
-    table.interactionsWith data channel = (table.envs data).flatMap fun env =>
-      table.component.operations.interactionValuesWith channel env := rfl
-
-lemma interactionssWith_def (table : Table F) (data : ProverData F)
-    (channel : RawChannel F) :
-    table.interactionssWith data channel = (table.envs data).map fun env =>
-      table.component.operations.interactionValuesWith channel env := rfl
-
 open Classical in lemma interactionsWith_eq_filter :
     table.interactionsWith data channel =
       (table.interactions data).filter (·.channel = channel) := by
@@ -510,31 +487,6 @@ lemma row_size {t : Table F} {i : ℕ} (hi : i < t.table.length) :
     (t.table[i]!).size = t.component.rowWidth := by
   rw [getElem!_pos t.table i hi]
   exact t.uniform_width _ (List.getElem_mem hi)
-
-omit [FiniteField F] in
-private lemma foldl_append_size (l : List (Array F)) (init : Array F) :
-    (l.foldl (· ++ ·) init).size = init.size + (l.map Array.size).sum := by
-  induction l generalizing init with
-  | nil => simp
-  | cons a as ih =>
-    simp only [List.foldl_cons, ih, Array.size_append, List.map_cons, List.sum_cons]
-    omega
-
-/-- A window spans `windowRows` rows of `rowWidth` cells each. -/
-lemma windowRow_size {t : Table F} {i : ℕ} (hi : i ∈ t.windows) :
-    (t.windowRow i).size = t.component.windowRows * t.component.rowWidth := by
-  rw [mem_windows_iff] at hi
-  rw [windowRow, foldl_append_size]
-  have hrows : ((List.range t.component.windowRows).map fun k => t.table[i + k]!).map Array.size
-      = List.replicate t.component.windowRows t.component.rowWidth := by
-    rw [List.map_map, List.eq_replicate_iff]
-    refine ⟨by simp, ?_⟩
-    intro s hs
-    simp only [List.mem_map, List.mem_range, Function.comp_apply] at hs
-    obtain ⟨k, hk, rfl⟩ := hs
-    exact t.row_size (by omega)
-  rw [hrows, List.sum_replicate, smul_eq_mul]
-  simp
 
 /--
 Reading any type at offset `0` of the window at `i` is reading it at offset `0` of row `i`,
