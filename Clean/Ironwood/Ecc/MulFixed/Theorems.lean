@@ -112,13 +112,103 @@ def windowScalar (w k : ℕ) : Fq :=
 def windowPoint (point : Point Fp) (w k : ℕ) : Point Fp :=
   (windowScalar w k).val • point
 
+/-- The initialization offset is twice the length-84 geometric sum in base eight. -/
+theorem offsetAcc_eq :
+    offsetAcc = ∑ j ∈ Finset.range 84, 2 * 8 ^ j := by
+  rw [offsetAcc]
+  apply Finset.sum_congr rfl
+  intro j _
+  rw [pow_succ' 2 (3 * j), pow_mul]
+  norm_num
+
+/-- A nonempty base-eight offset sum has residue two modulo eight. -/
+theorem offsetSum_mod_eight (n : ℕ) :
+    (∑ j ∈ Finset.range (n + 1), 2 * 8 ^ j) % 8 = 2 := by
+  induction n with
+  | zero => norm_num
+  | succ n inductionHypothesis =>
+      rw [Finset.sum_range_succ, Nat.add_mod, inductionHypothesis]
+      have hlast : (2 * 8 ^ (n + 1)) % 8 = 0 := by
+        apply Nat.mod_eq_zero_of_dvd
+        exact ⟨2 * 8 ^ n, by rw [pow_succ]; ring⟩
+      rw [hlast]
+
+/-- A nonempty base-eight offset sum is strictly smaller than the following power. -/
+theorem offsetSum_lt_pow (n : ℕ) :
+    ∑ j ∈ Finset.range (n + 1), 2 * 8 ^ j < 8 ^ (n + 1) := by
+  have hgeom := geom_sum_mul_of_one_le (R := ℕ) (x := 8)
+    (by norm_num) (n + 1)
+  norm_num at hgeom
+  have hsum :
+      (∑ j ∈ Finset.range (n + 1), 2 * 8 ^ j) =
+        2 * ∑ j ∈ Finset.range (n + 1), 8 ^ j := by
+    rw [Finset.mul_sum]
+  have heq :
+      (∑ j ∈ Finset.range (n + 1), 2 * 8 ^ j) * 7 =
+        2 * (8 ^ (n + 1) - 1) := by
+    rw [hsum, mul_assoc, hgeom]
+  have hpow : 0 < 8 ^ (n + 1) := by positivity
+  omega
+
+/-- The offset-corrected last-window scalar cannot vanish. The magnitude bounds
+leave at most one subtraction of the field order; that wrapped case is excluded
+because the scalar is zero modulo eight while the order plus offset is three. -/
+theorem offsetWindowScalar_ne_zero
+    {n offset k : ℕ} (hn : 0 < n) (hk : k < 8)
+    (hoffsetLt : offset < 8 ^ n) (hoffsetMod : offset % 8 = 2)
+    (hpowLt : 8 ^ n < PALLAS_SCALAR_CARD)
+    (htotalLt : 8 * 8 ^ n < 2 * PALLAS_SCALAR_CARD)
+    (hcardMod : PALLAS_SCALAR_CARD % 8 = 1) :
+    (k : Fq) * 8 ^ n - (offset : Fq) ≠ 0 := by
+  rw [Ne, sub_eq_zero]
+  intro heq
+  have hcast : ((k * 8 ^ n : ℕ) : Fq) = (offset : Fq) := by
+    simpa only [Nat.cast_mul, Nat.cast_pow, Nat.cast_ofNat] using heq
+  have hmod := congrArg ZMod.val hcast
+  simp only [ZMod.val_natCast,
+    Nat.mod_eq_of_lt (hoffsetLt.trans hpowLt)] at hmod
+  have hproductLt : k * 8 ^ n < 2 * PALLAS_SCALAR_CARD := by
+    exact ((Nat.mul_lt_mul_right (by positivity : 0 < 8 ^ n)).mpr hk).trans
+      htotalLt
+  by_cases hproductCard : k * 8 ^ n < PALLAS_SCALAR_CARD
+  · rw [Nat.mod_eq_of_lt hproductCard] at hmod
+    by_cases hkzero : k = 0
+    · subst k
+      simp only [Nat.zero_mul] at hmod
+      omega
+    · have hpowLe : 8 ^ n ≤ k * 8 ^ n := by
+        simpa only [one_mul] using
+          Nat.mul_le_mul_right (8 ^ n) (Nat.one_le_iff_ne_zero.mpr hkzero)
+      omega
+  · have hcardLe : PALLAS_SCALAR_CARD ≤ k * 8 ^ n := by omega
+    rw [Nat.mod_eq_sub_mod hcardLe,
+      Nat.mod_eq_of_lt (by omega : k * 8 ^ n - PALLAS_SCALAR_CARD <
+        PALLAS_SCALAR_CARD)] at hmod
+    have heqNat : k * 8 ^ n = PALLAS_SCALAR_CARD + offset := by omega
+    have heqMod := congrArg (fun value => value % 8) heqNat
+    obtain ⟨m, rfl⟩ := Nat.exists_eq_succ_of_ne_zero (by omega : n ≠ 0)
+    have hleft : (k * 8 ^ m.succ) % 8 = 0 := by
+      apply Nat.mod_eq_zero_of_dvd
+      exact ⟨k * 8 ^ m, by rw [pow_succ]; ring⟩
+    change (k * 8 ^ m.succ) % 8 =
+      (PALLAS_SCALAR_CARD + offset) % 8 at heqMod
+    rw [hleft, Nat.add_mod, hcardMod, hoffsetMod] at heqMod
+    norm_num at heqMod
+
 theorem windowScalar_ne_zero {w k : ℕ} (hk : k < 8) :
     windowScalar w k ≠ 0 := by
   have hcard : 9 < PALLAS_SCALAR_CARD := by norm_num [PALLAS_SCALAR_CARD]
   unfold windowScalar
   by_cases h84 : w = 84
   · rw [if_pos h84]
-    interval_cases k <;> native_decide
+    apply offsetWindowScalar_ne_zero (by norm_num) hk
+    · rw [offsetAcc_eq]
+      exact offsetSum_lt_pow 83
+    · rw [offsetAcc_eq]
+      exact offsetSum_mod_eight 83
+    · norm_num [PALLAS_SCALAR_CARD]
+    · norm_num [PALLAS_SCALAR_CARD]
+    · norm_num [PALLAS_SCALAR_CARD]
   · rw [if_neg h84]
     apply mul_ne_zero
     · rw [show (k : Fq) + 2 = ((k + 2 : ℕ) : Fq) by push_cast; ring,
