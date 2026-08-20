@@ -66,6 +66,8 @@ For a transition component the layout is what makes both completeness and the sp
     main allocates w cells      cells [w, 2w)  -- row i+1, pinned by local-witness completeness
 
 so the next row is the circuit's *output*, and `Spec input output` is the transition relation.
+This layout is a law, not a convention: `input_eq_rowWidth` forces the input of any multi-row
+window to be its entire first row.
 -/
 structure Component (F : Type) [FiniteField F] where
   {Input : TypeMap} {Output : TypeMap}
@@ -86,6 +88,24 @@ structure Component (F : Type) [FiniteField F] where
   rows. The fixed-column and `ProverData` machinery are all stated about a single row's low
   indices (`FixedRowAt`, `DataRowAt`, `inputRow`), so that must be ruled out. -/
   input_le_rowWidth : size Input ≤ rowWidth := by simp [GeneralFormalCircuit.size_eq]
+  /-- For a multi-row window, the input is the *entire* first row.
+
+  `input_le_rowWidth` alone would admit a transition component with `size Input < rowWidth`: a
+  circuit that witnesses scratch cells `[size Input, rowWidth)` in its *own* row before the
+  next-row block. That shape is sound -- constraints only read committed trace cells -- but it
+  gives those scratch cells of row `i` two witnessing owners: window `i` (as own-row scratch)
+  and window `i - 1` (as part of its next-row block), so ensemble completeness and witness
+  generation would have to prove the two witness generators agree on them. With equality,
+  ownership is single: every cell of row `i + 1` is witnessed exactly once, by window `i`, and
+  read back freely (`witnessAny`) as window `i + 1`'s input.
+
+  Nothing is lost: intermediate columns of a transition step are expressed as extra columns of
+  the row type, witnessed by the *previous* window like every other column -- the classic AIR
+  layout in which the transition constraint relates all of row `i` to all of row `i + 1`.
+
+  Flat components (`windowRows = 1`) are untouched: their row is the input followed by a
+  witness suffix, and only `input_le_rowWidth` applies. -/
+  input_eq_rowWidth : 1 < windowRows → size Input = rowWidth := by simp
   /-- When present, identifies the fixed prefix available to the circuit on row `i`. -/
   fixedColumns : Option (FixedColumns F) := none
   /-- Assumptions still required from the enclosing ensemble after fixed-row and data facts. -/

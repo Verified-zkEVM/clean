@@ -134,13 +134,15 @@ def fibStep : GeneralFormalCircuit (F p) Fib8Input Fib8Input where
 example : (fibStep (p:=p)).size = 8 := by
   simp [GeneralFormalCircuit.size_eq, fibStep, circuit_norm]
 
-/-- The transition component: `window_size : 8 = 2 * 4`. -/
+/-- The transition component: `window_size : 8 = 2 * 4`, and `input_eq_rowWidth : 4 = 4` -- the
+input is the whole current row, as the law demands of a multi-row window. -/
 def fibTransitionComponent : Component (F p) where
   circuit := fibStep
   windowRows := 2
   rowWidth := 4
   window_size := by simp [GeneralFormalCircuit.size_eq, fibStep, circuit_norm]
   input_le_rowWidth := by simp [circuit_norm]
+  input_eq_rowWidth := by simp [circuit_norm]
 
 /-- A trace of this component is checked on each adjacent pair. -/
 example (t : Table (F p)) (h : t.component = fibTransitionComponent) : t.IsTransition := by

@@ -22,6 +22,10 @@ and `main` witnesses the next row, so `circuit.size = 2 * rowWidth`. That is wha
 next-row cells owned by the instantiation, and hence
 - completeness provable (they are pinned by `UsesLocalWitnessesCompleteness`), and
 - `Spec input output` the adjacent-row transition relation.
+
+This layout is enforced by the `Component` law `input_eq_rowWidth`: a multi-row window's input
+is its *entire* first row, so a transition circuit cannot witness scratch cells in its own row.
+See that field's docstring for the trace-cell ownership argument behind the law.
 -/
 import Clean.Air.FlatComponent
 

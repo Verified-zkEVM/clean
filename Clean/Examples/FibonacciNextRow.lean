@@ -164,7 +164,8 @@ example : (fibStep (p:=p)).size = 6 := by
   simp [GeneralFormalCircuit.size_eq, fibStep, circuit_norm]
 
 /--
-The transition component: `window_size : 6 = 2 * 3` and `input_le_rowWidth : 3 ≤ 3`.
+The transition component: `window_size : 6 = 2 * 3` and `input_eq_rowWidth : 3 = 3` -- the
+input is the whole current row, as the law demands of a multi-row window.
 
 Contrast `FibonacciVm.fib8Component`, which is flat (`windowRows = 1`) and needs a channel
 interaction *per row* to carry the state. Here the row-to-row structure is carried by the window
@@ -176,6 +177,7 @@ def fibComponent : Component (F p) where
   rowWidth := 3
   window_size := by simp [GeneralFormalCircuit.size_eq, fibStep, circuit_norm]
   input_le_rowWidth := by simp [circuit_norm]
+  input_eq_rowWidth := by simp [circuit_norm]
 
 /-- The component's environment spans two rows of width three. -/
 example : (fibComponent (p:=p)).envWidth = 6 := rfl
