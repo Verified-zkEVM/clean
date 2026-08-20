@@ -9,8 +9,9 @@ The evaluation layer of the concrete-`FixedBase` certification. All checked equa
 live over `ℕ` literals (`rfl`-evaluable through GMP kernel arithmetic — the ZMod-stated
 equivalents are >200× slower, see `BenchFixedBase.lean`); the soundness lemmas here
 bridge each passed check into the `Point Fp` facts (`PallasCert`) the chain induction
-consumes. Subtraction is encoded as `(a + P − b) % P`; no inversion or exponentiation
-appears — slopes are witnesses.
+consumes. Subtraction is encoded as `(a + P − b) % P`. Per-base checks use neither
+inversion nor exponentiation: slopes and non-square quotient roots are witnesses, after
+one shared kernel check establishes that `13` is a non-square.
 -/
 
 namespace Zcash.Circuits.Ecc.MulFixed.Cert
