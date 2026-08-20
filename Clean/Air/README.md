@@ -32,7 +32,7 @@ main allocates w cells      cells [w, 2w)  -- row i+1, pinned by local-witness c
 
 The next row is the circuit's **output**. That is what makes `GeneralFormalCircuit.completeness` provable for a next-row constraint (the cells belong to this instantiation, so `UsesLocalWitnessesCompleteness` pins them) and what makes `Component.Spec input output` the adjacent-row transition relation. A design in which the next row lay outside the circuit's footprint would be able to state neither. `Clean/Examples/FibonacciNextRow.lean` proves both facts for a concrete component.
 
-Which environments a trace presents is captured by the `RowEnvs` class (see `Component.lean`), derived from `windowRows`. In this terminology, a `Flat.Component` is an AIR component: it packages the circuit whose constraints are applied to every row (flat) or every row pair (transition). A `Flat.Table` is the concrete trace table for a component of *either* span — there is one `Table` type, not one per style. A `Flat.TableContext` is a bundle of multiple concrete tables that share the same prover data object.
+Which environments a trace presents is `Flat.Table.envs` (see `FlatComponent.lean`), one per window and therefore derived from `windowRows`. In this terminology, a `Flat.Component` is an AIR component: it packages the circuit whose constraints are applied to every row (flat) or every row pair (transition). A `Flat.Table` is the concrete trace table for a component of *either* span — there is one `Table` type, not one per style. A `Flat.TableContext` is a bundle of multiple concrete tables that share the same prover data object.
 
 ## Organization
 
@@ -40,23 +40,21 @@ Which environments a trace presents is captured by the `RowEnvs` class (see `Com
 
 `Component.lean` defines what is shared by both AIR styles:
 
-- `Flat.Component`: the static component, backed by a `GeneralFormalCircuit`, carrying its own row span in `windowRows` and `rowWidth`, tied to the circuit by `window_size`. `envWidth` is the width of one environment, and `envWidth_eq_size` is the *theorem* that it agrees with the circuit's footprint — so `RowEnvs` environments cannot silently disagree with `rowWidth`.
+- `Flat.Component`: the static component, backed by a `GeneralFormalCircuit`, carrying its own row span in `windowRows` and `rowWidth`, tied to the circuit by `window_size`. `envWidth` is the width of one environment, and `envWidth_eq_size` is the *theorem* that it agrees with the circuit's footprint — so a table's environments cannot silently disagree with `rowWidth`.
 - `input_le_rowWidth`: the circuit's input occupies the low cells of the window's *first* row. This is not implied by `window_size` (a 2-row window with `size Input = 10` and `rowWidth = 5` tiles correctly yet spills its input across both rows), and it is what lets the fixed-column and `ProverData` machinery — all stated about a single row's low indices — apply unchanged.
-- `Flat.RowEnvs`: the class that maps a trace to the list of environments its circuit is checked at. This is the single point at which the two styles differ.
-- Every trace-level predicate (`Constraints`, `Assumptions`, `Guarantees`, `Requirements`, `Spec`, the `Channel*` family), interaction collection, and `weakSoundness`, all stated once over `RowEnvs` and therefore applying to any window size.
-
-It also proves the component-level transport lemmas: instantiated component operations agree with row operations, and component soundness lifts to whole-trace soundness.
+It also proves the component-level transport lemmas: instantiated component operations agree with row operations, and component soundness lifts to whole-environment soundness (`Component.weakSoundness`).
 
 `FlatComponent.lean` defines the trace layer, for windows of any size:
 
 - `Flat.Table`: concrete list of rows for one component. There is one `Table` type regardless of span.
+- `Flat.Table.envs`: the list of environments the component's circuit is checked at — one per window. Every trace-level predicate (`Constraints`, `Assumptions`, `Guarantees`, `Requirements`, `Spec`, the `Channel*` family), every interaction collection, and `weakSoundness` quantify over it and never inspect an individual environment, which is why they apply to any window size.
 - `windows` / `windowRow` / `windowEnv`: the window at index `i` is the concatenation of rows `i … i + windowRows - 1`, evaluated as one environment. A window exists at `i` exactly when `i + windowRows ≤ length`, so an `n`-row table presents `n + 1 - windowRows` environments — `n` when flat, `n - 1` when transition (`windows_length`, restated as `Table.envs_length` in `Entry.lean`). Any bound on interaction count derived from table heights must use that number, in particular the `< ringChar F` side condition carried by `BalancedInteractions`.
 - `Flat.Table.circuitAssumptions`: supplies the fixed-row and derived-data facts at each row index.
 - `valueFromOffset_windowEnv`: the current row's input cells read identically from the row alone and from the whole window.
 - `row_size` and `windowRow_size`: an in-range row has width `rowWidth`, and a window therefore has width `windowRows * rowWidth`. These are the cell-level facts every window-index computation bottoms out in, and they are where `uniform_width` is actually consumed.
 - `valueFromOffset_windowEnv_curr`: the typed reading of the same fact — any `T` with `size T ≤ rowWidth` reads the same value from row `i` alone as from the window at `i`.
 
-The flat-specific predicates are additionally available in row-shaped form (`∀ row ∈ table.table`), with `envs_eq_of_flat` as the bridge to the shared `RowEnvs` results.
+For a flat table the environments are exactly the rows: `envs_eq_of_flat` and `mem_envs_of_mem_table` are the bridge that lets callers who only ever build flat tables (VM ensembles, for instance) keep reasoning row-shaped.
 
 `TransitionComponent.lean` is the two-row *spelling* of that machinery, so transition-specific reasoning reads in terms of `curr`/`next` rather than window indices:
 
@@ -77,7 +75,7 @@ An `n`-row transition table imposes `n - 1` constraint instances, and a table of
 `Entry.lean` connects tables to the ensemble:
 
 - `Flat.Table.deriveProverData`: each named component is the source of its circuit-input rows. Keyed on rows rather than environments — a transition table is *constrained* on windows, but its *data* is still one input row per trace row, so this does not depend on `windowRows`.
-- `Flat.TableContext`: a bundle of committed tables sharing one prover data object. Every operation on it is a `RowEnvs` one, so it applies uniformly to any window size.
+- `Flat.TableContext`: a bundle of committed tables sharing one prover data object. Every operation on it quantifies over each table's `envs`, so it applies uniformly to any window size.
 
 The file previously carried a `TableKind` tag, an `Entry` (component + kind) and an `EntryTable` sum type, because flat and transition traces were distinct types one ensemble had to hold together. `windowRows` replaced all three.
 

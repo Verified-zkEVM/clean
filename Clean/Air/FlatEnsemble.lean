@@ -290,7 +290,7 @@ lemma channel_eq_of_mem_interactionsWith {witness : EnsembleWitness ens}
       List.mem_map] at h_verifier
     obtain ⟨interaction, h_interaction, rfl⟩ := h_verifier
     exact Operations.channel_eq_of_mem_interactionsWith h_interaction
-  · exact RowEnvs.channel_eq_of_mem_interactionsWith (table:=table) h_table
+  · exact Table.channel_eq_of_mem_interactionsWith (table:=table) h_table
 
 lemma verifierChannelRequirements_iff_forall {witness : EnsembleWitness ens}
     {channel : RawChannel F} :

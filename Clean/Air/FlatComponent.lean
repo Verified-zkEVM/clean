@@ -1,17 +1,17 @@
 /-
 AIR tables: a concrete trace for one component, checked on each window of its rows.
 
-The `Component` structure itself, its `instantiate` transport lemmas, and every trace-level
-predicate and interaction-collection definition live in `Clean/Air/Component.lean`. What is
-specific to the trace is only:
-
-* the `Table` itself, whose environments are the component's row *windows*, and
-* `circuitAssumptions`, which supplies the fixed-row and derived-data facts at each row index.
+The `Component` structure itself and its `instantiate` transport lemmas live in
+`Clean/Air/Component.lean`. What lives here is the trace: the `Table`, whose environments are the
+component's row *windows*; every trace-level predicate and interaction collection, stated once
+over those environments; and `circuitAssumptions`, which supplies the fixed-row and derived-data
+facts at each row index.
 
 There is a single `Table` type for both AIR styles. How many rows an environment spans is read
 off `component.windowRows`, so a flat table (`windowRows = 1`) and a transition table
 (`windowRows = 2`) differ only in that field -- not in their type, and not in a separate tag the
-prover could reinterpret.
+prover could reinterpret. Consequently nothing below inspects an individual environment: the
+predicates quantify over `envs`, and a wider window changes only how that list is produced.
 -/
 import Clean.Air.Component
 
@@ -36,6 +36,7 @@ structure Table (F : Type) [FiniteField F] where
     simp [Component.fixedRowsMatch]
 
 namespace Table
+variable {table : Table F} {data : ProverData F} {channel : RawChannel F}
 
 /--
 The window starting at row `i`: `windowRows` consecutive rows laid side by side.
@@ -81,39 +82,44 @@ lemma lt_length_of_mem_windows {t : Table F} {i : ℕ} (h : i ∈ t.windows) :
   have := t.component.windowRows_pos
   omega
 
-end Table
+/--
+The environments at which the component's constraints are checked: one per window of the trace.
 
-/-- A table is checked once per window of its rows. -/
-instance : RowEnvs F (Table F) where
-  component table := table.component
-  envs table data := table.windows.map (table.windowEnv · data)
-  data_eq := by
-    intro table data e he
-    simp only [List.mem_map] at he
-    obtain ⟨i, _, rfl⟩ := he
-    rfl
+Indices are deliberately dropped here: only `circuitAssumptions` below needs them, and threading
+them through this list would force an extra binder through every predicate stated over `envs`.
+-/
+def envs (t : Table F) (data : ProverData F) : List (Environment F) :=
+  t.windows.map (t.windowEnv · data)
 
-@[circuit_norm] lemma Table.envs_eq (table : Table F) (data : ProverData F) :
-    RowEnvs.envs table data = table.windows.map (table.windowEnv · data) := rfl
+@[circuit_norm] lemma envs_eq (t : Table F) (data : ProverData F) :
+    t.envs data = t.windows.map (t.windowEnv · data) := rfl
+
+/-- Every environment carries the prover data it was built from. This is what lets the
+interaction lemmas below bridge `AbstractInteraction.Guarantees _ env`, which reads `env.data`,
+with `Interaction.Guarantees _ data`. -/
+lemma data_eq_of_mem {e : Environment F} (h : e ∈ table.envs data) : e.data = data := by
+  simp only [envs_eq, List.mem_map] at h
+  obtain ⟨i, -, rfl⟩ := h
+  rfl
 
 /-- A window of the trace is one of the environments the table is checked at. -/
-lemma Table.mem_envs_of_mem_windows {table : Table F} {i : ℕ} (hi : i ∈ table.windows)
+lemma mem_envs_of_mem_windows {table : Table F} {i : ℕ} (hi : i ∈ table.windows)
     {data : ProverData F} :
-    table.windowEnv i data ∈ RowEnvs.envs (F:=F) table data := by
-  simp only [Table.envs_eq, List.mem_map]
+    table.windowEnv i data ∈ table.envs data := by
+  simp only [envs_eq, List.mem_map]
   exact ⟨i, hi, rfl⟩
 
 /-- For a flat component the window at `i` is just row `i`. -/
-lemma Table.windowRow_of_flat {table : Table F}
+lemma windowRow_of_flat {table : Table F}
     (h : table.component.windowRows = 1) (i : ℕ) :
     table.windowRow i = table.table[i]! := by
   simp [Table.windowRow, h]
 
 /-- A flat table is checked once per row, against that row alone. -/
-lemma Table.envs_eq_of_flat (table : Table F) (data : ProverData F)
+lemma envs_eq_of_flat (table : Table F) (data : ProverData F)
     (h : table.component.windowRows = 1) :
-    RowEnvs.envs table data = table.table.map (Environment.fromArray · data) := by
-  simp only [Table.envs_eq, Table.windowEnv, Table.windowRow_of_flat h]
+    table.envs data = table.table.map (Environment.fromArray · data) := by
+  simp only [envs_eq, Table.windowEnv, windowRow_of_flat h]
   rw [show table.windows = List.range table.table.length by simp [Table.windows, h]]
   apply List.ext_getElem
   · simp
@@ -122,37 +128,13 @@ lemma Table.envs_eq_of_flat (table : Table F) (data : ProverData F)
   congr 1
   rw [getElem!_pos _ _ (by simpa using h₂)]
 
-@[circuit_norm] lemma Table.component_eq (table : Table F) :
-    RowEnvs.component (F:=F) table = table.component := rfl
-
-/-- Each named component is the source of its circuit-input rows in `ProverData`. -/
-def deriveProverData : List (Table F) → ProverData F
-  | [] => fun _ _ => #[]
-  | table :: tables => fun name n =>
-      if table.component.circuit.name = name then table.component.proverRows table.table n
-      else deriveProverData tables name n
-
-lemma deriveProverData_eq_of_mem (tables : List (Table F))
-    (hunique : (tables.map (fun table => table.component.circuit.name)).Nodup)
-    {table : Table F} (hmem : table ∈ tables) (n : ℕ) :
-    deriveProverData tables table.component.circuit.name n = table.component.proverRows table.table n := by
-  induction tables with
-  | nil => simp at hmem
-  | cons head tail ih =>
-      simp only [List.map_cons, List.nodup_cons] at hunique
-      obtain ⟨hhead, htail⟩ := hunique
-      simp only [List.mem_cons] at hmem
-      rcases hmem with rfl | hmem
-      · simp [deriveProverData]
-      · have hne : head.component.circuit.name ≠ table.component.circuit.name := by
-          intro heq
-          apply hhead
-          rw [heq]
-          exact List.mem_map.mpr ⟨table, hmem, rfl⟩
-        simp [deriveProverData, hne, ih htail hmem]
-
-namespace Table
-variable {table : Table F} {data : ProverData F} {channel : RawChannel F}
+/-- A row of a *flat* trace is one of the environments the table is checked at. -/
+lemma mem_envs_of_mem_table {table : Table F} {data : ProverData F}
+    (h : table.component.windowRows = 1) {row : Array F} (hrow : row ∈ table.table) :
+    Environment.fromArray row data ∈ table.envs data := by
+  rw [envs_eq_of_flat table data h]
+  simp only [List.mem_map]
+  exact ⟨row, hrow, rfl⟩
 
 def proverRows (table : Table F) (n : ℕ) : Array (Vector F n) :=
   table.component.proverRows table.table n
@@ -171,31 +153,45 @@ theorem ext_iff {table1 table2 : Table F} :
   simp only [mk.injEq]
 
 /-
-Trace-level predicates and interaction collection, stated exactly as they were before the shared
-`RowEnvs` layer existed: quantified over the trace's *rows*, with each row read as
-`Environment.fromArray row data`.
-
-The shared layer quantifies over environments instead, because a transition table constrains a
-*pair* of rows and so the two kinds have no common row type. For the flat kind that distinction is
-invisible -- its environments are exactly its rows -- so the row-shaped statements are kept here as
-the primary spelling, and `envs_iff` below is the single lemma relating the two. Everything proved
-over `RowEnvs` is then re-exported in row-shaped form.
+Trace-level predicates. Each quantifies over `envs`; none inspects an individual environment,
+which is exactly why they apply to any window size.
 -/
 
-/-- Quantifying over a *flat* table's environments is quantifying over its rows.
+def Constraints (table : Table F) (data : ProverData F) : Prop :=
+  ∀ env ∈ table.envs data, table.component.operations.ConstraintsHold env
 
-Only valid when `windowRows = 1`; a transition table's environments are pairs of rows, which have
-no row-shaped spelling. Callers that only ever build flat tables (VM ensembles, for instance) use
-this to keep reasoning about rows. -/
-lemma envs_iff {motive : Environment F → Prop} (table : Table F) (data : ProverData F)
-    (h : table.component.windowRows = 1) :
-    (∀ env ∈ RowEnvs.envs (F:=F) table data, motive env) ↔
-      ∀ row ∈ table.table, motive (Environment.fromArray row data) := by
-  rw [envs_eq_of_flat table data h]
-  simp only [List.mem_map, forall_exists_index, and_imp]
-  constructor
-  · intro h' row hrow; exact h' _ row hrow rfl
-  · intro h' e row hrow heq; subst heq; exact h' row hrow
+def Assumptions (table : Table F) (data : ProverData F) : Prop :=
+  ∀ env ∈ table.envs data, table.component.RowAssumptions env
+
+def CircuitAssumptions (table : Table F) (data : ProverData F) : Prop :=
+  ∀ env ∈ table.envs data, table.component.CircuitAssumptions env
+
+def Guarantees (table : Table F) (data : ProverData F) : Prop :=
+  ∀ env ∈ table.envs data, table.component.operations.FullGuarantees env
+
+def ChannelGuarantees (table : Table F) (data : ProverData F) (channel : RawChannel F) : Prop :=
+  ∀ env ∈ table.envs data,
+    table.component.operations.ChannelGuarantees channel env
+
+def InChannelsOrGuarantees (table : Table F) (data : ProverData F)
+    (channels : List (RawChannel F)) : Prop :=
+  ∀ env ∈ table.envs data,
+    table.component.operations.InChannelsOrGuaranteesFull channels env
+
+def Requirements (table : Table F) (data : ProverData F) : Prop :=
+  ∀ env ∈ table.envs data, table.component.operations.FullRequirements env
+
+def ChannelRequirements (table : Table F) (data : ProverData F) (channel : RawChannel F) : Prop :=
+  ∀ env ∈ table.envs data,
+    table.component.operations.ChannelRequirements channel env
+
+def InChannelsOrRequirements (table : Table F) (data : ProverData F)
+    (channels : List (RawChannel F)) : Prop :=
+  ∀ env ∈ table.envs data,
+    table.component.operations.InChannelsOrRequirementsFull channels env
+
+def Spec (table : Table F) (data : ProverData F) : Prop :=
+  ∀ env ∈ table.envs data, table.component.Spec env
 
 @[circuit_norm]
 def channelsWithGuarantees (table : Table F) : List (RawChannel F) :=
@@ -206,82 +202,283 @@ def channelsWithRequirements (table : Table F) : List (RawChannel F) :=
   table.component.circuit.channelsWithRequirements
 
 /-
-The trace-level predicates are the shared `RowEnvs` ones, quantified over the table's *windows*.
+Interaction collection. A component emits its interactions once per environment, so a transition
+table of `n` rows contributes `n - 1` copies rather than `n`.
 
-Before the window generalization these were stated row-shaped, which is only correct when
-`windowRows = 1`. They are now `abbrev`s over `RowEnvs`, exactly as the transition kind always
-had them, so a flat and a transition table share one spelling; `envs_iff` above recovers the
-row-shaped reading for flat callers.
+This matters for `BalancedInteractions`, which carries a side condition that the total interaction
+count is below `ringChar F` -- without it, `p` copies of a push would sum to zero and forge
+balance. Any bound on the total interaction count derived from table heights must therefore use
+`n - 1` for transition entries, and note that a 0- or 1-row transition table emits nothing at all.
 -/
 
-abbrev Constraints (table : Table F) (data : ProverData F) : Prop :=
-  RowEnvs.Constraints (F:=F) table data
+def interactions (table : Table F) (data : ProverData F) : List (Interaction F) :=
+  (table.envs data).flatMap fun env =>
+    table.component.operations.interactionValues env
 
-abbrev Assumptions (table : Table F) (data : ProverData F) : Prop :=
-  RowEnvs.Assumptions (F:=F) table data
-
-abbrev Guarantees (table : Table F) (data : ProverData F) : Prop :=
-  RowEnvs.Guarantees (F:=F) table data
-
-abbrev ChannelGuarantees (table : Table F) (data : ProverData F) (channel : RawChannel F) : Prop :=
-  RowEnvs.ChannelGuarantees (F:=F) table data channel
-
-abbrev InChannelsOrGuarantees (table : Table F) (data : ProverData F)
-    (channels : List (RawChannel F)) : Prop :=
-  RowEnvs.InChannelsOrGuarantees (F:=F) table data channels
-
-abbrev Requirements (table : Table F) (data : ProverData F) : Prop :=
-  RowEnvs.Requirements (F:=F) table data
-
-abbrev ChannelRequirements (table : Table F) (data : ProverData F) (channel : RawChannel F) : Prop :=
-  RowEnvs.ChannelRequirements (F:=F) table data channel
-
-abbrev InChannelsOrRequirements (table : Table F) (data : ProverData F)
-    (channels : List (RawChannel F)) : Prop :=
-  RowEnvs.InChannelsOrRequirements (F:=F) table data channels
-
-abbrev Spec (table : Table F) (data : ProverData F) : Prop :=
-  RowEnvs.Spec (F:=F) table data
-
-abbrev interactions (table : Table F) (data : ProverData F) : List (Interaction F) :=
-  RowEnvs.interactions (F:=F) table data
-
-noncomputable abbrev interactionsWith (table : Table F) (data : ProverData F)
+noncomputable def interactionsWith (table : Table F) (data : ProverData F)
     (channel : RawChannel F) : List (Interaction F) :=
-  RowEnvs.interactionsWith (F:=F) table data channel
+  (table.envs data).flatMap fun env =>
+    table.component.operations.interactionValuesWith channel env
 
-noncomputable abbrev interactionssWith (table : Table F) (data : ProverData F)
+noncomputable def interactionssWith (table : Table F) (data : ProverData F)
     (channel : RawChannel F) : List (List (Interaction F)) :=
-  RowEnvs.interactionssWith (F:=F) table data channel
+  (table.envs data).map fun env =>
+    table.component.operations.interactionValuesWith channel env
 
-/-! The `RowEnvs` iff-lemmas, re-exported at `Table` so that call sites can `rw` against goals
-stated through the abbreviations above. The abbreviations are reducible enough for elaboration but
-not for `rw`, which matches syntactically. -/
+/-
+Unfolding lemmas for the interaction collections. Downstream proofs reason about the underlying
+`flatMap`/`map` structure, so these expose it without making the definitions themselves reducible.
+
+Deliberately *not* `@[circuit_norm]`: as simp lemmas they fire ahead of `forall_interactions_iff`
+and friends, which expect the collections still folded. Name them explicitly where the underlying
+list structure is actually needed.
+-/
+
+lemma interactions_def (table : Table F) (data : ProverData F) :
+    table.interactions data = (table.envs data).flatMap fun env =>
+      table.component.operations.interactionValues env := rfl
+
+lemma interactionsWith_def (table : Table F) (data : ProverData F)
+    (channel : RawChannel F) :
+    table.interactionsWith data channel = (table.envs data).flatMap fun env =>
+      table.component.operations.interactionValuesWith channel env := rfl
+
+lemma interactionssWith_def (table : Table F) (data : ProverData F)
+    (channel : RawChannel F) :
+    table.interactionssWith data channel = (table.envs data).map fun env =>
+      table.component.operations.interactionValuesWith channel env := rfl
+
+open Classical in lemma interactionsWith_eq_filter :
+    table.interactionsWith data channel =
+      (table.interactions data).filter (·.channel = channel) := by
+  simp only [interactionsWith, interactions, List.filter_flatMap]
+  congr
+  funext env
+  rw [Operations.interactionValuesWith_eq_filter]
+
+lemma channel_eq_of_mem_interactionsWith {i : Interaction F} :
+    i ∈ table.interactionsWith data channel → i.channel = channel := by
+  intro h_mem
+  simp only [interactionsWith, List.mem_flatMap] at h_mem
+  rcases h_mem with ⟨env, h_env, hi⟩
+  simp only [Operations.interactionValuesWith, List.mem_map] at hi
+  rcases hi with ⟨i_abs, hi_abs, heq⟩
+  rw [←heq]
+  apply Operations.channel_eq_of_mem_interactionsWith hi_abs
+
+lemma forall_interactions_iff (table : Table F) (data : ProverData F)
+    (motive : Interaction F → Prop) :
+    (∀ i ∈ table.interactions data, motive i) ↔
+    ∀ env ∈ table.envs data, ∀ i ∈ table.component.operations.interactions,
+      motive (i.eval env) := by
+  simp only [interactions, Operations.interactionValues, List.mem_flatMap, List.mem_map,
+    forall_exists_index, and_imp]
+  constructor
+  · intro h e h_e i hi
+    exact h (i.eval e) e h_e i hi rfl
+  · intro h i e h_e i' hi' h_eq
+    rw [← h_eq]
+    exact h e h_e i' hi'
+
+lemma forall_interactionsWith_iff (table : Table F) (data : ProverData F) (channel : RawChannel F)
+  (motive : Interaction F → Prop) :
+    (∀ i ∈ table.interactionsWith data channel, motive i) ↔
+    ∀ env ∈ table.envs data, ∀ i ∈ table.component.operations.interactions,
+      (i.channel = channel → motive (i.eval env)) := by
+  simp only [interactionsWith, Operations.interactionValuesWith_eq_map,
+    Operations.interactionsWith, List.mem_flatMap, List.mem_map, List.mem_filter,
+    decide_eq_true_eq, forall_exists_index, and_imp]
+  constructor
+  · intro h e h_e i hi h_channel
+    exact h (i.eval e) e h_e i hi h_channel rfl
+  · intro h i e h_e i' hi' h_channel h_eq
+    rw [← h_eq]
+    exact h e h_e i' hi' h_channel
+
+lemma interactionsWith_nil_of_channel_not_mem :
+    channel ∉ table.component.circuit.channels →
+      table.interactionsWith data channel = [] := by
+  contrapose!
+  simp only [AbstractInteraction.eval_channel, interactionsWith_eq_filter, ne_eq, List.filter_eq_nil_iff,
+    decide_eq_true_eq, forall_interactions_iff, not_forall, not_not, forall_exists_index]
+  intro env env_mem i i_mem channel_eq
+  symm at channel_eq; subst channel_eq
+  simp only [Component.interactions_eq] at i_mem
+  have h_subset := table.component.circuit.channels_subset
+    table.component.rowInputVar table.component.rowOffset
+  apply h_subset
+  simp only [Operations.channels, List.mem_map]
+  exists i
+
+lemma guarantees_iff_forall (table : Table F) (data : ProverData F) :
+    table.Guarantees data ↔
+    ∀ i ∈ table.interactions data, i.Guarantees data := by
+  simp only [Guarantees, circuit_norm, forall_interactions_iff]
+  refine forall_congr' fun e => imp_congr_right fun h_e => ?_
+  simp only [AbstractInteraction.Guarantees, Interaction.Guarantees, AbstractInteraction.eval,
+    Interaction.msgVector, data_eq_of_mem (table:=table) h_e]
 
 lemma channelGuarantees_iff_forall (table : Table F) (data : ProverData F)
     (channel : RawChannel F) :
     table.ChannelGuarantees data channel ↔
-    ∀ i ∈ table.interactionsWith data channel, i.Guarantees data :=
-  RowEnvs.channelGuarantees_iff_forall table data channel
+    ∀ i ∈ table.interactionsWith data channel, i.Guarantees data := by
+  simp only [ChannelGuarantees, circuit_norm, forall_interactionsWith_iff]
+  refine forall_congr' fun e => imp_congr_right fun h_e => ?_
+  simp only [AbstractInteraction.Guarantees, Interaction.Guarantees, AbstractInteraction.eval,
+    Interaction.msgVector, data_eq_of_mem (table:=table) h_e]
 
 lemma guarantees_iff_channelGuarantees (table : Table F) (data : ProverData F) :
     table.Guarantees data ↔
-    ∀ channel ∈ RowEnvs.channelsWithGuarantees (F:=F) table,
-      table.ChannelGuarantees data channel :=
-  RowEnvs.guarantees_iff_channelGuarantees table data
+    ∀ channel ∈ table.channelsWithGuarantees,
+      table.ChannelGuarantees data channel := by
+  simp only [Guarantees, ChannelGuarantees, channelsWithGuarantees]
+  simp only [Component.guarantees_iff, Component.channelGuarantees_iff, Component.rowOperations]
+  simp only [GeneralFormalCircuit.guarantees_iff]
+  constructor <;> simp_all
+
+lemma channelGuarantees_of_requirements (table : Table F) (data : ProverData F)
+    {channel : RawChannel F} :
+    table.Guarantees data → table.ChannelGuarantees data channel := by
+  simp_all [Guarantees, ChannelGuarantees, circuit_norm]
+
+lemma requirements_iff_forall (table : Table F) (data : ProverData F) :
+    table.Requirements data ↔
+    ∀ i ∈ table.interactions data, i.Requirements data := by
+  simp only [Requirements, circuit_norm, forall_interactions_iff]
+  refine forall_congr' fun e => imp_congr_right fun h_e => ?_
+  simp only [AbstractInteraction.Requirements, Interaction.Requirements, AbstractInteraction.eval,
+    Interaction.msgVector, data_eq_of_mem (table:=table) h_e]
 
 lemma channelRequirements_iff_forall (table : Table F) (data : ProverData F)
     (channel : RawChannel F) :
     table.ChannelRequirements data channel ↔
-    ∀ i ∈ table.interactionsWith data channel, i.Requirements data :=
-  RowEnvs.channelRequirements_iff_forall table data channel
+    ∀ i ∈ table.interactionsWith data channel, i.Requirements data := by
+  simp only [ChannelRequirements, circuit_norm, forall_interactionsWith_iff]
+  refine forall_congr' fun e => imp_congr_right fun h_e => ?_
+  simp only [AbstractInteraction.Requirements, Interaction.Requirements, AbstractInteraction.eval,
+    Interaction.msgVector, data_eq_of_mem (table:=table) h_e]
 
-/-- The row-level phrasing of `Constraints`, for flat tables. -/
-lemma constraints_iff_forall_row {table : Table F} {data : ProverData F}
-    (h : table.component.windowRows = 1) :
-    table.Constraints data ↔ ∀ row ∈ table.table,
-      table.component.operations.ConstraintsHold (Environment.fromArray row data) :=
-  envs_iff table data h
+lemma requirements_iff_channelRequirements_of_constraints (table : Table F)
+    (data : ProverData F) :
+    table.Constraints data →
+    (table.Requirements data ↔
+    ∀ channel ∈ table.channelsWithRequirements,
+      table.ChannelRequirements data channel) := by
+  intro h_constraints
+  simp only [Requirements, ChannelRequirements, channelsWithRequirements]
+  simp only [Component.requirements_iff, Component.channelRequirements_iff, Component.rowOperations]
+  simp_rw [Constraints, table.component.constraintsHold_iff] at h_constraints
+  constructor
+  · intro h_reqs channel h_channel env h_env
+    specialize h_reqs env h_env
+    rw [table.component.circuit.requirements_iff_of_constraints
+      (h_constraints env h_env)] at h_reqs
+    exact h_reqs channel h_channel
+  · intro h_reqs env h_env
+    rw [table.component.circuit.requirements_iff_of_constraints (h_constraints env h_env)]
+    intro channel h_channel
+    exact h_reqs channel h_channel env h_env
+
+lemma channelRequirements_of_requirements (table : Table F) (data : ProverData F)
+    {channel : RawChannel F} :
+    table.Requirements data → table.ChannelRequirements data channel := by
+  simp_all [Requirements, ChannelRequirements, circuit_norm]
+
+lemma inChannelsOrRequirements_of_constraints (table : Table F) (data : ProverData F) :
+    table.Constraints data →
+    table.InChannelsOrRequirements data (table.channelsWithRequirements) := by
+  intro h_constraints
+  simp only [InChannelsOrRequirements, channelsWithRequirements]
+  intro env h_env
+  exact table.component.inChannelsOrRequirements_of_constraints env
+    (h_constraints env h_env)
+
+lemma requirements_of_not_mem_of_constraints (table : Table F) (data : ProverData F)
+    {channel : RawChannel F} :
+    table.Constraints data →
+    channel ∉ table.channelsWithRequirements →
+      table.ChannelRequirements data channel := by
+  intro h_constraints h_not_mem
+  have h_in_or_req := table.inChannelsOrRequirements_of_constraints data h_constraints
+  simp only [ChannelRequirements, InChannelsOrRequirements] at *
+  intro env h_env
+  specialize h_in_or_req env h_env
+  apply Operations.requirements_of_not_mem _ (table.channelsWithRequirements)
+  assumption
+  assumption
+
+lemma inChannelsOrGuarantees (table : Table F) (data : ProverData F) :
+    table.InChannelsOrGuarantees data (table.channelsWithGuarantees) := by
+  simp [InChannelsOrGuarantees, channelsWithGuarantees, Component.inChannelsOrGuarantees]
+
+lemma guarantees_of_not_mem (table : Table F) (data : ProverData F) {channel : RawChannel F} :
+    channel ∉ table.channelsWithGuarantees →
+      table.ChannelGuarantees data channel := by
+  intro h_not_mem
+  have h_in_or_guar := table.inChannelsOrGuarantees data
+  simp only [ChannelGuarantees, InChannelsOrGuarantees] at *
+  intro env h_env
+  specialize h_in_or_guar env h_env
+  apply Operations.guarantees_of_not_mem _ (table.channelsWithGuarantees)
+  assumption
+  assumption
+
+/--
+Circuit soundness, lifted to full table level.
+
+The hypothesis is `CircuitAssumptions`, the *circuit's* assumptions at every environment;
+`circuitAssumptions_envs` below derives it from the ensemble-level `Assumptions` and
+`DataConsistency`, and is the one place the window's row indices are needed. `weakSoundness`
+packages the two together.
+-/
+theorem weakSoundness_of_circuitAssumptions {table : Table F} {data : ProverData F}
+    (assumptions : table.CircuitAssumptions data) :
+    table.Constraints data → table.Guarantees data →
+    table.Spec data ∧ table.Requirements data := by
+  intro constraints guarantees
+  constructor
+  · intro env h_env
+    exact (Component.weakSoundness (assumptions env h_env)
+      (constraints env h_env) (guarantees env h_env)).left
+  · intro env h_env
+    exact (Component.weakSoundness (assumptions env h_env)
+      (constraints env h_env) (guarantees env h_env)).right
+
+/--
+If we know constraints and _some_ of the guarantees unconditionally, we can remove them from the
+per-environment assumptions.
+
+This lemma is tailored to VM-like channels where there remains a single channel that we need to
+prove guarantees for. Like everything else here it never mentions how many rows an environment
+spans.
+-/
+lemma requirements_of_partial_guarantees_of_constraints {table : Table F} {data : ProverData F}
+  {finished : List (RawChannel F)} {unfinished : RawChannel F} :
+  table.CircuitAssumptions data →
+  table.Constraints data →
+  table.channelsWithGuarantees ⊆ unfinished :: finished →
+  (∀ channel ∈ finished, table.ChannelGuarantees data channel) →
+    ∀ env ∈ table.envs data,
+      table.component.operations.ChannelGuarantees unfinished env →
+      table.component.operations.ChannelRequirements unfinished env := by
+  intro assumptions constraints subset finished_grts env h_env channel_grts
+  replace finished_grts channel hc := finished_grts channel hc env h_env
+  suffices table.component.operations.FullRequirements env by
+    simp only [circuit_norm] at this ⊢
+    intro i hi _
+    exact this i hi
+  suffices table.component.operations.FullGuarantees env from
+    Component.weakSoundness (assumptions env h_env) (constraints env h_env) this |>.right
+  simp only [Component.guarantees_iff, Component.rowOperations]
+  rw [GeneralFormalCircuit.guarantees_iff]
+  intro channel channel_mem
+  show table.component.rowOperations.ChannelGuarantees channel env
+  rw [← Component.channelGuarantees_iff]
+  replace channel_mem := subset channel_mem
+  simp at channel_mem
+  rcases channel_mem with rfl | channel_mem
+  · exact channel_grts
+  · exact finished_grts _ channel_mem
 
 omit [FiniteField F] in
 /--
@@ -428,7 +625,7 @@ lemma circuitAssumptions (table : Table F) (consistent : table.DataConsistency d
 /-- Every environment of a table satisfies the circuit's assumptions. -/
 lemma circuitAssumptions_envs (table : Table F) (consistent : table.DataConsistency data)
     (assumptions : table.Assumptions data) :
-    RowEnvs.CircuitAssumptions (F:=F) table data := by
+    table.CircuitAssumptions data := by
   intro e he
   simp only [envs_eq, List.mem_map] at he
   obtain ⟨i, hi, rfl⟩ := he
@@ -439,38 +636,8 @@ theorem weakSoundness {table : Table F} (consistent : table.DataConsistency data
     table.Assumptions data → table.Constraints data → table.Guarantees data →
     table.Spec data ∧ table.Requirements data := by
   intro assumptions constraints guarantees
-  exact RowEnvs.weakSoundness (table.circuitAssumptions_envs consistent assumptions)
+  exact weakSoundness_of_circuitAssumptions (table.circuitAssumptions_envs consistent assumptions)
     constraints guarantees
-
-/-- A row of a *flat* trace is one of the environments the table is checked at. -/
-lemma mem_envs_of_mem_table {table : Table F} {data : ProverData F}
-    (h : table.component.windowRows = 1) {row : Array F} (hrow : row ∈ table.table) :
-    Environment.fromArray row data ∈ RowEnvs.envs (F:=F) table data := by
-  rw [envs_eq_of_flat table data h]
-  simp only [List.mem_map]
-  exact ⟨row, hrow, rfl⟩
-
-/--
-If we know constraints and _some_ of the guarantees unconditionally, we can remove them from the
-per-window assumptions.
-
-This lemma is tailored to VM-like channels where there remains a single channel that we need to
-prove guarantees for.
--/
-lemma requirements_of_partial_guarantees_of_constraints {table : Table F}
-  {finished : List (RawChannel F)} {unfinished : RawChannel F} :
-  table.DataConsistency data →
-  table.Assumptions data →
-  table.Constraints data →
-  table.channelsWithGuarantees ⊆ unfinished :: finished →
-  (∀ channel ∈ finished, table.ChannelGuarantees data channel) →
-    ∀ env ∈ RowEnvs.envs (F:=F) table data,
-      table.component.operations.ChannelGuarantees unfinished env →
-      table.component.operations.ChannelRequirements unfinished env := by
-  intro consistent assumptions constraints subset finished_grts env h_env
-  exact RowEnvs.requirements_of_partial_guarantees_of_constraints
-    (table.circuitAssumptions_envs consistent assumptions) constraints subset finished_grts
-    _ h_env
 
 end Table
 

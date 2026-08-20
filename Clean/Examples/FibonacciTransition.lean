@@ -351,7 +351,7 @@ def fibonacciTransitionFormal : FormalEnsemble (F p) fieldTriple :=
       have hmem := witness.mem_component_of_mem htable
       simp only [circuit_norm, fibonacciTransitionEnsemble, List.mem_cons, List.not_mem_nil,
         or_false] at hmem
-      rcases hmem with hc | hc | hc <;> rw [Table.component_eq, hc] <;>
+      rcases hmem with hc | hc | hc <;> rw [hc] <;>
         simp [Component.RowAssumptions, fibTransitionComponent, add8Component, bytesComponent,
           fibStep, add8, pushBytes, circuit_norm])
     fibonacciTransitionEnsemble_specConsistency

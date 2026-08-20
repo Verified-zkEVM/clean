@@ -111,7 +111,7 @@ lemma windowRow_eq_pair {t : Table F} (h : t.IsTransition) (i : ℕ) :
 
 /-- A transition table's environments are exactly its pair environments. -/
 lemma envs_eq_pairs (t : Table F) (h : t.IsTransition) (data : ProverData F) :
-    RowEnvs.envs (F:=F) t data = t.pairs.map fun p => Transition.pairEnv p.2.1 p.2.2 data := by
+    t.envs data = t.pairs.map fun p => Transition.pairEnv p.2.1 p.2.2 data := by
   simp only [Table.envs_eq, pairs, List.map_map]
   apply List.map_congr_left
   intro i hi
@@ -120,7 +120,7 @@ lemma envs_eq_pairs (t : Table F) (h : t.IsTransition) (data : ProverData F) :
 /-- A pair of the trace is one of the environments the table is checked at. -/
 lemma mem_envs_of_mem_pairs {t : Table F} (h : t.IsTransition)
     {p : ℕ × Array F × Array F} (hp : p ∈ t.pairs) {data : ProverData F} :
-    Transition.pairEnv p.2.1 p.2.2 data ∈ RowEnvs.envs (F:=F) t data := by
+    Transition.pairEnv p.2.1 p.2.2 data ∈ t.envs data := by
   rw [envs_eq_pairs t h]
   exact List.mem_map_of_mem hp
 
@@ -257,7 +257,6 @@ theorem transition_induction {t : Table F} (h : t.IsTransition) {data : ProverDa
     intro hlt
     have hwin : n ∈ t.windows := by rw [mem_windows_iff, h]; omega
     have hs := hspec _ (mem_envs_of_mem_windows hwin (data := data))
-    rw [Table.component_eq] at hs
     unfold Component.Spec at hs
     rw [rowInput_windowEnv hwin data, rowOutput_windowEnv h hwin data houtput] at hs
     exact step n hlt hs (ih (by omega))

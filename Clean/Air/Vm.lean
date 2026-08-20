@@ -123,7 +123,7 @@ def toFormal (F : Type) [FiniteField F] (ens : SoundVmEnsemble F PublicIO)
     intro table h_table env h_env
     simp only [Component.RowAssumptions]
     have hcomponent := EnsembleWitness.mem_component_of_mem h_table
-    rw [RowEnvs.data_eq_of_mem h_env]
+    rw [Table.data_eq_of_mem h_env]
     have hresidual := extraAssumptionsConsistency witness.publicInput witness.data
       extra_assumptions table.component hcomponent (table.component.rowInput env)
     exact hresidual
@@ -555,7 +555,7 @@ lemma vmInteractionss_eq_interactionPairs (witness : EnsembleWitness (ens.addVm 
   apply congrArg List.flatten
   apply List.map_congr_left
   intro ⟨ table, table_mem ⟩ _
-  simp [RowEnvs.interactionssWith, Table.component_eq,
+  simp [Table.interactionssWith,
     Table.envs_eq_of_flat _ _ (witness.vmTables_windowRows_eq_one table_mem),
     witness.vmInteractionValuesWith_eq table_mem]
 
@@ -573,7 +573,7 @@ lemma vmInteractions_eq_pulls_pushes (witness : EnsembleWitness (ens.addVm vm na
       ([witness.verifierInteractionsWith vm.channel.toRaw] ++
         witness.vmTables.flatMap
           (·.interactionssWith witness.data vm.channel.toRaw)).flatten := by
-    simp only [vmInteractionsWith, RowEnvs.interactionsWith, RowEnvs.interactionssWith,
+    simp only [vmInteractionsWith, Table.interactionsWith, Table.interactionssWith,
       List.singleton_append, List.flatten_cons]
     rw [List.flatMap_flatMap, List.flatMap_def]
   rw [unfold_interactions, vmInteractionss_eq_pulls_pushes, List.flattenPairs]
@@ -849,7 +849,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
       rw [this, List.append_nil]
     simp only [List.flatMap_eq_nil_iff]
     intro table mem_table
-    apply RowEnvs.interactionsWith_nil_of_channel_not_mem
+    apply Table.interactionsWith_nil_of_channel_not_mem
     apply not_mem_vm_channel table.component
     exact old_component_of_mem table mem_table
   -- this already lets us supply the balance condition
@@ -859,12 +859,12 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
   -- which will give us exactly the second hypothesis of `verifier_guarantees`
   -- first, unify channel subset assumptions to all tables
   have grts_subset_all : ∀ table ∈ witness.vmTables,
-      RowEnvs.channelsWithGuarantees (F:=F) table ⊆ vmChannel :: finished := by
+      table.channelsWithGuarantees ⊆ vmChannel :: finished := by
     intro table h_table
     apply grts_subset.2 table.component
     exact witness.vmMemTablesComponent h_table
   have vm_reqs_disjoint : ∀ channel ∈ finished, ∀ table ∈ witness.vmTables,
-      channel ∉ RowEnvs.channelsWithRequirements (F:=F) table := by
+      channel ∉ table.channelsWithRequirements := by
     intro channel channel_mem table table_mem
     apply (reqs_disjoint channel channel_mem).2
     exact witness.vmMemTablesComponent table_mem
@@ -954,7 +954,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
   -- invoke `requirements_of_partial_guarantees_of_constraints` to get per-row grts → reqs for the vm channel,
   -- and use it in `verifier_guarantees`
   have reqs_of_grts' (table) (h_table : table ∈ witness.vmTables) :=
-    RowEnvs.requirements_of_partial_guarantees_of_constraints (table:=table)
+    Table.requirements_of_partial_guarantees_of_constraints (table:=table)
     (unfinished := vmChannel)
     (Table.circuitAssumptions_envs table (vmContext.data_consistent table h_table)
       (vm_assumptions table h_table))
@@ -981,7 +981,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
     · exact balance channel (by simp [Ensemble.addVm, finished_subset channel_mem])
     intro table h_table
     by_cases h_vm : table ∈ witness.vmTables
-    · apply RowEnvs.requirements_of_not_mem_of_constraints (table:=table) witness.data
+    · apply Table.requirements_of_not_mem_of_constraints (table:=table) witness.data
         (vm_constraints table h_vm)
       exact vm_reqs_disjoint channel channel_mem table h_vm
     · have h_old : table ∈ oldContext.tables := by

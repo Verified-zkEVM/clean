@@ -68,7 +68,7 @@ interaction count must use -- in particular the `< ringChar F` side condition ca
 allowed to sum to zero.
 -/
 @[circuit_norm] lemma envs_length (table : Table F) (data : ProverData F) :
-    (RowEnvs.envs (F:=F) table data).length =
+    (table.envs data).length =
       table.table.length + 1 - table.component.windowRows := by
   simp [Table.envs_eq, Table.windows_length]
 
@@ -76,7 +76,8 @@ end Table
 
 /-- A table subset together with the shared prover-data environment used to interpret it.
 
-Every operation below is a `RowEnvs` one, so it applies uniformly to any window size. -/
+Every operation below quantifies over each table's `envs`, so it applies uniformly to any
+window size. -/
 structure TableContext (F : Type) [FiniteField F] where
   tables : List (Table F)
   data : ProverData F

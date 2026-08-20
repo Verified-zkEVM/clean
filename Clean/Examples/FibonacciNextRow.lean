@@ -251,11 +251,11 @@ lemma rowOutput_windowEnv {t : Table (F p)} (hc : t.component = fibComponent)
       Array.getElem?_append_right, hsz, Array.getElem!_eq_getD] <;> rfl
 
 lemma pairAt_succ_of_spec {t : Table (F p)} (hc : t.component = fibComponent)
-    {data : ProverData (F p)} (hspec : RowEnvs.Spec (F:=F p) t data)
+    {data : ProverData (F p)} (hspec : t.Spec data)
     {i : ℕ} (hi : i ∈ t.windows) :
     pairAt t (i + 1) = ((pairAt t i).2, (pairAt t i).1 + (pairAt t i).2) := by
   have h := hspec _ (Table.mem_envs_of_mem_windows hi (data:=data))
-  rw [Table.component_eq, hc] at h
+  rw [hc] at h
   unfold Component.Spec at h
   obtain ⟨hx, hy⟩ := rowOutput_windowEnv (p:=p) hc (data:=data) hi
   -- rewrite the *reads* first: unfolding `fibComponent` would destroy these patterns
@@ -274,7 +274,7 @@ Row `i` holds `(fib i, fib (i+1))` for every row of the trace, given the step re
 window and the seed on row 0.
 -/
 theorem pairAt_eq_fibPair {t : Table (F p)} (hc : t.component = fibComponent)
-    {data : ProverData (F p)} (hspec : RowEnvs.Spec (F:=F p) t data)
+    {data : ProverData (F p)} (hspec : t.Spec data)
     (hseed : pairAt t 0 = (((fibPair 0).1 : F p), ((fibPair 0).2 : F p)))
     {i : ℕ} (hi : i < t.table.length) :
     pairAt t i = (((fibPair i).1 : F p), ((fibPair i).2 : F p)) := by
