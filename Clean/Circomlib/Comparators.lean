@@ -201,12 +201,7 @@ def main (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F
 def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
   main := main n hn
   computableWitnesses := by
-    computable_witnesses_start
-    · computable_witnesses_close
-    · -- the witnessed output reads one fresh window cell
-      simp only [circuit_norm]
-      rw [h_agrees.1 (n + n_1) (by simp only [Nat.add_zero, Nat.succ_eq_add_one, Nat.add_eq]; omega)]
-    · exact h_agrees.1 _ (by omega)
+    computable_witnesses
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val ≤ 2^n
 

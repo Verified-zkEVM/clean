@@ -95,6 +95,7 @@ def eval (env : Environment F) : Expression F → F
   | add x y => eval env x + eval env y
   | mul x y => eval env x * eval env y
 
+
 def toString [Repr F] : Expression F → String
   | var v => reprStr v
   | const c => reprStr c

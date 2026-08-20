@@ -132,7 +132,8 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
   computableWitnesses := by
     computable_witnesses_start [Vector.ext_iff]
     · -- the parts vector copies expressions over the input: transport its element
-      -- evals through the whole-input congruence, atom by atom
+      -- evals through the whole-input congruence, atom by atom (the full chain —
+      -- unwrap, ofFn, ite-split, distribute, fold — outruns grind's E-matching depth)
       have h' : ∀ (j : ℕ) (hj : j < 254),
           Expression.eval env.toEnvironment (input[j]'hj) =
             Expression.eval env'.toEnvironment (input[j]'hj) := fun j hj =>
