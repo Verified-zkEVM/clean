@@ -284,10 +284,10 @@ theorem fromElements_eq_iff {F : Type} {M : TypeMap} [ProvableType M]
     simpa only [ProvableType.toElements_fromElements] using this
   · intro h; rw [h]
 
-@[circuit_norm, computable_witnesses_norm]
+@[circuit_norm, computable_witnesses_norm, grind =]
 theorem toElements_fields {F : Type} {n : ℕ} (x : fields n F) : toElements x = x := rfl
 
-@[circuit_norm, computable_witnesses_norm]
+@[circuit_norm, computable_witnesses_norm, grind =]
 theorem fromElements_fields {F : Type} {n : ℕ} (v : Vector F n) :
     fromElements (M := fields n) v = v := rfl
 
@@ -627,6 +627,22 @@ theorem eval_fields_prover (env : ProverEnvironment F) (x : fields n (Expression
 @[circuit_norm ↓]
 theorem varFromOffset_fields {F} (offset : ℕ) :
   varFromOffset (F:=F) (fields n) offset = .mapRange n fun i => var ⟨offset + i⟩ := rfl
+
+/-- Elementwise `varFromOffset` window access, for `grind`: window atoms reach it as
+scalar evals of this getElem, where the whole-vector `eval_varFromOffset` cannot key. -/
+@[grind =] theorem getElem_varFromOffset_fields {F} (offset i : ℕ) (hi : i < n) :
+    (varFromOffset (F := F) (fields n) offset)[i]'hi = var ⟨offset + i⟩ := by
+  simp [varFromOffset_fields, Vector.getElem_mapRange]
+
+/-- Fully evaluated window access in one step: `grind`'s matcher does not reduce
+through e-classes, so the composition with the `var`-case of `eval` cannot be left
+to the engine. -/
+@[grind =] theorem eval_getElem_varFromOffset_fields (env : Environment F)
+    (offset i : ℕ) (hi : i < n) :
+    Expression.eval env ((varFromOffset (F := F) (fields n) offset)[i]'hi) =
+      env.get (offset + i) := by
+  rw [getElem_varFromOffset_fields]
+  rfl
 
 @[circuit_norm ↓, grind norm]
 theorem eval_fieldPair (env : Environment F) (t : fieldPair (Expression F)) :
