@@ -818,6 +818,31 @@ theorem FormalCircuit.output_of_input_eq {env env' : ProverEnvironment F}
     (by simpa only [CircuitType.eval_var_prover_to_verifier] using input_eq)).2 h_agrees
   simpa only [CircuitType.eval_var_prover_to_verifier] using h
 
+/-- Env-agreement transfers through an output-threaded iteration: if every step's
+state is env-determined below a monotone offset bound given the previous state's
+evaluation — for subcircuit steps that is one `output_of_input_eq` application —
+then so is every prefix of the chain. Factoring this induction keeps iterated
+gadgets' `computableWitnesses` proofs at one step obligation each, instead of a
+quadratic re-derivation of the chain in every leg. -/
+theorem ProverEnvironment.eval_congr_iterate {M : TypeMap} [ProvableType M]
+    {env env' : ProverEnvironment F}
+    (state : ℕ → Var M F) (bound : ℕ → ℕ) (mono : Monotone bound)
+    (base : eval env.toEnvironment (state 0) = eval env'.toEnvironment (state 0))
+    (step : ∀ k,
+      (eval env.toEnvironment (state k) : M F) = eval env'.toEnvironment (state k) →
+      env.AgreesBelow (bound (k + 1)) env' →
+      (eval env.toEnvironment (state (k + 1)) : M F) =
+        eval env'.toEnvironment (state (k + 1)))
+    {m : ℕ} (h_agrees : env.AgreesBelow (bound m) env') :
+    ∀ k, k ≤ m →
+      (eval env.toEnvironment (state k) : M F) = eval env'.toEnvironment (state k) := by
+  intro k hk
+  induction k with
+  | zero => exact base
+  | succ j ih =>
+    exact step j (ih (Nat.le_of_succ_le hk))
+      (ProverEnvironment.agreesBelow_of_le h_agrees (mono hk))
+
 /-- ProvableType (verifier-eval) form of `FormalCircuitBase.output_onlyAccessedBelow`. -/
 @[grind ←]
 theorem FormalCircuit.output_onlyAccessedBelow {env env' : ProverEnvironment F}
