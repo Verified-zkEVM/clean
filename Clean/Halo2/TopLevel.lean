@@ -611,10 +611,10 @@ structure TopLevelCircuit
     PublicInputLayout PublicInput
       (TopLevelCompilation.publicInputColumns formalCircuit)
   /-- A fully reduced finite shape for downstream verifier and proof types. -/
-  circuitShape : CircuitShape
+  shape : CircuitShape
   /-- The published shape agrees with the canonical compiler result. -/
-  circuitShape_eq :
-    circuitShape =
+  shape_eq :
+    shape =
       TopLevelCompilation.circuitShape formalCircuit publicInputLayout
   /-- The part of the extracted witness not contained in the public input. -/
   PrivateWitness : Type
@@ -1179,74 +1179,74 @@ theorem fixedQueryCount_eq_fixedQueries_length_add_newFixedCols
     self.formalCircuit self.publicInputLayout self.queryRequirements
 
 /-- The published shape's domain exponent is the compiler-derived exponent. -/
-theorem circuitShape_k
+theorem shape_k
     (self : TopLevelCircuit F Config PublicInput) :
-    self.circuitShape.k = self.domainExponent := by
-  rw [self.circuitShape_eq]
+    self.shape.k = self.domainExponent := by
+  rw [self.shape_eq]
   rfl
 
 /-- The published shape's advice-column count is the configured count. -/
-theorem circuitShape_numAdviceColumns
+theorem shape_numAdviceColumns
     (self : TopLevelCircuit F Config PublicInput) :
-    self.circuitShape.numAdviceColumns = self.adviceColumnCount := by
-  rw [self.circuitShape_eq]
+    self.shape.numAdviceColumns = self.adviceColumnCount := by
+  rw [self.shape_eq]
   rfl
 
 /-- The published shape's lookup count is the configured count. -/
-theorem circuitShape_numLookups
+theorem shape_numLookups
     (self : TopLevelCircuit F Config PublicInput) :
-    self.circuitShape.numLookups = self.lookupCount := by
-  rw [self.circuitShape_eq]
+    self.shape.numLookups = self.lookupCount := by
+  rw [self.shape_eq]
   rfl
 
 /-- The published shape's permutation-set count is the compiler-derived count. -/
-theorem circuitShape_numPermutationSets
+theorem shape_numPermutationSets
     (self : TopLevelCircuit F Config PublicInput) :
-    self.circuitShape.numPermutationSets = self.permutationSetCount := by
-  rw [self.circuitShape_eq]
+    self.shape.numPermutationSets = self.permutationSetCount := by
+  rw [self.shape_eq]
   rfl
 
 /-- The published shape's permutation-column count is the configured count. -/
-theorem circuitShape_numPermutationColumns
+theorem shape_numPermutationColumns
     (self : TopLevelCircuit F Config PublicInput) :
-    self.circuitShape.numPermutationColumns = self.permutationColumnCount := by
-  rw [self.circuitShape_eq]
+    self.shape.numPermutationColumns = self.permutationColumnCount := by
+  rw [self.shape_eq]
   rfl
 
 /-- The published shape's quotient-piece count is the compiler-derived count. -/
-theorem circuitShape_numQuotientPieces
+theorem shape_numQuotientPieces
     (self : TopLevelCircuit F Config PublicInput) :
-    self.circuitShape.numQuotientPieces = self.quotientPieceCount := by
-  rw [self.circuitShape_eq]
+    self.shape.numQuotientPieces = self.quotientPieceCount := by
+  rw [self.shape_eq]
   rfl
 
 /-- The published shape's instance-column count is the configured count. -/
-theorem circuitShape_numInstanceColumns
+theorem shape_numInstanceColumns
     (self : TopLevelCircuit F Config PublicInput) :
-    self.circuitShape.numInstanceColumns =
+    self.shape.numInstanceColumns =
       self.constraintSystem.numInstanceColumns := by
-  rw [self.circuitShape_eq]
+  rw [self.shape_eq]
   rfl
 
 /-- The published shape's instance-query count is the compiled count. -/
-theorem circuitShape_numInstanceQueries
+theorem shape_numInstanceQueries
     (self : TopLevelCircuit F Config PublicInput) :
-    self.circuitShape.numInstanceQueries = self.instanceQueryCount := by
-  rw [self.circuitShape_eq]
+    self.shape.numInstanceQueries = self.instanceQueryCount := by
+  rw [self.shape_eq]
   rfl
 
 /-- The published shape's advice-query count is the compiled count. -/
-theorem circuitShape_numAdviceQueries
+theorem shape_numAdviceQueries
     (self : TopLevelCircuit F Config PublicInput) :
-    self.circuitShape.numAdviceQueries = self.adviceQueryCount := by
-  rw [self.circuitShape_eq]
+    self.shape.numAdviceQueries = self.adviceQueryCount := by
+  rw [self.shape_eq]
   rfl
 
 /-- The published shape's fixed-query count is the compiled count. -/
-theorem circuitShape_numFixedQueries
+theorem shape_numFixedQueries
     (self : TopLevelCircuit F Config PublicInput) :
-    self.circuitShape.numFixedQueries = self.fixedQueryCount := by
-  rw [self.circuitShape_eq]
+    self.shape.numFixedQueries = self.fixedQueryCount := by
+  rw [self.shape_eq]
   rfl
 
 @[simp] theorem adviceQueryLayout_eq_constraintSystem
