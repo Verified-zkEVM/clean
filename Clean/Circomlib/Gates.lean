@@ -929,28 +929,27 @@ theorem main_computableWitnesses (n : ℕ) :
       simp only [computable_witnesses_norm, main]
       -- the recursive calls are inlined: their operations are discharged by weakening the
       -- induction hypotheses' conditions (child input equality follows from the parent's)
-      have sub_eq : ∀ (hp : (eval env.toEnvironment input : Vector (F p) (m + 3)) =
-            eval env'.toEnvironment input)
+      have sub_eq : ∀ (hp : Vector.map (Expression.eval env.toEnvironment) input =
+            Vector.map (Expression.eval env'.toEnvironment) input)
           {k : ℕ} (w : Vector (Expression (F p)) k)
           (hw : ∀ i (_ : i < k), ∃ (j : ℕ) (hj : j < m + 3), w[i] = input[j]),
           Vector.map (Expression.eval env.toEnvironment) w =
             Vector.map (Expression.eval env'.toEnvironment) w := by
         intro hp k w hw
-        rw [ProvableType.eval_fields, ProvableType.eval_fields] at hp
         refine map_eval_congr_of_getElem fun i hi => ?_
         obtain ⟨j, hj, hji⟩ := hw i hi
         rw [hji]
         exact getElem_eval_of_map_eq hp j hj
-      have take_eq : (eval env.toEnvironment input : Vector (F p) (m + 3)) =
-            eval env'.toEnvironment input →
+      have take_eq : Vector.map (Expression.eval env.toEnvironment) input =
+            Vector.map (Expression.eval env'.toEnvironment) input →
           Vector.map (Expression.eval env.toEnvironment)
               (((input.take ((m + 3) / 2)).cast (by omega) : Vector (Expression (F p)) ((m + 3) / 2))) =
             Vector.map (Expression.eval env'.toEnvironment)
               (((input.take ((m + 3) / 2)).cast (by omega) : Vector (Expression (F p)) ((m + 3) / 2))) :=
         fun hp => sub_eq hp (((input.take ((m + 3) / 2)).cast (by omega) : Vector (Expression (F p)) ((m + 3) / 2)))
           fun i hi => ⟨i, by omega, by rw [Vector.getElem_cast, Vector.getElem_take]⟩
-      have drop_eq : (eval env.toEnvironment input : Vector (F p) (m + 3)) =
-            eval env'.toEnvironment input →
+      have drop_eq : Vector.map (Expression.eval env.toEnvironment) input =
+            Vector.map (Expression.eval env'.toEnvironment) input →
           Vector.map (Expression.eval env.toEnvironment)
               (((input.drop ((m + 3) / 2)).cast (by omega) : Vector (Expression (F p)) (m + 3 - (m + 3) / 2))) =
             Vector.map (Expression.eval env'.toEnvironment)
