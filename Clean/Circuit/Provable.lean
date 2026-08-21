@@ -604,7 +604,6 @@ scalar evals of this getElem, where the whole-vector `eval_varFromOffset` cannot
     (varFromOffset (F := F) (fields n) offset)[i]'hi = var ⟨offset + i⟩ := by
   simp [varFromOffset_fields, Vector.getElem_mapRange]
 
-
 @[circuit_norm ↓, grind norm]
 theorem eval_fieldPair (env : Environment F) (t : fieldPair (Expression F)) :
     Eval.eval env t = (Expression.eval env t.1, Expression.eval env t.2):= by
