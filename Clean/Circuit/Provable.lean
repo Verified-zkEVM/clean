@@ -830,7 +830,7 @@ lemma eval_vector_eq_get {n : ℕ} (env : Environment F)
 /-- Chain fold through a pair-element vector access, straight to the whole-vector atom
 (used by `StructEvalSimprocs.vectorAtomLift`; fixed element `TypeMap` so the simproc
 can elaborate it without higher-order unification). -/
-theorem eval_fst_getElem_pairVector {n : ℕ} (env : Environment F)
+@[grind =] theorem eval_fst_getElem_pairVector {n : ℕ} (env : Environment F)
     (c : Vector (fieldPair (Expression F)) n) (i : ℕ) (hi : i < n) :
     Expression.eval env ((c[i]'hi).1) =
       (((eval env (c : ProvableVector fieldPair n (Expression F))) :
@@ -838,7 +838,7 @@ theorem eval_fst_getElem_pairVector {n : ℕ} (env : Environment F)
   (ProvableType.eval_fieldPair_fst env (c[i]'hi)).symm.trans
     (congrArg Prod.fst (getElem_eval_vector (α := fieldPair) env c i hi))
 
-theorem eval_snd_getElem_pairVector {n : ℕ} (env : Environment F)
+@[grind =] theorem eval_snd_getElem_pairVector {n : ℕ} (env : Environment F)
     (c : Vector (fieldPair (Expression F)) n) (i : ℕ) (hi : i < n) :
     Expression.eval env ((c[i]'hi).2) =
       (((eval env (c : ProvableVector fieldPair n (Expression F))) :
