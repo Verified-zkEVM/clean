@@ -113,7 +113,6 @@ at registration time by normalizing their left-hand sides. -/
 @[grind =] theorem eval_mul_ctor (env : Environment F) (x y : Expression F) :
     eval env (mul x y) = eval env x * eval env y := rfl
 
-
 def toString [Repr F] : Expression F → String
   | var v => reprStr v
   | const c => reprStr c
