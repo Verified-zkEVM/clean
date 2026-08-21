@@ -134,7 +134,7 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
     · simp only [circuit_norm]
       simp only [apply_ite (Expression.eval env.toEnvironment),
         apply_ite (Expression.eval env'.toEnvironment)]
-      split_ifs <;> grind
+      split_ifs <;> (simp only [circuit_norm]; rw [h (i * 2) (by omega), h (i * 2 + 1) (by omega)])
     · simp only [circuit_norm]
       apply eval_sum_eq_of_eval_eq
       intro i

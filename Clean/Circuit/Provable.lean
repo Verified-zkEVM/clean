@@ -634,16 +634,6 @@ scalar evals of this getElem, where the whole-vector `eval_varFromOffset` cannot
     (varFromOffset (F := F) (fields n) offset)[i]'hi = var ⟨offset + i⟩ := by
   simp [varFromOffset_fields, Vector.getElem_mapRange]
 
-/-- Fully evaluated window access in one step: `grind`'s matcher does not reduce
-through e-classes, so the composition with the `var`-case of `eval` cannot be left
-to the engine. -/
-@[grind =] theorem eval_getElem_varFromOffset_fields (env : Environment F)
-    (offset i : ℕ) (hi : i < n) :
-    Expression.eval env ((varFromOffset (F := F) (fields n) offset)[i]'hi) =
-      env.get (offset + i) := by
-  rw [getElem_varFromOffset_fields]
-  rfl
-
 @[circuit_norm ↓, grind norm]
 theorem eval_fieldPair (env : Environment F) (t : fieldPair (Expression F)) :
     Eval.eval env t = (Expression.eval env t.1, Expression.eval env t.2):= by
@@ -889,7 +879,7 @@ lemma eval_vector_eq_get {n : ℕ} (env : Environment F)
 /-- Chain fold through a pair-element vector access, straight to the whole-vector atom
 (used by `StructEvalSimprocs.vectorAtomLift`; fixed element `TypeMap` so the simproc
 can elaborate it without higher-order unification). -/
-theorem eval_fst_getElem_pairVector {n : ℕ} (env : Environment F)
+@[grind =] theorem eval_fst_getElem_pairVector {n : ℕ} (env : Environment F)
     (c : Vector (fieldPair (Expression F)) n) (i : ℕ) (hi : i < n) :
     Expression.eval env ((c[i]'hi).1) =
       (((eval env (c : ProvableVector fieldPair n (Expression F))) :
@@ -897,7 +887,7 @@ theorem eval_fst_getElem_pairVector {n : ℕ} (env : Environment F)
   (ProvableType.eval_fieldPair_fst env (c[i]'hi)).symm.trans
     (congrArg Prod.fst (getElem_eval_vector (α := fieldPair) env c i hi))
 
-theorem eval_snd_getElem_pairVector {n : ℕ} (env : Environment F)
+@[grind =] theorem eval_snd_getElem_pairVector {n : ℕ} (env : Environment F)
     (c : Vector (fieldPair (Expression F)) n) (i : ℕ) (hi : i < n) :
     Expression.eval env ((c[i]'hi).2) =
       (((eval env (c : ProvableVector fieldPair n (Expression F))) :
