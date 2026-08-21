@@ -872,8 +872,18 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
         replaceMainGoal []
         return
     throwError "syntacticAssumption: no match"
+  -- pattern-matching lambdas in circuit sources leave `_patWithRef` mdata inside
+  -- instantiated type arguments; grind's E-matching compares ground pattern arguments
+  -- syntactically and never fires against them. mdata is defeq-transparent, so a
+  -- `change` to the stripped goal is sound.
+  let cleanGoalMData : TacticM Unit := withMainContext do
+    let tgt ← instantiateMVars (← getMainTarget)
+    let tgt' ← Core.transform tgt (post := fun e => return .done e.consumeMData)
+    unless tgt' == tgt do
+      liftMetaTactic fun g => do return [← g.change tgt']
   let evalCloseRun : TacticM Unit := do
     if (← getGoals).isEmpty then return
+    try cleanGoalMData catch _ => pure ()
     try clearOpsLengthHyps catch _ => pure ()
     if (← try syntacticAssumption; pure true catch _ => pure false) then return
     -- expose labeled helper metadata before routing: the expansion produces the
