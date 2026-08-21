@@ -1179,6 +1179,15 @@ theorem configure_finalCounts_numFixedColumns (G : Generators) :
     ((configure G).finalCounts {}).numFixedColumns = 14 := by
   configure_norm
 
+/-- Action configuration allocates fifty-six selectors after any ambient configure
+prefix. -/
+@[keygen_norm]
+theorem configure_finalCounts_numSelectors_from (G : Generators)
+    (counts : ConfigureCounts) :
+    ((configure G).finalCounts counts).numSelectors =
+      counts.numSelectors + 56 := by
+  configure_norm
+
 /-- The closed Action configuration allocates fifty-six selectors. -/
 theorem configure_finalCounts_numSelectors (G : Generators) :
     ((configure G).finalCounts {}).numSelectors = 56 := by
@@ -1200,6 +1209,21 @@ theorem configure_lookupInputLengths (G : Generators) :
     ((configure G).delta {}).lookups.map (fun lookup => lookup.inputs.length) =
       [1, 3, 3] := by
   configure_norm
+
+/-- Every lookup configured by the Action circuit has at most four inputs. -/
+theorem configure_lookupInputArity_le (G : Generators) :
+    ∀ lookup ∈ ((configure G).run {}).2.lookups,
+      lookup.inputs.length ≤ 4 := by
+  intro lookup hlookup
+  rw [show ((configure G).run {}).2.lookups =
+    ((configure G).delta {}).lookups by rfl] at hlookup
+  have hlength : lookup.inputs.length ∈
+      ((configure G).delta {}).lookups.map
+        (fun argument => argument.inputs.length) :=
+    List.mem_map.mpr ⟨lookup, hlookup, rfl⟩
+  rw [configure_lookupInputLengths] at hlength
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hlength
+  omega
 
 set_option maxRecDepth 10000 in
 /-- Action's closed configure run records twenty-five distinct advice queries. -/
