@@ -1,31 +1,14 @@
 /-
-Transition AIR tables: a component whose circuit is checked on each *adjacent pair* of rows.
+Transition AIR tables: a component checked on each adjacent pair of rows `(rows[i], rows[i+1])`.
 
-Where a flat component is checked independently on each row, a transition component is checked on
-each pair `(rows[i], rows[i+1])`. Next-row access is expressed by *widening the environment*
-rather than by extending `Expression`: the circuit is evaluated against the concatenation
-`curr ++ next`, so that
+Next-row access widens the environment rather than extending `Expression`: the circuit is
+evaluated against `curr ++ next`, so cell `rowWidth + i` is `next[i]`. A transition trace is an
+ordinary `Table` whose component has `windowRows = 2`, so the generic `windows` / `windowEnv`
+machinery already produces the adjacent pairs; what lives here is their two-row reading and the
+induction along the trace it makes possible.
 
-    cell `i`              is `curr[i]`
-    cell `rowWidth + i`   is `next[i]`
-
-Since `Environment.fromArray` already reads a flat `Array F` by index, "next" is just an index
-offset. This requires no changes to `Expression`, `Environment`, `eval`, or `circuit_norm`.
-
-There is no separate transition `Table` type. A transition trace is an ordinary `Air.Flat.Table`
-whose component has `windowRows = 2`, so the generic `windows` / `windowEnv` machinery in
-`FlatComponent.lean` already produces exactly the adjacent pairs. What lives here is the
-two-row reading of that machinery, and the induction along the trace it makes possible.
-
-Crucially, the next row is the circuit's **output**: the component's `Input` is the current row
-and `main` witnesses the next row, so `circuit.size = 2 * rowWidth`. That is what makes the
-next-row cells owned by the instantiation, and hence
-- completeness provable (they are pinned by `UsesLocalWitnessesCompleteness`), and
-- `Spec input output` the adjacent-row transition relation.
-
-This layout is enforced by the `Component` law `input_eq_rowWidth`: a multi-row window's input
-is its *entire* first row, so a transition circuit cannot witness scratch cells in its own row.
-See that field's docstring for the trace-cell ownership argument behind the law.
+The next row is the circuit's **output**: `Input` is the current row and `main` witnesses the
+next row, which makes `Spec input output` the transition relation and completeness provable.
 -/
 import Clean.Air.FlatComponent
 
@@ -46,17 +29,12 @@ lemma windowRow_eq_pair {t : Table F} (h : t.IsTransition) (i : ℕ) :
 
 /-! ### Window access and the transition induction
 
-The lemmas below are what turns `Table.Spec` -- the circuit's `Spec` at every *window* -- into
-statements about *indexed rows*, which is the form an induction along the trace can consume:
-the typed reads of the window's two rows first, then the induction principle itself.
+The lemmas below turn `Table.Spec` -- the circuit's `Spec` at every window -- into statements
+about indexed rows, which is what an induction along the trace can consume.
 -/
 
-/--
-Reading any type at offset `rowWidth` of the window at `i` is reading it at offset `0` of row
-`i + 1`: the window's second row *is* the next row. This is the typed access that makes the
-next-row-as-output layout consumable. No width bound on the read is needed -- out-of-range
-cells are `0` on both sides.
--/
+/-- Reading any type at offset `rowWidth` of the window at `i` is reading it at offset `0` of row
+`i + 1`: the window's second row *is* the next row. -/
 lemma valueFromOffset_windowEnv_next {t : Table F} (h : t.IsTransition) {i : ℕ}
     (hi : i ∈ t.windows) (data : ProverData F) (T : TypeMap) [ProvableType T] :
     valueFromOffset T t.component.rowWidth (t.windowEnv i data) =
@@ -77,12 +55,9 @@ lemma rowInput_windowEnv {t : Table F} {i : ℕ} (hi : i ∈ t.windows) (data : 
       valueFromOffset t.component.Input 0 (Environment.fromArray t.table[i]! data) :=
   valueFromOffset_windowEnv_curr hi data _ t.component.input_le_rowWidth
 
-/--
-The circuit's output at the window at `i` is the output prefix of row `i + 1` -- provided the
-circuit's output variable is the canonical layout at offset `rowWidth`, i.e. the low cells of
-the window's second row. That per-circuit fact (`houtput`) is definitional for a circuit that
-witnesses the next row's cells in order and returns them, as `FibonacciTransition.fibStep` does.
--/
+/-- The circuit's output at the window at `i` is the output prefix of row `i + 1`, provided its
+output variable sits at offset `rowWidth` (`houtput`, definitional for a circuit that witnesses
+the next row's cells in order and returns them). -/
 lemma rowOutput_windowEnv {t : Table F} (h : t.IsTransition) {i : ℕ} (hi : i ∈ t.windows)
     (data : ProverData F)
     (houtput : (t.component.circuit t.component.rowInputVar).output t.component.rowOffset =
@@ -93,15 +68,9 @@ lemma rowOutput_windowEnv {t : Table F} (h : t.IsTransition) {i : ℕ} (hi : i �
     ((t.component.circuit t.component.rowInputVar).output t.component.rowOffset) = _
   rw [houtput, eval_varFromOffset_valueFromOffset, valueFromOffset_windowEnv_next h hi data]
 
-/--
-The transition induction principle: a boundary pins row `0`, the windows step, and the
-invariant follows for every row of the trace.
-
-The step hypothesis receives the circuit's `Spec` as a relation between the *typed reads of two
-adjacent indexed rows* -- all window plumbing is discharged here, once. The base case is what a
-first-row boundary assertion supplies; the conclusion at the last index is what a last-row
-boundary assertion consumes.
--/
+/-- The transition induction principle: a boundary pins row `0`, the windows step, and the
+invariant follows for every row. The base case is what a first-row boundary assertion supplies,
+the conclusion what a last-row assertion consumes. -/
 theorem transition_induction {t : Table F} (h : t.IsTransition) {data : ProverData F}
     (hspec : t.Spec data)
     (houtput : (t.component.circuit t.component.rowInputVar).output t.component.rowOffset =

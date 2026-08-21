@@ -1,9 +1,6 @@
 /-
-Shared infrastructure for AIR components.
-
-A `Component` is a row circuit plus the window it spans; everything about a concrete *trace* of
-one -- the `Table`, its windows, and the trace-level predicates -- lives in
-`Clean/Air/FlatComponent.lean`.
+The `Component` structure: a row circuit plus the window it spans. Concrete traces of one
+(`Table` and the trace-level predicates) live in `Clean/Air/FlatComponent.lean`.
 -/
 import Clean.Air.Circuit
 
@@ -51,23 +48,12 @@ def DataRowAt (name : String) (Input : TypeMap) [ProvableType Input]
 /--
 An AIR component: a row circuit together with its fixed columns and residual assumptions.
 
-A component *does* say how many trace rows its environment spans, via `windowRows`: 1 for a flat
-component checked against a single row, 2 for a transition component checked against two adjacent
-rows laid side by side. Communication with other components is expressed by channel interactions.
+`windowRows` says how many trace rows the circuit is checked against: 1 for a flat component,
+2 for a transition component, whose environment is the two adjacent rows laid side by side.
+Communication with other components is expressed by channel interactions.
 
-The window is recorded here, on the object the verifier commits to, rather than alongside the
-trace. `window_size` ties it to the circuit's own cell footprint, which is what makes the reading
-of an environment derivable from the component instead of a prover choice: committing a
-transition component as a flat trace is not merely forbidden, it is unstateable.
-
-For a transition component the layout is what makes both completeness and the spec work out:
-
-    Input  = Row (width w)      cells [0, w)   -- row i,   prover-chosen via `witnessAny`
-    main allocates w cells      cells [w, 2w)  -- row i+1, pinned by local-witness completeness
-
-so the next row is the circuit's *output*, and `Spec input output` is the transition relation.
-This layout is a law, not a convention: `input_eq_rowWidth` forces the input of any multi-row
-window to be its entire first row.
+For a transition component the next row is the circuit's *output* -- `Input` is all of row `i`
+and `main` witnesses row `i+1` -- so `Spec input output` is the transition relation.
 -/
 structure Component (F : Type) [FiniteField F] where
   {Input : TypeMap} {Output : TypeMap}
@@ -77,34 +63,18 @@ structure Component (F : Type) [FiniteField F] where
   windowRows : ℕ := 1
   /-- The width of a single trace row. The circuit's footprint spans `windowRows` of them. -/
   rowWidth : ℕ := circuit.size
-  /-- The circuit's cells tile exactly `windowRows` rows. This is the law that makes the window
-  derivable from the component rather than a separate, reinterpretable annotation. -/
+  /-- The circuit's cells tile exactly `windowRows` rows, so the window is derivable from the
+  component rather than a separate annotation the prover could reinterpret. -/
   window_size : circuit.size = windowRows * rowWidth := by simp
   windowRows_pos : 0 < windowRows := by simp
-  /-- The circuit's input occupies the low cells of the window's *first* row.
-
-  Not derivable from `window_size`: a component with `windowRows = 2`, `size Input = 10`,
-  `localLength = 0` and `rowWidth = 5` satisfies the tiling yet has its input spill across both
-  rows. The fixed-column and `ProverData` machinery are all stated about a single row's low
-  indices (`FixedRowAt`, `DataRowAt`, `inputRow`), so that must be ruled out. -/
+  /-- The circuit's input occupies the low cells of the window's *first* row. Not derivable from
+  `window_size`, and needed because `FixedRowAt`, `DataRowAt` and `inputRow` are all stated about
+  a single row's low indices. -/
   input_le_rowWidth : size Input ≤ rowWidth := by simp [GeneralFormalCircuit.size_eq]
-  /-- For a multi-row window, the input is the *entire* first row.
-
-  `input_le_rowWidth` alone would admit a transition component with `size Input < rowWidth`: a
-  circuit that witnesses scratch cells `[size Input, rowWidth)` in its *own* row before the
-  next-row block. That shape is sound -- constraints only read committed trace cells -- but it
-  gives those scratch cells of row `i` two witnessing owners: window `i` (as own-row scratch)
-  and window `i - 1` (as part of its next-row block), so ensemble completeness and witness
-  generation would have to prove the two witness generators agree on them. With equality,
-  ownership is single: every cell of row `i + 1` is witnessed exactly once, by window `i`, and
-  read back freely (`witnessAny`) as window `i + 1`'s input.
-
-  Nothing is lost: intermediate columns of a transition step are expressed as extra columns of
-  the row type, witnessed by the *previous* window like every other column -- the classic AIR
-  layout in which the transition constraint relates all of row `i` to all of row `i + 1`.
-
-  Flat components (`windowRows = 1`) are untouched: their row is the input followed by a
-  witness suffix, and only `input_le_rowWidth` applies. -/
+  /-- For a multi-row window, the input is the *entire* first row. Own-row scratch cells would
+  otherwise have two witnessing owners -- window `i` and window `i - 1`, which witnesses them as
+  part of its next-row block -- which witness generation would have to reconcile. Intermediate
+  values are instead expressed as extra columns of the row type. Flat components are unaffected. -/
   input_eq_rowWidth : 1 < windowRows → size Input = rowWidth := by simp
   /-- When present, identifies the fixed prefix available to the circuit on row `i`. -/
   fixedColumns : Option (FixedColumns F) := none
@@ -147,20 +117,12 @@ def DataConsistency (component : Component F) (rows : List (Array F))
 def operations (component : Component F) : Operations F :=
   component.circuit.instantiate.operations 0
 
-/-- The number of cells a single instantiation of the circuit commits: its input cells followed
-by its witnessed cells.
-
-This spans the component's whole window, so it is `windowRows` rows wide. For a flat component
-that is exactly one trace row; for a transition component it is the two rows `curr ++ next`. -/
+/-- The number of cells one instantiation of the circuit commits, spanning the whole window. -/
 def envWidth (component : Component F) : ℕ := component.windowRows * component.rowWidth
 
-/-- The circuit's footprint *is* its window. Restated from the `window_size` field so that callers
-can rewrite in either direction without unfolding the structure. -/
+/-- Restated from `window_size` so callers can rewrite without unfolding the structure. -/
 @[circuit_norm] lemma envWidth_eq_size (component : Component F) :
     component.envWidth = component.circuit.size := component.window_size.symm
-
-lemma envWidth_eq (component : Component F) :
-    component.envWidth = component.windowRows * component.rowWidth := rfl
 
 def committedWidth (component : Component F) : ℕ :=
   component.rowWidth - component.fixedWidth
@@ -215,12 +177,6 @@ def exposedChannels (component : Component F) : List (ExposedChannel F) :=
   component.circuit.exposedChannels component.rowInputVar component.rowOffset
 
 variable {component : Component F} {env : Environment F}
-
-/-
-The transport lemmas below relate the instantiated `operations` to the raw `rowOperations`. They
-are facts about `GeneralFormalCircuit.instantiate` alone, and say nothing about how many rows an
-environment spans -- which is why both table kinds share them.
--/
 
 lemma constraints_eq : component.operations.constraints = component.rowOperations.constraints := by
   simp only [circuit_norm, rowOperations, witnessAny, GeneralFormalCircuit.instantiate, Component.operations,

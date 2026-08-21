@@ -15,24 +15,18 @@ Which to reach for:
 - **Channels** for cross-*component* communication, and for cross-row structure that is unordered or non-local (a lookup, a VM state handoff, a public API link).
 - **Transition constraints** for dense, local, same-table row-to-row structure, where routing through a channel would cost a full lookup argument for what is really just "the next row continues this one".
 
-A **component** records its own row span, in the field `windowRows`: 1 for flat, 2 for transition, and in principle more. The style is therefore *derivable from the component*, not a separate tag — which is what makes the two styles safe to mix. The law that carries this is
+A component records its own row span in `windowRows` (1 for flat, 2 for transition), tied to the circuit by the law `window_size : circuit.size = windowRows * rowWidth`. The style is therefore derivable from the component rather than a separate tag, which is what makes the two styles safe to mix: the verifier commits to the component and thereby to the window.
 
-```lean
-window_size : circuit.size = windowRows * rowWidth
-```
-
-The circuit's whole cell footprint tiles exactly `windowRows` rows of width `rowWidth`. Since the verifier already commits to the component, it thereby commits to the window, and a prover cannot reinterpret a transition component as a flat trace — that is not merely forbidden, it is unstateable.
-
-What makes a transition component *mean* something is where the next row lives:
+For a transition component the next row is the circuit's **output** — `Input` is all of row `i`, and `main` witnesses row `i+1`:
 
 ```
 Input  = Row (width w)      cells [0, w)   -- row i,   prover-chosen via `witnessAny`
 main allocates w cells      cells [w, 2w)  -- row i+1, pinned by local-witness completeness
 ```
 
-The next row is the circuit's **output**. That is what makes `GeneralFormalCircuit.completeness` provable for a next-row constraint (the cells belong to this instantiation, so `UsesLocalWitnessesCompleteness` pins them) and what makes `Component.Spec input output` the adjacent-row transition relation. A design in which the next row lay outside the circuit's footprint would be able to state neither. `Clean/Examples/FibonacciNextRow.lean` proves both facts for a concrete component.
+This is what makes `GeneralFormalCircuit.completeness` provable for a next-row constraint and `Component.Spec input output` the adjacent-row transition relation.
 
-Which environments a trace presents is `Flat.Table.envs` (see `FlatComponent.lean`), one per window and therefore derived from `windowRows`. In this terminology, a `Flat.Component` is an AIR component: it packages the circuit whose constraints are applied to every row (flat) or every row pair (transition). A `Flat.Table` is the concrete trace table for a component of *either* span — there is one `Table` type, not one per style. A `Flat.TableContext` is a bundle of multiple concrete tables that share the same prover data object.
+In this terminology, a `Flat.Component` is an AIR component: it packages the circuit whose constraints are applied to every row (flat) or every row pair (transition). A `Flat.Table` is the concrete trace table for a component of either span — there is one `Table` type, not one per style. A `Flat.TableContext` is a bundle of multiple concrete tables that share the same prover data object.
 
 ## Organization
 
@@ -41,39 +35,37 @@ Which environments a trace presents is `Flat.Table.envs` (see `FlatComponent.lea
 `Component.lean` defines what is shared by both AIR styles:
 
 - `Flat.Component`: the static component, backed by a `GeneralFormalCircuit`, carrying its own row span in `windowRows` and `rowWidth`, tied to the circuit by `window_size`. `envWidth` is the width of one environment, and `envWidth_eq_size` is the *theorem* that it agrees with the circuit's footprint — so a table's environments cannot silently disagree with `rowWidth`.
-- `input_le_rowWidth`: the circuit's input occupies the low cells of the window's *first* row. This is not implied by `window_size` (a 2-row window with `size Input = 10` and `rowWidth = 5` tiles correctly yet spills its input across both rows), and it is what lets the fixed-column and `ProverData` machinery — all stated about a single row's low indices — apply unchanged.
-- `input_eq_rowWidth`: for a multi-row window (`1 < windowRows`), the input is the *entire* first row. `input_le_rowWidth` alone would admit a transition component that witnesses scratch cells in its own row (`size Input < rowWidth`, witnesses in `[size Input, rowWidth)`). That shape is sound — constraints only read committed trace cells — but it gives those cells of row `i` two witnessing owners: window `i` as own-row scratch, and window `i-1` as part of its next-row block, and ensemble completeness and witness generation would have to prove the two witness generators agree. The law keeps trace-cell ownership single: each cell of row `i+1` is witnessed exactly once, by window `i`, and read back freely (`witnessAny`) as window `i+1`'s input. Nothing is lost — intermediate columns of a transition step are expressed as extra columns of the row type, witnessed by the *previous* window, the classic AIR layout in which the transition constraint relates all of row `i` to all of row `i+1`. Flat components are unaffected: their row is the input followed by a witness suffix, and only `input_le_rowWidth` applies.
+- `input_le_rowWidth`: the circuit's input occupies the low cells of the window's *first* row. Not implied by `window_size`, and needed because the fixed-column and `ProverData` machinery is all stated about a single row's low indices.
+- `input_eq_rowWidth`: for a multi-row window the input is the *entire* first row, so that every cell of row `i+1` has a single witnessing owner (window `i`) rather than also being own-row scratch of window `i+1`. Intermediate values are instead expressed as extra columns of the row type. Flat components are unaffected.
+
 It also proves the component-level transport lemmas: instantiated component operations agree with row operations, and component soundness lifts to whole-environment soundness (`Component.weakSoundness`).
 
 `FlatComponent.lean` defines the trace layer, for windows of any size:
 
 - `Flat.Table`: concrete list of rows for one component. There is one `Table` type regardless of span.
-- `Flat.Table.envs`: the list of environments the component's circuit is checked at — one per window. Every trace-level predicate (`Constraints`, `Assumptions`, `Guarantees`, `Requirements`, `Spec`, the `Channel*` family), every interaction collection, and `weakSoundness` quantify over it and never inspect an individual environment, which is why they apply to any window size.
-- `windows` / `windowRow` / `windowEnv`: the window at index `i` is the concatenation of rows `i … i + windowRows - 1`, evaluated as one environment. A window exists at `i` exactly when `i + windowRows ≤ length`, so an `n`-row table presents `n + 1 - windowRows` environments — `n` when flat, `n - 1` when transition (`windows_length`, restated as `Table.envs_length` in `TableContext.lean`). Any bound on interaction count derived from table heights must use that number, in particular the `< ringChar F` side condition carried by `BalancedInteractions`.
+- `Flat.Table.envs`: the list of environments the circuit is checked at — one per window. Every trace-level predicate (`Constraints`, `Assumptions`, `Guarantees`, `Requirements`, `Spec`, the `Channel*` family), every interaction collection, and `weakSoundness` quantify over it and never inspect an individual environment, which is why they apply to any window size.
+- `windows` / `windowRow` / `windowEnv`: the window at index `i` is the concatenation of rows `i … i + windowRows - 1`, evaluated as one environment. An `n`-row table presents `n + 1 - windowRows` environments, which is the number any bound on interaction count must use — in particular the `< ringChar F` side condition of `BalancedInteractions`.
 - `Flat.Table.circuitAssumptions`: supplies the fixed-row and derived-data facts at each row index.
-- `valueFromOffset_windowEnv`: the current row's input cells read identically from the row alone and from the whole window.
-- `row_size`: an in-range row has width `rowWidth`. This is where `uniform_width` is consumed, and it is what confines a typed read to one row of the window.
-- `valueFromOffset_windowEnv_curr`: the typed reading of the same fact — any `T` with `size T ≤ rowWidth` reads the same value from row `i` alone as from the window at `i`.
+- `valueFromOffset_windowEnv` / `valueFromOffset_windowEnv_curr`: a typed read of size `≤ rowWidth` gives the same value from row `i` alone as from the window at `i`.
 
-For a flat table the environments are exactly the rows: `envs_eq_of_flat` and `mem_envs_of_mem_table` are the bridge that lets callers who only ever build flat tables (VM ensembles, for instance) keep reasoning row-shaped.
+For a flat table the environments are exactly the rows: `envs_eq_of_flat` and `mem_envs_of_mem_table` let callers who only build flat tables (VM ensembles) keep reasoning row-shaped.
 
 `TransitionComponent.lean` is the two-row reading of that machinery: the **window-induction library**, which turns `Table.Spec` — the circuit's `Spec` at every window, i.e. what `TableSoundness` hands you — into an induction along the trace:
 
-- `Table.IsTransition` (`windowRows = 2`) and `windowRow_eq_pair`: the window at `i` is the concatenation `rows[i] ++ rows[i+1]`. Cell `j` is `curr[j]` and cell `rowWidth + j` is `next[j]`, so "next row" is just an index offset — no new `Expression` node, and no changes to `eval` or `circuit_norm`.
-- `valueFromOffset_windowEnv_next`: the typed reading of the window's *upper* row. Unlike `valueFromOffset_windowEnv_curr` it needs no width bound, since the output occupies the window's upper row exactly.
-- `rowInput_windowEnv` and `rowOutput_windowEnv`: the component-level readings, phrased in `Component.rowInput`/`output`. `rowOutput_windowEnv` takes the per-component fact that the circuit's output variable is the canonical next-row layout (`output rowInputVar rowOffset = varFromOffset Output rowWidth`) as a *hypothesis* rather than a `Component` field, so the library stays additive: components that do not need it are unaffected.
-- `Table.transition_induction`: the induction principle. Given `t.Spec data` and that hypothesis, any `P` that holds at row 0 and is preserved by the circuit's `Spec` across an adjacent pair holds at every row of the trace. Callers state their invariant over `valueFromOffset Input 0 (Environment.fromArray t.table[i]! data)` and never touch a window index.
+- `Table.IsTransition` (`windowRows = 2`) and `windowRow_eq_pair`: the window at `i` is `rows[i] ++ rows[i+1]`, so cell `rowWidth + j` is `next[j]` and "next row" is just an index offset — no new `Expression` node, no changes to `eval` or `circuit_norm`.
+- `valueFromOffset_windowEnv_next`, `rowInput_windowEnv`, `rowOutput_windowEnv`: the typed readings of the window's two rows. `rowOutput_windowEnv` takes "the circuit's output variable is the canonical next-row layout" as a *hypothesis* rather than a `Component` field, so the library stays additive.
+- `Table.transition_induction`: given `t.Spec data`, any `P` that holds at row 0 and is preserved by the circuit's `Spec` across an adjacent pair holds at every row. Callers state their invariant over indexed rows and never touch a window index.
 
-An `n`-row transition table imposes `n - 1` constraint instances, and a table of 0 or 1 rows is entirely unconstrained. The last row is never a window's `curr`; it appears only as the previous window's `next`. That is safe rather than a soundness hole only because the ends of the trace are pinned separately — by a boundary assertion (`Boundary.lean`) or by a channel interaction. Note that `fixed_rows_match` still forces `table.length = fixed.height`: a fixed column covers *every* row including the last, which is a real committed row that the previous window reads.
+An `n`-row transition table imposes `n - 1` constraint instances, and a table of 0 or 1 rows is entirely unconstrained. The last row is never a window's `curr`, which is safe only because the ends of the trace are pinned separately — by a boundary assertion or a channel interaction.
 
 `TableContext.lean` connects tables to the ensemble:
 
-- `Flat.Table.deriveProverData`: each named component is the source of its circuit-input rows. Keyed on rows rather than environments — a transition table is *constrained* on windows, but its *data* is still one input row per trace row, so this does not depend on `windowRows`.
+- `Flat.Table.deriveProverData`: each named component is the source of its circuit-input rows. Keyed on rows rather than windows, so it does not depend on `windowRows`.
 - `Flat.TableContext`: a bundle of committed tables sharing one prover data object. Every operation on it quantifies over each table's `envs`, so it applies uniformly to any window size.
 
 `Balance.lean` contains the channel multiset theory. It defines `BalancedInteractions`, proves permutation and counting lemmas, and provides the channel-level implication principles used by higher-level soundness proofs. It also defines `RawChannel.Consistent` and `RawChannel.Normal`; typed channels are normal by construction, and normal channels are consistent, so both properties are satisfied in practice. A highlight in `Balance.lean` is the "guarantees-to-requirements-reversal" theorem which provides the basis for soundness of VM channels.
 
-`Boundary.lean` defines **boundary assertions**, the direct route from a trace to the public input. A `Boundary.Assertion` is an assert-only constraint set — no witnesses, no lookups, no channel interactions — over the typed input prefix of a designated trace row (first or last, matching the two rows with native AIR selectors) and the public input, bundled with the semantic `Spec` it is proved to imply. A `Boundary.Entry` attaches an assertion to an ensemble table, keyed by component name (names are stable under `addTable`, which prepends; positional indices are not). An entry naming a missing table, or a table whose designated row does not exist, is *unsatisfiable* rather than vacuous. Boundary assertions are deliberately the same artifact as a backend's `when_first_row`/`when_last_row` constraints over public values — unlike channels, which a proof system implements as a logup argument. Together with a transition component they make classic shift-constraint AIR tables expressible: the transition constraint carries the row-to-row induction, a first-row assertion pins the seed, a last-row assertion exports the result, and channels remain for lookups and cross-component interactions.
+`Boundary.lean` defines **boundary assertions**, the direct route from a trace to the public input. A `Boundary.Assertion` is an assert-only constraint set — no witnesses, lookups or channel interactions — over the typed input prefix of a designated trace row (first or last, matching the two rows with native AIR selectors) and the public input, bundled with the `Spec` it is proved to imply. A `Boundary.Entry` attaches one to an ensemble table, keyed by component name (stable under `addTable`, which prepends). An entry naming a missing table, or one whose designated row does not exist, is *unsatisfiable* rather than vacuous. Together with a transition component these make shift-constraint AIR tables expressible: the transition constraint carries the induction, a first-row assertion pins the seed, a last-row assertion exports the result, and channels remain for lookups and cross-component interactions.
 
 `FlatEnsemble.lean` defines AIR ensembles, `Flat.Ensemble` and their witnesses, `Flat.EnsembleWitness`. An ensemble has a list of components (which carry their own row spans, so flat and transition tables mix freely), channels, boundary assertions, and an append-only verifier program. Components are added with `addTable`, whatever their span, and boundary assertions with `addBoundary`. The verifier contributes public interactions directly; its operation type cannot create witnesses, constraints, lookups, or a synthetic table. Its `Statement` is the raw proof-system relation: there exists a witness whose table constraints hold, whose boundary assertions hold, and whose table and verifier interactions are balanced. The ensemble file also defines soundness and completeness and the `FormalEnsemble` structure which bundles an ensemble with its `Spec`, `Assumptions` and the soundness proof (completeness is TODO). For ensembles with boundary assertions, `SpecConsistencyWithBoundaries` is the consistency notion to prove: it receives the boundary specs alongside the table specs.
 
@@ -83,7 +75,7 @@ The library currently provides two distinct arguments to establish soundness, co
 
 `OrderedChannel.lean` contains a staged channel construction for ordinary lookup-like channels. The defining property is a strict hierarchy on the list of component tables: any table that pushes to a channel must come before every table that pulls from it. From little more than this property, we prove ensemble-level soundness, as encapsulated in the `SoundEnsemble` structure. On the way, we introduce a relaxed notion of channel balance called `PartialBalancedChannels` that allows the balanced interaction list to contain additional interactions from tables added later. This makes it suitable for an inductive argument or gradual addition of tables to an existing sound ensemble.
 
-Both channel soundness theories are stated over *interaction lists*, with no notion of which row produced what, so a wider window changes only how a table's interaction list is produced and not its type. Consequently they apply to any span unchanged, and there is a single `SoundEnsemble.addTable`: ordering is about which channels a component uses, not how often it is checked.
+Both channel soundness theories are stated over interaction lists, with no notion of which row produced what, so they apply to any span unchanged: ordering is about which channels a component uses, not how often it is checked.
 
 `Vm.lean` contains a construction aimed at "VM-like" components that perform one transition per row. Since VM components both pull from and push to one distinguished state channel, they cannot follow the theory of ordered lookup-channel soundness. Instead, we prove a dedicated soundness theorem that applies to a set of VM components added to an existing hierarchical ensemble; a typical modern zkVMs layout.
 
@@ -102,62 +94,39 @@ at every readable location.
 
 ## Current limits of the transition kind
 
-Transition components are supported by the Lean model, its soundness theory, and Lean-side
-witness generation, but not yet by extraction. Whatever an executable layer cannot express it
-**refuses** rather than silently mis-handling, which is what keeps the verified statement and
-the deployed artifact enforcing the same relation:
+Transition components are supported by the Lean model, its soundness theory, and Lean-side witness
+generation, but not yet by extraction. Whatever an executable layer cannot express it **refuses**,
+which is what keeps the verified statement and the deployed artifact enforcing the same relation:
 
 - **Witness generation** supports them through `Mode.transition`: a seed row program plus a
   committed row count. Generation is a chain — `input_eq_rowWidth` makes the current row the
-  circuit's whole input and the witness block exactly the next row, so one witness-generator run
-  per window (`transitionStep`) extends the trace by one row, with the accumulator playing the
-  two-row window environment (cells `< rowWidth` = current row, `≥ rowWidth` = the partially
-  built next row). Padding continues the chain rather than stamping `Padding.input`, so padded
-  suffixes satisfy the transition constraints by construction; interactions are accounted per
-  window (`n` rows → `n − 1` windows), matching `Table.envs` on the assembled trace. Windows
-  wider than two rows are still refused by `assembleTables`.
-- **Extraction** covers same-row operations only. `Lower.lean` throws `LoweringError.multiRowWindow`
-  unless `windowRows = 1`, and bounds variables by `Component.envWidth` (the whole window) rather
-  than one row's width. `Air/Extraction/IR.lean`'s `ComponentProgram` needs a transition variant;
-  the backend target is Plonky3's `builder.main().row_slice(1)`, which
-  `backends/plonky3/src/generated_air.rs` does not yet use anywhere.
-- **`VmTables` are flat by construction.** `tables_windowRows` requires `windowRows = 1` of every
-  VM component. This is not a new restriction: every VM obligation was already stated in terms of
-  a single row's `rowOperations` at `rowOffset`, so VM components were always implicitly flat.
-- **Boundary assertions are Lean-only.** `Lower.lean` throws `LoweringError.boundaryAssertions`
-  for any ensemble that carries one, because `backends/plonky3` does not yet emit
-  `when_first_row`/`when_last_row` constraints or route public values into them. As with the
-  window guards, refusing is what keeps the verified `Statement` and the shipped artifact
-  enforcing the same relation.
+  circuit's whole input and the witness block exactly the next row, so one generator run per window
+  (`transitionStep`) extends the trace by one row. Padding continues the chain rather than stamping
+  `Padding.input`, so padded suffixes satisfy the transition constraints by construction, and
+  interactions are accounted per window. Windows wider than two rows are refused by `assembleTables`.
+- **Extraction** covers same-row operations only: `Lower.lean` throws `LoweringError.multiRowWindow`
+  unless `windowRows = 1`. `Air/Extraction/IR.lean`'s `ComponentProgram` needs a transition variant;
+  the backend target is Plonky3's `builder.main().row_slice(1)`, which `backends/plonky3` does not
+  yet use.
+- **`VmTables` are flat by construction** (`tables_windowRows`). Not a new restriction: every VM
+  obligation was already stated in terms of a single row.
+- **Boundary assertions are Lean-only.** `Lower.lean` throws `LoweringError.boundaryAssertions` for
+  any ensemble carrying one, because `backends/plonky3` does not yet emit
+  `when_first_row`/`when_last_row` constraints or route public values into them.
 
-A worked example is in `Clean/Examples/FibonacciNextRow.lean`: Fibonacci with a next-row constraint
-in place of the state channel used by `Clean/Examples/FibonacciVm/Circuit.lean`. It proves the
-component's `completeness`, and that its `Spec` at a pair environment is exactly the recurrence
-between adjacent rows — the two things no component could do before the next-row-as-output layout.
+`Clean/Examples/FibonacciTransition.lean` is the example to read for how the pieces fit. It proves
+`fibonacciTransition_soundness`, the *same* public claim as `fibonacci_soundness`, from a mixed
+ensemble: a transition component carries the recurrence, two boundary assertions pin the seed and
+export the final state, and the byte-add lookup remains the only channel. Two points worth lifting
+out of it:
 
-`Clean/Examples/FibonacciTransition.lean` takes that to an end-to-end statement, and is the example
-to read for how the pieces fit. It proves `fibonacciTransition_soundness`, the *same* public claim
-as `fibonacci_soundness`, from a mixed ensemble: a transition component carries the recurrence, two
-boundary assertions pin the seed and export the final state, and the byte-add lookup remains the
-only channel — the one interaction a proof system genuinely ships as a lookup. Three points worth
-lifting out of it:
-
-- **Padding.** Backends pad a committed trace to a power of two, and a last-row assertion reads the
-  last *committed* row, whatever it is. The component therefore carries a boolean `enabled` selector:
-  an enabled row advances the state, a disabled row freezes it — including the selector itself, so it
-  can never turn back on. The frozen state carried to the last row is exactly the state at the last
-  enabled row.
+- **Padding.** Backends pad to a power of two, and a last-row assertion reads the last *committed*
+  row. The component therefore carries a boolean `enabled` selector: an enabled row advances the
+  state, a disabled row freezes it — including the selector itself, so it can never turn back on.
 - **Inline the selector's booleanity.** `GeneralFormalCircuit.requirementsChannelsLawful` sees only
   the circuit's *inline* constraints, not those of subcircuits, so a selector gating a channel
-  interaction must be constrained boolean with a bare `assertZero (enabled * (enabled - 1))` rather
-  than through the `assertBool` gadget. Delegating it leaves the obligation unprovable, and moving
-  the channel into `channelsWithRequirements` is not an escape: `SoundEnsemble.addTable` requires a
-  component's requirement channels to be disjoint from the already-finished ones.
-- **Non-vacuity is checked in-file.** A conditional soundness theorem is worthless if its hypothesis
-  has no models, and the live hazard for a boundary ensemble is an entry naming a table the ensemble
-  does not carry — unsatisfiable, hence vacuously fine, hence silent. `boundary_entries_resolve`
-  rules that out, and two further theorems exhibit rows refuting the step relation and the seed
-  assertion, so neither spec is `True` in disguise.
+  interaction must be constrained with a bare `assertZero (enabled * (enabled - 1))` rather than
+  through the `assertBool` gadget.
 
 ## Relation To Clean/Table
 
@@ -167,8 +136,8 @@ The transition component is the `Clean.Air` answer to `TableOperation.everyRowEx
 
 Not ported from `Clean/Table`:
 
-- **General boundary row indices** (`RowIndex.fromStart k` / `fromEnd k`). `Boundary.lean` covers the `TableOperation.boundary` use cases that back real AIRs — first and last row, the two rows with native selectors — but not interior rows, which no backend selector enforces for free.
-- **Windows wider than two rows.** `windowRows` is an arbitrary `ℕ` and `windows` is generic in it, so a 3-row window needs no new code at all — but nothing currently builds one, and `TransitionComponent.lean`'s `curr`/`next` spelling covers only the two-row case.
+- **General boundary row indices** (`RowIndex.fromStart k` / `fromEnd k`). `Boundary.lean` covers first and last row, the two with native selectors, but not interior rows.
+- **Windows wider than two rows.** `windowRows` is an arbitrary `ℕ` and `windows` is generic in it, but nothing currently builds one, and `TransitionComponent.lean` covers only the two-row case.
 - **`InductiveTable`** and its `Spec`-carrying inductive interface.
 
 The two layers remain independent, but `Clean.Air` is intended to become the common home for AIR-style infrastructure, including future support for the older inductive table style now living under `Clean/Table`.

@@ -52,12 +52,8 @@ structure VmTables (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType
   unique_names : (tables.map (·.circuit.name)).Nodup
   verifier : Verifier.Program F PublicIO
 
-  /-- VM components are checked row by row.
-
-  This is not a new restriction: every VM obligation below -- `tables_channel`, the interaction
-  count, the row-shaped soundness argument -- is already stated in terms of a single row's
-  `rowOperations` at `rowOffset`. Making it a field records that explicitly, and is what
-  `vmTables_windowRows_eq_one` transports to the committed traces via `same_circuits`. -/
+  /-- VM components are checked row by row. Every VM obligation below is already stated in
+  terms of a single row, so this only records that explicitly. -/
   tables_windowRows : tables.Forall (fun table => table.windowRows = 1) := by
     simp only [List.Forall, and_true, true_and] <;> rfl
 
@@ -354,15 +350,8 @@ lemma vmMemTablesComponent
   rw [List.getElem_take, ← component_eq]
   simp [Ensemble.addVm, hi_vm]
 
-/--
-Every committed VM trace is checked *row by row*.
-
-`Ensemble.addVm` only ever adds components with `windowRows = 1`, and `same_circuits` binds the
-witness's table to the ensemble's component -- which now *carries* the window, rather than the
-window being a separate tag alongside it. So the prover cannot commit a VM component as a
-multi-row-window trace: that is not merely forbidden, it is unstateable. This is what lets the
-rest of this file keep reasoning about rows.
--/
+/-- Every committed VM trace is checked row by row, which is what lets the rest of this file
+keep reasoning about rows. -/
 lemma vmTables_windowRows_eq_one
     {witness : EnsembleWitness (ens.addVm vm names)} {table : Table F} :
     table ∈ witness.vmTables → table.component.windowRows = 1 := by
@@ -954,14 +943,12 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
   -- invoke `requirements_of_partial_guarantees_of_constraints` to get per-row grts → reqs for the vm channel,
   -- and use it in `verifier_guarantees`
   have reqs_of_grts' (table) (h_table : table ∈ witness.vmTables) :=
-    Table.requirements_of_partial_guarantees_of_constraints (table:=table)
-    (unfinished := vmChannel)
-    (Table.circuitAssumptions_envs table (vmContext.data_consistent table h_table)
+    table.requirements_of_partial_guarantees_of_constraints (unfinished := vmChannel)
+    (table.circuitAssumptions_envs (vmContext.data_consistent table h_table)
       (vm_assumptions table h_table))
     (vm_constraints table h_table)
     (grts_subset_all table h_table) (finished_grts table h_table)
-  -- specialize the environment-quantified statement back to rows, which is valid because
-  -- every VM trace is flat (`vmTables_windowRows_eq_one`)
+  -- specialize back to rows, valid because every VM trace is flat
   have reqs_of_grts (table) (h_table : table ∈ witness.vmTables) (row) (h_row : row ∈ table.table) :=
     reqs_of_grts' table h_table _
       (Table.mem_envs_of_mem_table (witness.vmTables_windowRows_eq_one h_table) h_row)
@@ -981,7 +968,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
     · exact balance channel (by simp [Ensemble.addVm, finished_subset channel_mem])
     intro table h_table
     by_cases h_vm : table ∈ witness.vmTables
-    · apply Table.requirements_of_not_mem_of_constraints (table:=table) witness.data
+    · apply table.requirements_of_not_mem_of_constraints witness.data
         (vm_constraints table h_vm)
       exact vm_reqs_disjoint channel channel_mem table h_vm
     · have h_old : table ∈ oldContext.tables := by

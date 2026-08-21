@@ -1,18 +1,11 @@
 /-
-Boundary assertions: the Air-side counterpart of classic AIR boundary constraints.
+Boundary assertions: the counterpart of classic AIR boundary constraints. An assertion pins the
+typed input prefix of the first or last trace row against the public input, assert-only (no
+witnesses, lookups or channels), matching Plonky3's `when_first_row` / `when_last_row`.
 
-A boundary assertion pins the typed input prefix of a designated trace row -- the first or the
-last -- against the ensemble's public input. It is assert-only: no witnesses, no lookups, no
-channel interactions. This is deliberately the same shape as a backend's native boundary
-constraints over public values (Plonky3's `when_first_row` / `when_last_row`), so that what is
-verified here is the same artifact the proof system enforces with boundary selectors -- unlike
-a channel, which a proof system implements as a logup argument.
-
-Together with a transition component (`windowRows = 2`), boundary assertions are what make
-classic shift-constraint AIR tables expressible: the transition constraint carries the
-row-to-row induction, a first-row assertion pins the seed, and a last-row assertion exports
-the result. Channels remain for what they are in the deployed system: lookups and
-cross-component interactions.
+Together with a transition component, these make shift-constraint AIR tables expressible: the
+transition constraint carries the induction, a first-row assertion pins the seed and a last-row
+assertion exports the result.
 -/
 import Clean.Air.FlatComponent
 
@@ -33,14 +26,9 @@ def Row.resolve : Row → List (Array F) → Option (Array F)
   | .first, rows => rows.head?
   | .last, rows => rows.getLast?
 
-/--
-The environment a boundary assertion is evaluated in: the designated row's typed input prefix
-at cells `[0, size Input)`, the public input at `[size Input, size Input + size PublicIO)`.
-
-The row's cells beyond `size Input` are deliberately *not* present: a boundary assertion reads
-a row column-positionally through its typed input prefix, the way an AIR boundary constraint
-reads a trace row, and cannot depend on witness-suffix cells.
--/
+/-- The environment a boundary assertion is evaluated in: the designated row's typed input
+prefix at cells `[0, size Input)`, the public input directly after it. Witness-suffix cells of
+the row are deliberately not present. -/
 def assertionEnv (Input : TypeMap) [ProvableType Input] (row : Array F) (publicIO : PublicIO F)
     (data : ProverData F) : Environment F where
   get j :=
@@ -48,14 +36,9 @@ def assertionEnv (Input : TypeMap) [ProvableType Input] (row : Array F) (publicI
     else (toElements publicIO)[j - size Input]?.getD 0
   data
 
-/--
-A boundary assertion: constraint polynomials over one trace row's typed input prefix and the
-public input, each asserted to equal zero on the designated row, bundled with the semantic
-`Spec` they are proved to imply.
-
-Note there is no completeness obligation, mirroring `Verifier.Program`; ensemble completeness
-is TODO throughout `Clean.Air`.
--/
+/-- A boundary assertion: constraint polynomials over one trace row's typed input prefix and the
+public input, each asserted zero on the designated row, bundled with the `Spec` they imply. There
+is no completeness obligation, mirroring `Verifier.Program`. -/
 structure Assertion (F : Type) [FiniteField F] (PublicIO Input : TypeMap)
     [ProvableType PublicIO] [ProvableType Input] where
   row : Row
@@ -105,14 +88,8 @@ theorem Assertion.rowSpec_of_holds (assertion : Assertion F PublicIO Input) {row
     (varFromOffset Input 0) (varFromOffset PublicIO (size Input)) h
   rwa [eval_assertionEnv_input, eval_assertionEnv_publicIO] at hs
 
-/--
-A boundary assertion attached to an ensemble table, keyed by component name.
-
-Names are the stable key: `Ensemble.addTable` prepends to the table list, so positional
-indices shift as an ensemble is built up, while `unique_names` makes name resolution
-unambiguous. An entry naming a component absent from the ensemble is unsatisfiable, not
-vacuous: `Entry.Holds` demands the named table exist.
--/
+/-- A boundary assertion attached to an ensemble table, keyed by component name -- stable under
+`addTable`, which prepends and so shifts positional indices. -/
 structure Entry (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO] where
   {Input : TypeMap}
   [provableInput : ProvableType Input]
@@ -123,8 +100,7 @@ structure Entry (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType Pu
 instance (entry : Entry F PublicIO) : ProvableType entry.Input := entry.provableInput
 
 /-- The named table exists, its designated row exists, and the assertion's constraints hold
-there. Both existence demands are deliberate: a boundary assertion on a missing table or an
-empty trace is unsatisfiable rather than vacuous. -/
+there -- so an assertion on a missing table or an empty trace is unsatisfiable, not vacuous. -/
 def Entry.Holds (entry : Entry F PublicIO) (tables : List (Table F)) (publicIO : PublicIO F)
     (data : ProverData F) : Prop :=
   ∃ table ∈ tables, table.component.circuit.name = entry.table ∧

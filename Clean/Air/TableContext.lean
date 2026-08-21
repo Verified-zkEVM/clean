@@ -1,10 +1,6 @@
 /-
 The `TableContext`: a bundle of committed traces sharing one prover data object, together with
 the derivation of `ProverData` from those traces.
-
-Nothing here depends on how many rows an environment spans. `deriveProverData` is keyed on trace
-*rows* -- a transition table is constrained on windows, but its data is still one input row per
-row -- and every `TableContext` operation quantifies over each table's `envs`.
 -/
 import Clean.Air.TransitionComponent
 
@@ -13,22 +9,19 @@ variable {F : Type} [FiniteField F]
 
 namespace Table
 
-/--
-Each named component is the source of its circuit-input rows in `ProverData`.
-
-Keyed on rows, not environments: a transition table is constrained on windows, but its *data* is
-still one input row per trace row, so this does not depend on `windowRows`.
--/
+/-- Each named component is the source of its circuit-input rows in `ProverData`. Keyed on
+rows, not windows, so this does not depend on `windowRows`. -/
 def deriveProverData : List (Table F) → ProverData F
   | [] => fun _ _ => #[]
   | table :: tables => fun name n =>
-      if table.component.circuit.name = name then table.proverRows n
+      if table.component.circuit.name = name then table.component.proverRows table.table n
       else deriveProverData tables name n
 
 lemma deriveProverData_eq_of_mem (tables : List (Table F))
     (hunique : (tables.map (fun table => table.component.circuit.name)).Nodup)
     {table : Table F} (hmem : table ∈ tables) (n : ℕ) :
-    deriveProverData tables table.component.circuit.name n = table.proverRows n := by
+    deriveProverData tables table.component.circuit.name n =
+      table.component.proverRows table.table n := by
   induction tables with
   | nil => simp at hmem
   | cons head tail ih =>
@@ -44,32 +37,9 @@ lemma deriveProverData_eq_of_mem (tables : List (Table F))
           exact List.mem_map.mpr ⟨table, hmem, rfl⟩
         simp [deriveProverData, hne, ih htail hmem]
 
-/-- `DataConsistency` restated through the accessors, so it can be discharged uniformly. -/
-lemma dataConsistency_iff (table : Table F) (data : ProverData F) :
-    table.DataConsistency data ↔
-      data table.component.circuit.name (size table.component.Input) =
-        table.proverRows (size table.component.Input) := Iff.rfl
-
-/--
-Number of environments a table contributes, in terms of its row count.
-
-A component with `windowRows = w` contributes `length + 1 - w` environments: one per row when
-`w = 1`, one per adjacent pair (`length - 1`) when `w = 2`. This is what any bound on total
-interaction count must use -- in particular the `< ringChar F` side condition carried by
-`BalancedInteractions`, since a forged balance becomes possible if `p` copies of a push are
-allowed to sum to zero.
--/
-@[circuit_norm] lemma envs_length (table : Table F) (data : ProverData F) :
-    (table.envs data).length =
-      table.table.length + 1 - table.component.windowRows := by
-  simp [Table.envs_eq, Table.windows_length]
-
 end Table
 
-/-- A table subset together with the shared prover-data environment used to interpret it.
-
-Every operation below quantifies over each table's `envs`, so it applies uniformly to any
-window size. -/
+/-- A table subset together with the shared prover-data environment used to interpret it. -/
 structure TableContext (F : Type) [FiniteField F] where
   tables : List (Table F)
   data : ProverData F
@@ -147,7 +117,7 @@ noncomputable abbrev interactionsWith (tables : TableContext F) (channel : RawCh
   (consistent : table.DataConsistency tables.data) {channel : RawChannel F} :
   interactionsWith (cons table tables consistent) channel =
     table.interactionsWith tables.data channel ++ interactionsWith tables channel := by
-  simp [interactionsWith, circuit_norm]
+  simp [interactionsWith, Table.interactionsWith, circuit_norm]
 
 @[circuit_norm] lemma interactionsWith_append {tables1 tables2 : TableContext F}
   (data_eq : tables1.data = tables2.data) {channel : RawChannel F} :

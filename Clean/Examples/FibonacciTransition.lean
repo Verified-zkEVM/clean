@@ -1,32 +1,14 @@
 /-
-Fibonacci mod 256 as a *transition* AIR component with *boundary assertions* -- the mixed
-worked example for the v2 design.
+Fibonacci mod 256 as a transition AIR component with boundary assertions: the same public
+statement as `Clean/Examples/FibonacciVm/Circuit.lean`'s `fibonacci_soundness`, but with the
+mechanics of a classic shift-constraint AIR. The recurrence is a direct adjacent-row constraint
+where `fib8` spends a `FibonacciChannel` pull/push pair; the ends of the trace are pinned by
+boundary assertions rather than verifier channel interactions; and the only channel left is the
+byte-add lookup, reused unchanged from the VM example.
 
-This computes the same public statement as `Clean/Examples/FibonacciVm/Circuit.lean`'s
-`fibonacci_soundness`, but the mechanics are those of a classic shift-constraint AIR, with each
-device used for exactly what the proof system ships it as:
-
-* the **row-to-row induction** is carried by the transition window (`windowRows = 2`): the
-  recurrence is a direct adjacent-row constraint, where `fib8` spends a `FibonacciChannel`
-  pull/push pair -- a full logup argument -- per row;
-* the **ends of the trace** are pinned by boundary assertions: a first-row assertion pins the
-  seed `(enabled, n, x, y) = (1, 0, 0, 1)` and a last-row assertion exports `(n, x, y)` to the
-  public input. `fibonacciVm` routes both through verifier channel interactions, which a proof
-  system again implements as logup terms rather than as native boundary constraints;
-* the **only channel left** is the byte-add lookup -- the one interaction that genuinely is a
-  lookup in the deployed system. `bytesComponent`, `add8Component` and their channels are reused
-  from the VM example unchanged.
-
-## The `enabled` stutter flag
-
-Backends pad committed traces to a power of two with constraint-satisfying rows, and the
-last-row assertion reads the last *committed* row -- whatever it is. So the component must make
-"rows past the end" harmless: each row carries a boolean `enabled`, an enabled row advances the
-Fibonacci state, and a disabled row freezes it (`next = curr`, including `enabled` itself, so
-the flag can never turn back on). Padding rows are then disabled rows, and the frozen state
-they carry to the last row is exactly the state at the last enabled row.
-
-## Layout
+Since backends pad committed traces to a power of two and the last-row assertion reads the last
+*committed* row, each row carries a boolean `enabled`: an enabled row advances the state, a
+disabled row freezes it (including `enabled` itself, so it can never turn back on).
 
 `Input = Output = Fib8Input` is `(enabled, n, x, y)`, so `size Input = 4` and `main` witnesses
 four cells:
@@ -43,18 +25,10 @@ open Air.Flat
 
 variable {p : ℕ} [Fact p.Prime] [pGt : Fact (p > 512)]
 
-/--
-One Fibonacci-mod-256 step, with the next row as the circuit's **output**.
-
-`main` witnesses the next row's four cells and constrains them against the current row:
-disabled rows stutter, enabled rows advance `(n, x, y) ↦ (n + 1, y, (x + y) % 256)`, with the
-byte addition checked by a pull from the byte-add lookup channel, gated on the selector so that
-disabled rows emit no interactions.
-
-Note what is *not* here: no state channel, and no boundary-marker selectors. The chaining that
-`fib8` buys with `FibonacciChannel` is the window itself; the anchoring that `FibonacciNextRow`
-attempted with `isBoundary` selectors is the ensemble's boundary assertions below.
--/
+/-- One Fibonacci-mod-256 step, with the next row as the circuit's **output**. `main` witnesses
+the next row's four cells and constrains them against the current row: disabled rows stutter,
+enabled rows advance `(n, x, y) ↦ (n + 1, y, (x + y) % 256)`, with the byte addition checked by a
+pull from the byte-add lookup channel, gated on the selector so disabled rows emit nothing. -/
 def fibStep : GeneralFormalCircuit (F p) Fib8Input Fib8Input where
   name := "fibonacci-transition"
   main | { enabled, n, x, y } => do
@@ -169,11 +143,9 @@ lemma fibTransitionComponent_output :
 
 /-! ## Boundary assertions
 
-The two ends of the trace, pinned the way a real AIR pins them: native first/last-row
-constraints against public values, not channel messages. Compare `fibonacciVerifier`, which
-pushes the seed and pulls the claimed final state on `FibonacciChannel` -- shipped as logup
-terms -- and `FibonacciNextRow`, whose selector-chosen boundary rows left the seed reachable
-only through channel guarantees and the assembly unbuildable.
+The two ends of the trace, pinned the way a real AIR pins them: native first/last-row constraints
+against public values rather than channel messages. Compare `fibonacciVerifier`, which pushes the
+seed and pulls the claimed final state on `FibonacciChannel`.
 -/
 
 /-- First row: the Fibonacci seed. The selector starts enabled, the counter at zero, the pair
@@ -267,14 +239,10 @@ lemma rowInv_step {curr next : Fib8Input (F p)} {data : ProverData (F p)}
       rw [hfib, hx', hy' hx256 hy256]
     · rw [hn', ZMod.val_add, ZMod.val_one, ← hk, Nat.mod_add_mod]
 
-/--
-`SpecConsistencyWithBoundaries` for the mixed ensemble.
-
-The two boundary entries resolve, by name uniqueness, to one and the same transition table.
-The seed assertion pins its row 0, `Table.transition_induction` carries `RowInv` along the
-trace -- the step relation coming from the table's `Spec`, i.e. from `TableSoundness` -- and
-the final assertion transports the last row's state to the public input.
--/
+/-- `SpecConsistencyWithBoundaries` for the mixed ensemble. Both boundary entries resolve, by
+name uniqueness, to the same transition table: the seed assertion pins its row 0,
+`Table.transition_induction` carries `RowInv` along the trace, and the final assertion transports
+the last row's state to the public input. -/
 theorem fibonacciTransitionEnsemble_specConsistency :
     (fibonacciTransitionEnsemble (p:=p)).SpecConsistencyWithBoundaries
       (fun pub => ∃ k : ℕ, (pub.2.1.val, pub.2.2.val) = fibonacci k ∧ k % p = pub.1.val) := by
@@ -378,13 +346,10 @@ theorem fibonacciTransition_soundness : ∀ (n x y : F p),
 
 /-! ## Non-vacuity
 
-`fibonacciTransition_soundness` is a conditional statement, so it would be vacuously true if
-`Ensemble.Statement` had no models at all -- the caveat `falseEnsemble` makes at the end of
-`Clean/Examples/FibonacciVm/Circuit.lean`. The way *this* ensemble could fall into that trap is
-the one `Boundary.Entry` warns about: an entry naming a component absent from the ensemble is
-unsatisfiable rather than vacuous, so a typo in `seedEntry.table` would quietly turn the theorem
-above into a tautology. It does not occur here, and the specs the proof transports are refutable
-propositions rather than `True` in disguise.
+`fibonacciTransition_soundness` is conditional, so it would be vacuously true if
+`Ensemble.Statement` had no models -- the caveat `falseEnsemble` makes at the end of
+`Clean/Examples/FibonacciVm/Circuit.lean`. The hazard specific to a boundary ensemble is an entry
+naming an absent component, which is unsatisfiable rather than vacuous.
 -/
 
 /-- Both boundary entries name a component the ensemble actually carries, so neither

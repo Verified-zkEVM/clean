@@ -21,8 +21,6 @@ class HasChannelInterface (F : Type) (α : Type u) where
 def channelInterface {α : Type u} [HasChannelInterface F α] (value : α) : ChannelInterface F :=
   HasChannelInterface.channelInterface value
 
-/-- A component exposes its circuit's channels; the window affects how often the circuit is
-checked, never which channels it talks on. -/
 instance : HasChannelInterface F (Component F) where
   channelInterface component :=
     { channelsWithGuarantees := component.circuit.channelsWithGuarantees
@@ -47,17 +45,13 @@ instance : HasChannelInterface F (Verifier.Program F PublicIO) where
 
 structure Ensemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO] where
   /-- Components form an ordered map: names are keys, while list order fixes the trace order
-  consumed by witness generation and backend extraction. Each component also records, via
-  `windowRows`, the shape of trace it is checked against -- which the witness is not free to
-  reinterpret. -/
+  consumed by witness generation and backend extraction. -/
   tables : List (Component F)
   unique_names : (tables.map (·.circuit.name)).Nodup
   channels : List (RawChannel F)
   verifier : Verifier.Program F PublicIO := .empty F PublicIO
   /-- Boundary assertions pinning designated trace rows against the public input, keyed by
-  component name; see `Clean/Air/Boundary.lean`. This is the direct route from a trace to the
-  public input: unlike channels, which a proof system implements as a logup argument, boundary
-  assertions lower to native AIR boundary constraints over public values. -/
+  component name; see `Clean/Air/Boundary.lean`. -/
   boundaries : List (Boundary.Entry F PublicIO) := []
 
 /-- The public input and component traces committed by an ensemble proof. -/
@@ -65,11 +59,6 @@ structure EnsembleWitness (ens : Ensemble F PublicIO) where
   tables : List (Table F)
   publicInput : PublicIO F
   same_length : ens.tables.length = tables.length
-  /-- Binds the witness to the ensemble by component.
-
-  This also pins how the trace is read: `Component.windowRows` records how many rows an
-  environment spans and `window_size` ties it to the circuit's footprint, so binding the component
-  is enough -- a prover cannot commit a transition component as a flat trace. -/
   same_circuits : ∀ i (hi : i < ens.tables.length),
     ens.tables[i] = tables[i].component
 
@@ -174,7 +163,6 @@ end Ensemble
 namespace EnsembleWitness
 variable {ens : Ensemble F PublicIO}
 
-/-- The witness's traces fill exactly the ensemble's components. -/
 @[circuit_norm]
 lemma tables_map_component (witness : EnsembleWitness ens) :
     witness.tables.map (·.component) = ens.tables := by
@@ -196,7 +184,6 @@ private lemma tableNamesNodup (witness : EnsembleWitness ens) :
 lemma data_consistent (witness : EnsembleWitness ens) :
     ∀ table ∈ witness.tables, table.DataConsistency witness.data := by
   intro table htable
-  rw [Table.dataConsistency_iff]
   exact Table.deriveProverData_eq_of_mem witness.tables witness.tableNamesNodup
     htable _
 
@@ -256,14 +243,12 @@ noncomputable def interactionsWith {ens : Ensemble F PublicIO} (witness : Ensemb
 
 @[circuit_norm] lemma constraints_iff {ens : Ensemble F PublicIO}
     (witness : EnsembleWitness ens) :
-  witness.Constraints ↔
-    ∀ table ∈ witness.tables, table.Constraints witness.data := by
+  witness.Constraints ↔ ∀ table ∈ witness.tables, table.Constraints witness.data := by
   rfl
 
 @[circuit_norm] lemma assumptions_iff {ens : Ensemble F PublicIO}
     (witness : EnsembleWitness ens) :
-  witness.Assumptions ↔
-    ∀ table ∈ witness.tables, table.Assumptions witness.data := by
+  witness.Assumptions ↔ ∀ table ∈ witness.tables, table.Assumptions witness.data := by
   rfl
 
 @[circuit_norm] lemma spec_iff {ens : Ensemble F PublicIO}
@@ -289,7 +274,7 @@ lemma channel_eq_of_mem_interactionsWith {witness : EnsembleWitness ens}
       List.mem_map] at h_verifier
     obtain ⟨interaction, h_interaction, rfl⟩ := h_verifier
     exact Operations.channel_eq_of_mem_interactionsWith h_interaction
-  · exact Table.channel_eq_of_mem_interactionsWith (table:=table) h_table
+  · exact table.channel_eq_of_mem_interactionsWith h_table
 
 lemma verifierChannelRequirements_iff_forall {witness : EnsembleWitness ens}
     {channel : RawChannel F} :
@@ -390,9 +375,8 @@ def SpecConsistency (ens : Ensemble F PublicIO) (Spec : PublicIO F → Prop) : P
     witness.Spec →
     Spec witness.publicInput
 
-/-- Like `SpecConsistency`, but additionally receiving the boundary specs. This is the form to
-use for ensembles with boundary assertions; for `boundaries = []` the extra hypothesis is
-vacuous and the two notions coincide. -/
+/-- Like `SpecConsistency`, but additionally receiving the boundary specs. For `boundaries = []`
+the extra hypothesis is vacuous and the two notions coincide. -/
 def SpecConsistencyWithBoundaries (ens : Ensemble F PublicIO) (Spec : PublicIO F → Prop) : Prop :=
   ∀ (witness : EnsembleWitness ens),
     witness.Spec →
@@ -427,10 +411,15 @@ theorem soundness_of_tableSoundness_and_specConsistency (ens : Ensemble F Public
   ens.TableSoundness →
   ens.AssumptionsConsistency Assumptions →
   ens.SpecConsistency Spec →
-    ens.Soundness Assumptions Spec :=
-  fun table_soundness assumptions_consistency spec_consistency =>
-    soundness_of_tableSoundness_and_specConsistencyWithBoundaries ens Assumptions Spec
-      table_soundness assumptions_consistency spec_consistency.withBoundaries
+    ens.Soundness Assumptions Spec := by
+  simp only [Soundness, TableSoundness, AssumptionsConsistency, SpecConsistency, Statement,
+    forall_exists_index, and_imp]
+  intro table_soundness assumptions_consistency spec_consistency
+    publicInput assumptions witness publicInput_eq constraints _boundaries balance
+  simp only [← publicInput_eq] at *
+  apply spec_consistency witness
+  apply table_soundness witness ?assumptions constraints balance
+  exact assumptions_consistency witness assumptions
 end Ensemble
 
 /- ## Constructing ensembles -/
@@ -453,15 +442,8 @@ def merge (ens1 ens2 : Ensemble F PublicIO)
 @[circuit_norm] lemma merge_boundaries (ens1 ens2 : Ensemble F PublicIO) (unique_names) :
   (ens1.merge ens2 unique_names).boundaries = ens2.boundaries ++ ens1.boundaries := rfl
 
-/--
-Add a component to the ensemble.
-
-There is no separate `addTransitionTable`: how often the circuit is checked, and against how many
-rows, is read off `table.windowRows`, so a transition component is added exactly like a flat one.
-Note an `n`-row transition trace imposes `n - 1` constraint instances and a trace of fewer than
-`windowRows` rows is unconstrained -- so boundary conditions must be pinned separately, through
-boundary assertions or channel interactions.
--/
+/-- Add a component to the ensemble. There is no separate `addTransitionTable`: the window is
+read off `table.windowRows`, so a transition component is added exactly like a flat one. -/
 def addTable (ens : Ensemble F PublicIO) (table : Component F)
     (fresh : table.circuit.name ∉ ens.tables.map (·.circuit.name)) : Ensemble F PublicIO :=
   { ens with
@@ -475,8 +457,8 @@ def addTable (ens : Ensemble F PublicIO) (table : Component F)
 @[circuit_norm] lemma addTable_boundaries (ens : Ensemble F PublicIO) (table : Component F) (fresh) :
   (ens.addTable table fresh).boundaries = ens.boundaries := rfl
 
-/-- Attach a boundary assertion. Entries are keyed by component name, so the named component
-need not be present yet -- but `Statement` is unsatisfiable until it is. -/
+/-- Attach a boundary assertion, keyed by component name. The named component need not be
+present yet, but `Statement` is unsatisfiable until it is. -/
 def addBoundary (ens : Ensemble F PublicIO) (entry : Boundary.Entry F PublicIO) :
     Ensemble F PublicIO :=
   { ens with boundaries := entry :: ens.boundaries }

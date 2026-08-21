@@ -119,9 +119,8 @@ private def lowerRowProgram (error : LoweringError) (program : Witgen.RowProgram
 
 private def lowerComponent (index : ℕ) (component : Component F) :
     Except LoweringError (ComponentProgram F) := do
-  -- The emitted Rust AIR reads `main.row_slice(0)` only, so it can express a single-row
-  -- relation. Refuse anything wider rather than emitting a program that checks a different
-  -- relation from the one verified here.
+  -- the emitted Rust AIR reads `main.row_slice(0)` only, so it can only express a single-row
+  -- relation; refuse anything wider rather than shipping a different relation than we verified
   unless component.windowRows = 1 do
     throw (.multiRowWindow index component.windowRows)
   let operations := component.rowOperations
@@ -136,9 +135,7 @@ private def lowerComponent (index : ℕ) (component : Component F) :
   let interactions := operations.interactions
   let expressions := constraints ++ interactions.flatMap fun interaction =>
     interaction.mult :: interaction.msg.toList
-  -- Constraint expressions address the component's whole window, so the in-range bound is
-  -- `envWidth = windowRows * rowWidth`, not one row's width. Under the guard above these
-  -- coincide, but stating it as `envWidth` is what stays correct once wider windows lower.
+  -- constraint expressions address the whole window, so the in-range bound is `envWidth`
   match expressionsBadVariable component.envWidth expressions with
   | some cellIndex => throw (.componentVariable index cellIndex component.envWidth)
   | none => pure ()
@@ -238,16 +235,15 @@ private def witnessDataReads : {n : ℕ} → Witgen.WitgenIR F n → List DataRe
 
 private def validateDataReads (ensemble : Ensemble F PublicIO) (modes : List (Mode F)) :
     Except LoweringError Unit := do
-  for (entry, componentIndex) in ensemble.tables.zipIdx do
-    for (operation, operationIndex) in entry.rowOperations.toFlat.zipIdx do
+  for (component, componentIndex) in ensemble.tables.zipIdx do
+    for (operation, operationIndex) in component.rowOperations.toFlat.zipIdx do
       if let .witness _ code := operation then
         for read in witnessDataReads code do
           let some (target, mode) := (ensemble.tables.zip modes).find? fun (target, _) =>
               target.circuit.name == read.key
             | throw (.unknownDataRead componentIndex operationIndex read.key)
           unless read.width = target.rowOffset do
-            throw (.dataReadWidth componentIndex operationIndex read.key target.rowOffset
-              read.width)
+            throw (.dataReadWidth componentIndex operationIndex read.key target.rowOffset read.width)
           let unstable := match mode with
             | .demand _ => true
             -- chain-generated rows are not stable preallocated cells
@@ -260,21 +256,20 @@ private def validateDataReads (ensemble : Ensemble F PublicIO) (modes : List (Mo
 /-- Lower and validate the backend-facing portion of an ensemble without producing source text. -/
 def lower (ensemble : Ensemble F PublicIO) (config : Config F ProverInput) :
     Except LoweringError (Program F) := do
-  -- The backend enforces no boundary constraints, so lowering an ensemble that carries any
-  -- would ship an artifact checking a weaker relation than the one verified here. Refuse,
-  -- like the `multiRowWindow` guard does for transition components.
+  -- the backend enforces no boundary constraints, so an ensemble carrying any would ship an
+  -- artifact checking a weaker relation than the one verified here
   unless ensemble.boundaries.isEmpty do
     throw (.boundaryAssertions ensemble.boundaries.length)
   unless config.modes.length = ensemble.tables.length do
     throw (.modeCount ensemble.tables.length config.modes.length)
   unless config.padding.length = ensemble.tables.length do
     throw (.paddingCount ensemble.tables.length config.padding.length)
-  for (((entry, mode), padding), index) in
+  for (((component, mode), padding), index) in
       ((ensemble.tables.zip config.modes).zip config.padding).zipIdx do
-    validateMode index entry mode padding
+    validateMode index component mode padding
   validateDataReads ensemble config.modes
-  let components ← ensemble.tables.zipIdx.mapM fun (entry, index) =>
-    lowerComponent index entry
+  let components ← ensemble.tables.zipIdx.mapM fun (component, index) =>
+    lowerComponent index component
   let verifierOperations := ensemble.verifierOperations.toFlat
   let verifierInteractions := FlatOperation.interactions verifierOperations
   let verifierExpressions := verifierInteractions.flatMap fun interaction =>
