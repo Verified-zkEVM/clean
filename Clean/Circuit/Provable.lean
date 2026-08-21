@@ -261,11 +261,13 @@ instance (priority := high) : ProvableType (fields n) where
 /-- The `fields` instance's element view is the identity. Stated for `grind`: terms
 reach it with the abbrev eagerly beta-reduced to its lambda, past the `fields`-keyed
 simp lemmas, and without this rule the wrapper is a stuck atom. -/
-@[grind =] theorem toElements_fields {F : Type} {n : ℕ} (v : Vector F n) :
+@[circuit_norm, computable_witnesses_norm, grind =]
+theorem toElements_fields {F : Type} {n : ℕ} (v : Vector F n) :
     toElements (M := fields n) v = v := rfl
 
 /-- Inverse-side twin of `toElements_fields`. -/
-@[grind =] theorem fromElements_fields {F : Type} {n : ℕ} (v : Vector F n) :
+@[circuit_norm, computable_witnesses_norm, grind =]
+theorem fromElements_fields {F : Type} {n : ℕ} (v : Vector F n) :
     fromElements (M := fields n) v = v := rfl
 
 instance {n : ℕ} : NonEmptyProvableType (fields (n + 1)) where
