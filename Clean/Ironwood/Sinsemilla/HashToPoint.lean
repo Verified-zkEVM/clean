@@ -385,11 +385,12 @@ theorem hashRegionSynthesize_assignFixed_mem_iff
 def hashRegionSynthesisSummary (ns : List ℕ)
     (cfg : Sinsemilla.HashPiece.Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  (FloorPlanner.RegionSynthesisSummary.ofColumns
+  ((FloorPlanner.RegionSynthesisSummary.ofColumns
     [.selector (Sinsemilla.HashPiece.initialYQGate cfg).selector.index,
       .column .fixed cfg.fixedYQ.index,
       .column .advice cfg.xA.index]
-    (offset + 1) 1).combine
+    (offset + 1) 1).withSelectorActivations
+      [((Sinsemilla.HashPiece.initialYQGate cfg).selector.index, offset)]).combine
       (Sinsemilla.Chain.circuitSynthesisSummary ns cfg offset)
 
 @[synthesis_summary_norm]
@@ -528,7 +529,8 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
           simp only [hashRegionSynthesisSummary, hashRegionSynthesize,
             circuit_norm, synthesis_summary_norm]
           rw [z1Cells_operations]
-          simp only [synthesis_summary_norm, Nat.max_zero, Nat.add_zero]
+          simp only [synthesis_summary_norm, Nat.max_zero, Nat.add_zero,
+            List.append_nil]
         rw [← max_assoc, max_self, ← max_assoc, max_self]
       output_eq := by
         intro config offset input self

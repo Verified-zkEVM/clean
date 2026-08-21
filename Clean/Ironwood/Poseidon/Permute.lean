@@ -37,7 +37,7 @@ def permuteSynthesisSummary (cfg : Config) (offset : ℕ) :
         .column .advice (cfg.state 1).index,
         .column .advice (cfg.state 2).index]
       (offset + 1) 0).combine
-    ((FloorPlanner.RegionSynthesisSummary.repeatColumns
+    ((FloorPlanner.RegionSynthesisSummary.repeatColumnsWithSelector cfg.sFull.index
       [.selector cfg.sFull.index,
         .column .fixed (cfg.rcA 0).index,
         .column .fixed (cfg.rcA 1).index,
@@ -46,7 +46,7 @@ def permuteSynthesisSummary (cfg : Config) (offset : ℕ) :
         .column .advice (cfg.state 1).index,
         .column .advice (cfg.state 2).index]
       offset 1 2 0 4).combine
-      ((FloorPlanner.RegionSynthesisSummary.repeatColumns
+      ((FloorPlanner.RegionSynthesisSummary.repeatColumnsWithSelector cfg.sPartial.index
         [.selector cfg.sPartial.index,
           .column .fixed (cfg.rcA 0).index,
           .column .fixed (cfg.rcA 1).index,
@@ -59,7 +59,7 @@ def permuteSynthesisSummary (cfg : Config) (offset : ℕ) :
           .column .advice (cfg.state 1).index,
           .column .advice (cfg.state 2).index]
         (offset + 4) 1 2 0 28).combine
-        (FloorPlanner.RegionSynthesisSummary.repeatColumns
+        (FloorPlanner.RegionSynthesisSummary.repeatColumnsWithSelector cfg.sFull.index
           [.selector cfg.sFull.index,
             .column .fixed (cfg.rcA 0).index,
             .column .fixed (cfg.rcA 1).index,
@@ -104,9 +104,9 @@ def permuteElaborated :
     synthesisSummary_eq := by
       intro cfg offset input self
       simp only [permuteSynthesisSummary]
-      rw [← FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns,
-        ← FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns,
-        ← FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns]
+      rw [← FloorPlanner.RegionSynthesisSummary.foldr_ofColumnsWithSelector_eq_repeatColumnsWithSelector,
+        ← FloorPlanner.RegionSynthesisSummary.foldr_ofColumnsWithSelector_eq_repeatColumnsWithSelector,
+        ← FloorPlanner.RegionSynthesisSummary.foldr_ofColumnsWithSelector_eq_repeatColumnsWithSelector]
       apply FloorPlanner.RegionSynthesisSummary.ext
       · simp only [permuteSynthesize, fullRoundSynthesisSummary,
           partialRoundSynthesisSummary, circuit_norm, synthesis_summary_norm,
@@ -119,6 +119,9 @@ def permuteElaborated :
           partialRoundSynthesisSummary, circuit_norm, synthesis_summary_norm,
           Nat.mul_one,
           FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount]
+      · simp only [permuteSynthesize, fullRoundSynthesisSummary,
+          partialRoundSynthesisSummary, circuit_norm, synthesis_summary_norm,
+          Nat.mul_one]
       · simp only [permuteSynthesize, fullRoundSynthesisSummary,
           partialRoundSynthesisSummary, circuit_norm, synthesis_summary_norm,
           Nat.mul_one]

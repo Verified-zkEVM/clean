@@ -1009,7 +1009,7 @@ theorem sortedSummaryOrder_key_sorted {F : Type} (ops : Operations F) :
     have hascending :=
       Pdqsort.quicksort_sorted shapes.toArray RegionShape.key |>.reverse
     simpa only [List.map_reverse] using hascending
-  simpa only [sortedSummaryOrder, shapes, List.map_map,
+  simpa only [sortedSummaryOrder, sortedRegionOrder, shapes, List.map_map,
     Array.toList_reverse, RegionShape.toSummary_key, Pdqsort.lessBy] using hsorted
 
 end Halo2.FloorPlanner.V1

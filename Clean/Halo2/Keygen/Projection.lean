@@ -201,6 +201,46 @@ def queryWalkInit (map : SelCompressMap) (cs : ConstraintSystem F) : QueryState 
   (List.range map.newFixedCols).foldl
     (fun s i => s.registerFixed (cs.numFixedColumns + i)) (recordedQueries cs)
 
+/-- Selector compression leaves the configure-recorded advice-query layout unchanged. -/
+@[simp] theorem queryWalkInit_advice_toList
+    (map : SelCompressMap) (cs : ConstraintSystem F) :
+    (queryWalkInit map cs).advice.toList =
+      cs.adviceQueries.map fun query => (query.1.index, query.2) := by
+  have preserve (indices : List ℕ) (state : QueryState) :
+      (indices.foldl
+        (fun current index =>
+          current.registerFixed (cs.numFixedColumns + index))
+        state).advice = state.advice := by
+    induction indices generalizing state with
+    | nil => rfl
+    | cons _ rest inductionHypothesis =>
+        rw [List.foldl_cons, inductionHypothesis]
+        simp only [QueryState.registerFixed]
+        split <;> rfl
+  unfold queryWalkInit
+  rw [preserve]
+  simp [recordedQueries]
+
+/-- Selector compression leaves the configure-recorded instance-query layout unchanged. -/
+@[simp] theorem queryWalkInit_inst_toList
+    (map : SelCompressMap) (cs : ConstraintSystem F) :
+    (queryWalkInit map cs).inst.toList =
+      cs.instanceQueries.map fun query => (query.1.index, query.2) := by
+  have preserve (indices : List ℕ) (state : QueryState) :
+      (indices.foldl
+        (fun current index =>
+          current.registerFixed (cs.numFixedColumns + index))
+        state).inst = state.inst := by
+    induction indices generalizing state with
+    | nil => rfl
+    | cons _ rest inductionHypothesis =>
+        rw [List.foldl_cons, inductionHypothesis]
+        simp only [QueryState.registerFixed]
+        split <;> rfl
+  unfold queryWalkInit
+  rw [preserve]
+  simp [recordedQueries]
+
 /-- The fixed-query layout after selector compression is the recorded configure
 layout followed by one fresh rotation-zero query for every packed selector column. -/
 theorem queryWalkInit_fixed_toList

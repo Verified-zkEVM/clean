@@ -1091,8 +1091,10 @@ def roundColumns (config : Config) : List FloorPlanner.RegionColumn :=
 
 def roundSynthesisSummary (config : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  .ofColumns (roundColumns config) (offset + 2) 0
-    (lookupActivationCount := 1)
+  (FloorPlanner.RegionSynthesisSummary.ofColumns
+    (roundColumns config) (offset + 2) 0
+    (lookupActivationCount := 1)).withSelectorActivations
+      [(config.qS1.index, offset), (config.qS1.index, offset)]
 
 @[synthesis_summary_norm]
 theorem roundSynthesisSummary_lookupActivationCount
@@ -1122,6 +1124,8 @@ def round (G : Generators) (i : ℕ) : FormalRegionCircuit Fp Config Config fiel
         · simp only [roundSynthesisSummary, circuit_norm]
         · simp only [roundSynthesisSummary, circuit_norm, synthesis_summary_norm]
         · simp only [roundSynthesisSummary, circuit_norm, synthesis_summary_norm]
+        · simp only [roundSynthesisSummary, circuit_norm,
+            synthesis_summary_norm]
       fixedAssignmentsAgree := by
         intro configInput counts hconfig offset input region
         unfold RegionOperations.FixedAssignmentsAgree

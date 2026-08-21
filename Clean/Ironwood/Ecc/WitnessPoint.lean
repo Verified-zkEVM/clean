@@ -96,11 +96,12 @@ instance (x y : Column .advice) :
 
 def pointSynthesisSummary (config : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  .ofColumns
+  (FloorPlanner.RegionSynthesisSummary.ofColumns
     [.selector config.qPoint.index,
       .column .advice config.x.index,
       .column .advice config.y.index]
-    (offset + 1) 0
+    (offset + 1) 0).withSelectorActivations
+      [(config.qPoint.index, offset)]
 
 @[synthesis_summary_norm]
 theorem pointSynthesisSummary_lookupActivationCount
@@ -111,8 +112,8 @@ theorem pointSynthesisSummary_lookupActivationCount
 @[synthesis_summary_norm]
 theorem pointSynthesisSummary_hasNoFixedColumns (config : Config) (offset : ℕ) :
     (pointSynthesisSummary config offset).HasNoFixedColumns := by
-  simp only [pointSynthesisSummary,
-    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp only [pointSynthesisSummary, synthesis_summary_norm]
+  intro index
   simp
 
 def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
@@ -172,11 +173,12 @@ that non-identity precondition is carried on the honest prover as `ProverAssumpt
 input is `Unconstrained`, so — like `point` — the honest-side facts about it live there). -/
 def pointNonIdSynthesisSummary (config : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  .ofColumns
+  (FloorPlanner.RegionSynthesisSummary.ofColumns
     [.selector config.qPointNonId.index,
       .column .advice config.x.index,
       .column .advice config.y.index]
-    (offset + 1) 0
+    (offset + 1) 0).withSelectorActivations
+      [(config.qPointNonId.index, offset)]
 
 @[synthesis_summary_norm]
 theorem pointNonIdSynthesisSummary_lookupActivationCount

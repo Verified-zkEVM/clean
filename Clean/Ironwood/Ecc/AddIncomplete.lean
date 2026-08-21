@@ -77,7 +77,7 @@ def permutationColumns (config : Config) : List AnyColumn :=
 
 def synthesisSummary (config : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  .ofColumns
+  (FloorPlanner.RegionSynthesisSummary.ofColumns
     [.selector config.qAddIncomplete.index,
       .column .advice config.xP.index,
       .column .advice config.yP.index,
@@ -85,7 +85,8 @@ def synthesisSummary (config : Config) (offset : ℕ) :
       .column .advice config.yQR.index,
       .column .advice config.xQR.index,
       .column .advice config.yQR.index]
-    (offset + 2) 0
+    (offset + 2) 0).withSelectorActivations
+      [(config.qAddIncomplete.index, offset)]
 
 def add : FormalRegionCircuit Fp
     (Column .advice × Column .advice × Column .advice × Column .advice) Config

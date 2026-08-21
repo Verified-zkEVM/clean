@@ -187,7 +187,7 @@ theorem gateRegion_synthesisSummary
     (sCell sMinusLo130 : AssignedCell Fp) (region : RegionIndex) :
     FloorPlanner.regionSynthesisSummary
         ((gateRegion K cfg input sCell sMinusLo130).operations region) =
-      .ofColumns
+      (FloorPlanner.RegionSynthesisSummary.ofColumns
         [.column .advice cfg.adv0.index,
           .column .advice cfg.adv0.index,
           .column .advice cfg.adv0.index,
@@ -196,12 +196,13 @@ theorem gateRegion_synthesisSummary
           .column .advice cfg.adv1.index,
           .column .advice cfg.adv2.index,
           .selector cfg.qOverflow.index]
-        3 0 := by
+        3 0).withSelectorActivations [(cfg.qOverflow.index, 1)] := by
   apply FloorPlanner.RegionSynthesisSummary.ext
   · simp only [gateRegion, circuit_norm, synthesis_summary_norm,
       configure_selector_norm]
   · simp only [gateRegion, circuit_norm, synthesis_summary_norm]
     omega
+  · simp only [gateRegion, circuit_norm, synthesis_summary_norm]
   · simp only [gateRegion, circuit_norm, synthesis_summary_norm]
   · simp only [gateRegion, circuit_norm, synthesis_summary_norm]
   · simp only [gateRegion, circuit_norm, synthesis_summary_norm]
@@ -297,7 +298,7 @@ def circuitSynthesisSummary (K : ℕ) (cfg : Config K)
     ((LookupRangeCheck.copyCheckSynthesisSummary
         K (numWords K) false cfg.lookupConfig).combine
       (FloorPlanner.SynthesisSummary.ofRegion
-        (.ofColumns
+        ((FloorPlanner.RegionSynthesisSummary.ofColumns
           [.column .advice cfg.adv0.index,
             .column .advice cfg.adv0.index,
             .column .advice cfg.adv0.index,
@@ -306,7 +307,7 @@ def circuitSynthesisSummary (K : ℕ) (cfg : Config K)
             .column .advice cfg.adv1.index,
             .column .advice cfg.adv2.index,
             .selector cfg.qOverflow.index]
-          3 0)))
+          3 0).withSelectorActivations [(cfg.qOverflow.index, 1)])))
 
 @[synthesis_summary_norm]
 theorem circuitSynthesisSummary_lookupActivationCount (K : ℕ) (cfg : Config K) :
@@ -334,6 +335,7 @@ theorem circuitSynthesisSummary_hasNoFixedWrites (K : ℕ) (cfg : Config K) :
   simp only [circuitSynthesisSummary,
     FloorPlanner.SynthesisSummary.hasNoFixedWrites_combine,
     FloorPlanner.SynthesisSummary.hasNoFixedWrites_ofRegion,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_withSelectorActivations,
     FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns,
     LookupRangeCheck.copyCheckSynthesisSummary_hasNoFixedWrites]
   simp

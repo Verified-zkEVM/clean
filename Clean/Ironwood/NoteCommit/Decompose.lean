@@ -37,20 +37,21 @@ deriving ProvableStruct
 
 def synthesisSummary (config : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  .ofColumns
+  (FloorPlanner.RegionSynthesisSummary.ofColumns
     [.selector config.qNotecommitB.index,
       .column .advice config.colL.index,
       .column .advice config.colM.index,
       .column .advice config.colR.index,
       .column .advice config.colM.index,
       .column .advice config.colR.index]
-    (offset + 2) 0
+    (offset + 2) 0).withSelectorActivations
+      [(config.qNotecommitB.index, offset)]
 
 @[synthesis_summary_norm]
 theorem synthesisSummary_hasNoFixedColumns (config : Config) (offset : ℕ) :
     (synthesisSummary config offset).HasNoFixedColumns := by
-  unfold synthesisSummary
-  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp only [synthesisSummary, synthesis_summary_norm]
+  intro index
   simp
 
 /-- Rust `DecomposeB::assign` (`note_commit.rs:179-215`), parameterized by the `b_1`
@@ -78,6 +79,7 @@ def bundle (wb1 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
         · simp only [circuit_norm]
           omega
         · simp only [circuit_norm]
+        · simp only [circuit_norm, synthesis_summary_norm]
         · simp only [circuit_norm, synthesis_summary_norm]
         · simp only [circuit_norm, synthesis_summary_norm] }
 
@@ -156,20 +158,21 @@ deriving ProvableStruct
 
 def synthesisSummary (config : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  .ofColumns
+  (FloorPlanner.RegionSynthesisSummary.ofColumns
     [.selector config.qNotecommitD.index,
       .column .advice config.colL.index,
       .column .advice config.colM.index,
       .column .advice config.colR.index,
       .column .advice config.colM.index,
       .column .advice config.colR.index]
-    (offset + 2) 0
+    (offset + 2) 0).withSelectorActivations
+      [(config.qNotecommitD.index, offset)]
 
 @[synthesis_summary_norm]
 theorem synthesisSummary_hasNoFixedColumns (config : Config) (offset : ℕ) :
     (synthesisSummary config offset).HasNoFixedColumns := by
-  unfold synthesisSummary
-  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp only [synthesisSummary, synthesis_summary_norm]
+  intro index
   simp
 
 /-- Rust `DecomposeD::assign` (`note_commit.rs:297-340`), parameterized by the `d_0`
@@ -197,6 +200,7 @@ def bundle (wd0 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
         · simp only [circuit_norm]
           omega
         · simp only [circuit_norm]
+        · simp only [circuit_norm, synthesis_summary_norm]
         · simp only [circuit_norm, synthesis_summary_norm]
         · simp only [circuit_norm, synthesis_summary_norm] }
 
@@ -274,18 +278,19 @@ deriving ProvableStruct
 
 def synthesisSummary (config : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  .ofColumns
+  (FloorPlanner.RegionSynthesisSummary.ofColumns
     [.selector config.qNotecommitE.index,
       .column .advice config.colL.index,
       .column .advice config.colM.index,
       .column .advice config.colR.index]
-    (offset + 1) 0
+    (offset + 1) 0).withSelectorActivations
+      [(config.qNotecommitE.index, offset)]
 
 @[synthesis_summary_norm]
 theorem synthesisSummary_hasNoFixedColumns (config : Config) (offset : ℕ) :
     (synthesisSummary config offset).HasNoFixedColumns := by
-  unfold synthesisSummary
-  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp only [synthesisSummary, synthesis_summary_norm]
+  intro index
   simp
 
 /-- Rust `DecomposeE::assign` (`note_commit.rs:418-448`): pure copies, no in-gate
@@ -312,6 +317,7 @@ def bundle : FormalRegionCircuit Fp Config Config Inputs unit where
         · simp only [circuit_norm]
           omega
         · simp only [circuit_norm]
+        · simp only [circuit_norm, synthesis_summary_norm]
         · simp only [circuit_norm, synthesis_summary_norm]
         · simp only [circuit_norm, synthesis_summary_norm] }
 
@@ -356,19 +362,20 @@ deriving ProvableStruct
 
 def synthesisSummary (config : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  .ofColumns
+  (FloorPlanner.RegionSynthesisSummary.ofColumns
     [.selector config.qNotecommitG.index,
       .column .advice config.colL.index,
       .column .advice config.colM.index,
       .column .advice config.colL.index,
       .column .advice config.colM.index]
-    (offset + 2) 0
+    (offset + 2) 0).withSelectorActivations
+      [(config.qNotecommitG.index, offset)]
 
 @[synthesis_summary_norm]
 theorem synthesisSummary_hasNoFixedColumns (config : Config) (offset : ℕ) :
     (synthesisSummary config offset).HasNoFixedColumns := by
-  unfold synthesisSummary
-  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp only [synthesisSummary, synthesis_summary_norm]
+  intro index
   simp
 
 /-- Rust `DecomposeG::assign` (`note_commit.rs:540-575`), parameterized by the `g_0`
@@ -395,6 +402,7 @@ def bundle (wg0 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
         · simp only [circuit_norm]
           omega
         · simp only [circuit_norm]
+        · simp only [circuit_norm, synthesis_summary_norm]
         · simp only [circuit_norm, synthesis_summary_norm]
         · simp only [circuit_norm, synthesis_summary_norm] }
 
@@ -467,18 +475,19 @@ deriving ProvableStruct
 
 def synthesisSummary (config : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  .ofColumns
+  (FloorPlanner.RegionSynthesisSummary.ofColumns
     [.selector config.qNotecommitH.index,
       .column .advice config.colL.index,
       .column .advice config.colM.index,
       .column .advice config.colR.index]
-    (offset + 1) 0
+    (offset + 1) 0).withSelectorActivations
+      [(config.qNotecommitH.index, offset)]
 
 @[synthesis_summary_norm]
 theorem synthesisSummary_hasNoFixedColumns (config : Config) (offset : ℕ) :
     (synthesisSummary config offset).HasNoFixedColumns := by
-  unfold synthesisSummary
-  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp only [synthesisSummary, synthesis_summary_norm]
+  intro index
   simp
 
 /-- Rust `DecomposeH::assign` (`note_commit.rs:660-694`), parameterized by the `h_1`
@@ -506,6 +515,7 @@ def bundle (wh1 : WitgenIR Fp 1) : FormalRegionCircuit Fp Config Config Inputs f
         · simp only [circuit_norm]
           omega
         · simp only [circuit_norm]
+        · simp only [circuit_norm, synthesis_summary_norm]
         · simp only [circuit_norm, synthesis_summary_norm]
         · simp only [circuit_norm, synthesis_summary_norm] }
 

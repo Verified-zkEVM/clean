@@ -1,5 +1,5 @@
 import Clean.Halo2.TopLevel
-import Clean.Ironwood.Action.PublicInput
+import Clean.Ironwood.Action.Shape
 import Clean.Ironwood.Action.Spec
 
 /-!
@@ -135,13 +135,6 @@ private theorem actionSelectorRequirements :
     Circuit.elaboratedPost, Circuit.configureElaborated]
   trivial
 
-private theorem actionQueryRequirements :
-    (circuit Specs.Sinsemilla.orchardGenerators orchardBases).queryRequirements
-      () {} := by
-  dsimp only [FormalCircuit.queryRequirements, Circuit.circuit,
-    Circuit.elaboratedPost, Circuit.configureElaborated]
-  trivial
-
 def Internal.actionCircuitImpl : TopLevelCircuit Fp Config PublicInputs where
   formalCircuit :=
     circuit Specs.Sinsemilla.orchardGenerators orchardBases
@@ -171,11 +164,8 @@ def Internal.actionCircuitImpl : TopLevelCircuit Fp Config PublicInputs where
     set_option maxRecDepth 10000 in
       decide
   publicInputLayout := PublicInputs.layout
-  shape :=
-    TopLevelCompilation.circuitShape
-      (circuit Specs.Sinsemilla.orchardGenerators orchardBases)
-      PublicInputs.layout
-  shape_eq := rfl
+  shape := actionShape
+  shape_eq := actionShape_eq_compiled
   PrivateWitness := PrivateWitness
   extractPrivate := fun cfg env =>
     PrivateWitness.ofActionData (extractPost cfg () 0 env)

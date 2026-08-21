@@ -100,6 +100,8 @@ def initRegion (capacity : Fp) : FormalRegionCircuit Fp Config Config unit State
             synthesis_summary_norm]
         · simp only [initRegionSynthesisSummary, circuit_norm,
             synthesis_summary_norm]
+        · simp only [initRegionSynthesisSummary, circuit_norm,
+            synthesis_summary_norm]
       output_eq := by
         intro cfg _ _ _
         rfl }
@@ -134,12 +136,13 @@ theorem initRegion_synthesisSummary (capacity : Fp) (cfg : Config)
 /-- Reduced synthesis footprint of the pad-and-add region. -/
 def addInputRegionSynthesisSummary (cfg : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  .ofColumns
+  (FloorPlanner.RegionSynthesisSummary.ofColumns
     [.selector cfg.sPadAndAdd.index,
       .column .advice (cfg.state 0).index,
       .column .advice (cfg.state 1).index,
       .column .advice (cfg.state 2).index]
-    (offset + 3) 0
+    (offset + 3) 0).withSelectorActivations
+      [(cfg.sPadAndAdd.index, offset + 1)]
 
 def addInputRegionSynthesize (cfg : Config) (offset : ℕ)
     (input : Var Sponge.AddInputInput Fp) : RegionCircuit Fp (Var State Fp) := do
@@ -181,7 +184,7 @@ def addInputRegionElaborated : ElaboratedRegionCircuit Fp Config Config
     intro cfg _ _ _
     apply FloorPlanner.RegionSynthesisSummary.ext
     · simp only [addInputRegionSynthesize, addInputRegionSynthesisSummary, circuit_norm,
-        synthesis_summary_norm, configure_selector_norm]
+        synthesis_summary_norm, configure_selector_norm, padAndAddGate_selector]
       refine (FloorPlanner.unionColumns_normalize_append_redundant
         [.selector cfg.sPadAndAdd.index,
           .column .advice (cfg.state 0).index,
@@ -204,6 +207,8 @@ def addInputRegionElaborated : ElaboratedRegionCircuit Fp Config Config
         synthesis_summary_norm, configure_selector_norm]
     · simp only [addInputRegionSynthesize, addInputRegionSynthesisSummary, circuit_norm,
         synthesis_summary_norm, configure_selector_norm]
+    · simp only [addInputRegionSynthesize, addInputRegionSynthesisSummary, circuit_norm,
+        synthesis_summary_norm, configure_selector_norm, padAndAddGate_selector]
   output_eq := by
     intro _ _ _ _
     rfl

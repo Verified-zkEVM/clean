@@ -1137,10 +1137,11 @@ def slotIterationSynthesisSummary (ns : List ℕ) (i : ℕ)
     (cfg : Config) (base : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
   (slotSynthesisSummary ns i cfg base).combine
-    (FloorPlanner.RegionSynthesisSummary.ofColumns
+    ((FloorPlanner.RegionSynthesisSummary.ofColumns
       [.column .fixed cfg.qS2.index,
         .selector (sinsemillaGate cfg).selector.index]
-      (base + ns.getD i 0 + 1) 0)
+      (base + ns.getD i 0 + 1) 0).withSelectorActivations
+        [((sinsemillaGate cfg).selector.index, base + ns.getD i 0)])
 
 @[synthesis_summary_norm]
 theorem slotIterationSynthesisSummary_lookupActivationCount
@@ -1162,6 +1163,9 @@ theorem slotIteration_synthesisSummary_eq
           (sinsemillaGate cfg).enable (base + ns.getD i 0)).operations self) =
       slotIterationSynthesisSummary ns i cfg base := by
   apply FloorPlanner.RegionSynthesisSummary.ext
+  · simp only [slotIterationSynthesisSummary, RegionCircuit.operations_bind,
+      FloorPlanner.regionSynthesisSummary_append, circuit_norm,
+      synthesis_summary_norm]
   · simp only [slotIterationSynthesisSummary, RegionCircuit.operations_bind,
       FloorPlanner.regionSynthesisSummary_append, circuit_norm,
       synthesis_summary_norm]
@@ -1605,6 +1609,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
           simp only [RegionCircuit.operations_bind,
             FloorPlanner.regionSynthesisSummary_append]
         · apply FloorPlanner.RegionSynthesisSummary.ext
+          · simp only [circuit_norm, synthesis_summary_norm]
           · simp only [circuit_norm, synthesis_summary_norm]
           · simp only [circuit_norm, synthesis_summary_norm]
           · simp only [circuit_norm, synthesis_summary_norm]

@@ -61,7 +61,7 @@ theorem rowWit_eval (w : State (AssignedCell Fp)) (f : State Fp → Fp)
 
 def fullRoundSynthesisSummary (config : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  .ofColumns
+  (FloorPlanner.RegionSynthesisSummary.ofColumns
     [.selector config.sFull.index,
       .column .fixed (config.rcA 0).index,
       .column .fixed (config.rcA 1).index,
@@ -69,11 +69,12 @@ def fullRoundSynthesisSummary (config : Config) (offset : ℕ) :
       .column .advice (config.state 0).index,
       .column .advice (config.state 1).index,
       .column .advice (config.state 2).index]
-    (offset + 2) 0
+    (offset + 2) 0).withSelectorActivations
+      [(config.sFull.index, offset)]
 
 def partialRoundSynthesisSummary (config : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  .ofColumns
+  (FloorPlanner.RegionSynthesisSummary.ofColumns
     [.selector config.sPartial.index,
       .column .fixed (config.rcA 0).index,
       .column .fixed (config.rcA 1).index,
@@ -85,7 +86,8 @@ def partialRoundSynthesisSummary (config : Config) (offset : ℕ) :
       .column .advice (config.state 0).index,
       .column .advice (config.state 1).index,
       .column .advice (config.state 2).index]
-    (offset + 2) 0
+    (offset + 2) 0).withSelectorActivations
+      [(config.sPartial.index, offset)]
 
 def fullRoundSynthesize (r : ℕ) (cfg : Config) (offset : ℕ)
     (_ : Var unit Fp) : RegionCircuit Fp (Var State Fp) := do
@@ -129,6 +131,8 @@ def fullRoundSynthesize (r : ℕ) (cfg : Config) (offset : ℕ)
       · simp only [fullRoundSynthesize, circuit_norm]
       · simp only [fullRoundSynthesize, circuit_norm, synthesis_summary_norm]
       · simp only [fullRoundSynthesize, circuit_norm, synthesis_summary_norm]
+      · simp only [fullRoundSynthesize,
+          circuit_norm, synthesis_summary_norm]
     fixedAssignmentsAgree := by
       intro configInput counts hconfig offset input region
       unfold RegionOperations.FixedAssignmentsAgree
@@ -198,6 +202,8 @@ def partialRoundSynthesize (r : ℕ) (cfg : Config) (offset : ℕ)
       · simp only [partialRoundSynthesize, circuit_norm]
       · simp only [partialRoundSynthesize, circuit_norm, synthesis_summary_norm]
       · simp only [partialRoundSynthesize, circuit_norm, synthesis_summary_norm]
+      · simp only [partialRoundSynthesize,
+          circuit_norm, synthesis_summary_norm]
     fixedAssignmentsAgree := by
       intro configInput counts hconfig offset input region
       unfold RegionOperations.FixedAssignmentsAgree

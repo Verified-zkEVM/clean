@@ -98,7 +98,7 @@ private theorem loop_fold {n : ℕ} (st : ℕ → State Fp) (bits : ℕ → Bool
 
 def loopSynthesisSummary (n : ℕ) (cfg : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  .repeatColumns
+  .repeatColumnsWithSelectorAt cfg.qMul2.index (offset + 1)
     [.selector cfg.qMul2.index,
       .column .advice cfg.z.index,
       .column .advice cfg.xA.index,
@@ -120,6 +120,7 @@ theorem loopSynthesisSummary_hasNoFixedColumns
     (n : ℕ) (cfg : Config) (offset : ℕ) :
     (loopSynthesisSummary n cfg offset).HasNoFixedColumns := by
   simp only [loopSynthesisSummary,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_repeatColumnsWithSelectorAt,
     FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_repeatColumns]
   simp
 
@@ -147,7 +148,7 @@ theorem loopSynthesisSummary_eq (n w : ℕ) (cfg : Config) (offset : ℕ)
         ((loopProgram n w cfg offset alpha).operations self) := by
   rw [loopProgram_operations, RegionCircuit.forRange'_regionSynthesisSummary]
   unfold loopSynthesisSummary
-  rw [← FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns]
+  rw [← FloorPlanner.RegionSynthesisSummary.foldr_ofColumnsWithSelectorAt_eq_repeatColumnsWithSelectorAt]
   apply congrArg (List.foldr FloorPlanner.RegionSynthesisSummary.combine {})
   apply congrArg List.ofFn
   funext i
@@ -159,9 +160,10 @@ theorem loopSynthesisSummary_eq (n w : ℕ) (cfg : Config) (offset : ℕ)
       simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
         List.append_nil]]
   rw [Nat.mul_one]
-  simpa [round, Nat.add_assoc] using
-    (FormalRegionCircuit.call_synthesisSummary
-      (round (w + i.val)) cfg (offset + i.val) alpha self).symm
+  have hround := (FormalRegionCircuit.call_synthesisSummary
+    (round (w + i.val)) cfg (offset + i.val) alpha self).symm
+  simp only [round_synthesisSummary] at hround
+  simpa only [Nat.one_mul, Nat.add_assoc, Nat.add_left_comm, Nat.add_comm] using hround
 
 /-- The loop's operation stream performs no fixed-column assignments. -/
 theorem loopProgram_hasNoFixedAssignments
@@ -405,7 +407,7 @@ theorem initLambdaWit_eval (alpha : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)
 
 def doubleAndAddSynthesisSummary (n : ℕ) (cfg : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  (FloorPlanner.RegionSynthesisSummary.ofColumns
+  ((FloorPlanner.RegionSynthesisSummary.ofColumns
       [.column .advice cfg.z.index,
         .column .advice cfg.xA.index,
         .column .advice cfg.lambda1.index,
@@ -414,14 +416,16 @@ def doubleAndAddSynthesisSummary (n : ℕ) (cfg : Config) (offset : ℕ) :
         .column .advice cfg.lambda1.index,
         .column .advice cfg.lambda2.index,
         .selector cfg.qMul1.index]
-      (offset + 2) 0).combine
+      (offset + 2) 0).withSelectorActivations
+        [(cfg.qMul1.index, offset)]).combine
     ((loopSynthesisSummary n cfg offset).combine
-      (FloorPlanner.RegionSynthesisSummary.ofColumns
+      ((FloorPlanner.RegionSynthesisSummary.ofColumns
         [.selector cfg.qMul3.index,
           .column .advice cfg.z.index,
           .column .advice cfg.xA.index,
           .column .advice cfg.lambda1.index]
-        (offset + n + 3) 0))
+        (offset + n + 3) 0).withSelectorActivations
+          [(cfg.qMul3.index, offset + n + 1)]))
 
 @[synthesis_summary_norm]
 theorem doubleAndAddSynthesisSummary_lookupActivationCount
@@ -445,6 +449,7 @@ theorem doubleAndAddSynthesisSummary_hasNoFixedColumns
     (doubleAndAddSynthesisSummary n cfg offset).HasNoFixedColumns := by
   simp only [doubleAndAddSynthesisSummary,
     FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_combine,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_withSelectorActivations,
     FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns,
     loopSynthesisSummary_hasNoFixedColumns]
   simp
@@ -481,6 +486,7 @@ def double_and_add (n : ℕ) (w : ℕ) :
             FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount]
         · simp only [circuit_norm, synthesis_summary_norm,
             FloorPlanner.RegionSynthesisSummary.ofColumns_instanceRowExtent]
+        · simp only [circuit_norm, synthesis_summary_norm]
         · simp only [circuit_norm, synthesis_summary_norm]
       output cfg offset _ self :=
         { acc :=

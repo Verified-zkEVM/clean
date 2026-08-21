@@ -514,14 +514,15 @@ def mainCircuitSynthesisSummary (cfg : Config) :
             cfg.loConfig offLo).combine
           ((MulComplete.circuitSynthesisSummary 3
               cfg.completeConfig offComp).combine
-            ((FloorPlanner.RegionSynthesisSummary.ofColumns
+            (((FloorPlanner.RegionSynthesisSummary.ofColumns
                 [.column .advice cfg.completeConfig.zComplete.index,
                   .column .advice cfg.addConfig.xP.index,
                   .column .advice cfg.addConfig.yP.index,
                   .column .advice cfg.addConfig.xP.index,
                   .column .advice cfg.addConfig.yP.index,
                   .selector cfg.qMulLsb.index]
-                (offLsb + 2) 0).combine
+                (offLsb + 2) 0).withSelectorActivations
+                  [(cfg.qMulLsb.index, offLsb)]).combine
               (Add.synthesisSummary cfg.addConfig offLsb))))))
 
 @[synthesis_summary_norm]
@@ -540,6 +541,7 @@ theorem mainCircuitSynthesisSummary_hasNoFixedColumns (cfg : Config) :
     (mainCircuitSynthesisSummary cfg).HasNoFixedColumns := by
   simp only [mainCircuitSynthesisSummary,
     FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_combine,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_withSelectorActivations,
     FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns,
     Add.synthesisSummary_hasNoFixedColumns,
     MulIncomplete.doubleAndAddSynthesisSummary_hasNoFixedColumns,
@@ -564,6 +566,8 @@ theorem mainCircuitSynthesisSummary_eq (cfg : Config)
       synthesis_summary_norm, configure_selector_norm]
   · simp only [mainCircuitSynthesisSummary, circuit_norm,
       synthesis_summary_norm, configure_selector_norm]
+  · simp only [mainCircuitSynthesisSummary, circuit_norm,
+      synthesis_summary_norm, configure_selector_norm, lsbGate]
 
 def mainKeygenRequirements : KeygenRequirements Fp Config (Var Inputs Fp) where
   configLawful cfg :=

@@ -42,19 +42,20 @@ def toDonor (row : Row Fp) : DRow Fp :=
 
 def synthesisSummary (cfg : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  .ofColumns
+  (FloorPlanner.RegionSynthesisSummary.ofColumns
     [.selector cfg.qNotecommitValue.index,
       .column .advice cfg.colL.index,
       .column .advice cfg.colM.index,
       .column .advice cfg.colR.index,
       .column .advice cfg.colZ.index]
-    (offset + 1) 0
+    (offset + 1) 0).withSelectorActivations [(cfg.qNotecommitValue.index, offset)]
 
 @[synthesis_summary_norm]
 theorem synthesisSummary_hasNoFixedColumns (cfg : Config) (offset : ℕ) :
     (synthesisSummary cfg offset).HasNoFixedColumns := by
   unfold synthesisSummary
-  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp only [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_withSelectorActivations,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
   simp
 
 def bundleSynthesize (cfg : Config) (offset : ℕ)
@@ -84,6 +85,8 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
       synthesisSummary_eq := by
         intro _ _ _ _
         apply FloorPlanner.RegionSynthesisSummary.ext
+        · simp only [ValueCanonicity.synthesisSummary, bundleSynthesize, circuit_norm,
+            synthesis_summary_norm]
         · simp only [ValueCanonicity.synthesisSummary, bundleSynthesize, circuit_norm,
             synthesis_summary_norm]
         · simp only [ValueCanonicity.synthesisSummary, bundleSynthesize, circuit_norm,
@@ -145,7 +148,7 @@ def toDonor (row : Row Fp) : DRow Fp :=
 
 def synthesisSummary (cfg : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  .ofColumns
+  (FloorPlanner.RegionSynthesisSummary.ofColumns
     [.column .advice cfg.colL.index,
       .column .advice cfg.colM.index,
       .column .advice cfg.colM.index,
@@ -154,13 +157,14 @@ def synthesisSummary (cfg : Config) (offset : ℕ) :
       .column .advice cfg.colZ.index,
       .column .advice cfg.colZ.index,
       .selector cfg.qNotecommitGd.index]
-    (offset + 2) 0
+    (offset + 2) 0).withSelectorActivations [(cfg.qNotecommitGd.index, offset)]
 
 @[synthesis_summary_norm]
 theorem synthesisSummary_hasNoFixedColumns (cfg : Config) (offset : ℕ) :
     (synthesisSummary cfg offset).HasNoFixedColumns := by
   unfold synthesisSummary
-  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp only [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_withSelectorActivations,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
   simp
 
 def bundleSynthesize (cfg : Config) (offset : ℕ)
@@ -195,6 +199,8 @@ def bundleElaborated :
       · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
           synthesis_summary_norm]
         omega
+      · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+          synthesis_summary_norm]
       · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
           synthesis_summary_norm]
       · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
@@ -287,7 +293,7 @@ def toDonor (row : Row Fp) : DRow Fp :=
 
 def synthesisSummary (cfg : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  .ofColumns
+  (FloorPlanner.RegionSynthesisSummary.ofColumns
     [.column .advice cfg.colL.index,
       .column .advice cfg.colM.index,
       .column .advice cfg.colM.index,
@@ -296,13 +302,14 @@ def synthesisSummary (cfg : Config) (offset : ℕ) :
       .column .advice cfg.colZ.index,
       .column .advice cfg.colZ.index,
       .selector cfg.qNotecommitPkd.index]
-    (offset + 2) 0
+    (offset + 2) 0).withSelectorActivations [(cfg.qNotecommitPkd.index, offset)]
 
 @[synthesis_summary_norm]
 theorem synthesisSummary_hasNoFixedColumns (cfg : Config) (offset : ℕ) :
     (synthesisSummary cfg offset).HasNoFixedColumns := by
   unfold synthesisSummary
-  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp only [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_withSelectorActivations,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
   simp
 
 def bundleSynthesize (cfg : Config) (offset : ℕ)
@@ -328,6 +335,8 @@ theorem bundleSynthesisSummary_eq (cfg : Config) (offset : ℕ)
   · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
       synthesis_summary_norm]
     omega
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
   · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
       synthesis_summary_norm]
   · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
@@ -429,7 +438,7 @@ def toDonor (row : Row Fp) : DRow Fp :=
 
 def synthesisSummary (cfg : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  .ofColumns
+  (FloorPlanner.RegionSynthesisSummary.ofColumns
     [.column .advice cfg.colL.index,
       .column .advice cfg.colM.index,
       .column .advice cfg.colM.index,
@@ -438,13 +447,14 @@ def synthesisSummary (cfg : Config) (offset : ℕ) :
       .column .advice cfg.colZ.index,
       .column .advice cfg.colZ.index,
       .selector cfg.qNotecommitRho.index]
-    (offset + 2) 0
+    (offset + 2) 0).withSelectorActivations [(cfg.qNotecommitRho.index, offset)]
 
 @[synthesis_summary_norm]
 theorem synthesisSummary_hasNoFixedColumns (cfg : Config) (offset : ℕ) :
     (synthesisSummary cfg offset).HasNoFixedColumns := by
   unfold synthesisSummary
-  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp only [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_withSelectorActivations,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
   simp
 
 def bundleSynthesize (cfg : Config) (offset : ℕ)
@@ -474,6 +484,9 @@ theorem bundleSynthesisSummary_eq (cfg : Config) (offset : ℕ)
       synthesis_summary_norm]
   · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
       synthesis_summary_norm]
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
+
   · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
       synthesis_summary_norm]
 
@@ -572,7 +585,7 @@ def toDonor (row : Row Fp) : DRow Fp :=
 
 def synthesisSummary (cfg : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  .ofColumns
+  (FloorPlanner.RegionSynthesisSummary.ofColumns
     [.column .advice cfg.colL.index,
       .column .advice cfg.colL.index,
       .column .advice cfg.colM.index,
@@ -582,13 +595,14 @@ def synthesisSummary (cfg : Config) (offset : ℕ) :
       .column .advice cfg.colZ.index,
       .column .advice cfg.colZ.index,
       .selector cfg.qNotecommitPsi.index]
-    (offset + 2) 0
+    (offset + 2) 0).withSelectorActivations [(cfg.qNotecommitPsi.index, offset)]
 
 @[synthesis_summary_norm]
 theorem synthesisSummary_hasNoFixedColumns (cfg : Config) (offset : ℕ) :
     (synthesisSummary cfg offset).HasNoFixedColumns := by
   unfold synthesisSummary
-  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp only [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_withSelectorActivations,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
   simp
 
 def bundleSynthesize (cfg : Config) (offset : ℕ)
@@ -619,6 +633,9 @@ theorem bundleSynthesisSummary_eq (cfg : Config) (offset : ℕ)
       synthesis_summary_norm]
   · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
       synthesis_summary_norm]
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
+
   · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
       synthesis_summary_norm]
 
@@ -723,7 +740,7 @@ def toDonor (row : Row Fp) (lsb k3 : Fp) : DRow Fp :=
 
 def synthesisSummary (cfg : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  .ofColumns
+  (FloorPlanner.RegionSynthesisSummary.ofColumns
     [.selector cfg.qYCanon.index,
       .column .advice (cfg.advices 5).index,
       .column .advice (cfg.advices 6).index,
@@ -735,13 +752,14 @@ def synthesisSummary (cfg : Config) (offset : ℕ) :
       .column .advice (cfg.advices 7).index,
       .column .advice (cfg.advices 8).index,
       .column .advice (cfg.advices 9).index]
-    (offset + 2) 0
+    (offset + 2) 0).withSelectorActivations [(cfg.qYCanon.index, offset)]
 
 @[synthesis_summary_norm]
 theorem synthesisSummary_hasNoFixedColumns (cfg : Config) (offset : ℕ) :
     (synthesisSummary cfg offset).HasNoFixedColumns := by
   unfold synthesisSummary
-  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp only [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_withSelectorActivations,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
   simp
 
 def bundleSynthesize (wlsb wk3 : WitgenIR Fp 1) (cfg : Config) (offset : ℕ)
@@ -781,6 +799,9 @@ theorem bundleSynthesisSummary_eq (wlsb wk3 : WitgenIR Fp 1)
       synthesis_summary_norm]
   · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
       synthesis_summary_norm]
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
+
   · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
       synthesis_summary_norm]
 

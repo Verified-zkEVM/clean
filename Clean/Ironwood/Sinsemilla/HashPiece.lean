@@ -165,7 +165,9 @@ private def rowFam (cfg : Config) (pl : RegionIndex → ℕ) (e : ProverEnvironm
 
 def loopSynthesisSummary (n : ℕ) (cfg : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  .repeatColumns (roundColumns cfg) offset 1 2 0 n
+  .repeatColumnsWithSelectorPattern
+    [(cfg.qS1.index, 0), (cfg.qS1.index, 0)]
+    (roundColumns cfg) offset 1 2 0 n
     (lookupActivationCount := 1)
 
 @[synthesis_summary_norm]
@@ -197,7 +199,8 @@ def loop (G : Generators) (n : ℕ) : FormalRegionCircuit Fp Config Config field
         intro cfg offset piece self
         simp only [circuit_norm, synthesis_summary_norm, Nat.mul_one]
         simpa [loopSynthesisSummary, roundSynthesisSummary, Nat.add_assoc] using
-          (FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns
+          (FloorPlanner.RegionSynthesisSummary.foldr_ofColumnsWithSelectorPattern_eq_repeatColumnsWithSelectorPattern
+            [(cfg.qS1.index, 0), (cfg.qS1.index, 0)]
             (roundColumns cfg) offset 1 2 0 n
             (lookupActivationCount := 1)).symm
       fixedAssignmentsAgree := by
@@ -607,11 +610,12 @@ def circuitSynthesisSummary (w : ℕ) (cfg : Config) (offset : ℕ) :
         .column .advice cfg.lambda2.index]
       (offset + 1) 0).combine
     ((loopSynthesisSummary w cfg offset).combine
-      (FloorPlanner.RegionSynthesisSummary.ofColumns
+      ((FloorPlanner.RegionSynthesisSummary.ofColumns
         [.column .fixed cfg.qS2.index,
           .column .advice cfg.xA.index,
           .selector cfg.qS1.index]
-        (offset + w + 2) 0 (lookupActivationCount := 1)))
+        (offset + w + 2) 0 (lookupActivationCount := 1))
+          |>.withSelectorActivations [(cfg.qS1.index, offset + w)]))
 
 @[synthesis_summary_norm]
 theorem circuitSynthesisSummary_lookupActivationCount
