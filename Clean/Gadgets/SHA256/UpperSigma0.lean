@@ -215,10 +215,9 @@ def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
   -- Manual: the rotation-xor witness IR reads input bits; its eval-congruence needs the
   -- sigma-specific decomposition facts, beyond the tactic's generic close.
   computableWitnesses := by
-    computable_witnesses_start [upperSigma0, xor32, rotr32, Vector.ext_iff]
-    · computable_witnesses_close [Vector.getElem_rotate,
-        h ((i + 2) % 32) (by omega), h ((i + 13) % 32) (by omega)]
-    · computable_witnesses_close [Vector.getElem_rotate, h ((i + 22) % 32) (by omega)]
+    computable_witnesses_start [upperSigma0, xor32, rotr32, Vector.ext_iff, Vector.getElem_rotate]
+    · computable_witnesses_close [h ((i + 2) % 32) (by omega), h ((i + 13) % 32) (by omega)]
+    · computable_witnesses_close [h ((i + 22) % 32) (by omega)]
     · computable_witnesses_close
 
 end UpperSigma0

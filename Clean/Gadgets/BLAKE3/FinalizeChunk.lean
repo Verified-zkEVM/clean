@@ -342,15 +342,12 @@ def circuit : FormalCircuit (F p) Inputs (ProvableVector U32 8) := {
   -- offsets to `n + 5393`-style numerals while the lemma (matching the metadata) spells
   -- them as `n + 9 + 4 + 4 + 5376` chains, and simp keys don't bridge that arithmetic.
   computableWitnesses := by
-    computable_witnesses_start
-    · computable_witnesses_close [bytesToWords, eval_vector_set,
-        U32.ByteVector.eval_fromLimbs, U32.ByteVector.fromLimbs_inj]
-    · computable_witnesses_close [bytesToWords, eval_vector_set,
-        U32.ByteVector.eval_fromLimbs, U32.ByteVector.fromLimbs_inj]
-    · computable_witnesses_close [bytesToWords, eval_vector_set,
-        U32.ByteVector.eval_fromLimbs, U32.ByteVector.fromLimbs_inj]
-    · computable_witnesses_close [bytesToWords, eval_vector_set,
-        U32.ByteVector.eval_fromLimbs, U32.ByteVector.fromLimbs_inj]
+    computable_witnesses_start [bytesToWords, eval_vector_set,
+      U32.ByteVector.eval_fromLimbs, U32.ByteVector.fromLimbs_inj]
+    · computable_witnesses_close
+    · computable_witnesses_close
+    · computable_witnesses_close
+    · computable_witnesses_close
     -- the output leg needs `output_take8_eq`: its offset spelling
     -- (`n + 9 + 4 + 4 + 5376` chains) is not reachable by the closer's normalization
     · exact output_take8_eq h_agrees
