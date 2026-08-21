@@ -62,8 +62,15 @@ def fibStep : GeneralFormalCircuit (F p) Fib8Input Fib8Input where
     -- Inline rather than `assertBool`: the requirements-channels proof only sees inline
     -- constraints, and it needs booleanity to show the gated pull's multiplicity is lawful.
     assertZero (enabled * (enabled - 1))
-    -- the next row, witnessed: these four cells *are* trace row i+1
-    let enabled' ← witness (.expr enabled)
+    -- the next row, witnessed: these four cells *are* trace row i+1.
+    -- The selector is the one cell not derivable from the current row: *when to stop* is the
+    -- prover's choice. Witness generation reads the intended step count from the runtime hint
+    -- store (key "fibonacci-steps"): once the counter reaches it the flag witnesses 0 and the
+    -- trace freezes. A missing hint reads as 0, which never matches `n + 1` on a realistic
+    -- trace, so the default is "never stop". Hints feed only witness generation; constraints,
+    -- `Spec` and both proofs are hint-independent.
+    let enabled' ← witness (.ite (enabled =? 0) (.expr enabled)
+      (.ite (.feq (.expr (n + 1)) (.hintGet "fibonacci-steps" 1 0 0)) 0 1))
     let n' ← witness (.expr (n + enabled))
     let x' ← witness (.expr (x + enabled * (y - x)))
     let y' ← witness (.ite (enabled =? 0) (.expr y) (((x + y).val % 256).toField))

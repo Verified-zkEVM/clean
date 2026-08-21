@@ -798,4 +798,25 @@ def constraintsHold {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness 
 def channelsBalanced {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness ensemble) : Bool :=
   Demand.normalize witness.interactions |>.isEmpty
 
+/-- Executable boundary check: the `Bool` image of `EnsembleWitness.BoundaryConstraints`,
+completing the executable coverage of `Ensemble.Statement`'s three conjuncts alongside
+`constraintsHold` and `channelsBalanced`.
+
+Mirrors `Boundary.Entry.Holds` clause by clause: the named table must exist (`find?` is
+unambiguous since `unique_names` and `same_circuits` make witness table names unique), its
+designated row must exist (`Row.resolve` fails on an empty trace), and every assertion
+constraint must evaluate to zero in the assertion environment. -/
+def boundariesHold {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness ensemble) : Bool :=
+  ensemble.boundaries.all fun entry =>
+    match witness.tables.find? (fun table => table.component.circuit.name == entry.table) with
+    | none => false
+    | some table =>
+      match entry.assertion.row.resolve table.table with
+      | none => false
+      | some row =>
+        (entry.assertion.constraints (varFromOffset entry.Input 0)
+            (varFromOffset PublicIO (size entry.Input))).all fun constraint =>
+          constraint.eval
+            (Boundary.assertionEnv entry.Input row witness.publicInput witness.data) == 0
+
 end Air.Flat.WitnessGeneration
