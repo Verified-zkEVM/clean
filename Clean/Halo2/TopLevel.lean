@@ -18,6 +18,21 @@ namespace Halo2
 
 variable {F : Type}
 
+/-- The finite dimensions fixed by a top-level circuit and shared by its verifying
+key and every proof made against that key. -/
+@[ext] structure CircuitShape where
+  k : ℕ
+  numAdviceColumns : ℕ
+  numLookups : ℕ
+  numPermutationSets : ℕ
+  numPermutationColumns : ℕ
+  numQuotientPieces : ℕ
+  numInstanceColumns : ℕ
+  numInstanceQueries : ℕ
+  numAdviceQueries : ℕ
+  numFixedQueries : ℕ
+deriving DecidableEq, Repr
+
 private theorem accumulator_le_foldl_max (values : List ℕ) (accumulator : ℕ) :
     accumulator ≤ values.foldl max accumulator := by
   induction values generalizing accumulator with
@@ -497,6 +512,64 @@ def placedProverEnvironment
     Placed ProverEnvironment F :=
   ⟨placement circuit, proverEnvironment circuit layout assignment hint⟩
 
+/-- Query lawfulness bounds every configure-recorded fixed query by the closed
+configuration's fixed-column count. -/
+theorem fixedQueries_bounded
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (hrequirements : circuit.queryRequirements () {}) :
+    (constraintSystem circuit).fixedQueries.Forall fun query =>
+      query.1.index < (constraintSystem circuit).numFixedColumns := by
+  let program := circuit.configure ()
+  let delta := program.delta {}
+  let counts := program.finalCounts {}
+  have hlawful : delta.QueriesLawful counts :=
+    circuit.queriesLawful () {} hrequirements
+  rw [List.forall_iff_forall_mem]
+  intro query hquery
+  have hdelta : query ∈ delta.fixedQueries := by
+    have hrun := (Configure.mem_fixedQueries_run_iff program {} query).mp hquery
+    exact hrun.resolve_left (by simp)
+  have hbound := List.forall_iff_forall_mem.mp
+    hlawful.fixedQueries_fst_lt_numFixedColumns query hdelta
+  simpa only [constraintSystem, program, counts,
+    Configure.run_numFixedColumns,
+    ConfigureCounts.ofConstraintSystem_empty] using hbound
+
+/-- The compiler's post-compression fixed-query count is the configure-recorded
+count plus the number of packed selector columns. -/
+theorem fixedQueryCount_eq
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit))
+    (hrequirements : circuit.queryRequirements () {}) :
+    (PinnedConstraintSystem.derive
+      (constraintSystem circuit) (selectorMap circuit layout)).fixedQueryLayout.length =
+        (constraintSystem circuit).fixedQueries.length +
+          (selectorMap circuit layout).newFixedCols := by
+  simp only [PinnedConstraintSystem.derive, projectCS]
+  exact queryWalkInit_fixed_length _ _
+    (fixedQueries_bounded circuit hrequirements)
+
+/-- The complete finite shape produced by the canonical top-level compiler. -/
+def circuitShape
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit)) :
+    CircuitShape :=
+  let cs := constraintSystem circuit
+  let map := selectorMap circuit layout
+  let pinned := PinnedConstraintSystem.derive cs map
+  let permutationColumnCount := cs.permutationColumns.length
+  { k := domainExponent circuit layout
+    numAdviceColumns := cs.numAdviceColumns
+    numLookups := cs.lookups.length
+    numPermutationSets :=
+      (permutationColumnCount + cs.chunkLen - 1) / cs.chunkLen
+    numPermutationColumns := permutationColumnCount
+    numQuotientPieces := csDegree cs - 1
+    numInstanceColumns := cs.numInstanceColumns
+    numInstanceQueries := pinned.instanceQueryLayout.length
+    numAdviceQueries := pinned.adviceQueryLayout.length
+    numFixedQueries := pinned.fixedQueryLayout.length }
+
 end TopLevelCompilation
 
 /-- A closed formal circuit together with its public/private witness boundary. -/
@@ -537,6 +610,12 @@ structure TopLevelCircuit
   publicInputLayout :
     PublicInputLayout PublicInput
       (TopLevelCompilation.publicInputColumns formalCircuit)
+  /-- A fully reduced finite shape for downstream verifier and proof types. -/
+  circuitShape : CircuitShape
+  /-- The published shape agrees with the canonical compiler result. -/
+  circuitShape_eq :
+    circuitShape =
+      TopLevelCompilation.circuitShape formalCircuit publicInputLayout
   /-- The part of the extracted witness not contained in the public input. -/
   PrivateWitness : Type
   /-- Extract the private witness from a top-level execution, which starts at region zero. -/
@@ -1088,6 +1167,87 @@ def adviceQueryCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
 /-- The number of fixed queries in the circuit-owned pinned constraint system. -/
 def fixedQueryCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
   self.fixedQueryLayout.length
+
+/-- The top-level fixed-query count is the configure-recorded count plus one
+rotation-zero query for every packed selector column. -/
+theorem fixedQueryCount_eq_fixedQueries_length_add_newFixedCols
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.fixedQueryCount =
+      self.constraintSystem.fixedQueries.length +
+        self.selectorMap.newFixedCols := by
+  exact TopLevelCompilation.fixedQueryCount_eq
+    self.formalCircuit self.publicInputLayout self.queryRequirements
+
+/-- The published shape's domain exponent is the compiler-derived exponent. -/
+theorem circuitShape_k
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.circuitShape.k = self.domainExponent := by
+  rw [self.circuitShape_eq]
+  rfl
+
+/-- The published shape's advice-column count is the configured count. -/
+theorem circuitShape_numAdviceColumns
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.circuitShape.numAdviceColumns = self.adviceColumnCount := by
+  rw [self.circuitShape_eq]
+  rfl
+
+/-- The published shape's lookup count is the configured count. -/
+theorem circuitShape_numLookups
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.circuitShape.numLookups = self.lookupCount := by
+  rw [self.circuitShape_eq]
+  rfl
+
+/-- The published shape's permutation-set count is the compiler-derived count. -/
+theorem circuitShape_numPermutationSets
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.circuitShape.numPermutationSets = self.permutationSetCount := by
+  rw [self.circuitShape_eq]
+  rfl
+
+/-- The published shape's permutation-column count is the configured count. -/
+theorem circuitShape_numPermutationColumns
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.circuitShape.numPermutationColumns = self.permutationColumnCount := by
+  rw [self.circuitShape_eq]
+  rfl
+
+/-- The published shape's quotient-piece count is the compiler-derived count. -/
+theorem circuitShape_numQuotientPieces
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.circuitShape.numQuotientPieces = self.quotientPieceCount := by
+  rw [self.circuitShape_eq]
+  rfl
+
+/-- The published shape's instance-column count is the configured count. -/
+theorem circuitShape_numInstanceColumns
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.circuitShape.numInstanceColumns =
+      self.constraintSystem.numInstanceColumns := by
+  rw [self.circuitShape_eq]
+  rfl
+
+/-- The published shape's instance-query count is the compiled count. -/
+theorem circuitShape_numInstanceQueries
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.circuitShape.numInstanceQueries = self.instanceQueryCount := by
+  rw [self.circuitShape_eq]
+  rfl
+
+/-- The published shape's advice-query count is the compiled count. -/
+theorem circuitShape_numAdviceQueries
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.circuitShape.numAdviceQueries = self.adviceQueryCount := by
+  rw [self.circuitShape_eq]
+  rfl
+
+/-- The published shape's fixed-query count is the compiled count. -/
+theorem circuitShape_numFixedQueries
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.circuitShape.numFixedQueries = self.fixedQueryCount := by
+  rw [self.circuitShape_eq]
+  rfl
 
 @[simp] theorem adviceQueryLayout_eq_constraintSystem
     (self : TopLevelCircuit F Config PublicInput) :

@@ -171,6 +171,11 @@ def Internal.actionCircuitImpl : TopLevelCircuit Fp Config PublicInputs where
     set_option maxRecDepth 10000 in
       decide
   publicInputLayout := PublicInputs.layout
+  circuitShape :=
+    TopLevelCompilation.circuitShape
+      (circuit Specs.Sinsemilla.orchardGenerators orchardBases)
+      PublicInputs.layout
+  circuitShape_eq := rfl
   PrivateWitness := PrivateWitness
   extractPrivate := fun cfg env =>
     PrivateWitness.ofActionData (extractPost cfg () 0 env)

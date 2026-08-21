@@ -1179,9 +1179,32 @@ theorem configure_finalCounts_numFixedColumns (G : Generators) :
     ((configure G).finalCounts {}).numFixedColumns = 14 := by
   configure_norm
 
+/-- The closed Action configuration allocates fifty-six selectors. -/
+theorem configure_finalCounts_numSelectors (G : Generators) :
+    ((configure G).finalCounts {}).numSelectors = 56 := by
+  configure_norm
+
 /-- The closed Action configuration allocates one instance column. -/
 theorem configure_finalCounts_numInstanceColumns (G : Generators) :
     ((configure G).finalCounts {}).numInstanceColumns = 1 := by
+  configure_norm
+
+set_option maxRecDepth 10000 in
+/-- The closed Action configuration equality-enables fifteen distinct columns. -/
+theorem configure_permutationColumns_length (G : Generators) :
+    ((configure G).run {}).2.permutationColumns.length = 15 := by
+  configure_norm
+
+/-- The three Action lookup arguments have arities one, three, and three. -/
+theorem configure_lookupInputLengths (G : Generators) :
+    ((configure G).delta {}).lookups.map (fun lookup => lookup.inputs.length) =
+      [1, 3, 3] := by
+  configure_norm
+
+set_option maxRecDepth 10000 in
+/-- Action's closed configure run records twenty-five distinct advice queries. -/
+theorem configure_adviceQueries_length (G : Generators) :
+    ((configure G).run {}).2.adviceQueries.length = 25 := by
   configure_norm
 
 private instance elaboratedConfigure (G : Generators) : ElaboratedConfigure (configure G) := by
