@@ -1,6 +1,7 @@
 import Clean.Halo2.Keygen.PinnedCs
 import Clean.Halo2.Keygen.Semantics
 import Clean.Halo2.Keygen.Layout
+import Clean.Halo2.CircuitShape
 
 /-!
 # Closed top-level formal circuits
@@ -17,21 +18,6 @@ public input or verifier assumptions.
 namespace Halo2
 
 variable {F : Type}
-
-/-- The finite dimensions fixed by a top-level circuit and shared by its verifying
-key and every proof made against that key. -/
-@[ext] structure CircuitShape where
-  k : ℕ
-  numAdviceColumns : ℕ
-  numLookups : ℕ
-  numPermutationSets : ℕ
-  numPermutationColumns : ℕ
-  numQuotientPieces : ℕ
-  numInstanceColumns : ℕ
-  numInstanceQueries : ℕ
-  numAdviceQueries : ℕ
-  numFixedQueries : ℕ
-deriving DecidableEq, Repr
 
 private theorem accumulator_le_foldl_max (values : List ℕ) (accumulator : ℕ) :
     accumulator ≤ values.foldl max accumulator := by
