@@ -29,6 +29,9 @@ inductive LoweringError where
   | unstableDataRead (component operation : ℕ) (key : String) (column : ℕ)
   | componentVariable (component index width : ℕ)
   | verifierVariable (index width : ℕ)
+  | multiRowWindow (component windowRows : ℕ)
+  | transitionMode (component : ℕ)
+  | boundaryAssertions (count : ℕ)
 deriving Repr, DecidableEq
 
 instance : ToString LoweringError where
@@ -69,6 +72,12 @@ instance : ToString LoweringError where
         s!"component {component} expression reads cell {index}, but its width is {width}"
     | .verifierVariable index width =>
         s!"verifier interaction reads public cell {index}, but the public input width is {width}"
+    | .multiRowWindow component windowRows =>
+        s!"component {component} spans {windowRows} trace rows, but the backend AIR is single-row"
+    | .transitionMode component =>
+        s!"component {component} uses transition generation, which the backend does not support"
+    | .boundaryAssertions count =>
+        s!"ensemble carries {count} boundary assertions, but the backend has no boundary constraint support"
 
 def expressionBadVariable (width : ℕ) : Expression F → Option ℕ
   | .var cell => if cell.index < width then none else some cell.index
@@ -110,6 +119,10 @@ private def lowerRowProgram (error : LoweringError) (program : Witgen.RowProgram
 
 private def lowerComponent (index : ℕ) (component : Component F) :
     Except LoweringError (ComponentProgram F) := do
+  -- the emitted Rust AIR reads `main.row_slice(0)` only, so it can only express a single-row
+  -- relation; refuse anything wider rather than shipping a different relation than we verified
+  unless component.windowRows = 1 do
+    throw (.multiRowWindow index component.windowRows)
   let operations := component.rowOperations
   unless operations.lookups.isEmpty do
     throw (.legacyLookup index)
@@ -122,8 +135,9 @@ private def lowerComponent (index : ℕ) (component : Component F) :
   let interactions := operations.interactions
   let expressions := constraints ++ interactions.flatMap fun interaction =>
     interaction.mult :: interaction.msg.toList
-  match expressionsBadVariable component.width expressions with
-  | some cellIndex => throw (.componentVariable index cellIndex component.width)
+  -- constraint expressions address the whole window, so the in-range bound is `envWidth`
+  match expressionsBadVariable component.envWidth expressions with
+  | some cellIndex => throw (.componentVariable index cellIndex component.envWidth)
   | none => pure ()
   return {
     name := component.circuit.name
@@ -141,6 +155,7 @@ private def validateMode (index : ℕ) (component : Component F)
   match component.fixedColumns, mode with
   | none, _ => pure ()
   | some _, .demand _ => throw (.fixedDemandMode index)
+  | some _, .transition _ => throw (.transitionMode index)
   | some fixed, .preallocated preallocated =>
       unless preallocated.rows = fixed.height do
         throw (.preallocatedRows index fixed.height preallocated.rows)
@@ -149,6 +164,9 @@ private def validateMode (index : ℕ) (component : Component F)
         throw (.fixedPadding index fixed.height paddedHeight)
   match mode with
   | .demand _ => pure ()
+  -- the emitted Rust prover generates rows independently; a chained transition trace is
+  -- inexpressible there, mirroring the `multiRowWindow` refusal on the constraint side
+  | .transition _ => throw (.transitionMode index)
   | .preallocated preallocated =>
       let expectedWidth := component.rowOffset - fixedWidth
       unless preallocated.input.width = expectedWidth do
@@ -228,6 +246,8 @@ private def validateDataReads (ensemble : Ensemble F PublicIO) (modes : List (Mo
             throw (.dataReadWidth componentIndex operationIndex read.key target.rowOffset read.width)
           let unstable := match mode with
             | .demand _ => true
+            -- chain-generated rows are not stable preallocated cells
+            | .transition _ => true
             | .preallocated preallocated =>
                 preallocated.handlers.any fun handler => handler.column = read.column
           if unstable then
@@ -236,6 +256,10 @@ private def validateDataReads (ensemble : Ensemble F PublicIO) (modes : List (Mo
 /-- Lower and validate the backend-facing portion of an ensemble without producing source text. -/
 def lower (ensemble : Ensemble F PublicIO) (config : Config F ProverInput) :
     Except LoweringError (Program F) := do
+  -- the backend enforces no boundary constraints, so an ensemble carrying any would ship an
+  -- artifact checking a weaker relation than the one verified here
+  unless ensemble.boundaries.isEmpty do
+    throw (.boundaryAssertions ensemble.boundaries.length)
   unless config.modes.length = ensemble.tables.length do
     throw (.modeCount ensemble.tables.length config.modes.length)
   unless config.padding.length = ensemble.tables.length do

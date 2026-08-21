@@ -1,8 +1,9 @@
 /-
 This file defines flat AIR ensembles and what soundness and completeness mean for them.
 -/
-import Clean.Air.FlatComponent
+import Clean.Air.TableContext
 import Clean.Air.Balance
+import Clean.Air.Boundary
 import Clean.Circuit.Verifier
 
 namespace Air.Flat
@@ -49,6 +50,9 @@ structure Ensemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType
   unique_names : (tables.map (·.circuit.name)).Nodup
   channels : List (RawChannel F)
   verifier : Verifier.Program F PublicIO := .empty F PublicIO
+  /-- Boundary assertions pinning designated trace rows against the public input, keyed by
+  component name; see `Clean/Air/Boundary.lean`. -/
+  boundaries : List (Boundary.Entry F PublicIO) := []
 
 /-- The public input and component traces committed by an ensemble proof. -/
 structure EnsembleWitness (ens : Ensemble F PublicIO) where
@@ -61,7 +65,7 @@ structure EnsembleWitness (ens : Ensemble F PublicIO) where
 /-- External prover data consists of the complete inputs of the committed component traces. -/
 def EnsembleWitness.data {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) :
     ProverData F :=
-  deriveProverData witness.tables
+  Table.deriveProverData witness.tables
 
 @[circuit_norm]
 lemma List.flatMap_subset_iff {α β : Type*} {f : α → List β} {l₁ : List α} {l₂ : List β} :
@@ -83,6 +87,8 @@ def empty (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO
   (empty F PublicIO).channels = [] := rfl
 @[circuit_norm] lemma empty_verifier :
   (empty F PublicIO).verifier = Verifier.Program.empty F PublicIO := rfl
+@[circuit_norm] lemma empty_boundaries :
+  (empty F PublicIO).boundaries = [] := rfl
 @[circuit_norm]
 abbrev verifierOperations (ens : Ensemble F PublicIO) : Operations F :=
   ens.verifier.circuitOperations
@@ -178,7 +184,7 @@ private lemma tableNamesNodup (witness : EnsembleWitness ens) :
 lemma data_consistent (witness : EnsembleWitness ens) :
     ∀ table ∈ witness.tables, table.DataConsistency witness.data := by
   intro table htable
-  exact deriveProverData_eq_of_mem witness.tables witness.tableNamesNodup
+  exact Table.deriveProverData_eq_of_mem witness.tables witness.tableNamesNodup
     htable _
 
 def tableContext (witness : EnsembleWitness ens) : TableContext F where
@@ -206,6 +212,21 @@ def Assumptions {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Pr
 def Spec {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Prop :=
   ens.VerifierSpec witness.publicInput witness.data ∧
     ∀ table ∈ witness.tables, table.Spec witness.data
+
+/-- Every boundary assertion's constraints hold on its designated row. This is the raw form
+that enters `Ensemble.Statement`. -/
+def BoundaryConstraints {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Prop :=
+  ∀ entry ∈ ens.boundaries, entry.Holds witness.tables witness.publicInput witness.data
+
+/-- Every boundary assertion's `Spec` holds of its designated row. This is the semantic form
+available to `SpecConsistencyWithBoundaries`. -/
+def BoundarySpec {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Prop :=
+  ∀ entry ∈ ens.boundaries, entry.Spec witness.tables witness.publicInput witness.data
+
+lemma boundarySpec_of_boundaryConstraints {ens : Ensemble F PublicIO}
+    (witness : EnsembleWitness ens) :
+    witness.BoundaryConstraints → witness.BoundarySpec :=
+  fun h entry hentry => entry.spec_of_holds (h entry hentry)
 
 def interactions {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : List (Interaction F) :=
   ens.verifierOperations.interactionValues (.fromInput witness.publicInput witness.data) ++
@@ -309,7 +330,7 @@ verify a bound on the interaction length from the given table lengths.
 def Statement (ens : Ensemble F PublicIO) (publicInput : PublicIO F) : Prop :=
   ∃ witness : EnsembleWitness ens,
     witness.publicInput = publicInput ∧
-    witness.Constraints ∧ witness.BalancedChannels
+    witness.Constraints ∧ witness.BoundaryConstraints ∧ witness.BalancedChannels
 
 /-- Soundness: assumptions plus the raw statement imply the spec. -/
 def Soundness (ens : Ensemble F PublicIO) (Assumptions Spec : PublicIO F → Prop) : Prop :=
@@ -354,11 +375,36 @@ def SpecConsistency (ens : Ensemble F PublicIO) (Spec : PublicIO F → Prop) : P
     witness.Spec →
     Spec witness.publicInput
 
+/-- Like `SpecConsistency`, but additionally receiving the boundary specs. For `boundaries = []`
+the extra hypothesis is vacuous and the two notions coincide. -/
+def SpecConsistencyWithBoundaries (ens : Ensemble F PublicIO) (Spec : PublicIO F → Prop) : Prop :=
+  ∀ (witness : EnsembleWitness ens),
+    witness.Spec →
+    witness.BoundarySpec →
+    Spec witness.publicInput
+
+lemma SpecConsistency.withBoundaries {ens : Ensemble F PublicIO} {Spec : PublicIO F → Prop}
+    (h : ens.SpecConsistency Spec) : ens.SpecConsistencyWithBoundaries Spec :=
+  fun witness spec _ => h witness spec
+
 /-- Ensemble-level assumptions imply every table's assumptions. -/
 def AssumptionsConsistency (ens : Ensemble F PublicIO) (Assumptions : PublicIO F → Prop) : Prop :=
   ∀ (witness : EnsembleWitness ens),
     Assumptions witness.publicInput →
     witness.Assumptions
+
+theorem soundness_of_tableSoundness_and_specConsistencyWithBoundaries (ens : Ensemble F PublicIO)
+  (Assumptions Spec : PublicIO F → Prop) :
+  ens.TableSoundness →
+  ens.AssumptionsConsistency Assumptions →
+  ens.SpecConsistencyWithBoundaries Spec →
+    ens.Soundness Assumptions Spec := by
+  intro table_soundness assumptions_consistency spec_consistency publicInput assumptions statement
+  obtain ⟨witness, publicInput_eq, constraints, boundary_constraints, balance⟩ := statement
+  subst publicInput_eq
+  exact spec_consistency witness
+    (table_soundness witness (assumptions_consistency witness assumptions) constraints balance)
+    (witness.boundarySpec_of_boundaryConstraints boundary_constraints)
 
 theorem soundness_of_tableSoundness_and_specConsistency (ens : Ensemble F PublicIO)
   (Assumptions Spec : PublicIO F → Prop) :
@@ -369,7 +415,7 @@ theorem soundness_of_tableSoundness_and_specConsistency (ens : Ensemble F Public
   simp only [Soundness, TableSoundness, AssumptionsConsistency, SpecConsistency, Statement,
     forall_exists_index, and_imp]
   intro table_soundness assumptions_consistency spec_consistency
-    publicInput assumptions witness publicInput_eq constraints balance
+    publicInput assumptions witness publicInput_eq constraints _boundaries balance
   simp only [← publicInput_eq] at *
   apply spec_consistency witness
   apply table_soundness witness ?assumptions constraints balance
@@ -386,13 +432,18 @@ def merge (ens1 ens2 : Ensemble F PublicIO)
   { ens2 with
     tables := ens2.tables ++ ens1.tables,
     unique_names
-    channels := ens2.channels ++ ens1.channels }
+    channels := ens2.channels ++ ens1.channels
+    boundaries := ens2.boundaries ++ ens1.boundaries }
 
 @[circuit_norm] lemma merge_tables (ens1 ens2 : Ensemble F PublicIO) (unique_names) :
   (ens1.merge ens2 unique_names).tables = ens2.tables ++ ens1.tables := rfl
 @[circuit_norm] lemma merge_verifier (ens1 ens2 : Ensemble F PublicIO) (unique_names) :
   (ens1.merge ens2 unique_names).verifier = ens2.verifier := rfl
+@[circuit_norm] lemma merge_boundaries (ens1 ens2 : Ensemble F PublicIO) (unique_names) :
+  (ens1.merge ens2 unique_names).boundaries = ens2.boundaries ++ ens1.boundaries := rfl
 
+/-- Add a component to the ensemble. There is no separate `addTransitionTable`: the window is
+read off `table.windowRows`, so a transition component is added exactly like a flat one. -/
 def addTable (ens : Ensemble F PublicIO) (table : Component F)
     (fresh : table.circuit.name ∉ ens.tables.map (·.circuit.name)) : Ensemble F PublicIO :=
   { ens with
@@ -403,6 +454,23 @@ def addTable (ens : Ensemble F PublicIO) (table : Component F)
   (ens.addTable table fresh).tables = table :: ens.tables := rfl
 @[circuit_norm] lemma addTable_verifier (ens : Ensemble F PublicIO) (table : Component F) (fresh) :
   (ens.addTable table fresh).verifier = ens.verifier := rfl
+@[circuit_norm] lemma addTable_boundaries (ens : Ensemble F PublicIO) (table : Component F) (fresh) :
+  (ens.addTable table fresh).boundaries = ens.boundaries := rfl
+
+/-- Attach a boundary assertion, keyed by component name. The named component need not be
+present yet, but `Statement` is unsatisfiable until it is. -/
+def addBoundary (ens : Ensemble F PublicIO) (entry : Boundary.Entry F PublicIO) :
+    Ensemble F PublicIO :=
+  { ens with boundaries := entry :: ens.boundaries }
+
+@[circuit_norm] lemma addBoundary_tables (ens : Ensemble F PublicIO) (entry) :
+  (ens.addBoundary entry).tables = ens.tables := rfl
+@[circuit_norm] lemma addBoundary_channels (ens : Ensemble F PublicIO) (entry) :
+  (ens.addBoundary entry).channels = ens.channels := rfl
+@[circuit_norm] lemma addBoundary_verifier (ens : Ensemble F PublicIO) (entry) :
+  (ens.addBoundary entry).verifier = ens.verifier := rfl
+@[circuit_norm] lemma addBoundary_boundaries (ens : Ensemble F PublicIO) (entry) :
+  (ens.addBoundary entry).boundaries = entry :: ens.boundaries := rfl
 
 end Ensemble
 end Air.Flat

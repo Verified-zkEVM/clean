@@ -855,6 +855,7 @@ def empty (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO
 @[circuit_norm] lemma empty_channels : (empty F PublicIO).channels = [] := rfl
 @[circuit_norm] lemma empty_finished : (empty F PublicIO).finished = [] := rfl
 @[circuit_norm] lemma empty_verifier : (empty F PublicIO).verifier = .empty F PublicIO := rfl
+@[circuit_norm] lemma empty_boundaries : (empty F PublicIO).boundaries = [] := rfl
 
 def addTable (soundEns : SoundEnsemble F PublicIO) (table : Component F)
     (grts_subset_finished : table.circuit.channelsWithGuarantees ⊆ soundEns.finished
@@ -887,6 +888,8 @@ variable {soundEns : SoundEnsemble F PublicIO} {table : Component F}
   (soundEns.addTable table gsf rdf fresh).finished = soundEns.finished := rfl
 @[circuit_norm] lemma addTable_verifier :
   (soundEns.addTable table gsf rdf fresh).verifier = soundEns.verifier := rfl
+@[circuit_norm] lemma addTable_boundaries :
+  (soundEns.addTable table gsf rdf fresh).boundaries = soundEns.boundaries := rfl
 
 def addChannel (soundEns : SoundEnsemble F PublicIO) (channel : RawChannel F) : SoundEnsemble F PublicIO where
   ensemble := { soundEns.ensemble with channels := channel :: soundEns.channels }
@@ -903,6 +906,8 @@ def addChannel (soundEns : SoundEnsemble F PublicIO) (channel : RawChannel F) : 
   (soundEns.addChannel channel).tables = soundEns.tables := rfl
 @[circuit_norm] lemma addChannel_finished {channel : RawChannel F} :
   (soundEns.addChannel channel).finished = soundEns.finished := rfl
+@[circuit_norm] lemma addChannel_boundaries {channel : RawChannel F} :
+  (soundEns.addChannel channel).boundaries = soundEns.boundaries := rfl
 
 def markFinished (soundEns : SoundEnsemble F PublicIO) (channel : RawChannel F) [channel.Consistent]
   (h_mem : channel ∈ soundEns.channels := by simp [circuit_norm]) :
@@ -936,6 +941,8 @@ variable {channel : RawChannel F} [channel.Consistent] {h_mem : channel ∈ soun
   (soundEns.markFinished channel h_mem).tables = soundEns.tables := rfl
 @[circuit_norm] lemma markFinished_finished :
   (soundEns.markFinished channel h_mem).finished = channel :: soundEns.finished := rfl
+@[circuit_norm] lemma markFinished_boundaries :
+  (soundEns.markFinished channel h_mem).boundaries = soundEns.boundaries := rfl
 
 def addFinishedChannel (soundEns : SoundEnsemble F PublicIO) (channel : RawChannel F)
   [channel.Consistent] : SoundEnsemble F PublicIO :=
@@ -949,6 +956,34 @@ def addFinishedChannel (soundEns : SoundEnsemble F PublicIO) (channel : RawChann
   (soundEns.addFinishedChannel channel).tables = soundEns.tables := rfl
 @[circuit_norm] lemma addFinishedChannel_finished {channel : RawChannel F} [channel.Consistent] :
   (soundEns.addFinishedChannel channel).finished = channel :: soundEns.finished := rfl
+@[circuit_norm] lemma addFinishedChannel_boundaries {channel : RawChannel F} [channel.Consistent] :
+  (soundEns.addFinishedChannel channel).boundaries = soundEns.boundaries := rfl
+
+/-- Attach a boundary assertion. Boundaries touch neither the channels nor the table list, so
+every `SoundEnsemble` invariant carries over unchanged. -/
+def addBoundary (soundEns : SoundEnsemble F PublicIO) (entry : Boundary.Entry F PublicIO) :
+    SoundEnsemble F PublicIO where
+  ensemble := soundEns.ensemble.addBoundary entry
+  finished := soundEns.finished
+  finished_consistent := soundEns.finished_consistent
+  finished_subset := soundEns.finished_subset
+  subset_finished := soundEns.subset_finished
+  ordered_channels := soundEns.ordered_channels
+  verifier_empty := soundEns.verifier_empty
+
+variable {entry : Boundary.Entry F PublicIO} in
+section
+@[circuit_norm] lemma addBoundary_tables :
+  (soundEns.addBoundary entry).tables = soundEns.tables := rfl
+@[circuit_norm] lemma addBoundary_channels :
+  (soundEns.addBoundary entry).channels = soundEns.channels := rfl
+@[circuit_norm] lemma addBoundary_finished :
+  (soundEns.addBoundary entry).finished = soundEns.finished := rfl
+@[circuit_norm] lemma addBoundary_verifier :
+  (soundEns.addBoundary entry).verifier = soundEns.verifier := rfl
+@[circuit_norm] lemma addBoundary_boundaries :
+  (soundEns.addBoundary entry).boundaries = entry :: soundEns.boundaries := rfl
+end
 
 def toFormal (soundEns : SoundEnsemble F PublicIO)
     (Assumptions Spec : PublicIO F → Prop)
@@ -964,5 +999,21 @@ def toFormal (soundEns : SoundEnsemble F PublicIO)
     apply soundEns.tableSoundness_of_soundChannels
     use soundEns.finished, soundEns.finished_subset
     exact soundEns.soundChannels
+
+/-- Like `toFormal`, but with `SpecConsistencyWithBoundaries`, so the public spec may draw on
+the ensemble's boundary assertions in addition to the table and verifier specs. -/
+def toFormalWithBoundaries (soundEns : SoundEnsemble F PublicIO)
+    (Assumptions Spec : PublicIO F → Prop)
+    (assumptionsConsistency : soundEns.AssumptionsConsistency Assumptions)
+    (specConsistency : soundEns.SpecConsistencyWithBoundaries Spec) :
+    FormalEnsemble F PublicIO where
+  ensemble := soundEns.ensemble
+  Assumptions := Assumptions
+  Spec := Spec
+  soundness := by
+    apply soundEns.soundness_of_tableSoundness_and_specConsistencyWithBoundaries
+      Assumptions Spec ?_ assumptionsConsistency specConsistency
+    exact soundEns.tableSoundness_of_soundChannels
+      ⟨soundEns.finished, soundEns.finished_subset, soundEns.soundChannels⟩
 end SoundEnsemble
 end Air.Flat

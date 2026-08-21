@@ -52,6 +52,11 @@ structure VmTables (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType
   unique_names : (tables.map (·.circuit.name)).Nodup
   verifier : Verifier.Program F PublicIO
 
+  /-- VM components are checked row by row. Every VM obligation below is already stated in
+  terms of a single row, so this only records that explicitly. -/
+  tables_windowRows : tables.Forall (fun table => table.windowRows = 1) := by
+    simp only [List.Forall, and_true, true_and] <;> rfl
+
   tables_channel : tables.Forall fun table =>
     ∃ enabled : Expression F, ∃ pull push : Var Message F,
       ⟨ channel, [(channel.pulledIf enabled pull).toRaw, (channel.pushedIf enabled push).toRaw] ⟩ ∈
@@ -105,18 +110,18 @@ def toFormal (F : Type) [FiniteField F] (ens : SoundVmEnsemble F PublicIO)
   Spec publicInput := ∃ data, ens.VerifierSpec publicInput data
   soundness := by
     simp only [Ensemble.Soundness, Ensemble.Statement]
-    intro input assumptions ⟨witness, input_eq, constraints, balance⟩
+    intro input assumptions ⟨witness, input_eq, constraints, _boundaries, balance⟩
     use witness.data
     have extra_assumptions := assumptions witness.data
     simp only [← input_eq, circuit_norm] at *
     have soundVm := ens.soundVmChannel witness ?assumptions constraints balance
     exact ens.ensemble.verifierSoundness witness.publicInput witness.data soundVm
-    intro table h_table row h_row
+    intro table h_table env h_env
     simp only [Component.RowAssumptions]
     have hcomponent := EnsembleWitness.mem_component_of_mem h_table
+    rw [Table.data_eq_of_mem h_env]
     have hresidual := extraAssumptionsConsistency witness.publicInput witness.data
-      extra_assumptions table.component hcomponent
-        (table.component.rowInput (Environment.fromArray row witness.data))
+      extra_assumptions table.component hcomponent (table.component.rowInput env)
     exact hresidual
 
 variable {ens : SoundVmEnsemble F PublicIO} {ExtraAssumptions : PublicIO F → ProverData F → Prop}
@@ -345,6 +350,15 @@ lemma vmMemTablesComponent
   rw [List.getElem_take, ← component_eq]
   simp [Ensemble.addVm, hi_vm]
 
+/-- Every committed VM trace is checked row by row, which is what lets the rest of this file
+keep reasoning about rows. -/
+lemma vmTables_windowRows_eq_one
+    {witness : EnsembleWitness (ens.addVm vm names)} {table : Table F} :
+    table ∈ witness.vmTables → table.component.windowRows = 1 := by
+  intro htable
+  have hmem := vmMemTablesComponent htable
+  exact (List.forall_iff_forall_mem.mp vm.tables_windowRows) table.component hmem
+
 noncomputable def vmRowEnabled (witness : EnsembleWitness (ens.addVm vm names))
     {table} (_ : table ∈ witness.vmTables) (row : Array F) : F :=
   (Environment.fromArray row witness.data)
@@ -463,7 +477,8 @@ lemma vmRowEnabled_isBool_of_constraints {witness : EnsembleWitness (ens.addVm v
       IsBool (witness.vmRowEnabled ‹_› row) := by
   intro constraints table table_mem row row_mem
   exact vm.tableStep_enabled_isBool (witness.vmMemTablesComponent table_mem) _
-    (constraints table table_mem row row_mem)
+    (constraints table table_mem _
+      (Table.mem_envs_of_mem_table (vmTables_windowRows_eq_one table_mem) row_mem))
 
 lemma vmPulls_mult {witness : EnsembleWitness (ens.addVm vm names)} :
   witness.VmConstraints →
@@ -529,7 +544,9 @@ lemma vmInteractionss_eq_interactionPairs (witness : EnsembleWitness (ens.addVm 
   apply congrArg List.flatten
   apply List.map_congr_left
   intro ⟨ table, table_mem ⟩ _
-  simp [Table.interactionssWith, witness.vmInteractionValuesWith_eq table_mem]
+  simp [Table.interactionssWith,
+    Table.envs_eq_of_flat _ _ (witness.vmTables_windowRows_eq_one table_mem),
+    witness.vmInteractionValuesWith_eq table_mem]
 
 lemma vmInteractionss_eq_pulls_pushes (witness : EnsembleWitness (ens.addVm vm names)) :
   [witness.verifierInteractionsWith vm.channel.toRaw] ++
@@ -925,11 +942,16 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
       (combined_partial_balance _ channel_mem) (finished_reqs _ channel_mem) _ table_mem
   -- invoke `requirements_of_partial_guarantees_of_constraints` to get per-row grts → reqs for the vm channel,
   -- and use it in `verifier_guarantees`
-  have reqs_of_grts (table) (h_table : table ∈ witness.vmTables) :=
+  have reqs_of_grts' (table) (h_table : table ∈ witness.vmTables) :=
     table.requirements_of_partial_guarantees_of_constraints (unfinished := vmChannel)
-    (vmContext.data_consistent table h_table)
-    (vm_assumptions table h_table) (vm_constraints table h_table)
+    (table.circuitAssumptions_envs (vmContext.data_consistent table h_table)
+      (vm_assumptions table h_table))
+    (vm_constraints table h_table)
     (grts_subset_all table h_table) (finished_grts table h_table)
+  -- specialize back to rows, valid because every VM trace is flat
+  have reqs_of_grts (table) (h_table : table ∈ witness.vmTables) (row) (h_row : row ∈ table.table) :=
+    reqs_of_grts' table h_table _
+      (Table.mem_envs_of_mem_table (witness.vmTables_windowRows_eq_one h_table) h_row)
   have verifier_requirements :
       (ens.addVm vm names).VerifierChannelRequirements witness.publicInput witness.data
         vm.channel.toRaw := by
