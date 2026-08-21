@@ -206,31 +206,32 @@ lemma mapRange_var_eval_congr {env env' : ProverEnvironment (F p)} {n : ℕ}
   exact h (f i) (hf i (by omega))
 
 omit [Fact (p > 2 ^ 33)] in
-/-- Env-agreement transfers to the output state vector (own heartbeat budget): fresh witness
-windows lie below the bound, the remaining entries evaluate through the input state. -/
+/-- Env-agreement transfers through one round step (window base `w`): the two witness
+windows are fresh cells below the bound, the remaining entries evaluate through the
+previous state. Spelled base-first (`w + 389 + i`), matching `SHA256Compress.stateVar`. -/
 lemma output_eval_congr {env env' : ProverEnvironment (F p)}
-    {state : SHA256State (Expression (F p))} {n : ℕ}
+    {state : SHA256State (Expression (F p))} {w : ℕ}
     (hstate : (eval env.toEnvironment state : SHA256State (F p)) = eval env'.toEnvironment state)
-    (h_agrees : env.AgreesBelow (n + 455) env') :
+    (h_agrees : env.AgreesBelow (w + 455) env') :
     (eval env.toEnvironment
-        (#v[Vector.mapRange 32 fun i => var ⟨n + i + 389⟩,
+        (#v[Vector.mapRange 32 fun i => var ⟨w + 389 + i⟩,
             state[0], state[1], state[2],
-            Vector.mapRange 32 fun i => var ⟨n + i + 422⟩,
+            Vector.mapRange 32 fun i => var ⟨w + 422 + i⟩,
             state[4], state[5], state[6]] : Var SHA256State (F p)) : SHA256State (F p)) =
       eval env'.toEnvironment
-        (#v[Vector.mapRange 32 fun i => var ⟨n + i + 389⟩,
+        (#v[Vector.mapRange 32 fun i => var ⟨w + 389 + i⟩,
             state[0], state[1], state[2],
-            Vector.mapRange 32 fun i => var ⟨n + i + 422⟩,
+            Vector.mapRange 32 fun i => var ⟨w + 422 + i⟩,
             state[4], state[5], state[6]] : Var SHA256State (F p)) := by
   have hel := fun (jj : ℕ) (hjj : jj < 8) => map_eval_getElem_congr hstate jj hjj
   simp only [eval_vector, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil,
     Vector.mk.injEq, Array.mk.injEq, List.cons.injEq, and_true]
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> rw [ProvableType.eval_fields, ProvableType.eval_fields]
-  · exact mapRange_var_eval_congr (fun i => n + i + 389) h_agrees.1 (fun i hi => by omega)
+  · exact mapRange_var_eval_congr (fun i => w + 389 + i) h_agrees.1 (fun i hi => by omega)
   · exact hel 0 (by omega)
   · exact hel 1 (by omega)
   · exact hel 2 (by omega)
-  · exact mapRange_var_eval_congr (fun i => n + i + 422) h_agrees.1 (fun i hi => by omega)
+  · exact mapRange_var_eval_congr (fun i => w + 422 + i) h_agrees.1 (fun i hi => by omega)
   · exact hel 4 (by omega)
   · exact hel 5 (by omega)
   · exact hel 6 (by omega)
