@@ -812,6 +812,21 @@ theorem getElem_eval_vector (env : Environment F) (x : ProvableVector α n (Expr
   have h' := congrArg (fun xs : Vector (α F) n => xs[i]) (eval_vector env x)
   simpa only [Vector.getElem_map] using h'.symm
 
+/-- `eval` distributes over vector append (companion to `eval_vector_set`, for
+`grind`'s benefit at the folded spelling). -/
+@[grind =] theorem eval_vector_append {m k : ℕ} (env : Environment F)
+    (a : ProvableVector α m (Expression F)) (b : ProvableVector α k (Expression F)) :
+    (eval env (a ++ b : ProvableVector α (m + k) (Expression F)) : Vector (α F) (m + k)) =
+      (eval env a : Vector (α F) m) ++ (eval env b : Vector (α F) k) := by
+  simp only [eval_vector, Vector.map_append]
+
+/-- `eval` distributes over `Vector.replicate`. -/
+@[grind =] theorem eval_vector_replicate {k : ℕ} (env : Environment F)
+    (x : α (Expression F)) :
+    (eval env (Vector.replicate k x) : Vector (α F) k) =
+      Vector.replicate k (eval env x) := by
+  simp only [eval_vector, Vector.map_replicate]
+
 /-- `eval` commutes with `Vector.set`, so vectors updated entry by entry (state-update
 circuits) evaluate without unfolding the whole vector. Paired with the outward-oriented
 `getElem_eval_vector` normal form, this lets `grind` compute `(eval env (v.set i a))[j]`
