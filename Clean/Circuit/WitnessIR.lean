@@ -424,6 +424,29 @@ theorem WitgenIR.eval_ofExprs [FiniteField F] {n : ℕ} (es : Vector (Expression
   ext i hi
   simp [ofExprs, WitgenIR.eval, VExpr.eval, FExpr.eval, evalSteps]
 
+/-- Scalar analogue of `eval_ofExprs_congr` below: an expression-copying scalar
+witness leaf's congruence is the copied expression's own eval congruence. -/
+@[computable_witnesses_norm]
+theorem WitgenIR.eval_ofFExpr_expr_congr [FiniteField F] (e : Expression F)
+    (env env' : ProverEnvironment F) :
+    ((ofFExpr (.expr e)).eval env = (ofFExpr (.expr e)).eval env') ↔
+      Expression.eval env.toEnvironment e = Expression.eval env'.toEnvironment e := by
+  simp [eval_ofFExpr, Witgen.FExpr.eval]
+
+/-- Congruence normal form for expression-copying witness leaves (`<==`): the
+`computable_witnesses` laws leave such a leaf as an equality of the same IR's evals
+under two environments — the IR layer drops out and the obligation is the copied
+expressions' own eval congruence, the spelling the input premise and the close
+vocabulary are stated at. Keyed on the whole equality: either environment side alone
+is not a normal form. -/
+@[computable_witnesses_norm]
+theorem WitgenIR.eval_ofExprs_congr [FiniteField F] {n : ℕ} (es : Vector (Expression F) n)
+    (env env' : ProverEnvironment F) :
+    ((ofExprs es).eval env = (ofExprs es).eval env') ↔
+      es.map (Expression.eval env.toEnvironment)
+        = es.map (Expression.eval env'.toEnvironment) := by
+  simp only [eval_ofExprs]
+
 attribute [circuit_norm] Array.getElem?_singleton
 
 /- Witness-IR `BExpr` conditions surface in goals as `decide P = true` (via the
@@ -510,7 +533,7 @@ theorem WitgenIR.eval_ofCompositeFExpr_one {F : Type} [FiniteField F]
 
 /-- Field-equality conditions decide propositional equality (via the injective
 `ℕ` embedding). -/
-@[circuit_norm]
+@[circuit_norm, computable_witnesses_norm]
 theorem BExpr.eval_feq_iff (x y : FExpr F) (ctx : Ctx F) :
     (BExpr.feq x y).eval ctx = Bool.true ↔ x.eval ctx = y.eval ctx := by
   simp only [BExpr.eval, decide_eq_true_eq]
@@ -528,7 +551,7 @@ theorem WitgenIR.eval_ofFExpr_expr (e : Expression F)
 /-- Elementwise evaluation of expression-copying witnesses, keyed on `getElem` so it
 fires regardless of how the expression vector was built (matches the codebase's
 getElem-first simp discipline). -/
-@[circuit_norm ↓]
+@[circuit_norm ↓, computable_witnesses_norm ↓]
 theorem WitgenIR.getElem_eval_ofExprs {n : ℕ}
     (es : Vector (Expression F) n) (env : ProverEnvironment F) (i : ℕ) (hi : i < n) :
     ((ofExprs es).eval env)[i] = es[i].eval env.toEnvironment := by
@@ -678,6 +701,7 @@ def evalProjectionSimproc (e : Expr) : SimpM Simp.Step := do
 
 simproc evalProjection (Witgen.FExpr.eval _ _) := evalProjectionSimproc
 attribute [circuit_norm] evalProjection
+attribute [computable_witnesses_norm] evalProjection
 
 open Lean Meta Simp in
 /--
@@ -734,6 +758,7 @@ def evalStructLiteralSimproc (e : Expr) : SimpM Simp.Step := do
 
 simproc evalStructLiteral (Witgen.eval _ _) := evalStructLiteralSimproc
 attribute [circuit_norm] evalStructLiteral
+attribute [computable_witnesses_norm] evalStructLiteral
 end Eval
 end Witgen
 

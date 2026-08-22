@@ -131,11 +131,12 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
   -- 127 windows); grind cannot reach them and the close lacks the decomposition.
   computableWitnesses := by
     computable_witnesses_start [Vector.ext_iff]
-    · simp only [apply_ite (Expression.eval env.toEnvironment),
+    · simp only [circuit_norm]
+      simp only [apply_ite (Expression.eval env.toEnvironment),
         apply_ite (Expression.eval env'.toEnvironment)]
-      split_ifs <;>
-        (simp only [circuit_norm]; rw [h (i * 2) (by omega), h (i * 2 + 1) (by omega)])
-    · apply eval_sum_eq_of_eval_eq
+      split_ifs <;> (simp only [circuit_norm]; rw [h (i * 2) (by omega), h (i * 2 + 1) (by omega)])
+    · simp only [circuit_norm]
+      apply eval_sum_eq_of_eval_eq
       intro i
       simp only [Vector.getElem_mapRange, circuit_norm]
       grind

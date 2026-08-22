@@ -135,7 +135,7 @@ def main (input : Var Inputs (F p)) := do
 def circuit : FormalCircuit (F p) Inputs field where
   main := main
 
-  computableWitnesses := by computable_witnesses [eval_vector, Vector.ext_iff]
+  computableWitnesses := by computable_witnesses
 
   Assumptions input :=
     let ⟨_, s⟩ := input

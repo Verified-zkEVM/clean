@@ -411,6 +411,29 @@ instance [CircuitType α] [CircuitType β] :
     CoeFun (GeneralFormalCircuit.WithHint F β α) (fun _ => Var β F → Circuit F (Var α F)) where
   coe circuit input := subcircuitWithHintAssertion circuit input
 
+/- `computable_witnesses_norm`: respell coercion applications as the named inclusion
+constants the composition laws key on. The LHSs are written as bare applications so
+the elaborator inserts exactly the `CoeFun` spelling call sites carry — `simp`'s
+discrimination tree cannot see through the coercion head, though `rw` can. -/
+
+@[computable_witnesses_norm]
+theorem formalCircuit_coe_eq (circuit : FormalCircuit F β α) (b : Var β F) :
+    circuit b = subcircuit circuit b := rfl
+
+@[computable_witnesses_norm]
+theorem formalAssertion_coe_eq (circuit : FormalAssertion F β) (b : Var β F) :
+    circuit b = assertion circuit b := rfl
+
+@[computable_witnesses_norm]
+theorem generalFormalCircuit_coe_eq (circuit : GeneralFormalCircuit F β α) (b : Var β F) :
+    circuit b = subcircuitWithAssertion circuit b := rfl
+
+omit [ProvableType α] [ProvableType β] in
+@[computable_witnesses_norm]
+theorem generalFormalCircuitWithHint_coe_eq [CircuitType α] [CircuitType β]
+    (circuit : GeneralFormalCircuit.WithHint F β α) (b : Var β F) :
+    circuit b = subcircuitWithHintAssertion circuit b := rfl
+
 -- subcircuit composability for `ComputableWitnesses`
 
 /--
@@ -480,17 +503,7 @@ def ComputableWitnesses' (circuit : FormalCircuitBase F Input Output) [Elaborate
 lemma computableWitnesses' {circuit : FormalCircuitBase F Input Output} [ElaboratedCircuit F Input Output circuit.main] :
     circuit.ComputableWitnesses' := by
   intro n input env env' input_eq
-  obtain ⟨ h_forAll, h_output ⟩ := circuit.computableWitnesses n input env env'
-  refine ⟨?_, fun h_agrees => h_output input_eq h_agrees⟩
-  simp only [Circuit.ComputableWitnesses, Operations.ComputableWitnesses] at h_forAll ⊢
-  refine Operations.forAll_implies n ?_ h_forAll
-  -- given the global `input_eq`, the field's per-op `input_eq → …` collapses to the plain condition
-  generalize (circuit.main input).operations n = ops
-  clear h_forAll h_output
-  induction ops using Operations.induct generalizing n with
-  | empty => trivial
-  | assert _ _ ih | lookup _ _ ih | interact _ _ ih => simp_all [Operations.forAll, Condition.implies]
-  | witness _ _ _ ih | subcircuit _ _ ih => simp_all [Operations.forAll, Condition.implies]
+  exact circuit.computableWitnesses n input env env' input_eq
 
 /--
 `OnlyAccessedBelow`-flavored companion to `computableWitnesses'`: the witnesses are computable
@@ -543,6 +556,80 @@ variable {F : Type} [FiniteField F] {Input Output : TypeMap} [ProvableType Input
 -- normal-form doctrine in `Provable.lean`, eval lemmas must elaborate at the concrete
 -- type so their `@eval` atoms are congruent with goal terms inside `grind`.
 variable {env : Environment F} {env_p : ProverEnvironment F} {input_var : Input (Expression F)} {n : ℕ}
+
+section computableWitnessesLaws
+variable {n : ℕ} {env env' : ProverEnvironment F}
+variable {β' α' : TypeMap} [ProvableType β'] [ProvableType α'] {β'' α'' : TypeMap}
+
+/-!
+`Circuit.ComputableWitnesses` laws for the subcircuit inclusions (see the primitive laws
+in `Clean.Circuit.Basic`): each inclusion is exactly one per-node obligation.
+-/
+
+@[computable_witnesses_norm]
+theorem subcircuit_computableWitnesses (circuit : FormalCircuit F β' α') (b : Var β' F) :
+    Circuit.ComputableWitnesses (α := α' (Expression F)) (subcircuit circuit b) n env env' ↔
+      (circuit.toSubcircuit n b).ComputableWitnesses n env env' := by
+  simp [subcircuit, Circuit.ComputableWitnesses, Operations.ComputableWitnesses,
+    Circuit.operations, Operations.forAll]
+
+@[computable_witnesses_norm]
+theorem assertion_computableWitnesses (circuit : FormalAssertion F β') (b : Var β' F) :
+    (assertion circuit b).ComputableWitnesses n env env' ↔
+      (circuit.toSubcircuit n b).ComputableWitnesses n env env' := by
+  simp [assertion, Circuit.ComputableWitnesses, Operations.ComputableWitnesses,
+    Circuit.operations, Operations.forAll]
+
+@[computable_witnesses_norm]
+theorem subcircuitWithAssertion_computableWitnesses (circuit : GeneralFormalCircuit F β' α')
+    (b : Var β' F) :
+    Circuit.ComputableWitnesses (α := α' (Expression F))
+      (subcircuitWithAssertion circuit b) n env env' ↔
+      (circuit.toSubcircuit n b).ComputableWitnesses n env env' := by
+  simp [subcircuitWithAssertion, Circuit.ComputableWitnesses, Operations.ComputableWitnesses,
+    Circuit.operations, Operations.forAll]
+
+@[computable_witnesses_norm]
+theorem subcircuitWithHintAssertion_computableWitnesses [CircuitType β''] [CircuitType α'']
+    {circuit : GeneralFormalCircuit.WithHint F β'' α''} {b : Var β'' F} :
+    (subcircuitWithHintAssertion circuit b).ComputableWitnesses n env env' ↔
+      (circuit.toSubcircuit n b).ComputableWitnesses n env env' := by
+  simp [subcircuitWithHintAssertion, Circuit.ComputableWitnesses,
+    Operations.ComputableWitnesses, Circuit.operations, Operations.forAll]
+
+@[computable_witnesses_norm]
+theorem subcircuit_localLength (circuit : FormalCircuit F β' α') (b : Var β' F) :
+    (subcircuit circuit b).localLength n = circuit.localLength b := rfl
+
+@[computable_witnesses_norm]
+theorem subcircuit_output (circuit : FormalCircuit F β' α') (b : Var β' F) :
+    (subcircuit circuit b).output n = circuit.output b n := rfl
+
+@[computable_witnesses_norm]
+theorem assertion_localLength (circuit : FormalAssertion F β') (b : Var β' F) :
+    (assertion circuit b).localLength n = circuit.localLength b := rfl
+
+@[computable_witnesses_norm]
+theorem subcircuitWithAssertion_localLength (circuit : GeneralFormalCircuit F β' α')
+    (b : Var β' F) :
+    (subcircuitWithAssertion circuit b).localLength n = circuit.localLength b := rfl
+
+@[computable_witnesses_norm]
+theorem subcircuitWithAssertion_output (circuit : GeneralFormalCircuit F β' α')
+    (b : Var β' F) :
+    (subcircuitWithAssertion circuit b).output n = circuit.output b n := rfl
+
+@[computable_witnesses_norm]
+theorem subcircuitWithHintAssertion_localLength [CircuitType β''] [CircuitType α'']
+    {circuit : GeneralFormalCircuit.WithHint F β'' α''} {b : Var β'' F} :
+    (subcircuitWithHintAssertion circuit b).localLength n = circuit.localLength b := rfl
+
+@[computable_witnesses_norm]
+theorem subcircuitWithHintAssertion_output [CircuitType β''] [CircuitType α'']
+    {circuit : GeneralFormalCircuit.WithHint F β'' α''} {b : Var β'' F} :
+    (subcircuitWithHintAssertion circuit b).output n = circuit.output b n := rfl
+
+end computableWitnessesLaws
 
 -- Simplification lemmas for toSubcircuit.localLength
 

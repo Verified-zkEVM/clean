@@ -192,7 +192,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
   · exact ⟨n_sig0, n_maj⟩
   · exact ⟨n_t1, by simp_all⟩
   · exact ⟨h_d, n_t1⟩
-
 omit [Fact (p > 2 ^ 33)] in
 /-- Env-agreement transfers to a fresh window of witness variables (own heartbeat budget). -/
 lemma mapRange_var_eval_congr {env env' : ProverEnvironment (F p)} {n : ℕ}

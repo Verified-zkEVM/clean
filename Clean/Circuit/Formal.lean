@@ -1,4 +1,5 @@
 import Clean.Circuit.Explicit
+import Clean.Circuit.SimpGadget
 import Clean.Utils.Tactics.ComputableWitnesses
 
 variable {F : Type} [FiniteField F] {α β : Type} {n : ℕ}
@@ -15,21 +16,32 @@ used later for formal circuit bundles.
 @[circuit_norm]
 def ComputableWitnesses (main : Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output main] : Prop :=
   ∀ (n : ℕ) (input : Var Input F) (env env' : ProverEnvironment F),
+  eval env input = eval env' input →
   -- witness operations only refer to the input and previous witnesses (lower offsets)
-  (main input |>.operations n |>.forAll n {
-    witness n _ compute :=
-      eval env input = eval env' input →
-      env.AgreesBelow n env' →
-      compute.eval env = compute.eval env'
-    subcircuit n _ subcircuit :=
-      eval env input = eval env' input →
-      subcircuit.ComputableWitnesses n env env'
-    }) ∧
+  (main input).ComputableWitnesses n env env' ∧
   -- the output only refers to the input and this circuit's witnesses (below `n + localLength`)
-  (eval env input = eval env' input →
   ProverEnvironment.OnlyAccessedBelow (n + ElaboratedCircuit.localLength main input)
-    (fun env => eval env (ElaboratedCircuit.output main input n)) env env')
+    (fun env => eval env (ElaboratedCircuit.output main input n)) env env'
 end FormalCircuitBase
+
+/- Support entries for the `computable_witnesses_norm` path: the obligation head, the
+environment predicates, prover→verifier eval respellings, and propositional cleanup.
+The compositional laws live with their subjects (`Clean.Circuit.Basic`,
+`Clean.Circuit.Subcircuit`, `Clean.Circuit.Loops`). -/
+attribute [computable_witnesses_norm]
+  FormalCircuitBase.ComputableWitnesses
+  CircuitType.eval_expr_prover CircuitType.eval_expression_prover_to_verifier
+  CircuitType.eval_var_expression CircuitType.eval_var_expression_prover
+  CircuitType.var_of_provableType CircuitType.proverValue_of_provableType
+  CircuitType.value_of_provableType
+  ProvableType.size ProvableType.toElements_fromElements ProvableType.fromElements_toElements
+  ProvableType.fromElements_eval_toElements
+  ProvableStruct.components ProvableStruct.componentsToElements
+  ProvableStruct.componentsFromElements
+  ProvableStruct.eval_eq_eval ProvableStruct.eval_eq_eval_prover
+  ProvableStruct.eval_var_eq_eval ProvableStruct.eval_var_eq_eval_prover
+  ProvableStruct.eval_field_var_eq_eval
+  and_self and_true true_and implies_true forall_const
 
 @[explicit_circuit_unfold_type]
 structure FormalCircuitBase (F : Type) (Input Output : TypeMap)

@@ -43,7 +43,7 @@ lemma bitsVal_eval (ctx : Witgen.Ctx (F p)) (a : Var (fields 32) (F p)) :
 
 omit h_large in
 lemma evalBitsNat_congr {env env' : ProverEnvironment (F p)} {a : Var (fields 32) (F p)}
-    (h : (eval env.toEnvironment a : fields 32 (F p)) = eval env'.toEnvironment a) :
+    (h : eval env.toEnvironment a = eval env'.toEnvironment a) :
     evalBitsNat env a = evalBitsNat env' a := by
   rw [ProvableType.eval_fields, ProvableType.eval_fields] at h
   rw [evalBitsNat, evalBitsNat]
@@ -437,7 +437,7 @@ def circuit : FormalCircuit (F p) Inputs (fields 32) where
     · -- carry-out
       simp only [circuit_norm, bitsVal_eval, key, keyb]
     · -- output: the 33 fresh witness variables
-      grind
+      computable_witnesses_close
 
 end Add32
 end Gadgets.SHA256

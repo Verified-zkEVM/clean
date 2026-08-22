@@ -100,7 +100,7 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (main a b c d) Assumption
     · rw [Function.comp_apply, ←h_input.left, getElem_eval_vector]
 
   · intro i
-    simp only [eval_vector, Vector.map_set, ↓Vector.getElem_set]
+    simp only [eval_vector_set, ↓Vector.getElem_set]
     repeat' split
     · exact c11.right
     · simp only [U32.Normalized, explicit_provable_type, Vector.map_mk, List.map_toArray,
@@ -112,7 +112,7 @@ theorem soundness (a b c d : Fin 16) : Soundness (F p) (main a b c d) Assumption
         List.map_cons, List.map_nil, fromElements] at c9 ⊢
       simp +arith only [Nat.reducePow, Nat.add_mod_mod, Nat.reduceMod] at c9 ⊢
       exact c9.right
-    · simp only [Vector.getElem_map, getElem_eval_vector, h_input, h_assumptions]
+    · simp only [h_input, h_assumptions]
 
 theorem completeness (a b c d : Fin 16) : Completeness (F p) (main a b c d) Assumptions := by
   circuit_proof_start [BLAKE3State.Normalized]
@@ -135,7 +135,7 @@ lemma state_elem_congr {env env' : ProverEnvironment (F p)}
 
 set_option maxRecDepth 2048 in
 -- the unreachable-tactic linter cannot see that the `first` fallback fires only for
--- the pass-through entries
+-- the pass-through entries (`case pos` breaks without it)
 set_option linter.unreachableTactic false in
 set_option linter.unusedTactic false in
 omit p_large_enough in
@@ -159,9 +159,7 @@ lemma output_eval_congr {env env' : ProverEnvironment (F p)}
               simp only [Vector.getElem_map, Vector.getElem_ofFn, circuit_norm]
               grind)
            | grind)
-      | (exact (getElem_eval_vector env.toEnvironment state j (by omega)).trans
-          ((congrArg (fun s : BLAKE3State (F p) => s[j]'(by omega)) h1).trans
-            (getElem_eval_vector env'.toEnvironment state j (by omega)).symm))
+      | (exact congrArg (fun s : BLAKE3State (F p) => s[j]'(by omega)) h1)
 
 def circuit (a b c d : Fin 16) : FormalCircuit (F p) Inputs BLAKE3State where
   main := main a b c d

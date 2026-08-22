@@ -188,8 +188,12 @@ def circuit : FormalCircuit (F p) Inputs BLAKE3State := {
           (ProverEnvironment.agreesBelow_of_le h_agrees (by omega)) 7 (by omega),
         G.state_elem_congr h.2 14, G.state_elem_congr h.2 15⟩
     · -- output = the eighth G output
-      exact state_eval_congr (m := 8) h.1
-        (ProverEnvironment.agreesBelow_of_le h_agrees (by omega)) 8 (by omega)
+      exact (CircuitType.eval_expression_prover_to_verifier
+          (M := ProvableVector U32 16) env _).trans
+        ((state_eval_congr (m := 8) h.1
+            (ProverEnvironment.agreesBelow_of_le h_agrees (by omega)) 8 (by omega)).trans
+          (CircuitType.eval_expression_prover_to_verifier
+            (M := ProvableVector U32 16) env' _).symm)
 }
 
 end Gadgets.BLAKE3.Round

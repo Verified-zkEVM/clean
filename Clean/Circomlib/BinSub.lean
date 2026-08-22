@@ -301,6 +301,7 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
       simp only [circuit_norm]
       rw [bridge, bridge', h]
     · simp only [inputLinearSub, Fin.getElem_fin] at bridge bridge'
+      simp only [circuit_norm]
       rw [bridge, bridge', h]
     · computable_witnesses_close
 

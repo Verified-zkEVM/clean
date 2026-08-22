@@ -401,6 +401,25 @@ theorem Witnessable.witnessIR_provableVector {m : ℕ} (α : TypeMap) [NonEmptyP
     Witnessable.witnessIR (F := F) (value := ProvableVector α m)
       (var := Var (ProvableVector α m)) code = _root_.witnessIR (ProvableVector α m) code := rfl
 
+/- `computable_witnesses_norm` counterparts: the projections rewrite to the NAMED
+primitives — whose composition laws then apply — never to raw state-function
+closures (the `circuit_norm` field-instance spellings above). -/
+
+@[computable_witnesses_norm]
+theorem Witnessable.witness_field_named (e : Witgen.FExpr F) :
+    Witnessable.witness (F := F) (value := field) (var := Expression) e =
+      Circuit.witnessField e := rfl
+
+@[computable_witnesses_norm]
+theorem Witnessable.witnessIR_field_named (code : WitgenIR F 1) :
+    Witnessable.witnessIR (F := F) (value := field) (var := Expression) code =
+      Circuit.witnessVar code >>= fun v => pure (var v) := rfl
+
+attribute [computable_witnesses_norm] Witnessable.witness_fields
+  Witnessable.witness_provable Witnessable.witness_provableVector
+  Witnessable.witnessIR_fields Witnessable.witnessIR_provable
+  Witnessable.witnessIR_provableVector witnessNative witnessVectorProgram witnessProgram
+
 -- witness generation
 
 /-- Build a `ProverEnvironment` from a witness list and a specific prover hint. -/
@@ -563,6 +582,12 @@ theorem bind_output_eq (f : Circuit F α) (g : α → Circuit F β) (n : ℕ) :
 theorem map_output_eq (f : Circuit F α) (g : α → β) (n : ℕ) :
   (g <$> f).output n = g (f.output n) := rfl
 
+/- Metadata distribution for the `computable_witnesses` laws path: the bind law's
+offsets and inputs (`n + f.localLength n`, `g (f.output n)`) reduce structurally,
+never through an operations list. -/
+attribute [computable_witnesses_norm] pure_localLength_eq bind_localLength_eq
+  map_localLength_eq pure_output_eq bind_output_eq map_output_eq
+
 @[circuit_norm]
 theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} {prop : Condition F} :
   ((f >>= g).operations n).forAll n prop ↔
@@ -570,7 +595,193 @@ theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} {prop : Conditi
   have h_ops : (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (n + f.localLength n) := rfl
   rw [h_ops, Operations.forAll_append]
 
+/-!
+Composition laws for `Circuit.ComputableWitnesses`, stated directly at the property
+level: the property of a compound circuit rewrites into properties of its parts, and
+leaf circuits rewrite into their final content — witness windows for witness
+operations, `True` for asserts and lookups (whose payloads are never inspected), and a
+per-node obligation for subcircuits (see `Clean.Circuit.Subcircuit`). No law mentions
+operations lists, `forAll`, or condition records.
+-/
+section computableWitnessesLaws
+variable {n : ℕ} {env env' : ProverEnvironment F}
+
+@[computable_witnesses_norm]
+theorem computableWitnesses_bind {f : Circuit F α} {g : α → Circuit F β} :
+    (f >>= g).ComputableWitnesses n env env' ↔
+      f.ComputableWitnesses n env env' ∧
+      (g (f.output n)).ComputableWitnesses (n + f.localLength n) env env' := by
+  simp only [ComputableWitnesses, Operations.ComputableWitnesses, bind_forAll]
+
+@[computable_witnesses_norm]
+theorem computableWitnesses_pure (a : α) :
+    (pure a : Circuit F α).ComputableWitnesses n env env' ↔ True := by
+  simp [Circuit.pure_def, ComputableWitnesses, Operations.ComputableWitnesses,
+    Circuit.operations, Operations.forAll]
+
+/-- `pure` in raw state-function spelling (`fun _ => (a, [])`), as wrapper unfolds
+expose it. Definitionally the `pure` law. -/
+@[computable_witnesses_norm]
+theorem computableWitnesses_pure' (a : α) :
+    Circuit.ComputableWitnesses (fun _ => (a, [])) n env env' ↔ True :=
+  computableWitnesses_pure a
+
+@[computable_witnesses_norm]
+theorem computableWitnesses_map {f : Circuit F α} (g : α → β) :
+    ((g <$> f).ComputableWitnesses n env env') ↔ f.ComputableWitnesses n env env' := by
+  rw [ComputableWitnesses, Operations.ComputableWitnesses, map_operations_eq]; rfl
+
+@[computable_witnesses_norm]
+theorem computableWitnesses_witnessVar (ir : WitgenIR F 1) :
+    (witnessVar ir : Circuit F _).ComputableWitnesses n env env' ↔
+      (env.AgreesBelow n env' → ir.eval env = ir.eval env') := by
+  simp [witnessVar, ComputableWitnesses, Operations.ComputableWitnesses,
+    Circuit.operations, Operations.forAll]
+
+@[computable_witnesses_norm]
+theorem computableWitnesses_witnessField (e : Witgen.FExpr F) :
+    (witnessField e : Circuit F _).ComputableWitnesses n env env' ↔
+      (env.AgreesBelow n env' →
+        (Witgen.WitgenIR.ofFExpr e).eval env = (Witgen.WitgenIR.ofFExpr e).eval env') := by
+  simp [witnessField, ComputableWitnesses, Operations.ComputableWitnesses,
+    Circuit.operations, Operations.forAll]
+
+@[computable_witnesses_norm]
+theorem computableWitnesses_witnessVector {m : ℕ} (out : Witgen.VExpr F m) :
+    (witnessVector m out : Circuit F _).ComputableWitnesses n env env' ↔
+      (env.AgreesBelow n env' →
+        (Witgen.WitgenIR.ir [] out).eval env = (Witgen.WitgenIR.ir [] out).eval env') := by
+  simp [witnessVector, ComputableWitnesses, Operations.ComputableWitnesses,
+    Circuit.operations, Operations.forAll]
+
+@[computable_witnesses_norm]
+theorem computableWitnesses_assertZero (e : Expression F) :
+    (assertZero e : Circuit F Unit).ComputableWitnesses n env env' ↔ True := by
+  simp [assertZero, ComputableWitnesses, Operations.ComputableWitnesses,
+    Circuit.operations, Operations.forAll]
+
+@[computable_witnesses_norm]
+theorem computableWitnesses_lookup {Row : TypeMap} [ProvableType Row] (table : Table F Row)
+    (entry : Row (Expression F)) :
+    (lookup table entry : Circuit F Unit).ComputableWitnesses n env env' ↔ True := by
+  simp [lookup, ComputableWitnesses, Operations.ComputableWitnesses,
+    Circuit.operations, Operations.forAll]
+
+/- Leaf metadata for the laws path: each witness primitive's `localLength`/`output`
+in explicit form (numeral lengths, `varFromOffset`/`var` windows). -/
+
+@[computable_witnesses_norm]
+theorem witnessVar_localLength (ir : WitgenIR F 1) (n : ℕ) :
+    (witnessVar ir : Circuit F _).localLength n = 1 := rfl
+
+@[computable_witnesses_norm]
+theorem witnessVar_output (ir : WitgenIR F 1) (n : ℕ) :
+    (witnessVar ir : Circuit F _).output n = ⟨n⟩ := rfl
+
+@[computable_witnesses_norm]
+theorem witnessField_localLength (e : Witgen.FExpr F) (n : ℕ) :
+    (witnessField e : Circuit F _).localLength n = 1 := rfl
+
+@[computable_witnesses_norm]
+theorem witnessField_output (e : Witgen.FExpr F) (n : ℕ) :
+    (witnessField e : Circuit F _).output n = var ⟨n⟩ := rfl
+
+@[computable_witnesses_norm]
+theorem witnessVector_localLength (m : ℕ) (out : Witgen.VExpr F m) (n : ℕ) :
+    (witnessVector m out : Circuit F _).localLength n = m := rfl
+
+@[computable_witnesses_norm]
+theorem witnessVector_output (m : ℕ) (out : Witgen.VExpr F m) (n : ℕ) :
+    (witnessVector m out : Circuit F _).output n = varFromOffset (fields m) n := rfl
+
+@[computable_witnesses_norm]
+theorem assertZero_localLength (e : Expression F) (n : ℕ) :
+    (assertZero e : Circuit F Unit).localLength n = 0 := rfl
+
+@[computable_witnesses_norm]
+theorem lookup_localLength {Row : TypeMap} [ProvableType Row] (table : Table F Row)
+    (entry : Row (Expression F)) (n : ℕ) :
+    (lookup table entry : Circuit F Unit).localLength n = 0 := rfl
+
+end computableWitnessesLaws
 end Circuit
+
+/- `Circuit.ComputableWitnesses` laws for channel interactions: interaction payloads
+impose no witness conditions (the `forAll` record has no `interact` field), and their
+`localLength` is zero. One law per primitive — the laws never unfold the primitives. -/
+section interactLaws
+variable {Message : TypeMap} [ProvableType Message] {channel : Channel F Message}
+  {n : ℕ} {env env' : ProverEnvironment F}
+
+@[computable_witnesses_norm]
+theorem Channel.emit_computableWitnesses (mult : Expression F) (msg : Message (Expression F)) :
+    (channel.emit mult msg).ComputableWitnesses n env env' ↔ True := by
+  simp [Channel.emit, Circuit.ComputableWitnesses, Operations.ComputableWitnesses,
+    Circuit.operations, Operations.forAll]
+
+@[computable_witnesses_norm]
+theorem Channel.pull_computableWitnesses (msg : Message (Expression F)) :
+    (channel.pull msg).ComputableWitnesses n env env' ↔ True := by
+  simp [Channel.pull, Circuit.ComputableWitnesses, Operations.ComputableWitnesses,
+    Circuit.operations, Operations.forAll]
+
+@[computable_witnesses_norm]
+theorem Channel.pullIf_computableWitnesses (enabled : Expression F)
+    (msg : Message (Expression F)) :
+    (channel.pullIf enabled msg).ComputableWitnesses n env env' ↔ True := by
+  simp [Channel.pullIf, Circuit.ComputableWitnesses, Operations.ComputableWitnesses,
+    Circuit.operations, Operations.forAll]
+
+@[computable_witnesses_norm]
+theorem Channel.push_computableWitnesses (msg : Message (Expression F)) :
+    (channel.push msg).ComputableWitnesses n env env' ↔ True := by
+  simp [Channel.push, Circuit.ComputableWitnesses, Operations.ComputableWitnesses,
+    Circuit.operations, Operations.forAll]
+
+@[computable_witnesses_norm]
+theorem Channel.pushIf_computableWitnesses (enabled : Expression F)
+    (msg : Message (Expression F)) :
+    (channel.pushIf enabled msg).ComputableWitnesses n env env' ↔ True := by
+  simp [Channel.pushIf, Circuit.ComputableWitnesses, Operations.ComputableWitnesses,
+    Circuit.operations, Operations.forAll]
+
+@[computable_witnesses_norm]
+theorem Channel.emit_localLength (mult : Expression F) (msg : Message (Expression F)) :
+    (channel.emit mult msg).localLength n = 0 := rfl
+
+@[computable_witnesses_norm]
+theorem Channel.pull_localLength (msg : Message (Expression F)) :
+    (channel.pull msg).localLength n = 0 := rfl
+
+@[computable_witnesses_norm]
+theorem Channel.pullIf_localLength (enabled : Expression F) (msg : Message (Expression F)) :
+    (channel.pullIf enabled msg).localLength n = 0 := rfl
+
+@[computable_witnesses_norm]
+theorem Channel.push_localLength (msg : Message (Expression F)) :
+    (channel.push msg).localLength n = 0 := rfl
+
+@[computable_witnesses_norm]
+theorem Channel.pushIf_localLength (enabled : Expression F) (msg : Message (Expression F)) :
+    (channel.pushIf enabled msg).localLength n = 0 := rfl
+
+end interactLaws
+
+@[computable_witnesses_norm]
+theorem witnessIR_localLength {M : TypeMap} [ProvableType M] (ir : WitgenIR F (size M)) (n : ℕ) :
+    (witnessIR M ir : Circuit F _).localLength n = size M := rfl
+
+@[computable_witnesses_norm]
+theorem witnessIR_output {M : TypeMap} [ProvableType M] (ir : WitgenIR F (size M)) (n : ℕ) :
+    (witnessIR M ir : Circuit F _).output n = varFromOffset M n := rfl
+
+@[computable_witnesses_norm]
+theorem witnessIR_computableWitnesses {M : TypeMap} [ProvableType M] {n : ℕ}
+    {env env' : ProverEnvironment F} (ir : WitgenIR F (size M)) :
+    (witnessIR M ir : Circuit F _).ComputableWitnesses n env env' ↔
+      (env.AgreesBelow n env' → ir.eval env = ir.eval env') := by
+  simp [witnessIR, Circuit.ComputableWitnesses, Operations.ComputableWitnesses,
+    Circuit.operations, Operations.forAll]
 
 -- `circuit_norm` attributes
 
