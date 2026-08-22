@@ -83,7 +83,7 @@ theorem actionAdviceQueryCount_eq :
 theorem actionSelectorMap_newFixedCols_eq :
     (TopLevelCompilation.selectorMap actionFormalCircuit
       PublicInputs.layout).newFixedCols = 15 := by
-  unfold TopLevelCompilation.selectorMap
+  unfold TopLevelCompilation.selectorMap TopLevelCompilation.selectorMapAt
   rw [deriveSelCompressMap_newFixedCols_eq_selectorColumnCountWith _ _ _
     (by
       intro activation hactivation

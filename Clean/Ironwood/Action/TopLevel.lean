@@ -84,12 +84,12 @@ private theorem configured_closesEnvironment
     let formal := circuit Specs.Sinsemilla.orchardGenerators orchardBases
     formal.EnvAssumptions
       (TopLevelCompilation.config formal)
-      (TopLevelCompilation.placedEnvironment
-        formal PublicInputs.layout assignment) := by
+      (TopLevelCompilation.placedEnvironmentAt
+        formal (2 ^ actionShape.k) assignment) := by
   let formal := circuit Specs.Sinsemilla.orchardGenerators orchardBases
   let env :=
-    TopLevelCompilation.placedEnvironment
-      formal PublicInputs.layout assignment
+    TopLevelCompilation.placedEnvironmentAt
+      formal (2 ^ actionShape.k) assignment
   change EnvAssumptions
     (configure Specs.Sinsemilla.orchardGenerators {}).1 env
   have htable :
@@ -113,11 +113,16 @@ private theorem configured_closesEnvironment
   have hUsable : 2 ^ Specs.K ≤ env.env.usableRows := by
     change
       2 ^ Specs.K ≤
-        2 ^ TopLevelCompilation.domainExponent formal PublicInputs.layout -
+        2 ^ actionShape.k -
           (TopLevelCompilation.constraintSystem formal).blindingFactors - 1
-    exact htable.trans
+    have hfit := htable.trans
       (TopLevelCompilation.usedRows_le_usableRowsAt_domainExponent
         formal PublicInputs.layout)
+    have hk : actionShape.k =
+        TopLevelCompilation.domainExponent formal PublicInputs.layout := by
+      simpa only [formal, actionShape] using actionDomainExponent_eq.symm
+    rw [hk]
+    exact hfit
   obtain ⟨hs2, hm1, hm2, hlookup⟩ := configuredTableSharing
   obtain ⟨hfull, hshort, hbaseField, hdistinct⟩ :=
     configured_pureEnvironmentAssumptions env
