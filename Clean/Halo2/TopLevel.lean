@@ -1322,6 +1322,22 @@ theorem lookupCount_eq_constraintSystem
   simpa only [lookupCount, TopLevelCompilation.circuitShape_numLookups] using
     congrArg CircuitShape.numLookups self.shape_eq
 
+/-- The configured lookup selected by a published circuit-shape index. -/
+def lookupAt
+    (self : TopLevelCircuit F Config PublicInput)
+    (lookup : Fin self.lookupCount) : LookupArgument F :=
+  self.constraintSystem.lookups[lookup.val]'(by
+    rw [← self.lookupCount_eq_constraintSystem]
+    exact lookup.isLt)
+
+/-- A lookup selected through the published circuit shape belongs to configuration. -/
+theorem lookupAt_mem_constraintSystem
+    (self : TopLevelCircuit F Config PublicInput)
+    (lookup : Fin self.lookupCount) :
+    self.lookupAt lookup ∈ self.constraintSystem.lookups := by
+  unfold lookupAt
+  apply List.getElem_mem
+
 /-- The published permutation-column count agrees with configuration. -/
 theorem permutationColumnCount_eq_permutationColumns_length
     (self : TopLevelCircuit F Config PublicInput) :
