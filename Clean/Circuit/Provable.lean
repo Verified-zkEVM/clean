@@ -857,6 +857,21 @@ theorem eval_vector_set (env : Environment F) (x : ProvableVector α n (Expressi
     eval env (x.set i a) = (eval env x).set i (eval env a) := by
   simp only [eval_vector, Vector.map_set]
 
+/-- `eval` distributes over vector append (companion to `eval_vector_set`, for
+`grind`'s benefit at the folded spelling). -/
+@[grind =] theorem eval_vector_append {m k : ℕ} (env : Environment F)
+    (a : ProvableVector α m (Expression F)) (b : ProvableVector α k (Expression F)) :
+    (eval env (a ++ b : ProvableVector α (m + k) (Expression F)) : Vector (α F) (m + k)) =
+      (eval env a : Vector (α F) m) ++ (eval env b : Vector (α F) k) := by
+  simp only [eval_vector, Vector.map_append]
+
+/-- `eval` distributes over `Vector.replicate`. -/
+@[grind =] theorem eval_vector_replicate {k : ℕ} (env : Environment F)
+    (x : α (Expression F)) :
+    (eval env (Vector.replicate k x) : Vector (α F) k) =
+      Vector.replicate k (eval env x) := by
+  simp only [eval_vector, Vector.map_replicate]
+
 /-- Prover-environment twin of `eval_vector_set`. -/
 @[computable_witnesses_norm]
 theorem eval_vector_set_prover (env : ProverEnvironment F)
