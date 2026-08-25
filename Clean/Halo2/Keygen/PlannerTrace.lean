@@ -291,3 +291,26 @@ theorem continueCanonicalSegment
     hRightValid hEquivalent
 
 end Halo2.FloorPlanner.V1
+
+namespace Halo2
+
+/-- Advance one concrete compact planner-trace entry. Callers provide the
+definitions needed to normalize their reduced region shapes. -/
+macro "planner_trace_step"
+    " [" definitions:Lean.Parser.Tactic.simpLemma,* "]" : tactic =>
+  `(tactic|
+    (unfold V1.PlannedSummaryBlock.TraceLawfulAfter
+     refine ⟨by first | omega | norm_num,
+       by simp [RegionShapeSummary.WellFormed, $definitions,*],
+       by simp [$definitions,*], ?_, ?_, ?_⟩
+     · simp [V1.PlannedSummaryBlock.FitsAfterAt, $definitions,*,
+         RowIntervalsDisjoint] <;> omega
+     · intro candidate hFits
+       simp [V1.PlannedSummaryBlock.FitsAfterAt, $definitions,*,
+         RowIntervalsDisjoint] at hFits
+       try norm_num at hFits ⊢
+       try omega
+     simp only [List.nil_append, List.cons_append, List.append_nil,
+       List.append_assoc]))
+
+end Halo2
