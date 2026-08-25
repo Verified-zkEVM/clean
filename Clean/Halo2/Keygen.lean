@@ -2,6 +2,7 @@ import Clean.Halo2.Keygen.RichExpression
 import Clean.Halo2.Keygen.CompressSelectors
 import Clean.Halo2.Keygen.FloorPlanner
 import Clean.Halo2.Keygen.PdqsortCorrectness
+import Clean.Halo2.Keygen.PlannerTrace
 import Clean.Halo2.Keygen.Projection
 import Clean.Halo2.Keygen.PinnedCs
 import Clean.Halo2.Keygen.Semantics
@@ -18,6 +19,7 @@ plan → activations → minimal fitting domain → `compress_selectors` → pin
 * `RichExpression` — the pinned/verifier gate AST (query-index space).
 * `CompressSelectors` — the `SelCompressMap` derivation and its root-finding algebra.
 * `FloorPlanner` — the V1 floor planner (region placement from the operation stream).
+* `PlannerTrace` — reusable compact-trace and repeated-shape reasoning.
 * `Projection` — the query-index walk erasing `Expression F Query` into `RichExpression F`.
 * `PinnedCs` — `PinnedConstraintSystem` and `.derive`.
 * `Semantics` — the projection preserves evaluation (`derive_gates_eval`).
