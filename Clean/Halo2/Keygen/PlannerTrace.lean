@@ -297,20 +297,32 @@ namespace Halo2
 /-- Advance one concrete compact planner-trace entry. Callers provide the
 definitions needed to normalize their reduced region shapes. -/
 macro "planner_trace_step"
-    " [" definitions:Lean.Parser.Tactic.simpLemma,* "]" : tactic =>
+    " [" definitions:Lean.Parser.Tactic.simpLemma,* "]" : tactic => do
+  let traceLawfulAfter :=
+    Lean.mkIdent ``Halo2.FloorPlanner.V1.PlannedSummaryBlock.TraceLawfulAfter
+  let wellFormed :=
+    Lean.mkIdent ``Halo2.FloorPlanner.RegionShapeSummary.WellFormed
+  let fitsAfterAt :=
+    Lean.mkIdent ``Halo2.FloorPlanner.V1.PlannedSummaryBlock.FitsAfterAt
+  let rowIntervalsDisjoint :=
+    Lean.mkIdent ``Halo2.FloorPlanner.RowIntervalsDisjoint
+  let nilAppend := Lean.mkIdent ``List.nil_append
+  let consAppend := Lean.mkIdent ``List.cons_append
+  let appendNil := Lean.mkIdent ``List.append_nil
+  let appendAssoc := Lean.mkIdent ``List.append_assoc
   `(tactic|
-    (unfold V1.PlannedSummaryBlock.TraceLawfulAfter
+    (unfold $traceLawfulAfter:ident
      refine ⟨by first | omega | norm_num,
-       by simp [RegionShapeSummary.WellFormed, $definitions,*],
+       by simp [$wellFormed:ident, $definitions,*],
        by simp [$definitions,*], ?_, ?_, ?_⟩
-     · simp [V1.PlannedSummaryBlock.FitsAfterAt, $definitions,*,
-         RowIntervalsDisjoint] <;> omega
+     · simp [$fitsAfterAt:ident, $definitions,*,
+         $rowIntervalsDisjoint:ident] <;> omega
      · intro candidate hFits
-       simp [V1.PlannedSummaryBlock.FitsAfterAt, $definitions,*,
-         RowIntervalsDisjoint] at hFits
+       simp [$fitsAfterAt:ident, $definitions,*,
+         $rowIntervalsDisjoint:ident] at hFits
        try norm_num at hFits ⊢
        try omega
-     simp only [List.nil_append, List.cons_append, List.append_nil,
-       List.append_assoc]))
+     simp only [$nilAppend:ident, $consAppend:ident, $appendNil:ident,
+       $appendAssoc:ident]))
 
 end Halo2
