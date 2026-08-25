@@ -1,4 +1,5 @@
 import Clean.Halo2.Tactics.Keygen
+import Clean.Halo2.ElaboratedConfigure
 
 /-!
 # Halo2 formal circuits — DESIGN SKETCH

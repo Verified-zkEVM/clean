@@ -1,4 +1,5 @@
 import Clean.Halo2.Loops
+import Clean.Halo2.Configure.Lemmas
 import Clean.Halo2.Operations.FixedWrites
 import Clean.Halo2.Operations.LookupSelectors
 import Clean.Halo2.KeygenAttr
