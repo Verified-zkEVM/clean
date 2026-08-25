@@ -505,3 +505,64 @@ attribute [computable_witnesses_norm] ProvableStruct.structEvalProjectionProc
   ProvableStruct.structEvalLiteralProc ProvableStruct.structEvalProjectionEvalProc
 
 end ProvableStruct
+
+/-- Reducibility classification for the extensionality dispatch. `Vector.ext_iff` on an
+equality is productive exactly when both sides' `getElem` at a fresh symbolic index
+takes at least one reduction step under the route's lemmas: heads with a
+`getElem_*` distribution lemma (`map`, `mapRange`, `ofFn`, `mapFinRange`, `mapIdx`,
+`set`, `append`) or a window head (`varFromOffset`, reduced by the branch stage's
+`eval_varFromOffset` + agreement rewriting). Literals decline — a literal indexed at a
+symbolic index is irreducible (elements buried), and the `injEq` family decomposes them
+instead — and literal children of reducible heads defer until the set's
+literal-reduction lemmas (`map_mk`, `take`-family, …) have exposed them. Bare
+variables decline: `x[i]` takes no step, so the pointwise form only trades the whole
+atom for a stuck family.
+Result: 0 = literal, 1 = reducible, 2 = neither/defer. -/
+private partial def vecShape (e : Expr) : Nat :=
+  let e := e.consumeMData
+  match e.getAppFn with
+  | .const n _ =>
+    if n == ``Vector.mk || n == ``List.toArray || n == ``Array.mk then 0
+    else if n == `ProvableType.varFromOffset || n == ``Vector.mapRange ||
+        n == ``Vector.ofFn || n == ``Vector.mapFinRange || n == ``Vector.mapIdx ||
+        -- witness-IR evaluation is vector-valued and its `getElem` reduces through the
+        -- witgen eval lemmas of `circuit_norm` — opaque head, reducible pointwise
+        n == `Witgen.WitgenIR.eval then 1
+    else if n == ``Vector.map || n == ``Vector.set then
+      -- the vector argument must not be a literal (defer to `map_mk` etc.); a bare
+      -- variable child is fine — `x[i]` is an acceptable leaf atom under a reduced head
+      match vecShape e.appArg! with
+      | 0 => 2
+      | _ => 1
+    else if n == ``Vector.append || n == ``HAppend.hAppend then
+      match vecShape e.appFn!.appArg!, vecShape e.appArg! with
+      | 0, _ => 2
+      | _, 0 => 2
+      | _, _ => 1
+    else 2
+  | _ => 2
+
+/-- Extensionality dispatch: rewrite a `Vector`-typed equality by `Vector.ext_iff`
+exactly when both sides classify reducible under `vecShape` — the per-term form of the
+old two-stage ordering between the literal (`injEq`) and extensional decomposition
+families. -/
+def extIffDispatchCore : Simp.Simproc := fun e => do
+  unless e.isAppOfArity ``Eq 3 do return .continue
+  let args := e.getAppArgs
+  unless args[0]!.getAppFn.isConstOf ``Vector do return .continue
+  let lhs := args[1]!
+  let rhs := args[2]!
+  unless vecShape lhs == 1 && vecShape rhs == 1 do return .continue
+  try
+    let iff ← withDefault <| mkAppOptM ``Vector.ext_iff #[none, none, some lhs, some rhs]
+    let some (l, target) := (← inferType iff).iff? | return .continue
+    -- validate the instance against the matched term before rewriting (the
+    -- `vectorEvalLiteral` precedent): a defeq-but-differently-spelled statement
+    -- must not be handed to simp as a rewrite at `e`'s position
+    unless l == e || (← withTransparency .all <| isDefEq l e) do return .continue
+    return .visit { expr := target, proof? := some (← mkPropExt iff) }
+  catch _ => return .continue
+
+simproc extIffDispatch (_ = _) := extIffDispatchCore
+attribute [computable_witnesses_norm] extIffDispatch
+

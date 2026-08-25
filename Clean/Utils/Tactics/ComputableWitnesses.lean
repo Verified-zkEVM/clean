@@ -371,59 +371,6 @@ def retypeVectorAliasEqCore : Simp.DSimproc := fun e => do
 
 dsimproc_decl retypeVectorAliasEq (_ = _) := retypeVectorAliasEqCore
 
-/-- Reducibility classification for the extensionality dispatch. `Vector.ext_iff` on an
-equality is productive exactly when both sides' `getElem` at a fresh symbolic index
-takes at least one reduction step under the route's lemmas: heads with a
-`getElem_*` distribution lemma (`map`, `mapRange`, `ofFn`, `mapFinRange`, `mapIdx`,
-`set`, `append`) or a window head (`varFromOffset`, reduced by the branch stage's
-`eval_varFromOffset` + agreement rewriting). Literals decline — a literal indexed at a
-symbolic index is irreducible (elements buried), and the `injEq` family decomposes them
-instead — and literal children of reducible heads defer until the set's
-literal-reduction lemmas (`map_mk`, `take`-family, …) have exposed them. Bare
-variables decline: `x[i]` takes no step, so the pointwise form only trades the whole
-atom for a stuck family.
-Result: 0 = literal, 1 = reducible, 2 = neither/defer. -/
-private partial def vecShape (e : Expr) : Nat :=
-  let e := e.consumeMData
-  match e.getAppFn with
-  | .const n _ =>
-    if n == ``Vector.mk || n == ``List.toArray || n == ``Array.mk then 0
-    else if n == `ProvableType.varFromOffset || n == ``Vector.mapRange ||
-        n == ``Vector.ofFn || n == ``Vector.mapFinRange || n == ``Vector.mapIdx ||
-        -- witness-IR evaluation is vector-valued and its `getElem` reduces through the
-        -- witgen eval lemmas of `circuit_norm` — opaque head, reducible pointwise
-        n == `Witgen.WitgenIR.eval then 1
-    else if n == ``Vector.map || n == ``Vector.set then
-      -- the vector argument must not be a literal (defer to `map_mk` etc.); a bare
-      -- variable child is fine — `x[i]` is an acceptable leaf atom under a reduced head
-      match vecShape e.appArg! with
-      | 0 => 2
-      | _ => 1
-    else if n == ``Vector.append || n == ``HAppend.hAppend then
-      match vecShape e.appFn!.appArg!, vecShape e.appArg! with
-      | 0, _ => 2
-      | _, 0 => 2
-      | _, _ => 1
-    else 2
-  | _ => 2
-
-/-- Extensionality dispatch: rewrite a `Vector`-typed equality by `Vector.ext_iff`
-exactly when both sides classify reducible under `vecShape` — the per-term form of the
-old two-stage ordering between the literal (`injEq`) and extensional decomposition
-families. -/
-def extIffDispatchCore : Simp.Simproc := fun e => do
-  unless e.isAppOfArity ``Eq 3 do return .continue
-  let args := e.getAppArgs
-  unless args[0]!.getAppFn.isConstOf ``Vector do return .continue
-  let lhs := args[1]!
-  let rhs := args[2]!
-  unless vecShape lhs == 1 && vecShape rhs == 1 do return .continue
-  let iff ← mkAppOptM ``Vector.ext_iff #[none, none, some lhs, some rhs]
-  let some (_, target) := (← inferType iff).iff? | return .continue
-  return .visit { expr := target, proof? := some (← mkPropExt iff) }
-
-simproc_decl extIffDispatch (_ = _) := extIffDispatchCore
-
 /-- Collect fully-applied child-output terms: `c.output v k` and its pre-normalization
 spelling `(subcircuit c v k).1` (definitionally equal, handled by unification). -/
 partial def collectOutputsGo (e : Expr) (seen : IO.Ref (Std.HashSet Expr))
@@ -453,6 +400,10 @@ structure CwSimp where
   normCtx : Simp.Context
   /-- The two attribute sets' simprocs. -/
   normProcs : SimprocsArray
+  /-- `normProcs` without `extIffDispatch`: the pre-split goal contains `Subcircuit`'s
+  dependent offset positions (no motive for propositional rewrites), and leaf premise
+  shapes are the manual-proof interface — the dispatch fires only post-split. -/
+  startProcs : SimprocsArray
   /-- Base-route `simp_all only` fallback: attribute sets + hints. -/
   baseCtx : Simp.Context
   /-- `normProcs` + `reduceOutputMetadata`, for the offset-premise discharge. -/
@@ -730,9 +681,19 @@ def CwSimp.build (extraTerms : Array (TSyntax `term)) : TacticM CwSimp :=
     (normHints, hintSets) ← addHint normHints hintSets t
   let congr ← getSimpCongrTheorems
   let mut normProcs := cnProcs.push cwnProcs
+  let mut startProcs : SimprocsArray := #[cnProcsRaw.erase ``extIffDispatch,
+    (← getAttrSimprocs `computable_witnesses_norm).erase ``extIffDispatch]
   for p in [``reduceLocalLength, ``retypeVectorAliasEq] do
     normProcs ← SimprocsArray.add normProcs p (post := true)
-  let dischargeProcs ← SimprocsArray.add normProcs ``reduceOutputMetadata (post := true)
+    startProcs ← SimprocsArray.add startProcs p (post := true)
+  -- the discharge pass rewrites inside `Subcircuit`'s dependent offset positions,
+  -- where a propositional rewrite cannot build a motive — the extensionality
+  -- dispatch must not fire there (same reason `reduceLocalLength` is a dsimproc)
+  let dischargeBase := (cnProcsRaw.erase ``extIffDispatch)
+  let dischargeCwn := (← getAttrSimprocs `computable_witnesses_norm).erase ``extIffDispatch
+  let mut dischargeProcs : SimprocsArray := #[dischargeBase, dischargeCwn]
+  for p in [``reduceLocalLength, ``retypeVectorAliasEq, ``reduceOutputMetadata] do
+    dischargeProcs ← SimprocsArray.add dischargeProcs p (post := true)
   let outputMetaProcs ← SimprocsArray.add #[] ``reduceOutputMetadata (post := true)
   let vecProcs ← SimprocsArray.add cnProcs ``retypeVectorAliasEq (post := true)
   let vecProcs ← SimprocsArray.add vecProcs ``extIffDispatch (post := true)
@@ -740,6 +701,7 @@ def CwSimp.build (extraTerms : Array (TSyntax `term)) : TacticM CwSimp :=
     normCtx := ← Simp.mkContext {}
       (simpTheorems := #[normHints, cn, cwn] ++ hintSets) congr
     normProcs
+    startProcs
     baseCtx := ← Simp.mkContext {} (simpTheorems := #[normHints, cn, cwn] ++ hintSets)
       congr
     dischargeProcs
@@ -1089,7 +1051,7 @@ def runStart (cw : CwSimp) : TacticM Unit := do
       replaceMainGoal [g]
   let simpPass : TacticM Unit := do
     unless (← getGoals).isEmpty do
-      try metaSimp cw.normCtx cw.normProcs catch _ => pure ()
+      try metaSimp cw.normCtx cw.startProcs catch _ => pure ()
   simpPass
   unless (← getGoals).isEmpty do
     -- One boundary rule, mirroring the library's own: plain-`Circuit`-typed constants
