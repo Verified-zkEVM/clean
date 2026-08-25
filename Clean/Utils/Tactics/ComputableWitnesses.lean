@@ -39,10 +39,11 @@ a child bundle name whose metadata is otherwise stuck under a binder).
    * `chain_output_facts` derives child-output congruence facts
      (`FormalCircuit.output_of_input_eq` instances, re-keyed at the goal's own eval
      spelling);
-   * the close routes by shape (`isEvalCongrEq`): vector/eval-congruence goals get the
-     staged vector route (structural `simp_all`, then per-branch
-     `split_ifs` → `envUnify` → `grind`); everything else takes the base route
-     (`envUnify`, projection respelling, `grind` first, curated `simp_all` fallbacks).
+   * the close orders its stages by shape (`isEvalCongrEq`, an ordering heuristic):
+     vector/eval-congruence goals try the staged vector route first (structural
+     `simp_all`, then per-branch `split_ifs` → `envUnify` → `grind`), everything else
+     tries `envUnify` → `grind` first; both converge on the same fallbacks (curated
+     `simp_all`, then the default-set `simp_all`).
 
 ## Key supporting pieces
 
@@ -871,6 +872,16 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
       let st ← Tactic.saveState
       try act; pure true
       catch _ => st.restore; pure false
+    -- both routes converge here: curated `simp_all` (attribute sets + hints), then the
+    -- default-set `simp_all`, then fail
+    let sharedFallbacks : TacticM Unit := do
+      if ← attempt (do
+          metaSimpAll cw.baseCtx cw.normProcs
+          unless (← getGoals).isEmpty do throwError "open goals") then return
+      if ← attempt (do
+          metaSimpAll cw.fullCtx cw.fullProcs
+          unless (← getGoals).isEmpty do throwError "open goals") then return
+      throwError "computable_witnesses: could not close goal"
     if ← isEvalCongrEq then
       let vecMain : TacticM Unit := do
         try metaSimpAll cw.vecLitCtx cw.vecProcs catch _ => pure ()
@@ -899,15 +910,7 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
       -- `Vector.ext` elementwise fallback between them measured 0 and was deleted)
       if ← attempt vecMain then return
       if ← attempt metaGrind then return
-      -- same curated `simp_all` fallbacks as the base route: eval-congruence leaves
-      -- whose content is struct/instance respelling rather than vector structure
-      if ← attempt (do
-          metaSimpAll cw.baseCtx cw.normProcs
-          unless (← getGoals).isEmpty do throwError "open goals") then return
-      if ← attempt (do
-          metaSimpAll cw.fullCtx cw.fullProcs
-          unless (← getGoals).isEmpty do throwError "open goals") then return
-      throwError "computable_witnesses: could not close goal"
+      sharedFallbacks
     else
       -- grind first: on already-dispatched leaves it is the cheapest closer by an
       -- order of magnitude; the curated simp_all forms only run when it fails
@@ -918,13 +921,7 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
       envUnify
       if (← getGoals).isEmpty then return
       if ← attempt metaGrind then return
-      if ← attempt (do
-          metaSimpAll cw.baseCtx cw.normProcs
-          unless (← getGoals).isEmpty do throwError "open goals") then return
-      if ← attempt (do
-          metaSimpAll cw.fullCtx cw.fullProcs
-          unless (← getGoals).isEmpty do throwError "open goals") then return
-      throwError "computable_witnesses: could not close goal"
+      sharedFallbacks
   let leafDispatch : TacticM Unit := withMainContext do
     -- inaccessible hyp names (from intro1P) break the chainer's delab roundtrip
     try replaceMainGoal [← (← getMainGoal).exposeNames] catch _ => pure ()

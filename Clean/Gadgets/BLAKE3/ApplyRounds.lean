@@ -37,8 +37,6 @@ def roundWithPermute : FormalCircuit (F p) Round.Inputs Round.Inputs where
     let state ← Round.circuit input
     let permuted_message ← Permute.circuit input.message
     return ⟨state, permuted_message⟩
-  -- Manual: the witness structure matches on the round permutation constant; the
-  -- tactic has no case-split step for data-dependent operation lists.
   computableWitnesses := by computable_witnesses [output]
   elaborated := by elaborate_circuit_with {
     output input offset := output input offset
