@@ -31,9 +31,6 @@ def actionCS : ConstraintSystem Fp :=
   let actionPre ← loadCsFixture "Clean/Ironwood/Fixtures/actionPre.json" 0x31656840fdb3156d
   let actionPost ← loadCsFixture "Clean/Ironwood/Fixtures/actionPost.json" 0xdb884f3c3174a41b
   runChecks [
-    -- Every gate's/lookup's `queriedCells` registered faithfully; the layout equalities
-    -- below then certify the recorded order against the Rust dump.
-    ("action: no ill-formed queriedCells", actionCS.invalidQueriedCells.isEmpty),
     -- Pre-compression: projected CS (query layouts from the configure-recorded queries)
     -- equals the dumped fixture.
     ("actionPre: projected CS = dump", projectCS actionCS == actionPre),

@@ -2210,15 +2210,6 @@ theorem lookupQueriesResolved
     exact resolve source
       (List.forall_iff_forall_mem.mp hregistered.2 source hsource)
 
-/-- A closed circuit's configure program contains no malformed query declarations. -/
-theorem invalidQueriedCells_eq_nil
-    (self : TopLevelCircuit F Config PublicInput) :
-    self.constraintSystem.invalidQueriedCells = [] := by
-  have h := self.configureQueriesLawful.invalidQueriedCells_eq_nil
-  simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
-    Configure.run, ConfigureCounts.ofConstraintSystem,
-    ConfigureDelta.apply, List.nil_append] using h
-
 /-- Read this circuit's public input from its declared instance cells. -/
 def extractPublicInput (self : TopLevelCircuit F Config PublicInput)
     (env : Environment F) : PublicInput F :=
