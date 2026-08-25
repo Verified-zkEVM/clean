@@ -1,10 +1,12 @@
 import Clean.Halo2.Keygen.RichExpression
 import Clean.Halo2.Keygen.CompressSelectors
 import Clean.Halo2.Keygen.FloorPlanner
+import Clean.Halo2.Keygen.FloorPlannerCorrectness
 import Clean.Halo2.Keygen.PdqsortCorrectness
 import Clean.Halo2.Keygen.PlannerTrace
 import Clean.Halo2.Keygen.Projection
 import Clean.Halo2.Keygen.PinnedCs
+import Clean.Halo2.Keygen.Domain
 import Clean.Halo2.Keygen.Semantics
 import Clean.Halo2.Keygen.Layout
 import Clean.Halo2.Keygen.GateProjection

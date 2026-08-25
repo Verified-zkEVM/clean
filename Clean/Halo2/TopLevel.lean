@@ -1,4 +1,5 @@
 import Clean.Halo2.Keygen.PinnedCs
+import Clean.Halo2.Keygen.Domain
 import Clean.Halo2.Keygen.Semantics
 import Clean.Halo2.Keygen.Layout
 
