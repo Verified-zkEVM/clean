@@ -726,6 +726,19 @@ partial def conjunctProof? (tgt ty proof : Expr) : Option Expr :=
       conjunctProof? tgt r (mkApp3 (mkConst ``And.right) l r proof)
   else none
 
+/-- The equality atoms under a goal's `∀`/`→`/`∧` spine. -/
+partial def collectEqAtoms (e : Expr) (acc : Array (Expr × Expr) := #[]) :
+    Array (Expr × Expr) :=
+  let e := e.consumeMData
+  match e with
+  | .forallE _ _ b _ => collectEqAtoms b acc
+  | _ =>
+    if e.isAppOfArity ``And 2 then
+      collectEqAtoms e.appFn!.appArg! (collectEqAtoms e.appArg! acc)
+    else match e.eq? with
+      | some (_, l, r) => acc.push (l, r)
+      | none => acc
+
 /-- The per-leaf dispatch/close stage of `computable_witnesses`, shared by the main
 entry (per split leaf) and the standalone `computable_witnesses_close`.
 
@@ -740,34 +753,36 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
   let simpPass : TacticM Unit := do
     unless (← getGoals).isEmpty do
       try metaSimp cw.normCtx cw.normProcs catch _ => pure ()
-  -- Stage-ordering heuristic, NOT a correctness decision: both branches below
+  -- Stage-ordering dispatch, NOT a correctness decision: both branches below
   -- converge on the same `sharedFallbacks`, so a misclassified leaf still closes —
   -- it only pays the wrong stage family's attempts first. The split itself cannot be
   -- removed: running both families on every leaf spends their costs cumulatively
   -- against the per-declaration heartbeat budget, which sends hot files over the
   -- limit (measured: Rotation64Bytes times out under a merged single pipeline in
-  -- either stage order). Shape recognized: eval-congruence goals — both sides are
-  -- eval applications of the same variable term under the two environments (output
-  -- windows, child-output metadata, vector states), whether the value type is a
-  -- vector or a provable struct.
+  -- either stage order).
+  -- Contract: route to the vector/elementwise stage iff the goal has equality atoms
+  -- (under its `∀`/`→`/`∧` spine) and every one of them is eval-congruence-shaped —
+  -- the same principal term under the two environments, a Vector-typed equality, or
+  -- sides built from witness-window / child-output atoms.
   let isEvalCongrEq : TacticM Bool := withMainContext do
     let t := (← instantiateMVars (← getMainTarget)).consumeMData
-    -- witness-window / child-output atoms mark eval-congruence territory whatever
-    -- the goal's connective shape (equality, conjunction of equalities, …)
-    if (t.find? fun e =>
-        e.getAppFn.isConstOf `Expression.var ||
-        e.getAppFn.isConstOf `ProvableType.varFromOffset ||
-        e.getAppFn.isConstOf `FormalCircuitBase.output ||
-        e.getAppFn.isConstOf `ElaboratedCircuit.output).isSome then
-      return true
-    let some (_, lhs, rhs) := t.eq? | return false
-    let ty ← instantiateMVars (← inferType lhs)
-    let tyW ← withTransparency .instances <| whnf ty
-    if tyW.getAppFn.isConstOf ``Vector then return true
-    if lhs.isApp && rhs.isApp && lhs.appArg! == rhs.appArg! &&
-        (lhs.getAppFn.isConstOf `Eval.eval || lhs.getAppFn.isConstOf `Expression.eval) then
-      return true
-    return false
+    let eqs := collectEqAtoms t
+    if eqs.isEmpty then return false
+    eqs.allM fun (lhs, rhs) => do
+      if lhs.isApp && rhs.isApp && lhs.appArg! == rhs.appArg! &&
+          (lhs.getAppFn.isConstOf `Eval.eval || lhs.getAppFn.isConstOf `Expression.eval) then
+        return true
+      let isWindow (e : Expr) : Bool :=
+        (e.find? fun a =>
+          a.getAppFn.isConstOf `Expression.var ||
+          a.getAppFn.isConstOf `ProvableType.varFromOffset ||
+          a.getAppFn.isConstOf `FormalCircuitBase.output ||
+          a.getAppFn.isConstOf `ElaboratedCircuit.output).isSome
+      if isWindow lhs || isWindow rhs then return true
+      if lhs.hasLooseBVars then return false
+      let ty ← instantiateMVars (← inferType lhs)
+      let tyW ← withTransparency .instances <| whnf ty
+      return tyW.getAppFn.isConstOf ``Vector
   -- Var-typed metadata helper defs tagged `@[computable_witnesses_metadata]`
   -- (`Permutation.stateVar`, `BLAKE3.G.output`, …) block the eval simp lemmas;
   -- delta-expand them in the goal to expose their `varFromOffset` spelling.
