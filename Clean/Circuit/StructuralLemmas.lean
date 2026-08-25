@@ -47,8 +47,7 @@ def concat
   -- output instantiations.
   computableWitnesses := by
     computable_witnesses_start
-    -- circuit1's witnesses are computable directly from the shared input agreement
-    · exact circuit1.toSubcircuit_computableWitnesses h
+    · computable_witnesses_close
     -- circuit2's witnesses need circuit1's *output* to only access below its offset
     · apply circuit2.toSubcircuit_computableWitnesses_onlyAccessedBelow
       exact circuit1.output_onlyAccessedBelow (fun _ => h)

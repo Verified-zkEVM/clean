@@ -434,10 +434,8 @@ def circuit : FormalCircuit (F p) Inputs (fields 32) where
     · -- z-vector program: elementwise, with the let-step's value congruent via the keys
       ext i hi
       simp only [circuit_norm, bitsVal_eval, key, keyb]
-    · -- carry-out
-      simp only [circuit_norm, bitsVal_eval, key, keyb]
-    · -- output: the 33 fresh witness variables
-      grind
+    · computable_witnesses_close [key, keyb, bitsVal_eval]
+    · computable_witnesses_close
 
 end Add32
 end Gadgets.SHA256
