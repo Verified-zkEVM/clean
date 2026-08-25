@@ -1,5 +1,5 @@
 import Lean.Elab.Tactic
-import Clean.Halo2.Formal
+import Clean.Halo2.Formal.Tactics
 import Clean.Halo2.Loops
 import Clean.Halo2.Tactics.ProvableTypeSimp
 import Clean.Halo2.Tactics.AbstractOutputs

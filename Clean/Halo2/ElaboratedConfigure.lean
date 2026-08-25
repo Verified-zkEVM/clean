@@ -67,10 +67,12 @@ class ElaboratedConfigure (program : Configure F α) where
     intro _ hqueries
     exact hqueries
 
+namespace ElaboratedConfigure
+
 /-- Replace a discharged selector requirement by its reduced `True` summary. Parent
 configure programs can then consume the resulting allocation and compatibility facts
 without replaying the child's configure tree. -/
-@[reducible] def ElaboratedConfigure.closeSelectorRequirements
+@[reducible] def closeSelectorRequirements
     {program : Configure F α} (self : ElaboratedConfigure program)
     (requirements : ∀ counts, self.selectorRequirements counts) :
     ElaboratedConfigure program :=
@@ -82,7 +84,7 @@ without replaying the child's configure tree. -/
       self.lookupSelectorsCompatible counts (requirements counts) }
 
 @[configure_selector_norm, keygen_norm]
-theorem ElaboratedConfigure.closeSelectorRequirements_selectorSummary
+theorem closeSelectorRequirements_selectorSummary
     {program : Configure F α} (self : ElaboratedConfigure program)
     (requirements : ∀ counts, self.selectorRequirements counts)
     (counts : ConfigureCounts) :
@@ -90,7 +92,7 @@ theorem ElaboratedConfigure.closeSelectorRequirements_selectorSummary
       self.selectorSummary counts := rfl
 
 @[configure_selector_norm, keygen_norm]
-theorem ElaboratedConfigure.closeSelectorRequirements_externalSelectorSummary
+theorem closeSelectorRequirements_externalSelectorSummary
     {program : Configure F α} (self : ElaboratedConfigure program)
     (requirements : ∀ counts, self.selectorRequirements counts)
     (counts : ConfigureCounts) :
@@ -100,7 +102,7 @@ theorem ElaboratedConfigure.closeSelectorRequirements_externalSelectorSummary
 /-- Replace computed external-selector provenance by its reduced circuit-local
 summary. Parents consume this small interface instead of reopening the configure
 program that established it. -/
-@[reducible] def ElaboratedConfigure.withExternalSelectorSummary
+@[reducible] def withExternalSelectorSummary
     {program : Configure F α} (self : ElaboratedConfigure program)
     (summary : ConfigureCounts → ConfigureSelectorSummary)
     (summary_eq : ∀ counts,
@@ -112,7 +114,7 @@ program that established it. -/
 
 /-- Close selector provenance when a configure program only uses selectors allocated
 at or after its incoming selector count. -/
-@[reducible] def ElaboratedConfigure.withNoExternalSelectors
+@[reducible] def withNoExternalSelectors
     {program : Configure F α} (self : ElaboratedConfigure program)
     (fresh : ∀ counts,
       (program.delta counts).SelectorsFreshFrom counts.numSelectors) :
@@ -123,14 +125,14 @@ at or after its incoming selector count. -/
     exact ConfigureDelta.selectorSummary_externalAt_eq_empty_of_fresh
       (fresh counts))
 
-@[simp] theorem ElaboratedConfigure.delta_instanceQueries
+@[simp] theorem delta_instanceQueries
     (program : Configure F α) [elaborated : ElaboratedConfigure program]
     (counts : ConfigureCounts) :
     (program.delta counts).instanceQueries =
       elaborated.instanceQueries counts :=
   elaborated.instanceQueries_eq counts
 
-@[simp] theorem ElaboratedConfigure.delta_constraintDegree
+@[simp] theorem delta_constraintDegree
     (program : Configure F α) [elaborated : ElaboratedConfigure program]
     (counts : ConfigureCounts) :
     (program.delta counts).constraintDegree =
@@ -139,7 +141,7 @@ at or after its incoming selector count. -/
 
 /-- A closed configure program's reduced degree is exactly the degree of the
 constraint system obtained by running it from the empty state. -/
-theorem ElaboratedConfigure.csDegree_run_empty
+theorem csDegree_run_empty
     (program : Configure F α) [elaborated : ElaboratedConfigure program] :
     csDegree (program.run {}).2 = elaborated.constraintDegree {} := by
   rw [Configure.csDegree_run, ConfigureCounts.ofConstraintSystem_empty]
@@ -149,7 +151,7 @@ theorem ElaboratedConfigure.csDegree_run_empty
       Halo2.constraintDegree]
   rw [Nat.max_eq_right hdegree, elaborated.constraintDegree_eq]
 
-instance ElaboratedConfigure.pure (value : α) :
+instance pure (value : α) :
     ElaboratedConfigure (pure value : Configure F α) where
   constraintDegree _ := 3
   constraintDegree_eq := by intro counts; rfl
@@ -166,7 +168,7 @@ instance ElaboratedConfigure.pure (value : α) :
     intro counts _
     exact ConfigureDelta.QueriesLawful.empty counts
 
-instance ElaboratedConfigure.bind {β : Type}
+instance bind {β : Type}
     (program : Configure F α) [programElaborated : ElaboratedConfigure program]
     (next : α → Configure F β)
     [nextElaborated : ∀ value, ElaboratedConfigure (next value)] :
@@ -263,7 +265,7 @@ instance ElaboratedConfigure.bind {β : Type}
         (nextElaborated (program.output counts)).queriesLawful
           (program.finalCounts counts) hrequirements.2
 
-instance ElaboratedConfigure.adviceColumn :
+instance adviceColumn :
     ElaboratedConfigure (adviceColumn : Configure F (Column .advice)) where
   constraintDegree _ := 3
   constraintDegree_eq := by intro counts; rfl
@@ -278,7 +280,7 @@ instance ElaboratedConfigure.adviceColumn :
     intro counts _
     exact ConfigureDelta.QueriesLawful.empty _
 
-instance ElaboratedConfigure.fixedColumn :
+instance fixedColumn :
     ElaboratedConfigure (fixedColumn : Configure F (Column .fixed)) where
   constraintDegree _ := 3
   constraintDegree_eq := by intro counts; rfl
@@ -293,7 +295,7 @@ instance ElaboratedConfigure.fixedColumn :
     intro counts _
     exact ConfigureDelta.QueriesLawful.empty _
 
-instance ElaboratedConfigure.instanceColumn :
+instance instanceColumn :
     ElaboratedConfigure (instanceColumn : Configure F (Column .instance)) where
   constraintDegree _ := 3
   constraintDegree_eq := by intro counts; rfl
@@ -308,7 +310,7 @@ instance ElaboratedConfigure.instanceColumn :
     intro counts _
     exact ConfigureDelta.QueriesLawful.empty _
 
-instance ElaboratedConfigure.selector :
+instance selector :
     ElaboratedConfigure (selector : Configure F Selector) where
   constraintDegree _ := 3
   constraintDegree_eq := by intro counts; rfl
@@ -324,7 +326,7 @@ instance ElaboratedConfigure.selector :
     intro counts _
     exact ConfigureDelta.QueriesLawful.empty _
 
-instance ElaboratedConfigure.complexSelector :
+instance complexSelector :
     ElaboratedConfigure (complexSelector : Configure F ComplexSelector) where
   constraintDegree _ := 3
   constraintDegree_eq := by intro counts; rfl
@@ -340,7 +342,7 @@ instance ElaboratedConfigure.complexSelector :
     intro counts _
     exact ConfigureDelta.QueriesLawful.empty _
 
-instance ElaboratedConfigure.enableEquality (column : AnyColumn) :
+instance enableEquality (column : AnyColumn) :
     ElaboratedConfigure (enableEquality (F := F) column) where
   constraintDegree _ := 3
   constraintDegree_eq := by
@@ -390,7 +392,7 @@ instance ElaboratedConfigure.enableEquality (column : AnyColumn) :
           ConfigureDelta.RegistersPermutationColumn,
           ConfigureDelta.append]
 
-instance ElaboratedConfigure.enableConstant (column : Column .fixed) :
+instance enableConstant (column : Column .fixed) :
     ElaboratedConfigure (enableConstant (F := F) column) where
   constraintDegree _ := 3
   constraintDegree_eq := by intro counts; rfl
@@ -426,7 +428,7 @@ instance ElaboratedConfigure.enableConstant (column : Column .fixed) :
         Column.toAny,
         ConfigureDelta.RegistersPermutationColumn]
 
-instance ElaboratedConfigure.createGate (gate : Gate F) :
+instance createGate (gate : Gate F) :
     ElaboratedConfigure (createGate gate) where
   constraintDegree _ := Halo2.constraintDegree [gate] []
   constraintDegree_eq := by
@@ -490,7 +492,7 @@ instance ElaboratedConfigure.createGate (gate : Gate F) :
       Configure.countDelta, ConfigureCountDelta.apply,
       Halo2.createGate, queryDelta] using hcombined
 
-instance ElaboratedConfigure.lookup
+instance lookup
     (queriedCells : List (Expression F Query))
     (masterSelector : ComplexSelector)
     (tableMap : List (Expression F Query × TableColumn))
@@ -611,10 +613,12 @@ instance ElaboratedConfigure.lookup
         ConfigureDelta.append] using
           hcombined.constants_permutationRequests
 
-instance ElaboratedConfigure.lookupTableColumn :
+instance lookupTableColumn :
     ElaboratedConfigure (lookupTableColumn : Configure F TableColumn) := by
   unfold Halo2.lookupTableColumn
   infer_instance
+
+end ElaboratedConfigure
 
 attribute [configure_selector_norm] ElaboratedConfigure.pure ElaboratedConfigure.bind
 attribute [configure_query_norm] ElaboratedConfigure.pure ElaboratedConfigure.bind

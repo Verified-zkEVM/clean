@@ -1,4 +1,4 @@
-import Clean.Halo2.Formal
+import Clean.Halo2.Formal.Tactics
 import Clean.Halo2.Lemmas
 
 /-!
