@@ -61,10 +61,10 @@ def plannerBlockMultiset
     (blocks : List (ℕ × RegionShapeSummary)) : Multiset RegionShapeSummary :=
   blocks.foldr (fun block result => block.1 • {block.2} + result) 0
 
-private theorem listCoe_cons {T : Type} (head : T) (tail : List T) :
+theorem listCoe_cons {T : Type} (head : T) (tail : List T) :
     (↑(head :: tail) : Multiset T) = head ::ₘ (↑tail : Multiset T) := rfl
 
-private theorem multisetCons_eq_add {T : Type} (head : T)
+theorem multisetCons_eq_add {T : Type} (head : T)
     (tail : Multiset T) : head ::ₘ tail = {head} + tail :=
   (Multiset.singleton_add head tail).symm
 
