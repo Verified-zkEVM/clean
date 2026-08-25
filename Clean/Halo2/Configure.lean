@@ -619,5 +619,4 @@ def lookup (queriedCells : List (Expression F Query))
     (left.append right).lookups = left.lookups ++ right.lookups :=
   rfl
 
-
 end Halo2

@@ -503,6 +503,5 @@ theorem constantAssignments_row_lt_placementEnd
   obtain ⟨rfl, rfl, rfl⟩ := hequal
   exact hrow
 
-
 end V1
 end Halo2.FloorPlanner

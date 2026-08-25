@@ -305,5 +305,4 @@ theorem Expression.selectorBound_le_lookupInputSelectorBound
     (List.mem_map.mpr ⟨expression, hexpression, rfl⟩)
   exact le_rfl
 
-
 end Halo2

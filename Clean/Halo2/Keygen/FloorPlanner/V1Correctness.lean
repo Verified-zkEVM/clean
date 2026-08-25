@@ -2184,6 +2184,5 @@ theorem placementEnd_eq_slotSummaryEndFrom_withoutSelectors
   simpa only [sorted, slotSummaryEndFrom, slotSummaryEndFromWith]
     using herasure
 
-
 end V1
 end Halo2.FloorPlanner

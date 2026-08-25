@@ -638,7 +638,6 @@ def regionCount (self : FormalCircuit F ConfigInput Config Input Output)
     (input : Var Input F) : ℕ :=
   self.elaborated.regionCount input
 
-
 end FormalCircuit
 
 end Halo2

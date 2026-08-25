@@ -1,5 +1,4 @@
 import Clean.Halo2.Operations
-import Clean.Halo2.SynthesisSummaryAttr
 
 namespace Halo2
 
@@ -1193,7 +1192,6 @@ theorem forall_regionOperationConstantSiteCount_eq_zero_of_regionSynthesisSummar
       obtain ⟨hoperation, hrest⟩ := Nat.add_eq_zero_iff.mp hsummary
       rw [List.forall_cons]
       exact ⟨hoperation, inductionHypothesis hrest⟩
-
 
 end FloorPlanner
 end Halo2

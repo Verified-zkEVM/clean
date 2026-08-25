@@ -536,7 +536,6 @@ theorem KeygenLawful.call_registered
           simpa only [List.mem_append] using hcolumn)
       · exact hinputPermutationColumns column hcolumn)
 
-
 end FormalRegionCircuit
 
 end Halo2

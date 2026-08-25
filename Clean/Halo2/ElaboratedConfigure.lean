@@ -720,5 +720,4 @@ simproc foldElaboratedConfigureInstanceQueries
   foldElaboratedConfigureInstanceQueriesProc
 attribute [simp] foldElaboratedConfigureInstanceQueries
 
-
 end Halo2

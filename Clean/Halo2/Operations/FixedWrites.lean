@@ -625,5 +625,4 @@ theorem Operations.FixedWritesLawful.ofRegionAssignmentsAgree
   · rw [hloaded]
     exact List.disjoint_nil_left _
 
-
 end Halo2

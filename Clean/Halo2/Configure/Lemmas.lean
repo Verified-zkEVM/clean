@@ -733,5 +733,4 @@ elab "configure_norm" : tactic => withMainContext do
   if !(← getGoals).isEmpty then
     evalTactic (← `(tactic| rfl))
 
-
 end Halo2

@@ -603,7 +603,6 @@ def output (self : FormalRegionCircuit F ConfigInput Config Input Output) (confi
     (offset : ℕ) (input : Var Input F) (region : RegionIndex) : Var Output F :=
   self.elaborated.output config offset input region
 
-
 end FormalRegionCircuit
 
 end Halo2

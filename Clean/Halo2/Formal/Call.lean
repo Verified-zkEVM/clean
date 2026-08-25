@@ -606,7 +606,6 @@ TODO: `SubcircuitsConsistent` wellformedness (child cells reference the ambient 
 range `[i₀, i₀ + regionCount)`), discharged by the monad's structure.
 -/
 
-
 end FormalCircuit
 
 end Halo2

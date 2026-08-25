@@ -1,6 +1,6 @@
 import Clean.Halo2.Configure
+import Clean.Halo2.KeygenAttr
 import Clean.Halo2.Provable
-import Clean.Halo2.SynthesisSummaryAttr
 import Clean.Halo2.WitnessIR
 
 /-!

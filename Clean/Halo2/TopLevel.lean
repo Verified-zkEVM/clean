@@ -1703,14 +1703,6 @@ theorem lookupSelectorsCompatible
     program, counts, Configure.run, ConfigureCounts.ofConstraintSystem,
     ConfigureDelta.apply, List.nil_append] using hcompatible
 
-/-- The global lookup-selector law follows generically from configure registration,
-lookup-local activation, and configure-time selector compatibility. -/
-theorem lookupSelectorsLawful
-    (self : TopLevelCircuit F Config PublicInput) :
-    self.operations.LookupSelectorsLawful self.constraintSystem.lookups :=
-  Operations.lookupSelectorsLawful_of_registered self.keygenCoherent
-    self.lookupActivationsWellFormed self.lookupSelectorsCompatible
-
 /-- Every configured gate's activation selector is allocated. -/
 theorem gateSelectorsAllocated
     (self : TopLevelCircuit F Config PublicInput) :

@@ -657,5 +657,4 @@ def ConstraintSystem.queryAnyIndex (cs : ConstraintSystem F) (c : AnyColumn) :
   | ⟨.fixed, i⟩ => cs.queryFixedIndex ⟨i⟩
   | ⟨.instance, i⟩ => cs.queryInstanceIndex ⟨i⟩ 0
 
-
 end Halo2

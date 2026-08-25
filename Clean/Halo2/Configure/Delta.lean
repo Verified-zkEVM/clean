@@ -442,5 +442,4 @@ theorem ConfigureDelta.csDegree_apply
     Halo2.constraintDegree_append initial.gates delta.gates
       initial.lookups delta.lookups
 
-
 end Halo2

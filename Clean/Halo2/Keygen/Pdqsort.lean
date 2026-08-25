@@ -5292,6 +5292,5 @@ def quicksort (v : Array T) (isLess : T → T → Bool) : Array T :=
   if v.size == 0 then v
   else recurse (v.size + 1) v isLess none (Nat.log2 v.size + 1) true true
 
-
 end Pdqsort
 end Halo2.FloorPlanner

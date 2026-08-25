@@ -798,5 +798,4 @@ private theorem foldlTableDelta_constants
     LookupArgument.inputSelectorBound
   simp [ConfigureDelta.fixedQueriesOfColumns, foldlTableDelta_lookups]
 
-
 end Halo2
