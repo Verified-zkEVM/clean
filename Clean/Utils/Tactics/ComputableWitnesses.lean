@@ -371,6 +371,59 @@ def retypeVectorAliasEqCore : Simp.DSimproc := fun e => do
 
 dsimproc_decl retypeVectorAliasEq (_ = _) := retypeVectorAliasEqCore
 
+/-- Reducibility classification for the extensionality dispatch. `Vector.ext_iff` on an
+equality is productive exactly when both sides' `getElem` at a fresh symbolic index
+takes at least one reduction step under the route's lemmas: heads with a
+`getElem_*` distribution lemma (`map`, `mapRange`, `ofFn`, `mapFinRange`, `mapIdx`,
+`set`, `append`) or a window head (`varFromOffset`, reduced by the branch stage's
+`eval_varFromOffset` + agreement rewriting). Literals decline — a literal indexed at a
+symbolic index is irreducible (elements buried), and the `injEq` family decomposes them
+instead — and literal children of reducible heads defer until the set's
+literal-reduction lemmas (`map_mk`, `take`-family, …) have exposed them. Bare
+variables decline: `x[i]` takes no step, so the pointwise form only trades the whole
+atom for a stuck family.
+Result: 0 = literal, 1 = reducible, 2 = neither/defer. -/
+private partial def vecShape (e : Expr) : Nat :=
+  let e := e.consumeMData
+  match e.getAppFn with
+  | .const n _ =>
+    if n == ``Vector.mk || n == ``List.toArray || n == ``Array.mk then 0
+    else if n == `ProvableType.varFromOffset || n == ``Vector.mapRange ||
+        n == ``Vector.ofFn || n == ``Vector.mapFinRange || n == ``Vector.mapIdx ||
+        -- witness-IR evaluation is vector-valued and its `getElem` reduces through the
+        -- witgen eval lemmas of `circuit_norm` — opaque head, reducible pointwise
+        n == `Witgen.WitgenIR.eval then 1
+    else if n == ``Vector.map || n == ``Vector.set then
+      -- the vector argument must not be a literal (defer to `map_mk` etc.); a bare
+      -- variable child is fine — `x[i]` is an acceptable leaf atom under a reduced head
+      match vecShape e.appArg! with
+      | 0 => 2
+      | _ => 1
+    else if n == ``Vector.append || n == ``HAppend.hAppend then
+      match vecShape e.appFn!.appArg!, vecShape e.appArg! with
+      | 0, _ => 2
+      | _, 0 => 2
+      | _, _ => 1
+    else 2
+  | _ => 2
+
+/-- Extensionality dispatch: rewrite a `Vector`-typed equality by `Vector.ext_iff`
+exactly when both sides classify reducible under `vecShape` — the per-term form of the
+old two-stage ordering between the literal (`injEq`) and extensional decomposition
+families. -/
+def extIffDispatchCore : Simp.Simproc := fun e => do
+  unless e.isAppOfArity ``Eq 3 do return .continue
+  let args := e.getAppArgs
+  unless args[0]!.getAppFn.isConstOf ``Vector do return .continue
+  let lhs := args[1]!
+  let rhs := args[2]!
+  unless vecShape lhs == 1 && vecShape rhs == 1 do return .continue
+  let iff ← mkAppOptM ``Vector.ext_iff #[none, none, some lhs, some rhs]
+  let some (_, target) := (← inferType iff).iff? | return .continue
+  return .visit { expr := target, proof? := some (← mkPropExt iff) }
+
+simproc_decl extIffDispatch (_ = _) := extIffDispatchCore
+
 /-- Collect fully-applied child-output terms: `c.output v k` and its pre-normalization
 spelling `(subcircuit c v k).1` (definitionally equal, handled by unification). -/
 partial def collectOutputsGo (e : Expr) (seen : IO.Ref (Std.HashSet Expr))
@@ -404,9 +457,9 @@ structure CwSimp where
   baseCtx : Simp.Context
   /-- `normProcs` + `reduceOutputMetadata`, for the offset-premise discharge. -/
   dischargeProcs : SimprocsArray
-  /-- Vector route, structural `simp_all`. -/
+  /-- Vector route, structural `simp_all` (literal + extensional decomposition in one
+  set; the `injEq`/`ext_iff` choice is per-term, made by `extIffDispatch`). -/
   vecCtx : Simp.Context
-  vecLitCtx : Simp.Context
   /-- `circuit_norm` procs + `retypeVectorAliasEq` (vector-route steps). -/
   vecProcs : SimprocsArray
   /-- Vector route, per-branch simp after `split_ifs`. -/
@@ -603,28 +656,20 @@ partial def splitStep (g : MVarId) (fuel : Nat) : MetaM (List MVarId) := do
 def splitStructure : TacticM Unit :=
   liftMetaTactic fun g => splitStep g 512
 
-/-- Vector route, literal pre-pass: decompose literal-vector evals and split the
-resulting `mk = mk` equalities into componentwise conjuncts. Runs before
-`vecStructuralLemmas` so that literal leaves take the injEq route — `Vector.ext_iff`
-would otherwise rewrite them to a ∀-form whose symbolic index leaves list-`getElem`
-atoms nothing can reduce. -/
-def vecLiteralLemmas : Array Name := #[
-  ``eval_vector, ``ProvableType.eval_fields,
-  ``Vector.map_mk, ``List.map_toArray, ``List.map_cons, ``List.map_nil,
-  ``Vector.mk.injEq, ``Array.mk.injEq, ``List.cons.injEq, ``and_true,
-  -- `take`/`extract`-of-literal reduction, so windows behind `Vector.take` spellings
-  -- (e.g. `take 8` of a 16-window output) decompose to elements like any literal
-  ``Vector.take_eq_extract, ``Vector.extract_mk, ``List.extract_toArray,
-  ``List.extract_eq_take_drop, ``Nat.sub_zero, ``tsub_zero, ``List.drop_zero,
-  ``List.take_succ_cons, ``List.take_zero]
-
 /-- Vector route, structural `simp_all`: vector eval decomposition and elementwise
 access. Every member fired in the usage measurement at 815dc9b1 (1–75 each). -/
 def vecStructuralLemmas : Array Name := #[
   ``eval_vector, ``ProvableType.eval_fields,
   ``Vector.map_mk, ``List.map_toArray, ``List.map_cons, ``List.map_nil,
-  ``Array.mk.injEq, ``List.cons.injEq, ``and_true,
-  ``Vector.map_ofFn, ``Vector.ext_iff, ``Vector.getElem_ofFn, ``Function.comp_def,
+  -- literal decomposition (`injEq` chains only match literal pairs; the extensional
+  -- path is owned by `extIffDispatch`, which fires only on reducible sides)
+  ``Vector.mk.injEq, ``Array.mk.injEq, ``List.cons.injEq, ``and_true,
+  -- `take`/`extract`-of-literal reduction, so windows behind `Vector.take` spellings
+  -- (e.g. `take 8` of a 16-window output) decompose to elements like any literal
+  ``Vector.take_eq_extract, ``Vector.extract_mk, ``List.extract_toArray,
+  ``List.extract_eq_take_drop, ``Nat.sub_zero, ``tsub_zero, ``List.drop_zero,
+  ``List.take_succ_cons, ``List.take_zero,
+  ``Vector.map_ofFn, ``Vector.getElem_ofFn, ``Function.comp_def,
   ``Vector.getElem_map, ``Vector.getElem_append, ``Vector.getElem_mapFinRange,
   ``Vector.getElem_mapIdx, ``Vector.getElem_set, ``Vector.getElem_mapRange]
 
@@ -690,6 +735,7 @@ def CwSimp.build (extraTerms : Array (TSyntax `term)) : TacticM CwSimp :=
   let dischargeProcs ← SimprocsArray.add normProcs ``reduceOutputMetadata (post := true)
   let outputMetaProcs ← SimprocsArray.add #[] ``reduceOutputMetadata (post := true)
   let vecProcs ← SimprocsArray.add cnProcs ``retypeVectorAliasEq (post := true)
+  let vecProcs ← SimprocsArray.add vecProcs ``extIffDispatch (post := true)
   return {
     normCtx := ← Simp.mkContext {}
       (simpTheorems := #[normHints, cn, cwn] ++ hintSets) congr
@@ -699,9 +745,6 @@ def CwSimp.build (extraTerms : Array (TSyntax `term)) : TacticM CwSimp :=
     dischargeProcs
     vecCtx := ← Simp.mkContext {}
       (simpTheorems := #[← theoremsOf vecStructuralLemmas normHints, cn] ++ hintSets)
-      congr
-    vecLitCtx := ← Simp.mkContext {}
-      (simpTheorems := #[← theoremsOf vecLiteralLemmas normHints, cn] ++ hintSets)
       congr
     vecProcs
     branchCtx := ← Simp.mkContext {}
@@ -906,7 +949,6 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
       throwError "computable_witnesses: could not close goal"
     if ← isEvalCongrEq then
       let vecMain : TacticM Unit := do
-        try metaSimpAll cw.vecLitCtx cw.vecProcs catch _ => pure ()
         metaSimpAll cw.vecCtx cw.vecProcs
         let gs ← getGoals
         for g in gs do
