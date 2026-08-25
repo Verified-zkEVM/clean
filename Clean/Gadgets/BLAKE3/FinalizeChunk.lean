@@ -281,76 +281,11 @@ theorem completeness : Completeness (F p) main Assumptions := by
         · norm_num
       · exact h_or2.2
 
-omit p_large_enough in
-lemma output_windows_eq {env env' : ProverEnvironment (F p)} {m k : ℕ}
-    (h_agrees : env.AgreesBelow m env') (hk : k + 4 ≤ m) :
-    eval env.toEnvironment (varFromOffset U32 k : Var U32 (F p)) =
-      eval env'.toEnvironment (varFromOffset U32 k : Var U32 (F p)) := by
-  simp only [ProvableType.eval_varFromOffset, circuit_norm, Vector.mapRange_succ, Vector.mapRange_zero]
-  refine congrArg fromElements ?_
-  simp only [Vector.mk.injEq, Array.mk.injEq, List.cons.injEq, and_true]
-  and_intros <;> exact h_agrees.1 _ (by omega)
-
-omit p_large_enough in
-lemma output_take8_eq {env env' : ProverEnvironment (F p)} {n : ℕ}
-    (h_agrees : env.AgreesBelow (n + 5457) env') :
-    eval env.toEnvironment
-        ((#v[varFromOffset U32 (n + 9 + 4 + 4 + 5376),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4)] : Vector (U32 (Expression (F p))) 16).take 8) =
-      eval env'.toEnvironment
-        ((#v[varFromOffset U32 (n + 9 + 4 + 4 + 5376),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4),
-         varFromOffset U32 (n + 9 + 4 + 4 + 5376 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4 + 4)] : Vector (U32 (Expression (F p))) 16).take 8) := by
-  simp only [Vector.take_eq_extract, Vector.extract_mk, Nat.sub_zero, List.extract_toArray,
-    List.extract_eq_take_drop, tsub_zero, List.drop_zero, List.take_succ_cons, List.take_zero,
-    circuit_norm, eval_vector, Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil,
-    Vector.mk.injEq, Array.mk.injEq, List.cons.injEq, and_true]
-  (try and_intros) <;> (refine output_windows_eq h_agrees ?_; omega)
-
 def circuit : FormalCircuit (F p) Inputs (ProvableVector U32 8) := {
   main, elaborated, Assumptions, Spec, soundness, completeness
-  -- Manual: with `computable_witnesses [bytesToWords, eval_vector_set, …]`
-  -- every leg closes except the output: its `take 8` of a varFromOffset literal needs
-  -- `output_take8_eq`, which cannot fire as a hint — the tactic normalizes the window
-  -- offsets to `n + 5393`-style numerals while the lemma (matching the metadata) spells
-  -- them as `n + 9 + 4 + 4 + 5376` chains, and simp keys don't bridge that arithmetic.
   computableWitnesses := by
-    computable_witnesses_start [bytesToWords, eval_vector_set,
+    computable_witnesses [bytesToWords, eval_vector_set,
       U32.ByteVector.eval_fromLimbs, U32.ByteVector.fromLimbs_inj]
-    · computable_witnesses_close
-    · computable_witnesses_close
-    · computable_witnesses_close
-    · computable_witnesses_close
-    -- the output leg needs `output_take8_eq`: its offset spelling
-    -- (`n + 9 + 4 + 4 + 5376` chains) is not reachable by the closer's normalization
-    · exact output_take8_eq h_agrees
 }
 
 end Gadgets.BLAKE3.FinalizeChunk

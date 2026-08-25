@@ -609,7 +609,12 @@ atoms nothing can reduce. -/
 def vecLiteralLemmas : Array Name := #[
   ``eval_vector, ``ProvableType.eval_fields,
   ``Vector.map_mk, ``List.map_toArray, ``List.map_cons, ``List.map_nil,
-  ``Vector.mk.injEq, ``Array.mk.injEq, ``List.cons.injEq, ``and_true]
+  ``Vector.mk.injEq, ``Array.mk.injEq, ``List.cons.injEq, ``and_true,
+  -- `take`/`extract`-of-literal reduction, so windows behind `Vector.take` spellings
+  -- (e.g. `take 8` of a 16-window output) decompose to elements like any literal
+  ``Vector.take_eq_extract, ``Vector.extract_mk, ``List.extract_toArray,
+  ``List.extract_eq_take_drop, ``Nat.sub_zero, ``tsub_zero, ``List.drop_zero,
+  ``List.take_succ_cons, ``List.take_zero]
 
 /-- Vector route, structural `simp_all`: vector eval decomposition and elementwise
 access. Every member fired in the usage measurement at 815dc9b1 (1–75 each). -/
