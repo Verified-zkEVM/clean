@@ -391,6 +391,49 @@ partial def collectOutputsGo (e : Expr) (seen : IO.Ref (Std.HashSet Expr))
       unless (← instantiateMVars (← inferType e)).isForall do
         acc.modify (·.push e)
 
+/-- Speculative default-transparency `isDefEq`: at most `budget` additional heartbeats
+(never raising the ambient cap), and a blown budget means `false` rather than an
+escaping runtime exception. -/
+def speculativeIsDefEq (budget : Nat) (a b : Expr) : MetaM Bool := do
+  let ctx ← readThe Core.Context
+  let used := (← IO.getNumHeartbeats) - ctx.initHeartbeats
+  withTheReader Core.Context
+    (fun c => { c with maxHeartbeats := min c.maxHeartbeats (used + budget) }) do
+    tryCatchRuntimeEx
+      (try withDefault <| isDefEq a b catch _ => pure false)
+      (fun _ => pure false)
+
+/-- Last-resort close: a hypothesis, or a nested `∧`-projection of one, that is
+definitionally equal to the goal. The syntactic closers run first everywhere; this pays
+default-transparency `isDefEq` only on leaves that would otherwise fail, where
+defeq-but-distinct instance spellings (composite vs canonical eval instances) defeat
+grind's syntactic atoms and `assumption`'s reducible-transparency whole-hypothesis match. -/
+partial def projAssumptionGo (g : MVarId) (tgt : Expr) (e ty : Expr) (fuel : Nat) :
+    MetaM Bool := do
+  if ← speculativeIsDefEq 50000 ty tgt then
+    g.assign e
+    return true
+  if fuel == 0 then return false
+  let ty' := ty.consumeMData
+  if ty'.isAppOfArity ``And 2 then
+    let a := ty'.appFn!.appArg!
+    let b := ty'.appArg!
+    if ← projAssumptionGo g tgt (mkApp3 (mkConst ``And.left) a b e) a (fuel - 1) then
+      return true
+    if ← projAssumptionGo g tgt (mkApp3 (mkConst ``And.right) a b e) b (fuel - 1) then
+      return true
+  return false
+
+def projAssumption : TacticM Unit := withMainContext do
+  let g ← getMainGoal
+  let tgt ← g.getType
+  for decl in ← getLCtx do
+    if decl.isImplementationDetail then continue
+    if ← projAssumptionGo g tgt decl.toExpr decl.type 8 then
+      replaceMainGoal []
+      return
+  throwError "computable_witnesses: could not close goal"
+
 /-- Simp contexts and simproc arrays for one `computable_witnesses` invocation, built
 once by `CwSimp.build` — hints are resolved there, loudly. -/
 structure CwSimp where
@@ -514,6 +557,8 @@ def chainOutputFacts (cw? : Option CwSimp := none) : TacticM Unit := withMainCon
             else
               let closed ← try (← getMainGoal).assumption; replaceMainGoal []; pure true
                 catch _ => pure false
+              let closed ← if closed then pure true else
+                try projAssumption; pure true catch _ => pure false
               unless closed do
                 let (ctx, procs) ← match cw? with
                   | some cw => pure (cw.normCtx, cw.normProcs)
@@ -893,12 +938,18 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
             envUnify
             for g' in (← getGoals) do
               setGoals [g']
-              metaGrind
+              try metaGrind
+              catch e =>
+                -- defeq-but-distinct instance spellings defeat the syntactic closers;
+                -- pay the definitional projection-assumption only where grind failed
+                let closed ← try projAssumption; pure true catch _ => pure false
+                unless closed do throw e
         setGoals []
       -- vecMain closed 103 of 112 vector-route leaves; grind the other 9 (a
       -- `Vector.ext` elementwise fallback between them measured 0 and was deleted)
       if ← attempt vecMain then return
-      metaGrind
+      if ← attempt metaGrind then return
+      projAssumption
     else
       -- grind first: on already-dispatched leaves it is the cheapest closer by an
       -- order of magnitude; the curated simp_all forms only run when it fails
@@ -912,9 +963,10 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
       if ← attempt (do
           metaSimpAll cw.baseCtx cw.normProcs
           unless (← getGoals).isEmpty do throwError "open goals") then return
-      metaSimpAll cw.fullCtx cw.fullProcs
-      unless (← getGoals).isEmpty do
-        throwError "computable_witnesses: could not close goal"
+      if ← attempt (do
+          metaSimpAll cw.fullCtx cw.fullProcs
+          unless (← getGoals).isEmpty do throwError "open goals") then return
+      projAssumption
   let leafDispatch : TacticM Unit := withMainContext do
     -- inaccessible hyp names (from intro1P) break the chainer's delab roundtrip
     try replaceMainGoal [← (← getMainGoal).exposeNames] catch _ => pure ()

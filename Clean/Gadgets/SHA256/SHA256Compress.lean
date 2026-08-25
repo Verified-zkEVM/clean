@@ -530,10 +530,7 @@ def circuit : FormalCircuit (F p) Inputs SHA256State := {
   -- Add32 leg unifies `SHA256Rounds.circuit.output` against its 64-step unfolding.
   computableWitnesses := by
     computable_witnesses_start
-    · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
-        (by rfl) fun h_agrees => ?_
-      simp only [circuit_norm]
-      exact h.2
+    · computable_witnesses_close
     · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
         (by rfl) fun h_agrees => ?_
       simp only [circuit_norm]
