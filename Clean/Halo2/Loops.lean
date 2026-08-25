@@ -1,4 +1,7 @@
 import Clean.Halo2.Lemmas
+import Clean.Halo2.Operations.Copy
+import Clean.Halo2.Operations.FixedWrites
+import Clean.Halo2.SynthesisSummary.Operations
 
 /-!
 # Native loop support for `RegionCircuit`
