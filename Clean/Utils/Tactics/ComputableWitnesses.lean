@@ -635,22 +635,27 @@ def branchLemmas : Array Name := #[
 is added as a rewrite, a global definition as an unfold (the same paths quoted
 `simp [foo]` takes); anything else — local hypotheses included — elaborates as a term.
 Unknown names fail here, loudly, instead of silently disabling a downstream call. -/
-def addHint (thms : SimpTheorems) (sets : Array SimpTheorems) (t : TSyntax `term) :
-    TacticM (SimpTheorems × Array SimpTheorems) := do
+def addHint (thms : SimpTheorems) (sets : Array SimpTheorems)
+    (procs : Array Name) (t : TSyntax `term) :
+    TacticM (SimpTheorems × Array SimpTheorems × Array Name) := do
   if let `($id:ident) := t then
     if let some ext ← getSimpExtension? id.getId then
-      return (thms, sets.push (← ext.getTheorems))
+      return (thms, sets.push (← ext.getTheorems), procs)
     let declName? ← try pure (some (← resolveGlobalConstNoOverload id))
       catch _ => pure none
     if let some declName := declName? then
+      -- a simproc name opts the proc into this invocation's theorem-bearing passes
+      -- (start included — the per-invocation override of the curated defaults)
+      if ← Simp.isSimproc declName then
+        return (thms, sets, procs.push declName)
       if ← isProp (← getConstInfo declName).type then
-        return (← thms.addConst declName, sets)
+        return (← thms.addConst declName, sets, procs)
       else
-        return (← thms.addDeclToUnfold declName, sets)
+        return (← thms.addDeclToUnfold declName, sets, procs)
   let e ← Tactic.elabTerm t none
   if let .fvar fvarId := e then
-    return (← thms.add (.fvar fvarId) #[] e, sets)
-  return (← thms.add (.other (← mkFreshUserName `cw_hint)) #[] e, sets)
+    return (← thms.add (.fvar fvarId) #[] e, sets, procs)
+  return (← thms.add (.other (← mkFreshUserName `cw_hint)) #[] e, sets, procs)
 
 /-- Build all simp machinery for one invocation. The in-scope `main` is self-supplied
 as an unfold (all resolutions — a constant absent from the goal contributes no
@@ -677,13 +682,21 @@ def CwSimp.build (extraTerms : Array (TSyntax `term)) : TacticM CwSimp :=
   for mainName in (← try resolveGlobalConst (mkIdent `main) catch _ => pure []) do
     normHints ← normHints.addDeclToUnfold mainName
   let mut hintSets : Array SimpTheorems := #[]
+  let mut hintProcs : Array Name := #[]
   for t in extraTerms do
-    (normHints, hintSets) ← addHint normHints hintSets t
+    (normHints, hintSets, hintProcs) ← addHint normHints hintSets hintProcs t
   let congr ← getSimpCongrTheorems
   let mut normProcs := cnProcs.push cwnProcs
   let mut startProcs : SimprocsArray := #[cnProcsRaw.erase ``extIffDispatch,
     (← getAttrSimprocs `computable_witnesses_norm).erase ``extIffDispatch]
   for p in [``reduceLocalLength, ``retypeVectorAliasEq] do
+    normProcs ← SimprocsArray.add normProcs p (post := true)
+    startProcs ← SimprocsArray.add startProcs p (post := true)
+  -- simproc hints participate in the theorem-bearing passes, the start pass included:
+  -- passing a proc (e.g. `extIffDispatch`) is the per-invocation override of the
+  -- curated default exclusions. The discharge pass stays curated (dependent offset
+  -- positions; internal side-condition arithmetic, not a user normalization target).
+  for p in hintProcs do
     normProcs ← SimprocsArray.add normProcs p (post := true)
     startProcs ← SimprocsArray.add startProcs p (post := true)
   -- the discharge pass rewrites inside `Subcircuit`'s dependent offset positions,
@@ -695,8 +708,10 @@ def CwSimp.build (extraTerms : Array (TSyntax `term)) : TacticM CwSimp :=
   for p in [``reduceLocalLength, ``retypeVectorAliasEq, ``reduceOutputMetadata] do
     dischargeProcs ← SimprocsArray.add dischargeProcs p (post := true)
   let outputMetaProcs ← SimprocsArray.add #[] ``reduceOutputMetadata (post := true)
-  let vecProcs ← SimprocsArray.add cnProcs ``retypeVectorAliasEq (post := true)
-  let vecProcs ← SimprocsArray.add vecProcs ``extIffDispatch (post := true)
+  let mut vecProcs ← SimprocsArray.add cnProcs ``retypeVectorAliasEq (post := true)
+  vecProcs ← SimprocsArray.add vecProcs ``extIffDispatch (post := true)
+  for p in hintProcs do
+    vecProcs ← SimprocsArray.add vecProcs p (post := true)
   return {
     normCtx := ← Simp.mkContext {}
       (simpTheorems := #[normHints, cn, cwn] ++ hintSets) congr
