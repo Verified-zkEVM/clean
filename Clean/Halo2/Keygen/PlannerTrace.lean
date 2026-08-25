@@ -2,6 +2,136 @@ import Clean.Halo2.Keygen.PdqsortCorrectness
 
 namespace Halo2.FloorPlanner.V1
 
+def aboveKey (threshold : ℕ)
+    (summaries : List RegionShapeSummary) : List RegionShapeSummary :=
+  summaries.filter fun summary => decide (threshold < summary.key)
+
+def atMostKey (threshold : ℕ)
+    (summaries : List RegionShapeSummary) : List RegionShapeSummary :=
+  summaries.filter fun summary => decide (summary.key ≤ threshold)
+
+theorem sorted_eq_aboveKey_append_atMostKey
+    (threshold : ℕ) (summaries : List RegionShapeSummary)
+    (hSorted :
+      (summaries.map fun summary =>
+        (summary.key : OrderDual ℕ)).SortedLE) :
+    summaries = aboveKey threshold summaries ++ atMostKey threshold summaries := by
+  induction summaries with
+  | nil => rfl
+  | cons head tail inductionHypothesis =>
+      rw [List.sortedLE_iff_pairwise, List.map_cons,
+        List.pairwise_cons] at hSorted
+      by_cases hAbove : threshold < head.key
+      · rw [aboveKey, List.filter_cons_of_pos (by simp [hAbove]),
+          atMostKey, List.filter_cons_of_neg (by simp [hAbove])]
+        apply congrArg (List.cons head)
+        apply inductionHypothesis
+        rw [List.sortedLE_iff_pairwise]
+        exact hSorted.2
+      · have hTailAtMost : ∀ summary ∈ tail, summary.key ≤ threshold := by
+          intro summary hSummary
+          have hDescending : summary.key ≤ head.key :=
+            hSorted.1 (summary.key : OrderDual ℕ)
+              (List.mem_map.mpr ⟨summary, hSummary, rfl⟩)
+          omega
+        have hTailAbove : aboveKey threshold tail = [] := by
+          rw [aboveKey, List.filter_eq_nil_iff]
+          intro summary hSummary
+          simp only [Bool.not_eq_true, decide_eq_false_iff_not]
+          exact Nat.not_lt.mpr (hTailAtMost summary hSummary)
+        have hTailAtMostEq : atMostKey threshold tail = tail := by
+          rw [atMostKey, List.filter_eq_self]
+          intro summary hSummary
+          simp only [decide_eq_true_eq]
+          exact hTailAtMost summary hSummary
+        have hHeadAtMost : head.key ≤ threshold := by omega
+        rw [show aboveKey threshold (head :: tail) = [] by
+            rw [aboveKey, List.filter_cons_of_neg (by simp [hAbove])]
+            exact hTailAbove,
+          show atMostKey threshold (head :: tail) = head :: tail by
+            rw [atMostKey,
+              List.filter_cons_of_pos (by simp [hHeadAtMost])]
+            exact congrArg (List.cons head) hTailAtMostEq,
+          List.nil_append]
+
+theorem filter_key_sorted
+    (predicate : RegionShapeSummary → Bool)
+    (summaries : List RegionShapeSummary)
+    (hSorted :
+      (summaries.map fun summary =>
+        (summary.key : OrderDual ℕ)).SortedLE) :
+    (((summaries.filter predicate).map fun summary =>
+      (summary.key : OrderDual ℕ))).SortedLE := by
+  rw [List.sortedLE_iff_pairwise, List.pairwise_map] at hSorted ⊢
+  exact hSorted.filter predicate
+
+theorem perm_replicate_append_singleton_iff
+    {T : Type} [DecidableEq T] {items : List T} {repeated singleton : T}
+    (hNe : repeated ≠ singleton) (count : ℕ) :
+    items.Perm (List.replicate count repeated ++ [singleton]) ↔
+      ∃ before after, before + after = count ∧
+        items = List.replicate before repeated ++
+          singleton :: List.replicate after repeated := by
+  constructor
+  · intro hPerm
+    have hSingleton : singleton ∈ items :=
+      hPerm.symm.subset (by simp)
+    obtain ⟨beforeItems, afterItems, hItems⟩ :=
+      List.mem_iff_append.mp hSingleton
+    have hCounts := (List.perm_replicate_append_replicate
+      (l := items) (a := repeated) (b := singleton)
+      (m := count) (n := 1) hNe).mp hPerm
+    have hBeforeOnly : ∀ item ∈ beforeItems, item = repeated := by
+      intro item hItem
+      have hMember := hCounts.2.2 (hItems ▸
+        List.mem_append.mpr (Or.inl hItem))
+      rw [List.mem_cons, List.mem_singleton] at hMember
+      rcases hMember with hRepeat | hSingle
+      · exact hRepeat
+      · have hSingletonCount : items.count singleton = 1 := hCounts.2.1
+        rw [hItems, List.count_append, List.count_cons] at hSingletonCount
+        simp only [BEq.beq, decide_true, if_true] at hSingletonCount
+        have hBeforeZero : beforeItems.count singleton = 0 := by omega
+        exact (List.count_eq_zero.mp hBeforeZero (hSingle ▸ hItem)).elim
+    have hAfterOnly : ∀ item ∈ afterItems, item = repeated := by
+      intro item hItem
+      have hMember := hCounts.2.2 (hItems ▸
+        List.mem_append.mpr (Or.inr (List.mem_cons_of_mem singleton hItem)))
+      rw [List.mem_cons, List.mem_singleton] at hMember
+      rcases hMember with hRepeat | hSingle
+      · exact hRepeat
+      · have hSingletonCount : items.count singleton = 1 := hCounts.2.1
+        rw [hItems, List.count_append, List.count_cons] at hSingletonCount
+        simp only [BEq.beq, decide_true, if_true] at hSingletonCount
+        have hAfterZero : afterItems.count singleton = 0 := by omega
+        exact (List.count_eq_zero.mp hAfterZero (hSingle ▸ hItem)).elim
+    have hBefore := List.eq_replicate_length.mpr hBeforeOnly
+    have hAfter := List.eq_replicate_length.mpr hAfterOnly
+    refine ⟨beforeItems.length, afterItems.length, ?_, ?_⟩
+    · have hLength := hPerm.length_eq
+      rw [hItems] at hLength
+      simp only [List.length_append, List.length_cons,
+        List.length_replicate, List.length_nil] at hLength
+      omega
+    · exact hItems.trans (congrArg₂ (fun left right =>
+        left ++ singleton :: right) hBefore hAfter)
+  · rintro ⟨before, after, hCount, rfl⟩
+    have hPerm := (List.perm_replicate_append_replicate
+      (l := List.replicate before repeated ++
+        singleton :: List.replicate after repeated)
+      (a := repeated) (b := singleton) (m := count) (n := 1) hNe).mpr
+        (by
+          refine ⟨by simp [Ne.symm hNe, hCount], ?_, ?_⟩
+          · rw [List.count_append, List.count_cons,
+              List.count_replicate, List.count_replicate]
+            simp [hNe]
+          rw [List.append_subset, List.cons_subset]
+          refine ⟨?_, by simp, ?_⟩ <;>
+            intro item hItem <;>
+            rw [List.mem_replicate] at hItem <;>
+            simp [hItem.2])
+    simpa [List.replicate_succ] using hPerm
+
 /-- Expand a compact list of multiplicities and physical region shapes. -/
 def expandPlannerBlocks
     (blocks : List (ℕ × RegionShapeSummary)) : List RegionShapeSummary :=
