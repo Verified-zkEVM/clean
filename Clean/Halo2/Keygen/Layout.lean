@@ -1,5 +1,6 @@
 import Clean.Halo2.Keygen.CompressSelectors
 import Clean.Halo2.Keygen.FloorPlanner.ConstantAllocation
+import Clean.Halo2.Operations.FixedWrites
 import Batteries.Data.Array.Lemmas
 import Mathlib.Data.List.GetD
 import Std.Data.HashSet.Lemmas

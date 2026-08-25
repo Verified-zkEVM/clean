@@ -1,4 +1,6 @@
 import Clean.Halo2.Loops
+import Clean.Halo2.Operations.FixedWrites
+import Clean.Halo2.Operations.LookupSelectors
 import Clean.Halo2.KeygenAttr
 import Batteries.Lean.TagAttribute
 import Lean.Elab.Tactic

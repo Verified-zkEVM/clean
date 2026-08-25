@@ -1,4 +1,5 @@
-import Clean.Halo2.Operations
+import Clean.Halo2.SynthesisSummary.Operations
+import Clean.Halo2.Operations.LookupSelectors
 import Mathlib.Data.List.Nodup
 import Mathlib.Data.List.Perm.Basic
 import Mathlib.Data.List.Sort
