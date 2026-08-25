@@ -39,11 +39,12 @@ a child bundle name whose metadata is otherwise stuck under a binder).
    * `chain_output_facts` derives child-output congruence facts
      (`FormalCircuit.output_of_input_eq` instances, re-keyed at the goal's own eval
      spelling);
-   * the close orders its stages by shape (`isEvalCongrEq`, an ordering heuristic):
-     vector/eval-congruence goals try the staged vector route first (structural
-     `simp_all`, then per-branch `split_ifs` → `envUnify` → `grind`), everything else
-     tries `envUnify` → `grind` first; both converge on the same fallbacks (curated
-     `simp_all`, then the default-set `simp_all`).
+   * the close orders its stages by shape (`isEvalCongrEq` — a pure cost heuristic,
+     see its comment; misrouting costs budget, never capability): vector/eval-congruence
+     goals try the staged vector route first (structural `simp_all`, then per-branch
+     `split_ifs` → `envUnify` → `grind`), everything else tries `envUnify` → `grind`
+     first; both converge on the same fallbacks (curated `simp_all`, then the
+     default-set `simp_all`).
 
 ## Key supporting pieces
 
@@ -739,10 +740,16 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
   let simpPass : TacticM Unit := do
     unless (← getGoals).isEmpty do
       try metaSimp cw.normCtx cw.normProcs catch _ => pure ()
-  -- the window/elementwise route applies to eval-congruence goals: both sides are
+  -- Stage-ordering heuristic, NOT a correctness decision: both branches below
+  -- converge on the same `sharedFallbacks`, so a misclassified leaf still closes —
+  -- it only pays the wrong stage family's attempts first. The split itself cannot be
+  -- removed: running both families on every leaf spends their costs cumulatively
+  -- against the per-declaration heartbeat budget, which sends hot files over the
+  -- limit (measured: Rotation64Bytes times out under a merged single pipeline in
+  -- either stage order). Shape recognized: eval-congruence goals — both sides are
   -- eval applications of the same variable term under the two environments (output
-  -- windows, child-output metadata, vector states) — recognized by shape, whether
-  -- the value type is a vector or a provable struct
+  -- windows, child-output metadata, vector states), whether the value type is a
+  -- vector or a provable struct.
   let isEvalCongrEq : TacticM Bool := withMainContext do
     let t := (← instantiateMVars (← getMainTarget)).consumeMData
     -- witness-window / child-output atoms mark eval-congruence territory whatever
