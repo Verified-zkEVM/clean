@@ -337,23 +337,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
   · exact normalized_constWord32 _ _
   · exact h_sched_norm i
 
-set_option maxRecDepth 2048 in
-omit [Fact (p > 2 ^ 33)] in
-/-- Env-agreement transfers through the 64 round-steps: one
-`SHA256Round.output_eval_congr` per step, composed by `eval_congr_iterate`. -/
-lemma stateVar_eval_congr_composite {env env' : ProverEnvironment (F p)}
-    {input_var_state : Var SHA256State (F p)} {i₀ k : ℕ}
-    (hIn : (eval env.toEnvironment input_var_state : SHA256State (F p)) =
-      eval env'.toEnvironment input_var_state)
-    (hag : env.AgreesBelow (i₀ + k * 455) env') :
-    eval env.toEnvironment (stateVar i₀ input_var_state k) =
-      eval env'.toEnvironment (stateVar i₀ input_var_state k) :=
-  ProverEnvironment.eval_congr_iterate (stateVar i₀ input_var_state)
-    (fun j => i₀ + j * 455) (fun _ _ hab => by dsimp only; omega) hIn
-    (fun j hj hagj => SHA256Round.output_eval_congr hj
-      (ProverEnvironment.agreesBelow_of_le hagj (by simp only [Nat.succ_mul]; omega)))
-    hag k le_rfl
-
 def circuit : FormalCircuit (F p) Inputs SHA256State := {
   main, elaborated, Assumptions, Spec, soundness
   completeness := by simp only [completeness]
@@ -361,11 +344,20 @@ def circuit : FormalCircuit (F p) Inputs SHA256State := {
   -- plus Add32-family witness IR); see those gadgets' comments.
   computableWitnesses := by
     computable_witnesses_start
-    · obtain ⟨iv, hiv⟩ := i
-      rw [foldlAcc_eq_stateVar]
-      refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+    · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
         (by try rfl; try omega) fun h_agrees => ?_
-      have hsv := stateVar_eval_congr_composite (i₀ := n) (k := iv) h.1
+      have hsv := Circuit.FoldlM.foldlAcc_eval_congr
+        (xs := Vector.finRange 64)
+        (body := fun s (i : Fin 64) => subcircuit SHA256Round.circuit
+          { state := s, k := constWord32 (Specs.SHA256.K[i.val]'i.isLt).toNat,
+            w := input_schedule[i.val]'i.isLt })
+        (constant := ⟨455, fun _ _ => rfl⟩)
+        h.1
+        (fun acc k hk hacc hag =>
+          SHA256Round.output_eval_congr hacc
+            (ProverEnvironment.agreesBelow_of_le hag
+              (show n + k * 455 + 455 ≤ n + (k + 1) * 455 by omega)))
+        i
         (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only []; omega))
       have hSch := fun (jj : ℕ) (hjj : jj < 64) => map_eval_getElem_congr h.2 jj hjj
       simp only [circuit_norm]
@@ -376,9 +368,21 @@ def circuit : FormalCircuit (F p) Inputs SHA256State := {
         simp only [Vector.getElem_map, constWord32, Vector.getElem_ofFn, circuit_norm]
       · rw [← getElem_eval_vector, ← getElem_eval_vector,
           ProvableType.eval_fields, ProvableType.eval_fields]
-        exact hSch iv (by omega)
-    · exact stateVar_eval_congr_composite (i₀ := n) (k := 64) h.1
-        (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+        exact hSch i.val (by omega)
+    · rw [← fin_foldl_eq_stateVar]
+      exact Circuit.FoldlM.finFoldl_output_eval_congr
+        (xs := Vector.finRange 64)
+        (body := fun s (i : Fin 64) => subcircuit SHA256Round.circuit
+          { state := s, k := constWord32 (Specs.SHA256.K[i.val]'i.isLt).toNat,
+            w := input_schedule[i.val]'i.isLt })
+        (constant := ⟨455, fun _ _ => rfl⟩)
+        h.1
+        (fun acc k hk hacc hag =>
+          SHA256Round.output_eval_congr hacc
+            (ProverEnvironment.agreesBelow_of_le hag
+              (show n + k * 455 + 455 ≤ n + (k + 1) * 455 by omega)))
+        (ProverEnvironment.agreesBelow_of_le h_agrees
+          (show n + 64 * 455 ≤ n + 29120 by omega))
 }
 
 end SHA256Rounds

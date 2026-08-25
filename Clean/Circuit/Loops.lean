@@ -361,6 +361,152 @@ theorem forAllNoOffset_iff_finRange {constant : ConstantLength (prod circuit)} :
   simp only [forAllNoOffset_iff, Vector.getElem_finRange]
 
 end
+
+/-- `foldlAcc` at index zero is the initial accumulator. -/
+lemma foldlAcc_mk_zero (h : 0 < m) : foldlAcc n xs circuit init ⟨0, h⟩ = init :=
+  Fin.foldl_zero _ _
+
+/-- One-step unfolding of `foldlAcc`, with the offset normalized to `constant.localLength`. -/
+lemma foldlAcc_succ (k : ℕ) (hk : k + 1 < m) :
+    foldlAcc n xs circuit init ⟨k + 1, hk⟩ =
+      (circuit (foldlAcc n xs circuit init ⟨k, by omega⟩) (xs[k]'(by omega))).output
+        (n + k * constant.localLength) := by
+  rw [← constant.localLength_eq
+    ((foldlAcc n xs circuit init ⟨k, by omega⟩), (xs[k]'(by omega))) 0]
+  simp only [foldlAcc]
+  rw [Fin.foldl_succ_last]
+  simp only [Fin.val_castSucc, Fin.val_last]
+
+section
+variable {M : TypeMap} [ProvableType M] {env env' : ProverEnvironment F}
+
+/-- Env-agreement below the accumulated offset transfers through a `foldlAcc` accumulator:
+`base` covers the initial state, `step` transfers one loop body at a time. This is the
+loop-combinator form of `ProverEnvironment.eval_congr_iterate`. -/
+theorem foldlAcc_eval_congr {body : Var M F → α → Circuit F (Var M F)} {state₀ : Var M F}
+    {constant : ConstantLength (prod body)}
+    (base : (eval env.toEnvironment state₀ : M F) = eval env'.toEnvironment state₀)
+    (step : ∀ (acc : Var M F) (k : ℕ) (hk : k < m),
+      (eval env.toEnvironment acc : M F) = eval env'.toEnvironment acc →
+      env.AgreesBelow (n + (k + 1) * constant.localLength) env' →
+      (eval env.toEnvironment ((body acc (xs[k]'hk)).output (n + k * constant.localLength)) : M F) =
+        eval env'.toEnvironment ((body acc (xs[k]'hk)).output (n + k * constant.localLength)))
+    (j : Fin m) (h_agrees : env.AgreesBelow (n + j.val * constant.localLength) env') :
+    (eval env.toEnvironment (foldlAcc n xs body state₀ j) : M F) =
+      eval env'.toEnvironment (foldlAcc n xs body state₀ j) := by
+  have key : ∀ k (hk : k ≤ j.val),
+      (eval env.toEnvironment (foldlAcc n xs body state₀ ⟨k, by omega⟩) : M F) =
+        eval env'.toEnvironment (foldlAcc n xs body state₀ ⟨k, by omega⟩) := by
+    intro k
+    induction k with
+    | zero => intro _; rw [foldlAcc_mk_zero]; exact base
+    | succ i ih =>
+      intro hik
+      rw [foldlAcc_succ i (by omega)]
+      exact step _ i (by omega) (ih (by omega))
+        (ProverEnvironment.agreesBelow_of_le h_agrees
+          (Nat.add_le_add_left (Nat.mul_le_mul_right _ (by omega)) n))
+  have h0 := key j.val le_rfl
+  simp only [Fin.eta] at h0
+  exact h0
+
+/-- Env-agreement below the loop's total length transfers to the fully folded state
+(`Fin.foldl` spelling, as produced by `output_eq`). -/
+theorem finFoldl_output_eval_congr {body : Var M F → α → Circuit F (Var M F)} {state₀ : Var M F}
+    {constant : ConstantLength (prod body)}
+    (base : (eval env.toEnvironment state₀ : M F) = eval env'.toEnvironment state₀)
+    (step : ∀ (acc : Var M F) (k : ℕ) (hk : k < m),
+      (eval env.toEnvironment acc : M F) = eval env'.toEnvironment acc →
+      env.AgreesBelow (n + (k + 1) * constant.localLength) env' →
+      (eval env.toEnvironment ((body acc (xs[k]'hk)).output (n + k * constant.localLength)) : M F) =
+        eval env'.toEnvironment ((body acc (xs[k]'hk)).output (n + k * constant.localLength)))
+    (h_agrees : env.AgreesBelow (n + m * constant.localLength) env') :
+    (eval env.toEnvironment (Fin.foldl m
+        (fun acc (i : Fin m) => (body acc xs[i.val]).output (n + i.val * constant.localLength))
+        state₀) : M F) =
+      eval env'.toEnvironment (Fin.foldl m
+        (fun acc (i : Fin m) => (body acc xs[i.val]).output (n + i.val * constant.localLength))
+        state₀) := by
+  match m, xs, step, h_agrees with
+  | 0, xs, step, h_agrees => rw [Fin.foldl_zero]; exact base
+  | m' + 1, xs, step, h_agrees =>
+    rw [Fin.foldl_succ_last]
+    simp only [Fin.val_castSucc, Fin.val_last]
+    have hm : m' < m' + 1 := Nat.lt_succ_self m'
+    have inner : Fin.foldl m'
+        (fun acc (i : Fin m') => (body acc xs[i.val]).output (n + i.val * constant.localLength))
+        state₀ = foldlAcc n xs body state₀ ⟨m', hm⟩ := by
+      simp only [foldlAcc]
+      congr 1
+      funext acc i
+      rw [constant.localLength_eq (acc, _) 0]
+    rw [inner]
+    exact step _ m' (by omega)
+      (foldlAcc_eval_congr base step ⟨m', hm⟩
+        (ProverEnvironment.agreesBelow_of_le h_agrees
+          (Nat.add_le_add_left (Nat.mul_le_mul_right _ (by omega)) n)))
+      (ProverEnvironment.agreesBelow_of_le h_agrees le_rfl)
+
+/-- Env-agreement below the loop's total length transfers to the whole loop's output. -/
+theorem foldl_output_eval_congr {body : Var M F → α → Circuit F (Var M F)} {state₀ : Var M F}
+    {constant : ConstantLength (prod body)}
+    (base : (eval env.toEnvironment state₀ : M F) = eval env'.toEnvironment state₀)
+    (step : ∀ (acc : Var M F) (k : ℕ) (hk : k < m),
+      (eval env.toEnvironment acc : M F) = eval env'.toEnvironment acc →
+      env.AgreesBelow (n + (k + 1) * constant.localLength) env' →
+      (eval env.toEnvironment ((body acc (xs[k]'hk)).output (n + k * constant.localLength)) : M F) =
+        eval env'.toEnvironment ((body acc (xs[k]'hk)).output (n + k * constant.localLength)))
+    (h_agrees : env.AgreesBelow (n + m * constant.localLength) env') :
+    (eval env.toEnvironment ((xs.foldlM body state₀).output n) : M F) =
+      eval env'.toEnvironment ((xs.foldlM body state₀).output n) := by
+  rw [output_eq (constant := constant)]
+  exact finFoldl_output_eval_congr base step h_agrees
+
+/-- `foldlAcc_eval_congr` specialized to `Vector.finRange` loops (the spelling produced by
+`Circuit.foldlRange`), with the step stated over the plain `Fin` index. -/
+theorem foldlAcc_finRange_eval_congr {body : Var M F → Fin m → Circuit F (Var M F)}
+    {state₀ : Var M F} {constant : ConstantLength (prod body)}
+    (base : (eval env.toEnvironment state₀ : M F) = eval env'.toEnvironment state₀)
+    (step : ∀ (acc : Var M F) (k : ℕ) (hk : k < m),
+      (eval env.toEnvironment acc : M F) = eval env'.toEnvironment acc →
+      env.AgreesBelow (n + (k + 1) * constant.localLength) env' →
+      (eval env.toEnvironment ((body acc ⟨k, hk⟩).output (n + k * constant.localLength)) : M F) =
+        eval env'.toEnvironment ((body acc ⟨k, hk⟩).output (n + k * constant.localLength)))
+    (j : Fin m) (h_agrees : env.AgreesBelow (n + j.val * constant.localLength) env') :
+    (eval env.toEnvironment (foldlAcc n (Vector.finRange m) body state₀ j) : M F) =
+      eval env'.toEnvironment (foldlAcc n (Vector.finRange m) body state₀ j) :=
+  foldlAcc_eval_congr base
+    (fun acc k hk hacc hag => by
+      simp only [Vector.getElem_finRange]
+      exact step acc k hk hacc hag)
+    j h_agrees
+
+/-- `finFoldl_output_eval_congr` specialized to `Vector.finRange` loops. -/
+theorem finFoldl_finRange_output_eval_congr {body : Var M F → Fin m → Circuit F (Var M F)}
+    {state₀ : Var M F} {constant : ConstantLength (prod body)}
+    (base : (eval env.toEnvironment state₀ : M F) = eval env'.toEnvironment state₀)
+    (step : ∀ (acc : Var M F) (k : ℕ) (hk : k < m),
+      (eval env.toEnvironment acc : M F) = eval env'.toEnvironment acc →
+      env.AgreesBelow (n + (k + 1) * constant.localLength) env' →
+      (eval env.toEnvironment ((body acc ⟨k, hk⟩).output (n + k * constant.localLength)) : M F) =
+        eval env'.toEnvironment ((body acc ⟨k, hk⟩).output (n + k * constant.localLength)))
+    (h_agrees : env.AgreesBelow (n + m * constant.localLength) env') :
+    (eval env.toEnvironment (Fin.foldl m
+        (fun acc (i : Fin m) => (body acc i).output (n + i.val * constant.localLength))
+        state₀) : M F) =
+      eval env'.toEnvironment (Fin.foldl m
+        (fun acc (i : Fin m) => (body acc i).output (n + i.val * constant.localLength))
+        state₀) := by
+  have h := finFoldl_output_eval_congr (xs := Vector.finRange m) (body := body)
+    (constant := constant) base
+    (fun acc k hk hacc hag => by
+      simp only [Vector.getElem_finRange]
+      exact step acc k hk hacc hag)
+    h_agrees
+  simp only [Vector.getElem_finRange] at h
+  exact h
+
+end
 -- we can massively simplify the foldlM theory when assuming the body's output is independent of the input
 
 variable [Inhabited β] [Inhabited α] {h_const_out : ConstantOutput fun (t : β × α) => circuit t.1 t.2}
