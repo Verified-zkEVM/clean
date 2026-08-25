@@ -439,6 +439,21 @@ def chainOutputFacts (cw? : Option CwSimp := none) : TacticM Unit := withMainCon
       let args := ty.getAppArgs
       if args.size ≥ 2 then
         hA? := some (decl.userName, args[args.size - 2]!, args[args.size - 1]!)
+    else if ty.isAppOfArity ``And 2 && ty.appFn!.appArg!.isForall then
+      -- the unfolded spelling `(∀ i < b, env.get i = env'.get i) ∧ hint ∧ data`
+      -- (circuit_norm unfolds `AgreesBelow`); recover the prover environments from
+      -- the `toEnvironment` coercions inside the elementwise conjunct
+      let elemwise := ty.appFn!.appArg!
+      let mut envs := #[]
+      let found ← IO.mkRef (#[] : Array Expr)
+      elemwise.forEach fun sub => do
+        if sub.getAppFn.isConstOf `ProverEnvironment.toEnvironment && sub.getAppNumArgs ≥ 2 then
+          let envArg := sub.appArg!
+          unless envArg.hasLooseBVars do
+            found.modify fun a => if a.contains envArg then a else a.push envArg
+      envs := ← found.get
+      if envs.size == 2 then
+        hA? := some (decl.userName, envs[0]!, envs[1]!)
   let some (hAName, envE, envE') := hA? | return
   let seen ← IO.mkRef ((∅ : Std.HashSet Expr))
   let acc ← IO.mkRef (#[] : Array Expr)
@@ -968,9 +983,14 @@ def runLeafDispatch (cw : CwSimp) : TacticM Unit := do
         else
           metaGrind
       else
-        try chainOutputFacts (some cw) catch _ => pure ()
+        -- same normalization the subcircuit path runs before chaining: close-hints
+        -- (e.g. a local `output` wrapper def) must unfold before the collector looks
+        -- for child-output subterms
+        simpPass
         unless (← getGoals).isEmpty do
-          evalCloseRun
+          try chainOutputFacts (some cw) catch _ => pure ()
+          unless (← getGoals).isEmpty do
+            evalCloseRun
   leafDispatch
 
 /-- The pipeline up to the leaves: entry, main simp (with hints), wrapper unfold,
