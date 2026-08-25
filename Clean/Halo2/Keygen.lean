@@ -1,7 +1,8 @@
 import Clean.Halo2.Keygen.RichExpression
 import Clean.Halo2.Keygen.CompressSelectors
-import Clean.Halo2.Keygen.FloorPlanner
-import Clean.Halo2.Keygen.FloorPlannerCorrectness
+import Clean.Halo2.Keygen.FloorPlanner.ConstantAllocation
+import Clean.Halo2.Keygen.FloorPlanner.Simple
+import Clean.Halo2.Keygen.FloorPlanner.V1SortCorrectness
 import Clean.Halo2.Keygen.PdqsortCorrectness
 import Clean.Halo2.Keygen.PlannerTrace
 import Clean.Halo2.Keygen.Projection
