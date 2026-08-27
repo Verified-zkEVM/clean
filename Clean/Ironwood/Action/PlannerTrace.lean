@@ -3236,5 +3236,4 @@ theorem actionSelectorActivation_row_lt_domain
   rw [actionPlacementEnd_eq_1779] at hplaced
   omega
 
-
 end Zcash.Circuits.Action

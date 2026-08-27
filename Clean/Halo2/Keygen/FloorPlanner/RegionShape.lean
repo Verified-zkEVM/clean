@@ -448,7 +448,6 @@ theorem getD_eq_of_mem_of_map_eq_range
     simpa [hindex, hget] using h
   rw [hkey, List.getD_eq_getElem items fallback hindex, hget]
 
-
 theorem measureRegion_eq_measureRegionSummary
     (index : ℕ) (body : RegionOperations F) :
     measureRegion index body =
