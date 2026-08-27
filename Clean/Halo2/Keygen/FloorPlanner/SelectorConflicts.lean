@@ -204,6 +204,58 @@ theorem selectorLocalRowsSeparated_of_not_mem_localConflictPairs
       apply hcondition
       simp [hleftSelector, hrightSelector, hrows, hlt]
 
+private theorem exists_mem_placeSelectorActivations_of_mem_region
+    (starts : List ℕ) (initial : ℕ)
+    (regions : List (List (ℕ × ℕ)))
+    (region : List (ℕ × ℕ)) (left right row : ℕ)
+    (hregion : region ∈ regions)
+    (hleft : (left, row) ∈ region) (hright : (right, row) ∈ region) :
+    ∃ absoluteRow,
+      (left, absoluteRow) ∈
+          placeSelectorActivations starts initial regions ∧
+        (right, absoluteRow) ∈
+          placeSelectorActivations starts initial regions := by
+  induction regions generalizing initial with
+  | nil => simp at hregion
+  | cons current remaining inductionHypothesis =>
+      rw [List.mem_cons] at hregion
+      rcases hregion with rfl | hrest
+      · refine ⟨starts.getD initial 0 + row, ?_, ?_⟩ <;>
+          simp only [placeSelectorActivations, List.mem_append,
+            List.mem_map, Prod.mk.injEq]
+        · exact Or.inl ⟨(left, row), hleft, rfl, rfl⟩
+        · exact Or.inl ⟨(right, row), hright, rfl, rfl⟩
+      · obtain ⟨absoluteRow, hleftPlaced, hrightPlaced⟩ :=
+          inductionHypothesis (initial + 1) hrest
+        exact ⟨absoluteRow, by
+          simp only [placeSelectorActivations, List.mem_append]
+          exact Or.inr hleftPlaced, by
+          simp only [placeSelectorActivations, List.mem_append]
+          exact Or.inr hrightPlaced⟩
+
+/-- A same-region, same-row pair remains a conflict after any region placement. -/
+theorem selectorActivationsConflict_eq_true_of_mem_localConflictPairs
+    (operations : Operations F) (left right : ℕ)
+    (hconflict : (left, right) ∈
+      localSelectorConflictPairs (synthesisSummary operations)) :
+    selectorActivationsConflict
+        (placeSelectorActivations (V1.starts operations) 0
+          (synthesisSummary operations).regionSelectorActivations)
+        left right = true := by
+  rw [localSelectorConflictPairs, Finset.mem_biUnion] at hconflict
+  obtain ⟨region, hregion, hconflict⟩ := hconflict
+  rw [mem_regionLocalSelectorConflictPairs_iff] at hconflict
+  obtain ⟨_, row, hleft, hright⟩ := hconflict
+  obtain ⟨absoluteRow, hleftPlaced, hrightPlaced⟩ :=
+    exists_mem_placeSelectorActivations_of_mem_region
+      (V1.starts operations) 0
+      (synthesisSummary operations).regionSelectorActivations
+      region left right row (by simpa using hregion) hleft hright
+  rw [selectorActivationsConflict, List.any_eq_true]
+  refine ⟨absoluteRow,
+    (mem_selectorActivationRows_iff _ left absoluteRow).mpr hleftPlaced, ?_⟩
+  simpa only [decide_eq_true_eq] using hrightPlaced
+
 private theorem initial_le_index_of_mem_indexedRegionSummaries_zip
     (initial : ℕ) (summaries : List RegionShapeSummary)
     (activations : List (List (ℕ × ℕ)))

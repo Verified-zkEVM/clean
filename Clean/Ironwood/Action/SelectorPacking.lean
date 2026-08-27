@@ -1,6 +1,6 @@
 import Clean.Halo2.Keygen.FloorPlanner.SelectorConflicts
 import Clean.Halo2.Keygen.SelectorPackingCorrectness
-import Clean.Ironwood.Action.Compilation
+import Clean.Ironwood.Action.Planner
 
 namespace Zcash.Circuits.Action
 
@@ -33,6 +33,59 @@ def actionUnresolvedSelectorPairs : List (ℕ × ℕ) :=
 private def actionSelectorsMayConflict (left right : ℕ) : Bool :=
   actionUnresolvedSelectorPairs.contains (left, right) ||
     actionUnresolvedSelectorPairs.contains (right, left)
+
+private theorem actionShortLocalSelectorConflictPairs_eq :
+    localSelectorConflictPairs
+        (Ecc.MulFixed.Short.circuitSynthesisSummary
+          actionConfig.eccConfig.mulFixedShort) =
+      [(7, 18)].toFinset := by
+  ext pair
+  rcases pair with ⟨left, right⟩
+  unfold Ecc.MulFixed.Short.circuitSynthesisSummary
+    Ecc.MulFixed.Short.innerRegionSynthesisSummary
+    Ecc.MulFixed.Short.mswRegionSynthesisSummary
+  simp only [synthesis_summary_norm, Finset.mem_union, List.mem_toFinset,
+    mem_regionLocalSelectorConflictPairs_iff]
+  simp only [DecomposeRunningSum.copyDecomposeSynthesisSummary,
+    DecomposeRunningSum.enableLoopSynthesisSummary,
+    DecomposeRunningSum.assignLoopSynthesisSummary,
+    Ecc.MulFixed.fixedConstantsLoopSynthesisSummary,
+    Ecc.MulFixed.windowChainSynthesisSummary,
+    Ecc.MulFixed.processWindowSynthesisSummary,
+    Ecc.AddIncomplete.synthesisSummary, Ecc.Add.synthesisSummary,
+    synthesis_summary_norm, List.mem_append,
+    RegionSynthesisSummary.mem_repeatedSelectorActivations_iff]
+  rw [show actionConfig.eccConfig.mulFixedShort.superConfig.runningSumConfig.qRangeCheck.index = 18 by rfl,
+    show actionConfig.eccConfig.mulFixedShort.superConfig.addIncompleteConfig.qAddIncomplete.index = 7 by rfl,
+    show actionConfig.eccConfig.mulFixedShort.superConfig.addConfig.qAdd.index = 8 by rfl,
+    show actionConfig.eccConfig.mulFixedShort.qMulFixedShort.index = 20 by rfl]
+  simp
+  aesop
+
+private theorem actionFullWidthLocalSelectorConflictPairs_eq :
+    localSelectorConflictPairs
+        (Ecc.MulFixed.FullWidth.circuitSynthesisSummary
+          actionConfig.eccConfig.mulFixedFull) =
+      [(7, 19)].toFinset := by
+  ext pair
+  rcases pair with ⟨left, right⟩
+  unfold Ecc.MulFixed.FullWidth.circuitSynthesisSummary
+    Ecc.MulFixed.FullWidth.innerRegionSynthesisSummary
+    Ecc.Add.synthesisSummary
+  simp only [synthesis_summary_norm, Finset.mem_union, List.mem_toFinset,
+    mem_regionLocalSelectorConflictPairs_iff]
+  simp only [Ecc.MulFixed.FullWidth.witnessScalarLoopSynthesisSummary,
+    Ecc.MulFixed.fixedConstantsLoopSynthesisSummary,
+    Ecc.MulFixed.windowChainSynthesisSummary,
+    Ecc.MulFixed.processWindowSynthesisSummary,
+    Ecc.AddIncomplete.synthesisSummary, synthesis_summary_norm,
+    List.mem_append,
+    RegionSynthesisSummary.mem_repeatedSelectorActivations_iff]
+  rw [show actionConfig.eccConfig.mulFixedFull.qMulFixedFull.index = 19 by rfl,
+    show actionConfig.eccConfig.mulFixedFull.superConfig.addIncompleteConfig.qAddIncomplete.index = 7 by rfl,
+    show actionConfig.eccConfig.mulFixedFull.superConfig.addConfig.qAdd.index = 8 by rfl]
+  simp
+  aesop
 
 private def actionEarlySelectorConflict
     (unknown : Fin 9 → Bool) (left right : ℕ) : Bool :=
