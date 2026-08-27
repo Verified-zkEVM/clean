@@ -57,14 +57,76 @@ instance (summary : SynthesisSummary) (left right : ℕ) :
 supplied uniformly by a circuit's selector-anchor theorem. -/
 def SelectorLocalRowsSeparated (summary : SynthesisSummary)
     (left right : ℕ) : Prop :=
-  ∀ leftSite ∈ selectorSites summary left,
-    ∀ rightSite ∈ selectorSites summary right,
-      leftSite.region = rightSite.region → leftSite.row ≠ rightSite.row
+  ∀ region ∈ (indexRegionSummaries 0 summary.regionShapes).zip
+      summary.regionSelectorActivations,
+    ∀ leftActivation ∈ region.2, leftActivation.1 = left →
+      ∀ rightActivation ∈ region.2, rightActivation.1 = right →
+        leftActivation.2 ≠ rightActivation.2
 
 instance (summary : SynthesisSummary) (left right : ℕ) :
     Decidable (SelectorLocalRowsSeparated summary left right) := by
   unfold SelectorLocalRowsSeparated
   infer_instance
+
+private theorem initial_le_index_of_mem_indexedRegionSummaries_zip
+    (initial : ℕ) (summaries : List RegionShapeSummary)
+    (activations : List (List (ℕ × ℕ)))
+    (shape : RegionShape) (localActivations : List (ℕ × ℕ))
+    (hregion : (shape, localActivations) ∈
+      (indexRegionSummaries initial summaries).zip activations) :
+    initial ≤ shape.index := by
+  induction summaries generalizing initial activations with
+  | nil => simp [indexRegionSummaries] at hregion
+  | cons summary rest inductionHypothesis =>
+      cases activations with
+      | nil => simp at hregion
+      | cons current remaining =>
+          simp only [indexRegionSummaries, List.zip_cons_cons,
+            List.mem_cons] at hregion
+          rcases hregion with hhead | hrest
+          · have hshape := congrArg (fun pair => pair.1.index) hhead
+            simpa [measureRegionSummary] using hshape.symm.le
+          · exact Nat.le_trans (Nat.le_add_right initial 1)
+              (inductionHypothesis (initial + 1) remaining hrest)
+
+private theorem localActivations_eq_of_regionIndex_eq
+    (initial : ℕ) (summaries : List RegionShapeSummary)
+    (activations : List (List (ℕ × ℕ)))
+    (leftShape rightShape : RegionShape)
+    (leftActivations rightActivations : List (ℕ × ℕ))
+    (hleft : (leftShape, leftActivations) ∈
+      (indexRegionSummaries initial summaries).zip activations)
+    (hright : (rightShape, rightActivations) ∈
+      (indexRegionSummaries initial summaries).zip activations)
+    (hindex : leftShape.index = rightShape.index) :
+    leftActivations = rightActivations := by
+  induction summaries generalizing initial activations with
+  | nil => simp [indexRegionSummaries] at hleft
+  | cons summary rest inductionHypothesis =>
+      cases activations with
+      | nil => simp at hleft
+      | cons current remaining =>
+          simp only [indexRegionSummaries, List.zip_cons_cons,
+            List.mem_cons] at hleft hright
+          rcases hleft with hleftHead | hleftRest <;>
+            rcases hright with hrightHead | hrightRest
+          · exact congrArg Prod.snd (hleftHead.trans hrightHead.symm)
+          · have hleftIndex := congrArg (fun pair => pair.1.index) hleftHead
+            have hrightBound :=
+              initial_le_index_of_mem_indexedRegionSummaries_zip
+                (initial + 1) rest remaining rightShape rightActivations
+                hrightRest
+            simp only [measureRegionSummary] at hleftIndex
+            omega
+          · have hrightIndex := congrArg (fun pair => pair.1.index) hrightHead
+            have hleftBound :=
+              initial_le_index_of_mem_indexedRegionSummaries_zip
+                (initial + 1) rest remaining leftShape leftActivations
+                hleftRest
+            simp only [measureRegionSummary] at hrightIndex
+            omega
+          · exact inductionHypothesis (initial + 1) remaining
+              hleftRest hrightRest
 
 theorem synthesisSummary_regionShapes_length_eq_selectorActivations
     (operations : Operations F) :
@@ -310,7 +372,23 @@ theorem selectorSitesSeparated_of_commonColumn
     SelectorSitesSeparated summary left right := by
   intro leftSite hleftSite rightSite hrightSite
   split <;> rename_i hregions
-  · exact hlocal leftSite hleftSite rightSite hrightSite hregions
+  · rw [mem_selectorSites_iff] at hleftSite hrightSite
+    obtain ⟨leftShape, leftActivations, hleftRegion, hleftActivation,
+      hleftIndex, _⟩ := hleftSite
+    obtain ⟨rightShape, rightActivations, hrightRegion,
+      hrightActivation, hrightIndex, _⟩ := hrightSite
+    have hindex : leftShape.index = rightShape.index := by
+      rw [← hleftIndex, ← hrightIndex]
+      exact hregions
+    have hactivations : leftActivations = rightActivations :=
+      localActivations_eq_of_regionIndex_eq 0 summary.regionShapes
+        summary.regionSelectorActivations leftShape rightShape
+        leftActivations rightActivations hleftRegion hrightRegion hindex
+    intro hrows
+    subst rightActivations
+    exact hlocal (leftShape, leftActivations) hleftRegion
+      (left, leftSite.row) hleftActivation rfl
+      (right, rightSite.row) hrightActivation rfl hrows
   · obtain ⟨column, hleftColumn, hrightColumn⟩ := hcommon
     exact ⟨column,
       mem_selectorSite_of_mem_commonColumns summary left column

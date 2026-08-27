@@ -55,6 +55,31 @@ def buildCombinationsQueries {α : Type} (maxDegree : ℕ)
           (degree selector - 1) [selector] remaining ++
         buildCombinationsQueries maxDegree degree conflicts fuel result.2
 
+/-- Selectors remaining after producing a fixed number of greedy combinations. -/
+def packingRemainderWith {α : Type} (maxDegree : ℕ)
+    (degree : α → ℕ) (conflicts : α → α → Bool) :
+    ℕ → List α → List α
+  | 0, selectors => selectors
+  | _ + 1, [] => []
+  | steps + 1, selector :: remaining =>
+      let result := extendCombinationWith maxDegree degree conflicts
+        (degree selector - 1) [selector] remaining
+      packingRemainderWith maxDegree degree conflicts steps result.2
+
+/-- Conflict questions asked while producing a fixed number of greedy
+combinations, retaining only the resulting remainder. -/
+def packingRemainderQueries {α : Type} (maxDegree : ℕ)
+    (degree : α → ℕ) (conflicts : α → α → Bool) :
+    ℕ → List α → List (SelectorCombinationQuery α)
+  | 0, _ => []
+  | _ + 1, [] => []
+  | steps + 1, selector :: remaining =>
+      let result := extendCombinationWith maxDegree degree conflicts
+        (degree selector - 1) [selector] remaining
+      extendCombinationQueries maxDegree degree conflicts
+          (degree selector - 1) [selector] remaining ++
+        packingRemainderQueries maxDegree degree conflicts steps result.2
+
 /-- Agreement on the `any` questions asked by the reference execution reproduces
 the same inner-loop result. -/
 theorem extendCombinationWith_eq_of_queries {α : Type}
@@ -142,19 +167,35 @@ theorem buildCombinationsWith_eq_of_queries {α : Type}
           intro query hquery
           exact hagrees query (List.mem_append_right _ hquery)
 
-/-! ## Count-only execution -/
+/-- Agreement on the questions asked by a reference execution reproduces its
+remainder after any fixed number of combinations. -/
+theorem packingRemainderWith_eq_of_queries {α : Type}
+    (maxDegree steps : ℕ) (degree : α → ℕ)
+    (actual reference : α → α → Bool) (selectors : List α)
+    (hagrees : ∀ query ∈ packingRemainderQueries maxDegree degree reference
+      steps selectors,
+      query.combination.any (actual · query.selector) = query.expected) :
+    packingRemainderWith maxDegree degree actual steps selectors =
+      packingRemainderWith maxDegree degree reference steps selectors := by
+  induction steps generalizing selectors with
+  | zero => rfl
+  | succ steps inductionHypothesis =>
+      cases selectors with
+      | nil => rfl
+      | cons selector remaining =>
+          simp only [packingRemainderQueries] at hagrees
+          have hinner := extendCombinationWith_eq_of_queries maxDegree
+            (degree selector - 1) degree actual reference [selector] remaining
+            (by
+              intro query hquery
+              exact hagrees query (List.mem_append_left _ hquery))
+          simp only [packingRemainderWith]
+          rw [hinner]
+          apply inductionHypothesis
+          intro query hquery
+          exact hagrees query (List.mem_append_right _ hquery)
 
-/-- Selectors remaining after producing a fixed number of greedy combinations.
-This exposes useful checkpoints without retaining the combinations themselves. -/
-def packingRemainderWith {α : Type} (maxDegree : ℕ)
-    (degree : α → ℕ) (conflicts : α → α → Bool) :
-    ℕ → List α → List α
-  | 0, selectors => selectors
-  | _ + 1, [] => []
-  | steps + 1, selector :: remaining =>
-      let result := extendCombinationWith maxDegree degree conflicts
-        (degree selector - 1) [selector] remaining
-      packingRemainderWith maxDegree degree conflicts steps result.2
+/-! ## Count-only execution -/
 
 @[simp]
 theorem buildCombinationsWith_nil {α : Type} (maxDegree : ℕ)
@@ -167,6 +208,21 @@ theorem packingRemainderWith_nil {α : Type} (maxDegree : ℕ)
     (degree : α → ℕ) (conflicts : α → α → Bool) (steps : ℕ) :
     packingRemainderWith maxDegree degree conflicts steps [] = [] := by
   cases steps <;> rfl
+
+theorem packingRemainderWith_add {α : Type} (maxDegree : ℕ)
+    (degree : α → ℕ) (conflicts : α → α → Bool)
+    (first second : ℕ) (selectors : List α) :
+    packingRemainderWith maxDegree degree conflicts (first + second) selectors =
+      packingRemainderWith maxDegree degree conflicts second
+        (packingRemainderWith maxDegree degree conflicts first selectors) := by
+  induction first generalizing selectors with
+  | zero => simp only [Nat.zero_add, packingRemainderWith]
+  | succ first inductionHypothesis =>
+      cases selectors with
+      | nil => simp only [packingRemainderWith_nil]
+      | cons selector remaining =>
+          simp only [Nat.succ_add, packingRemainderWith]
+          exact inductionHypothesis _
 
 theorem buildCombinationsWith_eq_append_remainder
     {α : Type} (maxDegree : ℕ) (degree : α → ℕ)
