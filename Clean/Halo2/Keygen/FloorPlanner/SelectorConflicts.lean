@@ -53,6 +53,19 @@ instance (summary : SynthesisSummary) (left right : ℕ) :
   unfold SelectorSitesSeparated
   infer_instance
 
+/-- The same-region half of selector separation. Cross-region separation can be
+supplied uniformly by a circuit's selector-anchor theorem. -/
+def SelectorLocalRowsSeparated (summary : SynthesisSummary)
+    (left right : ℕ) : Prop :=
+  ∀ leftSite ∈ selectorSites summary left,
+    ∀ rightSite ∈ selectorSites summary right,
+      leftSite.region = rightSite.region → leftSite.row ≠ rightSite.row
+
+instance (summary : SynthesisSummary) (left right : ℕ) :
+    Decidable (SelectorLocalRowsSeparated summary left right) := by
+  unfold SelectorLocalRowsSeparated
+  infer_instance
+
 theorem synthesisSummary_regionShapes_length_eq_selectorActivations
     (operations : Operations F) :
     (synthesisSummary operations).regionShapes.length =
@@ -260,6 +273,50 @@ theorem selectorSites_wellFormed
   refine ⟨index, body, hindexed, ?_, ?_, hwell.1, hwell.2⟩
   · simpa [hshape] using hindex
   · simpa [hshape] using hcolumns
+
+/-- Physical columns common to every source region of a selector. -/
+def selectorCommonColumns (summary : SynthesisSummary)
+    (selector : ℕ) : List RegionColumn :=
+  match selectorSites summary selector with
+  | [] => []
+  | first :: rest => first.columns.filter fun column =>
+      rest.all fun site => column ∈ site.columns
+
+theorem mem_selectorSite_of_mem_commonColumns
+    (summary : SynthesisSummary) (selector : ℕ)
+    (column : RegionColumn) (site : SelectorSite)
+    (hcolumn : column ∈ selectorCommonColumns summary selector)
+    (hsite : site ∈ selectorSites summary selector) :
+    column ∈ site.columns := by
+  unfold selectorCommonColumns at hcolumn
+  cases hsites : selectorSites summary selector with
+  | nil => simp [hsites] at hsite
+  | cons first rest =>
+      simp only [hsites, List.mem_filter, decide_eq_true_eq,
+        List.all_eq_true] at hcolumn
+      rw [hsites, List.mem_cons] at hsite
+      rcases hsite with rfl | hrest
+      · exact hcolumn.1
+      · exact hcolumn.2 site hrest
+
+/-- A common measured column handles every cross-region case; only same-region
+local-row separation remains to be checked. -/
+theorem selectorSitesSeparated_of_commonColumn
+    (summary : SynthesisSummary) (left right : ℕ)
+    (hlocal : SelectorLocalRowsSeparated summary left right)
+    (hcommon : ∃ column,
+      column ∈ selectorCommonColumns summary left ∧
+        column ∈ selectorCommonColumns summary right) :
+    SelectorSitesSeparated summary left right := by
+  intro leftSite hleftSite rightSite hrightSite
+  split <;> rename_i hregions
+  · exact hlocal leftSite hleftSite rightSite hrightSite hregions
+  · obtain ⟨column, hleftColumn, hrightColumn⟩ := hcommon
+    exact ⟨column,
+      mem_selectorSite_of_mem_commonColumns summary left column
+        leftSite hleftColumn hleftSite,
+      mem_selectorSite_of_mem_commonColumns summary right column
+        rightSite hrightColumn hrightSite⟩
 
 theorem mem_placeSelectorActivations_iff_mem_selectorSites
     (starts : List ℕ) (operations : Operations F)
