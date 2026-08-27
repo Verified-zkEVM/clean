@@ -401,6 +401,27 @@ def repeatedSelectorActivations (selector offset stride : ℕ) :
       repeatedSelectorActivations selector offset stride count ++
         [(selector, offset + stride * count)]
 
+theorem mem_repeatedSelectorActivations_iff
+    (sourceSelector row selector offset stride count : ℕ) :
+    (sourceSelector, row) ∈
+        repeatedSelectorActivations selector offset stride count ↔
+      sourceSelector = selector ∧
+        ∃ index < count, row = offset + stride * index := by
+  induction count with
+  | zero => simp [repeatedSelectorActivations]
+  | succ count inductionHypothesis =>
+      simp only [repeatedSelectorActivations, List.mem_append,
+        inductionHypothesis, List.mem_singleton, Prod.mk.injEq]
+      constructor
+      · rintro (⟨hselector, index, hindex, hrow⟩ | ⟨hselector, hrow⟩)
+        · exact ⟨hselector, index, Nat.lt_succ_of_lt hindex, hrow⟩
+        · exact ⟨hselector, count, Nat.lt_succ_self count, hrow⟩
+      · rintro ⟨hselector, index, hindex, hrow⟩
+        by_cases hlast : index = count
+        · exact Or.inr ⟨hselector, by simpa only [hlast] using hrow⟩
+        · exact Or.inl ⟨hselector, index, Nat.lt_of_le_of_ne
+            (Nat.le_of_lt_succ hindex) hlast, hrow⟩
+
 /-- Compact selector rows for a repeated fixed pattern. Each pair contains a selector
 index and its row offset within one repetition. -/
 def repeatedSelectorPattern (pattern : List (ℕ × ℕ)) (offset stride : ℕ) :
@@ -410,6 +431,31 @@ def repeatedSelectorPattern (pattern : List (ℕ × ℕ)) (offset stride : ℕ) 
       repeatedSelectorPattern pattern offset stride count ++
         pattern.map fun (selector, row) =>
           (selector, offset + stride * count + row)
+
+theorem mem_repeatedSelectorPattern_iff
+    (activation : ℕ × ℕ) (pattern : List (ℕ × ℕ))
+    (offset stride count : ℕ) :
+    activation ∈ repeatedSelectorPattern pattern offset stride count ↔
+      ∃ index < count, ∃ source ∈ pattern,
+        activation = (source.1, offset + stride * index + source.2) := by
+  induction count with
+  | zero => simp [repeatedSelectorPattern]
+  | succ count inductionHypothesis =>
+      simp only [repeatedSelectorPattern, List.mem_append,
+        inductionHypothesis, List.mem_map]
+      constructor
+      · rintro (⟨index, hindex, source, hsource, hactivation⟩ |
+          ⟨source, hsource, hactivation⟩)
+        · exact ⟨index, Nat.lt_succ_of_lt hindex, source, hsource,
+            hactivation⟩
+        · exact ⟨count, Nat.lt_succ_self count, source, hsource,
+            hactivation.symm⟩
+      · rintro ⟨index, hindex, source, hsource, hactivation⟩
+        by_cases hlast : index = count
+        · exact Or.inr ⟨source, hsource, by simpa only [hlast] using
+            hactivation.symm⟩
+        · exact Or.inl ⟨index, Nat.lt_of_le_of_ne
+            (Nat.le_of_lt_succ hindex) hlast, source, hsource, hactivation⟩
 
 /-- The compact exact summary of repeated footprints with a fixed selector pattern. -/
 def repeatColumnsWithSelectorPattern (pattern : List (ℕ × ℕ))
@@ -548,6 +594,16 @@ theorem repeatColumnsWithSelectorAt_lookupActivationCount (selector selectorOffs
       (repeatColumns columns offset stride rowCount constantSiteCount count
         instanceRowExtent lookupActivationCount).lookupActivationCount := rfl
 
+@[circuit_norm, synthesis_summary_norm]
+theorem repeatColumnsWithSelectorAt_selectorActivations
+    (selector selectorOffset : ℕ) (columns : List RegionColumn)
+    (offset stride rowCount constantSiteCount count : ℕ)
+    (instanceRowExtent : ℕ := 0) (lookupActivationCount : ℕ := 0) :
+    (repeatColumnsWithSelectorAt selector selectorOffset columns offset stride
+      rowCount constantSiteCount count instanceRowExtent
+      lookupActivationCount).selectorActivations =
+        repeatedSelectorActivations selector selectorOffset stride count := rfl
+
 @[synthesis_summary_norm]
 theorem hasNoFixedColumns_repeatColumnsWithSelectorAt (selector selectorOffset : ℕ)
     (columns : List RegionColumn) (offset stride rowCount constantSiteCount count : ℕ)
@@ -603,6 +659,15 @@ theorem repeatColumnsWithSelector_lookupActivationCount (selector : ℕ)
       (repeatColumns columns offset stride rowCount constantSiteCount count
         instanceRowExtent lookupActivationCount).lookupActivationCount := rfl
 
+@[circuit_norm, synthesis_summary_norm]
+theorem repeatColumnsWithSelector_selectorActivations (selector : ℕ)
+    (columns : List RegionColumn) (offset stride rowCount constantSiteCount count : ℕ)
+    (instanceRowExtent : ℕ := 0) (lookupActivationCount : ℕ := 0) :
+    (repeatColumnsWithSelector selector columns offset stride rowCount
+      constantSiteCount count instanceRowExtent
+      lookupActivationCount).selectorActivations =
+        repeatedSelectorActivations selector offset stride count := rfl
+
 @[synthesis_summary_norm]
 theorem hasNoFixedColumns_repeatColumnsWithSelector (selector : ℕ)
     (columns : List RegionColumn) (offset stride rowCount constantSiteCount count : ℕ)
@@ -621,6 +686,14 @@ theorem repeatColumns_columns (columns : List RegionColumn)
     (repeatColumns columns offset stride rowCount constantSiteCount count
       instanceRowExtent lookupActivationCount).columns =
       if count = 0 then [] else unionColumns [] columns := by
+  cases count <;> rfl
+
+@[circuit_norm, synthesis_summary_norm]
+theorem repeatColumns_selectorActivations (columns : List RegionColumn)
+    (offset stride rowCount constantSiteCount count : ℕ)
+    (instanceRowExtent : ℕ := 0) (lookupActivationCount : ℕ := 0) :
+    (repeatColumns columns offset stride rowCount constantSiteCount count
+      instanceRowExtent lookupActivationCount).selectorActivations = [] := by
   cases count <;> rfl
 
 @[synthesis_summary_norm]

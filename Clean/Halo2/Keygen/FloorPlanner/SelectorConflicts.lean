@@ -77,6 +77,31 @@ def regionLocalSelectorConflictPairs
         some (left.1, right.1)
       else none).toFinset
 
+theorem mem_regionLocalSelectorConflictPairs_iff
+    (activations : List (ℕ × ℕ)) (left right : ℕ) :
+    (left, right) ∈ regionLocalSelectorConflictPairs activations ↔
+      left < right ∧ ∃ row,
+        (left, row) ∈ activations ∧ (right, row) ∈ activations := by
+  simp only [regionLocalSelectorConflictPairs, Finset.mem_biUnion,
+    List.mem_toFinset, List.mem_filterMap]
+  constructor
+  · rintro ⟨leftActivation, hleftActivation, rightActivation,
+      hrightActivation, hresult⟩
+    split at hresult <;> rename_i hcondition
+    · simp only [Bool.and_eq_true, decide_eq_true_eq] at hcondition
+      have hequal := Option.some.inj hresult
+      have hleft : leftActivation.1 = left := congrArg Prod.fst hequal
+      have hright : rightActivation.1 = right := congrArg Prod.snd hequal
+      refine ⟨by simpa only [hleft, hright] using hcondition.1,
+        leftActivation.2, ?_, ?_⟩
+      · simpa only [← hleft] using hleftActivation
+      · rw [hcondition.2]
+        simpa only [← hright] using hrightActivation
+    · simp at hresult
+  · rintro ⟨hlt, row, hleft, hright⟩
+    refine ⟨(left, row), hleft, (right, row), hright, ?_⟩
+    simp [hlt]
+
 /-- Distinct selector pairs activated at the same local row of any region. -/
 def localSelectorConflictPairs
     (summary : SynthesisSummary) : Finset (ℕ × ℕ) :=
