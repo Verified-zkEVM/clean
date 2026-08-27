@@ -1,5 +1,7 @@
 import Clean.Gadgets.SHA256.BitwiseOps
 
+open Clean
+
 section
 variable {p : ℕ} [Fact p.Prime]
 

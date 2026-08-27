@@ -1,6 +1,8 @@
 /- This file contains miscellaneous additions and helpers on top of the Circuit DSL -/
 import Clean.Circuit.Subcircuit
 
+namespace Clean
+
 variable {F : Type} [FiniteField F] {M : TypeMap} [ProvableType M]
 
 instance {M : TypeMap} [ProvableType M] : Inhabited (Circuit F (Var M F)) where
@@ -26,11 +28,11 @@ def valueFromOffset (M : TypeMap) [ProvableType M] (offset : ℕ) (env : Environ
 
 theorem eval_varFromOffset_valueFromOffset (M : TypeMap) [ProvableType M] (offset : ℕ) (env : Environment F) :
     Eval.eval env (varFromOffset (F:=F) M offset) = valueFromOffset M offset env := by
-  rw [ProvableType.eval_varFromOffset, valueFromOffset]
+  rw [ProvableType.Clean.eval_varFromOffset, valueFromOffset]
 
 def witnessAny (M: TypeMap) [ProvableType M] : Circuit F (Var M F) := do
   let offset ← getOffset
-  witnessIR M (.ir [] (.range (size M) fun i => .envGet (offset + i)))
+  witnessIR M (.ir [] (VExpr.range (size M) fun i => .envGet (offset + i)))
 
 theorem witnessAny_localWitnesses (n : ℕ) (env : ProverEnvironment F) :
     env.UsesLocalWitnessesCompleteness n (witnessAny M |>.operations n) ↔ True := by
@@ -45,3 +47,5 @@ theorem witnessAny_output {n : ℕ} :
 theorem witnessAny_interactionsWith {n : ℕ} {channel : RawChannel F} :
     (witnessAny M |>.operations n).interactionsWith channel = [] := by
   simp [circuit_norm, witnessAny, Operations.interactionsWith]
+
+end Clean

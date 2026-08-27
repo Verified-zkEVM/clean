@@ -4,6 +4,8 @@ import Clean.Utils.Rotation
 import Clean.Utils.Bits
 import Clean.Utils.Fin
 
+open Clean
+
 section
 variable {p : ℕ} [Fact p.Prime]
 

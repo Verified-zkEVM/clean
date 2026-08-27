@@ -1,6 +1,8 @@
 import Clean.Circuit
 import Clean.Utils.Tactics
 
+open Clean
+
 namespace TestSimplifyProvableStructEval
 
 -- Test structure with ProvableStruct instance

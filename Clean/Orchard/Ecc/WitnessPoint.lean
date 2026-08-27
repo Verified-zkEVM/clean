@@ -3,6 +3,8 @@ import Clean.Orchard.Ecc.Defs
 import Clean.Utils.Tactics
 import Mathlib.Tactic
 
+open Clean
+
 namespace Orchard
 namespace Ecc
 

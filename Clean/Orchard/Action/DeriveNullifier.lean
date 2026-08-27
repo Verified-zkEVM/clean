@@ -6,6 +6,8 @@ import Clean.Orchard.Ecc.Add
 import Clean.Orchard.Poseidon.Hash
 import Clean.Orchard.Utilities
 
+open Clean
+
 /-!
 # Orchard nullifier derivation
 

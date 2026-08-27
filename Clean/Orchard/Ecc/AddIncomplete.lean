@@ -3,6 +3,8 @@ import Clean.Orchard.Ecc.Defs
 import Clean.Utils.Tactics
 import Mathlib.Tactic
 
+open Clean
+
 namespace Orchard.Ecc
 
 open CompElliptic.CurveForms
@@ -152,7 +154,7 @@ def main (input : Var Input Fp) :
   let p <== input.p
   let q <== input.q
   let r ← witness <|
-    (Point.mk p.x p.y : Point (Witgen.FExpr Fp)).nondegenerateAdd (Point.mk q.x q.y)
+    (Point.mk p.x p.y : Point (FExpr Fp)).nondegenerateAdd (Point.mk q.x q.y)
   Gate.circuit {
     x_p := p.x
     y_p := p.y

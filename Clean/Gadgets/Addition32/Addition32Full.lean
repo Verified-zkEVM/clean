@@ -5,6 +5,8 @@ import Clean.Utils.Primes
 import Clean.Gadgets.Boolean
 import Clean.Utils.Tactics
 
+open Clean
+
 namespace Gadgets.Addition32Full
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 

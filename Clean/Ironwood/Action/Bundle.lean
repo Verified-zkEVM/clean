@@ -1,0 +1,3882 @@
+import Clean.Ironwood.Action.CircuitPreIronwood
+import Clean.Ironwood.Action.ConfigureCertificates
+
+/-!
+# The Orchard Action circuit: bundle contract (spec / extract / elaborated)
+
+The e2e statement (protocol spec §4.17.4) over the *extracted* public inputs and
+witness data — knowledge-sound at the extracted window scalars, with every Sinsemilla
+hash stated in the specification's guarded ⊥-model (`HashGuarded`, the literal
+`∈ {…, ⊥}` escapes of §4.17.4):
+
+- value-commitment integrity, nullifier integrity, spend authority (total);
+- diversified-address integrity, old/new note-commitment integrity (guarded);
+- Merkle path validity as the exact raw-encoding chain (`ExactMerklePathData`,
+  zcash/ironwood#97) and the four `q_orchard` value checks (knowledge-sound at the
+  extracted root cell).
+
+The exported statement contains no or-break disjunctions: escapes of the witnessed
+hash queries are recomputed and consumed as breaks by the security layer
+(`Zcash/Security/Ledger/Bridge.lean`), where the reduction to computed break data
+lives.
+-/
+
+open ProvableStruct.Halo2 (eval_cells_eq_eval)
+
+namespace Zcash.Circuits.Action.Circuit
+
+open Halo2
+open Ecc.MulFixed (FixedBase)
+open Specs.Sinsemilla (Generators hashToPoint HashGuarded
+  commitIvkChunks)
+open CompElliptic.Fields.Pasta (Fq)
+
+/-! ## Region counts -/
+
+/-! ### Per-call `nextRegionIndex` advances
+
+Each of these isolates the `Operations.regionCount ((call).operations j)` reduction into a
+small lemma that is kernel-checked once, so that `synthChecks_nextRegionIndex` /
+`synthChecks_output` can thread the offset towers using only the folded `= j + literal`
+statements (never carrying `regionCount(operations)` into their own kernel-checked terms —
+that is what made the `nextRegionIndex_call'`-based compositional proofs kernel-time-out). -/
+
+private theorem merkle_call_nextRegionIndex (G : Generators) (Q : Point Fp)
+    (hQ : Q.OnCurve) (l₀ : ℕ) (hld : l₀ + 16 ≤ 2 ^ 10)
+    (wsib : ℕ → WitgenIR Fp 1) (wswap : ℕ → Placed ProverEnvironment Fp → Bool)
+    (c : CondSwap.Config × Sinsemilla.Merkle.Config ×
+      LookupRangeCheck.Config 10)
+    (inp : Var Sinsemilla.Merkle.Layer.Input Fp) (j : RegionIndex) :
+    (((Sinsemilla.Merkle.CalculateRoot.circuit G Q hQ l₀ 16 hld wsib wswap).call
+        c inp).nextRegionIndex j) = j + 128 := by
+  rw [FormalCircuit.nextRegionIndex_call, Sinsemilla.Merkle.CalculateRoot.circuit_call_regionCount]
+
+private theorem vc_call_nextRegionIndex (V : Ecc.MulFixed.Short.FixedBase)
+    (R : FixedBase)
+    (c : Ecc.MulFixed.Short.Config × Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config)
+    (inp : Var ValueCommit.Inputs Fp) (j : RegionIndex) :
+    (((ValueCommit.circuit V R).call c inp).nextRegionIndex j) = j + 5 := by
+  rw [FormalCircuit.nextRegionIndex_call, ValueCommit.circuit_call_regionCount]
+
+private theorem dn_call_nextRegionIndex (K : FixedBase)
+    (c : Poseidon.Config × AddChip.Config × Ecc.MulFixed.BaseFieldElem.Config ×
+      Ecc.Add.Config)
+    (inp : Var DeriveNullifier.Input Fp) (j : RegionIndex) :
+    (((DeriveNullifier.circuit K).call c inp).nextRegionIndex j) = j + 9 := by
+  rw [FormalCircuit.nextRegionIndex_call, DeriveNullifier.circuit_call_regionCount]
+
+private theorem sa_call_nextRegionIndex (G : FixedBase)
+    (c : Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config)
+    (inp : Var SpendAuthority.Input Fp) (j : RegionIndex) :
+    (((SpendAuthority.circuit G).call c inp).nextRegionIndex j) = j + 3 := by
+  rw [FormalCircuit.nextRegionIndex_call, SpendAuthority.circuit_call_regionCount]
+
+private theorem civk_call_nextRegionIndex (G : Generators) (R : FixedBase)
+    (Q : Point Fp) (hQ : Q.OnCurve)
+    (c : CommitIvk.Main.Config) (inp : Var CommitIvk.Main.Inputs Fp)
+    (j : RegionIndex) :
+    (((CommitIvk.Main.circuit G R Q hQ).call c inp).nextRegionIndex j) = j + 14 := by
+  rw [FormalCircuit.nextRegionIndex_call, CommitIvk.Main.circuit_call_regionCount]
+
+private theorem ai_call_nextRegionIndex
+    (c : Ecc.Mul.Config × Ecc.WitnessPoint.Config)
+    (inp : Var AddressIntegrity.Input Fp) (j : RegionIndex) :
+    (((AddressIntegrity.circuit).call c inp).nextRegionIndex j) = j + 6 := by
+  rw [FormalCircuit.nextRegionIndex_call, AddressIntegrity.circuit_call_regionCount]
+
+/-- Compose two `nextRegionIndex` advances across a `bind`, over **opaque** `x`/`f`. Proven
+once (the `nextRegionIndex_bind` `rfl` is checked with `x`/`f` variables, so the kernel never
+reduces a concrete child); `synthChecks_nextRegionIndex` then only *applies* it, so the whole
+stage's `nextRegionIndex` is computed without ever unfolding `synthChecks` in a kernel term
+(the previous timeout). -/
+private theorem nextRegionIndex_advance_bind {α β : Type} {n m N : ℕ}
+    {x : Circuit Fp α} {f : α → Circuit Fp β} (hN : n + m = N)
+    (hx : ∀ j, x.nextRegionIndex j = j + n)
+    (hf : ∀ a j, (f a).nextRegionIndex j = j + m) :
+    ∀ j, (x >>= f).nextRegionIndex j = j + N := by
+  intro j
+  rw [Circuit.nextRegionIndex_bind, hf, hx, Nat.add_assoc, hN]
+
+private theorem nextRegionIndex_advance_pure {α : Type} (a : α) :
+    ∀ j, (pure a : Circuit Fp α).nextRegionIndex j = j + 0 := by
+  intro j; simp only [Circuit.nextRegionIndex_pure, Nat.add_zero]
+
+private theorem nextRegionIndex_advance_assignRegion {α : Type} (name : String)
+    (body : RegionCircuit Fp α) :
+    ∀ j, (assignRegion name body).nextRegionIndex j = j + 1 := by
+  intro j; rw [nextRegionIndex_assignRegion]
+
+private theorem nextRegionIndex_advance_constrainInstance (cell : AssignedCell Fp)
+    (col : Column .instance) (row : ℕ) :
+    ∀ j, (constrainInstance cell col row).nextRegionIndex j = j + 0 := by
+  intro j; simp only [Nat.add_zero]; rfl
+
+/-- Step the `output` of a `bind` to the tail's output at the advanced index, over opaque
+`x`/`f` (same kernel-safety rationale as `nextRegionIndex_advance_bind`). -/
+private theorem output_advance_bind {α β : Type} {n : ℕ} {x : Circuit Fp α}
+    {f : α → Circuit Fp β} (hx : ∀ j, x.nextRegionIndex j = j + n) (i : RegionIndex) :
+    (x >>= f).output i = (f (x.output i)).output (i + n) := by
+  rw [Circuit.output_bind, hx]
+
+theorem synthWitness_regionCount (G : Generators) (W : Witnesses Fp) (cfg : Config)
+    (i : RegionIndex) :
+    Operations.regionCount ((synthWitness G W cfg).operations i) = 8 := by
+  simp only [synthWitness, loadPrivate, Sinsemilla.load, circuit_norm,
+    Circuit.operations_bind, Circuit.operations_pure, operations_assignRegion,
+    operations_loadTable, Operations.regionCount_append, Operations.regionCount]
+
+theorem synthChecks_regionCount (G : Generators) (B : Bases) (W : Witnesses Fp)
+    (cfg : Config) (wc : WitnessCells) (i : RegionIndex) :
+    Operations.regionCount ((synthChecks G B W cfg wc).operations i) = 295 := by
+  simp only [synthChecks_eq, synthChecksProgram, loadPrivate, circuit_norm, Circuit.operations_bind,
+    Circuit.operations_pure, operations_assignRegion, operations_constrainInstance,
+    Operations.regionCount_append, Operations.regionCount]
+
+theorem synthNotes_regionCount (G : Generators) (B : Bases) (W : Witnesses Fp)
+    (cfg : Config) (wc : WitnessCells) (cc : CheckCells) (i : RegionIndex) :
+    Operations.regionCount ((synthNotes G B W cfg wc cc).operations i) = 91 := by
+  simp only [synthNotes_eq, synthNotesProgram, loadPrivate, circuit_norm, Circuit.operations_bind,
+    Circuit.operations_pure, operations_assignRegion, operations_constrainInstance,
+    Operations.regionCount_append, Operations.regionCount]
+
+/-- The Action circuit's region count: the 8 witness regions, the 295-region check
+stage, the 91-region note stage — 394. -/
+theorem synthesize_regionCount (G : Generators) (B : Bases) (W : Witnesses Fp)
+    (cfg : Config) (i : RegionIndex) :
+    Operations.regionCount ((CircuitPreIronwood.synthesize G B W cfg).operations i)
+      = 394 := by
+  simp only [CircuitPreIronwood.synthesize, synthesizeBase, circuit_norm,
+    Circuit.operations_bind, Circuit.operations_pure, Operations.regionCount_append]
+  rw [synthWitness_regionCount, synthChecks_regionCount, synthNotes_regionCount]
+
+/-- The base Action synthesis with its one fixed hint-backed witness program. -/
+def main (G : Generators) (B : Bases) (cfg : Config) :
+    Var unit Fp → Circuit Fp (Var AddressPoints Fp) := fun _ =>
+  CircuitPreIronwood.synthesize G B hintWitnesses cfg
+
+theorem main_regionCount (G : Generators) (B : Bases) (cfg : Config)
+    (input : Var unit Fp) (i : RegionIndex) :
+    Operations.regionCount ((main G B cfg input).operations i) = 394 := by
+  simp only [main]
+  rw [synthesize_regionCount]
+
+@[synthesis_summary_norm]
+theorem main_synthesisSummary_eq (G : Generators) (B : Bases)
+    (cfg : Config) (input : Var unit Fp) (region : RegionIndex) :
+    FloorPlanner.synthesisSummary ((main G B cfg input).operations region) =
+      synthesizeBaseSynthesisSummary cfg := by
+  rw [main, CircuitPreIronwood.synthesize,
+    synthesizeBase_synthesisSummary_eq]
+
+private theorem loadPrivate_lookupSelectorsAnchoredBy
+    (column : Column .advice) (witness : WitgenIR Fp 1)
+    (region : RegionIndex) (anchor : ℕ → FloorPlanner.RegionColumn) :
+    ((loadPrivate column witness).operations region)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  simp only [loadPrivate, operations_assignRegion]
+  apply Operations.LookupSelectorsAnchoredBy.region_cons
+  · apply RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
+    keygen_registration
+  · exact Operations.LookupSelectorsAnchoredBy.nil anchor
+
+private theorem constrainInstance_lookupSelectorsAnchoredBy
+    (cell : AssignedCell Fp) (column : Column .instance) (row : ℕ)
+    (region : RegionIndex) (anchor : ℕ → FloorPlanner.RegionColumn) :
+    ((constrainInstance cell column row).operations region)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  simp only [operations_constrainInstance]
+  exact Operations.LookupSelectorsAnchoredBy.constrainInstance_cons
+    (Operations.LookupSelectorsAnchoredBy.nil anchor)
+
+/-! ## The extracted data -/
+
+/-- Everything the Action statement speaks about, read off a satisfying assignment:
+the ten public-input rows (zcash/orchard#504), the private witness cells, the six
+witnessed points, and the five fixed-base window scalars. -/
+structure ActionData where
+  anchor : Fp
+  cvX : Fp
+  cvY : Fp
+  nfOld : Fp
+  rkX : Fp
+  rkY : Fp
+  cmx : Fp
+  enableSpend : Fp
+  enableOutput : Fp
+  disableCrossAddress : Fp
+  psiOld : Fp
+  rhoOld : Fp
+  nk : Fp
+  vOld : Fp
+  vNew : Fp
+  psiNew : Fp
+  magnitude : Fp
+  sign : Fp
+  cmOld : Point Fp
+  gdOld : Point Fp
+  akP : Point Fp
+  pkdOld : Point Fp
+  gdNew : Point Fp
+  pkdNew : Point Fp
+  /-- The literal 255-bit representatives consumed by each Merkle hash.  These are
+  reconstructed from the three decomposition pieces, rather than from the reduced
+  node field elements. -/
+  leftEncoding : Fin 32 → ℕ
+  rightEncoding : Fin 32 → ℕ
+  /-- The cond-swap position flag (`true` means the running node is the right child). -/
+  merkleSide : Fin 32 → Bool
+  merklePath : ℕ → Fp × Fp
+  rcv : Vector Fp 85 × Fq
+  alpha : Vector Fp 85 × Fq
+  rivk : Vector Fp 85 × Fq
+  rcmOld : Vector Fp 85 × Fq
+  rcmNew : Vector Fp 85 × Fq
+deriving Inhabited
+
+/-- One advice cell read. -/
+private def cellRead (env : Placed Environment Fp) (i : RegionIndex) (row : ℕ)
+    (col : Column .advice) : Fp :=
+  eval env (AssignedCell.of i row col : Var field Fp)
+
+/-- The extraction: instance rows off `primary`, witness cells at their regions,
+the witnessed points, and the five `fwExtract` window readings (region map in
+`synthesize_regionCount`'s docstring). -/
+def extract (cfg : Config) (_ : Var PrivateInputs Fp) (i₀ : RegionIndex)
+    (env : Placed Environment Fp) : ActionData where
+  anchor := env.env.get cfg.primary (ANCHOR : ℤ)
+  cvX := env.env.get cfg.primary (CV_NET_X : ℤ)
+  cvY := env.env.get cfg.primary (CV_NET_Y : ℤ)
+  nfOld := env.env.get cfg.primary (NF_OLD : ℤ)
+  rkX := env.env.get cfg.primary (RK_X : ℤ)
+  rkY := env.env.get cfg.primary (RK_Y : ℤ)
+  cmx := env.env.get cfg.primary (CMX : ℤ)
+  enableSpend := env.env.get cfg.primary (ENABLE_SPEND : ℤ)
+  enableOutput := env.env.get cfg.primary (ENABLE_OUTPUT : ℤ)
+  disableCrossAddress := env.env.get cfg.primary (DISABLE_CROSS_ADDRESS : ℤ)
+  psiOld := cellRead env i₀ 0 (cfg.advices 0)
+  rhoOld := cellRead env (i₀ + 1) 0 (cfg.advices 0)
+  nk := cellRead env (i₀ + 5) 0 (cfg.advices 0)
+  vOld := cellRead env (i₀ + 6) 0 (cfg.advices 0)
+  vNew := cellRead env (i₀ + 7) 0 (cfg.advices 0)
+  psiNew := cellRead env (i₀ + 349) 0 (cfg.advices 0)
+  magnitude := cellRead env (i₀ + 264) 0 (cfg.advices 9)
+  sign := cellRead env (i₀ + 265) 0 (cfg.advices 9)
+  cmOld := ⟨cellRead env (i₀ + 2) 0 cfg.eccConfig.witnessPoint.x,
+            cellRead env (i₀ + 2) 0 cfg.eccConfig.witnessPoint.y⟩
+  gdOld := ⟨cellRead env (i₀ + 3) 0 cfg.eccConfig.witnessPoint.x,
+            cellRead env (i₀ + 3) 0 cfg.eccConfig.witnessPoint.y⟩
+  akP := ⟨cellRead env (i₀ + 4) 0 cfg.eccConfig.witnessPoint.x,
+          cellRead env (i₀ + 4) 0 cfg.eccConfig.witnessPoint.y⟩
+  pkdOld := ⟨cellRead env (i₀ + 301) 0 cfg.eccConfig.witnessPoint.x,
+             cellRead env (i₀ + 301) 0 cfg.eccConfig.witnessPoint.y⟩
+  gdNew := ⟨cellRead env (i₀ + 347) 0 cfg.eccConfig.witnessPoint.x,
+            cellRead env (i₀ + 347) 0 cfg.eccConfig.witnessPoint.y⟩
+  pkdNew := ⟨cellRead env (i₀ + 348) 0 cfg.eccConfig.witnessPoint.x,
+             cellRead env (i₀ + 348) 0 cfg.eccConfig.witnessPoint.y⟩
+  leftEncoding := fun j =>
+    let k := j.val
+    let mcfg := if k < 16 then cfg.merkle1 else cfg.merkle2
+    let base := if k < 16 then i₀ + 8 + 8 * k else i₀ + 136 + 8 * (k - 16)
+    let a := (cellRead env (base + 1) 0 mcfg.sinsemilla.witnessPieces).val
+    let b := (cellRead env (base + 4) 0 mcfg.sinsemilla.witnessPieces).val
+    let b1 := (cellRead env (base + 2) 0 cfg.lookupConfig.runningSum).val
+    a / 2 ^ 10 + 2 ^ 240 * (b % 2 ^ 10 + 2 ^ 10 * b1)
+  rightEncoding := fun j =>
+    let k := j.val
+    let mcfg := if k < 16 then cfg.merkle1 else cfg.merkle2
+    let base := if k < 16 then i₀ + 8 + 8 * k else i₀ + 136 + 8 * (k - 16)
+    let c := (cellRead env (base + 5) 0 mcfg.sinsemilla.witnessPieces).val
+    let b2 := (cellRead env (base + 3) 0 cfg.lookupConfig.runningSum).val
+    b2 + 2 ^ 5 * c
+  merkleSide := fun j =>
+    let k := j.val
+    if k < 16 then
+      cellRead env (i₀ + 8 + 8 * k) 0 cfg.merkle1.condSwap.swap = 1
+    else
+      cellRead env (i₀ + 136 + 8 * (k - 16)) 0 cfg.merkle2.condSwap.swap = 1
+  merklePath := fun j =>
+    if j < 16 then
+      (cellRead env (i₀ + 8 + 8 * j) 0 cfg.merkle1.condSwap.b,
+       cellRead env (i₀ + 8 + 8 * j) 0 cfg.merkle1.condSwap.swap)
+    else
+      (cellRead env (i₀ + 136 + 8 * (j - 16)) 0 cfg.merkle2.condSwap.b,
+       cellRead env (i₀ + 136 + 8 * (j - 16)) 0 cfg.merkle2.condSwap.swap)
+  rcv := Ecc.MulFixed.FullWidth.fwExtract cfg.eccConfig.mulFixedFull (i₀ + 268) env
+  alpha := Ecc.MulFixed.FullWidth.fwExtract cfg.eccConfig.mulFixedFull (i₀ + 280) env
+  rivk := Ecc.MulFixed.FullWidth.fwExtract cfg.eccConfig.mulFixedFull (i₀ + 290) env
+  rcmOld := Ecc.MulFixed.FullWidth.fwExtract cfg.eccConfig.mulFixedFull (i₀ + 328) env
+  rcmNew := Ecc.MulFixed.FullWidth.fwExtract cfg.eccConfig.mulFixedFull (i₀ + 375) env
+
+/-- The base circuit's extractor at its fixed top-level witness program. -/
+def extractBase (cfg : Config) (_ : Var unit Fp) (i₀ : RegionIndex)
+    (env : Placed Environment Fp) : ActionData :=
+  extract cfg hintWitnesses i₀ env
+
+/-! ## The statement (§4.17.4, knowledge-sound, breaks-as-data) -/
+
+open NoteCommit (noteScalars)
+
+/-- Total views of the Action's fixed-size Merkle exports.  Values beyond depth
+32 are irrelevant to `ExactMerklePathData`, but the total functions make its
+interface directly usable by the ledger bridge. -/
+def merkleLeftEncoding (wit : ActionData) : ℕ → ℕ := fun i =>
+  if h : i < 32 then wit.leftEncoding ⟨i, h⟩ else 0
+
+def merkleRightEncoding (wit : ActionData) : ℕ → ℕ := fun i =>
+  if h : i < 32 then wit.rightEncoding ⟨i, h⟩ else 0
+
+def merkleSide (wit : ActionData) : ℕ → Bool := fun i =>
+  if h : i < 32 then wit.merkleSide ⟨i, h⟩ else false
+
+/-- The Orchard Action statement over the extracted data: every §4.17.4 clause, with
+the Sinsemilla escapes exhibited as data and the fixed-base scalars knowledge-sound at
+the extracted window readings. -/
+def SpecBase (G : Generators) (B : Bases) (wit : ActionData) : Prop :=
+  -- the witnessed points are well-formed
+  wit.cmOld.Valid ∧ wit.gdOld.OnCurve ∧ wit.akP.OnCurve ∧ wit.pkdOld.OnCurve ∧
+  wit.gdNew.OnCurve ∧ wit.pkdNew.OnCurve ∧
+  -- the note values are 64-bit, as §4.17.4 types them (exported from the NoteCommit
+  -- value decompositions; the commitment clauses alone can't bound the field elements)
+  wit.vOld.val < 2 ^ 64 ∧ wit.vNew.val < 2 ^ 64 ∧
+  -- value-commitment integrity: `cv_net = [v_old − v_new] V + [rcv] R`
+  (wit.magnitude.val < 2 ^ 64 ∧
+    ((wit.sign = 1 ∧ (⟨wit.cvX, wit.cvY⟩ : Point Fp)
+        = (wit.magnitude.val : Fq) • B.valueCommitV
+          + wit.rcv.2 • B.valueCommitR) ∨
+     (wit.sign = -1 ∧ (⟨wit.cvX, wit.cvY⟩ : Point Fp)
+        = -(wit.magnitude.val : Fq) • B.valueCommitV
+          + wit.rcv.2 • B.valueCommitR))) ∧
+  -- nullifier integrity: `nf_old = Extract([PRF(nk, ρ) + ψ] K + cm_old)`
+  wit.nfOld = (wit.cmOld +
+    ((Poseidon.Hash.ConstantLength.value #v[wit.nk, wit.rhoOld] + wit.psiOld).val : Fq)
+      • B.nullifierK).x ∧
+  -- spend authority: `rk = [α] SpendAuthG + ak_P`
+  (⟨wit.rkX, wit.rkY⟩ : Point Fp)
+    = wit.alpha.2 • B.spendAuthG + wit.akP ∧
+  -- diversified-address integrity: `ivk ∈ {Commit^ivk, ⊥}` (guarded ⊥-model) and
+  -- `pk_d_old = [ivk] g_d_old`
+  (∃ ivk : Fp,
+    HashGuarded G.S B.ivkQ (commitIvkChunks wit.akP.x.val wit.nk.val)
+      (fun bp => ivk = (bp + wit.rivk.2 • B.commitIvkR).x) ∧
+    wit.pkdOld = ivk.val • wit.gdOld) ∧
+  -- old note-commitment integrity: `NoteCommit(…) ∈ {cm_old, ⊥}` (guarded ⊥-model)
+  HashGuarded G.S B.noteQ
+    (noteScalars wit.gdOld wit.pkdOld wit.vOld wit.rhoOld wit.psiOld).chunks
+    (fun bp => wit.cmOld = bp + wit.rcmOld.2 • B.noteCommitR) ∧
+  -- new note-commitment integrity, `ρ_new = nf_old`:
+  -- `Extract(NoteCommit(…)) ∈ {cmx, ⊥}` (guarded ⊥-model)
+  HashGuarded G.S B.noteQ
+    (noteScalars wit.gdNew wit.pkdNew wit.vNew wit.nfOld wit.psiNew).chunks
+    (fun bp => wit.cmx = (bp + wit.rcmNew.2 • B.noteCommitR).x) ∧
+  -- Merkle path validity, tied through the `q_orchard` anchor check: the exact
+  -- raw-encoding chain of the witnessed path cells (zcash/ironwood#97), each layer's
+  -- hash in the guarded ⊥-model.
+  (∃ root : Fp,
+    Sinsemilla.Merkle.ExactMerklePathData G B.merkleQ 0 32 wit.cmOld.x root
+      (merkleLeftEncoding wit) (merkleRightEncoding wit) (merkleSide wit) ∧
+    wit.vOld * (root - wit.anchor) = 0) ∧
+  -- the remaining `q_orchard` value checks
+  wit.vOld - wit.vNew = wit.magnitude * wit.sign ∧
+  wit.vOld * (1 - wit.enableSpend) = 0 ∧
+  wit.vNew * (1 - wit.enableOutput) = 0
+
+/-- The pre-ironwood bundle's contract: the base statement, plus the output cells
+carrying the four witnessed address points (what the ironwood cross-address stage
+consumes). -/
+def Spec (G : Generators) (B : Bases)
+    (_ : Value unit Fp) (out : Value AddressPoints Fp) (wit : ActionData) :
+    Prop :=
+  SpecBase G B wit ∧ out.gdOld = wit.gdOld ∧ out.pkdOld = wit.pkdOld ∧
+  out.gdNew = wit.gdNew ∧ out.pkdNew = wit.pkdNew
+
+/--
+Layout and configuration facts that neither constraint satisfaction nor honest
+witness extension establishes.
+-/
+def EnvAssumptions (cfg : Config)
+    (env : Placed Environment Fp) : Prop :=
+  2 ^ Specs.K ≤ env.env.usableRows ∧
+  cfg.sinsemilla2.generatorTable = cfg.sinsemilla1.generatorTable ∧
+  cfg.merkle1.sinsemilla.generatorTable = cfg.sinsemilla1.generatorTable ∧
+  cfg.merkle2.sinsemilla.generatorTable = cfg.sinsemilla1.generatorTable ∧
+  cfg.lookupConfig.tableIdx = cfg.sinsemilla1.generatorTable.tableIdx ∧
+  Ecc.MulFixed.FullWidth.EnvAssumptions cfg.eccConfig.mulFixedFull env ∧
+  Ecc.MulFixed.Short.EnvAssumptions cfg.eccConfig.mulFixedShort env ∧
+  Ecc.MulFixed.BaseFieldElem.InnerEnvAssumptions
+    cfg.eccConfig.mulFixedBaseField env ∧
+  cfg.eccConfig.mulFixedBaseField.lookupConfig = cfg.lookupConfig ∧
+  cfg.eccConfig.mul.overflowConfig.lookupConfig = cfg.lookupConfig ∧
+  cfg.lookupConfig.qLookup.index ≠ cfg.lookupConfig.qRunning.index
+
+private theorem rangeLoad_constraints_of_generatorLoad
+    (G : Generators) (gcfg : Sinsemilla.GeneratorTableConfig)
+    (lcfg : LookupRangeCheck.Config 10)
+    (htable : lcfg.tableIdx = gcfg.tableIdx)
+    (i : RegionIndex) (env : Placed Environment Fp)
+    (h : Constraints env.place env.env
+      ((Sinsemilla.load G gcfg).operations i) i) :
+    Constraints env.place env.env
+      ((LookupRangeCheck.load 10 lcfg).operations i) i := by
+  simp only [Sinsemilla.load, LookupRangeCheck.load, circuit_norm] at h ⊢
+  rw [htable]
+  exact ⟨h.1, h.2.1⟩
+
+private theorem loadedChildEnvFacts
+    (G : Generators) (cfg : Config)
+    (i : RegionIndex) (env : Placed Environment Fp)
+    (hEnv : EnvAssumptions cfg env)
+    (hload : Constraints env.place env.env
+      ((Sinsemilla.load G cfg.sinsemilla1.generatorTable).operations i) i) :
+    Sinsemilla.GeneratorTableLoaded G cfg.sinsemilla1.generatorTable env.env ∧
+    Sinsemilla.GeneratorTableLoaded G cfg.sinsemilla2.generatorTable env.env ∧
+    Sinsemilla.GeneratorTableLoaded G
+      cfg.merkle1.sinsemilla.generatorTable env.env ∧
+    Sinsemilla.GeneratorTableLoaded G
+      cfg.merkle2.sinsemilla.generatorTable env.env ∧
+    Ecc.MulFixed.BaseFieldElem.EnvAssumptions
+      cfg.eccConfig.mulFixedBaseField env ∧
+    Ecc.Mul.EnvAssumptions cfg.eccConfig.mul env ∧
+    LookupRangeCheck.TableLoaded 10 cfg.lookupConfig env.env := by
+  obtain ⟨hUsable, hs2, hm1, hm2, hlookup, -, -, hBfInner,
+    hBfLookup, hMulLookup, hDist⟩ := hEnv
+  have hT1 := Sinsemilla.load_generatorTableLoaded G
+    cfg.sinsemilla1.generatorTable env.place env.env i hUsable hload
+  have hTL := LookupRangeCheck.load_tableLoaded 10 cfg.lookupConfig
+    env.place env.env i (by norm_num) hUsable
+    (rangeLoad_constraints_of_generatorLoad G
+      cfg.sinsemilla1.generatorTable cfg.lookupConfig hlookup i env hload)
+  refine ⟨hT1, ?_, ?_, ?_, ?_, ?_, hTL⟩
+  · simpa only [hs2] using hT1
+  · simpa only [hm1] using hT1
+  · simpa only [hm2] using hT1
+  · simp only [Ecc.MulFixed.BaseFieldElem.EnvAssumptions]
+    rw [hBfLookup]
+    exact ⟨hBfInner, hTL, hDist⟩
+  · simp only [Ecc.Mul.EnvAssumptions, Ecc.MulOverflow.EnvAssumptions]
+    rw [hMulLookup]
+    exact ⟨hTL, hDist⟩
+
+/-- Witness-consistency bridge: the honest prover's evaluated point hint equals the point
+read from the witnessed output cells. From the region's `ExtendsWitnesses` alone (no gate
+constraints), so it is available to discharge the value-level `ProverAssumptions` of the
+`WitnessPoint` children against the Action bundle's extract-level facts. -/
+private theorem wpoint_eval_eq_cells
+    (c : Ecc.WitnessPoint.Config) (p : Var (Unconstrained Point) Fp)
+    (i : RegionIndex) (place : RegionIndex → ℕ) (env : ProverEnvironment Fp)
+    (hw : Halo2.ExtendsWitnesses place env
+      ((Ecc.WitnessPoint.pointFormal.call c p).operations i) i) :
+    eval (⟨place, env⟩ : Placed ProverEnvironment Fp) p
+      = (⟨eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+            (AssignedCell.of i 0 c.x : Var field Fp),
+          eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+            (AssignedCell.of i 0 c.y : Var field Fp)⟩ : Point Fp) := by
+  rw [FormalCircuit.call_operations] at hw
+  simp only [Ecc.WitnessPoint.pointFormal, Ecc.WitnessPoint.point, FormalRegionCircuit.toFormal, circuit_norm,
+    RegionOperation.extendsWitness_assignAdvice] at hw
+  apply Point.ext_coords
+  have hx : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+      (AssignedCell.of i 0 c.x : Var field Fp) : Fp) = env.advice c.x ↑(place i) := by
+    simp only [circuit_norm, explicit_provable_type]
+  have hy : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+      (AssignedCell.of i 0 c.y : Var field Fp) : Fp) = env.advice c.y ↑(place i) := by
+    simp only [circuit_norm, explicit_provable_type]
+  simp only [Point.coords, hx, hy, hw.1, hw.2]
+  simp only [circuit_norm, explicit_provable_type]
+
+private theorem wpointNonId_eval_eq_cells
+    (c : Ecc.WitnessPoint.Config) (p : Var (Unconstrained Point) Fp)
+    (i : RegionIndex) (place : RegionIndex → ℕ) (env : ProverEnvironment Fp)
+    (hw : Halo2.ExtendsWitnesses place env
+      ((Ecc.WitnessPoint.pointNonIdFormal.call c p).operations i) i) :
+    eval (⟨place, env⟩ : Placed ProverEnvironment Fp) p
+      = (⟨eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+            (AssignedCell.of i 0 c.x : Var field Fp),
+          eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+            (AssignedCell.of i 0 c.y : Var field Fp)⟩ : Point Fp) := by
+  rw [FormalCircuit.call_operations] at hw
+  simp only [Ecc.WitnessPoint.pointNonIdFormal, Ecc.WitnessPoint.pointNonId, FormalRegionCircuit.toFormal, circuit_norm,
+    RegionOperation.extendsWitness_assignAdvice] at hw
+  apply Point.ext_coords
+  have hx : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+      (AssignedCell.of i 0 c.x : Var field Fp) : Fp) = env.advice c.x ↑(place i) := by
+    simp only [circuit_norm, explicit_provable_type]
+  have hy : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+      (AssignedCell.of i 0 c.y : Var field Fp) : Fp) = env.advice c.y ↑(place i) := by
+    simp only [circuit_norm, explicit_provable_type]
+  simp only [Point.coords, hx, hy, hw.1, hw.2]
+  simp only [circuit_norm, explicit_provable_type]
+
+private theorem wpoint_output (c : Ecc.WitnessPoint.Config)
+    (inp : Var (Unconstrained Point) Fp) (i : RegionIndex) :
+    Ecc.WitnessPoint.pointFormal.output c inp i
+      = ({ x := AssignedCell.of i 0 c.x, y := AssignedCell.of i 0 c.y }
+        : Var Point Fp) := rfl
+
+private theorem wpointNonId_output (c : Ecc.WitnessPoint.Config)
+    (inp : Var (Unconstrained Point) Fp) (i : RegionIndex) :
+    Ecc.WitnessPoint.pointNonIdFormal.output c inp i
+      = ({ x := AssignedCell.of i 0 c.x, y := AssignedCell.of i 0 c.y }
+        : Var Point Fp) := rfl
+
+private theorem ncInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
+    (c1 c2 c3 c4 c5 c6 c7 : AssignedCell Fp) (r : Var UnconstrainedNat Fp) :
+    (eval (Var := Var NoteCommit.Main.Inputs Fp) (⟨place, env⟩ : Placed Environment Fp)
+      { gdX := c1, gdY := c2, pkdX := c3, pkdY := c4, value := c5, rho := c6,
+        psi := c7, rcm := r })
+    = { gdX := eval (⟨place, env⟩ : Placed Environment Fp) (c1 : Var field Fp),
+        gdY := eval (⟨place, env⟩ : Placed Environment Fp) (c2 : Var field Fp),
+        pkdX := eval (⟨place, env⟩ : Placed Environment Fp) (c3 : Var field Fp),
+        pkdY := eval (⟨place, env⟩ : Placed Environment Fp) (c4 : Var field Fp),
+        value := eval (⟨place, env⟩ : Placed Environment Fp) (c5 : Var field Fp),
+        rho := eval (⟨place, env⟩ : Placed Environment Fp) (c6 : Var field Fp),
+        psi := eval (⟨place, env⟩ : Placed Environment Fp) (c7 : Var field Fp),
+        rcm := () } := by
+  simp only [circuit_norm, explicit_provable_type]
+
+private theorem vcInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
+    (c1 c2 : AssignedCell Fp) (r : Var UnconstrainedNat Fp) :
+    (eval (Var := Var ValueCommit.Inputs Fp) (⟨place, env⟩ : Placed Environment Fp)
+      { rcv := r, magnitude := c1, sign := c2 })
+    = { rcv := (), magnitude := eval (⟨place, env⟩ : Placed Environment Fp) (c1 : Var field Fp),
+        sign := eval (⟨place, env⟩ : Placed Environment Fp) (c2 : Var field Fp) } := by
+  simp only [circuit_norm, explicit_provable_type]
+
+private theorem dnInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
+    (c1 c2 c3 : AssignedCell Fp) (p : Point (AssignedCell Fp)) :
+    (eval (⟨place, env⟩ : Placed Environment Fp)
+      ({ nk := c1, rho := c2, psi := c3, cm := p } : Var DeriveNullifier.Input Fp))
+    = { nk := eval (⟨place, env⟩ : Placed Environment Fp) (c1 : Var field Fp),
+        rho := eval (⟨place, env⟩ : Placed Environment Fp) (c2 : Var field Fp),
+        psi := eval (⟨place, env⟩ : Placed Environment Fp) (c3 : Var field Fp),
+        cm := eval (⟨place, env⟩ : Placed Environment Fp) (p : Var Point Fp) } := by
+  rw [eval_cells_eq_eval]
+  simp only [circuit_norm, explicit_provable_type]
+
+private theorem saInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
+    (p : Point (AssignedCell Fp)) (a : Var UnconstrainedNat Fp) :
+    (eval (Var := Var SpendAuthority.Input Fp) (⟨place, env⟩ : Placed Environment Fp)
+      { alpha := a, akP := p })
+    = { alpha := (), akP := eval (⟨place, env⟩ : Placed Environment Fp) (p : Var Point Fp) } := by
+  simp only [circuit_norm, explicit_provable_type]
+
+private theorem civkInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
+    (c1 c2 : AssignedCell Fp) (r : Var UnconstrainedNat Fp) :
+    (eval (Var := Var CommitIvk.Main.Inputs Fp) (⟨place, env⟩ : Placed Environment Fp)
+      { ak := c1, nk := c2, rivk := r })
+    = { ak := eval (⟨place, env⟩ : Placed Environment Fp) (c1 : Var field Fp),
+        nk := eval (⟨place, env⟩ : Placed Environment Fp) (c2 : Var field Fp),
+        rivk := () } := by
+  simp only [circuit_norm, explicit_provable_type]
+
+private theorem aiInputs_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
+    (c1 : AssignedCell Fp) (p : Point (AssignedCell Fp))
+    (pk : Var (Unconstrained Point) Fp) :
+    (eval (Var := Var AddressIntegrity.Input Fp) (⟨place, env⟩ : Placed Environment Fp)
+      { ivk := c1, gDOld := p, pkDOld := pk })
+    = { ivk := eval (⟨place, env⟩ : Placed Environment Fp) (c1 : Var field Fp),
+        gDOld := eval (⟨place, env⟩ : Placed Environment Fp) (p : Var Point Fp),
+        pkDOld := () } := by
+  simp only [circuit_norm, explicit_provable_type]
+
+private theorem layerInput_eval_eq (place : RegionIndex → ℕ) (env : Environment Fp)
+    (c : AssignedCell Fp) :
+    (eval (⟨place, env⟩ : Placed Environment Fp)
+      ({ node := c } : Var Sinsemilla.Merkle.Layer.Input Fp))
+    = { node := eval (⟨place, env⟩ : Placed Environment Fp) (c : Var field Fp) } := by
+  rw [eval_cells_eq_eval]
+  simp only [circuit_norm, explicit_provable_type]
+
+private theorem vcInputs_eval_eq_prover (place : RegionIndex → ℕ)
+    (env : ProverEnvironment Fp) (c1 c2 : AssignedCell Fp)
+    (r : Var UnconstrainedNat Fp) :
+    (eval (Var := Var ValueCommit.Inputs Fp) (⟨place, env⟩ : Placed ProverEnvironment Fp)
+      { rcv := r, magnitude := c1, sign := c2 })
+    = { rcv := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+          (r : Var UnconstrainedNat Fp),
+        magnitude := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+          (c1 : Var field Fp),
+        sign := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+          (c2 : Var field Fp) } := by
+  simp only [circuit_norm, explicit_provable_type]
+
+private theorem civkInputs_eval_eq_prover (place : RegionIndex → ℕ)
+    (env : ProverEnvironment Fp) (c1 c2 : AssignedCell Fp)
+    (r : Var UnconstrainedNat Fp) :
+    (eval (Var := Var CommitIvk.Main.Inputs Fp) (⟨place, env⟩ : Placed ProverEnvironment Fp)
+      { ak := c1, nk := c2, rivk := r })
+    = { ak := eval (⟨place, env⟩ : Placed ProverEnvironment Fp) (c1 : Var field Fp),
+        nk := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+          (c2 : Var field Fp),
+        rivk := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+          (r : Var UnconstrainedNat Fp) } := by
+  simp only [circuit_norm, explicit_provable_type]
+
+private theorem aiInputs_eval_eq_prover (place : RegionIndex → ℕ)
+    (env : ProverEnvironment Fp) (c1 : AssignedCell Fp) (p : Point (AssignedCell Fp))
+    (pk : Var (Unconstrained Point) Fp) :
+    (eval (Var := Var AddressIntegrity.Input Fp) (⟨place, env⟩ : Placed ProverEnvironment Fp)
+      { ivk := c1, gDOld := p, pkDOld := pk })
+    = { ivk := eval (⟨place, env⟩ : Placed ProverEnvironment Fp) (c1 : Var field Fp),
+        gDOld := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+          (p : Var Point Fp),
+        pkDOld := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+          (pk : Var (Unconstrained Point) Fp) } := by
+  simp only [circuit_norm, explicit_provable_type]
+
+private theorem ncInputs_eval_eq_prover (place : RegionIndex → ℕ)
+    (env : ProverEnvironment Fp) (c1 c2 c3 c4 c5 c6 c7 : AssignedCell Fp)
+    (r : Var UnconstrainedNat Fp) :
+    (eval (Var := Var NoteCommit.Main.Inputs Fp) (⟨place, env⟩ : Placed ProverEnvironment Fp)
+      { gdX := c1, gdY := c2, pkdX := c3, pkdY := c4, value := c5, rho := c6,
+        psi := c7, rcm := r })
+    = { gdX := eval (⟨place, env⟩ : Placed ProverEnvironment Fp) (c1 : Var field Fp),
+        gdY := eval (⟨place, env⟩ : Placed ProverEnvironment Fp) (c2 : Var field Fp),
+        pkdX := eval (⟨place, env⟩ : Placed ProverEnvironment Fp) (c3 : Var field Fp),
+        pkdY := eval (⟨place, env⟩ : Placed ProverEnvironment Fp) (c4 : Var field Fp),
+        value := eval (⟨place, env⟩ : Placed ProverEnvironment Fp) (c5 : Var field Fp),
+        rho := eval (⟨place, env⟩ : Placed ProverEnvironment Fp) (c6 : Var field Fp),
+        psi := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+          (c7 : Var field Fp),
+        rcm := eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+          (r : Var UnconstrainedNat Fp) } := by
+  simp only [circuit_norm, explicit_provable_type]
+
+/-! ## Stage outputs and offsets -/
+
+private theorem nextRegionIndex_constrainInstance (cell : AssignedCell Fp)
+    (col : Column .instance) (row : ℕ) (i : RegionIndex) :
+    (constrainInstance cell col row).nextRegionIndex i = i := rfl
+
+theorem synthWitness_nextRegionIndex (G : Generators) (W : Witnesses Fp) (cfg : Config)
+    (i : RegionIndex) :
+    (synthWitness G W cfg).nextRegionIndex i = i + 8 := by
+  simp only [synthWitness, Sinsemilla.load, loadPrivate, circuit_norm,
+    Circuit.nextRegionIndex_bind, Circuit.nextRegionIndex_pure,
+    nextRegionIndex_loadTable, nextRegionIndex_assignRegion,
+    FormalCircuit.nextRegionIndex_call']
+
+theorem synthWitness_output (G : Generators) (W : Witnesses Fp) (cfg : Config)
+    (i : RegionIndex) :
+    (synthWitness G W cfg).output i
+      = { psiOld := .of i 0 (cfg.advices 0),
+          rhoOld := .of (i + 1) 0 (cfg.advices 0),
+          cmOld := { x := AssignedCell.of (i + 2) 0 cfg.eccConfig.witnessPoint.x,
+                     y := AssignedCell.of (i + 2) 0 cfg.eccConfig.witnessPoint.y },
+          gdOld := { x := AssignedCell.of (i + 3) 0 cfg.eccConfig.witnessPoint.x,
+                     y := AssignedCell.of (i + 3) 0 cfg.eccConfig.witnessPoint.y },
+          akP := { x := AssignedCell.of (i + 4) 0 cfg.eccConfig.witnessPoint.x,
+                   y := AssignedCell.of (i + 4) 0 cfg.eccConfig.witnessPoint.y },
+          nk := .of (i + 5) 0 (cfg.advices 0),
+          vOld := .of (i + 6) 0 (cfg.advices 0),
+          vNew := .of (i + 7) 0 (cfg.advices 0) } := by
+  simp only [synthWitness, Sinsemilla.load, loadPrivate,
+    Circuit.output_bind, Circuit.output_pure, Circuit.nextRegionIndex_bind,
+    nextRegionIndex_loadTable, output_assignRegion, nextRegionIndex_assignRegion,
+    output_assignAdvice, FormalCircuit.output_call',
+    FormalCircuit.nextRegionIndex_call']
+  rw [wpointNonId_output, Ecc.WitnessPoint.pointNonIdFormal_call_regionCount,
+    wpointNonId_output, Ecc.WitnessPoint.pointNonIdFormal_call_regionCount,
+    wpoint_output, Ecc.WitnessPoint.pointFormal_call_regionCount]
+
+theorem synthChecks_nextRegionIndex (G : Generators) (B : Bases) (W : Witnesses Fp)
+    (cfg : Config) (wc : WitnessCells) (i : RegionIndex) :
+    (synthChecks G B W cfg wc).nextRegionIndex i = i + 295 := by
+  -- Compose the per-call advances across the bind chain with `nextRegionIndex_advance_bind`,
+  -- whose statement is over opaque `x`/`f`; applying it never unfolds `synthChecks` in the
+  -- kernel term, so the enlarged children are never reduced (the previous timeout).
+  suffices h : ∀ j, (synthChecks G B W cfg wc).nextRegionIndex j = j + 295 from h i
+  simp only [synthChecks_eq, synthChecksProgram, loadPrivate]
+  refine nextRegionIndex_advance_bind (n := 128) (m := 167) (by norm_num)
+    (merkle_call_nextRegionIndex _ _ _ _ _ _ _ _ _) ?_; intro half
+  refine nextRegionIndex_advance_bind (n := 128) (m := 39) (by norm_num)
+    (merkle_call_nextRegionIndex _ _ _ _ _ _ _ _ _) ?_; intro root
+  refine nextRegionIndex_advance_bind (n := 1) (m := 38) (by norm_num)
+    (nextRegionIndex_advance_assignRegion _ _) ?_; intro magnitude
+  refine nextRegionIndex_advance_bind (n := 1) (m := 37) (by norm_num)
+    (nextRegionIndex_advance_assignRegion _ _) ?_; intro sign
+  refine nextRegionIndex_advance_bind (n := 5) (m := 32) (by norm_num)
+    (vc_call_nextRegionIndex _ _ _ _) ?_; intro cvNet
+  refine nextRegionIndex_advance_bind (n := 0) (m := 32) (by norm_num)
+    (nextRegionIndex_advance_constrainInstance _ _ _) ?_; intro _
+  refine nextRegionIndex_advance_bind (n := 0) (m := 32) (by norm_num)
+    (nextRegionIndex_advance_constrainInstance _ _ _) ?_; intro _
+  refine nextRegionIndex_advance_bind (n := 9) (m := 23) (by norm_num)
+    (dn_call_nextRegionIndex _ _ _) ?_; intro nfOld
+  refine nextRegionIndex_advance_bind (n := 0) (m := 23) (by norm_num)
+    (nextRegionIndex_advance_constrainInstance _ _ _) ?_; intro _
+  refine nextRegionIndex_advance_bind (n := 3) (m := 20) (by norm_num)
+    (sa_call_nextRegionIndex _ _ _) ?_; intro rk
+  refine nextRegionIndex_advance_bind (n := 0) (m := 20) (by norm_num)
+    (nextRegionIndex_advance_constrainInstance _ _ _) ?_; intro _
+  refine nextRegionIndex_advance_bind (n := 0) (m := 20) (by norm_num)
+    (nextRegionIndex_advance_constrainInstance _ _ _) ?_; intro _
+  refine nextRegionIndex_advance_bind (n := 14) (m := 6) (by norm_num)
+    (civk_call_nextRegionIndex _ _ _ _ _ _) ?_; intro ivk
+  refine nextRegionIndex_advance_bind (n := 6) (m := 0) (by norm_num)
+    (ai_call_nextRegionIndex _ _) ?_; intro pkdOld
+  exact nextRegionIndex_advance_pure _
+
+theorem synthChecks_output (G : Generators) (B : Bases) (W : Witnesses Fp)
+    (cfg : Config) (wc : WitnessCells) (i : RegionIndex) :
+    (synthChecks G B W cfg wc).output i
+      = { root := (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+            B.merkleQ_onCurve 16 16 (by norm_num) (fun j => W.merkleSib (16 + j))
+            (fun j => W.merkleSwap (16 + j))).output
+            (cfg.merkle2.condSwap, cfg.merkle2, cfg.lookupConfig)
+            { node := (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+                B.merkleQ_onCurve 0 16 (by norm_num) W.merkleSib W.merkleSwap).output
+                (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig)
+                { node := wc.cmOld.x } i }
+            (i + 128),
+          magnitude := .of (i + 256) 0 (cfg.advices 9),
+          sign := .of (i + 257) 0 (cfg.advices 9),
+          nfOld := (DeriveNullifier.circuit B.nullifierK).output
+            (cfg.poseidonConfig, cfg.addChipConfig, cfg.eccConfig.mulFixedBaseField,
+             cfg.eccConfig.add)
+            { nk := wc.nk, rho := wc.rhoOld, psi := wc.psiOld, cm := wc.cmOld }
+            (i + 263),
+          pkdOld := { x := AssignedCell.of (i + 293) 0 cfg.eccConfig.witnessPoint.x,
+                      y := AssignedCell.of (i + 293) 0 cfg.eccConfig.witnessPoint.y } }
+      := by
+  -- Thread the output through the bind chain with `output_advance_bind` (opaque `x`/`f`, so
+  -- the kernel never unfolds `synthChecks`), then reduce the child outputs to their stated
+  -- spellings and fold the offset towers.
+  simp only [synthChecks_eq, synthChecksProgram, loadPrivate]
+  rw [output_advance_bind (merkle_call_nextRegionIndex _ _ _ _ _ _ _ _ _),
+    output_advance_bind (merkle_call_nextRegionIndex _ _ _ _ _ _ _ _ _),
+    output_advance_bind (nextRegionIndex_advance_assignRegion _ _),
+    output_advance_bind (nextRegionIndex_advance_assignRegion _ _),
+    output_advance_bind (vc_call_nextRegionIndex _ _ _ _),
+    output_advance_bind (nextRegionIndex_advance_constrainInstance _ _ _),
+    output_advance_bind (nextRegionIndex_advance_constrainInstance _ _ _),
+    output_advance_bind (dn_call_nextRegionIndex _ _ _),
+    output_advance_bind (nextRegionIndex_advance_constrainInstance _ _ _),
+    output_advance_bind (sa_call_nextRegionIndex _ _ _),
+    output_advance_bind (nextRegionIndex_advance_constrainInstance _ _ _),
+    output_advance_bind (nextRegionIndex_advance_constrainInstance _ _ _),
+    output_advance_bind (civk_call_nextRegionIndex _ _ _ _ _ _),
+    output_advance_bind (ai_call_nextRegionIndex _ _),
+    Circuit.output_pure]
+  simp only [output_assignRegion, output_assignAdvice, FormalCircuit.output_call',
+    AddressIntegrity.circuit_output, Nat.add_assoc, Nat.reduceAdd]
+
+theorem synthNotes_output (G : Generators) (B : Bases) (W : Witnesses Fp)
+    (cfg : Config) (wc : WitnessCells) (cc : CheckCells) (i : RegionIndex) :
+    (synthNotes G B W cfg wc cc).output i
+      = { gdNew := { x := AssignedCell.of (i + 44) 0 cfg.eccConfig.witnessPoint.x,
+                     y := AssignedCell.of (i + 44) 0 cfg.eccConfig.witnessPoint.y },
+          pkdNew := { x := AssignedCell.of (i + 45) 0 cfg.eccConfig.witnessPoint.x,
+                      y := AssignedCell.of (i + 45) 0 cfg.eccConfig.witnessPoint.y } } := by
+  simp only [synthNotes_eq, synthNotesProgram, loadPrivate, Circuit.output_bind, Circuit.output_pure,
+    output_assignRegion, nextRegionIndex_assignRegion,
+    nextRegionIndex_constrainInstance, output_assignAdvice, FormalCircuit.output_call',
+    FormalCircuit.nextRegionIndex_call']
+  rw [NoteCommit.Main.circuit_call_regionCount, Ecc.WitnessPoint.pointNonIdFormal_call_regionCount,
+    wpointNonId_output, wpointNonId_output]
+
+private theorem synthWitness_keygenRegistered (G : Generators)
+    (counts : ConfigureCounts) (i : RegionIndex) :
+    let cfg := (configure G).output counts
+    ((synthWitness G hintWitnesses cfg).operations i).KeygenRegistered
+      ((configure G).delta counts).gates
+      ((configure G).delta counts).lookups
+      ((configure G).fixedColumns counts)
+      ((configure G).delta counts).permutationRequests := by
+  have hadvice := configure_output_advice_mem_permutationRequests G counts
+  have hwitnessX := configure_output_witnessPoint_x_mem_permutationRequests G counts
+  have hwitnessY := configure_output_witnessPoint_y_mem_permutationRequests G counts
+  dsimp only [synthWitness, loadPrivate, Sinsemilla.load]
+  simp_all only [keygen_spine]
+  repeat' constructor
+  all_goals
+    first
+    | apply Ecc.WitnessPoint.pointFormal.call_keygenRegistered_ofCertificate
+        (eccFullConfigureCertificate G counts).witnessPointFormal
+    | apply Ecc.WitnessPoint.pointNonIdFormal.call_keygenRegistered_ofCertificate
+        (eccFullConfigureCertificate G counts).witnessPointNonIdFormal
+  all_goals simp only [keygen_norm]
+
+private theorem disjoint_of_forall_mem_right
+    {α : Type} {left right superset : List α}
+    (hdisjoint : left.Disjoint superset)
+    (hsubset : right.Forall (· ∈ superset)) :
+    left.Disjoint right := by
+  rw [List.disjoint_left] at hdisjoint ⊢
+  intro value hleft hright
+  exact hdisjoint hleft
+    (List.forall_iff_forall_mem.mp hsubset value hright)
+
+private theorem synthWitness_fixedWritesLawful (G : Generators)
+    (counts : ConfigureCounts) (i : RegionIndex) :
+    let cfg := (configure G).output counts
+    ((synthWitness G hintWitnesses cfg).operations i).FixedWritesLawful
+      ((configure G).delta counts).constants := by
+  let cfg := (configure G).output counts
+  have hregionColumns :
+      ((synthWitness G hintWitnesses cfg).operations i).regionFixedColumns = [] := by
+    apply Operations.regionFixedColumns_eq_nil_of_summary
+    intro index
+    rw [synthWitness_synthesisSummary_eq]
+    exact synthWitnessSynthesisSummary_hasNoRegionFixedColumns cfg index
+  constructor
+  · exact Operations.regionAssignmentsAgree_of_regionFixedColumns_eq_nil
+      hregionColumns
+  · rw [synthWitness_loadedTableColumns_eq]
+    exact configure_output_generatorTableColumns_nodup G counts
+
+  · rw [hregionColumns]
+    exact List.disjoint_nil_right _
+  · rw [synthWitness_loadedTableColumns_eq, configure_delta_constants,
+      List.disjoint_left]
+    intro column htable hconstant
+    simp only [List.mem_singleton] at hconstant
+    subst column
+    have hdisjoint :
+        ((configure G).output counts).generatorTableColumns.Disjoint
+          ((configure G).output counts).regionFixedColumns :=
+      configure_output_generatorTableColumns_disjoint_regionFixedColumns G counts
+    rw [Config.generatorTableColumns, List.disjoint_left] at hdisjoint
+    exact hdisjoint htable
+      (configureBase_lagrangeCoeff_mem_regionFixedColumns G counts 0)
+
+private theorem synthWitness_lookupSelectorAssignmentsAgree
+    (G : Generators) (counts : ConfigureCounts) (i : RegionIndex) :
+    let cfg := (configure G).output counts
+    ((synthWitness G hintWitnesses cfg).operations i)
+      |>.LookupSelectorAssignmentsAgree := by
+  have hpoint :=
+    (eccFullConfigureCertificate G counts).witnessPointFormal.configured
+  have hpointNonId :=
+    (eccFullConfigureCertificate G counts).witnessPointNonIdFormal.configured
+  dsimp only [synthWitness, loadPrivate, Sinsemilla.load]
+  simp only [keygen_spine]
+  repeat' first
+    | (guard_target =~ (_ ∧ _); constructor)
+  all_goals
+    first
+    | apply Ecc.WitnessPoint.pointFormal.call_lookupSelectorAssignmentsAgree _
+        hpoint
+    | apply Ecc.WitnessPoint.pointNonIdFormal.call_lookupSelectorAssignmentsAgree _
+        hpointNonId
+    | simp [RegionOperations.LookupSelectorAssignmentsAgree,
+        RegionOperation.LookupSelectorAssignmentsAgreeWith]
+
+private theorem synthWitness_lookupSelectorsAnchoredBy
+    (G : Generators) (counts : ConfigureCounts) (i : RegionIndex)
+    (anchor : ℕ → FloorPlanner.RegionColumn) :
+    let cfg := (configure G).output counts
+    ((synthWitness G hintWitnesses cfg).operations i)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  have hpoint :=
+    (eccFullConfigureCertificate G counts).witnessPointFormal.configured
+  have hpointNonId :=
+    (eccFullConfigureCertificate G counts).witnessPointNonIdFormal.configured
+  unfold synthWitness
+  simp only [Circuit.operations_bind, Circuit.operations_pure, List.append_nil]
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact Sinsemilla.load_lookupSelectorsAnchoredBy G _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact loadPrivate_lookupSelectorsAnchoredBy _ _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact loadPrivate_lookupSelectorsAnchoredBy _ _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact Ecc.WitnessPoint.pointFormal.call_lookupSelectorsAnchoredBy
+      _ hpoint _ _ anchor (by trivial)
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact Ecc.WitnessPoint.pointNonIdFormal.call_lookupSelectorsAnchoredBy
+      _ hpointNonId _ _ anchor (by trivial)
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact Ecc.WitnessPoint.pointNonIdFormal.call_lookupSelectorsAnchoredBy
+      _ hpointNonId _ _ anchor (by trivial)
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact loadPrivate_lookupSelectorsAnchoredBy _ _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact loadPrivate_lookupSelectorsAnchoredBy _ _ _ anchor
+  · exact loadPrivate_lookupSelectorsAnchoredBy _ _ _ anchor
+
+private theorem synthChecks_keygenRegistered (G : Generators) (B : Bases)
+    (counts : ConfigureCounts) (i : RegionIndex) :
+    let cfg := (configure G).output counts
+    let witness := synthWitness G hintWitnesses cfg
+    ((synthChecks G B hintWitnesses cfg (witness.output i)).operations
+      (witness.nextRegionIndex i)).KeygenRegistered
+        ((configure G).delta counts).gates
+        ((configure G).delta counts).lookups
+        ((configure G).output counts).regionFixedColumns
+        ((configure G).delta counts).permutationRequests := by
+  have hadvice := configure_output_advice_mem_permutationRequests G counts
+  have hprimary := configure_output_primary_mem_permutationRequests G counts
+  have hwitnessX := configure_output_witnessPoint_x_mem_permutationRequests G counts
+  have hwitnessY := configure_output_witnessPoint_y_mem_permutationRequests G counts
+  have haddX := configure_output_add_xQR_mem_permutationRequests G counts
+  have haddY := configure_output_add_yQR_mem_permutationRequests G counts
+  have hmerkle1 := configure_output_merkle1_xA_mem_permutationRequests G counts
+  have hmerkle2 := configure_output_merkle2_xA_mem_permutationRequests G counts
+  simp only [synthChecks_eq]
+  dsimp only [synthChecksProgram, loadPrivate]
+  simp_all only [keygen_spine]
+  repeat' first
+    | (guard_target =~ (_ ∧ _); constructor)
+  all_goals
+    first
+    | apply
+        (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+          B.merkleQ_onCurve 0 16 (by norm_num)
+          hintWitnesses.merkleSib
+          hintWitnesses.merkleSwap).call_keygenRegistered_ofCertificate
+          (merkle1Certificate G B counts)
+    | apply
+        (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+          B.merkleQ_onCurve 16 16 (by norm_num)
+          (fun i => hintWitnesses.merkleSib (16 + i))
+          (fun i => hintWitnesses.merkleSwap
+            (16 + i))).call_keygenRegistered_ofCertificate
+          (merkle2Certificate G B counts)
+    | apply (ValueCommit.circuit B.valueCommitV
+        B.valueCommitR).call_keygenRegistered_ofCertificate
+        (valueCommitCertificate G B counts)
+    | apply (DeriveNullifier.circuit
+        B.nullifierK).call_keygenRegistered_ofCertificate
+        (deriveNullifierCertificate G B counts)
+    | apply (SpendAuthority.circuit
+        B.spendAuthG).call_keygenRegistered_ofCertificate
+        (spendAuthorityCertificate G B counts)
+    | apply (CommitIvk.Main.circuit G B.commitIvkR B.ivkQ
+        B.ivkQ_onCurve).call_keygenRegistered_ofCertificate
+        (commitIvkCertificate G B counts)
+    | apply AddressIntegrity.circuit.call_keygenRegistered_ofCertificate
+        (addressIntegrityCertificate G counts)
+    | exact configure_output_orchardGate_mem_gates G counts
+    | skip
+  all_goals simp_all only [keygen_norm, keygen_output_norm,
+    synthWitness_output, actionConfigureContext_permutationColumns,
+    Nat.reduceEqDiff, if_false]
+  all_goals
+    intro column hcolumn
+    rcases hcolumn with ⟨cell, hcell, rfl⟩
+    try simp_all only [keygen_norm, keygen_output_norm]
+  all_goals
+    rcases hcell with rfl | rfl | rfl | rfl
+    all_goals first
+      | exact hadvice 0
+      | exact hwitnessX
+      | exact hwitnessY
+
+private theorem synthNotes_keygenRegistered (G : Generators) (B : Bases)
+    (counts : ConfigureCounts) (i : RegionIndex) :
+    let cfg := (configure G).output counts
+    let witness := synthWitness G hintWitnesses cfg
+    let checks := synthChecks G B hintWitnesses cfg (witness.output i)
+    ((synthNotes G B hintWitnesses cfg (witness.output i)
+      (checks.output (witness.nextRegionIndex i))).operations
+        (checks.nextRegionIndex (witness.nextRegionIndex i))).KeygenRegistered
+          ((configure G).delta counts).gates
+          ((configure G).delta counts).lookups
+          ((configure G).output counts).regionFixedColumns
+          ((configure G).delta counts).permutationRequests := by
+  have hadvice := configure_output_advice_mem_permutationRequests G counts
+  have hprimary := configure_output_primary_mem_permutationRequests G counts
+  have hwitnessX := configure_output_witnessPoint_x_mem_permutationRequests G counts
+  have hwitnessY := configure_output_witnessPoint_y_mem_permutationRequests G counts
+  have haddX := configure_output_add_xQR_mem_permutationRequests G counts
+  have haddY := configure_output_add_yQR_mem_permutationRequests G counts
+  simp only [synthNotes_eq]
+  dsimp only [synthNotesProgram, loadPrivate]
+  simp_all only [keygen_spine]
+  repeat' first
+    | (guard_target =~ (_ ∧ _); constructor)
+  all_goals
+    first
+    | apply (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
+        B.noteQ_onCurve).call_keygenRegistered_ofCertificate
+        (noteCommitOldCertificate G B counts)
+    | apply (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
+        B.noteQ_onCurve).call_keygenRegistered_ofCertificate
+        (noteCommitNewCertificate G B counts)
+    | apply Ecc.WitnessPoint.pointNonIdFormal.call_keygenRegistered_ofCertificate
+        (eccConfigureCertificate G counts).witnessPointNonIdFormal
+    | exact configure_output_orchardGate_mem_gates G counts
+    | skip
+  all_goals simp_all only [keygen_norm, keygen_output_norm,
+    synthWitness_output, synthChecks_output,
+    actionConfigureContext_permutationColumns,
+    Nat.reduceEqDiff, if_false]
+
+private theorem synthChecks_regionFixedColumns_forall
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (i : RegionIndex) :
+    let cfg := (configure G).output counts
+    let witness := synthWitness G hintWitnesses cfg
+    ((synthChecks G B hintWitnesses cfg (witness.output i)).operations
+      (witness.nextRegionIndex i)).regionFixedColumns.Forall
+        (fun column => column ∈ cfg.regionFixedColumns) := by
+  rw [List.forall_iff_forall_mem]
+  intro column hcolumn
+  exact (synthChecks_keygenRegistered G B counts i)
+    |>.mem_fixedColumns_of_mem_regionFixedColumns hcolumn
+
+private theorem synthNotes_regionFixedColumns_forall
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (i : RegionIndex) :
+    let cfg := (configure G).output counts
+    let witness := synthWitness G hintWitnesses cfg
+    let checks := synthChecks G B hintWitnesses cfg (witness.output i)
+    ((synthNotes G B hintWitnesses cfg (witness.output i)
+      (checks.output (witness.nextRegionIndex i))).operations
+        (checks.nextRegionIndex (witness.nextRegionIndex i))).regionFixedColumns.Forall
+          (fun column => column ∈ cfg.regionFixedColumns) := by
+  rw [List.forall_iff_forall_mem]
+  intro column hcolumn
+  exact (synthNotes_keygenRegistered G B counts i)
+    |>.mem_fixedColumns_of_mem_regionFixedColumns hcolumn
+
+private theorem synthChecks_keygenRegistered_full
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (i : RegionIndex) :
+    let cfg := (configure G).output counts
+    let witness := synthWitness G hintWitnesses cfg
+    ((synthChecks G B hintWitnesses cfg (witness.output i)).operations
+      (witness.nextRegionIndex i)).KeygenRegistered
+        ((configure G).delta counts).gates
+        ((configure G).delta counts).lookups
+        ((configure G).fixedColumns counts)
+        ((configure G).delta counts).permutationRequests := by
+  apply (synthChecks_keygenRegistered G B counts i).mono
+  · exact fun _ hgate => hgate
+  · exact fun _ hlookup => hlookup
+  · exact List.forall_iff_forall_mem.mp
+      (configure_regionFixedColumns_forall_fixedColumns G counts)
+  · exact fun _ hcolumn => hcolumn
+
+private theorem synthNotes_keygenRegistered_full
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (i : RegionIndex) :
+    let cfg := (configure G).output counts
+    let witness := synthWitness G hintWitnesses cfg
+    let checks := synthChecks G B hintWitnesses cfg (witness.output i)
+    ((synthNotes G B hintWitnesses cfg (witness.output i)
+      (checks.output (witness.nextRegionIndex i))).operations
+        (checks.nextRegionIndex (witness.nextRegionIndex i))).KeygenRegistered
+          ((configure G).delta counts).gates
+          ((configure G).delta counts).lookups
+          ((configure G).fixedColumns counts)
+          ((configure G).delta counts).permutationRequests := by
+  apply (synthNotes_keygenRegistered G B counts i).mono
+  · exact fun _ hgate => hgate
+  · exact fun _ hlookup => hlookup
+  · exact List.forall_iff_forall_mem.mp
+      (configure_regionFixedColumns_forall_fixedColumns G counts)
+  · exact fun _ hcolumn => hcolumn
+
+private theorem synthWitness_copyCellsAssigned (G : Generators)
+    (counts : ConfigureCounts) (i : RegionIndex) :
+    (synthWitness G hintWitnesses ((configure G).output counts)).operations i
+      |>.CopyCellsAssignedFrom i [] := by
+  apply Operations.copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
+  simp only [synthWitness, Sinsemilla.load, loadPrivate, circuit_norm,
+    Operation.copiedCells, RegionOperation.copiedCells,
+    RegionOperations.copiedCells, List.flatMap_cons, List.flatMap_nil,
+    List.nil_append, List.forall_append, List.forall_cons,
+    and_true]
+  exact ⟨Ecc.WitnessPoint.pointFormal_call_operations_copyFree _ _ _,
+    Ecc.WitnessPoint.pointNonIdFormal_call_operations_copyFree _ _ _,
+    Ecc.WitnessPoint.pointNonIdFormal_call_operations_copyFree _ _ _⟩
+
+private theorem synthWitness_output_copyInputCells_assigned (G : Generators)
+    (counts : ConfigureCounts) (i : RegionIndex) :
+    let witness := synthWitness G hintWitnesses ((configure G).output counts)
+    witness.output i |>.copyInputCells |>.Forall fun cell =>
+      cell ∈ (witness.operations i).assignedCellsFrom i := by
+  have hcm := Ecc.WitnessPoint.pointFormal_call_output_cells_assigned
+    ((configure G).output counts).eccConfig.witnessPoint hintWitnesses.cmOld (i + 2)
+  have hgd := Ecc.WitnessPoint.pointNonIdFormal_call_output_cells_assigned
+    ((configure G).output counts).eccConfig.witnessPoint hintWitnesses.gdOld (i + 3)
+  have hak := Ecc.WitnessPoint.pointNonIdFormal_call_output_cells_assigned
+    ((configure G).output counts).eccConfig.witnessPoint hintWitnesses.akP (i + 4)
+  simp only [WitnessCells.copyInputCells, synthWitness, loadPrivate,
+    Sinsemilla.load, circuit_norm,
+    Operations.assignedCellsFrom_append, Operations.assignedCellsFrom,
+    RegionOperations.assignedCells, RegionOperation.assignedCells,
+    List.flatMap_cons, List.flatMap_nil, List.forall_cons,
+    List.mem_append, List.mem_cons, List.not_mem_nil, or_false,
+    AssignedCell.of_cell, and_true, Nat.add_assoc, Nat.reduceAdd] at hcm hgd hak ⊢
+  aesop
+
+private def synthChecksMerkle1Configured (G : Generators) (B : Bases)
+    (counts : ConfigureCounts) (cfg : Config)
+    (hcfg : cfg = (configure G).output counts) :
+    (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+      B.merkleQ_onCurve 0 16 (by norm_num)
+      hintWitnesses.merkleSib hintWitnesses.merkleSwap).Configured
+        (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig) := by
+  rw [hcfg]
+  exact (merkle1Certificate G B counts).configured
+
+private def synthChecksMerkle2Configured (G : Generators) (B : Bases)
+    (counts : ConfigureCounts) (cfg : Config)
+    (hcfg : cfg = (configure G).output counts) :
+    (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+      B.merkleQ_onCurve 16 16 (by norm_num)
+      (fun j => hintWitnesses.merkleSib (16 + j))
+      (fun j => hintWitnesses.merkleSwap (16 + j))).Configured
+        (cfg.merkle2.condSwap, cfg.merkle2, cfg.lookupConfig) := by
+  rw [hcfg]
+  exact (merkle2Certificate G B counts).configured
+
+private def synthChecksValueCommitConfigured (G : Generators) (B : Bases)
+    (counts : ConfigureCounts) (cfg : Config)
+    (hcfg : cfg = (configure G).output counts) :
+    (ValueCommit.circuit B.valueCommitV B.valueCommitR).Configured
+      (cfg.eccConfig.mulFixedShort, cfg.eccConfig.mulFixedFull,
+        cfg.eccConfig.add) := by
+  rw [hcfg]
+  exact (valueCommitCertificate G B counts).configured
+
+private def synthChecksDeriveNullifierConfigured
+    (G : Generators) (B : Bases) (counts : ConfigureCounts) (cfg : Config)
+    (hcfg : cfg = (configure G).output counts) :
+    (DeriveNullifier.circuit B.nullifierK).Configured
+      (cfg.poseidonConfig, cfg.addChipConfig,
+        cfg.eccConfig.mulFixedBaseField, cfg.eccConfig.add) := by
+  rw [hcfg]
+  exact (deriveNullifierCertificate G B counts).configured
+
+private def synthChecksSpendAuthorityConfigured
+    (G : Generators) (B : Bases) (counts : ConfigureCounts) (cfg : Config)
+    (hcfg : cfg = (configure G).output counts) :
+    (SpendAuthority.circuit B.spendAuthG).Configured
+      (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add) := by
+  rw [hcfg]
+  exact (spendAuthorityCertificate G B counts).configured
+
+private def synthChecksCommitIvkConfigured
+    (G : Generators) (B : Bases) (counts : ConfigureCounts) (cfg : Config)
+    (hcfg : cfg = (configure G).output counts) :
+    (CommitIvk.Main.circuit G B.commitIvkR B.ivkQ B.ivkQ_onCurve).Configured
+      { gate := cfg.commitIvkConfig, hashConfig := cfg.sinsemilla1,
+        lookupConfig := cfg.lookupConfig,
+        mulConfig := cfg.eccConfig.mulFixedFull,
+        addConfig := cfg.eccConfig.add } := by
+  rw [hcfg]
+  exact (commitIvkCertificate G B counts).configured
+
+private def synthChecksAddressIntegrityConfigured
+    (G : Generators) (counts : ConfigureCounts) (cfg : Config)
+    (hcfg : cfg = (configure G).output counts) :
+    AddressIntegrity.circuit.Configured
+      (cfg.eccConfig.mul, cfg.eccConfig.witnessPoint) := by
+  rw [hcfg]
+  exact (addressIntegrityCertificate G counts).configured
+
+private theorem synthChecks_fixedAssignmentsAgree
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (cfg : Config) (hcfg : cfg = (configure G).output counts)
+    (wc : WitnessCells) (i : RegionIndex) :
+    ((synthChecks G B hintWitnesses cfg wc).operations i).Forall
+      Operation.FixedAssignmentsAgree := by
+  have hmerkle1 := synthChecksMerkle1Configured G B counts cfg hcfg
+  have hmerkle2 := synthChecksMerkle2Configured G B counts cfg hcfg
+  have hvalueCommit := synthChecksValueCommitConfigured G B counts cfg hcfg
+  have hderiveNullifier :=
+    synthChecksDeriveNullifierConfigured G B counts cfg hcfg
+  have hspendAuthority :=
+    synthChecksSpendAuthorityConfigured G B counts cfg hcfg
+  have hcommitIvk := synthChecksCommitIvkConfigured G B counts cfg hcfg
+  have haddressIntegrity :=
+    synthChecksAddressIntegrityConfigured G counts cfg hcfg
+  rw [synthChecks_eq]
+  unfold synthChecksProgram loadPrivate
+  simp only [keygen_spine]
+  repeat' first
+    | (guard_target =~ (_ ∧ _); constructor)
+  all_goals
+    first
+    | apply
+        (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+          B.merkleQ_onCurve 0 16 (by norm_num)
+          hintWitnesses.merkleSib
+          hintWitnesses.merkleSwap).call_fixedAssignmentsAgree _ hmerkle1
+    | apply
+        (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+          B.merkleQ_onCurve 16 16 (by norm_num)
+          (fun j => hintWitnesses.merkleSib (16 + j))
+          (fun j => hintWitnesses.merkleSwap
+            (16 + j))).call_fixedAssignmentsAgree _ hmerkle2
+    | apply (ValueCommit.circuit B.valueCommitV
+        B.valueCommitR).call_fixedAssignmentsAgree _ hvalueCommit
+    | apply (DeriveNullifier.circuit
+        B.nullifierK).call_fixedAssignmentsAgree _ hderiveNullifier
+    | apply (SpendAuthority.circuit
+        B.spendAuthG).call_fixedAssignmentsAgree _ hspendAuthority
+    | apply (CommitIvk.Main.circuit G B.commitIvkR B.ivkQ
+        B.ivkQ_onCurve).call_fixedAssignmentsAgree _ hcommitIvk
+    | apply AddressIntegrity.circuit.call_fixedAssignmentsAgree _
+        haddressIntegrity
+    | simp [Operation.FixedAssignmentsAgree,
+        RegionOperations.FixedAssignmentsAgree]
+
+private theorem synthChecks_fixedWritesLawful
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (cfg : Config) (hcfg : cfg = (configure G).output counts)
+    (wc : WitnessCells) (i : RegionIndex) :
+    ((synthChecks G B hintWitnesses cfg wc).operations i).FixedWritesLawful
+      ((configure G).delta counts).constants := by
+  apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree
+    (synthChecks_fixedAssignmentsAgree G B counts cfg hcfg wc i)
+  rw [synthChecks_synthesisSummary_eq,
+    synthChecksSynthesisSummary_tableRowExtent_eq]
+
+private theorem synthChecks_lookupSelectorAssignmentsAgree
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (cfg : Config) (hcfg : cfg = (configure G).output counts)
+    (wc : WitnessCells) (i : RegionIndex) :
+    ((synthChecks G B hintWitnesses cfg wc).operations i)
+      |>.LookupSelectorAssignmentsAgree := by
+  have hmerkle1 := synthChecksMerkle1Configured G B counts cfg hcfg
+  have hmerkle2 := synthChecksMerkle2Configured G B counts cfg hcfg
+  have hvalueCommit := synthChecksValueCommitConfigured G B counts cfg hcfg
+  have hderiveNullifier :=
+    synthChecksDeriveNullifierConfigured G B counts cfg hcfg
+  have hspendAuthority :=
+    synthChecksSpendAuthorityConfigured G B counts cfg hcfg
+  have hcommitIvk := synthChecksCommitIvkConfigured G B counts cfg hcfg
+  have haddressIntegrity :=
+    synthChecksAddressIntegrityConfigured G counts cfg hcfg
+  rw [synthChecks_eq]
+  unfold synthChecksProgram loadPrivate
+  simp only [keygen_spine]
+  repeat' first
+    | (guard_target =~ (_ ∧ _); constructor)
+  all_goals
+    first
+    | apply
+        (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+          B.merkleQ_onCurve 0 16 (by norm_num)
+          hintWitnesses.merkleSib
+          hintWitnesses.merkleSwap).call_lookupSelectorAssignmentsAgree _
+            hmerkle1
+    | apply
+        (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+          B.merkleQ_onCurve 16 16 (by norm_num)
+          (fun j => hintWitnesses.merkleSib (16 + j))
+          (fun j => hintWitnesses.merkleSwap
+            (16 + j))).call_lookupSelectorAssignmentsAgree _ hmerkle2
+    | apply (ValueCommit.circuit B.valueCommitV
+        B.valueCommitR).call_lookupSelectorAssignmentsAgree _ hvalueCommit
+    | apply (DeriveNullifier.circuit
+        B.nullifierK).call_lookupSelectorAssignmentsAgree _ hderiveNullifier
+    | apply (SpendAuthority.circuit
+        B.spendAuthG).call_lookupSelectorAssignmentsAgree _ hspendAuthority
+    | apply (CommitIvk.Main.circuit G B.commitIvkR B.ivkQ
+        B.ivkQ_onCurve).call_lookupSelectorAssignmentsAgree _ hcommitIvk
+    | apply AddressIntegrity.circuit.call_lookupSelectorAssignmentsAgree _
+        haddressIntegrity
+    | simp [RegionOperations.LookupSelectorAssignmentsAgree,
+        RegionOperation.LookupSelectorAssignmentsAgreeWith]
+
+private theorem synthChecks_lookupSelectorsAnchoredBy
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (cfg : Config) (hcfg : cfg = (configure G).output counts)
+    (wc : WitnessCells) (i : RegionIndex)
+    (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchor : SelectorAnchorRequirementsSatisfied
+      (LookupRangeCheck.lookupSelectorAnchorRequirements cfg.lookupConfig) anchor) :
+    ((synthChecks G B hintWitnesses cfg wc).operations i)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  have hmerkle1 := synthChecksMerkle1Configured G B counts cfg hcfg
+  have hmerkle2 := synthChecksMerkle2Configured G B counts cfg hcfg
+  have hvalueCommit := synthChecksValueCommitConfigured G B counts cfg hcfg
+  have hderiveNullifier :=
+    synthChecksDeriveNullifierConfigured G B counts cfg hcfg
+  have hspendAuthority :=
+    synthChecksSpendAuthorityConfigured G B counts cfg hcfg
+  have hcommitIvk := synthChecksCommitIvkConfigured G B counts cfg hcfg
+  have haddressIntegrity :=
+    synthChecksAddressIntegrityConfigured G counts cfg hcfg
+  have hbaseLookup : cfg.eccConfig.mulFixedBaseField.lookupConfig =
+      cfg.lookupConfig := by
+    subst cfg
+    exact configure_output_mulFixedBaseField_lookupConfig G counts
+  have hmulLookup : cfg.eccConfig.mul.overflowConfig.lookupConfig =
+      cfg.lookupConfig := by
+    subst cfg
+    exact configure_output_mul_overflow_lookupConfig G counts
+  rw [synthChecks_eq]
+  unfold synthChecksProgram loadPrivate
+  simp only [Circuit.operations_bind, Circuit.operations_pure, List.append_nil]
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+      B.merkleQ_onCurve 0 16 (by norm_num)
+      hintWitnesses.merkleSib hintWitnesses.merkleSwap)
+        |>.call_lookupSelectorsAnchoredBy
+          (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig)
+          hmerkle1 _ _ anchor hanchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+      B.merkleQ_onCurve 16 16 (by norm_num)
+      (fun j => hintWitnesses.merkleSib (16 + j))
+      (fun j => hintWitnesses.merkleSwap (16 + j)))
+        |>.call_lookupSelectorsAnchoredBy
+          (cfg.merkle2.condSwap, cfg.merkle2, cfg.lookupConfig)
+          hmerkle2 _ _ anchor hanchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact loadPrivate_lookupSelectorsAnchoredBy
+      (cfg.advices 9) _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact loadPrivate_lookupSelectorsAnchoredBy
+      (cfg.advices 9) _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact (ValueCommit.circuit B.valueCommitV B.valueCommitR)
+      |>.call_lookupSelectorsAnchoredBy
+        (cfg.eccConfig.mulFixedShort, cfg.eccConfig.mulFixedFull,
+          cfg.eccConfig.add) hvalueCommit _ _ anchor (by trivial)
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact constrainInstance_lookupSelectorsAnchoredBy _ _ _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact constrainInstance_lookupSelectorsAnchoredBy _ _ _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact (DeriveNullifier.circuit B.nullifierK)
+      |>.call_lookupSelectorsAnchoredBy
+        (cfg.poseidonConfig, cfg.addChipConfig,
+          cfg.eccConfig.mulFixedBaseField, cfg.eccConfig.add)
+        hderiveNullifier _ _ anchor (by
+          simpa only [DeriveNullifier.circuit_lookupSelectorAnchorRequirements,
+            hbaseLookup] using hanchor)
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact constrainInstance_lookupSelectorsAnchoredBy _ _ _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact (SpendAuthority.circuit B.spendAuthG)
+      |>.call_lookupSelectorsAnchoredBy
+        (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add)
+        hspendAuthority _ _ anchor (by trivial)
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact constrainInstance_lookupSelectorsAnchoredBy _ _ _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact constrainInstance_lookupSelectorsAnchoredBy _ _ _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact (CommitIvk.Main.circuit G B.commitIvkR B.ivkQ B.ivkQ_onCurve)
+      |>.call_lookupSelectorsAnchoredBy
+        { gate := cfg.commitIvkConfig, hashConfig := cfg.sinsemilla1,
+          lookupConfig := cfg.lookupConfig,
+          mulConfig := cfg.eccConfig.mulFixedFull,
+          addConfig := cfg.eccConfig.add }
+        hcommitIvk _ _ anchor hanchor
+  · exact AddressIntegrity.circuit.call_lookupSelectorsAnchoredBy
+      (cfg.eccConfig.mul, cfg.eccConfig.witnessPoint)
+      haddressIntegrity _ _ anchor (by
+        simpa only [AddressIntegrity.circuit_lookupSelectorAnchorRequirements,
+          hmulLookup] using hanchor)
+
+private theorem synthChecks_loadedTableColumns_eq_nil
+    (G : Generators) (B : Bases) (cfg : Config)
+    (wc : WitnessCells) (i : RegionIndex) :
+    ((synthChecks G B hintWitnesses cfg wc).operations i).loadedTableColumns = [] := by
+  apply Operations.loadedTableColumns_eq_nil_of_tableRowExtent_eq_zero
+  rw [synthChecks_synthesisSummary_eq,
+    synthChecksSynthesisSummary_tableRowExtent_eq]
+
+private theorem synthChecks_copyCellsAssigned (G : Generators) (B : Bases)
+    (counts : ConfigureCounts) (cfg : Config)
+    (hcfg : cfg = (configure G).output counts)
+    (wc : WitnessCells) (i : RegionIndex) :
+    (synthChecks G B hintWitnesses cfg wc).operations i
+      |>.CopyCellsAssignedFrom i wc.copyInputCells := by
+  have hmerkle1 := synthChecksMerkle1Configured G B counts cfg hcfg
+  have hmerkle2 := synthChecksMerkle2Configured G B counts cfg hcfg
+  have hvalueCommit := synthChecksValueCommitConfigured G B counts cfg hcfg
+  have hderiveNullifier :=
+    synthChecksDeriveNullifierConfigured G B counts cfg hcfg
+  have hspendAuthority :=
+    synthChecksSpendAuthorityConfigured G B counts cfg hcfg
+  have hcommitIvk := synthChecksCommitIvkConfigured G B counts cfg hcfg
+  have haddressIntegrity :=
+    synthChecksAddressIntegrityConfigured G counts cfg hcfg
+  rw [synthChecks_eq]
+  unfold synthChecksProgram loadPrivate
+  apply FormalCircuit.bind_copyCellsAssignedFrom
+  · apply Sinsemilla.Merkle.CalculateRoot.circuit_call_copyCellsAssignedFrom
+      G B.merkleQ B.merkleQ_onCurve 0 16 (by norm_num)
+      hintWitnesses.merkleSib hintWitnesses.merkleSwap _ hmerkle1
+    keygen_registration [WitnessCells.copyInputCells]
+  · exact FormalCircuit.nextRegionIndex_call _ _ _ _
+  · apply FormalCircuit.bind_copyCellsAssignedFrom
+    · apply Sinsemilla.Merkle.CalculateRoot.circuit_call_copyCellsAssignedFrom
+        G B.merkleQ B.merkleQ_onCurve 16 16 (by norm_num)
+        (fun j => hintWitnesses.merkleSib (16 + j))
+        (fun j => hintWitnesses.merkleSwap (16 + j)) _ hmerkle2
+      have hroot :=
+        Sinsemilla.Merkle.CalculateRoot.circuit_call_output_cell_mem_input_or_assigned
+          (G := G) (Q := B.merkleQ) (hQ := B.merkleQ_onCurve)
+          (l₀ := 0) (d := 16) (hld := by norm_num)
+          (wsib := hintWitnesses.merkleSib)
+          (wswap := hintWitnesses.merkleSwap)
+          (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig)
+          { node := wc.cmOld.x } i
+      rw [FormalCircuit.output_call']
+      rw [List.mem_append]
+      exact Or.imp
+        (fun hcell => by
+          simp only [WitnessCells.copyInputCells, List.mem_cons,
+            List.not_mem_nil, or_false]
+          apply Or.inr
+          apply Or.inr
+          apply Or.inl
+          rw [← List.mem_singleton]
+          convert hcell using 1)
+        (fun hcell => by convert hcell using 1)
+        (List.mem_append.mp hroot)
+    · exact FormalCircuit.nextRegionIndex_call _ _ _ _
+    · apply FormalCircuit.bind_copyCellsAssignedFrom
+      · apply loadPrivate_copyCellsAssignedFrom
+      · simp only [nextRegionIndex_assignRegion, operations_assignRegion,
+          Operations.regionCount]
+      · apply FormalCircuit.bind_copyCellsAssignedFrom
+        · apply loadPrivate_copyCellsAssignedFrom
+        · simp only [nextRegionIndex_assignRegion, operations_assignRegion,
+            Operations.regionCount]
+        · apply (ValueCommit.circuit B.valueCommitV B.valueCommitR)
+              |>.call_bind_copyCellsAssignedFrom _ hvalueCommit
+          · intro cell hcell
+            rw [ValueCommit.circuit_inputCells_eq] at hcell
+            let merkle1 := (Sinsemilla.Merkle.CalculateRoot.circuit G
+              B.merkleQ B.merkleQ_onCurve 0 16 (by norm_num)
+              hintWitnesses.merkleSib hintWitnesses.merkleSwap).call
+                (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig)
+                { node := wc.cmOld.x }
+            let merkle2 := (Sinsemilla.Merkle.CalculateRoot.circuit G
+              B.merkleQ B.merkleQ_onCurve 16 16 (by norm_num)
+              (fun j => hintWitnesses.merkleSib (16 + j))
+              (fun j => hintWitnesses.merkleSwap (16 + j))).call
+                (cfg.merkle2.condSwap, cfg.merkle2, cfg.lookupConfig)
+                { node := merkle1.output i }
+            let magnitudeRegion := merkle2.nextRegionIndex
+              (merkle1.nextRegionIndex i)
+            let magnitudeLoad := loadPrivate (cfg.advices 9)
+              (Witgen.MOver.toIRScalar hintWitnesses.magnitude)
+            let signRegion := magnitudeLoad.nextRegionIndex magnitudeRegion
+            have hmagnitude := loadPrivate_output_cell_assigned
+              (cfg.advices 9) (Witgen.MOver.toIRScalar hintWitnesses.magnitude)
+              magnitudeRegion
+            have hsign := loadPrivate_output_cell_assigned
+              (cfg.advices 9) (Witgen.MOver.toIRScalar hintWitnesses.sign)
+              signRegion
+            have hmagnitude' := hmagnitude
+            simp only [magnitudeRegion, merkle2, merkle1] at hmagnitude'
+            have hsign' := hsign
+            simp only [signRegion, magnitudeLoad, magnitudeRegion,
+              merkle2, merkle1] at hsign'
+            rw [List.mem_cons] at hcell
+            rcases hcell with hcell | hcell
+            · rw [hcell]
+              simp only [List.mem_append]
+              exact Or.inl (Or.inr hmagnitude')
+            · rw [List.mem_cons] at hcell
+              rcases hcell with hcell | hcell
+              · rw [hcell]
+                simp only [List.mem_append]
+                exact Or.inr hsign'
+              · simp only [List.not_mem_nil] at hcell
+          · apply FormalCircuit.constrainInstance_bind_copyCellsAssignedFrom
+            · exact List.mem_append_right _
+                (ValueCommit.circuit_call_output_cells_assigned
+                  B.valueCommitV B.valueCommitR _ _ _).1
+            · apply FormalCircuit.constrainInstance_bind_copyCellsAssignedFrom
+              · exact List.mem_append_right _
+                  (ValueCommit.circuit_call_output_cells_assigned
+                    B.valueCommitV B.valueCommitR _ _ _).2
+              · apply (DeriveNullifier.circuit B.nullifierK)
+                    |>.call_bind_copyCellsAssignedFrom _ hderiveNullifier
+                · intro cell hcell
+                  rw [DeriveNullifier.circuit_inputCells_eq] at hcell
+                  have hsmall : cell ∈ wc.copyInputCells := by
+                    simp only [WitnessCells.copyInputCells, List.mem_cons,
+                      List.not_mem_nil, or_false] at hcell ⊢
+                    aesop
+                  simp only [List.mem_append]
+                  exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inl hsmall))))
+                · apply FormalCircuit.constrainInstance_bind_copyCellsAssignedFrom
+                  · exact List.mem_append_right _
+                      (DeriveNullifier.circuit_call_output_cell_assigned
+                        B.nullifierK _ _ _)
+                  · apply (SpendAuthority.circuit B.spendAuthG)
+                        |>.call_bind_copyCellsAssignedFrom _ hspendAuthority
+                    · intro cell hcell
+                      rw [SpendAuthority.circuit_inputCells_eq] at hcell
+                      have hsmall : cell ∈ wc.copyInputCells := by
+                        simp only [WitnessCells.copyInputCells, List.mem_cons,
+                          List.not_mem_nil, or_false] at hcell ⊢
+                        aesop
+                      simp only [List.mem_append]
+                      exact Or.inl (Or.inl (Or.inl (Or.inl
+                        (Or.inl (Or.inl hsmall)))))
+                    · apply FormalCircuit.constrainInstance_bind_copyCellsAssignedFrom
+                      · exact List.mem_append_right _
+                          (SpendAuthority.circuit_call_output_cells_assigned
+                            B.spendAuthG _ _ _).1
+                      · apply FormalCircuit.constrainInstance_bind_copyCellsAssignedFrom
+                        · exact List.mem_append_right _
+                            (SpendAuthority.circuit_call_output_cells_assigned
+                              B.spendAuthG _ _ _).2
+                        · apply (CommitIvk.Main.circuit G B.commitIvkR B.ivkQ
+                              B.ivkQ_onCurve).call_bind_copyCellsAssignedFrom _
+                              hcommitIvk
+                          · intro cell hcell
+                            rw [CommitIvk.Main.circuit_inputCells_eq] at hcell
+                            have hsmall : cell ∈ wc.copyInputCells := by
+                              simp only [WitnessCells.copyInputCells,
+                                List.mem_cons, List.not_mem_nil, or_false]
+                                at hcell ⊢
+                              aesop
+                            simp only [List.mem_append]
+                            exact Or.inl (Or.inl (Or.inl (Or.inl
+                              (Or.inl (Or.inl (Or.inl hsmall))))))
+                          · apply AddressIntegrity.circuit
+                                |>.call_bind_copyCellsAssignedFrom _
+                                  haddressIntegrity
+                            intro cell hcell
+                            rw [AddressIntegrity.circuit_inputCells_eq] at hcell
+                            simp only [List.mem_cons, List.not_mem_nil,
+                              or_false] at hcell
+                            rcases hcell with hcell | hcell | hcell
+                            · rw [hcell]
+                              simp only [List.mem_append]
+                              exact Or.inr
+                                (CommitIvk.Main.circuit_call_output_cell_assigned
+                                  G B.commitIvkR B.ivkQ B.ivkQ_onCurve _ _ _)
+                            · rw [hcell]
+                              simp only [WitnessCells.copyInputCells,
+                                List.mem_append, List.mem_cons,
+                                List.not_mem_nil, or_false]
+                              aesop
+                            · rw [hcell]
+                              simp only [WitnessCells.copyInputCells,
+                                List.mem_append, List.mem_cons,
+                                List.not_mem_nil, or_false]
+                              aesop
+                            simp only [Circuit.operations_pure,
+                              Operations.copyCellsAssignedFrom_nil_iff]
+
+private theorem synthNotes_fixedAssignmentsAgree
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (wc : WitnessCells) (cc : CheckCells) (i : RegionIndex) :
+    let cfg := (configure G).output counts
+    ((synthNotes G B hintWitnesses cfg wc cc).operations i).Forall
+      Operation.FixedAssignmentsAgree := by
+  have hold := (noteCommitOldCertificate G B counts).configured
+  have hnew := (noteCommitNewCertificate G B counts).configured
+  have hpoint :=
+    (eccConfigureCertificate G counts).witnessPointNonIdFormal.configured
+  let cfg := (configure G).output counts
+  simp only
+  rw [synthNotes_eq]
+  unfold synthNotesProgram loadPrivate
+  simp only [keygen_spine]
+  repeat' first
+    | (guard_target =~ (_ ∧ _); constructor)
+  all_goals
+    first
+    | apply (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
+        B.noteQ_onCurve).call_fixedAssignmentsAgree _ hold
+    | apply (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
+        B.noteQ_onCurve).call_fixedAssignmentsAgree _ hnew
+    | apply Ecc.WitnessPoint.pointNonIdFormal.call_fixedAssignmentsAgree _
+        hpoint
+    | exact synthOrchardChecks_fixedAssignmentsAgree cfg wc cc _
+    | simp [Operation.FixedAssignmentsAgree,
+        RegionOperations.FixedAssignmentsAgree]
+
+private theorem synthNotes_fixedWritesLawful
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (wc : WitnessCells) (cc : CheckCells) (i : RegionIndex) :
+    let cfg := (configure G).output counts
+    ((synthNotes G B hintWitnesses cfg wc cc).operations i).FixedWritesLawful
+      ((configure G).delta counts).constants := by
+  let cfg := (configure G).output counts
+  apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree
+    (synthNotes_fixedAssignmentsAgree G B counts wc cc i)
+  rw [synthNotes_synthesisSummary_eq,
+    synthNotesSynthesisSummary_tableRowExtent_eq]
+
+private theorem synthNotes_lookupSelectorAssignmentsAgree
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (wc : WitnessCells) (cc : CheckCells) (i : RegionIndex) :
+    let cfg := (configure G).output counts
+    ((synthNotes G B hintWitnesses cfg wc cc).operations i)
+      |>.LookupSelectorAssignmentsAgree := by
+  have hold := (noteCommitOldCertificate G B counts).configured
+  have hnew := (noteCommitNewCertificate G B counts).configured
+  have hpoint :=
+    (eccConfigureCertificate G counts).witnessPointNonIdFormal.configured
+  let cfg := (configure G).output counts
+  simp only
+  rw [synthNotes_eq]
+  unfold synthNotesProgram loadPrivate
+  simp only [keygen_spine]
+  repeat' first
+    | (guard_target =~ (_ ∧ _); constructor)
+  all_goals
+    first
+    | apply (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
+        B.noteQ_onCurve).call_lookupSelectorAssignmentsAgree _ hold
+    | apply (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
+        B.noteQ_onCurve).call_lookupSelectorAssignmentsAgree _ hnew
+    | apply Ecc.WitnessPoint.pointNonIdFormal.call_lookupSelectorAssignmentsAgree _
+        hpoint
+    | simp [RegionOperations.LookupSelectorAssignmentsAgree,
+        RegionOperation.LookupSelectorAssignmentsAgreeWith]
+
+private theorem synthNotes_lookupSelectorsAnchoredBy
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (wc : WitnessCells) (cc : CheckCells) (i : RegionIndex)
+    (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchor : SelectorAnchorRequirementsSatisfied
+      (LookupRangeCheck.lookupSelectorAnchorRequirements
+        ((configure G).output counts).lookupConfig) anchor) :
+    let cfg := (configure G).output counts
+    ((synthNotes G B hintWitnesses cfg wc cc).operations i)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  have hold := (noteCommitOldCertificate G B counts).configured
+  have hnew := (noteCommitNewCertificate G B counts).configured
+  have hpoint :=
+    (eccConfigureCertificate G counts).witnessPointNonIdFormal.configured
+  let cfg := (configure G).output counts
+  simp only
+  rw [synthNotes_eq]
+  unfold synthNotesProgram
+  simp only [Circuit.operations_bind, Circuit.operations_pure, List.append_nil]
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact (NoteCommit.Main.circuit G B.noteCommitR B.noteQ B.noteQ_onCurve)
+      |>.call_lookupSelectorsAnchoredBy
+        { gates := cfg.noteCommitOld, hashConfig := cfg.sinsemilla1,
+          lookupConfig := cfg.lookupConfig,
+          mulConfig := cfg.eccConfig.mulFixedFull,
+          addConfig := cfg.eccConfig.add }
+        hold _ _ anchor hanchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · apply Operations.LookupSelectorsAnchoredBy.region_cons
+    · apply RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
+      keygen_registration
+    · exact Operations.LookupSelectorsAnchoredBy.nil anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact Ecc.WitnessPoint.pointNonIdFormal.call_lookupSelectorsAnchoredBy
+      cfg.eccConfig.witnessPoint hpoint _ _ anchor (by trivial)
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact Ecc.WitnessPoint.pointNonIdFormal.call_lookupSelectorsAnchoredBy
+      cfg.eccConfig.witnessPoint hpoint _ _ anchor (by trivial)
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact loadPrivate_lookupSelectorsAnchoredBy
+      (cfg.advices 0) _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact (NoteCommit.Main.circuit G B.noteCommitR B.noteQ B.noteQ_onCurve)
+      |>.call_lookupSelectorsAnchoredBy
+        { gates := cfg.noteCommitNew, hashConfig := cfg.sinsemilla2,
+          lookupConfig := cfg.lookupConfig,
+          mulConfig := cfg.eccConfig.mulFixedFull,
+          addConfig := cfg.eccConfig.add }
+        hnew _ _ anchor hanchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact constrainInstance_lookupSelectorsAnchoredBy _ _ _ _ anchor
+  · apply Operations.LookupSelectorsAnchoredBy.region_cons
+    · apply RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
+      keygen_registration
+    · exact Operations.LookupSelectorsAnchoredBy.nil anchor
+
+private theorem synthNotes_loadedTableColumns_eq_nil
+    (G : Generators) (B : Bases) (cfg : Config)
+    (wc : WitnessCells) (cc : CheckCells) (i : RegionIndex) :
+    ((synthNotes G B hintWitnesses cfg wc cc).operations i).loadedTableColumns = [] := by
+  apply Operations.loadedTableColumns_eq_nil_of_tableRowExtent_eq_zero
+  rw [synthNotes_synthesisSummary_eq,
+    synthNotesSynthesisSummary_tableRowExtent_eq]
+
+private theorem synthNotes_copyCellsAssigned (G : Generators) (B : Bases)
+    (counts : ConfigureCounts) (wc : WitnessCells) (cc : CheckCells)
+    (i : RegionIndex) :
+    let cfg := (configure G).output counts
+    (synthNotes G B hintWitnesses cfg wc cc).operations i
+      |>.CopyCellsAssignedFrom i (wc.copyInputCells ++ cc.copyInputCells) := by
+  have hold := (noteCommitOldCertificate G B counts).configured
+  have hnew := (noteCommitNewCertificate G B counts).configured
+  have hpoint := (eccConfigureCertificate G counts).witnessPointNonIdFormal.configured
+  let cfg := (configure G).output counts
+  simp only
+  rw [synthNotes_eq]
+  unfold synthNotesProgram
+  apply (NoteCommit.Main.circuit G B.noteCommitR B.noteQ B.noteQ_onCurve)
+      |>.call_bind_copyCellsAssignedFrom _ hold
+  · intro cell hcell
+    rw [NoteCommit.Main.Configured.inputCells_eq] at hcell
+    simp only [WitnessCells.copyInputCells, CheckCells.copyInputCells,
+      List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at hcell ⊢
+    aesop
+  · apply FormalCircuit.bind_copyCellsAssignedFrom
+    · have hderived := NoteCommit.Main.circuit_call_output_cells_assigned
+        G B.noteCommitR B.noteQ B.noteQ_onCurve
+        { gates := cfg.noteCommitOld, hashConfig := cfg.sinsemilla1,
+          lookupConfig := cfg.lookupConfig,
+          mulConfig := cfg.eccConfig.mulFixedFull,
+          addConfig := cfg.eccConfig.add }
+        { gdX := wc.gdOld.x, gdY := wc.gdOld.y,
+          pkdX := cc.pkdOld.x, pkdY := cc.pkdOld.y,
+          value := wc.vOld, rho := wc.rhoOld, psi := wc.psiOld,
+          rcm := hintWitnesses.rcmOld } i
+      simp only [operations_assignRegion,
+        Operations.copyCellsAssignedFrom_region_iff,
+        Operations.copyCellsAssignedFrom_nil_iff,
+        RegionCircuit.operations_bind, operations_constrainEqual,
+        RegionOperations.copyCellsAssignedFrom_append_iff,
+        RegionOperations.copyCellsAssignedFrom_constrainEqual_iff,
+        RegionOperations.copyCellsAssignedFrom_nil_iff,
+        RegionOperations.assignedCellsAfter, List.foldl_cons, List.foldl_nil,
+        RegionOperation.assignedCells, List.nil_append, List.mem_append,
+        WitnessCells.copyInputCells, List.mem_cons, List.not_mem_nil,
+        or_false, and_true]
+      exact ⟨⟨Or.inr hderived.1, Or.inl (Or.inl (by aesop))⟩,
+        ⟨Or.inr hderived.2, Or.inl (Or.inl (by aesop))⟩⟩
+    · simp only [nextRegionIndex_assignRegion, operations_assignRegion,
+        Operations.regionCount]
+    · apply Ecc.WitnessPoint.pointNonIdFormal
+          |>.call_bind_copyCellsAssignedFrom _ hpoint
+      · rw [Ecc.WitnessPoint.pointNonIdFormal_inputCells]
+        intro cell hcell
+        simp_all only [List.not_mem_nil]
+      · apply Ecc.WitnessPoint.pointNonIdFormal
+            |>.call_bind_copyCellsAssignedFrom _ hpoint
+        · rw [Ecc.WitnessPoint.pointNonIdFormal_inputCells]
+          intro cell hcell
+          simp_all only [List.not_mem_nil]
+        · apply FormalCircuit.bind_copyCellsAssignedFrom
+          · apply loadPrivate_copyCellsAssignedFrom
+          · unfold loadPrivate
+            simp only [nextRegionIndex_assignRegion, operations_assignRegion,
+              Operations.regionCount]
+          · apply (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
+                B.noteQ_onCurve).call_bind_copyCellsAssignedFrom _ hnew
+            · intro cell hcell
+              rw [NoteCommit.Main.Configured.inputCells_eq] at hcell
+              let oldCall := (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
+                B.noteQ_onCurve).call
+                  { gates := cfg.noteCommitOld, hashConfig := cfg.sinsemilla1,
+                    lookupConfig := cfg.lookupConfig,
+                    mulConfig := cfg.eccConfig.mulFixedFull,
+                    addConfig := cfg.eccConfig.add }
+                  { gdX := wc.gdOld.x, gdY := wc.gdOld.y,
+                    pkdX := cc.pkdOld.x, pkdY := cc.pkdOld.y,
+                    value := wc.vOld, rho := wc.rhoOld, psi := wc.psiOld,
+                    rcm := hintWitnesses.rcmOld }
+              let equalRegion := assignRegion "constrain equal" (do
+                constrainEqual (oldCall.output i).x wc.cmOld.x
+                constrainEqual (oldCall.output i).y wc.cmOld.y)
+              let gdRegion := equalRegion.nextRegionIndex
+                (oldCall.nextRegionIndex i)
+              let gdCall := Ecc.WitnessPoint.pointNonIdFormal.call
+                cfg.eccConfig.witnessPoint hintWitnesses.gdNew
+              let pkdRegion := gdCall.nextRegionIndex gdRegion
+              let pkdCall := Ecc.WitnessPoint.pointNonIdFormal.call
+                cfg.eccConfig.witnessPoint hintWitnesses.pkdNew
+              let psiRegion := pkdCall.nextRegionIndex pkdRegion
+              simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+              rcases hcell with hcell | hcell | hcell | hcell | hcell | hcell | hcell
+              · rw [hcell]
+                simp only [List.mem_append]
+                exact Or.inl (Or.inl (Or.inr
+                  (Ecc.WitnessPoint.pointNonIdFormal_call_output_cells_assigned
+                    _ _ _).1))
+              · rw [hcell]
+                simp only [List.mem_append]
+                exact Or.inl (Or.inl (Or.inr
+                  (Ecc.WitnessPoint.pointNonIdFormal_call_output_cells_assigned
+                    _ _ _).2))
+              · rw [hcell]
+                simp only [List.mem_append]
+                exact Or.inl (Or.inr
+                  (Ecc.WitnessPoint.pointNonIdFormal_call_output_cells_assigned
+                    _ _ _).1)
+              · rw [hcell]
+                simp only [List.mem_append]
+                exact Or.inl (Or.inr
+                  (Ecc.WitnessPoint.pointNonIdFormal_call_output_cells_assigned
+                    _ _ _).2)
+              · rw [hcell]
+                simp only [WitnessCells.copyInputCells, List.mem_append,
+                  List.mem_cons, List.not_mem_nil, or_false]
+                aesop
+              · rw [hcell]
+                simp only [CheckCells.copyInputCells, List.mem_append,
+                  List.mem_cons, List.not_mem_nil, or_false]
+                aesop
+              · rw [hcell]
+                simp only [List.mem_append]
+                exact Or.inr (loadPrivate_output_cell_assigned _ _ _)
+            · apply FormalCircuit.constrainInstance_bind_copyCellsAssignedFrom
+              · exact List.mem_append_right _
+                  (NoteCommit.Main.circuit_call_output_cells_assigned
+                    G B.noteCommitR B.noteQ B.noteQ_onCurve _ _ _).1
+              · apply FormalCircuit.bind_copyCellsAssignedFrom
+                · keygen_registration [synthOrchardChecks,
+                    WitnessCells.copyInputCells, CheckCells.copyInputCells]
+                · simp only [nextRegionIndex_assignRegion,
+                    operations_assignRegion, Operations.regionCount]
+                · simp only [Circuit.operations_pure,
+                    Operations.copyCellsAssignedFrom_nil_iff]
+
+private theorem synthChecks_output_copyInputCells_assigned
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (wc : WitnessCells) (i : RegionIndex) :
+    let cfg := (configure G).output counts
+    let checks := synthChecks G B hintWitnesses cfg wc
+    (checks.output i).copyInputCells.Forall fun cell =>
+      cell ∈ (checks.operations i).assignedCellsFrom i := by
+  let cfg := (configure G).output counts
+  have hroot := Sinsemilla.Merkle.CalculateRoot.circuit_call_output_cell_assigned
+    (G := G) (Q := B.merkleQ) (hQ := B.merkleQ_onCurve) (l₀ := 16)
+    (d := 16) (hld := by norm_num)
+    (wsib := fun j => hintWitnesses.merkleSib (16 + j))
+    (wswap := fun j => hintWitnesses.merkleSwap (16 + j))
+    (cfg.merkle2.condSwap, cfg.merkle2, cfg.lookupConfig)
+    { node := (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+        B.merkleQ_onCurve 0 16 (by norm_num) hintWitnesses.merkleSib
+        hintWitnesses.merkleSwap).output
+          (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig)
+          { node := wc.cmOld.x } i }
+    (i + 128)
+    (by norm_num)
+  have hmagnitude := loadPrivate_output_cell_assigned (cfg.advices 9)
+    (Witgen.MOver.toIRScalar hintWitnesses.magnitude) (i + 256)
+  have hsign := loadPrivate_output_cell_assigned (cfg.advices 9)
+    (Witgen.MOver.toIRScalar hintWitnesses.sign) (i + 257)
+  have hnf := DeriveNullifier.circuit_call_output_cell_assigned
+    B.nullifierK
+    (cfg.poseidonConfig, cfg.addChipConfig, cfg.eccConfig.mulFixedBaseField,
+      cfg.eccConfig.add)
+    { nk := wc.nk, rho := wc.rhoOld, psi := wc.psiOld, cm := wc.cmOld }
+    (i + 263)
+  have hpkd := AddressIntegrity.circuit_call_output_cells_assigned
+    (cfg.eccConfig.mul, cfg.eccConfig.witnessPoint)
+    { ivk := (CommitIvk.Main.circuit G B.commitIvkR B.ivkQ
+        B.ivkQ_onCurve).output
+          { gate := cfg.commitIvkConfig, hashConfig := cfg.sinsemilla1,
+            lookupConfig := cfg.lookupConfig,
+            mulConfig := cfg.eccConfig.mulFixedFull,
+            addConfig := cfg.eccConfig.add }
+          { ak := wc.akP.x, nk := wc.nk, rivk := hintWitnesses.rivk }
+          (i + 275),
+      gDOld := wc.gdOld, pkDOld := hintWitnesses.pkDOld }
+    (i + 289)
+  simp only [CheckCells.copyInputCells, synthChecks_eq,
+    synthChecksProgram, loadPrivate, circuit_norm,
+    Operations.assignedCellsFrom_append, Operations.assignedCellsFrom,
+    RegionOperations.assignedCells, RegionOperation.assignedCells,
+    List.flatMap_cons, List.flatMap_nil, List.nil_append,
+    List.forall_cons, List.mem_append,
+    List.mem_cons, List.not_mem_nil, or_false,
+    Nat.add_assoc, Nat.reduceAdd] at hroot hmagnitude hsign hnf hpkd ⊢
+  aesop
+
+private theorem synthNotes_output_copyInputCells_assigned
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (wc : WitnessCells) (cc : CheckCells) (i : RegionIndex) :
+    let cfg := (configure G).output counts
+    let notes := synthNotes G B hintWitnesses cfg wc cc
+    (notes.output i).copyInputCells.Forall fun cell =>
+      cell ∈ (notes.operations i).assignedCellsFrom i := by
+  let cfg := (configure G).output counts
+  have hgd := Ecc.WitnessPoint.pointNonIdFormal_call_output_cells_assigned
+    cfg.eccConfig.witnessPoint hintWitnesses.gdNew (i + 44)
+  have hpkd := Ecc.WitnessPoint.pointNonIdFormal_call_output_cells_assigned
+    cfg.eccConfig.witnessPoint hintWitnesses.pkdNew (i + 45)
+  simp only [NoteCells.copyInputCells, synthNotes_eq, synthNotesProgram,
+    loadPrivate, synthOrchardChecks,
+    circuit_norm, Operations.assignedCellsFrom_append,
+    Operations.assignedCellsFrom, RegionOperations.assignedCells,
+    RegionOperation.assignedCells, List.flatMap_cons, List.flatMap_nil,
+    List.forall_cons, List.mem_append, List.mem_cons, List.not_mem_nil,
+    or_false, Nat.add_assoc, Nat.reduceAdd] at hgd hpkd ⊢
+  aesop
+
+private theorem main_output_copyInputCells_assigned
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (i : RegionIndex) :
+    let base := main G B ((configure G).output counts) ()
+    (base.output i).copyInputCells.Forall fun cell =>
+      cell ∈ (base.operations i).assignedCellsFrom i := by
+  let cfg := (configure G).output counts
+  let witness := synthWitness G hintWitnesses cfg
+  let checks := synthChecks G B hintWitnesses cfg (witness.output i)
+  have hwitness := synthWitness_output_copyInputCells_assigned G counts i
+  have hchecks := synthChecks_output_copyInputCells_assigned G B counts
+    (witness.output i) (i + 8)
+  have hnotes := synthNotes_output_copyInputCells_assigned G B counts
+    (witness.output i) (checks.output (i + 8)) (i + 303)
+  simp only [main, CircuitPreIronwood.synthesize, synthesizeBase,
+    AddressPoints.copyInputCells, Circuit.output_bind, Circuit.output_pure,
+    Circuit.operations_bind, Circuit.operations_pure, List.append_nil,
+    Operations.assignedCellsFrom_append,
+    synthWitness_nextRegionIndex, synthChecks_nextRegionIndex,
+    synthWitness_regionCount, synthChecks_regionCount]
+  simp only [WitnessCells.copyInputCells, CheckCells.copyInputCells,
+    NoteCells.copyInputCells, List.forall_cons, List.forall_nil, and_true,
+    List.mem_append] at hwitness hchecks hnotes ⊢
+  aesop
+
+private theorem main_fixedWritesLawful (G : Generators) (B : Bases)
+    (counts : ConfigureCounts) (i : RegionIndex) :
+    ((main G B ((configure G).output counts) ()).operations i).FixedWritesLawful
+      ((configure G).delta counts).constants := by
+  let cfg := (configure G).output counts
+  let witness := synthWitness G hintWitnesses cfg
+  let checks := synthChecks G B hintWitnesses cfg (witness.output i)
+  let checksRegion := witness.nextRegionIndex i
+  let notes := synthNotes G B hintWitnesses cfg (witness.output i)
+    (checks.output checksRegion)
+  let notesRegion := checks.nextRegionIndex checksRegion
+  have hwitness := synthWitness_fixedWritesLawful G counts i
+  have hchecks := synthChecks_fixedWritesLawful G B counts cfg rfl
+    (witness.output i) checksRegion
+  have hnotes := synthNotes_fixedWritesLawful G B counts
+    (witness.output i) (checks.output checksRegion) notesRegion
+  have hchecksTables :
+      (checks.operations checksRegion).loadedTableColumns = [] :=
+    synthChecks_loadedTableColumns_eq_nil G B cfg (witness.output i) checksRegion
+  have hnotesTables :
+      (notes.operations notesRegion).loadedTableColumns = [] :=
+    synthNotes_loadedTableColumns_eq_nil G B cfg (witness.output i)
+      (checks.output checksRegion) notesRegion
+  have hchecksColumns := synthChecks_regionFixedColumns_forall G B counts i
+  have hnotesColumns := synthNotes_regionFixedColumns_forall G B counts i
+  have htableColumns :=
+    configure_output_generatorTableColumns_disjoint_regionFixedColumns G counts
+  have hwitnessChecks :
+      (witness.operations i).loadedTableColumns.Disjoint
+        (checks.operations checksRegion).regionFixedColumns := by
+    rw [synthWitness_loadedTableColumns_eq]
+    exact disjoint_of_forall_mem_right htableColumns hchecksColumns
+  have hwitnessNotes :
+      (witness.operations i).loadedTableColumns.Disjoint
+        (notes.operations notesRegion).regionFixedColumns := by
+    rw [synthWitness_loadedTableColumns_eq]
+    exact disjoint_of_forall_mem_right htableColumns hnotesColumns
+  simp only [main, CircuitPreIronwood.synthesize, synthesizeBase,
+    Circuit.operations_bind, Circuit.operations_pure, List.append_nil]
+  exact Operations.FixedWritesLawful.append_noLaterTables
+    hwitness hchecks hnotes hchecksTables hnotesTables
+      hwitnessChecks hwitnessNotes
+
+instance elaborated (G : Generators) (B : Bases) :
+    ElaboratedCircuit Fp Unit Config unit AddressPoints
+      (fun _ => configure G) (main G B) where
+  configureInfo _ := configureElaborated G
+  registered := by
+    intro configInput counts hconfig input i
+    have hadvice := configure_output_advice_mem_permutationRequests G counts
+    have hprimary := configure_output_primary_mem_permutationRequests G counts
+    have hwitnessX := configure_output_witnessPoint_x_mem_permutationRequests G counts
+    have hwitnessY := configure_output_witnessPoint_y_mem_permutationRequests G counts
+    have haddX := configure_output_add_xQR_mem_permutationRequests G counts
+    have haddY := configure_output_add_yQR_mem_permutationRequests G counts
+    have hmerkle1 := configure_output_merkle1_xA_mem_permutationRequests G counts
+    have hmerkle2 := configure_output_merkle2_xA_mem_permutationRequests G counts
+    dsimp only [main, CircuitPreIronwood.synthesize, synthesizeBase]
+    simp_all only [keygen_spine]
+    constructor
+    · simpa only [List.map_nil, List.append_nil] using
+        synthWitness_keygenRegistered G counts i
+    · constructor
+      · simpa only [List.map_nil, List.append_nil] using
+          synthChecks_keygenRegistered_full G B counts i
+      · simpa only [List.map_nil, List.append_nil] using
+          synthNotes_keygenRegistered_full G B counts i
+  lookupSelectorAssignmentsAgree_of_registered := by
+    intro configInput counts hconfig input i program operations _hregistered
+    simp only [operations, program, main, CircuitPreIronwood.synthesize,
+      synthesizeBase, Circuit.operations_bind, Circuit.operations_pure,
+      keygen_norm, keygen_spine]
+    exact ⟨synthWitness_lookupSelectorAssignmentsAgree G counts i,
+      synthChecks_lookupSelectorAssignmentsAgree G B counts _ rfl _ _,
+      synthNotes_lookupSelectorAssignmentsAgree G B counts _ _ _⟩
+  lookupSelectorAnchorRequirements cfg _ _ :=
+    LookupRangeCheck.lookupSelectorAnchorRequirements cfg.lookupConfig
+  lookupSelectorsAnchoredBy_of_registered := by
+    intro configInput counts hconfig input i anchor hanchor _
+    simp only [main, CircuitPreIronwood.synthesize, synthesizeBase,
+      Circuit.operations_bind, Circuit.operations_pure, keygen_norm,
+      keygen_spine]
+    exact ⟨synthWitness_lookupSelectorsAnchoredBy G counts i anchor,
+      synthChecks_lookupSelectorsAnchoredBy
+        G B counts _ rfl _ _ anchor hanchor,
+      synthNotes_lookupSelectorsAnchoredBy
+        G B counts _ _ _ anchor hanchor⟩
+  fixedWritesLawful := by
+    intro configInput counts hconfig input i
+    exact main_fixedWritesLawful G B counts i
+  copyCellsAssigned := by
+    intro configInput counts hconfig input i
+    simp only [main, CircuitPreIronwood.synthesize, synthesizeBase,
+      Circuit.operations_bind, Circuit.operations_pure, List.append_nil]
+    apply Operations.CopyCellsAssignedFrom.append
+    · exact synthWitness_copyCellsAssigned G counts i
+    · apply Operations.CopyCellsAssignedFrom.append
+      · rw [synthWitness_regionCount]
+        rw [synthWitness_nextRegionIndex]
+        have hchecks := synthChecks_copyCellsAssigned G B counts
+          ((configure G).output counts) rfl
+          (synthWitness G hintWitnesses ((configure G).output counts) |>.output i)
+          (synthWitness G hintWitnesses ((configure G).output counts) |>.nextRegionIndex i)
+        rw [synthWitness_nextRegionIndex] at hchecks
+        apply hchecks.mono
+        intro cell hcell
+        simp only [List.nil_append]
+        exact List.forall_iff_forall_mem.mp
+          (synthWitness_output_copyInputCells_assigned G counts i) cell hcell
+      · rw [synthWitness_regionCount, synthWitness_nextRegionIndex,
+          synthChecks_regionCount, synthChecks_nextRegionIndex]
+        have hnotes := synthNotes_copyCellsAssigned G B counts
+          (synthWitness G hintWitnesses ((configure G).output counts) |>.output i)
+          (synthChecks G B hintWitnesses ((configure G).output counts)
+            (synthWitness G hintWitnesses ((configure G).output counts) |>.output i) |>.output
+              (synthWitness G hintWitnesses ((configure G).output counts) |>.nextRegionIndex i))
+          (synthChecks G B hintWitnesses ((configure G).output counts)
+            (synthWitness G hintWitnesses ((configure G).output counts) |>.output i) |>.nextRegionIndex
+              (synthWitness G hintWitnesses ((configure G).output counts) |>.nextRegionIndex i))
+        rw [synthWitness_nextRegionIndex, synthChecks_nextRegionIndex] at hnotes
+        apply hnotes.mono
+        intro cell hcell
+        rcases List.mem_append.mp hcell with hcell | hcell
+        · exact List.mem_append_left _ (List.forall_iff_forall_mem.mp
+            (synthWitness_output_copyInputCells_assigned G counts i) cell hcell)
+        · exact List.mem_append_right _ (List.forall_iff_forall_mem.mp
+            (synthChecks_output_copyInputCells_assigned G B counts
+              (synthWitness G hintWitnesses ((configure G).output counts) |>.output i)
+              (i + 8)) cell hcell)
+  lookupActivationsWellFormed := by
+    intro config input i
+    simp only [main, CircuitPreIronwood.synthesize, synthesizeBase,
+      Circuit.operations_bind, Circuit.operations_pure,
+      Operations.LookupActivationsWellFormed, List.forall_append,
+      List.forall_nil, and_true]
+    constructor
+    · unfold synthWitness
+      simp only [keygen_spine]
+      repeat' constructor
+      all_goals
+        first
+        | apply Ecc.WitnessPoint.pointFormal.call_lookupActivationsWellFormed
+        | apply Ecc.WitnessPoint.pointNonIdFormal.call_lookupActivationsWellFormed
+    constructor
+    · rw [synthChecks_eq]
+      unfold synthChecksProgram
+      simp only [keygen_spine]
+      repeat' constructor
+      all_goals
+        first
+        | apply
+            (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+              B.merkleQ_onCurve 0 16 (by norm_num)
+              hintWitnesses.merkleSib
+              hintWitnesses.merkleSwap).call_lookupActivationsWellFormed
+        | apply
+            (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+              B.merkleQ_onCurve 16 16 (by norm_num)
+              (fun i => hintWitnesses.merkleSib (16 + i))
+              (fun i => hintWitnesses.merkleSwap
+                (16 + i))).call_lookupActivationsWellFormed
+        | apply (ValueCommit.circuit B.valueCommitV
+            B.valueCommitR).call_lookupActivationsWellFormed
+        | apply (DeriveNullifier.circuit
+            B.nullifierK).call_lookupActivationsWellFormed
+        | apply (SpendAuthority.circuit
+            B.spendAuthG).call_lookupActivationsWellFormed
+        | apply (CommitIvk.Main.circuit G B.commitIvkR B.ivkQ
+            B.ivkQ_onCurve).call_lookupActivationsWellFormed
+        | apply AddressIntegrity.circuit.call_lookupActivationsWellFormed
+    · rw [synthNotes_eq]
+      unfold synthNotesProgram
+      simp only [keygen_spine]
+      repeat' constructor
+      all_goals
+        first
+        | apply (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
+            B.noteQ_onCurve).call_lookupActivationsWellFormed
+        | apply Ecc.WitnessPoint.pointNonIdFormal.call_lookupActivationsWellFormed
+  output cfg _ i₀ :=
+    { gdOld := { x := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.x,
+                 y := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.y },
+      pkdOld := { x := AssignedCell.of (i₀ + 301) 0 cfg.eccConfig.witnessPoint.x,
+                  y := AssignedCell.of (i₀ + 301) 0 cfg.eccConfig.witnessPoint.y },
+      gdNew := { x := AssignedCell.of (i₀ + 347) 0 cfg.eccConfig.witnessPoint.x,
+                 y := AssignedCell.of (i₀ + 347) 0 cfg.eccConfig.witnessPoint.y },
+      pkdNew := { x := AssignedCell.of (i₀ + 348) 0 cfg.eccConfig.witnessPoint.x,
+                  y := AssignedCell.of (i₀ + 348) 0 cfg.eccConfig.witnessPoint.y } }
+  regionCount _ := 394
+  synthesisSummary cfg _ _ := synthesizeBaseSynthesisSummary cfg
+  output_eq := by
+    intro cfg _ i₀
+    simp only [main, CircuitPreIronwood.synthesize, synthesizeBase,
+      Circuit.output_bind, Circuit.output_pure,
+      synthWitness_output, synthWitness_nextRegionIndex, synthChecks_output,
+      synthChecks_nextRegionIndex, synthNotes_output]
+  regionCount_eq := fun cfg input i =>
+    (main_regionCount G B cfg input i).symm
+  synthesisSummary_eq := fun cfg input region =>
+    (main_synthesisSummary_eq G B cfg input region).symm
+
+/-! ## Soundness -/
+
+theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
+    FormalCircuit.Soundness (Witness := fun _ => ActionData)
+      (fun _ : Unit => configure G) (main G B) cfg
+      (extractBase cfg) (EnvAssumptions cfg) (fun _ => True)
+      (Spec G B) := by
+  circuit_proof_start
+  let input_var_rcv := hintWitnesses.rcv
+  let input_var_alpha := hintWitnesses.alpha
+  let input_var_rivk := hintWitnesses.rivk
+  let input_var_rcmOld := hintWitnesses.rcmOld
+  let input_var_rcmNew := hintWitnesses.rcmNew
+  simp only [CircuitPreIronwood.synthesize, synthesizeBase, circuit_norm] at hc
+  have hW := hc.1
+  have hCk := hc.2.1
+  have hN := hc.2.2
+  clear hc
+  have hLoad := hW
+  simp only [synthWitness, Circuit.operations_bind, Circuit.operations_pure,
+    List.append_nil] at hLoad
+  rw [constraints_append] at hLoad
+  obtain ⟨hT1, hT2, hTM1, hTM2, hBf, hMulE, hTL⟩ :=
+    loadedChildEnvFacts G cfg i₀
+      (⟨place, env⟩ : Placed Environment Fp) _hE hLoad.1
+  obtain ⟨-, -, -, -, -, hFw, hSh, -, -, -, hDist⟩ := _hE
+  -- ── stage A: the witness regions ──
+  simp only [synthWitness, loadPrivate, Sinsemilla.load, circuit_norm] at hW
+  have hCm := hW.2.2.2.2.2.2.1
+  have hGd := hW.2.2.2.2.2.2.2.1
+  have hAk := hW.2.2.2.2.2.2.2.2
+  clear hW
+  simp only [Nat.add_assoc, Nat.reduceAdd] at hGd hAk
+  subcircuit_rw at hCm
+  subcircuit_rw at hGd
+  subcircuit_rw at hAk
+  have hCmS := hCm (by rw [Ecc.WitnessPoint.pointFormal_envAssumptions_eq]; trivial)
+    (by rw [Ecc.WitnessPoint.pointFormal_assumptions_eq]; trivial)
+  rw [Ecc.WitnessPoint.pointFormal_spec_eq, wpoint_output] at hCmS
+  have hGdS := hGd (by rw [Ecc.WitnessPoint.pointNonIdFormal_envAssumptions_eq]; trivial)
+    (by rw [Ecc.WitnessPoint.pointNonIdFormal_assumptions_eq]; trivial)
+  rw [Ecc.WitnessPoint.pointNonIdFormal_spec_eq, wpointNonId_output] at hGdS
+  have hAkS := hAk (by rw [Ecc.WitnessPoint.pointNonIdFormal_envAssumptions_eq]; trivial)
+    (by rw [Ecc.WitnessPoint.pointNonIdFormal_assumptions_eq]; trivial)
+  rw [Ecc.WitnessPoint.pointNonIdFormal_spec_eq, wpointNonId_output] at hAkS
+  clear hCm hGd hAk
+  simp only [Point.eval_eq, circuit_norm,
+    Nat.add_zero] at hCmS hGdS hAkS
+  -- ── stage B: the integrity checks ──
+  simp only [synthWitness_output, synthWitness_nextRegionIndex, synthWitness_regionCount,
+    Nat.add_assoc] at hCk hN
+  simp only [synthChecks_eq, synthChecksProgram, loadPrivate, circuit_norm] at hCk
+  have hM1 := hCk.1
+  have hM2 := hCk.2.1
+  have hVC := hCk.2.2.1
+  have hIcvx := hCk.2.2.2.1
+  have hIcvy := hCk.2.2.2.2.1
+  have hDN := hCk.2.2.2.2.2.1
+  have hInf := hCk.2.2.2.2.2.2.1
+  have hSA := hCk.2.2.2.2.2.2.2.1
+  have hIrkx := hCk.2.2.2.2.2.2.2.2.1
+  have hIrky := hCk.2.2.2.2.2.2.2.2.2.1
+  have hCI := hCk.2.2.2.2.2.2.2.2.2.2.1
+  have hAI := hCk.2.2.2.2.2.2.2.2.2.2.2
+  clear hCk
+  try simp only [Nat.add_assoc] at hM2
+  try simp only [Nat.add_assoc] at hVC
+  try simp only [Nat.add_assoc] at hIcvx
+  try simp only [Nat.add_assoc] at hIcvy
+  try simp only [Nat.add_assoc] at hDN
+  try simp only [Nat.add_assoc] at hInf
+  try simp only [Nat.add_assoc] at hSA
+  try simp only [Nat.add_assoc] at hIrkx
+  try simp only [Nat.add_assoc] at hIrky
+  try simp only [Nat.add_assoc] at hCI
+  try simp only [Nat.add_assoc] at hAI
+  subcircuit_rw at hM1
+  subcircuit_rw at hM2
+  subcircuit_rw at hVC
+  subcircuit_rw at hDN
+  subcircuit_rw at hSA
+  subcircuit_rw at hCI
+  subcircuit_rw at hAI
+  have hM1S := hM1 (by rw [Sinsemilla.Merkle.CalculateRoot.circuit_envAssumptions_eq]; exact ⟨hTM1, hTL, hDist⟩)
+    (by rw [Sinsemilla.Merkle.CalculateRoot.circuit_assumptions_eq]; trivial)
+  rw [Sinsemilla.Merkle.CalculateRoot.circuit_spec_eq] at hM1S
+  rw [layerInput_eval_eq] at hM1S
+  have hM2S := hM2 (by rw [Sinsemilla.Merkle.CalculateRoot.circuit_envAssumptions_eq]; exact ⟨hTM2, hTL, hDist⟩)
+    (by rw [Sinsemilla.Merkle.CalculateRoot.circuit_assumptions_eq]; trivial)
+  rw [Sinsemilla.Merkle.CalculateRoot.circuit_spec_eq] at hM2S
+  try rw [layerInput_eval_eq] at hM2S
+  have hVCS := hVC (by exact ⟨hSh, hFw⟩) (by trivial)
+  rw [ValueCommit.circuit_spec_eq, ValueCommit.circuit_extract_eq] at hVCS
+  rw [vcInputs_eval_eq] at hVCS
+  have hDNS := hDN (by exact hBf) (by
+    show Point.Valid _
+    simp only [circuit_norm, Point.eval_eq]
+    exact hCmS)
+  rw [DeriveNullifier.circuit_spec_eq] at hDNS
+  rw [dnInputs_eval_eq] at hDNS
+  have hSAS := hSA (by exact hFw) (by
+    show Point.Valid _
+    simp only [circuit_norm, Point.eval_eq]
+    exact Or.inl hAkS)
+  rw [SpendAuthority.circuit_spec_eq, SpendAuthority.circuit_extract_eq] at hSAS
+  rw [saInputs_eval_eq] at hSAS
+  have hCIS := hCI (by exact ⟨hT1, hFw, hTL, hDist⟩) (by trivial)
+  rw [CommitIvk.Main.circuit_spec_eq, CommitIvk.Main.circuit_extract_eq] at hCIS
+  rw [civkInputs_eval_eq] at hCIS
+  have hCISGuarded :=
+    (Specs.Sinsemilla.specOrBreak_hashToPointB_iff_guarded
+      (Or.inl B.ivkQ_onCurve)
+      (fun m hm => G.S_onCurve (Specs.Sinsemilla.chunksOf_mem_lt (by
+        rw [commitIvkChunks] at hm
+        exact hm)))).mp hCIS
+  have hAIS := hAI (by exact hMulE) (by
+    show Point.OnCurve _
+    simp only [circuit_norm, Point.eval_eq]
+    exact hGdS)
+  rw [AddressIntegrity.circuit_spec_eq, AddressIntegrity.circuit_output] at hAIS
+  rw [aiInputs_eval_eq] at hAIS
+  simp only [Point.eval_eq, circuit_norm, Nat.add_zero,
+    Nat.add_assoc, Nat.reduceAdd] at hAIS
+  clear hM1 hM2 hVC hDN hSA hCI hAI
+  -- ── stage C: the note commitments and the final checks ──
+  simp only [synthChecks_output, synthChecks_nextRegionIndex,
+    synthChecks_regionCount, Nat.add_assoc, Nat.reduceAdd] at hN
+  simp only [synthNotes_eq, synthNotesProgram, synthOrchardChecks, loadPrivate,
+    circuit_norm] at hN
+  have hNCo := hN.1
+  have hEqR := hN.2.1
+  have hGdN := hN.2.2.1
+  have hPkN := hN.2.2.2.1
+  have hNCn := hN.2.2.2.2.1
+  have hIcmx := hN.2.2.2.2.2.1
+  have hOrch := hN.2.2.2.2.2.2
+  clear hN
+  try simp only [Nat.add_assoc] at hGdN
+  try simp only [Nat.add_assoc] at hPkN
+  try simp only [Nat.add_assoc] at hNCn
+  try simp only [circuit_norm, Nat.add_assoc, Nat.reduceAdd] at hIcmx
+  try simp only [circuit_norm, Nat.add_assoc, Nat.reduceAdd] at hOrch
+  rw [wpointNonId_output] at hNCn
+  rw [wpointNonId_output] at hNCn
+  try rw [wpointNonId_output] at hIcmx
+  try rw [wpointNonId_output] at hIcmx
+  simp only [] at hNCn hIcmx
+  subcircuit_rw at hNCo
+  subcircuit_rw at hGdN
+  subcircuit_rw at hPkN
+  subcircuit_rw at hNCn
+  have hNCoS := hNCo (by exact ⟨hT1, hFw, hTL, hDist⟩)
+    (by rw [NoteCommit.Main.circuit_assumptions_eq, ncInputs_eval_eq]
+        refine ⟨?_, ?_⟩
+        · show Point.OnCurve _
+          simp only [circuit_norm, explicit_provable_type]; exact hGdS
+        · show Point.OnCurve _
+          simp only [circuit_norm, explicit_provable_type]; exact hAIS.1)
+  rw [NoteCommit.Main.circuit_spec_eq, NoteCommit.Main.circuit_extract_eq] at hNCoS
+  rw [ncInputs_eval_eq] at hNCoS
+  have hNCoGuarded :=
+    (Specs.Sinsemilla.specOrBreak_hashToPointB_iff_guarded
+      (Or.inl B.noteQ_onCurve)
+      (fun m hm => G.S_onCurve (Specs.Sinsemilla.chunksOf_mem_lt (by
+        rw [NoteCommit.NoteCommitScalars.chunks,
+          Specs.Sinsemilla.noteCommitChunks] at hm
+        exact hm)))).mp hNCoS.2
+  have hGdNS := hGdN (by rw [Ecc.WitnessPoint.pointNonIdFormal_envAssumptions_eq]; trivial)
+    (by rw [Ecc.WitnessPoint.pointNonIdFormal_assumptions_eq]; trivial)
+  rw [Ecc.WitnessPoint.pointNonIdFormal_spec_eq, wpointNonId_output] at hGdNS
+  have hPkNS := hPkN (by rw [Ecc.WitnessPoint.pointNonIdFormal_envAssumptions_eq]; trivial)
+    (by rw [Ecc.WitnessPoint.pointNonIdFormal_assumptions_eq]; trivial)
+  rw [Ecc.WitnessPoint.pointNonIdFormal_spec_eq, wpointNonId_output] at hPkNS
+  have hNCnS := hNCn (by exact ⟨hT2, hFw, hTL, hDist⟩)
+    (by rw [NoteCommit.Main.circuit_assumptions_eq, ncInputs_eval_eq]
+        refine ⟨?_, ?_⟩
+        · show Point.OnCurve _
+          with_unfolding_all exact hGdNS
+        · show Point.OnCurve _
+          with_unfolding_all exact hPkNS)
+  rw [NoteCommit.Main.circuit_spec_eq, NoteCommit.Main.circuit_extract_eq] at hNCnS
+  rw [ncInputs_eval_eq] at hNCnS
+  have hNCnGuarded :=
+    (Specs.Sinsemilla.specOrBreak_hashToPointB_iff_guarded
+      (Or.inl B.noteQ_onCurve)
+      (fun m hm => G.S_onCurve (Specs.Sinsemilla.chunksOf_mem_lt (by
+        rw [NoteCommit.NoteCommitScalars.chunks,
+          Specs.Sinsemilla.noteCommitChunks] at hm
+        exact hm)))).mp hNCnS.2
+  clear hNCo hGdN hPkN hNCn
+  simp only [Point.eval_eq, circuit_norm,
+    Nat.add_zero] at hGdNS hPkNS
+  -- the "constrain equal" region: derived cm_old = witnessed cm_old
+  try simp only [circuit_norm] at hEqR
+  try simp only [circuit_norm] at hOrch
+  -- ── assemble the statement ──
+  simp only [Spec, SpecBase, extractBase, extract, cellRead, circuit_norm,
+    Nat.add_zero, Nat.add_assoc]
+  refine ⟨⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩,
+    ?_, ?_, ?_, ?_⟩
+  · exact hCmS
+  · exact hGdS
+  · exact hAkS
+  · exact hAIS.1
+  · exact hGdNS
+  · exact hPkNS
+  · -- `v_old < 2^64` (old NoteCommit's value decomposition)
+    with_unfolding_all exact hNCoS.1
+  · -- `v_new < 2^64` (new NoteCommit's value decomposition)
+    with_unfolding_all exact hNCnS.1
+  · -- value-commitment integrity
+    obtain ⟨hm, hdisj⟩ := hVCS
+    have hP : ({ x := env.inst cfg.primary ((CV_NET_X : ℕ) : ℤ),
+                 y := env.inst cfg.primary ((CV_NET_Y : ℕ) : ℤ) } : Point Fp)
+        = eval (⟨place, env⟩ : Placed Environment Fp)
+            ((ValueCommit.circuit B.valueCommitV B.valueCommitR).output
+              (cfg.eccConfig.mulFixedShort, cfg.eccConfig.mulFixedFull,
+               cfg.eccConfig.add)
+              { rcv := input_var_rcv,
+                magnitude := AssignedCell.of (i₀ + 264) 0 (cfg.advices 9),
+                sign := AssignedCell.of (i₀ + 265) 0 (cfg.advices 9) }
+              (i₀ + 266)) := by
+      apply Point.ext_coords
+      show (env.inst cfg.primary ((CV_NET_X : ℕ) : ℤ),
+            env.inst cfg.primary ((CV_NET_Y : ℕ) : ℤ)) = _
+      rw [← hIcvx, ← hIcvy]
+      with_unfolding_all rfl
+    refine ⟨by with_unfolding_all exact hm, ?_⟩
+    rcases hdisj with ⟨hs, he⟩ | ⟨hs, he⟩
+    · with_unfolding_all exact Or.inl ⟨by exact hs, by rw [hP]; exact he⟩
+    · with_unfolding_all exact Or.inr ⟨by exact hs, by rw [hP]; exact he⟩
+  · -- nullifier integrity
+    with_unfolding_all exact hInf.symm.trans (by exact hDNS)
+  · -- spend authority
+    have hP : ({ x := env.inst cfg.primary ((RK_X : ℕ) : ℤ),
+                 y := env.inst cfg.primary ((RK_Y : ℕ) : ℤ) } : Point Fp)
+        = eval (⟨place, env⟩ : Placed Environment Fp)
+            ((SpendAuthority.circuit B.spendAuthG).output
+              (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add)
+              { alpha := input_var_alpha,
+                akP := { x := AssignedCell.of (i₀ + 4) 0 cfg.eccConfig.witnessPoint.x,
+                         y := AssignedCell.of (i₀ + 4) 0 cfg.eccConfig.witnessPoint.y } }
+              (i₀ + 280)) := by
+      apply Point.ext_coords
+      show (env.inst cfg.primary ((RK_X : ℕ) : ℤ),
+            env.inst cfg.primary ((RK_Y : ℕ) : ℤ)) = _
+      rw [← hIrkx, ← hIrky]
+      with_unfolding_all rfl
+    rw [hP, hSAS]
+    with_unfolding_all rfl
+  · -- diversified-address integrity
+    with_unfolding_all exact ⟨_, by exact hCISGuarded, by exact hAIS.2⟩
+  · -- old note-commitment integrity
+    refine Specs.Sinsemilla.HashGuarded.mono ?_
+      (by with_unfolding_all exact hNCoGuarded)
+    intro bp hbp
+    have hcmP : ({ x := env.advice cfg.eccConfig.witnessPoint.x ((place (i₀ + 2) : ℕ) : ℤ),
+                   y := env.advice cfg.eccConfig.witnessPoint.y ((place (i₀ + 2) : ℕ) : ℤ) }
+                : Point Fp)
+        = eval (⟨place, env⟩ : Placed Environment Fp)
+            ((NoteCommit.Main.circuit G B.noteCommitR B.noteQ
+              B.noteQ_onCurve).output
+              { gates := cfg.noteCommitOld, hashConfig := cfg.sinsemilla1,
+                lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
+                addConfig := cfg.eccConfig.add }
+              { gdX := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.x,
+                gdY := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.y,
+                pkdX := AssignedCell.of (i₀ + 301) 0 cfg.eccConfig.witnessPoint.x,
+                pkdY := AssignedCell.of (i₀ + 301) 0 cfg.eccConfig.witnessPoint.y,
+                value := AssignedCell.of (i₀ + 6) 0 (cfg.advices 0),
+                rho := AssignedCell.of (i₀ + 1) 0 (cfg.advices 0),
+                psi := AssignedCell.of i₀ 0 (cfg.advices 0),
+                rcm := input_var_rcmOld }
+              (i₀ + 303)) := by
+      simp only [input_var_rcmOld]
+      apply Point.ext_coords
+      simp only [Point.coords]
+      rw [← hEqR.1, ← hEqR.2]
+      simp only [circuit_norm, explicit_provable_type]
+    rw [hcmP]
+    exact hbp
+  · -- new note-commitment integrity
+    rw [← hInf]
+    refine Specs.Sinsemilla.HashGuarded.mono ?_
+      (by with_unfolding_all exact hNCnGuarded)
+    intro bp hbp
+    rw [← hIcmx]
+    with_unfolding_all exact congrArg Point.x hbp
+  · -- Merkle path validity + the anchor check
+    obtain ⟨hOv, hOn, hOm, hOs, hOr, hOa, hOes, hOeo, hGate⟩ := hOrch
+    have hExact := Sinsemilla.Merkle.ExactMerklePathData.trans G B.merkleQ
+      0 16 16 _ _ _ _ _ _ _ _ _ hM1S.1 hM2S.1
+    norm_num at hExact
+    simp only [orchardGate, Gate.withSelector, circuit_norm, List.Forall] at hGate
+    have h := hGate.2.1
+    rw [hOv, hOr, hOa] at h
+    refine ⟨_, ?_, by with_unfolding_all exact h⟩
+    rcases hExact with ⟨nodes, h0, hd, hs⟩
+    refine ⟨nodes, by with_unfolding_all exact h0,
+      by with_unfolding_all exact hd, ?_⟩
+    intro j hj
+    have hstep := hs j hj
+    by_cases h16 : j < 16
+    · simp only [merkleLeftEncoding, merkleRightEncoding, merkleSide,
+        dif_pos hj, h16, if_true] at ⊢
+      simpa [Sinsemilla.Merkle.CalculateRoot.circuit,
+        Sinsemilla.Merkle.CalculateRoot.extractWitness,
+        Sinsemilla.Merkle.HashLayer.circuit,
+        Sinsemilla.Merkle.HashLayer.leftEncoding,
+        Sinsemilla.Merkle.HashLayer.rightEncoding, circuit_norm,
+        Nat.add_assoc, h16] using hstep
+    · simp only [merkleLeftEncoding, merkleRightEncoding, merkleSide,
+        dif_pos hj, h16, if_false] at ⊢
+      simpa [Sinsemilla.Merkle.CalculateRoot.circuit,
+        Sinsemilla.Merkle.CalculateRoot.extractWitness,
+        Sinsemilla.Merkle.HashLayer.circuit,
+        Sinsemilla.Merkle.HashLayer.leftEncoding,
+        Sinsemilla.Merkle.HashLayer.rightEncoding, circuit_norm,
+        Nat.add_assoc, h16] using hstep
+  · -- `v_old − v_new = magnitude · sign`
+    obtain ⟨hOv, hOn, hOm, hOs, hOr, hOa, hOes, hOeo, hGate⟩ := hOrch
+    simp only [orchardGate, Gate.withSelector, circuit_norm, List.Forall] at hGate
+    have h := hGate.1
+    rw [hOv, hOn, hOm, hOs] at h
+    linear_combination h
+  · -- the enable-flag checks
+    obtain ⟨hOv, hOn, hOm, hOs, hOr, hOa, hOes, hOeo, hGate⟩ := hOrch
+    simp only [orchardGate, Gate.withSelector, circuit_norm, List.Forall] at hGate
+    refine ⟨?_, ?_⟩
+    · have h := hGate.2.2.1
+      rw [hOv, hOes] at h
+      linear_combination h
+    · have h := hGate.2.2.2
+      rw [hOn, hOeo] at h
+      linear_combination h
+  -- output ties: the four witnessed address points — the canonical `elaborated` unfold
+  -- lands h_output destructured to exactly these advice-atom pairs
+  · exact ⟨h_output.1.1.symm, h_output.1.2.symm⟩
+  · exact ⟨h_output.2.1.1.symm, h_output.2.1.2.symm⟩
+  · exact ⟨h_output.2.2.1.1.symm, h_output.2.2.1.2.symm⟩
+  · exact ⟨h_output.2.2.2.1.symm, h_output.2.2.2.2.symm⟩
+
+open Sinsemilla.Merkle.CalculateRoot (pathNode) in
+/-- Honest-prover preconditions: well-formed witness points, 3-bit windows for the five
+fixed-base scalars, a fully-defined Merkle path, defined Sinsemilla hashes for the three
+commitment legs (with the honest commitment equations for the copies/instance rows),
+and the `q_orchard` value checks at the honest values. -/
+def ProverAssumptionsCore (G : Generators) (B : Bases)
+    (wit : ActionData) : Prop :=
+  wit.cmOld.Valid ∧ wit.gdOld.OnCurve ∧ wit.akP.OnCurve ∧ wit.pkdOld.OnCurve ∧
+  wit.gdNew.OnCurve ∧ wit.pkdNew.OnCurve ∧
+  (∀ w : Fin 85, (wit.rcv.1[w.val]).val < 8) ∧
+  (∀ w : Fin 85, (wit.alpha.1[w.val]).val < 8) ∧
+  (∀ w : Fin 85, (wit.rivk.1[w.val]).val < 8) ∧
+  (∀ w : Fin 85, (wit.rcmOld.1[w.val]).val < 8) ∧
+  (∀ w : Fin 85, (wit.rcmNew.1[w.val]).val < 8) ∧
+  wit.magnitude.val < 2 ^ 64 ∧ (wit.sign = 1 ∨ wit.sign = -1) ∧
+  (show Fp from wit.vOld).val < 2 ^ 64 ∧ (show Fp from wit.vNew).val < 2 ^ 64 ∧
+  -- the Merkle path is fully defined, split at the chip boundary
+  (∃ mid, pathNode G B.merkleQ 0 wit.merklePath wit.cmOld.x 16 = some mid ∧
+    ∃ root, pathNode G B.merkleQ 16 (fun j => wit.merklePath (16 + j)) mid 16
+      = some root ∧
+    -- NOT `anchor = root`: an honest dummy spend has `v_old = 0` with an arbitrary
+    -- path, so only the product form holds (§4.17.4 "either v_old = 0 or …").
+    wit.vOld * (root - wit.anchor) = 0) ∧
+  -- the three Sinsemilla legs are defined, with the honest commitment equations
+  (∃ Bi, hashToPoint G.S B.ivkQ
+      (commitIvkChunks wit.akP.x.val wit.nk.val) = some Bi ∧
+    wit.pkdOld = ((Bi + wit.rivk.2 • B.commitIvkR).x).val • wit.gdOld) ∧
+  (∃ Bo, hashToPoint G.S B.noteQ
+      (NoteCommit.noteScalars wit.gdOld wit.pkdOld wit.vOld
+        wit.rhoOld wit.psiOld).chunks = some Bo ∧
+    wit.cmOld = Bo + wit.rcmOld.2 • B.noteCommitR) ∧
+  (∃ Bn, hashToPoint G.S B.noteQ
+      (NoteCommit.noteScalars wit.gdNew wit.pkdNew wit.vNew
+        wit.nfOld wit.psiNew).chunks = some Bn ∧
+    wit.cmx = (Bn + wit.rcmNew.2 • B.noteCommitR).x) ∧
+  -- the public-input rows are the honestly computed values
+  ((wit.sign = 1 →
+      (⟨wit.cvX, wit.cvY⟩ : Point Fp)
+        = (wit.magnitude.val : Fq) • B.valueCommitV
+          + wit.rcv.2 • B.valueCommitR) ∧
+   (wit.sign = -1 →
+      (⟨wit.cvX, wit.cvY⟩ : Point Fp)
+        = -(wit.magnitude.val : Fq) • B.valueCommitV
+          + wit.rcv.2 • B.valueCommitR)) ∧
+  wit.nfOld = (wit.cmOld +
+    ((Poseidon.Hash.ConstantLength.value #v[wit.nk, wit.rhoOld]
+      + wit.psiOld).val : Fq) • B.nullifierK).x ∧
+  (⟨wit.rkX, wit.rkY⟩ : Point Fp)
+    = wit.alpha.2 • B.spendAuthG + wit.akP ∧
+  -- the remaining `q_orchard` value checks at the honest values
+  wit.vOld - wit.vNew = wit.magnitude * wit.sign ∧
+  wit.vOld * (1 - wit.enableSpend) = 0 ∧
+  wit.vNew * (1 - wit.enableOutput) = 0
+
+/-- Honest-prover assumptions for the closed base circuit. -/
+def ProverAssumptions (G : Generators) (B : Bases)
+    (_ : ProverValue unit Fp) (wit : ActionData) (_ : ProverHint Fp) : Prop :=
+  ProverAssumptionsCore G B wit
+
+/-! ## Completeness -/
+
+private theorem buildWitness (G : Generators) (W : Witnesses Fp) (cfg : Config)
+    (i₀ : RegionIndex) (place : RegionIndex → ℕ) (env : Environment Fp)
+    (hT : Halo2.Constraints place env
+      ((Sinsemilla.load G cfg.sinsemilla1.generatorTable).operations i₀) i₀)
+    (h1 : Constraints place env
+      ((Ecc.WitnessPoint.pointFormal.call
+        cfg.eccConfig.witnessPoint W.cmOld).operations (i₀ + 2)) (i₀ + 2))
+    (h2 : Constraints place env
+      ((Ecc.WitnessPoint.pointNonIdFormal.call
+        cfg.eccConfig.witnessPoint W.gdOld).operations (i₀ + 3)) (i₀ + 3))
+    (h3 : Constraints place env
+      ((Ecc.WitnessPoint.pointNonIdFormal.call
+        cfg.eccConfig.witnessPoint W.akP).operations (i₀ + 4)) (i₀ + 4)) :
+    Constraints place env ((synthWitness G W cfg).operations i₀) i₀ := by
+  simp only [Sinsemilla.load, circuit_norm] at hT
+  simp only [synthWitness, loadPrivate, Sinsemilla.load, circuit_norm,
+    Nat.add_assoc, Nat.reduceAdd]
+  exact ⟨hT.1, hT.2.1, hT.2.2.1, hT.2.2.2.1, hT.2.2.2.2.1, hT.2.2.2.2.2,
+    h1, h2, h3⟩
+
+theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
+    FormalCircuit.Completeness (Witness := fun _ => ActionData)
+      (fun _ : Unit => configure G) (main G B) cfg
+      (extractBase cfg) (EnvAssumptions cfg) (fun _ => True)
+      (ProverAssumptions G B) (fun _ _ _ _ => True) := by
+  circuit_proof_start
+  simp only [extractBase] at hPA
+  obtain ⟨hVcm, hVgd, hVak, hVpk, hVgdn, hVpkn, hWrcv, hWal, hWri, hWro, hWrn,
+    hMag, hSign, hV64o, hV64n, ⟨mid, hMid, root, hRootP, hVanch⟩,
+    ⟨Bi, hBi, hPkd⟩, ⟨Bo, hBo, hCmOld⟩, ⟨Bn, hBn, hCmx⟩,
+    ⟨hCv1, hCv2⟩, hNf, hRk, hVms, hVes, hVeo⟩ := hPA
+  -- Keep the historical local names in the detailed completeness proof, but bind
+  -- them to the one fixed top-level witness program.
+  let input_var : Witnesses Fp := hintWitnesses
+  let input_var_psiOld := hintWitnesses.psiOld
+  let input_var_rhoOld := hintWitnesses.rhoOld
+  let input_var_nk := hintWitnesses.nk
+  let input_var_vOld := hintWitnesses.vOld
+  let input_var_vNew := hintWitnesses.vNew
+  let input_var_psiNew := hintWitnesses.psiNew
+  let input_var_magnitude := hintWitnesses.magnitude
+  let input_var_sign := hintWitnesses.sign
+  let input_var_cmOld := hintWitnesses.cmOld
+  let input_var_gdOld := hintWitnesses.gdOld
+  let input_var_akP := hintWitnesses.akP
+  let input_var_pkDOld := hintWitnesses.pkDOld
+  let input_var_gdNew := hintWitnesses.gdNew
+  let input_var_pkdNew := hintWitnesses.pkdNew
+  let input_var_rcv := hintWitnesses.rcv
+  let input_var_alpha := hintWitnesses.alpha
+  let input_var_rivk := hintWitnesses.rivk
+  let input_var_rcmOld := hintWitnesses.rcmOld
+  let input_var_rcmNew := hintWitnesses.rcmNew
+  let input_var_merkleSib := hintWitnesses.merkleSib
+  let input_var_merkleSwap := hintWitnesses.merkleSwap
+  simp only [CircuitPreIronwood.synthesize, synthesizeBase,
+    circuit_norm] at hwit ⊢
+  have hWw := hwit.1
+  have hWc := hwit.2.1
+  have hWn := hwit.2.2
+  clear hwit
+  have hLoadWitnesses := hWw
+  simp only [synthWitness, Circuit.operations_bind, Circuit.operations_pure,
+    List.append_nil] at hLoadWitnesses
+  rw [extendsWitnesses_append] at hLoadWitnesses
+  have hLoad : Constraints place env.toEnvironment
+      ((Sinsemilla.load G cfg.sinsemilla1.generatorTable).operations i₀) i₀ := by
+    simp only [Sinsemilla.load, circuit_norm] at hLoadWitnesses ⊢
+    exact hLoadWitnesses.1
+  obtain ⟨hT1, hT2, hTM1, hTM2, hBf, hMulE, hTL⟩ :=
+    loadedChildEnvFacts G cfg i₀
+      (⟨place, env.toEnvironment⟩ : Placed Environment Fp) _hE hLoad
+  obtain ⟨-, -, -, -, -, hFw, hSh, -, -, -, hDist⟩ := _hE
+  -- ── stage A witnesses: the shared cells are the programs' honest values ──
+  simp only [synthWitness, loadPrivate, Sinsemilla.load, circuit_norm] at hWw
+  obtain ⟨-, -, -, -, -, -, hwPsi, hwRho, hWcm, hWgd, hWak, hwNk, hwVo, hwVn⟩ := hWw
+  simp only [Nat.add_assoc, Nat.reduceAdd] at hWgd hWak
+  refine ⟨buildWitness G ⟨input_var_psiOld, input_var_rhoOld, input_var_nk, input_var_vOld,
+      input_var_vNew, input_var_psiNew, input_var_magnitude, input_var_sign,
+      input_var_cmOld, input_var_gdOld, input_var_akP, input_var_pkDOld,
+      input_var_gdNew, input_var_pkdNew, input_var_rcv, input_var_alpha,
+      input_var_rivk, input_var_rcmOld, input_var_rcmNew,
+      input_var_merkleSib, input_var_merkleSwap⟩ cfg i₀ place _
+    hLoad ?_ ?_ ?_, ?_⟩
+  · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+      Ecc.WitnessPoint.pointFormal
+      cfg.eccConfig.witnessPoint (i₀ + 2) place env _ hWcm
+      ⟨(by rw [Ecc.WitnessPoint.pointFormal_envAssumptions_eq]; trivial),
+       (by rw [Ecc.WitnessPoint.pointFormal_assumptions_eq]; trivial),
+       (by rw [Ecc.WitnessPoint.pointFormal_proverAssumptions_eq]
+           show Point.Valid _
+           rw [wpoint_eval_eq_cells _ _ _ _ _ hWcm]
+           exact hVcm)⟩
+  · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+      Ecc.WitnessPoint.pointNonIdFormal
+      cfg.eccConfig.witnessPoint (i₀ + 3) place env _ hWgd
+      ⟨(by rw [Ecc.WitnessPoint.pointNonIdFormal_envAssumptions_eq]; trivial),
+       (by rw [Ecc.WitnessPoint.pointNonIdFormal_assumptions_eq]; trivial),
+       (by rw [Ecc.WitnessPoint.pointNonIdFormal_proverAssumptions_eq]
+           show Point.OnCurve _
+           rw [wpointNonId_eval_eq_cells _ _ _ _ _ hWgd]
+           exact hVgd)⟩
+  · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+      Ecc.WitnessPoint.pointNonIdFormal
+      cfg.eccConfig.witnessPoint (i₀ + 4) place env _ hWak
+      ⟨(by rw [Ecc.WitnessPoint.pointNonIdFormal_envAssumptions_eq]; trivial),
+       (by rw [Ecc.WitnessPoint.pointNonIdFormal_assumptions_eq]; trivial),
+       (by rw [Ecc.WitnessPoint.pointNonIdFormal_proverAssumptions_eq]
+           show Point.OnCurve _
+           rw [wpointNonId_eval_eq_cells _ _ _ _ _ hWak]
+           exact hVak)⟩
+  · -- ── stages B and C ──
+    simp only [synthWitness_output, synthWitness_nextRegionIndex,
+      synthWitness_regionCount, Nat.add_assoc] at hWc hWn
+    simp only [synthChecks_eq, synthChecksProgram, loadPrivate, circuit_norm] at hWc
+    obtain ⟨hWm1, hWm2, hwMag, hwSign, hWvc, hWdn, hWsa, hWci, hWai⟩ := hWc
+    -- offsets are already folded (`circuit_norm` region-count bridges)
+    simp only [Nat.add_assoc, Nat.reduceAdd] at hWm2 hWvc hWdn hWsa hWci hWai
+    -- ── the fold contracts: honest mid/root landings ──
+    have hM1der := Halo2.SubcircuitRw.layouter_completeness_derived
+      (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve
+        0 16 (by norm_num) input_var_merkleSib input_var_merkleSwap)
+      (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig) (i₀ + 8) place env _ hWm1
+      (by rw [Sinsemilla.Merkle.CalculateRoot.circuit_envAssumptions_eq]; exact ⟨hTM1, hTL, hDist⟩)
+      (by rw [Sinsemilla.Merkle.CalculateRoot.circuit_assumptions_eq]; trivial)
+      (by show ((Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 0 _ _ 16).isSome)
+          rw [Sinsemilla.Merkle.CalculateRoot.pathNode_congr G B.merkleQ 0 _ 16
+            (w' := fun j => (extract cfg input_var i₀
+              (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath j)
+            (h := by
+              intro j hj
+              simp only [extract, cellRead, if_pos hj]
+              with_unfolding_all rfl)]
+          rw [show ((Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 0
+              (fun j => (extract cfg input_var i₀
+                (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath j) _ 16))
+            = (Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 0
+              (extract cfg input_var i₀
+                (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath
+              (extract cfg input_var i₀
+                (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).cmOld.x 16)
+            from by with_unfolding_all rfl]
+          rw [hMid]
+          rfl)
+    -- fold 1 lands on `mid`
+    have hM1mid : (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+        ((Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve
+          0 16 (by norm_num) input_var_merkleSib input_var_merkleSwap).output
+          (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig)
+          { node := AssignedCell.of (i₀ + 2) 0 cfg.eccConfig.witnessPoint.x }
+          (i₀ + 8)) : Fp) = mid := by
+      refine hM1der.2 mid ?_
+      rw [show (fun j => ((Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve
+          0 16 (by norm_num) input_var_merkleSib input_var_merkleSwap).extract
+          (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig) _ (i₀ + 8)
+          (⟨place, env.toEnvironment⟩ : Placed Environment Fp) j).pair)
+        = fun j => ((eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+            (AssignedCell.of (i₀ + 8 + 8 * j) 0 cfg.merkle1.condSwap.b : Var field Fp) : Fp),
+          (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+            (AssignedCell.of (i₀ + 8 + 8 * j) 0 cfg.merkle1.condSwap.swap : Var field Fp) : Fp)) from by
+        funext j
+        with_unfolding_all rfl]
+      rw [Sinsemilla.Merkle.CalculateRoot.pathNode_congr G B.merkleQ 0 _ 16
+        (w' := fun j => (extract cfg input_var i₀
+          (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath j)
+        (h := by
+          intro j hj
+          simp only [extract, cellRead, if_pos hj]
+          try simp only [circuit_norm, explicit_provable_type])]
+      rw [show ((Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 0
+          (fun j => (extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath j) _ 16))
+        = (Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 0
+          (extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath
+          (extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).cmOld.x 16)
+        from by with_unfolding_all rfl]
+      exact hMid
+    have hM2der := Halo2.SubcircuitRw.layouter_completeness_derived
+      (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve
+        16 16 (by norm_num) (fun i => input_var_merkleSib (16 + i))
+        (fun i => input_var_merkleSwap (16 + i)))
+      (cfg.merkle2.condSwap, cfg.merkle2, cfg.lookupConfig) (i₀ + 136) place env _
+      hWm2
+      (by rw [Sinsemilla.Merkle.CalculateRoot.circuit_envAssumptions_eq]; exact ⟨hTM2, hTL, hDist⟩)
+      (by rw [Sinsemilla.Merkle.CalculateRoot.circuit_assumptions_eq]; trivial)
+      (by show ((Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 16
+            _ _ 16).isSome)
+          rw [Sinsemilla.Merkle.CalculateRoot.pathNode_congr₂ G B.merkleQ 16 16
+            (w' := fun j => (extract cfg input_var i₀
+              (⟨place, env.toEnvironment⟩
+                : Placed Environment Fp)).merklePath (16 + j))
+            (node' := mid)
+            (hw := by
+              intro j hj
+              simp only [extract, cellRead,
+                show ¬(16 + j < 16) from by omega, if_false,
+                show 16 + j - 16 = j from by omega]
+              try with_unfolding_all rfl)
+            (hn := by with_unfolding_all exact hM1mid)]
+          rw [hRootP]
+          rfl)
+    -- fold 2 lands on `root`
+    have hM2root : (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+        ((Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve
+          16 16 (by norm_num) (fun i => input_var_merkleSib (16 + i))
+          (fun i => input_var_merkleSwap (16 + i))).output
+          (cfg.merkle2.condSwap, cfg.merkle2, cfg.lookupConfig)
+          { node := (Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ
+              B.merkleQ_onCurve 0 16 (by norm_num) input_var_merkleSib input_var_merkleSwap).output
+              (cfg.merkle1.condSwap, cfg.merkle1, cfg.lookupConfig)
+              { node := AssignedCell.of (i₀ + 2) 0 cfg.eccConfig.witnessPoint.x }
+              (i₀ + 8) }
+          (i₀ + 136)) : Fp) = root := by
+      refine hM2der.2 root ?_
+      rw [show (fun j => ((Sinsemilla.Merkle.CalculateRoot.circuit G B.merkleQ B.merkleQ_onCurve
+          16 16 (by norm_num) (fun i => input_var_merkleSib (16 + i))
+          (fun i => input_var_merkleSwap (16 + i))).extract
+          (cfg.merkle2.condSwap, cfg.merkle2, cfg.lookupConfig) _ (i₀ + 136)
+          (⟨place, env.toEnvironment⟩ : Placed Environment Fp) j).pair)
+        = fun j => ((eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+            (AssignedCell.of (i₀ + 136 + 8 * j) 0 cfg.merkle2.condSwap.b : Var field Fp) : Fp),
+          (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+            (AssignedCell.of (i₀ + 136 + 8 * j) 0 cfg.merkle2.condSwap.swap : Var field Fp) : Fp)) from by
+        funext j
+        with_unfolding_all rfl]
+      rw [Sinsemilla.Merkle.CalculateRoot.pathNode_congr₂ G B.merkleQ 16 16
+        (w' := fun j => (extract cfg input_var i₀
+          (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath (16 + j))
+        (node' := mid)
+        (hw := by
+          intro j hj
+          simp only [extract, cellRead,
+            show ¬(16 + j < 16) from by omega, if_false,
+            show 16 + j - 16 = j from by omega]
+          try with_unfolding_all rfl)
+        (hn := by with_unfolding_all exact hM1mid)]
+      exact hRootP
+    -- ── the remaining child contracts (for the instance rows and the gate) ──
+    have hVCder := (Halo2.SubcircuitRw.layouter_completeness_derived
+      (ValueCommit.circuit B.valueCommitV B.valueCommitR)
+      (cfg.eccConfig.mulFixedShort, cfg.eccConfig.mulFixedFull, cfg.eccConfig.add)
+      (i₀ + 266) place env _ hWvc (by exact ⟨hSh, hFw⟩) (by trivial)
+      (by rw [ValueCommit.circuit_proverAssumptions_eq, vcInputs_eval_eq_prover]
+          refine ⟨?_, ?_⟩
+          · with_unfolding_all exact hMag
+          · with_unfolding_all exact hSign)).1
+    have hDNder := (Halo2.SubcircuitRw.layouter_completeness_derived
+      (DeriveNullifier.circuit B.nullifierK)
+      (cfg.poseidonConfig, cfg.addChipConfig, cfg.eccConfig.mulFixedBaseField,
+       cfg.eccConfig.add) (i₀ + 271) place env _ hWdn (by exact hBf)
+      (by rw [DeriveNullifier.circuit_assumptions_eq, dnInputs_eval_eq]
+          show Point.Valid _
+          simp only [Point.eval_eq]
+          exact hVcm)
+      (by trivial)).1
+    have hSAder := (Halo2.SubcircuitRw.layouter_completeness_derived
+      (SpendAuthority.circuit B.spendAuthG)
+      (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add) (i₀ + 280) place env _ hWsa
+      (by exact hFw)
+      (by rw [SpendAuthority.circuit_assumptions_eq, saInputs_eval_eq]
+          show Point.Valid _
+          simp only [Point.eval_eq]
+          exact Or.inl hVak)
+      (by trivial)).1
+    have hCIder := (Halo2.SubcircuitRw.layouter_completeness_derived
+      (CommitIvk.Main.circuit G B.commitIvkR B.ivkQ B.ivkQ_onCurve)
+      { gate := cfg.commitIvkConfig, hashConfig := cfg.sinsemilla1,
+        lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
+        addConfig := cfg.eccConfig.add } (i₀ + 283) place env _ hWci
+      (by exact ⟨hT1, hFw, hTL, hDist⟩) (by trivial)
+      (by rw [CommitIvk.Main.circuit_proverAssumptions_eq]
+          rw [civkInputs_eval_eq_prover]
+          with_unfolding_all exact ⟨Bi, by exact hBi⟩)).1
+    -- the ivk output cell carries the honest commitment value
+    have hIvkVal : (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+        ((CommitIvk.Main.circuit G B.commitIvkR B.ivkQ
+          B.ivkQ_onCurve).output
+          { gate := cfg.commitIvkConfig, hashConfig := cfg.sinsemilla1,
+            lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
+            addConfig := cfg.eccConfig.add }
+          { ak := AssignedCell.of (i₀ + 4) 0 cfg.eccConfig.witnessPoint.x,
+            nk := AssignedCell.of (i₀ + 5) 0 (cfg.advices 0),
+            rivk := input_var_rivk }
+          (i₀ + 283)) : Fp)
+        = (Bi + (extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).rivk.2
+              • B.commitIvkR).x := by
+      rw [CommitIvk.Main.circuit_spec_eq, CommitIvk.Main.circuit_extract_eq] at hCIder
+      rw [civkInputs_eval_eq] at hCIder
+      simp only [circuit_norm,
+        Nat.add_zero] at hCIder
+      have hBi' : hashToPoint G.S B.ivkQ
+          (commitIvkChunks
+            (env.advice cfg.eccConfig.witnessPoint.x
+              ((place (i₀ + 4) : ℕ) : ℤ)).val
+            (env.advice (cfg.advices 0) ((place (i₀ + 5) : ℕ) : ℤ)).val) =
+          some Bi := by
+        with_unfolding_all exact hBi
+      rw [Specs.Sinsemilla.hashToPointB_inl_of_some hBi'] at hCIder
+      simp only [circuit_norm, explicit_provable_type]; exact hCIder
+    -- ── stage C witnesses and contracts ──
+    simp only [synthChecks_output, synthChecks_nextRegionIndex,
+      synthChecks_regionCount, Nat.add_assoc, Nat.reduceAdd] at hWn
+    simp only [synthNotes_eq, synthNotesProgram, synthOrchardChecks, loadPrivate,
+      circuit_norm] at hWn
+    obtain ⟨hWnco, hWgdn, hWpkn, hwPsiN, hWncn, hWorch⟩ := hWn
+    simp only [Nat.add_assoc, Nat.reduceAdd] at hWgdn hWpkn hWncn hWorch
+    have hNCoDer := (Halo2.SubcircuitRw.layouter_completeness_derived
+      (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
+        B.noteQ_onCurve)
+      { gates := cfg.noteCommitOld, hashConfig := cfg.sinsemilla1,
+        lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
+        addConfig := cfg.eccConfig.add } (i₀ + 303) place env _ hWnco
+      (by exact ⟨hT1, hFw, hTL, hDist⟩)
+      (by rw [NoteCommit.Main.circuit_assumptions_eq, ncInputs_eval_eq]
+          refine ⟨?_, ?_⟩
+          · show Point.OnCurve _
+            exact hVgd
+          · show Point.OnCurve _
+            exact hVpk)
+      (by rw [NoteCommit.Main.circuit_proverAssumptions_eq]
+          rw [ncInputs_eval_eq_prover]
+          refine ⟨?_, ?_, ?_, ?_⟩
+          · with_unfolding_all exact hVgd
+          · with_unfolding_all exact hVpk
+          · with_unfolding_all exact hV64o
+          · refine ⟨Bo, ?_⟩
+            with_unfolding_all exact hBo)).1
+    -- the nullifier output cell carries the honest `nf_old` (= the NF_OLD row)
+    have hDNval : (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+        ((DeriveNullifier.circuit B.nullifierK).output
+          (cfg.poseidonConfig, cfg.addChipConfig, cfg.eccConfig.mulFixedBaseField,
+           cfg.eccConfig.add)
+          { nk := AssignedCell.of (i₀ + 5) 0 (cfg.advices 0),
+            rho := AssignedCell.of (i₀ + 1) 0 (cfg.advices 0),
+            psi := AssignedCell.of i₀ 0 (cfg.advices 0),
+            cm := { x := AssignedCell.of (i₀ + 2) 0 cfg.eccConfig.witnessPoint.x,
+                    y := AssignedCell.of (i₀ + 2) 0 cfg.eccConfig.witnessPoint.y } }
+          (i₀ + 271)) : Fp)
+        = (extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).nfOld := by
+      rw [DeriveNullifier.circuit_spec_eq, dnInputs_eval_eq] at hDNder
+      rw [hNf]
+      with_unfolding_all exact hDNder
+    have hNCnDer := (Halo2.SubcircuitRw.layouter_completeness_derived
+      (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
+        B.noteQ_onCurve)
+      { gates := cfg.noteCommitNew, hashConfig := cfg.sinsemilla2,
+        lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
+        addConfig := cfg.eccConfig.add } (i₀ + 350) place env _ hWncn
+      (by exact ⟨hT2, hFw, hTL, hDist⟩)
+      (by rw [NoteCommit.Main.circuit_assumptions_eq, ncInputs_eval_eq]
+          refine ⟨?_, ?_⟩
+          · show Point.OnCurve _
+            exact hVgdn
+          · show Point.OnCurve _
+            exact hVpkn)
+      (by rw [NoteCommit.Main.circuit_proverAssumptions_eq]
+          rw [ncInputs_eval_eq_prover]
+          refine ⟨?_, ?_, ?_, ?_⟩
+          · with_unfolding_all exact hVgdn
+          · with_unfolding_all exact hVpkn
+          · with_unfolding_all exact hV64n
+          · refine ⟨Bn, ?_⟩
+            rw [show (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+                ((DeriveNullifier.circuit B.nullifierK).output
+                  (cfg.poseidonConfig, cfg.addChipConfig,
+                   cfg.eccConfig.mulFixedBaseField, cfg.eccConfig.add)
+                  { nk := AssignedCell.of (i₀ + 5) 0 (cfg.advices 0),
+                    rho := AssignedCell.of (i₀ + 1) 0 (cfg.advices 0),
+                    psi := AssignedCell.of i₀ 0 (cfg.advices 0),
+                    cm := { x := AssignedCell.of (i₀ + 2) 0
+                              cfg.eccConfig.witnessPoint.x,
+                            y := AssignedCell.of (i₀ + 2) 0
+                              cfg.eccConfig.witnessPoint.y } }
+                  (i₀ + 271)) : Fp)
+              = (extract cfg input_var i₀
+                  (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).nfOld
+              from hDNval]
+            with_unfolding_all exact hBn)).1
+    -- the honest instance-row values of the child outputs
+    have hCVval : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+        ((ValueCommit.circuit B.valueCommitV B.valueCommitR).output
+          (cfg.eccConfig.mulFixedShort, cfg.eccConfig.mulFixedFull,
+           cfg.eccConfig.add)
+          { rcv := input_var_rcv,
+            magnitude := AssignedCell.of (i₀ + 264) 0 (cfg.advices 9),
+            sign := AssignedCell.of (i₀ + 265) 0 (cfg.advices 9) }
+          (i₀ + 266)) : Point Fp)
+        = ⟨(extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).cvX,
+           (extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).cvY⟩ := by
+      rw [ValueCommit.circuit_spec_eq, ValueCommit.circuit_extract_eq, vcInputs_eval_eq] at hVCder
+      obtain ⟨hm, hdisj⟩ := hVCder
+      rcases hdisj with ⟨hs, he⟩ | ⟨hs, he⟩
+      · rw [he]
+        with_unfolding_all exact (hCv1 (by exact hs)).symm
+      · rw [he]
+        with_unfolding_all exact (hCv2 (by exact hs)).symm
+    have hSAval : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+        ((SpendAuthority.circuit B.spendAuthG).output
+          (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add)
+          { alpha := input_var_alpha,
+            akP := { x := AssignedCell.of (i₀ + 4) 0 cfg.eccConfig.witnessPoint.x,
+                     y := AssignedCell.of (i₀ + 4) 0 cfg.eccConfig.witnessPoint.y } }
+          (i₀ + 280)) : Point Fp)
+        = ⟨(extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).rkX,
+           (extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).rkY⟩ := by
+      rw [SpendAuthority.circuit_spec_eq, SpendAuthority.circuit_extract_eq, saInputs_eval_eq] at hSAder
+      rw [hSAder]
+      rw [show ((⟨(extract cfg input_var i₀
+          (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).rkX,
+          (extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).rkY⟩ : Point Fp))
+        = (extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).alpha.2
+              • B.spendAuthG
+          + (extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).akP from hRk]
+      with_unfolding_all rfl
+    have hNCoval : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+        ((NoteCommit.Main.circuit G B.noteCommitR B.noteQ
+          B.noteQ_onCurve).output
+          { gates := cfg.noteCommitOld, hashConfig := cfg.sinsemilla1,
+            lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
+            addConfig := cfg.eccConfig.add }
+          { gdX := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.x,
+            gdY := AssignedCell.of (i₀ + 3) 0 cfg.eccConfig.witnessPoint.y,
+            pkdX := AssignedCell.of (i₀ + 301) 0 cfg.eccConfig.witnessPoint.x,
+            pkdY := AssignedCell.of (i₀ + 301) 0 cfg.eccConfig.witnessPoint.y,
+            value := AssignedCell.of (i₀ + 6) 0 (cfg.advices 0),
+            rho := AssignedCell.of (i₀ + 1) 0 (cfg.advices 0),
+            psi := AssignedCell.of i₀ 0 (cfg.advices 0),
+            rcm := input_var_rcmOld }
+          (i₀ + 303)) : Point Fp)
+        = (extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).cmOld := by
+      rw [NoteCommit.Main.circuit_spec_eq, NoteCommit.Main.circuit_extract_eq] at hNCoDer
+      rw [ncInputs_eval_eq] at hNCoDer
+      rw [hCmOld]
+      have hNCo := hNCoDer.2
+      have hNCoGuarded :=
+        (Specs.Sinsemilla.specOrBreak_hashToPointB_iff_guarded
+          (Or.inl B.noteQ_onCurve)
+          (fun m hm => G.S_onCurve (Specs.Sinsemilla.chunksOf_mem_lt (by
+            rw [NoteCommit.NoteCommitScalars.chunks,
+              Specs.Sinsemilla.noteCommitChunks] at hm
+            exact hm)))).mp hNCo
+      exact hNCoGuarded Bo (by with_unfolding_all exact hBo)
+    have hNCnval : (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+        ((NoteCommit.Main.circuit G B.noteCommitR B.noteQ
+          B.noteQ_onCurve).output
+          { gates := cfg.noteCommitNew, hashConfig := cfg.sinsemilla2,
+            lookupConfig := cfg.lookupConfig, mulConfig := cfg.eccConfig.mulFixedFull,
+            addConfig := cfg.eccConfig.add }
+          { gdX := AssignedCell.of (i₀ + 347) 0 cfg.eccConfig.witnessPoint.x,
+            gdY := AssignedCell.of (i₀ + 347) 0 cfg.eccConfig.witnessPoint.y,
+            pkdX := AssignedCell.of (i₀ + 348) 0 cfg.eccConfig.witnessPoint.x,
+            pkdY := AssignedCell.of (i₀ + 348) 0 cfg.eccConfig.witnessPoint.y,
+            value := AssignedCell.of (i₀ + 7) 0 (cfg.advices 0),
+            rho := (DeriveNullifier.circuit B.nullifierK).output
+              (cfg.poseidonConfig, cfg.addChipConfig,
+               cfg.eccConfig.mulFixedBaseField, cfg.eccConfig.add)
+              { nk := AssignedCell.of (i₀ + 5) 0 (cfg.advices 0),
+                rho := AssignedCell.of (i₀ + 1) 0 (cfg.advices 0),
+                psi := AssignedCell.of i₀ 0 (cfg.advices 0),
+                cm := { x := AssignedCell.of (i₀ + 2) 0 cfg.eccConfig.witnessPoint.x,
+                        y := AssignedCell.of (i₀ + 2) 0
+                          cfg.eccConfig.witnessPoint.y } }
+              (i₀ + 271),
+            psi := AssignedCell.of (i₀ + 349) 0 (cfg.advices 0),
+            rcm := input_var_rcmNew }
+          (i₀ + 350)) : Point Fp)
+        = Bn + (extract cfg input_var i₀
+            (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).rcmNew.2
+              • B.noteCommitR := by
+      rw [NoteCommit.Main.circuit_spec_eq, NoteCommit.Main.circuit_extract_eq] at hNCnDer
+      rw [ncInputs_eval_eq] at hNCnDer
+      rw [show ((eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp)
+          ((DeriveNullifier.circuit B.nullifierK).output
+            (cfg.poseidonConfig, cfg.addChipConfig,
+             cfg.eccConfig.mulFixedBaseField, cfg.eccConfig.add)
+            { nk := AssignedCell.of (i₀ + 5) 0 (cfg.advices 0),
+              rho := AssignedCell.of (i₀ + 1) 0 (cfg.advices 0),
+              psi := AssignedCell.of i₀ 0 (cfg.advices 0),
+              cm := { x := AssignedCell.of (i₀ + 2) 0 cfg.eccConfig.witnessPoint.x,
+                      y := AssignedCell.of (i₀ + 2) 0
+                        cfg.eccConfig.witnessPoint.y } }
+            (i₀ + 271) : Var field Fp) : Fp))
+          = (extract cfg input_var i₀
+              (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).nfOld
+          from by with_unfolding_all exact hDNval] at hNCnDer
+      have hNCn := hNCnDer.2
+      have hNCnGuarded :=
+        (Specs.Sinsemilla.specOrBreak_hashToPointB_iff_guarded
+          (Or.inl B.noteQ_onCurve)
+          (fun m hm => G.S_onCurve (Specs.Sinsemilla.chunksOf_mem_lt (by
+            rw [NoteCommit.NoteCommitScalars.chunks,
+              Specs.Sinsemilla.noteCommitChunks] at hm
+            exact hm)))).mp hNCn
+      exact hNCnGuarded Bn (by with_unfolding_all exact hBn)
+    -- ── assemble the stage-B and stage-C constraints ──
+    simp only [synthWitness_output, synthWitness_nextRegionIndex,
+      synthWitness_regionCount, synthChecks_output, synthChecks_nextRegionIndex,
+      synthChecks_regionCount, Nat.add_assoc, Nat.reduceAdd]
+    refine ⟨?_, ?_⟩
+    · simp only [synthChecks_eq, synthChecksProgram, loadPrivate, circuit_norm,
+        Nat.add_assoc, Nat.reduceAdd]
+      refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+      · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+          _ _ (i₀ + 8) place env _ hWm1
+          ⟨(by rw [Sinsemilla.Merkle.CalculateRoot.circuit_envAssumptions_eq]; exact ⟨hTM1, hTL, hDist⟩),
+           (by rw [Sinsemilla.Merkle.CalculateRoot.circuit_assumptions_eq]; trivial),
+           (by show ((Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 0
+                 _ _ 16).isSome)
+               rw [Sinsemilla.Merkle.CalculateRoot.pathNode_congr G B.merkleQ 0 _ 16
+                 (w' := fun j => (extract cfg input_var i₀
+                   (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath j)
+                 (h := by
+                   intro j hj
+                   simp only [extract, cellRead, if_pos hj]
+                   try with_unfolding_all rfl)]
+               rw [show ((Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 0
+                   (fun j => (extract cfg input_var i₀
+                     (⟨place, env.toEnvironment⟩
+                       : Placed Environment Fp)).merklePath j) _ 16))
+                 = (Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 0
+                   (extract cfg input_var i₀
+                     (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).merklePath
+                   (extract cfg input_var i₀
+                     (⟨place, env.toEnvironment⟩
+                       : Placed Environment Fp)).cmOld.x 16)
+                 from by with_unfolding_all rfl]
+               rw [hMid]
+               rfl)⟩
+      · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+          _ _ (i₀ + 136) place env _ hWm2
+          ⟨(by rw [Sinsemilla.Merkle.CalculateRoot.circuit_envAssumptions_eq]; exact ⟨hTM2, hTL, hDist⟩),
+           (by rw [Sinsemilla.Merkle.CalculateRoot.circuit_assumptions_eq]; trivial),
+           (by show ((Sinsemilla.Merkle.CalculateRoot.pathNode G B.merkleQ 16
+                 _ _ 16).isSome)
+               rw [Sinsemilla.Merkle.CalculateRoot.pathNode_congr₂ G B.merkleQ 16 16
+                 (w' := fun j => (extract cfg input_var i₀
+                   (⟨place, env.toEnvironment⟩
+                     : Placed Environment Fp)).merklePath (16 + j))
+                 (node' := mid)
+                 (hw := by
+                   intro j hj
+                   simp only [extract, cellRead,
+                     show ¬(16 + j < 16) from by omega, if_false,
+                     show 16 + j - 16 = j from by omega]
+                   try with_unfolding_all rfl)
+                 (hn := by with_unfolding_all exact hM1mid)]
+               rw [hRootP]
+               rfl)⟩
+      · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+          (ValueCommit.circuit B.valueCommitV B.valueCommitR)
+          (cfg.eccConfig.mulFixedShort, cfg.eccConfig.mulFixedFull,
+           cfg.eccConfig.add) (i₀ + 266) place env _ hWvc
+          ⟨(by exact ⟨hSh, hFw⟩), (by trivial),
+           (by rw [ValueCommit.circuit_proverAssumptions_eq, vcInputs_eval_eq_prover]
+               refine ⟨?_, ?_⟩
+               · with_unfolding_all exact hMag
+               · with_unfolding_all exact hSign)⟩
+      · with_unfolding_all exact congrArg Point.x hCVval
+      · with_unfolding_all exact congrArg Point.y hCVval
+      · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+          (DeriveNullifier.circuit B.nullifierK)
+          (cfg.poseidonConfig, cfg.addChipConfig, cfg.eccConfig.mulFixedBaseField,
+           cfg.eccConfig.add) (i₀ + 271) place env _ hWdn
+          ⟨(by exact hBf),
+           (by rw [DeriveNullifier.circuit_assumptions_eq, dnInputs_eval_eq]
+               show Point.Valid _
+               simp only [Point.eval_eq]
+               exact hVcm),
+           (by trivial)⟩
+      · with_unfolding_all exact hDNval
+      · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+          (SpendAuthority.circuit B.spendAuthG)
+          (cfg.eccConfig.mulFixedFull, cfg.eccConfig.add) (i₀ + 280) place env _ hWsa
+          ⟨(by exact hFw),
+           (by rw [SpendAuthority.circuit_assumptions_eq, saInputs_eval_eq]
+               show Point.Valid _
+               simp only [Point.eval_eq]
+               exact Or.inl hVak),
+           (by trivial)⟩
+      · with_unfolding_all exact congrArg Point.x hSAval
+      · with_unfolding_all exact congrArg Point.y hSAval
+      · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+          (CommitIvk.Main.circuit G B.commitIvkR B.ivkQ
+            B.ivkQ_onCurve)
+          { gate := cfg.commitIvkConfig, hashConfig := cfg.sinsemilla1,
+            lookupConfig := cfg.lookupConfig,
+            mulConfig := cfg.eccConfig.mulFixedFull,
+            addConfig := cfg.eccConfig.add } (i₀ + 283) place env _ hWci
+          ⟨(by exact ⟨hT1, hFw, hTL, hDist⟩), (by trivial),
+           (by rw [CommitIvk.Main.circuit_proverAssumptions_eq]
+               rw [civkInputs_eval_eq_prover]
+               with_unfolding_all exact ⟨Bi, by exact hBi⟩)⟩
+      · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+          (AddressIntegrity.circuit)
+          (cfg.eccConfig.mul, cfg.eccConfig.witnessPoint) (i₀ + 297) place env _
+          hWai
+          ⟨(by exact hMulE),
+           (by rw [AddressIntegrity.circuit_assumptions_eq, aiInputs_eval_eq]
+               show Point.OnCurve _
+               simp only [Point.eval_eq]
+               exact hVgd),
+           (by rw [AddressIntegrity.circuit_proverAssumptions_eq, aiInputs_eval_eq_prover]
+               -- the honest `pk_d_old` hint equals the cells the AddressIntegrity witness
+               -- point assigns (region `i₀+301`), bridging it to the extract-level facts
+               have hAiPkW : Halo2.ExtendsWitnesses place env
+                   ((Ecc.WitnessPoint.pointNonIdFormal.call
+                     cfg.eccConfig.witnessPoint input_var.pkDOld).operations (i₀ + 301))
+                     (i₀ + 301) := by
+                 have h := hWai
+                 rw [FormalCircuit.call_operations] at h
+                 simp only [AddressIntegrity.circuit, Circuit.operations_bind,
+                   Circuit.operations_pure, operations_assignRegion,
+                   Halo2.extendsWitnesses_append, Halo2.extendsWitnesses_nil,
+                   FormalCircuit.nextRegionIndex_call,
+                   Ecc.Mul.mul_call_regionCount, Nat.add_assoc, Nat.reduceAdd,
+                   and_true] at h
+                 exact h.2.1
+               rw [wpointNonId_eval_eq_cells _ _ _ _ _ hAiPkW]
+               refine ⟨?_, ?_⟩
+               · exact hVpk
+               · have h := hPkd
+                 rw [← hIvkVal] at h
+                 with_unfolding_all exact h)⟩
+    · simp only [synthNotes_eq, synthNotesProgram, synthOrchardChecks, loadPrivate,
+        circuit_norm,
+        Nat.add_assoc, Nat.reduceAdd]
+      refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+      · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+          (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
+            B.noteQ_onCurve)
+          { gates := cfg.noteCommitOld, hashConfig := cfg.sinsemilla1,
+            lookupConfig := cfg.lookupConfig,
+            mulConfig := cfg.eccConfig.mulFixedFull,
+            addConfig := cfg.eccConfig.add } (i₀ + 303) place env _ hWnco
+          ⟨(by exact ⟨hT1, hFw, hTL, hDist⟩),
+           (by rw [NoteCommit.Main.circuit_assumptions_eq, ncInputs_eval_eq]
+               refine ⟨?_, ?_⟩
+               · show Point.OnCurve _
+                 exact hVgd
+               · show Point.OnCurve _
+                 exact hVpk),
+           (by rw [NoteCommit.Main.circuit_proverAssumptions_eq]
+               rw [ncInputs_eval_eq_prover]
+               refine ⟨?_, ?_, ?_, ?_⟩
+               · with_unfolding_all exact hVgd
+               · with_unfolding_all exact hVpk
+               · with_unfolding_all exact hV64o
+               · refine ⟨Bo, ?_⟩
+                 with_unfolding_all exact hBo)⟩
+      · refine ⟨?_, ?_⟩
+        · with_unfolding_all exact congrArg Point.x hNCoval
+        · with_unfolding_all exact congrArg Point.y hNCoval
+      · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+          Ecc.WitnessPoint.pointNonIdFormal
+          cfg.eccConfig.witnessPoint (i₀ + 347) place env _ hWgdn
+          ⟨(by rw [Ecc.WitnessPoint.pointNonIdFormal_envAssumptions_eq]; trivial),
+           (by rw [Ecc.WitnessPoint.pointNonIdFormal_assumptions_eq]; trivial),
+           (by rw [Ecc.WitnessPoint.pointNonIdFormal_proverAssumptions_eq]
+               show Point.OnCurve _
+               rw [wpointNonId_eval_eq_cells _ _ _ _ _ hWgdn]
+               exact hVgdn)⟩
+      · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+          Ecc.WitnessPoint.pointNonIdFormal
+          cfg.eccConfig.witnessPoint (i₀ + 348) place env _ hWpkn
+          ⟨(by rw [Ecc.WitnessPoint.pointNonIdFormal_envAssumptions_eq]; trivial),
+           (by rw [Ecc.WitnessPoint.pointNonIdFormal_assumptions_eq]; trivial),
+           (by rw [Ecc.WitnessPoint.pointNonIdFormal_proverAssumptions_eq]
+               show Point.OnCurve _
+               rw [wpointNonId_eval_eq_cells _ _ _ _ _ hWpkn]
+               exact hVpkn)⟩
+      · exact Halo2.SubcircuitRw.layouter_completeness_leaf
+          (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
+            B.noteQ_onCurve)
+          { gates := cfg.noteCommitNew, hashConfig := cfg.sinsemilla2,
+            lookupConfig := cfg.lookupConfig,
+            mulConfig := cfg.eccConfig.mulFixedFull,
+            addConfig := cfg.eccConfig.add } (i₀ + 350) place env _ hWncn
+          ⟨(by exact ⟨hT2, hFw, hTL, hDist⟩),
+           (by rw [NoteCommit.Main.circuit_assumptions_eq, ncInputs_eval_eq]
+               refine ⟨?_, ?_⟩
+               · show Point.OnCurve _
+                 exact hVgdn
+               · show Point.OnCurve _
+                 exact hVpkn),
+           (by rw [NoteCommit.Main.circuit_proverAssumptions_eq]
+               rw [ncInputs_eval_eq_prover]
+               refine ⟨?_, ?_, ?_, ?_⟩
+               · with_unfolding_all exact hVgdn
+               · with_unfolding_all exact hVpkn
+               · with_unfolding_all exact hV64n
+               · refine ⟨Bn, ?_⟩
+                 rw [show ((eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+                     ((DeriveNullifier.circuit B.nullifierK).output
+                       (cfg.poseidonConfig, cfg.addChipConfig,
+                        cfg.eccConfig.mulFixedBaseField, cfg.eccConfig.add)
+                       { nk := AssignedCell.of (i₀ + 5) 0 (cfg.advices 0),
+                         rho := AssignedCell.of (i₀ + 1) 0 (cfg.advices 0),
+                         psi := AssignedCell.of i₀ 0 (cfg.advices 0),
+                         cm := { x := AssignedCell.of (i₀ + 2) 0
+                                   cfg.eccConfig.witnessPoint.x,
+                                 y := AssignedCell.of (i₀ + 2) 0
+                                   cfg.eccConfig.witnessPoint.y } }
+                       (i₀ + 271)) : Fp))
+                   = (extract cfg input_var i₀
+                       (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).nfOld
+                   from by exact hDNval]
+                 with_unfolding_all exact hBn)⟩
+      · with_unfolding_all exact (congrArg Point.x hNCnval).trans hCmx.symm
+      · -- the final `"Orchard circuit checks"` region
+        obtain ⟨hOv, hOn, hOm, hOs, hOr, hOa, hOes, hOeo⟩ := hWorch
+        have hOr' : env.advice (cfg.advices 4) ((place (i₀ + 393) : ℕ) : ℤ)
+            = root := hOr.trans (by with_unfolding_all exact hM2root)
+        refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+        · exact hOv
+        · exact hOn
+        · exact hOm
+        · exact hOs
+        · exact hOr
+        · exact hOa
+        · exact hOes
+        · exact hOeo
+        · simp only [orchardGate, Gate.withSelector, circuit_norm,
+            List.Forall]
+          refine ⟨?_, ?_, ?_, ?_⟩
+          · rw [hOv, hOn, hOm, hOs]
+            have h : env.advice (cfg.advices 0) ((place (i₀ + 6) : ℕ) : ℤ)
+                - env.advice (cfg.advices 0) ((place (i₀ + 7) : ℕ) : ℤ)
+                = env.advice (cfg.advices 9) ((place (i₀ + 264) : ℕ) : ℤ)
+                  * env.advice (cfg.advices 9) ((place (i₀ + 265) : ℕ) : ℤ) := by
+              with_unfolding_all exact hVms
+            linear_combination h
+          · rw [hOv, hOr', hOa]
+            have h : env.advice (cfg.advices 0) ((place (i₀ + 6) : ℕ) : ℤ)
+                * (root - env.inst cfg.primary ((ANCHOR : ℕ) : ℤ)) = 0 := by
+              with_unfolding_all exact hVanch
+            linear_combination h
+          · rw [hOv, hOes]
+            have h : env.advice (cfg.advices 0) ((place (i₀ + 6) : ℕ) : ℤ)
+                * (1 - env.inst cfg.primary ((ENABLE_SPEND : ℕ) : ℤ)) = 0 := by
+              with_unfolding_all exact hVes
+            linear_combination h
+          · rw [hOn, hOeo]
+            have h : env.advice (cfg.advices 0) ((place (i₀ + 7) : ℕ) : ℤ)
+                * (1 - env.inst cfg.primary ((ENABLE_OUTPUT : ℕ) : ℤ)) = 0 := by
+              with_unfolding_all exact hVeo
+            linear_combination h
+
+/-- Rust `impl Circuit for Circuit` at `FixedPostNu6_2` (`synthesize_base`,
+`circuit.rs:271-828`) as a proof-carrying bundle: the base §4.17.4 statement
+(breaks-as-data) over the extracted primary-instance rows and witness data,
+outputting the four witnessed address points. -/
+def baseCircuit (G : Generators) (B : Bases) :
+    FormalCircuit Fp Unit Config unit AddressPoints where
+  name := "OrchardActionBase"
+  configure := fun _ => configure G
+  synthesize := main G B
+  elaborated := elaborated G B
+  Witness := fun _ => ActionData
+  extract := extractBase
+  EnvAssumptions := EnvAssumptions
+  Assumptions := fun _ => True
+  Spec := Spec G B
+  ProverAssumptions := ProverAssumptions G B
+  ProverSpec := fun _ _ _ _ => True
+  soundness := soundness G B
+  completeness := completeness G B
+
+@[synthesis_summary_norm]
+theorem baseCircuit_synthesisSummary_eq (G : Generators) (B : Bases)
+    (config : Config) (input : Var unit Fp) (region : RegionIndex) :
+    (baseCircuit G B).elaborated.synthesisSummary config input region =
+      synthesizeBaseSynthesisSummary config := rfl
+
+/-! ## The ironwood (post-NU 6.3) circuit bundle
+
+The main circuit: the proven base circuit called as a subcircuit, then the
+`"post-NU 6.3 cross-address checks"` region on its output cells. -/
+
+private theorem aafi_output (instCol : Column .instance) (r : ℕ)
+    (col : Column .advice) (row : ℕ) (self : RegionIndex) :
+    ((assignAdviceFromInstance (F := Fp) instCol r col row).output self)
+      = AssignedCell.of self row col := rfl
+
+derive_contract_bridges base (G : Generators) (B : Bases) := baseCircuit G B
+
+theorem base_output_copyInputCells_eq (G : Generators) (B : Bases)
+    (config : Config) (input : Var unit Fp) (region : RegionIndex) :
+    ((baseCircuit G B).output config input region).copyInputCells =
+      ((main G B config input).output region).copyInputCells := by
+  rw [base_output]
+  exact congrArg AddressPoints.copyInputCells
+    ((elaborated G B).output_eq config input region)
+
+/-- The deployed ironwood synthesis: the fixed hint-backed Action witness program,
+followed by the cross-address region. The verifier-visible input is `unit`; prover
+choices enter only through `hintWitnesses` and the runtime `ProverHint`. -/
+def mainPost (G : Generators) (B : Bases) (cfg : Config) :
+    Var unit Fp → Circuit Fp (Var unit Fp) := fun _ => do
+  let pts ← (baseCircuit G B).call cfg ()
+  synthCrossAddressChecks cfg pts
+  pure ()
+
+def mainPostSynthesisSummary (cfg : Config) :
+    FloorPlanner.SynthesisSummary :=
+  (synthesizeBaseSynthesisSummary cfg).combine
+    (synthCrossAddressChecksSynthesisSummary cfg)
+
+@[synthesis_summary_norm]
+theorem mainPostSynthesisSummary_lookupActivationCount (cfg : Config) :
+    (mainPostSynthesisSummary cfg).lookupActivationCount = 2424 := by
+  simp only [mainPostSynthesisSummary, synthesis_summary_norm]
+
+theorem mainPostSynthesisSummary_physicalRegionShapes (cfg : Config) :
+    (mainPostSynthesisSummary cfg).physicalRegionShapes =
+      (synthWitnessSynthesisSummary cfg).physicalRegionShapes ++
+      (synthChecksSynthesisSummary cfg).physicalRegionShapes ++
+      (synthNotesSynthesisSummary cfg).physicalRegionShapes ++
+      (synthCrossAddressChecksSynthesisSummary cfg).physicalRegionShapes := by
+  unfold mainPostSynthesisSummary synthesizeBaseSynthesisSummary
+  simp only [FloorPlanner.SynthesisSummary.combine_physicalRegionShapes,
+    List.append_assoc]
+
+@[synthesis_summary_norm]
+theorem mainPost_synthesisSummary_eq (G : Generators) (B : Bases)
+    (cfg : Config) (input : Var unit Fp) (region : RegionIndex) :
+    FloorPlanner.synthesisSummary
+        ((mainPost G B cfg input).operations region) =
+      mainPostSynthesisSummary cfg := by
+  simp only [mainPost, mainPostSynthesisSummary, circuit_norm,
+    synthesis_summary_norm]
+
+theorem mainPost_regionCount (G : Generators) (B : Bases) (cfg : Config)
+    (input : Var unit Fp) (i : RegionIndex) :
+    Operations.regionCount ((mainPost G B cfg input).operations i) = 395 := by
+  simp only [mainPost, synthCrossAddressChecks, circuit_norm,
+    Circuit.operations_bind, Circuit.operations_pure,
+    Operations.regionCount_append, Operations.regionCount]
+
+private theorem synthCrossAddressChecks_baseOutput_keygenRegistered
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (outputRegion crossRegion : RegionIndex) :
+    ((synthCrossAddressChecks ((configure G).output counts)
+      ((baseCircuit G B).output ((configure G).output counts) () outputRegion))
+      |>.operations crossRegion).KeygenRegistered
+        ((configure G).delta counts |>.gates)
+        ((configure G).delta counts |>.lookups)
+        ((configure G).fixedColumns counts)
+        ((configure G).delta counts |>.permutationRequests) := by
+  apply synthCrossAddressChecks_keygenRegistered
+  · exact configure_output_advice_mem_permutationRequests G counts
+  · exact configure_output_primary_mem_permutationRequests G counts
+  all_goals first
+    | rw [base_output]
+      exact configure_output_witnessPoint_x_mem_permutationRequests G counts
+    | rw [base_output]
+      exact configure_output_witnessPoint_y_mem_permutationRequests G counts
+    | exact (baseConfigureCertificate G counts).orchardGate
+
+private theorem mainPost_keygenRegistered
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (i : RegionIndex) :
+    ((mainPost G B ((configure G).output counts) ()).operations i)
+      |>.KeygenRegistered ((configure G).delta counts).gates
+        ((configure G).delta counts).lookups
+        ((configure G).fixedColumns counts)
+        ((configure G).delta counts).permutationRequests := by
+  dsimp only [mainPost]
+  simp only [keygen_spine]
+  constructor
+  · rw [(baseCircuit G B).call_operations]
+    simpa only [FormalCircuit.keygenRequirements, baseCircuit,
+      ElaboratedCircuit.keygenRequirements, KeygenRequirements.inputPermutationColumns,
+      List.map_nil, List.append_nil] using
+        (elaborated G B).registered () counts () () i
+  · simpa only [FormalCircuit.output_call'] using
+      synthCrossAddressChecks_baseOutput_keygenRegistered G B counts i (i + 394)
+
+private theorem mainPost_copyCellsAssigned
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (i : RegionIndex) :
+    ((mainPost G B ((configure G).output counts) ()).operations i)
+      |>.CopyCellsAssignedFrom i [] := by
+  dsimp only [mainPost]
+  rw [Circuit.operations_bind]
+  simp only [Circuit.operations_bind, Circuit.operations_pure, List.append_nil]
+  apply Operations.CopyCellsAssignedFrom.append
+  · rw [(baseCircuit G B).call_operations]
+    simpa only [FormalCircuit.keygenRequirements, baseCircuit,
+      ElaboratedCircuit.keygenRequirements] using
+        (elaborated G B).copyCellsAssigned () counts () () i
+  · rw [(baseCircuit G B).nextRegionIndex_call', base_call_regionCount]
+    rw [FormalCircuit.output_call']
+    apply (synthCrossAddressChecks_copyCellsAssigned
+      ((configure G).output counts)
+      ((baseCircuit G B).output ((configure G).output counts) () i)
+      (i + 394)).mono
+    intro cell hcell
+    rw [base_output_copyInputCells_eq] at hcell
+    rw [(baseCircuit G B).call_operations]
+    exact List.mem_append_right _
+      (List.forall_iff_forall_mem.mp
+        (main_output_copyInputCells_assigned G B counts i) cell hcell)
+
+private theorem mainPost_fixedWritesLawful
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (i : RegionIndex) :
+    ((mainPost G B ((configure G).output counts) ()).operations i)
+      |>.FixedWritesLawful ((configure G).delta counts).constants := by
+  let cfg := (configure G).output counts
+  have hbase := (elaborated G B).fixedWritesLawful () counts () () i
+  have hcrossNoFixed := synthCrossAddressChecks_hasNoFixedWrites cfg
+    ((baseCircuit G B).output cfg () i) (i + 394)
+  have hcross := hcrossNoFixed.fixedWritesLawful
+    (constantColumns := ((configure G).delta counts).constants)
+  have hcrossTables := hcrossNoFixed.loadedTableColumns_eq_nil
+  have hcrossRegionColumns := hcrossNoFixed.regionFixedColumns_eq_nil
+  dsimp only [mainPost]
+  simp only [Circuit.operations_bind, Circuit.operations_pure, List.append_nil]
+  rw [(baseCircuit G B).call_operations,
+    (baseCircuit G B).nextRegionIndex_call', base_call_regionCount,
+    FormalCircuit.output_call']
+  apply Operations.FixedWritesLawful.append hbase hcross
+  · rw [hcrossTables]
+    exact List.disjoint_nil_right _
+  · rw [hcrossRegionColumns]
+    exact List.disjoint_nil_right _
+  · rw [hcrossTables]
+    exact List.disjoint_nil_left _
+
+private theorem mainPost_lookupActivationsWellFormed
+    (G : Generators) (B : Bases) (config : Config) (i : RegionIndex) :
+    ((mainPost G B config ()).operations i).LookupActivationsWellFormed := by
+  dsimp only [mainPost]
+  simp only [Circuit.operations_bind, Circuit.operations_pure, List.append_nil,
+    Operations.LookupActivationsWellFormed, List.forall_append]
+  constructor
+  · rw [(baseCircuit G B).call_operations]
+    exact (elaborated G B).lookupActivationsWellFormed config () i
+  · keygen_registration [synthCrossAddressChecks]
+
+private theorem mainPost_lookupSelectorAssignmentsAgree
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (i : RegionIndex) :
+    let config := (configure G).output counts
+    ((mainPost G B config ()).operations i)
+      |>.LookupSelectorAssignmentsAgree := by
+  let config := (configure G).output counts
+  dsimp only [mainPost]
+  simp only [Circuit.operations_bind, Circuit.operations_pure,
+    List.append_nil,
+    Operations.lookupSelectorAssignmentsAgree_append]
+  constructor
+  · exact (baseCircuit G B).call_lookupSelectorAssignmentsAgree config
+      (FormalCircuit.Configured.ofOutput (baseCircuit G B) () counts ())
+      () i
+  · exact synthCrossAddressChecks_lookupSelectorAssignmentsAgree config _ _
+
+private theorem mainPost_lookupSelectorsAnchoredBy
+    (G : Generators) (B : Bases) (counts : ConfigureCounts)
+    (i : RegionIndex) (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchor : SelectorAnchorRequirementsSatisfied
+      (LookupRangeCheck.lookupSelectorAnchorRequirements
+        ((configure G).output counts).lookupConfig) anchor) :
+    let config := (configure G).output counts
+    ((mainPost G B config ()).operations i)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  let config := (configure G).output counts
+  dsimp only [mainPost]
+  simp only [Circuit.operations_bind, Circuit.operations_pure, List.append_nil]
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact (baseCircuit G B).call_lookupSelectorsAnchoredBy config
+      (FormalCircuit.Configured.ofOutput (baseCircuit G B) () counts ())
+      () i anchor hanchor
+  · exact synthCrossAddressChecks_lookupSelectorsAnchoredBy
+      config _ _ anchor
+
+instance elaboratedPost (G : Generators) (B : Bases) :
+    ElaboratedCircuit Fp Unit Config unit unit
+      (fun _ => configure G) (mainPost G B) where
+  configureInfo _ := configureElaborated G
+  keygenRequirements := {}
+  registered := ElaboratedCircuit.noRequirements_registered _ _ (by
+    intro configInput counts input i
+    cases configInput
+    cases input
+    exact mainPost_keygenRegistered G B counts i)
+  fixedWritesLawful := by
+    intro configInput counts hconfig input i
+    cases configInput
+    cases input
+    exact mainPost_fixedWritesLawful G B counts i
+  copyCellsAssigned := by
+    intro configInput counts hconfig input i
+    cases configInput
+    cases hconfig
+    cases input
+    simpa only [KeygenRequirements.inputCells] using
+      mainPost_copyCellsAssigned G B counts i
+  lookupSelectorAssignmentsAgree_of_registered := by
+    intro configInput counts hconfig input i program operations _hregistered
+    cases configInput
+    cases input
+    simpa only [operations, program] using
+      mainPost_lookupSelectorAssignmentsAgree G B counts i
+  lookupSelectorAnchorRequirements cfg _ _ :=
+    LookupRangeCheck.lookupSelectorAnchorRequirements cfg.lookupConfig
+  lookupSelectorsAnchoredBy_of_registered := by
+    intro configInput counts hconfig input i anchor hanchor _
+    cases configInput
+    cases input
+    simpa only [Configure.output_pure] using
+      mainPost_lookupSelectorsAnchoredBy G B counts i anchor hanchor
+  lookupActivationsWellFormed := by
+    intro config input i
+    cases input
+    exact mainPost_lookupActivationsWellFormed G B config i
+  output _ _ _ := ()
+  regionCount _ := 395
+  synthesisSummary cfg _ _ := mainPostSynthesisSummary cfg
+  output_eq := by intro _ _ _; rfl
+  regionCount_eq := fun cfg input i =>
+    (mainPost_regionCount G B cfg input i).symm
+  synthesisSummary_eq := fun cfg input region =>
+    (mainPost_synthesisSummary_eq G B cfg input region).symm
+
+/-- Read the Action statement data for the fixed top-level witness program. -/
+def extractPost (cfg : Config) (_ : Var unit Fp) (i : RegionIndex)
+    (env : Placed Environment Fp) : ActionData :=
+  extractBase cfg () i env
+
+@[simp] theorem extractPost_anchor (cfg : Config) (i : RegionIndex)
+    (env : Placed Environment Fp) :
+    (extractPost cfg () i env).anchor = env.env.get cfg.primary (ANCHOR : ℤ) :=
+  rfl
+
+@[simp] theorem extractPost_cvX (cfg : Config) (i : RegionIndex)
+    (env : Placed Environment Fp) :
+    (extractPost cfg () i env).cvX = env.env.get cfg.primary (CV_NET_X : ℤ) :=
+  rfl
+
+@[simp] theorem extractPost_cvY (cfg : Config) (i : RegionIndex)
+    (env : Placed Environment Fp) :
+    (extractPost cfg () i env).cvY = env.env.get cfg.primary (CV_NET_Y : ℤ) :=
+  rfl
+
+@[simp] theorem extractPost_nfOld (cfg : Config) (i : RegionIndex)
+    (env : Placed Environment Fp) :
+    (extractPost cfg () i env).nfOld = env.env.get cfg.primary (NF_OLD : ℤ) :=
+  rfl
+
+@[simp] theorem extractPost_rkX (cfg : Config) (i : RegionIndex)
+    (env : Placed Environment Fp) :
+    (extractPost cfg () i env).rkX = env.env.get cfg.primary (RK_X : ℤ) :=
+  rfl
+
+@[simp] theorem extractPost_rkY (cfg : Config) (i : RegionIndex)
+    (env : Placed Environment Fp) :
+    (extractPost cfg () i env).rkY = env.env.get cfg.primary (RK_Y : ℤ) :=
+  rfl
+
+@[simp] theorem extractPost_cmx (cfg : Config) (i : RegionIndex)
+    (env : Placed Environment Fp) :
+    (extractPost cfg () i env).cmx = env.env.get cfg.primary (CMX : ℤ) :=
+  rfl
+
+@[simp] theorem extractPost_enableSpend (cfg : Config) (i : RegionIndex)
+    (env : Placed Environment Fp) :
+    (extractPost cfg () i env).enableSpend =
+      env.env.get cfg.primary (ENABLE_SPEND : ℤ) :=
+  rfl
+
+@[simp] theorem extractPost_enableOutput (cfg : Config) (i : RegionIndex)
+    (env : Placed Environment Fp) :
+    (extractPost cfg () i env).enableOutput =
+      env.env.get cfg.primary (ENABLE_OUTPUT : ℤ) :=
+  rfl
+
+@[simp] theorem extractPost_disableCrossAddress (cfg : Config) (i : RegionIndex)
+    (env : Placed Environment Fp) :
+    (extractPost cfg () i env).disableCrossAddress =
+      env.env.get cfg.primary (DISABLE_CROSS_ADDRESS : ℤ) :=
+  rfl
+
+/-- The ironwood Action statement: the base §4.17.4 statement, plus the post-NU 6.3
+cross-address binding — a nonzero `DISABLE_CROSS_ADDRESS` instance row forces the new
+note's diversified address to equal the old note's. -/
+def SpecPost (G : Generators) (B : Bases)
+    (_ : Value unit Fp) (_ : Value unit Fp) (wit : ActionData) : Prop :=
+  SpecBase G B wit ∧
+  (wit.disableCrossAddress ≠ 0 → wit.gdOld = wit.gdNew ∧ wit.pkdOld = wit.pkdNew)
+
+/-- Honest-prover preconditions for the ironwood circuit: the base preconditions, and
+the cross-address rows hold at the honest values (the flag is off, or the addresses
+coincide). -/
+def ProverAssumptionsPost (G : Generators) (B : Bases)
+    (_ : ProverValue unit Fp) (wit : ActionData) (hint : ProverHint Fp) : Prop :=
+  ProverAssumptions G B () wit hint ∧
+  (wit.disableCrossAddress = 0 ∨ (wit.gdOld = wit.gdNew ∧ wit.pkdOld = wit.pkdNew))
+
+/--
+Action soundness derives every table-content fact from the circuit constraints;
+only the residual layout/configuration contract is assumed.
+-/
+theorem soundnessPost
+    (G : Generators) (B : Bases) (cfg : Config) :
+    FormalCircuit.Soundness (Witness := fun _ => ActionData)
+      (fun _ : Unit => configure G) (mainPost G B) cfg (extractPost cfg)
+      (EnvAssumptions cfg) (fun _ => True)
+      (SpecPost G B) := by
+  circuit_proof_start
+  set input_var : Witnesses Fp := hintWitnesses
+  -- restore the concrete base-child output (abstracted to `x_gen_out_0` by the prefix) so the
+  -- `base_output` bridge rewrites below fire.
+  subst x_gen_out_0
+  try simp only [mainPost, circuit_norm] at hc
+  have hPre := hc.1
+  have hX := hc.2
+  clear hc
+  -- the base chunk was consumed by circuit_proof_start; `hPre` is its EnvA → A → Spec implication
+  have hS := hPre (by rw [base_envAssumptions_eq]; exact _hE)
+    (by rw [base_assumptions_eq]; trivial)
+  rw [base_spec_eq, base_extract_eq, base_output] at hS
+  obtain ⟨hSB, -, -, -, -⟩ := hS
+  -- ── the cross-address region: four `dca · (old − new) = 0` rows ──
+  rw [base_output] at hX
+  simp only [synthCrossAddressChecks, synthCrossAddressRow, circuit_norm] at hX
+  have h0 := hX 0
+  have h1 := hX 1
+  have h2 := hX 2
+  have h3 := hX 3
+  clear hX
+  simp only [circuit_norm, List.get!Internal, Fin.isValue,
+    Fin.val_zero, Fin.val_one, Nat.reduceMod, Nat.mul_one,
+    Nat.add_zero] at h0 h1 h2 h3
+  obtain ⟨ha00, -, -, -, ha04, ha05, -, -, -, -, hG0⟩ := h0
+  obtain ⟨ha10, -, -, -, ha14, ha15, -, -, -, -, hG1⟩ := h1
+  obtain ⟨ha20, -, -, -, ha24, ha25, -, -, -, -, hG2⟩ := h2
+  obtain ⟨ha30, -, -, -, ha34, ha35, -, -, -, -, hG3⟩ := h3
+  simp only [orchardGate, Gate.withSelector, circuit_norm,
+    List.Forall] at hG0 hG1 hG2 hG3
+  have e0 := hG0.2.1
+  have e1 := hG1.2.1
+  have e2 := hG2.2.1
+  have e3 := hG3.2.1
+  rw [ha00, ha04, ha05] at e0
+  rw [ha10, ha14, ha15] at e1
+  rw [ha20, ha24, ha25] at e2
+  rw [ha30, ha34, ha35] at e3
+  -- ── assemble ──
+  simp only [SpecPost]
+  refine ⟨hSB, ?_⟩
+  intro hdca
+  have hgx : (extract cfg input_var i₀
+        (⟨place, env⟩ : Placed Environment Fp)).gdOld.x
+      = (extract cfg input_var i₀ (⟨place, env⟩ : Placed Environment Fp)).gdNew.x :=
+    sub_eq_zero.mp ((mul_eq_zero.mp (by simp only [circuit_norm, explicit_provable_type, extract, cellRead]; exact e0)).resolve_left hdca)
+  have hgy : (extract cfg input_var i₀
+        (⟨place, env⟩ : Placed Environment Fp)).gdOld.y
+      = (extract cfg input_var i₀ (⟨place, env⟩ : Placed Environment Fp)).gdNew.y :=
+    sub_eq_zero.mp ((mul_eq_zero.mp (by simp only [circuit_norm, explicit_provable_type, extract, cellRead]; exact e1)).resolve_left hdca)
+  have hpx : (extract cfg input_var i₀
+        (⟨place, env⟩ : Placed Environment Fp)).pkdOld.x
+      = (extract cfg input_var i₀ (⟨place, env⟩ : Placed Environment Fp)).pkdNew.x :=
+    sub_eq_zero.mp ((mul_eq_zero.mp (by simp only [circuit_norm, explicit_provable_type, extract, cellRead]; exact e2)).resolve_left hdca)
+  have hpy : (extract cfg input_var i₀
+        (⟨place, env⟩ : Placed Environment Fp)).pkdOld.y
+      = (extract cfg input_var i₀ (⟨place, env⟩ : Placed Environment Fp)).pkdNew.y :=
+    sub_eq_zero.mp ((mul_eq_zero.mp (by simp only [circuit_norm, explicit_provable_type, extract, cellRead]; exact e3)).resolve_left hdca)
+  simp only [extractPost, extractBase]
+  constructor
+  · apply Point.ext_coords
+    show (_, _) = _
+    rw [hgx, hgy]
+    rfl
+  · apply Point.ext_coords
+    show (_, _) = _
+    rw [hpx, hpy]
+    rfl
+
+/--
+Action completeness derives the same table-content facts from honest witness
+extension; only the shared residual contract is assumed.
+-/
+theorem completenessPost
+    (G : Generators) (B : Bases) (cfg : Config) :
+    FormalCircuit.Completeness (Witness := fun _ => ActionData)
+      (fun _ : Unit => configure G) (mainPost G B) cfg (extractPost cfg)
+      (EnvAssumptions cfg) (fun _ => True)
+      (ProverAssumptionsPost G B) (fun _ _ _ _ => True) := by
+  circuit_proof_start
+  obtain ⟨hPA, hDca⟩ := hPA
+  -- restore the concrete base-child output (abstracted to `x_gen_out_0` by the prefix) so the
+  -- `base_output` bridge rewrites below fire.
+  subst x_gen_out_0
+  try simp only [mainPost, circuit_norm] at hwit ⊢
+  obtain ⟨-, hWx⟩ := hwit
+  -- the base chunk was consumed by circuit_proof_start (completeness mode), so the goal opens
+  -- with the base child's preconditions rather than its witness constraints.
+  refine ⟨⟨?_, ?_, ?_⟩, ?_⟩
+  · rw [base_envAssumptions_eq]; exact _hE
+  · rw [base_assumptions_eq]; trivial
+  · rw [base_proverAssumptions_eq, base_extract_eq]; exact hPA
+  · -- the cross-address region at the honest values
+    rw [base_output]
+    rw [base_output] at hWx
+    simp only [synthCrossAddressChecks, synthCrossAddressRow, circuit_norm] at hWx ⊢
+    have hw0 := hWx 0
+    have hw1 := hWx 1
+    have hw2 := hWx 2
+    have hw3 := hWx 3
+    clear hWx
+    simp only [circuit_norm, List.get!Internal, Fin.isValue,
+      Fin.val_zero, Nat.mul_one, Nat.add_zero] at hw0 hw1 hw2 hw3
+    -- the four honest `dca · (old − new) = 0` products
+    have hdx : (env.inst cfg.primary ((DISABLE_CROSS_ADDRESS : ℕ) : ℤ) : Fp)
+        * (env.advice cfg.eccConfig.witnessPoint.x ((place (i₀ + 3) : ℕ) : ℤ)
+           - env.advice cfg.eccConfig.witnessPoint.x ((place (i₀ + 347) : ℕ) : ℤ))
+        = 0 := by
+      rcases hDca with hz | ⟨hg, -⟩
+      · rw [show (env.inst cfg.primary ((DISABLE_CROSS_ADDRESS : ℕ) : ℤ) : Fp) = 0
+            from by exact hz]
+        ring
+      · rw [show (env.advice cfg.eccConfig.witnessPoint.x
+              ((place (i₀ + 3) : ℕ) : ℤ) : Fp)
+            = env.advice cfg.eccConfig.witnessPoint.x ((place (i₀ + 347) : ℕ) : ℤ)
+            from by with_unfolding_all exact congrArg Point.x hg]
+        ring
+    have hdy : (env.inst cfg.primary ((DISABLE_CROSS_ADDRESS : ℕ) : ℤ) : Fp)
+        * (env.advice cfg.eccConfig.witnessPoint.y ((place (i₀ + 3) : ℕ) : ℤ)
+           - env.advice cfg.eccConfig.witnessPoint.y ((place (i₀ + 347) : ℕ) : ℤ))
+        = 0 := by
+      rcases hDca with hz | ⟨hg, -⟩
+      · rw [show (env.inst cfg.primary ((DISABLE_CROSS_ADDRESS : ℕ) : ℤ) : Fp) = 0
+            from by exact hz]
+        ring
+      · rw [show (env.advice cfg.eccConfig.witnessPoint.y
+              ((place (i₀ + 3) : ℕ) : ℤ) : Fp)
+            = env.advice cfg.eccConfig.witnessPoint.y ((place (i₀ + 347) : ℕ) : ℤ)
+            from by with_unfolding_all exact congrArg Point.y hg]
+        ring
+    have hpx : (env.inst cfg.primary ((DISABLE_CROSS_ADDRESS : ℕ) : ℤ) : Fp)
+        * (env.advice cfg.eccConfig.witnessPoint.x ((place (i₀ + 301) : ℕ) : ℤ)
+           - env.advice cfg.eccConfig.witnessPoint.x ((place (i₀ + 348) : ℕ) : ℤ))
+        = 0 := by
+      rcases hDca with hz | ⟨-, hp⟩
+      · rw [show (env.inst cfg.primary ((DISABLE_CROSS_ADDRESS : ℕ) : ℤ) : Fp) = 0
+            from by exact hz]
+        ring
+      · rw [show (env.advice cfg.eccConfig.witnessPoint.x
+              ((place (i₀ + 301) : ℕ) : ℤ) : Fp)
+            = env.advice cfg.eccConfig.witnessPoint.x ((place (i₀ + 348) : ℕ) : ℤ)
+            from by with_unfolding_all exact congrArg Point.x hp]
+        ring
+    have hpy : (env.inst cfg.primary ((DISABLE_CROSS_ADDRESS : ℕ) : ℤ) : Fp)
+        * (env.advice cfg.eccConfig.witnessPoint.y ((place (i₀ + 301) : ℕ) : ℤ)
+           - env.advice cfg.eccConfig.witnessPoint.y ((place (i₀ + 348) : ℕ) : ℤ))
+        = 0 := by
+      rcases hDca with hz | ⟨-, hp⟩
+      · rw [show (env.inst cfg.primary ((DISABLE_CROSS_ADDRESS : ℕ) : ℤ) : Fp) = 0
+            from by exact hz]
+        ring
+      · rw [show (env.advice cfg.eccConfig.witnessPoint.y
+              ((place (i₀ + 301) : ℕ) : ℤ) : Fp)
+            = env.advice cfg.eccConfig.witnessPoint.y ((place (i₀ + 348) : ℕ) : ℤ)
+            from by with_unfolding_all exact congrArg Point.y hp]
+        ring
+    intro i
+    fin_cases i
+    all_goals simp only [circuit_norm, List.get!Internal, Fin.isValue,
+      Nat.mul_one, Nat.add_zero]
+    · obtain ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9⟩ := hw0
+      refine ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, ?_⟩
+      simp only [orchardGate, Gate.withSelector, circuit_norm, List.Forall]
+      refine ⟨?_, ?_, ?_, ?_⟩
+      · rw [w2, w3, w1, w0]
+        ring
+      · rw [w4, w5, w0]
+        linear_combination hdx
+      · rw [w6, w0]
+        ring
+      · rw [w7, w1]
+        ring
+    · obtain ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9⟩ := hw1
+      refine ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, ?_⟩
+      simp only [orchardGate, Gate.withSelector, circuit_norm, List.Forall]
+      refine ⟨?_, ?_, ?_, ?_⟩
+      · rw [w2, w3, w1, w0]
+        ring
+      · rw [w4, w5, w0]
+        linear_combination hdy
+      · rw [w6, w0]
+        ring
+      · rw [w7, w1]
+        ring
+    · obtain ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9⟩ := hw2
+      refine ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, ?_⟩
+      simp only [orchardGate, Gate.withSelector, circuit_norm, List.Forall]
+      refine ⟨?_, ?_, ?_, ?_⟩
+      · rw [w2, w3, w1, w0]
+        ring
+      · rw [w4, w5, w0]
+        linear_combination hpx
+      · rw [w6, w0]
+        ring
+      · rw [w7, w1]
+        ring
+    · obtain ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9⟩ := hw3
+      refine ⟨w0, w1, w2, w3, w4, w5, w6, w7, w8, w9, ?_⟩
+      simp only [orchardGate, Gate.withSelector, circuit_norm, List.Forall]
+      refine ⟨?_, ?_, ?_, ?_⟩
+      · rw [w2, w3, w1, w0]
+        ring
+      · rw [w4, w5, w0]
+        linear_combination hpy
+      · rw [w6, w0]
+        ring
+      · rw [w7, w1]
+        ring
+
+/-- Rust `impl Circuit for Circuit` on the ironwood branch (post-NU 6.3) as a
+proof-carrying bundle: the e2e Orchard Action statement (§4.17.4 + cross-address
+binding, breaks-as-data) over the extracted primary-instance rows and witness data. -/
+def circuit (G : Generators) (B : Bases) :
+    FormalCircuit Fp Unit Config unit unit where
+  name := "OrchardAction"
+  configure := fun _ => configure G
+  synthesize := mainPost G B
+  elaborated := elaboratedPost G B
+  Witness := fun _ => ActionData
+  extract := extractPost
+  EnvAssumptions := EnvAssumptions
+  Assumptions := fun _ => True
+  Spec := SpecPost G B
+  ProverAssumptions := ProverAssumptionsPost G B
+  ProverSpec := fun _ _ _ _ => True
+  soundness := soundnessPost G B
+  completeness := completenessPost G B
+
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_eq (G : Generators) (B : Bases)
+    (config : Config) (input : Var unit Fp) (region : RegionIndex) :
+    (circuit G B).elaborated.synthesisSummary config input region =
+      mainPostSynthesisSummary config := rfl
+
+end Zcash.Circuits.Action.Circuit

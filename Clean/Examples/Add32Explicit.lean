@@ -4,6 +4,8 @@ import Clean.Gadgets.Addition32.Addition32Full
 import Clean.Examples.AddOperations
 import Clean.Gadgets.Boolean
 
+open Clean
+
 open Gadgets.Addition32Full (Inputs Outputs)
 
 def circuit32 input := Gadgets.Addition32Full.main (p:=pBabybear) input

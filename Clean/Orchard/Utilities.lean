@@ -6,6 +6,8 @@ import Clean.Orchard.Specs.Bitrange
 import Clean.Utils.Tactics
 import Clean.Utils.Tactics.ProvableStructDeriving
 
+open Clean
+
 /-!
 # Orchard utility gadgets
 
@@ -184,8 +186,8 @@ def main (input : Input.Var Fp) :
   let a <== input.a
   let b ← witnessProgram input.b
   let swap ← witnessProgram (do return (← input.swap).toField)
-  let aSwapped ← witnessProgram (do return .ite (← input.swap) b (Witgen.FExpr.expr a))
-  let bSwapped ← witnessProgram (do return .ite (← input.swap) (Witgen.FExpr.expr a) b)
+  let aSwapped ← witnessProgram (do return .ite (← input.swap) b (FExpr.expr a))
+  let bSwapped ← witnessProgram (do return .ite (← input.swap) (FExpr.expr a) b)
   Gate.circuit { a, b, aSwapped, bSwapped, swap }
   return { aSwapped, bSwapped }
 

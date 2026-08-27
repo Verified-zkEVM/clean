@@ -1,6 +1,8 @@
 import Clean.Circuit.Operations
 import Mathlib.Control.Monad.Writer
 
+namespace Clean
+
 variable {F : Type} [FiniteField F] {α β : Type} {n : ℕ}
 
 /--
@@ -96,13 +98,13 @@ def witnessVar (ir : WitgenIR F 1) : Circuit F (Variable F) :=
 
 /-- Create a new variable, as an `Expression`. -/
 @[circuit_norm]
-def witnessField (e : Witgen.FExpr F) : Circuit F (Expression F) :=
+def witnessField (e : FExpr F) : Circuit F (Expression F) :=
   fun (offset : ℕ) =>
     (var ⟨offset⟩, [.witness 1 (.ofFExpr e)])
 
 /-- Create a vector of expressions. -/
 @[circuit_norm]
-def witnessVector (m : ℕ) (out : Witgen.VExpr F m) :
+def witnessVector (m : ℕ) (out : VExpr F m) :
     Circuit F (Vector (Expression F) m) :=
   fun (offset : ℕ) =>
     (varFromOffset (fields m) offset, [.witness m (.ir [] out)])
@@ -160,9 +162,9 @@ def witnessIR (M : TypeMap) [ProvableType M] (ir : WitgenIR F (size M)) :
 /-- Create a vector of expressions computed by a monadic witness-IR program.
 Use this when the vector witness has shared `let` computations or compact loops. -/
 @[circuit_norm]
-def witnessVectorProgram (m : ℕ) (program : Witgen.M F (Witgen.VExpr F m)) :
+def witnessVectorProgram (m : ℕ) (program : Witgen.M F (VExpr F m)) :
     Circuit F (Vector (Expression F) m) :=
-  witnessIR (fields m) program.toIR
+  witnessIR (fields m) (Witgen.M.toIR program)
 
 /--
 If an environment "uses local witnesses", it means that the environment's evaluation
@@ -258,15 +260,15 @@ export Circuit (witnessVar witnessField witnessVector assertZero lookup)
 
 class Witnessable (F : Type) [FiniteField F] (value : outParam TypeMap) (var : TypeMap) [ProvableType value] where
   /-- Witness a provable value. -/
-  witness : value (Witgen.FExpr F) → Circuit F (var F)
+  witness : value (FExpr F) → Circuit F (var F)
   /-- Witness a value computed by a general witness-IR program, with `let`-steps and
   loops, which the per-element form cannot express. -/
   witnessIR : WitgenIR F (size value) → Circuit F (var F)
   var_eq : var F = value (Expression F) := by rfl
-  witness_def (xs : value (Witgen.FExpr F)) :
-    witness xs = var_eq ▸ _root_.witnessIR value (.ofFExprs (toElements xs)) := by intros; rfl
+  witness_def (xs : value (FExpr F)) :
+    witness xs = var_eq ▸ Clean.witnessIR value (.ofFExprs (toElements xs)) := by intros; rfl
   witnessIR_def (code : WitgenIR F (size value)) :
-    witnessIR code = var_eq ▸ _root_.witnessIR value code := by intros; rfl
+    witnessIR code = var_eq ▸ Clean.witnessIR value code := by intros; rfl
 
 export Witnessable (witness)
 
@@ -292,9 +294,9 @@ def witnessVectorNative (m : ℕ) (compute : ProverEnvironment F → Vector F m)
 This is `witness`, but with shared `let` computations. -/
 @[circuit_norm]
 def witnessProgram {value : TypeMap} [ProvableType value] {var : TypeMap}
-    [inst : Witnessable F value var] (program : Witgen.M F (value (Witgen.FExpr F))) :
+    [inst : Witnessable F value var] (program : Witgen.M F (value (FExpr F))) :
     Circuit F (var F) :=
-  inst.witnessIR (value := value) program.toIRLiteral
+  inst.witnessIR (value := value) (Witgen.M.toIRLiteral program)
 
 /-- The completeness obligation of `witnessProgram`, stated at the level of provable
 values: the witnessed variable evaluates to the program's value. Tagged `↓ high` so it
@@ -302,11 +304,11 @@ fires before `ExtendsVector` and the witness-IR evaluation unfold element-wise �
 proofs connect hint programs to witnessed outputs without ever seeing `toElements`. -/
 @[circuit_norm ↓ high]
 theorem ProverEnvironment.extendsVector_toIRLiteral {value : TypeMap} [ProvableType value]
-    (env : ProverEnvironment F) (program : Witgen.M F (value (Witgen.FExpr F))) (n : ℕ) :
-    env.ExtendsVector (program.toIRLiteral.eval env) n ↔
+    (env : ProverEnvironment F) (program : Witgen.M F (value (FExpr F))) (n : ℕ) :
+    env.ExtendsVector ((Witgen.M.toIRLiteral program).eval env) n ↔
       Eval.eval env.toEnvironment (varFromOffset value n : value (Expression F))
-        = program.eval env := by
-  rw [Witgen.M.eval_toIRLiteral, ProvableType.eval_varFromOffset, ProvableType.ext_iff]
+        = Witgen.M.eval env program := by
+  rw [Witgen.M.eval_toIRLiteral, ProvableType.Clean.eval_varFromOffset, ProvableType.ext_iff]
   simp only [ProvableType.toElements_fromElements, Vector.getElem_mapRange,
     ProverEnvironment.ExtendsVector]
   exact ⟨fun h i hi => h ⟨i, hi⟩, fun h i => h i.val i.isLt⟩
@@ -317,10 +319,10 @@ values: the witnessed variable evaluates to the closure's value. See
 @[circuit_norm ↓ high]
 theorem ProverEnvironment.extendsVector_nativeValue {value : TypeMap} [ProvableType value]
     (env : ProverEnvironment F) (compute : ProverEnvironment F → value F) (n : ℕ) :
-    env.ExtendsVector ((Witgen.WitgenIR.nativeValue compute).eval env) n ↔
+    env.ExtendsVector ((WitgenIR.nativeValue compute).eval env) n ↔
       Eval.eval env.toEnvironment (varFromOffset value n : value (Expression F))
         = compute env := by
-  rw [Witgen.WitgenIR.eval_nativeValue, ProvableType.eval_varFromOffset, ProvableType.ext_iff]
+  rw [WitgenIR.eval_nativeValue, ProvableType.Clean.eval_varFromOffset, ProvableType.ext_iff]
   simp only [ProvableType.toElements_fromElements, Vector.getElem_mapRange,
     ProverEnvironment.ExtendsVector]
   exact ⟨fun h i hi => h ⟨i, hi⟩, fun h i => h i.val i.isLt⟩
@@ -330,11 +332,11 @@ provable values: the witnessed variable evaluates to the value of the given expr
 See `ProverEnvironment.extendsVector_toIRLiteral`. -/
 @[circuit_norm ↓ high]
 theorem ProverEnvironment.extendsVector_ofFExprs {value : TypeMap} [ProvableType value]
-    (env : ProverEnvironment F) (xs : value (Witgen.FExpr F)) (n : ℕ) :
-    env.ExtendsVector ((Witgen.WitgenIR.ofFExprs (toElements xs)).eval env) n ↔
+    (env : ProverEnvironment F) (xs : value (FExpr F)) (n : ℕ) :
+    env.ExtendsVector ((WitgenIR.ofFExprs (toElements xs)).eval env) n ↔
       Eval.eval env.toEnvironment (varFromOffset value n : value (Expression F))
         = Witgen.eval { env := env } xs := by
-  rw [show Witgen.WitgenIR.ofFExprs (toElements xs) = Witgen.M.toIRLiteral (pure xs) from rfl,
+  rw [show WitgenIR.ofFExprs (toElements xs) = Witgen.M.toIRLiteral (pure xs) from rfl,
     ProverEnvironment.extendsVector_toIRLiteral,
     show Witgen.M.eval env (pure xs) = Witgen.eval { env := env } xs from rfl]
 
@@ -567,3 +569,5 @@ lemma List.ofFn_nil_flatten {α : Type} {m : ℕ} :
   simp
 
 attribute [circuit_norm] forall_eq reduceIte String.reduceEq decide_false
+
+end Clean

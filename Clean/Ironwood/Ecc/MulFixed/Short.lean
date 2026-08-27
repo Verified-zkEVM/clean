@@ -1,0 +1,2039 @@
+import Clean.Ironwood.Ecc.MulFixed
+import Clean.Ironwood.Ecc.MulFixed.ShortTheorems
+import Clean.Ironwood.Ecc.MulFixed.BaseFieldElemTheorems
+import Batteries.Data.Vector.Lemmas
+
+/-!
+Fixed-base scalar multiplication by a short *signed* exponent: `output = [sign · magnitude] B`
+with `|magnitude| < 2^64` (`L_SCALAR_SHORT = 64`, decomposed into `NUM_WINDOWS_SHORT = 22`
+3-bit windows, the same windowing as the shared `MulFixed`). The last window's bit `z_21` and
+the sign are checked by the `q_mul_fixed_short` gate, which also conditionally negates the
+accumulated `y`-coordinate to fold in the sign.
+
+Reference: `halo2_gadgets/src/ecc/chip/mul_fixed/short.rs`.
+-/
+
+-- The variable-name style linter whnf-walks chunk-typed statements below; disabled
+-- file-wide (as in the sibling wrappers).
+set_option linter.constructorNameAsVariable false
+
+namespace Zcash.Circuits.Ecc.MulFixed.Short
+
+open Halo2
+open Ecc.MulFixed
+  (coordsGate fixedConstantsLoop processWindow windowChain FixedBaseData)
+open DecomposeRunningSum
+  (copyDecompose copyDecomposeSynthesisSummary rangeCheckExpr)
+open Ecc.MulFixed.Short (FixedBase)
+open CompElliptic.Fields.Pasta (Fq PALLAS_BASE_CARD PALLAS_SCALAR_CARD)
+
+/-- The data of a proven short fixed base (window tables for the 22 short windows). -/
+def FixedBase.toData (B : FixedBase) :
+    FixedBaseData :=
+  { params := B.params, point := B.point, u := B.u }
+
+structure Config where
+  -- Selector used for fixed-base scalar mul with short signed exponent.
+  qMulFixedShort : Selector
+  -- The shared fixed-base mul config.
+  superConfig : MulFixed.Config
+
+/-- The "Short fixed-base mul gate", in the Rust constraint order (matches the compiled
+AST). -/
+def shortGate (cfg : Config) : Gate Fp :=
+  let yP : Expression Fp Query := queryAdvice cfg.superConfig.addConfig.yP 0
+  let yA : Expression Fp Query := queryAdvice cfg.superConfig.addConfig.yQR 0
+  -- z_21 = k_21, copied into the `u` column
+  let lastWindow : Expression Fp Query := queryAdvice cfg.superConfig.u 0
+  let sign : Expression Fp Query := queryAdvice cfg.superConfig.window 0
+  Gate.withSelector "Short fixed-base mul gate" cfg.qMulFixedShort
+    [yP, yA, lastWindow, sign] <|
+    -- bool_check(last_window) = range_check(last_window, 2)
+    let lastWindowCheck := rangeCheckExpr 2 lastWindow
+    -- sign² − 1
+    let signCheck := sign * sign - Expression.const (1 : Fp)
+    -- (y_p − y_a)·(y_p + y_a)  (redundant, kept verbatim — VK data)
+    let yCheck := (yP - yA) * (yP + yA)
+    -- sign·y_p − y_a
+    let negationCheck := sign * yP - yA
+    [ ("last_window_check", lastWindowCheck),
+      ("sign_check", signCheck),
+      ("y_check", yCheck),
+      ("negation_check", negationCheck) ]
+
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem shortGate_selector (cfg : Config) :
+    (shortGate cfg).selector = cfg.qMulFixedShort := rfl
+
+/-- Allocate the `q_mul_fixed_short` selector and register the gate. -/
+def configure (superConfig : MulFixed.Config) : Configure Fp Config := do
+  let qMulFixedShort ← selector
+  let cfg : Config := { qMulFixedShort, superConfig }
+  createGate (shortGate cfg)
+  return cfg
+
+instance (superConfig : MulFixed.Config) :
+    ElaboratedConfigure (configure superConfig) := by
+  unfold configure
+  infer_instance
+
+structure Inputs (F : Type) where
+  -- The unsigned magnitude, already assigned.
+  magnitude : F
+  -- The sign, already assigned (constrained to ±1 by the gate).
+  sign : F
+deriving ProvableStruct
+
+/-- The conditionally-negated final `y` witness: `sign = −1 ? −y : y` over the sign cell
+and the magnitude-mul `y` cell. -/
+def yVarWit (sign yMag : AssignedCell Fp) : WitgenIR Fp 1 :=
+  .native fun env =>
+    #v[if readCell env sign = -1 then -(readCell env yMag) else readCell env yMag]
+
+structure InnerOut (F : Type) where
+  -- The exit accumulator after windows 0..20.
+  acc : Point F
+  -- The MSB (window 21) table point.
+  mulB : Point F
+  -- The running sums; `z_21` feeds the sign row's last-window check.
+  zs : Vector F 23
+deriving ProvableStruct
+
+/-- Region 1, "Short fixed-base mul (incomplete addition)": the strict 22-window
+running-sum decomposition of the magnitude, then the shared inner body (fixed constants
+with the running-sum coords toggle; the window chain). -/
+def innerRegion (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (magnitude : AssignedCell Fp) :
+    RegionCircuit Fp (InnerOut (AssignedCell Fp)) := do
+  -- strict copy_decompose, 64 bits in 22 windows
+  let zsOut ← (copyDecompose 3 22).call cfg.superConfig.runningSumConfig offset
+    ⟨magnitude⟩
+  -- assign the fixed constants, with the running-sum coords gate as toggle
+  fixedConstantsLoop (coordsGate cfg.superConfig) B cfg.superConfig offset 22
+  -- the window chain over the magnitude cell
+  let r ← windowChain cfg.superConfig
+    (processWindow B (Ecc.MulFixed.Short.windowPoint B.point) cfg.superConfig
+      magnitude) offset 22
+  return { acc := r.1, mulB := r.2, zs := zsOut.zs }
+
+/-- Reduced footprint of the short-multiplication inner region. -/
+def innerRegionSynthesisSummary (cfg : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  (copyDecomposeSynthesisSummary 22
+      cfg.superConfig.runningSumConfig offset).combine
+    ((fixedConstantsLoopSynthesisSummary (coordsGate cfg.superConfig)
+      cfg.superConfig offset 22).combine
+      (windowChainSynthesisSummary cfg.superConfig offset 22))
+
+@[synthesis_summary_norm]
+theorem innerRegion_synthesisSummary_eq
+    (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (magnitude : AssignedCell Fp) (self : RegionIndex) :
+    FloorPlanner.regionSynthesisSummary
+        ((innerRegion B cfg offset magnitude).operations self) =
+      innerRegionSynthesisSummary cfg offset := by
+  simp only [innerRegion, innerRegionSynthesisSummary,
+    RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    FloorPlanner.regionSynthesisSummary_append, synthesis_summary_norm]
+  rw [windowChain_synthesisSummary_eq]
+  intro w row
+  exact processWindow_synthesisSummary_eq B
+    (Ecc.MulFixed.Short.windowPoint B.point) cfg.superConfig
+    magnitude w row self
+
+/-- Region 2, "Short fixed-base mul (most significant word)": the complete addition at
+offset 0, then the sign row at offset 1. Returns the result point (`magnitude_mul.x`,
+conditionally-negated `y`). -/
+def mswRegion (cfg : Config) (acc mulB : Point (AssignedCell Fp))
+    (sign z21 : AssignedCell Fp) : RegionCircuit Fp (Point (AssignedCell Fp)) := do
+  -- [magnitude]B by complete addition
+  let magnitudeMul ← Add.add.call cfg.superConfig.addConfig 0 ⟨mulB, acc⟩
+  -- offset 1: copy sign into `window`
+  let _s ← copyAdvice sign cfg.superConfig.window 1
+  -- copy z_21 into `u`
+  let _z ← copyAdvice z21 cfg.superConfig.u 1
+  -- enable the short gate
+  (shortGate cfg).enable 1
+  -- witness the conditionally-negated y into `add.y_p`
+  let yVar ← assignAdvice cfg.superConfig.addConfig.yP 1 (yVarWit sign magnitudeMul.y)
+  return { x := magnitudeMul.x, y := yVar }
+
+/-- Reduced footprint of the complete-addition and sign-adjustment region. -/
+def mswRegionSynthesisSummary (cfg : Config) :
+    FloorPlanner.RegionSynthesisSummary :=
+  (Add.synthesisSummary cfg.superConfig.addConfig 0).combine
+    (FloorPlanner.RegionSynthesisSummary.ofColumns
+      [.column .advice cfg.superConfig.window.index,
+        .column .advice cfg.superConfig.u.index,
+        .selector cfg.qMulFixedShort.index,
+        .column .advice cfg.superConfig.addConfig.yP.index]
+      2 0)
+
+@[synthesis_summary_norm]
+theorem mswRegion_synthesisSummary_eq
+    (cfg : Config) (acc mulB : Point (AssignedCell Fp))
+    (sign z21 : AssignedCell Fp) (self : RegionIndex) :
+    FloorPlanner.regionSynthesisSummary
+        ((mswRegion cfg acc mulB sign z21).operations self) =
+      mswRegionSynthesisSummary cfg := by
+  apply FloorPlanner.RegionSynthesisSummary.ext <;>
+    simp only [mswRegionSynthesisSummary, mswRegion, circuit_norm,
+      synthesis_summary_norm, shortGate]
+
+@[synthesis_summary_norm]
+theorem mswRegionSynthesisSummary_hasNoFixedColumns (cfg : Config) :
+    (mswRegionSynthesisSummary cfg).HasNoFixedColumns := by
+  simp only [mswRegionSynthesisSummary,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_combine,
+    Add.synthesisSummary_hasNoFixedColumns,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
+
+/-! ## The inner-region bundle
+
+BFE-shaped contracts at 22 windows: the strict 66-bit decomposition, the lower-window
+ladder (windows 0..20), and the short MSB (`Short.windowPoint 21`). -/
+
+/-- The inner region's output cells, reduced (the explicit `elaborated` output). -/
+def innerOutCells (cfg : Config) (offset : ℕ) (self : RegionIndex) :
+    Var InnerOut Fp where
+  acc := { x := AssignedCell.of self (offset + 21)
+             cfg.superConfig.addIncompleteConfig.xQR,
+           y := AssignedCell.of self (offset + 21)
+             cfg.superConfig.addIncompleteConfig.yQR }
+  mulB := { x := AssignedCell.of self (offset + 21) cfg.superConfig.addConfig.xP,
+            y := AssignedCell.of self (offset + 21) cfg.superConfig.addConfig.yP }
+  zs := Vector.ofFn (fun j => AssignedCell.of self (offset + j.val)
+    cfg.superConfig.runningSumConfig.z)
+
+private theorem innerRegion_output_zs (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (magnitude : AssignedCell Fp) (self : RegionIndex) :
+    ((innerRegion B cfg offset magnitude).output self).zs
+      = Vector.ofFn (fun j => AssignedCell.of self (offset + j.val)
+          cfg.superConfig.runningSumConfig.z) := by
+  show (((copyDecompose 3 22).call cfg.superConfig.runningSumConfig offset
+      { alpha := magnitude }).output self).zs = _
+  rw [FormalRegionCircuit.output_call,
+    DecomposeRunningSum.copyDecompose_output]
+
+@[keygen_norm]
+private theorem innerRegion_output_z_column (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (magnitude : AssignedCell Fp) (self : RegionIndex) (j : ℕ) (hj : j < 23) :
+    (((innerRegion B cfg offset magnitude).output self).zs[j]'hj).cell.column =
+      cfg.superConfig.runningSumConfig.z := by
+  rw [innerRegion_output_zs, Vector.getElem_ofFn]
+  exact Cell.of_column self (offset + j) cfg.superConfig.runningSumConfig.z
+
+@[keygen_norm]
+private theorem innerRegion_output_acc (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (magnitude : AssignedCell Fp) (self : RegionIndex) :
+    ((innerRegion B cfg offset magnitude).output self).acc
+      = { x := AssignedCell.of self (offset + 21)
+            cfg.superConfig.addIncompleteConfig.xQR,
+          y := AssignedCell.of self (offset + 21)
+            cfg.superConfig.addIncompleteConfig.yQR } := by
+  simp only [innerRegion, MulFixed.windowChain, circuit_norm]
+
+@[keygen_norm]
+private theorem innerRegion_output_mulB (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (magnitude : AssignedCell Fp) (self : RegionIndex) :
+    ((innerRegion B cfg offset magnitude).output self).mulB
+      = { x := AssignedCell.of self (offset + 21) cfg.superConfig.addConfig.xP,
+          y := AssignedCell.of self (offset + 21) cfg.superConfig.addConfig.yP } := by
+  simp only [innerRegion, MulFixed.windowChain, MulFixed.processWindow, circuit_norm]
+
+/-- The whole inner-region output as a cell literal. -/
+private theorem innerRegion_output (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (magnitude : AssignedCell Fp) (self : RegionIndex) :
+    (innerRegion B cfg offset magnitude).output self = innerOutCells cfg offset self := by
+  rw [innerOutCells, ← innerRegion_output_acc, ← innerRegion_output_mulB,
+    ← innerRegion_output_zs]
+
+derive_contract_bridges dec := DecomposeRunningSum.copyDecompose 3 22
+derive_contract_bridges addinc := Ecc.AddIncomplete.add
+derive_contract_bridges addc := Ecc.Add.add
+
+/-- Lower windows' short table point as a plain scalar multiple. -/
+theorem shortWindowPoint_lower (point : Point Fp) {w k : ℕ} (hw : w < 21) (hk : k < 8) :
+    Ecc.MulFixed.Short.windowPoint point w k
+      = (((k + 2) * 8 ^ w : ℕ) • point) := by
+  unfold Ecc.MulFixed.Short.windowPoint
+  rw [Ecc.MulFixed.Short.windowScalar_val hw hk]
+
+/-- The shared-config assumptions the inner proofs consume. -/
+def InnerEnvAssumptions (cfg : Config) (_ : Placed Environment Fp) : Prop :=
+  cfg.superConfig.runningSumConfig.z = cfg.superConfig.window ∧
+  cfg.superConfig.addIncompleteConfig.xP = cfg.superConfig.addConfig.xP ∧
+  cfg.superConfig.addIncompleteConfig.yP = cfg.superConfig.addConfig.yP
+
+/-- The inner bundle's soundness contract, split at the region boundary. -/
+def InnerSpec (B : FixedBase)
+    (input : Value DecomposeRunningSum.Inputs Fp)
+    (out : Value InnerOut Fp) (_ : unit Fp) : Prop :=
+  ∃ ks : ℕ → ℕ, (∀ w, w < 22 → ks w < 8) ∧
+    (let V := ∑ j ∈ Finset.range 22, ks j * 8 ^ j
+    input.alpha = (V : Fp) ∧
+    out.acc = { x := ((Ecc.MulFixed.partialSum ks 20) • B.point).x,
+                y := ((Ecc.MulFixed.partialSum ks 20) • B.point).y } ∧
+    out.mulB = Ecc.MulFixed.Short.windowPoint B.point 21 (ks 21) ∧
+    ∀ w : Fin 23, out.zs[w.val] = ((V / 2 ^ (3 * w.val) : ℕ) : Fp))
+
+/-- Honest-prover precondition: the magnitude fits the strict 66-bit decomposition. -/
+def InnerProverAssumptions
+    (input : ProverValue DecomposeRunningSum.Inputs Fp)
+    (_ : unit Fp) (_ : ProverHint Fp) : Prop :=
+  input.alpha.val < 2 ^ 66
+
+/-- Honest-prover postcondition: the exit cells at the magnitude's own digits, plus the
+running sums. -/
+def InnerProverSpec (B : FixedBase)
+    (input : ProverValue DecomposeRunningSum.Inputs Fp)
+    (out : ProverValue InnerOut Fp) (_ : unit Fp) (_ : ProverHint Fp) : Prop :=
+  out.acc.x = (Ecc.MulFixed.partialSum
+      (fun t => input.alpha.val / 2 ^ (3 * t) % 8) 20 • B.point).x ∧
+  out.acc.y = (Ecc.MulFixed.partialSum
+      (fun t => input.alpha.val / 2 ^ (3 * t) % 8) 20 • B.point).y ∧
+  out.mulB.x = (Ecc.MulFixed.Short.windowPoint B.point 21
+      (input.alpha.val / 2 ^ (3 * 21) % 8)).x ∧
+  out.mulB.y = (Ecc.MulFixed.Short.windowPoint B.point 21
+      (input.alpha.val / 2 ^ (3 * 21) % 8)).y ∧
+  ∀ w : Fin 23, out.zs[w.val] = ((input.alpha.val / 2 ^ (3 * w.val) : ℕ) : Fp)
+
+@[keygen_norm]
+def innerKeygenRequirements :
+    KeygenRequirements Fp Config (Var DecomposeRunningSum.Inputs Fp) where
+  configLawful cfg :=
+    AddIncomplete.add.Configured cfg.superConfig.addIncompleteConfig ×
+      cfg.superConfig.FixedColumnsLawful
+  gates cfg configured :=
+    runningSumKeygenRequirements.gates cfg.superConfig configured.1
+  lookups cfg configured :=
+    runningSumKeygenRequirements.lookups cfg.superConfig configured.1
+  fixedColumns cfg _ := MulFixed.fixedColumns cfg.superConfig
+  permutationColumns cfg configured :=
+    runningSumKeygenRequirements.permutationColumns cfg.superConfig configured.1
+  inputCells _ _ input := [input.alpha.cell]
+
+@[keygen_helper]
+theorem innerCopyDecompose_keygenRegistered
+    (cfg : Config) (offset : ℕ) (magnitude : AssignedCell Fp)
+    (self : RegionIndex)
+    (configured : innerKeygenRequirements.configLawful cfg) :
+    (((copyDecompose 3 22).call cfg.superConfig.runningSumConfig
+      offset ⟨magnitude⟩).operations self).Forall
+        (RegionOperation.KeygenRegistered
+          (innerKeygenRequirements.gates cfg configured)
+          (innerKeygenRequirements.lookups cfg configured)
+          (innerKeygenRequirements.fixedColumns cfg configured)
+          (innerKeygenRequirements.permutationColumns cfg configured ++
+            innerKeygenRequirements.inputPermutationColumns cfg configured ⟨magnitude⟩)) := by
+  apply FormalRegionCircuit.call_keygenRegistered_ofOutput
+    (copyDecompose 3 22)
+    (cfg.superConfig.runningSumConfig.qRangeCheck,
+      cfg.superConfig.runningSumConfig.z) {} ()
+  · intro gate h
+    unfold copyDecompose at h
+    simp only [FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements] at h
+    simp [innerKeygenRequirements, runningSumKeygenRequirements,
+      DecomposeRunningSum.configure] at h ⊢
+    exact Or.inl h
+  · intro argument h
+    unfold copyDecompose at h
+    simp only [FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements] at h
+    simp [DecomposeRunningSum.configure] at h
+  · intro column h
+    let configured := FormalRegionCircuit.Configured.ofOutput
+      (copyDecompose 3 22)
+      (cfg.superConfig.runningSumConfig.qRangeCheck,
+        cfg.superConfig.runningSumConfig.z) {} ()
+    have hcolumn : column ∈ configured.fixedColumns := by
+      simpa [configured, FormalRegionCircuit.Configured.fixedColumns,
+        FormalRegionCircuit.Configured.ofOutput] using h
+    rw [DecomposeRunningSum.copyDecompose_configured_fixedColumns_eq_nil]
+      at hcolumn
+    exact (List.not_mem_nil hcolumn).elim
+  · intro column h
+    have h' : column ∈
+        (FormalRegionCircuit.Configured.ofOutput (copyDecompose 3 22)
+          (cfg.superConfig.runningSumConfig.qRangeCheck,
+            cfg.superConfig.runningSumConfig.z) {} ()).permutationColumns := by
+      simpa [FormalRegionCircuit.Configured.permutationColumns,
+        FormalRegionCircuit.Configured.ofOutput] using h
+    rw [DecomposeRunningSum.copyDecompose_configured_permutationColumns_eq] at h'
+    have hz : column ∈
+        DecomposeRunningSum.permutationColumns cfg.superConfig.runningSumConfig := by
+      simpa [DecomposeRunningSum.configure] using h'
+    simp only [innerKeygenRequirements, runningSumKeygenRequirements,
+      List.mem_append]
+    exact Or.inl (Or.inl (Or.inl (Or.inl (Or.inl hz))))
+  · simp only [copyDecompose, FormalRegionCircuit.keygenRequirements,
+      DecomposeRunningSum.elaborated,
+      ElaboratedRegionCircuit.keygenRequirements,
+      List.forall_cons, List.forall_nil, and_true,
+      innerKeygenRequirements, KeygenRequirements.inputPermutationColumns,
+      List.map_cons, List.map_nil, List.mem_append, List.mem_singleton]
+    exact Or.inr trivial
+
+@[keygen_helper]
+theorem innerWindowChain_keygenRegistered
+    (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (magnitude : AssignedCell Fp) (self : RegionIndex)
+    (configured : innerKeygenRequirements.configLawful cfg) :
+    ((windowChain cfg.superConfig
+      (processWindow B (Ecc.MulFixed.Short.windowPoint B.point)
+        cfg.superConfig magnitude) offset 22).operations self).Forall
+        (RegionOperation.KeygenRegistered
+          (innerKeygenRequirements.gates cfg configured)
+          (innerKeygenRequirements.lookups cfg configured)
+          (innerKeygenRequirements.fixedColumns cfg configured)
+          (innerKeygenRequirements.permutationColumns cfg configured ++
+            innerKeygenRequirements.inputPermutationColumns cfg configured ⟨magnitude⟩)) := by
+  apply windowChain_processWindow_keygenRegistered
+      B (Ecc.MulFixed.Short.windowPoint B.point) cfg.superConfig
+      magnitude offset 22 self configured.1
+  · intro gate h
+    simp only [innerKeygenRequirements, runningSumKeygenRequirements,
+      List.mem_append, List.mem_cons]
+    exact Or.inr h
+  · intro argument h
+    exact h
+  · intro column h
+    exact False.elim (List.not_mem_nil h)
+  · intro column h
+    rw [AddIncomplete.Configured.permutationColumns_eq] at h
+    simp only [innerKeygenRequirements, runningSumKeygenRequirements,
+      List.mem_append]
+    exact Or.inl (Or.inr h)
+  · intro column h
+    simp only [innerKeygenRequirements, runningSumKeygenRequirements,
+      List.mem_append]
+    exact Or.inl (Or.inl (Or.inr h))
+
+theorem innerRegion_keygenRegistered
+    (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (magnitude : AssignedCell Fp) (self : RegionIndex)
+    (configured : innerKeygenRequirements.configLawful cfg) :
+    ((innerRegion B cfg offset magnitude).operations self).Forall
+      (RegionOperation.KeygenRegistered
+        (innerKeygenRequirements.gates cfg configured)
+        (innerKeygenRequirements.lookups cfg configured)
+        (innerKeygenRequirements.fixedColumns cfg configured)
+        (innerKeygenRequirements.permutationColumns cfg configured ++
+          innerKeygenRequirements.inputPermutationColumns cfg configured ⟨magnitude⟩)) := by
+  simp only [innerRegion, RegionCircuit.operations_bind,
+    RegionCircuit.operations_pure, List.forall_append,
+    List.forall_nil, and_true]
+  constructor
+  · exact innerCopyDecompose_keygenRegistered
+      cfg offset magnitude self configured
+  constructor
+  · simp only [fixedConstantsLoop, RegionCircuit.forRange'_forall]
+    intro i
+    unfold fixedConstantsWindow
+    keygen_registration
+  · exact innerWindowChain_keygenRegistered
+      B cfg offset magnitude self configured
+
+theorem innerRegion_copyCellsAssignedFrom
+    (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (magnitude : AssignedCell Fp) (self : RegionIndex)
+    (configured : innerKeygenRequirements.configLawful cfg) :
+    ((innerRegion B cfg offset magnitude).operations self)
+      |>.CopyCellsAssignedFrom self [magnitude.cell] := by
+  let decomposeOps :=
+    (((copyDecompose 3 22).call cfg.superConfig.runningSumConfig
+      offset ⟨magnitude⟩).operations self)
+  let fixedOps :=
+    (fixedConstantsLoop (coordsGate cfg.superConfig) B cfg.superConfig
+      offset 22).operations self
+  let chainOps :=
+    (windowChain cfg.superConfig
+      (processWindow B (Ecc.MulFixed.Short.windowPoint B.point)
+        cfg.superConfig magnitude) offset 22).operations self
+  have hdecompose : decomposeOps.CopyCellsAssignedFrom self [magnitude.cell] := by
+    apply (copyDecompose 3 22).call_copyCellsAssignedFrom
+      cfg.superConfig.runningSumConfig
+      (FormalRegionCircuit.Configured.ofOutput (copyDecompose 3 22)
+        (cfg.superConfig.runningSumConfig.qRangeCheck,
+          cfg.superConfig.runningSumConfig.z) {} ())
+      offset ⟨magnitude⟩ self
+    intro cell hcell
+    rw [DecomposeRunningSum.copyDecompose_configured_inputCells_eq] at hcell
+    simpa only [List.mem_singleton] using hcell
+  have hfixed : fixedOps.CopyCellsAssignedFrom self
+      (decomposeOps.assignedCellsAfter self [magnitude.cell]) :=
+    MulFixed.fixedConstantsLoop_copyCellsAssignedFrom _ _ _ _ _ _ _
+  have hchainResult := MulFixed.windowChain_copyCellsAssignedFrom
+    cfg.superConfig configured.1 self
+    (processWindow B (Ecc.MulFixed.Short.windowPoint B.point)
+      cfg.superConfig magnitude)
+    (fun w row available => MulFixed.processWindow_copyCellsAssignedFrom
+      B (Ecc.MulFixed.Short.windowPoint B.point) cfg.superConfig magnitude
+        w row self available)
+    (fun w row available => MulFixed.processWindow_output_cells_assigned
+      B (Ecc.MulFixed.Short.windowPoint B.point) cfg.superConfig magnitude
+        w row self available)
+    offset 22 (by norm_num)
+    ((decomposeOps ++ fixedOps).assignedCellsAfter self [magnitude.cell])
+  have hchain : chainOps.CopyCellsAssignedFrom self
+      ((decomposeOps ++ fixedOps).assignedCellsAfter self [magnitude.cell]) := by
+    exact hchainResult.1
+  have hprefix : (decomposeOps ++ fixedOps).CopyCellsAssignedFrom
+      self [magnitude.cell] := by
+    rw [RegionOperations.copyCellsAssignedFrom_append_iff]
+    exact ⟨hdecompose, hfixed⟩
+  have hall : ((decomposeOps ++ fixedOps) ++ chainOps).CopyCellsAssignedFrom
+      self [magnitude.cell] := by
+    rw [RegionOperations.copyCellsAssignedFrom_append_iff]
+    exact ⟨hprefix, hchain⟩
+  simpa only [innerRegion, RegionCircuit.operations_bind,
+    RegionCircuit.operations_pure, List.append_nil, List.append_assoc] using hall
+
+theorem innerRegion_msw_inputs_assigned
+    (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (magnitude : AssignedCell Fp) (self : RegionIndex)
+    (configured : innerKeygenRequirements.configLawful cfg)
+    (available : List Cell) :
+    let output := (innerRegion B cfg offset magnitude).output self
+    output.acc.x.cell ∈
+        ((innerRegion B cfg offset magnitude).operations self
+          |>.assignedCellsAfter self available) ∧
+      output.acc.y.cell ∈
+        ((innerRegion B cfg offset magnitude).operations self
+          |>.assignedCellsAfter self available) ∧
+      output.mulB.x.cell ∈
+        ((innerRegion B cfg offset magnitude).operations self
+          |>.assignedCellsAfter self available) ∧
+      output.mulB.y.cell ∈
+        ((innerRegion B cfg offset magnitude).operations self
+          |>.assignedCellsAfter self available) ∧
+      output.zs[21].cell ∈
+        ((innerRegion B cfg offset magnitude).operations self
+          |>.assignedCellsAfter self available) := by
+  let decomposeOps :=
+    (((copyDecompose 3 22).call cfg.superConfig.runningSumConfig
+      offset ⟨magnitude⟩).operations self)
+  let fixedOps :=
+    (fixedConstantsLoop (coordsGate cfg.superConfig) B cfg.superConfig
+      offset 22).operations self
+  have hchain := MulFixed.windowChain_copyCellsAssignedFrom
+    cfg.superConfig configured.1 self
+    (processWindow B (Ecc.MulFixed.Short.windowPoint B.point)
+      cfg.superConfig magnitude)
+    (fun w row current => MulFixed.processWindow_copyCellsAssignedFrom
+      B (Ecc.MulFixed.Short.windowPoint B.point) cfg.superConfig magnitude
+        w row self current)
+    (fun w row current => MulFixed.processWindow_output_cells_assigned
+      B (Ecc.MulFixed.Short.windowPoint B.point) cfg.superConfig magnitude
+        w row self current)
+    offset 22 (by norm_num)
+    ((decomposeOps ++ fixedOps).assignedCellsAfter self available)
+  rw [innerRegion_output]
+  simp only [innerOutCells, Vector.getElem_ofFn, AssignedCell.of_cell]
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩
+  · simpa only [innerRegion, RegionCircuit.operations_bind,
+      RegionCircuit.operations_pure, List.append_nil,
+      RegionOperations.assignedCellsAfter_append, decomposeOps, fixedOps]
+      using hchain.2.1
+  · simpa only [innerRegion, RegionCircuit.operations_bind,
+      RegionCircuit.operations_pure, List.append_nil,
+      RegionOperations.assignedCellsAfter_append, decomposeOps, fixedOps]
+      using hchain.2.2.1
+  · simpa only [innerRegion, RegionCircuit.operations_bind,
+      RegionCircuit.operations_pure, List.append_nil,
+      RegionOperations.assignedCellsAfter_append, decomposeOps, fixedOps]
+      using hchain.2.2.2.1
+  · simpa only [innerRegion, RegionCircuit.operations_bind,
+      RegionCircuit.operations_pure, List.append_nil,
+      RegionOperations.assignedCellsAfter_append, decomposeOps, fixedOps]
+      using hchain.2.2.2.2
+  · rw [RegionOperations.mem_assignedCellsAfter_iff]
+    rw [List.mem_append]
+    apply Or.inr
+    simp only [innerRegion, circuit_norm, RegionOperations.assignedCells,
+      List.flatMap_append, List.mem_append]
+    left
+    rw [FormalRegionCircuit.call_operations]
+    simp only [copyDecompose, DecomposeRunningSum.body, circuit_norm]
+    right
+    unfold DecomposeRunningSum.assignLoop RegionCircuit.forRange'
+    rw [RegionCircuit.loopAux_operations]
+    apply List.mem_append_right []
+    rw [List.mem_flatten]
+    let assigned := Cell.of self (offset + 20 * 1 + 1)
+      cfg.superConfig.runningSumConfig.z
+    refine ⟨[assigned], ?_, ?_⟩
+    · apply List.mem_map.mpr
+      refine ⟨.assignAdvice cfg.superConfig.runningSumConfig.z
+        (offset + 20 * 1 + 1)
+        (DecomposeRunningSum.zWitness 3 (20 + 1) magnitude), ?_, rfl⟩
+      simp only [List.mem_cons, List.mem_append]
+      apply Or.inr
+      apply Or.inr
+      apply Or.inl
+      rw [List.mem_flatten]
+      refine ⟨_, List.mem_ofFn.mpr ⟨⟨20, by norm_num⟩, rfl⟩, ?_⟩
+      simp only [circuit_norm, List.mem_singleton]
+    · simp only [List.mem_singleton, assigned]
+
+attribute [keygen_helper] innerRegion_keygenRegistered
+
+theorem innerRegion_fixedAssignmentsAgree
+    (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (magnitude : AssignedCell Fp) (self : RegionIndex)
+    (fixedColumnsLawful : cfg.superConfig.FixedColumnsLawful) :
+    ((innerRegion B cfg offset magnitude).operations self)
+      |>.FixedAssignmentsAgree := by
+  let decomposeOps :=
+    (((copyDecompose 3 22).call cfg.superConfig.runningSumConfig
+      offset ⟨magnitude⟩).operations self)
+  let fixedOps :=
+    (fixedConstantsLoop (coordsGate cfg.superConfig) B cfg.superConfig
+      offset 22).operations self
+  let chainOps :=
+    (windowChain cfg.superConfig
+      (processWindow B (Ecc.MulFixed.Short.windowPoint B.point)
+        cfg.superConfig magnitude) offset 22).operations self
+  have hdecompose : decomposeOps.HasNoFixedAssignments := by
+    apply FloorPlanner.RegionSynthesisSummary.HasNoFixedColumns.hasNoFixedAssignments
+    rw [(copyDecompose 3 22).call_synthesisSummary]
+    exact DecomposeRunningSum.copyDecompose_synthesisSummary_hasNoFixedColumns
+      3 22 cfg.superConfig.runningSumConfig offset ⟨magnitude⟩ self
+  have hfixed : fixedOps.FixedAssignmentsAgree :=
+    fixedConstantsLoop_fixedAssignmentsAgree
+      (coordsGate cfg.superConfig) B cfg.superConfig fixedColumnsLawful
+      offset 22 self
+  have hchain : chainOps.HasNoFixedAssignments := by
+    apply FloorPlanner.RegionSynthesisSummary.HasNoFixedColumns.hasNoFixedAssignments
+    rw [windowChain_synthesisSummary_eq]
+    · exact windowChainSynthesisSummary_hasNoFixedColumns
+        cfg.superConfig offset 22
+    · intro w row
+      exact processWindow_synthesisSummary_eq B
+        (Ecc.MulFixed.Short.windowPoint B.point) cfg.superConfig
+        magnitude w row self
+  have hall := hfixed.append_left hdecompose |>.append_right hchain
+  simpa only [innerRegion, RegionCircuit.operations_bind,
+    RegionCircuit.operations_pure, List.append_nil, List.append_assoc,
+    decomposeOps, fixedOps, chainOps] using hall
+
+/-- The elaborated-metadata instance, with the output cells in explicit reduced form. -/
+instance innerElab (B : FixedBaseData) :
+    ElaboratedRegionCircuit Fp Config Config DecomposeRunningSum.Inputs InnerOut
+      pure
+      (fun config offset (input : Var DecomposeRunningSum.Inputs Fp) =>
+        innerRegion B config offset input.alpha) where
+  keygenRequirements := innerKeygenRequirements
+  registered configInput _ configured offset input region := by
+    simpa using innerRegion_keygenRegistered
+      B configInput offset input.alpha region configured
+  lookupActivationsWellFormed config offset input region := by
+    simp only [innerRegion, RegionCircuit.operations_bind,
+      RegionCircuit.operations_pure,
+      RegionOperations.LookupActivationsWellFormed,
+      List.forall_append, List.forall_nil, and_true]
+    constructor
+    · keygen_registration
+    constructor
+    · simp only [fixedConstantsLoop, RegionCircuit.forRange'_forall]
+      intro i
+      unfold fixedConstantsWindow
+      keygen_registration
+    · exact windowChain_processWindow_lookupActivationsWellFormed
+        B (Ecc.MulFixed.Short.windowPoint B.point) config.superConfig input.alpha
+        offset 22 region
+  output config offset _ self := innerOutCells config offset self
+  synthesisSummary config offset _ _ :=
+    innerRegionSynthesisSummary config offset
+  output_eq := by
+    intro _ _ _ self
+    rw [innerRegion_output]
+  synthesisSummary_eq := by
+    intro _ _ input self
+    exact (innerRegion_synthesisSummary_eq B _ _ input.alpha self).symm
+  fixedAssignmentsAgree := by
+    intro configInput _ configured offset input self
+    exact innerRegion_fixedAssignmentsAgree B configInput offset input.alpha self
+      configured.2
+  copyCellsAssigned := by
+    intro configInput _ configured offset input self
+    exact innerRegion_copyCellsAssignedFrom
+      B configInput offset input.alpha self configured
+@[synthesis_summary_norm]
+theorem innerRegion_synthesisSummary_constantSiteCount
+    (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (magnitude : AssignedCell Fp) (self : RegionIndex) :
+    (FloorPlanner.regionSynthesisSummary
+      ((innerRegion B cfg offset magnitude).operations self)).constantSiteCount = 1 := by
+  simp only [innerRegion, RegionCircuit.operations_bind,
+    RegionCircuit.operations_pure, FloorPlanner.regionSynthesisSummary_append,
+    synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem innerRegionSynthesisSummary_constantSiteCount
+    (cfg : Config) (offset : ℕ) :
+    (innerRegionSynthesisSummary cfg offset).constantSiteCount = 1 := by
+  simp only [innerRegionSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem mswRegionSynthesisSummary_constantSiteCount (cfg : Config) :
+    (mswRegionSynthesisSummary cfg).constantSiteCount = 0 := by
+  simp only [mswRegionSynthesisSummary, synthesis_summary_norm,
+    Add.synthesisSummary]
+
+set_option linter.all false in
+/-- The inner region's soundness, standalone (own declaration budget). -/
+private theorem short_inner_soundness (B : FixedBase) (cfg : Config) (offset : ℕ) :
+    FormalRegionCircuit.Soundness
+      (Input := DecomposeRunningSum.Inputs) (Output := InnerOut)
+      pure
+      (fun config offset (input : Var DecomposeRunningSum.Inputs Fp) =>
+        innerRegion B.toData config offset input.alpha)
+      cfg offset
+      (fun _ _ _ => default)
+      (InnerEnvAssumptions cfg) (fun _ => True) (InnerSpec B) := by
+  circuit_proof_start [InnerSpec, InnerEnvAssumptions, InnerProverAssumptions]
+  obtain ⟨env, rfl, rfl⟩ :
+      ∃ pe : Placed Environment Fp, pe.place = place ∧ pe.env = env :=
+    ⟨⟨place, env⟩, rfl, rfl⟩
+  obtain ⟨hDec, hFixed, hChain⟩ := hc
+  -- circuit_proof_start consumed the copyDecompose chunk into its contract (assumptions `True`);
+  -- discharge and unfold to the running-sum decomposition.
+  simp only [dec_spec_eq, dec_assumptions_eq, dec_envAssumptions_eq] at hDec
+  -- circuit_proof_start unfolded `innerRegion` in `h_output`; it is defeq to the reduced cells.
+  change ProvableStruct.Halo2.eval env.place env.env (innerOutCells cfg offset self)
+    = { acc := output_acc, mulB := output_mulB, zs := output_zs } at h_output
+  simp only [innerOutCells] at h_output
+  provable_type_simp
+  simp only [DecomposeRunningSum.copyDecompose_output, circuit_norm] at hDec
+  obtain ⟨V, hVlt, hAlphaV, hZs⟩ := hDec
+  obtain ⟨⟨hOax, hOay⟩, ⟨hOmx, hOmy⟩, hOzs⟩ := h_output
+  -- ── the digit sequence and its reconstruction ──
+  have hVlt' : V < 8 ^ 22 := by
+    have : (2 : ℕ) ^ (3 * 22) = 8 ^ 22 := by rw [pow_mul]; norm_num
+    omega
+  have hSum : (∑ j ∈ Finset.range 22, V / 2 ^ (3 * j) % 8 * 8 ^ j) = V := by
+    have hstep : ∀ j, V / 2 ^ (3 * j) % 8 * 8 ^ j = V / 8 ^ j % 8 * 8 ^ j := by
+      intro j
+      rw [pow_mul]
+      norm_num
+    calc (∑ j ∈ Finset.range 22, V / 2 ^ (3 * j) % 8 * 8 ^ j)
+        = ∑ j ∈ Finset.range 22, V / 8 ^ j % 8 * 8 ^ j :=
+          Finset.sum_congr rfl (fun j _ => hstep j)
+      _ = V % 8 ^ 22 := Ecc.MulFixed.sum_base8 V 22
+      _ = V := Nat.mod_eq_of_lt hVlt'
+  -- ── the per-row window points (the coords rows) ──
+  simp only [MulFixed.fixedConstantsLoop, MulFixed.fixedConstantsWindow,
+    MulFixed.coordsGate, MulFixed.coordsCheck, MulFixed.eval_interpolatedX,
+    circuit_norm, mul_one, one_mul] at hFixed
+  obtain ⟨hZW, hXPeq, hYPeq⟩ := _hE
+  rw [hZW] at hZs
+  have hWP : ∀ w : Fin 22,
+      env.env.advice cfg.superConfig.addConfig.xP
+          ((env.place self + (offset + w.val) : ℕ) : ℤ)
+        = (Ecc.MulFixed.Short.windowPoint B.point w.val
+            (V / 2 ^ (3 * w.val) % 8)).x ∧
+      env.env.advice cfg.superConfig.addConfig.yP
+          ((env.place self + (offset + w.val) : ℕ) : ℤ)
+        = (Ecc.MulFixed.Short.windowPoint B.point w.val
+            (V / 2 ^ (3 * w.val) % 8)).y := by
+    intro w
+    have hRow := hFixed w
+    obtain ⟨hGate, hL0, hL1, hL2, hL3, hL4, hL5, hL6, hL7, hZf⟩ := hRow
+    obtain ⟨hIx, hUy, hCrv⟩ := hGate
+    simp only [show B.toData.params = B.params from rfl]
+      at hL0 hL1 hL2 hL3 hL4 hL5 hL6 hL7 hZf
+    have hz0 := hZs ⟨w.val, by omega⟩
+    have hz1 := hZs ⟨w.val + 1, by omega⟩
+    have hword :
+        env.env.advice cfg.superConfig.window
+            ((env.place self + (offset + w.val) : ℕ) : ℤ)
+          - env.env.advice cfg.superConfig.window
+              ((env.place self + (offset + w.val + 1) : ℕ) : ℤ)
+            * ((MulFixed.H : ℕ) : Fp)
+        = ((V / 2 ^ (3 * w.val) % 8 : ℕ) : Fp) := by
+      rw [show offset + w.val + 1 = offset + (w.val + 1) from by omega, hz0, hz1]
+      have hsw := DecomposeRunningSum.shift_word_eq 3 V w.val
+      norm_num [MulFixed.H] at hsw ⊢
+      exact hsw
+    rw [hword] at hIx
+    have hxP : env.env.advice cfg.superConfig.addConfig.xP
+          ((env.place self + (offset + w.val) : ℕ) : ℤ)
+        = Ecc.MulFixed.interpolate (B.params w.val)
+            ((V / 2 ^ (3 * w.val) % 8 : ℕ) : Fp) := by
+      rw [← sub_eq_zero.mp hIx]
+      apply MulFixed.interpolate_congr_params <;>
+        simp only [MulFixed.readParams, circuit_norm, add_zero] <;>
+        first
+        | exact hL0 | exact hL1 | exact hL2 | exact hL3
+        | exact hL4 | exact hL5 | exact hL6 | exact hL7
+    have hspec : Ecc.MulFixed.Coords.Spec (B.params w.val)
+        { window := ((V / 2 ^ (3 * w.val) % 8 : ℕ) : Fp),
+          xP := env.env.advice cfg.superConfig.addConfig.xP
+            ((env.place self + (offset + w.val) : ℕ) : ℤ),
+          yP := env.env.advice cfg.superConfig.addConfig.yP
+            ((env.place self + (offset + w.val) : ℕ) : ℤ),
+          u := env.env.advice cfg.superConfig.u
+            ((env.place self + (offset + w.val) : ℕ) : ℤ) } := by
+      refine ⟨hxP, ?_, ?_⟩
+      · rw [← hZf]; linear_combination hUy
+      · linear_combination hCrv
+    have hcw := B.coords_eq_windowPoint (w := w.val) (k := V / 2 ^ (3 * w.val) % 8)
+      (by omega) (Nat.mod_lt _ (by norm_num)) rfl hspec
+    dsimp only at hcw
+    exact hcw
+  refine ⟨fun w => V / 2 ^ (3 * w) % 8,
+    fun w _ => Nat.mod_lt _ (by norm_num), ?_, ?_, ?_, ?_⟩
+  · -- magnitude = ↑V (the digit sum)
+    rw [hSum]; exact hAlphaV
+  · -- acc = [partialSum ks 20]·B  (the window-chain ladder)
+    simp only [MulFixed.windowChain, MulFixed.processWindow, circuit_norm,
+      RegionCircuit.operations_bind, RegionOperations.constraints_append] at hChain
+    obtain ⟨hA1, hALoop⟩ := hChain
+    subcircuit_rw at hA1
+    simp only [addinc_spec_eq, addinc_assumptions_eq, addinc_envAssumptions_eq,
+      MulFixed.addinc_output_cells, circuit_norm] at hA1
+    have hLoopS := fun (i : Fin 19) => by
+      have h := hALoop i
+      subcircuit_rw at h
+      simp only [addinc_spec_eq, addinc_assumptions_eq, addinc_envAssumptions_eq,
+        MulFixed.addinc_output_cells, circuit_norm, mul_one] at h
+      exact h
+    clear hALoop
+    have hks_lt : ∀ t, V / 2 ^ (3 * t) % 8 < 8 := fun t => Nat.mod_lt _ (by norm_num)
+    have hLadder := MulFixed.chain_ladder B.point B.onCurve 22 (by norm_num)
+      (by norm_num) (fun t => V / 2 ^ (3 * t) % 8) hks_lt
+      (fun w => env.env.advice cfg.superConfig.addConfig.xP
+        ((env.place self + (offset + w) : ℕ) : ℤ))
+      (fun w => env.env.advice cfg.superConfig.addConfig.yP
+        ((env.place self + (offset + w) : ℕ) : ℤ))
+      (fun j => if j = 0 then
+          env.env.advice cfg.superConfig.addConfig.xP
+            ((env.place self + offset : ℕ) : ℤ)
+        else
+          env.env.advice cfg.superConfig.addIncompleteConfig.xQR
+            ((env.place self + (offset + j + 1) : ℕ) : ℤ))
+      (fun j => if j = 0 then
+          env.env.advice cfg.superConfig.addConfig.yP
+            ((env.place self + offset : ℕ) : ℤ)
+        else
+          env.env.advice cfg.superConfig.addIncompleteConfig.yQR
+            ((env.place self + (offset + j + 1) : ℕ) : ℤ))
+      (fun w hw => by
+        obtain ⟨hx, hy⟩ := hWP ⟨w, by omega⟩
+        rw [shortWindowPoint_lower B.point (by omega) (hks_lt _)] at hx hy
+        exact ⟨hx, hy⟩)
+      ⟨if_pos rfl, if_pos rfl⟩
+      (by
+        intro j hj1 hj20 hAssumptions
+        obtain ⟨hOnP, hOnQ, hne⟩ := hAssumptions
+        dsimp only at hOnP hOnQ hne ⊢
+        rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)]
+        rcases Nat.lt_or_ge j 2 with hj2 | hj2
+        · have hj : j = 1 := by omega
+          subst hj
+          obtain ⟨-, hOut⟩ := hA1 ⟨hOnP, hOnQ, hne⟩
+          exact hOut
+        · have h := hLoopS ⟨j - 2, by omega⟩
+          rw [show offset + 2 + (j - 2) = offset + j from by omega] at h
+          rw [if_neg (by omega : ¬j - 1 = 0), if_neg (by omega : ¬j - 1 = 0),
+            show offset + (j - 1) + 1 = offset + j from by omega] at hOnQ
+          rw [if_neg (by omega : ¬j - 1 = 0),
+            show offset + (j - 1) + 1 = offset + j from by omega] at hne
+          rw [if_neg (by omega : ¬j - 1 = 0), if_neg (by omega : ¬j - 1 = 0),
+            show offset + (j - 1) + 1 = offset + j from by omega]
+          obtain ⟨-, hOut⟩ := h ⟨hOnP, hOnQ, hne⟩
+          exact hOut)
+    have hI20 := hLadder 20 (by norm_num)
+    dsimp only at hI20
+    rw [if_neg (by norm_num : ¬(20 : ℕ) = 0), if_neg (by norm_num : ¬(20 : ℕ) = 0),
+      show offset + 20 + 1 = offset + 21 from by omega] at hI20
+    rw [← hOax, ← hOay]
+    rcases hP : Ecc.MulFixed.partialSum (fun t => V / 2 ^ (3 * t) % 8) 20
+        • B.point with ⟨px, py⟩
+    rw [hP] at hI20
+    rw [hI20.1, hI20.2]
+  · -- mulB = the short MSB window point
+    obtain ⟨hwx, hwy⟩ := hWP ⟨21, by norm_num⟩
+    rw [← hOmx, ← hOmy]
+    rcases hW : Ecc.MulFixed.Short.windowPoint B.point 21 (V / 2 ^ (3 * 21) % 8)
+      with ⟨wx, wy⟩
+    rw [show ((⟨21, by norm_num⟩ : Fin 22) : ℕ) = 21 from rfl, hW] at hwx hwy
+    rw [hwx, hwy]
+  · -- the running sums are the shifts of the digit sum
+    intro w
+    rw [hSum, ← congrArg (fun v => v[w.val]'w.isLt) hOzs]
+    simp only [circuit_norm, hZW]
+    exact hZs w
+
+set_option linter.all false in
+/-- The honest per-window point values (shared by the fixed-rows and chain completeness
+halves): the chain's witness programs put the window-table coordinates and `u` values at
+each window row. -/
+private theorem short_windows_honest (B : FixedBase) (cfg : Config) (offset : ℕ)
+    (self : RegionIndex) (env : Placed ProverEnvironment Fp)
+    (input_var_alpha : AssignedCell Fp) (input_alpha : Fp)
+    (h_input : AssignedCell.eval env.place env.env.toEnvironment input_var_alpha = input_alpha)
+    (hWchain : RegionOperations.ExtendsWitnesses env.place self env.env
+      ((MulFixed.windowChain cfg.superConfig
+        (MulFixed.processWindow B.toData (Ecc.MulFixed.Short.windowPoint B.toData.point) cfg.superConfig input_var_alpha) offset
+        22).operations self)) :
+    ∀ w : Fin 22,
+      env.env.advice cfg.superConfig.addConfig.xP
+          ((env.place self + (offset + w.val) : ℕ) : ℤ)
+        = (Ecc.MulFixed.Short.windowPoint B.point w.val
+            (input_alpha.val / 2 ^ (3 * w.val) % 8)).x ∧
+      env.env.advice cfg.superConfig.addConfig.yP
+          ((env.place self + (offset + w.val) : ℕ) : ℤ)
+        = (Ecc.MulFixed.Short.windowPoint B.point w.val
+            (input_alpha.val / 2 ^ (3 * w.val) % 8)).y ∧
+      env.env.advice cfg.superConfig.u
+          ((env.place self + (offset + w.val) : ℕ) : ℤ)
+        = B.u w.val (input_alpha.val / 2 ^ (3 * w.val) % 8) := by
+  simp only [MulFixed.windowChain, MulFixed.processWindow, circuit_norm, mul_one,
+    MulFixed.xPWit, MulFixed.yPWit, MulFixed.uWit] at hWchain
+  obtain ⟨hx0, hy0, hu0, hx1, hy1, hu1, _hAW1, hLoopW, hx21, hy21, hu21⟩ := hWchain
+  have hread : readCell env input_var_alpha = input_alpha := h_input
+  have hPW : ∀ w : Fin 22,
+      env.env.advice cfg.superConfig.addConfig.xP
+          ((env.place self + (offset + w.val) : ℕ) : ℤ)
+        = (Ecc.MulFixed.Short.windowPoint B.point w.val
+            (input_alpha.val / 2 ^ (3 * w.val) % 8)).x ∧
+      env.env.advice cfg.superConfig.addConfig.yP
+          ((env.place self + (offset + w.val) : ℕ) : ℤ)
+        = (Ecc.MulFixed.Short.windowPoint B.point w.val
+            (input_alpha.val / 2 ^ (3 * w.val) % 8)).y ∧
+      env.env.advice cfg.superConfig.u
+          ((env.place self + (offset + w.val) : ℕ) : ℤ)
+        = B.u w.val (input_alpha.val / 2 ^ (3 * w.val) % 8) := by
+    intro w
+    rcases w with ⟨wv, hwv⟩
+    simp only []
+    rcases Nat.eq_zero_or_pos wv with rfl | hpos
+    · rw [show offset + 0 = offset from by omega]
+      rw [hx0, hy0, hu0,
+        ofFn8_get_windowVal _ env input_var_alpha 0 input_alpha hread,
+        ofFn8_get_windowVal _ env input_var_alpha 0 input_alpha hread,
+        ofFn8_get_windowVal _ env input_var_alpha 0 input_alpha hread]
+      exact ⟨rfl, rfl, rfl⟩
+    rcases Nat.lt_or_ge wv 2 with h1 | h2
+    · rw [show wv = 1 from by omega]
+      rw [hx1, hy1, hu1,
+        ofFn8_get_windowVal _ env input_var_alpha 1 input_alpha hread,
+        ofFn8_get_windowVal _ env input_var_alpha 1 input_alpha hread,
+        ofFn8_get_windowVal _ env input_var_alpha 1 input_alpha hread]
+      exact ⟨rfl, rfl, rfl⟩
+    rcases Nat.lt_or_ge wv 21 with h84 | h84
+    · obtain ⟨hxw, hyw, huw, -⟩ := hLoopW ⟨wv - 2, by omega⟩
+      rw [show offset + 2 + (wv - 2) = offset + wv from by omega,
+        show wv - 2 + 2 = wv from by omega] at hxw hyw huw
+      rw [hxw, hyw, huw,
+        ofFn8_get_windowVal _ env input_var_alpha wv input_alpha hread,
+        ofFn8_get_windowVal _ env input_var_alpha wv input_alpha hread,
+        ofFn8_get_windowVal _ env input_var_alpha wv input_alpha hread]
+      exact ⟨rfl, rfl, rfl⟩
+    · rw [show wv = 21 from by omega]
+      rw [hx21, hy21, hu21,
+        ofFn8_get_windowVal _ env input_var_alpha 21 input_alpha hread,
+        ofFn8_get_windowVal _ env input_var_alpha 21 input_alpha hread,
+        ofFn8_get_windowVal _ env input_var_alpha 21 input_alpha hread]
+      exact ⟨rfl, rfl, rfl⟩
+  exact hPW
+
+set_option linter.all false in
+/-- Completeness of the window chain (standalone): each incomplete addition's
+constraints from its completeness leaf, on the honest partialSum ladder. -/
+private theorem short_completeness_chain (B : FixedBase) (cfg : Config) (offset : ℕ)
+    (self : RegionIndex) (env : Placed ProverEnvironment Fp)
+    (input_var_alpha : AssignedCell Fp) (input_alpha : Fp)
+    (h_input : AssignedCell.eval env.place env.env.toEnvironment input_var_alpha = input_alpha)
+    (hWfix : RegionOperations.ExtendsWitnesses env.place self env.env
+      ((MulFixed.fixedConstantsLoop (MulFixed.coordsGate cfg.superConfig) B.toData
+        cfg.superConfig offset 22).operations self))
+    (hWchain : RegionOperations.ExtendsWitnesses env.place self env.env
+      ((MulFixed.windowChain cfg.superConfig
+        (MulFixed.processWindow B.toData (Ecc.MulFixed.Short.windowPoint B.toData.point) cfg.superConfig input_var_alpha) offset
+        22).operations self))
+    (hZW : cfg.superConfig.runningSumConfig.z = cfg.superConfig.window)
+    (hXPeq : cfg.superConfig.addIncompleteConfig.xP = cfg.superConfig.addConfig.xP)
+    (hYPeq : cfg.superConfig.addIncompleteConfig.yP = cfg.superConfig.addConfig.yP)
+    (hZs : ∀ w : Fin 23, env.env.advice cfg.superConfig.window
+        ((env.place self + (offset + w.val) : ℕ) : ℤ)
+      = ((input_alpha.val / 2 ^ (3 * w.val) : ℕ) : Fp)) :
+    RegionOperations.Constraints env.place self env.env.toEnvironment
+      ((MulFixed.windowChain cfg.superConfig
+        (MulFixed.processWindow B.toData (Ecc.MulFixed.Short.windowPoint B.toData.point) cfg.superConfig input_var_alpha) offset
+        22).operations self) ∧
+    (env.env.advice cfg.superConfig.addIncompleteConfig.xQR
+        ((env.place self + (offset + 21) : ℕ) : ℤ)
+      = (Ecc.MulFixed.partialSum
+          (fun t => input_alpha.val / 2 ^ (3 * t) % 8) 20 • B.point).x ∧
+     env.env.advice cfg.superConfig.addIncompleteConfig.yQR
+        ((env.place self + (offset + 21) : ℕ) : ℤ)
+      = (Ecc.MulFixed.partialSum
+          (fun t => input_alpha.val / 2 ^ (3 * t) % 8) 20 • B.point).y ∧
+     env.env.advice cfg.superConfig.addConfig.xP
+        ((env.place self + (offset + 21) : ℕ) : ℤ)
+      = (Ecc.MulFixed.Short.windowPoint B.point 21
+          (input_alpha.val / 2 ^ (3 * 21) % 8)).x ∧
+     env.env.advice cfg.superConfig.addConfig.yP
+        ((env.place self + (offset + 21) : ℕ) : ℤ)
+      = (Ecc.MulFixed.Short.windowPoint B.point 21
+          (input_alpha.val / 2 ^ (3 * 21) % 8)).y) := by
+  have hPW := short_windows_honest B cfg offset self env input_var_alpha input_alpha
+    h_input hWchain
+  have hks_lt : ∀ t, input_alpha.val / 2 ^ (3 * t) % 8 < 8 :=
+    fun t => Nat.mod_lt _ (by norm_num)
+  -- the addinc chunk witnesses
+  simp only [MulFixed.windowChain, MulFixed.processWindow, circuit_norm, mul_one] at hWchain
+  obtain ⟨-, -, -, -, -, -, hAW1, hLoopW, -, -, -⟩ := hWchain
+  -- per-chunk derived statements (Spec under Assumptions) and leaf constraints
+  have hD1 := Halo2.SubcircuitRw.region_completeness_derived_placed
+    AddIncomplete.add cfg.superConfig.addIncompleteConfig (offset + 1) self env
+    ⟨⟨AssignedCell.of self (offset + 1) cfg.superConfig.addConfig.xP,
+      AssignedCell.of self (offset + 1) cfg.superConfig.addConfig.yP⟩,
+     ⟨AssignedCell.of self offset cfg.superConfig.addConfig.xP,
+      AssignedCell.of self offset cfg.superConfig.addConfig.yP⟩⟩ hAW1
+  simp only [addinc_spec_eq, addinc_assumptions_eq, addinc_envAssumptions_eq,
+    addinc_proverAssumptions_eq, MulFixed.addinc_output_cells, circuit_norm] at hD1
+  have hLoopD := fun (i : Fin 19) => by
+    have h := Halo2.SubcircuitRw.region_completeness_derived_placed
+      AddIncomplete.add cfg.superConfig.addIncompleteConfig (offset + 2 + i.val) self env
+      ⟨⟨AssignedCell.of self (offset + 2 + i.val) cfg.superConfig.addConfig.xP,
+        AssignedCell.of self (offset + 2 + i.val) cfg.superConfig.addConfig.yP⟩,
+       ⟨AssignedCell.of self (offset + 2 + i.val) cfg.superConfig.addIncompleteConfig.xQR,
+        AssignedCell.of self (offset + 2 + i.val) cfg.superConfig.addIncompleteConfig.yQR⟩⟩
+      ((hLoopW i).2.2.2)
+    simp only [addinc_spec_eq, addinc_assumptions_eq, addinc_envAssumptions_eq,
+      addinc_proverAssumptions_eq, MulFixed.addinc_output_cells, circuit_norm] at h
+    exact h
+  -- honest accumulator invariant via the shared ladder (`MulFixed.chain_ladder`)
+  have hLadder := MulFixed.chain_ladder B.point B.onCurve 22 (by norm_num)
+    (by norm_num) (fun t => input_alpha.val / 2 ^ (3 * t) % 8) hks_lt
+    (fun w => env.env.advice cfg.superConfig.addConfig.xP
+      ((env.place self + (offset + w) : ℕ) : ℤ))
+    (fun w => env.env.advice cfg.superConfig.addConfig.yP
+      ((env.place self + (offset + w) : ℕ) : ℤ))
+    (fun j => if j = 0 then
+        env.env.advice cfg.superConfig.addConfig.xP
+          ((env.place self + offset : ℕ) : ℤ)
+      else
+        env.env.advice cfg.superConfig.addIncompleteConfig.xQR
+          ((env.place self + (offset + j + 1) : ℕ) : ℤ))
+    (fun j => if j = 0 then
+        env.env.advice cfg.superConfig.addConfig.yP
+          ((env.place self + offset : ℕ) : ℤ)
+      else
+        env.env.advice cfg.superConfig.addIncompleteConfig.yQR
+          ((env.place self + (offset + j + 1) : ℕ) : ℤ))
+    (fun w hw => by
+      obtain ⟨hx, hy, -⟩ := hPW ⟨w, by omega⟩
+      rw [shortWindowPoint_lower B.point (by omega) (hks_lt _)] at hx hy
+      exact ⟨hx, hy⟩)
+    ⟨if_pos rfl, if_pos rfl⟩
+    (by
+      intro j hj1 hj83 hAssumptions
+      obtain ⟨hOnP, hOnQ, hne⟩ := hAssumptions
+      dsimp only at hOnP hOnQ hne ⊢
+      rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)]
+      rcases Nat.lt_or_ge j 2 with hj2 | hj2
+      · -- j = 1: the explicit first chunk (window 1 + window 0)
+        have hj : j = 1 := by omega
+        subst hj
+        obtain ⟨⟨-, hOut⟩, -⟩ := hD1 ⟨hOnP, hOnQ, hne⟩
+        exact hOut
+      · -- j ≥ 2: loop chunk j − 2
+        have h := hLoopD ⟨j - 2, by omega⟩
+        rw [show offset + 2 + (j - 2) = offset + j from by omega] at h
+        rw [if_neg (by omega : ¬j - 1 = 0), if_neg (by omega : ¬j - 1 = 0),
+          show offset + (j - 1) + 1 = offset + j from by omega] at hOnQ
+        rw [if_neg (by omega : ¬j - 1 = 0),
+          show offset + (j - 1) + 1 = offset + j from by omega] at hne
+        rw [if_neg (by omega : ¬j - 1 = 0), if_neg (by omega : ¬j - 1 = 0),
+          show offset + (j - 1) + 1 = offset + j from by omega]
+        obtain ⟨⟨-, hOut⟩, -⟩ := h ⟨hOnP, hOnQ, hne⟩
+        exact hOut)
+  -- the invariant in the downstream row spelling
+  have hInv : ∀ j : ℕ, 1 ≤ j → j ≤ 20 →
+      env.env.advice cfg.superConfig.addIncompleteConfig.xQR
+          ((env.place self + (offset + j + 1) : ℕ) : ℤ)
+        = (Ecc.MulFixed.partialSum
+            (fun t => input_alpha.val / 2 ^ (3 * t) % 8) j • B.point).x ∧
+      env.env.advice cfg.superConfig.addIncompleteConfig.yQR
+          ((env.place self + (offset + j + 1) : ℕ) : ℤ)
+        = (Ecc.MulFixed.partialSum
+            (fun t => input_alpha.val / 2 ^ (3 * t) % 8) j • B.point).y := by
+    intro j hj1 hj83
+    have h := hLadder j hj83
+    dsimp only at h
+    rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)] at h
+    exact h
+  have hHonest : env.env.advice cfg.superConfig.addIncompleteConfig.xQR
+        ((env.place self + (offset + 21) : ℕ) : ℤ)
+      = (Ecc.MulFixed.partialSum
+          (fun t => input_alpha.val / 2 ^ (3 * t) % 8) 20 • B.point).x ∧
+      env.env.advice cfg.superConfig.addIncompleteConfig.yQR
+        ((env.place self + (offset + 21) : ℕ) : ℤ)
+      = (Ecc.MulFixed.partialSum
+          (fun t => input_alpha.val / 2 ^ (3 * t) % 8) 20 • B.point).y ∧
+      env.env.advice cfg.superConfig.addConfig.xP
+        ((env.place self + (offset + 21) : ℕ) : ℤ)
+      = (Ecc.MulFixed.Short.windowPoint B.point 21
+          (input_alpha.val / 2 ^ (3 * 21) % 8)).x ∧
+      env.env.advice cfg.superConfig.addConfig.yP
+        ((env.place self + (offset + 21) : ℕ) : ℤ)
+      = (Ecc.MulFixed.Short.windowPoint B.point 21
+          (input_alpha.val / 2 ^ (3 * 21) % 8)).y := by
+    have h83 := hInv 20 (by norm_num) le_rfl
+    rw [show offset + 20 + 1 = offset + 21 from by omega] at h83
+    obtain ⟨hx21, hy21, -⟩ := hPW ⟨21, by norm_num⟩
+    rw [show ((⟨21, by norm_num⟩ : Fin 22) : ℕ) = 21 from rfl] at hx21 hy21
+    exact ⟨h83.1, h83.2, hx21, hy21⟩
+  refine And.intro ?_ hHonest
+  simp only [MulFixed.windowChain, MulFixed.processWindow, circuit_norm, mul_one]
+  have hC1 := Halo2.SubcircuitRw.region_completeness_leaf_placed
+    AddIncomplete.add cfg.superConfig.addIncompleteConfig (offset + 1) self env
+    ⟨⟨AssignedCell.of self (offset + 1) cfg.superConfig.addConfig.xP,
+      AssignedCell.of self (offset + 1) cfg.superConfig.addConfig.yP⟩,
+     ⟨AssignedCell.of self offset cfg.superConfig.addConfig.xP,
+      AssignedCell.of self offset cfg.superConfig.addConfig.yP⟩⟩ hAW1
+  simp only [addinc_spec_eq, addinc_assumptions_eq, addinc_envAssumptions_eq,
+    addinc_proverAssumptions_eq, MulFixed.addinc_output_cells, circuit_norm] at hC1
+  constructor
+  · -- first addition: window-1 point + window-0 point, honest values
+    obtain ⟨hp1x, hp1y, -⟩ := hPW ⟨1, by norm_num⟩
+    obtain ⟨hp0x, hp0y, -⟩ := hPW ⟨0, by norm_num⟩
+    rw [show ((⟨1, by norm_num⟩ : Fin 22) : ℕ) = 1 from rfl] at hp1x hp1y
+    rw [show ((⟨0, by norm_num⟩ : Fin 22) : ℕ) = 0 from rfl,
+      show offset + 0 = offset from by omega] at hp0x hp0y
+    obtain ⟨t1, ht1_def⟩ : ∃ t : ℕ, t = (Ecc.MulFixed.Short.windowScalar 1
+      (input_alpha.val / 2 ^ (3 * 1) % 8)).val := ⟨_, rfl⟩
+    obtain ⟨s0, hs0_def⟩ : ∃ t : ℕ, t = (Ecc.MulFixed.Short.windowScalar 0
+      (input_alpha.val / 2 ^ (3 * 0) % 8)).val := ⟨_, rfl⟩
+    have ht1 : t1 = (input_alpha.val / 2 ^ (3 * 1) % 8 + 2) * 8 ^ 1 := by
+      rw [ht1_def]
+      exact Ecc.MulFixed.Short.windowScalar_val (by norm_num) (hks_lt 1)
+    have hs0 : s0 = (input_alpha.val / 2 ^ (3 * 0) % 8 + 2) * 8 ^ 0 := by
+      rw [hs0_def]
+      exact Ecc.MulFixed.Short.windowScalar_val (by norm_num) (hks_lt 0)
+    have hwp1 : Ecc.MulFixed.Short.windowPoint B.point 1
+        (input_alpha.val / 2 ^ (3 * 1) % 8) = t1 • B.point := by rw [ht1_def]; rfl
+    have hwp0 : Ecc.MulFixed.Short.windowPoint B.point 0
+        (input_alpha.val / 2 ^ (3 * 0) % 8) = s0 • B.point := by rw [hs0_def]; rfl
+    rw [hwp1] at hp1x hp1y
+    rw [hwp0] at hp0x hp0y
+    obtain ⟨hbb1, hbb2, hbb3⟩ := base_bounds (hks_lt 0) (hks_lt 1)
+    rw [← hs0] at hbb1 hbb2 hbb3
+    rw [← ht1] at hbb2 hbb3
+    exact hC1 ⟨by
+        rw [hp1x, hp1y]
+        exact point_eta_onCurve (by rw [← hwp1]; exact B.windowPoint_onCurve (hks_lt 1)),
+      by
+        rw [hp0x, hp0y]
+        exact point_eta_onCurve (by rw [← hwp0]; exact B.windowPoint_onCurve (hks_lt 0)),
+      by
+        rw [hp1x, hp0x]
+        exact B.nsmul_x_ne hbb1 hbb2 hbb3⟩
+  · -- loop chunk i: window-(i+2) point + honest accumulator [partialSum (i+1)]·B
+    intro i
+    have hC := Halo2.SubcircuitRw.region_completeness_leaf_placed
+      AddIncomplete.add cfg.superConfig.addIncompleteConfig (offset + 2 + i.val) self env
+      ⟨⟨AssignedCell.of self (offset + 2 + i.val) cfg.superConfig.addConfig.xP,
+        AssignedCell.of self (offset + 2 + i.val) cfg.superConfig.addConfig.yP⟩,
+       ⟨AssignedCell.of self (offset + 2 + i.val) cfg.superConfig.addIncompleteConfig.xQR,
+        AssignedCell.of self (offset + 2 + i.val) cfg.superConfig.addIncompleteConfig.yQR⟩⟩
+      ((hLoopW i).2.2.2)
+    simp only [addinc_spec_eq, addinc_assumptions_eq, addinc_envAssumptions_eq,
+      addinc_proverAssumptions_eq, MulFixed.addinc_output_cells, circuit_norm] at hC
+    obtain ⟨hpx, hpy, -⟩ := hPW ⟨i.val + 2, by omega⟩
+    rw [show ((⟨i.val + 2, by omega⟩ : Fin 22) : ℕ) = i.val + 2 from rfl,
+      show offset + (i.val + 2) = offset + 2 + i.val from by omega] at hpx hpy
+    have hih := hInv (i.val + 1) (by omega) (by omega)
+    rw [show offset + (i.val + 1) + 1 = offset + 2 + i.val from by omega] at hih
+    obtain ⟨t, ht_def⟩ : ∃ t : ℕ,
+        t = (Ecc.MulFixed.Short.windowScalar (i.val + 2)
+          (input_alpha.val / 2 ^ (3 * (i.val + 2)) % 8)).val := ⟨_, rfl⟩
+    obtain ⟨S, hS_def⟩ : ∃ S : ℕ,
+        S = Ecc.MulFixed.partialSum
+          (fun t => input_alpha.val / 2 ^ (3 * t) % 8) (i.val + 1) := ⟨_, rfl⟩
+    have hval : t = (input_alpha.val / 2 ^ (3 * (i.val + 2)) % 8 + 2) * 8 ^ (i.val + 2) := by
+      rw [ht_def]
+      exact Ecc.MulFixed.Short.windowScalar_val (by omega) (hks_lt _)
+    have hwp : Ecc.MulFixed.Short.windowPoint B.point (i.val + 2)
+        (input_alpha.val / 2 ^ (3 * (i.val + 2)) % 8) = t • B.point := by
+      rw [ht_def]; rfl
+    rw [hwp] at hpx hpy
+    rw [← hS_def] at hih
+    have hS_lt : S < 2 * 8 ^ (i.val + 2) := by
+      rw [hS_def]
+      exact Ecc.MulFixed.partialSum_lt _ _ (fun _ _ => hks_lt _)
+    have hS_pos : 0 < S := by
+      rw [hS_def]; exact Ecc.MulFixed.partialSum_pos _ _
+    obtain ⟨hb1, hb2, hb3, hb4, hb5⟩ :=
+      step_bounds (hks_lt (i.val + 2)) hS_lt hS_pos (by omega)
+    rw [← hval] at hb1 hb2 hb3 hb5
+    exact hC ⟨by
+        rw [hpx, hpy]
+        exact point_eta_onCurve (B.nsmul_onCurve hb1 hb3),
+      by
+        rw [hih.1, hih.2]
+        exact point_eta_onCurve (B.nsmul_onCurve hS_pos hb4),
+      by
+        rw [hpx, hih.1]
+        exact B.nsmul_x_ne hS_pos hb2 (by omega)⟩
+
+set_option linter.all false in
+/-- Completeness of the fixed-constants rows (standalone — per-declaration budget):
+the witness equations pin the fixed cells and the honest advice values; the coords
+gate holds by the fixed-base invariants at the honest digits. -/
+private theorem short_completeness_fixed (B : FixedBase) (cfg : Config) (offset : ℕ)
+    (self : RegionIndex) (env : Placed ProverEnvironment Fp)
+    (input_var_alpha : AssignedCell Fp) (input_alpha : Fp)
+    (h_input : AssignedCell.eval env.place env.env.toEnvironment input_var_alpha = input_alpha)
+    (hWfix : RegionOperations.ExtendsWitnesses env.place self env.env
+      ((MulFixed.fixedConstantsLoop (MulFixed.coordsGate cfg.superConfig) B.toData
+        cfg.superConfig offset 22).operations self))
+    (hWchain : RegionOperations.ExtendsWitnesses env.place self env.env
+      ((MulFixed.windowChain cfg.superConfig
+        (MulFixed.processWindow B.toData (Ecc.MulFixed.Short.windowPoint B.toData.point) cfg.superConfig input_var_alpha) offset
+        22).operations self))
+    (hZW : cfg.superConfig.runningSumConfig.z = cfg.superConfig.window)
+    (hXPeq : cfg.superConfig.addIncompleteConfig.xP = cfg.superConfig.addConfig.xP)
+    (hYPeq : cfg.superConfig.addIncompleteConfig.yP = cfg.superConfig.addConfig.yP)
+    (hZs : ∀ w : Fin 23, env.env.advice cfg.superConfig.window
+        ((env.place self + (offset + w.val) : ℕ) : ℤ)
+      = ((input_alpha.val / 2 ^ (3 * w.val) : ℕ) : Fp)) :
+    RegionOperations.Constraints env.place self env.env.toEnvironment
+      ((MulFixed.fixedConstantsLoop (MulFixed.coordsGate cfg.superConfig) B.toData
+        cfg.superConfig offset 22).operations self) := by
+  simp only [MulFixed.fixedConstantsLoop, MulFixed.fixedConstantsWindow,
+    MulFixed.coordsGate, MulFixed.coordsCheck, MulFixed.eval_interpolatedX,
+    circuit_norm, mul_one, one_mul]
+  -- the fixed-cell witness equations (the loop's `assignFixed` clauses)
+  simp only [MulFixed.fixedConstantsLoop, MulFixed.fixedConstantsWindow, circuit_norm,
+    mul_one] at hWfix
+  intro i
+  obtain ⟨hL0, hL1, hL2, hL3, hL4, hL5, hL6, hL7, hZf⟩ := hWfix i
+  refine ⟨?_, hL0, hL1, hL2, hL3, hL4, hL5, hL6, hL7, hZf⟩
+  -- the coords gate on the honest window point
+  simp only [MulFixed.windowChain, MulFixed.processWindow, circuit_norm, mul_one,
+    MulFixed.xPWit, MulFixed.yPWit, MulFixed.uWit] at hWchain
+  obtain ⟨hx0, hy0, hu0, hx1, hy1, hu1, _hAW1, hLoopW, hx21, hy21, hu21⟩ := hWchain
+  have hread : readCell env input_var_alpha = input_alpha := h_input
+  have hPW : ∀ w : Fin 22,
+      env.env.advice cfg.superConfig.addConfig.xP
+          ((env.place self + (offset + w.val) : ℕ) : ℤ)
+        = (Ecc.MulFixed.Short.windowPoint B.point w.val
+            (input_alpha.val / 2 ^ (3 * w.val) % 8)).x ∧
+      env.env.advice cfg.superConfig.addConfig.yP
+          ((env.place self + (offset + w.val) : ℕ) : ℤ)
+        = (Ecc.MulFixed.Short.windowPoint B.point w.val
+            (input_alpha.val / 2 ^ (3 * w.val) % 8)).y ∧
+      env.env.advice cfg.superConfig.u
+          ((env.place self + (offset + w.val) : ℕ) : ℤ)
+        = B.u w.val (input_alpha.val / 2 ^ (3 * w.val) % 8) := by
+    intro w
+    rcases w with ⟨wv, hwv⟩
+    simp only []
+    rcases Nat.eq_zero_or_pos wv with rfl | hpos
+    · rw [show offset + 0 = offset from by omega]
+      rw [hx0, hy0, hu0,
+        ofFn8_get_windowVal _ env input_var_alpha 0 input_alpha hread,
+        ofFn8_get_windowVal _ env input_var_alpha 0 input_alpha hread,
+        ofFn8_get_windowVal _ env input_var_alpha 0 input_alpha hread]
+      exact ⟨rfl, rfl, rfl⟩
+    rcases Nat.lt_or_ge wv 2 with h1 | h2
+    · rw [show wv = 1 from by omega]
+      rw [hx1, hy1, hu1,
+        ofFn8_get_windowVal _ env input_var_alpha 1 input_alpha hread,
+        ofFn8_get_windowVal _ env input_var_alpha 1 input_alpha hread,
+        ofFn8_get_windowVal _ env input_var_alpha 1 input_alpha hread]
+      exact ⟨rfl, rfl, rfl⟩
+    rcases Nat.lt_or_ge wv 21 with h84 | h84
+    · obtain ⟨hxw, hyw, huw, -⟩ := hLoopW ⟨wv - 2, by omega⟩
+      rw [show offset + 2 + (wv - 2) = offset + wv from by omega,
+        show wv - 2 + 2 = wv from by omega] at hxw hyw huw
+      rw [hxw, hyw, huw,
+        ofFn8_get_windowVal _ env input_var_alpha wv input_alpha hread,
+        ofFn8_get_windowVal _ env input_var_alpha wv input_alpha hread,
+        ofFn8_get_windowVal _ env input_var_alpha wv input_alpha hread]
+      exact ⟨rfl, rfl, rfl⟩
+    · rw [show wv = 21 from by omega]
+      rw [hx21, hy21, hu21,
+        ofFn8_get_windowVal _ env input_var_alpha 21 input_alpha hread,
+        ofFn8_get_windowVal _ env input_var_alpha 21 input_alpha hread,
+        ofFn8_get_windowVal _ env input_var_alpha 21 input_alpha hread]
+      exact ⟨rfl, rfl, rfl⟩
+  -- the three gate equations at row i, from the invariants at the honest digit
+  simp only [show B.toData.params = B.params from rfl] at hL0 hL1 hL2 hL3 hL4 hL5 hL6
+  simp only [show B.toData.params = B.params from rfl] at hL7 hZf
+  obtain ⟨hpx, hpy, hpu⟩ := hPW i
+  have hz0 := hZs ⟨i.val, by omega⟩
+  have hz1 := hZs ⟨i.val + 1, by omega⟩
+  have hdig : input_alpha.val / 2 ^ (3 * i.val) % 8 < 8 := Nat.mod_lt _ (by norm_num)
+  have hword : env.env.advice cfg.superConfig.window
+        ((env.place self + (offset + i.val) : ℕ) : ℤ)
+      - env.env.advice cfg.superConfig.window
+          ((env.place self + (offset + i.val + 1) : ℕ) : ℤ)
+        * ((MulFixed.H : ℕ) : Fp)
+      = ((input_alpha.val / 2 ^ (3 * i.val) % 8 : ℕ) : Fp) := by
+    rw [show offset + i.val + 1 = offset + (i.val + 1) from by omega, hz0, hz1]
+    have hsw := DecomposeRunningSum.shift_word_eq 3 input_alpha.val i.val
+    norm_num [MulFixed.H] at hsw ⊢
+    exact hsw
+  refine ⟨?_, ?_, ?_⟩
+  · -- check x
+    rw [hword, hpx]
+    have hcongr : Ecc.MulFixed.interpolate
+        (MulFixed.readParams cfg.superConfig
+          (Query.eval env.env.toEnvironment
+            (fun j => if j = cfg.superConfig.runningSumConfig.qRangeCheck.index then 1
+              else 0)
+            ((env.place self + (offset + i.val) : ℕ) : ℤ)))
+        ((input_alpha.val / 2 ^ (3 * i.val) % 8 : ℕ) : Fp)
+        = Ecc.MulFixed.interpolate (B.params i.val)
+            ((input_alpha.val / 2 ^ (3 * i.val) % 8 : ℕ) : Fp) := by
+      apply MulFixed.interpolate_congr_params <;>
+        simp only [MulFixed.readParams, circuit_norm, add_zero] <;>
+        first
+        | exact hL0 | exact hL1 | exact hL2 | exact hL3
+        | exact hL4 | exact hL5 | exact hL6 | exact hL7
+    rw [hcongr, B.interpolate_eq i.val i.isLt _ hdig]
+    exact sub_self _
+  · -- check y
+    rw [hpu, hpy, hZf]
+    have huu := B.u_mul_u i.val i.isLt _ hdig
+    linear_combination huu
+  · -- on-curve
+    rw [hpx, hpy]
+    have hoc := B.windowPoint_onCurve (w := i.val) hdig
+    unfold Point.OnCurve at hoc
+    linear_combination hoc
+
+set_option linter.all false in
+/-- The decompose child's completeness products (standalone): its constraints chunk and
+the honest running-sum values. -/
+private theorem short_completeness_dec (cfg : Config) (offset : ℕ)
+    (self : RegionIndex) (env : Placed ProverEnvironment Fp)
+    (input_var_alpha : AssignedCell Fp) (input_alpha : Fp)
+    (h_input : AssignedCell.eval env.place env.env.toEnvironment input_var_alpha = input_alpha)
+    (hPA : input_alpha.val < 2 ^ 66)
+    (hWdec : RegionOperations.ExtendsWitnesses env.place self env.env
+      (((DecomposeRunningSum.copyDecompose 3 22).call
+        cfg.superConfig.runningSumConfig offset
+        { alpha := input_var_alpha }).operations self)) :
+    RegionOperations.Constraints env.place self env.env.toEnvironment
+      (((DecomposeRunningSum.copyDecompose 3 22).call
+        cfg.superConfig.runningSumConfig offset
+        { alpha := input_var_alpha }).operations self) ∧
+    ∀ w : Fin 23, env.env.advice cfg.superConfig.runningSumConfig.z
+        ((env.place self + (offset + w.val) : ℕ) : ℤ)
+      = ((input_alpha.val / 2 ^ (3 * w.val) : ℕ) : Fp) := by
+  have hDecC := Halo2.SubcircuitRw.region_completeness_leaf_placed
+    (DecomposeRunningSum.copyDecompose 3 22)
+    cfg.superConfig.runningSumConfig offset self env { alpha := input_var_alpha } hWdec
+  have hDecS := Halo2.SubcircuitRw.region_completeness_derived_placed
+    (DecomposeRunningSum.copyDecompose 3 22)
+    cfg.superConfig.runningSumConfig offset self env { alpha := input_var_alpha } hWdec
+  simp only [dec_spec_eq, dec_assumptions_eq, dec_envAssumptions_eq,
+    dec_proverAssumptions_eq, dec_proverSpec_eq,
+    DecomposeRunningSum.copyDecompose_output, circuit_norm]
+    at hDecC hDecS
+  have hPA' : (AssignedCell.eval env.place env.env.toEnvironment input_var_alpha).val < 2 ^ (3 * 22) := by
+    rw [h_input]
+    exact lt_of_lt_of_le hPA (by norm_num)
+  refine And.intro (hDecC hPA') ?_
+  have hZs := (hDecS hPA').2
+  simp only [h_input] at hZs
+  exact hZs
+
+set_option linter.all false in
+/-- The inner region's completeness, standalone (own declaration budget). -/
+private theorem short_inner_completeness (B : FixedBase) (cfg : Config) (offset : ℕ) :
+    FormalRegionCircuit.Completeness
+      (Input := DecomposeRunningSum.Inputs) (Output := InnerOut)
+      pure
+      (fun config offset (input : Var DecomposeRunningSum.Inputs Fp) =>
+        innerRegion B.toData config offset input.alpha)
+      cfg offset
+      (fun _ _ _ => default)
+      (InnerEnvAssumptions cfg) (fun _ => True) InnerProverAssumptions
+      (InnerProverSpec B) := by
+    circuit_proof_start
+    obtain ⟨env, rfl, rfl⟩ :
+        ∃ pe : Placed ProverEnvironment Fp, pe.place = place ∧ pe.env = env :=
+      ⟨⟨place, env⟩, rfl, rfl⟩
+    obtain ⟨hWdec, hWfix, hWchain⟩ := hwit
+    obtain ⟨hZW, hXPeq, hYPeq⟩ := _hE
+    have hDC := short_completeness_dec cfg offset self env input_var_alpha input_alpha
+      h_input hPA hWdec
+    have hZs : ∀ w : Fin 23, env.env.advice cfg.superConfig.window
+        ((env.place self + (offset + w.val) : ℕ) : ℤ)
+      = ((input_alpha.val / 2 ^ (3 * w.val) : ℕ) : Fp) := by
+      rw [← hZW]
+      exact hDC.2
+    -- circuit_proof_start consumed the copyDecompose chunk (completeness mode), so the goal opens
+    -- with the child's preconditions (EnvA/A vacuous, PA = the magnitude bound) rather than its
+    -- constraints, and the trailing `pure` region auto-discharged.
+    refine And.intro (And.intro ⟨trivial, trivial, hPA⟩ (And.intro ?_ ?_)) ?_
+    · with_reducible
+        exact short_completeness_fixed B cfg offset self env input_var_alpha
+          input_alpha h_input hWfix hWchain hZW hXPeq hYPeq hZs
+    · with_reducible
+        exact (short_completeness_chain B cfg offset self env input_var_alpha
+          input_alpha h_input hWfix hWchain hZW hXPeq hYPeq hZs).1
+    · -- the honest-prover contract (`InnerProverSpec`)
+      simp only [InnerProverSpec]
+      change ProvableStruct.Halo2.eval env.place env.env.toEnvironment (innerOutCells cfg offset self)
+        = _ at h_output
+      simp only [innerOutCells] at h_output
+      provable_type_simp
+      obtain ⟨⟨hOax, hOay⟩, ⟨hOmx, hOmy⟩, hOzs⟩ := h_output
+      refine ⟨?_, ?_, ?_, ?_, ?_⟩
+      · rw [← hOax]
+        with_reducible exact (short_completeness_chain B cfg offset self env
+          input_var_alpha input_alpha h_input hWfix hWchain hZW hXPeq hYPeq hZs).2.1
+      · rw [← hOay]
+        with_reducible exact (short_completeness_chain B cfg offset self env
+          input_var_alpha input_alpha h_input hWfix hWchain hZW hXPeq hYPeq hZs).2.2.1
+      · rw [← hOmx]
+        with_reducible exact (short_completeness_chain B cfg offset self env
+          input_var_alpha input_alpha h_input hWfix hWchain hZW hXPeq hYPeq hZs).2.2.2.1
+      · rw [← hOmy]
+        with_reducible exact (short_completeness_chain B cfg offset self env
+          input_var_alpha input_alpha h_input hWfix hWchain hZW hXPeq hYPeq hZs).2.2.2.2
+      · intro w
+        rw [← congrArg (fun v => v[w.val]'w.isLt) hOzs]
+        simp only [circuit_norm]
+        exact hDC.2 w
+
+/-- The inner-region bundle. -/
+def inner (B : FixedBase) : FormalRegionCircuit Fp Config Config
+    DecomposeRunningSum.Inputs InnerOut where
+  configure := pure
+  elaborated := innerElab B.toData
+  synthesize cfg offset input := innerRegion B.toData cfg offset input.alpha
+  Assumptions _ := True
+  EnvAssumptions := InnerEnvAssumptions
+  Spec := InnerSpec B
+  ProverAssumptions := InnerProverAssumptions
+  ProverSpec := InnerProverSpec B
+  soundness := fun cfg offset => short_inner_soundness B cfg offset
+  completeness := fun cfg offset => short_inner_completeness B cfg offset
+
+/-- The two regions of `assign`. Returns the result point `[sign·magnitude]B`. -/
+def synthesize (B : FixedBaseData) (cfg : Config) (input : Inputs (AssignedCell Fp)) :
+    Circuit Fp (Var Point Fp) := do
+  let inn ←
+    assignRegion "Short fixed-base mul (incomplete addition)"
+      (innerRegion B cfg 0 input.magnitude)
+  assignRegion "Short fixed-base mul (most significant word)"
+    (mswRegion cfg inn.acc inn.mulB input.sign inn.zs[21])
+
+/-! ## The gadget bundle -/
+
+/-- The conditionally-negated `y` witness value (single-element vector, `rfl` tail). -/
+private theorem yVarWit_eval (env : Placed ProverEnvironment Fp)
+    (sign yMag : AssignedCell Fp) :
+    ((yVarWit sign yMag).eval env)[0]
+      = if readCell env sign = -1 then -(readCell env yMag) else readCell env yMag := by
+  simp only [yVarWit, Witgen.WitgenIROver.eval_native_apply]
+  rfl
+
+/-- The complete-addition child's output cells (`rfl`). -/
+private theorem addc_output_cells (cfgA : Add.Config) (row : ℕ)
+    (input : Var Add.Inputs Fp) (self : RegionIndex) :
+    Add.add.output cfgA row input self
+      = { x := AssignedCell.of self (row + 1) cfgA.xQR,
+          y := AssignedCell.of self (row + 1) cfgA.yQR } := rfl
+
+/-- Env-level preconditions: the `EccChip` wiring asserts the inner region consumes. -/
+def EnvAssumptions (cfg : Config) (env : Placed Environment Fp) : Prop :=
+  InnerEnvAssumptions cfg env
+
+/-- The gadget's semantic contract: the output is the fixed base scaled by the signed
+short exponent. -/
+def Spec (B : FixedBase) (input : Inputs Fp) (output : Point Fp) : Prop :=
+  input.magnitude.val < 2 ^ 64 ∧
+    ((input.sign = 1 ∧ output = (input.magnitude.val : Fq) • B) ∨
+      (input.sign = -1 ∧ output = -(input.magnitude.val : Fq) • B))
+
+/-- The region count of `synthesize`: inner mul + most significant word. -/
+private theorem synthesize_regionCount (B : FixedBaseData) (cfg : Config)
+    (input : Inputs (AssignedCell Fp)) (i : RegionIndex) :
+    Operations.regionCount ((synthesize B cfg input).operations i) = 2 := by
+  simp only [synthesize, circuit_norm, operations_assignRegion, Operations.regionCount]
+
+/-- Reduced footprint of the inner and sign-adjustment regions. -/
+def circuitSynthesisSummary (cfg : Config) : FloorPlanner.SynthesisSummary :=
+  (FloorPlanner.SynthesisSummary.ofRegion
+    (innerRegionSynthesisSummary cfg 0)).combine
+    (FloorPlanner.SynthesisSummary.ofRegion (mswRegionSynthesisSummary cfg))
+
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_lookupActivationCount (cfg : Config) :
+    (circuitSynthesisSummary cfg).lookupActivationCount = 0 := by
+  simp only [circuitSynthesisSummary, innerRegionSynthesisSummary,
+    mswRegionSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem synthesize_synthesisSummary_eq
+    (B : FixedBaseData) (cfg : Config) (input : Var Inputs Fp)
+    (self : RegionIndex) :
+    FloorPlanner.synthesisSummary ((synthesize B cfg input).operations self) =
+      circuitSynthesisSummary cfg := by
+  simp only [synthesize, circuitSynthesisSummary, Circuit.operations_bind,
+    FloorPlanner.synthesisSummary_append, operations_assignRegion,
+    synthesis_summary_norm]
+  rw [mswRegion_synthesisSummary_eq]
+
+@[keygen_helper]
+theorem mswRegion_keygenRegistered
+    (cfg : Config) (acc mulB : Point (AssignedCell Fp))
+    (sign z21 : AssignedCell Fp) (self : RegionIndex)
+    (configured : Add.add.Configured cfg.superConfig.addConfig)
+    {gates : List (Gate Fp)} {lookups : List (LookupArgument Fp)}
+    {fixedColumns : List (Column .fixed)}
+    {permutationColumns : List AnyColumn}
+    (hgate : shortGate cfg ∈ gates)
+    (hgates : ∀ gate, gate ∈ configured.gates → gate ∈ gates)
+    (hlookups :
+      ∀ argument, argument ∈ configured.lookups → argument ∈ lookups)
+    (hpermutationColumns : ∀ column,
+      column ∈ configured.permutationColumns → column ∈ permutationColumns)
+    (hinputPermutationColumns : ∀ column,
+      column ∈ configured.inputPermutationColumns ⟨mulB, acc⟩ →
+        column ∈ permutationColumns)
+    (hwindow : (cfg.superConfig.window : AnyColumn) ∈ permutationColumns)
+    (hu : (cfg.superConfig.u : AnyColumn) ∈ permutationColumns)
+    (hsign : sign.cell.column ∈ permutationColumns)
+    (hz21 : z21.cell.column ∈ permutationColumns) :
+    ((mswRegion cfg acc mulB sign z21).operations self).Forall
+      (RegionOperation.KeygenRegistered gates lookups fixedColumns
+        permutationColumns) := by
+  simp only [mswRegion, RegionCircuit.operations_bind,
+    RegionCircuit.operations_pure, List.forall_append,
+    List.forall_nil, and_true]
+  constructor
+  · apply Add.add.call_keygenRegistered
+      cfg.superConfig.addConfig configured 0 ⟨mulB, acc⟩ self
+    · exact hgates
+    · exact hlookups
+    · intro column hcolumn
+      rw [Add.Configured.fixedColumns_eq_nil] at hcolumn
+      exact (List.not_mem_nil hcolumn).elim
+    · exact hpermutationColumns
+    · apply List.forall_iff_forall_mem.mpr
+      intro cell hcell
+      exact hinputPermutationColumns cell.column
+        (List.mem_map_of_mem hcell)
+  · keygen_registration
+
+theorem mswRegion_copyCellsAssignedFrom
+    (cfg : Config) (acc mulB : Point (AssignedCell Fp))
+    (sign z21 : AssignedCell Fp) (self : RegionIndex)
+    (configured : Add.add.Configured cfg.superConfig.addConfig)
+    (available : List Cell)
+    (haccX : acc.x.cell ∈ available) (haccY : acc.y.cell ∈ available)
+    (hmulBX : mulB.x.cell ∈ available) (hmulBY : mulB.y.cell ∈ available)
+    (hsign : sign.cell ∈ available) (hz21 : z21.cell ∈ available) :
+    ((mswRegion cfg acc mulB sign z21).operations self)
+      |>.CopyCellsAssignedFrom self available := by
+  simp only [mswRegion, circuit_norm]
+  rw [RegionOperations.copyCellsAssignedFrom_append_iff]
+  constructor
+  · apply Add.add.call_copyCellsAssignedFrom
+      cfg.superConfig.addConfig configured 0 ⟨mulB, acc⟩ self
+    intro cell hcell
+    rw [Add.add_inputCells] at hcell
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+    rcases hcell with rfl | rfl | rfl | rfl
+    · exact hmulBX
+    · exact hmulBY
+    · exact haccX
+    · exact haccY
+  · keygen_registration
+    · exact Or.inr <| RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ hsign
+    · exact Or.inr <| Or.inr <|
+        RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ hz21
+
+theorem synthesize_copyCellsAssignedFrom
+    (B : FixedBaseData) (cfg : Config) (input : Var Inputs Fp)
+    (i : RegionIndex)
+    (configuredIncomplete : AddIncomplete.add.Configured
+      cfg.superConfig.addIncompleteConfig)
+    (configuredAdd : Add.add.Configured cfg.superConfig.addConfig)
+    (fixedColumnsLawful : cfg.superConfig.FixedColumnsLawful) :
+    ((synthesize B cfg input).operations i).CopyCellsAssigned
+      i [input.magnitude.cell, input.sign.cell] := by
+  let innerBody := (innerRegion B cfg 0 input.magnitude).operations i
+  let innerOutput := (innerRegion B cfg 0 input.magnitude).output i
+  let afterInner := innerBody.assignedCellsAfter i
+    [input.magnitude.cell, input.sign.cell]
+  have hinner : innerBody.CopyCellsAssignedFrom i
+      [input.magnitude.cell, input.sign.cell] := by
+    apply (innerRegion_copyCellsAssignedFrom B cfg 0 input.magnitude i
+      ⟨configuredIncomplete, fixedColumnsLawful⟩).mono
+    intro cell hcell
+    simp only [List.mem_singleton] at hcell
+    simp only [hcell, List.mem_cons, true_or]
+  have hinputs := innerRegion_msw_inputs_assigned B cfg 0 input.magnitude i
+    ⟨configuredIncomplete, fixedColumnsLawful⟩
+    [input.magnitude.cell, input.sign.cell]
+  have hmsw : ((mswRegion cfg innerOutput.acc innerOutput.mulB
+      input.sign innerOutput.zs[21]).operations (i + 1))
+      |>.CopyCellsAssignedFrom (i + 1) afterInner := by
+    apply mswRegion_copyCellsAssignedFrom cfg innerOutput.acc innerOutput.mulB
+      input.sign innerOutput.zs[21] (i + 1) configuredAdd afterInner
+    · exact hinputs.1
+    · exact hinputs.2.1
+    · exact hinputs.2.2.1
+    · exact hinputs.2.2.2.1
+    · exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _
+        (by simp)
+    · exact hinputs.2.2.2.2
+  simp only [synthesize, Circuit.operations_bind, operations_assignRegion,
+    output_assignRegion, nextRegionIndex_assignRegion, List.singleton_append]
+  apply Operations.CopyCellsAssignedFrom.region
+  · exact hinner
+  apply Operations.CopyCellsAssignedFrom.region
+  · exact hmsw
+  · exact .nil (i + 2) _
+
+seal innerRegion in
+set_option linter.constructorNameAsVariable false in
+/-- `[sign·magnitude]B`. -/
+def circuit (B : FixedBase) : FormalCircuit Fp MulFixed.Config Config Inputs Point where
+  name := "fixed-base mul (short signed)"
+
+  configure := configure
+
+  synthesize cfg input := synthesize B.toData cfg input
+
+  elaborated :=
+    { keygenRequirements :=
+        { configLawful cfg :=
+            AddIncomplete.add.Configured cfg.addIncompleteConfig ×
+              Add.add.Configured cfg.addConfig × cfg.FixedColumnsLawful
+          gates cfg configured :=
+            runningSumKeygenRequirements.gates cfg configured.1 ++ configured.2.1.gates
+          lookups cfg configured :=
+            runningSumKeygenRequirements.lookups cfg configured.1 ++ configured.2.1.lookups
+          fixedColumns cfg _ := MulFixed.fixedColumns cfg
+          permutationColumns cfg configured :=
+            runningSumKeygenRequirements.permutationColumns cfg configured.1 ++
+              configured.2.1.permutationColumns
+          inputCells _ _ input :=
+            [input.magnitude.cell, input.sign.cell] }
+      registered configInput counts configured input self := by
+        rcases configured with
+          ⟨configuredAddIncomplete, configuredAdd, fixedColumnsLawful⟩
+        simp only [keygen_norm, keygen_spine, configure, synthesize]
+        have hinner := innerRegion_keygenRegistered B.toData
+          { qMulFixedShort := { index := counts.numSelectors, simple := true },
+            superConfig := configInput }
+          0 input.magnitude self ⟨configuredAddIncomplete, fixedColumnsLawful⟩
+        constructor
+        · exact RegionOperations.keygenRegistered_mono hinner
+            (by keygen_registration) (by keygen_registration)
+            (by keygen_registration) (by keygen_registration)
+        · apply mswRegion_keygenRegistered
+            _ _ _ _ _ _ configuredAdd
+          keygen_registration
+      lookupActivationsWellFormed config input self := by
+        simp only [synthesize, Circuit.operations_bind, operations_assignRegion,
+          Operations.LookupActivationsWellFormed]
+        constructor
+        · exact (innerElab B.toData).lookupActivationsWellFormed
+            config 0 ⟨input.magnitude⟩ self
+        · unfold mswRegion
+          keygen_registration
+      output cfg _ i :=
+        { x := .of (i + 1) 1 cfg.superConfig.addConfig.xQR
+          y := .of (i + 1) 1 cfg.superConfig.addConfig.yP }
+      synthesisSummary cfg _ _ := circuitSynthesisSummary cfg
+      regionCount _ := 2
+      output_eq := by
+        intro _ _ _
+        simp only [synthesize, mswRegion, circuit_norm, keygen_output_norm]
+      synthesisSummary_eq := by
+        intro _ input self
+        exact (synthesize_synthesisSummary_eq B.toData _ input self).symm
+      regionCount_eq := fun cfg input i => (synthesize_regionCount B.toData cfg input i).symm
+      fixedWritesLawful := by
+        intro configInput counts hconfig input self
+        rcases hconfig with
+          ⟨configuredIncomplete, configuredAdd, fixedColumnsLawful⟩
+        let cfg := (configure configInput).output counts
+        have hinner := innerRegion_fixedAssignmentsAgree B.toData cfg 0
+          input.magnitude self fixedColumnsLawful
+        have hmsw : ((mswRegion cfg
+            ((innerRegion B.toData cfg 0 input.magnitude).output self).acc
+            ((innerRegion B.toData cfg 0 input.magnitude).output self).mulB
+            input.sign
+            ((innerRegion B.toData cfg 0 input.magnitude).output self).zs[21])
+              |>.operations (self + 1)).HasNoFixedAssignments := by
+          apply FloorPlanner.RegionSynthesisSummary.HasNoFixedColumns.hasNoFixedAssignments
+          rw [mswRegion_synthesisSummary_eq]
+          exact mswRegionSynthesisSummary_hasNoFixedColumns cfg
+        constructor
+        · simp only [synthesize, Circuit.operations_bind, operations_assignRegion,
+            List.forall_append, List.forall_cons, List.forall_nil, and_true]
+          exact ⟨hinner, hmsw.fixedAssignmentsAgree⟩
+        · simp [synthesize, Circuit.operations_bind, operations_assignRegion,
+            Operations.loadedTableColumns]
+        · simp [synthesize, Circuit.operations_bind, operations_assignRegion,
+            Operations.loadedTableColumns]
+        · simp [synthesize, Circuit.operations_bind, operations_assignRegion,
+            Operations.loadedTableColumns]
+      copyCellsAssigned := by
+        intro configInput counts hconfig input i
+        rcases hconfig with
+          ⟨configuredIncomplete, configuredAdd, fixedColumnsLawful⟩
+        exact synthesize_copyCellsAssignedFrom B.toData
+          ((configure configInput).output counts) input i
+          configuredIncomplete configuredAdd fixedColumnsLawful }
+
+  EnvAssumptions := EnvAssumptions
+
+  Assumptions _ := True
+
+  Spec input output _ := Spec B input output
+
+  ProverAssumptions input _ _ :=
+    input.magnitude.val < 2 ^ 64 ∧ (input.sign = 1 ∨ input.sign = -1)
+
+  ProverSpec _ _ _ _ := True
+
+  soundness := by
+    circuit_proof_start2 [mswRegion, shortGate,
+      DecomposeRunningSum.eval_rangeCheckExpr, mul_one]
+    obtain ⟨hAddC, hCpSign, hCpZ21, hBool, hSignSq, _hYchk, hNeg⟩ := region_1
+    obtain ⟨hIMag, hISign⟩ := input_eq
+    -- ── region 1: the inner windowed mul ──
+    have hIS : InnerSpec B
+        (eval (⟨place, env⟩ : Placed Environment Fp)
+          (⟨input_var_magnitude⟩ : Var DecomposeRunningSum.Inputs Fp))
+        (eval (⟨place, env⟩ : Placed Environment Fp) (innerOutCells cfg 0 i₀))
+        default :=
+      short_inner_soundness B cfg 0 i₀ ⟨place, env⟩ ⟨input_var_magnitude⟩
+        env_assumptions trivial region_0
+    simp only [InnerSpec, innerOutCells, circuit_norm] at hIS
+    obtain ⟨ks, hks_lt', hMag, hAcc, hMulB, hZs⟩ := hIS
+    -- concretize the minted inner-output atoms via the closed form
+    rw [innerRegion_output] at inn_eq
+    cases inn_eq
+    -- ── the complete addition `mul_b + acc` (the engine-delivered contract) ──
+    simp only [addc_spec_eq, addc_assumptions_eq, addc_envAssumptions_eq,
+      Nat.zero_add, circuit_norm] at hAddC
+    obtain ⟨t21, ht21_def⟩ : ∃ t : ℕ,
+        t = (Ecc.MulFixed.Short.windowScalar 21 (ks 21)).val := ⟨_, rfl⟩
+    have hwp21 : Ecc.MulFixed.Short.windowPoint B.point 21 (ks 21)
+        = t21 • B.point := by rw [ht21_def]; rfl
+    obtain ⟨S20, hS20_def⟩ : ∃ S : ℕ, S = Ecc.MulFixed.partialSum ks 20 :=
+      ⟨_, rfl⟩
+    have hS20_lt : S20 < 2 * 8 ^ 21 := by
+      rw [hS20_def]
+      exact Ecc.MulFixed.partialSum_lt _ 20 (fun j hj => hks_lt' j (by omega))
+    have hS20_pos : 0 < S20 := by
+      rw [hS20_def]
+      exact Ecc.MulFixed.partialSum_pos _ _
+    have hS20_card : S20 < PALLAS_SCALAR_CARD :=
+      Ecc.MulFixed.BaseFieldElem.RunningSumMul.inv_lt_card hS20_lt (by norm_num)
+    have hOnP : (t21 • B.point).OnCurve := by
+      rw [← hwp21]
+      exact B.windowPoint_onCurve (hks_lt' 21 (by norm_num))
+    have hOnQ : (S20 • B.point).OnCurve :=
+      Point.nsmul_onCurve B.onCurve hS20_pos hS20_card
+    obtain ⟨-, hOutEq⟩ := hAddC ⟨by rw [hMulB, hwp21]; exact Or.inl hOnP,
+      by rw [hAcc, ← hS20_def]; exact Or.inl hOnQ⟩
+    rw [hMulB, hAcc, hwp21, ← hS20_def] at hOutEq
+    rw [Point.nsmul_add_nsmul B.onCurve] at hOutEq
+    -- the add output cells, as reads
+    rw [show Add.add.output cfg.superConfig.addConfig 0
+        ⟨{ x := AssignedCell.of i₀ 21 cfg.superConfig.addConfig.xP,
+           y := AssignedCell.of i₀ 21 cfg.superConfig.addConfig.yP },
+         { x := AssignedCell.of i₀ 21 cfg.superConfig.addIncompleteConfig.xQR,
+           y := AssignedCell.of i₀ 21 cfg.superConfig.addIncompleteConfig.yQR }⟩ (i₀ + 1)
+        = { x := AssignedCell.of (i₀ + 1) 1 cfg.superConfig.addConfig.xQR,
+            y := AssignedCell.of (i₀ + 1) 1 cfg.superConfig.addConfig.yQR }
+      from rfl] at hOutEq
+    simp only [circuit_norm, AssignedCell.eval, AssignedCell.of_cell, Cell.of_regionIndex,
+      Cell.of_rowOffset, Cell.of_column, Environment.get_advice] at hOutEq
+    -- the circuit's output cells
+    obtain ⟨hOx, hOy⟩ := output_eq
+    -- ── V is a 64-bit magnitude (the last-window bool check) ──
+    have hz21 := hZs ⟨21, by norm_num⟩
+    rw [show ((⟨21, by norm_num⟩ : Fin 23) : ℕ) = 21 from rfl] at hz21
+    simp only [Vector.getElem_ofFn, Nat.zero_add, circuit_norm] at hCpZ21
+    rw [hz21] at hCpZ21
+    obtain ⟨b, hb_lt, hb_eq⟩ :=
+      (DecomposeRunningSum.inRange_iff_exists_lt 2 (by norm_num) _).mp
+        ((Utilities.RunningSum.rangeCheckPoly_eq_zero_iff 2 _).mp hBool)
+    rw [hCpZ21] at hb_eq
+    obtain ⟨V, hV_def⟩ : ∃ v : ℕ, v = ∑ j ∈ Finset.range 22, ks j * 8 ^ j := ⟨_, rfl⟩
+    have hVlt : V < 8 ^ 22 := by
+      rw [hV_def]
+      exact Ecc.MulFixed.BaseFieldElem.RunningSumMul.sum_lt_of_windows hks_lt'
+    have hdig21 : V / 2 ^ 63 = b := by
+      apply Ecc.MulFixed.BaseFieldElem.RunningSumMul.natCast_inj_of_lt_8
+        (by rw [show (2:ℕ) ^ 63 = 8 ^ 21 from by norm_num]
+            rw [show (8:ℕ) ^ 22 = 8 ^ 21 * 8 from by ring] at hVlt
+            exact Nat.div_lt_of_lt_mul (by omega))
+        (by omega)
+      rw [← hb_eq, ← hV_def, show (2:ℕ) ^ 63 = 2 ^ (3 * 21) from by norm_num]
+    have hV64 : V < 2 ^ 64 := by
+      have : V / 2 ^ 63 ≤ 1 := by omega
+      omega
+    -- ── the sign facts ── (`hCpSign` landed input-spelled: `input_eq` fired)
+    rw [hCpSign] at hSignSq hNeg
+    have hsign : input_sign = 1 ∨ input_sign = -1 := by
+      rcases mul_eq_zero.mp (show (input_sign - 1) * (input_sign + 1) = 0 from by
+        linear_combination hSignSq) with h | h
+      · exact Or.inl (by linear_combination h)
+      · exact Or.inr (by linear_combination h)
+    -- ── assemble the signed spec ──
+    have hchain : (t21 + S20) • B.point = ((V : Fq)).val • B.point := by
+      rw [ht21_def, hS20_def,
+        ← Ecc.MulFixed.Short.FixedBase.add_natCast_val_nsmul, hV_def,
+        Ecc.MulFixed.Short.windowScalar_partialSum]
+    rw [hchain] at hOutEq
+    obtain ⟨yMag, hyMag_def⟩ : ∃ ym : Fp, ym = env.advice cfg.superConfig.addConfig.yQR
+        ((place (i₀ + 1) + 1 : ℕ) : ℤ) := ⟨_, rfl⟩
+    rw [← hyMag_def] at hOutEq
+    have hmulEq : ({ x := output_x, y := yMag } : Point Fp)
+        = (V : Fq) • B := by
+      rw [← hOx]
+      rw [show (((V : Fq)) • B : Point Fp)
+          = { x := (((V : Fq)).val • B.point).x, y := (((V : Fq)).val • B.point).y }
+        from rfl, ← hOutEq]
+    have hyeq : input_sign * output_y = yMag := by
+      rw [hyMag_def]
+      linear_combination hNeg
+    have hsigned := Ecc.MulFixed.Short.signed_output_spec B
+      (sign := input_sign) (ySigned := output_y) hmulEq
+      (fun hs => by rw [← hyeq, hs, one_mul])
+      (fun hs => by rw [← hyeq, hs]; ring)
+    -- TODO this is a bridge from the spec the proof originally used, to a more direct one
+    -- refactor to prove this more naturally
+    let output : Point Fp := { x := output_x, y := output_y }
+    suffices ∃ m : ℕ, m < 2 ^ 64 ∧ input_magnitude = (m : Fp) ∧
+    ((input_sign = 1 ∧ output = (m : Fq) • B) ∨
+      (input_sign = -1 ∧ output = (-(m : Fq) • B : Point Fp))) by
+      simp only [output] at this
+      obtain ⟨V, hV64, hV_def, hsign⟩ := this
+      have hmag : input_magnitude.val = V := by
+        rw [hV_def, ZMod.val_natCast_of_lt]
+        linarith
+      subst hmag
+      simp only [Spec, hV64, hsign]
+      simp
+    refine ⟨V, hV64, ?_, ?_⟩
+    · rw [← hIMag, hMag, hV_def]
+    · rcases hsign with hs | hs
+      · exact Or.inl ⟨hs, hsigned.1 hs⟩
+      · exact Or.inr ⟨hs, hsigned.2 hs⟩
+
+  completeness := by
+    circuit_proof_start2 [mswRegion, shortGate,
+      DecomposeRunningSum.eval_rangeCheckExpr, mul_one]
+    obtain ⟨-, hWSign, hWZ21, hWyVar⟩ := region_1
+    obtain ⟨hIMag, hISign⟩ := input_eq
+    obtain ⟨hMag64, hSignPM⟩ := prover_assumptions
+    -- region 1 honest: the inner windowed mul, via the family completeness
+    have hIC := short_inner_completeness B cfg 0 i₀ ⟨place, env⟩ ⟨input_var_magnitude⟩
+      region_0 env_assumptions trivial (by
+        show ZMod.val (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+          (⟨input_var_magnitude⟩ :
+            Var DecomposeRunningSum.Inputs Fp)).alpha < 2 ^ 66
+        have h : (eval (⟨place, env⟩ : Placed ProverEnvironment Fp)
+            (⟨input_var_magnitude⟩ :
+              Var DecomposeRunningSum.Inputs Fp)).alpha
+            = input_magnitude := by
+          simp only [circuit_norm, AssignedCell.eval]
+          exact hIMag
+        rw [h]
+        exact lt_of_lt_of_le hMag64 (by norm_num))
+    have hPS := hIC.2
+    rw [ElaboratedRegionCircuit.output_eq] at hPS
+    dsimp only at hPS
+    simp only [innerRegion_output, innerOutCells, InnerProverSpec, circuit_norm] at hPS
+    obtain ⟨hax, hay, hmx, hmy, hzs⟩ := hPS
+    have hks_lt : ∀ t : ℕ, input_magnitude.val / 2 ^ (3 * t) % 8 < 8 :=
+      fun t => Nat.mod_lt _ (by norm_num)
+    -- the honest facts are over the magnitude READ; land them on `input_magnitude`
+    rw [hIMag] at hax hay hmx hmy
+    -- concretize the minted inner-output atoms via the closed form
+    rw [innerRegion_output] at inn_eq
+    cases inn_eq
+    simp only [Vector.getElem_ofFn, Nat.zero_add, circuit_norm] at hWZ21
+    -- honest values at the sign row
+    rw [yVarWit_eval, addc_output_cells] at hWyVar
+    simp only [readCell, circuit_norm, Nat.zero_add] at hWyVar
+    rw [hISign] at hWyVar
+    have h2ne : (2 : Fp) ≠ 0 := by
+      have h : ((2 : ℕ) : Fp) ≠ 0 := by
+        rw [Ne, ZMod.natCast_eq_zero_iff]
+        intro hdvd
+        have := Nat.le_of_dvd (by norm_num) hdvd
+        norm_num [CompElliptic.Fields.Pasta.PALLAS_BASE_CARD] at this
+      simpa using h
+    have hone_ne : ¬(1 : Fp) = -1 := fun h => h2ne (by linear_combination h)
+    simp only [addc_assumptions_eq, addc_envAssumptions_eq,
+      addc_proverAssumptions_eq, Nat.zero_add, circuit_norm]
+    refine ⟨hIC.1, ⟨?_, ?_⟩, hWSign, hWZ21, ?_, ?_, ?_, ?_⟩
+    · have hOn : (Ecc.MulFixed.Short.windowPoint B.point 21
+          (input_magnitude.val / 2 ^ (3 * 21) % 8)).OnCurve :=
+        B.windowPoint_onCurve (hks_lt 21)
+      rcases hWp : Ecc.MulFixed.Short.windowPoint B.point 21
+          (input_magnitude.val / 2 ^ (3 * 21) % 8) with ⟨wx, wy⟩
+      rw [hWp] at hOn hmx hmy
+      rw [hmx, hmy]
+      exact Or.inl hOn
+    · have hOn : ((Ecc.MulFixed.partialSum
+          (fun t => input_magnitude.val / 2 ^ (3 * t) % 8) 20) • B.point).OnCurve :=
+        Point.nsmul_onCurve B.onCurve
+          (Ecc.MulFixed.partialSum_pos _ _)
+          (Ecc.MulFixed.BaseFieldElem.RunningSumMul.inv_lt_card
+            (Ecc.MulFixed.partialSum_lt _ 20 (fun j _ => hks_lt j))
+            (by norm_num))
+      rcases hSp : Ecc.MulFixed.partialSum
+          (fun t => input_magnitude.val / 2 ^ (3 * t) % 8) 20 • B.point
+        with ⟨sx, sy⟩
+      rw [hSp] at hOn hax hay
+      rw [hax, hay]
+      exact Or.inl hOn
+    · -- last-window bool check on the honest running sum
+      have hz21 := hzs ⟨21, by norm_num⟩
+      rw [show ((⟨21, by norm_num⟩ : Fin 23) : ℕ) = 21 from rfl, hIMag] at hz21
+      rw [hWZ21, hz21]
+      have hb : input_magnitude.val / 2 ^ (3 * 21) < 2 := by
+        have : (2:ℕ) ^ (3 * 21) = 2 ^ 63 := by norm_num
+        omega
+      exact (Utilities.RunningSum.rangeCheckPoly_eq_zero_iff 2 _).mpr
+        ((DecomposeRunningSum.inRange_iff_exists_lt 2 (by norm_num)
+          _).mpr ⟨input_magnitude.val / 2 ^ (3 * 21), hb, rfl⟩)
+    · -- sign check
+      rw [hWSign]
+      rcases hSignPM with hs | hs <;> rw [hs] <;> ring
+    · -- y check
+      rcases hSignPM with hs | hs
+      · rw [hs, if_neg hone_ne] at hWyVar
+        rw [hWyVar]
+        ring
+      · rw [hs, if_pos rfl] at hWyVar
+        rw [hWyVar]
+        ring
+    · -- negation check
+      rw [hWSign]
+      rcases hSignPM with hs | hs
+      · rw [hs, if_neg hone_ne] at hWyVar
+        rw [hWyVar, hs]
+        ring
+      · rw [hs, if_pos rfl] at hWyVar
+        rw [hWyVar, hs]
+        ring
+
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_eq
+    (B : FixedBase) (cfg : Config) (input : Var Inputs Fp)
+    (self : RegionIndex) :
+    (circuit B).elaborated.synthesisSummary cfg input self =
+      circuitSynthesisSummary cfg := rfl
+
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_constantSiteCount
+    (config : Config) :
+    (circuitSynthesisSummary config).constantSiteCount = 1 := by
+  simp only [circuitSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_instanceRowExtent_eq (config : Config) :
+    (circuitSynthesisSummary config).instanceRowExtent = 0 := by
+  simp only [circuitSynthesisSummary, innerRegionSynthesisSummary,
+    mswRegionSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_tableRowExtent_eq (config : Config) :
+    (circuitSynthesisSummary config).tableRowExtent = 0 := by
+  simp only [circuitSynthesisSummary, synthesis_summary_norm]
+
+/-- Short fixed-base multiplication requests exactly its strict decomposition's
+single deferred constant allocation. -/
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_constantSiteCount
+    (B : FixedBase) (config : Config) (input : Var Inputs Fp)
+    (region : RegionIndex) :
+    ((circuit B).elaborated.synthesisSummary
+      config input region).constantSiteCount = 1 := by
+  rw [circuit_synthesisSummary_eq]
+  exact circuitSynthesisSummary_constantSiteCount config
+
+@[keygen_output_norm]
+theorem circuit_output_cells
+    (B : FixedBase) (config : Config) (input : Var Inputs Fp)
+    (self : RegionIndex) :
+    (circuit B).output config input self =
+      { x := .of (self + 1) 1 config.superConfig.addConfig.xQR,
+        y := .of (self + 1) 1 config.superConfig.addConfig.yP } := by
+  rfl
+
+@[circuit_norm]
+theorem circuit_regionCount (B : FixedBase) (input : Var Inputs Fp) :
+    (circuit B).regionCount input = 2 := by
+  rfl
+
+@[keygen_norm]
+theorem circuit_inputCells_eq
+    (B : FixedBase) {config : Config}
+    (configured : (circuit B).Configured config) (input : Var Inputs Fp) :
+    configured.inputCells input =
+      [input.magnitude.cell, input.sign.cell] := by
+  rfl
+
+theorem circuit_call_output_cells_assigned
+    (B : FixedBase) (config : Config) (input : Var Inputs Fp)
+    (self : RegionIndex) :
+    let output := (circuit B).output config input self
+    output.x.cell ∈ Operations.assignedCellsFrom
+        (((circuit B).call config input).operations self) self ∧
+      output.y.cell ∈ Operations.assignedCellsFrom
+        (((circuit B).call config input).operations self) self := by
+  rw [circuit_output_cells]
+  rw [FormalCircuit.call_operations]
+  let innerOutput := (innerRegion B.toData config 0 input.magnitude).output self
+  have hadd := Add.add_output_cells_assigned config.superConfig.addConfig 0
+    ⟨innerOutput.mulB, innerOutput.acc⟩ (self + 1) []
+  dsimp only at hadd
+  simp only [RegionOperations.mem_assignedCellsAfter_iff, List.nil_append,
+    Add.add_output_cells, AssignedCell.of_cell] at hadd
+  have hmsw :
+      (AssignedCell.of (self + 1) 1
+          config.superConfig.addConfig.xQR : AssignedCell Fp).cell ∈
+        ((mswRegion config innerOutput.acc innerOutput.mulB input.sign
+          innerOutput.zs[21]).operations (self + 1)).assignedCells (self + 1) ∧
+      (AssignedCell.of (self + 1) 1
+          config.superConfig.addConfig.yP : AssignedCell Fp).cell ∈
+        ((mswRegion config innerOutput.acc innerOutput.mulB input.sign
+          innerOutput.zs[21]).operations (self + 1)).assignedCells (self + 1) := by
+    constructor
+    · simp only [mswRegion, circuit_norm, RegionOperations.assignedCells,
+        List.flatMap_append, List.flatMap_cons, RegionOperation.assignedCells,
+        List.singleton_append, List.flatMap_nil, List.append_nil,
+        List.mem_append, List.mem_cons]
+      exact Or.inl hadd.1
+    · simp only [mswRegion, circuit_norm, RegionOperations.assignedCells,
+        List.flatMap_append, List.flatMap_cons, RegionOperation.assignedCells,
+        List.singleton_append, List.flatMap_nil, List.append_nil,
+        List.mem_append, List.mem_cons]
+  simp only [circuit, synthesize, Circuit.operations_bind,
+    operations_assignRegion, output_assignRegion, nextRegionIndex_assignRegion,
+    List.singleton_append, List.append_nil, Operations.assignedCellsFrom,
+    List.mem_append]
+  exact ⟨Or.inr hmsw.1, Or.inr hmsw.2⟩
+
+derive_contract_bridges circuit (B : FixedBase) := circuit B
+
+end Zcash.Circuits.Ecc.MulFixed.Short

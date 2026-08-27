@@ -7,11 +7,14 @@ import Clean.Circuit.Extensions
 variable {F : Type} [FiniteField F]
 variable {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
 
-abbrev Environment.fromInput (row : Input F) (data : ProverData F) : Environment F :=
+abbrev Clean.Environment.fromInput (row : Input F) (data : ProverData F) : Environment F :=
   Environment.fromArray (toElements row).toArray data
 
+namespace ProvableType.Clean
+open _root_.Clean
+
 @[circuit_norm]
-lemma ProvableType.eval_fromInput_varFromOffset_zero (input : Input F) (data : ProverData F) :
+lemma eval_fromInput_varFromOffset_zero (input : Input F) (data : ProverData F) :
     Eval.eval (Environment.fromInput input data) (varFromOffset (F:=F) Input 0) = input := by
   simp only [Environment.fromInput, Environment.fromArray]
   rw [eval_varFromOffset, ProvableType.fromElements_eq_iff, Vector.ext_iff]
@@ -21,14 +24,16 @@ lemma ProvableType.eval_fromInput_varFromOffset_zero (input : Input F) (data : P
     Vector.getElem?_eq_getElem hi, Option.getD_some]
 
 @[circuit_norm]
-lemma ProvableType.valueFromOffset_zero_fromInput_eq (input : Input F) (data : ProverData F) :
+lemma valueFromOffset_zero_fromInput_eq (input : Input F) (data : ProverData F) :
     valueFromOffset (F:=F) Input 0 (Environment.fromInput input data) = input := by
   simp only [valueFromOffset, zero_add]
   rw [fromElements_eq_iff, Vector.ext_iff]
   simp only [circuit_norm, Vector.getElem?_toArray]
   grind
 
-namespace GeneralFormalCircuit
+end ProvableType.Clean
+
+namespace Clean.GeneralFormalCircuit
 /--
 Formal circuits are parametrized by their input, with the goal of being reusable in any parent circuit.
 However, when using such a circuit to define AIR constraints, there is no longer any reusability concern,
@@ -90,4 +95,4 @@ def empty (F : Type) [FiniteField F] (Input : TypeMap) [ProvableType Input] :
 
 @[circuit_norm] lemma empty_channelsWithRequirements :
   (empty F Input).channelsWithRequirements = [] := rfl
-end GeneralFormalCircuit
+end Clean.GeneralFormalCircuit

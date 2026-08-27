@@ -1,5 +1,7 @@
 import Clean.Orchard.Ecc.Defs
 
+open Clean
+
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul_fixed.rs`.
 -/
@@ -47,46 +49,33 @@ def interpolate {K : Type} [Add K] [Mul K] (params : CoordsParams K) (window : K
     window * window * window * window * window * window * window *
       params.lagrange7
 
-def interpolatedX {K : Type} [Add K] [Mul K] (params : CoordsParams K) (row : CoordsRow K) : K :=
-  interpolate params row.window
-
-def xCheck {K : Type} [Add K] [Sub K] [Mul K] (params : CoordsParams K) (row : CoordsRow K) :
-    K :=
-  interpolatedX params row - row.xP
-
-def yCheck {K : Type} [Sub K] [Mul K] (params : CoordsParams K) (row : CoordsRow K) : K :=
-  row.u * row.u - row.yP - params.z
-
-def onCurve {K : Type} [Sub K] [Mul K] [OfNat K 5] (row : CoordsRow K) : K :=
-  row.yP * row.yP - row.xP * row.xP * row.xP - 5
-
 namespace Coords
 
 def Spec (params : CoordsParams Fp) (row : CoordsRow Fp) :
     Prop :=
-  row.xP = interpolatedX params row ∧
+  row.xP = interpolate params row.window ∧
     row.u * row.u = row.yP + params.z ∧
-    row.yP * row.yP = row.xP * row.xP * row.xP + 5
+    row.yP * row.yP = row.xP * row.xP * row.xP + pallasB
 
 def main (params : CoordsParams Fp) (row : Var CoordsRow Fp) :
     Circuit Fp Unit := do
-  assertZero (xCheck params.toExpr row)
-  assertZero (yCheck params.toExpr row)
-  assertZero (onCurve row)
+  assertZero (interpolate params.toExpr row.window - row.xP)
+  assertZero (row.u * row.u - row.yP - params.z)
+  assertZero (row.yP * row.yP - row.xP * row.xP * row.xP - pallasB)
 
 def circuit (params : CoordsParams Fp) :
     FormalAssertion Fp CoordsRow where
   main := main params
   Spec := Spec params
   soundness := by
-    circuit_proof_start [main, Spec, xCheck, yCheck, onCurve, interpolatedX, interpolate]
+    circuit_proof_start [main, Spec, interpolate]
     rcases h_holds with ⟨hx, hy, hCurve⟩
     simp [CoordsParams.toExpr, circuit_norm] at hx hy
     exact ⟨(sub_eq_zero.mp (by simpa [sub_eq_add_neg] using hx)).symm,
       by linear_combination hy,
       by linear_combination hCurve⟩
   completeness := by
-    circuit_proof_start [main, Spec, xCheck, yCheck, onCurve, interpolatedX, interpolate]
+    circuit_proof_start [main, Spec, interpolate]
     rcases h_spec with ⟨hx, hy, hCurve⟩
     simp [CoordsParams.toExpr, circuit_norm]
     exact ⟨by simpa [sub_eq_add_neg] using sub_eq_zero.mpr hx.symm,
@@ -342,7 +331,7 @@ theorem coords_eq_windowPoint {w k : ℕ} (hw : w < 85) (hk : k < 8)
     row.xP = (windowPoint B.point w k).x ∧ row.yP = (windowPoint B.point w k).y := by
   obtain ⟨hx, hu, hcurve⟩ := hspec
   have hxP : row.xP = (windowPoint B.point w k).x := by
-    rw [hx, interpolatedX, hwindow, B.interpolate_eq w hw k hk]
+    rw [hx, hwindow, B.interpolate_eq w hw k hk]
   refine ⟨hxP, ?_⟩
   have hrowCurve : ({ x := (windowPoint B.point w k).x, y := row.yP } : Point Fp).OnCurve := by
     rw [← hxP]

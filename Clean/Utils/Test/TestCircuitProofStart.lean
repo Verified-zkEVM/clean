@@ -2,6 +2,8 @@ import Clean.Utils.Tactics
 import Clean.Circuit
 import Clean.Utils.Field
 
+open Clean
+
 namespace TestCircuitProofStart
 
 open Circuit

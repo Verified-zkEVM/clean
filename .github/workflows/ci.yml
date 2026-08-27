@@ -19,6 +19,10 @@ jobs:
           build-args: "--wfail"
       - name: Build tests
         run: lake build CleanTests
+      - name: Build Zcash
+        run: lake build Zcash --wfail
+      - name: Build Orchard
+        run: lake build Orchard --wfail
 
   plonky3-backend:
     runs-on: ubuntu-latest
