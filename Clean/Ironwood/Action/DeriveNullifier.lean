@@ -84,7 +84,7 @@ private theorem deriveNullifier_regionCount (K : FixedBase)
 @[keygen_norm]
 def keygenRequirements (K : FixedBase) : KeygenRequirements Fp
     (Poseidon.Config × AddChip.Config × Ecc.MulFixed.BaseFieldElem.Config ×
-      Ecc.Add.Config) where
+      Ecc.Add.Config) (Var Input Fp) where
   configLawful cfg :=
     (Poseidon.hash (Hash.ConstantLength.capacity 2)).Configured cfg.1 ×
       AddChip.addFormal.Configured cfg.2.1 ×
@@ -96,6 +96,69 @@ def keygenRequirements (K : FixedBase) : KeygenRequirements Fp
   lookups _ configured :=
     configured.1.lookups ++ configured.2.1.lookups ++
       configured.2.2.1.lookups ++ configured.2.2.2.lookups
+  fixedColumns _ configured :=
+    configured.1.fixedColumns ++ configured.2.1.fixedColumns ++
+      configured.2.2.1.fixedColumns ++ configured.2.2.2.fixedColumns
+  permutationColumns cfg configured :=
+    configured.1.permutationColumns ++ configured.2.1.permutationColumns ++
+      configured.2.2.1.permutationColumns ++ configured.2.2.2.permutationColumns ++
+        ([cfg.1.state 0, cfg.2.1.c,
+          cfg.2.2.1.superConfig.addConfig.xQR,
+          cfg.2.2.1.superConfig.addConfig.yQR] : List AnyColumn)
+  inputCells _ _ input :=
+    [input.nk.cell, input.rho.cell, input.psi.cell,
+      input.cm.x.cell, input.cm.y.cell]
+
+def synthesisSummary
+    (cfg : Poseidon.Config × AddChip.Config ×
+      Ecc.MulFixed.BaseFieldElem.Config × Ecc.Add.Config) :
+    FloorPlanner.SynthesisSummary :=
+  (Poseidon.hashSynthesisSummary cfg.1).combine
+    ((FloorPlanner.SynthesisSummary.ofRegion
+      (AddChip.synthesisSummary cfg.2.1 0)).combine
+      ((Ecc.MulFixed.BaseFieldElem.circuitSynthesisSummary cfg.2.2.1).combine
+        (FloorPlanner.SynthesisSummary.ofRegion
+          (Ecc.Add.synthesisSummary cfg.2.2.2 0))))
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_lookupActivationCount
+    (cfg : Poseidon.Config × AddChip.Config ×
+      Ecc.MulFixed.BaseFieldElem.Config × Ecc.Add.Config) :
+    (synthesisSummary cfg).lookupActivationCount = 13 := by
+  simp only [synthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_tableRowExtent_eq
+    (cfg : Poseidon.Config × AddChip.Config ×
+      Ecc.MulFixed.BaseFieldElem.Config × Ecc.Add.Config) :
+    (synthesisSummary cfg).tableRowExtent = 0 := by
+  simp only [synthesisSummary, Poseidon.hashSynthesisSummary,
+    synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_instanceRowExtent_eq
+    (cfg : Poseidon.Config × AddChip.Config ×
+      Ecc.MulFixed.BaseFieldElem.Config × Ecc.Add.Config) :
+    (synthesisSummary cfg).instanceRowExtent = 0 := by
+  simp only [synthesisSummary, Poseidon.hashSynthesisSummary,
+    Poseidon.initRegionSynthesisSummary,
+    Poseidon.addInputRegionSynthesisSummary,
+    Poseidon.permuteSynthesisSummary,
+    AddChip.synthesisSummary, synthesis_summary_norm]
+  simp
+
+def synthesize (K : FixedBase)
+    (cfg : Poseidon.Config × AddChip.Config ×
+      Ecc.MulFixed.BaseFieldElem.Config × Ecc.Add.Config)
+    (input : Var Input Fp) : Circuit Fp (Var field Fp) := do
+  let hash ← (Poseidon.hash (Hash.ConstantLength.capacity 2)).call cfg.1
+    { x0 := input.nk, x1 := input.rho }
+  let scalar ← AddChip.addFormal.call cfg.2.1
+    { a := hash, b := input.psi }
+  let product ← (Ecc.MulFixed.BaseFieldElem.circuit K).call cfg.2.2.1 scalar
+  let nf ← Ecc.Add.addFormal.call cfg.2.2.2
+    { p := input.cm, q := product }
+  pure nf.x
 
 /-- Rust `gadget.rs::derive_nullifier`: the Poseidon hash of `(nk, rho)`, the add-chip
 sum with `psi`, the `[scalar] NullifierK` base-field-element fixed-base mul, and the
@@ -111,34 +174,168 @@ def circuit (K : FixedBase) : FormalCircuit Fp
   name := "derive nullifier"
   configure := pure
 
-  synthesize := fun (pcfg, acfg, bcfg, ecfg) input => do
-    let hash ← (Poseidon.hash (Hash.ConstantLength.capacity 2)).call pcfg
-      { x0 := input.nk, x1 := input.rho }
-    let scalar ← AddChip.addFormal.call acfg
-      { a := hash, b := input.psi }
-    let product ← (Ecc.MulFixed.BaseFieldElem.circuit K).call bcfg scalar
-    let nf ← Ecc.Add.addFormal.call ecfg
-      { p := input.cm, q := product }
-    pure nf.x
+  synthesize := synthesize K
 
   elaborated :=
     { keygenRequirements := keygenRequirements K
-      registered := by keygen_registration
+      registered := by
+        intro cfg counts hconfig input self
+        simp only [synthesize, Circuit.operations_bind, Circuit.operations_pure,
+          Operations.KeygenRegistered.append, circuit_norm]
+        exact ⟨by
+          apply (Poseidon.hash (Hash.ConstantLength.capacity 2))
+              |>.call_keygenRegistered cfg.1 hconfig.1 _ self <;>
+            keygen_registration,
+          by
+            apply AddChip.addFormal.call_keygenRegistered cfg.2.1
+                hconfig.2.1 _ (self + 3) <;>
+              keygen_registration,
+          by
+            apply (Ecc.MulFixed.BaseFieldElem.circuit K)
+                |>.call_keygenRegistered cfg.2.2.1 hconfig.2.2.1 _
+                  (self + 4) <;>
+              keygen_registration,
+          by
+            apply Ecc.Add.addFormal.call_keygenRegistered cfg.2.2.2
+                hconfig.2.2.2 _ (self + 8) <;>
+              keygen_registration⟩
+      lookupSelectorAssignmentsAgree_of_registered := by
+        intro cfg counts hconfig input self program operations _hregistered
+        simp only [operations, program, Configure.output_pure, synthesize,
+          Circuit.operations_bind, Circuit.operations_pure,
+          keygen_norm, keygen_spine]
+        exact ⟨AddChip.addFormal.call_lookupSelectorAssignmentsAgree
+            cfg.2.1 hconfig.2.1 _ _,
+          (Ecc.MulFixed.BaseFieldElem.circuit K)
+            |>.call_lookupSelectorAssignmentsAgree
+              cfg.2.2.1 hconfig.2.2.1 _ _,
+          Ecc.Add.addFormal.call_lookupSelectorAssignmentsAgree
+            cfg.2.2.2 hconfig.2.2.2 _ _⟩
+      lookupSelectorAnchorRequirements cfg _ _ :=
+        LookupRangeCheck.lookupSelectorAnchorRequirements
+          cfg.2.2.1.lookupConfig
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro cfg _ hconfig input self anchor hanchor _
+        simp only [synthesize, Circuit.operations_bind,
+          Circuit.operations_pure, List.append_nil, circuit_norm]
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact (Poseidon.hash (Hash.ConstantLength.capacity 2))
+            |>.call_lookupSelectorsAnchoredBy
+              cfg.1 hconfig.1 _ self anchor (by trivial)
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact AddChip.addFormal.call_lookupSelectorsAnchoredBy
+            cfg.2.1 hconfig.2.1 _ (self + 3) anchor (by trivial)
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact (Ecc.MulFixed.BaseFieldElem.circuit K)
+            |>.call_lookupSelectorsAnchoredBy cfg.2.2.1 hconfig.2.2.1 _
+              (self + 4) anchor (by
+                simpa only [Ecc.MulFixed.BaseFieldElem.circuit_lookupSelectorAnchorRequirements]
+                  using hanchor)
+        · exact Ecc.Add.addFormal.call_lookupSelectorsAnchoredBy
+            cfg.2.2.2 hconfig.2.2.2 _ (self + 8) anchor (by trivial)
+      fixedWritesLawful := by
+        intro cfg _ hconfig input self
+        apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree
+        · simp only [Configure.output_pure, synthesize,
+            Circuit.operations_bind, Circuit.operations_pure,
+            List.forall_append, circuit_norm]
+          constructor
+          · exact (Poseidon.hash (Hash.ConstantLength.capacity 2))
+              |>.call_fixedAssignmentsAgree cfg.1 hconfig.1 _ self
+          constructor
+          · exact AddChip.addFormal.call_fixedAssignmentsAgree
+              cfg.2.1 hconfig.2.1 _ (self + 3)
+          constructor
+          · exact (Ecc.MulFixed.BaseFieldElem.circuit K)
+              |>.call_fixedAssignmentsAgree cfg.2.2.1 hconfig.2.2.1 _
+                (self + 4)
+          · exact Ecc.Add.addFormal.call_fixedAssignmentsAgree
+              cfg.2.2.2 hconfig.2.2.2 _ (self + 8)
+        · simp only [synthesize, circuit_norm, synthesis_summary_norm]
+      copyCellsAssigned := by
+        intro cfg counts hconfig input self
+        simp only [synthesize, Circuit.operations_bind, Circuit.operations_pure,
+          List.append_nil, Configure.output_pure, circuit_norm]
+        apply Operations.CopyCellsAssignedFrom.append
+        · apply (Poseidon.hash (Hash.ConstantLength.capacity 2))
+            |>.call_copyCellsAssignedFrom cfg.1 hconfig.1 _ self
+          intro cell hcell
+          rw [Poseidon.hash_inputCells] at hcell
+          simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+          rcases hcell with rfl | rfl
+          · simp only [keygenRequirements, List.mem_cons, true_or]
+          · simp only [keygenRequirements, List.mem_cons, true_or, or_true]
+        · apply Operations.CopyCellsAssignedFrom.append
+          · simp only [circuit_norm]
+            apply AddChip.addFormal.call_copyCellsAssignedFrom
+              cfg.2.1 hconfig.2.1 _ _
+            intro cell hcell
+            rw [AddChip.addFormal_inputCells] at hcell
+            simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+            simp only [keygenRequirements, List.mem_append, List.mem_cons,
+              List.not_mem_nil, or_false] at ⊢
+            rcases hcell with rfl | rfl
+            · exact Or.inr (Poseidon.hash_call_output_cell_assigned
+                (Hash.ConstantLength.capacity 2) cfg.1 _ self)
+            · exact Or.inl (Or.inr (Or.inr (Or.inl rfl)))
+          · simp only [circuit_norm, Nat.add_assoc]
+            apply Operations.CopyCellsAssignedFrom.append
+            · apply (Ecc.MulFixed.BaseFieldElem.circuit K)
+                |>.call_copyCellsAssignedFrom cfg.2.2.1 hconfig.2.2.1 _ _
+              intro cell hcell
+              rw [Ecc.MulFixed.BaseFieldElem.circuit_inputCells_eq] at hcell
+              simp only [List.mem_singleton] at hcell
+              subst cell
+              simp only [keygenRequirements, List.mem_append, List.mem_cons,
+                List.not_mem_nil, or_false] at ⊢
+              exact Or.inr (Or.inr
+                (AddChip.addFormal_call_output_cell_assigned cfg.2.1 _ _))
+            · simp only [circuit_norm, Nat.add_assoc]
+              apply Ecc.Add.addFormal.call_copyCellsAssignedFrom
+                cfg.2.2.2 hconfig.2.2.2 _ _
+              intro cell hcell
+              rw [Ecc.Add.addFormal_inputCells] at hcell
+              simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+              simp only [keygenRequirements, List.mem_append, List.mem_cons,
+                List.not_mem_nil, or_false] at ⊢
+              rcases hcell with rfl | rfl | rfl | rfl
+              · exact Or.inl (Or.inr (Or.inr (Or.inr (Or.inl rfl))))
+              · exact Or.inl (Or.inr (Or.inr (Or.inr (Or.inr rfl))))
+              · exact Or.inr (Or.inr (Or.inr
+                  (Ecc.MulFixed.BaseFieldElem.circuit_call_output_cells_assigned
+                    K cfg.2.2.1 _ _).1))
+              · exact Or.inr (Or.inr (Or.inr
+                  (Ecc.MulFixed.BaseFieldElem.circuit_call_output_cells_assigned
+                    K cfg.2.2.1 _ _).2))
+      lookupActivationsWellFormed := by
+        intro cfg input self
+        simp only [synthesize, Circuit.operations_bind, Circuit.operations_pure,
+          Operations.LookupActivationsWellFormed, List.forall_append,
+          circuit_norm]
+        exact ⟨(Poseidon.hash (Hash.ConstantLength.capacity 2))
+            |>.call_lookupActivationsWellFormed cfg.1 _ self,
+          AddChip.addFormal.call_lookupActivationsWellFormed
+            cfg.2.1 _ (self + 3),
+          (Ecc.MulFixed.BaseFieldElem.circuit K)
+            |>.call_lookupActivationsWellFormed cfg.2.2.1 _ (self + 4),
+          Ecc.Add.addFormal.call_lookupActivationsWellFormed
+            cfg.2.2.2 _ (self + 8)⟩
       output cfg input i :=
-        let (pcfg, acfg, bcfg, ecfg) := cfg
-        ((do
-          let hash ← (Poseidon.hash (Hash.ConstantLength.capacity 2)).call pcfg
-            { x0 := input.nk, x1 := input.rho }
-          let scalar ← AddChip.addFormal.call acfg
-            { a := hash, b := input.psi }
-          let product ← (Ecc.MulFixed.BaseFieldElem.circuit K).call bcfg scalar
-          let nf ← Ecc.Add.addFormal.call ecfg
-            { p := input.cm, q := product }
-          pure nf.x : Circuit Fp (Var field Fp)).output i)
+        .of (i + 8) 1 cfg.2.2.2.xQR
       regionCount _ := 9
-      output_eq := by intro _ _ _; rfl
-      regionCount_eq := fun (pcfg, acfg, bcfg, ecfg) input i =>
-        (deriveNullifier_regionCount K pcfg acfg bcfg ecfg input i).symm }
+      synthesisSummary cfg _ _ := synthesisSummary cfg
+      synthesisSummary_eq := by
+        intro cfg input region
+        simp only [synthesize, synthesisSummary, circuit_norm, synthesis_summary_norm]
+      output_eq := by
+        intro cfg input i
+        simp only [synthesize, Circuit.output_bind, Circuit.output_pure,
+          FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call',
+          FormalCircuit.call_regionCount', circuit_norm,
+          Ecc.Add.addFormal_output_cells]
+      regionCount_eq := fun (pcfg, acfg, bcfg, ecfg) input i => by
+        unfold synthesize
+        exact (deriveNullifier_regionCount K pcfg acfg bcfg ecfg input i).symm }
 
   EnvAssumptions := fun (_, _, bcfg, _) env =>
     Ecc.MulFixed.BaseFieldElem.EnvAssumptions bcfg env
@@ -170,16 +367,11 @@ def circuit (K : FixedBase) : FormalCircuit Fp
       rw [Ecc.Add.addFormal_assumptions_eq]
       exact ⟨hA, by rw [hB]; exact K.smul_valid _⟩)
     rw [Ecc.Add.addFormal_spec_eq] at hAddS
-    have hSum : (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_3
-        : Value Point Fp)
-        = ({ x := input_cm_x, y := input_cm_y } : Point Fp)
-          + (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_2
-            : Value Point Fp) := hAddS.2
-    rw [← h_output]
-    rw [show AssignedCell.eval place env x_gen_out_3.x
-      = (eval (⟨place, env⟩ : Placed Environment Fp) x_gen_out_3
-          : Value Point Fp).x from by simp only [Point.eval_eq, circuit_norm]]
-    rw [hSum, hB, hS, hH, constantLength_value_two]
+    rw [Ecc.Add.addFormal_output_cells] at hAddS
+    have hSum := congrArg Point.x hAddS.2
+    simp only [Point.eval_eq, circuit_norm] at hSum
+    simp only [Point.eval_eq, circuit_norm] at hB
+    rw [← h_output, hSum, hB, hS, hH, constantLength_value_two]
 
   completeness := by
     circuit_proof_start
@@ -192,6 +384,61 @@ def circuit (K : FixedBase) : FormalCircuit Fp
       trivial, ?_, trivial⟩
     rw [Ecc.Add.addFormal_assumptions_eq]
     exact ⟨hA, by rw [hB]; exact K.smul_valid _⟩
+
+@[keygen_norm]
+theorem circuit_inputCells_eq (K : FixedBase) {config}
+    (configured : (circuit K).Configured config) (input : Var Input Fp) :
+    configured.inputCells input =
+      [input.nk.cell, input.rho.cell, input.psi.cell,
+        input.cm.x.cell, input.cm.y.cell] := by
+  rfl
+
+/-- The nullifier cell returned by the call is assigned by its final complete
+addition region. -/
+theorem circuit_call_output_cell_assigned
+    (K : FixedBase)
+    (config : Poseidon.Config × AddChip.Config ×
+      Ecc.MulFixed.BaseFieldElem.Config × Ecc.Add.Config)
+    (input : Var Input Fp) (region : RegionIndex) :
+    ((circuit K).output config input region).cell ∈
+      (((circuit K).call config input).operations region).assignedCellsFrom region := by
+  have houtput : (circuit K).output config input region =
+      .of (region + 8) 1 config.2.2.2.xQR := rfl
+  rw [houtput]
+  rw [FormalCircuit.call_operations]
+  let hash := (Poseidon.hash (Hash.ConstantLength.capacity 2)).output
+    config.1 { x0 := input.nk, x1 := input.rho } region
+  let scalar := AddChip.addFormal.output config.2.1
+    { a := hash, b := input.psi } (region + 3)
+  let product := (Ecc.MulFixed.BaseFieldElem.circuit K).output config.2.2.1
+    scalar (region + 4)
+  have hadd := Ecc.Add.addFormal_call_output_cells_assigned config.2.2.2
+    { p := input.cm, q := product } (region + 8)
+  simp only [circuit, synthesize, Circuit.operations_bind,
+    Circuit.operations_pure, FormalCircuit.output_call',
+    FormalCircuit.nextRegionIndex_call', FormalCircuit.call_regionCount',
+    Operations.assignedCellsFrom_append, circuit_norm,
+    Ecc.Add.addFormal_output_cells, List.mem_append, AssignedCell.of_cell,
+    Nat.add_assoc, Nat.reduceAdd, hash, scalar, product] at hadd ⊢
+  exact Or.inr (Or.inr (Or.inr hadd.1))
+
+@[keygen_norm]
+theorem circuit_lookupSelectorAnchorRequirements
+    (K : FixedBase)
+    (config : Poseidon.Config × AddChip.Config ×
+      Ecc.MulFixed.BaseFieldElem.Config × Ecc.Add.Config)
+    (input : Var Input Fp) (region : RegionIndex) :
+    (circuit K).elaborated.lookupSelectorAnchorRequirements config input region =
+      LookupRangeCheck.lookupSelectorAnchorRequirements
+        config.2.2.1.lookupConfig := rfl
+
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_eq (K : FixedBase)
+    (config : Poseidon.Config × AddChip.Config ×
+      Ecc.MulFixed.BaseFieldElem.Config × Ecc.Add.Config)
+    (input : Var Input Fp) (region : RegionIndex) :
+    (circuit K).elaborated.synthesisSummary config input region =
+      synthesisSummary config := rfl
 
 derive_contract_bridges circuit (K : FixedBase) := circuit K
 

@@ -68,6 +68,10 @@ def gate (cfg : Config) : Gate Fp :=
       b2 + c * (2 ^ 5 : Fp) + (2 ^ 140 : Fp) - (tP : Fp) - b2CPrime),
      ("z14_b2_c_prime", d1 * z14B2CPrime)]
 
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem gate_selector (cfg : Config) :
+    (gate cfg).selector = cfg.qCommitIvk := rfl
+
 /-- Rust `CommitIvkChip::configure` (`commit_ivk.rs:60-235`), VK-exact. -/
 def configure (advices : Fin 10 → Column .advice) : Configure Fp Config := do
   let qCommitIvk ← selector
@@ -75,9 +79,32 @@ def configure (advices : Fin 10 → Column .advice) : Configure Fp Config := do
   createGate (gate cfg)
   return cfg
 
-instance (advices : Fin 10 → Column .advice) :
+@[configure_selector_norm, keygen_norm] theorem configure_delta_lookups
+    (advices : Fin 10 → Column .advice) (counts) :
+    ((configure advices).delta counts).lookups = [] := by
+  simp [configure]
+
+@[keygen_norm] theorem configure_delta_constants
+    (advices : Fin 10 → Column .advice) (counts) :
+    ((configure advices).delta counts).constants = [] := by
+  simp [configure]
+
+@[reducible] private def configureInferred (advices : Fin 10 → Column .advice) :
     ElaboratedConfigure (configure advices) := by
   unfold configure
   infer_instance
+
+private theorem configure_selectorRequirements
+    (advices : Fin 10 → Column .advice) (counts) :
+    (configureInferred advices).selectorRequirements counts := by
+  dsimp only [configureInferred, configure]
+  simp [configure_selector_norm]
+
+instance (advices : Fin 10 → Column .advice) :
+    ElaboratedConfigure (configure advices) :=
+  ((configureInferred advices).closeSelectorRequirements
+    (configure_selectorRequirements advices)).withNoExternalSelectors (by
+      intro counts
+      constructor <;> simp [configure, gate, Gate.withSelector])
 
 end Zcash.Circuits.CommitIvk

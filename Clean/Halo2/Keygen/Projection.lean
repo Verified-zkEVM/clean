@@ -219,8 +219,16 @@ def projectCS [Field F] [DecidableEq F] (map : SelCompressMap) (cs : ConstraintS
   let m : ℕ → Option SelCompress := map.lookup
   let polys := (flatGates cs).map (substSelectorMap m)
   let lookups' : List (LookupArgument F) := cs.lookups.map (fun a =>
-    { inputs := a.inputs.map (substSelectorMap m)
+    { masterSelector := a.masterSelector
+      inputs := a.inputs.map (substSelectorMap m)
       tables := a.tables.map (substSelectorMap m)
+      inputsNoSimpleSelectors := by
+        rw [List.forall_iff_forall_mem]
+        intro expression hexpression
+        obtain ⟨source, hsource, rfl⟩ := List.mem_map.mp hexpression
+        exact substSelectorMap_noSimpleSelectors m source
+          (List.forall_iff_forall_mem.mp a.inputsNoSimpleSelectors
+            source hsource)
       tablesFree := by
         intro table htable
         obtain ⟨source, hsource, rfl⟩ := List.mem_map.mp htable

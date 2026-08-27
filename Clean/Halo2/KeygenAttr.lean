@@ -7,6 +7,12 @@ register_simp_attr keygen_norm
 /-- Cheap operation-spine reductions run before the broader keygen normalization set. -/
 register_simp_attr keygen_spine
 
+/-- Reduced circuit-output projections used only while routing keygen call premises. -/
+register_simp_attr keygen_output_norm
+
+/-- Structural reductions for exact synthesis-footprint summaries. -/
+register_simp_attr synthesis_summary_norm
+
 namespace Halo2
 
 open Lean

@@ -163,6 +163,24 @@ private def rowFam (cfg : Config) (pl : RegionIndex → ℕ) (e : ProverEnvironm
              lambda1 := e.advice cfg.lambda1 ((pl self + (offset + r) : ℕ) : ℤ),
              lambda2 := e.advice cfg.lambda2 ((pl self + (offset + r) : ℕ) : ℤ) } }
 
+def loopSynthesisSummary (n : ℕ) (cfg : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .repeatColumns (roundColumns cfg) offset 1 2 0 n
+    (lookupActivationCount := 1)
+
+@[synthesis_summary_norm]
+theorem loopSynthesisSummary_lookupActivationCount
+    (n : ℕ) (cfg : Config) (offset : ℕ) :
+    (loopSynthesisSummary n cfg offset).lookupActivationCount = n := by
+  simp only [loopSynthesisSummary, synthesis_summary_norm, Nat.mul_one]
+
+/-- The reduced interior-loop summary contains no deferred constant requests. -/
+@[synthesis_summary_norm]
+theorem loopSynthesisSummary_constantSiteCount
+    (n : ℕ) (cfg : Config) (offset : ℕ) :
+    (loopSynthesisSummary n cfg offset).constantSiteCount = 0 := by
+  cases n <;> rfl
+
 /-- The interior word rounds (`q_s2 = 1` rows) as one formal circuit: `n` rounds of the
 `round` bundle at consecutive offsets. The entering row is positional (`Witness`), the
 exit row and the interior running sums are the output. The round-to-round induction
@@ -171,8 +189,43 @@ def loop (G : Generators) (n : ℕ) : FormalRegionCircuit Fp Config Config field
   configure := pure
   elaborated :=
     { keygenRequirements :=
-        { gates cfg _ := [sinsemillaGate cfg]
-          lookups cfg _ := [generatorLookup G cfg] } }
+      { gates cfg _ := [sinsemillaGate cfg]
+        lookups cfg _ := [generatorLookup G cfg]
+        fixedColumns cfg _ := [cfg.qS2] }
+      synthesisSummary cfg offset _ _ := loopSynthesisSummary n cfg offset
+      synthesisSummary_eq := by
+        intro cfg offset piece self
+        simp only [circuit_norm, synthesis_summary_norm, Nat.mul_one]
+        simpa [loopSynthesisSummary, roundSynthesisSummary, Nat.add_assoc] using
+          (FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns
+            (roundColumns cfg) offset 1 2 0 n
+            (lookupActivationCount := 1)).symm
+      fixedAssignmentsAgree := by
+        intro configInput counts hconfig offset input region
+        unfold RegionOperations.FixedAssignmentsAgree
+        intro column row left right hleft hright
+        simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+          HashPiece.operations_readState, operations_cellVec, List.append_nil] at hleft hright
+        rw [RegionCircuit.forRange'_operations] at hleft hright
+        simp only [List.mem_flatten, List.mem_ofFn] at hleft hright
+        obtain ⟨_, ⟨i, rfl⟩, hleft⟩ := hleft
+        obtain ⟨_, ⟨j, rfl⟩, hright⟩ := hright
+        simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+          List.append_nil] at hleft hright
+        rw [round_assignFixed_mem_iff] at hleft hright
+        exact hleft.2.2.trans hright.2.2.symm
+      copyCellsAssigned := by
+        intro configInput counts hconfig offset input region
+        simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+          RegionOperations.CopyCellsAssigned]
+        rw [RegionOperations.copyCellsAssignedFrom_append_iff]
+        constructor
+        · apply RegionCircuit.forRange'_copyCellsAssignedFrom
+          intro i
+          keygen_registration
+        · apply RegionOperations.copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
+          simp only [circuit_norm, RegionOperation.copiedCells,
+            List.Forall] }
 
   synthesize cfg offset (piece : AssignedCell Fp) := do
     RegionCircuit.forRange' offset 1 n (fun r o => do
@@ -331,6 +384,51 @@ def loop (G : Generators) (n : ℕ) : FormalRegionCircuit Fp Config Config field
       rw [show offset + 1 + ↑j = offset + (↑j + 1) from by omega]
       exact congrArg State.z hj
 
+/-- The loop publishes its reduced synthesis summary without exposing its operation
+stream. -/
+@[synthesis_summary_norm]
+theorem loop_synthesisSummary_eq
+    (G : Generators) (n : ℕ) (config : Config) (offset : ℕ)
+    (piece : AssignedCell Fp) (region : RegionIndex) :
+    (loop G n).elaborated.synthesisSummary config offset piece region =
+      loopSynthesisSummary n config offset := rfl
+
+/-- The interior hash-piece loop requests no deferred constants. -/
+@[synthesis_summary_norm]
+theorem loop_synthesisSummary_constantSiteCount
+    (G : Generators) (n : ℕ) (config : Config) (offset : ℕ)
+    (piece : AssignedCell Fp) (region : RegionIndex) :
+    ((loop G n).elaborated.synthesisSummary
+      config offset piece region).constantSiteCount = 0 := by
+  rw [loop_synthesisSummary_eq]
+  exact loopSynthesisSummary_constantSiteCount n config offset
+
+/-- The loop writes `qS2 = 1` exactly at its `n` consecutive round rows. -/
+theorem loop_assignFixed_mem_iff (G : Generators) (n : ℕ)
+    (cfg : Config) (offset : ℕ) (piece : AssignedCell Fp)
+    (self : RegionIndex) (column : Column .fixed) (row : ℕ) (value : Fp) :
+    .assignFixed column row value ∈
+        ((loop G n).call cfg offset piece).operations self ↔
+      column = cfg.qS2 ∧ (∃ i : Fin n, row = offset + i.val) ∧ value = 1 := by
+  rw [FormalRegionCircuit.call_operations]
+  simp only [loop, RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    HashPiece.operations_readState, operations_cellVec, List.append_nil]
+  rw [RegionCircuit.forRange'_operations]
+  simp only [List.mem_flatten, List.mem_ofFn]
+  constructor
+  · rintro ⟨operations, ⟨i, rfl⟩, hoperation⟩
+    simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+      List.append_nil] at hoperation
+    rw [round_assignFixed_mem_iff] at hoperation
+    rcases hoperation with ⟨hcolumn, hrow, hvalue⟩
+    exact ⟨hcolumn, ⟨i, by simpa using hrow⟩, hvalue⟩
+  · rintro ⟨hcolumn, ⟨i, hrow⟩, hvalue⟩
+    refine ⟨_, ⟨i, rfl⟩, ?_⟩
+    simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+      List.append_nil]
+    rw [round_assignFixed_mem_iff]
+    exact ⟨hcolumn, by simpa using hrow, hvalue⟩
+
 -- contract bridges for the `loop` child (opened by the piece bundle's proofs)
 derive_contract_bridges loopC (G : Generators) (n : ℕ) := loop G n
 
@@ -341,6 +439,40 @@ theorem loop_output (G : Generators) (n : ℕ) (cfg : Config) (o : ℕ) (iv : As
     (loop G n).output cfg o iv self
       = { exit := reads cfg (o + n) self,
           zs := Vector.ofFn (fun j => AssignedCell.of self (o + 1 + j) cfg.bits) } := rfl
+
+/-- Every running-sum cell returned by the loop was assigned by its round. -/
+theorem loop_output_z_cell_assigned (G : Generators) (n : ℕ)
+    (cfg : Config) (offset : ℕ) (piece : AssignedCell Fp)
+    (self : RegionIndex) (available : List Cell) (r : Fin n) :
+    ((loop G n).output cfg offset piece self).zs[r].cell ∈
+      (((loop G n).call cfg offset piece).operations self
+        |>.assignedCellsAfter self available) := by
+  rw [loop_output, FormalRegionCircuit.call_operations]
+  simp only [loop, RegionCircuit.operations_bind,
+    RegionCircuit.operations_pure, HashPiece.operations_readState,
+    operations_cellVec, List.append_nil,
+    RegionOperations.mem_assignedCellsAfter_iff, List.mem_append]
+  right
+  rw [RegionOperations.assignedCells, RegionCircuit.forRange'_operations]
+  have hround := round_output_z_cell_assigned G r.val cfg
+    (offset + r.val) piece self []
+  rw [round_output] at hround
+  simp only [reads, AssignedCell.of_cell,
+    RegionOperations.mem_assignedCellsAfter_iff, List.nil_append] at hround
+  obtain ⟨operation, hoperation, hcell⟩ := List.mem_flatMap.mp hround
+  apply List.mem_flatMap.mpr
+  refine ⟨operation, ?_, ?_⟩
+  · apply List.mem_flatten.mpr
+    let body : RegionCircuit Fp Unit := do
+      let _ ← (round G r.val).call cfg (offset + r.val) piece
+      pure ()
+    refine ⟨body.operations self, ?_, ?_⟩
+    · simpa only [body, Nat.mul_one] using List.mem_ofFn.mpr ⟨r, rfl⟩
+    · simpa only [body, RegionCircuit.operations_bind,
+        RegionCircuit.operations_pure, List.append_nil] using hoperation
+  · have hrow : offset + r.val + 1 = offset + 1 + r.val := by omega
+    simpa only [Fin.getElem_fin, Vector.getElem_ofFn,
+      AssignedCell.of_cell, hrow] using hcell
 
 /-! ## The `hash_piece` bundle (edges)
 
@@ -466,49 +598,141 @@ private theorem map_range_congr (w : ℕ) (ms ms' : ℕ → ℕ)
 private theorem stepXA_eq (s : State Fp) (g' : Fp × Fp) (z' : Fp) :
     s.stepXA = (s.step g' z').row.xA := rfl
 
+def circuitSynthesisSummary (w : ℕ) (cfg : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  (FloorPlanner.RegionSynthesisSummary.ofColumns
+      [.column .advice cfg.bits.index,
+        .column .advice cfg.xP.index,
+        .column .advice cfg.lambda1.index,
+        .column .advice cfg.lambda2.index]
+      (offset + 1) 0).combine
+    ((loopSynthesisSummary w cfg offset).combine
+      (FloorPlanner.RegionSynthesisSummary.ofColumns
+        [.column .fixed cfg.qS2.index,
+          .column .advice cfg.xA.index,
+          .selector cfg.qS1.index]
+        (offset + w + 2) 0 (lookupActivationCount := 1)))
+
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_lookupActivationCount
+    (w : ℕ) (cfg : Config) (offset : ℕ) :
+    (circuitSynthesisSummary w cfg offset).lookupActivationCount = w + 1 := by
+  simp only [circuitSynthesisSummary, synthesis_summary_norm,
+    loopSynthesisSummary_lookupActivationCount, Nat.zero_add]
+
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_instanceRowExtent_eq (w : ℕ)
+    (cfg : Config) (offset : ℕ) :
+    (circuitSynthesisSummary w cfg offset).instanceRowExtent = 0 := by
+  simp only [circuitSynthesisSummary, loopSynthesisSummary,
+    synthesis_summary_norm]
+  simp
+
+def circuitBody (G : Generators) (w : ℕ) (final : Bool)
+    (yaIn : Placed Environment Fp → Fp) (cfg : Config) (offset : ℕ)
+    (piece : AssignedCell Fp) : RegionCircuit Fp (Output (w + 1) (AssignedCell Fp)) := do
+  let _z0 ← copyAdvice piece cfg.bits offset
+  let w0 ← readState cfg offset
+  let _xP ← assignAdvice cfg.xP offset (initXPWit G piece)
+  let _l1 ← assignAdvice cfg.lambda1 offset (initLWit G piece w0.row.xA yaIn (·.1))
+  let _l2 ← assignAdvice cfg.lambda2 offset (initLWit G piece w0.row.xA yaIn (·.2.1))
+  let _lp ← (loop G w).call cfg offset piece
+  let ex ← readState cfg (offset + w)
+  let _q ← assignFixed cfg.qS2 (offset + w) (qS2Boundary final)
+  let _xf ← assignAdvice cfg.xA (offset + w + 1) (exitXAWit ex)
+  (generatorLookup G cfg).enable [] (offset + w)
+  let first0 ← cellAt cfg.xA offset
+  let firstXP ← cellAt cfg.xP offset
+  let firstL1 ← cellAt cfg.lambda1 offset
+  let firstL2 ← cellAt cfg.lambda2 offset
+  let last0 ← cellAt cfg.xA (offset + w)
+  let lastXP ← cellAt cfg.xP (offset + w)
+  let lastL1 ← cellAt cfg.lambda1 (offset + w)
+  let lastL2 ← cellAt cfg.lambda2 (offset + w)
+  let xANext ← cellAt cfg.xA (offset + w + 1)
+  let zsCells ← cellVec cfg.bits (fun r => offset + r) (w + 1)
+  return {
+    first := { xA := first0, xP := firstXP, lambda1 := firstL1, lambda2 := firstL2 },
+    last := { xA := last0, xP := lastXP, lambda1 := lastL1, lambda2 := lastL2 },
+    xANext := xANext,
+    zs := zsCells }
+
+@[keygen_norm]
+def circuitKeygenRequirements (G : Generators) :
+    KeygenRequirements Fp Config (Var field Fp) where
+  gates cfg _ := [sinsemillaGate cfg]
+  lookups cfg _ := [generatorLookup G cfg]
+  fixedColumns cfg _ := [cfg.qS2]
+  permutationColumns cfg _ := [cfg.bits]
+  inputCells _ _ input := [input.cell]
+
+theorem circuitBody_copyCellsAssigned (G : Generators) (w : ℕ) (final : Bool)
+    (yaIn : Placed Environment Fp → Fp) (cfg : Config) (offset : ℕ)
+    (input : Var field Fp) (region : RegionIndex) :
+    ((circuitBody G w final yaIn cfg offset input).operations region)
+      |>.CopyCellsAssignedFrom region [input.cell] := by
+  unfold circuitBody
+  simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    RegionOperations.copyCellsAssignedFrom_append_iff]
+  repeat' apply And.intro
+  all_goals first
+    | (apply RegionOperations.copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
+       simp only [circuit_norm, RegionOperation.copiedCells, List.Forall] <;> done)
+    | keygen_registration
+
+/-- The hash-piece body writes only its round selector column: `1` on each
+interior round and the circuit's boundary marker on its final row. -/
+theorem circuitBody_assignFixed_mem_iff (G : Generators) (w : ℕ)
+    (final : Bool) (yaIn : Placed Environment Fp → Fp) (cfg : Config)
+    (offset : ℕ) (piece : AssignedCell Fp) (self : RegionIndex)
+    (column : Column .fixed) (row : ℕ) (value : Fp) :
+    .assignFixed column row value ∈
+        (circuitBody G w final yaIn cfg offset piece).operations self ↔
+      column = cfg.qS2 ∧
+        ((∃ i : Fin w, row = offset + i.val ∧ value = 1) ∨
+          row = offset + w ∧ value = qS2Boundary final) := by
+  simp only [circuitBody, circuit_norm, List.mem_append]
+  rw [loop_assignFixed_mem_iff]
+  aesop
+
 def circuit (G : Generators) (w : ℕ) (final : Bool)
     (yaIn : Placed Environment Fp → Fp) :
     FormalRegionCircuit Fp Config Config field (Output (w + 1)) where
   name := "sinsemilla hash_piece"
   configure := pure
   elaborated :=
-    { keygenRequirements :=
-        { gates cfg _ := [sinsemillaGate cfg]
-          lookups cfg _ := [generatorLookup G cfg] } }
+    { keygenRequirements := circuitKeygenRequirements G
+      synthesisSummary cfg offset _ _ := circuitSynthesisSummary w cfg offset
+      synthesisSummary_eq := by
+        intro cfg offset piece self
+        cases w <;> apply FloorPlanner.RegionSynthesisSummary.ext
+        all_goals simp only [circuitSynthesisSummary,
+            circuitBody, loopSynthesisSummary, roundColumns,
+            circuit_norm, synthesis_summary_norm,
+            FloorPlanner.RegionSynthesisSummary.ofColumns_columns,
+            FloorPlanner.RegionSynthesisSummary.ofColumns_rowCount]
+        all_goals try omega
+      fixedAssignmentsAgree := by
+        intro configInput counts hconfig offset input region
+        unfold RegionOperations.FixedAssignmentsAgree
+        intro column row left right hleft hright
+        simp only [circuitBody, circuit_norm, List.mem_append] at hleft hright
+        rw [loop_assignFixed_mem_iff] at hleft hright
+        simp at hleft hright
+        rcases hleft with hleft | hleft <;>
+          rcases hright with hright | hright
+        · exact hleft.2.2.trans hright.2.2.symm
+        · rcases hleft.2.1 with ⟨i, hi⟩
+          omega
+        · rcases hright.2.1 with ⟨i, hi⟩
+          omega
+        · exact hleft.2.2.trans hright.2.2.symm
+      copyCellsAssigned := by
+        intro configInput counts hconfig offset input region
+        simpa only [Configure.output_pure, circuitKeygenRequirements]
+          using circuitBody_copyCellsAssigned G w final yaIn configInput offset input region }
 
-  synthesize cfg offset (piece : AssignedCell Fp) := do
-    -- z_0 = copy of the piece into the `bits` column (the only copy — the entering
-    -- `x_a` is positional, Rust `hash_piece`'s "not copied" rule)
-    let _z0 ← copyAdvice piece cfg.bits offset
-    let w0 ← readState cfg offset
-    -- the init-row slopes: word 0's generator x and the `rowValue` slopes of the
-    -- entering accumulator (positional x_a + the `yaIn` thread)
-    let _xP ← assignAdvice cfg.xP offset (initXPWit G piece)
-    let _l1 ← assignAdvice cfg.lambda1 offset (initLWit G piece w0.row.xA yaIn (·.1))
-    let _l2 ← assignAdvice cfg.lambda2 offset (initLWit G piece w0.row.xA yaIn (·.2.1))
-    -- the interior word rounds
-    let _lp ← (loop G w).call cfg offset piece
-    -- the last-word edge at row `offset + w`
-    let ex ← readState cfg (offset + w)
-    let _q ← assignFixed cfg.qS2 (offset + w) (qS2Boundary final)
-    let _xf ← assignAdvice cfg.xA (offset + w + 1) (exitXAWit ex)
-    (generatorLookup G cfg).enable [cfg.qS1] (offset + w)
-    -- name the output cells (fixed rows)
-    let first0 ← cellAt cfg.xA offset
-    let firstXP ← cellAt cfg.xP offset
-    let firstL1 ← cellAt cfg.lambda1 offset
-    let firstL2 ← cellAt cfg.lambda2 offset
-    let last0 ← cellAt cfg.xA (offset + w)
-    let lastXP ← cellAt cfg.xP (offset + w)
-    let lastL1 ← cellAt cfg.lambda1 (offset + w)
-    let lastL2 ← cellAt cfg.lambda2 (offset + w)
-    let xANext ← cellAt cfg.xA (offset + w + 1)
-    let zsCells ← cellVec cfg.bits (fun r => offset + r) (w + 1)
-    return {
-      first := { xA := first0, xP := firstXP, lambda1 := firstL1, lambda2 := firstL2 },
-      last := { xA := last0, xP := lastXP, lambda1 := lastL1, lambda2 := lastL2 },
-      xANext := xANext,
-      zs := zsCells }
+  synthesize := circuitBody G w final yaIn
 
   Witness := fieldPair
   extract cfg offset _ self env :=
@@ -758,6 +982,33 @@ def circuit (G : Generators) (w : ℕ) (final : Bool)
           Ecc.DoubleAndAdd.xR] at hEyB ⊢
         linear_combination (norm := (field_simp; ring)) 2 * hEyB
 
+/-- The complete piece publishes its reduced synthesis summary. -/
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_constantSiteCount
+    (w : ℕ) (config : Config) (offset : ℕ) :
+    (circuitSynthesisSummary w config offset).constantSiteCount = 0 := by
+  simp only [circuitSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_eq
+    (G : Generators) (w : ℕ) (final : Bool)
+    (yaIn : Placed Environment Fp → Fp) (config : Config) (offset : ℕ)
+    (piece : AssignedCell Fp) (region : RegionIndex) :
+    (circuit G w final yaIn).elaborated.synthesisSummary
+      config offset piece region =
+      circuitSynthesisSummary w config offset := rfl
+
+/-- A complete hash-piece bundle requests no deferred constants. -/
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_constantSiteCount
+    (G : Generators) (w : ℕ) (final : Bool)
+    (yaIn : Placed Environment Fp → Fp) (config : Config) (offset : ℕ)
+    (piece : AssignedCell Fp) (region : RegionIndex) :
+    ((circuit G w final yaIn).elaborated.synthesisSummary
+      config offset piece region).constantSiteCount = 0 := by
+  rw [circuit_synthesisSummary_eq]
+  simp only [circuitSynthesisSummary, synthesis_summary_norm]
+
 /-- The piece bundle's output variable (position-determined, rfl). -/
 @[circuit_norm]
 theorem piece_output (G : Generators) (w : ℕ) (final : Bool)
@@ -771,5 +1022,72 @@ theorem piece_output (G : Generators) (w : ℕ) (final : Bool)
                     lambda2 := .of self (o + w) cfg.lambda2 },
           xANext := .of self (o + w + 1) cfg.xA,
           zs := Vector.ofFn (fun r => .of self (o + r.val) cfg.bits) } := rfl
+
+/-- The exit accumulator x-coordinate returned by a hash piece is assigned by its
+last edge operation. -/
+theorem circuit_output_xANext_cell_assigned (G : Generators) (w : ℕ)
+    (final : Bool) (yaIn : Placed Environment Fp → Fp) (cfg : Config)
+    (offset : ℕ) (piece : AssignedCell Fp) (self : RegionIndex)
+    (available : List Cell) :
+    ((circuit G w final yaIn).output cfg offset piece self).xANext.cell ∈
+      (((circuit G w final yaIn).call cfg offset piece).operations self
+        |>.assignedCellsAfter self available) := by
+  rw [FormalRegionCircuit.call_operations, piece_output]
+  simp only [circuit, circuitBody, circuit_norm, AssignedCell.of_cell,
+    RegionOperations.mem_assignedCellsAfter_iff, List.mem_append,
+    RegionOperations.assignedCells, List.flatMap_append, List.flatMap_cons,
+    RegionOperation.assignedCells, List.singleton_append, List.mem_cons,
+    true_or, or_true]
+
+/-- Every running-sum cell returned by a hash piece is assigned either by the
+initial copy (`z₀`) or its corresponding symbolic loop round. -/
+theorem circuit_output_z_cell_assigned (G : Generators) (w : ℕ)
+    (final : Bool) (yaIn : Placed Environment Fp → Fp)
+    (cfg : Config) (offset : ℕ) (piece : AssignedCell Fp)
+    (self : RegionIndex) (available : List Cell) (r : Fin (w + 1)) :
+    ((circuit G w final yaIn).output cfg offset piece self).zs[r].cell ∈
+      (((circuit G w final yaIn).call cfg offset piece).operations self
+        |>.assignedCellsAfter self available) := by
+  rcases r with ⟨r, hr⟩
+  by_cases hzero : r = 0
+  · subst r
+    rw [FormalRegionCircuit.call_operations, piece_output]
+    simp only [Fin.getElem_fin, Vector.getElem_ofFn, circuit, circuitBody,
+      circuit_norm, AssignedCell.of_cell,
+      RegionOperations.mem_assignedCellsAfter_iff, List.mem_append,
+      RegionOperations.assignedCells, List.flatMap_append, List.flatMap_cons,
+      RegionOperation.assignedCells, List.singleton_append, List.mem_cons,
+      Nat.add_zero, true_or]
+  · let j : Fin w := ⟨r - 1, by omega⟩
+    have hloop := loop_output_z_cell_assigned G w cfg offset piece self
+      available j
+    rw [loop_output] at hloop
+    have hrow : offset + 1 + j.val = offset + r := by
+      simp only [j]
+      omega
+    simp only [Fin.getElem_fin, Vector.getElem_ofFn, AssignedCell.of_cell,
+      RegionOperations.mem_assignedCellsAfter_iff, List.mem_append,
+      hrow] at hloop
+    rw [FormalRegionCircuit.call_operations, piece_output]
+    simp only [Fin.getElem_fin, Vector.getElem_ofFn, circuit, circuitBody,
+      circuit_norm, AssignedCell.of_cell,
+      RegionOperations.mem_assignedCellsAfter_iff, List.mem_append,
+      RegionOperations.assignedCells, List.flatMap_append, List.flatMap_cons,
+      RegionOperation.assignedCells, List.singleton_append, List.mem_cons]
+    rcases hloop with havailable | hassigned
+    · exact Or.inl havailable
+    · exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl hassigned)))))
+
+/-- The first interior running sum returned by a nontrivial hash piece is assigned
+by the first loop round. -/
+theorem circuit_output_z1_cell_assigned (G : Generators) (w : ℕ)
+    (hw : 0 < w) (final : Bool) (yaIn : Placed Environment Fp → Fp)
+    (cfg : Config) (offset : ℕ) (piece : AssignedCell Fp)
+    (self : RegionIndex) (available : List Cell) :
+    ((circuit G w final yaIn).output cfg offset piece self).zs[1].cell ∈
+      (((circuit G w final yaIn).call cfg offset piece).operations self
+        |>.assignedCellsAfter self available) :=
+  circuit_output_z_cell_assigned G w final yaIn cfg offset piece self available
+    ⟨1, by omega⟩
 
 end Zcash.Circuits.Sinsemilla.HashPiece

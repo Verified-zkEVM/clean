@@ -78,16 +78,8 @@ def layout : PublicInputLayout PublicInputs [⟨0⟩] where
   columnSizes := #v[10]
   size_eq := rfl
 
-@[simp] theorem layout_cells (index : Fin (size PublicInputs)) :
-    layout.cells index = (⟨0⟩, index.val) := by
-  simp [layout, PublicInputLayout.cells, PublicInputLayout.cellList]
-
-/-- Serialize the structured statement in its declared instance-cell order. -/
-def rows (inputs : PublicInputs Fp) : List Fp :=
-  (toElements inputs).toList
-
 /-- Project the public part of the circuit's extracted semantic witness. -/
-def ofActionData (data : Circuit.ActionData) : PublicInputs Fp where
+def ofActionData (data : ActionData) : PublicInputs Fp where
   anchor := data.anchor
   cvX := data.cvX
   cvY := data.cvY
@@ -100,13 +92,13 @@ def ofActionData (data : Circuit.ActionData) : PublicInputs Fp where
   disableCrossAddress := data.disableCrossAddress
 
 theorem ofActionData_extractPost
-    (cfg : Circuit.Config) (i : RegionIndex) (env : Placed Environment Fp)
-    (hprimary : cfg.primary = ⟨0⟩) :
-    ofActionData (Circuit.extractPost cfg () i env) =
-      layout.extract env.env := by
+    (cfg : Config) (i : RegionIndex) (env : Placed Environment Fp)
+    (hprimary :
+      cfg.primary = (layout.cells ⟨0, by decide⟩).1) :
+    ofActionData (extractPost cfg () i env) = layout.extract env.env := by
   apply PublicInputs.ext <;>
-    simp [ofActionData, Circuit.extractPost, Circuit.extractBase, Circuit.extract,
-      layout, PublicInputLayout.extract, ProvableType.fromElements, hprimary] <;>
+    simp [ofActionData, layout, PublicInputLayout.extract,
+      ProvableType.fromElements, hprimary] <;>
     rw [Environment.get_inst] <;>
     rfl
 
@@ -128,6 +120,9 @@ structure PrivateWitness where
   pkdOld : Point Fp
   gdNew : Point Fp
   pkdNew : Point Fp
+  leftEncoding : Fin 32 → ℕ
+  rightEncoding : Fin 32 → ℕ
+  merkleSide : Fin 32 → Bool
   merklePath : ℕ → Fp × Fp
   rcv : Vector Fp 85 × Fq
   alpha : Vector Fp 85 × Fq
@@ -138,7 +133,7 @@ structure PrivateWitness where
 namespace PrivateWitness
 
 /-- Project the private part of the circuit's extracted semantic witness. -/
-def ofActionData (data : Circuit.ActionData) : PrivateWitness where
+def ofActionData (data : ActionData) : PrivateWitness where
   psiOld := data.psiOld
   rhoOld := data.rhoOld
   nk := data.nk
@@ -153,6 +148,9 @@ def ofActionData (data : Circuit.ActionData) : PrivateWitness where
   pkdOld := data.pkdOld
   gdNew := data.gdNew
   pkdNew := data.pkdNew
+  leftEncoding := data.leftEncoding
+  rightEncoding := data.rightEncoding
+  merkleSide := data.merkleSide
   merklePath := data.merklePath
   rcv := data.rcv
   alpha := data.alpha
@@ -164,7 +162,7 @@ end PrivateWitness
 
 /-- Reassemble the formal circuit witness from its public and private parts. -/
 def combine (inputs : PublicInputs Fp) (privateWitness : PrivateWitness) :
-    Circuit.ActionData where
+    ActionData where
   anchor := inputs.anchor
   cvX := inputs.cvX
   cvY := inputs.cvY
@@ -189,6 +187,9 @@ def combine (inputs : PublicInputs Fp) (privateWitness : PrivateWitness) :
   pkdOld := privateWitness.pkdOld
   gdNew := privateWitness.gdNew
   pkdNew := privateWitness.pkdNew
+  leftEncoding := privateWitness.leftEncoding
+  rightEncoding := privateWitness.rightEncoding
+  merkleSide := privateWitness.merkleSide
   merklePath := privateWitness.merklePath
   rcv := privateWitness.rcv
   alpha := privateWitness.alpha
@@ -196,7 +197,7 @@ def combine (inputs : PublicInputs Fp) (privateWitness : PrivateWitness) :
   rcmOld := privateWitness.rcmOld
   rcmNew := privateWitness.rcmNew
 
-@[simp] theorem combine_parts (data : Circuit.ActionData) :
+@[simp] theorem combine_parts (data : ActionData) :
     combine (PublicInputs.ofActionData data) (PrivateWitness.ofActionData data) =
       data := by
   cases data

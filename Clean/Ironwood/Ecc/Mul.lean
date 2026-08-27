@@ -85,6 +85,10 @@ def lsbGate (cfg : Config) : Gate Fp :=
     let lsbY := lsb * yP + ((1 : Fp) - lsb) * (yP + baseY)
     [ ("bool_check", boolCheck), ("lsb_x", lsbX), ("lsb_y", lsbY) ]
 
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem lsbGate_selector (cfg : Config) :
+    (lsbGate cfg).selector = cfg.qMulLsb := rfl
+
 /-! ## Configure -/
 
 /-- Instantiates the two incomplete configs from the shared 10-advice bundle, delegates to each
@@ -108,6 +112,22 @@ def configure (addConfig : Add.Config) (lookupConfig : LookupRangeCheck.Config 1
     { qMulLsb, addConfig, hiConfig, loConfig, completeConfig, overflowConfig }
   createGate (lsbGate cfg)
   return cfg
+
+@[keygen_output_norm]
+theorem configure_output_hiConfig_z (addConfig : Add.Config)
+    (lookupConfig : LookupRangeCheck.Config 10)
+    (advices : Fin 10 → Column .advice) (counts : ConfigureCounts) :
+    ((configure addConfig lookupConfig advices).output counts).hiConfig.z =
+      advices 9 := by
+  simp [configure, MulIncomplete.configure]
+
+@[keygen_output_norm]
+theorem configure_output_completeConfig_zComplete (addConfig : Add.Config)
+    (lookupConfig : LookupRangeCheck.Config 10)
+    (advices : Fin 10 → Column .advice) (counts : ConfigureCounts) :
+    ((configure addConfig lookupConfig advices).output counts).completeConfig.zComplete =
+      advices 9 := by
+  simp [configure, MulComplete.configure]
 
 instance (addConfig : Add.Config) (lookupConfig : LookupRangeCheck.Config 10)
     (advices : Fin 10 → Column .advice) :
@@ -319,38 +339,7 @@ private theorem accPoint_nsmul {P : Point Fp} (hP : P.OnCurve) (m : ℕ) (hm : 1
 
 end PointAlgebra
 
-/-! ## Output-record and cell-eval bridges
-
-The children's `.call … .output self` records reduce lazily, by `rfl`, to record literals of
-`AssignedCell.of` cells; eval decomposes componentwise on those literals. -/
-
-/-- The `MulIncomplete` bundle's output record, reduced (`cellAt`/`cellVec` cells at their
-fixed region-local rows). -/
-private theorem incomplete_call_output (n : ℕ) (w : ℕ)
-    (cfg : MulIncomplete.Config) (off : ℕ) (inp : Var MulIncomplete.Inputs Fp)
-    (self : RegionIndex) :
-    ((MulIncomplete.double_and_add n w).call cfg off inp).output self
-      = { acc := { x := .of self (off + n + 2) cfg.xA,
-                   y := .of self (off + n + 2) cfg.lambda1 },
-          zs := Vector.ofFn (fun i => .of self (off + 1 + i.val) cfg.z) } := by
-  -- TODO HALO2 circuit_norm is incomplete to resolve elaborated circuit outputs => rfl disease
-  simp only [circuit_norm, MulIncomplete.double_and_add, FormalRegionCircuit.output,
-    ElaboratedRegionCircuit.output]
-
-/-- The `MulComplete` bundle's output `zs` cells at their fixed rows (the `acc` field is
-never reduced, per the whnf discipline). -/
-private theorem complete_call_output_zs (w : ℕ) (cfg : MulComplete.Config)
-    (off : ℕ) (inp : Var MulComplete.Inputs Fp) (self : RegionIndex) :
-    (((MulComplete.assign_region 3 w).call cfg off inp).output self).zs
-      = Vector.ofFn (fun i => .of self (off + 2 * i.val + 2) cfg.zComplete) := by
-  rw [FormalRegionCircuit.output_call]; rfl
-
-/-- The `Add` bundle's output point cells (`x_qr`/`y_qr` at `offset + 1`). -/
-private theorem add_call_output (cfg : Add.Config) (off : ℕ) (inp : Var Add.Inputs Fp)
-    (self : RegionIndex) :
-    (Add.add.call cfg off inp).output self
-      = { x := .of self (off + 1) cfg.xQR, y := .of self (off + 1) cfg.yQR } := by
-  rw [FormalRegionCircuit.output_call]; rfl
+/-! ## Output-record and cell-eval bridges -/
 
 /-- Literal-eval bridge for `MulComplete.Output 3` (verifier view; the `acc` field may be a
 symbolic term). -/
@@ -362,48 +351,6 @@ private theorem completeOutput_eval_literal (place : RegionIndex → ℕ)
       = { acc := ProvableType.Halo2.eval place env acc,
           zs := ProvableType.Halo2.eval (M := fields 3) place env zs } := by
   simp only [circuit_norm, explicit_provable_type, ProvableType.Halo2.eval_fields_cells]
-
-/-- Elementwise read of an evaluated cell vector. -/
-private theorem fieldsEval_getElem {w : ℕ} (place : RegionIndex → ℕ) (env : Environment Fp)
-    (zs : Vector (AssignedCell Fp) w) (i : ℕ) (hi : i < w) :
-    (ProvableType.Halo2.eval (M := fields w) place env zs)[i]
-      = AssignedCell.eval place env (zs[i]) := by
-  simp only [ProvableType.Halo2.eval, ProvableType.toElements, ProvableType.fromElements,
-    Vector.getElem_map]
-
-/-- Plain-`.output` spelling of `incomplete_call_output` (the composition iff's form). -/
-private theorem incomplete_output_eq (n : ℕ) (w : ℕ)
-    (cfg : MulIncomplete.Config) (off : ℕ) (inp : Var MulIncomplete.Inputs Fp)
-    (self : RegionIndex) :
-    (MulIncomplete.double_and_add n w).output cfg off inp self
-      = { acc := { x := .of self (off + n + 2) cfg.xA,
-                   y := .of self (off + n + 2) cfg.lambda1 },
-          zs := Vector.ofFn (fun i => .of self (off + 1 + i.val) cfg.z) } := rfl
-
-/-- The `MulComplete` bundle's output record, full form: the `acc` field is the (symbolic,
-never-reduced) fold output, the `zs` are the fixed-row cells. -/
-private theorem complete_output_eq (w : ℕ) (cfg : MulComplete.Config)
-    (off : ℕ) (inp : Var MulComplete.Inputs Fp) (self : RegionIndex) :
-    (MulComplete.assign_region 3 w).output cfg off inp self
-      = { acc := (RegionCircuit.foldRange off 2 3
-            ({ x := inp.xA, y := inp.yA } : Point (AssignedCell Fp))
-            (fun i r acc => do
-              let out ← (MulComplete.round w i).call cfg r
-                { alpha := inp.alpha, base := inp.base, z := inp.z, acc := acc }
-              pure out.acc)).output self,
-          zs := Vector.ofFn (fun i => .of self (off + 2 * i.val + 2) cfg.zComplete) } := rfl
-
-/-- Plain-`.output` spelling of `complete_call_output_zs`. -/
-private theorem complete_output_zs_eq (w : ℕ) (cfg : MulComplete.Config)
-    (off : ℕ) (inp : Var MulComplete.Inputs Fp) (self : RegionIndex) :
-    ((MulComplete.assign_region 3 w).output cfg off inp self).zs
-      = Vector.ofFn (fun i => .of self (off + 2 * i.val + 2) cfg.zComplete) := rfl
-
-/-- Plain-`.output` spelling of `add_call_output`. -/
-private theorem add_output_eq (cfg : Add.Config) (off : ℕ) (inp : Var Add.Inputs Fp)
-    (self : RegionIndex) :
-    Add.add.output cfg off inp self
-      = { x := .of self (off + 1) cfg.xQR, y := .of self (off + 1) cfg.yQR } := rfl
 
 /-! ## Prover-side bridge duplicates (completeness)
 
@@ -520,6 +467,608 @@ structure MainOutputs (F : Type) where
   k254 : F
 deriving ProvableStruct
 
+/-- The complete variable-base multiplication computation performed in its main region. -/
+def mainSynthesize (cfg : Config) (input : Var Inputs Fp) :
+    RegionCircuit Fp (Var MainOutputs Fp) := do
+  let acc ← Add.add.call cfg.addConfig offInit ⟨input.base, input.base⟩
+  let zInit ← assignAdvice cfg.hiConfig.z offHi (.ofFExpr (.const 0))
+  constrainConstant zInit 0
+  let hi ← (MulIncomplete.double_and_add 124 0).call cfg.hiConfig offHi
+    ⟨(pure (.expr input.alpha) : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)),
+      input.base, acc, zInit⟩
+  let z130 ← cellAt cfg.hiConfig.z (offHi + 1 + 124)
+  let k254 ← cellAt cfg.hiConfig.z (offHi + 1)
+  let lo ← (MulIncomplete.double_and_add 125 125).call cfg.loConfig offLo
+    ⟨(pure (.expr input.alpha) : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)),
+      input.base, hi.acc, z130⟩
+  let zLo ← cellAt cfg.loConfig.z (offLo + 1 + 125)
+  let comp ← (MulComplete.assign_region 3 251).call cfg.completeConfig offComp
+    ⟨(pure (.expr input.alpha) : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)),
+      input.base, lo.acc.x, lo.acc.y, zLo⟩
+  let z1 ← cellAt cfg.completeConfig.zComplete (offComp + 2 * 2 + 2)
+  let z0 ← assignAdvice cfg.completeConfig.zComplete (offLsb + 1)
+    (.ofFExpr (.add (.mul (.const 2) (.expr z1))
+      (.ite (MulComplete.kBitWindowExpr (.expr input.alpha) 254 0) (.const 1) (.const 0))))
+  let _bx ← copyAdvice input.base.x cfg.addConfig.xP (offLsb + 1)
+  let _by ← copyAdvice input.base.y cfg.addConfig.yP (offLsb + 1)
+  let corrX ← assignAdvice cfg.addConfig.xP offLsb
+    (.ofFExpr (.ite (MulComplete.kBitWindowExpr (.expr input.alpha) 254 0)
+      (.const 0) (.expr input.base.x)))
+  let corrY ← assignAdvice cfg.addConfig.yP offLsb
+    (.ofFExpr (.ite (MulComplete.kBitWindowExpr (.expr input.alpha) 254 0)
+      (.const 0) (Witgen.FExprOver.neg (.expr input.base.y))))
+  (lsbGate cfg).enable offLsb
+  let result ← Add.add.call cfg.addConfig offLsb
+    ⟨{ x := corrX, y := corrY }, comp.acc⟩
+  return { result, z0, z130, k254 }
+
+/-- Reduced synthesis footprint of the complete double-and-add region. -/
+def mainCircuitSynthesisSummary (cfg : Config) :
+    FloorPlanner.RegionSynthesisSummary :=
+  (Add.synthesisSummary cfg.addConfig offInit).combine
+    ((FloorPlanner.RegionSynthesisSummary.ofColumns
+        [.column .advice cfg.hiConfig.z.index] (offHi + 1) 1).combine
+      ((MulIncomplete.doubleAndAddSynthesisSummary 124
+          cfg.hiConfig offHi).combine
+        ((MulIncomplete.doubleAndAddSynthesisSummary 125
+            cfg.loConfig offLo).combine
+          ((MulComplete.circuitSynthesisSummary 3
+              cfg.completeConfig offComp).combine
+            ((FloorPlanner.RegionSynthesisSummary.ofColumns
+                [.column .advice cfg.completeConfig.zComplete.index,
+                  .column .advice cfg.addConfig.xP.index,
+                  .column .advice cfg.addConfig.yP.index,
+                  .column .advice cfg.addConfig.xP.index,
+                  .column .advice cfg.addConfig.yP.index,
+                  .selector cfg.qMulLsb.index]
+                (offLsb + 2) 0).combine
+              (Add.synthesisSummary cfg.addConfig offLsb))))))
+
+@[synthesis_summary_norm]
+theorem mainCircuitSynthesisSummary_lookupActivationCount (cfg : Config) :
+    (mainCircuitSynthesisSummary cfg).lookupActivationCount = 0 := by
+  simp only [mainCircuitSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem mainCircuitSynthesisSummary_instanceRowExtent_eq (cfg : Config) :
+    (mainCircuitSynthesisSummary cfg).instanceRowExtent = 0 := by
+  simp only [mainCircuitSynthesisSummary, synthesis_summary_norm]
+
+/-- The complete double-and-add region uses selectors and advice columns only. -/
+@[synthesis_summary_norm]
+theorem mainCircuitSynthesisSummary_hasNoFixedColumns (cfg : Config) :
+    (mainCircuitSynthesisSummary cfg).HasNoFixedColumns := by
+  simp only [mainCircuitSynthesisSummary,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_combine,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns,
+    Add.synthesisSummary_hasNoFixedColumns,
+    MulIncomplete.doubleAndAddSynthesisSummary_hasNoFixedColumns,
+    MulComplete.circuitSynthesisSummary_hasNoFixedColumns]
+  simp
+
+theorem mainCircuitSynthesisSummary_eq (cfg : Config)
+    (input : Var Inputs Fp) (self : RegionIndex) :
+    mainCircuitSynthesisSummary cfg =
+      FloorPlanner.regionSynthesisSummary
+        ((mainSynthesize cfg input).operations self) := by
+  unfold mainSynthesize
+  apply FloorPlanner.RegionSynthesisSummary.ext
+  · simp only [mainCircuitSynthesisSummary, circuit_norm,
+      synthesis_summary_norm, configure_selector_norm]
+  · simp only [mainCircuitSynthesisSummary, circuit_norm,
+      synthesis_summary_norm, configure_selector_norm]
+    omega
+  · simp only [mainCircuitSynthesisSummary, circuit_norm,
+      synthesis_summary_norm, configure_selector_norm]
+  · simp only [mainCircuitSynthesisSummary, circuit_norm,
+      synthesis_summary_norm, configure_selector_norm]
+  · simp only [mainCircuitSynthesisSummary, circuit_norm,
+      synthesis_summary_norm, configure_selector_norm]
+
+def mainKeygenRequirements : KeygenRequirements Fp Config (Var Inputs Fp) where
+  configLawful cfg :=
+    Add.add.Configured cfg.addConfig ×
+      (MulIncomplete.double_and_add 124 0).Configured cfg.hiConfig ×
+      (MulIncomplete.double_and_add 125 125).Configured cfg.loConfig ×
+      (MulComplete.assign_region 3 251).Configured cfg.completeConfig
+  gates cfg configured :=
+    [lsbGate cfg] ++ configured.1.gates ++ configured.2.1.gates ++
+      configured.2.2.1.gates ++ configured.2.2.2.gates
+  lookups _ configured :=
+    configured.1.lookups ++ configured.2.1.lookups ++
+      configured.2.2.1.lookups ++ configured.2.2.2.lookups
+  fixedColumns _ configured :=
+    configured.1.fixedColumns ++ configured.2.1.fixedColumns ++
+      configured.2.2.1.fixedColumns ++ configured.2.2.2.fixedColumns
+  permutationColumns _ configured :=
+    configured.1.permutationColumns ++ configured.2.1.permutationColumns ++
+      configured.2.2.1.permutationColumns ++ configured.2.2.2.permutationColumns
+  inputCells _ _ input := [input.base.x.cell, input.base.y.cell]
+
+@[keygen_norm]
+theorem mainKeygenRequirements_gates (cfg : Config)
+    (configured : mainKeygenRequirements.configLawful cfg) :
+    mainKeygenRequirements.gates cfg configured =
+      [lsbGate cfg] ++ configured.1.gates ++ configured.2.1.gates ++
+        configured.2.2.1.gates ++ configured.2.2.2.gates := rfl
+
+@[keygen_norm]
+theorem mainKeygenRequirements_lookups (cfg : Config)
+    (configured : mainKeygenRequirements.configLawful cfg) :
+    mainKeygenRequirements.lookups cfg configured =
+      configured.1.lookups ++ configured.2.1.lookups ++
+        configured.2.2.1.lookups ++ configured.2.2.2.lookups := rfl
+
+@[keygen_norm]
+theorem mainKeygenRequirements_lookups_eq_nil (cfg : Config)
+    (configured : mainKeygenRequirements.configLawful cfg) :
+    mainKeygenRequirements.lookups cfg configured = [] := by
+  rw [mainKeygenRequirements_lookups]
+  simp only [Add.Configured.lookups_eq_nil,
+    MulIncomplete.Configured.lookups_eq_nil,
+    MulComplete.Configured.lookups_eq_nil, List.nil_append]
+
+@[keygen_norm]
+theorem mainKeygenRequirements_fixedColumns (cfg : Config)
+    (configured : mainKeygenRequirements.configLawful cfg) :
+    mainKeygenRequirements.fixedColumns cfg configured =
+      configured.1.fixedColumns ++ configured.2.1.fixedColumns ++
+        configured.2.2.1.fixedColumns ++
+          configured.2.2.2.fixedColumns := rfl
+
+@[keygen_norm]
+theorem mainKeygenRequirements_permutationColumns (cfg : Config)
+    (configured : mainKeygenRequirements.configLawful cfg) :
+    mainKeygenRequirements.permutationColumns cfg configured =
+      configured.1.permutationColumns ++ configured.2.1.permutationColumns ++
+        configured.2.2.1.permutationColumns ++
+          configured.2.2.2.permutationColumns := rfl
+
+@[keygen_norm]
+theorem mainKeygenRequirements_inputCells (cfg : Config)
+    (configured : mainKeygenRequirements.configLawful cfg)
+    (input : Var Inputs Fp) :
+    mainKeygenRequirements.inputCells cfg configured input =
+      [input.base.x.cell, input.base.y.cell] := rfl
+
+@[keygen_norm]
+private theorem incomplete_inputCells
+    {n w : ℕ}
+    (cfg : MulIncomplete.Config)
+    (configured : (MulIncomplete.double_and_add n w).Configured cfg)
+    (input : Var MulIncomplete.Inputs Fp) :
+    configured.inputCells input =
+      [input.z.cell, input.acc.x.cell, input.acc.y.cell,
+        input.base.x.cell, input.base.y.cell] := by
+  rcases configured with ⟨configInput, counts, hconfig, outputEq⟩
+  rfl
+
+@[keygen_norm]
+private theorem complete_inputCells
+    {numBits w : ℕ}
+    (cfg : MulComplete.Config)
+    (configured : (MulComplete.assign_region numBits w).Configured cfg)
+    (input : Var MulComplete.Inputs Fp) :
+    configured.inputCells input =
+      [input.base.x.cell, input.base.y.cell, input.xA.cell,
+        input.yA.cell, input.z.cell] := by
+  rcases configured with ⟨configInput, counts, hconfig, outputEq⟩
+  rfl
+
+theorem mainSynthesize_keygenRegistered
+    (cfg : Config) (configured : mainKeygenRequirements.configLawful cfg)
+    (input : Var Inputs Fp) (region : RegionIndex) :
+    List.Forall
+      (RegionOperation.KeygenRegistered
+        (mainKeygenRequirements.gates cfg configured)
+        (mainKeygenRequirements.lookups cfg configured)
+        (mainKeygenRequirements.fixedColumns cfg configured)
+        (mainKeygenRequirements.permutationColumns cfg configured ++
+          mainKeygenRequirements.inputPermutationColumns cfg configured input))
+      ((mainSynthesize cfg input).operations region) := by
+  rcases configured with ⟨hadd, hhi, hlo, hcomp⟩
+  simp only [mainKeygenRequirements, KeygenRequirements.inputPermutationColumns,
+    List.map_cons, List.map_nil] at *
+  unfold mainSynthesize
+  rw [RegionCircuit.operations_bind, List.forall_append]
+  apply And.intro
+  · apply Add.add.call_keygenRegistered cfg.addConfig hadd offInit
+      { p := input.base, q := input.base } region
+    all_goals keygen_registration
+  rw [RegionCircuit.operations_bind, List.forall_append]
+  apply And.intro
+  · keygen_registration
+  rw [RegionCircuit.operations_bind, List.forall_append]
+  apply And.intro
+  · keygen_registration
+  rw [RegionCircuit.operations_bind, List.forall_append]
+  apply And.intro
+  · apply (MulIncomplete.double_and_add 124 0).call_keygenRegistered
+      cfg.hiConfig hhi offHi _ region
+    all_goals keygen_registration
+  rw [RegionCircuit.operations_bind, List.forall_append]
+  apply And.intro
+  · keygen_registration
+  rw [RegionCircuit.operations_bind, List.forall_append]
+  apply And.intro
+  · keygen_registration
+  rw [RegionCircuit.operations_bind, List.forall_append]
+  apply And.intro
+  · apply (MulIncomplete.double_and_add 125 125).call_keygenRegistered
+      cfg.loConfig hlo offLo _ region
+    all_goals keygen_registration
+  rw [RegionCircuit.operations_bind, List.forall_append]
+  apply And.intro
+  · keygen_registration
+  rw [RegionCircuit.operations_bind, List.forall_append]
+  apply And.intro
+  · apply (MulComplete.assign_region 3 251).call_keygenRegistered
+      cfg.completeConfig hcomp offComp _ region
+    case hgates =>
+      intro gate hgate
+      exact List.mem_append_right _ hgate
+    case hlookups =>
+      intro argument hargument
+      exact List.mem_append_right _ hargument
+    case hfixedColumns =>
+      intro column hcolumn
+      apply List.mem_append_right
+      exact List.mem_append_right _ hcolumn
+    case hpermutationColumns =>
+      intro column hcolumn
+      apply List.mem_append_left
+      exact List.mem_append_right _ hcolumn
+    case hinputCells =>
+      rw [complete_inputCells]
+      keygen_registration
+  rw [RegionCircuit.operations_bind, List.forall_append]
+  apply And.intro
+  · simp only [operations_cellAt, List.forall_nil]
+  rw [RegionCircuit.operations_bind, List.forall_append]
+  apply And.intro
+  · apply assignAdvice_keygenRegistered
+  rw [RegionCircuit.operations_bind, List.forall_append]
+  apply And.intro
+  · simp only [operations_copyAdvice, List.forall_cons,
+      RegionOperation.KeygenRegistered, List.forall_nil, and_true]
+    keygen_registration
+  rw [RegionCircuit.operations_bind, List.forall_append]
+  apply And.intro
+  · simp only [operations_copyAdvice, List.forall_cons,
+      RegionOperation.KeygenRegistered, List.forall_nil, and_true]
+    keygen_registration
+  rw [RegionCircuit.operations_bind, List.forall_append]
+  apply And.intro
+  · apply assignAdvice_keygenRegistered
+  rw [RegionCircuit.operations_bind, List.forall_append]
+  apply And.intro
+  · apply assignAdvice_keygenRegistered
+  rw [RegionCircuit.operations_bind, List.forall_append]
+  apply And.intro
+  · simp only [operations_enable, List.forall_cons,
+      RegionOperation.KeygenRegistered, List.forall_nil, and_true,
+      List.mem_append, List.mem_cons, true_or]
+  rw [RegionCircuit.operations_bind, List.forall_append]
+  apply And.intro
+  · apply Add.add.call_keygenRegistered cfg.addConfig hadd offLsb _ region
+    all_goals keygen_registration
+  simp only [RegionCircuit.operations_pure, List.forall_nil]
+
+private theorem assignedCellsAfter_nil (region : RegionIndex)
+    (available : List Cell) :
+    RegionOperations.assignedCellsAfter (F := Fp) region available [] = available := rfl
+
+private theorem incomplete_output_cells_assigned
+    (n w : ℕ) (cfg : MulIncomplete.Config) (offset : ℕ)
+    (input : Var MulIncomplete.Inputs Fp) (region : RegionIndex)
+    (available : List Cell) :
+    Cell.of region (offset + n + 2) cfg.xA ∈
+        (((MulIncomplete.double_and_add n w).call cfg offset input).operations region
+          |>.assignedCellsAfter region available) ∧
+      Cell.of region (offset + n + 2) cfg.lambda1 ∈
+        (((MulIncomplete.double_and_add n w).call cfg offset input).operations region
+          |>.assignedCellsAfter region available) ∧
+      Cell.of region (offset + n + 1) cfg.z ∈
+        (((MulIncomplete.double_and_add n w).call cfg offset input).operations region
+          |>.assignedCellsAfter region available) := by
+  rw [FormalRegionCircuit.call_operations]
+  dsimp only [MulIncomplete.double_and_add]
+  simp only [RegionOperations.mem_assignedCellsAfter_iff, List.mem_append]
+  refine ⟨?_, ?_, ?_⟩
+  all_goals
+    right
+    simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+      operations_copyAdvice, operations_assignAdvice, operations_enable,
+      MulIncomplete.operations_readState, operations_cellAt, operations_cellVec,
+      RegionOperations.assignedCells, List.flatMap_append, List.flatMap_cons,
+      RegionOperation.assignedCells, List.singleton_append, List.append_nil,
+      List.nil_append, List.mem_append, List.mem_cons, true_or, or_true]
+
+private theorem incomplete_first_z_cell_assigned
+    (n w : ℕ) (hn : 0 < n) (cfg : MulIncomplete.Config) (offset : ℕ)
+    (input : Var MulIncomplete.Inputs Fp) (region : RegionIndex)
+    (available : List Cell) :
+    Cell.of region (offset + 1) cfg.z ∈
+      (((MulIncomplete.double_and_add n w).call cfg offset input).operations region
+        |>.assignedCellsAfter region available) := by
+  rw [FormalRegionCircuit.call_operations]
+  dsimp only [MulIncomplete.double_and_add]
+  simp only [RegionOperations.mem_assignedCellsAfter_iff, List.mem_append]
+  right
+  simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    operations_copyAdvice, operations_assignAdvice, operations_enable,
+    MulIncomplete.operations_readState, operations_cellAt, operations_cellVec,
+    RegionOperations.assignedCells, List.flatMap_append, List.flatMap_cons,
+    RegionOperation.assignedCells, List.singleton_append, List.append_nil,
+    List.nil_append, List.mem_append, List.mem_cons]
+  exact Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl
+    (MulIncomplete.loop_first_z_cell_assigned n w hn cfg offset input.alpha region))))))))
+
+theorem mainSynthesize_copyCellsAssigned
+    (cfg : Config) (configured : mainKeygenRequirements.configLawful cfg)
+    (input : Var Inputs Fp) (region : RegionIndex) :
+    ((mainSynthesize cfg input).operations region).CopyCellsAssigned region
+      [input.base.x.cell, input.base.y.cell] := by
+  rcases configured with ⟨hadd, hhi, hlo, hcomp⟩
+  have hacc := Add.add_output_cells_assigned cfg.addConfig offInit
+    { p := input.base, q := input.base } region
+    [input.base.x.cell, input.base.y.cell]
+  dsimp only at hacc
+  let acc := Add.add.output cfg.addConfig offInit
+    { p := input.base, q := input.base } region
+  let zInit : AssignedCell Fp := AssignedCell.of region offHi cfg.hiConfig.z
+  let hi := (MulIncomplete.double_and_add 124 0).output cfg.hiConfig offHi
+    { alpha := (pure (.expr input.alpha) :
+        Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)),
+      base := input.base, acc, z := zInit } region
+  let z130 : AssignedCell Fp :=
+    AssignedCell.of region (offHi + 1 + 124) cfg.hiConfig.z
+  let lo := (MulIncomplete.double_and_add 125 125).output cfg.loConfig offLo
+    { alpha := (pure (.expr input.alpha) :
+        Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)),
+      base := input.base, acc := hi.acc,
+      z := z130 } region
+  let zLo : AssignedCell Fp :=
+    AssignedCell.of region (offLo + 1 + 125) cfg.loConfig.z
+  let compInput : Var MulComplete.Inputs Fp :=
+    { alpha := (pure (.expr input.alpha) :
+        Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)),
+      base := input.base,
+      xA := lo.acc.x, yA := lo.acc.y, z := zLo }
+  unfold mainSynthesize RegionOperations.CopyCellsAssigned
+  rw [RegionCircuit.operations_bind,
+    RegionOperations.copyCellsAssignedFrom_append_iff]
+  apply And.intro
+  · apply Add.add.call_copyCellsAssignedFrom cfg.addConfig hadd offInit _ region
+    keygen_registration
+  rw [RegionCircuit.operations_bind,
+    RegionOperations.copyCellsAssignedFrom_append_iff]
+  apply And.intro
+  · keygen_registration
+  rw [RegionCircuit.operations_bind,
+    RegionOperations.copyCellsAssignedFrom_append_iff]
+  apply And.intro
+  · keygen_registration
+  rw [RegionCircuit.operations_bind,
+    RegionOperations.copyCellsAssignedFrom_append_iff]
+  apply And.intro
+  · apply (MulIncomplete.double_and_add 124 0).call_copyCellsAssignedFrom
+      cfg.hiConfig hhi offHi _ region
+    rw [incomplete_inputCells]
+    simp only [List.mem_cons, List.not_mem_nil, or_false]
+    rintro cell (rfl | rfl | rfl | rfl | rfl)
+    · apply RegionOperations.mem_assignedCellsAfter_of_mem
+      keygen_registration
+    · apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      simpa only [FormalRegionCircuit.call_output] using hacc.1
+    · apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      simpa only [FormalRegionCircuit.call_output] using hacc.2
+    · apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      exact List.mem_cons_self
+    · apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      exact List.mem_cons_of_mem _ List.mem_cons_self
+  rw [RegionCircuit.operations_bind,
+    RegionOperations.copyCellsAssignedFrom_append_iff]
+  apply And.intro
+  · keygen_registration
+  rw [RegionCircuit.operations_bind,
+    RegionOperations.copyCellsAssignedFrom_append_iff]
+  apply And.intro
+  · keygen_registration
+  rw [RegionCircuit.operations_bind,
+    RegionOperations.copyCellsAssignedFrom_append_iff]
+  apply And.intro
+  · apply (MulIncomplete.double_and_add 125 125).call_copyCellsAssignedFrom
+      cfg.loConfig hlo offLo _ region
+    rw [incomplete_inputCells]
+    simp only [List.mem_cons, List.not_mem_nil, or_false]
+    rintro cell (rfl | rfl | rfl | rfl | rfl)
+    all_goals simp only [operations_cellAt, assignedCellsAfter_nil,
+      FormalRegionCircuit.call_output, keygen_output_norm]
+    · exact (incomplete_output_cells_assigned 124 0 cfg.hiConfig offHi _ region _).2.2
+    · exact (incomplete_output_cells_assigned 124 0 cfg.hiConfig offHi _ region _).1
+    · exact (incomplete_output_cells_assigned 124 0 cfg.hiConfig offHi _ region _).2.1
+    · apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      exact List.mem_cons_self
+    · apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      exact List.mem_cons_of_mem _ List.mem_cons_self
+  rw [RegionCircuit.operations_bind,
+    RegionOperations.copyCellsAssignedFrom_append_iff]
+  apply And.intro
+  · keygen_registration
+  rw [RegionCircuit.operations_bind,
+    RegionOperations.copyCellsAssignedFrom_append_iff]
+  apply And.intro
+  · apply (MulComplete.assign_region 3 251).call_copyCellsAssignedFrom
+      cfg.completeConfig hcomp offComp _ region
+    rw [complete_inputCells]
+    simp only [List.mem_cons, List.not_mem_nil, or_false]
+    rintro cell (rfl | rfl | rfl | rfl | rfl)
+    all_goals simp only [operations_cellAt, assignedCellsAfter_nil,
+      FormalRegionCircuit.call_output, keygen_output_norm]
+    · apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      exact List.mem_cons_self
+    · apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      exact List.mem_cons_of_mem _ List.mem_cons_self
+    · exact (incomplete_output_cells_assigned 125 125 cfg.loConfig offLo _ region _).1
+    · exact (incomplete_output_cells_assigned 125 125 cfg.loConfig offLo _ region _).2.1
+    · exact (incomplete_output_cells_assigned 125 125 cfg.loConfig offLo _ region _).2.2
+  rw [RegionCircuit.operations_bind,
+    RegionOperations.copyCellsAssignedFrom_append_iff]
+  apply And.intro
+  · keygen_registration
+  rw [RegionCircuit.operations_bind,
+    RegionOperations.copyCellsAssignedFrom_append_iff]
+  apply And.intro
+  · keygen_registration
+  rw [RegionCircuit.operations_bind,
+    RegionOperations.copyCellsAssignedFrom_append_iff]
+  apply And.intro
+  · simp only [operations_copyAdvice,
+      RegionOperations.copyCellsAssignedFrom_assignAdvice_iff,
+      RegionOperations.copyCellsAssignedFrom_constrainEqual_iff,
+      RegionOperations.copyCellsAssignedFrom_nil_iff,
+      List.mem_cons, true_or, and_true]
+    refine ⟨trivial, Or.inr ?_⟩
+    simp only [RegionOperations.mem_assignedCellsAfter_iff,
+      List.mem_append, List.mem_cons, true_or]
+  rw [RegionCircuit.operations_bind,
+    RegionOperations.copyCellsAssignedFrom_append_iff]
+  apply And.intro
+  · simp only [operations_copyAdvice,
+      RegionOperations.copyCellsAssignedFrom_assignAdvice_iff,
+      RegionOperations.copyCellsAssignedFrom_constrainEqual_iff,
+      RegionOperations.copyCellsAssignedFrom_nil_iff,
+      List.mem_cons, true_or, and_true]
+    refine ⟨trivial, Or.inr ?_⟩
+    simp only [RegionOperations.mem_assignedCellsAfter_iff,
+      List.mem_append, List.mem_cons, true_or, or_true]
+  rw [RegionCircuit.operations_bind,
+    RegionOperations.copyCellsAssignedFrom_append_iff]
+  apply And.intro
+  · keygen_registration
+  rw [RegionCircuit.operations_bind,
+    RegionOperations.copyCellsAssignedFrom_append_iff]
+  apply And.intro
+  · keygen_registration
+  rw [RegionCircuit.operations_bind,
+    RegionOperations.copyCellsAssignedFrom_append_iff]
+  apply And.intro
+  · simp only [operations_enable,
+      RegionOperations.copyCellsAssignedFrom_enableGate_iff,
+      RegionOperations.copyCellsAssignedFrom_nil_iff]
+  rw [RegionCircuit.operations_bind,
+    RegionOperations.copyCellsAssignedFrom_append_iff]
+  apply And.intro
+  · apply Add.add.call_copyCellsAssignedFrom cfg.addConfig hadd offLsb _ region
+    rw [Add.add_inputCells cfg.addConfig hadd]
+    simp only [List.mem_cons, List.not_mem_nil, or_false]
+    rintro cell (rfl | rfl | rfl | rfl)
+    · apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      simp only [operations_assignAdvice, output_assignAdvice,
+        AssignedCell.of_cell,
+        RegionOperations.mem_assignedCellsAfter_iff,
+        RegionOperations.assignedCells, List.flatMap_cons,
+        RegionOperation.assignedCells, List.singleton_append,
+        List.mem_append, List.mem_cons, true_or, or_true]
+    · apply RegionOperations.mem_assignedCellsAfter_of_mem
+      simp only [operations_assignAdvice, output_assignAdvice,
+        AssignedCell.of_cell,
+        RegionOperations.mem_assignedCellsAfter_iff,
+        RegionOperations.assignedCells, List.flatMap_cons,
+        RegionOperation.assignedCells, List.singleton_append,
+        List.mem_append, List.mem_cons, true_or, or_true]
+    · apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      simpa only [compInput, lo, zLo, hi, z130, acc, zInit,
+        circuit_norm, keygen_output_norm] using
+          (MulComplete.assignRegion_output_acc_cells_assigned
+            3 251 (by omega) cfg.completeConfig offComp compInput region _).1
+    · apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      apply RegionOperations.mem_assignedCellsAfter_of_mem
+      simpa only [compInput, lo, zLo, hi, z130, acc, zInit,
+        circuit_norm, keygen_output_norm] using
+          (MulComplete.assignRegion_output_acc_cells_assigned
+            3 251 (by omega) cfg.completeConfig offComp compInput region _).2
+  keygen_registration
+
+@[reducible]
+def mainElaborated : ElaboratedRegionCircuit Fp Config Config Inputs MainOutputs
+    (fun cfg => pure cfg) (fun cfg _ input => mainSynthesize cfg input) where
+  keygenRequirements := mainKeygenRequirements
+  registered := by
+    intro cfg counts hconfig offset input region
+    simpa only [Configure.output_pure, Configure.delta_pure, List.append_nil] using
+      mainSynthesize_keygenRegistered cfg hconfig input region
+  copyCellsAssigned := by
+    intro cfg counts hconfig offset input region
+    simpa only [Configure.output_pure, mainKeygenRequirements] using
+      mainSynthesize_copyCellsAssigned cfg hconfig input region
+  lookupSelectorAssignmentsAgree_of_registered := by
+    intro cfg counts hconfig offset input region program operations hregistered
+    clear_value operations
+    apply
+      RegionOperations.lookupSelectorAssignmentsAgree_of_keygenRegistered_noLookups
+    simpa only [mainKeygenRequirements_lookups_eq_nil, program,
+      Configure.delta_pure, List.nil_append] using hregistered
+  lookupSelectorsAnchoredBy_of_registered := by
+    intro cfg counts hconfig offset input region anchor _ hregistered
+    apply RegionOperations.LookupSelectorsAnchoredBy.of_registered_noLookups
+    simpa only [mainKeygenRequirements_lookups_eq_nil,
+      Configure.delta_pure, List.nil_append] using hregistered
+  lookupActivationsWellFormed := by keygen_registration [mainSynthesize]
+  output cfg _ _ self :=
+    { result :=
+        { x := .of self (offLsb + 1) cfg.addConfig.xQR
+          y := .of self (offLsb + 1) cfg.addConfig.yQR }
+      z0 := .of self (offLsb + 1) cfg.completeConfig.zComplete
+      z130 := .of self (offHi + 1 + 124) cfg.hiConfig.z
+      k254 := .of self (offHi + 1) cfg.hiConfig.z }
+  synthesisSummary cfg _ _ _ := mainCircuitSynthesisSummary cfg
+  output_eq := by
+    intro _ _ _ _
+    simp only [mainSynthesize, circuit_norm, keygen_output_norm]
+  synthesisSummary_eq := by
+    intro cfg _ input self
+    exact mainCircuitSynthesisSummary_eq cfg input self
+  fixedAssignmentsAgree := by
+    intro configInput counts hconfig offset input region
+    apply RegionOperations.HasNoFixedAssignments.fixedAssignmentsAgree
+    apply FloorPlanner.RegionSynthesisSummary.HasNoFixedColumns.hasNoFixedAssignments
+    rw [← mainCircuitSynthesisSummary_eq]
+    exact mainCircuitSynthesisSummary_hasNoFixedColumns configInput
+
 /-- The main double-and-add region as a bundle. `Spec` is the pre-overflow seam: some bit
 families drive the three chained double-and-add phases plus the constraint-forced LSB, the
 running-sum cells carry their chain values, and the result is the assembled scalar
@@ -527,63 +1076,8 @@ multiple `[2^254 + 2·K + k₀] base`. The overflow contract then rules out the 
 readings (`mul.soundness`). -/
 def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
   configure := pure
-
-  synthesize cfg _ (input : Var Inputs Fp) := do
-    -- 1. acc = [2]base  (init complete addition)
-    let acc ← Add.add.call cfg.addConfig offInit ⟨input.base, input.base⟩
-    -- 2. z_init = 0: the running-sum start
-    let zInit ← assignAdvice cfg.hiConfig.z offHi (.ofFExpr (.const 0))
-    constrainConstant zInit 0
-    -- 3. hi half: 125 double-and-add bits k_254..k_130, bit window 0
-    let hi ← (MulIncomplete.double_and_add 124 0).call cfg.hiConfig offHi
-      ⟨(pure (.expr input.alpha) : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)), input.base, acc, zInit⟩
-    -- the hi half's boundary running-sum cells, by position (`zs[124]`, `zs[0]`)
-    let z130 ← cellAt cfg.hiConfig.z (offHi + 1 + 124)
-    let k254 ← cellAt cfg.hiConfig.z (offHi + 1)
-    -- 4. lo half: 126 double-and-add bits k_129..k_4, running sum chained
-    let lo ← (MulIncomplete.double_and_add 125 125).call cfg.loConfig
-      offLo ⟨(pure (.expr input.alpha) : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)), input.base, hi.acc, z130⟩
-    -- the lo half's exit running sum (`zs[125]`), by position
-    let zLo ← cellAt cfg.loConfig.z (offLo + 1 + 125)
-    -- 5. complete rounds: k_3..k_1, bit window 251
-    let comp ← (MulComplete.assign_region 3 251).call cfg.completeConfig
-      offComp ⟨(pure (.expr input.alpha) : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)), input.base, lo.acc.x, lo.acc.y, zLo⟩
-    -- the complete phase's exit running sum (`zs[2]` = z₁), by position
-    let z1 ← cellAt cfg.completeConfig.zComplete (offComp + 2 * 2 + 2)
-    -- 6. the LSB step k_0 = kBits alpha 254: z_0 = 2·z_1 + k_0
-    let z0 ← assignAdvice cfg.completeConfig.zComplete (offLsb + 1)
-      (.ofFExpr (.add (.mul (.const 2) (.expr z1))
-        (.ite (MulComplete.kBitWindowExpr (.expr input.alpha) 254 0) (.const 1) (.const 0))))
-    -- copy base_x, base_y into the LSB gate window (next row)
-    let _bx ← copyAdvice input.base.x cfg.addConfig.xP (offLsb + 1)
-    let _by ← copyAdvice input.base.y cfg.addConfig.yP (offLsb + 1)
-    -- the correction point (base_x, ±base_y) or identity
-    let corrX ← assignAdvice cfg.addConfig.xP offLsb
-      (.ofFExpr (.ite (MulComplete.kBitWindowExpr (.expr input.alpha) 254 0)
-        (.const 0) (.expr input.base.x)))
-    let corrY ← assignAdvice cfg.addConfig.yP offLsb
-      (.ofFExpr (.ite (MulComplete.kBitWindowExpr (.expr input.alpha) 254 0)
-        (.const 0) (Witgen.FExprOver.neg (.expr input.base.y))))
-    (lsbGate cfg).enable offLsb
-    -- the final complete addition: result = corr + acc
-    let result ← Add.add.call cfg.addConfig offLsb
-      ⟨{ x := corrX, y := corrY }, comp.acc⟩
-    return { result, z0, z130, k254 }
-
-  elaborated :=
-    { keygenRequirements :=
-        { configLawful cfg :=
-            Add.add.Configured cfg.addConfig ×
-              (MulIncomplete.double_and_add 124 0).Configured cfg.hiConfig ×
-              (MulIncomplete.double_and_add 125 125).Configured cfg.loConfig ×
-              (MulComplete.assign_region 3 251).Configured cfg.completeConfig
-          gates cfg configured :=
-            [lsbGate cfg] ++ configured.1.gates ++ configured.2.1.gates ++
-              configured.2.2.1.gates ++ configured.2.2.2.gates
-          lookups _ configured :=
-            configured.1.lookups ++ configured.2.1.lookups ++
-              configured.2.2.1.lookups ++ configured.2.2.2.lookups }
-      registered := by keygen_registration }
+  synthesize cfg _ input := mainSynthesize cfg input
+  elaborated := mainElaborated
 
   Assumptions input := (input.base : Point Fp).OnCurve
 
@@ -608,8 +1102,8 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     out.k254 = ((kNat input.alpha / 2 ^ 254 : ℕ) : Fp)
 
   soundness := by
-    circuit_proof_start2 [Add.add, MulIncomplete.double_and_add, MulComplete.assign_region,
-      lsbGate]
+    circuit_proof_start2 [mainSynthesize, Add.add, MulIncomplete.double_and_add,
+      MulComplete.assign_region, lsbGate]
     have hbaseV : ({ x := input_base_x, y := input_base_y } : Point Fp).Valid := Or.inl assumptions
     -- init add: acc = base + base = [2]base
     obtain ⟨hAccV, hAcc2⟩ := acc_spec hbaseV
@@ -626,15 +1120,18 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     have hHiOut := hHiAccCl 2 (by rw [hAcc2]) (le_refl 2) (by norm_num)
     -- the hi z-cell 124 (= z₁₃₀) and z-cell 0 (= k₂₅₄), as chainNat casts on the output cells
     have hHiZ124 := hHiCells 124 (by omega)
-    rw [← hi_eq, incomplete_output_eq] at hHiZ124
+    rw [← hi_eq] at hHiZ124
+    simp only [keygen_output_norm] at hHiZ124
     simp only [circuit_norm, Vector.getElem_ofFn] at hHiZ124
     have hK254v := hHiCells 0 (by omega)
-    rw [← hi_eq, incomplete_output_eq] at hK254v
+    rw [← hi_eq] at hK254v
+    simp only [keygen_output_norm] at hK254v
     simp only [circuit_norm, Vector.getElem_ofFn] at hK254v
     -- the output cells (`output_eq` components)
     obtain ⟨⟨hOResX, hOResY⟩, hOZ0, hOZ130, hOK254⟩ := output_eq
     -- the hi accumulator at its concrete cells
-    rw [← hi_eq, incomplete_output_eq] at hHiOut
+    rw [← hi_eq] at hHiOut
+    simp only [keygen_output_norm] at hHiOut
     simp only [circuit_norm] at hHiOut
     -- lo half: ∃ bitsLo, RoundInvariant 126 with entering z = z₁₃₀, entering acc = hi.acc
     obtain ⟨bitsLo, hLoRI⟩ := lo_spec assumptions
@@ -647,16 +1144,18 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     -- the lo accumulator, entering at m = accScalar 2 bitsHi 125
     have hmB := m_bounds bitsHi bitsLo
     have hLoOut := hLoAccCl (accScalar 2 bitsHi 125)
-      (by rw [← hi_eq, incomplete_output_eq]
+      (by rw [← hi_eq]
+          simp only [keygen_output_norm]
           simp only [circuit_norm]
           exact hHiOut)
       hmB.1 hmB.2.1
-    rw [← lo_eq, incomplete_output_eq] at hLoOut
+    rw [← lo_eq] at hLoOut
+    simp only [keygen_output_norm] at hLoOut
     simp only [circuit_norm] at hLoOut
     -- complete rounds: ∃ bitsC, RoundInvariant 3 with entering acc = lo.acc
     have hM2pos : 1 ≤ accScalar (accScalar 2 bitsHi 125) bitsLo 126 := hmB.2.2.1
     rw [← lo_eq] at comp_spec
-    simp only [incomplete_output_eq, circuit_norm] at comp_spec
+    simp only [keygen_output_norm, circuit_norm] at comp_spec
     obtain ⟨bitsC, hCompRI⟩ := comp_spec
       ⟨by rw [hLoOut]; exact Point.valid_nsmul hbaseV _, hbaseV⟩
     simp only [MulComplete.RoundInvariant] at hCompRI
@@ -667,7 +1166,8 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     rw [hLoOut, accPoint_nsmul assumptions _ hM2pos bitsC 3] at hCompAccEq
     -- the complete-phase z-chain, continued from the lo chain
     have hLoZ125 := hLoCells 125 (by omega)
-    rw [← lo_eq, incomplete_output_eq] at hLoZ125
+    rw [← lo_eq] at hLoZ125
+    simp only [keygen_output_norm] at hLoZ125
     simp only [circuit_norm, Vector.getElem_ofFn] at hLoZ125
     have hCompZ0 := hCompChain ⟨0, by omega⟩
     simp only [if_pos] at hCompZ0
@@ -679,7 +1179,8 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
         simpa using h)
     -- z₁ (= comp zs[2]) as a chainNat cast on its concrete cell
     have hz1cast := hCompCells 2 (by omega)
-    rw [← comp_eq, complete_output_eq] at hz1cast
+    rw [← comp_eq] at hz1cast
+    simp only [keygen_output_norm] at hz1cast
     simp only [circuit_norm, Vector.getElem_ofFn] at hz1cast
     have hz1read : env.advice cfg.completeConfig.zComplete ((place self + offLsb : ℕ) : ℤ)
         = ((chainNat (chainNat (chainNat 0 bitsHi 125) bitsLo 126) bitsC 3 : ℕ) : Fp) := by
@@ -691,9 +1192,9 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     rw [region_2] at hLsbY
     -- the final add's `q` summand and the comp accumulator, at the shared spelling
     rw [← comp_eq] at result_spec
-    simp only [complete_output_eq, circuit_norm] at result_spec
+    simp only [keygen_output_norm, circuit_norm] at result_spec
     rw [← comp_eq] at hCompAccV hCompAccEq
-    simp only [complete_output_eq, circuit_norm] at hCompAccV hCompAccEq
+    simp only [keygen_output_norm, circuit_norm] at hCompAccV hCompAccEq
     -- the accumulated-scalar closed forms
     have hM3pos : 1 ≤ accScalar (accScalar (accScalar 2 bitsHi 125) bitsLo 126) bitsC 3 :=
       accScalar_one_le hM2pos bitsC 3
@@ -738,11 +1239,10 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
         rw [hcx, hcy, show ({ x := input_base_x, y := -input_base_y } : Point Fp)
               = -({ x := input_base_x, y := input_base_y } : Point Fp) from rfl,
           hCompAccEq, point_neg_add_nsmul assumptions hM3pos] at hResEq
-        rw [← hOResX, ← hOResY] at hResEq ⊢
-        rw [hResEq]
-        congr 1
-        rw [hm3]
-        simp
+        exact hResEq.trans (by
+          congr 1
+          rw [hm3]
+          simp)
       · -- validity
         obtain ⟨hResV, -⟩ := result_spec
           ⟨by rw [show env.advice cfg.addConfig.xP ((place self + offLsb : ℕ) : ℤ)
@@ -766,9 +1266,7 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
           ⟨by rw [hcx, hcy]; exact Point.valid_zero, hCompAccV⟩
         rw [hcx, hcy, show ({ x := 0, y := 0 } : Point Fp) = (0 : Point Fp) from rfl,
           hCompAccEq, point_zero_add (Point.valid_nsmul hbaseV _)] at hResEq
-        rw [← hOResX, ← hOResY] at hResEq ⊢
-        rw [hResEq]
-        congr 1
+        exact hResEq.trans (by congr 1)
       · obtain ⟨hResV, -⟩ := result_spec
           ⟨by rw [show env.advice cfg.addConfig.xP ((place self + offLsb : ℕ) : ℤ) = 0 from by
                   linear_combination hLsbX + input_base_x * hk1,
@@ -777,8 +1275,8 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
               exact Point.valid_zero, hCompAccV⟩
         exact hResV
   completeness := by
-    circuit_proof_start2 [Add.add, MulIncomplete.double_and_add, MulComplete.assign_region,
-      lsbGate]
+    circuit_proof_start2 [mainSynthesize, Add.add, MulIncomplete.double_and_add,
+      MulComplete.assign_region, lsbGate]
     have hOnC : ({ x := input_base_x, y := input_base_y } : Point Fp).OnCurve := assumptions
     have hbaseV : ({ x := input_base_x, y := input_base_y } : Point Fp).Valid := Or.inl hOnC
     -- the honest working-scalar bits, as a local opaque constant
@@ -826,20 +1324,23 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
       norm_num
     have hHiCells := chain_cast (n := 124) _ _ 0 bits hentry hHiZ0 hHiZstep
     have hHiOut := hHiAccCl 2 (by rw [hAcc2]) (le_refl 2) (by norm_num)
-    rw [← hi_eq, incomplete_output_eq] at hHiOut
+    rw [← hi_eq] at hHiOut
+    simp only [keygen_output_norm] at hHiOut
     simp only [circuit_norm] at hHiOut
     have hHiZ124 := hHiCells 124 (by omega)
-    rw [← hi_eq, incomplete_output_eq] at hHiZ124
+    rw [← hi_eq] at hHiZ124
+    simp only [keygen_output_norm] at hHiZ124
     simp only [circuit_norm, Vector.getElem_ofFn] at hHiZ124
     have hHiZtop := hHiCells 0 (by omega)
-    rw [← hi_eq, incomplete_output_eq] at hHiZtop
+    rw [← hi_eq] at hHiZtop
+    simp only [keygen_output_norm] at hHiZtop
     simp only [circuit_norm, Vector.getElem_ofFn] at hHiZtop
     -- lo half: honest RoundInvariant, chained
     have hmB := m_bounds bits (fun i => bits (125 + i))
     have hHiAccP : eval (⟨place, env⟩ : Placed ProverEnvironment Fp) hi.acc
         = accScalar 2 bits 125 • ({ x := input_base_x, y := input_base_y } : Point Fp) := by
       rw [← hi_eq]
-      simp only [incomplete_output_eq, circuit_norm]
+      simp only [keygen_output_norm, circuit_norm]
       exact hHiOut
     obtain ⟨-, hLoPS⟩ := lo_spec hOnC ⟨hOnC, accScalar 2 bits 125, hHiAccP, hmB.1, hmB.2.1⟩
     simp only [MulIncomplete.RoundInvariant, hBF125] at hLoPS
@@ -848,14 +1349,16 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
     have hLoCells := chain_cast (n := 125) _ _ (chainNat 0 bits 125) (fun i => bits (125 + i))
       (by rw [← hOZ130]; exact hHiZ124) hLoZ0 hLoZstep
     have hLoOut := hLoAccCl (accScalar 2 bits 125) (by rw [hHiAccP]) hmB.1 hmB.2.1
-    rw [← lo_eq, incomplete_output_eq] at hLoOut
+    rw [← lo_eq] at hLoOut
+    simp only [keygen_output_norm] at hLoOut
     simp only [circuit_norm] at hLoOut
     have hLoZ125 := hLoCells 125 (by omega)
-    rw [← lo_eq, incomplete_output_eq] at hLoZ125
+    rw [← lo_eq] at hLoZ125
+    simp only [keygen_output_norm] at hLoZ125
     simp only [circuit_norm, Vector.getElem_ofFn] at hLoZ125
     -- complete rounds: honest RoundInvariant
     rw [← lo_eq] at comp_spec
-    simp only [incomplete_output_eq, circuit_norm] at comp_spec
+    simp only [keygen_output_norm, circuit_norm] at comp_spec
     obtain ⟨hCompSpecV, hCompPS⟩ := comp_spec
       ⟨by rw [hLoOut]; exact Point.valid_nsmul hbaseV _, hbaseV⟩
       ⟨by rw [hLoOut]; exact Point.valid_nsmul hbaseV _, hbaseV⟩
@@ -875,7 +1378,8 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
         have h := hCompChain ⟨b.val + 1, by omega⟩
         simpa using h)
     have hz1cast := hCompCells 2 (by omega)
-    rw [← comp_eq, complete_output_eq] at hz1cast
+    rw [← comp_eq] at hz1cast
+    simp only [keygen_output_norm] at hz1cast
     simp only [circuit_norm, Vector.getElem_ofFn] at hz1cast
     -- the honest chain values, `kBits`-driven
     have hck := cells_kNat input_alpha
@@ -890,9 +1394,9 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
       exact region_1
     -- ── assemble: premise bundles + parent constraints + the honest cell values ──
     rw [← lo_eq, ← comp_eq]
-    simp only [incomplete_output_eq, complete_output_eq, circuit_norm]
+    simp only [keygen_output_norm, circuit_norm]
     rw [← comp_eq] at hCompAccVv
-    simp only [complete_output_eq, circuit_norm] at hCompAccVv
+    simp only [keygen_output_norm, circuit_norm] at hCompAccVv
     have hz1read : env.advice cfg.completeConfig.zComplete ((place self + offLsb : ℕ) : ℤ)
         = ((kNat input_alpha / 2 : ℕ) : Fp) := by
       rw [show (offLsb : ℕ) = offComp + (2 * 2 + 2) from by simp only [offLsb, compSpan]]
@@ -938,6 +1442,114 @@ def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
       · simp only [if_true]
         exact Point.valid_zero
 
+/-- The main region exposes its reduced synthesis footprint. -/
+@[synthesis_summary_norm]
+theorem mainCircuit_synthesisSummary_eq (cfg : Config)
+    (input : Var Inputs Fp) (self : RegionIndex) :
+    mainCircuit.elaborated.synthesisSummary cfg 0 input self =
+      mainCircuitSynthesisSummary cfg := rfl
+
+@[keygen_output_norm]
+theorem mainCircuit_output (cfg : Config) (input : Var Inputs Fp)
+    (self : RegionIndex) :
+    (mainCircuit.toFormal "variable-base scalar mul").output cfg input self =
+      { result :=
+          { x := .of self (offLsb + 1) cfg.addConfig.xQR
+            y := .of self (offLsb + 1) cfg.addConfig.yQR }
+        z0 := .of self (offLsb + 1) cfg.completeConfig.zComplete
+        z130 := .of self (offHi + 1 + 124) cfg.hiConfig.z
+        k254 := .of self (offHi + 1) cfg.hiConfig.z } := by
+  rfl
+
+/-- The three running-sum cells exported to the overflow check are assigned by the
+main region that returns them. -/
+theorem mainCircuit_call_overflowInput_cells_assigned
+    (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex) :
+    let output := (mainCircuit.toFormal "variable-base scalar mul").output
+      cfg input self
+    output.z0.cell ∈ Operations.assignedCellsFrom
+        (((mainCircuit.toFormal "variable-base scalar mul").call cfg input).operations self)
+          self ∧
+      output.z130.cell ∈ Operations.assignedCellsFrom
+        (((mainCircuit.toFormal "variable-base scalar mul").call cfg input).operations self)
+          self ∧
+      output.k254.cell ∈ Operations.assignedCellsFrom
+        (((mainCircuit.toFormal "variable-base scalar mul").call cfg input).operations self)
+          self := by
+  have hz130 :=
+    (incomplete_output_cells_assigned 124 0 cfg.hiConfig offHi
+      { alpha := (pure (.expr input.alpha) :
+          Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)),
+        base := input.base,
+        acc := Add.add.output cfg.addConfig offInit
+          { p := input.base, q := input.base } self,
+        z := AssignedCell.of self offHi cfg.hiConfig.z }
+      self []).2.2
+  have hk254 :=
+    incomplete_first_z_cell_assigned 124 0 (by omega) cfg.hiConfig offHi
+      { alpha := (pure (.expr input.alpha) :
+          Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)),
+        base := input.base,
+        acc := Add.add.output cfg.addConfig offInit
+          { p := input.base, q := input.base } self,
+        z := AssignedCell.of self offHi cfg.hiConfig.z }
+      self []
+  simp only [RegionOperations.mem_assignedCellsAfter_iff, List.nil_append] at hz130 hk254
+  rw [mainCircuit_output, FormalCircuit.call_operations]
+  simp only [mainCircuit, FormalRegionCircuit.toFormal, operations_assignRegion,
+    Operations.assignedCellsFrom, mainSynthesize, circuit_norm,
+    RegionOperations.assignedCells, RegionOperation.assignedCells,
+    List.flatMap_cons, List.flatMap_append, List.append_nil, List.mem_append,
+    List.mem_cons, AssignedCell.of_cell, true_or, or_true]
+  exact ⟨Or.inr (Or.inr (Or.inl hz130)), Or.inr (Or.inr (Or.inl hk254))⟩
+
+/-- The result point returned by the main multiplication region is assigned in that
+region. Parent circuits use this provenance fact when they copy the result. -/
+theorem mainCircuit_call_result_cells_assigned
+    (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex) :
+    let output := (mainCircuit.toFormal "variable-base scalar mul").output
+      cfg input self
+    output.result.x.cell ∈ Operations.assignedCellsFrom
+        (((mainCircuit.toFormal "variable-base scalar mul").call cfg input).operations self)
+          self ∧
+      output.result.y.cell ∈ Operations.assignedCellsFrom
+        (((mainCircuit.toFormal "variable-base scalar mul").call cfg input).operations self)
+          self := by
+  let acc := Add.add.output cfg.addConfig offInit
+    { p := input.base, q := input.base } self
+  let hi := (MulIncomplete.double_and_add 124 0).output cfg.hiConfig offHi
+    { alpha := (pure (.expr input.alpha) :
+        Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)),
+      base := input.base, acc, z := .of self offHi cfg.hiConfig.z } self
+  let lo := (MulIncomplete.double_and_add 125 125).output cfg.loConfig offLo
+    { alpha := (pure (.expr input.alpha) :
+        Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)),
+      base := input.base, acc := hi.acc,
+      z := .of self (offHi + 1 + 124) cfg.hiConfig.z } self
+  let comp := (MulComplete.assign_region 3 251).output cfg.completeConfig offComp
+    { alpha := (pure (.expr input.alpha) :
+        Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)),
+      base := input.base, xA := lo.acc.x, yA := lo.acc.y,
+      z := .of self (offLo + 1 + 125) cfg.loConfig.z } self
+  have hadd := Add.add_output_cells_assigned cfg.addConfig offLsb
+    { p :=
+        { x := .of self offLsb cfg.addConfig.xP,
+          y := .of self offLsb cfg.addConfig.yP },
+      q := comp.acc } self []
+  dsimp only at hadd
+  simp only [RegionOperations.mem_assignedCellsAfter_iff, List.nil_append,
+    Add.add_output_cells, AssignedCell.of_cell] at hadd
+  rw [mainCircuit_output, FormalCircuit.call_operations]
+  simp only [mainCircuit, FormalRegionCircuit.toFormal, operations_assignRegion,
+    Operations.assignedCellsFrom, mainSynthesize, circuit_norm,
+    RegionOperations.assignedCells, RegionOperation.assignedCells,
+    List.flatMap_cons, List.flatMap_append, List.append_nil, List.mem_append,
+    List.mem_cons, AssignedCell.of_cell]
+  exact ⟨Or.inr (Or.inr (Or.inr (Or.inr (Or.inr
+      (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr hadd.1))))))))),
+    Or.inr (Or.inr (Or.inr (Or.inr (Or.inr
+      (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr hadd.2)))))))))⟩
+
 derive_contract_bridges main := mainCircuit.toFormal "variable-base scalar mul"
 
 /-- The scalar-decomposition and recombination assembly, at the layouter level: the whole
@@ -954,6 +1566,47 @@ def synthesize (cfg : Config) (input : Var Inputs Fp) :
     ⟨input.alpha, m.z0, m.z130, m.k254⟩
   return m.result
 
+/-- Reduced synthesis footprint of scalar multiplication's main region and overflow
+subcircuit. -/
+def mulSynthesisSummary (cfg : Config) : FloorPlanner.SynthesisSummary :=
+  (FloorPlanner.SynthesisSummary.ofRegion
+      (mainCircuitSynthesisSummary cfg)).combine
+    (MulOverflow.circuitSynthesisSummary 10 cfg.overflowConfig)
+
+@[synthesis_summary_norm]
+theorem mulSynthesisSummary_lookupActivationCount (cfg : Config) :
+    (mulSynthesisSummary cfg).lookupActivationCount = 13 := by
+  simp only [mulSynthesisSummary, MulOverflow.numWords, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem mulSynthesisSummary_tableRowExtent_eq (cfg : Config) :
+    (mulSynthesisSummary cfg).tableRowExtent = 0 := by
+  simp only [mulSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem mulSynthesisSummary_instanceRowExtent_eq (cfg : Config) :
+    (mulSynthesisSummary cfg).instanceRowExtent = 0 := by
+  simp only [mulSynthesisSummary, synthesis_summary_norm]
+
+/-- Variable-base multiplication performs no fixed-column writes. -/
+@[synthesis_summary_norm]
+theorem mulSynthesisSummary_hasNoFixedWrites (cfg : Config) :
+    (mulSynthesisSummary cfg).HasNoFixedWrites := by
+  simp only [mulSynthesisSummary,
+    FloorPlanner.SynthesisSummary.hasNoFixedWrites_combine,
+    FloorPlanner.SynthesisSummary.hasNoFixedWrites_ofRegion,
+    mainCircuitSynthesisSummary_hasNoFixedColumns,
+    MulOverflow.circuitSynthesisSummary_hasNoFixedWrites]
+  simp
+
+@[synthesis_summary_norm]
+theorem synthesize_synthesisSummary_eq (cfg : Config)
+    (input : Var Inputs Fp) (region : RegionIndex) :
+    FloorPlanner.synthesisSummary ((synthesize cfg input).operations region) =
+      mulSynthesisSummary cfg := by
+  simp only [mulSynthesisSummary, synthesize, circuit_norm,
+    synthesis_summary_norm]
+
 /-- The region count of `synthesize`: the main double-and-add region (1) plus the overflow
 check's three sibling regions (`MulOverflow.circuit`'s regionCount, 3) = 4. -/
 private theorem synthesize_regionCount (cfg : Config)
@@ -964,11 +1617,18 @@ private theorem synthesize_regionCount (cfg : Config)
 @[keygen_norm]
 def keygenRequirements :
     KeygenRequirements Fp
-      (Add.Config × LookupRangeCheck.Config 10 × (Fin 10 → Column .advice)) where
+      (Add.Config × LookupRangeCheck.Config 10 × (Fin 10 → Column .advice))
+      (Var Inputs Fp) where
   configLawful input := Add.add.Configured input.1
   gates _ configured := configured.gates
   lookups input configured :=
     LookupRangeCheck.rangeCheckLookup 10 input.2.1 :: configured.lookups
+  fixedColumns _ configured := configured.fixedColumns
+  permutationColumns input configured :=
+    ([input.2.1.runningSum, input.2.2 3, input.2.2 0,
+      input.2.2 1, input.2.2 7] : List AnyColumn) ++ configured.permutationColumns
+  inputCells _ _ input :=
+    [input.alpha.cell, input.base.x.cell, input.base.y.cell]
 
 @[keygen_norm]
 private theorem doubleAndAddRequirements_gates
@@ -1070,6 +1730,260 @@ private def overflowConfigured
     (completeProgram.finalCounts
       (loProgram.finalCounts (hiProgram.finalCounts counts))) ()
 
+private theorem synthesize_keygenRegistered
+    (configInput :
+      Add.Config × LookupRangeCheck.Config 10 × (Fin 10 → Column .advice))
+    (counts : ConfigureCounts)
+    (hconfig : keygenRequirements.configLawful configInput)
+    (input : Var Inputs Fp) (i : RegionIndex) :
+    ((synthesize ((configure configInput.1 configInput.2.1 configInput.2.2).output counts)
+      input).operations i).KeygenRegistered
+      (keygenRequirements.gates configInput hconfig ++
+        ((configure configInput.1 configInput.2.1 configInput.2.2).delta counts).gates)
+      (keygenRequirements.lookups configInput hconfig ++
+        ((configure configInput.1 configInput.2.1 configInput.2.2).delta counts).lookups)
+      (keygenRequirements.fixedColumns configInput hconfig ++
+        (configure configInput.1 configInput.2.1 configInput.2.2).fixedColumns counts)
+      (keygenRequirements.permutationColumns configInput hconfig ++
+        (((configure configInput.1 configInput.2.1 configInput.2.2).delta counts).permutationRequests ++
+          keygenRequirements.inputPermutationColumns configInput hconfig input)) := by
+  simp only [synthesize, Circuit.operations_bind,
+    Operations.KeygenRegistered.append, circuit_norm]
+  constructor
+  · apply (mainCircuit.toFormal "variable-base scalar mul")
+      |>.call_keygenRegistered _ (mainConfigured configInput counts hconfig)
+        input i
+    case hgates =>
+      intro gate hgate
+      simp only [mainConfigured, FormalCircuit.Configured.ofPure_gates,
+        FormalRegionCircuit.toFormal_keygenRequirements, mainCircuit,
+        FormalRegionCircuit.keygenRequirements,
+        ElaboratedRegionCircuit.keygenRequirements] at hgate
+      rw [mainKeygenRequirements_gates] at hgate
+      simp only [FormalRegionCircuit.Configured.gates,
+        FormalRegionCircuit.keygenRequirements, keygen_norm, configure,
+        keygenRequirements] at hgate ⊢
+      aesop
+    case hlookups =>
+      intro argument hargument
+      simp only [mainConfigured, FormalCircuit.Configured.ofPure_lookups,
+        FormalRegionCircuit.toFormal_keygenRequirements, mainCircuit,
+        FormalRegionCircuit.keygenRequirements,
+        ElaboratedRegionCircuit.keygenRequirements] at hargument
+      rw [mainKeygenRequirements_lookups] at hargument
+      simp only [FormalRegionCircuit.Configured.lookups,
+        FormalRegionCircuit.keygenRequirements, keygen_norm, configure,
+        keygenRequirements] at hargument ⊢
+      aesop
+    case hfixedColumns => keygen_registration
+    case hpermutationColumns =>
+      intro column hcolumn
+      simp only [mainConfigured,
+        FormalCircuit.Configured.ofPure_permutationColumns,
+        FormalRegionCircuit.toFormal_keygenRequirements, mainCircuit,
+        FormalRegionCircuit.keygenRequirements,
+        ElaboratedRegionCircuit.keygenRequirements] at hcolumn
+      rw [mainKeygenRequirements_permutationColumns] at hcolumn
+      simp only [FormalRegionCircuit.Configured.permutationColumns,
+        FormalRegionCircuit.keygenRequirements,
+        ElaboratedRegionCircuit.keygenRequirements,
+        MulIncomplete.double_and_add, MulComplete.assign_region,
+        keygen_norm, configure, keygenRequirements] at hcolumn ⊢
+      aesop
+    case hinputCells =>
+      simp only [mainConfigured, mainCircuit]
+      keygen_registration
+  · apply (MulOverflow.circuit 10 hKW10)
+      |>.call_keygenRegistered _ (overflowConfigured configInput counts) _ _
+    case hgates =>
+      intro gate hgate
+      simp only [keygen_norm, configure, overflowConfigured,
+        keygenRequirements,
+        FormalCircuit.Configured.gates, FormalCircuit.keygenRequirements,
+        MulOverflow.circuit, ElaboratedCircuit.keygenRequirements] at hgate ⊢
+      aesop
+    case hlookups =>
+      intro argument hargument
+      simp only [keygen_norm, configure, overflowConfigured,
+        keygenRequirements,
+        FormalCircuit.Configured.lookups, FormalCircuit.keygenRequirements,
+        MulOverflow.circuit, ElaboratedCircuit.keygenRequirements] at hargument ⊢
+      aesop
+    case hfixedColumns => keygen_registration
+    case hpermutationColumns =>
+      intro column hcolumn
+      simp only [keygen_norm, configure, overflowConfigured,
+        keygenRequirements,
+        FormalCircuit.Configured.permutationColumns,
+        FormalCircuit.keygenRequirements, MulOverflow.circuit,
+        ElaboratedCircuit.keygenRequirements] at hcolumn ⊢
+      aesop
+    case hinputCells =>
+      rw [MulOverflow.circuit_inputCells]
+      rw [mainCircuit_output]
+      simp only [AssignedCell.of_cell]
+      simp only [List.forall_cons, List.forall_nil, and_true]
+      refine ⟨?_, ?_, ?_, ?_⟩
+      · apply List.mem_append_right
+        rw [KeygenRequirements.inputPermutationColumns]
+        simp [keygenRequirements]
+      ·
+        apply List.mem_append_right
+        apply List.mem_append_left
+        rw [configure_output_completeConfig_zComplete]
+        have hcolumn := MulComplete.configure_output_zComplete_mem_permutationRequests
+          (configInput.2.2 9) configInput.1
+            ((MulIncomplete.configure (configInput.2.2 6) (configInput.2.2 7)
+              (configInput.2.2 0) (configInput.2.2 1) (configInput.2.2 8)
+              (configInput.2.2 2)).finalCounts
+                ((MulIncomplete.configure (configInput.2.2 9) (configInput.2.2 3)
+                  (configInput.2.2 0) (configInput.2.2 1) (configInput.2.2 4)
+                  (configInput.2.2 5)).finalCounts counts))
+        unfold configure
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_left
+        exact hcolumn
+      ·
+        apply List.mem_append_right
+        apply List.mem_append_left
+        rw [configure_output_hiConfig_z]
+        have hcolumn : (configInput.2.2 9).toAny ∈
+            ((MulIncomplete.configure (configInput.2.2 9) (configInput.2.2 3)
+              (configInput.2.2 0) (configInput.2.2 1) (configInput.2.2 4)
+              (configInput.2.2 5)).delta counts).permutationRequests := by
+          unfold MulIncomplete.configure
+          apply Configure.mem_permutationRequests_delta_bind_left
+          exact Configure.mem_permutationRequests_delta_enableEquality _ _
+        unfold configure
+        apply Configure.mem_permutationRequests_delta_bind_left
+        exact hcolumn
+      ·
+        apply List.mem_append_right
+        apply List.mem_append_left
+        rw [configure_output_hiConfig_z]
+        have hcolumn : (configInput.2.2 9).toAny ∈
+            ((MulIncomplete.configure (configInput.2.2 9) (configInput.2.2 3)
+              (configInput.2.2 0) (configInput.2.2 1) (configInput.2.2 4)
+              (configInput.2.2 5)).delta counts).permutationRequests := by
+          unfold MulIncomplete.configure
+          apply Configure.mem_permutationRequests_delta_bind_left
+          exact Configure.mem_permutationRequests_delta_enableEquality _ _
+        unfold configure
+        apply Configure.mem_permutationRequests_delta_bind_left
+        exact hcolumn
+
+private theorem synthesize_copyCellsAssigned
+    (configInput :
+      Add.Config × LookupRangeCheck.Config 10 × (Fin 10 → Column .advice))
+    (counts : ConfigureCounts)
+    (hconfig : keygenRequirements.configLawful configInput)
+    (input : Var Inputs Fp) (self : RegionIndex) :
+    ((synthesize
+      ((configure configInput.1 configInput.2.1 configInput.2.2).output counts)
+      input).operations self).CopyCellsAssigned self
+        (keygenRequirements.inputCells configInput hconfig input) := by
+  simp only [synthesize, Circuit.operations_bind, Circuit.operations_pure,
+    List.append_nil, FormalCircuit.nextRegionIndex_call,
+    FormalCircuit.call_regionCount]
+  apply Operations.CopyCellsAssignedFrom.append
+  · apply (mainCircuit.toFormal "variable-base scalar mul")
+      |>.call_copyCellsAssignedFrom _
+        (mainConfigured configInput counts hconfig) input self
+    intro cell hcell
+    simp only [mainConfigured,
+      FormalCircuit.Configured.ofPure_inputCells,
+      FormalRegionCircuit.toFormal_keygenRequirements, mainCircuit,
+      FormalRegionCircuit.keygenRequirements,
+      ElaboratedRegionCircuit.keygenRequirements,
+      mainKeygenRequirements] at hcell
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+    rcases hcell with rfl | rfl
+    · simp [keygenRequirements]
+    · simp [keygenRequirements]
+  · rw [FormalCircuit.call_regionCount]
+    apply (MulOverflow.circuit 10 hKW10)
+      |>.call_copyCellsAssignedFrom _
+        (overflowConfigured configInput counts) _ _
+    rw [MulOverflow.circuit_inputCells]
+    intro cell hcell
+    simp only [FormalCircuit.call_output, List.mem_cons,
+      List.not_mem_nil, or_false] at hcell
+    rcases hcell with rfl | rfl | rfl | rfl
+    · apply List.mem_append_left
+      simp [keygenRequirements]
+    · exact List.mem_append_right _
+        (mainCircuit_call_overflowInput_cells_assigned _ input self).1
+    · exact List.mem_append_right _
+        (mainCircuit_call_overflowInput_cells_assigned _ input self).2.1
+    · exact List.mem_append_right _
+        (mainCircuit_call_overflowInput_cells_assigned _ input self).2.2
+
+@[reducible] private def mulElaborated :
+    ElaboratedCircuit Fp
+      (Add.Config × LookupRangeCheck.Config 10 × (Fin 10 → Column .advice))
+      Config Inputs Point
+      (fun input => configure input.1 input.2.1 input.2.2) synthesize where
+  keygenRequirements := keygenRequirements
+  registered := synthesize_keygenRegistered
+  copyCellsAssigned := synthesize_copyCellsAssigned
+  fixedWritesLawful := by
+    intro configInput counts hconfig input region
+    apply Operations.HasNoFixedWrites.fixedWritesLawful
+    apply FloorPlanner.SynthesisSummary.HasNoFixedWrites.hasNoFixedWrites
+    rw [synthesize_synthesisSummary_eq]
+    exact mulSynthesisSummary_hasNoFixedWrites
+      ((configure configInput.1 configInput.2.1 configInput.2.2).output counts)
+  lookupSelectorAssignmentsAgree_of_registered := by
+    intro configInput counts hconfig input region program operations _hregistered
+    simp only [operations, synthesize, Circuit.operations_bind,
+      Circuit.operations_pure, keygen_norm, keygen_spine]
+    exact (MulOverflow.circuit 10 hKW10)
+      |>.call_lookupSelectorAssignmentsAgree
+        (program.output counts).overflowConfig
+        (overflowConfigured configInput counts) _ _
+  lookupSelectorAnchorRequirements cfg _ _ :=
+    LookupRangeCheck.lookupSelectorAnchorRequirements
+      cfg.overflowConfig.lookupConfig
+  lookupSelectorsAnchoredBy_of_registered := by
+    intro configInput counts hconfig input region anchor hanchor _
+    let cfg := (configure configInput.1 configInput.2.1 configInput.2.2).output counts
+    simp only [synthesize, Circuit.operations_bind,
+      Circuit.operations_pure, List.append_nil]
+    apply Operations.LookupSelectorsAnchoredBy.append
+    · exact (mainCircuit.toFormal "variable-base scalar mul")
+        |>.call_lookupSelectorsAnchoredBy cfg
+          (mainConfigured configInput counts hconfig) input region anchor (by trivial)
+    · exact (MulOverflow.circuit 10 hKW10)
+        |>.call_lookupSelectorsAnchoredBy cfg.overflowConfig
+          (overflowConfigured configInput counts) _ _ anchor (by
+            simpa only [MulOverflow.circuit_lookupSelectorAnchorRequirements]
+              using hanchor)
+  lookupActivationsWellFormed config input region := by
+    simp only [synthesize, Circuit.operations_bind,
+      Circuit.operations_pure, Operations.LookupActivationsWellFormed,
+      List.forall_append, List.forall_nil, and_true]
+    constructor
+    · exact (mainCircuit.toFormal "variable-base scalar mul")
+        |>.call_lookupActivationsWellFormed config input region
+    · exact (MulOverflow.circuit 10 hKW10)
+        |>.call_lookupActivationsWellFormed config.overflowConfig _ _
+  output cfg _ self :=
+    { x := .of self (offLsb + 1) cfg.addConfig.xQR
+      y := .of self (offLsb + 1) cfg.addConfig.yQR }
+  regionCount _ := 4
+  synthesisSummary cfg _ _ := mulSynthesisSummary cfg
+  output_eq := by
+    intro _ _ _
+    unfold synthesize
+    rw [Circuit.output_bind, FormalCircuit.output_call', Circuit.output_bind,
+      Circuit.output_pure, mainCircuit_output]
+  regionCount_eq := fun cfg input i => (synthesize_regionCount cfg input i).symm
+  synthesisSummary_eq := by
+    intro _ _ _
+    simp only [mulSynthesisSummary, synthesize, circuit_norm,
+      synthesis_summary_norm]
+
 /-- Variable-base scalar multiplication by a base-field element: `[alpha] base`. A
 layouter-level `FormalCircuit`: the main double-and-add region plus the overflow check's three
 sibling regions after it. No `BitsHint` parameter — the working-scalar bits are derived from the
@@ -1085,52 +1999,7 @@ def mul :
 
   synthesize cfg input := synthesize cfg input
 
-  elaborated :=
-    { keygenRequirements
-      registered := by
-        intro configInput counts hconfig input i
-        simp only [synthesize, Circuit.operations_bind, Circuit.operations_pure,
-          Operations.KeygenRegistered.append, Operations.KeygenRegistered.nil,
-          and_true]
-        constructor
-        · apply FormalCircuit.call_keygenRegistered _ _
-            (mainConfigured configInput counts hconfig)
-          · intro gate hgate
-            simp only [mainConfigured, FormalCircuit.Configured.ofPure_gates,
-              FormalRegionCircuit.toFormal_keygenRequirements, mainCircuit,
-              FormalRegionCircuit.keygenRequirements,
-              ElaboratedRegionCircuit.keygenRequirements] at hgate
-            simp only [FormalRegionCircuit.Configured.gates,
-              doubleAndAddRequirements_gates, completeRequirements_gates,
-              keygen_norm, configure, keygenRequirements] at hgate ⊢
-            grind
-          · intro argument hargument
-            simp only [mainConfigured, FormalCircuit.Configured.ofPure_lookups,
-              FormalRegionCircuit.toFormal_keygenRequirements, mainCircuit,
-              FormalRegionCircuit.keygenRequirements,
-              ElaboratedRegionCircuit.keygenRequirements] at hargument
-            simp only [FormalRegionCircuit.Configured.lookups,
-              doubleAndAddRequirements_lookups, completeRequirements_lookups,
-              keygen_norm, configure, keygenRequirements] at hargument ⊢
-            grind
-        · apply FormalCircuit.call_keygenRegistered _ _
-            (overflowConfigured configInput counts)
-          · intro gate hgate
-            simp only [keygen_norm, configure, overflowConfigured,
-              keygenRequirements,
-              FormalCircuit.Configured.gates, FormalCircuit.keygenRequirements,
-              MulOverflow.circuit, ElaboratedCircuit.keygenRequirements] at hgate ⊢
-            grind
-          · intro argument hargument
-            simp only [keygen_norm, configure, overflowConfigured,
-              keygenRequirements,
-              FormalCircuit.Configured.lookups, FormalCircuit.keygenRequirements,
-              MulOverflow.circuit, ElaboratedCircuit.keygenRequirements] at hargument ⊢
-            grind
-      output := fun cfg input i => (synthesize cfg input).output i
-      regionCount _ := 4
-      output_eq := by intro _ _ _; rfl
-      regionCount_eq := fun cfg input i => (synthesize_regionCount cfg input i).symm }
+  elaborated := mulElaborated
 
   EnvAssumptions cfg env := EnvAssumptions cfg env
 
@@ -1154,7 +2023,7 @@ def mul :
   -- Layouter peel (main region + the MulOverflow chunk), the six child chunks consumed via
   -- `subcircuit_rw`, the LSB gate, and the canonicity finish.
   soundness := by
-    circuit_proof_start2 [mainCircuit, MulOverflow.circuit, Spec, Assumptions,
+    circuit_proof_start2 [mainCircuit, mainSynthesize, MulOverflow.circuit, Spec, Assumptions,
       EnvAssumptions]
     simp only [main_spec_eq, main_assumptions_eq, main_envAssumptions_eq] at m_spec
     obtain ⟨bitsHi, bitsLo, bitsC, k0, hK254, hZ130, hZ0, hResEq, hResV⟩ :=
@@ -1230,7 +2099,7 @@ def mul :
       exact hfin _ (by omega)
 
   completeness := by
-    circuit_proof_start2 [mainCircuit, MulOverflow.circuit, Spec, Assumptions,
+    circuit_proof_start2 [mainCircuit, mainSynthesize, MulOverflow.circuit, Spec, Assumptions,
       EnvAssumptions]
     simp only [main_envAssumptions_eq, main_assumptions_eq, main_proverAssumptions_eq,
       main_proverSpec_eq] at m_spec ⊢
@@ -1242,6 +2111,35 @@ def mul :
        by norm_num [MulOverflow.numWords, PALLAS_BASE_CARD]⟩, ?_⟩
     rw [hz0v, hz130v, hk254v]
     exact Ecc.Mul.overflow_spec_honest input_alpha rfl rfl rfl
+
+@[keygen_norm]
+theorem mul_inputCells (cfg : Config) (configured : mul.Configured cfg)
+    (input : Var Inputs Fp) :
+    configured.inputCells input =
+      [input.alpha.cell, input.base.x.cell, input.base.y.cell] := by
+  rfl
+
+/-- The point returned by the layouter-level multiplication call is assigned by its
+main region. -/
+theorem mul_call_output_cells_assigned
+    (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex) :
+    let output := mul.output cfg input self
+    output.x.cell ∈ Operations.assignedCellsFrom
+        ((mul.call cfg input).operations self) self ∧
+      output.y.cell ∈ Operations.assignedCellsFrom
+        ((mul.call cfg input).operations self) self := by
+  have hmain := mainCircuit_call_result_cells_assigned cfg input self
+  rw [FormalCircuit.call_operations]
+  simp only [mul, synthesize, Circuit.operations_bind,
+    Operations.assignedCellsFrom_append, FormalCircuit.call_regionCount,
+    FormalCircuit.output_call, mulElaborated]
+  exact ⟨List.mem_append_left _ hmain.1, List.mem_append_left _ hmain.2⟩
+
+@[synthesis_summary_norm]
+theorem mul_synthesisSummary_eq (cfg : Config) (input : Var Inputs Fp)
+    (region : RegionIndex) :
+    mul.elaborated.synthesisSummary cfg input region =
+      mulSynthesisSummary cfg := rfl
 
 derive_contract_bridges mul := mul
 

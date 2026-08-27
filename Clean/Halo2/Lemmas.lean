@@ -1,5 +1,7 @@
 import Clean.Halo2.Attributes
 import Clean.Halo2.Basic
+import Clean.Halo2.Operations.LookupSelectors
+import Clean.Halo2.SynthesisSummary.Operations
 
 /-!
 # Composition lemmas: the deliberate simp set — DESIGN SKETCH
@@ -150,9 +152,27 @@ theorem operations_enable (gate : Gate F) (row : ℕ) (self : RegionIndex) :
     (gate.enable row).operations self = [.enableGate gate row] := rfl
 
 @[circuit_norm]
-theorem operations_enableLookup (arg : LookupArgument F) (enabled : List Selector)
-    (row : ℕ) (self : RegionIndex) :
-    (arg.enable enabled row).operations self = [.enableLookup arg enabled row] := rfl
+theorem operations_enableLookup (arg : LookupArgument F) (auxiliarySelectors : List Selector)
+    (row : ℕ)
+    (hauxiliary : auxiliarySelectors.Forall fun selector =>
+      selector.index ∈ arg.selectorIndices)
+    (self : RegionIndex) :
+    (arg.enable auxiliarySelectors row hauxiliary).operations self =
+      [.enableLookup arg (arg.masterSelector :: auxiliarySelectors) row] := rfl
+
+@[keygen_norm]
+theorem lookupActivationsWellFormed_operations_enableLookup
+    (arg : LookupArgument F) (auxiliarySelectors : List Selector)
+    (row : ℕ)
+    (hauxiliary : auxiliarySelectors.Forall fun selector =>
+      selector.index ∈ arg.selectorIndices)
+    (self : RegionIndex) :
+    (arg.enable auxiliarySelectors row hauxiliary).operations self
+      |>.LookupActivationsWellFormed := by
+  rw [operations_enableLookup, RegionOperations.LookupActivationsWellFormed]
+  rw [List.forall_cons]
+  exact ⟨arg.lookupActivationWellFormed_enable
+    auxiliarySelectors row hauxiliary, by trivial⟩
 
 @[circuit_norm]
 theorem operations_constrainEqual (a b : AssignedCell F) (self : RegionIndex) :
@@ -162,6 +182,11 @@ theorem operations_constrainEqual (a b : AssignedCell F) (self : RegionIndex) :
 theorem operations_constrainInstance (cell : AssignedCell F) (col : Column .instance)
     (row : ℕ) (i : RegionIndex) :
     (constrainInstance cell col row).operations i = [.constrainInstance cell.cell col row] := rfl
+
+@[circuit_norm]
+theorem nextRegionIndex_constrainInstance (cell : AssignedCell F)
+    (col : Column .instance) (row : ℕ) (i : RegionIndex) :
+    (constrainInstance cell col row).nextRegionIndex i = i := rfl
 
 @[circuit_norm]
 theorem operations_loadTable (tbl : TableColumn) (values : List F) (i : RegionIndex) :
@@ -268,12 +293,60 @@ theorem RegionOperations.constraints_ite {c : Prop} [Decidable c] (place : Regio
 theorem operations_constrainConstant (a : AssignedCell F) (v : F) (self : RegionIndex) :
     (constrainConstant a v).operations self = [.constrainConstant a.cell v] := rfl
 
+/-! Deferred-constant demand of primitive region operations. These projection
+lemmas let synthesis-summary proofs stay at the DSL level. -/
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_assignAdvice_constantSiteCount
+    (col : Column .advice) (row : ℕ) (compute : WitgenIR F 1) (self : RegionIndex) :
+    (FloorPlanner.regionSynthesisSummary
+      ((assignAdvice col row compute).operations self)).constantSiteCount = 0 := by
+  rw [operations_assignAdvice]
+  rfl
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_assignFixed_constantSiteCount
+    (col : Column .fixed) (row : ℕ) (value : F) (self : RegionIndex) :
+    (FloorPlanner.regionSynthesisSummary
+      ((assignFixed col row value).operations self)).constantSiteCount = 0 := by
+  rw [operations_assignFixed]
+  rfl
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_enable_constantSiteCount
+    (gate : Gate F) (row : ℕ) (self : RegionIndex) :
+    (FloorPlanner.regionSynthesisSummary
+      ((gate.enable row).operations self)).constantSiteCount = 0 := by
+  rw [operations_enable]
+  rfl
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_constrainConstant_constantSiteCount
+    (cell : AssignedCell F) (value : F) (self : RegionIndex) :
+    (FloorPlanner.regionSynthesisSummary
+      ((constrainConstant cell value).operations self)).constantSiteCount = 1 := by
+  rw [operations_constrainConstant]
+  rfl
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_pure_constantSiteCount (value : α) (self : RegionIndex) :
+    (FloorPlanner.regionSynthesisSummary
+      ((pure value : RegionCircuit F α).operations self)).constantSiteCount = 0 := by
+  rw [RegionCircuit.operations_pure]
+  rfl
+
 @[circuit_norm]
 theorem operations_assignAdviceFromInstance (instCol : Column .instance) (instRow : ℕ)
     (col : Column .advice) (row : ℕ) (self : RegionIndex) :
     (assignAdviceFromInstance (F := F) instCol instRow col row).operations self
       = [.assignAdvice col row (instanceGet instCol instRow),
          .constrainInstance (Cell.of self row col) instCol instRow] := rfl
+
+@[circuit_norm, keygen_norm]
+theorem output_assignAdviceFromInstance (instCol : Column .instance) (instRow : ℕ)
+    (col : Column .advice) (row : ℕ) (self : RegionIndex) :
+    (assignAdviceFromInstance (F := F) instCol instRow col row).output self =
+      AssignedCell.of self row col := rfl
 
 -- `List.Forall` over a concrete list decomposes into a conjunction; `add_zero` clears
 -- rotation-0 query offsets so cell reads share the row form `↑(place self + row)`.

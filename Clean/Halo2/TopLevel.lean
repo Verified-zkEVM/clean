@@ -1,4 +1,5 @@
 import Clean.Halo2.Keygen.PinnedCs
+import Clean.Halo2.Keygen.Domain
 import Clean.Halo2.Keygen.Semantics
 import Clean.Halo2.Keygen.Layout
 
@@ -303,6 +304,17 @@ def constraintSystem
     ConstraintSystem F :=
   (circuit.configure () {}).2
 
+/-- Exact reduced degree emitted by the closed circuit's configure program. -/
+def constraintDegree
+    (circuit : FormalCircuit F Unit Config unit unit) : ℕ :=
+  (circuit.elaborated.configureInfo ()).constraintDegree {}
+
+theorem constraintSystem_csDegree
+    (circuit : FormalCircuit F Unit Config unit unit) :
+    csDegree (constraintSystem circuit) = constraintDegree circuit := by
+  simpa only [constraintSystem, constraintDegree] using
+    ElaboratedConfigure.csDegree_run_empty (circuit.configure ())
+
 /-- Instance-query requests emitted by this circuit's configure program. -/
 def configureInstanceQueries
     (circuit : FormalCircuit F Unit Config unit unit) :
@@ -511,6 +523,14 @@ structure TopLevelCircuit
         (⟨column⟩, rotation) ∈
           (TopLevelCompilation.constraintSystem formalCircuit).fixedQueries := by
     configure_norm
+  /-- The exact number of deferred constant requests fits the capacity guaranteed by
+  exact compositional column occupancies. -/
+  constantSiteCount_le_constantCapacityLowerBound :
+    let config := TopLevelCompilation.config formalCircuit
+    let summary := formalCircuit.elaborated.synthesisSummary config () 0
+    summary.constantSiteCount ≤
+      summary.constantCapacityLowerBound
+        (TopLevelCompilation.constraintSystem formalCircuit).constants
   /--
   Dense public prefixes for the instance columns derived from this circuit's own
   configure-time query list.
@@ -570,6 +590,15 @@ def constraintSystem (self : TopLevelCircuit F Config PublicInput) :
     ConstraintSystem F :=
   TopLevelCompilation.constraintSystem self.formalCircuit
 
+/-- Exact constraint-system degree from reduced configure metadata. -/
+def constraintDegree (self : TopLevelCircuit F Config PublicInput) : ℕ :=
+  TopLevelCompilation.constraintDegree self.formalCircuit
+
+theorem constraintSystem_csDegree
+    (self : TopLevelCircuit F Config PublicInput) :
+    csDegree self.constraintSystem = self.constraintDegree :=
+  TopLevelCompilation.constraintSystem_csDegree self.formalCircuit
+
 /-- The permutation chunk width derived from the circuit's constraint system. -/
 def chunkLen (self : TopLevelCircuit F Config PublicInput) : ℕ :=
   self.constraintSystem.chunkLen
@@ -594,6 +623,51 @@ def permutationColumns
 /-- The number of columns participating in the circuit's permutation argument. -/
 def permutationColumnCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
   self.permutationColumns.length
+
+/-- The configure interpreter retains each equality-enabled column only at its first
+request. -/
+theorem permutationColumns_nodup
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.permutationColumns.Nodup := by
+  apply Configure.permutationColumns_run_nodup
+  simp
+
+/-- The configure interpreter retains each constants column only at its first request. -/
+theorem constantColumns_nodup
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.constraintSystem.constants.Nodup := by
+  apply Configure.constants_run_nodup
+  simp
+
+private def flattenColumn
+    (counts : ConfigureCounts) : AnyColumn → ℕ
+  | ⟨.advice, index⟩ => index
+  | ⟨.fixed, index⟩ => counts.numAdviceColumns + index
+  | ⟨.instance, index⟩ =>
+      counts.numAdviceColumns + counts.numFixedColumns + index
+
+private theorem flattenColumn_lt
+    (counts : ConfigureCounts) (column : AnyColumn)
+    (hcolumn : column.Allocated counts) :
+    flattenColumn counts column <
+      counts.numAdviceColumns + counts.numFixedColumns +
+        counts.numInstanceColumns := by
+  rcases column with ⟨kind, index⟩
+  cases kind <;>
+    simp only [AnyColumn.Allocated, flattenColumn] at hcolumn ⊢ <;>
+    omega
+
+private theorem flattenColumn_injective_of_allocated
+    (counts : ConfigureCounts) {left right : AnyColumn}
+    (hleft : left.Allocated counts) (hright : right.Allocated counts)
+    (heq : flattenColumn counts left = flattenColumn counts right) :
+    left = right := by
+  rcases left with ⟨leftKind, leftIndex⟩
+  rcases right with ⟨rightKind, rightIndex⟩
+  cases leftKind <;> cases rightKind <;>
+    simp only [AnyColumn.Allocated, flattenColumn] at hleft hright heq ⊢ <;>
+    try omega
+  all_goals congr 1 <;> omega
 
 /-- The number of chunks in the circuit's permutation argument. -/
 def permutationSetCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
@@ -646,6 +720,153 @@ theorem exists_rotation_mem_instanceQueries_of_publicInputLayout_cell
 def operations (self : TopLevelCircuit F Config PublicInput) : Operations F :=
   TopLevelCompilation.operations self.formalCircuit
 
+/-- Every copied cell in a closed top-level circuit is assigned before use. -/
+theorem operationsCopyCellsAssigned
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.operations.CopyCellsAssigned 0 [] := by
+  exact self.formalCircuit.operationsCopyCellsAssigned
+    () () self.noCallerRequirements
+
+/-- The closed synthesis stream inherits its circuit-local fixed-write discipline. -/
+theorem fixedWritesLawful
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.operations.FixedWritesLawful self.constraintSystem.constants := by
+  rcases self.noCallerRequirements with
+    ⟨hconfig, _, _, _, hconstantColumns, _, _⟩
+  let program := self.formalCircuit.configure ()
+  have hsource := self.formalCircuit.elaborated.fixedWritesLawful
+    () {} hconfig () 0
+  simp only [hconstantColumns, List.nil_append] at hsource
+  apply hsource.mono_constantColumns
+  intro column hcolumn
+  have hrun : column ∈ (program.run {}).2.constants := by
+    simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
+      program] using hcolumn
+  exact (Configure.mem_constants_run_iff program {} column).mp hrun
+    |>.resolve_left (by simp)
+
+/-- Exact compositional footprint published by the formal circuit. -/
+def synthesisSummary (self : TopLevelCircuit F Config PublicInput) :
+    FloorPlanner.SynthesisSummary :=
+  self.formalCircuit.elaborated.synthesisSummary self.config () 0
+
+theorem synthesisSummary_eq_operations
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.synthesisSummary = FloorPlanner.synthesisSummary self.operations := by
+  exact self.formalCircuit.elaborated.synthesisSummary_eq self.config () 0
+
+/-- The compactly elaborated, ordered region shapes consumed by V1 measurement. -/
+def plannerShapes (self : TopLevelCircuit F Config PublicInput) :
+    List FloorPlanner.RegionShape :=
+  FloorPlanner.indexRegionSummaries 0 self.synthesisSummary.regionShapes
+
+/-- Elaborated planner shapes are exactly V1's measurement of the full operation
+stream. -/
+theorem plannerShapes_eq_measureRegions
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.plannerShapes = FloorPlanner.measureRegions self.operations := by
+  unfold plannerShapes
+  rw [self.synthesisSummary_eq_operations]
+  exact (FloorPlanner.measureRegions_eq_synthesisSummary_regionShapes _).symm
+
+def constantSiteCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
+  self.synthesisSummary.constantSiteCount
+
+def constantCapacityLowerBound
+    (self : TopLevelCircuit F Config PublicInput) : ℕ :=
+  self.synthesisSummary.constantCapacityLowerBound
+    self.constraintSystem.constants
+
+/-- Every configured constants column is equality-enabled by `enableConstant`. -/
+theorem constantColumn_mem_permutationColumns
+    (self : TopLevelCircuit F Config PublicInput)
+    {column : Column .fixed}
+    (hcolumn : column ∈ self.constraintSystem.constants) :
+    column.toAny ∈ self.permutationColumns := by
+  let program := self.formalCircuit.configure ()
+  let delta := program.delta {}
+  have hlawful : delta.QueriesLawful (program.finalCounts {}) :=
+    self.formalCircuit.queriesLawful () {} self.queryRequirements
+  have hdelta : column ∈ delta.constants := by
+    have hrun : column ∈ (program.run {}).2.constants := by
+      simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
+        program] using hcolumn
+    exact (Configure.mem_constants_run_iff program {} column).mp hrun
+      |>.resolve_left (by simp)
+  have hrequest : column.toAny ∈ delta.permutationRequests :=
+    List.forall_iff_forall_mem.mp
+      hlawful.constants_permutationRequests column hdelta
+  exact (Configure.mem_permutationColumns_run_iff program {} column.toAny).mpr
+    (Or.inr hrequest)
+
+/-- Every configured constants column lies in the circuit's fixed-column prefix. -/
+theorem constantColumn_index_lt_numFixedColumns
+    (self : TopLevelCircuit F Config PublicInput)
+    {column : Column .fixed}
+    (hcolumn : column ∈ self.constraintSystem.constants) :
+    column.index < self.constraintSystem.numFixedColumns := by
+  let program := self.formalCircuit.configure ()
+  let delta := program.delta {}
+  have hlawful : delta.QueriesLawful (program.finalCounts {}) :=
+    self.formalCircuit.queriesLawful () {} self.queryRequirements
+  have hdelta : column ∈ delta.constants := by
+    have hrun : column ∈ (program.run {}).2.constants := by
+      simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
+        program] using hcolumn
+    exact (Configure.mem_constants_run_iff program {} column).mp hrun
+      |>.resolve_left (by simp)
+  have hrequest : column.toAny ∈ delta.permutationRequests :=
+    List.forall_iff_forall_mem.mp
+      hlawful.constants_permutationRequests column hdelta
+  have hregistered := List.forall_iff_forall_mem.mp
+    hlawful.permutationRequests_registered column.toAny hrequest
+  have hfixedQuery : (column, 0) ∈ delta.fixedQueries := by
+    exact hregistered
+  have hbound := List.forall_iff_forall_mem.mp
+    hlawful.fixedQueries_fst_lt_numFixedColumns
+      (column, 0) hfixedQuery
+  simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
+    program, Configure.finalCounts] using hbound
+
+/-- Every V1 constant allocation uses an equality-enabled constants column. -/
+theorem constantAssignmentColumn_mem_permutationColumns
+    (self : TopLevelCircuit F Config PublicInput)
+    {value : F} {column row : ℕ}
+    (hassignment :
+      (value, column, row) ∈
+        FloorPlanner.V1.constantAssignments self.operations
+          (self.constraintSystem.constants.map (·.index))) :
+    (AnyColumn.mk .fixed column) ∈ self.permutationColumns := by
+  have hcolumn := FloorPlanner.V1.constantAssignments_column_mem
+    self.operations (self.constraintSystem.constants.map (·.index))
+    hassignment
+  obtain ⟨configuredColumn, hconfigured, hindex⟩ :=
+    List.mem_map.mp hcolumn
+  have hpermutation :=
+    self.constantColumn_mem_permutationColumns hconfigured
+  cases configuredColumn
+  simpa only [Column.toAny, AnyColumn.mk.injEq] using
+    hindex ▸ hpermutation
+
+/-- V1 allocates one constants-column cell for every deferred constant request. -/
+theorem constantValues_length_le_constantAssignments_length
+    (self : TopLevelCircuit F Config PublicInput) :
+    (FloorPlanner.V1.constantValues self.operations).length ≤
+      (FloorPlanner.V1.constantAssignments self.operations
+        (self.constraintSystem.constants.map (·.index))).length := by
+  apply FloorPlanner.V1.constantValues_length_le_constantAssignments_length
+  rw [FloorPlanner.V1.constantValues_length]
+  have hcapacity :
+      self.synthesisSummary.constantSiteCount ≤
+        self.synthesisSummary.constantCapacityLowerBound
+          self.constraintSystem.constants := by
+    simpa only [synthesisSummary, constraintSystem, config] using
+      self.constantSiteCount_le_constantCapacityLowerBound
+  rw [self.synthesisSummary_eq_operations] at hcapacity
+  exact hcapacity.trans
+    (FloorPlanner.V1.synthesisSummary_constantCapacityLowerBound_le
+      self.operations self.constraintSystem.constants)
+
 /-- V1 region starts derived from the circuit's operation stream. -/
 def regionStarts (self : TopLevelCircuit F Config PublicInput) : List ℕ :=
   TopLevelCompilation.regionStarts self.formalCircuit
@@ -668,6 +889,11 @@ def placement (self : TopLevelCircuit F Config PublicInput) :
 /-- The operation footprint that key generation requires to fit in usable rows. -/
 def usedRows (self : TopLevelCircuit F Config PublicInput) : ℕ :=
   TopLevelCompilation.usedRows self.formalCircuit self.publicInputLayout
+
+theorem usedRows_eq_max (self : TopLevelCircuit F Config PublicInput) :
+    self.usedRows =
+      max (Halo2.usedRows self.operations) self.publicInputLayout.usedRows := by
+  rfl
 
 /-- The complete synthesis operation footprint is included in top-level row usage. -/
 theorem operations_usedRows_le_usedRows
@@ -712,6 +938,14 @@ theorem n_ne_zero (self : TopLevelCircuit F Config PublicInput) :
 def selectorMap
     (self : TopLevelCircuit F Config PublicInput) : SelCompressMap :=
   TopLevelCompilation.selectorMap self.formalCircuit self.publicInputLayout
+
+/-- The top-level selector map is the canonical compression of this circuit's
+constraint system and absolute selector activations. -/
+theorem selectorMap_eq_derive
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.selectorMap =
+      deriveSelCompressMap self.constraintSystem self.n
+        self.selectorActivations := rfl
 
 /-- The blinding-row count derived from the circuit's constraint system. -/
 def blindingFactors (self : TopLevelCircuit F Config PublicInput) : ℕ :=
@@ -801,6 +1035,23 @@ def pinnedCS (self : TopLevelCircuit F Config PublicInput) :
 /-- The authoritative query layout used to compile this circuit's expressions. -/
 def gateQueryState (self : TopLevelCircuit F Config PublicInput) : QueryState :=
   queryWalkInit self.selectorMap self.constraintSystem
+
+/-- A selector compression emitted by this circuit's compiler resolves in its
+authoritative query state. -/
+theorem gateQueryState_resolves_selectorMap_lookup
+    (self : TopLevelCircuit F Config PublicInput)
+    {selector : ℕ} {compressed : SelCompress}
+    (hlookup : self.selectorMap.lookup selector = some compressed) :
+    self.gateQueryState.ResolvesQuery
+      (.fixed ⟨compressed.packedCol⟩ 0) := by
+  unfold gateQueryState
+  unfold selectorMap TopLevelCompilation.selectorMap at hlookup ⊢
+  unfold constraintSystem
+  exact queryWalkInit_resolves_deriveSelCompressMap_lookup
+    (TopLevelCompilation.constraintSystem self.formalCircuit)
+    (2 ^ TopLevelCompilation.domainExponent
+      self.formalCircuit self.publicInputLayout)
+    (TopLevelCompilation.selectorActivations self.formalCircuit) hlookup
 
 /--
 The circuit-owned pinned constraint system is exactly the projection using its
@@ -924,6 +1175,102 @@ theorem permutationColumn_mem_queryLayout
       rw [instanceQueryLayout_eq_constraintSystem]
       exact List.mem_map.mpr ⟨(⟨index⟩, 0), hquery, rfl⟩
 
+/-- Every equality-enabled column was allocated by the same closed configure run. -/
+theorem permutationColumn_allocated
+    (self : TopLevelCircuit F Config PublicInput)
+    {column : AnyColumn} (hcolumn : column ∈ self.permutationColumns) :
+    column.Allocated
+      (ConfigureCounts.ofConstraintSystem self.constraintSystem) := by
+  let program := self.formalCircuit.configure ()
+  let delta := program.delta {}
+  let counts := program.finalCounts {}
+  have hlawful : delta.QueriesLawful counts :=
+    self.formalCircuit.queriesLawful () {} self.queryRequirements
+  have hdelta : column ∈ delta.permutationRequests := by
+    have hrun :=
+      (Configure.mem_permutationColumns_run_iff program {} column).mp
+        (by simpa [permutationColumns, constraintSystem,
+          TopLevelCompilation.constraintSystem, program] using hcolumn)
+    exact hrun.resolve_left (by simp)
+  have hregistered := List.forall_iff_forall_mem.mp
+    hlawful.permutationRequests_registered column hdelta
+  rcases column with ⟨kind, index⟩
+  cases kind with
+  | advice =>
+      have hquery : (⟨index⟩, 0) ∈ delta.adviceQueries := by
+        simpa [ConfigureDelta.RegistersPermutationColumn] using hregistered
+      have hindex := List.forall_iff_forall_mem.mp
+        hlawful.adviceQueries_fst_lt_numAdviceColumns
+        (⟨index⟩, 0) hquery
+      simpa only [AnyColumn.Allocated, constraintSystem,
+        TopLevelCompilation.constraintSystem, ConfigureCounts.ofConstraintSystem,
+        program, counts, Configure.run_numAdviceColumns] using hindex
+  | fixed =>
+      have hquery : (⟨index⟩, 0) ∈ delta.fixedQueries := by
+        simpa [ConfigureDelta.RegistersPermutationColumn] using hregistered
+      have hindex := List.forall_iff_forall_mem.mp
+        hlawful.fixedQueries_fst_lt_numFixedColumns
+        (⟨index⟩, 0) hquery
+      simpa only [AnyColumn.Allocated, constraintSystem,
+        TopLevelCompilation.constraintSystem, ConfigureCounts.ofConstraintSystem,
+        program, counts, Configure.run_numFixedColumns] using hindex
+  | «instance» =>
+      have hquery : (⟨index⟩, 0) ∈ delta.instanceQueries := by
+        simpa [ConfigureDelta.RegistersPermutationColumn] using hregistered
+      have hindex := List.forall_iff_forall_mem.mp
+        hlawful.instanceQueries_fst_lt_numInstanceColumns
+        (⟨index⟩, 0) hquery
+      simpa only [AnyColumn.Allocated, constraintSystem,
+        TopLevelCompilation.constraintSystem, ConfigureCounts.ofConstraintSystem,
+        program, counts, Configure.run_numInstanceColumns] using hindex
+
+/-- The duplicate-free permutation family fits inside the disjoint configured advice,
+fixed, and instance column spaces. -/
+theorem permutationColumnCount_le_configuredColumnCount
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.permutationColumnCount ≤
+      self.constraintSystem.numAdviceColumns +
+        self.constraintSystem.numFixedColumns +
+          self.constraintSystem.numInstanceColumns := by
+  classical
+  let counts := ConfigureCounts.ofConstraintSystem self.constraintSystem
+  let columns := self.permutationColumns.toFinset
+  let indices := columns.image (flattenColumn counts)
+  have hinjective : Set.InjOn (flattenColumn counts) columns := by
+    intro left hleft right hright heq
+    apply flattenColumn_injective_of_allocated counts
+    · apply self.permutationColumn_allocated
+      exact List.mem_toFinset.mp (show left ∈ columns from hleft)
+    · apply self.permutationColumn_allocated
+      exact List.mem_toFinset.mp (show right ∈ columns from hright)
+    · exact heq
+  have hindicesCard : indices.card = columns.card := by
+    exact Finset.card_image_iff.mpr hinjective
+  have hsubset : indices ⊆ Finset.range
+      (counts.numAdviceColumns + counts.numFixedColumns +
+        counts.numInstanceColumns) := by
+    intro index hindex
+    rw [Finset.mem_image] at hindex
+    obtain ⟨column, hcolumn, rfl⟩ := hindex
+    rw [Finset.mem_range]
+    apply flattenColumn_lt
+    apply self.permutationColumn_allocated
+    exact List.mem_toFinset.mp (show column ∈ columns from hcolumn)
+  calc
+    self.permutationColumnCount = columns.card := by
+      exact (List.toFinset_card_of_nodup
+        self.permutationColumns_nodup).symm
+    _ = indices.card := hindicesCard.symm
+    _ ≤ (Finset.range
+        (counts.numAdviceColumns + counts.numFixedColumns +
+          counts.numInstanceColumns)).card :=
+      Finset.card_le_card hsubset
+    _ = self.constraintSystem.numAdviceColumns +
+        self.constraintSystem.numFixedColumns +
+          self.constraintSystem.numInstanceColumns := by
+      simp only [Finset.card_range, counts,
+        ConfigureCounts.ofConstraintSystem]
+
 /-- The number of fixed columns in the circuit-owned pinned constraint system. -/
 def fixedColumnCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
   self.pinnedCS.numFixedColumns
@@ -933,6 +1280,18 @@ def fixedColumnCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
     self.fixedColumnCount =
       self.constraintSystem.numFixedColumns + self.selectorMap.newFixedCols := by
   simp [fixedColumnCount, pinnedCS, PinnedConstraintSystem.derive, projectCS]
+
+/-- Selector compression leaves the total fixed-column count bounded by the
+configured fixed columns plus the configured selectors. -/
+theorem fixedColumnCount_le_numFixedColumns_add_selectorCount
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.fixedColumnCount ≤
+      self.constraintSystem.numFixedColumns + self.selectorCount := by
+  rw [fixedColumnCount_eq, selectorCount]
+  exact Nat.add_le_add_left
+    (deriveSelCompressMap_newFixedCols_le_numSelectors
+      self.constraintSystem self.n self.selectorActivations)
+    self.constraintSystem.numFixedColumns
 
 /-- Every fixed column in the post-compression verifier constraint system has a query
 slot. Original columns are covered by the closed circuit's configure law; selector
@@ -1047,6 +1406,12 @@ def fixedRows
     (self : TopLevelCircuit F Config PublicInput) : List (List F) :=
   TopLevelCompilation.fixedRows self.formalCircuit self.publicInputLayout
 
+/-- Sparse top-level fixed compilation contains at most one value per cell. -/
+theorem fixedAssignments_cells_nodup
+    (self : TopLevelCircuit F Config PublicInput) :
+    (self.fixedAssignments.map Layout.FixedAssignment.cell).Nodup := by
+  apply Layout.compileFixed_cells_nodup
+
 @[simp] theorem fixedRows_length
     (self : TopLevelCircuit F Config PublicInput) :
     self.fixedRows.length = self.fixedColumnCount := by
@@ -1060,6 +1425,35 @@ theorem fixedRows_getD_length
     (self.fixedRows.getD column []).length = self.n := by
   apply Layout.denseFixedColumns_getD_length
   exact hcolumn
+
+/-- Every in-bounds sparse top-level assignment is realized by its dense fixed rows. -/
+theorem fixedRows_getD_getD_eq_of_mem
+    (self : TopLevelCircuit F Config PublicInput)
+    (assignment : Layout.FixedAssignment F)
+    (hassignment : assignment ∈ self.fixedAssignments)
+    (hcolumn : assignment.1 < self.fixedColumnCount)
+    (hrow : assignment.2.1 < self.n) :
+    (self.fixedRows.getD assignment.1 []).getD assignment.2.1 0 =
+      assignment.2.2 := by
+  apply Layout.denseFixedColumns_getD_getD_eq_of_mem
+  · exact hassignment
+  · exact self.fixedAssignments_cells_nodup
+  · exact hcolumn
+  · exact hrow
+
+/-- Every in-domain fixed cell absent from the compiled sparse assignment stream is
+zero in the canonical dense rows. -/
+theorem fixedRows_getD_getD_eq_zero_of_not_mem
+    (self : TopLevelCircuit F Config PublicInput)
+    (column row : ℕ)
+    (habsent : (column, row) ∉
+      self.fixedAssignments.map Layout.FixedAssignment.cell)
+    (hcolumn : column < self.fixedColumnCount)
+    (hrow : row < self.n) :
+    (self.fixedRows.getD column []).getD row 0 = 0 := by
+  exact Layout.denseFixedColumns_getD_getD_eq_zero_of_not_mem
+    self.n self.fixedColumnCount self.fixedAssignments
+    column row habsent hcolumn hrow
 
 /--
 Read a compiled fixed column with Halo2's cyclic domain-row semantics.
@@ -1167,6 +1561,148 @@ theorem keygenCoherent
   exact self.formalCircuit.operationsKeygenCoherent
     () () self.noCallerRequirements
 
+/-- Every raw fixed write emitted by a lawful top-level circuit survives the canonical
+last-write compiler. -/
+theorem mem_fixedAssignments_of_mem_raw
+    (self : TopLevelCircuit F Config PublicInput)
+    (assignment : Layout.FixedAssignment F)
+    (hassignment : assignment ∈
+      Layout.rawAssignments
+        (self.usableRowsAt self.domainExponent)
+        self.selectorMap self.constraintSystem self.operations) :
+    assignment ∈ self.fixedAssignments := by
+  apply Layout.mem_compileFixed_of_mem_raw
+  · apply Layout.rawAssignments_agree_deriveSelCompressMap
+    · exact self.fixedWritesLawful
+    · exact self.keygenCoherent
+    · exact self.constantColumns_nodup
+    · rw [List.forall_iff_forall_mem]
+      intro column hcolumn
+      exact self.constantColumn_index_lt_numFixedColumns hcolumn
+    · intro activation hactivation
+      have hplacement := FloorPlanner.V1.activation_row_lt_placementEnd
+        self.operations hactivation
+      exact hplacement.trans_le <|
+        (Halo2.V1_placementEnd_le_usedRows self.operations).trans <|
+          self.operations_usedRows_le_usedRows.trans <|
+            self.usedRows_le_usableRowsAt_domainExponent.trans
+              self.usableRowsAt_domainExponent_le_n
+  · simpa only [selectorMap, TopLevelCompilation.selectorMap,
+      selectorActivations, TopLevelCompilation.selectorActivations,
+      regionStarts, TopLevelCompilation.regionStarts,
+      fixedAssignments, TopLevelCompilation.fixedAssignments,
+      usableRowsAt, n] using hassignment
+
+/-- Every cell retained in a top-level circuit's fixed assignment list originated
+in the compiler's raw write stream. -/
+theorem fixedAssignment_cell_mem_raw_of_mem
+    (self : TopLevelCircuit F Config PublicInput)
+    (assignment : Layout.FixedAssignment F)
+    (hassignment : assignment ∈ self.fixedAssignments) :
+    assignment.cell ∈
+      (Layout.rawAssignments
+        (self.usableRowsAt self.domainExponent)
+        self.selectorMap self.constraintSystem self.operations).map
+          Layout.FixedAssignment.cell := by
+  apply Layout.cell_mem_raw_of_mem_compileFixed
+  simpa only [fixedAssignments, TopLevelCompilation.fixedAssignments,
+    usableRowsAt, domainExponent, selectorMap, constraintSystem,
+    operations] using hassignment
+
+/-- Every raw fixed write emitted by a lawful top-level circuit lies within its
+canonical fixed-column and evaluation-domain bounds. -/
+theorem fixedAssignment_bounds_of_mem_raw
+    (self : TopLevelCircuit F Config PublicInput)
+    (assignment : Layout.FixedAssignment F)
+    (hassignment : assignment ∈
+      Layout.rawAssignments
+        (self.usableRowsAt self.domainExponent)
+        self.selectorMap self.constraintSystem self.operations) :
+    assignment.1 < self.fixedColumnCount ∧ assignment.2.1 < self.n := by
+  have hbounds := Layout.rawAssignments_bounds_deriveSelCompressMap
+    (self.usableRowsAt self.domainExponent) self.n
+    self.constraintSystem self.operations self.keygenCoherent
+    (by
+      rw [List.forall_iff_forall_mem]
+      intro column hcolumn
+      exact self.constantColumn_index_lt_numFixedColumns hcolumn)
+    (by
+      intro table values hload
+      exact (Operations.loadTable_length_le_usedRows
+        self.operations table values hload).trans
+          (self.operations_usedRows_le_usedRows.trans
+            self.usedRows_le_usableRowsAt_domainExponent))
+    self.usableRowsAt_domainExponent_le_n
+    ((Halo2.V1_placementEnd_le_usedRows self.operations).trans
+      (self.operations_usedRows_le_usedRows.trans
+        (self.usedRows_le_usableRowsAt_domainExponent.trans
+          self.usableRowsAt_domainExponent_le_n)))
+    (by
+      intro activation hactivation
+      exact (FloorPlanner.V1.activation_row_lt_placementEnd
+        self.operations hactivation).trans_le
+          ((Halo2.V1_placementEnd_le_usedRows self.operations).trans
+            (self.operations_usedRows_le_usedRows.trans
+              (self.usedRows_le_usableRowsAt_domainExponent.trans
+                self.usableRowsAt_domainExponent_le_n))))
+    (by
+      simpa only [selectorMap, TopLevelCompilation.selectorMap,
+        selectorActivations, TopLevelCompilation.selectorActivations,
+        regionStarts, TopLevelCompilation.regionStarts,
+        usableRowsAt, n] using hassignment)
+  exact ⟨by
+    simpa only [fixedColumnCount_eq, selectorMap,
+      TopLevelCompilation.selectorMap] using hbounds.1, hbounds.2⟩
+
+/-- Every raw fixed write emitted by a lawful top-level circuit is realized at the
+same cell and value in its canonical dense fixed columns. -/
+theorem fixedRows_getD_getD_eq_of_mem_raw
+    (self : TopLevelCircuit F Config PublicInput)
+    (assignment : Layout.FixedAssignment F)
+    (hassignment : assignment ∈
+      Layout.rawAssignments
+        (self.usableRowsAt self.domainExponent)
+        self.selectorMap self.constraintSystem self.operations) :
+    (self.fixedRows.getD assignment.1 []).getD assignment.2.1 0 =
+      assignment.2.2 := by
+  have hbounds := self.fixedAssignment_bounds_of_mem_raw assignment hassignment
+  exact self.fixedRows_getD_getD_eq_of_mem assignment
+    (self.mem_fixedAssignments_of_mem_raw assignment hassignment)
+    hbounds.1 hbounds.2
+
+/-- Every synthesized lookup activation enables its master and only selectors declared
+by that lookup. -/
+theorem lookupActivationsWellFormed
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.operations.LookupActivationsWellFormed := by
+  exact self.formalCircuit.elaborated.lookupActivationsWellFormed
+    self.config () 0
+
+/-- Every synthesized lookup operation agrees with every lookup-selector activation
+at the same region-local row. -/
+theorem lookupSelectorAssignmentsAgree
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.operations.LookupSelectorAssignmentsAgree := by
+  rcases self.noCallerRequirements with
+    ⟨hconfig, _, _, _, _, _, _⟩
+  exact self.formalCircuit.elaborated.lookupSelectorAssignmentsAgree
+    () {} hconfig () 0
+
+/-- Configure composition keeps every gate and lookup selector compatible with every
+configured lookup's master-selector discipline. -/
+theorem lookupSelectorsCompatible
+    (self : TopLevelCircuit F Config PublicInput) :
+    Halo2.LookupSelectorsCompatible
+      self.constraintSystem.gates self.constraintSystem.lookups := by
+  let program := self.formalCircuit.configure ()
+  let counts :=
+    ConfigureCounts.ofConstraintSystem ({} : ConstraintSystem F)
+  have hcompatible := self.formalCircuit.lookupSelectorsCompatible
+    () counts self.selectorRequirements
+  simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
+    program, counts, Configure.run, ConfigureCounts.ofConstraintSystem,
+    ConfigureDelta.apply, List.nil_append] using hcompatible
+
 /-- Every configured gate's activation selector is allocated. -/
 theorem gateSelectorsAllocated
     (self : TopLevelCircuit F Config PublicInput) :
@@ -1190,6 +1726,384 @@ theorem lookupInputsAllocated
         expression.selectorBound ≤ self.constraintSystem.numSelectors := by
   exact (self.formalCircuit.lookupSelectorsAllocated
     () self.selectorRequirements).lookupInputsAllocated
+
+/-- Every selector used by a lookup has compression degree zero. Static configure
+compatibility excludes it from all gate selector sets, and gate well-formedness owns
+every selector atom in each gate polynomial. -/
+theorem lookupInputSelectorDegree_eq_zero
+    (self : TopLevelCircuit F Config PublicInput)
+    (argument : LookupArgument F)
+    (hargument : argument ∈ self.constraintSystem.lookups)
+    (expression : Expression F Query) (hexpression : expression ∈ argument.inputs)
+    {selector : ℕ} (hselector : selector ∈ expression.selectorIndices) :
+    (selectorMaxDegrees self.constraintSystem)[selector]! = 0 := by
+  have hbound := self.lookupInputsAllocated argument hargument
+    expression hexpression
+  have hallocated :=
+    (Expression.lt_selectorBound_of_mem_selectorIndices
+      expression hselector).trans_le hbound
+  apply selectorMaxDegrees_eq_zero_of_complexGateSelectors
+    self.constraintSystem hallocated
+  rw [List.forall_iff_forall_mem]
+  intro gate hgate
+  have hcompatible := List.forall_iff_forall_mem.mp
+    (List.forall_iff_forall_mem.mp self.lookupSelectorsCompatible.1
+      gate hgate) argument hargument
+  have hcompatible' :
+      (argument.auxiliarySelectorIndices.Forall fun candidate =>
+        candidate ≠ gate.selector.index) ∧
+      (argument.masterSelector.index = gate.selector.index →
+        gate.selector.simple = false) := by
+    simpa [Gate.LookupSelectorsCompatible,
+      Selector.LookupSelectorsCompatible,
+      LookupArgument.selectorUsage] using hcompatible
+  intro hgateSelector
+  by_cases hmaster : selector = argument.masterSelector.index
+  · exact hcompatible'.2 (by omega)
+  · have hauxiliary : selector ∈ argument.auxiliarySelectorIndices :=
+      List.mem_filter.mpr ⟨List.mem_flatMap.mpr
+        ⟨expression, hexpression, hselector⟩, by simpa⟩
+    have hdisjoint := List.forall_iff_forall_mem.mp hcompatible'.1
+      selector hauxiliary
+    omega
+
+/-- Every selector leaf in a lookup input is compiled as a bare query in its own
+packed fixed column. -/
+theorem lookupInputSelectorMap_singleton
+    (self : TopLevelCircuit F Config PublicInput)
+    (argument : LookupArgument F)
+    (hargument : argument ∈ self.constraintSystem.lookups)
+    (expression : Expression F Query)
+    (hexpression : expression ∈ argument.inputs)
+    {selector : ℕ} (hselector : selector ∈ expression.selectorIndices) :
+    ∃ compressed,
+      self.selectorMap.lookup selector = some compressed ∧
+        compressed.combinationLen = 1 ∧
+        compressed.assignedRoot = 1 ∧
+        compressed.packedCol < self.fixedColumnCount := by
+  have hbound := self.lookupInputsAllocated argument hargument
+    expression hexpression
+  have hallocated :=
+    (Expression.lt_selectorBound_of_mem_selectorIndices
+      expression hselector).trans_le hbound
+  have hdegree := self.lookupInputSelectorDegree_eq_zero
+    argument hargument expression hexpression hselector
+  obtain ⟨compressed, hlookup, hlength, hroot⟩ :=
+    deriveSelCompressMap_lookup_singleton_of_degree_zero
+      self.constraintSystem self.n self.selectorActivations selector
+      hallocated hdegree
+  have hcolumnData := deriveSelCompressMap_lookup_packedColumn
+    self.constraintSystem self.n self.selectorActivations hlookup
+  rw [← self.selectorMap_eq_derive] at hcolumnData
+  obtain ⟨index, hindex, hcolumn⟩ := hcolumnData
+  refine ⟨compressed, ?_, hlength, hroot, ?_⟩
+  · simpa only [self.selectorMap_eq_derive] using hlookup
+  · rw [self.fixedColumnCount_eq]
+    omega
+
+/-- The reduced lookup-selector anchor requirements of the closed top-level
+circuit. -/
+def lookupSelectorAnchorRequirements
+    (self : TopLevelCircuit F Config PublicInput) :
+    List (ℕ × FloorPlanner.RegionColumn) :=
+  self.formalCircuit.elaborated.lookupSelectorAnchorRequirements self.config () 0
+
+/-- A solution of the reduced top-level anchor equations physically anchors every
+lookup selector which may be read while disabled. -/
+theorem lookupSelectorsAnchoredBy
+    (self : TopLevelCircuit F Config PublicInput)
+    (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchor : SelectorAnchorRequirementsSatisfied
+      self.lookupSelectorAnchorRequirements anchor) :
+    self.operations.LookupSelectorsAnchoredBy anchor := by
+  rcases self.noCallerRequirements with ⟨hconfig, _, _, _, _, _, _⟩
+  exact self.formalCircuit.elaborated.lookupSelectorsAnchoredBy
+    () {} hconfig () 0 anchor hanchor
+
+/-- A lookup input selector is compiled into a singleton packed column whose value
+at the lookup row is exactly that operation's selector valuation. The disabled case
+uses physical selector anchoring and V1's shared-column separation to rule out an
+activation from another region. -/
+theorem lookupInputSelectorFixedValue
+    (self : TopLevelCircuit F Config PublicInput)
+    (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchored : self.operations.LookupSelectorsAnchoredBy anchor)
+    {region : RegionIndex} {body : RegionOperations F}
+    {argument : LookupArgument F} {enabled : List Selector} {row : ℕ}
+    (hregion : (region, body) ∈ (indexedRegions self.operations 0).1)
+    (hlookup : .enableLookup argument enabled row ∈ body)
+    (hargument : argument ∈ self.constraintSystem.lookups)
+    (expression : Expression F Query)
+    (hexpression : expression ∈ argument.inputs)
+    (selector : ℕ) (hselector : selector ∈ expression.selectorIndices) :
+    ∃ compressed,
+      self.selectorMap.lookup selector = some compressed ∧
+        compressed.combinationLen = 1 ∧
+        compressed.assignedRoot = 1 ∧
+        compressed.packedCol < self.fixedColumnCount ∧
+        (self.fixedRows.getD compressed.packedCol []).getD
+            (self.regionStarts.getD region 0 + row) 0 =
+          if ∃ candidate ∈ enabled, candidate.index = selector then 1 else 0 := by
+  classical
+  obtain ⟨compressed, hmap, hlength, hroot, hcolumn⟩ :=
+    self.lookupInputSelectorMap_singleton argument hargument expression
+      hexpression hselector
+  refine ⟨compressed, hmap, hlength, hroot, hcolumn, ?_⟩
+  have hrow : self.regionStarts.getD region 0 + row < self.n := by
+    exact (absoluteRow_lt_usedRows_of_enableLookup_mem self.operations
+      region body hregion argument enabled row hlookup).trans_le
+        (self.operations_usedRows_le_usedRows.trans
+          (self.usedRows_le_usableRowsAt_domainExponent.trans
+            self.usableRowsAt_domainExponent_le_n))
+  by_cases henabled : SelectorEnabledAtIndex enabled selector
+  · have hactivation :
+        (selector, self.regionStarts.getD region 0 + row) ∈
+          self.selectorActivations := by
+      rw [TopLevelCircuit.selectorActivations]
+      apply (mem_activations_iff _ _ _ _).mpr
+      exact ⟨region, body, .enableLookup argument enabled row, row,
+        hregion, hlookup, ⟨henabled, rfl⟩, rfl⟩
+    have hraw :
+        (compressed.packedCol,
+          self.regionStarts.getD region 0 + row,
+          FiniteField.fromNat compressed.assignedRoot) ∈
+          Layout.rawAssignments
+            (self.usableRowsAt self.domainExponent)
+            self.selectorMap self.constraintSystem self.operations := by
+      apply List.mem_append_left
+      apply List.mem_append_right
+      have hselectorAssignment :
+          (compressed.packedCol,
+            self.regionStarts.getD region 0 + row,
+            FiniteField.fromNat compressed.assignedRoot) ∈
+            Layout.selectorAssignments (F := F)
+              self.selectorMap self.selectorActivations :=
+        Layout.mem_selectorAssignments_of_activation
+          self.selectorMap self.selectorActivations hactivation hmap
+      simpa only [TopLevelCircuit.selectorActivations] using hselectorAssignment
+    have hvalue := self.fixedRows_getD_getD_eq_of_mem_raw _ hraw
+    have hone : (FiniteField.fromNat 1 : F) = 1 := by
+      apply FiniteField.ext
+      rw [FiniteField.val_fromNat]
+      · exact FiniteField.val_one.symm
+      · exact FiniteField.fieldSize_pos
+    rw [hroot, hone] at hvalue
+    change ∃ candidate ∈ enabled, candidate.index = selector at henabled
+    simpa only [henabled, ↓reduceIte] using hvalue
+  · have habsent :
+        (compressed.packedCol,
+          self.regionStarts.getD region 0 + row) ∉
+          self.fixedAssignments.map Layout.FixedAssignment.cell := by
+      intro hcell
+      obtain ⟨assignment, hassignment, hassignmentCell⟩ :=
+        List.mem_map.mp hcell
+      have hrawCell := self.fixedAssignment_cell_mem_raw_of_mem
+        assignment hassignment
+      obtain ⟨raw, hraw, hrawCellEq⟩ := List.mem_map.mp hrawCell
+      have hpacked : self.constraintSystem.numFixedColumns ≤ raw.1 := by
+        have htarget : raw.1 = compressed.packedCol := by
+          have hcell := hrawCellEq.trans hassignmentCell
+          exact congrArg Prod.fst hcell
+        obtain ⟨index, _, hpacked⟩ :=
+          deriveSelCompressMap_lookup_packedColumn
+            self.constraintSystem self.n self.selectorActivations
+            (by simpa only [self.selectorMap_eq_derive] using hmap)
+        rw [htarget, hpacked]
+        omega
+      obtain ⟨sourceSelector, sourceRow, sourceCompressed,
+          hsourceActivation, hsourceMap, hrawEq⟩ :=
+        Layout.exists_selectorActivation_of_mem_rawAssignments_of_column_ge
+          (self.usableRowsAt self.domainExponent) self.selectorMap
+          self.constraintSystem self.operations self.keygenCoherent
+          (by
+            rw [List.forall_iff_forall_mem]
+            intro column hcolumn
+            exact self.constantColumn_index_lt_numFixedColumns hcolumn)
+          hraw hpacked
+      have hsourceSelector : sourceSelector = selector := by
+        symm
+        apply deriveSelCompressMap_lookup_selector_eq_of_singleton_column
+          (leftSelector := selector) (rightSelector := sourceSelector)
+          self.constraintSystem self.n self.selectorActivations
+          (by simpa only [self.selectorMap_eq_derive] using hmap)
+          (by simpa only [self.selectorMap_eq_derive] using hsourceMap)
+          hlength
+        have hrawColumn := congrArg (fun entry => entry.1) hrawEq
+        have hcellColumn := congrArg Prod.fst
+          (hrawCellEq.trans hassignmentCell)
+        exact hcellColumn.symm.trans hrawColumn
+      subst sourceSelector
+      have hsourceRow : sourceRow = self.regionStarts.getD region 0 + row := by
+        have hrawRow := congrArg (fun entry => entry.2.1) hrawEq
+        have hcellRow := congrArg Prod.snd
+          (hrawCellEq.trans hassignmentCell)
+        exact hrawRow.symm.trans hcellRow
+      obtain ⟨sourceRegion, sourceBody, sourceOperation, sourceLocalRow,
+          hsourceRegion, hsourceOperation, hsourceActivates,
+          hsourceAbsolute⟩ :=
+        (mem_activations_iff self.regionStarts
+          (indexedRegions self.operations 0).1 selector sourceRow).mp
+          hsourceActivation
+      have hselectorNeMaster : selector ≠ argument.masterSelector.index := by
+        intro heq
+        apply henabled
+        obtain ⟨name, hregionOperation⟩ :=
+          exists_region_mem_of_mem_indexedRegions
+            self.operations 0 hregion
+        have hwellFormed := List.forall_iff_forall_mem.mp
+          (List.forall_iff_forall_mem.mp self.lookupActivationsWellFormed
+            (.region name body) hregionOperation)
+            (.enableLookup argument enabled row) hlookup
+        exact heq ▸ hwellFormed.1
+      have hauxiliary : selector ∈ argument.auxiliarySelectorIndices := by
+        rw [LookupArgument.auxiliarySelectorIndices, List.mem_filter]
+        exact ⟨List.mem_flatMap.mpr ⟨expression, hexpression, hselector⟩,
+          by simpa⟩
+      obtain ⟨targetName, htargetRegionOperation⟩ :=
+        exists_region_mem_of_mem_indexedRegions
+          self.operations 0 hregion
+      obtain ⟨sourceName, hsourceRegionOperation⟩ :=
+        exists_region_mem_of_mem_indexedRegions
+          self.operations 0 hsourceRegion
+      have htargetAnchored : body.LookupSelectorsAnchoredBy anchor :=
+        List.forall_iff_forall_mem.mp hanchored
+          (.region targetName body) htargetRegionOperation
+      have htargetAnchor := htargetAnchored argument enabled row hlookup
+        selector hauxiliary
+      have hsourceRegistered : sourceBody.Forall
+          (RegionOperation.KeygenCoherent self.constraintSystem) :=
+        List.forall_iff_forall_mem.mp self.keygenCoherent
+          (.region sourceName sourceBody) hsourceRegionOperation
+      have hsourceWellFormed : sourceBody.LookupActivationsWellFormed :=
+        List.forall_iff_forall_mem.mp self.lookupActivationsWellFormed
+          (.region sourceName sourceBody) hsourceRegionOperation
+      have hsourceAnchored : sourceBody.LookupSelectorsAnchoredBy anchor :=
+        List.forall_iff_forall_mem.mp hanchored
+          (.region sourceName sourceBody) hsourceRegionOperation
+      have hsourceAnchor : anchor selector ∈
+          FloorPlanner.physicalColumns
+            (FloorPlanner.regionSynthesisSummary sourceBody).columns := by
+        cases sourceOperation with
+        | enableGate gate sourceRow =>
+            rcases hsourceActivates with ⟨hgateSelector, rfl⟩
+            have hgateRegistered := List.forall_iff_forall_mem.mp
+              hsourceRegistered (.enableGate gate sourceRow) hsourceOperation
+            have hgateCompatible := List.forall_iff_forall_mem.mp
+              (List.forall_iff_forall_mem.mp
+                self.lookupSelectorsCompatible.1 gate hgateRegistered)
+              argument hargument
+            have havoids := List.forall_iff_forall_mem.mp hgateCompatible.1
+              selector hauxiliary
+            exact False.elim (havoids hgateSelector.symm)
+        | enableLookup sourceArgument sourceEnabled sourceRow =>
+            rcases hsourceActivates with ⟨hsourceEnabled, rfl⟩
+            have hsourceArgument := List.forall_iff_forall_mem.mp
+              hsourceRegistered
+              (.enableLookup sourceArgument sourceEnabled sourceRow)
+              hsourceOperation
+            have hsourceActivationWellFormed :=
+              List.forall_iff_forall_mem.mp hsourceWellFormed
+                (.enableLookup sourceArgument sourceEnabled sourceRow)
+                hsourceOperation
+            obtain ⟨candidate, hcandidate, hcandidateIndex⟩ := hsourceEnabled
+            have hdeclared := List.forall_iff_forall_mem.mp
+              hsourceActivationWellFormed.2 candidate hcandidate
+            have hsourceSelectorIndices :
+                selector ∈ sourceArgument.selectorIndices := by
+              rw [LookupArgument.selectorIndices, List.mem_cons]
+              rw [hcandidateIndex] at hdeclared
+              exact hdeclared
+            have hcompatible := List.forall_iff_forall_mem.mp
+              (List.forall_iff_forall_mem.mp
+                self.lookupSelectorsCompatible.2 sourceArgument hsourceArgument)
+              argument hargument
+            have hmasters : argument.masterSelector.index =
+                sourceArgument.masterSelector.index := by
+              exact List.forall_iff_forall_mem.mp hcompatible
+                selector hsourceSelectorIndices hauxiliary
+            have hsourceAuxiliary :
+                selector ∈ sourceArgument.auxiliarySelectorIndices := by
+              rw [LookupArgument.selectorIndices, List.mem_cons] at hsourceSelectorIndices
+              rcases hsourceSelectorIndices with hsourceMaster | hsourceAuxiliary
+              · exact False.elim (hselectorNeMaster
+                  (hsourceMaster.trans hmasters.symm))
+              · exact hsourceAuxiliary
+            exact hsourceAnchored sourceArgument sourceEnabled sourceRow
+              hsourceOperation selector hsourceAuxiliary
+        | assignAdvice | assignFixed | constrainEqual | constrainConstant |
+            constrainInstance =>
+            contradiction
+      have hregionEq : sourceRegion = region := by
+        by_contra hne
+        have hsourceShape : FloorPlanner.measureRegion sourceRegion sourceBody ∈
+            FloorPlanner.measureRegions self.operations :=
+          List.mem_map.mpr ⟨(sourceRegion, sourceBody), hsourceRegion, rfl⟩
+        have htargetShape : FloorPlanner.measureRegion region body ∈
+            FloorPlanner.measureRegions self.operations :=
+          List.mem_map.mpr ⟨(region, body), hregion, rfl⟩
+        have hsourceColumn : anchor selector ∈
+            (FloorPlanner.measureRegion sourceRegion sourceBody).columns :=
+          (List.mem_filter.mp hsourceAnchor).1
+        have htargetColumn : anchor selector ∈
+            (FloorPlanner.measureRegion region body).columns :=
+          (List.mem_filter.mp htargetAnchor).1
+        have hsourceLocal :=
+          FloorPlanner.row_lt_measureRegion_of_activatesSelectorAt
+            sourceRegion sourceBody hsourceOperation hsourceActivates
+        have htargetLocal := FloorPlanner.row_lt_measureRegion_of_enableLookup_mem
+          region body argument enabled row hlookup
+        have hneRows :=
+          FloorPlanner.region_rows_ne_of_sharedColumnIntervalsDisjoint
+            (FloorPlanner.V1.starts_sharedColumnIntervalsDisjoint self.operations)
+            hsourceShape htargetShape hne hsourceColumn htargetColumn
+            hsourceLocal htargetLocal
+        apply hneRows
+        change sourceRow =
+          (FloorPlanner.V1.starts self.operations).getD sourceRegion 0 +
+            sourceLocalRow at hsourceAbsolute
+        change sourceRow =
+          (FloorPlanner.V1.starts self.operations).getD region 0 + row at hsourceRow
+        exact hsourceAbsolute.symm.trans hsourceRow
+      subst sourceRegion
+      have hsourceBodyEq : sourceBody = body := by
+        exact congrArg Prod.snd
+          (FloorPlanner.indexedRegions_eq_of_index_eq self.operations 0
+            hsourceRegion hregion rfl)
+      subst sourceBody
+      have hsourceLocalRowEq : sourceLocalRow = row := by
+        rw [hsourceRow] at hsourceAbsolute
+        omega
+      subst sourceLocalRow
+      have hagrees := List.forall_iff_forall_mem.mp
+        self.lookupSelectorAssignmentsAgree
+        (.region targetName body) htargetRegionOperation
+      have hiff :=
+        RegionOperations.selectorEnabledAtIndex_iff_exists_activatesLookupSelectorAt
+          hagrees hlookup hauxiliary
+      apply henabled
+      apply hiff.mpr
+      refine ⟨sourceOperation, hsourceOperation, ?_⟩
+      cases sourceOperation with
+      | enableLookup sourceArgument sourceEnabled sourceRow =>
+          exact hsourceActivates
+      | enableGate gate sourceRow =>
+          have hgateRegistered := List.forall_iff_forall_mem.mp
+            hsourceRegistered (.enableGate gate sourceRow) hsourceOperation
+          have hgateCompatible := List.forall_iff_forall_mem.mp
+            (List.forall_iff_forall_mem.mp
+              self.lookupSelectorsCompatible.1 gate hgateRegistered)
+            argument hargument
+          have havoids := List.forall_iff_forall_mem.mp hgateCompatible.1
+            selector hauxiliary
+          exact False.elim (havoids hsourceActivates.1.symm)
+      | assignAdvice | assignFixed | constrainEqual | constrainConstant |
+          constrainInstance =>
+          contradiction
+    have hzero := self.fixedRows_getD_getD_eq_zero_of_not_mem
+      compressed.packedCol (self.regionStarts.getD region 0 + row)
+      habsent hcolumn hrow
+    change ¬∃ candidate ∈ enabled, candidate.index = selector at henabled
+    simpa only [henabled, ↓reduceIte] using hzero
 
 /-- Every query declaration emitted by the closed configure program is valid and
 names a column allocated by that program. -/
@@ -1236,10 +2150,7 @@ theorem gateQueriesResolved
   apply substSelectorMap_queriesResolved self.selectorMap.lookup
     self.gateQueryState constraint.poly hsource
   intro selector compressed hlookup
-  simpa only [selectorMap, TopLevelCompilation.selectorMap,
-    gateQueryState, constraintSystem, n, TopLevelCompilation.constraintSystem] using
-    queryWalkInit_resolves_deriveSelCompressMap_lookup
-      self.constraintSystem self.n self.selectorActivations hlookup
+  exact self.gateQueryState_resolves_selectorMap_lookup hlookup
 
 /-- Every selector-compressed lookup expression resolves against the same authoritative
 query layout. -/
@@ -1279,11 +2190,7 @@ theorem lookupQueriesResolved
     apply substSelectorMap_queriesResolved self.selectorMap.lookup
       self.gateQueryState expression hsource
     intro selector compressed hlookup
-    simpa only [selectorMap, TopLevelCompilation.selectorMap,
-      gateQueryState, constraintSystem, n,
-      TopLevelCompilation.constraintSystem] using
-      queryWalkInit_resolves_deriveSelCompressMap_lookup
-        self.constraintSystem self.n self.selectorActivations hlookup
+    exact self.gateQueryState_resolves_selectorMap_lookup hlookup
   constructor
   · rw [List.forall_iff_forall_mem]
     intro expression hexpression
@@ -1295,15 +2202,6 @@ theorem lookupQueriesResolved
     obtain ⟨source, hsource, rfl⟩ := List.mem_map.mp hexpression
     exact resolve source
       (List.forall_iff_forall_mem.mp hregistered.2 source hsource)
-
-/-- A closed circuit's configure program contains no malformed query declarations. -/
-theorem invalidQueriedCells_eq_nil
-    (self : TopLevelCircuit F Config PublicInput) :
-    self.constraintSystem.invalidQueriedCells = [] := by
-  have h := self.configureQueriesLawful.invalidQueriedCells_eq_nil
-  simpa only [constraintSystem, TopLevelCompilation.constraintSystem,
-    Configure.run, ConfigureCounts.ofConstraintSystem,
-    ConfigureDelta.apply, List.nil_append] using h
 
 /-- Read this circuit's public input from its declared instance cells. -/
 def extractPublicInput (self : TopLevelCircuit F Config PublicInput)

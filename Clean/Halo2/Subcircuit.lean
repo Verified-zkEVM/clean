@@ -1,4 +1,4 @@
-import Clean.Halo2.Formal
+import Clean.Halo2.Formal.Tactics
 import Clean.Halo2.Lemmas
 
 /-!
@@ -52,7 +52,7 @@ section
 variable [CircuitType Input] [CircuitType Output]
 
 /-- `output` of a layouter `call` (the child's output) — a `circuit_norm` accessor lemma. -/
-@[circuit_norm]
+@[circuit_norm, keygen_norm]
 theorem FormalCircuit.output_call (self : FormalCircuit F CI Cfg Input Output) (config : Cfg)
     (input : Var Input F) (i : RegionIndex) :
     (self.call config input).output i = self.output config input i :=
@@ -62,7 +62,7 @@ theorem FormalCircuit.output_call (self : FormalCircuit F CI Cfg Input Output) (
 
 /-- `output` of a region-level `call` (the child's elaborated output) — the region-level
 analogue of `FormalCircuit.output_call`. `@[circuit_norm]`. -/
-@[circuit_norm]
+@[circuit_norm, keygen_norm]
 theorem FormalRegionCircuit.output_call {CI Cfg : Type}
     (self : FormalRegionCircuit F CI Cfg Input Output) (config : Cfg) (offset : ℕ)
     (input : Var Input F) (region : RegionIndex) :
@@ -77,7 +77,7 @@ the generic lemma's discr-tree key then misses under `simp`), the region-level a
 
 `@[circuit_norm]` like the layouter `output_call'` (an earlier exclusion protected v1-era
 by-hand `rw [FormalRegionCircuit.output_call]` targets; the corpus no longer depends on it). -/
-@[circuit_norm]
+@[circuit_norm, keygen_norm]
 theorem FormalRegionCircuit.output_call' {Output : TypeMap} [ProvableType Output] {CI Cfg : Type}
     (self : FormalRegionCircuit F CI Cfg Input Output) (config : Cfg) (offset : ℕ)
     (input : Var Input F) (region : RegionIndex) :
@@ -110,7 +110,7 @@ theorem FormalCircuit.nextRegionIndex_call (self : FormalCircuit F CI Cfg Input 
 /-- Concrete-`α` restatement of `output_call` (the `Circuit.output`/`operations` element type
 is rewritten to the concrete `Output (AssignedCell F)` by `var_of_provableType`; the generic
 lemma's discr-tree key then misses under `simp`). -/
-@[circuit_norm]
+@[circuit_norm, keygen_norm]
 theorem FormalCircuit.output_call' {Output : TypeMap} [ProvableType Output]
     (self : FormalCircuit F CI Cfg Input Output) (config : Cfg)
     (input : Var Input F) (i : RegionIndex) :
@@ -323,6 +323,19 @@ def FormalCircuit.foldOps (c : ℕ → FormalCircuit F CI Cfg Input Output)
       ++ ((c m).call config (FormalCircuit.foldState c toInput config init i₀ m).1).operations
         (FormalCircuit.foldState c toInput config init i₀ m).2
 
+/-- Reduced synthesis summary of a serial circuit fold, composed from the
+already-reduced summaries of its children. -/
+def FormalCircuit.foldSynthesisSummary
+    (c : ℕ → FormalCircuit F CI Cfg Input Output)
+    (toInput : Var Output F → Var Input F) (config : Cfg) (init : Var Input F)
+    (i₀ : RegionIndex) : ℕ → FloorPlanner.SynthesisSummary
+  | 0 => {}
+  | m + 1 =>
+    (FormalCircuit.foldSynthesisSummary c toInput config init i₀ m).combine
+      ((c m).elaborated.synthesisSummary config
+        (FormalCircuit.foldState c toInput config init i₀ m).1
+        (FormalCircuit.foldState c toInput config init i₀ m).2)
+
 variable (c : ℕ → FormalCircuit F CI Cfg Input Output)
   (toInput : Var Output F → Var Input F) (config : Cfg) (init : Var Input F)
   (i₀ : RegionIndex)
@@ -347,6 +360,126 @@ theorem FormalCircuit.foldCall_operations (m : ℕ) :
     (FormalCircuit.foldCall c toInput config init m).operations i₀
       = FormalCircuit.foldOps c toInput config init i₀ m := by
   rw [Circuit.operations, FormalCircuit.foldCall_run]
+
+@[synthesis_summary_norm]
+theorem FormalCircuit.foldSynthesisSummary_eq (m : ℕ) :
+    FormalCircuit.foldSynthesisSummary c toInput config init i₀ m =
+      FloorPlanner.synthesisSummary
+        (FormalCircuit.foldOps c toInput config init i₀ m) := by
+  induction m with
+  | zero =>
+      simp only [FormalCircuit.foldSynthesisSummary, FormalCircuit.foldOps,
+        FloorPlanner.synthesisSummary_nil]
+  | succ m inductionHypothesis =>
+      rw [FormalCircuit.foldSynthesisSummary, FormalCircuit.foldOps,
+        FloorPlanner.synthesisSummary_append, FormalCircuit.call_synthesisSummary,
+        inductionHypothesis]
+
+/-- A fold whose children have one common reduced footprint is represented by
+the constant-size replicated summary, not a nested composition tree. -/
+theorem FormalCircuit.foldSynthesisSummary_eq_replicate
+    (summary : FloorPlanner.SynthesisSummary)
+    (hsummary : ∀ i,
+      (c i).elaborated.synthesisSummary config
+        (FormalCircuit.foldState c toInput config init i₀ i).1
+        (FormalCircuit.foldState c toInput config init i₀ i).2 = summary)
+    (hcolumns : summary.columns.Nodup) : ∀ m,
+    FormalCircuit.foldSynthesisSummary c toInput config init i₀ m =
+      FloorPlanner.SynthesisSummary.replicate m summary
+  | 0 => by
+      apply FloorPlanner.SynthesisSummary.ext
+      · simp [FormalCircuit.foldSynthesisSummary,
+          FloorPlanner.SynthesisSummary.replicate]
+      · funext column
+        simp [FormalCircuit.foldSynthesisSummary,
+          FloorPlanner.SynthesisSummary.replicate]
+      · simp [FormalCircuit.foldSynthesisSummary,
+          FloorPlanner.SynthesisSummary.replicate]
+      · simp [FormalCircuit.foldSynthesisSummary,
+          FloorPlanner.SynthesisSummary.replicate]
+      · simp [FormalCircuit.foldSynthesisSummary,
+          FloorPlanner.SynthesisSummary.replicate]
+      · simp [FormalCircuit.foldSynthesisSummary,
+          FloorPlanner.SynthesisSummary.replicate]
+      · simp [FormalCircuit.foldSynthesisSummary,
+          FloorPlanner.SynthesisSummary.replicate]
+  | m + 1 => by
+      rw [FormalCircuit.foldSynthesisSummary,
+        FormalCircuit.foldSynthesisSummary_eq_replicate summary hsummary hcolumns m,
+        hsummary m,
+        FloorPlanner.SynthesisSummary.replicate_succ m summary hcolumns]
+
+/-- Exact deferred-constant demand of a serial circuit fold. -/
+@[synthesis_summary_norm]
+theorem FormalCircuit.foldOps_synthesisSummary_constantSiteCount (m : ℕ) :
+    (FloorPlanner.synthesisSummary
+      (FormalCircuit.foldOps c toInput config init i₀ m)).constantSiteCount =
+      (List.ofFn fun i : Fin m =>
+        ((c i).elaborated.synthesisSummary config
+          (FormalCircuit.foldState c toInput config init i₀ i).1
+          (FormalCircuit.foldState c toInput config init i₀ i).2).constantSiteCount).sum := by
+  induction m with
+  | zero =>
+      simp only [FormalCircuit.foldOps, FloorPlanner.synthesisSummary_nil_constantSiteCount,
+        List.ofFn_zero, List.sum_nil]
+  | succ m inductionHypothesis =>
+      rw [FormalCircuit.foldOps, FloorPlanner.synthesisSummary_append,
+        FloorPlanner.SynthesisSummary.combine_constantSiteCount,
+        inductionHypothesis, FormalCircuit.call_synthesisSummary,
+        List.ofFn_succ', List.sum_concat]
+      simp only [Fin.val_castSucc, Fin.val_last]
+      rfl
+
+/-- `foldCall`-spelled exact deferred-constant demand. -/
+@[synthesis_summary_norm]
+theorem FormalCircuit.foldCall_synthesisSummary_constantSiteCount (m : ℕ) :
+    (FloorPlanner.synthesisSummary
+      ((FormalCircuit.foldCall c toInput config init m).operations i₀)).constantSiteCount =
+      (List.ofFn fun i : Fin m =>
+        ((c i).elaborated.synthesisSummary config
+          (FormalCircuit.foldState c toInput config init i₀ i).1
+          (FormalCircuit.foldState c toInput config init i₀ i).2).constantSiteCount).sum := by
+  rw [FormalCircuit.foldCall_operations,
+    FormalCircuit.foldOps_synthesisSummary_constantSiteCount]
+
+/-- Exact occupancy of one column across a serial circuit fold. -/
+@[synthesis_summary_norm]
+theorem FormalCircuit.foldOps_synthesisSummary_columnOccupancy
+    (column : FloorPlanner.RegionColumn) (m : ℕ) :
+    (FloorPlanner.synthesisSummary
+      (FormalCircuit.foldOps c toInput config init i₀ m)).columnOccupancy column =
+      (List.ofFn fun i : Fin m =>
+        ((c i).elaborated.synthesisSummary config
+          (FormalCircuit.foldState c toInput config init i₀ i).1
+          (FormalCircuit.foldState c toInput config init i₀ i).2).columnOccupancy
+            column).sum := by
+  induction m with
+  | zero =>
+      simp only [FormalCircuit.foldOps,
+        FloorPlanner.synthesisSummary_nil_columnOccupancy,
+        List.ofFn_zero, List.sum_nil]
+  | succ m inductionHypothesis =>
+      rw [FormalCircuit.foldOps, FloorPlanner.synthesisSummary_append,
+        FloorPlanner.SynthesisSummary.combine_columnOccupancy,
+        inductionHypothesis, FormalCircuit.call_synthesisSummary,
+        List.ofFn_succ', List.sum_concat]
+      simp only [Fin.val_castSucc, Fin.val_last]
+      rfl
+
+/-- `foldCall`-spelled exact occupancy of one column. -/
+@[synthesis_summary_norm]
+theorem FormalCircuit.foldCall_synthesisSummary_columnOccupancy
+    (column : FloorPlanner.RegionColumn) (m : ℕ) :
+    (FloorPlanner.synthesisSummary
+      ((FormalCircuit.foldCall c toInput config init m).operations i₀)).columnOccupancy
+        column =
+      (List.ofFn fun i : Fin m =>
+        ((c i).elaborated.synthesisSummary config
+          (FormalCircuit.foldState c toInput config init i₀ i).1
+          (FormalCircuit.foldState c toInput config init i₀ i).2).columnOccupancy
+            column).sum := by
+  rw [FormalCircuit.foldCall_operations,
+    FormalCircuit.foldOps_synthesisSummary_columnOccupancy]
 
 theorem FormalCircuit.foldCall_output (m : ℕ) :
     (FormalCircuit.foldCall c toInput config init m).output i₀
@@ -401,6 +534,133 @@ theorem FormalCircuit.foldCall_forall (property : Operation F → Prop) (m : ℕ
           (FormalCircuit.foldState c toInput config init i₀ i).2).Forall property := by
   rw [FormalCircuit.foldCall_operations,
     FormalCircuit.foldOps_forall c toInput config init i₀]
+
+/-- Fixed-assignment agreement composes over a serial fold from the configured
+law of each folded child. -/
+theorem FormalCircuit.foldCall_fixedAssignmentsAgree
+    (m : ℕ) (configured : ∀ i : Fin m, (c i).Configured config) :
+    ((FormalCircuit.foldCall c toInput config init m).operations i₀).Forall
+      Operation.FixedAssignmentsAgree := by
+  rw [FormalCircuit.foldCall_forall]
+  intro i
+  exact (c i).call_fixedAssignmentsAgree config (configured i)
+    (FormalCircuit.foldState c toInput config init i₀ i).1
+    (FormalCircuit.foldState c toInput config init i₀ i).2
+
+/-- Lookup-selector assignment agreement composes over a serial fold from the
+configured law of each folded child. -/
+@[keygen_norm, keygen_spine]
+theorem FormalCircuit.foldCall_lookupSelectorAssignmentsAgree
+    (m : ℕ) (configured : ∀ i : Fin m, (c i).Configured config) :
+    ((FormalCircuit.foldCall c toInput config init m).operations i₀)
+      |>.LookupSelectorAssignmentsAgree := by
+  rw [Operations.LookupSelectorAssignmentsAgree,
+    FormalCircuit.foldCall_forall]
+  intro i
+  exact (c i).call_lookupSelectorAssignmentsAgree config (configured i)
+    (FormalCircuit.foldState c toInput config init i₀ i).1
+    (FormalCircuit.foldState c toInput config init i₀ i).2
+
+/-- Physical lookup-selector anchoring composes over a serial fold from the
+packaged law of each folded child. -/
+theorem FormalCircuit.foldCall_lookupSelectorsAnchoredBy
+    (m : ℕ) (configured : ∀ i : Fin m, (c i).Configured config)
+    (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchor : ∀ i : Fin m, SelectorAnchorRequirementsSatisfied
+      ((c i).elaborated.lookupSelectorAnchorRequirements config
+        (FormalCircuit.foldState c toInput config init i₀ i).1
+        (FormalCircuit.foldState c toInput config init i₀ i).2)
+      anchor) :
+    ((FormalCircuit.foldCall c toInput config init m).operations i₀)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  rw [Operations.LookupSelectorsAnchoredBy,
+    FormalCircuit.foldCall_forall]
+  intro i
+  exact (c i).call_lookupSelectorsAnchoredBy config (configured i)
+    (FormalCircuit.foldState c toInput config init i₀ i).1
+    (FormalCircuit.foldState c toInput config init i₀ i).2
+    anchor (hanchor i)
+
+/-- Register a serial fold compositionally from one configured handle per round and
+an invariant covering the equality columns of each folded input. -/
+theorem FormalCircuit.foldCall_keygenRegistered
+    (m : ℕ)
+    {targetGates : List (Gate F)}
+    {targetLookups : List (LookupArgument F)}
+    {targetFixedColumns : List (Column .fixed)}
+    {targetPermutationColumns : List AnyColumn}
+    (configured : ∀ i : Fin m, (c i).Configured config)
+    (hgates : ∀ i gate,
+      gate ∈ (configured i).gates → gate ∈ targetGates)
+    (hlookups : ∀ i argument,
+      argument ∈ (configured i).lookups → argument ∈ targetLookups)
+    (hfixedColumns : ∀ i column,
+      column ∈ (configured i).fixedColumns → column ∈ targetFixedColumns)
+    (hpermutationColumns : ∀ i column,
+      column ∈ (configured i).permutationColumns →
+        column ∈ targetPermutationColumns)
+    (hinputCells : ∀ i,
+      ((configured i).inputCells
+          (FormalCircuit.foldState c toInput config init i₀ i).1).Forall fun cell ↦
+        cell.column ∈ targetPermutationColumns) :
+    ((FormalCircuit.foldCall c toInput config init m).operations i₀).KeygenRegistered
+      targetGates targetLookups targetFixedColumns targetPermutationColumns := by
+  rw [Operations.KeygenRegistered, FormalCircuit.foldCall_forall]
+  intro i
+  exact FormalCircuit.call_keygenRegistered
+    (c i) config (configured i)
+    (FormalCircuit.foldState c toInput config init i₀ i).1
+    (FormalCircuit.foldState c toInput config init i₀ i).2
+    (hgates i) (hlookups i) (hfixedColumns i) (hpermutationColumns i)
+    (hinputCells i)
+
+/-- Copy provenance composes across a serial circuit fold when every round's
+declared input cells are either caller inputs or cells assigned by an earlier
+round. -/
+theorem FormalCircuit.foldOps_copyCellsAssignedFrom
+    (m : ℕ) (configured : ∀ i : Fin m, (c i).Configured config)
+    {available : List Cell}
+    (hinputCells : ∀ i cell,
+      cell ∈ (configured i).inputCells
+          (FormalCircuit.foldState c toInput config init i₀ i).1 →
+        cell ∈ available ++
+          (FormalCircuit.foldOps c toInput config init i₀ i).assignedCellsFrom i₀) :
+    (FormalCircuit.foldOps c toInput config init i₀ m).CopyCellsAssignedFrom
+      i₀ available := by
+  induction m with
+  | zero => exact .nil i₀ available
+  | succ m inductionHypothesis =>
+      rw [FormalCircuit.foldOps]
+      apply Operations.CopyCellsAssignedFrom.append
+      · apply inductionHypothesis
+          (fun i => configured i.castSucc)
+        intro i cell hcell
+        exact hinputCells i.castSucc cell hcell
+      · rw [show i₀ + Operations.regionCount
+              (FormalCircuit.foldOps c toInput config init i₀ m) =
+            (FormalCircuit.foldState c toInput config init i₀ m).2 from
+          FormalCircuit.foldOps_regionCount c toInput config init i₀ m]
+        apply (c m).call_copyCellsAssignedFrom config
+          (configured ⟨m, Nat.lt_succ_self m⟩)
+          (FormalCircuit.foldState c toInput config init i₀ m).1
+          (FormalCircuit.foldState c toInput config init i₀ m).2
+        intro cell hcell
+        exact hinputCells ⟨m, Nat.lt_succ_self m⟩ cell hcell
+
+/-- `foldCall` spelling of `foldOps_copyCellsAssignedFrom`. -/
+theorem FormalCircuit.foldCall_copyCellsAssignedFrom
+    (m : ℕ) (configured : ∀ i : Fin m, (c i).Configured config)
+    {available : List Cell}
+    (hinputCells : ∀ i cell,
+      cell ∈ (configured i).inputCells
+          (FormalCircuit.foldState c toInput config init i₀ i).1 →
+        cell ∈ available ++
+          (FormalCircuit.foldOps c toInput config init i₀ i).assignedCellsFrom i₀) :
+    ((FormalCircuit.foldCall c toInput config init m).operations i₀)
+      |>.CopyCellsAssignedFrom i₀ available := by
+  rw [FormalCircuit.foldCall_operations]
+  exact FormalCircuit.foldOps_copyCellsAssignedFrom
+    c toInput config init i₀ m configured hinputCells
 
 /-- The soundness-side split: `Constraints` of the fold is the per-round folded chunks. -/
 theorem FormalCircuit.foldOps_constraints (place : RegionIndex → ℕ) (env : Environment F)

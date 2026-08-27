@@ -34,8 +34,8 @@ private theorem rangeCheckAt_output (cfg : LookupRangeCheck.Config 10) (i : Regi
     (LookupRangeCheck.rangeCheckAt 10 n false).output cfg 0 () i
       = { z0 := .of i 0 cfg.runningSum, zLast := .of i n cfg.runningSum } := by
   show ((LookupRangeCheck.rangeCheckAt 10 n false).synthesize cfg 0 ()).output i = _
-  simp only [LookupRangeCheck.rangeCheckAt, circuit_norm, RegionCircuit.output_bind,
-    output_cellAt, Bool.false_eq_true, if_false, Nat.zero_add]
+  simp only [LookupRangeCheck.rangeCheckAt, circuit_norm, Bool.false_eq_true,
+    Nat.zero_add]
 
 end WitnessCheckBridges
 
@@ -74,6 +74,23 @@ def gateChild : FormalCircuit Fp GdCanonicity.Config GdCanonicity.Config GdCanon
 
 derive_contract_bridges gateChild := gateChild
 
+@[keygen_norm]
+theorem gateChild_inputCells {cfg : GdCanonicity.Config}
+    (configured : gateChild.Configured cfg)
+    (input : Var GdCanonicity.Row Fp) :
+    configured.inputCells input =
+      [input.gdX.cell, input.b0.cell, input.b1.cell, input.a.cell,
+        input.aPrime.cell, input.z13A.cell, input.z13APrime.cell] := by
+  rcases configured with ⟨configInput, counts, hconfig, rfl⟩
+  rfl
+
+@[synthesis_summary_norm]
+theorem gateChild_synthesisSummary_eq (cfg : GdCanonicity.Config)
+    (input : Var GdCanonicity.Row Fp) (region : RegionIndex) :
+    gateChild.elaborated.synthesisSummary cfg input region =
+      FloorPlanner.SynthesisSummary.ofRegion
+        (GdCanonicity.synthesisSummary cfg 0) := rfl
+
 /-- The synthesize body (Rust `gd_x_canonicity` flow): the `witness_check` of `a'`, then
 the gate region with `a' = z_0` and `z13_a' = z_13` wired in. -/
 def synth (gcfg : GdCanonicity.Config) (lcfg : LookupRangeCheck.Config 10)
@@ -83,6 +100,12 @@ def synth (gcfg : GdCanonicity.Config) (lcfg : LookupRangeCheck.Config 10)
     { gdX := input.gdX, b0 := input.b0, b1 := input.b1, a := input.a,
       aPrime := aZs.z0, z13A := input.z13A, z13APrime := aZs.zLast }
   pure ()
+
+def synthesisSummary (gcfg : GdCanonicity.Config)
+    (lcfg : LookupRangeCheck.Config 10) : FloorPlanner.SynthesisSummary :=
+  (LookupRangeCheck.witnessCheckSynthesisSummary 10 13 false lcfg).combine
+    (FloorPlanner.SynthesisSummary.ofRegion
+      (GdCanonicity.synthesisSummary gcfg 0))
 
 /-- The region count of `synth`: the `witnessCheck` region and the gate child's region. -/
 theorem synth_regionCount (gcfg : GdCanonicity.Config) (lcfg : LookupRangeCheck.Config 10)
@@ -105,9 +128,48 @@ def circuit :
   elaborated :=
     { keygenRequirements :=
         { gates cfg _ := [GdCanonicity.gate cfg.1]
-          lookups cfg _ := [LookupRangeCheck.rangeCheckLookup 10 cfg.2] }
+          lookups cfg _ := [LookupRangeCheck.rangeCheckLookup 10 cfg.2]
+          permutationColumns cfg _ :=
+            [cfg.1.colL, cfg.1.colM, cfg.1.colR, cfg.1.colZ,
+              cfg.2.runningSum]
+          inputCells _ _ input :=
+            [input.gdX.cell, input.b0.cell, input.b1.cell,
+              input.a.cell, input.z13A.cell] }
+      lookupSelectorAnchorRequirements cfg _ _ :=
+        LookupRangeCheck.lookupSelectorAnchorRequirements cfg.2
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro cfg counts _ _ i anchor hanchor _
+        simp only [synth, Circuit.operations_bind,
+          Circuit.operations_pure, List.append_nil, circuit_norm]
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact LookupRangeCheck.witnessCheck_lookupSelectorsAnchoredBy
+            10 13 false (by simp) cfg.2 _ i anchor hanchor
+        · exact gateChild.call_lookupSelectorsAnchoredBy cfg.1
+            (FormalCircuit.Configured.ofOutput gateChild cfg.1 counts
+              (by keygen_registration)) _ (i + 1) anchor (by trivial)
+      copyCellsAssigned := by
+        intro configInput counts hconfig input i
+        simp only [synth, circuit_norm]
+        apply Operations.CopyCellsAssignedFrom.append
+        · apply LookupRangeCheck.witnessCheck_copyCellsAssignedFrom
+        · apply gateChild.call_copyCellsAssignedFrom
+            (hconfigured := FormalCircuit.Configured.ofOutput
+              gateChild configInput.1 {} (by keygen_registration))
+          intro cell hcell
+          rw [gateChild_inputCells] at hcell
+          simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+          have hout := LookupRangeCheck.witnessCheck_output_cells_assigned
+            10 13 false (by simp) configInput.2 (aPrimeWit input.a) i
+          simp only [List.mem_append]
+          rcases hcell with rfl | rfl | rfl | rfl | rfl | rfl | rfl
+          all_goals simp_all
       output _ _ _ := ()
       regionCount _ := 2
+      synthesisSummary := fun (gcfg, lcfg) _ _ => synthesisSummary gcfg lcfg
+      synthesisSummary_eq := by
+        intro cfg input region
+        simp only [synthesisSummary, synth, circuit_norm, synthesis_summary_norm]
+        rw [LookupRangeCheck.witnessCheck_synthesisSummary]
       output_eq := by intro _ _ _; rfl
       regionCount_eq := fun (gcfg, lcfg) input i =>
         (synth_regionCount gcfg lcfg input i).symm }
@@ -133,9 +195,13 @@ def circuit :
   soundness := by
     circuit_proof_start
     obtain ⟨hTable, hDistinct⟩ := _hE
-    simp only [LookupRangeCheck.witnessCheck, circuit_norm] at hc
     obtain ⟨hWC, hGate⟩ := hc
+    simp only [circuit_norm] at hWC
     subcircuit_rw at hWC
+    simp only [FormalCircuit.callPacked_operations, List.append_nil] at hGate
+    subcircuit_rw at hGate
+    simp only [FormalRegionCircuit.callPacked_output, circuit_norm,
+      h_input] at hGate
     -- the witnessCheck child: `z_0 = a'`-cell and the 130-bit telescoped decomposition
     have hWSpec := hWC
       (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
@@ -155,7 +221,7 @@ def circuit :
   completeness := by
     circuit_proof_start
     obtain ⟨hTable, hDistinct⟩ := _hE
-    simp only [LookupRangeCheck.witnessCheck, Operations.regionCount, circuit_norm,
+    simp only [synth, LookupRangeCheck.witnessCheck, circuit_norm,
       readCell] at hwit ⊢
     obtain ⟨⟨hWaP, hWrc⟩, hWgate⟩ := hwit
     subcircuit_rw
@@ -232,6 +298,23 @@ def gateChild : FormalCircuit Fp PkdCanonicity.Config PkdCanonicity.Config PkdCa
 
 derive_contract_bridges gateChild := gateChild
 
+@[keygen_norm]
+theorem gateChild_inputCells {cfg : PkdCanonicity.Config}
+    (configured : gateChild.Configured cfg)
+    (input : Var PkdCanonicity.Row Fp) :
+    configured.inputCells input =
+      [input.pkdX.cell, input.b3.cell, input.d0.cell, input.c.cell,
+        input.b3CPrime.cell, input.z13C.cell, input.z14B3CPrime.cell] := by
+  rcases configured with ⟨configInput, counts, hconfig, rfl⟩
+  rfl
+
+@[synthesis_summary_norm]
+theorem gateChild_synthesisSummary_eq (cfg : PkdCanonicity.Config)
+    (input : Var PkdCanonicity.Row Fp) (region : RegionIndex) :
+    gateChild.elaborated.synthesisSummary cfg input region =
+      FloorPlanner.SynthesisSummary.ofRegion
+        (PkdCanonicity.synthesisSummary cfg 0) := rfl
+
 def synth (gcfg : PkdCanonicity.Config) (lcfg : LookupRangeCheck.Config 10)
     (input : Inputs (AssignedCell Fp)) : Circuit Fp Unit := do
   let zs ← LookupRangeCheck.witnessCheck 10 14 false lcfg (b3CPrimeWit input.b3 input.c)
@@ -239,6 +322,12 @@ def synth (gcfg : PkdCanonicity.Config) (lcfg : LookupRangeCheck.Config 10)
     { pkdX := input.pkdX, b3 := input.b3, d0 := input.d0, c := input.c,
       b3CPrime := zs.z0, z13C := input.z13C, z14B3CPrime := zs.zLast }
   pure ()
+
+def synthesisSummary (gcfg : PkdCanonicity.Config)
+    (lcfg : LookupRangeCheck.Config 10) : FloorPlanner.SynthesisSummary :=
+  (LookupRangeCheck.witnessCheckSynthesisSummary 10 14 false lcfg).combine
+    (FloorPlanner.SynthesisSummary.ofRegion
+      (PkdCanonicity.synthesisSummary gcfg 0))
 
 theorem synth_regionCount (gcfg : PkdCanonicity.Config) (lcfg : LookupRangeCheck.Config 10)
     (input : Inputs (AssignedCell Fp)) (i : RegionIndex) :
@@ -257,9 +346,49 @@ def circuit :
   elaborated :=
     { keygenRequirements :=
         { gates cfg _ := [PkdCanonicity.gate cfg.1]
-          lookups cfg _ := [LookupRangeCheck.rangeCheckLookup 10 cfg.2] }
+          lookups cfg _ := [LookupRangeCheck.rangeCheckLookup 10 cfg.2]
+          permutationColumns cfg _ :=
+            [cfg.1.colL, cfg.1.colM, cfg.1.colR, cfg.1.colZ,
+              cfg.2.runningSum]
+          inputCells _ _ input :=
+            [input.pkdX.cell, input.b3.cell, input.d0.cell,
+              input.c.cell, input.z13C.cell] }
+      lookupSelectorAnchorRequirements cfg _ _ :=
+        LookupRangeCheck.lookupSelectorAnchorRequirements cfg.2
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro cfg counts _ _ i anchor hanchor _
+        simp only [synth, Circuit.operations_bind,
+          Circuit.operations_pure, List.append_nil, circuit_norm]
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact LookupRangeCheck.witnessCheck_lookupSelectorsAnchoredBy
+            10 14 false (by simp) cfg.2 _ i anchor hanchor
+        · exact gateChild.call_lookupSelectorsAnchoredBy cfg.1
+            (FormalCircuit.Configured.ofOutput gateChild cfg.1 counts
+              (by keygen_registration)) _ (i + 1) anchor (by trivial)
+      copyCellsAssigned := by
+        intro configInput counts hconfig input i
+        simp only [synth, circuit_norm]
+        apply Operations.CopyCellsAssignedFrom.append
+        · apply LookupRangeCheck.witnessCheck_copyCellsAssignedFrom
+        · apply gateChild.call_copyCellsAssignedFrom
+            (hconfigured := FormalCircuit.Configured.ofOutput
+              gateChild configInput.1 {} (by keygen_registration))
+          intro cell hcell
+          rw [gateChild_inputCells] at hcell
+          simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+          have hout := LookupRangeCheck.witnessCheck_output_cells_assigned
+            10 14 false (by simp) configInput.2
+              (b3CPrimeWit input.b3 input.c) i
+          simp only [List.mem_append]
+          rcases hcell with rfl | rfl | rfl | rfl | rfl | rfl | rfl
+          all_goals simp_all
       output _ _ _ := ()
       regionCount _ := 2
+      synthesisSummary := fun (gcfg, lcfg) _ _ => synthesisSummary gcfg lcfg
+      synthesisSummary_eq := by
+        intro cfg input region
+        simp only [synthesisSummary, synth, circuit_norm, synthesis_summary_norm]
+        rw [LookupRangeCheck.witnessCheck_synthesisSummary]
       output_eq := by intro _ _ _; rfl
       regionCount_eq := fun (gcfg, lcfg) input i =>
         (synth_regionCount gcfg lcfg input i).symm }
@@ -285,9 +414,13 @@ def circuit :
   soundness := by
     circuit_proof_start
     obtain ⟨hTable, hDistinct⟩ := _hE
-    simp only [LookupRangeCheck.witnessCheck, circuit_norm] at hc
     obtain ⟨hWC, hGate⟩ := hc
+    simp only [circuit_norm] at hWC
     subcircuit_rw at hWC
+    simp only [FormalCircuit.callPacked_operations, List.append_nil] at hGate
+    subcircuit_rw at hGate
+    simp only [FormalRegionCircuit.callPacked_output, circuit_norm,
+      h_input] at hGate
     have hWSpec := hWC
       (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
       (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
@@ -305,7 +438,7 @@ def circuit :
   completeness := by
     circuit_proof_start
     obtain ⟨hTable, hDistinct⟩ := _hE
-    simp only [LookupRangeCheck.witnessCheck, Operations.regionCount, circuit_norm,
+    simp only [synth, LookupRangeCheck.witnessCheck, circuit_norm,
       readCell] at hwit ⊢
     obtain ⟨⟨hWaP, hWrc⟩, hWgate⟩ := hwit
     subcircuit_rw
@@ -377,6 +510,23 @@ def gateChild : FormalCircuit Fp RhoCanonicity.Config RhoCanonicity.Config RhoCa
 
 derive_contract_bridges gateChild := gateChild
 
+@[keygen_norm]
+theorem gateChild_inputCells {cfg : RhoCanonicity.Config}
+    (configured : gateChild.Configured cfg)
+    (input : Var RhoCanonicity.Row Fp) :
+    configured.inputCells input =
+      [input.rho.cell, input.e1.cell, input.g0.cell, input.f.cell,
+        input.e1FPrime.cell, input.z13F.cell, input.z14E1FPrime.cell] := by
+  rcases configured with ⟨configInput, counts, hconfig, rfl⟩
+  rfl
+
+@[synthesis_summary_norm]
+theorem gateChild_synthesisSummary_eq (cfg : RhoCanonicity.Config)
+    (input : Var RhoCanonicity.Row Fp) (region : RegionIndex) :
+    gateChild.elaborated.synthesisSummary cfg input region =
+      FloorPlanner.SynthesisSummary.ofRegion
+        (RhoCanonicity.synthesisSummary cfg 0) := rfl
+
 def synth (gcfg : RhoCanonicity.Config) (lcfg : LookupRangeCheck.Config 10)
     (input : Inputs (AssignedCell Fp)) : Circuit Fp Unit := do
   let zs ← LookupRangeCheck.witnessCheck 10 14 false lcfg (e1FPrimeWit input.e1 input.f)
@@ -384,6 +534,12 @@ def synth (gcfg : RhoCanonicity.Config) (lcfg : LookupRangeCheck.Config 10)
     { rho := input.rho, e1 := input.e1, g0 := input.g0, f := input.f,
       e1FPrime := zs.z0, z13F := input.z13F, z14E1FPrime := zs.zLast }
   pure ()
+
+def synthesisSummary (gcfg : RhoCanonicity.Config)
+    (lcfg : LookupRangeCheck.Config 10) : FloorPlanner.SynthesisSummary :=
+  (LookupRangeCheck.witnessCheckSynthesisSummary 10 14 false lcfg).combine
+    (FloorPlanner.SynthesisSummary.ofRegion
+      (RhoCanonicity.synthesisSummary gcfg 0))
 
 theorem synth_regionCount (gcfg : RhoCanonicity.Config) (lcfg : LookupRangeCheck.Config 10)
     (input : Inputs (AssignedCell Fp)) (i : RegionIndex) :
@@ -402,9 +558,49 @@ def circuit :
   elaborated :=
     { keygenRequirements :=
         { gates cfg _ := [RhoCanonicity.gate cfg.1]
-          lookups cfg _ := [LookupRangeCheck.rangeCheckLookup 10 cfg.2] }
+          lookups cfg _ := [LookupRangeCheck.rangeCheckLookup 10 cfg.2]
+          permutationColumns cfg _ :=
+            [cfg.1.colL, cfg.1.colM, cfg.1.colR, cfg.1.colZ,
+              cfg.2.runningSum]
+          inputCells _ _ input :=
+            [input.rho.cell, input.e1.cell, input.g0.cell,
+              input.f.cell, input.z13F.cell] }
+      lookupSelectorAnchorRequirements cfg _ _ :=
+        LookupRangeCheck.lookupSelectorAnchorRequirements cfg.2
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro cfg counts _ _ i anchor hanchor _
+        simp only [synth, Circuit.operations_bind,
+          Circuit.operations_pure, List.append_nil, circuit_norm]
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact LookupRangeCheck.witnessCheck_lookupSelectorsAnchoredBy
+            10 14 false (by simp) cfg.2 _ i anchor hanchor
+        · exact gateChild.call_lookupSelectorsAnchoredBy cfg.1
+            (FormalCircuit.Configured.ofOutput gateChild cfg.1 counts
+              (by keygen_registration)) _ (i + 1) anchor (by trivial)
+      copyCellsAssigned := by
+        intro configInput counts hconfig input i
+        simp only [synth, circuit_norm]
+        apply Operations.CopyCellsAssignedFrom.append
+        · apply LookupRangeCheck.witnessCheck_copyCellsAssignedFrom
+        · apply gateChild.call_copyCellsAssignedFrom
+            (hconfigured := FormalCircuit.Configured.ofOutput
+              gateChild configInput.1 {} (by keygen_registration))
+          intro cell hcell
+          rw [gateChild_inputCells] at hcell
+          simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+          have hout := LookupRangeCheck.witnessCheck_output_cells_assigned
+            10 14 false (by simp) configInput.2
+              (e1FPrimeWit input.e1 input.f) i
+          simp only [List.mem_append]
+          rcases hcell with rfl | rfl | rfl | rfl | rfl | rfl | rfl
+          all_goals simp_all
       output _ _ _ := ()
       regionCount _ := 2
+      synthesisSummary := fun (gcfg, lcfg) _ _ => synthesisSummary gcfg lcfg
+      synthesisSummary_eq := by
+        intro cfg input region
+        simp only [synthesisSummary, synth, circuit_norm, synthesis_summary_norm]
+        rw [LookupRangeCheck.witnessCheck_synthesisSummary]
       output_eq := by intro _ _ _; rfl
       regionCount_eq := fun (gcfg, lcfg) input i =>
         (synth_regionCount gcfg lcfg input i).symm }
@@ -430,9 +626,10 @@ def circuit :
   soundness := by
     circuit_proof_start
     obtain ⟨hTable, hDistinct⟩ := _hE
-    simp only [LookupRangeCheck.witnessCheck, circuit_norm] at hc
     obtain ⟨hWC, hGate⟩ := hc
+    simp only [LookupRangeCheck.witnessCheck, circuit_norm] at hWC
     subcircuit_rw at hWC
+    simp only [LookupRangeCheck.witnessCheck, circuit_norm] at hGate
     have hWSpec := hWC
       (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
       (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]
@@ -523,6 +720,24 @@ def gateChild : FormalCircuit Fp PsiCanonicity.Config PsiCanonicity.Config PsiCa
 
 derive_contract_bridges gateChild := gateChild
 
+@[keygen_norm]
+theorem gateChild_inputCells {cfg : PsiCanonicity.Config}
+    (configured : gateChild.Configured cfg)
+    (input : Var PsiCanonicity.Row Fp) :
+    configured.inputCells input =
+      [input.psi.cell, input.h0.cell, input.g1.cell, input.h1.cell,
+        input.g2.cell, input.g1G2Prime.cell, input.z13G.cell,
+        input.z13G1G2Prime.cell] := by
+  rcases configured with ⟨configInput, counts, hconfig, rfl⟩
+  rfl
+
+@[synthesis_summary_norm]
+theorem gateChild_synthesisSummary_eq (cfg : PsiCanonicity.Config)
+    (input : Var PsiCanonicity.Row Fp) (region : RegionIndex) :
+    gateChild.elaborated.synthesisSummary cfg input region =
+      FloorPlanner.SynthesisSummary.ofRegion
+        (PsiCanonicity.synthesisSummary cfg 0) := rfl
+
 def synth (gcfg : PsiCanonicity.Config) (lcfg : LookupRangeCheck.Config 10)
     (input : Inputs (AssignedCell Fp)) : Circuit Fp Unit := do
   let zs ← LookupRangeCheck.witnessCheck 10 13 false lcfg (g1G2PrimeWit input.g1 input.g2)
@@ -530,6 +745,12 @@ def synth (gcfg : PsiCanonicity.Config) (lcfg : LookupRangeCheck.Config 10)
     { psi := input.psi, h0 := input.h0, g1 := input.g1, h1 := input.h1, g2 := input.g2,
       g1G2Prime := zs.z0, z13G := input.z13G, z13G1G2Prime := zs.zLast }
   pure ()
+
+def synthesisSummary (gcfg : PsiCanonicity.Config)
+    (lcfg : LookupRangeCheck.Config 10) : FloorPlanner.SynthesisSummary :=
+  (LookupRangeCheck.witnessCheckSynthesisSummary 10 13 false lcfg).combine
+    (FloorPlanner.SynthesisSummary.ofRegion
+      (PsiCanonicity.synthesisSummary gcfg 0))
 
 theorem synth_regionCount (gcfg : PsiCanonicity.Config) (lcfg : LookupRangeCheck.Config 10)
     (input : Inputs (AssignedCell Fp)) (i : RegionIndex) :
@@ -548,9 +769,49 @@ def circuit :
   elaborated :=
     { keygenRequirements :=
         { gates cfg _ := [PsiCanonicity.gate cfg.1]
-          lookups cfg _ := [LookupRangeCheck.rangeCheckLookup 10 cfg.2] }
+          lookups cfg _ := [LookupRangeCheck.rangeCheckLookup 10 cfg.2]
+          permutationColumns cfg _ :=
+            [cfg.1.colL, cfg.1.colM, cfg.1.colR, cfg.1.colZ,
+              cfg.2.runningSum]
+          inputCells _ _ input :=
+            [input.psi.cell, input.h0.cell, input.g1.cell,
+              input.h1.cell, input.g2.cell, input.z13G.cell] }
+      lookupSelectorAnchorRequirements cfg _ _ :=
+        LookupRangeCheck.lookupSelectorAnchorRequirements cfg.2
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro cfg counts _ _ i anchor hanchor _
+        simp only [synth, Circuit.operations_bind,
+          Circuit.operations_pure, List.append_nil, circuit_norm]
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact LookupRangeCheck.witnessCheck_lookupSelectorsAnchoredBy
+            10 13 false (by simp) cfg.2 _ i anchor hanchor
+        · exact gateChild.call_lookupSelectorsAnchoredBy cfg.1
+            (FormalCircuit.Configured.ofOutput gateChild cfg.1 counts
+              (by keygen_registration)) _ (i + 1) anchor (by trivial)
+      copyCellsAssigned := by
+        intro configInput counts hconfig input i
+        simp only [synth, circuit_norm]
+        apply Operations.CopyCellsAssignedFrom.append
+        · apply LookupRangeCheck.witnessCheck_copyCellsAssignedFrom
+        · apply gateChild.call_copyCellsAssignedFrom
+            (hconfigured := FormalCircuit.Configured.ofOutput
+              gateChild configInput.1 {} (by keygen_registration))
+          intro cell hcell
+          rw [gateChild_inputCells] at hcell
+          simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+          have hout := LookupRangeCheck.witnessCheck_output_cells_assigned
+            10 13 false (by simp) configInput.2
+              (g1G2PrimeWit input.g1 input.g2) i
+          simp only [List.mem_append]
+          rcases hcell with rfl | rfl | rfl | rfl | rfl | rfl | rfl | rfl
+          all_goals simp_all
       output _ _ _ := ()
       regionCount _ := 2
+      synthesisSummary := fun (gcfg, lcfg) _ _ => synthesisSummary gcfg lcfg
+      synthesisSummary_eq := by
+        intro cfg input region
+        simp only [synthesisSummary, synth, circuit_norm, synthesis_summary_norm]
+        rw [LookupRangeCheck.witnessCheck_synthesisSummary]
       output_eq := by intro _ _ _; rfl
       regionCount_eq := fun (gcfg, lcfg) input i =>
         (synth_regionCount gcfg lcfg input i).symm }
@@ -579,9 +840,10 @@ def circuit :
   soundness := by
     circuit_proof_start
     obtain ⟨hTable, hDistinct⟩ := _hE
-    simp only [LookupRangeCheck.witnessCheck, circuit_norm] at hc
     obtain ⟨hWC, hGate⟩ := hc
+    simp only [LookupRangeCheck.witnessCheck, circuit_norm] at hWC
     subcircuit_rw at hWC
+    simp only [LookupRangeCheck.witnessCheck, circuit_norm] at hGate
     have hWSpec := hWC
       (by rw [LookupRangeCheck.rangeCheckAt_envAssumptions_eq]; exact ⟨hTable, hDistinct⟩)
       (by rw [LookupRangeCheck.rangeCheckAt_assumptions_eq]

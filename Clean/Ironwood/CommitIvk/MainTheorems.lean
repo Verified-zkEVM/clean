@@ -36,8 +36,8 @@ open Specs.Sinsemilla (Generators)
 open Ecc
 open Sinsemilla
 open Specs (bitrange bitrange_lt cast_bitrange_val)
-open Specs.Sinsemilla (commitIvkChunks hashToPoint running_sum_telescope
-  hashToPointB SpecOrBreak breaksOfGuarded chunksOf_mem_lt)
+open Specs.Sinsemilla (commitIvkChunks hashToPoint HashGuarded
+  running_sum_telescope chunksOf_mem_lt)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD PALLAS_SCALAR_CARD)
 open NoteCommit (pallasBaseCard_eq tPNat val_shift high_bit_canonical
   shifted_high_zero)
@@ -519,15 +519,15 @@ theorem honest_pieces_facts (ak nk a b c d : Fp)
 
 end Commit
 
-/-- Breaks-as-data `Commit^ivk` relation (zcash/ironwood#45): either the Sinsemilla
-chain over the canonical `commit_ivk` chunks is defined and `ivk` is the extracted
-short commitment, or the incomplete-addition escape is exhibited as a valid break.
-Projecting the break branch to `⊥` recovers `ivk ∈ {…, ⊥}` (§4.17.4). -/
+/-- The `Commit^ivk` relation in the specification's guarded ⊥-model (§4.17.4's
+`ivk ∈ {…, ⊥}`): whenever the Sinsemilla chain over the canonical `commit_ivk`
+chunks is defined, `ivk` is the extracted short commitment. Exceptional chains are
+not constrained here; the security layer consumes them as breaks. -/
 def Spec (G : Generators) (Q : Point Fp)
     (R : MulFixed.FixedBase) (ak nk ivk : Fp) : Prop :=
   ∃ rivk : Fq,
-    SpecOrBreak G.S Q (fun B => ivk = (B + rivk • R).x)
-      (hashToPointB G.S Q (commitIvkChunks ak.val nk.val))
+    HashGuarded G.S Q (commitIvkChunks ak.val nk.val)
+      (fun B => ivk = (B + rivk • R).x)
 
 /-- Honest-prover version of `Spec`, for the prover's concrete `rivk`. -/
 def ProverSpec (G : Generators) (Q : Point Fp)

@@ -41,6 +41,15 @@ structure Config where
   sPartial : Selector
   sPadAndAdd : Selector
 
+/-- Fixed columns used for Poseidon round constants, in allocation order. -/
+@[keygen_norm]
+def Config.fixedColumns (config : Config) : List (Column .fixed) :=
+  List.ofFn config.rcA ++ List.ofFn config.rcB
+
+/-- Evidence that the logical round-constant roles use distinct fixed columns. -/
+structure Config.FixedColumnsLawful (config : Config) : Type where
+  nodup : config.fixedColumns.Nodup
+
 /-- Rust `pow_5` (`pow5.rs:89-92`): `v² · v² · v`, in the source's exact association. -/
 @[selector_free, query_correct]
 def pow5Expr (v : Expression Fp Query) : Expression Fp Query :=
@@ -66,6 +75,10 @@ def fullRoundGate (cfg : Config) : Gate Fp :=
       term nextIdx 0 + term nextIdx 1 + term nextIdx 2
         - queryAdvice (cfg.state nextIdx) 1
     [("", row 0), ("", row 1), ("", row 2)]
+
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem fullRoundGate_selector (cfg : Config) :
+    (fullRoundGate cfg).selector = cfg.sFull := rfl
 
 /-- Rust `"partial rounds"` gate (`pow5.rs:116-160`): the double-round row. `mid i` is the
 MDS row over `(mid_0_sbox, cur₁ + rc_a₁, cur₂ + rc_a₂)`; `next i` is the `m_inv` row over
@@ -97,6 +110,10 @@ def partialRoundsGate (cfg : Config) : Gate Fp :=
      ("", mid 1 + rcB 1 - next 1),
      ("", mid 2 + rcB 2 - next 2)]
 
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem partialRoundsGate_selector (cfg : Config) :
+    (partialRoundsGate cfg).selector = cfg.sPartial := rfl
+
 /-- Rust `"pad-and-add"` gate (`pow5.rs:162-186`): over rows `prev`/`cur`/`next`, each
 rate word satisfies `initial + input - output`, and the capacity element is copied
 through unchanged. -/
@@ -113,6 +130,10 @@ def padAndAddGate (cfg : Config) : Gate Fp :=
     [("", padAndAdd 0), ("", padAndAdd 1),
      ("", queryAdvice (cfg.state 2) (-1) - queryAdvice (cfg.state 2) 1)]
 
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem padAndAddGate_selector (cfg : Config) :
+    (padAndAddGate cfg).selector = cfg.sPadAndAdd := rfl
+
 @[reducible] def configureEqualities
     (state : Fin 3 → Column .advice) (rcB : Fin 3 → Column .fixed) :
     Configure Fp Unit := do
@@ -123,7 +144,7 @@ def padAndAddGate (cfg : Config) : Gate Fp :=
   enableEquality (rcB 1).toAny
   enableEquality (rcB 2).toAny
 
-instance (state : Fin 3 → Column .advice)
+private instance (state : Fin 3 → Column .advice)
     (rcB : Fin 3 → Column .fixed) :
     ElaboratedConfigure (configureEqualities state rcB) := by
   unfold configureEqualities
@@ -134,7 +155,7 @@ instance (state : Fin 3 → Column .advice)
   createGate (partialRoundsGate cfg)
   createGate (padAndAddGate cfg)
 
-instance (cfg : Config) : ElaboratedConfigure (configureGates cfg) := by
+private instance (cfg : Config) : ElaboratedConfigure (configureGates cfg) := by
   unfold configureGates
   infer_instance
 
@@ -151,18 +172,73 @@ def configure (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
   configureGates cfg
   return cfg
 
-@[reducible] def configureElaborated
+@[configure_selector_norm, keygen_norm] theorem configure_delta_lookups
+    (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
+    (rcA rcB : Fin 3 → Column .fixed) (counts) :
+    ((configure state partialSbox rcA rcB).delta counts).lookups = [] := by
+  simp [configure, configureEqualities, configureGates]
+
+@[keygen_norm] theorem configure_delta_constants
+    (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
+    (rcA rcB : Fin 3 → Column .fixed) (counts) :
+    ((configure state partialSbox rcA rcB).delta counts).constants = [] := by
+  simp [configure, configureEqualities, configureGates]
+
+/-- Every state column is equality-enabled by the Pow5 configure program. -/
+theorem state_mem_configure_permutationRequests
+    (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
+    (rcA rcB : Fin 3 → Column .fixed) (counts : ConfigureCounts) (i : Fin 3) :
+    (state i).toAny ∈
+      ((configure state partialSbox rcA rcB).delta counts).permutationRequests := by
+  fin_cases i
+  · unfold configure
+    apply Configure.mem_permutationRequests_delta_bind_left
+    unfold configureEqualities
+    apply Configure.mem_permutationRequests_delta_bind_left
+    exact Configure.mem_permutationRequests_delta_enableEquality _ _
+  · unfold configure
+    apply Configure.mem_permutationRequests_delta_bind_left
+    unfold configureEqualities
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_left
+    exact Configure.mem_permutationRequests_delta_enableEquality _ _
+  · unfold configure
+    apply Configure.mem_permutationRequests_delta_bind_left
+    unfold configureEqualities
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_left
+    exact Configure.mem_permutationRequests_delta_enableEquality _ _
+
+@[reducible] private def configureElaborated
     (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
     (rcA rcB : Fin 3 → Column .fixed) :
     ElaboratedConfigure (configure state partialSbox rcA rcB) := by
   dsimp only [configure]
   infer_instance
 
+private theorem configure_constraintDegree
+    (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
+    (rcA rcB : Fin 3 → Column .fixed) (counts) :
+    ((configure state partialSbox rcA rcB).delta counts).constraintDegree = 6 := by
+  simp [ConfigureDelta.constraintDegree, Halo2.constraintDegree,
+    configure, configureEqualities, configureGates,
+    fullRoundGate, partialRoundsGate, padAndAddGate, pow5Expr,
+    Expression.degree, querySelector, queryAdvice, queryFixed,
+    Gate.withSelector]
+
 instance (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
     (rcA rcB : Fin 3 → Column .fixed) :
     ElaboratedConfigure (configure state partialSbox rcA rcB) :=
-  { configureElaborated state partialSbox rcA rcB with
+  ({ configureElaborated state partialSbox rcA rcB with
+    constraintDegree _ := 6
+    constraintDegree_eq := configure_constraintDegree state partialSbox rcA rcB
     selectorRequirements _ := True
+    lookupSelectorsCompatible := by
+      intro counts _
+      simp [configure, configureEqualities, configureGates,
+        ConfigureDelta.LookupSelectorsCompatible,
+        Halo2.LookupSelectorsCompatible]
     selectorsAllocated := by
       intro counts _
       constructor
@@ -170,7 +246,14 @@ instance (state : Fin 3 → Column .advice) (partialSbox : Column .advice)
           fullRoundGate, partialRoundsGate, padAndAddGate,
           Gate.withSelector]
         omega
+      · simp [configure, configureEqualities, configureGates]
       · simp [configure, configureEqualities, configureGates,
-          lookupInputSelectorBound] }
+          lookupInputSelectorBound] }).withNoExternalSelectors (by
+    intro counts
+    constructor
+    · simp [configure, configureEqualities, configureGates,
+        fullRoundGate, partialRoundsGate, padAndAddGate, Gate.withSelector]
+      omega
+    · simp [configure, configureEqualities, configureGates])
 
 end Zcash.Circuits.Poseidon

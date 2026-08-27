@@ -50,6 +50,28 @@ def load (G : Generators) (cfg : GeneratorTableConfig) : Circuit Fp Unit := do
   loadTable cfg.tableX ((List.range (2 ^ K)).map (fun j => (G.S j).x))
   loadTable cfg.tableY ((List.range (2 ^ K)).map (fun j => (G.S j).y))
 
+theorem load_lookupSelectorsAnchoredBy (G : Generators)
+    (cfg : GeneratorTableConfig) (region : RegionIndex)
+    (anchor : ℕ → FloorPlanner.RegionColumn) :
+    ((load G cfg).operations region).LookupSelectorsAnchoredBy anchor := by
+  simp [load, Circuit.operations_bind, operations_loadTable,
+    Operations.LookupSelectorsAnchoredBy]
+
+/-- The exact absolute-row footprint of the generator-table loads. -/
+def loadSynthesisSummary : FloorPlanner.SynthesisSummary where
+  tableRowExtent := 2 ^ K + 1
+
+@[synthesis_summary_norm]
+theorem load_synthesisSummary_eq (G : Generators)
+    (cfg : GeneratorTableConfig) (region : RegionIndex) :
+  FloorPlanner.synthesisSummary ((load G cfg).operations region) =
+      loadSynthesisSummary := by
+  simp only [load, loadSynthesisSummary, circuit_norm,
+    FloorPlanner.synthesisSummary_loadTable_cons,
+    FloorPlanner.synthesisSummary_nil, FloorPlanner.SynthesisSummary.ofTableValues,
+    FloorPlanner.SynthesisSummary.combine, List.length_map, List.length_range]
+  simp
+
 /-- The generator-table-contents predicate a Sinsemilla consumer's `EnvAssumptions`
 references — the three-column analogue of `LookupRangeCheck.TableLoaded`. Three conjuncts
 (mirroring `TableLoaded`'s design; discharged by `load_generatorTableLoaded`):
@@ -85,6 +107,20 @@ theorem load_operations (G : Generators) (cfg : GeneratorTableConfig) (i : Regio
       [ .loadTable cfg.tableIdx ((List.range (2 ^ K)).map (Nat.cast : ℕ → Fp)),
         .loadTable cfg.tableX ((List.range (2 ^ K)).map (fun j => (G.S j).x)),
         .loadTable cfg.tableY ((List.range (2 ^ K)).map (fun j => (G.S j).y)) ] := rfl
+
+theorem load_fixedWritesLawful (G : Generators) (cfg : GeneratorTableConfig)
+    (region : RegionIndex) (constantColumns : List (Column .fixed))
+    (hnodup : [cfg.tableIdx.inner, cfg.tableX.inner,
+      cfg.tableY.inner].Nodup)
+    (hconstants : [cfg.tableIdx.inner, cfg.tableX.inner,
+      cfg.tableY.inner].Disjoint constantColumns) :
+    ((load G cfg).operations region).FixedWritesLawful constantColumns := by
+  rw [load_operations]
+  constructor
+  · simp [Operation.FixedAssignmentsAgree]
+  · simpa [Operations.loadedTableColumns, Specs.K] using hnodup
+  · simp [Operations.loadedTableColumns, Operations.regionFixedColumns, Specs.K]
+  · simpa [Operations.loadedTableColumns, Specs.K] using hconstants
 
 /-- Contents of the `tableIdx` column: block row `r ∈ [0, 2^K)` holds `↑r`. Proven from the
 `loadTable` explicit-block conjunct alone (mirrors `LookupRangeCheck.load_tableIdx_eq`). -/

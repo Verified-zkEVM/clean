@@ -30,6 +30,238 @@ private theorem partialRound_output_eq (r : ℕ) (cfg : Config) (o : ℕ)
     (input : Var unit Fp) (self : RegionIndex) :
     (partialRound r).output cfg o input self = stateRow cfg (o + 1) self := rfl
 
+def permuteSynthesisSummary (cfg : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  (FloorPlanner.RegionSynthesisSummary.ofColumns
+      [.column .advice (cfg.state 0).index,
+        .column .advice (cfg.state 1).index,
+        .column .advice (cfg.state 2).index]
+      (offset + 1) 0).combine
+    ((FloorPlanner.RegionSynthesisSummary.repeatColumns
+      [.selector cfg.sFull.index,
+        .column .fixed (cfg.rcA 0).index,
+        .column .fixed (cfg.rcA 1).index,
+        .column .fixed (cfg.rcA 2).index,
+        .column .advice (cfg.state 0).index,
+        .column .advice (cfg.state 1).index,
+        .column .advice (cfg.state 2).index]
+      offset 1 2 0 4).combine
+      ((FloorPlanner.RegionSynthesisSummary.repeatColumns
+        [.selector cfg.sPartial.index,
+          .column .fixed (cfg.rcA 0).index,
+          .column .fixed (cfg.rcA 1).index,
+          .column .fixed (cfg.rcA 2).index,
+          .column .advice cfg.partialSbox.index,
+          .column .fixed (cfg.rcB 0).index,
+          .column .fixed (cfg.rcB 1).index,
+          .column .fixed (cfg.rcB 2).index,
+          .column .advice (cfg.state 0).index,
+          .column .advice (cfg.state 1).index,
+          .column .advice (cfg.state 2).index]
+        (offset + 4) 1 2 0 28).combine
+        (FloorPlanner.RegionSynthesisSummary.repeatColumns
+          [.selector cfg.sFull.index,
+            .column .fixed (cfg.rcA 0).index,
+            .column .fixed (cfg.rcA 1).index,
+            .column .fixed (cfg.rcA 2).index,
+            .column .advice (cfg.state 0).index,
+            .column .advice (cfg.state 1).index,
+            .column .advice (cfg.state 2).index]
+          (offset + 32) 1 2 0 4)))
+
+@[circuit_norm]
+def permuteSynthesize (cfg : Config) (offset : ℕ) (input : Var State Fp) :
+    RegionCircuit Fp (Var State Fp) := do
+  let _c0 ← copyAdvice input.x0 (cfg.state 0) offset
+  let _c1 ← copyAdvice input.x1 (cfg.state 1) offset
+  let _c2 ← copyAdvice input.x2 (cfg.state 2) offset
+  RegionCircuit.forRange' offset 1 4 (fun r o => do
+    let _ ← (fullRound r).call cfg o ()
+    pure ())
+  RegionCircuit.forRange' (offset + 4) 1 28 (fun r o => do
+    let _ ← (partialRound (4 + 2 * r)).call cfg o ()
+    pure ())
+  RegionCircuit.forRange' (offset + 32) 1 4 (fun r o => do
+    let _ ← (fullRound (60 + r)).call cfg o ()
+    pure ())
+  readStateRow cfg (offset + 36)
+
+@[reducible]
+def permuteElaborated :
+    ElaboratedRegionCircuit Fp Config Config State State pure
+      permuteSynthesize :=
+  { keygenRequirements :=
+      { configLawful cfg := Config.FixedColumnsLawful cfg
+        gates cfg _ := [fullRoundGate cfg, partialRoundsGate cfg]
+        fixedColumns cfg _ := cfg.fixedColumns
+        permutationColumns cfg _ :=
+          [cfg.state 0, cfg.state 1, cfg.state 2]
+        inputCells _ _ input :=
+          [input.x0.cell, input.x1.cell, input.x2.cell] }
+    output cfg offset _ self := stateRow cfg (offset + 36) self
+    synthesisSummary cfg offset _ _ :=
+      permuteSynthesisSummary cfg offset
+    synthesisSummary_eq := by
+      intro cfg offset input self
+      simp only [permuteSynthesisSummary]
+      rw [← FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns,
+        ← FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns,
+        ← FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns]
+      apply FloorPlanner.RegionSynthesisSummary.ext
+      · simp only [permuteSynthesize, fullRoundSynthesisSummary,
+          partialRoundSynthesisSummary, circuit_norm, synthesis_summary_norm,
+          Nat.mul_one, FloorPlanner.RegionSynthesisSummary.ofColumns_columns]
+      · simp only [permuteSynthesize, fullRoundSynthesisSummary,
+          partialRoundSynthesisSummary, circuit_norm, synthesis_summary_norm,
+          Nat.mul_one, FloorPlanner.RegionSynthesisSummary.ofColumns_rowCount]
+        omega
+      · simp only [permuteSynthesize, fullRoundSynthesisSummary,
+          partialRoundSynthesisSummary, circuit_norm, synthesis_summary_norm,
+          Nat.mul_one,
+          FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount]
+      · simp only [permuteSynthesize, fullRoundSynthesisSummary,
+          partialRoundSynthesisSummary, circuit_norm, synthesis_summary_norm,
+          Nat.mul_one]
+      · simp only [permuteSynthesize, fullRoundSynthesisSummary,
+          partialRoundSynthesisSummary, circuit_norm, synthesis_summary_norm,
+          Nat.mul_one]
+    output_eq := by
+      intro _ _ _ _
+      simp only [permuteSynthesize, circuit_norm]
+    fixedAssignmentsAgree := by
+      intro configInput counts hconfig offset input region
+      have hfirst :
+          ((RegionCircuit.forRange' offset 1 4 fun r o => do
+            let _ ← (fullRound r).call configInput o ()
+            pure ()).operations region).FixedAssignmentsAgree := by
+        apply RegionCircuit.forRange'_fixedAssignmentsAgree
+        · intro i
+          simpa only [FormalRegionCircuit.call_operations, Configure.output_pure,
+              RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+              List.append_nil]
+            using (fullRound i.val).elaborated.fixedAssignmentsAgree
+              configInput counts hconfig (offset + i.val * 1) () region
+        · intro i column row value hassignment
+          simp only [RegionCircuit.operations_bind,
+            RegionCircuit.operations_pure, List.append_nil] at hassignment
+          exact fullRound_assignFixed_row i.val configInput
+            (offset + i.val * 1) () region column row value hassignment
+      have hpartial :
+          ((RegionCircuit.forRange' (offset + 4) 1 28 fun r o => do
+            let _ ← (partialRound (4 + 2 * r)).call configInput o ()
+            pure ()).operations region).FixedAssignmentsAgree := by
+        apply RegionCircuit.forRange'_fixedAssignmentsAgree
+        · intro i
+          simpa only [FormalRegionCircuit.call_operations, Configure.output_pure,
+              RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+              List.append_nil]
+            using (partialRound (4 + 2 * i.val)).elaborated.fixedAssignmentsAgree
+              configInput counts hconfig (offset + 4 + i.val * 1) () region
+        · intro i column row value hassignment
+          simp only [RegionCircuit.operations_bind,
+            RegionCircuit.operations_pure, List.append_nil] at hassignment
+          exact partialRound_assignFixed_row (4 + 2 * i.val) configInput
+            (offset + 4 + i.val * 1) () region column row value hassignment
+      have hlast :
+          ((RegionCircuit.forRange' (offset + 32) 1 4 fun r o => do
+            let _ ← (fullRound (60 + r)).call configInput o ()
+            pure ()).operations region).FixedAssignmentsAgree := by
+        apply RegionCircuit.forRange'_fixedAssignmentsAgree
+        · intro i
+          simpa only [FormalRegionCircuit.call_operations, Configure.output_pure,
+              RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+              List.append_nil]
+            using (fullRound (60 + i.val)).elaborated.fixedAssignmentsAgree
+              configInput counts hconfig (offset + 32 + i.val * 1) () region
+        · intro i column row value hassignment
+          simp only [RegionCircuit.operations_bind,
+            RegionCircuit.operations_pure, List.append_nil] at hassignment
+          exact fullRound_assignFixed_row (60 + i.val) configInput
+            (offset + 32 + i.val * 1) () region column row value hassignment
+      have hfirstBounds : ∀ column row value,
+          .assignFixed column row value ∈
+              (RegionCircuit.forRange' offset 1 4 (fun r o => do
+                let _ ← (fullRound r).call configInput o ()
+                pure ())).operations region →
+            offset ≤ row ∧ row < offset + 4 := by
+        apply RegionCircuit.forRange'_assignFixed_row_bounds
+        intro i column row value hassignment
+        simp only [RegionCircuit.operations_bind,
+          RegionCircuit.operations_pure, List.append_nil] at hassignment
+        exact fullRound_assignFixed_row i.val configInput
+          (offset + i.val * 1) () region column row value hassignment
+      have hpartialBounds : ∀ column row value,
+          .assignFixed column row value ∈
+              (RegionCircuit.forRange' (offset + 4) 1 28 (fun r o => do
+                let _ ← (partialRound (4 + 2 * r)).call configInput o ()
+                pure ())).operations region →
+            offset + 4 ≤ row ∧ row < offset + 32 := by
+        intro column row value hassignment
+        have hbounds := RegionCircuit.forRange'_assignFixed_row_bounds
+          (offset + 4) 28 _ region
+          (fun i column row value hassignment => by
+            simp only [RegionCircuit.operations_bind,
+              RegionCircuit.operations_pure, List.append_nil] at hassignment
+            exact partialRound_assignFixed_row (4 + 2 * i.val) configInput
+              (offset + 4 + i.val * 1) () region column row value hassignment)
+          column row value hassignment
+        omega
+      have hlastBounds : ∀ column row value,
+          .assignFixed column row value ∈
+              (RegionCircuit.forRange' (offset + 32) 1 4 (fun r o => do
+                let _ ← (fullRound (60 + r)).call configInput o ()
+                pure ())).operations region →
+            offset + 32 ≤ row ∧ row < offset + 36 := by
+        intro column row value hassignment
+        have hbounds := RegionCircuit.forRange'_assignFixed_row_bounds
+          (offset + 32) 4 _ region
+          (fun i column row value hassignment => by
+            simp only [RegionCircuit.operations_bind,
+              RegionCircuit.operations_pure, List.append_nil] at hassignment
+            exact fullRound_assignFixed_row (60 + i.val) configInput
+              (offset + 32 + i.val * 1) () region column row value hassignment)
+          column row value hassignment
+        omega
+      unfold RegionOperations.FixedAssignmentsAgree
+      intro column row left right hleft hright
+      simp only [Configure.output_pure, permuteSynthesize,
+        RegionCircuit.operations_bind, operations_copyAdvice] at hleft hright
+      rw [operations_readStateRow] at hleft hright
+      simp at hleft hright
+      rcases hleft with hleft | hleft | hleft <;>
+        rcases hright with hright | hright | hright
+      · exact hfirst column row left right hleft hright
+      · have hleftBounds := hfirstBounds column row left hleft
+        have hrightBounds := hpartialBounds column row right hright
+        omega
+      · have hleftBounds := hfirstBounds column row left hleft
+        have hrightBounds := hlastBounds column row right hright
+        omega
+      · have hleftBounds := hpartialBounds column row left hleft
+        have hrightBounds := hfirstBounds column row right hright
+        omega
+      · exact hpartial column row left right hleft hright
+      · have hleftBounds := hpartialBounds column row left hleft
+        have hrightBounds := hlastBounds column row right hright
+        omega
+      · have hleftBounds := hlastBounds column row left hleft
+        have hrightBounds := hfirstBounds column row right hright
+        omega
+      · have hleftBounds := hlastBounds column row left hleft
+        have hrightBounds := hpartialBounds column row right hright
+        omega
+      · exact hlast column row left right hleft hright
+    copyCellsAssigned := by
+      intro configInput counts hconfig offset input region
+      simp only [permuteSynthesize, RegionCircuit.operations_bind,
+        RegionOperations.CopyCellsAssigned,
+        RegionOperations.copyCellsAssignedFrom_append_iff]
+      repeat' apply And.intro
+      all_goals first
+        | (apply RegionOperations.copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
+           simp only [circuit_norm, RegionOperation.copiedCells, List.Forall] <;> done)
+        | keygen_registration }
+
 /-- Chain a per-row step family into a `Fin.foldl` (the donor `Permute.value` shape). -/
 private theorem foldl_of_steps (f : ℕ → State Fp → State Fp) (st : ℕ → State Fp)
     (base : ℕ) : ∀ n : ℕ,
@@ -48,25 +280,8 @@ rounds, 28 double partial rounds, 4 full rounds. `Spec`: the outgoing state is t
 `Permute.value` of the incoming one. -/
 def permuteRegion : FormalRegionCircuit Fp Config Config State State where
   configure := pure
-  elaborated :=
-    { keygenRequirements :=
-        { gates cfg _ := [fullRoundGate cfg, partialRoundsGate cfg] } }
-
-  synthesize cfg offset (input : Var State Fp) := do
-    -- Pow5State::load (pow5.rs:536-550)
-    let _c0 ← copyAdvice input.x0 (cfg.state 0) offset
-    let _c1 ← copyAdvice input.x1 (cfg.state 1) offset
-    let _c2 ← copyAdvice input.x2 (cfg.state 2) offset
-    RegionCircuit.forRange' offset 1 4 (fun r o => do
-      let _ ← (fullRound r).call cfg o ()
-      pure ())
-    RegionCircuit.forRange' (offset + 4) 1 28 (fun r o => do
-      let _ ← (partialRound (4 + 2 * r)).call cfg o ()
-      pure ())
-    RegionCircuit.forRange' (offset + 32) 1 4 (fun r o => do
-      let _ ← (fullRound (60 + r)).call cfg o ()
-      pure ())
-    readStateRow cfg (offset + 36)
+  synthesize := permuteSynthesize
+  elaborated := permuteElaborated
 
   Spec input output _ := output = Permute.value roundConstants input
 
@@ -218,6 +433,66 @@ def permuteRegion : FormalRegionCircuit Fp Config Config State State where
     show st (32 + 4) = Permute.value roundConstants (st 0)
     rw [hC, show (32 : ℕ) = 4 + 28 from rfl, hB, show (4 : ℕ) = 0 + 4 from rfl, hA]
     rfl
+
+/-- The permutation bundle exposes its already-reduced synthesis footprint. -/
+@[synthesis_summary_norm]
+theorem permuteRegion_synthesisSummary (cfg : Config) (offset : ℕ)
+    (input : Var State Fp) (self : RegionIndex) :
+    permuteRegion.elaborated.synthesisSummary cfg offset input self =
+      permuteSynthesisSummary cfg offset := rfl
+
+@[keygen_norm]
+theorem permuteRegion_inputCells (cfg : Config)
+    (hconfigured : permuteRegion.Configured cfg) (input : Var State Fp) :
+    FormalRegionCircuit.Configured.inputCells hconfigured input =
+      [input.x0.cell, input.x1.cell, input.x2.cell] := rfl
+
+/-- Every coordinate returned by the Poseidon permutation is assigned by its final
+full round. The proof only opens the four-round tail, not the 28-round middle loop. -/
+theorem permuteRegion_output_cells_assigned (cfg : Config) (offset : ℕ)
+    (input : Var State Fp) (self : RegionIndex) (available : List Cell) :
+    let output := permuteRegion.output cfg offset input self
+    output.x0.cell ∈
+        ((permuteRegion.call cfg offset input).operations self
+          |>.assignedCellsAfter self available) ∧
+      output.x1.cell ∈
+        ((permuteRegion.call cfg offset input).operations self
+          |>.assignedCellsAfter self available) ∧
+      output.x2.cell ∈
+        ((permuteRegion.call cfg offset input).operations self
+          |>.assignedCellsAfter self available) := by
+  rw [show permuteRegion.output cfg offset input self =
+      stateRow cfg (offset + 36) self from rfl]
+  rw [FormalRegionCircuit.call_operations]
+  simp only [permuteRegion, permuteSynthesize, RegionCircuit.operations_bind,
+    circuit_norm, RegionOperations.mem_assignedCellsAfter_iff,
+    RegionOperations.assignedCells, List.flatMap_append, List.flatMap_cons,
+    RegionOperation.assignedCells, List.singleton_append, List.mem_append,
+    List.mem_cons]
+  repeat' apply And.intro
+  all_goals right
+  all_goals right
+  all_goals right
+  all_goals right
+  all_goals right
+  all_goals right
+  all_goals rw [RegionCircuit.forRange'_operations]
+  all_goals simp only [List.ofFn, Fin.foldr_succ, Fin.foldr_zero,
+    List.flatten_cons, List.flatten_nil, List.append_nil,
+    List.flatMap_append, List.mem_append]
+  all_goals right
+  all_goals right
+  all_goals right
+  all_goals
+    have h := fullRound_output_cells_assigned 63 cfg (offset + 35) () self []
+    simp only [RegionOperations.mem_assignedCellsAfter_iff, List.nil_append] at h
+    first
+      | simpa only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+          List.append_nil, Nat.mul_one, Nat.add_assoc] using h.1
+      | simpa only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+          List.append_nil, Nat.mul_one, Nat.add_assoc] using h.2.1
+      | simpa only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+          List.append_nil, Nat.mul_one, Nat.add_assoc] using h.2.2
 
 derive_contract_bridges permuteRegion := permuteRegion
 

@@ -49,6 +49,11 @@ def gate (qAddIncomplete : Selector) (xP yP xQR yQR : Column .advice) : Gate Fp 
     [x_p, y_p, x_q, y_q, x_r, y_r]
     [("x_r", poly1), ("y_r", poly2)]
 
+@[circuit_norm, configure_selector_norm, keygen_norm]
+theorem gate_selector
+    (qAddIncomplete : Selector) (xP yP xQR yQR : Column .advice) :
+    (gate qAddIncomplete xP yP xQR yQR).selector = qAddIncomplete := rfl
+
 /-!
 ## The gadget
 
@@ -65,6 +70,23 @@ structure Inputs (F : Type) where
   q : Point F
 deriving ProvableStruct
 
+/-- The point-coordinate columns registered for equality by `AddIncomplete.add.configure`. -/
+@[keygen_norm]
+def permutationColumns (config : Config) : List AnyColumn :=
+  [config.xP, config.yP, config.xQR, config.yQR]
+
+def synthesisSummary (config : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns
+    [.selector config.qAddIncomplete.index,
+      .column .advice config.xP.index,
+      .column .advice config.yP.index,
+      .column .advice config.xQR.index,
+      .column .advice config.yQR.index,
+      .column .advice config.xQR.index,
+      .column .advice config.yQR.index]
+    (offset + 2) 0
+
 def add : FormalRegionCircuit Fp
     (Column .advice × Column .advice × Column .advice × Column .advice) Config
     Inputs Point where
@@ -78,6 +100,24 @@ def add : FormalRegionCircuit Fp
     let qAddIncomplete ← selector
     createGate (gate qAddIncomplete xP yP xQR yQR)
     return { qAddIncomplete, xP, yP, xQR, yQR }
+
+  elaborated :=
+    { keygenRequirements :=
+        { inputCells _ _ input :=
+            [input.p.x.cell, input.p.y.cell, input.q.x.cell, input.q.y.cell] }
+      synthesisSummary config offset _ _ := synthesisSummary config offset
+      synthesisSummary_eq := by
+        intro _ _ _ _
+        apply FloorPlanner.RegionSynthesisSummary.ext
+        · simp only [synthesisSummary]
+          rw [FloorPlanner.regionSynthesisSummary_columns_eq_unionColumns]
+          simp only [circuit_norm, gate, List.flatMap_cons,
+            List.flatMap_nil, FloorPlanner.regionOperationShapeColumns,
+            List.append_nil, List.nil_append, List.singleton_append]
+        · simp only [synthesisSummary, circuit_norm, gate]
+          omega
+        all_goals simp only [synthesisSummary, circuit_norm, gate,
+          synthesis_summary_norm] }
 
   synthesize config offset (input : Inputs (AssignedCell Fp)) := do
     -- enable `q_add_incomplete` selector at `offset`
@@ -129,6 +169,98 @@ def add : FormalRegionCircuit Fp
     obtain ⟨-, -, hxne⟩ := assumptions
     simp_all only
     grind
+
+/-- Incomplete addition never requests a deferred constant allocation. -/
+@[synthesis_summary_norm]
+theorem add_synthesisSummary_eq
+    (config : Config) (offset : ℕ) (input : Var Inputs Fp)
+    (region : RegionIndex) :
+    add.elaborated.synthesisSummary config offset input region =
+      synthesisSummary config offset := rfl
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_constantSiteCount (config : Config) (offset : ℕ) :
+    (synthesisSummary config offset).constantSiteCount = 0 := by
+  simp only [synthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem add_synthesisSummary_constantSiteCount
+    (config : Config) (offset : ℕ) (input : Inputs (AssignedCell Fp))
+    (region : RegionIndex) :
+    (add.elaborated.synthesisSummary
+      config offset input region).constantSiteCount = 0 := by
+  rw [add_synthesisSummary_eq]
+  simp only [synthesisSummary, circuit_norm]
+
+@[keygen_norm]
+theorem Configured.fixedColumns_eq_nil {config : Config}
+    (configured : add.Configured config) :
+    configured.fixedColumns = [] := by
+  rcases configured with ⟨configInput, counts, hconfig, outputEq⟩
+  cases outputEq
+  simp only [FormalRegionCircuit.Configured.fixedColumns]
+  constructor
+
+@[keygen_norm]
+theorem Configured.lookups_eq_nil {config : Config}
+    (configured : add.Configured config) :
+    configured.lookups = [] := by
+  rcases configured with ⟨configInput, counts, hconfig, outputEq⟩
+  cases outputEq
+  simp only [FormalRegionCircuit.Configured.lookups,
+    FormalRegionCircuit.keygenRequirements,
+    ElaboratedRegionCircuit.keygenRequirements, add, keygen_norm]
+
+@[keygen_norm]
+theorem Configured.permutationColumns_eq {config : Config}
+    (configured : add.Configured config) :
+    configured.permutationColumns = permutationColumns config := by
+  rcases configured with ⟨configInput, counts, hconfig, outputEq⟩
+  cases outputEq
+  simp only [keygen_norm, FormalRegionCircuit.Configured.permutationColumns,
+    FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+    add, permutationColumns, List.singleton_append]
+
+@[keygen_norm]
+theorem Configured.inputCells_eq {config : Config}
+    (configured : add.Configured config) (input : Var Inputs Fp) :
+    configured.inputCells input =
+      [input.p.x.cell, input.p.y.cell, input.q.x.cell, input.q.y.cell] := by
+  rfl
+
+/-- Both coordinates returned by incomplete addition are assigned by its call body. -/
+theorem add_output_cells_assigned (config : Config) (offset : ℕ)
+    (input : Var Inputs Fp) (self : RegionIndex) (available : List Cell) :
+    let output := add.output config offset input self
+    output.x.cell ∈
+        (((add.call config offset input).operations self).assignedCellsAfter self available) ∧
+      output.y.cell ∈
+        (((add.call config offset input).operations self).assignedCellsAfter self available) := by
+  rw [FormalRegionCircuit.call_operations]
+  simp only [FormalRegionCircuit.output]
+  rw [add.elaborated.output_eq]
+  simp only [add, circuit_norm, AssignedCell.of_cell,
+    RegionOperations.mem_assignedCellsAfter_iff, List.mem_append]
+  constructor <;> right <;>
+    simp only [RegionOperations.assignedCells, List.flatMap_cons,
+      RegionOperation.assignedCells, List.singleton_append,
+      List.flatMap_nil, List.nil_append, List.mem_cons, true_or, or_true]
+
+@[keygen_norm]
+theorem Configured.inputPermutationColumns_eq {config : Config}
+    (configured : add.Configured config) (input : Var Inputs Fp) :
+    configured.inputPermutationColumns input =
+      [input.p.x.cell.column, input.p.y.cell.column,
+        input.q.x.cell.column, input.q.y.cell.column] := by
+  rfl
+
+@[keygen_norm]
+theorem configure_output_permutationColumns
+    (xP yP xQR yQR : Column .advice) (counts : ConfigureCounts) :
+    permutationColumns
+        ((add.configure (xP, yP, xQR, yQR)).output counts) =
+      [xP, yP, xQR, yQR] := by
+  simp [add, permutationColumns]
 
 end AddIncomplete
 

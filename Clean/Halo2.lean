@@ -8,7 +8,7 @@ import Clean.Halo2.Operations
 import Clean.Halo2.Basic
 import Clean.Halo2.Lemmas
 import Clean.Halo2.Loops
-import Clean.Halo2.Formal
+import Clean.Halo2.Formal.Tactics
 import Clean.Halo2.Keygen
 import Clean.Halo2.TopLevel
 import Clean.Halo2.Tactics.ProvableTypeSimp

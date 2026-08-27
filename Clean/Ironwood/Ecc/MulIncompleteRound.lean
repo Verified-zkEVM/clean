@@ -134,6 +134,10 @@ def qMul1Gate (cfg : Config) : Gate Fp :=
     let yAWitnessed : Expression Fp Query := queryAdvice cfg.lambda1 0
     [("init y_a", yAWitnessed - yA cfg 1)]
 
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem qMul1Gate_selector (cfg : Config) :
+    (qMul1Gate cfg).selector = cfg.qMul1 := rfl
+
 /-- The `q_mul_2` gate: `x_p`/`y_p` are constant on the next row, plus the shared loop body with the
 next-row `y_a` derived. -/
 def qMul2Gate (cfg : Config) : Gate Fp :=
@@ -152,6 +156,10 @@ def qMul2Gate (cfg : Config) : Gate Fp :=
        ("y_p_check", yPCur - yPNext) ]
       ++ forLoopPolys cfg (yA cfg 1))
 
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem qMul2Gate_selector (cfg : Config) :
+    (qMul2Gate cfg).selector = cfg.qMul2 := rfl
+
 /-- The `q_mul_3` gate: the loop body on the last row, with the next-row `y_a` the WITNESSED final
 `y` in the `λ₁` column (a bare query, not a derived `Y_A`). -/
 def qMul3Gate (cfg : Config) : Gate Fp :=
@@ -163,6 +171,10 @@ def qMul3Gate (cfg : Config) : Gate Fp :=
       queryAdvice cfg.yP 0, queryAdvice cfg.lambda1 0, queryAdvice cfg.lambda2 0 ] <|
     let yAFinal : Expression Fp Query := queryAdvice cfg.lambda1 1
     forLoopPolys cfg yAFinal
+
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem qMul3Gate_selector (cfg : Config) :
+    (qMul3Gate cfg).selector = cfg.qMul3 := rfl
 
 /-- Rust `Config::configure`: enable equality on `z` and `λ₁`, allocate the three selectors, and
 register the three gates. The columns are handed down by `mul.rs` (different for `hi`/`lo`). -/
@@ -182,6 +194,14 @@ instance (z xA xP yP lambda1 lambda2 : Column .advice) :
     ElaboratedConfigure (configure z xA xP yP lambda1 lambda2) := by
   unfold configure
   infer_instance
+
+@[keygen_norm]
+theorem configure_delta_lookups
+    (z xA xP yP lambda1 lambda2 : Column .advice)
+    (counts : ConfigureCounts) :
+    ((configure z xA xP yP lambda1 lambda2).delta counts).lookups = [] := by
+  unfold configure
+  rfl
 
 /-! ## Inputs / Output
 
@@ -332,7 +352,7 @@ def reads (cfg : Config) (offset : ℕ) (self : RegionIndex) : State (AssignedCe
 def readState (cfg : Config) (offset : ℕ) : RegionCircuit Fp (State (AssignedCell Fp)) :=
   fun self => (reads cfg offset self, [])
 
-@[circuit_norm]
+@[circuit_norm, keygen_spine]
 theorem operations_readState (cfg : Config) (offset : ℕ) (self : RegionIndex) :
     (readState cfg offset).operations self = [] := rfl
 
@@ -646,7 +666,29 @@ def round (i : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field)
 
   elaborated :=
     { keygenRequirements := { gates cfg _ := [qMul2Gate cfg] }
-      registered := by keygen_registration }
+      registered := by keygen_registration
+      synthesisSummary config offset _ _ :=
+        .ofColumns
+          [.selector config.qMul2.index,
+            .column .advice config.z.index,
+            .column .advice config.xA.index,
+            .column .advice config.lambda1.index,
+            .column .advice config.lambda2.index,
+            .column .advice config.xP.index,
+            .column .advice config.yP.index]
+          (offset + 3) 0
+      synthesisSummary_eq := by
+        intro _ _ _ _
+        apply FloorPlanner.RegionSynthesisSummary.ext
+        · rw [FloorPlanner.regionSynthesisSummary_columns_eq_unionColumns]
+          simp only [circuit_norm, qMul2Gate_selector, List.flatMap_cons,
+            List.flatMap_nil, FloorPlanner.regionOperationShapeColumns,
+            List.append_nil, List.nil_append, List.singleton_append]
+        · simp only [circuit_norm]
+          omega
+        · simp only [circuit_norm]
+        · simp only [circuit_norm, synthesis_summary_norm]
+        · simp only [circuit_norm, synthesis_summary_norm] }
 
   Witness := State
   extract cfg offset _ self env := eval env (reads cfg offset self)
@@ -807,6 +849,18 @@ theorem last_gates {w : State Fp} {m : ℕ} {k k' : Bool} (hH : w.Honest m k) :
   · simpa using step_gates (k' := k') hH |>.2.2.2.2.1
   · simp only [State.stepY, step_xA_eq, State.yA2, State.xR]
     ring
+
+/-- The round assigns the next running-sum cell that its output names. -/
+theorem round_output_z_cell_assigned (i : ℕ) (cfg : Config) (offset : ℕ)
+    (input : Var (Unconstrained field) Fp) (self : RegionIndex) :
+    Cell.of self (offset + 1) cfg.z ∈
+      RegionOperations.assignedCells
+        (((round i).call cfg offset input).operations self) self := by
+  rw [FormalRegionCircuit.call_operations]
+  simp only [round, RegionCircuit.operations_bind, operations_readState,
+    operations_enable, operations_assignAdvice, RegionOperations.assignedCells,
+    List.flatMap_cons, RegionOperation.assignedCells, List.singleton_append,
+    List.nil_append, List.mem_cons, true_or]
 
 /-- The round's output variable: the next row's neighborhood (position-determined). -/
 @[circuit_norm]

@@ -14,8 +14,8 @@ namespace Zcash.Circuits.CommitIvk.Main
 open Halo2
 open Ecc.MulFixed (FixedBase)
 open Specs (bitrange)
-open Specs.Sinsemilla (Generators hashToPoint hashToPointB SpecOrBreak
-  commitIvkChunks breaksOfGuarded chunksOf_mem_lt)
+open Specs.Sinsemilla (Generators hashToPoint HashGuarded
+  commitIvkChunks chunksOf_mem_lt)
 open CompElliptic.Fields.Pasta (Fq)
 open NoteCommit.Main (brWit currentRegion)
 open CompElliptic.Fields.Pasta (PALLAS_BASE_CARD)
@@ -191,7 +191,7 @@ theorem soundness (G : Generators) (R : FixedBase) (Q : Point Fp)
   simp only [circuit_norm,
     Nat.add_assoc, Nat.reduceAdd] at hCanS
   obtain ⟨hSa, hSb0v, hSb1, hSb2v, hSc, hSd0v, hSd1, hSbW, hSdW⟩ := hCanS
-  obtain ⟨hiak, hink, -⟩ := h_input
+  obtain ⟨hiak, hInputNk, -⟩ := h_input
   -- ── field-level canonical piece values ──
   have haF : env.advice cfg.hashConfig.witnessPieces ((place i₀ : ℕ) : ℤ)
       = ((bitrange (AssignedCell.eval place env input_var_ak).val 0 250 : ℕ) : Fp) := by
@@ -267,9 +267,11 @@ theorem soundness (G : Generators) (R : FixedBase) (Q : Point Fp)
     hak hnk
   -- ── land the Spec ──
   simp only [Spec]
-  rw [hiak, hink] at hchunks
-  refine breaksOfGuarded (Or.inl hQ) (fun m hm => G.S_onCurve (chunksOf_mem_lt (by
-    simpa [Specs.Sinsemilla.commitIvkChunks] using hm))) ?_
+  rw [hiak, hInputNk] at hchunks
+  refine Specs.Sinsemilla.breaksOfGuarded (Or.inl hQ)
+    (fun m hm => G.S_onCurve (chunksOf_mem_lt (by
+      rw [Specs.Sinsemilla.commitIvkChunks] at hm
+      exact hm))) ?_
   intro B hB
   rw [← hchunks] at hB
   obtain ⟨-, hOut⟩ := hContract B hB
@@ -284,31 +286,8 @@ theorem soundness (G : Generators) (R : FixedBase) (Q : Point Fp)
                 AssignedCell.of (i₀ + 6) 0 cfg.hashConfig.witnessPieces],
             r := input_var_rivk }
           (i₀ + 7)) : Point Fp).x := by
-    -- the output walk crosses the commit call (opaque): land the walk on the folded call's
-    -- output projection (defeq), open it with `output_call`, then the rest is metadata defeq
-    rw [← h_output,
-      show (synth G R Q hQ cfg
-          { ak := input_var_ak, nk := input_var_nk, rivk := input_var_rivk }).output i₀
-        = ((Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).output
-            (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
-            { pieces :=
-                #v[AssignedCell.of i₀ 0 cfg.hashConfig.witnessPieces,
-                  AssignedCell.of (i₀ + 3) 0 cfg.hashConfig.witnessPieces,
-                  AssignedCell.of (i₀ + 4) 0 cfg.hashConfig.witnessPieces,
-                  AssignedCell.of (i₀ + 6) 0 cfg.hashConfig.witnessPieces],
-              r := input_var_rivk }
-            (i₀ + 7)).x from by
-        show (((Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).call
-            (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
-            { pieces :=
-                #v[AssignedCell.of i₀ 0 cfg.hashConfig.witnessPieces,
-                  AssignedCell.of (i₀ + 3) 0 cfg.hashConfig.witnessPieces,
-                  AssignedCell.of (i₀ + 4) 0 cfg.hashConfig.witnessPieces,
-                  AssignedCell.of (i₀ + 6) 0 cfg.hashConfig.witnessPieces],
-              r := input_var_rivk }).output
-          (i₀ + 7)).x = _
-        rw [FormalCircuit.output_call]]
-    with_unfolding_all rfl
+    rw [← h_output, Sinsemilla.CommitDomain.commit_output]
+    simp only [explicit_provable_type, circuit_norm, Nat.add_assoc, Nat.reduceAdd]
   show (output : Fp) = _
   rw [show (output : Fp) = ({ x := output, y := 0 } : Point Fp).x from rfl, hOutVar,
     hOut]
@@ -408,12 +387,12 @@ private theorem commit_derived_spec (G : Generators) (R : FixedBase)
             c inp i) : Value Point Fp)
           = B + (((Ecc.MulFixed.FullWidth.fwExtract c.1 i
               (⟨place, env.toEnvironment⟩ : Placed Environment Fp)).2 • R) : Point Fp) := by
-  have hpeP :
+  have hPiecesProver :
       (eval (⟨place, env⟩ : Placed ProverEnvironment Fp) inp).pieces =
         (eval (⟨place, env⟩ : Placed ProverEnvironment Fp) inp.pieces
           : Value (fields ns.length) Fp) := by
     with_unfolding_all rfl
-  have hpeE :
+  have hPiecesEnv :
       (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) inp).pieces =
         (eval (⟨place, env.toEnvironment⟩ : Placed Environment Fp) inp.pieces
           : Value (fields ns.length) Fp) := by
@@ -426,10 +405,10 @@ private theorem commit_derived_spec (G : Generators) (R : FixedBase)
             (eval (⟨place, env⟩ : Placed ProverEnvironment Fp) inp).pieces ∧
           ∃ B, hashToPoint G.S Q (Sinsemilla.Chain.honestChunks ns
             (eval (⟨place, env⟩ : Placed ProverEnvironment Fp) inp).pieces) = some B
-        rw [hpeP]
+        rw [hPiecesProver]
         exact ⟨hPB', hHon'⟩)).1
   rw [Sinsemilla.CommitDomain.commit_spec_eq, Sinsemilla.CommitDomain.commit_extract_eq] at h
-  rw [hpeE] at h
+  rw [hPiecesEnv] at h
   simp only at h
   exact h
 
@@ -504,7 +483,7 @@ theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
   simp only [synthPieces_output, synthPieces_nextRegionIndex,
     synthPieces_regionCount, Nat.add_assoc] at hWcm hWCan
   simp only [Nat.reduceAdd] at hWCan
-  obtain ⟨hiak, hink, -⟩ := h_input
+  obtain ⟨hiak, hInputNk, -⟩ := h_input
   -- ── honest piece facts ──
   have hHF := CommitIvk.Commit.honest_pieces_facts
     (AssignedCell.eval place env input_var_ak)
@@ -528,7 +507,7 @@ theorem completeness (G : Generators) (R : FixedBase) (Q : Point Fp)
         env.advice cfg.hashConfig.witnessPieces ((place (i₀ + 6) : ℕ) : ℤ)]
       = commitIvkChunks (show Fp from input_ak).val (show Fp from input_nk).val := by
     rw [honestChunks_donor_eq]
-    rw [hiak, hink] at hHonestDonor
+    rw [hiak, hInputNk] at hHonestDonor
     exact hHonestDonor
   -- ── derived commit contract (the composite's rely-conditions) ──
   have hPB2 : Sinsemilla.Chain.PieceBounds ns
@@ -700,6 +679,52 @@ def circuit (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve) :
   soundness := soundness G R Q hQ
   completeness := completeness G R Q hQ
 
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_eq (G : Generators) (R : FixedBase)
+    (Q : Point Fp) (hQ : Q.OnCurve) (config : Config)
+    (input : Var Inputs Fp) (region : RegionIndex) :
+    (circuit G R Q hQ).elaborated.synthesisSummary config input region =
+      synthesisSummary config := rfl
+
+@[keygen_norm]
+theorem circuit_inputCells_eq (G : Generators) (R : FixedBase)
+    (Q : Point Fp) (hQ : Q.OnCurve) {config}
+    (configured : (circuit G R Q hQ).Configured config)
+    (input : Var Inputs Fp) :
+    configured.inputCells input = [input.ak.cell, input.nk.cell] := by
+  rfl
+
+/-- The scalar cell returned by CommitIvk is assigned by its commitment child. -/
+theorem circuit_call_output_cell_assigned
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (config : Config) (input : Var Inputs Fp) (region : RegionIndex) :
+    ((circuit G R Q hQ).output config input region).cell ∈
+      Operations.assignedCellsFrom
+        (((circuit G R Q hQ).call config input).operations region) region := by
+  have houtput : (circuit G R Q hQ).output config input region =
+      .of (region + 10) 1 config.addConfig.xQR := rfl
+  rw [houtput]
+  rw [FormalCircuit.call_operations]
+  let pcs := (synthPieces config input.ak input.nk).output region
+  let commitInput : Var (Sinsemilla.CommitDomain.Input ns.length) Fp :=
+    { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d], r := input.rivk }
+  have hcommit := Sinsemilla.CommitDomain.commit_call_output_cells_assigned
+    G ns R Q hQ ns_ne_nil
+    (config.mulConfig, config.hashConfig, config.addConfig)
+    commitInput (region + 7)
+  simp only [circuit, synth, NoteCommit.Main.currentRegion_operations,
+    NoteCommit.Main.currentRegion_output,
+    NoteCommit.Main.currentRegion_nextRegionIndex, Circuit.operations_bind,
+    Circuit.operations_pure, FormalCircuit.output_call',
+    FormalCircuit.nextRegionIndex_call', Operations.assignedCellsFrom_append,
+    Operations.assignedCellsFrom, Operations.regionCount,
+    synthPieces_regionCount, synthPieces_nextRegionIndex,
+    Sinsemilla.CommitDomain.commit_output_cells, List.mem_append,
+    List.not_mem_nil, AssignedCell.of_cell, false_or, or_false,
+    Nat.add_assoc, Nat.reduceAdd, pcs, commitInput]
+    at hcommit ⊢
+  exact Or.inr (Or.inl hcommit.1)
+
 /-- Package CommitIvk from the commitment child and the three arguments registered
 by its own piece/canonicity stages. -/
 def configurationCertificate (G : Generators) (R : FixedBase)
@@ -711,7 +736,10 @@ def configurationCertificate (G : Generators) (R : FixedBase)
     (bitshift : LookupRangeCheck.bitshiftGate 10 cfg.lookupConfig ∈ context.gates)
     (canonicity : CommitIvk.gate cfg.gate ∈ context.gates)
     (rangeLookup : LookupRangeCheck.rangeCheckLookup 10 cfg.lookupConfig ∈
-      context.lookups) :
+      context.lookups)
+    (requiredPermutationColumns : ∀ column,
+      column ∈ permutationColumns cfg commit.configured.permutationColumns →
+        column ∈ context.permutationColumns) :
     (circuit G R Q hQ).ConfigurationCertificate cfg context := by
   apply ((circuit G R Q hQ).configureCertificate
     cfg {} commit.configured).mono
@@ -736,6 +764,16 @@ def configurationCertificate (G : Generators) (R : FixedBase)
       rw [hrange]
       exact rangeLookup
     · exact commit.lookups_of_configured required hcommit
+  · intro required hrequired
+    simp only [circuit, FormalCircuit.keygenRequirements,
+      elaborated, keygenRequirements, Configure.fixedColumns_pure,
+      List.append_nil] at hrequired
+    exact commit.fixedColumns_of_configured required hrequired
+  · intro required hrequired
+    simp only [circuit, FormalCircuit.keygenRequirements,
+      elaborated, keygenRequirements, Configure.delta_pure,
+      List.append_nil] at hrequired
+    exact requiredPermutationColumns required hrequired
 
 derive_contract_bridges circuit (G : Generators) (R : FixedBase) (Q : Point Fp)
   (hQ : Q.OnCurve) := circuit G R Q hQ

@@ -64,6 +64,10 @@ def decomposeGate (cfg : Config) : Gate Fp :=
     let ySwitch := k * (baseY - yP) + ((1 : Fp) - k) * (baseY + yP)
     [ ("bool_check", boolCheck), ("y_switch", ySwitch) ]
 
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem decomposeGate_selector (cfg : Config) :
+    (decomposeGate cfg).selector = cfg.qDecompose := rfl
+
 /-- Enable equality on `z_complete`, allocate the selector, register the gate. The `add::Config`'s
 columns are already equality-enabled by `add`'s own `configure`. -/
 def configure (zComplete : Column .advice) (addConfig : Add.Config) : Configure Fp Config := do
@@ -98,6 +102,21 @@ theorem configure_output_addConfig (zComplete : Column .advice) (addConfig : Add
     (counts : ConfigureCounts) :
     ((configure zComplete addConfig).output counts).addConfig = addConfig := by
   simp [configure]
+
+theorem configure_output_zComplete (zComplete : Column .advice)
+    (addConfig : Add.Config) (counts : ConfigureCounts) :
+    ((configure zComplete addConfig).output counts).zComplete = zComplete := by
+  simp [configure]
+
+theorem configure_output_zComplete_mem_permutationRequests
+    (zComplete : Column .advice) (addConfig : Add.Config)
+    (counts : ConfigureCounts) :
+    ((configure zComplete addConfig).output counts).zComplete.toAny ∈
+      ((configure zComplete addConfig).delta counts).permutationRequests := by
+  rw [configure_output_zComplete]
+  unfold configure
+  apply Configure.mem_permutationRequests_delta_bind_left
+  exact Configure.mem_permutationRequests_delta_enableEquality _ _
 
 /-! ## Inputs / Output -/
 
@@ -333,25 +352,107 @@ structure RoundOutput (F : Type) where
   z : F
 deriving ProvableStruct
 
+def roundColumns (cfg : Config) : List FloorPlanner.RegionColumn :=
+    [.column .advice cfg.zComplete.index,
+      .column .advice cfg.zComplete.index,
+      .column .advice cfg.addConfig.yP.index,
+      .selector cfg.qDecompose.index,
+      .selector cfg.addConfig.qAdd.index,
+      .column .advice cfg.addConfig.xP.index,
+      .column .advice cfg.addConfig.yP.index,
+      .column .advice cfg.addConfig.xQR.index,
+      .column .advice cfg.addConfig.yQR.index,
+      .column .advice cfg.addConfig.alpha.index,
+      .column .advice cfg.addConfig.beta.index,
+      .column .advice cfg.addConfig.gamma.index,
+      .column .advice cfg.addConfig.delta.index,
+      .column .advice cfg.addConfig.lambda.index,
+      .column .advice cfg.addConfig.xQR.index,
+      .column .advice cfg.addConfig.yQR.index,
+      .selector cfg.addConfig.qAdd.index,
+      .column .advice cfg.addConfig.xP.index,
+      .column .advice cfg.addConfig.yP.index,
+      .column .advice cfg.addConfig.xQR.index,
+      .column .advice cfg.addConfig.yQR.index,
+      .column .advice cfg.addConfig.alpha.index,
+      .column .advice cfg.addConfig.beta.index,
+      .column .advice cfg.addConfig.gamma.index,
+      .column .advice cfg.addConfig.delta.index,
+      .column .advice cfg.addConfig.lambda.index,
+      .column .advice cfg.addConfig.xQR.index,
+      .column .advice cfg.addConfig.yQR.index]
+
+def roundSynthesisSummary (cfg : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns (roundColumns cfg) (offset + 3) 0
+
+def roundSynthesize (w iter : ℕ) (cfg : Config) (offset : ℕ)
+    (input : Var RoundInputs Fp) : RegionCircuit Fp (Var RoundOutput Fp) := do
+  let ebits := kBitWindowProg input.alpha w
+  let _z ← assignAdvice cfg.zComplete (offset + 2) (zWit input.z ebits iter)
+  let _baseY ← copyAdvice input.base.y cfg.zComplete (offset + 1)
+  let yP ← assignAdvice cfg.addConfig.yP offset (yPWit input.base.y ebits iter)
+  (decomposeGate cfg).enable (offset + 1)
+  let tmp ← Add.add.call cfg.addConfig offset ⟨{ x := input.base.x, y := yP }, input.acc⟩
+  let acc' ← Add.add.call cfg.addConfig (offset + 1) ⟨input.acc, tmp⟩
+  let zOut ← cellAt cfg.zComplete (offset + 2)
+  return { acc := acc', z := zOut }
+
+theorem roundSynthesize_lookupSelectorsAnchoredBy
+    (w iter : ℕ) (cfg : Config) (configured : Add.add.Configured cfg.addConfig)
+    (offset : ℕ) (input : Var RoundInputs Fp) (region : RegionIndex)
+    (anchor : ℕ → FloorPlanner.RegionColumn) :
+    ((roundSynthesize w iter cfg offset input).operations region)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  simp only [roundSynthesize, RegionCircuit.operations_bind,
+    RegionCircuit.operations_pure, List.append_nil]
+  repeat' apply RegionOperations.LookupSelectorsAnchoredBy.append
+  all_goals first
+    | exact Add.add.call_lookupSelectorsAnchoredBy cfg.addConfig
+        configured offset _ region anchor (by trivial)
+    | exact Add.add.call_lookupSelectorsAnchoredBy cfg.addConfig
+        configured (offset + 1) _ region anchor (by trivial)
+    | (apply RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
+       simp only [circuit_norm, RegionOperation.IsNotLookup])
+
+theorem roundSynthesize_copyCellsAssigned
+    (w iter : ℕ) (cfg : Config) (configured : Add.add.Configured cfg.addConfig)
+    (offset : ℕ) (input : Var RoundInputs Fp) (region : RegionIndex) :
+    ((roundSynthesize w iter cfg offset input).operations region)
+      |>.CopyCellsAssigned region
+        [input.base.x.cell, input.base.y.cell,
+          input.acc.x.cell, input.acc.y.cell] := by
+  simp only [roundSynthesize, RegionCircuit.operations_bind,
+    RegionCircuit.operations_pure, RegionOperations.CopyCellsAssigned,
+    RegionOperations.copyCellsAssignedFrom_append_iff]
+  repeat' apply And.intro
+  all_goals first
+    | (apply RegionOperations.copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
+       simp only [circuit_norm, RegionOperation.copiedCells, List.Forall] <;> done)
+    | keygen_registration
+  all_goals
+    apply FormalRegionCircuit.callPacked_copyCellsAssignedFrom (self := Add.add)
+      (hconfigured := configured)
+  all_goals intro cell hcell
+  all_goals simp only [Add.add_inputCells, List.mem_cons,
+    List.not_mem_nil, or_false] at hcell
+  · have hOutputCellsAssigned := Add.add_output_cells_assigned cfg.addConfig offset
+      { p := { x := input.base.x, y := AssignedCell.of region offset cfg.addConfig.yP },
+        q := input.acc } region
+      [Cell.of region offset cfg.addConfig.yP,
+        Cell.of region (offset + 1) cfg.zComplete,
+        Cell.of region (offset + 2) cfg.zComplete,
+        input.base.x.cell, input.base.y.cell, input.acc.x.cell, input.acc.y.cell]
+    rcases hcell with rfl | rfl | rfl | rfl
+    · exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ (by simp)
+    · exact RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ (by simp)
+    · simpa only [RegionCircuit.operations] using hOutputCellsAssigned.1
+    · simpa only [RegionCircuit.operations] using hOutputCellsAssigned.2
+
 def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs RoundOutput where
   configure := pure
 
-  synthesize cfg offset (input : Var RoundInputs Fp) := do
-    let ebits := kBitWindowProg input.alpha w
-    -- running-sum cell z_i at offset + 2
-    let _z ← assignAdvice cfg.zComplete (offset + 2) (zWit input.z ebits iter)
-    -- base_y copied into z_complete at offset + 1 (for the decomposition gate's `base_y` read)
-    let _baseY ← copyAdvice input.base.y cfg.zComplete (offset + 1)
-    -- conditionally-negated y_p, assigned on add.yP at offset
-    let yP ← assignAdvice cfg.addConfig.yP offset (yPWit input.base.y ebits iter)
-    -- the q_mul_decompose_var gate at the middle row offset + 1
-    (decomposeGate cfg).enable (offset + 1)
-    -- tmp = U + acc, U = (base.x, y_p)
-    let tmp ← Add.add.call cfg.addConfig offset ⟨{ x := input.base.x, y := yP }, input.acc⟩
-    -- acc' = acc + tmp
-    let acc' ← Add.add.call cfg.addConfig (offset + 1) ⟨input.acc, tmp⟩
-    let zOut ← cellAt cfg.zComplete (offset + 2)
-    return { acc := acc', z := zOut }
+  synthesize := roundSynthesize w iter
 
   -- the intended output representation: the second `add.call`'s output point plus this
   -- round's running-sum cell. `derive_contract_bridges` reads it off into `round_output`.
@@ -359,15 +460,45 @@ def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs Roun
     { keygenRequirements :=
         { configLawful cfg := Add.add.Configured cfg.addConfig
           gates cfg configured := [decomposeGate cfg] ++ configured.gates
-          lookups _ configured := configured.lookups }
+          lookups _ configured := configured.lookups
+          permutationColumns cfg configured :=
+            cfg.zComplete :: configured.permutationColumns
+          inputCells _ _ input :=
+            [input.base.x.cell, input.base.y.cell,
+              input.acc.x.cell, input.acc.y.cell] }
       output cfg offset input self :=
-        { acc := (Add.add.call cfg.addConfig (offset + 1)
-            { p := input.acc,
-              q := (Add.add.call cfg.addConfig offset
-                { p := { x := input.base.x, y := AssignedCell.of self offset cfg.addConfig.yP },
-                  q := input.acc }).output self }).output self,
+        { acc :=
+            { x := .of self (offset + 2) cfg.addConfig.xQR
+              y := .of self (offset + 2) cfg.addConfig.yQR },
           z := AssignedCell.of self (offset + 2) cfg.zComplete }
-      output_eq := by intro _ _ _ _; rfl }
+      synthesisSummary cfg offset _ _ := roundSynthesisSummary cfg offset
+      output_eq := by
+        intro _ _ _ _
+        simp only [roundSynthesize, circuit_norm, keygen_output_norm]
+      synthesisSummary_eq := by
+        intro _ _ _ _
+        apply FloorPlanner.RegionSynthesisSummary.ext
+        · simp only [roundSynthesize, roundSynthesisSummary, roundColumns,
+            Add.synthesisSummary, circuit_norm, synthesis_summary_norm]
+        · simp only [roundSynthesize, roundSynthesisSummary, roundColumns,
+            Add.synthesisSummary, circuit_norm, synthesis_summary_norm]
+          omega
+        · simp only [roundSynthesize, roundSynthesisSummary, roundColumns,
+            Add.synthesisSummary, circuit_norm, synthesis_summary_norm]
+        · simp only [roundSynthesisSummary, roundColumns, roundSynthesize,
+            Add.synthesisSummary, circuit_norm, synthesis_summary_norm]
+        · simp only [roundSynthesisSummary, roundColumns, roundSynthesize,
+            Add.synthesisSummary, circuit_norm, synthesis_summary_norm]
+      registered := by keygen_registration [roundSynthesize]
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro configInput counts configured offset input region anchor _ _
+        exact roundSynthesize_lookupSelectorsAnchoredBy
+          w iter configInput configured offset input region anchor
+      copyCellsAssigned := by
+        intro configInput counts hconfig offset input region
+        exact roundSynthesize_copyCellsAssigned
+          w iter configInput hconfig offset input region
+        }
 
   -- acc, base are valid Pallas points (complete addition is exceptional-case-free).
   Assumptions input := input.acc.Valid ∧ input.base.Valid
@@ -395,11 +526,19 @@ def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs Roun
     out.z = zRunValue input.z (kBitsWindow input.alpha w) iter
 
   soundness := by
-    circuit_proof_start2 [decomposeGate, Add.add]
+    circuit_proof_start2 [roundSynthesize, decomposeGate, Add.add]
     obtain ⟨hAccV, hBaseV⟩ := assumptions
     -- fold the elaborated output spelling onto the peel's atoms
-    rw [tmp_eq, acc'_eq] at output_eq
-    obtain ⟨hAccOut, -⟩ := output_eq
+    simp only [keygen_output_norm] at acc'_eq
+    have hAccOut : eval
+        ({ place := place, env := env } : Placed Environment Fp) acc' =
+        ({ x := output_acc_x, y := output_acc_y } : Point Fp) := by
+      rw [Point.eval_eq, Point.mk.injEq]
+      constructor
+      · rw [← congrArg Point.x acc'_eq]
+        simpa only [circuit_norm, Nat.add_assoc, Nat.reduceAdd] using output_eq.1.1
+      · rw [← congrArg Point.y acc'_eq]
+        simpa only [circuit_norm, Nat.add_assoc, Nat.reduceAdd] using output_eq.1.2
     obtain ⟨hbool, hswitch⟩ := region_1
     rw [region_0] at hswitch
     set zP := env.advice cfg.zComplete ((place self + offset : ℕ) : ℤ) with hzP
@@ -437,13 +576,21 @@ def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs Roun
       rw [hE2]
       simp [stepPoint, stepBasePoint]
   completeness := by
-    circuit_proof_start2 [decomposeGate, Add.add, zWit_eval, yPWit_eval,
+    circuit_proof_start2 [roundSynthesize, decomposeGate, Add.add, zWit_eval, yPWit_eval,
       ebitsVal_kBitWindowProg, readCell]
     obtain ⟨hAccV, hBaseV⟩ := assumptions
     have hzPrev := prover_assumptions
     -- fold the elaborated output spelling onto the peel's atoms
-    rw [tmp_eq, acc'_eq] at output_eq
-    obtain ⟨hAccOut, -⟩ := output_eq
+    simp only [keygen_output_norm] at acc'_eq
+    have hAccOut : eval
+        ({ place := place, env := env.toEnvironment } : Placed Environment Fp) acc' =
+        ({ x := output_acc_x, y := output_acc_y } : Point Fp) := by
+      rw [Point.eval_eq, Point.mk.injEq]
+      constructor
+      · rw [← congrArg Point.x acc'_eq]
+        simpa only [circuit_norm, Nat.add_assoc, Nat.reduceAdd] using output_eq.1.1
+      · rw [← congrArg Point.y acc'_eq]
+        simpa only [circuit_norm, Nat.add_assoc, Nat.reduceAdd] using output_eq.1.2
     -- land the honest witness values in the goal, then split on the round's bit
     rw [region_0, region_1, hzPrev, zRunValue_step input_z (kBitsWindow input_alpha w) iter]
     rcases Bool.dichotomy (kBitsWindow input_alpha w iter) with hb | hb <;>
@@ -466,6 +613,21 @@ def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs Roun
       refine ⟨⟨rfl, ⟨by simp, by simp⟩, ⟨hUv, hAccV⟩, hAccV, hTmpV⟩, ?_, rfl⟩
       rw [← hAccOut, hAccE, hTmpE]
       simp [stepPoint, stepBasePoint]
+
+@[synthesis_summary_norm]
+theorem round_synthesisSummary_eq
+    (w iter : ℕ) (cfg : Config) (offset : ℕ)
+    (input : Var RoundInputs Fp) (region : RegionIndex) :
+    (round w iter).elaborated.synthesisSummary cfg offset input region =
+      roundSynthesisSummary cfg offset := rfl
+
+@[keygen_norm]
+theorem round_inputCells (w iter : ℕ) (cfg : Config)
+    (hconfigured : (round w iter).Configured cfg)
+    (input : Var RoundInputs Fp) :
+    FormalRegionCircuit.Configured.inputCells hconfigured input =
+      [input.base.x.cell, input.base.y.cell,
+        input.acc.x.cell, input.acc.y.cell] := rfl
 
 /-- Name a whole vector of `z` cells at fixed region-local rows, emitting no op — the running-sum
 `Output.zs` cells. (`MulIncomplete.cellVec`, inlined; the round-`iter` `z_i` cell is at
@@ -490,6 +652,43 @@ Generated by `derive_contract_bridges`. -/
 
 derive_contract_bridges add := Add.add
 derive_contract_bridges round (w iter : ℕ) := round w iter
+
+/-- A complete-multiplication round returns the two cells assigned by its
+second complete-addition call. -/
+theorem round_output_cells_assigned (w iter : ℕ) (cfg : Config) (offset : ℕ)
+    (input : Var RoundInputs Fp) (region : RegionIndex)
+    (available : List Cell) :
+    let output := (round w iter).output cfg offset input region
+    output.acc.x.cell ∈
+        (((round w iter).call cfg offset input).operations region
+          |>.assignedCellsAfter region available) ∧
+      output.acc.y.cell ∈
+        (((round w iter).call cfg offset input).operations region
+          |>.assignedCellsAfter region available) := by
+  rw [FormalRegionCircuit.call_operations]
+  simp only [round_output, RegionOperations.mem_assignedCellsAfter_iff,
+    List.mem_append]
+  simp only [round, roundSynthesize, circuit_norm, RegionOperations.assignedCells,
+    List.flatMap_append, List.flatMap_cons, RegionOperation.assignedCells,
+    List.singleton_append, List.append_nil, List.nil_append, List.mem_cons]
+  let firstInput : Var Add.Inputs Fp :=
+    { p := { x := input.base.x,
+             y := AssignedCell.of region offset cfg.addConfig.yP },
+      q := input.acc }
+  let secondInput : Var Add.Inputs Fp :=
+    { p := input.acc,
+      q := Add.add.output cfg.addConfig offset firstInput region }
+  have h := Add.add_output_cells_assigned cfg.addConfig (offset + 1)
+    secondInput region []
+  dsimp only at h
+  simp only [RegionOperations.mem_assignedCellsAfter_iff, List.nil_append,
+    Add.add_output_cells, AssignedCell.of_cell] at h
+  have hy : Cell.of region (offset + 2) cfg.addConfig.yQR ∈
+      ((Add.add.call cfg.addConfig (offset + 1) secondInput).operations region
+        |>.assignedCells region) := by
+    simpa only [show offset + 1 + 1 = offset + 2 by omega] using h.2
+  exact ⟨Or.inr (Or.inr (Or.inr (Or.inr (Or.inr h.1)))),
+    Or.inr (Or.inr (Or.inr (Or.inr (Or.inr hy))))⟩
 
 /-- **Fold soundness.** From the per-round contracts — each producing a constraint-forced
 bit, the z-step over adjacent cells, and the complete step on the accumulator — some bit
@@ -606,6 +805,163 @@ def startCopy (cfg : Config) (input : Var Inputs Fp) (offset : ℕ) :
   let _z ← copyAdvice input.z cfg.zComplete offset
   return ()
 
+@[synthesis_summary_norm]
+theorem startCopy_synthesisSummary (cfg : Config) (input : Var Inputs Fp)
+    (offset : ℕ) (region : RegionIndex) :
+    FloorPlanner.regionSynthesisSummary
+        ((startCopy cfg input offset).operations region) =
+      .ofColumns [.column .advice cfg.zComplete.index] (offset + 1) 0 := by
+  apply FloorPlanner.RegionSynthesisSummary.ext <;>
+    simp only [startCopy, circuit_norm, synthesis_summary_norm]
+
+/-- The accumulator threaded through complete-addition rounds is initially the
+external accumulator and thereafter occupies the complete-addition output columns. -/
+private theorem roundFoldAcc_eq (w offset : ℕ) (cfg : Config)
+    (input : Var Inputs Fp) (self : RegionIndex) (k : ℕ) :
+    RegionCircuit.foldAcc (fun j => offset + j * 2)
+      ({ x := input.xA, y := input.yA } : Point (AssignedCell Fp))
+      (fun i r acc => do
+        let out ← (round w i).call cfg r
+          { alpha := input.alpha, base := input.base, z := input.z, acc }
+        pure out.acc)
+      k self =
+        match k with
+        | 0 => { x := input.xA, y := input.yA }
+        | i + 1 =>
+          { x := .of self (offset + 2 * i + 2) cfg.addConfig.xQR
+            y := .of self (offset + 2 * i + 2) cfg.addConfig.yQR } := by
+  cases k with
+  | zero => rw [RegionCircuit.foldAcc_zero]
+  | succ i =>
+    rw [RegionCircuit.foldAcc_succ]
+    simp only [circuit_norm, keygen_output_norm]
+    constructor <;> congr 2 <;> omega
+
+private theorem roundFoldAcc_columns (w offset : ℕ) (cfg : Config)
+    (input : Var Inputs Fp) (self : RegionIndex) (k : ℕ) :
+    let acc := RegionCircuit.foldAcc (fun j => offset + j * 2)
+      ({ x := input.xA, y := input.yA } : Point (AssignedCell Fp))
+      (fun i r acc => do
+        let out ← (round w i).call cfg r
+          { alpha := input.alpha, base := input.base, z := input.z, acc }
+        pure out.acc)
+      k self
+    (acc.x.cell.column = input.xA.cell.column ∨
+        acc.x.cell.column = cfg.addConfig.xQR.toAny) ∧
+      (acc.y.cell.column = input.yA.cell.column ∨
+        acc.y.cell.column = cfg.addConfig.yQR.toAny) := by
+  dsimp only
+  rw [roundFoldAcc_eq]
+  cases k with
+  | zero => exact ⟨Or.inl rfl, Or.inl rfl⟩
+  | succ _ => exact ⟨Or.inr rfl, Or.inr rfl⟩
+
+def roundsSynthesisSummary (numBits : ℕ) (cfg : Config)
+    (offset : ℕ) : FloorPlanner.RegionSynthesisSummary :=
+  .repeatColumns (roundColumns cfg) offset 2 3 0 numBits
+
+@[synthesis_summary_norm]
+theorem foldr_roundSynthesisSummary_eq (numBits : ℕ) (cfg : Config)
+    (offset : ℕ) :
+    (List.ofFn fun i : Fin numBits =>
+      roundSynthesisSummary cfg (offset + i.val * 2)).foldr
+        FloorPlanner.RegionSynthesisSummary.combine {} =
+      roundsSynthesisSummary numBits cfg offset := by
+  simpa [roundSynthesisSummary, Nat.mul_comm, Nat.add_assoc] using
+    (FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns
+      (roundColumns cfg) offset 2 3 0 numBits)
+
+def circuitSynthesisSummary (numBits : ℕ) (cfg : Config)
+    (offset : ℕ) : FloorPlanner.RegionSynthesisSummary :=
+  (FloorPlanner.RegionSynthesisSummary.ofColumns
+      [.column .advice cfg.zComplete.index] (offset + 1) 0).combine
+    (roundsSynthesisSummary numBits cfg offset)
+
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_lookupActivationCount
+    (numBits : ℕ) (cfg : Config) (offset : ℕ) :
+    (circuitSynthesisSummary numBits cfg offset).lookupActivationCount = 0 := by
+  simp only [circuitSynthesisSummary, roundsSynthesisSummary,
+    synthesis_summary_norm, Nat.mul_zero, Nat.zero_add]
+
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_instanceRowExtent_eq
+    (numBits : ℕ) (cfg : Config) (offset : ℕ) :
+    (circuitSynthesisSummary numBits cfg offset).instanceRowExtent = 0 := by
+  simp only [circuitSynthesisSummary, roundsSynthesisSummary,
+    synthesis_summary_norm]
+  simp
+
+/-- The complete-phase region uses selectors and advice columns only. -/
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_hasNoFixedColumns
+    (numBits : ℕ) (cfg : Config) (offset : ℕ) :
+    (circuitSynthesisSummary numBits cfg offset).HasNoFixedColumns := by
+  simp only [circuitSynthesisSummary, roundsSynthesisSummary,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_combine,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_repeatColumns]
+  simp [roundColumns]
+
+def assignRegionSynthesize (numBits w : ℕ) (cfg : Config) (offset : ℕ)
+    (input : Var Inputs Fp) : RegionCircuit Fp (Var (Output numBits) Fp) := do
+  startCopy cfg input offset
+  let accFinal ← RegionCircuit.foldRange offset 2 numBits
+    ({ x := input.xA, y := input.yA } : Point (AssignedCell Fp))
+    (fun i r acc => do
+      let out ← (round w i).call cfg r
+        { alpha := input.alpha, base := input.base, z := input.z, acc }
+      pure out.acc)
+  let zsOut ← zsCells cfg offset numBits
+  return { acc := accFinal, zs := zsOut }
+
+theorem assignRegionSynthesize_operations (numBits w : ℕ) (cfg : Config)
+    (offset : ℕ) (input : Var Inputs Fp) (region : RegionIndex) :
+    (assignRegionSynthesize numBits w cfg offset input).operations region =
+      (startCopy cfg input offset).operations region ++
+        (RegionCircuit.foldRange offset 2 numBits
+          ({ x := input.xA, y := input.yA } : Point (AssignedCell Fp))
+          (fun i r acc => do
+            let out ← (round w i).call cfg r
+              { alpha := input.alpha, base := input.base, z := input.z, acc }
+            pure out.acc)).operations region ++
+          (zsCells cfg offset numBits).operations region := rfl
+
+theorem assignRegionSynthesize_output (numBits w : ℕ) (cfg : Config)
+    (offset : ℕ) (input : Var Inputs Fp) (region : RegionIndex) :
+    (assignRegionSynthesize numBits w cfg offset input).output region =
+      { acc :=
+          (RegionCircuit.foldRange offset 2 numBits
+            ({ x := input.xA, y := input.yA } : Point (AssignedCell Fp))
+            (fun i r acc => do
+              let out ← (round w i).call cfg r
+                { alpha := input.alpha, base := input.base, z := input.z, acc }
+              pure out.acc)).output region,
+        zs := (zsCells cfg offset numBits).output region } := rfl
+
+@[synthesis_summary_norm]
+theorem assignRegionSynthesize_synthesisSummary_eq
+    (numBits w : ℕ) (cfg : Config) (offset : ℕ)
+    (input : Var Inputs Fp) (region : RegionIndex) :
+    circuitSynthesisSummary numBits cfg offset =
+      FloorPlanner.regionSynthesisSummary
+        ((assignRegionSynthesize numBits w cfg offset input).operations region) := by
+  rw [assignRegionSynthesize_operations]
+  apply FloorPlanner.RegionSynthesisSummary.ext <;>
+    simp only [circuitSynthesisSummary, roundsSynthesisSummary,
+      circuit_norm, synthesis_summary_norm,
+      foldr_roundSynthesisSummary_eq]
+
+/-- The complete-phase operation stream performs no fixed-column assignments. -/
+theorem assignRegionSynthesize_hasNoFixedAssignments
+    (numBits w : ℕ) (cfg : Config) (offset : ℕ)
+    (input : Var Inputs Fp) (region : RegionIndex) :
+    ((assignRegionSynthesize numBits w cfg offset input).operations region)
+      |>.HasNoFixedAssignments := by
+  apply FloorPlanner.RegionSynthesisSummary.HasNoFixedColumns.hasNoFixedAssignments
+  rw [← assignRegionSynthesize_synthesisSummary_eq]
+  exact circuitSynthesisSummary_hasNoFixedColumns numBits cfg offset
+
 def assign_region (numBits : ℕ) (w : ℕ) :
     FormalRegionCircuit Fp (Column .advice × Add.Config) Config Inputs (Output numBits) where
   configure := fun (zComplete, addConfig) => configure zComplete addConfig
@@ -613,23 +969,33 @@ def assign_region (numBits : ℕ) (w : ℕ) :
     { keygenRequirements :=
         { configLawful input := Add.add.Configured input.2
           gates _ configured := configured.gates
-          lookups _ configured := configured.lookups }
+          lookups _ configured := configured.lookups
+          permutationColumns _ configured := configured.permutationColumns
+          inputCells _ _ input :=
+            [input.base.x.cell, input.base.y.cell, input.xA.cell,
+              input.yA.cell, input.z.cell] }
       registered := by
         intro configInput counts hconfig offset input region
-        simp_all! +zetaDelta only [
-          Configure.delta_bind, Configure.delta_pure,
-          Configure.output_bind, Configure.output_pure,
-          Configure.output_enableEquality, Configure.output_selector,
-          Configure.output_createGate,
-          ConfigureDelta.gates_append, ConfigureDelta.lookups_append,
-          ConfigureDelta.gates_queriedCells, ConfigureDelta.lookups_queriedCells,
-          List.mem_append, List.mem_cons, List.mem_singleton,
-          List.nil_append, List.append_nil, List.append_assoc]
-        simp_all only [keygen_spine]
+        dsimp only
+        rw [assignRegionSynthesize_operations]
+        rw [List.forall_append, List.forall_append]
         constructor
-        · simp only [startCopy, circuit_norm, keygen_norm]
         · constructor
-          · intro i
+          · simp only [startCopy, circuit_norm, keygen_norm]
+            right
+            right
+            right
+            right
+            left
+            exact configure_output_zComplete_mem_permutationRequests
+              configInput.1 configInput.2 counts
+          · rw [RegionCircuit.foldRange_forall]
+            intro i
+            rw [roundFoldAcc_eq w offset
+              ((configure configInput.1 configInput.2).output counts)
+              input region i]
+            simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+              List.append_nil]
             apply FormalRegionCircuit.call_keygenRegistered (round w i)
             case hconfigured =>
               apply FormalRegionCircuit.Configured.ofPure
@@ -654,21 +1020,95 @@ def assign_region (numBits : ℕ) (w : ℕ) :
                 ElaboratedRegionCircuit.keygenRequirements,
                 configure_delta_lookups, List.mem_append, List.not_mem_nil,
                 or_false, round] using hargument
-          · simp only [operations_zsCells, List.forall_nil] }
+            case hfixedColumns => keygen_registration
+            case hpermutationColumns => keygen_registration
+            case hinputCells =>
+              cases hval : i.val <;> keygen_registration
+        · simp only [operations_zsCells, List.forall_nil]
+      output cfg offset input self :=
+        { acc :=
+            match numBits with
+            | 0 => { x := input.xA, y := input.yA }
+            | k + 1 =>
+              { x := .of self (offset + 2 * k + 2) cfg.addConfig.xQR
+                y := .of self (offset + 2 * k + 2) cfg.addConfig.yQR }
+          zs := Vector.ofFn fun j => .of self (offset + 2 * j.val + 2) cfg.zComplete }
+      synthesisSummary cfg offset _ _ := circuitSynthesisSummary numBits cfg offset
+      output_eq := by
+        intro cfg offset input self
+        rw [assignRegionSynthesize_output]
+        simp only [circuit_norm, keygen_output_norm]
+        rw [← roundFoldAcc_eq w offset cfg input self numBits]
+        rfl
+      synthesisSummary_eq := by
+        intro cfg offset input region
+        exact assignRegionSynthesize_synthesisSummary_eq
+          numBits w cfg offset input region
+      fixedAssignmentsAgree := by
+        intro configInput counts hconfig offset input region
+        exact (assignRegionSynthesize_hasNoFixedAssignments numBits w
+          ((configure configInput.1 configInput.2).output counts)
+          offset input region).fixedAssignmentsAgree
+      copyCellsAssigned := by
+        intro configInput counts hconfig offset input region
+        let cfg := (configure configInput.1 configInput.2).output counts
+        let initial := [input.base.x.cell, input.base.y.cell, input.xA.cell,
+          input.yA.cell, input.z.cell]
+        let afterStart :=
+          (startCopy cfg input offset).operations region
+            |>.assignedCellsAfter region initial
+        let body := fun i r acc => do
+          let out ← (round w i).call cfg r
+            { alpha := input.alpha, base := input.base, z := input.z, acc }
+          pure out.acc
+        dsimp only
+        rw [assignRegionSynthesize_operations]
+        unfold RegionOperations.CopyCellsAssigned
+        rw [RegionOperations.copyCellsAssignedFrom_append_iff,
+          RegionOperations.copyCellsAssignedFrom_append_iff]
+        constructor
+        · constructor
+          · keygen_registration
+          · apply RegionCircuit.foldRange_copyCellsAssignedFrom
+              (invariant := fun cells acc =>
+                input.base.x.cell ∈ cells ∧ input.base.y.cell ∈ cells ∧
+                  acc.x.cell ∈ cells ∧ acc.y.cell ∈ cells)
+              (available := afterStart)
+            · repeat' apply And.intro
+              all_goals
+                apply RegionOperations.mem_assignedCellsAfter_of_mem
+                simp [initial]
+            · intro i cells acc hacc
+              simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+                List.append_nil]
+              have hround : (round w i).Configured cfg := by
+                apply FormalRegionCircuit.Configured.ofPure
+                · simpa only [cfg, configure_output_addConfig] using hconfig
+                · rfl
+              apply FormalRegionCircuit.call_copyCellsAssignedFrom
+                (self := round w i) (hconfigured := hround)
+              intro cell hcell
+              rw [round_inputCells] at hcell
+              simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+              rcases hcell with rfl | rfl | rfl | rfl
+              · exact hacc.1
+              · exact hacc.2.1
+              · exact hacc.2.2.1
+              · exact hacc.2.2.2
+            · intro i cells acc hacc
+              have hout := round_output_cells_assigned w i cfg (offset + i * 2)
+                { alpha := input.alpha, base := input.base, z := input.z, acc }
+                region cells
+              simp only [RegionCircuit.operations_bind,
+                RegionCircuit.operations_pure, RegionCircuit.output_bind,
+                RegionCircuit.output_pure, FormalRegionCircuit.call_output,
+                List.append_nil]
+              exact ⟨RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ hacc.1,
+                RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ hacc.2.1,
+                hout.1, hout.2⟩
+        · exact .nil _ }
 
-  synthesize cfg offset (input : Var Inputs Fp) := do
-    -- copy the entering running sum
-    startCopy cfg input offset
-    -- the per-bit round loop: round `i` at base row `offset + 2·i`, threading the accumulator
-    let accFinal ← RegionCircuit.foldRange offset 2 numBits
-      ({ x := input.xA, y := input.yA } : Point (AssignedCell Fp))
-      (fun i r acc => do
-        let out ← (round w i).call cfg r
-          { alpha := input.alpha, base := input.base, z := input.z, acc }
-        pure out.acc)
-    -- name the running-sum output cells (at fixed absolute rows)
-    let zsOut ← zsCells cfg offset numBits
-    return { acc := accFinal, zs := zsOut }
+  synthesize := assignRegionSynthesize numBits w
 
   -- the base point is a valid Pallas point (complete addition is exceptional-case-free).
   Assumptions input :=
@@ -694,7 +1134,7 @@ def assign_region (numBits : ℕ) (w : ℕ) :
   -- ══ Soundness ══
   -- The fold splits into the per-round `round` contracts; `fold_sound` chains them.
   soundness := by
-    circuit_proof_start2 [round, round_output]
+    circuit_proof_start2 [assignRegionSynthesize_operations, startCopy, round, round_output]
     obtain ⟨hAcc0V, hBaseV⟩ := assumptions
     obtain ⟨hOutAcc, hzs⟩ := output_eq
     -- the running-sum output cells, per index
@@ -729,6 +1169,11 @@ def assign_region (numBits : ℕ) (w : ℕ) :
           · rw [RegionCircuit.foldAcc_succ]
             simp only [round_output, circuit_norm] at h3 ⊢
             exact h3)
+    rw [roundFoldAcc_eq w offset cfg
+      { alpha := input_var_alpha,
+        base := { x := input_var_base_x, y := input_var_base_y },
+        xA := input_var_xA, yA := input_var_yA, z := input_var_z }
+      self numBits] at hout
     -- ── assemble `RoundInvariant` ──
     refine ⟨bits', ?_, fun _ _ => ⟨?_, ?_⟩⟩
     · -- z-chain: the fold's per-round steps, re-indexed onto the output cells
@@ -757,7 +1202,7 @@ def assign_region (numBits : ℕ) (w : ℕ) :
   -- ══ Completeness ══
   -- The fold's honest witnesses feed the per-round engine leaves; `fold_complete` chains them.
   completeness := by
-    circuit_proof_start2 [round, round_output]
+    circuit_proof_start2 [assignRegionSynthesize_operations, startCopy, round, round_output]
     obtain ⟨hAcc0V, hBaseV⟩ := prover_assumptions
     obtain ⟨hOutAcc, hzs⟩ := output_eq
     -- the running-sum output cells, per index
@@ -806,6 +1251,11 @@ def assign_region (numBits : ℕ) (w : ℕ) :
             exact hPSacc
           · rw [show (↑i + 1) * 2 = ↑i * 2 + 2 from by ring]
             exact hPSz)
+    rw [roundFoldAcc_eq w offset cfg
+      { alpha := input_var_alpha,
+        base := { x := input_var_base_x, y := input_var_base_y },
+        xA := input_var_xA, yA := input_var_yA, z := input_var_z }
+      self numBits] at haccN
     -- ── assemble: copy constraint + per-round constraints + `RoundInvariant` ──
     refine ⟨⟨region_0, fun i => hCall i⟩, ?_, fun _ _ => ⟨?_, ?_⟩⟩
     · -- z-chain on the honest values
@@ -830,5 +1280,85 @@ def assign_region (numBits : ℕ) (w : ℕ) :
       exact accPoint_valid hBaseV hAcc0V (kBitsWindow input_alpha w) numBits
     · -- accumulator value
       exact hOutAcc.symm.trans haccN
+
+/-- A nonempty complete-multiplication region returns the accumulator assigned by
+its final round. -/
+theorem assignRegion_output_acc_cells_assigned
+    (numBits w : ℕ) (hnumBits : 0 < numBits)
+    (cfg : Config) (offset : ℕ) (input : Var Inputs Fp)
+    (region : RegionIndex) (available : List Cell) :
+    let output := (assign_region numBits w).output cfg offset input region
+    output.acc.x.cell ∈
+        (((assign_region numBits w).call cfg offset input).operations region
+          |>.assignedCellsAfter region available) ∧
+      output.acc.y.cell ∈
+        (((assign_region numBits w).call cfg offset input).operations region
+          |>.assignedCellsAfter region available) := by
+  obtain ⟨k, rfl⟩ := Nat.exists_eq_succ_of_ne_zero (by omega : numBits ≠ 0)
+  dsimp only
+  rw [show ((assign_region (k + 1) w).output cfg offset input region).acc.x =
+      AssignedCell.of region (offset + 2 * k + 2) cfg.addConfig.xQR from rfl,
+    show ((assign_region (k + 1) w).output cfg offset input region).acc.y =
+      AssignedCell.of region (offset + 2 * k + 2) cfg.addConfig.yQR from rfl]
+  rw [FormalRegionCircuit.call_operations]
+  simp only [assign_region]
+  rw [assignRegionSynthesize_operations]
+  simp only [keygen_output_norm,
+    RegionOperations.mem_assignedCellsAfter_iff,
+    RegionOperations.assignedCells, List.flatMap_append, List.mem_append]
+  have hround := round_output_cells_assigned w k cfg (offset + k * 2)
+    { alpha := input.alpha, base := input.base, z := input.z,
+      acc := RegionCircuit.foldAcc (fun j => offset + j * 2)
+        ({ x := input.xA, y := input.yA } : Point (AssignedCell Fp))
+        (fun i r acc => do
+          let out ← (round w i).call cfg r
+            { alpha := input.alpha, base := input.base, z := input.z, acc }
+          pure out.acc) k region }
+    region []
+  dsimp only at hround
+  simp only [round_output, AssignedCell.of_cell,
+    RegionOperations.mem_assignedCellsAfter_iff, List.nil_append] at hround
+  rw [RegionCircuit.foldRange, RegionCircuit.foldRangeVar,
+    RegionCircuit.foldRangeVarAux_operations_succ]
+  simp only [RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    List.append_nil, List.flatMap_append, List.mem_append]
+  exact ⟨Or.inr (Or.inl (Or.inr (Or.inr (by
+      simpa only [AssignedCell.of_cell, Nat.mul_comm] using hround.1)))),
+    Or.inr (Or.inl (Or.inr (Or.inr (by
+      simpa only [AssignedCell.of_cell, Nat.mul_comm] using hround.2))))⟩
+
+/-- The complete-multiplication bundle exposes its reduced footprint. -/
+@[synthesis_summary_norm]
+theorem assign_region_synthesisSummary_eq
+    (numBits w : ℕ) (cfg : Config) (offset : ℕ)
+    (input : Var Inputs Fp) (self : RegionIndex) :
+    (assign_region numBits w).elaborated.synthesisSummary cfg offset input self =
+      circuitSynthesisSummary numBits cfg offset := rfl
+
+@[keygen_norm]
+theorem Configured.permutationColumns_eq (numBits w : ℕ) {cfg : Config}
+    (configured : (assign_region numBits w).Configured cfg) :
+    configured.permutationColumns =
+      Add.permutationColumns cfg.addConfig ++ ([cfg.zComplete] : List AnyColumn) := by
+  rcases configured with ⟨configInput, counts, hconfig, outputEq⟩
+  cases outputEq
+  calc
+    _ = hconfig.permutationColumns ++ ([configInput.1] : List AnyColumn) := by
+      simp only [FormalRegionCircuit.Configured.permutationColumns,
+        FormalRegionCircuit.keygenRequirements, ElaboratedRegionCircuit.keygenRequirements,
+        assign_region, configure, keygen_norm]
+    _ = Add.permutationColumns configInput.2 ++ ([configInput.1] : List AnyColumn) := by
+      rw [Add.Configured.permutationColumns_eq hconfig]
+
+theorem Configured.lookups_eq_nil (numBits w : ℕ) {cfg : Config}
+    (configured : (assign_region numBits w).Configured cfg) :
+    configured.lookups = [] := by
+  rcases configured with ⟨configInput, counts, hconfig, outputEq⟩
+  cases outputEq
+  simp only [FormalRegionCircuit.Configured.lookups,
+    FormalRegionCircuit.keygenRequirements,
+    ElaboratedRegionCircuit.keygenRequirements, assign_region, configure,
+    keygen_norm]
+  exact Add.Configured.lookups_eq_nil hconfig
 
 end Zcash.Circuits.Ecc.MulComplete

@@ -41,7 +41,7 @@ def pointGate (qPoint : Selector) (x y : Column .advice) : Gate Fp where
       ⟨ "y == 0 v on_curve", qPoint * queryAdvice y 0 * curveEqn x y ⟩ ]
   wellFormed := by
     refine ⟨by query_correct, by query_correct, ?_, ?_⟩
-    · simp [Expression.selectorsCovered, querySelector,
+    · simp [Expression.SelectorsOwnedBy, querySelector,
         queryAdvice, curveEqn]
     · intro _ constraint hconstraint
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hconstraint
@@ -67,11 +67,20 @@ def pointGate (qPoint : Selector) (x y : Column .advice) : Gate Fp where
         · exact mul_eq_zero.mpr (.inl ((mul_eq_zero.mp hscaled).resolve_left hscale))
         · exact mul_eq_zero.mpr (.inr hcurve)
 
+@[circuit_norm, configure_selector_norm, keygen_norm]
+theorem pointGate_selector (qPoint : Selector) (x y : Column .advice) :
+    (pointGate qPoint x y).selector = qPoint := rfl
+
 /-- The "witness non-identity point" gate. -/
 def pointNonIdGate (qPointNonId : Selector) (x y : Column .advice) : Gate Fp :=
   Gate.withSelector "witness non-identity point" qPointNonId
     [queryAdvice x 0, queryAdvice y 0]
     [("on_curve", curveEqn x y)]
+
+@[circuit_norm, configure_selector_norm, keygen_norm]
+theorem pointNonIdGate_selector
+    (qPointNonId : Selector) (x y : Column .advice) :
+    (pointNonIdGate qPointNonId x y).selector = qPointNonId := rfl
 
 def configure (x y : Column .advice) : Configure Fp Config := do
   let qPoint ← selector
@@ -84,6 +93,27 @@ instance (x y : Column .advice) :
     ElaboratedConfigure (configure x y) := by
   unfold configure
   infer_instance
+
+def pointSynthesisSummary (config : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns
+    [.selector config.qPoint.index,
+      .column .advice config.x.index,
+      .column .advice config.y.index]
+    (offset + 1) 0
+
+@[synthesis_summary_norm]
+theorem pointSynthesisSummary_lookupActivationCount
+    (config : Config) (offset : ℕ) :
+    (pointSynthesisSummary config offset).lookupActivationCount = 0 := by
+  simp only [pointSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem pointSynthesisSummary_hasNoFixedColumns (config : Config) (offset : ℕ) :
+    (pointSynthesisSummary config offset).HasNoFixedColumns := by
+  simp only [pointSynthesisSummary,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
 
 def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
     (Unconstrained Point) Point where
@@ -101,7 +131,19 @@ def point : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
     { registered := by keygen_registration
       output config offset _ self :=
         { x := .of self offset config.x, y := .of self offset config.y }
-      output_eq := by intro _ _ _ _; rfl }
+      synthesisSummary config offset _ _ := pointSynthesisSummary config offset
+      output_eq := by intro _ _ _ _; rfl
+      synthesisSummary_eq := by
+        intro _ _ _ _
+        apply FloorPlanner.RegionSynthesisSummary.ext
+        · rw [FloorPlanner.regionSynthesisSummary_columns_eq_unionColumns]
+          simp only [pointSynthesisSummary, circuit_norm, pointGate, List.flatMap_cons,
+            List.flatMap_nil, FloorPlanner.regionOperationShapeColumns,
+            List.append_nil, List.singleton_append]
+        · simp only [pointSynthesisSummary, circuit_norm, pointGate]
+          omega
+        all_goals simp only [pointSynthesisSummary, circuit_norm, pointGate,
+          synthesis_summary_norm] }
 
   Spec _ output _ := output.Valid
   ProverAssumptions input _ _ := input.Valid
@@ -128,6 +170,20 @@ assign x/y; but the gate has no identity escape hatch, so the `Spec` is *strictl
 valid curve point. The Rust additionally errors when the value is known to be the identity;
 that non-identity precondition is carried on the honest prover as `ProverAssumptions` (the
 input is `Unconstrained`, so — like `point` — the honest-side facts about it live there). -/
+def pointNonIdSynthesisSummary (config : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns
+    [.selector config.qPointNonId.index,
+      .column .advice config.x.index,
+      .column .advice config.y.index]
+    (offset + 1) 0
+
+@[synthesis_summary_norm]
+theorem pointNonIdSynthesisSummary_lookupActivationCount
+    (config : Config) (offset : ℕ) :
+    (pointNonIdSynthesisSummary config offset).lookupActivationCount = 0 := by
+  simp only [pointNonIdSynthesisSummary, synthesis_summary_norm]
+
 def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Config
     (Unconstrained Point) Point where
   configure | (x, y) => configure x y
@@ -141,7 +197,21 @@ def pointNonId : FormalRegionCircuit Fp (Column .advice × Column .advice) Confi
     return ⟨ xVar, yVar ⟩
 
   elaborated :=
-    { registered := by keygen_registration }
+    { registered := by keygen_registration
+      synthesisSummary config offset _ _ :=
+        pointNonIdSynthesisSummary config offset
+      synthesisSummary_eq := by
+        intro _ _ _ _
+        apply FloorPlanner.RegionSynthesisSummary.ext
+        · rw [FloorPlanner.regionSynthesisSummary_columns_eq_unionColumns]
+          simp only [pointNonIdSynthesisSummary, circuit_norm, pointNonIdGate,
+            List.flatMap_cons, List.flatMap_nil,
+            FloorPlanner.regionOperationShapeColumns, List.append_nil,
+            List.singleton_append]
+        · simp only [pointNonIdSynthesisSummary, circuit_norm, pointNonIdGate]
+          omega
+        all_goals simp only [pointNonIdSynthesisSummary, circuit_norm, pointNonIdGate,
+          synthesis_summary_norm] }
 
   Spec _ output _ := output.OnCurve
   -- honest-prover precondition: the witnessed point is genuinely on-curve. The Rust errors
@@ -168,6 +238,100 @@ def pointFormal :=
 
 def pointNonIdFormal :=
   pointNonId.toFormal "witness non-identity point"
+
+/-- The point-witness circuit's two positional output cells. -/
+@[keygen_output_norm]
+theorem pointFormal_output_cells (config : Config)
+    (input : Var (Unconstrained Point) Fp) (self : RegionIndex) :
+    pointFormal.output config input self =
+      { x := .of self 0 config.x, y := .of self 0 config.y } := by
+  rfl
+
+/-- Both coordinates returned by the point-witness call are assigned in its single
+region. -/
+theorem pointFormal_call_output_cells_assigned
+    (config : Config) (input : Var (Unconstrained Point) Fp)
+    (self : RegionIndex) :
+    let output := pointFormal.output config input self
+    output.x.cell ∈ Operations.assignedCellsFrom
+        ((pointFormal.call config input).operations self) self ∧
+      output.y.cell ∈ Operations.assignedCellsFrom
+        ((pointFormal.call config input).operations self) self := by
+  rw [pointFormal_output_cells, FormalCircuit.call_operations]
+  simp only [pointFormal, FormalRegionCircuit.toFormal, point,
+    operations_assignRegion, Operations.assignedCellsFrom, circuit_norm,
+    RegionOperations.assignedCells, RegionOperation.assignedCells,
+    List.flatMap_cons, List.flatMap_nil, List.mem_cons,
+    AssignedCell.of_cell, true_or]
+
+@[synthesis_summary_norm]
+theorem pointFormal_synthesisSummary_eq (config : Config)
+    (input : Var (Unconstrained Point) Fp) (region : RegionIndex) :
+    pointFormal.elaborated.synthesisSummary config input region =
+      FloorPlanner.SynthesisSummary.ofRegion
+        (pointSynthesisSummary config 0) := rfl
+
+@[synthesis_summary_norm]
+theorem pointNonIdFormal_synthesisSummary_eq (config : Config)
+    (input : Var (Unconstrained Point) Fp) (region : RegionIndex) :
+    pointNonIdFormal.elaborated.synthesisSummary config input region =
+      FloorPlanner.SynthesisSummary.ofRegion
+        (pointNonIdSynthesisSummary config 0) := rfl
+
+/-- The non-identity witness circuit's two positional output cells. -/
+@[keygen_output_norm]
+theorem pointNonIdFormal_output_cells (config : Config)
+    (input : Var (Unconstrained Point) Fp) (self : RegionIndex) :
+    pointNonIdFormal.output config input self =
+      { x := .of self 0 config.x, y := .of self 0 config.y } := by
+  rfl
+
+@[keygen_norm]
+theorem pointNonIdFormal_inputCells (config : Config)
+    (configured : pointNonIdFormal.Configured config)
+    (input : Var (Unconstrained Point) Fp) :
+    configured.inputCells input = [] := by
+  rfl
+
+/-- Both coordinates returned by the non-identity witness call are assigned in its
+single region. -/
+theorem pointNonIdFormal_call_output_cells_assigned
+    (config : Config) (input : Var (Unconstrained Point) Fp)
+    (self : RegionIndex) :
+    let output := pointNonIdFormal.output config input self
+    output.x.cell ∈ Operations.assignedCellsFrom
+        ((pointNonIdFormal.call config input).operations self) self ∧
+      output.y.cell ∈ Operations.assignedCellsFrom
+        ((pointNonIdFormal.call config input).operations self) self := by
+  rw [pointNonIdFormal_output_cells, FormalCircuit.call_operations]
+  simp only [pointNonIdFormal, FormalRegionCircuit.toFormal,
+    operations_assignRegion, Operations.assignedCellsFrom, pointNonId,
+    circuit_norm, RegionOperations.assignedCells,
+    RegionOperation.assignedCells, List.flatMap_cons, List.flatMap_nil,
+    List.mem_cons, AssignedCell.of_cell, true_or]
+
+@[keygen_norm]
+theorem pointFormal_call_operations_copyFree (config : Config)
+    (input : Var (Unconstrained Point) Fp) (self : RegionIndex) :
+    ((pointFormal.call config input).operations self).Forall fun operation =>
+      operation.copiedCells = [] := by
+  rw [FormalCircuit.call_operations]
+  simp only [pointFormal, FormalRegionCircuit.toFormal, point, circuit_norm,
+    Operation.copiedCells, RegionOperations.copiedCells,
+    RegionOperation.copiedCells, List.flatMap_cons, List.flatMap_nil,
+    List.nil_append]
+
+@[keygen_norm]
+theorem pointNonIdFormal_call_operations_copyFree (config : Config)
+    (input : Var (Unconstrained Point) Fp) (self : RegionIndex) :
+    ((pointNonIdFormal.call config input).operations self).Forall fun operation =>
+      operation.copiedCells = [] := by
+  rw [FormalCircuit.call_operations]
+  simp only [pointNonIdFormal, FormalRegionCircuit.toFormal, pointNonId,
+    circuit_norm,
+    Operation.copiedCells, RegionOperations.copiedCells,
+    RegionOperation.copiedCells, List.flatMap_cons, List.flatMap_nil,
+    List.nil_append]
 
 derive_contract_bridges pointFormal := pointFormal
 

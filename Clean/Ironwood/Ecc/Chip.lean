@@ -66,12 +66,217 @@ def configure (advices : Fin 10 → Column .advice)
   return { witnessPoint, addIncomplete, add, mul, mulFixedFull, mulFixedShort,
            mulFixedBaseField }
 
-instance (advices : Fin 10 → Column .advice)
+@[keygen_norm]
+theorem configure_output_mul_overflow_lookupConfig
+    (advices : Fin 10 → Column .advice)
+    (lagrangeCoeffs : Fin 8 → Column .fixed)
+    (rangeCheck : LookupRangeCheck.Config 10) (counts : ConfigureCounts) :
+    ((configure advices lagrangeCoeffs rangeCheck).output counts).mul.overflowConfig.lookupConfig =
+      rangeCheck := by
+  simp [configure, Mul.configure, MulOverflow.configure]
+
+@[keygen_norm]
+theorem configure_output_mulFixedBaseField_lookupConfig
+    (advices : Fin 10 → Column .advice)
+    (lagrangeCoeffs : Fin 8 → Column .fixed)
+    (rangeCheck : LookupRangeCheck.Config 10) (counts : ConfigureCounts) :
+    ((configure advices lagrangeCoeffs rangeCheck).output counts).mulFixedBaseField.lookupConfig =
+      rangeCheck := by
+  simp [configure, MulFixed.BaseFieldElem.configure]
+
+@[configure_selector_norm, keygen_norm] theorem configure_delta_lookups
+    (advices : Fin 10 → Column .advice)
+    (lagrangeCoeffs : Fin 8 → Column .fixed)
+    (rangeCheck : LookupRangeCheck.Config 10) (counts) :
+    ((configure advices lagrangeCoeffs rangeCheck).delta counts).lookups = [] := by
+  simp [configure, WitnessPoint.configure, AddIncomplete.add, Add.add,
+    Mul.configure, MulIncomplete.configure, MulComplete.configure,
+    MulOverflow.configure, MulFixed.configure,
+    DecomposeRunningSum.configure,
+    MulFixed.FullWidth.configure,
+    MulFixed.Short.configure, MulFixed.BaseFieldElem.configure]
+
+@[keygen_norm] theorem configure_delta_constants
+    (advices : Fin 10 → Column .advice)
+    (lagrangeCoeffs : Fin 8 → Column .fixed)
+    (rangeCheck : LookupRangeCheck.Config 10) (counts) :
+    ((configure advices lagrangeCoeffs rangeCheck).delta counts).constants = [] := by
+  simp [configure, WitnessPoint.configure, AddIncomplete.add, Add.add,
+    Mul.configure, MulIncomplete.configure, MulComplete.configure,
+    MulOverflow.configure, MulFixed.configure,
+    DecomposeRunningSum.configure,
+    MulFixed.FullWidth.configure,
+    MulFixed.Short.configure, MulFixed.BaseFieldElem.configure]
+
+@[keygen_norm] theorem configure_fixedColumns
+    (advices : Fin 10 → Column .advice)
+    (lagrangeCoeffs : Fin 8 → Column .fixed)
+    (rangeCheck : LookupRangeCheck.Config 10) (counts) :
+    (configure advices lagrangeCoeffs rangeCheck).fixedColumns counts =
+      [((configure advices lagrangeCoeffs rangeCheck).output counts)
+        |>.mulFixedShort.superConfig.fixedZ] := by
+  simp [configure, WitnessPoint.configure, AddIncomplete.add, Add.add,
+    Mul.configure, MulIncomplete.configure, MulComplete.configure,
+    MulOverflow.configure, MulFixed.configure,
+    DecomposeRunningSum.configure,
+    MulFixed.FullWidth.configure,
+    MulFixed.Short.configure, MulFixed.BaseFieldElem.configure]
+
+@[reducible] private def configureInferred
+    (advices : Fin 10 → Column .advice)
     (lagrangeCoeffs : Fin 8 → Column .fixed)
     (rangeCheck : LookupRangeCheck.Config 10) :
     ElaboratedConfigure (configure advices lagrangeCoeffs rangeCheck) := by
   unfold configure
   infer_instance
+
+private theorem configure_selectorRequirements
+    (advices : Fin 10 → Column .advice)
+    (lagrangeCoeffs : Fin 8 → Column .fixed)
+    (rangeCheck : LookupRangeCheck.Config 10) (counts) :
+    (configureInferred advices lagrangeCoeffs rangeCheck).selectorRequirements
+      counts := by
+  dsimp only [configureInferred, configure]
+  simp [keygen_norm, WitnessPoint.configure,
+    AddIncomplete.add, Add.add, Mul.configure,
+    MulIncomplete.configure, MulComplete.configure, MulOverflow.configure,
+    MulFixed.configure,
+    DecomposeRunningSum.configure,
+    MulFixed.FullWidth.configure,
+    MulFixed.Short.configure, MulFixed.BaseFieldElem.configure]
+
+instance (advices : Fin 10 → Column .advice)
+    (lagrangeCoeffs : Fin 8 → Column .fixed)
+    (rangeCheck : LookupRangeCheck.Config 10) :
+    ElaboratedConfigure (configure advices lagrangeCoeffs rangeCheck) :=
+  ((configureInferred advices lagrangeCoeffs rangeCheck).closeSelectorRequirements
+    (configure_selectorRequirements advices lagrangeCoeffs rangeCheck)).withNoExternalSelectors (by
+      intro counts
+      constructor
+      · simp [configure_selector_norm, configure,
+          WitnessPoint.configure, AddIncomplete.add, Add.add, Mul.configure,
+          MulIncomplete.configure, MulComplete.configure,
+          MulOverflow.configure, MulFixed.configure,
+          MulFixed.FullWidth.configure, MulFixed.Short.configure,
+          MulFixed.BaseFieldElem.configure,
+          DecomposeRunningSum.configure]
+        omega
+      · rw [configure_delta_lookups]
+        simp)
+
+/-- Every advice column handed to the ECC chip is equality-enabled by its aggregate
+configure program. -/
+theorem advice_mem_permutationRequests (advices : Fin 10 → Column .advice)
+    (lagrangeCoeffs : Fin 8 → Column .fixed)
+    (rangeCheck : LookupRangeCheck.Config 10) (counts : ConfigureCounts)
+    (i : Fin 10) :
+    (advices i).toAny ∈
+      ((configure advices lagrangeCoeffs rangeCheck).delta counts).permutationRequests := by
+  fin_cases i
+  all_goals unfold configure
+  case «0» =>
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_left
+    simp only [AddIncomplete.add]
+    apply Configure.mem_permutationRequests_delta_bind_left
+    exact Configure.mem_permutationRequests_delta_enableEquality _ _
+  case «1» =>
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_left
+    simp only [AddIncomplete.add]
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_left
+    exact Configure.mem_permutationRequests_delta_enableEquality _ _
+  case «2» =>
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_left
+    simp only [AddIncomplete.add]
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_left
+    exact Configure.mem_permutationRequests_delta_enableEquality _ _
+  case «3» =>
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_left
+    simp only [AddIncomplete.add]
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_left
+    exact Configure.mem_permutationRequests_delta_enableEquality _ _
+  case «4» =>
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_left
+    unfold Mul.configure
+    apply Configure.mem_permutationRequests_delta_bind_left
+    unfold MulIncomplete.configure
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_left
+    exact Configure.mem_permutationRequests_delta_enableEquality _ _
+  case «5» =>
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_left
+    unfold MulFixed.configure
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_left
+    exact Configure.mem_permutationRequests_delta_enableEquality _ _
+  case «6» =>
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_left
+    unfold Mul.configure
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_left
+    unfold MulOverflow.configure
+    apply Configure.mem_permutationRequests_delta_bind_left
+    exact Configure.mem_permutationRequests_delta_enableEquality _ _
+  case «7» =>
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_left
+    unfold Mul.configure
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_left
+    unfold MulOverflow.configure
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_left
+    exact Configure.mem_permutationRequests_delta_enableEquality _ _
+  case «8» =>
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_left
+    unfold Mul.configure
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_left
+    unfold MulOverflow.configure
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_left
+    exact Configure.mem_permutationRequests_delta_enableEquality _ _
+  case «9» =>
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_right
+    apply Configure.mem_permutationRequests_delta_bind_left
+    unfold Mul.configure
+    apply Configure.mem_permutationRequests_delta_bind_left
+    unfold MulIncomplete.configure
+    apply Configure.mem_permutationRequests_delta_bind_left
+    exact Configure.mem_permutationRequests_delta_enableEquality _ _
 
 /-- The keygen context produced locally by one aggregate ECC configure run. -/
 private def configureDeltaContext (advices : Fin 10 → Column .advice)
@@ -79,7 +284,10 @@ private def configureDeltaContext (advices : Fin 10 → Column .advice)
     (rangeCheck : LookupRangeCheck.Config 10) (counts : ConfigureCounts) :
     KeygenContext Fp :=
   { gates := ((configure advices lagrangeCoeffs rangeCheck).delta counts).gates
-    lookups := ((configure advices lagrangeCoeffs rangeCheck).delta counts).lookups }
+    lookups := ((configure advices lagrangeCoeffs rangeCheck).delta counts).lookups
+    fixedColumns := (configure advices lagrangeCoeffs rangeCheck).fixedColumns counts
+    permutationColumns :=
+      ((configure advices lagrangeCoeffs rangeCheck).delta counts).permutationRequests }
 
 /-- The capabilities exported by ECC: its local configure delta plus the range-check
 lookup borrowed from its caller by variable- and base-field multiplication. -/
@@ -89,7 +297,11 @@ def configureContext (advices : Fin 10 → Column .advice)
     KeygenContext Fp :=
   { gates := ((configure advices lagrangeCoeffs rangeCheck).delta counts).gates
     lookups := LookupRangeCheck.rangeCheckLookup 10 rangeCheck ::
-      ((configure advices lagrangeCoeffs rangeCheck).delta counts).lookups }
+      ((configure advices lagrangeCoeffs rangeCheck).delta counts).lookups
+    fixedColumns := List.ofFn lagrangeCoeffs ++
+      (configure advices lagrangeCoeffs rangeCheck).fixedColumns counts
+    permutationColumns := rangeCheck.runningSum ::
+      ((configure advices lagrangeCoeffs rangeCheck).delta counts).permutationRequests }
 
 /--
 Opaque capabilities exported by the aggregate ECC configurer.
@@ -131,14 +343,20 @@ def mono
     (certificate :
       CoreConfigureCertificate advices lagrangeCoeffs rangeCheck counts source)
     (gates : ∀ gate, gate ∈ source.gates → gate ∈ target.gates)
-    (lookups : ∀ argument, argument ∈ source.lookups → argument ∈ target.lookups) :
+    (lookups : ∀ argument, argument ∈ source.lookups → argument ∈ target.lookups)
+    (fixedColumns : ∀ column,
+      column ∈ source.fixedColumns → column ∈ target.fixedColumns)
+    (permutationColumns : ∀ column,
+      column ∈ source.permutationColumns → column ∈ target.permutationColumns) :
     CoreConfigureCertificate advices lagrangeCoeffs rangeCheck counts target where
-  witnessPoint := certificate.witnessPoint.mono gates lookups
-  witnessPointFormal := certificate.witnessPointFormal.mono gates lookups
-  witnessPointNonIdFormal := certificate.witnessPointNonIdFormal.mono gates lookups
-  addIncomplete := certificate.addIncomplete.mono gates lookups
-  add := certificate.add.mono gates lookups
-  addFormal := certificate.addFormal.mono gates lookups
+  witnessPoint := certificate.witnessPoint.mono gates lookups fixedColumns permutationColumns
+  witnessPointFormal :=
+    certificate.witnessPointFormal.mono gates lookups fixedColumns permutationColumns
+  witnessPointNonIdFormal :=
+    certificate.witnessPointNonIdFormal.mono gates lookups fixedColumns permutationColumns
+  addIncomplete := certificate.addIncomplete.mono gates lookups fixedColumns permutationColumns
+  add := certificate.add.mono gates lookups fixedColumns permutationColumns
+  addFormal := certificate.addFormal.mono gates lookups fixedColumns permutationColumns
 
 end CoreConfigureCertificate
 
@@ -167,6 +385,22 @@ def coreConfigureCertificate (advices : Fin 10 → Column .advice)
         unfold configure
         apply Configure.mem_lookups_delta_bind_left
         simpa only [WitnessPoint.point] using hargument)
+      (by
+        intro column hcolumn
+        simp only [WitnessPoint.point, FormalRegionCircuit.keygenRequirements,
+          ElaboratedRegionCircuit.keygenRequirements, List.nil_append] at hcolumn
+        simp only [configureDeltaContext]
+        unfold configure
+        apply Configure.mem_fixedColumns_bind_left
+        simpa only [WitnessPoint.point] using hcolumn)
+      (by
+        intro column hcolumn
+        simp only [WitnessPoint.point, FormalRegionCircuit.keygenRequirements,
+          ElaboratedRegionCircuit.keygenRequirements, List.nil_append] at hcolumn
+        simp only [configureDeltaContext]
+        unfold configure
+        apply Configure.mem_permutationRequests_delta_bind_left
+        simpa only [WitnessPoint.point] using hcolumn)
   witnessPointFormal :=
     (WitnessPoint.pointFormal.configureCertificate
       (advices 0, advices 1) counts ()).mono
@@ -190,6 +424,26 @@ def coreConfigureCertificate (advices : Fin 10 → Column .advice)
         unfold configure
         apply Configure.mem_lookups_delta_bind_left
         simpa only [WitnessPoint.point] using hargument)
+      (by
+        intro column hcolumn
+        simp only [WitnessPoint.pointFormal,
+          FormalRegionCircuit.toFormal_keygenRequirements,
+          WitnessPoint.point, FormalRegionCircuit.keygenRequirements,
+          ElaboratedRegionCircuit.keygenRequirements, List.nil_append] at hcolumn
+        simp only [configureDeltaContext]
+        unfold configure
+        apply Configure.mem_fixedColumns_bind_left
+        simpa only [WitnessPoint.point] using hcolumn)
+      (by
+        intro column hcolumn
+        simp only [WitnessPoint.pointFormal,
+          FormalRegionCircuit.toFormal_keygenRequirements,
+          WitnessPoint.point, FormalRegionCircuit.keygenRequirements,
+          ElaboratedRegionCircuit.keygenRequirements, List.nil_append] at hcolumn
+        simp only [configureDeltaContext]
+        unfold configure
+        apply Configure.mem_permutationRequests_delta_bind_left
+        simpa only [WitnessPoint.point] using hcolumn)
   witnessPointNonIdFormal :=
     (WitnessPoint.pointNonIdFormal.configureCertificate
       (advices 0, advices 1) counts ()).mono
@@ -213,6 +467,26 @@ def coreConfigureCertificate (advices : Fin 10 → Column .advice)
         unfold configure
         apply Configure.mem_lookups_delta_bind_left
         simpa only [WitnessPoint.pointNonId] using hargument)
+      (by
+        intro column hcolumn
+        simp only [WitnessPoint.pointNonIdFormal,
+          FormalRegionCircuit.toFormal_keygenRequirements,
+          WitnessPoint.pointNonId, FormalRegionCircuit.keygenRequirements,
+          ElaboratedRegionCircuit.keygenRequirements, List.nil_append] at hcolumn
+        simp only [configureDeltaContext]
+        unfold configure
+        apply Configure.mem_fixedColumns_bind_left
+        simpa only [WitnessPoint.pointNonId] using hcolumn)
+      (by
+        intro column hcolumn
+        simp only [WitnessPoint.pointNonIdFormal,
+          FormalRegionCircuit.toFormal_keygenRequirements,
+          WitnessPoint.pointNonId, FormalRegionCircuit.keygenRequirements,
+          ElaboratedRegionCircuit.keygenRequirements, List.nil_append] at hcolumn
+        simp only [configureDeltaContext]
+        unfold configure
+        apply Configure.mem_permutationRequests_delta_bind_left
+        simpa only [WitnessPoint.pointNonId] using hcolumn)
   addIncomplete :=
     (AddIncomplete.add.configureCertificate
       (advices 0, advices 1, advices 2, advices 3)
@@ -235,6 +509,24 @@ def coreConfigureCertificate (advices : Fin 10 → Column .advice)
         apply Configure.mem_lookups_delta_bind_right
         apply Configure.mem_lookups_delta_bind_left
         exact hargument)
+      (by
+        intro column hcolumn
+        simp only [AddIncomplete.add, FormalRegionCircuit.keygenRequirements,
+          ElaboratedRegionCircuit.keygenRequirements, List.nil_append] at hcolumn
+        simp only [configureDeltaContext]
+        unfold configure
+        apply Configure.mem_fixedColumns_bind_right
+        apply Configure.mem_fixedColumns_bind_left
+        exact hcolumn)
+      (by
+        intro column hcolumn
+        simp only [AddIncomplete.add, FormalRegionCircuit.keygenRequirements,
+          ElaboratedRegionCircuit.keygenRequirements, List.nil_append] at hcolumn
+        simp only [configureDeltaContext]
+        unfold configure
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_left
+        exact hcolumn)
   add :=
     (Add.add.configureCertificate
       (advices 0, advices 1, advices 2, advices 3, advices 4,
@@ -263,6 +555,26 @@ def coreConfigureCertificate (advices : Fin 10 → Column .advice)
         apply Configure.mem_lookups_delta_bind_right
         apply Configure.mem_lookups_delta_bind_left
         exact hargument)
+      (by
+        intro column hcolumn
+        simp only [Add.add, FormalRegionCircuit.keygenRequirements,
+          ElaboratedRegionCircuit.keygenRequirements, List.nil_append] at hcolumn
+        simp only [configureDeltaContext]
+        unfold configure
+        apply Configure.mem_fixedColumns_bind_right
+        apply Configure.mem_fixedColumns_bind_right
+        apply Configure.mem_fixedColumns_bind_left
+        exact hcolumn)
+      (by
+        intro column hcolumn
+        simp only [Add.add, FormalRegionCircuit.keygenRequirements,
+          ElaboratedRegionCircuit.keygenRequirements, List.nil_append] at hcolumn
+        simp only [configureDeltaContext]
+        unfold configure
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_left
+        exact hcolumn)
   addFormal :=
     (Add.addFormal.configureCertificate
       (advices 0, advices 1, advices 2, advices 3, advices 4,
@@ -289,6 +601,24 @@ def coreConfigureCertificate (advices : Fin 10 → Column .advice)
         apply Configure.mem_lookups_delta_bind_right
         apply Configure.mem_lookups_delta_bind_left
         exact hargument)
+      (by
+        intro column hcolumn
+        simp only [Add.addFormal, FormalCircuit.keygenRequirements] at hcolumn
+        simp only [configureDeltaContext]
+        unfold configure
+        apply Configure.mem_fixedColumns_bind_right
+        apply Configure.mem_fixedColumns_bind_right
+        apply Configure.mem_fixedColumns_bind_left
+        exact hcolumn)
+      (by
+        intro column hcolumn
+        simp only [Add.addFormal, FormalCircuit.keygenRequirements] at hcolumn
+        simp only [configureDeltaContext]
+        unfold configure
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_left
+        exact hcolumn)
 
 /--
 The two gates borrowed through a fixed-base wrapper are registered by the shared
@@ -320,6 +650,33 @@ theorem mem_mulFixed_gates (advices : Fin 10 → Column .advice)
   unfold configure at hgate
   simpa [MulFixed.configure, MulFixed.Short.configure,
     DecomposeRunningSum.configure] using hgate
+
+/-- The fixed columns exposed by the shared fixed-base configuration are either the
+borrowed Lagrange columns or the locally allocated `fixedZ` column. -/
+theorem mem_mulFixed_fixedColumns (advices : Fin 10 → Column .advice)
+    (lagrangeCoeffs : Fin 8 → Column .fixed)
+    (rangeCheck : LookupRangeCheck.Config 10)
+    (counts : ConfigureCounts) (column : Column .fixed)
+    (hcolumn :
+      let cfg :=
+        ((configure advices lagrangeCoeffs rangeCheck).output counts)
+          |>.mulFixedShort.superConfig
+      column ∈ MulFixed.fixedColumns cfg) :
+    column ∈
+      (configureContext advices lagrangeCoeffs rangeCheck counts).fixedColumns := by
+  simp only [configureContext, List.mem_append]
+  unfold MulFixed.fixedColumns at hcolumn
+  rcases List.mem_append.mp hcolumn with hlagrange | hfixedZ
+  · exact Or.inl hlagrange
+  · simp only [List.mem_singleton] at hfixedZ
+    subst column
+    right
+    rw [Configure.mem_fixedColumns_iff]
+    simp [configure, WitnessPoint.configure, AddIncomplete.add, Add.add,
+      Mul.configure, MulIncomplete.configure, MulComplete.configure,
+      MulOverflow.configure, MulFixed.configure,
+      DecomposeRunningSum.configure, MulFixed.FullWidth.configure,
+      MulFixed.Short.configure, MulFixed.BaseFieldElem.configure]
 
 /-- All ECC capabilities needed by the Action-level fixed-base wrappers. -/
 structure ConfigureCertificate (advices : Fin 10 → Column .advice)
@@ -354,21 +711,71 @@ def mono
     (certificate :
       ConfigureCertificate advices lagrangeCoeffs rangeCheck counts source)
     (gates : ∀ gate, gate ∈ source.gates → gate ∈ target.gates)
-    (lookups : ∀ argument, argument ∈ source.lookups → argument ∈ target.lookups) :
+    (lookups : ∀ argument, argument ∈ source.lookups → argument ∈ target.lookups)
+    (fixedColumns : ∀ column,
+      column ∈ source.fixedColumns → column ∈ target.fixedColumns)
+    (permutationColumns : ∀ column,
+      column ∈ source.permutationColumns → column ∈ target.permutationColumns) :
     ConfigureCertificate advices lagrangeCoeffs rangeCheck counts target where
   toCoreConfigureCertificate :=
-    certificate.toCoreConfigureCertificate.mono gates lookups
-  mul := certificate.mul.mono gates lookups
-  mulFixedShort B := (certificate.mulFixedShort B).mono gates lookups
-  mulFixedFull B := (certificate.mulFixedFull B).mono gates lookups
-  mulFixedBaseField B := (certificate.mulFixedBaseField B).mono gates lookups
+    certificate.toCoreConfigureCertificate.mono gates lookups fixedColumns permutationColumns
+  mul := certificate.mul.mono gates lookups fixedColumns permutationColumns
+  mulFixedShort B :=
+    (certificate.mulFixedShort B).mono gates lookups fixedColumns permutationColumns
+  mulFixedFull B :=
+    (certificate.mulFixedFull B).mono gates lookups fixedColumns permutationColumns
+  mulFixedBaseField B :=
+    (certificate.mulFixedBaseField B).mono gates lookups fixedColumns permutationColumns
 
 end ConfigureCertificate
+
+/-- The fixed-column law required by the fixed-base children follows from the
+borrowed Lagrange columns being distinct and allocated before the ECC configure run. -/
+def configureOutputFixedColumnsLawful
+    (advices : Fin 10 → Column .advice)
+    (lagrangeCoeffs : Fin 8 → Column .fixed)
+    (rangeCheck : LookupRangeCheck.Config 10) (counts : ConfigureCounts)
+    (hnodup : (List.ofFn lagrangeCoeffs).Nodup)
+    (hbound : ∀ column ∈ List.ofFn lagrangeCoeffs,
+      column.index < counts.numFixedColumns) :
+    ((configure advices lagrangeCoeffs rangeCheck).output counts)
+      |>.mulFixedShort.superConfig.FixedColumnsLawful := by
+  let witnessProgram := WitnessPoint.configure (advices 0) (advices 1)
+  let addIncompleteProgram := AddIncomplete.add.configure
+    (advices 0, advices 1, advices 2, advices 3)
+  let addProgram := Add.add.configure
+    (advices 0, advices 1, advices 2, advices 3, advices 4,
+      advices 5, advices 6, advices 7, advices 8)
+  let witnessCounts := witnessProgram.finalCounts counts
+  let addIncompleteCounts := addIncompleteProgram.finalCounts witnessCounts
+  let addCounts := addProgram.finalCounts addIncompleteCounts
+  let addConfig := addProgram.output addIncompleteCounts
+  let addIncompleteConfig := addIncompleteProgram.output witnessCounts
+  let mulProgram := Mul.configure addConfig rangeCheck advices
+  let mulCounts := mulProgram.finalCounts addCounts
+  apply MulFixed.configureOutputFixedColumnsLawful
+  · exact hnodup
+  · intro column hcolumn
+    apply (hbound column hcolumn).trans_le
+    exact le_trans
+      (Configure.counts_componentwiseLE_finalCounts
+        witnessProgram counts).numFixedColumns <|
+      le_trans
+        (Configure.counts_componentwiseLE_finalCounts
+          addIncompleteProgram witnessCounts).numFixedColumns <|
+        le_trans
+          (Configure.counts_componentwiseLE_finalCounts
+            addProgram addIncompleteCounts).numFixedColumns
+          (Configure.counts_componentwiseLE_finalCounts
+            mulProgram addCounts).numFixedColumns
 
 /-- Construct the fixed-base Action-facing ECC capabilities once in the ECC owner. -/
 def configureCertificate (advices : Fin 10 → Column .advice)
     (lagrangeCoeffs : Fin 8 → Column .fixed)
-    (rangeCheck : LookupRangeCheck.Config 10) (counts : ConfigureCounts) :
+    (rangeCheck : LookupRangeCheck.Config 10) (counts : ConfigureCounts)
+    (fixedColumnsLawful :
+      ((configure advices lagrangeCoeffs rangeCheck).output counts)
+        |>.mulFixedShort.superConfig.FixedColumnsLawful) :
     ConfigureCertificate advices lagrangeCoeffs rangeCheck counts
       (configureContext advices lagrangeCoeffs rangeCheck counts) := by
   let core : CoreConfigureCertificate advices lagrangeCoeffs rangeCheck counts
@@ -376,6 +783,8 @@ def configureCertificate (advices : Fin 10 → Column .advice)
     (coreConfigureCertificate advices lagrangeCoeffs rangeCheck counts).mono
       (fun _ hgate => hgate)
       (fun _ hargument => List.mem_cons_of_mem _ hargument)
+      (fun _ hcolumn => List.mem_append_right _ hcolumn)
+      (fun _ hcolumn => List.mem_cons_of_mem _ hcolumn)
   let witnessProgram := WitnessPoint.configure (advices 0) (advices 1)
   let addIncompleteProgram := AddIncomplete.add.configure
     (advices 0, advices 1, advices 2, advices 3)
@@ -397,6 +806,60 @@ def configureCertificate (advices : Fin 10 → Column .advice)
   let fullCounts := fullProgram.finalCounts mulFixedCounts
   let shortProgram := MulFixed.Short.configure mulFixedConfig
   let shortCounts := shortProgram.finalCounts fullCounts
+  have hrunningColumns : ∀ column,
+      column ∈ MulFixed.runningSumKeygenRequirements.permutationColumns
+        mulFixedConfig core.addIncomplete.configured →
+      column ∈ (configureContext advices lagrangeCoeffs rangeCheck counts).permutationColumns := by
+    intro column hcolumn
+    rw [MulFixed.configure_output_runningSumPermutationColumns] at hcolumn
+    have haddColumns : Add.permutationColumns addConfig =
+        ([advices 0, advices 1, advices 2, advices 3] : List AnyColumn) :=
+      Add.configure_output_permutationColumns _ _ _ _ _ _ _ _ _ _
+    have hincompleteColumns : AddIncomplete.permutationColumns addIncompleteConfig =
+        ([advices 0, advices 1, advices 2, advices 3] : List AnyColumn) :=
+      AddIncomplete.configure_output_permutationColumns _ _ _ _ _
+    rw [haddColumns, hincompleteColumns] at hcolumn
+    simp only [List.mem_append] at hcolumn
+    rcases hcolumn with (hprefix | hadd) | hincomplete
+    · simp only [List.mem_cons, List.not_mem_nil, or_false] at hprefix
+      rcases hprefix with hfour | hfour | hfive
+      · rw [hfour]
+        apply List.mem_cons_of_mem
+        exact advice_mem_permutationRequests _ _ _ _ 4
+      · rw [hfour]
+        apply List.mem_cons_of_mem
+        exact advice_mem_permutationRequests _ _ _ _ 4
+      · rw [hfive]
+        apply List.mem_cons_of_mem
+        exact advice_mem_permutationRequests _ _ _ _ 5
+    · simp only [List.mem_cons, List.not_mem_nil, or_false] at hadd
+      rcases hadd with hzero | hone | htwo | hthree
+      · rw [hzero]
+        apply List.mem_cons_of_mem
+        exact advice_mem_permutationRequests _ _ _ _ 0
+      · rw [hone]
+        apply List.mem_cons_of_mem
+        exact advice_mem_permutationRequests _ _ _ _ 1
+      · rw [htwo]
+        apply List.mem_cons_of_mem
+        exact advice_mem_permutationRequests _ _ _ _ 2
+      · rw [hthree]
+        apply List.mem_cons_of_mem
+        exact advice_mem_permutationRequests _ _ _ _ 3
+    · simp only [List.mem_cons, List.not_mem_nil, or_false] at hincomplete
+      rcases hincomplete with hzero | hone | htwo | hthree
+      · rw [hzero]
+        apply List.mem_cons_of_mem
+        exact advice_mem_permutationRequests _ _ _ _ 0
+      · rw [hone]
+        apply List.mem_cons_of_mem
+        exact advice_mem_permutationRequests _ _ _ _ 1
+      · rw [htwo]
+        apply List.mem_cons_of_mem
+        exact advice_mem_permutationRequests _ _ _ _ 2
+      · rw [hthree]
+        apply List.mem_cons_of_mem
+        exact advice_mem_permutationRequests _ _ _ _ 3
   refine
     { toCoreConfigureCertificate := core
       mul := ?_
@@ -442,10 +905,63 @@ def configureCertificate (advices : Fin 10 → Column .advice)
         apply Configure.mem_lookups_delta_bind_right
         apply Configure.mem_lookups_delta_bind_left
         exact hmul
+    · intro column hcolumn
+      rcases List.mem_append.mp hcolumn with hrequirements | hmul
+      · have hfixedColumns : Mul.mul.keygenRequirements.fixedColumns
+            (addConfig, rangeCheck, advices) core.add.configured =
+            core.add.configured.fixedColumns := rfl
+        rw [hfixedColumns] at hrequirements
+        exact core.add.fixedColumns_of_configured column hrequirements
+      · apply List.mem_append_right
+        rw [show Mul.mul.configure (addConfig, rangeCheck, advices) =
+          Mul.configure addConfig rangeCheck advices from rfl] at hmul
+        unfold configure
+        apply Configure.mem_fixedColumns_bind_right
+        apply Configure.mem_fixedColumns_bind_right
+        apply Configure.mem_fixedColumns_bind_right
+        apply Configure.mem_fixedColumns_bind_left
+        exact hmul
+    · intro column hcolumn
+      rcases List.mem_append.mp hcolumn with hrequirements | hmul
+      · rw [show Mul.mul.keygenRequirements.permutationColumns
+            (addConfig, rangeCheck, advices) core.add.configured =
+            ([rangeCheck.runningSum, advices 3, advices 0,
+              advices 1, advices 7] : List AnyColumn) ++
+                core.add.configured.permutationColumns from rfl] at hrequirements
+        rcases List.mem_append.mp hrequirements with hcolumns | hadd
+        · simp only [List.mem_cons] at hcolumns
+          rcases hcolumns with hrange | hthree | hzero | hone | hseven
+          · simp only [configureContext, List.mem_cons]
+            exact Or.inl hrange
+          · rw [hthree]
+            apply List.mem_cons_of_mem
+            exact advice_mem_permutationRequests _ _ _ _ 3
+          · rw [hzero]
+            apply List.mem_cons_of_mem
+            exact advice_mem_permutationRequests _ _ _ _ 0
+          · rw [hone]
+            apply List.mem_cons_of_mem
+            exact advice_mem_permutationRequests _ _ _ _ 1
+          · rcases hseven with hseven | hseven
+            · rw [hseven]
+              apply List.mem_cons_of_mem
+              exact advice_mem_permutationRequests _ _ _ _ 7
+            · contradiction
+        · exact core.add.permutationColumns_of_configured column hadd
+      · apply List.mem_cons_of_mem
+        rw [show Mul.mul.configure (addConfig, rangeCheck, advices) =
+          Mul.configure addConfig rangeCheck advices from rfl] at hmul
+        unfold configure
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_left
+        exact hmul
   · intro B
     apply ((MulFixed.Short.circuit B).configureCertificate
       mulFixedConfig fullCounts
-      ⟨core.addIncomplete.configured, core.add.configured⟩).mono
+      ⟨core.addIncomplete.configured, core.add.configured,
+        fixedColumnsLawful⟩).mono
     · intro gate hgate
       simp only [MulFixed.Short.circuit, FormalCircuit.keygenRequirements,
         ElaboratedCircuit.keygenRequirements, MulFixed.runningSumKeygenRequirements,
@@ -485,16 +1001,51 @@ def configureCertificate (advices : Fin 10 → Column .advice)
         apply Configure.mem_lookups_delta_bind_right
         apply Configure.mem_lookups_delta_bind_left
         exact hshort
+    · intro column hcolumn
+      simp only [MulFixed.Short.circuit, FormalCircuit.keygenRequirements,
+        ElaboratedCircuit.keygenRequirements, List.mem_append] at hcolumn
+      rcases hcolumn with hrequirements | hshort
+      · exact mem_mulFixed_fixedColumns _ _ _ _ column hrequirements
+      · apply List.mem_append_right
+        unfold configure
+        apply Configure.mem_fixedColumns_bind_right
+        apply Configure.mem_fixedColumns_bind_right
+        apply Configure.mem_fixedColumns_bind_right
+        apply Configure.mem_fixedColumns_bind_right
+        apply Configure.mem_fixedColumns_bind_right
+        apply Configure.mem_fixedColumns_bind_right
+        apply Configure.mem_fixedColumns_bind_left
+        exact hshort
+    · intro column hcolumn
+      simp only [MulFixed.Short.circuit, FormalCircuit.keygenRequirements,
+        ElaboratedCircuit.keygenRequirements, List.mem_append] at hcolumn
+      rcases hcolumn with (hrunning | hadd) | hshort
+      · exact hrunningColumns column hrunning
+      · exact core.add.permutationColumns_of_configured column hadd
+      · apply List.mem_cons_of_mem
+        unfold configure
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_left
+        exact hshort
   · intro B
     apply ((MulFixed.FullWidth.circuit B).configureCertificate
       mulFixedConfig mulFixedCounts
-      ⟨core.addIncomplete.configured, core.add.configured⟩).mono
+      ⟨core.addIncomplete.configured, core.add.configured,
+        fixedColumnsLawful⟩).mono
     · intro gate hgate
       simp only [MulFixed.FullWidth.circuit, FormalCircuit.keygenRequirements,
-        ElaboratedCircuit.keygenRequirements, List.mem_append] at hgate
+        ElaboratedCircuit.keygenRequirements, MulFixed.runningSumKeygenRequirements,
+        List.mem_append] at hgate
       rcases hgate with hrequirements | hfull
-      · rcases hrequirements with hincomplete | hadd
-        · exact core.addIncomplete.gates_of_configured gate hincomplete
+      · rcases hrequirements with hcoreOrIncomplete | hadd
+        · rcases hcoreOrIncomplete with hcore | hincomplete
+          · exact mem_mulFixed_gates _ _ _ _ gate hcore
+          · exact core.addIncomplete.gates_of_configured gate hincomplete
         · exact core.add.gates_of_configured gate hadd
       · simp only [configureContext]
         unfold configure
@@ -522,11 +1073,41 @@ def configureCertificate (advices : Fin 10 → Column .advice)
         apply Configure.mem_lookups_delta_bind_right
         apply Configure.mem_lookups_delta_bind_left
         exact hfull
+    · intro column hcolumn
+      simp only [MulFixed.FullWidth.circuit, FormalCircuit.keygenRequirements,
+        ElaboratedCircuit.keygenRequirements, List.mem_append] at hcolumn
+      rcases hcolumn with hrequirements | hfull
+      · exact mem_mulFixed_fixedColumns _ _ _ _ column hrequirements
+      · apply List.mem_append_right
+        unfold configure
+        apply Configure.mem_fixedColumns_bind_right
+        apply Configure.mem_fixedColumns_bind_right
+        apply Configure.mem_fixedColumns_bind_right
+        apply Configure.mem_fixedColumns_bind_right
+        apply Configure.mem_fixedColumns_bind_right
+        apply Configure.mem_fixedColumns_bind_left
+        exact hfull
+    · intro column hcolumn
+      simp only [MulFixed.FullWidth.circuit, FormalCircuit.keygenRequirements,
+        ElaboratedCircuit.keygenRequirements, List.mem_append] at hcolumn
+      rcases hcolumn with (hrunning | hadd) | hfull
+      · exact hrunningColumns column hrunning
+      · exact core.add.permutationColumns_of_configured column hadd
+      · apply List.mem_cons_of_mem
+        unfold configure
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_left
+        exact hfull
   · intro B
     apply ((MulFixed.BaseFieldElem.circuit B).configureCertificate
       (![advices 6, advices 7, advices 8], rangeCheck, mulFixedConfig)
       shortCounts
-      ⟨core.addIncomplete.configured, core.add.configured⟩).mono
+      ⟨core.addIncomplete.configured, core.add.configured,
+        fixedColumnsLawful⟩).mono
     · intro gate hgate
       simp only [MulFixed.BaseFieldElem.circuit,
         FormalCircuit.keygenRequirements, ElaboratedCircuit.keygenRequirements,
@@ -573,6 +1154,44 @@ def configureCertificate (advices : Fin 10 → Column .advice)
         apply Configure.mem_lookups_delta_bind_right
         apply Configure.mem_lookups_delta_bind_right
         apply Configure.mem_lookups_delta_bind_left
+        exact hbase
+    · intro column hcolumn
+      simp only [MulFixed.BaseFieldElem.circuit,
+        FormalCircuit.keygenRequirements, ElaboratedCircuit.keygenRequirements,
+        MulFixed.BaseFieldElem.keygenRequirements, List.mem_append] at hcolumn
+      rcases hcolumn with hrequirements | hbase
+      · exact mem_mulFixed_fixedColumns _ _ _ _ column hrequirements
+      · apply List.mem_append_right
+        unfold configure
+        apply Configure.mem_fixedColumns_bind_right
+        apply Configure.mem_fixedColumns_bind_right
+        apply Configure.mem_fixedColumns_bind_right
+        apply Configure.mem_fixedColumns_bind_right
+        apply Configure.mem_fixedColumns_bind_right
+        apply Configure.mem_fixedColumns_bind_right
+        apply Configure.mem_fixedColumns_bind_right
+        apply Configure.mem_fixedColumns_bind_left
+        exact hbase
+    · intro column hcolumn
+      simp only [MulFixed.BaseFieldElem.circuit,
+        FormalCircuit.keygenRequirements, ElaboratedCircuit.keygenRequirements,
+        MulFixed.BaseFieldElem.keygenRequirements, List.mem_append] at hcolumn
+      rcases hcolumn with ((hrunning | hadd) | hrange) | hbase
+      · exact hrunningColumns column hrunning
+      · exact core.add.permutationColumns_of_configured column hadd
+      · simp only [List.mem_singleton] at hrange
+        rw [hrange]
+        simp only [configureContext, List.mem_cons, true_or]
+      · apply List.mem_cons_of_mem
+        unfold configure
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_right
+        apply Configure.mem_permutationRequests_delta_bind_left
         exact hbase
 
 end Zcash.Circuits.Ecc

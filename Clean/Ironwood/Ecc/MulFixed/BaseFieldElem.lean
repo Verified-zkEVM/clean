@@ -20,7 +20,8 @@ namespace Zcash.Circuits.Ecc.MulFixed.BaseFieldElem
 
 open Halo2
 open Ecc.MulFixed (coordsGate fixedConstantsLoop processWindow)
-open DecomposeRunningSum (copyDecompose rangeCheckExpr)
+open DecomposeRunningSum
+  (copyDecompose copyDecomposeSynthesisSummary rangeCheckExpr)
 open Ecc.MulFixed (FixedBase)
 open Ecc.MulFixed (FixedBaseData)
 open CompElliptic.Fields.Pasta (Fq PALLAS_BASE_CARD PALLAS_SCALAR_CARD)
@@ -87,6 +88,10 @@ def canonGate (cfg : Config) : Gate Fp :=
       ("z_84_alpha_check", z84AlphaCheck),
       ("alpha_0_prime check", alpha0PrimeCheck) ]
 
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem canonGate_selector (cfg : Config) :
+    (canonGate cfg).selector = cfg.qMulFixedBaseField := rfl
+
 /-- Enable equality on the three canon advices, allocate a fresh selector, register the
 canonicity gate. (The canon-advice/incomplete-addition column deconfliction assert holds
 by construction at the `EccChip` wiring: canon = advices 6/7/8, add_incomplete =
@@ -136,6 +141,50 @@ def innerRegion (B : FixedBaseData) (cfg : Config) (offset : ℕ) (alpha : Assig
     offset 85
   return { acc := r.1, mulB := r.2, zs := zsOut.zs }
 
+theorem innerRegion_operations_eq
+    (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (alpha : AssignedCell Fp) (self : RegionIndex) :
+    (innerRegion B cfg offset alpha).operations self =
+      ((copyDecompose 3 85).call cfg.superConfig.runningSumConfig
+          offset ⟨alpha⟩).operations self ++
+        (fixedConstantsLoop (coordsGate cfg.superConfig) B cfg.superConfig
+          offset 85).operations self ++
+          (windowChain cfg.superConfig
+            (processWindow B (Ecc.MulFixed.windowPoint B.point)
+              cfg.superConfig alpha) offset 85).operations self := by
+  simp only [innerRegion, RegionCircuit.operations_bind,
+    RegionCircuit.operations_pure, List.append_nil, List.append_assoc]
+
+/-- Reduced footprint of the base-field multiplication inner region. -/
+def innerRegionSynthesisSummary (cfg : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  (copyDecomposeSynthesisSummary 85
+      cfg.superConfig.runningSumConfig offset).combine
+    ((fixedConstantsLoopSynthesisSummary (coordsGate cfg.superConfig)
+      cfg.superConfig offset 85).combine
+      (windowChainSynthesisSummary cfg.superConfig offset 85))
+
+@[synthesis_summary_norm]
+theorem innerRegionSynthesisSummary_lookupActivationCount
+    (cfg : Config) (offset : ℕ) :
+    (innerRegionSynthesisSummary cfg offset).lookupActivationCount = 0 := by
+  simp only [innerRegionSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem innerRegion_synthesisSummary_eq
+    (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (alpha : AssignedCell Fp) (self : RegionIndex) :
+    FloorPlanner.regionSynthesisSummary
+        ((innerRegion B cfg offset alpha).operations self) =
+      innerRegionSynthesisSummary cfg offset := by
+  simp only [innerRegion, innerRegionSynthesisSummary,
+    RegionCircuit.operations_bind, RegionCircuit.operations_pure,
+    FloorPlanner.regionSynthesisSummary_append, synthesis_summary_norm]
+  rw [windowChain_synthesisSummary_eq]
+  intro w row
+  exact processWindow_synthesisSummary_eq B
+    (Ecc.MulFixed.windowPoint B.point) cfg.superConfig alpha w row self
+
 /-- The honest `α₀' = (α − z_84·2^252) + 2^130 − t_p` witness, from the α and `z_84`
 cells. -/
 def alphaZeroPrimeWit (alpha z84 : AssignedCell Fp) : WitgenIR Fp 1 :=
@@ -179,6 +228,112 @@ def canonicityRegion (cfg : Config) (alpha z84 alphaPrime z13 z44 z43 : Assigned
   let _ ← copyAdvice z44 (cfg.canonAdvices 1) 2
   let _ ← copyAdvice z43 (cfg.canonAdvices 2) 2
   return ()
+
+@[keygen_norm, keygen_spine]
+theorem witnessCheck13_lookupSelectorAssignmentsAgree
+    (cfg : LookupRangeCheck.Config 10) (w : WitgenIR Fp 1) (region : RegionIndex) :
+    ((witnessCheck13 cfg w).operations region).LookupSelectorAssignmentsAgree := by
+  simpa only [witnessCheck13, LookupRangeCheck.witnessCheck, circuit_norm] using
+    LookupRangeCheck.witnessCheck_lookupSelectorAssignmentsAgree
+      10 13 false (by simp) cfg w region
+
+@[keygen_norm, keygen_spine]
+theorem witnessCheck13_lookupSelectorsAnchoredBy
+    (cfg : LookupRangeCheck.Config 10) (w : WitgenIR Fp 1)
+    (region : RegionIndex) (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchor : SelectorAnchorRequirementsSatisfied
+      (LookupRangeCheck.lookupSelectorAnchorRequirements cfg) anchor) :
+    ((witnessCheck13 cfg w).operations region).LookupSelectorsAnchoredBy anchor := by
+  simpa only [witnessCheck13, LookupRangeCheck.witnessCheck, circuit_norm] using
+    LookupRangeCheck.witnessCheck_lookupSelectorsAnchoredBy
+      10 13 false (by simp) cfg w region anchor hanchor
+
+@[keygen_norm, keygen_spine]
+theorem canonicityRegion_lookupSelectorAssignmentsAgree
+    (cfg : Config) (alpha z84 alphaPrime z13 z44 z43 : AssignedCell Fp)
+    (region : RegionIndex) :
+    ((canonicityRegion cfg alpha z84 alphaPrime z13 z44 z43).operations region)
+      |>.LookupSelectorAssignmentsAgree := by
+  apply RegionOperations.lookupSelectorAssignmentsAgree_of_forall_isNotLookup
+  simp only [canonicityRegion, circuit_norm, RegionOperation.IsNotLookup]
+
+/-- Reduced footprint of the 13-word witness-check region. -/
+def witnessCheck13SynthesisSummary
+    (cfg : LookupRangeCheck.Config 10) :
+    FloorPlanner.SynthesisSummary :=
+  LookupRangeCheck.witnessCheckSynthesisSummary 10 13 false cfg
+
+@[synthesis_summary_norm]
+theorem witnessCheck13SynthesisSummary_lookupActivationCount
+    (cfg : LookupRangeCheck.Config 10) :
+    (witnessCheck13SynthesisSummary cfg).lookupActivationCount = 13 := by
+  simp only [witnessCheck13SynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem witnessCheck13_synthesisSummary_eq
+    (cfg : LookupRangeCheck.Config 10) (w : WitgenIR Fp 1)
+    (self : RegionIndex) :
+    FloorPlanner.synthesisSummary ((witnessCheck13 cfg w).operations self) =
+      witnessCheck13SynthesisSummary cfg := by
+  simpa only [witnessCheck13SynthesisSummary, witnessCheck13,
+    LookupRangeCheck.witnessCheck, circuit_norm] using
+      LookupRangeCheck.witnessCheck_synthesisSummary
+        10 13 false (by simp) cfg w self
+
+@[synthesis_summary_norm]
+theorem witnessCheck13SynthesisSummary_hasNoFixedWrites
+    (cfg : LookupRangeCheck.Config 10) :
+    (witnessCheck13SynthesisSummary cfg).HasNoFixedWrites := by
+  exact LookupRangeCheck.witnessCheckSynthesisSummary_hasNoFixedWrites
+    10 13 false cfg
+
+/-- Reduced footprint of the three-row canonicity block. -/
+def canonicityRegionSynthesisSummary (cfg : Config) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns
+    [.selector cfg.qMulFixedBaseField.index,
+      .column .advice (cfg.canonAdvices 0).index,
+      .column .advice (cfg.canonAdvices 2).index,
+      .column .advice (cfg.canonAdvices 0).index,
+      .column .advice (cfg.canonAdvices 1).index,
+      .column .advice (cfg.canonAdvices 2).index,
+      .column .advice (cfg.canonAdvices 0).index,
+      .column .advice (cfg.canonAdvices 1).index,
+      .column .advice (cfg.canonAdvices 2).index]
+    3 0
+
+@[synthesis_summary_norm]
+theorem canonicityRegionSynthesisSummary_lookupActivationCount (cfg : Config) :
+    (canonicityRegionSynthesisSummary cfg).lookupActivationCount = 0 := by
+  simp only [canonicityRegionSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem canonicityRegion_synthesisSummary_eq
+    (cfg : Config) (alpha z84 alphaPrime z13 z44 z43 : AssignedCell Fp)
+    (self : RegionIndex) :
+    FloorPlanner.regionSynthesisSummary
+        ((canonicityRegion cfg alpha z84 alphaPrime z13 z44 z43).operations self) =
+      canonicityRegionSynthesisSummary cfg := by
+  apply FloorPlanner.RegionSynthesisSummary.ext
+  · simp only [canonicityRegionSynthesisSummary, canonicityRegion,
+      circuit_norm, canonGate]
+  · simp only [canonicityRegionSynthesisSummary, canonicityRegion,
+      circuit_norm, canonGate]
+    omega
+  · simp only [canonicityRegionSynthesisSummary, canonicityRegion,
+      circuit_norm, canonGate, synthesis_summary_norm]
+  · simp only [canonicityRegionSynthesisSummary, canonicityRegion,
+      circuit_norm, canonGate]
+    omega
+  · simp only [canonicityRegionSynthesisSummary, canonicityRegion,
+      circuit_norm, canonGate]
+
+@[synthesis_summary_norm]
+theorem canonicityRegionSynthesisSummary_hasNoFixedColumns (cfg : Config) :
+    (canonicityRegionSynthesisSummary cfg).HasNoFixedColumns := by
+  simp only [canonicityRegionSynthesisSummary,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
 
 /-! ## The inner-region bundle (proof boundary for region 1)
 
@@ -274,93 +429,269 @@ def InnerProverSpec (B : FixedBase)
       (input.alpha.val / 2 ^ (3 * 84) % 8)).y ∧
   ∀ w : Fin 86, out.zs[w.val] = ((input.alpha.val / 2 ^ (3 * w.val) : ℕ) : Fp)
 
+@[keygen_norm]
+def innerKeygenRequirements :
+    KeygenRequirements Fp Config (Var DecomposeRunningSum.Inputs Fp) where
+  configLawful cfg :=
+    AddIncomplete.add.Configured cfg.superConfig.addIncompleteConfig ×
+      cfg.superConfig.FixedColumnsLawful
+  gates cfg configured :=
+    runningSumKeygenRequirements.gates cfg.superConfig configured.1
+  lookups cfg configured :=
+    runningSumKeygenRequirements.lookups cfg.superConfig configured.1
+  fixedColumns cfg _ := MulFixed.fixedColumns cfg.superConfig
+  permutationColumns cfg configured :=
+    runningSumKeygenRequirements.permutationColumns cfg.superConfig configured.1
+  inputCells _ _ input := [input.alpha.cell]
+
 @[keygen_helper]
 theorem innerCopyDecompose_keygenRegistered
     (cfg : Config) (offset : ℕ) (alpha : AssignedCell Fp)
     (self : RegionIndex)
-    (configured : AddIncomplete.add.Configured
-      cfg.superConfig.addIncompleteConfig) :
+    (configured : innerKeygenRequirements.configLawful cfg) :
     (((copyDecompose 3 85).call cfg.superConfig.runningSumConfig
       offset ⟨alpha⟩).operations self).Forall
         (RegionOperation.KeygenRegistered
-          (runningSumKeygenRequirements.gates cfg.superConfig configured)
-          (runningSumKeygenRequirements.lookups cfg.superConfig configured)) := by
+          (innerKeygenRequirements.gates cfg configured)
+          (innerKeygenRequirements.lookups cfg configured)
+          (innerKeygenRequirements.fixedColumns cfg configured)
+          (innerKeygenRequirements.permutationColumns cfg configured ++
+            innerKeygenRequirements.inputPermutationColumns cfg configured ⟨alpha⟩)) := by
   apply FormalRegionCircuit.call_keygenRegistered_ofOutput
     (copyDecompose 3 85)
     (cfg.superConfig.runningSumConfig.qRangeCheck,
       cfg.superConfig.runningSumConfig.z) {} ()
-  · intro gate h
-    unfold copyDecompose at h
-    simp only [FormalRegionCircuit.keygenRequirements,
-      ElaboratedRegionCircuit.keygenRequirements] at h
-    simp [runningSumKeygenRequirements,
-      DecomposeRunningSum.configure] at h ⊢
-    exact Or.inl h
-  · intro argument h
-    unfold copyDecompose at h
-    simp only [FormalRegionCircuit.keygenRequirements,
-      ElaboratedRegionCircuit.keygenRequirements] at h
-    simp [DecomposeRunningSum.configure] at h
-
-@[keygen_helper]
-theorem innerFixedConstants_keygenRegistered
-    (B : FixedBaseData) (cfg : Config) (offset : ℕ)
-    (self : RegionIndex)
-    (configured : AddIncomplete.add.Configured
-      cfg.superConfig.addIncompleteConfig) :
-    ((fixedConstantsLoop (coordsGate cfg.superConfig) B cfg.superConfig
-      offset 85).operations self).Forall
-        (RegionOperation.KeygenRegistered
-          (runningSumKeygenRequirements.gates cfg.superConfig configured)
-          (runningSumKeygenRequirements.lookups cfg.superConfig configured)) := by
-  simp only [fixedConstantsLoop, RegionCircuit.forRange'_forall]
-  intro i
-  unfold fixedConstantsWindow
-  keygen_registration
+  · keygen_registration
+  · keygen_registration
+  · intro column h
+    let configuredChild := FormalRegionCircuit.Configured.ofOutput
+      (copyDecompose 3 85)
+      (cfg.superConfig.runningSumConfig.qRangeCheck,
+        cfg.superConfig.runningSumConfig.z) {} ()
+    have hcolumn : column ∈ configuredChild.fixedColumns := by
+      simpa [configuredChild, FormalRegionCircuit.Configured.fixedColumns,
+        FormalRegionCircuit.Configured.ofOutput] using h
+    rw [DecomposeRunningSum.copyDecompose_configured_fixedColumns_eq_nil]
+      at hcolumn
+    exact (List.not_mem_nil hcolumn).elim
+  · intro column h
+    have h' : column ∈
+        (FormalRegionCircuit.Configured.ofOutput (copyDecompose 3 85)
+          (cfg.superConfig.runningSumConfig.qRangeCheck,
+            cfg.superConfig.runningSumConfig.z) {} ()).permutationColumns := by
+      simpa [FormalRegionCircuit.Configured.permutationColumns,
+        FormalRegionCircuit.Configured.ofOutput] using h
+    rw [DecomposeRunningSum.copyDecompose_configured_permutationColumns_eq] at h'
+    keygen_registration
+  · simp only [copyDecompose, FormalRegionCircuit.keygenRequirements,
+      DecomposeRunningSum.elaborated,
+      ElaboratedRegionCircuit.keygenRequirements,
+      List.forall_cons, List.forall_nil, and_true,
+      innerKeygenRequirements, KeygenRequirements.inputPermutationColumns,
+      List.map_cons, List.map_nil, List.mem_append, List.mem_singleton]
+    exact Or.inr trivial
 
 @[keygen_helper]
 theorem innerWindowChain_keygenRegistered
     (B : FixedBaseData) (cfg : Config) (offset : ℕ)
     (alpha : AssignedCell Fp) (self : RegionIndex)
-    (configured : AddIncomplete.add.Configured
-      cfg.superConfig.addIncompleteConfig) :
+    (configured : innerKeygenRequirements.configLawful cfg) :
     ((MulFixed.windowChain cfg.superConfig
       (processWindow B (Ecc.MulFixed.windowPoint B.point)
         cfg.superConfig alpha) offset 85).operations self).Forall
         (RegionOperation.KeygenRegistered
-          (runningSumKeygenRequirements.gates cfg.superConfig configured)
-          (runningSumKeygenRequirements.lookups cfg.superConfig configured)) := by
-  unfold MulFixed.windowChain processWindow
-  simp only [keygen_spine, operations_assignAdvice, operations_cellAt,
-    List.forall_cons, List.forall_nil, RegionOperation.KeygenRegistered]
-  constructor
-  · apply FormalRegionCircuit.call_keygenRegistered
-      AddIncomplete.add cfg.superConfig.addIncompleteConfig configured
-    · intro gate h
-      simp only [runningSumKeygenRequirements, List.mem_append, List.mem_cons]
-      exact Or.inr h
-    · intro argument h
-      exact h
-  · intro i
-    apply FormalRegionCircuit.call_keygenRegistered
-        AddIncomplete.add cfg.superConfig.addIncompleteConfig configured
-    · intro gate h
-      simp only [runningSumKeygenRequirements, List.mem_append, List.mem_cons]
-      exact Or.inr h
-    · intro argument h
-      exact h
+          (innerKeygenRequirements.gates cfg configured)
+          (innerKeygenRequirements.lookups cfg configured)
+          (innerKeygenRequirements.fixedColumns cfg configured)
+          (innerKeygenRequirements.permutationColumns cfg configured ++
+            innerKeygenRequirements.inputPermutationColumns cfg configured ⟨alpha⟩)) := by
+  apply windowChain_processWindow_keygenRegistered
+      B (Ecc.MulFixed.windowPoint B.point) cfg.superConfig
+      alpha offset 85 self configured.1 <;>
+    keygen_registration
 
 @[keygen_helper]
 theorem innerRegion_keygenRegistered
     (B : FixedBaseData) (cfg : Config) (offset : ℕ)
     (alpha : AssignedCell Fp) (self : RegionIndex)
-    (configured : AddIncomplete.add.Configured
-      cfg.superConfig.addIncompleteConfig) :
+    (configured : innerKeygenRequirements.configLawful cfg) :
     ((innerRegion B cfg offset alpha).operations self).Forall
       (RegionOperation.KeygenRegistered
-          (runningSumKeygenRequirements.gates cfg.superConfig configured)
-          (runningSumKeygenRequirements.lookups cfg.superConfig configured)) := by
+          (innerKeygenRequirements.gates cfg configured)
+          (innerKeygenRequirements.lookups cfg configured)
+          (innerKeygenRequirements.fixedColumns cfg configured)
+          (innerKeygenRequirements.permutationColumns cfg configured ++
+            innerKeygenRequirements.inputPermutationColumns cfg configured ⟨alpha⟩)) := by
   keygen_registration
+
+theorem innerRegion_fixedAssignmentsAgree
+    (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (alpha : AssignedCell Fp) (self : RegionIndex)
+    (fixedColumnsLawful : cfg.superConfig.FixedColumnsLawful) :
+    ((innerRegion B cfg offset alpha).operations self)
+      |>.FixedAssignmentsAgree := by
+  rw [innerRegion_operations_eq]
+  generalize coordsGate cfg.superConfig = toggle
+  have hfixed := fixedConstantsLoop_fixedAssignmentsAgree
+    toggle B cfg.superConfig fixedColumnsLawful offset 85 self
+  have hchain := windowChain_hasNoFixedAssignments cfg.superConfig
+    (processWindow B (Ecc.MulFixed.windowPoint B.point)
+      cfg.superConfig alpha) offset 85 self fun w row =>
+        processWindow_synthesisSummary_eq B
+          (Ecc.MulFixed.windowPoint B.point) cfg.superConfig alpha w row self
+  apply hfixed.between
+  · apply FloorPlanner.RegionSynthesisSummary.HasNoFixedColumns.hasNoFixedAssignments
+    rw [(copyDecompose 3 85).call_synthesisSummary]
+    exact DecomposeRunningSum.copyDecompose_synthesisSummary_hasNoFixedColumns
+      3 85 cfg.superConfig.runningSumConfig offset ⟨alpha⟩ self
+  · exact hchain
+
+theorem innerRegion_copyCellsAssignedFrom
+    (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (alpha : AssignedCell Fp) (self : RegionIndex)
+    (configured : innerKeygenRequirements.configLawful cfg) :
+    ((innerRegion B cfg offset alpha).operations self)
+      |>.CopyCellsAssignedFrom self [alpha.cell] := by
+  let decomposeOps :=
+    (((copyDecompose 3 85).call cfg.superConfig.runningSumConfig
+      offset ⟨alpha⟩).operations self)
+  let fixedOps :=
+    (fixedConstantsLoop (coordsGate cfg.superConfig) B cfg.superConfig
+      offset 85).operations self
+  let chainOps :=
+    (windowChain cfg.superConfig
+      (processWindow B (Ecc.MulFixed.windowPoint B.point)
+        cfg.superConfig alpha) offset 85).operations self
+  have hdecompose : decomposeOps.CopyCellsAssignedFrom self [alpha.cell] := by
+    apply (copyDecompose 3 85).call_copyCellsAssignedFrom
+      cfg.superConfig.runningSumConfig
+      (FormalRegionCircuit.Configured.ofOutput (copyDecompose 3 85)
+        (cfg.superConfig.runningSumConfig.qRangeCheck,
+          cfg.superConfig.runningSumConfig.z) {} ())
+      offset ⟨alpha⟩ self
+    intro cell hcell
+    rw [DecomposeRunningSum.copyDecompose_configured_inputCells_eq] at hcell
+    simpa only [List.mem_singleton] using hcell
+  have hfixed : fixedOps.CopyCellsAssignedFrom self
+      (decomposeOps.assignedCellsAfter self [alpha.cell]) :=
+    MulFixed.fixedConstantsLoop_copyCellsAssignedFrom _ _ _ _ _ _ _
+  have hchain := MulFixed.windowChain_copyCellsAssignedFrom
+    cfg.superConfig configured.1 self
+    (processWindow B (Ecc.MulFixed.windowPoint B.point)
+      cfg.superConfig alpha)
+    (fun w row available => MulFixed.processWindow_copyCellsAssignedFrom
+      B (Ecc.MulFixed.windowPoint B.point) cfg.superConfig alpha
+        w row self available)
+    (fun w row available => MulFixed.processWindow_output_cells_assigned
+      B (Ecc.MulFixed.windowPoint B.point) cfg.superConfig alpha
+        w row self available)
+    offset 85 (by norm_num)
+    ((decomposeOps ++ fixedOps).assignedCellsAfter self [alpha.cell])
+  have hprefix : (decomposeOps ++ fixedOps).CopyCellsAssignedFrom
+      self [alpha.cell] := by
+    rw [RegionOperations.copyCellsAssignedFrom_append_iff]
+    exact ⟨hdecompose, hfixed⟩
+  have hall : ((decomposeOps ++ fixedOps) ++ chainOps).CopyCellsAssignedFrom
+      self [alpha.cell] := by
+    rw [RegionOperations.copyCellsAssignedFrom_append_iff]
+    exact ⟨hprefix, hchain.1⟩
+  simpa only [innerRegion, RegionCircuit.operations_bind,
+    RegionCircuit.operations_pure, List.append_nil, List.append_assoc] using hall
+
+theorem innerRegion_output_cells_assigned
+    (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (alpha : AssignedCell Fp) (self : RegionIndex)
+    (configured : innerKeygenRequirements.configLawful cfg)
+    (available : List Cell) :
+    let output := (innerRegion B cfg offset alpha).output self
+    output.acc.x.cell ∈
+        ((innerRegion B cfg offset alpha).operations self
+          |>.assignedCellsAfter self available) ∧
+      output.acc.y.cell ∈
+        ((innerRegion B cfg offset alpha).operations self
+          |>.assignedCellsAfter self available) ∧
+      output.mulB.x.cell ∈
+        ((innerRegion B cfg offset alpha).operations self
+          |>.assignedCellsAfter self available) ∧
+      output.mulB.y.cell ∈
+        ((innerRegion B cfg offset alpha).operations self
+          |>.assignedCellsAfter self available) := by
+  let decomposeOps :=
+    (((copyDecompose 3 85).call cfg.superConfig.runningSumConfig
+      offset ⟨alpha⟩).operations self)
+  let fixedOps :=
+    (fixedConstantsLoop (coordsGate cfg.superConfig) B cfg.superConfig
+      offset 85).operations self
+  have hchain := MulFixed.windowChain_copyCellsAssignedFrom
+    cfg.superConfig configured.1 self
+    (processWindow B (Ecc.MulFixed.windowPoint B.point)
+      cfg.superConfig alpha)
+    (fun w row current => MulFixed.processWindow_copyCellsAssignedFrom
+      B (Ecc.MulFixed.windowPoint B.point) cfg.superConfig alpha
+        w row self current)
+    (fun w row current => MulFixed.processWindow_output_cells_assigned
+      B (Ecc.MulFixed.windowPoint B.point) cfg.superConfig alpha
+        w row self current)
+    offset 85 (by norm_num)
+    ((decomposeOps ++ fixedOps).assignedCellsAfter self available)
+  rw [innerRegion_output]
+  simp only [AssignedCell.of_cell]
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · simpa only [innerRegion, RegionCircuit.operations_bind,
+      RegionCircuit.operations_pure, List.append_nil,
+      RegionOperations.assignedCellsAfter_append, decomposeOps, fixedOps]
+      using hchain.2.1
+  · simpa only [innerRegion, RegionCircuit.operations_bind,
+      RegionCircuit.operations_pure, List.append_nil,
+      RegionOperations.assignedCellsAfter_append, decomposeOps, fixedOps]
+      using hchain.2.2.1
+  · simpa only [innerRegion, RegionCircuit.operations_bind,
+      RegionCircuit.operations_pure, List.append_nil,
+      RegionOperations.assignedCellsAfter_append, decomposeOps, fixedOps]
+      using hchain.2.2.2.1
+  · simpa only [innerRegion, RegionCircuit.operations_bind,
+      RegionCircuit.operations_pure, List.append_nil,
+      RegionOperations.assignedCellsAfter_append, decomposeOps, fixedOps]
+      using hchain.2.2.2.2
+
+theorem innerRegion_z_cell_assigned
+    (B : FixedBaseData) (cfg : Config) (offset : ℕ)
+    (alpha : AssignedCell Fp) (self : RegionIndex) (available : List Cell)
+    (j : Fin 86) :
+    ((innerRegion B cfg offset alpha).output self).zs[j].cell ∈
+      ((innerRegion B cfg offset alpha).operations self
+        |>.assignedCellsAfter self available) := by
+  rw [innerRegion_output]
+  rw [RegionOperations.mem_assignedCellsAfter_iff, List.mem_append]
+  apply Or.inr
+  simp only [innerRegion, circuit_norm, RegionOperations.assignedCells,
+    List.flatMap_append, List.mem_append]
+  left
+  rw [FormalRegionCircuit.call_operations]
+  simp only [copyDecompose, DecomposeRunningSum.body, circuit_norm,
+    List.flatMap_append, List.flatMap_cons,
+    RegionOperation.assignedCells, List.singleton_append, List.flatMap_nil,
+    List.nil_append, List.append_nil, List.mem_cons, List.mem_append]
+  by_cases hj : j.val = 0
+  · left
+    congr
+    omega
+  · right
+    unfold DecomposeRunningSum.assignLoop RegionCircuit.forRange'
+    rw [RegionCircuit.loopAux_operations]
+    right
+    rw [List.mem_flatMap]
+    refine ⟨.assignAdvice cfg.superConfig.runningSumConfig.z
+      (offset + (j.val - 1) * 1 + 1)
+      (DecomposeRunningSum.zWitness 3 ((j.val - 1) + 1) alpha), ?_, ?_⟩
+    · rw [List.mem_flatten]
+      refine ⟨_, List.mem_ofFn.mpr ⟨⟨j.val - 1, by omega⟩, rfl⟩, ?_⟩
+      simp only [circuit_norm, List.mem_singleton]
+    · simp only [RegionOperation.assignedCells, List.mem_singleton]
+      simp only [Nat.mul_one]
+      refine congrArg (fun row => Cell.of self row
+        cfg.superConfig.runningSumConfig.z) ?_
+      omega
 
 /-- The elaborated-metadata instance for the inner region's synthesize lambda (the
 bundle's default `{}`), local so the standalone proofs can state
@@ -371,15 +702,28 @@ bundle's default `{}`), local so the standalone proofs can state
       (fun config offset (input : Var DecomposeRunningSum.Inputs Fp) =>
         innerRegion B config offset input.alpha) where
   keygenRequirements :=
-    { configLawful cfg :=
-        AddIncomplete.add.Configured cfg.superConfig.addIncompleteConfig
-      gates cfg configured :=
-        runningSumKeygenRequirements.gates cfg.superConfig configured
-      lookups cfg configured :=
-        runningSumKeygenRequirements.lookups cfg.superConfig configured }
+    innerKeygenRequirements
   registered configInput counts configured offset input self := by
     simpa using
       innerRegion_keygenRegistered B configInput offset input.alpha self configured
+  copyCellsAssigned configInput counts configured offset input self := by
+    exact innerRegion_copyCellsAssignedFrom
+      B configInput offset input.alpha self configured
+  lookupActivationsWellFormed config offset input region := by
+    simp only [innerRegion, RegionCircuit.operations_bind,
+      RegionCircuit.operations_pure,
+      RegionOperations.LookupActivationsWellFormed,
+      List.forall_append, List.forall_nil, and_true]
+    constructor
+    · keygen_registration
+    constructor
+    · simp only [fixedConstantsLoop, RegionCircuit.forRange'_forall]
+      intro i
+      unfold fixedConstantsWindow
+      keygen_registration
+    · exact windowChain_processWindow_lookupActivationsWellFormed
+        B (Ecc.MulFixed.windowPoint B.point) config.superConfig input.alpha
+        offset 85 region
   output config offset _ self :=
     { acc := { x := .of self (offset + 84) config.superConfig.addIncompleteConfig.xQR,
                y := .of self (offset + 84) config.superConfig.addIncompleteConfig.yQR },
@@ -387,9 +731,18 @@ bundle's default `{}`), local so the standalone proofs can state
                 y := .of self (offset + 84) config.superConfig.addConfig.yP },
       zs := Vector.ofFn (fun j => .of self (offset + j.val)
               config.superConfig.runningSumConfig.z) }
+  synthesisSummary config offset _ _ :=
+    innerRegionSynthesisSummary config offset
   output_eq := by
     intro _ _ _ _
     simp only [circuit_norm, innerRegion_output]
+  synthesisSummary_eq := by
+    intro _ _ input self
+    exact (innerRegion_synthesisSummary_eq B _ _ input.alpha self).symm
+  fixedAssignmentsAgree := by
+    intro configInput _ configured offset input self
+    exact innerRegion_fixedAssignmentsAgree B configInput offset input.alpha self
+      configured.2
 
 set_option linter.all false in
 /-- The honest per-window point values (shared by the fixed-rows and chain completeness
@@ -557,8 +910,8 @@ private theorem inner_completeness_chain (B : FixedBase) (cfg : Config) (offset 
       exact ⟨hx, hy⟩)
     ⟨if_pos rfl, if_pos rfl⟩
     (by
-      intro j hj1 hj83 hass
-      obtain ⟨hOnP, hOnQ, hne⟩ := hass
+      intro j hj1 hj83 hAssumptions
+      obtain ⟨hOnP, hOnQ, hne⟩ := hAssumptions
       dsimp only at hOnP hOnQ hne ⊢
       rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)]
       rcases Nat.lt_or_ge j 2 with hj2 | hj2
@@ -1082,8 +1435,8 @@ def inner (B : FixedBase) : FormalRegionCircuit Fp Config Config
           exact ⟨hx, hy⟩)
         ⟨if_pos rfl, if_pos rfl⟩
         (by
-          intro j hj1 hj83 hass
-          obtain ⟨hOnP, hOnQ, hne⟩ := hass
+          intro j hj1 hj83 hAssumptions
+          obtain ⟨hOnP, hOnQ, hne⟩ := hAssumptions
           dsimp only at hOnP hOnQ hne ⊢
           rw [if_neg (by omega : ¬j = 0), if_neg (by omega : ¬j = 0)]
           rcases Nat.lt_or_ge j 2 with hj2 | hj2
@@ -1126,6 +1479,13 @@ def inner (B : FixedBase) : FormalRegionCircuit Fp Config Config
       exact hZs w
 
   completeness := fun cfg offset => inner_completeness B cfg offset
+
+@[synthesis_summary_norm]
+theorem inner_synthesisSummary_eq
+    (B : FixedBase) (cfg : Config) (offset : ℕ)
+    (input : Var DecomposeRunningSum.Inputs Fp) (self : RegionIndex) :
+    (inner B).elaborated.synthesisSummary cfg offset input self =
+      innerRegionSynthesisSummary cfg offset := rfl
 
 /-- The four layouter pieces in source order. Returns the result point `[α]B`. -/
 def synthesize (B : FixedBase) (cfg : Config) (alpha : AssignedCell Fp) :
@@ -1180,12 +1540,60 @@ private theorem synthesize_regionCount (B : FixedBase) (cfg : Config)
   simp only [synthesize, witnessCheck13, circuit_norm, operations_assignRegion,
     Operations.regionCount]
 
+/-- Reduced footprint of the four top-level regions. -/
+def circuitSynthesisSummary (cfg : Config) :
+    FloorPlanner.SynthesisSummary :=
+  (FloorPlanner.SynthesisSummary.ofRegion
+      (innerRegionSynthesisSummary cfg 0)).combine
+    ((FloorPlanner.SynthesisSummary.ofRegion
+        (Add.synthesisSummary cfg.superConfig.addConfig 0)).combine
+      ((witnessCheck13SynthesisSummary cfg.lookupConfig).combine
+        (FloorPlanner.SynthesisSummary.ofRegion
+          (canonicityRegionSynthesisSummary cfg))))
+
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_lookupActivationCount (cfg : Config) :
+    (circuitSynthesisSummary cfg).lookupActivationCount = 13 := by
+  simp only [circuitSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_tableRowExtent_eq (cfg : Config) :
+    (circuitSynthesisSummary cfg).tableRowExtent = 0 := by
+  simp only [circuitSynthesisSummary, witnessCheck13SynthesisSummary,
+    LookupRangeCheck.witnessCheckSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_instanceRowExtent_eq (cfg : Config) :
+    (circuitSynthesisSummary cfg).instanceRowExtent = 0 := by
+  simp only [circuitSynthesisSummary, innerRegionSynthesisSummary,
+    witnessCheck13SynthesisSummary, canonicityRegionSynthesisSummary,
+    LookupRangeCheck.witnessCheckSynthesisSummary,
+    synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem synthesize_synthesisSummary_eq
+    (B : FixedBase) (cfg : Config) (alpha : AssignedCell Fp)
+    (self : RegionIndex) :
+    FloorPlanner.synthesisSummary ((synthesize B cfg alpha).operations self) =
+      circuitSynthesisSummary cfg := by
+  simp only [synthesize, circuitSynthesisSummary, Circuit.operations_bind,
+    Circuit.operations_pure, FloorPlanner.synthesisSummary_append,
+    operations_assignRegion, synthesis_summary_norm]
+
 /-- The range-check chunk's output cells (positional `z0`/`z13`). -/
-private theorem rca_output (cfgL : LookupRangeCheck.Config 10) (offset : ℕ)
+private theorem rangeCheck13_output (cfgL : LookupRangeCheck.Config 10) (offset : ℕ)
     (self : RegionIndex) :
     (LookupRangeCheck.rangeCheckAt 10 13 false).output cfgL offset () self
       = { z0 := AssignedCell.of self offset cfgL.runningSum,
           zLast := AssignedCell.of self (offset + 13) cfgL.runningSum } := rfl
+
+@[keygen_norm, grind =]
+theorem witnessCheck13_output (cfg : LookupRangeCheck.Config 10)
+    (w : WitgenIR Fp 1) (self : RegionIndex) :
+    (witnessCheck13 cfg w).output self =
+      (AssignedCell.of self 0 cfg.runningSum,
+        AssignedCell.of self 13 cfg.runningSum) := by
+  simp only [witnessCheck13, circuit_norm, rangeCheck13_output]
 
 /-- The range-check chunk's extraction data: the positional element cell's value. -/
 private theorem rca_extract (cfgL : LookupRangeCheck.Config 10) (offset : ℕ)
@@ -1273,8 +1681,11 @@ theorem witnessCheck13_keygenRegistered
     (cfg : LookupRangeCheck.Config 10) (w : WitgenIR Fp 1)
     (self : RegionIndex) {gates : List (Gate Fp)}
     {lookups : List (LookupArgument Fp)}
-    (hlookup : LookupRangeCheck.rangeCheckLookup 10 cfg ∈ lookups) :
-    ((witnessCheck13 cfg w).operations self).KeygenRegistered gates lookups := by
+    {fixedColumns : List (Column .fixed)} {permutationColumns : List AnyColumn}
+    (hlookup : LookupRangeCheck.rangeCheckLookup 10 cfg ∈ lookups)
+    (hpermutation : (cfg.runningSum : AnyColumn) ∈ permutationColumns) :
+    ((witnessCheck13 cfg w).operations self).KeygenRegistered
+      gates lookups fixedColumns permutationColumns := by
   unfold witnessCheck13
   keygen_registration
 
@@ -1283,24 +1694,42 @@ theorem canonicityRegion_keygenRegistered
     (cfg : Config) (alpha z84 alphaPrime z13 z44 z43 : AssignedCell Fp)
     (self : RegionIndex) {gates : List (Gate Fp)}
     {lookups : List (LookupArgument Fp)}
-    (hgate : canonGate cfg ∈ gates) :
+    {fixedColumns : List (Column .fixed)} {permutationColumns : List AnyColumn}
+    (hgate : canonGate cfg ∈ gates)
+    (hcanon0 : (cfg.canonAdvices 0 : AnyColumn) ∈ permutationColumns)
+    (hcanon1 : (cfg.canonAdvices 1 : AnyColumn) ∈ permutationColumns)
+    (hcanon2 : (cfg.canonAdvices 2 : AnyColumn) ∈ permutationColumns)
+    (hinputs : ∀ column,
+      column ∈ [alpha.cell.column, z84.cell.column, alphaPrime.cell.column,
+        z13.cell.column, z44.cell.column, z43.cell.column] →
+      column ∈ permutationColumns) :
     ((canonicityRegion cfg alpha z84 alphaPrime z13 z44 z43).operations
-      self).Forall (RegionOperation.KeygenRegistered gates lookups) := by
+      self).Forall
+        (RegionOperation.KeygenRegistered gates lookups fixedColumns
+          permutationColumns) := by
   unfold canonicityRegion
   keygen_registration
 
+@[keygen_norm]
 def keygenRequirements : KeygenRequirements Fp
-    ((Fin 3 → Column .advice) × LookupRangeCheck.Config 10 × MulFixed.Config) where
+    ((Fin 3 → Column .advice) × LookupRangeCheck.Config 10 × MulFixed.Config)
+    (Var field Fp) where
   configLawful input :=
     AddIncomplete.add.Configured input.2.2.addIncompleteConfig ×
-      Add.add.Configured input.2.2.addConfig
+      Add.add.Configured input.2.2.addConfig × input.2.2.FixedColumnsLawful
   gates input configured :=
     runningSumKeygenRequirements.gates input.2.2 configured.1 ++
-      configured.2.gates
+      configured.2.1.gates
   lookups input configured :=
     runningSumKeygenRequirements.lookups input.2.2 configured.1 ++
-      configured.2.lookups ++
+      configured.2.1.lookups ++
         [LookupRangeCheck.rangeCheckLookup 10 input.2.1]
+  fixedColumns input _ := MulFixed.fixedColumns input.2.2
+  permutationColumns input configured :=
+    runningSumKeygenRequirements.permutationColumns input.2.2 configured.1 ++
+      configured.2.1.permutationColumns ++
+        ([input.2.1.runningSum] : List AnyColumn)
+  inputCells _ _ input := [input.cell]
 
 @[keygen_helper]
 theorem synthesize_keygenRegistered
@@ -1310,34 +1739,25 @@ theorem synthesize_keygenRegistered
     (counts : ConfigureCounts)
     (configured : keygenRequirements.configLawful configInput)
     (alpha : Var field Fp) (self : RegionIndex) :
-    ((synthesize B
-      ((configure configInput.1 configInput.2.1 configInput.2.2).output counts)
-      alpha).operations self).KeygenRegistered
-        (keygenRequirements.gates configInput configured ++
-          ((configure configInput.1 configInput.2.1 configInput.2.2).delta
-            counts).gates)
-        (keygenRequirements.lookups configInput configured ++
-          ((configure configInput.1 configInput.2.1 configInput.2.2).delta
-            counts).lookups) := by
-  let cfg :=
-    (configure configInput.1 configInput.2.1 configInput.2.2).output counts
+    let program := configure configInput.1 configInput.2.1 configInput.2.2
+    ((synthesize B (program.output counts) alpha).operations self).KeygenRegistered
+      (keygenRequirements.gates configInput configured ++ (program.delta counts).gates)
+      (keygenRequirements.lookups configInput configured ++ (program.delta counts).lookups)
+      (keygenRequirements.fixedColumns configInput configured ++
+        program.fixedColumns counts)
+      (keygenRequirements.permutationColumns configInput configured ++
+        (program.delta counts).permutationRequests ++
+        keygenRequirements.inputPermutationColumns configInput configured alpha) := by
+  simp only
+  let program := configure configInput.1 configInput.2.1 configInput.2.2
+  let cfg := program.output counts
   let innerConfigured : (inner B).Configured cfg :=
     FormalRegionCircuit.Configured.ofPure (inner B) cfg
-      (by simpa [cfg, configure] using configured.1) rfl
+      (by simpa [cfg, program, configure] using
+        (⟨configured.1, configured.2.2⟩ :
+          innerKeygenRequirements.configLawful cfg)) rfl
   let addConfigured : Add.add.Configured cfg.superConfig.addConfig := by
-    simpa [cfg, configure] using configured.2
-  have innerGates :
-      innerConfigured.gates =
-        runningSumKeygenRequirements.gates configInput.2.2 configured.1 := by
-    rfl
-  have innerLookups :
-      innerConfigured.lookups =
-        runningSumKeygenRequirements.lookups configInput.2.2 configured.1 := by
-    rfl
-  have addGates : addConfigured.gates = configured.2.gates := by
-    rfl
-  have addLookups : addConfigured.lookups = configured.2.lookups := by
-    rfl
+    simpa [cfg, program, configure] using configured.2.1
   simp only [synthesize, Circuit.operations_bind,
     Circuit.operations_pure, operations_assignRegion,
     Operations.KeygenRegistered, List.forall_append,
@@ -1345,35 +1765,130 @@ theorem synthesize_keygenRegistered
     Operation.KeygenRegistered, and_true]
   constructor
   · apply FormalRegionCircuit.call_keygenRegistered
-      (inner B) cfg innerConfigured
-    · intro gate h
-      rw [innerGates] at h
-      exact List.mem_append.mpr
-        (Or.inl (List.mem_append.mpr (Or.inl h)))
-    · intro argument h
-      rw [innerLookups] at h
-      exact List.mem_append.mpr
-        (Or.inl (List.mem_append.mpr
-          (Or.inl (List.mem_append.mpr (Or.inl h)))))
+      (inner B) cfg innerConfigured <;>
+        keygen_registration
   constructor
   · apply FormalRegionCircuit.call_keygenRegistered
-      Add.add cfg.superConfig.addConfig addConfigured
-    · intro gate h
-      rw [addGates] at h
-      exact List.mem_append.mpr
-        (Or.inl (List.mem_append.mpr (Or.inr h)))
-    · intro argument h
-      rw [addLookups] at h
-      exact List.mem_append.mpr
-        (Or.inl (List.mem_append.mpr
-          (Or.inl (List.mem_append.mpr (Or.inr h)))))
+      Add.add cfg.superConfig.addConfig addConfigured <;>
+        keygen_registration
   constructor
-  · apply witnessCheck13_keygenRegistered
-    exact List.mem_append.mpr
-      (Or.inl (List.mem_append.mpr
-        (Or.inr (by simp [configure]))))
-  · apply canonicityRegion_keygenRegistered
-    keygen_registration
+  · apply witnessCheck13_keygenRegistered <;>
+      keygen_registration
+  · apply canonicityRegion_keygenRegistered <;>
+      keygen_registration
+
+theorem synthesize_copyCellsAssignedFrom
+    (B : FixedBase) (cfg : Config) (alpha : AssignedCell Fp)
+    (self : RegionIndex)
+    (configuredIncomplete : AddIncomplete.add.Configured
+      cfg.superConfig.addIncompleteConfig)
+    (configuredAdd : Add.add.Configured cfg.superConfig.addConfig)
+    (fixedColumnsLawful : cfg.superConfig.FixedColumnsLawful) :
+    ((synthesize B cfg alpha).operations self)
+      |>.CopyCellsAssignedFrom self [alpha.cell] := by
+  let innerCall := (inner B).call cfg 0 ⟨alpha⟩
+  let innerBody := innerCall.operations self
+  let innerOutput := innerCall.output self
+  let afterInner := innerBody.assignedCellsAfter self [alpha.cell]
+  let addBody := (Add.add.call cfg.superConfig.addConfig 0
+    ⟨innerOutput.mulB, innerOutput.acc⟩).operations (self + 1)
+  let afterAdd := addBody.assignedCellsAfter (self + 1) afterInner
+  let checkRegionBody : RegionOperations Fp :=
+    [.assignAdvice cfg.lookupConfig.runningSum 0
+      (alphaZeroPrimeWit innerOutput.zs[0] innerOutput.zs[84])] ++
+      ((LookupRangeCheck.rangeCheckAt 10 13 false).call
+        cfg.lookupConfig 0 ()).operations (self + 2)
+  let afterCheck := checkRegionBody.assignedCellsAfter (self + 2) afterAdd
+  have hinner : innerBody.CopyCellsAssignedFrom self [alpha.cell] := by
+    simpa only [innerCall, innerBody, FormalRegionCircuit.call_operations] using
+      innerRegion_copyCellsAssignedFrom B.toData cfg 0 alpha self
+        ⟨configuredIncomplete, fixedColumnsLawful⟩
+  have hinnerOutput :
+      innerOutput.acc.x.cell ∈ afterInner ∧
+      innerOutput.acc.y.cell ∈ afterInner ∧
+      innerOutput.mulB.x.cell ∈ afterInner ∧
+      innerOutput.mulB.y.cell ∈ afterInner := by
+    simpa only [innerCall, innerBody, innerOutput, afterInner,
+      FormalRegionCircuit.call_operations, FormalRegionCircuit.output_call,
+      innerRegion_output] using
+      innerRegion_output_cells_assigned B.toData cfg 0 alpha self
+        ⟨configuredIncomplete, fixedColumnsLawful⟩ [alpha.cell]
+  have hz (j : Fin 86) : innerOutput.zs[j].cell ∈ afterInner := by
+    simpa only [innerCall, innerBody, innerOutput, afterInner,
+      FormalRegionCircuit.call_operations, FormalRegionCircuit.output_call,
+      innerRegion_output] using
+      innerRegion_z_cell_assigned B.toData cfg 0 alpha self [alpha.cell] j
+  have hadd : addBody.CopyCellsAssignedFrom (self + 1) afterInner := by
+    apply Add.add.call_copyCellsAssignedFrom cfg.superConfig.addConfig
+      configuredAdd 0 ⟨innerOutput.mulB, innerOutput.acc⟩ (self + 1)
+    intro cell hcell
+    rw [Add.add_inputCells] at hcell
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+    rcases hcell with rfl | rfl | rfl | rfl
+    · exact hinnerOutput.2.2.1
+    · exact hinnerOutput.2.2.2
+    · exact hinnerOutput.1
+    · exact hinnerOutput.2.1
+  have hcheck : checkRegionBody.CopyCellsAssignedFrom (self + 2) afterAdd := by
+    simp only [checkRegionBody, circuit_norm, keygen_norm, keygen_spine]
+  have hprime : (witnessCheck13 cfg.lookupConfig
+      (alphaZeroPrimeWit innerOutput.zs[0] innerOutput.zs[84])
+      |>.output (self + 2)).1.cell ∈ afterCheck := by
+    simp only [afterCheck, witnessCheck13, circuit_norm, checkRegionBody,
+      RegionOperations.mem_assignedCellsAfter_iff, List.mem_append]
+    right
+    simp only [RegionOperations.assignedCells, List.flatMap_cons,
+      RegionOperation.assignedCells, List.singleton_append, List.mem_cons, true_or]
+  have hlast : (witnessCheck13 cfg.lookupConfig
+      (alphaZeroPrimeWit innerOutput.zs[0] innerOutput.zs[84])
+      |>.output (self + 2)).2.cell ∈ afterCheck := by
+    simp only [afterCheck, witnessCheck13, circuit_norm, checkRegionBody,
+      RegionOperations.mem_assignedCellsAfter_iff, List.mem_append]
+    right
+    have hcheckOutput := LookupRangeCheck.witnessCheck_output_cells_assigned
+      10 13 false (by simp) cfg.lookupConfig
+        (alphaZeroPrimeWit innerOutput.zs[0] innerOutput.zs[84]) (self + 2)
+    simpa only [LookupRangeCheck.witnessCheck, circuit_norm,
+      Operations.assignedCellsFrom] using hcheckOutput.2
+  have hlastCell : Cell.of (self + 2) 13 cfg.lookupConfig.runningSum ∈
+      afterCheck := by
+    simpa only [witnessCheck13, circuit_norm, rangeCheck13_output] using hlast
+  have hzAfterCheck (j : Fin 86) : innerOutput.zs[j].cell ∈ afterCheck :=
+    RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _
+      (RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ _ (hz j))
+  have hcanon : ((canonicityRegion cfg innerOutput.zs[0] innerOutput.zs[84]
+      ((witnessCheck13 cfg.lookupConfig
+        (alphaZeroPrimeWit innerOutput.zs[0] innerOutput.zs[84])).output
+          (self + 2)).1
+      ((witnessCheck13 cfg.lookupConfig
+        (alphaZeroPrimeWit innerOutput.zs[0] innerOutput.zs[84])).output
+          (self + 2)).2
+      innerOutput.zs[44] innerOutput.zs[43]).operations (self + 3))
+      |>.CopyCellsAssignedFrom (self + 3) afterCheck := by
+    simp only [canonicityRegion, circuit_norm, keygen_norm, keygen_spine]
+    exact ⟨Or.inr (hzAfterCheck 0),
+      Or.inr (Or.inr (hzAfterCheck 84)),
+      Or.inr (Or.inr (Or.inr hprime)),
+      Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr hlastCell))))),
+      Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr
+        (hzAfterCheck 44))))))),
+      Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr
+        (hzAfterCheck 43))))))))⟩
+  simp only [synthesize, Circuit.operations_bind, Circuit.operations_pure,
+    operations_assignRegion, output_assignRegion, nextRegionIndex_assignRegion,
+    List.singleton_append]
+  apply Operations.CopyCellsAssignedFrom.region
+  · exact hinner
+  apply Operations.CopyCellsAssignedFrom.region
+  · exact hadd
+  apply Operations.CopyCellsAssignedFrom.region
+  · simpa only [innerCall, innerBody, innerOutput, afterInner, addBody,
+      afterAdd, checkRegionBody, List.append_nil, Nat.add_assoc] using hcheck
+  apply Operations.CopyCellsAssignedFrom.region
+  · simpa only [innerCall, innerBody, innerOutput, afterInner, addBody,
+      afterAdd, checkRegionBody, afterCheck, List.append_nil,
+      Nat.add_assoc] using hcanon
+  · exact .nil (self + 4) _
 
 /-- Rust `FixedPointBaseField::mul`: `[α]B` for a base-field element α, canonically. -/
 def circuit (B : FixedBase) : FormalCircuit Fp
@@ -1389,10 +1904,160 @@ def circuit (B : FixedBase) : FormalCircuit Fp
   elaborated :=
     { keygenRequirements := keygenRequirements
       registered := synthesize_keygenRegistered B
-      output cfg alpha i := (synthesize B cfg alpha).output i
+      lookupSelectorAssignmentsAgree_of_registered := by
+        intro configInput counts configured alpha self program operations _hregistered
+        let cfg := program.output counts
+        let innerConfigured : (inner B).Configured cfg :=
+          FormalRegionCircuit.Configured.ofPure (inner B) cfg
+            (by simpa [cfg, program, configure] using
+              (⟨configured.1, configured.2.2⟩ :
+                innerKeygenRequirements.configLawful cfg)) rfl
+        let addConfigured : Add.add.Configured cfg.superConfig.addConfig := by
+          simpa [cfg, program, configure] using configured.2.1
+        simp only [operations, synthesize, Circuit.operations_bind,
+          Circuit.operations_pure, operations_assignRegion,
+          output_assignRegion, nextRegionIndex_assignRegion,
+          keygen_norm, keygen_spine]
+      lookupActivationsWellFormed config alpha region := by
+        simp only [synthesize, Circuit.operations_bind,
+          Circuit.operations_pure, operations_assignRegion,
+          Operations.LookupActivationsWellFormed]
+        constructor
+        · exact (inner B).call_lookupActivationsWellFormed
+            config 0 ⟨alpha⟩ region
+        constructor
+        · exact Add.add.call_lookupActivationsWellFormed
+            config.superConfig.addConfig 0 _ (region + 1)
+        constructor <;> keygen_registration
+      lookupSelectorAnchorRequirements cfg _ _ :=
+        LookupRangeCheck.lookupSelectorAnchorRequirements cfg.lookupConfig
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro configInput counts configured alpha self anchor hanchor _
+        let program := configure configInput.1 configInput.2.1 configInput.2.2
+        let cfg := program.output counts
+        let innerConfigured : (inner B).Configured cfg :=
+          FormalRegionCircuit.Configured.ofPure (inner B) cfg
+            (by simpa [cfg, program, configure] using
+              (⟨configured.1, configured.2.2⟩ :
+                innerKeygenRequirements.configLawful cfg)) rfl
+        let addConfigured : Add.add.Configured cfg.superConfig.addConfig := by
+          simpa [cfg, program, configure] using configured.2.1
+        simp only [synthesize, Circuit.operations_bind,
+          Circuit.operations_pure, operations_assignRegion, List.append_nil]
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact (inner B).call_lookupSelectorsAnchoredBy
+            cfg innerConfigured 0 ⟨alpha⟩ self anchor (by trivial)
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact Add.add.call_lookupSelectorsAnchoredBy
+            cfg.superConfig.addConfig addConfigured 0 _ (self + 1)
+              anchor (by trivial)
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact witnessCheck13_lookupSelectorsAnchoredBy cfg.lookupConfig
+            (alphaZeroPrimeWit
+              ((inner B).call cfg 0 ⟨alpha⟩ |>.output self).zs[0]
+              ((inner B).call cfg 0 ⟨alpha⟩ |>.output self).zs[84])
+            (self + 2) anchor (by
+              simpa only [program, cfg,
+                LookupRangeCheck.lookupSelectorAnchorRequirements] using hanchor)
+        · apply Operations.LookupSelectorsAnchoredBy.region_cons
+          · apply RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
+            simp only [canonicityRegion, circuit_norm, RegionOperation.IsNotLookup]
+          · exact Operations.LookupSelectorsAnchoredBy.nil anchor
+      output cfg _ i :=
+        { x := .of (i + 1) 1 cfg.superConfig.addConfig.xQR
+          y := .of (i + 1) 1 cfg.superConfig.addConfig.yQR }
+      synthesisSummary cfg _ _ := circuitSynthesisSummary cfg
       regionCount _ := 4
-      output_eq := by intro _ _ _; rfl
-      regionCount_eq := fun cfg alpha i => (synthesize_regionCount B cfg alpha i).symm }
+      output_eq := by
+        intro _ _ _
+        simp only [synthesize, circuit_norm, keygen_output_norm]
+      synthesisSummary_eq := by
+        intro _ alpha self
+        exact (synthesize_synthesisSummary_eq B _ alpha self).symm
+      regionCount_eq := fun cfg alpha i => (synthesize_regionCount B cfg alpha i).symm
+      fixedWritesLawful := by
+        intro configInput counts hconfig alpha self
+        let cfg :=
+          (configure configInput.1 configInput.2.1 configInput.2.2).output counts
+        let innerConfigured : (inner B).Configured cfg :=
+          FormalRegionCircuit.Configured.ofPure (inner B) cfg
+            (by simpa [cfg, configure] using
+              (⟨hconfig.1, hconfig.2.2⟩ :
+                innerKeygenRequirements.configLawful cfg)) rfl
+        let addConfigured : Add.add.Configured cfg.superConfig.addConfig := by
+          simpa [cfg, configure] using hconfig.2.1
+        let innerStep := assignRegion
+          "Base-field elem fixed-base mul (incomplete addition)"
+          ((inner B).call cfg 0 ⟨alpha⟩)
+        let innerOutput := innerStep.output self
+        let addStep := assignRegion
+          "Base-field elem fixed-base mul (complete addition)"
+          (Add.add.call cfg.superConfig.addConfig 0
+            ⟨innerOutput.mulB, innerOutput.acc⟩)
+        let check := witnessCheck13 cfg.lookupConfig
+          (alphaZeroPrimeWit innerOutput.zs[0] innerOutput.zs[84])
+        let checkRegion := addStep.nextRegionIndex
+          (innerStep.nextRegionIndex self)
+        let canonRegion := check.nextRegionIndex checkRegion
+        have hinner := (inner B).call_fixedAssignmentsAgree
+          cfg innerConfigured 0 ⟨alpha⟩ self
+        have hadd := Add.add.call_fixedAssignmentsAgree
+          cfg.superConfig.addConfig addConfigured 0
+          ⟨innerOutput.mulB, innerOutput.acc⟩
+          (innerStep.nextRegionIndex self)
+        have hcheck : (check.operations checkRegion).HasNoFixedWrites := by
+          apply FloorPlanner.SynthesisSummary.HasNoFixedWrites.hasNoFixedWrites
+          rw [witnessCheck13_synthesisSummary_eq]
+          exact witnessCheck13SynthesisSummary_hasNoFixedWrites cfg.lookupConfig
+        have hcanon : ((canonicityRegion cfg innerOutput.zs[0]
+            innerOutput.zs[84] (check.output checkRegion).1
+            (check.output checkRegion).2 innerOutput.zs[44]
+            innerOutput.zs[43]).operations canonRegion)
+              |>.HasNoFixedAssignments := by
+          apply FloorPlanner.RegionSynthesisSummary.HasNoFixedColumns.hasNoFixedAssignments
+          rw [canonicityRegion_synthesisSummary_eq]
+          exact canonicityRegionSynthesisSummary_hasNoFixedColumns cfg
+        have hloaded :
+            ((synthesize B cfg alpha).operations self).loadedTableColumns = [] := by
+          simp only [synthesize, Circuit.operations_bind,
+            Circuit.operations_pure, operations_assignRegion,
+            Operations.loadedTableColumns, List.filterMap_append,
+            List.filterMap_cons, List.filterMap_nil, List.append_nil]
+          simpa only [innerStep, innerOutput, addStep, checkRegion, check]
+            using hcheck.loadedTableColumns_eq_nil
+        constructor
+        · simp only [synthesize, Circuit.operations_bind,
+            Circuit.operations_pure, operations_assignRegion,
+            List.forall_append, List.forall_cons, List.forall_nil, and_true]
+          simpa only [innerStep, innerOutput, addStep, check, checkRegion,
+            canonRegion]
+            using ⟨hinner, hadd,
+              (Operations.HasNoFixedWrites.fixedWritesLawful
+                (constantColumns := []) hcheck).regionAssignmentsAgree,
+              hcanon.fixedAssignmentsAgree⟩
+        · have : ((synthesize B cfg alpha).operations self)
+              |>.loadedTableColumns.Nodup := by
+            rw [hloaded]
+            exact List.nodup_nil
+          simpa only [cfg] using this
+        · have : ((synthesize B cfg alpha).operations self)
+              |>.loadedTableColumns.Disjoint
+                ((synthesize B cfg alpha).operations self).regionFixedColumns := by
+            rw [hloaded]
+            exact List.disjoint_nil_left _
+          simpa only [cfg] using this
+        · have : ((synthesize B cfg alpha).operations self)
+              |>.loadedTableColumns.Disjoint
+                (keygenRequirements.constantColumns configInput hconfig ++
+                  ((configure configInput.1 configInput.2.1 configInput.2.2).delta counts).constants) := by
+            rw [hloaded]
+            exact List.disjoint_nil_left _
+          simpa only [cfg] using this
+      copyCellsAssigned := by
+        intro configInput counts hconfig alpha self
+        exact synthesize_copyCellsAssignedFrom B
+          ((configure configInput.1 configInput.2.1 configInput.2.2).output counts)
+          alpha self hconfig.1 hconfig.2.1 hconfig.2.2 }
 
   EnvAssumptions := EnvAssumptions
 
@@ -1561,8 +2226,16 @@ def circuit (B : FixedBase) : FormalCircuit Fp
       rw [ht84_def, hS83_def, ← Ecc.MulFixed.FixedBase.add_natCast_val_nsmul,
         Ecc.MulFixed.BaseFieldElem.RunningSumMul.windowScalar_partialSum]
     simp only [Spec]
-    rw [hinput, ZMod.val_natCast, Nat.mod_eq_of_lt hVltp, hOutEq, hchain]
-    exact (point_eta _).symm
+    rw [hinput, ZMod.val_natCast, Nat.mod_eq_of_lt hVltp]
+    calc
+      { x := output_x, y := output_y } =
+          eval (⟨place, env⟩ : Placed Environment Fp) result := by
+            rw [← result_eq]
+            simp only [keygen_output_norm, circuit_norm, Point.mk.injEq]
+            exact ⟨output_eq.1.symm, output_eq.2.symm⟩
+      _ = (t84 + S83) • B.point := hOutEq
+      _ = ((V : Fq)).val • B.point := hchain
+      _ = (V : Fq) • B := (point_eta _).symm
 
   completeness := by
     circuit_proof_start2 [witnessCheck13, canonicityRegion, canonGate,
@@ -1711,6 +2384,52 @@ def circuit (B : FixedBase) : FormalCircuit Fp
         rw [← hax, ← hay]
       rw [hpt]
       exact Or.inl hOn
+
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_eq (B : FixedBase) (cfg : Config)
+    (input : Var field Fp) (region : RegionIndex) :
+    (circuit B).elaborated.synthesisSummary cfg input region =
+      circuitSynthesisSummary cfg := rfl
+
+@[keygen_norm]
+theorem circuit_inputCells_eq (B : FixedBase) {cfg : Config}
+    (configured : (circuit B).Configured cfg) (input : Var field Fp) :
+    configured.inputCells input = [input.cell] := rfl
+
+@[keygen_norm]
+theorem circuit_lookupSelectorAnchorRequirements
+    (B : FixedBase) (cfg : Config) (input : Var field Fp)
+    (region : RegionIndex) :
+    (circuit B).elaborated.lookupSelectorAnchorRequirements cfg input region =
+      LookupRangeCheck.lookupSelectorAnchorRequirements cfg.lookupConfig := rfl
+
+/-- Both coordinates returned by the base-field fixed-base multiplication call are
+assigned by its second region. -/
+theorem circuit_call_output_cells_assigned
+    (B : FixedBase) (config : Config) (input : Var field Fp)
+    (self : RegionIndex) :
+    let output := (circuit B).output config input self
+    output.x.cell ∈ Operations.assignedCellsFrom
+        (((circuit B).call config input).operations self) self ∧
+      output.y.cell ∈ Operations.assignedCellsFrom
+        (((circuit B).call config input).operations self) self := by
+  rw [show (circuit B).output config input self =
+      { x := .of (self + 1) 1 config.superConfig.addConfig.xQR,
+        y := .of (self + 1) 1 config.superConfig.addConfig.yQR } from rfl]
+  rw [FormalCircuit.call_operations]
+  let innerOutput := (inner B).output config 0 ⟨input⟩ self
+  have hadd := Add.add_output_cells_assigned config.superConfig.addConfig 0
+    ⟨innerOutput.mulB, innerOutput.acc⟩ (self + 1) []
+  dsimp only at hadd
+  simp only [RegionOperations.mem_assignedCellsAfter_iff, List.nil_append,
+    Add.add_output_cells, AssignedCell.of_cell] at hadd
+  simp only [circuit, synthesize, Circuit.operations_bind,
+    operations_assignRegion, output_assignRegion, nextRegionIndex_assignRegion,
+    List.singleton_append, Operations.assignedCellsFrom, List.mem_append]
+  exact ⟨Or.inr (Or.inl (by simpa only [innerOutput,
+      FormalRegionCircuit.output_call, Nat.zero_add] using hadd.1)),
+    Or.inr (Or.inl (by simpa only [innerOutput,
+      FormalRegionCircuit.output_call, Nat.zero_add] using hadd.2))⟩
 
 derive_contract_bridges circuit (B : FixedBase) := circuit B
 

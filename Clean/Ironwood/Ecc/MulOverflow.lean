@@ -92,6 +92,10 @@ def overflowGate (K : ℕ) (cfg : Config K) : Gate Fp :=
     [ ("s_check", sCheck), ("recovery", recovery), ("lo_zero", loZero),
       ("s_minus_lo_130_check", sMinusLo130Check), ("canonicity", canonicity) ]
 
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem overflowGate_selector (K : ℕ) (cfg : Config K) :
+    (overflowGate K cfg).selector = cfg.qOverflow := rfl
+
 /-- Enable equality on the three advice columns, allocate the `q_mul_overflow` selector, register
 the overflow gate. The `lookup_config` is handed down by the chip assembly, already configured by
 `LookupRangeCheck.configure`. -/
@@ -177,6 +181,31 @@ def gateRegion (K : ℕ) (cfg : Config K) (input : Inputs (AssignedCell Fp))
   (overflowGate K cfg).enable 1
   return ()
 
+@[synthesis_summary_norm]
+theorem gateRegion_synthesisSummary
+    (K : ℕ) (cfg : Config K) (input : Inputs (AssignedCell Fp))
+    (sCell sMinusLo130 : AssignedCell Fp) (region : RegionIndex) :
+    FloorPlanner.regionSynthesisSummary
+        ((gateRegion K cfg input sCell sMinusLo130).operations region) =
+      .ofColumns
+        [.column .advice cfg.adv0.index,
+          .column .advice cfg.adv0.index,
+          .column .advice cfg.adv0.index,
+          .column .advice cfg.adv1.index,
+          .column .advice cfg.adv1.index,
+          .column .advice cfg.adv1.index,
+          .column .advice cfg.adv2.index,
+          .selector cfg.qOverflow.index]
+        3 0 := by
+  apply FloorPlanner.RegionSynthesisSummary.ext
+  · simp only [gateRegion, circuit_norm, synthesis_summary_norm,
+      configure_selector_norm]
+  · simp only [gateRegion, circuit_norm, synthesis_summary_norm]
+    omega
+  · simp only [gateRegion, circuit_norm, synthesis_summary_norm]
+  · simp only [gateRegion, circuit_norm, synthesis_summary_norm]
+  · simp only [gateRegion, circuit_norm, synthesis_summary_norm]
+
 /-- The layouter-level `overflow_check` body: the three faithful sibling regions plus the
 copyCheck child. -/
 def synthesize (K : ℕ) (cfg : Config K) (input : Inputs (AssignedCell Fp)) :
@@ -261,6 +290,54 @@ theorem synthesize_regionCount (K : ℕ) (cfg : Config K) (input : Inputs (Assig
   simp only [synthesize, circuit_norm, operations_assignRegion, Operations.regionCount_append,
     Operations.regionCount]
 
+def circuitSynthesisSummary (K : ℕ) (cfg : Config K)
+    : FloorPlanner.SynthesisSummary :=
+  (FloorPlanner.SynthesisSummary.ofRegion
+      (.ofColumns [.column .advice cfg.adv0.index] 1 0)).combine
+    ((LookupRangeCheck.copyCheckSynthesisSummary
+        K (numWords K) false cfg.lookupConfig).combine
+      (FloorPlanner.SynthesisSummary.ofRegion
+        (.ofColumns
+          [.column .advice cfg.adv0.index,
+            .column .advice cfg.adv0.index,
+            .column .advice cfg.adv0.index,
+            .column .advice cfg.adv1.index,
+            .column .advice cfg.adv1.index,
+            .column .advice cfg.adv1.index,
+            .column .advice cfg.adv2.index,
+            .selector cfg.qOverflow.index]
+          3 0)))
+
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_lookupActivationCount (K : ℕ) (cfg : Config K) :
+    (circuitSynthesisSummary K cfg).lookupActivationCount = numWords K := by
+  simp only [circuitSynthesisSummary, synthesis_summary_norm, Nat.zero_add,
+    Nat.add_zero]
+
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_tableRowExtent_eq (K : ℕ) (cfg : Config K) :
+    (circuitSynthesisSummary K cfg).tableRowExtent = 0 := by
+  simp only [circuitSynthesisSummary,
+    LookupRangeCheck.copyCheckSynthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_instanceRowExtent_eq (K : ℕ) (cfg : Config K) :
+    (circuitSynthesisSummary K cfg).instanceRowExtent = 0 := by
+  simp only [circuitSynthesisSummary,
+    LookupRangeCheck.copyCheckSynthesisSummary,
+    synthesis_summary_norm]
+
+/-- The overflow checker uses selectors and advice columns and performs no table load. -/
+@[synthesis_summary_norm]
+theorem circuitSynthesisSummary_hasNoFixedWrites (K : ℕ) (cfg : Config K) :
+    (circuitSynthesisSummary K cfg).HasNoFixedWrites := by
+  simp only [circuitSynthesisSummary,
+    FloorPlanner.SynthesisSummary.hasNoFixedWrites_combine,
+    FloorPlanner.SynthesisSummary.hasNoFixedWrites_ofRegion,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns,
+    LookupRangeCheck.copyCheckSynthesisSummary_hasNoFixedWrites]
+  simp
+
 def circuit (K : ℕ) (hKW : K * numWords K = 130) :
     FormalCircuit Fp (LookupRangeCheck.Config K × Column .advice × Column .advice ×
       Column .advice) (Config K) Inputs unit where
@@ -272,13 +349,75 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
 
   elaborated :=
     { keygenRequirements :=
-        { lookups input _ := [LookupRangeCheck.rangeCheckLookup K input.1] }
+        { lookups input _ := [LookupRangeCheck.rangeCheckLookup K input.1]
+          permutationColumns input _ := [input.1.runningSum]
+          inputCells _ _ input :=
+            [input.alpha.cell, input.z0.cell,
+              input.z130.cell, input.k254.cell] }
       registered := by
         keygen_registration
+      lookupSelectorAnchorRequirements cfg _ _ :=
+        LookupRangeCheck.lookupSelectorAnchorRequirements cfg.lookupConfig
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro configInput counts hconfig input i anchor hanchor _
+        simp only [synthesize, circuit_norm, keygen_norm, keygen_spine,
+          Operations.LookupSelectorsAnchoredBy]
+        constructor
+        · simp
+        constructor
+        · exact (LookupRangeCheck.copyCheck K (numWords K) false)
+            |>.call_lookupSelectorsAnchoredBy
+              ((configure K configInput.1 configInput.2.1
+                configInput.2.2.1 configInput.2.2.2).output counts).lookupConfig
+              (FormalCircuit.Configured.ofOutput
+                (LookupRangeCheck.copyCheck K (numWords K) false)
+                ((configure K configInput.1 configInput.2.1
+                  configInput.2.2.1 configInput.2.2.2).output counts).lookupConfig
+                counts (by keygen_registration))
+              { element := AssignedCell.of i 0
+                  ((configure K configInput.1 configInput.2.1
+                    configInput.2.2.1 configInput.2.2.2).output counts).adv0 }
+              (i + 1) anchor (by
+                simpa only [LookupRangeCheck.lookupSelectorAnchorRequirements,
+                  SelectorAnchorRequirementsSatisfied] using hanchor)
+        · apply RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
+          simp only [gateRegion, circuit_norm, RegionOperation.IsNotLookup]
+      lookupSelectorAssignmentsAgree_of_registered := by
+        intro configInput counts hconfig input i
+        dsimp only
+        intro _hregistered
+        simp only [synthesize, circuit_norm, keygen_norm, keygen_spine]
+        apply RegionOperations.lookupSelectorAssignmentsAgree_of_forall_isNotLookup
+        simp only [gateRegion, circuit_norm, RegionOperation.IsNotLookup]
       output _ _ _ := ()
       regionCount _ := 3
+      synthesisSummary cfg _ _ := circuitSynthesisSummary K cfg
+      copyCellsAssigned := by
+        intro configInput counts hconfig input i
+        simp only [synthesize, circuit_norm]
+        unfold Operations.CopyCellsAssigned
+        rw [Operations.copyCellsAssignedFrom_region_iff]
+        refine ⟨by keygen_registration, ?_⟩
+        apply Operations.CopyCellsAssignedFrom.append
+        · keygen_registration
+        · have hdec := LookupRangeCheck.copyCheck_output_cells_assigned
+            K (numWords K) false
+            ((configure K configInput.1 configInput.2.1 configInput.2.2.1
+              configInput.2.2.2).output counts).lookupConfig
+            { element := AssignedCell.of i 0
+                ((configure K configInput.1 configInput.2.1 configInput.2.2.1
+                  configInput.2.2.2).output counts).adv0 }
+            (i + 1)
+          rw [← (LookupRangeCheck.copyCheck K (numWords K) false).call_operations]
+            at hdec
+          simp only [gateRegion, circuit_norm, keygen_norm, keygen_spine]
+          simp_all
       output_eq := by intro _ _ _; rfl
-      regionCount_eq := fun cfg input i => (synthesize_regionCount K cfg input i).symm }
+      regionCount_eq := fun cfg input i => (synthesize_regionCount K cfg input i).symm
+      synthesisSummary_eq := by
+        intro _ _ _
+        simp only [circuitSynthesisSummary, synthesize,
+          circuit_norm, synthesis_summary_norm, configure_selector_norm] }
 
   EnvAssumptions cfg env := EnvAssumptions K cfg env
 
@@ -382,6 +521,27 @@ def circuit (K : ℕ) (hKW : K * numWords K = 130) :
       · rw [h]; ring
       · rw [mul_inv_cancel₀ hz]; ring
       · rw [hzLastZero h]; ring
+
+/-- The overflow circuit exposes its reduced layouter footprint. -/
+@[synthesis_summary_norm]
+theorem circuit_synthesisSummary_eq (K : ℕ) (hKW : K * numWords K = 130)
+    (cfg : Config K) (input : Var Inputs Fp) (region : RegionIndex) :
+    (circuit K hKW).elaborated.synthesisSummary cfg input region =
+      circuitSynthesisSummary K cfg := rfl
+
+@[keygen_norm]
+theorem circuit_inputCells (K : ℕ) (hKW : K * numWords K = 130)
+    {cfg : Config K} (configured : (circuit K hKW).Configured cfg)
+    (input : Var Inputs Fp) :
+    configured.inputCells input =
+      [input.alpha.cell, input.z0.cell, input.z130.cell, input.k254.cell] := rfl
+
+@[keygen_norm]
+theorem circuit_lookupSelectorAnchorRequirements
+    (K : ℕ) (hKW : K * numWords K = 130) (cfg : Config K)
+    (input : Var Inputs Fp) (region : RegionIndex) :
+    (circuit K hKW).elaborated.lookupSelectorAnchorRequirements cfg input region =
+      LookupRangeCheck.lookupSelectorAnchorRequirements cfg.lookupConfig := rfl
 
 end MulOverflow
 

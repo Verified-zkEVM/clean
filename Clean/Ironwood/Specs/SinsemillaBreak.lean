@@ -349,11 +349,20 @@ theorem validBreak_of_inr {S : ℕ → Point Fp} {Q : Point Fp} {chunks : List �
   · exact hEq.2.2.2
   · exact doubleCollision_resolve haccV hchunk hEq
 
-/-! ## The breaks-as-data disjunction and the bridge from guarded conclusions -/
+/-! ## The breaks-as-data disjunction and its equivalence with the guarded form
+
+Exported circuit specifications do NOT use this disjunction: they are stated in the
+guarded ⊥-model form (`HashGuarded`), a concrete property of the partial hash
+function. `SpecOrBreak` is security-layer vocabulary — the reduction from a
+satisfying witness to computed break data lives outside the circuit proofs
+(`Zcash/Security/Ledger/Bridge.lean`), where `hashToPointB` is re-evaluated on the
+witnessed chunks and `validBreak_of_inr` certifies any escape. The equivalence
+theorem `specOrBreak_hashToPointB_iff_guarded` records that the two forms have the
+same logical strength given only fixed-base validity facts: the break branch of the
+disjunction never constrains the witness. -/
 
 /-- The breaks-as-data disjunction: the payload predicate on the hash point, or a
-valid exhibited break. Relation-layer specs are stated as
-`SpecOrBreak S Q P (hashToPointB S Q chunks)`. -/
+valid exhibited break. -/
 def SpecOrBreak (S : ℕ → Point Fp) (Q : Point Fp) (P : Point Fp → Prop) :
     Point Fp ⊕ BreakData → Prop
   | .inl B => P B
@@ -376,16 +385,35 @@ theorem Generators.chunksOf_onCurve (G : Generators) (val n : ℕ) :
     ∀ m ∈ chunksOf val n, (G.S m).OnCurve := fun _ hm =>
   G.S_onCurve (chunksOf_mem_lt hm)
 
-/-- Upgrade a guarded (`∀ B, hashToPoint … = some B → P B`) soundness conclusion to
-the breaks-as-data disjunction: either the hash is defined and `P` holds of it, or
-the escape is exhibited as a valid break. This is the one-line patch point for
-composed circuit soundness proofs. -/
+/-- Upgrade a guarded (`HashGuarded`) conclusion to the breaks-as-data disjunction:
+either the hash is defined and `P` holds of it, or the escape is exhibited as a
+valid break. The upgrade needs no circuit hypothesis — only validity of the fixed
+bases actually consumed. -/
 theorem breaksOfGuarded {S : ℕ → Point Fp} {Q : Point Fp} {chunks : List ℕ}
     (hQ : Q.Valid) (hS : ∀ m ∈ chunks, (S m).OnCurve)
-    {P : Point Fp → Prop} (h : ∀ B, hashToPoint S Q chunks = some B → P B) :
+    {P : Point Fp → Prop} (h : HashGuarded S Q chunks P) :
     SpecOrBreak S Q P (hashToPointB S Q chunks) := by
   cases hB : hashToPointB S Q chunks with
   | inl B => exact h B (hashToPointB_inl hB)
   | inr br => exact validBreak_of_inr hQ hS hB
+
+/-- **The or-break disjunction adds no strength over the guarded ⊥-model.** Given
+only fixed-base validity — facts about the deployed constants, independent of any
+circuit satisfaction — `SpecOrBreak` evaluated at the witness's own `hashToPointB`
+chain is equivalent to the guarded partial-function statement. This is the audit
+point for keeping exported circuit specifications in the guarded form and producing
+break data only in the security-layer reduction: the break branch of the
+disjunction is discharged by `validBreak_of_inr` alone, so it never constrains the
+witness. -/
+theorem specOrBreak_hashToPointB_iff_guarded {S : ℕ → Point Fp} {Q : Point Fp}
+    {chunks : List ℕ} (hQ : Q.Valid) (hS : ∀ m ∈ chunks, (S m).OnCurve)
+    {P : Point Fp → Prop} :
+    SpecOrBreak S Q P (hashToPointB S Q chunks) ↔ HashGuarded S Q chunks P := by
+  constructor
+  · intro hspec B hB
+    have hb := hashToPointB_inl_of_some hB
+    rw [hb] at hspec
+    exact hspec
+  · exact breaksOfGuarded hQ hS
 
 end Zcash.Circuits.Specs.Sinsemilla

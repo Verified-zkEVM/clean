@@ -52,6 +52,100 @@ def toDonor (row : Inputs Fp) (b1 d1 : Fp) : DRow Fp :=
     row.d0, d1, row.z13A, row.z13C, row.aPrime, row.b2CPrime, row.z13APrime,
     row.z14B2CPrime⟩
 
+/-- Advice columns into which the bundle copies its inputs. -/
+@[keygen_norm]
+def permutationColumns (cfg : Config) : List AnyColumn :=
+  [cfg.advices 0, cfg.advices 1, cfg.advices 2, cfg.advices 3,
+    cfg.advices 5, cfg.advices 6, cfg.advices 7, cfg.advices 8]
+
+def synthesisSummary (cfg : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns
+    [.selector cfg.qCommitIvk.index,
+      .column .advice (cfg.advices 0).index,
+      .column .advice (cfg.advices 1).index,
+      .column .advice (cfg.advices 2).index,
+      .column .advice (cfg.advices 3).index,
+      .column .advice (cfg.advices 4).index,
+      .column .advice (cfg.advices 5).index,
+      .column .advice (cfg.advices 6).index,
+      .column .advice (cfg.advices 7).index,
+      .column .advice (cfg.advices 8).index,
+      .column .advice (cfg.advices 0).index,
+      .column .advice (cfg.advices 1).index,
+      .column .advice (cfg.advices 2).index,
+      .column .advice (cfg.advices 3).index,
+      .column .advice (cfg.advices 4).index,
+      .column .advice (cfg.advices 6).index,
+      .column .advice (cfg.advices 7).index,
+      .column .advice (cfg.advices 8).index]
+    (offset + 2) 0
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_lookupActivationCount (cfg : Config) (offset : ℕ) :
+    (synthesisSummary cfg offset).lookupActivationCount = 0 := by
+  simp only [synthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_hasNoFixedColumns (cfg : Config) (offset : ℕ) :
+    (synthesisSummary cfg offset).HasNoFixedColumns := by
+  unfold synthesisSummary
+  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
+
+@[circuit_norm]
+def bundleSynthesize (wb1 wd1 : WitgenIR Fp 1) (cfg : Config)
+    (offset : ℕ) (input : Var Inputs Fp) : RegionCircuit Fp Unit := do
+  (gate cfg).enable offset
+  let _ak ← copyAdvice input.ak (cfg.advices 0) offset
+  let _a ← copyAdvice input.a (cfg.advices 1) offset
+  let _b ← copyAdvice input.bWhole (cfg.advices 2) offset
+  let _b0 ← copyAdvice input.b0 (cfg.advices 3) offset
+  let _b1 ← assignAdvice (cfg.advices 4) offset wb1
+  let _b2 ← copyAdvice input.b2 (cfg.advices 5) offset
+  let _z13a ← copyAdvice input.z13A (cfg.advices 6) offset
+  let _ap ← copyAdvice input.aPrime (cfg.advices 7) offset
+  let _z13ap ← copyAdvice input.z13APrime (cfg.advices 8) offset
+  let _nk ← copyAdvice input.nk (cfg.advices 0) (offset + 1)
+  let _c ← copyAdvice input.c (cfg.advices 1) (offset + 1)
+  let _d ← copyAdvice input.dWhole (cfg.advices 2) (offset + 1)
+  let _d0 ← copyAdvice input.d0 (cfg.advices 3) (offset + 1)
+  let _d1 ← assignAdvice (cfg.advices 4) (offset + 1) wd1
+  let _z13c ← copyAdvice input.z13C (cfg.advices 6) (offset + 1)
+  let _b2cp ← copyAdvice input.b2CPrime (cfg.advices 7) (offset + 1)
+  let _z14 ← copyAdvice input.z14B2CPrime (cfg.advices 8) (offset + 1)
+  pure ()
+
+@[reducible]
+def bundleElaborated (wb1 wd1 : WitgenIR Fp 1) :
+    ElaboratedRegionCircuit Fp Config Config Inputs unit pure
+      (bundleSynthesize wb1 wd1) :=
+  { keygenRequirements :=
+      { gates cfg _ := [gate cfg]
+        permutationColumns cfg _ := permutationColumns cfg
+        inputCells _ _ input :=
+          [input.ak.cell, input.a.cell, input.bWhole.cell, input.b0.cell,
+            input.b2.cell, input.z13A.cell, input.aPrime.cell,
+            input.z13APrime.cell, input.nk.cell, input.c.cell,
+            input.dWhole.cell, input.d0.cell, input.z13C.cell,
+            input.b2CPrime.cell, input.z14B2CPrime.cell] }
+    synthesisSummary cfg offset _ _ := synthesisSummary cfg offset
+    synthesisSummary_eq := by
+      intro _ _ _ _
+      apply FloorPlanner.RegionSynthesisSummary.ext
+      · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+          synthesis_summary_norm, configure_selector_norm]
+      · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+          synthesis_summary_norm]
+        omega
+      · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+          synthesis_summary_norm]
+      · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+          synthesis_summary_norm]
+      · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+          synthesis_summary_norm]
+    copyCellsAssigned := by keygen_registration [bundleSynthesize] }
+
 /-- Rust `CommitIvkChip` canonicity `assign` (`commit_ivk.rs:519-660`), parameterized by
 the `b_1`/`d_1` witness programs. The `(b1, d1)` readings are the extraction data;
 `Spec` is the donor `CommitIvk.Gate.Spec` at them, `Assumptions` the input-only donor
@@ -59,28 +153,8 @@ rely-conditions (the two witnessed-bit implications move to `ProverAssumptions`)
 def bundle (wb1 wd1 : WitgenIR Fp 1) :
     FormalRegionCircuit Fp Config Config Inputs unit where
   configure := pure
-  elaborated := { keygenRequirements := { gates cfg _ := [gate cfg] } }
-
-  synthesize cfg offset (input : Inputs (AssignedCell Fp)) := do
-    (gate cfg).enable offset
-    let _ak ← copyAdvice input.ak (cfg.advices 0) offset
-    let _a ← copyAdvice input.a (cfg.advices 1) offset
-    let _b ← copyAdvice input.bWhole (cfg.advices 2) offset
-    let _b0 ← copyAdvice input.b0 (cfg.advices 3) offset
-    let _b1 ← assignAdvice (cfg.advices 4) offset wb1
-    let _b2 ← copyAdvice input.b2 (cfg.advices 5) offset
-    let _z13a ← copyAdvice input.z13A (cfg.advices 6) offset
-    let _ap ← copyAdvice input.aPrime (cfg.advices 7) offset
-    let _z13ap ← copyAdvice input.z13APrime (cfg.advices 8) offset
-    let _nk ← copyAdvice input.nk (cfg.advices 0) (offset + 1)
-    let _c ← copyAdvice input.c (cfg.advices 1) (offset + 1)
-    let _d ← copyAdvice input.dWhole (cfg.advices 2) (offset + 1)
-    let _d0 ← copyAdvice input.d0 (cfg.advices 3) (offset + 1)
-    let _d1 ← assignAdvice (cfg.advices 4) (offset + 1) wd1
-    let _z13c ← copyAdvice input.z13C (cfg.advices 6) (offset + 1)
-    let _b2cp ← copyAdvice input.b2CPrime (cfg.advices 7) (offset + 1)
-    let _z14 ← copyAdvice input.z14B2CPrime (cfg.advices 8) (offset + 1)
-    pure ()
+  synthesize := bundleSynthesize wb1 wd1
+  elaborated := bundleElaborated wb1 wd1
 
   Witness := fieldPair
   extract cfg offset _ self env :=
@@ -196,7 +270,8 @@ def bundle (wb1 wd1 : WitgenIR Fp 1) :
     have hiz13A : AssignedCell.eval env.place env.env.toEnvironment input_var.z13A = input.z13A := congrArg Inputs.z13A h_input
     have hiaPrime : AssignedCell.eval env.place env.env.toEnvironment input_var.aPrime = input.aPrime := congrArg Inputs.aPrime h_input
     have hiz13APrime : AssignedCell.eval env.place env.env.toEnvironment input_var.z13APrime = input.z13APrime := congrArg Inputs.z13APrime h_input
-    have hink : AssignedCell.eval env.place env.env.toEnvironment input_var.nk = input.nk := congrArg Inputs.nk h_input
+    have hInputNk : AssignedCell.eval env.place env.env.toEnvironment input_var.nk = input.nk :=
+      congrArg Inputs.nk h_input
     have hic : AssignedCell.eval env.place env.env.toEnvironment input_var.c = input.c := congrArg Inputs.c h_input
     have hidWhole : AssignedCell.eval env.place env.env.toEnvironment input_var.dWhole = input.dWhole := congrArg Inputs.dWhole h_input
     have hid0 : AssignedCell.eval env.place env.env.toEnvironment input_var.d0 = input.d0 := congrArg Inputs.d0 h_input
@@ -217,7 +292,7 @@ def bundle (wb1 wd1 : WitgenIR Fp 1) :
     rw [← hibWhole, ← hib0, ← hib2, ← hwb, ← hwb0, ← hwb2] at he3
     rw [← hidWhole, ← hid0, ← hwd, ← hwd0] at he4
     rw [← hia, ← hib0, ← hiak, ← hwa, ← hwb0, ← hwak] at he5
-    rw [← hib2, ← hic, ← hid0, ← hink, ← hwb2, ← hwc, ← hwd0, ← hwnk] at he6
+    rw [← hib2, ← hic, ← hid0, ← hInputNk, ← hwb2, ← hwc, ← hwd0, ← hwnk] at he6
     rw [← hib0, ← hwb0] at he7
     rw [← hiz13A, ← hwz13a] at he8
     rw [← hia, ← hiaPrime, ← hwa, ← hwap] at he9

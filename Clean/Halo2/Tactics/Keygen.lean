@@ -1,4 +1,7 @@
 import Clean.Halo2.Loops
+import Clean.Halo2.Configure.Lemmas
+import Clean.Halo2.Operations.FixedWrites
+import Clean.Halo2.Operations.LookupSelectors
 import Clean.Halo2.KeygenAttr
 import Batteries.Lean.TagAttribute
 import Lean.Elab.Tactic
@@ -6,8 +9,9 @@ import Lean.Elab.Tactic
 /-!
 # Configure/synthesis registration automation
 
-`keygen_registration` proves that every gate and lookup enabled by a circuit's synthesis
-stream was either supplied by its caller or appended by its configure program.  The
+`keygen_registration` proves that every gate, lookup, and equality-dependent operation
+in a circuit's synthesis stream is covered by caller-supplied or configure-produced
+capabilities. The
 normalization set is deliberately separate from `circuit_norm`: registration proofs
 open configure deltas and operation streams, while ordinary circuit proofs preserve
 formal-circuit call boundaries. Parent circuits discharge those folded calls with the
@@ -16,36 +20,74 @@ generic `call_keygenRegistered` lemmas.
 
 namespace Halo2
 
+attribute [keygen_norm]
+  RegionCircuit.Vector.map_getElem_mem_toList
+  RegionCircuit.Vector.map_getElem!_mem_toList
+
 open Lean
 
 initialize registerTraceClass `Halo2.keygen
 
 attribute [keygen_norm]
+  ComplexSelector.toSelector_index ComplexSelector.toSelector_simple
   Configure.delta_bind Configure.delta_pure
+  Configure.delta_permutationRequests
   Configure.delta_enableEquality_gates
   Configure.delta_enableEquality_lookups
+  Configure.delta_enableEquality_permutationRequests
+  Configure.plan_enableEquality_permutationRequests
   Configure.delta_selector Configure.delta_complexSelector
   Configure.delta_createGate
   Configure.output_bind Configure.output_pure
+  Configure.fixedColumns_bind Configure.fixedColumns_pure
+  Configure.fixedColumns_fixedColumn
   Configure.output_adviceColumn Configure.output_fixedColumn
   Configure.output_instanceColumn Configure.output_selector
   Configure.output_complexSelector Configure.output_enableEquality
   Configure.output_enableConstant Configure.output_createGate
   Configure.output_lookup
   ConfigureDelta.gates_append ConfigureDelta.lookups_append
+  ConfigureDelta.permutationRequests_append
   ConfigureDelta.gates_queriedCells ConfigureDelta.lookups_queriedCells
+  ConfigureDelta.permutationRequests_queryAny
+  ConfigureDelta.permutationRequests_queriedCells
   RegionOperation.KeygenRegistered Operation.KeygenRegistered
+  KeygenRequirements.inputPermutationColumns
+  RegionOperation.LookupActivationWellFormed
+  Operation.LookupActivationsWellFormed
+  RegionOperations.LookupActivationsWellFormed
+  Operations.LookupActivationsWellFormed
+  RegionOperation.IsNotLookup
+  RegionOperation.assignedCells RegionOperation.copiedCells
+  RegionOperations.assignedCells RegionOperations.copiedCells
+  RegionOperations.CopyCellsAssigned
+  RegionOperations.fixedColumns RegionOperations.FixedAssignmentsAgree
+  RegionOperation.HasNoFixedAssignment RegionOperations.HasNoFixedAssignments
+  Operations.regionFixedColumns Operations.loadedTableColumns
+  Operation.HasNoFixedWrites Operations.HasNoFixedWrites
+  RegionOperations.assignedCellsAfter
+  Operation.copiedCells
+  Operations.assignedCellsFrom Operations.assignedCells
+  Operations.copiedCells Operations.CopyCellsAssigned
+  LookupArgument.lookupActivationWellFormed_enable
+  selectorEnabledAtIndex_cons_self complexSelectorEnabledAtIndex_cons_self
   Operations.KeygenRegistered.nil Operations.KeygenRegistered.append
   Operations.KeygenRegistered.region_cons
   Operations.KeygenRegistered.constrainInstance_cons
   Operations.KeygenRegistered.loadTable_cons
   List.forall_append List.forall_cons
-  List.mem_append List.mem_cons List.mem_singleton List.not_mem_nil
-  List.nil_append List.append_nil List.append_assoc
+  List.flatMap_cons List.flatMap_append
+  List.mem_append List.mem_cons List.mem_singleton List.mem_flatMap List.mem_map
+  List.not_mem_nil
+  List.nil_append List.append_nil List.singleton_append List.append_assoc
   and_self and_true true_and
   or_self or_true true_or or_false false_or
   false_implies implies_true forall_true_iff
+  forall_eq forall_eq_or_imp imp_self or_imp
   ite_self
+  Cell.of_column AssignedCell.of_cell
+  output_assignAdvice output_assignRegion output_cellAt
+  Vector.getElem_ofFn
 
 attribute [grind norm]
   Configure.output_pure Configure.delta_pure
@@ -59,13 +101,31 @@ attribute [keygen_spine]
   operations_constrainConstant operations_assignAdviceFromInstance
   operations_cellAt operations_cellVec
   RegionOperation.KeygenRegistered Operation.KeygenRegistered
+  KeygenRequirements.inputPermutationColumns
+  RegionOperation.LookupActivationWellFormed
+  Operation.LookupActivationsWellFormed
+  RegionOperations.LookupActivationsWellFormed
+  Operations.LookupActivationsWellFormed
+  RegionOperation.IsNotLookup
+  RegionOperation.assignedCells RegionOperation.copiedCells
+  RegionOperations.assignedCells RegionOperations.copiedCells
+  RegionOperations.CopyCellsAssigned
+  RegionOperations.fixedColumns RegionOperations.FixedAssignmentsAgree
+  RegionOperation.HasNoFixedAssignment RegionOperations.HasNoFixedAssignments
+  Operations.regionFixedColumns Operations.loadedTableColumns
+  Operation.HasNoFixedWrites Operations.HasNoFixedWrites
+  RegionOperations.assignedCellsAfter
+  Operation.copiedCells
+  Operations.assignedCellsFrom Operations.assignedCells
+  Operations.copiedCells Operations.CopyCellsAssigned
   Operations.KeygenRegistered.nil Operations.KeygenRegistered.append
   Operations.KeygenRegistered.region_cons
   Operations.KeygenRegistered.constrainInstance_cons
   Operations.KeygenRegistered.loadTable_cons
   List.forall_append List.forall_cons
-  List.mem_append List.mem_cons List.mem_singleton
-  List.nil_append List.append_nil List.append_assoc
+  List.flatMap_cons List.flatMap_append
+  List.mem_append List.mem_cons List.mem_singleton List.mem_flatMap List.mem_map
+  List.nil_append List.append_nil List.singleton_append List.append_assoc
   and_self and_true true_and
   or_self or_true true_or or_false false_or
 
@@ -91,6 +151,11 @@ theorem List.forall_nil {α : Type} (property : α → Prop) :
     ([].Forall property) ↔ True :=
   Iff.rfl
 
+@[keygen_norm]
+theorem List.forall_true {α : Type} (values : List α) :
+    values.Forall (fun _ => True) ↔ True := by
+  induction values <;> simp_all
+
 @[keygen_norm, keygen_spine]
 theorem List.forall_nil_append {α : Type} (property : α → Prop) (values : List α) :
     ([].append values).Forall property ↔ values.Forall property :=
@@ -100,6 +165,26 @@ attribute [keygen_spine] List.forall_nil
 attribute [keygen_spine] RegionCircuit.operations_ite List.forall_ite
 
 variable {F α β : Type}
+
+@[keygen_norm, keygen_spine]
+theorem RegionCircuit.operations_pair
+    [FiniteField F]
+    (output : RegionIndex → α)
+    (operations : RegionIndex → RegionOperations F)
+    (region : RegionIndex) :
+    RegionCircuit.operations (fun self => (output self, operations self)) region =
+      operations region := rfl
+
+@[keygen_norm, keygen_spine]
+theorem Circuit.operations_triple
+    [FiniteField F]
+    (output : RegionIndex → α)
+    (operations : RegionIndex → Operations F)
+    (nextRegion : RegionIndex → RegionIndex)
+    (region : RegionIndex) :
+    Circuit.operations
+        (fun self => (output self, operations self, nextRegion self)) region =
+      operations region := rfl
 
 theorem Configure.mem_gates_delta_bind_left
     (program : Configure F α) (next : α → Configure F β)
@@ -137,6 +222,31 @@ theorem Configure.mem_lookups_delta_bind_right
   rw [Configure.delta_bind, ConfigureDelta.lookups_append]
   exact List.mem_append_right _ hargument
 
+theorem Configure.mem_permutationRequests_delta_bind_left
+    (program : Configure F α) (next : α → Configure F β)
+    (counts : ConfigureCounts) (column : AnyColumn)
+    (hcolumn : column ∈ (program.delta counts).permutationRequests) :
+    column ∈ ((program >>= next).delta counts).permutationRequests := by
+  rw [Configure.delta_bind, ConfigureDelta.permutationRequests_append]
+  exact List.mem_append_left _ hcolumn
+
+theorem Configure.mem_permutationRequests_delta_bind_right
+    (program : Configure F α) (next : α → Configure F β)
+    (counts : ConfigureCounts) (column : AnyColumn)
+    (hcolumn : column ∈
+      ((next (program.output counts)).delta
+        (program.finalCounts counts)).permutationRequests) :
+    column ∈ ((program >>= next).delta counts).permutationRequests := by
+  rw [Configure.delta_bind, ConfigureDelta.permutationRequests_append]
+  exact List.mem_append_right _ hcolumn
+
+theorem Configure.mem_permutationRequests_delta_enableEquality
+    {kind : ColumnKind} (column : Column kind) (counts : ConfigureCounts) :
+    column.toAny ∈
+      ((enableEquality (F := F) column).delta counts).permutationRequests := by
+  rw [Configure.delta_enableEquality_permutationRequests]
+  exact List.mem_singleton_self column.toAny
+
 theorem Configure.mem_gates_delta_createGate
     (gate : Gate F) (counts : ConfigureCounts) :
     gate ∈ ((createGate gate).delta counts).gates := by
@@ -146,9 +256,12 @@ theorem Configure.mem_gates_delta_createGate
 theorem assignAdvice_keygenRegistered
     {F : Type} [FiniteField F]
     (column : Column .advice) (row : ℕ) (compute : WitgenIR F 1)
-    (self : RegionIndex) (gates : List (Gate F)) (lookups : List (LookupArgument F)) :
+    (self : RegionIndex) (gates : List (Gate F)) (lookups : List (LookupArgument F))
+    (fixedColumns : List (Column .fixed))
+    (permutationColumns : List AnyColumn) :
     ((assignAdvice column row compute).operations self).Forall
-      (RegionOperation.KeygenRegistered gates lookups) := by
+      (RegionOperation.KeygenRegistered gates lookups fixedColumns
+        permutationColumns) := by
   simp only [operations_assignAdvice, List.forall_cons,
     RegionOperation.KeygenRegistered, List.forall_nil, and_self]
 
@@ -332,7 +445,8 @@ partial def closeCallSideCondition
   let state ← saveState
   try
     evalTactic (← `(tactic|
-      first | assumption | exact () | rfl | simp_all only [keygen_norm]))
+      first | assumption | exact () | rfl |
+        simp_all only [keygen_norm, synthesis_summary_norm]))
   catch _ =>
     state.restore
   if (← getGoals).isEmpty then
@@ -353,7 +467,8 @@ partial def closeCallSideCondition
     return
   let state ← saveState
   try
-    evalTactic (← `(tactic| simp_all))
+    evalTactic (← `(tactic|
+      simp_all only [keygen_norm, synthesis_summary_norm]))
   catch _ =>
     state.restore
   if (← getGoals).isEmpty then
@@ -431,9 +546,9 @@ def directCallBundleArguments (bundleTypes : Array Name)
   return bundles
 
 /--
-Find the first application whose head contains a tagged call and which directly carries
-a formal-circuit bundle. This follows the opaque call wrapper without inspecting the
-types of every argument in the surrounding synthesis proposition.
+Find the rightmost application whose head contains a tagged call and which directly
+carries a formal-circuit bundle. Operation-list arguments occur after the accumulated
+available-cell state, which may itself mention earlier calls.
 -/
 partial def taggedCallBundlesIn (callExpressions bundleTypes : Array Name)
     (expression : Expr) : MetaM (Array Expr) := do
@@ -444,7 +559,7 @@ partial def taggedCallBundlesIn (callExpressions bundleTypes : Array Name)
     let bundles ← directCallBundleArguments bundleTypes expression
     if !bundles.isEmpty then
       return bundles
-  for argument in expression.getAppArgs do
+  for argument in expression.getAppArgs.reverse do
     let bundles ← taggedCallBundlesIn callExpressions bundleTypes argument
     if !bundles.isEmpty then
       return bundles
@@ -472,7 +587,7 @@ partial def formalCallBundlesIn (bundleTypes : Array Name)
       return #[expression]
   catch _ =>
     pure ()
-  for argument in expression.getAppArgs do
+  for argument in expression.getAppArgs.reverse do
     let bundles ← formalCallBundlesIn bundleTypes argument
     if !bundles.isEmpty then
       return bundles
@@ -634,10 +749,22 @@ def simpCallRouting (expression : Expr) : SimpM Simp.Result := do
   let requirementProjections := keygenRequirementProjectionAttr.getDecls env
   let configureProjections := keygenConfigureProjectionAttr.getDecls env
   let bundleTypes := keygenCallBundleAttr.getDecls env
-  let mut projections : SimpTheorems := {}
+  let outputProjections : SimpTheorems ←
+    match ← getSimpExtension? `keygen_output_norm with
+    | some extension => extension.getTheorems
+    | none => pure {}
+  let mut projections := outputProjections
   for projection in keygenMetadataProjectionAttr.getDecls env do
     projections ← projections.addDeclToUnfold projection
-  let ambient ← Simp.getSimpTheorems
+  projections ← projections.addConst ``List.mem_append
+  projections ← projections.addConst ``List.mem_cons
+  projections ← projections.addConst ``Cell.of_column
+  projections ← projections.addConst ``AssignedCell.of_cell
+  let mut ambient ← Simp.getSimpTheorems
+  for declaration in ← getLCtx do
+    if ← isProp declaration.type then
+      let fact := declaration.toExpr
+      ambient ← ambient.addTheorem (.fvar declaration.fvarId) fact
   -- First expose the child's requirement projection from the configured handle;
   -- only then does the concrete bundle occur at a reducible projection.
   let mut exposed ← Simp.withFreshCache <|
@@ -694,16 +821,23 @@ def simpCallRouting (expression : Expr) : SimpM Simp.Result := do
       Simp.withSimpTheorems (#[projections] ++ ambient) do
         Simp.simp exposed.expr
     exposed ← exposed.mkEqTrans next
-  -- The formal-bundle projection leaves an opaque receiver below `gates`/`lookups`.
+  -- The formal-bundle projection leaves an opaque receiver below the requirement
+  -- projections.
   -- Reduce precisely that small `KeygenRequirements` receiver and add its definitional
   -- equality as a local simp theorem. No synthesis field is projected or normalized.
   let some requirementProjection :=
       exposed.expr.find? fun expression =>
         expression.getAppFn.isConstOf ``KeygenRequirements.gates ||
-          expression.getAppFn.isConstOf ``KeygenRequirements.lookups
+          expression.getAppFn.isConstOf ``KeygenRequirements.lookups ||
+          expression.getAppFn.isConstOf ``KeygenRequirements.fixedColumns ||
+          expression.getAppFn.isConstOf ``KeygenRequirements.constantColumns ||
+          expression.getAppFn.isConstOf ``KeygenRequirements.permutationColumns ||
+          expression.getAppFn.isConstOf ``KeygenRequirements.inputCells ||
+          expression.getAppFn.isConstOf ``KeygenRequirements.inputPermutationColumns
     | return exposed
   let arguments := requirementProjection.getAppArgs
-  let some requirement := arguments[2]?
+  -- `F`, `ConfigInput`, and `InputVar` precede the structure receiver.
+  let some requirement := arguments[3]?
     | return exposed
   let reducedRequirement ← withTransparency .all <| whnf requirement
   if reducedRequirement == requirement then
@@ -912,7 +1046,7 @@ partial def configuredWitness? (target : Expr)
   return none
 
 /--
-Route one configured child's gate or lookup through the append-only configure tree.
+Route one configured child's keygen capability through the append-only configure tree.
 
 This deliberately explores one side of each bind at a time. Simplifying
 `member ∈ (left ++ right)` eagerly normalizes both branches and is catastrophic for a
@@ -940,8 +1074,11 @@ partial def proveConfigureRoute (goal : MVarId) (sourceHead : Option Name)
   let rules := #[
     ``Configure.mem_gates_delta_bind_right,
     ``Configure.mem_lookups_delta_bind_right,
+    ``Configure.mem_permutationRequests_delta_bind_right,
     ``Configure.mem_gates_delta_bind_left,
     ``Configure.mem_lookups_delta_bind_left,
+    ``Configure.mem_permutationRequests_delta_bind_left,
+    ``Configure.mem_permutationRequests_delta_enableEquality,
     ``Configure.mem_gates_delta_createGate]
   for rule in rules do
     let metaState ← getThe Meta.State
@@ -968,6 +1105,106 @@ partial def proveConfigureRoute (goal : MVarId) (sourceHead : Option Name)
         catch _ =>
           pure ()
   return false
+
+/-- Close a concrete `List.Forall` cell-routing obligation one list cell at a time. -/
+partial def proveConcreteForall (goal : MVarId) (fuel : Nat := 256) : SimpM Bool := do
+  if fuel == 0 then
+    return false
+  let target ← instantiateMVars (← goal.getType)
+  unless target.isAppOfArity ``List.Forall 3 do
+    return false
+  let values := target.getAppArgs[2]!
+  if values.isAppOfArity ``List.nil 1 then
+    let simplified ← simpCallRouting target
+    let some proof ← proofOfSimpTrue? simplified
+      | return false
+    goal.assign proof
+    return true
+  unless values.isAppOfArity ``List.cons 3 do
+    return false
+  let targetArguments := target.getAppArgs
+  let valueArguments := values.getAppArgs
+  let elementType := targetArguments[0]!
+  let [elementLevel] := target.getAppFn.constLevels!
+    | return false
+  let forallCons := mkAppN (mkConst ``List.forall_cons [elementLevel])
+    #[elementType, targetArguments[1]!, valueArguments[1]!, valueArguments[2]!]
+  let implication ← mkAppM ``Iff.mpr #[forallCons]
+  let [conjunctionGoal] ← goal.apply implication
+    | return false
+  let goals ← conjunctionGoal.applyConst ``And.intro
+  let [headGoal, tailGoal] := goals
+    | return false
+  let simplified ← headGoal.withContext do
+    simpCallRouting (← instantiateMVars (← headGoal.getType))
+  let some proof ← proofOfSimpTrue? simplified
+    | trace[Halo2.keygen] "concrete routing head residual:\n{simplified.expr}"
+      return false
+  headGoal.assign proof
+  tailGoal.withContext do
+    proveConcreteForall tailGoal (fuel - 1)
+
+/-- Reduce a declared input-cell list, then prove its `List.Forall` routing property
+structurally. Ordinary pointwise list inclusions are first converted to `List.Forall`. -/
+def proveListRoutingPremise (goal : MVarId) : SimpM Bool := do
+  let metaState ← getThe Meta.State
+  try
+    let target ← instantiateMVars (← goal.getType)
+    let normalizedGoal ←
+      if target.isAppOfArity ``List.Forall 3 then
+        pure goal
+      else
+        let some (elementType, property, values) ←
+            forallTelescopeReducing target (fun xs body => do
+              unless xs.size == 2 do
+                return none
+              let element := xs[0]!
+              let membership := xs[1]!
+              if body.containsFVar membership.fvarId! then
+                return none
+              let membershipType ← inferType membership
+              let membershipArguments := membershipType.getAppArgs
+              unless 2 ≤ membershipArguments.size do
+                return none
+              let values := membershipArguments[membershipArguments.size - 2]!
+              if values.containsFVar element.fvarId! then
+                return none
+              let property ← mkLambdaFVars #[element] body
+              let elementType ← inferType element
+              return some (elementType, property, values))
+          | throwError "routing premise is not pointwise list inclusion"
+        let valuesType ← whnf (← inferType values)
+        let [elementLevel] := valuesType.getAppFn.constLevels!
+          | throwError "routing source is not a List"
+        let characterization := mkAppN
+          (mkConst ``List.forall_iff_forall_mem [elementLevel])
+          #[elementType, property, values]
+        let forward ← mkAppM ``Iff.mp #[characterization]
+        let forwardType ← whnf (← inferType forward)
+        unless forwardType.isForall do
+          throwError "invalid List.Forall characterization"
+        let sourceProof ← mkFreshExprSyntheticOpaqueMVar forwardType.bindingDomain!
+        let routedProof := mkApp forward sourceProof
+        goal.assign routedProof
+        pure sourceProof.mvarId!
+    let target ← instantiateMVars (← normalizedGoal.getType)
+    unless target.isAppOfArity ``List.Forall 3 do
+      throwError "pointwise list inclusion did not normalize to List.Forall"
+    let arguments := target.getAppArgs
+    let values := arguments[2]!
+    let simplifiedValues ← simpCallRouting values
+    let forallFunction := mkAppN target.getAppFn arguments[:2]
+    let normalizedTarget := mkApp forallFunction simplifiedValues.expr
+    let targetEquality ← mkCongrArg forallFunction (← simplifiedValues.getProof)
+    let concreteGoal ← normalizedGoal.replaceTargetEq normalizedTarget targetEquality
+    let closed ← concreteGoal.withContext do
+      proveConcreteForall concreteGoal
+    unless closed do
+      throwError "concrete list-routing premise was not solved"
+    return closed
+  catch _ =>
+    set metaState
+    return false
 
 /-- Introduce a routing premise and prove its final membership by bind traversal. -/
 def proveConfigureRoutingPremise (goal : MVarId) : MetaM Bool := do
@@ -1040,6 +1277,9 @@ def proveWithCallCertificate?
         if ← proveConfigureRoutingPremise sideCondition then
           trace[Halo2.keygen] "routed configure premise"
           continue
+        if ← proveListRoutingPremise sideCondition then
+          trace[Halo2.keygen] "routed list-membership premise"
+          continue
         let mut simplified ← Simp.simp sideTarget
         let mut proof? ← proofOfSimpTrue? simplified
         if proof?.isNone then
@@ -1087,12 +1327,27 @@ def callRegistrationSimproc (target : Expr) : SimpM Simp.Step := do
   return .continue
 
 simproc callRegistration
-    (Operations.KeygenRegistered _ _ _) := callRegistrationSimproc
+    (Operations.KeygenRegistered _ _ _ _ _) := callRegistrationSimproc
 
 simproc regionCallRegistration
     (List.Forall _ _) := callRegistrationSimproc
 
-attribute [keygen_norm] callRegistration regionCallRegistration
+simproc callCopyCellsAssignedFrom
+    (Operations.CopyCellsAssignedFrom _ _ _) := callRegistrationSimproc
+
+simproc regionCallCopyCellsAssignedFrom
+    (RegionOperations.CopyCellsAssignedFrom _ _ _) := callRegistrationSimproc
+
+simproc callLookupSelectorAssignmentsAgree
+    (Operations.LookupSelectorAssignmentsAgree _) := callRegistrationSimproc
+
+simproc regionCallLookupSelectorAssignmentsAgree
+    (RegionOperations.LookupSelectorAssignmentsAgree _) := callRegistrationSimproc
+
+attribute [keygen_norm]
+  callRegistration regionCallRegistration
+  callCopyCellsAssignedFrom regionCallCopyCellsAssignedFrom
+  callLookupSelectorAssignmentsAgree regionCallLookupSelectorAssignmentsAgree
 
 /-- Target and hypothesis types used to detect normalization progress. -/
 def goalContextTypes : TacticM (Array Expr) := withMainContext do
@@ -1244,7 +1499,9 @@ partial def prepareConfigure (unfolded : Std.HashSet Name := {}) : TacticM Unit 
         Configure.output_enableConstant, Configure.output_createGate,
         Configure.output_lookup,
         ConfigureDelta.gates_append, ConfigureDelta.lookups_append,
+        ConfigureDelta.permutationRequests_append,
         ConfigureDelta.gates_queriedCells, ConfigureDelta.lookups_queriedCells,
+        ConfigureDelta.permutationRequests_queriedCells,
         List.mem_append, List.mem_cons, List.mem_singleton,
         List.nil_append, List.append_nil, List.append_assoc]))
   catch _ =>
@@ -1269,7 +1526,8 @@ def finishConfigureGoals : TacticM Unit := do
   for goal in ← getGoals do
     setGoals [goal]
     prepareConfigure
-    close
+    if !(← getGoals).isEmpty then
+      close
     remaining := remaining ++ (← getGoals)
   setGoals remaining
 
@@ -1283,19 +1541,32 @@ configure/synthesis heads that still block a registration goal. Formal-circuit c
 stay opaque for explicit discharge through the compositional registration lemmas.
 -/
 elab "keygen_registration" : tactic => do
-  evalTactic (← `(tactic| intros))
-  KeygenRegistration.prepareConfigure
-  evalTactic (← `(tactic|
-    simp_all! +zetaDelta (config := { failIfUnchanged := false }) only [
-      keygen_spine, keygen_norm]))
   if (← getGoals).isEmpty then
     return
+  trace[Halo2.keygen] "keygen_registration: introductions"
+  evalTactic (← `(tactic| intros))
+  if (← getGoals).isEmpty then
+    return
+  trace[Halo2.keygen] "keygen_registration: configure preparation"
+  KeygenRegistration.prepareConfigure
+  trace[Halo2.keygen] "keygen_registration: initial normalization"
+  evalTactic (← `(tactic|
+    simp_all! +zetaDelta (config := { failIfUnchanged := false }) only [
+      keygen_spine, keygen_norm, keygen_output_norm]))
+  if (← getGoals).isEmpty then
+    return
+  trace[Halo2.keygen] "keygen_registration: structural close"
   KeygenRegistration.close
   if !(← getGoals).isEmpty then
+    evalTactic (← `(tactic|
+      simp_all! +zetaDelta (config := { failIfUnchanged := false }) only [
+        keygen_spine, keygen_norm, keygen_output_norm]))
+  if !(← getGoals).isEmpty then
+    trace[Halo2.keygen] "keygen_registration: configure fallback"
     KeygenRegistration.finishConfigureGoals
 
 macro "keygen_registration" " [" definitions:Lean.Parser.Tactic.simpLemma,* "]" : tactic =>
-  `(tactic| (dsimp only [$definitions,*]; keygen_registration))
+  `(tactic| (dsimp only [$definitions,*] <;> keygen_registration))
 
 elab "configure_route" : tactic => do
   let goal ← getMainGoal

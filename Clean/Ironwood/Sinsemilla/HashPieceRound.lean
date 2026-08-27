@@ -37,7 +37,7 @@ open Sinsemilla
 
 structure Config where
   -- `q_sinsemilla1`: the Sinsemilla gate selector.
-  qS1 : Selector
+  qS1 : ComplexSelector
   -- `q_sinsemilla2`: a fixed column taking values `0/1/2`, queried inside gate polynomials and the
   -- lookup input.
   qS2 : Column .fixed
@@ -59,6 +59,12 @@ structure Config where
   witnessPieces : Column .advice
   -- The generator table columns.
   generatorTable : GeneratorTableConfig
+
+/-- The two fixed columns used by Sinsemilla remain distinct. This is a
+caller-supplied law because `fixedYQ` is allocated before `configure`, while
+`qS2` is allocated by it. -/
+structure Config.FixedColumnsLawful (config : Config) : Type where
+  qS2_ne_fixedYQ : config.qS2 ≠ config.fixedYQ
 
 /-! ## Gate expression builders
 
@@ -105,6 +111,10 @@ def initialYQGate (cfg : Config) : Gate Fp :=
     let yQ : Expression Fp Query := queryFixed cfg.fixedYQ
     [("init y_q", yQ * (2 : Fp) - yAExpr cfg 0)]
 
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem initialYQGate_selector (cfg : Config) :
+    (initialYQGate cfg).selector = cfg.qS4 := rfl
+
 /-- The synthetic selector `q_s3 = q_s2·(q_s2 − 1)`: `0` when `q_s2 ∈ {0,1}`, `2` when
 `q_s2 = 2` (final piece). -/
 @[selector_free, query_correct]
@@ -138,6 +148,10 @@ def sinsemillaGate (cfg : Config) : Gate Fp :=
             + qS3Expr cfg * (2 : Fp) * l1Next)
     [("secant line", secant), ("y check", yCheck)]
 
+@[circuit_norm, configure_selector_norm, keygen_norm, synthesis_summary_norm]
+theorem sinsemillaGate_selector (cfg : Config) :
+    (sinsemillaGate cfg).selector = cfg.qS1 := rfl
+
 /-! ## The 3-tuple generator lookup
 
 The input tuple (gated by `q_s1` and `q_run = q_s2 − q_s3`):
@@ -150,6 +164,7 @@ with `word = z_cur − q_run·z_next·2^K` (`z` = the `bits` column), `y_p = Y_A
 (`yPExpr`), and `(init_x, init_y) = S(0)`. -/
 @[query_correct]
 def generatorLookup (G : Generators) (cfg : Config) : LookupArgument Fp where
+  masterSelector := cfg.qS1
   inputs :=
     let qS1 : Expression Fp Query := querySelector cfg.qS1
     let qRun : Expression Fp Query := queryFixed cfg.qS2 - qS3Expr cfg
@@ -166,8 +181,25 @@ def generatorLookup (G : Generators) (cfg : Config) : LookupArgument Fp where
     [ queryFixed cfg.generatorTable.tableIdx.inner,
       queryFixed cfg.generatorTable.tableX.inner,
       queryFixed cfg.generatorTable.tableY.inner ]
+  inputsNoSimpleSelectors := by
+    simp [yPExpr, yAExpr, xRExpr, qS3Expr,
+      Expression.NoSimpleSelectors,
+      Expression.noSimpleSelectors_queryComplexSelector,
+      Expression.noSimpleSelectors_queryAdvice,
+      Expression.noSimpleSelectors_queryFixed]
   tablesFree := by simp [Expression.SelectorFree, queryFixed]
   arity := rfl
+
+@[circuit_norm, synthesis_summary_norm, keygen_norm]
+theorem generatorLookup_masterSelector (G : Generators) (cfg : Config) :
+    (generatorLookup G cfg).masterSelector = cfg.qS1 := rfl
+
+@[keygen_norm]
+theorem generatorLookup_auxiliarySelectorIndices (G : Generators) (cfg : Config) :
+    (generatorLookup G cfg).auxiliarySelectorIndices = [] := by
+  simp [keygen_norm, generatorLookup,
+    LookupArgument.auxiliarySelectorIndices,
+    yPExpr, yAExpr, xRExpr, qS3Expr]
 
 /-! ## Configure
 
@@ -197,13 +229,240 @@ def configure (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
   -- λ₁/x_a @ cur plus λ₂ @ cur (from `Y_A`).
   lookup [queryFixed cfg.qS2, queryAdvice cfg.bits 0, queryAdvice cfg.bits 1,
           queryAdvice cfg.xP 0, queryAdvice cfg.lambda1 0, queryAdvice cfg.xA 0,
-          queryAdvice cfg.lambda2 0]
+          queryAdvice cfg.lambda2 0] cfg.qS1
     [((generatorLookup G cfg).inputs[0]!, genTable.tableIdx),
           ((generatorLookup G cfg).inputs[1]!, genTable.tableX),
           ((generatorLookup G cfg).inputs[2]!, genTable.tableY)]
+    (_hnoSimpleSelectors := by
+      simpa [generatorLookup] using
+        (generatorLookup G cfg).inputsNoSimpleSelectors)
   createGate (initialYQGate cfg)
   createGate (sinsemillaGate cfg)
   return cfg
+
+@[keygen_norm] theorem configure_delta_constants
+    (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
+    (witnessPieces : Column .advice) (fixedYQ : Column .fixed)
+    (genTable : GeneratorTableConfig) (counts) :
+    ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).delta
+      counts).constants = [] := by
+  simp [configure]
+
+@[keygen_norm] theorem configure_fixedColumns
+    (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
+    (witnessPieces : Column .advice) (fixedYQ : Column .fixed)
+    (genTable : GeneratorTableConfig) (counts) :
+    (configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).fixedColumns
+        counts =
+      [((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).output
+        counts).qS2] := by
+  simp [configure]
+
+@[keygen_norm]
+theorem configure_output_qS2_index
+    (G : Generators) (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).output
+      counts).qS2.index = counts.numFixedColumns := by
+  simp [configure]
+
+theorem configure_output_fixedYQ
+    (G : Generators) (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).output
+      counts).fixedYQ = fixedYQ := rfl
+
+def configureOutputFixedColumnsLawful
+    (G : Generators) (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) (hfixedYQ : fixedYQ.index < counts.numFixedColumns) :
+    Config.FixedColumnsLawful
+      ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).output
+        counts) := by
+  constructor
+  intro heq
+  have := congrArg Column.index heq
+  simp only [configure_output_qS2_index, configure_output_fixedYQ] at this
+  omega
+
+@[configure_selector_norm, keygen_norm] theorem configure_output_qS1_index
+    (G : Generators) (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).output
+      counts).qS1.index = counts.numSelectors := by
+  simp [configure]
+
+@[configure_selector_norm, keygen_norm] theorem configure_output_qS4_index
+    (G : Generators) (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).output
+      counts).qS4.index = counts.numSelectors + 1 := by
+  simp [configure]
+
+@[keygen_norm]
+theorem configure_lookups (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).delta
+      counts).lookups =
+      [generatorLookup G
+        ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).output
+          counts)] := by
+  rfl
+
+@[keygen_norm]
+theorem configure_gates (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).delta
+      counts).gates =
+      let cfg := (configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ
+        genTable).output counts
+      [initialYQGate cfg, sinsemillaGate cfg] := by
+  rfl
+
+theorem configure_output_xA (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).output counts).xA
+      = xA := by
+  rfl
+
+theorem configure_output_xP (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).output counts).xP
+      = xP := by
+  rfl
+
+theorem configure_output_bits (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).output counts).bits
+      = bits := by
+  rfl
+
+theorem configure_output_lambda1 (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).output
+      counts).lambda1 = lambda1 := by
+  rfl
+
+theorem configure_output_lambda2 (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).output
+      counts).lambda2 = lambda2 := by
+  rfl
+
+theorem configure_xA_mem_permutationRequests (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    xA.toAny ∈ ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).delta
+      counts).permutationRequests := by
+  unfold configure
+  apply Configure.mem_permutationRequests_delta_bind_left
+  exact Configure.mem_permutationRequests_delta_enableEquality _ _
+
+theorem configure_xP_mem_permutationRequests (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    xP.toAny ∈ ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).delta
+      counts).permutationRequests := by
+  unfold configure
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_left
+  exact Configure.mem_permutationRequests_delta_enableEquality _ _
+
+theorem configure_bits_mem_permutationRequests (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    bits.toAny ∈ ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).delta
+      counts).permutationRequests := by
+  unfold configure
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_left
+  exact Configure.mem_permutationRequests_delta_enableEquality _ _
+
+theorem configure_lambda1_mem_permutationRequests (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    lambda1.toAny ∈ ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).delta
+      counts).permutationRequests := by
+  unfold configure
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_left
+  exact Configure.mem_permutationRequests_delta_enableEquality _ _
+
+theorem configure_lambda2_mem_permutationRequests (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) :
+    lambda2.toAny ∈ ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).delta
+      counts).permutationRequests := by
+  unfold configure
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_right
+  apply Configure.mem_permutationRequests_delta_bind_left
+  exact Configure.mem_permutationRequests_delta_enableEquality _ _
+
+/-- The five equality-enabled HashPiece columns are all present in its configure log. -/
+theorem configure_equalityColumn_mem_permutationRequests (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) (column : AnyColumn)
+    (hcolumn : column ∈
+      ([xA, xP, bits, lambda1, lambda2] : List AnyColumn)) :
+    column ∈ ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).delta
+      counts).permutationRequests := by
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hcolumn
+  rcases hcolumn with rfl | rfl | rfl | rfl | rfl
+  · exact configure_xA_mem_permutationRequests G xA xP bits lambda1 lambda2
+      witnessPieces fixedYQ genTable counts
+  · exact configure_xP_mem_permutationRequests G xA xP bits lambda1 lambda2
+      witnessPieces fixedYQ genTable counts
+  · exact configure_bits_mem_permutationRequests G xA xP bits lambda1 lambda2
+      witnessPieces fixedYQ genTable counts
+  · exact configure_lambda1_mem_permutationRequests G xA xP bits lambda1 lambda2
+      witnessPieces fixedYQ genTable counts
+  · exact configure_lambda2_mem_permutationRequests G xA xP bits lambda1 lambda2
+      witnessPieces fixedYQ genTable counts
+
+/-- The equality-enabled columns of a configured HashPiece are present in its configure log. -/
+theorem configure_output_equalityColumn_mem_permutationRequests (G : Generators)
+    (xA xP bits lambda1 lambda2 witnessPieces : Column .advice)
+    (fixedYQ : Column .fixed) (genTable : GeneratorTableConfig)
+    (counts : ConfigureCounts) (column : AnyColumn)
+    (hcolumn : let cfg :=
+        (configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).output counts
+      column ∈ ([cfg.xA, cfg.xP, cfg.bits, cfg.lambda1, cfg.lambda2] : List AnyColumn)) :
+    column ∈ ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).delta
+      counts).permutationRequests := by
+  apply configure_equalityColumn_mem_permutationRequests G xA xP bits lambda1 lambda2
+    witnessPieces fixedYQ genTable counts column
+  simpa only [configure_output_xA, configure_output_xP, configure_output_bits,
+    configure_output_lambda1, configure_output_lambda2] using hcolumn
 
 set_option synthInstance.maxSize 2048 in
 @[reducible] def configureElaborated
@@ -215,20 +474,60 @@ set_option synthInstance.maxSize 2048 in
   unfold configure
   infer_instance
 
+private theorem configure_constraintDegree
+    (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
+    (witnessPieces : Column .advice) (fixedYQ : Column .fixed)
+    (genTable : GeneratorTableConfig) (counts) :
+    ((configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable).delta
+      counts).constraintDegree = 7 := by
+  simp [ConfigureDelta.constraintDegree, Halo2.constraintDegree,
+    configure_gates, configure_lookups,
+    initialYQGate, sinsemillaGate, generatorLookup,
+    qS3Expr, yPExpr, xRExpr, yAExpr,
+    LookupArgument.requiredDegree, Expression.degree,
+    querySelector, queryAdvice, queryFixed, Gate.withSelector]
+
 instance (G : Generators) (xA xP bits lambda1 lambda2 : Column .advice)
     (witnessPieces : Column .advice) (fixedYQ : Column .fixed)
     (genTable : GeneratorTableConfig) :
     ElaboratedConfigure
       (configure G xA xP bits lambda1 lambda2 witnessPieces fixedYQ genTable) :=
-  { configureElaborated G xA xP bits lambda1 lambda2 witnessPieces fixedYQ
+  ({ configureElaborated G xA xP bits lambda1 lambda2 witnessPieces fixedYQ
       genTable with
+    constraintDegree _ := 7
+    constraintDegree_eq := configure_constraintDegree G xA xP bits lambda1 lambda2
+      witnessPieces fixedYQ genTable
     selectorRequirements _ := True
+    lookupSelectorsCompatible := by
+      intro counts _
+      simp [configure_lookups, configure_gates,
+        generatorLookup_auxiliarySelectorIndices,
+        generatorLookup_masterSelector,
+        initialYQGate_selector, sinsemillaGate_selector,
+        configure_output_qS1_index, configure_output_qS4_index,
+        Gate.LookupSelectorsCompatible,
+        Selector.LookupSelectorsCompatible,
+        LookupArgument.selectorUsage,
+        ConfigureDelta.LookupSelectorsCompatible,
+        Halo2.LookupSelectorsCompatible]
+      exact LookupArgument.selectorsCompatible_self _
     selectorsAllocated := by
       intro counts _
       constructor
       · simp [configure, initialYQGate, sinsemillaGate, Gate.withSelector]
+      · rw [configure_lookups]
+        simp [generatorLookup_masterSelector, configure]
       · simp [configure, generatorLookup, yPExpr, yAExpr, qS3Expr,
-          xRExpr, Expression.selectorBound] }
+          xRExpr, Expression.selectorBound] }).withNoExternalSelectors (by
+    intro counts
+    constructor
+    · rw [configure_gates]
+      simp [initialYQGate_selector, sinsemillaGate_selector,
+        configure_output_qS1_index, configure_output_qS4_index]
+    · rw [configure_lookups]
+      simp [generatorLookup_masterSelector,
+        generatorLookup_auxiliarySelectorIndices,
+        LookupArgument.selectorIndices, configure_output_qS1_index])
 
 /-- The boundary `q_s2` value: `0` between pieces, `2` on the message's final piece
 (`hash_to_point.rs::hash_piece`, `final_piece`). Deliberately NOT `@[simp]`: proofs keep it
@@ -780,12 +1079,62 @@ private theorem complete_gates (G : Generators)
 /-- One interior hash-word round at word index `i`, at its own row `offset`. Assigns row
 `offset + 1`'s cells (running sum, stepped accumulator x, next word's slopes), enables the
 generator lookup and the Sinsemilla gate at `offset`. -/
+def roundColumns (config : Config) : List FloorPlanner.RegionColumn :=
+    [.column .fixed config.qS2.index,
+      .column .advice config.bits.index,
+      .column .advice config.xP.index,
+      .column .advice config.lambda1.index,
+      .column .advice config.lambda2.index,
+      .column .advice config.xA.index,
+      .selector config.qS1.index,
+      .selector config.qS1.index]
+
+def roundSynthesisSummary (config : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns (roundColumns config) (offset + 2) 0
+    (lookupActivationCount := 1)
+
+@[synthesis_summary_norm]
+theorem roundSynthesisSummary_lookupActivationCount
+    (config : Config) (offset : ℕ) :
+    (roundSynthesisSummary config offset).lookupActivationCount = 1 := by
+  simp only [roundSynthesisSummary, synthesis_summary_norm]
+
 def round (G : Generators) (i : ℕ) : FormalRegionCircuit Fp Config Config field State where
   configure := pure
   elaborated :=
     { keygenRequirements :=
         { gates cfg _ := [sinsemillaGate cfg]
-          lookups cfg _ := [generatorLookup G cfg] } }
+          lookups cfg _ := [generatorLookup G cfg]
+          fixedColumns cfg _ := [cfg.qS2] }
+      synthesisSummary config offset _ _ := roundSynthesisSummary config offset
+      synthesisSummary_eq := by
+        intro _ _ _ _
+        apply FloorPlanner.RegionSynthesisSummary.ext
+        · simp only [roundSynthesisSummary, roundColumns]
+          rw [FloorPlanner.regionSynthesisSummary_columns_eq_unionColumns]
+          simp only [circuit_norm, sinsemillaGate_selector,
+            List.flatMap_cons, List.flatMap_nil,
+            FloorPlanner.regionOperationShapeColumns, List.append_nil,
+            List.nil_append, List.singleton_append, List.map_cons, List.map_nil]
+        · simp only [roundSynthesisSummary, roundColumns, circuit_norm]
+          omega
+        · simp only [roundSynthesisSummary, circuit_norm]
+        · simp only [roundSynthesisSummary, circuit_norm, synthesis_summary_norm]
+        · simp only [roundSynthesisSummary, circuit_norm, synthesis_summary_norm]
+      fixedAssignmentsAgree := by
+        intro configInput counts hconfig offset input region
+        unfold RegionOperations.FixedAssignmentsAgree
+        intro column row left right hleft hright
+        simp only [Configure.output_pure, circuit_norm, List.mem_cons,
+          List.not_mem_nil, or_false] at hleft hright
+        grind
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro _ _ _ _ _ _ anchor _ hregistered
+        apply
+          RegionOperations.LookupSelectorsAnchoredBy.of_registered_auxiliarySelectors_nil
+            hregistered (anchor := anchor)
+        keygen_registration [generatorLookup_auxiliarySelectorIndices] }
 
   synthesize cfg offset (piece : AssignedCell Fp) := do
     let w ← readState cfg offset
@@ -796,7 +1145,7 @@ def round (G : Generators) (i : ℕ) : FormalRegionCircuit Fp Config Config fiel
     let _l1 ← assignAdvice cfg.lambda1 (offset + 1) (stepWit G piece w i (·.row.lambda1))
     let _l2 ← assignAdvice cfg.lambda2 (offset + 1) (stepWit G piece w i (·.row.lambda2))
     let _xA ← assignAdvice cfg.xA (offset + 1) (stepWit G piece w i (·.row.xA))
-    (generatorLookup G cfg).enable [cfg.qS1] offset
+    (generatorLookup G cfg).enable [] offset
     (sinsemillaGate cfg).enable offset
     readState cfg (offset + 1)
 
@@ -860,10 +1209,52 @@ def round (G : Generators) (i : ℕ) : FormalRegionCircuit Fp Config Config fiel
       (fun t => env.fixed cfg.generatorTable.tableY.inner (t : ℤ))
       hH hchain hUsable hBlock
 
+/-- The interior round exposes its reduced synthesis summary. -/
+@[synthesis_summary_norm]
+theorem round_synthesisSummary_eq
+    (G : Generators) (i : ℕ) (config : Config) (offset : ℕ)
+    (piece : AssignedCell Fp) (region : RegionIndex) :
+    ((round G i).elaborated.synthesisSummary config offset piece region) =
+      roundSynthesisSummary config offset := rfl
+
+/-- An interior hash-word round requests no deferred constants. -/
+@[synthesis_summary_norm]
+theorem round_synthesisSummary_constantSiteCount
+    (G : Generators) (i : ℕ) (config : Config) (offset : ℕ)
+    (piece : AssignedCell Fp) (region : RegionIndex) :
+    ((round G i).elaborated.synthesisSummary
+      config offset piece region).constantSiteCount = 0 := by
+  rw [round_synthesisSummary_eq]
+  simp only [roundSynthesisSummary, circuit_norm]
+
+/-- The round's only fixed write enables `qS2` at its base row. -/
+theorem round_assignFixed_mem_iff (G : Generators) (i : ℕ)
+    (cfg : Config) (offset : ℕ) (piece : AssignedCell Fp)
+    (self : RegionIndex) (column : Column .fixed) (row : ℕ) (value : Fp) :
+    .assignFixed column row value ∈
+        ((round G i).call cfg offset piece).operations self ↔
+      column = cfg.qS2 ∧ row = offset ∧ value = 1 := by
+  rw [FormalRegionCircuit.call_operations]
+  simp [round, circuit_norm]
+
 /-- The round's output variable: the next row's neighborhood (position-determined). -/
 @[circuit_norm]
 theorem round_output (G : Generators) (i : ℕ) (cfg : Config) (o : ℕ) (iv : AssignedCell Fp)
     (self : RegionIndex) :
     (round G i).output cfg o iv self = reads cfg (o + 1) self := rfl
+
+/-- The running-sum cell returned by a round is assigned by that round. -/
+theorem round_output_z_cell_assigned (G : Generators) (i : ℕ)
+    (cfg : Config) (offset : ℕ) (piece : AssignedCell Fp)
+    (self : RegionIndex) (available : List Cell) :
+    ((round G i).output cfg offset piece self).z.cell ∈
+      (((round G i).call cfg offset piece).operations self
+        |>.assignedCellsAfter self available) := by
+  rw [FormalRegionCircuit.call_operations, round_output]
+  simp only [round, circuit_norm, reads, AssignedCell.of_cell,
+    RegionOperations.mem_assignedCellsAfter_iff, RegionOperations.assignedCells,
+    List.mem_append, List.flatMap_cons,
+    RegionOperation.assignedCells, List.singleton_append, List.mem_cons,
+    true_or]
 
 end Zcash.Circuits.Sinsemilla.HashPiece

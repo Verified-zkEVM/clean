@@ -50,6 +50,21 @@ the identity to `(0, 0)`, so `.x` is exactly `Extract⊥` on defined results. -/
 def hash (S : ℕ → Point Fp) (Q : Point Fp) (chunks : List ℕ) : Option Fp :=
   (hashToPoint S Q chunks).map (·.x)
 
+/-- The specification's literal ⊥-model contract (§5.4.1.9): whenever the Sinsemilla
+chain over `chunks` is defined, the payload predicate holds of the hash point. This
+is the shape of every exported circuit statement about a Sinsemilla hash — a concrete
+property of the partial hash function, with no break vocabulary. The security layer
+recomputes the escape data (`hashToPointB`) from the same witnessed chunks and
+consumes the escapes as breaks; see `specOrBreak_hashToPointB_iff_guarded`. -/
+def HashGuarded (S : ℕ → Point Fp) (Q : Point Fp) (chunks : List ℕ)
+    (P : Point Fp → Prop) : Prop :=
+  ∀ B, hashToPoint S Q chunks = some B → P B
+
+theorem HashGuarded.mono {S : ℕ → Point Fp} {Q : Point Fp} {chunks : List ℕ}
+    {P P' : Point Fp → Prop} (h : ∀ B, P B → P' B)
+    (hg : HashGuarded S Q chunks P) : HashGuarded S Q chunks P' :=
+  fun B hB => h B (hg B hB)
+
 /--
 The Sinsemilla generator constants: the per-chunk generators
 `S(j) = GroupHash("z.cash:SinsemillaS", j)` for `j < 2^K`, packaged with the property
@@ -243,6 +258,51 @@ theorem chunksOf_add (val m n : ℕ) :
   congr 2
   ring
 
+/-- `chunksOf` is injective below `2 ^ (K * n)`: the `K`-bit digits determine the value. -/
+theorem chunksOf_inj {a b n : ℕ} (ha : a < 2 ^ (K * n)) (hb : b < 2 ^ (K * n))
+    (h : chunksOf a n = chunksOf b n) : a = b := by
+  have hdig : ∀ i, i < n → bitrange a (K * i) K = bitrange b (K * i) K := by
+    intro i hi
+    have hgd := congrArg (fun l => l.getD i 0) h
+    simpa [chunksOf, List.getD_eq_getElem?_getD, List.getElem?_map, List.getElem?_range, hi]
+      using hgd
+  have hmod : ∀ m, m ≤ n → a % 2 ^ (K * m) = b % 2 ^ (K * m) := by
+    intro m
+    induction m with
+    | zero => simp [Nat.mod_one]
+    | succ i ih =>
+      intro hi
+      have hstep := hdig i (by omega)
+      simp only [bitrange] at hstep
+      rw [show K * (i + 1) = K * i + K from by ring, pow_add, Nat.mod_mul, Nat.mod_mul,
+        ih (by omega), hstep]
+  have hfin := hmod n le_rfl
+  rwa [Nat.mod_eq_of_lt ha, Nat.mod_eq_of_lt hb] at hfin
+
+set_option exponentiation.threshold 600 in
+/-- `merkleChunks` is the 52-chunk decomposition of its packed message. -/
+theorem merkleChunks_eq_chunksOf (l lv rv : ℕ) :
+    merkleChunks l lv rv = chunksOf (l + 2 ^ 10 * lv + 2 ^ 265 * rv) 52 := by
+  simp [merkleChunks, chunksOf, bitrange]
+
+set_option exponentiation.threshold 600 in
+/-- The 52-chunk Merkle compression encoding is injective on components within
+their widths. -/
+theorem merkleChunks_inj {l lv rv l' lv' rv' : ℕ}
+    (h1 : l < 2 ^ 10) (h2 : lv < 2 ^ 255) (h3 : rv < 2 ^ 255)
+    (h1' : l' < 2 ^ 10) (h2' : lv' < 2 ^ 255) (h3' : rv' < 2 ^ 255)
+    (h : merkleChunks l lv rv = merkleChunks l' lv' rv') :
+    l = l' ∧ lv = lv' ∧ rv = rv' := by
+  rw [merkleChunks_eq_chunksOf, merkleChunks_eq_chunksOf] at h
+  have hK : (2 : ℕ) ^ (K * 52) = 2 ^ 520 := by norm_num [K]
+  have hbound : ∀ {a b c : ℕ}, a < 2 ^ 10 → b < 2 ^ 255 → c < 2 ^ 255 →
+      a + 2 ^ 10 * b + 2 ^ 265 * c < 2 ^ (K * 52) := by
+    intro a b c ha hb hc
+    rw [hK]
+    omega
+  have hmsg := chunksOf_inj (hbound h1 h2 h3) (hbound h1' h2' h3') h
+  omega
+
 /-- Chunks below position `n` are unaffected by reducing `val` mod `2 ^ (K * n)`. -/
 theorem chunksOf_mod (val n : ℕ) : chunksOf (val % 2 ^ (K * n)) n = chunksOf val n := by
   unfold chunksOf
@@ -424,6 +484,43 @@ def noteCommitMessage (gdX gdY pkdX pkdY v rho psi : ℕ) : ℕ :=
 def noteCommitChunks (gdX gdY pkdX pkdY v rho psi : ℕ) : List ℕ :=
   chunksOf (noteCommitMessage gdX gdY pkdX pkdY v rho psi) 109
 
+/-- The note-commit message packing is injective on components within their widths. -/
+theorem noteCommitMessage_inj
+    {gdX gdY pkdX pkdY v rho psi gdX' gdY' pkdX' pkdY' v' rho' psi' : ℕ}
+    (h1 : gdX < 2 ^ 255) (h2 : gdY < 2) (h3 : pkdX < 2 ^ 255) (h4 : pkdY < 2)
+    (h5 : v < 2 ^ 64) (h6 : rho < 2 ^ 255) (_h7 : psi < 2 ^ 255)
+    (h1' : gdX' < 2 ^ 255) (h2' : gdY' < 2) (h3' : pkdX' < 2 ^ 255) (h4' : pkdY' < 2)
+    (h5' : v' < 2 ^ 64) (h6' : rho' < 2 ^ 255) (_h7' : psi' < 2 ^ 255)
+    (h : noteCommitMessage gdX gdY pkdX pkdY v rho psi
+        = noteCommitMessage gdX' gdY' pkdX' pkdY' v' rho' psi') :
+    gdX = gdX' ∧ gdY = gdY' ∧ pkdX = pkdX' ∧ pkdY = pkdY' ∧ v = v' ∧ rho = rho'
+      ∧ psi = psi' := by
+  unfold noteCommitMessage at h
+  omega
+
+/-- The 109-chunk note-commit encoding is injective on components within their widths. -/
+theorem noteCommitChunks_inj
+    {gdX gdY pkdX pkdY v rho psi gdX' gdY' pkdX' pkdY' v' rho' psi' : ℕ}
+    (h1 : gdX < 2 ^ 255) (h2 : gdY < 2) (h3 : pkdX < 2 ^ 255) (h4 : pkdY < 2)
+    (h5 : v < 2 ^ 64) (h6 : rho < 2 ^ 255) (h7 : psi < 2 ^ 255)
+    (h1' : gdX' < 2 ^ 255) (h2' : gdY' < 2) (h3' : pkdX' < 2 ^ 255) (h4' : pkdY' < 2)
+    (h5' : v' < 2 ^ 64) (h6' : rho' < 2 ^ 255) (h7' : psi' < 2 ^ 255)
+    (h : noteCommitChunks gdX gdY pkdX pkdY v rho psi
+        = noteCommitChunks gdX' gdY' pkdX' pkdY' v' rho' psi') :
+    gdX = gdX' ∧ gdY = gdY' ∧ pkdX = pkdX' ∧ pkdY = pkdY' ∧ v = v' ∧ rho = rho'
+      ∧ psi = psi' := by
+  have hK : (2 : ℕ) ^ (K * 109) = 2 ^ 1090 := by norm_num [K]
+  have hbound : ∀ {a b c d e f g : ℕ}, a < 2 ^ 255 → b < 2 → c < 2 ^ 255 → d < 2 →
+      e < 2 ^ 64 → f < 2 ^ 255 → g < 2 ^ 255 →
+      noteCommitMessage a b c d e f g < 2 ^ (K * 109) := by
+    intro a b c d e f g ha hb hc hd he hf hg
+    unfold noteCommitMessage
+    rw [hK]
+    omega
+  have hmsg := chunksOf_inj (hbound h1 h2 h3 h4 h5 h6 h7)
+    (hbound h1' h2' h3' h4' h5' h6' h7') h
+  exact noteCommitMessage_inj h1 h2 h3 h4 h5 h6 h7 h1' h2' h3' h4' h5' h6' h7' hmsg
+
 /-- The 109 message chunks tile into the 8 Sinsemilla message pieces `a..h` at their
 `K`-bit boundaries: piece sizes `25, 1, 25, 6, 1, 25, 25, 1` chunks starting at bits
 `0, 250, 260, 510, 570, 580, 830, 1080`. -/
@@ -459,6 +556,32 @@ def commitIvkMessage (ak nk : ℕ) : ℕ :=
 /-- The 51 `K`-bit chunks of the `CommitIvk` message (510 bits = 51 chunks). -/
 def commitIvkChunks (ak nk : ℕ) : List ℕ :=
   chunksOf (commitIvkMessage ak nk) 51
+
+/-- The 51-chunk `CommitIvk` message encoding is injective on 255-bit components. -/
+theorem commitIvkChunks_inj {ak nk ak' nk' : ℕ}
+    (ha : ak < 2 ^ 255) (hn : nk < 2 ^ 255) (ha' : ak' < 2 ^ 255) (hn' : nk' < 2 ^ 255)
+    (h : commitIvkChunks ak nk = commitIvkChunks ak' nk') : ak = ak' ∧ nk = nk' := by
+  have hbound : ∀ {x y : ℕ}, x < 2 ^ 255 → y < 2 ^ 255 →
+      commitIvkMessage x y < 2 ^ (K * 51) := by
+    intro x y hx hy
+    unfold commitIvkMessage
+    have hK : (2 : ℕ) ^ (K * 51) = 2 ^ 255 * 2 ^ 255 := by
+      rw [← pow_add]; norm_num [K]
+    calc x + 2 ^ 255 * y < 2 ^ 255 + 2 ^ 255 * y := by omega
+      _ = 2 ^ 255 * (y + 1) := by ring
+      _ ≤ 2 ^ 255 * 2 ^ 255 := Nat.mul_le_mul_left _ hy
+      _ = 2 ^ (K * 51) := hK.symm
+  have hmsg : commitIvkMessage ak nk = commitIvkMessage ak' nk' :=
+    chunksOf_inj (hbound ha hn) (hbound ha' hn') h
+  unfold commitIvkMessage at hmsg
+  have hak : ak = ak' := by
+    have hcong := congrArg (· % 2 ^ 255) hmsg
+    simp only [Nat.add_mul_mod_self_left] at hcong
+    rwa [Nat.mod_eq_of_lt ha, Nat.mod_eq_of_lt ha'] at hcong
+  refine ⟨hak, ?_⟩
+  subst hak
+  have hmul : 2 ^ 255 * nk = 2 ^ 255 * nk' := by omega
+  exact Nat.eq_of_mul_eq_mul_left (Nat.two_pow_pos 255) hmul
 
 /-- The 51 message chunks tile into the 4 Sinsemilla message pieces `a, b, c, d` at their
 `K`-bit boundaries: piece sizes `25, 1, 24, 1` chunks starting at bits `0, 250, 260, 500`. -/

@@ -40,21 +40,60 @@ deriving ProvableStruct
 def toDonor (row : Row Fp) : DRow Fp :=
   { value := row.value, d2 := row.d2, d3 := row.d3, e0 := row.e0 }
 
+def synthesisSummary (cfg : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns
+    [.selector cfg.qNotecommitValue.index,
+      .column .advice cfg.colL.index,
+      .column .advice cfg.colM.index,
+      .column .advice cfg.colR.index,
+      .column .advice cfg.colZ.index]
+    (offset + 1) 0
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_hasNoFixedColumns (cfg : Config) (offset : ℕ) :
+    (synthesisSummary cfg offset).HasNoFixedColumns := by
+  unfold synthesisSummary
+  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
+
+def bundleSynthesize (cfg : Config) (offset : ℕ)
+    (input : Var Row Fp) : RegionCircuit Fp Unit := do
+  (gate cfg).enable offset
+  let _v ← copyAdvice input.value cfg.colL offset
+  let _d2 ← copyAdvice input.d2 cfg.colM offset
+  let _d3 ← copyAdvice input.d3 cfg.colR offset
+  let _e0 ← copyAdvice input.e0 cfg.colZ offset
+  pure ()
+
 /-- Rust `ValueCanonicity::assign` (`note_commit.rs:994-1035`): pure copies. `Spec` is
 the donor `ValueCanonicity.Gate.Spec` (canonical 64-bit value with its slices);
 `Assumptions` the donor rely-conditions (the slices are range-checked). -/
 def bundle : FormalRegionCircuit Fp Config Config Row unit where
   configure := pure
-  elaborated := { keygenRequirements := { gates cfg _ := [gate cfg] } }
-
-  synthesize cfg offset (input : Row (AssignedCell Fp)) := do
-    (gate cfg).enable offset
-    let _v ← copyAdvice input.value cfg.colL offset
-    let _d2 ← copyAdvice input.d2 cfg.colM offset
-    let _d3 ← copyAdvice input.d3 cfg.colR offset
-    let _e0 ← copyAdvice input.e0 cfg.colZ offset
-    pure ()
-
+  synthesize := bundleSynthesize
+  elaborated :=
+    { keygenRequirements :=
+        { gates cfg _ := [gate cfg]
+          permutationColumns cfg _ :=
+            [cfg.colL, cfg.colM, cfg.colR, cfg.colZ]
+          inputCells _ _ input :=
+            [input.value.cell, input.d2.cell, input.d3.cell, input.e0.cell] }
+      copyCellsAssigned := by keygen_registration [bundleSynthesize]
+      synthesisSummary cfg offset _ _ := ValueCanonicity.synthesisSummary cfg offset
+      synthesisSummary_eq := by
+        intro _ _ _ _
+        apply FloorPlanner.RegionSynthesisSummary.ext
+        · simp only [ValueCanonicity.synthesisSummary, bundleSynthesize, circuit_norm,
+            synthesis_summary_norm]
+        · simp only [ValueCanonicity.synthesisSummary, bundleSynthesize, circuit_norm,
+            synthesis_summary_norm]
+        · simp only [ValueCanonicity.synthesisSummary, bundleSynthesize, circuit_norm,
+            synthesis_summary_norm]
+        · simp only [ValueCanonicity.synthesisSummary, bundleSynthesize, circuit_norm,
+            synthesis_summary_norm]
+        · simp only [ValueCanonicity.synthesisSummary, bundleSynthesize, circuit_norm,
+            synthesis_summary_norm] }
   Assumptions input := DAssumptions (toDonor input)
 
   Spec input _ _ := DSpec (toDonor input)
@@ -73,6 +112,12 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
   completeness := by
     circuit_proof_start [gate]
     linear_combination -hPA
+
+@[synthesis_summary_norm]
+theorem bundle_synthesisSummary_eq (cfg : Config) (offset : ℕ)
+    (input : Var Row Fp) (region : RegionIndex) :
+    bundle.elaborated.synthesisSummary cfg offset input region =
+      synthesisSummary cfg offset := rfl
 
 derive_contract_bridges bundle := bundle
 
@@ -98,23 +143,72 @@ deriving ProvableStruct
 def toDonor (row : Row Fp) : DRow Fp :=
   ⟨row.gdX, row.b0, row.b1, row.a, row.aPrime, row.z13A, row.z13APrime⟩
 
+def synthesisSummary (cfg : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns
+    [.column .advice cfg.colL.index,
+      .column .advice cfg.colM.index,
+      .column .advice cfg.colM.index,
+      .column .advice cfg.colR.index,
+      .column .advice cfg.colR.index,
+      .column .advice cfg.colZ.index,
+      .column .advice cfg.colZ.index,
+      .selector cfg.qNotecommitGd.index]
+    (offset + 2) 0
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_hasNoFixedColumns (cfg : Config) (offset : ℕ) :
+    (synthesisSummary cfg offset).HasNoFixedColumns := by
+  unfold synthesisSummary
+  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
+
+def bundleSynthesize (cfg : Config) (offset : ℕ)
+    (input : Var Row Fp) : RegionCircuit Fp Unit := do
+  let _x ← copyAdvice input.gdX cfg.colL offset
+  let _b0 ← copyAdvice input.b0 cfg.colM offset
+  let _b1 ← copyAdvice input.b1 cfg.colM (offset + 1)
+  let _a ← copyAdvice input.a cfg.colR offset
+  let _ap ← copyAdvice input.aPrime cfg.colR (offset + 1)
+  let _z ← copyAdvice input.z13A cfg.colZ offset
+  let _zp ← copyAdvice input.z13APrime cfg.colZ (offset + 1)
+  (gate cfg).enable offset
+  pure ()
+
+@[reducible]
+def bundleElaborated :
+    ElaboratedRegionCircuit Fp Config Config Row unit pure bundleSynthesize :=
+  { keygenRequirements :=
+      { gates cfg _ := [gate cfg]
+        permutationColumns cfg _ :=
+          [cfg.colL, cfg.colM, cfg.colR, cfg.colZ]
+        inputCells _ _ input :=
+          [input.gdX.cell, input.b0.cell, input.b1.cell, input.a.cell,
+            input.aPrime.cell, input.z13A.cell, input.z13APrime.cell] }
+    copyCellsAssigned := by keygen_registration [bundleSynthesize]
+    synthesisSummary cfg offset _ _ := synthesisSummary cfg offset
+    synthesisSummary_eq := by
+      intro _ _ _ _
+      apply FloorPlanner.RegionSynthesisSummary.ext
+      · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+          synthesis_summary_norm]
+      · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+          synthesis_summary_norm]
+        omega
+      · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+          synthesis_summary_norm]
+      · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+          synthesis_summary_norm]
+      · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+          synthesis_summary_norm] }
+
 /-- Rust `GdCanonicity::assign` (`note_commit.rs:789-841`): pure copies (rows 0/1 of
 `col_l/m/r/z`), gate enabled at row 0. `Spec`/`Assumptions` are the donor
 `GdCanonicity.Gate` contract; the canonicity value argument is the donor `spec_of_eqs`. -/
 def bundle : FormalRegionCircuit Fp Config Config Row unit where
   configure := pure
-  elaborated := { keygenRequirements := { gates cfg _ := [gate cfg] } }
-
-  synthesize cfg offset (input : Row (AssignedCell Fp)) := do
-    let _x ← copyAdvice input.gdX cfg.colL offset
-    let _b0 ← copyAdvice input.b0 cfg.colM offset
-    let _b1 ← copyAdvice input.b1 cfg.colM (offset + 1)
-    let _a ← copyAdvice input.a cfg.colR offset
-    let _ap ← copyAdvice input.aPrime cfg.colR (offset + 1)
-    let _z ← copyAdvice input.z13A cfg.colZ offset
-    let _zp ← copyAdvice input.z13APrime cfg.colZ (offset + 1)
-    (gate cfg).enable offset
-    pure ()
+  synthesize := bundleSynthesize
+  elaborated := bundleElaborated
 
   -- input-only rely-conditions: the gate itself enforces the `a'` shift (constraint 2)
   Assumptions input := IsBool input.b1 ∧ input.a.val < 2 ^ 250 ∧
@@ -161,6 +255,12 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
     · linear_combination he4
     · linear_combination he5
 
+@[synthesis_summary_norm]
+theorem bundle_synthesisSummary_eq (cfg : Config) (offset : ℕ)
+    (input : Var Row Fp) (region : RegionIndex) :
+    bundle.elaborated.synthesisSummary cfg offset input region =
+      synthesisSummary cfg offset := rfl
+
 derive_contract_bridges bundle := bundle
 
 end GdCanonicity
@@ -185,24 +285,73 @@ deriving ProvableStruct
 def toDonor (row : Row Fp) : DRow Fp :=
   ⟨row.pkdX, row.b3, row.d0, row.c, row.b3CPrime, row.z13C, row.z14B3CPrime⟩
 
+def synthesisSummary (cfg : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns
+    [.column .advice cfg.colL.index,
+      .column .advice cfg.colM.index,
+      .column .advice cfg.colM.index,
+      .column .advice cfg.colR.index,
+      .column .advice cfg.colR.index,
+      .column .advice cfg.colZ.index,
+      .column .advice cfg.colZ.index,
+      .selector cfg.qNotecommitPkd.index]
+    (offset + 2) 0
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_hasNoFixedColumns (cfg : Config) (offset : ℕ) :
+    (synthesisSummary cfg offset).HasNoFixedColumns := by
+  unfold synthesisSummary
+  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
+
+def bundleSynthesize (cfg : Config) (offset : ℕ)
+    (input : Var Row Fp) : RegionCircuit Fp Unit := do
+  let _x ← copyAdvice input.pkdX cfg.colL offset
+  let _b3 ← copyAdvice input.b3 cfg.colM offset
+  let _d0 ← copyAdvice input.d0 cfg.colM (offset + 1)
+  let _c ← copyAdvice input.c cfg.colR offset
+  let _ap ← copyAdvice input.b3CPrime cfg.colR (offset + 1)
+  let _z ← copyAdvice input.z13C cfg.colZ offset
+  let _zp ← copyAdvice input.z14B3CPrime cfg.colZ (offset + 1)
+  (gate cfg).enable offset
+  pure ()
+
+theorem bundleSynthesisSummary_eq (cfg : Config) (offset : ℕ)
+    (input : Var Row Fp) (self : RegionIndex) :
+    synthesisSummary cfg offset =
+      FloorPlanner.regionSynthesisSummary
+        ((bundleSynthesize cfg offset input).operations self) := by
+  apply FloorPlanner.RegionSynthesisSummary.ext
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
+    omega
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
+
 /-- Rust `PkdCanonicity::assign` (`note_commit.rs:789-841`): pure copies (rows 0/1 of
 `col_l/m/r/z`), gate enabled at row 0. `Spec`/`Assumptions` are the donor
 `PkdCanonicity.Gate` contract; the canonicity value argument is the donor `spec_of_eqs`. -/
 def bundle : FormalRegionCircuit Fp Config Config Row unit where
   configure := pure
-  elaborated := { keygenRequirements := { gates cfg _ := [gate cfg] } }
-
-  synthesize cfg offset (input : Row (AssignedCell Fp)) := do
-    let _x ← copyAdvice input.pkdX cfg.colL offset
-    let _b3 ← copyAdvice input.b3 cfg.colM offset
-    let _d0 ← copyAdvice input.d0 cfg.colM (offset + 1)
-    let _c ← copyAdvice input.c cfg.colR offset
-    let _ap ← copyAdvice input.b3CPrime cfg.colR (offset + 1)
-    let _z ← copyAdvice input.z13C cfg.colZ offset
-    let _zp ← copyAdvice input.z14B3CPrime cfg.colZ (offset + 1)
-    (gate cfg).enable offset
-    pure ()
-
+  synthesize := bundleSynthesize
+  elaborated :=
+    { keygenRequirements :=
+        { gates cfg _ := [gate cfg]
+          permutationColumns cfg _ :=
+            [cfg.colL, cfg.colM, cfg.colR, cfg.colZ]
+          inputCells _ _ input :=
+            [input.pkdX.cell, input.b3.cell, input.d0.cell, input.c.cell,
+              input.b3CPrime.cell, input.z13C.cell, input.z14B3CPrime.cell] }
+      copyCellsAssigned := by keygen_registration [bundleSynthesize]
+      synthesisSummary cfg offset _ _ := PkdCanonicity.synthesisSummary cfg offset
+      synthesisSummary_eq := bundleSynthesisSummary_eq }
   -- input-only rely-conditions: the gate itself enforces the shift (constraint 2)
   Assumptions input := IsBool input.d0 ∧ input.c.val < 2 ^ 250 ∧
     input.b3.val < 2 ^ 4 ∧
@@ -248,6 +397,12 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
     · linear_combination he3
     · linear_combination he4
 
+@[synthesis_summary_norm]
+theorem bundle_synthesisSummary_eq (cfg : Config) (offset : ℕ)
+    (input : Var Row Fp) (region : RegionIndex) :
+    bundle.elaborated.synthesisSummary cfg offset input region =
+      synthesisSummary cfg offset := rfl
+
 derive_contract_bridges bundle := bundle
 
 end PkdCanonicity
@@ -272,24 +427,73 @@ deriving ProvableStruct
 def toDonor (row : Row Fp) : DRow Fp :=
   ⟨row.rho, row.e1, row.g0, row.f, row.e1FPrime, row.z13F, row.z14E1FPrime⟩
 
+def synthesisSummary (cfg : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns
+    [.column .advice cfg.colL.index,
+      .column .advice cfg.colM.index,
+      .column .advice cfg.colM.index,
+      .column .advice cfg.colR.index,
+      .column .advice cfg.colR.index,
+      .column .advice cfg.colZ.index,
+      .column .advice cfg.colZ.index,
+      .selector cfg.qNotecommitRho.index]
+    (offset + 2) 0
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_hasNoFixedColumns (cfg : Config) (offset : ℕ) :
+    (synthesisSummary cfg offset).HasNoFixedColumns := by
+  unfold synthesisSummary
+  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
+
+def bundleSynthesize (cfg : Config) (offset : ℕ)
+    (input : Var Row Fp) : RegionCircuit Fp Unit := do
+  let _x ← copyAdvice input.rho cfg.colL offset
+  let _e1 ← copyAdvice input.e1 cfg.colM offset
+  let _g0 ← copyAdvice input.g0 cfg.colM (offset + 1)
+  let _f ← copyAdvice input.f cfg.colR offset
+  let _ap ← copyAdvice input.e1FPrime cfg.colR (offset + 1)
+  let _z ← copyAdvice input.z13F cfg.colZ offset
+  let _zp ← copyAdvice input.z14E1FPrime cfg.colZ (offset + 1)
+  (gate cfg).enable offset
+  pure ()
+
+theorem bundleSynthesisSummary_eq (cfg : Config) (offset : ℕ)
+    (input : Var Row Fp) (self : RegionIndex) :
+    synthesisSummary cfg offset =
+      FloorPlanner.regionSynthesisSummary
+        ((bundleSynthesize cfg offset input).operations self) := by
+  apply FloorPlanner.RegionSynthesisSummary.ext
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
+    omega
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
+
 /-- Rust `RhoCanonicity::assign` (`note_commit.rs:789-841`): pure copies (rows 0/1 of
 `col_l/m/r/z`), gate enabled at row 0. `Spec`/`Assumptions` are the donor
 `RhoCanonicity.Gate` contract; the canonicity value argument is the donor `spec_of_eqs`. -/
 def bundle : FormalRegionCircuit Fp Config Config Row unit where
   configure := pure
-  elaborated := { keygenRequirements := { gates cfg _ := [gate cfg] } }
-
-  synthesize cfg offset (input : Row (AssignedCell Fp)) := do
-    let _x ← copyAdvice input.rho cfg.colL offset
-    let _e1 ← copyAdvice input.e1 cfg.colM offset
-    let _g0 ← copyAdvice input.g0 cfg.colM (offset + 1)
-    let _f ← copyAdvice input.f cfg.colR offset
-    let _ap ← copyAdvice input.e1FPrime cfg.colR (offset + 1)
-    let _z ← copyAdvice input.z13F cfg.colZ offset
-    let _zp ← copyAdvice input.z14E1FPrime cfg.colZ (offset + 1)
-    (gate cfg).enable offset
-    pure ()
-
+  synthesize := bundleSynthesize
+  elaborated :=
+    { keygenRequirements :=
+        { gates cfg _ := [gate cfg]
+          permutationColumns cfg _ :=
+            [cfg.colL, cfg.colM, cfg.colR, cfg.colZ]
+          inputCells _ _ input :=
+            [input.rho.cell, input.e1.cell, input.g0.cell, input.f.cell,
+              input.e1FPrime.cell, input.z13F.cell, input.z14E1FPrime.cell] }
+      copyCellsAssigned := by keygen_registration [bundleSynthesize]
+      synthesisSummary cfg offset _ _ := RhoCanonicity.synthesisSummary cfg offset
+      synthesisSummary_eq := bundleSynthesisSummary_eq }
   -- input-only rely-conditions: the gate itself enforces the shift (constraint 2)
   Assumptions input := IsBool input.g0 ∧ input.f.val < 2 ^ 250 ∧
     input.e1.val < 2 ^ 4 ∧
@@ -335,6 +539,12 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
     · linear_combination he3
     · linear_combination he4
 
+@[synthesis_summary_norm]
+theorem bundle_synthesisSummary_eq (cfg : Config) (offset : ℕ)
+    (input : Var Row Fp) (region : RegionIndex) :
+    bundle.elaborated.synthesisSummary cfg offset input region =
+      synthesisSummary cfg offset := rfl
+
 derive_contract_bridges bundle := bundle
 
 end RhoCanonicity
@@ -360,25 +570,76 @@ deriving ProvableStruct
 def toDonor (row : Row Fp) : DRow Fp :=
   ⟨row.psi, row.h0, row.g1, row.h1, row.g2, row.g1G2Prime, row.z13G, row.z13G1G2Prime⟩
 
+def synthesisSummary (cfg : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns
+    [.column .advice cfg.colL.index,
+      .column .advice cfg.colL.index,
+      .column .advice cfg.colM.index,
+      .column .advice cfg.colM.index,
+      .column .advice cfg.colR.index,
+      .column .advice cfg.colR.index,
+      .column .advice cfg.colZ.index,
+      .column .advice cfg.colZ.index,
+      .selector cfg.qNotecommitPsi.index]
+    (offset + 2) 0
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_hasNoFixedColumns (cfg : Config) (offset : ℕ) :
+    (synthesisSummary cfg offset).HasNoFixedColumns := by
+  unfold synthesisSummary
+  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
+
+def bundleSynthesize (cfg : Config) (offset : ℕ)
+    (input : Var Row Fp) : RegionCircuit Fp Unit := do
+  let _p ← copyAdvice input.psi cfg.colL offset
+  let _h0 ← copyAdvice input.h0 cfg.colL (offset + 1)
+  let _g1 ← copyAdvice input.g1 cfg.colM offset
+  let _h1 ← copyAdvice input.h1 cfg.colM (offset + 1)
+  let _g2 ← copyAdvice input.g2 cfg.colR offset
+  let _gp ← copyAdvice input.g1G2Prime cfg.colR (offset + 1)
+  let _z ← copyAdvice input.z13G cfg.colZ offset
+  let _zp ← copyAdvice input.z13G1G2Prime cfg.colZ (offset + 1)
+  (gate cfg).enable offset
+  pure ()
+
+theorem bundleSynthesisSummary_eq (cfg : Config) (offset : ℕ)
+    (input : Var Row Fp) (self : RegionIndex) :
+    synthesisSummary cfg offset =
+      FloorPlanner.regionSynthesisSummary
+        ((bundleSynthesize cfg offset input).operations self) := by
+  apply FloorPlanner.RegionSynthesisSummary.ext
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
+    omega
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
+
 /-- Rust `PsiCanonicity::assign` (`note_commit.rs:1240-1274`): pure copies (rows 0/1 of
 `col_l/m/r/z`), gate enabled at row 0. `Spec`/`Assumptions` are the donor
 `PsiCanonicity.Gate` contract. -/
 def bundle : FormalRegionCircuit Fp Config Config Row unit where
   configure := pure
-  elaborated := { keygenRequirements := { gates cfg _ := [gate cfg] } }
-
-  synthesize cfg offset (input : Row (AssignedCell Fp)) := do
-    let _p ← copyAdvice input.psi cfg.colL offset
-    let _h0 ← copyAdvice input.h0 cfg.colL (offset + 1)
-    let _g1 ← copyAdvice input.g1 cfg.colM offset
-    let _h1 ← copyAdvice input.h1 cfg.colM (offset + 1)
-    let _g2 ← copyAdvice input.g2 cfg.colR offset
-    let _gp ← copyAdvice input.g1G2Prime cfg.colR (offset + 1)
-    let _z ← copyAdvice input.z13G cfg.colZ offset
-    let _zp ← copyAdvice input.z13G1G2Prime cfg.colZ (offset + 1)
-    (gate cfg).enable offset
-    pure ()
-
+  synthesize := bundleSynthesize
+  elaborated :=
+    { keygenRequirements :=
+        { gates cfg _ := [gate cfg]
+          permutationColumns cfg _ :=
+            [cfg.colL, cfg.colM, cfg.colR, cfg.colZ]
+          inputCells _ _ input :=
+            [input.psi.cell, input.h0.cell, input.g1.cell, input.h1.cell,
+              input.g2.cell, input.g1G2Prime.cell, input.z13G.cell,
+              input.z13G1G2Prime.cell] }
+      copyCellsAssigned := by keygen_registration [bundleSynthesize]
+      synthesisSummary cfg offset _ _ := PsiCanonicity.synthesisSummary cfg offset
+      synthesisSummary_eq := bundleSynthesisSummary_eq }
   -- input-only rely-conditions: the gate itself enforces the shift (constraint 2)
   Assumptions input := IsBool input.h1 ∧ input.g1.val < 2 ^ 9 ∧
     input.g2.val < 2 ^ 240 ∧ input.h0.val < 2 ^ 5 ∧
@@ -427,6 +688,12 @@ def bundle : FormalRegionCircuit Fp Config Config Row unit where
     · linear_combination he4
     · linear_combination he5
 
+@[synthesis_summary_norm]
+theorem bundle_synthesisSummary_eq (cfg : Config) (offset : ℕ)
+    (input : Var Row Fp) (region : RegionIndex) :
+    bundle.elaborated.synthesisSummary cfg offset input region =
+      synthesisSummary cfg offset := rfl
+
 derive_contract_bridges bundle := bundle
 
 end PsiCanonicity
@@ -454,6 +721,69 @@ def toDonor (row : Row Fp) (lsb k3 : Fp) : DRow Fp :=
   ⟨row.y, lsb, row.k0, row.k2, k3, row.j, row.z1J, row.z13J, row.jPrime,
     row.z13JPrime⟩
 
+def synthesisSummary (cfg : Config) (offset : ℕ) :
+    FloorPlanner.RegionSynthesisSummary :=
+  .ofColumns
+    [.selector cfg.qYCanon.index,
+      .column .advice (cfg.advices 5).index,
+      .column .advice (cfg.advices 6).index,
+      .column .advice (cfg.advices 7).index,
+      .column .advice (cfg.advices 8).index,
+      .column .advice (cfg.advices 9).index,
+      .column .advice (cfg.advices 5).index,
+      .column .advice (cfg.advices 6).index,
+      .column .advice (cfg.advices 7).index,
+      .column .advice (cfg.advices 8).index,
+      .column .advice (cfg.advices 9).index]
+    (offset + 2) 0
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_hasNoFixedColumns (cfg : Config) (offset : ℕ) :
+    (synthesisSummary cfg offset).HasNoFixedColumns := by
+  unfold synthesisSummary
+  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp
+
+def bundleSynthesize (wlsb wk3 : WitgenIR Fp 1) (cfg : Config) (offset : ℕ)
+    (input : Var Row Fp) : RegionCircuit Fp (Var field Fp) := do
+  (gate cfg).enable offset
+  let _y ← copyAdvice input.y (cfg.advices 5) offset
+  let lsb ← assignAdvice (cfg.advices 6) offset wlsb
+  let _k0 ← copyAdvice input.k0 (cfg.advices 7) offset
+  let _k2 ← copyAdvice input.k2 (cfg.advices 8) offset
+  let _k3 ← assignAdvice (cfg.advices 9) offset wk3
+  let _j ← copyAdvice input.j (cfg.advices 5) (offset + 1)
+  let _z1 ← copyAdvice input.z1J (cfg.advices 6) (offset + 1)
+  let _z13 ← copyAdvice input.z13J (cfg.advices 7) (offset + 1)
+  let _jp ← copyAdvice input.jPrime (cfg.advices 8) (offset + 1)
+  let _z13p ← copyAdvice input.z13JPrime (cfg.advices 9) (offset + 1)
+  pure lsb
+
+@[circuit_norm]
+theorem bundleSynthesize_output (wlsb wk3 : WitgenIR Fp 1)
+    (cfg : Config) (offset : ℕ) (input : Var Row Fp) (self : RegionIndex) :
+    (bundleSynthesize wlsb wk3 cfg offset input).output self =
+      AssignedCell.of self offset (cfg.advices 6) := by
+  simp only [bundleSynthesize, circuit_norm]
+
+theorem bundleSynthesisSummary_eq (wlsb wk3 : WitgenIR Fp 1)
+    (cfg : Config) (offset : ℕ) (input : Var Row Fp) (self : RegionIndex) :
+    synthesisSummary cfg offset =
+      FloorPlanner.regionSynthesisSummary
+        ((bundleSynthesize wlsb wk3 cfg offset input).operations self) := by
+  apply FloorPlanner.RegionSynthesisSummary.ext
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
+    omega
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
+  · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+      synthesis_summary_norm]
+
 /-- Rust `YCanonicity::assign` (`note_commit.rs:1345-1409`): `q_y_canon` at row 0; row 0
 copies `y`/`k_0`/`k_2` and witnesses `LSB`/`k_3` (the `wlsb`/`wk3` programs); row 1 copies
 `j`/`z1_j`/`z13_j`/`j_prime`/`z13_j_prime`. Output is the witnessed `lsb` cell; the
@@ -464,22 +794,20 @@ composite threads it back as a rely. -/
 def bundle (wlsb wk3 : WitgenIR Fp 1) :
     FormalRegionCircuit Fp Config Config Row field where
   configure := pure
-  elaborated := { keygenRequirements := { gates cfg _ := [gate cfg] } }
-
-  synthesize cfg offset (input : Row (AssignedCell Fp)) := do
-    (gate cfg).enable offset
-    let _y ← copyAdvice input.y (cfg.advices 5) offset
-    let lsb ← assignAdvice (cfg.advices 6) offset wlsb
-    let _k0 ← copyAdvice input.k0 (cfg.advices 7) offset
-    let _k2 ← copyAdvice input.k2 (cfg.advices 8) offset
-    let _k3 ← assignAdvice (cfg.advices 9) offset wk3
-    let _j ← copyAdvice input.j (cfg.advices 5) (offset + 1)
-    let _z1 ← copyAdvice input.z1J (cfg.advices 6) (offset + 1)
-    let _z13 ← copyAdvice input.z13J (cfg.advices 7) (offset + 1)
-    let _jp ← copyAdvice input.jPrime (cfg.advices 8) (offset + 1)
-    let _z13p ← copyAdvice input.z13JPrime (cfg.advices 9) (offset + 1)
-    pure lsb
-
+  synthesize := bundleSynthesize wlsb wk3
+  elaborated :=
+    { keygenRequirements :=
+        { gates cfg _ := [gate cfg]
+          permutationColumns cfg _ :=
+            [cfg.advices 5, cfg.advices 6, cfg.advices 7,
+              cfg.advices 8, cfg.advices 9]
+          inputCells _ _ input :=
+            [input.y.cell, input.k0.cell, input.k2.cell, input.j.cell,
+              input.z1J.cell, input.z13J.cell, input.jPrime.cell,
+              input.z13JPrime.cell] }
+      copyCellsAssigned := by keygen_registration [bundleSynthesize]
+      synthesisSummary cfg offset _ _ := YCanonicity.synthesisSummary cfg offset
+      synthesisSummary_eq := bundleSynthesisSummary_eq wlsb wk3 }
   Witness := fieldPair
   extract cfg offset _ self env :=
     (eval env (AssignedCell.of self offset (cfg.advices 6) : Var field Fp),
@@ -552,8 +880,51 @@ def bundle (wlsb wk3 : WitgenIR Fp 1) :
     · linear_combination he6
     · linear_combination he7
 
+@[synthesis_summary_norm]
+theorem bundle_synthesisSummary_eq (wlsb wk3 : WitgenIR Fp 1)
+    (cfg : Config) (offset : ℕ) (input : Var Row Fp)
+    (region : RegionIndex) :
+    (bundle wlsb wk3).elaborated.synthesisSummary cfg offset input region =
+      synthesisSummary cfg offset := rfl
+
 derive_contract_bridges bundle (wlsb wk3 : WitgenIR Fp 1) := bundle wlsb wk3
 
 end YCanonicity
+
+@[synthesis_summary_norm]
+theorem ValueCanonicity.synthesisSummary_lookupActivationCount
+    (cfg : ValueCanonicity.Config) (offset : ℕ) :
+    (ValueCanonicity.synthesisSummary cfg offset).lookupActivationCount = 0 := by
+  simp only [ValueCanonicity.synthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem GdCanonicity.synthesisSummary_lookupActivationCount
+    (cfg : GdCanonicity.Config) (offset : ℕ) :
+    (GdCanonicity.synthesisSummary cfg offset).lookupActivationCount = 0 := by
+  simp only [GdCanonicity.synthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem PkdCanonicity.synthesisSummary_lookupActivationCount
+    (cfg : PkdCanonicity.Config) (offset : ℕ) :
+    (PkdCanonicity.synthesisSummary cfg offset).lookupActivationCount = 0 := by
+  simp only [PkdCanonicity.synthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem RhoCanonicity.synthesisSummary_lookupActivationCount
+    (cfg : RhoCanonicity.Config) (offset : ℕ) :
+    (RhoCanonicity.synthesisSummary cfg offset).lookupActivationCount = 0 := by
+  simp only [RhoCanonicity.synthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem PsiCanonicity.synthesisSummary_lookupActivationCount
+    (cfg : PsiCanonicity.Config) (offset : ℕ) :
+    (PsiCanonicity.synthesisSummary cfg offset).lookupActivationCount = 0 := by
+  simp only [PsiCanonicity.synthesisSummary, synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem YCanonicity.synthesisSummary_lookupActivationCount
+    (cfg : YCanonicity.Config) (offset : ℕ) :
+    (YCanonicity.synthesisSummary cfg offset).lookupActivationCount = 0 := by
+  simp only [YCanonicity.synthesisSummary, synthesis_summary_norm]
 
 end Zcash.Circuits.NoteCommit

@@ -1,4 +1,5 @@
 import Lean.Data.Json
+import Lean.Util.Path
 import Clean.Ironwood.Fixtures.FixtureTypes
 
 /-!
@@ -36,7 +37,32 @@ drift after regeneration, parse error) is an `IO` error → a build failure at t
 consuming `#eval`. -/
 def hex (u : UInt64) : String := String.ofList (Nat.toDigits 16 u.toNat)
 
+private def packageSourceRoot : IO System.FilePath := do
+  let searchPath ← Lean.searchPathRef.get
+  let relativeOLean := System.FilePath.mk "Clean/Ironwood/Fixtures/Json.olean"
+  let some oleanRoot ← searchPath.findM? fun root =>
+      (root / relativeOLean).pathExists
+    | throw <| IO.userError "could not locate the Clean package in LEAN_PATH"
+  let some libDir := oleanRoot.parent
+    | throw <| IO.userError s!"unexpected Clean build path: {oleanRoot}"
+  let some buildDir := libDir.parent
+    | throw <| IO.userError s!"unexpected Clean build path: {oleanRoot}"
+  let some lakeDir := buildDir.parent
+    | throw <| IO.userError s!"unexpected Clean build path: {oleanRoot}"
+  let some packageRoot := lakeDir.parent
+    | throw <| IO.userError s!"unexpected Clean build path: {oleanRoot}"
+  pure packageRoot
+
+private def resolveSourcePath (path : System.FilePath) : IO System.FilePath := do
+  if ← path.pathExists then
+    return path
+  let candidate := (← packageSourceRoot) / path
+  unless ← candidate.pathExists do
+    throw <| IO.userError s!"fixture not found at {path} or {candidate}"
+  pure candidate
+
 def loadJsonChecked (path : System.FilePath) (expectedHash : UInt64) : IO Json := do
+  let path ← resolveSourcePath path
   let bytes ← IO.FS.readBinFile path
   let h := fnv1a bytes
   unless h == expectedHash do

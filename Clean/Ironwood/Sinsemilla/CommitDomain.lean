@@ -144,7 +144,8 @@ private theorem commit_regionCount
 def keygenRequirements (G : Generators) (ns : List ℕ)
     (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ []) :
     KeygenRequirements Fp
-      (Ecc.MulFixed.FullWidth.Config × HashPiece.Config × Ecc.Add.Config) where
+      (Ecc.MulFixed.FullWidth.Config × HashPiece.Config × Ecc.Add.Config)
+      (Var (Input ns.length) Fp) where
   configLawful cfg :=
     (Ecc.MulFixed.FullWidth.circuit R).Configured cfg.1 ×
       (HashToPoint.hashCircuit G ns Q hQ hns).Configured cfg.2.1 ×
@@ -154,6 +155,48 @@ def keygenRequirements (G : Generators) (ns : List ℕ)
   lookups _ configured :=
     configured.1.lookups ++ configured.2.1.lookups ++
       configured.2.2.lookups
+  fixedColumns _ configured :=
+    configured.1.fixedColumns ++ configured.2.1.fixedColumns ++
+      configured.2.2.fixedColumns
+  permutationColumns _ configured :=
+    configured.1.permutationColumns ++ configured.2.1.permutationColumns ++
+      configured.2.2.permutationColumns
+  inputCells _ _ input :=
+    input.pieces.toList.map (·.cell)
+
+def commitSynthesisSummary (ns : List ℕ)
+    (cfg : Ecc.MulFixed.FullWidth.Config × HashPiece.Config × Ecc.Add.Config) :
+    FloorPlanner.SynthesisSummary :=
+  (Ecc.MulFixed.FullWidth.circuitSynthesisSummary cfg.1).combine
+    ((HashToPoint.hashCircuitSynthesisSummary ns cfg.2.1).combine
+      (FloorPlanner.SynthesisSummary.ofRegion
+        (Ecc.Add.synthesisSummary cfg.2.2 0)))
+
+@[synthesis_summary_norm]
+theorem commitSynthesisSummary_lookupActivationCount
+    (ns : List ℕ)
+    (cfg : Ecc.MulFixed.FullWidth.Config × HashPiece.Config × Ecc.Add.Config) :
+    (commitSynthesisSummary ns cfg).lookupActivationCount =
+      (List.ofFn fun i : Fin ns.length => ns.getD i.val 0 + 1).sum := by
+  simp only [commitSynthesisSummary, synthesis_summary_norm, Nat.zero_add,
+    Nat.add_zero]
+
+@[synthesis_summary_norm]
+theorem commitSynthesisSummary_tableRowExtent_eq (ns : List ℕ)
+    (cfg : Ecc.MulFixed.FullWidth.Config × HashPiece.Config × Ecc.Add.Config) :
+    (commitSynthesisSummary ns cfg).tableRowExtent = 0 := by
+  simp only [commitSynthesisSummary, synthesis_summary_norm]
+
+def synthesize (G : Generators) (ns : List ℕ) (R : FixedBase)
+    (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ [])
+    (cfg : Ecc.MulFixed.FullWidth.Config × HashPiece.Config × Ecc.Add.Config)
+    (input : Var (Input ns.length) Fp) : Circuit Fp (Var Point Fp) := do
+  let blindOut ← (Ecc.MulFixed.FullWidth.circuit R).call cfg.1 input.r
+  let hashOut ← (HashToPoint.hashCircuit G ns Q hQ hns).call cfg.2.1
+    { pieces := input.pieces }
+  let result ← Ecc.Add.addFormal.call cfg.2.2
+    { p := hashOut.point, q := blindOut }
+  pure result
 
 /-- `CommitDomain::commit`: `[r]R` (the `Ecc.MulFixed.FullWidth` bundle), `hash_to_point(Q, msg)`
 (the hash bundle), and the final complete addition `M + [r]R`. `Spec`: the commitment is
@@ -170,30 +213,159 @@ def commit (G : Generators) (ns : List ℕ)
   name := "sinsemilla commit"
   configure := pure
 
-  synthesize := fun (bcfg, hcfg, acfg) input => do
-    let blindOut ← (Ecc.MulFixed.FullWidth.circuit R).call bcfg input.r
-    let hashOut ← (HashToPoint.hashCircuit G ns Q hQ hns).call hcfg
-      { pieces := input.pieces }
-    let result ← Ecc.Add.addFormal.call acfg
-      { p := hashOut.point, q := blindOut }
-    pure result
+  synthesize := synthesize G ns R Q hQ hns
 
   elaborated :=
     { keygenRequirements := keygenRequirements G ns R Q hQ hns
-      registered := by keygen_registration
-      output cfg input i :=
-        let (bcfg, hcfg, acfg) := cfg
-        ((do
-          let blindOut ← (Ecc.MulFixed.FullWidth.circuit R).call bcfg input.r
-          let hashOut ← (HashToPoint.hashCircuit G ns Q hQ hns).call hcfg
-            { pieces := input.pieces }
-          let result ← Ecc.Add.addFormal.call acfg
-            { p := hashOut.point, q := blindOut }
-          pure result : Circuit Fp (Var Point Fp)).output i)
+      registered configInput counts configured input self := by
+        have hmulAdd := Ecc.MulFixed.FullWidth.Configured.addPermutationColumns_subset
+          R configured.1
+        simp only [synthesize, Circuit.operations_bind,
+          Operations.KeygenRegistered.append, circuit_norm]
+        constructor
+        · apply (Ecc.MulFixed.FullWidth.circuit R)
+            |>.call_keygenRegistered configInput.1 configured.1 input.r self <;>
+              keygen_registration
+        constructor
+        · apply (HashToPoint.hashCircuit G ns Q hQ hns)
+            |>.call_keygenRegistered configInput.2.1 configured.2.1 _ (self + 2)
+          · intro gate hgate
+            simp only [keygenRequirements, Configure.delta_pure,
+              List.append_nil, List.mem_append]
+            exact Or.inl (Or.inr hgate)
+          · intro lookup hlookup
+            simp only [keygenRequirements, Configure.delta_pure,
+              List.append_nil, List.mem_append]
+            exact Or.inl (Or.inr hlookup)
+          · intro column hcolumn
+            simp only [keygenRequirements, Configure.fixedColumns_pure,
+              List.append_nil, List.mem_append]
+            exact Or.inl (Or.inr hcolumn)
+          · intro column hcolumn
+            simp only [keygenRequirements, Configure.delta_pure,
+              KeygenRequirements.inputPermutationColumns,
+              List.nil_append, List.mem_append]
+            exact Or.inl (Or.inl (Or.inr hcolumn))
+          · rw [HashToPoint.hashCircuit_inputCells,
+              List.forall_iff_forall_mem]
+            intro cell hcell
+            simp only [keygenRequirements, Configure.delta_pure,
+              KeygenRequirements.inputPermutationColumns,
+              List.nil_append, List.mem_append, List.mem_map]
+            rcases List.mem_map.mp hcell with ⟨assigned, hassigned, rfl⟩
+            exact Or.inr ⟨assigned.cell, ⟨assigned, hassigned, rfl⟩, rfl⟩
+        · apply Ecc.Add.addFormal.call_keygenRegistered
+            configInput.2.2 configured.2.2 _ (self + 3) <;>
+              keygen_registration
+      lookupSelectorAssignmentsAgree_of_registered := by
+        intro cfg counts hconfig input self program operations _hregistered
+        simp only [operations, program, Configure.output_pure, synthesize,
+          Circuit.operations_bind, Circuit.operations_pure,
+          keygen_norm, keygen_spine]
+        exact ⟨(HashToPoint.hashCircuit G ns Q hQ hns)
+            |>.call_lookupSelectorAssignmentsAgree
+              cfg.2.1 hconfig.2.1 _ _,
+          Ecc.Add.addFormal.call_lookupSelectorAssignmentsAgree
+            cfg.2.2 hconfig.2.2 _ _⟩
+      lookupSelectorsAnchoredBy_of_registered := by
+        intro cfg _ hconfig input self anchor _ _
+        simp only [synthesize, Circuit.operations_bind,
+          Circuit.operations_pure, List.append_nil, circuit_norm]
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact (Ecc.MulFixed.FullWidth.circuit R)
+            |>.call_lookupSelectorsAnchoredBy
+              cfg.1 hconfig.1 input.r self anchor (by trivial)
+        apply Operations.LookupSelectorsAnchoredBy.append
+        · exact (HashToPoint.hashCircuit G ns Q hQ hns)
+            |>.call_lookupSelectorsAnchoredBy
+              cfg.2.1 hconfig.2.1 _ (self + 2) anchor (by trivial)
+        · exact Ecc.Add.addFormal.call_lookupSelectorsAnchoredBy
+            cfg.2.2 hconfig.2.2 _ (self + 3) anchor (by trivial)
+      copyCellsAssigned := by
+        intro cfg counts configured input self
+        simp only [synthesize, Circuit.operations_bind, Circuit.operations_pure,
+          List.append_nil, Configure.output_pure, circuit_norm]
+        apply Operations.CopyCellsAssignedFrom.append
+        · apply (Ecc.MulFixed.FullWidth.circuit R)
+            |>.call_copyCellsAssignedFrom cfg.1 configured.1 input.r self
+          intro cell hcell
+          rw [Ecc.MulFixed.FullWidth.circuit_inputCells_eq] at hcell
+          contradiction
+        · apply Operations.CopyCellsAssignedFrom.append
+          · rw [Ecc.MulFixed.FullWidth.circuit_call_regionCount]
+            apply (HashToPoint.hashCircuit G ns Q hQ hns)
+              |>.call_copyCellsAssignedFrom cfg.2.1 configured.2.1 _ _
+            intro cell hcell
+            rw [HashToPoint.hashCircuit_inputCells] at hcell
+            simp only [keygenRequirements]
+            exact List.mem_append_left _ hcell
+          · simp only [circuit_norm, Nat.add_assoc]
+            apply Ecc.Add.addFormal.call_copyCellsAssignedFrom
+              cfg.2.2 configured.2.2 _ _
+            intro cell hcell
+            rw [Ecc.Add.addFormal_inputCells] at hcell
+            simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+            simp only [keygenRequirements, List.mem_append] at ⊢
+            rcases hcell with rfl | rfl | rfl | rfl
+            · exact Or.inr (Or.inr
+                (HashToPoint.hashCircuit_call_output_point_cells_assigned
+                  G ns Q hQ hns cfg.2.1 _ _).1)
+            · exact Or.inr (Or.inr
+                (HashToPoint.hashCircuit_call_output_point_cells_assigned
+                  G ns Q hQ hns cfg.2.1 _ _).2)
+            · exact Or.inr (Or.inl
+                (Ecc.MulFixed.FullWidth.circuit_call_output_cells_assigned
+                  R cfg.1 input.r self).1)
+            · exact Or.inr (Or.inl
+                (Ecc.MulFixed.FullWidth.circuit_call_output_cells_assigned
+                  R cfg.1 input.r self).2)
+      fixedWritesLawful := by
+        intro cfg _ hconfig input self
+        apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree
+        · simpa only [Configure.output_pure, synthesize,
+            Circuit.operations_bind, Circuit.operations_pure,
+            List.forall_append, circuit_norm, Nat.add_assoc] using
+            And.intro
+              ((Ecc.MulFixed.FullWidth.circuit R).call_fixedAssignmentsAgree
+                cfg.1 hconfig.1 input.r self)
+              (And.intro
+                ((HashToPoint.hashCircuit G ns Q hQ hns)
+                  |>.call_fixedAssignmentsAgree cfg.2.1 hconfig.2.1
+                    { pieces := input.pieces } (self + 2))
+                (Ecc.Add.addFormal.call_fixedAssignmentsAgree
+                  cfg.2.2 hconfig.2.2
+                    { p := (HashToPoint.hashCircuit G ns Q hQ hns).output
+                        cfg.2.1 { pieces := input.pieces } (self + 2) |>.point,
+                      q := (Ecc.MulFixed.FullWidth.circuit R).output
+                        cfg.1 input.r self }
+                    (self + 3)))
+        · simp only [synthesize, circuit_norm, synthesis_summary_norm]
+      lookupActivationsWellFormed := by
+        intro cfg input self
+        simp only [synthesize, Circuit.operations_bind, Circuit.operations_pure,
+          Operations.LookupActivationsWellFormed, List.forall_append,
+          circuit_norm]
+        exact ⟨(Ecc.MulFixed.FullWidth.circuit R)
+            |>.call_lookupActivationsWellFormed cfg.1 input.r self,
+          (HashToPoint.hashCircuit G ns Q hQ hns)
+            |>.call_lookupActivationsWellFormed cfg.2.1 _ (self + 2),
+          Ecc.Add.addFormal.call_lookupActivationsWellFormed
+            cfg.2.2 _ (self + 3)⟩
+      output cfg _ i :=
+        { x := .of (i + 3) 1 cfg.2.2.xQR
+          y := .of (i + 3) 1 cfg.2.2.yQR }
       regionCount _ := 4
-      output_eq := by intro _ _ _; rfl
+      synthesisSummary cfg _ _ := commitSynthesisSummary ns cfg
+      synthesisSummary_eq := by
+        intro cfg input region
+        simp only [synthesize, commitSynthesisSummary, circuit_norm, synthesis_summary_norm]
+      output_eq := by
+        intro _ _ _
+        simp only [synthesize, circuit_norm, keygen_output_norm]
       regionCount_eq := fun (bcfg, hcfg, acfg) input i =>
-        (commit_regionCount G ns R Q hQ hns bcfg hcfg acfg input i).symm }
+        by
+          unfold synthesize
+          exact (commit_regionCount G ns R Q hQ hns bcfg hcfg acfg input i).symm }
 
   EnvAssumptions := fun (bcfg, hcfg, _) env =>
     Sinsemilla.GeneratorTableLoaded G hcfg.generatorTable env.env ∧
@@ -274,8 +446,16 @@ def commit (G : Generators) (ns : List ℕ)
       · rw [hPB]; exact hBvalid
       · rw [hBl]; exact R.smul_valid _)
     obtain ⟨hVout, hSum⟩ := hAddS
-    refine ⟨hVout, ?_⟩
-    rw [hSum, hPB, hBl]
+    have hresult : (eval (⟨place, env⟩ : Placed Environment Fp) result
+        : Value Point Fp) = { x := output_x, y := output_y } := by
+      rw [← result_eq]
+      rw [Ecc.Add.addFormal_output, Ecc.Add.add_output_cells]
+      rw [ProvableType.Halo2.eval_cells, Sinsemilla.Chain.point_eval_literal]
+      congr 1
+      · exact output_eq.1
+      · exact output_eq.2
+    rw [← hresult]
+    exact ⟨hVout, by rw [hSum, hPB, hBl]⟩
 
   completeness := by
     circuit_proof_start2
@@ -371,8 +551,122 @@ def configurationCertificate (G : Generators) (ns : List ℕ)
     · exact mul.lookups_of_configured required hrequired
     · exact hash.lookups_of_configured required hrequired
     · exact add.lookups_of_configured required hrequired
+  · intro column hcolumn
+    simp only [commit, FormalCircuit.keygenRequirements,
+      ElaboratedCircuit.keygenRequirements, keygenRequirements,
+      Configure.fixedColumns_pure, List.append_nil, List.mem_append] at hcolumn
+    rcases hcolumn with (hmul | hhash) | hadd
+    · exact mul.fixedColumns_of_configured column hmul
+    · exact hash.fixedColumns_of_configured column hhash
+    · exact add.fixedColumns_of_configured column hadd
+  · intro column hcolumn
+    simp only [commit, FormalCircuit.keygenRequirements,
+      ElaboratedCircuit.keygenRequirements, keygenRequirements,
+      Configure.delta_pure, List.append_nil, List.mem_append] at hcolumn
+    rcases hcolumn with (hmul | hhash) | hadd
+    · exact mul.permutationColumns_of_configured column hmul
+    · exact hash.permutationColumns_of_configured column hhash
+    · exact add.permutationColumns_of_configured column hadd
+
+@[synthesis_summary_norm]
+theorem commit_synthesisSummary_eq
+    (G : Generators) (ns : List ℕ) (R : FixedBase)
+    (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ [])
+    (cfg : Ecc.MulFixed.FullWidth.Config × HashPiece.Config × Ecc.Add.Config)
+    (input : Var (Input ns.length) Fp) (region : RegionIndex) :
+    (commit G ns R Q hQ hns).elaborated.synthesisSummary cfg input region =
+      commitSynthesisSummary ns cfg := rfl
 
 derive_contract_bridges commit (G : Generators) (ns : List ℕ) (R : FixedBase)
   (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ []) := commit G ns R Q hQ hns
+
+/-- The commitment result occupies the complete-addition output columns. -/
+theorem commit_output_cells (G : Generators) (ns : List ℕ) (R : FixedBase)
+    (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ [])
+    (cfg : Ecc.MulFixed.FullWidth.Config × HashPiece.Config × Ecc.Add.Config)
+    (input : Var (Input ns.length) Fp) (i : RegionIndex) :
+    (commit G ns R Q hQ hns).output cfg input i =
+      { x := .of (i + 3) 1 cfg.2.2.xQR,
+        y := .of (i + 3) 1 cfg.2.2.yQR } := by
+  rfl
+
+/-- Both commitment coordinates are assigned by the final addition call. -/
+theorem commit_call_output_cells_assigned
+    (G : Generators) (ns : List ℕ) (R : FixedBase)
+    (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ [])
+    (cfg : Ecc.MulFixed.FullWidth.Config × HashPiece.Config × Ecc.Add.Config)
+    (input : Var (Input ns.length) Fp) (region : RegionIndex) :
+    let output := (commit G ns R Q hQ hns).output cfg input region
+    output.x.cell ∈
+        Operations.assignedCellsFrom
+          (((commit G ns R Q hQ hns).call cfg input).operations region) region ∧
+      output.y.cell ∈
+        Operations.assignedCellsFrom
+          (((commit G ns R Q hQ hns).call cfg input).operations region) region := by
+  rw [commit_output_cells, FormalCircuit.call_operations]
+  let blind := (Ecc.MulFixed.FullWidth.circuit R).output cfg.1 input.r region
+  let hash := (HashToPoint.hashCircuit G ns Q hQ hns).output cfg.2.1
+    { pieces := input.pieces } (region + 2)
+  have hadd := Ecc.Add.addFormal_call_output_cells_assigned cfg.2.2
+    { p := hash.point, q := blind } (region + 3)
+  simp only [commit, synthesize, Circuit.operations_bind, Circuit.operations_pure,
+    FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call',
+    FormalCircuit.call_regionCount', Operations.assignedCellsFrom_append,
+    circuit_norm, Ecc.Add.addFormal_output_cells, List.mem_append,
+    AssignedCell.of_cell, Nat.add_assoc, Nat.reduceAdd, blind, hash] at hadd ⊢
+  constructor
+  · exact Or.inr (Or.inr hadd.1)
+  · exact Or.inr (Or.inr hadd.2)
+
+/-- A running-sum cell assigned by the hash child remains assigned in the
+enclosing commitment call. -/
+theorem commit_call_hash_z_cell_assigned
+    (G : Generators) (ns : List ℕ) (R : FixedBase)
+    (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ [])
+    (cfg : Ecc.MulFixed.FullWidth.Config × HashPiece.Config × Ecc.Add.Config)
+    (input : Var (Input ns.length) Fp) (self : RegionIndex)
+    (i : Fin ns.length) (r : Fin (ns.getD i.val 0 + 1)) :
+    Cell.of (self + 2) (Sinsemilla.Chain.prefixRows ns i.val + r.val)
+        cfg.2.1.bits ∈
+      Operations.assignedCellsFrom
+        (((commit G ns R Q hQ hns).call cfg input).operations self) self := by
+  have hhash := HashToPoint.hashCircuit_call_z_cell_assigned
+    G ns Q hQ hns cfg.2.1 { pieces := input.pieces } (self + 2) i r
+  have hmul := Ecc.MulFixed.FullWidth.circuit_call_regionCount
+    R cfg.1 input.r self
+  rw [FormalCircuit.call_operations]
+  simp only [commit, synthesize, Circuit.operations_bind,
+    Circuit.operations_pure, List.append_nil,
+    Operations.assignedCellsFrom_append,
+    FormalCircuit.nextRegionIndex_call',
+    hmul,
+    HashToPoint.hashCircuit_call_regionCount, Nat.add_assoc]
+  exact List.mem_append.mpr
+    (Or.inr (List.mem_append.mpr (Or.inl hhash)))
+
+/-- A `z₁` cell assigned by the hash child remains assigned in the enclosing
+commitment call. -/
+theorem commit_call_hash_z1_cell_assigned
+    (G : Generators) (ns : List ℕ) (R : FixedBase)
+    (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ [])
+    (cfg : Ecc.MulFixed.FullWidth.Config × HashPiece.Config × Ecc.Add.Config)
+    (input : Var (Input ns.length) Fp) (self : RegionIndex)
+    (i : Fin ns.length) (hi : 0 < ns.getD i.val 0) :
+    ((HashToPoint.hashCircuit G ns Q hQ hns).output cfg.2.1
+        { pieces := input.pieces } (self + 2)).z1s[i].cell ∈
+      Operations.assignedCellsFrom
+        (((commit G ns R Q hQ hns).call cfg input).operations self) self := by
+  rw [HashToPoint.hashCircuit_output_z1s]
+  simpa only [Fin.getElem_fin, Vector.getElem_ofFn, AssignedCell.of_cell,
+    Nat.zero_add] using commit_call_hash_z_cell_assigned
+      G ns R Q hQ hns cfg input self i ⟨1, by omega⟩
+
+@[keygen_norm]
+theorem commit_inputCells (G : Generators) (ns : List ℕ) (R : FixedBase)
+    (Q : Point Fp) (hQ : Q.OnCurve) (hns : ns ≠ []) {cfg}
+    (configured : (commit G ns R Q hQ hns).Configured cfg)
+    (input : Var (Input ns.length) Fp) :
+    configured.inputCells input = input.pieces.toList.map fun assigned => assigned.cell := by
+  rfl
 
 end Zcash.Circuits.Sinsemilla.CommitDomain

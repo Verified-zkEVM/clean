@@ -90,7 +90,14 @@ theorem windowScalar_ne_zero {w k : ℕ} (hk : k < 8) :
   unfold windowScalar
   by_cases h21 : w = 21
   · rw [if_pos h21]
-    interval_cases k <;> native_decide
+    apply Ecc.MulFixed.offsetWindowScalar_ne_zero (by norm_num) hk
+    · rw [offsetAcc_eq]
+      exact Ecc.MulFixed.offsetSum_lt_pow 20
+    · rw [offsetAcc_eq]
+      exact Ecc.MulFixed.offsetSum_mod_eight 20
+    · norm_num [PALLAS_SCALAR_CARD]
+    · norm_num [PALLAS_SCALAR_CARD]
+    · norm_num [PALLAS_SCALAR_CARD]
   · rw [if_neg h21]
     apply mul_ne_zero
     · rw [show (k : Fq) + 2 = ((k + 2 : ℕ) : Fq) by push_cast; ring,

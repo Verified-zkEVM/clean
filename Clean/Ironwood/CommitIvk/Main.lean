@@ -115,6 +115,12 @@ structure PieceCells where
   b2 : AssignedCell Fp
   d0 : AssignedCell Fp
 
+@[keygen_norm]
+def PieceCells.permutationColumns (cells : PieceCells) : List AnyColumn :=
+  [cells.a.cell.column, cells.b.cell.column, cells.c.cell.column,
+    cells.d.cell.column, cells.b0.cell.column, cells.b2.cell.column,
+    cells.d0.cell.column]
+
 /-- Stage 1 (7 regions): the four message pieces interleaved with the three
 sub-piece short checks (`commit_ivk.rs:289-350`). -/
 def synthPieces (cfg : Config) (ak nk : AssignedCell Fp) :
@@ -177,6 +183,89 @@ theorem synthPieces_nextRegionIndex (cfg : Config) (ak nk : AssignedCell Fp)
     (synthPieces cfg ak nk).nextRegionIndex i = i + 7 := by
   rfl
 
+/-- Exact reduced footprint of the seven message-piece regions. -/
+def synthPiecesSynthesisSummary (cfg : Config) :
+    FloorPlanner.SynthesisSummary :=
+  let piece := Sinsemilla.HashToPoint.witnessMessagePieceSynthesisSummary
+    cfg.hashConfig
+  let short := LookupRangeCheck.witnessShortCheckSynthesisSummary
+    10 cfg.lookupConfig
+  [piece, short, short, piece, piece, short, piece].foldr
+    FloorPlanner.SynthesisSummary.combine {}
+
+@[synthesis_summary_norm]
+theorem synthPiecesSynthesisSummary_lookupActivationCount (cfg : Config) :
+    (synthPiecesSynthesisSummary cfg).lookupActivationCount = 6 := by
+  simp only [synthPiecesSynthesisSummary, synthesis_summary_norm,
+    List.map_cons, List.map_nil, List.sum_cons, List.sum_nil]
+  norm_num
+
+/-- Exact reduced footprint of the complete fourteen-region CommitIvk flow. -/
+def synthesisSummary (cfg : Config) : FloorPlanner.SynthesisSummary :=
+  (synthPiecesSynthesisSummary cfg).combine
+    ((Sinsemilla.CommitDomain.commitSynthesisSummary ns
+        (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)).combine
+      (Canonicity.circuitSynthesisSummary cfg.gate cfg.lookupConfig))
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_lookupActivationCount (cfg : Config) :
+    (synthesisSummary cfg).lookupActivationCount = 84 := by
+  simp only [synthesisSummary, ns, synthesis_summary_norm,
+    List.ofFn_succ, List.ofFn_zero, List.sum_cons, List.sum_nil]
+  norm_num
+
+@[synthesis_summary_norm]
+theorem synthPiecesSynthesisSummary_hasNoFixedWrites (cfg : Config) :
+    (synthPiecesSynthesisSummary cfg).HasNoFixedWrites := by
+  simp only [synthPiecesSynthesisSummary,
+    Sinsemilla.HashToPoint.witnessMessagePieceSynthesisSummary,
+    LookupRangeCheck.witnessShortCheckSynthesisSummary,
+    List.foldr_cons, List.foldr_nil, synthesis_summary_norm]
+  simp
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_tableRowExtent_eq (cfg : Config) :
+    (synthesisSummary cfg).tableRowExtent = 0 := by
+  simp only [synthesisSummary, synthPiecesSynthesisSummary,
+    Sinsemilla.CommitDomain.commitSynthesisSummary,
+    Canonicity.circuitSynthesisSummary, List.foldr_cons, List.foldr_nil,
+    LookupRangeCheck.witnessShortCheckSynthesisSummary,
+    LookupRangeCheck.witnessCheckSynthesisSummary,
+    Sinsemilla.HashToPoint.witnessMessagePieceSynthesisSummary,
+    synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem synthesisSummary_instanceRowExtent_eq (cfg : Config) :
+    (synthesisSummary cfg).instanceRowExtent = 0 := by
+  simp only [synthesisSummary, synthPiecesSynthesisSummary,
+    Sinsemilla.CommitDomain.commitSynthesisSummary,
+    Canonicity.circuitSynthesisSummary, List.foldr_cons, List.foldr_nil,
+    LookupRangeCheck.witnessShortCheckSynthesisSummary,
+    LookupRangeCheck.witnessCheckSynthesisSummary,
+    Sinsemilla.HashToPoint.witnessMessagePieceSynthesisSummary,
+    CommitIvk.synthesisSummary,
+    synthesis_summary_norm]
+
+@[synthesis_summary_norm]
+theorem synthPieces_synthesisSummary_eq (cfg : Config)
+    (ak nk : AssignedCell Fp) (region : RegionIndex) :
+    FloorPlanner.synthesisSummary
+        ((synthPieces cfg ak nk).operations region) =
+      synthPiecesSynthesisSummary cfg := by
+  simp only [synthPiecesSynthesisSummary, synthPieces, circuit_norm,
+    synthesis_summary_norm, List.foldr_cons, List.foldr_nil,
+    FloorPlanner.SynthesisSummary.combine_empty]
+
+@[synthesis_summary_norm]
+theorem synth_synthesisSummary_eq
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (region : RegionIndex) :
+    FloorPlanner.synthesisSummary
+        ((synth G R Q hQ cfg input).operations region) =
+      synthesisSummary cfg := by
+  simp only [synthesisSummary, synth, circuit_norm, synthesis_summary_norm]
+
+@[keygen_output_norm]
 theorem synthPieces_output (cfg : Config) (ak nk : AssignedCell Fp)
     (i : RegionIndex) :
     (synthPieces cfg ak nk).output i
@@ -189,14 +278,53 @@ theorem synthPieces_output (cfg : Config) (ak nk : AssignedCell Fp)
           d0 := .of (i + 5) 0 cfg.lookupConfig.runningSum } := by
   rfl
 
+@[keygen_output_norm]
+theorem synth_output (G : Generators) (R : FixedBase)
+    (Q : Point Fp) (hQ : Q.OnCurve) (cfg : Config)
+    (input : Var Inputs Fp) (i : RegionIndex) :
+    (synth G R Q hQ cfg input).output i =
+      AssignedCell.of (i + 10) 1 cfg.addConfig.xQR := by
+  simp only [synth, Circuit.output_bind, Circuit.output_pure,
+    NoteCommit.Main.currentRegion_output,
+    NoteCommit.Main.currentRegion_nextRegionIndex,
+    synthPieces_output, synthPieces_nextRegionIndex,
+    FormalCircuit.output_call', FormalCircuit.nextRegionIndex_call',
+    Sinsemilla.CommitDomain.commit_output, Nat.add_assoc, Nat.reduceAdd]
+
 /-! ## The bundle contract -/
 
 open Specs.Sinsemilla (hashToPoint hashToPointB SpecOrBreak commitIvkChunks)
 open CompElliptic.Fields.Pasta (Fq)
 
+def permutationColumns (cfg : Config) (childColumns : List AnyColumn) :
+    List AnyColumn :=
+  ([cfg.hashConfig.witnessPieces, cfg.hashConfig.bits,
+      cfg.lookupConfig.runningSum] : List AnyColumn) ++
+    CommitIvk.permutationColumns cfg.gate ++ childColumns
+
+theorem synthPieces_output_permutationColumns (cfg : Config)
+    (ak nk : AssignedCell Fp) (childColumns : List AnyColumn)
+    (i : RegionIndex) :
+    ∀ column, column ∈ ((synthPieces cfg ak nk).output i).permutationColumns →
+      column ∈ permutationColumns cfg childColumns := by
+  intro column hcolumn
+  simp only [synthPieces_output, PieceCells.permutationColumns,
+    AssignedCell.of_cell, Cell.of_column, List.mem_cons,
+    List.not_mem_nil, or_false, or_self] at hcolumn
+  have : column = cfg.hashConfig.witnessPieces.toAny ∨
+      column = cfg.lookupConfig.runningSum.toAny := by
+    grind
+  rcases this with rfl | rfl <;> simp [permutationColumns]
+
+theorem zCell_column_mem_permutationColumns (cfg : Config)
+    (childColumns : List AnyColumn) (iHash : RegionIndex) (i j : ℕ) :
+    (zCell cfg.hashConfig iHash i j).cell.column ∈
+      permutationColumns cfg childColumns := by
+  simp [zCell, AssignedCell.of_cell, Cell.of_column, permutationColumns]
+
 @[keygen_norm]
 def keygenRequirements (G : Generators) (R : FixedBase) (Q : Point Fp)
-    (hQ : Q.OnCurve) : KeygenRequirements Fp Config where
+    (hQ : Q.OnCurve) : KeygenRequirements Fp Config (Var Inputs Fp) where
   configLawful cfg :=
     (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil).Configured
       (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
@@ -205,22 +333,384 @@ def keygenRequirements (G : Generators) (R : FixedBase) (Q : Point Fp)
       configured.gates
   lookups cfg configured :=
     [LookupRangeCheck.rangeCheckLookup 10 cfg.lookupConfig] ++ configured.lookups
+  fixedColumns _ configured := configured.fixedColumns
+  permutationColumns cfg configured :=
+    permutationColumns cfg configured.permutationColumns
+  inputCells _ _ input :=
+    [input.ak.cell, input.nk.cell]
+
+@[keygen_helper]
+theorem synthPieces_keygenRegistered
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex)
+    (configured : (keygenRequirements G R Q hQ).configLawful cfg) :
+    ((synthPieces cfg input.ak input.nk).operations self).KeygenRegistered
+      ((keygenRequirements G R Q hQ).gates cfg configured)
+      ((keygenRequirements G R Q hQ).lookups cfg configured)
+      ((keygenRequirements G R Q hQ).fixedColumns cfg configured)
+      ((keygenRequirements G R Q hQ).permutationColumns cfg configured ++
+        (keygenRequirements G R Q hQ).inputPermutationColumns
+          cfg configured input) := by
+  have hRunningSum : cfg.lookupConfig.runningSum.toAny ∈
+      (keygenRequirements G R Q hQ).permutationColumns cfg configured ++
+        (keygenRequirements G R Q hQ).inputPermutationColumns
+          cfg configured input := by
+    simp [keygenRequirements, permutationColumns]
+  keygen_registration [synthPieces,
+    Sinsemilla.HashToPoint.witnessMessagePiece]
+
+@[keygen_helper]
+theorem synth_keygenRegistered
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex)
+    (configured : (keygenRequirements G R Q hQ).configLawful cfg) :
+    ((synth G R Q hQ cfg input).operations self).KeygenRegistered
+      ((keygenRequirements G R Q hQ).gates cfg configured)
+      ((keygenRequirements G R Q hQ).lookups cfg configured)
+      ((keygenRequirements G R Q hQ).fixedColumns cfg configured)
+      ((keygenRequirements G R Q hQ).permutationColumns cfg configured ++
+        (keygenRequirements G R Q hQ).inputPermutationColumns
+          cfg configured input) := by
+  have hRunningSum : cfg.lookupConfig.runningSum.toAny ∈
+      (keygenRequirements G R Q hQ).permutationColumns cfg configured ++
+        (keygenRequirements G R Q hQ).inputPermutationColumns
+          cfg configured input := by
+    simp [keygenRequirements, permutationColumns]
+  have hChild := fun column =>
+    show column ∈ configured.permutationColumns →
+      column ∈
+        (keygenRequirements G R Q hQ).permutationColumns cfg configured ++
+          (keygenRequirements G R Q hQ).inputPermutationColumns
+            cfg configured input from by
+      intro hcolumn
+      simp only [keygenRequirements, List.mem_append]
+      left
+      exact List.mem_append_right _ hcolumn
+  have hPieces := synthPieces_output_permutationColumns
+    cfg input.ak input.nk configured.permutationColumns
+      self
+  have hZ := fun i j =>
+    zCell_column_mem_permutationColumns
+      cfg configured.permutationColumns (self + 9) i j
+  have hCanonicity : ∀ column,
+      column ∈ CommitIvk.permutationColumns cfg.gate ++
+        ([cfg.lookupConfig.runningSum] : List AnyColumn) →
+      column ∈
+        (keygenRequirements G R Q hQ).permutationColumns cfg configured ++
+          (keygenRequirements G R Q hQ).inputPermutationColumns
+            cfg configured input := by
+    intro column hcolumn
+    simp [keygenRequirements, permutationColumns] at hcolumn ⊢
+    grind
+  simp only [synth, Circuit.operations_bind,
+    NoteCommit.Main.currentRegion_operations,
+    NoteCommit.Main.currentRegion_nextRegionIndex,
+    NoteCommit.Main.currentRegion_output,
+    synthPieces_nextRegionIndex, synthPieces_output,
+    FormalCircuit.nextRegionIndex_call', FormalCircuit.output_call',
+    Circuit.operations_pure, Operations.KeygenRegistered.append,
+    Operations.KeygenRegistered.nil, true_and, and_true]
+  constructor
+  · exact synthPieces_keygenRegistered G R Q hQ cfg input self configured
+  constructor
+  · apply (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil)
+      |>.call_keygenRegistered
+        (cfg.mulConfig, cfg.hashConfig, cfg.addConfig) configured _ (self + 7)
+    case hgates => keygen_registration
+    case hlookups => keygen_registration
+    case hfixedColumns =>
+      intro column hcolumn
+      exact hcolumn
+    case hpermutationColumns => exact hChild
+    case hinputCells =>
+      rw [Sinsemilla.CommitDomain.commit_inputCells,
+        List.forall_iff_forall_mem]
+      intro cell hcell
+      simp only [Vector.toList, List.map_cons, List.map_nil,
+        List.mem_cons, List.not_mem_nil, or_false] at hcell
+      rcases hcell with rfl | rfl | rfl | rfl <;>
+        apply List.mem_append_left <;>
+        apply synthPieces_output_permutationColumns cfg input.ak input.nk
+          configured.permutationColumns self <;>
+        simp [synthPieces_output, PieceCells.permutationColumns]
+  · rw [Sinsemilla.CommitDomain.commit_call_regionCount]
+    let child := CommitIvk.Canonicity.circuit
+      (brWit input.ak 254 1) (brWit input.nk 254 1)
+    let childConfigured := FormalCircuit.Configured.ofPure child
+      (cfg.gate, cfg.lookupConfig) () (by rfl)
+    apply child.call_keygenRegistered
+      (cfg.gate, cfg.lookupConfig) childConfigured _ (self + 11)
+    case hgates => keygen_registration
+    case hlookups => keygen_registration
+    case hfixedColumns =>
+      intro column hcolumn
+      simp only [childConfigured, child,
+        FormalCircuit.Configured.ofPure_fixedColumns] at hcolumn
+      contradiction
+    case hpermutationColumns =>
+      intro column hcolumn
+      simpa only [childConfigured, child,
+        FormalCircuit.Configured.ofPure_permutationColumns] using
+          hCanonicity column hcolumn
+    case hinputCells => keygen_registration
+
+private theorem synthPieces_copyCellsAssigned
+    (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex) :
+    ((synthPieces cfg input.ak input.nk).operations self).CopyCellsAssigned self
+      [input.ak.cell, input.nk.cell] := by
+  simp only [synthPieces, Circuit.operations_bind, Circuit.operations_pure,
+    List.append_nil]
+  apply Operations.CopyCellsAssignedFrom.append
+  · apply Sinsemilla.HashToPoint.witnessMessagePiece_copyCellsAssignedFrom
+  · apply Operations.CopyCellsAssignedFrom.append
+    · apply LookupRangeCheck.witnessShortCheck_copyCellsAssignedFrom
+    · apply Operations.CopyCellsAssignedFrom.append
+      · apply LookupRangeCheck.witnessShortCheck_copyCellsAssignedFrom
+      · apply Operations.CopyCellsAssignedFrom.append
+        · apply Sinsemilla.HashToPoint.witnessMessagePiece_copyCellsAssignedFrom
+        · apply Operations.CopyCellsAssignedFrom.append
+          · apply Sinsemilla.HashToPoint.witnessMessagePiece_copyCellsAssignedFrom
+          · apply Operations.CopyCellsAssignedFrom.append
+            · apply LookupRangeCheck.witnessShortCheck_copyCellsAssignedFrom
+            · apply Sinsemilla.HashToPoint.witnessMessagePiece_copyCellsAssignedFrom
+
+private theorem synthPieces_output_cells_assigned
+    (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex) :
+    let pcs := (synthPieces cfg input.ak input.nk).output self
+    [pcs.a.cell, pcs.b.cell, pcs.c.cell, pcs.d.cell,
+      pcs.b0.cell, pcs.b2.cell, pcs.d0.cell].Forall fun cell =>
+        cell ∈ Operations.assignedCellsFrom
+          ((synthPieces cfg input.ak input.nk).operations self) self := by
+  rw [synthPieces_output]
+  simp only [synthPieces, Sinsemilla.HashToPoint.witnessMessagePiece,
+    LookupRangeCheck.witnessShortCheck, circuit_norm,
+    Operations.assignedCellsFrom, RegionOperations.assignedCells,
+    RegionOperation.assignedCells, List.flatMap_cons, List.mem_append,
+    List.mem_cons, true_or]
+
+private theorem synthPieces_lookupActivationsWellFormed
+    (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex) :
+    ((synthPieces cfg input.ak input.nk).operations self)
+      |>.LookupActivationsWellFormed := by
+  simp only [synthPieces, Circuit.operations_bind, Circuit.operations_pure,
+    Operations.LookupActivationsWellFormed, List.forall_append,
+    List.forall_nil, and_true]
+  exact ⟨
+    Sinsemilla.HashToPoint.witnessMessagePiece_lookupActivationsWellFormed
+      cfg.hashConfig (brWit input.ak 0 250) _,
+    LookupRangeCheck.witnessShortCheck_lookupActivationsWellFormed
+      10 4 cfg.lookupConfig (brWit input.ak 250 4) _,
+    LookupRangeCheck.witnessShortCheck_lookupActivationsWellFormed
+      10 5 cfg.lookupConfig (brWit input.nk 0 5) _,
+    Sinsemilla.HashToPoint.witnessMessagePiece_lookupActivationsWellFormed
+      cfg.hashConfig (bWit input.ak input.nk) _,
+    Sinsemilla.HashToPoint.witnessMessagePiece_lookupActivationsWellFormed
+      cfg.hashConfig (brWit input.nk 5 240) _,
+    LookupRangeCheck.witnessShortCheck_lookupActivationsWellFormed
+      10 9 cfg.lookupConfig (brWit input.nk 245 9) _,
+    Sinsemilla.HashToPoint.witnessMessagePiece_lookupActivationsWellFormed
+      cfg.hashConfig (dWit input.nk) _⟩
+
+private theorem synthPieces_lookupSelectorAssignmentsAgree
+    (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex) :
+    ((synthPieces cfg input.ak input.nk).operations self)
+      |>.LookupSelectorAssignmentsAgree := by
+  simp only [synthPieces, Circuit.operations_bind, Circuit.operations_pure,
+    keygen_norm, keygen_spine]
+
+private theorem synthPieces_lookupSelectorsAnchoredBy
+    (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex)
+    (anchor : ℕ → FloorPlanner.RegionColumn)
+    (hanchor : SelectorAnchorRequirementsSatisfied
+      (LookupRangeCheck.lookupSelectorAnchorRequirements cfg.lookupConfig) anchor) :
+    ((synthPieces cfg input.ak input.nk).operations self)
+      |>.LookupSelectorsAnchoredBy anchor := by
+  simp only [synthPieces, Circuit.operations_bind, Circuit.operations_pure,
+    List.append_nil]
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact Sinsemilla.HashToPoint.witnessMessagePiece_lookupSelectorsAnchoredBy
+      cfg.hashConfig _ self anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact LookupRangeCheck.witnessShortCheck_lookupSelectorsAnchoredBy
+      10 4 cfg.lookupConfig _ _ anchor hanchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact LookupRangeCheck.witnessShortCheck_lookupSelectorsAnchoredBy
+      10 5 cfg.lookupConfig _ _ anchor hanchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact Sinsemilla.HashToPoint.witnessMessagePiece_lookupSelectorsAnchoredBy
+      cfg.hashConfig _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact Sinsemilla.HashToPoint.witnessMessagePiece_lookupSelectorsAnchoredBy
+      cfg.hashConfig _ _ anchor
+  apply Operations.LookupSelectorsAnchoredBy.append
+  · exact LookupRangeCheck.witnessShortCheck_lookupSelectorsAnchoredBy
+      10 9 cfg.lookupConfig _ _ anchor hanchor
+  · exact Sinsemilla.HashToPoint.witnessMessagePiece_lookupSelectorsAnchoredBy
+      cfg.hashConfig _ _ anchor
+
+private theorem synth_copyCellsAssigned
+    (G : Generators) (R : FixedBase) (Q : Point Fp) (hQ : Q.OnCurve)
+    (cfg : Config) (input : Var Inputs Fp) (self : RegionIndex)
+    (configured : (keygenRequirements G R Q hQ).configLawful cfg) :
+    ((synth G R Q hQ cfg input).operations self).CopyCellsAssigned self
+      ((keygenRequirements G R Q hQ).inputCells cfg configured input) := by
+  simp only [keygenRequirements, synth,
+    NoteCommit.Main.currentRegion_operations,
+    NoteCommit.Main.currentRegion_nextRegionIndex,
+    NoteCommit.Main.currentRegion_output,
+    Circuit.operations_bind, Circuit.operations_pure, List.append_nil,
+    List.nil_append]
+  apply Operations.CopyCellsAssignedFrom.append
+  · exact synthPieces_copyCellsAssigned cfg input self
+  · apply Operations.CopyCellsAssignedFrom.append
+    · rw [synthPieces_regionCount]
+      apply (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil)
+        |>.call_copyCellsAssignedFrom _ configured _ _
+      rw [Sinsemilla.CommitDomain.commit_inputCells]
+      intro cell hcell
+      have hpieces := synthPieces_output_cells_assigned cfg input self
+      simp only [List.forall_cons, List.forall_nil, and_true] at hpieces
+      simp only [Vector.toList, List.map_cons, List.map_nil,
+        List.mem_cons, List.not_mem_nil, or_false] at hcell
+      rcases hcell with rfl | rfl | rfl | rfl <;>
+        apply List.mem_append_right
+      · exact hpieces.1
+      · exact hpieces.2.1
+      · exact hpieces.2.2.1
+      · exact hpieces.2.2.2.1
+    · rw [synthPieces_regionCount,
+        Sinsemilla.CommitDomain.commit_call_regionCount]
+      simp only [synthPieces_nextRegionIndex]
+      rw [FormalCircuit.nextRegionIndex_call,
+        Sinsemilla.CommitDomain.commit_call_regionCount]
+      let pcs := (synthPieces cfg input.ak input.nk).output self
+      let commitInput : Var (Sinsemilla.CommitDomain.Input ns.length) Fp :=
+        { pieces := #v[pcs.a, pcs.b, pcs.c, pcs.d], r := input.rivk }
+      let child := CommitIvk.Canonicity.circuit
+        (brWit input.ak 254 1) (brWit input.nk 254 1)
+      let childConfigured := FormalCircuit.Configured.ofPure child
+        (cfg.gate, cfg.lookupConfig) () (by rfl)
+      apply child.call_copyCellsAssignedFrom
+        (cfg.gate, cfg.lookupConfig) childConfigured _ (self + 7 + 4)
+      intro cell hcell
+      have hpieces := synthPieces_output_cells_assigned cfg input self
+      have hz0 := Sinsemilla.CommitDomain.commit_call_hash_z_cell_assigned
+        G ns R Q hQ ns_ne_nil (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
+        commitInput (self + 7) ⟨0, by simp [ns]⟩ ⟨13, by simp [ns]⟩
+      have hz2 := Sinsemilla.CommitDomain.commit_call_hash_z_cell_assigned
+        G ns R Q hQ ns_ne_nil (cfg.mulConfig, cfg.hashConfig, cfg.addConfig)
+        commitInput (self + 7) ⟨2, by simp [ns]⟩ ⟨13, by simp [ns]⟩
+      simp only [List.forall_cons, List.forall_nil, and_true] at hpieces
+      rw [CommitIvk.Canonicity.circuit_inputCells] at hcell
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hcell
+      rcases hcell with rfl | rfl | rfl | rfl | rfl | rfl |
+        rfl | rfl | rfl | rfl | rfl
+      · simp
+      · exact List.mem_append_left _ (List.mem_append_right _ hpieces.1)
+      · exact List.mem_append_left _ (List.mem_append_right _ hpieces.2.1)
+      · exact List.mem_append_left _
+          (List.mem_append_right _ hpieces.2.2.2.2.1)
+      · exact List.mem_append_left _
+          (List.mem_append_right _ hpieces.2.2.2.2.2.1)
+      · simpa only [zCell, commitInput, pcs, Nat.add_assoc] using
+          List.mem_append_right
+            ([input.ak.cell, input.nk.cell] ++
+              Operations.assignedCellsFrom
+                ((synthPieces cfg input.ak input.nk).operations self) self) hz0
+      · simp
+      · exact List.mem_append_left _ (List.mem_append_right _ hpieces.2.2.1)
+      · exact List.mem_append_left _
+          (List.mem_append_right _ hpieces.2.2.2.1)
+      · exact List.mem_append_left _
+          (List.mem_append_right _ hpieces.2.2.2.2.2.2)
+      · simpa only [zCell, commitInput, pcs, Nat.add_assoc] using
+          List.mem_append_right
+            ([input.ak.cell, input.nk.cell] ++
+              Operations.assignedCellsFrom
+                ((synthPieces cfg input.ak input.nk).operations self) self) hz2
 
 instance elaborated (G : Generators) (R : FixedBase) (Q : Point Fp)
     (hQ : Q.OnCurve) :
     ElaboratedCircuit Fp Config Config Inputs field
       (fun config => pure config) (synth G R Q hQ) where
   keygenRequirements := keygenRequirements G R Q hQ
-  registered := by
-    keygen_registration [
-      synth,
-      synthPieces,
-      Sinsemilla.HashToPoint.witnessMessagePiece]
-  output cfg input i := (synth G R Q hQ cfg input).output i
+  registered configInput _ configured input self := by
+    simpa using synth_keygenRegistered
+      G R Q hQ configInput input self configured
+  copyCellsAssigned cfg _ configured input self :=
+    synth_copyCellsAssigned G R Q hQ cfg input self configured
+  lookupSelectorAnchorRequirements cfg _ _ :=
+    LookupRangeCheck.lookupSelectorAnchorRequirements cfg.lookupConfig
+  lookupSelectorsAnchoredBy_of_registered := by
+    intro cfg _ hconfig input self anchor hanchor _
+    simp only [Configure.output_pure] at hanchor
+    simp only [Configure.output_pure, synth,
+      NoteCommit.Main.currentRegion_operations, Circuit.operations_bind,
+      Circuit.operations_pure, List.append_nil, keygen_norm, keygen_spine]
+    exact ⟨synthPieces_lookupSelectorsAnchoredBy cfg input _ anchor hanchor,
+      (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil)
+        |>.call_lookupSelectorsAnchoredBy
+          (cfg.mulConfig, cfg.hashConfig, cfg.addConfig) hconfig _ _ anchor (by trivial),
+      (CommitIvk.Canonicity.circuit
+        (brWit input.ak 254 1) (brWit input.nk 254 1))
+          |>.call_lookupSelectorsAnchoredBy (cfg.gate, cfg.lookupConfig)
+            (FormalCircuit.Configured.ofPure _ _ () rfl) _ _ anchor hanchor⟩
+  lookupSelectorAssignmentsAgree_of_registered := by
+    intro cfg counts hconfig input self program operations _hregistered
+    simp only [operations, program, Configure.output_pure, synth,
+      NoteCommit.Main.currentRegion_operations, Circuit.operations_bind,
+      Circuit.operations_pure, keygen_norm, keygen_spine]
+    exact ⟨synthPieces_lookupSelectorAssignmentsAgree cfg input self,
+      (CommitIvk.Canonicity.circuit
+        (brWit input.ak 254 1) (brWit input.nk 254 1))
+          |>.call_lookupSelectorAssignmentsAgree
+            (cfg.gate, cfg.lookupConfig)
+            (FormalCircuit.Configured.ofPure _ _ () (by rfl)) _ _⟩
+  fixedWritesLawful := by
+    intro cfg _ configured input self
+    apply Operations.FixedWritesLawful.ofRegionAssignmentsAgree
+    · simp only [Configure.output_pure, synth, Circuit.operations_bind,
+        NoteCommit.Main.currentRegion_operations, Circuit.operations_pure,
+        List.forall_append, circuit_norm]
+      refine ⟨?_, ?_, ?_⟩
+      · have hnoFixed : Operations.HasNoFixedWrites
+            ((synthPieces cfg input.ak input.nk).operations self) := by
+          apply FloorPlanner.SynthesisSummary.HasNoFixedWrites.hasNoFixedWrites
+          rw [synthPieces_synthesisSummary_eq]
+          exact synthPiecesSynthesisSummary_hasNoFixedWrites cfg
+        exact (hnoFixed.fixedWritesLawful
+          (constantColumns := [])).regionAssignmentsAgree
+      · exact (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil)
+          |>.call_fixedAssignmentsAgree
+            (cfg.mulConfig, cfg.hashConfig, cfg.addConfig) configured _ _
+      · exact (CommitIvk.Canonicity.circuit
+          (brWit input.ak 254 1) (brWit input.nk 254 1))
+            |>.call_fixedAssignmentsAgree
+              (cfg.gate, cfg.lookupConfig)
+              (FormalCircuit.Configured.ofPure _ _ () (by rfl)) _ _
+    · rw [synth_synthesisSummary_eq]
+      exact synthesisSummary_tableRowExtent_eq cfg
+  lookupActivationsWellFormed cfg input self := by
+    simp only [synth, Circuit.operations_bind,
+      NoteCommit.Main.currentRegion_operations,
+      Circuit.operations_pure, Operations.LookupActivationsWellFormed,
+      List.forall_append, List.forall_nil, true_and, and_true]
+    exact ⟨synthPieces_lookupActivationsWellFormed cfg input self,
+      (Sinsemilla.CommitDomain.commit G ns R Q hQ ns_ne_nil)
+        |>.call_lookupActivationsWellFormed
+          (cfg.mulConfig, cfg.hashConfig, cfg.addConfig) _ _,
+      (CommitIvk.Canonicity.circuit
+        (brWit input.ak 254 1) (brWit input.nk 254 1))
+          |>.call_lookupActivationsWellFormed
+            (cfg.gate, cfg.lookupConfig) _ _⟩
+  output cfg _ i := AssignedCell.of (i + 10) 1 cfg.addConfig.xQR
   regionCount _ := 14
-  output_eq := by intro _ _ _; rfl
+  synthesisSummary cfg _ _ := synthesisSummary cfg
+  output_eq := fun cfg input i => (synth_output G R Q hQ cfg input i).symm
   regionCount_eq cfg input i :=
     (synth_regionCount G R Q hQ cfg input i).symm
+  synthesisSummary_eq cfg input region :=
+    (synth_synthesisSummary_eq G R Q hQ cfg input region).symm
 
 def EnvAssumptions (G : Generators) (cfg : Config)
     (env : Placed Environment Fp) : Prop :=

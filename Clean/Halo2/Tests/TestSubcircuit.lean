@@ -36,14 +36,36 @@ config/IO as the child, so the parent's contract is inherited. -/
 def parent :
     FormalRegionCircuit Fp (Column .advice × Column .advice) WitnessPoint.Config
       (Unconstrained Point) Point where
-  configure := fun cols => WitnessPoint.configure cols.1 cols.2
+  configure := WitnessPoint.point.configure
   synthesize config offset input := WitnessPoint.point.call config offset input
   elaborated := {
+    keygenRequirements := WitnessPoint.point.keygenRequirements
     registered := by
       intro configInput counts hconfig offset input region
-      exact WitnessPoint.point.call_keygenRegistered_ofCertificate
-        (WitnessPoint.point.configureCertificate configInput counts hconfig)
-        offset input region }
+      exact WitnessPoint.point.call_keygenRegistered_exact
+        ((WitnessPoint.point.configure configInput).output counts)
+        (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
+          configInput counts hconfig) offset input region
+    copyCellsAssigned := by
+      intro configInput counts hconfig offset input region
+      apply WitnessPoint.point.call_copyCellsAssignedFrom
+        ((WitnessPoint.point.configure configInput).output counts)
+        (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
+          configInput counts hconfig) offset input region
+      intro cell hcell
+      exact hcell
+    fixedAssignmentsAgree := by
+      intro configInput counts hconfig offset input region
+      exact WitnessPoint.point.call_fixedAssignmentsAgree
+        ((WitnessPoint.point.configure configInput).output counts)
+        (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
+          configInput counts hconfig) offset input region
+    synthesisSummary := fun config offset input region =>
+      WitnessPoint.point.elaborated.synthesisSummary config offset input region
+    synthesisSummary_eq := by
+      intro config offset input region
+      exact (WitnessPoint.point.call_synthesisSummary
+        config offset input region).symm }
   Spec _ output _ := output.Valid
   Witness := Point
   extract := fun config offset _ self env =>
@@ -83,17 +105,46 @@ def parent :
 def parentWithOp :
     FormalRegionCircuit Fp (Column .advice × Column .advice) WitnessPoint.Config
       (Unconstrained Point) Point where
-  configure := fun cols => WitnessPoint.configure cols.1 cols.2
+  configure := WitnessPoint.point.configure
   synthesize config offset input := do
     let _ ← assignAdvice config.x (offset + 1) (Witgen.MOver.toIRScalar (Point.x <$> input))
     WitnessPoint.point.call config offset input
   elaborated := {
+    keygenRequirements := WitnessPoint.point.keygenRequirements
     registered := by
       intro configInput counts hconfig offset input region
       simp only [keygen_spine]
-      exact WitnessPoint.point.call_keygenRegistered_ofCertificate
-        (WitnessPoint.point.configureCertificate configInput counts hconfig)
-        offset input region }
+      exact WitnessPoint.point.call_keygenRegistered_exact
+        ((WitnessPoint.point.configure configInput).output counts)
+        (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
+          configInput counts hconfig) offset input region
+    copyCellsAssigned := by
+      intro configInput counts hconfig offset input region
+      simp only [keygen_spine]
+      apply WitnessPoint.point.call_copyCellsAssignedFrom
+        ((WitnessPoint.point.configure configInput).output counts)
+        (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
+          configInput counts hconfig) offset input region
+      intro cell hcell
+      exact List.mem_cons_of_mem _ hcell
+    fixedAssignmentsAgree := by
+      intro configInput counts hconfig offset input region
+      simp only [RegionCircuit.operations_bind]
+      apply (WitnessPoint.point.call_fixedAssignmentsAgree
+        ((WitnessPoint.point.configure configInput).output counts)
+        (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
+          configInput counts hconfig) offset input region).append_left
+      keygen_registration
+    synthesisSummary := fun config offset input region =>
+      (FloorPlanner.RegionSynthesisSummary.ofColumns
+        [.column .advice config.x.index] (offset + 2) 0).combine
+      (WitnessPoint.point.elaborated.synthesisSummary config offset input region)
+    synthesisSummary_eq := by
+      intro config offset input region
+      simp only [RegionCircuit.operations_bind,
+        FloorPlanner.regionSynthesisSummary_append,
+        FormalRegionCircuit.call_synthesisSummary]
+      congr 1 }
   Spec _ output _ := output.Valid
   Witness := Point
   extract := fun config offset _ self env =>

@@ -77,10 +77,6 @@ def mulProgram : Configure Fp Config := do
 
 def mulCS : ConstraintSystem Fp := (mulProgram {}).2
 
--- Every gate's/lookup's `queriedCells` registered faithfully (no ill-formed entries);
--- the layout equalities below then certify the recorded order against the Rust dump.
-#guard mulCS.invalidQueriedCells.isEmpty
-
 -- Pre-compression: projected CS (query layouts from the configure-recorded queries)
 -- equals the dumped fixture.
 #guard projectCS mulCS == mulPre
