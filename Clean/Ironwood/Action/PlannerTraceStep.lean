@@ -7,6 +7,10 @@ open Halo2 FloorPlanner
 macro "action_exact_planner_step" : tactic =>
   `(tactic|
     (unfold actionExactPlannerTrace actionPlannerBlocks
+     try unfold planner8Wide
+     try unfold planner8Short
+     try unfold planner4Narrow
+     try unfold planner4Wide
      simp only [List.map_cons, List.map_nil, List.take, List.drop,
        List.getD_cons_zero, List.getD_cons_succ,
        V1.PlannedSummaryBlock.TraceLawfulAfter]

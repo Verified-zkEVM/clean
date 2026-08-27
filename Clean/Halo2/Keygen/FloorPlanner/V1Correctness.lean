@@ -729,6 +729,36 @@ theorem lawful_append (initial : AllocationView)
         inductionHypothesis]
       tauto
 
+theorem Lawful.take
+    {initial : AllocationView} {trace : List PlannedSummaryBlock}
+    (hLawful : Lawful initial trace) (count : Nat) :
+    Lawful initial (trace.take count) := by
+  have hSplit : Lawful initial (trace.take count ++ trace.drop count) := by
+    rw [List.take_append_drop]
+    exact hLawful
+  exact (lawful_append initial (trace.take count) (trace.drop count)).mp
+    hSplit |>.1
+
+theorem Lawful.drop
+    {initial : AllocationView} {trace : List PlannedSummaryBlock}
+    (hLawful : Lawful initial trace) (count : Nat) :
+    Lawful (finalView initial (trace.take count)) (trace.drop count) := by
+  have hSplit : Lawful initial (trace.take count ++ trace.drop count) := by
+    rw [List.take_append_drop]
+    exact hLawful
+  exact (lawful_append initial (trace.take count) (trace.drop count)).mp
+    hSplit |>.2
+
+theorem Lawful.counts
+    {initial : AllocationView} {trace : List PlannedSummaryBlock}
+    (hLawful : Lawful initial trace) :
+    trace.Forall fun block => 0 < block.count := by
+  induction trace generalizing initial with
+  | nil => simp
+  | cons block rest inductionHypothesis =>
+      rw [List.forall_cons]
+      exact ⟨hLawful.1, inductionHypothesis hLawful.2.2.2.2.2⟩
+
 theorem Lawful.finalView_valid
     {initial : AllocationView} {trace : List PlannedSummaryBlock}
     (hlawful : Lawful initial trace) (hvalid : initial.Valid) :
@@ -803,6 +833,24 @@ theorem traceLawfulAfter_append
         inductionHypothesis, List.append_assoc]
       tauto
 
+/-- Any prefix of a lawful compact trace is lawful after the same placed
+prefix. -/
+theorem traceLawfulAfter_take
+    {placed trace : List PlannedSummaryBlock}
+    (hlawful : TraceLawfulAfter placed trace) (count : Nat) :
+    TraceLawfulAfter placed (trace.take count) := by
+  induction trace generalizing placed count with
+  | nil => simp [TraceLawfulAfter]
+  | cons block rest inductionHypothesis =>
+      cases count with
+      | zero => simp [TraceLawfulAfter]
+      | succ count =>
+          rcases hlawful with
+            ⟨hcount, hwellFormed, hcolumns, hfits, hleast, hrest⟩
+          simp only [List.take_succ_cons, TraceLawfulAfter]
+          exact ⟨hcount, hwellFormed, hcolumns, hfits, hleast,
+            inductionHypothesis hrest count⟩
+
 /-- A compact trace is lawful when every entry is lawful after the exact prefix
 preceding it. This lets large concrete traces certify bounded groups of entries
 independently, without repeatedly normalizing the entire suffix. -/
@@ -822,6 +870,26 @@ theorem traceLawfulAfter_of_steps
         rw [List.take_add_one, traceLawfulAfter_append]
         refine ⟨inductionHypothesis (by omega), ?_⟩
         simpa [hindex] using hsteps count hindex
+  simpa using hprefix trace.length (Nat.le_refl _)
+
+/-- Assemble a compact trace from one-step certificates after an existing
+planned prefix. -/
+theorem traceLawfulAfter_of_steps_after
+    (placed trace : List PlannedSummaryBlock)
+    (hsteps : ∀ index (hindex : index < trace.length),
+      TraceLawfulAfter (placed ++ trace.take index)
+        [trace.get ⟨index, hindex⟩]) :
+    TraceLawfulAfter placed trace := by
+  have hprefix : ∀ count, count ≤ trace.length →
+      TraceLawfulAfter placed (trace.take count) := by
+    intro count hcount
+    induction count with
+    | zero => simp [TraceLawfulAfter]
+    | succ count inductionHypothesis =>
+        have hindex : count < trace.length := by omega
+        rw [List.take_add_one, traceLawfulAfter_append]
+        refine ⟨inductionHypothesis (by omega), ?_⟩
+        simpa [List.append_assoc, hindex] using hsteps count hindex
   simpa using hprefix trace.length (Nat.le_refl _)
 
 private theorem fitsColumns_finalView_iff_fitsAfterAt

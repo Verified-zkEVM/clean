@@ -106,38 +106,12 @@ theorem actionExactSortedPlannerSummaries_starts_eq :
   rw [htrace.1, slotShapeSummariesFrom_replicate_empty]
   simp
 
-/-- The exact compact placement trace ends at row 1779. -/
-theorem actionExactSortedPlannerSummaries_endpoint :
-    (V1.slotSummaryStateFromWith 0 actionExactSortedPlannerSummaries
-      (∅ : CircuitAllocations)).1 = 1779 := by
-  have hrepresents :
-      V1.AllocationView.empty.Represents (∅ : CircuitAllocations) := by
-    intro column
-    simp [V1.AllocationView.empty]
-  have hvalid : V1.AllocationView.empty.Valid := by
-    intro column
-    simp [V1.AllocationView.empty, Allocations.Valid]
-  have htrace := V1.PlannedSummaryBlock.slotSummaryBlocksState_eq
-    actionExactPlannerTrace 0 (∅ : CircuitAllocations)
-    V1.AllocationView.empty hrepresents hvalid
-    actionExactPlannerTrace_lawful
-  unfold actionExactSortedPlannerSummaries
-  rw [V1.slotSummaryStateFromWith_append,
-    V1.slotSummaryStateFromWith_flatMap_replicate]
-  simp only
-  rw [htrace.1, V1.slotSummaryStateFromWith_replicate_empty]
-  rw [V1.PlannedSummaryBlock.endpointFrom_eq_foldl_max,
-    actionExactPlannerTrace_endpoints_eq]
-  set_option maxRecDepth 10000 in
-    decide
-
 /-- The consensus-sorted Action region stream ends exactly at row 1779. -/
 theorem actionSortedPlannerSummaries_endpoint :
     (V1.slotSummaryStateFromWith 0 actionSortedPlannerSummaries
       (∅ : CircuitAllocations)).1 = 1779 := by
-  rw [V1.slotSummaryStateFromWith_eq_of_forall₂_placementEquivalent
-    actionSortedPlannerSummaries_equivalent_exact]
-  exact actionExactSortedPlannerSummaries_endpoint
+  exact actionSortedPlannerSummaries_equivalent_canonical.1.trans
+    actionCanonicalPlannerSummaries_endpoint
 
 theorem actionPlacementEnd_eq_1779 :
     V1.placementEnd actionOperations = 1779 := by

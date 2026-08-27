@@ -1,5 +1,6 @@
 import Clean.Ironwood.Action.Planner
 import Clean.Halo2.Keygen.PdqsortCorrectness
+import Clean.Halo2.Keygen.PlannerTrace
 
 namespace Zcash.Circuits.Action
 
@@ -280,7 +281,7 @@ private theorem expandPlannerBlocks_key_sorted
         rcases hrightSummary with ⟨_, rfl⟩
         exact List.mem_map.mpr ⟨rightBlock, hrightBlock, rfl⟩
 
-private theorem actionCanonicalPlannerSummaries_key_sorted :
+theorem actionCanonicalPlannerSummaries_key_sorted :
     ((actionCanonicalPlannerSummaries.map fun summary =>
       (summary.key : OrderDual ℕ))).SortedLE := by
   rw [show actionCanonicalPlannerSummaries =
@@ -290,7 +291,7 @@ private theorem actionCanonicalPlannerSummaries_key_sorted :
     RegionShapeSummary.adviceCols RegionColumn.isAdvice
   decide
 
-private theorem actionSortedPlannerSummaries_key_sorted :
+theorem actionSortedPlannerSummaries_key_sorted :
     ((actionSortedPlannerSummaries.map fun summary =>
       (summary.key : OrderDual ℕ))).SortedLE := by
   have hsorted :=
@@ -316,7 +317,7 @@ private theorem expandPlannerBlocks_wellFormed
   exact hsummary.2 ▸
     List.forall_iff_forall_mem.mp hblocks block hblock
 
-private theorem actionCanonicalPlannerSummaries_wellFormed :
+theorem actionCanonicalPlannerSummaries_wellFormed :
     actionCanonicalPlannerSummaries.Forall RegionShapeSummary.WellFormed := by
   rw [show actionCanonicalPlannerSummaries =
       expandPlannerBlocks actionPlannerBlocks by rfl]
@@ -365,22 +366,22 @@ private theorem actionCanonicalPlannerSummaries_regular_ties
     simp only [decide_eq_true_eq] at hnotSecond
     exact hnotSecond (by simpa only [hsecond.2] using hsecondColumn)
 
-private def plannerAbove8 (summaries : List RegionShapeSummary) :=
+def plannerAbove8 (summaries : List RegionShapeSummary) :=
   aboveKey 8 summaries
 
-private def plannerKey8 (summaries : List RegionShapeSummary) :=
+def plannerKey8 (summaries : List RegionShapeSummary) :=
   summaries.filter fun summary => decide (summary.key = 8)
 
-private def plannerBetween8And4 (summaries : List RegionShapeSummary) :=
+def plannerBetween8And4 (summaries : List RegionShapeSummary) :=
   summaries.filter fun summary => decide (4 < summary.key ∧ summary.key < 8)
 
-private def plannerKey4 (summaries : List RegionShapeSummary) :=
+def plannerKey4 (summaries : List RegionShapeSummary) :=
   summaries.filter fun summary => decide (summary.key = 4)
 
-private def plannerBelow4 (summaries : List RegionShapeSummary) :=
+def plannerBelow4 (summaries : List RegionShapeSummary) :=
   summaries.filter fun summary => decide (summary.key < 4)
 
-private theorem plannerSegments_eq
+theorem plannerSegments_eq
     (summaries : List RegionShapeSummary)
     (hsorted :
       (summaries.map fun summary =>
@@ -1253,16 +1254,16 @@ private theorem plannerBelow4_normalized_perm :
   intro summary
   simp only [RegionShapeSummary.normalized_key_eq]
 
-private def planner8Wide : RegionShapeSummary :=
+def planner8Wide : RegionShapeSummary :=
   plannerShape [6,7,8,9] 2
 
-private def planner8Short : RegionShapeSummary :=
+def planner8Short : RegionShapeSummary :=
   plannerShape [0,1,2,3,4,5,6,7] 1
 
-private def planner4Narrow : RegionShapeSummary :=
+def planner4Narrow : RegionShapeSummary :=
   plannerShape [6,7] 2
 
-private def planner4Wide : RegionShapeSummary :=
+def planner4Wide : RegionShapeSummary :=
   plannerShape [6,7,8,9] 1
 
 private theorem filter_expandPlannerBlocks
@@ -1330,6 +1331,42 @@ private theorem plannerKey4_canonical_eq :
   rw [hblocks]
   rfl
 
+theorem actionCanonicalRegularSegment_equivalent
+    (left : List RegionShapeSummary)
+    (predicate : RegionShapeSummary → Bool)
+    (hnormalized :
+      (left.map
+          RegionShapeSummary.normalized).Perm
+        ((actionCanonicalPlannerSummaries.filter predicate).map
+          RegionShapeSummary.normalized))
+    (hsortedLeft :
+      (left.map fun summary =>
+        (summary.key : OrderDual Nat)).SortedLE)
+    (hregular : ∀ summary, predicate summary = true →
+      summary.key ≠ 8 ∧ summary.key ≠ 4)
+    (initial : ℕ) (allocations : CircuitAllocations)
+    (hvalid : allocations.Valid) :
+    V1.SummaryStateEquivalent
+      (V1.slotSummaryStateFromWith initial
+        left allocations)
+      (V1.slotSummaryStateFromWith initial
+        (actionCanonicalPlannerSummaries.filter predicate) allocations) := by
+  apply V1.slotSummaryStateFromWith_eq_of_normalized_perm hnormalized
+  · exact hsortedLeft
+  · exact filter_key_sorted predicate actionCanonicalPlannerSummaries
+      actionCanonicalPlannerSummaries_key_sorted
+  · rw [List.forall_iff_forall_mem]
+    intro summary hsummary
+    rw [List.mem_filter] at hsummary
+    exact List.forall_iff_forall_mem.mp
+      actionCanonicalPlannerSummaries_wellFormed summary hsummary.1
+  · intro first hfirst second hsecond hkey
+    rw [List.mem_filter] at hfirst hsecond
+    have hkeys := hregular first hfirst.2
+    exact actionCanonicalPlannerSummaries_regular_ties hfirst.1 hsecond.1
+      hkey hkeys.1 hkeys.2
+  · exact hvalid
+
 private theorem regularPlannerSegment_equivalent
     (predicate : RegionShapeSummary → Bool)
     (hnormalized :
@@ -1346,24 +1383,13 @@ private theorem regularPlannerSegment_equivalent
         (actionSortedPlannerSummaries.filter predicate) allocations)
       (V1.slotSummaryStateFromWith initial
         (actionCanonicalPlannerSummaries.filter predicate) allocations) := by
-  apply V1.slotSummaryStateFromWith_eq_of_normalized_perm hnormalized
-  · exact filter_key_sorted predicate actionSortedPlannerSummaries
-      actionSortedPlannerSummaries_key_sorted
-  · exact filter_key_sorted predicate actionCanonicalPlannerSummaries
-      actionCanonicalPlannerSummaries_key_sorted
-  · rw [List.forall_iff_forall_mem]
-    intro summary hsummary
-    rw [List.mem_filter] at hsummary
-    exact List.forall_iff_forall_mem.mp
-      actionCanonicalPlannerSummaries_wellFormed summary hsummary.1
-  · intro first hfirst second hsecond hkey
-    rw [List.mem_filter] at hfirst hsecond
-    have hkeys := hregular first hfirst.2
-    exact actionCanonicalPlannerSummaries_regular_ties hfirst.1 hsecond.1
-      hkey hkeys.1 hkeys.2
-  · exact hvalid
+  exact actionCanonicalRegularSegment_equivalent
+    (actionSortedPlannerSummaries.filter predicate) predicate hnormalized
+      (filter_key_sorted predicate actionSortedPlannerSummaries
+        actionSortedPlannerSummaries_key_sorted)
+      hregular initial allocations hvalid
 
-private theorem canonicalFiltered_wellFormed
+theorem canonicalFiltered_wellFormed
     (predicate : RegionShapeSummary → Bool) :
     (actionCanonicalPlannerSummaries.filter predicate).Forall
       RegionShapeSummary.WellFormed := by
@@ -1394,7 +1420,7 @@ private theorem continueCanonicalSegment
     (allocationsValid_of_summaryStateEquivalent hequivalent hrightValid)
     hrightValid hequivalent
 
-private theorem plannerAbove8_equivalent
+theorem plannerAbove8_equivalent
     (initial : ℕ) (allocations : CircuitAllocations)
     (hvalid : allocations.Valid) :
     V1.SummaryStateEquivalent
@@ -1410,7 +1436,7 @@ private theorem plannerAbove8_equivalent
   simp only [decide_eq_true_eq] at hsummary
   omega
 
-private theorem plannerBetween8And4_equivalent
+theorem plannerBetween8And4_equivalent
     (initial : ℕ) (allocations : CircuitAllocations)
     (hvalid : allocations.Valid) :
     V1.SummaryStateEquivalent
@@ -1427,7 +1453,7 @@ private theorem plannerBetween8And4_equivalent
   simp only [decide_eq_true_eq] at hsummary
   omega
 
-private theorem plannerBelow4_equivalent
+theorem plannerBelow4_equivalent
     (initial : ℕ) (allocations : CircuitAllocations)
     (hvalid : allocations.Valid) :
     V1.SummaryStateEquivalent
@@ -1616,6 +1642,418 @@ def actionExactPlannerTrace : List V1.PlannedSummaryBlock := (
         (0, { columns := [], rowCount := 0 })).2
       start := item.start }
 
+/-- The key-eight regions in any order allowed by sort correctness. The wide
+regions always occupy the same run; `before` records where the one short region
+appears within it. -/
+def actionKey8PlannerTrace (before : Nat) : List V1.PlannedSummaryBlock :=
+  V1.PlannedSummaryBlock.run before planner8Wide 580 ++
+    [{ count := 1, summary := planner8Short, start := 1745 }] ++
+    V1.PlannedSummaryBlock.run (8 - before) planner8Wide
+      (580 + before * 2)
+
+theorem actionKey8PlannerTrace_summaries
+    (before : Nat) :
+    V1.PlannedSummaryBlock.summaries (actionKey8PlannerTrace before) =
+      List.replicate before planner8Wide ++
+        planner8Short :: List.replicate (8 - before) planner8Wide := by
+  simp only [actionKey8PlannerTrace,
+    V1.PlannedSummaryBlock.summaries_append,
+    V1.PlannedSummaryBlock.summaries_run,
+    V1.PlannedSummaryBlock.summaries_singleton]
+  simp
+
+theorem actionKey8PlannerTrace8_summaries :
+    V1.PlannedSummaryBlock.summaries (actionKey8PlannerTrace 8) =
+      plannerKey8 actionCanonicalPlannerSummaries := by
+  rw [actionKey8PlannerTrace_summaries, plannerKey8_canonical_eq]
+  rfl
+
+theorem actionKey8PlannerTrace_finalView
+    (view : V1.AllocationView) (before : Nat) (hBefore : before ≤ 8) :
+    V1.PlannedSummaryBlock.finalView view (actionKey8PlannerTrace before) =
+      V1.PlannedSummaryBlock.finalView view (actionKey8PlannerTrace 0) := by
+  simp only [actionKey8PlannerTrace,
+    V1.PlannedSummaryBlock.finalView_append,
+    V1.PlannedSummaryBlock.finalView_run,
+    V1.PlannedSummaryBlock.finalView,
+    V1.AllocationView.insertRepeated_zero,
+    V1.AllocationView.insertRepeated_one]
+  have hWideRows : planner8Wide.rowCount = 2 := rfl
+  rw [hWideRows]
+  rw [V1.AllocationView.insertRepeated_insert_comm]
+  · rw [V1.AllocationView.insertRepeated_add]
+    rw [Nat.add_sub_of_le hBefore]
+  · intro index hIndex
+    omega
+
+theorem actionKey8PlannerTrace_endpointFrom
+    (initial before : Nat) (hBefore : before ≤ 8) :
+    V1.PlannedSummaryBlock.endpointFrom initial
+      (actionKey8PlannerTrace before) = max initial 1746 := by
+  simp only [actionKey8PlannerTrace,
+    V1.PlannedSummaryBlock.endpointFrom_append]
+  have hWideRows : planner8Wide.rowCount = 2 := rfl
+  have hShortRows : planner8Short.rowCount = 1 := rfl
+  by_cases hBeforeZero : before = 0
+  · subst before
+    simp [V1.PlannedSummaryBlock.run,
+      V1.PlannedSummaryBlock.endpointFrom, hWideRows, hShortRows]
+  · have hBeforePos : 0 < before := Nat.pos_of_ne_zero hBeforeZero
+    have hAfterPos : 0 < 8 - before ∨ before = 8 := by omega
+    rcases hAfterPos with hAfterPos | rfl
+    · rw [V1.PlannedSummaryBlock.endpointFrom_run _ _ _ _ hBeforePos]
+      simp only [V1.PlannedSummaryBlock.endpointFrom]
+      rw [V1.PlannedSummaryBlock.endpointFrom_run _ _ _ _ hAfterPos]
+      rw [hWideRows, hShortRows]
+      omega
+    · rw [V1.PlannedSummaryBlock.endpointFrom_run initial 8
+        planner8Wide 580 (by norm_num)]
+      simp [V1.PlannedSummaryBlock.run,
+        V1.PlannedSummaryBlock.endpointFrom, hWideRows, hShortRows]
+
+/-- The six possible orders of the two narrow and two wide key-four regions.
+The starts depend only on which occurrence of each shape is being placed. -/
+def actionKey4PlannerTrace : Nat → List V1.PlannedSummaryBlock
+  | 0 =>
+      [{ count := 1, summary := planner4Narrow, start := 264 },
+       { count := 1, summary := planner4Narrow, start := 266 },
+       { count := 1, summary := planner4Wide, start := 596 },
+       { count := 1, summary := planner4Wide, start := 597 }]
+  | 1 =>
+      [{ count := 1, summary := planner4Narrow, start := 264 },
+       { count := 1, summary := planner4Wide, start := 596 },
+       { count := 1, summary := planner4Narrow, start := 266 },
+       { count := 1, summary := planner4Wide, start := 597 }]
+  | 2 =>
+      [{ count := 1, summary := planner4Narrow, start := 264 },
+       { count := 1, summary := planner4Wide, start := 596 },
+       { count := 1, summary := planner4Wide, start := 597 },
+       { count := 1, summary := planner4Narrow, start := 266 }]
+  | 3 =>
+      [{ count := 1, summary := planner4Wide, start := 596 },
+       { count := 1, summary := planner4Narrow, start := 264 },
+       { count := 1, summary := planner4Narrow, start := 266 },
+       { count := 1, summary := planner4Wide, start := 597 }]
+  | 4 =>
+      [{ count := 1, summary := planner4Wide, start := 596 },
+       { count := 1, summary := planner4Narrow, start := 264 },
+       { count := 1, summary := planner4Wide, start := 597 },
+       { count := 1, summary := planner4Narrow, start := 266 }]
+  | _ =>
+      [{ count := 1, summary := planner4Wide, start := 596 },
+       { count := 1, summary := planner4Wide, start := 597 },
+       { count := 1, summary := planner4Narrow, start := 264 },
+       { count := 1, summary := planner4Narrow, start := 266 }]
+
+theorem actionKey4PlannerTrace_summaries
+    (order : Nat) (hOrder : order ≤ 5) :
+    (V1.PlannedSummaryBlock.summaries
+      (actionKey4PlannerTrace order)).Perm
+      (List.replicate 2 planner4Narrow ++
+        List.replicate 2 planner4Wide) := by
+  interval_cases order <;>
+    simp [actionKey4PlannerTrace,
+      V1.PlannedSummaryBlock.summaries,
+      V1.PlannedSummaryBlock.blocks] <;>
+    decide
+
+theorem actionKey4PlannerTrace0_summaries :
+    V1.PlannedSummaryBlock.summaries (actionKey4PlannerTrace 0) =
+      plannerKey4 actionCanonicalPlannerSummaries := by
+  rw [plannerKey4_canonical_eq]
+  rfl
+
+theorem actionKey4PlannerTrace_finalView
+    (view : V1.AllocationView) (order : Nat) (hOrder : order ≤ 5) :
+    V1.PlannedSummaryBlock.finalView view (actionKey4PlannerTrace order) =
+      V1.PlannedSummaryBlock.finalView view (actionKey4PlannerTrace 0) := by
+  interval_cases order
+  all_goals simp only [actionKey4PlannerTrace,
+    V1.PlannedSummaryBlock.finalView,
+    V1.AllocationView.insertRepeated_one]
+  · nth_rw 2 [V1.AllocationView.insert_comm_of_ne (hne := by norm_num)]
+  · rw [V1.AllocationView.insert_comm_of_ne (hne := by norm_num)]
+    nth_rw 2 [V1.AllocationView.insert_comm_of_ne (hne := by norm_num)]
+  · nth_rw 3 [V1.AllocationView.insert_comm_of_ne (hne := by norm_num)]
+    nth_rw 2 [V1.AllocationView.insert_comm_of_ne (hne := by norm_num)]
+  · rw [V1.AllocationView.insert_comm_of_ne (hne := by norm_num)]
+    nth_rw 3 [V1.AllocationView.insert_comm_of_ne (hne := by norm_num)]
+    nth_rw 2 [V1.AllocationView.insert_comm_of_ne (hne := by norm_num)]
+  · nth_rw 2 [V1.AllocationView.insert_comm_of_ne (hne := by norm_num)]
+    rw [V1.AllocationView.insert_comm_of_ne (hne := by norm_num)]
+    nth_rw 3 [V1.AllocationView.insert_comm_of_ne (hne := by norm_num)]
+    nth_rw 2 [V1.AllocationView.insert_comm_of_ne (hne := by norm_num)]
+
+theorem actionKey4PlannerTrace_endpointFrom
+    (initial order : Nat) (hOrder : order ≤ 5) :
+    V1.PlannedSummaryBlock.endpointFrom initial
+      (actionKey4PlannerTrace order) = max initial 598 := by
+  interval_cases order <;>
+    simp [actionKey4PlannerTrace,
+      V1.PlannedSummaryBlock.endpointFrom,
+      planner4Narrow, planner4Wide, plannerShape]
+
+/-- The key-eight segment emitted by the consensus sort is represented by one
+of the nine compact tie traces, up to irrelevant column ordering. -/
+theorem actionSortedKey8_exists_trace :
+    ∃ before, before ≤ 8 ∧
+      List.Forall₂ RegionShapeSummary.PlacementEquivalent
+        (plannerKey8 actionSortedPlannerSummaries)
+        (V1.PlannedSummaryBlock.summaries
+          (actionKey8PlannerTrace before)) := by
+  obtain ⟨aligned, hPerm, hAligned⟩ :=
+    V1.exists_perm_forall₂_of_map_perm
+      RegionShapeSummary.normalized plannerKey8_normalized_perm
+  have hPermCanonical :
+      aligned.Perm
+        (List.replicate 8 planner8Wide ++ [planner8Short]) := by
+    rw [← plannerKey8_canonical_eq]
+    exact hPerm
+  have hNe : planner8Wide ≠ planner8Short := by
+    intro hEqual
+    have := congrArg RegionShapeSummary.rowCount hEqual
+    norm_num [planner8Wide, planner8Short, plannerShape] at this
+  obtain ⟨before, after, hCount, hItems⟩ :=
+    (V1.perm_replicate_append_singleton_iff hNe 8).mp hPermCanonical
+  refine ⟨before, by omega, ?_⟩
+  rw [actionKey8PlannerTrace_summaries]
+  have hAfter : 8 - before = after := by omega
+  rw [hAfter, ← hItems]
+  exact hAligned.imp fun _ _ hNormalized =>
+    RegionShapeSummary.placementEquivalent_iff_normalized_eq.mpr hNormalized
+
+/-- The key-four segment emitted by the consensus sort is represented by one
+of its six possible compact tie traces, up to irrelevant column ordering. -/
+theorem actionSortedKey4_exists_trace :
+    ∃ order, order ≤ 5 ∧
+      List.Forall₂ RegionShapeSummary.PlacementEquivalent
+        (plannerKey4 actionSortedPlannerSummaries)
+        (V1.PlannedSummaryBlock.summaries
+          (actionKey4PlannerTrace order)) := by
+  obtain ⟨aligned, hPerm, hAligned⟩ :=
+    V1.exists_perm_forall₂_of_map_perm
+      RegionShapeSummary.normalized plannerKey4_normalized_perm
+  have hPermCanonical :
+      aligned.Perm
+        [planner4Narrow, planner4Narrow, planner4Wide, planner4Wide] := by
+    rw [plannerKey4_canonical_eq] at hPerm
+    simpa using hPerm
+  have hNe : planner4Narrow ≠ planner4Wide := by
+    intro hEqual
+    have := congrArg RegionShapeSummary.rowCount hEqual
+    norm_num [planner4Narrow, planner4Wide, plannerShape] at this
+  have hPlacement := hAligned.imp (fun _ _ hNormalized =>
+    RegionShapeSummary.placementEquivalent_iff_normalized_eq.mpr
+      hNormalized)
+  rcases (V1.perm_two_replicates_iff hNe).mp hPermCanonical with
+      hOrder | hOrder | hOrder | hOrder | hOrder | hOrder
+  all_goals subst aligned
+  · refine ⟨0, by norm_num, ?_⟩
+    simpa only [show V1.PlannedSummaryBlock.summaries
+        (actionKey4PlannerTrace 0) =
+          [planner4Narrow, planner4Narrow,
+            planner4Wide, planner4Wide] by rfl] using hPlacement
+  · refine ⟨1, by norm_num, ?_⟩
+    simpa only [show V1.PlannedSummaryBlock.summaries
+        (actionKey4PlannerTrace 1) =
+          [planner4Narrow, planner4Wide,
+            planner4Narrow, planner4Wide] by rfl] using hPlacement
+  · refine ⟨2, by norm_num, ?_⟩
+    simpa only [show V1.PlannedSummaryBlock.summaries
+        (actionKey4PlannerTrace 2) =
+          [planner4Narrow, planner4Wide,
+            planner4Wide, planner4Narrow] by rfl] using hPlacement
+  · refine ⟨3, by norm_num, ?_⟩
+    simpa only [show V1.PlannedSummaryBlock.summaries
+        (actionKey4PlannerTrace 3) =
+          [planner4Wide, planner4Narrow,
+            planner4Narrow, planner4Wide] by rfl] using hPlacement
+  · refine ⟨4, by norm_num, ?_⟩
+    simpa only [show V1.PlannedSummaryBlock.summaries
+        (actionKey4PlannerTrace 4) =
+          [planner4Wide, planner4Narrow,
+            planner4Wide, planner4Narrow] by rfl] using hPlacement
+  · refine ⟨5, by norm_num, ?_⟩
+    simpa only [show V1.PlannedSummaryBlock.summaries
+        (actionKey4PlannerTrace 5) =
+          [planner4Wide, planner4Wide,
+            planner4Narrow, planner4Narrow] by rfl] using hPlacement
+
+/-- The regular high-key prefix of the compact Action placement trace. -/
+def actionAbove8PlannerTrace : List V1.PlannedSummaryBlock :=
+  actionExactPlannerTrace.take 52
+
+/-- The regular segment strictly between planner keys eight and four. -/
+def actionBetween8And4PlannerTrace : List V1.PlannedSummaryBlock :=
+  (actionExactPlannerTrace.drop 55).take 24
+
+/-- The regular suffix below planner key four. -/
+def actionBelow4PlannerTrace : List V1.PlannedSummaryBlock :=
+  actionExactPlannerTrace.drop 81
+
+/-- The low-key trace summaries, including the two zero-row regions omitted
+from the compact trace because they do not affect placement. -/
+def actionBelow4PlannerSummaries : List RegionShapeSummary :=
+  V1.PlannedSummaryBlock.summaries actionBelow4PlannerTrace ++
+    List.replicate 2 { columns := [], rowCount := 0 }
+
+theorem actionAbove8PlannerTrace_normalized_perm :
+    ((plannerAbove8 actionCanonicalPlannerSummaries).map
+        RegionShapeSummary.normalized).Perm
+      ((V1.PlannedSummaryBlock.summaries actionAbove8PlannerTrace).map
+        RegionShapeSummary.normalized) := by
+  decide +kernel
+
+theorem actionBetween8And4PlannerTrace_normalized_perm :
+    ((plannerBetween8And4 actionCanonicalPlannerSummaries).map
+        RegionShapeSummary.normalized).Perm
+      ((V1.PlannedSummaryBlock.summaries
+        actionBetween8And4PlannerTrace).map
+          RegionShapeSummary.normalized) := by
+  decide +kernel
+
+theorem actionBelow4PlannerTrace_normalized_perm :
+    ((plannerBelow4 actionCanonicalPlannerSummaries).map
+        RegionShapeSummary.normalized).Perm
+      (actionBelow4PlannerSummaries.map
+        RegionShapeSummary.normalized) := by
+  decide +kernel
+
+theorem actionAbove8PlannerTrace_key_sorted :
+    ((V1.PlannedSummaryBlock.summaries actionAbove8PlannerTrace).map
+      fun summary => (summary.key : OrderDual Nat)).SortedLE := by
+  decide +kernel
+
+theorem actionBetween8And4PlannerTrace_key_sorted :
+    ((V1.PlannedSummaryBlock.summaries
+      actionBetween8And4PlannerTrace).map
+        fun summary => (summary.key : OrderDual Nat)).SortedLE := by
+  decide +kernel
+
+theorem actionBelow4PlannerTrace_key_sorted :
+    (actionBelow4PlannerSummaries.map
+      fun summary => (summary.key : OrderDual Nat)).SortedLE := by
+  decide +kernel
+
+theorem actionAbove8PlannerTrace_equivalent
+    (initial : Nat) (allocations : CircuitAllocations)
+    (hValid : allocations.Valid) :
+    V1.SummaryStateEquivalent
+      (V1.slotSummaryStateFromWith initial
+        (plannerAbove8 actionCanonicalPlannerSummaries) allocations)
+      (V1.slotSummaryStateFromWith initial
+        (V1.PlannedSummaryBlock.summaries actionAbove8PlannerTrace)
+          allocations) := by
+  apply V1.SummaryStateEquivalent.symm
+  apply actionCanonicalRegularSegment_equivalent
+    (left := V1.PlannedSummaryBlock.summaries actionAbove8PlannerTrace)
+    (predicate := fun summary => decide (8 < summary.key))
+    actionAbove8PlannerTrace_normalized_perm.symm
+    actionAbove8PlannerTrace_key_sorted
+    (initial := initial) (allocations := allocations) (hvalid := hValid)
+  intro summary hSummary
+  simp only [decide_eq_true_eq] at hSummary
+  omega
+
+theorem actionBetween8And4PlannerTrace_equivalent
+    (initial : Nat) (allocations : CircuitAllocations)
+    (hValid : allocations.Valid) :
+    V1.SummaryStateEquivalent
+      (V1.slotSummaryStateFromWith initial
+        (plannerBetween8And4 actionCanonicalPlannerSummaries) allocations)
+      (V1.slotSummaryStateFromWith initial
+        (V1.PlannedSummaryBlock.summaries actionBetween8And4PlannerTrace)
+          allocations) := by
+  apply V1.SummaryStateEquivalent.symm
+  apply actionCanonicalRegularSegment_equivalent
+    (left := V1.PlannedSummaryBlock.summaries
+      actionBetween8And4PlannerTrace)
+    (predicate := fun summary =>
+      decide (4 < summary.key ∧ summary.key < 8))
+    actionBetween8And4PlannerTrace_normalized_perm.symm
+    actionBetween8And4PlannerTrace_key_sorted
+    (initial := initial) (allocations := allocations) (hvalid := hValid)
+  intro summary hSummary
+  simp only [decide_eq_true_eq] at hSummary
+  omega
+
+theorem actionBelow4PlannerTrace_equivalent
+    (initial : Nat) (allocations : CircuitAllocations)
+    (hValid : allocations.Valid) :
+    V1.SummaryStateEquivalent
+      (V1.slotSummaryStateFromWith initial
+        (plannerBelow4 actionCanonicalPlannerSummaries) allocations)
+      (V1.slotSummaryStateFromWith initial actionBelow4PlannerSummaries
+        allocations) := by
+  apply V1.SummaryStateEquivalent.symm
+  apply actionCanonicalRegularSegment_equivalent
+    (left := actionBelow4PlannerSummaries)
+    (predicate := fun summary => decide (summary.key < 4))
+    actionBelow4PlannerTrace_normalized_perm.symm
+    actionBelow4PlannerTrace_key_sorted
+    (initial := initial) (allocations := allocations) (hvalid := hValid)
+  intro summary hSummary
+  simp only [decide_eq_true_eq] at hSummary
+  omega
+
+/-- A compact trace for the canonical key order. It differs from the actual
+sort output only inside the two harmless equal-key groups. -/
+def actionCanonicalPlannerTrace : List V1.PlannedSummaryBlock :=
+  actionAbove8PlannerTrace ++ actionKey8PlannerTrace 8 ++
+    actionBetween8And4PlannerTrace ++ actionKey4PlannerTrace 0 ++
+      actionBelow4PlannerTrace
+
+theorem actionExactPlannerTrace_take55_eq :
+    actionExactPlannerTrace.take 55 =
+      actionAbove8PlannerTrace ++ actionKey8PlannerTrace 1 := by
+  rfl
+
+theorem actionExactPlannerTrace_take79_eq :
+    actionExactPlannerTrace.take 79 =
+      actionExactPlannerTrace.take 55 ++
+        actionBetween8And4PlannerTrace := by
+  rfl
+
+theorem actionExactPlannerTrace_take81_eq :
+    actionExactPlannerTrace.take 81 =
+      actionExactPlannerTrace.take 79 ++
+        (actionExactPlannerTrace.drop 79).take 2 := by
+  rfl
+
+theorem actionExactPlannerTrace_drop79_take2_eq :
+    (actionExactPlannerTrace.drop 79).take 2 =
+      [{ count := 2, summary := planner4Wide, start := 596 },
+       { count := 2, summary := planner4Narrow, start := 264 }] := by
+  rfl
+
+theorem actionExactPlannerTrace_drop79_take2_finalView
+    (view : V1.AllocationView) :
+    V1.PlannedSummaryBlock.finalView view
+        ((actionExactPlannerTrace.drop 79).take 2) =
+      V1.PlannedSummaryBlock.finalView view (actionKey4PlannerTrace 0) := by
+  rw [actionExactPlannerTrace_drop79_take2_eq]
+  calc
+    _ = V1.PlannedSummaryBlock.finalView view
+        (actionKey4PlannerTrace 5) := by rfl
+    _ = _ := actionKey4PlannerTrace_finalView view 5 (by norm_num)
+
+theorem actionExactPlannerTrace_drop79_take2_endpointFrom
+    (initial : Nat) :
+    V1.PlannedSummaryBlock.endpointFrom initial
+        ((actionExactPlannerTrace.drop 79).take 2) =
+      V1.PlannedSummaryBlock.endpointFrom initial
+        (actionKey4PlannerTrace 0) := by
+  rw [actionExactPlannerTrace_drop79_take2_eq]
+  calc
+    _ = V1.PlannedSummaryBlock.endpointFrom initial
+        (actionKey4PlannerTrace 5) := by
+      simp [actionKey4PlannerTrace,
+        V1.PlannedSummaryBlock.endpointFrom,
+        planner4Narrow, planner4Wide, plannerShape]
+    _ = _ := by
+      rw [actionKey4PlannerTrace_endpointFrom initial 5 (by norm_num),
+        actionKey4PlannerTrace_endpointFrom initial 0 (by norm_num)]
+
 /-- The end row of each run in the reduced placement trace. -/
 def actionExactPlannerEndpoints : List ℕ :=
   [137, 247, 247, 333, 758, 811, 864, 917, 970, 1023, 1023, 1076, 1129,
@@ -1642,4 +2080,3 @@ theorem actionExactPlannerTrace_endpoints_eq :
   decide +kernel
 
 end Zcash.Circuits.Action
-
