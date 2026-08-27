@@ -35,32 +35,34 @@ private def actionSelectorsMayConflict (left right : ℕ) : Bool :=
     actionUnresolvedSelectorPairs.contains (right, left)
 
 private def actionEarlySelectorConflict
-    (unknown : BitVec 9) (left right : ℕ) : Bool :=
+    (unknown : Fin 9 → Bool) (left right : ℕ) : Bool :=
   match left, right with
-  | 0, 4 | 4, 0 => unknown[0]
-  | 1, 4 | 4, 1 => unknown[1]
-  | 1, 5 | 5, 1 => unknown[2]
-  | 4, 5 | 5, 4 => unknown[3]
-  | 1, 6 | 6, 1 => unknown[4]
-  | 4, 6 | 6, 4 => unknown[5]
-  | 1, 7 | 7, 1 => unknown[6]
-  | 4, 7 | 7, 4 => unknown[7]
-  | 4, 8 | 8, 4 => unknown[8]
+  | 0, 4 | 4, 0 => unknown 0
+  | 1, 4 | 4, 1 => unknown 1
+  | 1, 5 | 5, 1 => unknown 2
+  | 4, 5 | 5, 4 => unknown 3
+  | 1, 6 | 6, 1 => unknown 4
+  | 4, 6 | 6, 4 => unknown 5
+  | 1, 7 | 7, 1 => unknown 6
+  | 4, 7 | 7, 4 => unknown 7
+  | 4, 8 | 8, 4 => unknown 8
+  | 8, 15 | 15, 8 | 8, 17 | 17, 8 | 9, 12 | 12, 9 |
+      10, 13 | 13, 10 | 11, 13 | 13, 11 => true
   | _, _ => false
 
 private def actionLateSelectorConflict
-    (first : Bool) (unknown : BitVec 9) (left right : ℕ) : Bool :=
+    (first : Bool) (unknown : Fin 9 → Bool) (left right : ℕ) : Bool :=
   match left, right with
   | 23, 26 | 26, 23 => first
-  | 23, 27 | 27, 23 => unknown[0]
-  | 24, 26 | 26, 24 => unknown[1]
-  | 24, 27 | 27, 24 => unknown[2]
-  | 28, 30 | 30, 28 => unknown[3]
-  | 28, 31 | 31, 28 => unknown[4]
-  | 28, 32 | 32, 28 => unknown[5]
-  | 28, 34 | 34, 28 => unknown[6]
-  | 28, 35 | 35, 28 => unknown[7]
-  | 28, 36 | 36, 28 => unknown[8]
+  | 23, 27 | 27, 23 => unknown 0
+  | 24, 26 | 26, 24 => unknown 1
+  | 24, 27 | 27, 24 => unknown 2
+  | 28, 30 | 30, 28 => unknown 3
+  | 28, 31 | 31, 28 => unknown 4
+  | 28, 32 | 32, 28 => unknown 5
+  | 28, 34 | 34, 28 => unknown 6
+  | 28, 35 | 35, 28 => unknown 7
+  | 28, 36 | 36, 28 => unknown 8
   | _, _ => false
 
 private def actionPackingDegree : ℕ → ℕ
@@ -84,7 +86,13 @@ private theorem actionPackingDegree_eq (selector : ℕ)
   interval_cases selector <;> rfl
 
 private def actionPackingRemainderThree : List (List ℕ) :=
-  [[16, 18, 19, 20, 21, 22, 23, 24, 26, 27, 28, 30, 31, 32, 33,
+  [[13, 17, 18, 19, 20, 21, 22, 23, 24, 26, 27, 28, 30, 31, 32,
+    33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
+    49, 50, 51, 52, 53, 54, 55],
+   [15, 17, 18, 19, 21, 22, 23, 24, 26, 27, 28, 30, 31, 32, 33,
+    34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
+    49, 50, 51, 52, 53, 54, 55],
+   [16, 18, 19, 20, 21, 22, 23, 24, 26, 27, 28, 30, 31, 32, 33,
     34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
     49, 50, 51, 52, 53, 54, 55],
    [17, 18, 19, 20, 21, 22, 23, 24, 26, 27, 28, 30, 31, 32, 33,
@@ -102,8 +110,13 @@ private def actionPackingRemainderSixSecond : List ℕ :=
   [24, 26, 27, 28, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
    41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55]
 
+private def actionPackingRemainderSixZeroth : List ℕ :=
+  [22, 23, 26, 27, 28, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+   40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55]
+
 private def actionPackingRemainderSix : List (List ℕ) :=
-  [actionPackingRemainderSixFirst, actionPackingRemainderSixSecond]
+  [actionPackingRemainderSixZeroth, actionPackingRemainderSixFirst,
+   actionPackingRemainderSixSecond]
 
 private def actionPackingRemainderNine : List (List ℕ) :=
   [[42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55],
@@ -113,7 +126,7 @@ private def actionPackingRemainderNine : List (List ℕ) :=
 private def actionPackingRemainderTen : List (List ℕ) :=
   [[49, 50, 51, 52, 53, 54, 55], [52, 53, 54, 55], [53, 54, 55]]
 
-private theorem actionPackingRemainder_three (unknown : BitVec 9) :
+private theorem actionPackingRemainder_three (unknown : Fin 9 → Bool) :
     packingRemainderWith 9 actionPackingDegree
         (actionEarlySelectorConflict unknown) 3 actionNonzeroSelectors ∈
       actionPackingRemainderThree := by
@@ -127,30 +140,50 @@ private theorem actionPackingRemainder_six
   simp only [actionPackingRemainderThree, List.mem_cons, List.not_mem_nil,
     or_false]
     at hselectors
-  rcases hselectors with rfl | rfl | rfl <;> decide +kernel
+  rcases hselectors with rfl | rfl | rfl | rfl | rfl <;> decide +kernel
 
-private theorem actionPackingRemainder_nine_false_first (unknown : BitVec 9) :
+private theorem actionPackingRemainder_nine_false_zeroth
+    (unknown : Fin 9 → Bool) :
+    packingRemainderWith 9 actionPackingDegree
+        (actionLateSelectorConflict false unknown) 3
+        actionPackingRemainderSixZeroth ∈
+      actionPackingRemainderNine := by
+  decide +revert +kernel
+
+private theorem actionPackingRemainder_nine_false_first
+    (unknown : Fin 9 → Bool) :
     packingRemainderWith 9 actionPackingDegree
         (actionLateSelectorConflict false unknown) 3
         actionPackingRemainderSixFirst ∈
       actionPackingRemainderNine := by
   decide +revert +kernel
 
-private theorem actionPackingRemainder_nine_false_second (unknown : BitVec 9) :
+private theorem actionPackingRemainder_nine_false_second
+    (unknown : Fin 9 → Bool) :
     packingRemainderWith 9 actionPackingDegree
         (actionLateSelectorConflict false unknown) 3
         actionPackingRemainderSixSecond ∈
       actionPackingRemainderNine := by
   decide +revert +kernel
 
-private theorem actionPackingRemainder_nine_true_first (unknown : BitVec 9) :
+private theorem actionPackingRemainder_nine_true_first
+    (unknown : Fin 9 → Bool) :
     packingRemainderWith 9 actionPackingDegree
         (actionLateSelectorConflict true unknown) 3
         actionPackingRemainderSixFirst ∈
       actionPackingRemainderNine := by
   decide +revert +kernel
 
-private theorem actionPackingRemainder_nine_true_second (unknown : BitVec 9) :
+private theorem actionPackingRemainder_nine_true_zeroth
+    (unknown : Fin 9 → Bool) :
+    packingRemainderWith 9 actionPackingDegree
+        (actionLateSelectorConflict true unknown) 3
+        actionPackingRemainderSixZeroth ∈
+      actionPackingRemainderNine := by
+  decide +revert +kernel
+
+private theorem actionPackingRemainder_nine_true_second
+    (unknown : Fin 9 → Bool) :
     packingRemainderWith 9 actionPackingDegree
         (actionLateSelectorConflict true unknown) 3
         actionPackingRemainderSixSecond ∈
@@ -158,14 +191,16 @@ private theorem actionPackingRemainder_nine_true_second (unknown : BitVec 9) :
   decide +revert +kernel
 
 private theorem actionPackingRemainder_nine (first : Bool)
-    (unknown : BitVec 9)
+    (unknown : Fin 9 → Bool)
     (selectors : List ℕ) (hselectors : selectors ∈ actionPackingRemainderSix) :
     packingRemainderWith 9 actionPackingDegree
         (actionLateSelectorConflict first unknown) 3 selectors ∈
       actionPackingRemainderNine := by
   simp only [actionPackingRemainderSix, List.mem_cons, List.not_mem_nil,
     or_false] at hselectors
-  rcases hselectors with rfl | rfl <;> cases first
+  rcases hselectors with rfl | rfl | rfl <;> cases first
+  · exact actionPackingRemainder_nine_false_zeroth unknown
+  · exact actionPackingRemainder_nine_true_zeroth unknown
   · exact actionPackingRemainder_nine_false_first unknown
   · exact actionPackingRemainder_nine_true_first unknown
   · exact actionPackingRemainder_nine_false_second unknown

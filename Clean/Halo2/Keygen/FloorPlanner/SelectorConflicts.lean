@@ -68,6 +68,117 @@ instance (summary : SynthesisSummary) (left right : ℕ) :
   unfold SelectorLocalRowsSeparated
   infer_instance
 
+/-- Distinct selector pairs activated at the same local row of one region. -/
+def regionLocalSelectorConflictPairs
+    (activations : List (ℕ × ℕ)) : Finset (ℕ × ℕ) :=
+  activations.toFinset.biUnion fun left =>
+    (activations.filterMap fun right =>
+      if left.1 < right.1 && left.2 = right.2 then
+        some (left.1, right.1)
+      else none).toFinset
+
+/-- Distinct selector pairs activated at the same local row of any region. -/
+def localSelectorConflictPairs
+    (summary : SynthesisSummary) : Finset (ℕ × ℕ) :=
+  summary.regionSelectorActivations.toFinset.biUnion
+    regionLocalSelectorConflictPairs
+
+@[synthesis_summary_norm]
+theorem localSelectorConflictPairs_combine
+    (left right : SynthesisSummary) :
+    localSelectorConflictPairs (left.combine right) =
+      localSelectorConflictPairs left ∪ localSelectorConflictPairs right := by
+  ext pair
+  simp only [localSelectorConflictPairs,
+    SynthesisSummary.combine_regionSelectorActivations,
+    List.toFinset_append, Finset.mem_biUnion, List.mem_toFinset,
+    Finset.mem_union]
+  aesop
+
+@[synthesis_summary_norm]
+theorem localSelectorConflictPairs_replicate
+    (count : ℕ) (summary : SynthesisSummary) :
+    localSelectorConflictPairs (SynthesisSummary.replicate count summary) =
+      if count = 0 then ∅ else localSelectorConflictPairs summary := by
+  ext pair
+  simp [localSelectorConflictPairs,
+    SynthesisSummary.replicate_regionSelectorActivations]
+  aesop
+
+@[synthesis_summary_norm]
+theorem localSelectorConflictPairs_ofRegion
+    (summary : RegionSynthesisSummary) :
+    localSelectorConflictPairs (SynthesisSummary.ofRegion summary) =
+      regionLocalSelectorConflictPairs summary.selectorActivations := by
+  ext pair
+  simp [localSelectorConflictPairs,
+    SynthesisSummary.ofRegion_regionSelectorActivations]
+
+@[synthesis_summary_norm]
+theorem localSelectorConflictPairs_empty :
+    localSelectorConflictPairs ({} : SynthesisSummary) = ∅ := by
+  simp [localSelectorConflictPairs]
+
+@[synthesis_summary_norm]
+theorem localSelectorConflictPairs_ofInstanceRow (row : ℕ) :
+    localSelectorConflictPairs (SynthesisSummary.ofInstanceRow row) = ∅ := by
+  simp [localSelectorConflictPairs, SynthesisSummary.ofInstanceRow]
+
+@[synthesis_summary_norm]
+theorem localSelectorConflictPairs_ofTableValues (values : List F) :
+    localSelectorConflictPairs (SynthesisSummary.ofTableValues values) = ∅ := by
+  simp [localSelectorConflictPairs, SynthesisSummary.ofTableValues]
+
+@[synthesis_summary_norm]
+theorem localSelectorConflictPairs_foldr_combine
+    (summaries : List SynthesisSummary) :
+    localSelectorConflictPairs
+        (summaries.foldr SynthesisSummary.combine {}) =
+      summaries.foldr
+        (fun summary pairs => localSelectorConflictPairs summary ∪ pairs) ∅ := by
+  induction summaries with
+  | nil => exact localSelectorConflictPairs_empty
+  | cons summary rest inductionHypothesis =>
+      simp only [List.foldr_cons, localSelectorConflictPairs_combine,
+        inductionHypothesis]
+
+private theorem snd_mem_of_mem_zip {α β : Type}
+    (left : List α) (right : List β) (a : α) (b : β)
+    (hpair : (a, b) ∈ left.zip right) : b ∈ right := by
+  induction left generalizing right with
+  | nil => simp at hpair
+  | cons head tail inductionHypothesis =>
+      cases right with
+      | nil => simp at hpair
+      | cons current remaining =>
+          rw [List.zip_cons_cons, List.mem_cons] at hpair
+          rcases hpair with hhead | htail
+          · exact List.mem_cons.mpr (Or.inl (congrArg Prod.snd hhead))
+          · exact List.mem_cons.mpr (Or.inr
+              (inductionHypothesis remaining htail))
+
+theorem selectorLocalRowsSeparated_of_not_mem_localConflictPairs
+    (summary : SynthesisSummary) (left right : ℕ)
+    (hlt : left < right)
+    (hnotConflict : (left, right) ∉ localSelectorConflictPairs summary) :
+    SelectorLocalRowsSeparated summary left right := by
+  intro region hregion leftActivation hleftActivation hleftSelector
+    rightActivation hrightActivation hrightSelector hrows
+  apply hnotConflict
+  rw [localSelectorConflictPairs, Finset.mem_biUnion]
+  refine ⟨region.2, ?_, ?_⟩
+  · simpa using snd_mem_of_mem_zip _ _ region.1 region.2 hregion
+  · rw [regionLocalSelectorConflictPairs, Finset.mem_biUnion]
+    refine ⟨leftActivation, by simpa using hleftActivation, ?_⟩
+    simp only [List.mem_toFinset, List.mem_filterMap]
+    refine ⟨rightActivation, hrightActivation, ?_⟩
+    split <;> rename_i hcondition
+    · simp only [Option.some.injEq, Prod.mk.injEq]
+      exact ⟨hleftSelector, hrightSelector⟩
+    · exfalso
+      apply hcondition
+      simp [hleftSelector, hrightSelector, hrows, hlt]
+
 private theorem initial_le_index_of_mem_indexedRegionSummaries_zip
     (initial : ℕ) (summaries : List RegionShapeSummary)
     (activations : List (List (ℕ × ℕ)))
@@ -395,6 +506,69 @@ theorem selectorSitesSeparated_of_commonColumn
         leftSite hleftColumn hleftSite,
       mem_selectorSite_of_mem_commonColumns summary right column
         rightSite hrightColumn hrightSite⟩
+
+private theorem anchor_mem_selectorSite
+    (operations : Operations F) (anchor : ℕ → RegionColumn)
+    (hanchors : V1.SelectorAnchoredBy
+      (synthesisSummary operations).regionShapes anchor)
+    (selector : ℕ) (site : SelectorSite)
+    (hsite : site ∈ selectorSites (synthesisSummary operations) selector) :
+    anchor selector ∈ site.columns := by
+  obtain ⟨index, body, hregion, _, hcolumns, hselector, _⟩ :=
+    selectorSites_wellFormed operations selector site hsite
+  have hshape : measureRegion index body ∈ measureRegions operations := by
+    rw [measureRegions, List.mem_map]
+    exact ⟨(index, body), hregion, rfl⟩
+  rw [measureRegions_eq_synthesisSummary_regionShapes] at hshape
+  have hsummary : (measureRegion index body).toSummary ∈
+      (synthesisSummary operations).regionShapes := by
+    rw [← indexRegionSummaries_toSummary 0
+      (synthesisSummary operations).regionShapes]
+    exact List.mem_map.mpr ⟨measureRegion index body, hshape, rfl⟩
+  have hanchored := List.forall_iff_forall_mem.mp hanchors
+    (measureRegion index body).toSummary hsummary
+  have hanchor := hanchored selector (by simpa using hselector)
+  rw [physicalColumns, List.mem_filter] at hanchor
+  simpa only [hcolumns] using hanchor.1
+
+/-- A compositional selector anchor discharges every cross-region case. Only
+same-region activations at the same local row remain to be excluded. -/
+theorem selectorSitesSeparated_of_anchor
+    (operations : Operations F) (anchor : ℕ → RegionColumn)
+    (hanchors : V1.SelectorAnchoredBy
+      (synthesisSummary operations).regionShapes anchor)
+    (left right : ℕ)
+    (hlocal : SelectorLocalRowsSeparated
+      (synthesisSummary operations) left right)
+    (hanchor : anchor left = anchor right) :
+    SelectorSitesSeparated (synthesisSummary operations) left right := by
+  intro leftSite hleftSite rightSite hrightSite
+  split <;> rename_i hregions
+  · rw [mem_selectorSites_iff] at hleftSite hrightSite
+    obtain ⟨leftShape, leftActivations, hleftRegion, hleftActivation,
+      hleftIndex, _⟩ := hleftSite
+    obtain ⟨rightShape, rightActivations, hrightRegion,
+      hrightActivation, hrightIndex, _⟩ := hrightSite
+    have hindex : leftShape.index = rightShape.index := by
+      rw [← hleftIndex, ← hrightIndex]
+      exact hregions
+    have hactivations : leftActivations = rightActivations :=
+      localActivations_eq_of_regionIndex_eq 0
+        (synthesisSummary operations).regionShapes
+        (synthesisSummary operations).regionSelectorActivations
+        leftShape rightShape leftActivations rightActivations
+        hleftRegion hrightRegion hindex
+    intro hrows
+    subst rightActivations
+    exact hlocal (leftShape, leftActivations) hleftRegion
+      (left, leftSite.row) hleftActivation rfl
+      (right, rightSite.row) hrightActivation rfl hrows
+  · refine ⟨anchor left,
+      anchor_mem_selectorSite operations anchor hanchors left leftSite
+        hleftSite, ?_⟩
+    rw [hanchor]
+    exact anchor_mem_selectorSite operations anchor hanchors right rightSite
+      hrightSite
 
 theorem mem_placeSelectorActivations_iff_mem_selectorSites
     (starts : List ℕ) (operations : Operations F)
