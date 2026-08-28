@@ -1478,8 +1478,8 @@ structure ActionPlannerRun where
   block : Nat
   start : Nat
 
-/-- Exact Action placement compressed to consecutive runs of equal physical shapes. -/
-def actionExactPlannerTrace : List V1.PlannedSummaryBlock := (
+/-- Exact Action placement data, independent of both synthesis and region sorting. -/
+def actionExactPlannerRuns : List ActionPlannerRun :=
   [{ count := 1, block := 0, start := 0 },
    { count := 1, block := 1, start := 137 },
    { count := 1, block := 2, start := 137 },
@@ -1636,7 +1636,11 @@ def actionExactPlannerTrace : List V1.PlannedSummaryBlock := (
    { count := 2, block := 30, start := 1772 },
    { count := 1, block := 29, start := 334 },
    { count := 1, block := 31, start := 329 },
-  ] : List ActionPlannerRun).map fun item =>
+  ]
+
+/-- Exact Action placement compressed to consecutive runs of equal physical shapes. -/
+def actionExactPlannerTrace : List V1.PlannedSummaryBlock :=
+  actionExactPlannerRuns.map fun item =>
     { count := item.count
       summary := (actionPlannerBlocks.getD item.block
         (0, { columns := [], rowCount := 0 })).2
@@ -2075,7 +2079,7 @@ theorem actionExactPlannerTrace_endpoints_eq :
     (actionExactPlannerTrace.map fun block =>
       block.start + block.count * block.summary.rowCount) =
       actionExactPlannerEndpoints := by
-  unfold actionExactPlannerTrace actionPlannerBlocks plannerShape
+  unfold actionExactPlannerTrace actionExactPlannerRuns actionPlannerBlocks plannerShape
     actionExactPlannerEndpoints
   decide +kernel
 

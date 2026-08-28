@@ -75,6 +75,7 @@ theorem actionSortedPlannerSummaries_equivalent_exact :
       actionSynthesisSummary by
     exact actionSynthesisSummary_eq_operations.symm]
   unfold actionExactSortedPlannerSummaries actionExactPlannerTrace
+    actionExactPlannerRuns
     actionPlannerBlocks actionSortedRegionIndices actionSynthesisSummary
     Circuit.mainPostSynthesisSummary Circuit.synthesizeBaseSynthesisSummary
     Circuit.synthWitnessSynthesisSummary Circuit.synthChecksSynthesisSummary

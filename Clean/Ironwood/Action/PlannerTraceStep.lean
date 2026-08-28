@@ -6,7 +6,7 @@ open Halo2 FloorPlanner
 
 macro "action_exact_planner_step" : tactic =>
   `(tactic|
-    (unfold actionExactPlannerTrace actionPlannerBlocks
+    (unfold actionExactPlannerTrace actionExactPlannerRuns actionPlannerBlocks
      try unfold planner8Wide
      try unfold planner8Short
      try unfold planner4Narrow
