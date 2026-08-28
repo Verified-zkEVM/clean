@@ -501,12 +501,13 @@ private theorem actionMerkleHashLocalSelectorConflictPairs_eq :
   aesop
 
 private theorem actionCommitHashLocalSelectorConflictPairs_eq
-    (ns : List ℕ) (cfg : Sinsemilla.HashPiece.Config)
+    (ns : List ℕ) (cfg : Sinsemilla.HashPiece.Config) (qS1 qS4 : ℕ)
     (hns : ns ≠ [])
-    (hqS4 : cfg.qS4.index = 26) (hqS1 : cfg.qS1.index = 25) :
+    (hqS4 : cfg.qS4.index = qS4) (hqS1 : cfg.qS1.index = qS1)
+    (hlt : qS1 < qS4) :
     localSelectorConflictPairs
         (Sinsemilla.HashToPoint.hashCircuitSynthesisSummary ns cfg) =
-      [(25, 26)].toFinset := by
+      [(qS1, qS4)].toFinset := by
   unfold Sinsemilla.HashToPoint.hashCircuitSynthesisSummary
   rw [localSelectorConflictPairs_ofRegion]
   ext pair
@@ -526,8 +527,137 @@ private theorem actionCommitHashLocalSelectorConflictPairs_eq
     obtain ⟨hleft, hright⟩ :=
       Sinsemilla.HashToPoint.qS1_qS4_overlap_in_hashCircuitSynthesisSummary
         ns cfg hns
-    exact ⟨by omega, 0, by simpa only [hqS1] using hleft,
+    exact ⟨hlt, 0, by simpa only [hqS1] using hleft,
       by simpa only [hqS4] using hright⟩
+
+private theorem actionWitnessCheckLocalSelectorConflictPairs_eq
+    (numWords : ℕ) (strict : Bool) (hpositive : 0 < numWords) :
+    localSelectorConflictPairs
+      (LookupRangeCheck.witnessCheckSynthesisSummary 10 numWords strict
+          actionConfig.lookupConfig) = [(2, 3)].toFinset := by
+  unfold LookupRangeCheck.witnessCheckSynthesisSummary
+    LookupRangeCheck.rangeCheckSynthesisSummary
+  rw [localSelectorConflictPairs_ofRegion]
+  simp only [RegionSynthesisSummary.withSelectorActivations_selectorActivations]
+  rw [show actionConfig.lookupConfig.qLookup.index = 2 by rfl,
+    show actionConfig.lookupConfig.qRunning.index = 3 by rfl]
+  exact regionLocalSelectorConflictPairs_repeatedSelectorPattern_eq
+    2 3 0 1 numWords (by omega) hpositive
+
+private theorem actionWitnessCheckDecomposedLocalSelectorConflictPairs_eq :
+    localSelectorConflictPairs
+      (LookupRangeCheck.witnessCheckDecomposedSynthesisSummary
+          actionConfig.lookupConfig) = [(2, 3)].toFinset := by
+  unfold LookupRangeCheck.witnessCheckDecomposedSynthesisSummary
+    LookupRangeCheck.rangeCheckAtDecomposedSynthesisSummary
+  rw [localSelectorConflictPairs_ofRegion]
+  simp only [RegionSynthesisSummary.combine_selectorActivations,
+    RegionSynthesisSummary.ofColumns_selectorActivations,
+    RegionSynthesisSummary.withSelectorActivations_selectorActivations,
+    List.nil_append]
+  rw [show actionConfig.lookupConfig.qLookup.index = 2 by rfl,
+    show actionConfig.lookupConfig.qRunning.index = 3 by rfl]
+  exact regionLocalSelectorConflictPairs_repeatedSelectorPattern_eq
+    2 3 0 1 25 (by omega) (by omega)
+
+private theorem actionYCanonicityLocalSelectorConflictPairs_eq
+    (gateConfig : NoteCommit.YCanonicity.Config) :
+    localSelectorConflictPairs
+        (NoteCommit.YCanonicityCheck.synthesisSummary gateConfig
+          actionConfig.lookupConfig) = [(2, 3), (2, 4)].toFinset := by
+  unfold NoteCommit.YCanonicityCheck.synthesisSummary
+  simp only [localSelectorConflictPairs_combine]
+  rw [actionWitnessCheckDecomposedLocalSelectorConflictPairs_eq,
+    actionWitnessCheckLocalSelectorConflictPairs_eq 13 false (by omega)]
+  unfold NoteCommit.YCanonicity.synthesisSummary
+  rw [actionShortRangeLocalSelectorConflictPairs_eq]
+  simp [synthesis_summary_norm, regionLocalSelectorConflictPairs]
+  ext pair
+  simp
+  aesop
+
+private theorem witnessMessagePieceLocalSelectorConflictPairs_eq
+    (config : Sinsemilla.HashPiece.Config) :
+    localSelectorConflictPairs
+        (Sinsemilla.HashToPoint.witnessMessagePieceSynthesisSummary config) = ∅ := by
+  unfold Sinsemilla.HashToPoint.witnessMessagePieceSynthesisSummary
+  rw [localSelectorConflictPairs_ofRegion]
+  rw [RegionSynthesisSummary.ofColumns_selectorActivations]
+  simp [regionLocalSelectorConflictPairs]
+
+private theorem actionCommitDomainLocalSelectorConflictPairs_eq
+    (ns : List ℕ) (hashConfig : Sinsemilla.HashPiece.Config)
+    (qS1 qS4 : ℕ) (hns : ns ≠ [])
+    (hqS4 : hashConfig.qS4.index = qS4)
+    (hqS1 : hashConfig.qS1.index = qS1) (hlt : qS1 < qS4) :
+    localSelectorConflictPairs
+        (Sinsemilla.CommitDomain.commitSynthesisSummary ns
+          (actionConfig.eccConfig.mulFixedFull,
+            hashConfig,
+            actionConfig.eccConfig.add)) =
+      [(7, 19), (qS1, qS4)].toFinset := by
+  unfold Sinsemilla.CommitDomain.commitSynthesisSummary
+  rw [localSelectorConflictPairs_combine,
+    localSelectorConflictPairs_combine,
+    actionFullWidthLocalSelectorConflictPairs_eq,
+    actionCommitHashLocalSelectorConflictPairs_eq ns hashConfig qS1 qS4
+      hns hqS4 hqS1 hlt]
+  unfold Ecc.Add.synthesisSummary
+  simp [synthesis_summary_norm, regionLocalSelectorConflictPairs]
+
+private theorem actionCommitIvkPiecesLocalSelectorConflictPairs_eq :
+    localSelectorConflictPairs
+        (CommitIvk.Main.synthPiecesSynthesisSummary
+          { gate := actionConfig.commitIvkConfig,
+            hashConfig := actionConfig.sinsemilla1,
+            lookupConfig := actionConfig.lookupConfig,
+            mulConfig := actionConfig.eccConfig.mulFixedFull,
+            addConfig := actionConfig.eccConfig.add }) =
+      [(2, 4)].toFinset := by
+  unfold CommitIvk.Main.synthPiecesSynthesisSummary
+  simp only
+  rw [localSelectorConflictPairs_foldr_combine]
+  simp only [List.foldr_cons, List.foldr_nil,
+    witnessMessagePieceLocalSelectorConflictPairs_eq,
+    actionShortRangeLocalSelectorConflictPairs_eq, Finset.empty_union,
+    Finset.union_empty, Finset.union_self]
+
+private theorem actionCommitIvkCanonicityLocalSelectorConflictPairs_eq :
+    localSelectorConflictPairs
+        (CommitIvk.Canonicity.circuitSynthesisSummary
+          actionConfig.commitIvkConfig actionConfig.lookupConfig) =
+      [(2, 3)].toFinset := by
+  unfold CommitIvk.Canonicity.circuitSynthesisSummary
+  rw [localSelectorConflictPairs_combine,
+    localSelectorConflictPairs_combine,
+    actionWitnessCheckLocalSelectorConflictPairs_eq 13 false (by omega),
+    actionWitnessCheckLocalSelectorConflictPairs_eq 14 false (by omega)]
+  unfold CommitIvk.synthesisSummary
+  rw [localSelectorConflictPairs_ofRegion]
+  simp only [RegionSynthesisSummary.withSelectorActivations_selectorActivations,
+    regionLocalSelectorConflictPairs_singleton]
+  simp
+
+private theorem actionCommitIvkLocalSelectorConflictPairs_eq :
+    localSelectorConflictPairs
+        (CommitIvk.Main.synthesisSummary
+          { gate := actionConfig.commitIvkConfig,
+            hashConfig := actionConfig.sinsemilla1,
+            lookupConfig := actionConfig.lookupConfig,
+            mulConfig := actionConfig.eccConfig.mulFixedFull,
+            addConfig := actionConfig.eccConfig.add }) =
+      [(2, 4), (7, 19), (25, 26), (2, 3)].toFinset := by
+  unfold CommitIvk.Main.synthesisSummary
+  rw [localSelectorConflictPairs_combine,
+    localSelectorConflictPairs_combine,
+    actionCommitIvkPiecesLocalSelectorConflictPairs_eq,
+    actionCommitDomainLocalSelectorConflictPairs_eq CommitIvk.Main.ns
+      actionConfig.sinsemilla1 25 26 CommitIvk.Main.ns_ne_nil
+      (by rfl) (by rfl) (by omega),
+    actionCommitIvkCanonicityLocalSelectorConflictPairs_eq]
+  ext pair
+  simp
+  aesop
 
 private theorem actionMerkleHashLayerLocalSelectorConflictPairs_eq :
     localSelectorConflictPairs

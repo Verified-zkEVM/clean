@@ -102,6 +102,45 @@ theorem mem_regionLocalSelectorConflictPairs_iff
     refine ⟨(left, row), hleft, (right, row), hright, ?_⟩
     simp [hlt]
 
+/-- Repeating a two-selector pattern on at least one row creates exactly the
+conflict between those selectors. -/
+theorem regionLocalSelectorConflictPairs_repeatedSelectorPattern_eq
+    (left right offset stride count : ℕ) (hlt : left < right)
+    (hcount : 0 < count) :
+    regionLocalSelectorConflictPairs
+        (RegionSynthesisSummary.repeatedSelectorPattern
+          [(left, 0), (right, 0)] offset stride count) =
+      [(left, right)].toFinset := by
+  ext pair
+  rcases pair with ⟨sourceLeft, sourceRight⟩
+  rw [mem_regionLocalSelectorConflictPairs_iff]
+  simp only [List.mem_toFinset, List.mem_singleton, Prod.mk.injEq,
+    RegionSynthesisSummary.mem_repeatedSelectorPattern_iff]
+  constructor
+  · rintro ⟨hsourceLt, row, hsourceLeft, hsourceRight⟩
+    obtain ⟨_, _, leftSource, hleftSource, _⟩ := hsourceLeft
+    obtain ⟨_, _, rightSource, hrightSource, _⟩ := hsourceRight
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hleftSource hrightSource
+    rcases hleftSource with rfl | rfl <;>
+      rcases hrightSource with rfl | rfl <;> omega
+  · rintro ⟨rfl, rfl⟩
+    refine ⟨hlt, offset, ?_, ?_⟩
+    · exact ⟨0, hcount, (sourceLeft, 0), by simp, by simp⟩
+    · exact ⟨0, hcount, (sourceRight, 0), by simp, by simp⟩
+
+@[simp]
+theorem regionLocalSelectorConflictPairs_singleton (activation : ℕ × ℕ) :
+    regionLocalSelectorConflictPairs [activation] = ∅ := by
+  ext pair
+  rcases pair with ⟨left, right⟩
+  rw [mem_regionLocalSelectorConflictPairs_iff]
+  constructor
+  · rintro ⟨hlt, row, hleft, hright⟩
+    have heq := congrArg Prod.fst
+      ((List.mem_singleton.mp hleft).trans (List.mem_singleton.mp hright).symm)
+    omega
+  · simp
+
 /-- Distinct selector pairs activated at the same local row of any region. -/
 def localSelectorConflictPairs
     (summary : SynthesisSummary) : Finset (ℕ × ℕ) :=
