@@ -439,6 +439,102 @@ private theorem actionMulLocalSelectorConflictPairs_eq :
   ext pair
   simp
 
+private theorem actionAddressIntegrityLocalSelectorConflictPairs_eq :
+    localSelectorConflictPairs
+        (AddressIntegrity.synthesisSummary
+          (actionConfig.eccConfig.mul,
+            actionConfig.eccConfig.witnessPoint)) =
+      [(9, 12), (10, 13), (11, 13), (8, 15), (8, 17),
+        (2, 3)].toFinset := by
+  unfold AddressIntegrity.synthesisSummary
+  rw [localSelectorConflictPairs_combine,
+    localSelectorConflictPairs_combine,
+    actionMulLocalSelectorConflictPairs_eq]
+  unfold Ecc.WitnessPoint.pointNonIdSynthesisSummary
+  simp [synthesis_summary_norm, regionLocalSelectorConflictPairs]
+
+private theorem actionShortRangeLocalSelectorConflictPairs_eq :
+    localSelectorConflictPairs
+        (LookupRangeCheck.witnessShortCheckSynthesisSummary 10
+          actionConfig.lookupConfig) = [(2, 4)].toFinset := by
+  ext pair
+  rcases pair with ⟨left, right⟩
+  unfold LookupRangeCheck.witnessShortCheckSynthesisSummary
+    LookupRangeCheck.shortRangeCheckSynthesisSummary
+  simp only [synthesis_summary_norm, List.mem_toFinset,
+    mem_regionLocalSelectorConflictPairs_iff]
+  rw [show actionConfig.lookupConfig.qLookup.index = 2 by rfl,
+    show actionConfig.lookupConfig.qBitshift.index = 4 by rfl]
+  simp
+  constructor
+  · rintro ⟨hlt, row, hleft, hright⟩
+    rcases hleft with hleft | hleft | hleft <;>
+      rcases hright with hright | hright | hright <;> omega
+  · rintro ⟨rfl, rfl⟩
+    exact ⟨by omega, 1, Or.inr (Or.inl ⟨rfl, rfl⟩),
+      Or.inr (Or.inr ⟨rfl, rfl⟩)⟩
+
+private theorem actionMerkleHashLocalSelectorConflictPairs_eq :
+    localSelectorConflictPairs
+        (Sinsemilla.HashToPoint.hashCircuitSynthesisSummary
+          Sinsemilla.Merkle.HashLayer.merkleNs
+          actionConfig.merkle1.sinsemilla) =
+      [(25, 26)].toFinset := by
+  ext pair
+  rcases pair with ⟨left, right⟩
+  unfold Sinsemilla.HashToPoint.hashCircuitSynthesisSummary
+    Sinsemilla.HashToPoint.hashRegionSynthesisSummary
+    Sinsemilla.Chain.circuitSynthesisSummary
+    Sinsemilla.Chain.slotIterationSynthesisSummary
+    Sinsemilla.Chain.slotSynthesisSummary
+    Sinsemilla.HashPiece.circuitSynthesisSummary
+    Sinsemilla.HashPiece.loopSynthesisSummary
+    Sinsemilla.Merkle.HashLayer.merkleNs
+  simp only [synthesis_summary_norm, List.mem_toFinset,
+    mem_regionLocalSelectorConflictPairs_iff, List.mem_append,
+    RegionSynthesisSummary.mem_repeatedSelectorPattern_iff,
+    List.ofFn_succ, List.ofFn_zero, List.foldr_cons, List.foldr_nil]
+  rw [show actionConfig.merkle1.sinsemilla.qS4.index = 26 by rfl,
+    show actionConfig.merkle1.sinsemilla.qS1.index = 25 by rfl,
+    show actionConfig.merkle1.sinsemilla.qS1.toSelector.index = 25 by rfl]
+  simp [Sinsemilla.Chain.prefixRows]
+  aesop
+
+private theorem actionMerkleHashLayerLocalSelectorConflictPairs_eq :
+    localSelectorConflictPairs
+        (Sinsemilla.Merkle.HashLayer.synthesisSummary
+          actionConfig.merkle1 actionConfig.lookupConfig) =
+      [(2, 4), (25, 26)].toFinset := by
+  unfold Sinsemilla.Merkle.HashLayer.synthesisSummary
+  simp only [localSelectorConflictPairs_combine]
+  rw [actionShortRangeLocalSelectorConflictPairs_eq,
+    actionMerkleHashLocalSelectorConflictPairs_eq]
+  unfold Sinsemilla.HashToPoint.witnessMessagePieceSynthesisSummary
+    Sinsemilla.Merkle.Gate.synthesisSummary
+  simp [synthesis_summary_norm, regionLocalSelectorConflictPairs]
+
+private theorem actionMerkleLayerLocalSelectorConflictPairs_eq :
+    localSelectorConflictPairs
+        (Sinsemilla.Merkle.Layer.synthesisSummary
+          actionConfig.merkle1.condSwap actionConfig.merkle1
+          actionConfig.lookupConfig) =
+      [(2, 4), (25, 26)].toFinset := by
+  unfold Sinsemilla.Merkle.Layer.synthesisSummary
+  rw [localSelectorConflictPairs_combine,
+    actionMerkleHashLayerLocalSelectorConflictPairs_eq]
+  simp [synthesis_summary_norm, regionLocalSelectorConflictPairs]
+
+private theorem actionMerkleLocalSelectorConflictPairs_eq :
+    localSelectorConflictPairs
+        (Sinsemilla.Merkle.CalculateRoot.synthesisSummary 16
+          (actionConfig.merkle1.condSwap, actionConfig.merkle1,
+            actionConfig.lookupConfig)) =
+      [(2, 4), (25, 26)].toFinset := by
+  unfold Sinsemilla.Merkle.CalculateRoot.synthesisSummary
+  rw [localSelectorConflictPairs_replicate,
+    actionMerkleLayerLocalSelectorConflictPairs_eq]
+  simp
+
 private def actionEarlySelectorConflict
     (unknown : Fin 9 → Bool) (left right : ℕ) : Bool :=
   match left, right with
