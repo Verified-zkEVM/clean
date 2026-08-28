@@ -17,12 +17,23 @@ open Halo2 FloorPlanner
 def actionAdviceColumn6Selectors : List ℕ :=
   [0, 1, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20, 21, 22, 23, 24]
 
+def actionLateAdviceColumn6Selectors : List ℕ :=
+  [29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43,
+   44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55]
+
 def actionAdviceColumn9Selectors : List ℕ :=
   [4, 9, 10, 11, 12, 13, 14, 15, 17]
 
 set_option maxRecDepth 10000 in
 theorem actionAdviceColumn6Selectors_useColumn :
     actionAdviceColumn6Selectors.Forall fun selector =>
+      SelectorUsesColumn actionSynthesisSummary selector
+        (.column .advice 6) := by
+  decide +kernel
+
+set_option maxRecDepth 10000 in
+theorem actionLateAdviceColumn6Selectors_useColumn :
+    actionLateAdviceColumn6Selectors.Forall fun selector =>
       SelectorUsesColumn actionSynthesisSummary selector
         (.column .advice 6) := by
   decide +kernel
