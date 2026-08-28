@@ -221,6 +221,224 @@ private theorem actionDeriveNullifierLocalSelectorConflictPairs_eq :
     Ecc.Add.synthesisSummary
   simp [synthesis_summary_norm, regionLocalSelectorConflictPairs]
 
+private theorem actionMulMainSelectorActivation_iff
+    (selector row : ℕ) :
+    (selector, row) ∈
+        (Ecc.Mul.mainCircuitSynthesisSummary
+          actionConfig.eccConfig.mul).selectorActivations ↔
+      (selector = 8 ∧ (row = 0 ∨
+        (∃ index < 3, row = 129 + 2 * index) ∨
+        (∃ index < 3, row = 130 + 2 * index) ∨ row = 135)) ∨
+      (selector = 9 ∧ row = 1) ∨
+      (selector = 10 ∧ ∃ index < 124, row = 2 + index) ∨
+      (selector = 11 ∧ row = 126) ∨
+      (selector = 12 ∧ row = 1) ∨
+      (selector = 13 ∧ ∃ index < 125, row = 2 + index) ∨
+      (selector = 14 ∧ row = 127) ∨
+      (selector = 15 ∧ ∃ index < 3, row = 130 + 2 * index) ∨
+      (selector = 17 ∧ row = 135) := by
+  unfold Ecc.Mul.mainCircuitSynthesisSummary
+    Ecc.MulIncomplete.doubleAndAddSynthesisSummary
+    Ecc.MulIncomplete.loopSynthesisSummary
+    Ecc.MulComplete.circuitSynthesisSummary
+    Ecc.MulComplete.roundsSynthesisSummary Ecc.Add.synthesisSummary
+  simp only [synthesis_summary_norm, List.mem_append,
+    RegionSynthesisSummary.mem_repeatedSelectorActivations_iff,
+    RegionSynthesisSummary.mem_repeatedSelectorPattern_iff]
+  rw [show actionConfig.eccConfig.mul.addConfig.qAdd.index = 8 by rfl,
+    show actionConfig.eccConfig.mul.hiConfig.qMul1.index = 9 by rfl,
+    show actionConfig.eccConfig.mul.hiConfig.qMul2.index = 10 by rfl,
+    show actionConfig.eccConfig.mul.hiConfig.qMul3.index = 11 by rfl,
+    show actionConfig.eccConfig.mul.loConfig.qMul1.index = 12 by rfl,
+    show actionConfig.eccConfig.mul.loConfig.qMul2.index = 13 by rfl,
+    show actionConfig.eccConfig.mul.loConfig.qMul3.index = 14 by rfl,
+    show actionConfig.eccConfig.mul.completeConfig.qDecompose.index = 15 by rfl,
+    show actionConfig.eccConfig.mul.completeConfig.addConfig.qAdd.index = 8 by rfl,
+    show actionConfig.eccConfig.mul.qMulLsb.index = 17 by rfl]
+  simp only [Ecc.Mul.offInit, Ecc.Mul.offHi, Ecc.Mul.offLo,
+    Ecc.Mul.offComp, Ecc.Mul.offLsb, Ecc.Mul.loSpan, Ecc.Mul.compSpan]
+  simp only [List.not_mem_nil, false_or, List.mem_cons, Prod.mk.injEq,
+    or_false, Nat.one_mul]
+  constructor
+  · rintro (h8zero | (h9 | h10 | h11) | (h12 | h13 | h14) |
+      hcomplete | h17 | h8last)
+    · left
+      exact ⟨h8zero.1, Or.inl h8zero.2⟩
+    · right; left
+      exact h9
+    · rcases h10 with ⟨hselector, index, hindex, hrow⟩
+      right; right; left
+      exact ⟨hselector, index, hindex, by omega⟩
+    · right; right; right; left
+      exact ⟨h11.1, by omega⟩
+    · right; right; right; right; left
+      exact ⟨h12.1, by simpa [Ecc.Mul.offHi] using h12.2⟩
+    · rcases h13 with ⟨hselector, index, hindex, hrow⟩
+      right; right; right; right; right; left
+      exact ⟨hselector, index, hindex,
+        by simpa [Ecc.Mul.offHi] using hrow⟩
+    · right; right; right; right; right; right; left
+      exact ⟨h14.1, by simpa [Ecc.Mul.offHi] using h14.2⟩
+    · rcases hcomplete with ⟨index, hindex, source,
+        hsource, hselector, hrow⟩
+      rcases hsource with rfl | rfl | rfl
+      · right; right; right; right; right; right; right; left
+        exact ⟨hselector, index, hindex, by omega⟩
+      · left
+        exact ⟨hselector, Or.inr (Or.inl
+          ⟨index, hindex, by omega⟩)⟩
+      · left
+        exact ⟨hselector, Or.inr (Or.inr (Or.inl
+          ⟨index, hindex, by omega⟩))⟩
+    · right; right; right; right; right; right; right; right
+      exact ⟨h17.1, by omega⟩
+    · left
+      exact ⟨h8last.1, Or.inr (Or.inr (Or.inr (by omega)))⟩
+  · rintro (h8 | h9 | h10 | h11 | h12 | h13 | h14 | h15 | h17)
+    · rcases h8 with ⟨hselector, hrow | heven | hodd | hrow⟩
+      · left
+        exact ⟨hselector, hrow⟩
+      · rcases heven with ⟨index, hindex, hrow⟩
+        right; right; right; left
+        exact ⟨index, hindex, (8, 0), Or.inr (Or.inl rfl),
+          hselector, by omega⟩
+      · rcases hodd with ⟨index, hindex, hrow⟩
+        right; right; right; left
+        exact ⟨index, hindex, (8, 1), Or.inr (Or.inr rfl),
+          hselector, by omega⟩
+      · right; right; right; right; right
+        exact ⟨hselector, by omega⟩
+    · right; left; left
+      exact h9
+    · rcases h10 with ⟨hselector, index, hindex, hrow⟩
+      right; left; right; left
+      exact ⟨hselector, index, hindex, by omega⟩
+    · right; left; right; right
+      exact ⟨h11.1, by omega⟩
+    · right; right; left; left
+      exact ⟨h12.1, by simpa [Ecc.Mul.offHi] using h12.2⟩
+    · rcases h13 with ⟨hselector, index, hindex, hrow⟩
+      right; right; left; right; left
+      exact ⟨hselector, index, hindex,
+        by simpa [Ecc.Mul.offHi] using hrow⟩
+    · right; right; left; right; right
+      exact ⟨h14.1, by simpa [Ecc.Mul.offHi] using h14.2⟩
+    · rcases h15 with ⟨hselector, index, hindex, hrow⟩
+      right; right; right; left
+      exact ⟨index, hindex, (15, 1), Or.inl rfl,
+        hselector, by omega⟩
+    · right; right; right; right; left
+      exact ⟨h17.1, by omega⟩
+
+private theorem actionMulMainLocalSelectorConflictPairs_eq :
+    regionLocalSelectorConflictPairs
+        (Ecc.Mul.mainCircuitSynthesisSummary
+          actionConfig.eccConfig.mul).selectorActivations =
+      [(9, 12), (10, 13), (11, 13), (8, 15),
+        (8, 17)].toFinset := by
+  ext pair
+  rcases pair with ⟨left, right⟩
+  rw [mem_regionLocalSelectorConflictPairs_iff]
+  simp only [List.mem_toFinset, List.mem_cons, List.not_mem_nil,
+    Prod.mk.injEq, or_false]
+  constructor
+  · rintro ⟨hlt, row, hleft, hright⟩
+    rw [actionMulMainSelectorActivation_iff] at hleft hright
+    rcases hleft with
+        ⟨rfl, hleft | ⟨leftIndex, hleftIndex, hleft⟩ |
+          ⟨leftIndex, hleftIndex, hleft⟩ | hleft⟩ |
+        ⟨rfl, hleft⟩ |
+        ⟨rfl, leftIndex, hleftIndex, hleft⟩ |
+        ⟨rfl, hleft⟩ | ⟨rfl, hleft⟩ |
+        ⟨rfl, leftIndex, hleftIndex, hleft⟩ |
+        ⟨rfl, hleft⟩ |
+        ⟨rfl, leftIndex, hleftIndex, hleft⟩ | ⟨rfl, hleft⟩ <;>
+      rcases hright with
+        ⟨rfl, hright | ⟨rightIndex, hrightIndex, hright⟩ |
+          ⟨rightIndex, hrightIndex, hright⟩ | hright⟩ |
+        ⟨rfl, hright⟩ |
+        ⟨rfl, rightIndex, hrightIndex, hright⟩ |
+        ⟨rfl, hright⟩ | ⟨rfl, hright⟩ |
+        ⟨rfl, rightIndex, hrightIndex, hright⟩ |
+        ⟨rfl, hright⟩ |
+        ⟨rfl, rightIndex, hrightIndex, hright⟩ | ⟨rfl, hright⟩ <;>
+      omega
+  · rintro (⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ |
+      ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩)
+    · exact ⟨by omega, 1,
+        actionMulMainSelectorActivation_iff 9 1 |>.mpr (Or.inr (Or.inl ⟨rfl, rfl⟩)),
+        actionMulMainSelectorActivation_iff 12 1 |>.mpr
+          (Or.inr (Or.inr (Or.inr (Or.inr (Or.inl ⟨rfl, rfl⟩)))))⟩
+    · exact ⟨by omega, 2,
+        actionMulMainSelectorActivation_iff 10 2 |>.mpr
+          (Or.inr (Or.inr (Or.inl ⟨rfl, 0, by omega, by omega⟩))),
+        actionMulMainSelectorActivation_iff 13 2 |>.mpr
+          (Or.inr (Or.inr (Or.inr (Or.inr
+            (Or.inr (Or.inl ⟨rfl, 0, by omega, by omega⟩))))))⟩
+    · exact ⟨by omega, 126,
+        actionMulMainSelectorActivation_iff 11 126 |>.mpr
+          (Or.inr (Or.inr (Or.inr (Or.inl ⟨rfl, rfl⟩)))),
+        actionMulMainSelectorActivation_iff 13 126 |>.mpr
+          (Or.inr (Or.inr (Or.inr (Or.inr
+            (Or.inr (Or.inl ⟨rfl, 124, by omega, by omega⟩))))))⟩
+    · exact ⟨by omega, 130,
+        actionMulMainSelectorActivation_iff 8 130 |>.mpr
+          (Or.inl ⟨rfl, Or.inr (Or.inr (Or.inl
+            ⟨0, by omega, by omega⟩))⟩),
+        actionMulMainSelectorActivation_iff 15 130 |>.mpr
+          (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr
+            (Or.inr (Or.inl ⟨rfl, 0, by omega, by omega⟩))))))))⟩
+    · exact ⟨by omega, 135,
+        actionMulMainSelectorActivation_iff 8 135 |>.mpr
+          (Or.inl ⟨rfl, Or.inr (Or.inr (Or.inr rfl))⟩),
+        actionMulMainSelectorActivation_iff 17 135 |>.mpr
+          (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr (Or.inr
+            (Or.inr (Or.inr ⟨rfl, rfl⟩))))))))⟩
+
+private theorem actionMulOverflowLocalSelectorConflictPairs_eq :
+    localSelectorConflictPairs
+        (Ecc.MulOverflow.circuitSynthesisSummary 10
+          actionConfig.eccConfig.mul.overflowConfig) =
+      [(2, 3)].toFinset := by
+  ext pair
+  rcases pair with ⟨left, right⟩
+  unfold Ecc.MulOverflow.circuitSynthesisSummary
+    LookupRangeCheck.copyCheckSynthesisSummary
+    LookupRangeCheck.rangeCheckSynthesisSummary
+  simp only [synthesis_summary_norm, Finset.mem_union, List.mem_toFinset,
+    mem_regionLocalSelectorConflictPairs_iff,
+    RegionSynthesisSummary.mem_repeatedSelectorPattern_iff]
+  rw [show actionConfig.eccConfig.mul.overflowConfig.lookupConfig.qLookup.index = 2 by rfl,
+    show actionConfig.eccConfig.mul.overflowConfig.lookupConfig.qRunning.index = 3 by rfl,
+    show actionConfig.eccConfig.mul.overflowConfig.qOverflow.index = 16 by rfl]
+  unfold Ecc.MulOverflow.numWords
+  simp
+  constructor
+  · rintro (⟨hlt, row, hleft, hright⟩ | hsame)
+    · rcases hleft with ⟨leftIndex, hleftIndex, hleft⟩
+      rcases hright with ⟨rightIndex, hrightIndex, hright⟩
+      rcases hleft with hleft | hleft <;>
+        rcases hright with hright | hright <;> omega
+    · omega
+  · rintro ⟨rfl, rfl⟩
+    left
+    exact ⟨by omega, 0,
+      ⟨0, by omega, Or.inl ⟨rfl, rfl⟩⟩,
+      ⟨0, by omega, Or.inr ⟨rfl, rfl⟩⟩⟩
+
+private theorem actionMulLocalSelectorConflictPairs_eq :
+    localSelectorConflictPairs
+        (Ecc.Mul.mulSynthesisSummary actionConfig.eccConfig.mul) =
+      [(9, 12), (10, 13), (11, 13), (8, 15), (8, 17),
+        (2, 3)].toFinset := by
+  unfold Ecc.Mul.mulSynthesisSummary
+  rw [localSelectorConflictPairs_combine,
+    localSelectorConflictPairs_ofRegion,
+    actionMulMainLocalSelectorConflictPairs_eq,
+    actionMulOverflowLocalSelectorConflictPairs_eq]
+  ext pair
+  simp
+
 private def actionEarlySelectorConflict
     (unknown : Fin 9 → Bool) (left right : ℕ) : Bool :=
   match left, right with
