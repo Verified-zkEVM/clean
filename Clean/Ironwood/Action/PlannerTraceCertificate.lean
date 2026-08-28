@@ -6,7 +6,7 @@ namespace Zcash.Circuits.Action
 open Halo2 FloorPlanner
 
 /-- The reduced, already-sorted region shapes have the stated exact V1 placement. -/
-theorem actionExactPlannerTrace_check :
+theorem actionExactPlannerTrace_traceCheck_eq_true :
     V1.CompactPlanner.traceCheck actionExactPlannerTrace [] 0 = true := by
   decide +kernel
 
@@ -14,7 +14,7 @@ theorem actionExactPlannerTrace_lawful :
     V1.PlannedSummaryBlock.Lawful V1.AllocationView.empty
       actionExactPlannerTrace := by
   exact V1.CompactPlanner.lawful_of_traceCheck_eq_true
-    actionExactPlannerTrace actionExactPlannerTrace_check
+    actionExactPlannerTrace actionExactPlannerTrace_traceCheck_eq_true
 
 macro "action_tie_planner_trace" : tactic =>
   `(tactic|
