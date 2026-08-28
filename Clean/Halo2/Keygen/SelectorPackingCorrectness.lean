@@ -17,6 +17,18 @@ structure SelectorCombinationQuery (α : Type) where
   expected : Bool
 deriving DecidableEq, Repr
 
+theorem List.any_congr_of_forall_mem {α : Type} (items : List α)
+    (left right : α → Bool)
+    (hequal : ∀ item ∈ items, left item = right item) :
+    items.any left = items.any right := by
+  induction items with
+  | nil => rfl
+  | cons item rest inductionHypothesis =>
+      simp only [List.any_cons]
+      rw [hequal item (by simp), inductionHypothesis]
+      intro candidate hcandidate
+      exact hequal candidate (by simp [hcandidate])
+
 /-- Conflict questions asked by one reference execution of the greedy inner loop. -/
 def extendCombinationQueries {α : Type} (maxDegree : ℕ)
     (degree : α → ℕ) (conflicts : α → α → Bool) :
@@ -79,6 +91,57 @@ def packingRemainderQueries {α : Type} (maxDegree : ℕ)
       extendCombinationQueries maxDegree degree conflicts
           (degree selector - 1) [selector] remaining ++
         packingRemainderQueries maxDegree degree conflicts steps result.2
+
+/-- Every recorded inner-loop query stores the reference oracle answer that
+created it. -/
+theorem expected_eq_any_of_mem_extendCombinationQueries {α : Type}
+    (maxDegree currentDegree : ℕ) (degree : α → ℕ)
+    (conflicts : α → α → Bool) (combination selectors : List α)
+    (query : SelectorCombinationQuery α)
+    (hquery : query ∈ extendCombinationQueries maxDegree degree conflicts
+      currentDegree combination selectors) :
+    query.expected = query.combination.any (conflicts · query.selector) := by
+  induction selectors generalizing currentDegree combination with
+  | nil => simp [extendCombinationQueries] at hquery
+  | cons selector remaining inductionHypothesis =>
+      simp only [extendCombinationQueries] at hquery
+      split at hquery <;> rename_i hcapacity
+      · simp at hquery
+      · split at hquery <;> rename_i hconflict
+        · rw [List.mem_cons] at hquery
+          rcases hquery with rfl | hquery
+          · rfl
+          · exact inductionHypothesis _ _ hquery
+        · split at hquery <;> rename_i hdegree
+          · rw [List.mem_cons] at hquery
+            rcases hquery with rfl | hquery
+            · rfl
+            · exact inductionHypothesis _ _ hquery
+          · rw [List.mem_cons] at hquery
+            rcases hquery with rfl | hquery
+            · rfl
+            · exact inductionHypothesis _ _ hquery
+
+/-- Every recorded multi-step query stores the reference oracle answer that
+created it. -/
+theorem expected_eq_any_of_mem_packingRemainderQueries {α : Type}
+    (maxDegree steps : ℕ) (degree : α → ℕ)
+    (conflicts : α → α → Bool) (selectors : List α)
+    (query : SelectorCombinationQuery α)
+    (hquery : query ∈ packingRemainderQueries maxDegree degree conflicts
+      steps selectors) :
+    query.expected = query.combination.any (conflicts · query.selector) := by
+  induction steps generalizing selectors with
+  | zero => simp [packingRemainderQueries] at hquery
+  | succ steps inductionHypothesis =>
+      cases selectors with
+      | nil => simp [packingRemainderQueries] at hquery
+      | cons selector remaining =>
+          simp only [packingRemainderQueries, List.mem_append] at hquery
+          rcases hquery with hinner | hrest
+          · exact expected_eq_any_of_mem_extendCombinationQueries
+              _ _ _ _ _ _ _ hinner
+          · exact inductionHypothesis _ hrest
 
 /-- Agreement on the `any` questions asked by the reference execution reproduces
 the same inner-loop result. -/

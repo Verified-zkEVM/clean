@@ -48,6 +48,34 @@ def SelectorSitesSeparated (summary : SynthesisSummary)
         ∃ column,
           column ∈ leftSite.columns ∧ column ∈ rightSite.columns
 
+/-- A placement-specific sufficient condition for two selectors not to conflict.
+This is useful for the exceptional pairs that cannot be separated from region
+shape alone. -/
+def SelectorSitesPlacedApart (starts : List ℕ) (summary : SynthesisSummary)
+    (left right : ℕ) : Prop :=
+  ∀ leftSite ∈ selectorSites summary left,
+    ∀ rightSite ∈ selectorSites summary right,
+      starts.getD leftSite.region 0 + leftSite.row ≠
+        starts.getD rightSite.region 0 + rightSite.row
+
+/-- Two selectors have sites that a particular placement puts on one row. -/
+def SelectorSitesCoincide (starts : List ℕ) (summary : SynthesisSummary)
+    (left right : ℕ) : Prop :=
+  ∃ leftSite ∈ selectorSites summary left,
+    ∃ rightSite ∈ selectorSites summary right,
+      starts.getD leftSite.region 0 + leftSite.row =
+        starts.getD rightSite.region 0 + rightSite.row
+
+instance (starts : List ℕ) (summary : SynthesisSummary) (left right : ℕ) :
+    Decidable (SelectorSitesPlacedApart starts summary left right) := by
+  unfold SelectorSitesPlacedApart
+  infer_instance
+
+instance (starts : List ℕ) (summary : SynthesisSummary) (left right : ℕ) :
+    Decidable (SelectorSitesCoincide starts summary left right) := by
+  unfold SelectorSitesCoincide
+  infer_instance
+
 instance (summary : SynthesisSummary) (left right : ℕ) :
     Decidable (SelectorSitesSeparated summary left right) := by
   unfold SelectorSitesSeparated
@@ -66,6 +94,17 @@ def SelectorLocalRowsSeparated (summary : SynthesisSummary)
 instance (summary : SynthesisSummary) (left right : ℕ) :
     Decidable (SelectorLocalRowsSeparated summary left right) := by
   unfold SelectorLocalRowsSeparated
+  infer_instance
+
+/-- Every site of one selector contains a particular measured column. -/
+def SelectorUsesColumn (summary : SynthesisSummary) (selector : ℕ)
+    (column : RegionColumn) : Prop :=
+  ∀ site ∈ selectorSites summary selector, column ∈ site.columns
+
+instance (summary : SynthesisSummary) (selector : ℕ)
+    (column : RegionColumn) :
+    Decidable (SelectorUsesColumn summary selector column) := by
+  unfold SelectorUsesColumn
   infer_instance
 
 /-- Distinct selector pairs activated at the same local row of one region. -/
@@ -590,6 +629,17 @@ def selectorCommonColumns (summary : SynthesisSummary)
   | first :: rest => first.columns.filter fun column =>
       rest.all fun site => column ∈ site.columns
 
+theorem exists_commonColumn_of_any_eq_true
+    (summary : SynthesisSummary) (left right : ℕ)
+    (hcommon : (selectorCommonColumns summary left).any fun column =>
+      column ∈ selectorCommonColumns summary right) :
+    ∃ column,
+      column ∈ selectorCommonColumns summary left ∧
+        column ∈ selectorCommonColumns summary right := by
+  rw [List.any_eq_true] at hcommon
+  obtain ⟨column, hleftColumn, hrightColumn⟩ := hcommon
+  exact ⟨column, hleftColumn, of_decide_eq_true hrightColumn⟩
+
 theorem mem_selectorSite_of_mem_commonColumns
     (summary : SynthesisSummary) (selector : ℕ)
     (column : RegionColumn) (site : SelectorSite)
@@ -641,6 +691,37 @@ theorem selectorSitesSeparated_of_commonColumn
         leftSite hleftColumn hleftSite,
       mem_selectorSite_of_mem_commonColumns summary right column
         rightSite hrightColumn hrightSite⟩
+
+/-- A column used by every site of both selectors handles every cross-region
+case; only same-region local-row separation remains. -/
+theorem selectorSitesSeparated_of_sharedColumn
+    (summary : SynthesisSummary) (left right : ℕ)
+    (hlocal : SelectorLocalRowsSeparated summary left right)
+    (column : RegionColumn)
+    (hleft : SelectorUsesColumn summary left column)
+    (hright : SelectorUsesColumn summary right column) :
+    SelectorSitesSeparated summary left right := by
+  intro leftSite hleftSite rightSite hrightSite
+  split <;> rename_i hregions
+  · rw [mem_selectorSites_iff] at hleftSite hrightSite
+    obtain ⟨leftShape, leftActivations, hleftRegion, hleftActivation,
+      hleftIndex, _⟩ := hleftSite
+    obtain ⟨rightShape, rightActivations, hrightRegion, hrightActivation,
+      hrightIndex, _⟩ := hrightSite
+    have hindex : leftShape.index = rightShape.index := by
+      rw [← hleftIndex, ← hrightIndex]
+      exact hregions
+    have hactivations : leftActivations = rightActivations :=
+      localActivations_eq_of_regionIndex_eq 0 summary.regionShapes
+        summary.regionSelectorActivations leftShape rightShape
+        leftActivations rightActivations hleftRegion hrightRegion hindex
+    intro hrows
+    subst rightActivations
+    exact hlocal (leftShape, leftActivations) hleftRegion
+      (left, leftSite.row) hleftActivation rfl
+      (right, rightSite.row) hrightActivation rfl hrows
+  · exact ⟨column, hleft leftSite hleftSite,
+      hright rightSite hrightSite⟩
 
 private theorem anchor_mem_selectorSite
     (operations : Operations F) (anchor : ℕ → RegionColumn)
@@ -789,5 +870,56 @@ theorem selectorActivationsConflict_eq_false_of_sitesSeparated
     apply hrowNe
     simpa only [hleftIndex, hrightIndex] using
       hleftAbsolute.symm.trans hrightAbsolute
+
+/-- Exact separation of the placed selector sites implies non-conflict. -/
+theorem selectorActivationsConflict_eq_false_of_sitesPlacedApart
+    (operations : Operations F) (left right : ℕ)
+    (hapart : SelectorSitesPlacedApart (V1.starts operations)
+      (synthesisSummary operations) left right) :
+    selectorActivationsConflict
+        (placeSelectorActivations (V1.starts operations) 0
+          (synthesisSummary operations).regionSelectorActivations)
+        left right = false := by
+  apply Bool.eq_false_iff.mpr
+  intro hconflict
+  rw [selectorActivationsConflict, List.any_eq_true] at hconflict
+  obtain ⟨absoluteRow, hleftRow, hrightActivation⟩ := hconflict
+  have hleftActivation :
+      (left, absoluteRow) ∈ placeSelectorActivations
+        (V1.starts operations) 0
+        (synthesisSummary operations).regionSelectorActivations :=
+    (mem_selectorActivationRows_iff _ left absoluteRow).mp hleftRow
+  have hrightActivation' :
+      (right, absoluteRow) ∈ placeSelectorActivations
+        (V1.starts operations) 0
+        (synthesisSummary operations).regionSelectorActivations := by
+    simpa only [decide_eq_true_eq] using hrightActivation
+  rw [mem_placeSelectorActivations_iff_mem_selectorSites] at hleftActivation
+  rw [mem_placeSelectorActivations_iff_mem_selectorSites] at hrightActivation'
+  obtain ⟨leftSite, hleftSite, hleftAbsolute⟩ := hleftActivation
+  obtain ⟨rightSite, hrightSite, hrightAbsolute⟩ := hrightActivation'
+  exact hapart leftSite hleftSite rightSite hrightSite
+    (hleftAbsolute.symm.trans hrightAbsolute)
+
+/-- Coincident placed selector sites witness a compression conflict. -/
+theorem selectorActivationsConflict_eq_true_of_sitesCoincide
+    (operations : Operations F) (left right : ℕ)
+    (hcoincide : SelectorSitesCoincide (V1.starts operations)
+      (synthesisSummary operations) left right) :
+    selectorActivationsConflict
+        (placeSelectorActivations (V1.starts operations) 0
+          (synthesisSummary operations).regionSelectorActivations)
+        left right = true := by
+  obtain ⟨leftSite, hleftSite, rightSite, hrightSite, hrows⟩ := hcoincide
+  let absoluteRow :=
+    (V1.starts operations).getD leftSite.region 0 + leftSite.row
+  rw [selectorActivationsConflict, List.any_eq_true]
+  refine ⟨absoluteRow, ?_, ?_⟩
+  · rw [mem_selectorActivationRows_iff,
+      mem_placeSelectorActivations_iff_mem_selectorSites]
+    exact ⟨leftSite, hleftSite, rfl⟩
+  · simp only [decide_eq_true_eq]
+    rw [mem_placeSelectorActivations_iff_mem_selectorSites]
+    exact ⟨rightSite, hrightSite, by simpa only [absoluteRow] using hrows⟩
 
 end Halo2.FloorPlanner

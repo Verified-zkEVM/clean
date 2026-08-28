@@ -1364,6 +1364,20 @@ theorem mem_selectorActivationRows_iff (activations : List (ℕ × ℕ))
     exact ⟨(selector, row),
       List.mem_filter.mpr ⟨hactivation, by simp⟩, rfl⟩
 
+/-- Sparse selector conflict is symmetric in the two selectors. -/
+theorem selectorActivationsConflict_comm (activations : List (ℕ × ℕ))
+    (left right : ℕ) :
+    selectorActivationsConflict activations left right =
+      selectorActivationsConflict activations right left := by
+  rw [Bool.eq_iff_iff]
+  simp only [selectorActivationsConflict, List.any_eq_true,
+    decide_eq_true_eq, mem_selectorActivationRows_iff]
+  constructor
+  · rintro ⟨row, hleft, hright⟩
+    exact ⟨row, hright, hleft⟩
+  · rintro ⟨row, hright, hleft⟩
+    exact ⟨row, hleft, hright⟩
+
 /-- Sparse conflicts depend only on the two selectors' row lists. -/
 theorem selectorActivationsConflict_eq_any_rows
     (activations : List (ℕ × ℕ)) (left right : ℕ) :
