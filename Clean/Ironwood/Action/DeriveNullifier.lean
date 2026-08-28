@@ -8,14 +8,14 @@ import Clean.Ironwood.Poseidon.Hash
 import Clean.Ironwood.Utilities.AddChip
 
 /-!
-# Orchard nullifier derivation (Ironwood)
+# Orchard-protocol nullifier derivation
 
 Reference (ported from actual Rust, not memory):
 `orchard@0.14.0/src/circuit/gadget.rs::derive_nullifier` (lines 154-206):
-`nf = extract_p(cm + [poseidon_hash(nk, rho) + psi] NullifierK)` — four layouter pieces
+`nf = extract_p(cm + (poseidon_hash(nk, rho) + psi) • NullifierK)` — four layouter pieces
 in source order:
 1. `PoseidonHash::init` + `hash([nk, rho])` (`ConstantLength<2>` on the Pow5 chip; the
-   Ironwood `Poseidon.hash` bundle at capacity `2·2⁶⁴`);
+   Orchard-protocol `Poseidon.hash` bundle at capacity `2·2^{64}`);
 2. `add_chip.add(hash, psi)` (region `"c = a + b"`, `add_chip.rs:71-91`);
 3. `FixedPointBaseField::from_inner(NullifierK).mul(scalar)` (the
    `Ecc.MulFixed.BaseFieldElem` bundle);
@@ -41,10 +41,10 @@ structure Input (F : Type) where
   cm : Point F
 deriving ProvableStruct
 
-/-- The `ConstantLength<2>` hash value is the one-padded-block hash at capacity `2·2⁶⁴`:
-the message is exactly one rate-2 block, so the donor scheduler's fold is a single
-absorb/permute step — the value-level bridge onto the Ironwood `Poseidon.hash` bundle's
-`HashPaddedBlock` contract. -/
+/-- The `ConstantLength<2>` hash value is the one-padded-block hash at capacity
+`2·2^{64}`: the message is exactly one rate-2 block, so the donor scheduler's fold
+is a single absorb/permute step — the value-level bridge onto the Orchard-protocol
+`Poseidon.hash` bundle's `HashPaddedBlock` contract. -/
 theorem constantLength_value_two (a b : Fp) :
     Hash.ConstantLength.value #v[a, b]
       = Hash.HashPaddedBlock.value roundConstants (Hash.ConstantLength.capacity 2)
@@ -161,9 +161,9 @@ def synthesize (K : FixedBase)
   pure nf.x
 
 /-- Rust `gadget.rs::derive_nullifier`: the Poseidon hash of `(nk, rho)`, the add-chip
-sum with `psi`, the `[scalar] NullifierK` base-field-element fixed-base mul, and the
+sum with `psi`, the `scalar • NullifierK` base-field-element fixed-base mul, and the
 complete addition with `cm`. `Spec` is the donor contract: the nullifier is
-`extract_p(cm + [poseidon_hash(nk, rho) + psi] NullifierK)` — the x-coordinate of the
+`extract_p(cm + (poseidon_hash(nk, rho) + psi) • NullifierK)` — the x-coordinate of the
 complete sum. -/
 def circuit (K : FixedBase) : FormalCircuit Fp
     (Poseidon.Config × AddChip.Config × Ecc.MulFixed.BaseFieldElem.Config ×
@@ -357,7 +357,7 @@ def circuit (K : FixedBase) : FormalCircuit Fp
     -- the add-chip child: the scalar cell is `hash + psi`
     have hS := hScalar trivial trivial
     rw [AddChip.addFormal_spec_eq] at hS
-    -- the fixed-base mul child: the product is `[scalar] K`
+    -- the fixed-base mul child: the product is `scalar • K`
     have hB := hBfe (by rw [Ecc.MulFixed.BaseFieldElem.circuit_envAssumptions_eq]; exact _hE)
       (by rw [Ecc.MulFixed.BaseFieldElem.circuit_assumptions_eq]; trivial)
     rw [Ecc.MulFixed.BaseFieldElem.circuit_spec_eq] at hB
@@ -375,7 +375,7 @@ def circuit (K : FixedBase) : FormalCircuit Fp
 
   completeness := by
     circuit_proof_start
-    -- the fixed-base mul child's honest contract: the product is `[scalar] K`
+    -- the fixed-base mul child's honest contract: the product is `scalar • K`
     have hB := (h_spec_2 (by rw [Ecc.MulFixed.BaseFieldElem.circuit_envAssumptions_eq]; exact _hE) trivial trivial).1
     rw [Ecc.MulFixed.BaseFieldElem.circuit_spec_eq] at hB
     simp only [Ecc.MulFixed.BaseFieldElem.Spec] at hB

@@ -1092,6 +1092,8 @@ private theorem noteCommitNewDirectGates (G : Generators)
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hgate ⊢
     aesop
 
+/-- The old-note commitment configuration certificate, assembled from Action's first Sinsemilla
+hash configuration and its shared ECC, lookup, and addition capabilities. -/
 opaque noteCommitOldCertificate (G : Generators) (B : Bases)
     (counts : ConfigureCounts) :
     (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
@@ -1128,6 +1130,8 @@ opaque noteCommitOldCertificate (G : Generators) (B : Bases)
           all_goals exact base.advicePermutationColumn _
         · exact commit.permutationColumns_of_configured column hcommit)
 
+/-- The new-note commitment configuration certificate, assembled from Action's second Sinsemilla
+hash configuration and its shared ECC, lookup, and addition capabilities. -/
 opaque noteCommitNewCertificate (G : Generators) (B : Bases)
     (counts : ConfigureCounts) :
     (NoteCommit.Main.circuit G B.noteCommitR B.noteQ

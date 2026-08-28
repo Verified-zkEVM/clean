@@ -18,19 +18,6 @@ def actionSortedPlannerSummaries : List RegionShapeSummary :=
   (V1.sortedSummaryOrder actionOperations).map
     RegionShapeSummary.withoutSelectors
 
-theorem actionPlannerSummaries_wellFormed :
-    actionPlannerSummaries.Forall RegionShapeSummary.WellFormed := by
-  unfold actionPlannerSummaries
-  rw [List.forall_iff_forall_mem]
-  intro physical hphysical
-  obtain ⟨summary, hsummary, rfl⟩ := List.mem_map.mp hphysical
-  apply V1.RegionShapeSummary.withoutSelectors_wellFormed
-  have hall : actionSynthesisSummary.regionShapes.Forall
-      RegionShapeSummary.WellFormed := by
-    rw [actionSynthesisSummary_eq_operations]
-    exact synthesisSummary_regionShapes_wellFormed actionOperations
-  exact List.forall_iff_forall_mem.mp hall summary hsummary
-
 private theorem actionConfig_advice0 : (actionConfig.advices 0).index = 0 := by rfl
 private theorem actionConfig_advice5 : (actionConfig.advices 5).index = 5 := by rfl
 private theorem actionConfig_advice6 : (actionConfig.advices 6).index = 6 := by rfl
@@ -53,6 +40,8 @@ private theorem actionConfig_mulAddXP :
     actionConfig.eccConfig.mul.addConfig.xP.index = 0 := by rfl
 private theorem actionConfig_qOrchard : actionConfig.qOrchard.index = 0 := by rfl
 
+/-- Maps each Action selector to the advice column whose assignments determine that selector's
+physical V1 placement. -/
 def selectorAnchor (cfg : Circuit.Config) (selector : ℕ) : RegionColumn :=
   if selector = 2 ∨ selector = 3 ∨ selector = 4 then
     .column .advice (cfg.advices 9).index
@@ -65,6 +54,18 @@ def selectorAnchor (cfg : Circuit.Config) (selector : ℕ) : RegionColumn :=
     .column .advice (cfg.advices 6).index
   else
     .column .advice (cfg.advices 0).index
+
+/-- The concrete Action selector anchor solves its reduced lookup-anchor equations. -/
+theorem actionLookupSelectorAnchorRequirements_satisfied :
+    SelectorAnchorRequirementsSatisfied
+      (LookupRangeCheck.lookupSelectorAnchorRequirements
+        actionConfig.lookupConfig)
+      (selectorAnchor actionConfig) := by
+  simp only [LookupRangeCheck.lookupSelectorAnchorRequirements,
+    SelectorAnchorRequirementsSatisfied, List.forall_cons,
+    List.forall_nil, and_true]
+  rw [actionConfig_qRunning, actionConfig_runningSum]
+  simp [selectorAnchor, actionConfig_advice9]
 
 private theorem hashPieceLoop_selectorAnchored
     (n offset : ℕ) (cfg : Sinsemilla.HashPiece.Config)
@@ -1791,11 +1792,15 @@ private theorem actionMainPost_selectorAnchored :
       actionSynthNotes_selectorAnchored
   · exact actionCrossAddress_selectorAnchored
 
+/-- Every selector in the reduced Action synthesis summary is anchored to the column selected by
+`selectorAnchor`. -/
 theorem actionSelectorAnchored :
     V1.SelectorAnchoredBy actionSynthesisSummary.regionShapes
       (selectorAnchor actionConfig) := by
   simpa only [actionSynthesisSummary] using actionMainPost_selectorAnchored
 
+/-- Reduces the Action circuit's physical V1 placement endpoint to the endpoint computed from its
+selector-free, consensus-sorted region summaries. -/
 theorem actionPlacementEnd_eq :
     V1.placementEnd actionOperations =
       V1.slotSummaryEndFrom actionSortedPlannerSummaries ∅ := by

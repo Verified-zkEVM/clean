@@ -8,11 +8,11 @@ import Clean.Halo2.CircuitTypeDeriving
 import Clean.Ironwood.Ecc.MulFixed.Short
 
 /-!
-# Orchard value commitment (Ironwood)
+# Orchard-protocol value commitment
 
 Reference (ported from actual Rust, not memory):
 `orchard@0.14.0/src/circuit/gadget.rs::value_commit_orchard` (lines 115-148):
-`cv = [v] ValueCommitV + [rcv] ValueCommitR` — three layouter pieces in source order:
+`cv = v • ValueCommitV + rcv • ValueCommitR` — three layouter pieces in source order:
 1. `FixedPointShort::from_inner(ValueCommitV).mul(v)` (the `Ecc.MulFixed.Short`
    bundle; `v` is the signed magnitude-sign pair);
 2. `FixedPoint::from_inner(ValueCommitR).mul(rcv)` (the `Ecc.MulFixed.FullWidth`
@@ -192,11 +192,11 @@ theorem synthesize_copyCellsAssignedFrom
 
 /-! ## The `value_commit_orchard` bundle -/
 
-/-- Rust `gadget.rs::value_commit_orchard`: `[v] ValueCommitV` (short signed), `[rcv]
-ValueCommitR` (full-width; the scalar is the child's extraction data), and the final
-complete addition. `Spec` is the donor contract: the commitment is
-`[±m] V + [rcv] R` at the sign-resolved magnitude `m < 2⁶⁴` and the extracted
-full-width scalar. -/
+/-- Rust `gadget.rs::value_commit_orchard`: `v • ValueCommitV` (short signed),
+`rcv • ValueCommitR` (full-width; the scalar is the child's extraction data), and
+the final complete addition. `Spec` is the donor contract: the commitment is
+`(±m) • V + rcv • R` at the sign-resolved magnitude with `m < 2^{64}` and the
+extracted full-width scalar. -/
 def circuit (V : Ecc.MulFixed.Short.FixedBase) (R : FixedBase) :
     FormalCircuit Fp
     (Ecc.MulFixed.Short.Config × Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config)

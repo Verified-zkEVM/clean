@@ -25,6 +25,9 @@ def actionShape : CircuitShape where
   numAdviceQueries := 25
   numFixedQueries := 29
 
+/-- The reduced Action shape uses the deployed domain exponent. -/
+theorem actionShape_k : actionShape.k = 11 := rfl
+
 theorem actionConstraintSystem_numAdviceColumns_eq :
     (TopLevelCompilation.constraintSystem actionFormalCircuit).numAdviceColumns = 10 := by
   simpa only [actionFormalCircuit, TopLevelCompilation.constraintSystem,
