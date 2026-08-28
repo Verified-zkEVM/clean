@@ -500,6 +500,35 @@ private theorem actionMerkleHashLocalSelectorConflictPairs_eq :
   simp [Sinsemilla.Chain.prefixRows]
   aesop
 
+private theorem actionCommitHashLocalSelectorConflictPairs_eq
+    (ns : List ℕ) (cfg : Sinsemilla.HashPiece.Config)
+    (hns : ns ≠ [])
+    (hqS4 : cfg.qS4.index = 26) (hqS1 : cfg.qS1.index = 25) :
+    localSelectorConflictPairs
+        (Sinsemilla.HashToPoint.hashCircuitSynthesisSummary ns cfg) =
+      [(25, 26)].toFinset := by
+  unfold Sinsemilla.HashToPoint.hashCircuitSynthesisSummary
+  rw [localSelectorConflictPairs_ofRegion]
+  ext pair
+  rcases pair with ⟨left, right⟩
+  rw [mem_regionLocalSelectorConflictPairs_iff]
+  simp only [List.mem_toFinset, List.mem_singleton, Prod.mk.injEq]
+  constructor
+  · rintro ⟨hlt, row, hleft, hright⟩
+    have hleftSelector :=
+      Sinsemilla.HashToPoint.selector_eq_qS1_or_qS4_of_mem_hashCircuitSynthesisSummary
+        ns cfg (left, row) hleft
+    have hrightSelector :=
+      Sinsemilla.HashToPoint.selector_eq_qS1_or_qS4_of_mem_hashCircuitSynthesisSummary
+        ns cfg (right, row) hright
+    omega
+  · rintro ⟨rfl, rfl⟩
+    obtain ⟨hleft, hright⟩ :=
+      Sinsemilla.HashToPoint.qS1_qS4_overlap_in_hashCircuitSynthesisSummary
+        ns cfg hns
+    exact ⟨by omega, 0, by simpa only [hqS1] using hleft,
+      by simpa only [hqS4] using hright⟩
+
 private theorem actionMerkleHashLayerLocalSelectorConflictPairs_eq :
     localSelectorConflictPairs
         (Sinsemilla.Merkle.HashLayer.synthesisSummary

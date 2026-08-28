@@ -857,6 +857,25 @@ theorem combine_rowCount (left right : RegionSynthesisSummary) :
     (left.combine right).selectorActivations =
       left.selectorActivations ++ right.selectorActivations := rfl
 
+/-- Selector activations of a folded region-summary composition are the
+concatenation of the component activation lists. -/
+@[synthesis_summary_norm]
+theorem foldr_combine_selectorActivations
+    (summaries : List RegionSynthesisSummary) :
+    (summaries.foldr combine {}).selectorActivations =
+      summaries.flatMap (fun summary => summary.selectorActivations) := by
+  induction summaries with
+  | nil => rfl
+  | cons summary rest inductionHypothesis =>
+      simp only [List.foldr_cons, combine_selectorActivations,
+        List.flatMap_cons, inductionHypothesis]
+
+theorem mem_foldr_combine_selectorActivations_iff
+    (summaries : List RegionSynthesisSummary) (activation : ℕ × ℕ) :
+    activation ∈ (summaries.foldr combine {}).selectorActivations ↔
+      ∃ summary ∈ summaries, activation ∈ summary.selectorActivations := by
+  rw [foldr_combine_selectorActivations, List.mem_flatMap]
+
 /-- Combining two reduced column summaries keeps a single reduced column source and
 combines only their numerical footprints. -/
 @[circuit_norm, synthesis_summary_norm]
