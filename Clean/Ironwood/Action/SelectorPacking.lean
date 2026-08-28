@@ -87,6 +87,140 @@ private theorem actionFullWidthLocalSelectorConflictPairs_eq :
   simp
   aesop
 
+private theorem actionValueCommitLocalSelectorConflictPairs_eq :
+    localSelectorConflictPairs
+        (ValueCommit.synthesisSummary
+          (actionConfig.eccConfig.mulFixedShort,
+            actionConfig.eccConfig.mulFixedFull,
+            actionConfig.eccConfig.add)) =
+      [(7, 18), (7, 19)].toFinset := by
+  unfold ValueCommit.synthesisSummary
+  rw [localSelectorConflictPairs_combine,
+    localSelectorConflictPairs_combine,
+    actionShortLocalSelectorConflictPairs_eq,
+    actionFullWidthLocalSelectorConflictPairs_eq]
+  unfold Ecc.Add.synthesisSummary
+  simp [synthesis_summary_norm, regionLocalSelectorConflictPairs]
+
+private theorem actionSpendAuthorityLocalSelectorConflictPairs_eq :
+    localSelectorConflictPairs
+        (SpendAuthority.synthesisSummary
+          (actionConfig.eccConfig.mulFixedFull,
+            actionConfig.eccConfig.add)) =
+      [(7, 19)].toFinset := by
+  unfold SpendAuthority.synthesisSummary
+  rw [localSelectorConflictPairs_combine,
+    actionFullWidthLocalSelectorConflictPairs_eq]
+  unfold Ecc.Add.synthesisSummary
+  simp [synthesis_summary_norm, regionLocalSelectorConflictPairs]
+
+private theorem actionBaseFieldLocalSelectorConflictPairs_eq :
+    localSelectorConflictPairs
+        (Ecc.MulFixed.BaseFieldElem.circuitSynthesisSummary
+          actionConfig.eccConfig.mulFixedBaseField) =
+      [(7, 18), (2, 3)].toFinset := by
+  ext pair
+  rcases pair with ⟨left, right⟩
+  unfold Ecc.MulFixed.BaseFieldElem.circuitSynthesisSummary
+    Ecc.MulFixed.BaseFieldElem.innerRegionSynthesisSummary
+    Ecc.MulFixed.BaseFieldElem.witnessCheck13SynthesisSummary
+    Ecc.MulFixed.BaseFieldElem.canonicityRegionSynthesisSummary
+    LookupRangeCheck.witnessCheckSynthesisSummary
+    LookupRangeCheck.rangeCheckSynthesisSummary
+    Ecc.Add.synthesisSummary
+  simp only [synthesis_summary_norm, Finset.mem_union, List.mem_toFinset,
+    mem_regionLocalSelectorConflictPairs_iff]
+  simp only [DecomposeRunningSum.copyDecomposeSynthesisSummary,
+    DecomposeRunningSum.enableLoopSynthesisSummary,
+    DecomposeRunningSum.assignLoopSynthesisSummary,
+    Ecc.MulFixed.fixedConstantsLoopSynthesisSummary,
+    Ecc.MulFixed.windowChainSynthesisSummary,
+    Ecc.MulFixed.processWindowSynthesisSummary,
+    Ecc.AddIncomplete.synthesisSummary, synthesis_summary_norm,
+    List.mem_append,
+    RegionSynthesisSummary.mem_repeatedSelectorActivations_iff,
+    RegionSynthesisSummary.mem_repeatedSelectorPattern_iff]
+  rw [show actionConfig.eccConfig.mulFixedBaseField.superConfig.runningSumConfig.qRangeCheck.index = 18 by rfl,
+    show actionConfig.eccConfig.mulFixedBaseField.superConfig.addIncompleteConfig.qAddIncomplete.index = 7 by rfl,
+    show actionConfig.eccConfig.mulFixedBaseField.superConfig.addConfig.qAdd.index = 8 by rfl,
+    show actionConfig.eccConfig.mulFixedBaseField.qMulFixedBaseField.index = 21 by rfl,
+    show actionConfig.eccConfig.mulFixedBaseField.lookupConfig.qLookup.index = 2 by rfl,
+    show actionConfig.eccConfig.mulFixedBaseField.lookupConfig.qRunning.index = 3 by rfl]
+  simp
+  constructor
+  · rintro (⟨hlt, row, hleft, hright⟩ | hsameAdd |
+      ⟨hlt, row, hleft, hright⟩ | hsameCanonicity)
+    · rcases hleft with hleft | hleft | hleft <;>
+        rcases hright with hright | hright | hright <;> omega
+    · omega
+    · rcases hleft with ⟨index, hindex, hleft⟩
+      rcases hright with ⟨other, hother, hright⟩
+      rcases hleft with hleft | hleft <;>
+        rcases hright with hright | hright <;>
+        rcases hleft with ⟨hleftSelector, hleftRow⟩ <;>
+        rcases hright with ⟨hrightSelector, hrightRow⟩ <;> omega
+    · omega
+  · rintro (⟨rfl, rfl⟩ | ⟨rfl, rfl⟩)
+    · left
+      exact ⟨by omega, 1, Or.inr (Or.inl ⟨rfl, rfl⟩),
+        Or.inl ⟨rfl, by omega⟩⟩
+    · right
+      right
+      left
+      exact ⟨by omega, 0,
+        ⟨0, by omega, Or.inl ⟨rfl, rfl⟩⟩,
+        ⟨0, by omega, Or.inr ⟨rfl, rfl⟩⟩⟩
+
+private theorem actionPoseidonLocalSelectorConflictPairs_eq :
+    localSelectorConflictPairs
+        (Poseidon.hashSynthesisSummary actionConfig.poseidonConfig) = ∅ := by
+  ext pair
+  rcases pair with ⟨left, right⟩
+  unfold Poseidon.hashSynthesisSummary
+    Poseidon.initRegionSynthesisSummary
+    Poseidon.addInputRegionSynthesisSummary
+    Poseidon.permuteSynthesisSummary
+  simp only [synthesis_summary_norm, Finset.mem_union,
+    mem_regionLocalSelectorConflictPairs_iff]
+  simp only [List.mem_append,
+    RegionSynthesisSummary.mem_repeatedSelectorActivations_iff]
+  simp only [List.not_mem_nil, false_and, false_or, List.mem_singleton,
+    Prod.mk.injEq, Nat.zero_add, Nat.one_mul]
+  simp
+  constructor
+  · omega
+  · intro hlt row hleft
+    rcases hleft with hleft | hleft | hleft
+    · rcases hleft with ⟨hselector, hrow⟩
+      constructor
+      · omega
+      · constructor <;> omega
+    · rcases hleft with ⟨hselector, index, hindex, hrow⟩
+      constructor
+      · omega
+      · constructor <;> omega
+    · rcases hleft with ⟨hselector, index, hindex, hrow⟩
+      constructor
+      · omega
+      · constructor <;> omega
+
+private theorem actionDeriveNullifierLocalSelectorConflictPairs_eq :
+    localSelectorConflictPairs
+        (DeriveNullifier.synthesisSummary
+          (actionConfig.poseidonConfig, actionConfig.addChipConfig,
+            actionConfig.eccConfig.mulFixedBaseField,
+            actionConfig.eccConfig.add)) =
+      [(7, 18), (2, 3)].toFinset := by
+  unfold DeriveNullifier.synthesisSummary
+  rw [localSelectorConflictPairs_combine,
+    localSelectorConflictPairs_combine,
+    localSelectorConflictPairs_combine,
+    actionBaseFieldLocalSelectorConflictPairs_eq]
+  rw [actionPoseidonLocalSelectorConflictPairs_eq]
+  unfold AddChip.synthesisSummary
+    Ecc.Add.synthesisSummary
+  simp [synthesis_summary_norm, regionLocalSelectorConflictPairs]
+
 private def actionEarlySelectorConflict
     (unknown : Fin 9 → Bool) (left right : ℕ) : Bool :=
   match left, right with
