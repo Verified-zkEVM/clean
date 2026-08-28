@@ -141,6 +141,25 @@ theorem regionLocalSelectorConflictPairs_singleton (activation : ℕ × ℕ) :
     omega
   · simp
 
+@[simp]
+theorem regionLocalSelectorConflictPairs_nil :
+    regionLocalSelectorConflictPairs [] = ∅ := by
+  simp [regionLocalSelectorConflictPairs]
+
+theorem regionLocalSelectorConflictPairs_eq_empty_of_fst_eq
+    (activations : List (ℕ × ℕ)) (selector : ℕ)
+    (hsupport : ∀ activation ∈ activations, activation.1 = selector) :
+    regionLocalSelectorConflictPairs activations = ∅ := by
+  ext pair
+  rcases pair with ⟨left, right⟩
+  rw [mem_regionLocalSelectorConflictPairs_iff]
+  constructor
+  · rintro ⟨hlt, row, hleft, hright⟩
+    have := hsupport (left, row) hleft
+    have := hsupport (right, row) hright
+    omega
+  · simp
+
 /-- Distinct selector pairs activated at the same local row of any region. -/
 def localSelectorConflictPairs
     (summary : SynthesisSummary) : Finset (ℕ × ℕ) :=
