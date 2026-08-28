@@ -272,4 +272,141 @@ theorem actionActualSelectorConflict_eq_lateExceptional
   · exact actionActualSelectorConflict_eq_lateExceptional27b left right hpair
   · exact actionActualSelectorConflict_eq_lateExceptional28 left right hpair
 
+private def actionModeledSelectorPairsEarlyA : List (ℕ × ℕ) :=
+  [(0, 4), (1, 4), (1, 5), (4, 5), (1, 6)]
+
+private def actionModeledSelectorPairsEarlyB : List (ℕ × ℕ) :=
+  [(4, 6), (1, 7), (4, 7), (4, 8)]
+
+private def actionModeledSelectorPairsLateA : List (ℕ × ℕ) :=
+  [(23, 26), (23, 27), (24, 26), (24, 27), (28, 30)]
+
+private def actionModeledSelectorPairsLateB : List (ℕ × ℕ) :=
+  [(28, 31), (28, 32), (28, 34), (28, 35), (28, 36)]
+
+/-- The placement-dependent pairs retained by the compact Action packing
+model. -/
+def actionModeledSelectorPairs : List (ℕ × ℕ) :=
+  actionModeledSelectorPairsEarlyA ++
+    (actionModeledSelectorPairsEarlyB ++
+      (actionModeledSelectorPairsLateA ++ actionModeledSelectorPairsLateB))
+
+/-- The reduced placement answers for the compact Action packing model. -/
+def actionModeledSelectorConflict (left right : ℕ) : Bool :=
+  (left = 4 && right = 5) || (left = 4 && right = 6) ||
+    (left = 1 && right = 7) || (left = 4 && right = 7) ||
+    (left = 4 && right = 8) || (left = 28 && right = 31) ||
+    (left = 28 && right = 32)
+
+private theorem actionActualSelectorConflict_eq_of_placementLaw
+    (left right : ℕ)
+    (hlaw : if actionModeledSelectorConflict left right then
+        SelectorSitesCoincide (V1.starts actionOperations)
+          (synthesisSummary actionOperations) left right
+      else
+        SelectorSitesPlacedApart (V1.starts actionOperations)
+          (synthesisSummary actionOperations) left right) :
+    actionActualSelectorConflict left right =
+      actionModeledSelectorConflict left right := by
+  unfold actionActualSelectorConflict actionPlacedSelectorActivations
+  cases hmodel : actionModeledSelectorConflict left right
+  · simp only [hmodel, Bool.false_eq_true, ↓reduceIte] at hlaw ⊢
+    exact selectorActivationsConflict_eq_false_of_sitesPlacedApart
+      actionOperations left right hlaw
+  · simp only [hmodel, ↓reduceIte] at hlaw ⊢
+    exact selectorActivationsConflict_eq_true_of_sitesCoincide
+      actionOperations left right hlaw
+
+private theorem actionActualSelectorConflict_eq_modeledEarlyA
+    (left right : ℕ)
+    (hpair : (left, right) ∈ actionModeledSelectorPairsEarlyA) :
+    actionActualSelectorConflict left right =
+      actionModeledSelectorConflict left right := by
+  apply actionActualSelectorConflict_eq_of_placementLaw
+  have hlaws : actionModeledSelectorPairsEarlyA.Forall fun pair =>
+      if actionModeledSelectorConflict pair.1 pair.2 then
+        SelectorSitesCoincide (V1.starts actionOperations)
+          (synthesisSummary actionOperations) pair.1 pair.2
+      else
+        SelectorSitesPlacedApart (V1.starts actionOperations)
+          (synthesisSummary actionOperations) pair.1 pair.2 := by
+    rw [← actionSynthesisSummary_eq_operations,
+      show V1.starts actionOperations =
+        TopLevelCompilation.regionStarts actionFormalCircuit by rfl,
+      actionRegionStarts_eq_reduced]
+    decide +kernel
+  exact List.forall_iff_forall_mem.mp hlaws (left, right) hpair
+
+private theorem actionActualSelectorConflict_eq_modeledEarlyB
+    (left right : ℕ)
+    (hpair : (left, right) ∈ actionModeledSelectorPairsEarlyB) :
+    actionActualSelectorConflict left right =
+      actionModeledSelectorConflict left right := by
+  apply actionActualSelectorConflict_eq_of_placementLaw
+  have hlaws : actionModeledSelectorPairsEarlyB.Forall fun pair =>
+      if actionModeledSelectorConflict pair.1 pair.2 then
+        SelectorSitesCoincide (V1.starts actionOperations)
+          (synthesisSummary actionOperations) pair.1 pair.2
+      else
+        SelectorSitesPlacedApart (V1.starts actionOperations)
+          (synthesisSummary actionOperations) pair.1 pair.2 := by
+    rw [← actionSynthesisSummary_eq_operations,
+      show V1.starts actionOperations =
+        TopLevelCompilation.regionStarts actionFormalCircuit by rfl,
+      actionRegionStarts_eq_reduced]
+    decide +kernel
+  exact List.forall_iff_forall_mem.mp hlaws (left, right) hpair
+
+private theorem actionActualSelectorConflict_eq_modeledLateA
+    (left right : ℕ)
+    (hpair : (left, right) ∈ actionModeledSelectorPairsLateA) :
+    actionActualSelectorConflict left right =
+      actionModeledSelectorConflict left right := by
+  apply actionActualSelectorConflict_eq_of_placementLaw
+  have hlaws : actionModeledSelectorPairsLateA.Forall fun pair =>
+      if actionModeledSelectorConflict pair.1 pair.2 then
+        SelectorSitesCoincide (V1.starts actionOperations)
+          (synthesisSummary actionOperations) pair.1 pair.2
+      else
+        SelectorSitesPlacedApart (V1.starts actionOperations)
+          (synthesisSummary actionOperations) pair.1 pair.2 := by
+    rw [← actionSynthesisSummary_eq_operations,
+      show V1.starts actionOperations =
+        TopLevelCompilation.regionStarts actionFormalCircuit by rfl,
+      actionRegionStarts_eq_reduced]
+    decide +kernel
+  exact List.forall_iff_forall_mem.mp hlaws (left, right) hpair
+
+private theorem actionActualSelectorConflict_eq_modeledLateB
+    (left right : ℕ)
+    (hpair : (left, right) ∈ actionModeledSelectorPairsLateB) :
+    actionActualSelectorConflict left right =
+      actionModeledSelectorConflict left right := by
+  apply actionActualSelectorConflict_eq_of_placementLaw
+  have hlaws : actionModeledSelectorPairsLateB.Forall fun pair =>
+      if actionModeledSelectorConflict pair.1 pair.2 then
+        SelectorSitesCoincide (V1.starts actionOperations)
+          (synthesisSummary actionOperations) pair.1 pair.2
+      else
+        SelectorSitesPlacedApart (V1.starts actionOperations)
+          (synthesisSummary actionOperations) pair.1 pair.2 := by
+    rw [← actionSynthesisSummary_eq_operations,
+      show V1.starts actionOperations =
+        TopLevelCompilation.regionStarts actionFormalCircuit by rfl,
+      actionRegionStarts_eq_reduced]
+    decide +kernel
+  exact List.forall_iff_forall_mem.mp hlaws (left, right) hpair
+
+theorem actionActualSelectorConflict_eq_modeled
+    (left right : ℕ)
+    (hpair : (left, right) ∈ actionModeledSelectorPairs) :
+    actionActualSelectorConflict left right =
+      actionModeledSelectorConflict left right := by
+  simp only [actionModeledSelectorPairs, List.mem_append] at hpair
+  rcases hpair with hpair | hpair | hpair | hpair
+  · exact actionActualSelectorConflict_eq_modeledEarlyA left right hpair
+  · exact actionActualSelectorConflict_eq_modeledEarlyB left right hpair
+  · exact actionActualSelectorConflict_eq_modeledLateA left right hpair
+  · exact actionActualSelectorConflict_eq_modeledLateB left right hpair
+
 end Zcash.Circuits.Action

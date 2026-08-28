@@ -361,4 +361,18 @@ theorem buildCombinationsWith_length_eq_of_checkpoints
   | nil => exact (hbefore hremaining).elim
   | cons head tail => simp [buildCombinationsWith]
 
+/-- Exact degree partitions and an exact nonzero packing count determine the
+whole selector-column count. -/
+theorem selectorColumnCountWith_eq_of_partitions {α : Type}
+    (selectors zeroDegree nonzeroDegree : List α) (maxDegree count : ℕ)
+    (degree : α → ℕ) (conflicts : α → α → Bool)
+    (hzero : selectors.filter (degree · = 0) = zeroDegree)
+    (hnonzero : selectors.filter (degree · ≠ 0) = nonzeroDegree)
+    (hpacking : (buildCombinationsWith maxDegree degree conflicts
+      nonzeroDegree.length nonzeroDegree).length = count) :
+    selectorColumnCountWith selectors maxDegree degree conflicts =
+      zeroDegree.length + count := by
+  simp only [selectorColumnCountWith]
+  rw [hzero, hnonzero, hpacking]
+
 end Halo2

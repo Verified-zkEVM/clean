@@ -38,6 +38,24 @@ theorem actionLateAdviceColumn6Selectors_useColumn :
         (.column .advice 6) := by
   decide +kernel
 
+def actionUsesAdviceColumn6 (selector : ℕ) : Prop :=
+  selector ∈ actionAdviceColumn6Selectors ∨
+    selector ∈ actionLateAdviceColumn6Selectors
+
+instance (selector : ℕ) : Decidable (actionUsesAdviceColumn6 selector) := by
+  unfold actionUsesAdviceColumn6
+  infer_instance
+
+theorem actionUsesAdviceColumn6_useColumn (selector : ℕ)
+    (hselector : actionUsesAdviceColumn6 selector) :
+    SelectorUsesColumn actionSynthesisSummary selector
+      (.column .advice 6) := by
+  rcases hselector with hselector | hselector
+  · exact List.forall_iff_forall_mem.mp
+      actionAdviceColumn6Selectors_useColumn selector hselector
+  · exact List.forall_iff_forall_mem.mp
+      actionLateAdviceColumn6Selectors_useColumn selector hselector
+
 set_option maxRecDepth 10000 in
 theorem actionAdviceColumn9Selectors_useColumn :
     actionAdviceColumn9Selectors.Forall fun selector =>

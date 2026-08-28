@@ -1,6 +1,7 @@
 import Clean.Halo2.Keygen.FloorPlanner.SelectorConflicts
 import Clean.Halo2.Keygen.SelectorPackingCorrectness
-import Clean.Ironwood.Action.Planner
+import Clean.Ironwood.Action.SelectorPlacement
+import Clean.Ironwood.Action.SelectorSharedColumns
 
 namespace Zcash.Circuits.Action
 
@@ -21,18 +22,6 @@ private theorem actionSelectorDegreePartitions :
       actionNonzeroSelectors := by
   unfold actionSelectorDegrees actionNonzeroSelectors
   decide +kernel
-
-/-- The selector pairs whose conflict result is not determined by the compact
-region-local separation argument. The packing width is independent of all
-nineteen answers. -/
-def actionUnresolvedSelectorPairs : List (ℕ × ℕ) :=
-  [(0, 4), (1, 4), (1, 5), (4, 5), (1, 6), (4, 6), (1, 7), (4, 7),
-   (4, 8), (23, 26), (23, 27), (24, 26), (24, 27), (28, 30),
-   (28, 31), (28, 32), (28, 34), (28, 35), (28, 36)]
-
-private def actionSelectorsMayConflict (left right : ℕ) : Bool :=
-  actionUnresolvedSelectorPairs.contains (left, right) ||
-    actionUnresolvedSelectorPairs.contains (right, left)
 
 private theorem actionShortLocalSelectorConflictPairs_eq :
     localSelectorConflictPairs
@@ -919,12 +908,16 @@ private theorem actionCrossAddressLocalSelectorConflictPairs_eq :
   rw [RegionSynthesisSummary.mem_repeatedSelectorActivations_iff] at hactivation'
   exact hactivation'.1
 
+/-- The literal selector pairs that necessarily conflict within one Action region. -/
+def actionLocalSelectorConflictPairs : Finset (ℕ × ℕ) :=
+  [(29, 30), (7, 18), (2, 4), (7, 19), (25, 26),
+    (9, 12), (10, 13), (11, 13), (8, 15), (8, 17),
+    (2, 3)].toFinset
+
 /-- The exact selector pairs that necessarily conflict within one Action region. -/
 theorem actionLocalSelectorConflictPairs_eq :
     localSelectorConflictPairs actionSynthesisSummary =
-      [(29, 30), (7, 18), (2, 4), (7, 19), (25, 26),
-        (9, 12), (10, 13), (11, 13), (8, 15), (8, 17),
-        (2, 3)].toFinset := by
+      actionLocalSelectorConflictPairs := by
   unfold actionSynthesisSummary Circuit.mainPostSynthesisSummary
     Circuit.synthesizeBaseSynthesisSummary
   simp only [localSelectorConflictPairs_combine]
@@ -932,197 +925,857 @@ theorem actionLocalSelectorConflictPairs_eq :
     actionSynthChecksLocalSelectorConflictPairs_eq,
     actionSynthNotesLocalSelectorConflictPairs_eq,
     actionCrossAddressLocalSelectorConflictPairs_eq]
+  unfold actionLocalSelectorConflictPairs
   decide +kernel
+
+private def actionLocalSelectorsConflict (left right : ℕ) : Bool :=
+  decide ((left, right) ∈ actionLocalSelectorConflictPairs ∨
+    (right, left) ∈ actionLocalSelectorConflictPairs)
+
+private theorem actionLocalSelectorsConflict_eq_true_iff
+    (left right : ℕ) :
+    actionLocalSelectorsConflict left right = true ↔
+      (left, right) ∈ actionLocalSelectorConflictPairs ∨
+        (right, left) ∈ actionLocalSelectorConflictPairs := by
+  simp [actionLocalSelectorsConflict]
+
+/-- A small class identifying the physical advice column that anchors each Action
+selector. Only equality of classes matters to selector placement. -/
+private def actionSelectorAnchorClass (selector : ℕ) : ℕ :=
+  if selector = 2 ∨ selector = 3 ∨ selector = 4 then 9
+  else if 29 ≤ selector ∧ selector ≤ 32 ∨ selector = 44 ∨ selector = 55 then 5
+  else if selector = 1 ∨ selector = 16 ∨
+      (21 ≤ selector ∧ selector ≤ 24) ∨
+      (34 ≤ selector ∧ selector ≤ 43) ∨
+      (45 ≤ selector ∧ selector ≤ 54) then 6
+  else 0
+
+private theorem selectorAnchor_eq_class (selector : ℕ) :
+    selectorAnchor actionConfig selector =
+      .column .advice (actionSelectorAnchorClass selector) := by
+  unfold selectorAnchor actionSelectorAnchorClass
+  rw [show (actionConfig.advices 0).index = 0 by rfl,
+    show (actionConfig.advices 5).index = 5 by rfl,
+    show (actionConfig.advices 6).index = 6 by rfl,
+    show (actionConfig.advices 9).index = 9 by rfl]
+  by_cases hfirst : selector = 2 ∨ selector = 3 ∨ selector = 4
+  · simp only [if_pos hfirst]
+  · simp only [if_neg hfirst]
+    by_cases hsecond :
+        29 ≤ selector ∧ selector ≤ 32 ∨ selector = 44 ∨ selector = 55
+    · simp only [if_pos hsecond]
+    · simp only [if_neg hsecond]
+      by_cases hthird : selector = 1 ∨ selector = 16 ∨
+          (21 ≤ selector ∧ selector ≤ 24) ∨
+          (34 ≤ selector ∧ selector ≤ 43) ∨
+          (45 ≤ selector ∧ selector ≤ 54)
+      · simp only [if_pos hthird]
+      · simp only [if_neg hthird]
+
+private theorem selectorAnchor_eq_of_class_eq (left right : ℕ)
+    (hclass : actionSelectorAnchorClass left =
+      actionSelectorAnchorClass right) :
+    selectorAnchor actionConfig left = selectorAnchor actionConfig right := by
+  rw [selectorAnchor_eq_class, selectorAnchor_eq_class, hclass]
+
+private theorem actionActualSelectorConflict_comm (left right : ℕ) :
+    actionActualSelectorConflict left right =
+      actionActualSelectorConflict right left := by
+  unfold actionActualSelectorConflict
+  exact selectorActivationsConflict_comm _ _ _
+
+private def actionActualEarlySelectorConflicts : Fin 9 → Bool :=
+  ![actionActualSelectorConflict 0 4,
+    actionActualSelectorConflict 1 4,
+    actionActualSelectorConflict 1 5,
+    actionActualSelectorConflict 4 5,
+    actionActualSelectorConflict 1 6,
+    actionActualSelectorConflict 4 6,
+    actionActualSelectorConflict 1 7,
+    actionActualSelectorConflict 4 7,
+    actionActualSelectorConflict 4 8]
+
+private def actionActualFirstLateSelectorConflict : Bool :=
+  actionActualSelectorConflict 23 26
+
+private def actionActualLateSelectorConflicts : Fin 9 → Bool :=
+  ![actionActualSelectorConflict 23 27,
+    actionActualSelectorConflict 24 26,
+    actionActualSelectorConflict 24 27,
+    actionActualSelectorConflict 28 30,
+    actionActualSelectorConflict 28 31,
+    actionActualSelectorConflict 28 32,
+    actionActualSelectorConflict 28 34,
+    actionActualSelectorConflict 28 35,
+    actionActualSelectorConflict 28 36]
+
+private theorem actionActualEarlySelectorConflicts_eq_reduced :
+    actionActualEarlySelectorConflicts =
+      ![false, false, false, true, false, true, true, true, true] := by
+  funext index
+  fin_cases index <;>
+    apply actionActualSelectorConflict_eq_modeled <;> decide
+
+private theorem actionActualFirstLateSelectorConflict_eq_reduced :
+    actionActualFirstLateSelectorConflict = false := by
+  apply actionActualSelectorConflict_eq_modeled
+  decide
+
+private theorem actionActualLateSelectorConflicts_eq_reduced :
+    actionActualLateSelectorConflicts =
+      ![false, false, false, false, true, true, false, false, false] := by
+  funext index
+  fin_cases index <;>
+    apply actionActualSelectorConflict_eq_modeled <;> decide
+
+private theorem actionActualSelectorConflict_eq_true_of_local
+    (left right : ℕ)
+    (hlocal : actionLocalSelectorsConflict left right = true) :
+    actionActualSelectorConflict left right = true := by
+  unfold actionActualSelectorConflict actionPlacedSelectorActivations
+  rw [actionLocalSelectorsConflict_eq_true_iff] at hlocal
+  rcases hlocal with hlocal | hlocal
+  · apply selectorActivationsConflict_eq_true_of_mem_localConflictPairs
+      actionOperations
+    rw [← actionSynthesisSummary_eq_operations,
+      actionLocalSelectorConflictPairs_eq]
+    exact hlocal
+  · rw [selectorActivationsConflict_comm]
+    apply selectorActivationsConflict_eq_true_of_mem_localConflictPairs
+      actionOperations
+    rw [← actionSynthesisSummary_eq_operations,
+      actionLocalSelectorConflictPairs_eq]
+    exact hlocal
+
+private theorem actionActualSelectorConflict_eq_false_of_anchor
+    (left right : ℕ) (hlt : left < right)
+    (hlocal : actionLocalSelectorsConflict left right = false)
+    (hclass : actionSelectorAnchorClass left =
+      actionSelectorAnchorClass right) :
+    actionActualSelectorConflict left right = false := by
+  unfold actionActualSelectorConflict actionPlacedSelectorActivations
+  apply selectorActivationsConflict_eq_false_of_sitesSeparated actionOperations
+  apply selectorSitesSeparated_of_anchor actionOperations
+    (selectorAnchor actionConfig)
+  · rw [← actionSynthesisSummary_eq_operations]
+    exact actionSelectorAnchored
+  · apply selectorLocalRowsSeparated_of_not_mem_localConflictPairs
+      _ left right hlt
+    rw [← actionSynthesisSummary_eq_operations,
+      actionLocalSelectorConflictPairs_eq]
+    intro hconflict
+    have : actionLocalSelectorsConflict left right = true :=
+      actionLocalSelectorsConflict_eq_true_iff left right |>.mpr
+        (Or.inl hconflict)
+    simp_all
+  · exact selectorAnchor_eq_of_class_eq left right hclass
+
+private theorem actionActualSelectorConflict_eq_false_of_sharedColumn
+    (left right : ℕ) (hlt : left < right)
+    (hlocal : actionLocalSelectorsConflict left right = false)
+    (column : RegionColumn)
+    (hleft : SelectorUsesColumn actionSynthesisSummary left column)
+    (hright : SelectorUsesColumn actionSynthesisSummary right column) :
+    actionActualSelectorConflict left right = false := by
+  unfold actionActualSelectorConflict actionPlacedSelectorActivations
+  apply selectorActivationsConflict_eq_false_of_sitesSeparated actionOperations
+  apply selectorSitesSeparated_of_sharedColumn
+  · apply selectorLocalRowsSeparated_of_not_mem_localConflictPairs
+      _ left right hlt
+    rw [← actionSynthesisSummary_eq_operations,
+      actionLocalSelectorConflictPairs_eq]
+    intro hconflict
+    have : actionLocalSelectorsConflict left right = true :=
+      actionLocalSelectorsConflict_eq_true_iff left right |>.mpr
+        (Or.inl hconflict)
+    simp_all
+  · rw [← actionSynthesisSummary_eq_operations]
+    exact hleft
+  · rw [← actionSynthesisSummary_eq_operations]
+    exact hright
+
+private theorem actionActualSelectorConflict_eq_false_of_additionalSharedColumn
+    (left right : ℕ) (hlt : left < right)
+    (hlocal : actionLocalSelectorsConflict left right = false)
+    (hpair : (left, right) ∈ actionAdditionalSharedColumnPairs) :
+    actionActualSelectorConflict left right = false := by
+  obtain ⟨column, hleft, hright⟩ :=
+    actionAdditionalSharedColumnPairs_useColumn left right hpair
+  exact actionActualSelectorConflict_eq_false_of_sharedColumn
+    left right hlt hlocal column hleft hright
+
+private def actionEarlyUnresolvedSelectorCode
+    (left right : ℕ) : Option (Fin 9) :=
+  match left, right with
+  | 0, 4 | 4, 0 => some 0
+  | 1, 4 | 4, 1 => some 1
+  | 1, 5 | 5, 1 => some 2
+  | 4, 5 | 5, 4 => some 3
+  | 1, 6 | 6, 1 => some 4
+  | 4, 6 | 6, 4 => some 5
+  | 1, 7 | 7, 1 => some 6
+  | 4, 7 | 7, 4 => some 7
+  | 4, 8 | 8, 4 => some 8
+  | _, _ => none
+
+private def actionEarlySelectorCode
+    (left right : ℕ) : Option (Option (Fin 9)) :=
+  if actionLocalSelectorsConflict left right then some none
+  else (actionEarlyUnresolvedSelectorCode left right).map some
 
 private def actionEarlySelectorConflict
     (unknown : Fin 9 → Bool) (left right : ℕ) : Bool :=
+  match actionEarlySelectorCode left right with
+  | some (some index) => unknown index
+  | some none => true
+  | none => false
+
+private def actionLateSelectorCode
+    (left right : ℕ) : Option (Option (Fin 9)) :=
   match left, right with
-  | 0, 4 | 4, 0 => unknown 0
-  | 1, 4 | 4, 1 => unknown 1
-  | 1, 5 | 5, 1 => unknown 2
-  | 4, 5 | 5, 4 => unknown 3
-  | 1, 6 | 6, 1 => unknown 4
-  | 4, 6 | 6, 4 => unknown 5
-  | 1, 7 | 7, 1 => unknown 6
-  | 4, 7 | 7, 4 => unknown 7
-  | 4, 8 | 8, 4 => unknown 8
-  | 8, 15 | 15, 8 | 8, 17 | 17, 8 | 9, 12 | 12, 9 |
-      10, 13 | 13, 10 | 11, 13 | 13, 11 => true
-  | _, _ => false
+  | 23, 26 | 26, 23 => some none
+  | 23, 27 | 27, 23 => some (some 0)
+  | 24, 26 | 26, 24 => some (some 1)
+  | 24, 27 | 27, 24 => some (some 2)
+  | 28, 30 | 30, 28 => some (some 3)
+  | 28, 31 | 31, 28 => some (some 4)
+  | 28, 32 | 32, 28 => some (some 5)
+  | 28, 34 | 34, 28 => some (some 6)
+  | 28, 35 | 35, 28 => some (some 7)
+  | 28, 36 | 36, 28 => some (some 8)
+  | _, _ => none
 
 private def actionLateSelectorConflict
     (first : Bool) (unknown : Fin 9 → Bool) (left right : ℕ) : Bool :=
-  match left, right with
-  | 23, 26 | 26, 23 => first
-  | 23, 27 | 27, 23 => unknown 0
-  | 24, 26 | 26, 24 => unknown 1
-  | 24, 27 | 27, 24 => unknown 2
-  | 28, 30 | 30, 28 => unknown 3
-  | 28, 31 | 31, 28 => unknown 4
-  | 28, 32 | 32, 28 => unknown 5
-  | 28, 34 | 34, 28 => unknown 6
-  | 28, 35 | 35, 28 => unknown 7
-  | 28, 36 | 36, 28 => unknown 8
-  | _, _ => false
+  actionLateExceptionalSelectorConflict left right ||
+    match actionLateSelectorCode left right with
+    | some (some index) => unknown index
+    | some none => first
+    | none => false
 
-private def actionPackingDegree : ℕ → ℕ
-  | 0 => 3 | 1 => 2 | 4 => 3 | 5 => 5 | 6 => 4 | 7 => 4 | 8 => 6
-  | 9 => 4 | 10 => 4 | 11 => 4 | 12 => 4 | 13 => 4 | 14 => 4
-  | 15 => 3 | 16 => 5 | 17 => 3 | 18 => 9 | 19 => 9 | 20 => 3
-  | 21 => 5 | 22 => 6 | 23 => 6 | 24 => 2 | 26 => 4 | 27 => 3
-  | 28 => 2 | 30 => 4 | 31 => 3 | 32 => 2 | 33 => 3 | 34 => 3
-  | 35 => 3 | 36 => 2 | 37 => 3 | 38 => 3 | 39 => 3 | 40 => 3
-  | 41 => 2 | 42 => 3 | 43 => 3 | 44 => 3 | 45 => 3 | 46 => 3
-  | 47 => 2 | 48 => 3 | 49 => 3 | 50 => 3 | 51 => 3 | 52 => 2
-  | 53 => 3 | 54 => 3 | 55 => 3
-  | _ => 0
+private def actionEarlySelectorSupport (left right : ℕ) : Bool :=
+  (actionEarlySelectorCode left right).isSome
 
-private theorem actionPackingDegree_eq (selector : ℕ)
-    (hselector : selector ∈ actionNonzeroSelectors) :
-    actionPackingDegree selector = actionSelectorDegrees[selector]! := by
-  have hbound : selector ≤ 55 := by
-    simp [actionNonzeroSelectors] at hselector
-    omega
-  interval_cases selector <;> rfl
+private def actionLateSelectorSupport (left right : ℕ) : Bool :=
+  actionLateExceptionalSelectorConflict left right ||
+    (actionLateSelectorCode left right).isSome
 
-private def actionPackingRemainderThree : List (List ℕ) :=
-  [[13, 17, 18, 19, 20, 21, 22, 23, 24, 26, 27, 28, 30, 31, 32,
-    33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
-    49, 50, 51, 52, 53, 54, 55],
-   [15, 17, 18, 19, 21, 22, 23, 24, 26, 27, 28, 30, 31, 32, 33,
-    34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
-    49, 50, 51, 52, 53, 54, 55],
-   [16, 18, 19, 20, 21, 22, 23, 24, 26, 27, 28, 30, 31, 32, 33,
-    34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
-    49, 50, 51, 52, 53, 54, 55],
-   [17, 18, 19, 20, 21, 22, 23, 24, 26, 27, 28, 30, 31, 32, 33,
-    34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
-    49, 50, 51, 52, 53, 54, 55],
-   [18, 19, 20, 21, 22, 23, 24, 26, 27, 28, 30, 31, 32, 33, 34,
-    35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49,
-    50, 51, 52, 53, 54, 55]]
+private theorem actionEarlySelectorConflict_eq_false_of_support
+    (unknown : Fin 9 → Bool) (left right : ℕ)
+    (hsupport : actionEarlySelectorSupport left right = false) :
+    actionEarlySelectorConflict unknown left right = false := by
+  unfold actionEarlySelectorSupport at hsupport
+  unfold actionEarlySelectorConflict
+  cases hcode : actionEarlySelectorCode left right <;>
+    simp_all only [Option.isSome_none,
+      Option.isSome_some, Bool.true_eq_false]
 
-private def actionPackingRemainderSixFirst : List ℕ :=
+private theorem actionLateSelectorConflict_eq_false_of_support
+    (first : Bool) (unknown : Fin 9 → Bool) (left right : ℕ)
+    (hsupport : actionLateSelectorSupport left right = false) :
+    actionLateSelectorConflict first unknown left right = false := by
+  unfold actionLateSelectorSupport at hsupport
+  unfold actionLateSelectorConflict
+  cases hcode : actionLateSelectorCode left right <;>
+    simp_all only [Option.isSome_none, Option.isSome_some,
+      Bool.or_false, Bool.or_true, Bool.true_eq_false]
+
+private theorem actionEarlySelectorCode_local
+    (left right : ℕ)
+    (hcode : actionEarlySelectorCode left right = some none) :
+    actionLocalSelectorsConflict left right = true := by
+  unfold actionEarlySelectorCode at hcode
+  split at hcode <;> rename_i hlocal
+  · exact hlocal
+  · cases hcode' : actionEarlyUnresolvedSelectorCode left right <;>
+      simp_all
+
+private theorem actionEarlySelectorSupport_eq_true_of_local
+    (left right : ℕ)
+    (hlocal : actionLocalSelectorsConflict left right = true) :
+    actionEarlySelectorSupport left right = true := by
+  unfold actionEarlySelectorSupport actionEarlySelectorCode
+  rw [if_pos hlocal]
+  rfl
+
+/-- The compact conflict oracle used by the Action packing proof. Same-region
+and exceptional late conflicts are fixed; the remaining placement-dependent
+answers are supplied by the reduced placement model. -/
+private def actionInitialSelectorConflict (early : Fin 9 → Bool)
+    (left right : ℕ) : Bool :=
+  actionEarlySelectorConflict early left right ||
+    actionSpecialSelectorConflict left right
+
+private def actionPackingConflict (early : Fin 9 → Bool)
+    (first : Bool) (late : Fin 9 → Bool)
+    (left right : ℕ) : Bool :=
+  actionInitialSelectorConflict early left right ||
+    actionLateSelectorConflict first late left right
+
+private theorem actionEarlySelectorConflict_eq_actual_of_code
+    (left right : ℕ) (index : Fin 9)
+    (hcode : actionEarlySelectorCode left right = some (some index)) :
+    actionEarlySelectorConflict actionActualEarlySelectorConflicts left right =
+      actionActualSelectorConflict left right := by
+  unfold actionEarlySelectorConflict
+  rw [hcode]
+  unfold actionEarlySelectorCode at hcode
+  split at hcode <;> rename_i hlocal
+  · simp at hcode
+  · simp only [Option.map_eq_some_iff] at hcode
+    obtain ⟨resolved, hresolved, hindex⟩ := hcode
+    simp only [Option.some.injEq] at hindex
+    subst resolved
+    unfold actionEarlyUnresolvedSelectorCode at hresolved
+    split at hresolved <;> try simp at hresolved
+    all_goals
+      cases hresolved
+      simp [actionActualEarlySelectorConflicts]
+    all_goals rw [actionActualSelectorConflict_comm]
+
+private theorem actionLateSelectorConflict_eq_actual_of_indexed_code
+    (left right : ℕ) (index : Fin 9)
+    (hcode : actionLateSelectorCode left right = some (some index)) :
+    actionLateSelectorConflict actionActualFirstLateSelectorConflict
+        actionActualLateSelectorConflicts left right =
+      actionActualSelectorConflict left right := by
+  unfold actionLateSelectorConflict
+  rw [hcode]
+  unfold actionLateSelectorCode at hcode
+  split at hcode <;> try simp at hcode
+  all_goals
+    cases hcode
+    simp [actionActualLateSelectorConflicts,
+      actionLateExceptionalSelectorConflict]
+  all_goals rw [actionActualSelectorConflict_comm]
+
+private theorem actionLateSelectorConflict_eq_actual_of_first_code
+    (left right : ℕ)
+    (hcode : actionLateSelectorCode left right = some none) :
+    actionLateSelectorConflict actionActualFirstLateSelectorConflict
+        actionActualLateSelectorConflicts left right =
+      actionActualSelectorConflict left right := by
+  unfold actionLateSelectorConflict
+  rw [hcode]
+  unfold actionLateSelectorCode at hcode
+  split at hcode <;> try simp at hcode
+  all_goals
+    cases hcode
+    simp [actionActualFirstLateSelectorConflict,
+      actionLateExceptionalSelectorConflict]
+  all_goals rw [actionActualSelectorConflict_comm]
+
+private theorem actionEarlySelectorConflict_eq_actual_of_support
+    (left right : ℕ)
+    (hsupport : actionEarlySelectorSupport left right = true) :
+    actionEarlySelectorConflict actionActualEarlySelectorConflicts left right =
+      actionActualSelectorConflict left right := by
+  unfold actionEarlySelectorSupport at hsupport
+  cases hcode : actionEarlySelectorCode left right with
+  | none => simp [hcode] at hsupport
+  | some code =>
+      cases code with
+      | none =>
+          unfold actionEarlySelectorConflict
+          rw [hcode]
+          symm
+          apply actionActualSelectorConflict_eq_true_of_local
+          exact actionEarlySelectorCode_local left right hcode
+      | some index =>
+          exact actionEarlySelectorConflict_eq_actual_of_code
+            left right index hcode
+
+private theorem actionLateSelectorConflict_eq_actual_of_support
+    (left right : ℕ)
+    (hsupport : actionLateSelectorSupport left right = true) :
+    actionLateSelectorConflict actionActualFirstLateSelectorConflict
+        actionActualLateSelectorConflicts left right =
+      actionActualSelectorConflict left right := by
+  unfold actionLateSelectorSupport at hsupport
+  by_cases hexceptional :
+      actionLateExceptionalSelectorConflict left right = true
+  · have hpair : (left, right) ∈ actionLateExceptionalSelectorPairs := by
+      simp only [actionLateExceptionalSelectorConflict, Bool.or_eq_true,
+        Bool.and_eq_true, decide_eq_true_eq] at hexceptional
+      rcases hexceptional with
+        (⟨rfl, rfl⟩ | ⟨rfl, rfl⟩) | ⟨rfl, rfl⟩ <;> decide
+    rw [actionActualSelectorConflict_eq_lateExceptional left right hpair,
+      hexceptional]
+    simp [actionLateSelectorConflict, hexceptional]
+  · have hcodeSupport : (actionLateSelectorCode left right).isSome = true := by
+      simpa only [hexceptional, Bool.false_or] using hsupport
+    cases hcode : actionLateSelectorCode left right with
+    | none => simp [hcode] at hcodeSupport
+    | some code =>
+        cases code with
+        | none =>
+            exact actionLateSelectorConflict_eq_actual_of_first_code
+              left right hcode
+        | some index =>
+            exact actionLateSelectorConflict_eq_actual_of_indexed_code
+              left right index hcode
+
+private def actionPackingDegree (selector : ℕ) : ℕ :=
+  actionSelectorDegrees[selector]!
+
+private def actionPackingActualConflict (left right : ℕ) : Bool :=
+  selectorActivationsConflict actionReducedSelectorActivations left right
+
+private theorem actionActualSelectorConflict_eq_reduced
+    (left right : ℕ) :
+    actionActualSelectorConflict left right =
+      actionPackingActualConflict left right := by
+  unfold actionActualSelectorConflict actionPlacedSelectorActivations
+    actionPackingActualConflict actionReducedSelectorActivations
+  rw [← actionSynthesisSummary_eq_operations,
+    show V1.starts actionOperations =
+      TopLevelCompilation.regionStarts actionFormalCircuit by rfl,
+    actionRegionStarts_eq_reduced]
+
+
+private def actionPackingRemainderThree : List ℕ :=
+  [17, 18, 19, 20, 21, 22, 23, 24, 26, 27, 28, 30, 31, 32, 33,
+   34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48,
+   49, 50, 51, 52, 53, 54, 55]
+
+private def actionPackingRemainderSix : List ℕ :=
   [23, 24, 26, 27, 28, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
    40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55]
 
-private def actionPackingRemainderSixSecond : List ℕ :=
-  [24, 26, 27, 28, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
-   41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55]
+private def actionPackingRemainderNine : List ℕ :=
+  [42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55]
 
-private def actionPackingRemainderSixZeroth : List ℕ :=
-  [22, 23, 26, 27, 28, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
-   40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55]
+private def actionPackingRemainderTen : List ℕ :=
+  [49, 50, 51, 52, 53, 54, 55]
 
-private def actionPackingRemainderSix : List (List ℕ) :=
-  [actionPackingRemainderSixZeroth, actionPackingRemainderSixFirst,
-   actionPackingRemainderSixSecond]
+private theorem actionCompactPacking_length_eq :
+    (buildCombinationsWith 9 actionPackingDegree
+      (actionPackingConflict actionActualEarlySelectorConflicts
+        actionActualFirstLateSelectorConflict actionActualLateSelectorConflicts)
+      actionNonzeroSelectors.length actionNonzeroSelectors).length = 11 := by
+  rw [actionActualEarlySelectorConflicts_eq_reduced,
+    actionActualFirstLateSelectorConflict_eq_reduced,
+    actionActualLateSelectorConflicts_eq_reduced]
+  decide +kernel
 
-private def actionPackingRemainderNine : List (List ℕ) :=
-  [[42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55],
-   [45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55],
-   [46, 47, 48, 49, 50, 51, 52, 53, 54, 55]]
+private def actionEarlyQueriedPairs : List (ℕ × ℕ) :=
+  [(0, 1), (0, 4), (1, 4), (0, 5), (1, 5), (4, 5), (0, 6), (1, 6),
+   (4, 6), (5, 6), (7, 8), (7, 9), (8, 9), (7, 10), (8, 10), (9, 10),
+   (11, 12), (11, 13), (12, 13), (11, 14), (12, 14), (11, 15),
+   (12, 15), (14, 15), (11, 16), (12, 16), (14, 16), (15, 16), (0, 7),
+   (1, 7), (5, 7), (6, 7), (4, 8), (4, 9), (4, 10), (4, 7), (0, 8),
+   (1, 8), (6, 8), (0, 9), (1, 9), (6, 9), (5, 8), (5, 10), (5, 11),
+   (8, 11), (10, 11), (13, 14), (13, 15), (13, 16), (0, 10), (1, 10),
+   (6, 10), (4, 11), (4, 12), (8, 12), (5, 13), (5, 14), (5, 15),
+   (5, 16), (5, 9), (6, 11), (9, 11), (6, 12), (9, 12), (10, 12),
+   (4, 13), (6, 13), (9, 13), (10, 13), (4, 14), (6, 14), (9, 14),
+   (10, 14), (5, 12), (6, 15), (6, 16), (6, 17), (12, 17), (13, 17),
+   (14, 17), (15, 17), (4, 15), (9, 15), (10, 15), (7, 11), (7, 12),
+   (7, 13), (7, 14), (7, 15), (7, 16), (7, 17), (5, 17), (7, 18),
+   (12, 18), (13, 18), (15, 18), (17, 18), (7, 19), (12, 19),
+   (13, 19), (15, 19), (17, 19), (7, 20), (12, 20), (13, 20),
+   (15, 20), (17, 20), (6, 18), (6, 19), (6, 20), (8, 13), (8, 16),
+   (8, 15), (8, 17), (16, 17), (8, 18), (16, 18), (8, 19), (16, 19),
+   (8, 20), (16, 20), (4, 16), (4, 17), (11, 17), (0, 11), (1, 11)]
 
-private def actionPackingRemainderTen : List (List ℕ) :=
-  [[49, 50, 51, 52, 53, 54, 55], [52, 53, 54, 55], [53, 54, 55]]
+private theorem actionActualSelectorConflict_eq_initial_of_resolved
+    (left right : ℕ) (hlt : left < right)
+    (hresolved :
+      (actionEarlySelectorSupport left right = true ∧
+        actionSpecialSelectorConflict left right = false) ∨
+      (actionEarlySelectorSupport left right = false ∧
+        ((((actionSelectorAnchorClass left = actionSelectorAnchorClass right) ∨
+              (left, right) ∈ actionAdditionalSharedColumnPairs) ∧
+            actionSpecialSelectorConflict left right = false) ∨
+          (left, right) ∈ actionSpecialSeparatedSelectorPairs))) :
+    actionPackingActualConflict left right =
+      actionInitialSelectorConflict actionActualEarlySelectorConflicts
+        left right := by
+  rw [← actionActualSelectorConflict_eq_reduced left right]
+  rcases hresolved with ⟨hearly, hspecial⟩ | ⟨hearly, hseparated⟩
+  · rw [actionInitialSelectorConflict,
+      actionEarlySelectorConflict_eq_actual_of_support left right hearly,
+      hspecial, Bool.or_false]
+  · rw [actionInitialSelectorConflict,
+      actionEarlySelectorConflict_eq_false_of_support _ _ _ hearly,
+      Bool.false_or]
+    rcases hseparated with ⟨hshared, hspecial⟩ | hspecial
+    · rw [hspecial]
+      have hlocal : actionLocalSelectorsConflict left right = false := by
+        apply Bool.eq_false_iff.mpr
+        intro hlocal
+        have := actionEarlySelectorSupport_eq_true_of_local left right hlocal
+        simp_all
+      rcases hshared with hanchor | hcommon
+      · exact actionActualSelectorConflict_eq_false_of_anchor
+          left right hlt hlocal hanchor
+      · exact actionActualSelectorConflict_eq_false_of_additionalSharedColumn
+          left right hlt hlocal hcommon
+    · exact actionActualSelectorConflict_eq_special left right hspecial
 
-private theorem actionPackingRemainder_three (unknown : Fin 9 → Bool) :
+private theorem actionEarlyPackingQueries_pairs :
+    (packingRemainderQueries 9 actionPackingDegree
+      (actionInitialSelectorConflict actionActualEarlySelectorConflicts)
+      3 actionNonzeroSelectors).Forall fun query =>
+        query.combination.Forall fun left =>
+          (left, query.selector) ∈ actionEarlyQueriedPairs := by
+  rw [actionActualEarlySelectorConflicts_eq_reduced]
+  decide +kernel
+
+private theorem actionEarlyPairs_resolved :
+    actionEarlyQueriedPairs.Forall fun pair =>
+      pair.1 < pair.2 ∧
+        ((actionEarlySelectorSupport pair.1 pair.2 = true ∧
+            actionSpecialSelectorConflict pair.1 pair.2 = false) ∨
+          (actionEarlySelectorSupport pair.1 pair.2 = false ∧
+            ((((actionSelectorAnchorClass pair.1 =
+                  actionSelectorAnchorClass pair.2) ∨
+                pair ∈ actionAdditionalSharedColumnPairs) ∧
+              actionSpecialSelectorConflict pair.1 pair.2 = false) ∨
+            pair ∈ actionSpecialSeparatedSelectorPairs))) := by
+  decide +kernel
+
+private theorem actionActualPackingRemainder_three_eq :
     packingRemainderWith 9 actionPackingDegree
-        (actionEarlySelectorConflict unknown) 3 actionNonzeroSelectors ∈
+        actionPackingActualConflict 3 actionNonzeroSelectors =
       actionPackingRemainderThree := by
-  decide +revert +kernel
-
-private theorem actionPackingRemainder_six
-    (selectors : List ℕ) (hselectors : selectors ∈ actionPackingRemainderThree) :
+  rw [show packingRemainderWith 9 actionPackingDegree
+      actionPackingActualConflict 3 actionNonzeroSelectors =
     packingRemainderWith 9 actionPackingDegree
-        (fun _ _ => false) 3 selectors ∈
+      (actionInitialSelectorConflict actionActualEarlySelectorConflicts)
+      3 actionNonzeroSelectors by
+    apply packingRemainderWith_eq_of_queries
+    intro query hquery
+    rw [expected_eq_any_of_mem_packingRemainderQueries
+      9 3 actionPackingDegree
+      (actionInitialSelectorConflict actionActualEarlySelectorConflicts)
+      actionNonzeroSelectors query hquery]
+    apply List.any_congr_of_forall_mem
+    intro left hleft
+    have hpair := List.forall_iff_forall_mem.mp
+      (List.forall_iff_forall_mem.mp actionEarlyPackingQueries_pairs
+        query hquery) left hleft
+    have hresolved := List.forall_iff_forall_mem.mp
+      actionEarlyPairs_resolved (left, query.selector) hpair
+    exact actionActualSelectorConflict_eq_initial_of_resolved
+      left query.selector hresolved.1 hresolved.2]
+  rw [actionActualEarlySelectorConflicts_eq_reduced]
+  decide +kernel
+
+private def actionMiddleQueriedPairs : List (ℕ × ℕ) :=
+  [(13, 17), (13, 18), (17, 18), (13, 19), (17, 19), (13, 20),
+   (17, 20), (13, 21), (17, 21), (20, 21), (13, 22), (17, 22),
+   (20, 22), (21, 22), (13, 23), (17, 23), (20, 23), (21, 23),
+   (13, 24), (17, 24), (20, 24), (21, 24), (15, 17), (15, 18),
+   (15, 19), (15, 21), (15, 22), (16, 18), (16, 19), (16, 20),
+   (16, 21), (16, 22), (22, 23), (16, 23), (16, 17)]
+
+private theorem actionMiddlePackingQueries_pairs :
+    (packingRemainderQueries 9 actionPackingDegree
+      actionSpecialSelectorConflict 3 actionPackingRemainderThree).Forall
+      fun query => query.combination.Forall fun left =>
+        (left, query.selector) ∈ actionMiddleQueriedPairs := by
+  decide +kernel
+
+private theorem actionMiddlePairs_resolved :
+    actionMiddleQueriedPairs.Forall fun pair =>
+      pair.1 < pair.2 ∧
+        actionEarlySelectorSupport pair.1 pair.2 = false ∧
+        ((((actionSelectorAnchorClass pair.1 =
+              actionSelectorAnchorClass pair.2) ∨
+            pair ∈ actionAdditionalSharedColumnPairs) ∧
+          actionSpecialSelectorConflict pair.1 pair.2 = false) ∨
+        pair ∈ actionSpecialSeparatedSelectorPairs) := by
+  decide +kernel
+
+private theorem actionActualSelectorConflict_eq_special_of_resolved
+    (left right : ℕ) (hlt : left < right)
+    (hearly : actionEarlySelectorSupport left right = false)
+    (hresolved :
+      (((actionSelectorAnchorClass left = actionSelectorAnchorClass right) ∨
+          (left, right) ∈ actionAdditionalSharedColumnPairs) ∧
+        actionSpecialSelectorConflict left right = false) ∨
+      (left, right) ∈ actionSpecialSeparatedSelectorPairs) :
+    actionPackingActualConflict left right =
+      actionSpecialSelectorConflict left right := by
+  rw [← actionActualSelectorConflict_eq_reduced left right]
+  rcases hresolved with ⟨hshared, hspecial⟩ | hspecial
+  · rw [hspecial]
+    have hlocal : actionLocalSelectorsConflict left right = false := by
+      apply Bool.eq_false_iff.mpr
+      intro hlocal
+      have hsupport := actionEarlySelectorSupport_eq_true_of_local
+        left right hlocal
+      simp_all
+    rcases hshared with hanchor | hcommon
+    · exact actionActualSelectorConflict_eq_false_of_anchor
+        left right hlt hlocal hanchor
+    · exact actionActualSelectorConflict_eq_false_of_additionalSharedColumn
+        left right hlt hlocal hcommon
+  · exact actionActualSelectorConflict_eq_special left right hspecial
+
+private theorem actionActualPackingRemainder_six_eq :
+    packingRemainderWith 9 actionPackingDegree
+        actionPackingActualConflict 6 actionNonzeroSelectors =
       actionPackingRemainderSix := by
-  simp only [actionPackingRemainderThree, List.mem_cons, List.not_mem_nil,
-    or_false]
-    at hselectors
-  rcases hselectors with rfl | rfl | rfl | rfl | rfl <;> decide +kernel
-
-private theorem actionPackingRemainder_nine_false_zeroth
-    (unknown : Fin 9 → Bool) :
+  rw [show 6 = 3 + 3 by omega,
+    packingRemainderWith_add, actionActualPackingRemainder_three_eq]
+  rw [show packingRemainderWith 9 actionPackingDegree
+      actionPackingActualConflict 3 actionPackingRemainderThree =
     packingRemainderWith 9 actionPackingDegree
-        (actionLateSelectorConflict false unknown) 3
-        actionPackingRemainderSixZeroth ∈
+      actionSpecialSelectorConflict 3 actionPackingRemainderThree by
+    apply packingRemainderWith_eq_of_queries
+    intro query hquery
+    rw [expected_eq_any_of_mem_packingRemainderQueries
+      9 3 actionPackingDegree actionSpecialSelectorConflict
+      actionPackingRemainderThree query hquery]
+    apply List.any_congr_of_forall_mem
+    intro left hleft
+    have hpair := List.forall_iff_forall_mem.mp
+      (List.forall_iff_forall_mem.mp actionMiddlePackingQueries_pairs
+        query hquery) left hleft
+    have hresolved := List.forall_iff_forall_mem.mp
+      actionMiddlePairs_resolved (left, query.selector) hpair
+    exact actionActualSelectorConflict_eq_special_of_resolved
+      left query.selector hresolved.1 hresolved.2.1 hresolved.2.2]
+  decide +kernel
+
+private theorem actionLatePackingQueries_bounds :
+    (packingRemainderQueries 9 actionPackingDegree
+      (actionLateSelectorConflict actionActualFirstLateSelectorConflict
+        actionActualLateSelectorConflicts)
+      3 actionPackingRemainderSix).Forall fun query =>
+        query.combination.Forall fun left =>
+          22 ≤ left ∧ left ≠ 25 ∧ left ≠ 29 ∧
+            left < query.selector ∧ query.selector ≠ 25 ∧
+            query.selector ≠ 29 ∧ query.selector < 42 := by
+  rw [actionActualFirstLateSelectorConflict_eq_reduced,
+    actionActualLateSelectorConflicts_eq_reduced]
+  decide +kernel
+
+private def actionLatePackingSelectors : List ℕ :=
+  [22, 23, 24, 26, 27, 28, 30, 31, 32, 33, 34, 35, 36, 37, 38,
+   39, 40, 41]
+
+private theorem mem_actionLatePackingSelectors
+    (selector : ℕ) (hlower : 22 ≤ selector) (hne25 : selector ≠ 25)
+    (hne29 : selector ≠ 29) (hupper : selector < 42) :
+    selector ∈ actionLatePackingSelectors := by
+  interval_cases selector <;> simp_all [actionLatePackingSelectors]
+
+private theorem actionLatePackingSelectors_resolved :
+    actionLatePackingSelectors.Forall fun left =>
+      actionLatePackingSelectors.Forall fun right =>
+        left < right →
+          actionLocalSelectorsConflict left right = false ∧
+            (actionLateSelectorSupport left right = true ∨
+              (actionLateSelectorSupport left right = false ∧
+                ((actionUsesAdviceColumn6 left ∧
+                    actionUsesAdviceColumn6 right) ∨
+                  actionSelectorAnchorClass left =
+                    actionSelectorAnchorClass right ∨
+                  (left, right) ∈ actionLateExceptionalSelectorPairs))) := by
+  decide +kernel
+
+private theorem actionLatePair_resolved
+    (left right : ℕ)
+    (hleft : 22 ≤ left) (hneLeft25 : left ≠ 25)
+    (hneLeft29 : left ≠ 29) (hlt : left < right)
+    (hneRight25 : right ≠ 25) (hneRight29 : right ≠ 29)
+    (hright : right < 42) :
+    actionLocalSelectorsConflict left right = false ∧
+      (actionLateSelectorSupport left right = true ∨
+        (actionLateSelectorSupport left right = false ∧
+          ((actionUsesAdviceColumn6 left ∧ actionUsesAdviceColumn6 right) ∨
+            actionSelectorAnchorClass left = actionSelectorAnchorClass right ∨
+            (left, right) ∈ actionLateExceptionalSelectorPairs))) := by
+  have hleftUpper : left < 42 := Nat.lt_trans hlt hright
+  exact List.forall_iff_forall_mem.mp
+    (List.forall_iff_forall_mem.mp actionLatePackingSelectors_resolved
+      left (mem_actionLatePackingSelectors left hleft hneLeft25
+        hneLeft29 hleftUpper))
+    right (mem_actionLatePackingSelectors right (Nat.le_trans hleft hlt.le)
+      hneRight25 hneRight29 hright) hlt
+
+private theorem actionActualSelectorConflict_eq_late_of_resolved
+    (left right : ℕ) (hlt : left < right)
+    (hlocal : actionLocalSelectorsConflict left right = false)
+    (hresolved :
+      actionLateSelectorSupport left right = true ∨
+        (actionLateSelectorSupport left right = false ∧
+          ((actionUsesAdviceColumn6 left ∧ actionUsesAdviceColumn6 right) ∨
+            actionSelectorAnchorClass left = actionSelectorAnchorClass right ∨
+            (left, right) ∈ actionLateExceptionalSelectorPairs))) :
+    actionPackingActualConflict left right =
+      actionLateSelectorConflict actionActualFirstLateSelectorConflict
+        actionActualLateSelectorConflicts left right := by
+  rw [← actionActualSelectorConflict_eq_reduced left right]
+  rcases hresolved with hlate | ⟨hlate, hseparated⟩
+  · exact (actionLateSelectorConflict_eq_actual_of_support
+      left right hlate).symm
+  · rw [actionLateSelectorConflict_eq_false_of_support _ _ _ _ hlate]
+    rcases hseparated with hcolumn | hanchor | hexceptional
+    · exact actionActualSelectorConflict_eq_false_of_sharedColumn
+        left right hlt hlocal (.column .advice 6)
+        (actionUsesAdviceColumn6_useColumn left hcolumn.1)
+        (actionUsesAdviceColumn6_useColumn right hcolumn.2)
+    · exact actionActualSelectorConflict_eq_false_of_anchor
+        left right hlt hlocal hanchor
+    · rw [actionActualSelectorConflict_eq_lateExceptional
+          left right hexceptional]
+      unfold actionLateSelectorSupport at hlate
+      simp only [Bool.or_eq_false_eq_eq_false_and_eq_false] at hlate
+      exact hlate.1
+
+private theorem actionActualPackingRemainder_nine_eq :
+    packingRemainderWith 9 actionPackingDegree
+        actionPackingActualConflict 9 actionNonzeroSelectors =
       actionPackingRemainderNine := by
-  decide +revert +kernel
-
-private theorem actionPackingRemainder_nine_false_first
-    (unknown : Fin 9 → Bool) :
+  rw [show 9 = 6 + 3 by omega,
+    packingRemainderWith_add, actionActualPackingRemainder_six_eq]
+  rw [show packingRemainderWith 9 actionPackingDegree
+      actionPackingActualConflict 3 actionPackingRemainderSix =
     packingRemainderWith 9 actionPackingDegree
-        (actionLateSelectorConflict false unknown) 3
-        actionPackingRemainderSixFirst ∈
-      actionPackingRemainderNine := by
-  decide +revert +kernel
+      (actionLateSelectorConflict actionActualFirstLateSelectorConflict
+        actionActualLateSelectorConflicts)
+      3 actionPackingRemainderSix by
+    apply packingRemainderWith_eq_of_queries
+    intro query hquery
+    rw [expected_eq_any_of_mem_packingRemainderQueries
+      9 3 actionPackingDegree
+      (actionLateSelectorConflict actionActualFirstLateSelectorConflict
+        actionActualLateSelectorConflicts)
+      actionPackingRemainderSix query hquery]
+    apply List.any_congr_of_forall_mem
+    intro left hleft
+    have hbounds := List.forall_iff_forall_mem.mp
+      (List.forall_iff_forall_mem.mp actionLatePackingQueries_bounds
+        query hquery) left hleft
+    obtain ⟨hleftBound, hneLeft25, hneLeft29, hlt,
+      hneRight25, hneRight29, hrightBound⟩ := hbounds
+    have hresolved := actionLatePair_resolved left query.selector
+      hleftBound hneLeft25 hneLeft29 hlt hneRight25 hneRight29
+      hrightBound
+    exact actionActualSelectorConflict_eq_late_of_resolved
+      left query.selector hlt hresolved.1 hresolved.2]
+  rw [actionActualFirstLateSelectorConflict_eq_reduced,
+    actionActualLateSelectorConflicts_eq_reduced]
+  decide +kernel
 
-private theorem actionPackingRemainder_nine_false_second
-    (unknown : Fin 9 → Bool) :
-    packingRemainderWith 9 actionPackingDegree
-        (actionLateSelectorConflict false unknown) 3
-        actionPackingRemainderSixSecond ∈
-      actionPackingRemainderNine := by
-  decide +revert +kernel
+private def actionFinalPackingSelectors : List ℕ :=
+  [42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55]
 
-private theorem actionPackingRemainder_nine_true_first
-    (unknown : Fin 9 → Bool) :
-    packingRemainderWith 9 actionPackingDegree
-        (actionLateSelectorConflict true unknown) 3
-        actionPackingRemainderSixFirst ∈
-      actionPackingRemainderNine := by
-  decide +revert +kernel
+private theorem actionFinalPackingSelectors_resolved :
+    actionFinalPackingSelectors.Forall fun left =>
+      actionFinalPackingSelectors.Forall fun right =>
+        left < right →
+          actionLocalSelectorsConflict left right = false ∧
+            actionUsesAdviceColumn6 left ∧ actionUsesAdviceColumn6 right := by
+  decide +kernel
 
-private theorem actionPackingRemainder_nine_true_zeroth
-    (unknown : Fin 9 → Bool) :
-    packingRemainderWith 9 actionPackingDegree
-        (actionLateSelectorConflict true unknown) 3
-        actionPackingRemainderSixZeroth ∈
-      actionPackingRemainderNine := by
-  decide +revert +kernel
+private theorem actionFinalPackingQueries_bounds
+    (selectors : List ℕ)
+    (hselectors : selectors = actionPackingRemainderNine ∨
+      selectors = actionPackingRemainderTen) :
+    (packingRemainderQueries 9 actionPackingDegree
+      (fun _ _ => false) 1 selectors).Forall fun query =>
+        query.combination.Forall fun left =>
+          left ∈ actionFinalPackingSelectors ∧
+            query.selector ∈ actionFinalPackingSelectors ∧
+            left < query.selector := by
+  rcases hselectors with rfl | rfl <;> decide +kernel
 
-private theorem actionPackingRemainder_nine_true_second
-    (unknown : Fin 9 → Bool) :
-    packingRemainderWith 9 actionPackingDegree
-        (actionLateSelectorConflict true unknown) 3
-        actionPackingRemainderSixSecond ∈
-      actionPackingRemainderNine := by
-  decide +revert +kernel
+private theorem actionActualSelectorConflict_eq_false_of_finalPair
+    (left right : ℕ) (hleft : left ∈ actionFinalPackingSelectors)
+    (hright : right ∈ actionFinalPackingSelectors) (hlt : left < right) :
+    actionPackingActualConflict left right = false := by
+  rw [← actionActualSelectorConflict_eq_reduced left right]
+  have hresolved := List.forall_iff_forall_mem.mp
+    (List.forall_iff_forall_mem.mp actionFinalPackingSelectors_resolved
+      left hleft) right hright hlt
+  exact actionActualSelectorConflict_eq_false_of_sharedColumn
+    left right hlt hresolved.1 (.column .advice 6)
+    (actionUsesAdviceColumn6_useColumn left hresolved.2.1)
+    (actionUsesAdviceColumn6_useColumn right hresolved.2.2)
 
-private theorem actionPackingRemainder_nine (first : Bool)
-    (unknown : Fin 9 → Bool)
-    (selectors : List ℕ) (hselectors : selectors ∈ actionPackingRemainderSix) :
+private theorem actionActualPackingRemainder_final_eq
+    (selectors : List ℕ)
+    (hselectors : selectors = actionPackingRemainderNine ∨
+      selectors = actionPackingRemainderTen) :
     packingRemainderWith 9 actionPackingDegree
-        (actionLateSelectorConflict first unknown) 3 selectors ∈
-      actionPackingRemainderNine := by
-  simp only [actionPackingRemainderSix, List.mem_cons, List.not_mem_nil,
-    or_false] at hselectors
-  rcases hselectors with rfl | rfl | rfl <;> cases first
-  · exact actionPackingRemainder_nine_false_zeroth unknown
-  · exact actionPackingRemainder_nine_true_zeroth unknown
-  · exact actionPackingRemainder_nine_false_first unknown
-  · exact actionPackingRemainder_nine_true_first unknown
-  · exact actionPackingRemainder_nine_false_second unknown
-  · exact actionPackingRemainder_nine_true_second unknown
+        actionPackingActualConflict 1 selectors =
+      packingRemainderWith 9 actionPackingDegree
+        (fun _ _ => false) 1 selectors := by
+  apply packingRemainderWith_eq_of_queries
+  intro query hquery
+  rw [expected_eq_any_of_mem_packingRemainderQueries
+    9 1 actionPackingDegree (fun _ _ => false) selectors query hquery]
+  apply List.any_congr_of_forall_mem
+  intro left hleft
+  have hbounds := List.forall_iff_forall_mem.mp
+    (List.forall_iff_forall_mem.mp
+      (actionFinalPackingQueries_bounds selectors hselectors) query hquery)
+    left hleft
+  rw [actionActualSelectorConflict_eq_false_of_finalPair
+    left query.selector hbounds.1 hbounds.2.1 hbounds.2.2]
 
-private theorem actionPackingRemainder_ten
-    (selectors : List ℕ) (hselectors : selectors ∈ actionPackingRemainderNine) :
+private theorem actionActualPackingRemainder_ten_eq :
     packingRemainderWith 9 actionPackingDegree
-        (fun _ _ => false) 1 selectors ∈
+        actionPackingActualConflict 10 actionNonzeroSelectors =
       actionPackingRemainderTen := by
-  simp only [actionPackingRemainderNine, List.mem_cons, List.not_mem_nil,
-    or_false]
-    at hselectors
-  rcases hselectors with rfl | rfl | rfl <;> decide +kernel
+  rw [show 10 = 9 + 1 by omega,
+    packingRemainderWith_add, actionActualPackingRemainder_nine_eq,
+    actionActualPackingRemainder_final_eq actionPackingRemainderNine
+      (Or.inl rfl)]
+  decide +kernel
 
-private theorem actionPackingRemainder_eleven
-    (selectors : List ℕ) (hselectors : selectors ∈ actionPackingRemainderTen) :
+private theorem actionActualPackingRemainder_eleven_eq :
     packingRemainderWith 9 actionPackingDegree
-        (fun _ _ => false) 1 selectors = [] := by
-  simp only [actionPackingRemainderTen, List.mem_cons, List.not_mem_nil,
-    or_false]
-    at hselectors
-  rcases hselectors with rfl | rfl | rfl <;> decide +kernel
+        actionPackingActualConflict 11 actionNonzeroSelectors = [] := by
+  rw [show 11 = 10 + 1 by omega,
+    packingRemainderWith_add, actionActualPackingRemainder_ten_eq,
+    actionActualPackingRemainder_final_eq actionPackingRemainderTen
+      (Or.inr rfl)]
+  decide +kernel
+
+private theorem actionActualPacking_length_eq :
+    (buildCombinationsWith 9 actionPackingDegree
+      actionPackingActualConflict actionNonzeroSelectors.length
+      actionNonzeroSelectors).length = 11 := by
+  apply buildCombinationsWith_length_eq_of_checkpoints
+  · omega
+  · unfold actionNonzeroSelectors
+    decide
+  · rw [actionActualPackingRemainder_ten_eq]
+    simp [actionPackingRemainderTen]
+  · exact actionActualPackingRemainder_eleven_eq
+
+private theorem actionActualPacking_length_eq_sourceDegree :
+    (buildCombinationsWith 9
+      (fun selector => actionSelectorDegrees[selector]!)
+      actionPackingActualConflict actionNonzeroSelectors.length
+      actionNonzeroSelectors).length = 11 := by
+  simpa only [actionPackingDegree] using actionActualPacking_length_eq
+
+private theorem actionReducedPacking_length_eq :
+    (buildCombinationsWith 9
+      (fun selector => actionSelectorDegrees[selector]!)
+      (selectorActivationsConflict actionReducedSelectorActivations)
+      actionNonzeroSelectors.length actionNonzeroSelectors).length = 11 := by
+  simpa only [actionPackingActualConflict] using
+    actionActualPacking_length_eq_sourceDegree
+
+theorem actionSelectorColumnCount_eq :
+    selectorColumnCountWith (List.range 56) 9
+      (fun selector => actionSelectorDegrees[selector]!)
+      (selectorActivationsConflict actionReducedSelectorActivations) = 15 := by
+  have hcount := selectorColumnCountWith_eq_of_partitions
+    (List.range 56) [2, 3, 25, 29] actionNonzeroSelectors 9 11
+    (fun selector => actionSelectorDegrees[selector]!)
+    (selectorActivationsConflict actionReducedSelectorActivations)
+    actionSelectorDegreePartitions.1 actionSelectorDegreePartitions.2
+    actionReducedPacking_length_eq
+  norm_num only [List.length_cons, List.length_nil] at hcount
+  exact hcount
 
 end Zcash.Circuits.Action
