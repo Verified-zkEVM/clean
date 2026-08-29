@@ -293,6 +293,13 @@ namespace PlannedSummaryBlock
 def summaries (trace : List PlannedSummaryBlock) : List RegionShapeSummary :=
   (blocks trace).flatMap fun block => List.replicate block.1 block.2
 
+theorem slotShapeSummariesFrom_summaries
+    (trace : List PlannedSummaryBlock)
+    (allocations : CircuitAllocations) :
+    slotShapeSummariesFrom (summaries trace) allocations =
+      slotShapeSummaryBlocks (blocks trace) allocations := by
+  exact slotShapeSummariesFrom_flatMap_replicate (blocks trace) allocations
+
 theorem slotSummaryStateFromWith_summaries
     (trace : List PlannedSummaryBlock) (initial : Nat)
     (allocations : CircuitAllocations) :

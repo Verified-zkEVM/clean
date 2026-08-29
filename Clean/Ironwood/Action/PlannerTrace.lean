@@ -1,88 +1,8 @@
-import Clean.Ironwood.Action.PlannerTraceCertificate
+import Clean.Ironwood.Action.PlannerTraceBridge
 
 namespace Zcash.Circuits.Action
 
 open Halo2 FloorPlanner
-
-/-- Original Action region indices in the exact consensus sort order. -/
-def actionSortedRegionIndices : List Nat :=
-  [297, 330, 377, 275, 290, 268, 328, 375, 280, 206, 134, 118, 262, 254, 62,
-   30, 246, 158, 70, 150, 126, 46, 238, 166, 230, 78, 142, 214, 198, 174,
-   222, 110, 182, 94, 14, 22, 86, 102, 190, 38, 54, 292, 273, 266, 394,
-   320, 367, 372, 325, 293, 329, 291, 267, 276, 376, 270, 269, 279, 281,
-   378, 331, 296, 282, 334, 333, 295, 381, 380, 326, 382, 373, 332, 379,
-   321, 368, 277, 294, 335, 299, 31, 247, 322, 255, 374, 135, 239, 327,
-   119, 39, 263, 159, 167, 231, 369, 79, 223, 151, 127, 215, 87, 207, 23,
-   199, 95, 143, 47, 71, 191, 103, 15, 183, 175, 111, 63, 55, 300, 272,
-   278, 342, 393, 345, 392, 341, 391, 389, 388, 344, 336, 383, 337, 384,
-   120, 152, 56, 160, 128, 168, 112, 256, 176, 184, 32, 104, 64, 136,
-   144, 40, 96, 200, 24, 208, 88, 48, 240, 192, 8, 72, 216, 80, 224, 232,
-   16, 248, 343, 390, 386, 339, 227, 226, 338, 75, 340, 74, 234, 82, 219,
-   218, 83, 235, 324, 323, 319, 242, 211, 210, 243, 67, 27, 304, 90, 91,
-   203, 202, 66, 318, 351, 352, 19, 316, 195, 194, 99, 250, 18, 355, 251,
-   357, 187, 186, 314, 34, 358, 361, 106, 107, 179, 178, 11, 311, 363,
-   10, 365, 59, 171, 170, 114, 258, 366, 370, 115, 371, 163, 162, 259,
-   58, 310, 385, 35, 122, 155, 154, 123, 308, 305, 387, 271, 274, 147,
-   146, 51, 284, 285, 50, 130, 131, 139, 138, 288, 43, 42, 26, 98, 2, 3,
-   4, 348, 347, 301, 148, 125, 124, 149, 153, 121, 156, 157, 161, 117,
-   116, 164, 165, 113, 169, 172, 173, 109, 108, 177, 180, 105, 181, 185,
-   188, 101, 100, 189, 0, 97, 193, 196, 197, 93, 92, 201, 204, 89, 205,
-   209, 212, 85, 84, 213, 217, 81, 220, 221, 225, 77, 76, 228, 229, 73,
-   233, 236, 237, 69, 5, 68, 29, 65, 245, 249, 252, 61, 60, 253, 257, 57,
-   260, 261, 264, 53, 52, 265, 283, 49, 286, 287, 289, 45, 44, 298, 145,
-   141, 129, 41, 133, 303, 306, 37, 36, 307, 309, 33, 312, 313, 315, 1,
-   28, 317, 140, 137, 132, 241, 349, 21, 20, 350, 353, 17, 354, 356,
-   359, 13, 12, 360, 362, 9, 364, 7, 6, 25, 244, 346, 302]
-
-set_option maxRecDepth 1000000 in
-/-- The reduced synthesis summary computes the published consensus sort order. -/
-theorem actionSortedRegionIndices_eq :
-    V1.sortedRegionIndices actionOperations = actionSortedRegionIndices := by
-  unfold V1.sortedRegionIndices V1.sortedRegionOrder
-    actionSortedRegionIndices actionOperations
-  rw [measureRegions_eq_synthesisSummary_regionShapes]
-  rw [show TopLevelCompilation.operations actionFormalCircuit =
-      actionOperations by rfl,
-    ← actionSynthesisSummary_eq_operations]
-  unfold actionSynthesisSummary Circuit.mainPostSynthesisSummary
-    Circuit.synthesizeBaseSynthesisSummary
-    Circuit.synthWitnessSynthesisSummary Circuit.synthChecksSynthesisSummary
-    Circuit.synthNotesSynthesisSummary
-    Circuit.synthCrossAddressChecksSynthesisSummary
-  decide +kernel
-
-/-- The exact consensus-order physical summary stream, retaining maximal runs. -/
-def actionExactSortedPlannerSummaries : List RegionShapeSummary :=
-  ((V1.PlannedSummaryBlock.blocks actionExactPlannerTrace).flatMap fun block =>
-    List.replicate block.1 block.2) ++
-  List.replicate 2 { columns := [], rowCount := 0 }
-
-/-- Exact Action start rows in consensus sort order. -/
-def actionExactSortedStarts : List Nat :=
-  V1.PlannedSummaryBlock.starts actionExactPlannerTrace ++ [0, 0]
-
-set_option maxRecDepth 1000000 in
-/-- Each reduced summary in consensus order has the exact physical footprint
-recorded by the compact trace. -/
-theorem actionSortedPlannerSummaries_equivalent_exact :
-    List.Forall₂ RegionShapeSummary.PlacementEquivalent
-      actionSortedPlannerSummaries actionExactSortedPlannerSummaries := by
-  apply RegionShapeSummary.forall₂_placementEquivalent_of_map_normalized_eq
-  unfold actionSortedPlannerSummaries
-  rw [V1.sortedSummaryOrder_eq_map_getD]
-  rw [actionSortedRegionIndices_eq]
-  rw [show synthesisSummary actionOperations =
-      actionSynthesisSummary by
-    exact actionSynthesisSummary_eq_operations.symm]
-  unfold actionExactSortedPlannerSummaries actionExactPlannerTrace
-    actionExactPlannerRuns
-    actionPlannerBlocks actionSortedRegionIndices actionSynthesisSummary
-    Circuit.mainPostSynthesisSummary Circuit.synthesizeBaseSynthesisSummary
-    Circuit.synthWitnessSynthesisSummary Circuit.synthChecksSynthesisSummary
-    Circuit.synthNotesSynthesisSummary
-    Circuit.synthCrossAddressChecksSynthesisSummary
-    V1.PlannedSummaryBlock.blocks
-  decide +kernel
 
 /-- The compact exact trace computes every sorted start row, including the two
 zero-row regions at the end. -/
@@ -102,7 +22,7 @@ theorem actionExactSortedPlannerSummaries_starts_eq :
     actionExactPlannerTrace_lawful
   unfold actionExactSortedPlannerSummaries actionExactSortedStarts
   rw [slotShapeSummariesFrom_append,
-    slotShapeSummariesFrom_flatMap_replicate]
+    V1.PlannedSummaryBlock.slotShapeSummariesFrom_summaries]
   simp only
   rw [htrace.1, slotShapeSummariesFrom_replicate_empty]
   simp
@@ -111,8 +31,16 @@ theorem actionExactSortedPlannerSummaries_starts_eq :
 theorem actionSortedPlannerSummaries_endpoint :
     (V1.slotSummaryStateFromWith 0 actionSortedPlannerSummaries
       (∅ : CircuitAllocations)).1 = 1779 := by
-  exact actionSortedPlannerSummaries_equivalent_canonical.1.trans
-    actionCanonicalPlannerSummaries_endpoint
+  rw [V1.slotSummaryStateFromWith_eq_of_forall₂_placementEquivalent
+    actionSortedPlannerSummaries_equivalent_exact]
+  unfold actionExactSortedPlannerSummaries
+  rw [V1.slotSummaryStateFromWith_append]
+  rw [V1.slotSummaryStateFromWith_replicate_empty]
+  have hTrace := V1.PlannedSummaryBlock.slotSummaryStateFromWith_summaries_result
+    actionExactPlannerTrace 0 (∅ : CircuitAllocations)
+    V1.AllocationView.empty V1.AllocationView.empty_represents_empty
+    V1.AllocationView.empty_valid actionExactPlannerTrace_lawful
+  rw [hTrace.1, actionExactPlannerTrace_endpoint]
 
 theorem actionPlacementEnd_eq_1779 :
     V1.placementEnd actionOperations = 1779 := by
