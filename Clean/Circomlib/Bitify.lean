@@ -39,7 +39,9 @@ def main (n : ℕ) (inp : Expression (F p)) := do
   let (lc1, _) ← Circuit.foldlRange n (0, 1) fun (lc1, e2) i => do
     out[i] * (out[i] - 1) === 0
     let lc1 := lc1 + out[i] * e2
-    return (lc1, e2 + e2)
+    -- `e2 * 2` (not `e2 + e2`): the compiler's expression flattening is a
+    -- structural recursion, so doubling a shared subtree would be exponential.
+    return (lc1, e2 * 2)
 
   lc1 === inp
   return out
@@ -48,10 +50,10 @@ def main (n : ℕ) (inp : Expression (F p)) := do
 omit [Fact (p > 2)] in
 lemma lc_eq {i0} {env} {n : ℕ} :
   (Expression.eval env <| Prod.fst <|
-    Fin.foldl n (fun (lc1, e2) i => (lc1 + (var (F:=F p) ⟨ i0 + ↑i ⟩) * e2, e2 + e2)) (0, 1))
+    Fin.foldl n (fun (lc1, e2) i => (lc1 + (var (F:=F p) ⟨ i0 + ↑i ⟩) * e2, e2 * 2)) (0, 1))
     = fieldFromBits (Vector.mapRange n fun i => env.get (i0 + i)) := by
   suffices (eval (Var:=Var fieldPair (F p)) env <|
-    Fin.foldl n (fun (lc1, e2) i => (lc1 + (var (F:=F p) ⟨ i0 + ↑i ⟩) * e2, e2 + e2)) (0, 1))
+    Fin.foldl n (fun (lc1, e2) i => (lc1 + (var (F:=F p) ⟨ i0 + ↑i ⟩) * e2, e2 * 2)) (0, 1))
     = (fieldFromBits (Vector.mapRange n fun i => env.get (i0 + i)), 2^n) by
     simp_all [circuit_norm]
   simp only [fieldFromBits, fromBits, Vector.getElem_map]
@@ -60,7 +62,7 @@ lemma lc_eq {i0} {env} {n : ℕ} :
   | succ n ih =>
     simp_all only [circuit_norm, Prod.mk.injEq, Fin.foldl_succ_last, Fin.val_castSucc, Fin.val_last,
       Expression.eval, Nat.cast_add, Nat.cast_mul, ZMod.natCast_val, Nat.cast_pow, Nat.cast_ofNat,
-      pow_succ', two_mul, add_right_inj, mul_eq_mul_right_iff, pow_eq_zero_iff', ne_eq, and_true]
+      pow_succ, add_right_inj, mul_eq_mul_right_iff, pow_eq_zero_iff', ne_eq, and_true]
     left
     rw [ZMod.cast_id]
 
@@ -146,7 +148,9 @@ template Bits2Num(n) {
 def main (n : ℕ) (input : Vector (Expression (F p)) n) := do
   let (lc1, _) := Fin.foldl n (fun (lc1, e2) i =>
     let lc1 := lc1 + input[i] * e2
-    let e2 := e2 + e2
+    -- `e2 * 2` (not `e2 + e2`): see Num2Bits.main — doubling a shared
+    -- expression subtree makes the compiler's flattening exponential.
+    let e2 := e2 * 2
     (lc1, e2)) (0, 1)
 
   let out <== lc1
@@ -156,10 +160,10 @@ omit [Fact (p > 2)] in
 lemma lc_eq {env} {n : ℕ} {v : Vector (Expression (F p)) n} :
   (Expression.eval env <| Prod.fst <|
     Fin.foldl n (fun ((lc1, e2) : Expression (F p) × Expression (F p)) i =>
-      (lc1 + v[↑i] * e2, e2 + e2)) (0, 1))
+      (lc1 + v[↑i] * e2, e2 * 2)) (0, 1))
     = fieldFromBits (Vector.mapFinRange n fun i => v[↑i].eval env) := by
   suffices (eval (Var:=Var fieldPair (F p)) env <|
-    Fin.foldl n (fun (lc1, e2) i => (lc1 + v[↑i] * e2, e2 + e2)) (0, 1))
+    Fin.foldl n (fun (lc1, e2) i => (lc1 + v[↑i] * e2, e2 * 2)) (0, 1))
     = (fieldFromBits (Vector.mapFinRange n fun i => v[↑i].eval env), 2^n) by
     simp_all [circuit_norm]
   simp only [fieldFromBits, fromBits, Vector.getElem_map, Vector.getElem_mapFinRange]
@@ -168,7 +172,7 @@ lemma lc_eq {env} {n : ℕ} {v : Vector (Expression (F p)) n} :
   | succ n ih =>
     specialize ih (v := v.pop)
     simp only [Fin.getElem_fin, Vector.getElem_pop', Fin.eta] at ih
-    simp_all only [circuit_norm, Fin.foldl_succ_last, Prod.mk.injEq, pow_succ', two_mul,
+    simp_all only [circuit_norm, Fin.foldl_succ_last, Prod.mk.injEq, pow_succ,
       Fin.val_castSucc, Fin.val_last, Nat.cast_add, Nat.cast_mul, ZMod.natCast_val,
       Nat.cast_pow, Nat.cast_ofNat, Prod.mk.injEq]
     rw [ZMod.cast_id]
@@ -188,7 +192,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
     set output : (F p) := (env.get i₀)
 
     change output = Expression.eval env (Fin.foldl n
-      (fun (lc1, e2) i => (lc1 + input_var[↑i] * e2, e2 + e2)) (0, 1)).1
+      (fun (lc1, e2) i => (lc1 + input_var[↑i] * e2, e2 * 2)) (0, 1)).1
     at h_holds
     rw [lc_eq] at h_holds
 

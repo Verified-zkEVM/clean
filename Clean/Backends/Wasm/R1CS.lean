@@ -104,7 +104,7 @@ private def compileConstraints (fieldPrime numInputs : ℕ) (inputNames : List S
     throw "compileR1CS: outputVarIdx must be witness circuit variables (indices ≥ numInputs)"
   let flatOps := Operations.toFlat ops
   let vm := { (VarMap.init numInputs numWords fieldPrime) with numOutputs, outputVars := outputVarIdx }
-  let (_, finalVarIdx, _) ← processFlatOps flatOps vm numInputs []
+  let (_, finalVarIdx, _) ← processFlatOps flatOps vm numInputs {}
   -- finalVarIdx = numInputs + total witness outputs (steps don't count)
   let witnessCount := finalVarIdx - numInputs
   if !(outputVarIdx.all fun v => v < finalVarIdx) then

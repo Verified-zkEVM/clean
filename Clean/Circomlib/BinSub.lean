@@ -47,7 +47,7 @@ lemma inputLinearSub_eval_eq_sub {n : ℕ} [NeZero n] (env : Environment (F p))
 
 -- Lemma: (Left) folding `n` times over an accumulator that starts as `(0, 1)`, and doubling each time the right element of the accumulator, results in having `2^n` as the right element of the pair
 lemma foldl_acc1_powerof2 {n : ℕ} (env : Environment (F p)) (f : Expression (F p) × Expression (F p) → ℕ → Expression (F p)) :
-  Expression.eval env (Fin.foldl n (fun acc i ↦ (f acc i, acc.2 + acc.2)) (0, 1)).2 = (2^n : F p) := by
+  Expression.eval env (Fin.foldl n (fun acc i ↦ (f acc i, acc.2 * 2)) (0, 1)).2 = (2^n : F p) := by
   induction n with
   | zero => simp_all only [Fin.foldl_zero, pow_zero, circuit_norm]
   | succ n' ihn' => simp_all +arith [Fin.foldl_succ_last, circuit_norm, two_mul, pow_succ, mul_comm]
@@ -55,7 +55,7 @@ lemma foldl_acc1_powerof2 {n : ℕ} (env : Environment (F p)) (f : Expression (F
 -- Lemma: Conversion to bitstring equals the evaluation of the conversion with explicit accumulator and variables
 lemma foldl_explicit {n : ℕ} {m : ℕ} (h_le : m <= n) (env : Environment (F p)) (offset : ℕ) (h_bool : ∀ i : Fin n, IsBool (env.get (offset + i))) :
   Fin.foldl m (fun acc k ↦ acc + env.get (offset + k) * 2^k.val) 0 =
-    Expression.eval env (Fin.foldl m (fun acc i ↦ (acc.1 + var { index := offset + i } * acc.2, acc.2 + acc.2)) (0, 1)).1 := by
+    Expression.eval env (Fin.foldl m (fun acc i ↦ (acc.1 + var { index := offset + i } * acc.2, acc.2 * 2)) (0, 1)).1 := by
   induction m with
   | zero => simp_all +arith [Expression.eval]
   | succ m' ihm' =>
@@ -177,7 +177,7 @@ lemma completeness_reconstruction {n : ℕ} [NeZero n] (hnout : 2^(n+1) < p) (en
     (h_env_out : ∀ (i : Fin n), env.get (i₀ + ↑i) = (fieldToBits n (Expression.eval env (inputLinearSub n input_var)))[i])
     (h_env_aux : env.get (i₀ + n) = if (Expression.eval env (inputLinearSub n input_var)).val / 2 ^ n % 2 = 1 then 1 else 0) :
     Expression.eval env (inputLinearSub n input_var) =
-    Expression.eval env (Fin.foldl n (fun acc i => (acc.1 + var { index := i₀ + ↑i } * acc.2, acc.2 + acc.2)) (0, 1)).1 +
+    Expression.eval env (Fin.foldl n (fun acc i => (acc.1 + var { index := i₀ + ↑i } * acc.2, acc.2 * 2)) (0, 1)).1 +
     env.get (i₀ + n) * 2 ^ n := by
   -- 1. Convert Circuit Fold to Summation
   rw [←foldl_explicit (le_refl n) env i₀ h_out_binary]
@@ -255,7 +255,9 @@ def main (n : ℕ) [NeZero n] (inp : BinSubInput n (Expression (F p))) := do
     -- Ensure out[i] is binary
     out[i] * (out[i] - 1) === 0
     let lout := lout + out[i] * e2
-    return (lout, e2 + e2)
+    -- `e2 * 2` (not `e2 + e2`): see Circomlib.Num2Bits.main — doubling a shared
+    -- expression subtree makes the compiler's flattening exponential.
+    return (lout, e2 * 2)
 
   -- Ensure aux is binary
   aux * (aux - 1) === 0
@@ -315,7 +317,7 @@ def circuit (n : ℕ) [hn : NeZero n] (hnout : 2^(n+1) < p) :
     -- Link the circuit's reconstruction loop to `fieldFromBits` of the output vars
     -- Hint: Use `foldl_explicit` and `Bits.fieldFromBits_eval`
     let out_vars : Vector (Expression (F p)) n := Vector.mapRange n (fun i ↦ var { index := i₀ + i })
-    have h_rhs_eval : Expression.eval env (Fin.foldl n (fun acc i ↦ (acc.1 + var { index := i₀ + ↑i } * acc.2, acc.2 + acc.2)) (0, 1)).1 = fieldFromBits (Vector.map (Expression.eval env) out_vars) := by
+    have h_rhs_eval : Expression.eval env (Fin.foldl n (fun acc i ↦ (acc.1 + var { index := i₀ + ↑i } * acc.2, acc.2 * 2)) (0, 1)).1 = fieldFromBits (Vector.map (Expression.eval env) out_vars) := by
       -- By definition of `fieldFromBits`, we know that `fieldFromBits (Vector.map (Expression.eval env) out_vars)` is the sum of the bits of `out_vars` multiplied by their respective powers of 2.
       apply Eq.symm; exact (by
       convert foldl_explicit _ _ _ _ using 1;

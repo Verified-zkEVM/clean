@@ -5,14 +5,15 @@ import Clean.Utils.FiniteField
 import Clean.Utils.Primes
 import Clean.Specs.Poseidon
 import Clean.Circomlib.Poseidon
+import Clean.Circomlib.Bitify
 
 /-!
 # WASM Compiler Tests
 
 Tests for the WASM compiler and R1CS exporter, including negative tests
 checking that unsupported constructs are rejected with an error.
-Uses `#eval!` since witness IR infrastructure contains `sorry`'d proofs
-that prevent `native_decide` and `#eval`.
+Uses `#eval!` so the tests can shell out to `wasm-validate` and `snarkjs`
+(depending on both being installed).
 -/
 
 open Backends.Wasm
@@ -21,6 +22,20 @@ namespace TestWasmCompile
 
 /-- Substring check (`String.contains` takes a `Char`, not a substring). -/
 def hasSubstr (s needle : String) : Bool := (s.splitOn needle).length > 1
+
+/-- Whether a command is on the PATH (`command -v`). -/
+def hasCommand (cmd : String) : IO Bool := do
+  let r ← IO.Process.output { cmd := "sh", args := #["-c", s!"command -v {cmd}"] }
+  pure (r.exitCode = 0)
+
+/-- Run `action` if every tool in `tools` is installed, else print SKIP.
+    The snarkjs-backed checks need external tools that the CI runner may not
+    have; skipping (rather than failing) keeps the suite portable, while CI
+    installs the tools so the checks actually run there. -/
+def withTools (tools : List String) (action : IO Unit) : IO Unit := do
+  let missing ← tools.filterM (fun t => do pure (!(← hasCommand t)))
+  if missing.isEmpty then action
+  else IO.println s!"SKIP: {tools} not installed ({missing})"
 
 def expectOk (label needle : String) (r : Except String String) : IO Unit :=
   match r with
@@ -38,19 +53,22 @@ def expectError (label needle : String) (r : Except String String) : IO Unit :=
 
 /-- Validate a compiled module: write binary, validate with wasm-validate,
     then check wasm2wat output contains the expected substring. -/
-def expectBinaryOk (label needle : String) (r : Except String ByteArray) : IO Unit :=
-  match r with
-  | .error e => throw <| IO.userError s!"FAIL: {label}: unexpected error: {e}"
-  | .ok binary => do
-    IO.FS.writeBinFile (System.FilePath.mk s!"/tmp/test_{label.replace " " "_"}.wasm") binary
-    let v ← IO.Process.output { cmd := "wasm-validate", args := #[s!"/tmp/test_{label.replace " " "_"}.wasm"] }
-    if v.exitCode ≠ 0 then throw <| IO.userError s!"FAIL: {label}: invalid wasm: {v.stderr}"
-    if needle.isEmpty then IO.println s!"OK: {label}"
-    else do
-      let watOut ← IO.Process.output { cmd := "wasm2wat", args := #[s!"/tmp/test_{label.replace " " "_"}.wasm"] }
-      if watOut.exitCode ≠ 0 then throw <| IO.userError s!"FAIL: {label}: wasm2wat failed"
-      if hasSubstr watOut.stdout needle then IO.println s!"OK: {label}"
-      else throw <| IO.userError s!"FAIL: {label}: output missing '{needle}'"
+def expectBinaryOk (label needle : String) (r : Except String ByteArray) : IO Unit := do
+  if !(← hasCommand "wasm-validate") then
+    IO.println s!"SKIP: {label} (wasm-validate not installed)"
+  else
+    match r with
+    | .error e => throw <| IO.userError s!"FAIL: {label}: unexpected error: {e}"
+    | .ok binary => do
+      IO.FS.writeBinFile (System.FilePath.mk s!"/tmp/test_{label.replace " " "_"}.wasm") binary
+      let v ← IO.Process.output { cmd := "wasm-validate", args := #[s!"/tmp/test_{label.replace " " "_"}.wasm"] }
+      if v.exitCode ≠ 0 then throw <| IO.userError s!"FAIL: {label}: invalid wasm: {v.stderr}"
+      if needle.isEmpty then IO.println s!"OK: {label}"
+      else do
+        let watOut ← IO.Process.output { cmd := "wasm2wat", args := #[s!"/tmp/test_{label.replace " " "_"}.wasm"] }
+        if watOut.exitCode ≠ 0 then throw <| IO.userError s!"FAIL: {label}: wasm2wat failed"
+        if hasSubstr watOut.stdout needle then IO.println s!"OK: {label}"
+        else throw <| IO.userError s!"FAIL: {label}: output missing '{needle}'"
 
 def expectBinaryError (label needle : String) (r : Except String ByteArray) : IO Unit :=
   match r with
@@ -87,7 +105,7 @@ def assertOps : List (Operation (F p1009)) :=
 
 /-! ## Binary .r1cs export (r1csfile format) -/
 
-#eval! do
+#eval! withTools ["snarkjs"] do
   let binary ← match compileR1CSBin p1009 1 [] [] assertOps 1 with
     | .ok b => pure b
     | .error e => throw <| IO.userError s!"FAIL: compileR1CSBin: {e}"
@@ -165,7 +183,7 @@ def envRangeOps : List (Operation (F p1009)) :=
 
 /-! ## Binary path validation with simple circuits -/
 
-#eval! do
+#eval! withTools ["wasm-validate"] do
   -- Empty circuit: binary must validate
   let r := compileModule p1009 0 [] [] ([] : List (Operation (F p1009))) 1
   match r with
@@ -176,7 +194,7 @@ def envRangeOps : List (Operation (F p1009)) :=
     if v.exitCode ≠ 0 then throw <| IO.userError s!"FAIL empty validate: {v.stderr}"
     IO.println s!"OK: empty circuit binary validates ({binary.size} bytes)"
 
-#eval! do
+#eval! withTools ["wasm-validate"] do
   -- Witness addition circuit (single-word): binary must validate
   let r := compileModule p1009 1 [] [] addOps 1
   match r with
@@ -189,7 +207,7 @@ def envRangeOps : List (Operation (F p1009)) :=
 
 /-! ## End-to-end: Poseidon1 → binary WASM → wasm-validate → snarkjs witness -/
 
-#eval! do
+#eval! withTools ["wasm-validate", "snarkjs"] do
   let ops : List (Operation Specs.Poseidon.F) :=
     (Circomlib.Poseidon.Poseidon1.circuit.main (varFromOffset field 0)).operations 1
   let result := compileModule Specs.Poseidon.BN254_PRIME 1 [] [] ops 4
@@ -271,7 +289,7 @@ def compileAndWitness (fieldPrime numInputs : ℕ) [Fact fieldPrime.Prime]
 
 /-! ### C1: `a·b === z` asserts keep R1CS signal numbering in sync with the witness -/
 
-#eval! do
+#eval! withTools ["snarkjs"] do
   let ops : List (Operation (F p1009)) :=
     [.assert (.add (.mul (.var ⟨0⟩) (.var ⟨1⟩)) (.mul (.const (-1)) (.var ⟨2⟩)))]
   let r1cs ← match compileR1CS p1009 3 [] [] ops 1 with
@@ -286,7 +304,7 @@ def compileAndWitness (fieldPrime numInputs : ℕ) [Fact fieldPrime.Prime]
 
 /-! ### H1: let-step locals sized by the TOTAL step count (not the max) -/
 
-#eval! do
+#eval! withTools ["snarkjs"] do
   let stepOps : List (Operation (F p1009)) :=
     (List.range 4).map fun _ =>
       .witness 1 (.ir [.letF (.expr (.var ⟨0⟩))] (.lit #v[.bit (.localVar 0) 0]))
@@ -298,7 +316,7 @@ def compileAndWitness (fieldPrime numInputs : ℕ) [Fact fieldPrime.Prime]
 
 /-! ### H2: $fadd carry corner (a_i = b_i = 2^64-1 with carry-in 1) -/
 
-#eval! do
+#eval! withTools ["snarkjs"] do
   let p := Specs.Poseidon.BN254_PRIME
   -- mont(x) = 2^128-1 (limbs [2^64-1, 2^64-1, 0, 0]) and
   -- mont(y) = 2^128-2^64+1 (limbs [1, 2^64-1, 0, 0]): limb 1 of $fadd hits the
@@ -317,7 +335,7 @@ def compileAndWitness (fieldPrime numInputs : ℕ) [Fact fieldPrime.Prime]
 
 /-! ### H3: nested flt inside a multi-word comparison operand -/
 
-#eval! do
+#eval! withTools ["snarkjs"] do
   let p := Specs.Poseidon.BN254_PRIME
   let ops : List (Operation Specs.Poseidon.F) :=
     [.witness 1 (.ir [] (.lit #v[
@@ -330,7 +348,7 @@ def compileAndWitness (fieldPrime numInputs : ℕ) [Fact fieldPrime.Prime]
 
 /-! ### H4: multi-word feq emits valid WASM -/
 
-#eval! do
+#eval! withTools ["snarkjs"] do
   let p := Specs.Poseidon.BN254_PRIME
   let ops : List (Operation Specs.Poseidon.F) :=
     [.witness 1 (.ir [] (.lit #v[.ite (.feq (.expr (.var ⟨0⟩)) (.const 1)) (.const 7) (.const 8)]))]
@@ -342,7 +360,7 @@ def compileAndWitness (fieldPrime numInputs : ℕ) [Fact fieldPrime.Prime]
 
 /-! ### H5: listGet index survives an `.ite` element (single-word) -/
 
-#eval! do
+#eval! withTools ["snarkjs"] do
   let ops : List (Operation (F p1009)) :=
     [.witness 1 (.ir [] (.lit #v[
       .listGet [.ite (.lt (.const 0) (.const 1)) (.expr (.var ⟨0⟩)) (.expr (.var ⟨1⟩)), .const 7] (.const 0)]))]
@@ -353,7 +371,7 @@ def compileAndWitness (fieldPrime numInputs : ℕ) [Fact fieldPrime.Prime]
 
 /-! ### H6: multi-word listGet selector is in Montgomery form -/
 
-#eval! do
+#eval! withTools ["snarkjs"] do
   let p := Specs.Poseidon.BN254_PRIME
   let ops : List (Operation Specs.Poseidon.F) :=
     [.witness 1 (.ir [] (.lit #v[.listGet [.expr (.var ⟨0⟩), .const 7] (.const 0)]))]
@@ -363,7 +381,7 @@ def compileAndWitness (fieldPrime numInputs : ℕ) [Fact fieldPrime.Prime]
 
 /-! ### D1: strict input names reject unknown keys (like circom) -/
 
-#eval! do
+#eval! withTools ["snarkjs"] do
   let ops : List (Operation (F p1009)) :=
     [.witness 1 (.ir [] (.lit #v[.add (.expr (.var ⟨0⟩)) (.expr (.var ⟨1⟩))]))]
   let wasm ← match compileModule p1009 2 ["a", "b"] [] ops 1 with
@@ -382,7 +400,7 @@ def compileAndWitness (fieldPrime numInputs : ℕ) [Fact fieldPrime.Prime]
 
 /-! ### D2: outputs-first layout puts the output at signal 1 -/
 
-#eval! do
+#eval! withTools ["snarkjs"] do
   let ops : List (Operation (F p1009)) :=
     [.witness 1 (.ir [] (.lit #v[.add (.expr (.var ⟨0⟩)) (.const 5)]))]
   let r1cs ← match compileR1CS p1009 1 ["x"] [1] ops 1 with
@@ -394,5 +412,71 @@ def compileAndWitness (fieldPrime numInputs : ℕ) [Fact fieldPrime.Prime]
   if wit.getD 1 0 ≠ 10 then throw <| IO.userError s!"FAIL: D2: output signal 1 = {wit.getD 1 0}, expected 10"
   if wit.getD 2 0 ≠ 5 then throw <| IO.userError s!"FAIL: D2: input signal 2 = {wit.getD 2 0}, expected 5"
   IO.println "OK: D2 outputs-first layout"
+
+/-! ### Performance regression tests -/
+
+-- These compile large flat operation lists. Before the fixes they were
+-- quadratic: accumulating instructions with `acc ++ chunk` re-copied the
+-- whole prefix per witness op (2.6s for a 2000-op circuit, 3.6s after a
+-- reviewer "fixed" it), and the Keccak-shaped 3000-element mapRange was
+-- similarly dominated by the O(n^2) layout. The `Num2Bits 128` circuit
+-- below hung entirely (interrupted after 6 minutes): its `e2 + e2` power
+-- accumulator shared one expression subtree, and expression flattening is a
+-- structural recursion, so the sum blew up to 2^128 visits. Post-fix all of
+-- these complete in well under a second per element; the tests assert
+-- completion only, and print the elapsed milliseconds for the record.
+
+-- `Num2Bits.main` needs `[Fact p.Prime] [Fact (p > 2)]`; the prime fact comes
+-- from `Clean.Utils.Primes`, but no `> 2` instance exists for `p1009`.
+instance : Fact (p1009 > 2) := ⟨by native_decide⟩
+
+#eval! ((do
+  let ops : List (Operation (F p1009)) :=
+    List.replicate 2000 (.witness 1 (.ir [] (.lit #v[.const 0])))
+  let t0 ← IO.monoMsNow
+  let r := compileModule p1009 0 [] [] ops 1
+  let t1 ← IO.monoMsNow
+  match r with
+  | .ok _ => IO.println s!"OK: 2000 witness ops compile to WASM ({t1 - t0} ms)"
+  | .error e => throw <| IO.userError s!"FAIL: 2000 witness ops compileModule: {e}") : IO Unit)
+
+#eval! ((do
+  let ops : List (Operation (F p1009)) :=
+    List.replicate 2000 (.witness 1 (.ir [] (.lit #v[.const 0])))
+  let t0 ← IO.monoMsNow
+  let r := compileR1CS p1009 0 [] [] ops 1
+  let t1 ← IO.monoMsNow
+  match r with
+  | .ok _ => IO.println s!"OK: 2000 witness ops export R1CS ({t1 - t0} ms)"
+  | .error e => throw <| IO.userError s!"FAIL: 2000 witness ops compileR1CS: {e}") : IO Unit)
+
+#eval! ((do
+  -- Keccak-shaped: one 3000-element mapRange witness (with 3000 witness
+  -- cells), as produced by multi-limb gadgets.
+  let ops : List (Operation (F p1009)) :=
+    [.witness 3000 (.ir [] (.mapRange 3000 (.const 0)))]
+  let t0 ← IO.monoMsNow
+  let r := compileModule p1009 0 [] [] ops 1
+  let t1 ← IO.monoMsNow
+  match r with
+  | .ok _ => IO.println s!"OK: 3000-element mapRange compiles ({t1 - t0} ms)"
+  | .error e => throw <| IO.userError s!"FAIL: 3000-element mapRange compileModule: {e}") : IO Unit)
+
+#eval! ((do
+  -- Num2Bits 128: the power-of-two accumulator (`e2 * 2`) is a chain of 128
+  -- multiplications, so both the WASM and the R1CS paths stay linear.
+  let ops : List (Operation (F p1009)) := (Circomlib.Num2Bits.main 128 (varFromOffset field 0)).operations 1
+  let t0 ← IO.monoMsNow
+  let r := compileModule p1009 0 [] [] ops 1
+  let t1 ← IO.monoMsNow
+  match r with
+  | .ok _ => IO.println s!"OK: Num2Bits 128 compiles to WASM ({t1 - t0} ms)"
+  | .error e => throw <| IO.userError s!"FAIL: Num2Bits 128 compileModule: {e}"
+  let t2 ← IO.monoMsNow
+  let r := compileR1CS p1009 0 [] [] ops 1
+  let t3 ← IO.monoMsNow
+  match r with
+  | .ok _ => IO.println s!"OK: Num2Bits 128 exports R1CS ({t3 - t2} ms)"
+  | .error e => throw <| IO.userError s!"FAIL: Num2Bits 128 compileR1CS: {e}") : IO Unit)
 
 end TestWasmCompile

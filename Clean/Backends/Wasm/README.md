@@ -251,6 +251,37 @@ Values are kept in Montgomery form (`x·R mod p`, `R = 2^(N·64)`) throughout th
 
 For writing circuit witnesses, see `[doc/witgen-authoring.md](../../../doc/witgen-authoring.md)`.
 
+## Performance
+
+- **Linear lowering**: the export path (flattening → WASM instructions → binary,
+  and R1CS extraction) is linear in program size. It previously accumulated
+  instructions as `acc ++ chunk`, re-copying the whole prefix per witness op —
+  quadratic in the number of witness cells (a reviewer's 3,596-cell circuit
+  took 2.6 s; a 31K-witness Keccak-shaped circuit was dominated by the same
+  term). All accumulation now conses in O(1) (`CodeBuilder`), and the
+  `VarMap` layout lookup is a direct `i * numWords` formula. Regression tests
+  cover 2000-witness lists and a 3000-element `mapRange`; each completes in
+  milliseconds.
+- **Run the compiler natively for large circuits**: `#eval!` blocks and
+  `lake env lean --run` execute through Lean's bytecode interpreter, which is
+  orders of magnitude slower than native code (a reviewer measured >20 minutes
+  interpreted vs 2.6 s native on the same export). For big circuits, either
+  `set_option eval.useNative true` in a script, or drive the compiler from a
+  native executable — e.g. a `lean_exe` in your own project that calls
+  `compileModule`/`compileR1CS` directly. (This ships no `lean_exe`.)
+- **Expression shape matters**: never build `e + e` over a shared subtree —
+  for example an `e2 := e2 + e2` loop accumulator. `flattenExpr` and
+  `compileExpr` are structural recursions with no sharing, so doubling a
+  shared `Expression` tree visits 2^N nodes (a 254-bit bit-decomposition
+  circuit hung for over 6 minutes). Write `e2 * 2` instead: the power-of-two
+  becomes a chain of N multiplications and stays linear. The bundled
+  `Num2Bits`/`Bits2Num`/`BinSub` gadgets follow this; a 128-bit `Num2Bits`
+  circuit compiles in milliseconds (regression-tested).
+- New perf-regression tests live in
+  `[TestWasmCompile.lean](../../Utils/Test/TestWasmCompile.lean)`
+  ("Performance regression tests" section) and run on every `lake build
+  CleanTests`.
+
 ## Known limitations
 
 - **WASM local limit**: each witness output occupies `numWords` locals in the compute function, plus a shared scratch region of `2·numWords` and `numWords` per let-step. Circuits with tens of thousands of multi-word witnesses can approach WASM's 50,000-locals-per-function limit (e.g. SHA256Compress's 80K two-limb witnesses exceed it). Single-word circuits use no scratch and stay well under the limit.
