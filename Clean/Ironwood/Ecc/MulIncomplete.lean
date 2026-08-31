@@ -407,7 +407,7 @@ theorem initLambdaWit_eval (alpha : Witgen.MOver Fp (AssignedCell Fp) (FExpr Fp)
 
 def doubleAndAddSynthesisSummary (n : ℕ) (cfg : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  ((FloorPlanner.RegionSynthesisSummary.ofColumns
+  (FloorPlanner.RegionSynthesisSummary.ofColumns
       [.column .advice cfg.z.index,
         .column .advice cfg.xA.index,
         .column .advice cfg.lambda1.index,
@@ -416,16 +416,14 @@ def doubleAndAddSynthesisSummary (n : ℕ) (cfg : Config) (offset : ℕ) :
         .column .advice cfg.lambda1.index,
         .column .advice cfg.lambda2.index,
         .selector cfg.qMul1.index]
-      (offset + 2) 0).withSelectorActivations
-        [(cfg.qMul1.index, offset)]).combine
+      (offset + 2) 0 [(cfg.qMul1.index, offset)]).combine
     ((loopSynthesisSummary n cfg offset).combine
-      ((FloorPlanner.RegionSynthesisSummary.ofColumns
+      (.ofColumns
         [.selector cfg.qMul3.index,
           .column .advice cfg.z.index,
           .column .advice cfg.xA.index,
           .column .advice cfg.lambda1.index]
-        (offset + n + 3) 0).withSelectorActivations
-          [(cfg.qMul3.index, offset + n + 1)]))
+        (offset + n + 3) 0 [(cfg.qMul3.index, offset + n + 1)]))
 
 @[synthesis_summary_norm]
 theorem doubleAndAddSynthesisSummary_lookupActivationCount
@@ -449,7 +447,6 @@ theorem doubleAndAddSynthesisSummary_hasNoFixedColumns
     (doubleAndAddSynthesisSummary n cfg offset).HasNoFixedColumns := by
   simp only [doubleAndAddSynthesisSummary,
     FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_combine,
-    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_withSelectorActivations,
     FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns,
     loopSynthesisSummary_hasNoFixedColumns]
   simp

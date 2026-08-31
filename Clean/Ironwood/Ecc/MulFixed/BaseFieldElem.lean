@@ -290,7 +290,7 @@ theorem witnessCheck13SynthesisSummary_hasNoFixedWrites
 /-- Reduced footprint of the three-row canonicity block. -/
 def canonicityRegionSynthesisSummary (cfg : Config) :
     FloorPlanner.RegionSynthesisSummary :=
-  (FloorPlanner.RegionSynthesisSummary.ofColumns
+  .ofColumns
     [.selector cfg.qMulFixedBaseField.index,
       .column .advice (cfg.canonAdvices 0).index,
       .column .advice (cfg.canonAdvices 2).index,
@@ -300,7 +300,7 @@ def canonicityRegionSynthesisSummary (cfg : Config) :
       .column .advice (cfg.canonAdvices 0).index,
       .column .advice (cfg.canonAdvices 1).index,
       .column .advice (cfg.canonAdvices 2).index]
-    3 0).withSelectorActivations [(cfg.qMulFixedBaseField.index, 1)]
+    3 0 [(cfg.qMulFixedBaseField.index, 1)]
 
 @[synthesis_summary_norm]
 theorem canonicityRegionSynthesisSummary_lookupActivationCount (cfg : Config) :
@@ -322,7 +322,6 @@ theorem canonicityRegion_synthesisSummary_eq
 theorem canonicityRegionSynthesisSummary_hasNoFixedColumns (cfg : Config) :
     (canonicityRegionSynthesisSummary cfg).HasNoFixedColumns := by
   simp only [canonicityRegionSynthesisSummary,
-    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_withSelectorActivations,
     FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
   simp
 

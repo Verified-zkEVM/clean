@@ -429,7 +429,7 @@ theorem fixedConstantsLoop_fixedAssignmentsAgree
 def fixedConstantsWindowSynthesisSummary
     (toggle : Gate Fp) (cfg : Config) (row : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  (FloorPlanner.RegionSynthesisSummary.ofColumns
+  .ofColumns
     [.selector toggle.selector.index,
       .column .fixed (cfg.lagrangeCoeffs 0).index,
       .column .fixed (cfg.lagrangeCoeffs 1).index,
@@ -440,7 +440,7 @@ def fixedConstantsWindowSynthesisSummary
       .column .fixed (cfg.lagrangeCoeffs 6).index,
       .column .fixed (cfg.lagrangeCoeffs 7).index,
       .column .fixed cfg.fixedZ.index]
-    (row + 1) 0).withSelectorActivations [(toggle.selector.index, row)]
+    (row + 1) 0 [(toggle.selector.index, row)]
 
 /-- Reduced footprint of the fixed-table loop, composed from its row summaries. -/
 def fixedConstantsLoopSynthesisSummary
@@ -608,9 +608,8 @@ def windowStepColumns (cfg : Config) : List FloorPlanner.RegionColumn :=
 
 def windowStepSynthesisSummary (cfg : Config) (row : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  (FloorPlanner.RegionSynthesisSummary.ofColumns
-    (windowStepColumns cfg) (row + 2) 0).withSelectorActivations
-      [(cfg.addIncompleteConfig.qAddIncomplete.index, row)]
+  .ofColumns (windowStepColumns cfg) (row + 2) 0
+    [(cfg.addIncompleteConfig.qAddIncomplete.index, row)]
 
 @[synthesis_summary_norm]
 theorem processWindow_combine_addIncomplete_synthesisSummary
@@ -624,14 +623,12 @@ theorem processWindow_combine_addIncomplete_synthesisSummary
   · simp only [processWindowSynthesisSummary, AddIncomplete.synthesisSummary,
       windowStepSynthesisSummary,
       FloorPlanner.RegionSynthesisSummary.combine_rowCount,
-      FloorPlanner.RegionSynthesisSummary.ofColumns_rowCount,
-      FloorPlanner.RegionSynthesisSummary.withSelectorActivations_rowCount]
+      FloorPlanner.RegionSynthesisSummary.ofColumns_rowCount]
     omega
   · simp only [processWindowSynthesisSummary, AddIncomplete.synthesisSummary,
       windowStepSynthesisSummary,
       FloorPlanner.RegionSynthesisSummary.combine_constantSiteCount,
       FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount,
-      FloorPlanner.RegionSynthesisSummary.withSelectorActivations_constantSiteCount,
       Nat.zero_add]
   · simp only [processWindowSynthesisSummary, AddIncomplete.synthesisSummary,
       windowStepSynthesisSummary, synthesis_summary_norm]
@@ -640,13 +637,12 @@ theorem processWindow_combine_addIncomplete_synthesisSummary
   · simp only [processWindowSynthesisSummary, AddIncomplete.synthesisSummary,
       windowStepSynthesisSummary,
       FloorPlanner.RegionSynthesisSummary.combine_selectorActivations,
-      FloorPlanner.RegionSynthesisSummary.withSelectorActivations_selectorActivations,
       FloorPlanner.RegionSynthesisSummary.ofColumns_selectorActivations,
       List.nil_append]
 
 @[synthesis_summary_norm]
 theorem reduced_windowStep_synthesisSummary (cfg : Config) (row : ℕ) :
-    (FloorPlanner.RegionSynthesisSummary.ofColumns
+    FloorPlanner.RegionSynthesisSummary.ofColumns
         ([.column .advice cfg.addConfig.xP.index,
           .column .advice cfg.addConfig.yP.index,
           .column .advice cfg.u.index] ++
@@ -657,18 +653,16 @@ theorem reduced_windowStep_synthesisSummary (cfg : Config) (row : ℕ) :
           .column .advice cfg.addIncompleteConfig.yQR.index,
           .column .advice cfg.addIncompleteConfig.xQR.index,
           .column .advice cfg.addIncompleteConfig.yQR.index])
-        (max (row + 1) (row + 2)) (0 + 0)).withSelectorActivations
-          [(cfg.addIncompleteConfig.qAddIncomplete.index, row)] =
+        (max (row + 1) (row + 2)) (0 + 0)
+        [(cfg.addIncompleteConfig.qAddIncomplete.index, row)] =
       windowStepSynthesisSummary cfg row := by
   apply FloorPlanner.RegionSynthesisSummary.ext
   · rfl
   · simp only [windowStepSynthesisSummary,
-      FloorPlanner.RegionSynthesisSummary.withSelectorActivations_rowCount,
       FloorPlanner.RegionSynthesisSummary.ofColumns_rowCount]
     omega
   · rfl
   · simp only [windowStepSynthesisSummary,
-      FloorPlanner.RegionSynthesisSummary.withSelectorActivations_instanceRowExtent,
       FloorPlanner.RegionSynthesisSummary.ofColumns_instanceRowExtent]
   · rfl
   · rfl
@@ -1058,10 +1052,10 @@ theorem windowChain_synthesisSummary_eq
       windowChainSynthesisSummary cfg offset numWindows := by
   have hrepeat :
       (List.ofFn fun i : Fin (numWindows - 3) =>
-        (FloorPlanner.RegionSynthesisSummary.ofColumns
-          (windowStepColumns cfg) (offset + 2 + i.val + 2) 0).withSelectorActivations
-            [(cfg.addIncompleteConfig.qAddIncomplete.index,
-              offset + 2 + i.val)]).foldr
+        FloorPlanner.RegionSynthesisSummary.ofColumns
+          (windowStepColumns cfg) (offset + 2 + i.val + 2) 0
+          [(cfg.addIncompleteConfig.qAddIncomplete.index,
+            offset + 2 + i.val)]).foldr
           FloorPlanner.RegionSynthesisSummary.combine {} =
         FloorPlanner.RegionSynthesisSummary.repeatColumnsWithSelector
           cfg.addIncompleteConfig.qAddIncomplete.index (windowStepColumns cfg)
@@ -1077,7 +1071,7 @@ theorem windowChain_synthesisSummary_eq
         AddIncomplete.synthesisSummary cfg.addIncompleteConfig row := by
     have hcolumns :
         (AddIncomplete.synthesisSummary cfg.addIncompleteConfig row).columns.Nodup := by
-      exact FloorPlanner.RegionSynthesisSummary.withSelectorActivations_ofColumns_columns_nodup
+      exact FloorPlanner.RegionSynthesisSummary.ofColumns_columns_nodup
         _ _ _ _
     rw [FloorPlanner.RegionSynthesisSummary.empty_combine _ hcolumns,
       FloorPlanner.RegionSynthesisSummary.empty_combine _ hcolumns]
@@ -1111,7 +1105,6 @@ theorem windowChainSynthesisSummary_hasNoFixedColumns
   simp only [windowChainSynthesisSummary, processWindowSynthesisSummary,
     AddIncomplete.synthesisSummary,
     FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_combine,
-    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_withSelectorActivations,
     FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns,
     FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_repeatColumnsWithSelector,
     FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_repeatColumns]

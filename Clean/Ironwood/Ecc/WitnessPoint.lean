@@ -96,12 +96,11 @@ instance (x y : Column .advice) :
 
 def pointSynthesisSummary (config : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  (FloorPlanner.RegionSynthesisSummary.ofColumns
+  .ofColumns
     [.selector config.qPoint.index,
       .column .advice config.x.index,
       .column .advice config.y.index]
-    (offset + 1) 0).withSelectorActivations
-      [(config.qPoint.index, offset)]
+    (offset + 1) 0 [(config.qPoint.index, offset)]
 
 @[synthesis_summary_norm]
 theorem pointSynthesisSummary_lookupActivationCount
@@ -173,12 +172,11 @@ that non-identity precondition is carried on the honest prover as `ProverAssumpt
 input is `Unconstrained`, so — like `point` — the honest-side facts about it live there). -/
 def pointNonIdSynthesisSummary (config : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  (FloorPlanner.RegionSynthesisSummary.ofColumns
+  .ofColumns
     [.selector config.qPointNonId.index,
       .column .advice config.x.index,
       .column .advice config.y.index]
-    (offset + 1) 0).withSelectorActivations
-      [(config.qPointNonId.index, offset)]
+    (offset + 1) 0 [(config.qPointNonId.index, offset)]
 
 @[synthesis_summary_norm]
 theorem pointNonIdSynthesisSummary_lookupActivationCount

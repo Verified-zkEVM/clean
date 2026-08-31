@@ -385,12 +385,12 @@ theorem hashRegionSynthesize_assignFixed_mem_iff
 def hashRegionSynthesisSummary (ns : List ℕ)
     (cfg : Sinsemilla.HashPiece.Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  ((FloorPlanner.RegionSynthesisSummary.ofColumns
+  (FloorPlanner.RegionSynthesisSummary.ofColumns
     [.selector (Sinsemilla.HashPiece.initialYQGate cfg).selector.index,
       .column .fixed cfg.fixedYQ.index,
       .column .advice cfg.xA.index]
-    (offset + 1) 1).withSelectorActivations
-      [((Sinsemilla.HashPiece.initialYQGate cfg).selector.index, offset)]).combine
+    (offset + 1) 1
+    [((Sinsemilla.HashPiece.initialYQGate cfg).selector.index, offset)]).combine
       (Sinsemilla.Chain.circuitSynthesisSummary ns cfg offset)
 
 @[synthesis_summary_norm]
@@ -743,7 +743,7 @@ theorem selector_eq_qS1_or_qS4_of_mem_hashCircuitSynthesisSummary
     activation.1 = config.qS1.index ∨ activation.1 = config.qS4.index := by
   unfold hashRegionSynthesisSummary at hactivation
   simp only [FloorPlanner.RegionSynthesisSummary.combine_selectorActivations,
-    FloorPlanner.RegionSynthesisSummary.withSelectorActivations_selectorActivations,
+    FloorPlanner.RegionSynthesisSummary.ofColumns_selectorActivations,
     List.mem_append] at hactivation
   rcases hactivation with hinitial | hchain
   · exact Or.inr (by
@@ -764,7 +764,7 @@ theorem qS1_qS4_overlap_in_hashCircuitSynthesisSummary
     ns config 0 hns
   unfold hashRegionSynthesisSummary
   simp only [FloorPlanner.RegionSynthesisSummary.combine_selectorActivations,
-    FloorPlanner.RegionSynthesisSummary.withSelectorActivations_selectorActivations,
+    FloorPlanner.RegionSynthesisSummary.ofColumns_selectorActivations,
     List.mem_append]
   exact ⟨Or.inr hqS1, Or.inl (by
     simp [Sinsemilla.HashPiece.initialYQGate_selector])⟩

@@ -246,7 +246,7 @@ theorem mem_equalityColumns_of_mem_permutationColumns
 /-- Reduced two-row footprint of the decomposition gate. -/
 def synthesisSummary (cfg : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  (FloorPlanner.RegionSynthesisSummary.ofColumns
+  .ofColumns
     [.selector cfg.qDecompose.index,
       .column .advice cfg.lWhole.index,
       .column .advice cfg.aWhole.index,
@@ -258,8 +258,7 @@ def synthesisSummary (cfg : Config) (offset : ℕ) :
       .column .advice cfg.z1B.index,
       .column .advice cfg.b1.index,
       .column .advice cfg.b2.index]
-    (offset + 2) 1).withSelectorActivations
-      [(cfg.qDecompose.index, offset)]
+    (offset + 2) 1 [(cfg.qDecompose.index, offset)]
 
 @[synthesis_summary_norm]
 theorem synthesisSummary_lookupActivationCount (cfg : Config) (offset : ℕ) :
@@ -2945,14 +2944,14 @@ def Layer.keygenRequirements (G : Generators) (Q : Point Fp)
 def Layer.synthesisSummary (ccfg : CondSwap.Config) (cfg : Config)
     (lookupCfg : LookupRangeCheck.Config 10) : FloorPlanner.SynthesisSummary :=
   (FloorPlanner.SynthesisSummary.ofRegion
-      ((FloorPlanner.RegionSynthesisSummary.ofColumns
+      (FloorPlanner.RegionSynthesisSummary.ofColumns
         [.selector ccfg.qSwap.index,
           .column .advice ccfg.a.index,
           .column .advice ccfg.b.index,
           .column .advice ccfg.swap.index,
           .column .advice ccfg.aSwapped.index,
           .column .advice ccfg.bSwapped.index]
-        1 0).withSelectorActivations [(ccfg.qSwap.index, 0)])).combine
+        1 0 [(ccfg.qSwap.index, 0)])).combine
     (HashLayer.synthesisSummary cfg lookupCfg)
 
 @[synthesis_summary_norm]

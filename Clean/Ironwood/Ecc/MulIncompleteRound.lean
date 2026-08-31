@@ -668,7 +668,7 @@ def round (i : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field)
     { keygenRequirements := { gates cfg _ := [qMul2Gate cfg] }
       registered := by keygen_registration
       synthesisSummary config offset _ _ :=
-        (FloorPlanner.RegionSynthesisSummary.ofColumns
+        .ofColumns
           [.selector config.qMul2.index,
             .column .advice config.z.index,
             .column .advice config.xA.index,
@@ -676,8 +676,7 @@ def round (i : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field)
             .column .advice config.lambda2.index,
             .column .advice config.xP.index,
             .column .advice config.yP.index]
-          (offset + 3) 0).withSelectorActivations
-            [(config.qMul2.index, offset + 1)]
+          (offset + 3) 0 [(config.qMul2.index, offset + 1)]
       synthesisSummary_eq := by
         intro _ _ _ _
         apply FloorPlanner.RegionSynthesisSummary.ext
@@ -733,7 +732,7 @@ def round (i : ℕ) : FormalRegionCircuit Fp Config Config (Unconstrained field)
 theorem round_synthesisSummary (i : ℕ) (cfg : Config) (offset : ℕ)
     (input : Var (Unconstrained field) Fp) (self : RegionIndex) :
     (round i).elaborated.synthesisSummary cfg offset input self =
-      (FloorPlanner.RegionSynthesisSummary.ofColumns
+      .ofColumns
         [.selector cfg.qMul2.index,
           .column .advice cfg.z.index,
           .column .advice cfg.xA.index,
@@ -741,8 +740,7 @@ theorem round_synthesisSummary (i : ℕ) (cfg : Config) (offset : ℕ)
           .column .advice cfg.lambda2.index,
           .column .advice cfg.xP.index,
           .column .advice cfg.yP.index]
-        (offset + 3) 0).withSelectorActivations
-          [(cfg.qMul2.index, offset + 1)] := rfl
+        (offset + 3) 0 [(cfg.qMul2.index, offset + 1)] := rfl
 
 /-- Witness equations chain into the iterated step. -/
 theorem iter_of_steps {n : ℕ} (st : ℕ → State Fp) (bits : ℕ → Bool)

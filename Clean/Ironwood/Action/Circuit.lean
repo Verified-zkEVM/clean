@@ -1602,7 +1602,7 @@ def synthOrchardChecks (cfg : Config) (witnessCells : WitnessCells)
 
 def orchardChecksRegionSynthesisSummary (cfg : Config) :
     FloorPlanner.RegionSynthesisSummary :=
-  (FloorPlanner.RegionSynthesisSummary.ofColumns
+  .ofColumns
     [.column .advice (cfg.advices 0).index,
       .column .advice (cfg.advices 1).index,
       .column .advice (cfg.advices 2).index,
@@ -1612,8 +1612,8 @@ def orchardChecksRegionSynthesisSummary (cfg : Config) :
       .column .advice (cfg.advices 6).index,
       .column .advice (cfg.advices 7).index,
       .selector cfg.qOrchard.index]
-    1 0 (ENABLE_OUTPUT + 1)).withSelectorActivations
-      [(cfg.qOrchard.index, 0)]
+    1 0 [(cfg.qOrchard.index, 0)]
+    (instanceRowExtent := ENABLE_OUTPUT + 1)
 
 @[synthesis_summary_norm]
 theorem orchardChecksRegionSynthesisSummary_lookupActivationCount (cfg : Config) :
@@ -1642,9 +1642,7 @@ theorem synthOrchardChecks_fixedAssignmentsAgree (cfg : Config)
   apply FloorPlanner.RegionSynthesisSummary.HasNoFixedColumns.hasNoFixedAssignments
   rw [orchardChecksRegion_synthesisSummary_eq]
   rw [orchardChecksRegionSynthesisSummary]
-  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_withSelectorActivations]
-  apply (FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns
-    _ _ _ (ENABLE_OUTPUT + 1)).2
+  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
   simp
 
 /-- Stage C (91 regions): old/new note-commitment integrity and the final
@@ -2091,10 +2089,9 @@ theorem crossAddressRow_synthesisSummary_eq (cfg : Config)
     (oldCell newCell : AssignedCell Fp) (row : ℕ) (region : RegionIndex) :
     FloorPlanner.regionSynthesisSummary
         ((synthCrossAddressRow cfg oldCell newCell row).operations region) =
-      (FloorPlanner.RegionSynthesisSummary.ofColumns
-        (crossAddressColumns cfg) (row + 1) 4
-          (DISABLE_CROSS_ADDRESS + 1)).withSelectorActivations
-            [(cfg.qOrchard.index, row)] := by
+      .ofColumns (crossAddressColumns cfg) (row + 1) 4
+        [(cfg.qOrchard.index, row)]
+        (instanceRowExtent := DISABLE_CROSS_ADDRESS + 1) := by
   apply FloorPlanner.RegionSynthesisSummary.ext <;>
     simp only [synthCrossAddressRow, crossAddressColumns, orchardGate, circuit_norm,
       synthesis_summary_norm]

@@ -527,7 +527,7 @@ private theorem actionWitnessCheckLocalSelectorConflictPairs_eq
   unfold LookupRangeCheck.witnessCheckSynthesisSummary
     LookupRangeCheck.rangeCheckSynthesisSummary
   rw [localSelectorConflictPairs_ofRegion]
-  simp only [RegionSynthesisSummary.withSelectorActivations_selectorActivations]
+  simp only [RegionSynthesisSummary.ofColumns_selectorActivations]
   rw [show actionConfig.lookupConfig.qLookup.index = 2 by rfl,
     show actionConfig.lookupConfig.qRunning.index = 3 by rfl]
   exact regionLocalSelectorConflictPairs_repeatedSelectorPattern_eq
@@ -542,7 +542,6 @@ private theorem actionWitnessCheckDecomposedLocalSelectorConflictPairs_eq :
   rw [localSelectorConflictPairs_ofRegion]
   simp only [RegionSynthesisSummary.combine_selectorActivations,
     RegionSynthesisSummary.ofColumns_selectorActivations,
-    RegionSynthesisSummary.withSelectorActivations_selectorActivations,
     List.nil_append]
   rw [show actionConfig.lookupConfig.qLookup.index = 2 by rfl,
     show actionConfig.lookupConfig.qRunning.index = 3 by rfl]
@@ -623,7 +622,7 @@ private theorem actionCommitIvkCanonicityLocalSelectorConflictPairs_eq :
     actionWitnessCheckLocalSelectorConflictPairs_eq 14 false (by omega)]
   unfold CommitIvk.synthesisSummary
   rw [localSelectorConflictPairs_ofRegion]
-  simp only [RegionSynthesisSummary.withSelectorActivations_selectorActivations,
+  simp only [RegionSynthesisSummary.ofColumns_selectorActivations,
     regionLocalSelectorConflictPairs_singleton]
   simp
 
@@ -712,7 +711,7 @@ private theorem actionNoteGatesLocalSelectorConflictPairs_eq
     NoteCommit.ValueCanonicity.synthesisSummary
     NoteCommit.RhoCanonicity.synthesisSummary
     NoteCommit.PsiCanonicity.synthesisSummary
-  simp only [RegionSynthesisSummary.withSelectorActivations_selectorActivations,
+  simp only [RegionSynthesisSummary.ofColumns_selectorActivations,
     regionLocalSelectorConflictPairs_singleton, Finset.empty_union]
 
 private theorem actionNoteLocalSelectorConflictPairs_eq
@@ -829,7 +828,6 @@ private theorem actionSynthWitnessLocalSelectorConflictPairs_eq :
   simp only [List.foldr_cons, List.foldr_nil,
     localSelectorConflictPairs_ofRegion,
     RegionSynthesisSummary.ofColumns_selectorActivations,
-    RegionSynthesisSummary.withSelectorActivations_selectorActivations,
     regionLocalSelectorConflictPairs_singleton,
     regionLocalSelectorConflictPairs_nil, Finset.empty_union]
   simp [localSelectorConflictPairs]
@@ -868,7 +866,7 @@ private theorem actionOrchardChecksLocalSelectorConflictPairs_eq :
   unfold Circuit.orchardChecksSynthesisSummary
     Circuit.orchardChecksRegionSynthesisSummary
   rw [localSelectorConflictPairs_ofRegion]
-  simp only [RegionSynthesisSummary.withSelectorActivations_selectorActivations,
+  simp only [RegionSynthesisSummary.ofColumns_selectorActivations,
     regionLocalSelectorConflictPairs_singleton]
 
 private theorem actionSynthNotesLocalSelectorConflictPairs_eq :
@@ -880,7 +878,7 @@ private theorem actionSynthNotesLocalSelectorConflictPairs_eq :
   simp only [List.foldr_cons, List.foldr_nil,
     localSelectorConflictPairs_ofRegion,
     Ecc.WitnessPoint.pointNonIdSynthesisSummary,
-    RegionSynthesisSummary.withSelectorActivations_selectorActivations,
+    RegionSynthesisSummary.ofColumns_selectorActivations,
     regionLocalSelectorConflictPairs_singleton,
     regionLocalSelectorConflictPairs_nil,
     actionLoadPrivateLocalSelectorConflictPairs_eq,

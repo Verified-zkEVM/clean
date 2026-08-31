@@ -115,15 +115,14 @@ def swap (wb : WitgenIR Fp 1) (wswap : Placed ProverEnvironment Fp → Bool) :
         { aSwapped := AssignedCell.of self offset cfg.aSwapped
           bSwapped := AssignedCell.of self offset cfg.bSwapped }
       synthesisSummary cfg offset _ _ :=
-        (FloorPlanner.RegionSynthesisSummary.ofColumns
+        .ofColumns
           [.selector cfg.qSwap.index,
             .column .advice cfg.a.index,
             .column .advice cfg.b.index,
             .column .advice cfg.swap.index,
             .column .advice cfg.aSwapped.index,
             .column .advice cfg.bSwapped.index]
-          (offset + 1) 0).withSelectorActivations
-            [(cfg.qSwap.index, offset)]
+          (offset + 1) 0 [(cfg.qSwap.index, offset)]
       output_eq := by
         intro cfg offset input self
         simp only [circuit_norm]
@@ -211,15 +210,14 @@ theorem swap_synthesisSummary_eq
     (cfg : Config) (offset : ℕ) (input : Var Input Fp)
     (region : RegionIndex) :
     (swap wb wswap).elaborated.synthesisSummary cfg offset input region =
-      (FloorPlanner.RegionSynthesisSummary.ofColumns
+      .ofColumns
         [.selector cfg.qSwap.index,
           .column .advice cfg.a.index,
           .column .advice cfg.b.index,
           .column .advice cfg.swap.index,
           .column .advice cfg.aSwapped.index,
           .column .advice cfg.bSwapped.index]
-        (offset + 1) 0).withSelectorActivations
-          [(cfg.qSwap.index, offset)] := rfl
+        (offset + 1) 0 [(cfg.qSwap.index, offset)] := rfl
 
 /-- The first swap output stays in its configured advice column. -/
 @[keygen_norm, keygen_output_norm]

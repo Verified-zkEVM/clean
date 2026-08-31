@@ -37,15 +37,14 @@ deriving ProvableStruct
 
 def synthesisSummary (config : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  (FloorPlanner.RegionSynthesisSummary.ofColumns
+  .ofColumns
     [.selector config.qNotecommitB.index,
       .column .advice config.colL.index,
       .column .advice config.colM.index,
       .column .advice config.colR.index,
       .column .advice config.colM.index,
       .column .advice config.colR.index]
-    (offset + 2) 0).withSelectorActivations
-      [(config.qNotecommitB.index, offset)]
+    (offset + 2) 0 [(config.qNotecommitB.index, offset)]
 
 @[synthesis_summary_norm]
 theorem synthesisSummary_hasNoFixedColumns (config : Config) (offset : ℕ) :
@@ -158,15 +157,14 @@ deriving ProvableStruct
 
 def synthesisSummary (config : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  (FloorPlanner.RegionSynthesisSummary.ofColumns
+  .ofColumns
     [.selector config.qNotecommitD.index,
       .column .advice config.colL.index,
       .column .advice config.colM.index,
       .column .advice config.colR.index,
       .column .advice config.colM.index,
       .column .advice config.colR.index]
-    (offset + 2) 0).withSelectorActivations
-      [(config.qNotecommitD.index, offset)]
+    (offset + 2) 0 [(config.qNotecommitD.index, offset)]
 
 @[synthesis_summary_norm]
 theorem synthesisSummary_hasNoFixedColumns (config : Config) (offset : ℕ) :
@@ -278,13 +276,12 @@ deriving ProvableStruct
 
 def synthesisSummary (config : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  (FloorPlanner.RegionSynthesisSummary.ofColumns
+  .ofColumns
     [.selector config.qNotecommitE.index,
       .column .advice config.colL.index,
       .column .advice config.colM.index,
       .column .advice config.colR.index]
-    (offset + 1) 0).withSelectorActivations
-      [(config.qNotecommitE.index, offset)]
+    (offset + 1) 0 [(config.qNotecommitE.index, offset)]
 
 @[synthesis_summary_norm]
 theorem synthesisSummary_hasNoFixedColumns (config : Config) (offset : ℕ) :
@@ -362,14 +359,13 @@ deriving ProvableStruct
 
 def synthesisSummary (config : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  (FloorPlanner.RegionSynthesisSummary.ofColumns
+  .ofColumns
     [.selector config.qNotecommitG.index,
       .column .advice config.colL.index,
       .column .advice config.colM.index,
       .column .advice config.colL.index,
       .column .advice config.colM.index]
-    (offset + 2) 0).withSelectorActivations
-      [(config.qNotecommitG.index, offset)]
+    (offset + 2) 0 [(config.qNotecommitG.index, offset)]
 
 @[synthesis_summary_norm]
 theorem synthesisSummary_hasNoFixedColumns (config : Config) (offset : ℕ) :
@@ -475,13 +471,12 @@ deriving ProvableStruct
 
 def synthesisSummary (config : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  (FloorPlanner.RegionSynthesisSummary.ofColumns
+  .ofColumns
     [.selector config.qNotecommitH.index,
       .column .advice config.colL.index,
       .column .advice config.colM.index,
       .column .advice config.colR.index]
-    (offset + 1) 0).withSelectorActivations
-      [(config.qNotecommitH.index, offset)]
+    (offset + 1) 0 [(config.qNotecommitH.index, offset)]
 
 @[synthesis_summary_norm]
 theorem synthesisSummary_hasNoFixedColumns (config : Config) (offset : ℕ) :

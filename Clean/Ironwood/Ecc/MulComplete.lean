@@ -384,11 +384,10 @@ def roundColumns (cfg : Config) : List FloorPlanner.RegionColumn :=
 
 def roundSynthesisSummary (cfg : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  (FloorPlanner.RegionSynthesisSummary.ofColumns
-    (roundColumns cfg) (offset + 3) 0).withSelectorActivations
-      [(cfg.qDecompose.index, offset + 1),
-        (cfg.addConfig.qAdd.index, offset),
-        (cfg.addConfig.qAdd.index, offset + 1)]
+  .ofColumns (roundColumns cfg) (offset + 3) 0
+    [(cfg.qDecompose.index, offset + 1),
+      (cfg.addConfig.qAdd.index, offset),
+      (cfg.addConfig.qAdd.index, offset + 1)]
 
 def roundSynthesize (w iter : ℕ) (cfg : Config) (offset : ℕ)
     (input : Var RoundInputs Fp) : RegionCircuit Fp (Var RoundOutput Fp) := do

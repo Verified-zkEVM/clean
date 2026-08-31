@@ -136,13 +136,12 @@ theorem initRegion_synthesisSummary (capacity : Fp) (cfg : Config)
 /-- Reduced synthesis footprint of the pad-and-add region. -/
 def addInputRegionSynthesisSummary (cfg : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  (FloorPlanner.RegionSynthesisSummary.ofColumns
+  .ofColumns
     [.selector cfg.sPadAndAdd.index,
       .column .advice (cfg.state 0).index,
       .column .advice (cfg.state 1).index,
       .column .advice (cfg.state 2).index]
-    (offset + 3) 0).withSelectorActivations
-      [(cfg.sPadAndAdd.index, offset + 1)]
+    (offset + 3) 0 [(cfg.sPadAndAdd.index, offset + 1)]
 
 def addInputRegionSynthesize (cfg : Config) (offset : ℕ)
     (input : Var Sponge.AddInputInput Fp) : RegionCircuit Fp (Var State Fp) := do

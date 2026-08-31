@@ -1091,10 +1091,9 @@ def roundColumns (config : Config) : List FloorPlanner.RegionColumn :=
 
 def roundSynthesisSummary (config : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  (FloorPlanner.RegionSynthesisSummary.ofColumns
-    (roundColumns config) (offset + 2) 0
-    (lookupActivationCount := 1)).withSelectorActivations
-      [(config.qS1.index, offset), (config.qS1.index, offset)]
+  .ofColumns (roundColumns config) (offset + 2) 0
+    [(config.qS1.index, offset), (config.qS1.index, offset)]
+    (lookupActivationCount := 1)
 
 @[synthesis_summary_norm]
 theorem roundSynthesisSummary_lookupActivationCount

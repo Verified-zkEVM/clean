@@ -303,6 +303,7 @@ def HasNoFixedColumns (summary : RegionSynthesisSummary) : Prop :=
 /-- A reduced region summary from its distinct-column source list and exact numerical
 footprint. -/
 def ofColumns (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
+    (selectorActivations : List (ℕ × ℕ) := [])
     (instanceRowExtent : ℕ := 0) (lookupActivationCount : ℕ := 0) :
     RegionSynthesisSummary where
   columns := unionColumns [] columns
@@ -310,6 +311,7 @@ def ofColumns (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
   constantSiteCount := constantSiteCount
   lookupActivationCount := lookupActivationCount
   instanceRowExtent := instanceRowExtent
+  selectorActivations := selectorActivations
 
 /-- Attach the exact local selector activations to an otherwise reduced region
 footprint. -/
@@ -365,10 +367,10 @@ theorem withSelectorActivations_selectorActivations
 @[synthesis_summary_norm]
 theorem hasNoFixedColumns_ofColumns
     (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
-    (instanceRowExtent : ℕ := 0) {lookupActivationCount : ℕ} :
-    HasNoFixedColumns
-        (ofColumns columns rowCount constantSiteCount instanceRowExtent
-          lookupActivationCount) ↔
+    {selectorActivations : List (ℕ × ℕ)}
+    {instanceRowExtent lookupActivationCount : ℕ} :
+    HasNoFixedColumns (ofColumns columns rowCount constantSiteCount
+        selectorActivations instanceRowExtent lookupActivationCount) ↔
       ∀ index, .column .fixed index ∉ columns := by
   constructor
   · intro hsummary index hcolumn
@@ -390,8 +392,8 @@ def repeatColumns (columns : List RegionColumn) (offset stride rowCount
   else
     ofColumns columns
       (offset + stride * (count - 1) + rowCount)
-      (count * constantSiteCount) instanceRowExtent
-      (count * lookupActivationCount)
+      (count * constantSiteCount) (instanceRowExtent := instanceRowExtent)
+      (lookupActivationCount := count * lookupActivationCount)
 
 /-- Compact selector rows for repeated identical region fragments. -/
 def repeatedSelectorActivations (selector offset stride : ℕ) :
@@ -747,59 +749,58 @@ theorem repeatColumns_lookupActivationCount (columns : List RegionColumn)
 
 @[circuit_norm, synthesis_summary_norm] theorem ofColumns_columns
     (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
+    {selectorActivations : List (ℕ × ℕ)}
     {instanceRowExtent lookupActivationCount : ℕ} :
-    (ofColumns columns rowCount constantSiteCount instanceRowExtent
-      lookupActivationCount).columns =
+    (ofColumns columns rowCount constantSiteCount selectorActivations
+      instanceRowExtent lookupActivationCount).columns =
       unionColumns [] columns := rfl
 
 theorem ofColumns_columns_nodup (columns : List RegionColumn)
-    (rowCount constantSiteCount : ℕ) (instanceRowExtent : ℕ := 0)
+    (rowCount constantSiteCount : ℕ)
+    (selectorActivations : List (ℕ × ℕ) := []) (instanceRowExtent : ℕ := 0)
     (lookupActivationCount : ℕ := 0) :
-    (ofColumns columns rowCount constantSiteCount instanceRowExtent
-      lookupActivationCount).columns.Nodup :=
+    (ofColumns columns rowCount constantSiteCount selectorActivations
+      instanceRowExtent lookupActivationCount).columns.Nodup :=
   unionColumns_nodup [] columns (by simp)
-
-theorem withSelectorActivations_ofColumns_columns_nodup
-    (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
-    (selectorActivations : List (ℕ × ℕ)) (instanceRowExtent : ℕ := 0)
-    (lookupActivationCount : ℕ := 0) :
-    ((ofColumns columns rowCount constantSiteCount instanceRowExtent
-      lookupActivationCount).withSelectorActivations selectorActivations).columns.Nodup :=
-  ofColumns_columns_nodup columns rowCount constantSiteCount
-    instanceRowExtent lookupActivationCount
 
 @[circuit_norm, synthesis_summary_norm] theorem ofColumns_rowCount
     (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
+    {selectorActivations : List (ℕ × ℕ)}
     {instanceRowExtent lookupActivationCount : ℕ} :
-    (ofColumns columns rowCount constantSiteCount instanceRowExtent
-      lookupActivationCount).rowCount = rowCount := rfl
+    (ofColumns columns rowCount constantSiteCount selectorActivations
+      instanceRowExtent lookupActivationCount).rowCount = rowCount := rfl
 
 @[circuit_norm, synthesis_summary_norm] theorem ofColumns_constantSiteCount
     (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
+    {selectorActivations : List (ℕ × ℕ)}
     {instanceRowExtent lookupActivationCount : ℕ} :
-    (ofColumns columns rowCount constantSiteCount instanceRowExtent
-      lookupActivationCount).constantSiteCount =
+    (ofColumns columns rowCount constantSiteCount selectorActivations
+      instanceRowExtent lookupActivationCount).constantSiteCount =
       constantSiteCount := rfl
 
 @[circuit_norm, synthesis_summary_norm] theorem ofColumns_lookupActivationCount
     (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
+    {selectorActivations : List (ℕ × ℕ)}
     {instanceRowExtent lookupActivationCount : ℕ} :
-    (ofColumns columns rowCount constantSiteCount
+    (ofColumns columns rowCount constantSiteCount selectorActivations
       instanceRowExtent lookupActivationCount).lookupActivationCount =
         lookupActivationCount := rfl
 
 @[circuit_norm, synthesis_summary_norm] theorem ofColumns_instanceRowExtent
     (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
+    {selectorActivations : List (ℕ × ℕ)}
     {instanceRowExtent lookupActivationCount : ℕ} :
-    (ofColumns columns rowCount constantSiteCount instanceRowExtent
-      lookupActivationCount).instanceRowExtent =
+    (ofColumns columns rowCount constantSiteCount selectorActivations
+      instanceRowExtent lookupActivationCount).instanceRowExtent =
       instanceRowExtent := rfl
 
 @[circuit_norm, synthesis_summary_norm] theorem ofColumns_selectorActivations
     (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
+    {selectorActivations : List (ℕ × ℕ)}
     {instanceRowExtent lookupActivationCount : ℕ} :
-    (ofColumns columns rowCount constantSiteCount instanceRowExtent
-      lookupActivationCount).selectorActivations = [] := rfl
+    (ofColumns columns rowCount constantSiteCount selectorActivations
+      instanceRowExtent lookupActivationCount).selectorActivations =
+        selectorActivations := rfl
 
 def combine (left right : RegionSynthesisSummary) : RegionSynthesisSummary where
   columns := unionColumns left.columns right.columns
@@ -993,21 +994,11 @@ theorem empty_combine (summary : RegionSynthesisSummary)
 identity source. -/
 @[circuit_norm, synthesis_summary_norm]
 theorem empty_combine_ofColumns (columns : List RegionColumn)
-    (rowCount constantSiteCount : ℕ) :
+    (rowCount constantSiteCount : ℕ)
+    (selectorActivations : List (ℕ × ℕ) := []) :
     ({} : RegionSynthesisSummary).combine
-        (ofColumns columns rowCount constantSiteCount) =
-      ofColumns columns rowCount constantSiteCount :=
-  empty_combine _ (unionColumns_nodup [] columns (by simp))
-
-@[circuit_norm, synthesis_summary_norm]
-theorem empty_combine_withSelectorActivations_ofColumns
-    (columns : List RegionColumn) (rowCount constantSiteCount : ℕ)
-    (selectorActivations : List (ℕ × ℕ)) :
-    ({} : RegionSynthesisSummary).combine
-        ((ofColumns columns rowCount constantSiteCount).withSelectorActivations
-          selectorActivations) =
-      (ofColumns columns rowCount constantSiteCount).withSelectorActivations
-        selectorActivations :=
+        (ofColumns columns rowCount constantSiteCount selectorActivations) =
+      ofColumns columns rowCount constantSiteCount selectorActivations :=
   empty_combine _ (unionColumns_nodup [] columns (by simp))
 
 private theorem foldr_ofColumns_eq_repeatColumns_combine
@@ -1016,7 +1007,8 @@ private theorem foldr_ofColumns_eq_repeatColumns_combine
     (accumulator : RegionSynthesisSummary) (haccumulator : accumulator.columns.Nodup) :
     (List.ofFn fun i : Fin count =>
       ofColumns columns (offset + stride * i.val + rowCount) constantSiteCount
-        instanceRowExtent lookupActivationCount).foldr
+        (instanceRowExtent := instanceRowExtent)
+        (lookupActivationCount := lookupActivationCount)).foldr
         combine accumulator =
       (repeatColumns columns offset stride rowCount constantSiteCount count
         instanceRowExtent lookupActivationCount).combine
@@ -1074,7 +1066,8 @@ theorem foldr_ofColumns_eq_repeatColumns
     (instanceRowExtent : ℕ := 0) (lookupActivationCount : ℕ := 0) :
     (List.ofFn fun i : Fin count =>
       ofColumns columns (offset + stride * i.val + rowCount) constantSiteCount
-        instanceRowExtent lookupActivationCount).foldr
+        (instanceRowExtent := instanceRowExtent)
+        (lookupActivationCount := lookupActivationCount)).foldr
         combine {} =
       repeatColumns columns offset stride rowCount constantSiteCount count
         instanceRowExtent lookupActivationCount := by
@@ -1089,10 +1082,10 @@ private theorem foldr_ofColumnsWithSelector_eq_repeatColumnsWithSelector_combine
     (accumulator : RegionSynthesisSummary)
     (haccumulator : accumulator.columns.Nodup) :
     (List.ofFn fun i : Fin count =>
-      (ofColumns columns (offset + stride * i.val + rowCount)
-        constantSiteCount instanceRowExtent
-        lookupActivationCount).withSelectorActivations
-          [(selector, selectorOffset + stride * i.val)]).foldr combine accumulator =
+      ofColumns columns (offset + stride * i.val + rowCount)
+        constantSiteCount [(selector, selectorOffset + stride * i.val)]
+        (instanceRowExtent := instanceRowExtent)
+        (lookupActivationCount := lookupActivationCount)).foldr combine accumulator =
       (repeatColumnsWithSelectorAt selector selectorOffset columns offset stride rowCount
         constantSiteCount count instanceRowExtent lookupActivationCount).combine
         accumulator := by
@@ -1165,10 +1158,10 @@ theorem foldr_ofColumnsWithSelectorAt_eq_repeatColumnsWithSelectorAt
     (offset stride rowCount constantSiteCount count : ℕ)
     (instanceRowExtent : ℕ := 0) (lookupActivationCount : ℕ := 0) :
     (List.ofFn fun i : Fin count =>
-      (ofColumns columns (offset + stride * i.val + rowCount)
-        constantSiteCount instanceRowExtent
-        lookupActivationCount).withSelectorActivations
-          [(selector, selectorOffset + stride * i.val)]).foldr combine {} =
+      ofColumns columns (offset + stride * i.val + rowCount)
+        constantSiteCount [(selector, selectorOffset + stride * i.val)]
+        (instanceRowExtent := instanceRowExtent)
+        (lookupActivationCount := lookupActivationCount)).foldr combine {} =
       repeatColumnsWithSelectorAt selector selectorOffset columns offset stride rowCount
         constantSiteCount count instanceRowExtent lookupActivationCount := by
   rw [foldr_ofColumnsWithSelector_eq_repeatColumnsWithSelector_combine]
@@ -1182,10 +1175,10 @@ theorem foldr_ofColumnsWithSelector_eq_repeatColumnsWithSelector
     (offset stride rowCount constantSiteCount count : ℕ)
     (instanceRowExtent : ℕ := 0) (lookupActivationCount : ℕ := 0) :
     (List.ofFn fun i : Fin count =>
-      (ofColumns columns (offset + stride * i.val + rowCount)
-        constantSiteCount instanceRowExtent
-        lookupActivationCount).withSelectorActivations
-          [(selector, offset + stride * i.val)]).foldr combine {} =
+      ofColumns columns (offset + stride * i.val + rowCount)
+        constantSiteCount [(selector, offset + stride * i.val)]
+        (instanceRowExtent := instanceRowExtent)
+        (lookupActivationCount := lookupActivationCount)).foldr combine {} =
       repeatColumnsWithSelector selector columns offset stride rowCount
         constantSiteCount count instanceRowExtent lookupActivationCount := by
   rw [foldr_ofColumnsWithSelector_eq_repeatColumnsWithSelector_combine selector offset]
@@ -1199,11 +1192,12 @@ private theorem foldr_ofColumnsWithSelectorPattern_combine
     (accumulator : RegionSynthesisSummary)
     (haccumulator : accumulator.columns.Nodup) :
     (List.ofFn fun i : Fin count =>
-      (ofColumns columns (offset + stride * i.val + rowCount)
-        constantSiteCount instanceRowExtent
-        lookupActivationCount).withSelectorActivations
-          (pattern.map fun (selector, row) =>
-            (selector, offset + stride * i.val + row))).foldr combine accumulator =
+      ofColumns columns (offset + stride * i.val + rowCount)
+        constantSiteCount
+        (pattern.map fun (selector, row) =>
+          (selector, offset + stride * i.val + row))
+        (instanceRowExtent := instanceRowExtent)
+        (lookupActivationCount := lookupActivationCount)).foldr combine accumulator =
       (repeatColumnsWithSelectorPattern pattern columns offset stride rowCount
         constantSiteCount count instanceRowExtent lookupActivationCount).combine
         accumulator := by
@@ -1273,11 +1267,12 @@ theorem foldr_ofColumnsWithSelectorPattern_eq_repeatColumnsWithSelectorPattern
     (offset stride rowCount constantSiteCount count : ℕ)
     (instanceRowExtent : ℕ := 0) (lookupActivationCount : ℕ := 0) :
     (List.ofFn fun i : Fin count =>
-      (ofColumns columns (offset + stride * i.val + rowCount)
-        constantSiteCount instanceRowExtent
-        lookupActivationCount).withSelectorActivations
-          (pattern.map fun (selector, row) =>
-            (selector, offset + stride * i.val + row))).foldr combine {} =
+      ofColumns columns (offset + stride * i.val + rowCount)
+        constantSiteCount
+        (pattern.map fun (selector, row) =>
+          (selector, offset + stride * i.val + row))
+        (instanceRowExtent := instanceRowExtent)
+        (lookupActivationCount := lookupActivationCount)).foldr combine {} =
       repeatColumnsWithSelectorPattern pattern columns offset stride rowCount
         constantSiteCount count instanceRowExtent lookupActivationCount := by
   rw [foldr_ofColumnsWithSelectorPattern_combine]
@@ -1783,24 +1778,20 @@ theorem regionSynthesisSummary_single_assignFixed
 theorem regionSynthesisSummary_single_enableGate
     (gate : Gate F) (row : ℕ) :
     regionSynthesisSummary [.enableGate gate row] =
-      (RegionSynthesisSummary.ofColumns
-        [.selector gate.selector.index] (row + 1) 0).withSelectorActivations
-          [(gate.selector.index, row)] := by
+      RegionSynthesisSummary.ofColumns
+        [.selector gate.selector.index] (row + 1) 0
+        [(gate.selector.index, row)] := by
   apply RegionSynthesisSummary.ext
-  · simp only [RegionSynthesisSummary.withSelectorActivations,
-      regionSynthesisSummary_enableGate_cons_columns,
+  · simp only [regionSynthesisSummary_enableGate_cons_columns,
       regionSynthesisSummary_nil_columns,
       RegionSynthesisSummary.ofColumns_columns, unionColumns_nil_right]
-  · simp only [RegionSynthesisSummary.withSelectorActivations,
-      regionSynthesisSummary_enableGate_cons_rowCount,
+  · simp only [regionSynthesisSummary_enableGate_cons_rowCount,
       regionSynthesisSummary_nil_rowCount,
       RegionSynthesisSummary.ofColumns_rowCount, Nat.max_zero]
-  · simp only [RegionSynthesisSummary.withSelectorActivations,
-      regionSynthesisSummary_enableGate_cons_constantSiteCount,
+  · simp only [regionSynthesisSummary_enableGate_cons_constantSiteCount,
       regionSynthesisSummary_nil_constantSiteCount,
       RegionSynthesisSummary.ofColumns_constantSiteCount]
-  · simp [RegionSynthesisSummary.withSelectorActivations,
-      regionSynthesisSummary, RegionSynthesisSummary.combine,
+  · simp [regionSynthesisSummary, RegionSynthesisSummary.combine,
       RegionSynthesisSummary.ofOperation, regionOperationInstanceRowExtent,
       RegionSynthesisSummary.ofColumns_instanceRowExtent]
   · rfl

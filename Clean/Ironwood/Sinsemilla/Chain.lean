@@ -1137,11 +1137,11 @@ def slotIterationSynthesisSummary (ns : List ℕ) (i : ℕ)
     (cfg : Config) (base : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
   (slotSynthesisSummary ns i cfg base).combine
-    ((FloorPlanner.RegionSynthesisSummary.ofColumns
+    ((.ofColumns
       [.column .fixed cfg.qS2.index,
         .selector (sinsemillaGate cfg).selector.index]
-      (base + ns.getD i 0 + 1) 0).withSelectorActivations
-        [((sinsemillaGate cfg).selector.index, base + ns.getD i 0)])
+      (base + ns.getD i 0 + 1) 0
+      [((sinsemillaGate cfg).selector.index, base + ns.getD i 0)]))
 
 @[synthesis_summary_norm]
 theorem slotIterationSynthesisSummary_selectorActivations

@@ -339,7 +339,7 @@ def permutationColumns (config : Config) : List AnyColumn :=
 
 def synthesisSummary (config : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  (FloorPlanner.RegionSynthesisSummary.ofColumns
+  .ofColumns
     [.selector config.qAdd.index,
       .column .advice config.xP.index,
       .column .advice config.yP.index,
@@ -352,8 +352,7 @@ def synthesisSummary (config : Config) (offset : ℕ) :
       .column .advice config.lambda.index,
       .column .advice config.xQR.index,
       .column .advice config.yQR.index]
-    (offset + 2) 0).withSelectorActivations
-      [(config.qAdd.index, offset)]
+    (offset + 2) 0 [(config.qAdd.index, offset)]
 
 @[synthesis_summary_norm]
 theorem synthesisSummary_lookupActivationCount (config : Config) (offset : ℕ) :

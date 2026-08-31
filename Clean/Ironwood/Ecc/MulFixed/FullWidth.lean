@@ -139,9 +139,9 @@ theorem witnessScalarLoop_synthesisSummary_eq
     synthesis_summary_norm, Nat.mul_one]
   rw [show
     (List.ofFn fun i : Fin 85 =>
-      (FloorPlanner.RegionSynthesisSummary.ofColumns
-        [.selector cfg.1.index] (offset + i.val + 1) 0).withSelectorActivations
-          [(cfg.qMulFixedFull.index, offset + i.val)]).foldr
+      FloorPlanner.RegionSynthesisSummary.ofColumns
+        [.selector cfg.1.index] (offset + i.val + 1) 0
+        [(cfg.qMulFixedFull.index, offset + i.val)]).foldr
           FloorPlanner.RegionSynthesisSummary.combine {} =
         FloorPlanner.RegionSynthesisSummary.repeatColumnsWithSelector
           cfg.qMulFixedFull.index [.selector cfg.qMulFixedFull.index]

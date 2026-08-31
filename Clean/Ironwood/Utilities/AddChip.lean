@@ -82,13 +82,12 @@ def synthesize (cfg : Config) (offset : ℕ)
 copy `a` and `b` in, assign `c = a + b`. `Spec`: the output is the field sum. -/
 def synthesisSummary (cfg : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  (FloorPlanner.RegionSynthesisSummary.ofColumns
+  .ofColumns
     [.selector cfg.qAdd.index,
       .column .advice cfg.a.index,
       .column .advice cfg.b.index,
       .column .advice cfg.c.index]
-    (offset + 1) 0).withSelectorActivations
-      [(cfg.qAdd.index, offset)]
+    (offset + 1) 0 [(cfg.qAdd.index, offset)]
 
 @[synthesis_summary_norm]
 theorem synthesisSummary_lookupActivationCount (cfg : Config) (offset : ℕ) :

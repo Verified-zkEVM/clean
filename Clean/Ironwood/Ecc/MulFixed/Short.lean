@@ -162,12 +162,12 @@ def mswRegion (cfg : Config) (acc mulB : Point (AssignedCell Fp))
 def mswRegionSynthesisSummary (cfg : Config) :
     FloorPlanner.RegionSynthesisSummary :=
   (Add.synthesisSummary cfg.superConfig.addConfig 0).combine
-    ((FloorPlanner.RegionSynthesisSummary.ofColumns
+    (.ofColumns
       [.column .advice cfg.superConfig.window.index,
         .column .advice cfg.superConfig.u.index,
         .selector cfg.qMulFixedShort.index,
         .column .advice cfg.superConfig.addConfig.yP.index]
-      2 0).withSelectorActivations [(cfg.qMulFixedShort.index, 1)])
+      2 0 [(cfg.qMulFixedShort.index, 1)])
 
 @[synthesis_summary_norm]
 theorem mswRegion_synthesisSummary_eq
@@ -186,7 +186,6 @@ theorem mswRegionSynthesisSummary_hasNoFixedColumns (cfg : Config) :
   simp only [mswRegionSynthesisSummary,
     FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_combine,
     Add.synthesisSummary_hasNoFixedColumns,
-    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_withSelectorActivations,
     FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
   simp
 

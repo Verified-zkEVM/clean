@@ -60,7 +60,7 @@ def permutationColumns (cfg : Config) : List AnyColumn :=
 
 def synthesisSummary (cfg : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  (FloorPlanner.RegionSynthesisSummary.ofColumns
+  .ofColumns
     [.selector cfg.qCommitIvk.index,
       .column .advice (cfg.advices 0).index,
       .column .advice (cfg.advices 1).index,
@@ -79,8 +79,7 @@ def synthesisSummary (cfg : Config) (offset : ℕ) :
       .column .advice (cfg.advices 6).index,
       .column .advice (cfg.advices 7).index,
       .column .advice (cfg.advices 8).index]
-    (offset + 2) 0).withSelectorActivations
-      [(cfg.qCommitIvk.index, offset)]
+    (offset + 2) 0 [(cfg.qCommitIvk.index, offset)]
 
 @[synthesis_summary_norm]
 theorem synthesisSummary_lookupActivationCount (cfg : Config) (offset : ℕ) :

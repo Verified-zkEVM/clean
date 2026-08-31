@@ -610,12 +610,12 @@ def circuitSynthesisSummary (w : ℕ) (cfg : Config) (offset : ℕ) :
         .column .advice cfg.lambda2.index]
       (offset + 1) 0).combine
     ((loopSynthesisSummary w cfg offset).combine
-      ((FloorPlanner.RegionSynthesisSummary.ofColumns
+      (.ofColumns
         [.column .fixed cfg.qS2.index,
           .column .advice cfg.xA.index,
           .selector cfg.qS1.index]
-        (offset + w + 2) 0 (lookupActivationCount := 1))
-          |>.withSelectorActivations [(cfg.qS1.index, offset + w)]))
+        (offset + w + 2) 0 [(cfg.qS1.index, offset + w)]
+        (lookupActivationCount := 1)))
 
 @[synthesis_summary_norm]
 theorem circuitSynthesisSummary_selectorActivations
