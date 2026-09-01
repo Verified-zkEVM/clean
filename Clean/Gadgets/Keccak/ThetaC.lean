@@ -9,6 +9,7 @@ import Clean.Specs.Keccak256
 namespace Gadgets.Keccak256.ThetaC
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
+@[implicit_reducible]
 def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakRow (F p)) :=
   .mapFinRange 5 fun i => do
     let c ← Xor64.circuit ⟨state[5*i.val], state[5*i.val + 1]⟩
@@ -24,8 +25,22 @@ def Spec (state : KeccakState (F p)) (out : KeccakRow (F p)) :=
   ∧ out.value = Specs.Keccak256.thetaC state.value
 
 @[reducible]
-instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow main := by
-  elaborate_circuit
+instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow main where
+  localLength _ := 5 * 32
+  output _ i₀ := .mapFinRange 5 fun i => varFromOffset U64 (i₀ + i.val * 32 + 24)
+  localLength_eq := by
+    intro state i₀
+    simp only [main, Xor64.circuit, Xor64.elaborated, circuit_norm]
+  output_eq := by
+    intro state i₀
+    simp only [main, Xor64.circuit, Xor64.elaborated, circuit_norm]
+  subcircuitsConsistent := by
+    intro state i₀
+    simp only [main, Xor64.circuit, Xor64.elaborated, circuit_norm]
+    omega
+  channelsLawful := by
+    intro state i₀
+    simp only [main, Xor64.circuit, Xor64.elaborated, circuit_norm]
 
 -- rewrite thetaC as a loop
 lemma thetaC_loop (state : Vector ℕ 25) :
@@ -60,6 +75,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
   have state_norm : ∀ (i : ℕ) (hi : i < 25), state[i].Normalized := fun i hi => state_norm ⟨ i, hi ⟩
   simp_all
 
+@[implicit_reducible]
 def circuit : FormalCircuit (F p) KeccakState KeccakRow where
   main := main
   elaborated := elaborated

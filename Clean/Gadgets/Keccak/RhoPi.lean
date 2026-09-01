@@ -7,14 +7,18 @@ namespace Gadgets.Keccak256.RhoPi
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]
 instance : Fact (p > 512) := .mk (by linarith [‹Fact (p > _)›.elim])
 
+@[implicit_reducible]
 def rhoPiIndices : Vector (Fin 25) 25 := #v[
   0, 15, 5, 20, 10, 6, 21, 11, 1, 16, 12, 2, 17, 7, 22, 18, 8, 23, 13, 3, 24, 14, 4, 19, 9
 ]
+@[implicit_reducible]
 def rhoPiShifts : Vector (Fin 64) 25 := #v[
   0, 28, 1, 27, 62, 44, 20, 6, 36, 55, 43, 3, 25, 10, 39, 21, 45, 8, 15, 41, 14, 61, 18, 56, 2
 ]
+@[implicit_reducible]
 def rhoPiConstants := rhoPiIndices.zip rhoPiShifts
 
+@[implicit_reducible]
 def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
   .map rhoPiConstants fun (i, s) =>
     Rotation64.circuit (-s) state[i.val]
@@ -25,8 +29,22 @@ def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized
   ∧ out_state.value = Specs.Keccak256.rhoPi state.value
 
-@[reducible] instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main := by
-  elaborate_circuit
+@[reducible] instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main where
+  localLength _ := 25 * 16
+  output _ i₀ := rhoPiConstants.mapIdx fun i (_, s) =>
+    Rotation64.output (-s) (i₀ + i * 16)
+  localLength_eq := by
+    intro state i₀
+    simp only [main, Rotation64.circuit, Rotation64.elaborated, circuit_norm]
+  output_eq := by
+    intro state i₀
+    simp only [main, Rotation64.circuit, Rotation64.elaborated, circuit_norm]
+  subcircuitsConsistent := by
+    intro state i₀
+    simp only [main, Rotation64.circuit, Rotation64.elaborated, circuit_norm]
+  channelsLawful := by
+    intro state i₀
+    simp only [main, Rotation64.circuit, Rotation64.elaborated, circuit_norm]
 
 -- recharacterize rhoPi as a loop
 lemma rhoPi_loop (state : Vector ℕ 25) :
@@ -58,6 +76,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
   -- simplify constraints (goal + environment) and apply assumptions
   simp_all [circuit_norm, Rotation64.circuit, Rotation64.Assumptions, Rotation64.Spec]
 
+@[implicit_reducible]
 def circuit : FormalCircuit (F p) KeccakState KeccakState where
   main := main
   elaborated := elaborated

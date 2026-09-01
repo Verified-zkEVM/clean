@@ -30,12 +30,11 @@ template MultiMux1(n) {
     }
 }
 -/
+@[implicit_reducible]
 def main (n : ℕ) (input : Var (Inputs n) (F p)) := do
-  let { c, s } := input
-
   -- Witness and constrain output vector
-  let out <== c.map fun (c0, c1) =>
-    (c1 - c0) * s + c0
+  let out <== input.c.map fun (c0, c1) =>
+    (c1 - c0) * input.s + c0
   return out
 
 lemma Vector.mapRange_one {α : Type} (f : ℕ → α) :
@@ -119,11 +118,13 @@ template Mux1() {
     mux.out[0] ==> out;
 }
 -/
+@[implicit_reducible]
 def main (input : Var Inputs (F p)) := do
-  let { c, s } := input
-
   -- Call MultiMux1 with n=1
-  let mux_out ← MultiMux1.circuit 1 { c := #v[(c[0], c[1])], s }
+  let mux_out ← MultiMux1.circuit 1 {
+    c := #v[(input.c[0], input.c[1])]
+    s := input.s
+  }
   return mux_out[0]
 
 def circuit : FormalCircuit (F p) Inputs field where

@@ -17,8 +17,11 @@ structure Inputs (F : Type) where
   y : U32 F
 deriving ProvableStruct
 
+@[implicit_reducible]
 def main (a b c d : Fin 16) (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
-  let { state, x, y } := input
+  let state := input.state
+  let x := input.x
+  let y := input.y
 
   let state_a ← Addition32.circuit ⟨state[a], ← Addition32.circuit ⟨state[b], x⟩⟩
 
@@ -53,6 +56,7 @@ def output (a b c d : Fin 16) (state : BLAKE3State (Expression (F p))) (i₀ : �
     |>.set c (⟨var ⟨i₀ + 76⟩, var ⟨i₀ + 78⟩, var ⟨i₀ + 80⟩, var ⟨i₀ + 82⟩⟩) c.is_lt
     |>.set d (Rotation32.output 8 (i₀ + 68)) d.is_lt
 
+@[reducible]
 instance elaborated (a b c d : Fin 16): ElaboratedCircuit (F p) Inputs BLAKE3State (main a b c d) := by
   elaborate_circuit_with {
     output inputs i0 := output a b c d inputs.state i0
@@ -124,6 +128,7 @@ theorem completeness (a b c d : Fin 16) : Completeness (F p) (main a b c d) Assu
   -- resolve all chains of assumptions
   simp_all only [forall_const, and_true]
 
+@[implicit_reducible]
 def circuit (a b c d : Fin 16) : FormalCircuit (F p) Inputs BLAKE3State where
   main := main a b c d
   elaborated := elaborated a b c d

@@ -132,11 +132,12 @@ structure Inputs (F : Type) where
   inp : fieldPair F
 deriving ProvableStruct
 
+@[implicit_reducible]
 def main (inputs : Var Inputs (F p)) := do
-  let { enabled, inp } := inputs
-  let isz ← IsZero.circuit (inp.2 - inp.1)
-  enabled * (1 - isz) === 0
+  let isz ← IsZero.circuit (inputs.inp.2 - inputs.inp.1)
+  inputs.enabled * (1 - isz) === 0
 
+@[implicit_reducible]
 def circuit : FormalAssertion (F p) Inputs where
   main
 

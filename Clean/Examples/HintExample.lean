@@ -46,12 +46,12 @@ deriving ProvableStruct
   internally from its inputs and passes it to `witnessBool`.
 -/
 def booleanAnd : FormalCircuit (F p) Input field where
-  main | ⟨x, y⟩ => do
+  main input := do
     -- Use witnessBool as a subcircuit with a hint synthesized from the inputs
     let z ← witnessBool <| unconstrainedBool do
-      return (x =? 1) &&& (y =? 1)
+      return (input.x =? 1) &&& (input.y =? 1)
     -- Constrain result = x * y (multiplication is AND for booleans)
-    z === x * y
+    z === input.x * input.y
     return z
 
   Assumptions | ⟨x, y⟩ => IsBool x ∧ IsBool y

@@ -20,6 +20,7 @@ structure Inputs (M : TypeMap) (F : Type) where
   ifFalse : M F
 deriving ProvableStruct
 
+@[implicit_reducible]
 def main [DecidableEq F] (input : Var (Inputs M) F) : Circuit F (Var M F) := do
   let { selector, ifTrue, ifFalse } := input
 

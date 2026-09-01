@@ -17,6 +17,7 @@ Reuses the helper lemmas defined in `LowerSigma0`.
 -/
 
 /-- Σ₁(x) = ROTR6(x) XOR ROTR11(x) XOR ROTR25(x) -/
+@[implicit_reducible]
 def upperSigma1 (x : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
   let r1 ← xor32 (rotr32 6  x) (rotr32 11 x)
   xor32 r1 (rotr32 25 x)
@@ -26,6 +27,7 @@ namespace UpperSigma1
 open LowerSigma0 (sum_bool_lt_two_pow testBit_binary_sum bool_finsum_xor_eq
   valueBits_lt_two_pow valueBits_rotr32_eq eval_rotr32)
 
+@[implicit_reducible]
 def main (x : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
   upperSigma1 x
 
@@ -110,6 +112,7 @@ private lemma spec_of_constraint
   rw [sigma_def, h_z_eq]
   exact key
 
+@[reducible]
 instance elaborated : ElaboratedCircuit (F p) (fields 32) (fields 32) main := by
   elaborate_circuit
 
@@ -210,6 +213,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
     simp only [circuit_norm]
     rw [hxor3, hxor1]; ring
 
+@[implicit_reducible]
 def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness
 

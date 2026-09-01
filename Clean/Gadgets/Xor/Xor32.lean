@@ -15,19 +15,19 @@ structure Inputs (F : Type) where
   y: U32 F
 deriving ProvableStruct
 
+@[implicit_reducible]
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p))  := do
-  let ⟨x, y⟩ := input
   let z ← witness <|
-    let z0 := (x.x0.val ^^^ y.x0.val).toField
-    let z1 := (x.x1.val ^^^ y.x1.val).toField
-    let z2 := (x.x2.val ^^^ y.x2.val).toField
-    let z3 := (x.x3.val ^^^ y.x3.val).toField
+    let z0 := (input.x.x0.val ^^^ input.y.x0.val).toField
+    let z1 := (input.x.x1.val ^^^ input.y.x1.val).toField
+    let z2 := (input.x.x2.val ^^^ input.y.x2.val).toField
+    let z3 := (input.x.x3.val ^^^ input.y.x3.val).toField
     U32.mk z0 z1 z2 z3
 
-  lookup ByteXorTable (x.x0, y.x0, z.x0)
-  lookup ByteXorTable (x.x1, y.x1, z.x1)
-  lookup ByteXorTable (x.x2, y.x2, z.x2)
-  lookup ByteXorTable (x.x3, y.x3, z.x3)
+  lookup ByteXorTable (input.x.x0, input.y.x0, z.x0)
+  lookup ByteXorTable (input.x.x1, input.y.x1, z.x1)
+  lookup ByteXorTable (input.x.x2, input.y.x2, z.x2)
+  lookup ByteXorTable (input.x.x3, input.y.x3, z.x3)
   return z
 
 def Assumptions (input : Inputs (F p)) :=
@@ -95,6 +95,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
   simp only [circuit_norm, explicit_provable_type, U32.mk.injEq] at h_env ⊢
   simp_all [circuit_norm, xor_val]
 
+@[implicit_reducible]
 def circuit : FormalCircuit (F p) Inputs U32 where
   main
   elaborated

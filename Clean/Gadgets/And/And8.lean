@@ -5,7 +5,7 @@ import Clean.Utils.Primes
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 namespace Gadgets.And.And8
-open Xor (ByteXorTable)
+open _root_.Gadgets.Xor (ByteXorTable)
 open FieldUtils
 
 structure Inputs (F : Type) where
@@ -21,12 +21,12 @@ def Spec (input : Inputs (F p)) (z : F p) :=
   let ⟨x, y⟩ := input
   z.val = x.val &&& y.val
 
+@[implicit_reducible]
 def main (input : Var Inputs (F p)) : Circuit (F p) (Expression (F p)) := do
-  let ⟨x, y⟩ := input
-  let and ← witness (x.val &&& y.val).toField
+  let and ← witness (input.x.val &&& input.y.val).toField
   -- we prove AND correct using an XOR lookup and the following identity:
-  let xor := x + y - 2*and
-  lookup ByteXorTable (x, y, xor)
+  let xor := input.x + input.y - 2*and
+  lookup ByteXorTable (input.x, input.y, xor)
   return and
 
 -- AND / XOR identity that justifies the circuit
@@ -134,6 +134,7 @@ theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main A
   rw [ZMod.val_sub two_and_lt, x_y_val, two_and_val,
     ←and_times_two_add_xor hx_byte hy_byte, add_comm, Nat.add_sub_cancel]
 
+@[implicit_reducible]
 def circuit : FormalCircuit (F p) Inputs field :=
   { main, elaborated, Assumptions, Spec, soundness, completeness }
 

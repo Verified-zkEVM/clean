@@ -8,6 +8,7 @@ namespace Gadgets.Keccak256.KeccakRound
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]
 open Specs.Keccak256
 
+@[implicit_reducible]
 def main (rc : UInt64) (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
   let state ← Theta.circuit state
   let state ← RhoPi.circuit state
@@ -23,28 +24,46 @@ def Spec (rc : UInt64) (state : KeccakState (F p)) (out_state : KeccakState (F p
   out_state.Normalized
   ∧ out_state.value = keccakRound state.value rc
 
--- overridden so that `Permutation` can keep its nice proof which uses
--- `Vector.mapRange` instead of `Vector.mapFinRange`.
 @[reducible]
-instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) KeccakState KeccakState (main rc) := by
-  elaborate_circuit_with {
-    output _ i0 := Vector.mapRange 25 (fun i => varFromOffset U64 (i0 + i*16 + 888))
-      |>.set 0 (varFromOffset U64 (i0 + 1280))
-  } using by
-    simp +arith +instances only [circuit_norm, Vector.mapRange_eq_mapFinRange]
+instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) KeccakState KeccakState (main rc) where
+  localLength _ := 1288
+  output _ i₀ := Vector.mapFinRange 25 (fun i => varFromOffset U64 (i₀ + i.val * 16 + 888))
+    |>.set 0 (varFromOffset U64 (i₀ + 1280))
+  localLength_eq := by
+    intro state i₀
+    simp only [main, Theta.circuit, Theta.elaborated, RhoPi.circuit, RhoPi.elaborated,
+      Chi.circuit, Chi.elaborated, Xor64.circuit, Xor64.elaborated, circuit_norm]
+  output_eq := by
+    intro state i₀
+    simp +arith +instances only [main, Theta.circuit, Theta.elaborated,
+      RhoPi.circuit, RhoPi.elaborated, Chi.circuit, Chi.elaborated,
+      Xor64.circuit, Xor64.elaborated, circuit_norm]
+  subcircuitsConsistent := by
+    intro state i₀
+    simp only [main, Theta.circuit, Theta.elaborated, RhoPi.circuit, RhoPi.elaborated,
+      Chi.circuit, Chi.elaborated, Xor64.circuit, Xor64.elaborated, circuit_norm]
+    omega
+  channelsLawful := by
+    intro state i₀
+    simp only [main, Theta.circuit, Theta.elaborated, RhoPi.circuit, RhoPi.elaborated,
+      Chi.circuit, Chi.elaborated, Xor64.circuit, Xor64.elaborated, circuit_norm]
 
 theorem soundness (rc : UInt64) : Soundness (F p) (main rc) Assumptions (Spec rc) := by
-  circuit_proof_start [Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit,
-    Theta.Assumptions, Theta.Spec, RhoPi.Assumptions, RhoPi.Spec,
-    Chi.Assumptions, Chi.Spec, Xor64.Assumptions, Xor64.Spec]
-  simp_rw [Vector.mapRange_eq_mapFinRange]
+  circuit_proof_start_core
+  dsimp only [Assumptions] at h_assumptions
+  dsimp only [Spec]
+  dsimp +instances only [elaborated]
+  simp only [main, Theta.circuit, RhoPi.circuit, Chi.circuit, Xor64.circuit,
+    circuit_norm, h_input] at h_holds ⊢
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
   simp only [circuit_norm, eval_vector, keccakRound, iota]
 
   -- simplify constraints
-  simp only [h_assumptions, circuit_norm] at h_holds
+  simp only [Theta.Assumptions, Theta.Spec, RhoPi.Assumptions, RhoPi.Spec,
+    Chi.Assumptions, Chi.Spec, Xor64.Assumptions, Xor64.Spec,
+    h_assumptions, circuit_norm] at h_holds
   simp only [and_assoc, zero_mul, add_zero, and_imp] at h_holds
 
   obtain ⟨ theta_norm, theta_eq, h_rhopi, h_chi, h_rc ⟩ := h_holds
@@ -91,6 +110,7 @@ theorem completeness (rc : UInt64) : Completeness (F p) (main rc) Assumptions :=
   simp only [KeccakState.Normalized, eval_vector, circuit_norm] at chi_norm
   exact chi_norm 0
 
+@[implicit_reducible]
 def circuit (rc : UInt64) : FormalCircuit (F p) KeccakState KeccakState where
   main := main rc
   elaborated := elaborated rc

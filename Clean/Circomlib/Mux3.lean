@@ -57,24 +57,23 @@ template MultiMux3(n) {
     }
 }
 -/
+@[implicit_reducible]
 def main (n : ℕ) (input : Var (Inputs n) (F p)) := do
-  let { c, s } := input
-
-  let s10 <== s[1] * s[0]
+  let s10 <== input.s[1] * input.s[0]
 
   -- Witness and constrain output vector
-  let out <== c.map fun ci =>
+  let out <== input.c.map fun ci =>
     let a210 := (ci[7] - ci[6] - ci[5] + ci[4] - ci[3] + ci[2] + ci[1] - ci[0]) * s10
-    let a21 := (ci[6] - ci[4] - ci[2] + ci[0]) * s[1]
-    let a20 := (ci[5] - ci[4] - ci[1] + ci[0]) * s[0]
+    let a21 := (ci[6] - ci[4] - ci[2] + ci[0]) * input.s[1]
+    let a20 := (ci[5] - ci[4] - ci[1] + ci[0]) * input.s[0]
     let a2 := (ci[4] - ci[0])
 
     let a10 := (ci[3] - ci[2] - ci[1] + ci[0]) * s10;
-    let a1 := (ci[2] - ci[0]) * s[1];
-    let a0 := (ci[1] - ci[0]) * s[0];
+    let a1 := (ci[2] - ci[0]) * input.s[1];
+    let a0 := (ci[1] - ci[0]) * input.s[0];
     let a := (ci[0]);
 
-    (a210 + a21 + a20 + a2) * s[2] + (a10 + a1 + a0 + a);
+    (a210 + a21 + a20 + a2) * input.s[2] + (a10 + a1 + a0 + a);
 
   return out
 
@@ -155,11 +154,10 @@ template Mux3() {
     mux.out[0] ==> out;
 }
 -/
+@[implicit_reducible]
 def main (input : Var Inputs (F p)) := do
-  let { c, s } := input
-
   -- Call MultiMux3 with n=1
-  let mux_out ← MultiMux3.circuit 1 { c := #v[c], s }
+  let mux_out ← MultiMux3.circuit 1 { c := #v[input.c], s := input.s }
   return mux_out[0]
 
 def circuit : FormalCircuit (F p) Inputs field where

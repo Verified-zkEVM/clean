@@ -1196,7 +1196,7 @@ def from_foldl {m : ℕ} [Inhabited α] [Inhabited β] {xs : Vector α m}
       (n + i * ((explicit default default).localLength 0))).flatten
   output_eq n := by
     by_cases h : m > 0
-    · haveI : NeZero m := NeZero.of_pos h
+    · have : NeZero m := NeZero.of_pos h
       simp only [h, ↓reduceDIte]
       rw [foldl.output_eq]
       rw [(explicit default (xs[m-1])).output_eq]
@@ -1286,6 +1286,12 @@ def from_foldlRange {m : ℕ} [Inhabited β]
       (n + i * ((explicit default i).localLength 0)) using 1
     · rw [(explicit default i).localLength_eq]
 
+-- Lean 4.33 can leave these dependent structure projections stuck when the
+-- proof arguments in the circuit and its explicit instance are propositionally,
+-- but not syntactically, identical. Unfolding only the metadata constructors
+-- lets projection reduction proceed without exposing the loop circuit body.
+attribute [explicit_circuit_norm] from_foldl from_foldlRange
+
 @[circuit_norm, explicit_circuit_norm]
 theorem from_foldl_output {m : ℕ} [Inhabited α] [Inhabited β] {xs : Vector α m}
     {body : β → α → Circuit F β} [explicit : ∀ b a, ExplicitCircuit (body b a)] {init : β}
@@ -1336,6 +1342,15 @@ theorem from_foldlRange_operations {m : ℕ} [Inhabited β]
     (from_foldlRange explicit (init:=init) (constant:=constant)).operations n =
       (List.ofFn fun i =>
         (explicit (Circuit.FoldlM.foldlAcc n (Vector.finRange m) body init i) i).operations
+      (n + i * ((explicit default i).localLength 0))).flatten := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem from_foldlRange_channelsWithGuarantees {m : ℕ} [Inhabited β]
+    {body : β → Fin m → Circuit F β} (explicit : ∀ b i, ExplicitCircuit (body b i)) {init : β}
+    {constant : ConstantLength fun (t : β × Fin m) => body t.1 t.2} (n : ℕ) :
+    (from_foldlRange explicit (init:=init) (constant:=constant)).channelsWithGuarantees n =
+      (List.ofFn fun i =>
+        (explicit (Circuit.FoldlM.foldlAcc n (Vector.finRange m) body init i) i).channelsWithGuarantees
           (n + i * ((explicit default i).localLength 0))).flatten := rfl
 
 end ExplicitCircuit

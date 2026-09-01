@@ -91,7 +91,7 @@ instance (priority := low) : Inhabited (M (Expression F)) where
   default := fromElements default
 
 -- TODO this should be simply called `var`, analogous to `const`
-@[explicit_provable_type]
+@[implicit_reducible, explicit_provable_type]
 def varFromOffset (M : TypeMap) [ProvableType M] (offset : ℕ) : M (Expression F) :=
   let vars := Vector.mapRange (size M) fun i => var ⟨offset + i⟩
   fromElements vars
@@ -301,7 +301,12 @@ inductive ProvableTypeList (F : Type) : List WithProvableType → Type 1 where
 | nil : ProvableTypeList F []
 | cons : ∀ {a : WithProvableType} {as : List WithProvableType}, a.type F → ProvableTypeList F as → ProvableTypeList F (a :: as)
 
-abbrev combinedSize' (cs : List WithProvableType) : ℕ := cs.map (fun x => x.provableType.size) |>.sum
+-- This length appears in dependent vector types, so Lean must be able to
+-- reduce it while comparing implicit arguments.
+@[implicit_reducible]
+def combinedSize' : List WithProvableType → ℕ
+  | [] => 0
+  | c :: cs => c.provableType.size + combinedSize' cs
 end ProvableStruct
 
 -- if we can split a type into components that are provable types, then this gives us a provable type
@@ -423,8 +428,7 @@ where
     eval.go env cs as = (componentsToElements cs as |> Vector.map (Expression.eval env) |> componentsFromElements cs)
   | [], .nil => rfl
   | c :: cs, .cons a as => by
-    simp only [componentsToElements, componentsFromElements, eval.go,
-      combinedSize', List.map_cons, List.sum_cons]
+    simp only [componentsToElements, componentsFromElements, eval.go, combinedSize']
     simp only [Vector.map_append, Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
     congr
     · exact (ProvableType.fromElements_eval_toElements (env:=env) a).symm
@@ -499,7 +503,7 @@ where
       simp only [varFromOffset.go, componentsFromElements, ProvableType.varFromOffset]
       have h_size : combinedSize' (c :: cs) = size c.type + combinedSize' cs := rfl
       rw [Vector.cast_mapRange h_size, Vector.mapRange_add_eq_append]
-      simp only [combinedSize', List.map_cons, List.sum_cons]
+      simp only [combinedSize']
       simp_rw [Vector.cast_rfl, Vector.cast_take_append_of_eq_length, Vector.cast_drop_append_of_eq_length]
       congr
       -- recursively use this lemma

@@ -22,6 +22,7 @@ template RotR(n, r) {
     }
 }
 -/
+@[implicit_reducible]
 def main (n r : ℕ) [NeZero n] (inp : Vector (Expression (F p)) n) := do
   let out <== Vector.mapFinRange n fun i => inp.get (i + Fin.ofNat n r)
   return out

@@ -34,6 +34,8 @@ private def scheduleStep (w : SHA256Schedule (Expression (F p))) (i : Fin 48) :
   let wj   ← Add32.circuit ⟨sum1, w.get ⟨j - 16, by omega⟩⟩
   return w.set (⟨j, by omega⟩ : Fin 64) wj
 
+attribute [explicit_circuit_no_unfold] scheduleStep
+
 @[implicit_reducible]
 private def constantLength :
     Circuit.ConstantLength (fun (x : SHA256Schedule (Expression (F p)) × Fin 48) => scheduleStep x.1 x.2) where
@@ -43,6 +45,7 @@ private def constantLength :
 
 /-- Expand a 16-word block into a 64-word message schedule.
     Each word is a `Var (fields 32) (F p)` (32-bit boolean vector, LSB first). -/
+@[implicit_reducible]
 def messageSchedule (block : SHA256Block (Expression (F p))) :
     Circuit (F p) (SHA256Schedule (Expression (F p))) := do
   -- Initialise: first 16 words from block, next 48 as zero placeholders.
@@ -54,6 +57,7 @@ def messageSchedule (block : SHA256Block (Expression (F p))) :
 
 namespace MessageSchedule
 
+@[implicit_reducible]
 def main (block : SHA256Block (Expression (F p))) : Circuit (F p) (SHA256Schedule (Expression (F p))) :=
   messageSchedule block
 
@@ -146,6 +150,11 @@ private lemma scheduleStep_output (w : SHA256Schedule (Expression (F p))) (i : F
 private lemma scheduleStep_localLength (w : SHA256Schedule (Expression (F p))) (i : Fin 48) (n : ℕ) :
     (scheduleStep w i).localLength n = 227 := by
   simp [circuit_norm, scheduleStep, LowerSigma1.circuit, LowerSigma0.circuit, Add32.circuit]
+
+private lemma main_localLength (block : SHA256Block (Expression (F p))) (i₀ : ℕ) :
+    (main block).localLength i₀ = 48 * 227 := by
+  simp only [main, messageSchedule, circuit_norm, scheduleStep_localLength]
+  norm_num
 
 /-- `Circuit.FoldlM.foldlAcc` at index `⟨k, h⟩ : Fin 48` equals `varSchedule i₀ input_var k`. -/
 private lemma foldlAcc_eq_varSchedule (i₀ : ℕ) (input_var_block : SHA256Block (Expression (F p)))
@@ -386,13 +395,49 @@ private lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F
       · rw [Vector.getElem_set_ne (by omega : k + 16 < 64) hj (by omega : k + 16 ≠ j)]
         exact ih_norm j hj
 
-instance elaborated : ElaboratedCircuit (F p) SHA256Block SHA256Schedule main := by
-  elaborate_circuit_with {
+@[reducible] private def explicitScheduleStep
+    (w : SHA256Schedule (Expression (F p))) (i : Fin 48) :
+    ExplicitCircuit (scheduleStep w i) := by
+  infer_explicit_circuit
+
+private lemma explicitScheduleStep_channels
+    (w : SHA256Schedule (Expression (F p))) (i : Fin 48) (i₀ : ℕ) :
+    (explicitScheduleStep w i).channelsWithGuarantees i₀ = [] := by
+  rfl
+
+@[reducible] private def explicitMetadata : ExplicitCircuits (main (p:=p)) :=
+  ExplicitCircuits.fromSingle fun block => by
+    dsimp only [main, messageSchedule]
+    exact ExplicitCircuit.from_foldlRange fun w i => explicitScheduleStep w i
+
+@[reducible] private instance derived :
+    ElaboratedCircuit (F p) SHA256Block SHA256Schedule main := by
+  elaborate_circuit
+
+@[reducible] instance elaborated : ElaboratedCircuit (F p) SHA256Block SHA256Schedule main :=
+  ElaboratedCircuit.withData derived {
+    localLength _ := 48 * 227
     output input i₀ := varSchedule i₀ input 48
-  } using by
-    simp only [circuit_norm, ← finFoldl_eq_varSchedule_48]
-    intros
-    congr
+    channelsWithGuarantees := []
+  } (by
+    constructor
+    · intro input
+      rw [← derived.localLength_eq input 0]
+      exact main_localLength input 0
+    · constructor
+      · intro input i₀
+        rw [← derived.output_eq input i₀]
+        simp only [main, messageSchedule, circuit_norm, ← finFoldl_eq_varSchedule_48]
+        congr
+      · intro channel h_channel
+        change channel ∈
+          (ExplicitCircuit.from_foldlRange
+            (init := Vector.append (default : SHA256Block (Expression (F p)))
+              (Vector.replicate 48 (Vector.replicate 32 0)))
+            (constant := constantLength)
+            (fun w i => explicitScheduleStep w i)).channelsWithGuarantees 0 at h_channel
+        rw [ExplicitCircuit.from_foldlRange_channelsWithGuarantees] at h_channel
+        simp [explicitScheduleStep_channels] at h_channel)
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [messageSchedule]

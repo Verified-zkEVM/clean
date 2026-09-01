@@ -30,6 +30,9 @@ namespace Channel
 Convert a `Channel` to a `RawChannel` by removing the type argument,
 and adapting to the more general guarantees/requirements split.
 -/
+-- Raw interaction message types depend on this channel's arity, so this
+-- erasure must unfold while Lean compares implicit arguments.
+@[implicit_reducible]
 def toRaw (channel : Channel F Message) : RawChannel F where
   name := channel.name
   arity := size Message
@@ -202,6 +205,8 @@ omit [FiniteField F] in @[circuit_norm] lemma pushedIf_assumeGuarantees (enabled
   _root_.pushedIf (channel := channel) enabled msg
 
 namespace ChannelInteraction
+-- The result stores a message whose length depends on the erased channel.
+@[implicit_reducible]
 def toRaw (i : ChannelInteraction channel) : AbstractInteraction F :=
   ⟨ channel.toRaw, i.mult, toElements i.msg, i.assumeGuarantees ⟩
 

@@ -20,6 +20,7 @@ open ByteDecomposition.Theorems (byteDecomposition_lt)
 /--
   Rotate the 32-bit integer by `offset` bits
 -/
+@[implicit_reducible]
 def main (offset : Fin 8) (x : U32 (Expression (F p))) : Circuit (F p) (Var U32 (F p)) := do
   let parts ← Circuit.map x.toLimbs (ByteDecomposition.circuit offset)
   let lows := parts.map Outputs.low

@@ -4,7 +4,7 @@ import Clean.Gadgets.Xor.ByteXorTable
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 namespace Gadgets.Or.Or8
-open Xor (ByteXorTable)
+open _root_.Gadgets.Xor (ByteXorTable)
 open FieldUtils
 
 structure Inputs (F : Type) where
@@ -20,12 +20,12 @@ def Spec (input : Inputs (F p)) (z : F p) :=
   let ⟨x, y⟩ := input
   z.val = x.val ||| y.val ∧ z.val < 256
 
+@[implicit_reducible]
 def main (input : Var Inputs (F p)) : Circuit (F p) (Expression (F p)) := do
-  let ⟨x, y⟩ := input
-  let or ← witness (x.val ||| y.val).toField
+  let or ← witness (input.x.val ||| input.y.val).toField
   -- we prove OR correct using an XOR lookup
-  let xor := 2*or - x - y
-  lookup ByteXorTable (x, y, xor)
+  let xor := 2*or - input.x - input.y
+  lookup ByteXorTable (input.x, input.y, xor)
   return or
 
 -- OR / XOR identity that justifies the circuit
@@ -82,6 +82,7 @@ lemma two_non_zero : (2 : F p) ≠ 0 := by
   rw [val_two, ZMod.val_zero]
   trivial
 
+@[reducible]
 instance elaborated : ElaboratedCircuit (F p) Inputs field main := by
   elaborate_circuit
 
@@ -173,6 +174,7 @@ theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main A
   · omega
   · omega
 
+@[implicit_reducible]
 def circuit : FormalCircuit (F p) Inputs field :=
   { main, elaborated, Assumptions, Spec, soundness, completeness }
 

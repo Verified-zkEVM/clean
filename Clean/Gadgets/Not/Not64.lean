@@ -51,19 +51,39 @@ theorem not_bytewise_value_spec {x : U64 (F p)} (x_lt : x.Normalized) :
   exact ⟨ not_lt 256 hx0, not_lt 256 hx1, not_lt 256 hx2, not_lt 256 hx3,
       not_lt 256 hx4, not_lt 256 hx5, not_lt 256 hx6, not_lt 256 hx7 ⟩
 
+@[implicit_reducible]
+def main (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) :=
+  pure (not64_bytewise x)
+
+def Assumptions (x : U64 (F p)) : Prop := x.Normalized
+
+def Spec (x z : U64 (F p)) : Prop :=
+  z.value = not64 x.value ∧ z.Normalized
+
+@[reducible]
+instance elaborated : ElaboratedCircuit (F p) U64 U64 main where
+  localLength _ := 0
+  output x _ := not64_bytewise x
+
+theorem soundness : Soundness (F p) main Assumptions Spec := by
+  unfold Soundness
+  intro i env x_var x h_input x_norm h_holds
+  simp only [main, circuit_norm, eval_not, h_input, Spec]
+  exact not_bytewise_value_spec x_norm
+
+omit p_large_enough in
+theorem completeness : Completeness (F p) main Assumptions := by
+  unfold Completeness
+  intros
+  trivial
+
+@[implicit_reducible]
 def circuit : FormalCircuit (F p) U64 U64 where
-  main x := pure (not64_bytewise x)
-  Assumptions x := x.Normalized
-  Spec x z := z.value = not64 x.value ∧ z.Normalized
-
-  soundness := by
-    intro i env x_var x h_input x_norm h_holds
-    simp_all only [circuit_norm, eval_not]
-    exact not_bytewise_value_spec x_norm
-
-  completeness _ := by
-    -- there are no constraints to satisfy!
-    intros
-    exact trivial
+  main
+  elaborated
+  Assumptions
+  Spec
+  soundness
+  completeness
 
 end Gadgets.Not

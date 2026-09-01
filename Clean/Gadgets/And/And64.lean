@@ -11,16 +11,16 @@ structure Inputs (F : Type) where
   y: U64 F
 deriving ProvableStruct
 
+@[implicit_reducible]
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
-  let ⟨x, y⟩ := input
-  let z0 ← And8.circuit ⟨ x.x0, y.x0 ⟩
-  let z1 ← And8.circuit ⟨ x.x1, y.x1 ⟩
-  let z2 ← And8.circuit ⟨ x.x2, y.x2 ⟩
-  let z3 ← And8.circuit ⟨ x.x3, y.x3 ⟩
-  let z4 ← And8.circuit ⟨ x.x4, y.x4 ⟩
-  let z5 ← And8.circuit ⟨ x.x5, y.x5 ⟩
-  let z6 ← And8.circuit ⟨ x.x6, y.x6 ⟩
-  let z7 ← And8.circuit ⟨ x.x7, y.x7 ⟩
+  let z0 ← And8.circuit ⟨input.x.x0, input.y.x0⟩
+  let z1 ← And8.circuit ⟨input.x.x1, input.y.x1⟩
+  let z2 ← And8.circuit ⟨input.x.x2, input.y.x2⟩
+  let z3 ← And8.circuit ⟨input.x.x3, input.y.x3⟩
+  let z4 ← And8.circuit ⟨input.x.x4, input.y.x4⟩
+  let z5 ← And8.circuit ⟨input.x.x5, input.y.x5⟩
+  let z6 ← And8.circuit ⟨input.x.x6, input.y.x6⟩
+  let z7 ← And8.circuit ⟨input.x.x7, input.y.x7⟩
   return U64.mk z0 z1 z2 z3 z4 z5 z6 z7
 
 def Assumptions (input : Inputs (F p)) :=
@@ -77,6 +77,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
   simp only [circuit_norm, explicit_provable_type, U64.Normalized] at h_assumptions h_input ⊢
   simp_all
 
+@[implicit_reducible]
 def circuit : FormalCircuit (F p) Inputs U64 where
   main
   elaborated

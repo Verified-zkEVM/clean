@@ -22,6 +22,7 @@ Witnesses 64 variables: 32 for t, 32 for z.
     Two R1CS constraints per bit:
       (1)  a·b = t
       (2)  c·(a + b − 2·t) = z − t -/
+@[implicit_reducible]
 def maj32 (a b c : Vector (Expression (F p)) 32) : Circuit (F p) (Var (fields 32) (F p)) := do
   -- Witness the intermediate product t[i] = a[i] * b[i]
   let t ← witnessVector 32 (.range _ fun i => (a[i] * b[i]))
@@ -43,6 +44,7 @@ structure Inputs (F : Type) where
   c : fields 32 F
 deriving ProvableStruct
 
+@[implicit_reducible]
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
   maj32 input.a input.b input.c
 

@@ -8,8 +8,9 @@ import Clean.Specs.Keccak256
 
 namespace Gadgets.Keccak256.Chi
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
-open Not (not64_bytewise not64_bytewise_value)
+open _root_.Gadgets.Not (not64_bytewise not64_bytewise_value)
 
+@[implicit_reducible]
 def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
   .mapFinRange 25 fun i => do
     let state_not ← Not.circuit (state[i + 5])
@@ -22,8 +23,26 @@ def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized
   ∧ out_state.value = Specs.Keccak256.chi state.value
 
-@[reducible] instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main := by
-  elaborate_circuit
+@[reducible] instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main where
+  localLength _ := 25 * 16
+  output _ i₀ := .mapFinRange 25 fun i => varFromOffset U64 (i₀ + i.val * 16 + 8)
+  localLength_eq := by
+    intro state i₀
+    simp only [main, Not.circuit, And.And64.circuit, And.And64.elaborated,
+      Xor64.circuit, Xor64.elaborated, circuit_norm]
+  output_eq := by
+    intro state i₀
+    simp only [main, Not.circuit, And.And64.circuit, And.And64.elaborated,
+      Xor64.circuit, Xor64.elaborated, circuit_norm]
+  subcircuitsConsistent := by
+    intro state i₀
+    simp only [main, Not.circuit, Not.elaborated, And.And64.circuit, And.And64.elaborated,
+      Xor64.circuit, Xor64.elaborated, circuit_norm]
+    omega
+  channelsLawful := by
+    intro state i₀
+    simp only [main, Not.circuit, And.And64.circuit, And.And64.elaborated,
+      Xor64.circuit, Xor64.elaborated, circuit_norm]
 
 -- rewrite the chi spec as a loop
 lemma chi_loop (state : Vector ℕ 25) :
@@ -33,7 +52,8 @@ lemma chi_loop (state : Vector ℕ 25) :
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [ Xor64.circuit, And.And64.circuit, And.And8.circuit, Not.circuit,
-    Xor64.Assumptions, Xor64.Spec, And.And64.Assumptions, And.And64.Spec]
+    Xor64.Assumptions, Xor64.Spec, And.And64.Assumptions, And.And64.Spec,
+    Not.Assumptions, Not.Spec, Not.eval_not]
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
@@ -48,10 +68,11 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [Xor64.circuit, And.And64.circuit, And.And8.circuit, Not.circuit,
     Xor64.Assumptions, Xor64.Spec, And.And64.Assumptions, And.And64.Spec,
-    KeccakState.Normalized]
+    Not.Assumptions, Not.Spec, Not.eval_not, KeccakState.Normalized]
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp_all
 
+@[implicit_reducible]
 def circuit : FormalCircuit (F p) KeccakState KeccakState where
   main
   elaborated

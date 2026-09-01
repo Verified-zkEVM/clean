@@ -19,18 +19,17 @@ structure Outputs (F : Type) where
   carryOut: F
 deriving ProvableStruct
 
+@[implicit_reducible]
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
-  let ⟨x, y, carryIn⟩ := input
-
   -- witness the result
-  let z ← witness ((x + y + carryIn).val % 256).toField
+  let z ← witness ((input.x + input.y + input.carryIn).val % 256).toField
   lookup ByteTable z
 
   -- witness the output carry
-  let carryOut ← witness ((x + y + carryIn).val / 256).toField
+  let carryOut ← witness ((input.x + input.y + input.carryIn).val / 256).toField
   assertBool carryOut
 
-  assertZero (x + y + carryIn - z - carryOut * 256)
+  assertZero (input.x + input.y + input.carryIn - z - carryOut * 256)
 
   return { z, carryOut }
 
@@ -43,12 +42,30 @@ def Spec (input : Inputs (F p)) (out : Outputs (F p)) :=
   out.z.val = (x.val + y.val + carryIn.val) % 256 ∧
   out.carryOut.val = (x.val + y.val + carryIn.val) / 256
 
+@[reducible]
+instance elaborated : ElaboratedCircuit (F p) Inputs Outputs main := by
+  elaborate_circuit_with {
+    localLength _ := 2
+    output _ i₀ := {
+      z := varFromOffset field i₀
+      carryOut := varFromOffset field (i₀ + 1)
+    }
+  } using by
+    constructor
+    · intro input
+      rfl
+    · constructor
+      · intro input i₀
+        rfl
+      · simp only [circuit_norm]
+
 /--
   Compute the 8-bit addition of two numbers with a carry-in bit.
   Returns the sum and the output carry bit.
 -/
 def circuit : FormalCircuit (F p) Inputs Outputs where
   main
+  elaborated
   Assumptions
   Spec
 
@@ -61,7 +78,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
       simpa [circuit_norm] using h_inputs
 
     -- simplify constraints, assumptions and goal
-    simp_all only [circuit_norm, Spec, Assumptions, main, ByteTable]
+    simp_all +instances only [circuit_norm, explicit_circuit_norm, Spec, Assumptions, main, ByteTable]
 
     set z := env.get i0
     set carry_out := env.get (i0 + 1)
@@ -95,7 +112,7 @@ def circuit : FormalCircuit (F p) Inputs Outputs where
       rw [sum_val]; omega
 
     -- simplify assumptions and goal
-    simp only [circuit_norm, h_inputs, main, ByteTable] at *
+    simp +instances only [circuit_norm, explicit_circuit_norm, h_inputs, main, ByteTable] at *
 
     obtain ⟨hz, hcarry_out⟩ := h_env
     set z := env.get i0

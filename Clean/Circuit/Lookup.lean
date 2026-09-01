@@ -58,6 +58,8 @@ structure Lookup (F : Type) where
 instance [Repr F] : Repr (Lookup F) where
   reprPrec l _ := "(Lookup " ++ l.table.name ++ " " ++ repr l.entry ++ ")"
 
+/-- Keep the row arity visible when `toRaw` appears in dependent vector types. -/
+@[implicit_reducible]
 def Table.toRaw (table : Table F Row) : RawTable F where
   name := table.name
   arity := size Row

@@ -8,6 +8,7 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
 
 instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
+@[implicit_reducible]
 def main (row : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
   let c0 ← Rotation64.circuit (64 - 1) row[1]
   let c0 ← Xor64.circuit ⟨row[4], c0⟩
@@ -27,8 +28,32 @@ def main (row : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
   return #v[c0, c1, c2, c3, c4]
 
 @[reducible]
-instance elaborated : ElaboratedCircuit (F p) KeccakRow KeccakRow main := by
-  elaborate_circuit
+instance elaborated : ElaboratedCircuit (F p) KeccakRow KeccakRow main where
+  localLength _ := 120
+  output _ i₀ := #v[
+    varFromOffset U64 (i₀ + 16),
+    varFromOffset U64 (i₀ + 40),
+    varFromOffset U64 (i₀ + 64),
+    varFromOffset U64 (i₀ + 88),
+    varFromOffset U64 (i₀ + 112)
+  ]
+  localLength_eq := by
+    intro row i₀
+    simp only [main, Rotation64.circuit, Rotation64.elaborated,
+      Xor64.circuit, Xor64.elaborated, circuit_norm]
+  output_eq := by
+    intro row i₀
+    simp only [main, Rotation64.circuit, Rotation64.elaborated,
+      Xor64.circuit, Xor64.elaborated, circuit_norm]
+  subcircuitsConsistent := by
+    intro row i₀
+    simp only [main, Rotation64.circuit, Rotation64.elaborated,
+      Xor64.circuit, Xor64.elaborated, circuit_norm]
+    omega
+  channelsLawful := by
+    intro row i₀
+    simp only [main, Rotation64.circuit, Rotation64.elaborated,
+      Xor64.circuit, Xor64.elaborated, circuit_norm]
 
 def Assumptions (state : KeccakRow (F p)) := state.Normalized
 
@@ -80,8 +105,9 @@ theorem completeness : Completeness (F p) main Assumptions := by
     Xor64.Assumptions, Xor64.Spec, Rotation64.Assumptions, Rotation64.Spec,
     add_assoc, seval, true_and]
 
+@[implicit_reducible]
 def circuit : FormalCircuit (F p) KeccakRow KeccakRow := {
-  main, Assumptions, Spec, soundness, completeness
+  main, elaborated, Assumptions, Spec, soundness, completeness
 }
 
 end Gadgets.Keccak256.ThetaD

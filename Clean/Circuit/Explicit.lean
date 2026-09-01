@@ -310,6 +310,11 @@ instance ExplicitCircuit.from_map_tc {f : α → β} {g : Circuit F α}
     [g_explicit : ExplicitCircuit g] : ExplicitCircuit (f <$> g) :=
   ExplicitCircuit.from_map g_explicit
 
+-- Lean 4.33 keeps these typeclass bridge instances folded in inferred proof terms.
+-- Unfold them during explicit-metadata normalization so the projection lemmas for
+-- `from_bind` and `from_map` can fire.
+attribute [explicit_circuit_norm] ExplicitCircuit.from_bind_tc ExplicitCircuit.from_map_tc
+
 @[circuit_norm, explicit_circuit_norm]
 theorem ExplicitCircuit.from_map_output {f : α → β} {g : Circuit F α} (g_explicit : ExplicitCircuit g) (n : ℕ) :
     @ExplicitCircuit.output F _ β (f <$> g) (ExplicitCircuit.from_map g_explicit) n = f (ExplicitCircuit.output g n) := rfl
@@ -898,6 +903,10 @@ elab "elaborate_circuit" : tactic => withMainContext do
     (some noUnfoldHeads) (some unfoldTypeHeads)
   let commonDsimpCtx ← mkDsimpCtx commonDecls
   let explicitMetadata := (← dsimp explicit commonDsimpCtx).1
+  -- Lean 4.33 may leave an `id` wrapper around an otherwise fully normalized
+  -- explicit instance.  Strip only that reducible head so class projections
+  -- can reduce without unfolding any circuit payload.
+  let explicitMetadata ← withTransparency .default <| whnf explicitMetadata
 
   let simpCtx ← Simp.mkContext { zeta := true, beta := true, proj := true, iota := true, instances := true }
     (simpTheorems := #[explicitThms]) congrThms

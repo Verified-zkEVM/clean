@@ -19,6 +19,7 @@ open Utils.Rotation (rotRight64_composition)
 /--
   Rotate the 64-bit integer by `offset` bits
 -/
+@[implicit_reducible]
 def main (offset : Fin 64) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
   let byte_offset : Fin 8 := ⟨ offset.val / 8, by omega ⟩
   let bit_offset : Fin 8 := ⟨ offset.val % 8, by omega ⟩
@@ -33,12 +34,15 @@ def Spec (offset : Fin 64) (x : U64 (F p)) (y : U64 (F p)) :=
   y.value = rotRight64 x.value offset.val
   ∧ y.Normalized
 
+@[implicit_reducible]
 def output (offset : Fin 64) (i0 : ℕ) : U64 (Expression (F p)) :=
   Rotation64Bits.output ⟨ offset.val % 8, by omega ⟩ i0
 
 @[reducible] instance elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 U64 (main off) := by
   elaborate_circuit_with {
+    localLength _ := 16
     output _inputs i0 := output off i0
+    channelsWithGuarantees := []
   }
 
 theorem soundness (offset : Fin 64) : Soundness (F p) (main offset) Assumptions (Spec offset) := by
@@ -65,6 +69,7 @@ theorem completeness (offset : Fin 64) : Completeness (F p) (main offset) Assump
     Rotation64Bits.Assumptions, Rotation64Bytes.circuit,
     Rotation64Bytes.Assumptions, Rotation64Bytes.Spec]
 
+@[implicit_reducible]
 def circuit (offset : Fin 64) : FormalCircuit (F p) U64 U64 where
   main := main offset
   elaborated := elaborated offset

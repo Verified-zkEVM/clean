@@ -6,6 +6,7 @@ namespace Gadgets.Keccak256.Permutation
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]
 open Specs.Keccak256
 
+@[implicit_reducible]
 def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
   .foldl roundConstants state
     fun state rc => KeccakRound.circuit rc state
@@ -17,14 +18,28 @@ def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   ∧ out_state.value = keccakPermutation state.value
 
 /-- state in the ith round, starting from offset n -/
+@[implicit_reducible]
 def stateVar (n : ℕ) (i : ℕ) : Var KeccakState (F p) :=
-  Vector.mapRange 25 (fun j => varFromOffset U64 (n + i * 1288 + j * 16 + 888))
+  Vector.mapFinRange 25 (fun j => varFromOffset U64 (n + i * 1288 + j.val * 16 + 888))
   |>.set 0 (varFromOffset U64 (n + i * 1288 + 1280))
 
-instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main := by
-  elaborate_circuit_with {
-    output _ i0 := stateVar i0 23
-  }
+@[reducible]
+instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main where
+  localLength _ := 24 * 1288
+  output _ i₀ := stateVar i₀ 23
+  localLength_eq := by
+    intro state i₀
+    simp only [main, KeccakRound.circuit, KeccakRound.elaborated, circuit_norm]
+  output_eq := by
+    intro state i₀
+    simp +arith +instances only [main, stateVar, KeccakRound.circuit,
+      KeccakRound.elaborated, circuit_norm]
+  subcircuitsConsistent := by
+    intro state i₀
+    simp only [main, KeccakRound.circuit, KeccakRound.elaborated, circuit_norm]
+  channelsLawful := by
+    intro state i₀
+    simp only [main, KeccakRound.circuit, KeccakRound.elaborated, circuit_norm]
 
 -- `Fin.foldl` relates to `Vector.foldl` via this lemma
 lemma fin_foldl_eq_vector_foldl (state : Vector ℕ 25) :
@@ -102,6 +117,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
       exact h_succ i hi ih
   exact h_norm i (Nat.lt_of_succ_lt hi)
 
+@[implicit_reducible]
 def circuit : FormalCircuit (F p) KeccakState KeccakState where
   main := main
   elaborated := elaborated

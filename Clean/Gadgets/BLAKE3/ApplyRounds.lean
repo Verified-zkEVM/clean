@@ -376,20 +376,42 @@ deriving ProvableStruct
 Initializes the BLAKE3 state vector from input variables.
 This combines the chaining value with IV constants and counter/flags.
 -/
+@[implicit_reducible]
 def initializeStateVector (input_var : Var Inputs (F p)) : Var BLAKE3State (F p) :=
-  let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input_var
   #v[
-    chaining_value[0], chaining_value[1], chaining_value[2], chaining_value[3],
-    chaining_value[4], chaining_value[5], chaining_value[6], chaining_value[7],
+    input_var.chaining_value[0], input_var.chaining_value[1],
+    input_var.chaining_value[2], input_var.chaining_value[3],
+    input_var.chaining_value[4], input_var.chaining_value[5],
+    input_var.chaining_value[6], input_var.chaining_value[7],
     const (U32.fromUInt32 iv[0]), const (U32.fromUInt32 iv[1]),
     const (U32.fromUInt32 iv[2]), const (U32.fromUInt32 iv[3]),
-    counter_low, counter_high, block_len, flags
+    input_var.counter_low, input_var.counter_high, input_var.block_len, input_var.flags
   ]
 
+@[implicit_reducible]
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   let state := initializeStateVector input
   -- Apply 7 rounds with message permutation between rounds (except the last)
   sevenRoundsApplyStyle ⟨state, input.block_words⟩
+
+/-- Keep the large composed output behind an opaque name in parent proof types. -/
+def applyRoundsOutput (input : Var Inputs (F p)) (i₀ : ℕ) : Var BLAKE3State (F p) :=
+  sevenRoundsFinal.output
+    ⟨initializeStateVector input, input.block_words⟩ i₀
+
+@[circuit_norm] lemma sevenRoundsApplyStyle_assumptions (input : Round.Inputs (F p)) :
+    sevenRoundsApplyStyle.Assumptions input = Round.Assumptions input := by
+  rfl
+
+@[circuit_norm] lemma sevenRoundsApplyStyle_spec
+    (input : Round.Inputs (F p)) (state : BLAKE3State (F p)) :
+    sevenRoundsApplyStyle.Spec input state = SevenRoundsSpec input state := by
+  rfl
+
+lemma applyRoundsOutput_eq (input : Var Inputs (F p)) (i₀ : ℕ) :
+    applyRoundsOutput input i₀ = sevenRoundsApplyStyle.output
+      ⟨initializeStateVector input, input.block_words⟩ i₀ := by
+  rfl
 
 -- TODO AUTOELAB the generated instance without here is not fully reduced, it contains
 -- nested definitions like `sevenRoundsFinal` which we have to unfold in the soundness
@@ -399,11 +421,11 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := d
 instance elaborated : ElaboratedCircuit (F p) Inputs BLAKE3State main := by
   elaborate_circuit_with {
     localLength _ := 5376
-    output input i₀ := main input |>.output i₀
+    output input i₀ := applyRoundsOutput input i₀
     channelsWithGuarantees := []
   } using by
     -- get rid of output with less unfolding
-    simp +instances only [circuit_norm, main, sevenRoundsApplyStyle]
+    simp +instances only [circuit_norm, applyRoundsOutput]
     -- localLength and channelsWithGuarantees need full unfolding down to `roundWithPermute` / `Round.circuit`
     simp +instances only [circuit_norm, sevenRoundsFinal, sixRoundsApplyStyle,
       sixRoundsWithPermute, fourRoundsWithPermute, twoRoundsWithPermute, roundWithPermute,
@@ -465,66 +487,129 @@ lemma initial_state_and_messages_are_normalized
     intro i
     exact h_normalized.2.1 i
 
+omit [Fact (Nat.Prime p)] p_large_enough in
+private lemma counter_low_mod_eq (x : U32 (F p)) (h : x.Normalized) :
+    x.value % 2^32 = x.value := by
+  exact Nat.mod_eq_of_lt (U32.value_lt_of_normalized h)
+
+omit [Fact (Nat.Prime p)] p_large_enough in
+private lemma counter_high_div_eq (low high : U32 (F p)) (h : low.Normalized) :
+    (low.value + 2^32 * high.value) / 2^32 = high.value := by
+  rw [Nat.add_mul_div_left _ _ (by norm_num : 2^32 > 0)]
+  have h_div : low.value / 2^32 = 0 :=
+    Nat.div_eq_of_lt (U32.value_lt_of_normalized h)
+  rw [h_div, zero_add]
+
+omit [Fact (Nat.Prime p)] p_large_enough in
+private def initialStateValues (input : Inputs (F p)) : Vector ℕ 16 := #v[
+  (input.chaining_value.map U32.value)[0],
+  (input.chaining_value.map U32.value)[1],
+  (input.chaining_value.map U32.value)[2],
+  (input.chaining_value.map U32.value)[3],
+  (input.chaining_value.map U32.value)[4],
+  (input.chaining_value.map U32.value)[5],
+  (input.chaining_value.map U32.value)[6],
+  (input.chaining_value.map U32.value)[7],
+  iv[0].toNat, iv[1].toNat, iv[2].toNat, iv[3].toNat,
+  input.counter_low.value, input.counter_high.value,
+  input.block_len.value, input.flags.value
+]
+
+private lemma initializeStateVector_value_eq
+    (env : Environment (F p)) (input_var : Var Inputs (F p)) (input : Inputs (F p))
+    (h_input : eval env input_var = input) :
+    (eval env (initializeStateVector input_var)).value = initialStateValues input := by
+  rcases input_var with ⟨cv_var, bw_var, ch_var, cl_var, bl_var, fl_var⟩
+  rcases input with ⟨chaining_value, block_words, counter_high,
+    counter_low, block_len, flags⟩
+  simp only [circuit_norm] at h_input
+  simp only [BLAKE3State.value]
+  rw [eval_vector]
+  simp only [initialStateValues]
+  simp only [initializeStateVector, Vector.map_mk,
+    List.map_toArray, List.map_cons, List.map_nil]
+  simp only [circuit_norm]
+  simp only [getElem_eval_vector, h_input.1, h_input.2.2.1,
+    h_input.2.2.2.1, h_input.2.2.2.2.1, h_input.2.2.2.2.2,
+    U32.value_fromUInt32]
+
+omit [Fact (Nat.Prime p)] p_large_enough in
+private lemma applyRounds_eq_applySevenRounds_input
+    (input : Inputs (F p)) (h_counter_low : input.counter_low.Normalized) :
+    applyRounds
+        (input.chaining_value.map U32.value)
+        (input.block_words.map U32.value)
+        (input.counter_low.value + 2^32 * input.counter_high.value)
+        input.block_len.value
+        input.flags.value =
+      applySevenRounds (initialStateValues input) (input.block_words.map U32.value) := by
+  rw [applyRounds_eq_applySevenRounds, Nat.add_mul_mod_self_left,
+    counter_low_mod_eq input.counter_low h_counter_low,
+    counter_high_div_eq input.counter_low input.counter_high h_counter_low]
+  rfl
+
+private lemma initialized_applySevenRounds_eq_applyRounds
+    (env : Environment (F p)) (input_var : Var Inputs (F p)) (input : Inputs (F p))
+    (h_input : eval env input_var = input) (h_counter_low : input.counter_low.Normalized) :
+    applySevenRounds
+        (eval env (initializeStateVector input_var)).value
+        ((eval env input_var.block_words).map U32.value) =
+      applyRounds
+        (input.chaining_value.map U32.value)
+        (input.block_words.map U32.value)
+        (input.counter_low.value + 2^32 * input.counter_high.value)
+        input.block_len.value
+        input.flags.value := by
+  have h_block_words : eval env input_var.block_words = input.block_words := by
+    simpa only [circuit_norm] using congrArg Inputs.block_words h_input
+  calc
+    _ = applySevenRounds (initialStateValues input)
+        (input.block_words.map U32.value) := congrArg₂ applySevenRounds
+          (initializeStateVector_value_eq env input_var input h_input)
+          (congrArg (Vector.map U32.value) h_block_words)
+    _ = _ := (applyRounds_eq_applySevenRounds_input input h_counter_low).symm
+
 theorem soundness : Soundness (F p) main Assumptions Spec := by
-  circuit_proof_start [sevenRoundsApplyStyle]
-
-  -- Equations for counter values
-  have h_counter_low_eq : input_counter_low.value % 4294967296 = input_counter_low.value := by
-    apply Nat.mod_eq_of_lt
-
-    exact U32.value_lt_of_normalized h_assumptions.2.2.2.1
-  have h_counter_high_eq : (input_counter_low.value + 4294967296 * input_counter_high.value) / 4294967296 = input_counter_high.value := by
-    -- We want to show (input_counter_low.value + 2^32 * input_counter_high.value) / 2^32 = input_counter_high.value
-    -- Since input_counter_low.value < 2^32, this follows from properties of division
-    have h1 : input_counter_low.value < 4294967296 := U32.value_lt_of_normalized h_assumptions.2.2.2.1
-    have h2 : 4294967296 > 0 := by norm_num
-    -- Now we have (2^32 * input_counter_high.value + input_counter_low.value) / 2^32
-    -- This equals input_counter_high.value + input_counter_low.value / 2^32
-    rw [Nat.add_mul_div_left _ _ h2]
-    rw [Nat.div_eq_of_lt h1]
-    simp
-
-  -- Apply h_holds with the proven assumptions
-  have h_spec := h_holds (by
-    apply initial_state_and_messages_are_normalized env
-      ⟨input_var_chaining_value, input_var_block_words, input_var_counter_high,
-       input_var_counter_low, input_var_block_len, input_var_flags⟩
-      input_block_words input_chaining_value input_counter_high input_counter_low
-      input_block_len input_flags
-    · simp only [circuit_norm]
-      exact h_input
-    · simp only [Assumptions]
-      aesop
-  )
-  clear h_holds
-
-  -- Now we need to show that the spec holds
-  -- h_spec tells us that sevenRoundsApplyStyle.Spec holds for the inputs and output
-  -- We need to unpack what this means and relate it to our Spec
-
-  simp only [FormalCircuit.weakenSpec, sevenRoundsFinal, FormalCircuit.concat] at h_spec
-
-  -- The spec for sevenRoundsApplyStyle says the output equals applySevenRounds
-  simp only [SevenRoundsSpec] at h_spec
-
-  obtain ⟨h_value, h_normalized⟩ := h_spec
-
-  and_intros
-  · -- Show out.value = applyRounds ...
-    -- Use our lemma to express applyRounds in terms of applySevenRounds
-    rw [applyRounds_eq_applySevenRounds]
-
-    -- h_value tells us the output equals applySevenRounds on our constructed state
-    simp only [BLAKE3State.value] at h_value ⊢
-    calc
-      _ = _ := h_value
-      _ = _ := by
-        clear h_value
-        simp only [initializeStateVector, h_input, eval_vector, circuit_norm, getElem_eval_vector]
-        simp [circuit_norm, U32.value_fromUInt32, h_counter_low_eq, h_counter_high_eq]
-  · -- Show out.Normalized
-    exact h_normalized
-  · left; trivial
+  circuit_proof_start_core
+  rcases input_var with ⟨input_var_chaining_value, input_var_block_words,
+    input_var_counter_high, input_var_counter_low, input_var_block_len, input_var_flags⟩
+  rcases input with ⟨input_chaining_value, input_block_words,
+    input_counter_high, input_counter_low, input_block_len, input_flags⟩
+  simp +instances only [circuit_norm] at h_input
+  dsimp only [Assumptions] at h_assumptions
+  dsimp only [Spec]
+  dsimp +instances only [elaborated]
+  simp +instances only [main, circuit_norm] at h_holds ⊢
+  let input_var_full : Var Inputs (F p) := ⟨input_var_chaining_value,
+    input_var_block_words, input_var_counter_high, input_var_counter_low,
+    input_var_block_len, input_var_flags⟩
+  let input_full : Inputs (F p) := ⟨input_chaining_value, input_block_words,
+    input_counter_high, input_counter_low, input_block_len, input_flags⟩
+  have h_input_full : eval env input_var_full = input_full := by
+    simp only [input_var_full, input_full, circuit_norm]
+    exact h_input
+  have h_initial_normalized := initial_state_and_messages_are_normalized
+    (p := p) env input_var_full
+    input_block_words input_chaining_value input_counter_high input_counter_low
+    input_block_len input_flags h_input_full (by
+      simp only [Assumptions]
+      exact h_assumptions)
+  have h_round_assumptions : Round.Assumptions
+      {
+        state := eval env (initializeStateVector input_var_full)
+        message := eval env input_var_block_words
+      } := by
+    rw [h_input.2.1]
+    exact h_initial_normalized
+  have h_child_spec := h_holds h_round_assumptions
+  simp only [SevenRoundsSpec] at h_child_spec
+  have h_semantic := initialized_applySevenRounds_eq_applyRounds env
+    input_var_full input_full h_input_full h_assumptions.2.2.2.1
+  refine ⟨⟨?_, ?_⟩, Or.inr h_round_assumptions⟩
+  · rw [applyRoundsOutput_eq]
+    exact h_child_spec.1.trans h_semantic
+  · rw [applyRoundsOutput_eq]
+    exact h_child_spec.2
 
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start

@@ -91,11 +91,46 @@ lemma inputLinearSum_eval_eq_sum {n ops : ℕ} [NeZero n]
   -- The main function uses input[j][k] which evaluates to input_val[j][k]
   -- We need to show the nested sum equals the sum of fieldFromBits
 
-  -- Step 1: The circuit evaluation computes the nested sum Σ_k 2^k * (Σ_j offset[j][k])
-  simp only [inputLinearSum, circuit_norm, eval_foldl, Fin.foldl_factor_const]
+  simp only [inputLinearSum]
 
-  -- Step 2: Replace Expression.eval env input[j][k] with input_val[j][k]
-  simp only [ProvableType.getElem_eval_fields, getElem_eval_vector, h_eval]
+  have eval_inner (k : Fin n) (init : Expression (F p)) :
+      Expression.eval env
+          (Fin.foldl ops
+            (fun lin j => lin + input[j][k] * (2^k.val : F p)) init) =
+        Fin.foldl ops
+          (fun lin j => lin + Expression.eval env input[j][k] * (2^k.val : F p))
+          (Expression.eval env init) := by
+    rw [eval_foldl]
+    · simp only [circuit_norm]
+    · intro e j
+      simp only [circuit_norm]
+
+  have eval_inner_nat (k : Fin n) (init : Expression (F p)) :
+      Expression.eval env
+          (Fin.foldl ops
+            (fun lin j => lin + (input[j.val]'j.isLt)[k.val]'k.isLt * (2^k.val : F p)) init) =
+        Fin.foldl ops
+          (fun lin j => lin + Expression.eval env ((input[j.val]'j.isLt)[k.val]'k.isLt) *
+            (2^k.val : F p))
+          (Expression.eval env init) := by
+    rw [eval_foldl]
+    · simp only [circuit_norm]
+    · intro e j
+      simp only [circuit_norm]
+
+  rw [eval_foldl env n _ 0 (by
+    intro e k
+    rw [eval_inner, eval_inner]
+    simp only [circuit_norm])]
+  simp only [eval_inner_nat, circuit_norm]
+  simp_rw [Fin.foldl_factor_const]
+
+  have h_bit (j : Fin ops) (k : Fin n) :
+      Expression.eval env ((input[j.val]'j.isLt)[k.val]'k.isLt) =
+        (input_val[j.val]'j.isLt)[k.val]'k.isLt := by
+    rw [ProvableType.getElem_eval_fields env (input[j.val]'j.isLt) k.val k.isLt]
+    rw [getElem_eval_vector env input j.val j.isLt, h_eval]
+  simp_rw [h_bit]
 
   rw [Fin.sum_interchange]
   simp only [fieldFromBits_as_sum]

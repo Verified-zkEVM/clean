@@ -29,13 +29,19 @@ template AliasCheck() {
     compConstant.out === 0;
 }
 -/
+@[implicit_reducible]
 def main (input : Vector (Expression (F p)) 254) := do
   -- CompConstant(-1) means we're comparing against p-1 (since -1 ≡ p-1 mod p)
   let comp_out ← CompConstant.circuit (p - 1) hppre254.elim input
   comp_out === 0
 
+instance elaborated : ElaboratedCircuit (F p) (fields 254) unit main := by
+  elaborate_circuit
+
+@[implicit_reducible]
 def circuit : FormalAssertion (F p) (fields 254) where
-  main
+  main := main
+  elaborated := elaborated
 
   Assumptions input := ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1
 

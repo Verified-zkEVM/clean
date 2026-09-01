@@ -15,6 +15,7 @@ variable {M : TypeMap} [ProvableType M]
 Main circuit that checks if all elements of a ProvableType are zero.
 Returns 1 if all elementts are 0, otherwise returns 0.
 -/
+@[implicit_reducible]
 def main (input : Var M F) : Circuit F (Var field F) := do
   let elemVars := toElements (M:=M) input
   -- Use foldlRange to multiply all IsZero results together
@@ -30,7 +31,15 @@ instance elaborated : ElaboratedCircuit F M field main := by
     localLength _ := 2 * size M
     output input i₀ := Fin.foldl (size M)
       (fun acc i => acc * varFromOffset field (i₀ + i * 2 + 1)) 1
-  } using by simp +arith +instances [circuit_norm]
+  } using by
+    constructor
+    · intro input
+      change (if h : size M > 0 then size M * 2 else 0) = 2 * size M
+      split <;> omega
+    · constructor
+      · intro input i₀
+        rfl
+      · simp only [circuit_norm]
 
 def Assumptions (_ : M F) : Prop := True
 

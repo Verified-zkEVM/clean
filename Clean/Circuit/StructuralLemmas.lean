@@ -20,6 +20,7 @@ The composite circuit:
 - Has the assumptions of the first circuit
 - Has a spec stating that there exists an intermediate value such that both component specs hold
 -/
+@[implicit_reducible]
 def concat
     (circuit1 : FormalCircuit F Input Mid)
     (circuit2 : FormalCircuit F Mid Output)
@@ -28,9 +29,15 @@ def concat
       FormalCircuit F Input Output where
   main := (circuit1 · >>= circuit2)
   elaborated := .fromExplicit (by infer_explicit_circuits) <| by
-    constructor <;> simp +instances [explicit_circuit_norm, circuit_norm]
+    constructor
     · intro a n m
-      apply h_localLength_stable
+      change circuit1.localLength a + circuit2.localLength (circuit1.output a n) =
+        circuit1.localLength a + circuit2.localLength (circuit1.output a m)
+      rw [h_localLength_stable]
+    · intro a a' n m
+      change circuit1.channelsWithGuarantees ++ circuit2.channelsWithGuarantees =
+        circuit1.channelsWithGuarantees ++ circuit2.channelsWithGuarantees
+      rfl
   channelsWithRequirements := circuit1.channelsWithRequirements ++ circuit2.channelsWithRequirements
   Assumptions := circuit1.Assumptions
   Spec input output := ∃ mid, circuit1.Spec input mid ∧ circuit2.Spec mid output
@@ -50,24 +57,28 @@ lemma concat_assumptions (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F 
 lemma concat_localLength (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F Mid Output) p0 p1 inp :
   (c1.concat c2 p0 p1).localLength inp =
     c1.localLength inp + c2.localLength (c1.output inp 0) := by
-  simp +instances only [concat, circuit_norm, explicit_circuit_norm]
+  change c1.localLength inp + c2.localLength (c1.output inp 0) = _
+  rfl
 
 @[circuit_norm]
 lemma concat_localLength' (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F Mid Output) p0 p1 inp :
   ElaboratedCircuit.localLength (c1.concat c2 p0 p1).main inp =
     c1.localLength inp + c2.localLength (c1.output inp 0) := by
-  simp +instances only [concat, circuit_norm, explicit_circuit_norm]
+  change c1.localLength inp + c2.localLength (c1.output inp 0) = _
+  rfl
 
 @[circuit_norm]
 lemma concat_channelsWithGuarantees (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F Mid Output) p0 p1 :
     (c1.concat c2 p0 p1).channelsWithGuarantees = c1.channelsWithGuarantees ++ c2.channelsWithGuarantees := by
-  simp +instances only [explicit_circuit_norm, concat]
+  change c1.channelsWithGuarantees ++ c2.channelsWithGuarantees = _
+  rfl
 
 @[circuit_norm]
 lemma concat_channelsWithGuarantees' (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F Mid Output) p0 p1 :
     ElaboratedCircuit.channelsWithGuarantees (c1.concat c2 p0 p1).main =
       c1.channelsWithGuarantees ++ c2.channelsWithGuarantees := by
-  simp +instances only [explicit_circuit_norm, concat]
+  change c1.channelsWithGuarantees ++ c2.channelsWithGuarantees = _
+  rfl
 
 /--
 Weaken the specification of a FormalCircuit.
