@@ -26,6 +26,9 @@ def actionShape : CircuitShape where
   numAdviceQueries := 25
   numFixedQueries := 29
 
+/-- The published Action domain exponent. -/
+theorem actionShape_k : actionShape.k = 11 := rfl
+
 theorem actionConstraintSystem_numLookups_eq :
     (TopLevelCompilation.constraintSystem actionFormalCircuit).lookups.length = 3 := by
   unfold actionFormalCircuit TopLevelCompilation.constraintSystem
