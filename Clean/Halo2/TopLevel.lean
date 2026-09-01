@@ -1882,7 +1882,7 @@ def fixedValue
 
 /-- Reading a fixed value agrees with the corresponding cell of the published
 dense fixed rows. -/
-@[simp] theorem fixedValue_eq_fixedRows_getD
+theorem fixedValue_eq_fixedRows_getD
     (self : TopLevelCircuit F Config PublicInput)
     [TopLevelShape self]
     (column : Column .fixed) (row : ℤ) :
