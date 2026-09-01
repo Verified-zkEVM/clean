@@ -142,9 +142,10 @@ instance : TopLevelShape actionCircuit where
     rw [Internal.actionCircuit_eq_impl]
     exact actionShape_eq_compiled
 
-/-- The opaque Action package publishes the fully reduced circuit shape. -/
+/-- The Action circuit publishes its fully reduced circuit shape. -/
 @[simp] theorem actionCircuit_shape_eq :
-    actionCircuit.shape = actionShape := rfl
+    actionCircuit.shape = actionShape :=
+  actionCircuit.shape_eq_published
 
 /-- Action's closed configure run equality-enables fifteen distinct columns. -/
 theorem actionCircuit_permutationColumnCount_eq :
