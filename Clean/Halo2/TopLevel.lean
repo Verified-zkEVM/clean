@@ -1880,6 +1880,19 @@ def fixedValue
   TopLevelCompilation.fixedValue
     self.formalCircuit self.publicInputLayout column row
 
+/-- Reading a fixed value agrees with the corresponding cell of the published
+dense fixed rows. -/
+@[simp] theorem fixedValue_eq_fixedRows_getD
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self]
+    (column : Column .fixed) (row : ℤ) :
+    self.fixedValue column row =
+      (self.fixedRows.getD column.index []).getD
+        (row.natMod self.n) 0 := by
+  simp only [fixedValue, TopLevelCompilation.fixedValue,
+    TopLevelCompilation.fixedValueAt, fixedRows, n]
+  rw [self.domainExponent_eq_compiled]
+
 /--
 Construct the complete semantic environment from exactly the proof-varying assignment.
 Fixed values and usable rows are circuit-derived and cannot be supplied independently.
