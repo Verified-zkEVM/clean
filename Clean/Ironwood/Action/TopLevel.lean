@@ -1,5 +1,6 @@
 import Clean.Halo2.TopLevel
-import Clean.Ironwood.Action.Shape
+import Clean.Ironwood.Action.Compilation
+import Clean.Ironwood.Action.ConfigureCertificates
 import Clean.Ironwood.Action.Spec
 
 /-!
@@ -84,12 +85,12 @@ private theorem configured_closesEnvironment
     let formal := circuit Specs.Sinsemilla.orchardGenerators orchardBases
     formal.EnvAssumptions
       (TopLevelCompilation.config formal)
-      (TopLevelCompilation.placedEnvironmentAt
-        formal (2 ^ actionShape.k) assignment) := by
+      (TopLevelCompilation.placedEnvironment
+        formal PublicInputs.layout assignment) := by
   let formal := circuit Specs.Sinsemilla.orchardGenerators orchardBases
   let env :=
-    TopLevelCompilation.placedEnvironmentAt
-      formal (2 ^ actionShape.k) assignment
+    TopLevelCompilation.placedEnvironment
+      formal PublicInputs.layout assignment
   change EnvAssumptions
     (configure Specs.Sinsemilla.orchardGenerators {}).1 env
   have htable :
@@ -113,16 +114,11 @@ private theorem configured_closesEnvironment
   have hUsable : 2 ^ Specs.K ≤ env.env.usableRows := by
     change
       2 ^ Specs.K ≤
-        2 ^ actionShape.k -
+        2 ^ TopLevelCompilation.domainExponent formal PublicInputs.layout -
           (TopLevelCompilation.constraintSystem formal).blindingFactors - 1
-    have hfit := htable.trans
+    exact htable.trans
       (TopLevelCompilation.usedRows_le_usableRowsAt_domainExponent
         formal PublicInputs.layout)
-    have hk : actionShape.k =
-        TopLevelCompilation.domainExponent formal PublicInputs.layout := by
-      simpa only [formal, actionShape] using actionDomainExponent_eq.symm
-    rw [hk]
-    exact hfit
   obtain ⟨hs2, hm1, hm2, hlookup⟩ := configuredTableSharing
   obtain ⟨hfull, hshort, hbaseField, hdistinct⟩ :=
     configured_pureEnvironmentAssumptions env
@@ -169,8 +165,6 @@ def Internal.actionCircuitImpl : TopLevelCircuit Fp Config PublicInputs where
     set_option maxRecDepth 10000 in
       decide
   publicInputLayout := PublicInputs.layout
-  shape := actionShape
-  shape_eq := actionShape_eq_compiled
   PrivateWitness := PrivateWitness
   extractPrivate := fun cfg env =>
     PrivateWitness.ofActionData (extractPost cfg () 0 env)
@@ -217,30 +211,6 @@ deliberately not a simp lemma. -/
 theorem Internal.actionCircuit_eq_impl :
     actionCircuit = Internal.actionCircuitImpl :=
   actionCircuitPacked.property
-
-/-- The opaque Action package publishes the fully reduced circuit shape. -/
-@[simp] theorem actionCircuit_shape_eq :
-    actionCircuit.shape = actionShape := by
-  rw [Internal.actionCircuit_eq_impl]
-  rfl
-
-/-- Action's reduced lookup-selector anchor equations are exactly those of its
-top-level range-check configuration. -/
-theorem actionCircuit_lookupSelectorAnchorRequirements_eq :
-    actionCircuit.lookupSelectorAnchorRequirements =
-      LookupRangeCheck.lookupSelectorAnchorRequirements
-        actionConfig.lookupConfig := by
-  rw [Internal.actionCircuit_eq_impl]
-  rfl
-
-/-- The concrete Action anchor satisfies the requirements published by the
-opaque top-level circuit. -/
-theorem actionCircuit_lookupSelectorAnchorRequirements_satisfied :
-    SelectorAnchorRequirementsSatisfied
-      actionCircuit.lookupSelectorAnchorRequirements
-      (selectorAnchor actionConfig) := by
-  rw [actionCircuit_lookupSelectorAnchorRequirements_eq]
-  exact actionLookupSelectorAnchorRequirements_satisfied
 
 /-- Action's configured primary column witnesses that its permutation family is
 nonempty. -/
@@ -295,12 +265,6 @@ theorem actionCircuit_numInstanceColumns_eq :
     TopLevelCompilation.constraintSystem, Circuit.circuit] using
       Circuit.configure_finalCounts_numInstanceColumns
         Specs.Sinsemilla.orchardGenerators
-
-/-- Action's closed configure run equality-enables fifteen distinct columns. -/
-theorem actionCircuit_permutationColumnCount_eq :
-    actionCircuit.permutationColumnCount = 15 := by
-  rw [TopLevelCircuit.permutationColumnCount, actionCircuit_shape_eq]
-  rfl
 
 /-- Every lookup in the Action constraint system has at most four inputs. -/
 theorem actionCircuit_lookupInputArity_le

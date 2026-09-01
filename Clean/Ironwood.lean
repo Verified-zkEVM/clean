@@ -83,7 +83,8 @@ import Clean.Ironwood.Action.Bundle
 import Clean.Ironwood.Action.RealBases
 import Clean.Ironwood.Action.Spec
 import Clean.Ironwood.Action.Separation
-import Clean.Ironwood.Action.TopLevel
+import Clean.Ironwood.Action.TopLevelShape
+import Clean.Ironwood.Action.TopLevelAnchors
 
 /-!
 # Ironwood circuits
