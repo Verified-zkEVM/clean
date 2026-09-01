@@ -1,5 +1,5 @@
 import Clean.Halo2.Keygen.FloorPlanner.SelectorConflicts
-import Clean.Ironwood.Action.Compilation
+import Clean.Ironwood.Action.Shape.Compilation
 
 /-!
 # Shared selector columns in the Orchard Action circuit

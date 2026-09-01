@@ -1,5 +1,4 @@
 import Clean.Halo2.TopLevel
-import Clean.Ironwood.Action.Compilation
 import Clean.Ironwood.Action.ConfigureCertificates
 import Clean.Ironwood.Action.Spec
 
@@ -136,10 +135,22 @@ private theorem actionSelectorRequirements :
     Circuit.elaboratedPost, Circuit.configureElaborated]
   trivial
 
+/-- The closed Action circuit borrows no key-generation resources from a caller. -/
+def actionNoCallerRequirements :
+    (circuit Specs.Sinsemilla.orchardGenerators orchardBases).keygenRequirements.EmptyAt () := by
+  exact ⟨(), rfl, rfl, rfl, rfl, rfl, fun _ => rfl⟩
+
+/-- Action's closed configure run borrows no queryable columns from a caller. -/
+theorem actionQueryRequirements :
+    (circuit Specs.Sinsemilla.orchardGenerators orchardBases).queryRequirements () {} := by
+  dsimp only [FormalCircuit.queryRequirements, Circuit.circuit,
+    Circuit.elaboratedPost, Circuit.configureElaborated]
+  trivial
+
 def Internal.actionCircuitImpl : TopLevelCircuit Fp Config PublicInputs where
   formalCircuit :=
     circuit Specs.Sinsemilla.orchardGenerators orchardBases
-  noCallerRequirements := ⟨(), rfl, rfl, rfl, rfl, rfl, fun _ => rfl⟩
+  noCallerRequirements := actionNoCallerRequirements
   selectorRequirements := actionSelectorRequirements
   queryRequirements := actionQueryRequirements
   exists_rotation_mem_fixedQueries_of_lt := by

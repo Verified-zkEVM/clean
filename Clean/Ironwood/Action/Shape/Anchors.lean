@@ -1,4 +1,4 @@
-import Clean.Ironwood.Action.Planner
+import Clean.Ironwood.Action.Shape.Planner
 import Clean.Ironwood.Action.TopLevel
 
 /-!

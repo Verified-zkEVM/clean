@@ -86,7 +86,11 @@ theorem actionUsedRows_eq_1779 :
       actionOperations by rfl,
     actionOperations_usedRows_eq_1779]
   apply Nat.max_eq_left
-  exact actionPublicInputLayout_usedRows_eq.le.trans (by norm_num)
+  have hPublicInputRows : PublicInputs.layout.usedRows = 10 := by
+    rw [← actionCircuit_publicInputLayout_usedRows_eq]
+    rw [Internal.actionCircuit_eq_impl]
+    rfl
+  exact hPublicInputRows.le.trans (by norm_num)
 
 /-- Halo 2's minimal-domain calculation selects exponent 11 for the Action circuit. -/
 theorem actionDomainExponent_eq :
@@ -98,7 +102,9 @@ theorem actionDomainExponent_eq :
   have hcompiledBlindingFactors :
       (TopLevelCompilation.constraintSystem
         actionFormalCircuit).blindingFactors = 5 := by
-    exact actionConstraintSystem_blindingFactors_eq
+    simpa only [← actionCircuit_formalCircuit_eq,
+      TopLevelCircuit.blindingFactors, TopLevelCircuit.constraintSystem] using
+        actionCircuit_blindingFactors_eq
   unfold TopLevelCompilation.domainExponent
   apply minimalKForRows_eq_succ_of (k := 10)
   · simp only [ConstraintSystem.minimumRows, hcompiledUsedRows,

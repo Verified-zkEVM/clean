@@ -1,13 +1,10 @@
-import Clean.Ironwood.Action.PublicInput
-import Clean.Ironwood.Action.RealBases
+import Clean.Ironwood.Action.TopLevel
 
 /-!
 # Reduced compilation input for the Orchard Action circuit
 
-This module names the closed Action circuit and the compact synthesis data consumed
-by the top-level compiler.  It deliberately stops below `TopLevelCircuit`, so the
-planner and shape proofs can justify the literal top-level package without circularly
-reasoning through that package.
+This module names the concrete compilation data used to prove the optional Action
+shape. The lightweight top-level circuit does not import this shape machinery.
 -/
 
 namespace Zcash.Circuits.Action
@@ -18,6 +15,13 @@ open Circuit
 /-- The formal Orchard Action circuit before top-level packaging. -/
 def actionFormalCircuit : FormalCircuit Fp Unit Config unit unit :=
   circuit Specs.Sinsemilla.orchardGenerators orchardBases
+
+/-- The concrete formal circuit used by the shape proof is the formal circuit
+packaged by the opaque Action top-level circuit. -/
+theorem actionCircuit_formalCircuit_eq :
+    actionCircuit.formalCircuit = actionFormalCircuit := by
+  rw [Internal.actionCircuit_eq_impl]
+  rfl
 
 /-- The closed configure output used throughout Action compilation. -/
 def actionConfig : Config :=
@@ -30,18 +34,6 @@ def actionOperations : Operations Fp :=
 /-- The already-reduced, compositional synthesis summary published by Action. -/
 def actionSynthesisSummary : FloorPlanner.SynthesisSummary :=
   Circuit.mainPostSynthesisSummary actionConfig
-
-/-- The closed Action circuit borrows no key-generation resources from a caller. -/
-def actionNoCallerRequirements :
-    actionFormalCircuit.keygenRequirements.EmptyAt () := by
-  exact ⟨(), rfl, rfl, rfl, rfl, rfl, fun _ => rfl⟩
-
-/-- Action's closed configure run borrows no queryable columns from a caller. -/
-theorem actionQueryRequirements :
-    actionFormalCircuit.queryRequirements () {} := by
-  dsimp only [actionFormalCircuit, FormalCircuit.queryRequirements,
-    Circuit.circuit, Circuit.elaboratedPost, Circuit.configureElaborated]
-  trivial
 
 /-- The published Action summary is exactly the summary of its operation stream. -/
 theorem actionSynthesisSummary_eq_operations :
@@ -58,36 +50,8 @@ theorem actionSynthesisSummary_eq_operations :
 /-- Every copied cell in the closed Action operation stream is assigned. -/
 theorem actionOperations_copyCellsAssigned :
     actionOperations.CopyCellsAssigned 0 [] := by
-  exact actionFormalCircuit.operationsCopyCellsAssigned
-    () () actionNoCallerRequirements
-
-/-- Action's public instance layout occupies exactly ten rows. -/
-theorem actionPublicInputLayout_usedRows_eq :
-    PublicInputs.layout.usedRows = 10 := rfl
-
-/-- Action's configured query depth requires exactly five blinding rows. -/
-theorem actionConstraintSystem_blindingFactors_eq :
-    (TopLevelCompilation.constraintSystem actionFormalCircuit).blindingFactors = 5 := by
-  unfold actionFormalCircuit TopLevelCompilation.constraintSystem
-  simp only [Circuit.circuit]
-  set_option maxRecDepth 10000 in
-    configure_norm
-
-/-- Action's reduced configure summary records exact Halo 2 constraint degree nine. -/
-theorem actionConstraintDegree_eq :
-    TopLevelCompilation.constraintDegree actionFormalCircuit = 9 := by
-  unfold TopLevelCompilation.constraintDegree actionFormalCircuit
-  simp only [Circuit.circuit]
-  configure_norm
-
-/-- Action's closed configure run allocates exactly 56 selectors. -/
-theorem actionNumSelectors_eq :
-    (TopLevelCompilation.constraintSystem
-      actionFormalCircuit).numSelectors = 56 := by
-  simpa only [actionFormalCircuit, TopLevelCompilation.constraintSystem,
-    Circuit.circuit] using
-      Circuit.configure_finalCounts_numSelectors
-        Specs.Sinsemilla.orchardGenerators
+  simpa only [actionOperations, TopLevelCircuit.operations,
+    actionCircuit_formalCircuit_eq] using actionCircuit.operationsCopyCellsAssigned
 
 /-- The exact per-selector maximal gate degrees emitted by Action configuration. -/
 def actionSelectorDegrees : Array ℕ :=

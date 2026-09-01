@@ -26,16 +26,6 @@ def actionShape : CircuitShape where
   numAdviceQueries := 25
   numFixedQueries := 29
 
-/-- The reduced Action shape uses the deployed domain exponent. -/
-theorem actionShape_k : actionShape.k = 11 := rfl
-
-theorem actionConstraintSystem_numAdviceColumns_eq :
-    (TopLevelCompilation.constraintSystem actionFormalCircuit).numAdviceColumns = 10 := by
-  simpa only [actionFormalCircuit, TopLevelCompilation.constraintSystem,
-    Circuit.circuit] using
-      Circuit.configure_finalCounts_numAdviceColumns
-        Specs.Sinsemilla.orchardGenerators
-
 theorem actionConstraintSystem_numLookups_eq :
     (TopLevelCompilation.constraintSystem actionFormalCircuit).lookups.length = 3 := by
   unfold actionFormalCircuit TopLevelCompilation.constraintSystem
@@ -50,18 +40,13 @@ theorem actionConstraintSystem_numPermutationColumns_eq :
       Circuit.configure_permutationColumns_length
         Specs.Sinsemilla.orchardGenerators
 
-theorem actionConstraintSystem_numInstanceColumns_eq :
-    (TopLevelCompilation.constraintSystem actionFormalCircuit).numInstanceColumns = 1 := by
-  simpa only [actionFormalCircuit, TopLevelCompilation.constraintSystem,
-    Circuit.circuit] using
-      Circuit.configure_finalCounts_numInstanceColumns
-        Specs.Sinsemilla.orchardGenerators
-
 theorem actionConstraintSystem_chunkLen_eq :
     (TopLevelCompilation.constraintSystem actionFormalCircuit).chunkLen = 7 := by
-  rw [ConstraintSystem.chunkLen,
-    TopLevelCompilation.constraintSystem_csDegree,
-    actionConstraintDegree_eq]
+  rw [ConstraintSystem.chunkLen, TopLevelCompilation.constraintSystem_csDegree]
+  have hDegree : TopLevelCompilation.constraintDegree actionFormalCircuit = 9 := by
+    simpa only [← actionCircuit_formalCircuit_eq,
+      TopLevelCircuit.constraintDegree] using actionCircuit_constraintDegree_eq
+  rw [hDegree]
 
 theorem actionInstanceQueryCount_eq :
     (PinnedConstraintSystem.derive
@@ -93,8 +78,16 @@ theorem actionSelectorMap_newFixedCols_eq :
       intro activation hactivation
       rw [actionDomainExponent_eq]
       exact actionSelectorActivation_row_lt_domain activation hactivation)]
-  rw [actionNumSelectors_eq, actionSelectorMaxDegrees_eq,
-    TopLevelCompilation.constraintSystem_csDegree, actionConstraintDegree_eq,
+  have hSelectorCount :
+      (TopLevelCompilation.constraintSystem actionFormalCircuit).numSelectors = 56 := by
+    simpa only [← actionCircuit_formalCircuit_eq,
+      TopLevelCircuit.selectorCount, TopLevelCircuit.constraintSystem] using
+        actionCircuit_selectorCount_eq
+  have hDegree : TopLevelCompilation.constraintDegree actionFormalCircuit = 9 := by
+    simpa only [← actionCircuit_formalCircuit_eq,
+      TopLevelCircuit.constraintDegree] using actionCircuit_constraintDegree_eq
+  rw [hSelectorCount, actionSelectorMaxDegrees_eq,
+    TopLevelCompilation.constraintSystem_csDegree, hDegree,
     actionSelectorActivations_eq_reduced, actionSelectorColumnCount_eq]
 
 /-- Every field of the canonical compiler shape agrees with the published Action
@@ -105,8 +98,9 @@ theorem actionShape_eq_compiled :
   apply CircuitShape.ext
   · simpa only [actionShape, TopLevelCompilation.circuitShape] using
       actionDomainExponent_eq.symm
-  · simpa only [actionShape, TopLevelCompilation.circuitShape] using
-      actionConstraintSystem_numAdviceColumns_eq.symm
+  · simpa only [actionShape, TopLevelCompilation.circuitShape,
+      ← actionCircuit_formalCircuit_eq, TopLevelCircuit.constraintSystem] using
+        actionCircuit_numAdviceColumns_eq.symm
   · simpa only [actionShape, TopLevelCompilation.circuitShape] using
       actionConstraintSystem_numLookups_eq.symm
   · simp only [TopLevelCompilation.circuitShape,
@@ -117,17 +111,22 @@ theorem actionShape_eq_compiled :
       actionConstraintSystem_numPermutationColumns_eq.symm
   · simp only [TopLevelCompilation.circuitShape,
       actionShape,
-      TopLevelCompilation.constraintSystem_csDegree,
-      actionConstraintDegree_eq]
-  · simpa only [actionShape, TopLevelCompilation.circuitShape] using
-      actionConstraintSystem_numInstanceColumns_eq.symm
+      TopLevelCompilation.constraintSystem_csDegree]
+    have hDegree : TopLevelCompilation.constraintDegree actionFormalCircuit = 9 := by
+      simpa only [← actionCircuit_formalCircuit_eq,
+        TopLevelCircuit.constraintDegree] using actionCircuit_constraintDegree_eq
+    rw [hDegree]
+  · simpa only [actionShape, TopLevelCompilation.circuitShape,
+      ← actionCircuit_formalCircuit_eq, TopLevelCircuit.constraintSystem] using
+        actionCircuit_numInstanceColumns_eq.symm
   · simpa only [actionShape, TopLevelCompilation.circuitShape] using
       actionInstanceQueryCount_eq.symm
   · simpa only [actionShape, TopLevelCompilation.circuitShape] using
       actionAdviceQueryCount_eq.symm
   · simp only [actionShape, TopLevelCompilation.circuitShape]
     rw [TopLevelCompilation.fixedQueryCount_eq actionFormalCircuit
-      PublicInputs.layout actionQueryRequirements]
+      PublicInputs.layout (by
+        simpa only [actionFormalCircuit] using actionQueryRequirements)]
     rw [show (TopLevelCompilation.constraintSystem
         actionFormalCircuit).fixedQueries.length = 14 by
       simpa only [actionFormalCircuit, TopLevelCompilation.constraintSystem,

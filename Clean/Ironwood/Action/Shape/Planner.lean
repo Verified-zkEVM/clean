@@ -1,4 +1,4 @@
-import Clean.Ironwood.Action.Compilation
+import Clean.Ironwood.Action.Shape.Compilation
 
 namespace Zcash.Circuits.Action
 
