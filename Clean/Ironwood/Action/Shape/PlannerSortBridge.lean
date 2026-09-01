@@ -1,4 +1,4 @@
-import Clean.Ironwood.Action.PlannerSort.Certificate
+import Clean.Ironwood.Action.Shape.PlannerSort.Certificate
 
 namespace Zcash.Circuits.Action
 

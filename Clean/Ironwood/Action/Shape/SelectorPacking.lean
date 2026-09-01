@@ -1,7 +1,7 @@
 import Clean.Halo2.Keygen.FloorPlanner.SelectorConflicts
 import Clean.Halo2.Keygen.SelectorPackingCorrectness
-import Clean.Ironwood.Action.SelectorPlacement
-import Clean.Ironwood.Action.SelectorSharedColumns
+import Clean.Ironwood.Action.Shape.SelectorPlacement
+import Clean.Ironwood.Action.Shape.SelectorSharedColumns
 
 namespace Zcash.Circuits.Action
 

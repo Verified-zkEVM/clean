@@ -1,4 +1,4 @@
-import Clean.Ironwood.Action.PlannerSort.Data
+import Clean.Ironwood.Action.Shape.PlannerSort.Data
 
 /-! Kernel-checked pdqsort recursion for Action region shapes with keys three through nine. -/
 

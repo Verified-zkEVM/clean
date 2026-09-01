@@ -1,5 +1,5 @@
 import Clean.Halo2.Keygen.FloorPlanner.SelectorConflicts
-import Clean.Ironwood.Action.PlannerTrace
+import Clean.Ironwood.Action.Shape.PlannerTrace
 
 /-!
 # Exceptional Action selector placements

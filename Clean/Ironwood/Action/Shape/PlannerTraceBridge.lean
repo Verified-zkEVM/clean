@@ -1,5 +1,5 @@
-import Clean.Ironwood.Action.PlannerSortBridge
-import Clean.Ironwood.Action.PlannerTraceCertificate
+import Clean.Ironwood.Action.Shape.PlannerSortBridge
+import Clean.Ironwood.Action.Shape.PlannerTraceCertificate
 
 namespace Zcash.Circuits.Action
 

@@ -1,4 +1,4 @@
-import Clean.Ironwood.Action.PlannerTraceBridge
+import Clean.Ironwood.Action.Shape.PlannerTraceBridge
 
 namespace Zcash.Circuits.Action
 

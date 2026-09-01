@@ -1,5 +1,5 @@
-import Clean.Ironwood.Action.PlannerSort.Keys3To9
-import Clean.Ironwood.Action.PlannerSort.KeysAtLeast10
+import Clean.Ironwood.Action.Shape.PlannerSort.Keys3To9
+import Clean.Ironwood.Action.Shape.PlannerSort.KeysAtLeast10
 
 /-! The pdqsort recursion node combining Action region shapes with keys at least three. -/
 

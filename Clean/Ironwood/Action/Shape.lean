@@ -1,4 +1,5 @@
-import Clean.Ironwood.Action.SelectorPacking
+import Clean.Ironwood.Action.Shape.SelectorPacking
+import Clean.Ironwood.Action.TopLevel
 
 /-!
 # The fully reduced Orchard Action circuit shape
@@ -134,5 +135,22 @@ theorem actionShape_eq_compiled :
           Circuit.configure_fixedQueries_length
             Specs.Sinsemilla.orchardGenerators]
     rw [actionSelectorMap_newFixedCols_eq]
+
+/-- The deployed Action circuit opts into its fully reduced compiler shape. -/
+instance : TopLevelShape actionCircuit where
+  shape := actionShape
+  shape_eq := by
+    rw [Internal.actionCircuit_eq_impl]
+    exact actionShape_eq_compiled
+
+/-- The opaque Action package publishes the fully reduced circuit shape. -/
+@[simp] theorem actionCircuit_shape_eq :
+    actionCircuit.shape = actionShape := rfl
+
+/-- Action's closed configure run equality-enables fifteen distinct columns. -/
+theorem actionCircuit_permutationColumnCount_eq :
+    actionCircuit.permutationColumnCount = 15 := by
+  rw [TopLevelCircuit.permutationColumnCount, actionCircuit_shape_eq]
+  rfl
 
 end Zcash.Circuits.Action

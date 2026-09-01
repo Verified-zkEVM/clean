@@ -1,4 +1,4 @@
-import Clean.Ironwood.Action.PlannerSort.RootPartitionData
+import Clean.Ironwood.Action.Shape.PlannerSort.RootPartitionData
 
 /-! Kernel-checked evaluation of the Action sort's two-step root partition. -/
 

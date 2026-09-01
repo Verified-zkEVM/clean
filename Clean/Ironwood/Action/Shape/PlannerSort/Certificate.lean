@@ -1,6 +1,6 @@
-import Clean.Ironwood.Action.PlannerSort.KeysBelow3
-import Clean.Ironwood.Action.PlannerSort.KeysAtLeast3
-import Clean.Ironwood.Action.PlannerSort.RootPartition
+import Clean.Ironwood.Action.Shape.PlannerSort.KeysBelow3
+import Clean.Ironwood.Action.Shape.PlannerSort.KeysAtLeast3
+import Clean.Ironwood.Action.Shape.PlannerSort.RootPartition
 
 /-!
 # Exact Action planner sort certificate

@@ -1,4 +1,4 @@
-import Clean.Ironwood.Action.PlannerSort.Data
+import Clean.Ironwood.Action.Shape.PlannerSort.Data
 
 /-!
 # Action root-partition data
