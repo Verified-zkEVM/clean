@@ -24,6 +24,8 @@ import Clean.Examples.FemtoCairo.FemtoCairo
 import Clean.Examples.FemtoCairo.Plonky3Helpers
 import Clean.Examples.FemtoCairo.Plonky3TestData
 import Clean.Examples.FemtoCairo.Plonky3MemoryTestData
+import Clean.Air.WitnessGeneration
+import Clean.Air.Extraction.Rust
 import Clean.Tables.Fibonacci8
 import Clean.Tables.Fibonacci32
 import Clean.Tables.Fibonacci32Inductive
@@ -41,5 +43,5 @@ import Clean.Gadgets.BLAKE3.Permute
 import Clean.Gadgets.BLAKE3.FinalStateUpdate
 import Clean.Gadgets.BLAKE3.Round
 import Clean.Gadgets.BLAKE3.FinalizeChunk
-import Clean.Examples.FibonacciWithChannels
+import Clean.Examples.FibonacciVm.Circuit
 import Clean.Gadgets.SHA256.SHA256Compress

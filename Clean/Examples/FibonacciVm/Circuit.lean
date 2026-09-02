@@ -9,6 +9,7 @@ Goal - use three channels:
 Prove e2e soundness and completeness of the table ensemble.
 -/
 import Clean.Air.Vm
+import Clean.Air.WitnessGeneration
 import Clean.Gadgets.Addition8.Theorems
 open ByteUtils (mod256)
 open FieldUtils (mod floorDiv)
@@ -261,6 +262,61 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
     (by simp [circuit_norm, fibonacciVm, fib8, fibonacciVerifier, Add8Channel, FibonacciChannel])
   |>.toFormal _ (fun _ _ => True)
     (by simp [circuit_norm, fibonacciVm, add8, pushBytes, fib8])
+
+namespace FibonacciWitness
+
+open Air.Flat.WitnessGeneration
+
+/-- Generic push-driven generation metadata for the Fibonacci VM component. -/
+def fibMode : Mode (F p) := .demand {
+  channel := (FibonacciChannel (p := p)).name
+  direction := .push
+  aggregation := .perOccurrence
+  input := { cells := [.const 1, .message 0, .message 1, .message 2] }
+}
+
+/-- Generic pull-driven, message-coalescing generation metadata for the addition chip. -/
+def add8Mode : Mode (F p) := .demand {
+  channel := (Add8Channel (p := p)).name
+  direction := .pull
+  aggregation := .byMessage
+  input := { cells := [.message 0, .message 1, .message 2, .multiplicity] }
+}
+
+/--
+The current byte provider has one fixed row with one multiplicity input per byte.
+Each byte-channel pull updates the corresponding slot.
+-/
+def bytesMode : Mode (F p) := .fixed
+  [Array.replicate 256 0]
+  ((List.range 256).map fun (value : ℕ) => {
+    channel := (BytesChannel (p := p)).name
+    direction := .pull
+    message := #[(value : F p)]
+    row := 0
+    column := value
+  })
+
+/--
+Channel-driven witness-generation metadata, aligned with
+`fibonacciEnsemble.ensemble.tables = [fib8, add8, pushBytes]`.
+-/
+def config (fuel : ℕ) : Config (F p) where
+  modes := [fibMode (p := p), add8Mode (p := p), bytesMode (p := p)]
+  padding := [
+    { input := #[0, 0, 0, 0], minimumRows := 32 },
+    { input := #[0, 0, 0, 0], minimumRows := 32 },
+    { input := Array.replicate 256 0, minimumRows := 32 }
+  ]
+  fuel := fuel
+
+/-- Generate a complete ensemble witness from the claimed public final state. -/
+def generate (publicInput : fieldTriple (F p)) (fuel : ℕ) :
+    Except String (EnsembleWitness (fibonacciEnsemble (p := p)).ensemble) :=
+  Air.Flat.WitnessGeneration.generate (fibonacciEnsemble (p := p)).ensemble
+    (config (p := p) fuel) publicInput
+
+end FibonacciWitness
 
 /--
 Fibonacci soundness, concretely: if someone gives you a proof of the ensemble statement,

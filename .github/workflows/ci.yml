@@ -44,6 +44,7 @@ jobs:
         working-directory: backends/plonky3
         run: |
           cargo test --release -- --nocapture test_lean_circuit_end_to_end
+          cargo test --release --test fibonacci_ensemble_tests -- --nocapture
           cargo test test_tampered_multiplicity
           cargo test --release test_tampered_multiplicity
           cargo test --release -- --nocapture test_femtocairo
