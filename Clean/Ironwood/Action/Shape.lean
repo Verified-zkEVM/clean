@@ -138,17 +138,28 @@ theorem actionShape_eq_compiled :
             Specs.Sinsemilla.orchardGenerators]
     rw [actionSelectorMap_newFixedCols_eq]
 
+private opaque protectedActionShapePacked :
+    { shape : CircuitShape // shape = actionShape } :=
+  ⟨actionShape, rfl⟩
+
+private def protectedActionShape : CircuitShape :=
+  protectedActionShapePacked.val
+
+private theorem protectedActionShape_eq : protectedActionShape = actionShape :=
+  protectedActionShapePacked.property
+
 /-- The deployed Action circuit opts into its fully reduced compiler shape. -/
 instance : TopLevelShape actionCircuit where
-  shape := actionShape
+  shape := protectedActionShape
   shape_eq := by
+    rw [protectedActionShape_eq]
     rw [Internal.actionCircuit_eq_impl]
     exact actionShape_eq_compiled
 
 /-- The Action circuit publishes its fully reduced circuit shape. -/
 @[simp] theorem actionCircuit_shape_eq :
     actionCircuit.shape = actionShape :=
-  actionCircuit.shape_eq_published
+  protectedActionShape_eq
 
 /-- Action's closed configure run equality-enables fifteen distinct columns. -/
 theorem actionCircuit_permutationColumnCount_eq :

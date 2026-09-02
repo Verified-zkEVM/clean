@@ -760,28 +760,11 @@ variable
     {Config : Type} {PublicInput : TypeMap}
     [ProvableType PublicInput]
 
-private opaque shapePacked
-    (self : TopLevelCircuit F Config PublicInput)
-    [TopLevelShape self] :
-    { shape : CircuitShape //
-      shape = TopLevelShape.shape (circuit := self) } :=
-  ⟨TopLevelShape.shape (circuit := self), rfl⟩
-
-/-- The fully reduced shape published by a top-level circuit that opts into one.
-The packed implementation prevents downstream code from specializing generic
-algorithms by unfolding an entire concrete shape. -/
+/-- The fully reduced shape published by a top-level circuit that opts into one. -/
 def shape
     (self : TopLevelCircuit F Config PublicInput)
     [TopLevelShape self] : CircuitShape :=
-  (shapePacked self).val
-
-/-- The public shape accessor returns the shape supplied by its `TopLevelShape`
-instance. -/
-theorem shape_eq_published
-    (self : TopLevelCircuit F Config PublicInput)
-    [TopLevelShape self] :
-    self.shape = TopLevelShape.shape (circuit := self) :=
-  (shapePacked self).property
+  TopLevelShape.shape (circuit := self)
 
 /-- The published shape agrees with the canonical compiler result. -/
 theorem shape_eq
@@ -790,7 +773,7 @@ theorem shape_eq
     self.shape =
       TopLevelCompilation.circuitShape
         self.formalCircuit self.publicInputLayout :=
-  self.shape_eq_published.trans (TopLevelShape.shape_eq (circuit := self))
+  TopLevelShape.shape_eq (circuit := self)
 
 /-- The configuration produced by the top-level circuit's own configure run. -/
 def config (self : TopLevelCircuit F Config PublicInput) : Config :=
