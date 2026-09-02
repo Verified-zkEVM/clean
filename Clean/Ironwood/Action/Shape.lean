@@ -29,6 +29,19 @@ def actionShape : CircuitShape where
 /-- The published Action domain exponent. -/
 theorem actionShape_k : actionShape.k = 11 := rfl
 
+private opaque opaqueActionShapePacked :
+    { shape : CircuitShape // shape = actionShape } :=
+  ⟨actionShape, rfl⟩
+
+/-- The Action shape behind a reduction barrier, for consumers whose generic
+computations must not specialize to the concrete Action parameters. -/
+def opaqueActionShape : CircuitShape :=
+  opaqueActionShapePacked.val
+
+/-- The opaque Action shape denotes the ordinary transparent Action shape. -/
+theorem opaqueActionShape_eq : opaqueActionShape = actionShape :=
+  opaqueActionShapePacked.property
+
 theorem actionConstraintSystem_numLookups_eq :
     (TopLevelCompilation.constraintSystem actionFormalCircuit).lookups.length = 3 := by
   unfold actionFormalCircuit TopLevelCompilation.constraintSystem
