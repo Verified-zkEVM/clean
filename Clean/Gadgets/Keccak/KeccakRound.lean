@@ -56,13 +56,13 @@ theorem soundness (rc : UInt64) : Soundness (F p) (main rc) Assumptions (Spec rc
   -- simplify round constant constraint
   set state0_before_rc := eval env (varFromOffset U64 (F:=F p) (i₀ + 480 + 400 + 8))
   have h_rc_norm : state0_before_rc.Normalized := by
-    simp only [KeccakState.Normalized, eval_vector, circuit_norm] at chi_norm
+    simp only [KeccakState.Normalized, circuit_norm] at chi_norm
     exact chi_norm 0
   have h_rc_eq : state0_before_rc.value = (chi (rhoPi (theta input.value)))[0] := by
     simp only [Vector.ext_iff] at chi_eq
     specialize chi_eq 0 (by linarith)
     rw [←chi_eq]
-    simp only [state0_before_rc, KeccakState.value, eval_vector, circuit_norm]
+    simp only [state0_before_rc, KeccakState.value, circuit_norm]
   simp only [h_rc_norm, U64.fromUInt64_normalized, forall_const] at h_rc
   rw [h_rc_eq, U64.value_fromUInt64] at h_rc
 
@@ -70,7 +70,7 @@ theorem soundness (rc : UInt64) : Soundness (F p) (main rc) Assumptions (Spec rc
   intro i
   by_cases hi : 0 = i.val <;> simp only [hi, reduceIte]
   · simp [←hi, h_rc]
-  simp only [KeccakState.value, KeccakState.Normalized, eval_vector,
+  simp only [KeccakState.value, KeccakState.Normalized,
     Vector.ext_iff, Vector.getElem_map, Vector.getElem_mapFinRange] at chi_norm chi_eq
   specialize chi_eq i i.is_lt
   specialize chi_norm i
@@ -88,7 +88,7 @@ theorem completeness (rc : UInt64) : Completeness (F p) (main rc) Assumptions :=
   obtain ⟨ ⟨theta_norm, _ ⟩, h_rhopi, h_chi, _ ⟩ := h_env
   have ⟨ rhopi_norm, _ ⟩ := h_rhopi theta_norm
   have ⟨ chi_norm, _ ⟩ := h_chi rhopi_norm
-  simp only [KeccakState.Normalized, eval_vector, circuit_norm] at chi_norm
+  simp only [KeccakState.Normalized, circuit_norm] at chi_norm
   exact chi_norm 0
 
 def circuit (rc : UInt64) : FormalCircuit (F p) KeccakState KeccakState where
@@ -98,4 +98,5 @@ def circuit (rc : UInt64) : FormalCircuit (F p) KeccakState KeccakState where
   Assumptions
   soundness := soundness rc
   completeness := completeness rc
+
 end Gadgets.Keccak256.KeccakRound

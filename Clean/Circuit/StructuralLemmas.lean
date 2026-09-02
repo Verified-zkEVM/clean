@@ -40,6 +40,27 @@ def concat
   completeness := by
     simp only [circuit_norm]
     aesop
+  -- Manual: generic construction over abstract child circuits. The tactic's grind close
+  -- cannot instantiate `output_of_input_eq` here — the goal spells the child metadata as raw
+  -- structure projections (`circuit1.elaborated.1`), which defeats e-matching even when the
+  -- lemma is hinted — and the offset bounds need `h_localLength_stable` applied at specific
+  -- output instantiations.
+  computableWitnesses := by
+    computable_witnesses_start
+    · computable_witnesses_close
+    -- circuit2's witnesses need circuit1's *output* to only access below its offset
+    · apply circuit2.toSubcircuit_computableWitnesses_onlyAccessedBelow
+      exact circuit1.output_onlyAccessedBelow (fun _ => h)
+    -- the composite output agrees, chaining circuit1's then circuit2's output
+    · refine circuit2.output_of_input_eq
+        (circuit1.output_of_input_eq h ?_) ?_
+      -- the composite `localLength` reduces to `ll₁ + ll₂`, then the offset bounds are `omega`-able
+      · exact ProverEnvironment.agreesBelow_of_le h_agrees
+          (by simp +instances only [circuit_norm, explicit_circuit_norm]; omega)
+      · refine ProverEnvironment.agreesBelow_of_le h_agrees ?_
+        have hs := h_localLength_stable (circuit1.output input n) (circuit1.output input 0)
+        simp +instances only [circuit_norm, explicit_circuit_norm] at hs ⊢
+        omega
 
 @[circuit_norm]
 lemma concat_assumptions (c1 : FormalCircuit F Input Mid) (c2 : FormalCircuit F Mid Output) p0 p1 :
@@ -93,6 +114,7 @@ def weakenSpec (circuit : FormalCircuit F Input Output)
   elaborated := circuit.elaborated
   channelsWithRequirements := circuit.channelsWithRequirements
   requirementsChannelsLawful := circuit.requirementsChannelsLawful
+  computableWitnesses := circuit.computableWitnesses
   Assumptions := circuit.Assumptions
   Spec := WeakerSpec
   soundness := by
@@ -162,6 +184,7 @@ def weakenSpec (circuit : GeneralFormalCircuit F Input Output)
   elaborated := circuit.elaborated
   channelsWithRequirements := circuit.channelsWithRequirements
   requirementsChannelsLawful := circuit.requirementsChannelsLawful
+  computableWitnesses := circuit.computableWitnesses
   Assumptions := circuit.Assumptions
   Spec := WeakerSpec
   ProverAssumptions := circuit.ProverAssumptions

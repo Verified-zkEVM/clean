@@ -59,7 +59,7 @@ def sha256Round (state : Vector ℕ 8) (k w : ℕ) : Vector ℕ 8 :=
 -- Expand a 16-word block into a 64-word message schedule
 def messageSchedule (block : Vector ℕ 16) : Vector ℕ 64 :=
   let init : Vector ℕ 64 := Vector.mapFinRange 64 fun i =>
-    if h : i.val < 16 then block.get ⟨i.val, h⟩ else 0
+    if h : i.val < 16 then block[i.val]'h else 0
   Fin.foldl 48 (fun w (i : Fin 48) =>
     let j := i.val + 16
     let wj := add32 (add32 (lowerSigma1 w[j - 2])  w[j - 7])

@@ -134,7 +134,12 @@ theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main A
   rw [ZMod.val_sub two_and_lt, x_y_val, two_and_val,
     ←and_times_two_add_xor hx_byte hy_byte, add_comm, Nat.add_sub_cancel]
 
-def circuit : FormalCircuit (F p) Inputs field :=
-  { main, elaborated, Assumptions, Spec, soundness, completeness }
+def circuit : FormalCircuit (F p) Inputs field where
+  main
+  elaborated
+  Assumptions
+  Spec
+  soundness
+  completeness
 
 end Gadgets.And.And8

@@ -24,18 +24,22 @@ Per step, `scheduleStep` creates:
 -/
 
 /-- One step of the message schedule: compute w[j] for j = i.val + 16. -/
-private def scheduleStep (w : SHA256Schedule (Expression (F p))) (i : Fin 48) :
+-- kept folded through `computable_witnesses_start`'s wrapper unfold: the manual
+-- computableWitnesses proof bridges the foldl accumulator through
+-- `foldlAcc_eq_varSchedule`, which keys on the folded spelling
+@[explicit_circuit_no_unfold]
+def scheduleStep (w : SHA256Schedule (Expression (F p))) (i : Fin 48) :
     Circuit (F p) (SHA256Schedule (Expression (F p))) := do
   let j := i.val + 16
-  let s1   ← LowerSigma1.circuit (w.get ⟨j - 2,  by omega⟩)
-  let s0   ← LowerSigma0.circuit (w.get ⟨j - 15, by omega⟩)
-  let sum0 ← Add32.circuit ⟨s1, w.get ⟨j - 7, by omega⟩⟩
+  let s1   ← LowerSigma1.circuit (w[j - 2]'(by omega))
+  let s0   ← LowerSigma0.circuit (w[j - 15]'(by omega))
+  let sum0 ← Add32.circuit ⟨s1, w[j - 7]'(by omega)⟩
   let sum1 ← Add32.circuit ⟨sum0, s0⟩
-  let wj   ← Add32.circuit ⟨sum1, w.get ⟨j - 16, by omega⟩⟩
+  let wj   ← Add32.circuit ⟨sum1, w[j - 16]'(by omega)⟩
   return w.set (⟨j, by omega⟩ : Fin 64) wj
 
 @[implicit_reducible]
-private def constantLength :
+def constantLength :
     Circuit.ConstantLength (fun (x : SHA256Schedule (Expression (F p)) × Fin 48) => scheduleStep x.1 x.2) where
   localLength := 227
   localLength_eq _ _ := by
@@ -80,8 +84,8 @@ def varSchedule (i₀ : ℕ) (input_var_block : SHA256Block (Expression (F p))) 
       varSchedule i₀ input_var_block k
 
 /-- Value-level schedule after `k` expansion steps. -/
-private def valSchedule (input_block : Vector ℕ 16) : ℕ → Vector ℕ 64
-  | 0 => Vector.mapFinRange 64 fun i => if h : i.val < 16 then input_block.get ⟨i.val, h⟩ else 0
+def valSchedule (input_block : Vector ℕ 16) : ℕ → Vector ℕ 64
+  | 0 => Vector.mapFinRange 64 fun i => if h : i.val < 16 then input_block[i.val]'h else 0
   | k + 1 =>
     if h : k < 48 then
       let prev := valSchedule input_block k
@@ -94,7 +98,7 @@ private def valSchedule (input_block : Vector ℕ 16) : ℕ → Vector ℕ 64
 
 omit [Fact (Nat.Prime p)] [Fact (p > 2 ^ 33)] in
 /-- `Specs.SHA256.messageSchedule` equals our `valSchedule` at index 48. -/
-private lemma messageSchedule_eq_valSchedule (input_block : Vector ℕ 16) :
+lemma messageSchedule_eq_valSchedule (input_block : Vector ℕ 16) :
     Specs.SHA256.messageSchedule input_block = valSchedule input_block 48 := by
   simp only [Specs.SHA256.messageSchedule]
   -- Generic step body, independent of the foldl bound, so the IH on `k` matches
@@ -108,7 +112,7 @@ private lemma messageSchedule_eq_valSchedule (input_block : Vector ℕ 16) :
       w.set (n + 16) wj hj
     else w with hbody_def
   set init : Vector ℕ 64 :=
-    Vector.mapFinRange 64 fun i => if h : i.val < 16 then input_block.get ⟨i.val, h⟩ else 0
+    Vector.mapFinRange 64 fun i => if h : i.val < 16 then input_block[i.val]'h else 0
   -- Rephrase RHS bodies in terms of `body`.
   have hspec : Fin.foldl 48 (fun w (i : Fin 48) =>
       w.set (i.val + 16)
@@ -137,18 +141,18 @@ private lemma messageSchedule_eq_valSchedule (input_block : Vector ℕ 16) :
     simp only [Fin.val_last, hbody_def, dif_pos (show k < 48 from by omega)]
 
 /-- The output of `scheduleStep w i` at offset `n` is `w.set (i.val + 16) (varFromOffset ...)`. -/
-private lemma scheduleStep_output (w : SHA256Schedule (Expression (F p))) (i : Fin 48) (n : ℕ) :
+lemma scheduleStep_output (w : SHA256Schedule (Expression (F p))) (i : Fin 48) (n : ℕ) :
     (scheduleStep w i).output n =
       w.set (i.val + 16) (varFromOffset (fields 32) (n + 194)) (by omega) := by
   simp [scheduleStep, circuit_norm, LowerSigma1.circuit, LowerSigma0.circuit, Add32.circuit]
 
 /-- The localLength of `scheduleStep w i` is 227. -/
-private lemma scheduleStep_localLength (w : SHA256Schedule (Expression (F p))) (i : Fin 48) (n : ℕ) :
+lemma scheduleStep_localLength (w : SHA256Schedule (Expression (F p))) (i : Fin 48) (n : ℕ) :
     (scheduleStep w i).localLength n = 227 := by
   simp [circuit_norm, scheduleStep, LowerSigma1.circuit, LowerSigma0.circuit, Add32.circuit]
 
 /-- `Circuit.FoldlM.foldlAcc` at index `⟨k, h⟩ : Fin 48` equals `varSchedule i₀ input_var k`. -/
-private lemma foldlAcc_eq_varSchedule (i₀ : ℕ) (input_var_block : SHA256Block (Expression (F p)))
+lemma foldlAcc_eq_varSchedule (i₀ : ℕ) (input_var_block : SHA256Block (Expression (F p)))
     (k : ℕ) (h : k < 48) :
     Circuit.FoldlM.foldlAcc i₀ (Vector.finRange 48)
       (fun w (i : Fin 48) => scheduleStep w i)
@@ -178,7 +182,7 @@ private lemma foldlAcc_eq_varSchedule (i₀ : ℕ) (input_var_block : SHA256Bloc
     rw [scheduleStep_output, scheduleStep_localLength]
 
 /-- The 48-step `Fin.foldl` of the variable-level schedule body equals `varSchedule 48`. -/
-private lemma finFoldl_eq_varSchedule_48 (i₀ : ℕ) (input_var_block : SHA256Block (Expression (F p))) :
+lemma finFoldl_eq_varSchedule_48 (i₀ : ℕ) (input_var_block : SHA256Block (Expression (F p))) :
     Fin.foldl 48
       (fun (acc : SHA256Schedule (Expression (F p))) (i : Fin 48) =>
         (scheduleStep acc i (i₀ + i.val * 227)).1)
@@ -218,9 +222,80 @@ private lemma finFoldl_eq_varSchedule_48 (i₀ : ℕ) (input_var_block : SHA256B
     change (scheduleStep _ ⟨k, hk''⟩).output (i₀ + k * 227) = _
     rw [scheduleStep_output]
 
+omit [Fact (p > 2 ^ 33)] in
+/-- Env-agreement transfers to a fresh `varFromOffset` window that lies below the bound. -/
+lemma varFromOffset_eval_congr {env env' : Environment (F p)} {k n : ℕ}
+    (h : ∀ i < n, env.get i = env'.get i) (hk : k + 32 ≤ n) :
+    (eval env (varFromOffset (fields 32) k : Var (fields 32) (F p)) : fields 32 (F p)) =
+      eval env' (varFromOffset (fields 32) k : Var (fields 32) (F p)) := by
+  simp only [ProvableType.eval_varFromOffset]
+  refine congrArg fromElements (Vector.ext fun i hi => ?_)
+  simp only [Vector.getElem_mapRange]
+  exact h (k + i) (by first | omega | (simp only [circuit_norm] at hi hk ⊢; omega))
+
+/-- Env-agreement transfers through one `scheduleStep` output: the fresh window slot is
+covered by the agreement window, every other slot carries the accumulator. -/
+private lemma scheduleStep_output_eval_congr {env env' : ProverEnvironment (F p)}
+    {i₀ : ℕ} {acc : SHA256Schedule (Expression (F p))} (k : ℕ) (hk : k < 48)
+    (hacc : eval env.toEnvironment acc = eval env'.toEnvironment acc)
+    (hag : env.AgreesBelow (i₀ + (k + 1) * 227) env') :
+    eval env.toEnvironment ((scheduleStep acc ⟨k, hk⟩).output (i₀ + k * 227)) =
+      eval env'.toEnvironment ((scheduleStep acc ⟨k, hk⟩).output (i₀ + k * 227)) := by
+  simp only [circuit_norm, scheduleStep, LowerSigma1.circuit, LowerSigma0.circuit, Add32.circuit]
+  simp only [eval_vector] at hacc ⊢
+  refine Vector.ext fun j hj => ?_
+  simp only [Vector.getElem_map]
+  try simp only [circuit_norm] at hj
+  by_cases hjk : j = k + 16
+  · subst hjk
+    simp only [Vector.getElem_set_self]
+    exact varFromOffset_eval_congr (fun i hi => hag.1 i (by omega)) (by omega)
+  · rw [Vector.getElem_set_ne (by omega) (by omega) (by omega)]
+    have hc := congrArg (fun v => v[j]'(by omega)) hacc
+    simp only [Vector.getElem_map] at hc
+    exact hc
+
+omit [Fact (p > 2 ^ 33)] in
+/-- Env-agreement of the block transfers to the schedule loop's initial accumulator. -/
+private lemma scheduleInit_eval_congr {env env' : ProverEnvironment (F p)}
+    {input : SHA256Block (Expression (F p))}
+    (h : eval env.toEnvironment input = eval env'.toEnvironment input) :
+    (eval env.toEnvironment (Vector.append input
+        (Vector.replicate 48 (Vector.replicate 32 (0 : Expression (F p))))) :
+      SHA256Schedule (F p)) =
+      eval env'.toEnvironment (Vector.append input
+        (Vector.replicate 48 (Vector.replicate 32 (0 : Expression (F p))))) := by
+  have happ : ∀ (a : SHA256Block (Expression (F p)))
+      (b : Vector (Var (fields 32) (F p)) 48),
+      Vector.append a b = a ++ b := fun _ _ => rfl
+  simp only [happ]
+  rw [eval_vector_append, eval_vector_append, h]
+  congr 1
+  simp [circuit_norm]
+
+/-- Env-agreement below `i₀ + j * 227` transfers to the schedule loop's accumulator after
+`j` steps: `Circuit.FoldlM.foldlAcc_finRange_eval_congr` with one `scheduleStep` per step. -/
+private lemma foldlAcc_schedule_eval_congr {env env' : ProverEnvironment (F p)}
+    {input : SHA256Block (Expression (F p))} {i₀ : ℕ}
+    (h : eval env.toEnvironment input = eval env'.toEnvironment input)
+    (k : ℕ) (hk : k < 48) (hag : env.AgreesBelow (i₀ + k * 227) env') :
+    eval env.toEnvironment (Circuit.FoldlM.foldlAcc i₀ (Vector.finRange 48)
+        (fun w i => scheduleStep w i)
+        (Vector.append input (Vector.replicate 48 (Vector.replicate 32 0))) ⟨k, hk⟩) =
+      eval env'.toEnvironment (Circuit.FoldlM.foldlAcc i₀ (Vector.finRange 48)
+        (fun w i => scheduleStep w i)
+        (Vector.append input (Vector.replicate 48 (Vector.replicate 32 0))) ⟨k, hk⟩) :=
+  Circuit.FoldlM.foldlAcc_finRange_eval_congr (M := SHA256Schedule)
+    (constant := ⟨227, fun _ _ => rfl⟩)
+    (scheduleInit_eval_congr h)
+    (fun _acc k hk hacc hag => scheduleStep_output_eval_congr k hk hacc
+      (ProverEnvironment.agreesBelow_of_le hag
+        (show i₀ + (k + 1) * 227 ≤ i₀ + (k + 1) * 227 from le_rfl)))
+    ⟨k, hk⟩ hag
+
 /-- The soundness inductive invariant. Given the constraints `h_holds` hold for every step,
     the variable-level schedule at step `k` matches the value-level schedule and is normalized. -/
-private lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F p)))
+lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F p)))
     (env : Environment (F p)) (input : SHA256Block (F p))
     (h_input : eval env input_var = input)
     (h_assumptions : ∀ i : Fin 16, Normalized input[i])
@@ -252,8 +327,6 @@ private lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F
           Vector.replicate 48 (Vector.replicate 32 (0 : Expression (F p))))[j]) = _
         rw [Vector.getElem_append_left hj16]
         simp only [Vector.getElem_mapFinRange, hj16, dif_pos]
-        rw [show (Vector.map valueBits input).get ⟨j, hj16⟩ =
-              (Vector.map valueBits input)[j]'hj16 from rfl]
         rw [Vector.getElem_map]
         congr 1
         rw [getElem_eval_vector, h_input]
@@ -318,12 +391,7 @@ private lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F
       LowerSigma0.Assumptions, LowerSigma0.Spec, Add32.Assumptions, Add32.Spec, and_imp] at h_step
     obtain ⟨c_sig1, c_sig0, c_sum0, c_sum1, c_wj⟩ := h_step
     -- Establish normalization of indexed positions via IH.
-    -- Convert `Vector.get x ⟨i, h⟩` to `x[i]` for our IH lemmas.
-    have h_eval_get : ∀ (x : SHA256Schedule (Expression (F p))) (i : ℕ) (h : i < 64),
-        Vector.map (Expression.eval env) (Vector.get x ⟨i, h⟩) = eval env (x[i]'h) := by
-      intros x i h
-      rw [show Vector.get x ⟨i, h⟩ = x[i]'h from rfl,
-          CircuitType.eval_var_fields]
+    -- Bridge the raw `Vector.map (Expression.eval env)` spelling to `eval env` for the IH lemmas.
     have h_norm_m2 : Normalized (eval env ((varSchedule i₀ input_var k)[k + 16 - 2]'(by omega))) :=
       ih_norm (k + 16 - 2) (by omega)
     have h_norm_m7 : Normalized (eval env ((varSchedule i₀ input_var k)[k + 16 - 7]'(by omega))) :=
@@ -333,14 +401,10 @@ private lemma soundness_inv (i₀ : ℕ) (input_var : SHA256Block (Expression (F
     have h_norm_m16 : Normalized (eval env ((varSchedule i₀ input_var k)[k + 16 - 16]'(by omega))) :=
       ih_norm (k + 16 - 16) (by omega)
     -- Apply specs in order: sig1, sig0, sum0, sum1, wj.
-    rw [h_eval_get] at c_sig1
     obtain ⟨v_sig1, n_sig1⟩ := c_sig1 h_norm_m2
-    rw [h_eval_get] at c_sig0
     obtain ⟨v_sig0, n_sig0⟩ := c_sig0 h_norm_m15
-    rw [h_eval_get] at c_sum0
     obtain ⟨v_sum0, n_sum0⟩ := c_sum0 n_sig1 h_norm_m7
     obtain ⟨v_sum1, n_sum1⟩ := c_sum1 n_sum0 n_sig0
-    rw [h_eval_get] at c_wj
     obtain ⟨v_wj, n_wj⟩ := c_wj n_sum1 h_norm_m16
     -- Now compose values: wj's value should equal valSchedule's k+16 slot.
     refine ⟨?_, ?_⟩
@@ -472,24 +536,14 @@ theorem completeness : Completeness (F p) (Input := SHA256Block) (Output := SHA2
         at h_step
       -- We need to show Normalized at slot j for varSchedule (k+1).
       obtain ⟨c_sig1, c_sig0, c_sum0, c_sum1, c_wj⟩ := h_step
-      have h_eval_get : ∀ (x : SHA256Schedule (Expression (F p))) (i : ℕ) (h : i < 64),
-          Vector.map (Expression.eval env.toEnvironment) (Vector.get x ⟨i, h⟩) =
-            eval env.toEnvironment (x[i]'h) := by
-        intros x i h
-        rw [show Vector.get x ⟨i, h⟩ = x[i]'h from rfl,
-            CircuitType.eval_var_fields]
       have h_norm_m2 := ih (k + 16 - 2) (by omega)
       have h_norm_m7 := ih (k + 16 - 7) (by omega)
       have h_norm_m15 := ih (k + 16 - 15) (by omega)
       have h_norm_m16 := ih (k + 16 - 16) (by omega)
-      rw [h_eval_get] at c_sig1
       obtain ⟨_, n_sig1⟩ := c_sig1 h_norm_m2
-      rw [h_eval_get] at c_sig0
       obtain ⟨_, n_sig0⟩ := c_sig0 h_norm_m15
-      rw [h_eval_get] at c_sum0
       obtain ⟨_, n_sum0⟩ := c_sum0 n_sig1 h_norm_m7
       obtain ⟨_, n_sum1⟩ := c_sum1 n_sum0 n_sig0
-      rw [h_eval_get] at c_wj
       obtain ⟨_, n_wj⟩ := c_wj n_sum1 h_norm_m16
       intro j hj
       simp only [varSchedule, dif_pos hk'']
@@ -528,34 +582,84 @@ theorem completeness : Completeness (F p) (Input := SHA256Block) (Output := SHA2
   -- Now we need to provide the chain of normalized assumptions.
   -- Extract the chain from h_env_i.
   obtain ⟨e_sig1, e_sig0, e_sum0, e_sum1, e_wj⟩ := h_env_i
-  have h_eval_get : ∀ (x : SHA256Schedule (Expression (F p))) (i : ℕ) (h : i < 64),
-      Vector.map (Expression.eval env.toEnvironment) (Vector.get x ⟨i, h⟩) =
-        eval env.toEnvironment (x[i]'h) := by
-    intros x i h
-    rw [show Vector.get x ⟨i, h⟩ = x[i]'h from rfl,
-        CircuitType.eval_var_fields]
   have h_norm_m2 := ih (i.val + 16 - 2) (by omega)
   have h_norm_m7 := ih (i.val + 16 - 7) (by omega)
   have h_norm_m15 := ih (i.val + 16 - 15) (by omega)
   have h_norm_m16 := ih (i.val + 16 - 16) (by omega)
-  rw [h_eval_get] at e_sig1
   obtain ⟨_, n_sig1⟩ := e_sig1 h_norm_m2
-  rw [h_eval_get] at e_sig0
   obtain ⟨_, n_sig0⟩ := e_sig0 h_norm_m15
-  rw [h_eval_get] at e_sum0
   obtain ⟨_, n_sum0⟩ := e_sum0 n_sig1 h_norm_m7
   obtain ⟨_, n_sum1⟩ := e_sum1 n_sum0 n_sig0
   -- The goal is the chain of ProverAssumptions = R1CS Assumptions = Normalized.
   refine ⟨?_, ?_, ?_, ?_, ?_⟩
-  · rw [h_eval_get]; exact h_norm_m2
-  · rw [h_eval_get]; exact h_norm_m15
-  · rw [h_eval_get]; exact ⟨n_sig1, h_norm_m7⟩
+  · exact h_norm_m2
+  · exact h_norm_m15
+  · exact ⟨n_sig1, h_norm_m7⟩
   · exact ⟨n_sum0, n_sig0⟩
-  · rw [h_eval_get]; exact ⟨n_sum1, h_norm_m16⟩
+  · exact ⟨n_sum1, h_norm_m16⟩
 
 def circuit : FormalCircuit (F p) SHA256Block SHA256Schedule where
   main; elaborated; Assumptions; Spec; soundness;
   completeness := by simp only [completeness]
+  -- Manual: leaves need the whole-input congruence lifted elementwise through
+  -- state[i]/Vector.map spellings; the tactic's close lacks these lifting lemmas.
+  computableWitnesses := by
+    computable_witnesses_start [messageSchedule]
+    · obtain ⟨iv, hiv⟩ := i
+      have hLL : Operations.localLength
+          ((scheduleStep (default : SHA256Schedule (Expression (F p)))
+            ⟨iv, hiv⟩) 0).2 = 227 := scheduleStep_localLength _ _ 0
+      rw [hLL]
+      simp only [circuit_norm, scheduleStep]
+      refine ⟨fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_, fun h => ?_⟩
+      · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+          (by simp only [circuit_norm]) fun h_agrees => ?_
+        have hsched := foldlAcc_schedule_eval_congr (i₀ := n) h iv hiv
+          (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+        simp only [circuit_norm, scheduleStep] at hsched
+        have hel := fun jj (hjj : jj < 64) => map_eval_getElem_congr hsched jj hjj
+        simp only [circuit_norm]
+        grind
+      · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+          (by simp only [circuit_norm]) fun h_agrees => ?_
+        have hsched := foldlAcc_schedule_eval_congr (i₀ := n) h iv hiv
+          (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+        simp only [circuit_norm, scheduleStep] at hsched
+        have hel := fun jj (hjj : jj < 64) => map_eval_getElem_congr hsched jj hjj
+        simp only [circuit_norm]
+        grind
+      · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+          (by simp only [circuit_norm]) fun h_agrees => ?_
+        have hsched := foldlAcc_schedule_eval_congr (i₀ := n) h iv hiv
+          (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+        simp only [circuit_norm, scheduleStep] at hsched
+        have hel := fun jj (hjj : jj < 64) => map_eval_getElem_congr hsched jj hjj
+        simp only [circuit_norm]
+        and_intros <;> grind
+      · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+          (by simp only [circuit_norm]) fun h_agrees => ?_
+        have hsched := foldlAcc_schedule_eval_congr (i₀ := n) h iv hiv
+          (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+        simp only [circuit_norm, scheduleStep] at hsched
+        have hel := fun jj (hjj : jj < 64) => map_eval_getElem_congr hsched jj hjj
+        simp only [circuit_norm]
+        and_intros <;> grind
+      · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+          (by simp only [circuit_norm]) fun h_agrees => ?_
+        have hsched := foldlAcc_schedule_eval_congr (i₀ := n) h iv hiv
+          (ProverEnvironment.agreesBelow_of_le h_agrees (by omega))
+        simp only [circuit_norm, scheduleStep] at hsched
+        have hel := fun jj (hjj : jj < 64) => map_eval_getElem_congr hsched jj hjj
+        simp only [circuit_norm]
+        and_intros <;> grind
+    · rw [← finFoldl_eq_varSchedule_48]
+      exact Circuit.FoldlM.finFoldl_finRange_output_eval_congr (M := SHA256Schedule)
+        (body := fun w i => scheduleStep w i)
+        (constant := ⟨227, fun _ _ => rfl⟩)
+        (scheduleInit_eval_congr h)
+        (fun _acc k hk hacc hag => scheduleStep_output_eval_congr k hk hacc hag)
+        (ProverEnvironment.agreesBelow_of_le h_agrees
+          (show n + 48 * 227 ≤ n + 10896 by omega))
 
 end MessageSchedule
 end Gadgets.SHA256

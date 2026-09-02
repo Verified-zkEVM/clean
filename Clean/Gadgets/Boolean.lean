@@ -1,4 +1,5 @@
 import Clean.Circuit.Basic
+import Clean.Circuit.Subcircuit
 import Clean.Utils.Field
 import Clean.Utils.Tactics.CircuitProofStart
 import Mathlib.Data.Nat.Bitwise
@@ -190,6 +191,21 @@ def assertBool : FormalAssertion (F p) field where
   Spec x := IsBool x
   soundness := by circuit_proof_all
   completeness := by circuit_proof_all
+
+/-- `assertBool` is assert-only (no witnesses), so its subcircuit is trivially computable —
+for *any* pair of offsets (see `Gadgets.Equality.toSubcircuit_computableWitnesses` for why
+the offsets are decoupled). -/
+@[circuit_norm]
+theorem assertBool_toSubcircuit_computableWitnesses {m n : ℕ} (input : Expression (F p))
+    {env env' : ProverEnvironment (F p)} :
+    (assertBool.toSubcircuit m input).ComputableWitnesses n env env' := by
+  have h_n : (assertBool.toSubcircuit n input).ComputableWitnesses n env env' := by
+    simp only [Subcircuit.ComputableWitnesses, FormalAssertion.toSubcircuit, assertBool,
+      FlatOperation.forAll, circuit_norm]
+  have h_ops : (assertBool.main input).operations m = (assertBool.main input).operations n := rfl
+  simp only [Subcircuit.ComputableWitnesses, FormalAssertion.toSubcircuit] at h_n ⊢
+  rw [h_ops]
+  exact h_n
 
 inductive Boolean (F : Type) where
   | private mk : Variable F → Boolean F

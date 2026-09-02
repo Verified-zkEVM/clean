@@ -76,17 +76,19 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
         split <;> split <;> decide
       output[i] = (c[i])[idx]
 
+  computableWitnesses := by
+    computable_witnesses [eval_vector, Vector.ext_iff, explicit_provable_type,
+      Vector.getElem_map]
+
   soundness := by
     circuit_proof_start
     obtain ⟨h_s10, h_out⟩ := h_holds
     intro i hi
     have h_s0 := congrArg (fun v => v[0]) h_input.2
     have h_s1 := congrArg (fun v => v[1]) h_input.2
-    simp only [Vector.getElem_map] at h_s0 h_s1
     have h_holds_i := congrArg (fun v => v[i]) h_out
     simp only [circuit_norm, Vector.getElem_map, Vector.getElem_mapRange] at h_holds_i
     rw [h_holds_i, h_s10, h_s0, h_s1, ← h_input.1]
-    simp only [← getElem_eval_vector, circuit_norm]
     rcases h_assumptions with ⟨h0 | h0, h1 | h1⟩ <;> simp [h0, h1]
     ring
 
@@ -103,7 +105,7 @@ def circuit (n : ℕ) : FormalCircuit (F p) (Inputs n) (fields n) where
       simp only [circuit_norm]
       -- Right side: eval of the computed expression
       have h_env_i := h_env ⟨i, hi⟩
-      rw [h_env_i]
+      rw [h_env_i]; simp only [h_input.1, h_input.2]
 
 end MultiMux2
 
@@ -143,6 +145,9 @@ def main (input : Var Inputs (F p)) := do
 def circuit : FormalCircuit (F p) Inputs field where
   main := main
 
+  computableWitnesses := by
+    computable_witnesses [eval_vector, Vector.ext_iff, Vector.getElem_map]
+
   Assumptions input :=
     let ⟨_, s⟩ := input
     IsBool s[0] ∧ IsBool s[1]
@@ -160,9 +165,7 @@ def circuit : FormalCircuit (F p) Inputs field where
   soundness := by
     circuit_proof_start [MultiMux2.circuit]
     specialize h_holds h_assumptions 0 (by omega)
-    simp only [circuit_norm, eval_vector] at h_holds
-    rw [← h_input.1]
-    simp only [Vector.getElem_map]
+    simp only [circuit_norm] at h_holds
     exact h_holds
 
   completeness := by

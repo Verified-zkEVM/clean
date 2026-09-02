@@ -62,7 +62,7 @@ def Spec (input : Inputs (F p)) (out : SHA256State (F p)) : Prop :=
 omit [Fact (Nat.Prime p)] [Fact (p > 2 ^ 33)] in
 /-- Generic version of `output_eq`: for any bound `k`, the `Fin.foldl k` over our round body
     equals `stateVar i₀ input_var_state k`. -/
-private lemma fin_foldl_eq_stateVar (i₀ : ℕ) (input_var_state : Var SHA256State (F p)) (k : ℕ) :
+lemma fin_foldl_eq_stateVar (i₀ : ℕ) (input_var_state : Var SHA256State (F p)) (k : ℕ) :
     Fin.foldl k
       (fun (acc : Var SHA256State (F p)) (i : Fin k) =>
         #v[Vector.mapRange 32 fun i_1 => var { index := i₀ + i.val * 455 + 389 + i_1 },
@@ -94,7 +94,7 @@ private lemma fin_foldl_eq_stateVar (i₀ : ℕ) (input_var_state : Var SHA256St
     Uses `SHA256State (Expression (F p))` for the accumulator type (not the
     `Var SHA256State (F p)` alias) so the lemma's pattern matches `h_holds`
     syntactically — `rw` can't see through the alias. -/
-private lemma foldlAcc_eq_stateVar (i₀ : ℕ)
+lemma foldlAcc_eq_stateVar (i₀ : ℕ)
     (input_var_state : SHA256State (Expression (F p)))
     (input_var_schedule : SHA256Schedule (Expression (F p)))
     (k : ℕ) (h : k < 64) :
@@ -112,7 +112,8 @@ private lemma foldlAcc_eq_stateVar (i₀ : ℕ)
 omit [Fact (p > 2 ^ 33)] in
 /-- Helper: `constWord32 n` evaluated is always normalized (bits are 0 or 1). -/
 private lemma normalized_constWord32 (env : Environment (F p)) (n : ℕ) :
-    Normalized (Vector.map (Expression.eval env) (constWord32 (p:=p) n)) := by
+    Normalized (eval env (constWord32 (p:=p) n)) := by
+  rw [CircuitType.eval_var_fields]
   intro i
   have h : (n / 2^i.val % 2 : ℕ) = 0 ∨ (n / 2^i.val % 2 : ℕ) = 1 := by omega
   rcases h with h | h
@@ -122,7 +123,7 @@ private lemma normalized_constWord32 (env : Environment (F p)) (n : ℕ) :
     simp [constWord32, Expression.eval, h]
 
 /-- valueBits of `constWord32 n` equals `n` modulo `2^32`. -/
-private lemma valueBits_constWord32 (env : Environment (F p)) (n : ℕ) :
+lemma valueBits_constWord32 (env : Environment (F p)) (n : ℕ) :
     valueBits (Vector.map (Expression.eval env) (constWord32 (p:=p) n)) = n % 2^32 := by
   simp only [valueBits, constWord32]
   have h2 : ∀ i : Fin 32, ((n / 2^i.val % 2 : ℕ) : F p).val = n / 2^i.val % 2 := by
@@ -157,12 +158,12 @@ private lemma valueBits_constWord32 (env : Environment (F p)) (n : ℕ) :
   exact key 32
 
 /-- For `n < 2^32`, valueBits of `constWord32 n` is `n`. -/
-private lemma valueBits_constWord32_of_lt (env : Environment (F p)) {n : ℕ} (h : n < 2^32) :
+lemma valueBits_constWord32_of_lt (env : Environment (F p)) {n : ℕ} (h : n < 2^32) :
     valueBits (Vector.map (Expression.eval env) (constWord32 (p:=p) n)) = n := by
   rw [valueBits_constWord32, Nat.mod_eq_of_lt h]
 
 /-- The value-level state at the end of round `k`. -/
-private def valStateAfterRound (input_state : Vector ℕ 8)
+def valStateAfterRound (input_state : Vector ℕ 8)
     (input_schedule : Vector ℕ 64) : ℕ → Vector ℕ 8
   | 0 => input_state
   | k + 1 =>
@@ -173,7 +174,7 @@ private def valStateAfterRound (input_state : Vector ℕ 8)
       valStateAfterRound input_state input_schedule k
 
 /-- `sha256Compress` equals our `valStateAfterRound` at index 64. -/
-private lemma sha256Compress_eq_valStateAfterRound
+lemma sha256Compress_eq_valStateAfterRound
     (input_state : Vector ℕ 8) (input_schedule : Vector ℕ 64) :
     Specs.SHA256.sha256Compress input_state input_schedule =
       valStateAfterRound input_state input_schedule 64 := by
@@ -246,13 +247,9 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
       rw [foldlAcc_eq_stateVar i₀ input_var_state input_var_schedule k hk''] at h_holds
       simp only [circuit_norm, SHA256Round.circuit, SHA256Round.elaborated,
         SHA256Round.Spec, SHA256Round.Assumptions] at h_holds
-      have h2 : Normalized (Vector.map (Expression.eval env)
-          (constWord32 (p:=p) Specs.SHA256.K[k].toNat)) := normalized_constWord32 env _
-      have h3 : Normalized (Vector.map (Expression.eval env) input_var_schedule[k]) := by
-        rw [show Vector.map (Expression.eval env) input_var_schedule[k]
-              = eval env (input_var_schedule[k]'hk'') from (CircuitType.eval_var_fields env _).symm]
-        rw [getElem_eval_vector, h_input_schedule]
-        exact h_sched_norm ⟨k, hk''⟩
+      have h2 : Normalized (eval env (constWord32 (p:=p) Specs.SHA256.K[k].toNat)) :=
+        normalized_constWord32 env _
+      have h3 : Normalized (input_schedule[k]'hk'') := h_sched_norm ⟨k, hk''⟩
       -- Provide the IH-derived normalization assumption via a tactic that bridges
       -- via `getElem_eval_vector`.
       have h_spec := h_holds ⟨by
@@ -264,11 +261,12 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
       rw [stateVar, valStateAfterRound, dif_pos hk'']
       refine ⟨?_, ?_⟩
       · -- Value equality: h_value gives the LHS = sha256Round (...)
-        rw [h_value, ih_val,
+        try simp only [ProvableStruct.vectorEvalLiteral, ProvableType.eval_fields,
+          Vector.map_mk, List.map_toArray, List.map_cons, List.map_nil]
+        simp only [ProvableType.eval_fields,
+          add_assoc, Nat.reduceAdd] at h_value ⊢
+        simp only [h_value, ih_val,
           valueBits_constWord32_of_lt env Specs.SHA256.K[k].toNat_lt,
-          show Vector.map (Expression.eval env) input_var_schedule[k]
-            = eval env (input_var_schedule[k]'hk'') from (CircuitType.eval_var_fields env _).symm,
-          getElem_eval_vector, h_input_schedule,
           show (Vector.map valueBits input_schedule)[k]'hk''
             = valueBits (input_schedule[k]'hk'') from Vector.getElem_map _ _]
       · -- Normalization for round k+1.
@@ -276,6 +274,9 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
         -- h_norm gives Normalized (eval env <new state>)[↑i_1] for i_1 : Fin 8.
         -- We need Normalized (eval env <new state>[j]'hj).
         rw [getElem_eval_vector]
+        simp only [ProvableStruct.vectorEvalLiteral, Vector.map_mk, List.map_toArray,
+          List.map_cons, List.map_nil, Vector.getElem_mk,
+          List.getElem_toArray] at h_norm ⊢
         exact h_norm ⟨j, hj⟩
   obtain ⟨h_val_64, h_norm_64⟩ := h_inv 64 (le_refl 64)
   refine ⟨⟨h_val_64, ?_⟩, ?_⟩
@@ -309,14 +310,9 @@ theorem completeness : Completeness (F p) main Assumptions := by
       rw [foldlAcc_eq_stateVar i₀ input_var_state input_var_schedule k hk''] at h_env
       simp only [circuit_norm, SHA256Round.circuit, SHA256Round.elaborated,
         SHA256Round.Spec, SHA256Round.Assumptions] at h_env
-      have h2 : Normalized (Vector.map (Expression.eval env.toEnvironment)
-          (constWord32 (p:=p) Specs.SHA256.K[k].toNat)) := normalized_constWord32 _ _
-      have h3 : Normalized (Vector.map (Expression.eval env.toEnvironment) input_var_schedule[k]) := by
-        rw [show Vector.map (Expression.eval env.toEnvironment) input_var_schedule[k]
-              = eval env.toEnvironment (input_var_schedule[k]'hk'') from
-            (CircuitType.eval_var_fields _ _).symm]
-        rw [getElem_eval_vector, h_input_schedule]
-        exact h_sched_norm ⟨k, hk''⟩
+      have h2 : Normalized (eval env.toEnvironment (constWord32 (p:=p) Specs.SHA256.K[k].toNat)) :=
+        normalized_constWord32 _ _
+      have h3 : Normalized (input_schedule[k]'hk'') := h_sched_norm ⟨k, hk''⟩
       have h_spec := h_env ⟨by
         intro i
         have h := ih hk' i.val i.isLt
@@ -326,6 +322,8 @@ theorem completeness : Completeness (F p) main Assumptions := by
       intro j hj
       rw [stateVar]
       rw [getElem_eval_vector]
+      simp only [ProvableStruct.vectorEvalLiteral, Vector.map_mk, List.map_toArray,
+        List.map_cons, List.map_nil, Vector.getElem_mk, List.getElem_toArray]
       exact h_norm ⟨j, hj⟩
   intro i
   refine ⟨?_, ?_, ?_⟩
@@ -337,15 +335,54 @@ theorem completeness : Completeness (F p) main Assumptions := by
     rw [heq] at h
     exact h
   · exact normalized_constWord32 _ _
-  · rw [show Vector.map (Expression.eval env.toEnvironment) input_var_schedule[i.val]
-          = eval env.toEnvironment (input_var_schedule[i.val]'i.isLt) from
-        (CircuitType.eval_var_fields _ _).symm]
-    rw [getElem_eval_vector, h_input_schedule]
-    exact h_sched_norm i
+  · exact h_sched_norm i
 
 def circuit : FormalCircuit (F p) Inputs SHA256State := {
   main, elaborated, Assumptions, Spec, soundness
   completeness := by simp only [completeness]
+  -- Manual: compound of the SHA256Round/Schedule leaves (elementwise input lifting
+  -- plus Add32-family witness IR); see those gadgets' comments.
+  computableWitnesses := by
+    computable_witnesses_start
+    · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+        (by try rfl; try omega) fun h_agrees => ?_
+      have hsv := Circuit.FoldlM.foldlAcc_eval_congr
+        (xs := Vector.finRange 64)
+        (body := fun s (i : Fin 64) => subcircuit SHA256Round.circuit
+          { state := s, k := constWord32 (Specs.SHA256.K[i.val]'i.isLt).toNat,
+            w := input_schedule[i.val]'i.isLt })
+        (constant := ⟨455, fun _ _ => rfl⟩)
+        h.1
+        (fun acc k hk hacc hag =>
+          SHA256Round.output_eval_congr hacc
+            (ProverEnvironment.agreesBelow_of_le hag
+              (show n + k * 455 + 455 ≤ n + (k + 1) * 455 by omega)))
+        i
+        (ProverEnvironment.agreesBelow_of_le h_agrees (by simp only []; omega))
+      have hSch := fun (jj : ℕ) (hjj : jj < 64) => map_eval_getElem_congr h.2 jj hjj
+      simp only [circuit_norm]
+      refine ⟨?_, ?_, ?_⟩
+      · exact hsv
+      · -- the round constant: env-independent
+        refine Vector.ext fun j hj => ?_
+        simp only [Vector.getElem_map, constWord32, Vector.getElem_ofFn, circuit_norm]
+      · rw [← getElem_eval_vector, ← getElem_eval_vector,
+          ProvableType.eval_fields, ProvableType.eval_fields]
+        exact hSch i.val (by omega)
+    · rw [← fin_foldl_eq_stateVar]
+      exact Circuit.FoldlM.finFoldl_output_eval_congr
+        (xs := Vector.finRange 64)
+        (body := fun s (i : Fin 64) => subcircuit SHA256Round.circuit
+          { state := s, k := constWord32 (Specs.SHA256.K[i.val]'i.isLt).toNat,
+            w := input_schedule[i.val]'i.isLt })
+        (constant := ⟨455, fun _ _ => rfl⟩)
+        h.1
+        (fun acc k hk hacc hag =>
+          SHA256Round.output_eval_congr hacc
+            (ProverEnvironment.agreesBelow_of_le hag
+              (show n + k * 455 + 455 ≤ n + (k + 1) * 455 by omega)))
+        (ProverEnvironment.agreesBelow_of_le h_agrees
+          (show n + 64 * 455 ≤ n + 29120 by omega))
 }
 
 end SHA256Rounds
@@ -430,24 +467,39 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
     rw [this, h_sched_map]
   -- Helper to convert `eval env <mapFinRange>[i]` to the per-position var form.
   have h_index : ∀ (i : ℕ) (hi : i < 8),
-      (eval env ((Vector.mapFinRange 8 fun (j : Fin 8) ↦
+      (Vector.map (eval env) ((Vector.mapFinRange 8 fun (j : Fin 8) ↦
               Vector.mapRange 32 fun i_1 ↦
-                var { index := i₀ + 48 * 227 + 64 * 455 + j.val * 33 + i_1 }) :
+                var { index := i₀ + 10896 + 29120 + j.val * 33 + i_1 }) :
             Var SHA256State (F p)))[i]'hi
           = Vector.map (Expression.eval env)
               (Vector.mapRange 32 fun i_1 ↦
-                var (F := F p) { index := i₀ + 48 * 227 + 64 * 455 + i * 33 + i_1 }) := by
+                var (F := F p) { index := i₀ + 10896 + 29120 + i * 33 + i_1 }) := by
     intro i hi
-    rw [← getElem_eval_vector, CircuitType.eval_var_fields, Vector.getElem_mapFinRange]
-  simp_all only [implies_true, and_self, forall_const, and_true]
+    rw [Vector.getElem_map, Vector.getElem_mapFinRange]
+    exact CircuitType.eval_var_fields env _
+  simp_all only [implies_true, and_self]
   -- Value equality
   simp only [Specs.SHA256.compressBlock]
+  have h_add' := fun (i : Fin 8) => h_add i ⟨trivial, by
+    have hb := h_state_b i
+    simp only [Nat.reduceMul] at hb
+    rw [← CircuitType.eval_var_fields] at hb
+    exact hb⟩
+  refine ⟨?_, fun i => (h_add' i).2⟩
   ext i hi
-  have ⟨h_val, _⟩ := h_add ⟨i, hi⟩
+  have ⟨h_val, _⟩ := h_add' ⟨i, hi⟩
   simp only at h_val
   rw [Vector.getElem_map, h_index i hi, h_val,
       Vector.getElem_mapFinRange]
   simp only [_root_.add32, circuit_norm]
+  have hre : valueBits (eval env ((SHA256Rounds.stateVar (i₀ + 10896) input_var_state 64)[i]'(by omega)))
+      = (Specs.SHA256.sha256Compress (Vector.map valueBits input_state)
+          (Specs.SHA256.messageSchedule (Vector.map valueBits input_block)))[i]'(by omega) := by
+    rw [getElem_eval_vector]
+    have h := congrArg (fun v => v[i]'(by omega)) h_rounds_val
+    simp only [Vector.getElem_map] at h
+    exact h
+  rw [hre]
 
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [MessageSchedule.circuit, MessageSchedule.Spec, MessageSchedule.Assumptions,
@@ -464,17 +516,55 @@ theorem completeness : Completeness (F p) main Assumptions := by
   refine ⟨h_block_norm, ⟨h_state_norm, h_sched_norm⟩, ?_⟩
   intro i
   refine ⟨?_, ?_⟩
-  · -- Normalized (Vector.map (Expression.eval env.toEnvironment) input_var_state[i.val])
-    rw [← CircuitType.eval_var_fields, getElem_eval_vector, h_input_state]
-    exact h_state_norm i
-  · -- Normalized (Vector.map (Expression.eval env.toEnvironment) (stateVar ...)[i.val])
-    have := h_rounds_norm i
-    rw [← getElem_eval_vector, CircuitType.eval_var_fields] at this
-    exact this
+  · exact h_state_norm i
+  · have h := h_rounds_norm i
+    rw [← getElem_eval_vector] at h
+    exact h
 
+set_option maxRecDepth 2048 in
 def circuit : FormalCircuit (F p) Inputs SHA256State := {
   main, elaborated, Assumptions, Spec, soundness
   completeness := by simp only [completeness]
+  -- Manual: compound of the SHA256Round/Schedule leaves (elementwise input lifting
+  -- plus Add32-family witness IR); see those gadgets' comments. maxRecDepth: the
+  -- Add32 leg unifies `SHA256Rounds.circuit.output` against its 64-step unfolding.
+  computableWitnesses := by
+    computable_witnesses_start
+    · computable_witnesses_close
+    · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+        (by rfl) fun h_agrees => ?_
+      simp only [circuit_norm]
+      refine ⟨h.1, ?_⟩
+      exact FormalCircuit.output_of_input_eq (MessageSchedule.circuit (p:=p))
+        (input_var := input_block) (n := n) h.2
+        (ProverEnvironment.agreesBelow_of_le h_agrees (by
+          have eM : ∀ x, (MessageSchedule.circuit (p:=p)).localLength x = 10896 := fun _ => rfl
+          simp only [eM]; omega))
+    · refine FormalCircuit.toSubcircuit_computableWitnesses_onlyAccessedBelow_of_offset_eq _
+        (by rfl) fun h_agrees => ?_
+      have oR := FormalCircuit.output_of_input_eq (SHA256Rounds.circuit (p:=p))
+        (input_var := ⟨input_state, (MessageSchedule.circuit (p:=p)).output input_block n⟩)
+        (n := n + 10896)
+        (by simp only [circuit_norm]
+            refine ⟨h.1, ?_⟩
+            exact FormalCircuit.output_of_input_eq (MessageSchedule.circuit (p:=p))
+              (input_var := input_block) (n := n) h.2
+              (ProverEnvironment.agreesBelow_of_le h_agrees (by
+                have eM : ∀ x, (MessageSchedule.circuit (p:=p)).localLength x = 10896 := fun _ => rfl
+                simp only [eM]; omega)))
+        (ProverEnvironment.agreesBelow_of_le h_agrees (by
+          have eR : ∀ x, (SHA256Rounds.circuit (p:=p)).localLength x = 29120 := fun _ => rfl
+          simp only [eR]; omega))
+      have hb := fun (jj : ℕ) (hjj : jj < 8) => map_eval_getElem_congr oR jj hjj
+      have ha := fun (jj : ℕ) (hjj : jj < 8) => map_eval_getElem_congr h.1 jj hjj
+      simp only [circuit_norm]
+      have ha' := ha i.val i.isLt
+      have hb' := hb i.val i.isLt
+      rw [← ProvableType.eval_fields, ← ProvableType.eval_fields,
+        getElem_eval_vector, getElem_eval_vector] at ha'
+      rw [← ProvableType.eval_fields, ← ProvableType.eval_fields] at hb'
+      exact ⟨ha', hb'⟩
+    · computable_witnesses_close
 }
 
 end CompressBlock

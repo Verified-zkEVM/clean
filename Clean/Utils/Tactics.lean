@@ -2,3 +2,4 @@
 import Clean.Utils.Tactics.SpecializeAuto
 import Clean.Utils.Tactics.ProvableStructSimp
 import Clean.Utils.Tactics.CircuitProofStart
+import Clean.Utils.Tactics.ComputableWitnesses

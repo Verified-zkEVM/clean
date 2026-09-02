@@ -13,6 +13,30 @@ open Utils.Bits
 variable {p : ℕ} [Fact p.Prime] [Fact (p < 2^254)] [Fact (p > 2^253)]
 
 namespace CompConstant
+
+lemma eval_sum_eq_of_eval_eq {F : Type} [Field F]
+    {env env' : Environment F} {n : ℕ} {v : Vector (Expression F) n}
+    (h : ∀ i : Fin n, Expression.eval env v[i] = Expression.eval env' v[i]) :
+    Expression.eval env v.sum = Expression.eval env' v.sum := by
+  have eval_sum (env : Environment F) (v : Vector (Expression F) n) :
+      Expression.eval env v.sum = (v.map (Expression.eval env)).sum := by
+    have eval_list_sum (l : List (Expression F)) :
+        (l.map (Expression.eval env)).sum = Expression.eval env l.sum := by
+      induction l with
+      | nil => simp only [List.map_nil, List.sum_nil, circuit_norm]
+      | cons x xs ih =>
+        simp only [List.map_cons, List.sum_cons, ih, circuit_norm]
+    simp only [Vector.sum, Vector.toArray_map]
+    conv_rhs => rw [← Array.sum_toList, Array.toList_map]
+    conv_lhs => rw [← Array.sum_toList]
+    exact (eval_list_sum _).symm
+  rw [eval_sum, eval_sum]
+  congr 1
+  rw [Vector.ext_iff]
+  intro i hi
+  simp only [Vector.getElem_map]
+  exact h ⟨i, hi⟩
+
 /-
 template CompConstant(ct) {
     signal input in[254];
@@ -103,6 +127,22 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
   Spec bits output :=
     output = if fromBits (bits.map ZMod.val) > c then 1 else 0
 
+  -- Manual: selector/pair-vector evaluations under binders (toElements spellings over
+  -- 127 windows); grind cannot reach them and the close lacks the decomposition.
+  computableWitnesses := by
+    computable_witnesses_start [Vector.ext_iff]
+    · simp only [apply_ite (Expression.eval env.toEnvironment),
+        apply_ite (Expression.eval env'.toEnvironment)]
+      split_ifs <;>
+        (simp only [circuit_norm]; rw [h (i * 2) (by omega), h (i * 2 + 1) (by omega)])
+    · apply eval_sum_eq_of_eval_eq
+      intro i
+      simp only [Vector.getElem_mapRange, circuit_norm]
+      grind
+    · computable_witnesses_close
+    · computable_witnesses_close
+    · computable_witnesses_close
+
   soundness := by
     circuit_proof_start [Num2Bits.circuit]
     rcases h_holds with ⟨h_parts, h_holds⟩
@@ -118,9 +158,7 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
 
     have h_input_eval : ∀ j : ℕ, (hj : j < 254) → input_var[j].eval env = input[j] := by
       intro j hj
-      have := congrArg (fun v => v[j]) h_input
-      simp only [Vector.getElem_map] at this
-      exact this
+      rw [ProvableType.getElem_eval_fields _ input_var j hj, h_input]
 
     have h_parts' :
         ∀ i : Fin 127,
@@ -134,7 +172,7 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
       simp only [circuit_norm]
       have hi2 : (i : ℕ) * 2 < 254 := by omega
       have hi2p1 : (i : ℕ) * 2 + 1 < 254 := by omega
-      simp only [h_input_eval _ hi2, h_input_eval _ hi2p1]
+      simp only [h_input]
       simp only [computePart, bCoeff, aCoeff, Bool.and_eq_true]
       have h_pow_le : (2 : ℕ)^(i : ℕ) ≤ 2^128 := Nat.pow_le_pow_right (by omega) (by omega : (i : ℕ) ≤ 128)
       have h_int_eq_nat_sub : ((2^128 - 2^(i : ℕ) : ℤ) : F p) = ((2^128 - 2^(i : ℕ) : ℕ) : F p) := by
@@ -206,9 +244,7 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
 
     have h_input_eval : ∀ j : ℕ, (hj : j < 254) → input_var[j].eval env = input[j] := by
       intro j hj
-      have := congrArg (fun v => v[j]) h_input
-      simp only [Vector.getElem_map] at this
-      exact this
+      rw [ProvableType.getElem_eval_fields _ input_var j hj, h_input]
 
     have h_parts' :
         ∀ i : Fin 127,
@@ -221,7 +257,7 @@ def circuit (c : ℕ) (h_c : c < 2^254) : FormalCircuit (F p) (fields 254) field
       simp only [circuit_norm]
       have hi2 : (i : ℕ) * 2 < 254 := by omega
       have hi2p1 : (i : ℕ) * 2 + 1 < 254 := by omega
-      simp only [h_input_eval _ hi2, h_input_eval _ hi2p1]
+      simp only [h_input]
       simp only [computePart, bCoeff, aCoeff, Bool.and_eq_true]
       have h_pow_le : (2 : ℕ)^(i : ℕ) ≤ 2^128 := Nat.pow_le_pow_right (by omega) (by omega : (i : ℕ) ≤ 128)
       have h_int_eq_nat_sub : ((2^128 - 2^(i : ℕ) : ℤ) : F p) = ((2^128 - 2^(i : ℕ) : ℕ) : F p) := by

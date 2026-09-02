@@ -37,10 +37,9 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
-  simp only [circuit_norm, chi_loop, eval_vector, KeccakState.value]
+  simp only [circuit_norm, chi_loop, KeccakState.value]
 
   -- simplify constraints
-  simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp only [KeccakState.Normalized] at h_assumptions
 
   simp_all
@@ -49,7 +48,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [Xor64.circuit, And.And64.circuit, And.And8.circuit, Not.circuit,
     Xor64.Assumptions, Xor64.Spec, And.And64.Assumptions, And.And64.Spec,
     KeccakState.Normalized]
-  simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp_all
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState where
@@ -59,4 +57,8 @@ def circuit : FormalCircuit (F p) KeccakState KeccakState where
   Spec
   soundness
   completeness
+  computableWitnesses := by
+    -- reduce the children's localLength/output metadata: the chained offsets otherwise
+    -- leave opaque sums that send grind's case-splitting off a cliff
+    computable_witnesses [Not.circuit]
 end Gadgets.Keccak256.Chi

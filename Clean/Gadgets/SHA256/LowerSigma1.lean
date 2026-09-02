@@ -37,7 +37,7 @@ def Spec (x : fields 32 (F p)) (z : fields 32 (F p)) : Prop :=
 
 /-! ## Spec proof factored out to avoid kernel deep recursion -/
 
-private lemma spec_of_constraint
+lemma spec_of_constraint
     (input z : fields 32 (F p))
     (hx : Normalized input)
     (h_z : ∀ i : Fin 32, z[i] =
@@ -169,7 +169,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [lowerSigma1, xor32]
-  obtain ⟨h_env1, h_env2, -⟩ := h_env
+  obtain ⟨h_env1, h_env2⟩ := h_env
   refine ⟨fun i => ?_, fun i => ?_⟩
   · have hr17 := eval_rotr32 env.toEnvironment input_var input h_input 17 i
     have hr19 := eval_rotr32 env.toEnvironment input_var input h_input 19 i
@@ -192,7 +192,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
     have hs10 := eval_shr32 env.toEnvironment input_var input h_input 10 i
     have h1 := h_env1 i
     have h2 := h_env2 i
-    simp only [circuit_norm, mul_zero, zero_add] at h2
+    simp only [circuit_norm, mul_zero] at h2
     rw [show (i₀ + (32 + 32 * 0) + ↑i) = i₀ + 32 + ↑i from by ring, h2, h1, hr17, hr19, hs10]
     have b17 : input[(i + 17).val] = (0 : F p) ∨ input[(i + 17).val] = 1 := h_assumptions (i + 17)
     have b19 : input[(i + 19).val] = (0 : F p) ∨ input[(i + 19).val] = 1 := h_assumptions (i + 19)
@@ -225,6 +225,19 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
 def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness
+  -- Manual: the rotation-xor witness IR reads input bits; its eval-congruence needs the
+  -- sigma-specific decomposition facts, beyond the tactic's generic close.
+  computableWitnesses := by
+    computable_witnesses_start [lowerSigma1, xor32, rotr32, shr32, Vector.ext_iff, Vector.getElem_rotate]
+    · computable_witnesses_close [h ((i + 17) % 32) (by omega), h ((i + 19) % 32) (by omega)]
+    · have hz := h_agrees.1 (n + i) (by omega)
+      split_ifs with hc
+      · have h3 := h (i + 10 % 32) (by omega)
+        grind
+      · have h3 := h ((i + 10 % 32) % 32) (by omega)
+        simp only [circuit_norm]
+        grind
+    · computable_witnesses_close
 
 end LowerSigma1
 end Gadgets.SHA256

@@ -21,6 +21,12 @@ export Expression (var)
 def ProverData (F : Type) :=
   String → (n : ℕ) → Array (Vector F n)
 
+/-- Placeholder `ProverData` that returns an empty array for every key. -/
+def ProverData.empty (F : Type) : ProverData F := fun _ _ => #[]
+
+instance : Inhabited (ProverData F) where
+  default := ProverData.empty F
+
 /-- Runtime-only hashmap of prover hints. Same shape as `ProverData`, but
 distinct to emphasize that hints are *not* committed: they feed only the
 witness-generation step and never appear in the proof. -/
@@ -89,6 +95,24 @@ def eval (env : Environment F) : Expression F → F
   | add x y => eval env x + eval env y
   | mul x y => eval env x * eval env y
 
+/-! `eval`'s defining equations as `grind =` rules rather than `grind unfold`:
+unfold only reduces syntactic constructor applications, while E-matching rules also
+fire when the argument's e-class contains the constructor form (window atoms folded
+to `var` by other rules). The unfold tag would additionally erase these very rules
+at registration time by normalizing their left-hand sides. -/
+
+@[grind =] theorem eval_var_ctor (env : Environment F) (v : Variable F) :
+    eval env (var v) = env.get v.index := rfl
+
+@[grind =] theorem eval_const_ctor (env : Environment F) (c : F) :
+    eval env (const c) = c := rfl
+
+@[grind =] theorem eval_add_ctor (env : Environment F) (x y : Expression F) :
+    eval env (add x y) = eval env x + eval env y := rfl
+
+@[grind =] theorem eval_mul_ctor (env : Environment F) (x y : Expression F) :
+    eval env (mul x y) = eval env x * eval env y := rfl
+
 def toString [Repr F] : Expression F → String
   | var v => reprStr v
   | const c => reprStr c
@@ -125,6 +149,16 @@ attribute [circuit_norm] Bool.and_eq_true
 instance : Coe F (Expression F) where coe f := const f
 instance {n : ℕ} [OfNat F n] : OfNat (Expression F) n where
   ofNat := const (OfNat.ofNat n)
+/-- Numeral spellings of `const`: goals carry `(0 : Expression F)` through the
+`Zero`/`One`/`OfNat` instances, never the syntactic `const` constructor. -/
+@[grind =] theorem eval_zero (env : Environment F) :
+    eval env (0 : Expression F) = 0 := rfl
+
+@[grind =] theorem eval_one (env : Environment F) :
+    eval env (1 : Expression F) = 1 := rfl
+
+@[grind =] theorem eval_ofNat (env : Environment F) (n : ℕ) [OfNat F n] :
+    eval env (OfNat.ofNat n : Expression F) = OfNat.ofNat n := rfl
 
 instance : HMul F (Expression F) (Expression F) where hMul f e := mul f e
 instance : HMul (Expression F) F (Expression F) where hMul f e := mul f e
@@ -154,21 +188,27 @@ instance [Field F] : Inhabited (Expression F) where
 section EvalLemmas
 variable [Field F]
 
+/-! The eval distribution rules are keyed on the operator spellings (`a + b`, not
+`Expression.add a b`): circuits are written in operator sugar, so that is the form goals
+contain, and `grind` in particular never unfolds the `HAdd`/`Sub`/`Neg`/`Mul` instances
+down to the constructors. The operator forms are definitionally the constructors, so
+they prove by `rfl` and also apply wherever the constructor spelling appears. -/
+
 /-- Expression.eval distributes over multiplication -/
-@[circuit_norm]
+@[circuit_norm, grind =]
 lemma eval_mul (env : Environment F) (a b : Expression F) :
-    Expression.eval env (Expression.mul a b) = (Expression.eval env a) * (Expression.eval env b) := by
-  simp only [Expression.eval]
+    Expression.eval env (a * b) = Expression.eval env a * Expression.eval env b := rfl
 
 /-- Expression.eval distributes over addition -/
-@[circuit_norm]
+@[circuit_norm, grind =]
 lemma eval_add (env : Environment F) (a b : Expression F) :
-    Expression.eval env (Expression.add a b) = (Expression.eval env a) + (Expression.eval env b) := by
-  simp only [Expression.eval]
+    Expression.eval env (a + b) = Expression.eval env a + Expression.eval env b := rfl
 
 /-- Expression.eval distributes over negation. Keyed on the `-a` surface syntax: the
 `Expression.eval` matcher does not unfold the composite `Neg`/`Sub` instances, so the
-`Expression.mul`-keyed lemmas do not reach these spellings. -/
+`Expression.mul`-keyed lemmas do not reach these spellings. Not a `grind` rule: the
+`-1` literal hidden in the desugared pattern trips a grind internalization bug
+("term has not been internalized"). -/
 @[circuit_norm]
 lemma eval_neg (env : Environment F) (a : Expression F) :
     Expression.eval env (-a) = -Expression.eval env a := by
@@ -176,10 +216,10 @@ lemma eval_neg (env : Environment F) (a : Expression F) :
   simp only [Expression.eval, neg_one_mul]
 
 /-- Expression.eval distributes over subtraction (see `eval_neg`). -/
-@[circuit_norm]
+@[circuit_norm, grind =]
 lemma eval_sub (env : Environment F) (a b : Expression F) :
     Expression.eval env (a - b) = Expression.eval env a - Expression.eval env b := by
-  show Expression.eval env (Expression.add a (-b)) = _
+  show Expression.eval env (a + -b) = _
   rw [eval_add, eval_neg, ← sub_eq_add_neg]
 
 /-- Expression.eval distributes over Fin.foldl with addition -/

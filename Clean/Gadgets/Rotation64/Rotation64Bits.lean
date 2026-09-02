@@ -34,6 +34,7 @@ def Spec (offset : Fin 8) (x : U64 (F p)) (y : U64 (F p)) :=
   y.value = rotRight64 x.value offset.val
   ∧ y.Normalized
 
+@[grind unfold, computable_witnesses_metadata]
 def output (offset : Fin 8) (i0 : ℕ) : U64 (Expression (F p)) :=
   U64.fromLimbs (.ofFn fun ⟨i,_⟩ =>
     (var ⟨i0 + i*2 + 1⟩) + var ⟨i0 + (i + 1) % 8 * 2⟩ * .const ((2^(8-offset.val) : ℕ) : F p))
@@ -106,13 +107,11 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (main offset) Assumpt
   rw [U64.ByteVector.normalized_iff] at h_assumptions
   simp_all only [U64.ByteVector.getElem_eval_toLimbs, forall_const]
 
-def circuit (offset : Fin 8) : FormalCircuit (F p) U64 U64 := {
+def circuit (offset : Fin 8) : FormalCircuit (F p) U64 U64 where
   main := main offset
   elaborated := elaborated offset
   Assumptions
   Spec := Spec offset
   soundness := soundness offset
   completeness := completeness offset
-}
-
 end Gadgets.Rotation64Bits

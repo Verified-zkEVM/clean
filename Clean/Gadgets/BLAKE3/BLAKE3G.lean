@@ -46,6 +46,7 @@ def main (a b c d : Fin 16) (input : Var Inputs (F p)) : Circuit (F p) (Var BLAK
     |>.set c state_c
     |>.set d state_d
 
+@[computable_witnesses_metadata]
 def output (a b c d : Fin 16) (state : BLAKE3State (Expression (F p))) (i₀ : ℕ) : Vector (U32 (Expression (F p))) 16 :=
   (state : Vector (U32 (Expression (F p))) 16)
     |>.set a (⟨var ⟨i₀ + 56⟩, var ⟨i₀ + 58⟩, var ⟨i₀ + 60⟩, var ⟨i₀ + 62⟩⟩) a.is_lt
@@ -119,10 +120,48 @@ theorem completeness (a b c d : Fin 16) : Completeness (F p) (main a b c d) Assu
   dsimp only [main, circuit_norm, Xor32.circuit, Addition32.circuit, Rotation32.circuit] at h_env ⊢
   simp only [circuit_norm, and_imp,
     Addition32.Assumptions, Addition32.Spec, Rotation32.Assumptions, Rotation32.Spec,
-    Xor32.Assumptions, Xor32.Spec, getElem_eval_vector] at h_env ⊢
+    Xor32.Assumptions, Xor32.Spec] at h_env ⊢
 
   -- resolve all chains of assumptions
   simp_all only [forall_const, and_true]
+
+omit p_large_enough in
+lemma state_elem_congr {env env' : ProverEnvironment (F p)}
+    {state : BLAKE3State (Expression (F p))}
+    (h1 : eval env.toEnvironment state = eval env'.toEnvironment state) (i : Fin 16) :
+    (eval env.toEnvironment state : BLAKE3State (F p))[(i : ℕ)] =
+      (eval env'.toEnvironment state : BLAKE3State (F p))[(i : ℕ)] :=
+  congrArg (fun s : BLAKE3State (F p) => s[i]) h1
+
+set_option maxRecDepth 2048 in
+-- the unreachable-tactic linter cannot see that the `first` fallback fires only for
+-- the pass-through entries
+set_option linter.unreachableTactic false in
+set_option linter.unusedTactic false in
+omit p_large_enough in
+/-- Env-agreement transfers to the output state: the four set slots are fresh witness
+windows below the bound, the remaining entries evaluate through the input state. -/
+lemma output_eval_congr {env env' : ProverEnvironment (F p)}
+    {a b c d : Fin 16} {state : BLAKE3State (Expression (F p))} {n : ℕ}
+    (h1 : eval env.toEnvironment state = eval env'.toEnvironment state)
+    (h_agrees : env.AgreesBelow (n + 96) env') :
+    eval env.toEnvironment (output a b c d state n) =
+      eval env'.toEnvironment (output a b c d state n) := by
+  simp only [circuit_norm, eval_vector]
+  refine Vector.ext fun j hj => ?_
+  simp only [output, Vector.getElem_map, Vector.getElem_set]
+  split_ifs <;>
+    first
+      | (simp only [circuit_norm, Rotation32.output, Rotation32Bits.output,
+           U32.ByteVector.eval_fromLimbs]
+         first
+           | (refine congrArg U32.fromLimbs (Vector.ext fun i hi => ?_)
+              simp only [Vector.getElem_map, Vector.getElem_ofFn, circuit_norm]
+              grind)
+           | grind)
+      | (exact (getElem_eval_vector env.toEnvironment state j (by omega)).trans
+          ((congrArg (fun s : BLAKE3State (F p) => s[j]'(by omega)) h1).trans
+            (getElem_eval_vector env'.toEnvironment state j (by omega)).symm))
 
 def circuit (a b c d : Fin 16) : FormalCircuit (F p) Inputs BLAKE3State where
   main := main a b c d
@@ -131,5 +170,8 @@ def circuit (a b c d : Fin 16) : FormalCircuit (F p) Inputs BLAKE3State where
   Spec := Spec a b c d
   soundness := soundness a b c d
   completeness := completeness a b c d
+  computableWitnesses := by
+    computable_witnesses [eval_vector_set, U32.ByteVector.eval_fromLimbs,
+      U32.ByteVector.fromLimbs_inj]
 
 end Gadgets.BLAKE3.G

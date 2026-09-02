@@ -17,22 +17,22 @@ section StateEval
 variable {F : Type} [FiniteField F]
 
 /-- Evaluating a State variable and extracting pc equals evaluating the pc expression -/
-@[circuit_norm]
-lemma State.eval_pc (env : Environment F) (s : Var State F) :
+@[circuit_norm, grind =_]
+lemma State.eval_pc (env : Environment F) (s : State (Expression F)) :
     (eval env s).pc = Expression.eval env s.pc := by
   obtain ⟨pc, ap, fp⟩ := s
   simp [circuit_norm, explicit_provable_type]
 
 /-- Evaluating a State variable and extracting ap equals evaluating the ap expression -/
-@[circuit_norm]
-lemma State.eval_ap (env : Environment F) (s : Var State F) :
+@[circuit_norm, grind =_]
+lemma State.eval_ap (env : Environment F) (s : State (Expression F)) :
     (eval env s).ap = Expression.eval env s.ap := by
   obtain ⟨pc, ap, fp⟩ := s
   simp [circuit_norm, explicit_provable_type]
 
 /-- Evaluating a State variable and extracting fp equals evaluating the fp expression -/
-@[circuit_norm]
-lemma State.eval_fp (env : Environment F) (s : Var State F) :
+@[circuit_norm, grind =_]
+lemma State.eval_fp (env : Environment F) (s : State (Expression F)) :
     (eval env s).fp = Expression.eval env s.fp := by
   obtain ⟨pc, ap, fp⟩ := s
   simp [circuit_norm, explicit_provable_type]
@@ -43,29 +43,29 @@ section RawInstructionEval
 variable {F : Type} [FiniteField F]
 
 /-- Evaluating a RawInstruction variable and extracting rawInstrType equals evaluating the rawInstrType expression -/
-@[circuit_norm]
-lemma RawInstruction.eval_rawInstrType (env : Environment F) (r : Var RawInstruction F) :
+@[circuit_norm, grind =_]
+lemma RawInstruction.eval_rawInstrType (env : Environment F) (r : RawInstruction (Expression F)) :
     (eval env r).rawInstrType = Expression.eval env r.rawInstrType := by
   obtain ⟨rawInstrType, op1, op2, op3⟩ := r
   simp [circuit_norm, explicit_provable_type]
 
 /-- Evaluating a RawInstruction variable and extracting op1 equals evaluating the op1 expression -/
-@[circuit_norm]
-lemma RawInstruction.eval_op1 (env : Environment F) (r : Var RawInstruction F) :
+@[circuit_norm, grind =_]
+lemma RawInstruction.eval_op1 (env : Environment F) (r : RawInstruction (Expression F)) :
     (eval env r).op1 = Expression.eval env r.op1 := by
   obtain ⟨rawInstrType, op1, op2, op3⟩ := r
   simp [circuit_norm, explicit_provable_type]
 
 /-- Evaluating a RawInstruction variable and extracting op2 equals evaluating the op2 expression -/
-@[circuit_norm]
-lemma RawInstruction.eval_op2 (env : Environment F) (r : Var RawInstruction F) :
+@[circuit_norm, grind =_]
+lemma RawInstruction.eval_op2 (env : Environment F) (r : RawInstruction (Expression F)) :
     (eval env r).op2 = Expression.eval env r.op2 := by
   obtain ⟨rawInstrType, op1, op2, op3⟩ := r
   simp [circuit_norm, explicit_provable_type]
 
 /-- Evaluating a RawInstruction variable and extracting op3 equals evaluating the op3 expression -/
-@[circuit_norm]
-lemma RawInstruction.eval_op3 (env : Environment F) (r : Var RawInstruction F) :
+@[circuit_norm, grind =_]
+lemma RawInstruction.eval_op3 (env : Environment F) (r : RawInstruction (Expression F)) :
     (eval env r).op3 = Expression.eval env r.op3 := by
   obtain ⟨rawInstrType, op1, op2, op3⟩ := r
   simp [circuit_norm, explicit_provable_type]

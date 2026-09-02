@@ -33,6 +33,7 @@ def Spec (offset : Fin 64) (x : U64 (F p)) (y : U64 (F p)) :=
   y.value = rotRight64 x.value offset.val
   ∧ y.Normalized
 
+@[computable_witnesses_metadata]
 def output (offset : Fin 64) (i0 : ℕ) : U64 (Expression (F p)) :=
   Rotation64Bits.output ⟨ offset.val % 8, by omega ⟩ i0
 
@@ -72,5 +73,4 @@ def circuit (offset : Fin 64) : FormalCircuit (F p) U64 U64 where
   Spec := Spec offset
   soundness := soundness offset
   completeness := completeness offset
-
 end Gadgets.Rotation64

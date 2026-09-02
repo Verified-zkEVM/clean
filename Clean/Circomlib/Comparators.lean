@@ -200,6 +200,8 @@ def main (n : ℕ) (hn : 2^(n+1) < p) (input : Expression (F p) × Expression (F
 
 def circuit (n : ℕ) (hn : 2^(n+1) < p) : FormalCircuit (F p) fieldPair field where
   main := main n hn
+  computableWitnesses := by
+    computable_witnesses
 
   Assumptions := fun (x, y) => x.val < 2^n ∧ y.val ≤ 2^n
 

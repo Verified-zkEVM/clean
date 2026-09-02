@@ -264,7 +264,7 @@ class Witnessable (F : Type) [FiniteField F] (value : outParam TypeMap) (var : T
   witnessIR : WitgenIR F (size value) → Circuit F (var F)
   var_eq : var F = value (Expression F) := by rfl
   witness_def (xs : value (Witgen.FExpr F)) :
-    witness xs = var_eq ▸ _root_.witnessIR value (.ofFExprs (toElements xs)) := by intros; rfl
+    witness xs = var_eq ▸ _root_.witnessIR value (.ofCompositeFExpr xs) := by intros; rfl
   witnessIR_def (code : WitgenIR F (size value)) :
     witnessIR code = var_eq ▸ _root_.witnessIR value code := by intros; rfl
 
@@ -329,12 +329,12 @@ theorem ProverEnvironment.extendsVector_nativeValue {value : TypeMap} [ProvableT
 provable values: the witnessed variable evaluates to the value of the given expressions.
 See `ProverEnvironment.extendsVector_toIRLiteral`. -/
 @[circuit_norm ↓ high]
-theorem ProverEnvironment.extendsVector_ofFExprs {value : TypeMap} [ProvableType value]
+theorem ProverEnvironment.extendsVector_ofCompositeFExpr {value : TypeMap} [ProvableType value]
     (env : ProverEnvironment F) (xs : value (Witgen.FExpr F)) (n : ℕ) :
-    env.ExtendsVector ((Witgen.WitgenIR.ofFExprs (toElements xs)).eval env) n ↔
+    env.ExtendsVector ((Witgen.WitgenIR.ofCompositeFExpr xs).eval env) n ↔
       Eval.eval env.toEnvironment (varFromOffset value n : value (Expression F))
         = Witgen.eval { env := env } xs := by
-  rw [show Witgen.WitgenIR.ofFExprs (toElements xs) = Witgen.M.toIRLiteral (pure xs) from rfl,
+  rw [show Witgen.WitgenIR.ofCompositeFExpr (value:=value) xs = Witgen.M.toIRLiteral (pure xs) from rfl,
     ProverEnvironment.extendsVector_toIRLiteral,
     show Witgen.M.eval env (pure xs) = Witgen.eval { env := env } xs from rfl]
 
@@ -347,12 +347,12 @@ instance {m : ℕ} : Witnessable F (fields m) (Var (fields m)) where
   witnessIR := witnessIR _
 
 instance (M : TypeMap) [ProvableType M] : Witnessable F M (Var M) where
-  witness xs := witnessIR M (.ofFExprs (toElements xs))
+  witness xs := witnessIR M (.ofCompositeFExpr xs)
   witnessIR := witnessIR M
 
 instance {m : ℕ} (α : TypeMap) [NonEmptyProvableType α] :
     Witnessable F (ProvableVector α m) (Var (ProvableVector α m)) where
-  witness xs := witnessIR (ProvableVector α m) (.ofFExprs (toElements xs))
+  witness xs := witnessIR (ProvableVector α m) (.ofCompositeFExpr xs)
   witnessIR := witnessIR (ProvableVector α m)
 
 /- simp does not unfold the `Witnessable.witness`/`witnessIR` class projections applied to
@@ -372,14 +372,14 @@ theorem Witnessable.witness_fields {m : ℕ} (v : fields m (Witgen.FExpr F)) :
 @[circuit_norm]
 theorem Witnessable.witness_provable (M : TypeMap) [ProvableType M] (xs : M (Witgen.FExpr F)) :
     Witnessable.witness (F := F) (value := M) (var := Var M) xs =
-      _root_.witnessIR M (.ofFExprs (toElements xs)) := rfl
+      _root_.witnessIR M (.ofCompositeFExpr xs) := rfl
 
 @[circuit_norm]
 theorem Witnessable.witness_provableVector {m : ℕ} (α : TypeMap) [NonEmptyProvableType α]
     (xs : ProvableVector α m (Witgen.FExpr F)) :
     Witnessable.witness (F := F) (value := ProvableVector α m)
       (var := Var (ProvableVector α m)) xs =
-      _root_.witnessIR (ProvableVector α m) (.ofFExprs (toElements xs)) := rfl
+      _root_.witnessIR (ProvableVector α m) (.ofCompositeFExpr xs) := rfl
 
 @[circuit_norm]
 theorem Witnessable.witnessIR_field (code : WitgenIR F 1) :
@@ -421,21 +421,49 @@ def FlatOperation.dynamicWitnesses (ops : List (FlatOperation F)) (hint : Prover
 def FlatOperation.proverEnvironment (ops : List (FlatOperation F)) (hint : ProverHint F) (init : List F) :=
   ProverEnvironment.fromList (FlatOperation.dynamicWitnesses ops hint init) hint
 
+-- unfold `AgreesBelow` under `circuit_norm` so its `∀ i < n` / hint / data facts are directly
+-- available to `simp`/`grind` in `computableWitnesses` proofs (no manual unfolding needed)
+@[circuit_norm, computable_witnesses_norm, grind]
 def ProverEnvironment.AgreesBelow (n : ℕ) (env env' : ProverEnvironment F) :=
-  ∀ i < n, env.get i = env'.get i
+  (∀ i < n, env.get i = env'.get i) ∧ env.hint = env'.hint ∧ env.data = env'.data
 
-def ProverEnvironment.OnlyAccessedBelow (n : ℕ) (f : ProverEnvironment F → α) :=
-  ∀ env env', env.AgreesBelow n env' → f env = f env'
+/-- `AgreesBelow` is symmetric; as a forward `grind` rule so both orientations are
+available when discharging composition-rule premises. -/
+@[grind →]
+theorem ProverEnvironment.AgreesBelow.symm {F} {n : ℕ} {env env' : ProverEnvironment F}
+    (h : env.AgreesBelow n env') : env'.AgreesBelow n env :=
+  ⟨fun i hi => (h.1 i hi).symm, h.2.1.symm, h.2.2.symm⟩
+
+@[computable_witnesses_norm, grind]
+def ProverEnvironment.OnlyAccessedBelow (n : ℕ) (f : ProverEnvironment F → α) (env env' : ProverEnvironment F) :=
+  env.AgreesBelow n env' → f env = f env'
+
+omit [FiniteField F] in
+@[grind norm]
+theorem ProverEnvironment.onlyAccessedBelow_iff (n : ℕ)
+    (f : ProverEnvironment F → α) (env env' : ProverEnvironment F) :
+    ProverEnvironment.OnlyAccessedBelow n f env env' ↔
+      (env.AgreesBelow n env' → f env = f env') := by
+  rfl
+
+def Subcircuit.ComputableWitnesses {m : ℕ} (s : Subcircuit F m) (n : ℕ) (env env' : ProverEnvironment F) : Prop :=
+  FlatOperation.forAll n {
+    witness n' _ compute := env.AgreesBelow n' env' → compute.eval env = compute.eval env'
+  } s.ops.toFlat
 
 /--
-A circuit has _computable witnesses_ when witness generators only depend on the environment at indices smaller than the current offset.
+A circuit has _computable witnesses_ when witness generators only depend on the environment at indices smaller than the current offset,
+plus the shared `hint` and `data` (which witnesses can be computed from as well).
 This allows us to compute a concrete environment from witnesses, by successively extending an array with new witnesses.
 -/
 def Operations.ComputableWitnesses (ops : Operations F) (n : ℕ) (env env' : ProverEnvironment F) : Prop :=
-  ops.forAllFlat n { witness n _ compute := env.AgreesBelow n env' → compute.eval env = compute.eval env' }
+  ops.forAll n {
+    witness n' _ compute := env.AgreesBelow n' env' → compute.eval env = compute.eval env'
+    subcircuit n' _ s := s.ComputableWitnesses n' env env'
+  }
 
-def Circuit.ComputableWitnesses (circuit : Circuit F α) (n : ℕ) :=
-  ∀ env env', (circuit.operations n).ComputableWitnesses n env env'
+def Circuit.ComputableWitnesses (circuit : Circuit F α) (n : ℕ) (env env' : ProverEnvironment F) :=
+  (circuit.operations n).ComputableWitnesses n env env'
 
 /--
 If a circuit satisfies `computableWitnesses`, we can construct a concrete environment
@@ -540,7 +568,7 @@ theorem bind_forAll {f : Circuit F α} {g : α → Circuit F β} {prop : Conditi
   ((f >>= g).operations n).forAll n prop ↔
     (f.operations n).forAll n prop ∧ (((g (f.output n)).operations (n + f.localLength n)).forAll (n + f.localLength n)) prop := by
   have h_ops : (f >>= g).operations n = f.operations n ++ (g (f.output n)).operations (n + f.localLength n) := rfl
-  rw [h_ops, Operations.forAll_append, add_comm n]
+  rw [h_ops, Operations.forAll_append]
 
 end Circuit
 
@@ -573,6 +601,15 @@ attribute [circuit_norm ↓] Fin.getElem_fin
   Vector.getElem_push Vector.getElem_set Vector.getElem_cast
   Vector.getElem_mk Vector.getElem_toArray Vector.getElem_ofFn
   List.getElem_cons_zero List.getElem_cons_succ List.getElem_toArray
+
+attribute [grind norm]
+  Vector.getElem_ofFn Vector.getElem_mk List.getElem_toArray
+  List.getElem_cons_zero List.getElem_cons_succ
+
+-- Extensionality introduces indexed `mapRange` terms during grind's search.
+-- Normalize these pointwise terms immediately; this eliminates `mapRange` without
+-- expanding the whole vector.
+attribute [grind norm] Vector.getElem_mapRange
 
 /-
 lemmas that would expand `Vector.{mapRange, mapFinRange}` are not added to the simp set,

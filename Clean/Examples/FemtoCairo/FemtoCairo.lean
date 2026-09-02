@@ -543,6 +543,8 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
       · simp only [circuit_norm, explicit_provable_type, h_store, ↓reduceIte] at h_env2
         simp only [circuit_norm, explicit_provable_type, h_env2]
 
+  computableWitnesses := by computable_witnesses [explicit_provable_type]
+
 /--
   The main femtoCairo step circuit, which combines instruction fetch, decode,
   memory accesses, and state transition into a single circuit.
@@ -759,6 +761,9 @@ theorem femtoCairoStepCompleteness {programSize : ℕ} (program : Fin programSiz
 
 variable {programSize : ℕ} (program : Fin programSize → (F p)) (h_programSize : programSize < p)
 variable (h_program : ValidProgramSize p programSize ∧ ValidProgram program)
+
+-- TODO how to get grind to do this generically?
+@[local grind norm] lemma size_state_eq : size State = 3 := rfl
 
 def femtoCairoStep : GeneralFormalCircuit (F p) State State where
   main := femtoCairoStepMain program h_programSize

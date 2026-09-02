@@ -6,3 +6,4 @@ import Lean.LabelAttribute
 register_simp_attr circuit_norm
 register_simp_attr explicit_circuit_norm
 register_simp_attr explicit_provable_type
+register_simp_attr computable_witnesses_norm

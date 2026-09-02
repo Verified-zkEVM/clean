@@ -45,6 +45,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
     ApplyRounds.Spec, FinalStateUpdate.circuit, FinalStateUpdate.Assumptions,
     ApplyRounds.Assumptions, FinalStateUpdate.Spec]
 
+set_option maxRecDepth 8192 in
 def circuit : FormalCircuit (F p) ApplyRounds.Inputs BLAKE3State := {
   main, Assumptions, Spec, soundness, completeness
 }

@@ -41,7 +41,7 @@ def Spec (input : Inputs (F p)) (z : fields 32 (F p)) : Prop :=
 ## Helper lemmas for valueBits and bitwise XOR
 -/
 
-private lemma sum_bool_lt_two_pow (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i ≤ 1) :
+lemma sum_bool_lt_two_pow (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i ≤ 1) :
     ∑ i : Fin n, f i * 2^i.val < 2^n := by
   induction n with
   | zero => simp
@@ -54,7 +54,7 @@ private lemma sum_bool_lt_two_pow (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i
     have h2 : 2^m + 2^m = 2^(m+1) := by ring
     omega
 
-private lemma testBit_binary_sum (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i = 0 ∨ f i = 1) (k : Fin n) :
+lemma testBit_binary_sum (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i = 0 ∨ f i = 1) (k : Fin n) :
     Nat.testBit (∑ i : Fin n, f i * 2^i.val) k.val = decide (f k = 1) := by
   induction n with
   | zero => exact k.elim0
@@ -75,7 +75,7 @@ private lemma testBit_binary_sum (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i 
       have hklast : k = Fin.last m := Fin.ext hkeq; subst hklast
       rcases hf (Fin.last m) with h | h <;> simp [h, fm]
 
-private lemma bool_finsum_xor (n : ℕ) (f g : Fin n → ℕ) (hf : ∀ i, f i = 0 ∨ f i = 1)
+lemma bool_finsum_xor (n : ℕ) (f g : Fin n → ℕ) (hf : ∀ i, f i = 0 ∨ f i = 1)
     (hg : ∀ i, g i = 0 ∨ g i = 1) :
     (∑ i : Fin n, f i * 2^i.val) ^^^ (∑ i : Fin n, g i * 2^i.val)
     = ∑ i : Fin n, (f i ^^^ g i) * 2^i.val := by
@@ -102,18 +102,10 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [xor32]
   obtain ⟨ha, hb⟩ := h_assumptions
   obtain ⟨h_input_a, h_input_b⟩ := h_input
-  have h_ai : ∀ i : Fin 32, Expression.eval env input_var_a[i.val] = input_a[i] := by
-    intro i
-    have := Vector.ext_iff.mp h_input_a i i.isLt
-    simp [Vector.getElem_map] at this; exact this
-  have h_bi : ∀ i : Fin 32, Expression.eval env input_var_b[i.val] = input_b[i] := by
-    intro i
-    have := Vector.ext_iff.mp h_input_b i i.isLt
-    simp [Vector.getElem_map] at this; exact this
-  -- h_holds: env.get(i₀+i) = a[i] + b[i] - 2*a[i]*b[i]
+  -- h_holds: env.get(i₀+i) = a[i] + b[i] - 2*a[i]*b[i] (values already substituted)
   have h_eq : ∀ i : Fin 32, env.get (i₀ + i.val) = input_a[i] + input_b[i] - 2 * input_a[i] * input_b[i] := by
     intro i
-    have h := h_holds i; rw [h_ai i, h_bi i] at h
+    have h := h_holds i
     -- h: env.get(i₀+i) + -a[i] + -b[i] + 2*a[i]*b[i] = 0
     have key : env.get (i₀ + i.val) - (input_a[i] + input_b[i] - 2 * input_a[i] * input_b[i]) = 0 := by
       ring_nf; ring_nf at h; exact h
@@ -141,25 +133,20 @@ theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [xor32]
   obtain ⟨ha, hb⟩ := h_assumptions
   obtain ⟨h_input_a, h_input_b⟩ := h_input
-  have h_ai : ∀ i : Fin 32, Expression.eval env.toEnvironment input_var_a[i.val] = input_a[i] := by
-    intro i; have := Vector.ext_iff.mp h_input_a i i.isLt; simp [Vector.getElem_map] at this; exact this
-  have h_bi : ∀ i : Fin 32, Expression.eval env.toEnvironment input_var_b[i.val] = input_b[i] := by
-    intro i; have := Vector.ext_iff.mp h_input_b i i.isLt; simp [Vector.getElem_map] at this; exact this
   intro i
-  -- the witness generator computes in `u64`; these bounds let the wrapping simplify away
-  have ha_lt : ZMod.val (Expression.eval env.toEnvironment input_var_a[i.val]) < 2 ^ 64 := by
-    rw [h_ai i]; rcases ha i with h | h <;> simp [h, ZMod.val_zero, ZMod.val_one]
-  have hb_lt : ZMod.val (Expression.eval env.toEnvironment input_var_b[i.val]) < 2 ^ 64 := by
-    rw [h_bi i]; rcases hb i with h | h <;> simp [h, ZMod.val_zero, ZMod.val_one]
-  have henv := h_env i
-  simp only [circuit_norm] at henv
-  rw [h_ai i, h_bi i] at henv
+  have ha_lt : (input_a[i]).val < 2 ^ 64 := by
+    rcases ha i with h | h <;> simp [h, ZMod.val_zero, ZMod.val_one]
+  have hb_lt : (input_b[i]).val < 2 ^ 64 := by
+    rcases hb i with h | h <;> simp [h, ZMod.val_zero, ZMod.val_one]
   have hcast : ((input_a[i].val ^^^ input_b[i].val : ℕ) : F p) =
       input_a[i] + input_b[i] - 2 * input_a[i] * input_b[i] := by
     rw [← IsBool.xor_eq_val_xor (ha i) (hb i)]
     have := ZMod.natCast_val (R := ZMod p) (input_a[i] + input_b[i] - 2 * input_a[i] * input_b[i])
     rw [this]; exact ZMod.cast_id p _
-  rw [henv, hcast, h_ai i, h_bi i]; ring
+  simp only [Fin.getElem_fin] at ha_lt hb_lt hcast ⊢
+  rw [h_env i]
+  simp only [Nat.mod_eq_of_lt ha_lt, Nat.mod_eq_of_lt hb_lt]
+  rw [hcast]; ring
 
 def circuit : FormalCircuit (F p) Inputs (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness

@@ -23,7 +23,7 @@ template RotR(n, r) {
 }
 -/
 def main (n r : ℕ) [NeZero n] (inp : Vector (Expression (F p)) n) := do
-  let out <== Vector.mapFinRange n fun i => inp.get (i + Fin.ofNat n r)
+  let out <== Vector.mapFinRange n fun i => inp[i + Fin.ofNat n r]
   return out
 
 def circuit (n r : ℕ) [NeZero n] : FormalCircuit (F p) (fields n) (fields n) where
@@ -42,15 +42,14 @@ def circuit (n r : ℕ) [NeZero n] : FormalCircuit (F p) (fields n) (fields n) w
     simp only [Vector.getElem_map, Vector.getElem_mapFinRange]
     -- Simplify RHS: (input.rotate r)[i] = input[(i + r) % n]
     rw [Vector.getElem_rotate]
-    simp only [Vector.get]
     -- Use h_input: eval input_var = input
-    simp only [← h_input, Vector.getElem_map]
-    congr 1
-    -- Normalize array/vector indexing
-    simp only [Vector.getElem_toArray]
+    simp only [← h_input]
+    -- fold the scalar element eval to the whole-atom spelling
+    rw [ProvableType.getElem_eval_fields]
     congr 1
     -- Prove index equality via Fin arithmetic
-    simp [Fin.val_cast, Fin.val_add]
+    simp only [Fin.val_add, Fin.val_ofNat]
+    exact Nat.add_mod_mod ..
 
   completeness := by
     circuit_proof_start
@@ -62,6 +61,8 @@ def circuit (n r : ℕ) [NeZero n] : FormalCircuit (F p) (fields n) (fields n) w
     rw [h_env ⟨i, hi⟩]
     -- simplify RHS to match
     rw [Vector.getElem_mapFinRange i hi]
+    rw [ProvableType.getElem_eval_fields]
+    simp only [h_input]
 
 end RotR
 end Circomlib

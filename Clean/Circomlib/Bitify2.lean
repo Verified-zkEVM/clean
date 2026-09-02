@@ -35,7 +35,7 @@ template Num2Bits_strict() {
 -/
 def main (input : Expression (F p)) := do
   -- Convert input to 254 bits
-  let bits ← Num2Bits.main 254 input
+  let bits ← Num2Bits.arbitraryBitLengthCircuit 254 input
 
   -- Check that the bits represent a value less than p
   AliasCheck.circuit bits
@@ -51,46 +51,31 @@ def circuit : FormalCircuit (F p) field (fields 254) where
     bits = fieldToBits 254 input
 
   soundness := by
-    intro i0 env input_var input h_input assumptions h_holds
-    simp only [circuit_norm, main] at h_holds ⊢
-    dsimp only [Num2Bits.main, AliasCheck.circuit] at h_holds ⊢
-    simp_all only [circuit_norm, Vector.map_mapRange]
-    simp only [Num2Bits.lc_eq, Fin.forall_iff,
-      mul_eq_zero, sub_eq_zero] at h_holds
-    obtain ⟨ ⟨h_bits, h_eq⟩, h_alias ⟩ := h_holds
+    circuit_proof_start [Num2Bits.arbitraryBitLengthCircuit, AliasCheck.circuit]
+    obtain ⟨⟨-, h_bits, h_eq⟩, h_alias⟩ := h_holds
     specialize h_alias h_bits
-    rw [← h_eq, fieldToBits, fieldFromBits,
-      ZMod.val_natCast, Vector.map_mapRange]
-    rw [Nat.mod_eq_of_lt h_alias, toBits_fromBits, Vector.ext_iff]
-    simp only [circuit_norm]
-    intro i hi
-    simp only [circuit_norm]
-    specialize h_bits i hi
-    rcases h_bits with h_bits | h_bits
-      <;> simp [h_bits, ZMod.val_one]
+    rw [← h_eq, fieldToBits, fieldFromBits, ZMod.val_natCast, Nat.mod_eq_of_lt h_alias,
+      toBits_fromBits, Vector.ext_iff]
+    -- side goal first (`toBits_fromBits`'s bit-bound premise), then the ext goal
+    · intro i hi
+      rcases h_bits i hi with h | h <;> simp
+    · intro i hi
+      simp only [circuit_norm, Vector.getElem_map]
+      rcases h_bits i hi with h | h <;> simp [h, ZMod.val_one]
 
   completeness := by
-    intro i0 env input_var h_env input h_input assumptions
-    simp only [circuit_norm, main, Num2Bits.main] at h_env h_input ⊢
-    dsimp only [circuit_norm, AliasCheck.circuit] at h_env ⊢
-    simp only [h_input, circuit_norm] at h_env ⊢
-    simp only [Num2Bits.lc_eq, Fin.forall_iff,
-      mul_eq_zero, sub_eq_zero] at h_env ⊢
-    rw [Vector.map_mapRange]
-    simp only [Expression.eval]
-    have h_bits i (hi : i < 254) : env.get (i0 + i) = 0 ∨ env.get (i0 + i) = 1 := by
-      rw [h_env i hi]
-      rcases Nat.mod_two_eq_zero_or_one (ZMod.val input >>> i) with h | h <;> simp [h]
-    set bits := Vector.mapRange 254 fun i => env.get (i0 + i)
-    have h_eq : bits = fieldToBits 254 input := by
-      ext i hi; simp only [bits, Vector.getElem_mapRange, h_env i hi, getElem_fieldToBits]
-    have input_lt : input.val < 2^254 := by
-      linarith [‹Fact (p < 2^254)›.elim, ZMod.val_lt input]
-    use h_bits
-    simp_rw [h_eq, fieldFromBits_fieldToBits input_lt,
-      fieldToBits, Vector.map_map, val_natCast_toBits,
-      fromBits_toBits input_lt, ZMod.val_lt]
-    use trivial, h_bits
+    circuit_proof_start [Num2Bits.arbitraryBitLengthCircuit, AliasCheck.circuit]
+    have h_lt : (input : F p).val < 2^254 := by
+      have h1 := ZMod.val_lt (input : F p)
+      have h2 := ‹Fact (p < 2^254)›.elim
+      omega
+    obtain ⟨⟨-, h_bits, -⟩, h_ps⟩ := h_env h_lt
+    refine ⟨h_lt, h_bits, ?_⟩
+    -- the alias constraint is satisfiable because the honest witness is the exact
+    -- decomposition: fromBits (toBits input.val) = input.val < p
+    rw [h_ps, fieldToBits, Vector.map_map, val_natCast_toBits, fromBits_toBits h_lt]
+    exact ZMod.val_lt (input : F p)
+
 end Num2Bits_strict
 
 namespace Bits2Num_strict
@@ -115,7 +100,7 @@ def main (input : Vector (Expression (F p)) 254) := do
   AliasCheck.circuit input
 
   -- Convert bits to number
-  Bits2Num.main 254 input
+  Bits2Num.circuit 254 input
 
 set_option linter.constructorNameAsVariable false
 
@@ -134,20 +119,17 @@ def circuit : GeneralFormalCircuit (F p) (fields 254) field where
     output.val = fromBits (input.map ZMod.val)
 
   soundness := by
-    circuit_proof_start [Bits2Num.main, AliasCheck.circuit]
-    set output := (env.get (i₀ + (127 + 1 + 135 + 1)))
-    simp_all only [implies_true, forall_const, fields]
-    obtain ⟨ h_bits, h_eq ⟩ := h_holds
-    rw [← ZMod.val_natCast_of_lt h_bits, ← Vector.mapFinRange_eq_map,
-      ← fieldFromBits_eq_mapFinRange_cast]
-    simp only [← h_input, circuit_norm]
-    simp only [← Fin.getElem_fin, Bits2Num.lc_eq]
+    circuit_proof_start [Bits2Num.circuit, AliasCheck.circuit]
+    obtain ⟨h_alias, h_b2n⟩ := h_holds
+    specialize h_alias h_assumptions
+    obtain ⟨h_out, -⟩ := h_b2n h_assumptions
+    rw [h_out, fieldFromBits, ZMod.val_natCast, Nat.mod_eq_of_lt h_alias]
 
   completeness := by
-    circuit_proof_start [Bits2Num.main, AliasCheck.circuit]
-    obtain ⟨assumption₁, assumption₂⟩ := h_assumptions
-    simp only [circuit_norm, assumption₁, assumption₂] at ⊢
-    rw [← h_env]
+    circuit_proof_start [Bits2Num.circuit, AliasCheck.circuit]
+    obtain ⟨h_bool, h_lt⟩ := h_assumptions
+    exact ⟨⟨h_bool, h_lt⟩, h_bool⟩
+
 end Bits2Num_strict
 
 namespace Num2BitsNeg

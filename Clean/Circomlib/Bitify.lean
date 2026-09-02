@@ -76,6 +76,10 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
     ∧ (∀ i (_ : i < n), bits[i] = 0 ∨ bits[i] = 1)
     ∧ fieldFromBits bits = input
 
+  -- the honest witness is the exact bit decomposition — strict wrappers (alias-checked
+  -- parents) need this to show the alias constraint is satisfiable
+  ProverSpec input bits _ := bits = fieldToBits n input
+
   soundness := by
     circuit_proof_start
     simp only [lc_eq] at h_holds
@@ -95,16 +99,18 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
     circuit_proof_start
     simp only [lc_eq, Fin.forall_iff, mul_eq_zero] at h_env ⊢
     let bits := Vector.mapRange n fun i => env.get (i₀ + i)
-    constructor
-    · intro i hi
-      rw [h_env i hi]
-      rcases Nat.mod_two_eq_zero_or_one (input.val >>> i) with h | h <;> simp [h]
-    show fieldFromBits bits = input
-    have : bits = fieldToBits n input := by
+    have hbits : bits = fieldToBits n input := by
       rw [Vector.ext_iff]
       intro i hi
       simp only [bits, Vector.getElem_mapRange, h_env i hi, getElem_fieldToBits]
-    rw [this, fieldFromBits_fieldToBits h_assumptions]
+    refine ⟨⟨?_, ?_⟩, ?_⟩
+    · intro i hi
+      rw [h_env i hi]
+      rcases Nat.mod_two_eq_zero_or_one (input.val >>> i) with h | h <;> simp [h]
+    · show fieldFromBits bits = input
+      rw [hbits, fieldFromBits_fieldToBits h_assumptions]
+    · simp only [Vector.map_mapRange, circuit_norm]
+      exact hbits
 
 -- the main circuit implementation makes a stronger statement assuming 2^n < p
 def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
@@ -173,6 +179,20 @@ lemma lc_eq {env} {n : ℕ} {v : Vector (Expression (F p)) n} :
       Nat.cast_pow, Nat.cast_ofNat, Prod.mk.injEq]
     rw [ZMod.cast_id]
 
+omit [Fact (p > 2)] in
+lemma lc_eq_map {env} {n : ℕ} {v : Vector (Expression (F p)) n} :
+    Expression.eval env (Fin.foldl n
+      (fun ((lc1, e2) : Expression (F p) × Expression (F p)) i =>
+        (lc1 + v[↑i] * e2, e2 + e2)) (0, 1)).1 =
+      fieldFromBits (v.map (Expression.eval env)) := by
+  rw [lc_eq]
+  congr 1
+  rw [Vector.ext_iff]
+  intro i hi
+  simp only [Vector.getElem_mapFinRange, Vector.getElem_map, Fin.getElem_fin]
+
+local grind_pattern lc_eq_map => Vector.map (Expression.eval env) v
+
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main := main n
 
@@ -195,7 +215,8 @@ def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
     have h1 : Vector.mapFinRange n (fun i ↦ input_var[i].eval env) = input := by
       rw [← h_input]
       ext i hi
-      rw [Vector.getElem_map, Vector.getElem_mapFinRange, Fin.getElem_fin]
+      rw [Vector.getElem_mapFinRange, Fin.getElem_fin]
+      exact ProvableType.getElem_eval_fields env input_var i hi
 
     rw [h1] at h_holds
     simp only [h_holds, true_and]

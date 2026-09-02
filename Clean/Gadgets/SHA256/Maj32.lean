@@ -43,6 +43,15 @@ structure Inputs (F : Type) where
   c : fields 32 F
 deriving ProvableStruct
 
+/-- Constructor-keyed composite eval (see `U64.eval_mk`): lets `grind` decompose literal
+`Inputs` evals into the `Vector.map` component spelling used by `circuit_norm`. -/
+@[grind =]
+theorem Inputs.eval_mk {F : Type} [FiniteField F] (env : Environment F)
+    (a b c : fields 32 (Expression F)) :
+    eval env ({ a := a, b := b, c := c } : Inputs (Expression F)) =
+      { a := Vector.map (Expression.eval env) a, b := Vector.map (Expression.eval env) b, c := Vector.map (Expression.eval env) c } := by
+  simp only [circuit_norm, ProvableType.eval_fields]
+
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
   maj32 input.a input.b input.c
 
@@ -60,7 +69,7 @@ def Spec (input : Inputs (F p)) (z : fields 32 (F p)) : Prop :=
 ## Helper lemmas for valueBits and bitwise Maj
 -/
 
-private lemma sum_bool_lt_two_pow (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i ≤ 1) :
+lemma sum_bool_lt_two_pow (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i ≤ 1) :
     ∑ i : Fin n, f i * 2^i.val < 2^n := by
   induction n with
   | zero => simp
@@ -73,7 +82,7 @@ private lemma sum_bool_lt_two_pow (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i
     have h2 : 2^m + 2^m = 2^(m+1) := by ring
     omega
 
-private lemma testBit_binary_sum (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i = 0 ∨ f i = 1) (k : Fin n) :
+lemma testBit_binary_sum (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i = 0 ∨ f i = 1) (k : Fin n) :
     Nat.testBit (∑ i : Fin n, f i * 2^i.val) k.val = decide (f k = 1) := by
   induction n with
   | zero => exact k.elim0
@@ -96,7 +105,7 @@ private lemma testBit_binary_sum (n : ℕ) (f : Fin n → ℕ) (hf : ∀ i, f i 
 
 /-- For boolean field elements a, b, c: the field expression t + c*(a+b-2t) where t=a*b
     has val equal to the bitwise Nat majority of a.val, b.val, c.val -/
-private lemma maj_eq_val_maj {p : ℕ} [Fact p.Prime]
+lemma maj_eq_val_maj {p : ℕ} [Fact p.Prime]
     {a b c : F p} (ha : IsBool a) (hb : IsBool b) (hc : IsBool c) :
     (a * b + c * (a + b - 2 * (a * b))).val = (a.val &&& b.val) ^^^ (a.val &&& c.val) ^^^ (b.val &&& c.val) := by
   rcases ha with ha | ha <;> rcases hb with hb | hb <;> rcases hc with hc | hc <;>
@@ -104,12 +113,12 @@ private lemma maj_eq_val_maj {p : ℕ} [Fact p.Prime]
 
 /-- For boolean field elements a, b, c: the field expression t + c*(a+b-2t) where t=a*b
     is boolean -/
-private lemma maj_is_bool {α : Type*} [Ring α] {a b c : α} (ha : IsBool a) (hb : IsBool b) (hc : IsBool c) :
+lemma maj_is_bool {α : Type*} [Ring α] {a b c : α} (ha : IsBool a) (hb : IsBool b) (hc : IsBool c) :
     IsBool (a * b + c * (a + b - 2 * (a * b))) := by
   rcases ha with ha | ha <;> rcases hb with hb | hb <;> rcases hc with hc | hc <;>
     simp [ha, hb, hc] <;> norm_num <;> first | exact IsBool.zero | exact IsBool.one
 
-private lemma bool_finsum_maj (n : ℕ) (f g k : Fin n → ℕ)
+lemma bool_finsum_maj (n : ℕ) (f g k : Fin n → ℕ)
     (hf : ∀ i, f i = 0 ∨ f i = 1) (hg : ∀ i, g i = 0 ∨ g i = 1) (hk : ∀ i, k i = 0 ∨ k i = 1) :
     ((∑ i : Fin n, f i * 2^i.val) &&& (∑ i : Fin n, g i * 2^i.val)) ^^^
     ((∑ i : Fin n, f i * 2^i.val) &&& (∑ i : Fin n, k i * 2^i.val)) ^^^
@@ -155,7 +164,7 @@ private lemma bool_finsum_maj (n : ℕ) (f g k : Fin n → ℕ)
         Nat.testBit_eq_false_of_lt (Nat.lt_of_lt_of_le hmajS pow_le)]
 
 /-- Spec holds for any vector `z` whose bits satisfy the per-bit constraint. -/
-private lemma spec_of_constraint
+lemma spec_of_constraint
     (input_a input_b input_c z : fields 32 (F p))
     (ha : Normalized input_a) (hb : Normalized input_b) (hc : Normalized input_c)
     (h_eq : ∀ i : Fin 32, z[i] =
@@ -203,31 +212,19 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [maj32]
   obtain ⟨ha, hb, hc⟩ := h_assumptions
   obtain ⟨h_input_a, h_input_b, h_input_c⟩ := h_input
-  have h_ai : ∀ i : Fin 32, Expression.eval env input_var_a[i.val] = input_a[i] := by
-    intro i
-    have := Vector.ext_iff.mp h_input_a i i.isLt
-    simp [Vector.getElem_map] at this; exact this
-  have h_bi : ∀ i : Fin 32, Expression.eval env input_var_b[i.val] = input_b[i] := by
-    intro i
-    have := Vector.ext_iff.mp h_input_b i i.isLt
-    simp [Vector.getElem_map] at this; exact this
-  have h_ci : ∀ i : Fin 32, Expression.eval env input_var_c[i.val] = input_c[i] := by
-    intro i
-    have := Vector.ext_iff.mp h_input_c i i.isLt
-    simp [Vector.getElem_map] at this; exact this
-  -- Extract the two sets of constraints from h_holds
+  -- the lift + input premises already substitute values into `h_holds` elementwise
   obtain ⟨h_holds_t, h_holds_z⟩ := h_holds
   -- t[i] = a[i] * b[i]
   have h_t : ∀ i : Fin 32, env.get (i₀ + i.val) = input_a[i] * input_b[i] := by
     intro i
-    have := h_holds_t i; rw [h_ai i, h_bi i] at this
-    exact sub_eq_zero.mp this
+    exact sub_eq_zero.mp (h_holds_t i)
   -- z[i] = t[i] + c[i] * (a[i] + b[i] - 2 * t[i])
   have h_z : ∀ i : Fin 32, env.get (i₀ + 32 + i.val) =
       input_a[i] * input_b[i] + input_c[i] * (input_a[i] + input_b[i] - 2 * (input_a[i] * input_b[i])) := by
     intro i
-    have := h_holds_z i; rw [h_t i, h_ai i, h_bi i, h_ci i] at this
-    exact eq_of_sub_eq_zero (by ring_nf; ring_nf at this; exact this)
+    have := h_holds_z i; rw [h_t i] at this
+    exact eq_of_sub_eq_zero (by
+      simp only [Fin.getElem_fin] at this ⊢; ring_nf; ring_nf at this; exact this)
   set z : fields 32 (F p) :=
     Vector.map (Expression.eval env) (Vector.mapRange 32 fun i =>
       (var {index := i₀ + 32 + i} : Expression (F p))) with hz_def
@@ -243,7 +240,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
   simp only [circuit_norm, Fin.isLt, reduceDIte] at h_env
   refine ⟨fun i => ?_, fun i => ?_⟩
   · rw [h_env.1 i]; ring
-  · rw [h_env.2.1 i]; ring
+  · rw [h_env.2 i]; ring
 
 def circuit : FormalCircuit (F p) Inputs (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness

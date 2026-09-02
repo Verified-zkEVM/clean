@@ -55,6 +55,18 @@ measure_heartbeats() {
   local output
   local args=("$path")
   if [ -n "$setup" ]; then
+    # a setup file records absolute artifact paths; if any point outside this repo
+    # (e.g. a sibling git worktree), the measurement would silently load a different
+    # branch's library — refuse instead of reporting a number for the wrong code
+    local foreign
+    foreign="$(grep -oE '"/[^"]*/\.lake/' "$repo/$setup" | sed 's/^"//; s|/\.lake/$||' | sort -u |
+      awk -v repo="$repo" '!($0 == repo || index($0, repo "/.lake/") == 1)')"
+    if [ -n "$foreign" ]; then
+      echo "stale setup file: $repo/$setup references artifacts outside $repo:" >&2
+      printf '  %s\n' $foreign >&2
+      echo "rebuild the module in this worktree (lake build $module) and retry" >&2
+      return 1
+    fi
     args+=("--setup" "$setup")
   fi
   if ! output="$(cd "$repo" && lake env lean --run "$heartbeat_check" "${args[@]}" 2>&1)"; then

@@ -1,22 +1,35 @@
 import Clean.Circuit.Explicit
+import Clean.Utils.Tactics.ComputableWitnesses
 
 variable {F : Type} [FiniteField F] {α β : Type} {n : ℕ}
 
 section
 variable {Input Output : TypeMap}
 
-open Lean Meta Elab Tactic in
-elab "unfold_formal_circuit_consts" : tactic => do
-  withMainContext do
-    let noUnfold ← labelled `explicit_circuit_no_unfold
-    let unfoldTypes ← labelled `explicit_circuit_unfold_type
-    let names ← collectUnfoldableCircuitDecls (← getMainTarget) #[]
-      (some noUnfold) (some unfoldTypes)
-    for name in names do
-      try
-        evalTactic (← `(tactic| unfold $(mkIdent name)))
-      catch _ =>
-        pure ()
+namespace FormalCircuitBase
+variable {Input Output : TypeMap} [CircuitType Input] [CircuitType Output]
+/--
+Formulation of `Circuit.ComputableWitnesses` that includes an assumption on the circuit input,
+used later for formal circuit bundles.
+-/
+@[circuit_norm]
+def ComputableWitnesses (main : Var Input F → Circuit F (Var Output F)) [ElaboratedCircuit F Input Output main] : Prop :=
+  ∀ (n : ℕ) (input : Var Input F) (env env' : ProverEnvironment F),
+  -- witness operations only refer to the input and previous witnesses (lower offsets)
+  (main input |>.operations n |>.forAll n {
+    witness n _ compute :=
+      eval env input = eval env' input →
+      env.AgreesBelow n env' →
+      compute.eval env = compute.eval env'
+    subcircuit n _ subcircuit :=
+      eval env input = eval env' input →
+      subcircuit.ComputableWitnesses n env env'
+    }) ∧
+  -- the output only refers to the input and this circuit's witnesses (below `n + localLength`)
+  (eval env input = eval env' input →
+  ProverEnvironment.OnlyAccessedBelow (n + ElaboratedCircuit.localLength main input)
+    (fun env => eval env (ElaboratedCircuit.output main input n)) env env')
+end FormalCircuitBase
 
 @[explicit_circuit_unfold_type]
 structure FormalCircuitBase (F : Type) (Input Output : TypeMap)
@@ -52,6 +65,12 @@ structure FormalCircuitBase (F : Type) (Input Output : TypeMap)
     try (unfold_formal_circuit_consts; simp only [circuit_norm, seval])
     try first | ac_rfl | trivial | tauto
 
+  /-- Consistency property: Witness generators only refer to witnesses previously computed.
+    This allows us to prove the existence of the honest-prover environment which is
+    used in the hypotheses of `Completeness` variants below. -/
+  computableWitnesses : FormalCircuitBase.ComputableWitnesses main := by
+    computable_witnesses
+
 attribute [circuit_norm] FormalCircuitBase.elaborated FormalCircuitBase.exposedChannels
   FormalCircuitBase.channelsWithRequirements
   FormalCircuitBase.requirementsChannelsLawful
@@ -67,6 +86,7 @@ variable {name : String} {main : Var Input F → Circuit F (Var Output F)}
   {requirementsChannelsLawful : ∀ input offset,
     ((main input).operations offset).RequirementsChannelsLawful
       elaborated.channelsWithGuarantees channelsWithRequirements}
+  {computableWitnesses : ComputableWitnesses main}
 
 @[explicit_circuit_norm]
 def output (self : FormalCircuitBase F Input Output) (input : Var Input F) (offset : ℕ) : Var Output F :=
@@ -75,7 +95,7 @@ def output (self : FormalCircuitBase F Input Output) (input : Var Input F) (offs
 @[circuit_norm]
   lemma output_def (input : Var Input F) (offset : ℕ) :
     (FormalCircuitBase.mk name main elaborated exposedChannels exposedChannels_eq
-      channelsWithRequirements requirementsChannelsLawful).output input offset =
+      channelsWithRequirements requirementsChannelsLawful computableWitnesses).output input offset =
     elaborated.output input offset := rfl
 
 @[explicit_circuit_norm]
@@ -85,7 +105,7 @@ def localLength (self : FormalCircuitBase F Input Output) (input : Var Input F) 
 @[circuit_norm]
   lemma localLength_def (input : Var Input F) :
     (FormalCircuitBase.mk name main elaborated exposedChannels exposedChannels_eq
-      channelsWithRequirements requirementsChannelsLawful).localLength input =
+      channelsWithRequirements requirementsChannelsLawful computableWitnesses).localLength input =
     elaborated.localLength input := rfl
 
 @[explicit_circuit_norm]
@@ -95,13 +115,13 @@ def channelsWithGuarantees (self : FormalCircuitBase F Input Output) : List (Raw
 @[circuit_norm]
   lemma channelsWithGuarantees_def :
     (FormalCircuitBase.mk name main elaborated exposedChannels exposedChannels_eq
-      channelsWithRequirements requirementsChannelsLawful).channelsWithGuarantees =
+      channelsWithRequirements requirementsChannelsLawful computableWitnesses).channelsWithGuarantees =
     elaborated.channelsWithGuarantees := rfl
 
 @[circuit_norm]
   lemma channelsWithRequirements_def :
     (FormalCircuitBase.mk name main elaborated exposedChannels exposedChannels_eq
-      channelsWithRequirements requirementsChannelsLawful).channelsWithRequirements =
+      channelsWithRequirements requirementsChannelsLawful computableWitnesses).channelsWithRequirements =
     channelsWithRequirements := rfl
 
 theorem localLength_eq (self : FormalCircuitBase F Input Output) (input : Var Input F) (offset : ℕ) :

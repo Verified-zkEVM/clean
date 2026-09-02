@@ -83,7 +83,7 @@ theorem completeness (off : Fin 8) : Completeness (F p) (main off) Assumptions :
   rintro i0 env ⟨ x0_var, x1_var, x2_var, x3_var, x4_var, x5_var, x6_var, x7_var ⟩ henv ⟨ x0, x1, x2, x3, x4, x5, x6, x7 ⟩ _ Assumptions
   fin_cases off <;> simp [main, circuit_norm]
 
-def circuit (off : Fin 8) : FormalCircuit (F p) U64 U64 := {
+def circuit (off : Fin 8) : FormalCircuit (F p) U64 U64 where
   main := main off
   elaborated := elaborated off
   requirementsChannelsLawful := by
@@ -92,5 +92,7 @@ def circuit (off : Fin 8) : FormalCircuit (F p) U64 U64 := {
   Spec := Spec off
   soundness := soundness off
   completeness := completeness off
-}
+  computableWitnesses := by
+    -- the witness is selected by an `if`-nest on `off`; decide it first
+    fin_cases off <;> computable_witnesses [reduceIte, Fin.reduceFinMk, Fin.reduceEq]
 end Gadgets.Rotation64Bytes

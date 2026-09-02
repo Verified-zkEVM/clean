@@ -184,9 +184,10 @@ lemma valueBits_rotr32_eq (k : Fin 32) (x : fields 32 (F p)) (hx : Normalized x)
 /-! ## eval helpers for rotr32 / shr32 -/
 
 lemma eval_rotr32 (env : Environment (F p)) (input_var : fields 32 (Expression (F p)))
-    (input : fields 32 (F p)) (h_input : Vector.map (Expression.eval env) input_var = input)
+    (input : fields 32 (F p)) (h_input : eval env input_var = input)
     (k : Fin 32) (i : Fin 32) :
     Expression.eval env (rotr32 k input_var)[i.val] = input[(i + k).val] := by
+  rw [CircuitType.eval_var_fields] at h_input
   unfold rotr32
   rw [Vector.getElem_rotate]
   subst h_input
@@ -232,10 +233,11 @@ lemma valueBits_shr32_eq (k : Fin 32) (x : fields 32 (F p)) (hx : Normalized x) 
           (Nat.lt_of_le_of_lt (Nat.div_le_self _ _) hval_lt) pow_le)]
 
 lemma eval_shr32 (env : Environment (F p)) (input_var : fields 32 (Expression (F p)))
-    (input : fields 32 (F p)) (h_input : Vector.map (Expression.eval env) input_var = input)
+    (input : fields 32 (F p)) (h_input : eval env input_var = input)
     (k : Fin 32) (i : Fin 32) :
     Expression.eval env (shr32 k input_var)[i.val] =
       if h : i.val + k.val < 32 then input[i.val + k.val]'h else 0 := by
+  rw [CircuitType.eval_var_fields] at h_input
   unfold shr32; rw [Vector.getElem_ofFn]; subst h_input
   split
   · next h => rw [Vector.getElem_map]
@@ -250,7 +252,7 @@ lemma shr_isbool (k : ℕ) (input : fields 32 (F p)) (ha : Normalized input) (i 
 
 /-! ## Spec proof factored out to avoid kernel deep recursion -/
 
-private lemma spec_of_constraint
+lemma spec_of_constraint
     (input z : fields 32 (F p))
     (hx : Normalized input)
     (h_z : ∀ i : Fin 32, z[i] =
@@ -395,7 +397,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [lowerSigma0, xor32]
-  obtain ⟨h_env1, h_env2, -⟩ := h_env
+  obtain ⟨h_env1, h_env2⟩ := h_env
   refine ⟨fun i => ?_, fun i => ?_⟩
   · have hr7 := eval_rotr32 env.toEnvironment input_var input h_input 7 i
     have hr18 := eval_rotr32 env.toEnvironment input_var input h_input 18 i
@@ -418,7 +420,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
     have hs3 := eval_shr32 env.toEnvironment input_var input h_input 3 i
     have h1 := h_env1 i
     have h2 := h_env2 i
-    simp only [circuit_norm, mul_zero, zero_add] at h2
+    simp only [circuit_norm, mul_zero] at h2
     rw [show (i₀ + (32 + 32 * 0) + ↑i) = i₀ + 32 + ↑i from by ring, h2, h1, hr7, hr18, hs3]
     have b7 : input[(i + 7).val] = (0 : F p) ∨ input[(i + 7).val] = 1 := h_assumptions (i + 7)
     have b18 : input[(i + 18).val] = (0 : F p) ∨ input[(i + 18).val] = 1 := h_assumptions (i + 18)
@@ -453,6 +455,19 @@ theorem completeness : Completeness (F p) main Assumptions := by
 
 def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness
+  -- Manual: the rotation-xor witness IR reads input bits; its eval-congruence needs the
+  -- sigma-specific decomposition facts, beyond the tactic's generic close.
+  computableWitnesses := by
+    computable_witnesses_start [lowerSigma0, xor32, rotr32, shr32, Vector.ext_iff, Vector.getElem_rotate]
+    · computable_witnesses_close [h ((i + 7) % 32) (by omega), h ((i + 18) % 32) (by omega)]
+    · have hz := h_agrees.1 (n + i) (by omega)
+      split_ifs with hc
+      · have h3 := h (i + 3 % 32) (by omega)
+        grind
+      · have h3 := h ((i + 3 % 32) % 32) (by omega)
+        simp only [circuit_norm]
+        grind
+    · computable_witnesses_close
 
 end LowerSigma0
 end Gadgets.SHA256

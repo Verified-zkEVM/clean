@@ -36,6 +36,51 @@ instance (T : Type) [Repr T] : Repr (U32 T) where
   reprPrec x _ := "⟨" ++ repr x.x0 ++ ", " ++ repr x.x1 ++ ", " ++ repr x.x2 ++ ", " ++ repr x.x3 ++ "⟩"
 
 namespace U32
+@[grind =]
+theorem size_eq : size U32 = 4 := rfl
+
+theorem eval_eq_components {F : Type} [FiniteField F]
+    (env : Environment F) (x : U32 (Expression F)) :
+    eval env x =
+      { x0 := eval env x.x0, x1 := eval env x.x1,
+        x2 := eval env x.x2, x3 := eval env x.x3 } := by
+  with_unfolding_all rfl
+
+/-- Constructor-keyed composite eval: decomposition fires only on `U32` literals, keeping
+opaque composite evals intact as `grind` atoms. -/
+@[grind =]
+theorem eval_mk {F : Type} [FiniteField F] (env : Environment F)
+    (a0 a1 a2 a3 : Expression F) :
+    eval env (⟨a0, a1, a2, a3⟩ : U32 (Expression F)) =
+      ⟨Expression.eval env a0, Expression.eval env a1,
+       Expression.eval env a2, Expression.eval env a3⟩ := by
+  simp only [eval_eq_components, circuit_norm]
+
+/-! Component evals commute into projections of the composite eval (rather than the
+composite exploding into components): opaque composite evals are the `grind` atoms that
+subcircuit composition rules are patterned on, and env-agreement transfers between them
+by congruence. -/
+
+@[grind =]
+theorem eval_x0 {F : Type} [FiniteField F] (env : Environment F) (x : U32 (Expression F)) :
+    Expression.eval env x.x0 = (eval env x).x0 := by
+  simp only [eval_eq_components, circuit_norm]
+
+@[grind =]
+theorem eval_x1 {F : Type} [FiniteField F] (env : Environment F) (x : U32 (Expression F)) :
+    Expression.eval env x.x1 = (eval env x).x1 := by
+  simp only [eval_eq_components, circuit_norm]
+
+@[grind =]
+theorem eval_x2 {F : Type} [FiniteField F] (env : Environment F) (x : U32 (Expression F)) :
+    Expression.eval env x.x2 = (eval env x).x2 := by
+  simp only [eval_eq_components, circuit_norm]
+
+@[grind =]
+theorem eval_x3 {F : Type} [FiniteField F] (env : Environment F) (x : U32 (Expression F)) :
+    Expression.eval env x.x3 = (eval env x).x3 := by
+  simp only [eval_eq_components, circuit_norm]
+
 def toLimbs {F} (x : U32 F) : Vector F 4 := toElements x
 def fromLimbs {F} (v : Vector F 4) : U32 F := fromElements v
 
@@ -310,6 +355,18 @@ theorem ext_iff {F} {x y : U32 F} :
     x = y ↔ ∀ i (_ : i < 4), x.toLimbs[i] = y.toLimbs[i] := by
   simp only [U32.toLimbs, ProvableType.ext_iff, size]
 
+@[grind =]
+theorem fromLimbs_inj {F} {x y : Vector F 4} :
+    U32.fromLimbs x = U32.fromLimbs y ↔ x = y := by
+  constructor
+  · intro h
+    have := congrArg U32.toLimbs h
+    simp only [toLimbs_fromLimbs] at this
+    exact this
+  · intro h
+    subst y
+    rfl
+
 omit [Fact (Nat.Prime p)] p_large_enough in
 theorem normalized_iff {x : U32 (F p)} :
     x.Normalized ↔ ∀ i (_ : i < 4), x.toLimbs[i].val < 256 := by
@@ -343,11 +400,11 @@ end ByteVector
 section Bitwise
 
 -- helper lemma to prepare the goal for testBit_two_pow_mul_add
-private lemma reorganize_value (a b c d : ℕ) :
+lemma reorganize_value (a b c d : ℕ) :
   a + 256 * (b + 256 * (c + 256 * d)) =
   2^8 * (2^8 * (2^8 * d + c) + b) + a := by ring
 
-private lemma reorganize_value' (a b c d : ℕ) :
+lemma reorganize_value' (a b c d : ℕ) :
   a + b * 256 + c * 256 ^ 2 + d * 256 ^ 3 =
   2^8 * (2^8 * (2^8 * d + c) + b) + a := by ring
 
