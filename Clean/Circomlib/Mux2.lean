@@ -43,7 +43,6 @@ template MultiMux2(n) {
     }
 }
 -/
-@[implicit_reducible]
 def main (n : ℕ) (input : Var (Inputs n) (F p)) := do
   let s10 <== input.s[1] * input.s[0]
 
@@ -132,7 +131,6 @@ template Mux2() {
     mux.out[0] ==> out;
 }
 -/
-@[implicit_reducible]
 def main (input : Var Inputs (F p)) := do
   -- Call MultiMux2 with n=1
   let mux_out ← MultiMux2.circuit 1 { c := #v[input.c], s := input.s }

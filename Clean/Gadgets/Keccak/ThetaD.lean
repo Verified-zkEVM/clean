@@ -8,7 +8,6 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
 
 instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
-@[implicit_reducible]
 def main (row : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
   let c0 ← Rotation64.circuit (64 - 1) row[1]
   let c0 ← Xor64.circuit ⟨row[4], c0⟩
@@ -105,7 +104,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
     Xor64.Assumptions, Xor64.Spec, Rotation64.Assumptions, Rotation64.Spec,
     add_assoc, seval, true_and]
 
-@[implicit_reducible]
 def circuit : FormalCircuit (F p) KeccakRow KeccakRow := {
   main, elaborated, Assumptions, Spec, soundness, completeness
 }

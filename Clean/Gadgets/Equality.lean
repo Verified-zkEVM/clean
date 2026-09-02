@@ -25,7 +25,6 @@ theorem allZero.completeness {offset : ℕ} {env : ProverEnvironment F} {n} {xs 
   exact h_holds xs[i] (Vector.mem_of_getElem rfl)
 
 namespace Equality
-@[implicit_reducible]
 def main (input : Var M F × Var M F) : Circuit F Unit := do
   let (x, y) := input
   let diffs := (toElements (M:=M) x).zip (toElements y) |>.map (fun (xi, yi) => xi - yi)

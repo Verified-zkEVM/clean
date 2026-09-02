@@ -30,7 +30,6 @@ template MultiMux1(n) {
     }
 }
 -/
-@[implicit_reducible]
 def main (n : ℕ) (input : Var (Inputs n) (F p)) := do
   -- Witness and constrain output vector
   let out <== input.c.map fun (c0, c1) =>
@@ -118,7 +117,6 @@ template Mux1() {
     mux.out[0] ==> out;
 }
 -/
-@[implicit_reducible]
 def main (input : Var Inputs (F p)) := do
   -- Call MultiMux1 with n=1
   let mux_out ← MultiMux1.circuit 1 {

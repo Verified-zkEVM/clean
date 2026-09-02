@@ -376,7 +376,6 @@ deriving ProvableStruct
 Initializes the BLAKE3 state vector from input variables.
 This combines the chaining value with IV constants and counter/flags.
 -/
-@[implicit_reducible]
 def initializeStateVector (input_var : Var Inputs (F p)) : Var BLAKE3State (F p) :=
   #v[
     input_var.chaining_value[0], input_var.chaining_value[1],
@@ -388,7 +387,6 @@ def initializeStateVector (input_var : Var Inputs (F p)) : Var BLAKE3State (F p)
     input_var.counter_low, input_var.counter_high, input_var.block_len, input_var.flags
   ]
 
-@[implicit_reducible]
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   let state := initializeStateVector input
   -- Apply 7 rounds with message permutation between rounds (except the last)

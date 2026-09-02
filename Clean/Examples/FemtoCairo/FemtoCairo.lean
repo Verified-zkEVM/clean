@@ -243,7 +243,6 @@ def MemoryCompletenessAssumption (env : ProverData (F p)) : Prop :=
   The circuit uses lookups into a read-only table representing the memory.
   This circuit is not satisfiable if the memory access is out of bounds.
 -/
-@[implicit_reducible]
 def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
   main := fun input => do
     let state := input.state
@@ -405,7 +404,6 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
   if the claimed state transition is invalid.
   Returns the next state.
 -/
-@[implicit_reducible]
 def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
   main (input : Var StateTransitionInput (F p)) := do
     let state := input.state
@@ -546,7 +544,6 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
   as input and returns the next state as output.
   The circuit is not satisfiable if the state transition is invalid.
 -/
-@[implicit_reducible]
 def femtoCairoStepMain {programSize : ℕ} (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     (state : Var State (F p)) : Circuit (F p) (Var State (F p)) := do
   -- Fetch instruction

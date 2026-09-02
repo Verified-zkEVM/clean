@@ -18,7 +18,6 @@ Two xor32 calls = 64 witnesses total.
 -/
 
 /-- σ₀(x) = ROTR7(x) XOR ROTR18(x) XOR SHR3(x) -/
-@[implicit_reducible]
 def lowerSigma0 (x : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
   let r1 ← xor32 (rotr32 7  x) (rotr32 18 x)
   xor32 r1 (shr32 3 x)
@@ -27,7 +26,6 @@ namespace LowerSigma0
 
 -- TODO: This circuit is written BADLY: it hides `main` behind `lowerSigma0`
 -- and inlines `xor32` instead of calling `Xor32.circuit` as a subcircuit.
-@[implicit_reducible]
 def main (x : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
   lowerSigma0 x
 
@@ -454,7 +452,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
     simp only [circuit_norm]
     rw [hxor3, hxor1]; ring
 
-@[implicit_reducible]
 def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness
 

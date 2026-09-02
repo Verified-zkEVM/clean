@@ -10,7 +10,6 @@ namespace Gadgets.Keccak256.Chi
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 open _root_.Gadgets.Not (not64_bytewise not64_bytewise_value)
 
-@[implicit_reducible]
 def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
   .mapFinRange 25 fun i => do
     let state_not ← Not.circuit (state[i + 5])
@@ -72,7 +71,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp_all
 
-@[implicit_reducible]
 def circuit : FormalCircuit (F p) KeccakState KeccakState where
   main
   elaborated

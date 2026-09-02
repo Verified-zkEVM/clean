@@ -13,7 +13,6 @@ structure Inputs (F : Type) where
   y : U32 F
 deriving ProvableStruct
 
-@[implicit_reducible]
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U32 (F p))  := do
   let z0 ← Or8.circuit ⟨input.x.x0, input.y.x0⟩
   let z1 ← Or8.circuit ⟨input.x.x1, input.y.x1⟩

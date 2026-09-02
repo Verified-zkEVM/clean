@@ -11,7 +11,6 @@ structure Inputs (F : Type) where
   y: U64 F
 deriving ProvableStruct
 
-@[implicit_reducible]
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
   let z0 ← And8.circuit ⟨input.x.x0, input.y.x0⟩
   let z1 ← And8.circuit ⟨input.x.x1, input.y.x1⟩
@@ -77,7 +76,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
   simp only [circuit_norm, explicit_provable_type, U64.Normalized] at h_assumptions h_input ⊢
   simp_all
 
-@[implicit_reducible]
 def circuit : FormalCircuit (F p) Inputs U64 where
   main
   elaborated

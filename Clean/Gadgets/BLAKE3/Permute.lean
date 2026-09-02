@@ -6,7 +6,6 @@ variable {p : ℕ} [Fact p.Prime]
 
 open Specs.BLAKE3 (msgPermutation permute)
 
-@[implicit_reducible]
 def main (state : Var BLAKE3State (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   return Vector.ofFn (fun i => state[msgPermutation[i]])
 

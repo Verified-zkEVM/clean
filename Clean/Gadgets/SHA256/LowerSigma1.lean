@@ -17,7 +17,6 @@ Reuses the helper lemmas defined in `LowerSigma0`.
 -/
 
 /-- σ₁(x) = ROTR17(x) XOR ROTR19(x) XOR SHR10(x) -/
-@[implicit_reducible]
 def lowerSigma1 (x : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
   let r1 ← xor32 (rotr32 17 x) (rotr32 19 x)
   xor32 r1 (shr32 10 x)
@@ -28,7 +27,6 @@ open LowerSigma0 (sum_bool_lt_two_pow testBit_binary_sum bool_finsum_xor_eq
   valueBits_lt_two_pow valueBits_rotr32_eq valueBits_shr32_eq
   eval_rotr32 eval_shr32 shr_isbool)
 
-@[implicit_reducible]
 def main (x : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
   lowerSigma1 x
 
@@ -226,7 +224,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
     simp only [circuit_norm]
     rw [hxor3, hxor1]; ring
 
-@[implicit_reducible]
 def circuit : FormalCircuit (F p) (fields 32) (fields 32) where
   main; elaborated; Assumptions; Spec; soundness; completeness
 

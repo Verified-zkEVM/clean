@@ -18,7 +18,6 @@ open ByteDecomposition.Theorems (byteDecomposition_lt)
 /--
   Rotate the 64-bit integer by `offset` bits
 -/
-@[implicit_reducible]
 def main (offset : Fin 8) (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) := do
   let parts ← Circuit.map x.toLimbs (ByteDecomposition.circuit offset)
   let lows := parts.map Outputs.low
@@ -107,7 +106,6 @@ theorem completeness (offset : Fin 8) : Completeness (F p) (main offset) Assumpt
   rw [U64.ByteVector.normalized_iff] at h_assumptions
   simp_all only [U64.ByteVector.getElem_eval_toLimbs, forall_const]
 
-@[implicit_reducible]
 def circuit (offset : Fin 8) : FormalCircuit (F p) U64 U64 := {
   main := main offset
   elaborated := elaborated offset

@@ -91,7 +91,7 @@ instance (priority := low) : Inhabited (M (Expression F)) where
   default := fromElements default
 
 -- TODO this should be simply called `var`, analogous to `const`
-@[implicit_reducible, explicit_provable_type]
+@[explicit_provable_type]
 def varFromOffset (M : TypeMap) [ProvableType M] (offset : ℕ) : M (Expression F) :=
   let vars := Vector.mapRange (size M) fun i => var ⟨offset + i⟩
   fromElements vars
@@ -301,8 +301,10 @@ inductive ProvableTypeList (F : Type) : List WithProvableType → Type 1 where
 | nil : ProvableTypeList F []
 | cons : ∀ {a : WithProvableType} {as : List WithProvableType}, a.type F → ProvableTypeList F as → ProvableTypeList F (a :: as)
 
--- This length appears in dependent vector types, so Lean must be able to
--- reduce it while comparing implicit arguments.
+/-- Total flattened size of a heterogeneous list of provable types.
+
+This appears in dependent `Vector` lengths, so Lean must unfold it while checking
+implicit arguments. -/
 @[implicit_reducible]
 def combinedSize' : List WithProvableType → ℕ
   | [] => 0

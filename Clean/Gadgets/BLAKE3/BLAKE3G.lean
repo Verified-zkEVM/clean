@@ -17,7 +17,6 @@ structure Inputs (F : Type) where
   y : U32 F
 deriving ProvableStruct
 
-@[implicit_reducible]
 def main (a b c d : Fin 16) (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   let state := input.state
   let x := input.x
@@ -128,7 +127,6 @@ theorem completeness (a b c d : Fin 16) : Completeness (F p) (main a b c d) Assu
   -- resolve all chains of assumptions
   simp_all only [forall_const, and_true]
 
-@[implicit_reducible]
 def circuit (a b c d : Fin 16) : FormalCircuit (F p) Inputs BLAKE3State where
   main := main a b c d
   elaborated := elaborated a b c d

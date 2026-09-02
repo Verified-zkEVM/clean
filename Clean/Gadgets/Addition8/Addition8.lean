@@ -10,7 +10,6 @@ namespace Addition8Full
 Compute the 8-bit addition of two numbers with a carry-in bit.
 Returns the sum.
 -/
-@[implicit_reducible]
 def main (inputs : Var Addition8FullCarry.Inputs (F p)) : Circuit (F p) (Var field (F p)) := do
   let output ← Addition8FullCarry.circuit inputs
   return output.z
@@ -44,7 +43,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
   simp_all [circuit_norm, main, Assumptions,
     Addition8FullCarry.circuit, Addition8FullCarry.Assumptions]
 
-@[implicit_reducible]
 def circuit : FormalCircuit (F p) Addition8FullCarry.Inputs field where
   main
   elaborated
@@ -78,7 +76,6 @@ deriving ProvableStruct
 Compute the 8-bit addition of two numbers.
 Returns the sum.
 -/
-@[implicit_reducible]
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var field (F p)) :=
   Addition8Full.circuit { x := input.x, y := input.y, carryIn := 0 }
 
@@ -111,7 +108,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
   simp_all [circuit_norm, main, Assumptions, Addition8Full.circuit,
     Addition8Full.Assumptions, IsBool]
 
-@[implicit_reducible]
 def circuit : FormalCircuit (F p) Inputs field where
   main
   elaborated

@@ -51,7 +51,6 @@ theorem not_bytewise_value_spec {x : U64 (F p)} (x_lt : x.Normalized) :
   exact ⟨ not_lt 256 hx0, not_lt 256 hx1, not_lt 256 hx2, not_lt 256 hx3,
       not_lt 256 hx4, not_lt 256 hx5, not_lt 256 hx6, not_lt 256 hx7 ⟩
 
-@[implicit_reducible]
 def main (x : Var U64 (F p)) : Circuit (F p) (Var U64 (F p)) :=
   pure (not64_bytewise x)
 
@@ -77,7 +76,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
   intros
   trivial
 
-@[implicit_reducible]
 def circuit : FormalCircuit (F p) U64 U64 where
   main
   elaborated

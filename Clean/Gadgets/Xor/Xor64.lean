@@ -15,7 +15,6 @@ structure Inputs (F : Type) where
   y: U64 F
 deriving ProvableStruct
 
-@[implicit_reducible]
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var U64 (F p))  := do
   let z ← witness <|
     let z0 := (input.x.x0.val ^^^ input.y.x0.val).toField
@@ -104,7 +103,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
   simp only [circuit_norm, explicit_provable_type, U64.mk.injEq] at h_env ⊢
   simp_all [circuit_norm, xor_val]
 
-@[implicit_reducible]
 def circuit : FormalCircuit (F p) Inputs U64 where
   main
   elaborated

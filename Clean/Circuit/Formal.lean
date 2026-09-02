@@ -120,7 +120,7 @@ end FormalCircuitBase
 section
 variable [ProvableType Input] [ProvableType Output]
 
-@[implicit_reducible, circuit_norm]
+@[circuit_norm]
 def Soundness (F : Type) [FiniteField F] (main : Var Input F → Circuit F (Var Output F))
     [elaborated : ElaboratedCircuit F Input Output main]
     (Assumptions : Input F → Prop) (Spec : Input F → Output F → Prop) :=
@@ -136,7 +136,7 @@ def Soundness (F : Type) [FiniteField F] (main : Var Input F → Circuit F (Var 
   Spec input output ∧
   Operations.Requirements env (main input_var |>.operations offset)
 
-@[implicit_reducible, circuit_norm]
+@[circuit_norm]
 def Completeness (F : Type) [FiniteField F] (main : Var Input F → Circuit F (Var Output F))
     (Assumptions : Input F → Prop) :=
   -- for all prover environments which use the default witness generators for local variables

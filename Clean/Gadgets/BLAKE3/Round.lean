@@ -16,7 +16,6 @@ structure Inputs (F : Type) where
   message : Vector (U32 F) 16
 deriving ProvableStruct
 
-@[implicit_reducible]
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   -- TODO: refactor using a for loop
   let state ← G.circuit 0 4 8 12 ⟨input.state, input.message[0], input.message[1]⟩

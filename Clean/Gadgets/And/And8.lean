@@ -21,7 +21,6 @@ def Spec (input : Inputs (F p)) (z : F p) :=
   let ⟨x, y⟩ := input
   z.val = x.val &&& y.val
 
-@[implicit_reducible]
 def main (input : Var Inputs (F p)) : Circuit (F p) (Expression (F p)) := do
   let and ← witness (input.x.val &&& input.y.val).toField
   -- we prove AND correct using an XOR lookup and the following identity:
@@ -134,7 +133,6 @@ theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main A
   rw [ZMod.val_sub two_and_lt, x_y_val, two_and_val,
     ←and_times_two_add_xor hx_byte hy_byte, add_comm, Nat.add_sub_cancel]
 
-@[implicit_reducible]
 def circuit : FormalCircuit (F p) Inputs field :=
   { main, elaborated, Assumptions, Spec, soundness, completeness }
 

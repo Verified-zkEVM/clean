@@ -31,7 +31,6 @@ Circuit that checks if two values of a ProvableType are equal.
 Returns 1 if the inputs are equal, otherwise returns 0.
 Uses three constraints per field element (IsZeroField on each component difference + one multiplication).
 -/
-@[implicit_reducible]
 def main (input : Var α F × Var α F) : Circuit F (Var field F) := do
   let d := diffs input.1 input.2
   IsZero.circuit (fromElements (M:=α) d)

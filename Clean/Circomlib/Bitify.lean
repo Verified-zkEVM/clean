@@ -33,7 +33,6 @@ template Num2Bits(n) {
     lc1 === in;
 }
 -/
-@[implicit_reducible]
 def main (n : ℕ) (inp : Expression (F p)) := do
   let out ← witnessVector n (inp.bits n)
 
@@ -65,7 +64,6 @@ lemma lc_eq {i0} {env} {n : ℕ} :
     left
     rw [ZMod.cast_id]
 
-@[implicit_reducible]
 def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fields n) where
   main := main n
 
@@ -109,7 +107,6 @@ def arbitraryBitLengthCircuit (n : ℕ) : GeneralFormalCircuit (F p) field (fiel
     rw [this, fieldFromBits_fieldToBits h_assumptions]
 
 -- the main circuit implementation makes a stronger statement assuming 2^n < p
-@[implicit_reducible]
 def circuit (n : ℕ) (hn : 2^n < p) : GeneralFormalCircuit (F p) field (fields n) where
   main input := arbitraryBitLengthCircuit n input
 
@@ -146,7 +143,6 @@ template Bits2Num(n) {
     lc1 ==> out;
 }
 -/
-@[implicit_reducible]
 def main (n : ℕ) (input : Vector (Expression (F p)) n) := do
   let (lc1, _) := Fin.foldl n (fun (lc1, e2) i =>
     let lc1 := lc1 + input[i] * e2
@@ -180,7 +176,6 @@ lemma lc_eq {env} {n : ℕ} {v : Vector (Expression (F p)) n} :
       Nat.cast_pow, Nat.cast_ofNat, Prod.mk.injEq]
     rw [ZMod.cast_id]
 
-@[implicit_reducible]
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main := main n
   elaborated := elaborated n

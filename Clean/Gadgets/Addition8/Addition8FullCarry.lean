@@ -19,7 +19,6 @@ structure Outputs (F : Type) where
   carryOut: F
 deriving ProvableStruct
 
-@[implicit_reducible]
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   -- witness the result
   let z ← witness ((input.x + input.y + input.carryIn).val % 256).toField

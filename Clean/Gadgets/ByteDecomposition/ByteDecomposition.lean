@@ -19,7 +19,6 @@ deriving ProvableStruct
   The low part is the least significant `offset` bits,
   and the high part is the most significant `8 - offset` bits.
 -/
-@[implicit_reducible]
 def main (offset : Fin 8) (x : Expression (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let low ← witness (x.val % (2^offset.val : ℕ)).toField
   let high ← witness (x.val / (2^offset.val : ℕ)).toField

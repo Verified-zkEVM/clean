@@ -31,7 +31,6 @@ template XOR() {
     out <== a + b - 2*a*b;
 }
 -/
-@[implicit_reducible]
 def main (input : Expression (F p) × Expression (F p)) := do
   let a := input.1
   let b := input.2
@@ -69,7 +68,6 @@ template AND() {
     out <== a*b;
 }
 -/
-@[implicit_reducible]
 def main (input : Expression (F p) × Expression (F p)) := do
   let a := input.1
   let b := input.2
@@ -107,7 +105,6 @@ template OR() {
     out <== a + b - a*b;
 }
 -/
-@[implicit_reducible]
 def main (input : Expression (F p) × Expression (F p)) := do
   let a := input.1
   let b := input.2
@@ -146,7 +143,6 @@ template NOT() {
     out <== 1 + in - 2*in;
 }
 -/
-@[implicit_reducible]
 def main (input : Expression (F p)) := do
   let inp := input
   let out <== 1 + inp - 2*inp
@@ -184,7 +180,6 @@ template NAND() {
     out <== 1 - a*b;
 }
 -/
-@[implicit_reducible]
 def main (input : Expression (F p) × Expression (F p)) := do
   let a := input.1
   let b := input.2
@@ -222,7 +217,6 @@ template NOR() {
     out <== a*b + 1 - a - b;
 }
 -/
-@[implicit_reducible]
 def main (input : Expression (F p) × Expression (F p)) := do
   let a := input.1
   let b := input.2
@@ -281,7 +275,6 @@ template MultiAND(n) {
 }
 -/
 
-@[implicit_reducible]
 def main : {n : ℕ} → Vector (Expression (F p)) n → Circuit (F p) (Expression (F p))
   | 0, _ =>
     return (1 : F p)

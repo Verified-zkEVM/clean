@@ -20,7 +20,6 @@ def Spec (input : Inputs (F p)) (z : F p) :=
   let ⟨x, y⟩ := input
   z.val = x.val ||| y.val ∧ z.val < 256
 
-@[implicit_reducible]
 def main (input : Var Inputs (F p)) : Circuit (F p) (Expression (F p)) := do
   let or ← witness (input.x.val ||| input.y.val).toField
   -- we prove OR correct using an XOR lookup
@@ -174,7 +173,6 @@ theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main A
   · omega
   · omega
 
-@[implicit_reducible]
 def circuit : FormalCircuit (F p) Inputs field :=
   { main, elaborated, Assumptions, Spec, soundness, completeness }
 

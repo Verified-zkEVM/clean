@@ -18,7 +18,6 @@ Witnesses 32 output bits.
 /-- Choice function: Ch(e, f, g) = (e AND f) XOR (NOT e AND g) = g + e·(f − g).
     Per bit: ch = g + e·(f − g), which equals f when e = 1 and g when e = 0.
     One R1CS constraint per bit: e·(f − g) = ch − g. -/
-@[implicit_reducible]
 def ch32 (e f g : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
   let z ← witnessVector 32 (.range _ fun i => g[i] + e[i] * (f[i] - g[i]))
   Circuit.forEach (Vector.finRange 32) fun i =>
@@ -33,7 +32,6 @@ structure Inputs (F : Type) where
   g : fields 32 F
 deriving ProvableStruct
 
-@[implicit_reducible]
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
   ch32 input.e input.f input.g
 

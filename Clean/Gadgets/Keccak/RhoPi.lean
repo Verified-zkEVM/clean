@@ -7,18 +7,14 @@ namespace Gadgets.Keccak256.RhoPi
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]
 instance : Fact (p > 512) := .mk (by linarith [‹Fact (p > _)›.elim])
 
-@[implicit_reducible]
 def rhoPiIndices : Vector (Fin 25) 25 := #v[
   0, 15, 5, 20, 10, 6, 21, 11, 1, 16, 12, 2, 17, 7, 22, 18, 8, 23, 13, 3, 24, 14, 4, 19, 9
 ]
-@[implicit_reducible]
 def rhoPiShifts : Vector (Fin 64) 25 := #v[
   0, 28, 1, 27, 62, 44, 20, 6, 36, 55, 43, 3, 25, 10, 39, 21, 45, 8, 15, 41, 14, 61, 18, 56, 2
 ]
-@[implicit_reducible]
 def rhoPiConstants := rhoPiIndices.zip rhoPiShifts
 
-@[implicit_reducible]
 def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
   .map rhoPiConstants fun (i, s) =>
     Rotation64.circuit (-s) state[i.val]
@@ -76,7 +72,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
   -- simplify constraints (goal + environment) and apply assumptions
   simp_all [circuit_norm, Rotation64.circuit, Rotation64.Assumptions, Rotation64.Spec]
 
-@[implicit_reducible]
 def circuit : FormalCircuit (F p) KeccakState KeccakState where
   main := main
   elaborated := elaborated

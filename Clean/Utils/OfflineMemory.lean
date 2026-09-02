@@ -43,6 +43,9 @@ abbrev timestamp_ordering (x y : MemoryAccess) := match x, y with
 
 /--
   A memory access list is timestamp sorted if the timestamps are strictly decreasing.
+
+  This proposition indexes proof-dependent memory operations, so Lean must unfold
+  it while checking implicit arguments.
 -/
 @[implicit_reducible]
 def MemoryAccessList.isTimestampSorted (accesses : MemoryAccessList) : Prop :=

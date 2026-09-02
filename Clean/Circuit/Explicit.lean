@@ -193,6 +193,23 @@ def ExplicitCircuits.fromSingle {circuit : α → Circuit F β}
   channelsWithGuarantees a n := (explicit a).channelsWithGuarantees n
   channelsLawful a n := (explicit a).channelsLawful n
 
+/-- Transport explicit metadata across an equality of circuit definitions.
+
+`infer_explicit_circuit(s)` uses this bridge when it unfolds a named circuit wrapper for
+structural inference.  Consequently, the resulting proof remains indexed by the original
+named circuit instead of exposing the unfolded implementation in its type. -/
+@[instance_reducible, explicit_circuit_norm]
+def ExplicitCircuit.of_eq {circuit circuit' : Circuit F α} (h : circuit = circuit')
+    (explicit : ExplicitCircuit circuit') : ExplicitCircuit circuit := by
+  subst circuit'
+  exact explicit
+
+@[instance_reducible, explicit_circuit_norm]
+def ExplicitCircuits.of_eq {circuit circuit' : α → Circuit F β} (h : circuit = circuit')
+    (explicit : ExplicitCircuits circuit') : ExplicitCircuits circuit := by
+  subst circuit'
+  exact explicit
+
 instance ExplicitCircuits.toSingle (circuit : α → Circuit F β) (a : α)
     [explicit : ExplicitCircuits circuit] : ExplicitCircuit (circuit a) where
   output n := output circuit a n
@@ -655,8 +672,11 @@ def explicitConstructorFor? (head : Name) : MetaM (Option Name) := do
   return none
 
 /-- If the head of `circuit` (the goal's last argument, application `target`/`args`) is an unfoldable
-circuit wrapper, unfold it one step, `whnfCore` (no delta, so a loop `def` stays folded; sees through
-`let`s/`match`es), `change` to the (defeq) reduced form, and return it — else `none`, no change.
+circuit wrapper, unfold it one step and `whnfCore` it (no delta, so a loop `def` stays folded; sees
+through `let`s/`match`es). Create a subgoal for the exposed circuit and assign the original goal via
+`ExplicitCircuit(s).of_eq`, preserving the named circuit as the resulting proof's index.
+
+Return the exposed circuit, or `none` without changing the goal when the head is not unfoldable.
 Shared by `inferExplicitHead` and `unfold_explicit_circuits_head`. -/
 def unfoldCircuitWrapperHead (target : Expr) (args : Array Expr) (circuit : Expr) :
     TacticM (Option Expr) := do
@@ -665,7 +685,16 @@ def unfoldCircuitWrapperHead (target : Expr) (args : Array Expr) (circuit : Expr
   let some unfolded ← withTransparency .default <| unfoldDefinition? circuit | return none
   let exposed ← whnfCore unfolded
   let newTarget := mkAppN target.getAppFn (args.set! (args.size - 1) exposed)
-  replaceMainGoal [← (← getMainGoal).change newTarget (checkDefEq := false)]
+  let goal ← getMainGoal
+  let subgoal ← mkFreshExprMVar newTarget
+  let equalityType ← mkEq circuit exposed
+  let equalityProof ← mkExpectedTypeHint (← mkEqRefl circuit) equalityType
+  let bridgeName :=
+    if target.getAppFn.isConstOf ``ExplicitCircuit then ``ExplicitCircuit.of_eq
+    else ``ExplicitCircuits.of_eq
+  let bridge ← mkAppM bridgeName #[equalityProof, subgoal]
+  goal.assign bridge
+  replaceMainGoal [subgoal.mvarId!]
   return some exposed
 
 /--
@@ -745,6 +774,7 @@ elab "cases_match_discr" : tactic => casesMatchDiscr
 
 macro_rules
   | `(tactic|infer_explicit_circuit) => `(tactic|(
+    set_option backward.isDefEq.respectTransparency.types false in
     try intros
     repeat (
       try intros
@@ -774,6 +804,7 @@ elab "unfold_explicit_circuits_head" : tactic => withMainContext do
 
 macro_rules
   | `(tactic|infer_explicit_circuits) => `(tactic|(
+    set_option backward.isDefEq.respectTransparency.types false in
     try unfold_explicit_circuits_head
     -- dsimp, not simp: a propositional rewrite here wraps the inferred instance in
     -- `Eq.mpr`, which blocks all downstream projection reduction (parametric circuits)
@@ -832,7 +863,9 @@ unnecessary type-directed reduction of the original circuit.
 Set `set_option debug.elaborateCircuit true` to print the inferred explicit proof term and the
 normalization passes used for each metadata field.
 -/
-elab "elaborate_circuit" : tactic => withMainContext do
+elab "elaborate_circuit" : tactic =>
+    withOptions (fun opts => opts.setBool `backward.isDefEq.respectTransparency.types false) <|
+    withMainContext do
   -- We are going to build an `ElaboratedCircuit` record directly.  First inspect the
   -- current goal and pull the important arguments out of
   --   ElaboratedCircuit F Input Output main
@@ -1063,7 +1096,9 @@ syntax "elaborate_circuit_with" term : tactic
 syntax "elaborate_circuit_with" term " using " term : tactic
 
 private def elaborateCircuitWith (dataStx : TSyntax `term) (dataEqStx? : Option (TSyntax `term)) :
-    TacticM Unit := withMainContext do
+    TacticM Unit :=
+  withOptions (fun opts => opts.setBool `backward.isDefEq.respectTransparency.types false) <|
+  withMainContext do
   -- The tactic is used in goals of the form
   --   ElaboratedCircuit F Input Output main
   -- We unpack the target manually because the rest of the code constructs

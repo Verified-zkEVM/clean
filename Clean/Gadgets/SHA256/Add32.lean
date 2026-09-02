@@ -43,7 +43,6 @@ private lemma bitsVal_eval (env : ProverEnvironment (F p)) (a : Var (fields 32) 
 
 /-- Add two 32-bit words mod 2^32.
     Both inputs are assumed to have boolean values in each bit position. -/
-@[implicit_reducible]
 def add32 (a b : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
   -- Witness the lower 32 bits of the sum
   let z ← witnessVectorProgram 32 do
@@ -67,7 +66,6 @@ structure Inputs (F : Type) where
   b : fields 32 F
 deriving ProvableStruct
 
-@[implicit_reducible]
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
   add32 input.a input.b
 

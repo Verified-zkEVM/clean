@@ -265,7 +265,6 @@ open Gadgets (ByteTable)
   Assert that a 32-bit unsigned integer is normalized.
   This means that all its limbs are less than 256.
 -/
-@[implicit_reducible]
 def main (inputs : Var U32 (F p)) : Circuit (F p) Unit := do
   lookup ByteTable inputs.x0
   lookup ByteTable inputs.x1

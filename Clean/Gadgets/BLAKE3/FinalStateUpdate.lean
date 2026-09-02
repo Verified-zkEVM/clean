@@ -15,7 +15,6 @@ structure Inputs (F : Type) where
   chaining_value : Vector (U32 F) 8
 deriving ProvableStruct
 
-@[implicit_reducible]
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
   -- XOR first 8 words with last 8 words
   let s0 ← Xor32.circuit ⟨input.state[0], input.state[8]⟩

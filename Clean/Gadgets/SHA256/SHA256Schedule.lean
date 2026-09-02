@@ -45,7 +45,6 @@ private def constantLength :
 
 /-- Expand a 16-word block into a 64-word message schedule.
     Each word is a `Var (fields 32) (F p)` (32-bit boolean vector, LSB first). -/
-@[implicit_reducible]
 def messageSchedule (block : SHA256Block (Expression (F p))) :
     Circuit (F p) (SHA256Schedule (Expression (F p))) := do
   -- Initialise: first 16 words from block, next 48 as zero placeholders.
@@ -57,7 +56,6 @@ def messageSchedule (block : SHA256Block (Expression (F p))) :
 
 namespace MessageSchedule
 
-@[implicit_reducible]
 def main (block : SHA256Block (Expression (F p))) : Circuit (F p) (SHA256Schedule (Expression (F p))) :=
   messageSchedule block
 

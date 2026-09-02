@@ -6,7 +6,6 @@ import Clean.Gadgets.Boolean
 
 open Gadgets.Addition32Full (Inputs Outputs)
 
-@[implicit_reducible]
 def circuit32 input := Gadgets.Addition32Full.main (p:=pBabybear) input
 
 -- `infer_explicit_circuit(s)` seem to work for all circuits
@@ -18,7 +17,6 @@ instance explicit : ExplicitCircuits circuit32 := by
 instance elaborated : ElaboratedCircuit (F pBabybear) Inputs Outputs circuit32 := by
   elaborate_circuit_naive
 
-@[implicit_reducible]
 def circuit32Reduced input := Gadgets.Addition32Full.main (p:=pBabybear) input
 
 @[reducible]

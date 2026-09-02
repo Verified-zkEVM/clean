@@ -20,7 +20,6 @@ The composite circuit:
 - Has the assumptions of the first circuit
 - Has a spec stating that there exists an intermediate value such that both component specs hold
 -/
-@[implicit_reducible]
 def concat
     (circuit1 : FormalCircuit F Input Mid)
     (circuit2 : FormalCircuit F Mid Output)

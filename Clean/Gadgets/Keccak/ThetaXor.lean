@@ -11,7 +11,6 @@ structure Inputs (F : Type) where
   d : KeccakRow F
 deriving ProvableStruct
 
-@[implicit_reducible]
 def main (inputs : Var Inputs (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
   .mapFinRange 25 fun i =>
     Xor64.circuit ⟨inputs.state[i.val], inputs.d[i.val / 5]⟩
@@ -70,7 +69,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
   intro i
   exact ⟨ state_norm i, d_norm ⟨i.val / 5, by omega⟩ ⟩
 
-@[implicit_reducible]
 def circuit : FormalCircuit (F p) Inputs KeccakState where
   main := main
   elaborated := elaborated

@@ -361,7 +361,6 @@ structure Inputs (F : Type) where
   block : SHA256Block F
 deriving ProvableStruct
 
-@[implicit_reducible]
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var SHA256State (F p)) := do
   let w ← MessageSchedule.circuit input.block
   let state' ← SHA256Rounds.circuit ⟨input.state, w⟩
@@ -369,7 +368,6 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var SHA256State (F p)) := d
     Add32.circuit ⟨input.state[i], state'[i]⟩
 
 /-- Direct output metadata for the final eight Davies--Meyer additions. -/
-@[implicit_reducible]
 def output (i₀ : ℕ) : Var SHA256State (F p) :=
   Vector.mapFinRange 8 fun i =>
     varFromOffset (fields 32) (i₀ + 48 * 227 + 64 * 455 + i.val * 33)

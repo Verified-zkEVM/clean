@@ -8,7 +8,6 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
 
 instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])
 
-@[implicit_reducible]
 def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
   let c ← ThetaC.circuit state
   let d ← ThetaD.circuit c
@@ -51,7 +50,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
     ThetaD.circuit, ThetaD.Assumptions, ThetaD.Spec,
     ThetaXor.circuit, ThetaXor.Assumptions, ThetaXor.Spec]
 
-@[implicit_reducible]
 def circuit : FormalCircuit (F p) KeccakState KeccakState := {
   main, elaborated, Assumptions, Spec, soundness, completeness
 }

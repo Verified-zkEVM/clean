@@ -15,7 +15,6 @@ Witnesses 32 output bits.
 /-- Bitwise XOR of two 32-bit words.
     Per bit: z = a + b − 2·a·b  (correct when a, b ∈ {0, 1}).
     Witnesses 32 output bits. -/
-@[implicit_reducible]
 def xor32 (a b : Var (fields 32) (F p)) : Circuit (F p) (Var (fields 32) (F p)) := do
   let z ← witnessVector 32 (.lit <| .ofFn fun i => (a[i].val ^^^ b[i].val).toField)
   Circuit.forEach (Vector.finRange 32) fun i =>
@@ -29,7 +28,6 @@ structure Inputs (F : Type) where
   b : fields 32 F
 deriving ProvableStruct
 
-@[implicit_reducible]
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var (fields 32) (F p)) :=
   xor32 input.a input.b
 

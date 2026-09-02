@@ -57,7 +57,6 @@ template MultiMux3(n) {
     }
 }
 -/
-@[implicit_reducible]
 def main (n : ℕ) (input : Var (Inputs n) (F p)) := do
   let s10 <== input.s[1] * input.s[0]
 
@@ -154,7 +153,6 @@ template Mux3() {
     mux.out[0] ==> out;
 }
 -/
-@[implicit_reducible]
 def main (input : Var Inputs (F p)) := do
   -- Call MultiMux3 with n=1
   let mux_out ← MultiMux3.circuit 1 { c := #v[input.c], s := input.s }

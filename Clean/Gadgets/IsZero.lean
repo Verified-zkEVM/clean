@@ -15,7 +15,6 @@ variable {M : TypeMap} [ProvableType M]
 Main circuit that checks if all elements of a ProvableType are zero.
 Returns 1 if all elementts are 0, otherwise returns 0.
 -/
-@[implicit_reducible]
 def main (input : Var M F) : Circuit F (Var field F) := do
   let elemVars := toElements (M:=M) input
   -- Use foldlRange to multiply all IsZero results together

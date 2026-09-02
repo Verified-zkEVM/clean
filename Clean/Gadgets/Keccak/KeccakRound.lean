@@ -8,7 +8,6 @@ namespace Gadgets.Keccak256.KeccakRound
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]
 open Specs.Keccak256
 
-@[implicit_reducible]
 def main (rc : UInt64) (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
   let state ← Theta.circuit state
   let state ← RhoPi.circuit state
@@ -110,7 +109,6 @@ theorem completeness (rc : UInt64) : Completeness (F p) (main rc) Assumptions :=
   simp only [KeccakState.Normalized, eval_vector, circuit_norm] at chi_norm
   exact chi_norm 0
 
-@[implicit_reducible]
 def circuit (rc : UInt64) : FormalCircuit (F p) KeccakState KeccakState where
   main := main rc
   elaborated := elaborated rc

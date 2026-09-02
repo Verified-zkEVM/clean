@@ -110,7 +110,6 @@ template Bits2Num_strict() {
     b2n.out ==> out;
 }
 -/
-@[implicit_reducible]
 def main (input : Vector (Expression (F p)) 254) := do
   -- Check that the bits represent a value less than p
   AliasCheck.circuit input

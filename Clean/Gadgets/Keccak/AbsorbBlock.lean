@@ -11,7 +11,6 @@ structure Input (F : Type) where
   block : KeccakBlock F
 deriving ProvableStruct
 
-@[implicit_reducible]
 def main (input : Var Input (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
   -- absorb the block into the state by XORing with the first RATE elements
   let state_rate ← Circuit.mapFinRange RATE fun i =>

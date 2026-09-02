@@ -22,7 +22,6 @@ structure Outputs (F : Type) where
   carryOut: F
 deriving Repr, ProvableStruct
 
-@[implicit_reducible]
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
   let out0 ← Addition8FullCarry.circuit ⟨input.x.x0, input.y.x0, input.carryIn⟩
   let out1 ← Addition8FullCarry.circuit ⟨input.x.x1, input.y.x1, out0.carryOut⟩
@@ -188,7 +187,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
     ⟨x3_byte, y3_byte, c2_bool⟩
   exact ⟨as0, as1, as2, as3⟩
 
-@[implicit_reducible]
 def circuit : FormalCircuit (F p) Inputs Outputs where
   main
   elaborated
