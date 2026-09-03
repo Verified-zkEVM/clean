@@ -340,7 +340,6 @@ private lemma spec_of_constraint
 
 /-! ## Soundness / Completeness -/
 
-@[reducible]
 instance elaborated : ElaboratedCircuit (F p) (fields 32) (fields 32) main := by
   elaborate_circuit
 

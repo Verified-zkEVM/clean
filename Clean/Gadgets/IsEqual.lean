@@ -32,23 +32,13 @@ Returns 1 if the inputs are equal, otherwise returns 0.
 Uses three constraints per field element (IsZeroField on each component difference + one multiplication).
 -/
 def main (input : Var α F × Var α F) : Circuit F (Var field F) := do
-  let d := diffs input.1 input.2
+  let (x, y) := input
+  let d := diffs x y
   IsZero.circuit (fromElements (M:=α) d)
 
 @[reducible]
 instance elaborated : ElaboratedCircuit F (ProvablePair α α) field main := by
-  elaborate_circuit_with {
-    localLength _ := 2 * size α
-    output _ i₀ := Fin.foldl (size α)
-      (fun acc i => acc * varFromOffset field (i₀ + i * 2 + 1)) 1
-  } using by
-    constructor
-    · intro input
-      rfl
-    · constructor
-      · intro input i₀
-        rfl
-      · simp only [circuit_norm]
+  elaborate_circuit
 
 def Assumptions (_ : α F × α F) : Prop := True
 

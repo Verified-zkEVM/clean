@@ -774,7 +774,6 @@ elab "cases_match_discr" : tactic => casesMatchDiscr
 
 macro_rules
   | `(tactic|infer_explicit_circuit) => `(tactic|(
-    set_option backward.isDefEq.respectTransparency.types false in
     try intros
     repeat (
       try intros
@@ -804,7 +803,6 @@ elab "unfold_explicit_circuits_head" : tactic => withMainContext do
 
 macro_rules
   | `(tactic|infer_explicit_circuits) => `(tactic|(
-    set_option backward.isDefEq.respectTransparency.types false in
     try unfold_explicit_circuits_head
     -- dsimp, not simp: a propositional rewrite here wraps the inferred instance in
     -- `Eq.mpr`, which blocks all downstream projection reduction (parametric circuits)
@@ -863,9 +861,7 @@ unnecessary type-directed reduction of the original circuit.
 Set `set_option debug.elaborateCircuit true` to print the inferred explicit proof term and the
 normalization passes used for each metadata field.
 -/
-elab "elaborate_circuit" : tactic =>
-    withOptions (fun opts => opts.setBool `backward.isDefEq.respectTransparency.types false) <|
-    withMainContext do
+elab "elaborate_circuit" : tactic => withMainContext do
   -- We are going to build an `ElaboratedCircuit` record directly.  First inspect the
   -- current goal and pull the important arguments out of
   --   ElaboratedCircuit F Input Output main
@@ -1096,9 +1092,7 @@ syntax "elaborate_circuit_with" term : tactic
 syntax "elaborate_circuit_with" term " using " term : tactic
 
 private def elaborateCircuitWith (dataStx : TSyntax `term) (dataEqStx? : Option (TSyntax `term)) :
-    TacticM Unit :=
-  withOptions (fun opts => opts.setBool `backward.isDefEq.respectTransparency.types false) <|
-  withMainContext do
+    TacticM Unit := withMainContext do
   -- The tactic is used in goals of the form
   --   ElaboratedCircuit F Input Output main
   -- We unpack the target manually because the rest of the code constructs

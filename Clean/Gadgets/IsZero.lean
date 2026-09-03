@@ -30,15 +30,7 @@ instance elaborated : ElaboratedCircuit F M field main := by
     localLength _ := 2 * size M
     output input i₀ := Fin.foldl (size M)
       (fun acc i => acc * varFromOffset field (i₀ + i * 2 + 1)) 1
-  } using by
-    constructor
-    · intro input
-      change (if h : size M > 0 then size M * 2 else 0) = 2 * size M
-      split <;> omega
-    · constructor
-      · intro input i₀
-        rfl
-      · simp only [circuit_norm]
+  } using by simp +arith +instances [circuit_norm]
 
 def Assumptions (_ : M F) : Prop := True
 

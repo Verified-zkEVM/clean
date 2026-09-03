@@ -222,7 +222,6 @@ private lemma fieldFromBits_bit_decomp (n : ℕ) (h_n_lt : n < 2^32) (hp32 : (2:
 Soundness requires p > 2^33 so the field linear constraint can be lifted to ℕ.
 -/
 
-@[reducible]
 instance elaborated : ElaboratedCircuit (F p) Inputs (fields 32) main := by
   elaborate_circuit
 

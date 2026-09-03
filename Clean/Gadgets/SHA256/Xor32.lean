@@ -95,7 +95,6 @@ private lemma bool_finsum_xor (n : ℕ) (f g : Fin n → ℕ) (hf : ∀ i, f i =
     rw [Nat.testBit_eq_false_of_lt (Nat.lt_of_lt_of_le (Nat.xor_lt_two_pow hfS hgS) pow_le),
         Nat.testBit_eq_false_of_lt (Nat.lt_of_lt_of_le hfgS pow_le)]
 
-@[reducible]
 instance elaborated : ElaboratedCircuit (F p) Inputs (fields 32) main := by
   elaborate_circuit
 

@@ -158,7 +158,6 @@ private lemma spec_of_constraint
   rw [Ch_def, he_eq, hf_eq, hg_eq, h1]
   exact key'
 
-@[reducible]
 instance elaborated : ElaboratedCircuit (F p) Inputs (fields 32) main := by
   elaborate_circuit
 

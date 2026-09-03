@@ -110,7 +110,6 @@ private lemma spec_of_constraint
   rw [sigma_def, h_z_eq]
   exact key
 
-@[reducible]
 instance elaborated : ElaboratedCircuit (F p) (fields 32) (fields 32) main := by
   elaborate_circuit
 

@@ -152,9 +152,6 @@ def main (n : ℕ) (input : Vector (Expression (F p)) n) := do
   let out <== lc1
   return out
 
-instance elaborated (n : ℕ) : ElaboratedCircuit (F p) (fields n) field (main n) := by
-  elaborate_circuit
-
 omit [Fact (p > 2)] in
 lemma lc_eq {env} {n : ℕ} {v : Vector (Expression (F p)) n} :
   (Expression.eval env <| Prod.fst <|
@@ -178,7 +175,6 @@ lemma lc_eq {env} {n : ℕ} {v : Vector (Expression (F p)) n} :
 
 def circuit (n : ℕ) : FormalCircuit (F p) (fields n) field where
   main := main n
-  elaborated := elaborated n
 
   Assumptions input :=
     ∀ i (_ : i < n), input[i] = 0 ∨ input[i] = 1
