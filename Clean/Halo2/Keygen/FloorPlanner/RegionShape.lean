@@ -1,5 +1,6 @@
 import Clean.Halo2.SynthesisSummary.Operations
 import Clean.Halo2.Operations.LookupSelectors
+import Mathlib.Data.List.GetD
 import Mathlib.Data.List.Nodup
 import Mathlib.Data.List.Perm.Basic
 import Mathlib.Data.List.Sort
@@ -86,6 +87,75 @@ def activations (starts : List ℕ) (regions : List (ℕ × RegionOperations F))
       | .enableLookup _ enabled row =>
           enabled.map fun s => (s.index, starts.getD idx 0 + row)
       | _ => []
+
+/-- Place an ordered sequence of region-local selector activations at the rows
+chosen for those regions. -/
+def placeSelectorActivations (starts : List ℕ) :
+    ℕ → List (List (ℕ × ℕ)) → List (ℕ × ℕ)
+  | _, [] => []
+  | index, current :: rest =>
+      current.map (fun (selector, row) =>
+        (selector, starts.getD index 0 + row)) ++
+      placeSelectorActivations starts (index + 1) rest
+
+def regionActivationsAt (starts : List ℕ) (index : ℕ)
+    (body : RegionOperations F) : List (ℕ × ℕ) :=
+  body.flatMap fun operation =>
+    match operation with
+    | .enableGate gate row =>
+        [(gate.selector.index, starts.getD index 0 + row)]
+    | .enableLookup _ enabled row =>
+        enabled.map fun selector =>
+          (selector.index, starts.getD index 0 + row)
+    | _ => []
+
+theorem activations_cons (starts : List ℕ) (index : ℕ)
+    (body : RegionOperations F) (rest : List (ℕ × RegionOperations F)) :
+    activations starts ((index, body) :: rest) =
+      regionActivationsAt starts index body ++ activations starts rest := rfl
+
+theorem regionActivationsAt_eq_map_selectorActivations
+    (starts : List ℕ) (index : ℕ) (body : RegionOperations F) :
+    regionActivationsAt starts index body =
+      (body.flatMap FloorPlanner.regionOperationSelectorActivations).map
+        fun (selector, row) =>
+          (selector, starts.getD index 0 + row) := by
+  induction body with
+  | nil => rfl
+  | cons operation operations inductionHypothesis =>
+      simp only [regionActivationsAt, List.flatMap_cons, List.map_append]
+      rw [← regionActivationsAt]
+      rw [inductionHypothesis]
+      cases operation <;>
+        simp [FloorPlanner.regionOperationSelectorActivations,
+          Function.comp_def]
+
+/-- The exact selector-activation stream can be reconstructed from the reduced
+synthesis summary and the planner's region starts. -/
+theorem activations_eq_placeSelectorActivations
+    (starts : List ℕ) (operations : Operations F) (initial : ℕ) :
+    activations starts (indexedRegions operations initial).1 =
+      placeSelectorActivations starts initial
+        (FloorPlanner.synthesisSummary operations).regionSelectorActivations := by
+  induction operations generalizing initial with
+  | nil => rfl
+  | cons operation rest inductionHypothesis =>
+      cases operation with
+      | region name body =>
+          simp only [indexedRegions, activations_cons,
+            FloorPlanner.synthesisSummary,
+            FloorPlanner.SynthesisSummary.combine_regionSelectorActivations,
+            FloorPlanner.SynthesisSummary.ofRegion_regionSelectorActivations,
+            List.singleton_append, placeSelectorActivations,
+            FloorPlanner.regionSynthesisSummary_selectorActivations_eq_flatMap]
+          rw [regionActivationsAt_eq_map_selectorActivations,
+            inductionHypothesis]
+      | constrainInstance cell column row =>
+          simpa only [indexedRegions, FloorPlanner.synthesisSummary] using
+            inductionHypothesis initial
+      | loadTable column values =>
+          simpa only [indexedRegions, FloorPlanner.synthesisSummary] using
+            inductionHypothesis initial
 
 /-- Membership in the selector-activation stream retains its source region,
 operation, and region-local row. -/
@@ -364,6 +434,19 @@ def indexRegionSummaries : ℕ → List RegionShapeSummary → List RegionShape
       simp only [indexRegionSummaries, List.map_cons,
         measureRegionSummary_toSummary, List.cons.injEq, true_and]
       exact inductionHypothesis (initial + 1)
+
+/-- In a list whose keys are exactly `0, ..., length - 1`, membership determines
+the item at its key. -/
+theorem getD_eq_of_mem_of_map_eq_range
+    {α : Type} (key : α → Nat) (items : List α) (fallback item : α)
+    (hkeys : items.map key = List.range items.length)
+    (hitem : item ∈ items) :
+    items.getD (key item) fallback = item := by
+  obtain ⟨index, hindex, hget⟩ := List.getElem_of_mem hitem
+  have hkey : key item = index := by
+    have h := congrArg (fun list => list[index]?) hkeys
+    simpa [hindex, hget] using h
+  rw [hkey, List.getD_eq_getElem items fallback hindex, hget]
 
 theorem measureRegion_eq_measureRegionSummary
     (index : ℕ) (body : RegionOperations F) :

@@ -440,13 +440,13 @@ def fixedConstantsWindowSynthesisSummary
       .column .fixed (cfg.lagrangeCoeffs 6).index,
       .column .fixed (cfg.lagrangeCoeffs 7).index,
       .column .fixed cfg.fixedZ.index]
-    (row + 1) 0
+    (row + 1) 0 [(toggle.selector.index, row)]
 
 /-- Reduced footprint of the fixed-table loop, composed from its row summaries. -/
 def fixedConstantsLoopSynthesisSummary
     (toggle : Gate Fp) (cfg : Config) (offset numWindows : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  .repeatColumns
+  .repeatColumnsWithSelector toggle.selector.index
     [.selector toggle.selector.index,
       .column .fixed (cfg.lagrangeCoeffs 0).index,
       .column .fixed (cfg.lagrangeCoeffs 1).index,
@@ -492,6 +492,8 @@ theorem fixedConstantsWindow_synthesisSummary_eq
       circuit_norm, synthesis_summary_norm]
   · simp only [fixedConstantsWindowSynthesisSummary, fixedConstantsWindow,
       circuit_norm, synthesis_summary_norm]
+  · simp only [fixedConstantsWindowSynthesisSummary, fixedConstantsWindow,
+      circuit_norm, synthesis_summary_norm]
 
 @[synthesis_summary_norm]
 theorem fixedConstantsLoop_synthesisSummary_eq
@@ -505,7 +507,8 @@ theorem fixedConstantsLoop_synthesisSummary_eq
     RegionCircuit.forRange'_regionSynthesisSummary, synthesis_summary_norm,
     Nat.mul_one]
   simpa [Nat.add_assoc] using
-    (FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns
+    (FloorPlanner.RegionSynthesisSummary.foldr_ofColumnsWithSelector_eq_repeatColumnsWithSelector
+      toggle.selector.index
       [.selector toggle.selector.index,
         .column .fixed (cfg.lagrangeCoeffs 0).index,
         .column .fixed (cfg.lagrangeCoeffs 1).index,
@@ -606,6 +609,7 @@ def windowStepColumns (cfg : Config) : List FloorPlanner.RegionColumn :=
 def windowStepSynthesisSummary (cfg : Config) (row : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
   .ofColumns (windowStepColumns cfg) (row + 2) 0
+    [(cfg.addIncompleteConfig.qAddIncomplete.index, row)]
 
 @[synthesis_summary_norm]
 theorem processWindow_combine_addIncomplete_synthesisSummary
@@ -630,6 +634,11 @@ theorem processWindow_combine_addIncomplete_synthesisSummary
       windowStepSynthesisSummary, synthesis_summary_norm]
   · simp only [processWindowSynthesisSummary, AddIncomplete.synthesisSummary,
       windowStepSynthesisSummary, synthesis_summary_norm]
+  · simp only [processWindowSynthesisSummary, AddIncomplete.synthesisSummary,
+      windowStepSynthesisSummary,
+      FloorPlanner.RegionSynthesisSummary.combine_selectorActivations,
+      FloorPlanner.RegionSynthesisSummary.ofColumns_selectorActivations,
+      List.nil_append]
 
 @[synthesis_summary_norm]
 theorem reduced_windowStep_synthesisSummary (cfg : Config) (row : ℕ) :
@@ -644,15 +653,18 @@ theorem reduced_windowStep_synthesisSummary (cfg : Config) (row : ℕ) :
           .column .advice cfg.addIncompleteConfig.yQR.index,
           .column .advice cfg.addIncompleteConfig.xQR.index,
           .column .advice cfg.addIncompleteConfig.yQR.index])
-        (max (row + 1) (row + 2)) (0 + 0) =
-      FloorPlanner.RegionSynthesisSummary.ofColumns
-        (windowStepColumns cfg) (row + 2) 0 := by
+        (max (row + 1) (row + 2)) (0 + 0)
+        [(cfg.addIncompleteConfig.qAddIncomplete.index, row)] =
+      windowStepSynthesisSummary cfg row := by
   apply FloorPlanner.RegionSynthesisSummary.ext
   · rfl
-  · simp only [FloorPlanner.RegionSynthesisSummary.ofColumns_rowCount]
+  · simp only [windowStepSynthesisSummary,
+      FloorPlanner.RegionSynthesisSummary.ofColumns_rowCount]
     omega
   · rfl
-  · simp only [FloorPlanner.RegionSynthesisSummary.ofColumns_instanceRowExtent]
+  · simp only [windowStepSynthesisSummary,
+      FloorPlanner.RegionSynthesisSummary.ofColumns_instanceRowExtent]
+  · rfl
   · rfl
 
 @[synthesis_summary_norm]
@@ -667,6 +679,8 @@ theorem processWindow_synthesisSummary_eq
   · simp only [processWindowSynthesisSummary, processWindow, circuit_norm]
     omega
   · simp only [processWindowSynthesisSummary, processWindow, circuit_norm]
+  · simp only [processWindowSynthesisSummary, processWindow, circuit_norm,
+      synthesis_summary_norm]
   · simp only [processWindowSynthesisSummary, processWindow, circuit_norm,
       synthesis_summary_norm]
   · simp only [processWindowSynthesisSummary, processWindow, circuit_norm,
@@ -1003,7 +1017,8 @@ def windowChainSynthesisSummary (cfg : Config)
   (processWindowSynthesisSummary cfg offset).combine
     ((processWindowSynthesisSummary cfg (offset + 1)).combine
       ((AddIncomplete.synthesisSummary cfg.addIncompleteConfig (offset + 1)).combine
-        ((FloorPlanner.RegionSynthesisSummary.repeatColumns
+        ((FloorPlanner.RegionSynthesisSummary.repeatColumnsWithSelector
+            cfg.addIncompleteConfig.qAddIncomplete.index
             (windowStepColumns cfg) (offset + 2) 1 2 0
               (numWindows - 3)).combine
           (processWindowSynthesisSummary cfg (offset + (numWindows - 1))))))
@@ -1038,20 +1053,40 @@ theorem windowChain_synthesisSummary_eq
   have hrepeat :
       (List.ofFn fun i : Fin (numWindows - 3) =>
         FloorPlanner.RegionSynthesisSummary.ofColumns
-          (windowStepColumns cfg) (offset + 2 + i.val + 2) 0).foldr
+          (windowStepColumns cfg) (offset + 2 + i.val + 2) 0
+          [(cfg.addIncompleteConfig.qAddIncomplete.index,
+            offset + 2 + i.val)]).foldr
           FloorPlanner.RegionSynthesisSummary.combine {} =
-        FloorPlanner.RegionSynthesisSummary.repeatColumns
-          (windowStepColumns cfg) (offset + 2) 1 2 0 (numWindows - 3) := by
+        FloorPlanner.RegionSynthesisSummary.repeatColumnsWithSelector
+          cfg.addIncompleteConfig.qAddIncomplete.index (windowStepColumns cfg)
+          (offset + 2) 1 2 0 (numWindows - 3) := by
     simpa only [Nat.one_mul, Nat.add_assoc] using
-      (FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns
-        (windowStepColumns cfg) (offset + 2) 1 2 0 (numWindows - 3))
+      (FloorPlanner.RegionSynthesisSummary.foldr_ofColumnsWithSelector_eq_repeatColumnsWithSelector
+        cfg.addIncompleteConfig.qAddIncomplete.index (windowStepColumns cfg)
+        (offset + 2) 1 2 0 (numWindows - 3))
+  have haddEmpty (row : ℕ) :
+      ({} : FloorPlanner.RegionSynthesisSummary).combine
+          (({} : FloorPlanner.RegionSynthesisSummary).combine
+            (AddIncomplete.synthesisSummary cfg.addIncompleteConfig row)) =
+        AddIncomplete.synthesisSummary cfg.addIncompleteConfig row := by
+    have hcolumns :
+        (AddIncomplete.synthesisSummary cfg.addIncompleteConfig row).columns.Nodup := by
+      exact FloorPlanner.RegionSynthesisSummary.ofColumns_columns_nodup
+        _ _ _ _
+    rw [FloorPlanner.RegionSynthesisSummary.empty_combine _ hcolumns,
+      FloorPlanner.RegionSynthesisSummary.empty_combine _ hcolumns]
   unfold windowChainSynthesisSummary
   simp only [windowChain,
     RegionCircuit.operations_bind, RegionCircuit.operations_pure,
     FloorPlanner.regionSynthesisSummary_append, operations_cellAt,
-    synthesis_summary_norm, hprocess, Nat.mul_one,
+    RegionCircuit.forRange'_regionSynthesisSummary,
+    FormalRegionCircuit.call_synthesisSummary,
+    AddIncomplete.add_synthesisSummary_eq,
+    FloorPlanner.regionSynthesisSummary_nil, haddEmpty,
+    processWindow_combine_addIncomplete_synthesisSummary,
+    hprocess, windowStepSynthesisSummary, Nat.mul_one,
     FloorPlanner.RegionSynthesisSummary.combine_empty,
-    processWindowSynthesisSummary, AddIncomplete.synthesisSummary, hrepeat]
+    hrepeat]
 
 @[synthesis_summary_norm]
 theorem windowChainSynthesisSummary_constantSiteCount
@@ -1071,6 +1106,7 @@ theorem windowChainSynthesisSummary_hasNoFixedColumns
     AddIncomplete.synthesisSummary,
     FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_combine,
     FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_repeatColumnsWithSelector,
     FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_repeatColumns]
   simp [windowStepColumns]
 

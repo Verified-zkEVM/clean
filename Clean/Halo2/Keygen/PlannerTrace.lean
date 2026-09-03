@@ -132,6 +132,41 @@ theorem perm_replicate_append_singleton_iff
             simp [hItem.2])
     simpa [List.replicate_succ] using hPerm
 
+/-- A permutation of two copies each of two distinct values is one of the six
+possible interleavings. -/
+theorem perm_two_replicates_iff
+    {T : Type} [DecidableEq T] {items : List T} {left right : T}
+    (hNe : left ≠ right) :
+    items.Perm ([left, left, right, right]) ↔
+      items = [left, left, right, right] ∨
+      items = [left, right, left, right] ∨
+      items = [left, right, right, left] ∨
+      items = [right, left, left, right] ∨
+      items = [right, left, right, left] ∨
+      items = [right, right, left, left] := by
+  constructor
+  · intro hPerm
+    have hLength := hPerm.length_eq
+    have hMembers := hPerm.subset
+    have hLeftCount := hPerm.count left
+    have hRightCount := hPerm.count right
+    rcases items with _ | ⟨first, items⟩ <;> simp_all
+    rcases items with _ | ⟨second, items⟩ <;> simp_all
+    rcases items with _ | ⟨third, items⟩ <;> simp_all
+    rcases items with _ | ⟨fourth, items⟩ <;> simp_all
+    rcases items with _ | ⟨fifth, items⟩ <;> simp_all
+    rcases hMembers.1 with rfl | rfl <;>
+    rcases hMembers.2.1 with rfl | rfl <;>
+    rcases hMembers.2.2.1 with rfl | rfl <;>
+    rcases hMembers.2.2.2 with rfl | rfl <;>
+    simp_all [eq_comm]
+  · rintro (rfl | rfl | rfl | rfl | rfl | rfl) <;>
+      rw [List.perm_iff_count] <;>
+      intro item <;>
+      by_cases hLeft : item = left <;>
+      by_cases hRight : item = right <;>
+      simp_all [eq_comm]
+
 /-- Expand a compact list of multiplicities and physical region shapes. -/
 def expandPlannerBlocks
     (blocks : List (ℕ × RegionShapeSummary)) : List RegionShapeSummary :=
@@ -258,14 +293,149 @@ namespace PlannedSummaryBlock
 def summaries (trace : List PlannedSummaryBlock) : List RegionShapeSummary :=
   (blocks trace).flatMap fun block => List.replicate block.1 block.2
 
+theorem slotShapeSummariesFrom_summaries
+    (trace : List PlannedSummaryBlock)
+    (allocations : CircuitAllocations) :
+    slotShapeSummariesFrom (summaries trace) allocations =
+      slotShapeSummaryBlocks (blocks trace) allocations := by
+  exact slotShapeSummariesFrom_flatMap_replicate (blocks trace) allocations
+
+theorem slotSummaryStateFromWith_summaries
+    (trace : List PlannedSummaryBlock) (initial : Nat)
+    (allocations : CircuitAllocations) :
+    slotSummaryStateFromWith initial (summaries trace) allocations =
+      slotSummaryBlocksState (blocks trace) initial allocations := by
+  exact slotSummaryStateFromWith_flatMap_replicate
+    (blocks trace) initial allocations
+
+theorem slotSummaryStateFromWith_summaries_result
+    (trace : List PlannedSummaryBlock) (initial : Nat)
+    (allocations : CircuitAllocations) (view : AllocationView)
+    (hRepresents : view.Represents allocations) (hValid : view.Valid)
+    (hLawful : Lawful view trace) :
+    let result := slotSummaryStateFromWith initial (summaries trace) allocations
+    result.1 = endpointFrom initial trace ∧
+      (finalView view trace).Represents result.2 := by
+  rw [slotSummaryStateFromWith_summaries]
+  exact slotSummaryBlocksState_eq trace initial allocations view
+    hRepresents hValid hLawful
+
 theorem summaries_append (left right : List PlannedSummaryBlock) :
     summaries (left ++ right) = summaries left ++ summaries right := by
   simp [summaries, blocks]
+
+theorem summaries_singleton (block : PlannedSummaryBlock) :
+    summaries [block] = List.replicate block.count block.summary := by
+  simp [summaries, blocks]
+
+theorem Lawful.summaries_wellFormed
+    {initial : AllocationView} {trace : List PlannedSummaryBlock}
+    (hLawful : Lawful initial trace) :
+    (summaries trace).Forall RegionShapeSummary.WellFormed := by
+  induction trace generalizing initial with
+  | nil => simp [summaries, blocks]
+  | cons block rest inductionHypothesis =>
+      rw [summaries, blocks, List.map_cons, List.flatMap_cons,
+        List.forall_append]
+      constructor
+      · induction block.count with
+        | zero => simp
+        | succ count inductionHypothesis =>
+            rw [List.replicate_succ, List.forall_cons]
+            exact ⟨hLawful.2.1, inductionHypothesis⟩
+      · exact inductionHypothesis hLawful.2.2.2.2.2
 
 /-- A compact run, omitting its entry when the multiplicity is zero. -/
 def run (count : ℕ) (summary : RegionShapeSummary)
     (start : ℕ) : List PlannedSummaryBlock :=
   if count = 0 then [] else [{ count, summary, start }]
+
+theorem summaries_run (count : Nat) (summary : RegionShapeSummary)
+    (start : Nat) :
+    summaries (run count summary start) = List.replicate count summary := by
+  by_cases hCount : count = 0
+  · subst count
+    rfl
+  · simp [run, hCount, summaries, blocks]
+
+theorem finalView_run (view : AllocationView) (count : Nat)
+    (summary : RegionShapeSummary) (start : Nat) :
+    finalView view (run count summary start) =
+      view.insertRepeated (sortRegionColumns summary.columns) start
+        summary.rowCount count := by
+  by_cases hCount : count = 0
+  · simp [run, hCount, finalView, AllocationView.insertRepeated]
+  · simp [run, hCount, finalView]
+
+theorem endpointFrom_append (initial : Nat)
+    (left right : List PlannedSummaryBlock) :
+    endpointFrom initial (left ++ right) =
+      endpointFrom (endpointFrom initial left) right := by
+  induction left generalizing initial with
+  | nil => rfl
+  | cons block rest inductionHypothesis =>
+      simp only [List.cons_append, endpointFrom]
+      exact inductionHypothesis _
+
+theorem endpointFrom_run (initial count : Nat)
+    (summary : RegionShapeSummary) (start : Nat) (hCount : 0 < count) :
+    endpointFrom initial (run count summary start) =
+      max initial (start + count * summary.rowCount) := by
+  simp [run, Nat.ne_of_gt hCount, endpointFrom]
+
+/-- A summary stream represented by one lawful compact trace has the same
+planner state as another lawful trace with the same endpoint and final view. -/
+theorem slotSummaryStateFromWith_equivalent_of_traces
+    (summaries : List RegionShapeSummary)
+    (left right : List PlannedSummaryBlock)
+    (hSummaries : List.Forall₂ RegionShapeSummary.PlacementEquivalent
+      summaries (PlannedSummaryBlock.summaries left))
+    (initial : Nat) (allocations : CircuitAllocations)
+    (view : AllocationView) (hRepresents : view.Represents allocations)
+    (hValid : view.Valid) (hLeft : Lawful view left)
+    (hRight : Lawful view right)
+    (hEndpoint : endpointFrom initial left = endpointFrom initial right)
+    (hFinalView : finalView view left = finalView view right) :
+    SummaryStateEquivalent
+      (slotSummaryStateFromWith initial summaries allocations)
+      (slotSummaryStateFromWith initial
+        (PlannedSummaryBlock.summaries right) allocations) := by
+  rw [slotSummaryStateFromWith_eq_of_forall₂_placementEquivalent
+    hSummaries]
+  rw [PlannedSummaryBlock.slotSummaryStateFromWith_summaries,
+    PlannedSummaryBlock.slotSummaryStateFromWith_summaries]
+  exact PlannedSummaryBlock.slotSummaryBlocksState_equivalent
+    left right initial allocations view hRepresents hValid hLeft hRight
+      hEndpoint hFinalView
+
+/-- Variant for equivalent incoming states represented by the same allocation
+view. -/
+theorem slotSummaryStateFromWith_equivalent_of_traces_of_represents
+    (summaries : List RegionShapeSummary)
+    (left right : List PlannedSummaryBlock)
+    (hSummaries : List.Forall₂ RegionShapeSummary.PlacementEquivalent
+      summaries (PlannedSummaryBlock.summaries left))
+    (leftInitial rightInitial : Nat)
+    (leftAllocations rightAllocations : CircuitAllocations)
+    (view : AllocationView)
+    (hLeftRepresents : view.Represents leftAllocations)
+    (hRightRepresents : view.Represents rightAllocations)
+    (hValid : view.Valid) (hLeft : Lawful view left)
+    (hRight : Lawful view right)
+    (hEndpoint : endpointFrom leftInitial left =
+      endpointFrom rightInitial right)
+    (hFinalView : finalView view left = finalView view right) :
+    SummaryStateEquivalent
+      (slotSummaryStateFromWith leftInitial summaries leftAllocations)
+      (slotSummaryStateFromWith rightInitial
+        (PlannedSummaryBlock.summaries right) rightAllocations) := by
+  rw [slotSummaryStateFromWith_eq_of_forall₂_placementEquivalent
+    hSummaries]
+  rw [PlannedSummaryBlock.slotSummaryStateFromWith_summaries,
+    PlannedSummaryBlock.slotSummaryStateFromWith_summaries]
+  exact PlannedSummaryBlock.slotSummaryBlocksState_equivalent_of_represents
+    left right leftInitial rightInitial leftAllocations rightAllocations view
+      hLeftRepresents hRightRepresents hValid hLeft hRight hEndpoint hFinalView
 
 end PlannedSummaryBlock
 

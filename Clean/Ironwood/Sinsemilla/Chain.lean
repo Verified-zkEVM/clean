@@ -1137,10 +1137,42 @@ def slotIterationSynthesisSummary (ns : List ℕ) (i : ℕ)
     (cfg : Config) (base : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
   (slotSynthesisSummary ns i cfg base).combine
-    (FloorPlanner.RegionSynthesisSummary.ofColumns
+    ((.ofColumns
       [.column .fixed cfg.qS2.index,
         .selector (sinsemillaGate cfg).selector.index]
-      (base + ns.getD i 0 + 1) 0)
+      (base + ns.getD i 0 + 1) 0
+      [((sinsemillaGate cfg).selector.index, base + ns.getD i 0)]))
+
+@[synthesis_summary_norm]
+theorem slotIterationSynthesisSummary_selectorActivations
+    (ns : List ℕ) (i : ℕ) (cfg : Config) (base : ℕ) :
+    (slotIterationSynthesisSummary ns i cfg base).selectorActivations =
+      (HashPiece.circuitSynthesisSummary (ns.getD i 0) cfg base).selectorActivations ++
+        [((sinsemillaGate cfg).selector.index, base + ns.getD i 0)] := by
+  simp only [slotIterationSynthesisSummary, slotSynthesisSummary,
+    synthesis_summary_norm]
+
+theorem selector_eq_qS1_of_mem_slotIterationSynthesisSummary
+    (ns : List ℕ) (i : ℕ) (cfg : Config) (base : ℕ)
+    (activation : ℕ × ℕ)
+    (hactivation : activation ∈
+      (slotIterationSynthesisSummary ns i cfg base).selectorActivations) :
+    activation.1 = cfg.qS1.index := by
+  rw [slotIterationSynthesisSummary_selectorActivations,
+    List.mem_append] at hactivation
+  rcases hactivation with hpiece | hboundary
+  · exact HashPiece.selector_eq_qS1_of_mem_circuitSynthesisSummary
+      _ _ _ _ hpiece
+  · have heq := List.mem_singleton.mp hboundary
+    simpa [HashPiece.sinsemillaGate_selector] using congrArg Prod.fst heq
+
+theorem initial_qS1_mem_slotIterationSynthesisSummary
+    (ns : List ℕ) (i : ℕ) (cfg : Config) (base : ℕ) :
+    (cfg.qS1.index, base) ∈
+      (slotIterationSynthesisSummary ns i cfg base).selectorActivations := by
+  rw [slotIterationSynthesisSummary_selectorActivations]
+  exact List.mem_append_left _
+    (HashPiece.initial_qS1_mem_circuitSynthesisSummary _ _ _)
 
 @[synthesis_summary_norm]
 theorem slotIterationSynthesisSummary_lookupActivationCount
@@ -1162,6 +1194,9 @@ theorem slotIteration_synthesisSummary_eq
           (sinsemillaGate cfg).enable (base + ns.getD i 0)).operations self) =
       slotIterationSynthesisSummary ns i cfg base := by
   apply FloorPlanner.RegionSynthesisSummary.ext
+  · simp only [slotIterationSynthesisSummary, RegionCircuit.operations_bind,
+      FloorPlanner.regionSynthesisSummary_append, circuit_norm,
+      synthesis_summary_norm]
   · simp only [slotIterationSynthesisSummary, RegionCircuit.operations_bind,
       FloorPlanner.regionSynthesisSummary_append, circuit_norm,
       synthesis_summary_norm]
@@ -1468,6 +1503,50 @@ def circuitSynthesisSummary (ns : List ℕ) (cfg : Config) (offset : ℕ) :
         .column .advice cfg.xP.index]
       (offset + prefixRows ns ns.length + 1) 0)
 
+theorem selector_eq_qS1_of_mem_circuitSynthesisSummary
+    (ns : List ℕ) (cfg : Config) (offset : ℕ) (activation : ℕ × ℕ)
+    (hactivation : activation ∈
+      (circuitSynthesisSummary ns cfg offset).selectorActivations) :
+    activation.1 = cfg.qS1.index := by
+  unfold circuitSynthesisSummary at hactivation
+  simp only [FloorPlanner.RegionSynthesisSummary.combine_selectorActivations,
+    FloorPlanner.RegionSynthesisSummary.ofColumns_selectorActivations,
+    List.mem_append, List.not_mem_nil, or_false,
+    FloorPlanner.RegionSynthesisSummary.mem_foldr_combine_selectorActivations_iff]
+    at hactivation
+  obtain ⟨summary, hsummary, hactivation⟩ := hactivation
+  rw [List.mem_ofFn] at hsummary
+  obtain ⟨i, rfl⟩ := hsummary
+  exact selector_eq_qS1_of_mem_slotIterationSynthesisSummary
+    _ _ _ _ _ hactivation
+
+theorem initial_qS1_mem_circuitSynthesisSummary
+    (ns : List ℕ) (cfg : Config) (offset : ℕ) (hns : ns ≠ []) :
+    (cfg.qS1.index, offset) ∈
+      (circuitSynthesisSummary ns cfg offset).selectorActivations := by
+  have hlength : 0 < ns.length := by
+    cases ns with
+    | nil => contradiction
+    | cons => simp
+  let first : Fin ns.length := ⟨0, hlength⟩
+  let summary := slotIterationSynthesisSummary ns first.val cfg
+    (offset + prefixRows ns first.val)
+  have hsummary : summary ∈
+      List.ofFn (fun i : Fin ns.length =>
+        slotIterationSynthesisSummary ns i.val cfg
+          (offset + prefixRows ns i.val)) := by
+    rw [List.mem_ofFn]
+    exact ⟨first, rfl⟩
+  have hqS1 := initial_qS1_mem_slotIterationSynthesisSummary ns first.val cfg
+    (offset + prefixRows ns first.val)
+  unfold circuitSynthesisSummary
+  simp only [FloorPlanner.RegionSynthesisSummary.combine_selectorActivations,
+    FloorPlanner.RegionSynthesisSummary.ofColumns_selectorActivations,
+    List.mem_append, List.not_mem_nil, or_false,
+    FloorPlanner.RegionSynthesisSummary.mem_foldr_combine_selectorActivations_iff]
+  refine ⟨summary, hsummary, ?_⟩
+  simpa [first, prefixRows_zero] using hqS1
+
 @[synthesis_summary_norm]
 theorem circuitSynthesisSummary_lookupActivationCount
     (ns : List ℕ) (cfg : Config) (offset : ℕ) :
@@ -1605,6 +1684,7 @@ def circuit (G : Generators) (ns : List ℕ) (yaIn : Placed Environment Fp → F
           simp only [RegionCircuit.operations_bind,
             FloorPlanner.regionSynthesisSummary_append]
         · apply FloorPlanner.RegionSynthesisSummary.ext
+          · simp only [circuit_norm, synthesis_summary_norm]
           · simp only [circuit_norm, synthesis_summary_norm]
           · simp only [circuit_norm, synthesis_summary_norm]
           · simp only [circuit_norm, synthesis_summary_norm]

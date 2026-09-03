@@ -18,6 +18,7 @@ already-reduced V1 measurement input without retaining any region operations. -/
   tableRowExtent : ℕ := 0
   instanceRowExtent : ℕ := 0
   lookupActivationCount : ℕ := 0
+  regionSelectorActivations : List (List (ℕ × ℕ)) := []
 
 namespace SynthesisSummary
 
@@ -34,6 +35,8 @@ def combine (left right : SynthesisSummary) : SynthesisSummary where
   constantSiteCount := left.constantSiteCount + right.constantSiteCount
   lookupActivationCount := left.lookupActivationCount + right.lookupActivationCount
   regionShapes := left.regionShapes ++ right.regionShapes
+  regionSelectorActivations :=
+    left.regionSelectorActivations ++ right.regionSelectorActivations
   tableRowExtent := max left.tableRowExtent right.tableRowExtent
   instanceRowExtent := max left.instanceRowExtent right.instanceRowExtent
 
@@ -57,6 +60,7 @@ theorem combine_assoc (left middle right : SynthesisSummary) :
   · exact (Nat.max_assoc _ _ _).symm
   · exact (Nat.max_assoc _ _ _).symm
   · exact (Nat.add_assoc _ _ _).symm
+  · exact (List.append_assoc _ _ _).symm
 
 /-- Fully reduced summary of `count` identical layouter fragments. -/
 def replicate (count : ℕ) (summary : SynthesisSummary) : SynthesisSummary where
@@ -65,6 +69,8 @@ def replicate (count : ℕ) (summary : SynthesisSummary) : SynthesisSummary wher
   constantSiteCount := count * summary.constantSiteCount
   lookupActivationCount := count * summary.lookupActivationCount
   regionShapes := (List.replicate count summary.regionShapes).flatten
+  regionSelectorActivations :=
+    (List.replicate count summary.regionSelectorActivations).flatten
   tableRowExtent := if count = 0 then 0 else summary.tableRowExtent
   instanceRowExtent := if count = 0 then 0 else summary.instanceRowExtent
 
@@ -106,6 +112,12 @@ theorem replicate_regionShapes (count : ℕ) (summary : SynthesisSummary) :
       (List.replicate count summary.regionShapes).flatten := rfl
 
 @[circuit_norm, synthesis_summary_norm]
+theorem replicate_regionSelectorActivations
+    (count : ℕ) (summary : SynthesisSummary) :
+    (replicate count summary).regionSelectorActivations =
+      (List.replicate count summary.regionSelectorActivations).flatten := rfl
+
+@[circuit_norm, synthesis_summary_norm]
 theorem replicate_tableRowExtent (count : ℕ) (summary : SynthesisSummary) :
     (replicate count summary).tableRowExtent =
       if count = 0 then 0 else summary.tableRowExtent := rfl
@@ -145,6 +157,13 @@ theorem replicate_succ (count : ℕ) (summary : SynthesisSummary)
   · cases count <;> simp [replicate, combine]
   · simp only [replicate_lookupActivationCount, combine, Nat.add_mul,
       Nat.one_mul]
+  · simp only [replicate, combine, List.replicate_succ,
+      List.flatten_cons]
+    induction count with
+    | zero => simp
+    | succ count inductionHypothesis =>
+        rw [List.replicate_succ, List.flatten_cons, List.append_assoc,
+          inductionHypothesis, ← List.append_assoc]
 
 @[circuit_norm, synthesis_summary_norm]
 theorem combine_columns (left right : SynthesisSummary) :
@@ -170,6 +189,11 @@ theorem combine_columns (left right : SynthesisSummary) :
     (left right : SynthesisSummary) :
     (left.combine right).regionShapes =
       left.regionShapes ++ right.regionShapes := rfl
+
+@[circuit_norm, synthesis_summary_norm]
+theorem combine_regionSelectorActivations (left right : SynthesisSummary) :
+    (left.combine right).regionSelectorActivations =
+      left.regionSelectorActivations ++ right.regionSelectorActivations := rfl
 
 /-- Lookup activations of a reduced layouter-summary fold are the sum of the
 component counts. -/
@@ -206,6 +230,7 @@ theorem foldr_combine_lookupActivationCount
   · simp [combine]
   · simp [combine]
   · simp [combine]
+  · simp [combine]
 
 theorem empty_combine (summary : SynthesisSummary)
     (hcolumns : summary.columns.Nodup) :
@@ -219,6 +244,7 @@ theorem empty_combine (summary : SynthesisSummary)
   · simp [combine]
   · simp [combine]
   · simp [combine]
+  · simp [combine]
 
 def ofRegion (summary : RegionSynthesisSummary) : SynthesisSummary where
   columns := summary.columns
@@ -227,8 +253,14 @@ def ofRegion (summary : RegionSynthesisSummary) : SynthesisSummary where
   constantSiteCount := summary.constantSiteCount
   lookupActivationCount := summary.lookupActivationCount
   regionShapes := [summary.toRegionShapeSummary]
+  regionSelectorActivations := [summary.selectorActivations]
   tableRowExtent := 0
   instanceRowExtent := summary.instanceRowExtent
+
+@[circuit_norm, synthesis_summary_norm]
+theorem ofRegion_regionSelectorActivations (summary : RegionSynthesisSummary) :
+    (ofRegion summary).regionSelectorActivations =
+      [summary.selectorActivations] := rfl
 
 /-- Reduced summary of one absolute instance-row reference. -/
 def ofInstanceRow (row : ℕ) : SynthesisSummary where
@@ -548,6 +580,7 @@ theorem synthesisSummary_constrainInstance_cons_lookupActivationCount
       · simp [RegionSynthesisSummary.combine]
       · simp [RegionSynthesisSummary.combine]
       · simp [RegionSynthesisSummary.combine]
+      · simp [RegionSynthesisSummary.combine]
   | cons operation rest inductionHypothesis =>
       simp only [List.cons_append, regionSynthesisSummary,
         inductionHypothesis]
@@ -557,6 +590,7 @@ theorem synthesisSummary_constrainInstance_cons_lookupActivationCount
       · simp [RegionSynthesisSummary.combine, Nat.add_assoc]
       · simp [RegionSynthesisSummary.combine, Nat.max_assoc]
       · simp [RegionSynthesisSummary.combine, Nat.add_assoc]
+      · simp [RegionSynthesisSummary.combine, List.append_assoc]
 
 /-- Columns of concatenated region fragments compose by unioning their reduced
 column summaries. -/
@@ -646,6 +680,7 @@ theorem regionSynthesisSummary_flatten
           (synthesisSummary_columns_nodup right)).symm
       · funext column
         simp [SynthesisSummary.combine]
+      · simp [SynthesisSummary.combine]
       · simp [SynthesisSummary.combine]
       · simp [SynthesisSummary.combine]
       · simp [SynthesisSummary.combine]

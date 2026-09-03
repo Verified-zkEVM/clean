@@ -1,5 +1,5 @@
 import Clean.Halo2.TopLevel
-import Clean.Ironwood.Action.PublicInput
+import Clean.Ironwood.Action.ConfigureCertificates
 import Clean.Ironwood.Action.Spec
 
 /-!
@@ -20,7 +20,7 @@ theorem initialGeneratorTableIdx_mem
     List.append_nil]
   apply List.mem_append_left
   rw [FormalCircuit.call_operations]
-  simp only [baseCircuit, main, CircuitPreIronwood.synthesize, synthesizeBase,
+  simp only [baseCircuit, main, CircuitPreNU63.synthesize, synthesizeBase,
     Circuit.operations_bind, Circuit.operations_pure, List.append_nil]
   apply List.mem_append_left
   simp only [synthWitness, Circuit.operations_bind, Circuit.operations_pure,
@@ -135,9 +135,14 @@ private theorem actionSelectorRequirements :
     Circuit.elaboratedPost, Circuit.configureElaborated]
   trivial
 
-private theorem actionQueryRequirements :
-    (circuit Specs.Sinsemilla.orchardGenerators orchardBases).queryRequirements
-      () {} := by
+/-- The closed Action circuit borrows no key-generation resources from a caller. -/
+def actionNoCallerRequirements :
+    (circuit Specs.Sinsemilla.orchardGenerators orchardBases).keygenRequirements.EmptyAt () := by
+  exact ⟨(), rfl, rfl, rfl, rfl, rfl, fun _ => rfl⟩
+
+/-- Action's closed configure run borrows no queryable columns from a caller. -/
+theorem actionQueryRequirements :
+    (circuit Specs.Sinsemilla.orchardGenerators orchardBases).queryRequirements () {} := by
   dsimp only [FormalCircuit.queryRequirements, Circuit.circuit,
     Circuit.elaboratedPost, Circuit.configureElaborated]
   trivial
@@ -145,7 +150,7 @@ private theorem actionQueryRequirements :
 def Internal.actionCircuitImpl : TopLevelCircuit Fp Config PublicInputs where
   formalCircuit :=
     circuit Specs.Sinsemilla.orchardGenerators orchardBases
-  noCallerRequirements := ⟨(), rfl, rfl, rfl, rfl, rfl, fun _ => rfl⟩
+  noCallerRequirements := actionNoCallerRequirements
   selectorRequirements := actionSelectorRequirements
   queryRequirements := actionQueryRequirements
   exists_rotation_mem_fixedQueries_of_lt := by
@@ -253,6 +258,16 @@ theorem actionCircuit_numFixedColumns_eq :
       Circuit.configure_finalCounts_numFixedColumns
         Specs.Sinsemilla.orchardGenerators
 
+/-- Action's closed configure run allocates fifty-six selectors. -/
+theorem actionCircuit_selectorCount_eq :
+    actionCircuit.selectorCount = 56 := by
+  rw [Internal.actionCircuit_eq_impl]
+  simpa only [Internal.actionCircuitImpl, TopLevelCircuit.selectorCount,
+    TopLevelCircuit.constraintSystem, TopLevelCompilation.constraintSystem,
+    Circuit.circuit] using
+      Circuit.configure_finalCounts_numSelectors
+        Specs.Sinsemilla.orchardGenerators
+
 /-- Action's closed configure run allocates one instance column. -/
 theorem actionCircuit_numInstanceColumns_eq :
     actionCircuit.constraintSystem.numInstanceColumns = 1 := by
@@ -261,6 +276,35 @@ theorem actionCircuit_numInstanceColumns_eq :
     TopLevelCompilation.constraintSystem, Circuit.circuit] using
       Circuit.configure_finalCounts_numInstanceColumns
         Specs.Sinsemilla.orchardGenerators
+
+/-- Every lookup in the Action constraint system has at most four inputs. -/
+theorem actionCircuit_lookupInputArity_le
+    (lookup : LookupArgument Fp)
+    (hlookup : lookup ∈ actionCircuit.constraintSystem.lookups) :
+    lookup.inputs.length ≤ 4 := by
+  rw [Internal.actionCircuit_eq_impl] at hlookup
+  simpa only [Internal.actionCircuitImpl,
+    TopLevelCircuit.constraintSystem,
+    TopLevelCompilation.constraintSystem,
+    Circuit.circuit] using
+      Circuit.configure_lookupInputArity_le
+        Specs.Sinsemilla.orchardGenerators lookup hlookup
+
+/-- Action synthesis enables exactly 2424 lookup sites. -/
+theorem actionCircuit_lookupActivationCount_eq :
+    actionCircuit.synthesisSummary.lookupActivationCount = 2424 := by
+  rw [Internal.actionCircuit_eq_impl]
+  calc
+    _ = (Circuit.mainPostSynthesisSummary
+          Internal.actionCircuitImpl.config).lookupActivationCount := by
+      simpa only [TopLevelCircuit.synthesisSummary,
+        Internal.actionCircuitImpl] using
+          congrArg (fun summary => summary.lookupActivationCount)
+            (Circuit.circuit_synthesisSummary_eq
+              Specs.Sinsemilla.orchardGenerators orchardBases
+              Internal.actionCircuitImpl.config () 0)
+    _ = 2424 :=
+      Circuit.mainPostSynthesisSummary_lookupActivationCount _
 
 /-- Action's configured gates and lookups have exact Halo 2 degree nine. -/
 theorem actionCircuit_constraintDegree_eq :
@@ -331,24 +375,20 @@ theorem actionCircuit_publicInputRows_ne_zero
 private theorem actionCircuit_spec_iff_of_eq
     (top : TopLevelCircuit Fp Config PublicInputs)
     (htop : top = Internal.actionCircuitImpl)
-    (input : PublicInputs Fp) (privateWitness : PrivateWitness) :
-    ActionSpec input privateWitness ↔
-      top.Spec input
-        (cast ((congrArg (fun circuit => circuit.PrivateWitness) htop).trans
-          (by simp only [Internal.actionCircuitImpl])).symm
-          privateWitness) := by
+    (input : PublicInputs Fp) (wit : PrivateWitness) :
+    ActionSpec input wit ↔
+      top.Spec input (cast (htop ▸ rfl) wit) := by
   cases htop
   simp [Internal.actionCircuitImpl]
 
 /-- The Orchard Action spec is the opaque circuit's internal spec after
 transporting the public private-witness type across the circuit boundary. -/
 theorem actionCircuit_spec_iff
-    (input : PublicInputs Fp) (privateWitness : PrivateWitness) :
-    ActionSpec input privateWitness ↔
-      actionCircuit.Spec input
-        (actionCircuit_privateWitness_eq.symm ▸ privateWitness) := by
+    (input : PublicInputs Fp) (wit : PrivateWitness) :
+    ActionSpec input wit ↔
+      actionCircuit.Spec input (actionCircuit_privateWitness_eq.symm ▸ wit) := by
   exact actionCircuit_spec_iff_of_eq actionCircuit
-    Internal.actionCircuit_eq_impl input privateWitness
+    Internal.actionCircuit_eq_impl input wit
 
 /-- The semantic conclusion for every Action proved in one Halo 2 bundle. -/
 def BundleStatement {numProofs : ℕ}

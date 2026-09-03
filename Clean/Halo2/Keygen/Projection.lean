@@ -100,6 +100,24 @@ def QueryState.registerFixed (s : QueryState) (col : ℕ) : QueryState :=
   | some _ => s
   | none => { s with fixed := s.fixed.push (col, 0) }
 
+/-- Registering a fixed column above every existing fixed query appends its
+rotation-zero query. -/
+theorem QueryState.registerFixed_fixed_toList
+    (queries : QueryState) (column : ℕ)
+    (hqueries : queries.fixed.toList.Forall fun query => query.1 < column) :
+    (queries.registerFixed column).fixed.toList =
+      queries.fixed.toList ++ [(column, 0)] := by
+  have hmissing : findQuery queries.fixed column 0 = none := by
+    rw [findQuery, Array.findIdx?_eq_none_iff]
+    intro query hquery
+    have hbound := List.forall_iff_forall_mem.mp hqueries query (by
+      simpa using hquery)
+    simp only [decide_eq_false_iff_not]
+    omega
+  unfold QueryState.registerFixed
+  rw [hmissing]
+  simp
+
 section Erase
 variable [Field F] [DecidableEq F]
 
@@ -182,6 +200,108 @@ at column-allocation time inside `compress_selectors` (`circuit.rs:1267-1274`, v
 def queryWalkInit (map : SelCompressMap) (cs : ConstraintSystem F) : QueryState :=
   (List.range map.newFixedCols).foldl
     (fun s i => s.registerFixed (cs.numFixedColumns + i)) (recordedQueries cs)
+
+/-- Selector compression leaves the configure-recorded advice-query layout unchanged. -/
+@[simp] theorem queryWalkInit_advice_toList
+    (map : SelCompressMap) (cs : ConstraintSystem F) :
+    (queryWalkInit map cs).advice.toList =
+      cs.adviceQueries.map fun query => (query.1.index, query.2) := by
+  have preserve (indices : List ℕ) (state : QueryState) :
+      (indices.foldl
+        (fun current index =>
+          current.registerFixed (cs.numFixedColumns + index))
+        state).advice = state.advice := by
+    induction indices generalizing state with
+    | nil => rfl
+    | cons _ rest inductionHypothesis =>
+        rw [List.foldl_cons, inductionHypothesis]
+        simp only [QueryState.registerFixed]
+        split <;> rfl
+  unfold queryWalkInit
+  rw [preserve]
+  simp [recordedQueries]
+
+/-- Selector compression leaves the configure-recorded instance-query layout unchanged. -/
+@[simp] theorem queryWalkInit_inst_toList
+    (map : SelCompressMap) (cs : ConstraintSystem F) :
+    (queryWalkInit map cs).inst.toList =
+      cs.instanceQueries.map fun query => (query.1.index, query.2) := by
+  have preserve (indices : List ℕ) (state : QueryState) :
+      (indices.foldl
+        (fun current index =>
+          current.registerFixed (cs.numFixedColumns + index))
+        state).inst = state.inst := by
+    induction indices generalizing state with
+    | nil => rfl
+    | cons _ rest inductionHypothesis =>
+        rw [List.foldl_cons, inductionHypothesis]
+        simp only [QueryState.registerFixed]
+        split <;> rfl
+  unfold queryWalkInit
+  rw [preserve]
+  simp [recordedQueries]
+
+/-- The fixed-query layout after selector compression is the recorded configure
+layout followed by one fresh rotation-zero query for every packed selector column. -/
+theorem queryWalkInit_fixed_toList
+    (map : SelCompressMap) (cs : ConstraintSystem F)
+    (hrecorded : cs.fixedQueries.Forall fun query =>
+      query.1.index < cs.numFixedColumns) :
+    (queryWalkInit map cs).fixed.toList =
+      (cs.fixedQueries.map fun query => (query.1.index, query.2)) ++
+        (List.range map.newFixedCols).map fun index =>
+          (cs.numFixedColumns + index, 0) := by
+  have hinitial : (recordedQueries cs).fixed.toList =
+      cs.fixedQueries.map fun query => (query.1.index, query.2) := by
+    simp [recordedQueries]
+  have hinitialBound :
+      (recordedQueries cs).fixed.toList.Forall fun query =>
+        query.1 < cs.numFixedColumns := by
+    rw [hinitial, List.forall_map_iff]
+    exact hrecorded
+  have aux (count : ℕ) :
+      ((List.range count).foldl
+        (fun state index =>
+          state.registerFixed (cs.numFixedColumns + index))
+        (recordedQueries cs)).fixed.toList =
+          (recordedQueries cs).fixed.toList ++
+            (List.range count).map fun index =>
+              (cs.numFixedColumns + index, 0) := by
+    induction count with
+    | zero => simp
+    | succ count inductionHypothesis =>
+        rw [List.range_succ, List.foldl_append]
+        let current := (List.range count).foldl
+          (fun state index =>
+            state.registerFixed (cs.numFixedColumns + index))
+          (recordedQueries cs)
+        change (current.registerFixed
+            (cs.numFixedColumns + count)).fixed.toList = _
+        rw [QueryState.registerFixed_fixed_toList]
+        · rw [inductionHypothesis]
+          simp only [List.map_append, List.map_cons, List.map_nil,
+            List.append_assoc]
+        · rw [inductionHypothesis]
+          apply List.forall_append.mpr
+          constructor
+          · exact hinitialBound.imp fun query hquery =>
+              hquery.trans_le (Nat.le_add_right _ _)
+          · rw [List.forall_map_iff, List.forall_iff_forall_mem]
+            intro index hindex
+            exact Nat.add_lt_add_left (List.mem_range.mp hindex) _
+  unfold queryWalkInit
+  rw [aux, hinitial]
+
+/-- Selector compression adds exactly one fixed-query slot per packed selector
+column. -/
+theorem queryWalkInit_fixed_length
+    (map : SelCompressMap) (cs : ConstraintSystem F)
+    (hrecorded : cs.fixedQueries.Forall fun query =>
+      query.1.index < cs.numFixedColumns) :
+    (queryWalkInit map cs).fixed.toList.length =
+      cs.fixedQueries.length + map.newFixedCols := by
+  rw [queryWalkInit_fixed_toList map cs hrecorded, List.length_append,
+    List.length_map, List.length_map, List.length_range]
 
 /-- Selector substitution is inert on selector-free expressions. -/
 theorem substSelectorMap_eq_of_selectorFree

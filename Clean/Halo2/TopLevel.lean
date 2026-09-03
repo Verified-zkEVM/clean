@@ -2,6 +2,7 @@ import Clean.Halo2.Keygen.PinnedCs
 import Clean.Halo2.Keygen.Domain
 import Clean.Halo2.Keygen.Semantics
 import Clean.Halo2.Keygen.Layout
+import Clean.Halo2.CircuitShape
 
 /-!
 # Closed top-level formal circuits
@@ -379,12 +380,17 @@ def domainExponent
     (layout : PublicInputLayout PublicInput (publicInputColumns circuit)) : ℕ :=
   Halo2.minimalKForRows (constraintSystem circuit) (usedRows circuit layout)
 
+def selectorMapAt
+    (circuit : FormalCircuit F Unit Config unit unit) (n : ℕ) :
+    SelCompressMap :=
+  deriveSelCompressMap
+    (constraintSystem circuit) n (selectorActivations circuit)
+
 def selectorMap
     (circuit : FormalCircuit F Unit Config unit unit)
     (layout : PublicInputLayout PublicInput (publicInputColumns circuit)) :
     SelCompressMap :=
-  deriveSelCompressMap (constraintSystem circuit)
-    (2 ^ domainExponent circuit layout) (selectorActivations circuit)
+  selectorMapAt circuit (2 ^ domainExponent circuit layout)
 
 /-- The canonical domain leaves room for the circuit's complete operation footprint. -/
 theorem usedRows_le_usableRowsAt_domainExponent
@@ -402,44 +408,62 @@ theorem usedRows_le_usableRowsAt_domainExponent
         (constraintSystem circuit) (usedRows circuit layout))
   omega
 
+def fixedAssignmentsAt
+    (circuit : FormalCircuit F Unit Config unit unit) (n : ℕ) :
+    List (Layout.FixedAssignment F) :=
+  Layout.compileFixed
+    (n - (constraintSystem circuit).blindingFactors - 1)
+    (selectorMapAt circuit n) (constraintSystem circuit) (operations circuit)
+
 def fixedAssignments
     (circuit : FormalCircuit F Unit Config unit unit)
     (layout : PublicInputLayout PublicInput (publicInputColumns circuit)) :
     List (Layout.FixedAssignment F) :=
-  Layout.compileFixed
-    (2 ^ domainExponent circuit layout -
-      (constraintSystem circuit).blindingFactors - 1)
-    (selectorMap circuit layout) (constraintSystem circuit) (operations circuit)
+  fixedAssignmentsAt circuit (2 ^ domainExponent circuit layout)
+
+def fixedRowsAt
+    (circuit : FormalCircuit F Unit Config unit unit) (n : ℕ) :
+    List (List F) :=
+  Layout.denseFixedColumns
+    n
+    (PinnedConstraintSystem.derive
+      (constraintSystem circuit) (selectorMapAt circuit n)).numFixedColumns
+    (fixedAssignmentsAt circuit n)
 
 def fixedRows
     (circuit : FormalCircuit F Unit Config unit unit)
     (layout : PublicInputLayout PublicInput (publicInputColumns circuit)) :
     List (List F) :=
-  Layout.denseFixedColumns
-    (2 ^ domainExponent circuit layout)
-    (PinnedConstraintSystem.derive
-      (constraintSystem circuit) (selectorMap circuit layout)).numFixedColumns
-    (fixedAssignments circuit layout)
+  fixedRowsAt circuit (2 ^ domainExponent circuit layout)
+
+def fixedValueAt
+    (circuit : FormalCircuit F Unit Config unit unit) (n : ℕ)
+    (column : Column .fixed) (row : ℤ) : F :=
+  (fixedRowsAt circuit n).getD column.index [] |>.getD
+    (row.natMod n) 0
 
 def fixedValue
     (circuit : FormalCircuit F Unit Config unit unit)
     (layout : PublicInputLayout PublicInput (publicInputColumns circuit))
     (column : Column .fixed) (row : ℤ) : F :=
-  (fixedRows circuit layout).getD column.index [] |>.getD
-    (row.natMod (2 ^ domainExponent circuit layout)) 0
+  fixedValueAt circuit (2 ^ domainExponent circuit layout) column row
 
-def environment
-    (circuit : FormalCircuit F Unit Config unit unit)
-    (layout : PublicInputLayout PublicInput (publicInputColumns circuit))
+def environmentAt
+    (circuit : FormalCircuit F Unit Config unit unit) (n : ℕ)
     (assignment : ProofAssignment F) : Environment F where
   get column row :=
     match column.kind with
     | .advice => assignment.advice ⟨column.index⟩ row
-    | .fixed => fixedValue circuit layout ⟨column.index⟩ row
+    | .fixed => fixedValueAt circuit n ⟨column.index⟩ row
     | .instance => assignment.inst ⟨column.index⟩ row
   usableRows :=
-    2 ^ domainExponent circuit layout -
-      (constraintSystem circuit).blindingFactors - 1
+    n - (constraintSystem circuit).blindingFactors - 1
+
+def environment
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit))
+    (assignment : ProofAssignment F) : Environment F :=
+  environmentAt circuit (2 ^ domainExponent circuit layout) assignment
 
 @[simp] theorem environment_advice
     (circuit : FormalCircuit F Unit Config unit unit)
@@ -457,7 +481,8 @@ def environment
     (column : Column .fixed) (row : ℤ) :
     (environment circuit layout assignment).fixed column row =
       fixedValue circuit layout column row := by
-  simp only [Environment.fixed, environment, Column.toAny]
+  simp only [Environment.fixed, environment, environmentAt,
+    fixedValue, Column.toAny]
 
 @[simp] theorem environment_inst
     (circuit : FormalCircuit F Unit Config unit unit)
@@ -483,6 +508,11 @@ def placedEnvironment
     (assignment : ProofAssignment F) : Placed Environment F :=
   ⟨placement circuit, environment circuit layout assignment⟩
 
+def placedEnvironmentAt
+    (circuit : FormalCircuit F Unit Config unit unit) (n : ℕ)
+    (assignment : ProofAssignment F) : Placed Environment F :=
+  ⟨placement circuit, environmentAt circuit n assignment⟩
+
 def proverEnvironment
     (circuit : FormalCircuit F Unit Config unit unit)
     (layout : PublicInputLayout PublicInput (publicInputColumns circuit))
@@ -491,12 +521,147 @@ def proverEnvironment
   toEnvironment := environment circuit layout assignment
   hint := hint
 
+def proverEnvironmentAt
+    (circuit : FormalCircuit F Unit Config unit unit) (n : ℕ)
+    (assignment : ProofAssignment F) (hint : ProverHint F) :
+    ProverEnvironment F where
+  toEnvironment := environmentAt circuit n assignment
+  hint := hint
+
 def placedProverEnvironment
     (circuit : FormalCircuit F Unit Config unit unit)
     (layout : PublicInputLayout PublicInput (publicInputColumns circuit))
     (assignment : ProofAssignment F) (hint : ProverHint F) :
     Placed ProverEnvironment F :=
   ⟨placement circuit, proverEnvironment circuit layout assignment hint⟩
+
+def placedProverEnvironmentAt
+    (circuit : FormalCircuit F Unit Config unit unit) (n : ℕ)
+    (assignment : ProofAssignment F) (hint : ProverHint F) :
+    Placed ProverEnvironment F :=
+  ⟨placement circuit, proverEnvironmentAt circuit n assignment hint⟩
+
+/-- Query lawfulness bounds every configure-recorded fixed query by the closed
+configuration's fixed-column count. -/
+theorem fixedQueries_bounded
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (hrequirements : circuit.queryRequirements () {}) :
+    (constraintSystem circuit).fixedQueries.Forall fun query =>
+      query.1.index < (constraintSystem circuit).numFixedColumns := by
+  let program := circuit.configure ()
+  let delta := program.delta {}
+  let counts := program.finalCounts {}
+  have hlawful : delta.QueriesLawful counts :=
+    circuit.queriesLawful () {} hrequirements
+  rw [List.forall_iff_forall_mem]
+  intro query hquery
+  have hdelta : query ∈ delta.fixedQueries := by
+    have hrun := (Configure.mem_fixedQueries_run_iff program {} query).mp hquery
+    exact hrun.resolve_left (by simp)
+  have hbound := List.forall_iff_forall_mem.mp
+    hlawful.fixedQueries_fst_lt_numFixedColumns query hdelta
+  simpa only [constraintSystem, program, counts,
+    Configure.run_numFixedColumns,
+    ConfigureCounts.ofConstraintSystem_empty] using hbound
+
+/-- The compiler's post-compression fixed-query count is the configure-recorded
+count plus the number of packed selector columns. -/
+theorem fixedQueryCount_eq
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit))
+    (hrequirements : circuit.queryRequirements () {}) :
+    (PinnedConstraintSystem.derive
+      (constraintSystem circuit) (selectorMap circuit layout)).fixedQueryLayout.length =
+        (constraintSystem circuit).fixedQueries.length +
+          (selectorMap circuit layout).newFixedCols := by
+  simp only [PinnedConstraintSystem.derive, projectCS]
+  exact queryWalkInit_fixed_length _ _
+    (fixedQueries_bounded circuit hrequirements)
+
+/-- The complete finite shape produced by the canonical top-level compiler. -/
+def circuitShape
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit)) :
+    CircuitShape :=
+  let cs := constraintSystem circuit
+  let map := selectorMap circuit layout
+  let pinned := PinnedConstraintSystem.derive cs map
+  let permutationColumnCount := cs.permutationColumns.length
+  { k := domainExponent circuit layout
+    numAdviceColumns := cs.numAdviceColumns
+    numLookups := cs.lookups.length
+    numPermutationSets :=
+      (permutationColumnCount + cs.chunkLen - 1) / cs.chunkLen
+    numPermutationColumns := permutationColumnCount
+    numQuotientPieces := csDegree cs - 1
+    numInstanceColumns := cs.numInstanceColumns
+    numInstanceQueries := pinned.instanceQueryLayout.length
+    numAdviceQueries := pinned.adviceQueryLayout.length
+    numFixedQueries := pinned.fixedQueryLayout.length }
+
+theorem circuitShape_k
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit)) :
+    (circuitShape circuit layout).k = domainExponent circuit layout := rfl
+
+theorem circuitShape_numAdviceColumns
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit)) :
+    (circuitShape circuit layout).numAdviceColumns =
+      (constraintSystem circuit).numAdviceColumns := rfl
+
+theorem circuitShape_numLookups
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit)) :
+    (circuitShape circuit layout).numLookups =
+      (constraintSystem circuit).lookups.length := rfl
+
+theorem circuitShape_numPermutationSets
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit)) :
+    (circuitShape circuit layout).numPermutationSets =
+      ((constraintSystem circuit).permutationColumns.length +
+        (constraintSystem circuit).chunkLen - 1) /
+          (constraintSystem circuit).chunkLen := rfl
+
+theorem circuitShape_numPermutationColumns
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit)) :
+    (circuitShape circuit layout).numPermutationColumns =
+      (constraintSystem circuit).permutationColumns.length := rfl
+
+theorem circuitShape_numQuotientPieces
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit)) :
+    (circuitShape circuit layout).numQuotientPieces =
+      csDegree (constraintSystem circuit) - 1 := rfl
+
+theorem circuitShape_numInstanceColumns
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit)) :
+    (circuitShape circuit layout).numInstanceColumns =
+      (constraintSystem circuit).numInstanceColumns := rfl
+
+theorem circuitShape_numInstanceQueries
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit)) :
+    (circuitShape circuit layout).numInstanceQueries =
+      (PinnedConstraintSystem.derive
+        (constraintSystem circuit) (selectorMap circuit layout)).instanceQueryLayout.length := rfl
+
+theorem circuitShape_numAdviceQueries
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit)) :
+    (circuitShape circuit layout).numAdviceQueries =
+      (PinnedConstraintSystem.derive
+        (constraintSystem circuit) (selectorMap circuit layout)).adviceQueryLayout.length := rfl
+
+theorem circuitShape_numFixedQueries
+    (circuit : FormalCircuit F Unit Config unit unit)
+    (layout : PublicInputLayout PublicInput (publicInputColumns circuit)) :
+    (circuitShape circuit layout).numFixedQueries =
+      (PinnedConstraintSystem.derive
+        (constraintSystem circuit) (selectorMap circuit layout)).fixedQueryLayout.length := rfl
 
 end TopLevelCompilation
 
@@ -564,7 +729,7 @@ structure TopLevelCircuit
   /-- A top-level circuit has no assumptions supplied by an enclosing circuit. -/
   assumptions_eq : formalCircuit.Assumptions = fun _ => True
   /--
-  The canonical compiled environment supplies the residual facts that the circuit
+  The canonical shape-indexed environment supplies the residual facts that the circuit
   cannot establish from either constraints or witness extension.
   -/
   closesEnvironment :
@@ -574,12 +739,41 @@ structure TopLevelCircuit
         (TopLevelCompilation.placedEnvironment
           formalCircuit publicInputLayout assignment)
 
+/-- An optional, fully reduced circuit shape for downstream verifier and proof types. -/
+class TopLevelShape
+    {F : Type} [FiniteField F]
+    {Config : Type} {PublicInput : TypeMap}
+    [ProvableType PublicInput]
+    (circuit : TopLevelCircuit F Config PublicInput) where
+  /-- The circuit's published finite shape. -/
+  shape : CircuitShape
+  /-- The published shape agrees with the canonical compiler result. -/
+  shape_eq :
+    shape =
+      TopLevelCompilation.circuitShape
+        circuit.formalCircuit circuit.publicInputLayout
+
 namespace TopLevelCircuit
 
 variable
     {F : Type} [FiniteField F]
     {Config : Type} {PublicInput : TypeMap}
     [ProvableType PublicInput]
+
+/-- The fully reduced shape published by a top-level circuit that opts into one. -/
+def shape
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] : CircuitShape :=
+  TopLevelShape.shape (circuit := self)
+
+/-- The published shape agrees with the canonical compiler result. -/
+theorem shape_eq
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
+    self.shape =
+      TopLevelCompilation.circuitShape
+        self.formalCircuit self.publicInputLayout :=
+  TopLevelShape.shape_eq (circuit := self)
 
 /-- The configuration produced by the top-level circuit's own configure run. -/
 def config (self : TopLevelCircuit F Config PublicInput) : Config :=
@@ -603,26 +797,34 @@ theorem constraintSystem_csDegree
 def chunkLen (self : TopLevelCircuit F Config PublicInput) : ℕ :=
   self.constraintSystem.chunkLen
 
-/-- The number of advice columns configured by the circuit. -/
-def adviceColumnCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
-  self.constraintSystem.numAdviceColumns
+/-- The published number of advice columns. -/
+def adviceColumnCount (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] : ℕ :=
+  self.shape.numAdviceColumns
+
+/-- The published number of public-instance columns. -/
+def instanceColumnCount (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] : ℕ :=
+  self.shape.numInstanceColumns
 
 /-- The number of selectors configured by the circuit. -/
 def selectorCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
   self.constraintSystem.numSelectors
 
-/-- The number of lookup arguments configured by the circuit. -/
-def lookupCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
-  self.constraintSystem.lookups.length
+/-- The published number of lookup arguments. -/
+def lookupCount (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] : ℕ :=
+  self.shape.numLookups
 
 /-- The columns participating in the circuit's permutation argument. -/
 def permutationColumns
     (self : TopLevelCircuit F Config PublicInput) : List AnyColumn :=
   self.constraintSystem.permutationColumns
 
-/-- The number of columns participating in the circuit's permutation argument. -/
-def permutationColumnCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
-  self.permutationColumns.length
+/-- The published number of columns participating in the permutation argument. -/
+def permutationColumnCount (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] : ℕ :=
+  self.shape.numPermutationColumns
 
 /-- The configure interpreter retains each equality-enabled column only at its first
 request. -/
@@ -669,13 +871,15 @@ private theorem flattenColumn_injective_of_allocated
     try omega
   all_goals congr 1 <;> omega
 
-/-- The number of chunks in the circuit's permutation argument. -/
-def permutationSetCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
-  (self.permutationColumnCount + self.chunkLen - 1) / self.chunkLen
+/-- The published number of sets in the circuit's permutation argument. -/
+def permutationSetCount (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] : ℕ :=
+  self.shape.numPermutationSets
 
-/-- The number of quotient-polynomial pieces required by the circuit. -/
-def quotientPieceCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
-  csDegree self.constraintSystem - 1
+/-- The published number of quotient-polynomial pieces required by the circuit. -/
+def quotientPieceCount (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] : ℕ :=
+  self.shape.numQuotientPieces
 
 /-- Public-input cells are distinct by construction from queried columns and prefixes. -/
 theorem publicInputLayout_cells_injective
@@ -909,43 +1113,71 @@ theorem publicInputLayout_cells_snd_lt_usedRows
   exact (self.publicInputLayout.cells_snd_lt_usedRows i).trans_le
     (Nat.le_max_right _ _)
 
-/-- The smallest keygen domain exponent derived from this circuit. -/
-def domainExponent (self : TopLevelCircuit F Config PublicInput) : ℕ :=
-  TopLevelCompilation.domainExponent self.formalCircuit self.publicInputLayout
+/-- The circuit's published domain exponent. -/
+def domainExponent (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] : ℕ :=
+  self.shape.k
+
+/-- The published domain exponent agrees with the compiler calculation. -/
+theorem domainExponent_eq_compiled
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
+    self.domainExponent =
+      TopLevelCompilation.domainExponent
+        self.formalCircuit self.publicInputLayout := by
+  simpa only [domainExponent, TopLevelCompilation.circuitShape_k] using
+    congrArg CircuitShape.k self.shape_eq
 
 /-- The size of the circuit's smallest fitting evaluation domain. -/
-def n (self : TopLevelCircuit F Config PublicInput) : ℕ :=
+def n (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] : ℕ :=
   2 ^ self.domainExponent
 
 /-- The circuit-owned domain size is the power of two selected by compilation. -/
 @[simp] theorem n_eq_two_pow_domainExponent
-    (self : TopLevelCircuit F Config PublicInput) :
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
     self.n = 2 ^ self.domainExponent := by
   rfl
 
 /-- The circuit's evaluation domain is nonempty. -/
-theorem n_pos (self : TopLevelCircuit F Config PublicInput) :
+theorem n_pos (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
     0 < self.n := by
   rw [n_eq_two_pow_domainExponent]
   exact pow_pos (by decide) self.domainExponent
 
 /-- The circuit's evaluation-domain size is nonzero. -/
-theorem n_ne_zero (self : TopLevelCircuit F Config PublicInput) :
+theorem n_ne_zero (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
     self.n ≠ 0 :=
   Nat.ne_of_gt self.n_pos
 
 /-- The selector-compression map derived from this circuit and its fitting domain. -/
 def selectorMap
-    (self : TopLevelCircuit F Config PublicInput) : SelCompressMap :=
-  TopLevelCompilation.selectorMap self.formalCircuit self.publicInputLayout
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] : SelCompressMap :=
+  TopLevelCompilation.selectorMapAt self.formalCircuit self.n
 
 /-- The top-level selector map is the canonical compression of this circuit's
 constraint system and absolute selector activations. -/
 theorem selectorMap_eq_derive
-    (self : TopLevelCircuit F Config PublicInput) :
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
     self.selectorMap =
       deriveSelCompressMap self.constraintSystem self.n
         self.selectorActivations := rfl
+
+/-- Shape-indexed selector compression agrees with the upstream compiler run. -/
+theorem selectorMap_eq_compiled
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
+    self.selectorMap =
+      TopLevelCompilation.selectorMap
+        self.formalCircuit self.publicInputLayout := by
+  simp only [selectorMap, TopLevelCompilation.selectorMap,
+    TopLevelCompilation.selectorMapAt, n]
+  rw [self.domainExponent_eq_compiled]
 
 /-- The blinding-row count derived from the circuit's constraint system. -/
 def blindingFactors (self : TopLevelCircuit F Config PublicInput) : ℕ :=
@@ -966,42 +1198,50 @@ theorem usableRowsAt_le_domainSize
 /-- At the circuit-selected exponent, every usable row lies in the circuit's
 domain. -/
 theorem usableRowsAt_domainExponent_le_n
-    (self : TopLevelCircuit F Config PublicInput) :
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
     self.usableRowsAt self.domainExponent ≤ self.n := by
   rw [self.n_eq_two_pow_domainExponent]
   exact self.usableRowsAt_le_domainSize self.domainExponent
 
 /-- The circuit's fitting domain leaves exactly the non-blinding prefix usable. -/
 @[simp] theorem usableRowsAt_domainExponent
-    (self : TopLevelCircuit F Config PublicInput) :
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
     self.usableRowsAt self.domainExponent =
       self.n - self.blindingFactors - 1 := by
   rfl
 
 /-- The total domain compiler leaves room for the full circuit footprint. -/
 theorem usedRows_le_usableRowsAt_domainExponent
-    (self : TopLevelCircuit F Config PublicInput) :
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
     self.usedRows ≤ self.usableRowsAt self.domainExponent := by
-  simpa only [usedRows, usableRowsAt, domainExponent, blindingFactors,
-    constraintSystem] using
+  rw [self.domainExponent_eq_compiled]
+  simpa only [usedRows, usableRowsAt, blindingFactors, constraintSystem] using
     TopLevelCompilation.usedRows_le_usableRowsAt_domainExponent
       self.formalCircuit self.publicInputLayout
 
 /-- The compiler-derived domain includes Halo 2's three mandatory terminal rows. -/
 theorem blindingFactors_add_three_le_domainSize
-    (self : TopLevelCircuit F Config PublicInput) :
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
     self.blindingFactors + 3 ≤ self.n := by
   have hfit := Halo2.minimalKForRows_fits
     self.constraintSystem self.usedRows
   have hminimum :
-      self.constraintSystem.minimumRows ≤ 2 ^ self.domainExponent :=
+      self.constraintSystem.minimumRows ≤
+        2 ^ TopLevelCompilation.domainExponent
+          self.formalCircuit self.publicInputLayout :=
     (Nat.le_max_right _ _).trans hfit
+  rw [← self.domainExponent_eq_compiled] at hminimum
   simpa only [ConstraintSystem.minimumRows, blindingFactors,
     n_eq_two_pow_domainExponent] using hminimum
 
 /-- Every public-input cell lies in the compiler-derived usable-row range. -/
 theorem publicInputLayout_cells_snd_lt_usableRowsAt_domainExponent
     (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self]
     (i : Fin (size PublicInput)) :
     (self.publicInputLayout.cells i).2 <
       self.usableRowsAt self.domainExponent :=
@@ -1010,47 +1250,54 @@ theorem publicInputLayout_cells_snd_lt_usableRowsAt_domainExponent
 
 /-- The canonical domain leaves a usable row beyond the blinding suffix. -/
 theorem blindingFactors_succ_lt_domainSize
-    (self : TopLevelCircuit F Config PublicInput) :
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
     self.blindingFactors + 1 < self.n := by
   have hfit := (Nat.le_max_right _ _).trans
     (Halo2.minimalKForRows_fits
       (TopLevelCompilation.constraintSystem self.formalCircuit)
       (TopLevelCompilation.usedRows self.formalCircuit self.publicInputLayout))
+  change self.constraintSystem.minimumRows ≤
+    2 ^ TopLevelCompilation.domainExponent
+      self.formalCircuit self.publicInputLayout at hfit
+  rw [← self.domainExponent_eq_compiled] at hfit
   simp only [ConstraintSystem.minimumRows] at hfit
-  simp only [blindingFactors, n_eq_two_pow_domainExponent, domainExponent,
-    TopLevelCompilation.domainExponent, constraintSystem] at *
+  simp only [blindingFactors, n_eq_two_pow_domainExponent,
+    constraintSystem] at *
   omega
 
 /-- The canonical domain has strictly more rows than the blinding count. -/
 theorem blindingFactors_lt_domainSize
-    (self : TopLevelCircuit F Config PublicInput) :
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
     self.blindingFactors < self.n :=
   Nat.lt_of_succ_lt self.blindingFactors_succ_lt_domainSize
 
 /-- The pinned constraint system derived solely from the closed circuit. -/
-def pinnedCS (self : TopLevelCircuit F Config PublicInput) :
+def pinnedCS (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
     PinnedConstraintSystem F :=
   PinnedConstraintSystem.derive self.constraintSystem self.selectorMap
 
 /-- The authoritative query layout used to compile this circuit's expressions. -/
-def gateQueryState (self : TopLevelCircuit F Config PublicInput) : QueryState :=
+def gateQueryState (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] : QueryState :=
   queryWalkInit self.selectorMap self.constraintSystem
 
 /-- A selector compression emitted by this circuit's compiler resolves in its
 authoritative query state. -/
 theorem gateQueryState_resolves_selectorMap_lookup
     (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self]
     {selector : ℕ} {compressed : SelCompress}
     (hlookup : self.selectorMap.lookup selector = some compressed) :
     self.gateQueryState.ResolvesQuery
       (.fixed ⟨compressed.packedCol⟩ 0) := by
-  unfold gateQueryState
-  unfold selectorMap TopLevelCompilation.selectorMap at hlookup ⊢
-  unfold constraintSystem
+  simp only [gateQueryState, selectorMap,
+    TopLevelCompilation.selectorMapAt, constraintSystem, n] at hlookup ⊢
   exact queryWalkInit_resolves_deriveSelCompressMap_lookup
     (TopLevelCompilation.constraintSystem self.formalCircuit)
-    (2 ^ TopLevelCompilation.domainExponent
-      self.formalCircuit self.publicInputLayout)
+    (2 ^ self.domainExponent)
     (TopLevelCompilation.selectorActivations self.formalCircuit) hlookup
 
 /--
@@ -1058,40 +1305,188 @@ The circuit-owned pinned constraint system is exactly the projection using its
 circuit-owned selector map.
 -/
 theorem pinnedCS_eq_derive
-    (self : TopLevelCircuit F Config PublicInput) :
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
     self.pinnedCS =
       PinnedConstraintSystem.derive self.constraintSystem self.selectorMap :=
   rfl
 
+/-- The shape-indexed pinned constraint system agrees with the upstream compiler run. -/
+theorem pinnedCS_eq_compiled
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
+    self.pinnedCS =
+      PinnedConstraintSystem.derive
+        (TopLevelCompilation.constraintSystem self.formalCircuit)
+        (TopLevelCompilation.selectorMap
+          self.formalCircuit self.publicInputLayout) := by
+  rw [self.pinnedCS_eq_derive, self.selectorMap_eq_compiled]
+  rfl
+
 /-- The instance-query layout of the circuit-owned pinned constraint system. -/
 def instanceQueryLayout
-    (self : TopLevelCircuit F Config PublicInput) : List (ℕ × ℤ) :=
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] : List (ℕ × ℤ) :=
   self.pinnedCS.instanceQueryLayout
 
 /-- The advice-query layout of the circuit-owned pinned constraint system. -/
 def adviceQueryLayout
-    (self : TopLevelCircuit F Config PublicInput) : List (ℕ × ℤ) :=
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] : List (ℕ × ℤ) :=
   self.pinnedCS.adviceQueryLayout
 
 /-- The fixed-query layout of the circuit-owned pinned constraint system. -/
 def fixedQueryLayout
-    (self : TopLevelCircuit F Config PublicInput) : List (ℕ × ℤ) :=
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] : List (ℕ × ℤ) :=
   self.pinnedCS.fixedQueryLayout
 
-/-- The number of instance queries in the circuit-owned pinned constraint system. -/
-def instanceQueryCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
-  self.instanceQueryLayout.length
+/-- The published number of instance queries. -/
+def instanceQueryCount (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] : ℕ :=
+  self.shape.numInstanceQueries
 
-/-- The number of advice queries in the circuit-owned pinned constraint system. -/
-def adviceQueryCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
-  self.adviceQueryLayout.length
+/-- The published number of advice queries. -/
+def adviceQueryCount (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] : ℕ :=
+  self.shape.numAdviceQueries
 
-/-- The number of fixed queries in the circuit-owned pinned constraint system. -/
-def fixedQueryCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
-  self.fixedQueryLayout.length
+/-- The published number of fixed queries. -/
+def fixedQueryCount (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] : ℕ :=
+  self.shape.numFixedQueries
+
+/-- The published advice-column count agrees with configuration. -/
+theorem adviceColumnCount_eq_constraintSystem
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
+    self.adviceColumnCount = self.constraintSystem.numAdviceColumns := by
+  simpa only [adviceColumnCount,
+    TopLevelCompilation.circuitShape_numAdviceColumns] using
+      congrArg CircuitShape.numAdviceColumns self.shape_eq
+
+/-- The published instance-column count agrees with configuration. -/
+theorem instanceColumnCount_eq_constraintSystem
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
+    self.instanceColumnCount = self.constraintSystem.numInstanceColumns := by
+  simpa only [instanceColumnCount,
+    TopLevelCompilation.circuitShape_numInstanceColumns] using
+      congrArg CircuitShape.numInstanceColumns self.shape_eq
+
+/-- The published lookup count agrees with configuration. -/
+theorem lookupCount_eq_constraintSystem
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
+    self.lookupCount = self.constraintSystem.lookups.length := by
+  simpa only [lookupCount, TopLevelCompilation.circuitShape_numLookups] using
+    congrArg CircuitShape.numLookups self.shape_eq
+
+/-- The configured lookup selected by a published circuit-shape index. -/
+def lookupAt
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self]
+    (lookup : Fin self.lookupCount) : LookupArgument F :=
+  self.constraintSystem.lookups[lookup.val]'(by
+    rw [← self.lookupCount_eq_constraintSystem]
+    exact lookup.isLt)
+
+/-- A lookup selected through the published circuit shape belongs to configuration. -/
+theorem lookupAt_mem_constraintSystem
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self]
+    (lookup : Fin self.lookupCount) :
+    self.lookupAt lookup ∈ self.constraintSystem.lookups := by
+  unfold lookupAt
+  apply List.getElem_mem
+
+/-- The published permutation-column count agrees with configuration. -/
+theorem permutationColumnCount_eq_permutationColumns_length
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
+    self.permutationColumnCount = self.permutationColumns.length := by
+  simpa only [permutationColumnCount, permutationColumns, constraintSystem,
+    TopLevelCompilation.circuitShape_numPermutationColumns] using
+      congrArg CircuitShape.numPermutationColumns self.shape_eq
+
+/-- The published permutation-set count agrees with the compiler calculation. -/
+theorem permutationSetCount_eq
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
+    self.permutationSetCount =
+      (self.permutationColumnCount + self.chunkLen - 1) / self.chunkLen := by
+  have h := congrArg CircuitShape.numPermutationSets self.shape_eq
+  rw [TopLevelCompilation.circuitShape_numPermutationSets] at h
+  simpa only [permutationSetCount,
+    self.permutationColumnCount_eq_permutationColumns_length,
+    permutationColumns, chunkLen, constraintSystem] using h
+
+/-- The published quotient-piece count agrees with the constraint-system degree. -/
+theorem quotientPieceCount_eq
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
+    self.quotientPieceCount = csDegree self.constraintSystem - 1 := by
+  simpa only [quotientPieceCount, constraintSystem,
+    TopLevelCompilation.circuitShape_numQuotientPieces] using
+      congrArg CircuitShape.numQuotientPieces self.shape_eq
+
+/-- The published instance-query count agrees with the compiled query layout. -/
+theorem instanceQueryCount_eq_instanceQueryLayout_length
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
+    self.instanceQueryCount = self.instanceQueryLayout.length := by
+  have h := congrArg CircuitShape.numInstanceQueries self.shape_eq
+  rw [TopLevelCompilation.circuitShape_numInstanceQueries] at h
+  simpa only [instanceQueryCount, instanceQueryLayout, pinnedCS,
+    constraintSystem, selectorMap, n, domainExponent_eq_compiled,
+    TopLevelCompilation.selectorMap] using h
+
+/-- The published advice-query count agrees with the compiled query layout. -/
+theorem adviceQueryCount_eq_adviceQueryLayout_length
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
+    self.adviceQueryCount = self.adviceQueryLayout.length := by
+  have h := congrArg CircuitShape.numAdviceQueries self.shape_eq
+  rw [TopLevelCompilation.circuitShape_numAdviceQueries] at h
+  simpa only [adviceQueryCount, adviceQueryLayout, pinnedCS,
+    constraintSystem, selectorMap, n, domainExponent_eq_compiled,
+    TopLevelCompilation.selectorMap] using h
+
+/-- The published fixed-query count agrees with the compiled query layout. -/
+theorem fixedQueryCount_eq_fixedQueryLayout_length
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
+    self.fixedQueryCount = self.fixedQueryLayout.length := by
+  have h := congrArg CircuitShape.numFixedQueries self.shape_eq
+  rw [TopLevelCompilation.circuitShape_numFixedQueries] at h
+  simpa only [fixedQueryCount, fixedQueryLayout, pinnedCS,
+    constraintSystem, selectorMap, n, domainExponent_eq_compiled,
+    TopLevelCompilation.selectorMap] using h
+
+/-- The published fixed-query count is the configure-recorded count plus one
+rotation-zero query for every packed selector column. -/
+theorem fixedQueryCount_eq_fixedQueries_length_add_newFixedCols
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
+    self.fixedQueryCount =
+      self.constraintSystem.fixedQueries.length +
+        self.selectorMap.newFixedCols := by
+  calc
+    self.fixedQueryCount = self.fixedQueryLayout.length :=
+      self.fixedQueryCount_eq_fixedQueryLayout_length
+    _ = self.constraintSystem.fixedQueries.length +
+        (TopLevelCompilation.selectorMap
+          self.formalCircuit self.publicInputLayout).newFixedCols := by
+      rw [fixedQueryLayout, self.pinnedCS_eq_compiled]
+      exact TopLevelCompilation.fixedQueryCount_eq
+        self.formalCircuit self.publicInputLayout self.queryRequirements
+    _ = self.constraintSystem.fixedQueries.length +
+        self.selectorMap.newFixedCols := by
+      rw [self.selectorMap_eq_compiled]
 
 @[simp] theorem adviceQueryLayout_eq_constraintSystem
-    (self : TopLevelCircuit F Config PublicInput) :
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
     self.adviceQueryLayout =
       self.constraintSystem.adviceQueries.map fun query =>
         (query.1.index, query.2) := by
@@ -1099,7 +1494,8 @@ def fixedQueryCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
     projectCS]
 
 @[simp] theorem instanceQueryLayout_eq_constraintSystem
-    (self : TopLevelCircuit F Config PublicInput) :
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
     self.instanceQueryLayout =
       self.constraintSystem.instanceQueries.map fun query =>
         (query.1.index, query.2) := by
@@ -1107,7 +1503,8 @@ def fixedQueryCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
     projectCS]
 
 @[simp] theorem fixedQueryLayout_eq_gateQueryState
-    (self : TopLevelCircuit F Config PublicInput) :
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
     self.fixedQueryLayout = self.gateQueryState.fixed.toList := by
   simp [fixedQueryLayout, gateQueryState, pinnedCS,
     PinnedConstraintSystem.derive, projectCS]
@@ -1117,6 +1514,7 @@ permutation compiler. This follows for every top-level circuit from the configur
 program's query lawfulness. -/
 theorem permutationColumn_mem_queryLayout
     (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self]
     {column : AnyColumn} (hcolumn : column ∈ self.permutationColumns) :
     match column with
     | ⟨.advice, index⟩ => (index, 0) ∈ self.adviceQueryLayout
@@ -1227,7 +1625,8 @@ theorem permutationColumn_allocated
 /-- The duplicate-free permutation family fits inside the disjoint configured advice,
 fixed, and instance column spaces. -/
 theorem permutationColumnCount_le_configuredColumnCount
-    (self : TopLevelCircuit F Config PublicInput) :
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
     self.permutationColumnCount ≤
       self.constraintSystem.numAdviceColumns +
         self.constraintSystem.numFixedColumns +
@@ -1258,6 +1657,7 @@ theorem permutationColumnCount_le_configuredColumnCount
     exact List.mem_toFinset.mp (show column ∈ columns from hcolumn)
   calc
     self.permutationColumnCount = columns.card := by
+      rw [self.permutationColumnCount_eq_permutationColumns_length]
       exact (List.toFinset_card_of_nodup
         self.permutationColumns_nodup).symm
     _ = indices.card := hindicesCard.symm
@@ -1272,11 +1672,13 @@ theorem permutationColumnCount_le_configuredColumnCount
         ConfigureCounts.ofConstraintSystem]
 
 /-- The number of fixed columns in the circuit-owned pinned constraint system. -/
-def fixedColumnCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
+def fixedColumnCount (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] : ℕ :=
   self.pinnedCS.numFixedColumns
 
 @[simp] theorem fixedColumnCount_eq
-    (self : TopLevelCircuit F Config PublicInput) :
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
     self.fixedColumnCount =
       self.constraintSystem.numFixedColumns + self.selectorMap.newFixedCols := by
   simp [fixedColumnCount, pinnedCS, PinnedConstraintSystem.derive, projectCS]
@@ -1284,7 +1686,8 @@ def fixedColumnCount (self : TopLevelCircuit F Config PublicInput) : ℕ :=
 /-- Selector compression leaves the total fixed-column count bounded by the
 configured fixed columns plus the configured selectors. -/
 theorem fixedColumnCount_le_numFixedColumns_add_selectorCount
-    (self : TopLevelCircuit F Config PublicInput) :
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
     self.fixedColumnCount ≤
       self.constraintSystem.numFixedColumns + self.selectorCount := by
   rw [fixedColumnCount_eq, selectorCount]
@@ -1297,7 +1700,8 @@ theorem fixedColumnCount_le_numFixedColumns_add_selectorCount
 slot. Original columns are covered by the closed circuit's configure law; selector
 compression covers its appended suffix by construction. -/
 theorem exists_rotation_mem_fixedQueryLayout_of_lt
-    (self : TopLevelCircuit F Config PublicInput) :
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
     ∀ column < self.fixedColumnCount,
       ∃ rotation, (column, rotation) ∈ self.fixedQueryLayout := by
   intro column hcolumn
@@ -1325,7 +1729,8 @@ theorem exists_rotation_mem_fixedQueryLayout_of_lt
 /-- Every fixed-query slot names a column in the post-compression verifier constraint
 system. -/
 theorem fixedQueryLayout_columns_lt
-    (self : TopLevelCircuit F Config PublicInput) :
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
     self.fixedQueryLayout.Forall fun query =>
       query.1 < self.fixedColumnCount := by
   rw [fixedQueryLayout_eq_gateQueryState, fixedColumnCount_eq]
@@ -1349,7 +1754,8 @@ theorem fixedQueryLayout_columns_lt
 /-- Every advice-query slot names a column allocated by the closed configure
 program. -/
 theorem adviceQueryLayout_columns_lt
-    (self : TopLevelCircuit F Config PublicInput) :
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
     self.adviceQueryLayout.Forall fun query =>
       query.1 < self.constraintSystem.numAdviceColumns := by
   rw [adviceQueryLayout_eq_constraintSystem,
@@ -1373,7 +1779,8 @@ theorem adviceQueryLayout_columns_lt
 /-- Every instance-query slot names a column allocated by the closed configure
 program. -/
 theorem instanceQueryLayout_columns_lt
-    (self : TopLevelCircuit F Config PublicInput) :
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
     self.instanceQueryLayout.Forall fun query =>
       query.1 < self.constraintSystem.numInstanceColumns := by
   rw [instanceQueryLayout_eq_constraintSystem,
@@ -1396,30 +1803,34 @@ theorem instanceQueryLayout_columns_lt
 
 /-- All circuit-derived fixed-cell assignments, before dense row expansion. -/
 def fixedAssignments
-    (self : TopLevelCircuit F Config PublicInput) :
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
     List (Layout.FixedAssignment F) :=
-  TopLevelCompilation.fixedAssignments
-    self.formalCircuit self.publicInputLayout
+  TopLevelCompilation.fixedAssignmentsAt self.formalCircuit self.n
 
 /-- The dense fixed columns compiled canonically from the top-level circuit. -/
 def fixedRows
-    (self : TopLevelCircuit F Config PublicInput) : List (List F) :=
-  TopLevelCompilation.fixedRows self.formalCircuit self.publicInputLayout
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] : List (List F) :=
+  TopLevelCompilation.fixedRowsAt self.formalCircuit self.n
 
 /-- Sparse top-level fixed compilation contains at most one value per cell. -/
 theorem fixedAssignments_cells_nodup
-    (self : TopLevelCircuit F Config PublicInput) :
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
     (self.fixedAssignments.map Layout.FixedAssignment.cell).Nodup := by
   apply Layout.compileFixed_cells_nodup
 
 @[simp] theorem fixedRows_length
-    (self : TopLevelCircuit F Config PublicInput) :
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
     self.fixedRows.length = self.fixedColumnCount := by
   apply Layout.denseFixedColumns_length
 
 /-- Every compiled fixed column spans the full evaluation domain. -/
 theorem fixedRows_getD_length
     (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self]
     (column : ℕ)
     (hcolumn : column < self.fixedColumnCount) :
     (self.fixedRows.getD column []).length = self.n := by
@@ -1429,6 +1840,7 @@ theorem fixedRows_getD_length
 /-- Every in-bounds sparse top-level assignment is realized by its dense fixed rows. -/
 theorem fixedRows_getD_getD_eq_of_mem
     (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self]
     (assignment : Layout.FixedAssignment F)
     (hassignment : assignment ∈ self.fixedAssignments)
     (hcolumn : assignment.1 < self.fixedColumnCount)
@@ -1445,6 +1857,7 @@ theorem fixedRows_getD_getD_eq_of_mem
 zero in the canonical dense rows. -/
 theorem fixedRows_getD_getD_eq_zero_of_not_mem
     (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self]
     (column row : ℕ)
     (habsent : (column, row) ∉
       self.fixedAssignments.map Layout.FixedAssignment.cell)
@@ -1466,6 +1879,19 @@ def fixedValue
     (column : Column .fixed) (row : ℤ) : F :=
   TopLevelCompilation.fixedValue
     self.formalCircuit self.publicInputLayout column row
+
+/-- Reading a fixed value agrees with the corresponding cell of the published
+dense fixed rows. -/
+theorem fixedValue_eq_fixedRows_getD
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self]
+    (column : Column .fixed) (row : ℤ) :
+    self.fixedValue column row =
+      (self.fixedRows.getD column.index []).getD
+        (row.natMod self.n) 0 := by
+  simp only [fixedValue, TopLevelCompilation.fixedValue,
+    TopLevelCompilation.fixedValueAt, fixedRows, n]
+  rw [self.domainExponent_eq_compiled]
 
 /--
 Construct the complete semantic environment from exactly the proof-varying assignment.
@@ -1530,7 +1956,9 @@ def placedProverEnvironment
     (self : TopLevelCircuit F Config PublicInput)
     (assignment : ProofAssignment F) :
     (self.environment assignment).usableRows =
-      self.usableRowsAt self.domainExponent := by
+      2 ^ TopLevelCompilation.domainExponent
+          self.formalCircuit self.publicInputLayout -
+        self.blindingFactors - 1 := by
   rfl
 
 @[simp] theorem placedEnvironment_place
@@ -1565,6 +1993,7 @@ theorem keygenCoherent
 last-write compiler. -/
 theorem mem_fixedAssignments_of_mem_raw
     (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self]
     (assignment : Layout.FixedAssignment F)
     (hassignment : assignment ∈
       Layout.rawAssignments
@@ -1597,6 +2026,7 @@ theorem mem_fixedAssignments_of_mem_raw
 in the compiler's raw write stream. -/
 theorem fixedAssignment_cell_mem_raw_of_mem
     (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self]
     (assignment : Layout.FixedAssignment F)
     (hassignment : assignment ∈ self.fixedAssignments) :
     assignment.cell ∈
@@ -1613,6 +2043,7 @@ theorem fixedAssignment_cell_mem_raw_of_mem
 canonical fixed-column and evaluation-domain bounds. -/
 theorem fixedAssignment_bounds_of_mem_raw
     (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self]
     (assignment : Layout.FixedAssignment F)
     (hassignment : assignment ∈
       Layout.rawAssignments
@@ -1658,6 +2089,7 @@ theorem fixedAssignment_bounds_of_mem_raw
 same cell and value in its canonical dense fixed columns. -/
 theorem fixedRows_getD_getD_eq_of_mem_raw
     (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self]
     (assignment : Layout.FixedAssignment F)
     (hassignment : assignment ∈
       Layout.rawAssignments
@@ -1732,6 +2164,7 @@ compatibility excludes it from all gate selector sets, and gate well-formedness 
 every selector atom in each gate polynomial. -/
 theorem lookupInputSelectorDegree_eq_zero
     (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self]
     (argument : LookupArgument F)
     (hargument : argument ∈ self.constraintSystem.lookups)
     (expression : Expression F Query) (hexpression : expression ∈ argument.inputs)
@@ -1771,6 +2204,7 @@ theorem lookupInputSelectorDegree_eq_zero
 packed fixed column. -/
 theorem lookupInputSelectorMap_singleton
     (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self]
     (argument : LookupArgument F)
     (hargument : argument ∈ self.constraintSystem.lookups)
     (expression : Expression F Query)
@@ -1826,6 +2260,7 @@ uses physical selector anchoring and V1's shared-column separation to rule out a
 activation from another region. -/
 theorem lookupInputSelectorFixedValue
     (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self]
     (anchor : ℕ → FloorPlanner.RegionColumn)
     (hanchored : self.operations.LookupSelectorsAnchoredBy anchor)
     {region : RegionIndex} {body : RegionOperations F}
@@ -2116,7 +2551,8 @@ theorem configureQueriesLawful
 /-- Every selector-compressed gate expression resolves read-only against the circuit's
 compiler-derived query layout. -/
 theorem gateQueriesResolved
-    (self : TopLevelCircuit F Config PublicInput) :
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
     ∀ expression ∈ flatGates self.constraintSystem,
       (substSelectorMap self.selectorMap.lookup expression).QueriesResolved
         self.gateQueryState := by
@@ -2155,7 +2591,8 @@ theorem gateQueriesResolved
 /-- Every selector-compressed lookup expression resolves against the same authoritative
 query layout. -/
 theorem lookupQueriesResolved
-    (self : TopLevelCircuit F Config PublicInput) :
+    (self : TopLevelCircuit F Config PublicInput)
+    [TopLevelShape self] :
     ∀ argument ∈ self.constraintSystem.lookups,
       (argument.inputs.map
         (substSelectorMap self.selectorMap.lookup)).Forall

@@ -521,7 +521,7 @@ def mainCircuitSynthesisSummary (cfg : Config) :
                   .column .advice cfg.addConfig.xP.index,
                   .column .advice cfg.addConfig.yP.index,
                   .selector cfg.qMulLsb.index]
-                (offLsb + 2) 0).combine
+                (offLsb + 2) 0 [(cfg.qMulLsb.index, offLsb)]).combine
               (Add.synthesisSummary cfg.addConfig offLsb))))))
 
 @[synthesis_summary_norm]
@@ -564,6 +564,8 @@ theorem mainCircuitSynthesisSummary_eq (cfg : Config)
       synthesis_summary_norm, configure_selector_norm]
   · simp only [mainCircuitSynthesisSummary, circuit_norm,
       synthesis_summary_norm, configure_selector_norm]
+  · simp only [mainCircuitSynthesisSummary, circuit_norm,
+      synthesis_summary_norm, configure_selector_norm, lsbGate]
 
 def mainKeygenRequirements : KeygenRequirements Fp Config (Var Inputs Fp) where
   configLawful cfg :=

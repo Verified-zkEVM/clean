@@ -385,6 +385,9 @@ def roundColumns (cfg : Config) : List FloorPlanner.RegionColumn :=
 def roundSynthesisSummary (cfg : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
   .ofColumns (roundColumns cfg) (offset + 3) 0
+    [(cfg.qDecompose.index, offset + 1),
+      (cfg.addConfig.qAdd.index, offset),
+      (cfg.addConfig.qAdd.index, offset + 1)]
 
 def roundSynthesize (w iter : ℕ) (cfg : Config) (offset : ℕ)
     (input : Var RoundInputs Fp) : RegionCircuit Fp (Var RoundOutput Fp) := do
@@ -484,6 +487,8 @@ def round (w iter : ℕ) : FormalRegionCircuit Fp Config Config RoundInputs Roun
             Add.synthesisSummary, circuit_norm, synthesis_summary_norm]
           omega
         · simp only [roundSynthesize, roundSynthesisSummary, roundColumns,
+            Add.synthesisSummary, circuit_norm, synthesis_summary_norm]
+        · simp only [roundSynthesisSummary, roundColumns, roundSynthesize,
             Add.synthesisSummary, circuit_norm, synthesis_summary_norm]
         · simp only [roundSynthesisSummary, roundColumns, roundSynthesize,
             Add.synthesisSummary, circuit_norm, synthesis_summary_norm]
@@ -858,7 +863,11 @@ private theorem roundFoldAcc_columns (w offset : ℕ) (cfg : Config)
 
 def roundsSynthesisSummary (numBits : ℕ) (cfg : Config)
     (offset : ℕ) : FloorPlanner.RegionSynthesisSummary :=
-  .repeatColumns (roundColumns cfg) offset 2 3 0 numBits
+  .repeatColumnsWithSelectorPattern
+    [(cfg.qDecompose.index, 1),
+      (cfg.addConfig.qAdd.index, 0),
+      (cfg.addConfig.qAdd.index, 1)]
+    (roundColumns cfg) offset 2 3 0 numBits
 
 @[synthesis_summary_norm]
 theorem foldr_roundSynthesisSummary_eq (numBits : ℕ) (cfg : Config)
@@ -868,8 +877,11 @@ theorem foldr_roundSynthesisSummary_eq (numBits : ℕ) (cfg : Config)
         FloorPlanner.RegionSynthesisSummary.combine {} =
       roundsSynthesisSummary numBits cfg offset := by
   simpa [roundSynthesisSummary, Nat.mul_comm, Nat.add_assoc] using
-    (FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns
-      (roundColumns cfg) offset 2 3 0 numBits)
+    (FloorPlanner.RegionSynthesisSummary.foldr_ofColumnsWithSelectorPattern_eq_repeatColumnsWithSelectorPattern
+        [(cfg.qDecompose.index, 1),
+          (cfg.addConfig.qAdd.index, 0),
+          (cfg.addConfig.qAdd.index, 1)]
+        (roundColumns cfg) offset 2 3 0 numBits)
 
 def circuitSynthesisSummary (numBits : ℕ) (cfg : Config)
     (offset : ℕ) : FloorPlanner.RegionSynthesisSummary :=
@@ -900,6 +912,7 @@ theorem circuitSynthesisSummary_hasNoFixedColumns
   simp only [circuitSynthesisSummary, roundsSynthesisSummary,
     FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_combine,
     FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_repeatColumnsWithSelectorPattern,
     FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_repeatColumns]
   simp [roundColumns]
 

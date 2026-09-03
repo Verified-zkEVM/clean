@@ -215,6 +215,13 @@ theorem constants_run_nodup
     (program.run initial).2.constants.Nodup := by
   exact nodup_appendFirstEncounters _ _ hinitial
 
+/-- Configure interpretation retains each fixed query only at its first request. -/
+theorem fixedQueries_run_nodup
+    (program : Configure F α) (initial : ConstraintSystem F)
+    (hinitial : initial.fixedQueries.Nodup) :
+    (program.run initial).2.fixedQueries.Nodup := by
+  exact nodup_appendFirstEncounters _ _ hinitial
+
 instance : CoeFun (Configure F α)
     (fun _ => ConstraintSystem F → α × ConstraintSystem F) where
   coe := run

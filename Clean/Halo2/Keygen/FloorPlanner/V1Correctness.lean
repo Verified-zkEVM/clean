@@ -550,6 +550,79 @@ theorem slotSummaryStateRepeated_single_eq
           omega,
         hrecursive.2⟩
 
+/-- Consecutive start rows for a compact run of equal-height regions. -/
+def repeatedStarts (start length : ℕ) : ℕ → List ℕ
+  | 0 => []
+  | count + 1 => start :: repeatedStarts (start + length) length count
+
+/-- Exact start rows and final allocation view for a compact run of one summary.
+This is the list-valued companion of `slotSummaryStateRepeated_single_eq`. -/
+theorem slotShapeSummariesRepeated_single_eq
+    (count : ℕ) (summary : RegionShapeSummary)
+    (allocations : CircuitAllocations)
+    (view : AllocationView) (start : ℕ)
+    (hrepresents : view.Represents allocations)
+    (hvalid : view.Valid)
+    (hnodup : summary.columns.Nodup)
+    (hcolumns : summary.columns ≠ [])
+    (hlength : 0 < summary.rowCount)
+    (hleast : view.LeastFit (sortRegionColumns summary.columns)
+      summary.rowCount start)
+    (hfree : view.FitsColumns (sortRegionColumns summary.columns) start
+      ((count + 1) * summary.rowCount)) :
+    let result := slotShapeSummariesRepeated (count + 1) [summary] allocations
+    result.1 = repeatedStarts start summary.rowCount (count + 1) ∧
+      (view.insertRepeated (sortRegionColumns summary.columns) start
+        summary.rowCount (count + 1)).Represents result.2 := by
+  induction count generalizing allocations view start with
+  | zero =>
+      obtain ⟨updated, hplaced, hupdatedRepresents⟩ :=
+        view.placeSummary_eq_of_leastFit summary allocations start
+          hrepresents hvalid hnodup hlength hleast
+      simp only [slotShapeSummariesRepeated, slotShapeSummariesFrom,
+        hplaced, Option.getD_some, repeatedStarts,
+        AllocationView.insertRepeated]
+      exact ⟨rfl, hupdatedRepresents⟩
+  | succ count inductionHypothesis =>
+      let columns := sortRegionColumns summary.columns
+      have hsortedColumns : columns ≠ [] := by
+        intro hempty
+        have hlengths := (sortRegionColumns_perm summary.columns).length_eq
+        have : summary.columns.length = 0 := by
+          simpa [columns, hempty] using hlengths.symm
+        exact hcolumns (List.eq_nil_of_length_eq_zero this)
+      obtain ⟨updated, hplaced, hupdatedRepresents⟩ :=
+        view.placeSummary_eq_of_leastFit summary allocations start
+          hrepresents hvalid hnodup hlength hleast
+      have hupdatedValid :
+          (view.insert columns start summary.rowCount).Valid := by
+        have hactualValid : allocations.Valid := hrepresents.valid hvalid
+        have hsummaryWellFormed : summary.WellFormed :=
+          ⟨hnodup, fun _ => hlength⟩
+        have hupdatedValidActual : updated.Valid := by
+          have hresult := placeSummary_valid summary allocations hactualValid
+            hsummaryWellFormed
+          rw [hplaced] at hresult
+          exact hresult
+        intro column
+        rw [← hupdatedRepresents column]
+        exact hupdatedValidActual column
+      have hnextLeast := view.leastFit_insert_next hsortedColumns hlength
+        hleast hfree
+      have htailFree := view.fitsColumns_insert_tail hfree
+      have hrecursive := inductionHypothesis updated
+        (view.insert columns start summary.rowCount)
+        (start + summary.rowCount) hupdatedRepresents hupdatedValid
+        hnextLeast htailFree
+      rw [show count.succ + 1 = (count + 1) + 1 by omega,
+        slotShapeSummariesRepeated]
+      simp only [slotShapeSummariesFrom, hplaced, Option.getD_some,
+        List.singleton_append, repeatedStarts,
+        AllocationView.insertRepeated]
+      constructor
+      · exact congrArg (start :: ·) hrecursive.1
+      · exact hrecursive.2
+
 /-- Endpoint-only form of `slotSummaryStateRepeated_single_eq`. -/
 theorem slotSummaryStateRepeated_single_fst_eq
     (count : ℕ) (summary : RegionShapeSummary)
@@ -586,12 +659,29 @@ def blocks (trace : List PlannedSummaryBlock) :
     List (ℕ × RegionShapeSummary) :=
   trace.map fun block => (block.count, block.summary)
 
+/-- Exact start sequence represented by a compact planned trace. -/
+def starts (trace : List PlannedSummaryBlock) : List ℕ :=
+  trace.flatMap fun block =>
+    repeatedStarts block.start block.summary.rowCount block.count
+
 def endpointFrom (initial : ℕ) : List PlannedSummaryBlock → ℕ
   | [] => initial
   | block :: rest =>
       endpointFrom
         (max initial (block.start + block.count * block.summary.rowCount))
         rest
+
+/-- The endpoint computation observes only the end row of each planned block. -/
+theorem endpointFrom_eq_foldl_max (initial : ℕ)
+    (trace : List PlannedSummaryBlock) :
+    endpointFrom initial trace =
+      (trace.map fun block =>
+        block.start + block.count * block.summary.rowCount).foldl max initial := by
+  induction trace generalizing initial with
+  | nil => rfl
+  | cons block rest inductionHypothesis =>
+      simp only [endpointFrom, List.map_cons, List.foldl_cons]
+      exact inductionHypothesis _
 
 def finalView (initial : AllocationView) :
     List PlannedSummaryBlock → AllocationView
@@ -638,6 +728,36 @@ theorem lawful_append (initial : AllocationView)
       simp only [List.cons_append, Lawful, finalView,
         inductionHypothesis]
       tauto
+
+theorem Lawful.take
+    {initial : AllocationView} {trace : List PlannedSummaryBlock}
+    (hLawful : Lawful initial trace) (count : Nat) :
+    Lawful initial (trace.take count) := by
+  have hSplit : Lawful initial (trace.take count ++ trace.drop count) := by
+    rw [List.take_append_drop]
+    exact hLawful
+  exact (lawful_append initial (trace.take count) (trace.drop count)).mp
+    hSplit |>.1
+
+theorem Lawful.drop
+    {initial : AllocationView} {trace : List PlannedSummaryBlock}
+    (hLawful : Lawful initial trace) (count : Nat) :
+    Lawful (finalView initial (trace.take count)) (trace.drop count) := by
+  have hSplit : Lawful initial (trace.take count ++ trace.drop count) := by
+    rw [List.take_append_drop]
+    exact hLawful
+  exact (lawful_append initial (trace.take count) (trace.drop count)).mp
+    hSplit |>.2
+
+theorem Lawful.counts
+    {initial : AllocationView} {trace : List PlannedSummaryBlock}
+    (hLawful : Lawful initial trace) :
+    trace.Forall fun block => 0 < block.count := by
+  induction trace generalizing initial with
+  | nil => simp
+  | cons block rest inductionHypothesis =>
+      rw [List.forall_cons]
+      exact ⟨hLawful.1, inductionHypothesis hLawful.2.2.2.2.2⟩
 
 theorem Lawful.finalView_valid
     {initial : AllocationView} {trace : List PlannedSummaryBlock}
@@ -712,6 +832,65 @@ theorem traceLawfulAfter_append
       simp only [List.cons_append, TraceLawfulAfter,
         inductionHypothesis, List.append_assoc]
       tauto
+
+/-- Any prefix of a lawful compact trace is lawful after the same placed
+prefix. -/
+theorem traceLawfulAfter_take
+    {placed trace : List PlannedSummaryBlock}
+    (hlawful : TraceLawfulAfter placed trace) (count : Nat) :
+    TraceLawfulAfter placed (trace.take count) := by
+  induction trace generalizing placed count with
+  | nil => simp [TraceLawfulAfter]
+  | cons block rest inductionHypothesis =>
+      cases count with
+      | zero => simp [TraceLawfulAfter]
+      | succ count =>
+          rcases hlawful with
+            ⟨hcount, hwellFormed, hcolumns, hfits, hleast, hrest⟩
+          simp only [List.take_succ_cons, TraceLawfulAfter]
+          exact ⟨hcount, hwellFormed, hcolumns, hfits, hleast,
+            inductionHypothesis hrest count⟩
+
+/-- A compact trace is lawful when every entry is lawful after the exact prefix
+preceding it. This lets large concrete traces certify bounded groups of entries
+independently, without repeatedly normalizing the entire suffix. -/
+theorem traceLawfulAfter_of_steps
+    (trace : List PlannedSummaryBlock)
+    (hsteps : ∀ index (hindex : index < trace.length),
+      TraceLawfulAfter (trace.take index)
+        [trace.get ⟨index, hindex⟩]) :
+    TraceLawfulAfter [] trace := by
+  have hprefix : ∀ count, count ≤ trace.length →
+      TraceLawfulAfter [] (trace.take count) := by
+    intro count hcount
+    induction count with
+    | zero => simp [TraceLawfulAfter]
+    | succ count inductionHypothesis =>
+        have hindex : count < trace.length := by omega
+        rw [List.take_add_one, traceLawfulAfter_append]
+        refine ⟨inductionHypothesis (by omega), ?_⟩
+        simpa [hindex] using hsteps count hindex
+  simpa using hprefix trace.length (Nat.le_refl _)
+
+/-- Assemble a compact trace from one-step certificates after an existing
+planned prefix. -/
+theorem traceLawfulAfter_of_steps_after
+    (placed trace : List PlannedSummaryBlock)
+    (hsteps : ∀ index (hindex : index < trace.length),
+      TraceLawfulAfter (placed ++ trace.take index)
+        [trace.get ⟨index, hindex⟩]) :
+    TraceLawfulAfter placed trace := by
+  have hprefix : ∀ count, count ≤ trace.length →
+      TraceLawfulAfter placed (trace.take count) := by
+    intro count hcount
+    induction count with
+    | zero => simp [TraceLawfulAfter]
+    | succ count inductionHypothesis =>
+        have hindex : count < trace.length := by omega
+        rw [List.take_add_one, traceLawfulAfter_append]
+        refine ⟨inductionHypothesis (by omega), ?_⟩
+        simpa [List.append_assoc, hindex] using hsteps count hindex
+  simpa using hprefix trace.length (Nat.le_refl _)
 
 private theorem fitsColumns_finalView_iff_fitsAfterAt
     (initial : AllocationView) (placed : List PlannedSummaryBlock)
@@ -809,6 +988,46 @@ theorem slotSummaryBlocksState_eq
       simp only [blocks, List.map_cons, slotSummaryBlocksState,
         endpointFrom, finalView]
       exact ⟨by rw [← hfirst.1]; exact htail.1, htail.2⟩
+
+/-- A lawful compact trace computes both the exact start sequence and final
+allocation view of its expanded summary blocks. -/
+theorem slotShapeSummaryBlocks_eq
+    (trace : List PlannedSummaryBlock)
+    (allocations : CircuitAllocations) (view : AllocationView)
+    (hrepresents : view.Represents allocations)
+    (hvalid : view.Valid) (hlawful : Lawful view trace) :
+    let result := slotShapeSummaryBlocks (blocks trace) allocations
+    result.1 = starts trace ∧
+      (finalView view trace).Represents result.2 := by
+  induction trace generalizing allocations view with
+  | nil => exact ⟨rfl, hrepresents⟩
+  | cons block rest inductionHypothesis =>
+      rcases block with ⟨blockCount, summary, start⟩
+      rcases hlawful with
+        ⟨hcount, hwellFormed, hcolumns, hleast, hfits, hrest⟩
+      obtain ⟨count, rfl⟩ := Nat.exists_eq_succ_of_ne_zero
+        (Nat.ne_of_gt hcount)
+      have hfirst := slotShapeSummariesRepeated_single_eq count summary
+        allocations view start hrepresents hvalid hwellFormed.1 hcolumns
+        (hwellFormed.2 hcolumns) hleast hfits
+      have hnextValid := view.insertRepeated_valid count hvalid hfits
+        (hwellFormed.2 hcolumns)
+      have htail := inductionHypothesis
+        (slotShapeSummariesRepeated (count + 1) [summary] allocations).2
+        (view.insertRepeated (sortRegionColumns summary.columns)
+          start summary.rowCount (count + 1))
+        hfirst.2 hnextValid hrest
+      have htailStarts :
+          (slotShapeSummaryBlocks
+            (rest.map fun block => (block.count, block.summary))
+            (slotShapeSummariesRepeated (count + 1) [summary]
+              allocations).2).1 =
+            rest.flatMap fun block => repeatedStarts block.start
+              block.summary.rowCount block.count := by
+        simpa only [blocks, starts] using htail.1
+      simp only [blocks, List.map_cons, slotShapeSummaryBlocks,
+        starts, List.flatMap_cons, finalView]
+      exact ⟨by rw [hfirst.1, htailStarts], htail.2⟩
 
 /-- Two lawful compact traces with the same endpoint and final allocation view
 produce extensionally equivalent planner states. -/
@@ -2099,12 +2318,65 @@ theorem activation_row_lt_placementEnd
       constrainInstance =>
       simp at hmapped
 
-/-- The exact index-free summary order consumed by V1 after its legacy pdqsort. -/
-def sortedSummaryOrder (ops : Operations F) : List RegionShapeSummary :=
+/-- The exact indexed region order consumed by V1 after its legacy pdqsort. -/
+def sortedRegionOrder (ops : Operations F) : List RegionShape :=
   let shapes := measureRegions ops
   (Pdqsort.quicksort shapes.toArray
-    (fun left right => left.key < right.key)).reverse.toList.map
-      RegionShape.toSummary
+    (fun left right => left.key < right.key)).reverse.toList
+
+/-- Original region indices in V1's consensus sort order. -/
+def sortedRegionIndices (ops : Operations F) : List Nat :=
+  (sortedRegionOrder ops).map RegionShape.index
+
+/-- The exact index-free summary order consumed by V1 after its legacy pdqsort. -/
+def sortedSummaryOrder (ops : Operations F) : List RegionShapeSummary :=
+  (sortedRegionOrder ops).map RegionShape.toSummary
+
+/-- The consensus-sorted summaries are determined by their original region
+indices and the reduced synthesis summary. -/
+theorem sortedSummaryOrder_eq_map_getD (ops : Operations F) :
+    sortedSummaryOrder ops =
+      (sortedRegionIndices ops).map fun index =>
+        (synthesisSummary ops).regionShapes.getD index
+          { columns := [], rowCount := 0 } := by
+  let shapes := measureRegions ops
+  let sorted := (Pdqsort.quicksort shapes.toArray
+    (fun left right => left.key < right.key)).reverse.toList
+  have hperm : sorted.Perm shapes := by
+    have hquick := Pdqsort.quicksort_perm shapes.toArray
+      (fun left right => left.key < right.key)
+    simpa only [sorted, shapes, Array.toList_reverse] using
+      (List.reverse_perm _).trans hquick
+  have hlength : shapes.length = ops.regionCount := by
+    have h := congrArg List.length (measureRegions_indices_eq_range ops)
+    simpa only [shapes, List.length_map, List.length_range] using h
+  have hindices : shapes.map RegionShape.index =
+      List.range shapes.length := by
+    simpa only [shapes, hlength] using measureRegions_indices_eq_range ops
+  have hsummaries : shapes.map RegionShape.toSummary =
+      (synthesisSummary ops).regionShapes := by
+    simp only [shapes, measureRegions_eq_synthesisSummary_regionShapes,
+      indexRegionSummaries_toSummary]
+  unfold sortedSummaryOrder sortedRegionOrder sortedRegionIndices
+  change sorted.map RegionShape.toSummary = _
+  rw [List.map_map]
+  apply List.map_congr_left
+  intro shape hshape
+  simp only [Function.comp_apply]
+  have hmember : shape ∈ shapes := hperm.mem_iff.mp hshape
+  have hget := getD_eq_of_mem_of_map_eq_range RegionShape.index shapes
+    { index := 0, columns := [], rowCount := 0 } shape hindices hmember
+  rw [← hsummaries]
+  calc
+    shape.toSummary =
+        (shapes.getD shape.index
+          { index := 0, columns := [], rowCount := 0 }).toSummary :=
+      congrArg RegionShape.toSummary hget.symm
+    _ = (shapes.map RegionShape.toSummary).getD shape.index
+        { columns := [], rowCount := 0 } := by
+      exact (List.getD_map shapes
+        { index := 0, columns := [], rowCount := 0 }
+        RegionShape.toSummary).symm
 
 theorem sortedSummaryOrder_perm_synthesisSummary (ops : Operations F) :
     (sortedSummaryOrder ops).Perm
@@ -2125,8 +2397,53 @@ theorem sortedSummaryOrder_perm_synthesisSummary (ops : Operations F) :
     rw [measureRegions_eq_synthesisSummary_regionShapes,
       indexRegionSummaries_toSummary]
   rw [← hforget]
-  simpa only [sortedSummaryOrder, shapes, sorted,
+  simpa only [sortedSummaryOrder, sortedRegionOrder, shapes, sorted,
     Array.toList_reverse] using hsummaries
+
+/-- Erasing selector columns preserves every start chosen in consensus sort
+order when each selector is anchored by a physical column. -/
+theorem sortedRegionStarts_eq_slotShapeSummariesFrom_withoutSelectors
+    (ops : Operations F) (anchor : Nat → RegionColumn)
+    (hanchors : SelectorAnchoredBy
+      (synthesisSummary ops).regionShapes anchor) :
+    let shapes := measureRegions ops
+    let sorted := (Pdqsort.quicksort shapes.toArray
+      (fun left right => left.key < right.key)).reverse.toList
+    (slotIn sorted).1.map (·.2) =
+      (slotShapeSummariesFrom
+        ((sortedSummaryOrder ops).map
+          RegionShapeSummary.withoutSelectors) ∅).1 := by
+  let shapes := measureRegions ops
+  let sorted := (Pdqsort.quicksort shapes.toArray
+    (fun left right => left.key < right.key)).reverse.toList
+  have hperm : (sorted.map RegionShape.toSummary).Perm
+      (synthesisSummary ops).regionShapes := by
+    simpa only [sorted, shapes, sortedSummaryOrder, sortedRegionOrder] using
+      sortedSummaryOrder_perm_synthesisSummary ops
+  have hwellFormed : (sorted.map RegionShape.toSummary).Forall
+      RegionShapeSummary.WellFormed := by
+    rw [List.forall_iff_forall_mem]
+    intro summary hsummary
+    exact List.forall_iff_forall_mem.mp
+      (synthesisSummary_regionShapes_wellFormed ops) summary
+      (hperm.mem_iff.mp hsummary)
+  have hsortedAnchors : SelectorAnchoredBy
+      (sorted.map RegionShape.toSummary) anchor := by
+    rw [SelectorAnchoredBy, List.forall_iff_forall_mem]
+    intro summary hsummary
+    exact List.forall_iff_forall_mem.mp hanchors summary
+      (hperm.mem_iff.mp hsummary)
+  have hforget := congrArg Prod.fst
+    (slotInFrom_forgetIndices sorted (∅ : CircuitAllocations))
+  have hphysical := slotShapeSummariesFrom_eq_withoutSelectors
+    (sorted.map RegionShape.toSummary)
+    (∅ : CircuitAllocations) (∅ : CircuitAllocations)
+    hwellFormed CircuitAllocations.Valid.empty
+    CircuitAllocations.Valid.empty
+    (CircuitAllocations.PhysicalEquivalent.refl ∅)
+    (SelectorAllocationsDominatedBy.empty anchor)
+    hsortedAnchors
+  exact hforget.trans hphysical.1
 
 /-- V1's placement endpoint is exactly the result of running the reduced summary
 planner in its consensus sort order. -/
@@ -2147,7 +2464,7 @@ theorem placementEnd_eq_slotSummaryEndFrom (ops : Operations F) :
       (fun left right => left.key < right.key)).reverse.toList
   have hsummary := slottedEndFrom_eq_slottedSummaryEndFrom
     sortedDesc (∅ : CircuitAllocations)
-  simpa only [sortedSummaryOrder, sortedDesc, slotIn,
+  simpa only [sortedSummaryOrder, sortedRegionOrder, sortedDesc, slotIn,
     slotSummaryEndFrom, slotSummaryEndFromWith] using hsummary
 
 /-- When virtual selectors are anchored by physical columns, the exact V1

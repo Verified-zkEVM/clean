@@ -2923,6 +2923,28 @@ theorem RegionShapeSummary.placementEquivalent_iff_normalized_eq
     injection heq with hcolumns hrows
     exact ⟨hcolumns, hrows⟩
 
+/-- Equality of canonical physical summaries yields pointwise placement
+equivalence without requiring a decidability instance for `List.Forall₂`. -/
+theorem RegionShapeSummary.forall₂_placementEquivalent_of_map_normalized_eq
+    {left right : List RegionShapeSummary}
+    (hequal : left.map RegionShapeSummary.normalized =
+      right.map RegionShapeSummary.normalized) :
+    List.Forall₂ RegionShapeSummary.PlacementEquivalent left right := by
+  induction left generalizing right with
+  | nil =>
+      cases right with
+      | nil => exact List.Forall₂.nil
+      | cons head tail => simp at hequal
+  | cons head tail inductionHypothesis =>
+      cases right with
+      | nil => simp at hequal
+      | cons other rest =>
+          simp only [List.map_cons, List.cons.injEq] at hequal
+          exact List.Forall₂.cons
+            (RegionShapeSummary.placementEquivalent_iff_normalized_eq.mpr
+              hequal.1)
+            (inductionHypothesis hequal.2)
+
 theorem RegionShapeSummary.normalized_key_eq
     (summary : RegionShapeSummary) :
     summary.normalized.key = summary.key := by
@@ -3061,6 +3083,21 @@ theorem slotShapeSummariesFrom_append
       simp only [List.cons_append, slotShapeSummariesFrom, hfirst]
       rw [inductionHypothesis]
 
+/-- Empty zero-row summaries contribute zero starts and leave allocations
+unchanged. -/
+theorem slotShapeSummariesFrom_replicate_empty
+    (count : Nat) (allocations : CircuitAllocations) :
+    slotShapeSummariesFrom
+      (List.replicate count { columns := [], rowCount := 0 }) allocations =
+        (List.replicate count 0, allocations) := by
+  induction count generalizing allocations with
+  | zero => rfl
+  | succ count inductionHypothesis =>
+      rw [List.replicate_succ]
+      simp [slotShapeSummariesFrom, placeSummary, sortRegionColumns,
+        firstFit, inductionHypothesis]
+      rw [List.replicate_succ]
+
 /-- Replacing every reduced region shape by a placement-equivalent shape preserves
 the complete index-free planner result. This is the compositional boundary used by
 concrete circuits to publish canonical physical summaries without preserving the
@@ -3104,6 +3141,34 @@ theorem slotShapeSummariesFrom_flatten_replicate
       rw [List.replicate_succ, List.flatten_cons,
         slotShapeSummariesFrom_append]
       simp only [slotShapeSummariesRepeated]
+      rw [inductionHypothesis]
+
+/-- Evaluate repeated singleton-summary blocks while retaining every chosen start. -/
+def slotShapeSummaryBlocks (blocks : List (ℕ × RegionShapeSummary))
+    (allocations : CircuitAllocations) : List ℕ × CircuitAllocations :=
+  match blocks with
+  | [] => ([], allocations)
+  | (count, summary) :: rest =>
+      let first := slotShapeSummariesRepeated count [summary] allocations
+      let tail := slotShapeSummaryBlocks rest first.2
+      (first.1 ++ tail.1, tail.2)
+
+/-- A flat list of repeated summaries and its compact block evaluator agree exactly. -/
+theorem slotShapeSummariesFrom_flatMap_replicate
+    (blocks : List (ℕ × RegionShapeSummary))
+    (allocations : CircuitAllocations) :
+    slotShapeSummariesFrom
+        (blocks.flatMap fun block => List.replicate block.1 block.2)
+        allocations =
+      slotShapeSummaryBlocks blocks allocations := by
+  induction blocks generalizing allocations with
+  | nil => rfl
+  | cons block rest inductionHypothesis =>
+      rcases block with ⟨count, summary⟩
+      rw [List.flatMap_cons, ← List.flatten_replicate_singleton,
+        slotShapeSummariesFrom_append,
+        slotShapeSummariesFrom_flatten_replicate]
+      simp only [slotShapeSummaryBlocks]
       rw [inductionHypothesis]
 
 /-- Extensionally equal allocation states produce the same starts and remain

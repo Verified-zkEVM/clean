@@ -246,7 +246,7 @@ theorem mem_equalityColumns_of_mem_permutationColumns
 /-- Reduced two-row footprint of the decomposition gate. -/
 def synthesisSummary (cfg : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  FloorPlanner.RegionSynthesisSummary.ofColumns
+  .ofColumns
     [.selector cfg.qDecompose.index,
       .column .advice cfg.lWhole.index,
       .column .advice cfg.aWhole.index,
@@ -258,7 +258,7 @@ def synthesisSummary (cfg : Config) (offset : ℕ) :
       .column .advice cfg.z1B.index,
       .column .advice cfg.b1.index,
       .column .advice cfg.b2.index]
-    (offset + 2) 1
+    (offset + 2) 1 [(cfg.qDecompose.index, offset)]
 
 @[synthesis_summary_norm]
 theorem synthesisSummary_lookupActivationCount (cfg : Config) (offset : ℕ) :
@@ -295,6 +295,8 @@ theorem synthesisSummary_eq (cfg : Config) (l : Fp)
       FloorPlanner.RegionSynthesisSummary.ofColumns_instanceRowExtent]
   · simp only [body, circuit_norm, synthesis_summary_norm,
       FloorPlanner.RegionSynthesisSummary.ofColumns_lookupActivationCount]
+  · simp only [body, circuit_norm, synthesis_summary_norm,
+      decomposeGate]
 
 @[implicit_reducible]
 def elaborated (l : Fp) :
@@ -312,8 +314,38 @@ def elaborated (l : Fp) :
     synthesisSummary_eq := fun cfg offset input self =>
       synthesisSummary_eq cfg l input offset self
     registered := by keygen_registration [body, permutationColumns]
-    copyCellsAssigned := by keygen_registration [body, permutationColumns]
-    lookupActivationsWellFormed := by keygen_registration [body] }
+    copyCellsAssigned := by
+      intro configInput counts hconfig offset input region
+      simp only [body, circuit_norm,
+        RegionOperations.CopyCellsAssigned,
+        RegionOperations.copyCellsAssignedFrom_assignAdvice_iff,
+        RegionOperations.copyCellsAssignedFrom_constrainEqual_iff,
+        RegionOperations.copyCellsAssignedFrom_constrainConstant_iff,
+        RegionOperations.copyCellsAssignedFrom_enableGate_iff,
+        RegionOperations.copyCellsAssignedFrom_nil_iff, List.mem_cons,
+        List.not_mem_nil, or_false]
+    lookupActivationsWellFormed := by
+      intro cfg offset input region
+      simp only [body, circuit_norm,
+        RegionOperations.LookupActivationsWellFormed,
+        RegionOperation.LookupActivationWellFormed, List.forall_cons]
+    lookupSelectorsAnchoredBy_of_registered := by
+      intro configInput counts hconfig offset input region anchor hanchor
+        hregistered
+      apply RegionOperations.LookupSelectorsAnchoredBy.of_forall_isNotLookup
+      simp only [body, circuit_norm, RegionOperation.IsNotLookup]
+    lookupSelectorAssignmentsAgree_of_registered := by
+      intro configInput counts hconfig offset input region
+      dsimp only
+      intro _hregistered
+      apply RegionOperations.lookupSelectorAssignmentsAgree_of_forall_isNotLookup
+      simp only [body, circuit_norm, RegionOperation.IsNotLookup]
+    fixedAssignmentsAgree := by
+      intro configInput counts hconfig offset input region
+      apply RegionOperations.HasNoFixedAssignments.fixedAssignmentsAgree
+      simp only [body, circuit_norm,
+        RegionOperations.HasNoFixedAssignments,
+        RegionOperation.HasNoFixedAssignment, List.forall_cons, and_self] }
 
 /-- The decomposition-gate gadget. Pure assertion (`unit` output). Soundness: the four polys imply
 `GateSpec`; completeness: `GateSpec` (the honest-caller precondition, like `MulOverflow`) implies
@@ -2919,7 +2951,7 @@ def Layer.synthesisSummary (ccfg : CondSwap.Config) (cfg : Config)
           .column .advice ccfg.swap.index,
           .column .advice ccfg.aSwapped.index,
           .column .advice ccfg.bSwapped.index]
-        1 0)).combine
+        1 0 [(ccfg.qSwap.index, 0)])).combine
     (HashLayer.synthesisSummary cfg lookupCfg)
 
 @[synthesis_summary_norm]

@@ -233,7 +233,8 @@ def body (W numWindows : ℕ) (cfg : Config) (offset : ℕ)
 
 def enableLoopSynthesisSummary (cfg : Config)
     (offset numWindows : ℕ) : FloorPlanner.RegionSynthesisSummary :=
-  .repeatColumns [.selector cfg.qRangeCheck.index]
+  .repeatColumnsWithSelector cfg.qRangeCheck.index
+    [.selector cfg.qRangeCheck.index]
     offset 1 1 0 numWindows
 
 theorem enableLoopSynthesisSummary_eq (W : ℕ) (cfg : Config)
@@ -244,7 +245,7 @@ theorem enableLoopSynthesisSummary_eq (W : ℕ) (cfg : Config)
   symm
   unfold enableLoop enableLoopSynthesisSummary
   rw [RegionCircuit.forRange'_regionSynthesisSummary]
-  rw [← FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns]
+  rw [← FloorPlanner.RegionSynthesisSummary.foldr_ofColumnsWithSelector_eq_repeatColumnsWithSelector]
   apply congrArg (List.foldr FloorPlanner.RegionSynthesisSummary.combine {})
   apply congrArg List.ofFn
   funext i
@@ -274,6 +275,7 @@ theorem assignLoopSynthesisSummary_eq (W : ℕ) (cfg : Config)
       FloorPlanner.RegionSynthesisSummary.ofColumns_rowCount, Nat.mul_one]
   · simp only [circuit_norm,
       FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount]
+  · simp only [circuit_norm, synthesis_summary_norm]
   · simp only [circuit_norm, synthesis_summary_norm]
   · simp only [circuit_norm, synthesis_summary_norm]
 
@@ -309,6 +311,7 @@ theorem copyDecomposeSynthesisSummary_constantSiteCount
     FloorPlanner.RegionSynthesisSummary.combine_constantSiteCount,
     FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount,
     FloorPlanner.RegionSynthesisSummary.repeatColumns_constantSiteCount,
+    FloorPlanner.RegionSynthesisSummary.repeatColumnsWithSelector_constantSiteCount,
     enableLoopSynthesisSummary, assignLoopSynthesisSummary, Nat.mul_zero,
     Nat.zero_add]
 
@@ -450,6 +453,8 @@ def elaborated (W numWindows : ℕ) :
       · simp only [body, circuit_norm, enableLoopSynthesisSummary_eq,
           assignLoopSynthesisSummary_eq,
           FloorPlanner.RegionSynthesisSummary.ofColumns_constantSiteCount]
+      · simp only [body, circuit_norm, enableLoopSynthesisSummary_eq,
+          assignLoopSynthesisSummary_eq, synthesis_summary_norm]
       · simp only [body, circuit_norm, enableLoopSynthesisSummary_eq,
           assignLoopSynthesisSummary_eq, synthesis_summary_norm]
       · simp only [body, circuit_norm, enableLoopSynthesisSummary_eq,
@@ -607,6 +612,7 @@ theorem copyDecompose_synthesisSummary_hasNoFixedColumns
     FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_combine,
     FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns,
     FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_repeatColumns,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_repeatColumnsWithSelector,
     enableLoopSynthesisSummary, assignLoopSynthesisSummary]
   simp
 
