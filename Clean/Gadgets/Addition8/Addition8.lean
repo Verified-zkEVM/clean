@@ -28,11 +28,11 @@ instance elaborated : ElaboratedCircuit (F p) Addition8FullCarry.Inputs field ma
         rfl
       · simp only [circuit_norm]
 
-def Assumptions (input : Addition8FullCarry.Inputs (F p)) : Prop :=
-  input.x.val < 256 ∧ input.y.val < 256 ∧ IsBool input.carryIn
+def Assumptions : Addition8FullCarry.Inputs (F p) → Prop
+  | { x, y, carryIn } => x.val < 256 ∧ y.val < 256 ∧ IsBool carryIn
 
-def Spec (input : Addition8FullCarry.Inputs (F p)) (z : F p) : Prop :=
-  z.val = (input.x.val + input.y.val + input.carryIn.val) % 256
+def Spec : Addition8FullCarry.Inputs (F p) → F p → Prop
+  | { x, y, carryIn }, z => z.val = (x.val + y.val + carryIn.val) % 256
 
 -- The proofs are immediate from the bundled child circuit's semantic contract.
 theorem soundness : Soundness (F p) main Assumptions Spec := by
@@ -93,11 +93,11 @@ instance elaborated : ElaboratedCircuit (F p) Inputs field main := by
         rfl
       · simp only [circuit_norm]
 
-def Assumptions (input : Inputs (F p)) : Prop :=
-  input.x.val < 256 ∧ input.y.val < 256
+def Assumptions : Inputs (F p) → Prop
+  | { x, y } => x.val < 256 ∧ y.val < 256
 
-def Spec (input : Inputs (F p)) (z : F p) : Prop :=
-  z.val = (input.x.val + input.y.val) % 256
+def Spec : Inputs (F p) → F p → Prop
+  | { x, y }, z => z.val = (x.val + y.val) % 256
 
 -- The proofs are immediate from the bundled `Addition8Full` contract at carry-in zero.
 theorem soundness : Soundness (F p) main Assumptions Spec := by

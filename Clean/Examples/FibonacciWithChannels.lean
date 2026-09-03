@@ -77,9 +77,9 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
     -- emit to the add8 channel with multiplicity `m`
     Add8Channel.emit input.m (input.x, input.y, input.z)
 
-  ProverAssumptions := fun input _ _ =>
-    input.x.val < 256 ∧ input.y.val < 256 ∧ input.z.val < 256 ∧
-      input.z.val = (input.x.val + input.y.val) % 256
+  ProverAssumptions
+  | { x, y, z, m }, _, _ =>
+    x.val < 256 ∧ y.val < 256 ∧ z.val < 256 ∧ z.val = (x.val + y.val) % 256
   Spec _ _ _ := True
   channelsWithRequirements := [ Add8Channel.toRaw ]
 
@@ -159,19 +159,17 @@ def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
     FibonacciChannel.pushIf input.enabled (input.n + 1, input.y, z)
 
   -- expose interactions
-  exposedChannels input i₀ :=
+  exposedChannels
+  | { enabled, n, x, y }, i₀ =>
     let z := var ⟨ i₀ ⟩
-    expose FibonacciChannel [
-      pulledIf input.enabled (input.n, input.x, input.y),
-      pushedIf input.enabled (input.n + 1, input.y, z)
-    ]
+    expose FibonacciChannel [ pulledIf enabled (n, x, y), pushedIf enabled (n + 1, y, z) ]
   exposedChannels_eq input i₀ := by
     obtain ⟨enabled, n, x, y⟩ := input
     simp only [circuit_norm, FibonacciChannel, Add8Channel]
 
-  ProverAssumptions := fun input _ _ =>
-    input.enabled = 0 ∨ (input.enabled = 1 ∧
-      ∃ k : ℕ, (input.x.val, input.y.val) = fibonacci k ∧ k % p = input.n.val)
+  ProverAssumptions
+  | { enabled, n, x, y }, _, _ =>
+    enabled = 0 ∨ (enabled = 1 ∧ ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val)
   Spec _ _ _ := True
 
   channelsWithRequirements := [ FibonacciChannel.toRaw ]
@@ -215,13 +213,14 @@ def fibonacciVerifier : GeneralFormalCircuit (F p) fieldTriple unit where
     FibonacciChannel.pull input
     FibonacciChannel.push (0, 0, 1)
 
-  exposedChannels input _ :=
-    expose FibonacciChannel [ pulled input, pushed (0, 0, 1) ]
+  exposedChannels
+  | (n, x, y), _ =>
+    expose FibonacciChannel [ pulled (n, x, y), pushed (0, 0, 1) ]
 
-  ProverAssumptions := fun input _ _ =>
-    ∃ k : ℕ, (input.2.1.val, input.2.2.val) = fibonacci k ∧ k % p = input.1.val
-  Spec := fun input _ _ =>
-    ∃ k : ℕ, (input.2.1.val, input.2.2.val) = fibonacci k ∧ k % p = input.1.val
+  ProverAssumptions
+  | (n, x, y), _, _ => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
+  Spec
+  | (n, x, y), _, _ => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
   channelsWithRequirements := [ FibonacciChannel.toRaw ]
   soundness := by
     circuit_proof_start [FibonacciChannel]
