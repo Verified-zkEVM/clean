@@ -18,9 +18,6 @@ namespace Circomlib.Poseidon
 open Specs.Poseidon (F BN254_PRIME C_t2 M_t2)
 open Specs.PoseidonOptimized (P_t2 S_t2)
 
--- BN254 prime facts (BN254_PRIME is a well-known prime, proofs omitted for performance)
-instance : Fact (Nat.Prime BN254_PRIME) := ⟨by sorry⟩
-
 /-
 ============================================================================
 SIGMA (S-box): x^5
