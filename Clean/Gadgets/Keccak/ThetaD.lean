@@ -27,32 +27,8 @@ def main (row : Var KeccakRow (F p)) : Circuit (F p) (Var KeccakRow (F p)) := do
   return #v[c0, c1, c2, c3, c4]
 
 @[reducible]
-instance elaborated : ElaboratedCircuit (F p) KeccakRow KeccakRow main where
-  localLength _ := 120
-  output _ i₀ := #v[
-    varFromOffset U64 (i₀ + 16),
-    varFromOffset U64 (i₀ + 40),
-    varFromOffset U64 (i₀ + 64),
-    varFromOffset U64 (i₀ + 88),
-    varFromOffset U64 (i₀ + 112)
-  ]
-  localLength_eq := by
-    intro row i₀
-    simp only [main, Rotation64.circuit, Rotation64.elaborated,
-      Xor64.circuit, Xor64.elaborated, circuit_norm]
-  output_eq := by
-    intro row i₀
-    simp only [main, Rotation64.circuit, Rotation64.elaborated,
-      Xor64.circuit, Xor64.elaborated, circuit_norm]
-  subcircuitsConsistent := by
-    intro row i₀
-    simp only [main, Rotation64.circuit, Rotation64.elaborated,
-      Xor64.circuit, Xor64.elaborated, circuit_norm]
-    omega
-  channelsLawful := by
-    intro row i₀
-    simp only [main, Rotation64.circuit, Rotation64.elaborated,
-      Xor64.circuit, Xor64.elaborated, circuit_norm]
+instance elaborated : ElaboratedCircuit (F p) KeccakRow KeccakRow main := by
+  elaborate_circuit
 
 def Assumptions (state : KeccakRow (F p)) := state.Normalized
 
@@ -105,7 +81,7 @@ theorem completeness : Completeness (F p) main Assumptions := by
     add_assoc, seval, true_and]
 
 def circuit : FormalCircuit (F p) KeccakRow KeccakRow := {
-  main, elaborated, Assumptions, Spec, soundness, completeness
+  main, Assumptions, Spec, soundness, completeness
 }
 
 end Gadgets.Keccak256.ThetaD

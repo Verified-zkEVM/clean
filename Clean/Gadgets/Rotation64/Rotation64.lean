@@ -38,9 +38,7 @@ def output (offset : Fin 64) (i0 : ℕ) : U64 (Expression (F p)) :=
 
 @[reducible] instance elaborated (off : Fin 64) : ElaboratedCircuit (F p) U64 U64 (main off) := by
   elaborate_circuit_with {
-    localLength _ := 16
     output _inputs i0 := output off i0
-    channelsWithGuarantees := []
   }
 
 theorem soundness (offset : Fin 64) : Soundness (F p) (main offset) Assumptions (Spec offset) := by

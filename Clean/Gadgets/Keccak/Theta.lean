@@ -13,26 +13,8 @@ def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p))
   let d ← ThetaD.circuit c
   ThetaXor.circuit ⟨state, d⟩
 
-@[reducible] instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main where
-  localLength _ := 480
-  output _ i₀ := .mapFinRange 25 fun i => varFromOffset U64 (i₀ + 280 + i.val * 8)
-  localLength_eq := by
-    intro state i₀
-    simp only [main, ThetaC.circuit, ThetaC.elaborated, ThetaD.circuit, ThetaD.elaborated,
-      ThetaXor.circuit, ThetaXor.elaborated, circuit_norm]
-  output_eq := by
-    intro state i₀
-    simp only [main, ThetaC.circuit, ThetaC.elaborated, ThetaD.circuit, ThetaD.elaborated,
-      ThetaXor.circuit, ThetaXor.elaborated, circuit_norm]
-  subcircuitsConsistent := by
-    intro state i₀
-    simp only [main, ThetaC.circuit, ThetaC.elaborated, ThetaD.circuit, ThetaD.elaborated,
-      ThetaXor.circuit, ThetaXor.elaborated, circuit_norm]
-    omega
-  channelsLawful := by
-    intro state i₀
-    simp only [main, ThetaC.circuit, ThetaC.elaborated, ThetaD.circuit, ThetaD.elaborated,
-      ThetaXor.circuit, ThetaXor.elaborated, circuit_norm]
+@[reducible] instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main := by
+  elaborate_circuit
 
 def Assumptions (state : KeccakState (F p)) := state.Normalized
 
@@ -51,6 +33,6 @@ theorem completeness : Completeness (F p) main Assumptions := by
     ThetaXor.circuit, ThetaXor.Assumptions, ThetaXor.Spec]
 
 def circuit : FormalCircuit (F p) KeccakState KeccakState := {
-  main, elaborated, Assumptions, Spec, soundness, completeness
+  main, Assumptions, Spec, soundness, completeness
 }
 end Gadgets.Keccak256.Theta

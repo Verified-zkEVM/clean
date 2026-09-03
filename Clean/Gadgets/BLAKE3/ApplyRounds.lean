@@ -377,14 +377,13 @@ Initializes the BLAKE3 state vector from input variables.
 This combines the chaining value with IV constants and counter/flags.
 -/
 def initializeStateVector (input_var : Var Inputs (F p)) : Var BLAKE3State (F p) :=
+  let { chaining_value, block_words, counter_high, counter_low, block_len, flags } := input_var
   #v[
-    input_var.chaining_value[0], input_var.chaining_value[1],
-    input_var.chaining_value[2], input_var.chaining_value[3],
-    input_var.chaining_value[4], input_var.chaining_value[5],
-    input_var.chaining_value[6], input_var.chaining_value[7],
+    chaining_value[0], chaining_value[1], chaining_value[2], chaining_value[3],
+    chaining_value[4], chaining_value[5], chaining_value[6], chaining_value[7],
     const (U32.fromUInt32 iv[0]), const (U32.fromUInt32 iv[1]),
     const (U32.fromUInt32 iv[2]), const (U32.fromUInt32 iv[3]),
-    input_var.counter_low, input_var.counter_high, input_var.block_len, input_var.flags
+    counter_low, counter_high, block_len, flags
   ]
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var BLAKE3State (F p)) := do
