@@ -18,6 +18,16 @@ elab "unfold_formal_circuit_consts" : tactic => do
       catch _ =>
         pure ()
 
+open Lean Meta Elab Tactic in
+/-- Preserve a default proof's declared target even if its tactic script unfolds that target.
+Lean 4.33 checks the resulting auto-parameter proof at implicit transparency downstream. -/
+elab "preserve_tactic_target" : tactic => withMainContext do
+  let goal ← getMainGoal
+  let target ← goal.getType
+  let subgoal ← mkFreshExprMVar target
+  goal.assign (← mkAppOptM ``id #[target, subgoal])
+  replaceMainGoal [subgoal.mvarId!]
+
 @[explicit_circuit_unfold_type]
 structure FormalCircuitBase (F : Type) (Input Output : TypeMap)
     [FiniteField F] [CircuitType Input] [CircuitType Output] where
@@ -30,6 +40,7 @@ structure FormalCircuitBase (F : Type) (Input Output : TypeMap)
   exposedChannels : Var Input F → ℕ → List (ExposedChannel F) := fun _ _ => []
   exposedChannels_eq : ∀ input offset,
     ((main input).operations offset).ExposedChannelsLawful (exposedChannels input offset) := by
+    preserve_tactic_target
     try dsimp only [main]
     simp only [circuit_norm, seval]
     try first | ac_rfl | trivial | tauto
@@ -46,6 +57,7 @@ structure FormalCircuitBase (F : Type) (Input Output : TypeMap)
   requirementsChannelsLawful : ∀ input offset,
     ((main input).operations offset).RequirementsChannelsLawful
       elaborated.channelsWithGuarantees channelsWithRequirements := by
+    preserve_tactic_target
     try dsimp only [main]
     simp only [circuit_norm, seval]
     try (unfold_formal_circuit_consts; simp only [circuit_norm, seval])

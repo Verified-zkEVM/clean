@@ -4,67 +4,27 @@ import Clean.Gadgets.Boolean
 namespace Gadgets
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
-namespace Addition8Full
-
 /--
 Compute the 8-bit addition of two numbers with a carry-in bit.
 Returns the sum.
 -/
-def main (inputs : Var Addition8FullCarry.Inputs (F p)) : Circuit (F p) (Var field (F p)) := do
-  let output ← Addition8FullCarry.circuit inputs
-  return output.z
+def Addition8Full.circuit : FormalCircuit (F p) Addition8FullCarry.Inputs field where
+  main := fun inputs => do
+    let { z, .. } ← Addition8FullCarry.circuit inputs
+    return z
 
-@[reducible]
-instance elaborated : ElaboratedCircuit (F p) Addition8FullCarry.Inputs field main := by
-  elaborate_circuit_with {
-    localLength _ := 2
-    output _ i₀ := var ⟨i₀⟩
-  } using by
-    constructor
-    · intro input
-      rfl
-    · constructor
-      · intro input i₀
-        rfl
-      · simp only [circuit_norm]
+  Assumptions := fun { x, y, carryIn } =>
+    x.val < 256 ∧ y.val < 256 ∧ IsBool carryIn
 
-def Assumptions : Addition8FullCarry.Inputs (F p) → Prop
-  | { x, y, carryIn } => x.val < 256 ∧ y.val < 256 ∧ IsBool carryIn
+  Spec := fun { x, y, carryIn } z =>
+    z.val = (x.val + y.val + carryIn.val) % 256
 
-def Spec : Addition8FullCarry.Inputs (F p) → F p → Prop
-  | { x, y, carryIn }, z => z.val = (x.val + y.val + carryIn.val) % 256
-
--- The proofs are immediate from the bundled child circuit's semantic contract.
-theorem soundness : Soundness (F p) main Assumptions Spec := by
-  simp_all [circuit_norm, main, Assumptions, Spec,
+  -- the proofs are trivial since this just wraps `Addition8FullCarry`
+  soundness := by simp_all [circuit_norm,
     Addition8FullCarry.circuit, Addition8FullCarry.Assumptions, Addition8FullCarry.Spec]
 
-theorem completeness : Completeness (F p) main Assumptions := by
-  simp_all [circuit_norm, main, Assumptions,
+  completeness := by simp_all [circuit_norm,
     Addition8FullCarry.circuit, Addition8FullCarry.Assumptions]
-
-def circuit : FormalCircuit (F p) Addition8FullCarry.Inputs field where
-  main
-  elaborated
-  Assumptions
-  Spec
-  soundness
-  completeness
-
-@[circuit_norm ↓, explicit_circuit_norm]
-lemma elaborated_eq : (circuit (p:=p)).elaborated = elaborated := rfl
-
-@[circuit_norm, explicit_circuit_norm]
-lemma localLength_eq (input : Var Addition8FullCarry.Inputs (F p)) :
-    circuit.localLength input = 2 := by
-  simp only [circuit_norm, circuit]
-
-@[circuit_norm, explicit_circuit_norm]
-lemma output_eq (input : Var Addition8FullCarry.Inputs (F p)) (offset : ℕ) :
-    circuit.output input offset = var ⟨offset⟩ := by
-  simp only [circuit_norm, circuit]
-
-end Addition8Full
 
 namespace Addition8
 structure Inputs (F : Type) where
@@ -76,57 +36,19 @@ deriving ProvableStruct
 Compute the 8-bit addition of two numbers.
 Returns the sum.
 -/
-def main (input : Var Inputs (F p)) : Circuit (F p) (Var field (F p)) :=
-  Addition8Full.circuit { x := input.x, y := input.y, carryIn := 0 }
-
-@[reducible]
-instance elaborated : ElaboratedCircuit (F p) Inputs field main := by
-  elaborate_circuit_with {
-    localLength _ := 2
-    output _ i₀ := var ⟨i₀⟩
-  } using by
-    constructor
-    · intro input
-      rfl
-    · constructor
-      · intro input i₀
-        rfl
-      · simp only [circuit_norm]
-
-def Assumptions : Inputs (F p) → Prop
-  | { x, y } => x.val < 256 ∧ y.val < 256
-
-def Spec : Inputs (F p) → F p → Prop
-  | { x, y }, z => z.val = (x.val + y.val) % 256
-
--- The proofs are immediate from the bundled `Addition8Full` contract at carry-in zero.
-theorem soundness : Soundness (F p) main Assumptions Spec := by
-  simp_all [circuit_norm, main, Assumptions, Spec, Addition8Full.circuit,
-    Addition8Full.Assumptions, Addition8Full.Spec, IsBool]
-
-theorem completeness : Completeness (F p) main Assumptions := by
-  simp_all [circuit_norm, main, Assumptions, Addition8Full.circuit,
-    Addition8Full.Assumptions, IsBool]
-
 def circuit : FormalCircuit (F p) Inputs field where
-  main
-  elaborated
-  Assumptions
-  Spec
-  soundness
-  completeness
+  main := fun { x, y } =>
+    Addition8Full.circuit { x, y, carryIn := 0 }
 
-@[circuit_norm ↓, explicit_circuit_norm]
-lemma elaborated_eq : (circuit (p:=p)).elaborated = elaborated := rfl
+  Assumptions | { x, y } => x.val < 256 ∧ y.val < 256
 
-@[circuit_norm, explicit_circuit_norm]
-lemma localLength_eq (input : Var Inputs (F p)) : circuit.localLength input = 2 := by
-  simp only [circuit_norm, circuit]
+  Spec | { x, y }, z => z.val = (x.val + y.val) % 256
 
-@[circuit_norm, explicit_circuit_norm]
-lemma output_eq (input : Var Inputs (F p)) (offset : ℕ) :
-    circuit.output input offset = var ⟨offset⟩ := by
-  simp only [circuit_norm, circuit]
+  -- the proofs are trivial since this just wraps `Addition8Full`
+  soundness := by
+    simp_all [circuit_norm, Addition8Full.circuit, IsBool]
+  completeness := by
+    simp_all [circuit_norm, Addition8Full.circuit, IsBool]
 
 end Addition8
 end Gadgets

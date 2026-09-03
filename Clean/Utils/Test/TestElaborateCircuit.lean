@@ -87,7 +87,6 @@ after the tactic's scoped compatibility setting ends. -/
 def namedPair (input : Var fieldPair (F p)) : Circuit (F p) (Expression (F p)) :=
   mainPair input
 
-@[reducible]
 instance explicitNamedPair : ExplicitCircuits (namedPair (p := p)) := by
   infer_explicit_circuits
 

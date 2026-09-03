@@ -196,19 +196,33 @@ def ExplicitCircuits.fromSingle {circuit : α → Circuit F β}
 /-- Transport explicit metadata across an equality of circuit definitions.
 
 `infer_explicit_circuit(s)` uses this bridge when it unfolds a named circuit wrapper for
-structural inference.  Consequently, the resulting proof remains indexed by the original
+structural inference. Consequently, the resulting proof remains indexed by the original
 named circuit instead of exposing the unfolded implementation in its type. -/
 @[instance_reducible, explicit_circuit_norm]
 def ExplicitCircuit.of_eq {circuit circuit' : Circuit F α} (h : circuit = circuit')
-    (explicit : ExplicitCircuit circuit') : ExplicitCircuit circuit := by
-  subst circuit'
-  exact explicit
+    (explicit : ExplicitCircuit circuit') : ExplicitCircuit circuit where
+  output := explicit.output
+  localLength := explicit.localLength
+  operations := explicit.operations
+  output_eq n := by subst circuit'; exact explicit.output_eq n
+  localLength_eq n := by subst circuit'; exact explicit.localLength_eq n
+  operations_eq n := by subst circuit'; exact explicit.operations_eq n
+  subcircuitsConsistent n := by subst circuit'; exact explicit.subcircuitsConsistent n
+  channelsWithGuarantees := explicit.channelsWithGuarantees
+  channelsLawful n := by subst circuit'; exact explicit.channelsLawful n
 
 @[instance_reducible, explicit_circuit_norm]
 def ExplicitCircuits.of_eq {circuit circuit' : α → Circuit F β} (h : circuit = circuit')
-    (explicit : ExplicitCircuits circuit') : ExplicitCircuits circuit := by
-  subst circuit'
-  exact explicit
+    (explicit : ExplicitCircuits circuit') : ExplicitCircuits circuit where
+  output := explicit.output
+  localLength := explicit.localLength
+  operations := explicit.operations
+  output_eq a n := by subst circuit'; exact explicit.output_eq a n
+  localLength_eq a n := by subst circuit'; exact explicit.localLength_eq a n
+  operations_eq a n := by subst circuit'; exact explicit.operations_eq a n
+  subcircuitsConsistent a n := by subst circuit'; exact explicit.subcircuitsConsistent a n
+  channelsWithGuarantees := explicit.channelsWithGuarantees
+  channelsLawful a n := by subst circuit'; exact explicit.channelsLawful a n
 
 instance ExplicitCircuits.toSingle (circuit : α → Circuit F β) (a : α)
     [explicit : ExplicitCircuits circuit] : ExplicitCircuit (circuit a) where
@@ -932,10 +946,6 @@ elab "elaborate_circuit" : tactic => withMainContext do
     (some noUnfoldHeads) (some unfoldTypeHeads)
   let commonDsimpCtx ← mkDsimpCtx commonDecls
   let explicitMetadata := (← dsimp explicit commonDsimpCtx).1
-  -- Lean 4.33 may leave an `id` wrapper around an otherwise fully normalized
-  -- explicit instance.  Strip only that reducible head so class projections
-  -- can reduce without unfolding any circuit payload.
-  let explicitMetadata ← withTransparency .default <| whnf explicitMetadata
 
   let simpCtx ← Simp.mkContext { zeta := true, beta := true, proj := true, iota := true, instances := true }
     (simpTheorems := #[explicitThms]) congrThms
@@ -961,9 +971,14 @@ elab "elaborate_circuit" : tactic => withMainContext do
   let normalizeExplicitSimp (label : String) (e : Expr) : TacticM (Expr × Expr) := do
     let e' ← normalizeExplicit label e
     let r ← Lean.Meta.simp e' simpCtx simpProcs
-    let proof ← match r.1.proof? with
+    let simpProof ← match r.1.proof? with
       | some proof => pure proof
       | none => mkEqRefl e'
+    let type ← inferType e
+    let dsimpProofType ← mkEq e e'
+    let dsimpProof ← mkExpectedTypeHint (← mkEqRefl e) dsimpProofType
+    let proof ← mkAppOptM ``Eq.trans
+      #[type, e, e', r.1.expr, dsimpProof, simpProof]
     return (r.1.expr, proof)
 
   -- Store a simplified elaborated `localLength`.  We start from
@@ -1000,13 +1015,13 @@ elab "elaborate_circuit" : tactic => withMainContext do
     withLocalDeclD `offset natType fun offset => do
       let p1 ← mkAppOptM ``ExplicitCircuits.localLength_eq #[none, none, none, none, main, explicitProof, input, offset]
       let p1Type ← inferType p1
-      let some (_, _, mid) := p1Type.eq?
+      let some (type, lhs, mid) := p1Type.eq?
         | throwError "unexpected localLength_eq type: {p1Type}"
       let p2 := mkApp localLengthNormProof input
       let rhs := mkApp localLengthFun input
       let p2Type ← mkEq mid rhs
       let p2 ← mkExpectedTypeHint p2 p2Type
-      let p ← mkAppM ``Eq.trans #[p1, p2]
+      let p ← mkAppOptM ``Eq.trans #[type, lhs, mid, rhs, p1, p2]
       mkLambdaFVars #[input, offset] p
 
   -- Same proof pattern for output:
@@ -1015,13 +1030,13 @@ elab "elaborate_circuit" : tactic => withMainContext do
     withLocalDeclD `offset natType fun offset => do
       let p1 ← mkAppOptM ``ExplicitCircuits.output_eq #[none, none, none, none, main, explicitProof, input, offset]
       let p1Type ← inferType p1
-      let some (_, _, mid) := p1Type.eq?
+      let some (type, lhs, mid) := p1Type.eq?
         | throwError "unexpected output_eq type: {p1Type}"
       let p2 := mkApp2 outputNormProof input offset
       let rhs := mkApp2 outputFun input offset
       let p2Type ← mkEq mid rhs
       let p2 ← mkExpectedTypeHint p2 p2Type
-      let p ← mkAppM ``Eq.trans #[p1, p2]
+      let p ← mkAppOptM ``Eq.trans #[type, lhs, mid, rhs, p1, p2]
       mkLambdaFVars #[input, offset] p
 
   -- Consistency proofs are not recomputed.  They are taken directly from the
@@ -1052,7 +1067,7 @@ elab "elaborate_circuit" : tactic => withMainContext do
   -- Channel lawfulness is delegated to the inferred explicit circuit proof.  If the
   -- stored channel metadata was simplified propositionally, transport the delegated
   -- proof across the corresponding channel-list equality.
-  let channelsLawful ← withLocalDeclD `input varInputType fun input => do
+  let channelsLawfulProof ← withLocalDeclD `input varInputType fun input => do
     withLocalDeclD `offset natType fun offset => do
       let p := mkAppN (mkConst ``ExplicitCircuits.channelsLawful)
         #[F, fieldInst, varInputType, varOutputType, main, explicitProof, input, offset]
@@ -1079,6 +1094,12 @@ elab "elaborate_circuit" : tactic => withMainContext do
         let propEq ← mkAppM ``congrArg #[motive, guaranteesProof]
         mkEqMP propEq p
       mkLambdaFVars #[input, offset] p
+  let channelsLawfulType := mkAppN (mkConst ``ElaboratedCircuit.ChannelsLawful)
+    #[F, fieldInst, Input, Output, args[4]!, args[5]!, main, channelsWithGuarantees]
+  -- Keep the proof indexed by the named predicate. Lean 4.33 otherwise infers the
+  -- unfolded forall type, which stops type-checking after a downstream restricted
+  -- `dsimp` unfolds the surrounding record.
+  let channelsLawful ← mkAppOptM ``id #[channelsLawfulType, channelsLawfulProof]
 
   -- Assemble the final `ElaboratedCircuit` record using the normalized fields and
   -- the delegated proofs, then close the user's goal.

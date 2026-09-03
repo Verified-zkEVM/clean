@@ -556,7 +556,7 @@ end CircuitType
 namespace ProvableType
 variable {α : TypeMap} [ProvableType α]
 
-@[circuit_norm ↓]
+@[circuit_norm ↓, explicit_circuit_norm]
 theorem varFromOffset_field {F} (offset : ℕ) :
   varFromOffset (F:=F) field offset = var ⟨offset⟩ := rfl
 
