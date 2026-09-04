@@ -396,15 +396,6 @@ def applyRoundsOutput (input : Var Inputs (F p)) (i₀ : ℕ) : Var BLAKE3State 
   sevenRoundsFinal.output
     ⟨initializeStateVector input, input.block_words⟩ i₀
 
-@[circuit_norm] lemma sevenRoundsApplyStyle_assumptions (input : Round.Inputs (F p)) :
-    sevenRoundsApplyStyle.Assumptions input = Round.Assumptions input := by
-  rfl
-
-@[circuit_norm] lemma sevenRoundsApplyStyle_spec
-    (input : Round.Inputs (F p)) (state : BLAKE3State (F p)) :
-    sevenRoundsApplyStyle.Spec input state = SevenRoundsSpec input state := by
-  rfl
-
 lemma applyRoundsOutput_eq (input : Var Inputs (F p)) (i₀ : ℕ) :
     applyRoundsOutput input i₀ = sevenRoundsApplyStyle.output
       ⟨initializeStateVector input, input.block_words⟩ i₀ := by
@@ -484,6 +475,8 @@ lemma initial_state_and_messages_are_normalized
     intro i
     exact h_normalized.2.1 i
 
+-- Keep the concrete state conversion out of `soundness`: when it is inlined into the
+-- already-large circuit proof, Lean 4.33's kernel hits its recursion limit while checking it.
 omit [Fact (Nat.Prime p)] p_large_enough in
 private lemma counter_low_mod_eq (x : U32 (F p)) (h : x.Normalized) :
     x.value % 2^32 = x.value := by
@@ -558,7 +551,9 @@ private lemma initialized_applySevenRounds_eq_applyRounds
         input.block_len.value
         input.flags.value := by
   have h_block_words : eval env input_var.block_words = input.block_words := by
-    simpa only [circuit_norm] using congrArg Inputs.block_words h_input
+    have h := congrArg Inputs.block_words h_input
+    simp only [circuit_norm] at h
+    exact h
   calc
     _ = applySevenRounds (initialStateValues input)
         (input.block_words.map U32.value) := congrArg₂ applySevenRounds
@@ -567,16 +562,33 @@ private lemma initialized_applySevenRounds_eq_applyRounds
     _ = _ := (applyRounds_eq_applySevenRounds_input input h_counter_low).symm
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
-  circuit_proof_start_core
-  rcases input_var with ⟨input_var_chaining_value, input_var_block_words,
-    input_var_counter_high, input_var_counter_low, input_var_block_len, input_var_flags⟩
-  rcases input with ⟨input_chaining_value, input_block_words,
-    input_counter_high, input_counter_low, input_block_len, input_flags⟩
-  simp +instances only [circuit_norm] at h_input
-  dsimp only [Assumptions] at h_assumptions
-  dsimp only [Spec]
-  dsimp +instances only [elaborated]
-  simp +instances only [main, circuit_norm] at h_holds ⊢
+  circuit_proof_start [sevenRoundsApplyStyle]
+
+  -- Apply h_holds with the proven assumptions
+  have h_spec := h_holds (by
+    apply initial_state_and_messages_are_normalized env
+      ⟨input_var_chaining_value, input_var_block_words, input_var_counter_high,
+       input_var_counter_low, input_var_block_len, input_var_flags⟩
+      input_block_words input_chaining_value input_counter_high input_counter_low
+      input_block_len input_flags
+    · simp only [circuit_norm]
+      exact h_input
+    · simp only [Assumptions]
+      aesop
+  )
+  clear h_holds
+
+  -- Now we need to show that the spec holds
+  -- h_spec tells us that sevenRoundsApplyStyle.Spec holds for the inputs and output
+  -- We need to unpack what this means and relate it to our Spec
+
+  simp only [FormalCircuit.weakenSpec, sevenRoundsFinal, FormalCircuit.concat] at h_spec
+
+  -- The spec for sevenRoundsApplyStyle says the output equals applySevenRounds
+  simp only [SevenRoundsSpec] at h_spec
+
+  obtain ⟨h_value, h_normalized⟩ := h_spec
+
   let input_var_full : Var Inputs (F p) := ⟨input_var_chaining_value,
     input_var_block_words, input_var_counter_high, input_var_counter_low,
     input_var_block_len, input_var_flags⟩
@@ -585,28 +597,18 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   have h_input_full : eval env input_var_full = input_full := by
     simp only [input_var_full, input_full, circuit_norm]
     exact h_input
-  have h_initial_normalized := initial_state_and_messages_are_normalized
-    (p := p) env input_var_full
-    input_block_words input_chaining_value input_counter_high input_counter_low
-    input_block_len input_flags h_input_full (by
-      simp only [Assumptions]
-      exact h_assumptions)
-  have h_round_assumptions : Round.Assumptions
-      {
-        state := eval env (initializeStateVector input_var_full)
-        message := eval env input_var_block_words
-      } := by
-    rw [h_input.2.1]
-    exact h_initial_normalized
-  have h_child_spec := h_holds h_round_assumptions
-  simp only [SevenRoundsSpec] at h_child_spec
   have h_semantic := initialized_applySevenRounds_eq_applyRounds env
     input_var_full input_full h_input_full h_assumptions.2.2.2.1
-  refine ⟨⟨?_, ?_⟩, Or.inr h_round_assumptions⟩
-  · rw [applyRoundsOutput_eq]
-    exact h_child_spec.1.trans h_semantic
-  · rw [applyRoundsOutput_eq]
-    exact h_child_spec.2
+
+  and_intros
+  · -- Show out.value = applyRounds ...
+    rw [applyRoundsOutput_eq]
+    dsimp only [input_var_full, input_full] at h_semantic
+    rw [h_input.2.1] at h_semantic
+    exact h_value.trans h_semantic
+  · -- Show out.Normalized
+    exact h_normalized
+  · left; trivial
 
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start
