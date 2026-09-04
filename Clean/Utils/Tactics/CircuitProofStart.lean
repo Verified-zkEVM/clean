@@ -5,6 +5,19 @@ import Clean.Utils.Tactics.ProvableStructSimp
 open Lean Elab Tactic Meta
 open Circuit
 
+/-- Whether an output projection contains a literal, rather than named, circuit body. -/
+private def isInlineCircuitOutput (e : Expr) : Bool :=
+  let args := e.getAppArgs
+  if e.getAppFn.isConstOf ``ElaboratedCircuit.output then
+    (args[args.size - 4]?.map (·.isLambda)).getD false
+  else if e.getAppFn.isConstOf ``FormalCircuitBase.output then
+    match args[args.size - 3]? with
+    | some circuit =>
+      circuit.getAppFn.isConstOf ``FormalCircuitBase.mk &&
+        (circuit.getAppArgs[7]?.map (·.isLambda)).getD false
+    | none => false
+  else false
+
 /--
   Introduce all standard parameters and hypotheses for Soundness or Completeness.
 -/
@@ -157,29 +170,14 @@ elab_rules : tactic
   try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*]))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $lemmasArray,*] at $(mkIdent `h_spec):ident))) catch _ => pure ()
 
-  -- Inline child circuits can expose an outer output projection only after the
-  -- main simp pass. Normalize that wrapper without unfolding named child metadata,
-  -- whose opacity is part of larger proofs' simplification strategy.
+  -- A child unfolded above may leave behind the output projection of its inline body.
   if (← getGoals).isEmpty then return
-  let hHoldsHasFormalOutput ← withMainContext do
+  let hasInlineOutput ← withMainContext do
     let some hHolds := (← getLCtx).findFromUserName? `h_holds | pure false
-    let type ← instantiateMVars hHolds.type
-    pure (type.find? fun e =>
-      let args := e.getAppArgs
-      if e.getAppFn.isConstOf ``FormalCircuitBase.output then
-        match args[args.size - 3]? with
-        | some self =>
-          let selfArgs := self.getAppArgs
-          self.getAppFn.isConstOf ``FormalCircuitBase.mk &&
-            (selfArgs[7]?.map (·.isLambda)).getD false
-        | none => false
-      else
-        e.getAppFn.isConstOf ``ElaboratedCircuit.output &&
-          (args[args.size - 4]?.map (·.isLambda)).getD false).isSome
-  if hHoldsHasFormalOutput then
+    pure ((← instantiateMVars hHolds.type).find? isInlineCircuitOutput).isSome
+  if hasInlineOutput then
     try (evalTactic (← `(tactic| simp only [FormalCircuitBase.output,
-      ElaboratedCircuit.output]
-      at $(mkIdent `h_holds):ident))) catch _ => pure ()
+      ElaboratedCircuit.output] at $(mkIdent `h_holds):ident))) catch _ => pure ()
     try (evalTactic (← `(tactic| simp only [circuit_norm]
       at $(mkIdent `h_holds):ident))) catch _ => pure ()
 

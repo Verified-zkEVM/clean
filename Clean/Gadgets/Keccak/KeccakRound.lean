@@ -23,6 +23,8 @@ def Spec (rc : UInt64) (state : KeccakState (F p)) (out_state : KeccakState (F p
   out_state.Normalized
   ∧ out_state.value = keccakRound state.value rc
 
+-- overridden so that `Permutation` can keep its nice proof which uses
+-- `Vector.mapRange` instead of `Vector.mapFinRange`.
 @[reducible]
 instance elaborated (rc : UInt64) : ElaboratedCircuit (F p) KeccakState KeccakState (main rc) := by
   elaborate_circuit_with {

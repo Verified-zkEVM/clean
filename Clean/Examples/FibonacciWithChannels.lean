@@ -255,13 +255,12 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
   |>.addFinishedChannel BytesChannel.toRaw
   |>.addTable ⟨ add8 ⟩
     (by simp +instances [circuit_norm, add8])
-    (by simp [circuit_norm, add8, SoundEnsemble.addTable])
+    (by simp [circuit_norm, add8])
   |>.addFinishedChannel Add8Channel.toRaw
   |>.addVm fibonacciVm
     (by simp +instances [circuit_norm, fibonacciVm, add8, pushBytes, Add8Channel, FibonacciChannel])
     (by simp +instances [circuit_norm, fibonacciVm, fib8, fibonacciVerifier])
-    (by simp [circuit_norm, fibonacciVm, fib8, fibonacciVerifier, Add8Channel, FibonacciChannel,
-      SoundEnsemble.addTable])
+    (by simp [circuit_norm, fibonacciVm, fib8, fibonacciVerifier, Add8Channel, FibonacciChannel])
   |>.toFormal _ (fun _ _ => True)
     (by simp [circuit_norm, fibonacciVm, add8, pushBytes, fib8])
 

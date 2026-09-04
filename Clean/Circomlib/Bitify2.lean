@@ -121,10 +121,6 @@ set_option linter.constructorNameAsVariable false
 
 def circuit : GeneralFormalCircuit (F p) (fields 254) field where
   main
-  elaborated := by elaborate_circuit_with {
-    localLength _ := 265
-    output _ i := varFromOffset field (i + 264)
-  } using (by simp +arith only [circuit_norm])
 
   ProverAssumptions (input : fields 254 (F p)) _ _ :=
     (∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1) ∧ fromBits (input.map ZMod.val) < p
