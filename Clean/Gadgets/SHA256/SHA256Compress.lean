@@ -354,6 +354,10 @@ end SHA256Rounds
 ## FormalCircuit for full block compression (messageSchedule + 64 rounds + Davies-Meyer)
 -/
 
+-- Lean 4.33 exposes `Fin.foldl` during reduction. Keep the concrete 48-step fold in
+-- the value-level schedule specification opaque to the generic circuit simp pass.
+attribute [local irreducible] Specs.SHA256.messageSchedule
+
 namespace CompressBlock
 
 structure Inputs (F : Type) where
@@ -380,16 +384,12 @@ def Spec (input : Inputs (F p)) (out : SHA256State (F p)) : Prop :=
   ∧ ∀ i : Fin 8, Normalized out[i]
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
-  circuit_proof_start
+  circuit_proof_start [MessageSchedule.circuit, MessageSchedule.Spec, MessageSchedule.Assumptions,
+    SHA256Rounds.circuit, SHA256Rounds.Spec, SHA256Rounds.Assumptions,
+    Add32.circuit, Add32.Spec, Add32.Assumptions]
   obtain ⟨h_state_norm, h_block_norm⟩ := h_assumptions
   obtain ⟨h_input_state, h_input_block⟩ := h_input
   obtain ⟨h_sched, h_rounds, h_add⟩ := h_holds
-  simp +instances only [MessageSchedule.circuit, MessageSchedule.Spec,
-    MessageSchedule.Assumptions, circuit_norm] at h_sched
-  simp +instances only [MessageSchedule.circuit, SHA256Rounds.circuit,
-    SHA256Rounds.Spec, SHA256Rounds.Assumptions, circuit_norm] at h_rounds
-  simp +instances only [MessageSchedule.circuit, SHA256Rounds.circuit, Add32.circuit,
-    Add32.Spec, Add32.Assumptions, circuit_norm] at h_add
   have h_sched_full := h_sched h_block_norm
   have h_sched_val := fun i => (h_sched_full i).1
   have h_sched_norm := fun i => (h_sched_full i).2
@@ -443,8 +443,6 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
                 var (F := F p) { index := i₀ + 48 * 227 + 64 * 455 + i * 33 + i_1 }) := by
     intro i hi
     rw [← getElem_eval_vector, CircuitType.eval_var_fields, Vector.getElem_mapFinRange]
-  simp +instances only [MessageSchedule.circuit, SHA256Rounds.circuit,
-    Add32.circuit, circuit_norm]
   simp_all only [implies_true, and_self, forall_const, and_true]
   -- Value equality
   simp only [Specs.SHA256.compressBlock]
@@ -456,16 +454,12 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
   simp only [_root_.add32, circuit_norm]
 
 theorem completeness : Completeness (F p) main Assumptions := by
-  circuit_proof_start
+  circuit_proof_start [MessageSchedule.circuit, MessageSchedule.Spec, MessageSchedule.Assumptions,
+    SHA256Rounds.circuit, SHA256Rounds.Spec, SHA256Rounds.Assumptions,
+    Add32.circuit, Add32.Spec, Add32.Assumptions]
   obtain ⟨h_state_norm, h_block_norm⟩ := h_assumptions
   obtain ⟨h_input_state, h_input_block⟩ := h_input
   obtain ⟨h_sched_impl, h_rounds_impl, _⟩ := h_env
-  simp +instances only [MessageSchedule.circuit, MessageSchedule.Spec,
-    MessageSchedule.Assumptions, circuit_norm] at h_sched_impl
-  simp +instances only [MessageSchedule.circuit, SHA256Rounds.circuit,
-    SHA256Rounds.Spec, SHA256Rounds.Assumptions, circuit_norm] at h_rounds_impl
-  simp +instances only [MessageSchedule.circuit, SHA256Rounds.circuit,
-    Add32.circuit, circuit_norm]
   -- Extract directly from h_sched_impl/h_rounds_impl applied to assumptions.
   have h_sched_full := h_sched_impl h_block_norm
   have h_sched_norm := fun i => (h_sched_full i).2
