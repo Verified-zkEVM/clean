@@ -33,8 +33,7 @@ lemma chi_loop (state : Vector ℕ 25) :
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [ Xor64.circuit, And.And64.circuit, And.And8.circuit, Not.circuit,
-    Xor64.Assumptions, Xor64.Spec, And.And64.Assumptions, And.And64.Spec,
-    Not.Assumptions, Not.Spec, Not.eval_not]
+    Xor64.Assumptions, Xor64.Spec, And.And64.Assumptions, And.And64.Spec]
 
   -- simplify goal
   apply KeccakState.normalized_value_ext
@@ -49,7 +48,7 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
 theorem completeness : Completeness (F p) main Assumptions := by
   circuit_proof_start [Xor64.circuit, And.And64.circuit, And.And8.circuit, Not.circuit,
     Xor64.Assumptions, Xor64.Spec, And.And64.Assumptions, And.And64.Spec,
-    Not.Assumptions, Not.Spec, Not.eval_not, KeccakState.Normalized]
+    KeccakState.Normalized]
   simp only [circuit_norm, eval_vector, Vector.ext_iff] at h_input
   simp_all
 
