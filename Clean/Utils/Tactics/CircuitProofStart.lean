@@ -5,19 +5,6 @@ import Clean.Utils.Tactics.ProvableStructSimp
 open Lean Elab Tactic Meta
 open Circuit
 
-/-- Whether an output projection contains a literal, rather than named, circuit body. -/
-private def isInlineCircuitOutput (e : Expr) : Bool :=
-  let args := e.getAppArgs
-  if e.getAppFn.isConstOf ``ElaboratedCircuit.output then
-    (args[args.size - 4]?.map (·.isLambda)).getD false
-  else if e.getAppFn.isConstOf ``FormalCircuitBase.output then
-    match args[args.size - 3]? with
-    | some circuit =>
-      circuit.getAppFn.isConstOf ``FormalCircuitBase.mk &&
-        (circuit.getAppArgs[7]?.map (·.isLambda)).getD false
-    | none => false
-  else false
-
 /--
   Introduce all standard parameters and hypotheses for Soundness or Completeness.
 -/
@@ -165,21 +152,13 @@ elab_rules : tactic
 
   try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $lemmasArray,*] at $(mkIdent `h_input):ident))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $lemmasArray,*] at $(mkIdent `h_assumptions):ident))) catch _ => pure ()
-  try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent `h_holds):ident))) catch _ => pure ()
+  -- Let `circuit_norm` match dependent record lemmas such as `FormalCircuitBase.output_def`.
+  withOptions (fun opts =>
+      opts.setBool `backward.isDefEq.respectTransparency.types false) do
+    try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent `h_holds):ident))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent `h_env):ident))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*]))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $lemmasArray,*] at $(mkIdent `h_spec):ident))) catch _ => pure ()
-
-  -- A child unfolded above may leave behind the output projection of its inline body.
-  if (← getGoals).isEmpty then return
-  let hasInlineOutput ← withMainContext do
-    let some hHolds := (← getLCtx).findFromUserName? `h_holds | pure false
-    pure ((← instantiateMVars hHolds.type).find? isInlineCircuitOutput).isSome
-  if hasInlineOutput then
-    try (evalTactic (← `(tactic| simp only [FormalCircuitBase.output,
-      ElaboratedCircuit.output] at $(mkIdent `h_holds):ident))) catch _ => pure ()
-    try (evalTactic (← `(tactic| simp only [circuit_norm]
-      at $(mkIdent `h_holds):ident))) catch _ => pure ()
 
   -- collapse the field/id synonym again: the simp passes above can reintroduce
   -- `field F`-typed statements (e.g. from unfolded Specs)
