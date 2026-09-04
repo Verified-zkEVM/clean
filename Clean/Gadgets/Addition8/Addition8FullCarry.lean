@@ -20,17 +20,15 @@ structure Outputs (F : Type) where
 deriving ProvableStruct
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Var Outputs (F p)) := do
-  let ⟨x, y, carryIn⟩ := input
-
   -- witness the result
-  let z ← witness ((x + y + carryIn).val % 256).toField
+  let z ← witness ((input.x + input.y + input.carryIn).val % 256).toField
   lookup ByteTable z
 
   -- witness the output carry
-  let carryOut ← witness ((x + y + carryIn).val / 256).toField
+  let carryOut ← witness ((input.x + input.y + input.carryIn).val / 256).toField
   assertBool carryOut
 
-  assertZero (x + y + carryIn - z - carryOut * 256)
+  assertZero (input.x + input.y + input.carryIn - z - carryOut * 256)
 
   return { z, carryOut }
 
@@ -129,7 +127,7 @@ def lookupCircuit : LookupCircuit (F p) Inputs Outputs := {
 
   computableWitnesses n input := by
     obtain ⟨x, y, carryIn⟩ := input
-    simp_all +instances only [circuit_norm, Witgen.WitgenIR.eval_ofFExprs_one, circuit, main,
+    simp_all +instances only [circuit_norm, circuit, main,
       FormalAssertion.toSubcircuit, Operations.forAllFlat, FlatOperation.forAll, Inputs.mk.injEq]
 }
 

@@ -65,20 +65,21 @@ deriving ProvableStruct
 
 /-- Proves x + y = z (mod 256) -/
 def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
-  main | { x, y, z, m } => do
+  main input := do
     -- range-check z using the bytes channel
     -- (x and y are guaranteed to be range-checked from earlier interactions)
-    BytesChannel.pull z
+    BytesChannel.pull input.z
     -- witness the output carry
-    let carry ← witness ((x + y).val / 256).toField
+    let carry ← witness ((input.x + input.y).val / 256).toField
     assertBool carry
     -- assert correctness
-    x + y === z + carry * 256
+    input.x + input.y === input.z + carry * 256
     -- emit to the add8 channel with multiplicity `m`
-    Add8Channel.emit m (x, y, z)
+    Add8Channel.emit input.m (input.x, input.y, input.z)
 
   ProverAssumptions
-  | { x, y, z, m }, _, _ => x.val < 256 ∧ y.val < 256 ∧ z.val < 256 ∧ z.val = (x.val + y.val) % 256
+  | { x, y, z, m }, _, _ =>
+    x.val < 256 ∧ y.val < 256 ∧ z.val < 256 ∧ z.val = (x.val + y.val) % 256
   Spec _ _ _ := True
   channelsWithRequirements := [ Add8Channel.toRaw ]
 
@@ -144,18 +145,18 @@ structure Fib8Input F where
 deriving ProvableStruct
 
 def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
-  main | { enabled, n, x, y } => do
+  main input := do
     -- boolean constraint for `enabled`
     -- has to be inline, channels with requirements proof doesn't handle subcircuits
-    assertZero (enabled * (enabled - 1))
+    assertZero (input.enabled * (input.enabled - 1))
     -- pull the current Fibonacci state
-    FibonacciChannel.pullIf enabled (n, x, y)
+    FibonacciChannel.pullIf input.enabled (input.n, input.x, input.y)
     -- witness the next Fibonacci value
-    let z ← witness ((x + y).val % 256).toField
+    let z ← witness ((input.x + input.y).val % 256).toField
     -- pull from the Add8 channel to check addition
-    Add8Channel.pullIf enabled (x, y, z)
+    Add8Channel.pullIf input.enabled (input.x, input.y, z)
     -- push the next Fibonacci state
-    FibonacciChannel.pushIf enabled (n + 1, y, z)
+    FibonacciChannel.pushIf input.enabled (input.n + 1, input.y, z)
 
   -- expose interactions
   exposedChannels
@@ -207,9 +208,9 @@ example (input : Var Fib8Input (F p)) :
 
 -- completing Fibonacci channel with input and output
 def fibonacciVerifier : GeneralFormalCircuit (F p) fieldTriple unit where
-  main | (n, x, y) => do
+  main input := do
     -- push initial state, pull the final state
-    FibonacciChannel.pull (n, x, y)
+    FibonacciChannel.pull input
     FibonacciChannel.push (0, 0, 1)
 
   exposedChannels
@@ -253,7 +254,8 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
     (by simp [circuit_norm, pushBytes]) (by simp [circuit_norm, pushBytes])
   |>.addFinishedChannel BytesChannel.toRaw
   |>.addTable ⟨ add8 ⟩
-    (by simp +instances [circuit_norm, add8]) (by simp [circuit_norm, add8])
+    (by simp +instances [circuit_norm, add8])
+    (by simp [circuit_norm, add8])
   |>.addFinishedChannel Add8Channel.toRaw
   |>.addVm fibonacciVm
     (by simp +instances [circuit_norm, fibonacciVm, add8, pushBytes, Add8Channel, FibonacciChannel])

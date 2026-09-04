@@ -11,9 +11,9 @@ structure Inputs (F : Type) where
   d : KeccakRow F
 deriving ProvableStruct
 
-def main : Var Inputs (F p) → Circuit (F p) (Var KeccakState (F p))
-  | { state, d } => .mapFinRange 25 fun i =>
-    Xor64.circuit ⟨state[i.val], d[i.val / 5]⟩
+def main (inputs : Var Inputs (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
+  .mapFinRange 25 fun i =>
+    Xor64.circuit ⟨inputs.state[i.val], inputs.d[i.val / 5]⟩
 
 @[reducible] instance elaborated : ElaboratedCircuit (F p) Inputs KeccakState main := by
   elaborate_circuit

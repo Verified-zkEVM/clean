@@ -354,6 +354,10 @@ end SHA256Rounds
 ## FormalCircuit for full block compression (messageSchedule + 64 rounds + Davies-Meyer)
 -/
 
+-- Lean 4.33 exposes `Fin.foldl` during reduction. Keep the concrete 48-step fold in
+-- the value-level schedule specification opaque to the generic circuit simp pass.
+attribute [local irreducible] Specs.SHA256.messageSchedule
+
 namespace CompressBlock
 
 structure Inputs (F : Type) where
