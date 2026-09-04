@@ -152,14 +152,8 @@ elab_rules : tactic
 
   try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $lemmasArray,*] at $(mkIdent `h_input):ident))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $lemmasArray,*] at $(mkIdent `h_assumptions):ident))) catch _ => pure ()
-  -- Rewrite circuit-record projections before `dsimp` reduces data fields such as
-  -- `main` while leaving dependent proof fields at their original declared types.
-  try (evalTactic (← `(tactic| simp (config := { dsimp := false }) only
-    [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*]
-    at $(mkIdent `h_holds):ident))) catch _ => pure ()
-  -- Finish ordinary value and input normalization after the projections are gone.
   try (evalTactic (← `(tactic| simp +instances only [circuit_norm,
-    $(mkIdent `h_input):ident] at $(mkIdent `h_holds):ident))) catch _ => pure ()
+    $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent `h_holds):ident))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*] at $(mkIdent `h_env):ident))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*]))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $lemmasArray,*] at $(mkIdent `h_spec):ident))) catch _ => pure ()

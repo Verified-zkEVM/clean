@@ -90,6 +90,25 @@ def output (self : FormalCircuitBase F Input Output) (input : Var Input F) (offs
       channelsWithRequirements requirementsChannelsLawful).output input offset =
     elaborated.output input offset := rfl
 
+open Lean Meta Simp in
+/-- Reduce `FormalCircuitBase.output` on record constructors without asking the
+simplifier to unify the constructor's dependent proof fields. -/
+private def outputSimproc (e : Expr) : SimpM Simp.Step := do
+  unless e.isAppOfArity ``FormalCircuitBase.output 9 do return .continue
+  let args := e.getAppArgs
+  let self := args[6]!
+  unless self.isAppOfArity ``FormalCircuitBase.mk 13 do return .continue
+  let selfArgs := self.getAppArgs
+  let outputProj := mkProj ``ElaboratedCircuit 2 selfArgs[8]!
+  let some outputFn ← withTransparency .all <| reduceProj? outputProj
+    | return .continue
+  let rhs := mkAppN outputFn #[args[7]!, args[8]!]
+  unless ← withTransparency .all <| isDefEq e rhs do return .continue
+  return .done { expr := rhs, proof? := none }
+
+simproc outputReduce (FormalCircuitBase.output _ _ _) := outputSimproc
+attribute [circuit_norm] outputReduce
+
 @[explicit_circuit_norm]
 def localLength (self : FormalCircuitBase F Input Output) (input : Var Input F) : ℕ :=
   self.elaborated.localLength input
