@@ -100,10 +100,9 @@ private def outputSimproc (e : Expr) : SimpM Simp.Step := do
   unless self.isAppOfArity ``FormalCircuitBase.mk 13 do return .continue
   let selfArgs := self.getAppArgs
   let outputProj := mkProj ``ElaboratedCircuit 2 selfArgs[8]!
-  let some outputFn ← withTransparency .all <| reduceProj? outputProj
+  let some outputFn ← withTransparency .none <| reduceProj? outputProj
     | return .continue
   let rhs := mkAppN outputFn #[args[7]!, args[8]!]
-  unless ← withTransparency .all <| isDefEq e rhs do return .continue
   return .done { expr := rhs, proof? := none }
 
 simproc outputReduce (FormalCircuitBase.output _ _ _) := outputSimproc
