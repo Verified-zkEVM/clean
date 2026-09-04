@@ -198,7 +198,6 @@ instance {Hint : TypeMap} : ProvableType (Value (UnconstrainedDepNative Hint)) :
 
 abbrev field : TypeMap := fun F => F
 
-@[circuit_norm]
 instance : ProvableType field where
   size := 1
   toElements x := #v[x]

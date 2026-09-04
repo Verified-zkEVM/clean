@@ -127,7 +127,7 @@ def lookupCircuit : LookupCircuit (F p) Inputs Outputs := {
 
   computableWitnesses n input := by
     obtain ⟨x, y, carryIn⟩ := input
-    simp_all +instances only [circuit_norm, Witgen.WitgenIR.eval_ofFExprs_one, circuit, main,
+    simp_all +instances only [circuit_norm, circuit, main,
       FormalAssertion.toSubcircuit, Operations.forAllFlat, FlatOperation.forAll, Inputs.mk.injEq]
 }
 
