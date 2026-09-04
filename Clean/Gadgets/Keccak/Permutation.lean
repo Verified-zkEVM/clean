@@ -18,27 +18,13 @@ def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
 
 /-- state in the ith round, starting from offset n -/
 def stateVar (n : ℕ) (i : ℕ) : Var KeccakState (F p) :=
-  Vector.mapFinRange 25 (fun j => varFromOffset U64 (n + i * 1288 + j.val * 16 + 888))
+  Vector.mapRange 25 (fun j => varFromOffset U64 (n + i * 1288 + j * 16 + 888))
   |>.set 0 (varFromOffset U64 (n + i * 1288 + 1280))
 
-set_option backward.isDefEq.respectTransparency.types false in
-@[reducible]
-instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main where
-  localLength _ := 24 * 1288
-  output _ i₀ := stateVar i₀ 23
-  localLength_eq := by
-    intro state i₀
-    simp only [main, KeccakRound.circuit, KeccakRound.elaborated, circuit_norm]
-  output_eq := by
-    intro state i₀
-    simp +arith +instances only [main, stateVar, KeccakRound.circuit,
-      KeccakRound.elaborated, circuit_norm]
-  subcircuitsConsistent := by
-    intro state i₀
-    simp only [main, KeccakRound.circuit, KeccakRound.elaborated, circuit_norm]
-  channelsLawful := by
-    intro state i₀
-    simp only [main, KeccakRound.circuit, KeccakRound.elaborated, circuit_norm]
+instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main := by
+  elaborate_circuit_with {
+    output _ i0 := stateVar i0 23
+  }
 
 -- `Fin.foldl` relates to `Vector.foldl` via this lemma
 lemma fin_foldl_eq_vector_foldl (state : Vector ℕ 25) :

@@ -25,22 +25,8 @@ def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized
   ∧ out_state.value = Specs.Keccak256.rhoPi state.value
 
-@[reducible] instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main where
-  localLength _ := 25 * 16
-  output _ i₀ := rhoPiConstants.mapIdx fun i (_, s) =>
-    Rotation64.output (-s) (i₀ + i * 16)
-  localLength_eq := by
-    intro state i₀
-    simp only [main, Rotation64.circuit, Rotation64.elaborated, circuit_norm]
-  output_eq := by
-    intro state i₀
-    simp only [main, Rotation64.circuit, Rotation64.elaborated, circuit_norm]
-  subcircuitsConsistent := by
-    intro state i₀
-    simp only [main, Rotation64.circuit, Rotation64.elaborated, circuit_norm]
-  channelsLawful := by
-    intro state i₀
-    simp only [main, Rotation64.circuit, Rotation64.elaborated, circuit_norm]
+@[reducible] instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main := by
+  elaborate_circuit
 
 -- recharacterize rhoPi as a loop
 lemma rhoPi_loop (state : Vector ℕ 25) :

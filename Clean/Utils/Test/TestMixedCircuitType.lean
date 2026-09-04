@@ -65,7 +65,7 @@ def parent : GeneralFormalCircuit F field field where
     circuit_proof_start [circuit]
     -- The subcircuit spec should be stated in terms of the parent input, not
     -- the inline mixed child input passed to the subcircuit.
-    change input * env.get i₀ = 1 at h_holds
+    guard_hyp h_holds : input * env.get i₀ = 1
     exact h_holds
 
   completeness := by

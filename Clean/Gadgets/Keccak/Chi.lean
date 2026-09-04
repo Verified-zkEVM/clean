@@ -8,7 +8,7 @@ import Clean.Specs.Keccak256
 
 namespace Gadgets.Keccak256.Chi
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
-open _root_.Gadgets.Not (not64_bytewise not64_bytewise_value)
+open Gadgets.Not (not64_bytewise not64_bytewise_value)
 
 def main (state : Var KeccakState (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
   .mapFinRange 25 fun i => do
@@ -22,26 +22,8 @@ def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
   out_state.Normalized
   ∧ out_state.value = Specs.Keccak256.chi state.value
 
-@[reducible] instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main where
-  localLength _ := 25 * 16
-  output _ i₀ := .mapFinRange 25 fun i => varFromOffset U64 (i₀ + i.val * 16 + 8)
-  localLength_eq := by
-    intro state i₀
-    simp only [main, Not.circuit, And.And64.circuit, And.And64.elaborated,
-      Xor64.circuit, Xor64.elaborated, circuit_norm]
-  output_eq := by
-    intro state i₀
-    simp only [main, Not.circuit, And.And64.circuit, And.And64.elaborated,
-      Xor64.circuit, Xor64.elaborated, circuit_norm]
-  subcircuitsConsistent := by
-    intro state i₀
-    simp only [main, Not.circuit, Not.elaborated, And.And64.circuit, And.And64.elaborated,
-      Xor64.circuit, Xor64.elaborated, circuit_norm]
-    omega
-  channelsLawful := by
-    intro state i₀
-    simp only [main, Not.circuit, And.And64.circuit, And.And64.elaborated,
-      Xor64.circuit, Xor64.elaborated, circuit_norm]
+@[reducible] instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakState main := by
+  elaborate_circuit
 
 -- rewrite the chi spec as a loop
 lemma chi_loop (state : Vector ℕ 25) :

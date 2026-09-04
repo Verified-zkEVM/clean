@@ -157,6 +157,32 @@ elab_rules : tactic
   try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $(mkIdent `h_input):ident, $lemmasArray,*]))) catch _ => pure ()
   try (evalTactic (← `(tactic| simp +instances only [circuit_norm, $lemmasArray,*] at $(mkIdent `h_spec):ident))) catch _ => pure ()
 
+  -- Inline child circuits can expose an outer output projection only after the
+  -- main simp pass. Normalize that wrapper without unfolding named child metadata,
+  -- whose opacity is part of larger proofs' simplification strategy.
+  if (← getGoals).isEmpty then return
+  let hHoldsHasFormalOutput ← withMainContext do
+    let some hHolds := (← getLCtx).findFromUserName? `h_holds | pure false
+    let type ← instantiateMVars hHolds.type
+    pure (type.find? fun e =>
+      let args := e.getAppArgs
+      if e.getAppFn.isConstOf ``FormalCircuitBase.output then
+        match args[args.size - 3]? with
+        | some self =>
+          let selfArgs := self.getAppArgs
+          self.getAppFn.isConstOf ``FormalCircuitBase.mk &&
+            (selfArgs[7]?.map (·.isLambda)).getD false
+        | none => false
+      else
+        e.getAppFn.isConstOf ``ElaboratedCircuit.output &&
+          (args[args.size - 4]?.map (·.isLambda)).getD false).isSome
+  if hHoldsHasFormalOutput then
+    try (evalTactic (← `(tactic| simp only [FormalCircuitBase.output,
+      ElaboratedCircuit.output]
+      at $(mkIdent `h_holds):ident))) catch _ => pure ()
+    try (evalTactic (← `(tactic| simp only [circuit_norm]
+      at $(mkIdent `h_holds):ident))) catch _ => pure ()
+
   -- collapse the field/id synonym again: the simp passes above can reintroduce
   -- `field F`-typed statements (e.g. from unfolded Specs)
   try (evalTactic (← `(tactic| dsimp only [field, id_eq, CircuitType.var_of_provableType,

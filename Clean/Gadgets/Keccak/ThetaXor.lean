@@ -15,21 +15,8 @@ def main (inputs : Var Inputs (F p)) : Circuit (F p) (Var KeccakState (F p)) :=
   .mapFinRange 25 fun i =>
     Xor64.circuit ⟨inputs.state[i.val], inputs.d[i.val / 5]⟩
 
-@[reducible] instance elaborated : ElaboratedCircuit (F p) Inputs KeccakState main where
-  localLength _ := 25 * 8
-  output _ i₀ := .mapFinRange 25 fun i => varFromOffset U64 (i₀ + i.val * 8)
-  localLength_eq := by
-    intro inputs i₀
-    simp only [main, Xor64.circuit, Xor64.elaborated, circuit_norm]
-  output_eq := by
-    intro inputs i₀
-    simp only [main, Xor64.circuit, Xor64.elaborated, circuit_norm]
-  subcircuitsConsistent := by
-    intro inputs i₀
-    simp only [main, circuit_norm]
-  channelsLawful := by
-    intro inputs i₀
-    simp only [main, Xor64.circuit, Xor64.elaborated, circuit_norm]
+@[reducible] instance elaborated : ElaboratedCircuit (F p) Inputs KeccakState main := by
+  elaborate_circuit
 
 def Assumptions (inputs : Inputs (F p)) : Prop :=
   let ⟨state, d⟩ := inputs

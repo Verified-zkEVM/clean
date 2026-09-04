@@ -24,22 +24,8 @@ def Spec (state : KeccakState (F p)) (out : KeccakRow (F p)) :=
   ∧ out.value = Specs.Keccak256.thetaC state.value
 
 @[reducible]
-instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow main where
-  localLength _ := 5 * 32
-  output _ i₀ := .mapFinRange 5 fun i => varFromOffset U64 (i₀ + i.val * 32 + 24)
-  localLength_eq := by
-    intro state i₀
-    simp only [main, Xor64.circuit, Xor64.elaborated, circuit_norm]
-  output_eq := by
-    intro state i₀
-    simp only [main, Xor64.circuit, Xor64.elaborated, circuit_norm]
-  subcircuitsConsistent := by
-    intro state i₀
-    simp only [main, Xor64.circuit, Xor64.elaborated, circuit_norm]
-    omega
-  channelsLawful := by
-    intro state i₀
-    simp only [main, Xor64.circuit, Xor64.elaborated, circuit_norm]
+instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow main := by
+  elaborate_circuit
 
 -- rewrite thetaC as a loop
 lemma thetaC_loop (state : Vector ℕ 25) :
