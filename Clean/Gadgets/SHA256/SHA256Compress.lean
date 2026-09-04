@@ -367,39 +367,8 @@ def main (input : Var Inputs (F p)) : Circuit (F p) (Var SHA256State (F p)) := d
   Circuit.mapFinRange 8 fun (i : Fin 8) =>
     Add32.circuit ⟨input.state[i], state'[i]⟩
 
-/-- Direct output metadata for the final eight Davies--Meyer additions. -/
-def output (i₀ : ℕ) : Var SHA256State (F p) :=
-  Vector.mapFinRange 8 fun i =>
-    varFromOffset (fields 32) (i₀ + 48 * 227 + 64 * 455 + i.val * 33)
-
-@[reducible]
-instance elaborated : ElaboratedCircuit (F p) Inputs SHA256State main where
-  localLength _ := 48 * 227 + 64 * 455 + 8 * 33
-  output _ i₀ := output i₀
-  localLength_eq := by
-    intro input i₀
-    simp +arith +instances only [main, MessageSchedule.circuit, MessageSchedule.elaborated,
-      SHA256Rounds.circuit, SHA256Rounds.elaborated, Add32.circuit, Add32.elaborated,
-      circuit_norm]
-  output_eq := by
-    intro input i₀
-    simp +arith +instances only [main, output, MessageSchedule.circuit,
-      MessageSchedule.elaborated, SHA256Rounds.circuit, SHA256Rounds.elaborated,
-      Add32.circuit, Add32.elaborated, circuit_norm]
-  subcircuitsConsistent := by
-    intro input i₀
-    simp only [main, MessageSchedule.circuit, MessageSchedule.elaborated,
-      SHA256Rounds.circuit, SHA256Rounds.elaborated, Add32.circuit, Add32.elaborated,
-      circuit_norm]
-    constructor
-    · omega
-    · rw [show 29120 + (48 * 227 + i₀) = i₀ + 48 * 227 + 29120 by omega]
-      simp only [circuit_norm]
-  channelsLawful := by
-    intro input i₀
-    simp only [main, MessageSchedule.circuit, MessageSchedule.elaborated,
-      SHA256Rounds.circuit, SHA256Rounds.elaborated, Add32.circuit, Add32.elaborated,
-      circuit_norm]
+instance elaborated : ElaboratedCircuit (F p) Inputs SHA256State main := by
+  elaborate_circuit
 
 def Assumptions (input : Inputs (F p)) : Prop :=
   (∀ i : Fin 8, Normalized input.state[i]) ∧
@@ -480,12 +449,12 @@ theorem soundness : Soundness (F p) main Assumptions Spec := by
       simp only [Vector.getElem_map] at h
       rw [h, h_sched_map]
     rw [Vector.getElem_map, ← getElem_eval_vector, CircuitType.eval_var_fields]
-    simp only [output, Vector.getElem_mapFinRange, circuit_norm]
+    simp only [Vector.getElem_mapFinRange, circuit_norm]
     rw [(h_add_full j).1, h_state_val, h_rounds_eq]
     simp only [_root_.add32, circuit_norm]
   · intro i
     rw [← getElem_eval_vector, CircuitType.eval_var_fields]
-    simp only [output, Vector.getElem_mapFinRange, circuit_norm]
+    simp only [Vector.getElem_mapFinRange, circuit_norm]
     exact (h_add_full i).2
 
 theorem completeness : Completeness (F p) main Assumptions := by
