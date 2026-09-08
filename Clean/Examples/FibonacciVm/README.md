@@ -16,15 +16,13 @@ Build the Lean tests with:
 lake build CleanTests
 ```
 
-Regenerate and format the checked-in Rust artifacts and Lean reference witnesses with:
+Regenerate and format the checked-in Rust artifact with:
 
 ```bash
-bash scripts/generate-plonky3-artifacts.sh
+lake exe export_fibonacci_ensemble_rust \
+  | rustfmt --edition 2021 --emit stdout \
+  > backends/plonky3/tests/generated/fibonacci_ensemble.rs
 ```
-
-Pass `--check` to verify that the checked-in files match a fresh export. The
-`extraction_reference_tests` Rust test target compares complete Fibonacci traces with these Lean
-reference witnesses, including repeated-pull coalescing and semantic padding.
 
 Run the generated Rust witness and proof tests with:
 

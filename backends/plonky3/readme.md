@@ -24,20 +24,12 @@ The complete example is documented in
 [`Clean/Examples/FibonacciVm/README.md`](../../Clean/Examples/FibonacciVm/README.md). Its generated
 artifact is `tests/generated/fibonacci_ensemble.rs`, included by `tests/fibonacci_ensemble_tests.rs`.
 
-Regenerate the Rust artifacts and Lean reference witnesses from the repository root:
+Regenerate the artifact from the repository root:
 
 ```bash
-bash scripts/generate-plonky3-artifacts.sh
-```
-
-CI runs the same command with `--check` to reject stale artifacts. The reference tests compare
-every cell of the generated Fibonacci tables against Lean for 0, 1, 32, and 400 steps, and compare
-generated witness arithmetic against Lean on zero divisors and bit indices beyond 64. Run them in
-both debug and release modes:
-
-```bash
-cargo test --manifest-path backends/plonky3/Cargo.toml --test extraction_reference_tests
-cargo test --release --manifest-path backends/plonky3/Cargo.toml --test extraction_reference_tests
+lake exe export_fibonacci_ensemble_rust \
+  | rustfmt --edition 2021 --emit stdout \
+  > backends/plonky3/tests/generated/fibonacci_ensemble.rs
 ```
 
 Run the generated witness and end-to-end proof tests:
