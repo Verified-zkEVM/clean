@@ -13,4 +13,7 @@ lean_lib Clean where
 lean_lib CleanTests where
   roots := #[`Clean.Test, `Clean.Specs.BLAKE3.ChunkProcessingTests]
 
+lean_exe export_fibonacci_ensemble_rust where
+  root := `Clean.Examples.FibonacciVm.EnsembleRust
+
 require "leanprover-community" / "mathlib" @ git "v4.33.1"
