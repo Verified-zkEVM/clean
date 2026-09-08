@@ -37,5 +37,4 @@ theorem actionSortedPlannerSummaries_equivalent_exact :
     V1.PlannedSummaryBlock.summaries V1.PlannedSummaryBlock.blocks
   decide +kernel
 
-
 end Zcash.Circuits.Action

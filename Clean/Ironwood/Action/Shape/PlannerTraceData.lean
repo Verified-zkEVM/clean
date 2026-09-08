@@ -218,5 +218,4 @@ def actionExactPlannerTrace : List V1.PlannedSummaryBlock :=
         (0, { columns := [], rowCount := 0 })).2
       start := item.start }
 
-
 end Zcash.Circuits.Action
