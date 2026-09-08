@@ -17,7 +17,7 @@ namespace Air.Flat.Extraction
 
 open Air.Flat.WitnessGeneration
 
-variable {F : Type} [FiniteField F] [DecidableEq F]
+variable {F : Type} [FiniteField F]
 
 inductive LocalSort where
   | field
