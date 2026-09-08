@@ -5,7 +5,7 @@ import Clean.Circuit.WitnessGeneration
 # Channel-driven ensemble witness generation
 
 This file contains the executable reference builder for flat AIR ensemble witnesses.
-It is intentionally not completeness-proved: malformed generation metadata or a public
+It is not completeness-proved: malformed generation metadata or a public
 input for which generation does not terminate produces an explicit error. Soundness does
 not depend on this builder; generated rows still have to satisfy the component constraints
 and global channel-balance relation.
