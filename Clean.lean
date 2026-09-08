@@ -1,4 +1,6 @@
 import Clean.Circuit
+import Clean.Specs.BabyJubJub
+import Clean.Circomlib.BabyJubJub.PointAdd
 import Clean.Examples.WitnessExport
 import Clean.Utils.FiniteField
 import Clean.Utils.SourceSinkPath
