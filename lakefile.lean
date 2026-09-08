@@ -16,4 +16,4 @@ lean_lib CleanTests where
 lean_exe export_fibonacci_ensemble_rust where
   root := `Clean.Examples.FibonacciVm.EnsembleRust
 
-require mathlib from git "https://github.com/leanprover-community/mathlib4"@"v4.32.2"
+require "leanprover-community" / "mathlib" @ git "v4.33.1"

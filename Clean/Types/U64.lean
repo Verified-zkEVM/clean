@@ -186,15 +186,14 @@ open Gadgets (ByteTable)
   This means that all its limbs are less than 256.
 -/
 def main (inputs : Var U64 (F p)) : Circuit (F p) Unit := do
-  let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := inputs
-  lookup ByteTable x0
-  lookup ByteTable x1
-  lookup ByteTable x2
-  lookup ByteTable x3
-  lookup ByteTable x4
-  lookup ByteTable x5
-  lookup ByteTable x6
-  lookup ByteTable x7
+  lookup ByteTable inputs.x0
+  lookup ByteTable inputs.x1
+  lookup ByteTable inputs.x2
+  lookup ByteTable inputs.x3
+  lookup ByteTable inputs.x4
+  lookup ByteTable inputs.x5
+  lookup ByteTable inputs.x6
+  lookup ByteTable inputs.x7
 
 def circuit : FormalAssertion (F p) U64 where
   main

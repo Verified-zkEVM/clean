@@ -315,6 +315,7 @@ theorem VExpr.range_def (n : ℕ) (body : U64Expr F → FExpr F) :
 
 /-- Witness-program builder: accumulates `let`-steps, so shared values are written
 in `do`-notation via `letF` / `letU`. -/
+@[reducible]
 def M (F : Type) (α : Type) : Type :=
   Array (Step F) → α × Array (Step F)
 

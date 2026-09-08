@@ -995,7 +995,7 @@ theorem Operations.channelsLawful_flatten_of_forall {m : ℕ}
 namespace ExplicitCircuit
 open Circuit (ConstantLength ConstantOutput forEach map mapFinRange foldl foldlRange)
 
-@[explicit_circuit_constructor, implicit_reducible]
+@[explicit_circuit_constructor, implicit_reducible, explicit_circuit_norm]
 def from_forEach {m : ℕ} [Inhabited α] {xs : Vector α m}
     {body : α → Circuit F Unit} (explicit : ∀ a, ExplicitCircuit (body a))
     {constant : ConstantLength body} : ExplicitCircuit (forEach xs body constant) where
@@ -1052,7 +1052,7 @@ theorem from_forEach_channelsWithGuarantees {m : ℕ} [Inhabited α] {xs : Vecto
     (from_forEach explicit (xs:=xs) (constant:=constant)).channelsWithGuarantees n =
       (List.ofFn fun (i : Fin m) => (explicit xs[i.val]).channelsWithGuarantees (n + i * ((explicit default).localLength 0))).flatten := rfl
 
-@[explicit_circuit_constructor, implicit_reducible]
+@[explicit_circuit_constructor, implicit_reducible, explicit_circuit_norm]
 def from_map_loop {m : ℕ} [Inhabited α] {xs : Vector α m}
     {body : α → Circuit F β} (explicit : ∀ a, ExplicitCircuit (body a))
     {constant : ConstantLength body} : ExplicitCircuit (map xs body constant) where
@@ -1111,7 +1111,7 @@ theorem from_map_loop_channelsWithGuarantees {m : ℕ} [Inhabited α] {xs : Vect
     (from_map_loop explicit (xs:=xs) (constant:=constant)).channelsWithGuarantees n =
       (List.ofFn fun (i : Fin m) => (explicit xs[i.val]).channelsWithGuarantees (n + i * ((explicit default).localLength 0))).flatten := rfl
 
-@[explicit_circuit_constructor, implicit_reducible]
+@[explicit_circuit_constructor, implicit_reducible, explicit_circuit_norm]
 def from_mapFinRange {m : ℕ} [NeZero m]
     {body : Fin m → Circuit F β} (explicit : ∀ i, ExplicitCircuit (body i))
     {constant : ConstantLength body} : ExplicitCircuit (mapFinRange m body constant) where
@@ -1172,7 +1172,7 @@ theorem from_mapFinRange_channelsWithGuarantees {m : ℕ} [NeZero m]
     (from_mapFinRange explicit (constant:=constant)).channelsWithGuarantees n =
       (List.ofFn fun (i : Fin m) => (explicit i).channelsWithGuarantees (n + i * ((explicit 0).localLength 0))).flatten := rfl
 
-@[explicit_circuit_constructor, implicit_reducible]
+@[explicit_circuit_constructor, implicit_reducible, explicit_circuit_norm]
 def from_foldl {m : ℕ} [Inhabited α] [Inhabited β] {xs : Vector α m}
     -- `explicit` is a regular explicit binder (not `[explicit]`) so the `infer_explicit_head`
     -- dispatch leaves it as a subgoal for the enclosing `infer_explicit_circuit` loop to solve
@@ -1196,7 +1196,7 @@ def from_foldl {m : ℕ} [Inhabited α] [Inhabited β] {xs : Vector α m}
       (n + i * ((explicit default default).localLength 0))).flatten
   output_eq n := by
     by_cases h : m > 0
-    · haveI : NeZero m := NeZero.of_pos h
+    · have : NeZero m := NeZero.of_pos h
       simp only [h, ↓reduceDIte]
       rw [foldl.output_eq]
       rw [(explicit default (xs[m-1])).output_eq]
@@ -1241,7 +1241,7 @@ def from_foldl {m : ℕ} [Inhabited α] [Inhabited β] {xs : Vector α m}
       (n + i * ((explicit default default).localLength 0)) using 1
     · rw [(explicit default default).localLength_eq]
 
-@[explicit_circuit_constructor, implicit_reducible]
+@[explicit_circuit_constructor, implicit_reducible, explicit_circuit_norm]
 def from_foldlRange {m : ℕ} [Inhabited β]
     {body : β → Fin m → Circuit F β} (explicit : ∀ b i, ExplicitCircuit (body b i)) {init : β}
     {constant : ConstantLength fun (t : β × Fin m) => body t.1 t.2} :
@@ -1285,6 +1285,12 @@ def from_foldlRange {m : ℕ} [Inhabited β]
     convert (explicit (Circuit.FoldlM.foldlAcc n (Vector.finRange m) body init i) i).channelsLawful
       (n + i * ((explicit default i).localLength 0)) using 1
     · rw [(explicit default i).localLength_eq]
+
+-- Lean 4.33 can leave these dependent structure projections stuck when the
+-- proof arguments in the circuit and its explicit instance are propositionally,
+-- but not syntactically, identical. Unfolding only the metadata constructors
+-- lets projection reduction proceed without exposing the loop circuit body.
+attribute [explicit_circuit_norm] from_foldl from_foldlRange
 
 @[circuit_norm, explicit_circuit_norm]
 theorem from_foldl_output {m : ℕ} [Inhabited α] [Inhabited β] {xs : Vector α m}
@@ -1336,6 +1342,15 @@ theorem from_foldlRange_operations {m : ℕ} [Inhabited β]
     (from_foldlRange explicit (init:=init) (constant:=constant)).operations n =
       (List.ofFn fun i =>
         (explicit (Circuit.FoldlM.foldlAcc n (Vector.finRange m) body init i) i).operations
+      (n + i * ((explicit default i).localLength 0))).flatten := rfl
+
+@[circuit_norm, explicit_circuit_norm]
+theorem from_foldlRange_channelsWithGuarantees {m : ℕ} [Inhabited β]
+    {body : β → Fin m → Circuit F β} (explicit : ∀ b i, ExplicitCircuit (body b i)) {init : β}
+    {constant : ConstantLength fun (t : β × Fin m) => body t.1 t.2} (n : ℕ) :
+    (from_foldlRange explicit (init:=init) (constant:=constant)).channelsWithGuarantees n =
+      (List.ofFn fun i =>
+        (explicit (Circuit.FoldlM.foldlAcc n (Vector.finRange m) body init i) i).channelsWithGuarantees
           (n + i * ((explicit default i).localLength 0))).flatten := rfl
 
 end ExplicitCircuit
