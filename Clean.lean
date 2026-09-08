@@ -20,6 +20,7 @@ import Clean.Examples.AddOperations
 import Clean.Examples.Add32Explicit
 import Clean.Examples.ToJson
 import Clean.Examples.HintExample
+import Clean.Examples.DataWitness
 import Clean.Examples.FemtoCairo.FemtoCairo
 import Clean.Examples.FemtoCairo.Plonky3Helpers
 import Clean.Examples.FemtoCairo.Plonky3TestData
