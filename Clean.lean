@@ -43,5 +43,5 @@ import Clean.Gadgets.BLAKE3.Permute
 import Clean.Gadgets.BLAKE3.FinalStateUpdate
 import Clean.Gadgets.BLAKE3.Round
 import Clean.Gadgets.BLAKE3.FinalizeChunk
-import Clean.Examples.FibonacciVm.Circuit
+import Clean.Examples.FibonacciVm.Ensemble
 import Clean.Gadgets.SHA256.SHA256Compress

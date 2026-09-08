@@ -1,5 +1,5 @@
 import Clean.Air.Extraction.Rust
-import Clean.Examples.FibonacciVm.Circuit
+import Clean.Examples.FibonacciVm.Ensemble
 import Clean.Utils.Primes
 
 def main : IO Unit := do
