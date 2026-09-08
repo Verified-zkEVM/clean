@@ -21,7 +21,7 @@ fn safe_div(left: u64, right: u64) -> u64 {
 #[inline(always)]
 fn safe_rem(left: u64, right: u64) -> u64 {
     if right == 0 {
-        0
+        left
     } else {
         left % right
     }

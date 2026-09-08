@@ -16,4 +16,7 @@ lean_lib CleanTests where
 lean_exe export_fibonacci_ensemble_rust where
   root := `Clean.Examples.FibonacciVm.EnsembleRust
 
+lean_exe export_backend_test_data where
+  root := `Clean.Air.Extraction.TestData
+
 require "leanprover-community" / "mathlib" @ git "v4.33.1"

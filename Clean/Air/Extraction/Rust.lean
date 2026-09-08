@@ -88,7 +88,11 @@ private def bexprToRust (locals : Array LocalSort) (row idx : String) :
   | .neq left right => return s!"({← u64exprToRust locals row idx left} == {← u64exprToRust locals row idx right})"
   | .lt left right => return s!"({← u64exprToRust locals row idx left} < {← u64exprToRust locals row idx right})"
   | .flt left right => return s!"(({← fexprToRust locals row idx left}).canonical_u64() < ({← fexprToRust locals row idx right}).canonical_u64())"
-  | .bit value bit => return s!"((({← fexprToRust locals row idx value}).canonical_u64() >> {bit}) & 1) == 1"
+  | .bit value bit => do
+      let value ← fexprToRust locals row idx value
+      if bit < 64 then
+        return s!"((({value}).canonical_u64() >> {bit}) & 1) == 1"
+      else pure "false"
   | .not condition => return s!"!({← bexprToRust locals row idx condition})"
   | .and left right => return s!"({← bexprToRust locals row idx left} && {← bexprToRust locals row idx right})"
 
@@ -119,7 +123,7 @@ private def vexprPushRust (locals : Array LocalSort) (row output idx : String) :
       pure s!"        for idx in 0usize..{n}usize \{\n            {output}.push({row}.get({offset}usize + idx).copied().unwrap_or(F::ZERO));\n        }"
   | n, .bitsOf value => do
       let value ← fexprToRust locals row idx value
-      return s!"        let bits_value = ({value}).canonical_u64();\n        for bit in 0u32..{n}u32 \{\n            {output}.push(F::from_canonical_u64((bits_value >> bit) & 1));\n        }"
+      return s!"        let bits_value = ({value}).canonical_u64();\n        for bit in 0u32..{n}u32 \{\n            {output}.push(F::from_canonical_u64(bits_value.checked_shr(bit).unwrap_or(0) & 1));\n        }"
   | _, .append left right =>
       return s!"{← vexprPushRust locals row output idx left}\n{← vexprPushRust locals row output idx right}"
 
@@ -267,7 +271,7 @@ use alloc::string::String;\n\
 #[inline(always)]\n\
 fn safe_div(left: u64, right: u64) -> u64 { if right == 0 { 0 } else { left / right } }\n\
 #[inline(always)]\n\
-fn safe_rem(left: u64, right: u64) -> u64 { if right == 0 { 0 } else { left % right } }\n"
+fn safe_rem(left: u64, right: u64) -> u64 { if right == 0 { left } else { left % right } }\n"
 
 /-- Render a validated extraction program as direct Rust witness and constraint code. -/
 def programToRust (name : String) (program : Program F) : Except String String := do
