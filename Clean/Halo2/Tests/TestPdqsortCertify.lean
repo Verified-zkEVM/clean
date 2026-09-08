@@ -4,6 +4,16 @@ namespace Halo2.Tests.TestPdqsortCertify
 
 open FloorPlanner
 
+-- The elaborator is unsafe metaprogramming, not a safe constant with a substituted body.
+-- In particular, importing it must not add overrides rejected by Ironwood's trust census.
+run_cmd do
+  let env ← Lean.getEnv
+  for i in [:env.header.moduleNames.size] do
+    if env.header.moduleNames[i]! == `Clean.Halo2.Keygen.PdqsortCertify then
+      unless (Lean.Compiler.implementedByAttr.ext.getModuleEntries env i).isEmpty &&
+          (Lean.externAttr.ext.getModuleEntries env i).isEmpty do
+        throwError "pdqsort_certify must not introduce compiled-body overrides"
+
 pdqsort_certify empty (#[] : Array Nat) using (· < ·)
 pdqsort_certify singleton (#[7] : Array Nat) using (· < ·)
 pdqsort_certify small (#[4, 1, 4, 2, 0] : Array Nat) using (· < ·)

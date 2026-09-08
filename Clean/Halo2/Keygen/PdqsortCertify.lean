@@ -374,7 +374,12 @@ private def checkEvent (item : Event)
   mkAuxLemma [] (← mkEq item.lhs item.rhs) (← instantiateMVars proof)
 
 /-- Prove the exact pdqsort result of a closed array by kernel-checking generated steps. -/
-elab "pdqsort_certify " name:ident input:term " using " comparison:term : command => do
+syntax (name := pdqsortCertify) "pdqsort_certify " ident term " using " term : command
+
+@[command_elab pdqsortCertify]
+unsafe def elabPdqsortCertify : Elab.Command.CommandElab := fun stx => do
+  let `(pdqsort_certify $name:ident $input:term using $comparison:term) := stx
+    | Elab.throwUnsupportedSyntax
   let (output, plan, items, inputExpr, compExpr) ← Elab.Command.liftTermElabM do
     let inputExpr ← Elab.Term.elabTermAndSynthesize input none
     let arrayType ← inferType inputExpr
@@ -385,11 +390,10 @@ elab "pdqsort_certify " name:ident input:term " using " comparison:term : comman
     let qExpr := mkApp3 (mkConst ``Quotation.mk) (toExpr elementType) (toExpr inh) (toExpr compExpr)
     let call ← mkAppM ``certificates #[qExpr, inputExpr, compExpr]
     -- Evaluation proposes data only; checkEvent and the final addDecl check every proof.
-    let (output, plan, items) ← unsafe
-      Meta.evalExpr (Expr × Expr × List Event)
+    let (output, plan, items) ← Meta.evalExpr (Expr × Expr × List Event)
+      (mkApp2 (mkConst ``Prod [0, 0]) (mkConst ``Expr)
         (mkApp2 (mkConst ``Prod [0, 0]) (mkConst ``Expr)
-          (mkApp2 (mkConst ``Prod [0, 0]) (mkConst ``Expr)
-            (mkApp (mkConst ``List [0]) (mkConst ``Event)))) call
+          (mkApp (mkConst ``List [0]) (mkConst ``Event)))) call
     return (output, plan, items, inputExpr, compExpr)
   let mut cache : Std.HashMap Expr Name := {}
   let mut shared : Std.HashMap Expr Expr := {}
