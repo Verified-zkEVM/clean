@@ -974,11 +974,11 @@ v4.30.0 final) with ZERO code changes — so compat is a two-line pin bump on th
 Done here: Clean now requires `daira/CompElliptic @ f5f420f` (same rev as ironwood;
 mathlib is required LAST in lakefile.lean so its transitive pins win). The vendored
 `Clean/Ironwood/Specs/CompElliptic`+`CompPoly` are DELETED. Vendor-only content
-re-homed: the generic SW lemmas (`y_eq_or_y_eq_neg_of_onCurve`,
-`SWPoint.{onCurve_of_ne_zero, eq_or_eq_neg_of_x_eq, add_x, add_y}`) + `Fields.Pasta.Fp/Fq`
-abbrevs in `Specs/CompEllipticExtras.lean`, and the Pallas-side
-`neg_five_not_isCube`/`no_onCurve_y_zero` twins in `Specs/Pallas.lean` — all stated in
-CompElliptic's namespaces, all upstream candidates. The dep's `nsmul = binNsmul` (vs the
+re-homed upstream in CompElliptic: the generic SW lemmas
+(`y_eq_or_y_eq_neg_of_onCurve`,
+`SWPoint.{onCurve_of_ne_zero, eq_or_eq_neg_of_x_eq, add_x, add_y}`), the
+`Fields.Pasta.Fp/Fq` abbrevs, and the Pallas-side
+`neg_five_not_isCube`/`no_onCurve_y_zero` facts. The dep's `nsmul = binNsmul` (vs the
 vendor's `nsmulRec`) was transparent to every proof, and unlocks `native_decide` on
 `n • P` goals. zcash/ironwood's `Fp` (`ZMod PALLAS_BASE_CARD`) is now defeq to ours
 through the shared dep. Full Clean + CleanTests green.

@@ -1,4 +1,4 @@
-import Clean.Ironwood.Action.CircuitPreIronwood
+import Clean.Ironwood.Action.CircuitPreNU63
 import Clean.Ironwood.Action.ConfigureCertificates
 
 /-!
@@ -143,16 +143,16 @@ theorem synthNotes_regionCount (G : Generators) (B : Bases) (W : Witnesses Fp)
 stage, the 91-region note stage — 394. -/
 theorem synthesize_regionCount (G : Generators) (B : Bases) (W : Witnesses Fp)
     (cfg : Config) (i : RegionIndex) :
-    Operations.regionCount ((CircuitPreIronwood.synthesize G B W cfg).operations i)
+    Operations.regionCount ((CircuitPreNU63.synthesize G B W cfg).operations i)
       = 394 := by
-  simp only [CircuitPreIronwood.synthesize, synthesizeBase, circuit_norm,
+  simp only [CircuitPreNU63.synthesize, synthesizeBase, circuit_norm,
     Circuit.operations_bind, Circuit.operations_pure, Operations.regionCount_append]
   rw [synthWitness_regionCount, synthChecks_regionCount, synthNotes_regionCount]
 
 /-- The base Action synthesis with its one fixed hint-backed witness program. -/
 def main (G : Generators) (B : Bases) (cfg : Config) :
     Var unit Fp → Circuit Fp (Var AddressPoints Fp) := fun _ =>
-  CircuitPreIronwood.synthesize G B hintWitnesses cfg
+  CircuitPreNU63.synthesize G B hintWitnesses cfg
 
 theorem main_regionCount (G : Generators) (B : Bases) (cfg : Config)
     (input : Var unit Fp) (i : RegionIndex) :
@@ -165,7 +165,7 @@ theorem main_synthesisSummary_eq (G : Generators) (B : Bases)
     (cfg : Config) (input : Var unit Fp) (region : RegionIndex) :
     FloorPlanner.synthesisSummary ((main G B cfg input).operations region) =
       synthesizeBaseSynthesisSummary cfg := by
-  rw [main, CircuitPreIronwood.synthesize,
+  rw [main, CircuitPreNU63.synthesize,
     synthesizeBase_synthesisSummary_eq]
 
 private theorem loadPrivate_lookupSelectorsAnchoredBy
@@ -338,7 +338,7 @@ def SpecBase (G : Generators) (B : Bases) (wit : ActionData) : Prop :=
   -- the note values are 64-bit, as §4.17.4 types them (exported from the NoteCommit
   -- value decompositions; the commitment clauses alone can't bound the field elements)
   wit.vOld.val < 2 ^ 64 ∧ wit.vNew.val < 2 ^ 64 ∧
-  -- value-commitment integrity: `cv_net = [v_old − v_new] V + [rcv] R`
+  -- value-commitment integrity: `cv_net = (v_old − v_new) • V + rcv • R`
   (wit.magnitude.val < 2 ^ 64 ∧
     ((wit.sign = 1 ∧ (⟨wit.cvX, wit.cvY⟩ : Point Fp)
         = (wit.magnitude.val : Fq) • B.valueCommitV
@@ -346,15 +346,15 @@ def SpecBase (G : Generators) (B : Bases) (wit : ActionData) : Prop :=
      (wit.sign = -1 ∧ (⟨wit.cvX, wit.cvY⟩ : Point Fp)
         = -(wit.magnitude.val : Fq) • B.valueCommitV
           + wit.rcv.2 • B.valueCommitR))) ∧
-  -- nullifier integrity: `nf_old = Extract([PRF(nk, ρ) + ψ] K + cm_old)`
+  -- nullifier integrity: `nf_old = Extract((PRF(nk, ρ) + ψ) • K + cm_old)`
   wit.nfOld = (wit.cmOld +
     ((Poseidon.Hash.ConstantLength.value #v[wit.nk, wit.rhoOld] + wit.psiOld).val : Fq)
       • B.nullifierK).x ∧
-  -- spend authority: `rk = [α] SpendAuthG + ak_P`
+  -- spend authority: `rk = α • SpendAuthG + ak_P`
   (⟨wit.rkX, wit.rkY⟩ : Point Fp)
     = wit.alpha.2 • B.spendAuthG + wit.akP ∧
   -- diversified-address integrity: `ivk ∈ {Commit^ivk, ⊥}` (guarded ⊥-model) and
-  -- `pk_d_old = [ivk] g_d_old`
+  -- `pk_d_old = ivk • g_d_old`
   (∃ ivk : Fp,
     HashGuarded G.S B.ivkQ (commitIvkChunks wit.akP.x.val wit.nk.val)
       (fun bp => ivk = (bp + wit.rivk.2 • B.commitIvkR).x) ∧
@@ -380,8 +380,8 @@ def SpecBase (G : Generators) (B : Bases) (wit : ActionData) : Prop :=
   wit.vOld * (1 - wit.enableSpend) = 0 ∧
   wit.vNew * (1 - wit.enableOutput) = 0
 
-/-- The pre-ironwood bundle's contract: the base statement, plus the output cells
-carrying the four witnessed address points (what the ironwood cross-address stage
+/-- The pre-NU6.3 bundle's contract: the base statement, plus the output cells
+carrying the four witnessed address points (what the post-NU6.3 cross-address stage
 consumes). -/
 def Spec (G : Generators) (B : Bases)
     (_ : Value unit Fp) (out : Value AddressPoints Fp) (wit : ActionData) :
@@ -1908,7 +1908,7 @@ private theorem main_output_copyInputCells_assigned
     (witness.output i) (i + 8)
   have hnotes := synthNotes_output_copyInputCells_assigned G B counts
     (witness.output i) (checks.output (i + 8)) (i + 303)
-  simp only [main, CircuitPreIronwood.synthesize, synthesizeBase,
+  simp only [main, CircuitPreNU63.synthesize, synthesizeBase,
     AddressPoints.copyInputCells, Circuit.output_bind, Circuit.output_pure,
     Circuit.operations_bind, Circuit.operations_pure, List.append_nil,
     Operations.assignedCellsFrom_append,
@@ -1956,7 +1956,7 @@ private theorem main_fixedWritesLawful (G : Generators) (B : Bases)
         (notes.operations notesRegion).regionFixedColumns := by
     rw [synthWitness_loadedTableColumns_eq]
     exact disjoint_of_forall_mem_right htableColumns hnotesColumns
-  simp only [main, CircuitPreIronwood.synthesize, synthesizeBase,
+  simp only [main, CircuitPreNU63.synthesize, synthesizeBase,
     Circuit.operations_bind, Circuit.operations_pure, List.append_nil]
   exact Operations.FixedWritesLawful.append_noLaterTables
     hwitness hchecks hnotes hchecksTables hnotesTables
@@ -1976,7 +1976,7 @@ instance elaborated (G : Generators) (B : Bases) :
     have haddY := configure_output_add_yQR_mem_permutationRequests G counts
     have hmerkle1 := configure_output_merkle1_xA_mem_permutationRequests G counts
     have hmerkle2 := configure_output_merkle2_xA_mem_permutationRequests G counts
-    dsimp only [main, CircuitPreIronwood.synthesize, synthesizeBase]
+    dsimp only [main, CircuitPreNU63.synthesize, synthesizeBase]
     simp_all only [keygen_spine]
     constructor
     · simpa only [List.map_nil, List.append_nil] using
@@ -1988,7 +1988,7 @@ instance elaborated (G : Generators) (B : Bases) :
           synthNotes_keygenRegistered_full G B counts i
   lookupSelectorAssignmentsAgree_of_registered := by
     intro configInput counts hconfig input i program operations _hregistered
-    simp only [operations, program, main, CircuitPreIronwood.synthesize,
+    simp only [operations, program, main, CircuitPreNU63.synthesize,
       synthesizeBase, Circuit.operations_bind, Circuit.operations_pure,
       keygen_norm, keygen_spine]
     exact ⟨synthWitness_lookupSelectorAssignmentsAgree G counts i,
@@ -1998,7 +1998,7 @@ instance elaborated (G : Generators) (B : Bases) :
     LookupRangeCheck.lookupSelectorAnchorRequirements cfg.lookupConfig
   lookupSelectorsAnchoredBy_of_registered := by
     intro configInput counts hconfig input i anchor hanchor _
-    simp only [main, CircuitPreIronwood.synthesize, synthesizeBase,
+    simp only [main, CircuitPreNU63.synthesize, synthesizeBase,
       Circuit.operations_bind, Circuit.operations_pure, keygen_norm,
       keygen_spine]
     exact ⟨synthWitness_lookupSelectorsAnchoredBy G counts i anchor,
@@ -2011,7 +2011,7 @@ instance elaborated (G : Generators) (B : Bases) :
     exact main_fixedWritesLawful G B counts i
   copyCellsAssigned := by
     intro configInput counts hconfig input i
-    simp only [main, CircuitPreIronwood.synthesize, synthesizeBase,
+    simp only [main, CircuitPreNU63.synthesize, synthesizeBase,
       Circuit.operations_bind, Circuit.operations_pure, List.append_nil]
     apply Operations.CopyCellsAssignedFrom.append
     · exact synthWitness_copyCellsAssigned G counts i
@@ -2050,7 +2050,7 @@ instance elaborated (G : Generators) (B : Bases) :
               (i + 8)) cell hcell)
   lookupActivationsWellFormed := by
     intro config input i
-    simp only [main, CircuitPreIronwood.synthesize, synthesizeBase,
+    simp only [main, CircuitPreNU63.synthesize, synthesizeBase,
       Circuit.operations_bind, Circuit.operations_pure,
       Operations.LookupActivationsWellFormed, List.forall_append,
       List.forall_nil, and_true]
@@ -2110,11 +2110,12 @@ instance elaborated (G : Generators) (B : Bases) :
   regionCount _ := 394
   synthesisSummary cfg _ _ := synthesizeBaseSynthesisSummary cfg
   output_eq := by
-    intro cfg _ i₀
-    simp only [main, CircuitPreIronwood.synthesize, synthesizeBase,
+    intro _ i₀
+    simp only [main, CircuitPreNU63.synthesize, synthesizeBase,
       Circuit.output_bind, Circuit.output_pure,
       synthWitness_output, synthWitness_nextRegionIndex, synthChecks_output,
       synthChecks_nextRegionIndex, synthNotes_output]
+    exact fun _ => trivial
   regionCount_eq := fun cfg input i =>
     (main_regionCount G B cfg input i).symm
   synthesisSummary_eq := fun cfg input region =>
@@ -2133,7 +2134,7 @@ theorem soundness (G : Generators) (B : Bases) (cfg : Config) :
   let input_var_rivk := hintWitnesses.rivk
   let input_var_rcmOld := hintWitnesses.rcmOld
   let input_var_rcmNew := hintWitnesses.rcmNew
-  simp only [CircuitPreIronwood.synthesize, synthesizeBase, circuit_norm] at hc
+  simp only [CircuitPreNU63.synthesize, synthesizeBase, circuit_norm] at hc
   have hW := hc.1
   have hCk := hc.2.1
   have hN := hc.2.2
@@ -2578,7 +2579,7 @@ theorem completeness (G : Generators) (B : Bases) (cfg : Config) :
   let input_var_rcmNew := hintWitnesses.rcmNew
   let input_var_merkleSib := hintWitnesses.merkleSib
   let input_var_merkleSwap := hintWitnesses.merkleSwap
-  simp only [CircuitPreIronwood.synthesize, synthesizeBase,
+  simp only [CircuitPreNU63.synthesize, synthesizeBase,
     circuit_norm] at hwit ⊢
   have hWw := hwit.1
   have hWc := hwit.2.1
@@ -3308,7 +3309,7 @@ theorem baseCircuit_synthesisSummary_eq (G : Generators) (B : Bases)
     (baseCircuit G B).elaborated.synthesisSummary config input region =
       synthesizeBaseSynthesisSummary config := rfl
 
-/-! ## The ironwood (post-NU 6.3) circuit bundle
+/-! ## The post-NU6.3 circuit bundle
 
 The main circuit: the proven base circuit called as a subcircuit, then the
 `"post-NU 6.3 cross-address checks"` region on its output cells. -/
@@ -3328,7 +3329,7 @@ theorem base_output_copyInputCells_eq (G : Generators) (B : Bases)
   exact congrArg AddressPoints.copyInputCells
     ((elaborated G B).output_eq config input region)
 
-/-- The deployed ironwood synthesis: the fixed hint-backed Action witness program,
+/-- The deployed post-NU6.3 synthesis: the fixed hint-backed Action witness program,
 followed by the cross-address region. The verifier-visible input is `unit`; prover
 choices enter only through `hintWitnesses` and the runtime `ProverHint`. -/
 def mainPost (G : Generators) (B : Bases) (cfg : Config) :
@@ -3618,7 +3619,7 @@ def extractPost (cfg : Config) (_ : Var unit Fp) (i : RegionIndex)
       env.env.get cfg.primary (DISABLE_CROSS_ADDRESS : ℤ) :=
   rfl
 
-/-- The ironwood Action statement: the base §4.17.4 statement, plus the post-NU 6.3
+/-- The post-NU6.3 Action statement: the base §4.17.4 statement, plus the post-NU6.3
 cross-address binding — a nonzero `DISABLE_CROSS_ADDRESS` instance row forces the new
 note's diversified address to equal the old note's. -/
 def SpecPost (G : Generators) (B : Bases)
@@ -3626,7 +3627,7 @@ def SpecPost (G : Generators) (B : Bases)
   SpecBase G B wit ∧
   (wit.disableCrossAddress ≠ 0 → wit.gdOld = wit.gdNew ∧ wit.pkdOld = wit.pkdNew)
 
-/-- Honest-prover preconditions for the ironwood circuit: the base preconditions, and
+/-- Honest-prover preconditions for the post-NU6.3 circuit: the base preconditions, and
 the cross-address rows hold at the honest values (the flag is off, or the addresses
 coincide). -/
 def ProverAssumptionsPost (G : Generators) (B : Bases)
@@ -3854,9 +3855,9 @@ theorem completenessPost
       · rw [w7, w1]
         ring
 
-/-- Rust `impl Circuit for Circuit` on the ironwood branch (post-NU 6.3) as a
-proof-carrying bundle: the e2e Orchard Action statement (§4.17.4 + cross-address
-binding, breaks-as-data) over the extracted primary-instance rows and witness data. -/
+/-- Rust post-NU6.3 `impl Circuit for Circuit` as a proof-carrying bundle: the e2e
+Orchard Action statement (§4.17.4 + cross-address binding, breaks-as-data) over the
+extracted primary-instance rows and witness data. -/
 def circuit (G : Generators) (B : Bases) :
     FormalCircuit Fp Unit Config unit unit where
   name := "OrchardAction"

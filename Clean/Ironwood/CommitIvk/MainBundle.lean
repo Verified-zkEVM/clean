@@ -31,7 +31,7 @@ private theorem short_output (b : ℕ) (cfg : LookupRangeCheck.Config 10)
 
 /-! ## Value-level infrastructure -/
 
-/-- The Ironwood `Chain.PieceChunks` is the donor's, verbatim. -/
+/-- The ironwood `Chain.PieceChunks` is the donor's, verbatim. -/
 private theorem pieceChunks_donor_iff :
     ∀ (ms : List ℕ) (pieces : Vector Fp ms.length) (chunks : List ℕ),
       Sinsemilla.Chain.PieceChunks ms pieces chunks ↔
@@ -49,7 +49,7 @@ private theorem pieceChunks_donor_iff :
     · rintro ⟨msf, h1, h2, tailChunks, h3, h4⟩
       exact ⟨msf, h1, h2, tailChunks, h3, (ih _ _).mpr h4⟩
 
-/-- The Ironwood `Chain.ZsFacts` is the donor's, verbatim. -/
+/-- The ironwood `Chain.ZsFacts` is the donor's, verbatim. -/
 private theorem zsFacts_donor_iff :
     ∀ (ms : List ℕ) (chunks : List ℕ)
       (zs : Sinsemilla.HVec (Sinsemilla.Chain.zLengths ms) Fp),

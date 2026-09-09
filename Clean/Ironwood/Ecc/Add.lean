@@ -352,7 +352,7 @@ def synthesisSummary (config : Config) (offset : ℕ) :
       .column .advice config.lambda.index,
       .column .advice config.xQR.index,
       .column .advice config.yQR.index]
-    (offset + 2) 0
+    (offset + 2) 0 [(config.qAdd.index, offset)]
 
 @[synthesis_summary_norm]
 theorem synthesisSummary_lookupActivationCount (config : Config) (offset : ℕ) :
@@ -371,8 +371,8 @@ theorem synthesisSummary_instanceRowExtent_eq (config : Config) (offset : ℕ) :
 @[synthesis_summary_norm]
 theorem synthesisSummary_hasNoFixedColumns (config : Config) (offset : ℕ) :
     (synthesisSummary config offset).HasNoFixedColumns := by
-  simp only [synthesisSummary,
-    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp only [synthesisSummary, synthesis_summary_norm]
+  intro index
   simp
 
 def add : FormalRegionCircuit Fp
@@ -413,6 +413,7 @@ def add : FormalRegionCircuit Fp
         · simp only [synthesisSummary, circuit_norm, gate]
           omega
         · simp only [synthesisSummary, circuit_norm, gate]
+        · simp only [synthesisSummary, circuit_norm, gate, synthesis_summary_norm]
         · simp only [synthesisSummary, circuit_norm, gate, synthesis_summary_norm]
         · simp only [synthesisSummary, circuit_norm, gate, synthesis_summary_norm] }
 

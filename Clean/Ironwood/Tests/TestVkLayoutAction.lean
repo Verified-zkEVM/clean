@@ -1,7 +1,7 @@
 import Clean.Ironwood.Fixtures.ActionSelMap
 import Clean.Ironwood.Fixtures.Json
 import Clean.Ironwood.Action.RealBases
-import Clean.Ironwood.Action.CircuitPreIronwood
+import Clean.Ironwood.Action.CircuitPreNU63
 import Clean.Ironwood.Fixtures.Layout
 import Clean.Ironwood.Action.Circuit
 
@@ -64,7 +64,7 @@ def aProgram : Circuit Fp Unit :=
 
 /-- The real pre-ironwood (fixed post-NU 6.2) circuit, at the same bases. -/
 def aProgramBase : Circuit Fp Unit := do
-  let _ ← Action.CircuitPreIronwood.synthesize aG
+  let _ ← Action.CircuitPreNU63.synthesize aG
     Action.orchardBases aW aCfg
   pure ()
 

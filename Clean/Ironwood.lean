@@ -1,4 +1,3 @@
-import Clean.Ironwood.Specs.CompEllipticExtras
 import Clean.Ironwood.Specs.Types
 import Clean.Ironwood.Specs.Bitrange
 import Clean.Ironwood.Specs.Pallas
@@ -81,7 +80,10 @@ import Clean.Ironwood.Ecc.Chip
 import Clean.Ironwood.Action.Circuit
 import Clean.Ironwood.Action.Bundle
 import Clean.Ironwood.Action.RealBases
-import Clean.Ironwood.Action.TopLevel
+import Clean.Ironwood.Action.Spec
+import Clean.Ironwood.Action.Separation
+import Clean.Ironwood.Action.Shape
+import Clean.Ironwood.Action.Shape.Anchors
 
 /-!
 # Ironwood circuits

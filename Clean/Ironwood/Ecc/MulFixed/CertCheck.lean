@@ -693,6 +693,8 @@ theorem thirteen_not_isSquare : ¬ IsSquare (13 : Fp) := by
 def checkNonSquareRoot (x root : ℕ) : Bool :=
   root < P && !(root == 0) && mulm 13 (mulm root root) == x
 
+/-- A successful root-form certificate proves that the represented field element is a quadratic
+non-residue. -/
 theorem checkNonSquareRoot_sound {x root : ℕ}
     (h : checkNonSquareRoot x root = true) :
     ¬ IsSquare ((x : ℕ) : Fp) := by

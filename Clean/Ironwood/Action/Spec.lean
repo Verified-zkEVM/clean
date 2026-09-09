@@ -19,83 +19,83 @@ open Specs.Sinsemilla (HashGuarded commitIvkChunks)
 open CompElliptic.Fields.Pasta (Fq)
 
 /-- The deployed Orchard Action statement over its public input and private witness. -/
-def ActionSpec (input : PublicInputs Fp) (privateWitness : PrivateWitness) : Prop :=
+def ActionSpec (input : PublicInputs Fp) (wit : PrivateWitness) : Prop :=
   -- the witnessed points are well-formed
-  privateWitness.cmOld.Valid ∧ privateWitness.gdOld.OnCurve ∧
-  privateWitness.akP.OnCurve ∧ privateWitness.pkdOld.OnCurve ∧
-  privateWitness.gdNew.OnCurve ∧ privateWitness.pkdNew.OnCurve ∧
+  wit.cmOld.Valid ∧ wit.gdOld.OnCurve ∧
+  wit.akP.OnCurve ∧ wit.pkdOld.OnCurve ∧
+  wit.gdNew.OnCurve ∧ wit.pkdNew.OnCurve ∧
   -- the note values are 64-bit
-  privateWitness.vOld.val < 2 ^ 64 ∧ privateWitness.vNew.val < 2 ^ 64 ∧
-  -- value-commitment integrity: `cv_net = [v_old − v_new] V + [rcv] R`
-  (privateWitness.magnitude.val < 2 ^ 64 ∧
-    ((privateWitness.sign = 1 ∧ (⟨input.cvX, input.cvY⟩ : Point Fp)
-        = (privateWitness.magnitude.val : Fq) • orchardBases.valueCommitV
-          + privateWitness.rcv.2 • orchardBases.valueCommitR) ∨
-     (privateWitness.sign = -1 ∧ (⟨input.cvX, input.cvY⟩ : Point Fp)
-        = -(privateWitness.magnitude.val : Fq) • orchardBases.valueCommitV
-          + privateWitness.rcv.2 • orchardBases.valueCommitR))) ∧
-  -- nullifier integrity: `nf_old = Extract([PRF(nk, ρ) + ψ] K + cm_old)`
-  input.nfOld = (privateWitness.cmOld +
+  wit.vOld.val < 2 ^ 64 ∧ wit.vNew.val < 2 ^ 64 ∧
+  -- value-commitment integrity: `cv_net = (v_old − v_new) • V + rcv • R`
+  (wit.magnitude.val < 2 ^ 64 ∧
+    ((wit.sign = 1 ∧ (⟨input.cvX, input.cvY⟩ : Point Fp)
+        = (wit.magnitude.val : Fq) • orchardBases.valueCommitV
+          + wit.rcv.2 • orchardBases.valueCommitR) ∨
+     (wit.sign = -1 ∧ (⟨input.cvX, input.cvY⟩ : Point Fp)
+        = -(wit.magnitude.val : Fq) • orchardBases.valueCommitV
+          + wit.rcv.2 • orchardBases.valueCommitR))) ∧
+  -- nullifier integrity: `nf_old = Extract((PRF(nk, ρ) + ψ) • K + cm_old)`
+  input.nfOld = (wit.cmOld +
     ((Poseidon.Hash.ConstantLength.value
-      #v[privateWitness.nk, privateWitness.rhoOld] + privateWitness.psiOld).val : Fq)
+      #v[wit.nk, wit.rhoOld] + wit.psiOld).val : Fq)
       • orchardBases.nullifierK).x ∧
-  -- spend authority: `rk = [α] SpendAuthG + ak_P`
+  -- spend authority: `rk = α • SpendAuthG + ak_P`
   (⟨input.rkX, input.rkY⟩ : Point Fp)
-    = privateWitness.alpha.2 • orchardBases.spendAuthG + privateWitness.akP ∧
+    = wit.alpha.2 • orchardBases.spendAuthG + wit.akP ∧
   -- diversified-address integrity
   (∃ ivk : Fp,
     HashGuarded Specs.Sinsemilla.orchardGenerators.S orchardBases.ivkQ
-      (commitIvkChunks privateWitness.akP.x.val privateWitness.nk.val)
+      (commitIvkChunks wit.akP.x.val wit.nk.val)
       (fun bp => ivk =
-        (bp + privateWitness.rivk.2 • orchardBases.commitIvkR).x) ∧
-    privateWitness.pkdOld = ivk.val • privateWitness.gdOld) ∧
+        (bp + wit.rivk.2 • orchardBases.commitIvkR).x) ∧
+    wit.pkdOld = ivk.val • wit.gdOld) ∧
   -- old note-commitment integrity
   HashGuarded Specs.Sinsemilla.orchardGenerators.S orchardBases.noteQ
-    (noteScalars privateWitness.gdOld privateWitness.pkdOld privateWitness.vOld
-      privateWitness.rhoOld privateWitness.psiOld).chunks
-    (fun bp => privateWitness.cmOld =
-      bp + privateWitness.rcmOld.2 • orchardBases.noteCommitR) ∧
+    (noteScalars wit.gdOld wit.pkdOld wit.vOld
+      wit.rhoOld wit.psiOld).chunks
+    (fun bp => wit.cmOld =
+      bp + wit.rcmOld.2 • orchardBases.noteCommitR) ∧
   -- new note-commitment integrity, with `ρ_new = nf_old`
   HashGuarded Specs.Sinsemilla.orchardGenerators.S orchardBases.noteQ
-    (noteScalars privateWitness.gdNew privateWitness.pkdNew privateWitness.vNew
-      input.nfOld privateWitness.psiNew).chunks
+    (noteScalars wit.gdNew wit.pkdNew wit.vNew
+      input.nfOld wit.psiNew).chunks
     (fun bp => input.cmx =
-      (bp + privateWitness.rcmNew.2 • orchardBases.noteCommitR).x) ∧
+      (bp + wit.rcmNew.2 • orchardBases.noteCommitR).x) ∧
   -- exact raw-encoding Merkle path and dummy-spend anchor gate
   (∃ root : Fp,
     Sinsemilla.Merkle.ExactMerklePathData Specs.Sinsemilla.orchardGenerators
-      orchardBases.merkleQ 0 32 privateWitness.cmOld.x root
-      (fun i => if h : i < 32 then privateWitness.leftEncoding ⟨i, h⟩ else 0)
-      (fun i => if h : i < 32 then privateWitness.rightEncoding ⟨i, h⟩ else 0)
-      (fun i => if h : i < 32 then privateWitness.merkleSide ⟨i, h⟩ else false) ∧
-    privateWitness.vOld * (root - input.anchor) = 0) ∧
+      orchardBases.merkleQ 0 32 wit.cmOld.x root
+      (fun i => if h : i < 32 then wit.leftEncoding ⟨i, h⟩ else 0)
+      (fun i => if h : i < 32 then wit.rightEncoding ⟨i, h⟩ else 0)
+      (fun i => if h : i < 32 then wit.merkleSide ⟨i, h⟩ else false) ∧
+    wit.vOld * (root - input.anchor) = 0) ∧
   -- remaining `q_orchard` value checks
-  privateWitness.vOld - privateWitness.vNew =
-    privateWitness.magnitude * privateWitness.sign ∧
-  privateWitness.vOld * (1 - input.enableSpend) = 0 ∧
-  privateWitness.vNew * (1 - input.enableOutput) = 0 ∧
+  wit.vOld - wit.vNew =
+    wit.magnitude * wit.sign ∧
+  wit.vOld * (1 - input.enableSpend) = 0 ∧
+  wit.vNew * (1 - input.enableOutput) = 0 ∧
   -- post-NU6.3 cross-address binding
   (input.disableCrossAddress ≠ 0 →
-    privateWitness.gdOld = privateWitness.gdNew ∧
-      privateWitness.pkdOld = privateWitness.pkdNew)
+    wit.gdOld = wit.gdNew ∧
+      wit.pkdOld = wit.pkdNew)
 
 /-- The canonical Action specification is the concrete instantiation of the
 formal circuit bundle's parameterized postcondition. -/
 theorem actionSpec_iff_specPost
-    (input : PublicInputs Fp) (privateWitness : PrivateWitness) :
-    ActionSpec input privateWitness ↔
+    (input : PublicInputs Fp) (wit : PrivateWitness) :
+    ActionSpec input wit ↔
       SpecPost Specs.Sinsemilla.orchardGenerators orchardBases
-        () () (combine input privateWitness) := by
-  have leftEncoding : merkleLeftEncoding (combine input privateWitness) =
-      fun i => if h : i < 32 then privateWitness.leftEncoding ⟨i, h⟩ else 0 := by
+        () () (combine input wit) := by
+  have leftEncoding : merkleLeftEncoding (combine input wit) =
+      fun i => if h : i < 32 then wit.leftEncoding ⟨i, h⟩ else 0 := by
     funext i
     simp only [merkleLeftEncoding, combine]
-  have rightEncoding : merkleRightEncoding (combine input privateWitness) =
-      fun i => if h : i < 32 then privateWitness.rightEncoding ⟨i, h⟩ else 0 := by
+  have rightEncoding : merkleRightEncoding (combine input wit) =
+      fun i => if h : i < 32 then wit.rightEncoding ⟨i, h⟩ else 0 := by
     funext i
     simp only [merkleRightEncoding, combine]
-  have sides : merkleSide (combine input privateWitness) =
-      fun i => if h : i < 32 then privateWitness.merkleSide ⟨i, h⟩ else false := by
+  have sides : merkleSide (combine input wit) =
+      fun i => if h : i < 32 then wit.merkleSide ⟨i, h⟩ else false := by
     funext i
     simp only [merkleSide, combine]
   rw [SpecPost, SpecBase, leftEncoding, rightEncoding, sides]
@@ -104,7 +104,7 @@ theorem actionSpec_iff_specPost
 /-- Projecting an extracted Action into public and private parts preserves its
 formal circuit postcondition. -/
 theorem actionSpec_ofActionData_iff_specPost (data : ActionData) :
-    ActionSpec (PublicInputs.ofActionData data) (PrivateWitness.ofActionData data) ↔
+    ActionSpec (.ofActionData data) (.ofActionData data) ↔
       SpecPost Specs.Sinsemilla.orchardGenerators orchardBases () () data := by
   rw [actionSpec_iff_specPost, combine_parts]
 

@@ -87,7 +87,7 @@ def synthesisSummary (cfg : Config) (offset : ℕ) :
       .column .advice cfg.a.index,
       .column .advice cfg.b.index,
       .column .advice cfg.c.index]
-    (offset + 1) 0
+    (offset + 1) 0 [(cfg.qAdd.index, offset)]
 
 @[synthesis_summary_norm]
 theorem synthesisSummary_lookupActivationCount (cfg : Config) (offset : ℕ) :

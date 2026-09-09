@@ -25,7 +25,7 @@ The full `Commit^ivk` flow, region-for-region:
    `CommitIvk` composite, called as a unit (contiguous in Rust).
 
 The output is the extracted `x`-coordinate (`ivk`). `Spec` is the breaks-as-data
-`Commit^ivk` relation at the extracted `rivk` window scalar (zcash/ironwood#45).
+`Commit^ivk` relation at the extracted `rivk` window scalar.
 -/
 
 namespace Zcash.Circuits.CommitIvk.Main
@@ -725,7 +725,7 @@ def rivkExtract (cfg : Config) (_ : Var Inputs Fp) (i₀ : RegionIndex)
     (env : Placed Environment Fp) : Vector Fp 85 × Fq :=
   Ecc.MulFixed.FullWidth.fwExtract cfg.mulConfig (i₀ + 7) env
 
-/-- Breaks-as-data `Commit^ivk` contract (zcash/ironwood#45): either the Sinsemilla
+/-- Breaks-as-data `Commit^ivk` contract: either the Sinsemilla
 chain over the canonical `commit_ivk` chunks of `ak`/`nk` is defined and the output
 is the extracted short commitment `(B + [rivk]R).x`, or the incomplete-addition
 escape is exhibited as a valid break. -/

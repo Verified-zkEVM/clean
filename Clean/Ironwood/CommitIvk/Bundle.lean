@@ -79,7 +79,7 @@ def synthesisSummary (cfg : Config) (offset : ℕ) :
       .column .advice (cfg.advices 6).index,
       .column .advice (cfg.advices 7).index,
       .column .advice (cfg.advices 8).index]
-    (offset + 2) 0
+    (offset + 2) 0 [(cfg.qCommitIvk.index, offset)]
 
 @[synthesis_summary_norm]
 theorem synthesisSummary_lookupActivationCount (cfg : Config) (offset : ℕ) :
@@ -89,8 +89,8 @@ theorem synthesisSummary_lookupActivationCount (cfg : Config) (offset : ℕ) :
 @[synthesis_summary_norm]
 theorem synthesisSummary_hasNoFixedColumns (cfg : Config) (offset : ℕ) :
     (synthesisSummary cfg offset).HasNoFixedColumns := by
-  unfold synthesisSummary
-  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
+  simp only [synthesisSummary, synthesis_summary_norm]
+  intro index
   simp
 
 @[circuit_norm]
@@ -138,6 +138,8 @@ def bundleElaborated (wb1 wd1 : WitgenIR Fp 1) :
       · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
           synthesis_summary_norm]
         omega
+      · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
+          synthesis_summary_norm]
       · simp only [synthesisSummary, bundleSynthesize, circuit_norm,
           synthesis_summary_norm]
       · simp only [synthesisSummary, bundleSynthesize, circuit_norm,

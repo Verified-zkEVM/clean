@@ -389,7 +389,8 @@ def hashRegionSynthesisSummary (ns : List ℕ)
     [.selector (Sinsemilla.HashPiece.initialYQGate cfg).selector.index,
       .column .fixed cfg.fixedYQ.index,
       .column .advice cfg.xA.index]
-    (offset + 1) 1).combine
+    (offset + 1) 1
+    [((Sinsemilla.HashPiece.initialYQGate cfg).selector.index, offset)]).combine
       (Sinsemilla.Chain.circuitSynthesisSummary ns cfg offset)
 
 @[synthesis_summary_norm]
@@ -528,7 +529,8 @@ def hashRegion (G : Generators) (ns : List ℕ) (Q : Point Fp) (hQ : Q.OnCurve)
           simp only [hashRegionSynthesisSummary, hashRegionSynthesize,
             circuit_norm, synthesis_summary_norm]
           rw [z1Cells_operations]
-          simp only [synthesis_summary_norm, Nat.max_zero, Nat.add_zero]
+          simp only [synthesis_summary_norm, Nat.max_zero, Nat.add_zero,
+            List.append_nil]
         rw [← max_assoc, max_self, ← max_assoc, max_self]
       output_eq := by
         intro config offset input self
@@ -732,6 +734,40 @@ def hashCircuitSynthesisSummary (ns : List ℕ)
     (config : Sinsemilla.HashPiece.Config) : FloorPlanner.SynthesisSummary :=
   FloorPlanner.SynthesisSummary.ofRegion
     (hashRegionSynthesisSummary ns config 0)
+
+theorem selector_eq_qS1_or_qS4_of_mem_hashCircuitSynthesisSummary
+    (ns : List ℕ) (config : Sinsemilla.HashPiece.Config)
+    (activation : ℕ × ℕ)
+    (hactivation : activation ∈
+      (hashRegionSynthesisSummary ns config 0).selectorActivations) :
+    activation.1 = config.qS1.index ∨ activation.1 = config.qS4.index := by
+  unfold hashRegionSynthesisSummary at hactivation
+  simp only [FloorPlanner.RegionSynthesisSummary.combine_selectorActivations,
+    FloorPlanner.RegionSynthesisSummary.ofColumns_selectorActivations,
+    List.mem_append] at hactivation
+  rcases hactivation with hinitial | hchain
+  · exact Or.inr (by
+      have heq := List.mem_singleton.mp hinitial
+      simpa [Sinsemilla.HashPiece.initialYQGate_selector] using
+        congrArg Prod.fst heq)
+  · exact Or.inl
+      (Sinsemilla.Chain.selector_eq_qS1_of_mem_circuitSynthesisSummary
+        ns config 0 activation hchain)
+
+theorem qS1_qS4_overlap_in_hashCircuitSynthesisSummary
+    (ns : List ℕ) (config : Sinsemilla.HashPiece.Config) (hns : ns ≠ []) :
+    (config.qS1.index, 0) ∈
+        (hashRegionSynthesisSummary ns config 0).selectorActivations ∧
+      (config.qS4.index, 0) ∈
+        (hashRegionSynthesisSummary ns config 0).selectorActivations := by
+  have hqS1 := Sinsemilla.Chain.initial_qS1_mem_circuitSynthesisSummary
+    ns config 0 hns
+  unfold hashRegionSynthesisSummary
+  simp only [FloorPlanner.RegionSynthesisSummary.combine_selectorActivations,
+    FloorPlanner.RegionSynthesisSummary.ofColumns_selectorActivations,
+    List.mem_append]
+  exact ⟨Or.inr hqS1, Or.inl (by
+    simp [Sinsemilla.HashPiece.initialYQGate_selector])⟩
 
 @[synthesis_summary_norm]
 theorem hashCircuitSynthesisSummary_lookupActivationCount

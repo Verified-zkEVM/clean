@@ -7,11 +7,11 @@ import Clean.Ironwood.Ecc.MulFixed.FullWidth
 import Clean.Halo2.CircuitTypeDeriving
 
 /-!
-# Orchard spend authority (Ironwood)
+# Orchard-protocol spend authority
 
-Reference (ported from actual Rust, not memory):
+Reference (ported from Rust):
 `orchard@0.14.0/src/circuit.rs`, the `Spend authority` block in `Circuit::synthesize`
-(lines 629-644): `alpha_commitment = [alpha] SpendAuthG` (full-width fixed-base mul,
+(lines 629-644): `alpha_commitment = alpha • SpendAuthG` (full-width fixed-base mul,
 discarding the returned scalar decomposition), then `rk = alpha_commitment + ak_P`. The
 final public-instance constraints on `rk.x`/`rk.y` belong to the enclosing action
 synthesis.
@@ -19,11 +19,11 @@ synthesis.
 ## Knowledge soundness
 
 The phase-1 donor (`Clean/Orchard/Action/SpendAuthority.lean`) could only state
-`∃ alpha, rk = [alpha] SpendAuthG + ak_P` — vacuous, since `SpendAuthG` generates the
-group. Here `alpha` is the `FullWidth` child's extraction data (the scalar its witnessed
-window cells encode), so the `Spec` is the real knowledge-soundness statement: the
-extractor reads `alpha` off any satisfying assignment and `rk = [alpha] SpendAuthG + ak_P`
-holds at that `alpha`, with no existential.
+`∃ alpha, rk = α • SpendAuthG + ak_P` — vacuous, since `SpendAuthG` generates the group.
+Here `α` is the `FullWidth` child's extraction data (the scalar its witnessed window
+cells encode), so the `Spec` is the real knowledge-soundness statement: the extractor
+reads `α` off any satisfying assignment and `rk = α • SpendAuthG + ak_P` holds at that
+`α`, with no existential.
 -/
 
 namespace Zcash.Circuits.Action.SpendAuthority
@@ -131,10 +131,10 @@ theorem synthesize_copyCellsAssignedFrom
     FormalCircuit.nextRegionIndex_call', Nat.add_zero, fullWidthOps,
     fullWidthOutput] using hall
 
-/-- Rust `Circuit::synthesize`'s spend-authority block: `[alpha] SpendAuthG` (the
+/-- Rust `Circuit::synthesize`'s spend-authority block: `α • SpendAuthG` (the
 `FullWidth` bundle) plus `ak_P`. `Spec` is knowledge soundness at the extracted
-randomizer: `rk = [alpha] SpendAuthG + ak_P` for the `alpha` read off the witnessed
-window cells — no existential. -/
+randomizer: `rk = α • SpendAuthG + ak_P` for the `α` read off the witnessed window
+cells — no existential. -/
 def circuit (G : FixedBase) : FormalCircuit Fp
     (Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config)
     (Ecc.MulFixed.FullWidth.Config × Ecc.Add.Config)
