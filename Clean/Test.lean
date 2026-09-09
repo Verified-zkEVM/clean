@@ -23,6 +23,7 @@ import Clean.Halo2.Tests.TestProofStart
 import Clean.Halo2.Tests.TestTupleLookup
 import Clean.Halo2.Tests.TestSelectorFree
 import Clean.Halo2.Tests.TestPdqsortCertify
+import Clean.Halo2.Tests.TestSelectorBitsets
 import Clean.Ironwood.Tests.TestVkMatchAdd
 import Clean.Ironwood.Tests.TestVkLayoutAdd
 import Clean.Ironwood.Tests.TestVkMatchMul
