@@ -2,7 +2,7 @@ import Clean.Ironwood.NoteCommit.Gates
 import Clean.Ironwood.NoteCommit.CanonicityTheorems
 
 /-!
-Reference (ported from actual Rust, not memory):
+Reference (ported from Rust):
 `orchard@0.14.0/src/circuit/note_commit.rs` — the input-canonicity `assign` regions
 (`"NoteCommit input value"` 994-1035: pure copies of `value`/`d_2`/`d_3 = z1_d`/`e_0`).
 
@@ -10,7 +10,7 @@ The semantic contracts are the phase-1 gate specs (`Clean/Orchard/Action/Canonic
 verbatim; the heavyweight canonicity value arguments are REUSED wholesale via the
 donor-replay bridge: the donor `Gate.circuit` is a main-Clean `FormalAssertion` over the
 same field equations, so applying its `soundness` at offset 0, a trivial environment and
-const-lifted inputs turns the Ironwood-landed equations into the donor `Spec`.
+const-lifted inputs turns the ironwood-landed equations into the donor `Spec`.
 -/
 
 namespace Zcash.Circuits.NoteCommit

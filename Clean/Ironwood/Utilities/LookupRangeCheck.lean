@@ -370,7 +370,7 @@ Packaging decision: a plain `def load … : Circuit Fp Unit` emitting the single
 op, plus a standalone table-contents theorem proven from its `Constraints`. We do NOT wrap
 it in a `FormalCircuit` (the design sketch's suggestion): the layouter-level formal-circuit
 `call`/forward-lemma machinery is not yet ported (only `FormalRegionCircuit` proofs exist
-in the Ironwood tree, and `FormalCircuit` has no `_iff` helpers landed), and the loader's
+in the ironwood tree, and `FormalCircuit` has no `_iff` helpers landed), and the loader's
 sole content IS the table-contents fact, which the theorem below states directly from the
 `loadTable` `Constraints`. This keeps the loader usable by consumers today with no
 dependence on unported layouter-level formal-circuit plumbing. -/
@@ -405,7 +405,7 @@ def TableLoaded (K : ℕ) (cfg : Config K) (env : Environment Fp) : Prop :=
   (∀ r : ℕ, r < env.usableRows → (env.fixed cfg.tableIdx.inner (r : ℤ)).val < 2 ^ K) ∧
   (∀ r : ℕ, r < 2 ^ K → env.fixed cfg.tableIdx.inner (r : ℤ) = (r : Fp))
 
-/-- **Membership-consumption helper** (C2a #5). Turn a lookup-membership existential (the
+/-- **Membership-consumption helper**. Turn a lookup-membership existential (the
 `enableLookup` constraint's `∃ tableRow < usableRows, value = env.fixed tableIdx tableRow`) plus
 the `TableLoaded` usable-rows bound (`TableLoaded`'s second conjunct — `hTableLt`) into the value
 bound `value.val < 2^K`, in one application. This is the "two `obtain`s + application, same shape

@@ -2374,8 +2374,7 @@ def MerkleRoot (G : Generators) (Q : Point Fp) : ℕ → Fp → ℕ → Fp → P
 
 /-- One escape-free Merkle step. Unlike `MerkleStep`, this records that the
 Sinsemilla hash is defined, so the parent is its actual `x`-coordinate. Together
-with `MerkleBreakAt`, this is the Merkle-path breaks-as-data refinement requested
-by zcash/ironwood#45. -/
+with `MerkleBreakAt`, this gives the Merkle-path breaks-as-data refinement. -/
 def MerkleStepStrict (G : Generators) (Q : Point Fp) (l : ℕ)
     (node node' : Fp) : Prop :=
   ∃ lv rv : ℕ, lv < 2 ^ 255 ∧ rv < 2 ^ 255 ∧
@@ -2383,7 +2382,7 @@ def MerkleStepStrict (G : Generators) (Q : Point Fp) (l : ℕ)
     ∃ B, hashToPoint G.S Q (merkleChunks l lv rv) = some B ∧ node' = B.x
 
 /-- An escape-free Merkle root chain. This is the defined-hash branch of the
-Merkle-path breaks-as-data refinement requested by zcash/ironwood#45. -/
+Merkle-path breaks-as-data refinement. -/
 def MerkleRootStrict (G : Generators) (Q : Point Fp) : ℕ → Fp → ℕ → Fp → Prop
   | _, node, 0, root => root = node
   | l, node, k + 1, root =>
@@ -2391,8 +2390,7 @@ def MerkleRootStrict (G : Generators) (Q : Point Fp) : ℕ → Fp → ℕ → Fp
       MerkleRootStrict G Q (l + 1) mid k root
 
 /-- A valid Sinsemilla escape exhibited at layer `l + j` of a `k`-layer Merkle
-window. The layer index is retained as part of the breaks-as-data witness requested
-by zcash/ironwood#45. -/
+window. The layer index is retained as part of the breaks-as-data witness. -/
 def MerkleBreakAt (G : Generators) (Q : Point Fp) (l k : ℕ) : Prop :=
   ∃ j, j < k ∧ ∃ br : BreakData, ValidBreak G.S Q br ∧
     ∃ lv rv : ℕ, lv < 2 ^ 255 ∧ rv < 2 ^ 255 ∧
@@ -2404,6 +2402,8 @@ private theorem merkleChunks_mem_lt {l lv rv m : ℕ}
   obtain ⟨j, -, rfl⟩ := h
   exact Nat.mod_lt _ (Nat.two_pow_pos K)
 
+/-- Forgets the exhibited defined hash result from a strict Merkle step, yielding the guarded
+Merkle-step contract. -/
 theorem MerkleStepStrict.toMerkleStep (G : Generators) (Q : Point Fp)
     {l : ℕ} {node node' : Fp} (h : MerkleStepStrict G Q l node node') :
     MerkleStep G Q l node node' := by
@@ -2434,6 +2434,8 @@ theorem MerkleStep.strictOrBreak (G : Generators) (Q : Point Fp) (hQ : Q.OnCurve
       rw [Nat.add_zero]
       exact hsplit.symm⟩
 
+/-- Forgets the exhibited defined hash results throughout a strict Merkle path, yielding the
+guarded Merkle-root contract. -/
 theorem MerkleRootStrict.toMerkleRoot (G : Generators) (Q : Point Fp)
     {l : ℕ} {node : Fp} {k : ℕ} {root : Fp}
     (h : MerkleRootStrict G Q l node k root) : MerkleRoot G Q l node k root := by
