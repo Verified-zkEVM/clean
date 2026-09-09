@@ -1,7 +1,11 @@
-import Lean
-import Clean.Circuit.Json
-import Clean.Table.Json
-import Clean.Utils.Primes
+module
+
+public import Lean
+public import Clean.Circuit.Json
+public import Clean.Table.Json
+public import Clean.Utils.Primes
+
+@[expose] public section
 
 namespace Examples.FemtoCairo.Plonky3Helpers
 

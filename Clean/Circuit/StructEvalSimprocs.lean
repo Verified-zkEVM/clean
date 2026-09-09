@@ -1,4 +1,6 @@
-import Clean.Circuit.Provable
+module
+
+public meta import Clean.Circuit.Provable
 
 /-!
 # Simprocs for `ProvableStruct` evaluation
@@ -23,6 +25,8 @@ and structure projections syntactically — something rewrite lemmas cannot do g
 and validate the rewrite by definitional equality (structure eta *is* still part of
 definitional equality, only matcher reduction lost it).
 -/
+
+public meta section
 
 open Lean Meta Simp
 

@@ -1,9 +1,20 @@
-import Clean.Utils.Vector
-import Clean.Circuit.Basic
-import Clean.Table.Theorems
-import Clean.Gadgets.Addition32.Addition32
-import Clean.Gadgets.Equality
-import Clean.Types.U32
+module
+
+public import Clean.Utils.Vector
+public import Clean.Circuit.Basic
+public import Clean.Table.Theorems
+public import Clean.Gadgets.Addition32.Addition32
+public import Clean.Gadgets.Equality
+public import Clean.Types.U32
+
+-- `Vector.finRange`/`mapFinRange` are unfolded below; core does not expose their bodies.
+import all Init.Data.Vector.FinRange
+
+-- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
+-- whose bodies core does not expose.
+import all Init.Data.Array.Basic
+
+@[expose] public section
 
 namespace Tables.Fibonacci32
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]

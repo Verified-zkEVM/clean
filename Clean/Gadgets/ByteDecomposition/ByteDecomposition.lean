@@ -1,7 +1,15 @@
-import Clean.Circuit
-import Clean.Utils.Primes
-import Clean.Utils.Field
-import Clean.Gadgets.ByteDecomposition.Theorems
+module
+
+public import Clean.Circuit
+public import Clean.Utils.Primes
+public import Clean.Utils.Field
+public import Clean.Gadgets.ByteDecomposition.Theorems
+
+-- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
+-- whose bodies core does not expose.
+import all Init.Data.Array.Basic
+
+@[expose] public section
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
 instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])

@@ -1,7 +1,14 @@
-import Clean.Utils.Field
-import Clean.Utils.Bitwise
-import Clean.Utils.Rotation
-import Clean.Types.U64
+module
+
+public import Clean.Utils.Field
+public import Clean.Utils.Bitwise
+public import Clean.Utils.Rotation
+public import Clean.Types.U64
+
+-- The `rfl` below reduces through `Array.ofFn`, whose body core does not expose.
+import all Init.Data.Array.Basic
+
+@[expose] public section
 
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 2^16 + 2^8)]
@@ -34,7 +41,7 @@ def rotRight64_u64 : U64 ℕ → ℕ → U64 ℕ
 
 -- these two are definitionally equal
 lemma rotRight64_bytes_u64_eq (o : ℕ) (x : U64 ℕ) :
-  rotRight64_bytes x.toLimbs o = (rotRight64_u64 x o).toLimbs := rfl
+  rotRight64_bytes x.toLimbs o = (rotRight64_u64 x o).toLimbs := by with_unfolding_all rfl
 
 lemma h_mod {o : ℕ} (ho : o < 8) {x0 x1 x2 x3 x4 x5 x6 x7 : ℕ} :
     (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) %

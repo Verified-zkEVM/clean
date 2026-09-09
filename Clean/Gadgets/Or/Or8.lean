@@ -1,5 +1,12 @@
-import Clean.Circuit
-import Clean.Gadgets.Xor.ByteXorTable
+module
+
+public import Clean.Circuit
+public import Clean.Gadgets.Xor.ByteXorTable
+-- `Nat.bitwise` is unfolded below; core does not expose its body.
+import all Init.Data.Nat.Bitwise.Basic
+import all Init.Data.Array.Basic
+
+@[expose] public section
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 

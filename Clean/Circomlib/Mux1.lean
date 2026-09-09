@@ -1,8 +1,16 @@
-import Clean.Circuit
-import Clean.Utils.Field
-import Clean.Utils.Tactics
-import Clean.Gadgets.Equality
-import Clean.Gadgets.Boolean
+module
+
+public import Clean.Circuit
+public import Clean.Utils.Field
+public import Clean.Utils.Tactics
+public import Clean.Gadgets.Equality
+public import Clean.Gadgets.Boolean
+
+-- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
+-- whose bodies core does not expose.
+import all Init.Data.Array.Basic
+
+@[expose] public section
 
 namespace Circomlib
 open Circuit

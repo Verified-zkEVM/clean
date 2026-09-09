@@ -1,6 +1,10 @@
-import Clean.Circuit
-import Clean.Utils.Bits
-import Clean.Gadgets.Bits
+module
+
+public import Clean.Circuit
+public import Clean.Utils.Bits
+public import Clean.Gadgets.Bits
+
+@[expose] public section
 
 namespace Circomlib
 open Utils.Bits

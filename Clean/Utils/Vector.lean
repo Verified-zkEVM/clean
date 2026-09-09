@@ -1,6 +1,13 @@
-import Mathlib.Analysis.Normed.Ring.Lemmas
-import Mathlib.Combinatorics.Enumerative.Composition
-import Init.Data.List.Find
+module
+
+public import Mathlib.Analysis.Normed.Ring.Lemmas
+public import Mathlib.Combinatorics.Enumerative.Composition
+public import Init.Data.List.Find
+
+-- `simp [finRange]` below unfolds `Vector.finRange`, whose body core does not expose.
+import all Init.Data.Vector.FinRange
+
+@[expose] public section
 
 variable {α β : Type} {n m : ℕ}
 
@@ -408,6 +415,6 @@ lemma map_takeShort {α β : Type} (f : α → β) {j n : ℕ} (v : Vector α n)
 
 /-- coerce any Array to a Vector of the given size -/
 def ofArray [Inhabited α] (n : ℕ) (arr : Array α) : Vector α n :=
-  ⟨ arr.take n |>.rightpad n default, by simp ⟩
+  ⟨ arr.take n |>.rightpad n default, by simp [Array.size_rightpad] ⟩
 
 end Vector

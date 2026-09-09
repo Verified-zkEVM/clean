@@ -8,8 +8,18 @@ Goal - use three channels:
 
 Prove e2e soundness and completeness of the table ensemble.
 -/
-import Clean.Air.Vm
-import Clean.Gadgets.Addition8.Theorems
+module
+
+public import Clean.Air.Vm
+public import Clean.Gadgets.Addition8.Theorems
+
+-- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
+-- whose bodies core does not expose.
+import all Init.Data.Array.Basic
+-- `Vector.finRange`/`mapFinRange` are unfolded below; core does not expose their bodies.
+import all Init.Data.Vector.FinRange
+
+@[expose] public section
 open ByteUtils (mod256)
 open FieldUtils (mod floorDiv)
 open Gadgets.Addition8 (Theorems.soundness Theorems.completeness_bool Theorems.completeness_add)

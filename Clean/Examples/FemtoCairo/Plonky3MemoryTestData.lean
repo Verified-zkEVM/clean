@@ -2,9 +2,20 @@
   Shared test data for FemtoCairo plonky3 backend tests with memory-reading instructions.
   Exercises AP-relative and FP-relative addressing modes with non-trivial memory values.
 -/
-import Clean.Examples.FemtoCairo.FemtoCairo
-import Clean.Table.Inductive
-import Clean.Utils.Primes
+module
+
+public import Clean.Examples.FemtoCairo.FemtoCairo
+public import Clean.Table.Inductive
+public import Clean.Utils.Primes
+
+-- `native_decide` runs compiled code from this module.
+public meta import Clean.Utils.Primes
+
+-- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
+-- whose bodies core does not expose.
+import all Init.Data.Array.Basic
+
+@[expose] public section
 
 open Examples.FemtoCairo
 open Examples.FemtoCairo.Types

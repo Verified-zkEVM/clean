@@ -1,14 +1,36 @@
-import Clean.Circuit.WitnessExport
-import Clean.Gadgets.Xor.Xor64
-import Clean.Gadgets.IsZeroField
-import Clean.Gadgets.Bits
-import Clean.Gadgets.Keccak.Permutation
-import Clean.Utils.Primes
+module
+
+public import Clean.Circuit.WitnessExport
+public import Clean.Gadgets.Xor.Xor64
+public import Clean.Gadgets.IsZeroField
+public import Clean.Gadgets.Bits
+public import Clean.Gadgets.Keccak.Permutation
+public import Clean.Utils.Primes
+
+-- `native_decide` runs compiled code from this module.
+public meta import Clean.Gadgets.Bits
+
+-- `native_decide` runs compiled code from this module.
+public meta import Clean.Circuit.WitnessExport
+-- `native_decide` runs compiled code from this module.
+public meta import Clean.Gadgets.IsZeroField
+-- `native_decide` runs compiled code from this module.
+public meta import Clean.Gadgets.Keccak.Permutation
+-- `native_decide` runs compiled code from this module.
+public meta import Clean.Gadgets.Xor.Xor64
+-- `native_decide` runs compiled code from this module.
+public meta import Clean.Utils.Primes
+
+-- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
+-- whose bodies core does not expose.
+import all Init.Data.Array.Basic
 
 /-!
 Exercises `#assert_exportable` and `#witgen_json` (witgen IR plan, phase 6) on ported
 gadgets, including a guarded failure for a native-closure witness.
 -/
+
+@[expose] public section
 
 namespace Examples.WitnessExport
 

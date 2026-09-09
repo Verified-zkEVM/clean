@@ -1,11 +1,19 @@
-import Clean.Circuit
-import Clean.Table.Inductive
-import Clean.Gadgets.Bits
-import Clean.Utils.Bits
-import Clean.Utils.Field
+module
 
-import Clean.Examples.FemtoCairo.SpecLemmas
-import Clean.Examples.FemtoCairo.TypesLemmas
+public import Clean.Circuit
+public import Clean.Table.Inductive
+public import Clean.Gadgets.Bits
+public import Clean.Utils.Bits
+public import Clean.Utils.Field
+
+public import Clean.Examples.FemtoCairo.SpecLemmas
+public import Clean.Examples.FemtoCairo.TypesLemmas
+
+-- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
+-- whose bodies core does not expose.
+import all Init.Data.Array.Basic
+
+@[expose] public section
 
 namespace Examples.FemtoCairo
 open Gadgets

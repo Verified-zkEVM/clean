@@ -1,7 +1,15 @@
-import Clean.Circuit
-import Clean.Gadgets.ByteLookup
-import Clean.Gadgets.Boolean
-import Clean.Gadgets.Addition8.Theorems
+module
+
+public import Clean.Circuit
+public import Clean.Gadgets.ByteLookup
+public import Clean.Gadgets.Boolean
+public import Clean.Gadgets.Addition8.Theorems
+
+-- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
+-- whose bodies core does not expose.
+import all Init.Data.Array.Basic
+
+@[expose] public section
 
 namespace Gadgets.Addition8FullCarry
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]

@@ -1,8 +1,13 @@
-import Clean.Circuit.Provable
-import Clean.Circuit.Subcircuit
-import Clean.Gadgets.Boolean
-import Clean.Utils.Tactics
-import Clean.Utils.Tactics.ProvableStructDeriving
+module
+
+public import Clean.Circuit.Provable
+public import Clean.Circuit.Subcircuit
+public import Clean.Gadgets.Boolean
+public import Clean.Utils.Tactics
+public import Clean.Utils.Tactics.ProvableStructDeriving
+import all Init.Data.Array.Basic
+
+@[expose] public section
 
 namespace Gadgets.Conditional
 

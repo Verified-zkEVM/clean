@@ -1,5 +1,12 @@
-import Clean.Utils.Bitwise
-import Clean.Utils.Vector
+module
+
+public import Clean.Utils.Bitwise
+public import Clean.Utils.Vector
+
+-- The `rfl` test vectors below reduce through `Array.ofFn`, whose body core does not expose.
+import all Init.Data.Array.Basic
+
+@[expose] public section
 
 namespace Specs.BLAKE3
 

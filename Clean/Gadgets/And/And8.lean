@@ -1,6 +1,14 @@
-import Clean.Circuit
-import Clean.Gadgets.Xor.ByteXorTable
-import Clean.Utils.Primes
+module
+
+public import Clean.Circuit
+public import Clean.Gadgets.Xor.ByteXorTable
+public import Clean.Utils.Primes
+
+-- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
+-- whose bodies core does not expose.
+import all Init.Data.Array.Basic
+
+@[expose] public section
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 

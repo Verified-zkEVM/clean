@@ -1,8 +1,16 @@
-import Clean.Utils.Field
-import Clean.Utils.Bitwise
-import Clean.Utils.Rotation
-import Clean.Types.U32
-import Clean.Gadgets.ByteDecomposition.ByteDecomposition
+module
+
+public import Clean.Utils.Field
+public import Clean.Utils.Bitwise
+public import Clean.Utils.Rotation
+public import Clean.Types.U32
+public import Clean.Gadgets.ByteDecomposition.ByteDecomposition
+
+-- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
+-- whose bodies core does not expose.
+import all Init.Data.Array.Basic
+
+@[expose] public section
 
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 2^16 + 2^8)]
@@ -32,7 +40,7 @@ def rotRight32_u32 : U32 ℕ → ℕ → U32 ℕ
 
 -- these two are definitionally equal
 lemma rotRight32_bytes_u32_eq (o : ℕ) (x : U32 ℕ) :
-  rotRight32_bytes x.toLimbs o = (rotRight32_u32 x o).toLimbs := rfl
+  rotRight32_bytes x.toLimbs o = (rotRight32_u32 x o).toLimbs := by with_unfolding_all rfl
 
 lemma h_mod32 {o : ℕ} (ho : o < 8) {x0 x1 x2 x3 : ℕ} :
     (x0 + x1 * 256 + x2 * 256^2 + x3 * 256^3) % 2^o = x0 % 2^o := by

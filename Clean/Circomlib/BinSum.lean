@@ -1,11 +1,15 @@
-import Clean.Circuit
-import Clean.Circuit.Expression
-import Clean.Utils.Bits
-import Clean.Utils.Fin
-import Clean.Utils.Vector
-import Clean.Gadgets.Bits
-import Clean.Gadgets.Boolean
-import Clean.Circomlib.Bitify
+module
+
+public import Clean.Circuit
+public import Clean.Circuit.Expression
+public import Clean.Utils.Bits
+public import Clean.Utils.Fin
+public import Clean.Utils.Vector
+public import Clean.Gadgets.Bits
+public import Clean.Gadgets.Boolean
+public import Clean.Circomlib.Bitify
+
+@[expose] public section
 
 namespace Circomlib
 open Utils.Bits Expression

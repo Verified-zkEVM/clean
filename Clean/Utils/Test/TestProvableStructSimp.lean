@@ -1,5 +1,7 @@
-import Clean.Circuit
-import Clean.Utils.Tactics
+module
+
+public import Clean.Circuit
+public import Clean.Utils.Tactics
 
 /-!
 Tests for `provable_struct_simp`, covering its three jobs:
@@ -12,6 +14,8 @@ Tests for `provable_struct_simp`, covering its three jobs:
 
 The `have`/`exact` bodies double as shape assertions on the resulting goal state.
 -/
+
+@[expose] public section
 
 namespace TestProvableStructSimp
 

@@ -1,10 +1,17 @@
-import Clean.Gadgets.ByteLookup
-import Clean.Circuit.Extensions
-import Clean.Utils.Bitwise
-import Clean.Circuit.Provable
-import Clean.Utils.Primes
-import Clean.Circuit.Subcircuit
-import Clean.Gadgets.Equality
+module
+
+public import Clean.Gadgets.ByteLookup
+public import Clean.Circuit.Extensions
+public import Clean.Utils.Bitwise
+public import Clean.Circuit.Provable
+public import Clean.Utils.Primes
+public import Clean.Circuit.Subcircuit
+public import Clean.Gadgets.Equality
+
+-- `show Nat.bitwise ...` below unfolds `Nat.bitwise`, whose body core does not expose.
+import all Init.Data.Nat.Bitwise.Basic
+
+@[expose] public section
 
 section
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]

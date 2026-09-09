@@ -1,9 +1,13 @@
-import Clean.Circuit
-import Clean.Utils.Bits
-import Clean.Utils.Fin
-import Clean.Circomlib.Bitify
-import Clean.Circomlib.AliasCheck
-import Clean.Circomlib.Comparators
+module
+
+public import Clean.Circuit
+public import Clean.Utils.Bits
+public import Clean.Utils.Fin
+public import Clean.Circomlib.Bitify
+public import Clean.Circomlib.AliasCheck
+public import Clean.Circomlib.Comparators
+
+@[expose] public section
 
 /-
 Original source code:

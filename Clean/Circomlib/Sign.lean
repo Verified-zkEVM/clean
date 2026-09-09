@@ -1,7 +1,11 @@
-import Clean.Circuit
-import Clean.Utils.Field
-import Clean.Utils.Bits
-import Clean.Circomlib.CompConstant
+module
+
+public import Clean.Circuit
+public import Clean.Utils.Field
+public import Clean.Utils.Bits
+public import Clean.Circomlib.CompConstant
+
+@[expose] public section
 
 /-
 Original source code:

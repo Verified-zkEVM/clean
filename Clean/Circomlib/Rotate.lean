@@ -1,6 +1,10 @@
-import Clean.Circuit
-import Clean.Utils.Field
-import Clean.Utils.Tactics
+module
+
+public import Clean.Circuit
+public import Clean.Utils.Field
+public import Clean.Utils.Tactics
+
+@[expose] public section
 
 namespace Circomlib
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]

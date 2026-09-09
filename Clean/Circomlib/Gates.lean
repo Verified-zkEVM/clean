@@ -1,11 +1,15 @@
-import Clean.Circuit
-import Clean.Utils.Field
-import Clean.Gadgets.Boolean
-import Clean.Utils.Bitwise
-import Clean.Utils.Vector
-import Clean.Utils.BinaryOps
-import Clean.Circuit.Theorems
-import Mathlib.Data.Nat.Bitwise
+module
+
+public import Clean.Circuit
+public import Clean.Utils.Field
+public import Clean.Gadgets.Boolean
+public import Clean.Utils.Bitwise
+public import Clean.Utils.Vector
+public import Clean.Utils.BinaryOps
+public import Clean.Circuit.Theorems
+public import Mathlib.Data.Nat.Bitwise
+
+@[expose] public section
 
 open IsBool
 

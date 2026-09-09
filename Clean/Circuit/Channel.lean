@@ -1,7 +1,11 @@
-import Clean.Circuit.Expression
-import Clean.Circuit.Provable
-import Clean.Circuit.SimpGadget
-import Mathlib.Data.Finsupp.Defs
+module
+
+public import Clean.Circuit.Expression
+public import Clean.Circuit.Provable
+public import Clean.Circuit.SimpGadget
+public import Mathlib.Data.Finsupp.Defs
+
+@[expose] public section
 
 variable {F : Type} [FiniteField F]
 variable {Message : TypeMap} [ProvableType Message]

@@ -1,6 +1,10 @@
-import Clean.Circuit
-import Clean.Utils.Field
-import Clean.Utils.Primes
+module
+
+public import Clean.Circuit
+public import Clean.Utils.Field
+public import Clean.Utils.Primes
+
+@[expose] public section
 namespace Examples.FemtoCairo.Types
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 

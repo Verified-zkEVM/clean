@@ -1,11 +1,15 @@
-import Clean.Gadgets.BLAKE3.BLAKE3State
-import Clean.Gadgets.BLAKE3.Round
-import Clean.Gadgets.BLAKE3.Permute
-import Clean.Types.U32
-import Clean.Circuit.Provable
-import Clean.Specs.BLAKE3
-import Clean.Circuit.StructuralLemmas
-import Clean.Utils.Tactics
+module
+
+public import Clean.Gadgets.BLAKE3.BLAKE3State
+public import Clean.Gadgets.BLAKE3.Round
+public import Clean.Gadgets.BLAKE3.Permute
+public import Clean.Types.U32
+public import Clean.Circuit.Provable
+public import Clean.Specs.BLAKE3
+public import Clean.Circuit.StructuralLemmas
+public import Clean.Utils.Tactics
+
+@[expose] public section
 
 namespace Gadgets.BLAKE3.ApplyRounds
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]

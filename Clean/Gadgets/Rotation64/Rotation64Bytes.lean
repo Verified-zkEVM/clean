@@ -1,6 +1,14 @@
-import Clean.Types.U64
-import Clean.Gadgets.Rotation64.Theorems
-import Clean.Utils.Primes
+module
+
+public import Clean.Types.U64
+public import Clean.Gadgets.Rotation64.Theorems
+public import Clean.Utils.Primes
+
+-- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
+-- whose bodies core does not expose.
+import all Init.Data.Array.Basic
+
+@[expose] public section
 
 namespace Gadgets.Rotation64Bytes
 variable {p : ℕ} [Fact p.Prime]
@@ -50,9 +58,9 @@ def Spec (offset : Fin 8) (x : U64 (F p)) (y : U64 (F p)) :=
   subcircuitsConsistent x i0 := by
     obtain ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := x
     simp only [main]
-    fin_cases off <;> simp only [circuit_norm, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
+    fin_cases off <;> simp only [circuit_norm, Fin.reduceFinMk, Fin.reduceEq]
   channelsLawful := by
-    fin_cases off <;> simp only [circuit_norm, main, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
+    fin_cases off <;> simp only [circuit_norm, main, Fin.reduceFinMk, Fin.reduceEq]
 
   output_eq := by
     intros
@@ -87,7 +95,7 @@ def circuit (off : Fin 8) : FormalCircuit (F p) U64 U64 := {
   main := main off
   elaborated := elaborated off
   requirementsChannelsLawful := by
-    fin_cases off <;> simp only [circuit_norm, main, reduceIte, Fin.reduceFinMk, Fin.reduceEq]
+    fin_cases off <;> simp only [circuit_norm, main, Fin.reduceFinMk, Fin.reduceEq]
   Assumptions
   Spec := Spec off
   soundness := soundness off

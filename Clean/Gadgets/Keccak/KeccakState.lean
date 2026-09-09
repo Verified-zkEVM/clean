@@ -1,7 +1,11 @@
-import Clean.Types.U64
-import Clean.Circuit.Provable
-import Clean.Utils.Field
-import Clean.Specs.Keccak256
+module
+
+public import Clean.Types.U64
+public import Clean.Circuit.Provable
+public import Clean.Utils.Field
+public import Clean.Specs.Keccak256
+
+@[expose] public section
 
 namespace Gadgets.Keccak256
 open Specs.Keccak256

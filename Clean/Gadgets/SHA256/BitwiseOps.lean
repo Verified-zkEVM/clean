@@ -1,7 +1,11 @@
-import Clean.Circuit
-import Clean.Gadgets.Boolean
-import Clean.Utils.Primes
-import Clean.Utils.Bits
+module
+
+public import Clean.Circuit
+public import Clean.Gadgets.Boolean
+public import Clean.Utils.Primes
+public import Clean.Utils.Bits
+
+@[expose] public section
 
 section
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]

@@ -1,4 +1,14 @@
-import Clean.Specs.BLAKE3
+module
+
+public import Clean.Specs.BLAKE3
+
+-- `decide` below evaluates `bytesToWords` through `Array.ofFn`, whose body core does not expose.
+import all Init.Data.Array.Basic
+
+-- `native_decide` runs compiled code from this module.
+public meta import Clean.Specs.BLAKE3
+
+@[expose] public section
 
 namespace Specs.BLAKE3.ChunkProcessing.Tests
 

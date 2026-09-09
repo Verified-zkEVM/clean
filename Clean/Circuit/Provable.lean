@@ -1,7 +1,14 @@
-import Mathlib.Data.ZMod.Basic
-import Clean.Utils.Vector
-import Clean.Circuit.CircuitType
-import Clean.Circuit.SimpGadget
+module
+
+public import Mathlib.Data.ZMod.Basic
+public import Clean.Utils.Vector
+public import Clean.Circuit.CircuitType
+public import Clean.Circuit.SimpGadget
+
+-- `with_unfolding_all rfl` below reduces through `Array.mapM`, whose body core does not expose.
+import all Init.Data.Array.Basic
+
+@[expose] public section
 
 variable {F : Type} [FiniteField F]
 

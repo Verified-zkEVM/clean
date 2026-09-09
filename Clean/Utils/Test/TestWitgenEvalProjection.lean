@@ -1,5 +1,9 @@
-import Clean.Circuit.Lookup
-import Clean.Utils.Tactics.ProvableStructDeriving
+module
+
+public import Clean.Circuit.Lookup
+public import Clean.Utils.Tactics.ProvableStructDeriving
+
+@[expose] public section
 
 namespace TestWitgenEvalProjection
 

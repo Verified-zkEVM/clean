@@ -1,8 +1,17 @@
-import Std.Tactic.BVDecide
-import Mathlib.Analysis.Normed.Ring.Lemmas
-import Clean.Utils.Field
-import Mathlib.Data.Nat.Bitwise
-import Std.Tactic.BVDecide
+module
+
+public import Std.Tactic.BVDecide
+public import Mathlib.Analysis.Normed.Ring.Lemmas
+public import Clean.Utils.Field
+public import Mathlib.Data.Nat.Bitwise
+public import Std.Tactic.BVDecide
+
+-- `simp only [Nat.land]` below unfolds `Nat.land`/`Nat.bitwise`, whose bodies core does not
+-- expose; `bv_decide` compiles its reflection procedure, so that must reach meta code.
+import all Init.Data.Nat.Bitwise.Basic
+public meta import Std.Tactic.BVDecide.Reflect
+
+@[expose] public section
 def not64 (a : ℕ) : ℕ := a ^^^ 0xffffffffffffffff
 
 def add32 (a b : ℕ) : ℕ := (a + b) % 2^32

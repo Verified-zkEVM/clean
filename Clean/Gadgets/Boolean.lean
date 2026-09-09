@@ -1,7 +1,15 @@
-import Clean.Circuit.Basic
-import Clean.Utils.Field
-import Clean.Utils.Tactics.CircuitProofStart
-import Mathlib.Data.Nat.Bitwise
+module
+
+public import Clean.Circuit.Basic
+public import Clean.Utils.Field
+public import Clean.Utils.Tactics.CircuitProofStart
+public import Mathlib.Data.Nat.Bitwise
+public import Clean.Circuit.Formal
+
+-- `unfold Nat.land` below needs a body core does not expose.
+import all Init.Data.Nat.Bitwise.Basic
+
+@[expose] public section
 
 /-- A predicate stating that an element is boolean (0 or 1) for any type with 0 and 1 -/
 def IsBool {α : Type*} [Zero α] [One α] (x : α) : Prop := x = 0 ∨ x = 1
@@ -195,7 +203,11 @@ inductive Boolean (F : Type) where
   | private mk : Variable F → Boolean F
 
 namespace Boolean
-def witness (e : Witgen.FExpr (F p)) := do
+
+/- `mk` is private on purpose: a `Boolean` may only be produced by `witness`, which emits the
+booleanity constraint. Its body therefore stays unexposed, or it would leak the private
+constructor into the public scope. -/
+@[no_expose] def witness (e : Witgen.FExpr (F p)) := do
   let x ← witnessVar (.ofFExpr e)
   assertZero (var x * (var x - 1))
   return Boolean.mk x

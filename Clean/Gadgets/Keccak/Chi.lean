@@ -1,10 +1,20 @@
-import Clean.Types.U64
-import Clean.Circuit.Loops
-import Clean.Gadgets.Xor.Xor64
-import Clean.Gadgets.And.And64
-import Clean.Gadgets.Not.Not64
-import Clean.Gadgets.Keccak.KeccakState
-import Clean.Specs.Keccak256
+module
+
+public import Clean.Types.U64
+public import Clean.Circuit.Loops
+public import Clean.Gadgets.Xor.Xor64
+public import Clean.Gadgets.And.And64
+public import Clean.Gadgets.Not.Not64
+public import Clean.Gadgets.Keccak.KeccakState
+public import Clean.Specs.Keccak256
+-- `rw [Vector.finRange]` below needs a body core does not expose.
+import all Init.Data.Vector.FinRange
+
+-- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
+-- whose bodies core does not expose.
+import all Init.Data.Array.Basic
+
+@[expose] public section
 
 namespace Gadgets.Keccak256.Chi
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
