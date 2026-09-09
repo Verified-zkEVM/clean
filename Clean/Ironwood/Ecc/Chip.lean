@@ -8,7 +8,7 @@ import Clean.Ironwood.Ecc.MulFixed.Short
 import Clean.Ironwood.Ecc.MulFixed.BaseFieldElem
 
 /-!
-# ECC chip configure (Ironwood)
+# Orchard-protocol ECC chip configure
 
 The aggregate ECC configuration, in VK-exact registration order: witness point, incomplete
 addition, complete addition, variable-base mul, the shared `mul_fixed` core, then the

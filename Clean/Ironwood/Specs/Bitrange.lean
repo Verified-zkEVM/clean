@@ -1,6 +1,11 @@
-import Mathlib.Tactic
+import Mathlib.Tactic.FieldSimp
+import Mathlib.Tactic.Linarith
+import Mathlib.Tactic.NormNum
+import Mathlib.Tactic.Positivity
+import Mathlib.Tactic.Ring
+import Mathlib.Tactic.Set
 import Clean.Circuit.WitnessIRSugar
-import Clean.Ironwood.Specs.CompEllipticExtras
+import CompElliptic.Fields.Pasta
 
 open CompElliptic.Fields.Pasta (Fp)
 
