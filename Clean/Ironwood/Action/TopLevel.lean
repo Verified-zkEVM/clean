@@ -153,6 +153,13 @@ def Internal.actionCircuitImpl : TopLevelCircuit Fp Config PublicInputs where
   noCallerRequirements := actionNoCallerRequirements
   selectorRequirements := actionSelectorRequirements
   queryRequirements := actionQueryRequirements
+  lookupSelectorAnchor _ := .column .advice
+    ((configure Specs.Sinsemilla.orchardGenerators {}).1.lookupConfig.runningSum.index)
+  lookupSelectorAnchorRequirements_satisfied := by
+    simp only [Circuit.circuit, Circuit.elaboratedPost,
+      TopLevelCompilation.config, LookupRangeCheck.lookupSelectorAnchorRequirements,
+      SelectorAnchorRequirementsSatisfied]
+    rfl
   exists_rotation_mem_fixedQueries_of_lt := by
     intro column hcolumn
     have hbound : column <
