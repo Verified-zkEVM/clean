@@ -678,6 +678,14 @@ structure TopLevelCircuit
   selectorRequirements : formalCircuit.selectorRequirements () {}
   /-- A closed circuit borrows no queryable columns from an incoming configure state. -/
   queryRequirements : formalCircuit.queryRequirements () {}
+  /-- Physical columns shared by regions using each auxiliary lookup selector. -/
+  lookupSelectorAnchor : ℕ → FloorPlanner.RegionColumn
+  /-- The closed circuit solves the lookup-anchor equations exported by its children. -/
+  lookupSelectorAnchorRequirements_satisfied :
+    SelectorAnchorRequirementsSatisfied
+      (formalCircuit.elaborated.lookupSelectorAnchorRequirements
+        (TopLevelCompilation.config formalCircuit) () 0)
+      lookupSelectorAnchor
   /-- Every fixed column allocated by the closed configure program is queried. Child
   circuits may leave this obligation to a parent that queries their column later, so the
   law belongs specifically at the top-level boundary. -/
@@ -2245,14 +2253,12 @@ def lookupSelectorAnchorRequirements
 /-- A solution of the reduced top-level anchor equations physically anchors every
 lookup selector which may be read while disabled. -/
 theorem lookupSelectorsAnchoredBy
-    (self : TopLevelCircuit F Config PublicInput)
-    (anchor : ℕ → FloorPlanner.RegionColumn)
-    (hanchor : SelectorAnchorRequirementsSatisfied
-      self.lookupSelectorAnchorRequirements anchor) :
-    self.operations.LookupSelectorsAnchoredBy anchor := by
+    (self : TopLevelCircuit F Config PublicInput) :
+    self.operations.LookupSelectorsAnchoredBy self.lookupSelectorAnchor := by
   rcases self.noCallerRequirements with ⟨hconfig, _, _, _, _, _, _⟩
   exact self.formalCircuit.elaborated.lookupSelectorsAnchoredBy
-    () {} hconfig () 0 anchor hanchor
+    () {} hconfig () 0 self.lookupSelectorAnchor
+    self.lookupSelectorAnchorRequirements_satisfied
 
 /-- A lookup input selector is compiled into a singleton packed column whose value
 at the lookup row is exactly that operation's selector valuation. The disabled case
@@ -2261,8 +2267,6 @@ activation from another region. -/
 theorem lookupInputSelectorFixedValue
     (self : TopLevelCircuit F Config PublicInput)
     [TopLevelShape self]
-    (anchor : ℕ → FloorPlanner.RegionColumn)
-    (hanchored : self.operations.LookupSelectorsAnchoredBy anchor)
     {region : RegionIndex} {body : RegionOperations F}
     {argument : LookupArgument F} {enabled : List Selector} {row : ℕ}
     (hregion : (region, body) ∈ (indexedRegions self.operations 0).1)
@@ -2400,8 +2404,8 @@ theorem lookupInputSelectorFixedValue
       obtain ⟨sourceName, hsourceRegionOperation⟩ :=
         exists_region_mem_of_mem_indexedRegions
           self.operations 0 hsourceRegion
-      have htargetAnchored : body.LookupSelectorsAnchoredBy anchor :=
-        List.forall_iff_forall_mem.mp hanchored
+      have htargetAnchored : body.LookupSelectorsAnchoredBy self.lookupSelectorAnchor :=
+        List.forall_iff_forall_mem.mp self.lookupSelectorsAnchoredBy
           (.region targetName body) htargetRegionOperation
       have htargetAnchor := htargetAnchored argument enabled row hlookup
         selector hauxiliary
@@ -2412,10 +2416,10 @@ theorem lookupInputSelectorFixedValue
       have hsourceWellFormed : sourceBody.LookupActivationsWellFormed :=
         List.forall_iff_forall_mem.mp self.lookupActivationsWellFormed
           (.region sourceName sourceBody) hsourceRegionOperation
-      have hsourceAnchored : sourceBody.LookupSelectorsAnchoredBy anchor :=
-        List.forall_iff_forall_mem.mp hanchored
+      have hsourceAnchored : sourceBody.LookupSelectorsAnchoredBy self.lookupSelectorAnchor :=
+        List.forall_iff_forall_mem.mp self.lookupSelectorsAnchoredBy
           (.region sourceName sourceBody) hsourceRegionOperation
-      have hsourceAnchor : anchor selector ∈
+      have hsourceAnchor : self.lookupSelectorAnchor selector ∈
           FloorPlanner.physicalColumns
             (FloorPlanner.regionSynthesisSummary sourceBody).columns := by
         cases sourceOperation with
@@ -2476,10 +2480,10 @@ theorem lookupInputSelectorFixedValue
         have htargetShape : FloorPlanner.measureRegion region body ∈
             FloorPlanner.measureRegions self.operations :=
           List.mem_map.mpr ⟨(region, body), hregion, rfl⟩
-        have hsourceColumn : anchor selector ∈
+        have hsourceColumn : self.lookupSelectorAnchor selector ∈
             (FloorPlanner.measureRegion sourceRegion sourceBody).columns :=
           (List.mem_filter.mp hsourceAnchor).1
-        have htargetColumn : anchor selector ∈
+        have htargetColumn : self.lookupSelectorAnchor selector ∈
             (FloorPlanner.measureRegion region body).columns :=
           (List.mem_filter.mp htargetAnchor).1
         have hsourceLocal :=
