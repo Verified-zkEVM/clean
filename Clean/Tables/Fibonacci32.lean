@@ -158,7 +158,7 @@ lemma fib_vars (curr next : Row (F p) RowType) (aux_env : ProverEnvironment (F p
   -- TODO it's annoying that we explicitly need the GetElem instance here
   simp only [Vector.instGetElemNatLt, Vector.get, Fin.cast_mk, PNat.val_ofNat,
     Fin.isValue, List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ]
-  and_intros <;> rfl
+  and_intros <;> with_unfolding_all rfl
 
 /--
   Main lemma that shows that if the constraints hold over the two-row window,
@@ -210,7 +210,7 @@ lemma boundary_vars (first_row : Row (F p) RowType) (aux_env : ProverEnvironment
   simp only [circuit_norm, explicit_provable_type, reduceDIte, Nat.reduceLT, Nat.reduceAdd]
   simp only [Vector.instGetElemNatLt, Vector.get, Fin.cast_mk, PNat.val_ofNat,
     Fin.isValue, List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ]
-  and_intros <;> rfl
+  and_intros <;> with_unfolding_all rfl
 
 lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : ProverEnvironment (F p)) :
   ConstraintsHold.Soundness (F := F p) (windowEnv boundary ⟨<+> +> first_row, rfl⟩ aux_env) boundary.operations →
