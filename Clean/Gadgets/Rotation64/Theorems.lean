@@ -1,6 +1,5 @@
 module
 
-public import Mathlib.Tactic.IntervalCases
 public import Clean.Utils.Field
 public import Clean.Utils.Bitwise
 public import Clean.Utils.Rotation
@@ -37,13 +36,12 @@ def rotRight64_u64 : U64 ℕ → ℕ → U64 ℕ
     (x7 / 2^o) + (x0 % 2^o) * 2^(8-o),
   ⟩
 
--- Compare entries using the public `Vector.ofFn` indexing lemma.
+-- Compare lists using the public `Vector.ofFn` conversion lemma.
 lemma rotRight64_bytes_u64_eq (o : ℕ) (x : U64 ℕ) :
   rotRight64_bytes x.toLimbs o = (rotRight64_u64 x o).toLimbs := by
-  cases x
-  apply Vector.ext
-  intro i hi
-  interval_cases i <;> simp [rotRight64_bytes, rotRight64_u64, U64.toLimbs, toElements]
+  apply Vector.toList_inj.mp
+  rw [rotRight64_bytes, Vector.toList_ofFn]
+  rfl
 
 lemma h_mod {o : ℕ} (ho : o < 8) {x0 x1 x2 x3 x4 x5 x6 x7 : ℕ} :
     (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) %

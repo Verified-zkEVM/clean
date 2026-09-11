@@ -1,6 +1,5 @@
 module
 
-public import Mathlib.Tactic.IntervalCases
 public import Clean.Circuit.Loops
 public import Clean.Gadgets.Addition8.Addition8FullCarry
 public import Clean.Types.U64
@@ -36,9 +35,12 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow main := by
 lemma thetaC_loop (state : Vector ℕ 25) :
     Specs.Keccak256.thetaC state = .mapFinRange 5 fun i =>
       state[5*i.val] ^^^ state[5*i.val + 1] ^^^ state[5*i.val + 2] ^^^ state[5*i.val + 3] ^^^ state[5*i.val + 4] := by
-  apply Vector.ext
-  intro i hi
-  interval_cases i <;> simp [Specs.Keccak256.thetaC, Vector.getElem_mapFinRange]
+  conv_rhs =>
+    rw [← Vector.ofFn_getElem (xs := Vector.mapFinRange 5 _)]
+    simp only [Vector.getElem_mapFinRange]
+  apply Vector.toList_inj.mp
+  rw [Vector.toList_ofFn]
+  rfl
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [Xor64.circuit, Xor64.Assumptions, Xor64.Spec]

@@ -1,6 +1,5 @@
 module
 
-public import Mathlib.Tactic.IntervalCases
 public import Clean.Utils.Field
 public import Clean.Utils.Bitwise
 public import Clean.Utils.Rotation
@@ -35,13 +34,12 @@ def rotRight32_u32 : U32 ℕ → ℕ → U32 ℕ
     (x3 / 2^o) + (x0 % 2^o) * 2^(8-o),
   ⟩
 
--- Compare entries using the public `Vector.ofFn` indexing lemma.
+-- Compare lists using the public `Vector.ofFn` conversion lemma.
 lemma rotRight32_bytes_u32_eq (o : ℕ) (x : U32 ℕ) :
   rotRight32_bytes x.toLimbs o = (rotRight32_u32 x o).toLimbs := by
-  cases x
-  apply Vector.ext
-  intro i hi
-  interval_cases i <;> simp [rotRight32_bytes, rotRight32_u32, U32.toLimbs, toElements]
+  apply Vector.toList_inj.mp
+  rw [rotRight32_bytes, Vector.toList_ofFn]
+  rfl
 
 lemma h_mod32 {o : ℕ} (ho : o < 8) {x0 x1 x2 x3 : ℕ} :
     (x0 + x1 * 256 + x2 * 256^2 + x3 * 256^3) % 2^o = x0 % 2^o := by
