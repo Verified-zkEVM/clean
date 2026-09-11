@@ -574,7 +574,7 @@ theorem eval_eq_eval {M : TypeMap} [ProvableStruct M] (ctx : Ctx F) (x : M (FExp
     Witgen.eval ctx x = StructEval.eval ctx x := by
   symm
   simp only [Witgen.eval, eval, fromElements, toElements, size,
-    ProvableType.structToElements_eq, ProvableType.structFromElements_eq]
+    ProvableStruct.structToElements_eq, ProvableStruct.structFromElements_eq]
   congr 1
   apply eval_eq_eval_aux
 where

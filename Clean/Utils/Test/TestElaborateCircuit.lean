@@ -2,7 +2,6 @@ module
 
 public import Clean.Circuit
 public import Clean.Gadgets.Equality
-public import Clean.Utils.Primes
 
 /-!
 # Regression tests for `elaborate_circuit`'s output quality

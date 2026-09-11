@@ -1,7 +1,6 @@
 module
 
 public import Clean.Circuit
-public import Clean.Utils.Field
 public import Clean.Utils.Tactics
 public import Clean.Gadgets.Equality
 public import Clean.Gadgets.Boolean

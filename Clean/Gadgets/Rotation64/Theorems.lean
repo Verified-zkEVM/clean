@@ -39,7 +39,12 @@ def rotRight64_u64 : U64 ℕ → ℕ → U64 ℕ
     (x7 / 2^o) + (x0 % 2^o) * 2^(8-o),
   ⟩
 
--- these two are definitionally equal
+-- These two are definitionally equal, but only after unfolding `Vector.ofFn` in
+-- `rotRight64_bytes`, and core does not expose `Array.ofFn`'s body. Everything on this
+-- side of the boundary is already exposed -- both definitions here and `U64.toLimbs` --
+-- so `ofFn` is the whole of it: writing `rotRight64_bytes` as an explicit `#v[...]` makes
+-- plain `rfl` work again. Keeping `ofFn` and unfolding here is the better trade, since
+-- the index-generic form is what the rotation proofs downstream want.
 lemma rotRight64_bytes_u64_eq (o : ℕ) (x : U64 ℕ) :
   rotRight64_bytes x.toLimbs o = (rotRight64_u64 x o).toLimbs := by with_unfolding_all rfl
 

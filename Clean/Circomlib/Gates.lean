@@ -1,7 +1,6 @@
 module
 
 public import Clean.Circuit
-public import Clean.Utils.Field
 public import Clean.Gadgets.Boolean
 public import Clean.Utils.Bitwise
 public import Clean.Utils.Vector

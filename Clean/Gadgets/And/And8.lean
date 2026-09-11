@@ -2,7 +2,6 @@ module
 
 public import Clean.Circuit
 public import Clean.Gadgets.Xor.ByteXorTable
-public import Clean.Utils.Primes
 
 -- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
 -- whose bodies core does not expose.

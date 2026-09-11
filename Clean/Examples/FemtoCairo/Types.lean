@@ -1,8 +1,6 @@
 module
 
 public import Clean.Circuit
-public import Clean.Utils.Field
-public import Clean.Utils.Primes
 
 @[expose] public section
 namespace Examples.FemtoCairo.Types

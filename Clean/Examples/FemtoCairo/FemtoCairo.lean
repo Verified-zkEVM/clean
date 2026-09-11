@@ -4,7 +4,6 @@ public import Clean.Circuit
 public import Clean.Table.Inductive
 public import Clean.Gadgets.Bits
 public import Clean.Utils.Bits
-public import Clean.Utils.Field
 
 public import Clean.Examples.FemtoCairo.SpecLemmas
 public import Clean.Examples.FemtoCairo.TypesLemmas

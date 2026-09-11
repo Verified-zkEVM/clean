@@ -386,29 +386,24 @@ theorem toElements_fromElements {F} : (cs : List WithProvableType) → (xs : Vec
     simp only [componentsToElements, componentsFromElements,
       toElements_fromElements, ProvableType.toElements_fromElements]
     rw [Vector.append_take_drop]
-end ProvableStruct
 
-open ProvableStruct in
 /-- Flattening half of `ProvableType.fromStruct`. Split out so it can be sealed; see the note
 on `attribute [irreducible]` below. -/
-def ProvableType.structToElements {α : TypeMap} [ProvableStruct α] {F : Type} (x : α F) :
+def structToElements {α : TypeMap} [ProvableStruct α] {F : Type} (x : α F) :
     Vector F (combinedSize α) :=
   toComponents x |> componentsToElements (components α) |>.cast combinedSize_eq.symm
 
-open ProvableStruct in
 /-- Splitting half of `ProvableType.fromStruct`. -/
-def ProvableType.structFromElements {α : TypeMap} [ProvableStruct α] {F : Type}
+def structFromElements {α : TypeMap} [ProvableStruct α] {F : Type}
     (v : Vector F (combinedSize α)) : α F :=
   v.cast combinedSize_eq |> componentsFromElements (components α) |> fromComponents
 
-open ProvableStruct in
-@[circuit_norm] lemma ProvableType.structToElements_eq {α : TypeMap} [ProvableStruct α]
+@[circuit_norm] lemma structToElements_eq {α : TypeMap} [ProvableStruct α]
     {F : Type} (x : α F) :
     structToElements x
       = (componentsToElements (components α) (toComponents x)).cast combinedSize_eq.symm := rfl
 
-open ProvableStruct in
-@[circuit_norm] lemma ProvableType.structFromElements_eq {α : TypeMap} [ProvableStruct α]
+@[circuit_norm] lemma structFromElements_eq {α : TypeMap} [ProvableStruct α]
     {F : Type} (v : Vector F (combinedSize α)) :
     structFromElements v
       = fromComponents (componentsFromElements (components α) (v.cast combinedSize_eq)) := rfl
@@ -422,19 +417,21 @@ diverges for a struct nesting another struct.
 Sealing the two element functions stops the descent there while leaving `size` — which is just
 `combinedSize α` — free to compute, as the table and cell machinery needs. The two lemmas above
 are what `circuit_norm` reduces through, so they must be proved before this line. -/
-attribute [irreducible] ProvableType.structToElements ProvableType.structFromElements
+attribute [irreducible] structToElements structFromElements
+
+end ProvableStruct
 
 open ProvableStruct in
 instance ProvableType.fromStruct {α : TypeMap} [ProvableStruct α] : ProvableType α where
   size := combinedSize α
-  toElements x := ProvableType.structToElements x
-  fromElements v := ProvableType.structFromElements v
+  toElements x := structToElements x
+  fromElements v := structFromElements v
   fromElements_toElements x := by
-    simp only [ProvableType.structToElements_eq, ProvableType.structFromElements_eq,
+    simp only [structToElements_eq, structFromElements_eq,
       Vector.cast_cast, Vector.cast_rfl]
     rw [ProvableStruct.fromElements_toElements, fromComponents_toComponents]
   toElements_fromElements x := by
-    simp only [ProvableType.structToElements_eq, ProvableType.structFromElements_eq]
+    simp only [structToElements_eq, structFromElements_eq]
     rw [toComponents_fromComponents, ProvableStruct.toElements_fromElements]
     simp only [Vector.cast_cast, Vector.cast_rfl]
 
@@ -465,7 +462,7 @@ theorem eval_eq_eval {α : TypeMap} [ProvableStruct α] : ∀ (env : Environment
   rw [CircuitType.eval_expression]
   symm
   simp only [eval, ProvableType.eval, fromElements, toElements, size,
-    ProvableType.structToElements_eq, ProvableType.structFromElements_eq]
+    ProvableStruct.structToElements_eq, ProvableStruct.structFromElements_eq]
   congr 1
   apply eval_eq_eval_aux
 where
@@ -536,7 +533,7 @@ theorem varFromOffset_eq_varFromOffset {α : TypeMap} [ProvableStruct α] (offse
     ProvableType.varFromOffset (F:=F) α offset = ProvableStruct.varFromOffset α offset := by
   symm
   simp only [varFromOffset, ProvableType.varFromOffset, fromElements, size,
-    ProvableType.structFromElements_eq]
+    ProvableStruct.structFromElements_eq]
   congr
   rw [←Vector.cast_mapRange combinedSize_eq.symm]
   apply varFromOffset_eq_varFromOffset_aux (components α) offset

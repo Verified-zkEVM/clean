@@ -2,7 +2,6 @@ module
 
 public import Clean.Circuit
 public import Clean.Gadgets.Boolean
-public import Clean.Utils.Primes
 public import Clean.Utils.Bits
 
 @[expose] public section

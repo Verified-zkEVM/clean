@@ -2,7 +2,6 @@ module
 
 public import Clean.Utils.Tactics
 public import Clean.Circuit
-public import Clean.Utils.Field
 
 @[expose] public section
 

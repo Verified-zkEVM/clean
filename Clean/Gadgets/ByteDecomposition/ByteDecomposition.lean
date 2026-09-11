@@ -1,8 +1,6 @@
 module
 
 public import Clean.Circuit
-public import Clean.Utils.Primes
-public import Clean.Utils.Field
 public import Clean.Gadgets.ByteDecomposition.Theorems
 
 -- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
