@@ -1,12 +1,20 @@
-import Clean.Gadgets.BLAKE3.Compress
-import Clean.Gadgets.BLAKE3.ApplyRounds
-import Clean.Gadgets.BLAKE3.BLAKE3State
-import Clean.Gadgets.Or.Or32
-import Clean.Gadgets.IsZero
-import Clean.Specs.BLAKE3
-import Clean.Tables.BLAKE3.ProcessBlocksInductive
-import Clean.Circuit.Provable
-import Clean.Utils.Tactics
+module
+
+public import Clean.Gadgets.BLAKE3.Compress
+public import Clean.Gadgets.BLAKE3.ApplyRounds
+public import Clean.Gadgets.BLAKE3.BLAKE3State
+public import Clean.Gadgets.Or.Or32
+public import Clean.Gadgets.IsZero
+public import Clean.Specs.BLAKE3
+public import Clean.Tables.BLAKE3.ProcessBlocksInductive
+public import Clean.Circuit.Provable
+public import Clean.Utils.Tactics
+
+-- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
+-- whose bodies core does not expose.
+import all Init.Data.Array.Basic
+
+@[expose] public section
 
 namespace Gadgets.BLAKE3.FinalizeChunk
 variable {p : ℕ} [Fact p.Prime] [p_large_enough : Fact (p > 2^16 + 2^8)]

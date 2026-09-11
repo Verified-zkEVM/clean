@@ -1,7 +1,18 @@
-import Clean.Utils.Vector
-import Clean.Circuit.Extensions
-import Clean.Table.Theorems
-import Clean.Gadgets.Addition8.Addition8
+module
+
+public import Clean.Utils.Vector
+public import Clean.Circuit.Extensions
+public import Clean.Table.Theorems
+public import Clean.Gadgets.Addition8.Addition8
+
+-- `Vector.finRange`/`mapFinRange` are unfolded below; core does not expose their bodies.
+import all Init.Data.Vector.FinRange
+
+-- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
+-- whose bodies core does not expose.
+import all Init.Data.Array.Basic
+
+@[expose] public section
 
 /-
   8-bit Fibonacci inductive table definition. The i-th row of the table

@@ -2,6 +2,8 @@ module
 
 public import Clean.Circuit
 public import Clean.Utils.Tactics
+-- `structEvalLiteral` validates its rewrite at `.all`, which needs `Array.map`'s body
+import all Init.Data.Array.Basic
 
 /-!
 Tests for `provable_struct_simp`, covering its three jobs:
