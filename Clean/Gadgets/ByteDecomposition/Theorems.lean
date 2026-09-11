@@ -1,7 +1,11 @@
-import Clean.Utils.Field
-import Clean.Utils.Bitwise
-import Clean.Types.U64
-import Clean.Types.U32
+module
+
+public import Clean.Utils.Field
+public import Clean.Utils.Bitwise
+public import Clean.Types.U64
+public import Clean.Types.U32
+
+@[expose] public section
 
 namespace Gadgets.ByteDecomposition.Theorems
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]

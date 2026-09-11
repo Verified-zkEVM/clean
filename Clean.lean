@@ -1,45 +1,47 @@
-import Clean.Circuit
-import Clean.Examples.WitnessExport
-import Clean.Utils.FiniteField
-import Clean.Utils.SourceSinkPath
-import Clean.Utils.OfflineMemory
-import Clean.Circomlib.AliasCheck
-import Clean.Circomlib.BinSum
-import Clean.Circomlib.BinSub
-import Clean.Circomlib.Bitify
-import Clean.Circomlib.Bitify2
-import Clean.Circomlib.Gates
-import Clean.Circomlib.Comparators
-import Clean.Circomlib.CompConstant
-import Clean.Circomlib.Mux1
-import Clean.Circomlib.Mux2
-import Clean.Circomlib.Mux3
-import Clean.Circomlib.Rotate
-import Clean.Circomlib.Sign
-import Clean.Examples.AddOperations
-import Clean.Examples.Add32Explicit
-import Clean.Examples.ToJson
-import Clean.Examples.HintExample
-import Clean.Examples.FemtoCairo.FemtoCairo
-import Clean.Examples.FemtoCairo.Plonky3Helpers
-import Clean.Examples.FemtoCairo.Plonky3TestData
-import Clean.Examples.FemtoCairo.Plonky3MemoryTestData
-import Clean.Tables.Fibonacci8
-import Clean.Tables.Fibonacci32
-import Clean.Tables.Fibonacci32Inductive
-import Clean.Tables.KeccakInductive
-import Clean.Tables.BLAKE3.ProcessBlocksInductive
-import Clean.Gadgets.Bits
-import Clean.Gadgets.Conditional
-import Clean.Gadgets.IsEqual
-import Clean.Gadgets.IsZeroField
-import Clean.Gadgets.IsZero
-import Clean.Gadgets.BLAKE3.ApplyRounds
-import Clean.Gadgets.BLAKE3.BLAKE3G
-import Clean.Gadgets.BLAKE3.Compress
-import Clean.Gadgets.BLAKE3.Permute
-import Clean.Gadgets.BLAKE3.FinalStateUpdate
-import Clean.Gadgets.BLAKE3.Round
-import Clean.Gadgets.BLAKE3.FinalizeChunk
-import Clean.Examples.FibonacciWithChannels
-import Clean.Gadgets.SHA256.SHA256Compress
+module
+
+public import Clean.Circuit
+public import Clean.Examples.WitnessExport
+public import Clean.Utils.FiniteField
+public import Clean.Utils.SourceSinkPath
+public import Clean.Utils.OfflineMemory
+public import Clean.Circomlib.AliasCheck
+public import Clean.Circomlib.BinSum
+public import Clean.Circomlib.BinSub
+public import Clean.Circomlib.Bitify
+public import Clean.Circomlib.Bitify2
+public import Clean.Circomlib.Gates
+public import Clean.Circomlib.Comparators
+public import Clean.Circomlib.CompConstant
+public import Clean.Circomlib.Mux1
+public import Clean.Circomlib.Mux2
+public import Clean.Circomlib.Mux3
+public import Clean.Circomlib.Rotate
+public import Clean.Circomlib.Sign
+public import Clean.Examples.AddOperations
+public import Clean.Examples.Add32Explicit
+public import Clean.Examples.ToJson
+public import Clean.Examples.HintExample
+public import Clean.Examples.FemtoCairo.FemtoCairo
+public import Clean.Examples.FemtoCairo.Plonky3Helpers
+public import Clean.Examples.FemtoCairo.Plonky3TestData
+public import Clean.Examples.FemtoCairo.Plonky3MemoryTestData
+public import Clean.Tables.Fibonacci8
+public import Clean.Tables.Fibonacci32
+public import Clean.Tables.Fibonacci32Inductive
+public import Clean.Tables.KeccakInductive
+public import Clean.Tables.BLAKE3.ProcessBlocksInductive
+public import Clean.Gadgets.Bits
+public import Clean.Gadgets.Conditional
+public import Clean.Gadgets.IsEqual
+public import Clean.Gadgets.IsZeroField
+public import Clean.Gadgets.IsZero
+public import Clean.Gadgets.BLAKE3.ApplyRounds
+public import Clean.Gadgets.BLAKE3.BLAKE3G
+public import Clean.Gadgets.BLAKE3.Compress
+public import Clean.Gadgets.BLAKE3.Permute
+public import Clean.Gadgets.BLAKE3.FinalStateUpdate
+public import Clean.Gadgets.BLAKE3.Round
+public import Clean.Gadgets.BLAKE3.FinalizeChunk
+public import Clean.Examples.FibonacciWithChannels
+public import Clean.Gadgets.SHA256.SHA256Compress

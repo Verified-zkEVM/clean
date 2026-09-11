@@ -4,11 +4,15 @@ using the `infer_explicit_circuit(s)` tactic.
 
 This could be useful to simplify circuit statements with less user intervention.
 -/
-import Clean.Utils.Misc
-import Clean.Circuit.Basic
-import Clean.Circuit.ExplicitAttributes
-import Lean.Elab.Tactic
-import Mathlib.Lean.Meta.Simp
+module
+
+public import Clean.Utils.Misc
+public import Clean.Circuit.Basic
+public import Clean.Circuit.ExplicitAttributes
+public import Lean.Elab.Tactic
+public import Mathlib.Lean.Meta.Simp
+
+@[expose] public section
 
 open Lean Meta Elab Tactic
 
@@ -606,13 +610,28 @@ attribute [explicit_circuit_norm] ElaboratedCircuit.localLength ElaboratedCircui
 -- simplification of terms coming from `bind` aggregation e.g. 8 + 0 + 1 + ...
 attribute [explicit_circuit_norm] size Nat.add_zero Nat.zero_add Nat.mul_zero Nat.zero_mul
   Nat.mul_one Nat.one_mul Nat.sub_zero dif_pos dif_neg if_pos if_neg
-  Nat.reduceAdd Nat.reduceMul Nat.reduceSub Nat.reduceLT Nat.reduceGT
   -- lists reduction, for channels
   List.nil_append List.append_nil
   List.cons_append
   List.ofFn_nil_flatten List.ofFn_singleton_flatten
   -- if-else
-  dite_eq_ite ite_self reduceIte reduceDIte
+  dite_eq_ite ite_self
+
+/- As in `Clean.Circuit.Basic`: core's `builtin_(d)simproc`s are not marked `meta`, so a simp set
+cannot take them directly. Re-export each under `explicit_circuit_norm` as a local `meta` simproc. -/
+meta section
+dsimproc [explicit_circuit_norm] natReduceAdd' ((_ + _ : ℕ)) := Nat.reduceAdd
+dsimproc [explicit_circuit_norm] natReduceMul' ((_ * _ : ℕ)) := Nat.reduceMul
+dsimproc [explicit_circuit_norm] natReduceSub' ((_ - _ : ℕ)) := Nat.reduceSub
+simproc [explicit_circuit_norm] natReduceLT' ((_ : ℕ) < _) := Nat.reduceLT
+simproc [explicit_circuit_norm] natReduceGT' ((_ : ℕ) > _) := Nat.reduceGT
+simproc ↓ [explicit_circuit_norm] iteReduce' (ite _ _ _) := reduceIte
+simproc ↓ [explicit_circuit_norm] diteReduce' (dite _ _ _) := reduceDIte
+end
+
+/- Everything from here to the examples below is metaprogramming: the tactics that infer
+`ExplicitCircuit`/`ElaboratedCircuit` instances. -/
+meta section
 
 syntax "infer_explicit_circuit" : tactic
 syntax "infer_explicit_head" : tactic
@@ -620,7 +639,7 @@ syntax "unfold_explicit_circuits_head" : tactic
 syntax "infer_explicit_circuits" : tactic
 
 /-- The head of `type`, looking through `∀`/`let`/`mdata`. -/
-private def resultTypeHead? : Expr → Option Name
+def resultTypeHead? : Expr → Option Name
   | .forallE _ _ body _ => resultTypeHead? body
   | .letE _ _ _ body _ => resultTypeHead? body
   | .mdata _ body => resultTypeHead? body
@@ -1112,7 +1131,7 @@ elab "elaborate_circuit" : tactic => withMainContext do
 syntax "elaborate_circuit_with" term : tactic
 syntax "elaborate_circuit_with" term " using " term : tactic
 
-private def elaborateCircuitWith (dataStx : TSyntax `term) (dataEqStx? : Option (TSyntax `term)) :
+def elaborateCircuitWith (dataStx : TSyntax `term) (dataEqStx? : Option (TSyntax `term)) :
     TacticM Unit := withMainContext do
   -- The tactic is used in goals of the form
   --   ElaboratedCircuit F Input Output main
@@ -1225,6 +1244,8 @@ elab_rules : tactic
       elaborateCircuitWith data (some data_eq)
   | `(tactic|elaborate_circuit_with $data:term) => do
       elaborateCircuitWith data none
+
+end
 
 -- this tactic is pretty good at inferring explicit circuits!
 section

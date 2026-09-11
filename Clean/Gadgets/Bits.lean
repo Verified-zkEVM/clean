@@ -1,7 +1,11 @@
-import Clean.Gadgets.Equality
-import Clean.Gadgets.Boolean
-import Clean.Utils.Bits
-import Clean.Utils.Tactics
+module
+
+public import Clean.Gadgets.Equality
+public import Clean.Gadgets.Boolean
+public import Clean.Utils.Bits
+public import Clean.Utils.Tactics
+
+@[expose] public section
 
 namespace Gadgets.ToBits
 open Utils.Bits

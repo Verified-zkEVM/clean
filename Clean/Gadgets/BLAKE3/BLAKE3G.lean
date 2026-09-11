@@ -1,9 +1,13 @@
-import Clean.Gadgets.Xor.Xor32
-import Clean.Gadgets.BLAKE3.BLAKE3State
-import Clean.Gadgets.Addition32.Addition32
-import Clean.Gadgets.Rotation32.Rotation32
-import Clean.Specs.BLAKE3
-import Clean.Utils.Tactics
+module
+
+public import Clean.Gadgets.Xor.Xor32
+public import Clean.Gadgets.BLAKE3.BLAKE3State
+public import Clean.Gadgets.Addition32.Addition32
+public import Clean.Gadgets.Rotation32.Rotation32
+public import Clean.Specs.BLAKE3
+public import Clean.Utils.Tactics
+
+@[expose] public section
 
 namespace Gadgets.BLAKE3.G
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]

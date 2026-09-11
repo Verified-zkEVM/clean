@@ -1,7 +1,11 @@
-import Clean.Circuit
-import Clean.Utils.Bits
-import Clean.Gadgets.Bits
-import Clean.Gadgets.Boolean
+module
+
+public import Clean.Circuit
+public import Clean.Utils.Bits
+public import Clean.Gadgets.Bits
+public import Clean.Gadgets.Boolean
+
+@[expose] public section
 
 namespace Circomlib
 open Utils.Bits

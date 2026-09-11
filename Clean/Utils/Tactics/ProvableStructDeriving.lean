@@ -1,6 +1,8 @@
-import Lean
-import Lean.Elab.Deriving.Util
-import Clean.Circuit.Provable
+module
+
+public meta import Lean
+public meta import Lean.Elab.Deriving.Util
+public meta import Clean.Circuit.Provable
 
 /-!
   # Deriving handlers for ProvableStruct and CircuitType
@@ -107,6 +109,8 @@ import Clean.Circuit.Provable
 
   This pattern is used in the codebase for types like `BLAKE3State`, `KeccakState`, etc.
 -/
+
+public meta section
 
 open Lean Meta Elab Term Command Parser.Term
 

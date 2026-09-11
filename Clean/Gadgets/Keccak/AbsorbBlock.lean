@@ -1,6 +1,10 @@
-import Clean.Gadgets.Keccak.Permutation
-import Clean.Circuit.Explicit
-import Clean.Specs.Keccak256
+module
+
+public import Clean.Gadgets.Keccak.Permutation
+public import Clean.Circuit.Explicit
+public import Clean.Specs.Keccak256
+
+@[expose] public section
 
 namespace Gadgets.Keccak256.AbsorbBlock
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]

@@ -1,11 +1,13 @@
-import Mathlib.Data.Finset.Basic
-import Mathlib.Data.Fintype.Basic
-import Mathlib.Data.Fintype.Prod
-import Mathlib.Data.List.Basic
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Algebra.BigOperators.Group.Finset.Piecewise
-import Mathlib.Algebra.BigOperators.Ring.Finset
+module
+
+public import Mathlib.Data.Finset.Basic
+public import Mathlib.Data.Fintype.Basic
+public import Mathlib.Data.Fintype.Prod
+public import Mathlib.Data.List.Basic
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Algebra.BigOperators.Group.Finset.Piecewise
+public import Mathlib.Algebra.BigOperators.Ring.Finset
 
 /-!
 # State Transition with +1 Source and -1 Sink
@@ -54,6 +56,8 @@ then there exists a cycle-free path from `s` to `d` following transitions in `R`
 6. Therefore, `d` is reachable from `s` via a cycle-free path.
 
 -/
+
+@[expose] public section
 
 namespace Utils.StateTransition
 

@@ -1,6 +1,9 @@
-import Clean.Utils.Tactics
-import Clean.Circuit
-import Clean.Utils.Field
+module
+
+public import Clean.Utils.Tactics
+public import Clean.Circuit
+
+@[expose] public section
 
 namespace TestCircuitProofStart
 

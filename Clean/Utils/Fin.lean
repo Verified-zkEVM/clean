@@ -1,6 +1,10 @@
-import Mathlib.Data.ZMod.Basic
-import Mathlib.Data.Fin.Basic
-import Mathlib.Algebra.BigOperators.Fin
+module
+
+public import Mathlib.Data.ZMod.Basic
+public import Mathlib.Data.Fin.Basic
+public import Mathlib.Algebra.BigOperators.Fin
+
+@[expose] public section
 
 namespace Fin
 

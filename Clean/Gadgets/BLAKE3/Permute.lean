@@ -1,5 +1,9 @@
-import Clean.Gadgets.BLAKE3.BLAKE3State
-import Clean.Circuit
+module
+
+public import Clean.Gadgets.BLAKE3.BLAKE3State
+public import Clean.Circuit
+
+@[expose] public section
 
 namespace Gadgets.BLAKE3.Permute
 variable {p : ℕ} [Fact p.Prime]

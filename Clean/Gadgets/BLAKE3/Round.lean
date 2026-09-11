@@ -1,9 +1,13 @@
-import Clean.Gadgets.BLAKE3.BLAKE3State
-import Clean.Gadgets.BLAKE3.BLAKE3G
-import Clean.Specs.BLAKE3
-import Clean.Circuit.Provable
-import Clean.Utils.Tactics
-import Clean.Utils.Tactics.ProvableStructDeriving
+module
+
+public import Clean.Gadgets.BLAKE3.BLAKE3State
+public import Clean.Gadgets.BLAKE3.BLAKE3G
+public import Clean.Specs.BLAKE3
+public import Clean.Circuit.Provable
+public import Clean.Utils.Tactics
+public import Clean.Utils.Tactics.ProvableStructDeriving
+
+@[expose] public section
 
 namespace Gadgets.BLAKE3.Round
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]

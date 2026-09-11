@@ -1,6 +1,10 @@
-import Mathlib.Analysis.Normed.Ring.Lemmas
-import Mathlib.Combinatorics.Enumerative.Composition
-import Init.Data.List.Find
+module
+
+public import Mathlib.Analysis.Normed.Ring.Lemmas
+public import Mathlib.Combinatorics.Enumerative.Composition
+public import Init.Data.List.Find
+
+@[expose] public section
 
 variable {α β : Type} {n m : ℕ}
 
@@ -194,11 +198,11 @@ theorem cast_mapFinRange {n} {create : Fin n → α} (h : n = m) :
 
 theorem getElemFin_mapFinRange {n} {create : Fin n → α} :
     ∀ i : Fin n, (mapFinRange n create)[i] = create i := by
-  simp [mapFinRange, finRange]
+  simp [mapFinRange, getElem_finRange]
 
 theorem getElem_mapFinRange {n} {create : Fin n → α} :
     ∀ (i : ℕ) (hi : i < n), (mapFinRange n create)[i] = create ⟨ i, hi ⟩ := by
-  simp [mapFinRange, finRange]
+  simp [mapFinRange, getElem_finRange]
 
 lemma mapFinRange_eq_map {n : ℕ} (v : Vector α n) (f : α → β) :
     Vector.mapFinRange n (fun i => f v[i]) = v.map f := by
@@ -408,6 +412,6 @@ lemma map_takeShort {α β : Type} (f : α → β) {j n : ℕ} (v : Vector α n)
 
 /-- coerce any Array to a Vector of the given size -/
 def ofArray [Inhabited α] (n : ℕ) (arr : Array α) : Vector α n :=
-  ⟨ arr.take n |>.rightpad n default, by simp ⟩
+  ⟨ arr.take n |>.rightpad n default, by simp [Array.size_rightpad] ⟩
 
 end Vector

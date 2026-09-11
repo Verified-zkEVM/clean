@@ -9,6 +9,8 @@ package Clean where
 
 @[default_target]
 lean_lib Clean where
+  -- every file under `Clean/` that Lake builds uses the module system; warn if a new one does not
+  requiresModuleSystem := true
 
 lean_lib CleanTests where
   roots := #[`Clean.Test, `Clean.Specs.BLAKE3.ChunkProcessingTests]

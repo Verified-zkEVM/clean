@@ -1,8 +1,11 @@
-import Clean.Circuit
-import Clean.Utils.Field
-import Clean.Utils.Tactics
-import Clean.Gadgets.Equality
-import Clean.Gadgets.Boolean
+module
+
+public import Clean.Circuit
+public import Clean.Utils.Tactics
+public import Clean.Gadgets.Equality
+public import Clean.Gadgets.Boolean
+
+@[expose] public section
 
 namespace Circomlib
 open Circuit

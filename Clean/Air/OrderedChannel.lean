@@ -1,4 +1,8 @@
-import Clean.Air.FlatEnsemble
+module
+
+public import Clean.Air.FlatEnsemble
+
+@[expose] public section
 
 variable {F : Type} [FiniteField F]
 open Air.Flat (Component Table Tables)

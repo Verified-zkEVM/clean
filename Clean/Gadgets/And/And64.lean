@@ -1,6 +1,10 @@
-import Clean.Utils.Primes
-import Clean.Types.U64
-import Clean.Gadgets.And.And8
+module
+
+public import Clean.Utils.Primes
+public import Clean.Types.U64
+public import Clean.Gadgets.And.And8
+
+@[expose] public section
 
 variable {p : ℕ} [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]

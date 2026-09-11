@@ -1,7 +1,11 @@
-import Lean.Elab.Tactic
-import Clean.Circuit.StructEvalSimprocs
-import Clean.Utils.Tactics.ProvableTacticUtils
-import Clean.Utils.Tactics.ProvableStructNaming
+module
+
+public meta import Lean.Elab.Tactic
+public meta import Clean.Circuit.StructEvalSimprocs
+-- also non-meta, so importers of this tactic still receive the `circuit_norm` simprocs it relies on
+public import Clean.Circuit.StructEvalSimprocs
+public meta import Clean.Utils.Tactics.ProvableTacticUtils
+public meta import Clean.Utils.Tactics.ProvableStructNaming
 
 /-!
 # `provable_struct_simp`
@@ -26,6 +30,8 @@ decompose field-wise, evaluation of a projection becomes a projection of the row
 evaluation, opaque structs stay folded atoms, and constructor equalities split into
 field-wise conjunctions.
 -/
+
+public meta section
 
 open Lean Elab Tactic Meta
 open ProvableStructNaming

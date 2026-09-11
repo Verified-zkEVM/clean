@@ -1,6 +1,10 @@
-import Clean.Utils.Field
-import Clean.Circuit.Expression
-import Clean.Circuit.Basic
+module
+
+public import Clean.Utils.Field
+public import Clean.Circuit.Expression
+public import Clean.Circuit.Basic
+
+@[expose] public section
 
 open Lean
 

@@ -1,7 +1,11 @@
-import Clean.Gadgets.SHA256.SHA256Round
-import Clean.Gadgets.SHA256.SHA256Schedule
-import Clean.Gadgets.SHA256.Add32
-import Clean.Specs.SHA256
+module
+
+public import Clean.Gadgets.SHA256.SHA256Round
+public import Clean.Gadgets.SHA256.SHA256Schedule
+public import Clean.Gadgets.SHA256.Add32
+public import Clean.Specs.SHA256
+
+@[expose] public section
 
 section
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^33)]

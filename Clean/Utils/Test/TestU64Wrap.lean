@@ -1,9 +1,13 @@
-import Clean.Circuit.WitnessIRSugar
+module
+
+public import Clean.Circuit.WitnessIRSugar
 
 /-!
 Regression tests for the `u64Wrap` simproc: the `% 2^64` / `% 64` truncations left behind
 by the u64 witness sort are erased exactly when the local hypotheses bound the operand.
 -/
+
+@[expose] public section
 
 /-- The wrap is erased when `omega` can bound the operand from the local context. -/
 example (a b : ℕ) (h : a < 256 ∧ b < 256) :

@@ -1,10 +1,14 @@
-import Clean.Gadgets.ByteLookup
-import Clean.Circuit.Extensions
-import Clean.Utils.Bitwise
-import Clean.Circuit.Provable
-import Clean.Utils.Primes
-import Clean.Circuit.Subcircuit
-import Clean.Gadgets.Equality
+module
+
+public import Clean.Gadgets.ByteLookup
+public import Clean.Circuit.Extensions
+public import Clean.Utils.Bitwise
+public import Clean.Circuit.Provable
+public import Clean.Utils.Primes
+public import Clean.Circuit.Subcircuit
+public import Clean.Gadgets.Equality
+
+@[expose] public section
 
 section
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
@@ -389,8 +393,13 @@ lemma or_componentwise {x y : U32 (F p)} (x_norm : x.Normalized) (y_norm : y.Nor
     (x.x0.val ||| y.x0.val) + 256 *
       ((x.x1.val ||| y.x1.val) + 256 *
         ((x.x2.val ||| y.x2.val) + 256 * (x.x3.val ||| y.x3.val))) := by
-  show Nat.bitwise _ _ _ = _
-  rw [bitwise_componentwise or x_norm y_norm] <;> rfl
+  have bitwise_or (a b : ℕ) : Nat.bitwise or a b = a ||| b := by
+    apply Nat.eq_of_testBit_eq
+    intro i
+    simp only [Nat.testBit_bitwise (f := or) (by rfl), Nat.testBit_or]
+  have h := bitwise_componentwise or x_norm y_norm (by rfl)
+  simp only [bitwise_or] at h
+  exact h
 
 end Bitwise
 
