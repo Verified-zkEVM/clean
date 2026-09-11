@@ -1,12 +1,10 @@
 module
 
+public import Mathlib.Tactic.IntervalCases
 public import Clean.Utils.Field
 public import Clean.Utils.Bitwise
 public import Clean.Utils.Rotation
 public import Clean.Types.U64
-
--- The `rfl` below reduces through `Array.ofFn`, whose body core does not expose.
-import all Init.Data.Array.Basic
 
 @[expose] public section
 
@@ -39,14 +37,13 @@ def rotRight64_u64 : U64 ℕ → ℕ → U64 ℕ
     (x7 / 2^o) + (x0 % 2^o) * 2^(8-o),
   ⟩
 
--- These two are definitionally equal, but only after unfolding `Vector.ofFn` in
--- `rotRight64_bytes`, and core does not expose `Array.ofFn`'s body. Everything on this
--- side of the boundary is already exposed -- both definitions here and `U64.toLimbs` --
--- so `ofFn` is the whole of it: writing `rotRight64_bytes` as an explicit `#v[...]` makes
--- plain `rfl` work again. Keeping `ofFn` and unfolding here is the better trade, since
--- the index-generic form is what the rotation proofs downstream want.
+-- Compare entries using the public `Vector.ofFn` indexing lemma.
 lemma rotRight64_bytes_u64_eq (o : ℕ) (x : U64 ℕ) :
-  rotRight64_bytes x.toLimbs o = (rotRight64_u64 x o).toLimbs := by with_unfolding_all rfl
+  rotRight64_bytes x.toLimbs o = (rotRight64_u64 x o).toLimbs := by
+  cases x
+  apply Vector.ext
+  intro i hi
+  interval_cases i <;> simp [rotRight64_bytes, rotRight64_u64, U64.toLimbs, toElements]
 
 lemma h_mod {o : ℕ} (ho : o < 8) {x0 x1 x2 x3 x4 x5 x6 x7 : ℕ} :
     (x0 + x1 * 256 + x2 * 256 ^ 2 + x3 * 256 ^ 3 + x4 * 256 ^ 4 + x5 * 256 ^ 5 + x6 * 256 ^ 6 + x7 * 256 ^ 7) %

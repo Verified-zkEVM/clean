@@ -10,10 +10,6 @@ public import Clean.Tables.BLAKE3.ProcessBlocksInductive
 public import Clean.Circuit.Provable
 public import Clean.Utils.Tactics
 
--- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
--- whose bodies core does not expose.
-import all Init.Data.Array.Basic
-
 @[expose] public section
 
 namespace Gadgets.BLAKE3.FinalizeChunk

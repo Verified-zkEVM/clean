@@ -8,9 +8,6 @@ public import Clean.Utils.Primes
 public import Clean.Circuit.Subcircuit
 public import Clean.Gadgets.Equality
 
--- `show Nat.bitwise ...` below unfolds `Nat.bitwise`, whose body core does not expose.
-import all Init.Data.Nat.Bitwise.Basic
-
 @[expose] public section
 
 section
@@ -396,8 +393,13 @@ lemma or_componentwise {x y : U32 (F p)} (x_norm : x.Normalized) (y_norm : y.Nor
     (x.x0.val ||| y.x0.val) + 256 *
       ((x.x1.val ||| y.x1.val) + 256 *
         ((x.x2.val ||| y.x2.val) + 256 * (x.x3.val ||| y.x3.val))) := by
-  show Nat.bitwise _ _ _ = _
-  rw [bitwise_componentwise or x_norm y_norm] <;> rfl
+  have bitwise_or (a b : ℕ) : Nat.bitwise or a b = a ||| b := by
+    apply Nat.eq_of_testBit_eq
+    intro i
+    simp only [Nat.testBit_bitwise (f := or) (by rfl), Nat.testBit_or]
+  have h := bitwise_componentwise or x_norm y_norm (by rfl)
+  simp only [bitwise_or] at h
+  exact h
 
 end Bitwise
 

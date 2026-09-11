@@ -6,9 +6,6 @@ public import Clean.Utils.FiniteField
 public import Clean.Utils.Vector
 public import Clean.Circuit.Provable
 
--- `with_unfolding_all rfl` below reduces through `Array.mapM`, whose body core does not expose.
-import all Init.Data.Array.Basic
-
 -- The simprocs below call `omega` from meta code.
 public meta import Lean.Elab.Tactic.Omega.Frontend
 
@@ -503,7 +500,11 @@ theorem WitgenIR.getElem_eval_ofFExprs [FiniteField F] {n : ℕ} (es : Vector (F
 theorem WitgenIR.eval_ofFExprs_singleton {F: Type} [FiniteField F]
     (x : FExpr F) (env : ProverEnvironment F) :
     (WitgenIR.ofFExprs (toElements (M:=field) x)).eval env = #v[x.eval { env }] := by
-  with_unfolding_all rfl
+  ext i hi
+  change i < 1 at hi
+  have : i = 0 := Nat.lt_one_iff.mp hi
+  subst i
+  simp [WitgenIR.getElem_eval_ofFExprs, toElements]
 
 /-- Same as `eval_ofFExprs_singleton`, keyed on the literal-vector spelling
 (`toElements (M := field) x` and `#v[x]` are not identified during simp matching).
@@ -512,7 +513,7 @@ goal shapes; cite it explicitly where needed. -/
 theorem WitgenIR.eval_ofFExprs_one {F : Type} [FiniteField F]
     (x : FExpr F) (env : ProverEnvironment F) :
     (WitgenIR.ofFExprs #v[x]).eval env = #v[x.eval { env }] := by
-  with_unfolding_all rfl
+  exact WitgenIR.eval_ofFExprs_singleton x env
 
 /-- Field-equality conditions decide propositional equality (via the injective
 `ℕ` embedding). -/
@@ -719,8 +720,8 @@ private meta def evalStructLiteralSimproc (e : Expr) : SimpM Simp.Step := do
     let some (_, _, rhs) := (← inferType proof).eq? | return .continue
     return .visit { expr := rhs, proof? := proof }
   catch _ => pure ()
-  -- custom-`ProvableType` route (e.g. `Point`): rewrite the literal component-wise,
-  -- validated by definitional equality. Covers flat structs of scalars; bails if a field
+  -- custom-`ProvableType` route (e.g. `Point`): rewrite the literal component-wise
+  -- using the public vector/array map lemmas. Covers flat structs of scalars; bails if a field
   -- is not a scalar `FExpr` or the instance doesn't evaluate field-by-field in
   -- constructor order.
   try
@@ -732,10 +733,15 @@ private meta def evalStructLiteralSimproc (e : Expr) : SimpM Simp.Step := do
     for a in ctorArgs[info.numParams:] do
       newArgs := newArgs.push (some (← mkAppM ``Witgen.FExpr.eval #[ctx, a]))
     let rhs ← mkAppOptM fn newArgs
-    -- custom instances typically need `.all` transparency to reduce (cf. `Point.eval_eq`
-    -- being proved by `with_unfolding_all rfl`); the kernel re-checks this unrestricted
-    unless ← withTransparency .all (isDefEq e rhs) do return .continue
-    return .visit { expr := rhs, proof? := none }
+    let mut thms : SimpTheorems := {}
+    for name in [``Witgen.eval, ``ProvableType.toElements, ``ProvableType.fromElements] do
+      thms ← thms.addDeclToUnfold name
+    for name in [``Vector.map_mk, ``List.map_toArray, ``List.map_cons, ``List.map_nil] do
+      thms ← thms.addConst name
+    let simpCtx ← Simp.mkContext (simpTheorems := #[thms])
+    let (result, _) ← Meta.simp e simpCtx #[]
+    unless ← withDefault <| isDefEq result.expr rhs do return .continue
+    return .visit { expr := rhs, proof? := some (← result.getProof) }
   catch _ => return .continue
 
 simproc evalStructLiteral (Witgen.eval _ _) := evalStructLiteralSimproc

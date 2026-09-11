@@ -1,14 +1,11 @@
 module
 
+public import Mathlib.Tactic.IntervalCases
 public import Clean.Utils.Field
 public import Clean.Utils.Bitwise
 public import Clean.Utils.Rotation
 public import Clean.Types.U32
 public import Clean.Gadgets.ByteDecomposition.ByteDecomposition
-
--- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
--- whose bodies core does not expose.
-import all Init.Data.Array.Basic
 
 @[expose] public section
 
@@ -38,14 +35,13 @@ def rotRight32_u32 : U32 ℕ → ℕ → U32 ℕ
     (x3 / 2^o) + (x0 % 2^o) * 2^(8-o),
   ⟩
 
--- These two are definitionally equal, but only after unfolding `Vector.ofFn` in
--- `rotRight32_bytes`, and core does not expose `Array.ofFn`'s body. Everything on this
--- side of the boundary is already exposed -- both definitions here and `U32.toLimbs` --
--- so `ofFn` is the whole of it: writing `rotRight32_bytes` as an explicit `#v[...]` makes
--- plain `rfl` work again. Keeping `ofFn` and unfolding here is the better trade, since
--- the index-generic form is what the rotation proofs downstream want.
+-- Compare entries using the public `Vector.ofFn` indexing lemma.
 lemma rotRight32_bytes_u32_eq (o : ℕ) (x : U32 ℕ) :
-  rotRight32_bytes x.toLimbs o = (rotRight32_u32 x o).toLimbs := by with_unfolding_all rfl
+  rotRight32_bytes x.toLimbs o = (rotRight32_u32 x o).toLimbs := by
+  cases x
+  apply Vector.ext
+  intro i hi
+  interval_cases i <;> simp [rotRight32_bytes, rotRight32_u32, U32.toLimbs, toElements]
 
 lemma h_mod32 {o : ℕ} (ho : o < 8) {x0 x1 x2 x3 : ℕ} :
     (x0 + x1 * 256 + x2 * 256^2 + x3 * 256^3) % 2^o = x0 % 2^o := by

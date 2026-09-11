@@ -5,10 +5,6 @@ public import Clean.Utils.Bits
 public import Clean.Circomlib.Bitify
 public import Mathlib.Data.Int.Basic
 
--- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
--- whose bodies core does not expose.
-import all Init.Data.Array.Basic
-
 @[expose] public section
 /-
 Original source code:

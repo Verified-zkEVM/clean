@@ -3,9 +3,6 @@ module
 public import Clean.Circuit
 public import Clean.Utils.Tactics
 
--- `structEvalLiteral` validates its rewrite at `.all`, which needs `Array.map`'s body
-import all Init.Data.Array.Basic
-
 /-!
 Tests for `provable_struct_simp`, covering its three jobs:
 
@@ -21,6 +18,9 @@ The `have`/`exact` bodies double as shape assertions on the resulting goal state
 @[expose] public section
 
 namespace TestProvableStructSimp
+
+-- Keep this module free of `import all`: the evaluation simprocs must build
+-- proofs without access to private core array implementations.
 
 structure TestInputs (F : Type) where
   x : F
@@ -271,6 +271,18 @@ theorem test_eval_projection_uses_decomposed_struct_eq {F : Type} [FiniteField F
   provable_struct_simp
   simp only [h] at hh ⊢
   exact hh
+
+-- The indexed-field branch composes a vector evaluation lemma with a row projection.
+theorem test_eval_indexed_projection {F : Type} [FiniteField F] (env : Environment F)
+    (input : VectorStruct (Expression F)) (i : Fin 2) :
+    Expression.eval env input.xs[i] = (ProvableStruct.eval env input).xs[i] := by
+  simp only [circuit_norm]
+
+theorem test_eval_nested_literal {F : Type} [FiniteField F] (env : Environment F)
+    (a b : TestInputs (Expression F)) :
+    ProvableStruct.eval env (NestedInputs.mk a b) =
+      NestedInputs.mk (ProvableStruct.eval env a) (ProvableStruct.eval env b) := by
+  simp only [circuit_norm]
 
 theorem test_eval_in_conjunction {F : Type} [FiniteField F] (env : ProverEnvironment F) (x : F)
     (x_var y_var z_var : Var field F)

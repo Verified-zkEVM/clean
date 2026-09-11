@@ -6,9 +6,6 @@ public import Clean.Utils.Tactics.CircuitProofStart
 public import Mathlib.Data.Nat.Bitwise
 public import Clean.Circuit.Formal
 
--- `unfold Nat.land` below needs a body core does not expose.
-import all Init.Data.Nat.Bitwise.Basic
-
 @[expose] public section
 
 /-- A predicate stating that an element is boolean (0 or 1) for any type with 0 and 1 -/
@@ -59,11 +56,7 @@ theorem land_inherit_left (l r : ℕ) (h : IsBool l) : IsBool (l &&& r) := by
   · -- Case: l = 0
     left
     rw [h_l0]
-    simp only [HAnd.hAnd, AndOp.and]
-    have : (0 : ℕ).land r = 0 := by
-      unfold Nat.land
-      simp
-    exact this
+    exact Nat.zero_and r
   · -- Case: l = 1
     subst h_l1
     simp only [Nat.one_and_eq_mod_two]

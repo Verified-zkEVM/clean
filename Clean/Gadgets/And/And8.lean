@@ -3,10 +3,6 @@ module
 public import Clean.Circuit
 public import Clean.Gadgets.Xor.ByteXorTable
 
--- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
--- whose bodies core does not expose.
-import all Init.Data.Array.Basic
-
 @[expose] public section
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]

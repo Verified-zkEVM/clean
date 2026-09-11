@@ -1,5 +1,6 @@
 module
 
+public import Mathlib.Tactic.IntervalCases
 public import Clean.Types.U64
 public import Clean.Circuit.Loops
 public import Clean.Gadgets.Xor.Xor64
@@ -7,13 +8,6 @@ public import Clean.Gadgets.And.And64
 public import Clean.Gadgets.Not.Not64
 public import Clean.Gadgets.Keccak.KeccakState
 public import Clean.Specs.Keccak256
-
--- `rw [Vector.finRange]` below needs a body core does not expose.
-import all Init.Data.Vector.FinRange
-
--- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
--- whose bodies core does not expose.
-import all Init.Data.Array.Basic
 
 @[expose] public section
 
@@ -39,8 +33,9 @@ def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
 -- rewrite the chi spec as a loop
 lemma chi_loop (state : Vector ℕ 25) :
     Specs.Keccak256.chi state = .mapFinRange 25 fun i => state[i] ^^^ ((not64 state[i + 5]) &&& state[i + 10]) := by
-  rw [Specs.Keccak256.chi, Vector.mapFinRange, Vector.finRange, Vector.map_mk, Vector.eq_mk, List.map_toArray]
-  rfl
+  apply Vector.ext
+  intro i hi
+  interval_cases i <;> simp [Specs.Keccak256.chi, Vector.getElem_mapFinRange]
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [ Xor64.circuit, And.And64.circuit, And.And8.circuit, Not.circuit,

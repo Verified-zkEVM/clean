@@ -1,5 +1,6 @@
 module
 
+public import Mathlib.Tactic.IntervalCases
 public import Clean.Circuit.Loops
 public import Clean.Gadgets.Addition8.Addition8FullCarry
 public import Clean.Types.U64
@@ -7,13 +8,6 @@ public import Clean.Gadgets.Addition32.Theorems
 public import Clean.Gadgets.Xor.Xor64
 public import Clean.Gadgets.Keccak.KeccakState
 public import Clean.Specs.Keccak256
-
--- `rw [Vector.finRange]` below needs a body core does not expose.
-import all Init.Data.Vector.FinRange
-
--- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
--- whose bodies core does not expose.
-import all Init.Data.Array.Basic
 
 @[expose] public section
 
@@ -42,8 +36,9 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow main := by
 lemma thetaC_loop (state : Vector ℕ 25) :
     Specs.Keccak256.thetaC state = .mapFinRange 5 fun i =>
       state[5*i.val] ^^^ state[5*i.val + 1] ^^^ state[5*i.val + 2] ^^^ state[5*i.val + 3] ^^^ state[5*i.val + 4] := by
-  rw [Specs.Keccak256.thetaC, Vector.mapFinRange, Vector.finRange, Vector.map_mk, Vector.eq_mk, List.map_toArray]
-  rfl
+  apply Vector.ext
+  intro i hi
+  interval_cases i <;> simp [Specs.Keccak256.thetaC, Vector.getElem_mapFinRange]
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by
   circuit_proof_start [Xor64.circuit, Xor64.Assumptions, Xor64.Spec]

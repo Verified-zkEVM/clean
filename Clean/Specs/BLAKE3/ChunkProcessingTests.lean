@@ -2,9 +2,6 @@ module
 
 public import Clean.Specs.BLAKE3
 
--- `decide` below evaluates `bytesToWords` through `Array.ofFn`, whose body core does not expose.
-import all Init.Data.Array.Basic
-
 -- `native_decide` runs compiled code from this module.
 public meta import Clean.Specs.BLAKE3
 
@@ -41,7 +38,7 @@ example :
     let state1 := processBlockWords state testBlock64Words
     let state2 := processBlockWords state1 testBlock64Words
     startFlag state = chunkStart ∧ startFlag state1 = 0 ∧ startFlag state2 = 0 := by
-  decide
+  native_decide
 
 -- Test chunk with partial final block (65 bytes = 1 full block + 1 byte)
 def testChunk65 : List ℕ := List.range 65
@@ -65,7 +62,7 @@ example :
     words[1] = 0x00000005 ∧
     -- Rest are zeros
     words[2] = 0 := by
-  decide
+  native_decide
 
 -- Test vectors from Python reference implementation
 -- These ensure our implementation matches the reference

@@ -5,9 +5,6 @@ public import Clean.Utils.Vector
 public import Clean.Circuit.CircuitType
 public import Clean.Circuit.SimpGadget
 
--- `with_unfolding_all rfl` below reduces through `Array.mapM`, whose body core does not expose.
-import all Init.Data.Array.Basic
-
 @[expose] public section
 
 variable {F : Type} [FiniteField F]
@@ -947,12 +944,19 @@ namespace CircuitType
 @[circuit_norm] lemma eval_field_pair (F : Type) [FiniteField F]
   (env : Environment F) (p1 : field (Expression F)) (p2 : field (Expression F)) :
     eval env ((p1, p2) : ProvablePair field field (Expression F)) = (eval env p1, eval env p2) := by
-  with_unfolding_all rfl
+  unfold Eval.eval
+  change ProvableType.eval (M := fieldPair) env (p1, p2) =
+    (ProvableType.eval (M := field) env p1, ProvableType.eval (M := field) env p2)
+  simp [ProvableType.eval, toElements, fromElements, Vector.map_mk, List.map_toArray]
 
 @[circuit_norm] lemma eval_field_pair_prover (F : Type) [FiniteField F]
   (env : ProverEnvironment F) (p1 : field (Expression F)) (p2 : field (Expression F)) :
     eval env ((p1, p2) : ProvablePair field field (Expression F)) = (eval env p1, eval env p2) := by
-  with_unfolding_all rfl
+  unfold Eval.eval
+  change ProvableType.eval (M := fieldPair) env.toEnvironment (p1, p2) =
+    (ProvableType.eval (M := field) env.toEnvironment p1,
+      ProvableType.eval (M := field) env.toEnvironment p2)
+  simp [ProvableType.eval, toElements, fromElements, Vector.map_mk, List.map_toArray]
 
 end CircuitType
 
@@ -976,7 +980,9 @@ theorem eval_pair_both_expr (env : Environment F)
   (a b : Expression F) :
     eval env ((a, b) : ProvablePair field field (Expression F)) =
       (Expression.eval env a, Expression.eval env b) := by
-  with_unfolding_all rfl
+  have h := CircuitType.eval_field_pair F env a b
+  simp only [CircuitType.eval_expr] at h
+  exact h
 
 omit [FiniteField F] in
 @[circuit_norm ↓ high]

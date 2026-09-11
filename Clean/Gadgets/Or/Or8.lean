@@ -3,13 +3,6 @@ module
 public import Clean.Circuit
 public import Clean.Gadgets.Xor.ByteXorTable
 
--- `Nat.bitwise` is unfolded below; core does not expose its body.
-import all Init.Data.Nat.Bitwise.Basic
-
--- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
--- whose bodies core does not expose.
-import all Init.Data.Array.Basic
-
 @[expose] public section
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
@@ -132,8 +125,7 @@ theorem soundness : Soundness (Input:=Inputs) (Output:=field) (F p) main Assumpt
   constructor
   · assumption
   simp only [value_goal]
-  show Nat.bitwise _ _ _ < 2 ^ 8
-  exact Nat.bitwise_lt_two_pow hx_byte hy_byte
+  exact Nat.or_lt_two_pow (n := 8) hx_byte hy_byte
 
 theorem completeness : Completeness (Input:=Inputs) (Output:=field) (F p) main Assumptions := by
   circuit_proof_start [ByteXorTable]

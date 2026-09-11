@@ -6,10 +6,6 @@ public import Clean.Gadgets.Rotation64.Theorems
 public import Clean.Circuit.Provable
 public import Clean.Gadgets.ByteDecomposition.ByteDecomposition
 
--- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
--- whose bodies core does not expose.
-import all Init.Data.Array.Basic
-
 @[expose] public section
 
 namespace Gadgets.Rotation64Bits

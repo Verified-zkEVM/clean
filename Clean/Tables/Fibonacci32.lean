@@ -7,13 +7,6 @@ public import Clean.Gadgets.Addition32.Addition32
 public import Clean.Gadgets.Equality
 public import Clean.Types.U32
 
--- `Vector.finRange`/`mapFinRange` are unfolded below; core does not expose their bodies.
-import all Init.Data.Vector.FinRange
-
--- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
--- whose bodies core does not expose.
-import all Init.Data.Array.Basic
-
 @[expose] public section
 
 namespace Tables.Fibonacci32
@@ -195,7 +188,8 @@ lemma boundary_assignment : (boundary (p:=p)).finalAssignment.vars =
   dsimp only [table_assignment_norm, circuit_norm, boundary, pure, MonadLift.monadLift]
   simp only [circuit_norm, FormalCircuitBase.localLength]
   simp +instances only [circuit_norm]
-  with_unfolding_all rfl
+  simp only [Vector.mapFinRange_succ, Vector.mapFinRange_zero, Vector.mapRange_zero]
+  rfl
 
 omit p_large_enough in
 lemma boundary_vars (first_row : Row (F p) RowType) (aux_env : ProverEnvironment (F p)) :
