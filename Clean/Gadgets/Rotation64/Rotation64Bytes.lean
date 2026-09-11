@@ -4,10 +4,6 @@ public import Clean.Types.U64
 public import Clean.Gadgets.Rotation64.Theorems
 public import Clean.Utils.Primes
 
--- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
--- whose bodies core does not expose.
-import all Init.Data.Array.Basic
-
 @[expose] public section
 
 namespace Gadgets.Rotation64Bytes

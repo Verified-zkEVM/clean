@@ -5,10 +5,6 @@ public import Clean.Gadgets.SHA256.LowerSigma1
 public import Clean.Gadgets.SHA256.Add32
 public import Clean.Specs.SHA256
 
--- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
--- whose bodies core does not expose.
-import all Init.Data.Array.Basic
-
 @[expose] public section
 
 section

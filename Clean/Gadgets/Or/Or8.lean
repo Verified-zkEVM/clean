@@ -2,8 +2,12 @@ module
 
 public import Clean.Circuit
 public import Clean.Gadgets.Xor.ByteXorTable
+
 -- `Nat.bitwise` is unfolded below; core does not expose its body.
 import all Init.Data.Nat.Bitwise.Basic
+
+-- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
+-- whose bodies core does not expose.
 import all Init.Data.Array.Basic
 
 @[expose] public section

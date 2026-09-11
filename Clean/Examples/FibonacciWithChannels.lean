@@ -16,6 +16,7 @@ public import Clean.Gadgets.Addition8.Theorems
 -- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
 -- whose bodies core does not expose.
 import all Init.Data.Array.Basic
+
 -- `Vector.finRange`/`mapFinRange` are unfolded below; core does not expose their bodies.
 import all Init.Data.Vector.FinRange
 

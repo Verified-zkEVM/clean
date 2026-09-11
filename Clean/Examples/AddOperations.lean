@@ -8,10 +8,6 @@ public meta import Clean.Gadgets.Addition8.Addition8
 -- `native_decide` runs compiled code from this module.
 public meta import Clean.Utils.Primes
 
--- `circuit_norm`'s struct simprocs validate by `isDefEq` through `Array.ofFn`/`mapM`,
--- whose bodies core does not expose.
-import all Init.Data.Array.Basic
-
 @[expose] public section
 
 section
