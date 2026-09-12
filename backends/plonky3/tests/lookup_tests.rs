@@ -8,8 +8,29 @@ use p3_baby_bear::BabyBear;
 use p3_field::PrimeCharacteristicRing;
 use p3_matrix::dense::RowMajorMatrix;
 use p3_matrix::Matrix;
+use p3_uni_stark::VerificationError;
 
 use common::setup;
+
+#[test]
+fn verifier_rejects_unexpected_static_trace_degree() {
+    let config = setup::test_config(17);
+    let json_content = "[]";
+    let width = 1;
+    let main_trace = RowMajorMatrix::new((0..8).map(|_| BabyBear::from_u64(0)).collect(), width);
+    let main_air = MainAir::<BabyBear>::new(json_content, width, main_trace.height());
+    let air_infos = vec![AirInfo::new(CleanAirInstance::Main(main_air))];
+    let traces = vec![main_trace];
+    let pis = vec![];
+
+    let mut proof = prove(&config, &air_infos, &traces, &pis);
+    verify(&config, &air_infos, &proof, &pis)
+        .expect("verification should accept matching metadata");
+
+    proof.degree_bits[0] += 1;
+    let result = verify(&config, &air_infos, &proof, &pis);
+    assert!(matches!(result, Err(VerificationError::InvalidProofShape)));
+}
 
 /// Test multi-column lookups with RLC compression.
 /// Demonstrates a 2-column preprocessed table (address, value) with
