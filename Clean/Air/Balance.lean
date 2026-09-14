@@ -1,4 +1,5 @@
 import Clean.Circuit
+import Clean.Circuit.DirectedChannel
 
 variable {F : Type} [FiniteField F] [DecidableEq F]
 variable {Message : TypeMap} [ProvableType Message]
@@ -272,6 +273,36 @@ lemma List.countP_eraseIdx {α : Type} {l : List α} {p : α → Bool} {i : ℕ}
       simp only [eraseIdx_cons_succ, countP_cons, getElem_cons_succ]
       rw [← ih (Nat.lt_of_succ_lt_succ hi)]
       ring_nf
+
+/-
+## The shared kernel: events, support and count balance
+
+Everything in this section is stated over natural-number counts and mentions no
+characteristic. An `Event` is the proof-facing view of one interaction: the logical payload
+it carries, its direction, and whether it is active. Different balance arguments read an
+`Interaction F` as an `Event F` differently, so the kernel is parametrized by that reading.
+-/
+
+/-- The proof-facing view of one bus interaction. -/
+structure Event (F : Type) where
+  payload : Array F
+  direction : Direction
+  active : Bool
+
+/-- Every active receiver has an active provider of the same payload in the list. -/
+def PullsSupported {α : Type} (view : α → Event F) (l : List α) : Prop :=
+  ∀ a ∈ l, (view a).direction = .receive → (view a).active = true →
+    ∃ b ∈ l, (view b).direction = .provide ∧ (view b).active = true ∧
+      (view b).payload = (view a).payload
+
+/-- The number of active events in a direction that carry a payload. -/
+def activeCount {α : Type} (view : α → Event F) (l : List α) (direction : Direction)
+    (payload : Array F) : ℕ :=
+  l.countP fun a => (view a).direction = direction && (view a).active && (view a).payload = payload
+
+/-- For every payload, as many active providers as active receivers. -/
+def CountBalanced {α : Type} (view : α → Event F) (l : List α) : Prop :=
+  ∀ payload : Array F, activeCount view l .provide payload = activeCount view l .receive payload
 
 /--
 Assume you have a list of channel interactions that is made up of pairs (-1, pull_i), (1, push_i),
