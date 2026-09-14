@@ -5,10 +5,11 @@ import Mathlib.Tactic.NormNum.Prime
 /-!
 # Bus balance acceptance tests
 
-The compatibility baseline of the bus-balance roadmap (A11, A13), the directed tag
-representation (A1), and the Layer 0 prototype: one typed message, a provider, a receive
-with an assumption, a receive without an assumption, a gated event, and one ensemble whose
-statement takes an explicit balance model (A14).
+Evidence for the acceptance items of the bus-balance roadmap that are within reach of the
+kernel and the balance models (A1–A6, A11, A13–A15, A17–A18), the legacy compatibility
+fixtures, and the Layer 0 prototype: one typed message, a provider, a receive with an
+assumption, a receive without an assumption, a gated event, and one ensemble whose statement
+takes an explicit balance model.
 
 Two kinds of fixture are kept apart. An `example` whose type is `Prop` only checks that the
 new API elaborates with explicit parameters; it proves nothing about satisfiability. Every
@@ -132,6 +133,113 @@ def LegacyTwo : Channel (F 5) (fields 2) where
   (Lean.toJson (LegacyTwo.pushed #v[0, 0]).toRaw).compress
 end Directed
 
+/-! ## Necessity of the kernel hypotheses (A2–A6) -/
+section Necessity
+
+/-- A throwaway legacy raw channel with trivial guarantees and requirements. -/
+def anyChannel (F : Type) [FiniteField F] : RawChannel F :=
+  ⟨"any", 1, fun _ _ _ => True, fun _ _ _ => True⟩
+
+def pull1 : Interaction (F 2) := ⟨anyChannel (F 2), -1, #[0], rfl, true⟩
+def push1 : Interaction (F 2) := ⟨anyChannel (F 2), 1, #[0], rfl, false⟩
+
+/-- A2: field-sum balance without the no-wrap guard admits two unsupported unit receives
+over `F 2`. -/
+theorem logUp_guard_necessary :
+    (∀ msg, balanceOf [pull1, pull1] msg = 0) ∧
+    ¬ PullsSupported Interaction.legacyEvent [pull1, pull1] := by
+  refine ⟨?_, ?_⟩
+  · intro msg
+    by_cases h : msg = #[0]
+    · subst h
+      decide
+    · have h' : (#[0] : Array (F 2)) ≠ msg := fun e => h e.symm
+      simp [balanceOf, pull1, h']
+  · intro h
+    obtain ⟨j, hj, hdir, -, -⟩ := h pull1 (by simp) (by decide) (by decide)
+    simp only [List.mem_cons, List.not_mem_nil, or_false, or_self] at hj
+    subst hj
+    exact absurd hdir (by decide)
+
+/-- Today's guard excludes every pair over `F 2`, matched or not. -/
+theorem logUp_guard_excludes_pairs : ¬ BalancedInteractions [pull1, push1] := by
+  intro ⟨h, _⟩
+  rw [ZMod.ringChar_zmod_n] at h
+  simp at h
+
+def pullA : Interaction (F 3) := ⟨anyChannel (F 3), -1, #[0], rfl, true⟩
+def pullB : Interaction (F 3) := ⟨anyChannel (F 3), -2, #[0], rfl, true⟩
+
+/-- A4: on the legacy path, a signed receive of weight `2` is not a receive at all: the sign
+reading makes it a provider (which owes the requirement). Non-unit receive weights are
+therefore not representable as receives; the directed path rejects them locally instead. -/
+theorem legacy_reads_weight_two_receive_as_provider :
+    BalancedInteractions [pullA, pullB] ∧ pullB.legacyEvent.direction = .provide := by
+  refine ⟨⟨?_, ?_⟩, by decide⟩
+  · left
+    rw [ZMod.ringChar_zmod_n]
+    decide
+  · intro msg
+    by_cases h : msg = #[0]
+    · subst h
+      decide
+    · have h' : (#[0] : Array (F 3)) ≠ msg := fun e => h e.symm
+      simp [balanceOf, pullA, pullB, h']
+
+def push2 : Interaction (F 5) := ⟨anyChannel (F 5), 2, #[0], rfl, false⟩
+def pull5 : Interaction (F 5) := ⟨anyChannel (F 5), -1, #[0], rfl, true⟩
+
+/-- A5/A6: a weight-2 provider and two unit receives over `F 5` are LogUp-balanced, yet the
+active counts are `1` and `2`. Count balance needs unit events. -/
+theorem logUp_unit_events_necessary :
+    BalancedInteractions [push2, pull5, pull5] ∧
+    ¬ CountBalanced Interaction.legacyEvent [push2, pull5, pull5] := by
+  refine ⟨⟨?_, ?_⟩, ?_⟩
+  · left
+    rw [ZMod.ringChar_zmod_n]
+    decide
+  · intro msg
+    by_cases h : msg = #[0]
+    · subst h
+      decide
+    · have h' : (#[0] : Array (F 5)) ≠ msg := fun e => h e.symm
+      simp [balanceOf, push2, pull5, h']
+  · intro h
+    have := h #[0]
+    revert this
+    decide
+
+def provide1 : Interaction (F 2) := (OneChannel (F 2)).emittedValue .provide 1 1 false
+def receive1 : Interaction (F 2) := (OneChannel (F 2)).emittedValue .receive 1 1 true
+
+/-- A3: the multiset model rejects two providers of a message with no receive. -/
+theorem multiset_rejects_two_providers :
+    ¬ (BalanceModel.multiset (F 2)).Balanced [provide1, provide1] := by
+  rw [BalanceModel.multiset_balanced_iff]
+  simp [activePayloads, provide1, circuit_norm]
+
+/-- A9 in miniature: the multiset model accepts a matched pair over `F 2` ... -/
+theorem multiset_accepts_matched_pair :
+    (BalanceModel.multiset (F 2)).Balanced [provide1, receive1] := by
+  rw [BalanceModel.multiset_balanced_iff]
+  simp [activePayloads, provide1, receive1, circuit_norm]
+
+/-- ... which the legacy guard rejects, so `F 2` cannot silently fall back to LogUp (A14). -/
+theorem logUp_rejects_matched_pair : ¬ BalancedInteractions [provide1, receive1] := by
+  intro ⟨h, _⟩
+  rw [ZMod.ringChar_zmod_n] at h
+  simp at h
+
+/-- A15 in miniature: with an honest active provider, support does give the guarantee. -/
+example (data : ProverData (F 2)) :
+    (∀ i ∈ [provide1, receive1], i.channel = (OneChannel (F 2)).toRaw ∧ i.Requirements data) →
+    receive1.Guarantees data := by
+  intro reqs
+  apply DirectedChannel.guarantees_of_requirements_of_pullsSupported (OneChannel (F 2)) _ data
+    ((BalanceModel.multiset (F 2)).pullsSupported_of_balanced multiset_accepts_matched_pair) reqs
+  simp
+end Necessity
+
 /-! ## Explicit models (A14) -/
 section Models
 
@@ -140,6 +248,16 @@ explicit model; there is no default instance to fall back to. The `Prop` is not 
 example {F : Type} [FiniteField F] [DecidableEq F] {PublicIO : TypeMap} [ProvableType PublicIO]
     (model : BalanceModel F) (ens : Ensemble F PublicIO) (publicInput : PublicIO F) : Prop :=
   ens.StatementWith model publicInput
+
+/-- A14, typechecking test: the multiset model is one such explicit model, over any field. -/
+example {F : Type} [FiniteField F] [DecidableEq F] {PublicIO : TypeMap} [ProvableType PublicIO]
+    (ens : Ensemble F PublicIO) (publicInput : PublicIO F) : Prop :=
+  ens.StatementWith (.multiset F) publicInput
+
+/-- The legacy statement is the LogUp instance of the model-aware one, definitionally. -/
+example {F : Type} [FiniteField F] [DecidableEq F] {PublicIO : TypeMap} [ProvableType PublicIO]
+    (ens : Ensemble F PublicIO) (publicInput : PublicIO F) :
+    ens.Statement publicInput ↔ ens.StatementWith (.logUp F) publicInput := Iff.rfl
 
 /-- `BalanceModel` is an abstract count/support interface: a model that reads every
 interaction as an inactive event satisfies every field. Nothing in the structure relates
@@ -156,9 +274,11 @@ def blindModel (F : Type) [FiniteField F] [DecidableEq F] : BalanceModel F where
 
 /-- So the interface alone does not reject a lone active receive that no provider supports,
 although its raw guarantee (`message = 1`, for payload `0`) is false. Ruling this out is the
-job of the correspondence law of the reading a model uses: it ties the view to the evaluated
-interactions of the channel and transports the requirement of the supporting provider to the
-guarantee of the receive. That law is roadmap Layer 1 work and lives outside the structure. -/
+job of the correspondence law of the reading a model uses: for the directed reading,
+`DirectedChannel.directedEvent_emittedValue` ties the view to the evaluated interactions of
+the channel and `DirectedChannel.guarantees_of_requirements_of_pullsSupported` transports the
+requirement of the supporting provider to the guarantee of the receive. That law lives
+outside the structure. -/
 example : (blindModel (F 2)).Balanced [(OneChannel (F 2)).emittedValue .receive 1 0 true] :=
   ⟨trivial, trivial⟩
 
@@ -228,11 +348,15 @@ def protoEnsemble (F : Type) [FiniteField F] : Ensemble F unit where
   channels := [(OneChannel F).toRaw]
 
 /-- A14, typechecking tests: the model-aware statement of the prototype ensemble elaborates
-over any field with an explicit model, and over `F 2`. Neither `Prop` is proved here; the
-directed statement with a nonempty witness is A9 (roadmap Layer 4). -/
+over any field with an explicit model, in particular the multiset model, and over `F 2`. None
+of these `Prop`s is proved here; the directed statement with a nonempty witness is A9
+(roadmap Layer 4). -/
 example {F : Type} [FiniteField F] [DecidableEq F] (model : BalanceModel F) : Prop :=
   (protoEnsemble F).StatementWith model ()
+example {F : Type} [FiniteField F] [DecidableEq F] : Prop :=
+  (protoEnsemble F).StatementWith (.multiset F) ()
 example (model : BalanceModel (F 2)) : Prop := (protoEnsemble (F 2)).StatementWith model ()
+example : Prop := (protoEnsemble (F 2)).StatementWith (.multiset (F 2)) ()
 
 /-- The empty prototype table over `F 2`: no rows, hence no interactions. -/
 def emptyProtoTable : Table (F 2) where
