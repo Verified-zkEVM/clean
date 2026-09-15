@@ -20,7 +20,22 @@ This representation survives every existing stage without changing a public reco
 construction (`DirectedInteraction.toRaw`), subcircuit composition and collection (the
 interaction is an ordinary `AbstractInteraction` inside `FlatOperation.interact`), evaluation
 (`AbstractInteraction.eval` maps the tag together with the payload) and export (the tag is the
-last element of the exported message; the export protocol is documented separately).
+last element of the exported message).
+
+The export is only a serialization shape. The raw JSON of a directed interaction is the legacy
+channel/message/multiplicity object with one more message element, so it does not identify
+the directed interpretation: a legacy interaction whose payload is one element longer has the
+same JSON. An opt-in export protocol that binds the interpretation (protocol version, balance
+model, tag removal before payloads of opposite direction are compared, gate and malformed-tag
+handling) is scheduled by the bus-balance roadmap and does not exist yet.
+
+## Malformed tags
+
+Raw interactions can be built without the typed constructors. A raw interaction on a directed
+channel whose last message element is neither tag fails the channel's `Requirements`, whatever
+its gate, so it cannot occur in a row whose soundness has been proved. The typed constructors
+always emit a well-formed tag, which is why the typed `DirectedInteraction.Requirements` does
+not mention it (`toRaw_requirements`).
 
 ## Local contract
 
@@ -51,13 +66,20 @@ namespace Direction
 @[circuit_norm] lemma provide_ne_receive : provide ≠ receive := Direction.noConfusion
 @[circuit_norm] lemma receive_ne_provide : receive ≠ provide := Direction.noConfusion
 
-/-- Field encoding of a direction, stored as the last message element of a directed raw interaction. -/
+/-- Field encoding of a direction, stored as the last message element of a directed raw
+interaction. -/
 def tag : Direction → F
   | provide => 0
   | receive => 1
 
 @[circuit_norm] lemma tag_provide : (provide.tag : F) = 0 := rfl
 @[circuit_norm] lemma tag_receive : (receive.tag : F) = 1 := rfl
+
+@[circuit_norm] lemma eq_provide_or_eq_receive (d : Direction) : d = provide ∨ d = receive := by
+  cases d <;> simp
+
+lemma tag_eq_zero_or_eq_one (d : Direction) : (d.tag : F) = 0 ∨ (d.tag : F) = 1 := by
+  cases d <;> simp [tag]
 
 @[circuit_norm]
 lemma tag_eq_zero_iff {d : Direction} : (d.tag : F) = 0 ↔ d = .provide := by
@@ -82,7 +104,8 @@ namespace DirectedChannel
 /--
 Erase a `DirectedChannel` to a `RawChannel`. The raw message is the payload followed by the
 direction tag. An active receiver is granted the guarantee; an active provider owes it;
-every interaction owes a boolean gate.
+every interaction owes a boolean gate and a well-formed tag, so that a raw interaction whose
+last element is neither tag cannot occur in a sound row.
 -/
 @[implicit_reducible]
 def toRaw (channel : DirectedChannel F Message) : RawChannel F where
@@ -93,6 +116,8 @@ def toRaw (channel : DirectedChannel F Message) : RawChannel F where
       channel.Guarantees (fromElements message.pop) data
   Requirements mult message data :=
     (mult = 0 ∨ mult = 1) ∧
+    (message.toArray.back? = some Direction.provide.tag ∨
+      message.toArray.back? = some Direction.receive.tag) ∧
     (message.toArray.back? = some Direction.provide.tag → mult ≠ 0 →
       channel.Guarantees (fromElements message.pop) data)
 
@@ -102,7 +127,8 @@ instance : CoeOut (DirectedChannel F Message) (RawChannel F) where
 @[circuit_norm]
 lemma toRaw_name (channel : DirectedChannel F Message) : channel.toRaw.name = channel.name := rfl
 @[circuit_norm]
-lemma toRaw_arity (channel : DirectedChannel F Message) : channel.toRaw.arity = size Message + 1 := rfl
+lemma toRaw_arity (channel : DirectedChannel F Message) :
+  channel.toRaw.arity = size Message + 1 := rfl
 end DirectedChannel
 
 /-- A typed interaction with a directed channel: a direction, an activation gate, a message,
@@ -146,9 +172,11 @@ section
 variable (direction : Direction) (enabled : Expression F) (msg : Message (Expression F))
 
 omit [FiniteField F] in
-@[circuit_norm] lemma emitted_direction : (channel.emitted direction enabled msg).direction = direction := rfl
+@[circuit_norm] lemma emitted_direction :
+  (channel.emitted direction enabled msg).direction = direction := rfl
 omit [FiniteField F] in
-@[circuit_norm] lemma emitted_enabled : (channel.emitted direction enabled msg).enabled = enabled := rfl
+@[circuit_norm] lemma emitted_enabled :
+  (channel.emitted direction enabled msg).enabled = enabled := rfl
 omit [FiniteField F] in
 @[circuit_norm] lemma emitted_msg : (channel.emitted direction enabled msg).msg = msg := rfl
 omit [FiniteField F] in
@@ -156,22 +184,26 @@ omit [FiniteField F] in
   (channel.emitted direction enabled msg).assumeGuarantees = false := rfl
 
 omit [FiniteField F] in
-@[circuit_norm] lemma pushedIf_direction : (channel.pushedIf enabled msg).direction = .provide := rfl
+@[circuit_norm] lemma pushedIf_direction :
+  (channel.pushedIf enabled msg).direction = .provide := rfl
 omit [FiniteField F] in
 @[circuit_norm] lemma pushedIf_enabled : (channel.pushedIf enabled msg).enabled = enabled := rfl
 omit [FiniteField F] in
 @[circuit_norm] lemma pushedIf_msg : (channel.pushedIf enabled msg).msg = msg := rfl
 omit [FiniteField F] in
-@[circuit_norm] lemma pushedIf_assumeGuarantees : (channel.pushedIf enabled msg).assumeGuarantees = false := rfl
+@[circuit_norm] lemma pushedIf_assumeGuarantees :
+  (channel.pushedIf enabled msg).assumeGuarantees = false := rfl
 
 omit [FiniteField F] in
-@[circuit_norm] lemma pulledIf_direction : (channel.pulledIf enabled msg).direction = .receive := rfl
+@[circuit_norm] lemma pulledIf_direction :
+  (channel.pulledIf enabled msg).direction = .receive := rfl
 omit [FiniteField F] in
 @[circuit_norm] lemma pulledIf_enabled : (channel.pulledIf enabled msg).enabled = enabled := rfl
 omit [FiniteField F] in
 @[circuit_norm] lemma pulledIf_msg : (channel.pulledIf enabled msg).msg = msg := rfl
 omit [FiniteField F] in
-@[circuit_norm] lemma pulledIf_assumeGuarantees : (channel.pulledIf enabled msg).assumeGuarantees = true := rfl
+@[circuit_norm] lemma pulledIf_assumeGuarantees :
+  (channel.pulledIf enabled msg).assumeGuarantees = true := rfl
 
 omit [FiniteField F] in
 /-- A provider that assumes nothing is just a provider. -/
@@ -196,7 +228,8 @@ end DirectedChannel
 namespace DirectedInteraction
 variable {channel : DirectedChannel F Message}
 
-/-- Erase to an `AbstractInteraction`: the raw message is the payload followed by the direction tag. -/
+/-- Erase to an `AbstractInteraction`: the raw message is the payload followed by the
+direction tag. -/
 @[implicit_reducible]
 def toRaw (i : DirectedInteraction channel) : AbstractInteraction F :=
   ⟨ channel.toRaw, i.enabled, (toElements i.msg).push (.const i.direction.tag), i.assumeGuarantees ⟩
@@ -235,7 +268,8 @@ lemma toRaw_requirements (env : Environment F) (i : DirectedInteraction channel)
     i.toRaw.Requirements env ↔ i.Requirements env := by
   simp [AbstractInteraction.Requirements, Requirements, toRaw, DirectedChannel.toRaw,
     Vector.map_push, Vector.toArray_push, Array.back?_push, Vector.pop_push,
-    ProvableType.fromElements_eval_toElements, Expression.eval, Direction.tag_inj_iff]
+    ProvableType.fromElements_eval_toElements, Expression.eval, Direction.tag_inj_iff,
+    Direction.eq_provide_or_eq_receive]
 end DirectedInteraction
 
 /- ## Circuit operations -/
@@ -249,7 +283,8 @@ def emit (channel : DirectedChannel F Message) (direction : Direction) (enabled 
 
 /-- Provide a message. The row must establish the channel guarantee for it. -/
 @[circuit_norm]
-def push (channel : DirectedChannel F Message) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
+def push (channel : DirectedChannel F Message) (msg : Message (Expression F)) :
+    Circuit F Unit := fun _ =>
   ((), [.interact (channel.pushed msg).toRaw])
 
 /-- Provide a message when `enabled = 1`. -/
@@ -260,7 +295,8 @@ def pushIf (channel : DirectedChannel F Message) (enabled : Expression F)
 
 /-- Receive a message, assuming the channel guarantee for it. -/
 @[circuit_norm]
-def pull (channel : DirectedChannel F Message) (msg : Message (Expression F)) : Circuit F Unit := fun _ =>
+def pull (channel : DirectedChannel F Message) (msg : Message (Expression F)) :
+    Circuit F Unit := fun _ =>
   ((), [.interact (channel.pulled msg).toRaw])
 
 /-- Receive a message when `enabled = 1`, assuming the channel guarantee when active. -/
