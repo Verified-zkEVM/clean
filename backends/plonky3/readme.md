@@ -7,17 +7,20 @@ Overall workflow:
 2. Generate a trace corresponding to the circuit.
 3. Prove and verify under the plonky3 backend.
 
-This workflow is demonstrated by the tests in this repo, specifically in [`tests/clean_air.rs`](tests/clean_air.rs).
+This workflow is demonstrated by the tests in this repo, specifically in [`tests/fib_tests.rs`](tests/fib_tests.rs).
 
 ## Running the test
 
-The integration test generates a Fibonacci trace from Lean and proves it with plonky3:
+The integration test generates a Fibonacci trace from Lean and proves it with plonky3.
+
+From the repository root, build Clean using the toolchain specified in [`lean-toolchain`](../../lean-toolchain), then run the test:
 
 ```bash
+lake build
 cd backends/plonky3
-cargo test --release -- --nocapture test_clean_fib
+cargo test --locked --release --test fib_tests test_lean_circuit_end_to_end -- --exact --nocapture
 ```
 
-Expected output: `test test_clean_fib ... ok` (test execution takes ~2 seconds in release mode)
+Expected output: `test test_lean_circuit_end_to_end ... ok`.
 
 todo: For more details in how it works, check out the [blog post](https://example.com).
