@@ -12,11 +12,11 @@ Uses the shared flattening logic from Compile.lean.
 -/
 import Clean.Circuit.Expression
 import Clean.Circuit.Operations
-import Clean.Backends.Wasm.Compile
+import Clean.Backends.Circom.Compile
 
 open Lean
 
-namespace Backends.Wasm
+namespace Backends.Circom
 
 open Expression (const add mul)
 
@@ -219,4 +219,4 @@ def compileR1CSBin (fieldPrime numInputs : ℕ) (inputNames : List String := [])
   let arr := putUInt32LE arr 3 |> fun a => putUInt64LE a mapSec.size |> fun a => a ++ mapSec
   pure arr
 
-end Backends.Wasm
+end Backends.Circom

@@ -6,5 +6,5 @@ import Clean.Utils.Test.TestU64Wrap
 import Clean.Utils.Test.TestElaborateCircuit
 import Clean.Utils.Test.TestCircuitStructDeriving
 import Clean.Utils.Test.TestMixedCircuitType
-import Clean.Utils.Test.TestWasmCompile
-import Clean.Utils.Test.TestWasmSemantics
+import Clean.Backends.Circom.TestWasmCompile
+import Clean.Backends.Circom.TestWasmSemantics

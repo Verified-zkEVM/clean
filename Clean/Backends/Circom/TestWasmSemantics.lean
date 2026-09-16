@@ -1,4 +1,4 @@
-import Clean.Utils.Test.TestWasmCompile
+import Clean.Backends.Circom.TestWasmCompile
 
 /-!
 Positive conformance checks for the WASM backend. These check the intended
@@ -6,7 +6,7 @@ semantics of the corrected implementation; they do not run an old compiler or
 construct proofs against a different constraint relation.
 -/
 
-open Backends.Wasm
+open Backends.Circom
 open TestWasmCompile
 
 namespace TestWasmSemantics

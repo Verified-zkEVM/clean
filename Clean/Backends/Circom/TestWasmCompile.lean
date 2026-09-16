@@ -1,5 +1,5 @@
-import Clean.Backends.Wasm.Compile
-import Clean.Backends.Wasm.R1CS
+import Clean.Backends.Circom.Compile
+import Clean.Backends.Circom.R1CS
 import Clean.Utils.Field
 import Clean.Utils.FiniteField
 import Clean.Utils.Primes
@@ -16,7 +16,7 @@ Uses `#eval!` so the tests can shell out to `wasm-validate` and `snarkjs`
 (depending on both being installed).
 -/
 
-open Backends.Wasm
+open Backends.Circom
 
 namespace TestWasmCompile
 

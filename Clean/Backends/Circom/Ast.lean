@@ -4,7 +4,7 @@ i64/i32 arithmetic, locals, function calls, control flow, memory operations.
 -/
 import Mathlib.Data.Nat.Basic
 
-namespace Backends.Wasm.Ast
+namespace Backends.Circom.Ast
 
 /-! ## Types -/
 
@@ -65,4 +65,4 @@ structure Module where
   funcs : List Func := []
 deriving Repr, Inhabited
 
-end Backends.Wasm.Ast
+end Backends.Circom.Ast

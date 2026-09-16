@@ -1,6 +1,6 @@
 # Clean WASM Backend
 
-A compiler written in Lean that turns [Clean](https://github.com/VanshSahay/clean) circuits into standalone artifacts the [snarkjs](https://github.com/iden3/snarkjs) toolchain can consume directly:
+A compiler written in Lean that turns [Clean](https://github.com/Verified-zkEVM/clean) circuits into standalone artifacts the [snarkjs](https://github.com/iden3/snarkjs) toolchain can consume directly:
 
 - **Binary WASM witness-generation modules** implementing the [Circom 2 witness-calculator ABI](https://github.com/iden3/circom_runtime/blob/master/js/witness_calculator.js) , `snarkjs wtns calculate circuit.wasm input.json witness.wtns` works out of the box.
 - **R1CS constraint files** in two formats: a pretty-printed JSON object, and the binary `.r1cs` format consumed directly by `snarkjs r1cs info`, `groth16 setup`, and the other `r1cs` subcommands.
@@ -47,13 +47,13 @@ List (FlatOperation F)
 ## Quick start
 
 ```lean
-import Clean.Backends.Wasm.Compile
-import Clean.Backends.Wasm.R1CS
+import Clean.Backends.Circom.Compile
+import Clean.Backends.Circom.R1CS
 import Clean.Utils.Field          -- the field type `F p`
 import Clean.Utils.Primes         -- small test primes, e.g. `p1009`
 import Clean.Specs.Poseidon       -- `BN254_PRIME`
 import Clean.Circomlib.Poseidon   -- `Poseidon1`, a full gadget to compile
-open Backends.Wasm
+open Backends.Circom
 
 -- Witness IR: one input `x`, one witness `w = x + 5`.
 def addOps : List (Operation (F p1009)) :=
@@ -80,7 +80,7 @@ To use the output, write the bytes to a file and hand them to snarkjs:
 snarkjs wtns calculate circuit.wasm input.json witness.wtns
 ```
 
-A complete end-to-end example (including `wasm-validate` and a ground-truth comparison) lives in `[Clean/Utils/Test/TestWasmCompile.lean](../../Utils/Test/TestWasmCompile.lean)`.
+A complete end-to-end example (including `wasm-validate` and a ground-truth comparison) lives in `[Clean/Backends/Circom/TestWasmCompile.lean](TestWasmCompile.lean)`.
 
 ## API
 
@@ -243,7 +243,7 @@ Values are kept in Montgomery form (`x·R mod p`, `R = 2^(N·64)`) throughout th
 
 ## Verification & testing
 
-`lake build CleanTests` runs `[TestWasmCompile.lean](../../Utils/Test/TestWasmCompile.lean)`, which:
+`lake build CleanTests` runs `[TestWasmCompile.lean](TestWasmCompile.lean)`, which:
 
 - compiles representative circuits (empty, addition, let-steps, `flt`, `bit`, `bitsOf`, `envRange`, `append`, `listGet`, multi-word `val`) and validates the emitted binaries with `wasm-validate`;
 - compiles full **Poseidon1** to WASM, runs `snarkjs wtns calculate` on three inputs, and checks each witness against the Lean ground truth computed by `Specs.PoseidonOptimized.poseidon1Opt`;
@@ -278,7 +278,7 @@ For writing circuit witnesses, see `[doc/witgen-authoring.md](../../../doc/witge
   `Num2Bits`/`Bits2Num`/`BinSub` gadgets follow this; a 128-bit `Num2Bits`
   circuit compiles in milliseconds (regression-tested).
 - New perf-regression tests live in
-  `[TestWasmCompile.lean](../../Utils/Test/TestWasmCompile.lean)`
+  `[TestWasmCompile.lean](TestWasmCompile.lean)`
   ("Performance regression tests" section) and run on every `lake build
   CleanTests`.
 

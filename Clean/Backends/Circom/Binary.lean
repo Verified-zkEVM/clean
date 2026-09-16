@@ -1,9 +1,9 @@
 /-
 WASM binary emitter. Encodes the AST to binary WASM format using ByteArray.
 -/
-import Clean.Backends.Wasm.Ast
+import Clean.Backends.Circom.Ast
 
-namespace Backends.Wasm.Binary
+namespace Backends.Circom.Binary
 
 open Ast (ValType Instr Func Module BinOp UnOp RelOp)
 
@@ -343,4 +343,4 @@ def Module.toBinary (m : Module) : Except String ByteArray := do
   let arr := putSection arr customSectionName nameSec  -- custom section = name section
   pure arr
 
-end Backends.Wasm.Binary
+end Backends.Circom.Binary

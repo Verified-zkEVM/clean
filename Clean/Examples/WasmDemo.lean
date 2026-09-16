@@ -1,5 +1,5 @@
-import Clean.Backends.Wasm.Compile
-import Clean.Backends.Wasm.R1CS
+import Clean.Backends.Circom.Compile
+import Clean.Backends.Circom.R1CS
 import Clean.Circuit.Basic
 import Clean.Circuit.Provable
 import Clean.Gadgets.Equality
@@ -46,7 +46,7 @@ compiled end-to-end to the snarkjs toolchain:
    (visible in the R1CS JSON).
 -/
 
-open Backends.Wasm
+open Backends.Circom
 
 namespace Examples.WasmDemo
 

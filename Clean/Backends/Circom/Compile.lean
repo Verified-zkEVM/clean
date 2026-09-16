@@ -14,10 +14,10 @@ compiler does not support produce an error with a reason.
 import Clean.Circuit.WitnessIR
 import Clean.Circuit.Expression
 import Clean.Circuit.Operations
-import Clean.Backends.Wasm.Ast
-import Clean.Backends.Wasm.Binary
+import Clean.Backends.Circom.Ast
+import Clean.Backends.Circom.Binary
 
-namespace Backends.Wasm
+namespace Backends.Circom
 
 open Witgen (FExpr U64Expr BExpr VExpr Step)
 open Ast (ValType Instr Func Module BinOp UnOp RelOp)
