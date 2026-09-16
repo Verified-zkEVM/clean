@@ -14,10 +14,17 @@ jobs:
       - uses: actions/checkout@v4
       - name: Check for consecutive empty lines
         run: python3 scripts/check-consecutive-empty-lines.py
+      - name: Install snarkjs and wabt (wasm-validate / wasm2wat)
+        run: |
+          npm install -g snarkjs
+          sudo apt-get update
+          sudo apt-get install -y wabt
       - uses: leanprover/lean-action@v1
         with:
           build-args: "--wfail"
       - name: Build tests
+        # CleanTests shells out to snarkjs / wasm-validate; without them the
+        # affected checks print SKIP instead of failing.
         run: lake build CleanTests
 
   plonky3-backend:
