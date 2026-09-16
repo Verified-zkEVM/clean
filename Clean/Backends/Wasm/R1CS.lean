@@ -40,7 +40,7 @@ def processOps (vm : VarMap) (ops : List (FlatOperation F)) (st : FlattenState F
       -- collapses into a scalar, no intermediate.
       if isConstant la ∨ isConstant lb then
         let (lz, st3) := flattenExpr vm z st2
-        let lz' := if c = -1 then scaleLinComb (-1 : F) lz else lz
+        let lz' := if c = -1 then lz else scaleLinComb (-1 : F) lz
         processOps vm rest { st3 with constraints := (la, lb, lz') :: st3.constraints }
       else
         let k := st2.nextSignal
@@ -54,19 +54,19 @@ def processOps (vm : VarMap) (ops : List (FlatOperation F)) (st : FlattenState F
       processOps vm rest { st1 with constraints := (lc, [(0, (1 : F))], []) :: st1.constraints }
   | .assert e@(.add (.mul (.const c) z) (.mul a b)) :: rest =>
     if c = -1 ∨ c = 1 then
-      let (la, st1) := flattenExpr vm a st
+      -- Match the original expression order used by WASM: z before a*b.
+      let (lz, stZ) := flattenExpr vm z st
+      let (la, st1) := flattenExpr vm a stZ
       let (lb, st2) := flattenExpr vm b st1
       if isConstant la ∨ isConstant lb then
-        let (lz, st3) := flattenExpr vm z st2
-        let lz' := if c = -1 then scaleLinComb (-1 : F) lz else lz
-        processOps vm rest { st3 with constraints := (la, lb, lz') :: st3.constraints }
+        let lz' := if c = -1 then lz else scaleLinComb (-1 : F) lz
+        processOps vm rest { st2 with constraints := (la, lb, lz') :: st2.constraints }
       else
         let k := st2.nextSignal
         let st3 : FlattenState F := { nextSignal := k + 1, constraints := (la, lb, [(k, (1 : F))]) :: st2.constraints }
-        let (lz, st4) := flattenExpr vm z st3
         let lz' := if c = -1 then scaleLinComb (-1 : F) lz else lz
         let lc := addLinCombs [(k, (1 : F))] lz'
-        processOps vm rest { st4 with constraints := (lc, [(0, (1 : F))], []) :: st4.constraints }
+        processOps vm rest { st3 with constraints := (lc, [(0, (1 : F))], []) :: st3.constraints }
     else
       let (lc, st1) := flattenExpr vm e st
       processOps vm rest { st1 with constraints := (lc, [(0, (1 : F))], []) :: st1.constraints }

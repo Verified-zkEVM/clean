@@ -65,10 +65,10 @@ private def listGetIdxSlots : ℕ := 1
 -- Size of the SHARED scratch region reserved at `vm.scratchBase` for
 -- expression compilers. `.flt`/`.feq` (multi-word) capture both operands
 -- (2*nw locals); `.ite`/`.bit`/`listGet`/`.bitsOf` use nw (or 1). Single-word
--- still needs 1 local (`.ite`/`.bit`/`listGet` capture at `scratchBase`).
+-- needs 2 locals: u64 division/remainder capture both operands before branching.
 -- Keeping this small lets large circuits (e.g. Keccak's 31K witnesses) stay
 -- within the WASM 50K-local limit.
-private def scratchReserve (nw : ℕ) : ℕ := if nw = 1 then 1 else 2 * nw
+private def scratchReserve (nw : ℕ) : ℕ := 2 * nw
 -- getInputSignalSize returns -1 (0xFFFFFFFF) for unknown input names.
 private def signalNotFound : ℕ := 2^32 - 1
 
@@ -349,7 +349,8 @@ def genFmul (p numWords : ℕ) : Func :=
           local.get carryIdx, i64.lt_u, i64.extend_i32_u, local.set carryIdx ]))
   let redSteps := (List.range N) >>= redStep
 
-  -- Conditional subtraction: c[N..2N-1] -= p if >= p. Result lands back in c[N..2N-1].
+  -- Conditional subtraction uses the full result c[N..2N], including carry.
+  -- The reduced result fits in N limbs and lands back in c[N..2N-1].
   -- Uses c[0..N-1] (all zero after reduction) as scratch for the trial subtraction.
   let subOneP : List Instr :=
     [ local.get (cBase+N+0), local.get (pBase+0), i64.sub, local.set (cBase+0),
@@ -360,7 +361,9 @@ def genFmul (p numWords : ℕ) : Func :=
         local.get (cBase+N+idx), local.get (pBase+idx), i64.lt_u, i64.extend_i32_u,
         local.get (cBase+N+idx), local.get (pBase+idx), i64.eq, i64.extend_i32_u,
         local.get brIdx, i64.and, i64.or, local.set brIdx ])
-    ++ [ local.get brIdx, i64.eqz,  -- borrow=0 means r >= p
+    ++ [ local.get (cBase + 2*N), i64.eqz, i32.eqz,
+         local.get brIdx, i64.eqz, .binop .i32 .or,
+         -- Subtract when the full (N+1)-limb result is >= p, including carry.
          .ifElse "" none ((List.range N) >>= fun i => [ local.get (cBase+i), local.set (cBase+N+i) ]) [] ]
 
   -- Return c[N..2N-1] (lowest limb first, matching the caller convention)
@@ -418,10 +421,13 @@ def genFadd (p numWords : ℕ) : Func :=
       local.get (ri idx), local.get (pBase + idx), i64.lt_u, i64.extend_i32_u,
       local.get (ri idx), local.get (pBase + idx), i64.eq, i64.extend_i32_u,
       local.get brIdx, i64.and, i64.or, local.set brIdx ]
-  -- If no borrow (r >= p), copy tmp to result. Return limbs in ascending order
+  -- If the addition carried OR subtraction had no borrow, copy tmp to result.
+  -- In the carry case, the low-limb subtraction wraps to the correct r - p.
+  -- Return limbs in ascending order
   -- (limb 0 deepest), matching the $fmul convention.
   let condSub : List Instr :=
-    [ local.get brIdx, i64.eqz,
+    [ local.get cIdx, i64.eqz, i32.eqz,
+      local.get brIdx, i64.eqz, .binop .i32 .or,
       .ifElse "" none ((List.range N) >>= fun i => [ local.get (tmpBase + i), local.set (ri i) ]) [] ]
   let rets : List Instr := (List.range N) >>= fun i => [ local.get (ri i) ]
   { name := "$fadd"
@@ -702,7 +708,8 @@ def compileFExpr (vm : VarMap) : FExpr F → CodeBuilder → Except String CodeB
       let captureIdx : List Instr := [local.set idxLocal]
       -- Compile each element (via the non-mutual list helper, so termination holds)
       -- and emit the select-sum chain.
-      let selInstrs ← compileFExprList vm idxLocal nw 0 xs
+      let selInstrs ← if xs.isEmpty then pure (List.replicate nw (i64.const 0))
+        else compileFExprList vm idxLocal nw 0 xs
       pure (idxCB.pushList captureIdx |>.pushList selInstrs)
   | .dataGet _ _ _ _, _ => .error "compileFExpr: dataGet is not yet supported"
   | .hintGet _ _ _ _, _ => .error "compileFExpr: hintGet is not yet supported"
@@ -732,9 +739,25 @@ def compileU64Expr (vm : VarMap) : U64Expr F → CodeBuilder → Except String C
   | .mul a e, cb => do
     let cb ← compileU64Expr vm a cb; let cb ← compileU64Expr vm e cb; pure (cb.push i64.mul)
   | .div a e, cb => do
-    let cb ← compileU64Expr vm a cb; let cb ← compileU64Expr vm e cb; pure (cb.push (.binop .i64 .div_u))
+    let cb ← compileU64Expr vm a cb
+    let cb ← compileU64Expr vm e cb
+    -- UInt64 division is total: a / 0 = 0, unlike WASM's trapping div_u.
+    -- Evaluate both operands before capture so nested expressions cannot
+    -- clobber the shared scratch slots.
+    let lhs := vm.scratchBase
+    let rhs := lhs + 1
+    pure (cb.pushList [local.set rhs, local.set lhs, local.get rhs, i64.eqz,
+      if_ (some .i64) [i64.const 0]
+        [local.get lhs, local.get rhs, .binop .i64 .div_u]])
   | .mod a e, cb => do
-    let cb ← compileU64Expr vm a cb; let cb ← compileU64Expr vm e cb; pure (cb.push i64.rem_u)
+    let cb ← compileU64Expr vm a cb
+    let cb ← compileU64Expr vm e cb
+    -- UInt64 remainder is total: a % 0 = a.
+    let lhs := vm.scratchBase
+    let rhs := lhs + 1
+    pure (cb.pushList [local.set rhs, local.set lhs, local.get rhs, i64.eqz,
+      if_ (some .i64) [local.get lhs]
+        [local.get lhs, local.get rhs, i64.rem_u]])
   | .land a e, cb => do
     let cb ← compileU64Expr vm a cb; let cb ← compileU64Expr vm e cb; pure (cb.push i64.and)
   | .lor a e, cb => do
@@ -968,10 +991,10 @@ def discoverAndCompileIntermediates (vm : VarMap) (flatOps : List (FlatOperation
   ) (({ nextSignal := startSignal, constraints := [] } : FlattenState F), ())
   let numInt := st.nextSignal - startSignal
   let intConstraintsRev := List.reverse st.constraints
-  let rec buildAST (idx : ℕ) (instrs : List Instr) (locals : List (String × ValType))
+  let rec buildAST (idx : ℕ) (instrs : CodeBuilder) (locals : List (String × ValType))
       (remaining : List (Constraint F)) : ℕ × List (String × ValType) × List Instr :=
     match remaining with
-    | [] => (idx, locals, instrs)
+    | [] => (idx, locals, instrs.build)
     | (la, lb, [(k, _)]) :: rest =>
       let laInstrs := compileLinComb la signalBase signalBytes nw vm.prime
       let lbInstrs := compileLinComb lb signalBase signalBytes nw vm.prime
@@ -994,9 +1017,9 @@ def discoverAndCompileIntermediates (vm : VarMap) (flatOps : List (FlatOperation
       let computeInstrs : List Instr :=
         laInstrs ++ lbInstrs ++ [call "$fmul"] ++ captureAll
         ++ fromMont ++ captureFromMont ++ storeAll
-      buildAST (idx + 1) (computeInstrs ++ instrs) (localNames ++ locals) rest
+      buildAST (idx + 1) (instrs.pushList computeInstrs) (localNames ++ locals) rest
     | _ :: rest => buildAST idx instrs locals rest
-  let (_, locals, instrs) := buildAST 0 [] [] intConstraintsRev
+  let (_, locals, instrs) := buildAST 0 {} [] intConstraintsRev
   (numInt, locals.reverse, instrs)
 
 /-- compile let-steps (letF/letN) to instructions.
@@ -1109,7 +1132,10 @@ def compileVExpr (vm : VarMap) (vi : ℕ) (acc : CodeBuilder) :
       -- testInstrs leaves i32 (0/1); zero-extend to i64 then to nw limbs
       let extend : List Instr := [i64.extend_i32_u] ++ List.replicate (nw - 1) (i64.const 0)
       let capture := (List.range nw).reverse.map fun w => local.set (elemBase + w)
-      pure (acc.pushList (testInstrs ++ extend ++ capture))
+      -- Field-witness locals always hold Montgomery form in multi-word mode.
+      let toMont := if nw = 1 then []
+        else pushCoeff (montR2 vm.prime nw) nw ++ [call "$fmul"]
+      pure (acc.pushList (testInstrs ++ extend ++ toMont ++ capture))
     ) (acc.pushList (xCB.build ++ fromMont ++ captureX))
     pure (vmOut, vi + n, instrs)
   | _, .append a b => do

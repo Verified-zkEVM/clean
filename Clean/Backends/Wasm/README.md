@@ -168,7 +168,7 @@ For field elements smaller than 64 bits the coefficient byte width is padded up 
 
 Lookups and interactions constrain existing values and allocate no witnesses, so witness generation skips them; they cannot be expressed as quadratic constraints, so the R1CS exporter rejects them.
 
-All u64-sorted (`U64Expr`) arithmetic is performed on single 64-bit words with WASM's native wrap-around semantics, exactly matching the IR's `UInt64` evaluation.
+U64-sorted (`U64Expr`) arithmetic uses single 64-bit words with WASM's native wrap-around semantics. Division and remainder explicitly preserve Lean's total zero-divisor cases (`a / 0 = 0`, `a % 0 = a`) instead of trapping.
 
 ## Error handling
 
@@ -284,7 +284,7 @@ For writing circuit witnesses, see `[doc/witgen-authoring.md](../../../doc/witge
 
 ## Known limitations
 
-- **WASM local limit**: each witness output occupies `numWords` locals in the compute function, plus a shared scratch region of `2·numWords` and `numWords` per let-step. Circuits with tens of thousands of multi-word witnesses can approach WASM's 50,000-locals-per-function limit (e.g. SHA256Compress's 80K two-limb witnesses exceed it). Single-word circuits use no scratch and stay well under the limit.
+- **WASM local limit**: each witness output occupies `numWords` locals in the compute function, plus a shared scratch region of `2·numWords` and `numWords` per let-step. Circuits with tens of thousands of multi-word witnesses can approach WASM's 50,000-locals-per-function limit (e.g. SHA256Compress's 80K two-limb witnesses exceed it). Single-word circuits reserve two shared scratch locals.
 - `dataGet`**/**`hintGet`: these read committed/uncommitted prover data from the Lean environment, which is not representable in a standalone WASM module; they are rejected with `.error`.
 - **R1CS export**: lookups and interactions cannot be expressed as quadratic constraints and are rejected (see [Supported operations](#supported-operations)). Note that snarkjs's `r1cs export json` only works for primes of known curves (e.g. BN254); `r1cs info` and `groth16 setup` work for any prime.
 - **`init(sanityCheck)`**: the Circom 2 `init` flag that enables constraint checking during witness generation is accepted but ignored — the module does not verify its own constraints at runtime. Use `snarkjs wtns check` on a supported curve instead.
