@@ -1,9 +1,13 @@
-import Clean.Gadgets.ByteLookup
-import Clean.Utils.Bitwise
-import Clean.Circuit.Provable
-import Clean.Utils.Primes
-import Clean.Circuit.Subcircuit
-import Clean.Gadgets.Equality
+module
+
+public import Clean.Gadgets.ByteLookup
+public import Clean.Utils.Bitwise
+public import Clean.Circuit.Provable
+public import Clean.Utils.Primes
+public import Clean.Circuit.Subcircuit
+public import Clean.Gadgets.Equality
+
+@[expose] public section
 
 section
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
@@ -186,15 +190,14 @@ open Gadgets (ByteTable)
   This means that all its limbs are less than 256.
 -/
 def main (inputs : Var U64 (F p)) : Circuit (F p) Unit := do
-  let ⟨x0, x1, x2, x3, x4, x5, x6, x7⟩ := inputs
-  lookup ByteTable x0
-  lookup ByteTable x1
-  lookup ByteTable x2
-  lookup ByteTable x3
-  lookup ByteTable x4
-  lookup ByteTable x5
-  lookup ByteTable x6
-  lookup ByteTable x7
+  lookup ByteTable inputs.x0
+  lookup ByteTable inputs.x1
+  lookup ByteTable inputs.x2
+  lookup ByteTable inputs.x3
+  lookup ByteTable inputs.x4
+  lookup ByteTable inputs.x5
+  lookup ByteTable inputs.x6
+  lookup ByteTable inputs.x7
 
 def circuit : FormalAssertion (F p) U64 where
   main

@@ -1,6 +1,10 @@
-import Lean.Elab.Tactic
-import Lean.Meta
-import Lean.Structure
+module
+
+public meta import Lean.Elab.Tactic
+public meta import Lean.Meta
+public meta import Lean.Structure
+
+public meta section
 
 open Lean Meta
 

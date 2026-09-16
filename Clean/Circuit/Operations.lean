@@ -1,9 +1,13 @@
-import Clean.Circuit.Expression
-import Clean.Circuit.Lookup
-import Clean.Circuit.WitnessIRSugar
-import Clean.Circuit.Provable
-import Clean.Circuit.Channel
-import Clean.Circuit.SimpGadget
+module
+
+public import Clean.Circuit.Expression
+public import Clean.Circuit.Lookup
+public import Clean.Circuit.WitnessIRSugar
+public import Clean.Circuit.Provable
+public import Clean.Circuit.Channel
+public import Clean.Circuit.SimpGadget
+
+@[expose] public section
 
 variable {F : Type} [FiniteField F] {α : Type} {n : ℕ}
 

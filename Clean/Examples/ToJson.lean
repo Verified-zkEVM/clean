@@ -1,7 +1,11 @@
-import Lean
-import Clean.Tables.Fibonacci8
-import Clean.Tables.Fibonacci32Inductive
-import Clean.Table.Json
+module
+
+public import Lean
+public import Clean.Tables.Fibonacci8
+public import Clean.Tables.Fibonacci32Inductive
+public import Clean.Table.Json
+
+@[expose] public section
 
 -- serialize constraints of the Fibonacci8 table to JSON
 def fib8json := Lean.toJson (Tables.Fibonacci8Table.fibTable (p:=pBabybear))

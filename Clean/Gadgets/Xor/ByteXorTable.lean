@@ -1,5 +1,10 @@
-import Clean.Circuit.Basic
-import Clean.Utils.Field
+module
+
+public import Clean.Circuit.Basic
+public import Clean.Utils.Field
+public import Init.Data.Fin.Bitwise
+
+@[expose] public section
 
 namespace Gadgets.Xor
 open ByteUtils

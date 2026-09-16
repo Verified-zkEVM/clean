@@ -1,7 +1,11 @@
-import Clean.Gadgets.SHA256.LowerSigma0
-import Clean.Gadgets.SHA256.LowerSigma1
-import Clean.Gadgets.SHA256.Add32
-import Clean.Specs.SHA256
+module
+
+public import Clean.Gadgets.SHA256.LowerSigma0
+public import Clean.Gadgets.SHA256.LowerSigma1
+public import Clean.Gadgets.SHA256.Add32
+public import Clean.Specs.SHA256
+
+@[expose] public section
 
 section
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^33)]
@@ -24,7 +28,7 @@ Per step, `scheduleStep` creates:
 -/
 
 /-- One step of the message schedule: compute w[j] for j = i.val + 16. -/
-private def scheduleStep (w : SHA256Schedule (Expression (F p))) (i : Fin 48) :
+def scheduleStep (w : SHA256Schedule (Expression (F p))) (i : Fin 48) :
     Circuit (F p) (SHA256Schedule (Expression (F p))) := do
   let j := i.val + 16
   let s1   ← LowerSigma1.circuit (w.get ⟨j - 2,  by omega⟩)
@@ -35,7 +39,7 @@ private def scheduleStep (w : SHA256Schedule (Expression (F p))) (i : Fin 48) :
   return w.set (⟨j, by omega⟩ : Fin 64) wj
 
 @[implicit_reducible]
-private def constantLength :
+def constantLength :
     Circuit.ConstantLength (fun (x : SHA256Schedule (Expression (F p)) × Fin 48) => scheduleStep x.1 x.2) where
   localLength := 227
   localLength_eq _ _ := by

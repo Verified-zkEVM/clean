@@ -10,9 +10,13 @@ consumed by the snarkjs toolchain:
 
 Uses the shared flattening logic from Compile.lean.
 -/
-import Clean.Circuit.Expression
-import Clean.Circuit.Operations
-import Clean.Backends.Circom.Compile
+module
+
+public import Clean.Circuit.Expression
+public import Clean.Circuit.Operations
+public import Clean.Backends.Circom.Compile
+
+public section
 
 open Lean
 

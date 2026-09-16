@@ -1,7 +1,11 @@
-import Clean.Utils.Vector
-import Clean.Circuit.Extensions
-import Clean.Table.Theorems
-import Clean.Gadgets.Addition8.Addition8
+module
+
+public import Clean.Utils.Vector
+public import Clean.Circuit.Extensions
+public import Clean.Table.Theorems
+public import Clean.Gadgets.Addition8.Addition8
+
+@[expose] public section
 
 /-
   8-bit Fibonacci inductive table definition. The i-th row of the table
@@ -96,7 +100,7 @@ lemma boundary_step (first_row : Row (F p) RowType) (aux_env : ProverEnvironment
 lemma fibRelation_assignment_vars :
     (fibRelation (p:=p)).finalAssignment.vars =
       #v[.input ⟨0, 0⟩, .input ⟨0, 1⟩, .input ⟨1, 0⟩, .input ⟨1, 1⟩, .aux 2] := by
-  simp only [fibRelation, TableConstraint.finalAssignment, table_assignment_norm, circuit_norm,
+  dsimp +instances only [fibRelation, TableConstraint.finalAssignment, table_assignment_norm, circuit_norm,
     copyToVar, Gadgets.Addition8.circuit, pure, MonadLift.monadLift, explicit_provable_type]
   simp only [Vector.mapFinRange_succ, Vector.mapFinRange_zero]
   rfl

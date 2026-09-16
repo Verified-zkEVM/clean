@@ -1,10 +1,14 @@
-import Clean.Circuit.Basic
-import Clean.Circuit.Provable
-import Clean.Gadgets.Equality
-import Clean.Utils.Field
-import Clean.Utils.Primes
-import Clean.Utils.Tactics
-import Mathlib.Data.List.Sort
+module
+
+public import Clean.Circuit.Basic
+public import Clean.Circuit.Provable
+public import Clean.Gadgets.Equality
+public import Clean.Utils.Field
+public import Clean.Utils.Primes
+public import Clean.Utils.Tactics
+public import Mathlib.Data.List.Sort
+
+@[expose] public section
 
 /-
 The purpose of this file is to define a memory model that can be checked using the Memory in the Head paradigm,
@@ -29,11 +33,13 @@ Additionally, the first value of the array (t, addr, readValue, writeValue) must
   A memory access consists of an address, a read value, and a write value.
   The semantics are that at this address, we read the readValue, and then write the writeValue.
 -/
+@[reducible]
 def MemoryAccess := ℕ × ℕ × ℕ × ℕ -- (timestamp, addr, readValue, writeValue)
 
 /--
 A memory list is canonically represented in reverse order, so that the most recent access is at the head of the list.
 -/
+@[reducible]
 def MemoryAccessList := List MemoryAccess
 
 abbrev timestamp_ordering (x y : MemoryAccess) := match x, y with
@@ -41,7 +47,11 @@ abbrev timestamp_ordering (x y : MemoryAccess) := match x, y with
 
 /--
   A memory access list is timestamp sorted if the timestamps are strictly decreasing.
+
+  This proposition indexes proof-dependent memory operations, so Lean must unfold
+  it while checking implicit arguments.
 -/
+@[implicit_reducible]
 def MemoryAccessList.isTimestampSorted (accesses : MemoryAccessList) : Prop :=
   accesses.Pairwise timestamp_ordering
 
@@ -275,7 +285,7 @@ example : MemoryAccessList.isConsistentOnline [
   (2, 0, 42, 44),
   (3, 2, 0, 45),
   (4, 1, 43, 46)
-].reverse (by letI : DecidableRel timestamp_ordering := fun x y => match x, y with | (t2,_,_,_), (t1,_,_,_) => Nat.decLt t1 t2; simp only [MemoryAccessList.isTimestampSorted]; decide) := by
+].reverse (by let : DecidableRel timestamp_ordering := fun x y => match x, y with | (t2,_,_,_), (t1,_,_,_) => Nat.decLt t1 t2; simp only [MemoryAccessList.isTimestampSorted]; decide) := by
   simp_all [MemoryAccessList.isConsistentOnline, MemoryAccessList.lastWriteValue]
 
 example : ¬ MemoryAccessList.isConsistentOnline [
@@ -284,7 +294,7 @@ example : ¬ MemoryAccessList.isConsistentOnline [
   (2, 0, 43, 44), -- inconsistent read
   (3, 2, 0, 45),
   (4, 1, 43, 46)
-].reverse (by letI : DecidableRel timestamp_ordering := fun x y => match x, y with | (t2,_,_,_), (t1,_,_,_) => Nat.decLt t1 t2; simp only [MemoryAccessList.isTimestampSorted]; decide) := by
+].reverse (by let : DecidableRel timestamp_ordering := fun x y => match x, y with | (t2,_,_,_), (t1,_,_,_) => Nat.decLt t1 t2; simp only [MemoryAccessList.isTimestampSorted]; decide) := by
   simp_all [MemoryAccessList.isConsistentOnline, MemoryAccessList.lastWriteValue]
 
 /--
@@ -668,7 +678,10 @@ theorem MemoryAccessList.filterAddress_empty_when_address_changes
       -- x ∈ tail
       have h_ord_second := h_sorted.2.1 (tx, ax, rx, wx) hx_tail
       simp only [address_timestamp_ordering] at h_ord_second
-      split_ifs at h_ord_second; linarith
+      split_ifs at h_ord_second with h_eq
+      · change ax ≠ a2 at h_addr_ne
+        exact h_addr_ne h_eq
+      · omega
 
 theorem MemoryAccessList.isConsistentOffline_of_cons
     (head : MemoryAccess) (tail : MemoryAccessList)
@@ -745,7 +758,6 @@ theorem MemoryAccessList.isConsistentOffline_implies_single_address
             simp [h_addr_ne]
           simp only [h_second_ne] at h_empty
           have h_empty_simplified : List.filter (fun x => match x with | (_, addr', _, _) => decide (addr' = a_head)) tail_rest = [] := by
-            simp at h_empty
             exact h_empty
           simp only [h_empty_simplified, isConsistentSingleAddress]
           simp only [isConsistentOffline] at h_offline

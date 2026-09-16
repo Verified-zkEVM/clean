@@ -2,10 +2,14 @@
 This file defines a conversion between a field element and its bit representation.
 The bits are themselves typed as field elements, with values in { 0, 1 }.
 -/
-import Clean.Utils.Field
-import Clean.Utils.Vector
-import Clean.Circuit.Expression
-import Clean.Utils.Fin
+module
+
+public import Clean.Utils.Field
+public import Clean.Utils.Vector
+public import Clean.Circuit.Expression
+public import Clean.Utils.Fin
+
+@[expose] public section
 
 namespace Utils.Bits
 /--

@@ -1,7 +1,11 @@
-import Clean.Circuit
-import Clean.Specs.Poseidon
-import Clean.Specs.PoseidonOptimized
-import Clean.Utils.Tactics.CircuitProofStart
+module
+
+public import Clean.Circuit
+public import Clean.Specs.Poseidon
+public import Clean.Specs.PoseidonOptimized
+public import Clean.Utils.Tactics.CircuitProofStart
+
+@[expose] public section
 
 /-
 Poseidon Hash Circuit Implementation
@@ -213,7 +217,7 @@ def circuit : FormalCircuit F field (fields 2) where
   soundness := by
     circuit_proof_start
     rw [ark_t2_eq C_t2 0 (by omega)]
-    simp_all
+    simp_all [circuit_norm, explicit_provable_type]
   completeness := by
     circuit_proof_all
 
@@ -257,7 +261,7 @@ theorem soundness (C : Vector ℕ 72) (M : Vector (Vector ℕ 2) 2) (offset : Fi
 theorem completeness (C : Vector ℕ 72) (M : Vector (Vector ℕ 2) 2) (offset : Fin 71) :
     Completeness F (Input := fields 2) (Output := fields 2) (main C M offset) (fun _ => True) := by
   circuit_proof_start [Sigma.circuit]
-  simp_all
+  simp_all [circuit_norm, explicit_provable_type]
 
 def circuit (C : Vector ℕ 72) (M : Vector (Vector ℕ 2) 2) (offset : Fin 71) :
     FormalCircuit F (fields 2) (fields 2) where
@@ -286,7 +290,7 @@ instance elaborated (offset : ℕ) (h : offset + 4 < 71) :
 
 theorem soundness (offset : ℕ) (h : offset + 4 < 71) :
     Soundness F (Input := fields 2) (Output := fields 2) (main offset h) (fun _ => True) (Spec offset) := by
-  circuit_proof_start [FullRound_t2.circuit, FullRound_t2.elaborated, FullRound_t2.Spec]
+  circuit_proof_start [FullRound_t2.circuit, FullRound_t2.Spec]
   obtain ⟨h0, h_step⟩ := h_holds
   have h1 := h_step 0 (by omega)
   have h2 := h_step 1 (by omega)
@@ -339,7 +343,7 @@ theorem soundness (round : Fin 56) :
 theorem completeness (round : Fin 56) :
     Completeness F (Input := fields 2) (Output := fields 2) (main round) (fun _ => True) := by
   circuit_proof_start [Sigma.circuit]
-  simp_all
+  simp_all [circuit_norm, explicit_provable_type]
 
 def circuit (round : Fin 56) : FormalCircuit F (fields 2) (fields 2) where
   main := main round
@@ -372,6 +376,10 @@ private lemma partialRoundsOpt_induction
       have hi' := h_round (i + 1) (by omega)
       convert hi' using 2 <;> omega
 
+-- As in SHA256Compress, keep a concrete multi-round specification opaque
+-- during generic circuit normalization on Lean 4.33.
+attribute [local irreducible] Specs.PoseidonOptimized.partialRoundsOpt_t2
+
 namespace ApplyPartialRoundsOpt
 
 def main (state : Vector (Expression F) 2)
@@ -398,8 +406,7 @@ instance elaborated : ElaboratedCircuit F (fields 2) (fields 2) main := by
   elaborate_circuit
 
 theorem soundness : Soundness F (Input := fields 2) (Output := fields 2) main Assumptions Spec := by
-  circuit_proof_start [PartialRoundOpt_t2.circuit, PartialRoundOpt_t2.elaborated,
-    PartialRoundOpt_t2.Spec]
+  circuit_proof_start [PartialRoundOpt_t2.circuit, PartialRoundOpt_t2.Spec]
   obtain ⟨h0, h_step⟩ := h_holds
   have h_round : ∀ (k : ℕ) (hk : k < 56),
       envState env input i₀ (k + 1) =
@@ -449,6 +456,20 @@ instance elaborated : ElaboratedCircuit F field field main := by
   } using by
     simp only [circuit_norm]
 
+-- Keep value-level composition separate from the circuit proof, as in the
+-- Lean 4.33 SHA256/BLAKE3 migration, so kernel checking stays structural.
+private lemma permutation_of_rounds (input : F) (s0 s1 s2 s3 s4 s5 : Vector F 2)
+    (h0 : s0.toArray = (Specs.Poseidon.ark C_t2 0 #v[0, input]).toArray)
+    (h1 : s1.toArray = (Specs.PoseidonOptimized.fullRoundsOpt_t2 C_t2 M_t2 3 2 s0).toArray)
+    (h2 : s2.toArray = (Specs.Poseidon.mix P_t2 (Specs.Poseidon.ark C_t2 8 (Specs.Poseidon.sboxFull s1))).toArray)
+    (h3 : s3.toArray = (Specs.PoseidonOptimized.partialRoundsOpt_t2 C_t2 S_t2 56 10 0 s2 (by omega)).toArray)
+    (h4 : s4.toArray = (Specs.PoseidonOptimized.fullRoundsOpt_t2 C_t2 M_t2 3 66 s3).toArray)
+    (h5 : s5.toArray = (Specs.Poseidon.mix M_t2 (Specs.Poseidon.sboxFull s4)).toArray) :
+    s5[0] = (Specs.PoseidonOptimized.poseidon1Permutation input)[0] := by
+  simp only [Vector.toArray_inj] at h0 h1 h2 h3 h4 h5
+  subst s0 s1 s2 s3 s4 s5
+  rfl
+
 theorem soundness : Soundness F (Input := field) (Output := field) (elaborated := elaborated) main (fun _ => True) Spec := by
   circuit_proof_start [InitialArk.circuit, ApplyFullRounds.circuit, FullRound_t2.circuit,
     ApplyPartialRoundsOpt.circuit]
@@ -456,9 +477,14 @@ theorem soundness : Soundness F (Input := field) (Output := field) (elaborated :
     ApplyPartialRoundsOpt.Spec, ApplyPartialRoundsOpt.Assumptions,
     Specs.PoseidonOptimized.fullRoundOpt_t2, ark_zero_t2_eq,
     Specs.PoseidonOptimized.poseidon1Opt] at h_holds ⊢
-  suffices #v[env.get (i₀ + 400), env.get (i₀ + 401)] =
-    Specs.PoseidonOptimized.poseidon1Permutation input by simp [← this]
-  simp_all [Specs.PoseidonOptimized.poseidon1Permutation]
+  obtain ⟨h0, h1, h2, h3, h4, h5⟩ := h_holds
+  exact permutation_of_rounds input
+    #v[env.get i₀, env.get (i₀ + 1)]
+    #v[env.get (i₀ + 24), env.get (i₀ + 25)]
+    #v[env.get (i₀ + 32), env.get (i₀ + 33)]
+    #v[env.get (i₀ + 368), env.get (i₀ + 369)]
+    #v[env.get (i₀ + 392), env.get (i₀ + 393)]
+    #v[env.get (i₀ + 400), env.get (i₀ + 401)] h0 h1 h2 h3 h4 h5
 
 theorem completeness : Completeness F (Input := field) (Output := field) main (fun _ => True) := by
   circuit_proof_start [InitialArk.circuit, ApplyFullRounds.circuit, FullRound_t2.circuit,

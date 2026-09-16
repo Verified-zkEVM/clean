@@ -5,9 +5,17 @@ This file contains the mathematical specification of the Poseidon hash function,
 matching the circomlib implementation:
 https://github.com/iden3/circomlib/blob/master/circuits/poseidon.circom
 -/
-import Clean.Utils.Vector
-import Clean.Specs.PoseidonConstants
-import CompPoly.Fields.BN254
+module
+
+public import Clean.Utils.Vector
+public import Clean.Specs.PoseidonConstants
+public import CompPoly.Fields.BN254
+
+public meta import Clean.Utils.Vector
+public meta import Clean.Specs.PoseidonConstants
+public meta import CompPoly.Fields.BN254
+
+@[expose] public section
 
 namespace Specs.Poseidon
 

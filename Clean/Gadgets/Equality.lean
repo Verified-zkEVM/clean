@@ -2,8 +2,12 @@
 This file provides the built-in `assertEquals` gadget, which works for any provable type
 and smoothly simplifies to an equality statement under `circuit_norm`.
 -/
-import Clean.Circuit.Loops
-import Clean.Circuit.Explicit
+module
+
+public import Clean.Circuit.Loops
+public import Clean.Circuit.Explicit
+
+@[expose] public section
 
 variable {F : Type} [FiniteField F] {M : TypeMap} [ProvableType M]
 

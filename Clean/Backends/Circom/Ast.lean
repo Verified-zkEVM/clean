@@ -2,7 +2,11 @@
 Minimal typed WASM AST for the Clean backend. Covers only the subset of WASM we use:
 i64/i32 arithmetic, locals, function calls, control flow, memory operations.
 -/
-import Mathlib.Data.Nat.Basic
+module
+
+public import Mathlib.Data.Nat.Basic
+
+@[expose] public section
 
 namespace Backends.Circom.Ast
 

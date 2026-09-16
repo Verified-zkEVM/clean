@@ -1,4 +1,6 @@
-import Clean.Circuit.WitnessIR
+module
+
+public import Clean.Circuit.WitnessIR
 
 /-!
 # Authoring sugar for the witness IR
@@ -23,6 +25,8 @@ witnessVectorProgram 32 do
   return .range 32 fun i => ((s >>> i) % 2).toField
 ```
 -/
+
+@[expose] public section
 
 variable {F : Type} {α β : Type}
 
@@ -315,6 +319,7 @@ theorem VExpr.range_def (n : ℕ) (body : U64Expr F → FExpr F) :
 
 /-- Witness-program builder: accumulates `let`-steps, so shared values are written
 in `do`-notation via `letF` / `letU`. -/
+@[reducible]
 def M (F : Type) (α : Type) : Type :=
   Array (Step F) → α × Array (Step F)
 

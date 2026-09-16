@@ -1,4 +1,14 @@
-import Mathlib.Data.ZMod.Basic
+module
+
+public import Mathlib.Data.ZMod.Basic
+
+-- `native_decide` compiles the decision procedure, so the instances it runs must also be
+-- reachable from meta code.
+public meta import Mathlib.Data.Nat.Prime.Defs
+public meta import Mathlib.Logic.Basic
+public meta import Mathlib.Algebra.Group.Nat.Defs
+
+@[expose] public section
 
 def p1009 := 1009
 def pBabybear := 15 * 2^27 + 1

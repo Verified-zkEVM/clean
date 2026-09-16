@@ -1,9 +1,13 @@
-import Clean.Utils.Vector
-import Clean.Circuit.Basic
-import Clean.Table.Theorems
-import Clean.Gadgets.Addition32.Addition32
-import Clean.Gadgets.Equality
-import Clean.Types.U32
+module
+
+public import Clean.Utils.Vector
+public import Clean.Circuit.Basic
+public import Clean.Table.Theorems
+public import Clean.Gadgets.Addition32.Addition32
+public import Clean.Gadgets.Equality
+public import Clean.Types.U32
+
+@[expose] public section
 
 namespace Tables.Fibonacci32
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
@@ -147,7 +151,7 @@ lemma fib_vars (curr next : Row (F p) RowType) (aux_env : ProverEnvironment (F p
   -- TODO it's annoying that we explicitly need the GetElem instance here
   simp only [Vector.instGetElemNatLt, Vector.get, Fin.cast_mk, PNat.val_ofNat,
     Fin.isValue, List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ]
-  and_intros <;> rfl
+  and_intros <;> with_unfolding_all rfl
 
 /--
   Main lemma that shows that if the constraints hold over the two-row window,
@@ -184,7 +188,8 @@ lemma boundary_assignment : (boundary (p:=p)).finalAssignment.vars =
   dsimp only [table_assignment_norm, circuit_norm, boundary, pure, MonadLift.monadLift]
   simp only [circuit_norm, FormalCircuitBase.localLength]
   simp +instances only [circuit_norm]
-  with_unfolding_all rfl
+  simp only [Vector.mapFinRange_succ, Vector.mapFinRange_zero, Vector.mapRange_zero]
+  rfl
 
 omit p_large_enough in
 lemma boundary_vars (first_row : Row (F p) RowType) (aux_env : ProverEnvironment (F p)) :
@@ -199,7 +204,7 @@ lemma boundary_vars (first_row : Row (F p) RowType) (aux_env : ProverEnvironment
   simp only [circuit_norm, explicit_provable_type, reduceDIte, Nat.reduceLT, Nat.reduceAdd]
   simp only [Vector.instGetElemNatLt, Vector.get, Fin.cast_mk, PNat.val_ofNat,
     Fin.isValue, List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ]
-  and_intros <;> rfl
+  and_intros <;> with_unfolding_all rfl
 
 lemma boundary_constraints (first_row : Row (F p) RowType) (aux_env : ProverEnvironment (F p)) :
   ConstraintsHold.Soundness (F := F p) (windowEnv boundary ⟨<+> +> first_row, rfl⟩ aux_env) boundary.operations →

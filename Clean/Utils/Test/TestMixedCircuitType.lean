@@ -1,4 +1,6 @@
-import Clean.Circuit
+module
+
+public import Clean.Circuit
 
 /-!
 This regression test covers a mixed `CircuitType` input: one ordinary provable
@@ -7,6 +9,8 @@ are that `circuit_proof_start` should split the `h_input` equality into
 field-level facts and use them to rewrite constraints from evaluated vars to
 verifier/prover values.
 -/
+
+@[expose] public section
 
 namespace TestMixedCircuitType
 variable {F : Type} [FiniteField F]

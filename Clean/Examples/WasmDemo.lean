@@ -1,13 +1,28 @@
-import Clean.Backends.Circom.Compile
-import Clean.Backends.Circom.R1CS
-import Clean.Circuit.Basic
-import Clean.Circuit.Provable
-import Clean.Gadgets.Equality
-import Clean.Utils.Field
-import Clean.Utils.Primes
-import Clean.Specs.Poseidon
-import Clean.Circomlib.Poseidon
-import Clean.Specs.PoseidonOptimized
+module
+
+public import Clean.Backends.Circom.Compile
+public import Clean.Backends.Circom.R1CS
+public import Clean.Circuit.Basic
+public import Clean.Circuit.Provable
+public import Clean.Gadgets.Equality
+public import Clean.Utils.Field
+public import Clean.Utils.Primes
+public import Clean.Specs.Poseidon
+public import Clean.Circomlib.Poseidon
+public import Clean.Specs.PoseidonOptimized
+
+public meta import Clean.Backends.Circom.Compile
+public meta import Clean.Backends.Circom.R1CS
+public meta import Clean.Circuit.Basic
+public meta import Clean.Circuit.Provable
+public meta import Clean.Gadgets.Equality
+public meta import Clean.Utils.Field
+public meta import Clean.Utils.Primes
+public meta import Clean.Specs.Poseidon
+public meta import Clean.Circomlib.Poseidon
+public meta import Clean.Specs.PoseidonOptimized
+
+@[expose] public section
 
 /-!
 # WASM backend demo: `mulAdd`

@@ -1,6 +1,10 @@
-import Clean.Gadgets.Keccak.Permutation
-import Clean.Circuit.Explicit
-import Clean.Specs.Keccak256
+module
+
+public import Clean.Gadgets.Keccak.Permutation
+public import Clean.Circuit.Explicit
+public import Clean.Specs.Keccak256
+
+@[expose] public section
 
 namespace Gadgets.Keccak256.AbsorbBlock
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]
@@ -12,12 +16,12 @@ structure Input (F : Type) where
 deriving ProvableStruct
 
 def main (input : Var Input (F p)) : Circuit (F p) (Var KeccakState (F p)) := do
-  let { state, block } := input
   -- absorb the block into the state by XORing with the first RATE elements
-  let state_rate ← Circuit.mapFinRange RATE fun i => Xor64.circuit ⟨state[i.val], block[i.val]⟩
+  let state_rate ← Circuit.mapFinRange RATE fun i =>
+    Xor64.circuit ⟨input.state[i.val], input.block[i.val]⟩
 
   -- the remaining elements of the state are unchanged
-  let state_capacity := Vector.mapFinRange (25 - RATE) fun i => state[RATE + i.val]
+  let state_capacity := Vector.mapFinRange (25 - RATE) fun i => input.state[RATE + i.val]
   let state' : Vector _ 25 := state_rate ++ state_capacity
 
   -- apply the permutation

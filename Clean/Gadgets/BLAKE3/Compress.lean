@@ -1,8 +1,12 @@
-import Clean.Gadgets.BLAKE3.ApplyRounds
-import Clean.Gadgets.BLAKE3.FinalStateUpdate
-import Clean.Specs.BLAKE3
-import Clean.Circuit.Provable
-import Clean.Utils.Tactics
+module
+
+public import Clean.Gadgets.BLAKE3.ApplyRounds
+public import Clean.Gadgets.BLAKE3.FinalStateUpdate
+public import Clean.Specs.BLAKE3
+public import Clean.Circuit.Provable
+public import Clean.Utils.Tactics
+
+@[expose] public section
 
 namespace Gadgets.BLAKE3.Compress
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]

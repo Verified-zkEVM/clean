@@ -1,4 +1,10 @@
-import Clean.Backends.Circom.TestWasmCompile
+module
+
+public import Clean.Backends.Circom.TestWasmCompile
+
+public meta import Clean.Backends.Circom.TestWasmCompile
+
+@[expose] public section
 
 /-!
 Positive conformance checks for the WASM backend. These check the intended

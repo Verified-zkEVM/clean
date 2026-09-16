@@ -1,11 +1,15 @@
-import Clean.Circuit
-import Clean.Circuit.Expression
-import Clean.Utils.Bits
-import Clean.Utils.Fin
-import Clean.Utils.Vector
-import Clean.Gadgets.Bits
-import Clean.Gadgets.Boolean
-import Clean.Circomlib.Bitify
+module
+
+public import Clean.Circuit
+public import Clean.Circuit.Expression
+public import Clean.Utils.Bits
+public import Clean.Utils.Fin
+public import Clean.Utils.Vector
+public import Clean.Gadgets.Bits
+public import Clean.Gadgets.Boolean
+public import Clean.Circomlib.Bitify
+
+@[expose] public section
 
 namespace Circomlib
 open Utils.Bits Expression
@@ -72,6 +76,8 @@ lemma sum_bound_of_binary_inputs {n ops : ℕ}
   -- Apply the bound we just proved
   apply Nat.lt_of_le_of_lt h_sum_bound (h_log_bound n)
 namespace BinSum
+
+attribute [local implicit_reducible] Expression.eval
 
 -- Compute the linear sum of input bits weighted by powers of 2
 def inputLinearSum (n ops : ℕ) (inp : BinSumInput n ops (Expression (F p))) : Expression (F p) :=

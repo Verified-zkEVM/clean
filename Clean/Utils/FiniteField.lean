@@ -11,8 +11,12 @@ range checks, and size-dependent reasoning.
 
 Part of issue #154: Generalize prime field assumption to cover binary fields.
 -/
-import Mathlib.Algebra.Field.ZMod
-import Clean.Utils.Field
+module
+
+public import Mathlib.Algebra.Field.ZMod
+public import Clean.Utils.Field
+
+@[expose] public section
 
 /--
 `FiniteField` extends `Field` with a canonical embedding into `ℕ` and finiteness.

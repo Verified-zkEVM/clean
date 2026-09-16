@@ -1,8 +1,12 @@
 /-
 This file defines flat AIR ensembles and what soundness and completeness mean for them.
 -/
-import Clean.Air.FlatComponent
-import Clean.Air.Balance
+module
+
+public import Clean.Air.FlatComponent
+public import Clean.Air.Balance
+
+@[expose] public section
 
 namespace Air.Flat
 variable {F : Type} [FiniteField F]

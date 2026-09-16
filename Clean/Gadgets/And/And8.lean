@@ -1,11 +1,14 @@
-import Clean.Circuit
-import Clean.Gadgets.Xor.ByteXorTable
-import Clean.Utils.Primes
+module
+
+public import Clean.Circuit
+public import Clean.Gadgets.Xor.ByteXorTable
+
+@[expose] public section
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 namespace Gadgets.And.And8
-open Xor (ByteXorTable)
+open Gadgets.Xor (ByteXorTable)
 open FieldUtils
 
 structure Inputs (F : Type) where
@@ -22,11 +25,10 @@ def Spec (input : Inputs (F p)) (z : F p) :=
   z.val = x.val &&& y.val
 
 def main (input : Var Inputs (F p)) : Circuit (F p) (Expression (F p)) := do
-  let ⟨x, y⟩ := input
-  let and ← witness (x.val &&& y.val).toField
+  let and ← witness (input.x.val &&& input.y.val).toField
   -- we prove AND correct using an XOR lookup and the following identity:
-  let xor := x + y - 2*and
-  lookup ByteXorTable (x, y, xor)
+  let xor := input.x + input.y - 2*and
+  lookup ByteXorTable (input.x, input.y, xor)
   return and
 
 -- AND / XOR identity that justifies the circuit

@@ -1,7 +1,11 @@
-import Mathlib.Algebra.Field.ZMod
-import Mathlib.Algebra.Order.Star.Basic
-import Mathlib.Analysis.Normed.Ring.Lemmas
-import Clean.Circuit.SimpGadget
+module
+
+public import Mathlib.Algebra.Field.ZMod
+public import Mathlib.Algebra.Order.Star.Basic
+public import Mathlib.Analysis.Normed.Ring.Lemmas
+public import Clean.Circuit.SimpGadget
+
+@[expose] public section
 
 -- main field definition
 abbrev F p := ZMod p

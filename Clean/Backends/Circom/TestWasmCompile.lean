@@ -1,11 +1,24 @@
-import Clean.Backends.Circom.Compile
-import Clean.Backends.Circom.R1CS
-import Clean.Utils.Field
-import Clean.Utils.FiniteField
-import Clean.Utils.Primes
-import Clean.Specs.Poseidon
-import Clean.Circomlib.Poseidon
-import Clean.Circomlib.Bitify
+module
+
+public import Clean.Backends.Circom.Compile
+public import Clean.Backends.Circom.R1CS
+public import Clean.Utils.Field
+public import Clean.Utils.FiniteField
+public import Clean.Utils.Primes
+public import Clean.Specs.Poseidon
+public import Clean.Circomlib.Poseidon
+public import Clean.Circomlib.Bitify
+
+public meta import Clean.Backends.Circom.Compile
+public meta import Clean.Backends.Circom.R1CS
+public meta import Clean.Utils.Field
+public meta import Clean.Utils.FiniteField
+public meta import Clean.Utils.Primes
+public meta import Clean.Specs.Poseidon
+public meta import Clean.Circomlib.Poseidon
+public meta import Clean.Circomlib.Bitify
+
+@[expose] public section
 
 /-!
 # WASM Compiler Tests

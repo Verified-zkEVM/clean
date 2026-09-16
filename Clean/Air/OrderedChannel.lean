@@ -1,4 +1,8 @@
-import Clean.Air.FlatEnsemble
+module
+
+public import Clean.Air.FlatEnsemble
+
+@[expose] public section
 
 variable {F : Type} [FiniteField F]
 open Air.Flat (Component Table Tables)
@@ -673,6 +677,7 @@ def empty (F : Type) [FiniteField F] [DecidableEq F] (PublicIO : TypeMap) [Prova
 @[circuit_norm] lemma empty_finished : (empty F PublicIO).finished = [] := rfl
 @[circuit_norm] lemma empty_verifier : (empty F PublicIO).verifier = .empty F PublicIO := rfl
 
+@[circuit_norm]
 def addTable (soundEns : SoundEnsemble F PublicIO) (table : Component F)
     (grts_subset_finished : table.circuit.channelsWithGuarantees ⊆ soundEns.finished
       := by simp [circuit_norm])

@@ -1,7 +1,11 @@
 /-
 WASM binary emitter. Encodes the AST to binary WASM format using ByteArray.
 -/
-import Clean.Backends.Circom.Ast
+module
+
+public import Clean.Backends.Circom.Ast
+
+public section
 
 namespace Backends.Circom.Binary
 

@@ -1,7 +1,11 @@
-import Clean.Circuit.Expression
-import Clean.Circuit.Provable
-import Clean.Circuit.SimpGadget
-import Mathlib.Data.Finsupp.Defs
+module
+
+public import Clean.Circuit.Expression
+public import Clean.Circuit.Provable
+public import Clean.Circuit.SimpGadget
+public import Mathlib.Data.Finsupp.Defs
+
+@[expose] public section
 
 variable {F : Type} [FiniteField F]
 variable {Message : TypeMap} [ProvableType Message]
@@ -30,6 +34,8 @@ namespace Channel
 Convert a `Channel` to a `RawChannel` by removing the type argument,
 and adapting to the more general guarantees/requirements split.
 -/
+-- The erased channel's arity indexes raw interaction message vectors.
+@[implicit_reducible]
 def toRaw (channel : Channel F Message) : RawChannel F where
   name := channel.name
   arity := size Message
@@ -202,6 +208,8 @@ omit [FiniteField F] in @[circuit_norm] lemma pushedIf_assumeGuarantees (enabled
   _root_.pushedIf (channel := channel) enabled msg
 
 namespace ChannelInteraction
+-- The result type contains the raw channel produced by `Channel.toRaw`.
+@[implicit_reducible]
 def toRaw (i : ChannelInteraction channel) : AbstractInteraction F :=
   ⟨ channel.toRaw, i.mult, toElements i.msg, i.assumeGuarantees ⟩
 

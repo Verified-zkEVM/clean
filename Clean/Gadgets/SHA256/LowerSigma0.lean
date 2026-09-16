@@ -1,8 +1,12 @@
-import Clean.Gadgets.SHA256.Xor32
-import Clean.Specs.SHA256
-import Clean.Utils.Rotation
-import Clean.Utils.Bits
-import Clean.Utils.Fin
+module
+
+public import Clean.Gadgets.SHA256.Xor32
+public import Clean.Specs.SHA256
+public import Clean.Utils.Rotation
+public import Clean.Utils.Bits
+public import Clean.Utils.Fin
+
+@[expose] public section
 
 section
 variable {p : ℕ} [Fact p.Prime]

@@ -4,13 +4,17 @@ This table has exactly 17 rows:
 - Rows 0-15: Process up to 16 blocks (64 bytes each)
 - Row 16: Final output containing the result of processBlocks
 -/
-import Clean.Table.Inductive
-import Clean.Circuit.Loops
-import Clean.Gadgets.BLAKE3.Compress
-import Clean.Specs.BLAKE3
-import Clean.Gadgets.Addition32.Addition32
-import Clean.Gadgets.Conditional
-import Clean.Gadgets.IsZero
+module
+
+public import Clean.Table.Inductive
+public import Clean.Circuit.Loops
+public import Clean.Gadgets.BLAKE3.Compress
+public import Clean.Specs.BLAKE3
+public import Clean.Gadgets.Addition32.Addition32
+public import Clean.Gadgets.Conditional
+public import Clean.Gadgets.IsZero
+
+@[expose] public section
 
 namespace Tables.BLAKE3.ProcessBlocksInductive
 open Gadgets

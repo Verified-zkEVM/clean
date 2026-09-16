@@ -11,11 +11,15 @@ arithmetic using CIOS Montgomery reduction with 64-bit limbs
 All compilation entry points return `Except String _`: inputs the
 compiler does not support produce an error with a reason.
 -/
-import Clean.Circuit.WitnessIR
-import Clean.Circuit.Expression
-import Clean.Circuit.Operations
-import Clean.Backends.Circom.Ast
-import Clean.Backends.Circom.Binary
+module
+
+public import Clean.Circuit.WitnessIR
+public import Clean.Circuit.Expression
+public import Clean.Circuit.Operations
+public import Clean.Backends.Circom.Ast
+public import Clean.Backends.Circom.Binary
+
+public section
 
 namespace Backends.Circom
 
@@ -81,10 +85,10 @@ deriving Inhabited
 def CodeBuilder.push (i : Instr) (cb : CodeBuilder) : CodeBuilder :=
   { cb with instrs := i :: cb.instrs }
 
-def CodeBuilder.pushList (is : List Instr) (cb : CodeBuilder) : CodeBuilder :=
+@[expose] def CodeBuilder.pushList (is : List Instr) (cb : CodeBuilder) : CodeBuilder :=
   { cb with instrs := is.reverse ++ cb.instrs }
 
-def CodeBuilder.build (cb : CodeBuilder) : List Instr :=
+@[expose] def CodeBuilder.build (cb : CodeBuilder) : List Instr :=
   cb.instrs.reverse
 
 /-! ## Concise AST constructors -/
@@ -888,8 +892,8 @@ end
 /-! ## Expression flattening (shared by WASM and R1CS compilers) -/
 
 -- sparse (signalIndex × fieldCoefficient) pairs
-def LinComb (F : Type) := List (ℕ × F)
-def Constraint (F : Type) := List (ℕ × F) × List (ℕ × F) × List (ℕ × F)
+@[expose] def LinComb (F : Type) := List (ℕ × F)
+@[expose] def Constraint (F : Type) := List (ℕ × F) × List (ℕ × F) × List (ℕ × F)
 
 structure FlattenState (F : Type) where
   nextSignal : ℕ := 1
