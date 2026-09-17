@@ -240,6 +240,65 @@ example (data : ProverData (F 2)) :
   simp
 end Necessity
 
+/-! ## The directed reading on malformed tags and on activity (A17) -/
+section Reading
+variable {K : Type} [FiniteField K] [DecidableEq K]
+
+/-- A raw interaction on a directed channel whose last element is neither tag, with an active
+gate and permission to assume. Only a raw construction can produce it; the typed constructors
+always emit a well-formed tag. -/
+def malformed : Interaction (F 5) := ⟨(NeverDirected (F 5)).toRaw, 1, #[0, 2], rfl, true⟩
+
+/-- A17, malformed tags: the directed reading is total and reads a malformed tag as an active
+receive, never as a provider, so it can support nothing. That receive assumes nothing: its
+guarantee holds for every prover data although the channel's guarantee is `False`. And the
+Layer 0 contract rejects it, so it cannot occur in a sound row. -/
+theorem malformed_reads_as_receive_assuming_nothing (data : ProverData (F 5)) :
+    malformed.directedEvent.direction = .receive ∧ malformed.directedEvent.active = true ∧
+    malformed.Guarantees data ∧ ¬ malformed.Requirements data := by
+  have h : (2 : F 5) ≠ 0 ∧ (2 : F 5) ≠ 1 := by decide
+  refine ⟨by decide, by decide, ?_, ?_⟩
+  · simp [malformed, Interaction.Guarantees, Interaction.msgVector, DirectedChannel.toRaw,
+      Direction.tag, h.2]
+  · simp [malformed, Interaction.Requirements, Interaction.msgVector, DirectedChannel.toRaw,
+      Direction.tag, h.1, h.2]
+
+/-- A17, activity: a disabled interaction is not an active event in the directed reading,
+whatever its direction, payload and permission, over any field. -/
+example (direction : Direction) (msg : K) (permission : Bool) :
+    ((OneChannel K).emittedValue direction 0 msg permission).directedEvent.active = false := by
+  simp [circuit_norm]
+
+def disabledProvide : Interaction (F 2) := (OneChannel (F 2)).emittedValue .provide 0 1 false
+def disabledReceive : Interaction (F 2) := (OneChannel (F 2)).emittedValue .receive 0 1 true
+
+/-- So disabled interactions contribute no active payload in either direction ... -/
+theorem disabled_contribute_no_active_payload :
+    activePayloads Interaction.directedEvent [disabledProvide, disabledReceive] .provide = [] ∧
+    activePayloads Interaction.directedEvent [disabledProvide, disabledReceive] .receive = [] := by
+  simp [activePayloads, disabledProvide, disabledReceive, circuit_norm]
+
+/-- ... a disabled provider supports nothing: next to it, the active receive `receive1` is
+unsupported and the multiset model rejects the pair ... -/
+theorem disabled_provider_supports_nothing :
+    ¬ PullsSupported Interaction.directedEvent [disabledProvide, receive1] ∧
+    ¬ (BalanceModel.multiset (F 2)).Balanced [disabledProvide, receive1] := by
+  refine ⟨?_, ?_⟩
+  · simp [PullsSupported, disabledProvide, receive1, circuit_norm]
+  · rw [BalanceModel.multiset_balanced_iff]
+    simp [activePayloads, disabledProvide, receive1, circuit_norm]
+
+/-- ... and a disabled receive needs no support: alone, it is supported and balanced, as an
+empty bus is. -/
+theorem disabled_receive_needs_no_support :
+    PullsSupported Interaction.directedEvent [disabledReceive] ∧
+    (BalanceModel.multiset (F 2)).Balanced [disabledReceive] := by
+  refine ⟨?_, ?_⟩
+  · simp [PullsSupported, disabledReceive, circuit_norm]
+  · rw [BalanceModel.multiset_balanced_iff]
+    simp [activePayloads, disabledReceive, circuit_norm]
+end Reading
+
 /-! ## Explicit models (A14) -/
 section Models
 
