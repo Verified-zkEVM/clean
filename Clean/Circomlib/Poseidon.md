@@ -1,167 +1,175 @@
-# Poseidon1 proof: explanation
+# Verified optimized Poseidon circuits
 
-This note walks through the structure of the Poseidon arity-1 (t=2) soundness
-and completeness proof for BN254, as implemented in `Poseidon.lean` against the
-specs in `Clean/Specs/Poseidon.lean` and `Clean/Specs/PoseidonOptimized.lean`.
+`Clean.Circomlib.Poseidon` implements the optimized circomlib Poseidon
+schedule over the BN254 scalar field. The circuit is verified once for a
+symbolic state width and then specialized through parameter bundles.
 
-## 1. Start from a non-optimised output spec
+The implementation follows six phases:
 
-`Clean/Specs/Poseidon.lean` defines a simple, **non-optimised** Poseidon
-permutation, parameterised by `t`, used as an output-level reference spec:
+1. initialize the state with capacity element zero and apply the initial ARK;
+2. apply three dense full rounds using `M`;
+3. apply the transition full round using `P`;
+4. apply every optimized sparse partial round using `S`;
+5. apply three more dense full rounds using `M`;
+6. apply the final full S-box layer and compute output coordinate zero with
+   `MixLast`.
 
-- S-box `sigma(x) = x^5` (BN254)
-- `ark`: add the round-constants slice `C[offset..offset+t]`
-- `mix`: multiply by the full MDS matrix `M` (t×t)
-- `fullRoundCircom`: `sbox_full → ark → mix`
-- `partialRoundCircom`: `sbox` on element 0 only, `ark` on element 0 only, `mix` (full M)
-- `poseidon1..poseidon4`: the complete hash at arities t=2..5, with the round
-  schedule `ARK_initial → 4 full → nP partial → 3 full → (SBOX → MIX)`
+## Generic specification
 
-This file is not a line-by-line model of either the optimised circom circuit
-or the current circomlibjs reference implementation. In particular,
-`poseidon_reference.js` uses the conventional add-round-constants-before-S-box
-round order inside its loop. The role of `Clean/Specs/Poseidon.lean` is to give
-a compact, full-MDS, output-compatible reference spec, checked against
-circomlibjs vectors.
-
-References:
-
-- Grassi, Khovratovich, Rechberger, Roy, Schofnegger.
-  _Poseidon: A New Hash Function for Zero-Knowledge Proof Systems_.
-  USENIX Security '21. <https://eprint.iacr.org/2019/458>
-- iden3 circomlibjs, `src/poseidon_reference.js` (the reference JS
-  implementation used as the output oracle for test-vector cross-checks).
-  <https://github.com/iden3/circomlibjs/blob/main/src/poseidon_reference.js>
-
-The constants `C_t*`, `M_t*` are copied verbatim from circomlib's
-`poseidon_constants.circom`.
-
-## 2. Cross-check against circomlibjs
-
-To guard against transcription errors in the constants and the round schedule,
-the spec file includes test vectors from circomlibjs:
-
-| Arity | Spec        | Test vectors (inputs)    |
-| ----- | ----------- | ------------------------ |
-| 1     | `poseidon1` | `1`, `0`, `123`          |
-| 2     | `poseidon2` | `[1, 2]`                 |
-| 3     | `poseidon3` | `[1, 0, 0]`, `[0, 0, 0]` |
-| 4     | `poseidon4` | `[1, 2, 3, 4]`           |
-
-Each test is an `example : poseidon_k inputs = known_hash := by native_decide`
-(see `Clean/Specs/Poseidon.lean`, bottom). 7 vectors total.
-
-## 3. Specialise to the circomlib-optimised variant
-
-`Clean/Specs/PoseidonOptimized.lean` defines the variant corresponding to
-circomlib's optimised `circuits/poseidon.circom` schedule (i.e.
-`poseidon.circom` uses the optimised form — `Clean/Specs/Poseidon.lean` is
-not a structural model of `poseidon.circom`, only of the intended output):
-
-- A **pre-sparse** matrix `P` is used at the transition from the first full
-  rounds into the partial rounds.
-- The partial rounds use **sparse** mix matrices (`mixS`) that require only
-  3 non-trivial constants per round instead of `t^2`.
-- `poseidon1Opt`, `poseidon2Opt`, `poseidon3Opt` implement this schedule.
-
-Mathematically this should be equivalent to the standard variant (it's the
-standard "Poseidon optimisation trick" used by circomlib/snarkjs). The Lean
-definition is a direct hand model of the optimised arity-1 circuit structure
-that Clean proves constraint-by-constraint.
-
-Reference:
-
-- iden3 circomlib, `circuits/poseidon.circom` (the optimised circom circuit
-  whose arity-1 structure this file hand-models).
-  <https://github.com/iden3/circomlib/blob/master/circuits/poseidon.circom>
-
-Equivalence is established empirically via `native_decide` test vectors in the
-same file:
-
-- `poseidon1Opt = poseidon1` at inputs `1`, `0`, `123`, `BN254_PRIME - 1`
-- `poseidon2Opt = poseidon2` at `[1,2]`, `[0,0]`, `[1,0]`, `[0,1]`, `[3,4]`,
-  `[12345, 67890]`, `[BN254_PRIME-1, 1]` — plus one match against the known
-  circomlibjs hash.
-- `poseidon3Opt = poseidon3` at `[1,0,0]`, `[0,0,0]`, `[1,2,3]` — plus two
-  matches against known circomlibjs hashes.
-
-(There is no formal proof of `poseidon1Opt = poseidon1`; it's validated only
-against this test set.)
-
-## 4. Soundness and completeness of each component circuit
-
-`Clean/Circomlib/Poseidon.lean` introduces a `FormalCircuit` for every
-Poseidon building block and discharges its `soundness` + `completeness`
-obligations in isolation. Each of these is small enough to prove with
-`circuit_proof_start` + a few-line tactic script:
-
-| Component                          | Spec                                                                                                        |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `Sigma.circuit`                    | `output = input ^ 5`                                                                                        |
-| `InitialArk.circuit`               | `output = Specs.Poseidon.ark C_t2 0 #v[0, input]`                                                           |
-| `FullRound_t2.circuit C M offset`  | `output = Specs.PoseidonOptimized.fullRoundOpt_t2 C M offset.val input`                                     |
-| `ApplyFullRounds.circuit offset h` | `output = Specs.PoseidonOptimized.fullRoundsOpt_t2 C_t2 M_t2 3 offset input`                                |
-| `PartialRoundOpt_t2.circuit round` | `output = Specs.PoseidonOptimized.partialRoundOpt_t2 C_t2 S_t2 (10 + round.val) round.val input round.isLt` |
-| `ApplyPartialRoundsOpt.circuit`    | `output = Specs.PoseidonOptimized.partialRoundsOpt_t2 C_t2 S_t2 56 10 0 input ...`                          |
-
-## 5. Composing the components into Poseidon1
-
-The top-level `Poseidon1.main` circuit is composed of 6 phases:
-
-```
-let state ← InitialArk.circuit input
-let state ← ApplyFullRounds.circuit 2 (by omega) state
-let state ← FullRound_t2.circuit C_t2 P_t2 ⟨8, by omega⟩ state
-let state ← ApplyPartialRoundsOpt.circuit state
-let state ← ApplyFullRounds.circuit 66 (by omega) state
-let state ← FullRound_t2.circuit (.replicate 72 0) M_t2 ⟨0, by omega⟩ state
-return state[0]
-```
-
-## What the final theorem says
+`Specs.PoseidonOptimized.Params t` contains the round count and indexed
+constant tables for state width `t`:
 
 ```lean
-def circuit : FormalCircuit F field field where
-  ...
-  Spec (input : F) (output : F) :=
-    output = Specs.PoseidonOptimized.poseidon1Opt input
-  soundness := ...
-  completeness := ...
+structure Params (t : ℕ) where
+  nPartial : ℕ
+  C : Vector ℕ (8 * t + nPartial)
+  M : Vector (Vector ℕ t) t
+  P : Vector (Vector ℕ t) t
+  S : Vector ℕ (nPartial * (2 * t - 1))
+  two_le_width : 2 ≤ t
 ```
 
-So the Clean circuit model exactly realises `poseidon1Opt`. That optimised
-spec agrees with `poseidon1` and with circomlibjs on every tested input.
-Chaining these gives a high (though not fully formal) degree of confidence
-that the arity-1 circomlib Poseidon circuit computes the specified hash.
+The vector lengths encode the constant-index bounds used by the proof. The
+pure function
 
-## What is formally proved?
+```lean
+Specs.PoseidonOptimized.poseidon params : Vector F (t - 1) → F
+```
 
-Formally proved:
+is the semantic specification of the circuit. Parameter bundles exist for
+every circomlib-supported state width from 2 through 17 (`params_t2` through
+`params_t17`), corresponding to input arities 1 through 16.
 
-- The Clean model `Poseidon1.circuit` is sound with respect to
-  `Specs.PoseidonOptimized.poseidon1Opt`: any satisfying assignment produces
-  the specified output.
-- The Clean model `Poseidon1.circuit` is complete: for every input, the
-  honest-prover witness satisfies the constraints.
-- The component proofs cover the S-box, initial ARK, full rounds, folded full
-  rounds, optimized partial rounds, folded partial rounds, and the complete
-  arity-1 composition.
+The constant tables are generated from iden3/circomlib commit
+`35e54ea21da3e8762557234298dbb553c175ea8d`. The generator validates the
+upstream file's SHA-256 and every expected table length before emitting Lean.
 
-Not yet formally proved:
+## Verified circuit boundaries
 
-- The translation from the original `poseidon.circom` source to this Clean
-  model is not mechanically checked; it is a direct hand model of the same
-  optimised structure.
-- `poseidon1Opt = poseidon1` is tested on representative inputs, but not
-  proven for all field elements.
-- The BN254 primality instance is still declared with `sorry`; it can be closed
-  independently with a Pratt/Lucas certificate.
+The implementation is divided into reusable `FormalCircuit`s:
 
-## Open items
+| Circuit | Semantic role |
+| --- | --- |
+| `InitialArk.circuit` | Build `[0, inputs...]` and add the initial constants |
+| `Sigma.circuit` | Compute `x^5` |
+| `Mix.circuit` | Apply an arbitrary dense matrix |
+| `MixS.circuit` | Apply one optimized sparse matrix |
+| `MixLast.circuit` | Compute coordinate zero of the final dense mix |
+| `FullRound.circuit` | Full S-box, ARK, and dense mix |
+| `PartialRound.circuit` | First-coordinate S-box and ARK, then sparse mix |
+| `ApplyFullRounds.circuit` | Fold any number of dense rounds |
+| `ApplyPartialRounds.circuit` | Fold any valid range of sparse rounds |
+| `FinalRound.circuit` | Full S-box followed by `MixLast` |
 
-- `instance : Fact (Nat.Prime BN254_PRIME)` is declared with `by sorry`
-  (near the top of `Clean/Circomlib/Poseidon.lean`). Closing it requires a Pratt/Lucas
-  certificate; Mathlib's `lucas_primality` is the tool.
-- `poseidon1Opt = poseidon1` is checked only via `native_decide` on a handful
-  of inputs, not proven.
-- Arities 2, 3, 4 have specs and test vectors but no circuit/formal-proof.
+Parents call these bundled circuits as subcircuits and consume their semantic
+specifications. The top-level proof does not unfold child operation traces.
+
+## Generic top-level circuit
+
+`Clean.Circomlib.Poseidon.Generic` exposes:
+
+```lean
+Circomlib.Poseidon.circuit (params : Params t) :
+  FormalCircuit F (fields (t - 1)) field
+```
+
+Its specification is:
+
+```lean
+output = Specs.PoseidonOptimized.poseidon params input
+```
+
+One soundness proof and one completeness proof cover every well-typed
+parameter bundle. The generic local witness count is
+
+```text
+32 * t + params.nPartial * (t + 4) + 1
+```
+
+## `Poseidon1` compatibility wrapper
+
+The historical scalar-input interface remains available:
+
+```lean
+Poseidon1.main : Expression F → Circuit F (Expression F)
+Poseidon1.Spec (input output : F) : Prop :=
+  output = Specs.PoseidonOptimized.poseidon1Opt input
+Poseidon1.circuit : FormalCircuit F field field
+```
+
+It is a thin adapter around `Circomlib.Poseidon.circuit params_t2`, packaging
+the scalar input as a length-one vector. `poseidon1Opt` is itself a
+compatibility alias for the generic `params_t2` specification.
+
+The wrapper has 401 local witnesses. Its output remains at local offset 400,
+so consumers that elaborate its operations at offset 1 continue to use
+circuit variable 401. The previous implementation used 402 witnesses because
+it computed and stored both coordinates of the final dense mix; `MixLast`
+deliberately omits the unused second coordinate.
+
+## Arity-specific instances
+
+The wider instances are direct aliases of the generic circuit because their
+public inputs already use the generic vector representation. The first two
+are:
+
+```lean
+Poseidon2.circuit : FormalCircuit F (fields 2) field
+Poseidon3.circuit : FormalCircuit F (fields 3) field
+```
+
+The same pattern continues through:
+
+```lean
+Poseidon16.circuit : FormalCircuit F (fields 16) field
+```
+
+`PoseidonN.circuit` specializes `Circomlib.Poseidon.circuit` with
+`params_t(N+1)`. No arity-specific soundness or completeness proof is needed.
+For example, the generic witness-count formula gives 496 local witnesses for
+`Poseidon2` and 577 for `Poseidon3`.
+
+## Guarantees and regression coverage
+
+Lean proves:
+
+- soundness: every satisfying assignment produces the generic optimized
+  Poseidon result;
+- completeness: the honest witness generator satisfies every constraint;
+- the same results for the arity-specific wrappers;
+- the `Poseidon1` witness count and output position stated above.
+
+Compile-time vectors compare the optimized specification with the independent
+non-optimized Poseidon specification for widths 2, 3, and 4. For every new
+input arity 4 through 16, `PoseidonReferenceVectors.lean` checks the input
+`[1, 2, ..., n]` against an output generated by both the reference and
+optimized implementations from iden3/circomlibjs commit
+`48b3ab37013c5ed21e9ff8a80a5b010795c97094`. The WASM demo also exports the
+complete `Poseidon1` circuit and R1CS using the preserved output position.
+
+Useful verification commands:
+
+```bash
+lake build Clean.Circomlib.Poseidon
+lake build Clean.Specs.PoseidonReferenceVectors
+lake build Clean.Examples.WasmDemo
+lake build Clean.Backends.Circom.TestWasmCompile
+```
+
+All constants and reference vectors used by these builds are committed as
+Lean data. Normal proof checking and circuit compilation are offline: they do
+not run either generator and do not require an upstream repository checkout.
+The pinned checkouts below are needed only to audit or regenerate that data.
+
+To reproduce and check the imported data from pinned upstream checkouts:
+
+```bash
+python3 scripts/generate_poseidon_constants.py \
+  --source /path/to/circomlib/circuits/poseidon_constants.circom --check
+node scripts/generate_poseidon_vectors.mjs \
+  --circomlibjs /path/to/circomlibjs --check
+```
+
+The translation from circomlib source is not mechanically proved in Lean, but
+the generators pin source revisions and hashes, validate dimensions, and
+detect any changed, reordered, or truncated value.
