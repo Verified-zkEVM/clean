@@ -1,3 +1,7 @@
+/-
+  Clean.Circuit.ExpressionPolynomial
+-/
+
 module
 
 public import Clean.Circuit.Expression
