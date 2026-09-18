@@ -62,7 +62,7 @@ namespace Xor
 
 abbrev iface : Interface F fieldPair field where
   Assumptions | (a, b) => IsBool a ∧ IsBool b
-  Spec | (a, b), c => c = a + b - 2 * (a * b)
+  Spec | (a, b), c => IsBool c ∧ (c = 1 ↔ ¬(a = 1 ↔ b = 1))
 
 attribute [circuit_norm] iface
 
@@ -74,11 +74,12 @@ def viaArith {B : Backend F} (arith : Sig.Impl B Arith.sig) : Impl B iface where
     let u ← arith .add (t, t)
     arith .sub (s, u)
   soundness := by
-    intro s env (a, b) _ h
-    simp only [circuit_norm] at h ⊢
+    intro s env (a, b) h_as h
+    simp only [circuit_norm, IsBool] at h_as h ⊢
+    obtain ⟨ha, hb⟩ := h_as
     obtain ⟨ht, hs, hu, hc⟩ := h
     rw [hc, hu, hs, ht]
-    ring
+    rcases ha with ha | ha <;> rcases hb with hb | hb <;> simp [ha, hb]
   completeness := by
     intro s env (a, b) _ _
     simp only [circuit_norm]
@@ -102,11 +103,18 @@ example (a b : LinComb F) (s : ℕ) :
 
 namespace Xor3
 
+/-- The output is the three-way xor `a ⊕ b ⊕ c`: it is 1 exactly when an odd number of the
+inputs are 1. -/
 abbrev iface : Interface F fieldTriple field where
   Assumptions | (a, b, c) => IsBool a ∧ IsBool b ∧ IsBool c
-  Spec | (a, b, c), d => d = (a + b - 2 * (a * b)) + c - 2 * ((a + b - 2 * (a * b)) * c)
+  Spec | (a, b, c), d => IsBool d ∧ (d = 1 ↔ Xor (a = 1) (Xor (b = 1) (c = 1)))
 
 attribute [circuit_norm] iface
+
+/-- Xor of propositions is associative — the reason `xor (xor a b) c` is the three-way xor.
+Mathlib has this for `Bool` but not for `Prop`. -/
+theorem xor_assoc (A B C : Prop) : Xor (Xor A B) C ↔ Xor A (Xor B C) := by
+  simp only [Xor]; tauto
 
 /-- `a ⊕ b ⊕ c`, generic over the `xor` implementation. Its proof only uses `Xor.iface`. -/
 def viaXor {B : Backend F} (xor : Impl B Xor.iface) : Impl B iface where
@@ -118,11 +126,11 @@ def viaXor {B : Backend F} (xor : Impl B Xor.iface) : Impl B iface where
     simp only [circuit_norm] at h_as h ⊢
     obtain ⟨ha, hb, hc⟩ := h_as
     obtain ⟨h1, h2⟩ := h
-    have h1 := h1 ⟨ha, hb⟩
-    have h_ab : IsBool (B.eval env (xor.output (a, b) s)) := by
-      rw [h1]
-      rcases ha with ha | ha <;> rcases hb with hb | hb <;> norm_num [ha, hb, IsBool]
-    rw [h2 ⟨h_ab, hc⟩, h1]
+    obtain ⟨h_bool, h_iff⟩ := h1 ⟨ha, hb⟩
+    obtain ⟨h_bool', h_iff'⟩ := h2 ⟨h_bool, hc⟩
+    refine ⟨h_bool', ?_⟩
+    rw [h_iff', h_iff, ← xor_iff_not_iff, ← xor_iff_not_iff]
+    exact xor_assoc ..
   completeness := by
     intro s env (a, b, c) _ _
     simp only [circuit_norm]
