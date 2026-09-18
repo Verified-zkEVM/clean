@@ -27,6 +27,20 @@ rejects malformed tags (`DirectedChannel.toRaw`), `DirectedChannel.directedEvent
 is the recovery lemma and `DirectedChannel.guarantees_of_requirements_of_pullsSupported` is
 the transport theorem, both below.
 
+## A model only fits the encoding it reads
+
+A model and a channel are chosen independently, and after erasure to `RawChannel` nothing
+records which encoding a channel uses. The multiset model applied to a legacy channel strips
+the last payload element as if it were a tag, and accepts interactions whose messages never
+matched; the LogUp model applied to a directed channel is balanced only by inactive traces.
+`RawChannel.ConsistentWith` is the obligation that rules this out: balance under the model
+and the requirements of all interactions on the channel imply their guarantees. It is the
+legacy `RawChannel.Consistent` with the model as a parameter, it has exactly two instances
+(legacy-consistent channels under `logUp`, erased directed channels under `multiset`), and
+`FormalEnsembleWith` demands it of every channel. For a mismatched pairing no instance exists,
+and where the channel's guarantee says anything the obligation is false (see
+`legacy_not_consistentWith_multiset` in `Clean/Air/Test/BusBalance.lean`).
+
 ## The two models
 
 * `BalanceModel.logUp` is today's `BalancedInteractions`, split into its field-sum relation
@@ -135,8 +149,9 @@ namespace Interaction
   i.directedEvent.payload = i.msg.pop := rfl
 @[circuit_norm] lemma directedEvent_active (i : Interaction F) :
   i.directedEvent.active = decide (i.mult ≠ 0) := rfl
-lemma directedEvent_direction (i : Interaction F) :
-  i.directedEvent.direction = if i.msg.back? = some Direction.provide.tag then .provide else .receive := rfl
+private lemma directedEvent_direction (i : Interaction F) :
+    i.directedEvent.direction =
+      if i.msg.back? = some Direction.provide.tag then .provide else .receive := rfl
 @[circuit_norm] lemma directedEvent_direction_eq_provide (i : Interaction F) :
     i.directedEvent.direction = .provide ↔ i.msg.back? = some Direction.provide.tag := by
   simp only [directedEvent_direction]; split_ifs <;> simp_all
@@ -175,30 +190,25 @@ theorem guarantees_of_requirements_of_pullsSupported (channel : DirectedChannel 
     (∀ i ∈ interactions, i.channel = channel.toRaw ∧ i.Requirements data) →
     ∀ i ∈ interactions, i.Guarantees data := by
   intro support reqs a a_mem
-  simp only [Interaction.Guarantees, Interaction.Requirements, Interaction.msgVector] at reqs ⊢
-  intro _
-  have a_channel := (reqs a a_mem).left
-  have a_msg_size : a.msg.size = channel.toRaw.arity := by rw [a.same_size, a_channel]
-  suffices channel.toRaw.Guarantees a.mult ⟨ a.msg, a_msg_size ⟩ data by convert this
-  intro a_tag a_active
+  -- state the guarantee of `a` on `channel.toRaw`: it is conditional on the receive tag and
+  -- an active gate
+  rw [Interaction.guarantees_iff_of_channel_eq (reqs a a_mem).left]
+  intro _ (a_tag : a.msg.back? = some Direction.receive.tag) (a_active : a.mult ≠ 0)
   -- `a` is an active receive in the directed reading, so it has an active provider `b`
   have a_receive : a.directedEvent.direction = .receive := by
-    simp only [Interaction.directedEvent_direction_eq_receive]
-    simp only at a_tag
-    simp [a_tag, Direction.tag]
-  have a_active' : a.directedEvent.active = true := by simp [Interaction.directedEvent_active, a_active]
+    simp [Interaction.directedEvent_direction_eq_receive, a_tag, Direction.tag]
+  have a_active' : a.directedEvent.active = true := by
+    simp [Interaction.directedEvent_active, a_active]
   obtain ⟨b, b_mem, b_provide, b_active, b_payload⟩ := support a a_mem a_receive a_active'
   simp only [Interaction.directedEvent_direction_eq_provide, Interaction.directedEvent_active,
     Interaction.directedEvent_payload, decide_eq_true_eq] at b_provide b_active b_payload
-  -- the requirement of `b` gives the guarantee on its payload
-  have ⟨b_channel, b_reqs⟩ := reqs b b_mem
-  have b_msg_size : b.msg.size = channel.toRaw.arity := by rw [b.same_size, b_channel]
-  have b_reqs' : channel.toRaw.Requirements b.mult ⟨ b.msg, b_msg_size ⟩ data := by
-    convert b_reqs
-    exact b_channel.symm
-  have b_grt := b_reqs'.right.right b_provide b_active
+  -- the requirement of `b`, stated on `channel.toRaw`, is: boolean gate, well-formed tag, and
+  -- the guarantee on its payload if it is an active provider
+  obtain ⟨b_channel, b_reqs⟩ := reqs b b_mem
+  rw [Interaction.requirements_iff_of_channel_eq b_channel] at b_reqs
+  obtain ⟨-, -, b_grt⟩ := b_reqs
   -- and the two payloads agree
-  convert b_grt using 2
+  convert b_grt b_provide b_active using 2
   apply Vector.toArray_inj.mp
   simp only [Vector.toArray_pop]
   exact b_payload.symm
@@ -228,6 +238,40 @@ theorem BalanceModel.multiset_balanced_iff (l : List (Interaction F)) :
   simp [Balanced, multiset]
 
 /-
+## Consistency of a channel under a model
+-/
+
+/--
+A raw channel is consistent under a balance model if, for any interactions on that channel,
+balance under the model together with the requirements of all interactions implies the
+guarantees of all interactions: what the receivers assumed is justified by what the providers
+proved. This is the legacy `RawChannel.Consistent` with the model as a parameter.
+
+It is the obligation that ties a model to the encoding it reads. It mentions no circuit: it
+relates the channel's two predicates, the model's reading and the model's relation.
+-/
+class RawChannel.ConsistentWith (channel : RawChannel F) (model : BalanceModel F) : Prop where
+  consistent : ∀ (interactions : List (Interaction F)) (data : ProverData F),
+    model.Balanced interactions →
+    (∀ i ∈ interactions, i.channel = channel ∧ i.Requirements data) →
+    (∀ i ∈ interactions, i.Guarantees data)
+
+/-- The legacy `Consistent` is consistency under the LogUp model, by definition. -/
+theorem RawChannel.consistent_iff_consistentWith_logUp (channel : RawChannel F) :
+    channel.Consistent ↔ channel.ConsistentWith (.logUp F) :=
+  ⟨fun h => ⟨h.consistent⟩, fun h => ⟨h.consistent⟩⟩
+
+/-- Legacy-consistent channels, in particular all typed `Channel`s, under the LogUp model. -/
+instance (channel : RawChannel F) [channel.Consistent] : channel.ConsistentWith (.logUp F) :=
+  (RawChannel.consistent_iff_consistentWith_logUp channel).mp inferInstance
+
+/-- Directed channels under the multiset model, over any field. -/
+instance (channel : DirectedChannel F Message) : channel.toRaw.ConsistentWith (.multiset F) where
+  consistent interactions data balanced reqs :=
+    channel.guarantees_of_requirements_of_pullsSupported interactions data
+      ((BalanceModel.multiset F).pullsSupported_of_balanced balanced) reqs
+
+/-
 ## Model-aware ensemble statements
 
 These are the explicitly model-selected counterparts of `EnsembleWitness.BalancedChannels`,
@@ -239,6 +283,7 @@ namespace Air.Flat
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
 
 /-- All ensemble interactions with all ensemble channels are balanced under `model`. -/
+@[circuit_norm]
 def EnsembleWitness.BalancedChannelsWith {ens : Ensemble F PublicIO} (model : BalanceModel F)
     (witness : EnsembleWitness ens) : Prop :=
   ∀ channel ∈ ens.channels, model.Balanced (witness.allTablesWitness.interactionsWith channel)
@@ -279,19 +324,32 @@ theorem completeness_iff_completenessWith_logUp (ens : Ensemble F PublicIO)
     ens.Completeness Assumptions Spec ↔ ens.CompletenessWith (.logUp F) Assumptions Spec := Iff.rfl
 end Ensemble
 
-/-- A formal ensemble whose soundness proof is bound to an explicit balance model. -/
+/--
+A formal ensemble whose soundness proof is bound to an explicit balance model.
+
+`consistent` ties the model to the channels: the statement of an ensemble describes what the
+verifier enforces only if the model reads every channel in the encoding that channel uses.
+Instances exist for legacy channels under `logUp` and for directed channels under `multiset`,
+so for a correct pairing the field is found by instance search (`fun _ _ => inferInstance`
+after a case split on the channel list); for a mismatched pairing it cannot be supplied.
+-/
 structure FormalEnsembleWith (F : Type) [FiniteField F] [DecidableEq F] (model : BalanceModel F)
     (PublicIO : TypeMap) [ProvableType PublicIO] where
   ensemble : Ensemble F PublicIO
   Assumptions : PublicIO F → Prop := fun _ => True
   Spec : PublicIO F → Prop
+  consistent : ∀ channel ∈ ensemble.channels, channel.ConsistentWith model
   soundness : ensemble.SoundnessWith model Assumptions Spec
 
-/-- A legacy formal ensemble is a formal ensemble under the LogUp model. -/
-def FormalEnsemble.withLogUp (ens : FormalEnsemble F PublicIO) :
+/-- A legacy formal ensemble with consistent channels is a formal ensemble under the LogUp
+model. -/
+def FormalEnsemble.withLogUp (ens : FormalEnsemble F PublicIO)
+    (consistent : ∀ channel ∈ ens.ensemble.channels, channel.Consistent) :
     FormalEnsembleWith F (.logUp F) PublicIO where
   ensemble := ens.ensemble
   Assumptions := ens.Assumptions
   Spec := ens.Spec
+  consistent channel h :=
+    (RawChannel.consistent_iff_consistentWith_logUp channel).mp (consistent channel h)
   soundness := ens.soundness
 end Air.Flat

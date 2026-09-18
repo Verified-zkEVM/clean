@@ -9,7 +9,8 @@ Evidence for the acceptance items of the bus-balance roadmap that are within rea
 kernel and the balance models (A1–A6, A11, A13–A15, A17–A18), the legacy compatibility
 fixtures, and the Layer 0 prototype: one typed message, a provider, a receive with an
 assumption, a receive without an assumption, a gated event, and one ensemble whose statement
-takes an explicit balance model.
+takes an explicit balance model. The Consistency section shows what a balance model does on
+the channel encoding it reads, and what it does on the other one.
 
 Two kinds of fixture are kept apart. An `example` whose type is `Prop` only checks that the
 new API elaborates with explicit parameters; it proves nothing about satisfiability. Every
@@ -161,21 +162,24 @@ theorem logUp_guard_necessary :
     subst hj
     exact absurd hdir (by decide)
 
-/-- Today's guard excludes every pair over `F 2`, matched or not. -/
-theorem logUp_guard_excludes_pairs : ¬ BalancedInteractions [pull1, push1] := by
-  intro ⟨h, _⟩
-  rw [ZMod.ringChar_zmod_n] at h
-  simp at h
+/-- Today's guard excludes every pair over `F 2`, matched or not: an instance of
+`legacy_length_le_one_over_F2`. -/
+theorem logUp_guard_excludes_pairs : ¬ BalancedInteractions [pull1, push1] :=
+  fun h => absurd (legacy_length_le_one_over_F2 _ h) (by simp)
 
-def pullA : Interaction (F 3) := ⟨anyChannel (F 3), -1, #[0], rfl, true⟩
-def pullB : Interaction (F 3) := ⟨anyChannel (F 3), -2, #[0], rfl, true⟩
+def push5 : Interaction (F 5) := ⟨anyChannel (F 5), 1, #[0], rfl, false⟩
+def push2 : Interaction (F 5) := ⟨anyChannel (F 5), 2, #[0], rfl, false⟩
+def pull5 : Interaction (F 5) := ⟨anyChannel (F 5), -1, #[0], rfl, true⟩
+def pullW2 : Interaction (F 5) := ⟨anyChannel (F 5), -2, #[0], rfl, true⟩
 
-/-- A4: on the legacy path, a signed receive of weight `2` is not a receive at all: the sign
+/-- A4: on the legacy path, a signed receive of weight `2` is not a receive at all. Over `F 5`
+the multiplicity `-2` is neither `1` nor `-1`, it balances a weight-2 provider, and the sign
 reading makes it a provider (which owes the requirement). Non-unit receive weights are
 therefore not representable as receives; the directed path rejects them locally instead. -/
 theorem legacy_reads_weight_two_receive_as_provider :
-    BalancedInteractions [pullA, pullB] ∧ pullB.legacyEvent.direction = .provide := by
-  refine ⟨⟨?_, ?_⟩, by decide⟩
+    ((-2 : F 5) ≠ 1 ∧ (-2 : F 5) ≠ -1) ∧ BalancedInteractions [push2, pullW2] ∧
+    pullW2.legacyEvent.direction = .provide := by
+  refine ⟨by decide, ⟨?_, ?_⟩, by decide⟩
   · left
     rw [ZMod.ringChar_zmod_n]
     decide
@@ -183,14 +187,32 @@ theorem legacy_reads_weight_two_receive_as_provider :
     by_cases h : msg = #[0]
     · subst h
       decide
-    · have h' : (#[0] : Array (F 3)) ≠ msg := fun e => h e.symm
-      simp [balanceOf, pullA, pullB, h']
+    · have h' : (#[0] : Array (F 5)) ≠ msg := fun e => h e.symm
+      simp [balanceOf, push2, pullW2, h']
 
-def push2 : Interaction (F 5) := ⟨anyChannel (F 5), 2, #[0], rfl, false⟩
-def pull5 : Interaction (F 5) := ⟨anyChannel (F 5), -1, #[0], rfl, true⟩
+/-- A5: a signed receive of weight `2` against two unit providers over `F 5` is
+LogUp-balanced, yet all three read as providers and nothing reads as a receive. Count balance
+needs unit events on the receive side. -/
+theorem logUp_unit_receives_necessary :
+    BalancedInteractions [push5, push5, pullW2] ∧
+    ¬ CountBalanced Interaction.legacyEvent [push5, push5, pullW2] := by
+  refine ⟨⟨?_, ?_⟩, ?_⟩
+  · left
+    rw [ZMod.ringChar_zmod_n]
+    decide
+  · intro msg
+    by_cases h : msg = #[0]
+    · subst h
+      decide
+    · have h' : (#[0] : Array (F 5)) ≠ msg := fun e => h e.symm
+      simp [balanceOf, push5, pullW2, h']
+  · intro h
+    have := h #[0]
+    revert this
+    decide
 
-/-- A5/A6: a weight-2 provider and two unit receives over `F 5` are LogUp-balanced, yet the
-active counts are `1` and `2`. Count balance needs unit events. -/
+/-- A6: a weight-2 provider and two unit receives over `F 5` are LogUp-balanced, yet the
+active counts are `1` and `2`. Count balance needs unit events on the provider side. -/
 theorem logUp_unit_events_necessary :
     BalancedInteractions [push2, pull5, pull5] ∧
     ¬ CountBalanced Interaction.legacyEvent [push2, pull5, pull5] := by
@@ -224,21 +246,110 @@ theorem multiset_accepts_matched_pair :
   rw [BalanceModel.multiset_balanced_iff]
   simp [activePayloads, provide1, receive1, circuit_norm]
 
-/-- ... which the legacy guard rejects, so `F 2` cannot silently fall back to LogUp (A14). -/
-theorem logUp_rejects_matched_pair : ¬ BalancedInteractions [provide1, receive1] := by
-  intro ⟨h, _⟩
-  rw [ZMod.ringChar_zmod_n] at h
-  simp at h
-
-/-- A15 in miniature: with an honest active provider, support does give the guarantee. -/
-example (data : ProverData (F 2)) :
-    (∀ i ∈ [provide1, receive1], i.channel = (OneChannel (F 2)).toRaw ∧ i.Requirements data) →
-    receive1.Guarantees data := by
-  intro reqs
-  apply DirectedChannel.guarantees_of_requirements_of_pullsSupported (OneChannel (F 2)) _ data
-    ((BalanceModel.multiset (F 2)).pullsSupported_of_balanced multiset_accepts_matched_pair) reqs
-  simp
+/-- ... which the legacy guard rejects, so `F 2` cannot silently fall back to LogUp (A14):
+another instance of `legacy_length_le_one_over_F2`. -/
+theorem logUp_rejects_matched_pair : ¬ BalancedInteractions [provide1, receive1] :=
+  fun h => absurd (legacy_length_le_one_over_F2 _ h) (by simp)
 end Necessity
+
+/-! ## Consistency under a model, and what happens under the wrong one (A15, A17) -/
+section Consistency
+variable {K : Type} [FiniteField K] [DecidableEq K]
+variable {Message : TypeMap} [ProvableType Message]
+
+/-- A directed channel over `F 2` with an arbitrary guarantee. -/
+def PChannel (P : F 2 → Prop) : DirectedChannel (F 2) field where
+  name := "p"
+  Guarantees x _ := P x
+
+def pProvide (P : F 2 → Prop) : Interaction (F 2) := (PChannel P).emittedValue .provide 1 1 false
+def pReceive (P : F 2 → Prop) : Interaction (F 2) := (PChannel P).emittedValue .receive 1 1 true
+
+/-- A15 in miniature, over `F 2`. The guarantee of the receive is not free: it is `P 1` ... -/
+theorem pReceive_guarantees_iff (P : F 2 → Prop) (data : ProverData (F 2)) :
+    (pReceive P).Guarantees data ↔ P 1 := by
+  simp [pReceive, PChannel, Interaction.Guarantees, Interaction.msgVector,
+    DirectedChannel.emittedValue, DirectedChannel.toRaw, Direction.tag, fromElements, field,
+    ProvableType.fromElements, toElements, ProvableType.toElements]
+  rfl
+
+/-- ... the multiset relation accepts the matched pair whatever `P` is ... -/
+theorem multiset_accepts_pPair (P : F 2 → Prop) :
+    (BalanceModel.multiset (F 2)).Balanced [pProvide P, pReceive P] := by
+  rw [BalanceModel.multiset_balanced_iff]
+  simp [activePayloads, pProvide, pReceive, circuit_norm]
+
+/-- ... so the consistency of the channel under the multiset model, found by instance search,
+turns the requirements of the pair into the guarantee of the receive ... -/
+theorem pReceive_guarantees_of_requirements (P : F 2 → Prop) (data : ProverData (F 2))
+    (reqs : ∀ i ∈ [pProvide P, pReceive P],
+      i.channel = (PChannel P).toRaw ∧ i.Requirements data) :
+    (pReceive P).Guarantees data :=
+  RawChannel.ConsistentWith.consistent (model := .multiset (F 2)) _ data
+    (multiset_accepts_pPair P) reqs _ (by simp)
+
+/-- ... and those requirements hold exactly when the provider establishes `P 1`. -/
+theorem pPair_requirements_iff (P : F 2 → Prop) (data : ProverData (F 2)) :
+    (∀ i ∈ [pProvide P, pReceive P], i.channel = (PChannel P).toRaw ∧ i.Requirements data) ↔
+      P 1 := by
+  simp [pProvide, pReceive, PChannel, Interaction.Requirements, Interaction.msgVector,
+    DirectedChannel.emittedValue, DirectedChannel.toRaw, Direction.tag, fromElements, field,
+    ProvableType.fromElements, toElements, ProvableType.toElements]
+
+/-- Correct pairings are found by instance search: directed channels under the multiset
+model over any field, in particular `F 2`, and legacy channels under LogUp. -/
+example (channel : DirectedChannel K Message) : channel.toRaw.ConsistentWith (.multiset K) :=
+  inferInstance
+example : (OneChannel (F 2)).toRaw.ConsistentWith (.multiset (F 2)) := inferInstance
+example : (LegacyChannel (p := 5)).toRaw.ConsistentWith (.logUp (F 5)) := inferInstance
+
+/-- Two pulls on the legacy channel whose guarantee is `x = 7`, of the messages `0` and `3`.
+A legacy pull owes nothing. -/
+def legacyPull0 : Interaction (F 5) := ⟨(LegacyChannel (p := 5)).toRaw, -1, #[0], rfl, true⟩
+def legacyPull3 : Interaction (F 5) := ⟨(LegacyChannel (p := 5)).toRaw, -1, #[3], rfl, true⟩
+
+/-- The multiset model on a legacy channel reads the wrong encoding: it strips the only
+payload element as if it were a tag, so the pull of `0` reads as a provide and the pull of
+`3` as a receive, both of the empty payload, and the relation accepts two messages that never
+matched and that nobody provided. -/
+theorem multiset_accepts_two_legacy_pulls :
+    (BalanceModel.multiset (F 5)).Balanced [legacyPull0, legacyPull3] := by
+  rw [BalanceModel.multiset_balanced_iff]
+  decide
+
+/-- So a legacy channel is not consistent under the multiset model: the two pulls are balanced
+and meet their (empty) requirements, yet the pull of `3` would be granted `3 = 7`. No instance
+can exist for this pairing, and `FormalEnsembleWith.consistent` cannot be supplied for it. -/
+theorem legacy_not_consistentWith_multiset :
+    ¬ (LegacyChannel (p := 5)).toRaw.ConsistentWith (.multiset (F 5)) := by
+  intro h
+  have grt := h.consistent [legacyPull0, legacyPull3] (fun _ _ => #[])
+    multiset_accepts_two_legacy_pulls
+    (by
+      intro i hi
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hi
+      rcases hi with rfl | rfl <;>
+        exact ⟨rfl, by simp [Interaction.Requirements, legacyPull0, legacyPull3, Channel.toRaw]⟩)
+    legacyPull3 (by simp)
+  revert grt
+  simp [Interaction.Guarantees, Interaction.msgVector, legacyPull3, Channel.toRaw, LegacyChannel,
+    fromElements, field, ProvableType.fromElements]
+  decide
+
+def provide5 : Interaction (F 5) := (OneChannel (F 5)).emittedValue .provide 1 1 false
+def receive5 : Interaction (F 5) := (OneChannel (F 5)).emittedValue .receive 1 1 true
+
+/-- The opposite mismatch: LogUp on a directed channel. A matched provide and receive both
+have multiplicity `1` and differ in their tag, so no sum cancels. Over `F 5` the no-wrap guard
+holds for the pair, and the relation still rejects it. -/
+theorem logUp_rejects_directed_pair :
+    ¬ (BalanceModel.logUp (F 5)).Balanced [provide5, receive5] := by
+  rw [BalanceModel.logUp_balanced_iff]
+  intro ⟨_, h⟩
+  have := h provide5.msg
+  revert this
+  decide
+end Consistency
 
 /-! ## The directed reading on malformed tags and on activity (A17) -/
 section Reading
@@ -312,11 +423,6 @@ example {F : Type} [FiniteField F] [DecidableEq F] {PublicIO : TypeMap} [Provabl
 example {F : Type} [FiniteField F] [DecidableEq F] {PublicIO : TypeMap} [ProvableType PublicIO]
     (ens : Ensemble F PublicIO) (publicInput : PublicIO F) : Prop :=
   ens.StatementWith (.multiset F) publicInput
-
-/-- The legacy statement is the LogUp instance of the model-aware one, definitionally. -/
-example {F : Type} [FiniteField F] [DecidableEq F] {PublicIO : TypeMap} [ProvableType PublicIO]
-    (ens : Ensemble F PublicIO) (publicInput : PublicIO F) :
-    ens.Statement publicInput ↔ ens.StatementWith (.logUp F) publicInput := Iff.rfl
 
 /-- `BalanceModel` is an abstract count/support interface: a model that reads every
 interaction as an inactive event satisfies every field. Nothing in the structure relates
@@ -405,6 +511,13 @@ example {F : Type} [FiniteField F] (env : Environment F) (input : Var ProtoInput
 def protoEnsemble (F : Type) [FiniteField F] : Ensemble F unit where
   tables := [⟨ proto F ⟩]
   channels := [(OneChannel F).toRaw]
+
+/-- The `consistent` field of `FormalEnsembleWith` for the prototype ensemble under the
+multiset model, over any field: one case per channel, each closed by instance search. -/
+example {F : Type} [FiniteField F] [DecidableEq F] :
+    ∀ channel ∈ (protoEnsemble F).channels, channel.ConsistentWith (.multiset F) := by
+  simp only [protoEnsemble, List.mem_singleton, forall_eq]
+  infer_instance
 
 /-- A14, typechecking tests: the model-aware statement of the prototype ensemble elaborates
 over any field with an explicit model, in particular the multiset model, and over `F 2`. None

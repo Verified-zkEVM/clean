@@ -334,28 +334,16 @@ lemma activeCount_cons (a : α) (l : List α) (direction : Direction) (payload :
   congr 1
   simp only [and_assoc]
 
-omit [FiniteField F] in
-theorem countBalanced_of_perm {l l' : List α} :
-    CountBalanced view l → l.Perm l' → CountBalanced view l' := by
-  intro balance perm payload
-  simp only [CountBalanced, activeCount] at balance ⊢
-  rw [← perm.countP_eq, ← perm.countP_eq]
-  exact balance payload
-
-omit [FiniteField F] [DecidableEq F] in
-theorem pullsSupported_of_perm {l l' : List α} :
-    PullsSupported view l → l.Perm l' → PullsSupported view l' := by
-  intro support perm a ha hdir hactive
-  obtain ⟨b, hb, hbdir, hbactive, hbpayload⟩ := support a (perm.mem_iff.mpr ha) hdir hactive
-  exact ⟨b, perm.mem_iff.mp hb, hbdir, hbactive, hbpayload⟩
-
 /-- The payloads of the active events in one direction, as a list. -/
 def activePayloads (view : α → Event F) (l : List α) (direction : Direction) : List (Array F) :=
-  (l.filter fun a => (view a).direction = direction && (view a).active).map fun a => (view a).payload
+  (l.filter fun a => (view a).direction = direction && (view a).active).map
+    fun a => (view a).payload
 
 omit [FiniteField F] in
-theorem activeCount_eq_countP_activePayloads (l : List α) (direction : Direction) (payload : Array F) :
-    activeCount view l direction payload = (activePayloads view l direction).countP (· = payload) := by
+theorem activeCount_eq_countP_activePayloads (l : List α) (direction : Direction)
+    (payload : Array F) :
+    activeCount view l direction payload =
+      (activePayloads view l direction).countP (· = payload) := by
   simp only [activeCount, activePayloads, List.countP_map, List.countP_filter]
   apply List.countP_congr
   intro a _
@@ -365,7 +353,8 @@ theorem activeCount_eq_countP_activePayloads (l : List α) (direction : Directio
 omit [FiniteField F] in
 /-- A permutation of active provided and received payloads gives exact count balance. -/
 theorem countBalanced_of_perm_activePayloads {l : List α} :
-    (activePayloads view l .provide).Perm (activePayloads view l .receive) → CountBalanced view l := by
+    (activePayloads view l .provide).Perm (activePayloads view l .receive) →
+    CountBalanced view l := by
   intro perm payload
   rw [activeCount_eq_countP_activePayloads, activeCount_eq_countP_activePayloads]
   exact perm.countP_eq _
@@ -451,7 +440,8 @@ theorem guarantees_of_requirements_of_count_eq {κ : Type} [DecidableEq κ]
       simp only [pulls', pushes', h_ij', List.getElem_eraseIdx, ne_eq, not_false_eq_true, List.getElem_set_ne]
       split_ifs <;> exact constraints _ (by omega)
     -- it only remains to prove count equality for pulls' and pushes'.
-    -- this holds because we removed two opposing elements with the same key (pushes[j] and pulls[i]).
+    -- this holds because we removed two opposing elements with the same key
+    -- (pushes[j] and pulls[i]).
     intro k
     have pushes_eq : pushes' = (pushes.set j pushes[i]).eraseIdx i := by
       simp [pushes', List.eraseIdx_set, j']
@@ -461,6 +451,32 @@ theorem guarantees_of_requirements_of_count_eq {κ : Type} [DecidableEq κ]
     rw [List.countP_eraseIdx (by simp_all), List.countP_set (len_pushes ▸ hj), push_j_key]
     simp [h_ij, count_eq]
 end Kernel
+
+/-
+## Interactions on a known channel
+
+An `Interaction` carries its channel as a field, and its message vector is sized by that
+channel's arity. These two lemmas restate its contract on a channel it is known to use, so
+that proofs about one channel can rewrite instead of transporting along the dependency.
+-/
+
+omit [FiniteField F] [DecidableEq F] in
+/-- The requirement of an interaction, stated on the channel it is known to use. -/
+lemma Interaction.requirements_iff_of_channel_eq {i : Interaction F} {channel : RawChannel F}
+    (h : i.channel = channel) (data : ProverData F) :
+    i.Requirements data ↔
+      channel.Requirements i.mult ⟨ i.msg, by rw [i.same_size, h] ⟩ data := by
+  subst h
+  rfl
+
+omit [FiniteField F] [DecidableEq F] in
+/-- The guarantee of an interaction, stated on the channel it is known to use. -/
+lemma Interaction.guarantees_iff_of_channel_eq {i : Interaction F} {channel : RawChannel F}
+    (h : i.channel = channel) (data : ProverData F) :
+    i.Guarantees data ↔
+      (i.assumeGuarantees → channel.Guarantees i.mult ⟨ i.msg, by rw [i.same_size, h] ⟩ data) := by
+  subst h
+  rfl
 
 /-
 ## Legacy bridges: from field-sum balance to the kernel
@@ -493,7 +509,7 @@ def Interaction.legacyEvent (i : Interaction F) : Event F where
   i.legacyEvent.payload = i.msg := rfl
 @[circuit_norm] lemma Interaction.legacyEvent_active (i : Interaction F) :
   i.legacyEvent.active = decide (i.mult ≠ 0) := rfl
-lemma Interaction.legacyEvent_direction (i : Interaction F) :
+private lemma Interaction.legacyEvent_direction (i : Interaction F) :
   i.legacyEvent.direction = if i.mult = -1 then .receive else .provide := rfl
 @[circuit_norm] lemma Interaction.legacyEvent_direction_eq_receive (i : Interaction F) :
     i.legacyEvent.direction = .receive ↔ i.mult = -1 := by
@@ -507,11 +523,13 @@ theorem pullsSupported_legacyEvent_of_balancedInteractions {interactions : List 
     BalancedInteractions interactions → PullsSupported Interaction.legacyEvent interactions := by
   intro balance a ha hdir _
   rw [Interaction.legacyEvent_direction_eq_receive] at hdir
-  obtain ⟨b, hb, b_msg, b_ne_zero, b_ne_neg_one⟩ := exists_push_of_pull interactions balance a ha hdir
+  obtain ⟨b, hb, b_msg, b_ne_zero, b_ne_neg_one⟩ :=
+    exists_push_of_pull interactions balance a ha hdir
   exact ⟨b, hb, by simp [Interaction.legacyEvent_direction_eq_provide, b_ne_neg_one],
     by simp [Interaction.legacyEvent_active, b_ne_zero], b_msg⟩
 
-lemma balanceOf_eq_sub_activeCount_legacyEvent {interactions : List (Interaction F)} {payload : Array F}
+lemma balanceOf_eq_sub_activeCount_legacyEvent {interactions : List (Interaction F)}
+    {payload : Array F}
     (unit : ∀ i ∈ interactions, i.mult = 0 ∨ i.mult = 1 ∨ i.mult = -1) :
     balanceOf interactions payload =
       (activeCount Interaction.legacyEvent interactions .provide payload : F) -
@@ -521,8 +539,9 @@ lemma balanceOf_eq_sub_activeCount_legacyEvent {interactions : List (Interaction
   | cons i is ih =>
     rw [balanceOf_cons, ih (fun j hj => unit j (List.mem_cons_of_mem _ hj)),
       activeCount_cons, activeCount_cons]
-    simp only [Interaction.legacyEvent_direction_eq_provide, Interaction.legacyEvent_direction_eq_receive,
-      Interaction.legacyEvent_active, Interaction.legacyEvent_payload, decide_eq_true_eq]
+    simp only [Interaction.legacyEvent_direction_eq_provide,
+      Interaction.legacyEvent_direction_eq_receive, Interaction.legacyEvent_active,
+      Interaction.legacyEvent_payload, decide_eq_true_eq]
     by_cases h_neg : i.mult = -1
     · by_cases h_msg : i.msg = payload
       · simp [h_neg, h_msg]; ring
@@ -601,21 +620,17 @@ theorem guarantees_of_requirements_of_requirements_of_guarantees [Fact (ringChar
     ∀ (i : ℕ) (hi: i < n), pushes[i].Requirements data → pulls[i].Guarantees data := by
   -- the shared kernel does the induction; we supply count equality and the bridge
   refine guarantees_of_requirements_of_count_eq (·.msg) (·.Guarantees data) (·.Requirements data)
-    pulls pushes n len_pulls len_pushes (count_eq_of_balancedInteractions balance pulls_mult pushes_mult) ?_
+    pulls pushes n len_pulls len_pushes
+    (count_eq_of_balancedInteractions balance pulls_mult pushes_mult) ?_
   intro a a_mem b b_mem msg_eq b_req
-  have a_channel := pulls_channel a a_mem
-  have b_channel := pushes_channel b b_mem |>.symm
-  have a_mult := pulls_mult a a_mem
-  have b_mult := pushes_mult b b_mem |>.symm
-  have msg_size : a.msg.size = channel.arity := by rw [a.same_size, a_channel]
+  -- state both contracts on `channel`, with the known multiplicities `-1` and `1`
+  rw [Interaction.guarantees_iff_of_channel_eq (pulls_channel a a_mem), pulls_mult a a_mem]
+  rw [Interaction.requirements_iff_of_channel_eq (pushes_channel b b_mem),
+    pushes_mult b b_mem] at b_req
+  simp only [msg_eq] at b_req
   -- thanks to the channel being normal, the push's requirement gives the pull's guarantee
-  suffices grt' : channel.Guarantees (-1) ⟨ a.msg, msg_size ⟩ data by
-    simp only [Interaction.Guarantees]
-    convert fun _ => grt'
-    rfl
-  apply RawChannel.Normal.grts_of_reqs ⟨ a.msg, msg_size ⟩ 1 data one_ne_zero one_ne_neg_one
-  simp only [Interaction.Requirements, Interaction.msgVector, msg_eq] at b_req
-  convert b_req
+  intro _
+  exact RawChannel.Normal.grts_of_reqs _ 1 data one_ne_zero one_ne_neg_one b_req
 
 def activeInteractions (interactions : List (Interaction F)) : List (Interaction F) :=
   interactions.filter (fun i => i.mult ≠ 0)
