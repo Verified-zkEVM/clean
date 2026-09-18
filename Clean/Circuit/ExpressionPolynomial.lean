@@ -1,4 +1,8 @@
 /-
+Copyright (c) 2024-2025 zkSecurity, LLC
+Released under MIT license as described in the file LICENSE.
+-/
+/-
   Clean.Circuit.ExpressionPolynomial
 -/
 
