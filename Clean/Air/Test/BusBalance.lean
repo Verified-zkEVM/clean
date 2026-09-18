@@ -60,8 +60,11 @@ example {F : Type} [FiniteField F] [DecidableEq F] (interactions : List (Interac
 /-- A13: `one_ne_neg_one` keeps its name and statement. -/
 example {F : Type} [FiniteField F] [Fact (ringChar F ≠ 2)] : (1 : F) ≠ -1 := one_ne_neg_one
 
-/-- A13: the legacy VM theorem keeps its name, binders and characteristic assumption. -/
-example {F : Type} [FiniteField F] [DecidableEq F] [Fact (ringChar F ≠ 2)]
+/-- A13, amended 2026-09-18: the legacy VM theorem keeps its name and binders, minus the
+characteristic assumption, which was provably redundant (in characteristic `2` the no-wrap
+guard forces an empty cycle). Callers that had the instance in scope still elaborate; this
+example has none in scope. -/
+example {F : Type} [FiniteField F] [DecidableEq F]
     (channel : RawChannel F) [channel.Normal]
     (pulls pushes : List (Interaction F))
     (balance : BalancedInteractions (pulls ++ pushes)) (data : ProverData F)
@@ -84,10 +87,8 @@ since its no-wrap guard is `length < ringChar F = 2`. A matching provide/receive
 already too many. It says nothing about a channel without interactions; see
 `legacyProto_satisfiable`. -/
 theorem legacy_length_le_one_over_F2 (l : List (Interaction (F 2))) :
-    BalancedInteractions l → l.length ≤ 1 := by
-  intro ⟨guard, _⟩
-  rw [ZMod.ringChar_zmod_n] at guard
-  omega
+    BalancedInteractions l → l.length ≤ 1 :=
+  length_le_one_of_balancedInteractions_of_ringChar_eq_two (ZMod.ringChar_zmod_n 2)
 end Legacy
 
 /-! ## The directed tag representation (A1) -/

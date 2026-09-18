@@ -55,6 +55,14 @@ lemma count_lt_ringChar_of_balancedInteractions {ins : List (Interaction F)} {ms
   grw [List.countP_le_length]
   exact lt_ringChar
 
+/-- Over a field of characteristic `2`, the no-wrap guard of `BalancedInteractions` leaves room
+for at most one interaction on a channel. -/
+lemma length_le_one_of_balancedInteractions_of_ringChar_eq_two {l : List (Interaction F)}
+    (h2 : ringChar F = 2) : BalancedInteractions l → l.length ≤ 1 := by
+  intro ⟨ guard, _ ⟩
+  rw [h2] at guard
+  omega
+
 lemma List.countP_and_left_le {α : Type} (l : List α) (p q : α → Bool) :
     l.countP (fun x => p x && q x) ≤ l.countP p := by
   induction l with
@@ -605,8 +613,15 @@ can "follow implications around the cycle" to show that _all_ the guarantees/req
 
 By narrowing the conclusion to only the guarantees of the push, the formulation cleverly
 avoids talking about cycles at all, and achieves a comparatively simple proof by induction.
+
+Until the bus-balance work this theorem assumed `[Fact (ringChar F ≠ 2)]`, used only to know
+that `1 ≠ -1` when reading a push as a provider. The assumption is not needed: over a field of
+characteristic `2` the no-wrap guard of `BalancedInteractions` leaves room for at most one
+interaction (`length_le_one_of_balancedInteractions_of_ringChar_eq_two`), so the cycle is empty
+and the statement holds vacuously. It therefore says nothing useful over a binary field; the
+directed path of `Clean.Air.BalanceModel` is the one to use there.
 -/
-theorem guarantees_of_requirements_of_requirements_of_guarantees [Fact (ringChar F ≠ 2)]
+theorem guarantees_of_requirements_of_requirements_of_guarantees
     (channel : RawChannel F) [channel.Normal]
     (pulls pushes : List (Interaction F))
     (balance : BalancedInteractions (pulls ++ pushes)) (data : ProverData F)
@@ -618,6 +633,13 @@ theorem guarantees_of_requirements_of_requirements_of_guarantees [Fact (ringChar
   (pulls_mult : ∀ a ∈ pulls, a.mult = -1) (pushes_mult : ∀ b ∈ pushes, b.mult = 1) :
     (∀ (i : ℕ) (hi : i < n), pulls[i].Guarantees data → pushes[i].Requirements data) →
     ∀ (i : ℕ) (hi: i < n), pushes[i].Requirements data → pulls[i].Guarantees data := by
+  by_cases h2 : ringChar F = 2
+  · -- characteristic 2: the no-wrap guard forces the cycle to be empty
+    intro _ i hi
+    have := length_le_one_of_balancedInteractions_of_ringChar_eq_two h2 balance
+    rw [List.length_append, len_pulls, len_pushes] at this
+    omega
+  have : Fact (ringChar F ≠ 2) := ⟨h2⟩
   -- the shared kernel does the induction; we supply count equality and the bridge
   refine guarantees_of_requirements_of_count_eq (·.msg) (·.Guarantees data) (·.Requirements data)
     pulls pushes n len_pulls len_pushes
@@ -764,7 +786,7 @@ The input lists may contain padded pull/push pairs with multiplicity `0`. The ac
 subsequence, where pull multiplicity is `-1` and push multiplicity is `1`, satisfies
 the original VM theorem. `0` multiplicities can be discarded as they don't affect balance.
 -/
-theorem guarantees_of_requirements_of_requirements_of_guarantees_of_mult_zero_iff [Fact (ringChar F ≠ 2)]
+theorem guarantees_of_requirements_of_requirements_of_guarantees_of_mult_zero_iff
     (channel : RawChannel F) [channel.Normal]
     (pulls pushes : List (Interaction F))
     (balance : BalancedInteractions (pulls ++ pushes)) (data : ProverData F)

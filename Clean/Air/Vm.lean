@@ -564,7 +564,7 @@ lemma activeInteractions_pushes_getElem_zero_eq {witness : VmWitness vm} :
 
 /-- Translation of the VM soundness theorem to VmTables -/
 theorem verifier_guarantees_of_requirements_of_requirements_of_guarantees
-  [Fact (ringChar F ≠ 2)] (witness : VmWitness vm) :
+    (witness : VmWitness vm) :
   -- if the vm interactions with the vm channel are balanced
   BalancedInteractions (witness.interactionsWith vm.channel.toRaw) →
   witness.Constraints →
@@ -700,7 +700,7 @@ lemma addVm_witness (ens : Ensemble F PublicIO) (vm : VmTables F PublicIO)
   · simp [EnsembleWitness.allTables, EnsembleWitness.verifierTable,
       Ensemble.addVm, VmTables.toEnsemble, vmWitness, witness', List.take_append_drop]
 
-theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : Ensemble F PublicIO)
+theorem addVm_soundVmChannel_of_soundChannels (ens : Ensemble F PublicIO)
       -- given a sound channels ensemble with a list of finished, consistent channels
     {finished : List (RawChannel F)} (soundChannels : ens.SoundChannels finished)
     (consistent : ∀ channel ∈ finished, channel.Consistent)
@@ -856,7 +856,7 @@ end Ensemble
 
 namespace SoundEnsemble
 
-def addVm [Fact (ringChar F ≠ 2)] (ens : SoundEnsemble F PublicIO) (vm : VmTables F PublicIO)
+def addVm (ens : SoundEnsemble F PublicIO) (vm : VmTables F PublicIO)
     (ne_mem_vm_channel : ∀ table ∈ ens.tables, vm.channel.toRaw ∉ table.circuit.channels
       := by simp [circuit_norm])
     (grts_subset_finished : vm.verifier.channelsWithGuarantees ⊆ vm.channel.toRaw :: ens.finished ∧
@@ -878,13 +878,13 @@ variable {soundEns : SoundEnsemble F PublicIO} {vm : VmTables F PublicIO}
   {rdf : ∀ channel ∈ soundEns.finished, channel ∉ vm.verifier.channelsWithRequirements ∧
     ∀ table ∈ vm.tables, channel ∉ table.circuit.channelsWithRequirements}
 
-@[circuit_norm] lemma addVm_tables [Fact (ringChar F ≠ 2)] :
+@[circuit_norm] lemma addVm_tables :
   (soundEns.addVm vm nmv gsf rdf).tables = vm.tables ++ soundEns.tables := rfl
-@[circuit_norm] lemma addVm_channels [Fact (ringChar F ≠ 2)] :
+@[circuit_norm] lemma addVm_channels :
   (soundEns.addVm vm nmv gsf rdf).channels = vm.channel.toRaw :: soundEns.channels := rfl
-@[circuit_norm] lemma addVm_verifier [Fact (ringChar F ≠ 2)] :
+@[circuit_norm] lemma addVm_verifier :
   (soundEns.addVm vm nmv gsf rdf).verifier = vm.verifier := rfl
-@[circuit_norm] lemma addVm_ensemble [Fact (ringChar F ≠ 2)] :
+@[circuit_norm] lemma addVm_ensemble :
   (soundEns.addVm vm nmv gsf rdf).ensemble = soundEns.ensemble.addVm vm := rfl
 
 end SoundEnsemble
