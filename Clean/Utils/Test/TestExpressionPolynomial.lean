@@ -1,6 +1,7 @@
 /-
 Copyright (c) 2024-2025 zkSecurity, LLC
 Released under MIT license as described in the file LICENSE.
+Authors: Elias Judin, Stefano Rocca, Aristotle (Harmonic)
 -/
 /-
   Clean.Utils.Test.TestExpressionPolynomial
