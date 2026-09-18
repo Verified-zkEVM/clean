@@ -7,3 +7,4 @@ public import Clean2.Backends.R1CS
 public import Clean2.Gadgets.Bool
 public import Clean2.Gadgets.IsZero
 public import Clean2.Gadgets.Gates
+public import Clean2.Gadgets.Equality
