@@ -1,0 +1,193 @@
+/-
+A `Backend` is the native set of a proof system: the things that are true "by definition of
+the proof system", which every circuit ultimately reduces to.
+
+Everything else (arithmetic, assertions, gadgets, ...) is a *functionality*: an interface
+(`Clean2.Interface`) implemented on top of a backend (`Clean2.Impl`).
+
+The backend also fixes the *heap model*: what a cell is, which cells a variable reads, and
+how allocation states grow. The core never mentions cells; it only uses the frame laws below.
+-/
+module
+
+public import Clean2.Core.Provable
+public import Mathlib.Data.Set.Lattice
+
+@[expose] public section
+
+namespace Clean2
+variable {F : Type} [Field F]
+
+structure Backend (F : Type) [Field F] where
+  /-- the atomic assignable location: `ℕ`, `Col × Row`, `Region × ℕ`, ... -/
+  Cell : Type
+  /-- what circuits pass around: cell references, linear combinations, expression trees, ... -/
+  Var : Type
+  /-- the meaning of a variable under an assignment of the cells -/
+  eval : (Cell → F) → Var → F
+  /-- the cells a variable reads -/
+  footprint : Var → Set Cell
+  /-- `eval` only looks at the footprint -/
+  eval_frame : ∀ (env env' : Cell → F) (v : Var),
+    (∀ c ∈ footprint v, env c = env' c) → eval env v = eval env' v
+
+  /-- allocation state -/
+  State : Type
+  /-- the cells allocated at a state; the "heap" -/
+  Alloc : State → Set Cell
+
+  /-- native operations -/
+  Op : Type
+  /-- what an operation does to the allocation state (replaces "how many cells") -/
+  advance : Op → State → State
+  alloc_mono : ∀ op s, Alloc s ⊆ Alloc (advance op s)
+  /-- the cells an operation reads -/
+  reads : Op → Set Cell
+  /-- the cells an operation assigns: its ownership -/
+  writes : Op → State → Set Cell
+  /-- ownership is of fresh cells only: `emp ⊢ {writes ↦ _}` -/
+  writes_fresh : ∀ op s, Disjoint (writes op s) (Alloc s) ∧ writes op s ⊆ Alloc (advance op s)
+
+  /-- verifier semantics: what it means for an operation, placed at a state, to hold -/
+  Holds : (Cell → F) → State → Op → Prop
+  /-- prover semantics: what the honest prover does with the cells an operation owns -/
+  Honest : (Cell → F) → State → Op → Prop
+  /-- frame: honesty of a well-formed op depends only on the heap after it -/
+  honest_frame : ∀ (env env' : Cell → F) s op, reads op ⊆ Alloc s →
+    Honest env s op → (∀ c ∈ Alloc (advance op s), env c = env' c) → Honest env' s op
+  /-- extension: a well-formed op can always be run honestly without touching the existing heap -/
+  honest_extend : ∀ (env₀ : Cell → F) s op, reads op ⊆ Alloc s →
+    ∃ env, (∀ c ∈ Alloc s, env c = env₀ c) ∧ Honest env s op
+
+namespace Backend
+variable (B : Backend F)
+
+/-- Evaluate a container of variables to a container of values. -/
+@[circuit_norm]
+def evalT {M : TypeMap} [ProvableType M] (env : B.Cell → F) (x : M B.Var) : M F :=
+  ProvableType.map (B.eval env) x
+
+/-- The cells a container of variables reads. -/
+def footprintT {M : TypeMap} [ProvableType M] (x : M B.Var) : Set B.Cell :=
+  ⋃ i : Fin (size M), B.footprint (toElements x)[i]
+
+variable {B}
+
+theorem footprint_subset_footprintT {M : TypeMap} [ProvableType M] (x : M B.Var) (i : Fin (size M)) :
+    B.footprint (toElements x)[i] ⊆ B.footprintT x :=
+  Set.subset_iUnion (fun i : Fin (size M) => B.footprint (toElements x)[i]) i
+
+theorem evalT_eq_fromElements {M : TypeMap} [ProvableType M] (env : B.Cell → F) (x : M B.Var) :
+    B.evalT env x = fromElements ((toElements x).map (B.eval env)) := by
+  unfold evalT
+  rw [← ProvableType.fromElements_toElements (ProvableType.map (B.eval env) x), ProvableType.toElements_map]
+
+theorem evalT_frame {M : TypeMap} [ProvableType M] (env env' : B.Cell → F) (x : M B.Var)
+    (h : ∀ c ∈ B.footprintT x, env c = env' c) : B.evalT env x = B.evalT env' x := by
+  unfold evalT
+  rw [← ProvableType.fromElements_toElements (ProvableType.map (B.eval env) x),
+    ← ProvableType.fromElements_toElements (ProvableType.map (B.eval env') x),
+    ProvableType.toElements_map, ProvableType.toElements_map]
+  congr 1
+  ext i hi
+  simp only [Vector.getElem_map]
+  exact B.eval_frame env env' _ fun c hc => h c (footprint_subset_footprintT x ⟨i, hi⟩ hc)
+
+@[circuit_norm]
+theorem footprintT_field (x : field B.Var) : B.footprintT x = B.footprint x := by
+  ext c
+  change (c ∈ ⋃ i : Fin 1, B.footprint (#v[x])[i]) ↔ _
+  simp
+
+@[circuit_norm]
+theorem footprintT_fieldPair (x y : B.Var) :
+    B.footprintT (M := fieldPair) (x, y) = B.footprint x ∪ B.footprint y := by
+  ext c
+  change (c ∈ ⋃ i : Fin 2, B.footprint (#v[x, y])[i]) ↔ _
+  simp [Fin.exists_fin_two]
+
+@[circuit_norm]
+theorem footprintT_fieldTriple (x y z : B.Var) :
+    B.footprintT (M := fieldTriple) (x, y, z) = B.footprint x ∪ B.footprint y ∪ B.footprint z := by
+  ext c
+  change (c ∈ ⋃ i : Fin 3, B.footprint (#v[x, y, z])[i]) ↔ _
+  simp [Fin.exists_fin_succ, Set.mem_union, or_assoc]
+
+@[circuit_norm]
+theorem footprintT_unit (x : unit B.Var) : B.footprintT x = ∅ := by
+  ext c
+  change (c ∈ ⋃ i : Fin 0, B.footprint (#v[])[i]) ↔ _
+  simp
+
+/-! ### Flat lists of native operations: the real semantics -/
+
+variable (B)
+
+def flatAdvance : List B.Op → B.State → B.State
+  | [], s => s
+  | op :: ops, s => flatAdvance ops (B.advance op s)
+
+def FlatHolds (env : B.Cell → F) : B.State → List B.Op → Prop
+  | _, [] => True
+  | s, op :: ops => B.Holds env s op ∧ FlatHolds env (B.advance op s) ops
+
+def FlatHonest (env : B.Cell → F) : B.State → List B.Op → Prop
+  | _, [] => True
+  | s, op :: ops => B.Honest env s op ∧ FlatHonest env (B.advance op s) ops
+
+/-- Well-formedness: every operation reads only cells that exist when it runs. -/
+def FlatLocal : B.State → List B.Op → Prop
+  | _, [] => True
+  | s, op :: ops => B.reads op ⊆ B.Alloc s ∧ FlatLocal (B.advance op s) ops
+
+variable {B}
+
+theorem flatAdvance_append (a b : List B.Op) (s : B.State) :
+    B.flatAdvance (a ++ b) s = B.flatAdvance b (B.flatAdvance a s) := by
+  induction a generalizing s with
+  | nil => rfl
+  | cons op ops ih => simp [flatAdvance, ih]
+
+theorem flatHolds_append {env : B.Cell → F} {s : B.State} (a b : List B.Op) :
+    B.FlatHolds env s (a ++ b) ↔ B.FlatHolds env s a ∧ B.FlatHolds env (B.flatAdvance a s) b := by
+  induction a generalizing s with
+  | nil => simp [FlatHolds, flatAdvance]
+  | cons op ops ih => simp [FlatHolds, flatAdvance, ih, and_assoc]
+
+theorem flatHonest_append {env : B.Cell → F} {s : B.State} (a b : List B.Op) :
+    B.FlatHonest env s (a ++ b) ↔ B.FlatHonest env s a ∧ B.FlatHonest env (B.flatAdvance a s) b := by
+  induction a generalizing s with
+  | nil => simp [FlatHonest, flatAdvance]
+  | cons op ops ih => simp [FlatHonest, flatAdvance, ih, and_assoc]
+
+theorem flatLocal_append {s : B.State} (a b : List B.Op) :
+    B.FlatLocal s (a ++ b) ↔ B.FlatLocal s a ∧ B.FlatLocal (B.flatAdvance a s) b := by
+  induction a generalizing s with
+  | nil => simp [FlatLocal, flatAdvance]
+  | cons op ops ih => simp [FlatLocal, flatAdvance, ih, and_assoc]
+
+theorem flatAlloc_mono (ops : List B.Op) (s : B.State) : B.Alloc s ⊆ B.Alloc (B.flatAdvance ops s) := by
+  induction ops generalizing s with
+  | nil => exact le_rfl
+  | cons op ops ih => exact (B.alloc_mono op s).trans (ih _)
+
+/--
+**Witness generation.** A well-formed list of operations can be run honestly on top of any
+existing assignment of the heap. This is what makes completeness statements non-vacuous, and it
+follows from the two frame laws alone.
+-/
+theorem flatHonest_exists (ops : List B.Op) :
+    ∀ (s : B.State) (env₀ : B.Cell → F), B.FlatLocal s ops →
+      ∃ env, (∀ c ∈ B.Alloc s, env c = env₀ c) ∧ B.FlatHonest env s ops := by
+  induction ops with
+  | nil => exact fun s env₀ _ => ⟨env₀, fun _ _ => rfl, trivial⟩
+  | cons op ops ih =>
+    intro s env₀ ⟨h_reads, h_local⟩
+    obtain ⟨env₁, h_agree₁, h_honest₁⟩ := B.honest_extend env₀ s op h_reads
+    obtain ⟨env₂, h_agree₂, h_honest₂⟩ := ih (B.advance op s) env₁ h_local
+    refine ⟨env₂, fun c hc => ?_, ?_, h_honest₂⟩
+    · rw [h_agree₂ c (B.alloc_mono op s hc), h_agree₁ c hc]
+    · exact B.honest_frame env₁ env₂ s op h_reads h_honest₁ fun c hc => (h_agree₂ c hc).symm
+
+end Backend
+end Clean2
