@@ -27,7 +27,7 @@ abbrev iface : Interface F field unit where
 attribute [circuit_norm] iface
 
 /-- `x * x = x` forces `x ∈ {0, 1}`. -/
-def viaMulEq {B : Backend F} (mulEq : Impl B MulEq.iface) : Impl B iface where
+def viaMulEq {B : Backend} [Field B.Native] (mulEq : Impl B MulEq.iface) : Impl B iface where
   main x := mulEq (x, x, x)
   soundness := by
     intro s env x _ h
@@ -67,7 +67,7 @@ abbrev iface : Interface F fieldPair field where
 attribute [circuit_norm] iface
 
 /-- `a ⊕ b = a + b - 2ab`. Generic over how arithmetic is done. -/
-def viaArith {B : Backend F} (arith : Sig.Impl B Arith.sig) : Impl B iface where
+def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Impl B iface where
   main | (a, b) => do
     let t ← arith .mul (a, b)
     let s ← arith .add (a, b)
@@ -117,7 +117,7 @@ theorem xor_assoc (A B C : Prop) : Xor (Xor A B) C ↔ Xor A (Xor B C) := by
   simp only [Xor]; tauto
 
 /-- `a ⊕ b ⊕ c`, generic over the `xor` implementation. Its proof only uses `Xor.iface`. -/
-def viaXor {B : Backend F} (xor : Impl B Xor.iface) : Impl B iface where
+def viaXor {B : Backend} [Field B.Native] (xor : Impl B Xor.iface) : Impl B iface where
   main | (a, b, c) => do
     let ab ← xor (a, b)
     xor (ab, c)

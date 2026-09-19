@@ -14,7 +14,7 @@ public import Clean2.Core.Formal
 
 namespace Clean2
 universe u
-variable {F : Type} [Field F]
+variable {F : Type}
 
 /-- A single method: an interface together with its input/output shapes. -/
 structure Method (F : Type) where
@@ -31,7 +31,6 @@ def Interface.toMethod {Input Output : TypeMap} [ProvableType Input] [ProvableTy
     (iface : Interface F Input Output) : Method F :=
   ⟨Input, Output, iface⟩
 
-omit [Field F] in
 @[circuit_norm] theorem Interface.toMethod_iface {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
     (iface : Interface F Input Output) : iface.toMethod.iface = iface := rfl
 
@@ -41,7 +40,7 @@ structure Sig (F : Type) where
   method : Name → Method F
 
 /-- An implementation of every method of a signature. -/
-def Sig.Impl (B : Backend F) (S : Sig.{u} F) : Type u :=
+def Sig.Impl (B : Backend) (S : Sig.{u} B.Native) : Type u :=
   ∀ m : S.Name, Clean2.Impl B (S.method m).iface
 
 namespace Sig
@@ -60,17 +59,17 @@ def restrict (S : Sig.{u} F) {N : Type u} (f : N → S.Name) : Sig.{u} F :=
   ⟨N, S.method ∘ f⟩
 
 namespace Impl
-variable {B : Backend F}
+variable {B : Backend}
 
 def single {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    {iface : Interface F Input Output} (impl : Clean2.Impl B iface) : (Sig.single iface).Impl B :=
+    {iface : Interface B.Native Input Output} (impl : Clean2.Impl B iface) : (Sig.single iface).Impl B :=
   fun _ => impl
 
-def union {S T : Sig.{u} F} (x : S.Impl B) (y : T.Impl B) : (S.union T).Impl B
+def union {S T : Sig.{u} B.Native} (x : S.Impl B) (y : T.Impl B) : (S.union T).Impl B
   | Sum.inl m => x m
   | Sum.inr m => y m
 
-def restrict {S : Sig.{u} F} (x : S.Impl B) {N : Type u} (f : N → S.Name) : (S.restrict f).Impl B :=
+def restrict {S : Sig.{u} B.Native} (x : S.Impl B) {N : Type u} (f : N → S.Name) : (S.restrict f).Impl B :=
   fun m => x (f m)
 
 end Impl
@@ -85,8 +84,8 @@ structure Interface.Refines {Input Output : TypeMap} (i j : Interface F Input Ou
   proverAssumptions : ∀ x, j.ProverAssumptions x → i.ProverAssumptions x
   proverSpec : ∀ x y, j.ProverAssumptions x → i.ProverSpec x y → j.ProverSpec x y
 
-def Impl.refine {B : Backend F} {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    {i j : Interface F Input Output} (h : i.Refines j) (impl : Impl B i) : Impl B j where
+def Impl.refine {B : Backend} {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    {i j : Interface B.Native Input Output} (h : i.Refines j) (impl : Impl B i) : Impl B j where
   main := impl.main
   advance := impl.advance
   output := impl.output

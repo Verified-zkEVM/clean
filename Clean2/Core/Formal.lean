@@ -17,9 +17,8 @@ public import Clean2.Core.Spatial
 @[expose] public section
 
 namespace Clean2
-variable {F : Type} [Field F]
 
-/-- A formal interface: the contract, and nothing else. -/
+/-- A formal interface: the semantic contract of a circuit. -/
 structure Interface (F : Type) (Input Output : TypeMap) where
   /-- assumed for soundness -/
   Assumptions : Input F → Prop := fun _ => True
@@ -31,14 +30,14 @@ structure Interface (F : Type) (Input Output : TypeMap) where
   ProverSpec : Input F → Output F → Prop := fun _ _ => True
 
 section
-variable {B : Backend F} {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+variable {B : Backend} {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
 
 /-- Soundness of `main` against `iface`: under the assumptions, if the (proof-level) constraints
 hold then the spec holds on the input and output. -/
 @[circuit_norm]
-def Soundness (B : Backend F) (main : Input B.Var → Circuit B (Output B.Var))
-    (output : Input B.Var → B.State → Output B.Var) (iface : Interface F Input Output) : Prop :=
-  ∀ (s : B.State) (env : B.Cell → F) (input : Input B.Var),
+def Soundness (B : Backend) (main : Input B.Var → Circuit B (Output B.Var))
+    (output : Input B.Var → B.State → Output B.Var) (iface : Interface B.Native Input Output) : Prop :=
+  ∀ (s : B.State) (env : B.Cell → B.Native) (input : Input B.Var),
     iface.Assumptions (B.evalT env input) →
     ((main input).operations s).SoundnessHold env s →
     iface.Spec (B.evalT env input) (B.evalT env (output input s))
@@ -46,9 +45,9 @@ def Soundness (B : Backend F) (main : Input B.Var → Circuit B (Output B.Var))
 /-- Completeness of `main` against `iface`: if the prover is honest and the prover assumptions
 hold, then the (proof-level) constraints hold and the prover spec holds. -/
 @[circuit_norm]
-def Completeness (B : Backend F) (main : Input B.Var → Circuit B (Output B.Var))
-    (output : Input B.Var → B.State → Output B.Var) (iface : Interface F Input Output) : Prop :=
-  ∀ (s : B.State) (env : B.Cell → F) (input : Input B.Var),
+def Completeness (B : Backend) (main : Input B.Var → Circuit B (Output B.Var))
+    (output : Input B.Var → B.State → Output B.Var) (iface : Interface B.Native Input Output) : Prop :=
+  ∀ (s : B.State) (env : B.Cell → B.Native) (input : Input B.Var),
     ((main input).operations s).HonestCompleteness env s →
     iface.ProverAssumptions (B.evalT env input) →
     ((main input).operations s).CompletenessHold env s ∧
@@ -57,13 +56,13 @@ def Completeness (B : Backend F) (main : Input B.Var → Circuit B (Output B.Var
 /-- The spatial contract, the same for every implementation:
 `{inputs exist} main {well-formed ∗ outputs exist}`. -/
 @[circuit_norm]
-def Spatial (B : Backend F) (main : Input B.Var → Circuit B (Output B.Var))
+def Spatial (B : Backend) (main : Input B.Var → Circuit B (Output B.Var))
     (output : Input B.Var → B.State → Output B.Var) : Prop :=
   ∀ (input : Input B.Var) (s : B.State), B.footprintT input ⊆ B.Alloc s →
     ((main input).operations s).LocalHold s fun s' => B.footprintT (output input s) ⊆ B.Alloc s'
 
 /-- An implementation of `iface` on backend `B`. -/
-structure Impl (B : Backend F) (iface : Interface F Input Output) where
+structure Impl (B : Backend) (iface : Interface B.Native Input Output) where
   main : Input B.Var → Circuit B (Output B.Var)
   /-- the allocation state after a call. Opaque to callers: no layout is visible here.
   Defaults to running the circuit; override to give it a closed form. -/
@@ -81,7 +80,7 @@ structure Impl (B : Backend F) (iface : Interface F Input Output) where
   completeness : Completeness B main output iface
 
 namespace Impl
-variable {iface : Interface F Input Output}
+variable {iface : Interface B.Native Input Output}
 
 /-- The contract of `impl` at a call site. This is the theorem that lets a caller forget
 the implementation. -/
@@ -132,20 +131,20 @@ theorem toSubcircuit_next (impl : Impl B iface) (s : B.State) (input : Input B.V
     (impl.toSubcircuit s input).next = impl.advance input s := rfl
 
 @[circuit_norm]
-theorem toSubcircuit_Assumptions (impl : Impl B iface) (s : B.State) (input : Input B.Var) (env : B.Cell → F) :
+theorem toSubcircuit_Assumptions (impl : Impl B iface) (s : B.State) (input : Input B.Var) (env : B.Cell → B.Native) :
     (impl.toSubcircuit s input).Assumptions env = iface.Assumptions (B.evalT env input) := rfl
 
 @[circuit_norm]
-theorem toSubcircuit_Spec (impl : Impl B iface) (s : B.State) (input : Input B.Var) (env : B.Cell → F) :
+theorem toSubcircuit_Spec (impl : Impl B iface) (s : B.State) (input : Input B.Var) (env : B.Cell → B.Native) :
     (impl.toSubcircuit s input).Spec env =
       iface.Spec (B.evalT env input) (B.evalT env (impl.output input s)) := rfl
 
 @[circuit_norm]
-theorem toSubcircuit_ProverAssumptions (impl : Impl B iface) (s : B.State) (input : Input B.Var) (env : B.Cell → F) :
+theorem toSubcircuit_ProverAssumptions (impl : Impl B iface) (s : B.State) (input : Input B.Var) (env : B.Cell → B.Native) :
     (impl.toSubcircuit s input).ProverAssumptions env = iface.ProverAssumptions (B.evalT env input) := rfl
 
 @[circuit_norm]
-theorem toSubcircuit_ProverSpec (impl : Impl B iface) (s : B.State) (input : Input B.Var) (env : B.Cell → F) :
+theorem toSubcircuit_ProverSpec (impl : Impl B iface) (s : B.State) (input : Input B.Var) (env : B.Cell → B.Native) :
     (impl.toSubcircuit s input).ProverSpec env =
       (iface.ProverAssumptions (B.evalT env input) →
         (iface.Assumptions (B.evalT env input) →
@@ -163,7 +162,7 @@ theorem toSubcircuit_post (impl : Impl B iface) (s : B.State) (input : Input B.V
 /-! ### Witness generation, and the completeness statement it makes non-vacuous -/
 
 /-- An honest environment exists on top of any assignment of the existing heap. -/
-theorem honest_env_exists (impl : Impl B iface) (input : Input B.Var) (s : B.State) (env₀ : B.Cell → F)
+theorem honest_env_exists (impl : Impl B iface) (input : Input B.Var) (s : B.State) (env₀ : B.Cell → B.Native)
     (h_in : B.footprintT input ⊆ B.Alloc s) :
     ∃ env, (∀ c ∈ B.Alloc s, env c = env₀ c) ∧ ((impl.main input).operations s).Honest env s :=
   Backend.flatHonest_exists _ s env₀
@@ -172,7 +171,7 @@ theorem honest_env_exists (impl : Impl B iface) (input : Input B.Var) (s : B.Sta
 /-- Completeness, as a statement about the real constraints: for inputs that exist in the heap
 and satisfy the prover assumptions, some honest environment (agreeing with the given one on the
 existing heap) satisfies all constraints, and the prover spec holds there. -/
-theorem exists_honest_env (impl : Impl B iface) (input : Input B.Var) (s : B.State) (env₀ : B.Cell → F)
+theorem exists_honest_env (impl : Impl B iface) (input : Input B.Var) (s : B.State) (env₀ : B.Cell → B.Native)
     (h_in : B.footprintT input ⊆ B.Alloc s) (h_prover : iface.ProverAssumptions (B.evalT env₀ input)) :
     ∃ env, (∀ c ∈ B.Alloc s, env c = env₀ c) ∧
       ((impl.main input).operations s).ConstraintsHold env s ∧

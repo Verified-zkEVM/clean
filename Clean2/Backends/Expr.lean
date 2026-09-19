@@ -80,7 +80,8 @@ end ExprOp
 -- checked (so `simp` lemmas about the monad apply), but `simp` does not reduce the backend's
 -- projections into raw fields (so the lemmas below about them apply)
 @[implicit_reducible]
-def ExprBackend (F : Type) [Field F] : Backend F where
+def ExprBackend (F : Type) [Field F] : Backend where
+  Native := F
   Cell := ℕ
   Var := Expr F
   eval env e := e.eval env
@@ -107,6 +108,9 @@ def ExprBackend (F : Type) [Field F] : Backend F where
     cases op
     · exact Linear.witnessHonest_extend Expr.eval Expr.footprint Expr.eval_frame env₀ h_reads
     · exact ⟨env₀, fun _ _ => rfl, trivial⟩
+
+/-- The native values of the expression backend are the field it is built over. -/
+instance : Field (ExprBackend F).Native := ‹Field F›
 
 namespace ExprBackend
 

@@ -32,7 +32,7 @@ abbrev iface : Interface F field field where
 
 attribute [circuit_norm] iface
 
-def viaArith {B : Backend F} (arith : Sig.Impl B Arith.sig) : Impl B iface where
+def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Impl B iface where
   main x := do
     let one ← arith (.const 1) ()
     arith .sub (one, x)
@@ -58,7 +58,7 @@ abbrev iface : Interface F fieldPair field where
 
 attribute [circuit_norm] iface
 
-def viaArith {B : Backend F} (arith : Sig.Impl B Arith.sig) : Impl B iface where
+def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Impl B iface where
   main | (a, b) => arith .mul (a, b)
   soundness := by
     intro s env (a, b) h_as h
@@ -82,7 +82,7 @@ abbrev iface : Interface F fieldPair field where
 
 attribute [circuit_norm] iface
 
-def viaArith {B : Backend F} (arith : Sig.Impl B Arith.sig) : Impl B iface where
+def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Impl B iface where
   main | (a, b) => do
     let ab ← arith .mul (a, b)
     let sum ← arith .add (a, b)
@@ -113,7 +113,7 @@ abbrev iface : Interface F fieldPair field where
 
 attribute [circuit_norm] iface
 
-def viaGates {B : Backend F} (and : Impl B AND.iface) (not : Impl B NOT.iface) : Impl B iface where
+def viaGates {B : Backend} [Field B.Native] (and : Impl B AND.iface) (not : Impl B NOT.iface) : Impl B iface where
   main | (a, b) => do
     let ab ← and (a, b)
     not ab
@@ -138,7 +138,7 @@ abbrev iface : Interface F fieldPair field where
 
 attribute [circuit_norm] iface
 
-def viaGates {B : Backend F} (or : Impl B OR.iface) (not : Impl B NOT.iface) : Impl B iface where
+def viaGates {B : Backend} [Field B.Native] (or : Impl B OR.iface) (not : Impl B NOT.iface) : Impl B iface where
   main | (a, b) => do
     let ab ← or (a, b)
     not ab

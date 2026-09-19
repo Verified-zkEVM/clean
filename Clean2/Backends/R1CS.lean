@@ -119,7 +119,8 @@ end R1CSOp
 
 -- `implicit_reducible`: see `ExprBackend`
 @[implicit_reducible]
-def R1CS (F : Type) [Field F] : Backend F where
+def R1CS (F : Type) [Field F] : Backend where
+  Native := F
   Cell := ℕ
   Var := LinComb F
   eval env l := l.eval env
@@ -146,6 +147,9 @@ def R1CS (F : Type) [Field F] : Backend F where
     cases op
     · exact Linear.witnessHonest_extend LinComb.eval LinComb.footprint LinComb.eval_frame env₀ h_reads
     · exact ⟨env₀, fun _ _ => rfl, trivial⟩
+
+/-- The native values of the R1CS backend are the field it is built over. -/
+instance : Field (R1CS F).Native := ‹Field F›
 
 namespace R1CS
 

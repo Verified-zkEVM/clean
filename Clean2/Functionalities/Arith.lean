@@ -118,8 +118,8 @@ end Base
 namespace Mul
 
 /-- `c ← witness (a * b); assert a * b = c`. This is how R1CS multiplies. -/
-def viaWitnessMulEq {B : Backend F}
-    (witness : Impl B (Witness.iface fun (p : fieldPair F) => p.1 * p.2))
+def viaWitnessMulEq {B : Backend} [Field B.Native]
+    (witness : Impl B (Witness.iface fun (p : fieldPair B.Native) => p.1 * p.2))
     (mulEq : Impl B MulEq.iface) : Impl B Mul.iface where
   main | (a, b) => do
     let c ← witness (a, b)
@@ -139,7 +139,8 @@ end Mul
 namespace AssertZero
 
 /-- `x * 1 = 0`. -/
-def viaMulEq {B : Backend F} (const : (c : F) → Impl B (Const.iface c)) (mulEq : Impl B MulEq.iface) :
+def viaMulEq {B : Backend} [Field B.Native] (const : (c : B.Native) → Impl B (Const.iface c))
+    (mulEq : Impl B MulEq.iface) :
     Impl B AssertZero.iface where
   main x := do
     let one ← const 1 ()
@@ -161,7 +162,7 @@ end AssertZero
 namespace Arith
 
 /-- A backend that provides `Base.sig` provides all of `Arith.sig`. -/
-def ofBase {B : Backend F} (base : Sig.Impl B Base.sig) : Sig.Impl B Arith.sig
+def ofBase {B : Backend} [Field B.Native] (base : Sig.Impl B Base.sig) : Sig.Impl B Arith.sig
   | .add => base .add
   | .sub => base .sub
   | .const c => base (.const c)

@@ -13,7 +13,7 @@ public import Clean2.Core.Backend
 @[expose] public section
 
 namespace Clean2
-variable {F : Type} [Field F] {B : Backend F}
+variable {B : Backend}
 
 /--
 A called implementation, as recorded in the parent's operations. It carries the flattened native
@@ -24,15 +24,15 @@ This is the proof boundary: a parent never looks at `ops`, only at the contract.
 a semantic part (`Assumptions`, `Spec`, ...) and a spatial part (`pre`, `post`): the inputs must
 exist in the heap, and then the outputs exist afterwards and the call is well-formed.
 -/
-structure Subcircuit (B : Backend F) (s : B.State) where
+structure Subcircuit (B : Backend) (s : B.State) where
   ops : List B.Op
   /-- the allocation state after the call -/
   next : B.State
   next_eq : next = B.flatAdvance ops s
-  Assumptions : (B.Cell → F) → Prop
-  Spec : (B.Cell → F) → Prop
-  ProverAssumptions : (B.Cell → F) → Prop
-  ProverSpec : (B.Cell → F) → Prop
+  Assumptions : (B.Cell → B.Native) → Prop
+  Spec : (B.Cell → B.Native) → Prop
+  ProverAssumptions : (B.Cell → B.Native) → Prop
+  ProverSpec : (B.Cell → B.Native) → Prop
   pre : Prop
   post : Prop
   soundness : ∀ env, Assumptions env → B.FlatHolds env s ops → Spec env
@@ -44,11 +44,11 @@ structure Subcircuit (B : Backend F) (s : B.State) where
 theorem Subcircuit.alloc_mono {s : B.State} (sc : Subcircuit B s) : B.Alloc s ⊆ B.Alloc sc.next := by
   rw [sc.next_eq]; exact Backend.flatAlloc_mono _ _
 
-inductive Op (B : Backend F) where
+inductive Op (B : Backend) where
   | native : B.Op → Op B
   | call : {s : B.State} → Subcircuit B s → Op B
 
-abbrev Ops (B : Backend F) := List (Op B)
+abbrev Ops (B : Backend) := List (Op B)
 
 namespace Ops
 
@@ -73,10 +73,10 @@ def Consistent : B.State → Ops B → Prop
 
 /-! ### Real semantics -/
 
-def ConstraintsHold (env : B.Cell → F) (s : B.State) (ops : Ops B) : Prop :=
+def ConstraintsHold (env : B.Cell → B.Native) (s : B.State) (ops : Ops B) : Prop :=
   B.FlatHolds env s ops.toFlat
 
-def Honest (env : B.Cell → F) (s : B.State) (ops : Ops B) : Prop :=
+def Honest (env : B.Cell → B.Native) (s : B.State) (ops : Ops B) : Prop :=
   B.FlatHonest env s ops.toFlat
 
 def Local (s : B.State) (ops : Ops B) : Prop :=
@@ -86,7 +86,7 @@ def Local (s : B.State) (ops : Ops B) : Prop :=
 
 /-- Constraints hold, with calls replaced by `Assumptions → Spec`. Used in soundness proofs. -/
 @[circuit_norm]
-def SoundnessHold (env : B.Cell → F) : B.State → Ops B → Prop
+def SoundnessHold (env : B.Cell → B.Native) : B.State → Ops B → Prop
   | _, [] => True
   | s, .native op :: ops => B.Holds env s op ∧ SoundnessHold env (B.advance op s) ops
   | _, .call sc :: ops => (sc.Assumptions env → sc.Spec env) ∧ SoundnessHold env sc.next ops
@@ -94,7 +94,7 @@ def SoundnessHold (env : B.Cell → F) : B.State → Ops B → Prop
 /-- Constraints hold, with calls replaced by `ProverAssumptions`. This is what a completeness
 proof has to establish. -/
 @[circuit_norm]
-def CompletenessHold (env : B.Cell → F) : B.State → Ops B → Prop
+def CompletenessHold (env : B.Cell → B.Native) : B.State → Ops B → Prop
   | _, [] => True
   | s, .native op :: ops => B.Holds env s op ∧ CompletenessHold env (B.advance op s) ops
   | _, .call sc :: ops => sc.ProverAssumptions env ∧ CompletenessHold env sc.next ops
@@ -102,7 +102,7 @@ def CompletenessHold (env : B.Cell → F) : B.State → Ops B → Prop
 /-- The prover is honest, with calls replaced by `ProverSpec`. This is what a completeness proof
 may assume. -/
 @[circuit_norm]
-def HonestCompleteness (env : B.Cell → F) : B.State → Ops B → Prop
+def HonestCompleteness (env : B.Cell → B.Native) : B.State → Ops B → Prop
   | _, [] => True
   | s, .native op :: ops => B.Honest env s op ∧ HonestCompleteness env (B.advance op s) ops
   | _, .call sc :: ops => sc.ProverSpec env ∧ HonestCompleteness env sc.next ops
@@ -148,7 +148,7 @@ theorem consistent_append {s : B.State} (a b : Ops B) :
     | call sc => simp [Consistent, advance, ih, and_assoc]
 
 @[circuit_norm]
-theorem soundnessHold_append {env : B.Cell → F} {s : B.State} (a b : Ops B) :
+theorem soundnessHold_append {env : B.Cell → B.Native} {s : B.State} (a b : Ops B) :
     SoundnessHold env s (a ++ b) ↔ SoundnessHold env s a ∧ SoundnessHold env (advance a s) b := by
   induction a generalizing s with
   | nil => simp [SoundnessHold, advance]
@@ -158,7 +158,7 @@ theorem soundnessHold_append {env : B.Cell → F} {s : B.State} (a b : Ops B) :
     | call sc => simp [SoundnessHold, advance, ih, and_assoc]
 
 @[circuit_norm]
-theorem completenessHold_append {env : B.Cell → F} {s : B.State} (a b : Ops B) :
+theorem completenessHold_append {env : B.Cell → B.Native} {s : B.State} (a b : Ops B) :
     CompletenessHold env s (a ++ b) ↔
       CompletenessHold env s a ∧ CompletenessHold env (advance a s) b := by
   induction a generalizing s with
@@ -169,7 +169,7 @@ theorem completenessHold_append {env : B.Cell → F} {s : B.State} (a b : Ops B)
     | call sc => simp [CompletenessHold, advance, ih, and_assoc]
 
 @[circuit_norm]
-theorem honestCompleteness_append {env : B.Cell → F} {s : B.State} (a b : Ops B) :
+theorem honestCompleteness_append {env : B.Cell → B.Native} {s : B.State} (a b : Ops B) :
     HonestCompleteness env s (a ++ b) ↔
       HonestCompleteness env s a ∧ HonestCompleteness env (advance a s) b := by
   induction a generalizing s with
@@ -196,7 +196,7 @@ theorem alloc_mono {s : B.State} {ops : Ops B} (h : Consistent s ops) :
 /-! ### Replacement theorems: real semantics ↔ proof-level semantics -/
 
 /-- If the real constraints hold, then the proof-level soundness statement holds. -/
-theorem soundnessHold_of_constraintsHold {env : B.Cell → F} {s : B.State} {ops : Ops B}
+theorem soundnessHold_of_constraintsHold {env : B.Cell → B.Native} {s : B.State} {ops : Ops B}
     (h_consistent : Consistent s ops) (h : ConstraintsHold env s ops) : SoundnessHold env s ops := by
   induction ops generalizing s with
   | nil => trivial
@@ -212,7 +212,7 @@ theorem soundnessHold_of_constraintsHold {env : B.Cell → F} {s : B.State} {ops
 
 /-- If the prover is honest and the proof-level completeness statement holds, then the real
 constraints hold. -/
-theorem constraintsHold_of_completenessHold {env : B.Cell → F} {s : B.State} {ops : Ops B}
+theorem constraintsHold_of_completenessHold {env : B.Cell → B.Native} {s : B.State} {ops : Ops B}
     (h_consistent : Consistent s ops) (h_honest : Honest env s ops) (h : CompletenessHold env s ops) :
     ConstraintsHold env s ops := by
   induction ops generalizing s with
@@ -229,7 +229,7 @@ theorem constraintsHold_of_completenessHold {env : B.Cell → F} {s : B.State} {
       exact ⟨(sc.completeness env h_honest.1).1 h.1, ih h_consistent h_honest.2 h.2⟩
 
 /-- If the prover is honest, then the proof-level honesty statement holds. -/
-theorem honestCompleteness_of_honest {env : B.Cell → F} {s : B.State} {ops : Ops B}
+theorem honestCompleteness_of_honest {env : B.Cell → B.Native} {s : B.State} {ops : Ops B}
     (h_consistent : Consistent s ops) (h_honest : Honest env s ops) : HonestCompleteness env s ops := by
   induction ops generalizing s with
   | nil => trivial
@@ -271,7 +271,7 @@ The operations determine the next state (`Ops.advance`), so the state is recover
 output, which is what keeps `output` and `advance` static.
 -/
 @[implicit_reducible]
-def Circuit (B : Backend F) (α : Type) := B.State → α × Ops B
+def Circuit (B : Backend) (α : Type) := B.State → α × Ops B
 
 namespace Circuit
 

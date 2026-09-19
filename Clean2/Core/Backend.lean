@@ -16,55 +16,72 @@ public import Mathlib.Data.Set.Lattice
 @[expose] public section
 
 namespace Clean2
-variable {F : Type} [Field F]
 
-structure Backend (F : Type) [Field F] where
-  /-- the atomic assignable location: `ℕ`, `Col × Row`, `Region × ℕ`, ... -/
+structure Backend where
+  /--
+    the native type of witness values contained in cells,
+    it does not necessarily have to be a field, so that we can
+    express SNARKs over integers, rationals, and so on
+  -/
+  Native : Type
+  /-- the "physical" address of a concrete witness location -/
   Cell : Type
-  /-- what circuits pass around: cell references, linear combinations, expression trees, ... -/
+  /-- the type of variables that circuits manipulate and talk about -/
   Var : Type
-  /-- the meaning of a variable under an assignment of the cells -/
-  eval : (Cell → F) → Var → F
+  /--
+    the meaning of a variable under an assignment of the cells: given an assignment from
+    physical cells to native values, this function describes how variables are computed
+  -/
+  eval : (Cell → Native) → Var → Native
+
   /-- the cells a variable reads -/
   footprint : Var → Set Cell
   /-- `eval` only looks at the footprint -/
-  eval_frame : ∀ (env env' : Cell → F) (v : Var),
+  eval_frame : ∀ (env env' : Cell → Native) (v : Var),
     (∀ c ∈ footprint v, env c = env' c) → eval env v = eval env' v
 
-  /-- allocation state -/
+  /-- backend state -/
   State : Type
   /-- the cells allocated at a state; the "heap" -/
   Alloc : State → Set Cell
 
   /-- native operations -/
   Op : Type
-  /-- what an operation does to the allocation state (replaces "how many cells") -/
+  /-- what an operation does to the allocation state -/
   advance : Op → State → State
+  /-- the allocation set is monotonic: Alloc set never decreases on `advance` -/
   alloc_mono : ∀ op s, Alloc s ⊆ Alloc (advance op s)
   /-- the cells an operation reads -/
   reads : Op → Set Cell
-  /-- the cells an operation assigns: its ownership -/
+  /-- the cells an operation writes -/
   writes : Op → State → Set Cell
-  /-- ownership is of fresh cells only: `emp ⊢ {writes ↦ _}` -/
-  writes_fresh : ∀ op s, Disjoint (writes op s) (Alloc s) ∧ writes op s ⊆ Alloc (advance op s)
+  /-- all operations must write only cells that they have allocated -/
+  writes_fresh : ∀ op s,
+    Disjoint (writes op s) (Alloc s) ∧
+    writes op s ⊆ Alloc (advance op s)
 
   /-- verifier semantics: what it means for an operation, placed at a state, to hold -/
-  Holds : (Cell → F) → State → Op → Prop
+  Holds : (Cell → Native) → State → Op → Prop
   /-- prover semantics: what the honest prover does with the cells an operation owns -/
-  Honest : (Cell → F) → State → Op → Prop
+  Honest : (Cell → Native) → State → Op → Prop
+
   /-- frame: honesty of a well-formed op depends only on the heap after it -/
-  honest_frame : ∀ (env env' : Cell → F) s op, reads op ⊆ Alloc s →
-    Honest env s op → (∀ c ∈ Alloc (advance op s), env c = env' c) → Honest env' s op
+  honest_frame :
+    ∀ (env env' : Cell → Native) s op,
+      reads op ⊆ Alloc s →
+      Honest env s op →
+      (∀ c ∈ Alloc (advance op s), env c = env' c) →
+      Honest env' s op
   /-- extension: a well-formed op can always be run honestly without touching the existing heap -/
-  honest_extend : ∀ (env₀ : Cell → F) s op, reads op ⊆ Alloc s →
+  honest_extend : ∀ (env₀ : Cell → Native) s op, reads op ⊆ Alloc s →
     ∃ env, (∀ c ∈ Alloc s, env c = env₀ c) ∧ Honest env s op
 
 namespace Backend
-variable (B : Backend F)
+variable (B : Backend)
 
 /-- Evaluate a container of variables to a container of values. -/
 @[circuit_norm]
-def evalT {M : TypeMap} [ProvableType M] (env : B.Cell → F) (x : M B.Var) : M F :=
+def evalT {M : TypeMap} [ProvableType M] (env : B.Cell → B.Native) (x : M B.Var) : M B.Native :=
   ProvableType.map (B.eval env) x
 
 /-- The cells a container of variables reads. -/
@@ -77,12 +94,12 @@ theorem footprint_subset_footprintT {M : TypeMap} [ProvableType M] (x : M B.Var)
     B.footprint (toElements x)[i] ⊆ B.footprintT x :=
   Set.subset_iUnion (fun i : Fin (size M) => B.footprint (toElements x)[i]) i
 
-theorem evalT_eq_fromElements {M : TypeMap} [ProvableType M] (env : B.Cell → F) (x : M B.Var) :
+theorem evalT_eq_fromElements {M : TypeMap} [ProvableType M] (env : B.Cell → B.Native) (x : M B.Var) :
     B.evalT env x = fromElements ((toElements x).map (B.eval env)) := by
   unfold evalT
   rw [← ProvableType.fromElements_toElements (ProvableType.map (B.eval env) x), ProvableType.toElements_map]
 
-theorem evalT_frame {M : TypeMap} [ProvableType M] (env env' : B.Cell → F) (x : M B.Var)
+theorem evalT_frame {M : TypeMap} [ProvableType M] (env env' : B.Cell → B.Native) (x : M B.Var)
     (h : ∀ c ∈ B.footprintT x, env c = env' c) : B.evalT env x = B.evalT env' x := by
   unfold evalT
   rw [← ProvableType.fromElements_toElements (ProvableType.map (B.eval env) x),
@@ -127,11 +144,11 @@ def flatAdvance : List B.Op → B.State → B.State
   | [], s => s
   | op :: ops, s => flatAdvance ops (B.advance op s)
 
-def FlatHolds (env : B.Cell → F) : B.State → List B.Op → Prop
+def FlatHolds (env : B.Cell → B.Native) : B.State → List B.Op → Prop
   | _, [] => True
   | s, op :: ops => B.Holds env s op ∧ FlatHolds env (B.advance op s) ops
 
-def FlatHonest (env : B.Cell → F) : B.State → List B.Op → Prop
+def FlatHonest (env : B.Cell → B.Native) : B.State → List B.Op → Prop
   | _, [] => True
   | s, op :: ops => B.Honest env s op ∧ FlatHonest env (B.advance op s) ops
 
@@ -148,13 +165,13 @@ theorem flatAdvance_append (a b : List B.Op) (s : B.State) :
   | nil => rfl
   | cons op ops ih => simp [flatAdvance, ih]
 
-theorem flatHolds_append {env : B.Cell → F} {s : B.State} (a b : List B.Op) :
+theorem flatHolds_append {env : B.Cell → B.Native} {s : B.State} (a b : List B.Op) :
     B.FlatHolds env s (a ++ b) ↔ B.FlatHolds env s a ∧ B.FlatHolds env (B.flatAdvance a s) b := by
   induction a generalizing s with
   | nil => simp [FlatHolds, flatAdvance]
   | cons op ops ih => simp [FlatHolds, flatAdvance, ih, and_assoc]
 
-theorem flatHonest_append {env : B.Cell → F} {s : B.State} (a b : List B.Op) :
+theorem flatHonest_append {env : B.Cell → B.Native} {s : B.State} (a b : List B.Op) :
     B.FlatHonest env s (a ++ b) ↔ B.FlatHonest env s a ∧ B.FlatHonest env (B.flatAdvance a s) b := by
   induction a generalizing s with
   | nil => simp [FlatHonest, flatAdvance]
@@ -177,7 +194,7 @@ existing assignment of the heap. This is what makes completeness statements non-
 follows from the two frame laws alone.
 -/
 theorem flatHonest_exists (ops : List B.Op) :
-    ∀ (s : B.State) (env₀ : B.Cell → F), B.FlatLocal s ops →
+    ∀ (s : B.State) (env₀ : B.Cell → B.Native), B.FlatLocal s ops →
       ∃ env, (∀ c ∈ B.Alloc s, env c = env₀ c) ∧ B.FlatHonest env s ops := by
   induction ops with
   | nil => exact fun s env₀ _ => ⟨env₀, fun _ _ => rfl, trivial⟩

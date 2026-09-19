@@ -25,7 +25,7 @@ abbrev iface : Interface F field field where
 
 attribute [circuit_norm] iface
 
-def viaArith {B : Backend F} (arith : Sig.Impl B Arith.sig) : Impl B iface where
+def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Impl B iface where
   main x := do
     let inv ← arith (.witness field fun v => v⁻¹) x
     let one ← arith (.const 1) ()
@@ -59,7 +59,7 @@ abbrev iface : Interface F field unit where
 
 attribute [circuit_norm] iface
 
-def viaInverse {B : Backend F} (inverse : Impl B Inverse.iface) : Impl B iface where
+def viaInverse {B : Backend} [Field B.Native] (inverse : Impl B Inverse.iface) : Impl B iface where
   main x := do
     let _ ← inverse x
     return ()
@@ -87,7 +87,7 @@ abbrev iface : Interface F fieldPair field where
 
 attribute [circuit_norm] iface
 
-def viaInverse {B : Backend F} (arith : Sig.Impl B Arith.sig) (inverse : Impl B Inverse.iface) :
+def viaInverse {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) (inverse : Impl B Inverse.iface) :
     Impl B iface where
   main | (a, b) => do
     let binv ← inverse b

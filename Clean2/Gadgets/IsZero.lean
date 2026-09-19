@@ -26,7 +26,7 @@ attribute [circuit_norm] iface
 
 /-- Generic over the arithmetic. The witness is a functionality like any other: nothing is
 known about `inv` for soundness, and its value is known for completeness. -/
-def viaArith {B : Backend F} (arith : Sig.Impl B Arith.sig) : Impl B iface where
+def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Impl B iface where
   main x := do
     let inv ← arith (.witness field fun v => v⁻¹) x
     let t ← arith .mul (x, inv)

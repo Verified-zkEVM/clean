@@ -26,7 +26,7 @@ abbrev iface : Interface F fieldTriple field where
 
 attribute [circuit_norm] iface
 
-def viaArith {B : Backend F} (arith : Sig.Impl B Arith.sig) : Impl B iface where
+def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Impl B iface where
   main | (c, a, b) => do
     let d ← arith .sub (a, b)
     let t ← arith .mul (c, d)
@@ -54,7 +54,7 @@ abbrev iface : Interface F fieldTriple field where
 attribute [circuit_norm] iface
 
 /-- `(a ∧ b) ∨ (¬a ∧ c)`. No arithmetic appears in this definition or in its proof. -/
-def viaGates {B : Backend F} (and : Impl B AND.iface) (or : Impl B OR.iface)
+def viaGates {B : Backend} [Field B.Native] (and : Impl B AND.iface) (or : Impl B OR.iface)
     (not : Impl B NOT.iface) : Impl B iface where
   main | (a, b, c) => do
     let ab ← and (a, b)
@@ -90,7 +90,7 @@ abbrev iface : Interface F fieldTriple field where
 attribute [circuit_norm] iface
 
 /-- `(a ∧ b) ∨ (a ∧ c) ∨ (b ∧ c)`. -/
-def viaGates {B : Backend F} (and : Impl B AND.iface) (or : Impl B OR.iface) : Impl B iface where
+def viaGates {B : Backend} [Field B.Native] (and : Impl B AND.iface) (or : Impl B OR.iface) : Impl B iface where
   main | (a, b, c) => do
     let ab ← and (a, b)
     let ac ← and (a, c)

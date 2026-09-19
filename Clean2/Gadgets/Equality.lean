@@ -24,7 +24,7 @@ abbrev iface : Interface F fieldPair unit where
 
 attribute [circuit_norm] iface
 
-def viaArith {B : Backend F} (arith : Sig.Impl B Arith.sig) : Impl B iface where
+def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Impl B iface where
   main | (a, b) => do
     let d ← arith .sub (a, b)
     arith .assertZero d
@@ -53,7 +53,7 @@ abbrev iface : Interface F fieldPair field where
 attribute [circuit_norm] iface
 
 /-- Generic over the arithmetic *and* over the zero test. -/
-def viaIsZero {B : Backend F} (arith : Sig.Impl B Arith.sig) (isZero : Impl B IsZero.iface) :
+def viaIsZero {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) (isZero : Impl B IsZero.iface) :
     Impl B iface where
   main | (a, b) => do
     let d ← arith .sub (a, b)

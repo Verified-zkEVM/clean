@@ -10,7 +10,7 @@ public import Clean2.Core
 @[expose] public section
 
 namespace Clean2.Linear
-variable {F : Type} [Field F]
+variable {F : Type}
 
 /-- The cells allocated at state `s`. -/
 def Alloc (s : ℕ) : Set ℕ := {c | c < s}
@@ -38,7 +38,6 @@ def WitnessHonest (env : ℕ → F) (s : ℕ) {m : ℕ} (vars : Vector V m) (f :
 variable (eval_frame : ∀ (env env' : ℕ → F) (v : V), (∀ c ∈ footprint v, env c = env' c) → eval env v = eval env' v)
 include eval_frame
 
-omit [Field F] in
 theorem map_eval_congr {m : ℕ} (vars : Vector V m) (env env' : ℕ → F)
     (h : ∀ c ∈ witnessReads footprint vars, env c = env' c) :
     vars.map (eval env) = vars.map (eval env') := by
@@ -46,7 +45,6 @@ theorem map_eval_congr {m : ℕ} (vars : Vector V m) (env env' : ℕ → F)
   simp only [Vector.getElem_map]
   exact eval_frame env env' _ fun c hc => h c (Set.mem_iUnion.mpr ⟨⟨i, hi⟩, hc⟩)
 
-omit [Field F] in
 theorem witnessHonest_frame {env env' : ℕ → F} {s m : ℕ} {vars : Vector V m} {f : Vector F m → F}
     (h_reads : witnessReads footprint vars ⊆ Alloc s) (h : WitnessHonest eval env s vars f)
     (h_agree : ∀ c ∈ Alloc (s + 1), env c = env' c) : WitnessHonest eval env' s vars f := by
@@ -54,7 +52,6 @@ theorem witnessHonest_frame {env env' : ℕ → F} {s m : ℕ} {vars : Vector V 
   rw [← h_agree s (Nat.lt_succ_self s), h,
     map_eval_congr eval footprint eval_frame vars env env' fun c hc => h_agree c (alloc_mono_succ s (h_reads hc))]
 
-omit [Field F] in
 theorem witnessHonest_extend (env₀ : ℕ → F) {s m : ℕ} {vars : Vector V m} {f : Vector F m → F}
     (h_reads : witnessReads footprint vars ⊆ Alloc s) :
     ∃ env, (∀ c ∈ Alloc s, env c = env₀ c) ∧ WitnessHonest eval env s vars f := by
