@@ -26,11 +26,9 @@ namespace Gates
 
 namespace NOT
 
-abbrev iface : Interface F field field where
+def iface : Interface F field field where
   Assumptions x := IsBool x
   Spec x out := IsBool out ∧ (out = 1 ↔ x ≠ 1)
-
-attribute [circuit_norm] iface
 
 def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Impl B iface where
   main x := do
@@ -38,13 +36,15 @@ def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Imp
     arith .sub (one, x)
   soundness := by
     intro s env x hx h
-    simp only [circuit_norm, IsBool] at hx h ⊢
+    simp only [circuit_norm] at hx h ⊢
+    simp only [circuit_norm, iface, Const.iface, Sub.iface, IsBool] at hx h ⊢
     obtain ⟨hone, hout⟩ := h
     rw [hout, hone]
     rcases hx with hx | hx <;> simp [hx]
   completeness := by
     intro s env x _ _
     simp only [circuit_norm]
+    simp only [circuit_norm, iface, Const.iface, Sub.iface]
 
 end NOT
 
@@ -52,23 +52,23 @@ end NOT
 
 namespace AND
 
-abbrev iface : Interface F fieldPair field where
+def iface : Interface F fieldPair field where
   Assumptions | (a, b) => IsBool a ∧ IsBool b
   Spec | (a, b), c => IsBool c ∧ (c = 1 ↔ a = 1 ∧ b = 1)
-
-attribute [circuit_norm] iface
 
 def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Impl B iface where
   main | (a, b) => arith .mul (a, b)
   soundness := by
     intro s env (a, b) h_as h
-    simp only [circuit_norm, IsBool] at h_as h ⊢
+    simp only [circuit_norm] at h_as h ⊢
+    simp only [circuit_norm, iface, Mul.iface, IsBool] at h_as h ⊢
     obtain ⟨ha, hb⟩ := h_as
     rw [h]
     rcases ha with ha | ha <;> rcases hb with hb | hb <;> simp [ha, hb]
   completeness := by
     intro s env (a, b) _ _
     simp only [circuit_norm]
+    simp only [circuit_norm, iface, Mul.iface]
 
 end AND
 
@@ -76,11 +76,9 @@ end AND
 
 namespace OR
 
-abbrev iface : Interface F fieldPair field where
+def iface : Interface F fieldPair field where
   Assumptions | (a, b) => IsBool a ∧ IsBool b
   Spec | (a, b), c => IsBool c ∧ (c = 1 ↔ a = 1 ∨ b = 1)
-
-attribute [circuit_norm] iface
 
 def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Impl B iface where
   main | (a, b) => do
@@ -89,7 +87,8 @@ def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Imp
     arith .sub (sum, ab)
   soundness := by
     intro s env (a, b) h_as h
-    simp only [circuit_norm, IsBool] at h_as h ⊢
+    simp only [circuit_norm] at h_as h ⊢
+    simp only [circuit_norm, iface, Mul.iface, Add.iface, Sub.iface, IsBool] at h_as h ⊢
     obtain ⟨ha, hb⟩ := h_as
     obtain ⟨hab, hsum, hout⟩ := h
     rw [hout, hsum, hab]
@@ -97,6 +96,7 @@ def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Imp
   completeness := by
     intro s env (a, b) _ _
     simp only [circuit_norm]
+    simp only [circuit_norm, iface, Mul.iface, Add.iface, Sub.iface]
 
 end OR
 
@@ -107,11 +107,9 @@ composition — the circuits of `and`, `or`, `not` are never unfolded. -/
 
 namespace NAND
 
-abbrev iface : Interface F fieldPair field where
+def iface : Interface F fieldPair field where
   Assumptions | (a, b) => IsBool a ∧ IsBool b
   Spec | (a, b), c => IsBool c ∧ (c = 1 ↔ ¬(a = 1 ∧ b = 1))
-
-attribute [circuit_norm] iface
 
 def viaGates {B : Backend} [Field B.Native] (and : Impl B AND.iface) (not : Impl B NOT.iface) : Impl B iface where
   main | (a, b) => do
@@ -120,6 +118,7 @@ def viaGates {B : Backend} [Field B.Native] (and : Impl B AND.iface) (not : Impl
   soundness := by
     intro s env (a, b) h_as h
     simp only [circuit_norm] at h_as h ⊢
+    simp only [circuit_norm, iface, AND.iface, NOT.iface] at h_as h ⊢
     obtain ⟨h_and, h_not⟩ := h
     obtain ⟨h_bool, h_iff⟩ := h_and h_as
     obtain ⟨h_bool', h_iff'⟩ := h_not h_bool
@@ -127,16 +126,15 @@ def viaGates {B : Backend} [Field B.Native] (and : Impl B AND.iface) (not : Impl
   completeness := by
     intro s env (a, b) _ _
     simp only [circuit_norm]
+    simp only [circuit_norm, iface, AND.iface, NOT.iface]
 
 end NAND
 
 namespace NOR
 
-abbrev iface : Interface F fieldPair field where
+def iface : Interface F fieldPair field where
   Assumptions | (a, b) => IsBool a ∧ IsBool b
   Spec | (a, b), c => IsBool c ∧ (c = 1 ↔ ¬(a = 1 ∨ b = 1))
-
-attribute [circuit_norm] iface
 
 def viaGates {B : Backend} [Field B.Native] (or : Impl B OR.iface) (not : Impl B NOT.iface) : Impl B iface where
   main | (a, b) => do
@@ -145,6 +143,7 @@ def viaGates {B : Backend} [Field B.Native] (or : Impl B OR.iface) (not : Impl B
   soundness := by
     intro s env (a, b) h_as h
     simp only [circuit_norm] at h_as h ⊢
+    simp only [circuit_norm, iface, OR.iface, NOT.iface] at h_as h ⊢
     obtain ⟨h_or, h_not⟩ := h
     obtain ⟨h_bool, h_iff⟩ := h_or h_as
     obtain ⟨h_bool', h_iff'⟩ := h_not h_bool
@@ -152,6 +151,7 @@ def viaGates {B : Backend} [Field B.Native] (or : Impl B OR.iface) (not : Impl B
   completeness := by
     intro s env (a, b) _ _
     simp only [circuit_norm]
+    simp only [circuit_norm, iface, OR.iface, NOT.iface]
 
 end NOR
 end Gates

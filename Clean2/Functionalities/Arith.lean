@@ -19,28 +19,28 @@ variable {F : Type} [Field F]
 /-! ## The interfaces -/
 
 namespace Add
-abbrev iface : Interface F fieldPair field where
+def iface : Interface F fieldPair field where
   Spec | (a, b), c => c = a + b
 end Add
 
 namespace Sub
-abbrev iface : Interface F fieldPair field where
+def iface : Interface F fieldPair field where
   Spec | (a, b), c => c = a - b
 end Sub
 
 namespace Mul
-abbrev iface : Interface F fieldPair field where
+def iface : Interface F fieldPair field where
   Spec | (a, b), c => c = a * b
 end Mul
 
 namespace Const
-abbrev iface (c : F) : Interface F unit field where
+def iface (c : F) : Interface F unit field where
   Spec _ x := x = c
 end Const
 
 /- Assert that a variable is zero. An assertion: the honest prover has to make it true. -/
 namespace AssertZero
-abbrev iface : Interface F field unit where
+def iface : Interface F field unit where
   Spec x _ := x = 0
   ProverAssumptions x := x = 0
 end AssertZero
@@ -49,7 +49,7 @@ end AssertZero
 constraint of R1CS; a backend that decomposed it into `mul` and `assertZero` would pay
 an extra cell. -/
 namespace MulEq
-abbrev iface : Interface F fieldTriple unit where
+def iface : Interface F fieldTriple unit where
   Spec | (a, b, c), _ => a * b = c
   ProverAssumptions | (a, b, c) => a * b = c
 end MulEq
@@ -57,14 +57,9 @@ end MulEq
 /- An unconstrained value, which the honest prover computes from the input values.
 Nothing is known about it for soundness; for completeness, its value is known. -/
 namespace Witness
-abbrev iface {Input : TypeMap} (f : Input F → F) : Interface F Input field where
+def iface {Input : TypeMap} (f : Input F → F) : Interface F Input field where
   ProverSpec x out := out = f x
 end Witness
-
--- interfaces are reducible and part of the simp set: unfolding them inside the type of an
--- `Impl` must keep terms well-typed at reducible transparency
-attribute [circuit_norm] Add.iface Sub.iface Mul.iface Const.iface AssertZero.iface MulEq.iface
-  Witness.iface
 
 /-! ## The signatures -/
 
@@ -128,10 +123,12 @@ def viaWitnessMulEq {B : Backend} [Field B.Native]
   soundness := by
     intro s env (a, b) _ h
     simp only [circuit_norm] at h ⊢
+    simp only [circuit_norm, iface, MulEq.iface, Witness.iface] at h ⊢
     exact h.symm
   completeness := by
     intro s env (a, b) h _
     simp only [circuit_norm] at h ⊢
+    simp only [circuit_norm, iface, MulEq.iface, Witness.iface] at h ⊢
     exact h.symm
 
 end Mul
@@ -149,12 +146,14 @@ def viaMulEq {B : Backend} [Field B.Native] (const : (c : B.Native) → Impl B (
   soundness := by
     intro s env x _ h
     simp only [circuit_norm] at h ⊢
+    simp only [circuit_norm, iface, Const.iface, MulEq.iface] at h ⊢
     obtain ⟨hone, hzero, h⟩ := h
     rw [hone, hzero, mul_one] at h
     exact h
   completeness := by
     intro s env x h hx
     simp only [circuit_norm] at h hx ⊢
+    simp only [circuit_norm, iface, Const.iface, MulEq.iface] at h hx ⊢
     simp_all
 
 end AssertZero

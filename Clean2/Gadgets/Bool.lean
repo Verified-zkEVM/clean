@@ -20,25 +20,25 @@ def IsBool (x : F) : Prop := x = 0 ∨ x = 1
 
 namespace AssertBool
 
-abbrev iface : Interface F field unit where
+def iface : Interface F field unit where
   Spec x _ := IsBool x
   ProverAssumptions x := IsBool x
-
-attribute [circuit_norm] iface
 
 /-- `x * x = x` forces `x ∈ {0, 1}`. -/
 def viaMulEq {B : Backend} [Field B.Native] (mulEq : Impl B MulEq.iface) : Impl B iface where
   main x := mulEq (x, x, x)
   soundness := by
     intro s env x _ h
-    simp only [circuit_norm, IsBool] at h ⊢
+    simp only [circuit_norm] at h ⊢
+    simp only [circuit_norm, iface, MulEq.iface, IsBool] at h ⊢
     have h : (B.eval env x) * (B.eval env x - 1) = 0 := by linear_combination h
     rcases mul_eq_zero.mp h with h | h
     · exact Or.inl h
     · exact Or.inr (sub_eq_zero.mp h)
   completeness := by
     intro s env x _ h
-    simp only [circuit_norm, IsBool] at h ⊢
+    simp only [circuit_norm] at h ⊢
+    simp only [circuit_norm, iface, MulEq.iface, IsBool] at h ⊢
     rcases h with h | h <;> simp [h]
 
 end AssertBool
@@ -60,11 +60,9 @@ example (x : Expr F) (s : ℕ) :
 
 namespace Xor
 
-abbrev iface : Interface F fieldPair field where
+def iface : Interface F fieldPair field where
   Assumptions | (a, b) => IsBool a ∧ IsBool b
   Spec | (a, b), c => IsBool c ∧ (c = 1 ↔ ¬(a = 1 ↔ b = 1))
-
-attribute [circuit_norm] iface
 
 /-- `a ⊕ b = a + b - 2ab`. Generic over how arithmetic is done. -/
 def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Impl B iface where
@@ -75,7 +73,8 @@ def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Imp
     arith .sub (s, u)
   soundness := by
     intro s env (a, b) h_as h
-    simp only [circuit_norm, IsBool] at h_as h ⊢
+    simp only [circuit_norm] at h_as h ⊢
+    simp only [circuit_norm, iface, Add.iface, Sub.iface, Mul.iface, IsBool] at h_as h ⊢
     obtain ⟨ha, hb⟩ := h_as
     obtain ⟨ht, hs, hu, hc⟩ := h
     rw [hc, hu, hs, ht]
@@ -83,6 +82,7 @@ def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Imp
   completeness := by
     intro s env (a, b) _ _
     simp only [circuit_norm]
+    simp only [circuit_norm, iface, Add.iface, Sub.iface, Mul.iface]
 
 end Xor
 
@@ -105,11 +105,9 @@ namespace Xor3
 
 /-- The output is the three-way xor `a ⊕ b ⊕ c`: it is 1 exactly when an odd number of the
 inputs are 1. -/
-abbrev iface : Interface F fieldTriple field where
+def iface : Interface F fieldTriple field where
   Assumptions | (a, b, c) => IsBool a ∧ IsBool b ∧ IsBool c
   Spec | (a, b, c), d => IsBool d ∧ (d = 1 ↔ Xor (a = 1) (Xor (b = 1) (c = 1)))
-
-attribute [circuit_norm] iface
 
 /-- Xor of propositions is associative — the reason `xor (xor a b) c` is the three-way xor.
 Mathlib has this for `Bool` but not for `Prop`. -/
@@ -124,6 +122,7 @@ def viaXor {B : Backend} [Field B.Native] (xor : Impl B Xor.iface) : Impl B ifac
   soundness := by
     intro s env (a, b, c) h_as h
     simp only [circuit_norm] at h_as h ⊢
+    simp only [circuit_norm, iface, Xor.iface] at h_as h ⊢
     obtain ⟨ha, hb, hc⟩ := h_as
     obtain ⟨h1, h2⟩ := h
     obtain ⟨h_bool, h_iff⟩ := h1 ⟨ha, hb⟩
@@ -134,6 +133,7 @@ def viaXor {B : Backend} [Field B.Native] (xor : Impl B Xor.iface) : Impl B ifac
   completeness := by
     intro s env (a, b, c) _ _
     simp only [circuit_norm]
+    simp only [circuit_norm, iface, Xor.iface]
 
 end Xor3
 

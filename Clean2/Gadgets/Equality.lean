@@ -18,11 +18,9 @@ variable {F : Type} [Field F]
 
 namespace AssertEq
 
-abbrev iface : Interface F fieldPair unit where
+def iface : Interface F fieldPair unit where
   Spec | (a, b), _ => a = b
   ProverAssumptions | (a, b) => a = b
-
-attribute [circuit_norm] iface
 
 def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Impl B iface where
   main | (a, b) => do
@@ -31,6 +29,7 @@ def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Imp
   soundness := by
     intro s env (a, b) _ h
     simp only [circuit_norm] at h ⊢
+    simp only [circuit_norm, iface, Sub.iface, AssertZero.iface] at h ⊢
     -- `d = a - b` and `d = 0`
     obtain ⟨h_sub, h_zero⟩ := h
     rw [h_sub] at h_zero
@@ -38,6 +37,7 @@ def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Imp
   completeness := by
     intro s env (a, b) h h_prover
     simp only [circuit_norm] at h h_prover ⊢
+    simp only [circuit_norm, iface, Sub.iface, AssertZero.iface] at h h_prover ⊢
     -- the honest prover has `a = b`, so the difference the `sub` child returns is zero
     rw [h, h_prover, sub_self]
 
@@ -47,10 +47,8 @@ end AssertEq
 
 namespace IsEqual
 
-abbrev iface : Interface F fieldPair field where
+def iface : Interface F fieldPair field where
   Spec | (a, b), out => (a = b → out = 1) ∧ (a ≠ b → out = 0)
-
-attribute [circuit_norm] iface
 
 /-- Generic over the arithmetic *and* over the zero test. -/
 def viaIsZero {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) (isZero : Impl B IsZero.iface) :
@@ -61,6 +59,7 @@ def viaIsZero {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) (isZ
   soundness := by
     intro s env (a, b) _ h
     simp only [circuit_norm] at h ⊢
+    simp only [circuit_norm, iface, Sub.iface, IsZero.iface] at h ⊢
     -- `d = a - b`, plus the two halves of `IsZero.iface.Spec d out`
     obtain ⟨h_sub, h_one, h_zero⟩ := h
     rw [h_sub, sub_eq_zero] at h_one
@@ -69,6 +68,7 @@ def viaIsZero {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) (isZ
   completeness := by
     intro s env (a, b) _ _
     simp only [circuit_norm]
+    simp only [circuit_norm, iface, Sub.iface, IsZero.iface]
 
 end IsEqual
 

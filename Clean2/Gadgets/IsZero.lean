@@ -19,10 +19,8 @@ variable {F : Type} [Field F]
 
 namespace IsZero
 
-abbrev iface : Interface F field field where
+def iface : Interface F field field where
   Spec x out := (x = 0 → out = 1) ∧ (x ≠ 0 → out = 0)
-
-attribute [circuit_norm] iface
 
 /-- Generic over the arithmetic. The witness is a functionality like any other: nothing is
 known about `inv` for soundness, and its value is known for completeness. -/
@@ -38,6 +36,7 @@ def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Imp
   soundness := by
     intro s env x _ h
     simp only [circuit_norm] at h ⊢
+    simp only [circuit_norm, iface, Witness.iface, Mul.iface, Const.iface, Sub.iface, MulEq.iface] at h ⊢
     -- the five facts: t = x*inv, one = 1, out = one - t, zero = 0, x*out = zero (the witness gives none)
     obtain ⟨ht, hone, hout, hzero, hmul⟩ := h
     simp only [hout, hone, ht, hzero] at hmul ⊢
@@ -51,6 +50,7 @@ def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Imp
   completeness := by
     intro s env x h _
     simp only [circuit_norm] at h ⊢
+    simp only [circuit_norm, iface, Witness.iface, Mul.iface, Const.iface, Sub.iface, MulEq.iface] at h ⊢
     -- the honest prover knows inv = x⁻¹ (the witness's `ProverSpec`) and, by soundness of the
     -- children, all the intermediate values; the only obligation is the assertion x*out = 0
     by_cases hx : B.eval env x = 0 <;> simp_all [mul_inv_cancel₀]

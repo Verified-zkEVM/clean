@@ -190,10 +190,10 @@ def add : Impl (R1CS F) Add.iface where
     simp_all [circuit_norm]
   soundness := by
     intro s env (a, b) _ _
-    simp [circuit_norm]
+    simp [circuit_norm, Add.iface]
   completeness := by
     intro s env (a, b) _ _
-    simp [circuit_norm]
+    simp [circuit_norm, Add.iface]
 
 def sub : Impl (R1CS F) Sub.iface where
   main := fun ((a, b) : LinComb F × LinComb F) => pure (a - b)
@@ -202,10 +202,10 @@ def sub : Impl (R1CS F) Sub.iface where
     simp_all [circuit_norm]
   soundness := by
     intro s env (a, b) _ _
-    simp [circuit_norm]
+    simp [circuit_norm, Sub.iface]
   completeness := by
     intro s env (a, b) _ _
-    simp [circuit_norm]
+    simp [circuit_norm, Sub.iface]
 
 def const (c : F) : Impl (R1CS F) (Const.iface c) where
   main _ := pure (LinComb.ofConst c)
@@ -214,10 +214,10 @@ def const (c : F) : Impl (R1CS F) (Const.iface c) where
     simp [circuit_norm]
   soundness := by
     intro s env _ _ _
-    simp [circuit_norm]
+    simp [circuit_norm, Const.iface]
   completeness := by
     intro s env _ _ _
-    simp [circuit_norm]
+    simp [circuit_norm, Const.iface]
 
 def mulEq : Impl (R1CS F) MulEq.iface where
   main | (a, b, c) => constraint a b c
@@ -226,10 +226,10 @@ def mulEq : Impl (R1CS F) MulEq.iface where
     simp_all [circuit_norm]
   soundness := by
     intro s env (a, b, c) _ h
-    simp_all [circuit_norm]
+    simp_all [circuit_norm, MulEq.iface]
   completeness := by
     intro s env (a, b, c) _ h
-    simp_all [circuit_norm]
+    simp_all [circuit_norm, MulEq.iface]
 
 def witnessImpl {Input : TypeMap} [ProvableType Input] (f : Input F → F) :
     Impl (R1CS F) (Witness.iface f) where
@@ -240,10 +240,10 @@ def witnessImpl {Input : TypeMap} [ProvableType Input] (f : Input F → F) :
     exact ⟨h, Linear.singleton_subset_alloc_succ s⟩
   soundness := by
     intro s env input _ _
-    simp [circuit_norm]
+    simp [circuit_norm, Witness.iface]
   completeness := by
     intro s env input h _
-    simp only [circuit_norm] at h ⊢
+    simp only [circuit_norm, Witness.iface] at h ⊢
     rw [h, ProvableType.map_eq_fromElements]
     rfl
 

@@ -124,7 +124,14 @@ def call (impl : Impl B iface) (input : Input B.Var) : Circuit B (Output B.Var) 
 
 instance : CoeFun (Impl B iface) (fun _ => Input B.Var → Circuit B (Output B.Var)) := ⟨call⟩
 
-/-! What a caller sees of a call, in each of the proof-level semantics. -/
+/-! What a caller sees of a call, in each of the proof-level semantics.
+
+Interfaces are plain definitions and are not in `circuit_norm`. A parent proof first runs
+`simp only [circuit_norm]`, which turns each call into its interface's `Assumptions`/`Spec`
+(etc.), and then unfolds the interfaces it uses in a second `simp only [circuit_norm, X.iface]`.
+The two steps cannot be merged: `simp` unfolds `X.iface` by `dsimp` in the (dependent) `iface`
+argument of `Impl.toSubcircuit` as well, after which `impl : Impl B X.iface` no longer matches
+the lemmas below at reducible transparency, and the call is never taken apart. -/
 
 @[circuit_norm]
 theorem toSubcircuit_next (impl : Impl B iface) (s : B.State) (input : Input B.Var) :

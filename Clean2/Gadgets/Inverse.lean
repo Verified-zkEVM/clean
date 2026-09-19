@@ -18,12 +18,10 @@ variable {F : Type} [Field F]
 
 namespace Inverse
 
-abbrev iface : Interface F field field where
+def iface : Interface F field field where
   Spec x out := x ≠ 0 ∧ out = x⁻¹
   ProverAssumptions x := x ≠ 0
   ProverSpec x out := out = x⁻¹
-
-attribute [circuit_norm] iface
 
 def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Impl B iface where
   main x := do
@@ -34,6 +32,7 @@ def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Imp
   soundness := by
     intro s env x h_assumptions h
     simp only [circuit_norm] at h ⊢
+    simp only [circuit_norm, iface, Witness.iface, Const.iface, MulEq.iface] at h ⊢
     obtain ⟨h_one, h_mul⟩ := h
     rw [h_one] at h_mul
     refine ⟨fun hx => ?_, eq_inv_of_mul_eq_one_right h_mul⟩
@@ -42,6 +41,7 @@ def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Imp
   completeness := by
     intro s env x h h_prover
     simp only [circuit_norm] at h h_prover ⊢
+    simp only [circuit_norm, iface, Witness.iface, Const.iface, MulEq.iface] at h h_prover ⊢
     -- the honest witness is `x⁻¹`, so `x * inv = 1 = one`
     obtain ⟨h_inv, h_one⟩ := h
     rw [h_inv, h_one]
@@ -53,11 +53,9 @@ end Inverse
 
 namespace AssertNonZero
 
-abbrev iface : Interface F field unit where
+def iface : Interface F field unit where
   Spec x _ := x ≠ 0
   ProverAssumptions x := x ≠ 0
-
-attribute [circuit_norm] iface
 
 def viaInverse {B : Backend} [Field B.Native] (inverse : Impl B Inverse.iface) : Impl B iface where
   main x := do
@@ -66,11 +64,13 @@ def viaInverse {B : Backend} [Field B.Native] (inverse : Impl B Inverse.iface) :
   soundness := by
     intro s env x _ h
     simp only [circuit_norm] at h ⊢
+    simp only [circuit_norm, iface, Inverse.iface] at h ⊢
     -- `Inverse.iface.Spec` already says `x ≠ 0`
     exact h.1
   completeness := by
     intro s env x _ h_prover
     simp only [circuit_norm] at h_prover ⊢
+    simp only [circuit_norm, iface, Inverse.iface] at h_prover ⊢
     -- the only obligation is `Inverse.iface.ProverAssumptions`, which is this one's
     exact h_prover
 
@@ -80,12 +80,10 @@ end AssertNonZero
 
 namespace Div
 
-abbrev iface : Interface F fieldPair field where
+def iface : Interface F fieldPair field where
   Spec | (a, b), out => b ≠ 0 ∧ out = a / b
   ProverAssumptions | (_, b) => b ≠ 0
   ProverSpec | (a, b), out => out = a / b
-
-attribute [circuit_norm] iface
 
 def viaInverse {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) (inverse : Impl B Inverse.iface) :
     Impl B iface where
@@ -95,12 +93,14 @@ def viaInverse {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) (in
   soundness := by
     intro s env (a, b) h_assumptions h
     simp only [circuit_norm] at h ⊢
+    simp only [circuit_norm, iface, Inverse.iface, Mul.iface] at h ⊢
     -- `b ≠ 0` and `binv = b⁻¹` from `Inverse`, `out = a * binv` from `Mul`
     obtain ⟨⟨hb, h_inv⟩, h_mul⟩ := h
     exact ⟨hb, by rw [h_mul, h_inv, div_eq_mul_inv]⟩
   completeness := by
     intro s env (a, b) h h_prover
     simp only [circuit_norm] at h h_prover ⊢
+    simp only [circuit_norm, iface, Inverse.iface, Mul.iface] at h h_prover ⊢
     -- discharging `Inverse`'s prover assumption `b ≠ 0` also yields `binv = b⁻¹`
     obtain ⟨h_inv, h_mul⟩ := h
     refine ⟨h_prover, ?_⟩
@@ -139,7 +139,7 @@ example (x : LinComb F) (s : ℕ) (env₀ : ℕ → F) (h : x.footprint ⊆ Line
       env s = (x.eval env)⁻¹ := by
   have h_out : (inverseR1CS (F := F)).output x s = .cell s := rfl
   have := (inverseR1CS (F := F)).exists_honest_env x s env₀ (by simpa [circuit_norm] using h) hx
-  simp only [circuit_norm, h_out] at this
+  simp only [circuit_norm, Inverse.iface, h_out] at this
   exact this
 
 end Clean2

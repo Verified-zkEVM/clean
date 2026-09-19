@@ -155,10 +155,10 @@ def add : Impl (ExprBackend F) Add.iface where
     simp_all [circuit_norm]
   soundness := by
     intro s env (a, b) _ _
-    simp [circuit_norm]
+    simp [circuit_norm, Add.iface]
   completeness := by
     intro s env (a, b) _ _
-    simp [circuit_norm]
+    simp [circuit_norm, Add.iface]
 
 def sub : Impl (ExprBackend F) Sub.iface where
   main | (a, b) => pure (Expr.add a (Expr.mul (Expr.const (-1)) b))
@@ -167,10 +167,10 @@ def sub : Impl (ExprBackend F) Sub.iface where
     simp_all [circuit_norm]
   soundness := by
     intro s env (a, b) _ _
-    simp [circuit_norm, sub_eq_add_neg]
+    simp [circuit_norm, Sub.iface, sub_eq_add_neg]
   completeness := by
     intro s env (a, b) _ _
-    simp [circuit_norm]
+    simp [circuit_norm, Sub.iface]
 
 def mul : Impl (ExprBackend F) Mul.iface where
   main | (a, b) => pure (Expr.mul a b)
@@ -179,10 +179,10 @@ def mul : Impl (ExprBackend F) Mul.iface where
     simp_all [circuit_norm]
   soundness := by
     intro s env (a, b) _ _
-    simp [circuit_norm]
+    simp [circuit_norm, Mul.iface]
   completeness := by
     intro s env (a, b) _ _
-    simp [circuit_norm]
+    simp [circuit_norm, Mul.iface]
 
 def const (c : F) : Impl (ExprBackend F) (Const.iface c) where
   main _ := pure (Expr.const c)
@@ -191,10 +191,10 @@ def const (c : F) : Impl (ExprBackend F) (Const.iface c) where
     simp [circuit_norm]
   soundness := by
     intro s env _ _ _
-    simp [circuit_norm]
+    simp [circuit_norm, Const.iface]
   completeness := by
     intro s env _ _ _
-    simp [circuit_norm]
+    simp [circuit_norm, Const.iface]
 
 def assertZeroImpl : Impl (ExprBackend F) AssertZero.iface where
   main e := assertZero e
@@ -203,10 +203,10 @@ def assertZeroImpl : Impl (ExprBackend F) AssertZero.iface where
     simp_all [circuit_norm]
   soundness := by
     intro s env e _ h
-    simp_all [circuit_norm]
+    simp_all [circuit_norm, AssertZero.iface]
   completeness := by
     intro s env e _ h
-    simp_all [circuit_norm]
+    simp_all [circuit_norm, AssertZero.iface]
 
 def mulEq : Impl (ExprBackend F) MulEq.iface where
   main | (a, b, c) => assertZero (Expr.add (Expr.mul a b) (Expr.mul (Expr.const (-1)) c))
@@ -215,11 +215,11 @@ def mulEq : Impl (ExprBackend F) MulEq.iface where
     simp_all [circuit_norm]
   soundness := by
     intro s env (a, b, c) _ h
-    simp_all [circuit_norm]
+    simp_all [circuit_norm, MulEq.iface]
     linear_combination h
   completeness := by
     intro s env (a, b, c) _ h
-    simp_all [circuit_norm]
+    simp_all [circuit_norm, MulEq.iface]
 
 def witnessImpl {Input : TypeMap} [ProvableType Input] (f : Input F → F) :
     Impl (ExprBackend F) (Witness.iface f) where
@@ -230,10 +230,10 @@ def witnessImpl {Input : TypeMap} [ProvableType Input] (f : Input F → F) :
     exact ⟨h, Linear.singleton_subset_alloc_succ s⟩
   soundness := by
     intro s env input _ _
-    simp [circuit_norm]
+    simp [circuit_norm, Witness.iface]
   completeness := by
     intro s env input h _
-    simp only [circuit_norm] at h ⊢
+    simp only [circuit_norm, Witness.iface] at h ⊢
     rw [h, ProvableType.map_eq_fromElements]
     rfl
 
