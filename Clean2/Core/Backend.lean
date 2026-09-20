@@ -130,6 +130,23 @@ theorem footprintT_nativeTriple (x y z : B.Var) :
   change (c ∈ ⋃ i : Fin 3, B.footprint (#v[x, y, z])[i]) ↔ _
   simp [Fin.exists_fin_succ, Set.mem_union, or_assoc]
 
+theorem footprintT_natives {n : ℕ} (v : natives n B.Var) :
+    B.footprintT v = ⋃ i : Fin n, B.footprint v[i] := rfl
+
+/-- An element of a vector reads a subset of what the vector reads. For `spatial`. -/
+theorem footprint_getElem_subset {n : ℕ} {v : natives n B.Var} {S : Set B.Cell}
+    (h : B.footprintT v ⊆ S) (i : ℕ) (hi : i < n) : B.footprint v[i] ⊆ S :=
+  (footprint_subset_footprintT v ⟨i, hi⟩).trans h
+
+/-- The tail of a vector reads a subset of what the vector reads. For `spatial`. -/
+theorem footprintT_tail_subset {n : ℕ} {v : natives (n + 1) B.Var} {S : Set B.Cell}
+    (h : B.footprintT v ⊆ S) : B.footprintT (M := natives n) v.tail ⊆ S := by
+  refine Set.iUnion_subset fun i => ?_
+  have hi : i.val < n := i.isLt
+  show B.footprint (v.tail[i.val]'(by omega)) ⊆ S
+  rw [Vector.getElem_tail']
+  exact footprint_getElem_subset h _ (by omega)
+
 @[circuit_norm]
 theorem footprintT_unit (x : unit B.Var) : B.footprintT x = ∅ := by
   ext c

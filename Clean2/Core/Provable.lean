@@ -76,6 +76,13 @@ instance {n : ℕ} : ProvableType (natives n) where
   map f v := v.map f
   toElements_map _ _ := rfl
 
+/-! ### Vectors by head and tail, for gadgets defined on `natives n` -/
+
+/-- Indexing into the tail of a vector. -/
+theorem _root_.Vector.getElem_tail' {α : Type} {n : ℕ} (v : Vector α (n + 1)) (i : ℕ) (hi : i < n) :
+    v.tail[i] = v[i + 1] := by
+  simp [Nat.add_comm]
+
 /-- The empty container, for circuits without input or output. -/
 abbrev unit : TypeMap := fun _ => Unit
 

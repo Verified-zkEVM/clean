@@ -42,37 +42,55 @@ partial def destructProds : TacticM Unit := do
     destructProds
   | none => pure ()
 
+/-- Close a leaf `footprint v ⊆ Alloc s'`: first through one of the extra lemmas (which are
+directed: they reduce the footprint of a part of an input to the footprint of the input), and
+otherwise by chaining hypotheses with `Set.Subset.trans`. The extra lemmas are tried *before*
+the search, and never inside it: an unprovable subgoal such as `Alloc s ⊆ Alloc s` makes the
+depth-first search exponential. -/
+def spatialLeaf (extra : Array Term) : TacticM Unit := do
+  for l in extra do
+    let saved ← saveState
+    try
+      evalTactic (← `(tactic| (apply $l; solve_by_elim (maxDepth := 12) [Set.Subset.trans])))
+      return
+    catch _ =>
+      saved.restore
+  evalTactic (← `(tactic| solve_by_elim (maxDepth := 12) [Set.Subset.trans]))
+
 /-- Split the goal along syntactic `∧` and `→` (no unfolding), then close the leaves. -/
-partial def spatialSplit : TacticM Unit := do
+partial def spatialSplit (extra : Array Term) : TacticM Unit := do
   let goals ← getUnsolvedGoals
   for goal in goals do
     setGoals [goal]
     let ty ← instantiateMVars (← goal.getType)
     if ty.isAppOfArity ``And 2 then
       evalTactic (← `(tactic| constructor))
-      spatialSplit
+      spatialSplit extra
     else if ty.isForall then
       evalTactic (← `(tactic| (intro _; try casesm* _ ∧ _)))
-      spatialSplit
+      spatialSplit extra
     else if ty.isConstOf ``True then
       evalTactic (← `(tactic| trivial))
     else
-      evalTactic (← `(tactic| solve_by_elim (maxDepth := 12) [Set.Subset.trans]))
+      spatialLeaf extra
   setGoals []
 
 /--
 Discharge a `Spatial` obligation: destructure the input, normalize the operations (which
 unfolds `LocalHold` into the tree of the calls' `pre`/`post`), and split and close the tree.
+`spatial [l₁, l₂]` also uses the lemmas `lᵢ` to close leaves: facts of the form
+`footprintT v ⊆ S → footprint (part of v) ⊆ S`, for inputs that are not tuples.
 -/
-syntax "spatial" : tactic
+syntax "spatial" (" [" term,* "]")? : tactic
 elab_rules : tactic
-  | `(tactic| spatial) => do
+  | `(tactic| spatial $[[$extra,*]]?) => do
+    let extra := (extra.map (·.getElems)).getD #[]
     evalTactic (← `(tactic| intro input s h_in))
     destructProds
     evalTactic (← `(tactic| (
       simp only [circuit_norm, Set.union_subset_iff, Set.empty_subset, and_imp] at h_in ⊢
       try casesm* _ ∧ _)))
-    spatialSplit
+    spatialSplit extra
 
 end
 
