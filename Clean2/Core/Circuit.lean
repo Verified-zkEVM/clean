@@ -179,7 +179,27 @@ theorem honestCompleteness_append {env : B.Cell → B.Native} {s : B.State} (a b
     | native op => simp [HonestCompleteness, advance, ih, and_assoc]
     | call sc => simp [HonestCompleteness, advance, ih, and_assoc]
 
--- `LocalHold` has no append lemma: its continuation depends on the posts of the calls before it.
+/-- `LocalHold` over an append, in continuation-passing form: the continuation of the first part
+is the obligation of the second, so everything the first part's calls establish is available. -/
+theorem localHold_append {s : B.State} (a b : Ops B) (K : B.State → Prop) :
+    LocalHold s (a ++ b) K ↔ LocalHold s a fun s' => LocalHold s' b K := by
+  induction a generalizing s with
+  | nil => simp [LocalHold]
+  | cons op ops ih => cases op <;> simp [LocalHold, ih]
+
+/-- The same for consistent operations, where the continuation runs at the state the operations
+advance to. This is the form a proof by induction over a loop needs: the `pre` of a call is
+stated at its recorded state, which is that state. -/
+theorem localHold_append_of_consistent {s : B.State} {a : Ops B} (h : Consistent s a) (b : Ops B)
+    (K : B.State → Prop) :
+    LocalHold s (a ++ b) K ↔ LocalHold s a fun _ => LocalHold (a.advance s) b K := by
+  induction a generalizing s with
+  | nil => simp [LocalHold, advance]
+  | cons op ops ih =>
+    cases op with
+    | native op => simp only [Consistent] at h; simp [LocalHold, advance, ih h]
+    | call sc => obtain ⟨rfl, h⟩ := h; simp [LocalHold, advance, ih h]
+
 -- Instead, operation lists are normalized to cons form (calls and natives emit singletons).
 
 theorem alloc_mono {s : B.State} {ops : Ops B} (h : Consistent s ops) :
@@ -304,6 +324,39 @@ theorem seqRight_def {α β : Type} (f : Circuit B α) (g : Circuit B β) :
       let (_, ops) := f s
       let (b, ops') := g (Ops.advance ops s)
       (b, ops ++ ops') := rfl
+
+instance : LawfulMonad (Circuit B) := LawfulMonad.mk'
+  (id_map := fun x => by
+    funext s
+    show (let (a, ops) := x s; (id a, ops)) = x s
+    rcases h : x s with ⟨a, ops⟩
+    rfl)
+  (pure_bind := fun a f => by
+    funext s
+    show (let (b, ops) := f a s; (b, [] ++ ops)) = f a s
+    rcases h : f a s with ⟨b, ops⟩
+    rfl)
+  (bind_assoc := fun x f g => by
+    funext s
+    simp only [bind_def]
+    rcases hx : x s with ⟨a, o₁⟩
+    rcases hf : f a (Ops.advance o₁ s) with ⟨b, o₂⟩
+    simp only [Ops.advance_append, List.append_assoc])
+  (bind_pure_comp := fun f x => by
+    funext s
+    show (let (a, ops) := x s; (f a, ops ++ [])) = (let (a, ops) := x s; (f a, ops))
+    rcases h : x s with ⟨a, ops⟩
+    simp)
+
+/-- The loop `for i in [n - 1, …, 0] do acc ← f i acc`, over the loop bound `n`: the same
+equations as `Fin.foldrM`, which is not exposed and so does not reduce. A circuit over `n` inputs
+is written as such a loop, and a proof about it is an induction on `n`. -/
+@[circuit_norm]
+def foldr {α : Type} : (n : ℕ) → (Fin n → α → Circuit B α) → α → Circuit B α
+  | 0, _, init => pure init
+  | n + 1, f, init => do
+    let acc ← foldr n (fun i => f i.succ) init
+    f 0 acc
 
 @[reducible, circuit_norm]
 def operations {α : Type} (circuit : Circuit B α) (s : B.State) : Ops B := (circuit s).2
