@@ -10,3 +10,4 @@ public import Clean2.Gadgets.Gates
 public import Clean2.Gadgets.Equality
 public import Clean2.Gadgets.Inverse
 public import Clean2.Gadgets.Select
+public import Clean2.Gadgets.Bits2Num
