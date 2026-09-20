@@ -22,17 +22,17 @@ structure Method (F : Type) where
   Output : TypeMap
   [instInput : ProvableType Input]
   [instOutput : ProvableType Output]
-  iface : Interface F Input Output
+  interface : Interface F Input Output
 
 attribute [instance] Method.instInput Method.instOutput
 
 @[reducible]
 def Interface.toMethod {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (iface : Interface F Input Output) : Method F :=
-  ⟨Input, Output, iface⟩
+    (interface : Interface F Input Output) : Method F :=
+  ⟨Input, Output, interface⟩
 
-@[circuit_norm] theorem Interface.toMethod_iface {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (iface : Interface F Input Output) : iface.toMethod.iface = iface := rfl
+@[circuit_norm] theorem Interface.toMethod_interface {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    (interface : Interface F Input Output) : interface.toMethod.interface = interface := rfl
 
 /-- A signature: methods indexed by names. -/
 structure Sig (F : Type) where
@@ -41,14 +41,14 @@ structure Sig (F : Type) where
 
 /-- An implementation of every method of a signature. -/
 def Sig.Impl (B : Backend) (S : Sig.{u} B.Native) : Type u :=
-  ∀ m : S.Name, Clean2.Impl B (S.method m).iface
+  ∀ m : S.Name, Clean2.Impl B (S.method m).interface
 
 namespace Sig
 
 /-- The one-method signature. -/
 def single {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    (iface : Interface F Input Output) : Sig.{u} F :=
-  ⟨PUnit, fun _ => iface.toMethod⟩
+    (interface : Interface F Input Output) : Sig.{u} F :=
+  ⟨PUnit, fun _ => interface.toMethod⟩
 
 /-- Both sets of methods. -/
 def union (S T : Sig.{u} F) : Sig.{u} F :=
@@ -62,7 +62,7 @@ namespace Impl
 variable {B : Backend}
 
 def single {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
-    {iface : Interface B.Native Input Output} (impl : Clean2.Impl B iface) : (Sig.single iface).Impl B :=
+    {interface : Interface B.Native Input Output} (impl : Clean2.Impl B interface) : (Sig.single interface).Impl B :=
   fun _ => impl
 
 def union {S T : Sig.{u} B.Native} (x : S.Impl B) (y : T.Impl B) : (S.union T).Impl B

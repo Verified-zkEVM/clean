@@ -2,7 +2,7 @@
 Selection: `mux`, and the two SHA-256 bit functions `ch` and `maj`.
 
 `mux` is arithmetic. `ch` and `maj` are the top of the stack in this file: they are written
-purely against `AND.iface`, `OR.iface` and `NOT.iface`, so they are simultaneously a statement
+purely against `AND.interface`, `OR.interface` and `NOT.interface`, so they are simultaneously a statement
 about circuits and about booleans, and their proofs are propositional.
 -/
 module
@@ -20,11 +20,11 @@ namespace Gates
 
 namespace MUX
 
-def iface : Interface F fieldTriple field where
+def interface : Interface F fieldTriple field where
   Assumptions | (c, _, _) => IsBool c
   Spec | (c, a, b), out => (c = 1 → out = a) ∧ (c = 0 → out = b)
 
-def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Impl B iface where
+def impl {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Impl B interface where
   main | (c, a, b) => do
     let d ← arith .sub (a, b)
     let t ← arith .mul (c, d)
@@ -32,14 +32,14 @@ def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Imp
   soundness := by
     intro s env (c, a, b) h_as h
     simp only [circuit_norm] at h_as h ⊢
-    simp only [circuit_norm, iface, Sub.iface, Mul.iface, Add.iface, IsBool] at h_as h ⊢
+    simp only [circuit_norm, interface, Sub.interface, Mul.interface, Add.interface, IsBool] at h_as h ⊢
     obtain ⟨hd, ht, hout⟩ := h
     rw [hout, ht, hd]
     rcases h_as with hc | hc <;> simp [hc]
   completeness := by
     intro s env (c, a, b) _ _
     simp only [circuit_norm]
-    simp only [circuit_norm, iface, Sub.iface, Mul.iface, Add.iface]
+    simp only [circuit_norm, interface, Sub.interface, Mul.interface, Add.interface]
 
 end MUX
 
@@ -47,13 +47,13 @@ end MUX
 
 namespace CH
 
-def iface : Interface F fieldTriple field where
+def interface : Interface F fieldTriple field where
   Assumptions | (a, b, c) => IsBool a ∧ IsBool b ∧ IsBool c
   Spec | (a, b, c), out => IsBool out ∧ (out = 1 ↔ (a = 1 ∧ b = 1) ∨ (a ≠ 1 ∧ c = 1))
 
 /-- `(a ∧ b) ∨ (¬a ∧ c)`. No arithmetic appears in this definition or in its proof. -/
-def viaGates {B : Backend} [Field B.Native] (and : Impl B AND.iface) (or : Impl B OR.iface)
-    (not : Impl B NOT.iface) : Impl B iface where
+def impl {B : Backend} [Field B.Native] (and : Impl B AND.interface) (or : Impl B OR.interface)
+    (not : Impl B NOT.interface) : Impl B interface where
   main | (a, b, c) => do
     let ab ← and (a, b)
     let na ← not a
@@ -62,7 +62,7 @@ def viaGates {B : Backend} [Field B.Native] (and : Impl B AND.iface) (or : Impl 
   soundness := by
     intro s env (a, b, c) h_as h
     simp only [circuit_norm] at h_as h ⊢
-    simp only [circuit_norm, iface, AND.iface, OR.iface, NOT.iface] at h_as h ⊢
+    simp only [circuit_norm, interface, AND.interface, OR.interface, NOT.interface] at h_as h ⊢
     obtain ⟨ha, hb, hc⟩ := h_as
     obtain ⟨h_and, h_not, h_and', h_or⟩ := h
     obtain ⟨hbool_ab, hiff_ab⟩ := h_and ⟨ha, hb⟩
@@ -74,7 +74,7 @@ def viaGates {B : Backend} [Field B.Native] (and : Impl B AND.iface) (or : Impl 
   completeness := by
     intro s env (a, b, c) _ _
     simp only [circuit_norm]
-    simp only [circuit_norm, iface, AND.iface, OR.iface, NOT.iface]
+    simp only [circuit_norm, interface, AND.interface, OR.interface, NOT.interface]
 
 end CH
 
@@ -82,13 +82,13 @@ end CH
 
 namespace MAJ
 
-def iface : Interface F fieldTriple field where
+def interface : Interface F fieldTriple field where
   Assumptions | (a, b, c) => IsBool a ∧ IsBool b ∧ IsBool c
   Spec | (a, b, c), out =>
          IsBool out ∧ (out = 1 ↔ (a = 1 ∧ b = 1) ∨ (a = 1 ∧ c = 1) ∨ (b = 1 ∧ c = 1))
 
 /-- `(a ∧ b) ∨ (a ∧ c) ∨ (b ∧ c)`. -/
-def viaGates {B : Backend} [Field B.Native] (and : Impl B AND.iface) (or : Impl B OR.iface) : Impl B iface where
+def impl {B : Backend} [Field B.Native] (and : Impl B AND.interface) (or : Impl B OR.interface) : Impl B interface where
   main | (a, b, c) => do
     let ab ← and (a, b)
     let ac ← and (a, c)
@@ -98,7 +98,7 @@ def viaGates {B : Backend} [Field B.Native] (and : Impl B AND.iface) (or : Impl 
   soundness := by
     intro s env (a, b, c) h_as h
     simp only [circuit_norm] at h_as h ⊢
-    simp only [circuit_norm, iface, AND.iface, OR.iface] at h_as h ⊢
+    simp only [circuit_norm, interface, AND.interface, OR.interface] at h_as h ⊢
     obtain ⟨ha, hb, hc⟩ := h_as
     obtain ⟨h_ab, h_ac, h_bc, h_t, h_or⟩ := h
     obtain ⟨hbool_ab, hiff_ab⟩ := h_ab ⟨ha, hb⟩
@@ -111,7 +111,7 @@ def viaGates {B : Backend} [Field B.Native] (and : Impl B AND.iface) (or : Impl 
   completeness := by
     intro s env (a, b, c) _ _
     simp only [circuit_norm]
-    simp only [circuit_norm, iface, AND.iface, OR.iface]
+    simp only [circuit_norm, interface, AND.interface, OR.interface]
 
 end MAJ
 end Gates
@@ -121,14 +121,14 @@ end Gates
 section
 open Gates
 
-def muxExpr : Impl (ExprBackend F) MUX.iface := MUX.viaArith ExprBackend.arith
-def muxR1CS : Impl (R1CS F) MUX.iface := MUX.viaArith R1CS.arith
+def muxExpr : Impl (ExprBackend F) MUX.interface := MUX.impl ExprBackend.arith
+def muxR1CS : Impl (R1CS F) MUX.interface := MUX.impl R1CS.arith
 
-def chExpr : Impl (ExprBackend F) CH.iface := CH.viaGates andExpr orExpr notExpr
-def chR1CS : Impl (R1CS F) CH.iface := CH.viaGates andR1CS orR1CS notR1CS
+def chExpr : Impl (ExprBackend F) CH.interface := CH.impl andExpr orExpr notExpr
+def chR1CS : Impl (R1CS F) CH.interface := CH.impl andR1CS orR1CS notR1CS
 
-def majExpr : Impl (ExprBackend F) MAJ.iface := MAJ.viaGates andExpr orExpr
-def majR1CS : Impl (R1CS F) MAJ.iface := MAJ.viaGates andR1CS orR1CS
+def majExpr : Impl (ExprBackend F) MAJ.interface := MAJ.impl andExpr orExpr
+def majR1CS : Impl (R1CS F) MAJ.interface := MAJ.impl andR1CS orR1CS
 
 example (c a b : Expr F) (s : ℕ) : (muxExpr (F := F)).advance (c, a, b) s = s := rfl
 example (c a b : LinComb F) (s : ℕ) : (muxR1CS (F := F)).advance (c, a, b) s = s + 1 := rfl

@@ -2,7 +2,7 @@
 Equality: the assertion `a = b`, and the predicate `a =? b`.
 
 `IsEqual` is the first gadget whose implementation is parametrized by a *witnessing* gadget:
-it subtracts and hands the difference to `IsZero`. Its proof uses `IsZero.iface` and nothing
+it subtracts and hands the difference to `IsZero`. Its proof uses `IsZero.interface` and nothing
 else — in particular it never learns that `IsZero` witnesses an inverse.
 -/
 module
@@ -18,18 +18,18 @@ variable {F : Type} [Field F]
 
 namespace AssertEq
 
-def iface : Interface F fieldPair unit where
+def interface : Interface F fieldPair unit where
   Spec | (a, b), _ => a = b
   ProverAssumptions | (a, b) => a = b
 
-def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Impl B iface where
+def impl {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Impl B interface where
   main | (a, b) => do
     let d ← arith .sub (a, b)
     arith .assertZero d
   soundness := by
     intro s env (a, b) _ h
     simp only [circuit_norm] at h ⊢
-    simp only [circuit_norm, iface, Sub.iface, AssertZero.iface] at h ⊢
+    simp only [circuit_norm, interface, Sub.interface, AssertZero.interface] at h ⊢
     -- `d = a - b` and `d = 0`
     obtain ⟨h_sub, h_zero⟩ := h
     rw [h_sub] at h_zero
@@ -37,7 +37,7 @@ def viaArith {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Imp
   completeness := by
     intro s env (a, b) h h_prover
     simp only [circuit_norm] at h h_prover ⊢
-    simp only [circuit_norm, iface, Sub.iface, AssertZero.iface] at h h_prover ⊢
+    simp only [circuit_norm, interface, Sub.interface, AssertZero.interface] at h h_prover ⊢
     -- the honest prover has `a = b`, so the difference the `sub` child returns is zero
     rw [h, h_prover, sub_self]
 
@@ -47,20 +47,20 @@ end AssertEq
 
 namespace IsEqual
 
-def iface : Interface F fieldPair field where
+def interface : Interface F fieldPair field where
   Spec | (a, b), out => (a = b → out = 1) ∧ (a ≠ b → out = 0)
 
 /-- Generic over the arithmetic *and* over the zero test. -/
-def viaIsZero {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) (isZero : Impl B IsZero.iface) :
-    Impl B iface where
+def impl {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) (isZero : Impl B IsZero.interface) :
+    Impl B interface where
   main | (a, b) => do
     let d ← arith .sub (a, b)
     isZero d
   soundness := by
     intro s env (a, b) _ h
     simp only [circuit_norm] at h ⊢
-    simp only [circuit_norm, iface, Sub.iface, IsZero.iface] at h ⊢
-    -- `d = a - b`, plus the two halves of `IsZero.iface.Spec d out`
+    simp only [circuit_norm, interface, Sub.interface, IsZero.interface] at h ⊢
+    -- `d = a - b`, plus the two halves of `IsZero.interface.Spec d out`
     obtain ⟨h_sub, h_one, h_zero⟩ := h
     rw [h_sub, sub_eq_zero] at h_one
     rw [h_sub, sub_ne_zero] at h_zero
@@ -68,17 +68,17 @@ def viaIsZero {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) (isZ
   completeness := by
     intro s env (a, b) _ _
     simp only [circuit_norm]
-    simp only [circuit_norm, iface, Sub.iface, IsZero.iface]
+    simp only [circuit_norm, interface, Sub.interface, IsZero.interface]
 
 end IsEqual
 
 /-! ## On both backends -/
 
-def assertEqExpr : Impl (ExprBackend F) AssertEq.iface := AssertEq.viaArith ExprBackend.arith
-def assertEqR1CS : Impl (R1CS F) AssertEq.iface := AssertEq.viaArith R1CS.arith
+def assertEqExpr : Impl (ExprBackend F) AssertEq.interface := AssertEq.impl ExprBackend.arith
+def assertEqR1CS : Impl (R1CS F) AssertEq.interface := AssertEq.impl R1CS.arith
 
-def isEqualExpr : Impl (ExprBackend F) IsEqual.iface := IsEqual.viaIsZero ExprBackend.arith isZeroExpr
-def isEqualR1CS : Impl (R1CS F) IsEqual.iface := IsEqual.viaIsZero R1CS.arith isZeroR1CS
+def isEqualExpr : Impl (ExprBackend F) IsEqual.interface := IsEqual.impl ExprBackend.arith isZeroExpr
+def isEqualR1CS : Impl (R1CS F) IsEqual.interface := IsEqual.impl R1CS.arith isZeroR1CS
 
 /-- Asserting an equality allocates nothing on either backend. -/
 example (a b : Expr F) (s : ℕ) : (assertEqExpr (F := F)).advance (a, b) s = s := rfl

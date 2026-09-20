@@ -183,56 +183,56 @@ def constraint (a b c : LinComb F) : Circuit (R1CS F) Unit :=
 
 /-! Native implementations: exactly `Base.sig`. Linear operations are free. -/
 
-def add : Impl (R1CS F) Add.iface where
+def add : Impl (R1CS F) Add.interface where
   main := fun ((a, b) : LinComb F × LinComb F) => pure (a + b)
   spatial := by
     intro (a, b) s h
     simp_all [circuit_norm]
   soundness := by
     intro s env (a, b) _ _
-    simp [circuit_norm, Add.iface]
+    simp [circuit_norm, Add.interface]
   completeness := by
     intro s env (a, b) _ _
-    simp [circuit_norm, Add.iface]
+    simp [circuit_norm, Add.interface]
 
-def sub : Impl (R1CS F) Sub.iface where
+def sub : Impl (R1CS F) Sub.interface where
   main := fun ((a, b) : LinComb F × LinComb F) => pure (a - b)
   spatial := by
     intro (a, b) s h
     simp_all [circuit_norm]
   soundness := by
     intro s env (a, b) _ _
-    simp [circuit_norm, Sub.iface]
+    simp [circuit_norm, Sub.interface]
   completeness := by
     intro s env (a, b) _ _
-    simp [circuit_norm, Sub.iface]
+    simp [circuit_norm, Sub.interface]
 
-def const (c : F) : Impl (R1CS F) (Const.iface c) where
+def const (c : F) : Impl (R1CS F) (Const.interface c) where
   main _ := pure (LinComb.ofConst c)
   spatial := by
     intro _ s _
     simp [circuit_norm]
   soundness := by
     intro s env _ _ _
-    simp [circuit_norm, Const.iface]
+    simp [circuit_norm, Const.interface]
   completeness := by
     intro s env _ _ _
-    simp [circuit_norm, Const.iface]
+    simp [circuit_norm, Const.interface]
 
-def mulEq : Impl (R1CS F) MulEq.iface where
+def mulEq : Impl (R1CS F) MulEq.interface where
   main | (a, b, c) => constraint a b c
   spatial := by
     intro (a, b, c) s h
     simp_all [circuit_norm]
   soundness := by
     intro s env (a, b, c) _ h
-    simp_all [circuit_norm, MulEq.iface]
+    simp_all [circuit_norm, MulEq.interface]
   completeness := by
     intro s env (a, b, c) _ h
-    simp_all [circuit_norm, MulEq.iface]
+    simp_all [circuit_norm, MulEq.interface]
 
 def witnessImpl {Input : TypeMap} [ProvableType Input] (f : Input F → F) :
-    Impl (R1CS F) (Witness.iface f) where
+    Impl (R1CS F) (Witness.interface f) where
   main input := witness (toElements input) fun v => f (fromElements v)
   spatial := by
     intro input s h
@@ -240,10 +240,10 @@ def witnessImpl {Input : TypeMap} [ProvableType Input] (f : Input F → F) :
     exact ⟨h, Linear.singleton_subset_alloc_succ s⟩
   soundness := by
     intro s env input _ _
-    simp [circuit_norm, Witness.iface]
+    simp [circuit_norm, Witness.interface]
   completeness := by
     intro s env input h _
-    simp only [circuit_norm, Witness.iface] at h ⊢
+    simp only [circuit_norm, Witness.interface] at h ⊢
     rw [h, ProvableType.map_eq_fromElements]
     rfl
 

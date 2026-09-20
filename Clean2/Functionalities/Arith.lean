@@ -19,28 +19,28 @@ variable {F : Type} [Field F]
 /-! ## The interfaces -/
 
 namespace Add
-def iface : Interface F fieldPair field where
+def interface : Interface F fieldPair field where
   Spec | (a, b), c => c = a + b
 end Add
 
 namespace Sub
-def iface : Interface F fieldPair field where
+def interface : Interface F fieldPair field where
   Spec | (a, b), c => c = a - b
 end Sub
 
 namespace Mul
-def iface : Interface F fieldPair field where
+def interface : Interface F fieldPair field where
   Spec | (a, b), c => c = a * b
 end Mul
 
 namespace Const
-def iface (c : F) : Interface F unit field where
+def interface (c : F) : Interface F unit field where
   Spec _ x := x = c
 end Const
 
 /- Assert that a variable is zero. An assertion: the honest prover has to make it true. -/
 namespace AssertZero
-def iface : Interface F field unit where
+def interface : Interface F field unit where
   Spec x _ := x = 0
   ProverAssumptions x := x = 0
 end AssertZero
@@ -49,7 +49,7 @@ end AssertZero
 constraint of R1CS; a backend that decomposed it into `mul` and `assertZero` would pay
 an extra cell. -/
 namespace MulEq
-def iface : Interface F fieldTriple unit where
+def interface : Interface F fieldTriple unit where
   Spec | (a, b, c), _ => a * b = c
   ProverAssumptions | (a, b, c) => a * b = c
 end MulEq
@@ -57,7 +57,7 @@ end MulEq
 /- An unconstrained value, which the honest prover computes from the input values.
 Nothing is known about it for soundness; for completeness, its value is known. -/
 namespace Witness
-def iface {Input : TypeMap} (f : Input F → F) : Interface F Input field where
+def interface {Input : TypeMap} (f : Input F → F) : Interface F Input field where
   ProverSpec x out := out = f x
 end Witness
 
@@ -75,13 +75,13 @@ inductive Name (F : Type) : Type 1 where
 abbrev sig : Sig.{1} F where
   Name := Name F
   method
-    | .add => Add.iface.toMethod
-    | .sub => Sub.iface.toMethod
-    | .mul => Mul.iface.toMethod
-    | .const c => (Const.iface c).toMethod
-    | .mulEq => MulEq.iface.toMethod
-    | .assertZero => AssertZero.iface.toMethod
-    | @Name.witness _ _Input inst f => letI := inst; (Witness.iface f).toMethod
+    | .add => Add.interface.toMethod
+    | .sub => Sub.interface.toMethod
+    | .mul => Mul.interface.toMethod
+    | .const c => (Const.interface c).toMethod
+    | .mulEq => MulEq.interface.toMethod
+    | .assertZero => AssertZero.interface.toMethod
+    | @Name.witness _ _Input inst f => letI := inst; (Witness.interface f).toMethod
 
 attribute [circuit_norm] sig
 
@@ -113,9 +113,9 @@ end Base
 namespace Mul
 
 /-- `c ← witness (a * b); assert a * b = c`. This is how R1CS multiplies. -/
-def viaWitnessMulEq {B : Backend} [Field B.Native]
-    (witness : Impl B (Witness.iface fun (p : fieldPair B.Native) => p.1 * p.2))
-    (mulEq : Impl B MulEq.iface) : Impl B Mul.iface where
+def ofWitnessMulEq {B : Backend} [Field B.Native]
+    (witness : Impl B (Witness.interface fun (p : fieldPair B.Native) => p.1 * p.2))
+    (mulEq : Impl B MulEq.interface) : Impl B Mul.interface where
   main | (a, b) => do
     let c ← witness (a, b)
     mulEq (a, b, c)
@@ -123,12 +123,12 @@ def viaWitnessMulEq {B : Backend} [Field B.Native]
   soundness := by
     intro s env (a, b) _ h
     simp only [circuit_norm] at h ⊢
-    simp only [circuit_norm, iface, MulEq.iface, Witness.iface] at h ⊢
+    simp only [circuit_norm, interface, MulEq.interface, Witness.interface] at h ⊢
     exact h.symm
   completeness := by
     intro s env (a, b) h _
     simp only [circuit_norm] at h ⊢
-    simp only [circuit_norm, iface, MulEq.iface, Witness.iface] at h ⊢
+    simp only [circuit_norm, interface, MulEq.interface, Witness.interface] at h ⊢
     exact h.symm
 
 end Mul
@@ -136,9 +136,9 @@ end Mul
 namespace AssertZero
 
 /-- `x * 1 = 0`. -/
-def viaMulEq {B : Backend} [Field B.Native] (const : (c : B.Native) → Impl B (Const.iface c))
-    (mulEq : Impl B MulEq.iface) :
-    Impl B AssertZero.iface where
+def ofMulEq {B : Backend} [Field B.Native] (const : (c : B.Native) → Impl B (Const.interface c))
+    (mulEq : Impl B MulEq.interface) :
+    Impl B AssertZero.interface where
   main x := do
     let one ← const 1 ()
     let zero ← const 0 ()
@@ -146,14 +146,14 @@ def viaMulEq {B : Backend} [Field B.Native] (const : (c : B.Native) → Impl B (
   soundness := by
     intro s env x _ h
     simp only [circuit_norm] at h ⊢
-    simp only [circuit_norm, iface, Const.iface, MulEq.iface] at h ⊢
+    simp only [circuit_norm, interface, Const.interface, MulEq.interface] at h ⊢
     obtain ⟨hone, hzero, h⟩ := h
     rw [hone, hzero, mul_one] at h
     exact h
   completeness := by
     intro s env x h hx
     simp only [circuit_norm] at h hx ⊢
-    simp only [circuit_norm, iface, Const.iface, MulEq.iface] at h hx ⊢
+    simp only [circuit_norm, interface, Const.interface, MulEq.interface] at h hx ⊢
     simp_all
 
 end AssertZero
@@ -167,8 +167,8 @@ def ofBase {B : Backend} [Field B.Native] (base : Sig.Impl B Base.sig) : Sig.Imp
   | .const c => base (.const c)
   | .mulEq => base .mulEq
   | @Arith.Name.witness _ Input inst f => letI := inst; base (.witness Input f)
-  | .mul => Mul.viaWitnessMulEq (base (.witness fieldPair fun p => p.1 * p.2)) (base .mulEq)
-  | .assertZero => AssertZero.viaMulEq (fun c => base (.const c)) (base .mulEq)
+  | .mul => Mul.ofWitnessMulEq (base (.witness fieldPair fun p => p.1 * p.2)) (base .mulEq)
+  | .assertZero => AssertZero.ofMulEq (fun c => base (.const c)) (base .mulEq)
 
 end Arith
 
