@@ -207,6 +207,19 @@ def sub : Impl (R1CS Native) Sub.interface where
     intro _ s env (a, b) _ _
     simp [circuit_norm]
 
+/-- One implementation for every scalar. -/
+def scale : Impl (R1CS Native) Scale.interface where
+  main c x := pure (LinComb.smul c x)
+  spatial := by
+    intro _ x s h
+    simp_all [circuit_norm]
+  soundness := by
+    intro c s env x _ _
+    simp [circuit_norm]
+  completeness := by
+    intro c s env x _ _
+    simp [circuit_norm]
+
 /-- One implementation for every constant. -/
 def const : Impl (R1CS Native) Const.interface where
   main c _ := pure (LinComb.ofConst c)
@@ -253,6 +266,7 @@ def base : Impl (R1CS Native) Base.interface :=
   Impl.ofFun fun
   | .add => add
   | .sub => sub
+  | .scale c => scale.fix c
   | .const c => const.fix c
   | .mulEq => mulEq
   | @Base.Name.witness _ Input inst f => letI := inst; witnessImpl.fix ⟨Input, f⟩

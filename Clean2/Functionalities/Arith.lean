@@ -36,6 +36,14 @@ abbrev interface [Mul Native] : Interface Native Unit := fun _ =>
     Spec := fun (a, b) c => c = a * b }
 end Mul
 
+/- Multiplication by a constant. The constant is a parameter: one implementation produces
+them all. Linear, so free on the backends whose variables are linear combinations. -/
+namespace Scale
+abbrev interface [Mul Native] : Interface Native Native := fun c =>
+  { Input := native, Output := native
+    Spec := fun x y => y = c * x }
+end Scale
+
 /- A constant. The constant is a parameter: one implementation produces them all. -/
 namespace Const
 abbrev interface : Interface Native Native := fun c =>
@@ -85,6 +93,7 @@ namespace Arith
 
 inductive Name (Native : Type) : Type 1 where
   | add | sub | mul
+  | scale (c : Native)
   | const (c : Native)
   | mulEq | assertZero
   | witness (Input : TypeMap) [ProvableType Input] (f : Input Native → Native)
@@ -94,6 +103,7 @@ abbrev interface [Add Native] [Sub Native] [Mul Native] [Zero Native] : Interfac
   | .add => Add.interface ()
   | .sub => Sub.interface ()
   | .mul => Mul.interface ()
+  | .scale c => Scale.interface c
   | .const c => Const.interface c
   | .mulEq => MulEq.interface ()
   | .assertZero => AssertZero.interface ()
@@ -107,6 +117,7 @@ namespace Base
 
 inductive Name (Native : Type) : Type 1 where
   | add | sub
+  | scale (c : Native)
   | const (c : Native)
   | mulEq
   | witness (Input : TypeMap) [ProvableType Input] (f : Input Native → Native)
@@ -114,6 +125,7 @@ inductive Name (Native : Type) : Type 1 where
 def Name.toArith : Name Native → Arith.Name Native
   | .add => .add
   | .sub => .sub
+  | .scale c => .scale c
   | .const c => .const c
   | .mulEq => .mulEq
   | @Name.witness _ Input inst f => letI := inst; .witness Input f
@@ -177,6 +189,7 @@ def ofBase {B : Backend} [Field B.Native] (base : Impl B Base.interface) : Impl 
   Impl.ofFun fun
   | .add => base.fix .add
   | .sub => base.fix .sub
+  | .scale c => base.fix (.scale c)
   | .const c => base.fix (.const c)
   | .mulEq => base.fix .mulEq
   | @Arith.Name.witness _ Input inst f => letI := inst; base.fix (.witness Input f)

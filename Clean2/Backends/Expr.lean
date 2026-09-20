@@ -184,6 +184,19 @@ def mul : Impl (ExprBackend Native) Mul.interface where
     intro _ s env (a, b) _ _
     simp [circuit_norm]
 
+/-- One implementation for every scalar. -/
+def scale : Impl (ExprBackend Native) Scale.interface where
+  main c x := pure (Expr.mul (Expr.const c) x)
+  spatial := by
+    intro _ x s h
+    simp_all [circuit_norm]
+  soundness := by
+    intro c s env x _ _
+    simp [circuit_norm]
+  completeness := by
+    intro c s env x _ _
+    simp [circuit_norm]
+
 /-- One implementation for every constant. -/
 def const : Impl (ExprBackend Native) Const.interface where
   main c _ := pure (Expr.const c)
@@ -244,6 +257,7 @@ def arith : Impl (ExprBackend Native) Arith.interface :=
   | .add => add
   | .sub => sub
   | .mul => mul
+  | .scale c => scale.fix c
   | .const c => const.fix c
   | .mulEq => mulEq
   | .assertZero => assertZeroImpl
