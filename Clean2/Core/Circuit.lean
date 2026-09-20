@@ -125,6 +125,11 @@ theorem advance_append (a b : Ops B) (s : B.State) : advance (a ++ b) s = advanc
   | nil => rfl
   | cons op ops ih => cases op <;> simp [advance, ih]
 
+theorem toFlat_append (a b : Ops B) : toFlat (a ++ b) = toFlat a ++ toFlat b := by
+  induction a with
+  | nil => rfl
+  | cons op ops ih => cases op <;> simp [toFlat, ih]
+
 theorem flatAdvance_toFlat {s : B.State} {ops : Ops B} (h : Consistent s ops) :
     B.flatAdvance ops.toFlat s = ops.advance s := by
   induction ops generalizing s with
@@ -186,6 +191,18 @@ theorem localHold_append {s : B.State} (a b : Ops B) (K : B.State → Prop) :
   induction a generalizing s with
   | nil => simp [LocalHold]
   | cons op ops ih => cases op <;> simp [LocalHold, ih]
+
+/-- The continuation of consistent operations can be weakened at the state they advance to. -/
+theorem localHold_mono_of_consistent {s : B.State} {ops : Ops B} (h : Consistent s ops) {K K' : B.State → Prop}
+    (h_loc : LocalHold s ops K) (h_imp : K (ops.advance s) → K' (ops.advance s)) : LocalHold s ops K' := by
+  induction ops generalizing s with
+  | nil => exact h_imp h_loc
+  | cons op ops ih =>
+    cases op with
+    | native op => exact ⟨h_loc.1, ih h h_loc.2 h_imp⟩
+    | call sc =>
+      obtain ⟨rfl, h⟩ := h
+      exact ⟨h_loc.1, fun h_post h_mono => ih h (h_loc.2 h_post h_mono) h_imp⟩
 
 /-- The same for consistent operations, where the continuation runs at the state the operations
 advance to. This is the form a proof by induction over a loop needs: the `pre` of a call is
@@ -357,6 +374,16 @@ def foldr {α : Type} : (n : ℕ) → (Fin n → α → Circuit B α) → α →
   | n + 1, f, init => do
     let acc ← foldr n (fun i => f i.succ) init
     f 0 acc
+
+/-- The loop `for i in [0, …, n - 1] do out[i] ← f i`, collecting the results: `Vector.ofFn` in
+the circuit monad. A proof about it is an induction on `n`, peeling off the last iteration. -/
+@[circuit_norm]
+def mapFin {α : Type} : (n : ℕ) → (Fin n → Circuit B α) → Circuit B (Vector α n)
+  | 0, _ => pure #v[]
+  | n + 1, f => do
+    let xs ← mapFin n (fun i => f i.castSucc)
+    let x ← f (Fin.last n)
+    return xs.push x
 
 @[reducible, circuit_norm]
 def operations {α : Type} (circuit : Circuit B α) (s : B.State) : Ops B := (circuit s).2

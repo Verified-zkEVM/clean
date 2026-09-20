@@ -130,6 +130,31 @@ theorem footprintT_nativeTriple (x y z : B.Var) :
   change (c ∈ ⋃ i : Fin 3, B.footprint (#v[x, y, z])[i]) ↔ _
   simp [Fin.exists_fin_succ, Set.mem_union, or_assoc]
 
+@[circuit_norm]
+theorem footprintT_vec0 : B.footprintT (M := natives 0) #v[] = ∅ := by
+  ext c
+  change (c ∈ ⋃ i : Fin 0, B.footprint (#v[])[i]) ↔ _
+  simp
+
+@[circuit_norm]
+theorem footprintT_vec1 (x : B.Var) : B.footprintT (M := natives 1) #v[x] = B.footprint x := by
+  ext c
+  change (c ∈ ⋃ i : Fin 1, B.footprint (#v[x])[i]) ↔ _
+  simp
+
+@[circuit_norm]
+theorem footprintT_vec2 (x y : B.Var) : B.footprintT (M := natives 2) #v[x, y] = B.footprint x ∪ B.footprint y := by
+  ext c
+  change (c ∈ ⋃ i : Fin 2, B.footprint (#v[x, y])[i]) ↔ _
+  simp [Fin.exists_fin_two]
+
+@[circuit_norm]
+theorem footprintT_vec3 (x y z : B.Var) :
+    B.footprintT (M := natives 3) #v[x, y, z] = B.footprint x ∪ B.footprint y ∪ B.footprint z := by
+  ext c
+  change (c ∈ ⋃ i : Fin 3, B.footprint (#v[x, y, z])[i]) ↔ _
+  simp [Fin.exists_fin_succ, Set.mem_union, or_assoc]
+
 theorem footprintT_natives {n : ℕ} (v : natives n B.Var) :
     B.footprintT v = ⋃ i : Fin n, B.footprint v[i] := rfl
 
