@@ -12,36 +12,35 @@ public import Clean2.Gadgets.Bool
 @[expose] public section
 
 namespace Clean2
-variable {F : Type} [Field F]
+variable {Native : Type} [Field Native]
 
 /-! ## `inverse`: witness `x⁻¹` and pin it down with `x * inv = 1` -/
 
 namespace Inverse
 
-def interface : Interface F field field where
-  Spec x out := x ≠ 0 ∧ out = x⁻¹
-  ProverAssumptions x := x ≠ 0
-  ProverSpec x out := out = x⁻¹
+abbrev interface : Interface Native Unit := fun _ =>
+  { Input := native, Output := native
+    Spec := fun x out => x ≠ 0 ∧ out = x⁻¹
+    ProverAssumptions := fun x => x ≠ 0
+    ProverSpec := fun x out => out = x⁻¹ }
 
-def impl {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Impl B interface where
-  main x := do
-    let inv ← arith (.witness field fun v => v⁻¹) x
+def impl {B : Backend} [Field B.Native] (arith : Impl B Arith.interface) : Impl B interface where
+  main _ x := do
+    let inv ← arith (.witness native fun v => v⁻¹) x
     let one ← arith (.const 1) ()
     arith .mulEq (x, inv, one)
     return inv
   soundness := by
-    intro s env x h_assumptions h
+    intro _ s env x h_assumptions h
     simp only [circuit_norm] at h ⊢
-    simp only [circuit_norm, interface, Witness.interface, Const.interface, MulEq.interface] at h ⊢
     obtain ⟨h_one, h_mul⟩ := h
     rw [h_one] at h_mul
     refine ⟨fun hx => ?_, eq_inv_of_mul_eq_one_right h_mul⟩
     rw [hx, zero_mul] at h_mul
     exact zero_ne_one h_mul
   completeness := by
-    intro s env x h h_prover
+    intro _ s env x h h_prover
     simp only [circuit_norm] at h h_prover ⊢
-    simp only [circuit_norm, interface, Witness.interface, Const.interface, MulEq.interface] at h h_prover ⊢
     -- the honest witness is `x⁻¹`, so `x * inv = 1 = one`
     obtain ⟨h_inv, h_one⟩ := h
     rw [h_inv, h_one]
@@ -53,24 +52,23 @@ end Inverse
 
 namespace AssertNonZero
 
-def interface : Interface F field unit where
-  Spec x _ := x ≠ 0
-  ProverAssumptions x := x ≠ 0
+abbrev interface : Interface Native Unit := fun _ =>
+  { Input := native, Output := unit
+    Spec := fun x _ => x ≠ 0
+    ProverAssumptions := fun x => x ≠ 0 }
 
 def impl {B : Backend} [Field B.Native] (inverse : Impl B Inverse.interface) : Impl B interface where
-  main x := do
+  main _ x := do
     let _ ← inverse x
     return ()
   soundness := by
-    intro s env x _ h
+    intro _ s env x _ h
     simp only [circuit_norm] at h ⊢
-    simp only [circuit_norm, interface, Inverse.interface] at h ⊢
     -- `Inverse.interface.Spec` already says `x ≠ 0`
     exact h.1
   completeness := by
-    intro s env x _ h_prover
+    intro _ s env x _ h_prover
     simp only [circuit_norm] at h_prover ⊢
-    simp only [circuit_norm, interface, Inverse.interface] at h_prover ⊢
     -- the only obligation is `Inverse.interface.ProverAssumptions`, which is this one's
     exact h_prover
 
@@ -80,27 +78,26 @@ end AssertNonZero
 
 namespace Div
 
-def interface : Interface F fieldPair field where
-  Spec | (a, b), out => b ≠ 0 ∧ out = a / b
-  ProverAssumptions | (_, b) => b ≠ 0
-  ProverSpec | (a, b), out => out = a / b
+abbrev interface : Interface Native Unit := fun _ =>
+  { Input := nativePair, Output := native
+    Spec := fun (a, b) out => b ≠ 0 ∧ out = a / b
+    ProverAssumptions := fun (_, b) => b ≠ 0
+    ProverSpec := fun (a, b) out => out = a / b }
 
-def impl {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) (inverse : Impl B Inverse.interface) :
+def impl {B : Backend} [Field B.Native] (arith : Impl B Arith.interface) (inverse : Impl B Inverse.interface) :
     Impl B interface where
-  main | (a, b) => do
+  main | _, (a, b) => do
     let binv ← inverse b
     arith .mul (a, binv)
   soundness := by
-    intro s env (a, b) h_assumptions h
+    intro _ s env (a, b) h_assumptions h
     simp only [circuit_norm] at h ⊢
-    simp only [circuit_norm, interface, Inverse.interface, Mul.interface] at h ⊢
     -- `b ≠ 0` and `binv = b⁻¹` from `Inverse`, `out = a * binv` from `Mul`
     obtain ⟨⟨hb, h_inv⟩, h_mul⟩ := h
     exact ⟨hb, by rw [h_mul, h_inv, div_eq_mul_inv]⟩
   completeness := by
-    intro s env (a, b) h h_prover
+    intro _ s env (a, b) h h_prover
     simp only [circuit_norm] at h h_prover ⊢
-    simp only [circuit_norm, interface, Inverse.interface, Mul.interface] at h h_prover ⊢
     -- discharging `Inverse`'s prover assumption `b ≠ 0` also yields `binv = b⁻¹`
     obtain ⟨h_inv, h_mul⟩ := h
     refine ⟨h_prover, ?_⟩
@@ -110,36 +107,36 @@ end Div
 
 /-! ## On both backends -/
 
-def inverseExpr : Impl (ExprBackend F) Inverse.interface := Inverse.impl ExprBackend.arith
-def inverseR1CS : Impl (R1CS F) Inverse.interface := Inverse.impl R1CS.arith
+def inverseExpr : Impl (ExprBackend Native) Inverse.interface := Inverse.impl ExprBackend.arith
+def inverseR1CS : Impl (R1CS Native) Inverse.interface := Inverse.impl R1CS.arith
 
-def assertNonZeroExpr : Impl (ExprBackend F) AssertNonZero.interface := AssertNonZero.impl inverseExpr
-def assertNonZeroR1CS : Impl (R1CS F) AssertNonZero.interface := AssertNonZero.impl inverseR1CS
+def assertNonZeroExpr : Impl (ExprBackend Native) AssertNonZero.interface := AssertNonZero.impl inverseExpr
+def assertNonZeroR1CS : Impl (R1CS Native) AssertNonZero.interface := AssertNonZero.impl inverseR1CS
 
-def divExpr : Impl (ExprBackend F) Div.interface := Div.impl ExprBackend.arith inverseExpr
-def divR1CS : Impl (R1CS F) Div.interface := Div.impl R1CS.arith inverseR1CS
+def divExpr : Impl (ExprBackend Native) Div.interface := Div.impl ExprBackend.arith inverseExpr
+def divR1CS : Impl (R1CS Native) Div.interface := Div.impl R1CS.arith inverseR1CS
 
 /-- One witness cell on either backend; the multiplication is free only on the expression one. -/
-example (x : Expr F) (s : ℕ) : (inverseExpr (F := F)).advance x s = s + 1 := rfl
-example (x : LinComb F) (s : ℕ) : (inverseR1CS (F := F)).advance x s = s + 1 := rfl
-example (a b : Expr F) (s : ℕ) : (divExpr (F := F)).advance (a, b) s = s + 1 := rfl
-example (a b : LinComb F) (s : ℕ) : (divR1CS (F := F)).advance (a, b) s = s + 2 := rfl
+example (x : Expr Native) (s : ℕ) : (inverseExpr (Native := Native)).advance () x s = s + 1 := rfl
+example (x : LinComb Native) (s : ℕ) : (inverseR1CS (Native := Native)).advance () x s = s + 1 := rfl
+example (a b : Expr Native) (s : ℕ) : (divExpr (Native := Native)).advance () (a, b) s = s + 1 := rfl
+example (a b : LinComb Native) (s : ℕ) : (divR1CS (Native := Native)).advance () (a, b) s = s + 2 := rfl
 
 /-- On R1CS, `inverse` is a single constraint on the witnessed cell. -/
-example (x : LinComb F) (s : ℕ) :
-    ((inverseR1CS (F := F)).main x |>.operations s).toFlat =
+example (x : LinComb Native) (s : ℕ) :
+    ((inverseR1CS (Native := Native)).main () x |>.operations s).toFlat =
       [.witness 1 #v[x] (fun v => v[0]⁻¹), .constraint x (.cell s) (.ofConst 1)] := rfl
 
 /-- Witness generation, at the interface level: for a non-zero input, an honest environment
 satisfying every constraint exists on top of whatever the caller has already assigned. -/
-example (x : LinComb F) (s : ℕ) (env₀ : ℕ → F) (h : x.footprint ⊆ Linear.Alloc s)
+example (x : LinComb Native) (s : ℕ) (env₀ : ℕ → Native) (h : x.footprint ⊆ Linear.Alloc s)
     (hx : x.eval env₀ ≠ 0) :
     ∃ env, (∀ c < s, env c = env₀ c) ∧
-      ((inverseR1CS (F := F)).main x |>.operations s).ConstraintsHold env s ∧
+      ((inverseR1CS (Native := Native)).main () x |>.operations s).ConstraintsHold env s ∧
       env s = (x.eval env)⁻¹ := by
-  have h_out : (inverseR1CS (F := F)).output x s = .cell s := rfl
-  have := (inverseR1CS (F := F)).exists_honest_env x s env₀ (by simpa [circuit_norm] using h) hx
-  simp only [circuit_norm, Inverse.interface, h_out] at this
+  have h_out : (inverseR1CS (Native := Native)).output () x s = .cell s := rfl
+  have := (inverseR1CS (Native := Native)).exists_honest_env () x s env₀ (by simpa [circuit_norm] using h) hx
+  simp only [circuit_norm, h_out] at this
   exact this
 
 end Clean2

@@ -12,7 +12,7 @@ public import Clean2.Gadgets.Gates
 @[expose] public section
 
 namespace Clean2
-variable {F : Type} [Field F]
+variable {Native : Type} [Field Native]
 
 namespace Gates
 
@@ -20,26 +20,25 @@ namespace Gates
 
 namespace MUX
 
-def interface : Interface F fieldTriple field where
-  Assumptions | (c, _, _) => IsBool c
-  Spec | (c, a, b), out => (c = 1 → out = a) ∧ (c = 0 → out = b)
+abbrev interface : Interface Native Unit := fun _ =>
+  { Input := nativeTriple, Output := native
+    Assumptions := fun (c, _, _) => IsBool c
+    Spec := fun (c, a, b) out => (c = 1 → out = a) ∧ (c = 0 → out = b) }
 
-def impl {B : Backend} [Field B.Native] (arith : Sig.Impl B Arith.sig) : Impl B interface where
-  main | (c, a, b) => do
+def impl {B : Backend} [Field B.Native] (arith : Impl B Arith.interface) : Impl B interface where
+  main | _, (c, a, b) => do
     let d ← arith .sub (a, b)
     let t ← arith .mul (c, d)
     arith .add (t, b)
   soundness := by
-    intro s env (c, a, b) h_as h
-    simp only [circuit_norm] at h_as h ⊢
-    simp only [circuit_norm, interface, Sub.interface, Mul.interface, Add.interface, IsBool] at h_as h ⊢
+    intro _ s env (c, a, b) h_as h
+    simp only [circuit_norm, IsBool] at h_as h ⊢
     obtain ⟨hd, ht, hout⟩ := h
     rw [hout, ht, hd]
     rcases h_as with hc | hc <;> simp [hc]
   completeness := by
-    intro s env (c, a, b) _ _
+    intro _ s env (c, a, b) _ _
     simp only [circuit_norm]
-    simp only [circuit_norm, interface, Sub.interface, Mul.interface, Add.interface]
 
 end MUX
 
@@ -47,22 +46,22 @@ end MUX
 
 namespace CH
 
-def interface : Interface F fieldTriple field where
-  Assumptions | (a, b, c) => IsBool a ∧ IsBool b ∧ IsBool c
-  Spec | (a, b, c), out => IsBool out ∧ (out = 1 ↔ (a = 1 ∧ b = 1) ∨ (a ≠ 1 ∧ c = 1))
+abbrev interface : Interface Native Unit := fun _ =>
+  { Input := nativeTriple, Output := native
+    Assumptions := fun (a, b, c) => IsBool a ∧ IsBool b ∧ IsBool c
+    Spec := fun (a, b, c) out => IsBool out ∧ (out = 1 ↔ (a = 1 ∧ b = 1) ∨ (a ≠ 1 ∧ c = 1)) }
 
 /-- `(a ∧ b) ∨ (¬a ∧ c)`. No arithmetic appears in this definition or in its proof. -/
 def impl {B : Backend} [Field B.Native] (and : Impl B AND.interface) (or : Impl B OR.interface)
     (not : Impl B NOT.interface) : Impl B interface where
-  main | (a, b, c) => do
+  main | _, (a, b, c) => do
     let ab ← and (a, b)
     let na ← not a
     let nac ← and (na, c)
     or (ab, nac)
   soundness := by
-    intro s env (a, b, c) h_as h
+    intro _ s env (a, b, c) h_as h
     simp only [circuit_norm] at h_as h ⊢
-    simp only [circuit_norm, interface, AND.interface, OR.interface, NOT.interface] at h_as h ⊢
     obtain ⟨ha, hb, hc⟩ := h_as
     obtain ⟨h_and, h_not, h_and', h_or⟩ := h
     obtain ⟨hbool_ab, hiff_ab⟩ := h_and ⟨ha, hb⟩
@@ -72,9 +71,8 @@ def impl {B : Backend} [Field B.Native] (and : Impl B AND.interface) (or : Impl 
     refine ⟨hbool_out, ?_⟩
     rw [hiff_out, hiff_ab, hiff_nac, hiff_na]
   completeness := by
-    intro s env (a, b, c) _ _
+    intro _ s env (a, b, c) _ _
     simp only [circuit_norm]
-    simp only [circuit_norm, interface, AND.interface, OR.interface, NOT.interface]
 
 end CH
 
@@ -82,23 +80,22 @@ end CH
 
 namespace MAJ
 
-def interface : Interface F fieldTriple field where
-  Assumptions | (a, b, c) => IsBool a ∧ IsBool b ∧ IsBool c
-  Spec | (a, b, c), out =>
-         IsBool out ∧ (out = 1 ↔ (a = 1 ∧ b = 1) ∨ (a = 1 ∧ c = 1) ∨ (b = 1 ∧ c = 1))
+abbrev interface : Interface Native Unit := fun _ =>
+  { Input := nativeTriple, Output := native
+    Assumptions := fun (a, b, c) => IsBool a ∧ IsBool b ∧ IsBool c
+    Spec := fun (a, b, c) out => IsBool out ∧ (out = 1 ↔ (a = 1 ∧ b = 1) ∨ (a = 1 ∧ c = 1) ∨ (b = 1 ∧ c = 1)) }
 
 /-- `(a ∧ b) ∨ (a ∧ c) ∨ (b ∧ c)`. -/
 def impl {B : Backend} [Field B.Native] (and : Impl B AND.interface) (or : Impl B OR.interface) : Impl B interface where
-  main | (a, b, c) => do
+  main | _, (a, b, c) => do
     let ab ← and (a, b)
     let ac ← and (a, c)
     let bc ← and (b, c)
     let t ← or (ab, ac)
     or (t, bc)
   soundness := by
-    intro s env (a, b, c) h_as h
+    intro _ s env (a, b, c) h_as h
     simp only [circuit_norm] at h_as h ⊢
-    simp only [circuit_norm, interface, AND.interface, OR.interface] at h_as h ⊢
     obtain ⟨ha, hb, hc⟩ := h_as
     obtain ⟨h_ab, h_ac, h_bc, h_t, h_or⟩ := h
     obtain ⟨hbool_ab, hiff_ab⟩ := h_ab ⟨ha, hb⟩
@@ -109,9 +106,8 @@ def impl {B : Backend} [Field B.Native] (and : Impl B AND.interface) (or : Impl 
     refine ⟨hbool_out, ?_⟩
     rw [hiff_out, hiff_t, hiff_ab, hiff_ac, hiff_bc, or_assoc]
   completeness := by
-    intro s env (a, b, c) _ _
+    intro _ s env (a, b, c) _ _
     simp only [circuit_norm]
-    simp only [circuit_norm, interface, AND.interface, OR.interface]
 
 end MAJ
 end Gates
@@ -121,24 +117,24 @@ end Gates
 section
 open Gates
 
-def muxExpr : Impl (ExprBackend F) MUX.interface := MUX.impl ExprBackend.arith
-def muxR1CS : Impl (R1CS F) MUX.interface := MUX.impl R1CS.arith
+def muxExpr : Impl (ExprBackend Native) MUX.interface := MUX.impl ExprBackend.arith
+def muxR1CS : Impl (R1CS Native) MUX.interface := MUX.impl R1CS.arith
 
-def chExpr : Impl (ExprBackend F) CH.interface := CH.impl andExpr orExpr notExpr
-def chR1CS : Impl (R1CS F) CH.interface := CH.impl andR1CS orR1CS notR1CS
+def chExpr : Impl (ExprBackend Native) CH.interface := CH.impl andExpr orExpr notExpr
+def chR1CS : Impl (R1CS Native) CH.interface := CH.impl andR1CS orR1CS notR1CS
 
-def majExpr : Impl (ExprBackend F) MAJ.interface := MAJ.impl andExpr orExpr
-def majR1CS : Impl (R1CS F) MAJ.interface := MAJ.impl andR1CS orR1CS
+def majExpr : Impl (ExprBackend Native) MAJ.interface := MAJ.impl andExpr orExpr
+def majR1CS : Impl (R1CS Native) MAJ.interface := MAJ.impl andR1CS orR1CS
 
-example (c a b : Expr F) (s : ℕ) : (muxExpr (F := F)).advance (c, a, b) s = s := rfl
-example (c a b : LinComb F) (s : ℕ) : (muxR1CS (F := F)).advance (c, a, b) s = s + 1 := rfl
+example (c a b : Expr Native) (s : ℕ) : (muxExpr (Native := Native)).advance () (c, a, b) s = s := rfl
+example (c a b : LinComb Native) (s : ℕ) : (muxR1CS (Native := Native)).advance () (c, a, b) s = s + 1 := rfl
 
 /-- `ch` uses two `AND`s and one `OR`, so three product cells on R1CS and none on the expression backend. -/
-example (a b c : Expr F) (s : ℕ) : (chExpr (F := F)).advance (a, b, c) s = s := rfl
-example (a b c : LinComb F) (s : ℕ) : (chR1CS (F := F)).advance (a, b, c) s = s + 3 := rfl
+example (a b c : Expr Native) (s : ℕ) : (chExpr (Native := Native)).advance () (a, b, c) s = s := rfl
+example (a b c : LinComb Native) (s : ℕ) : (chR1CS (Native := Native)).advance () (a, b, c) s = s + 3 := rfl
 
 /-- `maj` uses three `AND`s and two `OR`s. -/
-example (a b c : LinComb F) (s : ℕ) : (majR1CS (F := F)).advance (a, b, c) s = s + 5 := rfl
+example (a b c : LinComb Native) (s : ℕ) : (majR1CS (Native := Native)).advance () (a, b, c) s = s + 5 := rfl
 
 end
 end Clean2

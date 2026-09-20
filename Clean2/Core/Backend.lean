@@ -111,21 +111,21 @@ theorem evalT_frame {M : TypeMap} [ProvableType M] (env env' : B.Cell → B.Nati
   exact B.eval_frame env env' _ fun c hc => h c (footprint_subset_footprintT x ⟨i, hi⟩ hc)
 
 @[circuit_norm]
-theorem footprintT_field (x : field B.Var) : B.footprintT x = B.footprint x := by
+theorem footprintT_native (x : native B.Var) : B.footprintT x = B.footprint x := by
   ext c
   change (c ∈ ⋃ i : Fin 1, B.footprint (#v[x])[i]) ↔ _
   simp
 
 @[circuit_norm]
-theorem footprintT_fieldPair (x y : B.Var) :
-    B.footprintT (M := fieldPair) (x, y) = B.footprint x ∪ B.footprint y := by
+theorem footprintT_nativePair (x y : B.Var) :
+    B.footprintT (M := nativePair) (x, y) = B.footprint x ∪ B.footprint y := by
   ext c
   change (c ∈ ⋃ i : Fin 2, B.footprint (#v[x, y])[i]) ↔ _
   simp [Fin.exists_fin_two]
 
 @[circuit_norm]
-theorem footprintT_fieldTriple (x y z : B.Var) :
-    B.footprintT (M := fieldTriple) (x, y, z) = B.footprint x ∪ B.footprint y ∪ B.footprint z := by
+theorem footprintT_nativeTriple (x y z : B.Var) :
+    B.footprintT (M := nativeTriple) (x, y, z) = B.footprint x ∪ B.footprint y ∪ B.footprint z := by
   ext c
   change (c ∈ ⋃ i : Fin 3, B.footprint (#v[x, y, z])[i]) ↔ _
   simp [Fin.exists_fin_succ, Set.mem_union, or_assoc]
