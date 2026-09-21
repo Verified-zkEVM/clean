@@ -1,17 +1,17 @@
 /-
 Interfaces and implementations.
 
-- A `Contract` is one semantic contract on values: input and output shapes, assumptions and
-  specs, for both the verifier side (soundness) and the prover side (completeness). It does not
-  mention any backend, circuit, or heap.
-- An `Interface Native Params` is a family of contracts indexed by compile-time parameters: a
+- An `Interface Native Params` is a family of members indexed by compile-time parameters: a
   vector length, a constant, a witness computation, a name in a vocabulary. An interface with
   no parameters is one with `Params := Unit`.
+- An `Interface.Member` is one semantic contract on values: input and output shapes, assumptions
+  and specs, for both the verifier side (soundness) and the prover side (completeness). It does
+  not mention any backend, circuit, or heap.
 - An `Impl B I` implements every member of the family on backend `B`: for each parameter, a
   circuit together with proofs that it meets that member, and a proof of the (uniform) spatial
   contract: given its inputs exist, it is well-formed and its outputs exist afterwards.
 - `Impl.call` uses an implementation as a subcircuit, at one parameter: the parent only sees
-  the contract. The same implementation can be called at several parameters in one circuit.
+  the member. The same implementation can be called at several parameters in one circuit.
 -/
 module
 
@@ -23,8 +23,9 @@ public import Clean2.Core.Spatial
 namespace Clean2
 universe u v
 
-/-- A single contract: the shapes of the input and output, and the semantic contract on them. -/
-structure Contract (Native : Type) where
+/-- One member of an interface: the shapes of the input and output, and the semantic contract on
+them. -/
+structure Interface.Member (Native : Type) where
   Input : TypeMap
   Output : TypeMap
   [instInput : ProvableType Input]
@@ -38,10 +39,10 @@ structure Contract (Native : Type) where
   /-- proved by completeness ("what the honest prover knows about the output") -/
   ProverSpec : Input Native → Output Native → Prop := fun _ _ => True
 
-attribute [instance] Contract.instInput Contract.instOutput
+attribute [instance] Interface.Member.instInput Interface.Member.instOutput
 
-/-- A formal interface: a family of contracts indexed by compile-time parameters. -/
-abbrev Interface (Native : Type) (Params : Type u) := Params → Contract Native
+/-- A formal interface: a family of members indexed by compile-time parameters. -/
+abbrev Interface (Native : Type) (Params : Type u) := Params → Interface.Member Native
 
 namespace Interface
 variable {Native : Type}
@@ -64,7 +65,7 @@ variable {B : Backend}
 /-- Soundness of `main` against `c`: under the assumptions, if the (proof-level) constraints
 hold then the spec holds on the input and output. -/
 @[circuit_norm]
-def Soundness (B : Backend) (c : Contract B.Native) (main : c.Input B.Var → Circuit B (c.Output B.Var))
+def Soundness (B : Backend) (c : Interface.Member B.Native) (main : c.Input B.Var → Circuit B (c.Output B.Var))
     (output : c.Input B.Var → B.State → c.Output B.Var) : Prop :=
   ∀ (s : B.State) (env : B.Cell → B.Native) (input : c.Input B.Var),
     c.Assumptions (B.evalT env input) →
@@ -74,7 +75,7 @@ def Soundness (B : Backend) (c : Contract B.Native) (main : c.Input B.Var → Ci
 /-- Completeness of `main` against `c`: if the prover is honest and the prover assumptions
 hold, then the (proof-level) constraints hold and the prover spec holds. -/
 @[circuit_norm]
-def Completeness (B : Backend) (c : Contract B.Native) (main : c.Input B.Var → Circuit B (c.Output B.Var))
+def Completeness (B : Backend) (c : Interface.Member B.Native) (main : c.Input B.Var → Circuit B (c.Output B.Var))
     (output : c.Input B.Var → B.State → c.Output B.Var) : Prop :=
   ∀ (s : B.State) (env : B.Cell → B.Native) (input : c.Input B.Var),
     ((main input).operations s).HonestCompleteness env s →
@@ -85,7 +86,7 @@ def Completeness (B : Backend) (c : Contract B.Native) (main : c.Input B.Var →
 /-- The spatial contract, the same for every implementation:
 `{inputs exist} main {well-formed ∗ outputs exist}`. -/
 @[circuit_norm]
-def Spatial (B : Backend) (c : Contract B.Native) (main : c.Input B.Var → Circuit B (c.Output B.Var))
+def Spatial (B : Backend) (c : Interface.Member B.Native) (main : c.Input B.Var → Circuit B (c.Output B.Var))
     (output : c.Input B.Var → B.State → c.Output B.Var) : Prop :=
   ∀ (input : c.Input B.Var) (s : B.State), B.footprintT input ⊆ B.Alloc s →
     ((main input).operations s).LocalHold s fun s' => B.footprintT (output input s) ⊆ B.Alloc s'
@@ -117,7 +118,7 @@ structure Impl (B : Backend) (I : Interface B.Native Params) where
 namespace Impl
 variable {I : Interface B.Native Params}
 
-/-- The contract of `impl` at a call site. This is the theorem that lets a caller forget
+/-- The member implemented by `impl` at a call site. This is the theorem that lets a caller forget
 the implementation. -/
 def toSubcircuit (impl : Impl B I) (p : Params) (s : B.State) (input : (I p).Input B.Var) : Subcircuit B s where
   ops := ((impl.main p input).operations s).toFlat
@@ -172,14 +173,14 @@ The shape is matched through the (reducible) interface, so this applies to `cons
 `arith (.const 1)`, whose input shape depends on the name. -/
 instance (priority := high + 1) {Output : Params → TypeMap} [inst : ∀ p, ProvableType (Output p)]
     {A PA : Params → Unit → Prop} {S PS : (p : Params) → Unit → Output p B.Native → Prop} :
-    CoeFun (Impl B fun p => @Contract.mk B.Native unit (Output p) inferInstance (inst p) (A p) (S p) (PA p) (PS p))
+    CoeFun (Impl B fun p => @Interface.Member.mk B.Native unit (Output p) inferInstance (inst p) (A p) (S p) (PA p) (PS p))
       (fun _ => (p : Params) → Circuit B (Output p B.Var)) :=
   ⟨fun impl p => impl.call p ()⟩
 
 /-! What a caller sees of a call, in each of the proof-level semantics.
 
 Interfaces are reducible definitions and are not in `circuit_norm`: `simp only [circuit_norm]`
-turns each call into its contract's `Assumptions`/`Spec` (etc.) through the lemmas below, and
+turns each call into its member's `Assumptions`/`Spec` (etc.) through the lemmas below, and
 reduces the projections `(X.interface p).Spec`, `(X.interface p).Input` of a reducible interface
 on the spot. Interfaces must not be unfolded explicitly *before* the calls are taken apart: `simp`
 would then unfold `X.interface` in the (dependent) `I` argument of `Impl.toSubcircuit` as well, after
@@ -294,17 +295,17 @@ def union {Params' : Type v} {J : Interface B.Native Params'} (x : Impl B I) (y 
 end Impl
 end
 
-/-! ### Refinement: an implementation of a stronger contract implements a weaker one -/
+/-! ### Refinement: an implementation of a stronger member implements a weaker one -/
 
 /-- `c.refine`: the same shapes, another contract. -/
-abbrev Contract.refine {Native : Type} (c : Contract Native)
+abbrev Interface.Member.refine {Native : Type} (c : Interface.Member Native)
     (Assumptions : c.Input Native → Prop) (Spec : c.Input Native → c.Output Native → Prop)
     (ProverAssumptions : c.Input Native → Prop) (ProverSpec : c.Input Native → c.Output Native → Prop) :
-    Contract Native :=
+    Interface.Member Native :=
   { c with Assumptions, Spec, ProverAssumptions, ProverSpec }
 
 /-- `c.Refines A S PA PS`: `c` assumes less and promises more than the contract `A S PA PS`. -/
-structure Contract.Refines {Native : Type} (c : Contract Native)
+structure Interface.Member.Refines {Native : Type} (c : Interface.Member Native)
     (Assumptions : c.Input Native → Prop) (Spec : c.Input Native → c.Output Native → Prop)
     (ProverAssumptions : c.Input Native → Prop) (ProverSpec : c.Input Native → c.Output Native → Prop) :
     Prop where

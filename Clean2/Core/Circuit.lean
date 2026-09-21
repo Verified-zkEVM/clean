@@ -3,7 +3,7 @@ The circuit monad over a backend, and its two semantics:
 - the *real* one (`ConstraintsHold`, `Honest`, `Local`), obtained by flattening every call to
   native operations, which is what the proof system checks, and
 - the *proof-level* one (`SoundnessHold`, `CompletenessHold`, `HonestCompleteness`,
-  `LocalHold`), where a call to an implementation is replaced by the contract of its interface.
+  `LocalHold`), where a call to an implementation is replaced by the member of its interface.
 The replacement theorems at the end connect the two.
 -/
 module

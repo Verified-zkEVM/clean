@@ -15,7 +15,7 @@ is not part of the identity.
 
 Nothing is free here: `add` is a gate and costs a row. What the backend has natively is every
 gate at every assignment of its fixed cells (`Plonkish.gate`), an interface indexed by the
-fixed values, whose contract is the polynomial identities themselves. A semantic contract
+fixed values, whose members are the polynomial identities themselves. A semantic contract
 (`Poseidon.Round.interface`, `Add.interface`, ...) is obtained by refining it, which is a proof
 about polynomials and never about circuits.
 -/
@@ -113,10 +113,10 @@ namespace Gate
 def Constraint (g : Gate F) (x : Vector F g.nIn) (k : Vector F g.nFixed) (y : Vector F g.nOut) : Prop :=
   ∀ e ∈ g.polys, e.eval x k y = 0
 
-/-- The contract of a gate at fixed values `k`: the verifier learns the identities, the honest
+/-- The member of a gate at fixed values `k`: the verifier learns the identities, the honest
 prover computes the outputs. A gate is a witness and an assertion fused into one row. Reducible,
 like every interface. -/
-abbrev contract (g : Gate F) (k : Vector F g.nFixed) : Contract F where
+abbrev member (g : Gate F) (k : Vector F g.nFixed) : Interface.Member F where
   Input := natives g.nIn
   Output := natives g.nOut
   Spec x y := g.Constraint x k y
@@ -300,7 +300,7 @@ def place (g : Gate F) (inputs : Vector (ℕ × ℕ) g.nIn) (k : Vector F g.nFix
 
 /-- Every gate, at every assignment of its fixed cells: what the backend has natively. The
 contract is the gate's own polynomial identities. -/
-def gate (g : Gate F) : Impl (Plonkish F) (fun k => g.contract k) where
+def gate (g : Gate F) : Impl (Plonkish F) (fun k => g.member k) where
   main k inputs := place g inputs k
   spatial := by
     intro k inputs s h
