@@ -40,9 +40,10 @@ is the semantic specification of the circuit. Parameter bundles exist for
 every circomlib-supported state width from 2 through 17 (`params_t2` through
 `params_t17`), corresponding to input arities 1 through 16.
 
-The constant tables are generated from iden3/circomlib commit
-`35e54ea21da3e8762557234298dbb553c175ea8d`. The generator validates the
-upstream file's SHA-256 and every expected table length before emitting Lean.
+The constant tables are deterministically generated during Lean elaboration
+from the parameters used by iden3/circomlib commit
+`35e54ea21da3e8762557234298dbb553c175ea8d`. The generated definitions retain
+the same statically sized vector types and public names as the old literals.
 
 ## Verified circuit boundaries
 
@@ -156,20 +157,48 @@ lake build Clean.Examples.WasmDemo
 lake build Clean.Backends.Circom.TestWasmCompile
 ```
 
-All constants and reference vectors used by these builds are committed as
-Lean data. Normal proof checking and circuit compilation are offline: they do
-not run either generator and do not require an upstream repository checkout.
-The pinned checkouts below are needed only to audit or regenerate that data.
+The constants are produced by `PoseidonParameterGeneration.lean` from the
+Grain-LFSR, Cauchy MDS construction, constant compression, and sparse-matrix
+factorization. `PoseidonParameterElaboration.lean` runs that executable Lean
+generator once per width while compiling `PoseidonConstants.lean`, and emits
+ordinary typed vector terms. Downstream modules therefore consume constants,
+not computations that regenerate them on every use.
 
-To reproduce and check the imported data from pinned upstream checkouts:
+This arrangement replaces the former 1.69 MB literal source file. Before the
+literals were removed, Lean checked all 24,060 generated C/M/P/S values for
+exact equality with that table. An independent Python implementation checked
+the same values against `poseidon_constants.circom` from circomlib commit
+`35e54ea21da3e8762557234298dbb553c175ea8d` (source SHA-256
+`94c9e4b5ea891ab4d1ba626f1d719f8c661014d9b628f6096c803f75f39e3eee`).
+The resulting per-width and combined digests are retained by the independent
+Python audit:
 
 ```bash
-python3 scripts/generate_poseidon_constants.py \
-  --source /path/to/circomlib/circuits/poseidon_constants.circom --check
+python3 scripts/reproduce_poseidon_constants.py --trials 1
+```
+
+This offline command needs only Python's standard library. It regenerates all
+values, checks the pinned digests, and reports separate base generation,
+optimization, and total timings. Normal Lean builds are also deterministic and
+offline; neither path downloads circomlib or requires an external checkout.
+
+For a full value-by-value audit against a local copy of the original pinned
+circomlib source, run:
+
+```bash
+python3 scripts/reproduce_poseidon_constants.py \
+  --source /path/to/circomlib/circuits/poseidon_constants.circom --trials 1
+```
+
+The script rejects a source file whose SHA-256 differs from the pinned source.
+Reference vectors have a separate optional upstream audit:
+
+```bash
 node scripts/generate_poseidon_vectors.mjs \
   --circomlibjs /path/to/circomlibjs --check
 ```
 
-The translation from circomlib source is not mechanically proved in Lean, but
-the generators pin source revisions and hashes, validate dimensions, and
-detect any changed, reordered, or truncated value.
+The correspondence with the external circomlib source is an audited regression
+check rather than a theorem about that external file. Soundness and
+completeness of the circuit relative to the generated Lean specification remain
+fully proved in Lean.
