@@ -14,6 +14,7 @@ pub struct AirInfo<F: Field> {
     pub lookups: Vec<Lookup<F>>,
     pub lookup_row_scopes: Vec<LookupRowScope>,
     pub preprocessed: Option<RowMajorMatrix<F>>,
+    pub expected_trace_height: Option<usize>,
 }
 
 impl<F: Field> AirInfo<F> {
@@ -22,6 +23,7 @@ impl<F: Field> AirInfo<F> {
         let lookups =
             <CleanAirInstance<F> as Air<SymbolicAirBuilder<F>>>::get_lookups(&mut air);
         let lookup_row_scopes = air.lookup_row_scopes();
+        let expected_trace_height = air.expected_trace_height();
         let preprocessed = air.preprocessed_trace();
 
         Self {
@@ -29,6 +31,7 @@ impl<F: Field> AirInfo<F> {
             lookups,
             lookup_row_scopes,
             preprocessed,
+            expected_trace_height,
         }
     }
 }

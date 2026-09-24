@@ -24,6 +24,8 @@ where
     clean_ops: CleanOps,
     /// Width of the trace
     width: usize,
+    /// Expected trace height for this AIR.
+    trace_height: usize,
     /// Number of registered lookups (for add_lookup_columns)
     num_lookups: usize,
     /// Row scope for each lookup, parallel to the lookups vec from get_lookups
@@ -241,6 +243,7 @@ impl<F: Field> MainAir<F> {
         Self {
             clean_ops,
             width,
+            trace_height,
             num_lookups: 0,
             lookup_row_scopes: Vec::new(),
             preprocessed,
@@ -282,6 +285,11 @@ impl<F: Field> MainAir<F> {
     /// Get reference to the clean operations
     pub fn clean_ops(&self) -> &CleanOps {
         &self.clean_ops
+    }
+
+    /// Return the expected trace height supplied when this AIR was constructed.
+    pub fn trace_height(&self) -> usize {
+        self.trace_height
     }
 
     /// Process circuit operations and apply constraints
@@ -368,6 +376,15 @@ impl<F: Field> CleanAirInstance<F> {
             CleanAirInstance::Main(air) => air.lookup_row_scopes.clone(),
             CleanAirInstance::Preprocessed(_) => vec![],
             CleanAirInstance::ProverTable(_) => vec![],
+        }
+    }
+
+    /// Returns a verifier-known trace height when this AIR has static row metadata.
+    pub fn expected_trace_height(&self) -> Option<usize> {
+        match self {
+            CleanAirInstance::Main(air) => Some(air.trace_height()),
+            CleanAirInstance::Preprocessed(air) => air.preprocessed_trace().map(|t| t.height()),
+            CleanAirInstance::ProverTable(_) => None,
         }
     }
 }
