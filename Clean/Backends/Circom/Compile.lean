@@ -889,7 +889,7 @@ def compileBExpr (vm : VarMap) : BExpr F → CodeBuilder → Except String CodeB
     pure (cb.push i32.and)
 end
 
-/-! ## Expression flattening (shared by WASM and R1CS compilers) -/
+/-! ## R1CS lowering (shared by WASM and R1CS compilers) -/
 
 -- sparse (signalIndex × fieldCoefficient) pairs
 @[expose] def LinComb (F : Type) := List (ℕ × F)
@@ -899,11 +899,26 @@ structure FlattenState (F : Type) where
   nextSignal : ℕ := 1
   constraints : List (Constraint F) := []
 
-def isConstant (lc : List (ℕ × F)) : Bool :=
-  match lc with | [(0, _)] => true | _ => false
+/-- Drop zero coefficients from a linear combination.
 
+    Defensive: under the lowering's invariants (nonzero scaling coefficients,
+    already-normalized inputs) this cannot fire. It guards against the old
+    exporter's real bug — `scaleLinComb 0 lb` for a constant-zero product side
+    injected `(k, 0)` entries into the exported rows. -/
+def normLinComb (lc : LinComb F) : LinComb F :=
+  lc.filter fun (_, c) => c ≠ 0
+
+/-- Drop zero-coefficient product terms (`0·A·B` contributes nothing).
+    Defensive: like `normLinComb`, unreachable under the lowering's
+    invariants (every scaled coefficient is a product of nonzero field
+    elements). -/
+def normProds (prods : List (F × LinComb F × LinComb F)) : List (F × LinComb F × LinComb F) :=
+  prods.filter fun (c, _, _) => c ≠ 0
+
+/-- Scale a linear combination by a constant, dropping zero coefficients
+    (see `normLinComb`). -/
 def scaleLinComb (c : F) (lc : List (ℕ × F)) : List (ℕ × F) :=
-  lc.map fun (i, coeff) => (i, c * coeff)
+  normLinComb (lc.map fun (i, coeff) => (i, c * coeff))
 
 def addLinCombs (a b : List (ℕ × F)) : List (ℕ × F) :=
   match a, b with
@@ -916,27 +931,156 @@ def addLinCombs (a b : List (ℕ × F)) : List (ℕ × F) :=
       if s = 0 then addLinCombs xs ys else (i1, s) :: addLinCombs xs ys
     else (i2, c2) :: addLinCombs ((i1, c1) :: xs) ys
 
-open Expression (var const add mul) in
-def flattenExpr (vm : VarMap) : (e : Expression F) → FlattenState F → (List (ℕ × F) × FlattenState F)
+/-! ## Symbolic lowering with product absorption (shared by WASM and R1CS) -/
+
+/-- The symbolic value of an expression: `lin + Σ cᵢ · (Aᵢ · Bᵢ)`, where `lin`
+    is affine (normalized: sorted signal indices, no zero coefficients) and
+    each product term has affine factors. -/
+structure SymResult (F : Type) where
+  lin : LinComb F
+  prods : List (F × LinComb F × LinComb F)
+
+/-- The constant a linear combination stands for, or `none` if it references
+    any signal. `[]` is the constant 0. -/
+def constOf? (lc : LinComb F) : Option F :=
+  match lc with
+  | [] => some 0
+  | [(0, c)] => some c
+  | _ => none
+
+/-- The constant a `SymResult` stands for: `some c` when it is product-free
+    and its affine part touches only signal 0, `none` when it involves any
+    signal product or signal reference. -/
+def symConst? (s : SymResult F) : Option F :=
+  if s.prods.isEmpty then constOf? s.lin else none
+
+/-- The constraint row stating `lin + c·A·B = 0`. The ±1 cases are kept
+    explicit so the common shapes avoid `p-1` coefficients. -/
+def prodRow (c : F) (a b : LinComb F) (lin : LinComb F) : Constraint F :=
+  if c = 1 then (a, b, scaleLinComb (-1 : F) lin)
+  else if c = -1 then (a, b, lin)
+  else (scaleLinComb c a, b, scaleLinComb (-1 : F) lin)
+
+/-- The defining row `c·A·B = k` for a fresh intermediate signal `k`. -/
+def defRow (c : F) (a b : LinComb F) (k : ℕ) : Constraint F :=
+  (scaleLinComb c a, b, [(k, (1 : F))])
+
+/-- Absorbing defining row `(c·A)·B = k − lin` for a fresh intermediate signal
+    `k`, i.e. `k = c·A·B + lin`: the affine part rides along on the C side
+    instead of costing a separate row. -/
+def absorbingDefRow (c : F) (a b : LinComb F) (lin : LinComb F) (k : ℕ) : Constraint F :=
+  (scaleLinComb c a, b, addLinCombs [(k, (1 : F))] (scaleLinComb (-1 : F) lin))
+
+/-- Emit defining rows for a list of product terms, in order: one fresh signal
+    per term, `kᵢ = cᵢ·Aᵢ·Bᵢ`. Returns the accumulated `[(kᵢ, 1)]` sum and the
+    updated state. -/
+def prodDefRows :
+    (prods : List (F × LinComb F × LinComb F)) → FlattenState F →
+    List (ℕ × F) × FlattenState F
+  | [], st => ([], st)
+  | (c, a, b) :: ps, st =>
+    let k := st.nextSignal
+    let st' : FlattenState F :=
+      { st with nextSignal := k + 1, constraints := defRow c a b k :: st.constraints }
+    let (acc, st'') := prodDefRows ps st'
+    ((k, (1 : F)) :: acc, st'')
+
+/-- Lower a `SymResult` used as a product operand to a single affine linear
+    combination: emit defining rows for its product terms and return the
+    signal holding its value. A product-free operand needs no wire (so
+    `(a+b)·(c+d)` still costs one row), and a single bare product keeps the
+    classic one-def-row shape — the affine part, if any, is absorbed into
+    that row's C side. -/
+def symOperand (s : SymResult F) (st : FlattenState F) :
+    Except String (LinComb F × FlattenState F) :=
+  match s.prods with
+  | [] => pure (s.lin, st)
+  | _ =>
+    -- Defining rows for all products but the last, then an absorbing defining
+    -- row allocating the operand signal `k`:
+    --   k = s.lin + Σ cᵢ·Aᵢ·Bᵢ   (the last product's row absorbs the rest)
+    let init := s.prods.dropLast
+    let (acc, st1) := prodDefRows init st
+    match s.prods.getLast? with
+    | none => .error "symOperand: empty product list"  -- unreachable: `prods` is nonempty here
+    | some (c, a, b) =>
+      let k := st1.nextSignal
+      -- row: (c·A)·B = k − (lin + Σ kᵢ), i.e. k = c·A·B + lin + Σ kᵢ = value(s).
+      -- The fresh `k` never cancels, so this row is never fully constant.
+      let row := absorbingDefRow c a b (addLinCombs s.lin acc) k
+      pure ([(k, (1 : F))],
+        { st1 with nextSignal := k + 1, constraints := row :: st1.constraints })
+
+/-- Symbolically lower an expression to `lin + Σ cᵢ·(Aᵢ·Bᵢ)`. Structural,
+    mirroring `Expression.eval`: constant sides of products fold into
+    coefficients (a zero constant annihilates the product), and every other
+    product contributes one quadratic term whose operands are allocated by
+    `symOperand`. -/
+def symExpr (vm : VarMap) : Expression F → FlattenState F →
+    Except String (SymResult F × FlattenState F)
   | .var i, st =>
     -- R1CS signal = the variable's position in the outputs-first signal layout.
-    ([(signalOfVar vm i.index, (1 : F))], st)
-  | .const c, st => ([(0, c)], st)
-  | .add a b, st =>
-    let (la, st1) := flattenExpr vm a st
-    let (lb, st2) := flattenExpr vm b st1
-    (addLinCombs la lb, st2)
-  | .mul a b, st =>
-    let (la, st1) := flattenExpr vm a st
-    let (lb, st2) := flattenExpr vm b st1
-    if isConstant la then
-      (scaleLinComb ((la.head?.getD (0,0)).2) lb, st2)
-    else if isConstant lb then
-      (scaleLinComb ((lb.head?.getD (0,0)).2) la, st2)
-    else
-      let k := st2.nextSignal
-      let st3 : FlattenState F := { nextSignal := k + 1, constraints := (la, lb, [(k, (1 : F))]) :: st2.constraints }
-      ([(k, (1 : F))], st3)
+    pure (⟨[(signalOfVar vm i.index, (1 : F))], []⟩, st)
+  | .const c, st => pure (if c = 0 then ⟨[], []⟩ else ⟨[(0, c)], []⟩, st)
+  | .add a b, st => do
+    let (ra, st1) ← symExpr vm a st
+    let (rb, st2) ← symExpr vm b st1
+    pure (⟨addLinCombs ra.lin rb.lin, normProds (ra.prods ++ rb.prods)⟩, st2)
+  | .mul a b, st => do
+    let (ra, st1) ← symExpr vm a st
+    let (rb, st2) ← symExpr vm b st1
+    match symConst? ra, symConst? rb with
+    | some ca, _ =>
+      if ca = 0 then pure (⟨[], []⟩, st2)
+      else pure (⟨scaleLinComb ca rb.lin,
+              normProds (rb.prods.map fun (c, x, y) => (ca * c, x, y))⟩, st2)
+    | none, some cb =>
+      if cb = 0 then pure (⟨[], []⟩, st2)
+      else pure (⟨scaleLinComb cb ra.lin,
+              normProds (ra.prods.map fun (c, x, y) => (cb * c, x, y))⟩, st2)
+    | none, none => do
+      let (la, st3) ← symOperand ra st2
+      let (lb, st4) ← symOperand rb st3
+      pure (⟨[], [((1 : F), la, lb)]⟩, st4)
+
+/-- Add a constraint row, checking fully-constant rows: a tautology is dropped,
+    an unsatisfiable constant assertion fails at compile time (like circom
+    rejecting `0 === 1`). Defining rows never trigger the check (their C side
+    contains a fresh signal). -/
+def addRow (row : Constraint F) (st : FlattenState F) : Except String (FlattenState F) :=
+  let (a, b, c) := row
+  match constOf? a, constOf? b, constOf? c with
+  | some va, some vb, some vc =>
+    if va * vb - vc = 0 then pure st
+    else .error
+      s!"lowerAssert: unsatisfiable constant constraint ({FiniteField.val va}·{FiniteField.val vb} ≠ {FiniteField.val vc})"
+  | _, _, _ => pure { st with constraints := row :: st.constraints }
+
+/-- Lower one assert expression `e = 0` to R1CS rows, allocating intermediates.
+
+    Product terms are absorbed into the assert row instead of being witnessed
+    as their own signals: a single product `c·A·B` with affine part `lin`
+    becomes the one quadratic row `lin + c·A·B = 0` (no intermediate wire, no
+    copy row — `w <== a·b + 5` costs one row, like circom), and several
+    products share one defining row each before the absorbed final row. -/
+def lowerAssert (vm : VarMap) (e : Expression F) (st : FlattenState F) :
+    Except String (FlattenState F) := do
+  let (s, st1) ← symExpr vm e st
+  match s.prods with
+  | [] =>
+    -- affine assert: lin = 0
+    addRow (s.lin, [(0, (1 : F))], []) st1
+  | [(c, a, b)] =>
+    -- single product: absorb the affine part into the assert row (no wire)
+    addRow (prodRow c a b s.lin) st1
+  | prods =>
+    -- defining rows for all products but the last, then the absorbed assert row
+    -- (cₙ·Aₙ)·Bₙ + lin + Σ cᵢ·Aᵢ·Bᵢ = 0
+    let init := prods.dropLast
+    let (acc, st2) := prodDefRows init st1
+    match prods.getLast? with
+    | none => .error "lowerAssert: empty product list"  -- unreachable
+    | some (c, a, b) => addRow (prodRow c a b (addLinCombs s.lin acc)) st2
 
 /-! ## AST-based witness computation helpers -/
 
@@ -981,50 +1125,78 @@ def compileLinComb (lc : List (ℕ × F)) (signalBase signalBytes numWords prime
 /--
 Discover intermediate signals from assert expressions and compile to instructions.
 `intLocalBase` is the starting local index for intermediate locals in the calling function.
-Returns (numIntermediates, local declarations, computation instructions).
+Returns (numIntermediates, local declarations, computation instructions), or an
+error if a row's defining structure is not recognized.
 -/
 def discoverAndCompileIntermediates (vm : VarMap) (flatOps : List (FlatOperation F))
-    (startSignal signalBase signalBytes numWords intLocalBase : ℕ) : ℕ × List (String × ValType) × List Instr :=
+    (startSignal signalBase signalBytes numWords intLocalBase : ℕ) :
+    Except String (ℕ × List (String × ValType) × List Instr) := do
   let nw := numWords
-  let (st, _) := flatOps.foldl (fun (acc : FlattenState F × Unit) (op : FlatOperation F) =>
+  let st ← flatOps.foldlM (fun (acc : FlattenState F) (op : FlatOperation F) =>
     match op with
-    | .assert e =>
-      let (_, st') := flattenExpr vm e acc.1
-      (st', ())
-    | _ => acc
-  ) (({ nextSignal := startSignal, constraints := [] } : FlattenState F), ())
+    | .assert e => lowerAssert vm e acc
+    | _ => pure acc
+  ) ({ nextSignal := startSignal, constraints := [] } : FlattenState F)
   let numInt := st.nextSignal - startSignal
   let intConstraintsRev := List.reverse st.constraints
   let rec buildAST (idx : ℕ) (instrs : CodeBuilder) (locals : List (String × ValType))
-      (remaining : List (Constraint F)) : ℕ × List (String × ValType) × List Instr :=
+      (defined : List ℕ) (remaining : List (Constraint F)) :
+      Except String (ℕ × List (String × ValType) × List Instr) := do
     match remaining with
-    | [] => (idx, locals, instrs.build)
-    | (la, lb, [(k, _)]) :: rest =>
-      let laInstrs := compileLinComb la signalBase signalBytes nw vm.prime
-      let lbInstrs := compileLinComb lb signalBase signalBytes nw vm.prime
-      -- Each intermediate uses nw consecutive locals
-      let base := intLocalBase + idx * nw
-      let captureAll : List Instr := (List.range nw).reverse.map fun w => local.set (base + w)
-      -- Convert from Montgomery form back to normal form before storing
-      -- (memory holds normal form; snarkjs reads it directly).
-      -- montMul(mont(x), 1) = x·R·1·R⁻¹ = x. Single-word mode needs no conversion.
-      let fromMont : List Instr := if nw = 1 then []
-        else ((List.range nw) >>= fun w => [ local.get (base + w) ])
-             ++ pushCoeff 1 nw ++ [call "$fmul"]
-      let captureFromMont : List Instr := if nw = 1 then []
-        else (List.range nw).reverse.map fun w => local.set (base + w)
-      let storeAll : List Instr := (List.range nw) >>= fun w =>
-        [ i32.const (signalBase + k * signalBytes + w * bytesPerI64),
-          local.get (base + w), .memStore .i64 0 alignmentI64 ]
-      let localNames : List (String × ValType) :=
-        (List.range nw).map fun w => (s!"$int_{idx}_{w}", .i64)
-      let computeInstrs : List Instr :=
-        laInstrs ++ lbInstrs ++ [call "$fmul"] ++ captureAll
-        ++ fromMont ++ captureFromMont ++ storeAll
-      buildAST (idx + 1) (instrs.pushList computeInstrs) (localNames ++ locals) rest
-    | _ :: rest => buildAST idx instrs locals rest
-  let (_, locals, instrs) := buildAST 0 {} [] intConstraintsRev
-  (numInt, locals.reverse, instrs)
+    | [] => pure (idx, locals, instrs.build)
+    | (la, lb, cside) :: rest =>
+      -- The intermediate signals this row must compute: C-side entries at or
+      -- above `startSignal` that no earlier row defined. A defining row carries
+      -- exactly one such entry (its fresh signal, with coefficient 1); assert
+      -- rows only reference intermediates computed by earlier rows, so their
+      -- fresh set is empty and they are skipped.
+      -- Contiguity invariant: rows are processed in allocation (program) order
+      -- and each defining row adds exactly one signal, so `defined` is always
+      -- `[startSignal, startSignal + idx)` — the two `.error` branches below
+      -- are unreachable for rows produced by today's `lowerAssert`.
+      let fresh := cside.filter fun (i, _) => i ≥ startSignal ∧ !(defined.contains i)
+      match fresh with
+      | [] => buildAST idx instrs locals defined rest
+      | [(k, coeff)] =>
+        if coeff ≠ 1 then
+          .error s!"discoverAndCompileIntermediates: intermediate {k} is defined with coefficient {FiniteField.val coeff} ≠ 1"
+        else do
+          let laInstrs := compileLinComb la signalBase signalBytes nw vm.prime
+          let lbInstrs := compileLinComb lb signalBase signalBytes nw vm.prime
+          -- Each intermediate uses nw consecutive locals
+          let base := intLocalBase + idx * nw
+          let captureAll : List Instr := (List.range nw).reverse.map fun w => local.set (base + w)
+          -- Convert from Montgomery form back to normal form before storing
+          -- (memory holds normal form; snarkjs reads it directly).
+          -- montMul(mont(x), 1) = x·R·1·R⁻¹ = x. Single-word mode needs no conversion.
+          let fromMont : List Instr := if nw = 1 then []
+            else ((List.range nw) >>= fun w => [ local.get (base + w) ])
+                 ++ pushCoeff 1 nw ++ [call "$fmul"]
+          let captureFromMont : List Instr := if nw = 1 then []
+            else (List.range nw).reverse.map fun w => local.set (base + w)
+          let storeAll : List Instr := (List.range nw) >>= fun w =>
+            [ i32.const (signalBase + k * signalBytes + w * bytesPerI64),
+              local.get (base + w), .memStore .i64 0 alignmentI64 ]
+          let localNames : List (String × ValType) :=
+            (List.range nw).map fun w => (s!"$int_{idx}_{w}", .i64)
+          -- The row states `la·lb = k − rest` (every other C-side entry is
+          -- either below `startSignal` or already computed), so
+          -- `k = la·lb − rest`. The empty-rest case keeps the classic
+          -- `k = la·lb` instruction shape.
+          let restLc := cside.filter fun (i, _) => i ≠ k
+          let computeInstrs : List Instr :=
+            if restLc.isEmpty then
+              laInstrs ++ lbInstrs ++ [call "$fmul"] ++ captureAll
+              ++ fromMont ++ captureFromMont ++ storeAll
+            else
+              let restInstrs :=
+                compileLinComb (scaleLinComb (-1 : F) restLc) signalBase signalBytes nw vm.prime
+              laInstrs ++ lbInstrs ++ [call "$fmul"] ++ restInstrs ++ [call "$fadd"]
+              ++ captureAll ++ fromMont ++ captureFromMont ++ storeAll
+          buildAST (idx + 1) (instrs.pushList computeInstrs) (localNames ++ locals) (k :: defined) rest
+      | _ => .error "discoverAndCompileIntermediates: a constraint row defines multiple fresh intermediates"
+  let (_, locals, instrs) ← buildAST 0 {} [] [] intConstraintsRev
+  pure (numInt, locals.reverse, instrs)
 
 /-- compile let-steps (letF/letN) to instructions.
     Steps are allocated in the dedicated step region at `vm.stepNext` (direct
@@ -1243,7 +1415,7 @@ def compileModule (fieldPrime numInputs : ℕ) (inputNames : List String := []) 
   -- For multi-word, each input has nw limbs; locals are $in_{i}_{w}
   -- Each intermediate uses nw consecutive locals
   let intLocalBase := getWitnessFixedLocals + numInputs * nw
-  let (numInt, intLocals, intCode) :=
+  let (numInt, intLocals, intCode) ←
     discoverAndCompileIntermediates vm flatOps startSignal signalBase signalBytes nw intLocalBase
   let totalSignals := startSignal + numInt
   -- Build witness output stores: write each 64-bit limb to signal memory.

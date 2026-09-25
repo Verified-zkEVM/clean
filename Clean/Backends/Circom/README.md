@@ -19,7 +19,7 @@ Because the compiler itself is written in Lean, every output is built from the s
 
 ## Architecture
 
-Both backends share a single flattening pass over the circuit's operations:
+Both backends share a single R1CS-lowering pass over the circuit's operations. Asserts are lowered with **product absorption**: a product inside an assert becomes part of the assert's own quadratic row (circom-style) instead of being witnessed as an intermediate signal plus a copy row, so `w <== a·b + 5` costs exactly one constraint:
 
 ```
 Clean circuit (Circuit F α)
@@ -36,7 +36,7 @@ List (FlatOperation F)
 
 | File           | Role                                                                                |
 | -------------- | ----------------------------------------------------------------------------------- |
-| `Compile.lean` | Flattening pass, witness-generation code generation, all ABI functions              |
+| `Compile.lean` | Symbolic R1CS lowering (product absorption), witness-generation code generation, all ABI functions |
 | `Ast.lean`     | Typed WASM AST (instructions, functions, modules, binary opcodes)                   |
 | `Binary.lean`  | LEB128/binary encoding of the AST into a `.wasm` byte array, with validation errors |
 | `R1CS.lean`    | Quadratic-constraint extraction, JSON serialization, binary `.r1cs` encoding       |
@@ -162,6 +162,7 @@ For field elements smaller than 64 bits the coefficient byte width is padded up 
 | `dataGet`, `hintGet`                    | ❌ Not representable in a standalone module (`.error`)        |
 | `native` witnesses (Lean closures)      | ❌ Not compilable (`.error`)                                  |
 | `idx` (outside `mapRange`)              | ❌ Invalid (`.error`)                                         |
+| constant-false asserts (e.g. `2 === 3`) | ❌ Rejected at compile time by both backends (`.error`; formerly an unsatisfiable R1CS row, silently skipped in witness generation) |
 | lookups                                 | Ignored by witness generation; `.error` in R1CS export       |
 | interactions                            | Ignored by witness generation; `.error` in R1CS export       |
 
@@ -211,7 +212,7 @@ snarkjs dispatches on the FNV-1a hash of each `input.json` key (circom's convent
 
 ### Signal layout
 
-Signal `0` is the constant signal (`1`). Without `outputVarIdx`, signals `1..numInputs` are the public inputs, followed by the circuit's witnesses in variable order and the intermediate signals induced by asserts. With `outputVarIdx`, the layout is **outputs-first** (the circom convention): signal `0` = constant, signals `1..numOutputs` = the declared output witnesses (in `outputVarIdx` order), then the inputs, then the remaining witnesses — so snarkjs's `groth16 public.json` contains the circuit's real outputs and inputs. Witness values are produced in Montgomery form internally and converted back to normal form before being stored to shared memory.
+Signal `0` is the constant signal (`1`). Without `outputVarIdx`, signals `1..numInputs` are the public inputs, followed by the circuit's witnesses in variable order and (rarely) intermediate signals — asserts absorb their products into their own rows, so an assert allocates one intermediate per non-final product term — including products used inside operands (e.g. `(a·b)·(c·d) === z` and `a·b + c·d === z` each need one intermediate; only a row's final product is absorbed). With `outputVarIdx`, the layout is **outputs-first** (the circom convention): signal `0` = constant, signals `1..numOutputs` = the declared output witnesses (in `outputVarIdx` order), then the inputs, then the remaining witnesses — so snarkjs's `groth16 public.json` contains the circuit's real outputs and inputs. Witness values are produced in Montgomery form internally and converted back to normal form before being stored to shared memory.
 
 ### Using with snarkjs
 
@@ -253,7 +254,7 @@ For writing circuit witnesses, see `[doc/witgen-authoring.md](../../../doc/witge
 
 ## Performance
 
-- **Linear lowering**: the export path (flattening → WASM instructions → binary,
+- **Linear lowering**: the export path (symbolic lowering → WASM instructions → binary,
   and R1CS extraction) is linear in program size. It previously accumulated
   instructions as `acc ++ chunk`, re-copying the whole prefix per witness op —
   quadratic in the number of witness cells (a reviewer's 3,596-cell circuit
@@ -270,7 +271,7 @@ For writing circuit witnesses, see `[doc/witgen-authoring.md](../../../doc/witge
   native executable — e.g. a `lean_exe` in your own project that calls
   `compileModule`/`compileR1CS` directly. (This ships no `lean_exe`.)
 - **Expression shape matters**: never build `e + e` over a shared subtree —
-  for example an `e2 := e2 + e2` loop accumulator. `flattenExpr` and
+  for example an `e2 := e2 + e2` loop accumulator. `symExpr` and
   `compileExpr` are structural recursions with no sharing, so doubling a
   shared `Expression` tree visits 2^N nodes (a 254-bit bit-decomposition
   circuit hung for over 6 minutes). Write `e2 * 2` instead: the power-of-two
