@@ -1,7 +1,10 @@
 import Clean.Ironwood.Specs.Pallas
 import Clean.Ironwood.Ecc.Defs
 import Clean.Utils.Tactics
-import Mathlib.Tactic
+import Mathlib.Tactic.FieldSimp
+import Mathlib.Tactic.Linarith
+import Mathlib.Tactic.NormNum
+import Mathlib.Tactic.Ring
 
 namespace Zcash.Circuits.Ecc
 

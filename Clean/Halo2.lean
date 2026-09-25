@@ -18,3 +18,4 @@ import Clean.Halo2.Tactics.CircuitProofStart2
 import Clean.Halo2.Tactics.SubcircuitRw
 import Clean.Halo2.Tactics.AbstractOutputs
 import Clean.Halo2.Tactics.CircuitProofStart
+import Clean.Halo2.TrustBoundary

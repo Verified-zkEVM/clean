@@ -90,7 +90,7 @@ private theorem prefixRows_ns_3 : Sinsemilla.Chain.prefixRows ns 3 = 51 := rfl
 private theorem prefixRows_ns_5 : Sinsemilla.Chain.prefixRows ns 5 = 58 := rfl
 private theorem prefixRows_ns_6 : Sinsemilla.Chain.prefixRows ns 6 = 83 := rfl
 
-/-- The Ironwood `Chain.PieceChunks` is the donor's, verbatim — the bridge unlocks the
+/-- The ironwood `Chain.PieceChunks` is the donor's, verbatim — the bridge unlocks the
 donor's piece-value/chunk-equality connectors. -/
 private theorem pieceChunks_donor_iff :
     ∀ (ms : List ℕ) (pieces : Vector Fp ms.length) (chunks : List ℕ),
@@ -171,7 +171,7 @@ private theorem peelGates (cfg : Config) (input : Var Inputs Fp)
     decomposeD_output, decomposeG_output, decomposeH_output] at h
   exact h
 
-/-- The Ironwood `Chain.ZsFacts` is the donor's, verbatim. -/
+/-- The ironwood `Chain.ZsFacts` is the donor's, verbatim. -/
 private theorem zsFacts_donor_iff :
     ∀ (ms : List ℕ) (chunks : List ℕ)
       (zs : Sinsemilla.HVec (Sinsemilla.Chain.zLengths ms) Fp),
@@ -531,7 +531,7 @@ private theorem yc_lsb_witness (w : WitgenIR Fp 1)
   simp only [Nat.add_assoc, Nat.reduceAdd] at hlsb ⊢
   exact hlsb
 
-/-- The Ironwood `Chain.PieceBounds`/`honestChunks` are the donor's, verbatim. -/
+/-- The ironwood `Chain.PieceBounds`/`honestChunks` are the donor's, verbatim. -/
 private theorem pieceBounds_donor_iff :
     ∀ (ms : List ℕ) (pieces : Vector Fp ms.length),
       Sinsemilla.Chain.PieceBounds ms pieces ↔

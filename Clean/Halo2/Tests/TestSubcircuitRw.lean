@@ -53,9 +53,9 @@ def regionParent :
         ((WitnessPoint.point.configure configInput).output counts)
         (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
           configInput counts hconfig) offset input region
-    copyCellsAssigned := by
+    consumedCellsAssigned := by
       intro configInput counts hconfig offset input region
-      apply WitnessPoint.point.call_copyCellsAssignedFrom
+      apply WitnessPoint.point.call_consumedCellsAssignedFrom
         ((WitnessPoint.point.configure configInput).output counts)
         (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
           configInput counts hconfig) offset input region
@@ -126,10 +126,10 @@ def regionParentWithOp :
         ((WitnessPoint.point.configure configInput).output counts)
         (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
           configInput counts hconfig) offset input region
-    copyCellsAssigned := by
+    consumedCellsAssigned := by
       intro configInput counts hconfig offset input region
       simp only [keygen_spine]
-      apply WitnessPoint.point.call_copyCellsAssignedFrom
+      apply WitnessPoint.point.call_consumedCellsAssignedFrom
         ((WitnessPoint.point.configure configInput).output counts)
         (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
           configInput counts hconfig) offset input region
@@ -221,18 +221,18 @@ def layouterParent :
           ((witnessPointR.configure configInput).output counts)
           (FormalCircuit.Configured.ofOutput witnessPointR
             configInput counts hconfig) input _
-    copyCellsAssigned := by
+    consumedCellsAssigned := by
       intro configInput counts hconfig input i
       simp only [Circuit.operations_bind]
-      apply Operations.CopyCellsAssignedFrom.append
-      · apply witnessPointL.call_copyCellsAssignedFrom
+      apply Operations.AssignedFrom.append
+      · apply witnessPointL.call_consumedCellsAssignedFrom
           ((witnessPointL.configure configInput).output counts)
           (FormalCircuit.Configured.ofOutput witnessPointL
             configInput counts hconfig) input i
         intro cell hcell
         exact hcell
       · rw [← FormalCircuit.nextRegionIndex_call]
-        apply witnessPointR.call_copyCellsAssignedFrom
+        apply witnessPointR.call_consumedCellsAssignedFrom
           ((witnessPointL.configure configInput).output counts)
           ((FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
             configInput counts hconfig).toFormal :

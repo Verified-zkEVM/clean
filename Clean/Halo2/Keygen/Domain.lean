@@ -329,16 +329,16 @@ theorem Operations.copyRowExtent_le_placementEnd_max_instanceRowExtent
   exact Operation.copyRowExtent_le_placementEnd_max_instanceRowExtent
     operations hassigned operation hoperation
 
-/-- The exact generic compiler bound: under copy provenance, all Halo 2 usable-row
-checks are covered by V1 placement plus the reduced table and instance summaries. -/
-theorem usedRows_le_summaryExtents
+/-- The exact generic compiler bound: under provenance, all Halo 2 usable-row checks are
+covered by V1 placement plus the reduced table and instance summaries. -/
+theorem usedRows_le_summaryExtents [FiniteField F]
     (operations : Operations F)
-    (hassigned : operations.CopyCellsAssigned 0 []) :
+    (hassigned : operations.ConsumedCellsAssigned 0 []) :
     usedRows operations ≤
       max (FloorPlanner.V1.placementEnd operations)
         (max (FloorPlanner.synthesisSummary operations).tableRowExtent
           (FloorPlanner.synthesisSummary operations).instanceRowExtent) := by
-  have hcovered := operations.copyCellsCovered_of_assigned 0 [] hassigned
+  have hcovered := operations.copyCellsCovered_of_consumed 0 [] hassigned
   unfold usedRows
   rw [← synthesisSummary_tableRowExtent_eq]
   apply Nat.max_le.mpr

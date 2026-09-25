@@ -46,9 +46,9 @@ def parent :
         ((WitnessPoint.point.configure configInput).output counts)
         (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
           configInput counts hconfig) offset input region
-    copyCellsAssigned := by
+    consumedCellsAssigned := by
       intro configInput counts hconfig offset input region
-      apply WitnessPoint.point.call_copyCellsAssignedFrom
+      apply WitnessPoint.point.call_consumedCellsAssignedFrom
         ((WitnessPoint.point.configure configInput).output counts)
         (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
           configInput counts hconfig) offset input region
@@ -118,10 +118,10 @@ def parentWithOp :
         ((WitnessPoint.point.configure configInput).output counts)
         (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
           configInput counts hconfig) offset input region
-    copyCellsAssigned := by
+    consumedCellsAssigned := by
       intro configInput counts hconfig offset input region
       simp only [keygen_spine]
-      apply WitnessPoint.point.call_copyCellsAssignedFrom
+      apply WitnessPoint.point.call_consumedCellsAssignedFrom
         ((WitnessPoint.point.configure configInput).output counts)
         (FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
           configInput counts hconfig) offset input region

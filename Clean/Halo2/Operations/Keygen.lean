@@ -29,6 +29,16 @@ structure KeygenRequirements (F ConfigInput InputVar : Type) where
   /-- Concrete caller-owned cells that synthesis may use in copy constraints. -/
   inputCells : ∀ configInput, configLawful configInput →
       InputVar → List Cell := fun _ _ _ => []
+  /-- Concrete caller-owned cells that witness programs may read. Unlike `inputCells`, these
+  do not need equality-enabled columns. -/
+  readCells : ∀ configInput, configLawful configInput →
+      InputVar → List Cell := fun _ _ _ => []
+  /-- Cells that witness programs read at fixed rows relative to the gadget's start:
+  `(column, gadgetRow)` names the cell at region-local row `offset + gadgetRow` of `column` in
+  the region of the call, which the caller assigned earlier in that region. A layouter circuit
+  of its own has none. -/
+  readRelativeCells : ∀ configInput, configLawful configInput →
+      InputVar → List (AnyColumn × ℕ) := fun _ _ _ => []
 
 /-- Equality-enabled columns required by the concrete cells passed to synthesis. -/
 def KeygenRequirements.inputPermutationColumns
@@ -37,6 +47,21 @@ def KeygenRequirements.inputPermutationColumns
     (configInput : ConfigInput) (configLawful : self.configLawful configInput)
     (input : InputVar) : List AnyColumn :=
   (self.inputCells configInput configLawful input).map Cell.column
+
+/-- The relative read cells of a call at `offset` in `region`, placed. -/
+def KeygenRequirements.readRelativeCellsAt
+    {ConfigInput InputVar : Type}
+    (self : KeygenRequirements F ConfigInput InputVar)
+    (configInput : ConfigInput) (configLawful : self.configLawful configInput)
+    (region : RegionIndex) (offset : ℕ) (input : InputVar) : List Cell :=
+  (self.readRelativeCells configInput configLawful input).map fun (column, gadgetRow) =>
+    ⟨region, offset + gadgetRow, column⟩
+
+/-- A placed relative read, in the `Cell.of` spelling that the keygen normal form keeps for
+cells. -/
+@[keygen_norm]
+theorem Cell.mk_toAny (self : RegionIndex) (row : ℕ) {kind : ColumnKind} (col : Column kind) :
+    (⟨self, row, col.toAny⟩ : Cell) = Cell.of self row col := rfl
 
 /-- A configure input has no keygen requirements left for an enclosing circuit. -/
 structure KeygenRequirements.EmptyAt
@@ -51,6 +76,10 @@ structure KeygenRequirements.EmptyAt
   permutationColumns_eq : self.permutationColumns input configLawful = []
   inputCells_eq : ∀ inputVar,
     self.inputCells input configLawful inputVar = []
+  readCells_eq : ∀ inputVar,
+    self.readCells input configLawful inputVar = []
+  readRelativeCells_eq : ∀ inputVar,
+    self.readRelativeCells input configLawful inputVar = []
 
 /--
 Static registration of one region operation in explicit configure-produced gate and

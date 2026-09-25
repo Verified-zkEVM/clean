@@ -337,36 +337,40 @@ theorem fixedColumn_mem_of_mem_call
       _ hassignment
   exact hregistered
 
-/-- A region child call's packaged copy-provenance law remains valid in any caller
-state containing its declared input cells. -/
+/-- A region child call's packaged provenance law remains valid in any caller state
+containing its declared input cells, read cells, and relative reads placed at the call. -/
 @[keygen_norm, keygen_call]
-theorem call_copyCellsAssignedFrom
+theorem call_consumedCellsAssignedFrom
     (self : FormalRegionCircuit F ConfigInput Config Input Output)
     (config : Config) (hconfigured : self.Configured config)
     (offset : ℕ) (input : Var Input F) (region : RegionIndex)
     {available : List Cell}
-    (hinputCells : ∀ cell,
-      cell ∈ Configured.inputCells hconfigured input → cell ∈ available) :
+    (hcells : ∀ cell,
+      cell ∈ Configured.inputCells hconfigured input ++ Configured.readCells hconfigured input ++
+          Configured.readRelativeCellsAt hconfigured region offset input →
+        cell ∈ available) :
     ((self.call config offset input).operations region)
-      |>.CopyCellsAssignedFrom region available := by
+      |>.AssignedFrom RegionOperation.Consumes region available := by
   rcases hconfigured with ⟨configInput, counts, hconfig, rfl⟩
   rw [self.call_operations]
-  apply (self.elaborated.copyCellsAssigned
+  apply (self.elaborated.consumedCellsAssigned
     configInput counts hconfig offset input region).mono
-  simpa [Configured.inputCells] using hinputCells
+  simpa [Configured.inputCells, Configured.readCells, Configured.readRelativeCellsAt] using hcells
 
-/-- Region copy provenance in the opaque spelling exposed after spine normalization. -/
+/-- Region provenance in the opaque spelling exposed after spine normalization. -/
 @[keygen_call]
-theorem callPacked_copyCellsAssignedFrom
+theorem callPacked_consumedCellsAssignedFrom
     (self : FormalRegionCircuit F ConfigInput Config Input Output)
     (config : Config) (hconfigured : self.Configured config)
     (offset : ℕ) (input : Var Input F) (region : RegionIndex)
     {available : List Cell}
-    (hinputCells : ∀ cell,
-      cell ∈ Configured.inputCells hconfigured input → cell ∈ available) :
+    (hcells : ∀ cell,
+      cell ∈ Configured.inputCells hconfigured input ++ Configured.readCells hconfigured input ++
+          Configured.readRelativeCellsAt hconfigured region offset input →
+        cell ∈ available) :
     (((callPacked F ConfigInput Config Input Output).val self
-      config offset input region).2).CopyCellsAssignedFrom region available :=
-  self.call_copyCellsAssignedFrom config hconfigured offset input region hinputCells
+      config offset input region).2).AssignedFrom RegionOperation.Consumes region available :=
+  self.call_consumedCellsAssignedFrom config hconfigured offset input region hcells
 
 /-- Lookup activations in a region child call obey the lookup's local selector declaration. -/
 @[keygen_call]

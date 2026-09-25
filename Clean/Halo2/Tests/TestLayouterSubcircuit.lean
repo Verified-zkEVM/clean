@@ -72,18 +72,18 @@ def parent :
           ((witnessPointR.configure configInput).output counts)
           (FormalCircuit.Configured.ofOutput witnessPointR
             configInput counts hconfig) input _
-    copyCellsAssigned := by
+    consumedCellsAssigned := by
       intro configInput counts hconfig input i
       simp only [Circuit.operations_bind]
-      apply Operations.CopyCellsAssignedFrom.append
-      · apply witnessPointL.call_copyCellsAssignedFrom
+      apply Operations.AssignedFrom.append
+      · apply witnessPointL.call_consumedCellsAssignedFrom
           ((witnessPointL.configure configInput).output counts)
           (FormalCircuit.Configured.ofOutput witnessPointL
             configInput counts hconfig) input i
         intro cell hcell
         exact hcell
       · rw [← FormalCircuit.nextRegionIndex_call]
-        apply witnessPointR.call_copyCellsAssignedFrom
+        apply witnessPointR.call_consumedCellsAssignedFrom
           ((witnessPointL.configure configInput).output counts)
           ((FormalRegionCircuit.Configured.ofOutput WitnessPoint.point
             configInput counts hconfig).toFormal :

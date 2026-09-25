@@ -1,3 +1,6 @@
+import CompElliptic.CurveForms.ShortWeierstrass
+import CompElliptic.Curves.Pasta
+import CompElliptic.Fields.Pasta
 import Clean.Ironwood.Ecc.Defs
 
 /-!
@@ -387,7 +390,7 @@ theorem coords_eq_windowPoint {w k : ℕ} (hw : w < 85) (hk : k < 8)
     rw [← hxP]
     dsimp [Point.OnCurve]
     linear_combination hcurve
-  rcases ShortWeierstrass.y_eq_or_y_eq_neg_of_onCurve
+  rcases ShortWeierstrass.y_eq_pm_of_onCurve_x_eq
       ((Point.onCurve_iff
         ({ x := (windowPoint B.point w k).x, y := row.yP } : Point Fp)).mp hrowCurve)
       ((Point.onCurve_iff

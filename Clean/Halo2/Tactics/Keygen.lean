@@ -1,4 +1,5 @@
 import Clean.Halo2.Loops
+import Clean.Halo2.Operations.Consumption
 import Clean.Halo2.Configure.Lemmas
 import Clean.Halo2.Operations.FixedWrites
 import Clean.Halo2.Operations.LookupSelectors
@@ -23,6 +24,9 @@ namespace Halo2
 attribute [keygen_norm]
   RegionCircuit.Vector.map_getElem_mem_toList
   RegionCircuit.Vector.map_getElem!_mem_toList
+  RegionCircuit.Vector.exists_mem_toList_map_getElem!
+  RegionCircuit.Vector.exists_mem_toList_map_getElem!_of_lt
+  exists_exists_and_eq_and
 
 open Lean
 
@@ -52,23 +56,25 @@ attribute [keygen_norm]
   ConfigureDelta.permutationRequests_queryAny
   ConfigureDelta.permutationRequests_queriedCells
   RegionOperation.KeygenRegistered Operation.KeygenRegistered
-  KeygenRequirements.inputPermutationColumns
+  KeygenRequirements.inputPermutationColumns KeygenRequirements.readRelativeCellsAt
   RegionOperation.LookupActivationWellFormed
   Operation.LookupActivationsWellFormed
   RegionOperations.LookupActivationsWellFormed
   Operations.LookupActivationsWellFormed
   RegionOperation.IsNotLookup
   RegionOperation.assignedCells RegionOperation.copiedCells
-  RegionOperations.assignedCells RegionOperations.copiedCells
-  RegionOperations.CopyCellsAssigned
+  RegionOperations.assignedCells_nil RegionOperations.assignedCells_cons
+  RegionOperations.assignedCells_append RegionOperations.copiedCells
+  RegionOperations.ConsumedCellsAssigned
   RegionOperations.fixedColumns RegionOperations.FixedAssignmentsAgree
   RegionOperation.HasNoFixedAssignment RegionOperations.HasNoFixedAssignments
   Operations.regionFixedColumns Operations.loadedTableColumns
   Operation.HasNoFixedWrites Operations.HasNoFixedWrites
-  RegionOperations.assignedCellsAfter
+  RegionOperations.assignedCellsAfter_nil RegionOperations.assignedCellsAfter_cons
+  RegionOperations.assignedCellsAfter_append
   Operation.copiedCells
   Operations.assignedCellsFrom Operations.assignedCells
-  Operations.copiedCells Operations.CopyCellsAssigned
+  Operations.copiedCells Operations.ConsumedCellsAssigned
   LookupArgument.lookupActivationWellFormed_enable
   selectorEnabledAtIndex_cons_self complexSelectorEnabledAtIndex_cons_self
   Operations.KeygenRegistered.nil Operations.KeygenRegistered.append
@@ -76,7 +82,8 @@ attribute [keygen_norm]
   Operations.KeygenRegistered.constrainInstance_cons
   Operations.KeygenRegistered.loadTable_cons
   List.forall_append List.forall_cons
-  List.flatMap_cons List.flatMap_append
+  List.flatMap_cons List.flatMap_append List.map_nil List.map_cons Nat.add_zero Nat.le_refl
+  Nat.add_one_ne_zero
   List.mem_append List.mem_cons List.mem_singleton List.mem_flatMap List.mem_map
   List.not_mem_nil
   List.nil_append List.append_nil List.singleton_append List.append_assoc
@@ -84,10 +91,13 @@ attribute [keygen_norm]
   or_self or_true true_or or_false false_or
   false_implies implies_true forall_true_iff
   forall_eq forall_eq_or_imp imp_self or_imp
-  ite_self
+  ite_self if_true if_false Bool.false_eq_true
   Cell.of_column AssignedCell.of_cell
   output_assignAdvice output_assignRegion output_cellAt
   Vector.getElem_ofFn
+  RegionOperation.Reads Language.mem_one
+  Witgen.fieldWitnessReads Witgen.listWitnessReads Witgen.natWitnessReads
+  Witgen.boolWitnessReads Witgen.stepsWitnessReads Witgen.vectorWitnessReads
 
 attribute [grind norm]
   Configure.output_pure Configure.delta_pure
@@ -101,29 +111,32 @@ attribute [keygen_spine]
   operations_constrainConstant operations_assignAdviceFromInstance
   operations_cellAt operations_cellVec
   RegionOperation.KeygenRegistered Operation.KeygenRegistered
-  KeygenRequirements.inputPermutationColumns
+  KeygenRequirements.inputPermutationColumns KeygenRequirements.readRelativeCellsAt
   RegionOperation.LookupActivationWellFormed
   Operation.LookupActivationsWellFormed
   RegionOperations.LookupActivationsWellFormed
   Operations.LookupActivationsWellFormed
   RegionOperation.IsNotLookup
   RegionOperation.assignedCells RegionOperation.copiedCells
-  RegionOperations.assignedCells RegionOperations.copiedCells
-  RegionOperations.CopyCellsAssigned
+  RegionOperations.assignedCells_nil RegionOperations.assignedCells_cons
+  RegionOperations.assignedCells_append RegionOperations.copiedCells
+  RegionOperations.ConsumedCellsAssigned
   RegionOperations.fixedColumns RegionOperations.FixedAssignmentsAgree
   RegionOperation.HasNoFixedAssignment RegionOperations.HasNoFixedAssignments
   Operations.regionFixedColumns Operations.loadedTableColumns
   Operation.HasNoFixedWrites Operations.HasNoFixedWrites
-  RegionOperations.assignedCellsAfter
+  RegionOperations.assignedCellsAfter_nil RegionOperations.assignedCellsAfter_cons
+  RegionOperations.assignedCellsAfter_append
   Operation.copiedCells
   Operations.assignedCellsFrom Operations.assignedCells
-  Operations.copiedCells Operations.CopyCellsAssigned
+  Operations.copiedCells Operations.ConsumedCellsAssigned
   Operations.KeygenRegistered.nil Operations.KeygenRegistered.append
   Operations.KeygenRegistered.region_cons
   Operations.KeygenRegistered.constrainInstance_cons
   Operations.KeygenRegistered.loadTable_cons
   List.forall_append List.forall_cons
-  List.flatMap_cons List.flatMap_append
+  List.flatMap_cons List.flatMap_append List.map_nil List.map_cons Nat.add_zero Nat.le_refl
+  Nat.add_one_ne_zero
   List.mem_append List.mem_cons List.mem_singleton List.mem_flatMap List.mem_map
   List.nil_append List.append_nil List.singleton_append List.append_assoc
   and_self and_true true_and
@@ -266,6 +279,22 @@ theorem assignAdvice_keygenRegistered
     RegionOperation.KeygenRegistered, List.forall_nil, and_self]
 
 open Lean Elab Tactic Meta
+
+/-- Declared ahead of its elaborator, so that the helper-certificate step can run the whole
+tactic on a certificate's side conditions. -/
+syntax "keygen_registration" : tactic
+
+/-- The discharger of the keygen simp calls: a rule's premiss is a hypothesis in context,
+such as a gadget's own parameters (a nonempty width list, positive widths, a loop index
+bound), or else something the sets prove on their own. Simp's default discharger only
+simplifies, so a hypothesis premiss would never discharge. -/
+macro "keygen_discharge" : tactic =>
+  `(tactic| first
+    | assumption
+    | (simp only [keygen_spine, keygen_norm] <;> fail "keygen_discharge: premiss not proved")
+    -- Last, so that the failing alternative above runs without error recovery: the last
+    -- alternative of `first` would log its failure and admit the goal.
+    | skip)
 
 namespace KeygenRegistration
 
@@ -446,7 +475,7 @@ partial def closeCallSideCondition
   try
     evalTactic (← `(tactic|
       first | assumption | exact () | rfl |
-        simp_all only [keygen_norm, synthesis_summary_norm]))
+        simp_all only [keygen_spine, keygen_norm, synthesis_summary_norm]))
   catch _ =>
     state.restore
   if (← getGoals).isEmpty then
@@ -468,7 +497,7 @@ partial def closeCallSideCondition
   let state ← saveState
   try
     evalTactic (← `(tactic|
-      simp_all only [keygen_norm, synthesis_summary_norm]))
+      simp_all only [keygen_spine, keygen_norm, synthesis_summary_norm]))
   catch _ =>
     state.restore
   if (← getGoals).isEmpty then
@@ -501,35 +530,70 @@ partial def closeCallSideCondition
     return
   closeCallSideCondition (unfolded.insert head)
 
-/-- Apply a registered certificate for a raw circuit helper. -/
+/-- Try one helper certificate: apply it and close its side conditions with the call-routing
+closer, then, when `fallback` is set, with the whole tactic. Returns whether every side
+condition closed, and otherwise how many the cheap closer closed. -/
+def tryHelperCertificate (candidate : Name) (targetHead : Name) (fallback : Bool) :
+    TacticM (Bool × Nat) := do
+  let state ← saveState
+  try
+    let certificateLemma ← mkConstWithFreshMVarLevels candidate
+    -- The head is the conclusion's: a loop certificate's hypotheses mention the bound
+    -- round body's operations first.
+    let some candidateHead :=
+        circuitHead? (← liftMetaM <| inferType certificateLemma).getForallBody
+      | state.restore
+        return (false, 0)
+    if candidateHead != targetHead then
+      state.restore
+      return (false, 0)
+    let sideConditions ← (← getMainGoal).apply certificateLemma
+    let mut remaining := []
+    let mut closed := 0
+    for sideCondition in sideConditions.reverse do
+      if ← liftMetaM sideCondition.isAssigned then
+        continue
+      setGoals [sideCondition]
+      closeCallSideCondition
+      if (← getGoals).isEmpty then
+        closed := closed + 1
+      else if fallback then
+        let sideState ← saveState
+        try
+          evalTactic (← `(tactic| keygen_registration))
+        catch _ =>
+          sideState.restore
+      remaining := remaining ++ (← getGoals)
+    setGoals remaining
+    if (← getGoals).isEmpty then
+      return (true, closed)
+    state.restore
+    return (false, closed)
+  catch _ =>
+    state.restore
+    return (false, 0)
+
+/-- Apply a registered certificate for a raw circuit helper. Every candidate is tried with
+the cheap call-routing closer first; only then does a candidate that made progress, closing
+some side condition cheaply, get the whole tactic on the rest, since a loop certificate's
+side conditions are provenance obligations for one round's body. A candidate whose cheap
+pass closed nothing is likely the wrong one, and the whole tactic on its side conditions would
+spend the declaration's budget. -/
 def applyHelperCertificate : TacticM Bool := withMainContext do
   let target ← instantiateMVars (← getMainTarget)
   let some targetHead := circuitHead? target
     | return false
+  let mut progressed : Array Name := #[]
   for candidate in keygenHelperAttr.getDecls (← getEnv) do
-    let state ← saveState
-    try
-      let certificateLemma ← mkConstWithFreshMVarLevels candidate
-      let some candidateHead := circuitHead? (← liftMetaM <| inferType certificateLemma)
-        | state.restore
-          continue
-      if candidateHead != targetHead then
-        state.restore
-        continue
-      let sideConditions ← (← getMainGoal).apply certificateLemma
-      let mut remaining := []
-      for sideCondition in sideConditions.reverse do
-        if ← liftMetaM sideCondition.isAssigned then
-          continue
-        setGoals [sideCondition]
-        closeCallSideCondition
-        remaining := remaining ++ (← getGoals)
-      setGoals remaining
-      if (← getGoals).isEmpty then
-        return true
-      state.restore
-    catch _ =>
-      state.restore
+    let (done, closed) ← tryHelperCertificate candidate targetHead false
+    if done then
+      return true
+    if closed > 0 then
+      progressed := progressed.push candidate
+  for candidate in progressed do
+    let (done, _) ← tryHelperCertificate candidate targetHead true
+    if done then
+      return true
   return false
 
 /-- Collect the formal-circuit-valued direct arguments of an application. -/
@@ -744,7 +808,7 @@ partial def freshProductMVars (type : Expr) (fuel : Nat := 32) : MetaM Expr := d
 /--
 Retry a call-routing proposition with only its keygen metadata made transparent.
 -/
-def simpCallRouting (expression : Expr) : SimpM Simp.Result := do
+def simpCallRoutingCore (expression : Expr) : SimpM Simp.Result := do
   let env ← getEnv
   let requirementProjections := keygenRequirementProjectionAttr.getDecls env
   let configureProjections := keygenConfigureProjectionAttr.getDecls env
@@ -833,6 +897,9 @@ def simpCallRouting (expression : Expr) : SimpM Simp.Result := do
           expression.getAppFn.isConstOf ``KeygenRequirements.constantColumns ||
           expression.getAppFn.isConstOf ``KeygenRequirements.permutationColumns ||
           expression.getAppFn.isConstOf ``KeygenRequirements.inputCells ||
+          expression.getAppFn.isConstOf ``KeygenRequirements.readCells ||
+          expression.getAppFn.isConstOf ``KeygenRequirements.readRelativeCells ||
+          expression.getAppFn.isConstOf ``KeygenRequirements.readRelativeCellsAt ||
           expression.getAppFn.isConstOf ``KeygenRequirements.inputPermutationColumns
     | return exposed
   let arguments := requirementProjection.getAppArgs
@@ -851,6 +918,15 @@ def simpCallRouting (expression : Expr) : SimpM Simp.Result := do
     Simp.withSimpTheorems (#[projections] ++ ambient) do
       Simp.simp reducedExpression
   (← exposed.mkEqTrans definitionallyReduced).mkEqTrans reduced
+
+/-- `simpCallRoutingCore` with contextual simplification: a routing premiss over a child's
+declared cells is an implication `cell ∈ declared → cell ∈ available`, and when the declared
+list is opaque, such as the reads of a bundled parameter, only the antecedent itself proves
+the consequent. -/
+def simpCallRouting (expression : Expr) : SimpM Simp.Result := do
+  let context ← (← readThe Simp.Context).setConfig
+    { (← Simp.getConfig) with contextual := true }
+  withTheReader Simp.Context (fun _ => context) (simpCallRoutingCore expression)
 
 /-- Expose only framework projections around a configure program, preserving its head. -/
 partial def exposeConfigureProgram (program : Expr) (fuel : Nat := 8) :
@@ -1199,9 +1275,26 @@ def proveListRoutingPremise (goal : MVarId) : SimpM Bool := do
     let concreteGoal ← normalizedGoal.replaceTargetEq normalizedTarget targetEquality
     let closed ← concreteGoal.withContext do
       proveConcreteForall concreteGoal
-    unless closed do
-      throwError "concrete list-routing premise was not solved"
-    return closed
+    if closed then
+      return true
+    -- A declared list with an opaque part, such as the reads of a bundled parameter: back
+    -- to membership form over the normalized list, which contextual simplification closes
+    -- when the opaque part is itself among the available cells.
+    concreteGoal.withContext do
+      let [elementLevel] := target.getAppFn.constLevels!
+        | throwError "routing target is not a List.Forall"
+      let characterization := mkAppN
+        (mkConst ``List.forall_iff_forall_mem [elementLevel])
+        #[arguments[0]!, arguments[1]!, simplifiedValues.expr]
+      let backward ← mkAppM ``Iff.mpr #[characterization]
+      let backwardType ← whnf (← inferType backward)
+      unless backwardType.isForall do
+        throwError "invalid List.Forall characterization"
+      let simplified ← simpCallRouting backwardType.bindingDomain!
+      let some proof ← proofOfSimpTrue? simplified
+        | throwError "list-routing premiss with an opaque part was not solved"
+      concreteGoal.assign (mkApp backward proof)
+      return true
   catch _ =>
     set metaState
     return false
@@ -1332,11 +1425,11 @@ simproc callRegistration
 simproc regionCallRegistration
     (List.Forall _ _) := callRegistrationSimproc
 
-simproc callCopyCellsAssignedFrom
-    (Operations.CopyCellsAssignedFrom _ _ _) := callRegistrationSimproc
+simproc callAssignedFrom
+    (Operations.AssignedFrom _ _ _ _) := callRegistrationSimproc
 
-simproc regionCallCopyCellsAssignedFrom
-    (RegionOperations.CopyCellsAssignedFrom _ _ _) := callRegistrationSimproc
+simproc regionCallAssignedFrom
+    (RegionOperations.AssignedFrom _ _ _ _) := callRegistrationSimproc
 
 simproc callLookupSelectorAssignmentsAgree
     (Operations.LookupSelectorAssignmentsAgree _) := callRegistrationSimproc
@@ -1346,7 +1439,7 @@ simproc regionCallLookupSelectorAssignmentsAgree
 
 attribute [keygen_norm]
   callRegistration regionCallRegistration
-  callCopyCellsAssignedFrom regionCallCopyCellsAssignedFrom
+  callAssignedFrom regionCallAssignedFrom
   callLookupSelectorAssignmentsAgree regionCallLookupSelectorAssignmentsAgree
 
 /-- Target and hypothesis types used to detect normalization progress. -/
@@ -1368,7 +1461,8 @@ partial def normalize : TacticM Unit := do
     normalize
     return
   let before ← goalContextTypes
-  evalTactic (← `(tactic| simp (config := { failIfUnchanged := false }) only [
+  evalTactic (← `(tactic| simp (config := { failIfUnchanged := false })
+    (disch := keygen_discharge) only [
     keygen_spine, keygen_norm,
     Operations.KeygenRegistered, Operation.KeygenRegistered,
     RegionOperation.KeygenRegistered,
@@ -1399,6 +1493,29 @@ partial def normalize : TacticM Unit := do
   evalTactic (← `(tactic|
     simp_all (config := { failIfUnchanged := false }) only [keygen_norm]))
 
+/-- Fail if the main goal's target still mentions a metavariable. After the read-support
+search, the target is the property of the found read set, so a surviving metavariable means
+that a rule left the read set underdetermined, and the search may have filled it with
+whatever unified rather than with the program's reads. -/
+elab "keygen_guard_closed" : tactic => do
+  let target ← instantiateMVars (← getMainTarget)
+  if target.hasExprMVar then
+    throwError "read support left a metavariable in the read set:{indentExpr target}"
+
+/--
+Open a read-support obligation `∃ reads, WitnessFunctionSupport reads compute ∧ property reads`.
+The read set is a natural hole that `solve_witness_support` fills from the rules tagged
+`witness_support` while closing the support; the property, normally the memberships of the
+reads in the available cells, remains as the goal. The lemma is applied before the search runs,
+so that a goal of another shape fails at once: a search nested in a `refine` term runs before
+the term is matched against the goal, on an unconstrained support that it closes by inventing
+a program.
+-/
+macro "open_witness_support" : tactic =>
+  `(tactic| (apply Halo2.exists_witnessFunctionSupport_of
+             case support => solve_witness_support
+             keygen_guard_closed))
+
 /-- Recursively normalize operation spines and conjunctions. -/
 partial def close (unfolded : Std.HashSet Name := {}) : TacticM Unit := do
   withMainContext do
@@ -1424,6 +1541,13 @@ partial def close (unfolded : Std.HashSet Name := {}) : TacticM Unit := do
     return
   if ← applyHelperCertificate then
     return
+  let state ← saveState
+  if ← tryTactic (evalTactic (← `(tactic| open_witness_support))) then
+    if (← getGoals).isEmpty then
+      return
+    close unfolded
+    return
+  state.restore
 
   withMainContext do
     let target ← instantiateMVars (← getMainTarget)
@@ -1540,7 +1664,8 @@ It first applies the shared structural simp sets, then selectively unfolds named
 configure/synthesis heads that still block a registration goal. Formal-circuit calls
 stay opaque for explicit discharge through the compositional registration lemmas.
 -/
-elab "keygen_registration" : tactic => do
+elab_rules : tactic
+  | `(tactic| keygen_registration) => do
   if (← getGoals).isEmpty then
     return
   trace[Halo2.keygen] "keygen_registration: introductions"

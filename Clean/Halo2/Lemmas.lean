@@ -142,7 +142,7 @@ theorem operations_copyAdvice (src : AssignedCell F) (col : Column .advice) (row
       = [.assignAdvice col row (.ofFExpr (.expr src)),
          .constrainEqual (.of self row col) src.cell] := rfl
 
-@[circuit_norm]
+@[circuit_norm, keygen_norm]
 theorem output_copyAdvice (src : AssignedCell F) (col : Column .advice) (row : ℕ)
     (self : RegionIndex) :
     (copyAdvice src col row).output self = .of self row col := rfl

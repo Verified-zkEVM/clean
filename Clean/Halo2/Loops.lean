@@ -66,6 +66,22 @@ theorem Vector.map_getElem!_mem_toList {n : ℕ} [Inhabited α]
   rw [getElem!_pos values i.val i.isLt]
   exact Vector.map_getElem_mem_toList values f i
 
+/-- The same in the form that the keygen sets give a membership in a map, after
+`List.mem_map`: some element of the vector maps to the element at `i`'s image. A nested map,
+such as the columns of a vector input's cells, collapses to this by
+`exists_exists_and_eq_and`. -/
+theorem Vector.exists_mem_toList_map_getElem! {n : ℕ} [Inhabited α]
+    (values : Vector α n) (f : α → β) (i : Fin n) :
+    (∃ a ∈ values.toList, f a = f values[i.val]!) ↔ True :=
+  iff_true_intro (List.mem_map.mp (Vector.map_getElem!_mem_toList values f i))
+
+/-- The same at a natural-number index with its bound as a premiss, the form a loop's
+previous-round step has in context. -/
+theorem Vector.exists_mem_toList_map_getElem!_of_lt {n : ℕ} [Inhabited α]
+    (values : Vector α n) (f : α → β) (i : ℕ) (hi : i < n) :
+    (∃ a ∈ values.toList, f a = f values[i]!) ↔ True :=
+  Vector.exists_mem_toList_map_getElem! values f ⟨i, hi⟩
+
 /-! ## Generic per-round splits on the `List.ofFn`-flatten form
 
 The fundamental split lemmas, keyed on `(List.ofFn f).flatten` — the shape a loop's `operations`
@@ -279,52 +295,132 @@ theorem forRange'_assignFixed_row_bounds
   rw [hrow i column row value hassignment]
   omega
 
-/-- A copy-free loop is lawful for every incoming cell state. This packages the
-operation-local `copiedCells = []` proof through the loop decomposition without
-expanding the loop's operation list. -/
+/-- A loop whose rounds consume nothing is lawful for every incoming cell state. This
+packages the operation-local proof through the loop decomposition without expanding the
+loop's operation list. -/
 @[keygen_helper]
-theorem forRange'_copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
+theorem forRange'_assignedFrom_of_forall_consumes_nil (consumption : Consumption F)
     (offset stride m : ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
     (self : RegionIndex) (available : List Cell)
     (hbody : ∀ i : Fin m,
       ((body i.val (offset + i.val * stride)).operations self).Forall
-        fun operation => operation.copiedCells = []) :
-    ((forRange' offset stride m body).operations self).CopyCellsAssignedFrom
+        fun operation => [] ∈ consumption operation) :
+    ((forRange' offset stride m body).operations self).AssignedFrom consumption
       self available := by
-  apply RegionOperations.copyCellsAssignedFrom_of_forall_copiedCells_eq_nil
+  apply RegionOperations.assignedFrom_of_forall_consumes_nil
   exact (forRange'_forall _ _ _ _ _ _).2 hbody
 
-/-- A loop is copy-lawful when each symbolic round is copy-lawful from the caller's
-original input cells. Earlier rounds can only add cells, so the per-round proofs
-remain valid as the loop state grows. -/
-@[keygen_helper]
-theorem loopAux_copyCellsAssignedFrom
+/-- A loop is lawful when each round is lawful from the caller's cells together with
+everything the earlier rounds assigned. -/
+theorem loopAux_assignedFrom (consumption : Consumption F)
     (rows : ℕ → ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
     (self : RegionIndex) (available : List Cell) (k : ℕ)
     (hbody : ∀ i : Fin k,
-      ((body i.val (rows i.val)).operations self).CopyCellsAssignedFrom
-        self available) :
-    ((loopAux rows body k).operations self).CopyCellsAssignedFrom self available := by
+      ((body i.val (rows i.val)).operations self).AssignedFrom consumption self
+        (((loopAux rows body i.val).operations self).assignedCellsAfter self available)) :
+    ((loopAux rows body k).operations self).AssignedFrom consumption self available := by
   induction k with
   | zero => exact .nil available
   | succ n inductionHypothesis =>
-      rw [loopAux_operations_succ,
-        RegionOperations.copyCellsAssignedFrom_append_iff]
-      have hprefix := inductionHypothesis (fun i => hbody i.castSucc)
-      exact ⟨hprefix, (hbody (Fin.last n)).mono fun cell hcell =>
-        RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ cell hcell⟩
+      rw [loopAux_operations_succ, RegionOperations.assignedFrom_append_iff]
+      exact ⟨inductionHypothesis (fun i => hbody i.castSucc), hbody (Fin.last n)⟩
 
-/-- Constant-stride specialization of `loopAux_copyCellsAssignedFrom`. -/
+/-- A loop is lawful when each symbolic round is lawful from the caller's original input
+cells. Earlier rounds can only add cells, so the per-round proofs remain valid as the loop
+state grows. -/
+@[keygen_helper]
+theorem loopAux_assignedFrom_of_forall (consumption : Consumption F)
+    (rows : ℕ → ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) (available : List Cell) (k : ℕ)
+    (hbody : ∀ i : Fin k,
+      ((body i.val (rows i.val)).operations self).AssignedFrom consumption
+        self available) :
+    ((loopAux rows body k).operations self).AssignedFrom consumption self available :=
+  loopAux_assignedFrom consumption rows body self available k fun i =>
+    (hbody i).mono fun cell hcell =>
+      RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ cell hcell
+
+/-- Constant-stride specialization of `loopAux_assignedFrom`. -/
+theorem forRange'_assignedFrom (consumption : Consumption F)
+    (offset stride m : ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) (available : List Cell)
+    (hbody : ∀ i : Fin m,
+      ((body i.val (offset + i.val * stride)).operations self).AssignedFrom consumption self
+        (RegionOperations.assignedCellsAfter self available
+          ((loopAux (fun i => offset + i * stride) body i.val).operations self))) :
+    ((forRange' offset stride m body).operations self).AssignedFrom consumption
+      self available :=
+  loopAux_assignedFrom consumption _ body self available m hbody
+
+/-- A loop whose rounds read rows that earlier rounds wrote is lawful when its first round
+is lawful from the caller's cells, and every later round is lawful from the caller's cells
+together with everything the rounds before it assigned. The later rounds are presented at
+index `i + 1`, so that a round's choice of reads by index reduces. -/
+theorem loopAux_assignedFrom_of_earlier_rounds (consumption : Consumption F)
+    (rows : ℕ → ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) (available : List Cell) (m : ℕ)
+    (hfirst : 0 < m →
+      ((body 0 (rows 0)).operations self).AssignedFrom consumption self available)
+    (hnext : ∀ i, i + 1 < m →
+      ((body (i + 1) (rows (i + 1))).operations self).AssignedFrom consumption self
+        (((loopAux rows body (i + 1)).operations self).assignedCellsAfter self available)) :
+    ((loopAux rows body m).operations self).AssignedFrom consumption self available := by
+  apply loopAux_assignedFrom consumption rows body self available m
+  intro i
+  obtain ⟨k, hk⟩ := i
+  cases k with
+  | zero =>
+      exact (hfirst hk).mono fun cell hcell =>
+        RegionOperations.mem_assignedCellsAfter_of_mem _ _ _ cell hcell
+  | succ k => exact hnext k hk
+
+/-- A cell that round `k` assigns is available from round `k + 1` onward. As a rule, it
+reduces a later round's obligation over the accumulated set to membership in one round's
+cells. -/
+@[keygen_norm]
+theorem mem_assignedCellsAfter_loopAux_succ_of_mem_round (rows : ℕ → ℕ)
+    (body : (i : ℕ) → ℕ → RegionCircuit F Unit) (k : ℕ) (self : RegionIndex)
+    (available : List Cell) (cell : Cell)
+    (hcell : cell ∈ ((body k (rows k)).operations self).assignedCells self) :
+    cell ∈ ((loopAux rows body (k + 1)).operations self).assignedCellsAfter self available := by
+  rw [loopAux_operations_succ, RegionOperations.assignedCellsAfter_append,
+    RegionOperations.mem_assignedCellsAfter_iff, List.mem_append]
+  exact Or.inr hcell
+
+/-- Constant-stride form of `loopAux_assignedFrom_of_earlier_rounds`. The next round's row
+is spelled as the previous round's row plus the stride, which is how a round that assigns
+at its row plus the stride names the same cell, so no row arithmetic is left to the
+gadget. -/
+@[keygen_helper]
+theorem forRange'_assignedFrom_of_earlier_rounds (consumption : Consumption F)
+    (offset stride m : ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) (available : List Cell)
+    (hfirst : 0 < m →
+      ((body 0 offset).operations self).AssignedFrom consumption self available)
+    (hnext : ∀ i, i + 1 < m →
+      ((body (i + 1) (offset + i * stride + stride)).operations self).AssignedFrom
+        consumption self
+        (((loopAux (fun i => offset + i * stride) body (i + 1)).operations self)
+          |>.assignedCellsAfter self available)) :
+    ((forRange' offset stride m body).operations self).AssignedFrom consumption
+      self available := by
+  apply loopAux_assignedFrom_of_earlier_rounds consumption _ body self available m
+  · intro hm
+    simpa only [Nat.zero_mul, Nat.add_zero] using hfirst hm
+  · intro i hi
+    simpa only [Nat.add_mul, Nat.one_mul, Nat.add_assoc] using hnext i hi
+
+/-- Constant-stride specialization of `loopAux_assignedFrom_of_forall`. -/
 @[keygen_norm, keygen_helper]
-theorem forRange'_copyCellsAssignedFrom
+theorem forRange'_assignedFrom_of_forall (consumption : Consumption F)
     (offset stride m : ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
     (self : RegionIndex) (available : List Cell)
     (hbody : ∀ i : Fin m,
       ((body i.val (offset + i.val * stride)).operations self)
-        |>.CopyCellsAssignedFrom self available) :
+        |>.AssignedFrom consumption self available) :
     ((forRange' offset stride m body).operations self)
-      |>.CopyCellsAssignedFrom self available :=
-  loopAux_copyCellsAssignedFrom _ _ self available m hbody
+      |>.AssignedFrom consumption self available :=
+  loopAux_assignedFrom_of_forall consumption _ _ self available m hbody
 
 /-- A region loop requests no deferred constant cells when every iteration requests
 none. The proof composes the exact summaries without unfolding any iteration body. -/
@@ -569,19 +665,44 @@ theorem forRangeVar'_fixedAssignmentsAgree
   subst j
   exact hagree i column row left right hleft hright
 
-/-- A variable-stride loop is copy-lawful when each symbolic round is copy-lawful
-from the caller's original input cells. -/
+/-- A variable-stride loop is lawful when each round is lawful from the caller's cells
+together with everything the earlier rounds assigned. -/
+theorem forRangeVar'_assignedFrom (consumption : Consumption F)
+    (rows : ℕ → ℕ) (m : ℕ)
+    (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) (available : List Cell)
+    (hbody : ∀ i : Fin m,
+      ((body i.val (rows i.val)).operations self).AssignedFrom consumption self
+        (((loopAux rows body i.val).operations self).assignedCellsAfter self available)) :
+    ((forRangeVar' rows m body).operations self).AssignedFrom consumption self available :=
+  loopAux_assignedFrom consumption rows body self available m hbody
+
+/-- A variable-stride loop is lawful when each symbolic round is lawful from the caller's
+original input cells. -/
 @[keygen_norm, keygen_helper]
-theorem forRangeVar'_copyCellsAssignedFrom
+theorem forRangeVar'_assignedFrom_of_forall (consumption : Consumption F)
     (rows : ℕ → ℕ) (m : ℕ)
     (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
     (self : RegionIndex) (available : List Cell)
     (hbody : ∀ i : Fin m,
       ((body i.val (rows i.val)).operations self)
-        |>.CopyCellsAssignedFrom self available) :
+        |>.AssignedFrom consumption self available) :
     ((forRangeVar' rows m body).operations self)
-      |>.CopyCellsAssignedFrom self available :=
-  loopAux_copyCellsAssignedFrom rows body self available m hbody
+      |>.AssignedFrom consumption self available :=
+  loopAux_assignedFrom_of_forall consumption rows body self available m hbody
+
+/-- Variable-stride form of `loopAux_assignedFrom_of_earlier_rounds`. -/
+@[keygen_helper]
+theorem forRangeVar'_assignedFrom_of_earlier_rounds (consumption : Consumption F)
+    (rows : ℕ → ℕ) (m : ℕ) (body : (i : ℕ) → ℕ → RegionCircuit F Unit)
+    (self : RegionIndex) (available : List Cell)
+    (hfirst : 0 < m →
+      ((body 0 (rows 0)).operations self).AssignedFrom consumption self available)
+    (hnext : ∀ i, i + 1 < m →
+      ((body (i + 1) (rows (i + 1))).operations self).AssignedFrom consumption self
+        (((loopAux rows body (i + 1)).operations self).assignedCellsAfter self available)) :
+    ((forRangeVar' rows m body).operations self).AssignedFrom consumption self available :=
+  loopAux_assignedFrom_of_earlier_rounds consumption rows body self available m hfirst hnext
 
 @[circuit_norm ↓]
 theorem forRangeVar'_constraints (rows : ℕ → ℕ) (m : ℕ)
@@ -736,23 +857,23 @@ theorem foldRangeVarAux_operations (rows : ℕ → ℕ) (init : β)
     simp only [Fin.val_last, Fin.val_castSucc, List.flatten_cons, List.flatten_nil,
       List.append_nil]
 
-/-- Copy provenance through a serial fold. The invariant records exactly which
-cells of the running accumulator are available after the preceding rounds. -/
-theorem foldRangeVarAux_copyCellsAssignedFrom
+/-- Provenance through a serial fold. The invariant records exactly which cells of the
+running accumulator are available after the preceding rounds. -/
+theorem foldRangeVarAux_assignedFrom (consumption : Consumption F)
     (invariant : List Cell → β → Prop)
     (rows : ℕ → ℕ) (init : β)
     (body : (i : ℕ) → ℕ → β → RegionCircuit F β)
     (self : RegionIndex) (available : List Cell)
     (hinit : invariant available init)
-    (hbodyCopy : ∀ i cells acc, invariant cells acc →
-      ((body i (rows i) acc).operations self).CopyCellsAssignedFrom self cells)
+    (hbodyAssigned : ∀ i cells acc, invariant cells acc →
+      ((body i (rows i) acc).operations self).AssignedFrom consumption self cells)
     (hbodyInvariant : ∀ i cells acc, invariant cells acc →
       invariant
         ((body i (rows i) acc).operations self |>.assignedCellsAfter self cells)
         ((body i (rows i) acc).output self)) :
     ∀ k,
       ((foldRangeVarAux rows init body k).operations self
-          |>.CopyCellsAssignedFrom self available) ∧
+          |>.AssignedFrom consumption self available) ∧
         invariant
           ((foldRangeVarAux rows init body k).operations self
             |>.assignedCellsAfter self available)
@@ -762,13 +883,13 @@ theorem foldRangeVarAux_copyCellsAssignedFrom
   | zero =>
       exact ⟨.nil available, hinit⟩
   | succ k inductionHypothesis =>
-      rcases inductionHypothesis with ⟨hprefixCopy, hprefixInvariant⟩
-      have hroundCopy := hbodyCopy k _ _ hprefixInvariant
+      rcases inductionHypothesis with ⟨hprefixAssigned, hprefixInvariant⟩
+      have hroundAssigned := hbodyAssigned k _ _ hprefixInvariant
       have hroundInvariant := hbodyInvariant k _ _ hprefixInvariant
       constructor
       · rw [foldRangeVarAux_operations_succ,
-          RegionOperations.copyCellsAssignedFrom_append_iff]
-        exact ⟨hprefixCopy, hroundCopy⟩
+          RegionOperations.assignedFrom_append_iff]
+        exact ⟨hprefixAssigned, hroundAssigned⟩
       · simpa only [foldRangeVarAux_operations_succ, foldAcc_succ,
           RegionOperations.assignedCellsAfter, List.foldl_append] using
           hroundInvariant
@@ -875,27 +996,26 @@ def foldRange (offset stride m : ℕ) (init : β)
     (body : (i : ℕ) → ℕ → β → RegionCircuit F β) : RegionCircuit F β :=
   foldRangeVar (fun i => offset + i * stride) m init body
 
-/-- Constant-stride specialization of
-`foldRangeVarAux_copyCellsAssignedFrom`. -/
-theorem foldRange_copyCellsAssignedFrom
+/-- Constant-stride specialization of `foldRangeVarAux_assignedFrom`. -/
+theorem foldRange_assignedFrom (consumption : Consumption F)
     (invariant : List Cell → β → Prop)
     (offset stride m : ℕ) (init : β)
     (body : (i : ℕ) → ℕ → β → RegionCircuit F β)
     (self : RegionIndex) (available : List Cell)
     (hinit : invariant available init)
-    (hbodyCopy : ∀ i cells acc, invariant cells acc →
+    (hbodyAssigned : ∀ i cells acc, invariant cells acc →
       ((body i (offset + i * stride) acc).operations self
-        |>.CopyCellsAssignedFrom self cells))
+        |>.AssignedFrom consumption self cells))
     (hbodyInvariant : ∀ i cells acc, invariant cells acc →
       invariant
         ((body i (offset + i * stride) acc).operations self
           |>.assignedCellsAfter self cells)
         ((body i (offset + i * stride) acc).output self)) :
     ((foldRange offset stride m init body).operations self
-      |>.CopyCellsAssignedFrom self available) :=
-  (foldRangeVarAux_copyCellsAssignedFrom invariant
+      |>.AssignedFrom consumption self available) :=
+  (foldRangeVarAux_assignedFrom consumption invariant
     (fun i => offset + i * stride) init body self available
-    hinit hbodyCopy hbodyInvariant m).1
+    hinit hbodyAssigned hbodyInvariant m).1
 
 @[circuit_norm]
 theorem foldRange_output (offset stride m : ℕ) (init : β)

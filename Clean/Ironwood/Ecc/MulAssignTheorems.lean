@@ -8,7 +8,7 @@ import Clean.Ironwood.Ecc.AddTheorems
 Reference: `halo2_gadgets/src/ecc/chip/mul.rs::Config::assign`
 (`CircuitVersion::AnchoredBase`).
 
-Variable-base scalar multiplication: computes `[alpha] base` where `alpha : Fp` is a
+Variable-base scalar multiplication: computes `alpha • base` where `alpha : Fp` is a
 Pallas base-field element. The working scalar is `k = alpha.val + t_q`, decomposed
 MSB-first into 255 bits and processed as
 
@@ -22,7 +22,7 @@ MSB-first into 255 bits and processed as
 7. the overflow check on `z_0`, `z_130`, `k_254`.
 
 Soundness rests on the identity `2^254 + t_q ≡ 0 (mod q)`: the double-and-add
-accumulates `[2^254 + k] base = [alpha] base`.
+accumulates `(2^254 + k) • base = alpha • base`.
 -/
 
 namespace Zcash.Circuits.Ecc.Mul
@@ -150,7 +150,7 @@ theorem neg_add_nsmul (B : SWPoint Pallas.curve) {m : ℕ} (hm : 1 ≤ m) :
 
 /-- The complete-addition accumulator chain of `Complete.AssignRegion` computes
 double-and-add on scalar multiples: starting from `[M]B`, after `b` steps it holds
-`[accScalar M bits b] B`. Fully general (the identity case is covered by the complete
+`(accScalar M bits b) • B`. Fully general (the identity case is covered by the complete
 addition law `sw_add_coords`). -/
 private theorem accValue_nsmul (B : SWPoint Pallas.curve) (M : ℕ) (hM : 1 ≤ M)
     (bits : ℕ → Bool) :
