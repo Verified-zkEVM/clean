@@ -274,5 +274,48 @@ def base : ∀ n, Impl (R1CS Native) (Base.interface n)
 /-- The full arithmetic vocabulary, derived: `mul` costs a cell and a constraint. -/
 def arith : ∀ n, Impl (R1CS Native) (Arith.interface n) := Arith.ofBase base
 
+/-! ### Cost -/
+
+/-- The cost of an R1CS circuit: `(cells, constraints)`. A witness is a cell, a constraint is a
+constraint, and linear arithmetic is free. -/
+def cost : (R1CS Native).Measure (ℕ × ℕ) where
+  op
+    | .witness .. => (1, 0)
+    | .constraint .. => (0, 1)
+
+@[circuit_norm] theorem cost_witness {m : ℕ} (vars : Vector (LinComb Native) m) (f : Vector Native m → Native) :
+    cost.op (.witness m vars f) = (1, 0) := rfl
+@[circuit_norm] theorem cost_constraint (a b c : LinComb Native) : cost.op (.constraint a b c) = (0, 1) := rfl
+
+instance : Impl.Measured cost (add (Native := Native)) where value := (0, 0)
+instance : Impl.Measured cost (sub (Native := Native)) where value := (0, 0)
+instance (c : Native) : Impl.Measured cost (scale c) where value := (0, 0)
+instance (c : Native) : Impl.Measured cost (const c) where value := (0, 0)
+instance : Impl.Measured cost (mulEq (Native := Native)) where value := (0, 1)
+instance (p : Witness.Params Native) : Impl.Measured cost (witnessImpl p) where value := (1, 0)
+
+instance : ∀ n, Impl.Measured cost (base (Native := Native) n)
+  | .add => inferInstanceAs (Impl.Measured cost add)
+  | .sub => inferInstanceAs (Impl.Measured cost sub)
+  | .scale c => inferInstanceAs (Impl.Measured cost (scale c))
+  | .const c => inferInstanceAs (Impl.Measured cost (const c))
+  | .mulEq => inferInstanceAs (Impl.Measured cost mulEq)
+  | @Base.Name.witness _ Input inst f => letI := inst; inferInstanceAs (Impl.Measured cost (witnessImpl ⟨Input, f⟩))
+
+instance (n : Arith.Name Native) : Impl.Measured cost (arith n) :=
+  inferInstanceAs (Impl.Measured cost (Arith.ofBase base n))
+
+/-! The costs of the arithmetic vocabulary: linear arithmetic is free, a multiplication is a cell
+and a constraint. -/
+@[simp] theorem cost_add : cost.of (arith (Native := Native) .add) = (0, 0) := rfl
+@[simp] theorem cost_sub : cost.of (arith (Native := Native) .sub) = (0, 0) := rfl
+@[simp] theorem cost_mul : cost.of (arith (Native := Native) .mul) = (1, 1) := rfl
+@[simp] theorem cost_scale (c : Native) : cost.of (arith (.scale c)) = (0, 0) := rfl
+@[simp] theorem cost_const (c : Native) : cost.of (arith (.const c)) = (0, 0) := rfl
+@[simp] theorem cost_mulEq : cost.of (arith (Native := Native) .mulEq) = (0, 1) := rfl
+@[simp] theorem cost_assertZero : cost.of (arith (Native := Native) .assertZero) = (0, 1) := rfl
+@[simp] theorem cost_witness_impl (Input : TypeMap) [ProvableType Input] (f : Input Native → Native) :
+    cost.of (arith (.witness Input f)) = (1, 0) := rfl
+
 end R1CS
 end Clean2

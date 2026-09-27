@@ -347,5 +347,86 @@ theorem plonkish_config [DecidableEq F] (h : p.rounds ≠ 0) (x : Vector (ℕ ×
   rw [List.length_map, h_len]
   omega
 
+
+/-! ### Measures: the cost of the permutation, from the cost of a round -/
+
+section
+variable {B : Backend} [Field B.Native] {M : Type} [AddCommMonoid M] (μ : B.Measure M)
+
+instance _root_.Clean2.SBox.measured (arith : ∀ n, Impl B (Arith.interface n)) [∀ n, Impl.Measured μ (arith n)]
+    (c : B.Native) : Impl.Measured μ (SBox.impl arith c) where
+  value := μ.of (arith (.const c)) + μ.of (arith .add) + 3 • μ.of (arith .mul)
+  value_eq := by measure [SBox.impl]
+
+instance _root_.Clean2.Mix.measured (arith : ∀ n, Impl B (Arith.interface n)) [∀ n, Impl.Measured μ (arith n)]
+    (q : Mix.Params B.Native) : Impl.Measured μ (Mix.impl arith q) where
+  value := μ.of (arith (.const 0)) + ∑ i : Fin q.t, (μ.of (arith (.scale (q.m i))) + μ.of (arith .add))
+  value_eq := by
+    intro x s
+    simp only [Mix.impl, circuit_norm]
+    rw [Circuit.foldr_measure μ _ _ (fun i => μ.of (arith (.scale (q.m i))) + μ.of (arith .add))
+      (fun i acc s => by simp only [circuit_norm, add_zero])]
+
+variable (p : Params B.Native)
+
+instance Round.measured_ofLayers (sbox : ∀ c, Impl B (SBox.interface c)) (mix : ∀ q, Impl B (Mix.interface q))
+    [∀ c, Impl.Measured μ (sbox c)] [∀ q, Impl.Measured μ (mix q)] (r : ℕ) :
+    Impl.Measured μ (Round.ofLayers p sbox mix r) where
+  value := (∑ i : Fin p.t, μ.of (sbox (p.rc r)[i])) + ∑ j : Fin p.t, μ.of (mix ⟨p.t, p.mds j⟩)
+  value_eq := by
+    intro x s
+    simp only [Round.ofLayers, circuit_norm]
+    rw [Circuit.mapFin_measure μ _ (fun i => μ.of (sbox (p.rc r)[i])) (fun i s => by simp only [circuit_norm, add_zero]),
+      Circuit.mapFin_measure μ _ (fun j => μ.of (mix ⟨p.t, p.mds j⟩)) (fun j s => by simp only [circuit_norm, add_zero])]
+
+instance Round.measured_ofArith (arith : ∀ n, Impl B (Arith.interface n)) [∀ n, Impl.Measured μ (arith n)] (r : ℕ) :
+    Impl.Measured μ (Round.ofArith p arith r) :=
+  inferInstanceAs (Impl.Measured μ (Round.ofLayers p (SBox.impl arith) (Mix.impl arith) r))
+
+/-- The permutation measures the sum of its rounds. -/
+instance measured_impl (round : ∀ r, Impl B (Round.interface p r)) [∀ r, Impl.Measured μ (round r)] :
+    Impl.Measured μ (impl p round) where
+  value := ∑ i : Fin p.rounds, μ.of (round (p.rounds - 1 - i))
+  value_eq := by
+    intro x s
+    simp only [impl, circuit_norm]
+    exact Circuit.foldr_measure μ _ _ _ (fun i acc s => by simp only [circuit_norm, add_zero]) s
+
+end
+
+instance Round.measured_ofGate (r : ℕ) : Impl.Measured Plonkish.rows (Round.ofGate p r) :=
+  inferInstanceAs (Impl.Measured Plonkish.rows ((Plonkish.gate (roundGate p) (p.rc r)).refine _))
+
+instance measured_r1cs : Impl.Measured R1CS.cost (r1cs p) :=
+  inferInstanceAs (Impl.Measured R1CS.cost (impl (B := R1CS F) p (Round.ofArith (B := R1CS F) p R1CS.arith)))
+
+instance measured_plonkish : Impl.Measured Plonkish.rows (plonkish p) :=
+  inferInstanceAs (Impl.Measured Plonkish.rows (impl (B := Plonkish F) p (Round.ofGate p)))
+
+instance measured_plonkishArith : Impl.Measured Plonkish.rows (plonkishArith p) :=
+  inferInstanceAs (Impl.Measured Plonkish.rows (impl (B := Plonkish F) p (Round.ofArith (B := Plonkish F) p Plonkish.arith)))
+
+/-! The closed forms. `Backend.Measure.of` unfolds to the instance's `value`, and `simp` reduces
+the class projection through the (reducible) instances down to the vocabulary's costs. -/
+
+/-- R1CS: `3 t` cells and `3 t` constraints per round, the three multiplications of each S-box.
+The mixing layer and the round constants are free. -/
+theorem r1cs_cost : R1CS.cost.of (r1cs p) = (p.rounds * (3 * p.t), p.rounds * (3 * p.t)) := by
+  simp only [Backend.Measure.of, Impl.Measured.value, R1CS.cost_const, R1CS.cost_add, R1CS.cost_mul, R1CS.cost_scale,
+    Finset.sum_const, Finset.card_univ, Fintype.card_fin, Prod.mk_add_mk, Prod.smul_mk, smul_eq_mul,
+    Prod.mk.injEq, add_zero, mul_zero, mul_one]
+  constructor <;> ring
+
+/-- Plonkish, with the round gate: one row per round. -/
+theorem plonkish_rows : Plonkish.rows.of (plonkish p) = p.rounds := by
+  simp only [Backend.Measure.of, Impl.Measured.value, Finset.sum_const, Finset.card_univ, Fintype.card_fin,
+    smul_eq_mul, mul_one]
+
+/-- Plonkish, from arithmetic gates: `(6 + 2 t) t` rows per round, nothing being free. -/
+theorem plonkishArith_rows : Plonkish.rows.of (plonkishArith p) = p.rounds * ((6 + 2 * p.t) * p.t) := by
+  simp only [Backend.Measure.of, Impl.Measured.value, Finset.sum_const, Finset.card_univ, Fintype.card_fin,
+    smul_eq_mul]
+  ring
+
 end Poseidon
 end Clean2

@@ -158,6 +158,14 @@ def ofWitnessMulEq {B : Backend} [Field B.Native]
     simp only [circuit_norm] at h ⊢
     exact h.symm
 
+/-- Its measure: a witness and a `mulEq`. -/
+instance measured_ofWitnessMulEq {B : Backend} [Field B.Native] {M : Type} [AddCommMonoid M] (μ : B.Measure M)
+    (witness : ∀ p, Impl B (Witness.interface p)) (mulEq : Impl B MulEq.interface)
+    [∀ p, Impl.Measured μ (witness p)] [Impl.Measured μ mulEq] :
+    Impl.Measured μ (ofWitnessMulEq witness mulEq) where
+  value := μ.of (witness ⟨nativePair, fun (a, b) => a * b⟩) + μ.of mulEq
+  value_eq := by measure [ofWitnessMulEq]
+
 end Mul
 
 namespace AssertZero
@@ -180,6 +188,14 @@ def ofMulEq {B : Backend} [Field B.Native] (const : ∀ c, Impl B (Const.interfa
     simp only [circuit_norm] at h hx ⊢
     simp_all
 
+/-- Its measure: two constants and a `mulEq`. -/
+instance measured_ofMulEq {B : Backend} [Field B.Native] {M : Type} [AddCommMonoid M] (μ : B.Measure M)
+    (const : ∀ c, Impl B (Const.interface c)) (mulEq : Impl B MulEq.interface)
+    [∀ c, Impl.Measured μ (const c)] [Impl.Measured μ mulEq] :
+    Impl.Measured μ (ofMulEq const mulEq) where
+  value := μ.of (const 1) + μ.of (const 0) + μ.of mulEq
+  value_eq := by measure [ofMulEq]
+
 end AssertZero
 
 namespace Arith
@@ -194,6 +210,23 @@ def ofBase {B : Backend} [Field B.Native] (base : ∀ n, Impl B (Base.interface 
   | @Arith.Name.witness _ Input inst f => letI := inst; base (.witness Input f)
   | .mul => Mul.ofWitnessMulEq (fun p => base (.witness p.Input p.f)) (base .mulEq)
   | .assertZero => AssertZero.ofMulEq (fun c => base (.const c)) (base .mulEq)
+
+/-- The measure of the derived vocabulary, from that of the base one. The derived cases are
+spelled out: `Base.interface (.witness ..)` is `Witness.interface _` only after unfolding
+`Base.Name.toArith`, which instance resolution does not do. -/
+instance measured_ofBase {B : Backend} [Field B.Native] {M : Type} [AddCommMonoid M] (μ : B.Measure M)
+    (base : ∀ n, Impl B (Base.interface n)) [inst : ∀ n, Impl.Measured μ (base n)] :
+    ∀ n, Impl.Measured μ (ofBase base n)
+  | .add => inst .add
+  | .sub => inst .sub
+  | .scale c => inst (.scale c)
+  | .const c => inst (.const c)
+  | .mulEq => inst .mulEq
+  | @Arith.Name.witness _ Input _ f => inst (.witness Input f)
+  | .mul => @Mul.measured_ofWitnessMulEq B _ M _ μ (fun p => base (.witness p.Input p.f)) (base .mulEq)
+      (fun p => inst (.witness p.Input p.f)) (inst .mulEq)
+  | .assertZero => @AssertZero.measured_ofMulEq B _ M _ μ (fun c => base (.const c)) (base .mulEq)
+      (fun c => inst (.const c)) (inst .mulEq)
 
 end Arith
 

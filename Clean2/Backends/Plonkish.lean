@@ -506,6 +506,40 @@ def arith : ∀ n, Impl (Plonkish F) (Arith.interface n)
   | .assertZero => assertZeroImpl
   | @Arith.Name.witness _ Input inst f => letI := inst; witnessImpl ⟨Input, f⟩
 
+/-! ## Cost: rows -/
+
+/-- The cost of a plonkish circuit: its number of rows. Every operation is one row. -/
+def rows : (Plonkish F).Measure ℕ where
+  op _ := 1
+
+@[circuit_norm] theorem rows_gate (g : Gate F) (inputs : Vector (ℕ × ℕ) g.nIn) (k : Vector F g.nFixed) :
+    rows.op (.gate g inputs k) = 1 := rfl
+
+instance (g : Gate F) (k : Vector F g.nFixed) : Impl.Measured rows (gate g k) where value := 1
+instance : Impl.Measured rows (add (F := F)) where value := 1
+instance : Impl.Measured rows (sub (F := F)) where value := 1
+instance : Impl.Measured rows (mul (F := F)) where value := 1
+instance (c : F) : Impl.Measured rows (scale c) where value := 1
+instance (c : F) : Impl.Measured rows (const c) where value := 1
+instance : Impl.Measured rows (mulEq (F := F)) where value := 1
+instance : Impl.Measured rows (assertZeroImpl (F := F)) where value := 1
+instance (p : Witness.Params F) : Impl.Measured rows (witnessImpl p) where value := 1
+
+instance : ∀ n, Impl.Measured rows (arith (F := F) n)
+  | .add => inferInstanceAs (Impl.Measured rows add)
+  | .sub => inferInstanceAs (Impl.Measured rows sub)
+  | .mul => inferInstanceAs (Impl.Measured rows mul)
+  | .scale c => inferInstanceAs (Impl.Measured rows (scale c))
+  | .const c => inferInstanceAs (Impl.Measured rows (const c))
+  | .mulEq => inferInstanceAs (Impl.Measured rows mulEq)
+  | .assertZero => inferInstanceAs (Impl.Measured rows assertZeroImpl)
+  | @Arith.Name.witness _ Input inst f => letI := inst; inferInstanceAs (Impl.Measured rows (witnessImpl ⟨Input, f⟩))
+
+@[simp] theorem rows_of_gate (g : Gate F) (k : Vector F g.nFixed) : rows.of (gate g k) = 1 := rfl
+/-- Every arithmetic functionality is one row. -/
+@[simp] theorem rows_of_arith (n : Arith.Name F) : rows.of (arith n) = 1 := by
+  cases n <;> rfl
+
 /-! ## The configuration, read off the operations -/
 
 /-- The gate an operation places. -/
