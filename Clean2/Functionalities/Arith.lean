@@ -19,42 +19,42 @@ variable {Native : Type}
 /-! ## The interfaces -/
 
 namespace Add
-abbrev interface [Add Native] : Interface Native Unit := fun _ =>
-  { Input := nativePair, Output := native
+abbrev interface [Add Native] : Interface Native :=
+  { input := .nativePair, output := .native
     Spec := fun (a, b) c => c = a + b }
 end Add
 
 namespace Sub
-abbrev interface [Sub Native] : Interface Native Unit := fun _ =>
-  { Input := nativePair, Output := native
+abbrev interface [Sub Native] : Interface Native :=
+  { input := .nativePair, output := .native
     Spec := fun (a, b) c => c = a - b }
 end Sub
 
 namespace Mul
-abbrev interface [Mul Native] : Interface Native Unit := fun _ =>
-  { Input := nativePair, Output := native
+abbrev interface [Mul Native] : Interface Native :=
+  { input := .nativePair, output := .native
     Spec := fun (a, b) c => c = a * b }
 end Mul
 
 /- Multiplication by a constant. The constant is a parameter: one implementation produces
 them all. Linear, so free on the backends whose variables are linear combinations. -/
 namespace Scale
-abbrev interface [Mul Native] : Interface Native Native := fun c =>
-  { Input := native, Output := native
+abbrev interface [Mul Native] (c : Native) : Interface Native :=
+  { input := .native, output := .native
     Spec := fun x y => y = c * x }
 end Scale
 
 /- A constant. The constant is a parameter: one implementation produces them all. -/
 namespace Const
-abbrev interface : Interface Native Native := fun c =>
-  { Input := unit, Output := native
+abbrev interface (c : Native) : Interface Native :=
+  { input := .unit, output := .native
     Spec := fun _ x => x = c }
 end Const
 
 /- Assert that a variable is zero. An assertion: the honest prover has to make it true. -/
 namespace AssertZero
-abbrev interface [Zero Native] : Interface Native Unit := fun _ =>
-  { Input := native, Output := unit
+abbrev interface [Zero Native] : Interface Native :=
+  { input := .native, output := .unit
     Spec := fun x _ => x = 0
     ProverAssumptions := fun x => x = 0 }
 end AssertZero
@@ -63,8 +63,8 @@ end AssertZero
 constraint of R1CS; a backend that decomposed it into `mul` and `assertZero` would pay
 an extra cell. -/
 namespace MulEq
-abbrev interface [Mul Native] : Interface Native Unit := fun _ =>
-  { Input := nativeTriple, Output := unit
+abbrev interface [Mul Native] : Interface Native :=
+  { input := .nativeTriple, output := .unit
     Spec := fun (a, b, c) _ => a * b = c
     ProverAssumptions := fun (a, b, c) => a * b = c }
 end MulEq
@@ -81,8 +81,8 @@ structure Params (Native : Type) : Type 1 where
 
 attribute [instance] Params.inst
 
-abbrev interface : Interface Native (Params Native) := fun p =>
-  { Input := p.Input, Output := native
+abbrev interface (p : Params Native) : Interface Native :=
+  { input := .ofProvable p.Input, output := .native
     ProverSpec := fun x out => out = p.f x }
 
 end Witness
@@ -99,14 +99,14 @@ inductive Name (Native : Type) : Type 1 where
   | witness (Input : TypeMap) [ProvableType Input] (f : Input Native → Native)
 
 /-- All the arithmetic functionalities, by name. -/
-abbrev interface [Add Native] [Sub Native] [Mul Native] [Zero Native] : Interface Native (Name Native)
-  | .add => Add.interface ()
-  | .sub => Sub.interface ()
-  | .mul => Mul.interface ()
+abbrev interface [Add Native] [Sub Native] [Mul Native] [Zero Native] : Name Native → Interface Native
+  | .add => Add.interface
+  | .sub => Sub.interface
+  | .mul => Mul.interface
   | .scale c => Scale.interface c
   | .const c => Const.interface c
-  | .mulEq => MulEq.interface ()
-  | .assertZero => AssertZero.interface ()
+  | .mulEq => MulEq.interface
+  | .assertZero => AssertZero.interface
   | @Name.witness _ Input inst f => letI := inst; Witness.interface ⟨Input, f⟩
 
 attribute [circuit_norm] interface
@@ -131,9 +131,9 @@ def Name.toArith : Name Native → Arith.Name Native
   | @Name.witness _ Input inst f => letI := inst; .witness Input f
 
 /-- The native set of an R1CS-like backend: linear arithmetic, `a * b = c`, and witnesses.
-A sub-interface of `Arith.interface`. -/
-abbrev interface [Add Native] [Sub Native] [Mul Native] [Zero Native] : Interface Native (Name Native) :=
-  Arith.interface.restrict Name.toArith
+A sub-family of `Arith.interface`. -/
+abbrev interface [Add Native] [Sub Native] [Mul Native] [Zero Native] (n : Name Native) : Interface Native :=
+  Arith.interface n.toArith
 
 end Base
 
@@ -144,17 +144,17 @@ namespace Mul
 /-- `c ← witness (a * b); assert a * b = c`. This is how R1CS multiplies. The witness
 implementation is generic in the computation; the computation is chosen here. -/
 def ofWitnessMulEq {B : Backend} [Field B.Native]
-    (witness : Impl B Witness.interface) (mulEq : Impl B MulEq.interface) : Impl B Mul.interface where
-  main | _, (a, b) => do
+    (witness : ∀ p, Impl B (Witness.interface p)) (mulEq : Impl B MulEq.interface) : Impl B Mul.interface where
+  main | (a, b) => do
     let c ← witness ⟨nativePair, fun (a, b) => a * b⟩ (a, b)
     mulEq (a, b, c)
     return c
   soundness := by
-    intro _ s env (a, b) _ h
+    intro s env (a, b) _ h
     simp only [circuit_norm] at h ⊢
     exact h.symm
   completeness := by
-    intro _ s env (a, b) h _
+    intro s env (a, b) h _
     simp only [circuit_norm] at h ⊢
     exact h.symm
 
@@ -163,20 +163,20 @@ end Mul
 namespace AssertZero
 
 /-- `x * 1 = 0`. -/
-def ofMulEq {B : Backend} [Field B.Native] (const : Impl B Const.interface) (mulEq : Impl B MulEq.interface) :
+def ofMulEq {B : Backend} [Field B.Native] (const : ∀ c, Impl B (Const.interface c)) (mulEq : Impl B MulEq.interface) :
     Impl B AssertZero.interface where
-  main _ x := do
-    let one ← const 1
-    let zero ← const 0
+  main x := do
+    let one ← const 1 ()
+    let zero ← const 0 ()
     mulEq (x, one, zero)
   soundness := by
-    intro _ s env x _ h
+    intro s env x _ h
     simp only [circuit_norm] at h ⊢
     obtain ⟨hone, hzero, h⟩ := h
     rw [hone, hzero, mul_one] at h
     exact h
   completeness := by
-    intro _ s env x h hx
+    intro s env x h hx
     simp only [circuit_norm] at h hx ⊢
     simp_all
 
@@ -185,16 +185,15 @@ end AssertZero
 namespace Arith
 
 /-- A backend that provides `Base.interface` provides all of `Arith.interface`. -/
-def ofBase {B : Backend} [Field B.Native] (base : Impl B Base.interface) : Impl B Arith.interface :=
-  Impl.ofFun fun
-  | .add => base.fix .add
-  | .sub => base.fix .sub
-  | .scale c => base.fix (.scale c)
-  | .const c => base.fix (.const c)
-  | .mulEq => base.fix .mulEq
-  | @Arith.Name.witness _ Input inst f => letI := inst; base.fix (.witness Input f)
-  | .mul => Mul.ofWitnessMulEq (base.restrict fun (p : Witness.Params B.Native) => .witness p.Input p.f) (base.fix .mulEq)
-  | .assertZero => AssertZero.ofMulEq (base.restrict .const) (base.fix .mulEq)
+def ofBase {B : Backend} [Field B.Native] (base : ∀ n, Impl B (Base.interface n)) : ∀ n, Impl B (Arith.interface n)
+  | .add => base .add
+  | .sub => base .sub
+  | .scale c => base (.scale c)
+  | .const c => base (.const c)
+  | .mulEq => base .mulEq
+  | @Arith.Name.witness _ Input inst f => letI := inst; base (.witness Input f)
+  | .mul => Mul.ofWitnessMulEq (fun p => base (.witness p.Input p.f)) (base .mulEq)
+  | .assertZero => AssertZero.ofMulEq (fun c => base (.const c)) (base .mulEq)
 
 end Arith
 

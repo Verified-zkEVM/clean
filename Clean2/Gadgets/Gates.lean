@@ -26,23 +26,23 @@ namespace Gates
 
 namespace NOT
 
-abbrev interface : Interface Native Unit := fun _ =>
-  { Input := native, Output := native
+abbrev interface : Interface Native :=
+  { input := .native, output := .native
     Assumptions := fun x => IsBool x
     Spec := fun x out => IsBool out ∧ (out = 1 ↔ x ≠ 1) }
 
-def impl {B : Backend} [Field B.Native] (arith : Impl B Arith.interface) : Impl B interface where
-  main _ x := do
+def impl {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface n)) : Impl B interface where
+  main x := do
     let one ← arith (.const 1) ()
     arith .sub (one, x)
   soundness := by
-    intro _ s env x hx h
+    intro s env x hx h
     simp only [circuit_norm, IsBool] at hx h ⊢
     obtain ⟨hone, hout⟩ := h
     rw [hout, hone]
     rcases hx with hx | hx <;> simp [hx]
   completeness := by
-    intro _ s env x _ _
+    intro s env x _ _
     simp only [circuit_norm]
 
 end NOT
@@ -51,21 +51,21 @@ end NOT
 
 namespace AND
 
-abbrev interface : Interface Native Unit := fun _ =>
-  { Input := nativePair, Output := native
+abbrev interface : Interface Native :=
+  { input := .nativePair, output := .native
     Assumptions := fun (a, b) => IsBool a ∧ IsBool b
     Spec := fun (a, b) c => IsBool c ∧ (c = 1 ↔ a = 1 ∧ b = 1) }
 
-def impl {B : Backend} [Field B.Native] (arith : Impl B Arith.interface) : Impl B interface where
-  main | _, (a, b) => arith .mul (a, b)
+def impl {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface n)) : Impl B interface where
+  main | (a, b) => arith .mul (a, b)
   soundness := by
-    intro _ s env (a, b) h_as h
+    intro s env (a, b) h_as h
     simp only [circuit_norm, IsBool] at h_as h ⊢
     obtain ⟨ha, hb⟩ := h_as
     rw [h]
     rcases ha with ha | ha <;> rcases hb with hb | hb <;> simp [ha, hb]
   completeness := by
-    intro _ s env (a, b) _ _
+    intro s env (a, b) _ _
     simp only [circuit_norm]
 
 end AND
@@ -74,25 +74,25 @@ end AND
 
 namespace OR
 
-abbrev interface : Interface Native Unit := fun _ =>
-  { Input := nativePair, Output := native
+abbrev interface : Interface Native :=
+  { input := .nativePair, output := .native
     Assumptions := fun (a, b) => IsBool a ∧ IsBool b
     Spec := fun (a, b) c => IsBool c ∧ (c = 1 ↔ a = 1 ∨ b = 1) }
 
-def impl {B : Backend} [Field B.Native] (arith : Impl B Arith.interface) : Impl B interface where
-  main | _, (a, b) => do
+def impl {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface n)) : Impl B interface where
+  main | (a, b) => do
     let ab ← arith .mul (a, b)
     let sum ← arith .add (a, b)
     arith .sub (sum, ab)
   soundness := by
-    intro _ s env (a, b) h_as h
+    intro s env (a, b) h_as h
     simp only [circuit_norm, IsBool] at h_as h ⊢
     obtain ⟨ha, hb⟩ := h_as
     obtain ⟨hab, hsum, hout⟩ := h
     rw [hout, hsum, hab]
     rcases ha with ha | ha <;> rcases hb with hb | hb <;> simp [ha, hb]
   completeness := by
-    intro _ s env (a, b) _ _
+    intro s env (a, b) _ _
     simp only [circuit_norm]
 
 end OR
@@ -104,48 +104,48 @@ composition — the circuits of `and`, `or`, `not` are never unfolded. -/
 
 namespace NAND
 
-abbrev interface : Interface Native Unit := fun _ =>
-  { Input := nativePair, Output := native
+abbrev interface : Interface Native :=
+  { input := .nativePair, output := .native
     Assumptions := fun (a, b) => IsBool a ∧ IsBool b
     Spec := fun (a, b) c => IsBool c ∧ (c = 1 ↔ ¬(a = 1 ∧ b = 1)) }
 
 def impl {B : Backend} [Field B.Native] (and : Impl B AND.interface) (not : Impl B NOT.interface) : Impl B interface where
-  main | _, (a, b) => do
+  main | (a, b) => do
     let ab ← and (a, b)
     not ab
   soundness := by
-    intro _ s env (a, b) h_as h
+    intro s env (a, b) h_as h
     simp only [circuit_norm] at h_as h ⊢
     obtain ⟨h_and, h_not⟩ := h
     obtain ⟨h_bool, h_iff⟩ := h_and h_as
     obtain ⟨h_bool', h_iff'⟩ := h_not h_bool
     exact ⟨h_bool', by rw [h_iff']; simp only [ne_eq, h_iff]⟩
   completeness := by
-    intro _ s env (a, b) _ _
+    intro s env (a, b) _ _
     simp only [circuit_norm]
 
 end NAND
 
 namespace NOR
 
-abbrev interface : Interface Native Unit := fun _ =>
-  { Input := nativePair, Output := native
+abbrev interface : Interface Native :=
+  { input := .nativePair, output := .native
     Assumptions := fun (a, b) => IsBool a ∧ IsBool b
     Spec := fun (a, b) c => IsBool c ∧ (c = 1 ↔ ¬(a = 1 ∨ b = 1)) }
 
 def impl {B : Backend} [Field B.Native] (or : Impl B OR.interface) (not : Impl B NOT.interface) : Impl B interface where
-  main | _, (a, b) => do
+  main | (a, b) => do
     let ab ← or (a, b)
     not ab
   soundness := by
-    intro _ s env (a, b) h_as h
+    intro s env (a, b) h_as h
     simp only [circuit_norm] at h_as h ⊢
     obtain ⟨h_or, h_not⟩ := h
     obtain ⟨h_bool, h_iff⟩ := h_or h_as
     obtain ⟨h_bool', h_iff'⟩ := h_not h_bool
     exact ⟨h_bool', by rw [h_iff']; simp only [ne_eq, h_iff]⟩
   completeness := by
-    intro _ s env (a, b) _ _
+    intro s env (a, b) _ _
     simp only [circuit_norm]
 
 end NOR
@@ -172,20 +172,20 @@ def norR1CS : Impl (R1CS Native) NOR.interface := NOR.impl orR1CS notR1CS
 for the constants; on R1CS each multiplication costs one cell and one constraint, and the linear
 parts are folded into the linear combinations. -/
 
-example (x : Expr Native) (s : ℕ) : (notExpr (Native := Native)).advance () x s = s := rfl
-example (a b : Expr Native) (s : ℕ) : (andExpr (Native := Native)).advance () (a, b) s = s := rfl
-example (a b : Expr Native) (s : ℕ) : (nandExpr (Native := Native)).advance () (a, b) s = s := rfl
+example (x : Expr Native) (s : ℕ) : (notExpr (Native := Native)).advance x s = s := rfl
+example (a b : Expr Native) (s : ℕ) : (andExpr (Native := Native)).advance (a, b) s = s := rfl
+example (a b : Expr Native) (s : ℕ) : (nandExpr (Native := Native)).advance (a, b) s = s := rfl
 
-example (x : LinComb Native) (s : ℕ) : (notR1CS (Native := Native)).advance () x s = s := rfl
-example (a b : LinComb Native) (s : ℕ) : (andR1CS (Native := Native)).advance () (a, b) s = s + 1 := rfl
-example (a b : LinComb Native) (s : ℕ) : (norR1CS (Native := Native)).advance () (a, b) s = s + 1 := rfl
+example (x : LinComb Native) (s : ℕ) : (notR1CS (Native := Native)).advance x s = s := rfl
+example (a b : LinComb Native) (s : ℕ) : (andR1CS (Native := Native)).advance (a, b) s = s + 1 := rfl
+example (a b : LinComb Native) (s : ℕ) : (norR1CS (Native := Native)).advance (a, b) s = s + 1 := rfl
 
 /-- `NOT` is pure linear algebra: on R1CS it emits no constraint at all. -/
-example (x : LinComb Native) (s : ℕ) : ((notR1CS (Native := Native)).main () x |>.operations s).toFlat = [] := rfl
+example (x : LinComb Native) (s : ℕ) : ((notR1CS (Native := Native)).main x |>.operations s).toFlat = [] := rfl
 
 /-- `NAND` on R1CS: one product cell, one constraint; the negation is free. -/
 example (a b : LinComb Native) (s : ℕ) :
-    ((nandR1CS (Native := Native)).main () (a, b) |>.operations s).toFlat =
+    ((nandR1CS (Native := Native)).main (a, b) |>.operations s).toFlat =
       [.witness 2 #v[a, b] (fun v => v[0] * v[1]), .constraint a b (.cell s)] := rfl
 
 end

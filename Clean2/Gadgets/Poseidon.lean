@@ -31,26 +31,26 @@ namespace SBox
 def sbox (x : F) : F := x ^ 5
 
 /-- `x ↦ (x + c)^5`, the constant being the parameter. -/
-abbrev interface : Interface F F := fun c =>
-  { Input := native, Output := native
+abbrev interface (c : F) : Interface F :=
+  { input := .native, output := .native
     Spec := fun x y => y = sbox (x + c) }
 
 /-- Three multiplications. -/
-def impl {B : Backend} [Field B.Native] (arith : Impl B Arith.interface) : Impl B interface where
-  main c x := do
+def impl {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface n)) (c : B.Native) : Impl B (interface c) where
+  main x := do
     let k ← arith (.const c) ()
     let a ← arith .add (x, k)
     let a2 ← arith .mul (a, a)
     let a4 ← arith .mul (a2, a2)
     arith .mul (a4, a)
   soundness := by
-    intro c s env x _ h
+    intro s env x _ h
     simp only [circuit_norm, sbox] at h ⊢
     obtain ⟨hk, ha, h2, h4, h5⟩ := h
     rw [h5, h4, h2, ha, hk]
     ring
   completeness := by
-    intro c s env x _ _
+    intro s env x _ _
     simp only [circuit_norm]
 
 end SBox
@@ -63,8 +63,8 @@ structure Params (F : Type) where
   m : Fin t → F
 
 /-- `x ↦ ∑ i, m i * x[i]`. -/
-abbrev interface : Interface F (Params F) := fun p =>
-  { Input := natives p.t, Output := native
+abbrev interface (p : Params F) : Interface F :=
+  { input := .natives p.t, output := .native
     Spec := fun x y => y = ∑ i, p.m i * x[i] }
 
 /-- The tail sums `∑_{j ≥ i}`, one step: the loop invariant of `impl`. -/
@@ -84,18 +84,18 @@ theorem sum_tail_succ {t : ℕ} (f : Fin t → F) (i : Fin t) :
     if_pos (Finset.mem_univ _)]
 
 /-- A loop of scalings and additions: linear, so free on R1CS. -/
-def impl {B : Backend} [Field B.Native] (arith : Impl B Arith.interface) : Impl B interface where
-  main p x := do
+def impl {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface n)) (p : Params B.Native) : Impl B (interface p) where
+  main x := do
     let zero ← arith (.const 0) ()
     Circuit.foldr p.t (fun i acc => do
       let y ← arith (.scale (p.m i)) x[i]
       arith .add (acc, y)) zero
   consistent := by
-    intro p x s
+    intro x s
     simp only [circuit_norm]
     exact Circuit.foldr_consistent _ _ _ fun i acc s => by simp only [circuit_norm]
   spatial := by
-    intro p x s h_in
+    intro x s h_in
     simp only [circuit_norm] at h_in ⊢
     refine ⟨Set.empty_subset _, fun h_zero h_mono => ?_⟩
     refine Circuit.foldr_local _ _ _ _ (fun i acc s => by simp only [circuit_norm])
@@ -105,7 +105,7 @@ def impl {B : Backend} [Field B.Native] (arith : Impl B Arith.interface) : Impl 
     exact ⟨(Backend.footprint_getElem_subset h_in i i.isLt).trans (h_mono.trans h_mono'),
       fun h_y h_mono'' => ⟨⟨h_acc.trans h_mono'', h_y⟩, fun h_out _ => h_out⟩⟩
   soundness := by
-    intro p s env x _ h
+    intro s env x _ h
     simp only [circuit_norm] at h ⊢
     obtain ⟨h_zero, h_loop⟩ := h
     have := Circuit.foldr_sound _ _ _ env
@@ -121,7 +121,7 @@ def impl {B : Backend} [Field B.Native] (arith : Impl B Arith.interface) : Impl 
       rw [h_add, h_y, h_inv, sum_tail_succ, Fin.getElem_fin]
       ring
   completeness := by
-    intro p s env x h _
+    intro s env x h _
     simp only [circuit_norm] at h ⊢
     exact Circuit.foldr_complete _ _ _ env (fun i acc s h => by simp only [circuit_norm] at h ⊢) h.2
 
@@ -154,32 +154,32 @@ def iterate : ℕ → Vector F p.t → Vector F p.t
 def permutation (x : Vector F p.t) : Vector F p.t := iterate p p.rounds x
 
 /-- Round `r`. -/
-abbrev Round.interface : Interface F ℕ := fun r =>
-  { Input := natives p.t, Output := natives p.t
+abbrev Round.interface (r : ℕ) : Interface F :=
+  { input := .natives p.t, output := .natives p.t
     Spec := fun x y => y = round p r x }
 
 /-- The permutation. -/
-abbrev interface : Interface F Unit := fun _ =>
-  { Input := natives p.t, Output := natives p.t
+abbrev interface : Interface F :=
+  { input := .natives p.t, output := .natives p.t
     Spec := fun x y => y = permutation p x }
 
 section
 variable {B : Backend} [Field B.Native] (p : Params B.Native)
 
 /-- The permutation is a loop over the rounds, whatever a round is. -/
-def impl (round : Impl B (Round.interface p)) : Impl B (interface p) where
-  main _ x := Circuit.foldr p.rounds (fun i acc => round (p.rounds - 1 - i) acc) x
+def impl (round : ∀ r, Impl B (Round.interface p r)) : Impl B (interface p) where
+  main x := Circuit.foldr p.rounds (fun i acc => round (p.rounds - 1 - i) acc) x
   consistent := by
-    intro _ x s
+    intro x s
     simp only [circuit_norm]
     exact Circuit.foldr_consistent _ _ _ fun i acc s => by simp only [circuit_norm]
   spatial := by
-    intro _ x s h_in
+    intro x s h_in
     simp only [circuit_norm] at h_in ⊢
     exact Circuit.foldr_local _ _ _ _ (fun i acc s => by simp only [circuit_norm])
       (fun i acc s _ h_acc => by simp only [circuit_norm]; exact ⟨h_acc, fun h_post _ => h_post⟩) h_in id
   soundness := by
-    intro _ s env x _ h
+    intro s env x _ h
     simp only [circuit_norm] at h ⊢
     have := Circuit.foldr_sound _ x s env
       (fun i acc => B.evalT env acc = iterate p (p.rounds - i) (B.evalT env x)) ?_ ?_ h
@@ -192,22 +192,23 @@ def impl (round : Impl B (Round.interface p)) : Impl B (interface p) where
       rw [h_step, h_inv, show p.rounds - i = (p.rounds - 1 - i) + 1 by omega, iterate,
         show p.rounds - (i + 1) = p.rounds - 1 - i by omega]
   completeness := by
-    intro _ s env x h _
+    intro s env x h _
     simp only [circuit_norm] at h ⊢
     exact Circuit.foldr_complete _ _ _ env (fun i acc s h => by simp only [circuit_norm] at h ⊢) h
 
 /-- A round from an S-box and a linear combination, each applied lane by lane. -/
-def Round.ofLayers (sbox : Impl B SBox.interface) (mix : Impl B Mix.interface) : Impl B (Round.interface p) where
-  main r x := do
+def Round.ofLayers (sbox : ∀ c, Impl B (SBox.interface c)) (mix : ∀ q, Impl B (Mix.interface q)) (r : ℕ) :
+    Impl B (Round.interface p r) where
+  main x := do
     let a ← Circuit.mapFin p.t fun i => sbox (p.rc r)[i] x[i]
     Circuit.mapFin p.t fun j => mix ⟨p.t, p.mds j⟩ a
   consistent := by
-    intro r x s
+    intro x s
     simp only [circuit_norm]
     exact ⟨Circuit.mapFin_consistent _ _ fun i s => by simp only [circuit_norm],
       Circuit.mapFin_consistent _ _ fun i s => by simp only [circuit_norm]⟩
   spatial := by
-    intro r x s h_in
+    intro x s h_in
     simp only [circuit_norm] at h_in ⊢
     rw [Ops.localHold_append_of_consistent]
     · refine Circuit.mapFin_local _ _ _ (fun i s => by simp only [circuit_norm])
@@ -218,7 +219,7 @@ def Round.ofLayers (sbox : Impl B SBox.interface) (mix : Impl B Mix.interface) :
           (fun j s h_mono => by simp only [circuit_norm]; exact ⟨h_a.trans h_mono, fun h_post _ => h_post⟩) id
     · exact Circuit.mapFin_consistent _ _ fun i s => by simp only [circuit_norm]
   soundness := by
-    intro r s env x _ h
+    intro s env x _ h
     simp only [circuit_norm] at h ⊢
     obtain ⟨h₁, h₂⟩ := h
     have ha := Circuit.mapFin_sound _ s env (fun i v => v = SBox.sbox (B.eval env x[i] + (p.rc r)[i]))
@@ -235,14 +236,14 @@ def Round.ofLayers (sbox : Impl B SBox.interface) (mix : Impl B Mix.interface) :
     simp only [Vector.getElem_map, round, roundWith, Vector.getElem_ofFn, Fin.getElem_fin]
     exact hb j hj
   completeness := by
-    intro r s env x h _
+    intro s env x h _
     simp only [circuit_norm] at h ⊢
     exact ⟨Circuit.mapFin_complete _ _ env (fun i s h => by simp only [circuit_norm] at h ⊢) h.1,
       Circuit.mapFin_complete _ _ env (fun j s h => by simp only [circuit_norm] at h ⊢) h.2⟩
 
 /-- A round from arithmetic alone. -/
-def Round.ofArith (arith : Impl B Arith.interface) : Impl B (Round.interface p) :=
-  Round.ofLayers p (SBox.impl arith) (Mix.impl arith)
+def Round.ofArith (arith : ∀ n, Impl B (Arith.interface n)) (r : ℕ) : Impl B (Round.interface p r) :=
+  Round.ofLayers p (SBox.impl arith) (Mix.impl arith) r
 
 end
 
@@ -277,8 +278,8 @@ theorem roundGate_constraint (x k y : Vector F p.t) :
 
 /-- The round, as one placement of the round gate. The gate's contract is its identities; the
 round's contract is the round function; the difference is `roundGate_constraint`. -/
-def Round.ofGate : Impl (Plonkish F) (Round.interface p) :=
-  ((Plonkish.gate (roundGate p)).restrict p.rc).refine fun _ =>
+def Round.ofGate (r : ℕ) : Impl (Plonkish F) (Round.interface p r) :=
+  (Plonkish.gate (roundGate p) (p.rc r)).refine
     { assumptions := fun _ _ => trivial
       spec := fun x y _ h => (roundGate_constraint p x _ y).mp h
       proverAssumptions := fun x _ => (roundGate_constraint p x _ _).mpr rfl
@@ -302,7 +303,7 @@ def plonkishArith : Impl (Plonkish F) (interface p) :=
 /-- R1CS: `3 t` cells per round, the three multiplications of each S-box. The mixing layer and
 the round constants are free. -/
 theorem r1cs_advance (x : Vector (LinComb F) p.t) (s : ℕ) :
-    (r1cs p).advance () x s = s + p.rounds * (3 * p.t) := by
+    (r1cs p).advance x s = s + p.rounds * (3 * p.t) := by
   refine (Circuit.foldr_advance (B := R1CS F) _ x (fun s : ℕ => s + 3 * p.t) (fun i acc s => ?_) s).trans
     (iterate_add_const _ _ _)
   simp only [circuit_norm]
@@ -319,13 +320,13 @@ theorem r1cs_advance (x : Vector (LinComb F) p.t) (s : ℕ) :
       (by rw [iterate_add_const, Nat.mul_comm])
 
 /-- Plonkish, with the round gate: one row per round. -/
-theorem plonkish_advance (x : Vector (ℕ × ℕ) p.t) (s : ℕ) : (plonkish p).advance () x s = s + p.rounds := by
+theorem plonkish_advance (x : Vector (ℕ × ℕ) p.t) (s : ℕ) : (plonkish p).advance x s = s + p.rounds := by
   refine (Circuit.foldr_advance (B := Plonkish F) _ x (fun s : ℕ => s + 1) (fun i acc s => rfl) s).trans ?_
   rw [iterate_add_const, Nat.mul_one]
 
 /-- Every operation of the gated circuit places the round gate. -/
 theorem plonkish_shape (x : Vector (ℕ × ℕ) p.t) (s : ℕ) :
-    ∀ op ∈ (((plonkish p).main () x).operations s).toFlat, op.shape = (roundGate p).toGateShape :=
+    ∀ op ∈ (((plonkish p).main x).operations s).toFlat, op.shape = (roundGate p).toGateShape :=
   Circuit.foldr_flat (B := Plonkish F) _ _ _ (fun i acc s op h => by
     have h' : op ∈ [PlonkishOp.gate (roundGate p) acc (p.rc (p.rounds - 1 - i))] := h
     obtain rfl := List.mem_singleton.mp h'
@@ -333,13 +334,13 @@ theorem plonkish_shape (x : Vector (ℕ × ℕ) p.t) (s : ℕ) :
 
 /-- The configuration of the gated circuit, read off its operations: one gate. -/
 theorem plonkish_config [DecidableEq F] (h : p.rounds ≠ 0) (x : Vector (ℕ × ℕ) p.t) (s : ℕ) :
-    Plonkish.config (((plonkish p).main () x).operations s).toFlat = [(roundGate p).toGateShape] := by
-  have h_all : ∀ sh ∈ (((plonkish p).main () x).operations s).toFlat.map PlonkishOp.shape,
+    Plonkish.config (((plonkish p).main x).operations s).toFlat = [(roundGate p).toGateShape] := by
+  have h_all : ∀ sh ∈ (((plonkish p).main x).operations s).toFlat.map PlonkishOp.shape,
       sh = (roundGate p).toGateShape := by
     intro sh hsh
     obtain ⟨op, hop, rfl⟩ := List.mem_map.mp hsh
     exact plonkish_shape p x s op hop
-  have h_len : (((plonkish p).main () x).operations s).toFlat.length = p.rounds * 1 :=
+  have h_len : (((plonkish p).main x).operations s).toFlat.length = p.rounds * 1 :=
     Circuit.foldr_flat_length (B := Plonkish F) _ x 1 (fun i acc s => rfl) s
   unfold Plonkish.config
   rw [List.eq_replicate_of_mem h_all, List.replicate_dedup]

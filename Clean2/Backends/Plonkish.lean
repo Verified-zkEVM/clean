@@ -116,9 +116,9 @@ def Constraint (g : Gate F) (x : Vector F g.nIn) (k : Vector F g.nFixed) (y : Ve
 /-- The member of a gate at fixed values `k`: the verifier learns the identities, the honest
 prover computes the outputs. A gate is a witness and an assertion fused into one row. Reducible,
 like every interface. -/
-abbrev member (g : Gate F) (k : Vector F g.nFixed) : Interface.Member F where
-  Input := natives g.nIn
-  Output := natives g.nOut
+abbrev member (g : Gate F) (k : Vector F g.nFixed) : Interface F where
+  input := .natives g.nIn
+  output := .natives g.nOut
   Spec x y := g.Constraint x k y
   ProverAssumptions x := g.Constraint x k (g.witness x k)
   ProverSpec x y := y = g.witness x k
@@ -300,19 +300,19 @@ def place (g : Gate F) (inputs : Vector (ℕ × ℕ) g.nIn) (k : Vector F g.nFix
 
 /-- Every gate, at every assignment of its fixed cells: what the backend has natively. The
 contract is the gate's own polynomial identities. -/
-def gate (g : Gate F) : Impl (Plonkish F) (fun k => g.member k) where
-  main k inputs := place g inputs k
+def gate (g : Gate F) (k : Vector F g.nFixed) : Impl (Plonkish F) (g.member k) where
+  main inputs := place g inputs k
   spatial := by
-    intro k inputs s h
+    intro inputs s h
     simp only [circuit_norm]
     exact ⟨h, footprintT_outCells g s⟩
   soundness := by
-    intro k s env inputs _ h
+    intro s env inputs _ h
     simp only [circuit_norm] at h ⊢
     rw [← h.1]
     exact h.2
   completeness := by
-    intro k s env inputs h h_prover
+    intro s env inputs h h_prover
     simp only [circuit_norm] at h h_prover ⊢
     obtain ⟨h_in, h_out⟩ := h
     refine ⟨⟨h_in, ?_⟩, ?_⟩
@@ -354,140 +354,140 @@ macro_rules
       GateExpr.eval, Vector.getElem_map, Fin.getElem_fin, sub_eq_zero] $[$loc]?)
 
 def add : Impl (Plonkish F) Add.interface where
-  main | _, (a, b) => do
+  main | (a, b) => do
     let y ← gate (addGate (F := F)) #v[] #v[a, b]
     return y[0]
   spatial := by
-    intro _ (a, b) s h
+    intro (a, b) s h
     simp only [circuit_norm, Set.union_subset_iff] at h ⊢
     exact ⟨h, fun h_post _ => Backend.footprint_getElem_subset h_post 0 Nat.one_pos⟩
   soundness := by
-    intro _ s env (a, b) _ h
+    intro s env (a, b) _ h
     gate_norm at h ⊢
     simpa using h
   completeness := by
-    intro _ s env (a, b) _ _
+    intro s env (a, b) _ _
     gate_norm
     simp
 
 def sub : Impl (Plonkish F) Sub.interface where
-  main | _, (a, b) => do
+  main | (a, b) => do
     let y ← gate (subGate (F := F)) #v[] #v[a, b]
     return y[0]
   spatial := by
-    intro _ (a, b) s h
+    intro (a, b) s h
     simp only [circuit_norm, Set.union_subset_iff] at h ⊢
     exact ⟨h, fun h_post _ => Backend.footprint_getElem_subset h_post 0 Nat.one_pos⟩
   soundness := by
-    intro _ s env (a, b) _ h
+    intro s env (a, b) _ h
     gate_norm at h ⊢
     simpa using h
   completeness := by
-    intro _ s env (a, b) _ _
+    intro s env (a, b) _ _
     gate_norm
     simp
 
 def mul : Impl (Plonkish F) Mul.interface where
-  main | _, (a, b) => do
+  main | (a, b) => do
     let y ← gate (mulGate (F := F)) #v[] #v[a, b]
     return y[0]
   spatial := by
-    intro _ (a, b) s h
+    intro (a, b) s h
     simp only [circuit_norm, Set.union_subset_iff] at h ⊢
     exact ⟨h, fun h_post _ => Backend.footprint_getElem_subset h_post 0 Nat.one_pos⟩
   soundness := by
-    intro _ s env (a, b) _ h
+    intro s env (a, b) _ h
     gate_norm at h ⊢
     simpa using h
   completeness := by
-    intro _ s env (a, b) _ _
+    intro s env (a, b) _ _
     gate_norm
     simp
 
 /-- One implementation for every scalar. -/
-def scale : Impl (Plonkish F) Scale.interface where
-  main c x := do
+def scale (c : F) : Impl (Plonkish F) (Scale.interface c) where
+  main x := do
     let y ← gate (scaleGate (F := F)) #v[c] #v[x]
     return y[0]
   spatial := by
-    intro _ x s h
+    intro x s h
     simp only [circuit_norm] at h ⊢
     exact ⟨h, fun h_post _ => Backend.footprint_getElem_subset h_post 0 Nat.one_pos⟩
   soundness := by
-    intro c s env x _ h
+    intro s env x _ h
     gate_norm at h ⊢
     simpa using h
   completeness := by
-    intro c s env x _ _
+    intro s env x _ _
     gate_norm
     simp
 
 /-- One implementation for every constant. -/
-def const : Impl (Plonkish F) Const.interface where
-  main c _ := do
+def const (c : F) : Impl (Plonkish F) (Const.interface c) where
+  main _ := do
     let y ← gate (constGate (F := F)) #v[c] #v[]
     return y[0]
   spatial := by
-    intro _ _ s _
+    intro _ s _
     simp only [circuit_norm]
     exact ⟨Set.empty_subset _, fun h_post _ => Backend.footprint_getElem_subset h_post 0 Nat.one_pos⟩
   soundness := by
-    intro c s env _ _ h
+    intro s env _ _ h
     gate_norm at h ⊢
     simpa using h
   completeness := by
-    intro c s env _ _ _
+    intro s env _ _ _
     gate_norm
     simp
 
 def mulEq : Impl (Plonkish F) MulEq.interface where
-  main | _, (a, b, c) => do
+  main | (a, b, c) => do
     let _ ← gate (mulEqGate (F := F)) #v[] #v[a, b, c]
     return ()
   spatial := by
-    intro _ (a, b, c) s h
+    intro (a, b, c) s h
     simp only [circuit_norm, Set.union_subset_iff] at h ⊢
     exact ⟨h, fun _ _ => Set.empty_subset _⟩
   soundness := by
-    intro _ s env (a, b, c) _ h
+    intro s env (a, b, c) _ h
     gate_norm at h ⊢
     simpa using h
   completeness := by
-    intro _ s env (a, b, c) _ h_prover
+    intro s env (a, b, c) _ h_prover
     gate_norm at h_prover ⊢
     simpa using h_prover
 
 def assertZeroImpl : Impl (Plonkish F) AssertZero.interface where
-  main _ x := do
+  main x := do
     let _ ← gate (assertZeroGate (F := F)) #v[] #v[x]
     return ()
   spatial := by
-    intro _ x s h
+    intro x s h
     simp only [circuit_norm] at h ⊢
     exact ⟨h, fun _ _ => Set.empty_subset _⟩
   soundness := by
-    intro _ s env x _ h
+    intro s env x _ h
     gate_norm at h ⊢
     simpa using h
   completeness := by
-    intro _ s env x _ h_prover
+    intro s env x _ h_prover
     gate_norm at h_prover ⊢
     simpa using h_prover
 
 /-- One implementation for every witness computation, over any input shape. -/
-def witnessImpl : Impl (Plonkish F) Witness.interface where
-  main p input := do
+def witnessImpl (p : Witness.Params F) : Impl (Plonkish F) (Witness.interface p) where
+  main input := do
     let y ← gate (witnessGate (F := F) (size p.Input) fun v => p.f (fromElements v)) #v[] (toElements input)
     return y[0]
   spatial := by
-    intro _ input s h
+    intro input s h
     simp only [circuit_norm] at h ⊢
     exact ⟨h, fun h_post _ => Backend.footprint_getElem_subset h_post 0 Nat.one_pos⟩
   soundness := by
-    intro _ s env input _ _
+    intro s env input _ _
     simp only [circuit_norm]
   completeness := by
-    intro p s env input h _
+    intro s env input h _
     gate_norm at h ⊢
     have h := congrArg (fun v => v[0]) h
     simp only [Vector.getElem_map] at h
@@ -496,16 +496,15 @@ def witnessImpl : Impl (Plonkish F) Witness.interface where
     rfl
 
 /-- The plonkish backend implements all of `Arith.interface` natively, a gate each. -/
-def arith : Impl (Plonkish F) Arith.interface :=
-  Impl.ofFun fun
+def arith : ∀ n, Impl (Plonkish F) (Arith.interface n)
   | .add => add
   | .sub => sub
   | .mul => mul
-  | .scale c => scale.fix c
-  | .const c => const.fix c
+  | .scale c => scale c
+  | .const c => const c
   | .mulEq => mulEq
   | .assertZero => assertZeroImpl
-  | @Arith.Name.witness _ Input inst f => letI := inst; witnessImpl.fix ⟨Input, f⟩
+  | @Arith.Name.witness _ Input inst f => letI := inst; witnessImpl ⟨Input, f⟩
 
 /-! ## The configuration, read off the operations -/
 

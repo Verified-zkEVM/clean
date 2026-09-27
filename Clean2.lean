@@ -13,3 +13,4 @@ public import Clean2.Gadgets.Inverse
 public import Clean2.Gadgets.Select
 public import Clean2.Gadgets.Bits2Num
 public import Clean2.Gadgets.Poseidon
+public import Clean2.Gadgets.Byte

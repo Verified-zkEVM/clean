@@ -150,6 +150,7 @@ def R1CS (Native : Type) [Field Native] : Backend where
 
 /-- The native values of the R1CS backend are the field it is built over. -/
 instance : Field (R1CS Native).Native := ‹Field Native›
+instance [DecidableEq Native] : DecidableEq (R1CS Native).Native := ‹DecidableEq Native›
 
 namespace R1CS
 
@@ -184,95 +185,94 @@ def constraint (a b c : LinComb Native) : Circuit (R1CS Native) Unit :=
 /-! Native implementations: exactly `Base.interface`. Linear operations are free. -/
 
 def add : Impl (R1CS Native) Add.interface where
-  main | _, ((a, b) : LinComb Native × LinComb Native) => pure (a + b)
+  main | ((a, b) : LinComb Native × LinComb Native) => pure (a + b)
   spatial := by
-    intro _ (a, b) s h
+    intro (a, b) s h
     simp_all [circuit_norm]
   soundness := by
-    intro _ s env (a, b) _ _
+    intro s env (a, b) _ _
     simp [circuit_norm]
   completeness := by
-    intro _ s env (a, b) _ _
+    intro s env (a, b) _ _
     simp [circuit_norm]
 
 def sub : Impl (R1CS Native) Sub.interface where
-  main | _, ((a, b) : LinComb Native × LinComb Native) => pure (a - b)
+  main | ((a, b) : LinComb Native × LinComb Native) => pure (a - b)
   spatial := by
-    intro _ (a, b) s h
+    intro (a, b) s h
     simp_all [circuit_norm]
   soundness := by
-    intro _ s env (a, b) _ _
+    intro s env (a, b) _ _
     simp [circuit_norm]
   completeness := by
-    intro _ s env (a, b) _ _
+    intro s env (a, b) _ _
     simp [circuit_norm]
 
 /-- One implementation for every scalar. -/
-def scale : Impl (R1CS Native) Scale.interface where
-  main c x := pure (LinComb.smul c x)
+def scale (c : Native) : Impl (R1CS Native) (Scale.interface c) where
+  main x := pure (LinComb.smul c x)
   spatial := by
-    intro _ x s h
+    intro x s h
     simp_all [circuit_norm]
   soundness := by
-    intro c s env x _ _
+    intro s env x _ _
     simp [circuit_norm]
   completeness := by
-    intro c s env x _ _
+    intro s env x _ _
     simp [circuit_norm]
 
 /-- One implementation for every constant. -/
-def const : Impl (R1CS Native) Const.interface where
-  main c _ := pure (LinComb.ofConst c)
+def const (c : Native) : Impl (R1CS Native) (Const.interface c) where
+  main _ := pure (LinComb.ofConst c)
   spatial := by
-    intro _ _ s _
+    intro _ s _
     simp [circuit_norm]
   soundness := by
-    intro c s env _ _ _
+    intro s env _ _ _
     simp [circuit_norm]
   completeness := by
-    intro c s env _ _ _
+    intro s env _ _ _
     simp [circuit_norm]
 
 def mulEq : Impl (R1CS Native) MulEq.interface where
-  main | _, (a, b, c) => constraint a b c
+  main | (a, b, c) => constraint a b c
   spatial := by
-    intro _ (a, b, c) s h
+    intro (a, b, c) s h
     simp_all [circuit_norm]
   soundness := by
-    intro _ s env (a, b, c) _ h
+    intro s env (a, b, c) _ h
     simp_all [circuit_norm]
   completeness := by
-    intro _ s env (a, b, c) _ h
+    intro s env (a, b, c) _ h
     simp_all [circuit_norm]
 
 /-- One implementation for every witness computation, over any input shape. -/
-def witnessImpl : Impl (R1CS Native) Witness.interface where
-  main p input := witness (toElements input) fun v => p.f (fromElements v)
+def witnessImpl (p : Witness.Params Native) : Impl (R1CS Native) (Witness.interface p) where
+  main input := witness (toElements input) fun v => p.f (fromElements v)
   spatial := by
-    intro _ input s h
+    intro input s h
     simp only [circuit_norm]
     exact ⟨h, Linear.singleton_subset_alloc_succ s⟩
   soundness := by
-    intro _ s env input _ _
+    intro s env input _ _
     simp [circuit_norm]
   completeness := by
-    intro _ s env input h _
+    intro s env input h _
     simp only [circuit_norm] at h ⊢
     rw [h, ProvableType.map_eq_fromElements]
     rfl
 
 /-- What R1CS has natively. -/
-def base : Impl (R1CS Native) Base.interface :=
-  Impl.ofFun fun
+def base : ∀ n, Impl (R1CS Native) (Base.interface n)
   | .add => add
   | .sub => sub
-  | .scale c => scale.fix c
-  | .const c => const.fix c
+  | .scale c => scale c
+  | .const c => const c
   | .mulEq => mulEq
-  | @Base.Name.witness _ Input inst f => letI := inst; witnessImpl.fix ⟨Input, f⟩
+  | @Base.Name.witness _ Input inst f => letI := inst; witnessImpl ⟨Input, f⟩
 
 /-- The full arithmetic vocabulary, derived: `mul` costs a cell and a constraint. -/
-def arith : Impl (R1CS Native) Arith.interface := Arith.ofBase base
+def arith : ∀ n, Impl (R1CS Native) (Arith.interface n) := Arith.ofBase base
 
 end R1CS
 end Clean2

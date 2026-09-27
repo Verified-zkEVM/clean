@@ -149,119 +149,118 @@ def assertZero (e : Expr Native) : Circuit (ExprBackend Native) Unit :=
 builds a bigger expression. -/
 
 def add : Impl (ExprBackend Native) Add.interface where
-  main | _, (a, b) => pure (Expr.add a b)
+  main | (a, b) => pure (Expr.add a b)
   spatial := by
-    intro _ (a, b) s h
+    intro (a, b) s h
     simp_all [circuit_norm]
   soundness := by
-    intro _ s env (a, b) _ _
+    intro s env (a, b) _ _
     simp [circuit_norm]
   completeness := by
-    intro _ s env (a, b) _ _
+    intro s env (a, b) _ _
     simp [circuit_norm]
 
 def sub : Impl (ExprBackend Native) Sub.interface where
-  main | _, (a, b) => pure (Expr.add a (Expr.mul (Expr.const (-1)) b))
+  main | (a, b) => pure (Expr.add a (Expr.mul (Expr.const (-1)) b))
   spatial := by
-    intro _ (a, b) s h
+    intro (a, b) s h
     simp_all [circuit_norm]
   soundness := by
-    intro _ s env (a, b) _ _
+    intro s env (a, b) _ _
     simp [circuit_norm, sub_eq_add_neg]
   completeness := by
-    intro _ s env (a, b) _ _
+    intro s env (a, b) _ _
     simp [circuit_norm]
 
 def mul : Impl (ExprBackend Native) Mul.interface where
-  main | _, (a, b) => pure (Expr.mul a b)
+  main | (a, b) => pure (Expr.mul a b)
   spatial := by
-    intro _ (a, b) s h
+    intro (a, b) s h
     simp_all [circuit_norm]
   soundness := by
-    intro _ s env (a, b) _ _
+    intro s env (a, b) _ _
     simp [circuit_norm]
   completeness := by
-    intro _ s env (a, b) _ _
+    intro s env (a, b) _ _
     simp [circuit_norm]
 
 /-- One implementation for every scalar. -/
-def scale : Impl (ExprBackend Native) Scale.interface where
-  main c x := pure (Expr.mul (Expr.const c) x)
+def scale (c : Native) : Impl (ExprBackend Native) (Scale.interface c) where
+  main x := pure (Expr.mul (Expr.const c) x)
   spatial := by
-    intro _ x s h
+    intro x s h
     simp_all [circuit_norm]
   soundness := by
-    intro c s env x _ _
+    intro s env x _ _
     simp [circuit_norm]
   completeness := by
-    intro c s env x _ _
+    intro s env x _ _
     simp [circuit_norm]
 
 /-- One implementation for every constant. -/
-def const : Impl (ExprBackend Native) Const.interface where
-  main c _ := pure (Expr.const c)
+def const (c : Native) : Impl (ExprBackend Native) (Const.interface c) where
+  main _ := pure (Expr.const c)
   spatial := by
-    intro _ _ s _
+    intro _ s _
     simp [circuit_norm]
   soundness := by
-    intro c s env _ _ _
+    intro s env _ _ _
     simp [circuit_norm]
   completeness := by
-    intro c s env _ _ _
+    intro s env _ _ _
     simp [circuit_norm]
 
 def assertZeroImpl : Impl (ExprBackend Native) AssertZero.interface where
-  main _ e := assertZero e
+  main e := assertZero e
   spatial := by
-    intro _ e s h
+    intro e s h
     simp_all [circuit_norm]
   soundness := by
-    intro _ s env e _ h
+    intro s env e _ h
     simp_all [circuit_norm]
   completeness := by
-    intro _ s env e _ h
+    intro s env e _ h
     simp_all [circuit_norm]
 
 def mulEq : Impl (ExprBackend Native) MulEq.interface where
-  main | _, (a, b, c) => assertZero (Expr.add (Expr.mul a b) (Expr.mul (Expr.const (-1)) c))
+  main | (a, b, c) => assertZero (Expr.add (Expr.mul a b) (Expr.mul (Expr.const (-1)) c))
   spatial := by
-    intro _ (a, b, c) s h
+    intro (a, b, c) s h
     simp_all [circuit_norm]
   soundness := by
-    intro _ s env (a, b, c) _ h
+    intro s env (a, b, c) _ h
     simp_all [circuit_norm]
     linear_combination h
   completeness := by
-    intro _ s env (a, b, c) _ h
+    intro s env (a, b, c) _ h
     simp_all [circuit_norm]
 
 /-- One implementation for every witness computation, over any input shape. -/
-def witnessImpl : Impl (ExprBackend Native) Witness.interface where
-  main p input := witness (toElements input) fun v => p.f (fromElements v)
+def witnessImpl (p : Witness.Params Native) : Impl (ExprBackend Native) (Witness.interface p) where
+  main input := witness (toElements input) fun v => p.f (fromElements v)
   spatial := by
-    intro _ input s h
+    intro input s h
     simp only [circuit_norm]
     exact ⟨h, Linear.singleton_subset_alloc_succ s⟩
   soundness := by
-    intro _ s env input _ _
+    intro s env input _ _
     simp [circuit_norm]
   completeness := by
-    intro _ s env input h _
+    intro s env input h _
     simp only [circuit_norm] at h ⊢
     rw [h, ProvableType.map_eq_fromElements]
     rfl
 
 /-- The expression backend implements all of `Arith.interface` natively. -/
-def arith : Impl (ExprBackend Native) Arith.interface :=
-  Impl.ofFun fun
+def arith : ∀ n, Impl (ExprBackend Native) (Arith.interface n)
   | .add => add
   | .sub => sub
   | .mul => mul
-  | .scale c => scale.fix c
-  | .const c => const.fix c
+  | .scale c => scale c
+  | .const c => const c
   | .mulEq => mulEq
   | .assertZero => assertZeroImpl
-  | @Arith.Name.witness _ Input inst f => letI := inst; witnessImpl.fix ⟨Input, f⟩
+  | @Arith.Name.witness _ Input inst f => letI := inst; witnessImpl ⟨Input, f⟩
 
 end ExprBackend
 end Clean2

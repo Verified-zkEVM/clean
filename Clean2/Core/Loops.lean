@@ -164,6 +164,24 @@ theorem mapFin_sound (f : Fin n → Circuit B B.Var) (s : B.State) (env : B.Cell
     · rw [show (⟨i, hi⟩ : Fin (n + 1)) = Fin.last n from Fin.ext (by simp only [Fin.val_last]; omega)]
       exact h_step (Fin.last n) _ h.2
 
+/-- What the honest prover knows about each result: the prover-side counterpart of
+`mapFin_sound`. -/
+theorem mapFin_honest (f : Fin n → Circuit B B.Var) (s : B.State) (env : B.Cell → B.Native)
+    (P : Fin n → B.Native → Prop)
+    (h_step : ∀ i s, ((f i).operations s).HonestCompleteness env s → P i (B.eval env ((f i).output s)))
+    (h : ((mapFin n f).operations s).HonestCompleteness env s) :
+    ∀ (i : ℕ) (hi : i < n), P ⟨i, hi⟩ (B.eval env ((mapFin n f).output s)[i]) := by
+  induction n generalizing s with
+  | zero => intro i hi; exact absurd hi (Nat.not_lt_zero i)
+  | succ n ih =>
+    simp only [circuit_norm] at h ⊢
+    intro i hi
+    rw [Vector.getElem_push]
+    split
+    · exact ih (fun i => f i.castSucc) s (fun i => P i.castSucc) (fun i => h_step i.castSucc) h.1 i ‹_›
+    · rw [show (⟨i, hi⟩ : Fin (n + 1)) = Fin.last n from Fin.ext (by simp only [Fin.val_last]; omega)]
+      exact h_step (Fin.last n) _ h.2
+
 theorem mapFin_complete (f : Fin n → Circuit B B.Var) (s : B.State) (env : B.Cell → B.Native)
     (h_step : ∀ i s, ((f i).operations s).HonestCompleteness env s → ((f i).operations s).CompletenessHold env s)
     (h : ((mapFin n f).operations s).HonestCompleteness env s) :
