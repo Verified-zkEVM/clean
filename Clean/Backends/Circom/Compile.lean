@@ -892,20 +892,22 @@ end
 /-! ## Expression flattening (shared by WASM and R1CS compilers) -/
 
 -- sparse (signalIndex × fieldCoefficient) pairs
-@[expose] def LinComb (F : Type) := List (ℕ × F)
-@[expose] def Constraint (F : Type) := List (ℕ × F) × List (ℕ × F) × List (ℕ × F)
+abbrev LinComb (F : Type) := List (ℕ × F)
+abbrev Constraint (F : Type) := List (ℕ × F) × List (ℕ × F) × List (ℕ × F)
 
 structure FlattenState (F : Type) where
   nextSignal : ℕ := 1
   constraints : List (Constraint F) := []
 
-def isConstant (lc : List (ℕ × F)) : Bool :=
+@[expose] def isConstant (lc : List (ℕ × F)) : Bool :=
   match lc with | [(0, _)] => true | _ => false
 
-def scaleLinComb (c : F) (lc : List (ℕ × F)) : List (ℕ × F) :=
+/-- Scale a linear combination by a constant. -/
+@[expose] def scaleLinComb (c : F) (lc : List (ℕ × F)) : List (ℕ × F) :=
   lc.map fun (i, coeff) => (i, c * coeff)
 
-def addLinCombs (a b : List (ℕ × F)) : List (ℕ × F) :=
+/-- Add two linear combinations. -/
+@[expose] def addLinCombs (a b : List (ℕ × F)) : List (ℕ × F) :=
   match a, b with
   | [], _ => b
   | _, [] => a
@@ -917,7 +919,7 @@ def addLinCombs (a b : List (ℕ × F)) : List (ℕ × F) :=
     else (i2, c2) :: addLinCombs ((i1, c1) :: xs) ys
 
 open Expression (var const add mul) in
-def flattenExpr (vm : VarMap) : (e : Expression F) → FlattenState F → (List (ℕ × F) × FlattenState F)
+@[expose] def flattenExpr (vm : VarMap) : (e : Expression F) → FlattenState F → (List (ℕ × F) × FlattenState F)
   | .var i, st =>
     -- R1CS signal = the variable's position in the outputs-first signal layout.
     ([(signalOfVar vm i.index, (1 : F))], st)

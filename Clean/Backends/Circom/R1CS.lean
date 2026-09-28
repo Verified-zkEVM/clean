@@ -8,7 +8,9 @@ consumed by the snarkjs toolchain:
 * binary `.r1cs` (`compileR1CSBin`) — the r1csfile format read by
   `snarkjs r1cs info`, `groth16 setup`, and the other `r1cs` subcommands.
 
-Uses the shared flattening logic from Compile.lean.
+Uses the shared flattening logic from Compile.lean. The raw export is
+`exportConstraints`, which also returns the signal layout; its soundness with respect
+to Clean's circuit semantics is proved in R1CSSoundness.lean.
 -/
 module
 
@@ -29,56 +31,62 @@ variable {F : Type} [FiniteField F]
 private def bitsPerByte : ℕ := 8
 private def fieldWordBits : ℕ := 64  -- field word size in bits (matches limbBits)
 
-def processOps (vm : VarMap) (ops : List (FlatOperation F)) (st : FlattenState F) :
-    Except String (List (Constraint F) × ℕ) :=
-  match ops with
-  | [] => pure (st.constraints, st.nextSignal)
-  | .witness _ _ :: rest => processOps vm rest st
-  | .assert e@(.add (.mul a b) (.mul (.const c) z)) :: rest =>
-    if c = -1 ∨ c = 1 then
-      let (la, st1) := flattenExpr vm a st
-      let (lb, st2) := flattenExpr vm b st1
-      -- Linearize a·b exactly like the WASM witness module does (it flattens
-      -- the whole assert in order: the product first, then z), so intermediate
-      -- numbering stays in sync: k = a·b, then k ± z = 0. A constant factor
-      -- collapses into a scalar, no intermediate.
-      if isConstant la ∨ isConstant lb then
-        let (lz, st3) := flattenExpr vm z st2
-        let lz' := if c = -1 then lz else scaleLinComb (-1 : F) lz
-        processOps vm rest { st3 with constraints := (la, lb, lz') :: st3.constraints }
-      else
-        let k := st2.nextSignal
-        let st3 : FlattenState F := { nextSignal := k + 1, constraints := (la, lb, [(k, (1 : F))]) :: st2.constraints }
-        let (lz, st4) := flattenExpr vm z st3
-        let lz' := if c = -1 then scaleLinComb (-1 : F) lz else lz
-        let lc := addLinCombs [(k, (1 : F))] lz'
-        processOps vm rest { st4 with constraints := (lc, [(0, (1 : F))], []) :: st4.constraints }
-    else
-      let (lc, st1) := flattenExpr vm e st
-      processOps vm rest { st1 with constraints := (lc, [(0, (1 : F))], []) :: st1.constraints }
-  | .assert e@(.add (.mul (.const c) z) (.mul a b)) :: rest =>
-    if c = -1 ∨ c = 1 then
-      -- Match the original expression order used by WASM: z before a*b.
-      let (lz, stZ) := flattenExpr vm z st
-      let (la, st1) := flattenExpr vm a stZ
-      let (lb, st2) := flattenExpr vm b st1
-      if isConstant la ∨ isConstant lb then
-        let lz' := if c = -1 then lz else scaleLinComb (-1 : F) lz
-        processOps vm rest { st2 with constraints := (la, lb, lz') :: st2.constraints }
-      else
-        let k := st2.nextSignal
-        let st3 : FlattenState F := { nextSignal := k + 1, constraints := (la, lb, [(k, (1 : F))]) :: st2.constraints }
-        let lz' := if c = -1 then scaleLinComb (-1 : F) lz else lz
-        let lc := addLinCombs [(k, (1 : F))] lz'
-        processOps vm rest { st3 with constraints := (lc, [(0, (1 : F))], []) :: st3.constraints }
-    else
-      let (lc, st1) := flattenExpr vm e st
-      processOps vm rest { st1 with constraints := (lc, [(0, (1 : F))], []) :: st1.constraints }
-  | .assert e :: rest =>
-      let (lc, st1) := flattenExpr vm e st
-      processOps vm rest { st1 with constraints := (lc, [(0, (1 : F))], []) :: st1.constraints }
-  | .lookup _ :: _ => .error "processOps: lookup constraints cannot be represented in R1CS"
-  | .interact _ :: _ => .error "processOps: interactions cannot be represented in R1CS"
+/-- Lower one assert `e = 0`: flatten `e` and emit the linear row `lc · 1 = 0`. -/
+@[expose] def lowerAssert (vm : VarMap) (e : Expression F) (st : FlattenState F) : FlattenState F :=
+  let r := flattenExpr vm e st
+  { nextSignal := r.2.nextSignal, constraints := (r.1, [(0, (1 : F))], []) :: r.2.constraints }
+
+/-- Lower a list of flat operations to constraints, accumulated (most recent first) in the
+state. Lookups and interactions cannot be represented in R1CS and are rejected. -/
+@[expose] def processOps (vm : VarMap) : List (FlatOperation F) → FlattenState F → Except String (FlattenState F)
+  | [], st => .ok st
+  | .witness _ _ :: rest, st => processOps vm rest st
+  | .assert e :: rest, st => processOps vm rest (lowerAssert vm e st)
+  | .lookup _ :: _, _ => .error "processOps: lookup constraints cannot be represented in R1CS"
+  | .interact _ :: _, _ => .error "processOps: interactions cannot be represented in R1CS"
+
+/-- The signal layout: signal `0` is the constant, then the outputs, then the inputs, then
+the remaining witnesses (see `signalOfVar`). -/
+def layoutOf (fieldPrime numInputs numWords : ℕ) (outputVarIdx : List ℕ) : VarMap :=
+  { (VarMap.init numInputs numWords fieldPrime) with
+    numOutputs := outputVarIdx.length, outputVars := outputVarIdx }
+
+/-- Validate the export parameters and the witness IR. Returns the signal layout and the
+number of circuit variables (inputs plus witnesses). -/
+def validateExport (fieldPrime numInputs : ℕ) (inputNames : List String) (outputVarIdx : List ℕ)
+    (ops : List (Operation F)) (numWords : ℕ) : Except String (VarMap × ℕ) := do
+  if !inputNames.isEmpty ∧ inputNames.length ≠ numInputs then
+    throw s!"compileR1CS: {inputNames.length} input names for {numInputs} inputs (either none, or one per input)"
+  if outputVarIdx.length ≠ outputVarIdx.eraseDups.length then
+    throw "compileR1CS: outputVarIdx must not contain duplicate variables"
+  if !(outputVarIdx.all fun v => v ≥ numInputs) then
+    throw "compileR1CS: outputVarIdx must be witness circuit variables (indices ≥ numInputs)"
+  let flatOps := Operations.toFlat ops
+  let vm := layoutOf fieldPrime numInputs numWords outputVarIdx
+  -- Run the witness-IR compiler for validation only: it rejects witness IR the WASM
+  -- backend cannot compile (e.g. `native` witnesses), so both artifacts fail together.
+  let (_, finalVarIdx, _) ← processFlatOps flatOps vm numInputs {}
+  -- The number of circuit variables is fixed by the operations themselves.
+  let numVars := numInputs + FlatOperation.localLength flatOps
+  if finalVarIdx ≠ numVars then
+    throw s!"compileR1CS: internal error: witness compiler allocated {finalVarIdx} variables, operations declare {numVars}"
+  if !(outputVarIdx.all fun v => v < numVars) then
+    throw "compileR1CS: outputVarIdx contains a variable outside the witness range"
+  pure (vm, numVars)
+
+/--
+Raw constraint export: the constraints in generation order, the total number of signals
+(`nVars`), and the signal layout used, exactly as generated.
+-/
+@[expose] def exportConstraints (fieldPrime numInputs : ℕ) (inputNames : List String := []) (outputVarIdx : List ℕ := []) (ops : List (Operation F)) (numWords : ℕ) :
+    Except String (List (Constraint F) × ℕ × VarMap) :=
+  match validateExport fieldPrime numInputs inputNames outputVarIdx ops numWords with
+  | .error e => .error e
+  | .ok (vm, numVars) =>
+    -- signals 0..numVars are the constant and the circuit variables; intermediates follow
+    match processOps vm (Operations.toFlat ops) { nextSignal := 1 + numVars } with
+    | .error e => .error e
+    | .ok st => .ok (st.constraints.reverse, st.nextSignal, vm)
 
 /-- Convert a linear combination to a sparse JSON object: {"signalIndex": "coeff", ...} -/
 def linCombToJson (lc : List (ℕ × F)) : Json :=
@@ -91,34 +99,15 @@ def constraintToJson (c : Constraint F) : Json :=
   Json.arr #[linCombToJson a, linCombToJson b, linCombToJson c']
 
 /--
-Flatten the operations and extract the constraints, using the WASM compiler's
-VarMap so the signal layout matches the witness-generation module.
+Export the constraints and the field metadata for serialization.
 Returns (constraints, nVars, n8), where n8 is the byte width of a field element.
-`outputVarIdx` switches the signal numbering to the outputs-first layout,
-matching `compileModule` with the same argument.
 -/
 private def compileConstraints (fieldPrime numInputs : ℕ) (inputNames : List String := []) (outputVarIdx : List ℕ := []) (ops : List (Operation F)) (numWords : ℕ) :
     Except String (List (Constraint F) × ℕ × ℕ) := do
-  let numOutputs := outputVarIdx.length
-  if !inputNames.isEmpty ∧ inputNames.length ≠ numInputs then
-    throw s!"compileR1CS: {inputNames.length} input names for {numInputs} inputs (either none, or one per input)"
-  if outputVarIdx.length ≠ outputVarIdx.eraseDups.length then
-    throw "compileR1CS: outputVarIdx must not contain duplicate variables"
-  if !(outputVarIdx.all fun v => v ≥ numInputs) then
-    throw "compileR1CS: outputVarIdx must be witness circuit variables (indices ≥ numInputs)"
-  let flatOps := Operations.toFlat ops
-  let vm := { (VarMap.init numInputs numWords fieldPrime) with numOutputs, outputVars := outputVarIdx }
-  let (_, finalVarIdx, _) ← processFlatOps flatOps vm numInputs {}
-  -- finalVarIdx = numInputs + total witness outputs (steps don't count)
-  let witnessCount := finalVarIdx - numInputs
-  if !(outputVarIdx.all fun v => v < finalVarIdx) then
-    throw "compileR1CS: outputVarIdx contains a variable outside the witness range"
-  let totalSignals := 1 + numInputs + witnessCount  -- +1 for constant signal
-  let st : FlattenState F := { nextSignal := totalSignals }
-  let (allConstraints, nVars) ← processOps vm flatOps st
+  let (constraints, nVars, _) ← exportConstraints fieldPrime numInputs inputNames outputVarIdx ops numWords
   let primeBits := Nat.log2 fieldPrime + 1
   let n8 : ℕ := (primeBits + bitsPerByte - 1) / bitsPerByte
-  pure (allConstraints.reverse, nVars, n8)
+  pure (constraints, nVars, n8)
 
 /--
 Compile Clean circuit operations to R1CS JSON (snarkjs-compatible format).
