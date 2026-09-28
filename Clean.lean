@@ -48,3 +48,5 @@ public import Clean.Gadgets.SHA256.SHA256Compress
 public import Clean.Backends.Circom.Ast
 public import Clean.Backends.Circom.Compile
 public import Clean.Backends.Circom.R1CS
+public import Clean.Backends.Circom.R1CSSemantics
+public import Clean.Backends.Circom.Simplify
