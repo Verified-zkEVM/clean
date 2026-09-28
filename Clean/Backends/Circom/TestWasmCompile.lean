@@ -119,17 +119,23 @@ def assertOps : List (Operation (F p1009)) :=
 /-! ## Binary .r1cs export (r1csfile format) -/
 
 #eval! withTools ["snarkjs"] do
-  let binary ← match compileR1CSBin p1009 1 [] [] assertOps 1 with
-    | .ok b => pure b
-    | .error e => throw <| IO.userError s!"FAIL: compileR1CSBin: {e}"
-  let path := "/tmp/test_bin_r1cs.r1cs"
-  IO.FS.writeBinFile (System.FilePath.mk path) binary
-  let r ← IO.Process.output { cmd := "snarkjs", args := #["r1cs", "info", path] }
-  if r.exitCode ≠ 0 then throw <| IO.userError s!"FAIL: snarkjs r1cs info: {r.stderr}"
-  if !hasSubstr r.stdout "# of Constraints: 1" then throw <| IO.userError "FAIL: expected 1 constraint"
-  if !hasSubstr r.stdout "# of Wires: 3" then throw <| IO.userError "FAIL: expected 3 wires"
-  if !hasSubstr r.stdout "# of Outputs: 0" then throw <| IO.userError "FAIL: expected 0 outputs (none declared)"
-  IO.println "OK: binary R1CS validates with snarkjs r1cs info"
+  let info (simplify : Bool) : IO String := do
+    let binary ← match compileR1CSBin p1009 1 [] [] assertOps 1 simplify with
+      | .ok b => pure b
+      | .error e => throw <| IO.userError s!"FAIL: compileR1CSBin: {e}"
+    let path := "/tmp/test_bin_r1cs.r1cs"
+    IO.FS.writeBinFile (System.FilePath.mk path) binary
+    let r ← IO.Process.output { cmd := "snarkjs", args := #["r1cs", "info", path] }
+    if r.exitCode ≠ 0 then throw <| IO.userError s!"FAIL: snarkjs r1cs info: {r.stderr}"
+    pure r.stdout
+  let raw ← info false
+  if !hasSubstr raw "# of Constraints: 1" then throw <| IO.userError "FAIL: expected 1 constraint"
+  if !hasSubstr raw "# of Wires: 3" then throw <| IO.userError "FAIL: expected 3 wires"
+  if !hasSubstr raw "# of Outputs: 0" then throw <| IO.userError "FAIL: expected 0 outputs (none declared)"
+  let simp ← info true
+  if !hasSubstr simp "# of Constraints: 0" then throw <| IO.userError "FAIL: expected w = x to be simplified away"
+  if !hasSubstr simp "# of Wires: 3" then throw <| IO.userError "FAIL: simplification must not change the wires"
+  IO.println "OK: binary R1CS validates with snarkjs r1cs info (raw and simplified)"
 
 /-! ## Unsupported constructs are rejected with errors -/
 
@@ -308,9 +314,15 @@ def compileAndWitness (fieldPrime numInputs : ℕ) [Fact fieldPrime.Prime]
   let r1cs ← match compileR1CS p1009 3 [] [] ops 1 with
     | .ok s => pure s
     | .error e => throw <| IO.userError e
-  -- 1 const + 3 inputs + 1 intermediate for a·b.
+  -- 1 const + 3 inputs + 1 intermediate for a·b. The certified simplification
+  -- substitutes the intermediate `k` by the input `z` via `k = z`, leaving the
+  -- single constraint `a·b = z`.
   if !hasSubstr r1cs "\"nVars\": 5" then throw <| IO.userError "FAIL: C1: expected nVars=5"
-  if !hasSubstr r1cs "\"nConstraints\": 2" then throw <| IO.userError "FAIL: C1: expected 2 constraints"
+  if !hasSubstr r1cs "\"nConstraints\": 1" then throw <| IO.userError "FAIL: C1: expected 1 constraint"
+  let raw ← match compileR1CS p1009 3 [] [] ops 1 (simplify := false) with
+    | .ok s => pure s
+    | .error e => throw <| IO.userError e
+  if !hasSubstr raw "\"nConstraints\": 2" then throw <| IO.userError "FAIL: C1: expected 2 unsimplified constraints"
   let wit ← compileAndWitness p1009 3 [] [] ops 1 "/tmp/audit_c1.wasm" "{\"in\": [\"3\", \"4\", \"12\"]}"
   if wit.length ≠ 5 then throw <| IO.userError s!"FAIL: C1: witness length {wit.length} ≠ nVars 5"
   IO.println "OK: C1 a*b === z keeps R1CS numbering in sync"

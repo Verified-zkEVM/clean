@@ -15,6 +15,7 @@ module
 public import Clean.Circuit.Expression
 public import Clean.Circuit.Operations
 public import Clean.Backends.Circom.Compile
+public import Clean.Backends.Circom.Simplify
 
 public section
 
@@ -97,7 +98,7 @@ Returns (constraints, nVars, n8), where n8 is the byte width of a field element.
 `outputVarIdx` switches the signal numbering to the outputs-first layout,
 matching `compileModule` with the same argument.
 -/
-private def compileConstraints (fieldPrime numInputs : ℕ) (inputNames : List String := []) (outputVarIdx : List ℕ := []) (ops : List (Operation F)) (numWords : ℕ) :
+private def compileConstraints (fieldPrime numInputs : ℕ) (inputNames : List String := []) (outputVarIdx : List ℕ := []) (ops : List (Operation F)) (numWords : ℕ) (simplify : Bool := true) :
     Except String (List (Constraint F) × ℕ × ℕ) := do
   let numOutputs := outputVarIdx.length
   if !inputNames.isEmpty ∧ inputNames.length ≠ numInputs then
@@ -116,9 +117,15 @@ private def compileConstraints (fieldPrime numInputs : ℕ) (inputNames : List S
   let totalSignals := 1 + numInputs + witnessCount  -- +1 for constant signal
   let st : FlattenState F := { nextSignal := totalSignals }
   let (allConstraints, nVars) ← processOps vm flatOps st
+  -- Certified simplification. The forbidden signals are the public ones:
+  -- the constant signal 0, the outputs and the inputs after them.
+  let numPublic := numOutputs + numInputs
+  let constraints := if simplify
+    then (simplifyConstraints (fun i => decide (i ≤ numPublic)) allConstraints.reverse).1
+    else allConstraints.reverse
   let primeBits := Nat.log2 fieldPrime + 1
   let n8 : ℕ := (primeBits + bitsPerByte - 1) / bitsPerByte
-  pure (allConstraints.reverse, nVars, n8)
+  pure (constraints, nVars, n8)
 
 /--
 Compile Clean circuit operations to R1CS JSON (snarkjs-compatible format).
@@ -126,9 +133,9 @@ Returns a pretty-printed JSON string, or an error for operations that cannot
 be represented in R1CS (lookups, interactions) or witness IR the WASM
 backend cannot compile.
 -/
-def compileR1CS (fieldPrime numInputs : ℕ) (inputNames : List String := []) (outputVarIdx : List ℕ := []) (ops : List (Operation F)) (numWords : ℕ) :
+def compileR1CS (fieldPrime numInputs : ℕ) (inputNames : List String := []) (outputVarIdx : List ℕ := []) (ops : List (Operation F)) (numWords : ℕ) (simplify : Bool := true) :
     Except String String := do
-  let (constraints, nVars, n8) ← compileConstraints fieldPrime numInputs inputNames outputVarIdx ops numWords
+  let (constraints, nVars, n8) ← compileConstraints fieldPrime numInputs inputNames outputVarIdx ops numWords simplify
   let constraintsArr := Json.arr (constraints.map constraintToJson |>.toArray)
   let json := Json.mkObj [
     ("n8", Json.num n8),
@@ -188,9 +195,9 @@ format consumed by `snarkjs r1cs info`, `groth16 setup`, ...).
 Returns the raw bytes, or an error for operations that cannot be
 represented in R1CS.
 -/
-def compileR1CSBin (fieldPrime numInputs : ℕ) (inputNames : List String := []) (outputVarIdx : List ℕ := []) (ops : List (Operation F)) (numWords : ℕ) :
+def compileR1CSBin (fieldPrime numInputs : ℕ) (inputNames : List String := []) (outputVarIdx : List ℕ := []) (ops : List (Operation F)) (numWords : ℕ) (simplify : Bool := true) :
     Except String ByteArray := do
-  let (constraints, nVars, _) ← compileConstraints fieldPrime numInputs inputNames outputVarIdx ops numWords
+  let (constraints, nVars, _) ← compileConstraints fieldPrime numInputs inputNames outputVarIdx ops numWords simplify
   let primeBits := Nat.log2 fieldPrime + 1
   -- snarkjs's r1csfile builds the field from the prime and reads each
   -- coefficient with that field's byte width (`8·⌈bitLength/limbBits⌉`); the
