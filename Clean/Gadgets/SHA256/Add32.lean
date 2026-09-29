@@ -1,4 +1,8 @@
-import Clean.Gadgets.SHA256.BitwiseOps
+module
+
+public import Clean.Gadgets.SHA256.BitwiseOps
+
+@[expose] public section
 
 section
 variable {p : ℕ} [Fact p.Prime] [h_large : Fact (p > 2^33)]
@@ -26,7 +30,7 @@ private def evalBitsNat (env : ProverEnvironment (F p)) (a : Var (fields 32) (F 
 
 /-- IR expression for the ℕ value of a vector of bit-variables: `Σ a[i].val · 2^i`
 (authoring-time fold; the witness-IR counterpart of `evalBitsNat`). -/
-private def bitsVal (a : Var (fields 32) (F p)) : Witgen.U64Expr (F p) :=
+def bitsVal (a : Var (fields 32) (F p)) : Witgen.U64Expr (F p) :=
   (List.finRange 32).foldr
     (fun i acc => a[i.val].val * (2^i.val : ℕ) + acc) 0
 

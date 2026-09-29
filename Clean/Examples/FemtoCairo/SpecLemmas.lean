@@ -1,4 +1,6 @@
-import Clean.Examples.FemtoCairo.Spec
+module
+
+public import Clean.Examples.FemtoCairo.Spec
 
 /-!
 # Helper lemmas for FemtoCairo completeness proofs
@@ -6,6 +8,8 @@ import Clean.Examples.FemtoCairo.Spec
 This file contains lemmas about the FemtoCairo specification that are used
 in proving completeness of the circuit.
 -/
+
+@[expose] public section
 
 namespace Examples.FemtoCairo.Spec
 open Utils.Bits

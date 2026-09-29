@@ -1,5 +1,7 @@
-import Clean.Circuit.Json
-import Clean.Circuit.Formal
+module
+
+public import Clean.Circuit.Json
+public import Clean.Circuit.Formal
 
 /-!
 # Witness-generation export (witgen IR plan, phase 6)
@@ -23,6 +25,8 @@ Trust note: a wrong Rust witgen is a completeness bug, not a soundness bug — t
 serialized IR is differentially tested against the Lean reference interpreter
 (`Circuit.witgen`, phase 3), not verified.
 -/
+
+@[expose] public section
 
 open Lean
 

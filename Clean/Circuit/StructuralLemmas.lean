@@ -1,6 +1,10 @@
-import Clean.Circuit.Basic
-import Clean.Circuit.Subcircuit
-import Clean.Circuit.Theorems
+module
+
+public import Clean.Circuit.Basic
+public import Clean.Circuit.Subcircuit
+public import Clean.Circuit.Theorems
+
+@[expose] public section
 
 variable {F : Type} [FiniteField F]
   {Input Mid Output : TypeMap} [ProvableType Input] [ProvableType Mid] [ProvableType Output]

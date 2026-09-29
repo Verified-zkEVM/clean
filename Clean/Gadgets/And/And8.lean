@@ -1,6 +1,9 @@
-import Clean.Circuit
-import Clean.Gadgets.Xor.ByteXorTable
-import Clean.Utils.Primes
+module
+
+public import Clean.Circuit
+public import Clean.Gadgets.Xor.ByteXorTable
+
+@[expose] public section
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 

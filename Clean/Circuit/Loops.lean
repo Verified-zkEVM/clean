@@ -5,9 +5,13 @@ typically leveraging a `ConstantLength` assumption on the loop body.
 The end result are loop methods `Circuit.{mapFinRange, map, forEach, foldl}` that simplify
 under `circuit_norm` in every way we need them to.
 -/
-import Clean.Circuit.Subcircuit
-import Clean.Utils.Misc
-import Lean.Elab.Tactic
+module
+
+public import Clean.Circuit.Subcircuit
+public import Clean.Utils.Misc
+public import Lean.Elab.Tactic
+
+@[expose] public section
 
 open Lean Meta Elab Tactic
 

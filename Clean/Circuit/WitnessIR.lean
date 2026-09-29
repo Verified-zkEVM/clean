@@ -1,8 +1,13 @@
-import Clean.Circuit.Expression
-import Clean.Utils.Field
-import Clean.Utils.FiniteField
-import Clean.Utils.Vector
-import Clean.Circuit.Provable
+module
+
+public import Clean.Circuit.Expression
+public import Clean.Utils.Field
+public import Clean.Utils.FiniteField
+public import Clean.Utils.Vector
+public import Clean.Circuit.Provable
+
+-- The simprocs below call `omega` from meta code.
+public meta import Lean.Elab.Tactic.Omega.Frontend
 
 /-!
 # Witness-generation IR
@@ -42,6 +47,8 @@ range, a field-element bit decomposition, or an append.
    syntax. A decidable well-sortedness check can be layered on top later (it will be
    needed for serialization anyway).
 -/
+
+@[expose] public section
 
 variable {F : Type}
 
@@ -225,7 +232,7 @@ open Lean Meta Simp
 
 /-- Closed `ℕ` value of an expression, seeing through `b ^ k` (which `Meta.evalNat` does
 not reduce at the `Monoid.toPow` instance that `2 ^ 64` elaborates to). -/
-private partial def natLit? (e : Expr) : MetaM (Option ℕ) := do
+private meta partial def natLit? (e : Expr) : MetaM (Option ℕ) := do
   if let some n ← evalNat e |>.run then return some n
   if e.isAppOfArity ``HPow.hPow 6 then
     let args := e.getAppArgs
@@ -249,7 +256,7 @@ local hypotheses as facts) whether `n` is already below the modulus, and rewrite
 when it is. Other moduli are left alone, so ordinary `% 256`-style specification
 arithmetic is untouched.
 -/
-private def u64WrapSimproc (e : Expr) : SimpM Simp.Step := do
+private meta def u64WrapSimproc (e : Expr) : SimpM Simp.Step := do
   unless e.isAppOfArity ``HMod.hMod 6 do return .continue
   let args := e.getAppArgs
   let n := args[4]!
@@ -493,7 +500,11 @@ theorem WitgenIR.getElem_eval_ofFExprs [FiniteField F] {n : ℕ} (es : Vector (F
 theorem WitgenIR.eval_ofFExprs_singleton {F: Type} [FiniteField F]
     (x : FExpr F) (env : ProverEnvironment F) :
     (WitgenIR.ofFExprs (toElements (M:=field) x)).eval env = #v[x.eval { env }] := by
-  with_unfolding_all rfl
+  ext i hi
+  change i < 1 at hi
+  have : i = 0 := Nat.lt_one_iff.mp hi
+  subst i
+  simp [WitgenIR.getElem_eval_ofFExprs, toElements]
 
 /-- Same as `eval_ofFExprs_singleton`, keyed on the literal-vector spelling
 (`toElements (M := field) x` and `#v[x]` are not identified during simp matching).
@@ -502,7 +513,7 @@ goal shapes; cite it explicitly where needed. -/
 theorem WitgenIR.eval_ofFExprs_one {F : Type} [FiniteField F]
     (x : FExpr F) (env : ProverEnvironment F) :
     (WitgenIR.ofFExprs #v[x]).eval env = #v[x.eval { env }] := by
-  with_unfolding_all rfl
+  exact WitgenIR.eval_ofFExprs_singleton x env
 
 /-- Field-equality conditions decide propositional equality (via the injective
 `ℕ` embedding). -/
@@ -563,7 +574,8 @@ where
 theorem eval_eq_eval {M : TypeMap} [ProvableStruct M] (ctx : Ctx F) (x : M (FExpr F)) :
     Witgen.eval ctx x = StructEval.eval ctx x := by
   symm
-  simp only [Witgen.eval, eval, fromElements, toElements, size]
+  simp only [Witgen.eval, eval, fromElements, toElements, size,
+    ProvableStruct.structToElements_eq, ProvableStruct.structFromElements_eq]
   congr 1
   apply eval_eq_eval_aux
 where
@@ -610,7 +622,7 @@ structure projection like `.value`, `.address`, etc.  The meta code recognizes p
 applications, rebuilds the same projection on the evaluated row, then proves the rewrite by
 simplifying the generated RHS with the small struct-evaluation theorem set below.
 -/
-private def evalProjectionSimproc (e : Expr) : SimpM Simp.Step := do
+private meta def evalProjectionSimproc (e : Expr) : SimpM Simp.Step := do
   -- The simproc is registered on `Witgen.FExpr.eval _ _`; the last two explicit arguments are
   -- the evaluation context and the scalar expression being evaluated.
   let args := e.getAppArgs
@@ -693,7 +705,7 @@ simproc above. Decomposing an opaque value via structure eta would produce
 confluent: a literal's components are the program's own expressions, never projections
 of an opaque base.
 -/
-private def evalStructLiteralSimproc (e : Expr) : SimpM Simp.Step := do
+private meta def evalStructLiteralSimproc (e : Expr) : SimpM Simp.Step := do
   let args := e.getAppArgs
   unless e.getAppFn.isConstOf ``Witgen.eval && args.size >= 2 do
     return .continue
@@ -708,8 +720,8 @@ private def evalStructLiteralSimproc (e : Expr) : SimpM Simp.Step := do
     let some (_, _, rhs) := (← inferType proof).eq? | return .continue
     return .visit { expr := rhs, proof? := proof }
   catch _ => pure ()
-  -- custom-`ProvableType` route (e.g. `Point`): rewrite the literal component-wise,
-  -- validated by definitional equality. Covers flat structs of scalars; bails if a field
+  -- custom-`ProvableType` route (e.g. `Point`): rewrite the literal component-wise
+  -- using the public vector/array map lemmas. Covers flat structs of scalars; bails if a field
   -- is not a scalar `FExpr` or the instance doesn't evaluate field-by-field in
   -- constructor order.
   try
@@ -721,10 +733,15 @@ private def evalStructLiteralSimproc (e : Expr) : SimpM Simp.Step := do
     for a in ctorArgs[info.numParams:] do
       newArgs := newArgs.push (some (← mkAppM ``Witgen.FExpr.eval #[ctx, a]))
     let rhs ← mkAppOptM fn newArgs
-    -- custom instances typically need `.all` transparency to reduce (cf. `Point.eval_eq`
-    -- being proved by `with_unfolding_all rfl`); the kernel re-checks this unrestricted
-    unless ← withTransparency .all (isDefEq e rhs) do return .continue
-    return .visit { expr := rhs, proof? := none }
+    let mut thms : SimpTheorems := {}
+    for name in [``Witgen.eval, ``ProvableType.toElements, ``ProvableType.fromElements] do
+      thms ← thms.addDeclToUnfold name
+    for name in [``Vector.map_mk, ``List.map_toArray, ``List.map_cons, ``List.map_nil] do
+      thms ← thms.addConst name
+    let simpCtx ← Simp.mkContext (simpTheorems := #[thms])
+    let (result, _) ← Meta.simp e simpCtx #[]
+    unless ← withDefault <| isDefEq result.expr rhs do return .continue
+    return .visit { expr := rhs, proof? := some (← result.getProof) }
   catch _ => return .continue
 
 simproc evalStructLiteral (Witgen.eval _ _) := evalStructLiteralSimproc

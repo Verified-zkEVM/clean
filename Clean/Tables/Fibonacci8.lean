@@ -1,7 +1,11 @@
-import Clean.Utils.Vector
-import Clean.Circuit.Extensions
-import Clean.Table.Theorems
-import Clean.Gadgets.Addition8.Addition8
+module
+
+public import Clean.Utils.Vector
+public import Clean.Circuit.Extensions
+public import Clean.Table.Theorems
+public import Clean.Gadgets.Addition8.Addition8
+
+@[expose] public section
 
 /-
   8-bit Fibonacci inductive table definition. The i-th row of the table

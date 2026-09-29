@@ -1,4 +1,8 @@
-import Clean.Air.Circuit
+module
+
+public import Clean.Air.Circuit
+
+@[expose] public section
 
 namespace Air.Flat
 variable {F : Type} [FiniteField F]

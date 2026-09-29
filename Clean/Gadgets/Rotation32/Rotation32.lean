@@ -1,9 +1,13 @@
-import Clean.Types.U32
-import Clean.Circuit.Subcircuit
-import Clean.Utils.Rotation
-import Clean.Gadgets.Rotation32.Rotation32Bytes
-import Clean.Gadgets.Rotation32.Rotation32Bits
-import Clean.Circuit.Provable
+module
+
+public import Clean.Types.U32
+public import Clean.Circuit.Subcircuit
+public import Clean.Utils.Rotation
+public import Clean.Gadgets.Rotation32.Rotation32Bytes
+public import Clean.Gadgets.Rotation32.Rotation32Bits
+public import Clean.Circuit.Provable
+
+@[expose] public section
 
 namespace Gadgets.Rotation32
 variable {p : ℕ} [Fact p.Prime]

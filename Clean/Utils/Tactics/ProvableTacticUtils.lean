@@ -1,6 +1,10 @@
-import Lean
-import Clean.Circuit.CircuitType
-import Clean.Circuit.Provable
+module
+
+public meta import Lean
+public meta import Clean.Circuit.CircuitType
+public meta import Clean.Circuit.Provable
+
+public meta section
 
 open Lean Meta Elab Tactic
 

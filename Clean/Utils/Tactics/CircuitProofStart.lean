@@ -1,6 +1,10 @@
-import Lean
-import Clean.Circuit.Formal
-import Clean.Utils.Tactics.ProvableStructSimp
+module
+
+public meta import Lean
+public meta import Clean.Circuit.Formal
+public meta import Clean.Utils.Tactics.ProvableStructSimp
+
+public meta section
 
 open Lean Elab Tactic Meta
 open Circuit

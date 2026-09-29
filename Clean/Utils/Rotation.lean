@@ -1,7 +1,11 @@
-import Clean.Utils.Bitwise
-import Clean.Utils.Vector
-import Mathlib.Data.Nat.Bitwise
-import Clean.Utils.Bits
+module
+
+public import Clean.Utils.Bitwise
+public import Clean.Utils.Vector
+public import Mathlib.Data.Nat.Bitwise
+public import Clean.Utils.Bits
+
+@[expose] public section
 
 namespace Utils.Rotation
 open Bits (toBits toBits_injective)

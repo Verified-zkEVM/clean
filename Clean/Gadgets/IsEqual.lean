@@ -5,14 +5,18 @@ and returns a field element that is 1 when the inputs are equal, 0 otherwise.
 This is the boolean-returning counterpart of `Gadgets.Equality`, which asserts
 equality without returning a value.
 -/
-import Clean.Circuit.Basic
-import Clean.Circuit.Provable
-import Clean.Circuit.Theorems
-import Clean.Circuit.Loops
-import Clean.Gadgets.IsZeroField
-import Clean.Gadgets.IsZero
-import Clean.Utils.Field
-import Clean.Utils.Tactics
+module
+
+public import Clean.Circuit.Basic
+public import Clean.Circuit.Provable
+public import Clean.Circuit.Theorems
+public import Clean.Circuit.Loops
+public import Clean.Gadgets.IsZeroField
+public import Clean.Gadgets.IsZero
+public import Clean.Utils.Field
+public import Clean.Utils.Tactics
+
+@[expose] public section
 
 namespace Gadgets.IsEqual
 

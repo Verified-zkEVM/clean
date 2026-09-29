@@ -1,4 +1,8 @@
-import Clean.Gadgets.SHA256.LowerSigma0
+module
+
+public import Clean.Gadgets.SHA256.LowerSigma0
+
+@[expose] public section
 
 section
 variable {p : ℕ} [Fact p.Prime]

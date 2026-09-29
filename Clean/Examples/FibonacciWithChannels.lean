@@ -8,8 +8,12 @@ Goal - use three channels:
 
 Prove e2e soundness and completeness of the table ensemble.
 -/
-import Clean.Air.Vm
-import Clean.Gadgets.Addition8.Theorems
+module
+
+public import Clean.Air.Vm
+public import Clean.Gadgets.Addition8.Theorems
+
+@[expose] public section
 open ByteUtils (mod256)
 open FieldUtils (mod floorDiv)
 open Gadgets.Addition8 (Theorems.soundness Theorems.completeness_bool Theorems.completeness_add)

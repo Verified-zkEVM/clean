@@ -1,8 +1,12 @@
-import Clean.Utils.Primes
-import Clean.Circuit.Explicit
-import Clean.Gadgets.Addition32.Addition32Full
-import Clean.Examples.AddOperations
-import Clean.Gadgets.Boolean
+module
+
+public import Clean.Utils.Primes
+public import Clean.Circuit.Explicit
+public import Clean.Gadgets.Addition32.Addition32Full
+public import Clean.Examples.AddOperations
+public import Clean.Gadgets.Boolean
+
+@[expose] public section
 
 open Gadgets.Addition32Full (Inputs Outputs)
 

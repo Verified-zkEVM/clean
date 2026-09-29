@@ -1,7 +1,11 @@
-import Clean.Circuit.Loops
-import Clean.Gadgets.Rotation64.Rotation64
-import Clean.Gadgets.Keccak.KeccakState
-import Clean.Specs.Keccak256
+module
+
+public import Clean.Circuit.Loops
+public import Clean.Gadgets.Rotation64.Rotation64
+public import Clean.Gadgets.Keccak.KeccakState
+public import Clean.Specs.Keccak256
+
+@[expose] public section
 
 namespace Gadgets.Keccak256.RhoPi
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]

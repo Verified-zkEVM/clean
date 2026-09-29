@@ -1,4 +1,8 @@
-import Clean.Circuit
+module
+
+public import Clean.Circuit
+
+@[expose] public section
 
 variable {F : Type} [FiniteField F] [DecidableEq F]
 variable {Message : TypeMap} [ProvableType Message]
@@ -330,8 +334,9 @@ theorem guarantees_of_requirements_of_requirements_of_guarantees [Fact (ringChar
       have msg_size : msg.size = channel.arity := by rw [pulls[i].same_size, pulls_i_channel]
       suffices grt' : channel.Guarantees (-1) ⟨ msg, msg_size ⟩ data by
         simp only [Interaction.Guarantees]
-        convert fun _ => grt'
-        rfl
+        intro _
+        convert grt'
+        simp only [Interaction.msgVector, pull_i_msg]
       apply RawChannel.Normal.grts_of_reqs ⟨ msg, msg_size ⟩ 1 data one_ne_zero one_ne_neg_one
       simp only [Interaction.Requirements, Interaction.msgVector, push_j_msg] at push_j_req
       convert push_j_req

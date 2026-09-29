@@ -1,4 +1,6 @@
-import Clean.Circuit.WitnessIR
+module
+
+public import Clean.Circuit.WitnessIR
 
 /-!
 # Authoring sugar for the witness IR
@@ -23,6 +25,8 @@ witnessVectorProgram 32 do
   return .range 32 fun i => ((s >>> i) % 2).toField
 ```
 -/
+
+@[expose] public section
 
 variable {F : Type} {α β : Type}
 

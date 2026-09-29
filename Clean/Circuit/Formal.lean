@@ -1,4 +1,8 @@
-import Clean.Circuit.Explicit
+module
+
+public import Clean.Circuit.Explicit
+
+@[expose] public section
 
 variable {F : Type} [FiniteField F] {α β : Type} {n : ℕ}
 
@@ -93,7 +97,7 @@ def output (self : FormalCircuitBase F Input Output) (input : Var Input F) (offs
 open Lean Meta Simp in
 /-- Reduce `FormalCircuitBase.output` on record constructors without asking the
 simplifier to unify the constructor's dependent proof fields. -/
-private def outputSimproc (e : Expr) : SimpM Simp.Step := do
+private meta def outputSimproc (e : Expr) : SimpM Simp.Step := do
   unless e.isAppOfArity ``FormalCircuitBase.output 9 do return .continue
   let args := e.getAppArgs
   let self := args[6]!

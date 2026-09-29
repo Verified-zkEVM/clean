@@ -1,11 +1,14 @@
-import Clean.Circuit
-import Clean.Table.Inductive
-import Clean.Gadgets.Bits
-import Clean.Utils.Bits
-import Clean.Utils.Field
+module
 
-import Clean.Examples.FemtoCairo.SpecLemmas
-import Clean.Examples.FemtoCairo.TypesLemmas
+public import Clean.Circuit
+public import Clean.Table.Inductive
+public import Clean.Gadgets.Bits
+public import Clean.Utils.Bits
+
+public import Clean.Examples.FemtoCairo.SpecLemmas
+public import Clean.Examples.FemtoCairo.TypesLemmas
+
+@[expose] public section
 
 namespace Examples.FemtoCairo
 open Gadgets

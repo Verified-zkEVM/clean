@@ -1,7 +1,11 @@
-import Clean.Utils.Bits
-import Clean.Utils.Field
+module
 
-import Clean.Examples.FemtoCairo.Types
+public import Clean.Utils.Bits
+public import Clean.Utils.Field
+
+public import Clean.Examples.FemtoCairo.Types
+
+@[expose] public section
 
 namespace Examples.FemtoCairo.Spec
 open Utils.Bits
