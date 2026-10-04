@@ -8,5 +8,8 @@ public import Clean.Utils.Test.TestU64Wrap
 public import Clean.Utils.Test.TestElaborateCircuit
 public import Clean.Utils.Test.TestCircuitStructDeriving
 public import Clean.Utils.Test.TestMixedCircuitType
+public import Clean.Utils.Test.ResourceHistory
+public import Clean.Utils.Test.ResourceGrounding
+public import Clean.Utils.Test.ResourceRealization
 public import Clean.Backends.Circom.TestWasmCompile
 public import Clean.Backends.Circom.TestWasmSemantics
