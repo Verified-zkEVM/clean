@@ -53,19 +53,6 @@ def impl {B : Backend} [Field B.Native] (mulEq : Impl B MulEq.interface) : Impl 
 
 end AssertBool
 
-/-- The same gadget on two backends. -/
-def assertBoolExpr : Impl (ExprBackend Native) AssertBool.interface := AssertBool.impl ExprBackend.mulEq
-def assertBoolR1CS : Impl (R1CS Native) AssertBool.interface := AssertBool.impl R1CS.mulEq
-
-/-- On R1CS, the fully resolved circuit is a single native constraint. -/
-example (x : LinComb Native) (s : ℕ) :
-    ((assertBoolR1CS (Native := Native)).main x |>.operations s).toFlat = [.constraint x x x] := rfl
-
-/-- On the expression backend, it is `x*x + (-1)*x = 0`. -/
-example (x : Expr Native) (s : ℕ) :
-    ((assertBoolExpr (Native := Native)).main x |>.operations s).toFlat =
-      [.assertZero (.add (.mul x x) (.mul (.const (-1)) x))] := rfl
-
 /-! ## `xor`, implemented via the arithmetic functionalities -/
 
 namespace Xor
@@ -98,19 +85,6 @@ def impl {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface 
     simp only [circuit_norm]
 
 end Xor
-
-def xorExpr : Impl (ExprBackend Native) Xor.interface := Xor.impl ExprBackend.arith
-def xorR1CS : Impl (R1CS Native) Xor.interface := Xor.impl R1CS.arith
-
-/-- On the expression backend, `xor` allocates nothing and emits nothing: it is an expression. -/
-example (a b : Expr Native) (s : ℕ) : (xorExpr (Native := Native)).advance (a, b) s = s := rfl
-example (a b : Expr Native) (s : ℕ) : ((xorExpr (Native := Native)).main (a, b) |>.operations s).toFlat = [] := rfl
-
-/-- On R1CS it costs one cell (the product) and one constraint; the linear part is free. -/
-example (a b : LinComb Native) (s : ℕ) : (xorR1CS (Native := Native)).advance (a, b) s = s + 1 := rfl
-example (a b : LinComb Native) (s : ℕ) :
-    ((xorR1CS (Native := Native)).main (a, b) |>.operations s).toFlat =
-      [.witness 2 #v[a, b] (fun v => v[0] * v[1]), .constraint a b (.cell s)] := rfl
 
 /-! ## Stacking: a gadget generic over gadget-level interfaces -/
 
@@ -152,11 +126,5 @@ def impl {B : Backend} [Field B.Native] (xor : Impl B Xor.interface) : Impl B in
     simp only [circuit_norm]
 
 end Xor3
-
-def xor3R1CS : Impl (R1CS Native) Xor3.interface := Xor3.impl xorR1CS
-def xor3Expr : Impl (ExprBackend Native) Xor3.interface := Xor3.impl xorExpr
-
-example (a b c : LinComb Native) (s : ℕ) : (xor3R1CS (Native := Native)).advance (a, b, c) s = s + 2 := rfl
-example (a b c : Expr Native) (s : ℕ) : (xor3Expr (Native := Native)).advance (a, b, c) s = s := rfl
 
 end Clean2

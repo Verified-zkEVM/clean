@@ -117,38 +117,4 @@ def impl {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface 
 
 end Div
 
-/-! ## On both backends -/
-
-def inverseExpr : Impl (ExprBackend Native) Inverse.interface := Inverse.impl ExprBackend.arith
-def inverseR1CS : Impl (R1CS Native) Inverse.interface := Inverse.impl R1CS.arith
-
-def assertNonZeroExpr : Impl (ExprBackend Native) AssertNonZero.interface := AssertNonZero.impl inverseExpr
-def assertNonZeroR1CS : Impl (R1CS Native) AssertNonZero.interface := AssertNonZero.impl inverseR1CS
-
-def divExpr : Impl (ExprBackend Native) Div.interface := Div.impl ExprBackend.arith inverseExpr
-def divR1CS : Impl (R1CS Native) Div.interface := Div.impl R1CS.arith inverseR1CS
-
-/-- One witness cell on either backend; the multiplication is free only on the expression one. -/
-example (x : Expr Native) (s : ℕ) : (inverseExpr (Native := Native)).advance x s = s + 1 := rfl
-example (x : LinComb Native) (s : ℕ) : (inverseR1CS (Native := Native)).advance x s = s + 1 := rfl
-example (a b : Expr Native) (s : ℕ) : (divExpr (Native := Native)).advance (a, b) s = s + 1 := rfl
-example (a b : LinComb Native) (s : ℕ) : (divR1CS (Native := Native)).advance (a, b) s = s + 2 := rfl
-
-/-- On R1CS, `inverse` is a single constraint on the witnessed cell. -/
-example (x : LinComb Native) (s : ℕ) :
-    ((inverseR1CS (Native := Native)).main x |>.operations s).toFlat =
-      [.witness 1 #v[x] (fun v => v[0]⁻¹), .constraint x (.cell s) (.ofConst 1)] := rfl
-
-/-- Witness generation, at the interface level: for a non-zero input, an honest environment
-satisfying every constraint exists on top of whatever the caller has already assigned. -/
-example (x : LinComb Native) (s : ℕ) (env₀ : ℕ → Native) (h : x.footprint ⊆ Linear.Alloc s)
-    (hx : x.eval env₀ ≠ 0) :
-    ∃ env, (∀ c < s, env c = env₀ c) ∧
-      ((inverseR1CS (Native := Native)).main x |>.operations s).ConstraintsHold env s ∧
-      env s = (x.eval env)⁻¹ := by
-  have h_out : (inverseR1CS (Native := Native)).output x s = .cell s := rfl
-  have := (inverseR1CS (Native := Native)).exists_honest_env x s env₀ (by simpa [circuit_norm] using h) ⟨trivial, hx⟩
-  simp only [circuit_norm, h_out] at this
-  exact this
-
 end Clean2

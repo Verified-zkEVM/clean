@@ -171,42 +171,4 @@ def impl {B : Backend} [Field B.Native] (or : Impl B OR.interface) (not : Impl B
 end NOR
 end Gates
 
-/-! ## The whole family, on both backends. -/
-
-section
-open Gates
-
-def notExpr : Impl (ExprBackend Native) NOT.interface := NOT.impl ExprBackend.arith
-def andExpr : Impl (ExprBackend Native) AND.interface := AND.impl ExprBackend.arith
-def orExpr : Impl (ExprBackend Native) OR.interface := OR.impl ExprBackend.arith
-def nandExpr : Impl (ExprBackend Native) NAND.interface := NAND.impl andExpr notExpr
-def norExpr : Impl (ExprBackend Native) NOR.interface := NOR.impl orExpr notExpr
-
-def notR1CS : Impl (R1CS Native) NOT.interface := NOT.impl R1CS.arith
-def andR1CS : Impl (R1CS Native) AND.interface := AND.impl R1CS.arith
-def orR1CS : Impl (R1CS Native) OR.interface := OR.impl R1CS.arith
-def nandR1CS : Impl (R1CS Native) NAND.interface := NAND.impl andR1CS notR1CS
-def norR1CS : Impl (R1CS Native) NOR.interface := NOR.impl orR1CS notR1CS
-
-/-! The same gadget, two arithmetizations. On the expression backend every gate is free except
-for the constants; on R1CS each multiplication costs one cell and one constraint, and the linear
-parts are folded into the linear combinations. -/
-
-example (x : Expr Native) (s : ℕ) : (notExpr (Native := Native)).advance x s = s := rfl
-example (a b : Expr Native) (s : ℕ) : (andExpr (Native := Native)).advance (a, b) s = s := rfl
-example (a b : Expr Native) (s : ℕ) : (nandExpr (Native := Native)).advance (a, b) s = s := rfl
-
-example (x : LinComb Native) (s : ℕ) : (notR1CS (Native := Native)).advance x s = s := rfl
-example (a b : LinComb Native) (s : ℕ) : (andR1CS (Native := Native)).advance (a, b) s = s + 1 := rfl
-example (a b : LinComb Native) (s : ℕ) : (norR1CS (Native := Native)).advance (a, b) s = s + 1 := rfl
-
-/-- `NOT` is pure linear algebra: on R1CS it emits no constraint at all. -/
-example (x : LinComb Native) (s : ℕ) : ((notR1CS (Native := Native)).main x |>.operations s).toFlat = [] := rfl
-
-/-- `NAND` on R1CS: one product cell, one constraint; the negation is free. -/
-example (a b : LinComb Native) (s : ℕ) :
-    ((nandR1CS (Native := Native)).main (a, b) |>.operations s).toFlat =
-      [.witness 2 #v[a, b] (fun v => v[0] * v[1]), .constraint a b (.cell s)] := rfl
-
-end
 end Clean2

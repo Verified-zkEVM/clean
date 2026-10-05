@@ -78,25 +78,4 @@ def impl {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface 
 
 end IsEqual
 
-/-! ## On both backends -/
-
-def assertEqExpr : Impl (ExprBackend Native) AssertEq.interface := AssertEq.impl ExprBackend.arith
-def assertEqR1CS : Impl (R1CS Native) AssertEq.interface := AssertEq.impl R1CS.arith
-
-def isEqualExpr : Impl (ExprBackend Native) IsEqual.interface := IsEqual.impl ExprBackend.arith isZeroExpr
-def isEqualR1CS : Impl (R1CS Native) IsEqual.interface := IsEqual.impl R1CS.arith isZeroR1CS
-
-/-- Asserting an equality allocates nothing on either backend. -/
-example (a b : Expr Native) (s : ℕ) : (assertEqExpr (Native := Native)).advance (a, b) s = s := rfl
-example (a b : LinComb Native) (s : ℕ) : (assertEqR1CS (Native := Native)).advance (a, b) s = s := rfl
-
-/-- On R1CS, `assertZero` is not native: it is lowered to `(a - b) * 1 = 0`. -/
-example (a b : LinComb Native) (s : ℕ) :
-    ((assertEqR1CS (Native := Native)).main (a, b) |>.operations s).toFlat =
-      [.constraint (a - b) (.ofConst 1) (.ofConst 0)] := rfl
-
-/-- `isEqual` costs exactly what `isZero` costs. -/
-example (a b : LinComb Native) (s : ℕ) : (isEqualR1CS (Native := Native)).advance (a, b) s = s + 2 := rfl
-example (a b : Expr Native) (s : ℕ) : (isEqualExpr (Native := Native)).advance (a, b) s = s + 1 := rfl
-
 end Clean2

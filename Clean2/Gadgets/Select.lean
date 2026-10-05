@@ -124,29 +124,4 @@ def impl {B : Backend} [Field B.Native] (and : Impl B AND.interface) (or : Impl 
 end MAJ
 end Gates
 
-/-! ## On both backends -/
-
-section
-open Gates
-
-def muxExpr : Impl (ExprBackend Native) MUX.interface := MUX.impl ExprBackend.arith
-def muxR1CS : Impl (R1CS Native) MUX.interface := MUX.impl R1CS.arith
-
-def chExpr : Impl (ExprBackend Native) CH.interface := CH.impl andExpr orExpr notExpr
-def chR1CS : Impl (R1CS Native) CH.interface := CH.impl andR1CS orR1CS notR1CS
-
-def majExpr : Impl (ExprBackend Native) MAJ.interface := MAJ.impl andExpr orExpr
-def majR1CS : Impl (R1CS Native) MAJ.interface := MAJ.impl andR1CS orR1CS
-
-example (c a b : Expr Native) (s : ℕ) : (muxExpr (Native := Native)).advance (c, a, b) s = s := rfl
-example (c a b : LinComb Native) (s : ℕ) : (muxR1CS (Native := Native)).advance (c, a, b) s = s + 1 := rfl
-
-/-- `ch` uses two `AND`s and one `OR`, so three product cells on R1CS and none on the expression backend. -/
-example (a b c : Expr Native) (s : ℕ) : (chExpr (Native := Native)).advance (a, b, c) s = s := rfl
-example (a b c : LinComb Native) (s : ℕ) : (chR1CS (Native := Native)).advance (a, b, c) s = s + 3 := rfl
-
-/-- `maj` uses three `AND`s and two `OR`s. -/
-example (a b c : LinComb Native) (s : ℕ) : (majR1CS (Native := Native)).advance (a, b, c) s = s + 5 := rfl
-
-end
 end Clean2

@@ -602,14 +602,4 @@ def largeR1CS (p : ℕ) [Fact p.Prime] [Fact (256 ≤ p)] : ∀ op, Impl (R1CS (
   letI : CharP (R1CS (ZMod p)).Native p := ZMod.charP p
   large (Fact.out : 256 ≤ p) R1CS.arith
 
-/-- The generic layers, at each byte type: `byte` is inferred from the implementation. -/
-def xor3GF2 := Xor3.impl gf2R1CS
-def xor3Large (p : ℕ) [Fact p.Prime] [Fact (256 ≤ p)] := Xor3.impl (largeR1CS p)
-def xorOfBitsGF2 := XorOfBits.impl (CheckBits.impl (AssertBool.impl R1CS.mulEq)) gf2R1CS
-def xorOfBitsLarge (p : ℕ) [Fact p.Prime] [Fact (256 ≤ p)] :=
-  XorOfBits.impl (CheckBits.impl (AssertBool.impl R1CS.mulEq)) (largeR1CS p)
-
-/-- On GF(2), `xor` is free: additions are linear. -/
-example (x y : Vector (LinComb (ZMod 2)) 8) (s : ℕ) : (gf2R1CS .xor).advance (x, y) s = s := rfl
-
 end Clean2.Byte

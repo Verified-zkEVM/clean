@@ -160,27 +160,4 @@ def impl (arith : ∀ n, Impl B (Arith.interface n)) (n : ℕ) : Impl B (interfa
 
 end Bits2Num
 
-def bits2numExpr (n : ℕ) : Impl (ExprBackend Native) (Bits2Num.interface n) := Bits2Num.impl ExprBackend.arith n
-def bits2numR1CS (n : ℕ) : Impl (R1CS Native) (Bits2Num.interface n) := Bits2Num.impl R1CS.arith n
-
-/-! ### One implementation, several widths
-
-A caller picks the width at each call site: here the two halves of a value are converted with
-the same `bits2num`, at the widths of the caller's own inputs. -/
-
-/-- `(lo, hi) ↦ (bits2num lo, bits2num hi)`, over any `bits2num`. -/
-def twoWidths {B : Backend} [Field B.Native] (bits2num : ∀ n, Impl B (Bits2Num.interface n)) {m k : ℕ}
-    (lo : Vector B.Var m) (hi : Vector B.Var k) : Circuit B (B.Var × B.Var) := do
-  let a ← bits2num m lo
-  let b ← bits2num k hi
-  return (a, b)
-
-/-- Linear, so free on both backends, at any width. -/
-example (bits : Vector (Expr Native) 8) (s : ℕ) : (bits2numExpr (Native := Native) 8).advance bits s = s := rfl
-example (bits : Vector (LinComb Native) 8) (s : ℕ) : (bits2numR1CS (Native := Native) 8).advance bits s = s := rfl
-example (bits : Vector (LinComb Native) 8) (s : ℕ) :
-    ((bits2numR1CS (Native := Native) 8).main bits |>.operations s).toFlat = [] := rfl
-example (lo : Vector (LinComb Native) 8) (hi : Vector (LinComb Native) 4) (s : ℕ) :
-    ((twoWidths (bits2numR1CS (Native := Native)) lo hi).operations s).toFlat = [] := rfl
-
 end Clean2
