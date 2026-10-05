@@ -238,9 +238,12 @@ def envRangeOps : List (Operation (F p1009)) :=
       cmd := "snarkjs", args := #["wtns", "calculate", wasmPath, "/tmp/poseidon1_input.json", "/tmp/poseidon1_witness.wtns"]
     }
     if snarkOut.exitCode ≠ 0 then throw <| IO.userError s!"FAIL: snarkjs: {snarkOut.stderr}"
-    -- Verify against Lean ground truth. The Poseidon1 output is the circuit
-    -- variable at index 402 (0-based signal 402), which is NOT the last signal
-    -- (later signals are intermediate constraint witnesses).
+    -- Verify against Lean ground truth. The output is witness variable 401
+    -- (Poseidon1 has 1 input + 402 witnesses); in this module's plain layout
+    -- `signalOfVar v = v + 1`, so it lives at signal 402. Absorbed asserts
+    -- allocate no intermediate signals, so the witness ends at
+    -- totalSignals = 1 (constant) + 1 (input) + 402 (witnesses) = 404, and
+    -- signal 403 is the final round's second output (variable 402).
     -- Ground truths from Specs.PoseidonOptimized.poseidon1Opt:
     --   0 → 19014214495641488759237505126948346942972912379615652741039992445865937985820
     --   1 → 18586133768512220936620570745912940619677854269274689475585506675881198879027
@@ -272,6 +275,28 @@ def envRangeOps : List (Operation (F p1009)) :=
         else
           IO.println s!"OK: Poseidon1({input}) matches ground truth"
     IO.println s!"OK: Poseidon1 → wasm-validate + snarkjs (3 inputs verified vs ground truth, {binary.size} bytes WASM)"
+
+/-! ### Poseidon1 R1CS shape pin
+
+Absorption makes every one of Poseidon1's 216 product asserts (`in2 <== in·in`
+etc.) a single quadratic row with the witness signal on a row side — no
+defining row + copy row pairs, no intermediate signals. Measured on the
+exported system: 402 constraints / 404 wires (216 products + 186 linear rows),
+below circom `--O0` (581) and within ~3% of circom `--O1` (415). -/
+
+#eval! do
+  let ops : List (Operation Specs.Poseidon.F) :=
+    (Circomlib.Poseidon.Poseidon1.circuit.main (varFromOffset field 0)).operations 1
+  let r1cs ← match compileR1CS Specs.Poseidon.BN254_PRIME 1 ["in"] [401] ops 4 with
+    | .ok s => pure s
+    | .error e => throw <| IO.userError e
+  if !hasSubstr r1cs "\"nConstraints\": 402," then
+    throw <| IO.userError "FAIL: Poseidon1 shape: expected 402 constraints"
+  if !hasSubstr r1cs "\"nVars\": 404," then
+    throw <| IO.userError "FAIL: Poseidon1 shape: expected 404 wires"
+  if !hasSubstr r1cs "\"nOutputs\": 1," then
+    throw <| IO.userError "FAIL: Poseidon1 shape: expected 1 output"
+  IO.println "OK: Poseidon1 R1CS shape pinned (402 constraints / 404 wires)"
 
 /-! ## Audit regression tests (2026-08 audit) -/
 
@@ -308,12 +333,153 @@ def compileAndWitness (fieldPrime numInputs : ℕ) [Fact fieldPrime.Prime]
   let r1cs ← match compileR1CS p1009 3 [] [] ops 1 with
     | .ok s => pure s
     | .error e => throw <| IO.userError e
-  -- 1 const + 3 inputs + 1 intermediate for a·b.
-  if !hasSubstr r1cs "\"nVars\": 5" then throw <| IO.userError "FAIL: C1: expected nVars=5"
-  if !hasSubstr r1cs "\"nConstraints\": 2" then throw <| IO.userError "FAIL: C1: expected 2 constraints"
+  -- 1 const + 3 inputs; the product is absorbed into the assert row (no
+  -- intermediate), so the row is the quadratic `a·b = z`.
+  if !hasSubstr r1cs "\"nVars\": 4," then throw <| IO.userError "FAIL: C1: expected nVars=4"
+  if !hasSubstr r1cs "\"nConstraints\": 1," then throw <| IO.userError "FAIL: C1: expected 1 constraint"
   let wit ← compileAndWitness p1009 3 [] [] ops 1 "/tmp/audit_c1.wasm" "{\"in\": [\"3\", \"4\", \"12\"]}"
-  if wit.length ≠ 5 then throw <| IO.userError s!"FAIL: C1: witness length {wit.length} ≠ nVars 5"
+  if wit.length ≠ 4 then throw <| IO.userError s!"FAIL: C1: witness length {wit.length} ≠ nVars 4"
   IO.println "OK: C1 a*b === z keeps R1CS numbering in sync"
+
+/-! ### Absorption pins: assert row shapes (R1CS) -/
+
+/- `w <== a·b + 5`: the product is absorbed into the single quadratic row
+    `a·b = w − 5` — one constraint, no intermediate (exactly circom's shape). -/
+#eval! do
+  let ops : List (Operation (F p1009)) :=
+    [.witness 1 (.ir [] (.lit #v[.add (.mul (.expr (.var ⟨0⟩)) (.expr (.var ⟨1⟩))) (.const 5)])),
+     .assert (.add (.var ⟨2⟩) (.mul (.const (-1 : F p1009))
+       (.add (.mul (.var ⟨0⟩) (.var ⟨1⟩)) (.const 5))))]
+  let r1cs ← match compileR1CS p1009 2 ["a", "b"] [2] ops 1 with
+    | .ok s => pure s
+    | .error e => throw <| IO.userError e
+  if !hasSubstr r1cs "\"nConstraints\": 1," then throw <| IO.userError "FAIL: mulAdd absorption: expected 1 constraint"
+  if !hasSubstr r1cs "\"nVars\": 4," then throw <| IO.userError "FAIL: mulAdd absorption: expected 4 wires"
+  IO.println "OK: w <== a*b + 5 absorbs into 1 constraint / 4 wires"
+
+/- `(a·b)·(c·d) === z`: each inner product needs its own defining row (a
+    single R1CS row holds only one product), then the outer product is
+    absorbed into the assert row: 3 rows, 2 intermediates. -/
+#eval! do
+  let ops : List (Operation (F p1009)) :=
+    [.assert (.add (.mul (.mul (.var ⟨0⟩) (.var ⟨1⟩)) (.mul (.var ⟨2⟩) (.var ⟨3⟩)))
+                   (.mul (.const (-1 : F p1009)) (.var ⟨4⟩)))]
+  let r1cs ← match compileR1CS p1009 5 [] [] ops 1 with
+    | .ok s => pure s
+    | .error e => throw <| IO.userError e
+  if !hasSubstr r1cs "\"nConstraints\": 3," then throw <| IO.userError "FAIL: nested products: expected 3 rows"
+  if !hasSubstr r1cs "\"nVars\": 8," then throw <| IO.userError "FAIL: nested products: expected 8 wires (2 intermediates)"
+  IO.println "OK: (a*b)*(c*d) === z costs 3 rows / 2 intermediates"
+
+/- `a·b + c·d === z`: one defining row for the first product, the second
+    absorbed into the assert row: 2 rows, 1 intermediate. -/
+#eval! do
+  let ops : List (Operation (F p1009)) :=
+    [.assert (.add (.add (.mul (.var ⟨0⟩) (.var ⟨1⟩)) (.mul (.var ⟨2⟩) (.var ⟨3⟩)))
+                   (.mul (.const (-1 : F p1009)) (.var ⟨4⟩)))]
+  let r1cs ← match compileR1CS p1009 5 [] [] ops 1 with
+    | .ok s => pure s
+    | .error e => throw <| IO.userError e
+  if !hasSubstr r1cs "\"nConstraints\": 2," then throw <| IO.userError "FAIL: two products: expected 2 rows"
+  if !hasSubstr r1cs "\"nVars\": 7," then throw <| IO.userError "FAIL: two products: expected 7 wires (1 intermediate)"
+  IO.println "OK: a*b + c*d === z costs 2 rows / 1 intermediate"
+
+/- `(a·b + c)·d === w`: the operand `a·b + c` gets one absorbing defining row
+    (`k = a·b + c`), the outer product is absorbed into the assert row:
+    2 rows, 1 intermediate, checked end-to-end through snarkjs. -/
+#eval! withTools ["snarkjs"] do
+  let ops : List (Operation (F p1009)) :=
+    [.witness 1 (.ir [] (.lit #v[.mul (.add (.mul (.expr (.var ⟨0⟩)) (.expr (.var ⟨1⟩))) (.expr (.var ⟨2⟩))) (.expr (.var ⟨3⟩))])), .assert (.add (.var ⟨4⟩) (.mul (.const (-1 : F p1009)) (.mul (.add (.mul (.var ⟨0⟩) (.var ⟨1⟩)) (.var ⟨2⟩)) (.var ⟨3⟩))))]
+  let r1cs ← match compileR1CS p1009 4 [] [] ops 1 with
+    | .ok s => pure s
+    | .error e => throw <| IO.userError e
+  if !hasSubstr r1cs "\"nConstraints\": 2," then throw <| IO.userError "FAIL: absorbed operand: expected 2 rows"
+  if !hasSubstr r1cs "\"nVars\": 7," then throw <| IO.userError "FAIL: absorbed operand: expected 7 wires (1 intermediate)"
+  -- Witness canary: a=2, b=3, c=1, d=4 → k = 2·3+1 = 7 (signal 6), w = 28 (signal 5).
+  let wit ← compileAndWitness p1009 4 [] [] ops 1 "/tmp/audit_absorb.wasm"
+    "{\"in\": [\"2\", \"3\", \"1\", \"4\"]}"
+  if wit.length ≠ 7 then throw <| IO.userError s!"FAIL: absorbed operand: witness length {wit.length} ≠ nVars 7"
+  if wit.getD 5 0 ≠ 28 then throw <| IO.userError s!"FAIL: absorbed operand: w = {wit.getD 5 0}, expected 28"
+  if wit.getD 6 0 ≠ 7 then throw <| IO.userError s!"FAIL: absorbed operand: intermediate = {wit.getD 6 0}, expected 7"
+  IO.println "OK: (a*b + c)*d === w costs 2 rows / 1 intermediate, witness values correct"
+
+/- `2·(a·b) === z` (z witnessed): the constant folds into the product's
+    coefficient, exercising `prodRow`'s generic `c ∉ {±1}` branch:
+    1 constraint, no intermediates. The row-shape needle pins the emitted
+    quadratic row `2a·b = z` exactly. -/
+#eval! do
+  let ops : List (Operation (F p1009)) :=
+    [.witness 1 (.ir [] (.lit #v[.mul (.const (2 : F p1009)) (.mul (.expr (.var ⟨0⟩)) (.expr (.var ⟨1⟩)))])), .assert (.add (.mul (.const (2 : F p1009)) (.mul (.var ⟨0⟩) (.var ⟨1⟩))) (.mul (.const (-1 : F p1009)) (.var ⟨2⟩)))]
+  let r1cs ← match compileR1CS p1009 2 [] [] ops 1 with
+    | .ok s => pure s
+    | .error e => throw <| IO.userError e
+  if !hasSubstr r1cs "\"nConstraints\": 1," then throw <| IO.userError "FAIL: scalar product: expected 1 row"
+  if !hasSubstr r1cs "\"nVars\": 4," then throw <| IO.userError "FAIL: scalar product: expected 4 wires (0 intermediates)"
+  -- exact row: signals 1 = a, 2 = b, 3 = z → (2a)·b = z
+  if !hasSubstr r1cs "[{\"1\": \"2\"}, {\"2\": \"1\"}, {\"3\": \"1\"}]" then
+    throw <| IO.userError "FAIL: scalar product: unexpected row shape (expected (2a)·b = z)"
+  IO.println "OK: 2*(a*b) === z folds the scalar into one generic-coefficient row"
+
+/- `(a·b + c + d)·e === w`: the operand `a·b + c + d` gets one absorbing
+    defining row with a multi-entry C side (`k = a·b + c + d`), exercising
+    `buildAST`'s case-2 compute over several affine terms — the path Poseidon
+    no longer reaches (its absorbed asserts leave no defining rows):
+    2 constraints, 1 intermediate, checked end-to-end through snarkjs. -/
+#eval! withTools ["snarkjs"] do
+  let ops : List (Operation (F p1009)) :=
+    [.witness 1 (.ir [] (.lit #v[.mul (.add (.mul (.expr (.var ⟨0⟩)) (.expr (.var ⟨1⟩))) (.add (.expr (.var ⟨2⟩)) (.expr (.var ⟨3⟩)))) (.expr (.var ⟨4⟩))])), .assert (.add (.var ⟨5⟩) (.mul (.const (-1 : F p1009)) (.mul (.add (.mul (.var ⟨0⟩) (.var ⟨1⟩)) (.add (.var ⟨2⟩) (.var ⟨3⟩))) (.var ⟨4⟩))))]
+  let r1cs ← match compileR1CS p1009 5 [] [] ops 1 with
+    | .ok s => pure s
+    | .error e => throw <| IO.userError e
+  if !hasSubstr r1cs "\"nConstraints\": 2," then throw <| IO.userError "FAIL: multi-term operand: expected 2 rows"
+  if !hasSubstr r1cs "\"nVars\": 8," then throw <| IO.userError "FAIL: multi-term operand: expected 8 wires (1 intermediate)"
+  -- Witness canary: a=2, b=3, c=1, d=4, e=5 → k = 2·3+1+4 = 11 (signal 7), w = 55 (signal 6).
+  let wit ← compileAndWitness p1009 5 [] [] ops 1 "/tmp/audit_absorb_multi.wasm"
+    "{\"in\": [\"2\", \"3\", \"1\", \"4\", \"5\"]}"
+  if wit.length ≠ 8 then throw <| IO.userError s!"FAIL: multi-term operand: witness length {wit.length} ≠ nVars 8"
+  if wit.getD 6 0 ≠ 55 then throw <| IO.userError s!"FAIL: multi-term operand: w = {wit.getD 6 0}, expected 55"
+  if wit.getD 7 0 ≠ 11 then throw <| IO.userError s!"FAIL: multi-term operand: intermediate = {wit.getD 7 0}, expected 11"
+  IO.println "OK: (a*b + c + d)*e === w absorbs a multi-term operand, witness values correct"
+
+/- `x === x` lowers to a tautological constant row, which is dropped: 0 rows. -/
+#eval! do
+  let ops : List (Operation (F p1009)) :=
+    [.assert (.add (.var ⟨0⟩) (.mul (.const (-1 : F p1009)) (.var ⟨0⟩)))]
+  match compileR1CS p1009 1 [] [] ops 1 with
+  | .error e => throw <| IO.userError s!"FAIL: tautology: unexpected error: {e}"
+  | .ok s =>
+    if !hasSubstr s "\"nConstraints\": 0," then throw <| IO.userError "FAIL: tautology: expected 0 constraints"
+    IO.println "OK: tautological assert drops to 0 rows"
+
+/- `2 === 3` is an unsatisfiable constant assertion: compile-time error. -/
+#eval! expectError "constant-false assert rejected" "unsatisfiable constant constraint"
+  (compileR1CS p1009 0 [] []
+    ([.assert (.add (.const (2 : F p1009)) (.mul (.const (-1 : F p1009)) (.const 3)))] :
+      List (Operation (F p1009))) 1)
+
+/- `0·x === y`: the zero constant annihilates the product; the assert is a
+    plain linear row: 1 row, 0 intermediates. -/
+#eval! do
+  let ops : List (Operation (F p1009)) :=
+    [.assert (.add (.mul (.const (0 : F p1009)) (.var ⟨0⟩)) (.mul (.const (-1 : F p1009)) (.var ⟨1⟩)))]
+  let r1cs ← match compileR1CS p1009 2 [] [] ops 1 with
+    | .ok s => pure s
+    | .error e => throw <| IO.userError e
+  if !hasSubstr r1cs "\"nConstraints\": 1," then throw <| IO.userError "FAIL: 0*x === y: expected 1 row"
+  if !hasSubstr r1cs "\"nVars\": 3," then throw <| IO.userError "FAIL: 0*x === y: expected 3 wires (0 intermediates)"
+  IO.println "OK: 0*x === y is a single linear row"
+
+/- Repeated asserts that lower to identical rows are deduplicated: 1 row. -/
+#eval! do
+  let assertAb : Operation (F p1009) :=
+    .assert (.add (.mul (.var ⟨0⟩) (.var ⟨1⟩)) (.mul (.const (-1 : F p1009)) (.var ⟨2⟩)))
+  let ops : List (Operation (F p1009)) := [assertAb, assertAb]
+  let r1cs ← match compileR1CS p1009 3 [] [] ops 1 with
+    | .ok s => pure s
+    | .error e => throw <| IO.userError e
+  if !hasSubstr r1cs "\"nConstraints\": 1," then throw <| IO.userError "FAIL: duplicate asserts: expected 1 row"
+  if !hasSubstr r1cs "\"nVars\": 4," then throw <| IO.userError "FAIL: duplicate asserts: expected 4 wires"
+  IO.println "OK: duplicate asserts deduplicate to 1 row"
 
 /-! ### H1: let-step locals sized by the TOTAL step count (not the max) -/
 
@@ -419,7 +585,7 @@ def compileAndWitness (fieldPrime numInputs : ℕ) [Fact fieldPrime.Prime]
   let r1cs ← match compileR1CS p1009 1 ["x"] [1] ops 1 with
     | .ok s => pure s
     | .error e => throw <| IO.userError e
-  if !hasSubstr r1cs "\"nOutputs\": 1" then throw <| IO.userError "FAIL: D2: nOutputs != 1"
+  if !hasSubstr r1cs "\"nOutputs\": 1," then throw <| IO.userError "FAIL: D2: nOutputs != 1"
   let wit ← compileAndWitness p1009 1 ["x"] [1] ops 1 "/tmp/audit_d2.wasm" "{\"x\": \"5\"}"
   -- Outputs-first: signal 1 = w (= 10), signal 2 = x (= 5).
   if wit.getD 1 0 ≠ 10 then throw <| IO.userError s!"FAIL: D2: output signal 1 = {wit.getD 1 0}, expected 10"
@@ -434,8 +600,8 @@ def compileAndWitness (fieldPrime numInputs : ℕ) [Fact fieldPrime.Prime]
 -- reviewer "fixed" it), and the Keccak-shaped 3000-element mapRange was
 -- similarly dominated by the O(n^2) layout. The `Num2Bits 128` circuit
 -- below hung entirely (interrupted after 6 minutes): its `e2 + e2` power
--- accumulator shared one expression subtree, and expression flattening is a
--- structural recursion, so the sum blew up to 2^128 visits. Post-fix all of
+-- accumulator shared one expression subtree, and expression lowering
+-- (`symExpr`) is a structural recursion, so the sum blew up to 2^128 visits. Post-fix all of
 -- these complete in well under a second per element; the tests assert
 -- completion only, and print the elapsed milliseconds for the record.
 
