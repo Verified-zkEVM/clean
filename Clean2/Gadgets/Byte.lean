@@ -48,15 +48,6 @@ theorem ofNat_ofBits (b : Fin 8 → Bool) : UInt8.ofNat (Nat.ofBits b) = ofBits 
   apply UInt8.toNat_inj.mp
   rw [UInt8.toNat_ofNat', toNat_ofBits, Nat.mod_eq_of_lt (Nat.ofBits_lt_two_pow b)]
 
-theorem ofBits_eq_sum : ∀ {n : ℕ} (b : Fin n → Bool), Nat.ofBits b = ∑ i : Fin n, (b i).toNat * 2 ^ (i : ℕ)
-  | 0, b => by simp [Nat.ofBits_zero]
-  | n + 1, b => by
-    rw [Nat.ofBits_succ, ofBits_eq_sum, Fin.sum_univ_succ, Finset.mul_sum]
-    simp only [Function.comp_apply, Fin.val_zero, pow_zero, mul_one, Fin.val_succ, pow_succ]
-    rw [add_comm]
-    congr 1
-    refine Finset.sum_congr rfl fun i _ => by ring
-
 theorem ofBits_testBit {n m : ℕ} (h : m < 2 ^ n) : Nat.ofBits (fun i : Fin n => m.testBit i) = m := by
   apply Nat.eq_of_testBit_eq
   intro i
@@ -66,13 +57,6 @@ theorem ofBits_testBit {n m : ℕ} (h : m < 2 ^ n) : Nat.ofBits (fun i : Fin n =
   · rw [Nat.testBit_lt_two_pow (lt_of_lt_of_le h (Nat.pow_le_pow_right (by norm_num) (by omega)))]
 
 variable {Native : Type} [Field Native]
-
-theorem fromBits_eq [DecidableEq Native] {n : ℕ} (bits : Vector Native n) :
-    Bits2Num.fromBits bits = Nat.ofBits fun i : Fin n => decide (bits[i] = 1) := by
-  rw [ofBits_eq_sum, Bits2Num.fromBits]
-  refine Finset.sum_congr rfl fun i _ => ?_
-  simp only [Fin.getElem_fin]
-  split <;> simp_all
 
 /-! ## Two synthetic types -/
 
@@ -208,7 +192,7 @@ entry point of bits: the other two are stated on `Vector Bool n`, and assume the
 
 namespace CheckBits
 
-/-- `n` native elements are bits. An assertion; its output is the same elements, as bits. -/
+/-- `n` native elements are bits. An assertion; its output is the same elements, as booleans. -/
 @[reducible]
 def interface [DecidableEq Native] (n : ℕ) : Interface Native where
   input := Vector Native n
@@ -218,46 +202,38 @@ def interface [DecidableEq Native] (n : ℕ) : Interface Native where
   Spec := fun v b => ∀ i : Fin n, IsBool v[i] ∧ b[i] = decide (v[i] = 1)
   ProverAssumptions := fun v => ∀ i : Fin n, IsBool v[i]
 
-def impl {B : Backend} [Field B.Native] [DecidableEq B.Native] (assertBool : Impl B AssertBool.interface) (n : ℕ) :
+def impl {B : Backend} [Field B.Native] [DecidableEq B.Native] (toBit : Impl B ToBit.interface) (n : ℕ) :
     Impl B (interface n) where
-  main v := do
-    Circuit.foldr n (fun i _ => assertBool v[i]) ()
-    return v
+  main v := Circuit.mapFin n fun i => toBit v[i]
   consistent := by
     intro v s
-    simp only [circuit_norm]
-    exact Circuit.foldr_consistent _ _ _ fun i _ s => by simp only [circuit_norm]
+    exact Circuit.mapFin_consistent _ _ fun i s => by simp only [circuit_norm]
   spatial := by
     intro v s h_in
     simp only [circuit_norm] at h_in ⊢
-    refine Circuit.foldr_local (M := unit) _ () s _ (fun i _ s => by simp only [circuit_norm])
-      (fun i _ s h_mono _ => ?_) (by rw [Backend.footprintT_unit]; exact Set.empty_subset _)
-      fun _ => ?_
+    refine Circuit.mapFin_local _ s _ (fun i s => by simp only [circuit_norm]) (fun i s h_mono => ?_) fun h => ?_
     · simp only [circuit_norm]
-      exact ⟨(Backend.footprint_getElem_subset h_in i i.isLt).trans h_mono, fun _ _ => Set.empty_subset _⟩
-    · have h_mono := Ops.alloc_mono (Circuit.foldr_consistent (fun i _ => assertBool v[i]) () s
-        fun i _ s => by simp only [circuit_norm])
-      exact Backend.footprintT_ctypeVec_subset.mpr fun i =>
-        Backend.footprintT_native_subset.mpr ((Backend.footprint_getElem_subset h_in i i.isLt).trans h_mono)
+      exact ⟨(Backend.footprint_getElem_subset h_in i i.isLt).trans h_mono, fun h _ => h⟩
+    · simp only [circuit_norm, Set.iUnion_subset_iff]
+      rw [Backend.footprintT_natives, Set.iUnion_subset_iff] at h
+      exact h
   soundness := by
     intro s env v _ h
     simp only [circuit_norm] at h ⊢
-    have h_bool := Circuit.foldr_sound _ () s env (fun i _ => ∀ j : Fin n, i ≤ j → IsBool (B.eval env v[j]))
-      (fun j hj => absurd j.isLt (by omega)) ?_ h
-    · simp only [Fin.getElem_fin, Vector.getElem_map]
-      exact ⟨fun i => h_bool i (Nat.zero_le _), fun i => ⟨h_bool i (Nat.zero_le _), trivial⟩⟩
-    · intro i _ s h_inv h_step j hj
-      simp only [circuit_norm] at h_step
-      rcases Nat.lt_or_eq_of_le hj with hj | hj
-      · exact h_inv j hj
-      · rw [show j = i from Fin.ext hj.symm]
-        exact h_step
+    have hb := Circuit.mapFin_sound _ s env
+      (fun i b => IsBool b ∧ IsBool (B.eval env v[i]) ∧ decide (b = 1) = decide (B.eval env v[i] = 1))
+      (fun i s h => by simp only [circuit_norm] at h ⊢; exact h) h
+    simp only [Fin.getElem_fin, Vector.getElem_map] at hb ⊢
+    exact ⟨fun i => (hb i i.isLt).1, fun i => (hb i i.isLt).2⟩
   completeness := by
     intro s env v h hv
-    simp only [circuit_norm, Fin.getElem_fin, Vector.getElem_map] at h hv ⊢
-    refine ⟨Circuit.foldr_complete _ () s env (fun i _ s _ => ?_) h, hv⟩
-    simp only [circuit_norm]
-    exact hv i
+    simp only [circuit_norm] at h hv ⊢
+    have hb := Circuit.mapFin_honest _ s env
+      (fun i b => IsBool (B.eval env v[i]) → IsBool b)
+      (fun i s h => by simp only [circuit_norm] at h ⊢; exact fun hv => (h hv).2) h
+    simp only [Fin.getElem_fin, Vector.getElem_map] at hv hb ⊢
+    exact ⟨Circuit.mapFin_complete _ s env (fun i s h => by simp only [circuit_norm]; exact hv i) h,
+      fun i => hb i i.isLt (hv i)⟩
 
 end CheckBits
 
@@ -265,19 +241,15 @@ namespace XorBits
 
 /-- The bitwise xor of two vectors of `n` bits. -/
 @[reducible]
-def interface [DecidableEq Native] (n : ℕ) : Interface Native where
+def interface (bool : CType Native Bool) (n : ℕ) : Interface Native where
   input := Vector Bool n × Vector Bool n
-  inputCType := CType.vec n (bit Native) ×ᵗ CType.vec n (bit Native)
+  inputCType := CType.vec n bool ×ᵗ CType.vec n bool
   output := Vector Bool n
-  outputCType := CType.vec n (bit Native)
+  outputCType := CType.vec n bool
   Spec := fun (a, b) c => ∀ i : Fin n, c[i] = (a[i] ^^ b[i])
 
-theorem decide_eq_xor {a b c : Prop} [Decidable a] [Decidable b] [Decidable c] (h : c ↔ ¬(a ↔ b)) :
-    decide c = (decide a ^^ decide b) := by
-  by_cases a <;> by_cases b <;> simp_all
-
-def impl {B : Backend} [Field B.Native] [DecidableEq B.Native] (xor : Impl B Xor.interface) (n : ℕ) :
-    Impl B (interface n) where
+def impl {B : Backend} [Field B.Native] [DecidableEq B.Native] (xor : Impl B (Xor.interface (bit B.Native))) (n : ℕ) :
+    Impl B (interface (bit B.Native) n) where
   main | (a, b) => Circuit.mapFin n fun i => xor (a[i], b[i])
   consistent := by
     rintro ⟨a, b⟩ s
@@ -296,19 +268,18 @@ def impl {B : Backend} [Field B.Native] [DecidableEq B.Native] (xor : Impl B Xor
     simp only [circuit_norm] at h_as h ⊢
     have hc := Circuit.mapFin_sound _ s env
       (fun i c => IsBool (B.eval env a[i]) ∧ IsBool (B.eval env b[i]) →
-        IsBool c ∧ (c = 1 ↔ ¬(B.eval env a[i] = 1 ↔ B.eval env b[i] = 1)))
+        IsBool c ∧ decide (c = 1) = (decide (B.eval env a[i] = 1) ^^ decide (B.eval env b[i] = 1)))
       (fun i s h => by simp only [circuit_norm] at h ⊢; exact h) h
     simp only [Fin.getElem_fin, Vector.getElem_map] at h_as hc ⊢
-    exact ⟨fun i => (hc i i.isLt ⟨h_as.1 i, h_as.2 i⟩).1,
-      fun i => decide_eq_xor (hc i i.isLt ⟨h_as.1 i, h_as.2 i⟩).2⟩
+    exact ⟨fun i => (hc i i.isLt ⟨h_as.1 i, h_as.2 i⟩).1, fun i => (hc i i.isLt ⟨h_as.1 i, h_as.2 i⟩).2⟩
   completeness := by
     rintro s env ⟨a, b⟩ h h_as
     simp only [circuit_norm] at h h_as ⊢
     have hc := Circuit.mapFin_honest _ s env
       (fun i c => IsBool (B.eval env a[i]) ∧ IsBool (B.eval env b[i]) → IsBool c)
-      (fun i s h => by simp only [circuit_norm] at h ⊢; exact fun hab => (h hab).1) h
+      (fun i s h => by simp only [circuit_norm] at h ⊢; exact fun hab => (h hab).2) h
     simp only [Fin.getElem_fin, Vector.getElem_map] at h_as hc ⊢
-    exact ⟨Circuit.mapFin_complete _ s env (fun i s h => by simp only [circuit_norm]) h,
+    exact ⟨Circuit.mapFin_complete _ s env (fun i s h => by simp only [circuit_norm]; exact ⟨h_as.1 i, h_as.2 i⟩) h,
       fun i => hc i i.isLt ⟨h_as.1 i, h_as.2 i⟩⟩
 
 end XorBits
@@ -323,10 +294,8 @@ theorem isBool_bitOf {F : Type} [Field F] [NatVal F] (i : ℕ) (x : F) : IsBool 
   unfold bitOf IsBool; split <;> simp
 
 /-- The honest bits denote the number. -/
-theorem fromBits_bitOf {F : Type} [Field F] [NatVal F] {n : ℕ} (w : Vector F n) (x : F) (hw : ∀ i : Fin n, w[i] = bitOf i x)
-    (h : natVal x < 2 ^ n) : Bits2Num.fromBits w = natVal x := by
-  classical
-  rw [fromBits_eq]
+theorem ofBits_bitOf {F : Type} [Field F] [NatVal F] [DecidableEq F] {n : ℕ} (w : Vector F n) (x : F) (hw : ∀ i : Fin n, w[i] = bitOf i x)
+    (h : natVal x < 2 ^ n) : Nat.ofBits (fun i : Fin n => decide (w[i] = 1)) = natVal x := by
   conv => rhs; rw [← ofBits_testBit h]
   congr 1
   funext i
@@ -345,7 +314,7 @@ def interface [DecidableEq Native] (n : ℕ) : Interface Native where
 
 /-- Witness the bits, check they are bits, and that they add up to `x`. -/
 def impl {B : Backend} [Field B.Native] [DecidableEq B.Native] [NatVal B.Native] (arith : ∀ n, Impl B (Arith.interface n))
-    (checkBits : ∀ n, Impl B (CheckBits.interface n)) (bits2num : ∀ n, Impl B (Bits2Num.interface n))
+    (checkBits : ∀ n, Impl B (CheckBits.interface n)) (bits2num : ∀ n, Impl B (Bits2Num.interface (bit B.Native) n))
     (assertEq : Impl B AssertEq.interface) (n : ℕ) : Impl B (interface n) where
   main x := do
     let raw ← Circuit.mapFin n fun i => arith (.witness native (bitOf i)) x
@@ -368,16 +337,15 @@ def impl {B : Backend} [Field B.Native] [DecidableEq B.Native] [NatVal B.Native]
     · have h_mono := Ops.alloc_mono (Circuit.mapFin_consistent (n := n)
         (fun i => arith (.witness native (bitOf i)) x) s fun i s => by simp only [circuit_norm])
       simp only [circuit_norm, Set.union_subset_iff, Set.iUnion_subset_iff]
-      refine ⟨h_raw, fun h_bits h₁ => ⟨Set.iUnion_subset h_bits, fun h_v h₂ =>
+      refine ⟨h_raw, fun h_bits h₁ => ⟨h_bits, fun h_v h₂ =>
         ⟨⟨h_v, (h_in.trans h_mono).trans (h₁.trans h₂)⟩, fun _ h₃ i => ((h_bits i).trans h₂).trans h₃⟩⟩⟩
   soundness := by
     intro s env x _ h
     simp only [circuit_norm, Fin.getElem_fin, Vector.getElem_map] at h ⊢
     obtain ⟨-, ⟨h_valid, h_spec⟩, h_num, h_eq⟩ := h
-    obtain ⟨h_v, -⟩ := h_num h_valid
+    have h_v := h_num h_valid
     refine ⟨h_valid, ?_⟩
-    rw [← h_eq, h_v, fromBits_eq]
-    simp only [Fin.getElem_fin, Vector.getElem_map]
+    rw [← h_eq, h_v]
   completeness := by
     intro s env x h h_as
     have h_raw := Circuit.mapFin_honest (fun i => arith (.witness native (bitOf i)) x) s env
@@ -392,12 +360,12 @@ def impl {B : Backend} [Field B.Native] [DecidableEq B.Native] [NatVal B.Native]
       exact isBool_bitOf _ _
     obtain ⟨h_map, h_check, h_num⟩ := h
     obtain ⟨⟨h_valid, h_spec⟩, -⟩ := h_check h_bool
-    obtain ⟨h_v, -⟩ := h_num h_valid
-    refine ⟨⟨Circuit.mapFin_complete _ s env (fun i s h => by simp only [circuit_norm]) h_map, h_bool, ?_⟩, h_valid⟩
+    have h_v := h_num h_valid h_valid
+    refine ⟨⟨Circuit.mapFin_complete _ s env (fun i s h => by simp only [circuit_norm]) h_map, h_bool, h_valid, ?_⟩, h_valid⟩
     obtain ⟨h_nat, h_le⟩ := natVal_spec hx
-    have h_num := fromBits_bitOf ((Circuit.mapFin n fun i => arith (.witness native (bitOf i)) x).output s |>.map (B.eval env))
+    have h_num := ofBits_bitOf ((Circuit.mapFin n fun i => arith (.witness native (bitOf i)) x).output s |>.map (B.eval env))
       (B.eval env x) (fun i => by simp only [Fin.getElem_fin, Vector.getElem_map]; exact h_raw i i.isLt) (lt_of_le_of_lt h_le hm)
-    rw [h_v, fromBits_eq, h_nat, ← h_num, fromBits_eq]
+    rw [h_v, h_nat, ← h_num]
     congr 2
     funext i
     simp only [Fin.getElem_fin, Vector.getElem_map]
@@ -416,12 +384,6 @@ variable {F : Type} [Field F] [NatVal F] {p : ℕ} [CharP F p]
 theorem decodeField_natCast (hp : 256 ≤ p) {m : ℕ} (hm : m < 256) : decodeField (m : F) = UInt8.ofNat m := by
   rw [decodeField, natVal_natCast (lt_of_lt_of_le hm hp)]
 
-/-- The byte eight bits add up to. -/
-theorem decodeField_fromBits [DecidableEq F] (hp : 256 ≤ p) (b : Vector F 8) :
-    decodeField ((Bits2Num.fromBits b : ℕ) : F) = ofBits fun i => decide (b[i] = 1) := by
-  have h := Bits2Num.fromBits_lt b
-  rw [decodeField_natCast hp (by simpa using h), fromBits_eq, ofNat_ofBits]
-
 /-- The byte a number below 256 denotes, by its bits. -/
 theorem decodeField_ofBits (hp : 256 ≤ p) (b : Fin 8 → Bool) : decodeField ((Nat.ofBits b : ℕ) : F) = ofBits b := by
   rw [decodeField_natCast hp (Nat.ofBits_lt_two_pow b), ofNat_ofBits]
@@ -432,8 +394,8 @@ section Large
 variable {B : Backend} [Field B.Native] [DecidableEq B.Native] [NatVal B.Native] {p : ℕ} [CharP B.Native p]
 
 /-- Take both bytes apart into bits, xor the bits, and add them back up. -/
-def largeXor (hp : 256 ≤ p) (toBits : ∀ n, Impl B (ToBits.interface n)) (xorBits : ∀ n, Impl B (XorBits.interface n))
-    (bits2num : ∀ n, Impl B (Bits2Num.interface n)) : Impl B (interface (field B.Native) .xor) where
+def largeXor (hp : 256 ≤ p) (toBits : ∀ n, Impl B (ToBits.interface n)) (xorBits : ∀ n, Impl B (XorBits.interface (bit B.Native) n))
+    (bits2num : ∀ n, Impl B (Bits2Num.interface (bit B.Native) n)) : Impl B (interface (field B.Native) .xor) where
   main | (x, y) => do
     let xb ← toBits 8 x
     let yb ← toBits 8 y
@@ -444,12 +406,11 @@ def largeXor (hp : 256 ≤ p) (toBits : ∀ n, Impl B (ToBits.interface n)) (xor
     simp only [circuit_norm, Fin.getElem_fin, Vector.getElem_map] at h_as h ⊢
     obtain ⟨⟨hxb, hx⟩, ⟨hyb, hy⟩, h_xor, h_num⟩ := h
     obtain ⟨hzb, hz⟩ := h_xor ⟨hxb, hyb⟩
-    obtain ⟨hz_eq, hz_lt⟩ := h_num hzb
-    refine ⟨⟨_, hz_lt, hz_eq⟩, ?_⟩
-    rw [hz_eq, hx, hy, decodeField_fromBits hp, decodeField_ofBits hp, decodeField_ofBits hp, ofBits_xor]
+    have hz_eq := h_num hzb
+    refine ⟨⟨_, Nat.ofBits_lt_two_pow _, hz_eq⟩, ?_⟩
+    rw [hz_eq, hx, hy, decodeField_ofBits hp, decodeField_ofBits hp, decodeField_ofBits hp, ofBits_xor]
     congr 1
     funext i
-    simp only [Fin.getElem_fin, Vector.getElem_map]
     exact hz i
   completeness := by
     rintro s env ⟨x, y⟩ h h_as
@@ -459,30 +420,27 @@ def largeXor (hp : 256 ≤ p) (toBits : ∀ n, Impl B (ToBits.interface n)) (xor
     obtain ⟨-, hxb⟩ := h_x hx
     obtain ⟨-, hyb⟩ := h_y hy
     obtain ⟨-, hzb⟩ := h_xor ⟨hxb, hyb⟩
-    obtain ⟨hz_eq, hz_lt⟩ := h_num hzb
-    exact ⟨⟨hx, hy, hxb, hyb⟩, _, hz_lt, hz_eq⟩
+    exact ⟨⟨hx, hy, ⟨hxb, hyb⟩, hzb⟩, _, Nat.ofBits_lt_two_pow _, h_num hzb hzb⟩
 
 /-- Add the bits up. -/
-def largeFromBits (hp : 256 ≤ p) (bits2num : ∀ n, Impl B (Bits2Num.interface n)) :
+def largeFromBits (hp : 256 ≤ p) (bits2num : ∀ n, Impl B (Bits2Num.interface (bit B.Native) n)) :
     Impl B (interface (field B.Native) .fromBits) where
   main v := bits2num 8 v
   soundness := by
     intro s env v h_as h
     simp only [circuit_norm, Fin.getElem_fin, Vector.getElem_map] at h_as h ⊢
-    obtain ⟨h_eq, h_lt⟩ := h h_as
-    refine ⟨⟨_, h_lt, h_eq⟩, ?_⟩
-    rw [h_eq, decodeField_fromBits hp]
-    simp only [Fin.getElem_fin, Vector.getElem_map]
+    have h_eq := h h_as
+    refine ⟨⟨_, Nat.ofBits_lt_two_pow _, h_eq⟩, ?_⟩
+    rw [h_eq, decodeField_ofBits hp]
   completeness := by
     intro s env v h hv
     simp only [circuit_norm] at h hv ⊢
-    obtain ⟨h_eq, h_lt⟩ := h hv
-    exact ⟨_, h_lt, h_eq⟩
+    exact ⟨hv, _, Nat.ofBits_lt_two_pow _, h hv hv⟩
 
 /-- A byte is one native element, range-checked where it enters. For a field of characteristic
 at least 256. -/
 def large (hp : 256 ≤ p) (arith : ∀ n, Impl B (Arith.interface n)) : ∀ op, Impl B (interface (field B.Native) op) :=
-  let checkBits := CheckBits.impl (AssertBool.impl (arith .mulEq))
+  let checkBits := CheckBits.impl (ToBit.impl (AssertBool.impl (arith .mulEq)))
   let bits2num := Bits2Num.impl arith
   let toBits := ToBits.impl arith checkBits bits2num (AssertEq.impl arith)
   fun

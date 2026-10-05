@@ -7,15 +7,16 @@ A gadget with a shape parameter, written the way one writes it: `main n bits` is
 each, against the interfaces of the `add`s it calls. The circuit only adds, so it is free on
 both backends, whatever the width.
 
-The spec is Clean's: assuming the inputs are bits, the output is the number they denote, and
-that number is below `2^n`. Clean states the bound as `out.val < 2^n`; the native type here is
-any field, so the bound is on the number itself, which is the same thing for `ZMod p`.
+The input is `n` booleans, at a synthetic type `bool`; the implementation is at `bit`, where a
+boolean is one native element that is `0` or `1`. The spec: the output is the number the
+booleans denote (which is below `2^n`: `Nat.ofBits_lt_two_pow`).
 -/
 module
 
 public import Clean2.Gadgets.Bool
 public import Mathlib.Algebra.BigOperators.Fin
 public import Mathlib.Tactic.Linarith
+public import Batteries.Data.Nat.Lemmas
 
 @[expose] public section
 
@@ -24,40 +25,31 @@ variable {Native : Type} [Field Native]
 
 namespace Bits2Num
 
-/-- The number with the given little-endian bits: `∑ bits[i] * 2^i`, reading a field element as
-the bit `1` exactly when it is `1`. -/
-noncomputable def fromBits {n : ℕ} (bits : Vector Native n) : ℕ :=
-  open Classical in ∑ i : Fin n, (if bits[i] = 1 then 1 else 0) * 2 ^ (i : ℕ)
+/-- The number with the given little-endian bits, as a sum of powers of two. -/
+theorem ofBits_eq_sum : ∀ {n : ℕ} (b : Fin n → Bool), Nat.ofBits b = ∑ i : Fin n, (b i).toNat * 2 ^ (i : ℕ)
+  | 0, b => by simp [Nat.ofBits_zero]
+  | n + 1, b => by
+    rw [Nat.ofBits_succ, ofBits_eq_sum, Fin.sum_univ_succ, Finset.mul_sum]
+    simp only [Function.comp_apply, Fin.val_zero, pow_zero, mul_one, Fin.val_succ, pow_succ]
+    rw [add_comm]
+    congr 1
+    refine Finset.sum_congr rfl fun i _ => by ring
 
-/-- `n` bits are below `2^n`. -/
-theorem sum_lt_pow : ∀ (n : ℕ) (b : Fin n → ℕ), (∀ i, b i ≤ 1) → ∑ i, b i * 2 ^ (i : ℕ) < 2 ^ n
-  | 0, _, _ => by simp
-  | n + 1, b, hb => by
-    rw [Fin.sum_univ_castSucc]
-    simp only [Fin.val_castSucc, Fin.val_last, pow_succ]
-    have h₁ := sum_lt_pow n (fun i => b i.castSucc) fun i => hb _
-    have h₂ : b (Fin.last n) * 2 ^ n ≤ 1 * 2 ^ n := Nat.mul_le_mul_right _ (hb (Fin.last n))
-    omega
-
-theorem fromBits_lt {n : ℕ} (bits : Vector Native n) : fromBits bits < 2 ^ n :=
-  sum_lt_pow n _ fun _ => by split <;> omega
-
-/-- On bits, the number is the weighted sum of the field elements themselves. -/
-theorem cast_fromBits {n : ℕ} (bits : Vector Native n) (h : ∀ i : Fin n, IsBool bits[i]) :
-    (fromBits bits : Native) = ∑ i : Fin n, bits[i] * 2 ^ (i : ℕ) := by
-  simp only [fromBits, Nat.cast_sum, Nat.cast_mul, Nat.cast_pow, Nat.cast_ofNat]
+/-- On bits, the number they denote is the weighted sum of the field elements themselves. -/
+theorem cast_ofBits [DecidableEq Native] {n : ℕ} (bits : Vector Native n) (h : ∀ i : Fin n, IsBool bits[i]) :
+    ((Nat.ofBits fun i : Fin n => decide (bits[i] = 1) : ℕ) : Native) = ∑ i : Fin n, bits[i] * 2 ^ (i : ℕ) := by
+  simp only [ofBits_eq_sum, Nat.cast_sum, Nat.cast_mul, Nat.cast_pow, Nat.cast_ofNat]
   refine Finset.sum_congr rfl fun i _ => ?_
   rcases h i with h | h <;> simp [h]
 
-/-- `n` bits in, their value out. -/
+/-- `n` booleans in, laid out as `bool`; the number they denote out. -/
 @[reducible]
-def interface (n : ℕ) : Interface Native where
-  input := Vector Native n
-  inputCType := .natives n
+def interface (bool : CType Native Bool) (n : ℕ) : Interface Native where
+  input := Vector Bool n
+  inputCType := CType.vec n bool
   output := Native
   outputCType := .native
-  Assumptions := fun bits => ∀ i : Fin n, IsBool bits[i]
-  Spec := fun bits out => out = fromBits bits ∧ fromBits bits < 2 ^ n
+  Spec := fun bits out => out = ((Nat.ofBits fun i : Fin n => bits[i] : ℕ) : Native)
 
 variable {B : Backend} [Field B.Native]
 
@@ -131,7 +123,7 @@ theorem loop_local (s : B.State) (K : B.State → Prop)
 end Loop
 
 /-- Horner's rule over the bits. One implementation for every `n`: `n` is only the loop bound. -/
-def impl (arith : ∀ n, Impl B (Arith.interface n)) (n : ℕ) : Impl B (interface n) where
+def impl [DecidableEq B.Native] (arith : ∀ n, Impl B (Arith.interface n)) (n : ℕ) : Impl B (interface (bit B.Native) n) where
   main bits := do
     let zero ← arith (.const 0) ()
     Circuit.foldr n (fun i acc => step arith bits[i] acc) zero
@@ -141,18 +133,19 @@ def impl (arith : ∀ n, Impl B (Arith.interface n)) (n : ℕ) : Impl B (interfa
     exact loop_consistent arith n _ _ _
   spatial := by
     intro bits s h_in
+    have h_in := Backend.footprintT_ctypeVec_subset.mp h_in
     simp only [circuit_norm] at h_in ⊢
     refine ⟨Set.empty_subset _, fun h_zero h_mono => ?_⟩
-    exact loop_local arith n _ _ _ _ (fun i => (Backend.footprint_getElem_subset h_in i i.isLt).trans h_mono) h_zero id
+    exact loop_local arith n _ _ _ _ (fun i => (h_in i).trans h_mono) h_zero id
   soundness := by
     intro s env bits h_bool h
     simp only [circuit_norm] at h_bool h ⊢
     obtain ⟨h_zero, h_loop⟩ := h
     have h_val := loop_sound arith n (fun i => bits[i]) _ _ env h_loop
-    have h_cast := cast_fromBits (bits.map (B.eval env)) h_bool
+    have h_cast := cast_ofBits (bits.map (B.eval env)) h_bool
     simp only [circuit_norm, Fin.getElem_fin, Vector.getElem_map] at h_val h_cast ⊢
     rw [h_val, h_zero, mul_zero, add_zero]
-    exact ⟨h_cast.symm, fromBits_lt _⟩
+    exact h_cast.symm
   completeness := by
     intro s env bits h _
     simp only [circuit_norm] at h ⊢

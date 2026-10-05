@@ -46,35 +46,36 @@ def impl {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface 
 
 end AssertEq
 
-/-! ## `isEqual`: `out = 1` if `a = b`, and `out = 0` otherwise -/
+/-! ## `isEqual`: whether `a = b`, as a boolean -/
 
 namespace IsEqual
 
 @[reducible]
-def interface : Interface Native where
+def interface [DecidableEq Native] (bool : CType Native Bool) : Interface Native where
   input := Native × Native
   inputCType := .nativePair
-  output := Native
-  outputCType := .native
-  Spec := fun (a, b) out => (a = b → out = 1) ∧ (a ≠ b → out = 0)
+  output := Bool
+  outputCType := bool
+  Spec := fun (a, b) out => out = decide (a = b)
 
-/-- Generic over the arithmetic *and* over the zero test. -/
-def impl {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface n)) (isZero : Impl B IsZero.interface) :
-    Impl B interface where
+/-- Generic over the arithmetic, over the zero test, and over the layout of a boolean. -/
+def impl {B : Backend} [Field B.Native] [DecidableEq B.Native] {bool : CType B.Native Bool}
+    (arith : ∀ n, Impl B (Arith.interface n)) (isZero : Impl B (IsZero.interface bool)) :
+    Impl B (interface bool) where
   main | (a, b) => do
     let d ← arith .sub (a, b)
     isZero d
   soundness := by
     intro s env (a, b) _ h
     simp only [circuit_norm] at h ⊢
-    -- `d = a - b`, plus the two halves of `IsZero.interface.Spec d out`
-    obtain ⟨h_sub, h_one, h_zero⟩ := h
-    rw [h_sub, sub_eq_zero] at h_one
-    rw [h_sub, sub_ne_zero] at h_zero
-    exact ⟨h_one, h_zero⟩
+    -- `d = a - b`, and `IsZero.interface.Spec d out`
+    obtain ⟨h_sub, v_out, e_out⟩ := h
+    simp only [h_sub, sub_eq_zero] at e_out
+    exact ⟨v_out, e_out⟩
   completeness := by
-    intro s env (a, b) _ _
-    simp only [circuit_norm]
+    intro s env (a, b) h _
+    simp only [circuit_norm] at h ⊢
+    exact h.2.2
 
 end IsEqual
 

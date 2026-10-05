@@ -7,9 +7,11 @@ Two tiers:
 - `NAND`, `NOR` are implemented over `NOT.interface` and `AND.interface`/`OR.interface`. Their proofs never
   look at a circuit: they only compose the specs of the gates they call.
 
-A gate's spec says what the output *means*: it is a boolean, and it is true exactly when the
-corresponding proposition about the inputs holds. The field encoding (`1 - x`, `a * b`, ...)
-is implementation, and never appears in an interface.
+A gate's interface is stated on `Bool`, at a synthetic type `bool : CType Native Bool` it is
+given: its spec is the boolean function it computes. The field encoding (`1 - x`, `a * b`, ...)
+is implementation, and never appears in an interface: the direct gates are implemented at
+`bit`, where a boolean is one native element that is `0` or `1`, and the gates built on gates
+are generic in `bool`.
 -/
 module
 
@@ -27,15 +29,15 @@ namespace Gates
 namespace NOT
 
 @[reducible]
-def interface : Interface Native where
-  input := Native
-  inputCType := .native
-  output := Native
-  outputCType := .native
-  Assumptions := fun x => IsBool x
-  Spec := fun x out => IsBool out ∧ (out = 1 ↔ x ≠ 1)
+def interface (bool : CType Native Bool) : Interface Native where
+  input := Bool
+  inputCType := bool
+  output := Bool
+  outputCType := bool
+  Spec := fun x out => out = !x
 
-def impl {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface n)) : Impl B interface where
+def impl {B : Backend} [Field B.Native] [DecidableEq B.Native] (arith : ∀ n, Impl B (Arith.interface n)) :
+    Impl B (interface (bit B.Native)) where
   main x := do
     let one ← arith (.const 1) ()
     arith .sub (one, x)
@@ -46,8 +48,11 @@ def impl {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface 
     rw [hout, hone]
     rcases hx with hx | hx <;> simp [hx]
   completeness := by
-    intro s env x _ _
-    simp only [circuit_norm]
+    intro s env x h hx
+    simp only [circuit_norm, IsBool] at h hx ⊢
+    obtain ⟨hone, hout⟩ := h
+    rw [hout, hone]
+    rcases hx with hx | hx <;> simp [hx]
 
 end NOT
 
@@ -56,25 +61,28 @@ end NOT
 namespace AND
 
 @[reducible]
-def interface : Interface Native where
-  input := Native × Native
-  inputCType := .nativePair
-  output := Native
-  outputCType := .native
-  Assumptions := fun (a, b) => IsBool a ∧ IsBool b
-  Spec := fun (a, b) c => IsBool c ∧ (c = 1 ↔ a = 1 ∧ b = 1)
+def interface (bool : CType Native Bool) : Interface Native where
+  input := Bool × Bool
+  inputCType := bool ×ᵗ bool
+  output := Bool
+  outputCType := bool
+  Spec := fun (a, b) c => c = (a && b)
 
-def impl {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface n)) : Impl B interface where
+def impl {B : Backend} [Field B.Native] [DecidableEq B.Native] (arith : ∀ n, Impl B (Arith.interface n)) :
+    Impl B (interface (bit B.Native)) where
   main | (a, b) => arith .mul (a, b)
   soundness := by
     intro s env (a, b) h_as h
     simp only [circuit_norm, IsBool] at h_as h ⊢
     obtain ⟨ha, hb⟩ := h_as
-    rw [h]
+    simp only [h]
     rcases ha with ha | ha <;> rcases hb with hb | hb <;> simp [ha, hb]
   completeness := by
-    intro s env (a, b) _ _
-    simp only [circuit_norm]
+    intro s env (a, b) h h_as
+    simp only [circuit_norm, IsBool] at h h_as ⊢
+    obtain ⟨ha, hb⟩ := h_as
+    simp only [h]
+    rcases ha with ha | ha <;> rcases hb with hb | hb <;> simp [ha, hb]
 
 end AND
 
@@ -83,15 +91,15 @@ end AND
 namespace OR
 
 @[reducible]
-def interface : Interface Native where
-  input := Native × Native
-  inputCType := .nativePair
-  output := Native
-  outputCType := .native
-  Assumptions := fun (a, b) => IsBool a ∧ IsBool b
-  Spec := fun (a, b) c => IsBool c ∧ (c = 1 ↔ a = 1 ∨ b = 1)
+def interface (bool : CType Native Bool) : Interface Native where
+  input := Bool × Bool
+  inputCType := bool ×ᵗ bool
+  output := Bool
+  outputCType := bool
+  Spec := fun (a, b) c => c = (a || b)
 
-def impl {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface n)) : Impl B interface where
+def impl {B : Backend} [Field B.Native] [DecidableEq B.Native] (arith : ∀ n, Impl B (Arith.interface n)) :
+    Impl B (interface (bit B.Native)) where
   main | (a, b) => do
     let ab ← arith .mul (a, b)
     let sum ← arith .add (a, b)
@@ -104,69 +112,86 @@ def impl {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface 
     rw [hout, hsum, hab]
     rcases ha with ha | ha <;> rcases hb with hb | hb <;> simp [ha, hb]
   completeness := by
-    intro s env (a, b) _ _
-    simp only [circuit_norm]
+    intro s env (a, b) h h_as
+    simp only [circuit_norm, IsBool] at h h_as ⊢
+    obtain ⟨ha, hb⟩ := h_as
+    obtain ⟨hab, hsum, hout⟩ := h
+    rw [hout, hsum, hab]
+    rcases ha with ha | ha <;> rcases hb with hb | hb <;> simp [ha, hb]
 
 end OR
 
 /-! ## `NAND` and `NOR`: gates built out of gates.
 
-Both implementations are parametrized by the gates they use, and both proofs are pure spec
-composition — the circuits of `and`, `or`, `not` are never unfolded. -/
+Both implementations are parametrized by the gates they use, and by the layout of a boolean;
+both proofs are pure spec composition — the circuits of `and`, `or`, `not` are never unfolded,
+and the validity of each output is only carried to the next input. -/
 
 namespace NAND
 
 @[reducible]
-def interface : Interface Native where
-  input := Native × Native
-  inputCType := .nativePair
-  output := Native
-  outputCType := .native
-  Assumptions := fun (a, b) => IsBool a ∧ IsBool b
-  Spec := fun (a, b) c => IsBool c ∧ (c = 1 ↔ ¬(a = 1 ∧ b = 1))
+def interface (bool : CType Native Bool) : Interface Native where
+  input := Bool × Bool
+  inputCType := bool ×ᵗ bool
+  output := Bool
+  outputCType := bool
+  Spec := fun (a, b) c => c = !(a && b)
 
-def impl {B : Backend} [Field B.Native] (and : Impl B AND.interface) (not : Impl B NOT.interface) : Impl B interface where
+def impl {B : Backend} {bool : CType B.Native Bool} (and : Impl B (AND.interface bool))
+    (not : Impl B (NOT.interface bool)) : Impl B (interface bool) where
   main | (a, b) => do
     let ab ← and (a, b)
     not ab
-  soundness := by
-    intro s env (a, b) h_as h
-    simp only [circuit_norm] at h_as h ⊢
-    obtain ⟨h_and, h_not⟩ := h
-    obtain ⟨h_bool, h_iff⟩ := h_and h_as
-    obtain ⟨h_bool', h_iff'⟩ := h_not h_bool
-    exact ⟨h_bool', by rw [h_iff']; simp only [ne_eq, h_iff]⟩
-  completeness := by
-    intro s env (a, b) _ _
+  spatial := by
+    rintro ⟨a, b⟩ s h_in
+    obtain ⟨ha, hb⟩ := Backend.footprintT_ctypeProd_subset.mp h_in
     simp only [circuit_norm]
+    exact ⟨Set.union_subset ha hb, fun h_ab _ => ⟨h_ab, fun h_c _ => h_c⟩⟩
+  soundness := by
+    rintro s env ⟨a, b⟩ h_as h
+    simp only [circuit_norm] at h_as h ⊢
+    obtain ⟨v_ab, e_ab⟩ := h.1 h_as
+    obtain ⟨v_c, e_c⟩ := h.2 v_ab
+    exact ⟨v_c, by rw [e_c, e_ab]⟩
+  completeness := by
+    rintro s env ⟨a, b⟩ h h_as
+    simp only [circuit_norm] at h h_as ⊢
+    have v_ab := (h.1 h_as).2
+    exact ⟨⟨h_as, v_ab⟩, (h.2 v_ab).2⟩
 
 end NAND
 
 namespace NOR
 
 @[reducible]
-def interface : Interface Native where
-  input := Native × Native
-  inputCType := .nativePair
-  output := Native
-  outputCType := .native
-  Assumptions := fun (a, b) => IsBool a ∧ IsBool b
-  Spec := fun (a, b) c => IsBool c ∧ (c = 1 ↔ ¬(a = 1 ∨ b = 1))
+def interface (bool : CType Native Bool) : Interface Native where
+  input := Bool × Bool
+  inputCType := bool ×ᵗ bool
+  output := Bool
+  outputCType := bool
+  Spec := fun (a, b) c => c = !(a || b)
 
-def impl {B : Backend} [Field B.Native] (or : Impl B OR.interface) (not : Impl B NOT.interface) : Impl B interface where
+def impl {B : Backend} {bool : CType B.Native Bool} (or : Impl B (OR.interface bool))
+    (not : Impl B (NOT.interface bool)) : Impl B (interface bool) where
   main | (a, b) => do
     let ab ← or (a, b)
     not ab
-  soundness := by
-    intro s env (a, b) h_as h
-    simp only [circuit_norm] at h_as h ⊢
-    obtain ⟨h_or, h_not⟩ := h
-    obtain ⟨h_bool, h_iff⟩ := h_or h_as
-    obtain ⟨h_bool', h_iff'⟩ := h_not h_bool
-    exact ⟨h_bool', by rw [h_iff']; simp only [ne_eq, h_iff]⟩
-  completeness := by
-    intro s env (a, b) _ _
+  spatial := by
+    rintro ⟨a, b⟩ s h_in
+    obtain ⟨ha, hb⟩ := Backend.footprintT_ctypeProd_subset.mp h_in
     simp only [circuit_norm]
+    exact ⟨Set.union_subset ha hb, fun h_ab _ => ⟨h_ab, fun h_c _ => h_c⟩⟩
+  soundness := by
+    rintro s env ⟨a, b⟩ h_as h
+    simp only [circuit_norm] at h_as h ⊢
+    obtain ⟨v_ab, e_ab⟩ := h.1 h_as
+    obtain ⟨v_c, e_c⟩ := h.2 v_ab
+    exact ⟨v_c, by rw [e_c, e_ab]⟩
+  completeness := by
+    rintro s env ⟨a, b⟩ h h_as
+    simp only [circuit_norm] at h h_as ⊢
+    have v_ab := (h.1 h_as).2
+    exact ⟨⟨h_as, v_ab⟩, (h.2 v_ab).2⟩
 
 end NOR
 end Gates
