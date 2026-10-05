@@ -1,13 +1,3 @@
-/-
-A `Backend` is the native set of a proof system: the things that are true "by definition of
-the proof system", which every circuit ultimately reduces to.
-
-Everything else (arithmetic, assertions, gadgets, ...) is a *functionality*: an interface
-(`Clean2.Interface`) implemented on top of a backend (`Clean2.Impl`).
-
-The backend also fixes the *heap model*: what a cell is, which cells a variable reads, and
-how allocation states grow. The core never mentions cells; it only uses the frame laws below.
--/
 module
 
 public import Clean2.Core.Provable
@@ -17,62 +7,82 @@ public import Mathlib.Data.Set.Lattice
 
 namespace Clean2
 
+/--
+  A backend is a logical package of native functionalities.
+  It defines what it means for a proof system to hold "by definition": the things every
+  circuit ultimately reduces to. Everything else (arithmetic, assertions, gadgets, ...) is a
+  functionality, i.e. an `Interface` implemented on top of a backend by an `Impl`.
+
+  A backend fixes three things:
+  - the *value model*: native values, the cells holding them, and the variables that circuits
+    manipulate, together with how a variable evaluates (`eval`) and which cells it reads
+    (`footprint`);
+  - the *heap model*: a state, the set of cells allocated at that state, and the native
+    operations that advance it, reading old cells and writing only freshly allocated ones;
+  - the *semantics* of an operation, from two points of view: `Holds` is what the verifier
+    checks, `Honest` is what an honest prover does when filling in the cells the operation owns.
+
+  The laws (`eval_frame`, `alloc_mono`, `writes_fresh`, `honest_frame`, `honest_extend`) are
+  frame properties: they are all the core needs to compose operations, and it never looks at
+  cells directly. In particular, `honest_frame` and `honest_extend` alone give witness
+  generation for well-formed lists of operations (`flatHonest_exists`).
+-/
 structure Backend where
   /--
-    the native type of witness values contained in cells,
+    The native type of witness values contained in cells,
     it does not necessarily have to be a field, so that we can
     express SNARKs over integers, rationals, and so on
   -/
   Native : Type
-  /-- the "physical" address of a concrete witness location -/
+  /-- The "physical" address of a concrete witness location -/
   Cell : Type
   /-- the type of variables that circuits manipulate and talk about -/
   Var : Type
   /--
-    the meaning of a variable under an assignment of the cells: given an assignment from
+    The meaning of a variable under an assignment of the cells: given an assignment from
     physical cells to native values, this function describes how variables are computed
   -/
   eval : (Cell → Native) → Var → Native
 
-  /-- the cells a variable reads -/
+  /-- The cells a variable reads -/
   footprint : Var → Set Cell
   /-- `eval` only looks at the footprint -/
   eval_frame : ∀ (env env' : Cell → Native) (v : Var),
     (∀ c ∈ footprint v, env c = env' c) → eval env v = eval env' v
 
-  /-- backend state -/
+  /-- The backend state -/
   State : Type
-  /-- the cells allocated at a state; the "heap" -/
+  /-- The cells allocated at a state; the "heap" -/
   Alloc : State → Set Cell
 
-  /-- native operations -/
+  /-- Type of native operations -/
   Op : Type
-  /-- what an operation does to the allocation state -/
+  /-- What an operation does to the allocation state -/
   advance : Op → State → State
-  /-- the allocation set is monotonic: Alloc set never decreases on `advance` -/
+  /-- The allocation set is monotonic: Alloc set never decreases on `advance` -/
   alloc_mono : ∀ op s, Alloc s ⊆ Alloc (advance op s)
-  /-- the cells an operation reads -/
+  /-- The cells an operation reads -/
   reads : Op → Set Cell
-  /-- the cells an operation writes -/
+  /-- The cells an operation writes -/
   writes : Op → State → Set Cell
-  /-- all operations must write only cells that they have allocated -/
+  /-- All operations must write only cells that they have allocated -/
   writes_fresh : ∀ op s,
     Disjoint (writes op s) (Alloc s) ∧
     writes op s ⊆ Alloc (advance op s)
 
-  /-- verifier semantics: what it means for an operation, placed at a state, to hold -/
+  /-- Verifier semantics: what it means for an operation, placed at a state, to hold -/
   Holds : (Cell → Native) → State → Op → Prop
-  /-- prover semantics: what the honest prover does with the cells an operation owns -/
+  /-- Prover semantics: what the honest prover does with the cells an operation owns -/
   Honest : (Cell → Native) → State → Op → Prop
 
-  /-- frame: honesty of a well-formed op depends only on the heap after it -/
+  /-- Frame rule: honesty of a well-formed op depends only on the heap after it -/
   honest_frame :
     ∀ (env env' : Cell → Native) s op,
       reads op ⊆ Alloc s →
       Honest env s op →
       (∀ c ∈ Alloc (advance op s), env c = env' c) →
       Honest env' s op
-  /-- extension: a well-formed op can always be run honestly without touching the existing heap -/
+  /-- Extension: a well-formed op can always be run honestly without touching the existing heap -/
   honest_extend : ∀ (env₀ : Cell → Native) s op, reads op ⊆ Alloc s →
     ∃ env, (∀ c ∈ Alloc s, env c = env₀ c) ∧ Honest env s op
 
