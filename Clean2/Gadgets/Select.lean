@@ -21,7 +21,8 @@ namespace Gates
 namespace MUX
 
 abbrev interface : Interface Native :=
-  { input := .nativeTriple, output := .native
+  { input := Native × Native × Native, inputCType := .nativeTriple,
+    output := Native, outputCType := .native
     Assumptions := fun (c, _, _) => IsBool c
     Spec := fun (c, a, b) out => (c = 1 → out = a) ∧ (c = 0 → out = b) }
 
@@ -47,7 +48,8 @@ end MUX
 namespace CH
 
 abbrev interface : Interface Native :=
-  { input := .nativeTriple, output := .native
+  { input := Native × Native × Native, inputCType := .nativeTriple,
+    output := Native, outputCType := .native
     Assumptions := fun (a, b, c) => IsBool a ∧ IsBool b ∧ IsBool c
     Spec := fun (a, b, c) out => IsBool out ∧ (out = 1 ↔ (a = 1 ∧ b = 1) ∨ (a ≠ 1 ∧ c = 1)) }
 
@@ -81,7 +83,8 @@ end CH
 namespace MAJ
 
 abbrev interface : Interface Native :=
-  { input := .nativeTriple, output := .native
+  { input := Native × Native × Native, inputCType := .nativeTriple,
+    output := Native, outputCType := .native
     Assumptions := fun (a, b, c) => IsBool a ∧ IsBool b ∧ IsBool c
     Spec := fun (a, b, c) out => IsBool out ∧ (out = 1 ↔ (a = 1 ∧ b = 1) ∨ (a = 1 ∧ c = 1) ∨ (b = 1 ∧ c = 1)) }
 

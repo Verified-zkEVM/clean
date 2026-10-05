@@ -117,8 +117,10 @@ def Constraint (g : Gate F) (x : Vector F g.nIn) (k : Vector F g.nFixed) (y : Ve
 prover computes the outputs. A gate is a witness and an assertion fused into one row. Reducible,
 like every interface. -/
 abbrev member (g : Gate F) (k : Vector F g.nFixed) : Interface F where
-  input := .natives g.nIn
-  output := .natives g.nOut
+  input := Vector F g.nIn
+  inputCType := .natives g.nIn
+  output := Vector F g.nOut
+  outputCType := .natives g.nOut
   Spec x y := g.Constraint x k y
   ProverAssumptions x := g.Constraint x k (g.witness x k)
   ProverSpec x y := y = g.witness x k

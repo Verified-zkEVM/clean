@@ -27,7 +27,8 @@ namespace Gates
 namespace NOT
 
 abbrev interface : Interface Native :=
-  { input := .native, output := .native
+  { input := Native, inputCType := .native,
+    output := Native, outputCType := .native
     Assumptions := fun x => IsBool x
     Spec := fun x out => IsBool out ∧ (out = 1 ↔ x ≠ 1) }
 
@@ -52,7 +53,8 @@ end NOT
 namespace AND
 
 abbrev interface : Interface Native :=
-  { input := .nativePair, output := .native
+  { input := Native × Native, inputCType := .nativePair,
+    output := Native, outputCType := .native
     Assumptions := fun (a, b) => IsBool a ∧ IsBool b
     Spec := fun (a, b) c => IsBool c ∧ (c = 1 ↔ a = 1 ∧ b = 1) }
 
@@ -75,7 +77,8 @@ end AND
 namespace OR
 
 abbrev interface : Interface Native :=
-  { input := .nativePair, output := .native
+  { input := Native × Native, inputCType := .nativePair,
+    output := Native, outputCType := .native
     Assumptions := fun (a, b) => IsBool a ∧ IsBool b
     Spec := fun (a, b) c => IsBool c ∧ (c = 1 ↔ a = 1 ∨ b = 1) }
 
@@ -105,7 +108,8 @@ composition — the circuits of `and`, `or`, `not` are never unfolded. -/
 namespace NAND
 
 abbrev interface : Interface Native :=
-  { input := .nativePair, output := .native
+  { input := Native × Native, inputCType := .nativePair,
+    output := Native, outputCType := .native
     Assumptions := fun (a, b) => IsBool a ∧ IsBool b
     Spec := fun (a, b) c => IsBool c ∧ (c = 1 ↔ ¬(a = 1 ∧ b = 1)) }
 
@@ -129,7 +133,8 @@ end NAND
 namespace NOR
 
 abbrev interface : Interface Native :=
-  { input := .nativePair, output := .native
+  { input := Native × Native, inputCType := .nativePair,
+    output := Native, outputCType := .native
     Assumptions := fun (a, b) => IsBool a ∧ IsBool b
     Spec := fun (a, b) c => IsBool c ∧ (c = 1 ↔ ¬(a = 1 ∨ b = 1)) }
 

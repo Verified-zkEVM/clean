@@ -27,7 +27,8 @@ abbrev bit (Native : Type) [Field Native] [DecidableEq Native] : CType Native Bo
 namespace AssertBool
 
 abbrev interface : Interface Native :=
-  { input := .native, output := .unit
+  { input := Native, inputCType := .native,
+    output := Unit, outputCType := .unit
     Spec := fun x _ => IsBool x
     ProverAssumptions := fun x => IsBool x }
 
@@ -66,7 +67,8 @@ example (x : Expr Native) (s : ℕ) :
 namespace Xor
 
 abbrev interface : Interface Native :=
-  { input := .nativePair, output := .native
+  { input := Native × Native, inputCType := .nativePair,
+    output := Native, outputCType := .native
     Assumptions := fun (a, b) => IsBool a ∧ IsBool b
     Spec := fun (a, b) c => IsBool c ∧ (c = 1 ↔ ¬(a = 1 ↔ b = 1)) }
 
@@ -110,7 +112,8 @@ namespace Xor3
 /-- The output is the three-way xor `a ⊕ b ⊕ c`: it is 1 exactly when an odd number of the
 inputs are 1. -/
 abbrev interface : Interface Native :=
-  { input := .nativeTriple, output := .native
+  { input := Native × Native × Native, inputCType := .nativeTriple,
+    output := Native, outputCType := .native
     Assumptions := fun (a, b, c) => IsBool a ∧ IsBool b ∧ IsBool c
     Spec := fun (a, b, c) d => IsBool d ∧ (d = 1 ↔ Xor (a = 1) (Xor (b = 1) (c = 1))) }
 

@@ -160,8 +160,8 @@ theorem flat_call (μ : B.Measure M) {c : Interface B.Native} (impl : Impl B c) 
 
 /-- Refinement does not change the circuit. -/
 instance (μ : B.Measure M) {c : Interface B.Native} (impl : Impl B c) [inst : Measured μ impl]
-    {Assumptions : c.input.T → Prop} {Spec : c.input.T → c.output.T → Prop}
-    {ProverAssumptions : c.input.T → Prop} {ProverSpec : c.input.T → c.output.T → Prop}
+    {Assumptions : c.input → Prop} {Spec : c.input → c.output → Prop}
+    {ProverAssumptions : c.input → Prop} {ProverSpec : c.input → c.output → Prop}
     (h : c.Refines Assumptions Spec ProverAssumptions ProverSpec) :
     Measured μ (impl.refine h) where
   value := inst.value
@@ -169,8 +169,8 @@ instance (μ : B.Measure M) {c : Interface B.Native} (impl : Impl B c) [inst : M
 
 @[simp]
 theorem of_refine (μ : B.Measure M) {c : Interface B.Native} (impl : Impl B c) [Measured μ impl]
-    {Assumptions : c.input.T → Prop} {Spec : c.input.T → c.output.T → Prop}
-    {ProverAssumptions : c.input.T → Prop} {ProverSpec : c.input.T → c.output.T → Prop}
+    {Assumptions : c.input → Prop} {Spec : c.input → c.output → Prop}
+    {ProverAssumptions : c.input → Prop} {ProverSpec : c.input → c.output → Prop}
     (h : c.Refines Assumptions Spec ProverAssumptions ProverSpec) :
     μ.of (impl.refine h) = μ.of impl := rfl
 

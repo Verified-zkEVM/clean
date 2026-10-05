@@ -126,8 +126,12 @@ inductive Op | xor | fromBits
 /-- `xor`, and `fromBits`, where bytes enter from bits. Stated on `UInt8` and `Bool`; what a byte
 is made of is the argument. -/
 abbrev interface [DecidableEq Native] (byte : CType Native UInt8) : Op → Interface Native
-  | .xor => { input := byte ×ᵗ byte, output := byte, Spec := fun (a, b) c => c = a ^^^ b }
-  | .fromBits => { input := CType.vec 8 (bit Native), output := byte, Spec := fun v b => b = ofBits fun i => v[i] }
+  | .xor =>
+    { input := UInt8 × UInt8, inputCType := byte ×ᵗ byte,
+      output := UInt8, outputCType := byte, Spec := fun (a, b) c => c = a ^^^ b }
+  | .fromBits =>
+    { input := Vector Bool 8, inputCType := CType.vec 8 (bit Native),
+      output := UInt8, outputCType := byte, Spec := fun v b => b = ofBits fun i => v[i] }
 
 /-! ## On GF(2) -/
 
@@ -202,7 +206,8 @@ namespace CheckBits
 
 /-- `n` native elements are bits. An assertion; its output is the same elements, as bits. -/
 abbrev interface [DecidableEq Native] (n : ℕ) : Interface Native :=
-  { input := .natives n, output := CType.vec n (bit Native)
+  { input := Vector Native n, inputCType := .natives n,
+    output := Vector Bool n, outputCType := CType.vec n (bit Native)
     Spec := fun v b => ∀ i : Fin n, IsBool v[i] ∧ b[i] = decide (v[i] = 1)
     ProverAssumptions := fun v => ∀ i : Fin n, IsBool v[i] }
 
@@ -253,7 +258,8 @@ namespace XorBits
 
 /-- The bitwise xor of two vectors of `n` bits. -/
 abbrev interface [DecidableEq Native] (n : ℕ) : Interface Native :=
-  { input := CType.vec n (bit Native) ×ᵗ CType.vec n (bit Native), output := CType.vec n (bit Native)
+  { input := Vector Bool n × Vector Bool n, inputCType := CType.vec n (bit Native) ×ᵗ CType.vec n (bit Native),
+    output := Vector Bool n, outputCType := CType.vec n (bit Native)
     Spec := fun (a, b) c => ∀ i : Fin n, c[i] = (a[i] ^^ b[i]) }
 
 theorem decide_eq_xor {a b c : Prop} [Decidable a] [Decidable b] [Decidable c] (h : c ↔ ¬(a ↔ b)) :
@@ -319,7 +325,8 @@ theorem fromBits_bitOf {F : Type} [Field F] [NatVal F] {n : ℕ} (w : Vector F n
 
 /-- `x` is below `2^n`, and these are its `n` bits. An assertion. -/
 abbrev interface [DecidableEq Native] (n : ℕ) : Interface Native :=
-  { input := .native, output := CType.vec n (bit Native)
+  { input := Native, inputCType := .native,
+    output := Vector Bool n, outputCType := CType.vec n (bit Native)
     Spec := fun x bits => x = ((Nat.ofBits fun i : Fin n => bits[i] : ℕ) : Native)
     ProverAssumptions := fun x => ∃ m : ℕ, m < 2 ^ n ∧ x = m }
 
@@ -485,7 +492,8 @@ namespace Xor3
 
 /-- `a ⊕ b ⊕ c` on bytes. -/
 abbrev interface (byte : CType Native UInt8) : Interface Native :=
-  { input := byte ×ᵗ byte ×ᵗ byte, output := byte, Spec := fun (a, b, c) d => d = a ^^^ b ^^^ c }
+  { input := UInt8 × UInt8 × UInt8, inputCType := byte ×ᵗ byte ×ᵗ byte,
+    output := UInt8, outputCType := byte, Spec := fun (a, b, c) d => d = a ^^^ b ^^^ c }
 
 def impl {B : Backend} [Field B.Native] [DecidableEq B.Native] {byte : CType B.Native UInt8}
     (bytes : ∀ op, Impl B (Byte.interface byte op)) : Impl B (interface byte) where
@@ -518,7 +526,8 @@ namespace XorOfBits
 /-- A whole circuit: two bytes enter as native elements, checked to be bits, and their xor is
 returned. No invariant is assumed of the inputs: `CheckBits` establishes it. -/
 abbrev interface (byte : CType Native UInt8) : Interface Native :=
-  { input := (CType.natives 8 ×ᵗ CType.natives 8 : CType Native _), output := byte
+  { input := Vector Native 8 × Vector Native 8, inputCType := CType.natives 8 ×ᵗ CType.natives 8,
+    output := UInt8, outputCType := byte
     Spec := fun (a, b) c => (∀ i : Fin 8, IsBool a[i]) ∧ (∀ i : Fin 8, IsBool b[i]) ∧
       c = ofBits (fun i => decide (a[i] = 1)) ^^^ ofBits (fun i => decide (b[i] = 1))
     ProverAssumptions := fun (a, b) => (∀ i : Fin 8, IsBool a[i]) ∧ (∀ i : Fin 8, IsBool b[i]) }

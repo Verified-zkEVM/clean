@@ -8,9 +8,9 @@ invariant* and `decode` the *abstraction function*. A synthetic type is a value:
 byte are two values of `CType F UInt8`, and an interface stated on a byte type takes it as an
 argument, so that its implementations exist at one layout and the layers above are generic in it.
 
-`CType.Some` is a synthetic type with its meaning inside, which is what a contract is stated on;
-`ofProvable` is the embedding of provable types (every value valid, and each value its own
-meaning): a contract on native values is the special case of the trivial synthetic types.
+A contract is stated on a meaning type together with a synthetic type of it; `ofProvable` is the
+embedding of provable types (every value valid, and each value its own meaning): a contract on
+native values is the special case of the trivial synthetic types.
 
 The combinators build synthetic types of compound meanings from synthetic types of their parts,
 the way a provable type is built from its elements.
@@ -145,13 +145,6 @@ structure CType (Native T : Type) where
 
 attribute [instance] CType.inst
 
-/-- A synthetic type with its meaning inside: what a contract is stated on. -/
-structure CType.Some (Native : Type) where
-  T : Type
-  ty : CType Native T
-
-instance {Native T : Type} : CoeOut (CType Native T) (CType.Some Native) := ⟨fun c => ⟨T, c⟩⟩
-
 namespace CType
 variable {Native T U : Type}
 
@@ -161,7 +154,11 @@ abbrev ofProvable (M : TypeMap) [ProvableType M] : CType Native (M Native) where
   Valid _ := True
   decode x := x
 
+/-! The native synthetic types, for contracts on native values. -/
+
 abbrev native : CType Native Native := ofProvable Clean2.native
+abbrev nativePair : CType Native (Native × Native) := ofProvable Clean2.nativePair
+abbrev nativeTriple : CType Native (Native × Native × Native) := ofProvable Clean2.nativeTriple
 abbrev natives (n : ℕ) : CType Native (Vector Native n) := ofProvable (Clean2.natives n)
 abbrev unit : CType Native Unit := ofProvable Clean2.unit
 
@@ -186,22 +183,6 @@ abbrev map (a : CType Native T) (f : T → U) : CType Native U where
 end CType
 
 @[inherit_doc CType.prod] infixr:35 " ×ᵗ " => CType.prod
-
-/-! The native synthetic types, for contracts on native values. -/
-
-namespace CType.Some
-variable {Native : Type}
-
-/-- A provable type, as a synthetic type of its own values. -/
-abbrev ofProvable (M : TypeMap) [ProvableType M] : CType.Some Native := ⟨M Native, CType.ofProvable M⟩
-
-abbrev native : CType.Some Native := .ofProvable Clean2.native
-abbrev nativePair : CType.Some Native := .ofProvable Clean2.nativePair
-abbrev nativeTriple : CType.Some Native := .ofProvable Clean2.nativeTriple
-abbrev natives (n : ℕ) : CType.Some Native := .ofProvable (Clean2.natives n)
-abbrev unit : CType.Some Native := .ofProvable Clean2.unit
-
-end CType.Some
 
 /-! The invariant and the meaning, pushed through the combinators. All are `rfl`: the combinators
 are reducible, and these only make the reductions available to `simp`. -/

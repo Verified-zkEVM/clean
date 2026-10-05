@@ -32,7 +32,8 @@ def sbox (x : F) : F := x ^ 5
 
 /-- `x ↦ (x + c)^5`, the constant being the parameter. -/
 abbrev interface (c : F) : Interface F :=
-  { input := .native, output := .native
+  { input := F, inputCType := .native,
+    output := F, outputCType := .native
     Spec := fun x y => y = sbox (x + c) }
 
 /-- Three multiplications. -/
@@ -64,7 +65,8 @@ structure Params (F : Type) where
 
 /-- `x ↦ ∑ i, m i * x[i]`. -/
 abbrev interface (p : Params F) : Interface F :=
-  { input := .natives p.t, output := .native
+  { input := Vector F p.t, inputCType := .natives p.t,
+    output := F, outputCType := .native
     Spec := fun x y => y = ∑ i, p.m i * x[i] }
 
 /-- The tail sums `∑_{j ≥ i}`, one step: the loop invariant of `impl`. -/
@@ -155,12 +157,14 @@ def permutation (x : Vector F p.t) : Vector F p.t := iterate p p.rounds x
 
 /-- Round `r`. -/
 abbrev Round.interface (r : ℕ) : Interface F :=
-  { input := .natives p.t, output := .natives p.t
+  { input := Vector F p.t, inputCType := .natives p.t,
+    output := Vector F p.t, outputCType := .natives p.t
     Spec := fun x y => y = round p r x }
 
 /-- The permutation. -/
 abbrev interface : Interface F :=
-  { input := .natives p.t, output := .natives p.t
+  { input := Vector F p.t, inputCType := .natives p.t,
+    output := Vector F p.t, outputCType := .natives p.t
     Spec := fun x y => y = permutation p x }
 
 section

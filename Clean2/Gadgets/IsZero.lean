@@ -20,7 +20,8 @@ variable {Native : Type} [Field Native]
 namespace IsZero
 
 abbrev interface : Interface Native :=
-  { input := .native, output := .native
+  { input := Native, inputCType := .native,
+    output := Native, outputCType := .native
     Spec := fun x out => (x = 0 → out = 1) ∧ (x ≠ 0 → out = 0) }
 
 /-- Generic over the arithmetic. The witness is a functionality like any other: nothing is

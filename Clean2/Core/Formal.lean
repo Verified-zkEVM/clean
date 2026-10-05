@@ -29,25 +29,31 @@ meanings. A contract on native values names `.native`, `.nativePair`, `.natives 
 contract on bytes names a `byte : CType Native UInt8` it was given, and is the same contract
 whatever a byte is made of. -/
 structure Interface (Native : Type) where
-  input : CType.Some Native
-  output : CType.Some Native
+  /-- the meaning of the input -/
+  input : Type
+  /-- how an `input` is laid out in native values -/
+  inputCType : CType Native input
+  /-- the meaning of the output -/
+  output : Type
+  /-- how an `output` is laid out in native values -/
+  outputCType : CType Native output
   /-- assumed for soundness -/
-  Assumptions : input.T → Prop := fun _ => True
+  Assumptions : input → Prop := fun _ => True
   /-- proved by soundness -/
-  Spec : input.T → output.T → Prop := fun _ _ => True
+  Spec : input → output → Prop := fun _ _ => True
   /-- assumed for completeness ("what the honest prover guarantees about the inputs") -/
-  ProverAssumptions : input.T → Prop := fun _ => True
+  ProverAssumptions : input → Prop := fun _ => True
   /-- proved by completeness ("what the honest prover knows about the output") -/
-  ProverSpec : input.T → output.T → Prop := fun _ _ => True
+  ProverSpec : input → output → Prop := fun _ _ => True
 
 namespace Interface
 variable {Native : Type} (c : Interface Native)
 
 /-- The layout of the input. `c.Input B.Var` is what an implementation takes, `c.Input Native`
 what it denotes. -/
-abbrev Input : TypeMap := c.input.ty.Shape
+abbrev Input : TypeMap := c.inputCType.Shape
 /-- The layout of the output. -/
-abbrev Output : TypeMap := c.output.ty.Shape
+abbrev Output : TypeMap := c.outputCType.Shape
 
 end Interface
 
@@ -64,10 +70,10 @@ the outputs, on both sides, and the contract is applied to what the values decod
 def Soundness (B : Backend) (c : Interface B.Native) (main : c.Input B.Var → Circuit B (c.Output B.Var))
     (output : c.Input B.Var → B.State → c.Output B.Var) : Prop :=
   ∀ (s : B.State) (env : B.Cell → B.Native) (input : c.Input B.Var),
-    c.input.ty.Valid (B.evalT env input) ∧ c.Assumptions (c.input.ty.decode (B.evalT env input)) →
+    c.inputCType.Valid (B.evalT env input) ∧ c.Assumptions (c.inputCType.decode (B.evalT env input)) →
     ((main input).operations s).SoundnessHold env s →
-    c.output.ty.Valid (B.evalT env (output input s)) ∧
-      c.Spec (c.input.ty.decode (B.evalT env input)) (c.output.ty.decode (B.evalT env (output input s)))
+    c.outputCType.Valid (B.evalT env (output input s)) ∧
+      c.Spec (c.inputCType.decode (B.evalT env input)) (c.outputCType.decode (B.evalT env (output input s)))
 
 /-- Completeness of `main` against `c`: if the prover is honest, and the input is valid and
 satisfies the prover assumptions, then the (proof-level) constraints hold, the output is valid,
@@ -77,10 +83,10 @@ def Completeness (B : Backend) (c : Interface B.Native) (main : c.Input B.Var �
     (output : c.Input B.Var → B.State → c.Output B.Var) : Prop :=
   ∀ (s : B.State) (env : B.Cell → B.Native) (input : c.Input B.Var),
     ((main input).operations s).HonestCompleteness env s →
-    c.input.ty.Valid (B.evalT env input) ∧ c.ProverAssumptions (c.input.ty.decode (B.evalT env input)) →
+    c.inputCType.Valid (B.evalT env input) ∧ c.ProverAssumptions (c.inputCType.decode (B.evalT env input)) →
     ((main input).operations s).CompletenessHold env s ∧
-    c.output.ty.Valid (B.evalT env (output input s)) ∧
-      c.ProverSpec (c.input.ty.decode (B.evalT env input)) (c.output.ty.decode (B.evalT env (output input s)))
+    c.outputCType.Valid (B.evalT env (output input s)) ∧
+      c.ProverSpec (c.inputCType.decode (B.evalT env input)) (c.outputCType.decode (B.evalT env (output input s)))
 
 /-- The spatial contract, the same for every implementation:
 `{inputs exist} main {well-formed ∗ outputs exist}`. -/
@@ -120,18 +126,18 @@ def toSubcircuit (impl : Impl B c) (s : B.State) (input : c.Input B.Var) : Subci
   ops := ((impl.main input).operations s).toFlat
   next := impl.advance input s
   next_eq := by rw [Ops.flatAdvance_toFlat (impl.consistent input s), impl.advance_eq]
-  Assumptions env := c.input.ty.Valid (B.evalT env input) ∧ c.Assumptions (c.input.ty.decode (B.evalT env input))
-  Spec env := c.output.ty.Valid (B.evalT env (impl.output input s)) ∧
-    c.Spec (c.input.ty.decode (B.evalT env input)) (c.output.ty.decode (B.evalT env (impl.output input s)))
+  Assumptions env := c.inputCType.Valid (B.evalT env input) ∧ c.Assumptions (c.inputCType.decode (B.evalT env input))
+  Spec env := c.outputCType.Valid (B.evalT env (impl.output input s)) ∧
+    c.Spec (c.inputCType.decode (B.evalT env input)) (c.outputCType.decode (B.evalT env (impl.output input s)))
   ProverAssumptions env :=
-    c.input.ty.Valid (B.evalT env input) ∧ c.ProverAssumptions (c.input.ty.decode (B.evalT env input))
+    c.inputCType.Valid (B.evalT env input) ∧ c.ProverAssumptions (c.inputCType.decode (B.evalT env input))
   ProverSpec env :=
-    c.input.ty.Valid (B.evalT env input) ∧ c.ProverAssumptions (c.input.ty.decode (B.evalT env input)) →
-      (c.input.ty.Valid (B.evalT env input) ∧ c.Assumptions (c.input.ty.decode (B.evalT env input)) →
-        c.output.ty.Valid (B.evalT env (impl.output input s)) ∧
-          c.Spec (c.input.ty.decode (B.evalT env input)) (c.output.ty.decode (B.evalT env (impl.output input s)))) ∧
-      c.output.ty.Valid (B.evalT env (impl.output input s)) ∧
-        c.ProverSpec (c.input.ty.decode (B.evalT env input)) (c.output.ty.decode (B.evalT env (impl.output input s)))
+    c.inputCType.Valid (B.evalT env input) ∧ c.ProverAssumptions (c.inputCType.decode (B.evalT env input)) →
+      (c.inputCType.Valid (B.evalT env input) ∧ c.Assumptions (c.inputCType.decode (B.evalT env input)) →
+        c.outputCType.Valid (B.evalT env (impl.output input s)) ∧
+          c.Spec (c.inputCType.decode (B.evalT env input)) (c.outputCType.decode (B.evalT env (impl.output input s)))) ∧
+      c.outputCType.Valid (B.evalT env (impl.output input s)) ∧
+        c.ProverSpec (c.inputCType.decode (B.evalT env input)) (c.outputCType.decode (B.evalT env (impl.output input s)))
   pre := B.footprintT input ⊆ B.Alloc s
   post := B.footprintT (impl.output input s) ⊆ B.Alloc (impl.advance input s)
   soundness env h_assumptions h_holds :=
@@ -180,31 +186,31 @@ theorem toSubcircuit_next (impl : Impl B c) (s : B.State) (input : c.Input B.Var
 theorem toSubcircuit_Assumptions (impl : Impl B c) (s : B.State) (input : c.Input B.Var)
     (env : B.Cell → B.Native) :
     (impl.toSubcircuit s input).Assumptions env =
-      (c.input.ty.Valid (B.evalT env input) ∧ c.Assumptions (c.input.ty.decode (B.evalT env input))) := rfl
+      (c.inputCType.Valid (B.evalT env input) ∧ c.Assumptions (c.inputCType.decode (B.evalT env input))) := rfl
 
 @[circuit_norm]
 theorem toSubcircuit_Spec (impl : Impl B c) (s : B.State) (input : c.Input B.Var)
     (env : B.Cell → B.Native) :
     (impl.toSubcircuit s input).Spec env =
-      (c.output.ty.Valid (B.evalT env (impl.output input s)) ∧
-        c.Spec (c.input.ty.decode (B.evalT env input)) (c.output.ty.decode (B.evalT env (impl.output input s)))) := rfl
+      (c.outputCType.Valid (B.evalT env (impl.output input s)) ∧
+        c.Spec (c.inputCType.decode (B.evalT env input)) (c.outputCType.decode (B.evalT env (impl.output input s)))) := rfl
 
 @[circuit_norm]
 theorem toSubcircuit_ProverAssumptions (impl : Impl B c) (s : B.State) (input : c.Input B.Var)
     (env : B.Cell → B.Native) :
     (impl.toSubcircuit s input).ProverAssumptions env =
-      (c.input.ty.Valid (B.evalT env input) ∧ c.ProverAssumptions (c.input.ty.decode (B.evalT env input))) := rfl
+      (c.inputCType.Valid (B.evalT env input) ∧ c.ProverAssumptions (c.inputCType.decode (B.evalT env input))) := rfl
 
 @[circuit_norm]
 theorem toSubcircuit_ProverSpec (impl : Impl B c) (s : B.State) (input : c.Input B.Var)
     (env : B.Cell → B.Native) :
     (impl.toSubcircuit s input).ProverSpec env =
-      (c.input.ty.Valid (B.evalT env input) ∧ c.ProverAssumptions (c.input.ty.decode (B.evalT env input)) →
-        (c.input.ty.Valid (B.evalT env input) ∧ c.Assumptions (c.input.ty.decode (B.evalT env input)) →
-          c.output.ty.Valid (B.evalT env (impl.output input s)) ∧
-            c.Spec (c.input.ty.decode (B.evalT env input)) (c.output.ty.decode (B.evalT env (impl.output input s)))) ∧
-        c.output.ty.Valid (B.evalT env (impl.output input s)) ∧
-          c.ProverSpec (c.input.ty.decode (B.evalT env input)) (c.output.ty.decode (B.evalT env (impl.output input s)))) := rfl
+      (c.inputCType.Valid (B.evalT env input) ∧ c.ProverAssumptions (c.inputCType.decode (B.evalT env input)) →
+        (c.inputCType.Valid (B.evalT env input) ∧ c.Assumptions (c.inputCType.decode (B.evalT env input)) →
+          c.outputCType.Valid (B.evalT env (impl.output input s)) ∧
+            c.Spec (c.inputCType.decode (B.evalT env input)) (c.outputCType.decode (B.evalT env (impl.output input s)))) ∧
+        c.outputCType.Valid (B.evalT env (impl.output input s)) ∧
+          c.ProverSpec (c.inputCType.decode (B.evalT env input)) (c.outputCType.decode (B.evalT env (impl.output input s)))) := rfl
 
 @[circuit_norm]
 theorem toSubcircuit_pre (impl : Impl B c) (s : B.State) (input : c.Input B.Var) :
@@ -229,14 +235,14 @@ and satisfy the prover assumptions, some honest environment (agreeing with the g
 existing heap) satisfies all constraints, and the prover spec holds there. -/
 theorem exists_honest_env (impl : Impl B c) (input : c.Input B.Var) (s : B.State)
     (env₀ : B.Cell → B.Native) (h_in : B.footprintT input ⊆ B.Alloc s)
-    (h_prover : c.input.ty.Valid (B.evalT env₀ input) ∧ c.ProverAssumptions (c.input.ty.decode (B.evalT env₀ input))) :
+    (h_prover : c.inputCType.Valid (B.evalT env₀ input) ∧ c.ProverAssumptions (c.inputCType.decode (B.evalT env₀ input))) :
     ∃ env, (∀ c ∈ B.Alloc s, env c = env₀ c) ∧
       ((impl.main input).operations s).ConstraintsHold env s ∧
-      c.output.ty.Valid (B.evalT env (impl.output input s)) ∧
-        c.ProverSpec (c.input.ty.decode (B.evalT env input)) (c.output.ty.decode (B.evalT env (impl.output input s))) := by
+      c.outputCType.Valid (B.evalT env (impl.output input s)) ∧
+        c.ProverSpec (c.inputCType.decode (B.evalT env input)) (c.outputCType.decode (B.evalT env (impl.output input s))) := by
   obtain ⟨env, h_agree, h_honest⟩ := impl.honest_env_exists input s env₀ h_in
   have h_consistent := impl.consistent input s
-  have h_prover' : c.input.ty.Valid (B.evalT env input) ∧ c.ProverAssumptions (c.input.ty.decode (B.evalT env input)) := by
+  have h_prover' : c.inputCType.Valid (B.evalT env input) ∧ c.ProverAssumptions (c.inputCType.decode (B.evalT env input)) := by
     rwa [Backend.evalT_frame env env₀ input fun c hc => h_agree c (h_in hc)]
   have h := impl.completeness s env input (Ops.honestCompleteness_of_honest h_consistent h_honest) h_prover'
   exact ⟨env, h_agree, Ops.constraintsHold_of_completenessHold h_consistent h_honest h.1, h.2⟩
@@ -248,15 +254,15 @@ end
 
 /-- `c.refine`: the same types, another contract. -/
 abbrev Interface.refine {Native : Type} (c : Interface Native)
-    (Assumptions : c.input.T → Prop) (Spec : c.input.T → c.output.T → Prop)
-    (ProverAssumptions : c.input.T → Prop) (ProverSpec : c.input.T → c.output.T → Prop) :
+    (Assumptions : c.input → Prop) (Spec : c.input → c.output → Prop)
+    (ProverAssumptions : c.input → Prop) (ProverSpec : c.input → c.output → Prop) :
     Interface Native :=
   { c with Assumptions, Spec, ProverAssumptions, ProverSpec }
 
 /-- `c.Refines A S PA PS`: `c` assumes less and promises more than the contract `A S PA PS`. -/
 structure Interface.Refines {Native : Type} (c : Interface Native)
-    (Assumptions : c.input.T → Prop) (Spec : c.input.T → c.output.T → Prop)
-    (ProverAssumptions : c.input.T → Prop) (ProverSpec : c.input.T → c.output.T → Prop) :
+    (Assumptions : c.input → Prop) (Spec : c.input → c.output → Prop)
+    (ProverAssumptions : c.input → Prop) (ProverSpec : c.input → c.output → Prop) :
     Prop where
   assumptions : ∀ x, Assumptions x → c.Assumptions x
   spec : ∀ x y, Assumptions x → c.Spec x y → Spec x y
@@ -264,8 +270,8 @@ structure Interface.Refines {Native : Type} (c : Interface Native)
   proverSpec : ∀ x y, ProverAssumptions x → c.ProverSpec x y → ProverSpec x y
 
 def Impl.refine {B : Backend} {c : Interface B.Native} (impl : Impl B c)
-    {Assumptions : c.input.T → Prop} {Spec : c.input.T → c.output.T → Prop}
-    {ProverAssumptions : c.input.T → Prop} {ProverSpec : c.input.T → c.output.T → Prop}
+    {Assumptions : c.input → Prop} {Spec : c.input → c.output → Prop}
+    {ProverAssumptions : c.input → Prop} {ProverSpec : c.input → c.output → Prop}
     (h : c.Refines Assumptions Spec ProverAssumptions ProverSpec) :
     Impl B (c.refine Assumptions Spec ProverAssumptions ProverSpec) where
   main := impl.main

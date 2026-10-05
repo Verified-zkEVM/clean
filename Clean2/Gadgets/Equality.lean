@@ -19,7 +19,8 @@ variable {Native : Type} [Field Native]
 namespace AssertEq
 
 abbrev interface : Interface Native :=
-  { input := .nativePair, output := .unit
+  { input := Native × Native, inputCType := .nativePair,
+    output := Unit, outputCType := .unit
     Spec := fun (a, b) _ => a = b
     ProverAssumptions := fun (a, b) => a = b }
 
@@ -47,7 +48,8 @@ end AssertEq
 namespace IsEqual
 
 abbrev interface : Interface Native :=
-  { input := .nativePair, output := .native
+  { input := Native × Native, inputCType := .nativePair,
+    output := Native, outputCType := .native
     Spec := fun (a, b) out => (a = b → out = 1) ∧ (a ≠ b → out = 0) }
 
 /-- Generic over the arithmetic *and* over the zero test. -/

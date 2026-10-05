@@ -19,7 +19,8 @@ variable {Native : Type} [Field Native]
 namespace Inverse
 
 abbrev interface : Interface Native :=
-  { input := .native, output := .native
+  { input := Native, inputCType := .native,
+    output := Native, outputCType := .native
     Spec := fun x out => x ≠ 0 ∧ out = x⁻¹
     ProverAssumptions := fun x => x ≠ 0
     ProverSpec := fun x out => out = x⁻¹ }
@@ -53,7 +54,8 @@ end Inverse
 namespace AssertNonZero
 
 abbrev interface : Interface Native :=
-  { input := .native, output := .unit
+  { input := Native, inputCType := .native,
+    output := Unit, outputCType := .unit
     Spec := fun x _ => x ≠ 0
     ProverAssumptions := fun x => x ≠ 0 }
 
@@ -79,7 +81,8 @@ end AssertNonZero
 namespace Div
 
 abbrev interface : Interface Native :=
-  { input := .nativePair, output := .native
+  { input := Native × Native, inputCType := .nativePair,
+    output := Native, outputCType := .native
     Spec := fun (a, b) out => b ≠ 0 ∧ out = a / b
     ProverAssumptions := fun (_, b) => b ≠ 0
     ProverSpec := fun (a, b) out => out = a / b }

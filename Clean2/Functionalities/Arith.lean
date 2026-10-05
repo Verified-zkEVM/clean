@@ -20,19 +20,22 @@ variable {Native : Type}
 
 namespace Add
 abbrev interface [Add Native] : Interface Native :=
-  { input := .nativePair, output := .native
+  { input := Native × Native, inputCType := .nativePair,
+    output := Native, outputCType := .native
     Spec := fun (a, b) c => c = a + b }
 end Add
 
 namespace Sub
 abbrev interface [Sub Native] : Interface Native :=
-  { input := .nativePair, output := .native
+  { input := Native × Native, inputCType := .nativePair,
+    output := Native, outputCType := .native
     Spec := fun (a, b) c => c = a - b }
 end Sub
 
 namespace Mul
 abbrev interface [Mul Native] : Interface Native :=
-  { input := .nativePair, output := .native
+  { input := Native × Native, inputCType := .nativePair,
+    output := Native, outputCType := .native
     Spec := fun (a, b) c => c = a * b }
 end Mul
 
@@ -40,21 +43,24 @@ end Mul
 them all. Linear, so free on the backends whose variables are linear combinations. -/
 namespace Scale
 abbrev interface [Mul Native] (c : Native) : Interface Native :=
-  { input := .native, output := .native
+  { input := Native, inputCType := .native,
+    output := Native, outputCType := .native
     Spec := fun x y => y = c * x }
 end Scale
 
 /- A constant. The constant is a parameter: one implementation produces them all. -/
 namespace Const
 abbrev interface (c : Native) : Interface Native :=
-  { input := .unit, output := .native
+  { input := Unit, inputCType := .unit,
+    output := Native, outputCType := .native
     Spec := fun _ x => x = c }
 end Const
 
 /- Assert that a variable is zero. An assertion: the honest prover has to make it true. -/
 namespace AssertZero
 abbrev interface [Zero Native] : Interface Native :=
-  { input := .native, output := .unit
+  { input := Native, inputCType := .native,
+    output := Unit, outputCType := .unit
     Spec := fun x _ => x = 0
     ProverAssumptions := fun x => x = 0 }
 end AssertZero
@@ -64,7 +70,8 @@ constraint of R1CS; a backend that decomposed it into `mul` and `assertZero` wou
 an extra cell. -/
 namespace MulEq
 abbrev interface [Mul Native] : Interface Native :=
-  { input := .nativeTriple, output := .unit
+  { input := Native × Native × Native, inputCType := .nativeTriple,
+    output := Unit, outputCType := .unit
     Spec := fun (a, b, c) _ => a * b = c
     ProverAssumptions := fun (a, b, c) => a * b = c }
 end MulEq
@@ -82,7 +89,8 @@ structure Params (Native : Type) : Type 1 where
 attribute [instance] Params.inst
 
 abbrev interface (p : Params Native) : Interface Native :=
-  { input := .ofProvable p.Input, output := .native
+  { input := p.Input Native, inputCType := .ofProvable p.Input,
+    output := Native, outputCType := .native
     ProverSpec := fun x out => out = p.f x }
 
 end Witness

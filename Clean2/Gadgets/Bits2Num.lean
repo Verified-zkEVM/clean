@@ -51,7 +51,8 @@ theorem cast_fromBits {n : ℕ} (bits : Vector Native n) (h : ∀ i : Fin n, IsB
 
 /-- `n` bits in, their value out. -/
 abbrev interface (n : ℕ) : Interface Native :=
-  { input := .natives n, output := .native
+  { input := Vector Native n, inputCType := .natives n,
+    output := Native, outputCType := .native
     Assumptions := fun bits => ∀ i : Fin n, IsBool bits[i]
     Spec := fun bits out => out = fromBits bits ∧ fromBits bits < 2 ^ n }
 
