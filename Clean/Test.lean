@@ -10,3 +10,4 @@ public import Clean.Utils.Test.TestCircuitStructDeriving
 public import Clean.Utils.Test.TestMixedCircuitType
 public import Clean.Backends.Circom.TestWasmCompile
 public import Clean.Backends.Circom.TestWasmSemantics
+public import Clean.Utils.Test.TestExpressionPolynomial
