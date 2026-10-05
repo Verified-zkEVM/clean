@@ -116,7 +116,8 @@ def Constraint (g : Gate F) (x : Vector F g.nIn) (k : Vector F g.nFixed) (y : Ve
 /-- The member of a gate at fixed values `k`: the verifier learns the identities, the honest
 prover computes the outputs. A gate is a witness and an assertion fused into one row. Reducible,
 like every interface. -/
-abbrev member (g : Gate F) (k : Vector F g.nFixed) : Interface F where
+@[reducible]
+def member (g : Gate F) (k : Vector F g.nFixed) : Interface F where
   input := Vector F g.nIn
   inputCType := .natives g.nIn
   output := Vector F g.nOut
@@ -335,18 +336,26 @@ theorem copy_getElem {g : Gate F} {s : ℕ} {inputs : Vector (ℕ × ℕ) g.nIn}
 One gate per functionality, and a row per operation: nothing is free. Every gate here has one
 identity; the proofs unfold it and use the copy constraints. -/
 
-@[reducible] def addGate : Gate F := ⟨⟨2, 0, 1, [.output 0 - (.input 0 + .input 1)]⟩, fun x _ => #v[x[0] + x[1]]⟩
-@[reducible] def subGate : Gate F := ⟨⟨2, 0, 1, [.output 0 - (.input 0 - .input 1)]⟩, fun x _ => #v[x[0] - x[1]]⟩
-@[reducible] def mulGate : Gate F := ⟨⟨2, 0, 1, [.output 0 - .input 0 * .input 1]⟩, fun x _ => #v[x[0] * x[1]]⟩
+@[reducible]
+def addGate : Gate F := ⟨⟨2, 0, 1, [.output 0 - (.input 0 + .input 1)]⟩, fun x _ => #v[x[0] + x[1]]⟩
+@[reducible]
+def subGate : Gate F := ⟨⟨2, 0, 1, [.output 0 - (.input 0 - .input 1)]⟩, fun x _ => #v[x[0] - x[1]]⟩
+@[reducible]
+def mulGate : Gate F := ⟨⟨2, 0, 1, [.output 0 - .input 0 * .input 1]⟩, fun x _ => #v[x[0] * x[1]]⟩
 /-- The scalar is a fixed cell: one gate for every scalar. -/
-@[reducible] def scaleGate : Gate F := ⟨⟨1, 1, 1, [.output 0 - .fixed 0 * .input 0]⟩, fun x k => #v[k[0] * x[0]]⟩
+@[reducible]
+def scaleGate : Gate F := ⟨⟨1, 1, 1, [.output 0 - .fixed 0 * .input 0]⟩, fun x k => #v[k[0] * x[0]]⟩
 /-- The constant is a fixed cell: one gate for every constant. -/
-@[reducible] def constGate : Gate F := ⟨⟨0, 1, 1, [.output 0 - .fixed 0]⟩, fun _ k => #v[k[0]]⟩
+@[reducible]
+def constGate : Gate F := ⟨⟨0, 1, 1, [.output 0 - .fixed 0]⟩, fun _ k => #v[k[0]]⟩
 /-- An assertion: no outputs. -/
-@[reducible] def mulEqGate : Gate F := ⟨⟨3, 0, 0, [.input 0 * .input 1 - .input 2]⟩, fun _ _ => #v[]⟩
-@[reducible] def assertZeroGate : Gate F := ⟨⟨1, 0, 0, [.input 0]⟩, fun _ _ => #v[]⟩
+@[reducible]
+def mulEqGate : Gate F := ⟨⟨3, 0, 0, [.input 0 * .input 1 - .input 2]⟩, fun _ _ => #v[]⟩
+@[reducible]
+def assertZeroGate : Gate F := ⟨⟨1, 0, 0, [.input 0]⟩, fun _ _ => #v[]⟩
 /-- A witness: no identities. -/
-@[reducible] def witnessGate (n : ℕ) (f : Vector F n → F) : Gate F := ⟨⟨n, 0, 1, []⟩, fun x _ => #v[f x]⟩
+@[reducible]
+def witnessGate (n : ℕ) (f : Vector F n → F) : Gate F := ⟨⟨n, 0, 1, []⟩, fun x _ => #v[f x]⟩
 
 /-- The proof pattern of every gate below: expose the copy constraints and the identity. -/
 syntax "gate_norm" (Lean.Parser.Tactic.location)? : tactic

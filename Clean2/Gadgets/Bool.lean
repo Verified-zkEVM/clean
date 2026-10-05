@@ -17,7 +17,8 @@ variable {Native : Type} [Field Native]
 def IsBool (x : Native) : Prop := x = 0 ∨ x = 1
 
 /-- A bit is one native element, which is `0` or `1`: the synthetic type of `Bool`. -/
-abbrev bit (Native : Type) [Field Native] [DecidableEq Native] : CType Native Bool where
+@[reducible]
+def bit (Native : Type) [Field Native] [DecidableEq Native] : CType Native Bool where
   Shape := native
   Valid := IsBool
   decode x := decide (x = 1)
@@ -26,11 +27,14 @@ abbrev bit (Native : Type) [Field Native] [DecidableEq Native] : CType Native Bo
 
 namespace AssertBool
 
-abbrev interface : Interface Native :=
-  { input := Native, inputCType := .native,
-    output := Unit, outputCType := .unit
-    Spec := fun x _ => IsBool x
-    ProverAssumptions := fun x => IsBool x }
+@[reducible]
+def interface : Interface Native where
+  input := Native
+  inputCType := .native
+  output := Unit
+  outputCType := .unit
+  Spec := fun x _ => IsBool x
+  ProverAssumptions := fun x => IsBool x
 
 /-- `x * x = x` forces `x ∈ {0, 1}`. -/
 def impl {B : Backend} [Field B.Native] (mulEq : Impl B MulEq.interface) : Impl B interface where
@@ -66,11 +70,14 @@ example (x : Expr Native) (s : ℕ) :
 
 namespace Xor
 
-abbrev interface : Interface Native :=
-  { input := Native × Native, inputCType := .nativePair,
-    output := Native, outputCType := .native
-    Assumptions := fun (a, b) => IsBool a ∧ IsBool b
-    Spec := fun (a, b) c => IsBool c ∧ (c = 1 ↔ ¬(a = 1 ↔ b = 1)) }
+@[reducible]
+def interface : Interface Native where
+  input := Native × Native
+  inputCType := .nativePair
+  output := Native
+  outputCType := .native
+  Assumptions := fun (a, b) => IsBool a ∧ IsBool b
+  Spec := fun (a, b) c => IsBool c ∧ (c = 1 ↔ ¬(a = 1 ↔ b = 1))
 
 /-- `a ⊕ b = a + b - 2ab`. Generic over how arithmetic is done. -/
 def impl {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface n)) : Impl B interface where
@@ -111,11 +118,14 @@ namespace Xor3
 
 /-- The output is the three-way xor `a ⊕ b ⊕ c`: it is 1 exactly when an odd number of the
 inputs are 1. -/
-abbrev interface : Interface Native :=
-  { input := Native × Native × Native, inputCType := .nativeTriple,
-    output := Native, outputCType := .native
-    Assumptions := fun (a, b, c) => IsBool a ∧ IsBool b ∧ IsBool c
-    Spec := fun (a, b, c) d => IsBool d ∧ (d = 1 ↔ Xor (a = 1) (Xor (b = 1) (c = 1))) }
+@[reducible]
+def interface : Interface Native where
+  input := Native × Native × Native
+  inputCType := .nativeTriple
+  output := Native
+  outputCType := .native
+  Assumptions := fun (a, b, c) => IsBool a ∧ IsBool b ∧ IsBool c
+  Spec := fun (a, b, c) d => IsBool d ∧ (d = 1 ↔ Xor (a = 1) (Xor (b = 1) (c = 1)))
 
 /-- Xor of propositions is associative — the reason `xor (xor a b) c` is the three-way xor.
 Mathlib has this for `Bool` but not for `Prop`. -/

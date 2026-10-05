@@ -77,7 +77,8 @@ theorem fromBits_eq [DecidableEq Native] {n : ℕ} (bits : Vector Native n) :
 /-! ## Two synthetic types -/
 
 /-- GF(2): a byte is its eight bits, one native element each. -/
-abbrev bits (F : Type) [Field F] [DecidableEq F] : CType F UInt8 where
+@[reducible]
+def bits (F : Type) [Field F] [DecidableEq F] : CType F UInt8 where
   Shape := natives 8
   Valid _ := True
   decode v := ofBits fun i => decide (v[i] = 1)
@@ -92,7 +93,8 @@ class NatVal (F : Type) [Field F] where
 export NatVal (natCast_val val_natCast_le)
 
 /-- The least natural number a field element is the image of. -/
-abbrev natVal {F : Type} [Field F] [NatVal F] (x : F) : ℕ := NatVal.val x
+@[reducible]
+def natVal {F : Type} [Field F] [NatVal F] (x : F) : ℕ := NatVal.val x
 
 instance {p : ℕ} [NeZero p] [Fact p.Prime] : NatVal (ZMod p) where
   val := ZMod.val
@@ -114,7 +116,8 @@ theorem natVal_natCast {F : Type} [Field F] [NatVal F] {p : ℕ} [CharP F p] {m 
 def decodeField {F : Type} [Field F] [NatVal F] (x : F) : UInt8 := UInt8.ofNat (natVal x)
 
 /-- A large field: a byte is one native element, below 256. -/
-abbrev field (F : Type) [Field F] [NatVal F] : CType F UInt8 where
+@[reducible]
+def field (F : Type) [Field F] [NatVal F] : CType F UInt8 where
   Shape := native
   Valid x := ∃ n : ℕ, n < 2 ^ 8 ∧ x = n
   decode := decodeField
@@ -125,7 +128,8 @@ inductive Op | xor | fromBits
 
 /-- `xor`, and `fromBits`, where bytes enter from bits. Stated on `UInt8` and `Bool`; what a byte
 is made of is the argument. -/
-abbrev interface [DecidableEq Native] (byte : CType Native UInt8) : Op → Interface Native
+@[reducible]
+def interface [DecidableEq Native] (byte : CType Native UInt8) : Op → Interface Native
   | .xor =>
     { input := UInt8 × UInt8, inputCType := byte ×ᵗ byte,
       output := UInt8, outputCType := byte, Spec := fun (a, b) c => c = a ^^^ b }
@@ -205,11 +209,14 @@ entry point of bits: the other two are stated on `Vector Bool n`, and assume the
 namespace CheckBits
 
 /-- `n` native elements are bits. An assertion; its output is the same elements, as bits. -/
-abbrev interface [DecidableEq Native] (n : ℕ) : Interface Native :=
-  { input := Vector Native n, inputCType := .natives n,
-    output := Vector Bool n, outputCType := CType.vec n (bit Native)
-    Spec := fun v b => ∀ i : Fin n, IsBool v[i] ∧ b[i] = decide (v[i] = 1)
-    ProverAssumptions := fun v => ∀ i : Fin n, IsBool v[i] }
+@[reducible]
+def interface [DecidableEq Native] (n : ℕ) : Interface Native where
+  input := Vector Native n
+  inputCType := .natives n
+  output := Vector Bool n
+  outputCType := CType.vec n (bit Native)
+  Spec := fun v b => ∀ i : Fin n, IsBool v[i] ∧ b[i] = decide (v[i] = 1)
+  ProverAssumptions := fun v => ∀ i : Fin n, IsBool v[i]
 
 def impl {B : Backend} [Field B.Native] [DecidableEq B.Native] (assertBool : Impl B AssertBool.interface) (n : ℕ) :
     Impl B (interface n) where
@@ -257,10 +264,13 @@ end CheckBits
 namespace XorBits
 
 /-- The bitwise xor of two vectors of `n` bits. -/
-abbrev interface [DecidableEq Native] (n : ℕ) : Interface Native :=
-  { input := Vector Bool n × Vector Bool n, inputCType := CType.vec n (bit Native) ×ᵗ CType.vec n (bit Native),
-    output := Vector Bool n, outputCType := CType.vec n (bit Native)
-    Spec := fun (a, b) c => ∀ i : Fin n, c[i] = (a[i] ^^ b[i]) }
+@[reducible]
+def interface [DecidableEq Native] (n : ℕ) : Interface Native where
+  input := Vector Bool n × Vector Bool n
+  inputCType := CType.vec n (bit Native) ×ᵗ CType.vec n (bit Native)
+  output := Vector Bool n
+  outputCType := CType.vec n (bit Native)
+  Spec := fun (a, b) c => ∀ i : Fin n, c[i] = (a[i] ^^ b[i])
 
 theorem decide_eq_xor {a b c : Prop} [Decidable a] [Decidable b] [Decidable c] (h : c ↔ ¬(a ↔ b)) :
     decide c = (decide a ^^ decide b) := by
@@ -324,11 +334,14 @@ theorem fromBits_bitOf {F : Type} [Field F] [NatVal F] {n : ℕ} (w : Vector F n
   split <;> simp_all
 
 /-- `x` is below `2^n`, and these are its `n` bits. An assertion. -/
-abbrev interface [DecidableEq Native] (n : ℕ) : Interface Native :=
-  { input := Native, inputCType := .native,
-    output := Vector Bool n, outputCType := CType.vec n (bit Native)
-    Spec := fun x bits => x = ((Nat.ofBits fun i : Fin n => bits[i] : ℕ) : Native)
-    ProverAssumptions := fun x => ∃ m : ℕ, m < 2 ^ n ∧ x = m }
+@[reducible]
+def interface [DecidableEq Native] (n : ℕ) : Interface Native where
+  input := Native
+  inputCType := .native
+  output := Vector Bool n
+  outputCType := CType.vec n (bit Native)
+  Spec := fun x bits => x = ((Nat.ofBits fun i : Fin n => bits[i] : ℕ) : Native)
+  ProverAssumptions := fun x => ∃ m : ℕ, m < 2 ^ n ∧ x = m
 
 /-- Witness the bits, check they are bits, and that they add up to `x`. -/
 def impl {B : Backend} [Field B.Native] [DecidableEq B.Native] [NatVal B.Native] (arith : ∀ n, Impl B (Arith.interface n))
@@ -491,9 +504,13 @@ from the outputs of one call to the inputs of the next. -/
 namespace Xor3
 
 /-- `a ⊕ b ⊕ c` on bytes. -/
-abbrev interface (byte : CType Native UInt8) : Interface Native :=
-  { input := UInt8 × UInt8 × UInt8, inputCType := byte ×ᵗ byte ×ᵗ byte,
-    output := UInt8, outputCType := byte, Spec := fun (a, b, c) d => d = a ^^^ b ^^^ c }
+@[reducible]
+def interface (byte : CType Native UInt8) : Interface Native where
+  input := UInt8 × UInt8 × UInt8
+  inputCType := byte ×ᵗ byte ×ᵗ byte
+  output := UInt8
+  outputCType := byte
+  Spec := fun (a, b, c) d => d = a ^^^ b ^^^ c
 
 def impl {B : Backend} [Field B.Native] [DecidableEq B.Native] {byte : CType B.Native UInt8}
     (bytes : ∀ op, Impl B (Byte.interface byte op)) : Impl B (interface byte) where
@@ -525,12 +542,15 @@ namespace XorOfBits
 
 /-- A whole circuit: two bytes enter as native elements, checked to be bits, and their xor is
 returned. No invariant is assumed of the inputs: `CheckBits` establishes it. -/
-abbrev interface (byte : CType Native UInt8) : Interface Native :=
-  { input := Vector Native 8 × Vector Native 8, inputCType := CType.natives 8 ×ᵗ CType.natives 8,
-    output := UInt8, outputCType := byte
-    Spec := fun (a, b) c => (∀ i : Fin 8, IsBool a[i]) ∧ (∀ i : Fin 8, IsBool b[i]) ∧
-      c = ofBits (fun i => decide (a[i] = 1)) ^^^ ofBits (fun i => decide (b[i] = 1))
-    ProverAssumptions := fun (a, b) => (∀ i : Fin 8, IsBool a[i]) ∧ (∀ i : Fin 8, IsBool b[i]) }
+@[reducible]
+def interface (byte : CType Native UInt8) : Interface Native where
+  input := Vector Native 8 × Vector Native 8
+  inputCType := CType.natives 8 ×ᵗ CType.natives 8
+  output := UInt8
+  outputCType := byte
+  Spec := fun (a, b) c => (∀ i : Fin 8, IsBool a[i]) ∧ (∀ i : Fin 8, IsBool b[i]) ∧
+    c = ofBits (fun i => decide (a[i] = 1)) ^^^ ofBits (fun i => decide (b[i] = 1))
+  ProverAssumptions := fun (a, b) => (∀ i : Fin 8, IsBool a[i]) ∧ (∀ i : Fin 8, IsBool b[i])
 
 def impl {B : Backend} [Field B.Native] [DecidableEq B.Native] {byte : CType B.Native UInt8}
     (checkBits : ∀ n, Impl B (CheckBits.interface n)) (bytes : ∀ op, Impl B (Byte.interface byte op)) :

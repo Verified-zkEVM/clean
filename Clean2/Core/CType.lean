@@ -149,33 +149,42 @@ namespace CType
 variable {Native T U : Type}
 
 /-- A provable type represents its own values. -/
-abbrev ofProvable (M : TypeMap) [ProvableType M] : CType Native (M Native) where
+@[reducible]
+def ofProvable (M : TypeMap) [ProvableType M] : CType Native (M Native) where
   Shape := M
   Valid _ := True
   decode x := x
 
 /-! The native synthetic types, for contracts on native values. -/
 
-abbrev native : CType Native Native := ofProvable Clean2.native
-abbrev nativePair : CType Native (Native × Native) := ofProvable Clean2.nativePair
-abbrev nativeTriple : CType Native (Native × Native × Native) := ofProvable Clean2.nativeTriple
-abbrev natives (n : ℕ) : CType Native (Vector Native n) := ofProvable (Clean2.natives n)
-abbrev unit : CType Native Unit := ofProvable Clean2.unit
+@[reducible]
+def native : CType Native Native := ofProvable Clean2.native
+@[reducible]
+def nativePair : CType Native (Native × Native) := ofProvable Clean2.nativePair
+@[reducible]
+def nativeTriple : CType Native (Native × Native × Native) := ofProvable Clean2.nativeTriple
+@[reducible]
+def natives (n : ℕ) : CType Native (Vector Native n) := ofProvable (Clean2.natives n)
+@[reducible]
+def unit : CType Native Unit := ofProvable Clean2.unit
 
 /-- A pair, each component in its own synthetic type. -/
-abbrev prod (a : CType Native T) (b : CType Native U) : CType Native (T × U) where
+@[reducible]
+def prod (a : CType Native T) (b : CType Native U) : CType Native (T × U) where
   Shape α := a.Shape α × b.Shape α
   Valid x := a.Valid x.1 ∧ b.Valid x.2
   decode x := (a.decode x.1, b.decode x.2)
 
 /-- A vector, element by element. -/
-abbrev vec (n : ℕ) (a : CType Native T) : CType Native (Vector T n) where
+@[reducible]
+def vec (n : ℕ) (a : CType Native T) : CType Native (Vector T n) where
   Shape α := Vector (a.Shape α) n
   Valid x := ∀ i : Fin n, a.Valid x[i]
   decode x := x.map a.decode
 
 /-- The same layout and invariant, read as another type. -/
-abbrev map (a : CType Native T) (f : T → U) : CType Native U where
+@[reducible]
+def map (a : CType Native T) (f : T → U) : CType Native U where
   Shape := a.Shape
   Valid := a.Valid
   decode := f ∘ a.decode

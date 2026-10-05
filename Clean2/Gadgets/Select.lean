@@ -20,11 +20,14 @@ namespace Gates
 
 namespace MUX
 
-abbrev interface : Interface Native :=
-  { input := Native × Native × Native, inputCType := .nativeTriple,
-    output := Native, outputCType := .native
-    Assumptions := fun (c, _, _) => IsBool c
-    Spec := fun (c, a, b) out => (c = 1 → out = a) ∧ (c = 0 → out = b) }
+@[reducible]
+def interface : Interface Native where
+  input := Native × Native × Native
+  inputCType := .nativeTriple
+  output := Native
+  outputCType := .native
+  Assumptions := fun (c, _, _) => IsBool c
+  Spec := fun (c, a, b) out => (c = 1 → out = a) ∧ (c = 0 → out = b)
 
 def impl {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface n)) : Impl B interface where
   main | (c, a, b) => do
@@ -47,11 +50,14 @@ end MUX
 
 namespace CH
 
-abbrev interface : Interface Native :=
-  { input := Native × Native × Native, inputCType := .nativeTriple,
-    output := Native, outputCType := .native
-    Assumptions := fun (a, b, c) => IsBool a ∧ IsBool b ∧ IsBool c
-    Spec := fun (a, b, c) out => IsBool out ∧ (out = 1 ↔ (a = 1 ∧ b = 1) ∨ (a ≠ 1 ∧ c = 1)) }
+@[reducible]
+def interface : Interface Native where
+  input := Native × Native × Native
+  inputCType := .nativeTriple
+  output := Native
+  outputCType := .native
+  Assumptions := fun (a, b, c) => IsBool a ∧ IsBool b ∧ IsBool c
+  Spec := fun (a, b, c) out => IsBool out ∧ (out = 1 ↔ (a = 1 ∧ b = 1) ∨ (a ≠ 1 ∧ c = 1))
 
 /-- `(a ∧ b) ∨ (¬a ∧ c)`. No arithmetic appears in this definition or in its proof. -/
 def impl {B : Backend} [Field B.Native] (and : Impl B AND.interface) (or : Impl B OR.interface)
@@ -82,11 +88,14 @@ end CH
 
 namespace MAJ
 
-abbrev interface : Interface Native :=
-  { input := Native × Native × Native, inputCType := .nativeTriple,
-    output := Native, outputCType := .native
-    Assumptions := fun (a, b, c) => IsBool a ∧ IsBool b ∧ IsBool c
-    Spec := fun (a, b, c) out => IsBool out ∧ (out = 1 ↔ (a = 1 ∧ b = 1) ∨ (a = 1 ∧ c = 1) ∨ (b = 1 ∧ c = 1)) }
+@[reducible]
+def interface : Interface Native where
+  input := Native × Native × Native
+  inputCType := .nativeTriple
+  output := Native
+  outputCType := .native
+  Assumptions := fun (a, b, c) => IsBool a ∧ IsBool b ∧ IsBool c
+  Spec := fun (a, b, c) out => IsBool out ∧ (out = 1 ↔ (a = 1 ∧ b = 1) ∨ (a = 1 ∧ c = 1) ∨ (b = 1 ∧ c = 1))
 
 /-- `(a ∧ b) ∨ (a ∧ c) ∨ (b ∧ c)`. -/
 def impl {B : Backend} [Field B.Native] (and : Impl B AND.interface) (or : Impl B OR.interface) : Impl B interface where

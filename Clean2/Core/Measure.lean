@@ -146,7 +146,8 @@ class Measured (μ : B.Measure M) {c : Interface B.Native} (impl : Impl B c) whe
     measure
 
 /-- The measure of an implementation, by its `Measured` instance. -/
-abbrev _root_.Clean2.Backend.Measure.of (μ : B.Measure M) {c : Interface B.Native} (impl : Impl B c)
+@[reducible]
+def _root_.Clean2.Backend.Measure.of (μ : B.Measure M) {c : Interface B.Native} (impl : Impl B c)
     [inst : Measured μ impl] : M :=
   inst.value
 

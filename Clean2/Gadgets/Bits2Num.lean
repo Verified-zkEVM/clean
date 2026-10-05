@@ -50,11 +50,14 @@ theorem cast_fromBits {n : ℕ} (bits : Vector Native n) (h : ∀ i : Fin n, IsB
   rcases h i with h | h <;> simp [h]
 
 /-- `n` bits in, their value out. -/
-abbrev interface (n : ℕ) : Interface Native :=
-  { input := Vector Native n, inputCType := .natives n,
-    output := Native, outputCType := .native
-    Assumptions := fun bits => ∀ i : Fin n, IsBool bits[i]
-    Spec := fun bits out => out = fromBits bits ∧ fromBits bits < 2 ^ n }
+@[reducible]
+def interface (n : ℕ) : Interface Native where
+  input := Vector Native n
+  inputCType := .natives n
+  output := Native
+  outputCType := .native
+  Assumptions := fun bits => ∀ i : Fin n, IsBool bits[i]
+  Spec := fun bits out => out = fromBits bits ∧ fromBits bits < 2 ^ n
 
 variable {B : Backend} [Field B.Native]
 

@@ -26,11 +26,14 @@ namespace Gates
 
 namespace NOT
 
-abbrev interface : Interface Native :=
-  { input := Native, inputCType := .native,
-    output := Native, outputCType := .native
-    Assumptions := fun x => IsBool x
-    Spec := fun x out => IsBool out ∧ (out = 1 ↔ x ≠ 1) }
+@[reducible]
+def interface : Interface Native where
+  input := Native
+  inputCType := .native
+  output := Native
+  outputCType := .native
+  Assumptions := fun x => IsBool x
+  Spec := fun x out => IsBool out ∧ (out = 1 ↔ x ≠ 1)
 
 def impl {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface n)) : Impl B interface where
   main x := do
@@ -52,11 +55,14 @@ end NOT
 
 namespace AND
 
-abbrev interface : Interface Native :=
-  { input := Native × Native, inputCType := .nativePair,
-    output := Native, outputCType := .native
-    Assumptions := fun (a, b) => IsBool a ∧ IsBool b
-    Spec := fun (a, b) c => IsBool c ∧ (c = 1 ↔ a = 1 ∧ b = 1) }
+@[reducible]
+def interface : Interface Native where
+  input := Native × Native
+  inputCType := .nativePair
+  output := Native
+  outputCType := .native
+  Assumptions := fun (a, b) => IsBool a ∧ IsBool b
+  Spec := fun (a, b) c => IsBool c ∧ (c = 1 ↔ a = 1 ∧ b = 1)
 
 def impl {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface n)) : Impl B interface where
   main | (a, b) => arith .mul (a, b)
@@ -76,11 +82,14 @@ end AND
 
 namespace OR
 
-abbrev interface : Interface Native :=
-  { input := Native × Native, inputCType := .nativePair,
-    output := Native, outputCType := .native
-    Assumptions := fun (a, b) => IsBool a ∧ IsBool b
-    Spec := fun (a, b) c => IsBool c ∧ (c = 1 ↔ a = 1 ∨ b = 1) }
+@[reducible]
+def interface : Interface Native where
+  input := Native × Native
+  inputCType := .nativePair
+  output := Native
+  outputCType := .native
+  Assumptions := fun (a, b) => IsBool a ∧ IsBool b
+  Spec := fun (a, b) c => IsBool c ∧ (c = 1 ↔ a = 1 ∨ b = 1)
 
 def impl {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface n)) : Impl B interface where
   main | (a, b) => do
@@ -107,11 +116,14 @@ composition — the circuits of `and`, `or`, `not` are never unfolded. -/
 
 namespace NAND
 
-abbrev interface : Interface Native :=
-  { input := Native × Native, inputCType := .nativePair,
-    output := Native, outputCType := .native
-    Assumptions := fun (a, b) => IsBool a ∧ IsBool b
-    Spec := fun (a, b) c => IsBool c ∧ (c = 1 ↔ ¬(a = 1 ∧ b = 1)) }
+@[reducible]
+def interface : Interface Native where
+  input := Native × Native
+  inputCType := .nativePair
+  output := Native
+  outputCType := .native
+  Assumptions := fun (a, b) => IsBool a ∧ IsBool b
+  Spec := fun (a, b) c => IsBool c ∧ (c = 1 ↔ ¬(a = 1 ∧ b = 1))
 
 def impl {B : Backend} [Field B.Native] (and : Impl B AND.interface) (not : Impl B NOT.interface) : Impl B interface where
   main | (a, b) => do
@@ -132,11 +144,14 @@ end NAND
 
 namespace NOR
 
-abbrev interface : Interface Native :=
-  { input := Native × Native, inputCType := .nativePair,
-    output := Native, outputCType := .native
-    Assumptions := fun (a, b) => IsBool a ∧ IsBool b
-    Spec := fun (a, b) c => IsBool c ∧ (c = 1 ↔ ¬(a = 1 ∨ b = 1)) }
+@[reducible]
+def interface : Interface Native where
+  input := Native × Native
+  inputCType := .nativePair
+  output := Native
+  outputCType := .native
+  Assumptions := fun (a, b) => IsBool a ∧ IsBool b
+  Spec := fun (a, b) c => IsBool c ∧ (c = 1 ↔ ¬(a = 1 ∨ b = 1))
 
 def impl {B : Backend} [Field B.Native] (or : Impl B OR.interface) (not : Impl B NOT.interface) : Impl B interface where
   main | (a, b) => do

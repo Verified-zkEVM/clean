@@ -31,10 +31,13 @@ namespace SBox
 def sbox (x : F) : F := x ^ 5
 
 /-- `x ↦ (x + c)^5`, the constant being the parameter. -/
-abbrev interface (c : F) : Interface F :=
-  { input := F, inputCType := .native,
-    output := F, outputCType := .native
-    Spec := fun x y => y = sbox (x + c) }
+@[reducible]
+def interface (c : F) : Interface F where
+  input := F
+  inputCType := .native
+  output := F
+  outputCType := .native
+  Spec := fun x y => y = sbox (x + c)
 
 /-- Three multiplications. -/
 def impl {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface n)) (c : B.Native) : Impl B (interface c) where
@@ -64,10 +67,13 @@ structure Params (F : Type) where
   m : Fin t → F
 
 /-- `x ↦ ∑ i, m i * x[i]`. -/
-abbrev interface (p : Params F) : Interface F :=
-  { input := Vector F p.t, inputCType := .natives p.t,
-    output := F, outputCType := .native
-    Spec := fun x y => y = ∑ i, p.m i * x[i] }
+@[reducible]
+def interface (p : Params F) : Interface F where
+  input := Vector F p.t
+  inputCType := .natives p.t
+  output := F
+  outputCType := .native
+  Spec := fun x y => y = ∑ i, p.m i * x[i]
 
 /-- The tail sums `∑_{j ≥ i}`, one step: the loop invariant of `impl`. -/
 theorem sum_tail_succ {t : ℕ} (f : Fin t → F) (i : Fin t) :
@@ -156,16 +162,22 @@ def iterate : ℕ → Vector F p.t → Vector F p.t
 def permutation (x : Vector F p.t) : Vector F p.t := iterate p p.rounds x
 
 /-- Round `r`. -/
-abbrev Round.interface (r : ℕ) : Interface F :=
-  { input := Vector F p.t, inputCType := .natives p.t,
-    output := Vector F p.t, outputCType := .natives p.t
-    Spec := fun x y => y = round p r x }
+@[reducible]
+def Round.interface (r : ℕ) : Interface F where
+  input := Vector F p.t
+  inputCType := .natives p.t
+  output := Vector F p.t
+  outputCType := .natives p.t
+  Spec := fun x y => y = round p r x
 
 /-- The permutation. -/
-abbrev interface : Interface F :=
-  { input := Vector F p.t, inputCType := .natives p.t,
-    output := Vector F p.t, outputCType := .natives p.t
-    Spec := fun x y => y = permutation p x }
+@[reducible]
+def interface : Interface F where
+  input := Vector F p.t
+  inputCType := .natives p.t
+  output := Vector F p.t
+  outputCType := .natives p.t
+  Spec := fun x y => y = permutation p x
 
 section
 variable {B : Backend} [Field B.Native] (p : Params B.Native)

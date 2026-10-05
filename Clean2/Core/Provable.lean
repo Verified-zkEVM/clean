@@ -16,7 +16,8 @@ public import Mathlib.Data.Nat.Notation
 
 namespace Clean2
 
-abbrev TypeMap := Type → Type
+@[reducible]
+def TypeMap := Type → Type
 
 /--
 A container of a fixed number of elements, uniformly in the element type.
@@ -39,7 +40,8 @@ theorem ProvableType.map_eq_fromElements {M : TypeMap} [ProvableType M] {α β :
   rw [← ProvableType.fromElements_toElements (ProvableType.map f x), ProvableType.toElements_map]
 
 /-- The single-element container. -/
-abbrev native : TypeMap := fun α => α
+@[reducible]
+def native : TypeMap := fun α => α
 
 instance : ProvableType native where
   size := 1
@@ -48,7 +50,8 @@ instance : ProvableType native where
   map f x := f x
   toElements_map f x := by simp
 
-abbrev nativePair : TypeMap := fun α => α × α
+@[reducible]
+def nativePair : TypeMap := fun α => α × α
 
 instance : ProvableType nativePair where
   size := 2
@@ -57,7 +60,8 @@ instance : ProvableType nativePair where
   map f | (x, y) => (f x, f y)
   toElements_map f | (x, y) => by simp
 
-abbrev nativeTriple : TypeMap := fun α => α × α × α
+@[reducible]
+def nativeTriple : TypeMap := fun α => α × α × α
 
 instance : ProvableType nativeTriple where
   size := 3
@@ -67,7 +71,8 @@ instance : ProvableType nativeTriple where
   toElements_map f | (x, y, z) => by simp
 
 /-- `n` elements. -/
-abbrev natives (n : ℕ) : TypeMap := fun α => Vector α n
+@[reducible]
+def natives (n : ℕ) : TypeMap := fun α => Vector α n
 
 instance {n : ℕ} : ProvableType (natives n) where
   size := n
@@ -84,7 +89,8 @@ theorem _root_.Vector.getElem_tail' {α : Type} {n : ℕ} (v : Vector α (n + 1)
   simp [Nat.add_comm]
 
 /-- The empty container, for circuits without input or output. -/
-abbrev unit : TypeMap := fun _ => Unit
+@[reducible]
+def unit : TypeMap := fun _ => Unit
 
 instance : ProvableType unit where
   size := 0

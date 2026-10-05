@@ -18,12 +18,15 @@ variable {Native : Type} [Field Native]
 
 namespace Inverse
 
-abbrev interface : Interface Native :=
-  { input := Native, inputCType := .native,
-    output := Native, outputCType := .native
-    Spec := fun x out => x ≠ 0 ∧ out = x⁻¹
-    ProverAssumptions := fun x => x ≠ 0
-    ProverSpec := fun x out => out = x⁻¹ }
+@[reducible]
+def interface : Interface Native where
+  input := Native
+  inputCType := .native
+  output := Native
+  outputCType := .native
+  Spec := fun x out => x ≠ 0 ∧ out = x⁻¹
+  ProverAssumptions := fun x => x ≠ 0
+  ProverSpec := fun x out => out = x⁻¹
 
 def impl {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface n)) : Impl B interface where
   main x := do
@@ -53,11 +56,14 @@ end Inverse
 
 namespace AssertNonZero
 
-abbrev interface : Interface Native :=
-  { input := Native, inputCType := .native,
-    output := Unit, outputCType := .unit
-    Spec := fun x _ => x ≠ 0
-    ProverAssumptions := fun x => x ≠ 0 }
+@[reducible]
+def interface : Interface Native where
+  input := Native
+  inputCType := .native
+  output := Unit
+  outputCType := .unit
+  Spec := fun x _ => x ≠ 0
+  ProverAssumptions := fun x => x ≠ 0
 
 def impl {B : Backend} [Field B.Native] (inverse : Impl B Inverse.interface) : Impl B interface where
   main x := do
@@ -80,12 +86,15 @@ end AssertNonZero
 
 namespace Div
 
-abbrev interface : Interface Native :=
-  { input := Native × Native, inputCType := .nativePair,
-    output := Native, outputCType := .native
-    Spec := fun (a, b) out => b ≠ 0 ∧ out = a / b
-    ProverAssumptions := fun (_, b) => b ≠ 0
-    ProverSpec := fun (a, b) out => out = a / b }
+@[reducible]
+def interface : Interface Native where
+  input := Native × Native
+  inputCType := .nativePair
+  output := Native
+  outputCType := .native
+  Spec := fun (a, b) out => b ≠ 0 ∧ out = a / b
+  ProverAssumptions := fun (_, b) => b ≠ 0
+  ProverSpec := fun (a, b) out => out = a / b
 
 def impl {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface n)) (inverse : Impl B Inverse.interface) :
     Impl B interface where

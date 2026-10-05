@@ -51,9 +51,11 @@ variable {Native : Type} (c : Interface Native)
 
 /-- The layout of the input. `c.Input B.Var` is what an implementation takes, `c.Input Native`
 what it denotes. -/
-abbrev Input : TypeMap := c.inputCType.Shape
+@[reducible]
+def Input : TypeMap := c.inputCType.Shape
 /-- The layout of the output. -/
-abbrev Output : TypeMap := c.outputCType.Shape
+@[reducible]
+def Output : TypeMap := c.outputCType.Shape
 
 end Interface
 
@@ -253,11 +255,16 @@ end
 /-! ### Refinement: an implementation of a stronger contract implements a weaker one -/
 
 /-- `c.refine`: the same types, another contract. -/
-abbrev Interface.refine {Native : Type} (c : Interface Native)
+@[reducible]
+def Interface.refine {Native : Type} (c : Interface Native)
     (Assumptions : c.input → Prop) (Spec : c.input → c.output → Prop)
     (ProverAssumptions : c.input → Prop) (ProverSpec : c.input → c.output → Prop) :
-    Interface Native :=
-  { c with Assumptions, Spec, ProverAssumptions, ProverSpec }
+    Interface Native where
+  __ := c
+  Assumptions := Assumptions
+  Spec := Spec
+  ProverAssumptions := ProverAssumptions
+  ProverSpec := ProverSpec
 
 /-- `c.Refines A S PA PS`: `c` assumes less and promises more than the contract `A S PA PS`. -/
 structure Interface.Refines {Native : Type} (c : Interface Native)

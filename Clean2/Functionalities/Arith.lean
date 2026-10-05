@@ -19,61 +19,82 @@ variable {Native : Type}
 /-! ## The interfaces -/
 
 namespace Add
-abbrev interface [Add Native] : Interface Native :=
-  { input := Native × Native, inputCType := .nativePair,
-    output := Native, outputCType := .native
-    Spec := fun (a, b) c => c = a + b }
+@[reducible]
+def interface [Add Native] : Interface Native where
+  input := Native × Native
+  inputCType := .nativePair
+  output := Native
+  outputCType := .native
+  Spec := fun (a, b) c => c = a + b
 end Add
 
 namespace Sub
-abbrev interface [Sub Native] : Interface Native :=
-  { input := Native × Native, inputCType := .nativePair,
-    output := Native, outputCType := .native
-    Spec := fun (a, b) c => c = a - b }
+@[reducible]
+def interface [Sub Native] : Interface Native where
+  input := Native × Native
+  inputCType := .nativePair
+  output := Native
+  outputCType := .native
+  Spec := fun (a, b) c => c = a - b
 end Sub
 
 namespace Mul
-abbrev interface [Mul Native] : Interface Native :=
-  { input := Native × Native, inputCType := .nativePair,
-    output := Native, outputCType := .native
-    Spec := fun (a, b) c => c = a * b }
+@[reducible]
+def interface [Mul Native] : Interface Native where
+  input := Native × Native
+  inputCType := .nativePair
+  output := Native
+  outputCType := .native
+  Spec := fun (a, b) c => c = a * b
 end Mul
 
 /- Multiplication by a constant. The constant is a parameter: one implementation produces
 them all. Linear, so free on the backends whose variables are linear combinations. -/
 namespace Scale
-abbrev interface [Mul Native] (c : Native) : Interface Native :=
-  { input := Native, inputCType := .native,
-    output := Native, outputCType := .native
-    Spec := fun x y => y = c * x }
+@[reducible]
+def interface [Mul Native] (c : Native) : Interface Native where
+  input := Native
+  inputCType := .native
+  output := Native
+  outputCType := .native
+  Spec := fun x y => y = c * x
 end Scale
 
 /- A constant. The constant is a parameter: one implementation produces them all. -/
 namespace Const
-abbrev interface (c : Native) : Interface Native :=
-  { input := Unit, inputCType := .unit,
-    output := Native, outputCType := .native
-    Spec := fun _ x => x = c }
+@[reducible]
+def interface (c : Native) : Interface Native where
+  input := Unit
+  inputCType := .unit
+  output := Native
+  outputCType := .native
+  Spec := fun _ x => x = c
 end Const
 
 /- Assert that a variable is zero. An assertion: the honest prover has to make it true. -/
 namespace AssertZero
-abbrev interface [Zero Native] : Interface Native :=
-  { input := Native, inputCType := .native,
-    output := Unit, outputCType := .unit
-    Spec := fun x _ => x = 0
-    ProverAssumptions := fun x => x = 0 }
+@[reducible]
+def interface [Zero Native] : Interface Native where
+  input := Native
+  inputCType := .native
+  output := Unit
+  outputCType := .unit
+  Spec := fun x _ => x = 0
+  ProverAssumptions := fun x => x = 0
 end AssertZero
 
 /- Assert `a * b = c`. Included as its own functionality because it is the native
 constraint of R1CS; a backend that decomposed it into `mul` and `assertZero` would pay
 an extra cell. -/
 namespace MulEq
-abbrev interface [Mul Native] : Interface Native :=
-  { input := Native × Native × Native, inputCType := .nativeTriple,
-    output := Unit, outputCType := .unit
-    Spec := fun (a, b, c) _ => a * b = c
-    ProverAssumptions := fun (a, b, c) => a * b = c }
+@[reducible]
+def interface [Mul Native] : Interface Native where
+  input := Native × Native × Native
+  inputCType := .nativeTriple
+  output := Unit
+  outputCType := .unit
+  Spec := fun (a, b, c) _ => a * b = c
+  ProverAssumptions := fun (a, b, c) => a * b = c
 end MulEq
 
 /- An unconstrained value, which the honest prover computes from the input values.
@@ -88,10 +109,13 @@ structure Params (Native : Type) : Type 1 where
 
 attribute [instance] Params.inst
 
-abbrev interface (p : Params Native) : Interface Native :=
-  { input := p.Input Native, inputCType := .ofProvable p.Input,
-    output := Native, outputCType := .native
-    ProverSpec := fun x out => out = p.f x }
+@[reducible]
+def interface (p : Params Native) : Interface Native where
+  input := p.Input Native
+  inputCType := .ofProvable p.Input
+  output := Native
+  outputCType := .native
+  ProverSpec := fun x out => out = p.f x
 
 end Witness
 
@@ -107,7 +131,8 @@ inductive Name (Native : Type) : Type 1 where
   | witness (Input : TypeMap) [ProvableType Input] (f : Input Native → Native)
 
 /-- All the arithmetic functionalities, by name. -/
-abbrev interface [Add Native] [Sub Native] [Mul Native] [Zero Native] : Name Native → Interface Native
+@[reducible]
+def interface [Add Native] [Sub Native] [Mul Native] [Zero Native] : Name Native → Interface Native
   | .add => Add.interface
   | .sub => Sub.interface
   | .mul => Mul.interface
@@ -140,7 +165,8 @@ def Name.toArith : Name Native → Arith.Name Native
 
 /-- The native set of an R1CS-like backend: linear arithmetic, `a * b = c`, and witnesses.
 A sub-family of `Arith.interface`. -/
-abbrev interface [Add Native] [Sub Native] [Mul Native] [Zero Native] (n : Name Native) : Interface Native :=
+@[reducible]
+def interface [Add Native] [Sub Native] [Mul Native] [Zero Native] (n : Name Native) : Interface Native :=
   Arith.interface n.toArith
 
 end Base

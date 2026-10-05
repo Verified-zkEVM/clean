@@ -18,11 +18,14 @@ variable {Native : Type} [Field Native]
 
 namespace AssertEq
 
-abbrev interface : Interface Native :=
-  { input := Native × Native, inputCType := .nativePair,
-    output := Unit, outputCType := .unit
-    Spec := fun (a, b) _ => a = b
-    ProverAssumptions := fun (a, b) => a = b }
+@[reducible]
+def interface : Interface Native where
+  input := Native × Native
+  inputCType := .nativePair
+  output := Unit
+  outputCType := .unit
+  Spec := fun (a, b) _ => a = b
+  ProverAssumptions := fun (a, b) => a = b
 
 def impl {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface n)) : Impl B interface where
   main | (a, b) => do
@@ -47,10 +50,13 @@ end AssertEq
 
 namespace IsEqual
 
-abbrev interface : Interface Native :=
-  { input := Native × Native, inputCType := .nativePair,
-    output := Native, outputCType := .native
-    Spec := fun (a, b) out => (a = b → out = 1) ∧ (a ≠ b → out = 0) }
+@[reducible]
+def interface : Interface Native where
+  input := Native × Native
+  inputCType := .nativePair
+  output := Native
+  outputCType := .native
+  Spec := fun (a, b) out => (a = b → out = 1) ∧ (a ≠ b → out = 0)
 
 /-- Generic over the arithmetic *and* over the zero test. -/
 def impl {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface n)) (isZero : Impl B IsZero.interface) :

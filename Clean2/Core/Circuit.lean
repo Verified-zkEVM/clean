@@ -48,7 +48,8 @@ inductive Op (B : Backend) where
   | native : B.Op → Op B
   | call : {s : B.State} → Subcircuit B s → Op B
 
-abbrev Ops (B : Backend) := List (Op B)
+@[reducible]
+def Ops (B : Backend) := List (Op B)
 
 namespace Ops
 
