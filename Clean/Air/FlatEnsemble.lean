@@ -501,6 +501,8 @@ def addTable (ens : Ensemble F PublicIO) (table : Component F) : Ensemble F Publ
 
 @[circuit_norm] lemma addTable_tables (ens : Ensemble F PublicIO) (table : Component F) :
   (ens.addTable table).tables = table :: ens.tables := rfl
+@[circuit_norm] lemma addTable_channels (ens : Ensemble F PublicIO) (table : Component F) :
+  (ens.addTable table).channels = ens.channels := rfl
 @[circuit_norm] lemma addTable_verifierTable (ens : Ensemble F PublicIO) (table : Component F) :
   (ens.addTable table).verifierTable = ens.verifierTable := rfl
 @[circuit_norm] lemma addTable_verifier (ens : Ensemble F PublicIO) (table : Component F) :
