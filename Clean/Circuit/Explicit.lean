@@ -1096,7 +1096,7 @@ elab "elaborate_circuit" : tactic => withMainContext do
         throwError "unexpected channelsLawful type: {pType}"
       let ops := pArgs[2]!
       let actualGuarantees := pArgs[3]!
-      let rawChannelType := mkApp (mkConst ``RawChannel) F
+      let rawChannelType := mkApp2 (mkConst ``RawChannel) F F
       let rawChannelListType := mkApp (mkConst ``List [Level.zero]) rawChannelType
       let guaranteesProof := mkApp2 channelsWithGuaranteesNormProof input offset
       let currentGuarantees := mkApp2 channelsWithGuaranteesFun input offset
