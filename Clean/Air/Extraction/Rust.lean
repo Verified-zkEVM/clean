@@ -35,8 +35,8 @@ def constantValues? : List (Witgen.FExpr F) → Option (List F)
   | _ => none
 
 def constantLookupToRust (index : String) (values : List F) : String :=
-  let cases := values.zipIdx.map fun (value, i) => s!"{i} => {field value}"
-  s!"match ({index}) as usize \{ {commaSep cases}, _ => F::ZERO }"
+  let cases := values.zipIdx.map fun (value, i) => s!"{i} => {field value}, "
+  s!"match ({index}) as usize \{ {String.join cases}_ => F::ZERO }"
 
 def exprToRust (row : String) : Expression F → String
   | .var cell => s!"{row}.get({cell.index}).copied().unwrap_or(F::ZERO)"
@@ -155,33 +155,26 @@ def vexprPushRust (locals : Array LocalSort) (row output idx : String) :
   | _, .append left right =>
       return s!"{← vexprPushRust locals row output idx left}\n{← vexprPushRust locals row output idx right}"
 
+/-- Render steps and output of a witness program into a Rust vector `output`. Circuit cells are
+read from `row` and the row-program index is `idx`. Every witness, fixed-column, and prover-input
+row program is rendered through this function. -/
+def outputToRust {n : ℕ} (steps : List (Witgen.Step F)) (output : Witgen.VExpr F n)
+    (row idx : String) : Except String String := do
+  let locals := steps.map stepSort |>.toArray
+  let stepCode ← stepsToRust steps row idx
+  let outputCode ← vexprPushRust locals row "output" idx output
+  return s!"{stepCode}\n        let mut output = Vec::with_capacity({n});\n{outputCode}\n        debug_assert_eq!(output.len(), {n});"
+
 def witnessBlockToRust (block : WitnessBlock F) (row : String) : Except String String := do
-  let locals := block.steps.map stepSort |>.toArray
-  let stepCode ← stepsToRust block.steps row "0u64"
-  let outputCode ← vexprPushRust locals row "output" "0u64" block.output
-  return s!"{stepCode}\n        let mut output = Vec::with_capacity({block.outputWidth});\n{outputCode}\n        debug_assert_eq!(output.len(), {block.outputWidth});\n        {row}.extend(output);"
-
-def rowProgramToRust (program : Witgen.RowProgram F) (rowIndex : String) :
-    Except String String := do
-  let locals := program.steps.map stepSort |>.toArray
-  let stepCode ← stepsToRust program.steps "&[]" rowIndex
-  let outputCode ← vexprPushRust locals "&[]" "output" rowIndex program.output
-  return s!"{stepCode}\n        let mut output = Vec::with_capacity({program.width});\n{outputCode}\n        debug_assert_eq!(output.len(), {program.width});"
-
-def fixedProgramToRust (program : WitnessBlock F) (rowIndex : String) :
-    Except String String := do
-  let locals := program.steps.map stepSort |>.toArray
-  let stepCode ← stepsToRust program.steps "&[]" rowIndex
-  let outputCode ← vexprPushRust locals "&[]" "output" rowIndex program.output
-  return s!"{stepCode}\n        let mut output = Vec::with_capacity({program.outputWidth});\n{outputCode}\n        debug_assert_eq!(output.len(), {program.outputWidth});"
+  return s!"{← outputToRust block.steps block.output row "0u64"}\n        {row}.extend(output);"
 
 def fixedRowFunctionToRust (index : ℕ) (component : ComponentProgram F) :
     Except String (Option String) :=
   match component.fixedColumns with
   | none => pure none
   | some fixed => do
-      let program ← fixedProgramToRust fixed.program "row"
-      return some s!"fn component_{index}_fixed_row<F: Field + PrimeCharacteristicRing>(row: u64) -> Vec<F> \{
+      let program ← outputToRust fixed.program.steps fixed.program.output "&[]" "row"
+      return some s!"fn component_{index}_fixed_row<F: WitnessField>(row: u64) -> Vec<F> \{
     let _prover_input: &[F] = &[];
 {program}
     output
@@ -290,7 +283,7 @@ impl GeneratedAirSpec for {name}AirSpec \{\n\
     const INTERACTIONS_PER_ROW: &'static [usize] = &[{commaSep interactionsPerRow}];\n\
     const VERIFIER_INTERACTIONS: usize = {program.verifierInteractions.length};\n\
 \n\
-    fn fixed_trace<F: Field + PrimeCharacteristicRing>(component: usize) -> Option<RowMajorMatrix<F>> \{\n\
+    fn fixed_trace<F: WitnessField>(component: usize) -> Option<RowMajorMatrix<F>> \{\n\
         match component \{\n\
 {fixedCases}\n\
             _ => unreachable!(\"invalid generated AIR component\"),\n\
@@ -373,7 +366,7 @@ def initialRowsToRust (index : ℕ) (component : ComponentProgram F) (mode : Mod
   | .demand _ =>
       pure s!"fn component_{index}_initial_rows<F: WitnessField>(_prover_input: &[F]) -> Result<Vec<Vec<F>>, String> \{ Ok(vec![]) }"
   | .preallocated mode => do
-      let suffix ← rowProgramToRust mode.input "row"
+      let suffix ← outputToRust mode.input.steps mode.input.output "&[]" "row"
       let fixed ← match component.fixedColumns with
         | none => pure "        let mut input = Vec::new();"
         | some _ => pure s!"        let mut input = component_{index}_fixed_row::<F>(row);"
@@ -390,6 +383,12 @@ def initialRowsToRust (index : ℕ) (component : ComponentProgram F) (mode : Mod
 def paddingToRust (padding : Padding F) : String :=
   s!"Padding \{ input: {rowToRust padding.input}, minimum_rows: {padding.minimumRows} }"
 
+/-- Rust helpers implementing the `UInt64` division semantics of the witness IR. -/
+def u64Helpers : String := "#[inline(always)]\n\
+fn safe_div(left: u64, right: u64) -> u64 { if right == 0 { 0 } else { left / right } }\n\
+#[inline(always)]\n\
+fn safe_rem(left: u64, right: u64) -> u64 { if right == 0 { left } else { left % right } }\n"
+
 def prelude : String := "// Generated by Clean from a typed extraction program. Do not edit.\n\
 use clean_backend::witness_generation::{Aggregation, DemandMode, Direction, EnsembleWitness, InputCell, Interaction, Mode, Padding, PreallocatedHandler, Program, WitnessData, WitnessField, WitnessGenerationError};\n\
 use clean_backend::{GeneratedAirSpec, GeneratedEnsemble, GeneratedLookup};\n\
@@ -399,11 +398,7 @@ use p3_field::{Field, PrimeCharacteristicRing};\n\
 use p3_matrix::dense::RowMajorMatrix;\n\
 use alloc::{format, vec, vec::Vec};\n\
 use alloc::string::String;\n\
-\n\
-#[inline(always)]\n\
-fn safe_div(left: u64, right: u64) -> u64 { if right == 0 { 0 } else { left / right } }\n\
-#[inline(always)]\n\
-fn safe_rem(left: u64, right: u64) -> u64 { if right == 0 { left } else { left % right } }\n"
+\n" ++ u64Helpers
 
 /-- Render a validated extraction program as direct Rust witness and constraint code. -/
 def programToRust (name : String) (program : Program F) : Except String String := do

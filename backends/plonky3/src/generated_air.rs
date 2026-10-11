@@ -89,9 +89,7 @@ pub trait GeneratedAirSpec: Clone + Sync {
     const INTERACTIONS_PER_ROW: &'static [usize];
     const VERIFIER_INTERACTIONS: usize;
 
-    fn fixed_trace<F: Field + PrimeCharacteristicRing>(
-        component: usize,
-    ) -> Option<RowMajorMatrix<F>>;
+    fn fixed_trace<F: WitnessField>(component: usize) -> Option<RowMajorMatrix<F>>;
 
     fn constraints<AB>(component: usize, fixed: &[AB::Var], local: &[AB::Var]) -> Vec<AB::Expr>
     where
@@ -226,7 +224,7 @@ impl<F: WitnessField, P: GeneratedAirSpec> GeneratedEnsemble<F, P> {
     }
 }
 
-impl<F: Field, P: GeneratedAirSpec> BaseAir<F> for GeneratedAir<P> {
+impl<F: WitnessField, P: GeneratedAirSpec> BaseAir<F> for GeneratedAir<P> {
     fn width(&self) -> usize {
         P::WIDTHS[self.component]
     }
@@ -239,7 +237,7 @@ impl<F: Field, P: GeneratedAirSpec> BaseAir<F> for GeneratedAir<P> {
 impl<AB, P> Air<AB> for GeneratedAir<P>
 where
     AB: AirBuilderWithPublicValues,
-    AB::F: Field + PrimeCharacteristicRing,
+    AB::F: WitnessField,
     P: GeneratedAirSpec,
 {
     fn eval(&self, builder: &mut AB) {

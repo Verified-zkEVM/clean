@@ -159,7 +159,7 @@ fn component_2_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
     }]
 }
 
-fn component_2_fixed_row<F: Field + PrimeCharacteristicRing>(row: u64) -> Vec<F> {
+fn component_2_fixed_row<F: WitnessField>(row: u64) -> Vec<F> {
     let _prover_input: &[F] = &[];
 
     let mut output = Vec::with_capacity(1);
@@ -223,9 +223,7 @@ impl GeneratedAirSpec for FibonacciEnsembleProgramAirSpec {
     const INTERACTIONS_PER_ROW: &'static [usize] = &[3, 2, 1];
     const VERIFIER_INTERACTIONS: usize = 2;
 
-    fn fixed_trace<F: Field + PrimeCharacteristicRing>(
-        component: usize,
-    ) -> Option<RowMajorMatrix<F>> {
+    fn fixed_trace<F: WitnessField>(component: usize) -> Option<RowMajorMatrix<F>> {
         match component {
             0 => None,
             1 => None,
