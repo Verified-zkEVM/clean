@@ -34,6 +34,10 @@ def computePart (i : ℕ) (slsb smsb : F p) (ct : ℕ) : F p :=
 /-- Semantic value of a signal pair (2-bit number: msb * 2 + lsb) -/
 def signalPairValF (slsb smsb : F p) : ℕ := smsb.val * 2 + slsb.val
 
+/-- Semantic value of the signal pair at a two-bit position. -/
+def signalPairValAt (input : Vector (F p) 254) (i : Fin 127) : ℕ :=
+  signalPairValF input[i.val * 2] input[i.val * 2 + 1]
+
 /-- Semantic value of constant pair at position i -/
 def constPairValAt (i : ℕ) (ct : ℕ) : ℕ :=
   ((ct >>> (i * 2 + 1)) &&& 1) * 2 + ((ct >>> (i * 2)) &&& 1)
@@ -368,7 +372,7 @@ lemma above_max_pairs_eq (x y : ℕ) (diff_finset : Finset (Fin 127)) (h_nonempt
   intro j hj
   by_contra h_ne
   have hj_mem : j ∈ diff_finset := by
-    simp only [h_def, Set.mem_toFinset, Set.mem_setOf_eq]
+    simp only [h_def, Set.mem_toFinset, Set.mem_ofPred_eq]
     exact h_ne
   have h_le := Finset.le_max' diff_finset j hj_mem
   rw [← hk] at h_le
@@ -385,7 +389,7 @@ lemma exists_msb_win_from_gt (x y : ℕ) (hx : x < 2^254) (hy : y < 2^254) (h_gt
 
   have hk_mem : (x >>> (k.val * 2)) % 4 ≠ (y >>> (k.val * 2)) % 4 := by
     have : k ∈ diff_finset := Finset.max'_mem diff_finset h_nonempty
-    simp only [diff_finset, Set.mem_toFinset, Set.mem_setOf_eq] at this
+    simp only [diff_finset, Set.mem_toFinset, Set.mem_ofPred_eq] at this
     exact this
 
   have h_above_eq := above_max_pairs_eq x y diff_finset h_nonempty rfl k rfl
@@ -481,16 +485,16 @@ lemma msb_determines_le (ct : ℕ) (h_ct : ct < 2^254)
     (input : Vector (F p) 254)
     (h_bits : ∀ i (_ : i < 254), input[i] = 0 ∨ input[i] = 1)
     (h_le : fromBits (input.map ZMod.val) ≤ ct) :
-    (∀ i : Fin 127, signalPairValF input[i.val * 2] input[i.val * 2 + 1] = constPairValAt i.val ct) ∨
+    (∀ i : Fin 127, signalPairValAt input i = constPairValAt i.val ct) ∨
     (∃ k : Fin 127,
-      signalPairValF input[k.val * 2] input[k.val * 2 + 1] < constPairValAt k.val ct ∧
+      signalPairValAt input k < constPairValAt k.val ct ∧
       ∀ j : Fin 127, j > k →
-        signalPairValF input[j.val * 2] input[j.val * 2 + 1] = constPairValAt j.val ct) := by
+        signalPairValAt input j = constPairValAt j.val ct) := by
   let x := fromBits (input.map ZMod.val)
   have hx_lt : x < 2^254 := fromBits_input_lt_pow input h_bits
 
   have h_signal_pair : ∀ i : Fin 127,
-      signalPairValF input[i.val * 2] input[i.val * 2 + 1] = (x >>> (i.val * 2)) % 4 :=
+      signalPairValAt input i = (x >>> (i.val * 2)) % 4 :=
     fun i => signalPairValF_eq_shiftRight_mod4 input i h_bits
 
   have h_const_pair : ∀ i : Fin 127, constPairValAt i.val ct = (ct >>> (i.val * 2)) % 4 :=
@@ -939,7 +943,7 @@ lemma sum_bit127_one_when_gt (ct : ℕ) (h_ct : ct < 2^254)
     signalPairValF input[i.val * 2] input[i.val * 2 + 1] < constPairValAt i.val ct) Finset.univ
 
   have hk_in_wins : k ∈ wins := by
-    simp only [wins, Finset.mem_filter, Finset.mem_univ, true_and, signalPairValF]
+    simp only [wins, Finset.mem_filter, Finset.mem_univ, true_and]
     exact h_win_k
 
   have h_losses_lt_k : ∀ j ∈ losses, j < k := by
@@ -1023,7 +1027,7 @@ lemma sum_bit127_zero_when_loss (ct : ℕ)
     signalPairValF input[i.val * 2] input[i.val * 2 + 1] < constPairValAt i.val ct) Finset.univ
 
   have hk_in_losses : k ∈ losses := by
-    simp only [losses, Finset.mem_filter, Finset.mem_univ, true_and, signalPairValF]
+    simp only [losses, Finset.mem_filter, Finset.mem_univ, true_and]
     exact h_lose_k
 
   have h_wins_lt_k : ∀ j ∈ wins, j < k := by
@@ -1066,8 +1070,11 @@ lemma sum_bit127_zero_when_le (ct : ℕ) (h_ct : ct < 2^254)
     (h_le : fromBits (input.map ZMod.val) ≤ ct) :
     parts.sum.val / 2^127 % 2 = 0 := by
   obtain h_all_tie | ⟨k, h_lose_k, h_tie_above⟩ := msb_determines_le ct h_ct input h_bits h_le
-  · exact sum_zero_when_all_tie ct input h_bits parts h_parts h_all_tie
-  · exact sum_bit127_zero_when_loss ct input h_bits parts h_parts k h_lose_k h_tie_above
+  · apply sum_zero_when_all_tie ct input h_bits parts h_parts
+    simpa only [signalPairValAt] using h_all_tie
+  · apply sum_bit127_zero_when_loss ct input h_bits parts h_parts k
+    · simpa only [signalPairValAt] using h_lose_k
+    · simpa only [signalPairValAt] using h_tie_above
 
 omit [Fact (p < 2 ^ 254)] in
 lemma sum_range_precise (ct : ℕ) (h_ct : ct < 2^254)

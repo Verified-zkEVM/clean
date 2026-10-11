@@ -14,9 +14,9 @@ lean_lib CleanTests where
   roots := #[`Clean.Test, `Clean.Specs.BLAKE3.ChunkProcessingTests]
 
 lean_exe export_fibonacci_ensemble_rust where
-  root := `Clean.Examples.FibonacciVm.EnsembleRust
+  root := `Clean.Examples.FibonacciVm.Rust
 
 lean_exe export_femtocairo_flat_air_rust where
   root := `Clean.Examples.FemtoCairo.FlatAirRust
 
-require mathlib from git "https://github.com/leanprover-community/mathlib4"@"v4.32.2"
+require "leanprover-community" / "mathlib" @ git "v4.33.1"

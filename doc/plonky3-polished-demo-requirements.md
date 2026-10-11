@@ -60,7 +60,7 @@ When an existing row is updated—for example, when a chip multiplicity increase
 replace that row's previous contribution to channel imbalance with its new contribution. It must
 not enqueue unchanged nested interactions again.
 
-For `FibonacciWithChannels`, the verifier's initial-state push drives `fib8` rows until a generated
+For the Fibonacci VM ensemble, the verifier's initial-state push drives `fib8` rows until a generated
 final-state push cancels the verifier's final pull. The `add8` pulls produced inside those rows
 drive multiplicity-coalesced `add8` rows. Their byte pulls update the fixed byte row's
 multiplicities. This behavior is obtained from generic modes and component declarations, not from
@@ -103,7 +103,7 @@ completeness theorem is deferred.
 6. Missing or ambiguous handlers, malformed row inputs, non-termination/fuel exhaustion,
    multiplicity overflow, and malformed padding declarations are reported as explicit errors.
 7. The structured IR can express multiple component tables, deterministic worklist/scan state,
-   verifier interactions, and semantic trace padding needed by `FibonacciWithChannels`.
+   verifier interactions, and semantic trace padding needed by the Fibonacci VM ensemble.
 8. All code reachable through the export path is structured IR; native witness closures are
    rejected with their locations.
 9. Fibonacci generation declarations produce a non-trivial witness in Lean whose component
@@ -113,10 +113,10 @@ completeness theorem is deferred.
 11. The interface and trusted status are documented: the generator is not completeness-proved and
    generated witness correctness is not part of the soundness argument.
 
-## Plonky3 support for `FibonacciWithChannels`
+## Plonky3 support for the Fibonacci VM ensemble
 
 The reusable backend substrate must support the `fibonacciEnsemble` defined in
-`Clean/Examples/FibonacciVm/Circuit.lean`. It exercises multiple same-row AIR components,
+`Clean/Examples/FibonacciVm/Ensemble.lean`. It exercises multiple same-row AIR components,
 verifier-supplied public interactions, conditional multiplicities, and the static, lookup-like, and
 VM-state `bytes`, `add8`, and `fibonacci` channels.
 

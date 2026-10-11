@@ -244,7 +244,10 @@ def MemoryCompletenessAssumption (env : ProverData (F p)) : Prop :=
   This circuit is not satisfiable if the memory access is out of bounds.
 -/
 def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
-  main := fun { state, offset, mode } => do
+  main := fun input => do
+    let state := input.state
+    let offset := input.offset
+    let mode := input.mode
     /-
       read into memory for all cases of addressing mode.
       to avoid a completeness issue, we use dummy lookups (0, DUMMY_VALUE),
@@ -321,39 +324,23 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
     simp only [h_value1, h_value2] at h_value
     clear h_input
 
-    -- does the memory accesses return some or none?
-    split
-
-    -- the lookups imply that the memory accesses are valid, therefore
-    -- here we prove that Spec.memoryAccess never returns none
-    case h_2 x h_spec =>
-      -- by cases on the addressing mode, the proof for each case is pretty simple
-      rcases h_assumptions with h_mode|h_mode|h_mode|h_mode
-      · simp only [h_mode, one_mul, zero_mul, add_zero, ↓reduceIte,
-        Option.bind_eq_none_iff, Option.dite_none_right_eq_some, Option.some.injEq,
-        dite_eq_right_iff, reduceCtorEq, forall_exists_index,
-        forall_apply_eq_imp_iff, and_self] at *
-        exact h_spec h_addr1_lt h_addr2_lt
-      · simp [h_mode, memoryTable] at h_spec h_addr1_lt
-        linarith
-      · simp [h_mode, memoryTable] at h_spec h_addr1_lt
-        linarith
-      · simp [h_mode] at h_spec
-
-    -- handle the case where all memory accesses are valid
-    case h_1 rawInstrType _ _ value h_eq =>
-      -- by cases on the addressing mode, the proof for each case is pretty simple
-      rcases h_assumptions with h_mode|h_mode|h_mode|h_mode
-      <;> simp [h_mode, memoryTable] at *
-      · simp only [h_addr1_lt, ↓reduceDIte, Option.bind_some, Option.dite_none_right_eq_some,
-        Option.some.injEq] at h_eq
-        obtain ⟨h, h_eq⟩ := h_eq
-        rw [← h_eq, h_value]
-      · obtain ⟨h, h_eq⟩ := h_eq
-        rw [← h_eq, h_value]
-      · obtain ⟨h, h_eq⟩ := h_eq
-        rw [← h_eq, h_value]
-      · rw [← h_eq, h_value]
+    -- Each valid one-hot mode reduces the semantic access to the lookup values above.
+    rcases h_assumptions with h_mode | h_mode | h_mode | h_mode
+    · simp only [h_mode, one_mul, zero_mul, add_zero] at h_addr1_lt h_addr2_lt h_value
+      simp only [h_mode, ↓reduceIte]
+      simp only [← h_memory_table_def, h_addr1_lt, ↓reduceDIte,
+        Option.bind_some, h_addr2_lt]
+      exact h_value
+    · simp only [h_mode, one_mul, zero_mul, add_zero, zero_add] at h_addr1_lt h_value
+      simp only [h_mode, zero_ne_one, ↓reduceIte]
+      simp only [← h_memory_table_def, h_addr1_lt, ↓reduceDIte]
+      exact h_value
+    · simp only [h_mode, one_mul, zero_mul, add_zero, zero_add] at h_addr1_lt h_value
+      simp only [h_mode, zero_ne_one, ↓reduceIte]
+      simp only [← h_memory_table_def, h_addr1_lt, ↓reduceDIte]
+      exact h_value
+    · simpa only [h_mode, one_mul, zero_mul, add_zero, zero_add,
+        zero_ne_one, ↓reduceIte] using h_value
 
   completeness := by
     circuit_proof_start [Table.staticOfFn, DecodedAddressingMode.isEncodedCorrectly,
@@ -419,8 +406,15 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
 -/
 def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
   main (input : Var StateTransitionInput (F p)) := do
-    let { state, decoded, v1, v2, v3 } := input
-    let { instrType := { isAdd, isMul, isStoreState, isLoadState }, .. } := decoded
+    let state := input.state
+    let decoded := input.decoded
+    let v1 := input.v1
+    let v2 := input.v2
+    let v3 := input.v3
+    let isAdd := decoded.instrType.isAdd
+    let isMul := decoded.instrType.isMul
+    let isStoreState := decoded.instrType.isStoreState
+    let isLoadState := decoded.instrType.isLoadState
 
     -- Witness the claimed next state
     let nextState : Var State (F p) ← witnessProgram do
@@ -553,15 +547,15 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
 def femtoCairoStepMain {programSize : ℕ} (program : Fin programSize → (F p)) (h_programSize : programSize < p)
     (state : Var State (F p)) : Circuit (F p) (Var State (F p)) := do
   -- Fetch instruction
-  let { rawInstrType, op1, op2, op3 } ← fetchInstruction program h_programSize state.pc
+  let raw ← fetchInstruction program h_programSize state.pc
 
   -- Decode instruction
-  let decoded ← decodeInstruction rawInstrType
+  let decoded ← decodeInstruction raw.rawInstrType
 
   -- Perform relevant memory accesses
-  let v1 ← readFromMemory { state, offset := op1, mode := decoded.mode1 }
-  let v2 ← readFromMemory { state, offset := op2, mode := decoded.mode2 }
-  let v3 ← readFromMemory { state, offset := op3, mode := decoded.mode3 }
+  let v1 ← readFromMemory { state, offset := raw.op1, mode := decoded.mode1 }
+  let v2 ← readFromMemory { state, offset := raw.op2, mode := decoded.mode2 }
+  let v3 ← readFromMemory { state, offset := raw.op3, mode := decoded.mode3 }
 
   -- Compute next state
   nextState { state, decoded, v1, v2, v3 }

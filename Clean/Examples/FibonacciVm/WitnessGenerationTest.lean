@@ -1,4 +1,4 @@
-import Clean.Examples.FibonacciVm.Circuit
+import Clean.Examples.FibonacciVm.Ensemble
 import Clean.Air.Extraction.Lower
 import Clean.Utils.Primes
 
