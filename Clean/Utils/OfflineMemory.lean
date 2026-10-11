@@ -1,10 +1,14 @@
-import Clean.Circuit.Basic
-import Clean.Circuit.Provable
-import Clean.Gadgets.Equality
-import Clean.Utils.Field
-import Clean.Utils.Primes
-import Clean.Utils.Tactics
-import Mathlib.Data.List.Sort
+module
+
+public import Clean.Circuit.Basic
+public import Clean.Circuit.Provable
+public import Clean.Gadgets.Equality
+public import Clean.Utils.Field
+public import Clean.Utils.Primes
+public import Clean.Utils.Tactics
+public import Mathlib.Data.List.Sort
+
+@[expose] public section
 
 /-
 The purpose of this file is to define a memory model that can be checked using the Memory in the Head paradigm,

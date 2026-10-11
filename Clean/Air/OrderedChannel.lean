@@ -1,4 +1,8 @@
-import Clean.Air.FlatEnsemble
+module
+
+public import Clean.Air.FlatEnsemble
+
+@[expose] public section
 
 variable {F : Type} [FiniteField F]
 open Air.Flat (Component Table TableContext channelInterface)
@@ -685,7 +689,7 @@ theorem tableSoundness_of_soundChannels {ens : Ensemble F PublicIO} :
   have verifier_channel_guarantees : ∀ channel ∈ finished,
       ens.VerifierChannelGuarantees witness.publicInput witness.data channel := by
     intro channel h_channel
-    letI : channel.Consistent := soundChannels.right.right channel h_channel
+    let : channel.Consistent := soundChannels.right.right channel h_channel
     apply verifierChannelGuarantees_of_tableRequirements
       (soundChannels.right.left channel h_channel).left
       (balance channel (finished_subset h_channel))

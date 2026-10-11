@@ -1,4 +1,8 @@
-import Clean.Air.Extraction.IR
+module
+
+public import Clean.Air.Extraction.IR
+
+@[expose] public section
 
 /-! Structural lowering from a flat Clean ensemble to the typed extraction program. -/
 
@@ -79,7 +83,7 @@ def expressionBadVariable (width : ℕ) : Expression F → Option ℕ
 def expressionsBadVariable (width : ℕ) (expressions : List (Expression F)) : Option ℕ :=
   expressions.findSome? (expressionBadVariable width)
 
-private def lowerWitness (component operation : ℕ) {width : ℕ}
+def lowerWitness (component operation : ℕ) {width : ℕ}
     (code : Witgen.WitgenIR F width) : Except LoweringError (WitnessBlock F) :=
   match code with
   | .native _ => .error (.nativeWitness component operation)
@@ -89,14 +93,14 @@ private def lowerWitness (component operation : ℕ) {width : ℕ}
       else
         .error (.malformedWitnessLocals component operation)
 
-private def lowerWitnesses (component : ℕ) (operations : List (FlatOperation F)) :
+def lowerWitnesses (component : ℕ) (operations : List (FlatOperation F)) :
     Except LoweringError (List (WitnessBlock F)) := do
   operations.zipIdx.filterMapM fun (operation, index) =>
     match operation with
     | .witness _ code => return some (← lowerWitness component index code)
     | _ => return none
 
-private def lowerRowProgram (error : LoweringError) (program : Witgen.RowProgram F) :
+def lowerRowProgram (error : LoweringError) (program : Witgen.RowProgram F) :
     Except LoweringError (WitnessBlock F) :=
   if h : witnessProgramWellFormed program.steps program.output then
     .ok {
@@ -108,7 +112,7 @@ private def lowerRowProgram (error : LoweringError) (program : Witgen.RowProgram
   else
     .error error
 
-private def lowerComponent (index : ℕ) (component : Component F) :
+def lowerComponent (index : ℕ) (component : Component F) :
     Except LoweringError (ComponentProgram F) := do
   let operations := component.rowOperations
   unless operations.lookups.isEmpty do
@@ -135,7 +139,7 @@ private def lowerComponent (index : ℕ) (component : Component F) :
     interactions
   }
 
-private def validateMode (index : ℕ) (component : Component F)
+def validateMode (index : ℕ) (component : Component F)
     (mode : Mode F) (padding : Padding F) : Except LoweringError Unit := do
   let fixedWidth := component.fixedWidth
   match component.fixedColumns, mode with
@@ -160,14 +164,14 @@ private def validateMode (index : ℕ) (component : Component F)
         unless fixedWidth ≤ handler.column && handler.column < component.rowOffset do
           throw (.preallocatedColumn index handler.column fixedWidth component.rowOffset)
 
-private structure DataRead where
+structure DataRead where
   key : String
   width : ℕ
   column : ℕ
 
 mutual
 
-private def fexprDataReads : Witgen.FExpr F → List DataRead
+def fexprDataReads : Witgen.FExpr F → List DataRead
   | .expr _ | .const _ | .index | .localVar _ => []
   | .add left right | .mul left right => fexprDataReads left ++ fexprDataReads right
   | .inv value => fexprDataReads value
@@ -181,7 +185,7 @@ private def fexprDataReads : Witgen.FExpr F → List DataRead
       { key, width, column := column.val } :: u64exprDataReads row
   | .hintGet _ _ row _ => u64exprDataReads row
 
-private def u64exprDataReads : Witgen.U64Expr F → List DataRead
+def u64exprDataReads : Witgen.U64Expr F → List DataRead
   | .const _ | .idx | .localVar _ => []
   | .val value => fexprDataReads value
   | .add left right | .mul left right | .div left right | .mod left right |
@@ -190,7 +194,7 @@ private def u64exprDataReads : Witgen.U64Expr F → List DataRead
   | .ite condition thenValue elseValue =>
       bexprDataReads condition ++ u64exprDataReads thenValue ++ u64exprDataReads elseValue
 
-private def bexprDataReads : Witgen.BExpr F → List DataRead
+def bexprDataReads : Witgen.BExpr F → List DataRead
   | .true | .false => []
   | .feq left right | .flt left right => fexprDataReads left ++ fexprDataReads right
   | .neq left right | .lt left right => u64exprDataReads left ++ u64exprDataReads right
@@ -200,22 +204,22 @@ private def bexprDataReads : Witgen.BExpr F → List DataRead
 
 end
 
-private def vexprDataReads : {n : ℕ} → Witgen.VExpr F n → List DataRead
+def vexprDataReads : {n : ℕ} → Witgen.VExpr F n → List DataRead
   | _, .lit values => values.toList.flatMap fexprDataReads
   | _, .mapRange _ body => fexprDataReads body
   | _, .envRange _ => []
   | _, .bitsOf value => fexprDataReads value
   | _, .append left right => vexprDataReads left ++ vexprDataReads right
 
-private def stepDataReads : Witgen.Step F → List DataRead
+def stepDataReads : Witgen.Step F → List DataRead
   | .letF value => fexprDataReads value
   | .letU value => u64exprDataReads value
 
-private def witnessDataReads : {n : ℕ} → Witgen.WitgenIR F n → List DataRead
+def witnessDataReads : {n : ℕ} → Witgen.WitgenIR F n → List DataRead
   | _, .native _ => []
   | _, .ir steps output => steps.flatMap stepDataReads ++ vexprDataReads output
 
-private def validateDataReads (ensemble : Ensemble F PublicIO) (modes : List (Mode F)) :
+def validateDataReads (ensemble : Ensemble F PublicIO) (modes : List (Mode F)) :
     Except LoweringError Unit := do
   for (component, componentIndex) in ensemble.tables.zipIdx do
     for (operation, operationIndex) in component.rowOperations.toFlat.zipIdx do

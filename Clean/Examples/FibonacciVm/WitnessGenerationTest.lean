@@ -1,18 +1,27 @@
-import Clean.Examples.FibonacciVm.Ensemble
-import Clean.Air.Extraction.Lower
-import Clean.Utils.Primes
+module
+
+public import Clean.Examples.FibonacciVm.Ensemble
+public import Clean.Air.Extraction.Lower
+public import Clean.Utils.Primes
+
+-- `native_decide` runs compiled code from these modules.
+public meta import Clean.Examples.FibonacciVm.Ensemble
+public meta import Clean.Air.Extraction.Lower
+public meta import Clean.Utils.Primes
+
+@[expose] public section
 
 namespace Air.Flat.WitnessGenerationTest
 
 open Air.Flat.WitnessGeneration
 
-private def steps : ℕ := 32
+def steps : ℕ := 32
 
-private def publicInput : fieldTriple (F pBabybear) :=
+def publicInput : fieldTriple (F pBabybear) :=
   let state := fibonacci steps
   (steps, state.1, state.2)
 
-private def result : Except String (List ℕ × ℕ × ℕ × Bool × Bool) :=
+def result : Except String (List ℕ × ℕ × ℕ × Bool × Bool) :=
   match FibonacciWitness.generate publicInput 1000 with
   | .error error => .error error
   | .ok witness =>
@@ -33,7 +42,7 @@ distinct addition rows; byte range checks are accumulated in the 256 fixed byte 
 -/
 example : result = .ok ([32, 32, 256], 32, 2, true, true) := by native_decide
 
-private def derivedBytesData : Bool :=
+def derivedBytesData : Bool :=
   match FibonacciWitness.generate publicInput 1000 with
   | .error _ => false
   | .ok witness =>
@@ -45,7 +54,7 @@ private def derivedBytesData : Bool :=
 /-- The byte component exports its complete `(value, multiplicity)` input rows. -/
 example : derivedBytesData = true := by native_decide
 
-private def dynamicComponentData : Bool :=
+def dynamicComponentData : Bool :=
   match FibonacciWitness.generate publicInput 1000 with
   | .error _ => false
   | .ok witness =>
@@ -57,13 +66,13 @@ private def dynamicComponentData : Bool :=
 /-- Demand-generated components expose their complete inputs just like fixed components. -/
 example : dynamicComponentData = true := by native_decide
 
-private def repeatedSteps : ℕ := 400
+def repeatedSteps : ℕ := 400
 
-private def repeatedPublicInput : fieldTriple (F pBabybear) :=
+def repeatedPublicInput : fieldTriple (F pBabybear) :=
   let state := fibonacci repeatedSteps
   (repeatedSteps, state.1, state.2)
 
-private def repeatedResult : Except String (List ℕ × Bool × Bool) :=
+def repeatedResult : Except String (List ℕ × Bool × Bool) :=
   match FibonacciWitness.generate repeatedPublicInput 2000 with
   | .error error => .error error
   | .ok witness => .ok (
@@ -74,9 +83,9 @@ private def repeatedResult : Except String (List ℕ × Bool × Bool) :=
 /-- Repeated addition pulls coalesce after the period of Fibonacci modulo 256. -/
 example : repeatedResult = .ok ([512, 512, 256], true, true) := by native_decide
 
-private def invalidPublicInput : fieldTriple (F pBabybear) := (10, 42, 42)
+def invalidPublicInput : fieldTriple (F pBabybear) := (10, 42, 42)
 
-private def invalidRejected : Bool :=
+def invalidRejected : Bool :=
   match FibonacciWitness.generate invalidPublicInput 20 with
   | .error _ => true
   | .ok _ => false
@@ -84,9 +93,9 @@ private def invalidRejected : Bool :=
 /-- A final state not reached within the configured fuel fails generation. -/
 example : invalidRejected = true := by native_decide
 
-private def noData : ProverData (F pBabybear) := fun _ _ => #[]
+def noData : ProverData (F pBabybear) := fun _ _ => #[]
 
-private def extractedFirstRow : Except String (Array (F pBabybear)) := do
+def extractedFirstRow : Except String (Array (F pBabybear)) := do
   let program ← Air.Flat.Extraction.lower
     (fibonacciEnsemble (p := pBabybear)).ensemble
     (FibonacciWitness.config (p := pBabybear) 1000)

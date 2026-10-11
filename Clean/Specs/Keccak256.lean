@@ -1,4 +1,8 @@
-import Clean.Types.U64
+module
+
+public import Clean.Types.U64
+
+@[expose] public section
 namespace Specs.Keccak256
 
 def roundConstants : Vector UInt64 24 := #v[

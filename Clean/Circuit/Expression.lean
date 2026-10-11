@@ -1,5 +1,9 @@
-import Mathlib.Algebra.Field.Basic
-import Clean.Circuit.SimpGadget
+module
+
+public import Mathlib.Algebra.Field.Basic
+public import Clean.Circuit.SimpGadget
+
+@[expose] public section
 
 variable {F : Type}
 

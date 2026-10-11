@@ -1,4 +1,8 @@
-import Clean.Circuit.Theorems
+module
+
+public import Clean.Circuit.Theorems
+
+@[expose] public section
 
 variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]

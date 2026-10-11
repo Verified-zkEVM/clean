@@ -8,9 +8,13 @@ Goal - use three channels:
 
 Prove e2e soundness and completeness of the table ensemble.
 -/
-import Clean.Air.Vm
-import Clean.Air.WitnessGeneration
-import Clean.Gadgets.Addition8.Theorems
+module
+
+public import Clean.Air.Vm
+public import Clean.Air.WitnessGeneration
+public import Clean.Gadgets.Addition8.Theorems
+
+@[expose] public section
 open ByteUtils (mod256)
 open FieldUtils (mod floorDiv)
 open Gadgets.Addition8 (Theorems.soundness Theorems.completeness_bool Theorems.completeness_add)
@@ -85,7 +89,11 @@ def bytesComponent : Component (F p) where
       simpa [bytesFixedColumns, FixedColumns.width, FixedColumns.row,
         Witgen.RowProgram.ofFExprs, Witgen.RowProgram.eval, Witgen.VExpr.eval,
         Witgen.FExpr.eval, Witgen.evalSteps] using hrow
-    change row[0]?.getD 0 = ByteUtils.fromByte byteIndex
+    have hvalue : (valueFromOffset BytesInput 0 (Environment.fromArray row data)).value =
+        row[0]?.getD 0 := by
+      rw [← eval_varFromOffset_valueFromOffset]
+      simp only [circuit_norm, explicit_provable_type]
+    rw [hvalue]
     have hextractSize : (row.extract 0 1).size = 1 := by simp [hrow']
     have hrowSize : 0 < row.size := by
       rw [Array.size_extract] at hextractSize
@@ -306,12 +314,9 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
     (by simp [circuit_norm, bytesComponent, pushBytes])
   |>.addFinishedChannel BytesChannel.toRaw
   |>.addTable add8Component
-    (by simp +instances [circuit_norm, add8Component, add8])
+    (by unfold add8Component add8; simp +instances [circuit_norm])
     (by simp [circuit_norm, add8Component, add8])
-    (by
-      simp only [SoundEnsemble.addFinishedChannel_tables, SoundEnsemble.addTable_tables,
-        SoundEnsemble.empty_tables, List.map_cons, List.map_nil, List.mem_singleton]
-      simp [add8Component, add8, bytesComponent, pushBytes])
+    (by simp [circuit_norm, add8Component, add8, bytesComponent, pushBytes])
   |>.addFinishedChannel Add8Channel.toRaw
   |>.addVm fibonacciVm
     (by simp +instances [circuit_norm, fibonacciVm, add8Component, add8, bytesComponent, pushBytes,
@@ -319,11 +324,8 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
     (by simp +instances [circuit_norm, fibonacciVm, fib8Component, fib8, fibonacciVerifier])
     (by simp [circuit_norm, fibonacciVm, fib8Component, fib8, fibonacciVerifier,
       Add8Channel, FibonacciChannel])
-    (by
-      simp only [SoundEnsemble.addFinishedChannel_tables, SoundEnsemble.addTable_tables,
-        SoundEnsemble.empty_tables, List.map_append, List.map_cons, List.map_nil]
-      simp [fibonacciVm, fib8Component, fib8, add8Component, add8,
-        bytesComponent, pushBytes])
+    (by simp [circuit_norm, fibonacciVm, fib8Component, fib8, add8Component, add8,
+      bytesComponent, pushBytes])
   |>.toFormal _ (fun _ _ => True)
     (by simp [circuit_norm, fibonacciVm, fib8Component, add8Component, add8,
       bytesComponent, pushBytes, fib8])

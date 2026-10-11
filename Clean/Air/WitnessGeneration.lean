@@ -1,5 +1,9 @@
-import Clean.Air.FlatEnsemble
-import Clean.Circuit.WitnessGeneration
+module
+
+public import Clean.Air.FlatEnsemble
+public import Clean.Circuit.WitnessGeneration
+
+@[expose] public section
 
 /-!
 # Channel-driven ensemble witness generation
@@ -191,21 +195,21 @@ structure GeneratedRow (F : Type) where
 structure GeneratedTable (F : Type) where
   rows : List (GeneratedRow F) := []
 
-private structure PreparedComponent (F : Type) [FiniteField F] where
+structure PreparedComponent (F : Type) [FiniteField F] where
   component : Component F
   inputWidth : ℕ
   width : ℕ
   witgenOps : List (FlatOperation F)
   interactions : List (AbstractInteraction F)
 
-private def witnessOperationsOnly : List (FlatOperation F) → List (FlatOperation F)
+def witnessOperationsOnly : List (FlatOperation F) → List (FlatOperation F)
   | [] => []
   | operation :: operations =>
       match operation with
       | .witness _ _ => operation :: witnessOperationsOnly operations
       | .assert _ | .lookup _ | .interact _ => witnessOperationsOnly operations
 
-private def prepareComponent (component : Component F) : PreparedComponent F :=
+def prepareComponent (component : Component F) : PreparedComponent F :=
   let operations := component.rowOperations
   {
     component
@@ -215,7 +219,7 @@ private def prepareComponent (component : Component F) : PreparedComponent F :=
     interactions := operations.interactions
   }
 
-private def witgenStepWithData (data : ProverData F) (hint : ProverHint F)
+def witgenStepWithData (data : ProverData F) (hint : ProverHint F)
     (acc : Array F) : FlatOperation F → Array F
   | .witness _ code =>
       let environment : ProverEnvironment F := {
@@ -226,12 +230,12 @@ private def witgenStepWithData (data : ProverData F) (hint : ProverHint F)
       acc ++ (code.eval environment).toArray
   | .assert _ | .lookup _ | .interact _ => acc
 
-private def witgenWithData (data : ProverData F) (hint : ProverHint F)
+def witgenWithData (data : ProverData F) (hint : ProverHint F)
     (ops : List (FlatOperation F)) (input : Array F) : Array F :=
   ops.foldl (witgenStepWithData data hint) input
 
 /-- The runtime view of the same complete circuit inputs used by `deriveProverData`. -/
-private def generatedData :
+def generatedData :
     List (PreparedComponent F) → List (GeneratedTable F) → ProverData F
   | prepared, tables => fun name n =>
       match prepared.zip tables |>.find? (fun (component, _) => component.component.circuit.name == name) with
@@ -241,7 +245,7 @@ private def generatedData :
           else #[]
       | none => #[]
 
-private def completeRow (prepared : PreparedComponent F) (input : Array F)
+def completeRow (prepared : PreparedComponent F) (input : Array F)
     (data : ProverData F) (origin : Option (Origin F) := none) : Except String (GeneratedRow F) := do
   unless input.size = prepared.inputWidth do
     throw s!"component input has width {input.size}, expected {prepared.inputWidth}"
@@ -250,14 +254,14 @@ private def completeRow (prepared : PreparedComponent F) (input : Array F)
     throw s!"generated row has width {values.size}, expected {prepared.width}"
   return { input, values, origin }
 
-private def fixedPrefix (component : Component F) (row : ℕ) : Except String (Array F) :=
+def fixedPrefix (component : Component F) (row : ℕ) : Except String (Array F) :=
   match component.fixedColumns with
   | none => .ok #[]
   | some fixed =>
       if row < fixed.height then .ok (fixed.row row)
       else .error s!"fixed component '{component.circuit.name}' has no row {row}"
 
-private def initializeInput (prepared : PreparedComponent F) (mode : PreallocatedMode F)
+def initializeInput (prepared : PreparedComponent F) (mode : PreallocatedMode F)
     (proverInput : Array F) (row : ℕ) : Except String (Array F) := do
   let fixed ← fixedPrefix prepared.component row
   let suffix := (mode.input.eval row proverInput).toArray
@@ -267,7 +271,7 @@ private def initializeInput (prepared : PreparedComponent F) (mode : Preallocate
       {input.size}, expected {prepared.inputWidth}"
   return input
 
-private def initializeTableInputs (proverInput : Array F) :
+def initializeTableInputs (proverInput : Array F) :
     List (PreparedComponent F) → List (Mode F) → Except String (List (GeneratedTable F))
   | [], [] => .ok []
   | prepared :: components, mode :: modes => do
@@ -281,7 +285,7 @@ private def initializeTableInputs (proverInput : Array F) :
       return { rows } :: rest
   | _, _ => .error "generation-mode count does not match ensemble component count"
 
-private def completeInitialTables (data : ProverData F) :
+def completeInitialTables (data : ProverData F) :
     List (PreparedComponent F) → List (GeneratedTable F) →
       Except String (List (GeneratedTable F))
   | [], [] => pure []
@@ -291,13 +295,13 @@ private def completeInitialTables (data : ProverData F) :
       return { rows } :: rest
   | _, _ => .error "generated-table count does not match ensemble component count"
 
-private def rowInteractions (prepared : PreparedComponent F) (row : GeneratedRow F)
+def rowInteractions (prepared : PreparedComponent F) (row : GeneratedRow F)
     (data : ProverData F) :
     List (Interaction F) :=
   let environment := Environment.fromArray row.values data
   prepared.interactions.map (·.eval environment)
 
-private def tableInteractions (data : ProverData F) :
+def tableInteractions (data : ProverData F) :
     List (PreparedComponent F) → List (GeneratedTable F) → Except String (List (Interaction F))
   | [], [] => .ok []
   | prepared :: components, table :: tables => do
@@ -305,7 +309,7 @@ private def tableInteractions (data : ProverData F) :
       return table.rows.flatMap (rowInteractions prepared · data) ++ rest
   | _, _ => .error "generated-table count does not match ensemble component count"
 
-private def allInteractions (ensemble : Ensemble F PublicIO) (publicInput : PublicIO F)
+def allInteractions (ensemble : Ensemble F PublicIO) (publicInput : PublicIO F)
     (prepared : List (PreparedComponent F)) (tables : List (GeneratedTable F))
     (data : ProverData F) :
     Except String (List (Interaction F)) := do
@@ -313,10 +317,10 @@ private def allInteractions (ensemble : Ensemble F PublicIO) (publicInput : Publ
     (.fromInput publicInput data)
   return verifier ++ (← tableInteractions data prepared tables)
 
-private def handlerDirection (interaction : AbstractInteraction F) : Direction :=
+def handlerDirection (interaction : AbstractInteraction F) : Direction :=
   if interaction.assumeGuarantees then .push else .pull
 
-private def PreallocatedHandler.handles (prepared : PreparedComponent F)
+def PreallocatedHandler.handles (prepared : PreparedComponent F)
     (handler : PreallocatedHandler) (demand : Demand F) : Bool :=
   match prepared.interactions[handler.interaction]? with
   | none => false
@@ -324,18 +328,18 @@ private def PreallocatedHandler.handles (prepared : PreparedComponent F)
       interaction.channel.name == demand.channel &&
         handlerDirection interaction == demand.direction
 
-private def Mode.handles (prepared : PreparedComponent F) (mode : Mode F)
+def Mode.handles (prepared : PreparedComponent F) (mode : Mode F)
     (demand : Demand F) : Bool :=
   match mode with
   | .demand mode => mode.channel == demand.channel && mode.direction == demand.direction
   | .preallocated mode => mode.handlers.any fun handler => handler.handles prepared demand
 
-private def handlerIndices (prepared : List (PreparedComponent F)) (modes : List (Mode F))
+def handlerIndices (prepared : List (PreparedComponent F)) (modes : List (Mode F))
     (demand : Demand F) : List ℕ :=
   (prepared.zip modes).zipIdx.filterMap fun ((component, mode), index) =>
     if mode.handles component demand then some index else none
 
-private def findAction (prepared : List (PreparedComponent F)) (modes : List (Mode F)) :
+def findAction (prepared : List (PreparedComponent F)) (modes : List (Mode F)) :
     List (Demand F) → Except String (Option (Demand F × ℕ))
   | [] => .ok none
   | demand :: demands =>
@@ -344,18 +348,18 @@ private def findAction (prepared : List (PreparedComponent F)) (modes : List (Mo
       | [index] => .ok (some (demand, index))
       | _ => .error s!"multiple generation handlers match channel '{demand.channel}'"
 
-private def sameOrigin (origin : Origin F) (mode : DemandMode F) (demand : Demand F) : Bool :=
+def sameOrigin (origin : Origin F) (mode : DemandMode F) (demand : Demand F) : Bool :=
   origin.channel == mode.channel && origin.direction == mode.direction &&
     origin.message == demand.message
 
-private def findOriginIndex (rows : List (GeneratedRow F)) (mode : DemandMode F)
+def findOriginIndex (rows : List (GeneratedRow F)) (mode : DemandMode F)
     (demand : Demand F) : Option ℕ :=
   rows.zipIdx.findSome? fun (row, index) =>
     match row.origin with
     | some origin => if sameOrigin origin mode demand then some index else none
     | none => none
 
-private def createDemandRow (prepared : PreparedComponent F) (mode : DemandMode F)
+def createDemandRow (prepared : PreparedComponent F) (mode : DemandMode F)
     (demand : Demand F) (multiplicity : ℕ) (data : ProverData F) :
     Except String (GeneratedRow F) := do
   let origin : Origin F := {
@@ -366,12 +370,12 @@ private def createDemandRow (prepared : PreparedComponent F) (mode : DemandMode 
   }
   completeRow prepared (← mode.input.eval demand.message multiplicity) data (some origin)
 
-private structure TableMutation (F : Type) where
+structure TableMutation (F : Type) where
   table : GeneratedTable F
   removedRows : List (GeneratedRow F) := []
   addedRows : List (GeneratedRow F) := []
 
-private def handleDemand (prepared : PreparedComponent F) (mode : DemandMode F)
+def handleDemand (prepared : PreparedComponent F) (mode : DemandMode F)
     (demand : Demand F) (table : GeneratedTable F) (data : ProverData F) :
     Except String (TableMutation F) := do
   match mode.aggregation with
@@ -396,12 +400,12 @@ private def handleDemand (prepared : PreparedComponent F) (mode : DemandMode F)
             addedRows := [updated]
           }
 
-private structure PreallocatedMatch (F : Type) where
+structure PreallocatedMatch (F : Type) where
   handler : PreallocatedHandler
   rowIndex : ℕ
   row : GeneratedRow F
 
-private def findPreallocatedMatch (prepared : PreparedComponent F)
+def findPreallocatedMatch (prepared : PreparedComponent F)
     (handlers : List PreallocatedHandler) (demand : Demand F) (table : GeneratedTable F)
     (data : ProverData F) : Except String (PreallocatedMatch F) :=
   let candidates := handlers.flatMap fun handler =>
@@ -418,7 +422,7 @@ private def findPreallocatedMatch (prepared : PreparedComponent F)
   | [] => .error s!"preallocated handler has no row for channel '{demand.channel}' message"
   | _ => .error s!"preallocated handler has multiple rows for channel '{demand.channel}' message"
 
-private def handlePreallocated (prepared : PreparedComponent F)
+def handlePreallocated (prepared : PreparedComponent F)
     (handlers : List PreallocatedHandler) (demand : Demand F) (table : GeneratedTable F)
     (data : ProverData F) : Except String (TableMutation F) := do
   let found ← findPreallocatedMatch prepared handlers demand table data
@@ -436,12 +440,12 @@ private def handlePreallocated (prepared : PreparedComponent F)
     addedRows := [updated]
   }
 
-private structure Mutation (F : Type) where
+structure Mutation (F : Type) where
   tables : List (GeneratedTable F)
   removed : List (Interaction F)
   added : List (Interaction F)
 
-private def handle (prepared : List (PreparedComponent F)) (config : Config F ProverInput)
+def handle (prepared : List (PreparedComponent F)) (config : Config F ProverInput)
     (tables : List (GeneratedTable F)) (demand : Demand F) (index : ℕ)
     (data : ProverData F) :
     Except String (Mutation F) := do
@@ -460,7 +464,7 @@ private def handle (prepared : List (PreparedComponent F)) (config : Config F Pr
     added := tableMutation.addedRows.flatMap (rowInteractions component · data)
   }
 
-private def generateLoop (ensemble : Ensemble F PublicIO) (config : Config F ProverInput)
+def generateLoop (ensemble : Ensemble F PublicIO) (config : Config F ProverInput)
     (prepared : List (PreparedComponent F)) (publicInput : PublicIO F) (data : ProverData F) :
     ℕ → List (GeneratedTable F) → List (Demand F) →
     Except String (List (GeneratedTable F))
@@ -477,22 +481,22 @@ private def generateLoop (ensemble : Ensemble F PublicIO) (config : Config F Pro
             (Demand.removeInteractions demands mutation.removed) mutation.added
           generateLoop ensemble config prepared publicInput data fuel mutation.tables demands
 
-private def nextPowerOfTwoAux (target : ℕ) : ℕ → ℕ → ℕ
+def nextPowerOfTwoAux (target : ℕ) : ℕ → ℕ → ℕ
   | 0, power => power
   | fuel + 1, power =>
       if target ≤ power then power else nextPowerOfTwoAux target fuel (power * 2)
 
-private def nextPowerOfTwo (value : ℕ) : ℕ :=
+def nextPowerOfTwo (value : ℕ) : ℕ :=
   nextPowerOfTwoAux (max value 1) value 1
 
 def Padding.targetHeight (padding : Padding F) (rowCount : ℕ) : ℕ :=
   nextPowerOfTwo (max rowCount padding.minimumRows)
 
-private structure PaddingMutation (F : Type) where
+structure PaddingMutation (F : Type) where
   tables : List (GeneratedTable F)
   added : List (Interaction F)
 
-private def padTables (data : ProverData F) :
+def padTables (data : ProverData F) :
     List (PreparedComponent F) → List (Padding F) → List (GeneratedTable F) →
       Except String (PaddingMutation F)
   | [], [], [] => .ok { tables := [], added := [] }
@@ -507,14 +511,14 @@ private def padTables (data : ProverData F) :
       }
   | _, _, _ => .error "padding count does not match ensemble component count"
 
-private def tablesArePadded : List (GeneratedTable F) → List (Padding F) → Bool
+def tablesArePadded : List (GeneratedTable F) → List (Padding F) → Bool
   | [], [] => true
   | table :: tables, padding :: paddings =>
       table.rows.length == padding.targetHeight table.rows.length &&
         tablesArePadded tables paddings
   | _, _ => false
 
-private def validateModes :
+def validateModes :
     List (PreparedComponent F) → List (Mode F) → List (Padding F) → Except String Unit
   | [], [], [] => pure ()
   | prepared :: components, mode :: modes, padding :: paddings => do
@@ -545,7 +549,7 @@ private def validateModes :
       validateModes components modes paddings
   | _, _, _ => .error "generation metadata does not match ensemble component count"
 
-private def padAndBalance (ensemble : Ensemble F PublicIO) (config : Config F ProverInput)
+def padAndBalance (ensemble : Ensemble F PublicIO) (config : Config F ProverInput)
     (prepared : List (PreparedComponent F)) (publicInput : PublicIO F) (data : ProverData F) :
     ℕ → List (GeneratedTable F) → Except String (List (GeneratedTable F))
   | 0, _ => .error "ensemble padding exhausted its fuel"
@@ -556,17 +560,17 @@ private def padAndBalance (ensemble : Ensemble F PublicIO) (config : Config F Pr
       if tablesArePadded tables config.padding then return tables
       padAndBalance ensemble config prepared publicInput data fuel tables
 
-private structure AssembledTables (components : List (Component F)) where
+structure AssembledTables (components : List (Component F)) where
   tables : List (Table F)
   same_length : components.length = tables.length
   same_circuits : ∀ index (hindex : index < components.length),
     components[index] = tables[index].component
 
-private structure MatchedFixedRows (component : Component F) (rows : List (Array F)) where
+structure MatchedFixedRows (component : Component F) (rows : List (Array F)) where
   marker : Unit := ()
   property : component.fixedRowsMatch rows
 
-private def validateFixedRows (component : Component F) (rows : List (Array F)) :
+def validateFixedRows (component : Component F) (rows : List (Array F)) :
     Except String (MatchedFixedRows component rows) :=
   match hcolumns : component.fixedColumns with
   | none => .ok ⟨(), by simp [Component.fixedRowsMatch, hcolumns]⟩
@@ -576,7 +580,7 @@ private def validateFixedRows (component : Component F) (rows : List (Array F)) 
       else
         .error "generated table does not match its fixed columns"
 
-private def assembleTables :
+def assembleTables :
     (components : List (Component F)) → List (GeneratedTable F) →
       Except String (AssembledTables components)
   | [], [] => .ok {

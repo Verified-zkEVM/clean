@@ -1,6 +1,10 @@
-import Clean.Air.Extraction.Rust
-import Clean.Examples.FibonacciVm.Ensemble
-import Clean.Utils.Primes
+module
+
+public import Clean.Air.Extraction.Rust
+public import Clean.Examples.FibonacciVm.Ensemble
+public import Clean.Utils.Primes
+
+@[expose] public section
 
 def main : IO Unit := do
   match Air.Flat.Extraction.Rust.ensembleToRust

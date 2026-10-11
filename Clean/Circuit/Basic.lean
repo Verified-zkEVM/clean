@@ -1,5 +1,15 @@
-import Clean.Circuit.Operations
-import Mathlib.Control.Monad.Writer
+module
+
+public import Clean.Circuit.Operations
+public import Mathlib.Control.Monad.Writer
+
+-- `attribute [circuit_norm]` below registers core simprocs, which are `meta` declarations.
+public meta import Lean.Meta.Tactic.Simp.BuiltinSimprocs.Fin
+public meta import Lean.Meta.Tactic.Simp.BuiltinSimprocs.Nat
+public meta import Lean.Meta.Tactic.Simp.BuiltinSimprocs.Core
+public meta import Lean.Meta.Tactic.Simp.BuiltinSimprocs.String
+
+@[expose] public section
 
 variable {F : Type} [FiniteField F] {α β : Type} {n : ℕ}
 
@@ -582,17 +592,16 @@ because they would sometimes be applied too eagerly where using the correspondin
 
 -- simplify Vector.mapFinRange
 attribute [circuit_norm]
-    Nat.cast_zero Nat.cast_one Nat.cast_ofNat Fin.coe_eq_castSucc Fin.reduceCastSucc
+    Nat.cast_zero Nat.cast_one Nat.cast_ofNat Fin.coe_eq_castSucc
 
 -- simplify stuff like (3 : Fin 8).val = 3 % 8
 attribute [circuit_norm] Fin.coe_ofNat_eq_mod
 
 -- simplify `vector[i]` (which occurs in ProvableType definitions) and similar
-attribute [circuit_norm] Fin.val_eq_zero Fin.cast_eq_self Fin.coe_cast Fin.isValue
+attribute [circuit_norm] Fin.val_eq_zero Fin.cast_eq_self Fin.coe_cast
 
 -- simplify constraint expressions and +0 indices
 attribute [circuit_norm] neg_mul one_mul add_zero zero_add neg_zero neg_eq_zero one_ne_zero zero_ne_one
-  Nat.reduceAdd
 
 attribute [circuit_norm] List.append_nil
 
@@ -612,4 +621,18 @@ lemma List.ofFn_nil_flatten {α : Type} {m : ℕ} :
     (List.ofFn fun _ : Fin m => ([] : List α)).flatten = [] := by
   simp
 
-attribute [circuit_norm] forall_eq reduceIte String.reduceEq decide_false
+attribute [circuit_norm] forall_eq decide_false
+
+/- Core builtin simprocs that `circuit_norm` needs. `attribute [circuit_norm] Fin.reduceCastSucc`
+would be the direct spelling, but a simp set may only be given a declaration marked `meta`, and
+core's `builtin_(d)simproc`s are declared in a plain `public section`. Re-exporting each one as a
+local `meta` simproc with the same pattern is equivalent and is the only spelling the module
+system accepts. -/
+public meta section
+dsimproc [circuit_norm] finReduceCastSucc (Fin.castSucc _) := Fin.reduceCastSucc
+dsimproc [circuit_norm] finIsValue ((OfNat.ofNat _ : Fin _)) := Fin.isValue
+dsimproc [circuit_norm] natReduceAdd ((_ + _ : ℕ)) := Nat.reduceAdd
+simproc ↓ [circuit_norm] iteReduce (ite _ _ _) := reduceIte
+simproc [circuit_norm] stringReduceEq ((_ : String) = _) := String.reduceEq
+end
+

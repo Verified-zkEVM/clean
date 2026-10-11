@@ -1,4 +1,8 @@
-import Clean.Air.WitnessGeneration
+module
+
+public import Clean.Air.WitnessGeneration
+
+@[expose] public section
 
 /-!
 # Typed AIR extraction program
@@ -24,7 +28,7 @@ inductive LocalSort where
   | u64
 deriving Repr, DecidableEq, BEq
 
-private def localHasSort (locals : List LocalSort) (index : ℕ) (sort : LocalSort) : Bool :=
+def localHasSort (locals : List LocalSort) (index : ℕ) (sort : LocalSort) : Bool :=
   locals[index]? == some sort
 
 mutual
@@ -141,7 +145,7 @@ structure ComponentProgram (F : Type) [FiniteField F] where
 
 namespace ComponentProgram
 
-private def evalWitnesses (data : ProverData F) (hint : ProverHint F) :
+def evalWitnesses (data : ProverData F) (hint : ProverHint F) :
     List (WitnessBlock F) → Array F → Array F
   | [], row => row
   | block :: blocks, row =>

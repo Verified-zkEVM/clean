@@ -1,7 +1,11 @@
-import Clean.Circuit
-import Clean.Utils.Bits
-import Clean.Circomlib.Bitify
-import Clean.Circomlib.CompConstantLemmas
+module
+
+public import Clean.Circuit
+public import Clean.Utils.Bits
+public import Clean.Circomlib.Bitify
+public import Clean.Circomlib.CompConstantLemmas
+
+@[expose] public section
 
 /-
 Original source code:

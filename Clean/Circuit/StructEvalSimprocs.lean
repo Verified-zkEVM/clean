@@ -1,4 +1,6 @@
-import Clean.Circuit.Provable
+module
+
+public meta import Clean.Circuit.Provable
 
 /-!
 # Simprocs for `ProvableStruct` evaluation
@@ -20,13 +22,33 @@ definitions and relying on the matcher eta-expanding opaque structure variables 
 un-keyable stuck terms `fromComponents (eval.go … (match x with …))`. These simprocs
 produce the same normal form by meta-level rewriting: they recognize constructor literals
 and structure projections syntactically — something rewrite lemmas cannot do generically —
-and validate the rewrite by definitional equality (structure eta *is* still part of
-definitional equality, only matcher reduction lost it).
+and construct equality proofs using exported component-evaluation lemmas. This avoids
+requiring consumers to import the private implementations of core array operations.
 -/
+
+public meta section
 
 open Lean Meta Simp
 
 namespace ProvableStruct
+
+/-- Prove a component-preserving evaluation rewrite using the exported evaluation
+lemmas. Keep this simp set independent of `circuit_norm`: row-level user lemmas must
+only run after the simproc has returned its result. -/
+private def proveEvalEq (lhs rhs : Expr) : MetaM (Option Expr) := do
+  let mut thms : SimpTheorems := {}
+  thms ← thms.addConst ``ProvableStruct.eval_eq_eval
+  thms ← thms.addConst ``ProvableType.eval_field
+  for name in [``ProvableStruct.eval, ``ProvableStruct.eval.go,
+      ``ProvableStruct.components, ``ProvableStruct.toComponents,
+      ``ProvableStruct.fromComponents] do
+    thms ← thms.addDeclToUnfold name
+  let ctx ← Simp.mkContext (simpTheorems := #[thms])
+  let (lhsResult, _) ← Meta.simp lhs ctx #[]
+  let (rhsResult, _) ← Meta.simp rhs ctx #[]
+  unless ← withDefault <| isDefEq lhsResult.expr rhsResult.expr do
+    return none
+  return some (← mkEqTrans (← lhsResult.getProof) (← mkEqSymm (← rhsResult.getProof)))
 
 /-- View an expression as a structure projection `base.field`, returning the base and a
 function that rebuilds the same projection on a new base. Handles both `.proj` nodes and
@@ -55,8 +77,8 @@ ProvableStruct.eval env d.mode1 ~~>  (ProvableStruct.eval env d).mode1
 
 This restores the row-level shape so that row-level hypotheses (`h_input` equations) and
 per-struct lemmas can fire. A simproc rather than a lemma because lemmas cannot quantify
-over an arbitrary structure projection. The rewrite is validated by definitional equality
-at default transparency (structure eta), so it cannot produce wrong results.
+over an arbitrary structure projection. The proof uses the same component-evaluation
+lemmas as literal decomposition, keeping the public row-level expression folded.
 -/
 private def evalProjectionLiftCore (evalHead : Name) (e : Expr) : SimpM Simp.Step := do
   let args := e.getAppArgs
@@ -94,14 +116,11 @@ private def evalProjectionLiftCore (evalHead : Name) (e : Expr) : SimpM Simp.Ste
       unless rhs0.isAppOfArity ``GetElem.getElem 8 do return .continue
       let evalBase ← withDefault <| mkAppM ``ProvableStruct.eval #[env, base]
       let projEval ← mkRhs evalBase
-      -- the swap is a pure spelling change: validate that the row-level projection is
-      -- definitionally the evaluation of the projected field (the lemma's own equality
-      -- is propositional and needs no validation)
-      unless ← withTransparency .all <| isDefEq projEval rhs0.getAppArgs[5]! do
-        trace[Meta.Tactic.simp.rewrite] "getElem lift: defeq failed {projEval} vs {rhs0.getAppArgs[5]!}"
-        return .continue
+      -- Compose the indexing lemma with a proof that evaluating the field is the
+      -- corresponding projection of the evaluated row.
       let rhs := mkAppN rhs0.getAppFn (rhs0.getAppArgs.set! 5 projEval)
-      return .visit { expr := rhs, proof? := some proof }
+      let some projectionProof ← proveEvalEq rhs0 rhs | return .continue
+      return .visit { expr := rhs, proof? := some (← mkEqTrans proof projectionProof) }
     catch _ => return .continue
   let some (base, mkRhs) ← projectionView? projected | return .continue
   -- only lift projections out of `ProvableStruct` bases (`mkAppM` synthesizes the
@@ -112,10 +131,8 @@ private def evalProjectionLiftCore (evalHead : Name) (e : Expr) : SimpM Simp.Ste
     catch _ =>
       return .continue
   let rhs ← mkRhs evalBase
-  -- definitional-equality validation at `.all` (see the literal simproc)
-  unless ← withTransparency .all <| isDefEq rhs e do
-    return .continue
-  return .done { expr := rhs, proof? := none }
+  let some proof ← proveEvalEq e rhs | return .continue
+  return .done { expr := rhs, proof? := some proof }
 
 /-- `evalProjectionLiftCore` registered on scalar evaluation. -/
 def structEvalProjectionExprProc : Simproc :=
@@ -176,13 +193,8 @@ def structEvalLiteralProc : Simproc := fun e => do
     -- `ProvableType`-derived `CircuitType` instance; `mkAppOptM`'s default elaboration
     -- transparency does not resolve that, silently discarding the rewrite
     let rhs ← withTransparency .default <| mkAppOptM fn newArgs
-    -- validate at `.all` (like the witgen struct-literal simproc): the reduction goes
-    -- through instance and class-projection unfoldings that default transparency no
-    -- longer performs; the kernel re-checks the resulting rfl-step unrestricted
-    unless ← withTransparency .all <| isDefEq e rhs do
-      trace[Meta.Tactic.simp.rewrite] "structEvalLiteral: defeq validation failed {e} vs {rhs}"
-      return .continue
-    return .visit { expr := rhs, proof? := none }
+    let some proof ← proveEvalEq e rhs | return .continue
+    return .visit { expr := rhs, proof? := some proof }
   catch _ => return .continue
 
 /-- Gate for `structEqSplit`: the equality's type is a provable struct (its `TypeMap` has

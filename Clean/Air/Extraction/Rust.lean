@@ -1,4 +1,8 @@
-import Clean.Air.Extraction.Lower
+module
+
+public import Clean.Air.Extraction.Lower
+
+@[expose] public section
 
 /-!
 # Rust rendering for typed AIR extraction programs
@@ -17,24 +21,24 @@ variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
 variable {ProverInput : TypeMap} [ProvableType ProverInput]
 
-private def field (value : F) : String :=
+def field (value : F) : String :=
   s!"F::from_u64({FiniteField.val value}u64)"
 
-private def quoted (value : String) : String := reprStr value
+def quoted (value : String) : String := reprStr value
 
-private def commaSep (values : List String) : String :=
+def commaSep (values : List String) : String :=
   String.intercalate ", " values
 
-private def constantValues? : List (Witgen.FExpr F) → Option (List F)
+def constantValues? : List (Witgen.FExpr F) → Option (List F)
   | [] => some []
   | .const value :: values => return value :: (← constantValues? values)
   | _ => none
 
-private def constantLookupToRust (index : String) (values : List F) : String :=
+def constantLookupToRust (index : String) (values : List F) : String :=
   let cases := values.zipIdx.map fun (value, i) => s!"{i} => {field value}"
   s!"match ({index}) as usize \{ {commaSep cases}, _ => F::ZERO }"
 
-private def exprToRust (row : String) : Expression F → String
+def exprToRust (row : String) : Expression F → String
   | .var cell => s!"{row}.get({cell.index}).copied().unwrap_or(F::ZERO)"
   | .const value => field value
   | .add left right => s!"({exprToRust row left} + {exprToRust row right})"
@@ -42,7 +46,7 @@ private def exprToRust (row : String) : Expression F → String
 
 mutual
 
-private def fexprToRust (locals : Array LocalSort) (row idx : String) :
+def fexprToRust (locals : Array LocalSort) (row idx : String) :
     Witgen.FExpr F → Except String String
   | .expr expression => pure (exprToRust row expression)
   | .const value => pure (field value)
@@ -76,14 +80,14 @@ private def fexprToRust (locals : Array LocalSort) (row idx : String) :
       return s!"_data.get({quoted key}, {width}, ({← u64exprToRust locals row idx dataRow}) as usize, {column.val})"
   | .hintGet .. => throw "external prover hints cannot be rendered for Rust yet"
 
-private def fexprListToRust (locals : Array LocalSort) (row idx : String) :
+def fexprListToRust (locals : Array LocalSort) (row idx : String) :
     List (Witgen.FExpr F) → Except String (List String)
   | [] => pure []
   | value :: values =>
       return (← fexprToRust locals row idx value) ::
         (← fexprListToRust locals row idx values)
 
-private def u64exprToRust (locals : Array LocalSort) (row idx : String) :
+def u64exprToRust (locals : Array LocalSort) (row idx : String) :
     Witgen.U64Expr F → Except String String
   | .const value => pure s!"{value.toNat}u64"
   | .val value => return s!"({← fexprToRust locals row idx value}).canonical_u64()"
@@ -104,7 +108,7 @@ private def u64exprToRust (locals : Array LocalSort) (row idx : String) :
   | .ite condition thenValue elseValue =>
       return s!"if {← bexprToRust locals row idx condition} \{ {← u64exprToRust locals row idx thenValue} } else \{ {← u64exprToRust locals row idx elseValue} }"
 
-private def bexprToRust (locals : Array LocalSort) (row idx : String) :
+def bexprToRust (locals : Array LocalSort) (row idx : String) :
     Witgen.BExpr F → Except String String
   | .true => pure "true"
   | .false => pure "false"
@@ -122,11 +126,11 @@ private def bexprToRust (locals : Array LocalSort) (row idx : String) :
 
 end
 
-private def stepSort : Witgen.Step F → LocalSort
+def stepSort : Witgen.Step F → LocalSort
   | .letF _ => .field
   | .letU _ => .u64
 
-private def stepsToRust (steps : List (Witgen.Step F)) (row idx : String) : Except String String := do
+def stepsToRust (steps : List (Witgen.Step F)) (row idx : String) : Except String String := do
   let locals := steps.map stepSort |>.toArray
   let lines ← steps.zipIdx.mapM fun (step, index) =>
     match step with
@@ -134,7 +138,7 @@ private def stepsToRust (steps : List (Witgen.Step F)) (row idx : String) : Exce
     | .letU value => return s!"        let local_{index}: u64 = {← u64exprToRust locals row idx value};"
   return String.intercalate "\n" lines
 
-private def vexprPushRust (locals : Array LocalSort) (row output idx : String) :
+def vexprPushRust (locals : Array LocalSort) (row output idx : String) :
     {n : ℕ} → Witgen.VExpr F n → Except String String
   | _, .lit values => do
       let lines ← values.toList.mapM fun value =>
@@ -151,27 +155,27 @@ private def vexprPushRust (locals : Array LocalSort) (row output idx : String) :
   | _, .append left right =>
       return s!"{← vexprPushRust locals row output idx left}\n{← vexprPushRust locals row output idx right}"
 
-private def witnessBlockToRust (block : WitnessBlock F) (row : String) : Except String String := do
+def witnessBlockToRust (block : WitnessBlock F) (row : String) : Except String String := do
   let locals := block.steps.map stepSort |>.toArray
   let stepCode ← stepsToRust block.steps row "0u64"
   let outputCode ← vexprPushRust locals row "output" "0u64" block.output
   return s!"{stepCode}\n        let mut output = Vec::with_capacity({block.outputWidth});\n{outputCode}\n        debug_assert_eq!(output.len(), {block.outputWidth});\n        {row}.extend(output);"
 
-private def rowProgramToRust (program : Witgen.RowProgram F) (rowIndex : String) :
+def rowProgramToRust (program : Witgen.RowProgram F) (rowIndex : String) :
     Except String String := do
   let locals := program.steps.map stepSort |>.toArray
   let stepCode ← stepsToRust program.steps "&[]" rowIndex
   let outputCode ← vexprPushRust locals "&[]" "output" rowIndex program.output
   return s!"{stepCode}\n        let mut output = Vec::with_capacity({program.width});\n{outputCode}\n        debug_assert_eq!(output.len(), {program.width});"
 
-private def fixedProgramToRust (program : WitnessBlock F) (rowIndex : String) :
+def fixedProgramToRust (program : WitnessBlock F) (rowIndex : String) :
     Except String String := do
   let locals := program.steps.map stepSort |>.toArray
   let stepCode ← stepsToRust program.steps "&[]" rowIndex
   let outputCode ← vexprPushRust locals "&[]" "output" rowIndex program.output
   return s!"{stepCode}\n        let mut output = Vec::with_capacity({program.outputWidth});\n{outputCode}\n        debug_assert_eq!(output.len(), {program.outputWidth});"
 
-private def fixedRowFunctionToRust (index : ℕ) (component : ComponentProgram F) :
+def fixedRowFunctionToRust (index : ℕ) (component : ComponentProgram F) :
     Except String (Option String) :=
   match component.fixedColumns with
   | none => pure none
@@ -183,19 +187,19 @@ private def fixedRowFunctionToRust (index : ℕ) (component : ComponentProgram F
     output
 }"
 
-private def witnessBlocksToRust (blocks : List (WitnessBlock F)) : Except String String := do
+def witnessBlocksToRust (blocks : List (WitnessBlock F)) : Except String String := do
   let rendered ← blocks.mapM fun block =>
     return s!"    \{\n{← witnessBlockToRust block "row"}\n    }"
   return String.intercalate "\n" rendered
 
-private def interactionToRust (row : String) (interaction : AbstractInteraction F) : String :=
+def interactionToRust (row : String) (interaction : AbstractInteraction F) : String :=
   let message := interaction.msg.toList.map (exprToRust row)
   s!"Interaction \{ channel: {quoted interaction.channel.name}, multiplicity: {exprToRust row interaction.mult}, message: vec![{commaSep message}], assume_guarantees: {interaction.assumeGuarantees} }"
 
-private def interactionsToRust (row : String) (interactions : List (AbstractInteraction F)) : String :=
+def interactionsToRust (row : String) (interactions : List (AbstractInteraction F)) : String :=
   s!"vec![{commaSep (interactions.map (interactionToRust row))}]"
 
-private def airExprToRust (fixedWidth : ℕ) (fixed main : String) : Expression F → String
+def airExprToRust (fixedWidth : ℕ) (fixed main : String) : Expression F → String
   | .var cell =>
       if cell.index < fixedWidth then
         s!"Into::<AB::Expr>::into({fixed}[{cell.index}].clone())"
@@ -208,7 +212,7 @@ private def airExprToRust (fixedWidth : ℕ) (fixed main : String) : Expression 
   | .mul left right =>
       s!"({airExprToRust fixedWidth fixed main left} * {airExprToRust fixedWidth fixed main right})"
 
-private def symbolicExprToRust (fixedWidth : ℕ) (fixed main : String) : Expression F → String
+def symbolicExprToRust (fixedWidth : ℕ) (fixed main : String) : Expression F → String
   | .var cell =>
       if cell.index < fixedWidth then
         s!"SymbolicExpression::<F>::from({fixed}[{cell.index}])"
@@ -221,18 +225,18 @@ private def symbolicExprToRust (fixedWidth : ℕ) (fixed main : String) : Expres
   | .mul left right =>
       s!"({symbolicExprToRust fixedWidth fixed main left} * {symbolicExprToRust fixedWidth fixed main right})"
 
-private def componentFixedWidth (component : ComponentProgram F) : ℕ :=
+def componentFixedWidth (component : ComponentProgram F) : ℕ :=
   component.fixedColumns.map (·.width) |>.getD 0
 
-private def componentCommittedWidth (component : ComponentProgram F) : ℕ :=
+def componentCommittedWidth (component : ComponentProgram F) : ℕ :=
   component.width - componentFixedWidth component
 
-private def constraintCaseToRust (index : ℕ) (component : ComponentProgram F) : String :=
+def constraintCaseToRust (index : ℕ) (component : ComponentProgram F) : String :=
   let constraints := component.constraints.map
     (airExprToRust (componentFixedWidth component) "fixed" "local")
   s!"            {index} => vec![{commaSep constraints}],"
 
-private def lookupToRust (fixedWidth : ℕ) (fixed main : String)
+def lookupToRust (fixedWidth : ℕ) (fixed main : String)
     (interaction : AbstractInteraction F) : String :=
   let message := commaSep <| interaction.msg.toList.map
     (symbolicExprToRust fixedWidth fixed main)
@@ -243,13 +247,13 @@ private def lookupToRust (fixedWidth : ℕ) (fixed main : String)
     (multiplicity, "LookupDirection::Send")
   s!"                lookups.push(GeneratedLookup \{ channel: {quoted interaction.channel.name}.into(), message: vec![{message}], multiplicity: {multiplicity}, direction: {direction} });"
 
-private def lookupCaseToRust (index fixedWidth : ℕ) (fixed main : String)
+def lookupCaseToRust (index fixedWidth : ℕ) (fixed main : String)
     (interactions : List (AbstractInteraction F)) : String :=
   let lookups := String.intercalate "\n" <|
     interactions.map (lookupToRust fixedWidth fixed main)
   s!"            {index} => \{\n{lookups}\n            }"
 
-private def fixedColumnsToRust (index : ℕ) (component : ComponentProgram F) : Except String String :=
+def fixedColumnsToRust (index : ℕ) (component : ComponentProgram F) : Except String String :=
   match component.fixedColumns with
   | none => pure "None"
   | some fixed =>
@@ -261,7 +265,7 @@ private def fixedColumnsToRust (index : ℕ) (component : ComponentProgram F) : 
         RowMajorMatrix::new(values, {fixed.width})
     })"
 
-private def airToRust (name : String) (program : Program F) : Except String String := do
+def airToRust (name : String) (program : Program F) : Except String String := do
   let widths := program.components.map (toString ∘ componentCommittedWidth)
   let fixedWidths := program.components.map (toString ∘ componentFixedWidth)
   let fixedHeights := program.components.map fun component =>
@@ -325,29 +329,29 @@ impl GeneratedAirSpec for {name}AirSpec \{\n\
 \n\
 pub type {name}Statement<F> = GeneratedEnsemble<F, {name}AirSpec>;"
 
-private def componentToRust (index : ℕ) (component : ComponentProgram F) : Except String String := do
+def componentToRust (index : ℕ) (component : ComponentProgram F) : Except String String := do
   let witgen ← witnessBlocksToRust component.witnesses
   let mutable := if component.witnesses.isEmpty then "" else "mut "
   let interactions := interactionsToRust "row" component.interactions
   return s!"fn component_{index}<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<Vec<F>, String> \{\n    if input.len() != {component.inputWidth} \{ return Err(format!(\"component input has width \{}, expected {component.inputWidth}\", input.len())); }\n    let _prover_input: &[F] = &[];\n    let {mutable}row = input.to_vec();\n{witgen}\n    if row.len() != {component.width} \{ return Err(format!(\"generated row has width \{}, expected {component.width}\", row.len())); }\n    Ok(row)\n}\n\nfn component_{index}_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> \{\n    {interactions}\n}"
 
-private def inputCellToRust : InputCell F → String
+def inputCellToRust : InputCell F → String
   | .message index => s!"InputCell::Message({index})"
   | .multiplicity => "InputCell::Multiplicity"
   | .const value => s!"InputCell::Constant({field value})"
 
-private def directionToRust : Direction → String
+def directionToRust : Direction → String
   | .pull => "Direction::Pull"
   | .push => "Direction::Push"
 
-private def aggregationToRust : Aggregation → String
+def aggregationToRust : Aggregation → String
   | .perOccurrence => "Aggregation::PerOccurrence"
   | .byMessage => "Aggregation::ByMessage"
 
-private def rowToRust (row : Array F) : String :=
+def rowToRust (row : Array F) : String :=
   s!"vec![{commaSep (row.toList.map field)}]"
 
-private def preallocatedHandlerToRust (component : ComponentProgram F)
+def preallocatedHandlerToRust (component : ComponentProgram F)
     (handler : PreallocatedHandler) : Except String String := do
   let some interaction := component.interactions[handler.interaction]?
     | throw s!"preallocated handler interaction {handler.interaction} is out of bounds"
@@ -355,7 +359,7 @@ private def preallocatedHandlerToRust (component : ComponentProgram F)
   return s!"PreallocatedHandler \{ channel: {quoted interaction.channel.name}, direction: \
     {directionToRust direction}, interaction: {handler.interaction}, column: {handler.column} }"
 
-private def modeToRust (component : ComponentProgram F) : Mode F → Except String String
+def modeToRust (component : ComponentProgram F) : Mode F → Except String String
   | .demand mode =>
       let input := commaSep (mode.input.cells.map inputCellToRust)
       pure s!"Mode::Demand(DemandMode \{ channel: {quoted mode.channel}, direction: {directionToRust mode.direction}, aggregation: {aggregationToRust mode.aggregation}, input: vec![{input}] })"
@@ -363,7 +367,7 @@ private def modeToRust (component : ComponentProgram F) : Mode F → Except Stri
       let handlers ← mode.handlers.mapM (preallocatedHandlerToRust component)
       return s!"Mode::Preallocated \{ handlers: vec![{commaSep handlers}] }"
 
-private def initialRowsToRust (index : ℕ) (component : ComponentProgram F) (mode : Mode F) :
+def initialRowsToRust (index : ℕ) (component : ComponentProgram F) (mode : Mode F) :
     Except String String :=
   match mode with
   | .demand _ =>
@@ -383,10 +387,10 @@ private def initialRowsToRust (index : ℕ) (component : ComponentProgram F) (mo
     }).collect()
 }"
 
-private def paddingToRust (padding : Padding F) : String :=
+def paddingToRust (padding : Padding F) : String :=
   s!"Padding \{ input: {rowToRust padding.input}, minimum_rows: {padding.minimumRows} }"
 
-private def prelude : String := "// Generated by Clean from a typed extraction program. Do not edit.\n\
+def prelude : String := "// Generated by Clean from a typed extraction program. Do not edit.\n\
 use clean_backend::witness_generation::{Aggregation, DemandMode, Direction, EnsembleWitness, InputCell, Interaction, Mode, Padding, PreallocatedHandler, Program, WitnessData, WitnessField, WitnessGenerationError};\n\
 use clean_backend::{GeneratedAirSpec, GeneratedEnsemble, GeneratedLookup};\n\
 use p3_air::lookup::Direction as LookupDirection;\n\

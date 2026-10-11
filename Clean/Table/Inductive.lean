@@ -6,9 +6,13 @@ Assignment of cells is handled in the background, which simplifies reasoning abo
 
 Thus far, only the common `k=2` case is handled.
 -/
-import Clean.Circuit.Extensions
-import Clean.Table.Theorems
-import Clean.Gadgets.Equality
+module
+
+public import Clean.Circuit.Extensions
+public import Clean.Table.Theorems
+public import Clean.Gadgets.Equality
+
+@[expose] public section
 
 def InductiveTable.Soundness (F : Type) [FiniteField F] (State Input : Type → Type) [ProvableType State] [ProvableType Input]
     (Spec : (initialState : State F) → (xs : List (Input F)) → (i : ℕ) → (xs.length = i) → (currentState : State F) → ProverData F → Prop)

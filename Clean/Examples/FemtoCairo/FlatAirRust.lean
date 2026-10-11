@@ -1,13 +1,15 @@
-import Clean.Air.Extraction.Rust
-import Clean.Examples.FemtoCairo.FlatAir
-import Clean.Examples.FemtoCairo.FlatAirTestData
-import Clean.Utils.Primes
+module
+
+public import Clean.Air.Extraction.Rust
+public import Clean.Examples.FemtoCairo.FlatAir
+public import Clean.Examples.FemtoCairo.FlatAirTestData
+public import Clean.Utils.Primes
+
+@[expose] public section
 
 open Examples.FemtoCairo
 open Examples.FemtoCairo.Types
 open Examples.FemtoCairo.FlatAirTestData
-
-private theorem h_memorySize : 8 < pBabybear := by native_decide
 
 def main : IO Unit := do
   match Air.Flat.Extraction.Rust.ensembleToRust

@@ -1,9 +1,13 @@
 /-
 This file defines flat AIR ensembles and what soundness and completeness mean for them.
 -/
-import Clean.Air.FlatComponent
-import Clean.Air.Balance
-import Clean.Circuit.Verifier
+module
+
+public import Clean.Air.FlatComponent
+public import Clean.Air.Balance
+public import Clean.Circuit.Verifier
+
+@[expose] public section
 
 namespace Air.Flat
 universe u
@@ -165,7 +169,7 @@ lemma tables_map_component (witness : EnsembleWitness ens) :
   intro i hi hi'
   simp [witness.same_circuits i hi']
 
-private lemma tableNamesNodup (witness : EnsembleWitness ens) :
+lemma tableNamesNodup (witness : EnsembleWitness ens) :
     (witness.tables.map (fun table => table.component.circuit.name)).Nodup := by
   rw [show witness.tables.map (fun table => table.component.circuit.name) =
     ens.tables.map (·.circuit.name) by

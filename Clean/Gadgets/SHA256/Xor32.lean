@@ -1,4 +1,8 @@
-import Clean.Gadgets.SHA256.BitwiseOps
+module
+
+public import Clean.Gadgets.SHA256.BitwiseOps
+
+@[expose] public section
 
 section
 variable {p : ℕ} [Fact p.Prime]

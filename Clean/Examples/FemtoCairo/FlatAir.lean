@@ -1,6 +1,10 @@
-import Clean.Air.Vm
-import Clean.Air.WitnessGeneration
-import Clean.Examples.FemtoCairo.FemtoCairo
+module
+
+public import Clean.Air.Vm
+public import Clean.Air.WitnessGeneration
+public import Clean.Examples.FemtoCairo.FemtoCairo
+
+@[expose] public section
 
 namespace Examples.FemtoCairo.FlatAir
 
@@ -113,7 +117,10 @@ lemma memoryRows_getElem?_eq (data : ProverData (F p)) (i : ℕ) :
   exact Array.getElem?_map
 
 def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
-  main := fun { state, offset, mode } => do
+  main := fun input => do
+    let state := input.state
+    let offset := input.offset
+    let mode := input.mode
     let addr1 <==
       mode.isDoubleAddressing * (state.ap + offset) +
       mode.isApRelative * (state.ap + offset) +
@@ -167,27 +174,23 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
     simp only [h_addr2] at h_value2 h_addr2_lt
     simp only [h_value1, h_value2] at h_value
     clear h_input
-    split
-    case h_2 x h_spec =>
-      rcases h_assumptions with h_mode | h_mode | h_mode | h_mode
-      · simp only [h_mode, one_mul, zero_mul, add_zero, ↓reduceIte,
-          Option.bind_eq_none_iff, Option.dite_none_right_eq_some, Option.some.injEq,
-          dite_eq_right_iff, reduceCtorEq, forall_exists_index,
-          forall_apply_eq_imp_iff, and_self] at *
-        exact h_spec h_addr1_lt h_addr2_lt
-      · simp [h_mode, memoryTable] at h_spec h_addr1_lt; linarith
-      · simp [h_mode, memoryTable] at h_spec h_addr1_lt; linarith
-      · simp [h_mode] at h_spec
-    case h_1 rawInstrType _ _ value h_eq =>
-      rcases h_assumptions with h_mode | h_mode | h_mode | h_mode
-      <;> simp [h_mode, memoryTable] at *
-      · simp only [h_addr1_lt, ↓reduceDIte, Option.bind_some,
-          Option.dite_none_right_eq_some, Option.some.injEq] at h_eq
-        obtain ⟨h, h_eq⟩ := h_eq
-        rw [← h_eq, h_value]
-      · obtain ⟨h, h_eq⟩ := h_eq; rw [← h_eq, h_value]
-      · obtain ⟨h, h_eq⟩ := h_eq; rw [← h_eq, h_value]
-      · rw [← h_eq, h_value]
+    rcases h_assumptions with h_mode | h_mode | h_mode | h_mode
+    · simp only [h_mode, one_mul, zero_mul, add_zero] at h_addr1_lt h_addr2_lt h_value
+      simp only [h_mode, ↓reduceIte]
+      simp only [← h_memory_table_def, h_addr1_lt, ↓reduceDIte,
+        Option.bind_some, h_addr2_lt]
+      exact h_value
+    · simp only [h_mode, one_mul, zero_mul, add_zero, zero_add] at h_addr1_lt h_value
+      simp only [h_mode, zero_ne_one, ↓reduceIte]
+      simp only [← h_memory_table_def, h_addr1_lt, ↓reduceDIte]
+      exact h_value
+    · simp only [h_mode, one_mul, zero_mul, add_zero, zero_add] at h_addr1_lt h_value
+      simp only [h_mode, zero_ne_one, ↓reduceIte]
+      simp only [← h_memory_table_def, h_addr1_lt, ↓reduceDIte]
+      exact h_value
+    · simp only [h_mode, one_mul, zero_mul, add_zero, zero_add,
+        zero_ne_one, ↓reduceIte] at h_value ⊢
+      exact h_value
 
   completeness := by
     circuit_proof_start [MemoryChannel, DecodedAddressingMode.isEncodedCorrectly,
@@ -243,11 +246,11 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
 def femtoCairoStepMain {programSize : ℕ} (program : Fin programSize → F p)
     (h_programSize : programSize < p) (state : Var State (F p)) :
     Circuit (F p) (Var State (F p)) := do
-  let { rawInstrType, op1, op2, op3 } ← fetchInstruction program h_programSize state.pc
-  let decoded ← Examples.FemtoCairo.decodeInstruction rawInstrType
-  let v1 ← readFromMemory { state, offset := op1, mode := decoded.mode1 }
-  let v2 ← readFromMemory { state, offset := op2, mode := decoded.mode2 }
-  let v3 ← readFromMemory { state, offset := op3, mode := decoded.mode3 }
+  let raw ← fetchInstruction program h_programSize state.pc
+  let decoded ← Examples.FemtoCairo.decodeInstruction raw.rawInstrType
+  let v1 ← readFromMemory { state, offset := raw.op1, mode := decoded.mode1 }
+  let v2 ← readFromMemory { state, offset := raw.op2, mode := decoded.mode2 }
+  let v3 ← readFromMemory { state, offset := raw.op3, mode := decoded.mode3 }
   Examples.FemtoCairo.nextState { state, decoded, v1, v2, v3 }
 
 @[reducible]
@@ -434,6 +437,11 @@ def programComponent {programSize : ℕ} (program : Fin programSize → F p)
     intro i row data hfixed _ _
     rcases hfixed with ⟨hi, hrow⟩
     simp only [provideProgram]
+    have hinput : valueFromOffset ProviderInput 0 (Environment.fromArray row data) =
+        { address := row[0]?.getD 0, value := row[1]?.getD 0, multiplicity := row[2]?.getD 0 } := by
+      rw [← eval_varFromOffset_valueFromOffset]
+      simp only [circuit_norm, explicit_provable_type]
+    rw [hinput]
     change ∃ h : (row[0]?.getD 0).val < programSize,
       row[1]?.getD 0 = program ⟨(row[0]?.getD 0).val, h⟩
     have hi' : i < programSize := by simpa [programFixedColumns] using hi
@@ -493,6 +501,11 @@ def memoryComponent (memorySize : ℕ) (h_memorySize : memorySize < p) : Compone
     intro i row data hfixed hdata _
     rcases hfixed with ⟨hi, hrow⟩
     simp only [provideMemory, MemoryChannel]
+    have hinput : valueFromOffset ProviderInput 0 (Environment.fromArray row data) =
+        { address := row[0]?.getD 0, value := row[1]?.getD 0, multiplicity := row[2]?.getD 0 } := by
+      rw [← eval_varFromOffset_valueFromOffset]
+      simp only [circuit_norm, explicit_provable_type]
+    rw [hinput]
     change ∃ ha : (row[0]?.getD 0).val < (data.getRows "memory" ProviderInput).size,
       row[0]?.getD 0 = (data.getRows "memory" ProviderInput)[(row[0]?.getD 0).val].address ∧
       row[1]?.getD 0 = (data.getRows "memory" ProviderInput)[(row[0]?.getD 0).val].value
@@ -528,6 +541,7 @@ def memoryComponent (memorySize : ℕ) (h_memorySize : memorySize < p) : Compone
       multiplicity := row[2]?.getD 0
     }
     have hinput : inputRow ProviderInput row = toElements provider := by
+      simp only [inputRow, provider, explicit_provable_type, circuit_norm]
       rfl
     have hrawOpt : (data "memory" (size ProviderInput))[i]? =
         some (inputRow ProviderInput row) := hdata
@@ -686,10 +700,7 @@ def soundEnsemble {programSize memorySize : ℕ} (program : Fin programSize → 
         change "program" = "memory" at hname
         contradiction
       simp [circuit_norm, memoryComponent, provideMemory, hne])
-    (by
-      simp only [SoundEnsemble.addFinishedChannel_tables, SoundEnsemble.addTable_tables,
-        SoundEnsemble.empty_tables, List.map_cons, List.map_nil, List.mem_singleton]
-      simp [memoryComponent, provideMemory, programComponent, provideProgram])
+    (by simp [circuit_norm, memoryComponent, provideMemory, programComponent, provideProgram])
   |>.addFinishedChannel MemoryChannel.toRaw
   |>.addVm (vm program h_programSize initialState)
     (by simp +instances [circuit_norm, vm, programComponent, provideProgram,
@@ -697,11 +708,8 @@ def soundEnsemble {programSize memorySize : ℕ} (program : Fin programSize → 
     (by simp +instances [circuit_norm, vm, executionComponent, executeStep, verifier])
     (by simp [circuit_norm, vm, executionComponent, executeStep, verifier,
       StateChannel, ProgramChannel, MemoryChannel])
-    (by
-      simp only [SoundEnsemble.addFinishedChannel_tables, SoundEnsemble.addTable_tables,
-        SoundEnsemble.empty_tables, List.map_append, List.map_cons, List.map_nil]
-      simp [vm, executionComponent, executeStep, memoryComponent, provideMemory,
-        programComponent, provideProgram])
+    (by simp [circuit_norm, vm, executionComponent, executeStep, memoryComponent, provideMemory,
+      programComponent, provideProgram])
 
 def formalEnsemble {programSize memorySize : ℕ} (program : Fin programSize → F p)
     (h_programSize : programSize < p) (h_memorySize : memorySize < p)

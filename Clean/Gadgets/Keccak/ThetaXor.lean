@@ -1,7 +1,11 @@
-import Clean.Circuit.Loops
-import Clean.Gadgets.Xor.Xor64
-import Clean.Gadgets.Keccak.KeccakState
-import Clean.Specs.Keccak256
+module
+
+public import Clean.Circuit.Loops
+public import Clean.Gadgets.Xor.Xor64
+public import Clean.Gadgets.Keccak.KeccakState
+public import Clean.Specs.Keccak256
+
+@[expose] public section
 
 namespace Gadgets.Keccak256.ThetaXor
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]

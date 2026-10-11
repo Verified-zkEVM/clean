@@ -1,5 +1,9 @@
-import Clean.Circuit.Formal
-import Clean.Circuit.Theorems
+module
+
+public import Clean.Circuit.Formal
+public import Clean.Circuit.Theorems
+
+@[expose] public section
 
 variable {F : Type} [FiniteField F]
 

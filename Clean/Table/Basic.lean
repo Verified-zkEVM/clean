@@ -1,13 +1,17 @@
-import Mathlib.Algebra.Field.Basic
-import Mathlib.Data.ZMod.Basic
-import Clean.Utils.Primes
-import Clean.Utils.Vector
-import Clean.Circuit.Basic
-import Clean.Circuit.Subcircuit
-import Clean.Circuit.Expression
-import Clean.Circuit.Provable
-import Clean.Utils.Field
-import Clean.Table.SimpTable
+module
+
+public import Mathlib.Algebra.Field.Basic
+public import Mathlib.Data.ZMod.Basic
+public import Clean.Utils.Primes
+public import Clean.Utils.Vector
+public import Clean.Circuit.Basic
+public import Clean.Circuit.Subcircuit
+public import Clean.Circuit.Expression
+public import Clean.Circuit.Provable
+public import Clean.Utils.Field
+public import Clean.Table.SimpTable
+
+@[expose] public section
 
 /--
   A row is StructuredElement that contains field elements.

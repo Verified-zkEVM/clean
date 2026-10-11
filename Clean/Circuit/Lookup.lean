@@ -1,5 +1,9 @@
-import Clean.Circuit.Provable
-import Clean.Circuit.WitnessIR
+module
+
+public import Clean.Circuit.Provable
+public import Clean.Circuit.WitnessIR
+
+@[expose] public section
 variable {F : Type} {α : Type} {n : ℕ}
 variable {Row : TypeMap} [ProvableType Row]
 

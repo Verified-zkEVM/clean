@@ -1,5 +1,9 @@
-import Clean.Examples.FemtoCairo.Spec
-import Clean.Utils.Primes
+module
+
+public import Clean.Examples.FemtoCairo.Spec
+public import Clean.Utils.Primes
+
+@[expose] public section
 
 /-!
 # FemtoCairo Flat AIR test program
@@ -29,7 +33,9 @@ def programData : Vector (F pBabybear) programSize :=
 
 def testProgram : Fin programSize → F pBabybear := fun i => programData[i]
 
-theorem h_programSize : programSize < pBabybear := by native_decide
+theorem h_programSize : programSize < pBabybear := by norm_num [programSize, pBabybear]
+
+theorem h_memorySize : 8 < pBabybear := by norm_num [pBabybear]
 
 def initialState : State (F pBabybear) := { pc := 0, ap := 0, fp := 0 }
 

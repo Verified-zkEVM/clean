@@ -1,10 +1,14 @@
-import Clean.Types.U64
-import Clean.Circuit.Loops
-import Clean.Gadgets.Xor.Xor64
-import Clean.Gadgets.And.And64
-import Clean.Gadgets.Not.Not64
-import Clean.Gadgets.Keccak.KeccakState
-import Clean.Specs.Keccak256
+module
+
+public import Clean.Types.U64
+public import Clean.Circuit.Loops
+public import Clean.Gadgets.Xor.Xor64
+public import Clean.Gadgets.And.And64
+public import Clean.Gadgets.Not.Not64
+public import Clean.Gadgets.Keccak.KeccakState
+public import Clean.Specs.Keccak256
+
+@[expose] public section
 
 namespace Gadgets.Keccak256.Chi
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
@@ -28,7 +32,11 @@ def Spec (state : KeccakState (F p)) (out_state : KeccakState (F p)) :=
 -- rewrite the chi spec as a loop
 lemma chi_loop (state : Vector ℕ 25) :
     Specs.Keccak256.chi state = .mapFinRange 25 fun i => state[i] ^^^ ((not64 state[i + 5]) &&& state[i + 10]) := by
-  rw [Specs.Keccak256.chi, Vector.mapFinRange, Vector.finRange, Vector.map_mk, Vector.eq_mk, List.map_toArray]
+  conv_rhs =>
+    rw [← Vector.ofFn_getElem (xs := Vector.mapFinRange 25 _)]
+    simp only [Vector.getElem_mapFinRange]
+  apply Vector.toList_inj.mp
+  rw [Vector.toList_ofFn]
   rfl
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by

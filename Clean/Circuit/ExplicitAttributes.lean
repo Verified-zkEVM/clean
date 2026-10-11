@@ -1,4 +1,9 @@
-import Lean
+module
+
+public meta import Lean
+public import Lean
+
+public meta section
 
 open Lean
 

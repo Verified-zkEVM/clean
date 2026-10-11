@@ -1,6 +1,10 @@
-import Clean.Utils.Tactics
-import Clean.Types.U32
-import Clean.Gadgets.Or.Or8
+module
+
+public import Clean.Utils.Tactics
+public import Clean.Types.U32
+public import Clean.Gadgets.Or.Or8
+
+@[expose] public section
 
 section
 variable {p : ℕ} [Fact p.Prime] [p_large_enough : Fact (p > 512)]

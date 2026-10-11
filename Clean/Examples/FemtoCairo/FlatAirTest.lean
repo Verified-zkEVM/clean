@@ -1,7 +1,17 @@
-import Clean.Air.Extraction.Lower
-import Clean.Examples.FemtoCairo.FlatAir
-import Clean.Examples.FemtoCairo.FlatAirTestData
-import Clean.Utils.Primes
+module
+
+public import Clean.Air.Extraction.Lower
+public import Clean.Examples.FemtoCairo.FlatAir
+public import Clean.Examples.FemtoCairo.FlatAirTestData
+public import Clean.Utils.Primes
+
+-- `native_decide` runs compiled code from these modules.
+public meta import Clean.Air.Extraction.Lower
+public meta import Clean.Examples.FemtoCairo.FlatAir
+public meta import Clean.Examples.FemtoCairo.FlatAirTestData
+public meta import Clean.Utils.Primes
+
+@[expose] public section
 
 namespace Examples.FemtoCairo.FlatAirTest
 
@@ -12,17 +22,15 @@ open Examples.FemtoCairo.FlatAir
 open Examples.FemtoCairo.FlatAirTestData
 open Air.Flat.WitnessGeneration
 
-private def memoryValues : fields 8 (F pBabybear) :=
+def memoryValues : fields 8 (F pBabybear) :=
   #v[0, 5, 3, 7, 2, 10, 0, 0]
 
-private def alternateMemoryValues : fields 8 (F pBabybear) :=
+def alternateMemoryValues : fields 8 (F pBabybear) :=
   #v[0, 5, 3, 7, 2, 10, 0, 99]
 
-private def finalStateAfterEight : State (F pBabybear) := { pc := 32, ap := 0, fp := 0 }
+def finalStateAfterEight : State (F pBabybear) := { pc := 32, ap := 0, fp := 0 }
 
-private theorem h_memorySize : 8 < pBabybear := by native_decide
-
-private def generateResult (memoryValues : fields 8 (F pBabybear)) :
+def generateResult (memoryValues : fields 8 (F pBabybear)) :
     Except String (List ℕ × Bool × Bool × ℕ × ℕ × ℕ) :=
   match Examples.FemtoCairo.FlatAir.Witness.generate
       (p := pBabybear) (programSize := programSize) (memorySize := 8)
@@ -41,7 +49,7 @@ private def generateResult (memoryValues : fields 8 (F pBabybear)) :
       constraintsHold witness, channelsBalanced witness, memoryData.size, memoryValue,
       lastMemoryValue)
 
-private def result := generateResult memoryValues
+def result := generateResult memoryValues
 
 /--
 The full channel-driven witness contains eight execution rows, the eight-row fixed
@@ -56,7 +64,7 @@ the compiled ensemble or generation configuration. -/
 example : generateResult alternateMemoryValues = .ok ([8, 8, 32], true, true, 8, 10, 99) := by
   native_decide
 
-private def unstableDataReadRejected : Bool :=
+def unstableDataReadRejected : Bool :=
   let config : Config (F pBabybear) (fields 8) :=
     Witness.config (memorySize := 8) testProgram initialState 8 1000
   let mutableMemory : Mode (F pBabybear) := .preallocated {

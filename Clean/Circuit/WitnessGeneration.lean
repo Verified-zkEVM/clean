@@ -1,4 +1,8 @@
-import Clean.Circuit.Theorems
+module
+
+public import Clean.Circuit.Theorems
+
+@[expose] public section
 
 /-!
 # Array-backed witness generation (witgen IR plan, phase 3)

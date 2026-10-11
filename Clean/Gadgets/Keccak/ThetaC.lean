@@ -1,10 +1,14 @@
-import Clean.Circuit.Loops
-import Clean.Gadgets.Addition8.Addition8FullCarry
-import Clean.Types.U64
-import Clean.Gadgets.Addition32.Theorems
-import Clean.Gadgets.Xor.Xor64
-import Clean.Gadgets.Keccak.KeccakState
-import Clean.Specs.Keccak256
+module
+
+public import Clean.Circuit.Loops
+public import Clean.Gadgets.Addition8.Addition8FullCarry
+public import Clean.Types.U64
+public import Clean.Gadgets.Addition32.Theorems
+public import Clean.Gadgets.Xor.Xor64
+public import Clean.Gadgets.Keccak.KeccakState
+public import Clean.Specs.Keccak256
+
+@[expose] public section
 
 namespace Gadgets.Keccak256.ThetaC
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
@@ -31,7 +35,11 @@ instance elaborated : ElaboratedCircuit (F p) KeccakState KeccakRow main := by
 lemma thetaC_loop (state : Vector ℕ 25) :
     Specs.Keccak256.thetaC state = .mapFinRange 5 fun i =>
       state[5*i.val] ^^^ state[5*i.val + 1] ^^^ state[5*i.val + 2] ^^^ state[5*i.val + 3] ^^^ state[5*i.val + 4] := by
-  rw [Specs.Keccak256.thetaC, Vector.mapFinRange, Vector.finRange, Vector.map_mk, Vector.eq_mk, List.map_toArray]
+  conv_rhs =>
+    rw [← Vector.ofFn_getElem (xs := Vector.mapFinRange 5 _)]
+    simp only [Vector.getElem_mapFinRange]
+  apply Vector.toList_inj.mp
+  rw [Vector.toList_ofFn]
   rfl
 
 theorem soundness : Soundness (F p) main Assumptions Spec := by

@@ -1,7 +1,11 @@
-import Clean.Gadgets.Addition32.Addition32Full
-import Clean.Types.U32
-import Clean.Gadgets.Addition32.Theorems
-import Clean.Utils.Primes
+module
+
+public import Clean.Gadgets.Addition32.Addition32Full
+public import Clean.Types.U32
+public import Clean.Gadgets.Addition32.Theorems
+public import Clean.Utils.Primes
+
+@[expose] public section
 
 namespace Gadgets.Addition32
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
