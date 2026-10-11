@@ -118,6 +118,11 @@ pub struct WitnessData<F> {
 }
 
 impl<F: Field + Copy> WitnessData<F> {
+    /// Named component-input rows, keyed like Clean's `ProverData`.
+    pub fn from_entries(entries: Vec<(&'static str, Vec<Vec<F>>)>) -> Self {
+        Self { entries }
+    }
+
     fn from_initial_tables(names: &[&'static str], tables: &[Vec<Row<F>>]) -> Self {
         let entries = names
             .iter()
@@ -127,7 +132,7 @@ impl<F: Field + Copy> WitnessData<F> {
                 (*name, rows)
             })
             .collect();
-        Self { entries }
+        Self::from_entries(entries)
     }
 
     #[inline(always)]
