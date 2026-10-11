@@ -1,4 +1,4 @@
-//! A minimal univariate STARK framework.
+//! Plonky3 backend for channel-based Clean AIR ensembles.
 
 #![no_std]
 

@@ -29,12 +29,6 @@ deriving ProvableStruct
 def memorySize (data : ProverData (F p)) : ℕ :=
   (data.getRows "memory" ProviderInput).size
 
-def memoryValue (env : Environment (F p)) (address : Expression (F p)) : F p :=
-  let mem := env.data.getRows "memory" ProviderInput
-  if he : (env address).val < mem.size then
-    mem[(env address).val].value
-  else 0
-
 def memory (data : ProverData (F p)) : Fin (memorySize data) → F p :=
   let mem := data.getRows "memory" ProviderInput
   fun i => mem[i.val].value
@@ -155,7 +149,7 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
   soundness := by
     circuit_proof_start [MemoryChannel, Spec.dataMemoryAccess, Spec.memoryAccess,
       DecodedAddressingMode.val, DecodedAddressingMode.isEncodedCorrectly,
-      memorySize, memoryValue, memory, MemoryEntry, MemoryReadInput.mk.injEq]
+      memorySize, memory, MemoryEntry, MemoryReadInput.mk.injEq]
     set memoryTable := env.data.getRows "memory" ProviderInput with h_memory_table_def
     obtain ⟨isDoubleAddressing, isApRelative, isFpRelative, isImmediate⟩ := input_mode
     obtain ⟨_pc, ap, fp⟩ := input_state
@@ -194,7 +188,7 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
 
   completeness := by
     circuit_proof_start [MemoryChannel, DecodedAddressingMode.isEncodedCorrectly,
-      Spec.dataMemoryAccess, memory, memorySize, memoryValue, MemoryReadInput.mk.injEq]
+      Spec.dataMemoryAccess, memory, memorySize, MemoryReadInput.mk.injEq]
     set addr1 := env.get i₀
     set value1 := env.get (i₀ + 1)
     set addr2 := env.get (i₀ + 2)

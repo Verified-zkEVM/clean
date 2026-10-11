@@ -9,8 +9,8 @@ variable {F : Type} [FiniteField F]
 variable {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
 
 /-- Public, index-addressed columns supplied by the verifier rather than committed by the prover.
-The structured row program is evaluated identically in Lean and extracted backends; fixed-column
-values are no longer stored or exported as a fully materialized trace. -/
+Their values are defined by a structured row program evaluated on the row index, which Lean and
+extracted backends evaluate identically. -/
 structure FixedColumns (F : Type) where
   height : ℕ
   program : Witgen.RowProgram F
