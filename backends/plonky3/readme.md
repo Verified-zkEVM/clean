@@ -27,20 +27,24 @@ The Fibonacci example is documented in
 [`Clean/Examples/FibonacciVm/README.md`](../../Clean/Examples/FibonacciVm/README.md). The generated
 artifacts live in `tests/generated/` and are included by their corresponding Rust tests.
 
-Regenerate the artifact from the repository root:
+Regenerate the artifacts from the repository root. CI regenerates both and fails if the checked-in
+files differ:
 
 ```bash
 lake exe export_fibonacci_ensemble_rust \
   | rustfmt --edition 2021 --emit stdout \
   > backends/plonky3/tests/generated/fibonacci_ensemble.rs
+lake exe export_femtocairo_flat_air_rust \
+  | rustfmt --edition 2021 --emit stdout \
+  > backends/plonky3/tests/generated/femtocairo_flat_air.rs
 ```
 
 Run the generated witness and end-to-end proof tests:
 
 ```bash
-cargo test --release --manifest-path backends/plonky3/Cargo.toml \
+cargo test --locked --release --manifest-path backends/plonky3/Cargo.toml \
   --test fibonacci_ensemble_tests -- --nocapture
-cargo test --release --manifest-path backends/plonky3/Cargo.toml \
+cargo test --locked --release --manifest-path backends/plonky3/Cargo.toml \
   --test femtocairo_flat_air_tests -- --nocapture
 ```
 

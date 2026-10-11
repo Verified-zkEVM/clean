@@ -22,7 +22,7 @@ fn safe_div(left: u64, right: u64) -> u64 {
 #[inline(always)]
 fn safe_rem(left: u64, right: u64) -> u64 {
     if right == 0 {
-        0
+        left
     } else {
         left % right
     }
@@ -215,7 +215,7 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
         let mut output = Vec::with_capacity(8);
         let bits_value = (row.get(3).copied().unwrap_or(F::ZERO)).canonical_u64();
         for bit in 0u32..8u32 {
-            output.push(F::from_u64((bits_value >> bit) & 1));
+            output.push(F::from_u64(bits_value.checked_shr(bit).unwrap_or(0) & 1));
         }
         debug_assert_eq!(output.len(), 8);
         row.extend(output);

@@ -27,7 +27,7 @@ lake exe export_fibonacci_ensemble_rust \
 Run the generated Rust witness and proof tests with:
 
 ```bash
-cargo test --release --manifest-path backends/plonky3/Cargo.toml \
+cargo test --locked --release --manifest-path backends/plonky3/Cargo.toml \
   --test fibonacci_ensemble_tests -- --nocapture
 ```
 
