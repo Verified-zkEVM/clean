@@ -23,7 +23,7 @@ def publicInput : fieldTriple (F pBabybear) :=
 
 def result : Except String (List ℕ × ℕ × ℕ × Bool × Bool) :=
   match FibonacciWitness.generate publicInput 1000 with
-  | .error error => .error error
+  | .error error => .error (toString error)
   | .ok witness =>
       match witness.tables with
       | _ :: _ :: bytes :: _ =>
@@ -74,7 +74,7 @@ def repeatedPublicInput : fieldTriple (F pBabybear) :=
 
 def repeatedResult : Except String (List ℕ × Bool × Bool) :=
   match FibonacciWitness.generate repeatedPublicInput 2000 with
-  | .error error => .error error
+  | .error error => .error (toString error)
   | .ok witness => .ok (
       witness.tables.map (·.length),
       constraintsHold witness,

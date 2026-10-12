@@ -744,7 +744,7 @@ def generate {programSize memorySize : UInt64} (program : Fin programSize.toNat 
     (h_programSize : programSize.toNat < p) (h_memorySize : memorySize.toNat < p)
     (memoryValues : fields memorySize.toNat (F p)) (initialState : State (F p))
     (finalRegisters : fieldPair (F p)) (executionRows : UInt64) (fuel : ℕ) :
-    Except String (EnsembleWitness
+    Except GenerationError (EnsembleWitness
       (soundEnsemble program h_programSize h_memorySize initialState).ensemble) :=
   Air.Flat.WitnessGeneration.generate
     (soundEnsemble program h_programSize h_memorySize initialState).ensemble

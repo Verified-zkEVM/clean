@@ -37,7 +37,7 @@ def generateResult (memoryValues : fields 8 (F pBabybear)) :
       (p := pBabybear) (programSize := programSize) (memorySize := 8)
       testProgram h_programSize h_memorySize
       memoryValues initialState finalRegisters 8 1000 with
-  | .error error => .error error
+  | .error error => .error (toString error)
   | .ok witness =>
     let memoryData := witness.data "memory" 3
     let memoryValue := match memoryData[5]? with
@@ -80,7 +80,7 @@ def unstableDataReadRejected : Bool :=
         else (name, generation) }
   match Backends.Plonky3.lower
       (soundEnsemble testProgram h_programSize h_memorySize initialState).ensemble config with
-  | .error (.unstableDataRead _ _ "memory" 1) => true
+  | .error (.config (.unstableDataRead _ _ "memory" 1)) => true
   | _ => false
 
 /-- Export rejects witness programs that read cells mutated later by channel balancing. -/
