@@ -79,39 +79,9 @@ def bytesComponent : Component (F p) where
   fixed_width_le_input := by change 1 ≤ 2; omega
   Assumptions := fun _ _ => True
   assumptions_imply_circuit := by
-    intro i row data hfixed _ _
-    rcases hfixed with ⟨hi, hrow⟩
-    simp only [pushBytes]
-    have hi' : i < 256 := by simpa [bytesFixedColumns] using hi
-    let byteIndex : Fin 256 := ⟨i, hi'⟩
-    refine ⟨byteIndex, ?_⟩
-    have hrow' : row.extract 0 1 = #[(i : F p)] := by
-      simpa [bytesFixedColumns, FixedColumns.width, FixedColumns.row,
-        Witgen.RowProgram.ofFExprs, Witgen.RowProgram.eval, Witgen.VExpr.eval,
-        Witgen.FExpr.eval, Witgen.evalSteps] using hrow
-    have hvalue : (valueFromOffset BytesInput 0 (Environment.fromArray row data)).value =
-        row[0]?.getD 0 := by
-      rw [← eval_varFromOffset_valueFromOffset]
-      simp only [circuit_norm, explicit_provable_type]
-    rw [hvalue]
-    have hextractSize : (row.extract 0 1).size = 1 := by simp [hrow']
-    have hrowSize : 0 < row.size := by
-      rw [Array.size_extract] at hextractSize
-      omega
-    have hextract : 0 < (row.extract 0 1).size := by omega
-    calc
-      row[0]?.getD 0 = (row.extract 0 1)[0]?.getD 0 := by
-        rw [Array.getElem?_eq_getElem hrowSize, Array.getElem?_eq_getElem hextract]
-        simp only [Array.getElem_extract, Nat.zero_add]
-      _ = ByteUtils.fromByte byteIndex := by
-        rw [hrow']
-        have hip : i < p := by
-          have hp := pGt.out
-          omega
-        have hval : (i : F p).val = i := ZMod.val_natCast_of_lt hip
-        symm
-        have hcastLt : (i : F p).val < 256 := by rw [hval]; exact hi'
-        simpa [byteIndex, hval] using ByteUtils.fromByte_eq (p := p) (i : F p) hcastLt
+    rintro i ⟨value, multiplicity⟩ data ⟨hi, rest, hrow⟩ - -
+    simp [bytesFixedColumns, circuit_norm, explicit_provable_type] at hi hrow
+    exact ⟨⟨i, hi⟩, by rw [hrow.1, ByteUtils.fromByte, FieldUtils.natToField_eq_natCast]⟩
 
 def Add8Channel : Channel (F p) fieldTriple where
   name := "add8"

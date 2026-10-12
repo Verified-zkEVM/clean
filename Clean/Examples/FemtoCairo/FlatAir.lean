@@ -101,15 +101,6 @@ def MemoryChannel : Channel (F p) MemoryEntry where
       entry.address = table[entry.address.val].address ∧
       entry.value = table[entry.address.val].value
 
-omit [Fact p.Prime] p_large_enough in
-lemma memoryRows_getElem?_eq (data : ProverData (F p)) (i : ℕ) :
-    (data.getRows "memory" ProviderInput)[i]? =
-      Option.map (fromElements (M := ProviderInput))
-        ((data "memory" (size ProviderInput))[i]?) := by
-  rw [show data.getRows "memory" ProviderInput =
-    (data "memory" (size ProviderInput)).map fromElements by rfl]
-  exact Array.getElem?_map
-
 def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
   main := fun input => do
     let state := input.state
@@ -428,42 +419,10 @@ def programComponent {programSize : ℕ} (program : Fin programSize → F p)
   fixed_width_le_input := by change 2 ≤ 3; omega
   Assumptions := fun _ _ => True
   assumptions_imply_circuit := by
-    intro i row data hfixed _ _
-    rcases hfixed with ⟨hi, hrow⟩
-    simp only [provideProgram]
-    have hinput : valueFromOffset ProviderInput 0 (Environment.fromArray row data) =
-        { address := row[0]?.getD 0, value := row[1]?.getD 0, multiplicity := row[2]?.getD 0 } := by
-      rw [← eval_varFromOffset_valueFromOffset]
-      simp only [circuit_norm, explicit_provable_type]
-    rw [hinput]
-    change ∃ h : (row[0]?.getD 0).val < programSize,
-      row[1]?.getD 0 = program ⟨(row[0]?.getD 0).val, h⟩
-    have hi' : i < programSize := by simpa [programFixedColumns] using hi
-    have hrow' : row.extract 0 2 = #[(i : F p), program ⟨i, hi'⟩] := by
-      simpa [programFixedColumns, FixedColumns.width, FixedColumns.row,
-        Witgen.RowProgram.ofFExprs, Witgen.RowProgram.eval, Witgen.VExpr.eval,
-        Witgen.FExpr.eval, Witgen.evalSteps,
-        Witgen.evalList_map_vector_const, hi'] using hrow
-    have hextractSize : (row.extract 0 2).size = 2 := by simp [hrow']
-    have hrowSize : 2 ≤ row.size := by
-      rw [Array.size_extract] at hextractSize
-      omega
-    have haddress : row[0]?.getD 0 = (i : F p) := by
-      calc
-        row[0]?.getD 0 = (row.extract 0 2)[0]?.getD 0 := by
-          rw [Array.getElem?_eq_getElem (by omega), Array.getElem?_eq_getElem (by omega)]
-          simp only [Array.getElem_extract, Nat.zero_add]
-        _ = (i : F p) := by rw [hrow']; rfl
-    have hvalue : row[1]?.getD 0 = program ⟨i, hi'⟩ := by
-      calc
-        row[1]?.getD 0 = (row.extract 0 2)[1]?.getD 0 := by
-          rw [Array.getElem?_eq_getElem (by omega), Array.getElem?_eq_getElem (by omega)]
-          simp only [Array.getElem_extract, Nat.zero_add]
-        _ = program ⟨i, hi'⟩ := by rw [hrow']; rfl
-    have hval : (row[0]?.getD 0).val = i := by
-      rw [haddress, ZMod.val_natCast_of_lt (lt_trans hi' h_programSize)]
-    use hval ▸ hi'
-    simpa [hval] using hvalue
+    rintro i ⟨address, value, multiplicity⟩ data ⟨hi, rest, hrow⟩ - -
+    simp [programFixedColumns, circuit_norm, explicit_provable_type, Array.getElem?_append] at hi hrow
+    have hval : (i : F p).val = i := ZMod.val_cast_of_lt (by omega)
+    simp [provideProgram, ProgramChannel, hrow, hval, hi]
 
 def provideMemory : GeneralFormalCircuit (F p) ProviderInput unit where
   name := "memory"
@@ -492,63 +451,11 @@ def memoryComponent (memorySize : ℕ) (h_memorySize : memorySize < p) : Compone
   fixed_width_le_input := by change 1 ≤ 3; omega
   Assumptions := fun _ _ => True
   assumptions_imply_circuit := by
-    intro i row data hfixed hdata _
-    rcases hfixed with ⟨hi, hrow⟩
-    simp only [provideMemory, MemoryChannel]
-    have hinput : valueFromOffset ProviderInput 0 (Environment.fromArray row data) =
-        { address := row[0]?.getD 0, value := row[1]?.getD 0, multiplicity := row[2]?.getD 0 } := by
-      rw [← eval_varFromOffset_valueFromOffset]
-      simp only [circuit_norm, explicit_provable_type]
-    rw [hinput]
-    change ∃ ha : (row[0]?.getD 0).val < (data.getRows "memory" ProviderInput).size,
-      row[0]?.getD 0 = (data.getRows "memory" ProviderInput)[(row[0]?.getD 0).val].address ∧
-      row[1]?.getD 0 = (data.getRows "memory" ProviderInput)[(row[0]?.getD 0).val].value
-    change (data "memory" (size ProviderInput))[i]? =
-      some (inputRow ProviderInput row) at hdata
-    have hi : i < memorySize := by simpa [memoryFixedColumns] using hi
-    have hrow' : row.extract 0 1 = #[(i : F p)] := by
-      simpa [memoryFixedColumns, FixedColumns.width, FixedColumns.row,
-        Witgen.RowProgram.ofFExprs, Witgen.RowProgram.eval, Witgen.VExpr.eval,
-        Witgen.FExpr.eval, Witgen.evalSteps] using hrow
-    have hextractSize : (row.extract 0 1).size = 1 := by simp [hrow']
-    have hrowSize : 0 < row.size := by
-      rw [Array.size_extract] at hextractSize
-      omega
-    have haddress : row[0]?.getD 0 = (i : F p) := by
-      calc
-        row[0]?.getD 0 = (row.extract 0 1)[0]?.getD 0 := by
-          rw [Array.getElem?_eq_getElem hrowSize, Array.getElem?_eq_getElem (by omega)]
-          simp only [Array.getElem_extract, Nat.zero_add]
-        _ = (i : F p) := by rw [hrow']; rfl
-    have hindex : (row[0]?.getD 0).val = i := by
-      rw [haddress, ZMod.val_natCast_of_lt (lt_trans hi h_memorySize)]
-    have hdataSize : i < (data "memory" (size ProviderInput)).size := by
-      exact Array.getElem?_eq_some_iff.mp hdata |>.1
-    have htypedDataSize : i < (data.getRows "memory" ProviderInput).size := by
-      change i < ((data "memory" (size ProviderInput)).map
-        (fromElements (M := ProviderInput))).size
-      rw [Array.size_map]
-      exact hdataSize
-    let provider : ProviderInput (F p) := {
-      address := row[0]?.getD 0
-      value := row[1]?.getD 0
-      multiplicity := row[2]?.getD 0
-    }
-    have hinput : inputRow ProviderInput row = toElements provider := by
-      simp only [inputRow, provider, explicit_provable_type, circuit_norm]
-      rfl
-    have hrawOpt : (data "memory" (size ProviderInput))[i]? =
-        some (inputRow ProviderInput row) := hdata
-    have hproviderOpt : (data.getRows "memory" ProviderInput)[i]? = some provider := by
-      rw [memoryRows_getElem?_eq, hrawOpt, Option.map_some, hinput,
-        ProvableType.fromElements_toElements]
-    have hentryOptAtAddress :
-        (data.getRows "memory" ProviderInput)[(row[0]?.getD 0).val]? = some provider := by
-      simpa [hindex] using hproviderOpt
-    have hprovider := Array.getElem?_eq_some_iff.mp hentryOptAtAddress |>.2
-    refine ⟨hindex ▸ htypedDataSize, ?_, ?_⟩
-    · exact congrArg ProviderInput.address hprovider.symm
-    · exact congrArg ProviderInput.value hprovider.symm
+    rintro i ⟨address, value, multiplicity⟩ data ⟨hi, rest, hrow⟩ hdata -
+    simp [memoryFixedColumns, provideMemory, circuit_norm, explicit_provable_type] at hi hrow hdata
+    have hval : (i : F p).val = i := ZMod.val_cast_of_lt (by omega)
+    obtain ⟨hsize, hentry⟩ := Array.getElem?_eq_some_iff.mp hdata
+    simp [provideMemory, MemoryChannel, hrow, hval, hsize, hentry]
 
 def StateChannel {programSize : ℕ} (program : Fin programSize → F p)
     (initialState : State (F p)) : Channel (F p) State where

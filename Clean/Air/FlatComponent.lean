@@ -23,6 +23,19 @@ abbrev width (fixed : FixedColumns F) : ℕ := fixed.program.width
 def row (fixed : FixedColumns F) (i : ℕ) : Array F :=
   (fixed.program.eval i).toArray
 
+omit [FiniteField F] in
+@[circuit_norm]
+lemma width_ofFExprs {n : ℕ} (height : ℕ) (values : Vector (Witgen.FExpr F) n) (valid) :
+    ({ height, program := .ofFExprs values, valid } : FixedColumns F).width = n := rfl
+
+/-- Fixed values declared directly by one expression per column. -/
+@[circuit_norm]
+lemma row_ofFExprs {n : ℕ} (height : ℕ) (values : Vector (Witgen.FExpr F) n) (valid) (i : ℕ) :
+    ({ height, program := .ofFExprs values, valid } : FixedColumns F).row i =
+      (values.map (Witgen.FExpr.eval {
+        env := { get _ := 0, data _ _ := #[], hint := .empty F }
+        idx := i })).toArray := rfl
+
 /-- The full semantic rows have exactly the declared fixed prefix at every row index. -/
 abbrev RowsMatch (fixed : FixedColumns F) (rows : List (Array F)) : Prop :=
   rows.map (fun row => row.extract 0 fixed.width) =
@@ -30,19 +43,29 @@ abbrev RowsMatch (fixed : FixedColumns F) (rows : List (Array F)) : Prop :=
 
 end FixedColumns
 
-/-- The fixed-column fact available while proving the circuit assumptions for row `i`. -/
-def FixedRowAt (fixedColumns : Option (FixedColumns F)) (i : ℕ) (row : Array F) : Prop :=
-  match fixedColumns with
-  | none => True
-  | some fixed => i < fixed.height ∧ row.extract 0 fixed.width = fixed.row i
-
+@[circuit_norm]
 def inputRow (Input : TypeMap) [ProvableType Input] (row : Array F) : Vector F (size Input) :=
   ⟨(List.ofFn (fun i : Fin (size Input) => row[i.val]?.getD 0)).toArray, by simp⟩
 
-/-- The derived-data fact available while proving the circuit assumptions for row `i`. -/
-def DataRowAt (name : String) (Input : TypeMap) [ProvableType Input]
-    (i : ℕ) (row : Array F) (data : ProverData F) : Prop :=
-  (data name (size Input))[i]? = some (inputRow Input row)
+/-- The fixed-column fact about the input of row `i`: the row lies within the fixed height, and
+the input starts with the declared fixed values. -/
+def FixedInputAt (fixedColumns : Option (FixedColumns F)) (i : ℕ) (input : Input F) : Prop :=
+  match fixedColumns with
+  | none => True
+  | some fixed => i < fixed.height ∧ ∃ rest, input = fromElements (inputRow Input (fixed.row i ++ rest))
+
+/-- The derived-data fact about the input of row `i`: it is row `i` of the component's
+`ProverData` entry. -/
+@[circuit_norm]
+def DataInputAt (name : String) (i : ℕ) (input : Input F) (data : ProverData F) : Prop :=
+  (data.getRows name Input)[i]? = some input
+
+lemma valueFromOffset_fromArray (row : Array F) (data : ProverData F) :
+    valueFromOffset Input 0 (Environment.fromArray row data) = fromElements (inputRow Input row) := by
+  simp only [valueFromOffset]
+  congr 1
+  ext j hj
+  simp [inputRow, Vector.getElem_mapRange]
 
 /--
 A flat AIR component: one circuit whose constraints are checked independently on each row.
@@ -59,12 +82,9 @@ structure Component (F : Type) [FiniteField F] where
   Assumptions : Input F → ProverData F → Prop := circuit.Assumptions
   /-- Fixed-row and derived-data facts, together with the residual assumptions, imply the
   assumptions of the underlying row circuit. -/
-  assumptions_imply_circuit : ∀ i row data,
-      FixedRowAt fixedColumns i row →
-        DataRowAt circuit.name Input i row data →
-        Assumptions (valueFromOffset Input 0 (Environment.fromArray row data)) data →
-        circuit.Assumptions
-          (valueFromOffset Input 0 (Environment.fromArray row data)) data := by simp
+  assumptions_imply_circuit : ∀ i (input : Input F) data,
+      FixedInputAt fixedColumns i input → DataInputAt circuit.name i input data →
+        Assumptions input data → circuit.Assumptions input data := by simp
   fixed_width_le_input : (fixedColumns.map FixedColumns.width).getD 0 ≤ size Input := by simp
 
 instance (t: Component F) : ProvableType t.Input := t.provableInput
@@ -303,31 +323,27 @@ lemma circuitAssumptions (table : Table F) (consistent : table.DataConsistency d
     (row : Array F) (hrow : row ∈ table.table) :
     table.component.CircuitAssumptions (Environment.fromArray row data) := by
   obtain ⟨i, hi⟩ := List.get_of_mem hrow
-  apply table.component.assumptions_imply_circuit i.val row data
+  have hi' : table.table[i.val] = row := hi
+  apply table.component.assumptions_imply_circuit i.val
   · cases hcolumns : table.component.fixedColumns with
-    | none => simp [FixedRowAt]
+    | none => simp [FixedInputAt]
     | some fixed =>
       have hmatch := table.fixed_rows_match
       simp only [Component.fixedRowsMatch, hcolumns] at hmatch
       have hlength : table.table.length = fixed.height := by
         simpa using congrArg List.length hmatch
-      refine ⟨by omega, ?_⟩
       have hprefix := congrArg (fun rows => rows[i.val]?) hmatch
-      have hleft : i.val < (table.table.map
-          (fun candidate => candidate.extract 0 fixed.width)).length := by
-        simp only [List.length_map]
-        exact i.isLt
-      have hright : i.val < ((List.range fixed.height).map fixed.row).length := by
-        simp only [List.length_map, List.length_range]
+      simp only [List.getElem?_map, List.getElem?_range (by omega : i.val < fixed.height),
+        List.getElem?_eq_getElem i.isLt, hi', Option.map_some, Option.some.injEq] at hprefix
+      have hsize : fixed.width ≤ row.size := by
+        have := congrArg Array.size hprefix
+        simp [FixedColumns.row] at this
         omega
-      rw [List.getElem?_eq_getElem hleft, List.getElem?_eq_getElem hright] at hprefix
-      simp only [List.getElem_map, List.getElem_range, Option.some.injEq] at hprefix
-      have hi' : table.table[i.val] = row := hi
-      rw [hi'] at hprefix
-      exact hprefix
-  · simp only [DataRowAt]
+      refine ⟨by omega, row.extract fixed.width row.size, ?_⟩
+      rw [Component.rowInput, valueFromOffset_fromArray, ← hprefix, Array.extract_append_extract]
+      simp [hsize]
+  · simp only [DataInputAt, ProverData.getRows, Component.rowInput, valueFromOffset_fromArray]
     rw [consistent]
-    have hi' : table.table[i.val] = row := hi
     simp [Component.proverRows, i.isLt, hi']
   · exact assumptions row hrow
 
