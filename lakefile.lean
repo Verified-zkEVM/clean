@@ -22,7 +22,7 @@ lean_exe export_femtocairo_flat_air_rust where
   root := `Clean.Examples.FemtoCairo.FlatAirRust
 
 lean_exe export_witness_ir_reference_rust where
-  root := `Clean.Air.Extraction.ReferenceRust
+  root := `Clean.Backends.Plonky3.Reference
 
 require "leanprover-community" / "mathlib" @ git "v4.33.1"
 require CompPoly from git "https://github.com/Verified-zkEVM/CompPoly.git"@"v4.33.1"

@@ -17,8 +17,9 @@ their existing Lean semantics. `WitnessBlock.wellFormed` additionally certifies 
 reference has the sort of an earlier step. Native Lean closures are not representable.
 -/
 
-namespace Air.Flat.Extraction
+namespace Backends.Plonky3
 
+open Air.Flat
 open Air.Flat.WitnessGeneration
 
 variable {F : Type} [FiniteField F]
@@ -184,4 +185,4 @@ structure Program (F : Type) [FiniteField F] where
   padding : List (Padding F)
   fuel : ℕ
 
-end Air.Flat.Extraction
+end Backends.Plonky3

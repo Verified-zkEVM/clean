@@ -1,6 +1,6 @@
 module
 
-public import Clean.Air.Extraction.Lower
+public import Clean.Backends.Plonky3.Lower
 
 @[expose] public section
 
@@ -8,14 +8,15 @@ public import Clean.Air.Extraction.Lower
 # Rust rendering for typed AIR extraction programs
 
 This is the only string-producing part of ensemble extraction. It consumes a validated
-`Extraction.Program`; lowering, validation, and executable semantics live in `IR.lean` and
+`Backends.Plonky3.Program`; lowering, validation, and executable semantics live in `Program.lean` and
 `Lower.lean`. Generic Plonky3 `Air` plumbing lives in the Rust backend.
 -/
 
-namespace Air.Flat.Extraction.Rust
+namespace Backends.Plonky3.Print
 
+open Air.Flat
 open Air.Flat.WitnessGeneration
-open Air.Flat.Extraction
+open Backends.Plonky3
 
 variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
@@ -432,4 +433,4 @@ def ensembleToRust (name : String) (ensemble : Ensemble F PublicIO)
   let program ← lower ensemble config |>.mapError toString
   programToRust name program
 
-end Air.Flat.Extraction.Rust
+end Backends.Plonky3.Print

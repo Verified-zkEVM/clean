@@ -25,7 +25,7 @@ public import Clean.Examples.HintExample
 public import Clean.Examples.FemtoCairo.FemtoCairo
 public import Clean.Examples.FemtoCairo.FlatAir
 public import Clean.Air.WitnessGeneration
-public import Clean.Air.Extraction.Rust
+public import Clean.Backends.Plonky3.Print
 public import Clean.Tables.Fibonacci8
 public import Clean.Tables.Fibonacci32
 public import Clean.Tables.Fibonacci32Inductive

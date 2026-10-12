@@ -1,6 +1,6 @@
 module
 
-public import Clean.Air.Extraction.Rust
+public import Clean.Backends.Plonky3.Print
 public import Clean.Examples.FemtoCairo.FlatAir
 public import Clean.Examples.FemtoCairo.FlatAirTestData
 public import Clean.Utils.Primes
@@ -12,7 +12,7 @@ open Examples.FemtoCairo.Types
 open Examples.FemtoCairo.FlatAirTestData
 
 def main : IO Unit := do
-  match Air.Flat.Extraction.Rust.ensembleToRust
+  match Backends.Plonky3.Print.ensembleToRust
       "FemtoCairoFlatAirProgram"
       (Examples.FemtoCairo.FlatAir.soundEnsemble testProgram h_programSize h_memorySize
         initialState).ensemble

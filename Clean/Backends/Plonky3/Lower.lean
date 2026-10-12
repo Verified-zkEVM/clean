@@ -1,13 +1,14 @@
 module
 
-public import Clean.Air.Extraction.IR
+public import Clean.Backends.Plonky3.Program
 
 @[expose] public section
 
 /-! Structural lowering from a flat Clean ensemble to the typed extraction program. -/
 
-namespace Air.Flat.Extraction
+namespace Backends.Plonky3
 
+open Air.Flat
 open Air.Flat.WitnessGeneration
 
 variable {F : Type} [FiniteField F]
@@ -256,4 +257,4 @@ def lower (ensemble : Ensemble F PublicIO) (config : Config F) :
     fuel := config.fuel
   }
 
-end Air.Flat.Extraction
+end Backends.Plonky3
