@@ -6,7 +6,6 @@ public import Clean.Circuit.LookupCircuit
 public import Clean.Circuit.Explicit
 public import Clean.Circuit.Extensions
 public import Clean.Circuit.StructEvalSimprocs
-public import Clean.Circuit.Verifier
 public import Clean.Utils.Tactics.ProvableStructDeriving
 public import Clean.Gadgets.Equality
 public import Clean.Gadgets.Conditional

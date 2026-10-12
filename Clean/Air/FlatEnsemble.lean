@@ -5,7 +5,7 @@ module
 
 public import Clean.Air.FlatComponent
 public import Clean.Air.Balance
-public import Clean.Circuit.Verifier
+public import Clean.Air.Verifier
 
 @[expose] public section
 

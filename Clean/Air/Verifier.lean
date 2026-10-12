@@ -178,10 +178,10 @@ def push {Message : TypeMap} [ProvableType Message] (channel : Channel F Message
 structure Program (F : Type) [FiniteField F]
     (PublicIO : TypeMap) [ProvableType PublicIO] where
   main : Var PublicIO F → Verifier F Unit
-  Spec : PublicIO F → ProverData F → Prop := fun _ _ => True
+  Spec : PublicIO F → ProverData F → Prop
   soundness : ∀ env,
     ((main (varFromOffset PublicIO 0)).operations.circuitOperations).FullGuarantees env →
-      Spec (eval env (varFromOffset (F := F) PublicIO 0)) env.data := by simp
+      Spec (eval env (varFromOffset (F := F) PublicIO 0)) env.data
 
 namespace Program
 
@@ -208,6 +208,8 @@ abbrev channelsWithRequirements (program : Program F PublicIO) : List (RawChanne
 def empty (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO] :
     Program F PublicIO where
   main _ := pure ()
+  Spec _ _ := True
+  soundness _ _ := trivial
 
 @[circuit_norm]
 lemma empty_operations : (empty F PublicIO).operations = [] := rfl

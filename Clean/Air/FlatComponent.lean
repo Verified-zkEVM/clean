@@ -1,6 +1,7 @@
 module
 
 public import Clean.Air.Circuit
+public import Clean.Air.RowProgram
 
 @[expose] public section
 

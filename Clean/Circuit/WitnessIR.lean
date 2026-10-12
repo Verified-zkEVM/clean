@@ -361,131 +361,6 @@ def evalSteps [FiniteField F] (env : ProverEnvironment F)
       evalSteps env steps (locals.push (.inr (e.eval { env, locals, idx, proverInput })))
         idx proverInput
 
-/-- A structured, index-aware program producing one row segment. Unlike `WitgenIR`,
-this has no native-closure escape hatch and can therefore be interpreted identically
-by Lean and extracted backends. -/
-structure RowProgram (F : Type) where
-  width : ℕ
-  steps : List (Step F)
-  output : VExpr F width
-
-namespace RowProgram
-
-/-- Evaluate a row program at `row`. `proverInput` is supplied only for committed
-row initialization; fixed-column evaluation leaves it empty. -/
-def eval [FiniteField F] (program : RowProgram F) (row : ℕ)
-    (proverInput : Array F := #[]) : Vector F program.width :=
-  let env : ProverEnvironment F := {
-    get := fun _ => 0
-    data := fun _ _ => #[]
-    hint := .empty F
-  }
-  program.output.eval {
-    env
-    locals := evalSteps env program.steps #[] row proverInput
-    idx := row
-    proverInput
-  }
-
-def empty (F : Type) : RowProgram F where
-  width := 0
-  steps := []
-  output := .lit #v[]
-
-def ofFExprs {n : ℕ} (values : Vector (FExpr F) n) : RowProgram F where
-  width := n
-  steps := []
-  output := .lit values
-
-end RowProgram
-
-/-- External inputs available to an index-aware row program. -/
-inductive RowProgram.Source where
-  | fixed
-  | proverInput
-deriving DecidableEq
-
-def RowProgram.Source.allowsProverInput : RowProgram.Source → Bool
-  | .fixed => false
-  | .proverInput => true
-
-mutual
-
-/-- Whether an expression is valid in a row initializer. These programs have no
-circuit-row or semantic-data environment. Prover initializers additionally admit
-the serialized runtime prover input; fixed programs do not. -/
-def FExpr.validForRow (source : RowProgram.Source) : FExpr F → Bool
-  | .expr _ => false
-  | .const _ | .index | .localVar _ => true
-  | .add left right | .mul left right =>
-      left.validForRow source && right.validForRow source
-  | .inv value => value.validForRow source
-  | .ofU64 value => value.validForRow source
-  | .ite condition thenValue elseValue =>
-      condition.validForRow source &&
-        thenValue.validForRow source && elseValue.validForRow source
-  | .listGet values index =>
-      FExprList.validForRow source values && index.validForRow source
-  | .listGetAtIndex values => FExprList.validForRow source values
-  | .proverInputGet index => source.allowsProverInput && index.validForRow source
-  | .dataGet .. | .hintGet .. => false
-
-def U64Expr.validForRow (source : RowProgram.Source) : U64Expr F → Bool
-  | .const _ | .idx | .localVar _ => true
-  | .val value => value.validForRow source
-  | .add left right | .mul left right | .div left right | .mod left right |
-      .land left right | .lor left right | .lxor left right |
-      .shiftL left right | .shiftR left right =>
-        left.validForRow source && right.validForRow source
-  | .ite condition thenValue elseValue =>
-      condition.validForRow source &&
-        thenValue.validForRow source && elseValue.validForRow source
-
-def BExpr.validForRow (source : RowProgram.Source) : BExpr F → Bool
-  | .true | .false => true
-  | .feq left right | .flt left right =>
-      left.validForRow source && right.validForRow source
-  | .neq left right | .lt left right =>
-      left.validForRow source && right.validForRow source
-  | .bit value _ => value.validForRow source
-  | .not condition => condition.validForRow source
-  | .and left right =>
-      left.validForRow source && right.validForRow source
-
-def FExprList.validForRow (source : RowProgram.Source) : List (FExpr F) → Bool
-  | [] => true
-  | value :: values =>
-      value.validForRow source && FExprList.validForRow source values
-
-end
-
-@[simp]
-theorem FExprList.validForRow_map_const (source : RowProgram.Source) (values : List F) :
-    FExprList.validForRow source (values.map FExpr.const) = true := by
-  induction values with
-  | nil => rfl
-  | cons value values ih => simp [FExprList.validForRow, FExpr.validForRow, ih]
-
-def Step.validForRow (source : RowProgram.Source) : Step F → Bool
-  | .letF value => value.validForRow source
-  | .letU value => value.validForRow source
-
-def VExpr.validForRow (source : RowProgram.Source) : {n : ℕ} → VExpr F n → Bool
-  | _, .lit values => values.toList.all (FExpr.validForRow source)
-  | _, .mapRange _ body => body.validForRow source
-  | _, .envRange _ => false
-  | _, .bitsOf value => value.validForRow source
-  | _, .append left right =>
-      left.validForRow source && right.validForRow source
-
-namespace RowProgram
-
-def Valid (program : RowProgram F) (source : Source) : Prop :=
-  program.steps.all (Step.validForRow source) &&
-    program.output.validForRow source = true
-
-end RowProgram
-
 /-- A witness-generation program producing `m` field elements. -/
 inductive WitgenIR (F : Type) : ℕ → Type where
   /-- Arbitrary Lean closure — migration escape hatch, not serializable.
@@ -893,3 +768,29 @@ end Eval
 end Witgen
 
 export Witgen (WitgenIR)
+
+/-- Interpret the rows stored under a component name using their declared circuit-input type. -/
+def ProverData.getRows (data : ProverData F) (name : String)
+    (Row : TypeMap) [ProvableType Row] : Array (Row F) :=
+  data name (size Row) |>.map fromElements
+
+/-- Read a typed component-input row from committed prover data. -/
+def Witgen.dataGet (name : String) (Row : TypeMap) [ProvableType Row]
+    (row : Witgen.U64Expr F) : Row (Witgen.FExpr F) :=
+  fromElements <| Vector.mapFinRange (size Row) fun col =>
+    Witgen.FExpr.dataGet name (size Row) row col
+
+@[circuit_norm]
+lemma Witgen.eval_dataGet [FiniteField F] (name : String) (Row : TypeMap) [ProvableType Row]
+    (row : Witgen.U64Expr F) (ctx : Witgen.Ctx F) :
+    Witgen.eval ctx (Witgen.dataGet name Row row) =
+      ((ctx.env.data.getRows name Row)[(row.eval ctx).toNat]?.getD default) := by
+  simp only [Witgen.eval, Witgen.dataGet, ProverData.getRows]
+  rw [ProvableType.fromElements_eq_iff, ProvableType.toElements_fromElements,
+    Vector.map_mapFinRange]
+  simp only [Witgen.FExpr.eval]
+  by_cases h : (row.eval ctx).toNat < (ctx.env.data name (size Row)).size
+  · simp [h]
+    rw [ProvableType.toElements_fromElements, Vector.mapFinRange_eq_self]
+  · simp [h, Vector.mapFinRange_eq_self]
+    simp only [default, ProvableType.toElements_fromElements]
