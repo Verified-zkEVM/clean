@@ -52,7 +52,7 @@ cargo test --locked --release --manifest-path backends/plonky3/Cargo.toml \
   --test witness_ir_reference_tests
 ```
 
-`witness_ir_reference_tests` checks the Rust rendering of the witness IR against Lean's semantics. It covers every renderable constructor with wrapping, out-of-range, and division-by-zero edge cases (external hint reads are not renderable). This rendering is trusted for soundness where it defines fixed columns.
+`witness_ir_reference_tests` checks the Rust rendering of the witness IR against Lean's semantics. It covers every renderable constructor with wrapping, out-of-range, and division-by-zero edge cases (external hint reads are not renderable). The Rust printers are part of the trusted computing base.
 
 The largest test generates, proves, and verifies a 4,096-step Fibonacci execution and reports
 witness generation, proving, verification, trace dimensions, and serialized proof size.

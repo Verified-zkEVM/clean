@@ -210,7 +210,7 @@ bound (`i < 256`) inside Lean soundness. Their declared height is exact: the wit
 not power-of-two-pad such a component beyond that height, and the verifier rejects a proof shape
 whose main trace height differs from the fixed trace height.
 
-Fixed rows are defined by a witness IR row program evaluated on the row index, and the verifier's preprocessed columns are computed by Rust generated from that program. The translation of witness IR to Rust is therefore trusted for soundness, not only for completeness. It must implement the full witness IR semantics and is checked against the Lean evaluator by differential tests covering every constructor.
+Fixed rows are defined by a witness IR row program evaluated on the row index, and the verifier's preprocessed columns are computed by the Rust printed from that program. The Rust printers must therefore implement the full witness IR semantics.
 
 ### The verifier is not an AIR component
 
@@ -343,11 +343,10 @@ constraint evaluator.
 - Translation and witness-generation tests must include negative/adversarial cases, not only honest
   end-to-end proofs.
 - A wrong Rust witness generator may remain a completeness failure, but it must not be able to
-  compensate for missing or weakened constraints. Witness IR code that defines fixed columns is the
-  exception: it determines verifier-known values and is trusted for soundness.
+  compensate for missing or weakened constraints.
 
 Whether the Lean-to-Rust translation itself must be formally verified is an open question. Unless
-it is formally verified, the generator is part of the trusted computing base and requires small,
+it is formally verified, the Rust printers are part of the trusted computing base and require small,
 auditable lowering rules plus differential and negative testing.
 
 ## Performance and demonstration requirements
