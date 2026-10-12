@@ -34,6 +34,7 @@ impl<F> WitnessField for F where F: Field + PrimeField64 + Copy + Eq {}
 /// Failures surfaced by the public witness-generation API.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum WitnessGenerationError {
+    FieldOrder { expected: u64, actual: u64 },
     PublicInputWidth { expected: usize, actual: usize },
     ProverInputWidth { expected: usize, actual: usize },
     Runtime(String),
@@ -42,6 +43,10 @@ pub enum WitnessGenerationError {
 impl core::fmt::Display for WitnessGenerationError {
     fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
+            Self::FieldOrder { expected, actual } => write!(
+                formatter,
+                "generated program expects field order {expected}, got {actual}"
+            ),
             Self::PublicInputWidth { expected, actual } => write!(
                 formatter,
                 "public input has width {actual}, expected {expected}"
@@ -207,6 +212,8 @@ impl<F: Field> EnsembleWitness<F> {
 
 /// Implemented by Rust emitted directly from a Clean ensemble and its witness IR.
 pub trait Program<F: WitnessField> {
+    /// Order of the field whose constants and arithmetic the generated code was printed for.
+    const FIELD_ORDER: u64;
     const FUEL: usize;
     const COMPONENTS: usize;
     const PUBLIC_INPUTS: usize;
@@ -590,6 +597,12 @@ pub fn generate<F: WitnessField, P: Program<F>>(
     public_input: &[F],
     prover_input: &[F],
 ) -> Result<EnsembleWitness<F>, WitnessGenerationError> {
+    if F::ORDER_U64 != P::FIELD_ORDER {
+        return Err(WitnessGenerationError::FieldOrder {
+            expected: P::FIELD_ORDER,
+            actual: F::ORDER_U64,
+        });
+    }
     let modes = P::modes();
     let padding = P::padding();
     if modes.len() != P::COMPONENTS {

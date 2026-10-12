@@ -24,6 +24,10 @@ use crate::witness_generation::{Interaction, WitnessField};
 /// Shape errors detected before proving or verification.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EnsembleShapeError {
+    FieldOrder {
+        expected: u64,
+        actual: u64,
+    },
     NoComponents,
     MetadataCount {
         metadata: &'static str,
@@ -82,6 +86,8 @@ pub struct GeneratedLookup<F: Field> {
 
 /// Direct expressions emitted for one Clean ensemble.
 pub trait GeneratedAirSpec: Clone + Sync {
+    /// Order of the field whose constants and arithmetic the generated code was printed for.
+    const FIELD_ORDER: u64;
     const PUBLIC_VALUES: usize;
     const WIDTHS: &'static [usize];
     const FIXED_WIDTHS: &'static [usize];
@@ -127,6 +133,12 @@ pub struct GeneratedEnsemble<F, P> {
 
 impl<F: WitnessField, P: GeneratedAirSpec> GeneratedEnsemble<F, P> {
     pub fn new(trace_heights: &[usize]) -> Result<Self, EnsembleShapeError> {
+        if F::ORDER_U64 != P::FIELD_ORDER {
+            return Err(EnsembleShapeError::FieldOrder {
+                expected: P::FIELD_ORDER,
+                actual: F::ORDER_U64,
+            });
+        }
         let expected = P::WIDTHS.len();
         if expected == 0 {
             return Err(EnsembleShapeError::NoComponents);

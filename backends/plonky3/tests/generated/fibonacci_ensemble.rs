@@ -57,7 +57,7 @@ fn component_0_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
     vec![
         Interaction {
             channel: "fibonacci",
-            multiplicity: (F::from_u64(2013265920u64) * row.get(0).copied().unwrap_or(F::ZERO)),
+            multiplicity: (-F::from_u64(1u64) * row.get(0).copied().unwrap_or(F::ZERO)),
             message: vec![
                 row.get(1).copied().unwrap_or(F::ZERO),
                 row.get(2).copied().unwrap_or(F::ZERO),
@@ -67,7 +67,7 @@ fn component_0_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
         },
         Interaction {
             channel: "add8",
-            multiplicity: (F::from_u64(2013265920u64) * row.get(0).copied().unwrap_or(F::ZERO)),
+            multiplicity: (-F::from_u64(1u64) * row.get(0).copied().unwrap_or(F::ZERO)),
             message: vec![
                 row.get(2).copied().unwrap_or(F::ZERO),
                 row.get(3).copied().unwrap_or(F::ZERO),
@@ -117,7 +117,7 @@ fn component_1_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
     vec![
         Interaction {
             channel: "bytes",
-            multiplicity: (F::from_u64(2013265920u64) * F::from_u64(1u64)),
+            multiplicity: (-F::from_u64(1u64) * F::from_u64(1u64)),
             message: vec![row.get(2).copied().unwrap_or(F::ZERO)],
             assume_guarantees: true,
         },
@@ -195,7 +195,7 @@ fn public_interactions<F: WitnessField>(public_input: &[F]) -> Vec<Interaction<F
     vec![
         Interaction {
             channel: "fibonacci",
-            multiplicity: (F::from_u64(2013265920u64) * F::from_u64(1u64)),
+            multiplicity: (-F::from_u64(1u64) * F::from_u64(1u64)),
             message: vec![
                 public_input.get(0).copied().unwrap_or(F::ZERO),
                 public_input.get(1).copied().unwrap_or(F::ZERO),
@@ -216,6 +216,7 @@ fn public_interactions<F: WitnessField>(public_input: &[F]) -> Vec<Interaction<F
 pub struct FibonacciEnsembleProgramAirSpec;
 
 impl GeneratedAirSpec for FibonacciEnsembleProgramAirSpec {
+    const FIELD_ORDER: u64 = 2013265921;
     const PUBLIC_VALUES: usize = 3;
     const WIDTHS: &'static [usize] = &[5, 5, 1];
     const FIXED_WIDTHS: &'static [usize] = &[0, 0, 1];
@@ -248,17 +249,17 @@ impl GeneratedAirSpec for FibonacciEnsembleProgramAirSpec {
             0 => vec![
                 (Into::<AB::Expr>::into(local[0].clone())
                     * (Into::<AB::Expr>::into(local[0].clone())
-                        + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                        + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                             * Into::<AB::Expr>::into(AB::F::from_u64(1u64))))),
             ],
             1 => vec![
                 (Into::<AB::Expr>::into(local[4].clone())
                     * (Into::<AB::Expr>::into(local[4].clone())
-                        + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                        + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                             * Into::<AB::Expr>::into(AB::F::from_u64(1u64))))),
                 ((Into::<AB::Expr>::into(local[0].clone())
                     + Into::<AB::Expr>::into(local[1].clone()))
-                    + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                    + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                         * (Into::<AB::Expr>::into(local[2].clone())
                             + (Into::<AB::Expr>::into(local[4].clone())
                                 * Into::<AB::Expr>::into(AB::F::from_u64(256u64)))))),
@@ -283,7 +284,7 @@ impl GeneratedAirSpec for FibonacciEnsembleProgramAirSpec {
                         SymbolicExpression::<F>::from(local[2]),
                         SymbolicExpression::<F>::from(local[3]),
                     ],
-                    multiplicity: -(SymbolicExpression::<F>::from(F::from_u64(2013265920u64))
+                    multiplicity: -(SymbolicExpression::<F>::from(-F::from_u64(1u64))
                         * SymbolicExpression::<F>::from(local[0])),
                     direction: LookupDirection::Receive,
                 });
@@ -294,7 +295,7 @@ impl GeneratedAirSpec for FibonacciEnsembleProgramAirSpec {
                         SymbolicExpression::<F>::from(local[3]),
                         SymbolicExpression::<F>::from(local[4]),
                     ],
-                    multiplicity: -(SymbolicExpression::<F>::from(F::from_u64(2013265920u64))
+                    multiplicity: -(SymbolicExpression::<F>::from(-F::from_u64(1u64))
                         * SymbolicExpression::<F>::from(local[0])),
                     direction: LookupDirection::Receive,
                 });
@@ -314,7 +315,7 @@ impl GeneratedAirSpec for FibonacciEnsembleProgramAirSpec {
                 lookups.push(GeneratedLookup {
                     channel: "bytes".into(),
                     message: vec![SymbolicExpression::<F>::from(local[2])],
-                    multiplicity: -(SymbolicExpression::<F>::from(F::from_u64(2013265920u64))
+                    multiplicity: -(SymbolicExpression::<F>::from(-F::from_u64(1u64))
                         * SymbolicExpression::<F>::from(F::from_u64(1u64))),
                     direction: LookupDirection::Receive,
                 });
@@ -353,6 +354,7 @@ pub type FibonacciEnsembleProgramStatement<F> =
 pub struct FibonacciEnsembleProgram;
 
 impl<F: WitnessField> Program<F> for FibonacciEnsembleProgram {
+    const FIELD_ORDER: u64 = 2013265921;
     const FUEL: usize = 100000;
     const COMPONENTS: usize = 3;
     const PUBLIC_INPUTS: usize = 3;

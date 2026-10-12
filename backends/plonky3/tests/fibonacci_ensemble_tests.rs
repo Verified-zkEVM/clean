@@ -7,13 +7,14 @@ mod generated {
 }
 
 use clean_backend::witness_generation::{
-    self, Interaction, Mode, Padding, Program, WitnessData, WitnessField,
+    self, Interaction, Mode, Padding, Program, WitnessData, WitnessField, WitnessGenerationError,
 };
 use clean_backend::{
     prove_ensemble, verify_ensemble, EnsembleShapeError, EnsembleVerificationError,
 };
 use common::setup;
 use p3_baby_bear::BabyBear;
+use p3_koala_bear::KoalaBear;
 use p3_field::{PrimeCharacteristicRing, PrimeField64};
 use p3_matrix::Matrix;
 use std::time::Instant;
@@ -164,9 +165,25 @@ fn ensemble_api_reports_shape_errors() {
     ));
 }
 
+#[test]
+fn generated_code_rejects_other_fields() {
+    assert!(matches!(
+        generated::FibonacciEnsembleProgramStatement::<KoalaBear>::new(&[32, 32, 256]),
+        Err(EnsembleShapeError::FieldOrder { expected, actual })
+            if expected == BabyBear::ORDER_U64 && actual == KoalaBear::ORDER_U64
+    ));
+    let public_values = [32, 5, 226].map(KoalaBear::from_u64);
+    assert!(matches!(
+        generated::generate(&public_values, &[]),
+        Err(WitnessGenerationError::FieldOrder { expected, actual })
+            if expected == BabyBear::ORDER_U64 && actual == KoalaBear::ORDER_U64
+    ));
+}
+
 struct Minimum64Program;
 
 impl<F: WitnessField> Program<F> for Minimum64Program {
+    const FIELD_ORDER: u64 = <generated::FibonacciEnsembleProgram as Program<F>>::FIELD_ORDER;
     const FUEL: usize = <generated::FibonacciEnsembleProgram as Program<F>>::FUEL;
     const COMPONENTS: usize = <generated::FibonacciEnsembleProgram as Program<F>>::COMPONENTS;
     const PUBLIC_INPUTS: usize = <generated::FibonacciEnsembleProgram as Program<F>>::PUBLIC_INPUTS;

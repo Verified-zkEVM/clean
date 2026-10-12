@@ -141,6 +141,7 @@ use clean_backend::witness_generation::\{WitnessData, WitnessField};
 use alloc::vec::Vec;
 
 {Rust.u64Helpers}
+pub const FIELD_ORDER: u64 = {Rust.fieldOrder (F := Fb)};
 pub const INPUT: &[u64] = {u64List (input.toList.map (·.val))};
 pub const PROVER_INPUT: &[u64] = {u64List (proverInput.toList.map (·.val))};
 pub const MEMORY: &[&[u64]] = &[{memory}];

@@ -224,20 +224,20 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
         let mut output = Vec::with_capacity(1);
         output.push(
             ((((((F::from_u64(1u64)
-                + (F::from_u64(2013265920u64) * row.get(9).copied().unwrap_or(F::ZERO)))
-                + (F::from_u64(2013265920u64) * row.get(10).copied().unwrap_or(F::ZERO)))
+                + (-F::from_u64(1u64) * row.get(9).copied().unwrap_or(F::ZERO)))
+                + (-F::from_u64(1u64) * row.get(10).copied().unwrap_or(F::ZERO)))
                 + (row.get(9).copied().unwrap_or(F::ZERO)
                     * row.get(10).copied().unwrap_or(F::ZERO)))
                 * (row.get(1).copied().unwrap_or(F::ZERO)
                     + row.get(4).copied().unwrap_or(F::ZERO)))
                 + ((row.get(9).copied().unwrap_or(F::ZERO)
-                    + (F::from_u64(2013265920u64)
+                    + (-F::from_u64(1u64)
                         * (row.get(9).copied().unwrap_or(F::ZERO)
                             * row.get(10).copied().unwrap_or(F::ZERO))))
                     * (row.get(1).copied().unwrap_or(F::ZERO)
                         + row.get(4).copied().unwrap_or(F::ZERO))))
                 + ((row.get(10).copied().unwrap_or(F::ZERO)
-                    + (F::from_u64(2013265920u64)
+                    + (-F::from_u64(1u64)
                         * (row.get(9).copied().unwrap_or(F::ZERO)
                             * row.get(10).copied().unwrap_or(F::ZERO))))
                     * (row.get(2).copied().unwrap_or(F::ZERO)
@@ -261,8 +261,8 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
         let mut output = Vec::with_capacity(1);
         output.push(
             ((((F::from_u64(1u64)
-                + (F::from_u64(2013265920u64) * row.get(9).copied().unwrap_or(F::ZERO)))
-                + (F::from_u64(2013265920u64) * row.get(10).copied().unwrap_or(F::ZERO)))
+                + (-F::from_u64(1u64) * row.get(9).copied().unwrap_or(F::ZERO)))
+                + (-F::from_u64(1u64) * row.get(10).copied().unwrap_or(F::ZERO)))
                 + (row.get(9).copied().unwrap_or(F::ZERO)
                     * row.get(10).copied().unwrap_or(F::ZERO)))
                 * row.get(16).copied().unwrap_or(F::ZERO)),
@@ -285,18 +285,18 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
         let mut output = Vec::with_capacity(1);
         output.push(
             (((((((F::from_u64(1u64)
-                + (F::from_u64(2013265920u64) * row.get(9).copied().unwrap_or(F::ZERO)))
-                + (F::from_u64(2013265920u64) * row.get(10).copied().unwrap_or(F::ZERO)))
+                + (-F::from_u64(1u64) * row.get(9).copied().unwrap_or(F::ZERO)))
+                + (-F::from_u64(1u64) * row.get(10).copied().unwrap_or(F::ZERO)))
                 + (row.get(9).copied().unwrap_or(F::ZERO)
                     * row.get(10).copied().unwrap_or(F::ZERO)))
                 * row.get(18).copied().unwrap_or(F::ZERO))
                 + ((row.get(9).copied().unwrap_or(F::ZERO)
-                    + (F::from_u64(2013265920u64)
+                    + (-F::from_u64(1u64)
                         * (row.get(9).copied().unwrap_or(F::ZERO)
                             * row.get(10).copied().unwrap_or(F::ZERO))))
                     * row.get(16).copied().unwrap_or(F::ZERO)))
                 + ((row.get(10).copied().unwrap_or(F::ZERO)
-                    + (F::from_u64(2013265920u64)
+                    + (-F::from_u64(1u64)
                         * (row.get(9).copied().unwrap_or(F::ZERO)
                             * row.get(10).copied().unwrap_or(F::ZERO))))
                     * row.get(16).copied().unwrap_or(F::ZERO)))
@@ -311,20 +311,20 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
         let mut output = Vec::with_capacity(1);
         output.push(
             ((((((F::from_u64(1u64)
-                + (F::from_u64(2013265920u64) * row.get(11).copied().unwrap_or(F::ZERO)))
-                + (F::from_u64(2013265920u64) * row.get(12).copied().unwrap_or(F::ZERO)))
+                + (-F::from_u64(1u64) * row.get(11).copied().unwrap_or(F::ZERO)))
+                + (-F::from_u64(1u64) * row.get(12).copied().unwrap_or(F::ZERO)))
                 + (row.get(11).copied().unwrap_or(F::ZERO)
                     * row.get(12).copied().unwrap_or(F::ZERO)))
                 * (row.get(1).copied().unwrap_or(F::ZERO)
                     + row.get(5).copied().unwrap_or(F::ZERO)))
                 + ((row.get(11).copied().unwrap_or(F::ZERO)
-                    + (F::from_u64(2013265920u64)
+                    + (-F::from_u64(1u64)
                         * (row.get(11).copied().unwrap_or(F::ZERO)
                             * row.get(12).copied().unwrap_or(F::ZERO))))
                     * (row.get(1).copied().unwrap_or(F::ZERO)
                         + row.get(5).copied().unwrap_or(F::ZERO))))
                 + ((row.get(12).copied().unwrap_or(F::ZERO)
-                    + (F::from_u64(2013265920u64)
+                    + (-F::from_u64(1u64)
                         * (row.get(11).copied().unwrap_or(F::ZERO)
                             * row.get(12).copied().unwrap_or(F::ZERO))))
                     * (row.get(2).copied().unwrap_or(F::ZERO)
@@ -348,8 +348,8 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
         let mut output = Vec::with_capacity(1);
         output.push(
             ((((F::from_u64(1u64)
-                + (F::from_u64(2013265920u64) * row.get(11).copied().unwrap_or(F::ZERO)))
-                + (F::from_u64(2013265920u64) * row.get(12).copied().unwrap_or(F::ZERO)))
+                + (-F::from_u64(1u64) * row.get(11).copied().unwrap_or(F::ZERO)))
+                + (-F::from_u64(1u64) * row.get(12).copied().unwrap_or(F::ZERO)))
                 + (row.get(11).copied().unwrap_or(F::ZERO)
                     * row.get(12).copied().unwrap_or(F::ZERO)))
                 * row.get(21).copied().unwrap_or(F::ZERO)),
@@ -372,18 +372,18 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
         let mut output = Vec::with_capacity(1);
         output.push(
             (((((((F::from_u64(1u64)
-                + (F::from_u64(2013265920u64) * row.get(11).copied().unwrap_or(F::ZERO)))
-                + (F::from_u64(2013265920u64) * row.get(12).copied().unwrap_or(F::ZERO)))
+                + (-F::from_u64(1u64) * row.get(11).copied().unwrap_or(F::ZERO)))
+                + (-F::from_u64(1u64) * row.get(12).copied().unwrap_or(F::ZERO)))
                 + (row.get(11).copied().unwrap_or(F::ZERO)
                     * row.get(12).copied().unwrap_or(F::ZERO)))
                 * row.get(23).copied().unwrap_or(F::ZERO))
                 + ((row.get(11).copied().unwrap_or(F::ZERO)
-                    + (F::from_u64(2013265920u64)
+                    + (-F::from_u64(1u64)
                         * (row.get(11).copied().unwrap_or(F::ZERO)
                             * row.get(12).copied().unwrap_or(F::ZERO))))
                     * row.get(21).copied().unwrap_or(F::ZERO)))
                 + ((row.get(12).copied().unwrap_or(F::ZERO)
-                    + (F::from_u64(2013265920u64)
+                    + (-F::from_u64(1u64)
                         * (row.get(11).copied().unwrap_or(F::ZERO)
                             * row.get(12).copied().unwrap_or(F::ZERO))))
                     * row.get(21).copied().unwrap_or(F::ZERO)))
@@ -398,20 +398,20 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
         let mut output = Vec::with_capacity(1);
         output.push(
             ((((((F::from_u64(1u64)
-                + (F::from_u64(2013265920u64) * row.get(13).copied().unwrap_or(F::ZERO)))
-                + (F::from_u64(2013265920u64) * row.get(14).copied().unwrap_or(F::ZERO)))
+                + (-F::from_u64(1u64) * row.get(13).copied().unwrap_or(F::ZERO)))
+                + (-F::from_u64(1u64) * row.get(14).copied().unwrap_or(F::ZERO)))
                 + (row.get(13).copied().unwrap_or(F::ZERO)
                     * row.get(14).copied().unwrap_or(F::ZERO)))
                 * (row.get(1).copied().unwrap_or(F::ZERO)
                     + row.get(6).copied().unwrap_or(F::ZERO)))
                 + ((row.get(13).copied().unwrap_or(F::ZERO)
-                    + (F::from_u64(2013265920u64)
+                    + (-F::from_u64(1u64)
                         * (row.get(13).copied().unwrap_or(F::ZERO)
                             * row.get(14).copied().unwrap_or(F::ZERO))))
                     * (row.get(1).copied().unwrap_or(F::ZERO)
                         + row.get(6).copied().unwrap_or(F::ZERO))))
                 + ((row.get(14).copied().unwrap_or(F::ZERO)
-                    + (F::from_u64(2013265920u64)
+                    + (-F::from_u64(1u64)
                         * (row.get(13).copied().unwrap_or(F::ZERO)
                             * row.get(14).copied().unwrap_or(F::ZERO))))
                     * (row.get(2).copied().unwrap_or(F::ZERO)
@@ -435,8 +435,8 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
         let mut output = Vec::with_capacity(1);
         output.push(
             ((((F::from_u64(1u64)
-                + (F::from_u64(2013265920u64) * row.get(13).copied().unwrap_or(F::ZERO)))
-                + (F::from_u64(2013265920u64) * row.get(14).copied().unwrap_or(F::ZERO)))
+                + (-F::from_u64(1u64) * row.get(13).copied().unwrap_or(F::ZERO)))
+                + (-F::from_u64(1u64) * row.get(14).copied().unwrap_or(F::ZERO)))
                 + (row.get(13).copied().unwrap_or(F::ZERO)
                     * row.get(14).copied().unwrap_or(F::ZERO)))
                 * row.get(26).copied().unwrap_or(F::ZERO)),
@@ -459,18 +459,18 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
         let mut output = Vec::with_capacity(1);
         output.push(
             (((((((F::from_u64(1u64)
-                + (F::from_u64(2013265920u64) * row.get(13).copied().unwrap_or(F::ZERO)))
-                + (F::from_u64(2013265920u64) * row.get(14).copied().unwrap_or(F::ZERO)))
+                + (-F::from_u64(1u64) * row.get(13).copied().unwrap_or(F::ZERO)))
+                + (-F::from_u64(1u64) * row.get(14).copied().unwrap_or(F::ZERO)))
                 + (row.get(13).copied().unwrap_or(F::ZERO)
                     * row.get(14).copied().unwrap_or(F::ZERO)))
                 * row.get(28).copied().unwrap_or(F::ZERO))
                 + ((row.get(13).copied().unwrap_or(F::ZERO)
-                    + (F::from_u64(2013265920u64)
+                    + (-F::from_u64(1u64)
                         * (row.get(13).copied().unwrap_or(F::ZERO)
                             * row.get(14).copied().unwrap_or(F::ZERO))))
                     * row.get(26).copied().unwrap_or(F::ZERO)))
                 + ((row.get(14).copied().unwrap_or(F::ZERO)
-                    + (F::from_u64(2013265920u64)
+                    + (-F::from_u64(1u64)
                         * (row.get(13).copied().unwrap_or(F::ZERO)
                             * row.get(14).copied().unwrap_or(F::ZERO))))
                     * row.get(26).copied().unwrap_or(F::ZERO)))
@@ -526,7 +526,7 @@ fn component_0_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
     vec![
         Interaction {
             channel: "state",
-            multiplicity: (F::from_u64(2013265920u64) * F::from_u64(1u64)),
+            multiplicity: (-F::from_u64(1u64) * F::from_u64(1u64)),
             message: vec![
                 row.get(0).copied().unwrap_or(F::ZERO),
                 row.get(1).copied().unwrap_or(F::ZERO),
@@ -536,7 +536,7 @@ fn component_0_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
         },
         Interaction {
             channel: "program",
-            multiplicity: (F::from_u64(2013265920u64) * F::from_u64(1u64)),
+            multiplicity: (-F::from_u64(1u64) * F::from_u64(1u64)),
             message: vec![
                 row.get(0).copied().unwrap_or(F::ZERO),
                 row.get(3).copied().unwrap_or(F::ZERO),
@@ -545,7 +545,7 @@ fn component_0_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
         },
         Interaction {
             channel: "program",
-            multiplicity: (F::from_u64(2013265920u64) * F::from_u64(1u64)),
+            multiplicity: (-F::from_u64(1u64) * F::from_u64(1u64)),
             message: vec![
                 (row.get(0).copied().unwrap_or(F::ZERO) + F::from_u64(1u64)),
                 row.get(4).copied().unwrap_or(F::ZERO),
@@ -554,7 +554,7 @@ fn component_0_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
         },
         Interaction {
             channel: "program",
-            multiplicity: (F::from_u64(2013265920u64) * F::from_u64(1u64)),
+            multiplicity: (-F::from_u64(1u64) * F::from_u64(1u64)),
             message: vec![
                 (row.get(0).copied().unwrap_or(F::ZERO) + F::from_u64(2u64)),
                 row.get(5).copied().unwrap_or(F::ZERO),
@@ -563,7 +563,7 @@ fn component_0_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
         },
         Interaction {
             channel: "program",
-            multiplicity: (F::from_u64(2013265920u64) * F::from_u64(1u64)),
+            multiplicity: (-F::from_u64(1u64) * F::from_u64(1u64)),
             message: vec![
                 (row.get(0).copied().unwrap_or(F::ZERO) + F::from_u64(3u64)),
                 row.get(6).copied().unwrap_or(F::ZERO),
@@ -572,7 +572,7 @@ fn component_0_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
         },
         Interaction {
             channel: "memory",
-            multiplicity: (F::from_u64(2013265920u64) * F::from_u64(1u64)),
+            multiplicity: (-F::from_u64(1u64) * F::from_u64(1u64)),
             message: vec![
                 row.get(15).copied().unwrap_or(F::ZERO),
                 row.get(16).copied().unwrap_or(F::ZERO),
@@ -581,7 +581,7 @@ fn component_0_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
         },
         Interaction {
             channel: "memory",
-            multiplicity: (F::from_u64(2013265920u64) * F::from_u64(1u64)),
+            multiplicity: (-F::from_u64(1u64) * F::from_u64(1u64)),
             message: vec![
                 row.get(17).copied().unwrap_or(F::ZERO),
                 row.get(18).copied().unwrap_or(F::ZERO),
@@ -590,7 +590,7 @@ fn component_0_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
         },
         Interaction {
             channel: "memory",
-            multiplicity: (F::from_u64(2013265920u64) * F::from_u64(1u64)),
+            multiplicity: (-F::from_u64(1u64) * F::from_u64(1u64)),
             message: vec![
                 row.get(20).copied().unwrap_or(F::ZERO),
                 row.get(21).copied().unwrap_or(F::ZERO),
@@ -599,7 +599,7 @@ fn component_0_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
         },
         Interaction {
             channel: "memory",
-            multiplicity: (F::from_u64(2013265920u64) * F::from_u64(1u64)),
+            multiplicity: (-F::from_u64(1u64) * F::from_u64(1u64)),
             message: vec![
                 row.get(22).copied().unwrap_or(F::ZERO),
                 row.get(23).copied().unwrap_or(F::ZERO),
@@ -608,7 +608,7 @@ fn component_0_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
         },
         Interaction {
             channel: "memory",
-            multiplicity: (F::from_u64(2013265920u64) * F::from_u64(1u64)),
+            multiplicity: (-F::from_u64(1u64) * F::from_u64(1u64)),
             message: vec![
                 row.get(25).copied().unwrap_or(F::ZERO),
                 row.get(26).copied().unwrap_or(F::ZERO),
@@ -617,7 +617,7 @@ fn component_0_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
         },
         Interaction {
             channel: "memory",
-            multiplicity: (F::from_u64(2013265920u64) * F::from_u64(1u64)),
+            multiplicity: (-F::from_u64(1u64) * F::from_u64(1u64)),
             message: vec![
                 row.get(27).copied().unwrap_or(F::ZERO),
                 row.get(28).copied().unwrap_or(F::ZERO),
@@ -790,7 +790,7 @@ fn public_interactions<F: WitnessField>(public_input: &[F]) -> Vec<Interaction<F
     vec![
         Interaction {
             channel: "state",
-            multiplicity: (F::from_u64(2013265920u64) * F::from_u64(1u64)),
+            multiplicity: (-F::from_u64(1u64) * F::from_u64(1u64)),
             message: vec![
                 public_input.get(0).copied().unwrap_or(F::ZERO),
                 public_input.get(1).copied().unwrap_or(F::ZERO),
@@ -811,6 +811,7 @@ fn public_interactions<F: WitnessField>(public_input: &[F]) -> Vec<Interaction<F
 pub struct FemtoCairoFlatAirProgramAirSpec;
 
 impl GeneratedAirSpec for FemtoCairoFlatAirProgramAirSpec {
+    const FIELD_ORDER: u64 = 2013265921;
     const PUBLIC_VALUES: usize = 3;
     const WIDTHS: &'static [usize] = &[33, 2, 1];
     const FIXED_WIDTHS: &'static [usize] = &[0, 1, 2];
@@ -849,38 +850,38 @@ impl GeneratedAirSpec for FemtoCairoFlatAirProgramAirSpec {
             0 => vec![
                 (Into::<AB::Expr>::into(local[7].clone())
                     * (Into::<AB::Expr>::into(local[7].clone())
-                        + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                        + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                             * Into::<AB::Expr>::into(AB::F::from_u64(1u64))))),
                 (Into::<AB::Expr>::into(local[8].clone())
                     * (Into::<AB::Expr>::into(local[8].clone())
-                        + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                        + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                             * Into::<AB::Expr>::into(AB::F::from_u64(1u64))))),
                 (Into::<AB::Expr>::into(local[9].clone())
                     * (Into::<AB::Expr>::into(local[9].clone())
-                        + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                        + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                             * Into::<AB::Expr>::into(AB::F::from_u64(1u64))))),
                 (Into::<AB::Expr>::into(local[10].clone())
                     * (Into::<AB::Expr>::into(local[10].clone())
-                        + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                        + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                             * Into::<AB::Expr>::into(AB::F::from_u64(1u64))))),
                 (Into::<AB::Expr>::into(local[11].clone())
                     * (Into::<AB::Expr>::into(local[11].clone())
-                        + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                        + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                             * Into::<AB::Expr>::into(AB::F::from_u64(1u64))))),
                 (Into::<AB::Expr>::into(local[12].clone())
                     * (Into::<AB::Expr>::into(local[12].clone())
-                        + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                        + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                             * Into::<AB::Expr>::into(AB::F::from_u64(1u64))))),
                 (Into::<AB::Expr>::into(local[13].clone())
                     * (Into::<AB::Expr>::into(local[13].clone())
-                        + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                        + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                             * Into::<AB::Expr>::into(AB::F::from_u64(1u64))))),
                 (Into::<AB::Expr>::into(local[14].clone())
                     * (Into::<AB::Expr>::into(local[14].clone())
-                        + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                        + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                             * Into::<AB::Expr>::into(AB::F::from_u64(1u64))))),
                 (Into::<AB::Expr>::into(local[3].clone())
-                    + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                    + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                         * ((((((((Into::<AB::Expr>::into(AB::F::from_u64(0u64))
                             + (Into::<AB::Expr>::into(local[7].clone())
                                 * Into::<AB::Expr>::into(AB::F::from_u64(1u64))))
@@ -899,55 +900,55 @@ impl GeneratedAirSpec for FemtoCairoFlatAirProgramAirSpec {
                             + (Into::<AB::Expr>::into(local[14].clone())
                                 * Into::<AB::Expr>::into(AB::F::from_u64(128u64)))))),
                 (Into::<AB::Expr>::into(local[15].clone())
-                    + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                    + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                         * ((((((Into::<AB::Expr>::into(AB::F::from_u64(1u64))
-                            + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                            + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                 * Into::<AB::Expr>::into(local[9].clone())))
-                            + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                            + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                 * Into::<AB::Expr>::into(local[10].clone())))
                             + (Into::<AB::Expr>::into(local[9].clone())
                                 * Into::<AB::Expr>::into(local[10].clone())))
                             * (Into::<AB::Expr>::into(local[1].clone())
                                 + Into::<AB::Expr>::into(local[4].clone())))
                             + ((Into::<AB::Expr>::into(local[9].clone())
-                                + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                                + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                     * (Into::<AB::Expr>::into(local[9].clone())
                                         * Into::<AB::Expr>::into(local[10].clone()))))
                                 * (Into::<AB::Expr>::into(local[1].clone())
                                     + Into::<AB::Expr>::into(local[4].clone()))))
                             + ((Into::<AB::Expr>::into(local[10].clone())
-                                + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                                + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                     * (Into::<AB::Expr>::into(local[9].clone())
                                         * Into::<AB::Expr>::into(local[10].clone()))))
                                 * (Into::<AB::Expr>::into(local[2].clone())
                                     + Into::<AB::Expr>::into(local[4].clone())))))),
                 (Into::<AB::Expr>::into(local[17].clone())
-                    + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                    + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                         * ((((Into::<AB::Expr>::into(AB::F::from_u64(1u64))
-                            + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                            + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                 * Into::<AB::Expr>::into(local[9].clone())))
-                            + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                            + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                 * Into::<AB::Expr>::into(local[10].clone())))
                             + (Into::<AB::Expr>::into(local[9].clone())
                                 * Into::<AB::Expr>::into(local[10].clone())))
                             * Into::<AB::Expr>::into(local[16].clone())))),
                 (Into::<AB::Expr>::into(local[19].clone())
-                    + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                    + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                         * (((((((Into::<AB::Expr>::into(AB::F::from_u64(1u64))
-                            + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                            + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                 * Into::<AB::Expr>::into(local[9].clone())))
-                            + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                            + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                 * Into::<AB::Expr>::into(local[10].clone())))
                             + (Into::<AB::Expr>::into(local[9].clone())
                                 * Into::<AB::Expr>::into(local[10].clone())))
                             * Into::<AB::Expr>::into(local[18].clone()))
                             + ((Into::<AB::Expr>::into(local[9].clone())
-                                + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                                + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                     * (Into::<AB::Expr>::into(local[9].clone())
                                         * Into::<AB::Expr>::into(local[10].clone()))))
                                 * Into::<AB::Expr>::into(local[16].clone())))
                             + ((Into::<AB::Expr>::into(local[10].clone())
-                                + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                                + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                     * (Into::<AB::Expr>::into(local[9].clone())
                                         * Into::<AB::Expr>::into(local[10].clone()))))
                                 * Into::<AB::Expr>::into(local[16].clone())))
@@ -955,55 +956,55 @@ impl GeneratedAirSpec for FemtoCairoFlatAirProgramAirSpec {
                                 * Into::<AB::Expr>::into(local[10].clone()))
                                 * Into::<AB::Expr>::into(local[4].clone()))))),
                 (Into::<AB::Expr>::into(local[20].clone())
-                    + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                    + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                         * ((((((Into::<AB::Expr>::into(AB::F::from_u64(1u64))
-                            + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                            + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                 * Into::<AB::Expr>::into(local[11].clone())))
-                            + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                            + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                 * Into::<AB::Expr>::into(local[12].clone())))
                             + (Into::<AB::Expr>::into(local[11].clone())
                                 * Into::<AB::Expr>::into(local[12].clone())))
                             * (Into::<AB::Expr>::into(local[1].clone())
                                 + Into::<AB::Expr>::into(local[5].clone())))
                             + ((Into::<AB::Expr>::into(local[11].clone())
-                                + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                                + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                     * (Into::<AB::Expr>::into(local[11].clone())
                                         * Into::<AB::Expr>::into(local[12].clone()))))
                                 * (Into::<AB::Expr>::into(local[1].clone())
                                     + Into::<AB::Expr>::into(local[5].clone()))))
                             + ((Into::<AB::Expr>::into(local[12].clone())
-                                + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                                + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                     * (Into::<AB::Expr>::into(local[11].clone())
                                         * Into::<AB::Expr>::into(local[12].clone()))))
                                 * (Into::<AB::Expr>::into(local[2].clone())
                                     + Into::<AB::Expr>::into(local[5].clone())))))),
                 (Into::<AB::Expr>::into(local[22].clone())
-                    + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                    + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                         * ((((Into::<AB::Expr>::into(AB::F::from_u64(1u64))
-                            + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                            + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                 * Into::<AB::Expr>::into(local[11].clone())))
-                            + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                            + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                 * Into::<AB::Expr>::into(local[12].clone())))
                             + (Into::<AB::Expr>::into(local[11].clone())
                                 * Into::<AB::Expr>::into(local[12].clone())))
                             * Into::<AB::Expr>::into(local[21].clone())))),
                 (Into::<AB::Expr>::into(local[24].clone())
-                    + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                    + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                         * (((((((Into::<AB::Expr>::into(AB::F::from_u64(1u64))
-                            + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                            + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                 * Into::<AB::Expr>::into(local[11].clone())))
-                            + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                            + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                 * Into::<AB::Expr>::into(local[12].clone())))
                             + (Into::<AB::Expr>::into(local[11].clone())
                                 * Into::<AB::Expr>::into(local[12].clone())))
                             * Into::<AB::Expr>::into(local[23].clone()))
                             + ((Into::<AB::Expr>::into(local[11].clone())
-                                + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                                + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                     * (Into::<AB::Expr>::into(local[11].clone())
                                         * Into::<AB::Expr>::into(local[12].clone()))))
                                 * Into::<AB::Expr>::into(local[21].clone())))
                             + ((Into::<AB::Expr>::into(local[12].clone())
-                                + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                                + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                     * (Into::<AB::Expr>::into(local[11].clone())
                                         * Into::<AB::Expr>::into(local[12].clone()))))
                                 * Into::<AB::Expr>::into(local[21].clone())))
@@ -1011,55 +1012,55 @@ impl GeneratedAirSpec for FemtoCairoFlatAirProgramAirSpec {
                                 * Into::<AB::Expr>::into(local[12].clone()))
                                 * Into::<AB::Expr>::into(local[5].clone()))))),
                 (Into::<AB::Expr>::into(local[25].clone())
-                    + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                    + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                         * ((((((Into::<AB::Expr>::into(AB::F::from_u64(1u64))
-                            + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                            + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                 * Into::<AB::Expr>::into(local[13].clone())))
-                            + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                            + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                 * Into::<AB::Expr>::into(local[14].clone())))
                             + (Into::<AB::Expr>::into(local[13].clone())
                                 * Into::<AB::Expr>::into(local[14].clone())))
                             * (Into::<AB::Expr>::into(local[1].clone())
                                 + Into::<AB::Expr>::into(local[6].clone())))
                             + ((Into::<AB::Expr>::into(local[13].clone())
-                                + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                                + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                     * (Into::<AB::Expr>::into(local[13].clone())
                                         * Into::<AB::Expr>::into(local[14].clone()))))
                                 * (Into::<AB::Expr>::into(local[1].clone())
                                     + Into::<AB::Expr>::into(local[6].clone()))))
                             + ((Into::<AB::Expr>::into(local[14].clone())
-                                + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                                + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                     * (Into::<AB::Expr>::into(local[13].clone())
                                         * Into::<AB::Expr>::into(local[14].clone()))))
                                 * (Into::<AB::Expr>::into(local[2].clone())
                                     + Into::<AB::Expr>::into(local[6].clone())))))),
                 (Into::<AB::Expr>::into(local[27].clone())
-                    + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                    + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                         * ((((Into::<AB::Expr>::into(AB::F::from_u64(1u64))
-                            + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                            + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                 * Into::<AB::Expr>::into(local[13].clone())))
-                            + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                            + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                 * Into::<AB::Expr>::into(local[14].clone())))
                             + (Into::<AB::Expr>::into(local[13].clone())
                                 * Into::<AB::Expr>::into(local[14].clone())))
                             * Into::<AB::Expr>::into(local[26].clone())))),
                 (Into::<AB::Expr>::into(local[29].clone())
-                    + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                    + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                         * (((((((Into::<AB::Expr>::into(AB::F::from_u64(1u64))
-                            + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                            + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                 * Into::<AB::Expr>::into(local[13].clone())))
-                            + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                            + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                 * Into::<AB::Expr>::into(local[14].clone())))
                             + (Into::<AB::Expr>::into(local[13].clone())
                                 * Into::<AB::Expr>::into(local[14].clone())))
                             * Into::<AB::Expr>::into(local[28].clone()))
                             + ((Into::<AB::Expr>::into(local[13].clone())
-                                + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                                + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                     * (Into::<AB::Expr>::into(local[13].clone())
                                         * Into::<AB::Expr>::into(local[14].clone()))))
                                 * Into::<AB::Expr>::into(local[26].clone())))
                             + ((Into::<AB::Expr>::into(local[14].clone())
-                                + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                                + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                     * (Into::<AB::Expr>::into(local[13].clone())
                                         * Into::<AB::Expr>::into(local[14].clone()))))
                                 * Into::<AB::Expr>::into(local[26].clone())))
@@ -1067,83 +1068,83 @@ impl GeneratedAirSpec for FemtoCairoFlatAirProgramAirSpec {
                                 * Into::<AB::Expr>::into(local[14].clone()))
                                 * Into::<AB::Expr>::into(local[6].clone()))))),
                 (((((Into::<AB::Expr>::into(AB::F::from_u64(1u64))
-                    + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                    + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                         * Into::<AB::Expr>::into(local[7].clone())))
-                    + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                    + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                         * Into::<AB::Expr>::into(local[8].clone())))
                     + (Into::<AB::Expr>::into(local[7].clone())
                         * Into::<AB::Expr>::into(local[8].clone())))
                     * (Into::<AB::Expr>::into(local[29].clone())
-                        + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                        + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                             * (Into::<AB::Expr>::into(local[19].clone())
                                 + Into::<AB::Expr>::into(local[24].clone())))))
-                    + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                    + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                         * Into::<AB::Expr>::into(AB::F::from_u64(0u64)))),
                 (((Into::<AB::Expr>::into(local[7].clone())
-                    + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                    + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                         * (Into::<AB::Expr>::into(local[7].clone())
                             * Into::<AB::Expr>::into(local[8].clone()))))
                     * (Into::<AB::Expr>::into(local[29].clone())
-                        + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                        + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                             * (Into::<AB::Expr>::into(local[19].clone())
                                 * Into::<AB::Expr>::into(local[24].clone())))))
-                    + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                    + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                         * Into::<AB::Expr>::into(AB::F::from_u64(0u64)))),
                 (((Into::<AB::Expr>::into(local[8].clone())
-                    + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                    + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                         * (Into::<AB::Expr>::into(local[7].clone())
                             * Into::<AB::Expr>::into(local[8].clone()))))
                     * (Into::<AB::Expr>::into(local[19].clone())
-                        + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                        + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                             * Into::<AB::Expr>::into(local[0].clone()))))
-                    + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                    + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                         * Into::<AB::Expr>::into(AB::F::from_u64(0u64)))),
                 (((Into::<AB::Expr>::into(local[8].clone())
-                    + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                    + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                         * (Into::<AB::Expr>::into(local[7].clone())
                             * Into::<AB::Expr>::into(local[8].clone()))))
                     * (Into::<AB::Expr>::into(local[24].clone())
-                        + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                        + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                             * Into::<AB::Expr>::into(local[1].clone()))))
-                    + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                    + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                         * Into::<AB::Expr>::into(AB::F::from_u64(0u64)))),
                 (((Into::<AB::Expr>::into(local[8].clone())
-                    + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                    + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                         * (Into::<AB::Expr>::into(local[7].clone())
                             * Into::<AB::Expr>::into(local[8].clone()))))
                     * (Into::<AB::Expr>::into(local[29].clone())
-                        + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                        + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                             * Into::<AB::Expr>::into(local[2].clone()))))
-                    + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                    + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                         * Into::<AB::Expr>::into(AB::F::from_u64(0u64)))),
                 (Into::<AB::Expr>::into(local[30].clone())
-                    + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                    + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                         * (((Into::<AB::Expr>::into(local[7].clone())
                             * Into::<AB::Expr>::into(local[8].clone()))
                             * Into::<AB::Expr>::into(local[19].clone()))
                             + ((Into::<AB::Expr>::into(AB::F::from_u64(1u64))
-                                + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                                + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                     * (Into::<AB::Expr>::into(local[7].clone())
                                         * Into::<AB::Expr>::into(local[8].clone()))))
                                 * (Into::<AB::Expr>::into(local[0].clone())
                                     + Into::<AB::Expr>::into(AB::F::from_u64(4u64))))))),
                 (Into::<AB::Expr>::into(local[31].clone())
-                    + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                    + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                         * (((Into::<AB::Expr>::into(local[7].clone())
                             * Into::<AB::Expr>::into(local[8].clone()))
                             * Into::<AB::Expr>::into(local[24].clone()))
                             + ((Into::<AB::Expr>::into(AB::F::from_u64(1u64))
-                                + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                                + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                     * (Into::<AB::Expr>::into(local[7].clone())
                                         * Into::<AB::Expr>::into(local[8].clone()))))
                                 * Into::<AB::Expr>::into(local[1].clone()))))),
                 (Into::<AB::Expr>::into(local[32].clone())
-                    + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                    + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                         * (((Into::<AB::Expr>::into(local[7].clone())
                             * Into::<AB::Expr>::into(local[8].clone()))
                             * Into::<AB::Expr>::into(local[29].clone()))
                             + ((Into::<AB::Expr>::into(AB::F::from_u64(1u64))
-                                + (Into::<AB::Expr>::into(AB::F::from_u64(2013265920u64))
+                                + (Into::<AB::Expr>::into(-AB::F::from_u64(1u64))
                                     * (Into::<AB::Expr>::into(local[7].clone())
                                         * Into::<AB::Expr>::into(local[8].clone()))))
                                 * Into::<AB::Expr>::into(local[2].clone()))))),
@@ -1169,7 +1170,7 @@ impl GeneratedAirSpec for FemtoCairoFlatAirProgramAirSpec {
                         SymbolicExpression::<F>::from(local[1]),
                         SymbolicExpression::<F>::from(local[2]),
                     ],
-                    multiplicity: -(SymbolicExpression::<F>::from(F::from_u64(2013265920u64))
+                    multiplicity: -(SymbolicExpression::<F>::from(-F::from_u64(1u64))
                         * SymbolicExpression::<F>::from(F::from_u64(1u64))),
                     direction: LookupDirection::Receive,
                 });
@@ -1179,7 +1180,7 @@ impl GeneratedAirSpec for FemtoCairoFlatAirProgramAirSpec {
                         SymbolicExpression::<F>::from(local[0]),
                         SymbolicExpression::<F>::from(local[3]),
                     ],
-                    multiplicity: -(SymbolicExpression::<F>::from(F::from_u64(2013265920u64))
+                    multiplicity: -(SymbolicExpression::<F>::from(-F::from_u64(1u64))
                         * SymbolicExpression::<F>::from(F::from_u64(1u64))),
                     direction: LookupDirection::Receive,
                 });
@@ -1190,7 +1191,7 @@ impl GeneratedAirSpec for FemtoCairoFlatAirProgramAirSpec {
                             + SymbolicExpression::<F>::from(F::from_u64(1u64))),
                         SymbolicExpression::<F>::from(local[4]),
                     ],
-                    multiplicity: -(SymbolicExpression::<F>::from(F::from_u64(2013265920u64))
+                    multiplicity: -(SymbolicExpression::<F>::from(-F::from_u64(1u64))
                         * SymbolicExpression::<F>::from(F::from_u64(1u64))),
                     direction: LookupDirection::Receive,
                 });
@@ -1201,7 +1202,7 @@ impl GeneratedAirSpec for FemtoCairoFlatAirProgramAirSpec {
                             + SymbolicExpression::<F>::from(F::from_u64(2u64))),
                         SymbolicExpression::<F>::from(local[5]),
                     ],
-                    multiplicity: -(SymbolicExpression::<F>::from(F::from_u64(2013265920u64))
+                    multiplicity: -(SymbolicExpression::<F>::from(-F::from_u64(1u64))
                         * SymbolicExpression::<F>::from(F::from_u64(1u64))),
                     direction: LookupDirection::Receive,
                 });
@@ -1212,7 +1213,7 @@ impl GeneratedAirSpec for FemtoCairoFlatAirProgramAirSpec {
                             + SymbolicExpression::<F>::from(F::from_u64(3u64))),
                         SymbolicExpression::<F>::from(local[6]),
                     ],
-                    multiplicity: -(SymbolicExpression::<F>::from(F::from_u64(2013265920u64))
+                    multiplicity: -(SymbolicExpression::<F>::from(-F::from_u64(1u64))
                         * SymbolicExpression::<F>::from(F::from_u64(1u64))),
                     direction: LookupDirection::Receive,
                 });
@@ -1222,7 +1223,7 @@ impl GeneratedAirSpec for FemtoCairoFlatAirProgramAirSpec {
                         SymbolicExpression::<F>::from(local[15]),
                         SymbolicExpression::<F>::from(local[16]),
                     ],
-                    multiplicity: -(SymbolicExpression::<F>::from(F::from_u64(2013265920u64))
+                    multiplicity: -(SymbolicExpression::<F>::from(-F::from_u64(1u64))
                         * SymbolicExpression::<F>::from(F::from_u64(1u64))),
                     direction: LookupDirection::Receive,
                 });
@@ -1232,7 +1233,7 @@ impl GeneratedAirSpec for FemtoCairoFlatAirProgramAirSpec {
                         SymbolicExpression::<F>::from(local[17]),
                         SymbolicExpression::<F>::from(local[18]),
                     ],
-                    multiplicity: -(SymbolicExpression::<F>::from(F::from_u64(2013265920u64))
+                    multiplicity: -(SymbolicExpression::<F>::from(-F::from_u64(1u64))
                         * SymbolicExpression::<F>::from(F::from_u64(1u64))),
                     direction: LookupDirection::Receive,
                 });
@@ -1242,7 +1243,7 @@ impl GeneratedAirSpec for FemtoCairoFlatAirProgramAirSpec {
                         SymbolicExpression::<F>::from(local[20]),
                         SymbolicExpression::<F>::from(local[21]),
                     ],
-                    multiplicity: -(SymbolicExpression::<F>::from(F::from_u64(2013265920u64))
+                    multiplicity: -(SymbolicExpression::<F>::from(-F::from_u64(1u64))
                         * SymbolicExpression::<F>::from(F::from_u64(1u64))),
                     direction: LookupDirection::Receive,
                 });
@@ -1252,7 +1253,7 @@ impl GeneratedAirSpec for FemtoCairoFlatAirProgramAirSpec {
                         SymbolicExpression::<F>::from(local[22]),
                         SymbolicExpression::<F>::from(local[23]),
                     ],
-                    multiplicity: -(SymbolicExpression::<F>::from(F::from_u64(2013265920u64))
+                    multiplicity: -(SymbolicExpression::<F>::from(-F::from_u64(1u64))
                         * SymbolicExpression::<F>::from(F::from_u64(1u64))),
                     direction: LookupDirection::Receive,
                 });
@@ -1262,7 +1263,7 @@ impl GeneratedAirSpec for FemtoCairoFlatAirProgramAirSpec {
                         SymbolicExpression::<F>::from(local[25]),
                         SymbolicExpression::<F>::from(local[26]),
                     ],
-                    multiplicity: -(SymbolicExpression::<F>::from(F::from_u64(2013265920u64))
+                    multiplicity: -(SymbolicExpression::<F>::from(-F::from_u64(1u64))
                         * SymbolicExpression::<F>::from(F::from_u64(1u64))),
                     direction: LookupDirection::Receive,
                 });
@@ -1272,7 +1273,7 @@ impl GeneratedAirSpec for FemtoCairoFlatAirProgramAirSpec {
                         SymbolicExpression::<F>::from(local[27]),
                         SymbolicExpression::<F>::from(local[28]),
                     ],
-                    multiplicity: -(SymbolicExpression::<F>::from(F::from_u64(2013265920u64))
+                    multiplicity: -(SymbolicExpression::<F>::from(-F::from_u64(1u64))
                         * SymbolicExpression::<F>::from(F::from_u64(1u64))),
                     direction: LookupDirection::Receive,
                 });
@@ -1325,6 +1326,7 @@ pub type FemtoCairoFlatAirProgramStatement<F> =
 pub struct FemtoCairoFlatAirProgram;
 
 impl<F: WitnessField> Program<F> for FemtoCairoFlatAirProgram {
+    const FIELD_ORDER: u64 = 2013265921;
     const FUEL: usize = 1000;
     const COMPONENTS: usize = 3;
     const PUBLIC_INPUTS: usize = 3;

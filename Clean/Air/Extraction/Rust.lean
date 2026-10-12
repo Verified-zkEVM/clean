@@ -21,8 +21,18 @@ variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
 variable {ProverInput : TypeMap} [ProvableType ProverInput]
 
-def field (value : F) : String :=
-  s!"F::from_u64({FiniteField.val value}u64)"
+/-- Order of the field the generated code is printed for. Generated programs and AIRs reject
+any other Rust field. -/
+def fieldOrder : ℕ := FiniteField.size (F := F)
+
+/-- A field constant in the Rust field type `ty`. Values above half the field order are printed as
+negations, so that e.g. `-1` reads as `-ty::from_u64(1u64)`. -/
+def fieldIn (ty : String) (value : F) : String :=
+  let value := FiniteField.val value
+  if 2 * value > fieldOrder (F := F) then s!"-{ty}::from_u64({fieldOrder (F := F) - value}u64)"
+  else s!"{ty}::from_u64({value}u64)"
+
+def field (value : F) : String := fieldIn "F" value
 
 def quoted (value : String) : String := reprStr value
 
@@ -199,7 +209,7 @@ def airExprToRust (fixedWidth : ℕ) (fixed main : String) : Expression F → St
       else
         s!"Into::<AB::Expr>::into({main}[{cell.index - fixedWidth}].clone())"
   | .const value =>
-      s!"Into::<AB::Expr>::into(AB::F::from_u64({FiniteField.val value}u64))"
+      s!"Into::<AB::Expr>::into({fieldIn "AB::F" value})"
   | .add left right =>
       s!"({airExprToRust fixedWidth fixed main left} + {airExprToRust fixedWidth fixed main right})"
   | .mul left right =>
@@ -212,7 +222,7 @@ def symbolicExprToRust (fixedWidth : ℕ) (fixed main : String) : Expression F �
       else
         s!"SymbolicExpression::<F>::from({main}[{cell.index - fixedWidth}])"
   | .const value =>
-      s!"SymbolicExpression::<F>::from(F::from_u64({FiniteField.val value}u64))"
+      s!"SymbolicExpression::<F>::from({field value})"
   | .add left right =>
       s!"({symbolicExprToRust fixedWidth fixed main left} + {symbolicExprToRust fixedWidth fixed main right})"
   | .mul left right =>
@@ -276,6 +286,7 @@ def airToRust (name : String) (program : Program F) : Except String String := do
 pub struct {name}AirSpec;\n\
 \n\
 impl GeneratedAirSpec for {name}AirSpec \{\n\
+    const FIELD_ORDER: u64 = {fieldOrder (F := F)};\n\
     const PUBLIC_VALUES: usize = {program.publicInputWidth};\n\
     const WIDTHS: &'static [usize] = &[{commaSep widths}];\n\
     const FIXED_WIDTHS: &'static [usize] = &[{commaSep fixedWidths}];\n\
@@ -423,7 +434,7 @@ def programToRust (name : String) (program : Program F) : Except String String :
     s!"            {index} => component_{index}_initial_rows(prover_input),"
   let interactionCases := String.intercalate "\n" <| program.components.zipIdx.map fun (_, index) =>
     s!"            {index} => component_{index}_interactions(row),"
-  return s!"{prelude}\n{String.intercalate "\n\n" components}\n\n{String.intercalate "\n\n" initialRows}\n\nfn public_interactions<F: WitnessField>(public_input: &[F]) -> Vec<Interaction<F>> \{\n    {verifier}\n}\n\n{air}\n\npub struct {name};\n\nimpl<F: WitnessField> Program<F> for {name} \{\n    const FUEL: usize = {program.fuel};\n    const COMPONENTS: usize = {program.components.length};\n    const PUBLIC_INPUTS: usize = {program.publicInputWidth};\n    const PROVER_INPUTS: usize = {program.proverInputWidth};\n    const FIXED_WIDTHS: &'static [usize] = &[{fixedWidths}];\n    const COMPONENT_NAMES: &'static [&'static str] = &[{componentNames}];\n\n    fn modes() -> Vec<Mode<F>> \{ vec![{modes}] }\n\n    fn padding() -> Vec<Padding<F>> \{ vec![{padding}] }\n\n    fn initial_rows(component: usize, prover_input: &[F]) -> Result<Vec<Vec<F>>, String> \{\n        match component \{\n{initialCases}\n            _ => Err(format!(\"component index \{component} is out of bounds\")),\n        }\n    }\n\n    fn complete_row(component: usize, input: &[F], data: &WitnessData<F>) -> Result<Vec<F>, String> \{\n        match component \{\n{completeCases}\n            _ => Err(format!(\"component index \{component} is out of bounds\")),\n        }\n    }\n\n    fn interactions(component: usize, row: &[F]) -> Vec<Interaction<F>> \{\n        match component \{\n{interactionCases}\n            _ => vec![],\n        }\n    }\n\n    fn verifier_interactions(public_input: &[F]) -> Vec<Interaction<F>> \{\n        public_interactions(public_input)\n    }\n}\n\npub fn generate<F: WitnessField>(public_input: &[F], prover_input: &[F]) -> Result<EnsembleWitness<F>, WitnessGenerationError> \{\n    clean_backend::witness_generation::generate::<F, {name}>(public_input, prover_input)\n}\n"
+  return s!"{prelude}\n{String.intercalate "\n\n" components}\n\n{String.intercalate "\n\n" initialRows}\n\nfn public_interactions<F: WitnessField>(public_input: &[F]) -> Vec<Interaction<F>> \{\n    {verifier}\n}\n\n{air}\n\npub struct {name};\n\nimpl<F: WitnessField> Program<F> for {name} \{\n    const FIELD_ORDER: u64 = {fieldOrder (F := F)};\n    const FUEL: usize = {program.fuel};\n    const COMPONENTS: usize = {program.components.length};\n    const PUBLIC_INPUTS: usize = {program.publicInputWidth};\n    const PROVER_INPUTS: usize = {program.proverInputWidth};\n    const FIXED_WIDTHS: &'static [usize] = &[{fixedWidths}];\n    const COMPONENT_NAMES: &'static [&'static str] = &[{componentNames}];\n\n    fn modes() -> Vec<Mode<F>> \{ vec![{modes}] }\n\n    fn padding() -> Vec<Padding<F>> \{ vec![{padding}] }\n\n    fn initial_rows(component: usize, prover_input: &[F]) -> Result<Vec<Vec<F>>, String> \{\n        match component \{\n{initialCases}\n            _ => Err(format!(\"component index \{component} is out of bounds\")),\n        }\n    }\n\n    fn complete_row(component: usize, input: &[F], data: &WitnessData<F>) -> Result<Vec<F>, String> \{\n        match component \{\n{completeCases}\n            _ => Err(format!(\"component index \{component} is out of bounds\")),\n        }\n    }\n\n    fn interactions(component: usize, row: &[F]) -> Vec<Interaction<F>> \{\n        match component \{\n{interactionCases}\n            _ => vec![],\n        }\n    }\n\n    fn verifier_interactions(public_input: &[F]) -> Vec<Interaction<F>> \{\n        public_interactions(public_input)\n    }\n}\n\npub fn generate<F: WitnessField>(public_input: &[F], prover_input: &[F]) -> Result<EnsembleWitness<F>, WitnessGenerationError> \{\n    clean_backend::witness_generation::generate::<F, {name}>(public_input, prover_input)\n}\n"
 
 /-- Validate an ensemble into the typed artifact and render that artifact as Rust. -/
 def ensembleToRust (name : String) (ensemble : Ensemble F PublicIO)

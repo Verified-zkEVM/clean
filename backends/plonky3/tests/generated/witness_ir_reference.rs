@@ -19,6 +19,7 @@ fn safe_rem(left: u64, right: u64) -> u64 {
     }
 }
 
+pub const FIELD_ORDER: u64 = 2013265921;
 pub const INPUT: &[u64] = &[
     0u64,
     1u64,
@@ -61,7 +62,7 @@ pub fn case_0<F: WitnessField>(
             + (input.get(2).copied().unwrap_or(F::ZERO)
                 * input.get(3).copied().unwrap_or(F::ZERO))),
     );
-    output.push(F::from_u64(2013265920u64));
+    output.push(-F::from_u64(1u64));
     output.push(F::from_u64(row));
     output.push(
         (input.get(2).copied().unwrap_or(F::ZERO) + input.get(1).copied().unwrap_or(F::ZERO)),
@@ -140,7 +141,7 @@ pub fn case_2<F: WitnessField>(
         F::from_u64(0u64)
     });
     output.push(
-        if (input.get(2).copied().unwrap_or(F::ZERO) == F::from_u64(2013265920u64)) {
+        if (input.get(2).copied().unwrap_or(F::ZERO) == -F::from_u64(1u64)) {
             F::from_u64(1u64)
         } else {
             F::from_u64(0u64)
