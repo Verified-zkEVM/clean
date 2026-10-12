@@ -296,9 +296,15 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
       Add8Channel, FibonacciChannel])
     (by simp [circuit_norm, fibonacciVm, fib8Component, fib8, add8Component, add8,
       bytesComponent, pushBytes])
-  |>.toFormal _ (fun _ _ => True)
-    (by simp [circuit_norm, fibonacciVm, fib8Component, add8Component, add8,
-      bytesComponent, pushBytes, fib8])
+  |>.toFormal (fun _ => True)
+    (fun (n, x, y) => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val)
+    (Ensemble.assumptionsConsistency_of_components _ <| by
+      simp [circuit_norm, fibonacciVm, fib8Component, add8Component, add8, bytesComponent,
+        pushBytes, fib8])
+    (by
+      intro witness _ spec
+      simp only [circuit_norm, fibonacciVm, fibonacciVerifier] at spec
+      exact spec)
 
 namespace FibonacciWitness
 
@@ -373,10 +379,7 @@ theorem fibonacci_soundness : ∀ (n x y : F p),
   fibonacciEnsemble.ensemble.Statement (n, x, y) →
     ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val := by
   intro n x y statement
-  convert fibonacciEnsemble.soundness (n, x, y) ?assumptions statement
-  · simp only [circuit_norm, fibonacciEnsemble, fibonacciVm, fibonacciVerifier]
-    tauto
-  · simp only [circuit_norm, fibonacciEnsemble, fibonacciVm, fibonacciVerifier]
+  exact fibonacciEnsemble.soundness (n, x, y) trivial statement
 
 /-
 Fun fact! We can prove end-to-end soundness of a component that proves `False`

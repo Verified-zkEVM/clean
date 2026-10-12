@@ -201,6 +201,18 @@ lemma mem_component_of_mem {witness : EnsembleWitness ens} {table : Table F} :
   rw [← witness.tables_map_component]
   grind
 
+/-- A component with fixed columns has exactly one row of prover data per fixed row. -/
+lemma getRows_size_of_fixedColumns (witness : EnsembleWitness ens) {component : Component F}
+    (hcomponent : component ∈ ens.tables) {fixed : FixedColumns F}
+    (hfixed : component.fixedColumns = some fixed) :
+    (witness.data.getRows component.circuit.name component.Input).size = fixed.height := by
+  rw [← witness.tables_map_component, List.mem_map] at hcomponent
+  obtain ⟨table, htable, rfl⟩ := hcomponent
+  have hmatch := table.fixed_rows_match
+  simp only [Component.fixedRowsMatch, hfixed] at hmatch
+  rw [ProverData.getRows, witness.data_consistent table htable]
+  simpa [Component.proverRows] using congrArg List.length hmatch
+
 def Constraints {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Prop :=
   witness.tableContext.Constraints
 
@@ -363,6 +375,16 @@ def AssumptionsConsistency (ens : Ensemble F PublicIO) (Assumptions : PublicIO F
   ∀ (witness : EnsembleWitness ens),
     Assumptions witness.publicInput →
     witness.Assumptions
+
+/-- Public assumptions that imply every component's residual assumptions for all inputs and
+prover data are consistent. -/
+lemma assumptionsConsistency_of_components (ens : Ensemble F PublicIO)
+    {Assumptions : PublicIO F → Prop}
+    (h : ∀ publicInput, Assumptions publicInput →
+      ∀ component ∈ ens.tables, ∀ input data, component.Assumptions input data) :
+    ens.AssumptionsConsistency Assumptions := by
+  intro witness assumptions table htable row _
+  exact h _ assumptions _ (EnsembleWitness.mem_component_of_mem htable) _ _
 
 theorem soundness_of_tableSoundness_and_specConsistency (ens : Ensemble F PublicIO)
   (Assumptions Spec : PublicIO F → Prop) :

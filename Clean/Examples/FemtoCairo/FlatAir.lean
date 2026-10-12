@@ -547,21 +547,40 @@ def executionComponent {programSize : ℕ} (program : Fin programSize → F p)
     (h_programSize : programSize < p) (initialState : State (F p)) : Component (F p) where
   circuit := executeStep program h_programSize initialState
 
+/-- The state in which a program has run to completion: `pc` points just past the program, where
+no further instruction can be fetched. -/
+def haltedState (programSize : ℕ) (ap fp : F p) : State (F p) :=
+  { pc := programSize, ap, fp }
+
+omit p_large_enough in
+/-- No transition leaves a halted state. -/
+lemma femtoCairoMachineTransition_haltedState {programSize : ℕ}
+    (program : Fin programSize → F p) (h_programSize : programSize < p)
+    {memorySize : ℕ} (memory : Fin memorySize → F p) (ap fp : F p) :
+    Spec.femtoCairoMachineTransition program memory (haltedState programSize ap fp) = none := by
+  have hval : (programSize : F p).val = programSize := ZMod.val_cast_of_lt h_programSize
+  simp [Spec.femtoCairoMachineTransition, Spec.fetchInstruction, Spec.memoryAccess,
+    haltedState, hval]
+
+/-- The public input `(ap, fp)` claims that the program halts with these registers. -/
 def verifier {programSize : ℕ} (program : Fin programSize → F p)
-    (initialState : State (F p)) : Verifier.Program (F p) State where
-  main finalState := do
-    Verifier.pull (StateChannel program initialState) finalState
+    (initialState : State (F p)) : Verifier.Program (F p) fieldPair where
+  main | (ap, fp) => do
+    Verifier.pull (StateChannel program initialState)
+      { pc := .const (programSize : F p), ap, fp }
     Verifier.push (StateChannel program initialState) (const initialState)
-  Spec finalState data := (StateChannel program initialState).Guarantees finalState data
+  Spec
+  | (ap, fp), data =>
+      (StateChannel program initialState).Guarantees (haltedState programSize ap fp) data
   soundness := by
     intro env guarantees
-    simp only [circuit_norm, Operations.FullGuarantees,
-      AbstractInteraction.Guarantees, Channel.toRaw] at guarantees ⊢
+    simp only [circuit_norm, explicit_provable_type, Operations.FullGuarantees,
+      AbstractInteraction.Guarantees, Channel.toRaw, haltedState] at guarantees ⊢
     exact guarantees
 
 def vm {programSize : ℕ} (program : Fin programSize → F p)
     (h_programSize : programSize < p) (initialState : State (F p)) :
-    VmTables (F p) State where
+    VmTables (F p) fieldPair where
   channel := StateChannel program initialState
   tables := [executionComponent program h_programSize initialState]
   unique_names := by simp [executionComponent]
@@ -587,7 +606,7 @@ def vm {programSize : ℕ} (program : Fin programSize → F p)
 def soundEnsemble {programSize memorySize : ℕ} (program : Fin programSize → F p)
     (h_programSize : programSize < p) (h_memorySize : memorySize < p)
     (initialState : State (F p)) :=
-  SoundEnsemble.empty (F p) State
+  SoundEnsemble.empty (F p) fieldPair
   |>.addTable (programComponent program h_programSize)
     (List.Subset.refl _)
     (by simp [circuit_norm, programComponent, provideProgram])
@@ -612,21 +631,58 @@ def soundEnsemble {programSize memorySize : ℕ} (program : Fin programSize → 
     (by simp [circuit_norm, vm, executionComponent, executeStep, memoryComponent, provideMemory,
       programComponent, provideProgram])
 
+omit p_large_enough in
+lemma femtoCairoMachineBoundedExecution_cast {programSize : ℕ} (program : Fin programSize → F p)
+    {n m : ℕ} (h : n = m) (memory : Fin n → F p) (state : Option (State (F p))) (steps : ℕ) :
+    Spec.femtoCairoMachineBoundedExecution program memory state steps =
+      Spec.femtoCairoMachineBoundedExecution program (memory ∘ Fin.cast h.symm) state steps := by
+  subst h
+  rfl
+
+/-- The public statement: some memory of size `memorySize` makes the program run from
+`initialState` to completion with registers `(ap, fp)`. -/
+def Spec {programSize : ℕ} (program : Fin programSize → F p) (memorySize : ℕ)
+    (initialState : State (F p)) : fieldPair (F p) → Prop
+  | (ap, fp) => ∃ mem : Fin memorySize → F p, ∃ steps,
+      Spec.femtoCairoMachineBoundedExecution program mem (some initialState) steps =
+        some (haltedState programSize ap fp)
+
 def formalEnsemble {programSize memorySize : ℕ} (program : Fin programSize → F p)
     (h_programSize : programSize < p) (h_memorySize : memorySize < p)
     (initialState : State (F p)) :=
-  (soundEnsemble program h_programSize h_memorySize initialState).toFormal _
-    (fun _ _ => True)
-    (by
-      intro publicInput data _ table htable input
-      simp [soundEnsemble, circuit_norm] at htable
-      rcases htable with hvm | rfl | rfl
-      · have heq : table = executionComponent program h_programSize initialState := by
+  (soundEnsemble program h_programSize h_memorySize initialState).toFormal (fun _ => True)
+    (Spec program memorySize initialState)
+    (Ensemble.assumptionsConsistency_of_components _ <| by
+      intro _ _ component hcomponent input data
+      simp [soundEnsemble, circuit_norm] at hcomponent
+      rcases hcomponent with hvm | rfl | rfl
+      · have heq : component = executionComponent program h_programSize initialState := by
           simpa [vm] using hvm
-        subst table
+        subst component
         simp [executionComponent, executeStep]
       · simp [memoryComponent]
       · simp [programComponent])
+    (by
+      rintro witness - spec
+      have hsize := witness.getRows_size_of_fixedColumns
+        (component := memoryComponent memorySize h_memorySize)
+        (by simp [soundEnsemble, circuit_norm]) rfl
+      simp only [memoryComponent, provideMemory, memoryFixedColumns] at hsize
+      simp only [circuit_norm, soundEnsemble, vm, verifier, StateChannel] at spec
+      obtain ⟨steps, hsteps⟩ := spec
+      exact ⟨memory witness.data ∘ Fin.cast hsize.symm, steps,
+        femtoCairoMachineBoundedExecution_cast program hsize _ _ _ ▸ hsteps⟩)
+
+/-- End-to-end soundness: a valid proof for the public registers `(ap, fp)` shows that the
+program, run on some memory of size `memorySize`, halts with these registers. -/
+theorem femtoCairo_soundness {programSize memorySize : ℕ} (program : Fin programSize → F p)
+    (h_programSize : programSize < p) (h_memorySize : memorySize < p)
+    (initialState : State (F p)) (ap fp : F p) :
+    (soundEnsemble program h_programSize h_memorySize initialState).ensemble.Statement (ap, fp) →
+      ∃ mem : Fin memorySize → F p, ∃ steps,
+        Spec.femtoCairoMachineBoundedExecution program mem (some initialState) steps =
+          some (haltedState programSize ap fp) :=
+  (formalEnsemble program h_programSize h_memorySize initialState).soundness (ap, fp) trivial
 
 namespace Witness
 
@@ -667,13 +723,13 @@ def config {programSize memorySize : ℕ} (program : Fin programSize → F p)
 
 def generate {programSize memorySize : ℕ} (program : Fin programSize → F p)
     (h_programSize : programSize < p) (h_memorySize : memorySize < p)
-    (memoryValues : fields memorySize (F p)) (initialState finalState : State (F p))
-    (executionRows fuel : ℕ) :
+    (memoryValues : fields memorySize (F p)) (initialState : State (F p))
+    (finalRegisters : fieldPair (F p)) (executionRows fuel : ℕ) :
     Except String (EnsembleWitness
       (soundEnsemble program h_programSize h_memorySize initialState).ensemble) :=
   Air.Flat.WitnessGeneration.generate
     (soundEnsemble program h_programSize h_memorySize initialState).ensemble
-    (config program initialState executionRows fuel) finalState memoryValues
+    (config program initialState executionRows fuel) finalRegisters memoryValues
 
 end Witness
 

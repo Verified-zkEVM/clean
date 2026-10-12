@@ -792,9 +792,9 @@ fn public_interactions<F: WitnessField>(public_input: &[F]) -> Vec<Interaction<F
             channel: "state",
             multiplicity: (-F::from_u64(1u64) * F::from_u64(1u64)),
             message: vec![
+                F::from_u64(32u64),
                 public_input.get(0).copied().unwrap_or(F::ZERO),
                 public_input.get(1).copied().unwrap_or(F::ZERO),
-                public_input.get(2).copied().unwrap_or(F::ZERO),
             ],
             assume_guarantees: true,
         },
@@ -812,7 +812,7 @@ pub struct FemtoCairoFlatAirProgramAirSpec;
 
 impl GeneratedAirSpec for FemtoCairoFlatAirProgramAirSpec {
     const FIELD_ORDER: u64 = 2013265921;
-    const PUBLIC_VALUES: usize = 3;
+    const PUBLIC_VALUES: usize = 2;
     const WIDTHS: &'static [usize] = &[33, 2, 1];
     const FIXED_WIDTHS: &'static [usize] = &[0, 1, 2];
     const FIXED_HEIGHTS: &'static [usize] = &[0, 8, 32];
@@ -1329,7 +1329,7 @@ impl<F: WitnessField> Program<F> for FemtoCairoFlatAirProgram {
     const FIELD_ORDER: u64 = 2013265921;
     const FUEL: usize = 1000;
     const COMPONENTS: usize = 3;
-    const PUBLIC_INPUTS: usize = 3;
+    const PUBLIC_INPUTS: usize = 2;
     const PROVER_INPUTS: usize = 8;
     const FIXED_WIDTHS: &'static [usize] = &[0, 1, 2];
     const COMPONENT_NAMES: &'static [&'static str] = &["execution", "memory", "program"];

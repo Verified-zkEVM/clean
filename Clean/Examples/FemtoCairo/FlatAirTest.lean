@@ -28,14 +28,15 @@ def memoryValues : fields 8 (F pBabybear) :=
 def alternateMemoryValues : fields 8 (F pBabybear) :=
   #v[0, 5, 3, 7, 2, 10, 0, 99]
 
-def finalStateAfterEight : State (F pBabybear) := { pc := 32, ap := 0, fp := 0 }
+/-- The program halts after eight steps at `pc = 32` with `ap = fp = 0`. -/
+def finalRegisters : fieldPair (F pBabybear) := (0, 0)
 
 def generateResult (memoryValues : fields 8 (F pBabybear)) :
     Except String (List ℕ × Bool × Bool × ℕ × ℕ × ℕ) :=
   match Examples.FemtoCairo.FlatAir.Witness.generate
       (p := pBabybear) (programSize := programSize) (memorySize := 8)
       testProgram h_programSize h_memorySize
-      memoryValues initialState finalStateAfterEight 8 1000 with
+      memoryValues initialState finalRegisters 8 1000 with
   | .error error => .error error
   | .ok witness =>
     let memoryData := witness.data "memory" 3

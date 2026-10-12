@@ -25,7 +25,7 @@ fn memory(values: [u64; 8]) -> Vec<BabyBear> {
 #[test]
 fn extracted_femtocairo_witness_uses_committed_memory_data() {
     let prover_input = memory([0, 5, 3, 7, 2, 10, 0, 0]);
-    let witness = generated::generate(&[field(32), field(0), field(0)], &prover_input)
+    let witness = generated::generate(&[field(0), field(0)], &prover_input)
         .expect("extracted FemtoCairo witness generation failed");
 
     assert_eq!(
@@ -39,7 +39,7 @@ fn extracted_femtocairo_witness_uses_committed_memory_data() {
 
 #[test]
 fn extracted_femtocairo_accepts_runtime_private_memories() {
-    let public_values = vec![field(32), field(0), field(0)];
+    let public_values = vec![field(0), field(0)];
     let first = memory([0, 5, 3, 7, 2, 10, 0, 0]);
     let second = memory([0, 5, 3, 7, 2, 10, 0, 99]);
 
@@ -65,7 +65,7 @@ fn extracted_femtocairo_accepts_runtime_private_memories() {
 
 #[test]
 fn extracted_femtocairo_rejects_malformed_prover_input() {
-    let error = generated::generate(&[field(32), field(0), field(0)], &[field(0); 7])
+    let error = generated::generate(&[field(0), field(0)], &[field(0); 7])
         .expect_err("short private memory should be rejected");
     assert_eq!(
         error,
@@ -79,7 +79,7 @@ fn extracted_femtocairo_rejects_malformed_prover_input() {
 #[test]
 fn extracted_femtocairo_air_proves_and_verifies() {
     let config = setup::test_config(7);
-    let public_values = vec![field(32), field(0), field(0)];
+    let public_values = vec![field(0), field(0)];
     let prover_input = memory([0, 5, 3, 7, 2, 10, 0, 0]);
     let witness = generated::generate(&public_values, &prover_input)
         .expect("extracted FemtoCairo witness generation failed");

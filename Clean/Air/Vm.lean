@@ -63,8 +63,9 @@ structure VmTables (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType
       ∀ env, ConstraintsHold.Shallow env table.rowOperations →
         Expression.eval env enabled = 0 ∨ Expression.eval env enabled = 1
 
-  -- The public verifier pulls the final state and pushes the initial state on the VM channel.
-  verifier_channel : ∃ m1 m2, verifier.interactions =
+  -- On the VM channel, the public verifier pulls the final state and pushes the initial state.
+  -- Its interactions on other channels are unconstrained.
+  verifier_channel : ∃ m1 m2, verifier.circuitOperations.interactionsWith channel.toRaw =
     [(channel.pulled m1).toRaw, (channel.pushed m2).toRaw]
 
   -- verifier requirements hold unconditionally (without relying on channel guarantees)
@@ -98,44 +99,26 @@ structure SoundVmEnsemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [Prova
   soundVmChannel : ensemble.SoundVmChannel
 
 namespace SoundVmEnsemble
-def toFormal (F : Type) [FiniteField F] (ens : SoundVmEnsemble F PublicIO)
-  -- TODO is this useful in practice? Right now, tables don't have access to public input so that's weird
-  (ExtraAssumptions : PublicIO F → ProverData F → Prop)
-  (extraAssumptionsConsistency : ∀ publicInput data, ExtraAssumptions publicInput data →
-    ∀ table ∈ ens.ensemble.tables, ∀ input, table.Assumptions input data) :
+/--
+Bundle a sound VM ensemble with its public statement. `Assumptions` and `Spec` only refer to the
+public input. The verifier spec is evaluated on prover data derived from the witness, so the
+bridge from it to `Spec` quantifies over witnesses.
+-/
+def toFormal (ens : SoundVmEnsemble F PublicIO) (Assumptions Spec : PublicIO F → Prop)
+    (assumptionsConsistency : ens.ensemble.AssumptionsConsistency Assumptions)
+    (spec_of_verifierSpec : ∀ witness : EnsembleWitness ens.ensemble,
+      Assumptions witness.publicInput →
+      ens.VerifierSpec witness.publicInput witness.data → Spec witness.publicInput) :
     FormalEnsemble F PublicIO where
   ensemble := ens.ensemble
-  Assumptions publicInput := ∀ data, ExtraAssumptions publicInput data
-  Spec publicInput := ∃ data, ens.VerifierSpec publicInput data
+  Assumptions
+  Spec
   soundness := by
-    simp only [Ensemble.Soundness, Ensemble.Statement]
-    intro input assumptions ⟨witness, input_eq, constraints, balance⟩
-    use witness.data
-    have extra_assumptions := assumptions witness.data
-    simp only [← input_eq, circuit_norm] at *
-    have soundVm := ens.soundVmChannel witness ?assumptions constraints balance
-    exact ens.ensemble.verifierSoundness witness.publicInput witness.data soundVm
-    intro table h_table row h_row
-    simp only [Component.RowAssumptions]
-    have hcomponent := EnsembleWitness.mem_component_of_mem h_table
-    have hresidual := extraAssumptionsConsistency witness.publicInput witness.data
-      extra_assumptions table.component hcomponent
-        (table.component.rowInput (Environment.fromArray row witness.data))
-    exact hresidual
-
-variable {ens : SoundVmEnsemble F PublicIO} {ExtraAssumptions : PublicIO F → ProverData F → Prop}
-  {eac : ∀ publicInput data, ExtraAssumptions publicInput data →
-    ∀ table ∈ ens.tables, ∀ input, table.Assumptions input data}
-
-@[circuit_norm] lemma toFormal_spec publicInput :
-  (ens.toFormal F ExtraAssumptions eac).Spec publicInput ↔
-    ∃ data, ens.ensemble.VerifierSpec publicInput data := by
-  simp only [toFormal]
-
-@[circuit_norm] lemma toFormal_assumptions publicInput :
-  (ens.toFormal F ExtraAssumptions eac).Assumptions publicInput ↔
-    ∀ data, ExtraAssumptions publicInput data := by
-  simp only [toFormal, circuit_norm]
+    intro publicInput assumptions ⟨witness, input_eq, constraints, balance⟩
+    subst input_eq
+    apply spec_of_verifierSpec witness assumptions
+    apply ens.ensemble.verifierSoundness
+    exact ens.soundVmChannel witness (assumptionsConsistency witness assumptions) constraints balance
 end SoundVmEnsemble
 end Air.Flat
 
@@ -261,7 +244,7 @@ noncomputable def verifierPush (vm : VmTables F PublicIO) : Var vm.Message F :=
 
 /-- Concrete version of VmTables.verifier_channel -/
 theorem verifier_channel' (vm : VmTables F PublicIO) :
-  vm.verifier.interactions =
+  vm.verifier.circuitOperations.interactionsWith vm.channel.toRaw =
     [(vm.channel.pulled vm.verifierPull).toRaw,
       (vm.channel.pushed vm.verifierPush).toRaw] :=
   vm.verifier_channel.choose_spec.choose_spec
@@ -282,23 +265,11 @@ lemma verifierInteractionsWith_eq {vm : VmTables F PublicIO} :
   vm.toEnsemble.verifierOperations.interactionsWith vm.channel.toRaw = [
     (vm.channel.pulledIf vm.verifierStep.enabled vm.verifierStep.pull).toRaw,
     (vm.channel.pushedIf vm.verifierStep.enabled vm.verifierStep.push).toRaw ] := by
-  classical
   change vm.verifier.circuitOperations.interactionsWith vm.channel.toRaw = _
-  rw [Operations.interactionsWith,
-    Verifier.Operations.circuitOperations_interactions]
-  change List.filter (fun (interaction : AbstractInteraction F) ↦
-    decide (interaction.channel = vm.channel.toRaw))
-    vm.verifier.interactions = _
   rw [vm.verifier_channel']
-  simp only [verifierStep]
-  simp only [Channel.pulledIf, Channel.pushedIf, pulledIf_one_eq_pulled,
+  simp only [verifierStep, Channel.pulledIf, Channel.pushedIf, pulledIf_one_eq_pulled,
     pushedIf_one_eq_pushed]
-  have pull_channel : (vm.channel.pulled vm.verifierPull).toRaw.channel =
-      vm.channel.toRaw := rfl
-  have push_channel : (vm.channel.pushed vm.verifierPush).toRaw.channel =
-      vm.channel.toRaw := rfl
-  simp [pull_channel, push_channel]
-  constructor <;> rfl
+  rfl
 end VmTables
 
 namespace Ensemble
