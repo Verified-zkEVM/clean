@@ -56,7 +56,7 @@ pub fn case_0<F: WitnessField>(
     _hint: &WitnessData<F>,
     _data: &WitnessData<F>,
 ) -> Vec<F> {
-    let mut output = Vec::with_capacity(9);
+    let mut output: Vec<F> = Vec::with_capacity(9);
     output.push(
         (input.get(0).copied().unwrap_or(F::ZERO)
             + (input.get(2).copied().unwrap_or(F::ZERO)
@@ -84,7 +84,7 @@ pub fn case_1<F: WitnessField>(
     _hint: &WitnessData<F>,
     _data: &WitnessData<F>,
 ) -> Vec<F> {
-    let mut output = Vec::with_capacity(20);
+    let mut output: Vec<F> = Vec::with_capacity(20);
     output.push(F::from_u64(
         (input.get(2).copied().unwrap_or(F::ZERO)).canonical_u64(),
     ));
@@ -129,7 +129,7 @@ pub fn case_2<F: WitnessField>(
     _hint: &WitnessData<F>,
     _data: &WitnessData<F>,
 ) -> Vec<F> {
-    let mut output = Vec::with_capacity(16);
+    let mut output: Vec<F> = Vec::with_capacity(16);
     output.push(if true {
         F::from_u64(1u64)
     } else {
@@ -183,21 +183,33 @@ pub fn case_2<F: WitnessField>(
         },
     );
     output.push(
-        if (((input.get(2).copied().unwrap_or(F::ZERO)).canonical_u64() >> 0) & 1) == 1 {
+        if ((((input.get(2).copied().unwrap_or(F::ZERO)).canonical_u64())
+            .wrapping_shr((0u64 & 63) as u32)
+            & 1u64)
+            == 1u64)
+        {
             F::from_u64(1u64)
         } else {
             F::from_u64(0u64)
         },
     );
     output.push(
-        if (((input.get(3).copied().unwrap_or(F::ZERO)).canonical_u64() >> 30) & 1) == 1 {
+        if ((((input.get(3).copied().unwrap_or(F::ZERO)).canonical_u64())
+            .wrapping_shr((30u64 & 63) as u32)
+            & 1u64)
+            == 1u64)
+        {
             F::from_u64(1u64)
         } else {
             F::from_u64(0u64)
         },
     );
     output.push(
-        if (((input.get(2).copied().unwrap_or(F::ZERO)).canonical_u64() >> 63) & 1) == 1 {
+        if ((((input.get(2).copied().unwrap_or(F::ZERO)).canonical_u64())
+            .wrapping_shr((63u64 & 63) as u32)
+            & 1u64)
+            == 1u64)
+        {
             F::from_u64(1u64)
         } else {
             F::from_u64(0u64)
@@ -213,11 +225,14 @@ pub fn case_2<F: WitnessField>(
     } else {
         F::from_u64(0u64)
     });
-    output.push(if (((F::from_u64(row)).canonical_u64() >> 1) & 1) == 1 {
-        F::from_u64(1u64)
-    } else {
-        F::from_u64(0u64)
-    });
+    output.push(
+        if ((((F::from_u64(row)).canonical_u64()).wrapping_shr((1u64 & 63) as u32) & 1u64) == 1u64)
+        {
+            F::from_u64(1u64)
+        } else {
+            F::from_u64(0u64)
+        },
+    );
     output.push(if !(row < 2u64) {
         F::from_u64(1u64)
     } else {
@@ -238,7 +253,7 @@ pub fn case_3<F: WitnessField>(
     _hint: &WitnessData<F>,
     _data: &WitnessData<F>,
 ) -> Vec<F> {
-    let mut output = Vec::with_capacity(7);
+    let mut output: Vec<F> = Vec::with_capacity(7);
     output.push(match (row) as usize {
         0 => F::from_u64(10u64),
         1 => F::from_u64(11u64),
@@ -294,7 +309,7 @@ pub fn case_4<F: WitnessField>(
     _hint: &WitnessData<F>,
     _data: &WitnessData<F>,
 ) -> Vec<F> {
-    let mut output = Vec::with_capacity(82);
+    let mut output: Vec<F> = Vec::with_capacity(82);
     for idx in 0u64..5u64 {
         output.push(
             (F::from_u64(idx)
@@ -305,18 +320,27 @@ pub fn case_4<F: WitnessField>(
                 }),
         );
     }
-    for idx in 0usize..4usize {
-        output.push(input.get(6usize + idx).copied().unwrap_or(F::ZERO));
+    for idx in 0u64..4u64 {
+        output.push(input.get(6usize + idx as usize).copied().unwrap_or(F::ZERO));
     }
-    let bits_value = (input.get(2).copied().unwrap_or(F::ZERO)).canonical_u64();
-    for bit in 0u32..70u32 {
-        output.push(F::from_u64(bits_value.checked_shr(bit).unwrap_or(0) & 1));
+    for idx in 0u64..70u64 {
+        output.push(F::from_u64(
+            (if idx < 64 {
+                ((input.get(2).copied().unwrap_or(F::ZERO)).canonical_u64() >> idx) & 1
+            } else {
+                0
+            }),
+        ));
     }
-    let bits_value = (F::from_u64(row)).canonical_u64();
-    for bit in 0u32..3u32 {
-        output.push(F::from_u64(bits_value.checked_shr(bit).unwrap_or(0) & 1));
+    for idx in 0u64..3u64 {
+        output.push(F::from_u64(
+            (if idx < 64 {
+                ((F::from_u64(row)).canonical_u64() >> idx) & 1
+            } else {
+                0
+            }),
+        ));
     }
-
     debug_assert_eq!(output.len(), 82);
     output
 }
@@ -327,11 +351,11 @@ pub fn case_5<F: WitnessField>(
     _hint: &WitnessData<F>,
     _data: &WitnessData<F>,
 ) -> Vec<F> {
+    let mut output: Vec<F> = Vec::with_capacity(5);
     let local_0: F = (input.get(3).copied().unwrap_or(F::ZERO) + F::from_u64(row));
     let local_1: u64 = ((local_0).canonical_u64()).wrapping_add(row);
     let local_2: F = (local_0 * F::from_u64(local_1));
     let local_3: u64 = if (local_1 < 1000u64) { local_1 } else { 7u64 };
-    let mut output = Vec::with_capacity(5);
     output.push(local_0);
     output.push(F::from_u64(local_1));
     output.push(local_2);
@@ -352,7 +376,7 @@ pub fn case_6<F: WitnessField>(
     _hint: &WitnessData<F>,
     _data: &WitnessData<F>,
 ) -> Vec<F> {
-    let mut output = Vec::with_capacity(9);
+    let mut output: Vec<F> = Vec::with_capacity(9);
     output.push(_hint.get("hint", 1, (0u64) as usize, 0));
     output.push(_hint.get("hint", 1, (1u64) as usize, 0));
     output.push(_hint.get("hint", 1, (safe_rem(row, 4u64)) as usize, 0));

@@ -1,6 +1,7 @@
 module
 
 public import Clean.Backends.Plonky3.Lower
+public import Clean.Backends.Plonky3.Codegen
 
 @[expose] public section
 
@@ -39,11 +40,6 @@ def quoted (value : String) : String := reprStr value
 def commaSep (values : List String) : String :=
   String.intercalate ", " values
 
-def constantValues? : List (Witgen.FExpr F) → Option (List F)
-  | [] => some []
-  | .const value :: values => return value :: (← constantValues? values)
-  | _ => none
-
 def constantLookupToRust (index : String) (values : List F) : String :=
   let cases := values.zipIdx.map fun (value, i) => s!"{i} => {field value}, "
   s!"match ({index}) as usize \{ {String.join cases}_ => F::ZERO }"
@@ -54,136 +50,106 @@ def exprToRust (row : String) : Expression F → String
   | .add left right => s!"({exprToRust row left} + {exprToRust row right})"
   | .mul left right => s!"({exprToRust row left} * {exprToRust row right})"
 
+/-- Names of the Rust variables a function body reads: the row slice and the row index. -/
+structure Names where
+  row : String
+  rowIndex : String
+
 mutual
 
-def fexprToRust (locals : Array LocalSort) (row idx : String) :
-    Witgen.FExpr F → Except String String
-  | .expr expression => pure (exprToRust row expression)
-  | .const value => pure (field value)
-  | .localVar index =>
-      match locals[index]? with
-      | some .field => pure s!"local_{index}"
-      | _ => throw s!"invalid field local {index} reached the validated Rust renderer"
-  | .add left right => return s!"({← fexprToRust locals row idx left} + {← fexprToRust locals row idx right})"
-  | .mul left right => return s!"({← fexprToRust locals row idx left} * {← fexprToRust locals row idx right})"
-  | .inv value => return s!"({← fexprToRust locals row idx value}).inverse_or_zero()"
-  | .ofU64 value => return s!"F::from_u64({← u64exprToRust locals row idx value})"
+def fieldToRust (names : Names) : Rust.FieldExpr F → String
+  | .const value => field value
+  | .cell index => s!"{names.row}.get({index}).copied().unwrap_or(F::ZERO)"
+  | .cellAtLoop offset =>
+      s!"{names.row}.get({offset}usize + idx as usize).copied().unwrap_or(F::ZERO)"
+  | .localVar index => s!"local_{index}"
+  | .add left right => s!"({fieldToRust names left} + {fieldToRust names right})"
+  | .mul left right => s!"({fieldToRust names left} * {fieldToRust names right})"
+  | .inverseOrZero value => s!"({fieldToRust names value}).inverse_or_zero()"
+  | .fromU64 value => s!"F::from_u64({u64ToRust names value})"
   | .ite condition thenValue elseValue =>
-      return s!"if {← bexprToRust locals row idx condition} \{ {← fexprToRust locals row idx thenValue} } else \{ {← fexprToRust locals row idx elseValue} }"
-  | .listGet values index => do
-      let index ← u64exprToRust locals row idx index
-      match constantValues? values with
-      | some values => pure (constantLookupToRust index values)
-      | none =>
-          let values ← fexprListToRust locals row idx values
-          return s!"[{commaSep values}].get(({index}) as usize).copied().unwrap_or(F::ZERO)"
-  | .dataGet key width dataRow column =>
-      return s!"_data.get({quoted key}, {width}, ({← u64exprToRust locals row idx dataRow}) as usize, {column.val})"
-  | .hintGet key width hintRow column =>
-      return s!"_hint.get({quoted key}, {width}, ({← u64exprToRust locals row idx hintRow}) as usize, {column.val})"
+      s!"if {boolToRust names condition} \{ {fieldToRust names thenValue} } else \{ {fieldToRust names elseValue} }"
+  | .arrayGet values index =>
+      s!"[{commaSep (fieldListToRust names values)}].get(({u64ToRust names index}) as usize).copied().unwrap_or(F::ZERO)"
+  | .constMatch values index => constantLookupToRust (u64ToRust names index) values
+  | .dataGet key width row column =>
+      s!"_data.get({quoted key}, {width}, ({u64ToRust names row}) as usize, {column})"
+  | .hintGet key width row column =>
+      s!"_hint.get({quoted key}, {width}, ({u64ToRust names row}) as usize, {column})"
 
-def fexprListToRust (locals : Array LocalSort) (row idx : String) :
-    List (Witgen.FExpr F) → Except String (List String)
-  | [] => pure []
-  | value :: values =>
-      return (← fexprToRust locals row idx value) ::
-        (← fexprListToRust locals row idx values)
+def fieldListToRust (names : Names) : List (Rust.FieldExpr F) → List String
+  | [] => []
+  | value :: values => fieldToRust names value :: fieldListToRust names values
 
-def u64exprToRust (locals : Array LocalSort) (row idx : String) :
-    Witgen.U64Expr F → Except String String
-  | .const value => pure s!"{value.toNat}u64"
-  | .val value => return s!"({← fexprToRust locals row idx value}).canonical_u64()"
-  | .idx => pure idx
-  | .localVar index =>
-      match locals[index]? with
-      | some .u64 => pure s!"local_{index}"
-      | _ => throw s!"invalid u64 local {index} reached the validated Rust renderer"
-  | .add left right => return s!"({← u64exprToRust locals row idx left}).wrapping_add({← u64exprToRust locals row idx right})"
-  | .mul left right => return s!"({← u64exprToRust locals row idx left}).wrapping_mul({← u64exprToRust locals row idx right})"
-  | .div left right => return s!"safe_div({← u64exprToRust locals row idx left}, {← u64exprToRust locals row idx right})"
-  | .mod left right => return s!"safe_rem({← u64exprToRust locals row idx left}, {← u64exprToRust locals row idx right})"
-  | .land left right => return s!"({← u64exprToRust locals row idx left} & {← u64exprToRust locals row idx right})"
-  | .lor left right => return s!"({← u64exprToRust locals row idx left} | {← u64exprToRust locals row idx right})"
-  | .lxor left right => return s!"({← u64exprToRust locals row idx left} ^ {← u64exprToRust locals row idx right})"
-  | .shiftL left right => return s!"({← u64exprToRust locals row idx left}).wrapping_shl(({← u64exprToRust locals row idx right} & 63) as u32)"
-  | .shiftR left right => return s!"({← u64exprToRust locals row idx left}).wrapping_shr(({← u64exprToRust locals row idx right} & 63) as u32)"
+def u64ToRust (names : Names) : Rust.U64Expr F → String
+  | .const value => s!"{value.toNat}u64"
+  | .canonical value => s!"({fieldToRust names value}).canonical_u64()"
+  | .localVar index => s!"local_{index}"
+  | .loopVar => "idx"
+  | .rowIndex => names.rowIndex
+  | .wrappingAdd left right => s!"({u64ToRust names left}).wrapping_add({u64ToRust names right})"
+  | .wrappingMul left right => s!"({u64ToRust names left}).wrapping_mul({u64ToRust names right})"
+  | .safeDiv left right => s!"safe_div({u64ToRust names left}, {u64ToRust names right})"
+  | .safeRem left right => s!"safe_rem({u64ToRust names left}, {u64ToRust names right})"
+  | .and left right => s!"({u64ToRust names left} & {u64ToRust names right})"
+  | .or left right => s!"({u64ToRust names left} | {u64ToRust names right})"
+  | .xor left right => s!"({u64ToRust names left} ^ {u64ToRust names right})"
+  | .wrappingShl left right =>
+      s!"({u64ToRust names left}).wrapping_shl(({u64ToRust names right} & 63) as u32)"
+  | .wrappingShr left right =>
+      s!"({u64ToRust names left}).wrapping_shr(({u64ToRust names right} & 63) as u32)"
+  | .loopBit value =>
+      s!"(if idx < 64 \{ ({u64ToRust names value} >> idx) & 1 } else \{ 0 })"
   | .ite condition thenValue elseValue =>
-      return s!"if {← bexprToRust locals row idx condition} \{ {← u64exprToRust locals row idx thenValue} } else \{ {← u64exprToRust locals row idx elseValue} }"
+      s!"if {boolToRust names condition} \{ {u64ToRust names thenValue} } else \{ {u64ToRust names elseValue} }"
 
-def bexprToRust (locals : Array LocalSort) (row idx : String) :
-    Witgen.BExpr F → Except String String
-  | .true => pure "true"
-  | .false => pure "false"
-  | .feq left right => return s!"({← fexprToRust locals row idx left} == {← fexprToRust locals row idx right})"
-  | .neq left right => return s!"({← u64exprToRust locals row idx left} == {← u64exprToRust locals row idx right})"
-  | .lt left right => return s!"({← u64exprToRust locals row idx left} < {← u64exprToRust locals row idx right})"
-  | .flt left right => return s!"(({← fexprToRust locals row idx left}).canonical_u64() < ({← fexprToRust locals row idx right}).canonical_u64())"
-  | .bit value bit => do
-      let value ← fexprToRust locals row idx value
-      if bit < 64 then
-        return s!"((({value}).canonical_u64() >> {bit}) & 1) == 1"
-      else pure "false"
-  | .not condition => return s!"!({← bexprToRust locals row idx condition})"
-  | .and left right => return s!"({← bexprToRust locals row idx left} && {← bexprToRust locals row idx right})"
+def boolToRust (names : Names) : Rust.BoolExpr F → String
+  | .true => "true"
+  | .false => "false"
+  | .fieldEq left right => s!"({fieldToRust names left} == {fieldToRust names right})"
+  | .u64Eq left right => s!"({u64ToRust names left} == {u64ToRust names right})"
+  | .u64Lt left right => s!"({u64ToRust names left} < {u64ToRust names right})"
+  | .not condition => s!"!({boolToRust names condition})"
+  | .and left right => s!"({boolToRust names left} && {boolToRust names right})"
 
 end
 
-def stepSort : Witgen.Step F → LocalSort
-  | .letF _ => .field
-  | .letU _ => .u64
+/-- Print statements, numbering `let` locals in order. -/
+def stmtsToRust (names : Names) (lets : ℕ) : List (Rust.Stmt F) → List String
+  | [] => []
+  | .letField value :: rest =>
+      s!"        let local_{lets}: F = {fieldToRust names value};" :: stmtsToRust names (lets + 1) rest
+  | .letU64 value :: rest =>
+      s!"        let local_{lets}: u64 = {u64ToRust names value};" :: stmtsToRust names (lets + 1) rest
+  | .push value :: rest =>
+      s!"        output.push({fieldToRust names value});" :: stmtsToRust names lets rest
+  | .forPush count value :: rest =>
+      s!"        for idx in 0u64..{count}u64 \{\n            output.push({fieldToRust names value});\n        }" ::
+        stmtsToRust names lets rest
 
-def stepsToRust (steps : List (Witgen.Step F)) (row idx : String) : Except String String := do
-  let locals := steps.map stepSort |>.toArray
-  let lines ← steps.zipIdx.mapM fun (step, index) =>
-    match step with
-    | .letF value => return s!"        let local_{index}: F = {← fexprToRust locals row idx value};"
-    | .letU value => return s!"        let local_{index}: u64 = {← u64exprToRust locals row idx value};"
-  return String.intercalate "\n" lines
-
-def vexprPushRust (locals : Array LocalSort) (row output idx : String) :
-    {n : ℕ} → Witgen.VExpr F n → Except String String
-  | _, .lit values => do
-      let lines ← values.toList.mapM fun value =>
-        return s!"        {output}.push({← fexprToRust locals row idx value});"
-      return String.intercalate "\n" lines
-  | _, .mapRange n body => do
-      let body ← fexprToRust locals row "idx" body
-      return s!"        for idx in 0u64..{n}u64 \{\n            {output}.push({body});\n        }"
-  | n, .envRange offset =>
-      pure s!"        for idx in 0usize..{n}usize \{\n            {output}.push({row}.get({offset}usize + idx).copied().unwrap_or(F::ZERO));\n        }"
-  | n, .bitsOf value => do
-      let value ← fexprToRust locals row idx value
-      return s!"        let bits_value = ({value}).canonical_u64();\n        for bit in 0u32..{n}u32 \{\n            {output}.push(F::from_u64(bits_value.checked_shr(bit).unwrap_or(0) & 1));\n        }"
-  | _, .append left right =>
-      return s!"{← vexprPushRust locals row output idx left}\n{← vexprPushRust locals row output idx right}"
-
-/-- Render steps and output of a witness program into a Rust vector `output`. Circuit cells are
-read from `row` and the row-program index is `idx`. Every witness, fixed-column, and prover-input
-row program is rendered through this function. -/
+/-- Print the Rust function body of a witness IR program, filling a vector `output` of `width`
+elements. -/
 def outputToRust {n : ℕ} (steps : List (Witgen.Step F)) (output : Witgen.VExpr F n)
-    (row idx : String) : Except String String := do
-  let locals := steps.map stepSort |>.toArray
-  let stepCode ← stepsToRust steps row idx
-  let outputCode ← vexprPushRust locals row "output" idx output
-  return s!"{stepCode}\n        let mut output = Vec::with_capacity({n});\n{outputCode}\n        debug_assert_eq!(output.len(), {n});"
+    (names : Names) : String :=
+  let body := String.intercalate "\n" (stmtsToRust names 0 (Codegen.program steps output))
+  s!"        let mut output: Vec<F> = Vec::with_capacity({n});\n{body}\n        debug_assert_eq!(output.len(), {n});"
 
-def witnessBlockToRust (block : WitnessBlock F) (row : String) : Except String String := do
-  return s!"{← outputToRust block.steps block.output row "0u64"}\n        {row}.extend(output);"
+def witnessBlockToRust (block : WitnessBlock F) (row : String) : String :=
+  s!"{outputToRust block.steps block.output ⟨row, "0u64"⟩}\n        {row}.extend(output);"
 
 def fixedRowFunctionToRust (index : ℕ) (component : ComponentProgram F) :
     Except String (Option String) :=
   match component.fixedColumns with
   | none => pure none
   | some fixed => do
-      let program ← outputToRust fixed.program.steps fixed.program.output "&[]" "row"
+      let program := outputToRust fixed.program.steps fixed.program.output ⟨"&[]", "row"⟩
       return some s!"fn component_{index}_fixed_row<F: WitnessField>(row: u64) -> Vec<F> \{
 {program}
     output
 }"
 
 def witnessBlocksToRust (blocks : List (WitnessBlock F)) : Except String String := do
-  let rendered ← blocks.mapM fun block =>
-    return s!"    \{\n{← witnessBlockToRust block "row"}\n    }"
+  let rendered := blocks.map fun block => s!"    \{\n{witnessBlockToRust block "row"}\n    }"
   return String.intercalate "\n" rendered
 
 def interactionToRust (row : String) (interaction : AbstractInteraction F) : String :=
@@ -368,7 +334,7 @@ def initialRowsToRust (index : ℕ) (component : ComponentProgram F) (mode : Mod
   | .demand _ =>
       pure s!"fn component_{index}_initial_rows<F: WitnessField>(_hint: &WitnessData<F>) -> Result<Vec<Vec<F>>, String> \{ Ok(vec![]) }"
   | .preallocated mode => do
-      let suffix ← outputToRust mode.input.steps mode.input.output "&[]" "row"
+      let suffix := outputToRust mode.input.steps mode.input.output ⟨"&[]", "row"⟩
       let fixed ← match component.fixedColumns with
         | none => pure "        let mut input = Vec::new();"
         | some _ => pure s!"        let mut input = component_{index}_fixed_row::<F>(row);"

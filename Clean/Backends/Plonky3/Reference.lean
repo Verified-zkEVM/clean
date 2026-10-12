@@ -133,12 +133,12 @@ def Case.eval (c : Case) (row : ℕ) : Vector Fb c.width :=
 def u64List (values : List ℕ) : String :=
   s!"&[{Print.commaSep (values.map fun value => s!"{value}u64")}]"
 
-def Case.toRust (c : Case) (index : ℕ) : Except String String := do
-  let body ← Print.outputToRust c.steps c.output "input" "row"
-  return s!"pub fn case_{index}<F: WitnessField>(input: &[F], row: u64, _hint: &WitnessData<F>, _data: &WitnessData<F>) -> Vec<F> \{\n{body}\n    output\n}"
+def Case.toRust (c : Case) (index : ℕ) : String :=
+  let body := Print.outputToRust c.steps c.output ⟨"input", "row"⟩
+  s!"pub fn case_{index}<F: WitnessField>(input: &[F], row: u64, _hint: &WitnessData<F>, _data: &WitnessData<F>) -> Vec<F> \{\n{body}\n    output\n}"
 
 def render : Except String String := do
-  let functions ← cases.zipIdx.mapM fun (c, index) => c.toRust index
+  let functions := cases.zipIdx.map fun (c, index) => c.toRust index
   let dispatch := Print.commaSep <| cases.zipIdx.map fun (_, index) => s!"{index} => case_{index}(input, row, hint, data)"
   let expected := Print.commaSep <| cases.map fun c =>
     s!"&[{Print.commaSep (rowIndices.map fun row => u64List ((c.eval row).toList.map (·.val)))}]"

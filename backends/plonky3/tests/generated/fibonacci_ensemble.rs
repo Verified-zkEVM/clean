@@ -38,7 +38,7 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
     let _hint = &WitnessData::<F>::from_entries(Vec::new());
     let mut row = input.to_vec();
     {
-        let mut output = Vec::with_capacity(1);
+        let mut output: Vec<F> = Vec::with_capacity(1);
         output.push(F::from_u64(safe_rem(
             (row.get(2).copied().unwrap_or(F::ZERO) + row.get(3).copied().unwrap_or(F::ZERO))
                 .canonical_u64(),
@@ -98,7 +98,7 @@ fn component_1<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
     let _hint = &WitnessData::<F>::from_entries(Vec::new());
     let mut row = input.to_vec();
     {
-        let mut output = Vec::with_capacity(1);
+        let mut output: Vec<F> = Vec::with_capacity(1);
         output.push(F::from_u64(safe_div(
             (row.get(0).copied().unwrap_or(F::ZERO) + row.get(1).copied().unwrap_or(F::ZERO))
                 .canonical_u64(),
@@ -160,7 +160,7 @@ fn component_2_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
 }
 
 fn component_2_fixed_row<F: WitnessField>(row: u64) -> Vec<F> {
-    let mut output = Vec::with_capacity(1);
+    let mut output: Vec<F> = Vec::with_capacity(1);
     output.push(F::from_u64(row));
     debug_assert_eq!(output.len(), 1);
     output
@@ -184,8 +184,7 @@ fn component_2_initial_rows<F: WitnessField>(
     (0u64..256u64)
         .map(|row| {
             let mut input = component_2_fixed_row::<F>(row);
-
-            let mut output = Vec::with_capacity(1);
+            let mut output: Vec<F> = Vec::with_capacity(1);
             output.push(F::from_u64(0u64));
             debug_assert_eq!(output.len(), 1);
             input.extend(output);
