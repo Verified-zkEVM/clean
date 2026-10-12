@@ -539,10 +539,9 @@ def handleDemand (state : ComponentState F) (mode : DemandMode F)
       let rows := List.replicate demand.count (createDemandRow state mode demand 1 data)
       { state := { state with rows := state.rows ++ rows }, addedRows := rows }
   | .byMessage =>
-      let existing := state.rows.zipIdx.findSome? fun (row, index) =>
-        row.origin.bind fun origin =>
-          if sameOrigin origin mode demand then some (row, origin, index) else none
-      match existing with
+      match state.rows.zipIdx.findSome? fun (row, index) =>
+          row.origin.bind fun origin =>
+            if sameOrigin origin mode demand then some (row, origin, index) else none with
       | none =>
           let row := createDemandRow state mode demand demand.count data
           { state := { state with rows := state.rows ++ [row] }, addedRows := [row] }
@@ -677,8 +676,7 @@ round that leaves a component unpadded added rows through demand, and with them 
 def padAndBalance (data : ProverData F) (balancing : Balancing F) :
     Except GenerationError (Balancing F) :=
   let (states, added) := padTables data balancing.states
-  match balance data
-      { balancing.apply states ⟨[], added⟩ with } with
+  match balance data (balancing.apply states ⟨[], added⟩) with
   | .error error => .error error
   | .ok balanced =>
       if tablesArePadded balanced.states then .ok balanced
@@ -751,20 +749,25 @@ def assembleTables :
         throw (.assembly "generated table contains a row of the wrong width")
   | _, _ => .error (.assembly "generated-table count does not match ensemble component count")
 
-/-- Execute channel-driven generation from validated metadata. `hint` is read only by the row
-programs that initialize preallocated components; semantic `ProverData` is derived from the final
-committed component rows. -/
-def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensemble)
-    (publicInput : PublicIO F) (hint : ProverHint F) :
-    Except GenerationError (EnsembleWitness ensemble) := do
+/-- The components with their initial rows completed, and the prover data the rows derive. -/
+def initialStates {ensemble : Ensemble F PublicIO} (config : ValidConfig ensemble)
+    (hint : ProverHint F) : List (ComponentState F) × ProverData F :=
   let initial := (ensemble.tables.zip config.generations).map fun (component, generation) =>
     ComponentState.initial component generation
   let initial := initial.map fun state =>
     { state with rows := (initialInputs state hint).map fun input =>
       { input, values := input } }
   let data := generatedData initial
-  let initial := initial.map fun state =>
-    { state with rows := state.rows.map fun row => completeRow state row.input data none }
+  (initial.map fun state =>
+    { state with rows := state.rows.map fun row => completeRow state row.input data none }, data)
+
+/-- Execute channel-driven generation from validated metadata. `hint` is read only by the row
+programs that initialize preallocated components; semantic `ProverData` is derived from the final
+committed component rows. -/
+def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensemble)
+    (publicInput : PublicIO F) (hint : ProverHint F) :
+    Except GenerationError (EnsembleWitness ensemble) := do
+  let (initial, data) := initialStates config hint
   let verifier := ensemble.verifierOperations.interactionValues (.fromInput publicInput data)
   let rows := initial.flatMap fun state => state.rows.flatMap (rowInteractions state · data)
   let balanced ← balance data {
@@ -773,12 +776,14 @@ def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensembl
     interactions := (verifier ++ rows).length }
   let padded ← padAndBalance data balanced
   let assembled ← assembleTables ensemble.tables padded.states
-  return {
+  let witness : EnsembleWitness ensemble := {
     tables := assembled.tables
     publicInput
     same_length := assembled.same_length
     same_circuits := assembled.same_circuits
   }
+  if witness.interactions.length < FiniteField.size (F := F) then return witness
+  throw .interactionBound
 
 /-- Validate generation metadata, then generate an ensemble witness. -/
 def generate (ensemble : Ensemble F PublicIO) (config : Config F)
