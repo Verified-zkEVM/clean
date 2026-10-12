@@ -122,7 +122,7 @@ end WitnessBlock
 
 /-- A backend-facing component with explicit shape and only same-row operations. -/
 structure FixedColumnsProgram (F : Type) [FiniteField F] where
-  height : ℕ
+  height : UInt64
   program : WitnessBlock F
 
 namespace FixedColumnsProgram

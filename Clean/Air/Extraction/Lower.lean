@@ -116,7 +116,7 @@ def lowerComponent (index : ℕ) (component : Component F) :
   let witnesses ← lowerWitnesses index flat
   let fixedColumns ← component.fixedColumns.mapM fun fixed => do
     let program ← lowerRowProgram (.malformedFixedProgram index) fixed.program
-    return { height := fixed.height.toNat, program }
+    return { height := fixed.height, program }
   let constraints := operations.constraints
   let interactions := operations.interactions
   let expressions := constraints ++ interactions.flatMap fun interaction =>
@@ -141,9 +141,9 @@ def validateMode (index : ℕ) (component : Component F)
   | none, _ => pure ()
   | some _, .demand _ => throw (.fixedDemandMode index)
   | some fixed, .preallocated preallocated =>
-      unless preallocated.rows = fixed.height.toNat do
-        throw (.preallocatedRows index fixed.height.toNat preallocated.rows)
-      let paddedHeight := padding.targetHeight preallocated.rows
+      unless preallocated.rows = fixed.height do
+        throw (.preallocatedRows index fixed.height.toNat preallocated.rows.toNat)
+      let paddedHeight := padding.targetHeight preallocated.rows.toNat
       unless paddedHeight = fixed.height.toNat do
         throw (.fixedPadding index fixed.height.toNat paddedHeight)
   match mode with

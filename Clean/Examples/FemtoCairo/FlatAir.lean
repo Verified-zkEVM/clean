@@ -700,7 +700,7 @@ def executionMode {programSize : ℕ} (program : Fin programSize → F p)
 
 def programMode (programSize : UInt64) : Mode (F p) :=
   .preallocated {
-    rows := programSize.toNat
+    rows := programSize
     input := .ofFExprs #v[.const 0]
     input_valid := by rfl
     handlers := [{ interaction := 0, column := 2 }]
@@ -717,14 +717,15 @@ def memoryValuesHint {memorySize : UInt64} (memoryValues : fields memorySize.toN
   else #[]
 
 def memoryMode (memorySize : UInt64) : Mode (F p) := .preallocated {
-  rows := memorySize.toNat
+  rows := memorySize
   input := .ofFExprs #v[.hintGet memoryValuesKey 1 .idx 0, .const 0]
   input_valid := by rfl
   handlers := [{ interaction := 0, column := 2 }]
 }
 
 def config {programSize memorySize : UInt64} (program : Fin programSize.toNat → F p)
-    (h_programSize : programSize.toNat < p) (initialState : State (F p)) (executionRows fuel : ℕ) :
+    (h_programSize : programSize.toNat < p) (initialState : State (F p)) (executionRows : UInt64)
+    (fuel : ℕ) :
     Config (F p) where
   components := [
     ((executeStep program h_programSize initialState).name, {
@@ -732,17 +733,17 @@ def config {programSize memorySize : UInt64} (program : Fin programSize.toNat �
       padding := { input := #[0, 0, 0], minimumRows := executionRows } }),
     ((provideMemory (p := p)).name, {
       mode := memoryMode memorySize
-      padding := { input := #[0, 0, 0], minimumRows := memorySize.toNat } }),
+      padding := { input := #[0, 0, 0], minimumRows := memorySize } }),
     ((provideProgram program).name, {
       mode := programMode programSize
-      padding := { input := #[0, 0, 0], minimumRows := programSize.toNat } })
+      padding := { input := #[0, 0, 0], minimumRows := programSize } })
   ]
   fuel := fuel
 
 def generate {programSize memorySize : UInt64} (program : Fin programSize.toNat → F p)
     (h_programSize : programSize.toNat < p) (h_memorySize : memorySize.toNat < p)
     (memoryValues : fields memorySize.toNat (F p)) (initialState : State (F p))
-    (finalRegisters : fieldPair (F p)) (executionRows fuel : ℕ) :
+    (finalRegisters : fieldPair (F p)) (executionRows : UInt64) (fuel : ℕ) :
     Except String (EnsembleWitness
       (soundEnsemble program h_programSize h_memorySize initialState).ensemble) :=
   Air.Flat.WitnessGeneration.generate

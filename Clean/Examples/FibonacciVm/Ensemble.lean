@@ -330,7 +330,7 @@ def add8Mode : Mode (F p) := .demand {
 multiplicity cell per row. Its declared push interaction routes byte pulls back to
 the corresponding row. -/
 def bytesMode : Mode (F p) := .preallocated {
-  rows := (bytesFixedColumns (p := p)).height.toNat
+  rows := (bytesFixedColumns (p := p)).height
   input := .ofFExprs #v[.const 0]
   input_valid := by rfl
   handlers := [{ interaction := 0, column := 1 }]

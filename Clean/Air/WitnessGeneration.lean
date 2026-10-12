@@ -84,7 +84,7 @@ structure PreallocatedHandler where
 prepended by the generic builder; `input` is an index-aware Witness IR program for
 the prover-owned suffix. -/
 structure PreallocatedMode (F : Type) where
-  rows : ℕ
+  rows : UInt64
   input : Witgen.RowProgram F
   input_valid : input.Valid .prover
   handlers : List PreallocatedHandler
@@ -98,7 +98,7 @@ inductive Mode (F : Type) where
 /-- A semantic row used to extend one component to a power-of-two trace height. -/
 structure Padding (F : Type) where
   input : Array F
-  minimumRows : ℕ := 1
+  minimumRows : UInt64 := 1
 
 /-- How the generator builds the rows of one component. -/
 structure Generation (F : Type) where
@@ -317,7 +317,7 @@ def initializeTableInputs (hint : ProverHint F) :
       let rows ← match mode with
         | .demand _ => pure []
         | .preallocated mode =>
-            (List.range mode.rows).mapM fun row => do
+            (List.range mode.rows.toNat).mapM fun row => do
               let input ← initializeInput prepared mode hint (UInt64.ofNat row)
               return { input, values := input }
       let rest ← initializeTableInputs hint components modes
@@ -526,7 +526,7 @@ def nextPowerOfTwo (value : ℕ) : ℕ :=
   nextPowerOfTwoAux (max value 1) value 1
 
 def Padding.targetHeight (padding : Padding F) (rowCount : ℕ) : ℕ :=
-  nextPowerOfTwo (max rowCount padding.minimumRows)
+  nextPowerOfTwo (max rowCount padding.minimumRows.toNat)
 
 structure PaddingMutation (F : Type) where
   tables : List (GeneratedTable F)
@@ -563,10 +563,10 @@ def validateModes :
       | some _, .demand _ =>
           throw s!"fixed-column component '{prepared.component.circuit.name}' must use preallocated generation"
       | some fixed, .preallocated preallocated =>
-          unless preallocated.rows = fixed.height.toNat do
+          unless preallocated.rows = fixed.height do
             throw s!"preallocated row count for component '{prepared.component.circuit.name}' \
               does not match its fixed-column height"
-          unless padding.targetHeight preallocated.rows = preallocated.rows do
+          unless padding.targetHeight preallocated.rows.toNat = preallocated.rows.toNat do
             throw s!"fixed-column component '{prepared.component.circuit.name}' cannot change height during padding"
       | none, _ => pure ()
       match mode with
