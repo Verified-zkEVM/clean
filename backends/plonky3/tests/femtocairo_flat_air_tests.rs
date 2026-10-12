@@ -7,10 +7,15 @@ mod generated {
     include!("generated/femtocairo_flat_air.rs");
 }
 
-use clean_backend::witness_generation::WitnessData;
-use clean_backend::{prove_ensemble, verify_ensemble};
+use clean_backend::witness_generation::{Interaction, WitnessData, WitnessField};
+use clean_backend::{
+    prove_ensemble, verify_ensemble, EnsembleVerificationError, GeneratedAirSpec,
+    GeneratedEnsemble, GeneratedLookup,
+};
 use common::setup;
+use p3_air::{AirBuilderWithPublicValues, SymbolicVariable};
 use p3_baby_bear::BabyBear;
+use p3_field::Field;
 use p3_field::{PrimeCharacteristicRing, PrimeField64};
 use p3_matrix::Matrix;
 
@@ -92,4 +97,82 @@ fn extracted_femtocairo_air_proves_and_verifies() {
         prove_ensemble(&config, &statement, traces, &public_values).expect("invalid proving shape");
     verify_ensemble(&config, &statement, &proof, &public_values)
         .expect("extracted FemtoCairo AIR proof failed verification");
+}
+
+type Spec = generated::FemtoCairoFlatAirProgramAirSpec;
+
+const MEMORY: usize = 1;
+
+/// The FemtoCairo statement with rows 1 and 2 of the memory address table swapped.
+#[derive(Clone, Debug)]
+struct PermutedMemoryAddresses;
+
+impl GeneratedAirSpec for PermutedMemoryAddresses {
+    const FIELD_ORDER: u64 = Spec::FIELD_ORDER;
+    const PUBLIC_VALUES: usize = Spec::PUBLIC_VALUES;
+    const WIDTHS: &'static [usize] = Spec::WIDTHS;
+    const FIXED_WIDTHS: &'static [usize] = Spec::FIXED_WIDTHS;
+    const FIXED_HEIGHTS: &'static [usize] = Spec::FIXED_HEIGHTS;
+    const INTERACTIONS_PER_ROW: &'static [usize] = Spec::INTERACTIONS_PER_ROW;
+    const VERIFIER_INTERACTIONS: usize = Spec::VERIFIER_INTERACTIONS;
+
+    fn fixed_row<F: WitnessField>(component: usize, row: u64) -> Vec<F> {
+        let row = match (component, row) {
+            (MEMORY, 1) => 2,
+            (MEMORY, 2) => 1,
+            _ => row,
+        };
+        Spec::fixed_row(component, row)
+    }
+
+    fn constraints<AB>(component: usize, fixed: &[AB::Var], local: &[AB::Var]) -> Vec<AB::Expr>
+    where
+        AB: AirBuilderWithPublicValues,
+        AB::F: Field + PrimeCharacteristicRing,
+    {
+        Spec::constraints::<AB>(component, fixed, local)
+    }
+
+    fn lookups<F: Field>(
+        component: usize,
+        fixed: &[SymbolicVariable<F>],
+        local: &[SymbolicVariable<F>],
+    ) -> Vec<GeneratedLookup<F>> {
+        Spec::lookups(component, fixed, local)
+    }
+
+    fn verifier_interactions<F: WitnessField>(public_values: &[F]) -> Vec<Interaction<F>> {
+        Spec::verifier_interactions(public_values)
+    }
+}
+
+/// Memory is indexed: permuting (address, value) rows keeps every channel balanced and every
+/// constraint satisfied, but needs a different address table, which the verifier fixes.
+#[test]
+fn verifier_rejects_permuted_memory() {
+    let config = setup::test_config(19);
+    let public_values = vec![field(0), field(0)];
+    let witness = generated::generate(&public_values, &memory([0, 5, 3, 7, 2, 10, 0, 0]))
+        .expect("extracted FemtoCairo witness generation failed");
+    let mut traces = witness.into_traces().expect("invalid extracted traces");
+    let memory_trace = &mut traces[MEMORY];
+    let width = memory_trace.width();
+    for column in 0..width {
+        memory_trace.values.swap(width + column, 2 * width + column);
+    }
+    let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
+
+    let permuted = GeneratedEnsemble::<BabyBear, PermutedMemoryAddresses>::new(&trace_heights)
+        .expect("invalid permuted AIR shape");
+    let (proof, _) =
+        prove_ensemble(&config, &permuted, traces, &public_values).expect("invalid proving shape");
+    verify_ensemble(&config, &permuted, &proof, &public_values)
+        .expect("the permuted-memory proof must be valid for the permuted address table");
+
+    let statement = generated::FemtoCairoFlatAirProgramStatement::<BabyBear>::new(&trace_heights)
+        .expect("invalid generated AIR shape");
+    assert!(matches!(
+        verify_ensemble(&config, &statement, &proof, &public_values),
+        Err(EnsembleVerificationError::Proof(_))
+    ));
 }

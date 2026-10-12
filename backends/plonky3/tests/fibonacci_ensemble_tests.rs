@@ -14,8 +14,10 @@ use clean_backend::{
 };
 use common::setup;
 use p3_baby_bear::BabyBear;
-use p3_koala_bear::KoalaBear;
 use p3_field::{PrimeCharacteristicRing, PrimeField64};
+use p3_koala_bear::KoalaBear;
+#[cfg(not(debug_assertions))]
+use p3_matrix::dense::RowMajorMatrix;
 use p3_matrix::Matrix;
 use std::time::Instant;
 
@@ -25,8 +27,11 @@ fn field(value: u64) -> BabyBear {
 
 #[test]
 fn extracted_rust_generates_fibonacci_ensemble_witness() {
-    let witness = generated::generate(&[field(32), field(5), field(226)], &WitnessData::from_entries(Vec::new()))
-        .expect("extracted Rust witness generation failed");
+    let witness = generated::generate(
+        &[field(32), field(5), field(226)],
+        &WitnessData::from_entries(Vec::new()),
+    )
+    .expect("extracted Rust witness generation failed");
 
     assert_eq!(
         witness.tables.iter().map(Vec::len).collect::<Vec<_>>(),
@@ -51,8 +56,11 @@ fn extracted_rust_generates_fibonacci_ensemble_witness() {
 
 #[test]
 fn extracted_rust_coalesces_repeated_chip_pulls() {
-    let witness = generated::generate(&[field(400), field(219), field(61)], &WitnessData::from_entries(Vec::new()))
-        .expect("extracted Rust witness generation failed");
+    let witness = generated::generate(
+        &[field(400), field(219), field(61)],
+        &WitnessData::from_entries(Vec::new()),
+    )
+    .expect("extracted Rust witness generation failed");
 
     assert_eq!(
         witness.tables.iter().map(Vec::len).collect::<Vec<_>>(),
@@ -65,8 +73,8 @@ fn extracted_fibonacci_air_proves_and_verifies() {
     let config = setup::test_config(7);
     let public_values = vec![field(4096), field(59), field(29)];
     let witness_started = Instant::now();
-    let witness =
-        generated::generate(&public_values, &WitnessData::from_entries(Vec::new())).expect("extracted Rust witness generation failed");
+    let witness = generated::generate(&public_values, &WitnessData::from_entries(Vec::new()))
+        .expect("extracted Rust witness generation failed");
 
     let traces = witness.into_traces().expect("invalid extracted traces");
     assert_eq!(
@@ -102,8 +110,8 @@ fn extracted_fibonacci_air_proves_and_verifies() {
 fn ensemble_api_reports_shape_errors() {
     let config = setup::test_config(7);
     let public_values = vec![field(32), field(5), field(226)];
-    let witness =
-        generated::generate(&public_values, &WitnessData::from_entries(Vec::new())).expect("extracted Rust witness generation failed");
+    let witness = generated::generate(&public_values, &WitnessData::from_entries(Vec::new()))
+        .expect("extracted Rust witness generation failed");
     let traces = witness.into_traces().expect("invalid extracted traces");
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
     let statement = generated::FibonacciEnsembleProgramStatement::<BabyBear>::new(&trace_heights)
@@ -231,10 +239,13 @@ impl<F: WitnessField> Program<F> for Minimum64Program {
 fn verifier_rejects_a_valid_proof_at_the_wrong_height() {
     let config = setup::test_config(11);
     let public_values = vec![field(32), field(5), field(226)];
-    let expected =
-        generated::generate(&public_values, &WitnessData::from_entries(Vec::new())).expect("extracted Rust witness generation failed");
-    let wrong = witness_generation::generate::<BabyBear, Minimum64Program>(&public_values, &WitnessData::from_entries(Vec::new()))
-        .expect("wrong-height witness generation failed");
+    let expected = generated::generate(&public_values, &WitnessData::from_entries(Vec::new()))
+        .expect("extracted Rust witness generation failed");
+    let wrong = witness_generation::generate::<BabyBear, Minimum64Program>(
+        &public_values,
+        &WitnessData::from_entries(Vec::new()),
+    )
+    .expect("wrong-height witness generation failed");
 
     let wrong_traces = wrong.into_traces().expect("invalid wrong-height traces");
     let wrong_heights = wrong_traces.iter().map(Matrix::height).collect::<Vec<_>>();
@@ -270,4 +281,50 @@ fn verifier_rejects_a_valid_proof_at_the_wrong_height() {
             EnsembleShapeError::ProofDegreeBits { .. }
         ))
     ));
+}
+
+/// Prove a tampered trace of the 32-step execution and assert that verification rejects it.
+/// The prover checks constraints in debug builds, so such proofs exist only in release builds.
+#[cfg(not(debug_assertions))]
+fn assert_tampered_trace_rejected(
+    seed: u64,
+    tamper: impl FnOnce(&mut Vec<RowMajorMatrix<BabyBear>>),
+) {
+    let config = setup::test_config(seed);
+    let public_values = vec![field(32), field(5), field(226)];
+    let witness = generated::generate(&public_values, &WitnessData::from_entries(Vec::new()))
+        .expect("extracted Rust witness generation failed");
+    let mut traces = witness.into_traces().expect("invalid extracted traces");
+    tamper(&mut traces);
+    let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
+    let statement = generated::FibonacciEnsembleProgramStatement::<BabyBear>::new(&trace_heights)
+        .expect("invalid generated AIR shape");
+    let (proof, _) =
+        prove_ensemble(&config, &statement, traces, &public_values).expect("invalid proving shape");
+    assert!(matches!(
+        verify_ensemble(&config, &statement, &proof, &public_values),
+        Err(EnsembleVerificationError::Proof(_))
+    ));
+}
+
+/// The `add8` carry occurs in no interaction, so changing it violates only the printed
+/// constraints.
+#[cfg(not(debug_assertions))]
+#[test]
+fn verifier_rejects_a_violated_constraint() {
+    assert_tampered_trace_rejected(13, |traces| {
+        let add8 = &mut traces[1];
+        assert_eq!(add8.width(), 5);
+        add8.values[4] += BabyBear::ONE;
+    });
+}
+
+/// The byte table has no constraints, so changing a multiplicity unbalances only the `bytes`
+/// channel.
+#[cfg(not(debug_assertions))]
+#[test]
+fn verifier_rejects_an_unbalanced_channel() {
+    assert_tampered_trace_rejected(17, |traces| {
+        traces[2].values[0] += BabyBear::ONE;
+    });
 }

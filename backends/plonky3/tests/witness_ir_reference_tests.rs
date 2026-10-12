@@ -18,7 +18,8 @@ fn fields(values: &[u64]) -> Vec<BabyBear> {
 fn generated_witness_ir_matches_lean_semantics() {
     assert_eq!(BabyBear::ORDER_U64, FIELD_ORDER);
     let input = fields(INPUT);
-    let hint = WitnessData::from_entries(vec![("hint", HINT.iter().map(|row| fields(row)).collect())]);
+    let hint =
+        WitnessData::from_entries(vec![("hint", HINT.iter().map(|row| fields(row)).collect())]);
     let data = WitnessData::from_entries(vec![(
         "memory",
         MEMORY.iter().map(|row| fields(row)).collect(),

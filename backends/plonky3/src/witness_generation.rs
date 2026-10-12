@@ -235,7 +235,10 @@ impl<F: WitnessField> Demand<F> {
         if 2 * u128::from(value) <= u128::from(F::ORDER_U64) {
             (Direction::Push, value as usize)
         } else {
-            (Direction::Pull, (-self.multiplicity).canonical_u64() as usize)
+            (
+                Direction::Pull,
+                (-self.multiplicity).canonical_u64() as usize,
+            )
         }
     }
 
@@ -319,7 +322,9 @@ fn remove_interactions<F: WitnessField>(
 
 fn mode_handles<F: WitnessField>(mode: &Mode<F>, demand: &Demand<F>) -> bool {
     match mode {
-        Mode::Demand(mode) => mode.channel == demand.channel && mode.direction == demand.direction(),
+        Mode::Demand(mode) => {
+            mode.channel == demand.channel && mode.direction == demand.direction()
+        }
         Mode::Preallocated { handlers, .. } => handlers.iter().any(|handler| {
             handler.channel == demand.channel && handler.direction == demand.direction()
         }),
@@ -392,7 +397,8 @@ fn handle_demand<F: WitnessField, P: Program<F>>(
             });
             match existing {
                 None => {
-                    let row = make_demand_row::<F, P>(component, mode, demand, demand.count(), data)?;
+                    let row =
+                        make_demand_row::<F, P>(component, mode, demand, demand.count(), data)?;
                     add_interactions(demands, P::interactions(component, &row.values));
                     table.push(row);
                 }
