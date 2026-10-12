@@ -17,6 +17,6 @@ def main : IO Unit := do
       (Examples.FemtoCairo.FlatAir.soundEnsemble testProgram h_programSize h_memorySize
         initialState).ensemble
       (Examples.FemtoCairo.FlatAir.Witness.config (memorySize := 8)
-        testProgram initialState 8 1000) with
+        testProgram h_programSize initialState 8 1000) with
   | .ok rust => IO.print rust
   | .error error => throw (IO.userError error)

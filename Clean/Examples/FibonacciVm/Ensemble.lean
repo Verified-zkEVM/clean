@@ -312,7 +312,7 @@ open Air.Flat.WitnessGeneration
 
 /-- Generic push-driven generation metadata for the Fibonacci VM component. -/
 def fibMode : Mode (F p) := .demand {
-  channel := (FibonacciChannel (p := p)).name
+  channel := (FibonacciChannel (p := p)).toRaw
   direction := .push
   aggregation := .perOccurrence
   input := { cells := [.const 1, .message 0, .message 1, .message 2] }
@@ -320,7 +320,7 @@ def fibMode : Mode (F p) := .demand {
 
 /-- Generic pull-driven, message-coalescing generation metadata for the addition chip. -/
 def add8Mode : Mode (F p) := .demand {
-  channel := (Add8Channel (p := p)).name
+  channel := (Add8Channel (p := p)).toRaw
   direction := .pull
   aggregation := .byMessage
   input := { cells := [.message 0, .message 1, .message 2, .multiplicity] }
@@ -336,16 +336,12 @@ def bytesMode : Mode (F p) := .preallocated {
   handlers := [{ interaction := 0, column := 1 }]
 }
 
-/--
-Channel-driven witness-generation metadata, aligned with
-`fibonacciEnsemble.ensemble.tables = [fib8, add8, pushBytes]`.
--/
+/-- Channel-driven witness-generation metadata for each component of the ensemble. -/
 def config (fuel : ℕ) : Config (F p) unit where
-  modes := [fibMode (p := p), add8Mode (p := p), bytesMode (p := p)]
-  padding := [
-    { input := #[0, 0, 0, 0], minimumRows := 32 },
-    { input := #[0, 0, 0, 0], minimumRows := 32 },
-    { input := #[0, 0], minimumRows := 256 }
+  components := [
+    ((fib8 (p := p)).name, { mode := fibMode, padding := { input := #[0, 0, 0, 0], minimumRows := 32 } }),
+    ((add8 (p := p)).name, { mode := add8Mode, padding := { input := #[0, 0, 0, 0], minimumRows := 32 } }),
+    ((pushBytes (p := p)).name, { mode := bytesMode, padding := { input := #[0, 0], minimumRows := 256 } })
   ]
   fuel := fuel
 

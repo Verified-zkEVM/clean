@@ -15,8 +15,7 @@ variable {PublicIO : TypeMap} [ProvableType PublicIO]
 variable {ProverInput : TypeMap} [ProvableType ProverInput]
 
 inductive LoweringError where
-  | modeCount (expected actual : ℕ)
-  | paddingCount (expected actual : ℕ)
+  | config (error : ConfigError)
   | nativeWitness (component operation : ℕ)
   | malformedWitnessLocals (component operation : ℕ)
   | malformedFixedProgram (component : ℕ)
@@ -37,10 +36,7 @@ deriving Repr, DecidableEq
 
 instance : ToString LoweringError where
   toString
-    | .modeCount expected actual =>
-        s!"generation-mode count {actual} does not match component count {expected}"
-    | .paddingCount expected actual =>
-        s!"padding count {actual} does not match component count {expected}"
+    | .config error => toString error
     | .nativeWitness component operation =>
         s!"component {component} witness operation {operation} is a native Lean closure"
     | .malformedWitnessLocals component operation =>
@@ -240,10 +236,7 @@ def validateDataReads (ensemble : Ensemble F PublicIO) (modes : List (Mode F)) :
 /-- Lower and validate the backend-facing portion of an ensemble without producing source text. -/
 def lower (ensemble : Ensemble F PublicIO) (config : Config F ProverInput) :
     Except LoweringError (Program F) := do
-  unless config.modes.length = ensemble.tables.length do
-    throw (.modeCount ensemble.tables.length config.modes.length)
-  unless config.padding.length = ensemble.tables.length do
-    throw (.paddingCount ensemble.tables.length config.padding.length)
+  let config ← (config.align ensemble).mapError .config
   for (((component, mode), padding), index) in
       ((ensemble.tables.zip config.modes).zip config.padding).zipIdx do
     validateMode index component mode padding

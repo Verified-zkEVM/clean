@@ -50,7 +50,9 @@ def eval (message : Array F) (multiplicity : ℕ) : InputCell F → Except Strin
       match message[index]? with
       | some value => .ok value
       | none => .error s!"channel message has no element at index {index}"
-  | .multiplicity => .ok (FiniteField.fromNat multiplicity)
+  | .multiplicity =>
+      if multiplicity < FiniteField.size (F := F) then .ok (FiniteField.fromNat multiplicity)
+      else .error s!"multiplicity {multiplicity} does not fit in the field"
   | .const value => .ok value
 
 end InputCell
@@ -69,7 +71,7 @@ end InputTemplate
 
 /-- Demand-driven row generation. -/
 structure DemandMode (F : Type) where
-  channel : String
+  channel : RawChannel F
   direction : Direction
   aggregation : Aggregation
   input : InputTemplate F
@@ -101,13 +103,52 @@ structure Padding (F : Type) where
   input : Array F
   minimumRows : ℕ := 1
 
-/-- Generation and padding metadata are aligned with `Ensemble.tables`. `ProverInput`
-is witness-construction input only; semantic `ProverData` is still derived from the
-final committed component rows. -/
+/-- How the generator builds the rows of one component. -/
+structure Generation (F : Type) where
+  mode : Mode F
+  padding : Padding F
+
+/-- Generation metadata keyed by component name; every ensemble component needs exactly one
+entry. `ProverInput` is witness-construction input only; semantic `ProverData` is still derived
+from the final committed component rows. -/
 structure Config (F : Type) (ProverInput : TypeMap) [ProvableType ProverInput] where
+  components : List (String × Generation F)
+  fuel : ℕ
+
+inductive ConfigError where
+  | unknownComponent (name : String)
+  | missingComponent (name : String)
+  | duplicateComponent (name : String)
+deriving Repr, DecidableEq
+
+instance : ToString ConfigError where
+  toString
+    | .unknownComponent name => s!"generation config names unknown component '{name}'"
+    | .missingComponent name => s!"component '{name}' has no generation config"
+    | .duplicateComponent name => s!"component '{name}' has multiple generation configs"
+
+/-- Generation metadata aligned with `Ensemble.tables`. -/
+structure AlignedConfig (F : Type) where
   modes : List (Mode F)
   padding : List (Padding F)
   fuel : ℕ
+
+/-- Look up the generation metadata of every ensemble component, in ensemble order. -/
+def Config.align (config : Config F ProverInput) (ensemble : Ensemble F PublicIO) :
+    Except ConfigError (AlignedConfig F) := do
+  for (name, _) in config.components do
+    unless ensemble.tables.any (·.circuit.name == name) do
+      throw (.unknownComponent name)
+  let generations ← ensemble.tables.mapM fun component =>
+    match config.components.filter (·.1 == component.circuit.name) with
+    | [(_, generation)] => pure generation
+    | [] => throw (.missingComponent component.circuit.name)
+    | _ => throw (.duplicateComponent component.circuit.name)
+  return {
+    modes := generations.map (·.mode)
+    padding := generations.map (·.padding)
+    fuel := config.fuel
+  }
 
 /-- A normalized, nonzero channel imbalance. -/
 structure Demand (F : Type) where
@@ -121,18 +162,23 @@ namespace Demand
 def sameMessage (left right : Demand F) : Bool :=
   left.channel == right.channel && left.message == right.message
 
-def ofInteraction (interaction : Interaction F) : Option (Demand F) :=
+/-- The demand of one interaction: its multiplicity counted in its own direction. A count above
+half the field order comes from a multiplicity of the wrong sign and is rejected. -/
+def ofInteraction (interaction : Interaction F) : Except String (Option (Demand F)) :=
   let direction := if interaction.assumeGuarantees then Direction.pull else Direction.push
   let count := if interaction.assumeGuarantees then
     FiniteField.val (-interaction.mult)
   else
     FiniteField.val interaction.mult
-  if count = 0 then none else some {
+  if 2 * count > FiniteField.size (F := F) then
+    .error s!"interaction on channel '{interaction.channel.name}' has a multiplicity of the wrong sign"
+  else if count = 0 then .ok none
+  else .ok (some {
     channel := interaction.channel.name
     direction
     message := interaction.msg
     count
-  }
+  })
 
 /-- Add one demand to a normalized list, eagerly cancelling opposite directions. -/
 def add : List (Demand F) → Demand F → List (Demand F)
@@ -153,30 +199,27 @@ def add : List (Demand F) → Demand F → List (Demand F)
       else
         current :: add rest demand
 
-def normalize (interactions : List (Interaction F)) : List (Demand F) :=
-  interactions.foldl (fun demands interaction =>
-    match ofInteraction interaction with
-    | none => demands
-    | some demand => add demands demand) []
+def addInteractions (demands : List (Demand F)) (interactions : List (Interaction F)) :
+    Except String (List (Demand F)) :=
+  interactions.foldlM (fun demands interaction => do
+    match ← ofInteraction interaction with
+    | none => return demands
+    | some demand => return add demands demand) demands
+
+def normalize (interactions : List (Interaction F)) : Except String (List (Demand F)) :=
+  addInteractions [] interactions
 
 def opposite (demand : Demand F) : Demand F :=
   { demand with direction := match demand.direction with
       | .pull => .push
       | .push => .pull }
 
-def addInteractions (demands : List (Demand F)) (interactions : List (Interaction F)) :
-    List (Demand F) :=
-  interactions.foldl (fun demands interaction =>
-    match ofInteraction interaction with
-    | none => demands
-    | some demand => add demands demand) demands
-
 def removeInteractions (demands : List (Demand F)) (interactions : List (Interaction F)) :
-    List (Demand F) :=
-  interactions.foldl (fun demands interaction =>
-    match ofInteraction interaction with
-    | none => demands
-    | some demand => add demands demand.opposite) demands
+    Except String (List (Demand F)) :=
+  interactions.foldlM (fun demands interaction => do
+    match ← ofInteraction interaction with
+    | none => return demands
+    | some demand => return add demands demand.opposite) demands
 
 end Demand
 
@@ -331,7 +374,7 @@ def PreallocatedHandler.handles (prepared : PreparedComponent F)
 def Mode.handles (prepared : PreparedComponent F) (mode : Mode F)
     (demand : Demand F) : Bool :=
   match mode with
-  | .demand mode => mode.channel == demand.channel && mode.direction == demand.direction
+  | .demand mode => mode.channel.name == demand.channel && mode.direction == demand.direction
   | .preallocated mode => mode.handlers.any fun handler => handler.handles prepared demand
 
 def handlerIndices (prepared : List (PreparedComponent F)) (modes : List (Mode F))
@@ -349,7 +392,7 @@ def findAction (prepared : List (PreparedComponent F)) (modes : List (Mode F)) :
       | _ => .error s!"multiple generation handlers match channel '{demand.channel}'"
 
 def sameOrigin (origin : Origin F) (mode : DemandMode F) (demand : Demand F) : Bool :=
-  origin.channel == mode.channel && origin.direction == mode.direction &&
+  origin.channel == mode.channel.name && origin.direction == mode.direction &&
     origin.message == demand.message
 
 def findOriginIndex (rows : List (GeneratedRow F)) (mode : DemandMode F)
@@ -363,7 +406,7 @@ def createDemandRow (prepared : PreparedComponent F) (mode : DemandMode F)
     (demand : Demand F) (multiplicity : ℕ) (data : ProverData F) :
     Except String (GeneratedRow F) := do
   let origin : Origin F := {
-    channel := mode.channel
+    channel := mode.channel.name
     direction := mode.direction
     message := demand.message
     multiplicity
@@ -445,7 +488,7 @@ structure Mutation (F : Type) where
   removed : List (Interaction F)
   added : List (Interaction F)
 
-def handle (prepared : List (PreparedComponent F)) (config : Config F ProverInput)
+def handle (prepared : List (PreparedComponent F)) (config : AlignedConfig F)
     (tables : List (GeneratedTable F)) (demand : Demand F) (index : ℕ)
     (data : ProverData F) :
     Except String (Mutation F) := do
@@ -464,7 +507,7 @@ def handle (prepared : List (PreparedComponent F)) (config : Config F ProverInpu
     added := tableMutation.addedRows.flatMap (rowInteractions component · data)
   }
 
-def generateLoop (ensemble : Ensemble F PublicIO) (config : Config F ProverInput)
+def generateLoop (ensemble : Ensemble F PublicIO) (config : AlignedConfig F)
     (prepared : List (PreparedComponent F)) (publicInput : PublicIO F) (data : ProverData F) :
     ℕ → List (GeneratedTable F) → List (Demand F) →
     Except String (List (GeneratedTable F))
@@ -477,8 +520,8 @@ def generateLoop (ensemble : Ensemble F PublicIO) (config : Config F ProverInput
           throw s!"unhandled channel imbalance on: {channels}"
       | some (demand, index) =>
           let mutation ← handle prepared config tables demand index data
-          let demands := Demand.addInteractions
-            (Demand.removeInteractions demands mutation.removed) mutation.added
+          let demands ← Demand.addInteractions
+            (← Demand.removeInteractions demands mutation.removed) mutation.added
           generateLoop ensemble config prepared publicInput data fuel mutation.tables demands
 
 def nextPowerOfTwoAux (target : ℕ) : ℕ → ℕ → ℕ
@@ -549,14 +592,14 @@ def validateModes :
       validateModes components modes paddings
   | _, _, _ => .error "generation metadata does not match ensemble component count"
 
-def padAndBalance (ensemble : Ensemble F PublicIO) (config : Config F ProverInput)
+def padAndBalance (ensemble : Ensemble F PublicIO) (config : AlignedConfig F)
     (prepared : List (PreparedComponent F)) (publicInput : PublicIO F) (data : ProverData F) :
     ℕ → List (GeneratedTable F) → Except String (List (GeneratedTable F))
   | 0, _ => .error "ensemble padding exhausted its fuel"
   | fuel + 1, tables => do
       let mutation ← padTables data prepared config.padding tables
       let tables ← generateLoop ensemble config prepared publicInput data config.fuel mutation.tables
-        (Demand.normalize mutation.added)
+        (← Demand.normalize mutation.added)
       if tablesArePadded tables config.padding then return tables
       padAndBalance ensemble config prepared publicInput data fuel tables
 
@@ -621,6 +664,9 @@ def generate (ensemble : Ensemble F PublicIO) (config : Config F ProverInput)
     (publicInput : PublicIO F) (proverInput : ProverInput F) :
     Except String (EnsembleWitness ensemble) :=
   let prepared := ensemble.tables.map prepareComponent
+  match config.align ensemble with
+  | .error error => .error (toString error)
+  | .ok config =>
   match validateModes prepared config.modes config.padding with
   | .error error => .error error
   | .ok () => match initializeTableInputs (toElements proverInput).toArray prepared config.modes with
@@ -631,9 +677,10 @@ def generate (ensemble : Ensemble F PublicIO) (config : Config F ProverInput)
     | .error error => .error error
     | .ok initial => match allInteractions ensemble publicInput prepared initial data with
     | .error error => .error error
-    | .ok interactions =>
-      match generateLoop ensemble config prepared publicInput data config.fuel initial
-          (Demand.normalize interactions) with
+    | .ok interactions => match Demand.normalize interactions with
+    | .error error => .error error
+    | .ok demands =>
+      match generateLoop ensemble config prepared publicInput data config.fuel initial demands with
       | .error error => .error error
       | .ok generated =>
         match padAndBalance ensemble config prepared publicInput data config.fuel generated with
@@ -657,6 +704,8 @@ def constraintsHold {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness 
 
 /-- Executable balance check using the same normalized worklist representation. -/
 def channelsBalanced {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness ensemble) : Bool :=
-  Demand.normalize witness.interactions |>.isEmpty
+  match Demand.normalize witness.interactions with
+  | .ok demands => demands.isEmpty
+  | .error _ => false
 
 end Air.Flat.WitnessGeneration

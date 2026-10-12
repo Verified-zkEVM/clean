@@ -366,7 +366,7 @@ def preallocatedHandlerToRust (component : ComponentProgram F)
 def modeToRust (component : ComponentProgram F) : Mode F → Except String String
   | .demand mode =>
       let input := commaSep (mode.input.cells.map inputCellToRust)
-      pure s!"Mode::Demand(DemandMode \{ channel: {quoted mode.channel}, direction: {directionToRust mode.direction}, aggregation: {aggregationToRust mode.aggregation}, input: vec![{input}] })"
+      pure s!"Mode::Demand(DemandMode \{ channel: {quoted mode.channel.name}, direction: {directionToRust mode.direction}, aggregation: {aggregationToRust mode.aggregation}, input: vec![{input}] })"
   | .preallocated mode => do
       let handlers ← mode.handlers.mapM (preallocatedHandlerToRust component)
       return s!"Mode::Preallocated \{ handlers: vec![{commaSep handlers}] }"

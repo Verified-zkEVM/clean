@@ -93,6 +93,25 @@ def invalidRejected : Bool :=
 /-- A final state not reached within the configured fuel fails generation. -/
 example : invalidRejected = true := by native_decide
 
+def configErrors : List String :=
+  let config := FibonacciWitness.config (p := pBabybear) 1000
+  let ensemble := (fibonacciEnsemble (p := pBabybear)).ensemble
+  [{ config with components := config.components.drop 1 },
+    { config with components := config.components ++ config.components.take 1 },
+    { config with components :=
+      ("unknown", { mode := FibonacciWitness.fibMode, padding := { input := #[] } }) ::
+        config.components }]
+  |>.map fun (config : Config (F pBabybear) unit) => match config.align ensemble with
+    | .error error => toString error
+    | .ok _ => ""
+
+/-- Generation metadata is looked up by component name; missing, duplicate, and unknown entries
+are rejected. -/
+example : configErrors = [
+    "component 'fibonacci' has no generation config",
+    "component 'fibonacci' has multiple generation configs",
+    "generation config names unknown component 'unknown'"] := by native_decide
+
 def noData : ProverData (F pBabybear) := fun _ _ => #[]
 
 def extractedFirstRow : Except String (Array (F pBabybear)) := do

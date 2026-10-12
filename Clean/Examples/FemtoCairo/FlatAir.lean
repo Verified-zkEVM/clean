@@ -690,7 +690,7 @@ open Air.Flat.WitnessGeneration
 
 def executionMode {programSize : ℕ} (program : Fin programSize → F p)
     (initialState : State (F p)) : Mode (F p) := .demand {
-  channel := (StateChannel program initialState).name
+  channel := (StateChannel program initialState).toRaw
   direction := .push
   aggregation := .perOccurrence
   input := { cells := [.message 0, .message 1, .message 2] }
@@ -712,12 +712,18 @@ def memoryMode (memorySize : ℕ) : Mode (F p) := .preallocated {
 }
 
 def config {programSize memorySize : ℕ} (program : Fin programSize → F p)
-    (initialState : State (F p)) (executionRows fuel : ℕ) : Config (F p) (fields memorySize) where
-  modes := [executionMode program initialState, memoryMode memorySize, programMode program]
-  padding := [
-    { input := #[0, 0, 0], minimumRows := executionRows },
-    { input := #[0, 0, 0], minimumRows := memorySize },
-    { input := #[0, 0, 0], minimumRows := programSize }
+    (h_programSize : programSize < p) (initialState : State (F p)) (executionRows fuel : ℕ) :
+    Config (F p) (fields memorySize) where
+  components := [
+    ((executeStep program h_programSize initialState).name, {
+      mode := executionMode program initialState
+      padding := { input := #[0, 0, 0], minimumRows := executionRows } }),
+    ((provideMemory (p := p)).name, {
+      mode := memoryMode memorySize
+      padding := { input := #[0, 0, 0], minimumRows := memorySize } }),
+    ((provideProgram program).name, {
+      mode := programMode program
+      padding := { input := #[0, 0, 0], minimumRows := programSize } })
   ]
   fuel := fuel
 
@@ -729,7 +735,7 @@ def generate {programSize memorySize : ℕ} (program : Fin programSize → F p)
       (soundEnsemble program h_programSize h_memorySize initialState).ensemble) :=
   Air.Flat.WitnessGeneration.generate
     (soundEnsemble program h_programSize h_memorySize initialState).ensemble
-    (config program initialState executionRows fuel) finalRegisters memoryValues
+    (config program h_programSize initialState executionRows fuel) finalRegisters memoryValues
 
 end Witness
 

@@ -253,24 +253,28 @@ struct Row<F> {
     origin: Option<Origin<F>>,
 }
 
-fn interaction_demand<F: WitnessField>(interaction: Interaction<F>) -> Option<Demand<F>> {
+/// The demand of one interaction: its multiplicity counted in its own direction. A count above
+/// half the field order comes from a multiplicity of the wrong sign and is rejected.
+fn interaction_demand<F: WitnessField>(
+    interaction: Interaction<F>,
+) -> Result<Option<Demand<F>>, String> {
     let (direction, count) = if interaction.assume_guarantees {
-        (
-            Direction::Pull,
-            (-interaction.multiplicity).canonical_u64() as usize,
-        )
+        (Direction::Pull, (-interaction.multiplicity).canonical_u64())
     } else {
-        (
-            Direction::Push,
-            interaction.multiplicity.canonical_u64() as usize,
-        )
+        (Direction::Push, interaction.multiplicity.canonical_u64())
     };
-    (count != 0).then_some(Demand {
+    if 2 * u128::from(count) > u128::from(F::ORDER_U64) {
+        return Err(format!(
+            "interaction on channel '{}' has a multiplicity of the wrong sign",
+            interaction.channel
+        ));
+    }
+    Ok((count != 0).then_some(Demand {
         channel: interaction.channel,
         direction,
         message: interaction.message,
-        count,
-    })
+        count: count as usize,
+    }))
 }
 
 /// Add a demand while eagerly cancelling the opposite direction.
@@ -301,24 +305,26 @@ fn add_demand<F: WitnessField>(demands: &mut Vec<Demand<F>>, mut demand: Demand<
 fn add_interactions<F: WitnessField>(
     demands: &mut Vec<Demand<F>>,
     interactions: impl IntoIterator<Item = Interaction<F>>,
-) {
+) -> Result<(), String> {
     for interaction in interactions {
-        if let Some(demand) = interaction_demand(interaction) {
+        if let Some(demand) = interaction_demand(interaction)? {
             add_demand(demands, demand);
         }
     }
+    Ok(())
 }
 
 fn remove_interactions<F: WitnessField>(
     demands: &mut Vec<Demand<F>>,
     interactions: impl IntoIterator<Item = Interaction<F>>,
-) {
+) -> Result<(), String> {
     for interaction in interactions {
-        if let Some(mut demand) = interaction_demand(interaction) {
+        if let Some(mut demand) = interaction_demand(interaction)? {
             demand.direction = demand.direction.opposite();
             add_demand(demands, demand);
         }
     }
+    Ok(())
 }
 
 fn mode_handles<F: WitnessField>(mode: &Mode<F>, demand: &Demand<F>) -> bool {
@@ -343,7 +349,12 @@ fn input_for_demand<F: WitnessField>(
                 .get(*index)
                 .copied()
                 .ok_or_else(|| format!("channel message has no element at index {index}")),
-            InputCell::Multiplicity => Ok(F::from_canonical_u64(multiplicity as u64)),
+            InputCell::Multiplicity if (multiplicity as u64) < F::ORDER_U64 => {
+                Ok(F::from_canonical_u64(multiplicity as u64))
+            }
+            InputCell::Multiplicity => Err(format!(
+                "multiplicity {multiplicity} does not fit in the field"
+            )),
             InputCell::Constant(value) => Ok(*value),
         })
         .collect()
@@ -382,7 +393,7 @@ fn handle_demand<F: WitnessField, P: Program<F>>(
         Aggregation::PerOccurrence => {
             for _ in 0..demand.count {
                 let row = make_demand_row::<F, P>(component, mode, demand, 1, data)?;
-                add_interactions(demands, P::interactions(component, &row.values));
+                add_interactions(demands, P::interactions(component, &row.values))?;
                 table.push(row);
             }
         }
@@ -397,7 +408,7 @@ fn handle_demand<F: WitnessField, P: Program<F>>(
             match existing {
                 None => {
                     let row = make_demand_row::<F, P>(component, mode, demand, demand.count, data)?;
-                    add_interactions(demands, P::interactions(component, &row.values));
+                    add_interactions(demands, P::interactions(component, &row.values))?;
                     table.push(row);
                 }
                 Some(index) => {
@@ -410,8 +421,8 @@ fn handle_demand<F: WitnessField, P: Program<F>>(
                         + demand.count;
                     let updated =
                         make_demand_row::<F, P>(component, mode, demand, multiplicity, data)?;
-                    remove_interactions(demands, P::interactions(component, &old.values));
-                    add_interactions(demands, P::interactions(component, &updated.values));
+                    remove_interactions(demands, P::interactions(component, &old.values))?;
+                    add_interactions(demands, P::interactions(component, &updated.values))?;
                     table[index] = updated;
                 }
             }
@@ -479,8 +490,8 @@ fn handle_preallocated<F: WitnessField, P: Program<F>>(
     let old_interactions = P::interactions(component, &row.values);
     row.input[handler.column] = value;
     row.values = P::complete_row(component, &row.input, data)?;
-    remove_interactions(demands, old_interactions);
-    add_interactions(demands, P::interactions(component, &row.values));
+    remove_interactions(demands, old_interactions)?;
+    add_interactions(demands, P::interactions(component, &row.values))?;
     Ok(())
 }
 
@@ -570,7 +581,7 @@ fn pad_and_balance<F: WitnessField, P: Program<F>>(
             let height = target_height(table.len(), padding);
             for _ in table.len()..height {
                 let values = P::complete_row(component, &padding.input, data)?;
-                add_interactions(&mut demands, P::interactions(component, &values));
+                add_interactions(&mut demands, P::interactions(component, &values))?;
                 table.push(Row {
                     input: padding.input.clone(),
                     values,
@@ -701,10 +712,10 @@ pub fn generate<F: WitnessField, P: Program<F>>(
     }
 
     let mut demands = Vec::new();
-    add_interactions(&mut demands, P::verifier_interactions(public_input));
+    add_interactions(&mut demands, P::verifier_interactions(public_input))?;
     for (component, table) in tables.iter().enumerate() {
         for row in table {
-            add_interactions(&mut demands, P::interactions(component, &row.values));
+            add_interactions(&mut demands, P::interactions(component, &row.values))?;
         }
     }
 

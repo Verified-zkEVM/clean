@@ -67,7 +67,7 @@ example : generateResult alternateMemoryValues = .ok ([8, 8, 32], true, true, 8,
 
 def unstableDataReadRejected : Bool :=
   let config : Config (F pBabybear) (fields 8) :=
-    Witness.config (memorySize := 8) testProgram initialState 8 1000
+    Witness.config (memorySize := 8) testProgram h_programSize initialState 8 1000
   let mutableMemory : Mode (F pBabybear) := .preallocated {
     rows := 8
     input := .ofFExprs #v[.proverInputGet .idx, .const 0]
@@ -75,7 +75,9 @@ def unstableDataReadRejected : Bool :=
     handlers := [{ interaction := 0, column := 1 }]
   }
   let config : Config (F pBabybear) (fields 8) :=
-    { config with modes := config.modes.set 1 mutableMemory }
+    { config with components := config.components.map fun (name, generation) =>
+        if name = (provideMemory (p := pBabybear)).name then (name, { generation with mode := mutableMemory })
+        else (name, generation) }
   match Air.Flat.Extraction.lower
       (soundEnsemble testProgram h_programSize h_memorySize initialState).ensemble config with
   | .error (.unstableDataRead _ _ "memory" 1) => true
