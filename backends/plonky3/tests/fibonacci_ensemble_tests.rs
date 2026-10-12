@@ -206,8 +206,8 @@ impl<F: WitnessField> Program<F> for Minimum64Program {
             .collect()
     }
 
-    fn initial_rows(component: usize, hint: &WitnessData<F>) -> Result<Vec<Vec<F>>, String> {
-        generated::FibonacciEnsembleProgram::initial_rows(component, hint)
+    fn initial_row(component: usize, row: u64, hint: &WitnessData<F>) -> Vec<F> {
+        generated::FibonacciEnsembleProgram::initial_row(component, row, hint)
     }
 
     fn complete_row(

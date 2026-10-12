@@ -213,18 +213,6 @@ def lookupCaseToRust (index fixedWidth : ℕ) (fixed main : String)
     interactions.map (lookupToRust fixedWidth fixed main)
   s!"            {index} => \{\n{lookups}\n            }"
 
-def fixedColumnsToRust (index : ℕ) (component : ComponentProgram F) : Except String String :=
-  match component.fixedColumns with
-  | none => pure "None"
-  | some fixed =>
-      pure s!"Some(\{
-        let mut values = Vec::with_capacity({fixed.height} * {fixed.width});
-        for row in 0u64..{fixed.height}u64 \{
-            values.extend(component_{index}_fixed_row::<F>(row));
-        }
-        RowMajorMatrix::new(values, {fixed.width})
-    })"
-
 def airToRust (name : String) (program : Program F) : Except String String := do
   let widths := program.components.map (toString ∘ componentCommittedWidth)
   let fixedWidths := program.components.map (toString ∘ componentFixedWidth)
@@ -236,9 +224,9 @@ def airToRust (name : String) (program : Program F) : Except String String := do
     program.components.zipIdx.map fun (component, index) => constraintCaseToRust index component
   let tableCases := String.intercalate "\n" <| program.components.zipIdx.map fun (component, index) =>
     lookupCaseToRust index (componentFixedWidth component) "fixed" "local" component.interactions
-  let fixedCases ← program.components.zipIdx.mapM fun (component, index) => do
-    return s!"            {index} => {← fixedColumnsToRust index component},"
-  let fixedCases := String.intercalate "\n" fixedCases
+  let fixedCases := String.intercalate "\n" <| program.components.zipIdx.filterMap
+    fun (component, index) => component.fixedColumns.map fun _ =>
+      s!"            {index} => component_{index}_fixed_row::<F>(row),"
   return s!"#[derive(Clone, Debug)]\n\
 pub struct {name}AirSpec;\n\
 \n\
@@ -251,10 +239,10 @@ impl GeneratedAirSpec for {name}AirSpec \{\n\
     const INTERACTIONS_PER_ROW: &'static [usize] = &[{commaSep interactionsPerRow}];\n\
     const VERIFIER_INTERACTIONS: usize = {program.verifierInteractions.length};\n\
 \n\
-    fn fixed_trace<F: WitnessField>(component: usize) -> Option<RowMajorMatrix<F>> \{\n\
+    fn fixed_row<F: WitnessField>(component: usize, row: u64) -> Vec<F> \{\n\
         match component \{\n\
 {fixedCases}\n\
-            _ => unreachable!(\"invalid generated AIR component\"),\n\
+            _ => unreachable!(\"component without fixed columns\"),\n\
         }\n\
     }\n\
 \n\
@@ -326,25 +314,22 @@ def modeToRust (component : ComponentProgram F) : Mode F → Except String Strin
       pure s!"Mode::Demand(DemandMode \{ channel: {quoted mode.channel.name}, direction: {directionToRust mode.direction}, aggregation: {aggregationToRust mode.aggregation}, input: vec![{input}] })"
   | .preallocated mode => do
       let handlers ← mode.handlers.mapM (preallocatedHandlerToRust component)
-      return s!"Mode::Preallocated \{ handlers: vec![{commaSep handlers}] }"
+      return s!"Mode::Preallocated \{ rows: {mode.rows}, handlers: vec![{commaSep handlers}] }"
 
-def initialRowsToRust (index : ℕ) (component : ComponentProgram F) (mode : Mode F) :
-    Except String String :=
-  match mode with
-  | .demand _ =>
-      pure s!"fn component_{index}_initial_rows<F: WitnessField>(_hint: &WitnessData<F>) -> Result<Vec<Vec<F>>, String> \{ Ok(vec![]) }"
-  | .preallocated mode => do
+/-- The initial input of a row of a preallocated component: its fixed prefix followed by its row
+program's values. -/
+def initialRowToRust (index : ℕ) (component : ComponentProgram F) : Mode F → Option String
+  | .demand _ => none
+  | .preallocated mode =>
       let suffix := outputToRust mode.input.steps mode.input.output ⟨"&[]", "row"⟩
-      let fixed ← match component.fixedColumns with
-        | none => pure "        let mut input = Vec::new();"
-        | some _ => pure s!"        let mut input = component_{index}_fixed_row::<F>(row);"
-      return s!"fn component_{index}_initial_rows<F: WitnessField>(_hint: &WitnessData<F>) -> Result<Vec<Vec<F>>, String> \{
-    (0u64..{mode.rows}u64).map(|row| \{
-{fixed}
+      let fixed := match component.fixedColumns with
+        | none => "Vec::new()"
+        | some _ => s!"component_{index}_fixed_row::<F>(row)"
+      some s!"fn component_{index}_initial_row<F: WitnessField>(row: u64, _hint: &WitnessData<F>) -> Vec<F> \{
+    let mut input = {fixed};
 {suffix}
-        input.extend(output);
-        Ok(input)
-    }).collect()
+    input.extend(output);
+    input
 }"
 
 def paddingToRust (padding : Padding F) : String :=
@@ -362,7 +347,6 @@ use clean_backend::{GeneratedAirSpec, GeneratedEnsemble, GeneratedLookup};\n\
 use p3_air::lookup::Direction as LookupDirection;\n\
 use p3_air::{AirBuilderWithPublicValues, SymbolicExpression, SymbolicVariable};\n\
 use p3_field::{Field, PrimeCharacteristicRing};\n\
-use p3_matrix::dense::RowMajorMatrix;\n\
 use alloc::{format, vec, vec::Vec};\n\
 use alloc::string::String;\n\
 \n" ++ u64Helpers
@@ -374,8 +358,8 @@ def programToRust (name : String) (program : Program F) : Except String String :
   let fixedRows ← program.components.zipIdx.filterMapM fun (component, index) =>
     fixedRowFunctionToRust index component
   let components := components ++ fixedRows
-  let initialRows ← (program.components.zip program.modes).zipIdx.mapM fun
-    | ((component, mode), index) => initialRowsToRust index component mode
+  let initialRows := (program.components.zip program.modes).zipIdx.filterMap fun
+    | ((component, mode), index) => initialRowToRust index component mode
   let verifier := interactionsToRust "public_input" program.verifierInteractions
   let air ← airToRust name program
   let modes ← (program.components.zip program.modes).mapM fun (component, mode) =>
@@ -386,11 +370,13 @@ def programToRust (name : String) (program : Program F) : Except String String :
   let fixedWidths := commaSep (program.components.map (toString ∘ componentFixedWidth))
   let completeCases := String.intercalate "\n" <| program.components.zipIdx.map fun (_, index) =>
     s!"            {index} => component_{index}(input, data),"
-  let initialCases := String.intercalate "\n" <| program.components.zipIdx.map fun (_, index) =>
-    s!"            {index} => component_{index}_initial_rows(hint),"
+  let initialCases := String.intercalate "\n" <| (program.modes.zipIdx.filter fun
+    | (.preallocated _, _) => true
+    | (.demand _, _) => false).map fun (_, index) =>
+      s!"            {index} => component_{index}_initial_row(row, hint),"
   let interactionCases := String.intercalate "\n" <| program.components.zipIdx.map fun (_, index) =>
     s!"            {index} => component_{index}_interactions(row),"
-  return s!"{prelude}\n{String.intercalate "\n\n" components}\n\n{String.intercalate "\n\n" initialRows}\n\nfn public_interactions<F: WitnessField>(public_input: &[F]) -> Vec<Interaction<F>> \{\n    {verifier}\n}\n\n{air}\n\npub struct {name};\n\nimpl<F: WitnessField> Program<F> for {name} \{\n    const FIELD_ORDER: u64 = {fieldOrder (F := F)};\n    const FUEL: usize = {program.fuel};\n    const COMPONENTS: usize = {program.components.length};\n    const PUBLIC_INPUTS: usize = {program.publicInputWidth};\n    const FIXED_WIDTHS: &'static [usize] = &[{fixedWidths}];\n    const COMPONENT_NAMES: &'static [&'static str] = &[{componentNames}];\n\n    fn modes() -> Vec<Mode<F>> \{ vec![{modes}] }\n\n    fn padding() -> Vec<Padding<F>> \{ vec![{padding}] }\n\n    fn initial_rows(component: usize, hint: &WitnessData<F>) -> Result<Vec<Vec<F>>, String> \{\n        match component \{\n{initialCases}\n            _ => Err(format!(\"component index \{component} is out of bounds\")),\n        }\n    }\n\n    fn complete_row(component: usize, input: &[F], data: &WitnessData<F>) -> Result<Vec<F>, String> \{\n        match component \{\n{completeCases}\n            _ => Err(format!(\"component index \{component} is out of bounds\")),\n        }\n    }\n\n    fn interactions(component: usize, row: &[F]) -> Vec<Interaction<F>> \{\n        match component \{\n{interactionCases}\n            _ => vec![],\n        }\n    }\n\n    fn verifier_interactions(public_input: &[F]) -> Vec<Interaction<F>> \{\n        public_interactions(public_input)\n    }\n}\n\npub fn generate<F: WitnessField>(public_input: &[F], hint: &WitnessData<F>) -> Result<EnsembleWitness<F>, WitnessGenerationError> \{\n    clean_backend::witness_generation::generate::<F, {name}>(public_input, hint)\n}\n"
+  return s!"{prelude}\n{String.intercalate "\n\n" components}\n\n{String.intercalate "\n\n" initialRows}\n\nfn public_interactions<F: WitnessField>(public_input: &[F]) -> Vec<Interaction<F>> \{\n    {verifier}\n}\n\n{air}\n\npub struct {name};\n\nimpl<F: WitnessField> Program<F> for {name} \{\n    const FIELD_ORDER: u64 = {fieldOrder (F := F)};\n    const FUEL: usize = {program.fuel};\n    const COMPONENTS: usize = {program.components.length};\n    const PUBLIC_INPUTS: usize = {program.publicInputWidth};\n    const FIXED_WIDTHS: &'static [usize] = &[{fixedWidths}];\n    const COMPONENT_NAMES: &'static [&'static str] = &[{componentNames}];\n\n    fn modes() -> Vec<Mode<F>> \{ vec![{modes}] }\n\n    fn padding() -> Vec<Padding<F>> \{ vec![{padding}] }\n\n    fn initial_row(component: usize, row: u64, hint: &WitnessData<F>) -> Vec<F> \{\n        match component \{\n{initialCases}\n            _ => unreachable!(\"component without preallocated rows\"),\n        }\n    }\n\n    fn complete_row(component: usize, input: &[F], data: &WitnessData<F>) -> Result<Vec<F>, String> \{\n        match component \{\n{completeCases}\n            _ => Err(format!(\"component index \{component} is out of bounds\")),\n        }\n    }\n\n    fn interactions(component: usize, row: &[F]) -> Vec<Interaction<F>> \{\n        match component \{\n{interactionCases}\n            _ => vec![],\n        }\n    }\n\n    fn verifier_interactions(public_input: &[F]) -> Vec<Interaction<F>> \{\n        public_interactions(public_input)\n    }\n}\n\npub fn generate<F: WitnessField>(public_input: &[F], hint: &WitnessData<F>) -> Result<EnsembleWitness<F>, WitnessGenerationError> \{\n    clean_backend::witness_generation::generate::<F, {name}>(public_input, hint)\n}\n"
 
 /-- Validate an ensemble into the typed artifact and render that artifact as Rust. -/
 def ensembleToRust (name : String) (ensemble : Ensemble F PublicIO)

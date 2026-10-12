@@ -9,7 +9,6 @@ use clean_backend::{GeneratedAirSpec, GeneratedEnsemble, GeneratedLookup};
 use p3_air::lookup::Direction as LookupDirection;
 use p3_air::{AirBuilderWithPublicValues, SymbolicExpression, SymbolicVariable};
 use p3_field::{Field, PrimeCharacteristicRing};
-use p3_matrix::dense::RowMajorMatrix;
 
 #[inline(always)]
 fn safe_div(left: u64, right: u64) -> u64 {
@@ -747,41 +746,23 @@ fn component_2_fixed_row<F: WitnessField>(row: u64) -> Vec<F> {
     output
 }
 
-fn component_0_initial_rows<F: WitnessField>(
-    _hint: &WitnessData<F>,
-) -> Result<Vec<Vec<F>>, String> {
-    Ok(vec![])
+fn component_1_initial_row<F: WitnessField>(row: u64, _hint: &WitnessData<F>) -> Vec<F> {
+    let mut input = component_1_fixed_row::<F>(row);
+    let mut output: Vec<F> = Vec::with_capacity(2);
+    output.push(_hint.get("memoryValues", 1, (row) as usize, 0));
+    output.push(F::from_u64(0u64));
+    debug_assert_eq!(output.len(), 2);
+    input.extend(output);
+    input
 }
 
-fn component_1_initial_rows<F: WitnessField>(
-    _hint: &WitnessData<F>,
-) -> Result<Vec<Vec<F>>, String> {
-    (0u64..8u64)
-        .map(|row| {
-            let mut input = component_1_fixed_row::<F>(row);
-            let mut output: Vec<F> = Vec::with_capacity(2);
-            output.push(_hint.get("memoryValues", 1, (row) as usize, 0));
-            output.push(F::from_u64(0u64));
-            debug_assert_eq!(output.len(), 2);
-            input.extend(output);
-            Ok(input)
-        })
-        .collect()
-}
-
-fn component_2_initial_rows<F: WitnessField>(
-    _hint: &WitnessData<F>,
-) -> Result<Vec<Vec<F>>, String> {
-    (0u64..32u64)
-        .map(|row| {
-            let mut input = component_2_fixed_row::<F>(row);
-            let mut output: Vec<F> = Vec::with_capacity(1);
-            output.push(F::from_u64(0u64));
-            debug_assert_eq!(output.len(), 1);
-            input.extend(output);
-            Ok(input)
-        })
-        .collect()
+fn component_2_initial_row<F: WitnessField>(row: u64, _hint: &WitnessData<F>) -> Vec<F> {
+    let mut input = component_2_fixed_row::<F>(row);
+    let mut output: Vec<F> = Vec::with_capacity(1);
+    output.push(F::from_u64(0u64));
+    debug_assert_eq!(output.len(), 1);
+    input.extend(output);
+    input
 }
 
 fn public_interactions<F: WitnessField>(public_input: &[F]) -> Vec<Interaction<F>> {
@@ -817,24 +798,11 @@ impl GeneratedAirSpec for FemtoCairoFlatAirProgramAirSpec {
     const INTERACTIONS_PER_ROW: &'static [usize] = &[12, 1, 1];
     const VERIFIER_INTERACTIONS: usize = 2;
 
-    fn fixed_trace<F: WitnessField>(component: usize) -> Option<RowMajorMatrix<F>> {
+    fn fixed_row<F: WitnessField>(component: usize, row: u64) -> Vec<F> {
         match component {
-            0 => None,
-            1 => Some({
-                let mut values = Vec::with_capacity(8 * 1);
-                for row in 0u64..8u64 {
-                    values.extend(component_1_fixed_row::<F>(row));
-                }
-                RowMajorMatrix::new(values, 1)
-            }),
-            2 => Some({
-                let mut values = Vec::with_capacity(32 * 2);
-                for row in 0u64..32u64 {
-                    values.extend(component_2_fixed_row::<F>(row));
-                }
-                RowMajorMatrix::new(values, 2)
-            }),
-            _ => unreachable!("invalid generated AIR component"),
+            1 => component_1_fixed_row::<F>(row),
+            2 => component_2_fixed_row::<F>(row),
+            _ => unreachable!("component without fixed columns"),
         }
     }
 
@@ -1344,6 +1312,7 @@ impl<F: WitnessField> Program<F> for FemtoCairoFlatAirProgram {
                 ],
             }),
             Mode::Preallocated {
+                rows: 8,
                 handlers: vec![PreallocatedHandler {
                     channel: "memory",
                     direction: Direction::Pull,
@@ -1352,6 +1321,7 @@ impl<F: WitnessField> Program<F> for FemtoCairoFlatAirProgram {
                 }],
             },
             Mode::Preallocated {
+                rows: 32,
                 handlers: vec![PreallocatedHandler {
                     channel: "program",
                     direction: Direction::Pull,
@@ -1379,12 +1349,11 @@ impl<F: WitnessField> Program<F> for FemtoCairoFlatAirProgram {
         ]
     }
 
-    fn initial_rows(component: usize, hint: &WitnessData<F>) -> Result<Vec<Vec<F>>, String> {
+    fn initial_row(component: usize, row: u64, hint: &WitnessData<F>) -> Vec<F> {
         match component {
-            0 => component_0_initial_rows(hint),
-            1 => component_1_initial_rows(hint),
-            2 => component_2_initial_rows(hint),
-            _ => Err(format!("component index {component} is out of bounds")),
+            1 => component_1_initial_row(row, hint),
+            2 => component_2_initial_row(row, hint),
+            _ => unreachable!("component without preallocated rows"),
         }
     }
 

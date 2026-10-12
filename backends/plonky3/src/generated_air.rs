@@ -95,7 +95,8 @@ pub trait GeneratedAirSpec: Clone + Sync {
     const INTERACTIONS_PER_ROW: &'static [usize];
     const VERIFIER_INTERACTIONS: usize;
 
-    fn fixed_trace<F: WitnessField>(component: usize) -> Option<RowMajorMatrix<F>>;
+    /// The fixed-column values of one row of a component with fixed columns.
+    fn fixed_row<F: WitnessField>(component: usize, row: u64) -> Vec<F>;
 
     fn constraints<AB>(component: usize, fixed: &[AB::Var], local: &[AB::Var]) -> Vec<AB::Expr>
     where
@@ -242,7 +243,16 @@ impl<F: WitnessField, P: GeneratedAirSpec> BaseAir<F> for GeneratedAir<P> {
     }
 
     fn preprocessed_trace(&self) -> Option<RowMajorMatrix<F>> {
-        P::fixed_trace(self.component)
+        let width = P::FIXED_WIDTHS[self.component];
+        if width == 0 {
+            return None;
+        }
+        let height = P::FIXED_HEIGHTS[self.component];
+        let mut values = Vec::with_capacity(height * width);
+        for row in 0..height as u64 {
+            values.extend(P::fixed_row::<F>(self.component, row));
+        }
+        Some(RowMajorMatrix::new(values, width))
     }
 }
 

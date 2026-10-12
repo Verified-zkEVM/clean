@@ -2,17 +2,10 @@
 
 This crate proves channel-based Clean AIR ensembles with Plonky3.
 
-1. Lean lowers a `Clean.Air.Flat.Ensemble` into a typed extraction program.
-2. The Rust renderer emits direct row witness functions, constraint expressions, and channel
-   interactions. It does not emit generic Plonky3 plumbing.
-   Fixed columns and preallocated committed inputs use the same index-aware Witness IR. Generated
-   code contains the fixed row program and height, rather than a materialized fixed trace.
-3. `src/witness_generation.rs` runs the generated channel worklist and constructs all component
-   traces without invoking Lean. Lean's witness configuration supplies semantic padding rows; the
-   worklist executes them and balances any interactions they create until every trace has a
-   power-of-two height.
-4. `src/generated_air.rs` supplies the shared Plonky3 `Air` implementation and registers generated
-   channel lookups.
+1. Lean lowers a `Clean.Air.Flat.Ensemble` into a typed extraction program (`Clean/Backends/Plonky3/Lower.lean`).
+2. Witness programs, row programs, and fixed columns are translated into a typed model of the generated Rust (`Rust.lean`, `Codegen.lean`). `Correctness.lean` proves that the model computes the witness IR's values, for fields of order at most 2^64. `Print.lean` prints model terms structurally, together with constraint expressions, channel interactions, and the per-component dispatch. The Rust printers are part of the trusted computing base.
+3. `src/witness_generation.rs` runs the generated channel worklist and constructs all component traces without invoking Lean, building preallocated rows from the generated row functions. Lean's witness configuration supplies semantic padding rows; the worklist executes them and balances any interactions they create until every trace has a power-of-two height.
+4. `src/generated_air.rs` supplies the shared Plonky3 `Air` implementation, builds fixed traces from the generated fixed-row functions, and registers generated channel lookups.
 5. `src/ensemble_prover.rs` proves or verifies an opaque generated statement containing every
    component AIR exactly once in canonical order. Verifier-only interactions are derived from
    public inputs and enter the global channel argument directly, without a synthetic verifier AIR

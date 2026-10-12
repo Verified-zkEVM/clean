@@ -108,7 +108,10 @@ pub struct PreallocatedHandler {
 #[derive(Clone, Debug)]
 pub enum Mode<F> {
     Demand(DemandMode<F>),
-    Preallocated { handlers: Vec<PreallocatedHandler> },
+    Preallocated {
+        rows: usize,
+        handlers: Vec<PreallocatedHandler>,
+    },
 }
 
 /// Component-input rows available to extracted witness programs.
@@ -217,7 +220,8 @@ pub trait Program<F: WitnessField> {
 
     fn modes() -> Vec<Mode<F>>;
     fn padding() -> Vec<Padding<F>>;
-    fn initial_rows(component: usize, hint: &WitnessData<F>) -> Result<Vec<Vec<F>>, String>;
+    /// The initial input of row `row` of a preallocated component.
+    fn initial_row(component: usize, row: u64, hint: &WitnessData<F>) -> Vec<F>;
     fn complete_row(component: usize, input: &[F], data: &WitnessData<F>)
         -> Result<Vec<F>, String>;
     fn interactions(component: usize, row: &[F]) -> Vec<Interaction<F>>;
@@ -324,7 +328,7 @@ fn remove_interactions<F: WitnessField>(
 fn mode_handles<F: WitnessField>(mode: &Mode<F>, demand: &Demand<F>) -> bool {
     match mode {
         Mode::Demand(mode) => mode.channel == demand.channel && mode.direction == demand.direction,
-        Mode::Preallocated { handlers } => handlers.iter().any(|handler| {
+        Mode::Preallocated { handlers, .. } => handlers.iter().any(|handler| {
             handler.channel == demand.channel && handler.direction == demand.direction
         }),
     }
@@ -531,7 +535,7 @@ fn balance<F: WitnessField, P: Program<F>>(
                 demands,
                 data,
             )?,
-            Mode::Preallocated { handlers } => handle_preallocated::<F, P>(
+            Mode::Preallocated { handlers, .. } => handle_preallocated::<F, P>(
                 component,
                 handlers,
                 &demand,
@@ -641,13 +645,12 @@ pub fn generate<F: WitnessField, P: Program<F>>(
 
     let mut tables = Vec::with_capacity(modes.len());
     for (component, mode) in modes.iter().enumerate() {
-        let inputs = P::initial_rows(component, hint)?;
-        if matches!(mode, Mode::Demand(_)) && !inputs.is_empty() {
-            return Err(format!(
-                "demand-driven component {component} unexpectedly initialized rows"
-            )
-            .into());
-        }
+        let inputs = match mode {
+            Mode::Demand(_) => Vec::new(),
+            Mode::Preallocated { rows, .. } => (0..*rows as u64)
+                .map(|row| P::initial_row(component, row, hint))
+                .collect(),
+        };
         let rows = inputs
             .into_iter()
             .map(|input| Row {
@@ -668,7 +671,7 @@ pub fn generate<F: WitnessField, P: Program<F>>(
                 )
                 .into());
             }
-            Mode::Preallocated { handlers } => {
+            Mode::Preallocated { handlers, .. } => {
                 if let Some(handler) = handlers.iter().find(|handler| handler.column < fixed_width)
                 {
                     return Err(format!(
