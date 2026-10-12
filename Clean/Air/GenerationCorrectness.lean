@@ -415,13 +415,6 @@ lemma assembleTables_interactions {components : List (Component F)}
 
 /-! ### Channel balance -/
 
-/-- The ensemble identifies its channels by name: no interaction uses a different channel with
-the name of an ensemble channel. The generator balances messages per channel name. -/
-def _root_.Air.Flat.Ensemble.ChannelsNamed (ens : Ensemble F PublicIO) : Prop :=
-  ∀ channel ∈ ens.channels, ∀ interaction ∈ ens.verifierOperations.interactions ++
-    ens.tables.flatMap (·.operations.interactions),
-    interaction.channel.name = channel.name → interaction.channel = channel
-
 open Classical in
 lemma interactionsWith_eq_filter {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens)
     (channel : RawChannel F) :
@@ -446,28 +439,30 @@ lemma balanceOf_filter_channel {interactions : List (Interaction F)} {channel : 
   · have : interaction.channel ≠ channel := fun h => hname (h ▸ rfl)
     simp [this, hname]
 
-lemma mem_interactions_named {ens : Ensemble F PublicIO} (hnamed : ens.ChannelsNamed)
-    (witness : EnsembleWitness ens) {channel : RawChannel F} (hchannel : channel ∈ ens.channels) :
+lemma mem_interactions_named {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens)
+    {channel : RawChannel F} (hchannel : channel ∈ ens.channels) :
     ∀ interaction ∈ witness.interactions,
       interaction.channel.name = channel.name → interaction.channel = channel := by
   intro interaction hmem
   simp only [EnsembleWitness.interactions, Operations.interactionValues, Table.interactions,
     List.mem_append, List.mem_map, List.mem_flatMap] at hmem
   rcases hmem with ⟨abstract, habstract, rfl⟩ | ⟨table, htable, row, _, abstract, habstract, rfl⟩
-  · exact hnamed channel hchannel abstract (List.mem_append_left _ habstract)
-  · exact hnamed channel hchannel abstract (List.mem_append_right _ (List.mem_flatMap.mpr
-      ⟨_, EnsembleWitness.mem_component_of_mem htable, habstract⟩))
+  · exact ens.channels_named channel hchannel _
+      (Ensemble.channel_mem_declaredChannels (List.mem_append_left _ habstract))
+  · exact ens.channels_named channel hchannel _ (Ensemble.channel_mem_declaredChannels
+      (List.mem_append_right _ (List.mem_flatMap.mpr
+        ⟨_, EnsembleWitness.mem_component_of_mem htable, habstract⟩)))
 
 /-- A witness whose interactions have zero net multiplicity per channel name and message, and
 fewer interactions than the field characteristic, balances all ensemble channels. -/
-lemma balancedChannels_of_net {ens : Ensemble F PublicIO} (hnamed : ens.ChannelsNamed)
-    {witness : EnsembleWitness ens} (hlength : witness.interactions.length < ringChar F)
+lemma balancedChannels_of_net {ens : Ensemble F PublicIO} {witness : EnsembleWitness ens}
+    (hlength : witness.interactions.length < ringChar F)
     (hnet : ∀ channel message, netOfInteractions witness.interactions channel message = 0) :
     witness.BalancedChannels := by
   intro channel hchannel
   rw [EnsembleWitness.BalancedChannel, interactionsWith_eq_filter]
   refine ⟨.inl (lt_of_le_of_lt (List.length_filter_le _ _) hlength), fun message => ?_⟩
-  rw [balanceOf_filter_channel (mem_interactions_named hnamed witness hchannel), hnet]
+  rw [balanceOf_filter_channel (mem_interactions_named witness hchannel), hnet]
 
 lemma initialStates_interactions {ens : Ensemble F PublicIO} (config : ValidConfig ens)
     (hint : ProverHint F) :
@@ -477,10 +472,8 @@ lemma initialStates_interactions {ens : Ensemble F PublicIO} (config : ValidConf
   simp [initialStates, ComponentState.initial, Function.comp_def]
 
 /-- Generated witnesses have the requested public input and balance all channels. -/
-theorem generateValid_balanced {ens : Ensemble F PublicIO}
-    (hnamed : ens.ChannelsNamed)
-    {config : ValidConfig ens} {publicInput : PublicIO F} {hint : ProverHint F}
-    {witness : EnsembleWitness ens} (h : generateValid config publicInput hint = .ok witness) :
+theorem generateValid_balanced {ens : Ensemble F PublicIO} {config : ValidConfig ens}
+    {publicInput : PublicIO F} {hint : ProverHint F} {witness : EnsembleWitness ens} (h : generateValid config publicInput hint = .ok witness) :
     witness.publicInput = publicInput ∧ witness.BalancedChannels := by
   have hinteractions := initialStates_interactions config hint
   rcases hinit : initialStates config hint with ⟨initial, data⟩
@@ -500,7 +493,7 @@ theorem generateValid_balanced {ens : Ensemble F PublicIO}
   · cases h
   rename_i hlength
   cases h
-  refine ⟨rfl, balancedChannels_of_net hnamed (FiniteField.ringChar_eq (F := F) ▸ hlength)
+  refine ⟨rfl, balancedChannels_of_net (FiniteField.ringChar_eq (F := F) ▸ hlength)
     fun channel message => ?_⟩
   set verifier := ens.verifierOperations.interactionValues (Environment.fromInput publicInput data)
   have htracks : Balancing.Tracks ⟨initial,

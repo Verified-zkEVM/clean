@@ -283,11 +283,15 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
     (List.Subset.refl _)
     (by simp [circuit_norm, bytesComponent, pushBytes])
   |>.addFinishedChannel BytesChannel.toRaw
+    (by simp [circuit_norm, bytesComponent, pushBytes, Verifier.Program.empty])
   |>.addTable add8Component
     (by unfold add8Component add8; simp +instances [circuit_norm])
     (by simp [circuit_norm, add8Component, add8])
     (by simp [circuit_norm, add8Component, add8, bytesComponent, pushBytes])
+    (by simp +instances [circuit_norm, add8Component, add8, Add8Channel, BytesTable])
   |>.addFinishedChannel Add8Channel.toRaw
+    (by simp +instances [circuit_norm, add8Component, add8, bytesComponent, pushBytes,
+      Verifier.Program.empty, Add8Channel, BytesTable])
   |>.addVm fibonacciVm
     (by simp +instances [circuit_norm, fibonacciVm, add8Component, add8, bytesComponent, pushBytes,
       Add8Channel, FibonacciChannel])
@@ -296,6 +300,8 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
       Add8Channel, FibonacciChannel])
     (by simp [circuit_norm, fibonacciVm, fib8Component, fib8, add8Component, add8,
       bytesComponent, pushBytes])
+    (by simp +instances [circuit_norm, fibonacciVm, fib8Component, fib8, fibonacciVerifier,
+      add8Component, add8, bytesComponent, pushBytes, Add8Channel, FibonacciChannel, BytesTable])
   |>.toFormal (fun _ => True)
     (fun (n, x, y) => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val)
     (Ensemble.assumptionsConsistency_of_components _ <| by
@@ -397,3 +403,4 @@ def falseEnsemble := SoundEnsemble.empty (F p) unit
   |>.addFinishedChannel FalseChannel.toRaw
   |>.addTable { circuit := falseCircuit }
     (by simp [circuit_norm, falseCircuit]) (by simp [circuit_norm, falseCircuit])
+    (named := by simp [circuit_norm, falseCircuit])

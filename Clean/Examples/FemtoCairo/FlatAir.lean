@@ -612,6 +612,7 @@ def soundEnsemble {programSize memorySize : UInt64} (program : Fin programSize.t
     (List.Subset.refl _)
     (by simp [circuit_norm, programComponent, provideProgram])
   |>.addFinishedChannel (ProgramChannel program).toRaw
+    (by simp [circuit_norm, programComponent, provideProgram, Verifier.Program.empty])
   |>.addTable (memoryComponent memorySize h_memorySize)
     (by simp +instances [circuit_norm, memoryComponent, provideMemory])
     (by
@@ -622,7 +623,11 @@ def soundEnsemble {programSize memorySize : UInt64} (program : Fin programSize.t
         contradiction
       simp [circuit_norm, memoryComponent, provideMemory, hne])
     (by simp [circuit_norm, memoryComponent, provideMemory, programComponent, provideProgram])
+    (by simp +instances [circuit_norm, memoryComponent, provideMemory, ProgramChannel,
+      MemoryChannel])
   |>.addFinishedChannel MemoryChannel.toRaw
+    (by simp +instances [circuit_norm, memoryComponent, provideMemory, programComponent,
+      provideProgram, ProgramChannel, MemoryChannel, Verifier.Program.empty])
   |>.addVm (vm program h_programSize initialState)
     (by simp +instances [circuit_norm, vm, programComponent, provideProgram,
       memoryComponent, provideMemory, StateChannel, ProgramChannel, MemoryChannel])
@@ -631,6 +636,9 @@ def soundEnsemble {programSize memorySize : UInt64} (program : Fin programSize.t
       StateChannel, ProgramChannel, MemoryChannel])
     (by simp [circuit_norm, vm, executionComponent, executeStep, memoryComponent, provideMemory,
       programComponent, provideProgram])
+    (by simp +instances [circuit_norm, vm, executionComponent, executeStep, verifier,
+      memoryComponent, provideMemory, programComponent, provideProgram, StateChannel,
+      ProgramChannel, MemoryChannel])
 
 omit p_large_enough in
 lemma femtoCairoMachineBoundedExecution_cast {programSize : ℕ} (program : Fin programSize → F p)
