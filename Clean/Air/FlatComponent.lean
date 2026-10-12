@@ -13,7 +13,7 @@ variable {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
 Their values are defined by a structured row program evaluated on the row index, which Lean and
 extracted backends evaluate identically. -/
 structure FixedColumns (F : Type) where
-  height : ℕ
+  height : UInt64
   program : Witgen.RowProgram F
   valid : program.Valid .fixed
 
@@ -21,26 +21,27 @@ namespace FixedColumns
 
 abbrev width (fixed : FixedColumns F) : ℕ := fixed.program.width
 
-def row (fixed : FixedColumns F) (i : ℕ) : Array F :=
-  (fixed.program.eval i).toArray
+def row (fixed : FixedColumns F) (i : UInt64) : Array F :=
+  (fixed.program.eval i (.empty F)).toArray
 
 omit [FiniteField F] in
 @[circuit_norm]
-lemma width_ofFExprs {n : ℕ} (height : ℕ) (values : Vector (Witgen.FExpr F) n) (valid) :
+lemma width_ofFExprs {n : ℕ} (height : UInt64) (values : Vector (Witgen.FExpr F) n) (valid) :
     ({ height, program := .ofFExprs values, valid } : FixedColumns F).width = n := rfl
 
 /-- Fixed values declared directly by one expression per column. -/
 @[circuit_norm]
-lemma row_ofFExprs {n : ℕ} (height : ℕ) (values : Vector (Witgen.FExpr F) n) (valid) (i : ℕ) :
+lemma row_ofFExprs {n : ℕ} (height : UInt64) (values : Vector (Witgen.FExpr F) n) (valid)
+    (i : UInt64) :
     ({ height, program := .ofFExprs values, valid } : FixedColumns F).row i =
       (values.map (Witgen.FExpr.eval {
         env := { get _ := 0, data _ _ := #[], hint := .empty F }
-        idx := i })).toArray := rfl
+        idx := i.toNat })).toArray := rfl
 
 /-- The full semantic rows have exactly the declared fixed prefix at every row index. -/
 abbrev RowsMatch (fixed : FixedColumns F) (rows : List (Array F)) : Prop :=
   rows.map (fun row => row.extract 0 fixed.width) =
-    (List.range fixed.height).map fixed.row
+    (List.range fixed.height.toNat).map (fixed.row ∘ UInt64.ofNat)
 
 end FixedColumns
 
@@ -50,7 +51,7 @@ def inputRow (Input : TypeMap) [ProvableType Input] (row : Array F) : Vector F (
 
 /-- The fixed-column fact about the input of row `i`: the row lies within the fixed height, and
 the input starts with the declared fixed values. -/
-def FixedInputAt (fixedColumns : Option (FixedColumns F)) (i : ℕ) (input : Input F) : Prop :=
+def FixedInputAt (fixedColumns : Option (FixedColumns F)) (i : UInt64) (input : Input F) : Prop :=
   match fixedColumns with
   | none => True
   | some fixed => i < fixed.height ∧ ∃ rest, input = fromElements (inputRow Input (fixed.row i ++ rest))
@@ -58,8 +59,8 @@ def FixedInputAt (fixedColumns : Option (FixedColumns F)) (i : ℕ) (input : Inp
 /-- The derived-data fact about the input of row `i`: it is row `i` of the component's
 `ProverData` entry. -/
 @[circuit_norm]
-def DataInputAt (name : String) (i : ℕ) (input : Input F) (data : ProverData F) : Prop :=
-  (data.getRows name Input)[i]? = some input
+def DataInputAt (name : String) (i : UInt64) (input : Input F) (data : ProverData F) : Prop :=
+  (data.getRows name Input)[i.toNat]? = some input
 
 lemma valueFromOffset_fromArray (row : Array F) (data : ProverData F) :
     valueFromOffset Input 0 (Environment.fromArray row data) = fromElements (inputRow Input row) := by
@@ -83,7 +84,7 @@ structure Component (F : Type) [FiniteField F] where
   Assumptions : Input F → ProverData F → Prop := circuit.Assumptions
   /-- Fixed-row and derived-data facts, together with the residual assumptions, imply the
   assumptions of the underlying row circuit. -/
-  assumptions_imply_circuit : ∀ i (input : Input F) data,
+  assumptions_imply_circuit : ∀ (i : UInt64) (input : Input F) data,
       FixedInputAt fixedColumns i input → DataInputAt circuit.name i input data →
         Assumptions input data → circuit.Assumptions input data := by simp
   fixed_width_le_input : (fixedColumns.map FixedColumns.width).getD 0 ≤ size Input := by simp
@@ -254,6 +255,8 @@ structure Table (F : Type) [FiniteField F] where
   component : Component F
   table : List (Array F)
   uniform_width : ∀ row ∈ table, row.size = component.width
+  /-- Row indices are `u64` values. -/
+  length_le : table.length ≤ UInt64.size
   /-- Connects the row-indexed fixed-column declaration to the concrete semantic rows. -/
   fixed_rows_match : component.fixedRowsMatch table := by
     simp [Component.fixedRowsMatch]
@@ -325,25 +328,28 @@ lemma circuitAssumptions (table : Table F) (consistent : table.DataConsistency d
     table.component.CircuitAssumptions (Environment.fromArray row data) := by
   obtain ⟨i, hi⟩ := List.get_of_mem hrow
   have hi' : table.table[i.val] = row := hi
-  apply table.component.assumptions_imply_circuit i.val
+  have hindex : (UInt64.ofNat i.val).toNat = i.val :=
+    UInt64.toNat_ofNat_of_lt' (Nat.lt_of_lt_of_le i.isLt table.length_le)
+  apply table.component.assumptions_imply_circuit (UInt64.ofNat i.val)
   · cases hcolumns : table.component.fixedColumns with
     | none => simp [FixedInputAt]
     | some fixed =>
       have hmatch := table.fixed_rows_match
       simp only [Component.fixedRowsMatch, hcolumns] at hmatch
-      have hlength : table.table.length = fixed.height := by
+      have hlength : table.table.length = fixed.height.toNat := by
         simpa using congrArg List.length hmatch
       have hprefix := congrArg (fun rows => rows[i.val]?) hmatch
-      simp only [List.getElem?_map, List.getElem?_range (by omega : i.val < fixed.height),
-        List.getElem?_eq_getElem i.isLt, hi', Option.map_some, Option.some.injEq] at hprefix
+      simp only [List.getElem?_map, List.getElem?_range (by omega : i.val < fixed.height.toNat),
+        List.getElem?_eq_getElem i.isLt, hi', Option.map_some, Option.some.injEq,
+        Function.comp_apply] at hprefix
       have hsize : fixed.width ≤ row.size := by
         have := congrArg Array.size hprefix
         simp [FixedColumns.row] at this
         omega
-      refine ⟨by omega, row.extract fixed.width row.size, ?_⟩
+      refine ⟨by simp [UInt64.lt_iff_toNat_lt, hindex]; omega, row.extract fixed.width row.size, ?_⟩
       rw [Component.rowInput, valueFromOffset_fromArray, ← hprefix, Array.extract_append_extract]
       simp [hsize]
-  · simp only [DataInputAt, ProverData.getRows, Component.rowInput, valueFromOffset_fromArray]
+  · simp only [DataInputAt, ProverData.getRows, Component.rowInput, valueFromOffset_fromArray, hindex]
     rw [consistent]
     simp [Component.proverRows, i.isLt, hi']
   · exact assumptions row hrow

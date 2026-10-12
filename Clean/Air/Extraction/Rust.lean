@@ -19,7 +19,6 @@ open Air.Flat.Extraction
 
 variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
-variable {ProverInput : TypeMap} [ProvableType ProverInput]
 
 /-- Order of the field the generated code is printed for. Generated programs and AIRs reject
 any other Rust field. -/
@@ -60,7 +59,6 @@ def fexprToRust (locals : Array LocalSort) (row idx : String) :
     Witgen.FExpr F → Except String String
   | .expr expression => pure (exprToRust row expression)
   | .const value => pure (field value)
-  | .index => pure s!"F::from_u64({idx})"
   | .localVar index =>
       match locals[index]? with
       | some .field => pure s!"local_{index}"
@@ -78,17 +76,10 @@ def fexprToRust (locals : Array LocalSort) (row idx : String) :
       | none =>
           let values ← fexprListToRust locals row idx values
           return s!"[{commaSep values}].get(({index}) as usize).copied().unwrap_or(F::ZERO)"
-  | .listGetAtIndex values => do
-      match constantValues? values with
-      | some values => pure (constantLookupToRust idx values)
-      | none =>
-          let values ← fexprListToRust locals row idx values
-          return s!"[{commaSep values}].get(({idx}) as usize).copied().unwrap_or(F::ZERO)"
-  | .proverInputGet index =>
-      return s!"_prover_input.get(({← u64exprToRust locals row idx index}) as usize).copied().unwrap_or(F::ZERO)"
   | .dataGet key width dataRow column =>
       return s!"_data.get({quoted key}, {width}, ({← u64exprToRust locals row idx dataRow}) as usize, {column.val})"
-  | .hintGet .. => throw "external prover hints cannot be rendered for Rust yet"
+  | .hintGet key width hintRow column =>
+      return s!"_hint.get({quoted key}, {width}, ({← u64exprToRust locals row idx hintRow}) as usize, {column.val})"
 
 def fexprListToRust (locals : Array LocalSort) (row idx : String) :
     List (Witgen.FExpr F) → Except String (List String)
@@ -185,7 +176,6 @@ def fixedRowFunctionToRust (index : ℕ) (component : ComponentProgram F) :
   | some fixed => do
       let program ← outputToRust fixed.program.steps fixed.program.output "&[]" "row"
       return some s!"fn component_{index}_fixed_row<F: WitnessField>(row: u64) -> Vec<F> \{
-    let _prover_input: &[F] = &[];
 {program}
     output
 }"
@@ -337,7 +327,7 @@ def componentToRust (index : ℕ) (component : ComponentProgram F) : Except Stri
   let witgen ← witnessBlocksToRust component.witnesses
   let mutable := if component.witnesses.isEmpty then "" else "mut "
   let interactions := interactionsToRust "row" component.interactions
-  return s!"fn component_{index}<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<Vec<F>, String> \{\n    if input.len() != {component.inputWidth} \{ return Err(format!(\"component input has width \{}, expected {component.inputWidth}\", input.len())); }\n    let _prover_input: &[F] = &[];\n    let {mutable}row = input.to_vec();\n{witgen}\n    if row.len() != {component.width} \{ return Err(format!(\"generated row has width \{}, expected {component.width}\", row.len())); }\n    Ok(row)\n}\n\nfn component_{index}_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> \{\n    {interactions}\n}"
+  return s!"fn component_{index}<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<Vec<F>, String> \{\n    if input.len() != {component.inputWidth} \{ return Err(format!(\"component input has width \{}, expected {component.inputWidth}\", input.len())); }\n    let _hint = &WitnessData::<F>::from_entries(Vec::new());\n    let {mutable}row = input.to_vec();\n{witgen}\n    if row.len() != {component.width} \{ return Err(format!(\"generated row has width \{}, expected {component.width}\", row.len())); }\n    Ok(row)\n}\n\nfn component_{index}_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> \{\n    {interactions}\n}"
 
 def inputCellToRust : InputCell F → String
   | .message index => s!"InputCell::Message({index})"
@@ -375,14 +365,13 @@ def initialRowsToRust (index : ℕ) (component : ComponentProgram F) (mode : Mod
     Except String String :=
   match mode with
   | .demand _ =>
-      pure s!"fn component_{index}_initial_rows<F: WitnessField>(_prover_input: &[F]) -> Result<Vec<Vec<F>>, String> \{ Ok(vec![]) }"
+      pure s!"fn component_{index}_initial_rows<F: WitnessField>(_hint: &WitnessData<F>) -> Result<Vec<Vec<F>>, String> \{ Ok(vec![]) }"
   | .preallocated mode => do
       let suffix ← outputToRust mode.input.steps mode.input.output "&[]" "row"
       let fixed ← match component.fixedColumns with
         | none => pure "        let mut input = Vec::new();"
         | some _ => pure s!"        let mut input = component_{index}_fixed_row::<F>(row);"
-      return s!"fn component_{index}_initial_rows<F: WitnessField>(prover_input: &[F]) -> Result<Vec<Vec<F>>, String> \{
-    let _prover_input = prover_input;
+      return s!"fn component_{index}_initial_rows<F: WitnessField>(_hint: &WitnessData<F>) -> Result<Vec<Vec<F>>, String> \{
     (0u64..{mode.rows}u64).map(|row| \{
 {fixed}
 {suffix}
@@ -431,14 +420,14 @@ def programToRust (name : String) (program : Program F) : Except String String :
   let completeCases := String.intercalate "\n" <| program.components.zipIdx.map fun (_, index) =>
     s!"            {index} => component_{index}(input, data),"
   let initialCases := String.intercalate "\n" <| program.components.zipIdx.map fun (_, index) =>
-    s!"            {index} => component_{index}_initial_rows(prover_input),"
+    s!"            {index} => component_{index}_initial_rows(hint),"
   let interactionCases := String.intercalate "\n" <| program.components.zipIdx.map fun (_, index) =>
     s!"            {index} => component_{index}_interactions(row),"
-  return s!"{prelude}\n{String.intercalate "\n\n" components}\n\n{String.intercalate "\n\n" initialRows}\n\nfn public_interactions<F: WitnessField>(public_input: &[F]) -> Vec<Interaction<F>> \{\n    {verifier}\n}\n\n{air}\n\npub struct {name};\n\nimpl<F: WitnessField> Program<F> for {name} \{\n    const FIELD_ORDER: u64 = {fieldOrder (F := F)};\n    const FUEL: usize = {program.fuel};\n    const COMPONENTS: usize = {program.components.length};\n    const PUBLIC_INPUTS: usize = {program.publicInputWidth};\n    const PROVER_INPUTS: usize = {program.proverInputWidth};\n    const FIXED_WIDTHS: &'static [usize] = &[{fixedWidths}];\n    const COMPONENT_NAMES: &'static [&'static str] = &[{componentNames}];\n\n    fn modes() -> Vec<Mode<F>> \{ vec![{modes}] }\n\n    fn padding() -> Vec<Padding<F>> \{ vec![{padding}] }\n\n    fn initial_rows(component: usize, prover_input: &[F]) -> Result<Vec<Vec<F>>, String> \{\n        match component \{\n{initialCases}\n            _ => Err(format!(\"component index \{component} is out of bounds\")),\n        }\n    }\n\n    fn complete_row(component: usize, input: &[F], data: &WitnessData<F>) -> Result<Vec<F>, String> \{\n        match component \{\n{completeCases}\n            _ => Err(format!(\"component index \{component} is out of bounds\")),\n        }\n    }\n\n    fn interactions(component: usize, row: &[F]) -> Vec<Interaction<F>> \{\n        match component \{\n{interactionCases}\n            _ => vec![],\n        }\n    }\n\n    fn verifier_interactions(public_input: &[F]) -> Vec<Interaction<F>> \{\n        public_interactions(public_input)\n    }\n}\n\npub fn generate<F: WitnessField>(public_input: &[F], prover_input: &[F]) -> Result<EnsembleWitness<F>, WitnessGenerationError> \{\n    clean_backend::witness_generation::generate::<F, {name}>(public_input, prover_input)\n}\n"
+  return s!"{prelude}\n{String.intercalate "\n\n" components}\n\n{String.intercalate "\n\n" initialRows}\n\nfn public_interactions<F: WitnessField>(public_input: &[F]) -> Vec<Interaction<F>> \{\n    {verifier}\n}\n\n{air}\n\npub struct {name};\n\nimpl<F: WitnessField> Program<F> for {name} \{\n    const FIELD_ORDER: u64 = {fieldOrder (F := F)};\n    const FUEL: usize = {program.fuel};\n    const COMPONENTS: usize = {program.components.length};\n    const PUBLIC_INPUTS: usize = {program.publicInputWidth};\n    const FIXED_WIDTHS: &'static [usize] = &[{fixedWidths}];\n    const COMPONENT_NAMES: &'static [&'static str] = &[{componentNames}];\n\n    fn modes() -> Vec<Mode<F>> \{ vec![{modes}] }\n\n    fn padding() -> Vec<Padding<F>> \{ vec![{padding}] }\n\n    fn initial_rows(component: usize, hint: &WitnessData<F>) -> Result<Vec<Vec<F>>, String> \{\n        match component \{\n{initialCases}\n            _ => Err(format!(\"component index \{component} is out of bounds\")),\n        }\n    }\n\n    fn complete_row(component: usize, input: &[F], data: &WitnessData<F>) -> Result<Vec<F>, String> \{\n        match component \{\n{completeCases}\n            _ => Err(format!(\"component index \{component} is out of bounds\")),\n        }\n    }\n\n    fn interactions(component: usize, row: &[F]) -> Vec<Interaction<F>> \{\n        match component \{\n{interactionCases}\n            _ => vec![],\n        }\n    }\n\n    fn verifier_interactions(public_input: &[F]) -> Vec<Interaction<F>> \{\n        public_interactions(public_input)\n    }\n}\n\npub fn generate<F: WitnessField>(public_input: &[F], hint: &WitnessData<F>) -> Result<EnsembleWitness<F>, WitnessGenerationError> \{\n    clean_backend::witness_generation::generate::<F, {name}>(public_input, hint)\n}\n"
 
 /-- Validate an ensemble into the typed artifact and render that artifact as Rust. -/
 def ensembleToRust (name : String) (ensemble : Ensemble F PublicIO)
-    (config : Config F ProverInput) :
+    (config : Config F) :
     Except String String := do
   let program ← lower ensemble config |>.mapError toString
   programToRust name program

@@ -34,7 +34,7 @@ def localHasSort (locals : List LocalSort) (index : ℕ) (sort : LocalSort) : Bo
 mutual
 
 def fexprWellFormed (locals : List LocalSort) : Witgen.FExpr F → Bool
-  | .expr _ | .const _ | .index => true
+  | .expr _ | .const _ => true
   | .localVar index => localHasSort locals index .field
   | .add left right | .mul left right =>
       fexprWellFormed locals left && fexprWellFormed locals right
@@ -45,8 +45,6 @@ def fexprWellFormed (locals : List LocalSort) : Witgen.FExpr F → Bool
         fexprWellFormed locals elseValue
   | .listGet values index =>
       fexprListWellFormed locals values && u64exprWellFormed locals index
-  | .listGetAtIndex values => fexprListWellFormed locals values
-  | .proverInputGet index => u64exprWellFormed locals index
   | .dataGet _ _ row _ | .hintGet _ _ row _ => u64exprWellFormed locals row
 
 def fexprListWellFormed (locals : List LocalSort) : List (Witgen.FExpr F) → Bool
@@ -113,12 +111,11 @@ namespace WitnessBlock
 
 /-- Lean semantics for the backend-facing structured witness block. -/
 def eval (block : WitnessBlock F) (environment : ProverEnvironment F)
-    (row : ℕ := 0) (proverInput : Array F := #[]) : Vector F block.outputWidth :=
+    (row : ℕ := 0) : Vector F block.outputWidth :=
   block.output.eval {
     env := environment
-    locals := Witgen.evalSteps environment block.steps #[] row proverInput
+    locals := Witgen.evalSteps environment block.steps #[] row
     idx := row
-    proverInput
   }
 
 end WitnessBlock
@@ -181,7 +178,6 @@ end ComponentProgram
 /-- Complete typed artifact consumed by source-code backends. -/
 structure Program (F : Type) [FiniteField F] where
   publicInputWidth : ℕ
-  proverInputWidth : ℕ
   components : List (ComponentProgram F)
   verifierInteractions : List (AbstractInteraction F)
   modes : List (Mode F)

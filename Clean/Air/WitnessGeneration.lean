@@ -23,7 +23,6 @@ namespace Air.Flat.WitnessGeneration
 
 variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
-variable {ProverInput : TypeMap} [ProvableType ProverInput]
 
 /-- Operational direction of a typed channel interaction. -/
 inductive Direction where
@@ -87,7 +86,7 @@ the prover-owned suffix. -/
 structure PreallocatedMode (F : Type) where
   rows : ℕ
   input : Witgen.RowProgram F
-  input_valid : input.Valid .proverInput
+  input_valid : input.Valid .prover
   handlers : List PreallocatedHandler
 
 /-- The row-allocation modes needed by flat AIR ensembles. Fixed columns are an
@@ -107,9 +106,8 @@ structure Generation (F : Type) where
   padding : Padding F
 
 /-- Generation metadata keyed by component name; every ensemble component needs exactly one
-entry. `ProverInput` is witness-construction input only; semantic `ProverData` is still derived
-from the final committed component rows. -/
-structure Config (F : Type) (ProverInput : TypeMap) [ProvableType ProverInput] where
+entry. -/
+structure Config (F : Type) where
   components : List (String × Generation F)
   fuel : ℕ
 
@@ -132,7 +130,7 @@ structure AlignedConfig (F : Type) where
   fuel : ℕ
 
 /-- Look up the generation metadata of every ensemble component, in ensemble order. -/
-def Config.align (config : Config F ProverInput) (ensemble : Ensemble F PublicIO) :
+def Config.align (config : Config F) (ensemble : Ensemble F PublicIO) :
     Except ConfigError (AlignedConfig F) := do
   for (name, _) in config.components do
     unless ensemble.tables.any (·.circuit.name == name) do
@@ -295,7 +293,7 @@ def completeRow (prepared : PreparedComponent F) (input : Array F)
     throw s!"generated row has width {values.size}, expected {prepared.width}"
   return { input, values, origin }
 
-def fixedPrefix (component : Component F) (row : ℕ) : Except String (Array F) :=
+def fixedPrefix (component : Component F) (row : UInt64) : Except String (Array F) :=
   match component.fixedColumns with
   | none => .ok #[]
   | some fixed =>
@@ -303,16 +301,16 @@ def fixedPrefix (component : Component F) (row : ℕ) : Except String (Array F) 
       else .error s!"fixed component '{component.circuit.name}' has no row {row}"
 
 def initializeInput (prepared : PreparedComponent F) (mode : PreallocatedMode F)
-    (proverInput : Array F) (row : ℕ) : Except String (Array F) := do
+    (hint : ProverHint F) (row : UInt64) : Except String (Array F) := do
   let fixed ← fixedPrefix prepared.component row
-  let suffix := (mode.input.eval row proverInput).toArray
+  let suffix := (mode.input.eval row hint).toArray
   let input := fixed ++ suffix
   unless input.size = prepared.inputWidth do
     throw s!"component '{prepared.component.circuit.name}' initialized an input of width \
       {input.size}, expected {prepared.inputWidth}"
   return input
 
-def initializeTableInputs (proverInput : Array F) :
+def initializeTableInputs (hint : ProverHint F) :
     List (PreparedComponent F) → List (Mode F) → Except String (List (GeneratedTable F))
   | [], [] => .ok []
   | prepared :: components, mode :: modes => do
@@ -320,9 +318,9 @@ def initializeTableInputs (proverInput : Array F) :
         | .demand _ => pure []
         | .preallocated mode =>
             (List.range mode.rows).mapM fun row => do
-              let input ← initializeInput prepared mode proverInput row
+              let input ← initializeInput prepared mode hint (UInt64.ofNat row)
               return { input, values := input }
-      let rest ← initializeTableInputs proverInput components modes
+      let rest ← initializeTableInputs hint components modes
       return { rows } :: rest
   | _, _ => .error "generation-mode count does not match ensemble component count"
 
@@ -565,7 +563,7 @@ def validateModes :
       | some _, .demand _ =>
           throw s!"fixed-column component '{prepared.component.circuit.name}' must use preallocated generation"
       | some fixed, .preallocated preallocated =>
-          unless preallocated.rows = fixed.height do
+          unless preallocated.rows = fixed.height.toNat do
             throw s!"preallocated row count for component '{prepared.component.circuit.name}' \
               does not match its fixed-column height"
           unless padding.targetHeight preallocated.rows = preallocated.rows do
@@ -628,7 +626,9 @@ def assembleTables :
     }
   | component :: components, generated :: generatedTables => do
       let rows := generated.rows.map (·.values)
-      if h : ∀ row ∈ rows, row.size = component.width then
+      if hlength : rows.length > UInt64.size then
+        throw s!"generated table for component '{component.circuit.name}' has more than 2^64 rows"
+      else if h : ∀ row ∈ rows, row.size = component.width then
         match validateFixedRows component rows with
         | .error error => .error error
         | .ok matched => do
@@ -636,6 +636,7 @@ def assembleTables :
             component
             table := rows
             uniform_width := h
+            length_le := Nat.le_of_not_lt hlength
             fixed_rows_match := matched.property
           }
           let rest ← assembleTables components generatedTables
@@ -654,9 +655,11 @@ def assembleTables :
         throw "generated table contains a row of the wrong width"
   | _, _ => .error "generated-table count does not match ensemble component count"
 
-/-- Execute channel-driven generation and construct a structurally valid ensemble witness. -/
-def generate (ensemble : Ensemble F PublicIO) (config : Config F ProverInput)
-    (publicInput : PublicIO F) (proverInput : ProverInput F) :
+/-- Execute channel-driven generation and construct a structurally valid ensemble witness.
+`hint` is read only by the row programs that initialize preallocated components; semantic
+`ProverData` is derived from the final committed component rows. -/
+def generate (ensemble : Ensemble F PublicIO) (config : Config F)
+    (publicInput : PublicIO F) (hint : ProverHint F) :
     Except String (EnsembleWitness ensemble) :=
   let prepared := ensemble.tables.map prepareComponent
   match config.align ensemble with
@@ -664,7 +667,7 @@ def generate (ensemble : Ensemble F PublicIO) (config : Config F ProverInput)
   | .ok config =>
   match validateModes prepared config.modes config.padding with
   | .error error => .error error
-  | .ok () => match initializeTableInputs (toElements proverInput).toArray prepared config.modes with
+  | .ok () => match initializeTableInputs hint prepared config.modes with
   | .error error => .error error
   | .ok initialInputs =>
     let data := generatedData prepared initialInputs

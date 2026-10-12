@@ -35,7 +35,7 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
             input.len()
         ));
     }
-    let _prover_input: &[F] = &[];
+    let _hint = &WitnessData::<F>::from_entries(Vec::new());
     let mut row = input.to_vec();
     {
         let mut output = Vec::with_capacity(1);
@@ -644,7 +644,7 @@ fn component_1<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
             input.len()
         ));
     }
-    let _prover_input: &[F] = &[];
+    let _hint = &WitnessData::<F>::from_entries(Vec::new());
     let row = input.to_vec();
 
     if row.len() != 3 {
@@ -672,7 +672,7 @@ fn component_2<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
             input.len()
         ));
     }
-    let _prover_input: &[F] = &[];
+    let _hint = &WitnessData::<F>::from_entries(Vec::new());
     let row = input.to_vec();
 
     if row.len() != 3 {
@@ -694,8 +694,6 @@ fn component_2_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
 }
 
 fn component_1_fixed_row<F: WitnessField>(row: u64) -> Vec<F> {
-    let _prover_input: &[F] = &[];
-
     let mut output = Vec::with_capacity(1);
     output.push(F::from_u64(row));
     debug_assert_eq!(output.len(), 1);
@@ -703,8 +701,6 @@ fn component_1_fixed_row<F: WitnessField>(row: u64) -> Vec<F> {
 }
 
 fn component_2_fixed_row<F: WitnessField>(row: u64) -> Vec<F> {
-    let _prover_input: &[F] = &[];
-
     let mut output = Vec::with_capacity(2);
     output.push(F::from_u64(row));
     output.push(match (row) as usize {
@@ -746,23 +742,21 @@ fn component_2_fixed_row<F: WitnessField>(row: u64) -> Vec<F> {
     output
 }
 
-fn component_0_initial_rows<F: WitnessField>(_prover_input: &[F]) -> Result<Vec<Vec<F>>, String> {
+fn component_0_initial_rows<F: WitnessField>(
+    _hint: &WitnessData<F>,
+) -> Result<Vec<Vec<F>>, String> {
     Ok(vec![])
 }
 
-fn component_1_initial_rows<F: WitnessField>(prover_input: &[F]) -> Result<Vec<Vec<F>>, String> {
-    let _prover_input = prover_input;
+fn component_1_initial_rows<F: WitnessField>(
+    _hint: &WitnessData<F>,
+) -> Result<Vec<Vec<F>>, String> {
     (0u64..8u64)
         .map(|row| {
             let mut input = component_1_fixed_row::<F>(row);
 
             let mut output = Vec::with_capacity(2);
-            output.push(
-                _prover_input
-                    .get((row) as usize)
-                    .copied()
-                    .unwrap_or(F::ZERO),
-            );
+            output.push(_hint.get("memoryValues", 1, (row) as usize, 0));
             output.push(F::from_u64(0u64));
             debug_assert_eq!(output.len(), 2);
             input.extend(output);
@@ -771,8 +765,9 @@ fn component_1_initial_rows<F: WitnessField>(prover_input: &[F]) -> Result<Vec<V
         .collect()
 }
 
-fn component_2_initial_rows<F: WitnessField>(prover_input: &[F]) -> Result<Vec<Vec<F>>, String> {
-    let _prover_input = prover_input;
+fn component_2_initial_rows<F: WitnessField>(
+    _hint: &WitnessData<F>,
+) -> Result<Vec<Vec<F>>, String> {
     (0u64..32u64)
         .map(|row| {
             let mut input = component_2_fixed_row::<F>(row);
@@ -1330,7 +1325,6 @@ impl<F: WitnessField> Program<F> for FemtoCairoFlatAirProgram {
     const FUEL: usize = 1000;
     const COMPONENTS: usize = 3;
     const PUBLIC_INPUTS: usize = 2;
-    const PROVER_INPUTS: usize = 8;
     const FIXED_WIDTHS: &'static [usize] = &[0, 1, 2];
     const COMPONENT_NAMES: &'static [&'static str] = &["execution", "memory", "program"];
 
@@ -1382,11 +1376,11 @@ impl<F: WitnessField> Program<F> for FemtoCairoFlatAirProgram {
         ]
     }
 
-    fn initial_rows(component: usize, prover_input: &[F]) -> Result<Vec<Vec<F>>, String> {
+    fn initial_rows(component: usize, hint: &WitnessData<F>) -> Result<Vec<Vec<F>>, String> {
         match component {
-            0 => component_0_initial_rows(prover_input),
-            1 => component_1_initial_rows(prover_input),
-            2 => component_2_initial_rows(prover_input),
+            0 => component_0_initial_rows(hint),
+            1 => component_1_initial_rows(hint),
+            2 => component_2_initial_rows(hint),
             _ => Err(format!("component index {component} is out of bounds")),
         }
     }
@@ -1420,10 +1414,7 @@ impl<F: WitnessField> Program<F> for FemtoCairoFlatAirProgram {
 
 pub fn generate<F: WitnessField>(
     public_input: &[F],
-    prover_input: &[F],
+    hint: &WitnessData<F>,
 ) -> Result<EnsembleWitness<F>, WitnessGenerationError> {
-    clean_backend::witness_generation::generate::<F, FemtoCairoFlatAirProgram>(
-        public_input,
-        prover_input,
-    )
+    clean_backend::witness_generation::generate::<F, FemtoCairoFlatAirProgram>(public_input, hint)
 }

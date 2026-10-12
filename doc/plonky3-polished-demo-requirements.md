@@ -193,7 +193,7 @@ corresponding `ProverData` entries by construction, rather than accepting a sepa
 object and postulating consistency.
 
 Component names are unique and serve as `ProverData` keys. Each entry contains the component's
-complete serialized circuit inputs. Runtime prover input used to construct a witness is a separate
+complete serialized circuit inputs. A prover hint used to construct a witness is a separate
 concept and must not become an independently trusted semantic data source. Any witness-generation
 read must agree with the data derived from the final committed rows; programs for which this
 agreement cannot be established must be rejected explicitly.

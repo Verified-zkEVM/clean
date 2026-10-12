@@ -62,9 +62,6 @@ inductive FExpr (F : Type) where
   witnesses (`env x`). -/
   | expr (e : Expression F)
   | const (c : F)
-  /-- The enclosing row-program index embedded directly in the field. Unlike
-  `ofU64 U64Expr.idx`, this does not truncate indices modulo `2^64`. -/
-  | index
   /-- Reference to an earlier `Step` result (must be a `letF` step). -/
   | localVar (i : ℕ)
   | add (x y : FExpr F)
@@ -78,12 +75,6 @@ inductive FExpr (F : Type) where
   | ite (c : BExpr F) (t e : FExpr F)
   /-- Read an expression list at a computed index, 0 if out of range -/
   | listGet (xs : List (FExpr F)) (i : U64Expr F)
-  /-- Read a constant expression list at the enclosing row-program index. -/
-  | listGetAtIndex (xs : List (FExpr F))
-  /-- Read the serialized, runtime-supplied prover input at a computed index.
-  This source is available to ensemble row-initialization programs, but not to
-  ordinary circuit witness programs or fixed-column programs. -/
-  | proverInputGet (i : U64Expr F)
   /-- Read committed prover data (`Environment.data`), keyed like `ProverData`:
   row `row` of component `key` with rows of width `n`, projected at column `col`.
   Missing rows read as 0. -/
@@ -152,7 +143,6 @@ structure Ctx (F : Type) where
   env : ProverEnvironment F
   locals : Array (F ⊕ UInt64) := #[]
   idx : ℕ := 0
-  proverInput : Array F := #[]
 
 section Eval
 variable [FiniteField F]
@@ -163,7 +153,6 @@ mutual
 def FExpr.eval (ctx : Ctx F) : FExpr F → F
   | .expr e => e.eval ctx.env.toEnvironment
   | .const c => c
-  | .index => FiniteField.fromNat ctx.idx
   | .localVar i =>
     match ctx.locals[i]? with
     | some (.inl x) => x
@@ -174,8 +163,6 @@ def FExpr.eval (ctx : Ctx F) : FExpr F → F
   | .ofU64 n => FiniteField.fromNat (n.eval ctx).toNat
   | .ite c t e => if c.eval ctx then t.eval ctx else e.eval ctx
   | .listGet xs i => FExpr.evalList ctx (i.eval ctx).toNat xs
-  | .listGetAtIndex xs => FExpr.evalList ctx ctx.idx xs
-  | .proverInputGet i => ctx.proverInput[(i.eval ctx).toNat]?.getD 0
   | .dataGet key n row col =>
     ((ctx.env.data key n)[(row.eval ctx).toNat]?.getD default)[col.val]'col.isLt
   | .hintGet key n row col =>
@@ -351,15 +338,11 @@ inductive Step (F : Type) where
 @[circuit_norm]
 def evalSteps [FiniteField F] (env : ProverEnvironment F)
     (steps : List (Step F)) (locals : Array (F ⊕ UInt64) := #[])
-    (idx : ℕ := 0) (proverInput : Array F := #[]) : Array (F ⊕ UInt64) :=
+    (idx : ℕ := 0) : Array (F ⊕ UInt64) :=
   match steps with
   | [] => locals
-  | .letF e :: steps =>
-      evalSteps env steps (locals.push (.inl (e.eval { env, locals, idx, proverInput })))
-        idx proverInput
-  | .letU e :: steps =>
-      evalSteps env steps (locals.push (.inr (e.eval { env, locals, idx, proverInput })))
-        idx proverInput
+  | .letF e :: steps => evalSteps env steps (locals.push (.inl (e.eval { env, locals, idx }))) idx
+  | .letU e :: steps => evalSteps env steps (locals.push (.inr (e.eval { env, locals, idx }))) idx
 
 /-- A witness-generation program producing `m` field elements. -/
 inductive WitgenIR (F : Type) : ℕ → Type where

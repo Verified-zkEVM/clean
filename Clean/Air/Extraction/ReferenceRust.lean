@@ -10,7 +10,7 @@ public import Clean.Utils.Primes
 
 Generated Rust evaluates witness IR in witness generation, in prover row initialization, and in
 fixed columns, where it defines verifier-known values and is therefore trusted for soundness. This
-executable renders witness programs covering every renderable witness IR constructor, including
+executable renders witness programs covering every witness IR constructor, including
 wrapping, out-of-range, and division-by-zero edge cases, together with their values under the Lean
 semantics. `backends/plonky3/tests/witness_ir_reference_tests.rs` checks that the generated Rust
 reproduces every value.
@@ -29,7 +29,12 @@ structure Case where
 
 def input : Array Fb := #[0, 1, -1, 2^30, 12345, 7, 255, -2]
 
-def proverInput : Array Fb := #[3, -1, 0, 42]
+def hintRows : List (List Fb) := [[3], [-1], [0], [42]]
+
+def hint : ProverHint Fb := fun key n =>
+  if key = "hint" ∧ n = 1 then
+    (hintRows.map fun row => Vector.ofFn fun i : Fin n => row[i.val]?.getD 0).toArray
+  else #[]
 
 def memoryRows : List (List Fb) := [[5, 15], [7, 17]]
 
@@ -43,6 +48,9 @@ def rowIndices : List ℕ := [0, 1, 2, 3, 4, 63, 64, 65, 255, 256, 1000, pBabybe
 
 def cell (index : ℕ) : FExpr Fb := .expr (.var ⟨index⟩)
 
+/-- The row index, or the loop index inside `mapRange`, as a field element. -/
+def idx : FExpr Fb := .ofU64 .idx
+
 def u (value : UInt64) : U64Expr Fb := .const value
 
 def bool (condition : BExpr Fb) : FExpr Fb := .ite condition (.const 1) (.const 0)
@@ -51,7 +59,7 @@ def cases : List Case := [
   -- field operations, field constants, inverse of zero, reduction of u64 values and indices
   { width := 9, steps := [], output := .lit #v[
       .expr (.add (.var ⟨0⟩) (.mul (.var ⟨2⟩) (.var ⟨3⟩))),
-      .const (-1), .index,
+      .const (-1), idx,
       .add (cell 2) (cell 1), .mul (cell 2) (cell 7),
       .inv (cell 0), .inv (cell 3),
       .ofU64 (u 0xFFFFFFFFFFFFFFFF), .ofU64 .idx] },
@@ -68,35 +76,35 @@ def cases : List Case := [
       .ofU64 (.shiftL (u 3) (u 65)), .ofU64 (.shiftR (u 0xFFFFFFFFFFFFFFFF) (u 70)),
       .ofU64 (.shiftR .idx (u 1)), .ofU64 (.mod .idx (u 3)),
       .ofU64 (.ite (.lt .idx (u 64)) (u 1) (u 2)),
-      .ofU64 (.mul .idx .idx), .ofU64 (.add (.val .index) (u 1))] },
+      .ofU64 (.mul .idx .idx), .ofU64 (.add (.val idx) (u 1))] },
   -- conditions
   { width := 16, steps := [], output := .lit #v[
       bool .true, bool .false,
-      bool (.feq (cell 2) (.const (-1))), bool (.feq .index (.const 3)),
+      bool (.feq (cell 2) (.const (-1))), bool (.feq idx (.const 3)),
       bool (.neq .idx (u 64)), bool (.lt (.val (cell 2)) (u 5)),
       bool (.flt (cell 1) (cell 2)), bool (.flt (cell 2) (cell 1)),
       bool (.bit (cell 2) 0), bool (.bit (cell 3) 30), bool (.bit (cell 2) 63),
-      bool (.bit (cell 2) 64), bool (.bit (cell 2) 200), bool (.bit .index 1),
+      bool (.bit (cell 2) 64), bool (.bit (cell 2) 200), bool (.bit idx 1),
       bool (.not (.lt .idx (u 2))), bool (.and (.lt .idx (u 100)) (.lt (u 2) .idx))] },
   -- list reads at computed and row indices, in and out of range
   { width := 7, steps := [], output := .lit #v[
       .listGet [.const 10, .const 11, .const 12] .idx,
       .listGet [.const 10, .const 11, .const 12] (u 0xFFFFFFFFFFFFFFFF),
-      .listGet [cell 4, .add (cell 5) .index, .inv (cell 2)] (.mod .idx (u 4)),
+      .listGet [cell 4, .add (cell 5) idx, .inv (cell 2)] (.mod .idx (u 4)),
       .listGet [] (u 0),
-      .listGetAtIndex [.const 20, .const 21, .const 22, .const 23],
-      .listGetAtIndex [cell 6, .mul .index .index, .const 9],
-      .listGetAtIndex []] },
+      .listGet [.const 20, .const 21, .const 22, .const 23] .idx,
+      .listGet [cell 6, .mul idx idx, .const 9] .idx,
+      .listGet [] .idx] },
   -- vector formers
   { width := 82, steps := [], output :=
-      .append (.mapRange 5 (.add .index (.listGetAtIndex [.const 100, .const 200])))
+      .append (.mapRange 5 (.add idx (.listGet [.const 100, .const 200] .idx)))
         (.append (.envRange (n := 4) 6)
           (.append (.bitsOf (n := 70) (cell 2))
-            (.append (.bitsOf (n := 3) .index) (.lit #v[])))) },
+            (.append (.bitsOf (n := 3) idx) (.lit #v[])))) },
   -- `let` steps of both sorts, referenced from later steps and from the output
   { width := 5,
     steps := [
-      .letF (.add (cell 3) .index),
+      .letF (.add (cell 3) idx),
       .letU (.add (.val (.localVar 0)) .idx),
       .letF (.mul (.localVar 0) (.ofU64 (.localVar 1))),
       .letU (.ite (.lt (.localVar 1) (u 1000)) (.localVar 1) (u 7))],
@@ -104,8 +112,8 @@ def cases : List Case := [
       .listGet [.localVar 0, .localVar 2] (.mod (.localVar 3) (u 2))] },
   -- runtime prover input and committed prover data, in and out of range
   { width := 9, steps := [], output := .lit #v[
-      .proverInputGet (u 0), .proverInputGet (u 1), .proverInputGet (.mod .idx (u 4)),
-      .proverInputGet (u 4), .proverInputGet (u 0xFFFFFFFFFFFFFFFF),
+      .hintGet "hint" 1 (u 0) 0, .hintGet "hint" 1 (u 1) 0, .hintGet "hint" 1 (.mod .idx (u 4)) 0,
+      .hintGet "hint" 1 (u 0xFFFFFFFFFFFFFFFF) 0, .hintGet "hint" 2 (u 0) 0,
       .dataGet "memory" 2 (u 0) 0, .dataGet "memory" 2 (.mod .idx (u 3)) 1,
       .dataGet "memory" 3 (u 0) 0, .dataGet "missing" 2 (u 0) 0] }
 ]
@@ -114,13 +122,12 @@ def Case.eval (c : Case) (row : ℕ) : Vector Fb c.width :=
   let env : ProverEnvironment Fb := {
     get index := input[index]?.getD 0
     data
-    hint := .empty Fb
+    hint
   }
   c.output.eval {
     env
-    locals := evalSteps env c.steps #[] row proverInput
+    locals := evalSteps env c.steps #[] row
     idx := row
-    proverInput
   }
 
 def u64List (values : List ℕ) : String :=
@@ -128,11 +135,11 @@ def u64List (values : List ℕ) : String :=
 
 def Case.toRust (c : Case) (index : ℕ) : Except String String := do
   let body ← Rust.outputToRust c.steps c.output "input" "row"
-  return s!"pub fn case_{index}<F: WitnessField>(input: &[F], row: u64, _prover_input: &[F], _data: &WitnessData<F>) -> Vec<F> \{\n{body}\n    output\n}"
+  return s!"pub fn case_{index}<F: WitnessField>(input: &[F], row: u64, _hint: &WitnessData<F>, _data: &WitnessData<F>) -> Vec<F> \{\n{body}\n    output\n}"
 
 def render : Except String String := do
   let functions ← cases.zipIdx.mapM fun (c, index) => c.toRust index
-  let dispatch := Rust.commaSep <| cases.zipIdx.map fun (_, index) => s!"{index} => case_{index}(input, row, prover_input, data)"
+  let dispatch := Rust.commaSep <| cases.zipIdx.map fun (_, index) => s!"{index} => case_{index}(input, row, hint, data)"
   let expected := Rust.commaSep <| cases.map fun c =>
     s!"&[{Rust.commaSep (rowIndices.map fun row => u64List ((c.eval row).toList.map (·.val)))}]"
   let memory := Rust.commaSep (memoryRows.map fun row => u64List (row.map (·.val)))
@@ -143,7 +150,7 @@ use alloc::vec::Vec;
 {Rust.u64Helpers}
 pub const FIELD_ORDER: u64 = {Rust.fieldOrder (F := Fb)};
 pub const INPUT: &[u64] = {u64List (input.toList.map (·.val))};
-pub const PROVER_INPUT: &[u64] = {u64List (proverInput.toList.map (·.val))};
+pub const HINT: &[&[u64]] = &[{Rust.commaSep (hintRows.map fun row => u64List (row.map (·.val)))}];
 pub const MEMORY: &[&[u64]] = &[{memory}];
 pub const ROW_INDICES: &[u64] = {u64List rowIndices};
 #[rustfmt::skip]
@@ -151,7 +158,7 @@ pub const EXPECTED: &[&[&[u64]]] = &[{expected}];
 
 {String.intercalate "\n\n" functions}
 
-pub fn eval_case<F: WitnessField>(case: usize, input: &[F], row: u64, prover_input: &[F], data: &WitnessData<F>) -> Vec<F> \{
+pub fn eval_case<F: WitnessField>(case: usize, input: &[F], row: u64, hint: &WitnessData<F>, data: &WitnessData<F>) -> Vec<F> \{
     match case \{ {dispatch}, _ => unreachable!(\"invalid reference case\") }
 }
 "

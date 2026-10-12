@@ -12,7 +12,6 @@ open Air.Flat.WitnessGeneration
 
 variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
-variable {ProverInput : TypeMap} [ProvableType ProverInput]
 
 inductive LoweringError where
   | config (error : ConfigError)
@@ -117,7 +116,7 @@ def lowerComponent (index : ℕ) (component : Component F) :
   let witnesses ← lowerWitnesses index flat
   let fixedColumns ← component.fixedColumns.mapM fun fixed => do
     let program ← lowerRowProgram (.malformedFixedProgram index) fixed.program
-    return { height := fixed.height, program }
+    return { height := fixed.height.toNat, program }
   let constraints := operations.constraints
   let interactions := operations.interactions
   let expressions := constraints ++ interactions.flatMap fun interaction =>
@@ -142,11 +141,11 @@ def validateMode (index : ℕ) (component : Component F)
   | none, _ => pure ()
   | some _, .demand _ => throw (.fixedDemandMode index)
   | some fixed, .preallocated preallocated =>
-      unless preallocated.rows = fixed.height do
-        throw (.preallocatedRows index fixed.height preallocated.rows)
+      unless preallocated.rows = fixed.height.toNat do
+        throw (.preallocatedRows index fixed.height.toNat preallocated.rows)
       let paddedHeight := padding.targetHeight preallocated.rows
-      unless paddedHeight = fixed.height do
-        throw (.fixedPadding index fixed.height paddedHeight)
+      unless paddedHeight = fixed.height.toNat do
+        throw (.fixedPadding index fixed.height.toNat paddedHeight)
   match mode with
   | .demand _ => pure ()
   | .preallocated preallocated =>
@@ -168,15 +167,13 @@ structure DataRead where
 mutual
 
 def fexprDataReads : Witgen.FExpr F → List DataRead
-  | .expr _ | .const _ | .index | .localVar _ => []
+  | .expr _ | .const _ | .localVar _ => []
   | .add left right | .mul left right => fexprDataReads left ++ fexprDataReads right
   | .inv value => fexprDataReads value
   | .ofU64 value => u64exprDataReads value
   | .ite condition thenValue elseValue =>
       bexprDataReads condition ++ fexprDataReads thenValue ++ fexprDataReads elseValue
   | .listGet values index => values.flatMap fexprDataReads ++ u64exprDataReads index
-  | .listGetAtIndex values => values.flatMap fexprDataReads
-  | .proverInputGet index => u64exprDataReads index
   | .dataGet key width row column =>
       { key, width, column := column.val } :: u64exprDataReads row
   | .hintGet _ _ row _ => u64exprDataReads row
@@ -234,7 +231,7 @@ def validateDataReads (ensemble : Ensemble F PublicIO) (modes : List (Mode F)) :
             throw (.unstableDataRead componentIndex operationIndex read.key read.column)
 
 /-- Lower and validate the backend-facing portion of an ensemble without producing source text. -/
-def lower (ensemble : Ensemble F PublicIO) (config : Config F ProverInput) :
+def lower (ensemble : Ensemble F PublicIO) (config : Config F) :
     Except LoweringError (Program F) := do
   let config ← (config.align ensemble).mapError .config
   for (((component, mode), padding), index) in
@@ -252,7 +249,6 @@ def lower (ensemble : Ensemble F PublicIO) (config : Config F ProverInput) :
   | none => pure ()
   return {
     publicInputWidth := size PublicIO
-    proverInputWidth := size ProverInput
     components
     verifierInteractions
     modes := config.modes

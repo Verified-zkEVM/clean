@@ -30,7 +30,7 @@ pub const INPUT: &[u64] = &[
     255u64,
     2013265919u64,
 ];
-pub const PROVER_INPUT: &[u64] = &[3u64, 2013265920u64, 0u64, 42u64];
+pub const HINT: &[&[u64]] = &[&[3u64], &[2013265920u64], &[0u64], &[42u64]];
 pub const MEMORY: &[&[u64]] = &[&[5u64, 15u64], &[7u64, 17u64]];
 pub const ROW_INDICES: &[u64] = &[
     0u64,
@@ -53,7 +53,7 @@ pub const EXPECTED: &[&[&[u64]]] = &[&[&[939524097u64, 2013265920u64, 0u64, 0u64
 pub fn case_0<F: WitnessField>(
     input: &[F],
     row: u64,
-    _prover_input: &[F],
+    _hint: &WitnessData<F>,
     _data: &WitnessData<F>,
 ) -> Vec<F> {
     let mut output = Vec::with_capacity(9);
@@ -81,7 +81,7 @@ pub fn case_0<F: WitnessField>(
 pub fn case_1<F: WitnessField>(
     input: &[F],
     row: u64,
-    _prover_input: &[F],
+    _hint: &WitnessData<F>,
     _data: &WitnessData<F>,
 ) -> Vec<F> {
     let mut output = Vec::with_capacity(20);
@@ -126,7 +126,7 @@ pub fn case_1<F: WitnessField>(
 pub fn case_2<F: WitnessField>(
     input: &[F],
     row: u64,
-    _prover_input: &[F],
+    _hint: &WitnessData<F>,
     _data: &WitnessData<F>,
 ) -> Vec<F> {
     let mut output = Vec::with_capacity(16);
@@ -235,7 +235,7 @@ pub fn case_2<F: WitnessField>(
 pub fn case_3<F: WitnessField>(
     input: &[F],
     row: u64,
-    _prover_input: &[F],
+    _hint: &WitnessData<F>,
     _data: &WitnessData<F>,
 ) -> Vec<F> {
     let mut output = Vec::with_capacity(7);
@@ -291,7 +291,7 @@ pub fn case_3<F: WitnessField>(
 pub fn case_4<F: WitnessField>(
     input: &[F],
     row: u64,
-    _prover_input: &[F],
+    _hint: &WitnessData<F>,
     _data: &WitnessData<F>,
 ) -> Vec<F> {
     let mut output = Vec::with_capacity(82);
@@ -324,7 +324,7 @@ pub fn case_4<F: WitnessField>(
 pub fn case_5<F: WitnessField>(
     input: &[F],
     row: u64,
-    _prover_input: &[F],
+    _hint: &WitnessData<F>,
     _data: &WitnessData<F>,
 ) -> Vec<F> {
     let local_0: F = (input.get(3).copied().unwrap_or(F::ZERO) + F::from_u64(row));
@@ -349,40 +349,15 @@ pub fn case_5<F: WitnessField>(
 pub fn case_6<F: WitnessField>(
     input: &[F],
     row: u64,
-    _prover_input: &[F],
+    _hint: &WitnessData<F>,
     _data: &WitnessData<F>,
 ) -> Vec<F> {
     let mut output = Vec::with_capacity(9);
-    output.push(
-        _prover_input
-            .get((0u64) as usize)
-            .copied()
-            .unwrap_or(F::ZERO),
-    );
-    output.push(
-        _prover_input
-            .get((1u64) as usize)
-            .copied()
-            .unwrap_or(F::ZERO),
-    );
-    output.push(
-        _prover_input
-            .get((safe_rem(row, 4u64)) as usize)
-            .copied()
-            .unwrap_or(F::ZERO),
-    );
-    output.push(
-        _prover_input
-            .get((4u64) as usize)
-            .copied()
-            .unwrap_or(F::ZERO),
-    );
-    output.push(
-        _prover_input
-            .get((18446744073709551615u64) as usize)
-            .copied()
-            .unwrap_or(F::ZERO),
-    );
+    output.push(_hint.get("hint", 1, (0u64) as usize, 0));
+    output.push(_hint.get("hint", 1, (1u64) as usize, 0));
+    output.push(_hint.get("hint", 1, (safe_rem(row, 4u64)) as usize, 0));
+    output.push(_hint.get("hint", 1, (18446744073709551615u64) as usize, 0));
+    output.push(_hint.get("hint", 2, (0u64) as usize, 0));
     output.push(_data.get("memory", 2, (0u64) as usize, 0));
     output.push(_data.get("memory", 2, (safe_rem(row, 3u64)) as usize, 1));
     output.push(_data.get("memory", 3, (0u64) as usize, 0));
@@ -395,17 +370,17 @@ pub fn eval_case<F: WitnessField>(
     case: usize,
     input: &[F],
     row: u64,
-    prover_input: &[F],
+    hint: &WitnessData<F>,
     data: &WitnessData<F>,
 ) -> Vec<F> {
     match case {
-        0 => case_0(input, row, prover_input, data),
-        1 => case_1(input, row, prover_input, data),
-        2 => case_2(input, row, prover_input, data),
-        3 => case_3(input, row, prover_input, data),
-        4 => case_4(input, row, prover_input, data),
-        5 => case_5(input, row, prover_input, data),
-        6 => case_6(input, row, prover_input, data),
+        0 => case_0(input, row, hint, data),
+        1 => case_1(input, row, hint, data),
+        2 => case_2(input, row, hint, data),
+        3 => case_3(input, row, hint, data),
+        4 => case_4(input, row, hint, data),
+        5 => case_5(input, row, hint, data),
+        6 => case_6(input, row, hint, data),
         _ => unreachable!("invalid reference case"),
     }
 }

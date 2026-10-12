@@ -205,7 +205,7 @@ lemma mem_component_of_mem {witness : EnsembleWitness ens} {table : Table F} :
 lemma getRows_size_of_fixedColumns (witness : EnsembleWitness ens) {component : Component F}
     (hcomponent : component ∈ ens.tables) {fixed : FixedColumns F}
     (hfixed : component.fixedColumns = some fixed) :
-    (witness.data.getRows component.circuit.name component.Input).size = fixed.height := by
+    (witness.data.getRows component.circuit.name component.Input).size = fixed.height.toNat := by
   rw [← witness.tables_map_component, List.mem_map] at hcomponent
   obtain ⟨table, htable, rfl⟩ := hcomponent
   have hmatch := table.fixed_rows_match

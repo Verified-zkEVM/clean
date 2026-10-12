@@ -611,9 +611,7 @@ mutual
     | .ofU64 n => containsListGetU n
     | .ite c t e' => containsListGetB c || containsListGet t || containsListGet e'
     | .listGet _ _ => true
-    | .dataGet _ _ _ _ | .hintGet _ _ _ _ | .index => false
-    | .listGetAtIndex _ => true
-    | .proverInputGet i => containsListGetU i
+    | .dataGet _ _ _ _ | .hintGet _ _ _ _ => false
 
   def containsListGetU (e : U64Expr F) : Bool :=
     match e with
@@ -719,8 +717,6 @@ def compileFExpr (vm : VarMap) : FExpr F → CodeBuilder → Except String CodeB
       pure (idxCB.pushList captureIdx |>.pushList selInstrs)
   | .dataGet _ _ _ _, _ => .error "compileFExpr: dataGet is not yet supported"
   | .hintGet _ _ _ _, _ => .error "compileFExpr: hintGet is not yet supported"
-  | .index, _ | .listGetAtIndex _, _ | .proverInputGet _, _ =>
-    .error "compileFExpr: AIR row-program expressions are not supported"
 
 def compileU64Expr (vm : VarMap) : U64Expr F → CodeBuilder → Except String CodeBuilder
   | .const n, cb => pure (cb.push (i64.const n.toNat))

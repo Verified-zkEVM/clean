@@ -52,13 +52,9 @@ cargo test --locked --release --manifest-path backends/plonky3/Cargo.toml \
   --test witness_ir_reference_tests
 ```
 
-`witness_ir_reference_tests` checks the Rust rendering of the witness IR against Lean's semantics. It covers every renderable constructor with wrapping, out-of-range, and division-by-zero edge cases (external hint reads are not renderable). The Rust printers are part of the trusted computing base.
+`witness_ir_reference_tests` checks the Rust rendering of the witness IR against Lean's semantics. It covers every witness IR constructor with wrapping, out-of-range, and division-by-zero edge cases. The Rust printers are part of the trusted computing base.
 
 The largest test generates, proves, and verifies a 4,096-step Fibonacci execution and reports
 witness generation, proving, verification, trace dimensions, and serialized proof size.
 
-The generated ensemble path accepts a separately serialized runtime prover input for initializing
-private committed columns. Clean's semantic `ProverData` is not supplied by the caller: it is
-derived from the final component rows. Extracted witness programs may read stable cells of
-preallocated component data; reads from demand-generated or mutable cells are rejected during
-extraction. External hint reads remain unsupported.
+The generated ensemble path takes a prover hint: named tables of rows that the row programs of preallocated components read to initialize private committed columns. Component witness programs see an empty hint. Clean's semantic `ProverData` is not supplied by the caller: it is derived from the final component rows. Extracted witness programs may read stable cells of preallocated component data; reads from demand-generated or mutable cells are rejected during extraction.

@@ -70,7 +70,7 @@ def pushBytes : GeneralFormalCircuit (F p) BytesInput unit where
 
 def bytesFixedColumns : FixedColumns (F p) where
   height := 256
-  program := .ofFExprs #v[.index]
+  program := .ofFExprs #v[.ofU64 .idx]
   valid := by rfl
 
 def bytesComponent : Component (F p) where
@@ -81,7 +81,7 @@ def bytesComponent : Component (F p) where
   assumptions_imply_circuit := by
     rintro i ⟨value, multiplicity⟩ data ⟨hi, rest, hrow⟩ - -
     simp [bytesFixedColumns, circuit_norm, explicit_provable_type] at hi hrow
-    exact ⟨⟨i, hi⟩, by rw [hrow.1, ByteUtils.fromByte, FieldUtils.natToField_eq_natCast]⟩
+    exact ⟨⟨i.toNat, hi⟩, by rw [hrow.1, ByteUtils.fromByte, FieldUtils.natToField_eq_natCast]⟩
 
 def Add8Channel : Channel (F p) fieldTriple where
   name := "add8"
@@ -330,14 +330,14 @@ def add8Mode : Mode (F p) := .demand {
 multiplicity cell per row. Its declared push interaction routes byte pulls back to
 the corresponding row. -/
 def bytesMode : Mode (F p) := .preallocated {
-  rows := (bytesFixedColumns (p := p)).height
+  rows := (bytesFixedColumns (p := p)).height.toNat
   input := .ofFExprs #v[.const 0]
   input_valid := by rfl
   handlers := [{ interaction := 0, column := 1 }]
 }
 
 /-- Channel-driven witness-generation metadata for each component of the ensemble. -/
-def config (fuel : ℕ) : Config (F p) unit where
+def config (fuel : ℕ) : Config (F p) where
   components := [
     ((fib8 (p := p)).name, { mode := fibMode, padding := { input := #[0, 0, 0, 0], minimumRows := 32 } }),
     ((add8 (p := p)).name, { mode := add8Mode, padding := { input := #[0, 0, 0, 0], minimumRows := 32 } }),
@@ -349,7 +349,7 @@ def config (fuel : ℕ) : Config (F p) unit where
 def generate (publicInput : fieldTriple (F p)) (fuel : ℕ) :
     Except String (EnsembleWitness (fibonacciEnsemble (p := p)).ensemble) :=
   Air.Flat.WitnessGeneration.generate (fibonacciEnsemble (p := p)).ensemble
-    (config (p := p) fuel) publicInput ()
+    (config (p := p) fuel) publicInput (.empty (F p))
 
 end FibonacciWitness
 

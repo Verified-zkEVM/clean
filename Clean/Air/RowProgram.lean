@@ -25,20 +25,19 @@ structure RowProgram (F : Type) where
 
 namespace RowProgram
 
-/-- Evaluate a row program at `row`. `proverInput` is supplied only for committed
-row initialization; fixed-column evaluation leaves it empty. -/
-def eval [FiniteField F] (program : RowProgram F) (row : ℕ)
-    (proverInput : Array F := #[]) : Vector F program.width :=
+/-- Evaluate a row program at `row`, which `U64Expr.idx` reads. Prover row programs may read
+`hint`; fixed-column programs cannot. -/
+def eval [FiniteField F] (program : RowProgram F) (row : UInt64) (hint : ProverHint F) :
+    Vector F program.width :=
   let env : ProverEnvironment F := {
     get := fun _ => 0
     data := fun _ _ => #[]
-    hint := .empty F
+    hint
   }
   program.output.eval {
     env
-    locals := evalSteps env program.steps #[] row proverInput
-    idx := row
-    proverInput
+    locals := evalSteps env program.steps #[] row.toNat
+    idx := row.toNat
   }
 
 def empty (F : Type) : RowProgram F where
@@ -56,21 +55,20 @@ end RowProgram
 /-- External inputs available to an index-aware row program. -/
 inductive RowProgram.Source where
   | fixed
-  | proverInput
+  | prover
 deriving DecidableEq
 
-def RowProgram.Source.allowsProverInput : RowProgram.Source → Bool
+def RowProgram.Source.allowsHints : RowProgram.Source → Bool
   | .fixed => false
-  | .proverInput => true
+  | .prover => true
 
 mutual
 
-/-- Whether an expression is valid in a row initializer. These programs have no
-circuit-row or semantic-data environment. Prover initializers additionally admit
-the serialized runtime prover input; fixed programs do not. -/
+/-- Whether an expression is valid in a row program. These programs have no circuit-row or
+semantic-data environment. Prover row programs additionally read hints; fixed programs do not. -/
 def FExpr.validForRow (source : RowProgram.Source) : FExpr F → Bool
   | .expr _ => false
-  | .const _ | .index | .localVar _ => true
+  | .const _ | .localVar _ => true
   | .add left right | .mul left right =>
       left.validForRow source && right.validForRow source
   | .inv value => value.validForRow source
@@ -80,9 +78,8 @@ def FExpr.validForRow (source : RowProgram.Source) : FExpr F → Bool
         thenValue.validForRow source && elseValue.validForRow source
   | .listGet values index =>
       FExprList.validForRow source values && index.validForRow source
-  | .listGetAtIndex values => FExprList.validForRow source values
-  | .proverInputGet index => source.allowsProverInput && index.validForRow source
-  | .dataGet .. | .hintGet .. => false
+  | .dataGet .. => false
+  | .hintGet _ _ row _ => source.allowsHints && row.validForRow source
 
 def U64Expr.validForRow (source : RowProgram.Source) : U64Expr F → Bool
   | .const _ | .idx | .localVar _ => true

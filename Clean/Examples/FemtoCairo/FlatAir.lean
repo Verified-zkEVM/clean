@@ -403,13 +403,13 @@ def provideProgram {programSize : ℕ} (program : Fin programSize → F p) :
 
 def programFixedColumns {programSize : ℕ} (program : Fin programSize → F p) :
     FixedColumns (F p) where
-  height := programSize
+  height := UInt64.ofNat programSize
   program := .ofFExprs #v[
-    .index,
-    .listGetAtIndex ((Vector.ofFn program).toList.map .const)
+    .ofU64 .idx,
+    .listGet ((Vector.ofFn program).toList.map .const) .idx
   ]
   valid := by simp [Witgen.RowProgram.Valid, Witgen.RowProgram.ofFExprs,
-    Witgen.VExpr.validForRow, Witgen.FExpr.validForRow]
+    Witgen.VExpr.validForRow, Witgen.FExpr.validForRow, Witgen.U64Expr.validForRow]
 
 def programComponent {programSize : ℕ} (program : Fin programSize → F p)
     (h_programSize : programSize < p) :
@@ -421,8 +421,9 @@ def programComponent {programSize : ℕ} (program : Fin programSize → F p)
   assumptions_imply_circuit := by
     rintro i ⟨address, value, multiplicity⟩ data ⟨hi, rest, hrow⟩ - -
     simp [programFixedColumns, circuit_norm, explicit_provable_type, Array.getElem?_append] at hi hrow
-    have hval : (i : F p).val = i := ZMod.val_cast_of_lt (by omega)
-    simp [provideProgram, ProgramChannel, hrow, hval, hi]
+    have hi' : i.toNat < programSize := Nat.lt_of_lt_of_le hi (Nat.mod_le _ _)
+    have hval : (i.toNat : F p).val = i.toNat := ZMod.val_cast_of_lt (by omega)
+    simp [provideProgram, ProgramChannel, hrow, hval, hi']
 
 def provideMemory : GeneralFormalCircuit (F p) ProviderInput unit where
   name := "memory"
@@ -441,8 +442,8 @@ def provideMemory : GeneralFormalCircuit (F p) ProviderInput unit where
   completeness := by circuit_proof_start
 
 def memoryFixedColumns (memorySize : ℕ) : FixedColumns (F p) where
-  height := memorySize
-  program := .ofFExprs #v[.index]
+  height := UInt64.ofNat memorySize
+  program := .ofFExprs #v[.ofU64 .idx]
   valid := by rfl
 
 def memoryComponent (memorySize : ℕ) (h_memorySize : memorySize < p) : Component (F p) where
@@ -453,7 +454,7 @@ def memoryComponent (memorySize : ℕ) (h_memorySize : memorySize < p) : Compone
   assumptions_imply_circuit := by
     rintro i ⟨address, value, multiplicity⟩ data ⟨hi, rest, hrow⟩ hdata -
     simp [memoryFixedColumns, provideMemory, circuit_norm, explicit_provable_type] at hi hrow hdata
-    have hval : (i : F p).val = i := ZMod.val_cast_of_lt (by omega)
+    have hval : (i.toNat : F p).val = i.toNat := ZMod.val_cast_of_lt (by omega)
     obtain ⟨hsize, hentry⟩ := Array.getElem?_eq_some_iff.mp hdata
     simp [provideMemory, MemoryChannel, hrow, hval, hsize, hentry]
 
@@ -647,7 +648,8 @@ def Spec {programSize : ℕ} (program : Fin programSize → F p) (memorySize : �
       Spec.femtoCairoMachineBoundedExecution program mem (some initialState) steps =
         some (haltedState programSize ap fp)
 
-def formalEnsemble {programSize memorySize : ℕ} (program : Fin programSize → F p)
+def formalEnsemble [p_lt_u64 : Fact (p < UInt64.size)] {programSize memorySize : ℕ}
+    (program : Fin programSize → F p)
     (h_programSize : programSize < p) (h_memorySize : memorySize < p)
     (initialState : State (F p)) :=
   (soundEnsemble program h_programSize h_memorySize initialState).toFormal (fun _ => True)
@@ -667,7 +669,8 @@ def formalEnsemble {programSize memorySize : ℕ} (program : Fin programSize →
       have hsize := witness.getRows_size_of_fixedColumns
         (component := memoryComponent memorySize h_memorySize)
         (by simp [soundEnsemble, circuit_norm]) rfl
-      simp only [memoryComponent, provideMemory, memoryFixedColumns] at hsize
+      simp only [memoryComponent, provideMemory, memoryFixedColumns,
+        UInt64.toNat_ofNat_of_lt' (Nat.lt_trans h_memorySize p_lt_u64.out)] at hsize
       simp only [circuit_norm, soundEnsemble, vm, verifier, StateChannel] at spec
       obtain ⟨steps, hsteps⟩ := spec
       exact ⟨memory witness.data ∘ Fin.cast hsize.symm, steps,
@@ -675,7 +678,8 @@ def formalEnsemble {programSize memorySize : ℕ} (program : Fin programSize →
 
 /-- End-to-end soundness: a valid proof for the public registers `(ap, fp)` shows that the
 program, run on some memory of size `memorySize`, halts with these registers. -/
-theorem femtoCairo_soundness {programSize memorySize : ℕ} (program : Fin programSize → F p)
+theorem femtoCairo_soundness [Fact (p < UInt64.size)] {programSize memorySize : ℕ}
+    (program : Fin programSize → F p)
     (h_programSize : programSize < p) (h_memorySize : memorySize < p)
     (initialState : State (F p)) (ap fp : F p) :
     (soundEnsemble program h_programSize h_memorySize initialState).ensemble.Statement (ap, fp) →
@@ -696,24 +700,34 @@ def executionMode {programSize : ℕ} (program : Fin programSize → F p)
   input := { cells := [.message 0, .message 1, .message 2] }
 }
 
-def programMode {programSize : ℕ} (program : Fin programSize → F p) : Mode (F p) :=
+def programMode (programSize : ℕ) : Mode (F p) :=
   .preallocated {
-    rows := (programFixedColumns program).height
+    rows := programSize
     input := .ofFExprs #v[.const 0]
     input_valid := by rfl
     handlers := [{ interaction := 0, column := 2 }]
   }
 
+/-- Name of the hint table holding the private memory values, one per row. -/
+def memoryValuesKey : String := "memoryValues"
+
+/-- The generation hint supplying `memoryValues` to the memory component's rows. -/
+def memoryValuesHint {memorySize : ℕ} (memoryValues : fields memorySize (F p)) :
+    ProverHint (F p) := fun key n =>
+  if key = memoryValuesKey ∧ n = 1 then
+    memoryValues.toArray.map fun value => Vector.ofFn fun _ => value
+  else #[]
+
 def memoryMode (memorySize : ℕ) : Mode (F p) := .preallocated {
   rows := memorySize
-  input := .ofFExprs #v[.proverInputGet .idx, .const 0]
+  input := .ofFExprs #v[.hintGet memoryValuesKey 1 .idx 0, .const 0]
   input_valid := by rfl
   handlers := [{ interaction := 0, column := 2 }]
 }
 
 def config {programSize memorySize : ℕ} (program : Fin programSize → F p)
     (h_programSize : programSize < p) (initialState : State (F p)) (executionRows fuel : ℕ) :
-    Config (F p) (fields memorySize) where
+    Config (F p) where
   components := [
     ((executeStep program h_programSize initialState).name, {
       mode := executionMode program initialState
@@ -722,7 +736,7 @@ def config {programSize memorySize : ℕ} (program : Fin programSize → F p)
       mode := memoryMode memorySize
       padding := { input := #[0, 0, 0], minimumRows := memorySize } }),
     ((provideProgram program).name, {
-      mode := programMode program
+      mode := programMode programSize
       padding := { input := #[0, 0, 0], minimumRows := programSize } })
   ]
   fuel := fuel
@@ -735,7 +749,9 @@ def generate {programSize memorySize : ℕ} (program : Fin programSize → F p)
       (soundEnsemble program h_programSize h_memorySize initialState).ensemble) :=
   Air.Flat.WitnessGeneration.generate
     (soundEnsemble program h_programSize h_memorySize initialState).ensemble
-    (config program h_programSize initialState executionRows fuel) finalRegisters memoryValues
+    (config (memorySize := memorySize) program h_programSize initialState executionRows fuel)
+    finalRegisters
+    (memoryValuesHint memoryValues)
 
 end Witness
 

@@ -36,7 +36,6 @@ impl<F> WitnessField for F where F: Field + PrimeField64 + Copy + Eq {}
 pub enum WitnessGenerationError {
     FieldOrder { expected: u64, actual: u64 },
     PublicInputWidth { expected: usize, actual: usize },
-    ProverInputWidth { expected: usize, actual: usize },
     Runtime(String),
 }
 
@@ -50,10 +49,6 @@ impl core::fmt::Display for WitnessGenerationError {
             Self::PublicInputWidth { expected, actual } => write!(
                 formatter,
                 "public input has width {actual}, expected {expected}"
-            ),
-            Self::ProverInputWidth { expected, actual } => write!(
-                formatter,
-                "prover input has width {actual}, expected {expected}"
             ),
             Self::Runtime(error) => formatter.write_str(error),
         }
@@ -217,13 +212,12 @@ pub trait Program<F: WitnessField> {
     const FUEL: usize;
     const COMPONENTS: usize;
     const PUBLIC_INPUTS: usize;
-    const PROVER_INPUTS: usize;
     const FIXED_WIDTHS: &'static [usize];
     const COMPONENT_NAMES: &'static [&'static str];
 
     fn modes() -> Vec<Mode<F>>;
     fn padding() -> Vec<Padding<F>>;
-    fn initial_rows(component: usize, prover_input: &[F]) -> Result<Vec<Vec<F>>, String>;
+    fn initial_rows(component: usize, hint: &WitnessData<F>) -> Result<Vec<Vec<F>>, String>;
     fn complete_row(component: usize, input: &[F], data: &WitnessData<F>)
         -> Result<Vec<F>, String>;
     fn interactions(component: usize, row: &[F]) -> Vec<Interaction<F>>;
@@ -592,10 +586,11 @@ fn pad_and_balance<F: WitnessField, P: Program<F>>(
     Err("ensemble padding exhausted its fuel".to_string())
 }
 
-/// Run an extracted channel-driven ensemble witness program.
+/// Run an extracted channel-driven ensemble witness program. `hint` holds named tables that the
+/// row programs of preallocated components read.
 pub fn generate<F: WitnessField, P: Program<F>>(
     public_input: &[F],
-    prover_input: &[F],
+    hint: &WitnessData<F>,
 ) -> Result<EnsembleWitness<F>, WitnessGenerationError> {
     if F::ORDER_U64 != P::FIELD_ORDER {
         return Err(WitnessGenerationError::FieldOrder {
@@ -643,16 +638,10 @@ pub fn generate<F: WitnessField, P: Program<F>>(
             actual: public_input.len(),
         });
     }
-    if prover_input.len() != P::PROVER_INPUTS {
-        return Err(WitnessGenerationError::ProverInputWidth {
-            expected: P::PROVER_INPUTS,
-            actual: prover_input.len(),
-        });
-    }
 
     let mut tables = Vec::with_capacity(modes.len());
     for (component, mode) in modes.iter().enumerate() {
-        let inputs = P::initial_rows(component, prover_input)?;
+        let inputs = P::initial_rows(component, hint)?;
         if matches!(mode, Mode::Demand(_)) && !inputs.is_empty() {
             return Err(format!(
                 "demand-driven component {component} unexpectedly initialized rows"

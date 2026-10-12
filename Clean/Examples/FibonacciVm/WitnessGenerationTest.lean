@@ -101,7 +101,7 @@ def configErrors : List String :=
     { config with components :=
       ("unknown", { mode := FibonacciWitness.fibMode, padding := { input := #[] } }) ::
         config.components }]
-  |>.map fun (config : Config (F pBabybear) unit) => match config.align ensemble with
+  |>.map fun (config : Config (F pBabybear)) => match config.align ensemble with
     | .error error => toString error
     | .ok _ => ""
 

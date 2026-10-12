@@ -7,7 +7,7 @@ mod generated {
     include!("generated/femtocairo_flat_air.rs");
 }
 
-use clean_backend::witness_generation::WitnessGenerationError;
+use clean_backend::witness_generation::WitnessData;
 use clean_backend::{prove_ensemble, verify_ensemble};
 use common::setup;
 use p3_baby_bear::BabyBear;
@@ -18,14 +18,18 @@ fn field(value: u64) -> BabyBear {
     BabyBear::from_u64(value)
 }
 
-fn memory(values: [u64; 8]) -> Vec<BabyBear> {
-    values.into_iter().map(field).collect()
+/// The private memory values, supplied to witness generation as the `memoryValues` hint table.
+fn memory(values: [u64; 8]) -> WitnessData<BabyBear> {
+    WitnessData::from_entries(vec![(
+        "memoryValues",
+        values.into_iter().map(|value| vec![field(value)]).collect(),
+    )])
 }
 
 #[test]
 fn extracted_femtocairo_witness_uses_committed_memory_data() {
-    let prover_input = memory([0, 5, 3, 7, 2, 10, 0, 0]);
-    let witness = generated::generate(&[field(0), field(0)], &prover_input)
+    let hint = memory([0, 5, 3, 7, 2, 10, 0, 0]);
+    let witness = generated::generate(&[field(0), field(0)], &hint)
         .expect("extracted FemtoCairo witness generation failed");
 
     assert_eq!(
@@ -64,24 +68,11 @@ fn extracted_femtocairo_accepts_runtime_private_memories() {
 }
 
 #[test]
-fn extracted_femtocairo_rejects_malformed_prover_input() {
-    let error = generated::generate(&[field(0), field(0)], &[field(0); 7])
-        .expect_err("short private memory should be rejected");
-    assert_eq!(
-        error,
-        WitnessGenerationError::ProverInputWidth {
-            expected: 8,
-            actual: 7,
-        }
-    );
-}
-
-#[test]
 fn extracted_femtocairo_air_proves_and_verifies() {
     let config = setup::test_config(7);
     let public_values = vec![field(0), field(0)];
-    let prover_input = memory([0, 5, 3, 7, 2, 10, 0, 0]);
-    let witness = generated::generate(&public_values, &prover_input)
+    let hint = memory([0, 5, 3, 7, 2, 10, 0, 0]);
+    let witness = generated::generate(&public_values, &hint)
         .expect("extracted FemtoCairo witness generation failed");
     let traces = witness.into_traces().expect("invalid extracted traces");
 

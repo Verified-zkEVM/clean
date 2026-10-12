@@ -66,15 +66,15 @@ example : generateResult alternateMemoryValues = .ok ([8, 8, 32], true, true, 8,
   native_decide
 
 def unstableDataReadRejected : Bool :=
-  let config : Config (F pBabybear) (fields 8) :=
+  let config : Config (F pBabybear) :=
     Witness.config (memorySize := 8) testProgram h_programSize initialState 8 1000
   let mutableMemory : Mode (F pBabybear) := .preallocated {
     rows := 8
-    input := .ofFExprs #v[.proverInputGet .idx, .const 0]
+    input := .ofFExprs #v[.hintGet Witness.memoryValuesKey 1 .idx 0, .const 0]
     input_valid := by rfl
     handlers := [{ interaction := 0, column := 1 }]
   }
-  let config : Config (F pBabybear) (fields 8) :=
+  let config : Config (F pBabybear) :=
     { config with components := config.components.map fun (name, generation) =>
         if name = (provideMemory (p := pBabybear)).name then (name, { generation with mode := mutableMemory })
         else (name, generation) }
