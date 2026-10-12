@@ -1293,7 +1293,6 @@ pub struct FemtoCairoFlatAirProgram;
 
 impl<F: WitnessField> Program<F> for FemtoCairoFlatAirProgram {
     const FIELD_ORDER: u64 = 2013265921;
-    const FUEL: usize = 1000;
     const COMPONENTS: usize = 3;
     const PUBLIC_INPUTS: usize = 2;
     const FIXED_WIDTHS: &'static [usize] = &[0, 1, 2];

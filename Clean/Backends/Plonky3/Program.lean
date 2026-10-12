@@ -183,6 +183,5 @@ structure Program (F : Type) [FiniteField F] where
   verifierInteractions : List (AbstractInteraction F)
   modes : List (Mode F)
   padding : List (Padding F)
-  fuel : ℕ
 
 end Backends.Plonky3

@@ -330,7 +330,6 @@ pub struct FibonacciEnsembleProgram;
 
 impl<F: WitnessField> Program<F> for FibonacciEnsembleProgram {
     const FIELD_ORDER: u64 = 2013265921;
-    const FUEL: usize = 100000;
     const COMPONENTS: usize = 3;
     const PUBLIC_INPUTS: usize = 3;
     const FIXED_WIDTHS: &'static [usize] = &[0, 0, 1];

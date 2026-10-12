@@ -10,6 +10,6 @@ def main : IO Unit := do
   match Backends.Plonky3.Print.ensembleToRust
       "FibonacciEnsembleProgram"
       (fibonacciEnsemble (p := pBabybear)).ensemble
-      (FibonacciWitness.config (p := pBabybear) 100000) with
+      (FibonacciWitness.config (p := pBabybear)) with
   | .ok rust => IO.print rust
   | .error error => throw (IO.userError error)

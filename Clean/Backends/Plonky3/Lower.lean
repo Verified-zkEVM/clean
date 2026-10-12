@@ -130,7 +130,6 @@ def lower (ensemble : Ensemble F PublicIO) (config : Config F) :
     verifierInteractions
     modes := config.generations.map (·.mode)
     padding := config.generations.map (·.padding)
-    fuel := config.fuel
   }
 
 end Backends.Plonky3

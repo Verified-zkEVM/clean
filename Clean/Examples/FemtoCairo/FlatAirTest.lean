@@ -36,7 +36,7 @@ def generateResult (memoryValues : fields 8 (F pBabybear)) :
   match Examples.FemtoCairo.FlatAir.Witness.generate
       (p := pBabybear) (programSize := programSize) (memorySize := 8)
       testProgram h_programSize h_memorySize
-      memoryValues initialState finalRegisters 8 1000 with
+      memoryValues initialState finalRegisters 8 with
   | .error error => .error (toString error)
   | .ok witness =>
     let memoryData := witness.data "memory" 3
@@ -67,7 +67,7 @@ example : generateResult alternateMemoryValues = .ok ([8, 8, 32], true, true, 8,
 
 def unstableDataReadRejected : Bool :=
   let config : Config (F pBabybear) :=
-    Witness.config (memorySize := 8) testProgram h_programSize initialState 8 1000
+    Witness.config (memorySize := 8) testProgram h_programSize initialState 8
   let mutableMemory : Mode (F pBabybear) := .preallocated {
     rows := 8
     input := .ofFExprs #v[.hintGet Witness.memoryValuesKey 1 .idx 0, .const 0]

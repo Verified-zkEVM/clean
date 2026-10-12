@@ -724,8 +724,7 @@ def memoryMode (memorySize : UInt64) : Mode (F p) := .preallocated {
 }
 
 def config {programSize memorySize : UInt64} (program : Fin programSize.toNat → F p)
-    (h_programSize : programSize.toNat < p) (initialState : State (F p)) (executionRows : UInt64)
-    (fuel : ℕ) :
+    (h_programSize : programSize.toNat < p) (initialState : State (F p)) (executionRows : UInt64) :
     Config (F p) where
   components := [
     ((executeStep program h_programSize initialState).name, {
@@ -738,17 +737,16 @@ def config {programSize memorySize : UInt64} (program : Fin programSize.toNat �
       mode := programMode programSize
       padding := { input := #[0, 0, 0], minimumRows := programSize } })
   ]
-  fuel := fuel
 
 def generate {programSize memorySize : UInt64} (program : Fin programSize.toNat → F p)
     (h_programSize : programSize.toNat < p) (h_memorySize : memorySize.toNat < p)
     (memoryValues : fields memorySize.toNat (F p)) (initialState : State (F p))
-    (finalRegisters : fieldPair (F p)) (executionRows : UInt64) (fuel : ℕ) :
+    (finalRegisters : fieldPair (F p)) (executionRows : UInt64) :
     Except GenerationError (EnsembleWitness
       (soundEnsemble program h_programSize h_memorySize initialState).ensemble) :=
   Air.Flat.WitnessGeneration.generate
     (soundEnsemble program h_programSize h_memorySize initialState).ensemble
-    (config (memorySize := memorySize) program h_programSize initialState executionRows fuel)
+    (config (memorySize := memorySize) program h_programSize initialState executionRows)
     finalRegisters
     (memoryValuesHint memoryValues)
 

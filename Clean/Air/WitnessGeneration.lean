@@ -15,7 +15,8 @@ and the global channel-balance relation.
 `Config.validate` checks generation metadata against an ensemble once. A `ValidConfig` carries
 that check, and generation from it cannot hit structural errors. Its remaining failures are
 semantic: channel imbalance that no component handles, a message no preallocated row matches,
-and running out of fuel.
+and reaching as many interactions as the field has elements, beyond which channels cannot
+balance.
 
 The builder maintains the channel imbalance incrementally, as the net field multiplicity of each
 channel message, the quantity channel balance is about. New rows add their interactions;
@@ -108,7 +109,6 @@ structure Generation (F : Type) where
 entry. -/
 structure Config (F : Type) where
   components : List (String × Generation F)
-  fuel : ℕ
 
 /-- A structural problem with generation metadata, found by `Config.validate`. -/
 inductive ConfigError where
@@ -259,16 +259,8 @@ def Config.align (config : Config F) (ensemble : Ensemble F PublicIO) :
     | [] => throw (.missingComponent component.circuit.name)
     | _ => throw (.duplicateComponent component.circuit.name)
 
-def nextPowerOfTwoAux (target : ℕ) : ℕ → ℕ → ℕ
-  | 0, power => power
-  | fuel + 1, power =>
-      if target ≤ power then power else nextPowerOfTwoAux target fuel (power * 2)
-
-def nextPowerOfTwo (value : ℕ) : ℕ :=
-  nextPowerOfTwoAux (max value 1) value 1
-
 def Padding.targetHeight (padding : Padding F) (rowCount : ℕ) : ℕ :=
-  nextPowerOfTwo (max rowCount padding.minimumRows.toNat)
+  (max rowCount padding.minimumRows.toNat).nextPowerOfTwo
 
 /-- Check one component's generation mode and padding against the component. -/
 def validateGeneration (component : Component F) (generation : Generation F) :
@@ -347,7 +339,6 @@ structure ValidConfig (ensemble : Ensemble F PublicIO) where
   generations : List (Generation F)
   aligned : generations.length = ensemble.tables.length
   valid : validateGenerations ensemble generations = .ok ()
-  fuel : ℕ
 
 /-- Align generation metadata with an ensemble's components and check it. -/
 def Config.validate (config : Config F) (ensemble : Ensemble F PublicIO) :
@@ -358,7 +349,7 @@ def Config.validate (config : Config F) (ensemble : Ensemble F PublicIO) :
       if hlength : generations.length = ensemble.tables.length then
         match hvalid : validateGenerations ensemble generations with
         | .error error => .error error
-        | .ok () => .ok { generations, aligned := hlength, valid := hvalid, fuel := config.fuel }
+        | .ok () => .ok { generations, aligned := hlength, valid := hvalid }
       else
         -- `align` produces one entry per component
         .error (.missingComponent "")
@@ -592,7 +583,8 @@ inductive GenerationError where
   | config (error : ConfigError)
   | unhandledImbalance (channels : List String)
   | noPreallocatedRow (component channel : String)
-  | fuelExhausted
+  | interactionBound
+  | noProgress
   | assembly (message : String)
 deriving Repr
 
@@ -603,37 +595,67 @@ instance : ToString GenerationError where
         s!"unhandled channel imbalance on: {String.intercalate ", " channels}"
     | .noPreallocatedRow component channel =>
         s!"component '{component}' has no preallocated row for a message on channel '{channel}'"
-    | .fuelExhausted => "ensemble witness generation exhausted its fuel"
+    | .interactionBound => "generation reached as many interactions as the field has elements"
+    | .noProgress => "witness generation made no progress"
     | .assembly message => message
+
+/-- The interactions a handled demand removes and adds. -/
+structure Change (F : Type) where
+  removed : List (Interaction F)
+  added : List (Interaction F)
 
 /-- Route one demand to the component at `index`. -/
 def handle (states : List (ComponentState F)) (demand : Demand F) (index : ℕ)
-    (data : ProverData F) :
-    Except GenerationError (List (ComponentState F) × (List (Demand F) → List (Demand F))) := do
-  let some state := states[index]? | return (states, id)
+    (data : ProverData F) : Except GenerationError (List (ComponentState F) × Change F) := do
+  let some state := states[index]? | return (states, ⟨[], []⟩)
   let mutation ← match state.generation.mode with
     | .demand mode => pure (handleDemand state mode demand data)
     | .preallocated mode =>
         match handlePreallocated state mode.handlers demand data with
         | some mutation => pure mutation
         | none => throw (.noPreallocatedRow state.component.circuit.name demand.channel)
-  let removed := mutation.removedRows.flatMap (rowInteractions state · data)
-  let added := mutation.addedRows.flatMap (rowInteractions state · data)
-  return (states.set index mutation.state, fun demands =>
-    Demand.addInteractions (Demand.removeInteractions demands removed) added)
+  return (states.set index mutation.state, {
+    removed := mutation.removedRows.flatMap (rowInteractions state · data)
+    added := mutation.addedRows.flatMap (rowInteractions state · data) })
 
-/-- Handle demand until the channels balance. -/
-def generateLoop (data : ProverData F) :
-    ℕ → List (ComponentState F) → List (Demand F) →
-      Except GenerationError (List (ComponentState F))
-  | 0, _, _ => throw .fuelExhausted
-  | fuel + 1, states, demands =>
-      if demands.isEmpty then pure states else
-      match findAction states demands with
-      | none => throw (.unhandledImbalance (demands.map (·.channel)))
-      | some (demand, index) => do
-          let (states, update) ← handle states demand index data
-          generateLoop data fuel states (update demands)
+/-- The state of channel balancing: component rows, the pending imbalance, and the number of
+interactions of the verifier and all rows. -/
+structure Balancing (F : Type) [FiniteField F] where
+  states : List (ComponentState F)
+  demands : List (Demand F)
+  interactions : ℕ
+
+/-- Balancing terminates: every step adds interactions, which the field size bounds, or keeps
+them and settles one pending demand. -/
+def Balancing.measure (balancing : Balancing F) : ℕ × ℕ :=
+  (FiniteField.size (F := F) - balancing.interactions, balancing.demands.length)
+
+def Balancing.apply (balancing : Balancing F) (states : List (ComponentState F))
+    (change : Change F) : Balancing F where
+  states
+  demands := Demand.addInteractions (Demand.removeInteractions balancing.demands change.removed)
+    change.added
+  interactions := balancing.interactions + change.added.length - change.removed.length
+
+/-- Handle demand until the channels balance. Balance requires fewer interactions than the field
+size, so generation stops when that bound is reached. -/
+def balance (data : ProverData F) (balancing : Balancing F) :
+    Except GenerationError (Balancing F) :=
+  if balancing.demands.isEmpty then .ok balancing
+  else if FiniteField.size (F := F) ≤ balancing.interactions then .error .interactionBound
+  else
+    match findAction balancing.states balancing.demands with
+    | none => .error (.unhandledImbalance (balancing.demands.map (·.channel)))
+    | some (demand, index) =>
+        match handle balancing.states demand index data with
+        | .error error => .error error
+        | .ok (states, change) =>
+            let next := balancing.apply states change
+            if _ : Prod.Lex (· < ·) (· < ·) next.measure balancing.measure then
+              balance data next
+            else .error .noProgress
+termination_by balancing.measure
+decreasing_by assumption
 
 /-- Pad every component to its target height with its padding row; returns the padded states
 and the interactions of the new rows. -/
@@ -650,15 +672,22 @@ def tablesArePadded (states : List (ComponentState F)) : Bool :=
   states.all fun state =>
     state.rows.length == state.generation.padding.targetHeight state.rows.length
 
-/-- Pad, then balance the interactions of the padding rows, until no component grows. -/
-def padAndBalance (data : ProverData F) (fuel : ℕ) :
-    ℕ → List (ComponentState F) → Except GenerationError (List (ComponentState F))
-  | 0, _ => throw .fuelExhausted
-  | rounds + 1, states => do
-      let (states, added) := padTables data states
-      let states ← generateLoop data fuel states (Demand.addInteractions [] added)
-      if tablesArePadded states then return states
-      padAndBalance data fuel rounds states
+/-- Pad, then balance the interactions of the padding rows, until every component is padded. A
+round that leaves a component unpadded added rows through demand, and with them interactions. -/
+def padAndBalance (data : ProverData F) (balancing : Balancing F) :
+    Except GenerationError (Balancing F) :=
+  let (states, added) := padTables data balancing.states
+  match balance data
+      { balancing.apply states ⟨[], added⟩ with } with
+  | .error error => .error error
+  | .ok balanced =>
+      if tablesArePadded balanced.states then .ok balanced
+      else if _ : balancing.interactions < balanced.interactions ∧
+          balanced.interactions < FiniteField.size (F := F) then
+        padAndBalance data balanced
+      else .error .noProgress
+termination_by FiniteField.size (F := F) - balancing.interactions
+decreasing_by omega
 
 /-! ### Assembling the witness -/
 
@@ -738,10 +767,12 @@ def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensembl
     { state with rows := state.rows.map fun row => completeRow state row.input data none }
   let verifier := ensemble.verifierOperations.interactionValues (.fromInput publicInput data)
   let rows := initial.flatMap fun state => state.rows.flatMap (rowInteractions state · data)
-  let demands := Demand.addInteractions [] (verifier ++ rows)
-  let generated ← generateLoop data config.fuel initial demands
-  let padded ← padAndBalance data config.fuel config.fuel generated
-  let assembled ← assembleTables ensemble.tables padded
+  let balanced ← balance data {
+    states := initial
+    demands := Demand.addInteractions [] (verifier ++ rows)
+    interactions := (verifier ++ rows).length }
+  let padded ← padAndBalance data balanced
+  let assembled ← assembleTables ensemble.tables padded.states
   return {
     tables := assembled.tables
     publicInput

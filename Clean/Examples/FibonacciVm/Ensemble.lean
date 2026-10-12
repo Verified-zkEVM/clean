@@ -337,19 +337,18 @@ def bytesMode : Mode (F p) := .preallocated {
 }
 
 /-- Channel-driven witness-generation metadata for each component of the ensemble. -/
-def config (fuel : ℕ) : Config (F p) where
+def config : Config (F p) where
   components := [
     ((fib8 (p := p)).name, { mode := fibMode, padding := { input := #[0, 0, 0, 0], minimumRows := 32 } }),
     ((add8 (p := p)).name, { mode := add8Mode, padding := { input := #[0, 0, 0, 0], minimumRows := 32 } }),
     ((pushBytes (p := p)).name, { mode := bytesMode, padding := { input := #[0, 0], minimumRows := 256 } })
   ]
-  fuel := fuel
 
 /-- Generate a complete ensemble witness from the claimed public final state. -/
-def generate (publicInput : fieldTriple (F p)) (fuel : ℕ) :
+def generate (publicInput : fieldTriple (F p)) :
     Except GenerationError (EnsembleWitness (fibonacciEnsemble (p := p)).ensemble) :=
   Air.Flat.WitnessGeneration.generate (fibonacciEnsemble (p := p)).ensemble
-    (config (p := p) fuel) publicInput (.empty (F p))
+    (config (p := p)) publicInput (.empty (F p))
 
 end FibonacciWitness
 

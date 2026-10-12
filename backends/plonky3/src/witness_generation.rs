@@ -203,7 +203,6 @@ impl<F: Field> EnsembleWitness<F> {
 pub trait Program<F: WitnessField> {
     /// Order of the field whose constants and arithmetic the generated code was printed for.
     const FIELD_ORDER: u64;
-    const FUEL: usize;
     const COMPONENTS: usize;
     const PUBLIC_INPUTS: usize;
     const FIXED_WIDTHS: &'static [usize];
@@ -480,15 +479,41 @@ fn handle_preallocated<F: WitnessField, P: Program<F>>(
     Ok(())
 }
 
+/// The number of interactions of the verifier and all rows.
+fn interaction_count<F: WitnessField, P: Program<F>>(
+    verifier_interactions: usize,
+    tables: &[Vec<Row<F>>],
+) -> usize {
+    verifier_interactions
+        + tables
+            .iter()
+            .enumerate()
+            .map(|(component, table)| {
+                table.first().map_or(0, |row| {
+                    table.len() * P::interactions(component, &row.values).len()
+                })
+            })
+            .sum::<usize>()
+}
+
+/// Handle demand until the channels balance. Balance requires fewer interactions than the field
+/// order, so generation stops when that bound is reached.
 fn balance<F: WitnessField, P: Program<F>>(
     modes: &[Mode<F>],
     tables: &mut [Vec<Row<F>>],
     demands: &mut Vec<Demand<F>>,
     data: &WitnessData<F>,
+    verifier_interactions: usize,
 ) -> Result<(), String> {
-    for _ in 0..P::FUEL {
+    loop {
         if demands.is_empty() {
             return Ok(());
+        }
+        let interactions = interaction_count::<F, P>(verifier_interactions, tables);
+        if interactions as u128 >= u128::from(F::ORDER_U64) {
+            return Err(
+                "generation reached as many interactions as the field has elements".to_string(),
+            );
         }
 
         let mut action = None;
@@ -543,8 +568,6 @@ fn balance<F: WitnessField, P: Program<F>>(
             )?,
         }
     }
-
-    Err("ensemble witness generation exhausted its fuel".to_string())
 }
 
 fn target_height<F>(row_count: usize, padding: &Padding<F>) -> usize {
@@ -554,13 +577,17 @@ fn target_height<F>(row_count: usize, padding: &Padding<F>) -> usize {
         .next_power_of_two()
 }
 
+/// Pad, then balance the interactions of the padding rows, until every component is padded. A
+/// round that leaves a component unpadded added rows through demand, and with them interactions.
 fn pad_and_balance<F: WitnessField, P: Program<F>>(
     modes: &[Mode<F>],
     padding: &[Padding<F>],
     tables: &mut [Vec<Row<F>>],
     data: &WitnessData<F>,
+    verifier_interactions: usize,
 ) -> Result<(), String> {
-    for _ in 0..P::FUEL {
+    loop {
+        let before = interaction_count::<F, P>(verifier_interactions, tables);
         let mut demands = Vec::new();
         for (component, (table, padding)) in tables.iter_mut().zip(padding).enumerate() {
             let height = target_height(table.len(), padding);
@@ -575,7 +602,7 @@ fn pad_and_balance<F: WitnessField, P: Program<F>>(
             }
         }
 
-        balance::<F, P>(modes, tables, &mut demands, data)?;
+        balance::<F, P>(modes, tables, &mut demands, data, verifier_interactions)?;
         if tables
             .iter()
             .zip(padding)
@@ -583,9 +610,10 @@ fn pad_and_balance<F: WitnessField, P: Program<F>>(
         {
             return Ok(());
         }
+        if interaction_count::<F, P>(verifier_interactions, tables) <= before {
+            return Err("witness generation made no progress".to_string());
+        }
     }
-
-    Err("ensemble padding exhausted its fuel".to_string())
 }
 
 /// Run an extracted channel-driven ensemble witness program. `hint` holds named tables that the
@@ -691,15 +719,23 @@ pub fn generate<F: WitnessField, P: Program<F>>(
     }
 
     let mut demands = Vec::new();
-    add_interactions(&mut demands, P::verifier_interactions(public_input));
+    let verifier = P::verifier_interactions(public_input);
+    let verifier_interactions = verifier.len();
+    add_interactions(&mut demands, verifier);
     for (component, table) in tables.iter().enumerate() {
         for row in table {
             add_interactions(&mut demands, P::interactions(component, &row.values));
         }
     }
 
-    balance::<F, P>(&modes, &mut tables, &mut demands, &data)?;
-    pad_and_balance::<F, P>(&modes, &padding, &mut tables, &data)?;
+    balance::<F, P>(
+        &modes,
+        &mut tables,
+        &mut demands,
+        &data,
+        verifier_interactions,
+    )?;
+    pad_and_balance::<F, P>(&modes, &padding, &mut tables, &data, verifier_interactions)?;
 
     Ok(EnsembleWitness {
         fixed_widths: P::FIXED_WIDTHS.to_vec(),
