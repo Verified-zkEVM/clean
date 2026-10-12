@@ -50,9 +50,7 @@ def eval (message : Array F) (multiplicity : ℕ) : InputCell F → Except Strin
       match message[index]? with
       | some value => .ok value
       | none => .error s!"channel message has no element at index {index}"
-  | .multiplicity =>
-      if multiplicity < FiniteField.size (F := F) then .ok (FiniteField.fromNat multiplicity)
-      else .error s!"multiplicity {multiplicity} does not fit in the field"
+  | .multiplicity => .ok (FiniteField.fromNat multiplicity)
   | .const value => .ok value
 
 end InputCell
@@ -471,10 +469,7 @@ def handlePreallocated (prepared : PreparedComponent F)
   let found ← findPreallocatedMatch prepared handlers demand table data
   let some current := found.row.input[found.handler.column]?
     | throw s!"preallocated handler column {found.handler.column} is out of bounds"
-  let count := FiniteField.val current + demand.count
-  let value := FiniteField.fromNat (F := F) count
-  unless FiniteField.val value = count do
-    throw s!"preallocated multiplicity {count} overflows the field characteristic"
+  let value := current + FiniteField.fromNat demand.count
   let input := (found.row.input.toList.set found.handler.column value).toArray
   let updated ← completeRow prepared input data
   return {

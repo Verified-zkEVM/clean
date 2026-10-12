@@ -349,12 +349,7 @@ fn input_for_demand<F: WitnessField>(
                 .get(*index)
                 .copied()
                 .ok_or_else(|| format!("channel message has no element at index {index}")),
-            InputCell::Multiplicity if (multiplicity as u64) < F::ORDER_U64 => {
-                Ok(F::from_canonical_u64(multiplicity as u64))
-            }
-            InputCell::Multiplicity => Err(format!(
-                "multiplicity {multiplicity} does not fit in the field"
-            )),
+            InputCell::Multiplicity => Ok(F::from_canonical_u64(multiplicity as u64)),
             InputCell::Constant(value) => Ok(*value),
         })
         .collect()
@@ -480,13 +475,7 @@ fn handle_preallocated<F: WitnessField, P: Program<F>>(
             handler.column
         )
     })?;
-    let count = current.canonical_u64() as usize + demand.count;
-    let value = F::from_canonical_u64(count as u64);
-    if value.canonical_u64() as usize != count {
-        return Err(format!(
-            "preallocated multiplicity {count} overflows the field characteristic"
-        ));
-    }
+    let value = current + F::from_canonical_u64(demand.count as u64);
     let old_interactions = P::interactions(component, &row.values);
     row.input[handler.column] = value;
     row.values = P::complete_row(component, &row.input, data)?;
