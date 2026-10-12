@@ -35,7 +35,7 @@ def testProgram : Fin programSize → F pBabybear := fun i => programData[i]
 
 theorem h_programSize : programSize < pBabybear := by norm_num [programSize, pBabybear]
 
-theorem h_memorySize : 8 < pBabybear := by norm_num [pBabybear]
+theorem h_memorySize : (8 : UInt64).toNat < pBabybear := by decide
 
 def initialState : State (F pBabybear) := { pc := 0, ap := 0, fp := 0 }
 

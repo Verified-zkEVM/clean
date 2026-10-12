@@ -441,12 +441,13 @@ def provideMemory : GeneralFormalCircuit (F p) ProviderInput unit where
     exact h_assumptions
   completeness := by circuit_proof_start
 
-def memoryFixedColumns (memorySize : ℕ) : FixedColumns (F p) where
-  height := UInt64.ofNat memorySize
+def memoryFixedColumns (memorySize : UInt64) : FixedColumns (F p) where
+  height := memorySize
   program := .ofFExprs #v[.ofU64 .idx]
   valid := by rfl
 
-def memoryComponent (memorySize : ℕ) (h_memorySize : memorySize < p) : Component (F p) where
+def memoryComponent (memorySize : UInt64) (h_memorySize : memorySize.toNat < p) :
+    Component (F p) where
   circuit := provideMemory
   fixedColumns := some (memoryFixedColumns memorySize)
   fixed_width_le_input := by change 1 ≤ 3; omega
@@ -604,8 +605,8 @@ def vm {programSize : ℕ} (program : Fin programSize → F p)
     simp only [verifier, StateChannel, circuit_norm]
     exact ⟨0, rfl⟩
 
-def soundEnsemble {programSize memorySize : ℕ} (program : Fin programSize → F p)
-    (h_programSize : programSize < p) (h_memorySize : memorySize < p)
+def soundEnsemble {programSize : ℕ} {memorySize : UInt64} (program : Fin programSize → F p)
+    (h_programSize : programSize < p) (h_memorySize : memorySize.toNat < p)
     (initialState : State (F p)) :=
   SoundEnsemble.empty (F p) fieldPair
   |>.addTable (programComponent program h_programSize)
@@ -640,17 +641,16 @@ lemma femtoCairoMachineBoundedExecution_cast {programSize : ℕ} (program : Fin 
   subst h
   rfl
 
-/-- The public statement: some memory of size `memorySize` makes the program run from
+/-- The public statement: some memory of size `memorySize.toNat` makes the program run from
 `initialState` to completion with registers `(ap, fp)`. -/
-def Spec {programSize : ℕ} (program : Fin programSize → F p) (memorySize : ℕ)
+def Spec {programSize : ℕ} (program : Fin programSize → F p) (memorySize : UInt64)
     (initialState : State (F p)) : fieldPair (F p) → Prop
-  | (ap, fp) => ∃ mem : Fin memorySize → F p, ∃ steps,
+  | (ap, fp) => ∃ mem : Fin memorySize.toNat → F p, ∃ steps,
       Spec.femtoCairoMachineBoundedExecution program mem (some initialState) steps =
         some (haltedState programSize ap fp)
 
-def formalEnsemble [p_lt_u64 : Fact (p < UInt64.size)] {programSize memorySize : ℕ}
-    (program : Fin programSize → F p)
-    (h_programSize : programSize < p) (h_memorySize : memorySize < p)
+def formalEnsemble {programSize : ℕ} {memorySize : UInt64} (program : Fin programSize → F p)
+    (h_programSize : programSize < p) (h_memorySize : memorySize.toNat < p)
     (initialState : State (F p)) :=
   (soundEnsemble program h_programSize h_memorySize initialState).toFormal (fun _ => True)
     (Spec program memorySize initialState)
@@ -669,8 +669,7 @@ def formalEnsemble [p_lt_u64 : Fact (p < UInt64.size)] {programSize memorySize :
       have hsize := witness.getRows_size_of_fixedColumns
         (component := memoryComponent memorySize h_memorySize)
         (by simp [soundEnsemble, circuit_norm]) rfl
-      simp only [memoryComponent, provideMemory, memoryFixedColumns,
-        UInt64.toNat_ofNat_of_lt' (Nat.lt_trans h_memorySize p_lt_u64.out)] at hsize
+      simp only [memoryComponent, provideMemory, memoryFixedColumns] at hsize
       simp only [circuit_norm, soundEnsemble, vm, verifier, StateChannel] at spec
       obtain ⟨steps, hsteps⟩ := spec
       exact ⟨memory witness.data ∘ Fin.cast hsize.symm, steps,
@@ -678,12 +677,12 @@ def formalEnsemble [p_lt_u64 : Fact (p < UInt64.size)] {programSize memorySize :
 
 /-- End-to-end soundness: a valid proof for the public registers `(ap, fp)` shows that the
 program, run on some memory of size `memorySize`, halts with these registers. -/
-theorem femtoCairo_soundness [Fact (p < UInt64.size)] {programSize memorySize : ℕ}
+theorem femtoCairo_soundness {programSize : ℕ} {memorySize : UInt64}
     (program : Fin programSize → F p)
-    (h_programSize : programSize < p) (h_memorySize : memorySize < p)
+    (h_programSize : programSize < p) (h_memorySize : memorySize.toNat < p)
     (initialState : State (F p)) (ap fp : F p) :
     (soundEnsemble program h_programSize h_memorySize initialState).ensemble.Statement (ap, fp) →
-      ∃ mem : Fin memorySize → F p, ∃ steps,
+      ∃ mem : Fin memorySize.toNat → F p, ∃ steps,
         Spec.femtoCairoMachineBoundedExecution program mem (some initialState) steps =
           some (haltedState programSize ap fp) :=
   (formalEnsemble program h_programSize h_memorySize initialState).soundness (ap, fp) trivial
@@ -712,20 +711,20 @@ def programMode (programSize : ℕ) : Mode (F p) :=
 def memoryValuesKey : String := "memoryValues"
 
 /-- The generation hint supplying `memoryValues` to the memory component's rows. -/
-def memoryValuesHint {memorySize : ℕ} (memoryValues : fields memorySize (F p)) :
+def memoryValuesHint {memorySize : UInt64} (memoryValues : fields memorySize.toNat (F p)) :
     ProverHint (F p) := fun key n =>
   if key = memoryValuesKey ∧ n = 1 then
     memoryValues.toArray.map fun value => Vector.ofFn fun _ => value
   else #[]
 
-def memoryMode (memorySize : ℕ) : Mode (F p) := .preallocated {
-  rows := memorySize
+def memoryMode (memorySize : UInt64) : Mode (F p) := .preallocated {
+  rows := memorySize.toNat
   input := .ofFExprs #v[.hintGet memoryValuesKey 1 .idx 0, .const 0]
   input_valid := by rfl
   handlers := [{ interaction := 0, column := 2 }]
 }
 
-def config {programSize memorySize : ℕ} (program : Fin programSize → F p)
+def config {programSize : ℕ} {memorySize : UInt64} (program : Fin programSize → F p)
     (h_programSize : programSize < p) (initialState : State (F p)) (executionRows fuel : ℕ) :
     Config (F p) where
   components := [
@@ -734,16 +733,16 @@ def config {programSize memorySize : ℕ} (program : Fin programSize → F p)
       padding := { input := #[0, 0, 0], minimumRows := executionRows } }),
     ((provideMemory (p := p)).name, {
       mode := memoryMode memorySize
-      padding := { input := #[0, 0, 0], minimumRows := memorySize } }),
+      padding := { input := #[0, 0, 0], minimumRows := memorySize.toNat } }),
     ((provideProgram program).name, {
       mode := programMode programSize
       padding := { input := #[0, 0, 0], minimumRows := programSize } })
   ]
   fuel := fuel
 
-def generate {programSize memorySize : ℕ} (program : Fin programSize → F p)
-    (h_programSize : programSize < p) (h_memorySize : memorySize < p)
-    (memoryValues : fields memorySize (F p)) (initialState : State (F p))
+def generate {programSize : ℕ} {memorySize : UInt64} (program : Fin programSize → F p)
+    (h_programSize : programSize < p) (h_memorySize : memorySize.toNat < p)
+    (memoryValues : fields memorySize.toNat (F p)) (initialState : State (F p))
     (finalRegisters : fieldPair (F p)) (executionRows fuel : ℕ) :
     Except String (EnsembleWitness
       (soundEnsemble program h_programSize h_memorySize initialState).ensemble) :=
