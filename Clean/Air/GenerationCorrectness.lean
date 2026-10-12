@@ -478,7 +478,7 @@ lemma initialStates_interactions {ens : Ensemble F PublicIO} (config : ValidConf
 
 /-- Generated witnesses have the requested public input and balance all channels. -/
 theorem generateValid_balanced {ens : Ensemble F PublicIO}
-    (hchar : FiniteField.size F ≤ ringChar F) (hnamed : ens.ChannelsNamed)
+    (hnamed : ens.ChannelsNamed)
     {config : ValidConfig ens} {publicInput : PublicIO F} {hint : ProverHint F}
     {witness : EnsembleWitness ens} (h : generateValid config publicInput hint = .ok witness) :
     witness.publicInput = publicInput ∧ witness.BalancedChannels := by
@@ -500,7 +500,7 @@ theorem generateValid_balanced {ens : Ensemble F PublicIO}
   · cases h
   rename_i hlength
   cases h
-  refine ⟨rfl, balancedChannels_of_net hnamed (lt_of_lt_of_le hlength hchar)
+  refine ⟨rfl, balancedChannels_of_net hnamed (FiniteField.ringChar_eq (F := F) ▸ hlength)
     fun channel message => ?_⟩
   set verifier := ens.verifierOperations.interactionValues (Environment.fromInput publicInput data)
   have htracks : Balancing.Tracks ⟨initial,

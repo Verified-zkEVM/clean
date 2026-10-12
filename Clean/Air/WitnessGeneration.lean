@@ -594,7 +594,7 @@ instance : ToString GenerationError where
         s!"unhandled channel imbalance on: {String.intercalate ", " channels}"
     | .noPreallocatedRow component channel =>
         s!"component '{component}' has no preallocated row for a message on channel '{channel}'"
-    | .interactionBound => "generation reached as many interactions as the field has elements"
+    | .interactionBound => "generation reached as many interactions as the field characteristic"
     | .noProgress => "witness generation made no progress"
     | .assembly message => message
 
@@ -624,10 +624,10 @@ structure Balancing (F : Type) [FiniteField F] where
   demands : List (Demand F)
   interactions : ℕ
 
-/-- Balancing terminates: every step adds interactions, which the field size bounds, or keeps
+/-- Balancing terminates: every step adds interactions, which the field characteristic bounds, or keeps
 them and settles one pending demand. -/
 def Balancing.measure (balancing : Balancing F) : ℕ × ℕ :=
-  (FiniteField.size (F := F) - balancing.interactions, balancing.demands.length)
+  (FiniteField.char F - balancing.interactions, balancing.demands.length)
 
 def Balancing.apply (balancing : Balancing F) (states : List (ComponentState F))
     (change : Change F) : Balancing F where
@@ -637,11 +637,11 @@ def Balancing.apply (balancing : Balancing F) (states : List (ComponentState F))
   interactions := balancing.interactions + change.added.length - change.removed.length
 
 /-- Handle demand until the channels balance. Balance requires fewer interactions than the field
-size, so generation stops when that bound is reached. -/
+characteristic, so generation stops when that bound is reached. -/
 def balance (data : ProverData F) (balancing : Balancing F) :
     Except GenerationError (Balancing F) :=
   if balancing.demands.isEmpty then .ok balancing
-  else if FiniteField.size (F := F) ≤ balancing.interactions then .error .interactionBound
+  else if FiniteField.char F ≤ balancing.interactions then .error .interactionBound
   else
     match findAction balancing.states balancing.demands with
     | none => .error (.unhandledImbalance (balancing.demands.map (·.channel)))
@@ -681,10 +681,10 @@ def padAndBalance (data : ProverData F) (balancing : Balancing F) :
   | .ok balanced =>
       if tablesArePadded balanced.states then .ok balanced
       else if _ : balancing.interactions < balanced.interactions ∧
-          balanced.interactions < FiniteField.size (F := F) then
+          balanced.interactions < FiniteField.char F then
         padAndBalance data balanced
       else .error .noProgress
-termination_by FiniteField.size (F := F) - balancing.interactions
+termination_by FiniteField.char F - balancing.interactions
 decreasing_by omega
 
 /-! ### Assembling the witness -/
@@ -782,7 +782,7 @@ def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensembl
     same_length := assembled.same_length
     same_circuits := assembled.same_circuits
   }
-  if witness.interactions.length < FiniteField.size (F := F) then return witness
+  if witness.interactions.length < FiniteField.char F then return witness
   throw .interactionBound
 
 /-- Validate generation metadata, then generate an ensemble witness. -/
