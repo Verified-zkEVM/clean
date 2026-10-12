@@ -100,8 +100,8 @@ completeness theorem is deferred.
    pull-driven message-coalesced, and fixed-row multiplicity-updating generation.
 5. Updating a row changes the global channel imbalance by the delta between its old and new
    interactions, so unchanged nested pulls or pushes are not counted twice.
-6. Missing or ambiguous handlers, malformed row inputs, non-termination/fuel exhaustion,
-   multiplicity overflow, and malformed padding declarations are reported as explicit errors.
+6. Missing or ambiguous handlers, malformed row inputs, reaching the interaction bound, and
+   malformed padding declarations are reported as explicit errors.
 7. The structured IR can express multiple component tables, deterministic worklist/scan state,
    verifier interactions, and semantic trace padding needed by the Fibonacci VM ensemble.
 8. All code reachable through the export path is structured IR; native witness closures are
