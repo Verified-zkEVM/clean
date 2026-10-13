@@ -1361,6 +1361,19 @@ lemma getElem?_eq (h : Reachable handlers base input) {column : ℕ}
 
 end Reachable
 
+lemma width_eq {F : Type} [FiniteField F] (component : Component F) :
+    component.width =
+      component.rowOffset + FlatOperation.localLength component.rowOperations.toFlat := by
+  rw [Component.width, GeneralFormalCircuit.size_eq, FlatOperation.localLength_toFlat,
+    Component.rowOperations, Component.rowOffset]
+  rw [← component.circuit.localLength_eq (varFromOffset component.Input 0) (size component.Input)]
+
+lemma honestRow_size {F : Type} [FiniteField F] (component : Component F) (data : ProverData F)
+    (hint : ProverHint F) {input : Array F} (hsize : input.size = component.rowOffset) :
+    (honestRow component data hint input).size = component.width := by
+  rw [honestRow, honestWitgen_size, hsize, width_eq]
+
+
 namespace Run
 
 variable {ens : FormalEnsemble (F p) PublicIO} {plan : GenerationPlan (F p)} (run : Run ens plan)
@@ -3805,23 +3818,101 @@ theorem balance_ok {padded : Bool} (balancing : Balancing (F p)) :
       cases hhandle'
       exact absurd hlt' hnot
 
+/-- After the main balancing, padding and balancing again succeeds with all tables padded. -/
+theorem padAndBalance_ok {k : ℕ} {balancing : Balancing (F p)} (hinv : run.Inv k false balancing)
+    (hsettled : balancing.demands = []) : ∃ k' balanced,
+      padAndBalance run.data0 run.hint balancing = .ok balanced ∧ run.Inv k' true balanced ∧
+        balanced.demands = [] := by
+  obtain ⟨k', balanced, hbalance, hinv', hsettled'⟩ := run.balance_ok _ _ (hinv.pad hsettled)
+  refine ⟨k', balanced, ?_, hinv', hsettled'⟩
+  rw [padAndBalance, run.padTables_eq hinv.viewOk fun state hstate =>
+    run.stateOk_of_shape hinv.shape hstate]
+  simp only [hbalance, hinv'.tablesArePadded_of_padded, if_true]
+
+/-- A preallocated row with fixed columns starts with them. -/
+lemma fixed_prefix {state : ComponentState (F p)} (hok : run.StateOk state)
+    {mode : PreallocatedMode (F p)} (hmode : state.rowPlan.mode = .preallocated mode)
+    {fixed : FixedColumns (F p)} (hfixed : state.component.fixedColumns = some fixed) {j : ℕ}
+    (hj : j < mode.rows.toNat) {input : Array (F p)}
+    (hreachable : Reachable mode.handlers (run.baseInput state.component state.rowPlan mode j) input)
+    (hadmissible : run.Admissible state.component input) :
+    (run.row state.component input none).values.extract 0 fixed.width =
+      fixed.row (UInt64.ofNat j) := by
+  have hvalid := (run.planValid.row_plans _ hok.entry).preallocated mode hmode
+  simp only at hvalid
+  have hfixedWidth : state.component.fixedWidth = fixed.width := by
+    simp [Component.fixedWidth, hfixed]
+  have hbase : run.baseInput state.component state.rowPlan mode j =
+      fixedPrefix state.component (UInt64.ofNat j) ++
+        (mode.input.eval (UInt64.ofNat j) run.hint).toArray := by
+    simp [baseInput, hj, preallocatedInput]
+  have hprefix : fixedPrefix state.component (UInt64.ofNat j) = fixed.row (UInt64.ofNat j) := by
+    simp [fixedPrefix, hfixed]
+  have hrowSize : (fixed.row (UInt64.ofNat j)).size = fixed.width := by
+    simp [FixedColumns.row]
+  apply Array.ext_getElem?
+  intro i
+  rw [Array.getElem?_extract]
+  by_cases hi : i < fixed.width
+  · have hinput : i < input.size := by
+      rw [hadmissible.size]
+      have := hvalid.1
+      omega
+    rw [if_pos (by
+      simp only [row, honestRow_size _ _ _ hadmissible.size, Nat.sub_zero]
+      have := width_eq state.component
+      omega), Nat.zero_add]
+    simp only [row, honestRow, honestWitgen_getElem? _ _ _ _ i hinput]
+    have hnotHandler : i ∉ mode.handlers.map (·.column) := by
+      simp only [List.mem_map, not_exists, not_and]
+      intro handler hhandler hcolumn
+      have := (hvalid.2 handler hhandler).2.1
+      omega
+    rw [hreachable.getElem?_eq hnotHandler, hbase, hprefix,
+      Array.getElem?_append_left (by omega)]
+  · rw [if_neg (by omega), Array.getElem?_eq_none (by omega)]
+
+/-- Final rows fit their components: within the row bound, of the component's width, and starting
+with the fixed columns. -/
+lemma final_tables {k : ℕ} {balancing : Balancing (F p)} (hinv : run.Inv k true balancing) :
+    ∀ state ∈ balancing.states, state.rows.length ≤ UInt64.size ∧
+      (∀ row ∈ state.rows, row.values.size = state.component.width) ∧
+      state.component.fixedRowsMatch (state.rows.map (·.values)) := by
+  intro state hstate
+  have hok := run.stateOk_of_shape hinv.shape hstate
+  have hfacts := (hinv.statesOk state hstate).2
+  refine ⟨?_, fun row hrow => ?_, ?_⟩
+  · exact le_trans (hinv.rows_le_bound state hstate)
+      (run.bounds.row_plan state.component hok.mem state.rowPlan (run.planned _ hok.entry)).2.2.1
+  · rw [(hfacts row hrow).eq_row]
+    exact honestRow_size _ _ _ (hfacts row hrow).admissible.size
+  · unfold Component.fixedRowsMatch
+    split
+    · trivial
+    rename_i fixed hfixed
+    obtain ⟨mode, hmode, hrows, hheight⟩ :=
+      (run.planValid.row_plans _ hok.entry).fixed fixed hfixed
+    simp only at hmode hrows hheight
+    have hrowsOk := hinv.rows state hstate
+    simp only [RowsOk, hmode, if_true] at hrowsOk
+    obtain ⟨hlength, hrowsEq⟩ := hrowsOk
+    rw [hrows, hheight] at hlength
+    apply List.ext_getElem
+    · simp [hlength]
+    · intro j hj _
+      simp only [List.length_map] at hj
+      obtain ⟨input, hreachable, heq⟩ := hrowsEq j hj
+      simp only [List.getElem_map, List.getElem_range, Function.comp_apply, heq]
+      have hfactsRow := hfacts _ (List.getElem_mem hj)
+      rw [heq] at hfactsRow
+      exact run.fixed_prefix hok hmode hfixed (by rw [hrows]; omega) hreachable
+        hfactsRow.admissible
+
 end Run
 
 end Air.Flat.WitnessGeneration
 
 namespace Air.Flat.WitnessGeneration
-
-lemma width_eq {F : Type} [FiniteField F] (component : Component F) :
-    component.width =
-      component.rowOffset + FlatOperation.localLength component.rowOperations.toFlat := by
-  rw [Component.width, GeneralFormalCircuit.size_eq, FlatOperation.localLength_toFlat,
-    Component.rowOperations, Component.rowOffset]
-  rw [← component.circuit.localLength_eq (varFromOffset component.Input 0) (size component.Input)]
-
-lemma honestRow_size {F : Type} [FiniteField F] (component : Component F) (data : ProverData F)
-    (hint : ProverHint F) {input : Array F} (hsize : input.size = component.rowOffset) :
-    (honestRow component data hint input).size = component.width := by
-  rw [honestRow, honestWitgen_size, hsize, width_eq]
 
 /-- Assembly succeeds on states whose rows fit the components. -/
 lemma assembleTables_ok {F : Type} [FiniteField F] :
