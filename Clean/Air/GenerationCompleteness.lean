@@ -790,6 +790,120 @@ lemma rowPlansOf_eq {plan : GenerationPlan F} (hnodup : (plan.components.map (·
         rowPlansOf_eq hnodup components pairs h.2 fun pair hpair => hmem pair
           (List.mem_cons_of_mem _ hpair), List.map_cons]
 
+section ExpressionReadsBelow
+variable (n : ℕ) (a b : Expression F)
+
+@[simp] lemma expressionReadsBelow_var (cell : Variable F) :
+    expressionReadsBelow n (.var cell) = decide (cell.index < n) := rfl
+@[simp] lemma expressionReadsBelow_add :
+    expressionReadsBelow n (a + b) = (expressionReadsBelow n a && expressionReadsBelow n b) := rfl
+@[simp] lemma expressionReadsBelow_mul :
+    expressionReadsBelow n (a * b) = (expressionReadsBelow n a && expressionReadsBelow n b) := rfl
+@[simp] lemma expressionReadsBelow_neg : expressionReadsBelow n (-a) = expressionReadsBelow n a := by
+  simp [Neg.neg, expressionReadsBelow]
+@[simp] lemma expressionReadsBelow_sub :
+    expressionReadsBelow n (a - b) = (expressionReadsBelow n a && expressionReadsBelow n b) := by
+  simp [HSub.hSub, Sub.sub, expressionReadsBelow]
+@[simp] lemma expressionReadsBelow_ofNat (k : ℕ) [OfNat F k] :
+    expressionReadsBelow n (OfNat.ofNat k : Expression F) = true := rfl
+@[simp] lemma expressionReadsBelow_zero : expressionReadsBelow n (0 : Expression F) = true := rfl
+@[simp] lemma expressionReadsBelow_one : expressionReadsBelow n (1 : Expression F) = true := rfl
+
+end ExpressionReadsBelow
+
+lemma expressionReadsBelow_mono {n m : ℕ} (hnm : n ≤ m) :
+    ∀ {e : Expression F}, expressionReadsBelow n e = true → expressionReadsBelow m e = true
+  | .var cell, h => by
+      simp only [expressionReadsBelow, decide_eq_true_eq] at h ⊢
+      omega
+  | .const _, _ => rfl
+  | .add _ _, h | .mul _ _, h => by
+      simp only [expressionReadsBelow, Bool.and_eq_true] at h ⊢
+      exact ⟨expressionReadsBelow_mono hnm h.1, expressionReadsBelow_mono hnm h.2⟩
+
+/-- Operations followed by more operations read only earlier cells when both parts do, the latter
+placed after the witnesses of the former. -/
+lemma flatReadsBelow_append (n : ℕ) (ops rest : List (FlatOperation F)) :
+    flatReadsBelow n (ops ++ rest) =
+      (flatReadsBelow n ops && flatReadsBelow (n + FlatOperation.localLength ops) rest) := by
+  induction ops generalizing n with
+  | nil => simp [flatReadsBelow, FlatOperation.localLength]
+  | cons op ops ih =>
+    cases op with
+    | witness m _ =>
+      simp only [List.cons_append, flatReadsBelow, FlatOperation.localLength, ih, Bool.and_assoc]
+      rw [show m + n + FlatOperation.localLength ops = n + (m + FlatOperation.localLength ops) by
+        omega]
+    | assert _ | lookup _ | interact _ =>
+      simp [flatReadsBelow, FlatOperation.localLength, ih]
+
+/-- The data reads of the witness programs of `ops`. -/
+def flatDataReads (ops : List (FlatOperation F)) : List DataRead :=
+  ops.flatMap fun
+    | .witness _ code => witnessDataReads code
+    | _ => []
+
+@[simp] lemma flatDataReads_nil : flatDataReads ([] : List (FlatOperation F)) = [] := rfl
+
+@[simp] lemma flatDataReads_append (ops rest : List (FlatOperation F)) :
+    flatDataReads (ops ++ rest) = flatDataReads ops ++ flatDataReads rest := by
+  simp [flatDataReads]
+
+@[simp] lemma flatDataReads_witness (m : ℕ) (code : Witgen.WitgenIR F m)
+    (ops : List (FlatOperation F)) :
+    flatDataReads (.witness m code :: ops) = witnessDataReads code ++ flatDataReads ops := rfl
+
+@[simp] lemma flatDataReads_assert (e : Expression F) (ops : List (FlatOperation F)) :
+    flatDataReads (.assert e :: ops) = flatDataReads ops := rfl
+
+@[simp] lemma flatDataReads_lookup (l : Lookup F) (ops : List (FlatOperation F)) :
+    flatDataReads (.lookup l :: ops) = flatDataReads ops := rfl
+
+@[simp] lemma flatDataReads_interact (i : AbstractInteraction F) (ops : List (FlatOperation F)) :
+    flatDataReads (.interact i :: ops) = flatDataReads ops := rfl
+
+/-- Components read only stable prover data when they define no cells by reads and each of their
+data reads is stable. -/
+lemma dataReadsError_eq_none {components : List (Component F)} {rowPlans : List (RowPlan F)}
+    (h : ∀ entry ∈ components.zip rowPlans, entry.2.mode.lazyColumns = [] ∧
+      ∀ read ∈ flatDataReads entry.1.rowOperations.toFlat, ∀ index,
+        dataReadError components rowPlans entry.1 index read = none) :
+    dataReadsError components rowPlans = none := by
+  unfold dataReadsError
+  rw [List.findSome?_eq_none_iff]
+  rintro ⟨component, rowPlan⟩ hentry
+  obtain ⟨hlazy, hreads⟩ := h _ hentry
+  rw [List.findSome?_eq_none_iff]
+  rintro ⟨operation, index⟩ hoperation
+  have hmem : operation ∈ component.rowOperations.toFlat := by
+    simp only [List.mem_iff_getElem?] at hoperation ⊢
+    grind
+  cases operation with
+  | witness m code =>
+    simp only [hlazy, List.isEmpty_nil, Bool.true_or, check, if_true]
+    rw [show ∀ o : Option PlanError, (none <|> o) = o from fun _ => rfl,
+      List.findSome?_eq_none_iff]
+    intro read hread
+    exact hreads read (List.mem_flatMap.mpr ⟨_, hmem, hread⟩) index
+  | assert _ | lookup _ | interact _ => rfl
+
+@[simp] lemma fexprReadsBelow_ofNat (n k : ℕ) [OfNat F k] :
+    fexprReadsBelow n (OfNat.ofNat k : Witgen.FExpr F) = true := rfl
+
+/-- Constants read no cells. -/
+lemma fexprListReadsBelow_map_const (n : ℕ) (values : List F) :
+    fexprListReadsBelow n (values.map .const) = true := by
+  induction values with
+  | nil => rfl
+  | cons _ _ ih => simp [fexprListReadsBelow, fexprReadsBelow, ih]
+
+/-- Constants read no prover data. -/
+lemma fexprListDataReads_map_const (values : List F) :
+    fexprListDataReads (values.map .const) = [] := by
+  induction values with
+  | nil => rfl
+  | cons _ _ ih => simp [fexprListDataReads, fexprDataReads, ih]
+
 /-- Proves `planError ensemble rowPlans = none` for a concrete plan by evaluating the checks,
 unfolding the given definitions of the ensemble, its components and their circuits. -/
 syntax "plan_valid" ("[" term,* "]")? : tactic
@@ -815,7 +929,11 @@ macro_rules
       Air.Flat.WitnessGeneration.Padding.targetHeight, Component.rowOffset,
       Component.rowOperations, Component.fixedWidth, Witgen.WitgenIR.ofFExpr,
       Witgen.WitgenIR.ofFExprs, Witgen.RowProgram.ofFExprs, FormalAssertion.toSubcircuit,
-      FormalCircuit.toSubcircuit, GeneralFormalCircuit.toSubcircuit, Operations.toNested_toFlat,
+      FormalCircuit.toSubcircuit, GeneralFormalCircuit.toSubcircuit,
+      GeneralFormalCircuit.WithHint.toSubcircuit, GeneralFormalCircuit.toWithHint,
+      Air.Flat.WitnessGeneration.fexprListReadsBelow_map_const,
+      Air.Flat.WitnessGeneration.fexprReadsBelow_ofNat,
+      Air.Flat.WitnessGeneration.fexprListDataReads_map_const, Operations.toNested_toFlat,
       Circuit.forEach, circuit_norm, explicit_provable_type, $lemmas,*])
 
 /-- A plan listing one row plan per component, in the ensemble's order, validates when its row
