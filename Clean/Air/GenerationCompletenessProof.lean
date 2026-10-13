@@ -1990,6 +1990,89 @@ lemma findPreallocatedRow_isSome {F : Type} [FiniteField F] {state : ComponentSt
   refine ⟨(row, position), List.mem_zipIdx_iff_getElem?.mpr hrow, ?_⟩
   simp [hinteraction, hmsg]
 
+/-- Changing handler columns keeps the message of every handled interaction. -/
+lemma msg_reachable {state : ComponentState (F p)} (hok : run.StateOk state)
+    {mode : PreallocatedMode (F p)} (hmode : state.rowPlan.mode = .preallocated mode)
+    {handler : PreallocatedHandler} {interaction : AbstractInteraction (F p)}
+    (hinteraction : state.component.rowOperations.interactions[handler.interaction]? =
+      some interaction) {base input : Array (F p)} (hreachable : Reachable mode.handlers base input)
+    (hbase : run.Admissible state.component base) :
+    (interaction.eval (run.rowEnv state.component input run.stableData).toEnvironment).msg =
+      (interaction.eval (run.rowEnv state.component base run.stableData).toEnvironment).msg := by
+  induction hreachable with
+  | base => rfl
+  | set hprevious handler' hmem value ih =>
+      rename_i previous
+      have hadmissible := run.admissible_of_reachable hok hmode hprevious hbase
+      have hadmissible' := run.admissible_of_reachable hok hmode (hprevious.set handler' hmem value)
+        hbase
+      obtain ⟨interaction', hinteraction', -, -, hfacts⟩ :=
+        (run.complete.preallocated state.component hok.mem state.rowPlan mode
+          (run.planned _ hok.entry) hmode run.publicInput run.proverInput run.assumptions
+          run.stableData run.stableData_stable).2.2.2.2 handler' hmem
+      obtain ⟨-, -, hset⟩ := hfacts previous _ (run.honestEnv_row hok.mem hadmissible.size _) rfl rfl
+        (hadmissible.assumptions _ run.stableData_stable)
+      obtain ⟨hmsg, hother⟩ := hset value _ (run.honestEnv_row hok.mem hadmissible'.size _) rfl rfl
+      rw [← ih]
+      by_cases hindex : handler.interaction = handler'.interaction
+      · rw [hindex] at hinteraction
+        rw [hinteraction] at hinteraction'
+        cases hinteraction'
+        exact hmsg
+      · have := hother handler.interaction hindex
+        simp only [interactionsIn, List.getElem?_map, hinteraction, Option.map_some,
+          Option.some.injEq] at this
+        exact congrArg (·.msg) this
+
+/-- What a preallocated row answers on the channel of one of its handlers. -/
+lemma answeredBy_preallocated {state : ComponentState (F p)} (hok : run.StateOk state)
+    {mode : PreallocatedMode (F p)} (hmode : state.rowPlan.mode = .preallocated mode)
+    {input : Array (F p)} (hadmissible : run.Admissible state.component input)
+    {handler : PreallocatedHandler} (hhandler : handler ∈ mode.handlers)
+    {interaction : AbstractInteraction (F p)}
+    (hinteraction : state.component.rowOperations.interactions[handler.interaction]? =
+      some interaction) :
+    run.answeredBy state (run.row state.component input none) interaction.channel.name =
+      Multiset.replicate (input[handler.column]?.getD 0).val
+        (interaction.eval (run.rowEnv state.component input run.stableData).toEnvironment).msg := by
+  have hnodup := run.handled_nodup hok.entry
+  simp only [hmode, Mode.handled] at hnodup
+  have hpush : ∀ handler ∈ mode.handlers, ∀ interaction,
+      state.component.rowOperations.interactions[handler.interaction]? = some interaction →
+      interaction.assumeGuarantees = false := by
+    intro handler hmem interaction hinteraction
+    obtain ⟨interaction', hinteraction', -, -, hfacts⟩ :=
+      (run.complete.preallocated state.component hok.mem state.rowPlan mode
+        (run.planned _ hok.entry) hmode run.publicInput run.proverInput run.assumptions
+        run.stableData run.stableData_stable).2.2.2.2 handler hmem
+    rw [hinteraction] at hinteraction'
+    cases hinteraction'
+    exact (hfacts input _ (run.honestEnv_row hok.mem hadmissible.size _) rfl rfl
+      (hadmissible.assumptions _ run.stableData_stable)).1
+  have hhandled : ∀ handler ∈ mode.handlers, ∀ interaction,
+      state.component.rowOperations.interactions[handler.interaction]? = some interaction →
+      (state.component.rowOperations.interactions[handler.interaction]?.map fun interaction =>
+        (interaction.channel.name, handlerDirection interaction)) =
+        some (interaction.channel.name, Direction.pull) := by
+    intro handler hmem interaction hinteraction
+    rw [hinteraction]
+    simp [handlerDirection, hpush handler hmem interaction hinteraction]
+  simp only [answeredBy, hmode]
+  rw [sum_map_eq_of_unique hnodup hhandler (hhandled handler hhandler interaction hinteraction)]
+  · rw [hok.interactions, hinteraction]
+    simp only [if_true, row]
+    congr 2
+    apply interaction_eval_congr
+    rfl
+  · intro handler' hmem' hne
+    rw [hok.interactions]
+    split
+    · rename_i interaction' hinteraction'
+      rw [if_neg]
+      intro hname
+      exact hne (by rw [hhandled handler' hmem' interaction' hinteraction', hname])
+    · rfl
+
 namespace Inv
 
 variable {run} {k : ℕ} {padded : Bool} {balancing : Balancing (F p)}
