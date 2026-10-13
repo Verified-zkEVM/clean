@@ -243,8 +243,7 @@ theorem weakSoundness {component : Component F} {env : Environment F} :
   set inputVar := varFromOffset component.Input 0
   set ops := (component.circuit.main inputVar).operations (size component.Input)
   have h_assumptions' : component.circuit.Assumptions (eval env inputVar) env.data := by
-    simpa only [CircuitAssumptions, rowInput, inputVar, eval_varFromOffset_valueFromOffset]
-      using h_assumptions
+    simpa only [CircuitAssumptions, rowInput, inputVar, eval_varFromOffset_valueFromOffset] using h_assumptions
   convert component.circuit.original_full_soundness _ _ _ h_assumptions' h_constraints h_guarantees
   simp only [rowInput, inputVar, eval_varFromOffset_valueFromOffset]
   rfl
@@ -396,8 +395,7 @@ def ChannelGuarantees (table : Table F) (channel : RawChannel F) : Prop :=
   ∀ row ∈ table.table,
     table.component.operations.ChannelGuarantees channel (table.environment row)
 
-def InChannelsOrGuarantees (table : Table F)
-    (channels : List (RawChannel F)) : Prop :=
+def InChannelsOrGuarantees (table : Table F) (channels : List (RawChannel F)) : Prop :=
   ∀ row ∈ table.table,
     table.component.operations.InChannelsOrGuaranteesFull channels (table.environment row)
 
@@ -409,8 +407,7 @@ def ChannelRequirements (table : Table F) (channel : RawChannel F) : Prop :=
   ∀ row ∈ table.table,
     table.component.operations.ChannelRequirements channel (table.environment row)
 
-def InChannelsOrRequirements (table : Table F)
-    (channels : List (RawChannel F)) : Prop :=
+def InChannelsOrRequirements (table : Table F) (channels : List (RawChannel F)) : Prop :=
   ∀ row ∈ table.table,
     table.component.operations.InChannelsOrRequirementsFull channels (table.environment row)
 
@@ -422,20 +419,18 @@ def interactions (table : Table F) : List (Interaction F) :=
   table.table.flatMap fun row =>
     table.component.operations.interactionValues (table.environment row)
 
-noncomputable def interactionsWith (table : Table F)
-    (channel : RawChannel F) : List (Interaction F) :=
+noncomputable def interactionsWith (table : Table F) (channel : RawChannel F) : List (Interaction F) :=
   table.table.flatMap fun row =>
     table.component.operations.interactionValuesWith channel (table.environment row)
 
 open Classical in lemma interactionsWith_eq_filter :
-    table.interactionsWith channel = (table.interactions).filter (·.channel = channel) := by
+    table.interactionsWith channel = table.interactions.filter (·.channel = channel) := by
   simp only [interactionsWith, interactions, List.filter_flatMap]
   congr
   funext row
   rw [Operations.interactionValuesWith_eq_filter]
 
-noncomputable def interactionssWith (table : Table F)
-    (channel : RawChannel F) : List (List (Interaction F)) :=
+noncomputable def interactionssWith (table : Table F) (channel : RawChannel F) : List (List (Interaction F)) :=
   table.table.map fun row =>
     table.component.operations.interactionValuesWith channel (table.environment row)
 
@@ -449,8 +444,7 @@ lemma channel_eq_of_mem_interactionsWith {i : Interaction F} :
   rw [←heq]
   apply Operations.channel_eq_of_mem_interactionsWith hi_abs
 
-lemma forall_interactions_iff (table : Table F)
-    (motive : Interaction F → Prop) :
+lemma forall_interactions_iff (table : Table F) (motive : Interaction F → Prop) :
     (∀ i ∈ table.interactions, motive i) ↔
     ∀ row ∈ table.table, ∀ i ∈ table.component.operations.interactions,
       motive (i.eval (table.environment row)) := by
@@ -499,8 +493,7 @@ lemma guarantees_iff_forall (table : Table F) :
   simp only [Table.Guarantees, circuit_norm, forall_interactions_iff]
   rfl
 
-lemma channelGuarantees_iff_forall (table : Table F)
-    (channel : RawChannel F) :
+lemma channelGuarantees_iff_forall (table : Table F) (channel : RawChannel F) :
     table.ChannelGuarantees channel ↔
     ∀ i ∈ table.interactionsWith channel, i.Guarantees table.data := by
   simp only [Table.ChannelGuarantees, circuit_norm, forall_interactionsWith_iff]
@@ -514,8 +507,7 @@ lemma guarantees_iff_channelGuarantees (table : Table F) :
   simp only [GeneralFormalCircuit.guarantees_iff]
   constructor <;> simp_all
 
-lemma channelGuarantees_of_requirements (table : Table F)
-    {channel : RawChannel F} :
+lemma channelGuarantees_of_requirements (table : Table F) {channel : RawChannel F} :
     table.Guarantees → table.ChannelGuarantees channel := by
   simp_all [Table.Guarantees, Table.ChannelGuarantees, circuit_norm]
 
@@ -525,8 +517,7 @@ lemma requirements_iff_forall (table : Table F) :
   simp only [Table.Requirements, circuit_norm, forall_interactions_iff]
   rfl
 
-lemma channelRequirements_iff_forall (table : Table F)
-    (channel : RawChannel F) :
+lemma channelRequirements_iff_forall (table : Table F) (channel : RawChannel F) :
     table.ChannelRequirements channel ↔
     ∀ i ∈ table.interactionsWith channel, i.Requirements table.data := by
   simp only [Table.ChannelRequirements, circuit_norm, forall_interactionsWith_iff]
@@ -550,8 +541,7 @@ lemma requirements_iff_channelRequirements_of_constraints (table : Table F) :
     intro channel h_channel
     exact h_reqs channel h_channel row h_row
 
-lemma channelRequirements_of_requirements (table : Table F)
-    {channel : RawChannel F} :
+lemma channelRequirements_of_requirements (table : Table F) {channel : RawChannel F} :
     table.Requirements → table.ChannelRequirements channel := by
   simp_all [Table.Requirements, Table.ChannelRequirements, circuit_norm]
 
@@ -564,8 +554,7 @@ lemma inChannelsOrRequirements_of_constraints (table : Table F) :
   exact table.component.inChannelsOrRequirements_of_constraints
     (table.environment row) (h_constraints row h_row)
 
-lemma requirements_of_not_mem_of_constraints (table : Table F)
-    {channel : RawChannel F} :
+lemma requirements_of_not_mem_of_constraints (table : Table F) {channel : RawChannel F} :
     table.Constraints →
     channel ∉ table.channelsWithRequirements → table.ChannelRequirements channel := by
   intro h_constraints h_not_mem
