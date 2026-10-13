@@ -2441,6 +2441,59 @@ lemma step_append (hinv : run.Inv k padded balancing) {index : ℕ} {state : Com
     have : 0 < n * state.interactions.length := Nat.mul_pos hn this
     omega
 
+lemma createDemandRow_eq (hinv : run.Inv k padded balancing) {state : ComponentState (F p)}
+    (hstate : state ∈ balancing.states) {mode : DemandMode (F p)}
+    (hmode : state.rowPlan.mode = .demand mode) (demand : Demand (F p)) (count : ℕ) :
+    createDemandRow balancing.states state mode demand count run.data0 run.hint =
+      (run.answerRow state.component mode demand.message count, []) := by
+  have hok := run.stateOk_of_shape hinv.shape hstate
+  unfold createDemandRow
+  rw [run.completeRow_eq hinv.viewOk hok (run.demand_input_size hok.entry hmode _ _)]
+  rfl
+
+/-- A demand-driven component answers a deficit with one row per occurrence, or with one row for
+a message it has not answered yet. -/
+lemma step_new (hinv : run.Inv k padded balancing) {demand : Demand (F p)} {index : ℕ}
+    {state : ComponentState (F p)} (hstate : balancing.states[index]? = some state)
+    (hhandles : state.handles demand = true) {mode : DemandMode (F p)}
+    (hmode : state.rowPlan.mode = .demand mode)
+    (hnew : mode.aggregation = .perOccurrence ∨ (mode.aggregation = .byMessage ∧
+      state.rows.zipIdx.findSome? (fun (row, index) => row.origin.bind fun origin =>
+        if sameOrigin origin mode demand then some (row, origin, index) else none) = none))
+    (hchannel : demand.channel ≠ run.complete.vm.channel.name) {δ : ℕ} (hpos : 0 < δ)
+    (hlt : 2 * δ < p) (hmult : demand.multiplicity = -(δ : F p))
+    (hcount : (run.answeredMsgs balancing.states demand.channel).count demand.message + δ =
+      (run.pulledMsgs balancing.states demand.channel).count demand.message) :
+    ∃ states change, handle balancing.states demand index run.data0 run.hint = .ok (states, change) ∧
+      run.Inv k padded (balancing.apply states change) ∧
+      Prod.Lex (· < ·) (· < ·) (balancing.apply states change).measure balancing.measure := by
+  have hmemState := List.mem_of_getElem? hstate
+  obtain ⟨hvm, hmodeChannel, hpadded, hpullable, hsize⟩ :=
+    hinv.demand_setup hmemState hhandles hmode hchannel hpos hlt hmult hcount
+  have hdemandCount := (demand_pull hmult hpos hlt).2
+  rw [hmodeChannel] at hcount hchannel
+  rcases hnew with hperOccurrence | ⟨hbyMessage, hnone⟩
+  · have hmutation : handleDemand balancing.states state mode demand run.data0 run.hint =
+        Mutation.mk { state with rows := (state.rows ++
+          List.replicate δ (run.answerRow state.component mode demand.message 1)) } []
+          (List.replicate δ (run.answerRow state.component mode demand.message 1)) [] := by
+      simp [handleDemand, hperOccurrence, hinv.createDemandRow_eq hmemState hmode, hdemandCount]
+    have hhandle := run.handle_demand hstate hmode demand (by rw [hmutation])
+    rw [hmutation] at hhandle
+    refine ⟨_, _, hhandle, hinv.step_append hstate hmode hvm hpadded hpos one_pos hsize hpullable
+      (fun _ => rfl) hchannel (by omega) (handle_spec _ _ _ _ _ hhandle)⟩
+  · have hmutation : handleDemand balancing.states state mode demand run.data0 run.hint =
+        Mutation.mk { state with rows := (state.rows ++
+          List.replicate 1 (run.answerRow state.component mode demand.message δ)) } []
+          (List.replicate 1 (run.answerRow state.component mode demand.message δ)) [] := by
+      simp [handleDemand, hbyMessage, hnone, hinv.createDemandRow_eq hmemState hmode,
+        hdemandCount]
+    have hhandle := run.handle_demand hstate hmode demand (by rw [hmutation])
+    rw [hmutation] at hhandle
+    refine ⟨_, _, hhandle, hinv.step_append hstate hmode hvm hpadded one_pos hpos hsize hpullable
+      (fun h => absurd (hbyMessage ▸ h) (by simp)) hchannel (by omega)
+      (handle_spec _ _ _ _ _ hhandle)⟩
+
 end Inv
 
 end Run
