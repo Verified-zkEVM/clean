@@ -389,8 +389,8 @@ lemma assembleTables_interactions {components : List (Component F)}
     (h : assembleTables components states = .ok assembled)
     (hinteractions : states.map (·.interactions) =
       components.map (·.rowOperations.interactions))
-    (data witnessData : ProverData F) :
-    assembled.tables.flatMap (·.interactions witnessData) = statesInteractions states data := by
+    (data : ProverData F) :
+    assembled.tables.flatMap (·.interactions) = statesInteractions states data := by
   fun_induction assembleTables components states with
   | case1 => cases h; rfl
   | case4 component components state states =>
@@ -404,7 +404,7 @@ lemma assembleTables_interactions {components : List (Component F)}
       rw [List.flatMap_cons, statesInteractions, List.flatMap_cons]
       congr 1
       · change List.flatMap (fun row => component.operations.interactionValues
-            (Environment.fromArray row witnessData)) (state.rows.map (·.values)) = _
+            (Environment.fromArray row fun _ _ => #[])) (state.rows.map (·.values)) = _
         simp only [ComponentState.interactionsOf, rowInteractions, Operations.interactionValues,
           Component.interactions_eq, hinteractions.1, List.flatMap_map]
         refine List.flatMap_congr fun row _ => List.map_congr_left fun interaction _ =>
@@ -413,6 +413,13 @@ lemma assembleTables_interactions {components : List (Component F)}
       · exact ih hrest hinteractions.2
   | _ => cases h
 
+lemma withDerivedData_interactions (tables : List (Table F)) :
+    (withDerivedData tables).flatMap (·.interactions) = tables.flatMap (·.interactions) := by
+  simp only [withDerivedData, List.flatMap_map]
+  refine List.flatMap_congr fun table _ => List.flatMap_congr fun row _ =>
+    List.map_congr_left fun interaction _ => interaction_eval_congr ?_ interaction
+  rfl
+
 /-! ### Channel balance -/
 
 open Classical in
@@ -420,8 +427,8 @@ lemma interactionsWith_eq_filter {ens : Ensemble F PublicIO} (witness : Ensemble
     (channel : RawChannel F) :
     witness.interactionsWith channel = witness.interactions.filter (·.channel = channel) := by
   simp only [EnsembleWitness.interactionsWith, EnsembleWitness.verifierInteractionsWith,
-    Operations.interactionValuesWith_eq_filter, TableContext.interactionsWith,
-    EnsembleWitness.tableContext, Table.interactionsWith_eq_filter, EnsembleWitness.interactions,
+    Operations.interactionValuesWith_eq_filter, Tables.interactionsWith,
+    EnsembleWitness.toTables, Table.interactionsWith_eq_filter, EnsembleWitness.interactions,
     List.filter_append, List.filter_flatMap]
 
 open Classical in
@@ -510,7 +517,8 @@ theorem generateValid_balanced {ens : Ensemble F PublicIO} {plan : ValidPlan ens
   have hnet := htracks channel message
   rw [hempty, netOf_nil] at hnet
   simp only [EnsembleWitness.interactions]
-  rw [assembleTables_interactions hassembled hpaddedInteractions data, hnet]
+  rw [withDerivedData_interactions, assembleTables_interactions hassembled hpaddedInteractions data,
+    hnet]
   congr 2
   refine List.map_congr_left fun interaction _ => interaction_eval_congr ?_ interaction
   rfl

@@ -4114,8 +4114,11 @@ lemma stable_final {k : ℕ} {balancing : Balancing (F p)} (hinv : run.Inv k tru
 /-- Every row of the final tables satisfies its component's constraints. -/
 lemma constraints_final {k : ℕ} {balancing : Balancing (F p)} (hinv : run.Inv k true balancing)
     {tables : List (Table (F p))} (htables : TablesOf balancing tables) :
-    ∀ table ∈ tables, table.Constraints (deriveProverData tables) := by
-  intro table htable values hvalues
+    ∀ table ∈ withDerivedData tables, table.Constraints := by
+  simp only [withDerivedData, List.mem_map]
+  rintro _ ⟨table, htable, rfl⟩ values (hvalues : values ∈ table.table)
+  change table.component.operations.ConstraintsHold
+    (Environment.fromArray values (deriveProverData tables))
   obtain ⟨state, hstate, hcomponent, htableRows⟩ := mem_tablesOf htables htable
   rw [htableRows] at hvalues
   obtain ⟨row, hrow, rfl⟩ := List.mem_map.mp hvalues
@@ -4223,10 +4226,11 @@ theorem generate_complete {ens : FormalEnsemble (F p) PublicIO} {plan : Generati
       generateValid validPlan publicInput (ens.hint proverInput) := by
     simp only [generate, hvalidated]
   let witness : EnsembleWitness ens.ensemble := {
-    tables := assembled.tables
+    tables := withDerivedData assembled.tables
     publicInput := publicInput
-    same_length := assembled.same_length
-    same_circuits := assembled.same_circuits }
+    same_length := by simp [withDerivedData, assembled.same_length]
+    same_circuits := by simp [withDerivedData, assembled.same_circuits]
+    same_data := withDerivedData_data assembled.tables }
   have hinteractions : padded.states.map (·.interactions) =
       ens.ensemble.tables.map (·.rowOperations.interactions) := by
     rw [← run.components_eq hinv₂.shape, List.map_map]
@@ -4235,10 +4239,10 @@ theorem generate_complete {ens : FormalEnsemble (F p) PublicIO} {plan : Generati
     exact (run.stateOk_of_shape hinv₂.shape hstate).interactions
   have hlength : witness.interactions.length < FiniteField.char (F p) := by
     have hbound := hinv₂.length_lt
-    have hrows := assembleTables_interactions hassemble hinteractions run.data0 witness.data
+    have hrows := assembleTables_interactions hassemble hinteractions run.data0
     simp only [EnsembleWitness.interactions, List.length_append, Operations.interactionValues,
       List.length_map, witness] at hrows ⊢
-    rw [hrows]
+    rw [withDerivedData_interactions, hrows]
     simp only [List.length_append, Run.verifier, Operations.interactionValues,
       List.length_map] at hbound
     show _ < p

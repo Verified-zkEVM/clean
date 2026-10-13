@@ -250,10 +250,11 @@ theorem weakSoundness {component : Component F} {env : Environment F} :
   rfl
 end Component
 
-/-- A concrete trace for one flat AIR component. Its data environment belongs to the ensemble. -/
+/-- Concrete rows and prover data for one flat AIR component. -/
 structure Table (F : Type) [FiniteField F] where
   component : Component F
   table : List (Array F)
+  data : ProverData F
   uniform_width : ∀ row ∈ table, row.size = component.width
   /-- Row indices are `u64` values. -/
   length_le : table.length ≤ UInt64.size
@@ -287,21 +288,45 @@ lemma deriveProverData_eq_of_mem (tables : List (Table F))
           exact List.mem_map.mpr ⟨table, hmem, rfl⟩
         simp [deriveProverData, hne, ih htail hmem]
 
+/-- `deriveProverData` only reads the components and rows of the tables. -/
+lemma deriveProverData_map_data (tables : List (Table F)) (data : ProverData F) :
+    deriveProverData (tables.map fun table => { table with data }) = deriveProverData tables := by
+  induction tables with
+  | nil => rfl
+  | cons table tables ih => rw [List.map_cons, deriveProverData, deriveProverData, ih]
+
+/-- Gives every table the prover data derived from all of them. -/
+def withDerivedData (tables : List (Table F)) : List (Table F) :=
+  tables.map fun table => { table with data := deriveProverData tables }
+
+@[circuit_norm] lemma withDerivedData_map_component (tables : List (Table F)) :
+    (withDerivedData tables).map (·.component) = tables.map (·.component) := by
+  simp [withDerivedData]
+
+lemma withDerivedData_data (tables : List (Table F)) :
+    ∀ table ∈ withDerivedData tables, table.data = deriveProverData (withDerivedData tables) := by
+  simp [withDerivedData, deriveProverData_map_data]
+
 namespace Table
-variable {table : Table F} {data : ProverData F} {channel : RawChannel F}
+variable {table : Table F} {channel : RawChannel F}
 
 def proverRows (table : Table F) (n : ℕ) : Array (Vector F n) :=
   table.component.proverRows table.table n
 
-def DataConsistency (table : Table F) (data : ProverData F) : Prop :=
-  table.component.DataConsistency table.table data
+/-- The table's prover data contains its own component's circuit-input rows. -/
+def DataConsistency (table : Table F) : Prop :=
+  table.component.DataConsistency table.table table.data
 
 abbrev length (t : Table F) : ℕ := t.table.length
+
+def environment (table : Table F) (row : Array F) :=
+  Environment.fromArray row table.data
 
 theorem ext_iff {table1 table2 : Table F} :
     table1 = table2 ↔
     table1.component = table2.component ∧
-    table1.table = table2.table := by
+    table1.table = table2.table ∧
+    table1.data = table2.data := by
   cases table1
   cases table2
   simp only [mk.injEq]
@@ -314,18 +339,19 @@ def channelsWithGuarantees (table : Table F) : List (RawChannel F) :=
 def channelsWithRequirements (table : Table F) : List (RawChannel F) :=
   table.component.circuit.channelsWithRequirements
 
-def Constraints (table : Table F) (data : ProverData F) : Prop :=
+def Constraints (table : Table F) : Prop :=
   ∀ row ∈ table.table,
-    table.component.operations.ConstraintsHold (Environment.fromArray row data)
+    table.component.operations.ConstraintsHold (table.environment row)
 
-def Assumptions (table : Table F) (data : ProverData F) : Prop :=
+def Assumptions (table : Table F) : Prop :=
   ∀ row ∈ table.table,
-    table.component.RowAssumptions (Environment.fromArray row data)
+    table.component.RowAssumptions (table.environment row)
 
-lemma circuitAssumptions (table : Table F) (consistent : table.DataConsistency data)
-    (assumptions : table.Assumptions data)
+lemma circuitAssumptions (table : Table F) (consistent : table.DataConsistency)
+    (assumptions : table.Assumptions)
     (row : Array F) (hrow : row ∈ table.table) :
-    table.component.CircuitAssumptions (Environment.fromArray row data) := by
+    table.component.CircuitAssumptions (table.environment row) := by
+  unfold environment
   obtain ⟨i, hi⟩ := List.get_of_mem hrow
   have hi' : table.table[i.val] = row := hi
   have hindex : (UInt64.ofNat i.val).toNat = i.val :=
@@ -362,59 +388,59 @@ lemma circuitAssumptions (table : Table F) (consistent : table.DataConsistency d
     simp [Component.proverRows, i.isLt, hi']
   · exact assumptions row hrow
 
-def Guarantees (table : Table F) (data : ProverData F) : Prop :=
+def Guarantees (table : Table F) : Prop :=
   ∀ row ∈ table.table,
-    table.component.operations.FullGuarantees (Environment.fromArray row data)
+    table.component.operations.FullGuarantees (table.environment row)
 
-def ChannelGuarantees (table : Table F) (data : ProverData F) (channel : RawChannel F) : Prop :=
+def ChannelGuarantees (table : Table F) (channel : RawChannel F) : Prop :=
   ∀ row ∈ table.table,
-    table.component.operations.ChannelGuarantees channel (Environment.fromArray row data)
+    table.component.operations.ChannelGuarantees channel (table.environment row)
 
-def InChannelsOrGuarantees (table : Table F) (data : ProverData F)
+def InChannelsOrGuarantees (table : Table F)
     (channels : List (RawChannel F)) : Prop :=
   ∀ row ∈ table.table,
-    table.component.operations.InChannelsOrGuaranteesFull channels (Environment.fromArray row data)
+    table.component.operations.InChannelsOrGuaranteesFull channels (table.environment row)
 
-def Requirements (table : Table F) (data : ProverData F) : Prop :=
+def Requirements (table : Table F) : Prop :=
   ∀ row ∈ table.table,
-    table.component.operations.FullRequirements (Environment.fromArray row data)
+    table.component.operations.FullRequirements (table.environment row)
 
-def ChannelRequirements (table : Table F) (data : ProverData F) (channel : RawChannel F) : Prop :=
+def ChannelRequirements (table : Table F) (channel : RawChannel F) : Prop :=
   ∀ row ∈ table.table,
-    table.component.operations.ChannelRequirements channel (Environment.fromArray row data)
+    table.component.operations.ChannelRequirements channel (table.environment row)
 
-def InChannelsOrRequirements (table : Table F) (data : ProverData F)
+def InChannelsOrRequirements (table : Table F)
     (channels : List (RawChannel F)) : Prop :=
   ∀ row ∈ table.table,
-    table.component.operations.InChannelsOrRequirementsFull channels (Environment.fromArray row data)
+    table.component.operations.InChannelsOrRequirementsFull channels (table.environment row)
 
-def Spec (table : Table F) (data : ProverData F) : Prop :=
+def Spec (table : Table F) : Prop :=
   ∀ row ∈ table.table,
-    table.component.Spec (Environment.fromArray row data)
+    table.component.Spec (table.environment row)
 
-def interactions (table : Table F) (data : ProverData F) : List (Interaction F) :=
+def interactions (table : Table F) : List (Interaction F) :=
   table.table.flatMap fun row =>
-    table.component.operations.interactionValues (Environment.fromArray row data)
+    table.component.operations.interactionValues (table.environment row)
 
-noncomputable def interactionsWith (table : Table F) (data : ProverData F)
+noncomputable def interactionsWith (table : Table F)
     (channel : RawChannel F) : List (Interaction F) :=
   table.table.flatMap fun row =>
-    table.component.operations.interactionValuesWith channel (Environment.fromArray row data)
+    table.component.operations.interactionValuesWith channel (table.environment row)
 
 open Classical in lemma interactionsWith_eq_filter :
-    table.interactionsWith data channel = (table.interactions data).filter (·.channel = channel) := by
+    table.interactionsWith channel = (table.interactions).filter (·.channel = channel) := by
   simp only [interactionsWith, interactions, List.filter_flatMap]
   congr
   funext row
   rw [Operations.interactionValuesWith_eq_filter]
 
-noncomputable def interactionssWith (table : Table F) (data : ProverData F)
+noncomputable def interactionssWith (table : Table F)
     (channel : RawChannel F) : List (List (Interaction F)) :=
   table.table.map fun row =>
-    table.component.operations.interactionValuesWith channel (Environment.fromArray row data)
+    table.component.operations.interactionValuesWith channel (table.environment row)
 
 lemma channel_eq_of_mem_interactionsWith {i : Interaction F} :
-    i ∈ table.interactionsWith data channel → i.channel = channel := by
+    i ∈ table.interactionsWith channel → i.channel = channel := by
   intro h_mem
   simp only [interactionsWith, List.mem_flatMap] at h_mem
   rcases h_mem with ⟨row, h_row, hi⟩
@@ -423,38 +449,38 @@ lemma channel_eq_of_mem_interactionsWith {i : Interaction F} :
   rw [←heq]
   apply Operations.channel_eq_of_mem_interactionsWith hi_abs
 
-lemma forall_interactions_iff (table : Table F) (data : ProverData F)
+lemma forall_interactions_iff (table : Table F)
     (motive : Interaction F → Prop) :
-    (∀ i ∈ table.interactions data, motive i) ↔
+    (∀ i ∈ table.interactions, motive i) ↔
     ∀ row ∈ table.table, ∀ i ∈ table.component.operations.interactions,
-      motive (i.eval (Environment.fromArray row data)) := by
+      motive (i.eval (table.environment row)) := by
   simp only [interactions, Operations.interactionValues, List.mem_flatMap, List.mem_map,
     forall_exists_index, and_imp]
   constructor
   · intro h row h_row i hi
-    set env := Environment.fromArray row data
+    set env := table.environment row
     exact h (i.eval env) row h_row i hi rfl
   · intro h i row h_row i' hi' h_eq
     rw [← h_eq]
     exact h row h_row i' hi'
 
-lemma forall_interactionsWith_iff (table : Table F) (data : ProverData F) (channel : RawChannel F)
+lemma forall_interactionsWith_iff (table : Table F) (channel : RawChannel F)
   (motive : Interaction F → Prop) :
-    (∀ i ∈ table.interactionsWith data channel, motive i) ↔
+    (∀ i ∈ table.interactionsWith channel, motive i) ↔
     ∀ row ∈ table.table, ∀ i ∈ table.component.operations.interactions,
-      (i.channel = channel → motive (i.eval (Environment.fromArray row data))) := by
+      (i.channel = channel → motive (i.eval (table.environment row))) := by
   simp only [interactionsWith, List.mem_flatMap, List.mem_map,
     forall_exists_index, and_imp, circuit_norm]
   constructor
   · intro h row h_row i hi h_channel
-    set env := Environment.fromArray row data
+    set env := table.environment row
     exact h (i.eval env) row h_row i hi h_channel rfl
   · intro h i row h_row i' hi' h_channel h_eq
     rw [← h_eq]
     exact h row h_row i' hi' h_channel
 
 lemma interactionsWith_nil_of_channel_not_mem :
-    channel ∉ table.component.circuit.channels → table.interactionsWith data channel = [] := by
+    channel ∉ table.component.circuit.channels → table.interactionsWith channel = [] := by
   contrapose!
   simp only [AbstractInteraction.eval_channel, interactionsWith_eq_filter, ne_eq, List.filter_eq_nil_iff,
     decide_eq_true_eq, forall_interactions_iff, not_forall, not_not, forall_exists_index]
@@ -467,50 +493,49 @@ lemma interactionsWith_nil_of_channel_not_mem :
   simp only [Operations.channels, List.mem_map]
   exists i
 
-lemma guarantees_iff_forall (table : Table F) (data : ProverData F) :
-    table.Guarantees data ↔
-    ∀ i ∈ table.interactions data, i.Guarantees data := by
+lemma guarantees_iff_forall (table : Table F) :
+    table.Guarantees ↔
+    ∀ i ∈ table.interactions, i.Guarantees table.data := by
   simp only [Table.Guarantees, circuit_norm, forall_interactions_iff]
   rfl
 
-lemma channelGuarantees_iff_forall (table : Table F) (data : ProverData F)
+lemma channelGuarantees_iff_forall (table : Table F)
     (channel : RawChannel F) :
-    table.ChannelGuarantees data channel ↔
-    ∀ i ∈ table.interactionsWith data channel, i.Guarantees data := by
+    table.ChannelGuarantees channel ↔
+    ∀ i ∈ table.interactionsWith channel, i.Guarantees table.data := by
   simp only [Table.ChannelGuarantees, circuit_norm, forall_interactionsWith_iff]
   rfl
 
-lemma guarantees_iff_channelGuarantees (table : Table F) (data : ProverData F) :
-    table.Guarantees data ↔
-    ∀ channel ∈ table.channelsWithGuarantees, table.ChannelGuarantees data channel := by
+lemma guarantees_iff_channelGuarantees (table : Table F) :
+    table.Guarantees ↔
+    ∀ channel ∈ table.channelsWithGuarantees, table.ChannelGuarantees channel := by
   simp only [Table.Guarantees, Table.ChannelGuarantees, channelsWithGuarantees]
   simp only [Component.guarantees_iff, Component.channelGuarantees_iff, Component.rowOperations]
   simp only [GeneralFormalCircuit.guarantees_iff]
   constructor <;> simp_all
 
-lemma channelGuarantees_of_requirements (table : Table F) (data : ProverData F)
+lemma channelGuarantees_of_requirements (table : Table F)
     {channel : RawChannel F} :
-    table.Guarantees data → table.ChannelGuarantees data channel := by
+    table.Guarantees → table.ChannelGuarantees channel := by
   simp_all [Table.Guarantees, Table.ChannelGuarantees, circuit_norm]
 
-lemma requirements_iff_forall (table : Table F) (data : ProverData F) :
-    table.Requirements data ↔
-    ∀ i ∈ table.interactions data, i.Requirements data := by
+lemma requirements_iff_forall (table : Table F) :
+    table.Requirements ↔
+    ∀ i ∈ table.interactions, i.Requirements table.data := by
   simp only [Table.Requirements, circuit_norm, forall_interactions_iff]
   rfl
 
-lemma channelRequirements_iff_forall (table : Table F) (data : ProverData F)
+lemma channelRequirements_iff_forall (table : Table F)
     (channel : RawChannel F) :
-    table.ChannelRequirements data channel ↔
-    ∀ i ∈ table.interactionsWith data channel, i.Requirements data := by
+    table.ChannelRequirements channel ↔
+    ∀ i ∈ table.interactionsWith channel, i.Requirements table.data := by
   simp only [Table.ChannelRequirements, circuit_norm, forall_interactionsWith_iff]
   rfl
 
-lemma requirements_iff_channelRequirements_of_constraints (table : Table F)
-    (data : ProverData F) :
-    table.Constraints data →
-    (table.Requirements data ↔
-    ∀ channel ∈ table.channelsWithRequirements, table.ChannelRequirements data channel) := by
+lemma requirements_iff_channelRequirements_of_constraints (table : Table F) :
+    table.Constraints →
+    (table.Requirements ↔
+    ∀ channel ∈ table.channelsWithRequirements, table.ChannelRequirements channel) := by
   intro h_constraints
   simp only [Table.Requirements, Table.ChannelRequirements, channelsWithRequirements]
   simp only [Component.requirements_iff, Component.channelRequirements_iff, Component.rowOperations]
@@ -525,26 +550,26 @@ lemma requirements_iff_channelRequirements_of_constraints (table : Table F)
     intro channel h_channel
     exact h_reqs channel h_channel row h_row
 
-lemma channelRequirements_of_requirements (table : Table F) (data : ProverData F)
+lemma channelRequirements_of_requirements (table : Table F)
     {channel : RawChannel F} :
-    table.Requirements data → table.ChannelRequirements data channel := by
+    table.Requirements → table.ChannelRequirements channel := by
   simp_all [Table.Requirements, Table.ChannelRequirements, circuit_norm]
 
-lemma inChannelsOrRequirements_of_constraints (table : Table F) (data : ProverData F) :
-    table.Constraints data →
-    table.InChannelsOrRequirements data table.channelsWithRequirements := by
+lemma inChannelsOrRequirements_of_constraints (table : Table F) :
+    table.Constraints →
+    table.InChannelsOrRequirements table.channelsWithRequirements := by
   intro h_constraints
   simp only [InChannelsOrRequirements, channelsWithRequirements]
   intro row h_row
   exact table.component.inChannelsOrRequirements_of_constraints
-    (Environment.fromArray row data) (h_constraints row h_row)
+    (table.environment row) (h_constraints row h_row)
 
-lemma requirements_of_not_mem_of_constraints (table : Table F) (data : ProverData F)
+lemma requirements_of_not_mem_of_constraints (table : Table F)
     {channel : RawChannel F} :
-    table.Constraints data →
-    channel ∉ table.channelsWithRequirements → table.ChannelRequirements data channel := by
+    table.Constraints →
+    channel ∉ table.channelsWithRequirements → table.ChannelRequirements channel := by
   intro h_constraints h_not_mem
-  have h_in_or_req := table.inChannelsOrRequirements_of_constraints data h_constraints
+  have h_in_or_req := table.inChannelsOrRequirements_of_constraints h_constraints
   simp only [ChannelRequirements, InChannelsOrRequirements] at *
   intro row h_row
   specialize h_in_or_req row h_row
@@ -552,14 +577,14 @@ lemma requirements_of_not_mem_of_constraints (table : Table F) (data : ProverDat
   assumption
   assumption
 
-lemma inChannelsOrGuarantees (table : Table F) (data : ProverData F) :
-    table.InChannelsOrGuarantees data table.channelsWithGuarantees := by
+lemma inChannelsOrGuarantees (table : Table F) :
+    table.InChannelsOrGuarantees table.channelsWithGuarantees := by
   simp [InChannelsOrGuarantees, channelsWithGuarantees, Component.inChannelsOrGuarantees]
 
-lemma guarantees_of_not_mem (table : Table F) (data : ProverData F) {channel : RawChannel F} :
-    channel ∉ table.channelsWithGuarantees → table.ChannelGuarantees data channel := by
+lemma guarantees_of_not_mem (table : Table F) {channel : RawChannel F} :
+    channel ∉ table.channelsWithGuarantees → table.ChannelGuarantees channel := by
   intro h_not_mem
-  have h_in_or_guar := table.inChannelsOrGuarantees data
+  have h_in_or_guar := table.inChannelsOrGuarantees
   simp only [ChannelGuarantees, InChannelsOrGuarantees] at *
   intro row h_row
   specialize h_in_or_guar row h_row
@@ -568,9 +593,9 @@ lemma guarantees_of_not_mem (table : Table F) (data : ProverData F) {channel : R
   assumption
 
 /-- Circuit soundness, lifted to full table level. -/
-theorem weakSoundness {table : Table F} (consistent : table.DataConsistency data) :
-    table.Assumptions data → table.Constraints data → table.Guarantees data →
-    table.Spec data ∧ table.Requirements data := by
+theorem weakSoundness {table : Table F} (consistent : table.DataConsistency) :
+    table.Assumptions → table.Constraints → table.Guarantees →
+    table.Spec ∧ table.Requirements := by
   intro assumptions constraints guarantees
   constructor
   · intro row hrow
@@ -588,17 +613,17 @@ prove guarantees for.
 -/
 lemma requirements_of_partial_guarantees_of_constraints {table : Table F}
   {finished : List (RawChannel F)} {unfinished : RawChannel F} :
-  table.DataConsistency data →
-  table.Assumptions data →
-  table.Constraints data →
+  table.DataConsistency →
+  table.Assumptions →
+  table.Constraints →
   table.channelsWithGuarantees ⊆ unfinished :: finished →
-  (∀ channel ∈ finished, table.ChannelGuarantees data channel) →
+  (∀ channel ∈ finished, table.ChannelGuarantees channel) →
     ∀ row ∈ table.table,
-      table.component.operations.ChannelGuarantees unfinished (Environment.fromArray row data) →
-      table.component.operations.ChannelRequirements unfinished (Environment.fromArray row data) := by
+      table.component.operations.ChannelGuarantees unfinished (table.environment row) →
+      table.component.operations.ChannelRequirements unfinished (table.environment row) := by
   intro consistent assumptions constraints subset finished_grts row h_row channel_grts
   replace finished_grts channel hc := finished_grts channel hc row h_row
-  set env := Environment.fromArray row data
+  set env := table.environment row
   suffices table.component.operations.FullRequirements env by
     simp only [circuit_norm] at this ⊢
     intro i hi _
@@ -618,92 +643,92 @@ lemma requirements_of_partial_guarantees_of_constraints {table : Table F}
   · exact finished_grts _ channel_mem
 end Table
 
-/-- A table subset together with the shared prover-data environment used to interpret it. -/
-structure TableContext (F : Type) [FiniteField F] where
+/-- Light-weight package of multiple flat AIR tables sharing one prover data object. -/
+structure Tables (F : Type) [FiniteField F] where
   tables : List (Table F)
   data : ProverData F
-  data_consistent : ∀ table ∈ tables, table.DataConsistency data
+  same_data : ∀ table ∈ tables, table.data = data
 
-namespace TableContext
-def cons (table : Table F) (tables : TableContext F)
-    (consistent : table.DataConsistency tables.data) : TableContext F where
+namespace Tables
+def cons (table : Table F) (tables : Tables F) (same_data : table.data = tables.data) : Tables F where
   tables := table :: tables.tables
   data := tables.data
-  data_consistent := by
-    simp [consistent]
-    apply tables.data_consistent
+  same_data := by
+    simp [same_data]
+    apply tables.same_data
 
-@[circuit_norm] lemma cons_tables {table : Table F} {tables : TableContext F} (consistent) :
-  (cons table tables consistent).tables = table :: tables.tables := rfl
+@[circuit_norm] lemma cons_tables {table : Table F} {tables : Tables F} (same_data : table.data = tables.data) :
+  (cons table tables same_data).tables = table :: tables.tables := rfl
 
-@[circuit_norm] lemma cons_data {table : Table F} {tables : TableContext F} (consistent) :
-  (cons table tables consistent).data = tables.data := rfl
+@[circuit_norm] lemma cons_data {table : Table F} {tables : Tables F} (same_data : table.data = tables.data) :
+  (cons table tables same_data).data = tables.data := rfl
 
-def induct {motive : TableContext F → Sort*}
+def induct {motive : Tables F → Sort*}
   (nil : ∀ data, motive ⟨ [], data, by simp ⟩)
-  (cons : ∀ table tables consistent, motive tables → motive (cons table tables consistent))
-    (tables : TableContext F) : motive tables := by
-  rcases tables with ⟨ ts, data, data_consistent ⟩
+  (cons : ∀ table tables same_data, motive tables → motive (cons table tables same_data))
+    (tables : Tables F) : motive tables := by
+  rcases tables with ⟨ ts, data, same_data ⟩
   induction ts with
   | nil => exact nil data
   | cons table ts ih =>
-    have data_consistent' : ∀ table ∈ ts, table.DataConsistency data := by
+    have same_data' : ∀ table ∈ ts, table.data = data := by
       intro table h_table
-      apply data_consistent
+      apply same_data
       simp [h_table]
-    let tables : TableContext F := ⟨ ts, data, data_consistent' ⟩
-    have consistent : table.DataConsistency tables.data := by
-      simp [tables]
-      exact data_consistent table (by simp)
-    apply cons table tables consistent
-    exact ih data_consistent'
+    let tables : Tables F := ⟨ ts, data, same_data' ⟩
+    have same_data_table : table.data = tables.data := by
+      simp [tables, same_data]
+    apply cons table tables same_data_table
+    exact ih same_data'
 
-def append (tables1 tables2 : TableContext F) (data_eq : tables1.data = tables2.data) : TableContext F where
+def append (tables1 tables2 : Tables F) (same_data : tables1.data = tables2.data) : Tables F where
   tables := tables1.tables ++ tables2.tables
   data := tables1.data
-  data_consistent := by
+  same_data := by
     simp [or_imp, forall_and]
     constructor
-    · apply tables1.data_consistent
-    rw [data_eq]
-    apply tables2.data_consistent
+    · apply tables1.same_data
+    rw [same_data]
+    apply tables2.same_data
 
-@[circuit_norm] lemma append_tables {tables1 tables2 : TableContext F} (data_eq : tables1.data = tables2.data) :
-  (append tables1 tables2 data_eq).tables = tables1.tables ++ tables2.tables := rfl
+@[circuit_norm] lemma append_tables {tables1 tables2 : Tables F} (same_data : tables1.data = tables2.data) :
+  (append tables1 tables2 same_data).tables = tables1.tables ++ tables2.tables := rfl
 
-@[circuit_norm] lemma append_data {tables1 tables2 : TableContext F} (data_eq : tables1.data = tables2.data) :
-  (append tables1 tables2 data_eq).data = tables1.data := rfl
+@[circuit_norm] lemma append_data {tables1 tables2 : Tables F} (same_data : tables1.data = tables2.data) :
+  (append tables1 tables2 same_data).data = tables1.data := rfl
 
-@[circuit_norm] lemma cons_append {table : Table F} {tables1 tables2 : TableContext F}
-  (consistent : table.DataConsistency tables1.data) (data_eq : tables1.data = tables2.data) :
-  (cons table tables1 consistent).append tables2 data_eq =
-    cons table (append tables1 tables2 data_eq) consistent := rfl
+@[circuit_norm] lemma cons_append {table : Table F} {tables1 tables2 : Tables F}
+  (same_data1 : table.data = tables1.data) (same_data2 : tables1.data = tables2.data) :
+  (cons table tables1 same_data1).append tables2 same_data2 =
+    cons table (append tables1 tables2 same_data2) same_data1 := rfl
 
 @[circuit_norm]
-abbrev components (tables : TableContext F) : List (Component F) :=
+abbrev components (tables : Tables F) : List (Component F) :=
   tables.tables.map (·.component)
 
-abbrev Constraints (tables : TableContext F) : Prop :=
-  ∀ table ∈ tables.tables, table.Constraints tables.data
+instance : Coe (Tables F) (List (Table F)) where
+  coe tables := tables.tables
 
-abbrev Assumptions (tables : TableContext F) : Prop :=
-  ∀ table ∈ tables.tables, table.Assumptions tables.data
+abbrev Constraints (tables : Tables F) : Prop :=
+  ∀ table ∈ tables.tables, table.Constraints
 
-noncomputable abbrev interactionsWith (tables : TableContext F) (channel : RawChannel F) : List (Interaction F) :=
-  tables.tables.flatMap (·.interactionsWith tables.data channel)
+abbrev Assumptions (tables : Tables F) : Prop :=
+  ∀ table ∈ tables.tables, table.Assumptions
 
-@[circuit_norm] lemma interactionsWith_cons {table : Table F} {tables : TableContext F}
-  (consistent : table.DataConsistency tables.data) {channel : RawChannel F} :
-  interactionsWith (cons table tables consistent) channel =
-    table.interactionsWith tables.data channel ++ interactionsWith tables channel := by
+noncomputable abbrev interactionsWith (tables : Tables F) (channel : RawChannel F) : List (Interaction F) :=
+  tables.tables.flatMap (·.interactionsWith channel)
+
+@[circuit_norm] lemma interactionsWith_cons {table : Table F} {tables : Tables F}
+  (same_data : table.data = tables.data) {channel : RawChannel F} :
+  interactionsWith (cons table tables same_data) channel =
+    table.interactionsWith channel ++ interactionsWith tables channel := by
   simp [interactionsWith, Table.interactionsWith, circuit_norm]
 
-@[circuit_norm] lemma interactionsWith_append {tables1 tables2 : TableContext F}
-  (data_eq : tables1.data = tables2.data) {channel : RawChannel F} :
-  interactionsWith (append tables1 tables2 data_eq) channel =
+@[circuit_norm] lemma interactionsWith_append {tables1 tables2 : Tables F}
+  (same_data : tables1.data = tables2.data) {channel : RawChannel F} :
+  interactionsWith (append tables1 tables2 same_data) channel =
     interactionsWith tables1 channel ++ interactionsWith tables2 channel := by
-  simp only [interactionsWith, append, List.flatMap_append]
-  rw [data_eq]
-end TableContext
+  simp [interactionsWith, Table.interactionsWith, circuit_norm]
+end Tables
 
 end Air.Flat
