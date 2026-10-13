@@ -963,7 +963,7 @@ def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensembl
 /-- Validate generation metadata, then generate an ensemble witness from the public input and the
 prover's private input. -/
 def generate (ens : FormalEnsemble F PublicIO) (config : Config F) (publicInput : PublicIO F)
-    (proverInput : ens.ProverInput) : Except GenerationError (EnsembleWitness ens.ensemble) :=
+    (proverInput : ens.ProverInput F) : Except GenerationError (EnsembleWitness ens.ensemble) :=
   match config.validate ens.ensemble with
   | .error error => .error (.config error)
   | .ok config => generateValid config publicInput (ens.hint proverInput)

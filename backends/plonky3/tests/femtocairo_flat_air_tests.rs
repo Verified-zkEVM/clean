@@ -7,7 +7,7 @@ mod generated {
     include!("generated/femtocairo_flat_air.rs");
 }
 
-use clean_backend::witness_generation::{Interaction, WitnessData, WitnessField};
+use clean_backend::witness_generation::{Interaction, WitnessField};
 use clean_backend::{
     prove_ensemble, verify_ensemble, EnsembleVerificationError, GeneratedAirSpec,
     GeneratedEnsemble, GeneratedLookup,
@@ -23,19 +23,16 @@ fn field(value: u64) -> BabyBear {
     BabyBear::from_u64(value)
 }
 
-/// The prover's memory values, supplied to witness generation as the `memoryValues` hint table.
-/// Memory reads propose them for the cells they define.
-fn memory(values: [u64; 8]) -> WitnessData<BabyBear> {
-    WitnessData::from_entries(vec![(
-        "memoryValues",
-        values.into_iter().map(|value| vec![field(value)]).collect(),
-    )])
+/// The prover's memory values, the private input of FemtoCairo witness generation. Memory reads
+/// propose them for the cells they define.
+fn memory(values: [u64; 8]) -> Vec<BabyBear> {
+    values.into_iter().map(field).collect()
 }
 
 #[test]
 fn extracted_femtocairo_witness_uses_committed_memory_data() {
-    let hint = memory([0, 5, 3, 7, 2, 10, 0, 0]);
-    let witness = generated::generate(&[field(0), field(0)], &hint)
+    let memory_values = memory([0, 5, 3, 7, 2, 10, 0, 0]);
+    let witness = generated::generate(&[field(0), field(0)], &memory_values)
         .expect("extracted FemtoCairo witness generation failed");
 
     assert_eq!(
@@ -78,8 +75,8 @@ fn extracted_femtocairo_memory_is_defined_by_reads() {
 fn extracted_femtocairo_air_proves_and_verifies() {
     let config = setup::test_config(7);
     let public_values = vec![field(0), field(0)];
-    let hint = memory([0, 5, 3, 7, 2, 10, 0, 0]);
-    let witness = generated::generate(&public_values, &hint)
+    let memory_values = memory([0, 5, 3, 7, 2, 10, 0, 0]);
+    let witness = generated::generate(&public_values, &memory_values)
         .expect("extracted FemtoCairo witness generation failed");
     let traces = witness.into_traces().expect("invalid extracted traces");
 

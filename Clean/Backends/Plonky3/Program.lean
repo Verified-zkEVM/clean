@@ -183,6 +183,8 @@ end ComponentProgram
 /-- Complete typed artifact consumed by source-code backends. -/
 structure Program (F : Type) [FiniteField F] where
   publicInputWidth : ℕ
+  proverInputWidth : ℕ
+  hintTables : List HintTable
   components : List (ComponentProgram F)
   verifierInteractions : List (AbstractInteraction F)
   modes : List (Mode F)

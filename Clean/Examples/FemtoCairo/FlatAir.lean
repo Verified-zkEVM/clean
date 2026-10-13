@@ -105,13 +105,6 @@ def MemoryChannel : Channel (F p) MemoryEntry where
 propose them for the cells they define. -/
 def memoryValuesKey : String := "memoryValues"
 
-/-- The hint encoding the prover's memory values as the `memoryValues` table. -/
-def memoryValuesHint {memorySize : UInt64} (memoryValues : fields memorySize.toNat (F p)) :
-    ProverHint (F p) := fun key n =>
-  if key = memoryValuesKey ∧ n = 1 then
-    memoryValues.toArray.map fun value => Vector.ofFn fun _ => value
-  else #[]
-
 /-- Read the memory value at `address`, defining an undefined cell as the hinted value. -/
 def readMemory (address : Expression (F p)) : Witgen.M (F p) (Witgen.FExpr (F p)) :=
   Witgen.read "memory" ProviderInput address.val ⟨1, by decide⟩
@@ -731,7 +724,8 @@ def formalEnsemble {programSize memorySize : UInt64} (program : Fin programSize.
       obtain ⟨steps, hsteps⟩ := spec
       exact ⟨memory witness.data ∘ Fin.cast hsize.symm, steps,
         femtoCairoMachineBoundedExecution_cast program hsize _ _ _ ▸ hsteps⟩)
-  |>.withProverInput (fields memorySize.toNat (F p)) memoryValuesHint
+  |>.withProverInput (fields memorySize.toNat)
+    [{ key := memoryValuesKey, width := 1, offset := 0, rows := memorySize.toNat }]
     (ProverAssumptions program memorySize initialState)
 
 /-- End-to-end soundness: a valid proof for the public registers `(ap, fp)` shows that the

@@ -36,6 +36,7 @@ impl<F> WitnessField for F where F: Field + PrimeField64 + Copy + Eq {}
 pub enum WitnessGenerationError {
     FieldOrder { expected: u64, actual: u64 },
     PublicInputWidth { expected: usize, actual: usize },
+    ProverInputWidth { expected: usize, actual: usize },
     Runtime(String),
 }
 
@@ -49,6 +50,10 @@ impl core::fmt::Display for WitnessGenerationError {
             Self::PublicInputWidth { expected, actual } => write!(
                 formatter,
                 "public input has width {actual}, expected {expected}"
+            ),
+            Self::ProverInputWidth { expected, actual } => write!(
+                formatter,
+                "prover input has width {actual}, expected {expected}"
             ),
             Self::Runtime(error) => formatter.write_str(error),
         }
@@ -108,6 +113,16 @@ pub enum Mode<F> {
     },
 }
 
+/// A named hint table viewing the flattened private input: `rows` rows of `width` elements,
+/// starting at element `offset`. Elements beyond the input read as zero.
+#[derive(Clone, Copy, Debug)]
+pub struct HintTable {
+    pub key: &'static str,
+    pub width: usize,
+    pub offset: usize,
+    pub rows: usize,
+}
+
 /// Component-input rows available to extracted witness programs.
 #[derive(Clone, Debug)]
 pub struct WitnessData<F> {
@@ -118,6 +133,29 @@ impl<F: Field + Copy> WitnessData<F> {
     /// Named component-input rows, keyed like Clean's `ProverData`.
     pub fn from_entries(entries: Vec<(&'static str, Vec<Vec<F>>)>) -> Self {
         Self { entries }
+    }
+
+    /// The hint tables `tables` take from the flattened private input.
+    fn from_hint_tables(tables: &[HintTable], prover_input: &[F]) -> Self {
+        let entries = tables
+            .iter()
+            .map(|table| {
+                let rows = (0..table.rows)
+                    .map(|row| {
+                        (0..table.width)
+                            .map(|column| {
+                                prover_input
+                                    .get(table.offset + row * table.width + column)
+                                    .copied()
+                                    .unwrap_or(F::ZERO)
+                            })
+                            .collect()
+                    })
+                    .collect();
+                (table.key, rows)
+            })
+            .collect();
+        Self::from_entries(entries)
     }
 
     fn from_initial_tables(names: &[&'static str], tables: &[Vec<Row<F>>]) -> Self {
@@ -208,6 +246,8 @@ pub trait Program<F: WitnessField> {
     const FIELD_ORDER: u64;
     const COMPONENTS: usize;
     const PUBLIC_INPUTS: usize;
+    const PROVER_INPUTS: usize;
+    const HINT_TABLES: &'static [HintTable];
     const FIXED_WIDTHS: &'static [usize];
     const COMPONENT_NAMES: &'static [&'static str];
 
@@ -780,11 +820,11 @@ fn pad_and_balance<F: WitnessField, P: Program<F>>(
     }
 }
 
-/// Run an extracted channel-driven ensemble witness program. `hint` holds named tables that the
-/// row programs of preallocated components read.
+/// Run an extracted channel-driven ensemble witness program on the public input and the
+/// flattened private input, which witness programs read through the program's hint tables.
 pub fn generate<F: WitnessField, P: Program<F>>(
     public_input: &[F],
-    hint: &WitnessData<F>,
+    prover_input: &[F],
 ) -> Result<EnsembleWitness<F>, WitnessGenerationError> {
     if F::ORDER_U64 != P::FIELD_ORDER {
         return Err(WitnessGenerationError::FieldOrder {
@@ -832,6 +872,13 @@ pub fn generate<F: WitnessField, P: Program<F>>(
             actual: public_input.len(),
         });
     }
+    if prover_input.len() != P::PROVER_INPUTS {
+        return Err(WitnessGenerationError::ProverInputWidth {
+            expected: P::PROVER_INPUTS,
+            actual: prover_input.len(),
+        });
+    }
+    let hint = &WitnessData::from_hint_tables(P::HINT_TABLES, prover_input);
 
     let mut tables = Vec::with_capacity(modes.len());
     for (component, mode) in modes.iter().enumerate() {

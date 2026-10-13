@@ -74,7 +74,7 @@ def memoryModeError (memory : Mode (F pBabybear)) : Option ConfigError :=
         if name = (provideMemory (p := pBabybear)).name then (name, { generation with mode := memory })
         else (name, generation) }
   match Backends.Plonky3.lower
-      (soundEnsemble testProgram h_programSize h_memorySize initialState).ensemble config with
+      (formalEnsemble testProgram h_programSize h_memorySize initialState) config with
   | .error (.config error) => some error
   | _ => none
 

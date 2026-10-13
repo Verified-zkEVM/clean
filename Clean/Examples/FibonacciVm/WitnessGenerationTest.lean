@@ -119,7 +119,7 @@ def noData : ProverData (F pBabybear) := fun _ _ => #[]
 
 def extractedFirstRow : Except String (Array (F pBabybear)) := do
   let program ← Backends.Plonky3.lower
-    (fibonacciEnsemble (p := pBabybear)).ensemble
+    (fibonacciEnsemble (p := pBabybear))
     (FibonacciWitness.config (p := pBabybear))
     |>.mapError toString
   let some component := program.components[0]?
