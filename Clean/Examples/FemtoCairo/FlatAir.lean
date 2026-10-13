@@ -427,11 +427,12 @@ def programComponent {programSize : UInt64} (program : Fin programSize.toNat →
   fixedColumns := some (programFixedColumns program)
   fixed_width_le_input := by change 2 ≤ 3; omega
   Assumptions := fun _ _ => True
-  assumptions_imply_circuit := by
-    rintro i ⟨address, value, multiplicity⟩ data ⟨hi, rest, hrow⟩ - -
-    simp [programFixedColumns, circuit_norm, explicit_provable_type, Array.getElem?_append] at hi hrow
+  circuit_assumptions_of_assumptions := by
+    rintro i ⟨address, value, multiplicity⟩ data hfixed - -
+    simp [programFixedColumns, circuit_norm, explicit_provable_type] at hfixed
+    obtain ⟨hi, rfl, rfl⟩ := hfixed
     have hval : (i.toNat : F p).val = i.toNat := ZMod.val_cast_of_lt (by omega)
-    simp [provideProgram, ProgramChannel, hrow, hval, hi]
+    simp [provideProgram, ProgramChannel, hval, hi]
 
 def provideMemory : GeneralFormalCircuit (F p) ProviderInput unit where
   name := "memory"
@@ -462,12 +463,13 @@ def memoryComponent (memorySize : UInt64) (h_memorySize : memorySize.toNat < p) 
   fixedColumns := some (memoryFixedColumns memorySize)
   fixed_width_le_input := by change 1 ≤ 3; omega
   Assumptions := fun _ _ => True
-  assumptions_imply_circuit := by
-    rintro i ⟨address, value, multiplicity⟩ data ⟨hi, rest, hrow⟩ hdata -
-    simp [memoryFixedColumns, provideMemory, circuit_norm, explicit_provable_type] at hi hrow hdata
+  circuit_assumptions_of_assumptions := by
+    rintro i ⟨address, value, multiplicity⟩ data hfixed hdata -
+    simp [memoryFixedColumns, provideMemory, circuit_norm, explicit_provable_type] at hfixed hdata
+    obtain ⟨hi, rfl⟩ := hfixed
     have hval : (i.toNat : F p).val = i.toNat := ZMod.val_cast_of_lt (by omega)
     obtain ⟨hsize, hentry⟩ := Array.getElem?_eq_some_iff.mp hdata
-    simp [provideMemory, MemoryChannel, hrow, hval, hsize, hentry]
+    simp [provideMemory, MemoryChannel, hval, hsize, hentry]
 
 def StateChannel {programSize : ℕ} (program : Fin programSize → F p)
     (initialState : State (F p)) : Channel (F p) State where
