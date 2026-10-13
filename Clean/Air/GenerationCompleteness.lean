@@ -60,6 +60,14 @@ def RowInteractions {Input Output : TypeMap} [ProvableType Input] [ProvableType 
     P input env (((circuit.main input_var).operations offset).interactions.map
       (·.eval env.toEnvironment))
 
+lemma RowInteractions.mono {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    {circuit : GeneralFormalCircuit F Input Output}
+    {P Q : Input F → ProverEnvironment F → List (Interaction F) → Prop}
+    (h : RowInteractions circuit P) (hPQ : ∀ input env interactions, P input env interactions →
+      Q input env interactions) : RowInteractions circuit Q :=
+  fun offset env input_var henv input hinput hassumptions =>
+    hPQ _ _ _ (h offset env input_var henv input hinput hassumptions)
+
 /-- The interactions of a row of `component` in `env`. -/
 def interactionsIn (component : Component F) (env : Environment F) : List (Interaction F) :=
   component.rowOperations.interactions.map (·.eval env)
@@ -72,6 +80,15 @@ def _root_.Interaction.IsUnitPull (interaction : Interaction F) : Prop :=
 /-- The circuit input a row with `input` cells holds. -/
 def inputOf (component : Component F) (input : Array F) : component.Input F :=
   fromElements (inputRow component.Input input)
+
+/-- A row with as many cells as the input holds them. -/
+@[simp] lemma inputOf_of_size (component : Component F) {input : Array F}
+    (h : input.size = size component.Input) : inputOf component input = fromElements ⟨input, h⟩ := by
+  unfold inputOf
+  congr 1
+  apply Vector.ext
+  intro i hi
+  simp [inputRow, Array.getElem?_eq_getElem (h ▸ hi)]
 
 /-! ### Prover data fixed before balancing -/
 
@@ -251,14 +268,15 @@ structure CompletePlan (ens : FormalEnsemble (F p) PublicIO) (plan : GenerationP
             component.circuit.ProverAssumptions
               (inputOf component (mode.input.eval message.toArray count)) data
               (ens.hint proverInput)) ∧
-      (∀ message count, RowInteractions component.circuit fun input _ interactions =>
+      (∀ message count, message.size = mode.channel.arity →
+        RowInteractions component.circuit fun input _ interactions =>
         input = inputOf component (mode.input.eval message count) →
         (∀ other, netOfInteractions interactions mode.channel.name other =
           if other = message then (count : F p) else 0) ∧
         ∀ interaction ∈ interactions, interaction.channel.name ≠ mode.channel.name →
           SideInteraction ens.ensemble plan vm.channel.name false interaction) ∧
-      (mode.aggregation = .byMessage → ∀ message, ∃ nets : ProverData (F p) → ProverHint (F p) →
-          String → Array (F p) → F p, ∀ count,
+      (mode.aggregation = .byMessage → ∀ message, message.size = mode.channel.arity →
+        ∃ nets : ProverData (F p) → ProverHint (F p) → String → Array (F p) → F p, ∀ count,
         RowInteractions component.circuit fun input env interactions =>
           input = inputOf component (mode.input.eval message count) →
           ∀ channel ≠ mode.channel.name, ∀ other,
@@ -729,6 +747,95 @@ lemma rowPlansOf_spec {plan : GenerationPlan F} :
             · cases hrowPlan
             · cases hrowPlan
           · exact hmem entry hentry
+
+lemma filter_key_eq_singleton {α : Type*} {pairs : List (String × α)}
+    (hnodup : (pairs.map (·.1)).Nodup) {pair : String × α} (hpair : pair ∈ pairs) :
+    pairs.filter (·.1 == pair.1) = [pair] := by
+  induction pairs with
+  | nil => simp at hpair
+  | cons head rest ih =>
+      simp only [List.map_cons, List.nodup_cons] at hnodup
+      simp only [List.mem_cons] at hpair
+      rcases hpair with rfl | hpair
+      · rw [List.filter_cons_of_pos (by simp), List.filter_eq_nil_iff.mpr]
+        intro other hother hkey
+        simp only [beq_iff_eq] at hkey
+        exact hnodup.1 (hkey ▸ List.mem_map_of_mem hother)
+      · rw [List.filter_cons_of_neg, ih hnodup.2 hpair]
+        intro hkey
+        simp only [beq_iff_eq] at hkey
+        exact hnodup.1 (hkey ▸ List.mem_map_of_mem hpair)
+
+lemma rowPlansOf_eq {plan : GenerationPlan F} (hnodup : (plan.components.map (·.1)).Nodup) :
+    ∀ (components : List (Component F)) (pairs : List (String × RowPlan F)),
+      pairs.map (·.1) = components.map (·.circuit.name) → (∀ pair ∈ pairs, pair ∈ plan.components) →
+      plan.rowPlansOf components = .ok (pairs.map (·.2))
+  | [], [], _, _ => rfl
+  | [], _ :: _, h, _ => by simp at h
+  | _ :: _, [], h, _ => by simp at h
+  | component :: components, pair :: pairs, h, hmem => by
+      simp only [List.map_cons, List.cons.injEq] at h
+      have hfilter := filter_key_eq_singleton hnodup (hmem pair (List.mem_cons_self ..))
+      rw [h.1] at hfilter
+      simp only [GenerationPlan.rowPlansOf, GenerationPlan.rowPlanOf, hfilter,
+        rowPlansOf_eq hnodup components pairs h.2 fun pair hpair => hmem pair
+          (List.mem_cons_of_mem _ hpair), List.map_cons]
+
+/-- Proves `planError ensemble rowPlans = none` for a concrete plan by evaluating the checks,
+unfolding the given definitions of the ensemble, its components and their circuits. -/
+syntax "plan_valid" ("[" term,* "]")? : tactic
+
+macro_rules
+  | `(tactic| plan_valid $[[$terms,*]]?) => do
+    let lemmas ← (terms.map (·.getElems)).getD #[] |>.mapM fun term =>
+      `(Lean.Parser.Tactic.simpLemma| $term:term)
+    `(tactic| simp (config := { decide := true }) [
+      Air.Flat.WitnessGeneration.planError, Air.Flat.WitnessGeneration.rowPlanError,
+      Air.Flat.WitnessGeneration.handlersError, Air.Flat.WitnessGeneration.dataReadsError,
+      Air.Flat.WitnessGeneration.readsAheadError, Air.Flat.WitnessGeneration.dataReadError,
+      Air.Flat.WitnessGeneration.check, Air.Flat.WitnessGeneration.Mode.handled,
+      Air.Flat.WitnessGeneration.Mode.lazyColumns, Air.Flat.WitnessGeneration.handlerDirection,
+      Air.Flat.WitnessGeneration.flatReadsBelow, Air.Flat.WitnessGeneration.witgenReadsBelow,
+      Air.Flat.WitnessGeneration.vexprReadsBelow, Air.Flat.WitnessGeneration.fexprReadsBelow,
+      Air.Flat.WitnessGeneration.fexprListReadsBelow, Air.Flat.WitnessGeneration.u64exprReadsBelow,
+      Air.Flat.WitnessGeneration.bexprReadsBelow, Air.Flat.WitnessGeneration.stepReadsBelow,
+      Air.Flat.WitnessGeneration.expressionReadsBelow, Air.Flat.WitnessGeneration.witnessDataReads,
+      Air.Flat.WitnessGeneration.vexprDataReads, Air.Flat.WitnessGeneration.fexprDataReads,
+      Air.Flat.WitnessGeneration.fexprListDataReads, Air.Flat.WitnessGeneration.u64exprDataReads,
+      Air.Flat.WitnessGeneration.bexprDataReads, Air.Flat.WitnessGeneration.stepDataReads,
+      Air.Flat.WitnessGeneration.Padding.targetHeight, Component.rowOffset,
+      Component.rowOperations, Component.fixedWidth, Witgen.WitgenIR.ofFExpr,
+      Witgen.WitgenIR.ofFExprs, Witgen.RowProgram.ofFExprs, FormalAssertion.toSubcircuit,
+      FormalCircuit.toSubcircuit, GeneralFormalCircuit.toSubcircuit, Operations.toNested_toFlat,
+      Circuit.forEach, circuit_norm, explicit_provable_type, $lemmas,*])
+
+/-- A plan listing one row plan per component, in the ensemble's order, validates when its row
+plans have no plan error. -/
+theorem GenerationPlan.validate_ok {plan : GenerationPlan F} {ensemble : Ensemble F PublicIO}
+    (hnames : plan.components.map (·.1) = ensemble.tables.map (·.circuit.name))
+    (hvalid : planError ensemble (plan.components.map (·.2)) = none) :
+    ∃ validPlan, plan.validate ensemble = .ok validPlan := by
+  have hnodup : (plan.components.map (·.1)).Nodup := hnames ▸ ensemble.unique_names
+  have hfind : plan.components.find? (fun (name, _) =>
+      !ensemble.tables.any (·.circuit.name == name)) = none := by
+    rw [List.find?_eq_none]
+    intro pair hpair
+    have : pair.1 ∈ ensemble.tables.map (·.circuit.name) :=
+      hnames ▸ List.mem_map_of_mem hpair
+    obtain ⟨component, hcomponent, hname⟩ := List.mem_map.mp this
+    have hany : ensemble.tables.any (·.circuit.name == pair.1) = true :=
+      List.any_eq_true.mpr ⟨component, hcomponent, by simp [hname]⟩
+    simp [hany]
+  have hrows := rowPlansOf_eq hnodup ensemble.tables plan.components hnames fun _ h => h
+  have hlength : (plan.components.map (·.2)).length = ensemble.tables.length := by
+    rw [List.length_map, ← List.length_map (f := (·.1)), hnames, List.length_map]
+  refine ⟨⟨_, hlength, hvalid⟩, ?_⟩
+  simp only [GenerationPlan.validate, GenerationPlan.align, hfind, hrows, dif_pos hlength]
+  split
+  · rename_i error herror
+    rw [hvalid] at herror
+    cases herror
+  · rfl
 
 lemma validate_spec {plan : GenerationPlan F} {ensemble : Ensemble F PublicIO}
     {validPlan : ValidPlan ensemble} (h : plan.validate ensemble = .ok validPlan) :

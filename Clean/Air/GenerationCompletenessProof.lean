@@ -397,7 +397,8 @@ lemma demandObligation {component : Component (F p)} (hmem : component ∈ ens.e
           component.circuit.ProverAssumptions
             (inputOf component (mode.input.eval message.toArray count)) data
             (ens.hint proverInput)) ∧
-    (∀ message count env, HonestEnv component (mode.input.eval message count) env →
+    (∀ message count env, message.size = mode.channel.arity →
+      HonestEnv component (mode.input.eval message count) env →
       component.circuit.ProverAssumptions
         (inputOf component (mode.input.eval message count)) env.data env.hint →
       (∀ other, netOfInteractions (interactionsIn component env.toEnvironment)
@@ -406,7 +407,8 @@ lemma demandObligation {component : Component (F p)} (hmem : component ∈ ens.e
         interaction.channel.name ≠ mode.channel.name →
           SideInteraction ens.ensemble plan run.complete.vm.channel.name false interaction) ∧
     (mode.aggregation = .byMessage →
-      ∀ message count count' env env', HonestEnv component (mode.input.eval message count) env →
+      ∀ message count count' env env', message.size = mode.channel.arity →
+        HonestEnv component (mode.input.eval message count) env →
         HonestEnv component (mode.input.eval message count') env' →
         env.data = env'.data → env.hint = env'.hint →
         component.circuit.ProverAssumptions
@@ -418,10 +420,10 @@ lemma demandObligation {component : Component (F p)} (hmem : component ∈ ens.e
             netOfInteractions (interactionsIn component env'.toEnvironment) channel other) := by
   obtain ⟨hdeclared, hdirection, hassumptions, hnet, hbyMessage⟩ :=
     run.complete.demand component hmem rowPlan mode hplanned hmode hvm
-  refine ⟨hdeclared, hdirection, hassumptions, fun message count env honest hPA =>
-    rowInteractions_honest (hnet message count) honest hPA rfl, fun hagg message count count' env
-      env' honest honest' hdata hhint hPA hPA' channel hchannel other => ?_⟩
-  obtain ⟨nets, hnets⟩ := hbyMessage hagg message
+  refine ⟨hdeclared, hdirection, hassumptions, fun message count env hsize honest hPA =>
+    rowInteractions_honest (hnet message count hsize) honest hPA rfl, fun hagg message count count'
+      env env' hsize honest honest' hdata hhint hPA hPA' channel hchannel other => ?_⟩
+  obtain ⟨nets, hnets⟩ := hbyMessage hagg message hsize
   rw [rowInteractions_honest (hnets count) honest hPA rfl channel hchannel other,
     rowInteractions_honest (hnets count') honest' hPA' rfl channel hchannel other, hdata, hhint]
 
@@ -1056,7 +1058,7 @@ lemma rowFacts_answerRow {state : ComponentState (F p)} (hok : run.StateOk state
   have hadmissible : run.Admissible state.component (mode.input.eval message count) :=
     ⟨hinputSize, fun data hstable => hassumptions run.publicInput run.proverInput run.assumptions
       data hstable ⟨message, hsize⟩ count hcount (hpullable data hstable ⟨message, hsize⟩ rfl)⟩
-  obtain ⟨hnet, hside⟩ := hnet message count _ (run.honestEnv_row hok.mem hinputSize run.stableData)
+  obtain ⟨hnet, hside⟩ := hnet message count _ hsize (run.honestEnv_row hok.mem hinputSize run.stableData)
     (hadmissible.assumptions _ run.stableData_stable)
   have hinteractions := run.rowInteractions_row hok.interactions hok.mem hinputSize
     (some (demandOrigin mode message count)) run.stableData_stable
@@ -3232,7 +3234,7 @@ lemma step_update (hinv : run.Inv k padded balancing) {demand : Demand (F p)} {i
       rw [run.rowInteractions_row hok.interactions hok.mem (hinputSize _ _) _ run.stableData_stable,
         run.rowInteractions_row hok.interactions hok.mem (hinputSize _ _) _ run.stableData_stable]
       exact (run.demandObligation hok.mem (run.planned _ hok.entry) hmode hvm).2.2.2.2 hbyMessage
-        demand.message count₀ (count₀ + δ) _ _
+        demand.message count₀ (count₀ + δ) _ _ hsize
         (run.honestEnv_row hok.mem (hinputSize _ _) run.stableData)
         (run.honestEnv_row hok.mem (hinputSize _ _) run.stableData) rfl rfl
         ((run.rowFacts_answerRow hok hvm hmode hcount₀ hsize₀ hpullable₀).admissible.assumptions _

@@ -111,6 +111,10 @@ instance {p : ℕ} [Fact p.Prime] : FiniteField (F p) where
 @[simp, circuit_norm] theorem FiniteField.fromNat_F {p : ℕ} [Fact p.Prime] (n : ℕ) :
     (FiniteField.fromNat n : F p) = (n : F p) := rfl
 
+/-- On prime fields, the characteristic is `p`. -/
+@[simp, circuit_norm] theorem FiniteField.char_F {p : ℕ} [Fact p.Prime] :
+    FiniteField.char (F p) = p := rfl
+
 /-- On prime fields, `val` is just `ZMod.val`. -/
 @[simp, circuit_norm] theorem FiniteField.val_F {p : ℕ} [Fact p.Prime] (x : F p) :
     FiniteField.val x = ZMod.val x := rfl
