@@ -38,9 +38,9 @@ def hint : ProverHint Fb := fun key n =>
 
 def memoryRows : List (List Fb) := [[5, 15], [7, 17]]
 
-/-- Like data derived from committed rows, `memory` only has rows at its input width 2. -/
+/-- Like data derived from committed rows, `memory` rows are cut off or zero-padded at width `n`. -/
 def data : ProverData Fb := fun key n =>
-  if key = "memory" ∧ n = 2 then
+  if key = "memory" then
     (memoryRows.map fun row => Vector.ofFn fun i : Fin n => row[i.val]?.getD 0).toArray
   else #[]
 

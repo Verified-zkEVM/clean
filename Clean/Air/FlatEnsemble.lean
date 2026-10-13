@@ -183,7 +183,7 @@ lemma tableNames_nodup (witness : EnsembleWitness ens) :
 lemma dataConsistency_of_mem (witness : EnsembleWitness ens) :
     ∀ table ∈ witness.tables, table.DataConsistency := by
   intro table htable
-  rw [Table.DataConsistency, Component.DataConsistency, witness.same_data table htable]
+  rw [Table.DataConsistency, witness.same_data table htable]
   exact deriveProverData_eq_of_mem witness.tables witness.tableNames_nodup htable _
 
 def toTables (witness : EnsembleWitness ens) : Tables F where
@@ -213,7 +213,7 @@ lemma getRows_size_of_fixedColumns (witness : EnsembleWitness ens) {component : 
   simp only [Component.FixedRowsMatch, hfixed] at hmatch
   rw [ProverData.getRows, EnsembleWitness.data, ← witness.same_data table htable,
     witness.dataConsistency_of_mem table htable]
-  simpa [Component.proverRows] using congrArg List.length hmatch
+  simpa [Table.proverRows] using congrArg List.length hmatch
 
 def Constraints {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Prop :=
   witness.toTables.Constraints

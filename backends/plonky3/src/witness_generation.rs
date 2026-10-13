@@ -179,6 +179,22 @@ impl<F: Field + Copy> WitnessData<F> {
             .copied()
             .unwrap_or(F::ZERO)
     }
+
+    /// Reads column `column` of the named rows cut off at `width` elements, as in Lean's
+    /// derived `ProverData`.
+    #[inline(always)]
+    pub fn get_prefix(&self, name: &str, width: usize, row: usize, column: usize) -> F {
+        if column >= width {
+            return F::ZERO;
+        }
+        self.entries
+            .iter()
+            .find(|(entry_name, _)| *entry_name == name)
+            .and_then(|(_, rows)| rows.get(row))
+            .and_then(|value| value.get(column))
+            .copied()
+            .unwrap_or(F::ZERO)
+    }
 }
 
 /// A semantic component input used to extend a table to a power-of-two height.

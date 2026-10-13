@@ -73,7 +73,7 @@ def fieldToRust (names : Names) : Rust.FieldExpr F → String
       s!"[{commaSep (fieldListToRust names values)}].get(({u64ToRust names index}) as usize).copied().unwrap_or(F::ZERO)"
   | .constMatch values index => constantLookupToRust (u64ToRust names index) values
   | .dataGet key width row column =>
-      s!"_data.get({quoted key}, {width}, ({u64ToRust names row}) as usize, {column})"
+      s!"_data.get_prefix({quoted key}, {width}, ({u64ToRust names row}) as usize, {column})"
   | .hintGet key width row column =>
       s!"_hint.get({quoted key}, {width}, ({u64ToRust names row}) as usize, {column})"
 

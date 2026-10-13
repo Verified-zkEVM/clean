@@ -45,9 +45,10 @@ abbrev RowsMatch (fixed : FixedColumns F) (rows : List (Array F)) : Prop :=
 
 end FixedColumns
 
+/-- The first `n` elements of a row, padded with zeros. -/
 @[circuit_norm]
-def inputRow (Input : TypeMap) [ProvableType Input] (row : Array F) : Vector F (size Input) :=
-  ⟨(List.ofFn (fun i : Fin (size Input) => row[i.val]?.getD 0)).toArray, by simp⟩
+def rowPrefix (n : ℕ) (row : Array F) : Vector F n :=
+  ⟨(List.ofFn (fun i : Fin n => row[i.val]?.getD 0)).toArray, by simp⟩
 
 /-- The fixed-column fact about the input of row `i`: the row lies within the fixed height, and
 the input's first elements are the row's fixed values. -/
@@ -63,11 +64,11 @@ def DataInputAt (name : String) (i : UInt64) (input : Input F) (data : ProverDat
   (data.getRows name Input)[i.toNat]? = some input
 
 lemma valueFromOffset_fromArray (row : Array F) (data : ProverData F) :
-    valueFromOffset Input 0 (Environment.fromArray row data) = fromElements (inputRow Input row) := by
+    valueFromOffset Input 0 (Environment.fromArray row data) = fromElements (rowPrefix (size Input) row) := by
   simp only [valueFromOffset]
   congr 1
   ext j hj
-  simp [inputRow, Vector.getElem_mapRange]
+  simp [rowPrefix, Vector.getElem_mapRange]
 
 /--
 A flat AIR component: one circuit whose constraints are checked independently on each row.
@@ -100,18 +101,6 @@ def FixedRowsMatch (component : Component F) (rows : List (Array F)) : Prop :=
   match component.fixedColumns with
   | none => True
   | some fixed => FixedColumns.RowsMatch fixed rows
-
-def proverRows (component : Component F) (rows : List (Array F)) (n : ℕ) :
-    Array (Vector F n) :=
-  if h : size component.Input = n then
-    h ▸ (rows.map (inputRow component.Input) |>.toArray)
-  else
-    #[]
-
-def DataConsistency (component : Component F) (rows : List (Array F))
-    (data : ProverData F) : Prop :=
-  data component.circuit.name (size component.Input) =
-    component.proverRows rows (size component.Input)
 
 def operations (component : Component F) : Operations F :=
   component.circuit.instantiate.operations 0
@@ -260,17 +249,21 @@ structure Table (F : Type) [FiniteField F] where
   /-- Connects the row-indexed fixed-column declaration to the concrete semantic rows. -/
   fixed_rows_match : component.FixedRowsMatch table
 
+/-- The table's rows cut off at `n` elements. -/
+def Table.proverRows (table : Table F) (n : ℕ) : Array (Vector F n) :=
+  (table.table.map (rowPrefix n)).toArray
+
 /-- Each named component is the source of its circuit-input rows in `ProverData`. -/
 def deriveProverData : List (Table F) → ProverData F
   | [] => fun _ _ => #[]
   | table :: tables => fun name n =>
-      if table.component.circuit.name = name then table.component.proverRows table.table n
+      if table.component.circuit.name = name then table.proverRows n
       else deriveProverData tables name n
 
 lemma deriveProverData_eq_of_mem (tables : List (Table F))
     (hunique : (tables.map (fun table => table.component.circuit.name)).Nodup)
     {table : Table F} (hmem : table ∈ tables) (n : ℕ) :
-    deriveProverData tables table.component.circuit.name n = table.component.proverRows table.table n := by
+    deriveProverData tables table.component.circuit.name n = table.proverRows n := by
   induction tables with
   | nil => simp at hmem
   | cons head tail ih =>
@@ -291,7 +284,7 @@ lemma deriveProverData_map_data (tables : List (Table F)) (data : ProverData F) 
     deriveProverData (tables.map fun table => { table with data }) = deriveProverData tables := by
   induction tables with
   | nil => rfl
-  | cons table tables ih => rw [List.map_cons, deriveProverData, deriveProverData, ih]
+  | cons table tables ih => rw [List.map_cons, deriveProverData, deriveProverData, ih]; rfl
 
 /-- Gives every table the prover data derived from all of them. -/
 def withDerivedData (tables : List (Table F)) : List (Table F) :=
@@ -308,12 +301,10 @@ lemma withDerivedData_data (tables : List (Table F)) :
 namespace Table
 variable {table : Table F} {channel : RawChannel F}
 
-def proverRows (table : Table F) (n : ℕ) : Array (Vector F n) :=
-  table.component.proverRows table.table n
-
 /-- The table's prover data contains its own component's circuit-input rows. -/
 def DataConsistency (table : Table F) : Prop :=
-  table.component.DataConsistency table.table table.data
+  table.data table.component.circuit.name (size table.component.Input) =
+    table.proverRows (size table.component.Input)
 
 abbrev length (t : Table F) : ℕ := t.table.length
 
@@ -380,10 +371,10 @@ lemma circuitAssumptions_of_dataConsistency (table : Table F) (consistent : tabl
       · simp; omega
       · intro j hj _
         simp only [List.length_take, Vector.length_toList] at hj
-        simp [inputRow, show j < row.size by omega]
+        simp [rowPrefix, show j < row.size by omega]
   · simp only [DataInputAt, ProverData.getRows, Component.rowInput, valueFromOffset_fromArray, hindex]
     rw [consistent]
-    simp [Component.proverRows, i.isLt, hi']
+    simp [proverRows, i.isLt, hi']
   · exact assumptions row hrow
 
 def Guarantees (table : Table F) : Prop :=

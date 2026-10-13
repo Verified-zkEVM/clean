@@ -474,10 +474,7 @@ def witgenWithData (data : ProverData F) (hint : ProverHint F)
 /-- The runtime view of the same complete circuit inputs used by `deriveProverData`. -/
 def generatedData (states : List (ComponentState F)) : ProverData F := fun name n =>
   match states.find? (·.component.circuit.name == name) with
-  | some state =>
-      if h : size state.component.Input = n then
-        h ▸ (state.rows.map (inputRow state.component.Input ∘ (·.input)) |>.toArray)
-      else #[]
+  | some state => (state.rows.map (rowPrefix n ∘ (·.input))).toArray
   | none => #[]
 
 /-- Complete a component row from its input with the component's witness programs. -/
