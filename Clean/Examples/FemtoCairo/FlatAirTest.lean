@@ -60,9 +60,9 @@ used by the execution trace.
 -/
 example : result = .ok ([8, 8, 32], true, true, 8, 10, 0) := by native_decide
 
-/-- Memory cells are defined by the execution's reads: a hinted value at an address the program
-never reads does not enter the witness. -/
-example : generateResult alternateMemoryValues = .ok ([8, 8, 32], true, true, 8, 10, 0) := by
+/-- The same Lean witness program accepts a second private memory without changing the compiled
+ensemble or generation plan. -/
+example : generateResult alternateMemoryValues = .ok ([8, 8, 32], true, true, 8, 10, 99) := by
   native_decide
 
 /-- The plan error of exporting with a replaced memory generation mode. -/

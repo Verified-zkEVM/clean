@@ -256,19 +256,12 @@ fn component_0<F: WitnessField>(
     }
     {
         let mut output: Vec<F> = Vec::with_capacity(1);
-        let local_0: F = _cells.read(
+        output.push(_data.get(
             "memory",
             3,
             ((row.get(15).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
             1,
-            _hint.get(
-                "memoryValues",
-                1,
-                ((row.get(15).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
-                0,
-            ),
-        );
-        output.push(local_0);
+        ));
         debug_assert_eq!(output.len(), 1);
         row.extend(output);
     }
@@ -287,19 +280,12 @@ fn component_0<F: WitnessField>(
     }
     {
         let mut output: Vec<F> = Vec::with_capacity(1);
-        let local_0: F = _cells.read(
+        output.push(_data.get(
             "memory",
             3,
             ((row.get(17).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
             1,
-            _hint.get(
-                "memoryValues",
-                1,
-                ((row.get(17).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
-                0,
-            ),
-        );
-        output.push(local_0);
+        ));
         debug_assert_eq!(output.len(), 1);
         row.extend(output);
     }
@@ -357,19 +343,12 @@ fn component_0<F: WitnessField>(
     }
     {
         let mut output: Vec<F> = Vec::with_capacity(1);
-        let local_0: F = _cells.read(
+        output.push(_data.get(
             "memory",
             3,
             ((row.get(20).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
             1,
-            _hint.get(
-                "memoryValues",
-                1,
-                ((row.get(20).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
-                0,
-            ),
-        );
-        output.push(local_0);
+        ));
         debug_assert_eq!(output.len(), 1);
         row.extend(output);
     }
@@ -388,19 +367,12 @@ fn component_0<F: WitnessField>(
     }
     {
         let mut output: Vec<F> = Vec::with_capacity(1);
-        let local_0: F = _cells.read(
+        output.push(_data.get(
             "memory",
             3,
             ((row.get(22).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
             1,
-            _hint.get(
-                "memoryValues",
-                1,
-                ((row.get(22).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
-                0,
-            ),
-        );
-        output.push(local_0);
+        ));
         debug_assert_eq!(output.len(), 1);
         row.extend(output);
     }
@@ -458,19 +430,12 @@ fn component_0<F: WitnessField>(
     }
     {
         let mut output: Vec<F> = Vec::with_capacity(1);
-        let local_0: F = _cells.read(
+        output.push(_data.get(
             "memory",
             3,
             ((row.get(25).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
             1,
-            _hint.get(
-                "memoryValues",
-                1,
-                ((row.get(25).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
-                0,
-            ),
-        );
-        output.push(local_0);
+        ));
         debug_assert_eq!(output.len(), 1);
         row.extend(output);
     }
@@ -489,19 +454,12 @@ fn component_0<F: WitnessField>(
     }
     {
         let mut output: Vec<F> = Vec::with_capacity(1);
-        let local_0: F = _cells.read(
+        output.push(_data.get(
             "memory",
             3,
             ((row.get(27).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
             1,
-            _hint.get(
-                "memoryValues",
-                1,
-                ((row.get(27).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
-                0,
-            ),
-        );
-        output.push(local_0);
+        ));
         debug_assert_eq!(output.len(), 1);
         row.extend(output);
     }
@@ -803,7 +761,7 @@ fn component_2_fixed_row<F: WitnessField>(row: u64) -> Vec<F> {
 fn component_1_initial_row<F: WitnessField>(row: u64, _hint: &WitnessData<F>) -> Vec<F> {
     let mut input = component_1_fixed_row::<F>(row);
     let mut output: Vec<F> = Vec::with_capacity(2);
-    output.push(F::from_u64(0u64));
+    output.push(_hint.get("memoryValues", 1, (row) as usize, 0));
     output.push(F::from_u64(0u64));
     debug_assert_eq!(output.len(), 2);
     input.extend(output);
@@ -1379,7 +1337,7 @@ impl<F: WitnessField> Program<F> for FemtoCairoFlatAirProgram {
                     interaction: 0,
                     column: 2,
                 }],
-                lazy_columns: vec![1],
+                lazy_columns: vec![],
             },
             Mode::Preallocated {
                 rows: 32,
