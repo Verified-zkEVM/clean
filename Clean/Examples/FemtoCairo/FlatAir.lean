@@ -769,9 +769,9 @@ def memoryMode (memorySize : UInt64) : Mode (F p) := .preallocated {
   lazyColumns := [1]
 }
 
-def config {programSize memorySize : UInt64} (program : Fin programSize.toNat → F p)
+def plan {programSize memorySize : UInt64} (program : Fin programSize.toNat → F p)
     (h_programSize : programSize.toNat < p) (initialState : State (F p)) (executionRows : UInt64) :
-    Config (F p) where
+    GenerationPlan (F p) where
   components := [
     ((executeStep program h_programSize initialState).name, {
       mode := executionMode program initialState
@@ -791,7 +791,7 @@ def generate {programSize memorySize : UInt64} (program : Fin programSize.toNat 
     Except GenerationError (EnsembleWitness
       (formalEnsemble program h_programSize h_memorySize initialState).ensemble) :=
   Air.Flat.WitnessGeneration.generate (formalEnsemble program h_programSize h_memorySize initialState)
-    (config (memorySize := memorySize) program h_programSize initialState executionRows)
+    (plan (memorySize := memorySize) program h_programSize initialState executionRows)
     finalRegisters memoryValues
 
 end Witness

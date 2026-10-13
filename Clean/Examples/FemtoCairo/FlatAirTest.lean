@@ -65,17 +65,17 @@ never reads does not enter the witness. -/
 example : generateResult alternateMemoryValues = .ok ([8, 8, 32], true, true, 8, 10, 0) := by
   native_decide
 
-/-- The configuration error of exporting with a replaced memory generation mode. -/
-def memoryModeError (memory : Mode (F pBabybear)) : Option ConfigError :=
-  let config : Config (F pBabybear) :=
-    Witness.config (memorySize := 8) testProgram h_programSize initialState 8
-  let config : Config (F pBabybear) :=
-    { config with components := config.components.map fun (name, generation) =>
-        if name = (provideMemory (p := pBabybear)).name then (name, { generation with mode := memory })
-        else (name, generation) }
+/-- The plan error of exporting with a replaced memory generation mode. -/
+def memoryModeError (memory : Mode (F pBabybear)) : Option PlanError :=
+  let plan : GenerationPlan (F pBabybear) :=
+    Witness.plan (memorySize := 8) testProgram h_programSize initialState 8
+  let plan : GenerationPlan (F pBabybear) :=
+    { plan with components := plan.components.map fun (name, rowPlan) =>
+        if name = (provideMemory (p := pBabybear)).name then (name, { rowPlan with mode := memory })
+        else (name, rowPlan) }
   match Backends.Plonky3.lower
-      (formalEnsemble testProgram h_programSize h_memorySize initialState) config with
-  | .error (.config error) => some error
+      (formalEnsemble testProgram h_programSize h_memorySize initialState) plan with
+  | .error (.plan error) => some error
   | _ => none
 
 /-- Export rejects witness programs that read cells mutated later by channel balancing. -/

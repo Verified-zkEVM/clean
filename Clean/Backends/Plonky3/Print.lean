@@ -385,9 +385,9 @@ def programToRust (name : String) (program : Program F) : Except String String :
 
 /-- Validate an ensemble into the typed artifact and render that artifact as Rust. -/
 def ensembleToRust (name : String) (ens : FormalEnsemble F PublicIO)
-    (config : Config F) :
+    (plan : GenerationPlan F) :
     Except String String := do
-  let program ← lower ens config |>.mapError toString
+  let program ← lower ens plan |>.mapError toString
   programToRust name program
 
 end Backends.Plonky3.Print

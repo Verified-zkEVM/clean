@@ -542,24 +542,24 @@ lemma interactions_eq_of_shape {states states' : List (ComponentState F)}
   simpa [List.map_map, Function.comp_def, ComponentState.shape] using
     congrArg (List.map (·.interactions)) h
 
-lemma initialStates_interactions {ens : Ensemble F PublicIO} (config : ValidConfig ens)
+lemma initialStates_interactions {ens : Ensemble F PublicIO} (plan : ValidPlan ens)
     (hint : ProverHint F) :
-    (initialStates config hint).1.map (·.interactions) =
+    (initialStates plan hint).1.map (·.interactions) =
       ens.tables.map (·.rowOperations.interactions) := by
   simp only [initialStates]
   rw [interactions_eq_of_shape (define_spec _ _ _ _).1,
     interactions_eq_of_shape (completeStates_shape _ _ _ _ _)]
-  conv_rhs => rw [← List.map_fst_zip (l₁ := ens.tables) (l₂ := config.generations)
-    (by rw [config.aligned])]
+  conv_rhs => rw [← List.map_fst_zip (l₁ := ens.tables) (l₂ := plan.rowPlans)
+    (by rw [plan.aligned])]
   simp [ComponentState.initial, Function.comp_def]
 
 /-- Generated witnesses have the requested public input and balance all channels. -/
-theorem generateValid_balanced {ens : Ensemble F PublicIO} {config : ValidConfig ens}
+theorem generateValid_balanced {ens : Ensemble F PublicIO} {plan : ValidPlan ens}
     {publicInput : PublicIO F} {hint : ProverHint F} {witness : EnsembleWitness ens}
-    (h : generateValid config publicInput hint = .ok witness) :
+    (h : generateValid plan publicInput hint = .ok witness) :
     witness.publicInput = publicInput ∧ witness.BalancedChannels := by
-  have hinteractions := initialStates_interactions config hint
-  rcases hinit : initialStates config hint with ⟨initial, data⟩
+  have hinteractions := initialStates_interactions plan hint
+  rcases hinit : initialStates plan hint with ⟨initial, data⟩
   rw [hinit] at hinteractions
   simp only [generateValid, hinit, bind, Except.bind] at h
   split at h
