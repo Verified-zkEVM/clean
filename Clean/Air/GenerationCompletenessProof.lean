@@ -1809,6 +1809,79 @@ lemma card_pulledMsgs_le_length (states : List (ComponentState (F p))) (channel 
   · simp
   · exact card_pullsOf_le _ _
 
+omit [Fact p.Prime] in
+lemma mem_set_cases {α : Type*} {values : List α} {index : ℕ} {value x : α}
+    (h : x ∈ values.set index value) :
+    x = value ∨ ∃ j, ∃ hj : j < values.length, j ≠ index ∧ values[j] = x := by
+  obtain ⟨j, hj, rfl⟩ := List.getElem_of_mem h
+  by_cases hji : index = j
+  · subst hji
+    exact .inl (by simp)
+  · exact .inr ⟨j, by simpa using hj, Ne.symm hji, by rw [List.getElem_set_ne hji]⟩
+
+/-- The rows of a component other than the VM do not depend on the VM steps. -/
+lemma rowsOk_of_ne_vm {k k' : ℕ} {padded : Bool} {state : ComponentState (F p)}
+    (hvm : state.component ≠ run.complete.vm.component) (h : run.RowsOk k padded state) :
+    run.RowsOk k' padded state := by
+  unfold RowsOk at h ⊢
+  split at h
+  · exact h
+  · obtain ⟨main, pad, hrows, hpad, htarget, -, hanswer⟩ := h
+    exact ⟨main, pad, hrows, hpad, htarget, fun h => absurd h hvm, hanswer⟩
+
+/-- States other than the replaced one keep their component, which differs from the replaced
+one's. -/
+lemma component_ne_of_set {states : List (ComponentState (F p))}
+    (hshape : states.map (·.shape) = run.initialShape) {index : ℕ} {state : ComponentState (F p)}
+    (hstate : states[index]? = some state) {j : ℕ} (hj : j < states.length) (hji : j ≠ index) :
+    states[j].component ≠ state.component := by
+  intro heq
+  obtain ⟨hindex, rfl⟩ := List.getElem?_eq_some_iff.mp hstate
+  have := (List.Nodup.getElem_inj_iff (run.names_nodup hshape) (i := j) (j := index)
+    (hi := by simpa using hj) (hj := by simpa using hindex)).mp
+    (by simpa using congrArg (fun component : Component (F p) => component.circuit.name) heq)
+  exact hji this
+
+/-- Replacing a state's rows changes the answered and pulled messages by that state's. -/
+lemma answeredMsgs_set {states : List (ComponentState (F p))} {index : ℕ}
+    {state : ComponentState (F p)} (hstate : states[index]? = some state)
+    (rows : List (GeneratedRow (F p))) (channel : String) :
+    run.answeredMsgs (states.set index { state with rows }) channel +
+        (state.rows.map fun row => run.answeredBy state row channel).sum =
+      run.answeredMsgs states channel + (rows.map fun row => run.answeredBy state row channel).sum := by
+  obtain ⟨hindex, rfl⟩ := List.getElem?_eq_some_iff.mp hstate
+  exact sum_map_set_add (fun state => (state.rows.map fun row =>
+    run.answeredBy state row channel).sum) states index hindex _
+
+lemma pulledMsgs_set {states : List (ComponentState (F p))} {index : ℕ}
+    {state : ComponentState (F p)} (hstate : states[index]? = some state)
+    (rows : List (GeneratedRow (F p))) (channel : String) :
+    run.pulledMsgs (states.set index { state with rows }) channel +
+        (state.rows.map fun row => run.pulledBy state row channel).sum =
+      run.pulledMsgs states channel + (rows.map fun row => run.pulledBy state row channel).sum := by
+  obtain ⟨hindex, rfl⟩ := List.getElem?_eq_some_iff.mp hstate
+  simp only [pulledMsgs, add_assoc]
+  rw [sum_map_set_add (fun state => (state.rows.map fun row =>
+    run.pulledBy state row channel).sum) states index hindex _]
+  rfl
+
+omit [Fact p.Prime] in
+lemma length_statesInteractions_set {F : Type} [FiniteField F] {states : List (ComponentState F)}
+    {index : ℕ} {state : ComponentState F} (hstate : states[index]? = some state)
+    (rows : List (GeneratedRow F)) (data : ProverData F) :
+    (statesInteractions (states.set index { state with rows }) data).length +
+        state.rows.length * state.interactions.length =
+      (statesInteractions states data).length + rows.length * state.interactions.length := by
+  obtain ⟨hindex, rfl⟩ := List.getElem?_eq_some_iff.mp hstate
+  rw [length_statesInteractions, length_statesInteractions]
+  exact sum_map_set_add (fun state => state.rows.length * state.interactions.length) states index
+    hindex _
+
+lemma length_rowInteractions_flatMap {F : Type} [FiniteField F] (state : ComponentState F)
+    (rows : List (GeneratedRow F)) (data : ProverData F) :
+    (rows.flatMap (rowInteractions state · data)).length = rows.length * state.interactions.length := by
+  simp [List.length_flatMap, rowInteractions, mul_comm]
+
 namespace Inv
 
 variable {run} {k : ℕ} {padded : Bool} {balancing : Balancing (F p)}
@@ -2008,6 +2081,90 @@ lemma length_lt (hinv : run.Inv k padded balancing) :
   have hok := run.stateOk_of_shape hinv.shape hstate
   simp only [Function.comp_apply, hok.interactions]
   exact Nat.mul_le_mul_right _ (hinv.rows_le_bound state hstate)
+
+/-- A pending demand is the VM's next state, the final state, or a deficit of pulls off the VM
+channel. -/
+lemma demand_cases (hinv : run.Inv k padded balancing) {demand : Demand (F p)}
+    (hmem : demand ∈ balancing.demands) :
+    (demand.channel = run.complete.vm.channel.name ∧ k < run.steps ∧ padded = false ∧
+      ((demand.message = run.complete.vm.state run.publicInput k ∧ demand.multiplicity = 1) ∨
+        (demand.message = run.complete.vm.final run.publicInput ∧ demand.multiplicity = -1))) ∨
+    (demand.channel ≠ run.complete.vm.channel.name ∧ ∃ δ, 0 < δ ∧ 2 * δ < p ∧
+      demand.multiplicity = -(δ : F p) ∧
+      (run.answeredMsgs balancing.states demand.channel).count demand.message + δ =
+        (run.pulledMsgs balancing.states demand.channel).count demand.message) := by
+  have hnet := hinv.canonical.netOf_eq hmem
+  have hne := hinv.canonical.2 demand hmem
+  rw [hinv.tracks] at hnet
+  by_cases hchannel : demand.channel = run.complete.vm.channel.name
+  · left
+    rw [hchannel, hinv.net_vm] at hnet
+    have hk : k < run.steps := by
+      by_contra hk
+      have hsteps : k = run.steps := le_antisymm hinv.steps_le (by omega)
+      rw [hsteps, run.reaches] at hnet
+      exact hne (by rw [← hnet]; simp)
+    refine ⟨hchannel, hk, ?_, ?_⟩
+    · cases padded
+      · rfl
+      · exact absurd (hinv.padded_steps rfl) (by omega)
+    · have hdistinct := run.distinct k hk
+      by_cases hstate : demand.message = run.complete.vm.state run.publicInput k
+      · refine .inl ⟨hstate, ?_⟩
+        rw [← hnet]
+        simp [hstate, hdistinct]
+      · by_cases hfinal : demand.message = run.complete.vm.final run.publicInput
+        · refine .inr ⟨hfinal, ?_⟩
+          rw [← hnet]
+          simp [hfinal, Ne.symm hdistinct]
+        · exact absurd (by rw [← hnet]; simp [hstate, hfinal]) hne
+  · right
+    rw [run.net_eq_answered_sub_pulled hinv.statesOk hchannel] at hnet
+    have hle := Multiset.le_iff_count.mp (hinv.answered_le _ hchannel) demand.message
+    set answered := (run.answeredMsgs balancing.states demand.channel).count demand.message
+    set pulled := (run.pulledMsgs balancing.states demand.channel).count demand.message
+    refine ⟨hchannel, pulled - answered, ?_, ?_, ?_, by omega⟩
+    · by_contra hzero
+      apply hne
+      rw [← hnet, show pulled = answered by omega]
+      simp
+    · have hcount := Multiset.count_le_card demand.message
+        (run.pulledMsgs balancing.states demand.channel)
+      have hcard := run.card_pulledMsgs_le_length balancing.states demand.channel
+      have hlength := hinv.length_lt
+      omega
+    · rw [← hnet, Nat.cast_sub hle]
+      ring
+
+/-- While demand is pending, some component handles a pending demand. -/
+lemma exists_handled (hinv : run.Inv k padded balancing) (hne : balancing.demands ≠ []) :
+    ∃ demand ∈ balancing.demands, ∃ state ∈ balancing.states, state.handles demand = true := by
+  obtain ⟨demand, hmem⟩ := List.exists_mem_of_ne_nil _ hne
+  rcases hinv.demand_cases hmem with ⟨-, hk, -, -⟩ | ⟨hchannel, δ, hpos, hlt, hmult, hcount⟩
+  · have hdistinct := run.distinct k hk
+    have hnet : netOf balancing.demands run.complete.vm.channel.name
+        (run.complete.vm.state run.publicInput k) = 1 := by
+      rw [hinv.tracks, hinv.net_vm]
+      simp [hdistinct]
+    obtain ⟨demand', hmem', hkey⟩ := List.mem_map.mp ((hinv.canonical.mem_iff _ _).mpr
+      (by rw [hnet]; exact one_ne_zero))
+    simp only [Demand.key, Prod.mk.injEq] at hkey
+    have hmult : demand'.multiplicity = 1 := by
+      rw [← hinv.canonical.netOf_eq hmem', hkey.1, hkey.2, hnet]
+    obtain ⟨vmState, hvmState, hvm⟩ := run.exists_vm_state hinv.shape
+    have hok := run.stateOk_of_shape hinv.shape hvmState
+    refine ⟨demand', hmem', vmState, hvmState, (run.handles_iff hok demand').mpr ?_⟩
+    rw [StateOk.vm_rowPlan run hok hvm, (demand_push hmult).1, hkey.1]
+    simp [Mode.handled, run.complete.vm.mode_channel, run.complete.vm.mode_direction]
+  · have hpulled : demand.message ∈ run.pulledMsgs balancing.states demand.channel :=
+      Multiset.count_pos.mp (by omega)
+    obtain ⟨hanswers, -⟩ := run.pulled_facts hinv.statesOk hchannel hpulled
+    obtain ⟨entry, hentry, hhandled, -⟩ := run.answers_entry hanswers
+    obtain ⟨state, hstate, -, hcomponent, hrowPlan⟩ := run.find?_state hinv.shape hentry
+    have hok := run.stateOk_of_shape hinv.shape hstate
+    refine ⟨demand, hmem, state, hstate, (run.handles_iff hok demand).mpr ?_⟩
+    rw [hcomponent, hrowPlan, (demand_pull hmult hpos hlt).1]
+    exact hhandled
 
 end Inv
 
