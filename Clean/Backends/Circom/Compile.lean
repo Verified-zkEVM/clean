@@ -1059,6 +1059,7 @@ def compileSteps (vm : VarMap) (steps : List (Step F)) :
         | [] => []
         | base :: highs => local.set base :: (highs >>= fun idx' => [i64.const 0, local.set idx'])
       pure (vm, idx + 1, acc.pushList (cb.build ++ capture))
+    | .read .. => .error "compileSteps: prover-data reads are not yet supported"
   ) (vmB, 0, {})
   pure (vmF, acc)
 

@@ -7,7 +7,8 @@ mod generated {
 }
 
 use clean_backend::witness_generation::{
-    self, Interaction, Mode, Padding, Program, WitnessData, WitnessField, WitnessGenerationError,
+    self, Cells, Interaction, Mode, Padding, Program, WitnessData, WitnessField,
+    WitnessGenerationError,
 };
 use clean_backend::{
     prove_ensemble, verify_ensemble, EnsembleShapeError, EnsembleVerificationError,
@@ -221,8 +222,10 @@ impl<F: WitnessField> Program<F> for Minimum64Program {
         component: usize,
         input: &[F],
         data: &WitnessData<F>,
+        hint: &WitnessData<F>,
+        cells: &mut Cells<'_, F>,
     ) -> Result<Vec<F>, String> {
-        generated::FibonacciEnsembleProgram::complete_row(component, input, data)
+        generated::FibonacciEnsembleProgram::complete_row(component, input, data, hint, cells)
     }
 
     fn interactions(component: usize, row: &[F]) -> Vec<Interaction<F>> {

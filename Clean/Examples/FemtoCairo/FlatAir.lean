@@ -101,6 +101,31 @@ def MemoryChannel : Channel (F p) MemoryEntry where
       entry.address = table[entry.address.val].address ∧
       entry.value = table[entry.address.val].value
 
+/-- Name of the hint table holding the prover's memory values, one per address. Memory reads
+propose them for the cells they define. -/
+def memoryValuesKey : String := "memoryValues"
+
+/-- Read the memory value at `address`, defining an undefined cell as the hinted value. -/
+def readMemory (address : Expression (F p)) : Witgen.M (F p) (Witgen.FExpr (F p)) :=
+  Witgen.read "memory" ProviderInput address.val ⟨1, by decide⟩
+    (.hintGet memoryValuesKey 1 address.val 0)
+
+omit [Fact (Nat.Prime p)] p_large_enough in
+lemma toElements_value (row : ProviderInput (F p)) :
+    (toElements row)[(⟨1, by decide⟩ : Fin (size ProviderInput))] = row.value := by
+  rcases row with ⟨address, value, multiplicity⟩
+  simp only [explicit_provable_type, ProvableStruct.structToElements_eq]
+  rfl
+
+omit p_large_enough in
+@[circuit_norm ↓ high]
+lemma eval_readMemory (env : ProverEnvironment (F p)) (address : Expression (F p)) :
+    Witgen.M.eval (value := field) env (readMemory address) =
+      ((env.data.getRows "memory" ProviderInput)[
+        (Witgen.U64Expr.eval { env } address.val).toNat]?.getD default).value := by
+  rw [readMemory, Witgen.M.eval_read]
+  exact toElements_value _
+
 def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
   main := fun input => do
     let state := input.state
@@ -110,9 +135,9 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
       mode.isDoubleAddressing * (state.ap + offset) +
       mode.isApRelative * (state.ap + offset) +
       mode.isFpRelative * (state.fp + offset)
-    let value1 ← witness (Witgen.dataGet "memory" ProviderInput addr1.val).value
+    let value1 ← witnessProgram (value := field) (readMemory addr1)
     let addr2 <== mode.isDoubleAddressing * value1
-    let value2 ← witness (Witgen.dataGet "memory" ProviderInput addr2.val).value
+    let value2 ← witnessProgram (value := field) (readMemory addr2)
     MemoryChannel.pull { address := addr1, value := value1 }
     MemoryChannel.pull { address := addr2, value := value2 }
     let value <==
@@ -714,9 +739,6 @@ def programMode (programSize : UInt64) : Mode (F p) :=
     handlers := [{ interaction := 0, column := 2 }]
   }
 
-/-- Name of the hint table holding the private memory values, one per row. -/
-def memoryValuesKey : String := "memoryValues"
-
 /-- The generation hint supplying `memoryValues` to the memory component's rows. -/
 def memoryValuesHint {memorySize : UInt64} (memoryValues : fields memorySize.toNat (F p)) :
     ProverHint (F p) := fun key n =>
@@ -724,11 +746,13 @@ def memoryValuesHint {memorySize : UInt64} (memoryValues : fields memorySize.toN
     memoryValues.toArray.map fun value => Vector.ofFn fun _ => value
   else #[]
 
+/-- Memory values start undefined; the execution's reads define them in execution order. -/
 def memoryMode (memorySize : UInt64) : Mode (F p) := .preallocated {
   rows := memorySize
-  input := .ofFExprs #v[.hintGet memoryValuesKey 1 .idx 0, .const 0]
+  input := .ofFExprs #v[.const 0, .const 0]
   input_valid := by rfl
   handlers := [{ interaction := 0, column := 2 }]
+  lazyColumns := [1]
 }
 
 def config {programSize memorySize : UInt64} (program : Fin programSize.toNat → F p)

@@ -96,6 +96,8 @@ def steps : List (Witgen.Step F) → List (Stmt F)
   | [] => []
   | .letF value :: rest => .letField (fieldExpr false value) :: steps rest
   | .letU value :: rest => .letU64 (u64Expr false value) :: steps rest
+  | .read key width row column proposal :: rest =>
+      .letRead key width (u64Expr false row) column.val (fieldExpr false proposal) :: steps rest
 
 /-- Statements pushing a witness IR output vector. -/
 def output : {n : ℕ} → Witgen.VExpr F n → List (Stmt F)

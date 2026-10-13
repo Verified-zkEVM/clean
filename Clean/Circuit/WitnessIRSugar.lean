@@ -362,6 +362,13 @@ instance : CoeOut (FExpr F) (M F (FExpr F)) := ⟨letF⟩
 theorem letF_def (e : FExpr F) :
     letF e = fun s => (.localVar s.size, s.push (.letF e)) := rfl
 
+/-- Read cell `col` of row `row` of a component's prover data as a shared step; returns a
+reference to it. During flat witness generation, the first read of an undefined cell defines it
+as `proposal`. -/
+def read (key : String) (Row : TypeMap) [ProvableType Row] (row : U64Expr F) (col : Fin (size Row))
+    (proposal : FExpr F) : M F (FExpr F) :=
+  fun s => (.localVar s.size, s.push (.read key (size Row) row col proposal))
+
 instance {F: Type} [Field F] : Inhabited (FExpr F) where
   default := .const 0
 
@@ -413,6 +420,18 @@ theorem eval_toIRLiteral (program : M F (value (FExpr F))) (env : ProverEnvironm
 
 instance {α : Type} [Inhabited α] : Inhabited (M F α) where
   default := pure default
+
+/-- A read evaluates to the committed prover-data cell, like `FExpr.dataGet`. -/
+@[circuit_norm ↓ high]
+theorem eval_read (env : ProverEnvironment F) (key : String) (Row : TypeMap) [ProvableType Row]
+    (row : U64Expr F) (col : Fin (size Row)) (proposal : FExpr F) :
+    eval (value := field) env (read key Row row col proposal) =
+      (toElements ((env.data.getRows key Row)[(row.eval { env }).toNat]?.getD default))[col] := by
+  simp only [eval, read, Array.size_empty, Array.toList_push, List.nil_append, evalSteps,
+    Witgen.eval, FExpr.eval]
+  simp only [Array.push, List.concat_eq_append, List.nil_append, ProverData.getRows,
+    Array.getElem?_map, default, Option.getD_map, ProvableType.toElements_fromElements]
+  simp [FExpr.eval, toElements, fromElements]
 end M
 end Witgen
 

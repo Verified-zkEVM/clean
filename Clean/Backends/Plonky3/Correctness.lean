@@ -8,10 +8,10 @@ public import Clean.Backends.Plonky3.Program
 /-!
 # Correctness of the witness IR to Rust translation
 
-The Rust model computes exactly the witness IR's values: `program_run` states that running a
-translated witness program produces the witness IR's output vector, for fields of order at most
-`2^64`. `witnessBlock_run` and `rowProgram_run` specialize it to component witness blocks and to
-row programs.
+The Rust model computes exactly the witness IR's values, for fields of order at most `2^64`.
+`rowProgram_run` states that a translated row program produces the row program's values.
+`witnessBlock_run` states that a translated component witness block computes what the flat
+witness generator computes, including the cells its reads define.
 -/
 
 namespace Backends.Plonky3.Codegen
@@ -247,41 +247,46 @@ lemma context_outside_loop (env : Env F) (locals : Array (F ⊕ UInt64)) (loopVa
     context env ⟨locals, loopVar⟩ false = context env ⟨locals, 0⟩ false := rfl
 
 theorem steps_run (hsize : FiniteField.size (F := F) ≤ UInt64.size) (env : Env F)
-    (stepList : List (Witgen.Step F)) (locals : Array (F ⊕ UInt64)) (output : Array F) :
-    (steps stepList).foldl (Stmt.run env) ⟨locals, output⟩ =
-      ⟨Witgen.evalSteps (proverEnvironment env) stepList locals env.rowIndex.toNat, output⟩ := by
+    (source : Witgen.RowProgram.Source) (stepList : List (Witgen.Step F))
+    (hvalid : stepList.all (Witgen.Step.validForRow source) = true)
+    (locals : Array (F ⊕ UInt64)) (output : Array F) (defined : List (Defined F)) :
+    (steps stepList).foldl (Stmt.run env) ⟨locals, output, defined⟩ =
+      ⟨Witgen.evalSteps (proverEnvironment env) stepList locals env.rowIndex.toNat, output,
+        defined⟩ := by
   induction stepList generalizing locals with
   | nil => rfl
   | cons step rest ih =>
+      simp only [List.all_cons, Bool.and_eq_true] at hvalid
       cases step with
       | letF value =>
           simp only [steps, List.foldl_cons, Stmt.run, Witgen.evalSteps,
             fieldExpr_eval hsize env ⟨locals, 0⟩ false value]
-          exact ih _
+          exact ih hvalid.2 _
       | letU value =>
           simp only [steps, List.foldl_cons, Stmt.run, Witgen.evalSteps,
             u64Expr_eval hsize env ⟨locals, 0⟩ false value]
-          exact ih _
+          exact ih hvalid.2 _
+      | read => simp [Witgen.Step.validForRow] at hvalid
 
 theorem pushes_run (hsize : FiniteField.size (F := F) ≤ UInt64.size) (env : Env F)
-    (locals : Array (F ⊕ UInt64)) :
+    (locals : Array (F ⊕ UInt64)) (defined : List (Defined F)) :
     (values : List (Witgen.FExpr F)) → (out : Array F) →
       (values.map fun value => Stmt.push (fieldExpr false value)).foldl (Stmt.run env)
-          ⟨locals, out⟩ =
-        ⟨locals, out ++ (values.map (·.eval (context env ⟨locals, 0⟩ false))).toArray⟩
+          ⟨locals, out, defined⟩ =
+        ⟨locals, out ++ (values.map (·.eval (context env ⟨locals, 0⟩ false))).toArray, defined⟩
   | [], out => by simp
   | value :: values, out => by
       simp only [List.map_cons, List.foldl_cons, Stmt.run, fieldExpr_eval hsize env,
-        pushes_run hsize env locals values]
+        pushes_run hsize env locals defined values]
       simp
 
 theorem output_run (hsize : FiniteField.size (F := F) ≤ UInt64.size) (env : Env F)
-    (locals : Array (F ⊕ UInt64)) :
+    (locals : Array (F ⊕ UInt64)) (defined : List (Defined F)) :
     {n : ℕ} → (vector : Witgen.VExpr F n) → (out : Array F) →
-      (Codegen.output vector).foldl (Stmt.run env) ⟨locals, out⟩ =
-        ⟨locals, out ++ (vector.eval (context env ⟨locals, 0⟩ false)).toArray⟩
+      (Codegen.output vector).foldl (Stmt.run env) ⟨locals, out, defined⟩ =
+        ⟨locals, out ++ (vector.eval (context env ⟨locals, 0⟩ false)).toArray, defined⟩
   | _, .lit values, out => by
-      simp only [Codegen.output, pushes_run hsize env locals, Witgen.VExpr.eval]
+      simp only [Codegen.output, pushes_run hsize env locals defined, Witgen.VExpr.eval]
       congr 2
       apply Array.ext'
       simp [Vector.toList]
@@ -300,41 +305,99 @@ theorem output_run (hsize : FiniteField.size (F := F) ≤ UInt64.size) (env : En
       simp only [FieldExpr.eval, U64Expr.eval, fieldExpr_eval hsize env, context_outside_loop,
         loopBit_toNat (val_lt_u64 hsize _)]
   | _, .append left right, out => by
-      simp only [Codegen.output, List.foldl_append, output_run hsize env locals left,
-        output_run hsize env locals right, Witgen.VExpr.eval, Vector.toArray_append,
+      simp only [Codegen.output, List.foldl_append, output_run hsize env locals defined left,
+        output_run hsize env locals defined right, Witgen.VExpr.eval, Vector.toArray_append,
         Array.append_assoc]
-
-/-- Running a translated witness program yields the witness IR's output vector. -/
-theorem program_run (hsize : FiniteField.size (F := F) ≤ UInt64.size) (env : Env F) {n : ℕ}
-    (programSteps : List (Witgen.Step F)) (programOutput : Witgen.VExpr F n) :
-    (run env (program programSteps programOutput)).output =
-      (programOutput.eval {
-        env := proverEnvironment env
-        locals := Witgen.evalSteps (proverEnvironment env) programSteps #[] env.rowIndex.toNat
-        idx := env.rowIndex.toNat }).toArray := by
-  simp only [run, program, List.foldl_append]
-  rw [steps_run hsize env programSteps #[] #[], output_run hsize env _ programOutput #[]]
-  simp only [Array.empty_append]
-  rfl
-
-/-- The Rust function of a component witness block, run on the row built so far, computes the
-block's witness values. -/
-theorem witnessBlock_run (hsize : FiniteField.size (F := F) ≤ UInt64.size) (block : WitnessBlock F)
-    (row : Array F) (data : ProverData F) (hint : ProverHint F) :
-    (run ⟨row, 0, data, hint⟩ (program block.steps block.output)).output =
-      (block.eval { get index := row[index]?.getD 0, data, hint } 0).toArray :=
-  program_run hsize ⟨row, 0, data, hint⟩ block.steps block.output
 
 /-- The Rust function of a row program computes its values at `row`. -/
 theorem rowProgram_run (hsize : FiniteField.size (F := F) ≤ UInt64.size)
-    (rowProgram : Witgen.RowProgram F) (row : UInt64) (hint : ProverHint F) :
-    (run ⟨#[], row, fun _ _ => #[], hint⟩ (program rowProgram.steps rowProgram.output)).output =
+    (rowProgram : Witgen.RowProgram F) {source : Witgen.RowProgram.Source}
+    (hvalid : rowProgram.Valid source) (row : UInt64) (hint : ProverHint F) (cell) :
+    (run ⟨#[], row, fun _ _ => #[], hint, cell⟩ (program rowProgram.steps rowProgram.output)).output =
       (rowProgram.eval row hint).toArray := by
-  rw [program_run hsize]
-  have henv : proverEnvironment ⟨#[], row, fun _ _ => #[], hint⟩ =
+  simp only [Witgen.RowProgram.Valid, Bool.and_eq_true] at hvalid
+  simp only [run, program, List.foldl_append]
+  rw [steps_run hsize _ source rowProgram.steps hvalid.1 #[] #[] [], output_run hsize _ _ _ _ #[]]
+  have henv : proverEnvironment ⟨#[], row, fun _ _ => #[], hint, cell⟩ =
       { get := fun _ => 0, data := fun _ _ => #[], hint } := by
     simp [proverEnvironment]
-  simp only [henv]
+  simp only [Array.empty_append, henv]
+  rfl
+
+open Air.Flat.WitnessGeneration in
+/-- The generation-time cells `_cells.read` reads: the generator's rows. -/
+def cells (states : List (ComponentState F)) : String → ℕ → ℕ → ℕ → Option F :=
+  fun key width row column => readCell states [] key width row column
+
+open Air.Flat.WitnessGeneration in
+def toDefined (definition : Definition F) : Defined F :=
+  ⟨definition.key, definition.row, definition.column, definition.value⟩
+
+open Air.Flat.WitnessGeneration in
+lemma read_cells (states : List (ComponentState F)) (env : Env F) (hcell : env.cell = cells states)
+    (locals : Array (F ⊕ UInt64)) (output : Array F) (pending : List (Definition F))
+    (key : String) (width row column : ℕ) :
+    State.read ⟨locals, output, pending.map toDefined⟩ env key width row column =
+      readCell states pending key width row column := by
+  simp only [State.read, hcell, cells, readCell, List.find?_map, Function.comp_def, toDefined]
+  cases pending.find? (fun definition =>
+    definition.key == key && definition.row == row && definition.column == column) <;> rfl
+
+open Air.Flat.WitnessGeneration in
+theorem steps_run_generation (hsize : FiniteField.size (F := F) ≤ UInt64.size)
+    (states : List (ComponentState F)) (env : Env F) (hcell : env.cell = cells states)
+    (hrow : env.rowIndex = 0) (stepList : List (Witgen.Step F)) (locals : Array (F ⊕ UInt64))
+    (output : Array F) (pending : List (Definition F)) :
+    (steps stepList).foldl (Stmt.run env) ⟨locals, output, pending.map toDefined⟩ =
+      ⟨(runSteps states (proverEnvironment env) stepList locals pending).1, output,
+        (runSteps states (proverEnvironment env) stepList locals pending).2.map toDefined⟩ := by
+  have hcontext (locals : Array (F ⊕ UInt64)) :
+      context env ⟨locals, 0⟩ false = { env := proverEnvironment env, locals } := by
+    simp [context, hrow]
+  induction stepList generalizing locals pending with
+  | nil => rfl
+  | cons step rest ih =>
+      cases step with
+      | letF value =>
+          simp only [steps, List.foldl_cons, Stmt.run, runSteps,
+            fieldExpr_eval hsize env ⟨locals, 0⟩ false value, hcontext]
+          exact ih _ _
+      | letU value =>
+          simp only [steps, List.foldl_cons, Stmt.run, runSteps,
+            u64Expr_eval hsize env ⟨locals, 0⟩ false value, hcontext]
+          exact ih _ _
+      | read key width row column proposal =>
+          simp only [steps, List.foldl_cons, Stmt.run, runSteps,
+            u64Expr_eval hsize env ⟨locals, 0⟩ false row, hcontext,
+            read_cells states env hcell]
+          cases readCell states pending key width
+              (Witgen.U64Expr.eval { env := proverEnvironment env, locals } row).toNat column.val with
+          | some value => exact ih _ _
+          | none =>
+              simp only [fieldExpr_eval hsize env ⟨locals, 0⟩ false proposal, hcontext]
+              have h := ih (locals.push (.inl (proposal.eval { env := proverEnvironment env, locals })))
+                (pending ++ [⟨key, (row.eval { env := proverEnvironment env, locals }).toNat,
+                  column.val, proposal.eval { env := proverEnvironment env, locals }⟩])
+              simp only [List.map_append, List.map_cons, List.map_nil, toDefined] at h
+              exact h
+
+open Air.Flat.WitnessGeneration in
+/-- The Rust function of a component witness block, run on the row built so far and the cells
+defined so far, computes what the flat witness generator computes: the block's witness values
+and the cells its reads define. -/
+theorem witnessBlock_run (hsize : FiniteField.size (F := F) ≤ UInt64.size)
+    (states : List (ComponentState F)) (block : WitnessBlock F) (row : Array F)
+    (data : ProverData F) (hint : ProverHint F) (pending : List (Definition F)) :
+    let environment : ProverEnvironment F := { get index := row[index]?.getD 0, data, hint }
+    let result := runSteps states environment block.steps #[] pending
+    run ⟨row, 0, data, hint, cells states⟩ (program block.steps block.output)
+        (pending.map toDefined) =
+      ⟨result.1, (block.output.eval { env := environment, locals := result.1 }).toArray,
+        result.2.map toDefined⟩ := by
+  simp only [run, program, List.foldl_append]
+  rw [steps_run_generation hsize states _ rfl rfl block.steps #[] #[] pending,
+    output_run hsize _ _ _ _ #[]]
+  simp only [Array.empty_append]
   rfl
 
 end Backends.Plonky3.Codegen

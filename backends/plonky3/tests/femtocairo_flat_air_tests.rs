@@ -23,7 +23,8 @@ fn field(value: u64) -> BabyBear {
     BabyBear::from_u64(value)
 }
 
-/// The private memory values, supplied to witness generation as the `memoryValues` hint table.
+/// The prover's memory values, supplied to witness generation as the `memoryValues` hint table.
+/// Memory reads propose them for the cells they define.
 fn memory(values: [u64; 8]) -> WitnessData<BabyBear> {
     WitnessData::from_entries(vec![(
         "memoryValues",
@@ -47,7 +48,7 @@ fn extracted_femtocairo_witness_uses_committed_memory_data() {
 }
 
 #[test]
-fn extracted_femtocairo_accepts_runtime_private_memories() {
+fn extracted_femtocairo_memory_is_defined_by_reads() {
     let public_values = vec![field(0), field(0)];
     let first = memory([0, 5, 3, 7, 2, 10, 0, 0]);
     let second = memory([0, 5, 3, 7, 2, 10, 0, 99]);
@@ -56,8 +57,9 @@ fn extracted_femtocairo_accepts_runtime_private_memories() {
         .expect("first runtime memory should generate a witness");
     let second_witness = generated::generate(&public_values, &second)
         .expect("second runtime memory should generate a witness");
+    // The program never reads address 7, so its hinted value does not enter the witness.
     assert_eq!(first_witness.tables[1][7][1], field(0));
-    assert_eq!(second_witness.tables[1][7][1], field(99));
+    assert_eq!(second_witness.tables[1][7][1], field(0));
 
     let config = setup::test_config(13);
     let traces = second_witness

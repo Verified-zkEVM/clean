@@ -99,14 +99,19 @@ inductive Stmt (F : Type) where
   | push (value : FieldExpr F)
   /-- `for idx in 0u64..count { output.push(value); }` -/
   | forPush (count : ℕ) (value : FieldExpr F)
+  /-- `let local_k: F = _cells.read(key, width, row as usize, column, proposal);`, where `k` counts
+  the earlier `let`s. -/
+  | letRead (key : String) (width : ℕ) (row : U64Expr F) (column : ℕ) (proposal : FieldExpr F)
 
 /-- The inputs of a generated function: the row slice it reads, the row index argument, committed
-prover data, and the prover hint. -/
+prover data, the prover hint, and the generation-time prover-data cells that `_cells.read` reads:
+`none` while no read has defined a cell. -/
 structure Env (F : Type) where
   row : Array F
   rowIndex : UInt64
   data : ProverData F
   hint : ProverHint F
+  cell : String → ℕ → ℕ → ℕ → Option F
 
 /-- Values of the `let` locals, and the `idx` variable of the enclosing loop. -/
 structure Frame (F : Type) where
@@ -182,10 +187,24 @@ end
 
 end Eval
 
-/-- The locals and output vector built by a function body. -/
+/-- A prover-data cell defined by `_cells.read`: component `key`, row, column, and value. -/
+structure Defined (F : Type) where
+  key : String
+  row : ℕ
+  column : ℕ
+  value : F
+
+/-- The locals and output vector built by a function body, and the cells `_cells.read` defined. -/
 structure State (F : Type) where
   locals : Array (F ⊕ UInt64)
   output : Array F
+  defined : List (Defined F) := []
+
+/-- The value `_cells.read` sees for a cell: a definition made so far, else the cell itself. -/
+def State.read (state : State F) (env : Env F) (key : String) (width row column : ℕ) : Option F :=
+  match state.defined.find? fun cell => cell.key == key && cell.row == row && cell.column == column with
+  | some cell => some cell.value
+  | none => env.cell key width row column
 
 /-- Execute one statement. -/
 def Stmt.run [FiniteField F] (env : Env F) (state : State F) : Stmt F → State F
@@ -198,9 +217,19 @@ def Stmt.run [FiniteField F] (env : Env F) (state : State F) : Stmt F → State 
   | .forPush count value =>
       { state with output := state.output ++ (List.range count).toArray.map fun index =>
           value.eval env ⟨state.locals, index⟩ }
+  | .letRead key width row column proposal =>
+      let index := (row.eval env ⟨state.locals, 0⟩).toNat
+      match state.read env key width index column with
+      | some value => { state with locals := state.locals.push (.inl value) }
+      | none =>
+          let value := proposal.eval env ⟨state.locals, 0⟩
+          { state with
+            locals := state.locals.push (.inl value)
+            defined := state.defined ++ [⟨key, index, column, value⟩] }
 
-/-- Execute a function body from no locals and an empty output. -/
-def run [FiniteField F] (env : Env F) (body : List (Stmt F)) : State F :=
-  body.foldl (Stmt.run env) { locals := #[], output := #[] }
+/-- Execute a function body from no locals, an empty output, and the cells defined so far. -/
+def run [FiniteField F] (env : Env F) (body : List (Stmt F)) (defined : List (Defined F) := []) :
+    State F :=
+  body.foldl (Stmt.run env) { locals := #[], output := #[], defined }
 
 end Backends.Plonky3.Rust

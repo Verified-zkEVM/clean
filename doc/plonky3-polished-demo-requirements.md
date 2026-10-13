@@ -196,7 +196,9 @@ Component names are unique and serve as `ProverData` keys. Each entry contains t
 complete serialized circuit inputs. A prover hint used to construct a witness is a separate
 concept and must not become an independently trusted semantic data source. Any witness-generation
 read must agree with the data derived from the final committed rows; programs for which this
-agreement cannot be established must be rejected explicitly.
+agreement cannot be established must be rejected explicitly. Data that the prover does not know
+before execution, such as memory, is defined by the reads that execution performs: the first read
+of a lazy cell defines it, and every later read sees that value.
 
 ### Fixed columns have indexed Lean semantics
 

@@ -2,8 +2,8 @@
 use alloc::string::String;
 use alloc::{format, vec, vec::Vec};
 use clean_backend::witness_generation::{
-    Aggregation, DemandMode, Direction, EnsembleWitness, InputCell, Interaction, Mode, Padding,
-    PreallocatedHandler, Program, WitnessData, WitnessField, WitnessGenerationError,
+    Aggregation, Cells, DemandMode, Direction, EnsembleWitness, InputCell, Interaction, Mode,
+    Padding, PreallocatedHandler, Program, WitnessData, WitnessField, WitnessGenerationError,
 };
 use clean_backend::{GeneratedAirSpec, GeneratedEnsemble, GeneratedLookup};
 use p3_air::lookup::Direction as LookupDirection;
@@ -27,14 +27,18 @@ fn safe_rem(left: u64, right: u64) -> u64 {
     }
 }
 
-fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<Vec<F>, String> {
+fn component_0<F: WitnessField>(
+    input: &[F],
+    _data: &WitnessData<F>,
+    _hint: &WitnessData<F>,
+    _cells: &mut Cells<'_, F>,
+) -> Result<Vec<F>, String> {
     if input.len() != 3 {
         return Err(format!(
             "component input has width {}, expected 3",
             input.len()
         ));
     }
-    let _hint = &WitnessData::<F>::from_entries(Vec::new());
     let mut row = input.to_vec();
     {
         let mut output: Vec<F> = Vec::with_capacity(1);
@@ -252,12 +256,19 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
     }
     {
         let mut output: Vec<F> = Vec::with_capacity(1);
-        output.push(_data.get(
+        let local_0: F = _cells.read(
             "memory",
             3,
             ((row.get(15).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
             1,
-        ));
+            _hint.get(
+                "memoryValues",
+                1,
+                ((row.get(15).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
+                0,
+            ),
+        );
+        output.push(local_0);
         debug_assert_eq!(output.len(), 1);
         row.extend(output);
     }
@@ -276,12 +287,19 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
     }
     {
         let mut output: Vec<F> = Vec::with_capacity(1);
-        output.push(_data.get(
+        let local_0: F = _cells.read(
             "memory",
             3,
             ((row.get(17).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
             1,
-        ));
+            _hint.get(
+                "memoryValues",
+                1,
+                ((row.get(17).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
+                0,
+            ),
+        );
+        output.push(local_0);
         debug_assert_eq!(output.len(), 1);
         row.extend(output);
     }
@@ -339,12 +357,19 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
     }
     {
         let mut output: Vec<F> = Vec::with_capacity(1);
-        output.push(_data.get(
+        let local_0: F = _cells.read(
             "memory",
             3,
             ((row.get(20).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
             1,
-        ));
+            _hint.get(
+                "memoryValues",
+                1,
+                ((row.get(20).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
+                0,
+            ),
+        );
+        output.push(local_0);
         debug_assert_eq!(output.len(), 1);
         row.extend(output);
     }
@@ -363,12 +388,19 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
     }
     {
         let mut output: Vec<F> = Vec::with_capacity(1);
-        output.push(_data.get(
+        let local_0: F = _cells.read(
             "memory",
             3,
             ((row.get(22).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
             1,
-        ));
+            _hint.get(
+                "memoryValues",
+                1,
+                ((row.get(22).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
+                0,
+            ),
+        );
+        output.push(local_0);
         debug_assert_eq!(output.len(), 1);
         row.extend(output);
     }
@@ -426,12 +458,19 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
     }
     {
         let mut output: Vec<F> = Vec::with_capacity(1);
-        output.push(_data.get(
+        let local_0: F = _cells.read(
             "memory",
             3,
             ((row.get(25).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
             1,
-        ));
+            _hint.get(
+                "memoryValues",
+                1,
+                ((row.get(25).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
+                0,
+            ),
+        );
+        output.push(local_0);
         debug_assert_eq!(output.len(), 1);
         row.extend(output);
     }
@@ -450,12 +489,19 @@ fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<V
     }
     {
         let mut output: Vec<F> = Vec::with_capacity(1);
-        output.push(_data.get(
+        let local_0: F = _cells.read(
             "memory",
             3,
             ((row.get(27).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
             1,
-        ));
+            _hint.get(
+                "memoryValues",
+                1,
+                ((row.get(27).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
+                0,
+            ),
+        );
+        output.push(local_0);
         debug_assert_eq!(output.len(), 1);
         row.extend(output);
     }
@@ -641,14 +687,18 @@ fn component_0_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
     ]
 }
 
-fn component_1<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<Vec<F>, String> {
+fn component_1<F: WitnessField>(
+    input: &[F],
+    _data: &WitnessData<F>,
+    _hint: &WitnessData<F>,
+    _cells: &mut Cells<'_, F>,
+) -> Result<Vec<F>, String> {
     if input.len() != 3 {
         return Err(format!(
             "component input has width {}, expected 3",
             input.len()
         ));
     }
-    let _hint = &WitnessData::<F>::from_entries(Vec::new());
     let row = input.to_vec();
 
     if row.len() != 3 {
@@ -669,14 +719,18 @@ fn component_1_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
     }]
 }
 
-fn component_2<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<Vec<F>, String> {
+fn component_2<F: WitnessField>(
+    input: &[F],
+    _data: &WitnessData<F>,
+    _hint: &WitnessData<F>,
+    _cells: &mut Cells<'_, F>,
+) -> Result<Vec<F>, String> {
     if input.len() != 3 {
         return Err(format!(
             "component input has width {}, expected 3",
             input.len()
         ));
     }
-    let _hint = &WitnessData::<F>::from_entries(Vec::new());
     let row = input.to_vec();
 
     if row.len() != 3 {
@@ -749,7 +803,7 @@ fn component_2_fixed_row<F: WitnessField>(row: u64) -> Vec<F> {
 fn component_1_initial_row<F: WitnessField>(row: u64, _hint: &WitnessData<F>) -> Vec<F> {
     let mut input = component_1_fixed_row::<F>(row);
     let mut output: Vec<F> = Vec::with_capacity(2);
-    output.push(_hint.get("memoryValues", 1, (row) as usize, 0));
+    output.push(F::from_u64(0u64));
     output.push(F::from_u64(0u64));
     debug_assert_eq!(output.len(), 2);
     input.extend(output);
@@ -1318,6 +1372,7 @@ impl<F: WitnessField> Program<F> for FemtoCairoFlatAirProgram {
                     interaction: 0,
                     column: 2,
                 }],
+                lazy_columns: vec![1],
             },
             Mode::Preallocated {
                 rows: 32,
@@ -1327,6 +1382,7 @@ impl<F: WitnessField> Program<F> for FemtoCairoFlatAirProgram {
                     interaction: 0,
                     column: 2,
                 }],
+                lazy_columns: vec![],
             },
         ]
     }
@@ -1360,11 +1416,13 @@ impl<F: WitnessField> Program<F> for FemtoCairoFlatAirProgram {
         component: usize,
         input: &[F],
         data: &WitnessData<F>,
+        hint: &WitnessData<F>,
+        cells: &mut Cells<'_, F>,
     ) -> Result<Vec<F>, String> {
         match component {
-            0 => component_0(input, data),
-            1 => component_1(input, data),
-            2 => component_2(input, data),
+            0 => component_0(input, data, hint, cells),
+            1 => component_1(input, data, hint, cells),
+            2 => component_2(input, data, hint, cells),
             _ => Err(format!("component index {component} is out of bounds")),
         }
     }

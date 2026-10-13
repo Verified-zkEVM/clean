@@ -88,6 +88,9 @@ structure PreallocatedMode (F : Type) where
   input : Witgen.RowProgram F
   input_valid : input.Valid .prover
   handlers : List PreallocatedHandler
+  /-- Input columns whose cells start undefined: the first read of a cell, in generation order,
+  defines it as that read's proposal. -/
+  lazyColumns : List ℕ := []
 
 /-- The row-allocation modes needed by flat AIR ensembles. Fixed columns are an
 orthogonal component property and are not themselves a generation mode. -/
@@ -128,6 +131,10 @@ inductive ConfigError where
   | unknownDataRead (component : String) (operation : ℕ) (key : String)
   | dataReadWidth (component : String) (operation : ℕ) (key : String) (expected actual : ℕ)
   | unstableDataRead (component : String) (operation : ℕ) (key : String) (column : ℕ)
+  | lazyColumn (component : String) (column fixedWidth inputWidth : ℕ)
+  | lazyHandlerColumn (component : String) (column : ℕ)
+  | lazyComponentRead (component : String) (operation : ℕ)
+  | paddedDataRead (component : String) (operation : ℕ) (key : String)
 deriving Repr, DecidableEq
 
 def Direction.name : Direction → String
@@ -169,6 +176,17 @@ instance : ToString ConfigError where
     | .unstableDataRead component operation key column =>
         s!"component '{component}' witness operation {operation} reads generated prover-data cell \
           '{key}' column {column}"
+    | .lazyColumn component column fixedWidth inputWidth =>
+        s!"lazy column {column} of component '{component}' is outside the mutable input range \
+          [{fixedWidth}, {inputWidth})"
+    | .lazyHandlerColumn component column =>
+        s!"column {column} of component '{component}' is both lazy and a handler column"
+    | .paddedDataRead component operation key =>
+        s!"component '{component}' witness operation {operation} reads prover-data component \
+          '{key}', whose padding adds rows"
+    | .lazyComponentRead component operation =>
+        s!"component '{component}' has lazy columns, so its witness operation {operation} must not \
+          read prover data with a read step"
 
 /-- The direction of demand a preallocated handler's interaction serves: a push serves pulls and
 a pull serves pushes. -/
@@ -186,12 +204,15 @@ def Mode.handled (component : Component F) : Mode F → List (String × Directio
 
 Witness generation reads prover data from the rows initialized before channel balancing. That
 snapshot equals the final derived data at every cell that balancing never changes, so witness
-programs may read only the stable cells of preallocated components. -/
+programs may read only the stable cells of preallocated components. Read steps may also read the
+lazy cells of preallocated components, which the first read defines. -/
 
 structure DataRead where
   key : String
   width : ℕ
   column : ℕ
+  /-- A read step, which may define a lazy cell, rather than an `FExpr.dataGet`. -/
+  defining : Bool := false
 
 mutual
 
@@ -240,6 +261,9 @@ def vexprDataReads : {n : ℕ} → Witgen.VExpr F n → List DataRead
 def stepDataReads : Witgen.Step F → List DataRead
   | .letF value => fexprDataReads value
   | .letU value => u64exprDataReads value
+  | .read key width row column proposal =>
+      { key, width, column := column.val, defining := true } ::
+        (u64exprDataReads row ++ fexprDataReads proposal)
 
 def witnessDataReads : {n : ℕ} → Witgen.WitgenIR F n → List DataRead
   | _, .native _ => []
@@ -295,13 +319,28 @@ def validateGeneration (component : Component F) (generation : Generation F) :
           throw (.preallocatedInteraction name handler.interaction)
         unless fixedWidth ≤ handler.column && handler.column < inputWidth do
           throw (.preallocatedColumn name handler.column fixedWidth inputWidth)
+      for column in preallocated.lazyColumns do
+        unless fixedWidth ≤ column && column < inputWidth do
+          throw (.lazyColumn name column fixedWidth inputWidth)
+        if preallocated.handlers.any (·.column = column) then
+          throw (.lazyHandlerColumn name column)
 
-/-- Check that every prover-data read targets a stable cell of a preallocated component. -/
+/-- The lazy columns of a component's generation mode. -/
+def Mode.lazyColumns (mode : Mode F) : List ℕ :=
+  match mode with
+  | .demand _ => []
+  | .preallocated allocation => allocation.lazyColumns
+
+/-- Check that every prover-data read targets a stable cell of a preallocated component, or a
+lazy cell through a read step, and that components with lazy cells do not read them. -/
 def validateDataReads (components : List (Component F)) (generations : List (Generation F)) :
     Except ConfigError Unit := do
-  for component in components do
+  for (component, ownGeneration) in components.zip generations do
     for (operation, operationIndex) in component.rowOperations.toFlat.zipIdx do
       if let .witness _ code := operation then
+        if !ownGeneration.mode.lazyColumns.isEmpty &&
+            (witnessDataReads code).any (·.defining) then
+          throw (.lazyComponentRead component.circuit.name operationIndex)
         for read in witnessDataReads code do
           let some (target, generation) := (components.zip generations).find? fun (target, _) =>
               target.circuit.name == read.key
@@ -309,12 +348,16 @@ def validateDataReads (components : List (Component F)) (generations : List (Gen
           unless read.width = target.rowOffset do
             throw (.dataReadWidth component.circuit.name operationIndex read.key target.rowOffset
               read.width)
-          let unstable := match generation.mode with
-            | .demand _ => true
-            | .preallocated preallocated =>
-                preallocated.handlers.any fun handler => handler.column = read.column
-          if unstable then
-            throw (.unstableDataRead component.circuit.name operationIndex read.key read.column)
+          match generation.mode with
+          | .demand _ =>
+              throw (.unstableDataRead component.circuit.name operationIndex read.key read.column)
+          | .preallocated preallocated =>
+              if preallocated.handlers.any (·.column = read.column) ||
+                  (!read.defining && preallocated.lazyColumns.contains read.column) then
+                throw (.unstableDataRead component.circuit.name operationIndex read.key read.column)
+              unless generation.padding.targetHeight preallocated.rows.toNat =
+                  preallocated.rows.toNat do
+                throw (.paddedDataRead component.circuit.name operationIndex read.key)
 
 /-- Check that no two components handle demand of the same channel and direction. -/
 def validateHandlers (components : List (Component F)) (generations : List (Generation F)) :
@@ -401,6 +444,27 @@ end Demand
 
 /-! ### Rows and tables -/
 
+/-- A semantic failure of witness generation. -/
+inductive GenerationError where
+  | config (error : ConfigError)
+  | unhandledImbalance (channels : List String)
+  | noPreallocatedRow (component channel : String)
+  | interactionBound
+  | noProgress
+  | assembly (message : String)
+deriving Repr
+
+instance : ToString GenerationError where
+  toString
+    | .config error => toString error
+    | .unhandledImbalance channels =>
+        s!"unhandled channel imbalance on: {String.intercalate ", " channels}"
+    | .noPreallocatedRow component channel =>
+        s!"component '{component}' has no preallocated row for a message on channel '{channel}'"
+    | .interactionBound => "generation reached as many interactions as the field characteristic"
+    | .noProgress => "witness generation made no progress"
+    | .assembly message => message
+
 /-- How a dynamic row was triggered, retained for message-coalesced updates. -/
 structure Origin (F : Type) where
   channel : String
@@ -412,6 +476,8 @@ structure GeneratedRow (F : Type) where
   input : Array F
   values : Array F
   origin : Option (Origin F) := none
+  /-- The lazy input columns no read has defined yet. -/
+  undefined : List ℕ := []
 
 /-- One component's generation state: its operations, its validated generation metadata, and
 the rows generated so far. -/
@@ -439,20 +505,72 @@ def ComponentState.initial (component : Component F) (generation : Generation F)
     generation
   }
 
-def witgenStepWithData (data : ProverData F) (hint : ProverHint F)
-    (acc : Array F) : FlatOperation F → Array F
+/-- A lazy cell defined by its first read: column `column` of row `row` of component `key`. -/
+structure Definition (F : Type) where
+  key : String
+  row : ℕ
+  column : ℕ
+  value : F
+
+/-- The generation-time value of a prover-data cell: a pending definition, else the cell of the
+component's row, or `none` if the cell is still undefined. Missing rows read as 0, as in the
+derived prover data; validation ensures rows that are read are never added later. -/
+def readCell (states : List (ComponentState F)) (pending : List (Definition F)) (key : String)
+    (width row column : ℕ) : Option F :=
+  match pending.find? fun definition =>
+      definition.key == key && definition.row == row && definition.column == column with
+  | some definition => some definition.value
+  | none =>
+      match states.find? (·.component.circuit.name == key) with
+      | none => some 0
+      | some state =>
+          if state.component.rowOffset = width then
+            match state.rows[row]? with
+            | none => some 0
+            | some generated =>
+                if generated.undefined.contains column then none
+                else some (generated.input[column]?.getD 0)
+          else some 0
+
+/-- Run `let`-steps like `Witgen.evalSteps`, except that a read step of an undefined cell defines
+it as its proposal. Returns the locals and the pending definitions. -/
+def runSteps (states : List (ComponentState F)) (env : ProverEnvironment F) :
+    List (Witgen.Step F) → Array (F ⊕ UInt64) → List (Definition F) →
+      Array (F ⊕ UInt64) × List (Definition F)
+  | [], locals, pending => (locals, pending)
+  | .letF value :: steps, locals, pending =>
+      runSteps states env steps (locals.push (.inl (value.eval { env, locals }))) pending
+  | .letU value :: steps, locals, pending =>
+      runSteps states env steps (locals.push (.inr (value.eval { env, locals }))) pending
+  | .read key width row column proposal :: steps, locals, pending =>
+      let index := (row.eval { env, locals }).toNat
+      match readCell states pending key width index column.val with
+      | some value => runSteps states env steps (locals.push (.inl value)) pending
+      | none =>
+          let value := proposal.eval { env, locals }
+          runSteps states env steps (locals.push (.inl value))
+            (pending ++ [{ key, row := index, column := column.val, value }])
+
+def witgenStep (states : List (ComponentState F)) (data : ProverData F) (hint : ProverHint F)
+    (acc : Array F × List (Definition F)) : FlatOperation F → Array F × List (Definition F)
   | .witness _ code =>
       let environment : ProverEnvironment F := {
-        get index := acc[index]?.getD 0
+        get index := acc.1[index]?.getD 0
         data
         hint
       }
-      acc ++ (code.eval environment).toArray
+      match code with
+      | .native compute => (acc.1 ++ (compute environment).toArray, acc.2)
+      | .ir steps output =>
+          let (locals, pending) := runSteps states environment steps #[] acc.2
+          (acc.1 ++ (output.eval { env := environment, locals }).toArray, pending)
   | .assert _ | .lookup _ | .interact _ => acc
 
-def witgenWithData (data : ProverData F) (hint : ProverHint F)
-    (ops : List (FlatOperation F)) (input : Array F) : Array F :=
-  ops.foldl (witgenStepWithData data hint) input
+/-- Run a component's witness programs on an input row. -/
+def witgen (states : List (ComponentState F)) (data : ProverData F) (hint : ProverHint F)
+    (ops : List (FlatOperation F)) (input : Array F) (pending : List (Definition F)) :
+    Array F × List (Definition F) :=
+  ops.foldl (witgenStep states data hint) (input, pending)
 
 /-- The runtime view of the same complete circuit inputs used by `deriveProverData`. -/
 def generatedData (states : List (ComponentState F)) : ProverData F := fun name n =>
@@ -463,10 +581,13 @@ def generatedData (states : List (ComponentState F)) : ProverData F := fun name 
       else #[]
   | none => #[]
 
-/-- Complete a component row from its input with the component's witness programs. -/
-def completeRow (state : ComponentState F) (input : Array F) (data : ProverData F)
-    (origin : Option (Origin F)) : GeneratedRow F :=
-  { input, values := witgenWithData data (ProverHint.empty F) state.witgenOps input, origin }
+/-- Complete a component row from its input with the component's witness programs, reading
+prover data from `states` and the pending definitions. -/
+def completeRow (states : List (ComponentState F)) (pending : List (Definition F))
+    (state : ComponentState F) (input : Array F) (data : ProverData F) (hint : ProverHint F)
+    (origin : Option (Origin F)) (undefined : List ℕ) : GeneratedRow F × List (Definition F) :=
+  let (values, pending) := witgen states data hint state.witgenOps input pending
+  ({ input, values, origin, undefined }, pending)
 
 def rowInteractions (state : ComponentState F) (row : GeneratedRow F) (data : ProverData F) :
     List (Interaction F) :=
@@ -516,41 +637,45 @@ def sameOrigin (origin : Origin F) (mode : DemandMode F) (demand : Demand F) : B
   origin.channel == mode.channel.name && origin.direction == mode.direction &&
     origin.message == demand.message
 
-def createDemandRow (state : ComponentState F) (mode : DemandMode F)
-    (demand : Demand F) (multiplicity : ℕ) (data : ProverData F) : GeneratedRow F :=
+def createDemandRow (states : List (ComponentState F)) (state : ComponentState F)
+    (mode : DemandMode F) (demand : Demand F) (multiplicity : ℕ) (data : ProverData F) (hint : ProverHint F) :
+    GeneratedRow F × List (Definition F) :=
   let origin : Origin F := {
     channel := mode.channel.name
     direction := mode.direction
     message := demand.message
     multiplicity
   }
-  completeRow state (mode.input.eval demand.message multiplicity) data (some origin)
+  completeRow states [] state (mode.input.eval demand.message multiplicity) data hint (some origin) []
 
-/-- A component's new rows, and the rows they replaced. -/
+/-- A component's new rows, the rows they replaced, and the lazy cells their reads defined. -/
 structure Mutation (F : Type) [FiniteField F] where
   state : ComponentState F
   removedRows : List (GeneratedRow F) := []
   addedRows : List (GeneratedRow F) := []
+  definitions : List (Definition F) := []
 
-def handleDemand (state : ComponentState F) (mode : DemandMode F)
-    (demand : Demand F) (data : ProverData F) : Mutation F :=
+def handleDemand (states : List (ComponentState F)) (state : ComponentState F)
+    (mode : DemandMode F) (demand : Demand F) (data : ProverData F) (hint : ProverHint F) : Mutation F :=
   match mode.aggregation with
   | .perOccurrence =>
-      let rows := List.replicate demand.count (createDemandRow state mode demand 1 data)
-      { state := { state with rows := state.rows ++ rows }, addedRows := rows }
+      let (row, definitions) := createDemandRow states state mode demand 1 data hint
+      let rows := List.replicate demand.count row
+      { state := { state with rows := state.rows ++ rows }, addedRows := rows, definitions }
   | .byMessage =>
       match state.rows.zipIdx.findSome? fun (row, index) =>
           row.origin.bind fun origin =>
             if sameOrigin origin mode demand then some (row, origin, index) else none with
       | none =>
-          let row := createDemandRow state mode demand demand.count data
-          { state := { state with rows := state.rows ++ [row] }, addedRows := [row] }
+          let (row, definitions) := createDemandRow states state mode demand demand.count data hint
+          { state := { state with rows := state.rows ++ [row] }, addedRows := [row], definitions }
       | some (row, origin, index) =>
-          let updated :=
-            createDemandRow state mode demand (origin.multiplicity + demand.count) data
+          let (updated, definitions) :=
+            createDemandRow states state mode demand (origin.multiplicity + demand.count) data hint
           { state := { state with rows := state.rows.set index updated }
             removedRows := [row]
-            addedRows := [updated] }
+            addedRows := [updated]
+            definitions }
 
 /-- The first preallocated row whose handled interaction carries the demanded message. -/
 def findPreallocatedRow (state : ComponentState F) (handlers : List PreallocatedHandler)
@@ -564,58 +689,68 @@ def findPreallocatedRow (state : ComponentState F) (handlers : List Preallocated
           if interaction.msg == demand.message then some (handler, rowIndex, row) else none
     else none
 
-def handlePreallocated (state : ComponentState F) (handlers : List PreallocatedHandler)
-    (demand : Demand F) (data : ProverData F) : Option (Mutation F) :=
+def handlePreallocated (states : List (ComponentState F)) (state : ComponentState F)
+    (handlers : List PreallocatedHandler) (demand : Demand F) (data : ProverData F) (hint : ProverHint F) :
+    Option (Mutation F) :=
   match findPreallocatedRow state handlers demand data with
   | none => none
   | some (handler, rowIndex, row) =>
       let value := (row.input[handler.column]?.getD 0) + FiniteField.fromNat demand.count
-      let updated := completeRow state (row.input.set! handler.column value) data none
+      let (updated, definitions) :=
+        completeRow states [] state (row.input.set! handler.column value) data hint none row.undefined
       some {
         state := { state with rows := state.rows.set rowIndex updated }
         removedRows := [row]
         addedRows := [updated]
+        definitions
       }
-
-/-- A semantic failure of witness generation. -/
-inductive GenerationError where
-  | config (error : ConfigError)
-  | unhandledImbalance (channels : List String)
-  | noPreallocatedRow (component channel : String)
-  | interactionBound
-  | noProgress
-  | assembly (message : String)
-deriving Repr
-
-instance : ToString GenerationError where
-  toString
-    | .config error => toString error
-    | .unhandledImbalance channels =>
-        s!"unhandled channel imbalance on: {String.intercalate ", " channels}"
-    | .noPreallocatedRow component channel =>
-        s!"component '{component}' has no preallocated row for a message on channel '{channel}'"
-    | .interactionBound => "generation reached as many interactions as the field characteristic"
-    | .noProgress => "witness generation made no progress"
-    | .assembly message => message
 
 /-- The interactions a handled demand removes and adds. -/
 structure Change (F : Type) where
   removed : List (Interaction F)
   added : List (Interaction F)
 
+def Change.append (change change' : Change F) : Change F where
+  removed := change.removed ++ change'.removed
+  added := change.added ++ change'.added
+
+/-- Set the defined lazy cells in their rows, completing each defined row again. -/
+def define (data : ProverData F) (hint : ProverHint F) :
+    List (ComponentState F) → List (Definition F) → List (ComponentState F) × Change F
+  | states, [] => (states, ⟨[], []⟩)
+  | states, definition :: definitions =>
+      match states.findIdx? (·.component.circuit.name == definition.key) with
+      | none => define data hint states definitions
+      | some index =>
+          match states[index]? with
+          | none => define data hint states definitions
+          | some state =>
+              match state.rows[definition.row]? with
+              | none => define data hint states definitions
+              | some row =>
+                  let (updated, _) := completeRow states [] state
+                    (row.input.set! definition.column definition.value) data hint row.origin
+                    (row.undefined.erase definition.column)
+                  let states := states.set index
+                    { state with rows := state.rows.set definition.row updated }
+                  let (states, change) := define data hint states definitions
+                  (states, Change.append
+                    ⟨rowInteractions state row data, rowInteractions state updated data⟩ change)
+
 /-- Route one demand to the component at `index`. -/
 def handle (states : List (ComponentState F)) (demand : Demand F) (index : ℕ)
-    (data : ProverData F) : Except GenerationError (List (ComponentState F) × Change F) := do
+    (data : ProverData F) (hint : ProverHint F) : Except GenerationError (List (ComponentState F) × Change F) := do
   let some state := states[index]? | return (states, ⟨[], []⟩)
   let mutation ← match state.generation.mode with
-    | .demand mode => pure (handleDemand state mode demand data)
+    | .demand mode => pure (handleDemand states state mode demand data hint)
     | .preallocated mode =>
-        match handlePreallocated state mode.handlers demand data with
+        match handlePreallocated states state mode.handlers demand data hint with
         | some mutation => pure mutation
         | none => throw (.noPreallocatedRow state.component.circuit.name demand.channel)
-  return (states.set index mutation.state, {
+  let (states, defined) := define data hint (states.set index mutation.state) mutation.definitions
+  return (states, Change.append {
     removed := mutation.removedRows.flatMap (rowInteractions state · data)
-    added := mutation.addedRows.flatMap (rowInteractions state · data) })
+    added := mutation.addedRows.flatMap (rowInteractions state · data) } defined)
 
 /-- The state of channel balancing: component rows, the pending imbalance, and the number of
 interactions of the verifier and all rows. -/
@@ -638,7 +773,7 @@ def Balancing.apply (balancing : Balancing F) (states : List (ComponentState F))
 
 /-- Handle demand until the channels balance. Balance requires fewer interactions than the field
 characteristic, so generation stops when that bound is reached. -/
-def balance (data : ProverData F) (balancing : Balancing F) :
+def balance (data : ProverData F) (hint : ProverHint F) (balancing : Balancing F) :
     Except GenerationError (Balancing F) :=
   if balancing.demands.isEmpty then .ok balancing
   else if FiniteField.char F ≤ balancing.interactions then .error .interactionBound
@@ -646,26 +781,46 @@ def balance (data : ProverData F) (balancing : Balancing F) :
     match findAction balancing.states balancing.demands with
     | none => .error (.unhandledImbalance (balancing.demands.map (·.channel)))
     | some (demand, index) =>
-        match handle balancing.states demand index data with
+        match handle balancing.states demand index data hint with
         | .error error => .error error
         | .ok (states, change) =>
             let next := balancing.apply states change
             if _ : Prod.Lex (· < ·) (· < ·) next.measure balancing.measure then
-              balance data next
+              balance data hint next
             else .error .noProgress
 termination_by balancing.measure
 decreasing_by assumption
 
-/-- Pad every component to its target height with its padding row; returns the padded states
-and the interactions of the new rows. -/
-def padTables (data : ProverData F) (states : List (ComponentState F)) :
-    List (ComponentState F) × List (Interaction F) :=
-  let padded := states.map fun state =>
-    let padding := state.generation.padding
-    let count := padding.targetHeight state.rows.length - state.rows.length
-    let rows := List.replicate count (completeRow state padding.input data none)
-    ({ state with rows := state.rows ++ rows }, rows.flatMap (rowInteractions state · data))
-  (padded.map (·.1), padded.flatMap (·.2))
+/-- Append padding rows up to a component's target height; returns the padded state, the
+interactions of the new rows, and the pending definitions extended by their reads. -/
+def padState (data : ProverData F) (hint : ProverHint F) (view : List (ComponentState F)) (state : ComponentState F)
+    (pending : List (Definition F)) :
+    ComponentState F × List (Interaction F) × List (Definition F) :=
+  let padding := state.generation.padding
+  let count := padding.targetHeight state.rows.length - state.rows.length
+  if count = 0 then (state, [], pending)
+  else
+    let (row, pending) := completeRow view pending state padding.input data hint none []
+    let rows := List.replicate count row
+    ({ state with rows := state.rows ++ rows }, rows.flatMap (rowInteractions state · data),
+      pending)
+
+/-- Pad every component in order, threading the pending definitions. -/
+def padStates (data : ProverData F) (hint : ProverHint F) (view : List (ComponentState F)) :
+    List (ComponentState F) → List (Definition F) →
+      List (ComponentState F) × List (Interaction F) × List (Definition F)
+  | [], pending => ([], [], pending)
+  | state :: states, pending =>
+      let (state, added, pending) := padState data hint view state pending
+      let (states, added', pending) := padStates data hint view states pending
+      (state :: states, added ++ added', pending)
+
+/-- Pad every component to its target height with its padding row. -/
+def padTables (data : ProverData F) (hint : ProverHint F) (states : List (ComponentState F)) :
+    List (ComponentState F) × Change F :=
+  let (padded, added, pending) := padStates data hint states states []
+  let (padded, defined) := define data hint padded pending
+  (padded, Change.append ⟨[], added⟩ defined)
 
 def tablesArePadded (states : List (ComponentState F)) : Bool :=
   states.all fun state =>
@@ -673,16 +828,16 @@ def tablesArePadded (states : List (ComponentState F)) : Bool :=
 
 /-- Pad, then balance the interactions of the padding rows, until every component is padded. A
 round that leaves a component unpadded added rows through demand, and with them interactions. -/
-def padAndBalance (data : ProverData F) (balancing : Balancing F) :
+def padAndBalance (data : ProverData F) (hint : ProverHint F) (balancing : Balancing F) :
     Except GenerationError (Balancing F) :=
-  let (states, added) := padTables data balancing.states
-  match balance data (balancing.apply states ⟨[], added⟩) with
+  let (states, change) := padTables data hint balancing.states
+  match balance data hint (balancing.apply states change) with
   | .error error => .error error
   | .ok balanced =>
       if tablesArePadded balanced.states then .ok balanced
       else if _ : balancing.interactions < balanced.interactions ∧
           balanced.interactions < FiniteField.char F then
-        padAndBalance data balanced
+        padAndBalance data hint balanced
       else .error .noProgress
 termination_by FiniteField.char F - balancing.interactions
 decreasing_by omega
@@ -749,6 +904,25 @@ def assembleTables :
         throw (.assembly "generated table contains a row of the wrong width")
   | _, _ => .error (.assembly "generated-table count does not match ensemble component count")
 
+/-- Complete rows in order, threading the pending definitions. -/
+def completeRows (data : ProverData F) (hint : ProverHint F) (view : List (ComponentState F))
+    (state : ComponentState F) :
+    List (GeneratedRow F) → List (Definition F) → List (GeneratedRow F) × List (Definition F)
+  | [], pending => ([], pending)
+  | row :: rows, pending =>
+      let (row, pending) := completeRow view pending state row.input data hint row.origin row.undefined
+      let (rows, pending) := completeRows data hint view state rows pending
+      (row :: rows, pending)
+
+/-- Complete the rows of every component in order, threading the pending definitions. -/
+def completeStates (data : ProverData F) (hint : ProverHint F) (view : List (ComponentState F)) :
+    List (ComponentState F) → List (Definition F) → List (ComponentState F) × List (Definition F)
+  | [], pending => ([], pending)
+  | state :: states, pending =>
+      let (rows, pending) := completeRows data hint view state state.rows pending
+      let (states, pending) := completeStates data hint view states pending
+      ({ state with rows } :: states, pending)
+
 /-- The components with their initial rows completed, and the prover data the rows derive. -/
 def initialStates {ensemble : Ensemble F PublicIO} (config : ValidConfig ensemble)
     (hint : ProverHint F) : List (ComponentState F) × ProverData F :=
@@ -756,25 +930,26 @@ def initialStates {ensemble : Ensemble F PublicIO} (config : ValidConfig ensembl
     ComponentState.initial component generation
   let initial := initial.map fun state =>
     { state with rows := (initialInputs state hint).map fun input =>
-      { input, values := input } }
+      { input, values := input, undefined := state.generation.mode.lazyColumns } }
   let data := generatedData initial
-  (initial.map fun state =>
-    { state with rows := state.rows.map fun row => completeRow state row.input data none }, data)
+  let (completed, pending) := completeStates data hint initial initial []
+  ((define data hint completed pending).1, data)
 
-/-- Execute channel-driven generation from validated metadata. `hint` is read only by the row
-programs that initialize preallocated components; semantic `ProverData` is derived from the final
-committed component rows. -/
+/-- Execute channel-driven generation from validated metadata. `hint` is read by the row programs
+that initialize preallocated components and by the witness programs of all rows, for example for
+the proposals of read steps; semantic `ProverData` is derived from the final committed component
+rows. -/
 def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensemble)
     (publicInput : PublicIO F) (hint : ProverHint F) :
     Except GenerationError (EnsembleWitness ensemble) := do
   let (initial, data) := initialStates config hint
   let verifier := ensemble.verifierOperations.interactionValues (.fromInput publicInput data)
   let rows := initial.flatMap fun state => state.rows.flatMap (rowInteractions state · data)
-  let balanced ← balance data {
+  let balanced ← balance data hint {
     states := initial
     demands := Demand.addInteractions [] (verifier ++ rows)
     interactions := (verifier ++ rows).length }
-  let padded ← padAndBalance data balanced
+  let padded ← padAndBalance data hint balanced
   let assembled ← assembleTables ensemble.tables padded.states
   let witness : EnsembleWitness ensemble := {
     tables := assembled.tables

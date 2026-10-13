@@ -129,6 +129,9 @@ instance {n : ℕ} : ToJson (VExpr F n) := ⟨VExpr.toJson⟩
 def Step.toJson : Step F → Json
   | .letF e => Json.mkObj [("sort", "field"), ("value", Lean.toJson e)]
   | .letU e => Json.mkObj [("sort", "u64"), ("value", Lean.toJson e)]
+  | .read key n row col proposal => Json.mkObj [("sort", "read"),
+      ("table", Lean.toJson key), ("width", Lean.toJson n), ("row", Lean.toJson row),
+      ("col", Lean.toJson col.val), ("proposal", Lean.toJson proposal)]
 
 instance : ToJson (Step F) := ⟨Step.toJson⟩
 

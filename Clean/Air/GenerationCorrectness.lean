@@ -172,8 +172,9 @@ lemma netOf_interactionsOf_set (state : ComponentState F) (data : ProverData F)
     List.map_nil, List.sum_cons, List.sum_nil, add_zero]
   exact sum_map_set _ state.rows index hindex updated
 
-lemma handleDemand_valid (state : ComponentState F) (mode : DemandMode F) (demand : Demand F)
-    (data : ProverData F) : (handleDemand state mode demand data).Valid state data := by
+lemma handleDemand_valid (states : List (ComponentState F)) (state : ComponentState F)
+    (mode : DemandMode F) (demand : Demand F) (data : ProverData F) (hint : ProverHint F) :
+    (handleDemand states state mode demand data hint).Valid state data := by
   unfold handleDemand
   split
   · refine ⟨rfl, fun channel message => ?_⟩
@@ -191,9 +192,9 @@ lemma handleDemand_valid (state : ComponentState F) (mode : DemandMode F) (deman
         exact ⟨rfl, netOf_interactionsOf_set state data hvalue _⟩
       · simp at hsome
 
-lemma handlePreallocated_valid (state : ComponentState F) (handlers : List PreallocatedHandler)
-    (demand : Demand F) (data : ProverData F) {mutation : Mutation F}
-    (h : handlePreallocated state handlers demand data = some mutation) :
+lemma handlePreallocated_valid (states : List (ComponentState F)) (state : ComponentState F)
+    (handlers : List PreallocatedHandler) (demand : Demand F) (data : ProverData F) (hint : ProverHint F)
+    {mutation : Mutation F} (h : handlePreallocated states state handlers demand data hint = some mutation) :
     mutation.Valid state data := by
   unfold handlePreallocated at h
   split at h
@@ -234,46 +235,93 @@ lemma shape_eq_of_rows {state state' : ComponentState F}
   rw [← h]
   rfl
 
+/-- `states'` differs from `states` only in rows, whose interactions differ by `change`. -/
+def Changes (data : ProverData F) (states states' : List (ComponentState F)) (change : Change F) :
+    Prop :=
+  states'.map (·.shape) = states.map (·.shape) ∧
+    ∀ channel message,
+      netOfInteractions (statesInteractions states' data) channel message =
+        netOfInteractions (statesInteractions states data) channel message -
+          netOfInteractions change.removed channel message +
+          netOfInteractions change.added channel message
+
+lemma Changes.refl (data : ProverData F) (states : List (ComponentState F)) :
+    Changes data states states ⟨[], []⟩ :=
+  ⟨rfl, fun channel message => by simp [netOfInteractions_nil]⟩
+
+lemma Changes.trans {data : ProverData F} {states states' states'' : List (ComponentState F)}
+    {change change' : Change F} (h : Changes data states states' change)
+    (h' : Changes data states' states'' change') :
+    Changes data states states'' (change.append change') := by
+  refine ⟨h'.1.trans h.1, fun channel message => ?_⟩
+  simp only [Change.append, netOfInteractions_append, h'.2 channel message, h.2 channel message]
+  abel
+
+/-- Replacing the component at `index` by a valid mutation of it changes the interactions by the
+mutation's rows. -/
+lemma changes_set {data : ProverData F} {states : List (ComponentState F)} {index : ℕ}
+    {state : ComponentState F} (hstate : states[index]? = some state) {mutation : Mutation F}
+    (hvalid : mutation.Valid state data) :
+    Changes data states (states.set index mutation.state)
+      ⟨state.interactionsOf data mutation.removedRows,
+        state.interactionsOf data mutation.addedRows⟩ := by
+  obtain ⟨hindex, rfl⟩ := List.getElem?_eq_some_iff.mp hstate
+  constructor
+  · rw [List.map_set, shape_eq_of_rows hvalid.1]
+    have hget : states[index].shape = (states.map (·.shape))[index]'(by simpa using hindex) := by
+      simp
+    rw [hget]
+    exact List.set_getElem_self _
+  · intro channel message
+    simp only [statesInteractions, netOfInteractions_flatMap]
+    rw [sum_map_set _ states index hindex mutation.state,
+      interactionsOf_eq_of_shape hvalid.1, hvalid.2 channel message]
+    abel
+
+lemma define_spec (data : ProverData F) (hint : ProverHint F) (states : List (ComponentState F))
+    (definitions : List (Definition F)) :
+    Changes data states (define data hint states definitions).1 (define data hint states definitions).2 := by
+  fun_induction define data hint states definitions with
+  | case1 states => exact Changes.refl data states
+  | case5 =>
+      rename_i states definition definitions index _ state hstate row hrow updated _ _ states'
+        states'' change hrest ih
+      have hvalid : Mutation.Valid state data
+          { state := { state with rows := state.rows.set definition.row updated }
+            removedRows := [row], addedRows := [updated] } :=
+        ⟨rfl, netOf_interactionsOf_set state data hrow updated⟩
+      have hset := changes_set hstate hvalid
+      simp only [ComponentState.interactionsOf, List.flatMap_cons, List.flatMap_nil,
+        List.append_nil] at hset
+      rw [hrest] at ih
+      exact hset.trans ih
+  | _ => rename_i ih; exact ih
+
 theorem handle_spec (states : List (ComponentState F)) (demand : Demand F) (index : ℕ)
-    (data : ProverData F) {states' : List (ComponentState F)} {change : Change F}
-    (h : handle states demand index data = .ok (states', change)) :
-    states'.map (·.shape) = states.map (·.shape) ∧
-      ∀ channel message,
-        netOfInteractions (statesInteractions states' data) channel message =
-          netOfInteractions (statesInteractions states data) channel message -
-            netOfInteractions change.removed channel message +
-            netOfInteractions change.added channel message := by
+    (data : ProverData F) (hint : ProverHint F) {states' : List (ComponentState F)} {change : Change F}
+    (h : handle states demand index data hint = .ok (states', change)) :
+    Changes data states states' change := by
   unfold handle at h
   cases hstate : states[index]? with
   | none =>
       simp only [hstate] at h
       cases h
-      exact ⟨rfl, fun channel message => by simp [netOfInteractions_nil]⟩
+      exact Changes.refl data states
   | some state =>
       simp only [hstate] at h
       obtain ⟨mutation, hvalid, rfl, rfl⟩ : ∃ mutation : Mutation F, mutation.Valid state data ∧
-          states' = states.set index mutation.state ∧
-          change = { removed := state.interactionsOf data mutation.removedRows,
-                     added := state.interactionsOf data mutation.addedRows } := by
+          states' = (define data hint (states.set index mutation.state) mutation.definitions).1 ∧
+          change = Change.append ⟨state.interactionsOf data mutation.removedRows,
+            state.interactionsOf data mutation.addedRows⟩
+            (define data hint (states.set index mutation.state) mutation.definitions).2 := by
         split at h
         · simp only [bind, Except.bind, pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
-          exact ⟨_, handleDemand_valid state _ demand data, h.1.symm, h.2.symm⟩
+          exact ⟨_, handleDemand_valid states state _ demand data hint, h.1.symm, h.2.symm⟩
         · split at h
           · simp only [bind, Except.bind, pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
-            exact ⟨_, handlePreallocated_valid state _ demand data ‹_›, h.1.symm, h.2.symm⟩
+            exact ⟨_, handlePreallocated_valid states state _ demand data hint ‹_›, h.1.symm, h.2.symm⟩
           · simp [bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
-      obtain ⟨hindex, rfl⟩ := List.getElem?_eq_some_iff.mp hstate
-      constructor
-      · rw [List.map_set, shape_eq_of_rows hvalid.1]
-        have hget : states[index].shape = (states.map (·.shape))[index]'(by simpa using hindex) := by
-          simp
-        rw [hget]
-        exact List.set_getElem_self _
-      · intro channel message
-        simp only [statesInteractions, netOfInteractions_flatMap]
-        rw [sum_map_set _ states index hindex mutation.state,
-          interactionsOf_eq_of_shape hvalid.1, hvalid.2 channel message]
-        abel
+      exact (changes_set hstate hvalid).trans (define_spec data hint _ _)
 
 /-! ### Balancing -/
 
@@ -299,12 +347,12 @@ lemma Balancing.tracks_apply {balancing : Balancing F} {verifier : List (Interac
   abel
 
 /-- Balancing ends with no pending demand, keeps the invariant, and changes only rows. -/
-theorem balance_spec (data : ProverData F) (verifier : List (Interaction F))
+theorem balance_spec (data : ProverData F) (hint : ProverHint F) (verifier : List (Interaction F))
     (balancing : Balancing F) {balanced : Balancing F}
-    (h : balance data balancing = .ok balanced) (htracks : balancing.Tracks verifier data) :
+    (h : balance data hint balancing = .ok balanced) (htracks : balancing.Tracks verifier data) :
     balanced.demands = [] ∧ balanced.Tracks verifier data ∧
       balanced.states.map (·.shape) = balancing.states.map (·.shape) := by
-  fun_induction balance data balancing with
+  fun_induction balance data hint balancing with
   | case1 balancing hempty =>
       cases h
       exact ⟨List.isEmpty_iff.mp hempty, htracks, rfl⟩
@@ -312,7 +360,7 @@ theorem balance_spec (data : ProverData F) (verifier : List (Interaction F))
   | case3 => cases h
   | case4 => cases h
   | case5 balancing _ _ demand index _ states change hhandle next _ ih =>
-      obtain ⟨hshape, hstates⟩ := handle_spec _ demand index data hhandle
+      obtain ⟨hshape, hstates⟩ := handle_spec _ demand index data hint hhandle
       obtain ⟨hdemands, htracks', hshape'⟩ := ih h (balancing.tracks_apply htracks hstates)
       exact ⟨hdemands, htracks', hshape'.trans hshape⟩
   | case6 => cases h
@@ -321,48 +369,63 @@ theorem balance_spec (data : ProverData F) (verifier : List (Interaction F))
     (rows : List (GeneratedRow F)) (row : GeneratedRow F) (data : ProverData F) :
     rowInteractions { state with rows } row data = rowInteractions state row data := rfl
 
-lemma padTables_spec (data : ProverData F) (states : List (ComponentState F)) :
-    (padTables data states).1.map (·.shape) = states.map (·.shape) ∧
-      ∀ channel message,
-        netOfInteractions (statesInteractions (padTables data states).1 data) channel message =
-          netOfInteractions (statesInteractions states data) channel message -
-            netOfInteractions [] channel message +
-            netOfInteractions (padTables data states).2 channel message := by
-  constructor
-  · simp only [padTables, List.map_map]
-    exact List.map_congr_left fun _ _ => rfl
-  · intro channel message
-    simp only [padTables, statesInteractions, List.map_map, List.flatMap_map,
-      netOfInteractions_flatMap, netOfInteractions_nil, sub_zero]
-    rw [← List.sum_map_add]
-    congr 1
-    refine List.map_congr_left fun state _ => ?_
-    simp [ComponentState.interactionsOf, List.flatMap_append, netOfInteractions_append,
-      netOfInteractions_flatMap]
+lemma Changes.cons {data : ProverData F} {state state' : ComponentState F}
+    {states states' : List (ComponentState F)} {added added' : List (Interaction F)}
+    (hshape : state'.shape = state.shape)
+    (hrows : state'.interactionsOf data state'.rows = state.interactionsOf data state.rows ++ added)
+    (h : Changes data states states' ⟨[], added'⟩) :
+    Changes data (state :: states) (state' :: states') ⟨[], added ++ added'⟩ := by
+  refine ⟨by simp [hshape, h.1], fun channel message => ?_⟩
+  have hrest := h.2 channel message
+  simp only [netOfInteractions_nil, sub_zero] at hrest ⊢
+  simp only [statesInteractions, List.flatMap_cons, netOfInteractions_append] at hrest ⊢
+  rw [hrows, netOfInteractions_append, hrest]
+  abel
+
+lemma padStates_spec (data : ProverData F) (hint : ProverHint F) (view : List (ComponentState F))
+    (states : List (ComponentState F)) (pending : List (Definition F)) :
+    Changes data states (padStates data hint view states pending).1
+      ⟨[], (padStates data hint view states pending).2.1⟩ := by
+  induction states generalizing pending with
+  | nil => exact Changes.refl data []
+  | cons state states ih =>
+      have hstate : (padState data hint view state pending).1.shape = state.shape ∧
+          (padState data hint view state pending).1.interactionsOf data
+            (padState data hint view state pending).1.rows =
+            state.interactionsOf data state.rows ++ (padState data hint view state pending).2.1 := by
+        unfold padState
+        dsimp only
+        split
+        · simp
+        · simp [ComponentState.shape, ComponentState.interactionsOf, List.flatMap_append]
+      exact Changes.cons hstate.1 hstate.2 (ih _)
+
+lemma padTables_spec (data : ProverData F) (hint : ProverHint F) (states : List (ComponentState F)) :
+    Changes data states (padTables data hint states).1 (padTables data hint states).2 :=
+  (padStates_spec data hint states states []).trans (define_spec data hint _ _)
 
 /-- Padding and balancing end with no pending demand, keep the invariant, and change only rows. -/
-theorem padAndBalance_spec (data : ProverData F) (verifier : List (Interaction F))
+theorem padAndBalance_spec (data : ProverData F) (hint : ProverHint F) (verifier : List (Interaction F))
     (balancing : Balancing F) {balanced : Balancing F}
-    (h : padAndBalance data balancing = .ok balanced) (htracks : balancing.Tracks verifier data) :
+    (h : padAndBalance data hint balancing = .ok balanced) (htracks : balancing.Tracks verifier data) :
     balanced.demands = [] ∧ balanced.Tracks verifier data ∧
       balanced.states.map (·.shape) = balancing.states.map (·.shape) := by
-  fun_induction padAndBalance data balancing with
-  | case1 => cases h
-  | case2 balancing states added hpad balancedRound hround hpadded =>
+  fun_induction padAndBalance data hint balancing with
+  | case2 balancing states change hpad balancedRound hround _ =>
       cases h
-      obtain ⟨hshape, hnet⟩ := padTables_spec data balancing.states
+      obtain ⟨hshape, hnet⟩ := padTables_spec data hint balancing.states
       rw [hpad] at hshape hnet
-      obtain ⟨hdemands, htracks', hshape'⟩ := balance_spec data verifier _ hround
+      obtain ⟨hdemands, htracks', hshape'⟩ := balance_spec data hint verifier _ hround
         (balancing.tracks_apply htracks hnet)
       exact ⟨hdemands, htracks', hshape'.trans hshape⟩
-  | case3 balancing states added hpad balancedRound hround _ _ ih =>
-      obtain ⟨hshape, hnet⟩ := padTables_spec data balancing.states
+  | case3 balancing states change hpad balancedRound hround _ _ ih =>
+      obtain ⟨hshape, hnet⟩ := padTables_spec data hint balancing.states
       rw [hpad] at hshape hnet
-      obtain ⟨-, htracks', hshape'⟩ := balance_spec data verifier _ hround
+      obtain ⟨-, htracks', hshape'⟩ := balance_spec data hint verifier _ hround
         (balancing.tracks_apply htracks hnet)
       obtain ⟨hdemands, htracks'', hshape''⟩ := ih h htracks'
       exact ⟨hdemands, htracks'', hshape''.trans (hshape'.trans hshape)⟩
-  | case4 => cases h
+  | _ => cases h
 
 /-! ### The generated witness -/
 
@@ -464,16 +527,36 @@ lemma balancedChannels_of_net {ens : Ensemble F PublicIO} {witness : EnsembleWit
   refine ⟨.inl (lt_of_le_of_lt (List.length_filter_le _ _) hlength), fun message => ?_⟩
   rw [balanceOf_filter_channel (mem_interactions_named witness hchannel), hnet]
 
+lemma completeStates_shape (data : ProverData F) (hint : ProverHint F) (view : List (ComponentState F))
+    (states : List (ComponentState F)) (pending : List (Definition F)) :
+    (completeStates data hint view states pending).1.map (·.shape) = states.map (·.shape) := by
+  induction states generalizing pending with
+  | nil => rfl
+  | cons state states ih =>
+      simp only [completeStates, List.map_cons, ih]
+      rfl
+
+lemma interactions_eq_of_shape {states states' : List (ComponentState F)}
+    (h : states'.map (·.shape) = states.map (·.shape)) :
+    states'.map (·.interactions) = states.map (·.interactions) := by
+  simpa [List.map_map, Function.comp_def, ComponentState.shape] using
+    congrArg (List.map (·.interactions)) h
+
 lemma initialStates_interactions {ens : Ensemble F PublicIO} (config : ValidConfig ens)
     (hint : ProverHint F) :
     (initialStates config hint).1.map (·.interactions) =
       ens.tables.map (·.rowOperations.interactions) := by
-  conv_rhs => rw [← List.map_fst_zip (l₁ := ens.tables) (l₂ := config.generations) (by rw [config.aligned])]
-  simp [initialStates, ComponentState.initial, Function.comp_def]
+  simp only [initialStates]
+  rw [interactions_eq_of_shape (define_spec _ _ _ _).1,
+    interactions_eq_of_shape (completeStates_shape _ _ _ _ _)]
+  conv_rhs => rw [← List.map_fst_zip (l₁ := ens.tables) (l₂ := config.generations)
+    (by rw [config.aligned])]
+  simp [ComponentState.initial, Function.comp_def]
 
 /-- Generated witnesses have the requested public input and balance all channels. -/
 theorem generateValid_balanced {ens : Ensemble F PublicIO} {config : ValidConfig ens}
-    {publicInput : PublicIO F} {hint : ProverHint F} {witness : EnsembleWitness ens} (h : generateValid config publicInput hint = .ok witness) :
+    {publicInput : PublicIO F} {hint : ProverHint F} {witness : EnsembleWitness ens}
+    (h : generateValid config publicInput hint = .ok witness) :
     witness.publicInput = publicInput ∧ witness.BalancedChannels := by
   have hinteractions := initialStates_interactions config hint
   rcases hinit : initialStates config hint with ⟨initial, data⟩
@@ -500,8 +583,8 @@ theorem generateValid_balanced {ens : Ensemble F PublicIO} {config : ValidConfig
       Demand.addInteractions [] (verifier ++ statesInteractions initial data),
       (verifier ++ statesInteractions initial data).length⟩ verifier data :=
     fun channel message => by simp [netOf_addInteractions]
-  obtain ⟨-, htracks, hshape⟩ := balance_spec data verifier _ hbalanced htracks
-  obtain ⟨hempty, htracks, hshape'⟩ := padAndBalance_spec data verifier _ hpadded htracks
+  obtain ⟨-, htracks, hshape⟩ := balance_spec data hint verifier _ hbalanced htracks
+  obtain ⟨hempty, htracks, hshape'⟩ := padAndBalance_spec data hint verifier _ hpadded htracks
   have hpaddedInteractions : padded.states.map (·.interactions) =
       ens.tables.map (·.rowOperations.interactions) := by
     rw [← hinteractions]

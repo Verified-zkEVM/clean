@@ -60,30 +60,40 @@ used by the execution trace.
 -/
 example : result = .ok ([8, 8, 32], true, true, 8, 10, 0) := by native_decide
 
-/-- The same Lean witness program accepts a second runtime memory without changing
-the compiled ensemble or generation configuration. -/
-example : generateResult alternateMemoryValues = .ok ([8, 8, 32], true, true, 8, 10, 99) := by
+/-- Memory cells are defined by the execution's reads: a hinted value at an address the program
+never reads does not enter the witness. -/
+example : generateResult alternateMemoryValues = .ok ([8, 8, 32], true, true, 8, 10, 0) := by
   native_decide
 
-def unstableDataReadRejected : Bool :=
+/-- The configuration error of exporting with a replaced memory generation mode. -/
+def memoryModeError (memory : Mode (F pBabybear)) : Option ConfigError :=
   let config : Config (F pBabybear) :=
     Witness.config (memorySize := 8) testProgram h_programSize initialState 8
-  let mutableMemory : Mode (F pBabybear) := .preallocated {
-    rows := 8
-    input := .ofFExprs #v[.hintGet Witness.memoryValuesKey 1 .idx 0, .const 0]
-    input_valid := by rfl
-    handlers := [{ interaction := 0, column := 1 }]
-  }
   let config : Config (F pBabybear) :=
     { config with components := config.components.map fun (name, generation) =>
-        if name = (provideMemory (p := pBabybear)).name then (name, { generation with mode := mutableMemory })
+        if name = (provideMemory (p := pBabybear)).name then (name, { generation with mode := memory })
         else (name, generation) }
   match Backends.Plonky3.lower
       (soundEnsemble testProgram h_programSize h_memorySize initialState).ensemble config with
-  | .error (.config (.unstableDataRead _ _ "memory" 1)) => true
-  | _ => false
+  | .error (.config error) => some error
+  | _ => none
 
 /-- Export rejects witness programs that read cells mutated later by channel balancing. -/
-example : unstableDataReadRejected = true := by native_decide
+example : memoryModeError (.preallocated {
+    rows := 8
+    input := .ofFExprs #v[.const 0, .const 0]
+    input_valid := by rfl
+    handlers := [{ interaction := 0, column := 1 }]
+    lazyColumns := [1] }) =
+    some (.lazyHandlerColumn "memory" 1) := by native_decide
+
+/-- Export rejects reads of handler columns, which balancing mutates. -/
+example : (match memoryModeError (.preallocated {
+    rows := 8
+    input := .ofFExprs #v[.const 0, .const 0]
+    input_valid := by rfl
+    handlers := [{ interaction := 0, column := 1 }] }) with
+    | some (.unstableDataRead _ _ "memory" 1) => true
+    | _ => false) = true := by native_decide
 
 end Examples.FemtoCairo.FlatAirTest
