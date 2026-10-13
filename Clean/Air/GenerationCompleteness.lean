@@ -790,6 +790,14 @@ lemma rowPlansOf_eq {plan : GenerationPlan F} (hnodup : (plan.components.map (·
         rowPlansOf_eq hnodup components pairs h.2 fun pair hpair => hmem pair
           (List.mem_cons_of_mem _ hpair), List.map_cons]
 
+end Air.Flat.WitnessGeneration
+
+/-! ### Checks of witness operations, piece by piece -/
+
+namespace Air.Flat.WitnessGeneration
+
+variable {F : Type}
+
 section ExpressionReadsBelow
 variable (n : ℕ) (a b : Expression F)
 
@@ -799,15 +807,18 @@ variable (n : ℕ) (a b : Expression F)
     expressionReadsBelow n (a + b) = (expressionReadsBelow n a && expressionReadsBelow n b) := rfl
 @[simp] lemma expressionReadsBelow_mul :
     expressionReadsBelow n (a * b) = (expressionReadsBelow n a && expressionReadsBelow n b) := rfl
-@[simp] lemma expressionReadsBelow_neg : expressionReadsBelow n (-a) = expressionReadsBelow n a := by
-  simp [Neg.neg, expressionReadsBelow]
-@[simp] lemma expressionReadsBelow_sub :
+@[simp] lemma expressionReadsBelow_neg [FiniteField F] :
+    expressionReadsBelow n (-a) = expressionReadsBelow n a := by
+  simp [expressionReadsBelow]
+@[simp] lemma expressionReadsBelow_sub [FiniteField F] :
     expressionReadsBelow n (a - b) = (expressionReadsBelow n a && expressionReadsBelow n b) := by
   simp [HSub.hSub, Sub.sub, expressionReadsBelow]
 @[simp] lemma expressionReadsBelow_ofNat (k : ℕ) [OfNat F k] :
     expressionReadsBelow n (OfNat.ofNat k : Expression F) = true := rfl
-@[simp] lemma expressionReadsBelow_zero : expressionReadsBelow n (0 : Expression F) = true := rfl
-@[simp] lemma expressionReadsBelow_one : expressionReadsBelow n (1 : Expression F) = true := rfl
+@[simp] lemma expressionReadsBelow_zero [FiniteField F] :
+    expressionReadsBelow n (0 : Expression F) = true := rfl
+@[simp] lemma expressionReadsBelow_one [FiniteField F] :
+    expressionReadsBelow n (1 : Expression F) = true := rfl
 
 end ExpressionReadsBelow
 
@@ -864,7 +875,7 @@ def flatDataReads (ops : List (FlatOperation F)) : List DataRead :=
 
 /-- Components read only stable prover data when they define no cells by reads and each of their
 data reads is stable. -/
-lemma dataReadsError_eq_none {components : List (Component F)} {rowPlans : List (RowPlan F)}
+lemma dataReadsError_eq_none [FiniteField F] {components : List (Component F)} {rowPlans : List (RowPlan F)}
     (h : ∀ entry ∈ components.zip rowPlans, entry.2.mode.lazyColumns = [] ∧
       ∀ read ∈ flatDataReads entry.1.rowOperations.toFlat, ∀ index,
         dataReadError components rowPlans entry.1 index read = none) :
@@ -906,6 +917,12 @@ lemma fexprListDataReads_map_const (values : List F) :
   induction values with
   | nil => rfl
   | cons _ _ ih => simp [fexprListDataReads, fexprDataReads, ih]
+
+end Air.Flat.WitnessGeneration
+
+namespace Air.Flat.WitnessGeneration
+
+variable {F : Type} [FiniteField F] {PublicIO : TypeMap} [ProvableType PublicIO]
 
 /-- Proves `planError ensemble rowPlans = none` for a concrete plan by evaluating the checks,
 unfolding the given definitions of the ensemble, its components and their circuits. -/
