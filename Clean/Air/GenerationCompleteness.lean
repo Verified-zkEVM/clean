@@ -31,6 +31,22 @@ structure HonestEnv (component : Component F) (input : Array F) (env : ProverEnv
   usesLocalWitnesses : env.UsesLocalWitnesses component.rowOffset component.rowOperations
   input_eq : component.rowInput env.toEnvironment = fromElements (inputRow component.Input input)
 
+/-- A row computed by honest witness generation is honest. -/
+lemma honestEnv_rowEnvironment (component : Component F) (data : ProverData F)
+    (hint : ProverHint F) (input : Array F) (hsize : input.size = component.rowOffset)
+    (hbelow : flatReadsBelow component.rowOffset component.rowOperations.toFlat = true) :
+    HonestEnv component input (rowEnvironment (honestRow component data hint input) data hint) where
+  usesLocalWitnesses := by
+    rw [ProverEnvironment.usesLocalWitnesses_iff_flat]
+    have := honestWitgen_usesLocalWitnesses data hint component.rowOperations.toFlat input
+      (by rw [hsize]; exact hbelow)
+    rw [hsize] at this
+    exact this
+  input_eq := by
+    change valueFromOffset component.Input 0
+      (Environment.fromArray (honestRow component data hint input) data) = _
+    rw [valueFromOffset_fromArray, inputRow_honestRow component data hint input hsize]
+
 /-- The interactions of a row of `component` in `env`. -/
 def interactionsIn (component : Component F) (env : Environment F) : List (Interaction F) :=
   component.rowOperations.interactions.map (·.eval env)
@@ -92,33 +108,45 @@ def SideInteraction (ens : Ensemble F PublicIO) (plan : GenerationPlan F) (vmCha
     interaction.IsUnitPull ∧ interaction.channel.name ≠ vmChannel ∧
       Answers ens plan preallocated interaction.channel.name
 
+end Air.Flat.WitnessGeneration
+
+namespace Air.Flat.WitnessGeneration
+
+variable {p : ℕ} [Fact p.Prime] {PublicIO : TypeMap} [ProvableType PublicIO]
+
 /-- The VM of an ensemble: the channel on which the verifier pushes the initial state and pulls the
 final one, the component answering every pushed state with a row, and the step it implements. -/
-structure Vm (ens : FormalEnsemble F PublicIO) (plan : GenerationPlan F) where
-  channel : RawChannel F
-  component : Component F
-  mode : DemandMode F
-  padding : Padding F
+structure Vm (ens : FormalEnsemble (F p) PublicIO) (plan : GenerationPlan (F p)) where
+  channel : RawChannel (F p)
+  component : Component (F p)
+  mode : DemandMode (F p)
+  padding : Padding (F p)
+  declared : channel ∈ ens.ensemble.channels
   mem : component ∈ ens.ensemble.tables
   planned : (component.circuit.name, { mode := .demand mode, padding }) ∈ plan.components
   mode_channel : mode.channel = channel
   mode_direction : mode.direction = .push
   mode_aggregation : mode.aggregation = .perOccurrence
+  /-- No component answers pulls on the VM channel: the verifier's pull of the final state waits
+  for the VM. -/
+  no_pull_handler : ∀ other ∈ ens.ensemble.tables, ∀ rowPlan,
+    (other.circuit.name, rowPlan) ∈ plan.components →
+      (channel.name, Direction.pull) ∉ rowPlan.mode.handled other
   /-- The state after a state. -/
-  next : Array F → Array F
+  next : Array (F p) → Array (F p)
   /-- The states the verifier pushes first and pulls last. -/
-  initial : PublicIO F → Array F
-  final : PublicIO F → Array F
+  initial : PublicIO (F p) → Array (F p)
+  final : PublicIO (F p) → Array (F p)
 
 namespace Vm
 
-variable {ens : FormalEnsemble F PublicIO} {plan : GenerationPlan F}
+variable {ens : FormalEnsemble (F p) PublicIO} {plan : GenerationPlan (F p)}
 
 /-- The input of the VM row answering `state`. -/
-def input (vm : Vm ens plan) (state : Array F) : Array F := vm.mode.input.eval state 1
+def input (vm : Vm ens plan) (state : Array (F p)) : Array (F p) := vm.mode.input.eval state 1
 
 /-- The `index`-th state of the run from the public input's initial state. -/
-def state (vm : Vm ens plan) (publicInput : PublicIO F) (index : ℕ) : Array F :=
+def state (vm : Vm ens plan) (publicInput : PublicIO (F p)) (index : ℕ) : Array (F p) :=
   vm.next^[index] (vm.initial publicInput)
 
 end Vm
@@ -126,7 +154,7 @@ end Vm
 /-- Upper bounds on the rows of every component, from a run of `steps` VM steps: powers of two at
 least the minimum height, covering the preallocated rows, the VM rows, and one row per pull a
 demand-driven component answers; and few enough that all interactions balance in the field. -/
-structure RowBounds (ens : FormalEnsemble F PublicIO) (plan : GenerationPlan F) (vm : Vm ens plan)
+structure RowBounds (ens : FormalEnsemble (F p) PublicIO) (plan : GenerationPlan (F p)) (vm : Vm ens plan)
     (bound : String → ℕ) (steps : ℕ) : Prop where
   steps_le : steps ≤ bound vm.component.circuit.name
   row_plan : ∀ component ∈ ens.ensemble.tables, ∀ rowPlan,
@@ -143,16 +171,29 @@ structure RowBounds (ens : FormalEnsemble F PublicIO) (plan : GenerationPlan F) 
   interactions : 2 * (ens.ensemble.verifierOperations.interactions.length +
       (ens.ensemble.tables.map fun component =>
         bound component.circuit.name * component.rowOperations.interactions.length).sum) <
-    FiniteField.char F
+    FiniteField.char (F p)
 
 /-- What the author of a VM ensemble proves about a generation plan for witness generation to be
 complete. Obligations about rows hold whenever the inputs satisfy the ensemble's prover assumptions,
 for every prover data agreeing with what generation fixes before balancing. -/
-structure CompletePlan (ens : FormalEnsemble F PublicIO) (plan : GenerationPlan F) where
+structure CompletePlan (ens : FormalEnsemble (F p) PublicIO) (plan : GenerationPlan (F p)) where
   valid : ∃ validPlan, plan.validate ens.ensemble = .ok validPlan
+  /-- No cells are defined by reads. -/
+  no_lazy : ∀ component ∈ ens.ensemble.tables, ∀ rowPlan mode,
+    (component.circuit.name, rowPlan) ∈ plan.components → rowPlan.mode = .preallocated mode →
+      mode.lazyColumns = []
   vm : Vm ens plan
   /-- Upper bounds on the rows of every component, from the number of VM steps. -/
   rowBound : ℕ → String → ℕ
+  /-- Demand-driven components other than the VM answer pulls only of such components of lower
+  rank, so that answering pulls ends. -/
+  rank : String → ℕ
+  acyclic : ∀ component ∈ ens.ensemble.tables, ∀ rowPlan mode,
+    (component.circuit.name, rowPlan) ∈ plan.components → rowPlan.mode = .demand mode →
+    component ≠ vm.component → ∀ other ∈ ens.ensemble.tables, ∀ otherPlan otherMode,
+      (other.circuit.name, otherPlan) ∈ plan.components → otherPlan.mode = .demand otherMode →
+      other ≠ vm.component → 0 < pullsOn other mode.channel.name →
+        rank other.circuit.name < rank component.circuit.name
   /-- The run reaches the final state, through states the VM rows can answer, within the bounds. -/
   run : ∀ publicInput proverInput, ens.ProverAssumptions publicInput proverInput →
     ∃ steps, vm.state publicInput steps = vm.final publicInput ∧
@@ -191,10 +232,10 @@ structure CompletePlan (ens : FormalEnsemble F PublicIO) (plan : GenerationPlan 
   demand : ∀ component ∈ ens.ensemble.tables, ∀ rowPlan mode,
     (component.circuit.name, rowPlan) ∈ plan.components → rowPlan.mode = .demand mode →
     component ≠ vm.component →
-      mode.direction = .pull ∧
+      mode.channel ∈ ens.ensemble.channels ∧ mode.direction = .pull ∧
       (∀ publicInput proverInput, ens.ProverAssumptions publicInput proverInput →
         ∀ data, StableData ens.ensemble plan (ens.hint proverInput) data →
-        ∀ (message : Vector F mode.channel.arity) (count : ℕ), 0 < count →
+        ∀ (message : Vector (F p) mode.channel.arity) (count : ℕ), 0 < count →
           mode.channel.ProverGuarantees message data →
             component.circuit.ProverAssumptions
               (inputOf component (mode.input.eval message.toArray count)) data
@@ -203,7 +244,7 @@ structure CompletePlan (ens : FormalEnsemble F PublicIO) (plan : GenerationPlan 
         component.circuit.ProverAssumptions
           (inputOf component (mode.input.eval message count)) env.data env.hint →
         (∀ other, netOfInteractions (interactionsIn component env.toEnvironment)
-            mode.channel.name other = if other = message then (count : F) else 0) ∧
+            mode.channel.name other = if other = message then (count : (F p)) else 0) ∧
         ∀ interaction ∈ interactionsIn component env.toEnvironment,
           interaction.channel.name ≠ mode.channel.name →
             SideInteraction ens.ensemble plan vm.channel.name false interaction) ∧
@@ -217,7 +258,8 @@ structure CompletePlan (ens : FormalEnsemble F PublicIO) (plan : GenerationPlan 
   /-- A preallocated component's initial rows satisfy their prover assumptions, also with any
   handler column changed. Every handled interaction pushes with the handler column as
   multiplicity, the row's other interactions pull single messages, and neither depends on the
-  handler column; every message satisfying the channel's prover guarantees has a row. -/
+  handler column, and pull no channel the component answers; every message satisfying the channel's
+  prover guarantees has a row. -/
   preallocated : ∀ component ∈ ens.ensemble.tables, ∀ rowPlan mode,
     (component.circuit.name, rowPlan) ∈ plan.components → rowPlan.mode = .preallocated mode →
     ∀ publicInput proverInput, ens.ProverAssumptions publicInput proverInput →
@@ -225,12 +267,22 @@ structure CompletePlan (ens : FormalEnsemble F PublicIO) (plan : GenerationPlan 
       (∀ row < mode.rows.toNat, component.circuit.ProverAssumptions
         (inputOf component (preallocatedInput component mode (ens.hint proverInput) row)) data
         (ens.hint proverInput)) ∧
+      (∀ handler ∈ mode.handlers, ∀ row < mode.rows.toNat,
+        (preallocatedInput component mode (ens.hint proverInput) row)[handler.column]?.getD 0 = 0) ∧
       (∀ input, ∀ handler ∈ mode.handlers, ∀ value,
         component.circuit.ProverAssumptions (inputOf component input) data (ens.hint proverInput) →
         component.circuit.ProverAssumptions (inputOf component (input.set! handler.column value))
           data (ens.hint proverInput)) ∧
+      (∀ input env, HonestEnv component input env → env.data = data →
+        env.hint = ens.hint proverInput →
+        component.circuit.ProverAssumptions (inputOf component input) data env.hint →
+        ∀ index, index ∉ mode.handlers.map (·.interaction) →
+          ∀ other ∈ (interactionsIn component env.toEnvironment)[index]?,
+            SideInteraction ens.ensemble plan vm.channel.name false other ∧
+              (other.channel.name, Direction.pull) ∉ rowPlan.mode.handled component) ∧
       ∀ handler ∈ mode.handlers, ∃ interaction,
         component.rowOperations.interactions[handler.interaction]? = some interaction ∧
+        interaction.channel ∈ ens.ensemble.channels ∧
         (∀ message, interaction.channel.ProverGuarantees message data →
           ∃ row < mode.rows.toNat, ∀ env,
             HonestEnv component (preallocatedInput component mode (ens.hint proverInput) row) env →
@@ -241,9 +293,6 @@ structure CompletePlan (ens : FormalEnsemble F PublicIO) (plan : GenerationPlan 
           component.circuit.ProverAssumptions (inputOf component input) data env.hint →
             (interaction.eval env.toEnvironment).assumeGuarantees = false ∧
             (interaction.eval env.toEnvironment).mult = input[handler.column]?.getD 0 ∧
-            (∀ index, index ∉ mode.handlers.map (·.interaction) →
-              ∀ other ∈ (interactionsIn component env.toEnvironment)[index]?,
-                SideInteraction ens.ensemble plan vm.channel.name false other) ∧
             ∀ value env', HonestEnv component (input.set! handler.column value) env' →
               env'.data = data → env'.hint = env.hint →
               (interaction.eval env'.toEnvironment).msg = (interaction.eval env.toEnvironment).msg ∧

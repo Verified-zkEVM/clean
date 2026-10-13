@@ -367,6 +367,33 @@ theorem honestWitgen_usesLocalWitnesses (data : ProverData F) (hint : ProverHint
       simp only [flatReadsBelow] at hbelow
       exact ⟨trivial, honestWitgen_usesLocalWitnesses data hint ops input hbelow⟩
 
+/-- Honest witness generation depends on the prover data only through the cells it reads. -/
+theorem honestWitgen_congr {data data' : ProverData F} (hint : ProverHint F) :
+    (ops : List (FlatOperation F)) → (input : Array F) → flatReadsBelow input.size ops = true →
+      (∀ m (code : Witgen.WitgenIR F m), .witness m code ∈ ops → ∀ read ∈ witnessDataReads code,
+        ∀ row, dataCell data read.key read.width row read.column =
+          dataCell data' read.key read.width row read.column) →
+      honestWitgen data hint ops input = honestWitgen data' hint ops input
+  | [], _, _, _ => rfl
+  | .witness m code :: ops, input, hbelow, hreads => by
+      simp only [flatReadsBelow, Bool.and_eq_true] at hbelow
+      have heval : code.eval (rowEnvironment input data hint) =
+          code.eval (rowEnvironment input data' hint) :=
+        witgen_eval_congr code hbelow.1
+          ⟨fun _ _ => rfl, fun read hread row => hreads m code (by simp) read hread row, rfl⟩
+      have hsize : (honestStep data' hint input (.witness m code)).size = m + input.size := by
+        simp [honestStep]; omega
+      simp only [honestWitgen, List.foldl_cons]
+      rw [show honestStep data hint input (.witness m code) =
+        honestStep data' hint input (.witness m code) by simp [honestStep, heval]]
+      exact honestWitgen_congr hint ops _ (hsize ▸ hbelow.2)
+        fun m' code' hcode => hreads m' code' (List.mem_cons_of_mem _ hcode)
+  | .assert _ :: ops, input, hbelow, hreads | .lookup _ :: ops, input, hbelow, hreads |
+    .interact _ :: ops, input, hbelow, hreads => by
+      simp only [flatReadsBelow] at hbelow
+      exact honestWitgen_congr hint ops input hbelow
+        fun m code hcode => hreads m code (List.mem_cons_of_mem _ hcode)
+
 /-! ### The generator computes honest rows -/
 
 /-- The generator's view of the prover-data cells read by `reads` agrees with `data`: its data
