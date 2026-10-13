@@ -1662,6 +1662,153 @@ lemma card_answeredBy_ge {state : ComponentState (F p)} {mode : DemandMode (F p)
       omega
 
 
+/-! ### Generator steps -/
+
+omit [Fact p.Prime] in
+lemma findAction_some {F : Type} [FiniteField F] {states : List (ComponentState F)} :
+    ∀ {demands : List (Demand F)} {demand : Demand F} {index : ℕ},
+      findAction states demands = some (demand, index) →
+      demand ∈ demands ∧ ∃ state, states[index]? = some state ∧ state.handles demand = true
+  | [], _, _, h => by simp [findAction] at h
+  | head :: rest, demand, index, h => by
+      simp only [findAction] at h
+      split at h
+      · rename_i found hfound
+        cases h
+        obtain ⟨hlt, hhandles, -⟩ := List.findIdx?_eq_some_iff_getElem.mp hfound
+        exact ⟨List.mem_cons_self .., _, List.getElem?_eq_getElem hlt, hhandles⟩
+      · obtain ⟨hmem, rest⟩ := findAction_some h
+        exact ⟨List.mem_cons_of_mem _ hmem, rest⟩
+
+omit [Fact p.Prime] in
+lemma findAction_isSome {F : Type} [FiniteField F] {states : List (ComponentState F)} :
+    ∀ {demands : List (Demand F)}, (∃ demand ∈ demands, ∃ state ∈ states,
+      state.handles demand = true) → ∃ result, findAction states demands = some result
+  | [], h => by simp at h
+  | head :: rest, ⟨demand, hmem, state, hstate, hhandles⟩ => by
+      simp only [findAction]
+      split
+      · exact ⟨_, rfl⟩
+      · rename_i hnone
+        rcases List.mem_cons.mp hmem with rfl | hmem
+        · rw [List.findIdx?_eq_none_iff] at hnone
+          exact absurd hhandles (by simpa using hnone state hstate)
+        · exact findAction_isSome ⟨demand, hmem, state, hstate, hhandles⟩
+
+lemma handles_iff {state : ComponentState (F p)} (hok : run.StateOk state) (demand : Demand (F p)) :
+    state.handles demand = true ↔
+      (demand.channel, demand.direction) ∈ state.rowPlan.mode.handled state.component := by
+  rcases hmode : state.rowPlan.mode with mode | mode
+  · simp only [ComponentState.handles, hmode, Mode.handled, List.mem_singleton, Prod.mk.injEq,
+      Bool.and_eq_true, beq_iff_eq]
+    constructor <;> rintro ⟨h1, h2⟩ <;> exact ⟨h1.symm, h2.symm⟩
+  · simp only [ComponentState.handles, hmode, Mode.handled, List.any_eq_true, List.mem_filterMap,
+      PreallocatedHandler.handles, hok.interactions, Option.map_eq_some_iff]
+    constructor
+    · rintro ⟨handler, hmem, h⟩
+      split at h
+      · simp at h
+      · rename_i interaction hinteraction
+        simp only [Bool.and_eq_true, beq_iff_eq] at h
+        exact ⟨handler, hmem, interaction, hinteraction, by rw [h.1, h.2]⟩
+    · rintro ⟨handler, hmem, interaction, hinteraction, h⟩
+      refine ⟨handler, hmem, ?_⟩
+      rw [hinteraction]
+      simp only [Prod.mk.injEq] at h
+      simp [h.1, h.2]
+
+lemma val_eq (x : F p) : FiniteField.val x = ZMod.val x := rfl
+
+lemma size_eq : FiniteField.size (F := F p) = p := rfl
+
+/-- A demand of `δ` pulls. -/
+lemma demand_pull {demand : Demand (F p)} {δ : ℕ} (hmult : demand.multiplicity = -(δ : F p))
+    (hpos : 0 < δ) (hlt : 2 * δ < p) : demand.direction = .pull ∧ demand.count = δ := by
+  have hδ : δ < p := by omega
+  have hne : (δ : F p) ≠ 0 := by
+    intro h
+    rw [ZMod.natCast_eq_zero_iff] at h
+    exact absurd (Nat.le_of_dvd hpos h) (by omega)
+  have hval : ZMod.val (δ : F p) = δ := ZMod.val_natCast_of_lt hδ
+  have hneg : ZMod.val (-(δ : F p)) = p - δ := by rw [ZMod.neg_val, if_neg hne, hval]
+  have hnot : ¬ 2 * ZMod.val (-(δ : F p)) ≤ p := by rw [hneg]; omega
+  simp only [Demand.direction, Demand.count, Demand.surplus, hmult, val_eq, size_eq, if_neg hnot,
+    neg_neg, hval, and_self]
+
+/-- A demand of one push. -/
+lemma demand_push {demand : Demand (F p)} (hmult : demand.multiplicity = 1) :
+    demand.direction = .push ∧ demand.count = 1 := by
+  have hp := (Fact.out : p.Prime).two_le
+  have hval : ZMod.val (1 : F p) = 1 := ZMod.val_one_eq_one_mod p ▸ Nat.mod_eq_of_lt (by omega)
+  have hle : 2 * ZMod.val (1 : F p) ≤ p := by rw [hval]; omega
+  simp only [Demand.direction, Demand.count, Demand.surplus, hmult, val_eq, size_eq, hval]
+  rw [if_pos (by omega)]
+  exact ⟨rfl, rfl⟩
+
+omit [Fact p.Prime] in
+lemma sum_map_set_add {α : Type*} {M : Type*} [AddCommMonoid M] (f : α → M) :
+    ∀ (values : List α) (index : ℕ) (hindex : index < values.length) (value : α),
+      ((values.set index value).map f).sum + f values[index] = (values.map f).sum + f value
+  | [], _, hindex, _ => absurd hindex (by simp)
+  | head :: tail, 0, _, value => by
+      simp only [List.set_cons_zero, List.map_cons, List.sum_cons, List.getElem_cons_zero]
+      abel
+  | head :: tail, index + 1, hindex, value => by
+      simp only [List.set_cons_succ, List.map_cons, List.sum_cons, List.getElem_cons_succ]
+      rw [add_assoc, sum_map_set_add f tail index (by simpa using hindex) value, add_assoc]
+
+/-- Handling a demand with a demand-driven component that defines no cell. -/
+lemma handle_demand {states : List (ComponentState (F p))} {index : ℕ}
+    {state : ComponentState (F p)} (hstate : states[index]? = some state)
+    {mode : DemandMode (F p)} (hmode : state.rowPlan.mode = .demand mode) (demand : Demand (F p))
+    (hdefinitions : (handleDemand states state mode demand run.data0 run.hint).definitions = []) :
+    let mutation := handleDemand states state mode demand run.data0 run.hint
+    handle states demand index run.data0 run.hint = .ok (states.set index mutation.state,
+      ⟨mutation.removedRows.flatMap (rowInteractions state · run.data0),
+        mutation.addedRows.flatMap (rowInteractions state · run.data0)⟩) := by
+  simp [handle, hstate, hmode, hdefinitions, define, Change.append, pure, Except.pure, bind,
+    Except.bind]
+
+/-- Handling a demand with a preallocated row that defines no cell. -/
+lemma handle_preallocated {states : List (ComponentState (F p))} {index : ℕ}
+    {state : ComponentState (F p)} (hstate : states[index]? = some state)
+    {mode : PreallocatedMode (F p)} (hmode : state.rowPlan.mode = .preallocated mode)
+    {demand : Demand (F p)} {mutation : Mutation (F p)}
+    (hmutation : handlePreallocated states state mode.handlers demand run.data0 run.hint =
+      some mutation) (hdefinitions : mutation.definitions = []) :
+    handle states demand index run.data0 run.hint = .ok (states.set index mutation.state,
+      ⟨mutation.removedRows.flatMap (rowInteractions state · run.data0),
+        mutation.addedRows.flatMap (rowInteractions state · run.data0)⟩) := by
+  simp [handle, hstate, hmode, hmutation, hdefinitions, define, Change.append, pure, Except.pure,
+    bind, Except.bind]
+
+omit [Fact p.Prime] in
+lemma length_statesInteractions {F : Type} [FiniteField F] (states : List (ComponentState F))
+    (data : ProverData F) : (statesInteractions states data).length =
+      (states.map fun state => state.rows.length * state.interactions.length).sum := by
+  simp [statesInteractions, ComponentState.interactionsOf, List.length_flatMap, rowInteractions]
+
+lemma card_pullsOf_le (interactions : List (Interaction (F p))) (channel : String) :
+    Multiset.card (pullsOf interactions channel) ≤ interactions.length := by
+  simp only [pullsOf, Multiset.coe_card, List.length_map]
+  exact List.length_filter_le _ _
+
+lemma card_pulledMsgs_le_length (states : List (ComponentState (F p))) (channel : String) :
+    Multiset.card (run.pulledMsgs states channel) ≤
+      (run.verifier ++ statesInteractions states run.data0).length := by
+  simp only [pulledMsgs, Multiset.card_add, List.length_append, statesInteractions,
+    ComponentState.interactionsOf, List.length_flatMap, card_list_sum, List.map_map]
+  apply Nat.add_le_add (card_pullsOf_le _ _)
+  apply List.sum_le_sum
+  intro state _
+  simp only [Function.comp_apply, card_list_sum, List.map_map]
+  apply List.sum_le_sum
+  intro row _
+  simp only [Function.comp_apply, pulledBy]
+  split
+  · simp
+  · exact card_pullsOf_le _ _
+
 namespace Inv
 
 variable {run} {k : ℕ} {padded : Bool} {balancing : Balancing (F p)}
@@ -1828,6 +1975,39 @@ lemma rows_le_bound (hinv : run.Inv k padded balancing) :
       otherMode (run.planned _ hokOther.entry) hotherMode hotherVm (Nat.pos_of_ne_zero hpulls)
     exact ih _ (hrank ▸ hlt) other hother rfl
   · exact absurd hotherMode (hotherNotPreallocated otherMode)
+
+lemma viewOk (hinv : run.Inv k padded balancing) : run.ViewOk balancing.states := by
+  refine ⟨hinv.shape, fun state hstate mode hmode hheight => ?_⟩
+  have hok := run.stateOk_of_shape hinv.shape hstate
+  have hrows := hinv.rows state hstate
+  simp only [RowsOk, hmode] at hrows
+  obtain ⟨hlength, hrowsEq⟩ := hrows
+  have hlength' : state.rows.length = mode.rows.toNat := by
+    rw [hlength]; split <;> simp [hheight]
+  refine ⟨hlength', fun j hj => ?_⟩
+  obtain ⟨input, hreachable, heq⟩ := hrowsEq j hj
+  have hbase := run.admissible_baseInput hok hmode j
+  have hj' : j < mode.rows.toNat := hlength' ▸ hj
+  rw [heq]
+  refine ⟨rfl, hreachable.size_eq.trans hbase.size, fun column hcolumn => ?_⟩
+  show input[column]? = _
+  rw [hreachable.getElem?_eq hcolumn]
+  simp [baseInput, hj']
+
+/-- All interactions are fewer than half the field order. -/
+lemma length_lt (hinv : run.Inv k padded balancing) :
+    2 * (run.verifier ++ statesInteractions balancing.states run.data0).length < p := by
+  have hbound := run.bounds.interactions
+  refine lt_of_le_of_lt ?_ hbound
+  apply Nat.mul_le_mul_left
+  rw [List.length_append, length_statesInteractions]
+  apply Nat.add_le_add (by simp [verifier, Operations.interactionValues])
+  rw [← run.components_eq hinv.shape, List.map_map]
+  apply List.sum_le_sum
+  intro state hstate
+  have hok := run.stateOk_of_shape hinv.shape hstate
+  simp only [Function.comp_apply, hok.interactions]
+  exact Nat.mul_le_mul_right _ (hinv.rows_le_bound state hstate)
 
 end Inv
 
