@@ -394,10 +394,10 @@ lemma dataReadsError_none (hmemory : 2 ^ Nat.clog 2 memorySize.toNat = memorySiz
     dataReadsError (components program h_programSize h_memorySize initialState)
       (rowPlans (memorySize := memorySize) program h_programSize initialState) = none := by
   apply dataReadsError_eq_none
-  simp only [components, rowPlans, plan, List.map_cons, List.map_nil, List.zip_cons_cons,
-    List.zip_nil_right, List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq,
+  simp only [components, rowPlans, plan, List.map_cons, List.map_nil,
+    List.mem_cons, List.not_mem_nil, or_false, forall_eq_or_imp, forall_eq,
     execution_dataReads, List.mem_replicate]
-  simp [dataReadError, check, memoryRead, executionMode, memoryMode, programMode, Mode.lazyColumns,
+  simp [dataReadError, check, memoryRead, executionMode, memoryMode, programMode,
     executionComponent, memoryComponent, programComponent, Component.rowOperations,
     Component.rowOffset, executeStep, provideMemory, provideProgram, Padding.targetHeight, hmemory,
     circuit_norm, explicit_provable_type]
@@ -927,15 +927,6 @@ def completePlan (hprogram : ∃ k, programSize.toNat = 2 ^ k)
     CompletePlan (formalEnsemble program h_programSize h_memorySize initialState)
       (plan (memorySize := memorySize) program h_programSize initialState) where
   valid := valid program h_programSize h_memorySize initialState hprogram hmemory
-  no_lazy := by
-    intro component hmem rowPlan mode hplanned hmode
-    rcases planned_cases program h_programSize h_memorySize initialState hmem hplanned with
-      ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
-    · cases hmode
-    all_goals
-      simp only [Mode.preallocated.injEq] at hmode
-      subst hmode
-      rfl
   vm := vm program h_programSize h_memorySize initialState
   rowBound steps name :=
     if name = "execution" then

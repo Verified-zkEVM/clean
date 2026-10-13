@@ -276,11 +276,6 @@ lemma verifier_row (n x y : F p) (data : ProverData (F p)) :
 
 def completePlan : CompletePlan (fibonacciEnsemble (p := p)) (plan (p := p)) where
   valid := valid
-  no_lazy := by
-    intro component hmem rowPlan mode hplanned hmode
-    rcases planned_cases hmem hplanned with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ <;>
-      cases hmode
-    rfl
   vm
   rowBound steps name := if name = "bytes" then 256 else height steps
   rank _ := 0
