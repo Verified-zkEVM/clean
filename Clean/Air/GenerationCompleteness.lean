@@ -887,6 +887,9 @@ lemma dataReadsError_eq_none {components : List (Component F)} {rowPlans : List 
     exact hreads read (List.mem_flatMap.mpr ⟨_, hmem, hread⟩) index
   | assert _ | lookup _ | interact _ => rfl
 
+@[simp] lemma fexprDataReads_ofNat (k : ℕ) [OfNat F k] :
+    fexprDataReads (OfNat.ofNat k : Witgen.FExpr F) = [] := rfl
+
 @[simp] lemma fexprReadsBelow_ofNat (n k : ℕ) [OfNat F k] :
     fexprReadsBelow n (OfNat.ofNat k : Witgen.FExpr F) = true := rfl
 
@@ -933,6 +936,7 @@ macro_rules
       GeneralFormalCircuit.WithHint.toSubcircuit, GeneralFormalCircuit.toWithHint,
       Air.Flat.WitnessGeneration.fexprListReadsBelow_map_const,
       Air.Flat.WitnessGeneration.fexprReadsBelow_ofNat,
+      Air.Flat.WitnessGeneration.fexprDataReads_ofNat,
       Air.Flat.WitnessGeneration.fexprListDataReads_map_const, Operations.toNested_toFlat,
       Circuit.forEach, circuit_norm, explicit_provable_type, $lemmas,*])
 
