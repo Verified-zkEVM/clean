@@ -84,7 +84,7 @@ fn extracted_femtocairo_air_proves_and_verifies() {
     );
     assert_eq!(
         traces.iter().map(Matrix::width).collect::<Vec<_>>(),
-        vec![33, 2, 1]
+        vec![34, 2, 1]
     );
 
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
