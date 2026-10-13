@@ -7,7 +7,7 @@ generation and the Rust/Plonky3 extraction path.
   ensemble, and the explicit witness-generation and semantic-padding configuration.
 - `WitnessGenerationTest.lean` executes the generic ensemble witness builder in Lean. It checks
   constraints and channel balance, repeated-pull coalescing, byte multiplicities greater than one,
-  and fuel exhaustion.
+  and that an unreachable final state fails at the interaction bound.
 - `Rust.lean` lowers the ensemble to direct Rust witness and AIR code.
 
 Build the Lean tests with:

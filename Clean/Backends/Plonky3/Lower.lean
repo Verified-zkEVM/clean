@@ -15,7 +15,7 @@ variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
 
 inductive LoweringError where
-  | config (error : ConfigError)
+  | plan (error : PlanError)
   | nativeWitness (component operation : ℕ)
   | malformedWitnessLocals (component operation : ℕ)
   | malformedFixedProgram (component : ℕ)
@@ -27,7 +27,7 @@ deriving Repr, DecidableEq
 
 instance : ToString LoweringError where
   toString
-    | .config error => toString error
+    | .plan error => toString error
     | .nativeWitness component operation =>
         s!"component {component} witness operation {operation} is a native Lean closure"
     | .malformedWitnessLocals component operation =>
@@ -109,12 +109,12 @@ def lowerComponent (index : ℕ) (component : Component F) :
   }
 
 /-- Lower and validate the backend-facing portion of an ensemble without producing source text. -/
-def lower (ens : FormalEnsemble F PublicIO) (config : Config F) :
+def lower (ens : FormalEnsemble F PublicIO) (plan : GenerationPlan F) :
     Except LoweringError (Program F) := do
   let ensemble := ens.ensemble
-  let config ← (config.validate ensemble).mapError .config
-  for (generation, index) in config.generations.zipIdx do
-    if let .preallocated mode := generation.mode then
+  let plan ← (plan.validate ensemble).mapError .plan
+  for (rowPlan, index) in plan.rowPlans.zipIdx do
+    if let .preallocated mode := rowPlan.mode then
       let _ ← lowerRowProgram (.malformedInitializer index) mode.input
   let components ← ensemble.tables.zipIdx.mapM fun (component, index) =>
     lowerComponent index component
@@ -131,9 +131,8 @@ def lower (ens : FormalEnsemble F PublicIO) (config : Config F) :
     hintTables := ens.hintTables
     components
     verifierInteractions
-    modes := config.generations.map (·.mode)
-    padding := config.generations.map (·.padding)
-    fuel := config.fuel
+    modes := plan.rowPlans.map (·.mode)
+    padding := plan.rowPlans.map (·.padding)
   }
 
 end Backends.Plonky3

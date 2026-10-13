@@ -47,6 +47,9 @@ class FiniteField (F : Type) extends Field F where
   val_zero : val 0 = 0
   /-- One maps to one. -/
   val_one : val 1 = 1
+  /-- The characteristic, as a computable `ℕ`. -/
+  char : ℕ
+  ringChar_eq : ringChar F = char
 
 namespace FiniteField
 
@@ -101,10 +104,16 @@ instance {p : ℕ} [Fact p.Prime] : FiniteField (F p) where
   val_zero := ZMod.val_zero
   val_one := by
     rw [ZMod.val_one]
+  char := p
+  ringChar_eq := ZMod.ringChar_zmod_n p
 
 /-- On prime fields, `fromNat` is just `Nat.cast`. -/
 @[simp, circuit_norm] theorem FiniteField.fromNat_F {p : ℕ} [Fact p.Prime] (n : ℕ) :
     (FiniteField.fromNat n : F p) = (n : F p) := rfl
+
+/-- On prime fields, the characteristic is `p`. -/
+@[simp, circuit_norm] theorem FiniteField.char_F {p : ℕ} [Fact p.Prime] :
+    FiniteField.char (F p) = p := rfl
 
 /-- On prime fields, `val` is just `ZMod.val`. -/
 @[simp, circuit_norm] theorem FiniteField.val_F {p : ℕ} [Fact p.Prime] (x : F p) :

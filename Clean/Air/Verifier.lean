@@ -65,6 +65,18 @@ lemma circuitOperations_interactions (operations : Operations F) :
           Operation.interaction operation :: interactions operations
       rw [ih]
 
+/-- Every interaction's channel is declared as a guarantee or a requirement channel. -/
+lemma channel_mem_of_mem_interactions {operations : Operations F} {interaction : AbstractInteraction F}
+    (h : interaction ∈ operations.interactions) :
+    interaction.channel ∈ operations.channelsWithGuarantees ++ operations.channelsWithRequirements := by
+  simp only [interactions, List.mem_map] at h
+  obtain ⟨⟨interaction, otherSide⟩, h_operation, rfl⟩ := h
+  rw [List.mem_append, channelsWithGuarantees, channelsWithRequirements, List.mem_filterMap,
+    List.mem_filterMap]
+  by_cases assumes : interaction.assumeGuarantees
+  · exact .inl ⟨_, h_operation, by simp [Operation.guaranteeChannel, Operation.interaction, assumes]⟩
+  · exact .inr ⟨_, h_operation, by simp [Operation.requirementChannel, Operation.interaction, assumes]⟩
+
 lemma inChannelsOrGuaranteesFull (operations : Operations F) (env : Environment F) :
     operations.circuitOperations.InChannelsOrGuaranteesFull
       operations.channelsWithGuarantees env := by

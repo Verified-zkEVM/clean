@@ -24,6 +24,11 @@ class HasChannelInterface (F : Type) (α : Type u) where
 def channelInterface {α : Type u} [HasChannelInterface F α] (value : α) : ChannelInterface F :=
   HasChannelInterface.channelInterface value
 
+/-- All channels a component or verifier declares to interact with. -/
+@[circuit_norm]
+def ChannelInterface.channels (interface : ChannelInterface F) : List (RawChannel F) :=
+  interface.channelsWithGuarantees ++ interface.channelsWithRequirements
+
 instance : HasChannelInterface F (Component F) where
   channelInterface component :=
     { channelsWithGuarantees := component.circuit.channelsWithGuarantees
@@ -46,6 +51,57 @@ instance : HasChannelInterface F (Verifier.Program F PublicIO) where
     (verifier : Verifier.Program F PublicIO) :
     (channelInterface verifier).channelsWithRequirements = verifier.channelsWithRequirements := rfl
 
+/-- No channel among `declared` has the name of one of `channels` without being that channel. -/
+def ChannelsNamedIn (channels declared : List (RawChannel F)) : Prop :=
+  ∀ channel ∈ channels, ∀ other ∈ declared, other.name = channel.name → other = channel
+
+omit [FiniteField F] in
+@[circuit_norm] lemma channelsNamedIn_nil_left (declared : List (RawChannel F)) :
+    ChannelsNamedIn [] declared := by simp [ChannelsNamedIn]
+
+omit [FiniteField F] in
+@[circuit_norm] lemma channelsNamedIn_nil_right (channels : List (RawChannel F)) :
+    ChannelsNamedIn channels [] := by simp [ChannelsNamedIn]
+
+omit [FiniteField F] in
+@[circuit_norm] lemma channelsNamedIn_cons_left {channel : RawChannel F}
+    {channels declared : List (RawChannel F)} :
+    ChannelsNamedIn (channel :: channels) declared ↔
+      (∀ other ∈ declared, other.name = channel.name → other = channel) ∧
+        ChannelsNamedIn channels declared := by
+  simp [ChannelsNamedIn]
+
+omit [FiniteField F] in
+@[circuit_norm] lemma channelsNamedIn_append_left {channels channels' declared : List (RawChannel F)} :
+    ChannelsNamedIn (channels ++ channels') declared ↔
+      ChannelsNamedIn channels declared ∧ ChannelsNamedIn channels' declared := by
+  simp only [ChannelsNamedIn, List.mem_append]
+  grind
+
+omit [FiniteField F] in
+@[circuit_norm] lemma channelsNamedIn_append_right {channels declared declared' : List (RawChannel F)} :
+    ChannelsNamedIn channels (declared ++ declared') ↔
+      ChannelsNamedIn channels declared ∧ ChannelsNamedIn channels declared' := by
+  simp only [ChannelsNamedIn, List.mem_append]
+  grind
+
+omit [FiniteField F] in
+@[circuit_norm] lemma channelsNamedIn_cons_right {channels : List (RawChannel F)}
+    {other : RawChannel F} {declared : List (RawChannel F)} :
+    ChannelsNamedIn channels (other :: declared) ↔
+      (∀ channel ∈ channels, other.name = channel.name → other = channel) ∧
+        ChannelsNamedIn channels declared := by
+  simp only [ChannelsNamedIn, List.mem_cons]
+  grind
+
+omit [FiniteField F] in
+@[circuit_norm] lemma channelsNamedIn_flatMap_right {α : Type*} {channels : List (RawChannel F)}
+    {values : List α} {declared : α → List (RawChannel F)} :
+    ChannelsNamedIn channels (values.flatMap declared) ↔
+      ∀ value ∈ values, ChannelsNamedIn channels (declared value) := by
+  simp only [ChannelsNamedIn, List.mem_flatMap]
+  grind
+
 structure Ensemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO] where
   /-- Components form an ordered map: names are keys, while list order fixes the trace order
   consumed by witness generation and backend extraction. -/
@@ -53,6 +109,11 @@ structure Ensemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType
   unique_names : (tables.map (·.circuit.name)).Nodup
   channels : List (RawChannel F)
   verifier : Verifier.Program F PublicIO := .empty F PublicIO
+  /-- Ensemble channels are identified by name: no other channel the verifier or a component
+  declares has the name of an ensemble channel. -/
+  channels_named : ChannelsNamedIn channels ((channelInterface verifier).channels ++
+      tables.flatMap (channelInterface · |>.channels)) := by
+    simp [circuit_norm]
 
 /-- The public input and component traces committed by an ensemble proof. -/
 structure EnsembleWitness (ens : Ensemble F PublicIO) where
@@ -76,6 +137,11 @@ lemma List.flatMap_subset_iff {α β : Type*} {f : α → List β} {l₁ : List 
 namespace Ensemble
 variable {ens : Ensemble F PublicIO}
 
+/-- All channels the verifier or a component declares to interact with. -/
+@[circuit_norm]
+abbrev declaredChannels (ens : Ensemble F PublicIO) : List (RawChannel F) :=
+  (channelInterface ens.verifier).channels ++ ens.tables.flatMap (channelInterface · |>.channels)
+
 def empty (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO] :
   Ensemble F PublicIO where
     tables := []
@@ -91,6 +157,22 @@ def empty (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO
 @[circuit_norm]
 abbrev verifierOperations (ens : Ensemble F PublicIO) : Operations F :=
   ens.verifier.circuitOperations
+
+/-- Every channel the verifier or a component interacts with is declared. -/
+lemma channel_mem_declaredChannels {interaction : AbstractInteraction F}
+    (h : interaction ∈ ens.verifierOperations.interactions ++
+      ens.tables.flatMap (·.operations.interactions)) :
+    interaction.channel ∈ ens.declaredChannels := by
+  rw [List.mem_append] at h
+  rw [declaredChannels, List.mem_append]
+  rcases h with h | h
+  · rw [verifierOperations, Verifier.Program.circuitOperations,
+      Verifier.Operations.circuitOperations_interactions] at h
+    exact .inl (Verifier.Operations.channel_mem_of_mem_interactions h)
+  · obtain ⟨component, hcomponent, h⟩ := List.mem_flatMap.mp h
+    rw [Component.interactions_eq] at h
+    exact .inr (List.mem_flatMap.mpr ⟨component, hcomponent,
+      component.circuit.channels_subset _ _ (List.mem_map_of_mem h)⟩)
 
 def VerifierGuarantees (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : ProverData F) : Prop :=
   ens.verifierOperations.FullGuarantees (.fromInput publicInput data)
@@ -455,28 +537,47 @@ end Ensemble
 namespace Ensemble
 /-- Takes the verifier from the second ensemble. -/
 def merge (ens1 ens2 : Ensemble F PublicIO)
-    (unique_names : ((ens2.tables ++ ens1.tables).map (·.circuit.name)).Nodup) :
+    (unique_names : ((ens2.tables ++ ens1.tables).map (·.circuit.name)).Nodup)
+    (named : ChannelsNamedIn ens2.channels (ens1.tables.flatMap (channelInterface · |>.channels)) ∧
+      ChannelsNamedIn ens1.channels ((channelInterface ens2.verifier).channels ++
+        ens2.tables.flatMap (channelInterface · |>.channels)) := by simp [circuit_norm]) :
     Ensemble F PublicIO :=
   { ens2 with
     tables := ens2.tables ++ ens1.tables,
     unique_names
-    channels := ens2.channels ++ ens1.channels }
+    channels := ens2.channels ++ ens1.channels
+    channels_named := by
+      have h1 := ens1.channels_named
+      have h2 := ens2.channels_named
+      simp only [channelsNamedIn_append_left, channelsNamedIn_append_right, List.flatMap_append]
+        at h1 h2 named ⊢
+      tauto }
 
-@[circuit_norm] lemma merge_tables (ens1 ens2 : Ensemble F PublicIO) (unique_names) :
-  (ens1.merge ens2 unique_names).tables = ens2.tables ++ ens1.tables := rfl
-@[circuit_norm] lemma merge_verifier (ens1 ens2 : Ensemble F PublicIO) (unique_names) :
-  (ens1.merge ens2 unique_names).verifier = ens2.verifier := rfl
+@[circuit_norm] lemma merge_tables (ens1 ens2 : Ensemble F PublicIO) (unique_names named) :
+  (ens1.merge ens2 unique_names named).tables = ens2.tables ++ ens1.tables := rfl
+@[circuit_norm] lemma merge_verifier (ens1 ens2 : Ensemble F PublicIO) (unique_names named) :
+  (ens1.merge ens2 unique_names named).verifier = ens2.verifier := rfl
+@[circuit_norm] lemma merge_channels (ens1 ens2 : Ensemble F PublicIO) (unique_names named) :
+  (ens1.merge ens2 unique_names named).channels = ens2.channels ++ ens1.channels := rfl
 
 def addTable (ens : Ensemble F PublicIO) (table : Component F)
-    (fresh : table.circuit.name ∉ ens.tables.map (·.circuit.name)) : Ensemble F PublicIO :=
+    (fresh : table.circuit.name ∉ ens.tables.map (·.circuit.name))
+    (named : ChannelsNamedIn ens.channels (channelInterface table).channels := by
+      simp [circuit_norm]) : Ensemble F PublicIO :=
   { ens with
     tables := table :: ens.tables
-    unique_names := by simpa using List.nodup_cons.mpr ⟨fresh, ens.unique_names⟩ }
+    unique_names := by simpa using List.nodup_cons.mpr ⟨fresh, ens.unique_names⟩
+    channels_named := by
+      have h := ens.channels_named
+      simp only [channelsNamedIn_append_right, List.flatMap_cons] at h ⊢
+      tauto }
 
-@[circuit_norm] lemma addTable_tables (ens : Ensemble F PublicIO) (table : Component F) (fresh) :
-  (ens.addTable table fresh).tables = table :: ens.tables := rfl
-@[circuit_norm] lemma addTable_verifier (ens : Ensemble F PublicIO) (table : Component F) (fresh) :
-  (ens.addTable table fresh).verifier = ens.verifier := rfl
+@[circuit_norm] lemma addTable_tables (ens : Ensemble F PublicIO) (table : Component F)
+    (fresh named) : (ens.addTable table fresh named).tables = table :: ens.tables := rfl
+@[circuit_norm] lemma addTable_verifier (ens : Ensemble F PublicIO) (table : Component F)
+    (fresh named) : (ens.addTable table fresh named).verifier = ens.verifier := rfl
+@[circuit_norm] lemma addTable_channels (ens : Ensemble F PublicIO) (table : Component F)
+    (fresh named) : (ens.addTable table fresh named).channels = ens.channels := rfl
 
 end Ensemble
 end Air.Flat

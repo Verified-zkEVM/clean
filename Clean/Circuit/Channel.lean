@@ -14,6 +14,9 @@ structure Channel (F : Type) (Message : TypeMap) [ProvableType Message] where
   name : String
   /-- the guarantees you get from adding an interaction to the channel, to be used locally in your soundness proof -/
   Guarantees (message : Message F) (data : ProverData F) : Prop
+  /-- what an honest prover guarantees about every message it adds with nonzero multiplicity, to be
+  provided in completeness proofs and used by the completeness of witness generation -/
+  ProverGuarantees (message : Message F) (data : ProverData F) : Prop := True
 
 /-- `Channel` with type argument removed, to be used in the core framework. -/
 structure RawChannel (F : Type) where
@@ -28,6 +31,9 @@ structure RawChannel (F : Type) where
   the same element.
   -/
   Requirements (mult : F) (message : Vector F arity) (data : ProverData F) : Prop
+  /-- what an honest prover guarantees about every message it adds with nonzero multiplicity, to be
+  provided in completeness proofs and used by the completeness of witness generation -/
+  ProverGuarantees (message : Vector F arity) (data : ProverData F) : Prop := True
 
 namespace Channel
 /--
@@ -45,6 +51,7 @@ def toRaw (channel : Channel F Message) : RawChannel F where
     mult ≠ -1 →
     mult ≠ 0 →
     channel.Guarantees (fromElements message) data
+  ProverGuarantees message data := channel.ProverGuarantees (fromElements message) data
 
 instance : CoeOut (Channel F Message) (RawChannel F) where
   coe := toRaw
@@ -69,8 +76,10 @@ lemma toRaw_ext_iff {Message2 : TypeMap} [ProvableType Message2]
     size Message = size Message2 ∧
     ((fun mult message data ↦ mult = (-1 : F) → channel1.Guarantees (fromElements message) data) ≍
       fun mult message data ↦ mult = (-1 : F) → channel2.Guarantees (fromElements message) data) ∧
-    (fun mult message data ↦ mult ≠ (-1 : F) → mult ≠ 0 → channel1.Guarantees (fromElements message) data) ≍
-      fun mult message data ↦ mult ≠ (-1 : F) → mult ≠ 0 → channel2.Guarantees (fromElements message) data := by
+    ((fun mult message data ↦ mult ≠ (-1 : F) → mult ≠ 0 → channel1.Guarantees (fromElements message) data) ≍
+      fun mult message data ↦ mult ≠ (-1 : F) → mult ≠ 0 → channel2.Guarantees (fromElements message) data) ∧
+    (fun message data ↦ channel1.ProverGuarantees (fromElements message) data) ≍
+      fun message data ↦ channel2.ProverGuarantees (fromElements message) data := by
   simp only [toRaw, RawChannel.mk.injEq]
 end Channel
 
@@ -90,6 +99,7 @@ def Channel.fromStatic (F : Type) [Field F]
     (slc : StaticLookupChannel F Message) : Channel F Message where
   name := slc.name
   Guarantees msg _ := slc.Guarantees msg
+  ProverGuarantees msg _ := slc.Guarantees msg
 
 /--
 A _channel interaction_ is a channel message along with a multiplicity.
@@ -230,6 +240,10 @@ def Guarantees (i : ChannelInteraction channel) (env : Environment F) : Prop :=
 def Requirements (i : ChannelInteraction channel) (env : Environment F) : Prop :=
   Expression.eval env i.mult ≠ -1 → Expression.eval env i.mult ≠ 0 →
     channel.Guarantees (eval env i.msg) env.data
+
+@[circuit_norm]
+def ProverGuarantees (i : ChannelInteraction channel) (env : Environment F) : Prop :=
+  Expression.eval env i.mult ≠ 0 → channel.ProverGuarantees (eval env i.msg) env.data
 end ChannelInteraction
 
 namespace AbstractInteraction
@@ -238,6 +252,9 @@ def Guarantees (i : AbstractInteraction F) (env : Environment F) : Prop :=
 
 def Requirements (i : AbstractInteraction F) (env : Environment F) : Prop :=
   i.channel.Requirements (env i.mult) (i.msg.map env) env.data
+
+def ProverGuarantees (i : AbstractInteraction F) (env : Environment F) : Prop :=
+  env i.mult ≠ 0 → i.channel.ProverGuarantees (i.msg.map env) env.data
 end AbstractInteraction
 
 namespace ChannelInteraction
@@ -251,6 +268,12 @@ lemma toRaw_guarantees (env : Environment F) (int : ChannelInteraction channel) 
 lemma toRaw_requirements (env : Environment F) (int : ChannelInteraction channel) :
     int.toRaw.Requirements env ↔ int.Requirements env := by
   simp [AbstractInteraction.Requirements, ChannelInteraction.Requirements,
+    ChannelInteraction.toRaw, Channel.toRaw, ProvableType.fromElements_eval_toElements]
+
+@[circuit_norm]
+lemma toRaw_proverGuarantees (env : Environment F) (int : ChannelInteraction channel) :
+    int.toRaw.ProverGuarantees env ↔ int.ProverGuarantees env := by
+  simp [AbstractInteraction.ProverGuarantees, ChannelInteraction.ProverGuarantees,
     ChannelInteraction.toRaw, Channel.toRaw, ProvableType.fromElements_eval_toElements]
 end ChannelInteraction
 
@@ -322,6 +345,9 @@ def Guarantees (i : Interaction F) (data : ProverData F) : Prop :=
 
 def Requirements (i : Interaction F) (data : ProverData F) : Prop :=
   i.channel.Requirements i.mult i.msgVector data
+
+def ProverGuarantees (i : Interaction F) (data : ProverData F) : Prop :=
+  i.mult ≠ 0 → i.channel.ProverGuarantees i.msgVector data
 end Interaction
 
 namespace AbstractInteraction

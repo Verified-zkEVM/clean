@@ -187,7 +187,6 @@ struct Minimum64Program;
 
 impl<F: WitnessField> Program<F> for Minimum64Program {
     const FIELD_ORDER: u64 = <generated::FibonacciEnsembleProgram as Program<F>>::FIELD_ORDER;
-    const FUEL: usize = <generated::FibonacciEnsembleProgram as Program<F>>::FUEL;
     const COMPONENTS: usize = <generated::FibonacciEnsembleProgram as Program<F>>::COMPONENTS;
     const PUBLIC_INPUTS: usize = <generated::FibonacciEnsembleProgram as Program<F>>::PUBLIC_INPUTS;
     const PROVER_INPUTS: usize = <generated::FibonacciEnsembleProgram as Program<F>>::PROVER_INPUTS;

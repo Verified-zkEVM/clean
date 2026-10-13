@@ -54,6 +54,10 @@ lemma requirements_toFlat {env : Environment F} {ops : Operations F} :
     FlatOperation.Requirements env ops.toFlat ↔ ops.FullRequirements env := by
   simp_all [requirements_iff_forall_mem, Operations.FullRequirements, circuit_norm]
 
+lemma proverGuarantees_toFlat {env : Environment F} {ops : Operations F} :
+    FlatOperation.ProverGuarantees env ops.toFlat ↔ ops.FullProverGuarantees env := by
+  simp_all [proverGuarantees_iff_forall_mem, Operations.FullProverGuarantees, circuit_norm]
+
 lemma inChannelsOrGuarantees_toFlat {env : Environment F} {ops : Operations F}
   {channels : List (RawChannel F)} :
     FlatOperation.InChannelsOrGuarantees channels env ops.toFlat ↔
@@ -138,7 +142,8 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
   have completeness : ∀ env : ProverEnvironment F,
       env.ExtendsVector (FlatOperation.localWitnesses env nestedOps.toFlat) n →
       circuit.Assumptions (eval env input_var) →
-      ConstraintsHoldFlat env nestedOps.toFlat ∧ FlatOperation.Guarantees env nestedOps.toFlat := by
+      ConstraintsHoldFlat env nestedOps.toFlat ∧ FlatOperation.Guarantees env nestedOps.toFlat ∧
+        FlatOperation.ProverGuarantees env nestedOps.toFlat := by
     -- we are given that the assumptions are true
     intro env h_env
     let input := eval env input_var
@@ -155,11 +160,9 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
     have h_holds_inter := circuit.completeness n env input_var h_env_completeness input rfl as
 
     -- so we just need to go from constraints to flattened constraints
-    refine ⟨ ?_, ?_ ⟩
-    · apply constraintsHold_toFlat_iff.mpr
-      exact can_replace_completeness h_consistent h_env h_holds_inter
-    · rw [FlatOperation.guarantees_toFlat]
-      exact can_replace_completeness_guarantees h_consistent h_env h_holds_inter
+    rw [constraintsHold_toFlat_iff, FlatOperation.guarantees_toFlat,
+      FlatOperation.proverGuarantees_toFlat]
+    exact can_replace_completeness_and_guarantees h_consistent h_env h_holds_inter
 
   {
     ops := nestedOps,
@@ -183,7 +186,7 @@ def FormalCircuit.toSubcircuit (circuit : FormalCircuit F β α)
       have h_holds := completeness env h_env as
       -- by soundness, this implies the spec
       simp only [circuit_norm] at as ⊢
-      exact (soundness env as h_holds.1 h_holds.2).1
+      exact (soundness env as h_holds.1 h_holds.2.1).1
 
     localLength_eq := by
       rw [ops.toNested_toFlat, ←circuit.localLength_eq input_var n,
@@ -253,11 +256,9 @@ def FormalAssertion.toSubcircuit (circuit : FormalAssertion F β)
       have h_holds_inter := circuit.completeness n env input_var h_env_completeness input rfl as.left as.right
 
       -- so we just need to go from constraints to flattened constraints
-      constructor
-      · apply constraintsHold_toFlat_iff.mpr
-        exact can_replace_completeness h_consistent h_env h_holds_inter
-      · rw [FlatOperation.guarantees_toFlat]
-        exact can_replace_completeness_guarantees h_consistent h_env h_holds_inter
+      rw [constraintsHold_toFlat_iff, FlatOperation.guarantees_toFlat,
+        FlatOperation.proverGuarantees_toFlat]
+      exact can_replace_completeness_and_guarantees h_consistent h_env h_holds_inter
 
     localLength_eq := by
       rw [ops.toNested_toFlat, ← circuit.localLength_eq input_var n,
@@ -300,14 +301,16 @@ def GeneralFormalCircuit.WithHint.toSubcircuit [CircuitType α] [CircuitType β]
       env.ExtendsVector (FlatOperation.localWitnesses env nestedOps.toFlat) n →
       circuit.ProverAssumptions (eval env input_var) env.data env.hint →
 
-      ConstraintsHoldFlat env nestedOps.toFlat ∧ FlatOperation.Guarantees env nestedOps.toFlat := by
+      ConstraintsHoldFlat env nestedOps.toFlat ∧ FlatOperation.Guarantees env nestedOps.toFlat ∧
+        FlatOperation.ProverGuarantees env nestedOps.toFlat := by
     intro env h_env assumptions
     set input := eval env input_var
     rw [ops.toNested_toFlat] at h_env ⊢
     rw [←env.usesLocalWitnessesFlat_iff_extends, ←env.usesLocalWitnesses_iff_flat] at h_env
     have h_env_completeness := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
     have h_holds_inter := (circuit.completeness n env input_var h_env_completeness input rfl assumptions).1
-    rw [constraintsHold_toFlat_iff, FlatOperation.guarantees_toFlat]
+    rw [constraintsHold_toFlat_iff, FlatOperation.guarantees_toFlat,
+      FlatOperation.proverGuarantees_toFlat]
     exact can_replace_completeness_and_guarantees h_consistent h_env h_holds_inter
 
   {
@@ -345,7 +348,7 @@ def GeneralFormalCircuit.WithHint.toSubcircuit [CircuitType α] [CircuitType β]
         exact env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
       refine ⟨?_, (circuit.completeness n env input_var h_env_completeness _ rfl assumptions).2⟩
       intro verifier_assumptions
-      exact (soundness env.toEnvironment verifier_assumptions h_holds.1 h_holds.2).1
+      exact (soundness env.toEnvironment verifier_assumptions h_holds.1 h_holds.2.1).1
 
     localLength_eq := by
       rw [ops.toNested_toFlat, ← circuit.localLength_eq input_var n,

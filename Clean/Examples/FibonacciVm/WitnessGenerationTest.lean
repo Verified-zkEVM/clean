@@ -22,7 +22,7 @@ def publicInput : fieldTriple (F pBabybear) :=
   (steps, state.1, state.2)
 
 def result : Except String (List ℕ × ℕ × ℕ × Bool × Bool) :=
-  match FibonacciWitness.generate publicInput 1000 with
+  match FibonacciWitness.generate publicInput with
   | .error error => .error (toString error)
   | .ok witness =>
       match witness.tables with
@@ -43,7 +43,7 @@ distinct addition rows; byte range checks are accumulated in the 256 fixed byte 
 example : result = .ok ([32, 32, 256], 32, 2, true, true) := by native_decide
 
 def derivedBytesData : Bool :=
-  match FibonacciWitness.generate publicInput 1000 with
+  match FibonacciWitness.generate publicInput with
   | .error _ => false
   | .ok witness =>
       let rows := witness.data "bytes" 2
@@ -55,7 +55,7 @@ def derivedBytesData : Bool :=
 example : derivedBytesData = true := by native_decide
 
 def dynamicComponentData : Bool :=
-  match FibonacciWitness.generate publicInput 1000 with
+  match FibonacciWitness.generate publicInput with
   | .error _ => false
   | .ok witness =>
       let rows := witness.data "fibonacci" 4
@@ -73,7 +73,7 @@ def repeatedPublicInput : fieldTriple (F pBabybear) :=
   (repeatedSteps, state.1, state.2)
 
 def repeatedResult : Except String (List ℕ × Bool × Bool) :=
-  match FibonacciWitness.generate repeatedPublicInput 2000 with
+  match FibonacciWitness.generate repeatedPublicInput with
   | .error error => .error (toString error)
   | .ok witness => .ok (
       witness.tables.map (·.length),
@@ -83,41 +83,44 @@ def repeatedResult : Except String (List ℕ × Bool × Bool) :=
 /-- Repeated addition pulls coalesce after the period of Fibonacci modulo 256. -/
 example : repeatedResult = .ok ([512, 512, 256], true, true) := by native_decide
 
-def invalidPublicInput : fieldTriple (F pBabybear) := (10, 42, 42)
+instance : Fact (p1009 > 512) := ⟨by norm_num [p1009]⟩
+
+def invalidPublicInput : fieldTriple (F p1009) := (10, 42, 42)
 
 def invalidRejected : Bool :=
-  match FibonacciWitness.generate invalidPublicInput 20 with
-  | .error _ => true
-  | .ok _ => false
+  match FibonacciWitness.generate invalidPublicInput with
+  | .error .interactionBound => true
+  | _ => false
 
-/-- A final state not reached within the configured fuel fails generation. -/
+/-- An unreachable final state keeps the VM running until the interactions reach the field size,
+beyond which channels cannot balance. A small field reaches that bound quickly. -/
 example : invalidRejected = true := by native_decide
 
-def configErrors : List String :=
-  let config := FibonacciWitness.config (p := pBabybear) 1000
+def planErrors : List String :=
+  let plan := FibonacciWitness.plan (p := pBabybear)
   let ensemble := (fibonacciEnsemble (p := pBabybear)).ensemble
-  [{ config with components := config.components.drop 1 },
-    { config with components := config.components ++ config.components.take 1 },
-    { config with components :=
-      ("unknown", { mode := FibonacciWitness.fibMode, padding := { input := #[] } }) ::
-        config.components }]
-  |>.map fun (config : Config (F pBabybear)) => match config.align ensemble with
+  [{ plan with components := plan.components.drop 1 },
+    { plan with components := plan.components ++ plan.components.take 1 },
+    { plan with components :=
+      ("unknown", { mode := .demand FibonacciWitness.fibMode, padding := { input := #[] } }) ::
+        plan.components }]
+  |>.map fun (plan : GenerationPlan (F pBabybear)) => match plan.align ensemble with
     | .error error => toString error
     | .ok _ => ""
 
-/-- Generation metadata is looked up by component name; missing, duplicate, and unknown entries
+/-- Row plans are looked up by component name; missing, duplicate, and unknown entries
 are rejected. -/
-example : configErrors = [
-    "component 'fibonacci' has no generation config",
-    "component 'fibonacci' has multiple generation configs",
-    "generation config names unknown component 'unknown'"] := by native_decide
+example : planErrors = [
+    "component 'fibonacci' has no generation plan",
+    "component 'fibonacci' has multiple row plans",
+    "generation plan names unknown component 'unknown'"] := by native_decide
 
 def noData : ProverData (F pBabybear) := fun _ _ => #[]
 
 def extractedFirstRow : Except String (Array (F pBabybear)) := do
   let program ← Backends.Plonky3.lower
     (fibonacciEnsemble (p := pBabybear))
-    (FibonacciWitness.config (p := pBabybear) 1000)
+    (FibonacciWitness.plan (p := pBabybear))
     |>.mapError toString
   let some component := program.components[0]?
     | throw "extracted program has no Fibonacci component"
