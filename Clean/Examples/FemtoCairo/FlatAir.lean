@@ -748,28 +748,24 @@ namespace Witness
 open Air.Flat.WitnessGeneration
 
 def executionMode {programSize : ℕ} (program : Fin programSize → F p)
-    (initialState : State (F p)) : Mode (F p) := .demand {
+    (initialState : State (F p)) : DemandMode (F p) where
   channel := (StateChannel program initialState).toRaw
   direction := .push
   aggregation := .perOccurrence
   input := { cells := [.const 1, .message 0, .message 1, .message 2] }
-}
 
-def programMode (programSize : UInt64) : Mode (F p) :=
-  .preallocated {
-    rows := programSize
-    input := .ofFExprs #v[.const 0]
-    input_valid := by rfl
-    handlers := [{ interaction := 0, column := 2 }]
-  }
+def programMode (programSize : UInt64) : PreallocatedMode (F p) where
+  rows := programSize
+  input := .ofFExprs #v[.const 0]
+  input_valid := by rfl
+  handlers := [{ interaction := 0, column := 2 }]
 
 /-- Memory rows hold the prover's memory values, read from the private input. -/
-def memoryMode (memorySize : UInt64) : Mode (F p) := .preallocated {
+def memoryMode (memorySize : UInt64) : PreallocatedMode (F p) where
   rows := memorySize
   input := .ofFExprs #v[.hintGet memoryValuesKey 1 .idx 0, .const 0]
   input_valid := by rfl
   handlers := [{ interaction := 0, column := 2 }]
-}
 
 /-- The generation plan. Disabled execution rows at the initial state pad the execution table. -/
 def plan {programSize memorySize : UInt64} (program : Fin programSize.toNat → F p)
@@ -777,15 +773,15 @@ def plan {programSize memorySize : UInt64} (program : Fin programSize.toNat → 
     GenerationPlan (F p) where
   components := [
     ((executeStep program h_programSize initialState).name, {
-      mode := executionMode program initialState
+      mode := .demand (executionMode program initialState)
       padding := {
         input := #[0, initialState.pc, initialState.ap, initialState.fp]
         minimumRows := 8 } }),
     ((provideMemory (p := p)).name, {
-      mode := memoryMode memorySize
+      mode := .preallocated (memoryMode memorySize)
       padding := { input := #[0, 0, 0], minimumRows := memorySize } }),
     ((provideProgram program).name, {
-      mode := programMode programSize
+      mode := .preallocated (programMode programSize)
       padding := { input := #[0, 0, 0], minimumRows := programSize } })
   ]
 

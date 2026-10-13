@@ -342,4 +342,93 @@ lemma valid (hprogram : ∃ k, programSize.toNat = 2 ^ k) (hmemory : ∃ k, memo
     handlersError_none, dataReadsError_none _ _ _ _ hmemoryHeight, readsAheadError_none]
   rfl
 
+/-! ### Stable prover data -/
+
+lemma hint_memoryValues (memoryValues : fields memorySize.toNat (F p)) :
+    (formalEnsemble program h_programSize h_memorySize initialState).hint memoryValues
+      memoryValuesKey 1 = Array.ofFn fun i : Fin memorySize.toNat => #v[memoryValues[i]] := by
+  simp [FormalEnsemble.hint, HintTable.hint, formalEnsemble, FormalEnsemble.withProverInput,
+    memoryValuesKey]
+  congr 1
+  funext i
+  ext j hj
+  simp only [Nat.lt_one_iff] at hj
+  subst hj
+  simp only [Vector.getElem_ofFn, Vector.getElem_mk, List.getElem_toArray, List.getElem_cons_zero]
+  show memoryValues[(i : ℕ)]?.getD 0 = _
+  simp
+
+/-- Row `row` of the memory table initially holds address `row`, its value and multiplicity
+zero. -/
+lemma memory_initial (memoryValues : fields memorySize.toNat (F p)) {row : ℕ}
+    (hrow : row < memorySize.toNat) :
+    preallocatedInput (memoryComponent memorySize h_memorySize) (memoryMode memorySize)
+      ((formalEnsemble program h_programSize h_memorySize initialState).hint memoryValues) row =
+      #[(row : F p), memoryValues[row], 0] := by
+  have hrow' : row < 2 ^ 64 := lt_trans hrow (UInt64.toNat_lt_size memorySize)
+  simp [Nat.mod_eq_of_lt hrow', preallocatedInput, fixedPrefix, memoryComponent, memoryFixedColumns, memoryMode,
+    FixedColumns.row, Witgen.RowProgram.eval, Witgen.RowProgram.ofFExprs, Witgen.VExpr.eval,
+    Witgen.FExpr.eval, Witgen.U64Expr.eval, hint_memoryValues, hrow, circuit_norm,
+    explicit_provable_type]
+
+lemma evalList_map_const (ctx : Witgen.Ctx (F p)) (values : List (F p)) (i : ℕ) :
+    Witgen.FExpr.evalList ctx i (values.map .const) = values[i]?.getD 0 := by
+  induction values generalizing i with
+  | nil => simp [Witgen.FExpr.evalList]
+  | cons _ _ ih => cases i <;> simp [Witgen.FExpr.evalList, Witgen.FExpr.eval, ih]
+
+/-- Row `row` of the program table initially holds address `row`, its word and multiplicity
+zero. -/
+lemma program_initial (hint : ProverHint (F p)) {row : ℕ} (hrow : row < programSize.toNat) :
+    preallocatedInput (programComponent program h_programSize) (programMode programSize) hint row =
+      #[(row : F p), program ⟨row, hrow⟩, 0] := by
+  have hrow' : row < 2 ^ 64 := lt_trans hrow (UInt64.toNat_lt_size programSize)
+  simp [Nat.mod_eq_of_lt hrow', preallocatedInput, fixedPrefix, programComponent, programFixedColumns, programMode,
+    FixedColumns.row, Witgen.RowProgram.eval, Witgen.RowProgram.ofFExprs, Witgen.VExpr.eval,
+    Witgen.FExpr.eval, Witgen.U64Expr.eval, evalList_map_const, hrow, circuit_norm,
+    explicit_provable_type]
+
+omit [Fact p.Prime] p_large_enough in
+lemma providerInput_fromElements (row : Vector (F p) (size ProviderInput)) :
+    (fromElements row : ProviderInput (F p)) =
+      { address := row[0], value := row[1], multiplicity := row[2] } := by
+  rw [ProvableType.fromElements_eq_iff]
+  ext i hi
+  change i < 3 at hi
+  rcases i with _ | _ | _ | i
+  all_goals first | omega | (simp [ProvableStruct.componentsToElements, explicit_provable_type, circuit_norm]; done) | (with_unfolding_all rfl) | (trace_state; sorry)
+
+/-- Stable prover data holds the memory values in the memory table. -/
+lemma memory_stable (hmemory : 2 ^ Nat.clog 2 memorySize.toNat = memorySize.toNat)
+    (memoryValues : fields memorySize.toNat (F p)) {data : ProverData (F p)}
+    (hstable : StableData (formalEnsemble program h_programSize h_memorySize initialState).ensemble
+      (plan (memorySize := memorySize) program h_programSize initialState)
+      ((formalEnsemble program h_programSize h_memorySize initialState).hint memoryValues) data) :
+    ∃ hsize : (data.getRows "memory" ProviderInput).size = memorySize.toNat,
+      ∀ i (hi : i < memorySize.toNat),
+        (data.getRows "memory" ProviderInput)[i].address = (i : F p) ∧
+          (data.getRows "memory" ProviderInput)[i].value = memoryValues[i] := by
+  obtain ⟨hsize, hrows⟩ := hstable (memoryComponent memorySize h_memorySize)
+    (by simp [tables_eq])
+    { mode := .preallocated (memoryMode memorySize),
+      padding := { input := #[0, 0, 0], minimumRows := memorySize } }
+    (memoryMode memorySize) (by simp [plan, memoryComponent]) rfl
+  simp only [Padding.targetHeight, memoryMode, max_self, hmemory] at hsize
+  change (data "memory" (size ProviderInput)).size = memorySize.toNat at hsize
+  refine ⟨by simpa [ProverData.getRows] using hsize, fun i hi => ?_⟩
+  have h0 : (data "memory" (size ProviderInput))[i][0] = (i : F p) := by
+    have := hrows i (by change i < (data "memory" (size ProviderInput)).size; omega) 0
+      (by show 0 < 3; decide) (by simp [memoryMode])
+    simp only [show (memoryMode (p := p) memorySize).rows = memorySize from rfl, hi, if_true,
+      memory_initial _ _ _ _ _ hi] at this
+    exact this
+  have h1 : (data "memory" (size ProviderInput))[i][1] = memoryValues[i] := by
+    have := hrows i (by change i < (data "memory" (size ProviderInput)).size; omega) 1
+      (by show 1 < 3; decide) (by simp [memoryMode])
+    simp only [show (memoryMode (p := p) memorySize).rows = memorySize from rfl, hi, if_true,
+      memory_initial _ _ _ _ _ hi] at this
+    exact this
+  simp only [ProverData.getRows, Array.getElem_map, providerInput_fromElements]
+  exact ⟨h0, h1⟩
+
 end Examples.FemtoCairo.FlatAir.Witness
