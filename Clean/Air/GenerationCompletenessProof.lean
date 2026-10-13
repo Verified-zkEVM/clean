@@ -1289,6 +1289,211 @@ lemma telescope (k : ℕ) (message : Array (F p)) :
       simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero]
       ring
 
+/-! ### The generator's view of prover data -/
+
+end Run
+
+omit [Fact p.Prime] in
+lemma find?_key_eq {α β : Type*} [BEq β] [LawfulBEq β] {values : List α} (key : α → β)
+    (hnodup : (values.map key).Nodup) {a : α} (ha : a ∈ values) :
+    values.find? (fun x => key x == key a) = some a := by
+  obtain ⟨found, hfound⟩ : ∃ found, values.find? (fun x => key x == key a) = some found := by
+    rw [← Option.isSome_iff_exists, List.find?_isSome]
+    exact ⟨a, ha, by simp⟩
+  rw [hfound]
+  have hkey := List.find?_some hfound
+  have hmem := List.mem_of_find?_eq_some hfound
+  simp only [beq_iff_eq] at hkey
+  rw [List.inj_on_of_nodup_map hnodup hmem ha hkey]
+
+lemma honestWitgen_witnessOperationsOnly {F : Type} [FiniteField F] (data : ProverData F)
+    (hint : ProverHint F) :
+    (ops : List (FlatOperation F)) → (input : Array F) →
+      honestWitgen data hint (witnessOperationsOnly ops) input = honestWitgen data hint ops input
+  | [], _ => rfl
+  | .witness m code :: ops, input => by
+      simp only [witnessOperationsOnly, honestWitgen, List.foldl_cons]
+      exact honestWitgen_witnessOperationsOnly data hint ops _
+  | .assert _ :: ops, input | .lookup _ :: ops, input | .interact _ :: ops, input => by
+      simp only [witnessOperationsOnly, honestWitgen, List.foldl_cons, honestStep]
+      exact honestWitgen_witnessOperationsOnly data hint ops input
+
+lemma flatReadsBelow_witnessOperationsOnly {F : Type} [FiniteField F] :
+    (n : ℕ) → (ops : List (FlatOperation F)) → flatReadsBelow n ops = true →
+      flatReadsBelow n (witnessOperationsOnly ops) = true
+  | _, [], _ => rfl
+  | n, .witness m code :: ops, h => by
+      simp only [flatReadsBelow, Bool.and_eq_true, witnessOperationsOnly] at h ⊢
+      exact ⟨h.1, flatReadsBelow_witnessOperationsOnly _ ops h.2⟩
+  | n, .assert _ :: ops, h | n, .lookup _ :: ops, h | n, .interact _ :: ops, h => by
+      simp only [flatReadsBelow, witnessOperationsOnly] at h ⊢
+      exact flatReadsBelow_witnessOperationsOnly n ops h
+
+lemma mem_of_mem_witnessOperationsOnly {F : Type} [FiniteField F] {op : FlatOperation F} :
+    {ops : List (FlatOperation F)} → op ∈ witnessOperationsOnly ops → op ∈ ops
+  | [], h => by simp [witnessOperationsOnly] at h
+  | .witness m code :: ops, h => by
+      simp only [witnessOperationsOnly, List.mem_cons] at h
+      rcases h with rfl | h
+      · exact List.mem_cons_self ..
+      · exact List.mem_cons_of_mem _ (mem_of_mem_witnessOperationsOnly h)
+  | .assert _ :: ops, h | .lookup _ :: ops, h | .interact _ :: ops, h => by
+      simp only [witnessOperationsOnly] at h
+      exact List.mem_cons_of_mem _ (mem_of_mem_witnessOperationsOnly h)
+
+namespace Reachable
+
+variable {F : Type} {handlers : List PreallocatedHandler} {base input : Array F}
+
+lemma size_eq (h : Reachable handlers base input) : input.size = base.size := by
+  induction h with
+  | base => rfl
+  | set _ _ _ _ ih => simp [ih]
+
+lemma getElem?_eq (h : Reachable handlers base input) {column : ℕ}
+    (hcolumn : column ∉ handlers.map (·.column)) : input[column]? = base[column]? := by
+  induction h with
+  | base => rfl
+  | set _ handler hmem _ ih =>
+      rw [Array.set!_eq_setIfInBounds, Array.getElem?_setIfInBounds_ne, ih]
+      intro heq
+      exact hcolumn (List.mem_map.mpr ⟨handler, hmem, heq⟩)
+
+end Reachable
+
+namespace Run
+
+variable {ens : FormalEnsemble (F p) PublicIO} {plan : GenerationPlan (F p)} (run : Run ens plan)
+
+/-- The states generation starts from, with initial inputs as rows. -/
+def initialRows : List (ComponentState (F p)) :=
+  ((ens.ensemble.tables.zip run.rowPlans).map fun (component, rowPlan) =>
+    ComponentState.initial component rowPlan).map fun state =>
+      { state with rows := (initialInputs state run.hint).map fun input =>
+        { input, values := input, undefined := state.rowPlan.mode.lazyColumns } }
+
+lemma data0_eq : run.data0 = generatedData run.initialRows := rfl
+
+/-- What witness programs see of a state's preallocated rows: when padding does not extend the
+component, its preallocated rows with their initial inputs off the handler columns. -/
+def ViewRows (state : ComponentState (F p)) : Prop :=
+  ∀ mode, state.rowPlan.mode = .preallocated mode →
+    state.rowPlan.padding.targetHeight mode.rows.toNat = mode.rows.toNat →
+    state.rows.length = mode.rows.toNat ∧ ∀ j (hj : j < state.rows.length),
+      state.rows[j].undefined = [] ∧ state.rows[j].input.size = state.component.rowOffset ∧
+      ∀ column ∉ mode.handlers.map (·.column),
+        state.rows[j].input[column]? = (preallocatedInput state.component mode run.hint j)[column]?
+
+/-- States whose shape is the plan's and whose preallocated rows witness programs read are
+stable. -/
+structure ViewOk (states : List (ComponentState (F p))) : Prop where
+  shape : states.map (·.shape) = run.initialShape
+  rows : ∀ state ∈ states, run.ViewRows state
+
+lemma find?_state {states : List (ComponentState (F p))}
+    (hshape : states.map (·.shape) = run.initialShape) {entry : Component (F p) × RowPlan (F p)}
+    (hentry : entry ∈ ens.ensemble.tables.zip run.rowPlans) :
+    ∃ state ∈ states, states.find? (fun state => state.component.circuit.name ==
+      entry.1.circuit.name) = some state ∧ state.component = entry.1 ∧ state.rowPlan = entry.2 := by
+  have hmem : ComponentState.initial entry.1 entry.2 ∈ states.map (·.shape) := by
+    rw [hshape]
+    exact List.mem_map.mpr ⟨entry, hentry, rfl⟩
+  obtain ⟨state, hstate, hshapeEq⟩ := List.mem_map.mp hmem
+  have hcomponent : state.component = entry.1 := by
+    have := congrArg (·.component) hshapeEq
+    simpa [ComponentState.shape, ComponentState.initial] using this
+  have hrowPlan : state.rowPlan = entry.2 := by
+    have := congrArg (·.rowPlan) hshapeEq
+    simpa [ComponentState.shape, ComponentState.initial] using this
+  refine ⟨state, hstate, ?_, hcomponent, hrowPlan⟩
+  have := find?_key_eq (fun state : ComponentState (F p) => state.component.circuit.name)
+    (run.names_nodup hshape) hstate
+  rw [hcomponent] at this
+  exact this
+
+/-- Generation reads, before balancing, the stable data at every component padding does not
+extend. -/
+lemma data0_eq_stableData {component : Component (F p)} {rowPlan : RowPlan (F p)}
+    {mode : PreallocatedMode (F p)}
+    (hentry : (component, rowPlan) ∈ ens.ensemble.tables.zip run.rowPlans)
+    (hmode : rowPlan.mode = .preallocated mode)
+    (hheight : rowPlan.padding.targetHeight mode.rows.toNat = mode.rows.toNat) :
+    run.data0 component.circuit.name (size component.Input) =
+      run.stableData component.circuit.name (size component.Input) := by
+  rw [run.stableData_eq hentry hmode, data0_eq, initialRows]
+  simp only [generatedData, List.find?_map, Function.comp_def, ComponentState.initial]
+  rw [show (fun (entry : Component (F p) × RowPlan (F p)) => entry.1.circuit.name ==
+      component.circuit.name) = fun entry => entry.1.circuit.name == (component, rowPlan).1.circuit.name
+    from rfl, run.find?_eq hentry]
+  simp only [Option.map_some, dite_true, initialInputs, hmode, List.map_map, hheight]
+  congr 1
+  apply List.map_congr_left
+  intro row hrow
+  simp only [Function.comp_apply, baseInput, List.mem_range.mp hrow, if_true, preallocatedInput]
+
+/-- Witness programs read, through the generator's view, the stable data. -/
+lemma readCell_eq {states : List (ComponentState (F p))} (hview : run.ViewOk states)
+    {read : DataRead} (hread : DataReadValid ens.ensemble.tables run.rowPlans read) (row : ℕ) :
+    readCell states [] read.key read.width row read.column =
+      some (dataCell run.stableData read.key read.width row read.column) ∧
+    dataCell run.data0 read.key read.width row read.column =
+      dataCell run.stableData read.key read.width row read.column := by
+  obtain ⟨target, rowPlan, mode, hfind, hwidth, hmode, hcolumn, -, hheight⟩ := hread.target
+  have hentry := List.mem_of_find?_eq_some hfind
+  have hkey : target.circuit.name = read.key := by simpa using List.find?_some hfind
+  obtain ⟨state, hstate, hfound, hcomponent, hrowPlan⟩ := run.find?_state hview.shape hentry
+  simp only at hfound hcomponent hrowPlan
+  have hdata := run.data0_eq_stableData hentry hmode hheight
+  rw [← hkey, hwidth]
+  refine ⟨?_, by simp only [dataCell, Component.rowOffset, hdata]⟩
+  have hrows := hview.rows state hstate mode (by rw [hrowPlan]; exact hmode)
+    (by rw [hrowPlan]; exact hheight)
+  have hstable := run.stableData_eq hentry hmode
+  rw [hheight] at hstable
+  simp only [Component.rowOffset]
+  simp only [readCell, List.find?_nil, hfound, dataCell, hstable]
+  by_cases hrow : row < mode.rows.toNat
+  · have hrow' : row < state.rows.length := by rw [hrows.1]; exact hrow
+    obtain ⟨hundefined, hsize, hcell⟩ := hrows.2 row hrow'
+    rw [List.getElem?_eq_getElem hrow']
+    simp only [hundefined, List.contains_nil, Bool.false_eq_true, if_false, hcell _ hcolumn]
+    simp only [List.getElem?_toArray, List.getElem?_map, List.getElem?_range hrow, Option.map_some,
+      Option.bind_some, Function.comp_apply, baseInput, hrow, if_true, inputRow,
+      Vector.getElem?_mk, List.getElem?_toArray, List.getElem?_ofFn]
+    have hpreallocated : (preallocatedInput target mode run.hint row).size = size target.Input :=
+      run.preallocatedInput_size hentry hmode row
+    rw [hcomponent]
+    by_cases hcol : read.column < size target.Input
+    · simp [hcol, Component.rowOffset]
+    · simp [hcol, Component.rowOffset, Array.getElem?_eq_none (show (preallocatedInput target mode run.hint row).size ≤
+        read.column by omega)]
+  · rw [List.getElem?_eq_none (by rw [hrows.1]; omega)]
+    simp [hrow]
+
+lemma viewAgreesOps {states : List (ComponentState (F p))} (hview : run.ViewOk states)
+    {component : Component (F p)} (hmem : component ∈ ens.ensemble.tables) :
+    ViewAgreesOps states run.data0 run.stableData
+      (witnessOperationsOnly component.rowOperations.toFlat) := by
+  obtain ⟨rowPlan, hentry⟩ := run.exists_mem_zip hmem
+  intro op hop m code hcode read hread row
+  subst hcode
+  have hvalid := run.planValid.data_reads _ hentry m code (mem_of_mem_witnessOperationsOnly hop)
+    read hread
+  obtain ⟨hreadCell, hdata⟩ := run.readCell_eq hview hvalid row
+  exact ⟨hdata, hreadCell⟩
+
+/-- On a stable view, generation completes a row as its honest row. -/
+lemma completeRow_eq {states : List (ComponentState (F p))} (hview : run.ViewOk states)
+    {state : ComponentState (F p)} (hok : run.StateOk state) {input : Array (F p)}
+    (hsize : input.size = state.component.rowOffset) (origin : Option (Origin (F p))) :
+    completeRow states [] state input run.data0 run.hint origin [] =
+      (run.row state.component input origin, []) := by
+  have h := witgen_eq_honestWitgen states run.data0 run.stableData run.hint
+    (witnessOperationsOnly state.component.rowOperations.toFlat) input
+    (flatReadsBelow_witnessOperationsOnly _ _ (hsize ▸ run.planValid.reads_below _ hok.mem))
+    (run.viewAgreesOps hview hok.mem)
+  simp only [completeRow, hok.witgenOps, h, row, honestRow, honestWitgen_witnessOperationsOnly]
+
 /-! ### The balancing invariant -/
 
 /-- What holds of a balancing state after `k` VM steps, before or after padding. -/
