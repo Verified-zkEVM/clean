@@ -871,7 +871,7 @@ theorem fromSubcircuitWithHintAssertion_channelsWithGuarantees {Input Output : T
     (fromSubcircuitWithHintAssertion circuit input).channelsWithGuarantees n = circuit.channelsWithGuarantees := rfl
 end ExplicitCircuit
 
--- simplification lemmas for FlatOperations.interactions (toSubcircuit ..).ops.toFlat
+-- simplification lemmas for FlatOperation.interactions / constraints / lookups of (toSubcircuit ..).ops.toFlat
 
 theorem FormalCircuit.toSubcircuit_interactions (circuit : FormalCircuit F Input Output) :
   FlatOperation.interactions (circuit.toSubcircuit n input_var).ops.toFlat =
@@ -892,5 +892,45 @@ theorem FormalAssertion.toSubcircuit_interactions (circuit : FormalAssertion F I
     (circuit.main input_var |>.operations n |>.interactions) := by
   simp only [FormalAssertion.toSubcircuit]
   rw [Operations.toNested_toFlat, Operations.interactions_toFlat]
+
+theorem FormalCircuit.toSubcircuit_constraints (circuit : FormalCircuit F Input Output) :
+  FlatOperation.constraints (circuit.toSubcircuit n input_var).ops.toFlat =
+    (circuit.main input_var |>.operations n |>.constraints) := by
+  simp only [FormalCircuit.toSubcircuit]
+  rw [Operations.toNested_toFlat, Operations.constraints_toFlat]
+
+theorem FormalCircuit.toSubcircuit_lookups (circuit : FormalCircuit F Input Output) :
+  FlatOperation.lookups (circuit.toSubcircuit n input_var).ops.toFlat =
+    (circuit.main input_var |>.operations n |>.lookups) := by
+  simp only [FormalCircuit.toSubcircuit]
+  rw [Operations.toNested_toFlat, Operations.lookups_toFlat]
+
+theorem GeneralFormalCircuit.toSubcircuit_constraints
+    (circuit : GeneralFormalCircuit F Input Output) :
+  FlatOperation.constraints (circuit.toSubcircuit n input_var).ops.toFlat =
+    (circuit.main input_var |>.operations n |>.constraints) := by
+  simp only [GeneralFormalCircuit.toSubcircuit, GeneralFormalCircuit.toWithHint,
+    GeneralFormalCircuit.WithHint.toSubcircuit]
+  rw [Operations.toNested_toFlat, Operations.constraints_toFlat]
+
+theorem GeneralFormalCircuit.toSubcircuit_lookups
+    (circuit : GeneralFormalCircuit F Input Output) :
+  FlatOperation.lookups (circuit.toSubcircuit n input_var).ops.toFlat =
+    (circuit.main input_var |>.operations n |>.lookups) := by
+  simp only [GeneralFormalCircuit.toSubcircuit, GeneralFormalCircuit.toWithHint,
+    GeneralFormalCircuit.WithHint.toSubcircuit]
+  rw [Operations.toNested_toFlat, Operations.lookups_toFlat]
+
+theorem FormalAssertion.toSubcircuit_constraints (circuit : FormalAssertion F Input) :
+  FlatOperation.constraints (circuit.toSubcircuit n input_var).ops.toFlat =
+    (circuit.main input_var |>.operations n |>.constraints) := by
+  simp only [FormalAssertion.toSubcircuit]
+  rw [Operations.toNested_toFlat, Operations.constraints_toFlat]
+
+theorem FormalAssertion.toSubcircuit_lookups (circuit : FormalAssertion F Input) :
+  FlatOperation.lookups (circuit.toSubcircuit n input_var).ops.toFlat =
+    (circuit.main input_var |>.operations n |>.lookups) := by
+  simp only [FormalAssertion.toSubcircuit]
+  rw [Operations.toNested_toFlat, Operations.lookups_toFlat]
 
 end
