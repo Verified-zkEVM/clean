@@ -353,8 +353,8 @@ def config : Config (F p) where
 /-- Generate a complete ensemble witness from the claimed public final state. -/
 def generate (publicInput : fieldTriple (F p)) :
     Except GenerationError (EnsembleWitness (fibonacciEnsemble (p := p)).ensemble) :=
-  Air.Flat.WitnessGeneration.generate (fibonacciEnsemble (p := p)).ensemble
-    (config (p := p)) publicInput (.empty (F p))
+  Air.Flat.WitnessGeneration.generate (fibonacciEnsemble (p := p)) (config (p := p))
+    publicInput ()
 
 end FibonacciWitness
 

@@ -2,8 +2,8 @@
 use alloc::string::String;
 use alloc::{format, vec, vec::Vec};
 use clean_backend::witness_generation::{
-    Aggregation, DemandMode, Direction, EnsembleWitness, InputCell, Interaction, Mode, Padding,
-    PreallocatedHandler, Program, WitnessData, WitnessField, WitnessGenerationError,
+    Aggregation, DemandMode, Direction, EnsembleWitness, HintTable, InputCell, Interaction, Mode,
+    Padding, PreallocatedHandler, Program, WitnessData, WitnessField, WitnessGenerationError,
 };
 use clean_backend::{GeneratedAirSpec, GeneratedEnsemble, GeneratedLookup};
 use p3_air::lookup::Direction as LookupDirection;
@@ -27,14 +27,17 @@ fn safe_rem(left: u64, right: u64) -> u64 {
     }
 }
 
-fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<Vec<F>, String> {
+fn component_0<F: WitnessField>(
+    input: &[F],
+    _data: &WitnessData<F>,
+    _hint: &WitnessData<F>,
+) -> Result<Vec<F>, String> {
     if input.len() != 4 {
         return Err(format!(
             "component input has width {}, expected 4",
             input.len()
         ));
     }
-    let _hint = &WitnessData::<F>::from_entries(Vec::new());
     let mut row = input.to_vec();
     {
         let mut output: Vec<F> = Vec::with_capacity(1);
@@ -87,14 +90,17 @@ fn component_0_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
     ]
 }
 
-fn component_1<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<Vec<F>, String> {
+fn component_1<F: WitnessField>(
+    input: &[F],
+    _data: &WitnessData<F>,
+    _hint: &WitnessData<F>,
+) -> Result<Vec<F>, String> {
     if input.len() != 4 {
         return Err(format!(
             "component input has width {}, expected 4",
             input.len()
         ));
     }
-    let _hint = &WitnessData::<F>::from_entries(Vec::new());
     let mut row = input.to_vec();
     {
         let mut output: Vec<F> = Vec::with_capacity(1);
@@ -133,14 +139,17 @@ fn component_1_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
     ]
 }
 
-fn component_2<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<Vec<F>, String> {
+fn component_2<F: WitnessField>(
+    input: &[F],
+    _data: &WitnessData<F>,
+    _hint: &WitnessData<F>,
+) -> Result<Vec<F>, String> {
     if input.len() != 2 {
         return Err(format!(
             "component input has width {}, expected 2",
             input.len()
         ));
     }
-    let _hint = &WitnessData::<F>::from_entries(Vec::new());
     let row = input.to_vec();
 
     if row.len() != 2 {
@@ -332,6 +341,8 @@ impl<F: WitnessField> Program<F> for FibonacciEnsembleProgram {
     const FIELD_ORDER: u64 = 2013265921;
     const COMPONENTS: usize = 3;
     const PUBLIC_INPUTS: usize = 3;
+    const PROVER_INPUTS: usize = 0;
+    const HINT_TABLES: &'static [HintTable] = &[];
     const FIXED_WIDTHS: &'static [usize] = &[0, 0, 1];
     const COMPONENT_NAMES: &'static [&'static str] = &["fibonacci", "add8", "bytes"];
 
@@ -409,11 +420,12 @@ impl<F: WitnessField> Program<F> for FibonacciEnsembleProgram {
         component: usize,
         input: &[F],
         data: &WitnessData<F>,
+        hint: &WitnessData<F>,
     ) -> Result<Vec<F>, String> {
         match component {
-            0 => component_0(input, data),
-            1 => component_1(input, data),
-            2 => component_2(input, data),
+            0 => component_0(input, data, hint),
+            1 => component_1(input, data, hint),
+            2 => component_2(input, data, hint),
             _ => Err(format!("component index {component} is out of bounds")),
         }
     }
@@ -434,7 +446,10 @@ impl<F: WitnessField> Program<F> for FibonacciEnsembleProgram {
 
 pub fn generate<F: WitnessField>(
     public_input: &[F],
-    hint: &WitnessData<F>,
+    prover_input: &[F],
 ) -> Result<EnsembleWitness<F>, WitnessGenerationError> {
-    clean_backend::witness_generation::generate::<F, FibonacciEnsembleProgram>(public_input, hint)
+    clean_backend::witness_generation::generate::<F, FibonacciEnsembleProgram>(
+        public_input,
+        prover_input,
+    )
 }

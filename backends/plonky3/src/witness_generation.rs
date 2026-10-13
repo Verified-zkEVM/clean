@@ -36,6 +36,7 @@ impl<F> WitnessField for F where F: Field + PrimeField64 + Copy + Eq {}
 pub enum WitnessGenerationError {
     FieldOrder { expected: u64, actual: u64 },
     PublicInputWidth { expected: usize, actual: usize },
+    ProverInputWidth { expected: usize, actual: usize },
     Runtime(String),
 }
 
@@ -49,6 +50,10 @@ impl core::fmt::Display for WitnessGenerationError {
             Self::PublicInputWidth { expected, actual } => write!(
                 formatter,
                 "public input has width {actual}, expected {expected}"
+            ),
+            Self::ProverInputWidth { expected, actual } => write!(
+                formatter,
+                "prover input has width {actual}, expected {expected}"
             ),
             Self::Runtime(error) => formatter.write_str(error),
         }
@@ -105,6 +110,16 @@ pub enum Mode<F> {
     },
 }
 
+/// A named hint table viewing the flattened private input: `rows` rows of `width` elements,
+/// starting at element `offset`. Elements beyond the input read as zero.
+#[derive(Clone, Copy, Debug)]
+pub struct HintTable {
+    pub key: &'static str,
+    pub width: usize,
+    pub offset: usize,
+    pub rows: usize,
+}
+
 /// Component-input rows available to extracted witness programs.
 #[derive(Clone, Debug)]
 pub struct WitnessData<F> {
@@ -115,6 +130,29 @@ impl<F: Field + Copy> WitnessData<F> {
     /// Named component-input rows, keyed like Clean's `ProverData`.
     pub fn from_entries(entries: Vec<(&'static str, Vec<Vec<F>>)>) -> Self {
         Self { entries }
+    }
+
+    /// The hint tables `tables` take from the flattened private input.
+    fn from_hint_tables(tables: &[HintTable], prover_input: &[F]) -> Self {
+        let entries = tables
+            .iter()
+            .map(|table| {
+                let rows = (0..table.rows)
+                    .map(|row| {
+                        (0..table.width)
+                            .map(|column| {
+                                prover_input
+                                    .get(table.offset + row * table.width + column)
+                                    .copied()
+                                    .unwrap_or(F::ZERO)
+                            })
+                            .collect()
+                    })
+                    .collect();
+                (table.key, rows)
+            })
+            .collect();
+        Self::from_entries(entries)
     }
 
     fn from_initial_tables(names: &[&'static str], tables: &[Vec<Row<F>>]) -> Self {
@@ -205,6 +243,8 @@ pub trait Program<F: WitnessField> {
     const FIELD_ORDER: u64;
     const COMPONENTS: usize;
     const PUBLIC_INPUTS: usize;
+    const PROVER_INPUTS: usize;
+    const HINT_TABLES: &'static [HintTable];
     const FIXED_WIDTHS: &'static [usize];
     const COMPONENT_NAMES: &'static [&'static str];
 
@@ -212,8 +252,12 @@ pub trait Program<F: WitnessField> {
     fn padding() -> Vec<Padding<F>>;
     /// The initial input of row `row` of a preallocated component.
     fn initial_row(component: usize, row: u64, hint: &WitnessData<F>) -> Vec<F>;
-    fn complete_row(component: usize, input: &[F], data: &WitnessData<F>)
-        -> Result<Vec<F>, String>;
+    fn complete_row(
+        component: usize,
+        input: &[F],
+        data: &WitnessData<F>,
+        hint: &WitnessData<F>,
+    ) -> Result<Vec<F>, String>;
     fn interactions(component: usize, row: &[F]) -> Vec<Interaction<F>>;
     fn verifier_interactions(public_input: &[F]) -> Vec<Interaction<F>>;
 }
@@ -355,9 +399,10 @@ fn make_demand_row<F: WitnessField, P: Program<F>>(
     demand: &Demand<F>,
     multiplicity: usize,
     data: &WitnessData<F>,
+    hint: &WitnessData<F>,
 ) -> Result<Row<F>, String> {
     let input = input_for_demand(mode, demand, multiplicity)?;
-    let values = P::complete_row(component, &input, data)?;
+    let values = P::complete_row(component, &input, data, hint)?;
     Ok(Row {
         input,
         values,
@@ -377,11 +422,12 @@ fn handle_demand<F: WitnessField, P: Program<F>>(
     table: &mut Vec<Row<F>>,
     demands: &mut Vec<Demand<F>>,
     data: &WitnessData<F>,
+    hint: &WitnessData<F>,
 ) -> Result<(), String> {
     match mode.aggregation {
         Aggregation::PerOccurrence => {
             for _ in 0..demand.count() {
-                let row = make_demand_row::<F, P>(component, mode, demand, 1, data)?;
+                let row = make_demand_row::<F, P>(component, mode, demand, 1, data, hint)?;
                 add_interactions(demands, P::interactions(component, &row.values));
                 table.push(row);
             }
@@ -396,8 +442,14 @@ fn handle_demand<F: WitnessField, P: Program<F>>(
             });
             match existing {
                 None => {
-                    let row =
-                        make_demand_row::<F, P>(component, mode, demand, demand.count(), data)?;
+                    let row = make_demand_row::<F, P>(
+                        component,
+                        mode,
+                        demand,
+                        demand.count(),
+                        data,
+                        hint,
+                    )?;
                     add_interactions(demands, P::interactions(component, &row.values));
                     table.push(row);
                 }
@@ -410,7 +462,7 @@ fn handle_demand<F: WitnessField, P: Program<F>>(
                         .multiplicity
                         + demand.count();
                     let updated =
-                        make_demand_row::<F, P>(component, mode, demand, multiplicity, data)?;
+                        make_demand_row::<F, P>(component, mode, demand, multiplicity, data, hint)?;
                     remove_interactions(demands, P::interactions(component, &old.values));
                     add_interactions(demands, P::interactions(component, &updated.values));
                     table[index] = updated;
@@ -428,6 +480,7 @@ fn handle_preallocated<F: WitnessField, P: Program<F>>(
     table: &mut [Row<F>],
     demands: &mut Vec<Demand<F>>,
     data: &WitnessData<F>,
+    hint: &WitnessData<F>,
 ) -> Result<(), String> {
     let mut matches = handlers.iter().flat_map(|handler| {
         table
@@ -473,7 +526,7 @@ fn handle_preallocated<F: WitnessField, P: Program<F>>(
     let value = current + F::from_canonical_u64(demand.count() as u64);
     let old_interactions = P::interactions(component, &row.values);
     row.input[handler.column] = value;
-    row.values = P::complete_row(component, &row.input, data)?;
+    row.values = P::complete_row(component, &row.input, data, hint)?;
     remove_interactions(demands, old_interactions);
     add_interactions(demands, P::interactions(component, &row.values));
     Ok(())
@@ -504,6 +557,7 @@ fn balance<F: WitnessField, P: Program<F>>(
     demands: &mut Vec<Demand<F>>,
     data: &WitnessData<F>,
     verifier_interactions: usize,
+    hint: &WitnessData<F>,
 ) -> Result<(), String> {
     loop {
         if demands.is_empty() {
@@ -557,6 +611,7 @@ fn balance<F: WitnessField, P: Program<F>>(
                 &mut tables[component],
                 demands,
                 data,
+                hint,
             )?,
             Mode::Preallocated { handlers, .. } => handle_preallocated::<F, P>(
                 component,
@@ -565,6 +620,7 @@ fn balance<F: WitnessField, P: Program<F>>(
                 &mut tables[component],
                 demands,
                 data,
+                hint,
             )?,
         }
     }
@@ -585,6 +641,7 @@ fn pad_and_balance<F: WitnessField, P: Program<F>>(
     tables: &mut [Vec<Row<F>>],
     data: &WitnessData<F>,
     verifier_interactions: usize,
+    hint: &WitnessData<F>,
 ) -> Result<(), String> {
     loop {
         let before = interaction_count::<F, P>(verifier_interactions, tables);
@@ -592,7 +649,7 @@ fn pad_and_balance<F: WitnessField, P: Program<F>>(
         for (component, (table, padding)) in tables.iter_mut().zip(padding).enumerate() {
             let height = target_height(table.len(), padding);
             for _ in table.len()..height {
-                let values = P::complete_row(component, &padding.input, data)?;
+                let values = P::complete_row(component, &padding.input, data, hint)?;
                 add_interactions(&mut demands, P::interactions(component, &values));
                 table.push(Row {
                     input: padding.input.clone(),
@@ -602,7 +659,14 @@ fn pad_and_balance<F: WitnessField, P: Program<F>>(
             }
         }
 
-        balance::<F, P>(modes, tables, &mut demands, data, verifier_interactions)?;
+        balance::<F, P>(
+            modes,
+            tables,
+            &mut demands,
+            data,
+            verifier_interactions,
+            hint,
+        )?;
         if tables
             .iter()
             .zip(padding)
@@ -616,11 +680,11 @@ fn pad_and_balance<F: WitnessField, P: Program<F>>(
     }
 }
 
-/// Run an extracted channel-driven ensemble witness program. `hint` holds named tables that the
-/// row programs of preallocated components read.
+/// Run an extracted channel-driven ensemble witness program on the public input and the
+/// flattened private input, which witness programs read through the program's hint tables.
 pub fn generate<F: WitnessField, P: Program<F>>(
     public_input: &[F],
-    hint: &WitnessData<F>,
+    prover_input: &[F],
 ) -> Result<EnsembleWitness<F>, WitnessGenerationError> {
     if F::ORDER_U64 != P::FIELD_ORDER {
         return Err(WitnessGenerationError::FieldOrder {
@@ -668,6 +732,13 @@ pub fn generate<F: WitnessField, P: Program<F>>(
             actual: public_input.len(),
         });
     }
+    if prover_input.len() != P::PROVER_INPUTS {
+        return Err(WitnessGenerationError::ProverInputWidth {
+            expected: P::PROVER_INPUTS,
+            actual: prover_input.len(),
+        });
+    }
+    let hint = &WitnessData::from_hint_tables(P::HINT_TABLES, prover_input);
 
     let mut tables = Vec::with_capacity(modes.len());
     for (component, mode) in modes.iter().enumerate() {
@@ -714,7 +785,7 @@ pub fn generate<F: WitnessField, P: Program<F>>(
     let data = WitnessData::from_initial_tables(P::COMPONENT_NAMES, &tables);
     for (component, table) in tables.iter_mut().enumerate() {
         for row in table {
-            row.values = P::complete_row(component, &row.input, &data)?;
+            row.values = P::complete_row(component, &row.input, &data, hint)?;
         }
     }
 
@@ -734,8 +805,16 @@ pub fn generate<F: WitnessField, P: Program<F>>(
         &mut demands,
         &data,
         verifier_interactions,
+        hint,
     )?;
-    pad_and_balance::<F, P>(&modes, &padding, &mut tables, &data, verifier_interactions)?;
+    pad_and_balance::<F, P>(
+        &modes,
+        &padding,
+        &mut tables,
+        &data,
+        verifier_interactions,
+        hint,
+    )?;
 
     Ok(EnsembleWitness {
         fixed_widths: P::FIXED_WIDTHS.to_vec(),

@@ -109,8 +109,9 @@ def lowerComponent (index : ℕ) (component : Component F) :
   }
 
 /-- Lower and validate the backend-facing portion of an ensemble without producing source text. -/
-def lower (ensemble : Ensemble F PublicIO) (config : Config F) :
+def lower (ens : FormalEnsemble F PublicIO) (config : Config F) :
     Except LoweringError (Program F) := do
+  let ensemble := ens.ensemble
   let config ← (config.validate ensemble).mapError .config
   for (generation, index) in config.generations.zipIdx do
     if let .preallocated mode := generation.mode then
@@ -126,6 +127,8 @@ def lower (ensemble : Ensemble F PublicIO) (config : Config F) :
   | none => pure ()
   return {
     publicInputWidth := size PublicIO
+    proverInputWidth := size ens.ProverInput
+    hintTables := ens.hintTables
     components
     verifierInteractions
     modes := config.generations.map (·.mode)

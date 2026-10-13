@@ -36,13 +36,13 @@ The library currently provides two distinct arguments to establish soundness, co
 
 `Vm.lean` contains a construction aimed at "VM-like" components that perform one transition per row. Since VM components both pull from and push to one distinguished state channel, they cannot follow the theory of ordered lookup-channel soundness. Instead, we prove a dedicated soundness theorem that applies to a set of VM components added to an existing hierarchical ensemble; a typical modern zkVMs layout.
 
-`WitnessGeneration.lean` constructs ensemble witnesses from public input and a prover hint. Demand-driven components allocate rows from channel messages. Preallocated components initialize their prover-owned cells with row programs, which may read the hint, while the generic builder supplies any verifier-fixed prefix. Preallocated channel handlers identify an existing component interaction and a generated multiplicity column; messages and row indices are derived from completed rows rather than duplicated in generation metadata.
+`WitnessGeneration.lean` constructs ensemble witnesses from the public input and the prover's private input. A `FormalEnsemble` declares the type of its private input, the hint tables that witness programs read as views of the flattened private input, and the `ProverAssumptions` on public and private input that witness generation needs. Demand-driven components allocate rows from channel messages. Preallocated components initialize their prover-owned cells with row programs, which may read the hint, while the generic builder supplies any verifier-fixed prefix. Preallocated channel handlers identify an existing component interaction and a generated multiplicity column; messages and row indices are derived from completed rows rather than duplicated in generation metadata.
 
 The hint is only an input to honest witness construction. Semantic `ProverData` is always
 derived from the final committed component inputs. `Config.validate` permits `dataGet` only from
 stable cells of preallocated components and rejects reads from demand-generated or mutable cells.
 This makes the initial data snapshot used by witness generation agree with the final derived data
-at every readable location.
+at every readable location. Read steps may also read lazy cells, which the first read defines.
 
 ## Relation To Clean/Table
 

@@ -173,7 +173,7 @@ lemma netOf_interactionsOf_set (state : ComponentState F) (data : ProverData F)
   exact sum_map_set _ state.rows index hindex updated
 
 lemma handleDemand_valid (state : ComponentState F) (mode : DemandMode F) (demand : Demand F)
-    (data : ProverData F) : (handleDemand state mode demand data).Valid state data := by
+    (data : ProverData F) (hint : ProverHint F) : (handleDemand state mode demand data hint).Valid state data := by
   unfold handleDemand
   split
   · refine ⟨rfl, fun channel message => ?_⟩
@@ -192,8 +192,8 @@ lemma handleDemand_valid (state : ComponentState F) (mode : DemandMode F) (deman
       · simp at hsome
 
 lemma handlePreallocated_valid (state : ComponentState F) (handlers : List PreallocatedHandler)
-    (demand : Demand F) (data : ProverData F) {mutation : Mutation F}
-    (h : handlePreallocated state handlers demand data = some mutation) :
+    (demand : Demand F) (data : ProverData F) (hint : ProverHint F) {mutation : Mutation F}
+    (h : handlePreallocated state handlers demand data hint = some mutation) :
     mutation.Valid state data := by
   unfold handlePreallocated at h
   split at h
@@ -235,8 +235,8 @@ lemma shape_eq_of_rows {state state' : ComponentState F}
   rfl
 
 theorem handle_spec (states : List (ComponentState F)) (demand : Demand F) (index : ℕ)
-    (data : ProverData F) {states' : List (ComponentState F)} {change : Change F}
-    (h : handle states demand index data = .ok (states', change)) :
+    (data : ProverData F) (hint : ProverHint F) {states' : List (ComponentState F)} {change : Change F}
+    (h : handle states demand index data hint = .ok (states', change)) :
     states'.map (·.shape) = states.map (·.shape) ∧
       ∀ channel message,
         netOfInteractions (statesInteractions states' data) channel message =
@@ -257,10 +257,10 @@ theorem handle_spec (states : List (ComponentState F)) (demand : Demand F) (inde
                      added := state.interactionsOf data mutation.addedRows } := by
         split at h
         · simp only [bind, Except.bind, pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
-          exact ⟨_, handleDemand_valid state _ demand data, h.1.symm, h.2.symm⟩
+          exact ⟨_, handleDemand_valid state _ demand data hint, h.1.symm, h.2.symm⟩
         · split at h
           · simp only [bind, Except.bind, pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
-            exact ⟨_, handlePreallocated_valid state _ demand data ‹_›, h.1.symm, h.2.symm⟩
+            exact ⟨_, handlePreallocated_valid state _ demand data hint ‹_›, h.1.symm, h.2.symm⟩
           · simp [bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
       obtain ⟨hindex, rfl⟩ := List.getElem?_eq_some_iff.mp hstate
       constructor
@@ -299,12 +299,12 @@ lemma Balancing.tracks_apply {balancing : Balancing F} {verifier : List (Interac
   abel
 
 /-- Balancing ends with no pending demand, keeps the invariant, and changes only rows. -/
-theorem balance_spec (data : ProverData F) (verifier : List (Interaction F))
+theorem balance_spec (data : ProverData F) (hint : ProverHint F) (verifier : List (Interaction F))
     (balancing : Balancing F) {balanced : Balancing F}
-    (h : balance data balancing = .ok balanced) (htracks : balancing.Tracks verifier data) :
+    (h : balance data hint balancing = .ok balanced) (htracks : balancing.Tracks verifier data) :
     balanced.demands = [] ∧ balanced.Tracks verifier data ∧
       balanced.states.map (·.shape) = balancing.states.map (·.shape) := by
-  fun_induction balance data balancing with
+  fun_induction balance data hint balancing with
   | case1 balancing hempty =>
       cases h
       exact ⟨List.isEmpty_iff.mp hempty, htracks, rfl⟩
@@ -312,7 +312,7 @@ theorem balance_spec (data : ProverData F) (verifier : List (Interaction F))
   | case3 => cases h
   | case4 => cases h
   | case5 balancing _ _ demand index _ states change hhandle next _ ih =>
-      obtain ⟨hshape, hstates⟩ := handle_spec _ demand index data hhandle
+      obtain ⟨hshape, hstates⟩ := handle_spec _ demand index data hint hhandle
       obtain ⟨hdemands, htracks', hshape'⟩ := ih h (balancing.tracks_apply htracks hstates)
       exact ⟨hdemands, htracks', hshape'.trans hshape⟩
   | case6 => cases h
@@ -321,13 +321,13 @@ theorem balance_spec (data : ProverData F) (verifier : List (Interaction F))
     (rows : List (GeneratedRow F)) (row : GeneratedRow F) (data : ProverData F) :
     rowInteractions { state with rows } row data = rowInteractions state row data := rfl
 
-lemma padTables_spec (data : ProverData F) (states : List (ComponentState F)) :
-    (padTables data states).1.map (·.shape) = states.map (·.shape) ∧
+lemma padTables_spec (data : ProverData F) (hint : ProverHint F) (states : List (ComponentState F)) :
+    (padTables data hint states).1.map (·.shape) = states.map (·.shape) ∧
       ∀ channel message,
-        netOfInteractions (statesInteractions (padTables data states).1 data) channel message =
+        netOfInteractions (statesInteractions (padTables data hint states).1 data) channel message =
           netOfInteractions (statesInteractions states data) channel message -
             netOfInteractions [] channel message +
-            netOfInteractions (padTables data states).2 channel message := by
+            netOfInteractions (padTables data hint states).2 channel message := by
   constructor
   · simp only [padTables, List.map_map]
     exact List.map_congr_left fun _ _ => rfl
@@ -341,24 +341,24 @@ lemma padTables_spec (data : ProverData F) (states : List (ComponentState F)) :
       netOfInteractions_flatMap]
 
 /-- Padding and balancing end with no pending demand, keep the invariant, and change only rows. -/
-theorem padAndBalance_spec (data : ProverData F) (verifier : List (Interaction F))
+theorem padAndBalance_spec (data : ProverData F) (hint : ProverHint F) (verifier : List (Interaction F))
     (balancing : Balancing F) {balanced : Balancing F}
-    (h : padAndBalance data balancing = .ok balanced) (htracks : balancing.Tracks verifier data) :
+    (h : padAndBalance data hint balancing = .ok balanced) (htracks : balancing.Tracks verifier data) :
     balanced.demands = [] ∧ balanced.Tracks verifier data ∧
       balanced.states.map (·.shape) = balancing.states.map (·.shape) := by
-  fun_induction padAndBalance data balancing with
+  fun_induction padAndBalance data hint balancing with
   | case1 => cases h
   | case2 balancing states added hpad balancedRound hround hpadded =>
       cases h
-      obtain ⟨hshape, hnet⟩ := padTables_spec data balancing.states
+      obtain ⟨hshape, hnet⟩ := padTables_spec data hint balancing.states
       rw [hpad] at hshape hnet
-      obtain ⟨hdemands, htracks', hshape'⟩ := balance_spec data verifier _ hround
+      obtain ⟨hdemands, htracks', hshape'⟩ := balance_spec data hint verifier _ hround
         (balancing.tracks_apply htracks hnet)
       exact ⟨hdemands, htracks', hshape'.trans hshape⟩
   | case3 balancing states added hpad balancedRound hround _ _ ih =>
-      obtain ⟨hshape, hnet⟩ := padTables_spec data balancing.states
+      obtain ⟨hshape, hnet⟩ := padTables_spec data hint balancing.states
       rw [hpad] at hshape hnet
-      obtain ⟨-, htracks', hshape'⟩ := balance_spec data verifier _ hround
+      obtain ⟨-, htracks', hshape'⟩ := balance_spec data hint verifier _ hround
         (balancing.tracks_apply htracks hnet)
       obtain ⟨hdemands, htracks'', hshape''⟩ := ih h htracks'
       exact ⟨hdemands, htracks'', hshape''.trans (hshape'.trans hshape)⟩
@@ -500,8 +500,8 @@ theorem generateValid_balanced {ens : Ensemble F PublicIO} {config : ValidConfig
       Demand.addInteractions [] (verifier ++ statesInteractions initial data),
       (verifier ++ statesInteractions initial data).length⟩ verifier data :=
     fun channel message => by simp [netOf_addInteractions]
-  obtain ⟨-, htracks, hshape⟩ := balance_spec data verifier _ hbalanced htracks
-  obtain ⟨hempty, htracks, hshape'⟩ := padAndBalance_spec data verifier _ hpadded htracks
+  obtain ⟨-, htracks, hshape⟩ := balance_spec data hint verifier _ hbalanced htracks
+  obtain ⟨hempty, htracks, hshape'⟩ := padAndBalance_spec data hint verifier _ hpadded htracks
   have hpaddedInteractions : padded.states.map (·.interactions) =
       ens.tables.map (·.rowOperations.interactions) := by
     rw [← hinteractions]
