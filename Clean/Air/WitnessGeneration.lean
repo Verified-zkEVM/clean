@@ -128,6 +128,7 @@ inductive ConfigError where
   | unknownDataRead (component : String) (operation : ℕ) (key : String)
   | dataReadWidth (component : String) (operation : ℕ) (key : String) (expected actual : ℕ)
   | unstableDataRead (component : String) (operation : ℕ) (key : String) (column : ℕ)
+  | paddedDataRead (component : String) (operation : ℕ) (key : String)
 deriving Repr, DecidableEq
 
 def Direction.name : Direction → String
@@ -169,6 +170,9 @@ instance : ToString ConfigError where
     | .unstableDataRead component operation key column =>
         s!"component '{component}' witness operation {operation} reads generated prover-data cell \
           '{key}' column {column}"
+    | .paddedDataRead component operation key =>
+        s!"component '{component}' witness operation {operation} reads prover-data component \
+          '{key}', whose padding adds rows"
 
 /-- The direction of demand a preallocated handler's interaction serves: a push serves pulls and
 a pull serves pushes. -/
@@ -186,7 +190,8 @@ def Mode.handled (component : Component F) : Mode F → List (String × Directio
 
 Witness generation reads prover data from the rows initialized before channel balancing. That
 snapshot equals the final derived data at every cell that balancing never changes, so witness
-programs may read only the stable cells of preallocated components. -/
+programs may read only the stable cells of preallocated components, and only of components that
+padding does not extend. -/
 
 structure DataRead where
   key : String
@@ -317,12 +322,15 @@ def validateDataReads (components : List (Component F)) (generations : List (Gen
           unless read.width = target.rowOffset do
             throw (.dataReadWidth component.circuit.name operationIndex read.key target.rowOffset
               read.width)
-          let unstable := match generation.mode with
-            | .demand _ => true
-            | .preallocated preallocated =>
-                preallocated.handlers.any fun handler => handler.column = read.column
-          if unstable then
-            throw (.unstableDataRead component.circuit.name operationIndex read.key read.column)
+          match generation.mode with
+          | .demand _ =>
+              throw (.unstableDataRead component.circuit.name operationIndex read.key read.column)
+          | .preallocated preallocated =>
+              if preallocated.handlers.any (·.column = read.column) then
+                throw (.unstableDataRead component.circuit.name operationIndex read.key read.column)
+              unless generation.padding.targetHeight preallocated.rows.toNat =
+                  preallocated.rows.toNat do
+                throw (.paddedDataRead component.circuit.name operationIndex read.key)
 
 /-- Check that no two components handle demand of the same channel and direction. -/
 def validateHandlers (components : List (Component F)) (generations : List (Generation F)) :
