@@ -386,7 +386,6 @@ lemma rowInteractions_honest {F : Type} [FiniteField F] {component : Component F
     exact this
   exact h _ env _ hlocal _ hinput hassumptions
 
-
 /-- The VM obligation for honest rows. -/
 lemma vmObligation (state : Array (F p)) (env : ProverEnvironment (F p))
     (hsize : state.size = run.complete.vm.channel.arity)
@@ -1623,7 +1622,6 @@ lemma honestRow_size {F : Type} [FiniteField F] (component : Component F) (data 
     (honestRow component data hint input).size = component.width := by
   rw [honestRow, honestWitgen_size, hsize, width_eq]
 
-
 namespace Run
 
 variable {ens : FormalEnsemble (F p) PublicIO} {plan : GenerationPlan (F p)} (run : Run ens plan)
@@ -1776,7 +1774,6 @@ structure Inv (k : ℕ) (padded : Bool) (balancing : Balancing (F p)) : Prop whe
       ∃ mode, state.rowPlan.mode = .demand mode) →
     run.answeredMsgs balancing.states channel = run.pulledMsgs balancing.states channel
 
-
 omit [Fact p.Prime] in
 lemma mem_sum_map {α : Type*} {β : Type} {values : List α} {f : α → Multiset β} {b : β}
     (h : b ∈ (values.map f).sum) : ∃ a ∈ values, b ∈ f a := by
@@ -1927,7 +1924,6 @@ lemma card_answeredBy_ge {state : ComponentState (F p)} {mode : DemandMode (F p)
       obtain ⟨message, count, hcount, rfl⟩ := hanswer row hrow
       simp [answeredBy, hmode, answerRow, row, demandOrigin]
       omega
-
 
 /-! ### Generator steps -/
 
