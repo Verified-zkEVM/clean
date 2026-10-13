@@ -255,7 +255,7 @@ fn component_0<F: WitnessField>(
     }
     {
         let mut output: Vec<F> = Vec::with_capacity(1);
-        output.push(_data.get_prefix(
+        output.push(_data.get(
             "memory",
             3,
             ((row.get(16).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
@@ -279,7 +279,7 @@ fn component_0<F: WitnessField>(
     }
     {
         let mut output: Vec<F> = Vec::with_capacity(1);
-        output.push(_data.get_prefix(
+        output.push(_data.get(
             "memory",
             3,
             ((row.get(18).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
@@ -342,7 +342,7 @@ fn component_0<F: WitnessField>(
     }
     {
         let mut output: Vec<F> = Vec::with_capacity(1);
-        output.push(_data.get_prefix(
+        output.push(_data.get(
             "memory",
             3,
             ((row.get(21).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
@@ -366,7 +366,7 @@ fn component_0<F: WitnessField>(
     }
     {
         let mut output: Vec<F> = Vec::with_capacity(1);
-        output.push(_data.get_prefix(
+        output.push(_data.get(
             "memory",
             3,
             ((row.get(23).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
@@ -429,7 +429,7 @@ fn component_0<F: WitnessField>(
     }
     {
         let mut output: Vec<F> = Vec::with_capacity(1);
-        output.push(_data.get_prefix(
+        output.push(_data.get(
             "memory",
             3,
             ((row.get(26).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
@@ -453,7 +453,7 @@ fn component_0<F: WitnessField>(
     }
     {
         let mut output: Vec<F> = Vec::with_capacity(1);
-        output.push(_data.get_prefix(
+        output.push(_data.get(
             "memory",
             3,
             ((row.get(28).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,

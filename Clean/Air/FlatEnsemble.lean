@@ -349,12 +349,14 @@ structure HintTable where
   rows : ℕ
 deriving Repr, DecidableEq
 
-/-- The hint tables `tables` take from the flattened private input `elements`. -/
+/-- The hint tables `tables` take from the flattened private input `elements`. Like derived prover
+data, rows are cut off or zero-padded at the requested width. -/
 def HintTable.hint (tables : List HintTable) (elements : Array F) : ProverHint F := fun key width =>
-  match tables.find? fun table => table.key == key && table.width == width with
+  match tables.find? (·.key == key) with
   | none => #[]
-  | some table => Array.ofFn fun (row : Fin table.rows) => Vector.ofFn fun (column : Fin width) =>
-      elements[table.offset + row.val * width + column.val]?.getD 0
+  | some table => Array.ofFn fun (row : Fin table.rows) => rowPrefix width <|
+      elements.extract (table.offset + row.val * table.width)
+        (table.offset + (row.val + 1) * table.width)
 
 structure FormalEnsemble (F : Type) [FiniteField F]
     (PublicIO : TypeMap) [ProvableType PublicIO] where

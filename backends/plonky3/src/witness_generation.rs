@@ -167,23 +167,10 @@ impl<F: Field + Copy> WitnessData<F> {
         Self::from_entries(entries)
     }
 
+    /// Reads column `column` of the named rows cut off or zero-padded at `width` elements, as
+    /// in Lean's `ProverData` and `ProverHint`.
     #[inline(always)]
     pub fn get(&self, name: &str, width: usize, row: usize, column: usize) -> F {
-        self.entries
-            .iter()
-            .find(|(entry_name, rows)| {
-                *entry_name == name && rows.first().is_none_or(|value| value.len() == width)
-            })
-            .and_then(|(_, rows)| rows.get(row))
-            .and_then(|value| value.get(column))
-            .copied()
-            .unwrap_or(F::ZERO)
-    }
-
-    /// Reads column `column` of the named rows cut off at `width` elements, as in Lean's
-    /// derived `ProverData`.
-    #[inline(always)]
-    pub fn get_prefix(&self, name: &str, width: usize, row: usize, column: usize) -> F {
         if column >= width {
             return F::ZERO;
         }

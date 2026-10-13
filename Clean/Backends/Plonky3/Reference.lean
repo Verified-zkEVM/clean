@@ -32,7 +32,7 @@ def input : Array Fb := #[0, 1, -1, 2^30, 12345, 7, 255, -2]
 def hintRows : List (List Fb) := [[3], [-1], [0], [42]]
 
 def hint : ProverHint Fb := fun key n =>
-  if key = "hint" ∧ n = 1 then
+  if key = "hint" then
     (hintRows.map fun row => Vector.ofFn fun i : Fin n => row[i.val]?.getD 0).toArray
   else #[]
 
