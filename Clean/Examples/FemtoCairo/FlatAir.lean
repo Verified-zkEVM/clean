@@ -648,6 +648,34 @@ def Spec {programSize : UInt64} (program : Fin programSize.toNat → F p) (memor
       Spec.femtoCairoMachineBoundedExecution program mem (some initialState) steps =
         some (haltedState programSize.toNat ap fp)
 
+/-- The prover's assumptions: its memory values make the program run from `initialState` to
+completion with registers `(ap, fp)`. -/
+def ProverAssumptions {programSize : UInt64} (program : Fin programSize.toNat → F p)
+    (memorySize : UInt64) (initialState : State (F p)) :
+    fieldPair (F p) → fields memorySize.toNat (F p) → Prop
+  | (ap, fp), memoryValues => ∃ steps,
+      Spec.femtoCairoMachineBoundedExecution program memoryValues.get (some initialState) steps =
+        some (haltedState programSize.toNat ap fp)
+
+omit p_large_enough in
+/-- The prover's assumptions are no stronger than the public statement. -/
+lemma spec_of_proverAssumptions {programSize memorySize : UInt64}
+    (program : Fin programSize.toNat → F p) (initialState : State (F p))
+    (registers : fieldPair (F p)) (memoryValues : fields memorySize.toNat (F p))
+    (h : ProverAssumptions program memorySize initialState registers memoryValues) :
+    Spec program memorySize initialState registers :=
+  ⟨_, h⟩
+
+/-- Name of the hint table holding the prover's memory values, one per address. -/
+def memoryValuesKey : String := "memoryValues"
+
+/-- The hint encoding the prover's memory values as the `memoryValues` table. -/
+def memoryValuesHint {memorySize : UInt64} (memoryValues : fields memorySize.toNat (F p)) :
+    ProverHint (F p) := fun key n =>
+  if key = memoryValuesKey ∧ n = 1 then
+    memoryValues.toArray.map fun value => Vector.ofFn fun _ => value
+  else #[]
+
 def formalEnsemble {programSize memorySize : UInt64} (program : Fin programSize.toNat → F p)
     (h_programSize : programSize.toNat < p) (h_memorySize : memorySize.toNat < p)
     (initialState : State (F p)) :=
@@ -673,6 +701,8 @@ def formalEnsemble {programSize memorySize : UInt64} (program : Fin programSize.
       obtain ⟨steps, hsteps⟩ := spec
       exact ⟨memory witness.data ∘ Fin.cast hsize.symm, steps,
         femtoCairoMachineBoundedExecution_cast program hsize _ _ _ ▸ hsteps⟩)
+  |>.withProverInput (fields memorySize.toNat (F p)) memoryValuesHint
+    (ProverAssumptions program memorySize initialState)
 
 /-- End-to-end soundness: a valid proof for the public registers `(ap, fp)` shows that the
 program, run on some memory of size `memorySize`, halts with these registers. -/
@@ -706,16 +736,6 @@ def programMode (programSize : UInt64) : Mode (F p) :=
     handlers := [{ interaction := 0, column := 2 }]
   }
 
-/-- Name of the hint table holding the private memory values, one per row. -/
-def memoryValuesKey : String := "memoryValues"
-
-/-- The generation hint supplying `memoryValues` to the memory component's rows. -/
-def memoryValuesHint {memorySize : UInt64} (memoryValues : fields memorySize.toNat (F p)) :
-    ProverHint (F p) := fun key n =>
-  if key = memoryValuesKey ∧ n = 1 then
-    memoryValues.toArray.map fun value => Vector.ofFn fun _ => value
-  else #[]
-
 def memoryMode (memorySize : UInt64) : Mode (F p) := .preallocated {
   rows := memorySize
   input := .ofFExprs #v[.hintGet memoryValuesKey 1 .idx 0, .const 0]
@@ -745,12 +765,10 @@ def generate {programSize memorySize : UInt64} (program : Fin programSize.toNat 
     (memoryValues : fields memorySize.toNat (F p)) (initialState : State (F p))
     (finalRegisters : fieldPair (F p)) (executionRows : UInt64) (fuel : ℕ) :
     Except GenerationError (EnsembleWitness
-      (soundEnsemble program h_programSize h_memorySize initialState).ensemble) :=
-  Air.Flat.WitnessGeneration.generate
-    (soundEnsemble program h_programSize h_memorySize initialState).ensemble
+      (formalEnsemble program h_programSize h_memorySize initialState).ensemble) :=
+  Air.Flat.WitnessGeneration.generate (formalEnsemble program h_programSize h_memorySize initialState)
     (config (memorySize := memorySize) program h_programSize initialState executionRows fuel)
-    finalRegisters
-    (memoryValuesHint memoryValues)
+    finalRegisters memoryValues
 
 end Witness
 

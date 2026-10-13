@@ -749,13 +749,13 @@ def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensembl
     same_circuits := assembled.same_circuits
   }
 
-/-- Validate generation metadata, then generate an ensemble witness. -/
-def generate (ensemble : Ensemble F PublicIO) (config : Config F)
-    (publicInput : PublicIO F) (hint : ProverHint F) :
-    Except GenerationError (EnsembleWitness ensemble) :=
-  match config.validate ensemble with
+/-- Validate generation metadata, then generate an ensemble witness from the public input and the
+prover's private input. -/
+def generate (ens : FormalEnsemble F PublicIO) (config : Config F) (publicInput : PublicIO F)
+    (proverInput : ens.ProverInput) : Except GenerationError (EnsembleWitness ens.ensemble) :=
+  match config.validate ens.ensemble with
   | .error error => .error (.config error)
-  | .ok config => generateValid config publicInput hint
+  | .ok config => generateValid config publicInput (ens.hint proverInput)
 
 /-- Executable constraint check for the no-legacy-lookup initial milestone. -/
 def constraintsHold {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness ensemble) : Bool :=
