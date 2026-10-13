@@ -3285,7 +3285,96 @@ lemma step_preallocated (hinv : run.Inv k padded balancing) {demand : Demand (F 
         hinv.canonical hδ (by rw [hinv.canonical.netOf_eq hdemand, hmult]) hdiff
       omega
 
+/-- Every handled demand is handled with progress, keeping the invariant. -/
+lemma step (hinv : run.Inv k padded balancing) {demand : Demand (F p)} {index : ℕ}
+    (hfind : findAction balancing.states balancing.demands = some (demand, index)) :
+    ∃ states change k', handle balancing.states demand index run.data0 run.hint =
+      .ok (states, change) ∧ run.Inv k' padded (balancing.apply states change) ∧
+      Prod.Lex (· < ·) (· < ·) (balancing.apply states change).measure balancing.measure := by
+  obtain ⟨hdemand, state, hstate, hhandles⟩ := findAction_some hfind
+  have hmemState := List.mem_of_getElem? hstate
+  have hok := run.stateOk_of_shape hinv.shape hmemState
+  rcases hinv.demand_cases hdemand with
+    ⟨hchannel, hk, hpadded, ⟨hmessage, hmult⟩ | ⟨-, hmult⟩⟩ | ⟨hchannel, δ, hpos, hlt, hmult, hcount⟩
+  · have hhandled := (run.handles_iff hok demand).mp hhandles
+    rw [(demand_push hmult).1, hchannel] at hhandled
+    have hvmHandled : (run.complete.vm.channel.name, Direction.push) ∈
+        (({ mode := .demand run.complete.vm.mode, padding := run.complete.vm.padding } :
+          RowPlan (F p)).mode.handled run.complete.vm.component) := by
+      simp [Mode.handled, run.complete.vm.mode_channel, run.complete.vm.mode_direction]
+    have hvm : state.component = run.complete.vm.component :=
+      congrArg Prod.fst (run.handled_unique hok.entry run.vm_entry hhandled hvmHandled)
+    obtain ⟨states, change, hhandle, hinv', hlt⟩ :=
+      hinv.step_vm hstate hvm hk hpadded hmessage hmult
+    exact ⟨states, change, k + 1, hhandle, hinv', hlt⟩
+  · exfalso
+    have hp : 2 * 1 < p := by
+      have hnet := hinv.canonical.netOf_eq hdemand
+      rw [hinv.tracks, hmult] at hnet
+      obtain ⟨interaction, hmem, -⟩ := exists_of_netOfInteractions_ne_zero
+        (hnet ▸ neg_ne_zero.mpr one_ne_zero)
+      have := List.length_pos_of_mem hmem
+      have := hinv.length_lt
+      omega
+    have hhandled := (run.handles_iff hok demand).mp hhandles
+    rw [(demand_pull (δ := 1) (by simpa using hmult) one_pos hp).1, hchannel] at hhandled
+    exact run.not_answersPull_vmChannel hok hhandled
+  · have hdirection := (demand_pull hmult hpos hlt).1
+    rcases hmode : state.rowPlan.mode with mode | mode
+    · rcases haggregation : mode.aggregation
+      · obtain ⟨states, change, hhandle, hinv', hlt'⟩ := hinv.step_new hstate hhandles hmode
+          (.inl haggregation) hchannel hpos hlt hmult hcount
+        exact ⟨states, change, k, hhandle, hinv', hlt'⟩
+      · rcases hfound : state.rows.zipIdx.findSome? (fun (row, index) => row.origin.bind
+            fun origin => if sameOrigin origin mode demand then some (row, origin, index) else none)
+          with _ | ⟨row₀, origin, position⟩
+        · obtain ⟨states, change, hhandle, hinv', hlt'⟩ := hinv.step_new hstate hhandles hmode
+            (.inr ⟨haggregation, hfound⟩) hchannel hpos hlt hmult hcount
+          exact ⟨states, change, k, hhandle, hinv', hlt'⟩
+        · obtain ⟨states, change, hhandle, hinv', hlt'⟩ := hinv.step_update hstate hdemand hhandles
+            hmode haggregation hfound hchannel hpos hlt hmult hcount
+          exact ⟨states, change, k, hhandle, hinv', hlt'⟩
+    · obtain ⟨states, change, hhandle, hinv', hlt'⟩ := hinv.step_preallocated hstate hdemand
+        hhandles hmode hchannel hpos hlt hmult hcount
+      exact ⟨states, change, k, hhandle, hinv', hlt'⟩
+
 end Inv
+
+/-- From an invariant state, balancing succeeds and settles all demand. -/
+theorem balance_ok {padded : Bool} (balancing : Balancing (F p)) :
+    ∀ k, run.Inv k padded balancing → ∃ k' balanced,
+      balance run.data0 run.hint balancing = .ok balanced ∧ run.Inv k' padded balanced ∧
+        balanced.demands = [] := by
+  fun_induction balance run.data0 run.hint balancing with
+  | case1 balancing hempty =>
+      intro k hinv
+      exact ⟨k, balancing, rfl, hinv, List.isEmpty_iff.mp hempty⟩
+  | case2 balancing hempty hbound =>
+      intro k hinv
+      exact absurd hinv.interactions_lt (by simpa [FiniteField.char] using hbound)
+  | case3 balancing hempty hbound hnone =>
+      intro k hinv
+      obtain ⟨result, hresult⟩ := findAction_isSome
+        (hinv.exists_handled (by simpa using hempty))
+      rw [hnone] at hresult
+      cases hresult
+  | case4 balancing hempty hbound demand index hfind error herror =>
+      intro k hinv
+      obtain ⟨states, change, k', hhandle, -⟩ := hinv.step hfind
+      rw [hhandle] at herror
+      cases herror
+  | case5 balancing hempty hbound demand index hfind states change hhandle next hlt ih =>
+      intro k hinv
+      obtain ⟨states', change', k', hhandle', hinv', -⟩ := hinv.step hfind
+      rw [hhandle] at hhandle'
+      cases hhandle'
+      exact ih k' hinv'
+  | case6 balancing hempty hbound demand index hfind states change hhandle next hnot =>
+      intro k hinv
+      obtain ⟨states', change', k', hhandle', -, hlt'⟩ := hinv.step hfind
+      rw [hhandle] at hhandle'
+      cases hhandle'
+      exact absurd hlt' hnot
 
 end Run
 
