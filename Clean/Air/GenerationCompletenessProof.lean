@@ -3565,6 +3565,208 @@ lemma step (hinv : run.Inv k padded balancing) {demand : Demand (F p)} {index : 
         hhandles hmode hchannel hpos hlt hmult hcount
       exact ⟨states, change, k, hhandle, hinv', hlt'⟩
 
+/-- Once demand is settled, the VM has run all its steps. -/
+lemma steps_of_settled (hinv : run.Inv k padded balancing) (hsettled : balancing.demands = []) :
+    k = run.steps := by
+  by_contra hne
+  have hk : k < run.steps := lt_of_le_of_ne hinv.steps_le hne
+  have hnet := hinv.tracks run.complete.vm.channel.name (run.complete.vm.state run.publicInput k)
+  rw [hinv.net_vm, hsettled] at hnet
+  simp [run.distinct k hk] at hnet
+
+/-- Once demand is settled, every message is answered as often as it is pulled. -/
+lemma answered_eq_of_settled (hinv : run.Inv k padded balancing)
+    (hsettled : balancing.demands = []) {channel : String}
+    (hchannel : channel ≠ run.complete.vm.channel.name) :
+    run.answeredMsgs balancing.states channel = run.pulledMsgs balancing.states channel := by
+  ext message
+  have hnet := hinv.tracks channel message
+  rw [run.net_eq_answered_sub_pulled hinv.statesOk hchannel, hsettled, netOf_nil] at hnet
+  have hle := Multiset.le_iff_count.mp (hinv.answered_le _ hchannel) message
+  have hcount := Multiset.count_le_card message (run.pulledMsgs balancing.states channel)
+  have hcard := run.card_pulledMsgs_le_length balancing.states channel
+  have hlength := hinv.length_lt
+  have heq := (ZMod.natCast_eq_natCast_iff' _ _ p).mp (sub_eq_zero.mp hnet.symm)
+  rwa [Nat.mod_eq_of_lt (by omega), Nat.mod_eq_of_lt (by omega)] at heq
+
+lemma tablesArePadded_of_padded (hinv : run.Inv k true balancing) :
+    tablesArePadded balancing.states = true := by
+  simp only [tablesArePadded, List.all_eq_true, beq_iff_eq]
+  intro state hstate
+  have hrows := hinv.rows state hstate
+  unfold RowsOk at hrows
+  split at hrows
+  · rw [hrows.1, if_pos rfl, targetHeight_targetHeight]
+  · obtain ⟨main, pad, hrowsEq, -, htarget, -, -⟩ := hrows
+    rw [hrowsEq, List.length_append, List.length_replicate, htarget rfl, targetHeight_targetHeight]
+
+/-- Padding rows add no answers. -/
+lemma answeredBy_paddingRow (hinv : run.Inv k padded balancing) {state : ComponentState (F p)}
+    (hstate : state ∈ balancing.states) {channel : String}
+    (hchannel : channel ≠ run.complete.vm.channel.name) :
+    run.answeredBy state (run.paddingRow state) channel = 0 := by
+  have hok := run.stateOk_of_shape hinv.shape hstate
+  rcases hmode : state.rowPlan.mode with mode | mode
+  · simp [answeredBy, hmode, paddingRow, Run.row]
+  have hpadding := run.complete.padding state.component hok.mem state.rowPlan
+    (run.planned _ hok.entry) run.publicInput run.proverInput run.assumptions run.stableData
+    run.stableData_stable
+  have hsize : state.rowPlan.padding.input.size = state.component.rowOffset :=
+    (run.planValid.row_plans _ hok.entry).padding_width
+  have hadmissible : run.Admissible state.component state.rowPlan.padding.input :=
+    ⟨hsize, fun data hstable => (run.complete.padding state.component hok.mem state.rowPlan
+      (run.planned _ hok.entry) run.publicInput run.proverInput run.assumptions data hstable).1⟩
+  by_cases hanswers : AnswersPull state channel
+  · have hhandled := hanswers
+    simp only [AnswersPull, hmode, Mode.handled, List.mem_filterMap, Option.map_eq_some_iff,
+      Prod.mk.injEq] at hhandled
+    obtain ⟨handler, hhandler, interaction, hinteraction, hname, -⟩ := hhandled
+    rw [paddingRow, ← hname, run.answeredBy_preallocated hok hmode hadmissible hhandler hinteraction]
+    obtain ⟨interaction', hinteraction', -, -, hfacts⟩ :=
+      (run.complete.preallocated state.component hok.mem state.rowPlan mode
+        (run.planned _ hok.entry) hmode run.publicInput run.proverInput run.assumptions
+        run.stableData run.stableData_stable).2.2.2.2 handler hhandler
+    rw [hinteraction] at hinteraction'
+    cases hinteraction'
+    have hhonest := run.honestEnv_row hok.mem hsize run.stableData
+    obtain ⟨hpush, hmult, -⟩ := hfacts _ _ hhonest rfl rfl
+      (hadmissible.assumptions _ run.stableData_stable)
+    have hside := hpadding.2 _ hhonest rfl rfl (interaction.eval
+      (run.rowEnv state.component state.rowPlan.padding.input run.stableData).toEnvironment)
+      (List.mem_map.mpr ⟨interaction, List.mem_of_getElem? hinteraction, rfl⟩)
+    rcases hside with hzero | ⟨⟨hpull, -⟩, -⟩
+    · rw [← hmult, hzero]
+      simp
+    · rw [hpull] at hpush
+      cases hpush
+  · exact (run.rowFacts_preallocated hok hmode hadmissible).answered_zero channel hchannel hanswers
+
+omit [Fact p.Prime] in
+lemma sum_map_add' {α : Type*} {M : Type*} [AddCommMonoid M] (values : List α) (f g : α → M) :
+    (values.map fun x => f x + g x).sum = (values.map f).sum + (values.map g).sum := by
+  induction values with
+  | nil => simp
+  | cons head rest ih => simp [ih]; abel
+
+lemma answeredMsgs_pad (hinv : run.Inv k padded balancing) {channel : String}
+    (hchannel : channel ≠ run.complete.vm.channel.name) :
+    run.answeredMsgs (balancing.states.map run.padOne) channel =
+      run.answeredMsgs balancing.states channel := by
+  simp only [answeredMsgs, List.map_map, Function.comp_def]
+  congr 1
+  apply List.map_congr_left
+  intro state hstate
+  simp only [padOne, List.map_append, List.sum_append, sum_map_replicate]
+  rw [show run.answeredBy { state with rows := (state.rows ++ List.replicate (padCount state)
+    (run.paddingRow state)) } (run.paddingRow state) channel = 0 from
+    hinv.answeredBy_paddingRow hstate hchannel, smul_zero, add_zero]
+  rfl
+
+lemma pulledMsgs_pad (channel : String) :
+    run.pulledMsgs (balancing.states.map run.padOne) channel =
+      run.pulledMsgs balancing.states channel + (balancing.states.map fun state =>
+        padCount state • run.pulledBy state (run.paddingRow state) channel).sum := by
+  simp only [pulledMsgs, List.map_map, Function.comp_def, add_assoc]
+  congr 1
+  rw [← sum_map_add']
+  congr 1
+  apply List.map_congr_left
+  intro state _
+  simp only [padOne, List.map_append, List.sum_append, sum_map_replicate]
+  rfl
+
+/-- After settling demand, padding every component keeps the invariant, now padded. -/
+lemma pad (hinv : run.Inv k false balancing) (hsettled : balancing.demands = []) :
+    run.Inv run.steps true (balancing.apply (balancing.states.map run.padOne)
+      ⟨[], balancing.states.flatMap (fun state => (List.replicate (padCount state)
+        (run.paddingRow state)).flatMap (rowInteractions state · run.data0))⟩) := by
+  have hk := hinv.steps_of_settled hsettled
+  subst hk
+  have hok : ∀ state ∈ balancing.states, run.StateOk state := fun state hstate =>
+    run.stateOk_of_shape hinv.shape hstate
+  have hchanges := padTables_spec run.data0 run.hint balancing.states
+  rw [run.padTables_eq hinv.viewOk hok] at hchanges
+  refine ⟨hchanges.1.trans hinv.shape, ?_, le_rfl, fun _ => rfl,
+    Balancing.tracks_apply hinv.tracks hchanges.2,
+    (hinv.canonical.removeInteractions _).addInteractions _, ?_, ?_, ?_⟩
+  · intro x hx
+    obtain ⟨state, hstate, rfl⟩ := List.mem_map.mp hx
+    have hrows := hinv.rows state hstate
+    rcases hmode : state.rowPlan.mode with mode | mode
+    · simp only [RowsOk, hmode] at hrows
+      simp only [RowsOk, padOne, hmode]
+      obtain ⟨main, pad, hrowsEq, hpad, -, hvm, hanswer⟩ := hrows
+      rw [hpad trivial, List.replicate_zero, List.append_nil] at hrowsEq
+      refine ⟨main, padCount state, by rw [hrowsEq]; rfl, fun h => absurd h (by simp), fun _ => ?_,
+        hvm, hanswer⟩
+      simp only [padCount, hrowsEq]
+      exact Nat.add_sub_cancel' (le_targetHeight _ _).1
+    · simp only [RowsOk, hmode, Bool.false_eq_true, if_false] at hrows
+      simp only [RowsOk, padOne, hmode, if_true]
+      obtain ⟨hlength, hrowsEq⟩ := hrows
+      refine ⟨?_, fun j hj => ?_⟩
+      · rw [List.length_append, List.length_replicate, padCount, hlength]
+        exact Nat.add_sub_cancel' (le_targetHeight _ _).1
+      · by_cases hjrows : j < state.rows.length
+        · obtain ⟨input, hreachable, heq⟩ := hrowsEq j hjrows
+          exact ⟨input, hreachable, by rw [List.getElem_append_left hjrows]; exact heq⟩
+        · refine ⟨state.rowPlan.padding.input, ?_, ?_⟩
+          · have : run.baseInput state.component state.rowPlan mode j =
+                state.rowPlan.padding.input := by
+              simp [baseInput, show ¬ j < mode.rows.toNat by omega]
+            rw [this]
+            exact .base
+          · rw [List.getElem_append_right (by omega), List.getElem_replicate]
+            rfl
+  · simp only [Balancing.apply, List.length_nil, Nat.sub_zero, List.length_append,
+      hinv.interactions, length_statesInteractions, List.length_flatMap, List.map_map,
+      Function.comp_def, padOne, List.length_replicate, rowInteractions, List.length_map,
+      Nat.add_mul, List.map_replicate, List.sum_replicate, smul_eq_mul]
+    rw [sum_map_add']
+    ring
+  · intro channel hchannel
+    simp only [Balancing.apply]
+    rw [hinv.answeredMsgs_pad hchannel, pulledMsgs_pad (run := run) (balancing := balancing)]
+    exact le_trans (hinv.answered_le channel hchannel) le_self_add
+  · intro _ channel hchannel hall
+    simp only [Balancing.apply]
+    rw [hinv.answeredMsgs_pad hchannel, pulledMsgs_pad (run := run) (balancing := balancing),
+      hinv.answered_eq_of_settled hsettled hchannel]
+    suffices h : ∀ state ∈ balancing.states, run.pulledBy state (run.paddingRow state) channel = 0 by
+      rw [List.sum_eq_zero, add_zero]
+      intro x hx
+      obtain ⟨state, hstate, rfl⟩ := List.mem_map.mp hx
+      rw [h state hstate, smul_zero]
+    intro state hstate
+    have hokState := hok state hstate
+    unfold pulledBy
+    split
+    · rfl
+    apply Multiset.eq_zero_of_forall_notMem
+    intro message hmessage
+    obtain ⟨interaction, hmem, hname, -, hmult, -⟩ := mem_pullsOf hmessage
+    have hsize : state.rowPlan.padding.input.size = state.component.rowOffset :=
+      (run.planValid.row_plans _ hokState.entry).padding_width
+    rw [paddingRow, run.rowInteractions_row hokState.interactions hokState.mem hsize none
+      run.stableData_stable] at hmem
+    have hside := (run.complete.padding state.component hokState.mem state.rowPlan
+      (run.planned _ hokState.entry) run.publicInput run.proverInput run.assumptions run.stableData
+      run.stableData_stable).2 _ (run.honestEnv_row hokState.mem hsize _) rfl rfl interaction hmem
+    rcases hside with hzero | ⟨-, -, hanswered⟩
+    · rw [hmult] at hzero
+      exact neg_ne_zero.mpr one_ne_zero hzero
+    obtain ⟨entry, hentry, hhandled, hpreallocated⟩ := run.answers_entry hanswered
+    obtain ⟨mode, hmode⟩ := hpreallocated rfl
+    obtain ⟨other, hother, -, hcomponent, hrowPlan⟩ := run.find?_state hinv.shape hentry
+    have hanswers : AnswersPull (run.padOne other) channel := by
+      show (channel, Direction.pull) ∈ other.rowPlan.mode.handled other.component
+      rw [hcomponent, hrowPlan, ← hname]
+      exact hhandled
+    obtain ⟨mode', hmode'⟩ := hall (run.padOne other) (List.mem_map_of_mem hother) hanswers
+    simp only [padOne] at hmode'
+    rw [hrowPlan, hmode] at hmode'
+    cases hmode'
+
 end Inv
 
 /-- From an invariant state, balancing succeeds and settles all demand. -/
