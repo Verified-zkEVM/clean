@@ -389,14 +389,13 @@ lemma program_initial (hint : ProverHint (F p)) {row : ℕ} (hrow : row < progra
     explicit_provable_type]
 
 omit [Fact p.Prime] p_large_enough in
+omit [Fact p.Prime] p_large_enough in
 lemma providerInput_fromElements (row : Vector (F p) (size ProviderInput)) :
     (fromElements row : ProviderInput (F p)) =
       { address := row[0], value := row[1], multiplicity := row[2] } := by
-  rw [ProvableType.fromElements_eq_iff]
-  ext i hi
-  change i < 3 at hi
-  rcases i with _ | _ | _ | i
-  all_goals first | omega | (simp [ProvableStruct.componentsToElements, explicit_provable_type, circuit_norm]; done) | (with_unfolding_all rfl) | (trace_state; sorry)
+  obtain ⟨⟨_ | ⟨a, _ | ⟨b, _ | ⟨c, _ | _⟩⟩⟩⟩, h⟩ := row <;> change _ = 3 at h <;> simp at h
+  symm
+  simp [explicit_provable_type, circuit_norm]
 
 /-- Stable prover data holds the memory values in the memory table. -/
 lemma memory_stable (hmemory : 2 ^ Nat.clog 2 memorySize.toNat = memorySize.toNat)
@@ -430,5 +429,132 @@ lemma memory_stable (hmemory : 2 ^ Nat.clog 2 memorySize.toNat = memorySize.toNa
     exact this
   simp only [ProverData.getRows, Array.getElem_map, providerInput_fromElements]
   exact ⟨h0, h1⟩
+
+/-- Stable prover data has the memory of the memory values. -/
+lemma memory_eq_of_stable (hmemory : 2 ^ Nat.clog 2 memorySize.toNat = memorySize.toNat)
+    (memoryValues : fields memorySize.toNat (F p)) {data : ProverData (F p)}
+    (hstable : StableData (formalEnsemble program h_programSize h_memorySize initialState).ensemble
+      (plan (memorySize := memorySize) program h_programSize initialState)
+      ((formalEnsemble program h_programSize h_memorySize initialState).hint memoryValues) data) :
+    ∃ hsize : FlatAir.memorySize data = memorySize.toNat,
+      memory data = fun i => memoryValues.get (Fin.cast hsize i) := by
+  obtain ⟨hsize, hrows⟩ := memory_stable program h_programSize h_memorySize initialState hmemory
+    memoryValues hstable
+  exact ⟨hsize, funext fun i => (hrows i (hsize ▸ i.isLt)).2⟩
+
+lemma memoryCompleteness_of_stable (hmemory : 2 ^ Nat.clog 2 memorySize.toNat = memorySize.toNat)
+    (memoryValues : fields memorySize.toNat (F p)) {data : ProverData (F p)}
+    (hstable : StableData (formalEnsemble program h_programSize h_memorySize initialState).ensemble
+      (plan (memorySize := memorySize) program h_programSize initialState)
+      ((formalEnsemble program h_programSize h_memorySize initialState).hint memoryValues) data) :
+    MemoryCompletenessAssumption data := by
+  obtain ⟨hsize, hrows⟩ := memory_stable program h_programSize h_memorySize initialState hmemory
+    memoryValues hstable
+  have hpos : 0 < memorySize.toNat := by rw [← hmemory]; exact Nat.two_pow_pos _
+  refine ⟨by omega, by have := UInt64.toNat_lt_size memorySize; simp only [UInt64.size] at this; omega,
+    fun address ha => ?_⟩
+  rw [(hrows _ (hsize ▸ ha)).1, ZMod.natCast_zmod_val]
+
+/-- Memories that agree run the same. -/
+lemma transition_congr {programSize n m : ℕ} (program : Fin programSize → F p)
+    (memory : Fin n → F p) (memory' : Fin m → F p) (h : n = m)
+    (hmemory : ∀ i, memory i = memory' (Fin.cast h i)) (state : State (F p)) :
+    Spec.femtoCairoMachineTransition program memory state =
+      Spec.femtoCairoMachineTransition program memory' state := by
+  subst h
+  rw [show memory = memory' from funext hmemory]
+
+lemma execution_congr {programSize n m : ℕ} (program : Fin programSize → F p)
+    (memory : Fin n → F p) (memory' : Fin m → F p) (h : n = m)
+    (hmemory : ∀ i, memory i = memory' (Fin.cast h i)) (state : Option (State (F p))) (steps : ℕ) :
+    Spec.femtoCairoMachineBoundedExecution program memory state steps =
+      Spec.femtoCairoMachineBoundedExecution program memory' state steps := by
+  subst h
+  rw [show memory = memory' from funext hmemory]
+
+/-! ### The VM and its run -/
+
+/-- A state as a channel message. -/
+def messageOf (state : State (F p)) : Array (F p) := #[state.pc, state.ap, state.fp]
+
+/-- A channel message as a state. -/
+def stateOf (message : Array (F p)) : State (F p) :=
+  { pc := message[0]?.getD 0, ap := message[1]?.getD 0, fp := message[2]?.getD 0 }
+
+/-- The state after a state, on the memory values; halted states stay. -/
+def next (memoryValues : fields memorySize.toNat (F p)) (message : Array (F p)) : Array (F p) :=
+  match Spec.femtoCairoMachineTransition program memoryValues.get (stateOf message) with
+  | some state => messageOf state
+  | none => message
+
+def vm : Vm (formalEnsemble program h_programSize h_memorySize initialState)
+    (plan (memorySize := memorySize) program h_programSize initialState) where
+  channel := (StateChannel program initialState).toRaw
+  component := executionComponent program h_programSize initialState
+  mode := executionMode program initialState
+  padding := { input := #[0, initialState.pc, initialState.ap, initialState.fp], minimumRows := 8 }
+  declared := by simp [channels_eq]
+  mem := by simp [tables_eq]
+  planned := by simp [plan, executionComponent]
+  mode_channel := rfl
+  mode_direction := rfl
+  mode_aggregation := rfl
+  no_pull_handler := by
+    intro other hother rowPlan hplanned
+    simp only [tables_eq, List.mem_cons, List.not_mem_nil, or_false] at hother
+    rcases hother with rfl | rfl | rfl <;>
+      simp [plan, executionComponent, memoryComponent, programComponent, executeStep,
+        provideMemory, provideProgram] at hplanned <;>
+      subst hplanned <;>
+      simp [Mode.handled, executionMode, memoryMode, programMode, handlerDirection, circuit_norm,
+        Component.rowOperations, memoryComponent, programComponent, provideMemory, provideProgram,
+        StateChannel, MemoryChannel, ProgramChannel]
+  next := next program
+  initial _ := messageOf initialState
+  final | (ap, fp) => messageOf (haltedState programSize.toNat ap fp)
+
+lemma stateOf_messageOf (state : State (F p)) : stateOf (messageOf state) = state := rfl
+
+lemma messageOf_injective : Function.Injective (messageOf (p := p)) := by
+  intro state state' h
+  simp only [messageOf, Array.mk.injEq, List.cons.injEq] at h
+  obtain ⟨_, _, _⟩ := state
+  obtain ⟨_, _, _⟩ := state'
+  simp_all
+
+/-- The `k`-th state of the run is the `k`-th state of the execution. -/
+lemma vm_state (memoryValues : fields memorySize.toNat (F p)) (publicInput : fieldPair (F p))
+    {k : ℕ} {state : State (F p)}
+    (h : Spec.femtoCairoMachineBoundedExecution program memoryValues.get (some initialState) k =
+      some state) :
+    (vm program h_programSize h_memorySize initialState).state publicInput memoryValues k =
+      messageOf state := by
+  induction k generalizing state with
+  | zero =>
+    simp only [Spec.femtoCairoMachineBoundedExecution, Option.some.injEq] at h
+    subst h
+    rfl
+  | succ k ih =>
+    simp only [Spec.femtoCairoMachineBoundedExecution, Option.bind_eq_bind,
+      Option.bind_eq_some_iff] at h
+    obtain ⟨previous, hprevious, hnext⟩ := h
+    simp only [Vm.state, Function.iterate_succ_apply'] at ih ⊢
+    rw [ih hprevious]
+    show next program memoryValues (messageOf previous) = _
+    rw [next, stateOf_messageOf, hnext]
+
+omit p_large_enough in
+/-- A successful execution succeeds at every earlier step. -/
+lemma execution_isSome_of_le {programSize memorySize : ℕ} {program : Fin programSize → F p}
+    {memory : Fin memorySize → F p} {state : Option (State (F p))} {k k' : ℕ} (hle : k ≤ k')
+    (h : (Spec.femtoCairoMachineBoundedExecution program memory state k').isSome) :
+    (Spec.femtoCairoMachineBoundedExecution program memory state k).isSome := by
+  induction hle with
+  | refl => exact h
+  | step _ ih =>
+    apply ih
+    simp only [Spec.femtoCairoMachineBoundedExecution, Option.bind_eq_bind] at h
+    cases hstate : Spec.femtoCairoMachineBoundedExecution program memory state _ <;>
+      simp_all
 
 end Examples.FemtoCairo.FlatAir.Witness
