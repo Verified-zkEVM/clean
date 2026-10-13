@@ -1,7 +1,7 @@
 module
 
 public import Clean.Examples.FibonacciVm.Ensemble
-public import Clean.Air.GenerationCompleteness
+public import Clean.Air.GenerationCompletenessProof
 
 @[expose] public section
 
@@ -31,33 +31,26 @@ def vm : Vm (fibonacciEnsemble (p := p)) (plan (p := p)) where
   component := fib8Component
   mode := fibMode
   padding := { input := #[0, 0, 0, 0], minimumRows := 32 }
+  declared := by
+    simp [fibonacciEnsemble, FormalEnsemble.withProverInput, SoundVmEnsemble.toFormal,
+      SoundEnsemble.addVm, Ensemble.addVm, fibonacciVm, SoundEnsemble.addFinishedChannel,
+      SoundEnsemble.addTable, Ensemble.addTable, SoundEnsemble.empty]
   mem := by simp [fibonacciEnsemble, FormalEnsemble.withProverInput, SoundVmEnsemble.toFormal,
     SoundEnsemble.addVm, Ensemble.addVm, fibonacciVm]
   planned := by simp [plan, fib8Component]
   mode_channel := rfl
   mode_direction := rfl
   mode_aggregation := rfl
+  no_pull_handler := sorry
   next
   initial _ := #[0, 0, 1]
   final | (n, x, y) => #[n, x, y]
 
-def completePlan : CompletePlan (fibonacciEnsemble (p := p)) (plan (p := p)) where
-  valid := sorry
-  vm
-  rowBound steps name := if name = "bytes" then 256 else height steps
-  run := sorry
-  vm_row := by
-    intro state env hsize honest assumptions
-    obtain ⟨hlocal, hinput⟩ := honest
-    rcases state with ⟨_ | ⟨n, _ | ⟨x, _ | ⟨y, _ | _⟩⟩⟩⟩ <;>
-      simp [vm, FibonacciChannel, circuit_norm] at hsize
-    simp [vm, Vm.input, fibMode, InputTemplate.eval, InputCell.eval, fib8Component, fib8,
-      interactionsIn, Component.rowOperations, Component.rowInput, inputOf, circuit_norm,
-      explicit_provable_type] at hlocal hinput assumptions ⊢
-    sorry
-  verifier := sorry
-  demand := sorry
-  preallocated := sorry
-  padding := sorry
+example (e n' x' y' n x y : F p)
+    (h : ({ enabled := e, n := n', x := x', y := y' } : Fib8Input (F p)) =
+      fromElements (inputRow Fib8Input #[1, n, x, y])) : e = 1 ∧ n' = n ∧ x' = x ∧ y' = y := by
+  simp [explicit_provable_type, circuit_norm] at h
+  trace_state
+  sorry
 
 end FibonacciWitness

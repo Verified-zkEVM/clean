@@ -47,6 +47,19 @@ lemma honestEnv_rowEnvironment (component : Component F) (data : ProverData F)
       (Environment.fromArray (honestRow component data hint input) data) = _
     rw [valueFromOffset_fromArray, inputRow_honestRow component data hint input hsize]
 
+/-- A property of the interactions of every honestly generated row of `circuit`, stated like
+completeness: for every environment whose local witnesses are honest and every input satisfying
+the circuit's prover assumptions. -/
+def RowInteractions {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+    (circuit : GeneralFormalCircuit F Input Output)
+    (P : Input F → ProverEnvironment F → List (Interaction F) → Prop) : Prop :=
+  ∀ offset (env : ProverEnvironment F) (input_var : Var Input F),
+    env.UsesLocalWitnessesCompleteness offset ((circuit.main input_var).operations offset) →
+    ∀ input : Input F, eval env input_var = input →
+    circuit.ProverAssumptions input env.data env.hint →
+    P input env (((circuit.main input_var).operations offset).interactions.map
+      (·.eval env.toEnvironment))
+
 /-- The interactions of a row of `component` in `env`. -/
 def interactionsIn (component : Component F) (env : Environment F) : List (Interaction F) :=
   component.rowOperations.interactions.map (·.eval env)
@@ -204,14 +217,12 @@ structure CompletePlan (ens : FormalEnsemble (F p) PublicIO) (plan : GenerationP
           (ens.hint proverInput)) ∧
       RowBounds ens plan vm (rowBound steps) steps
   /-- A VM row pulls its state and pushes the next one; it adds nothing else on the VM channel. -/
-  vm_row : ∀ state env, state.size = vm.channel.arity → HonestEnv vm.component (vm.input state) env →
-    vm.component.circuit.ProverAssumptions (inputOf vm.component (vm.input state)) env.data
-      env.hint →
-    (∀ message, netOfInteractions (interactionsIn vm.component env.toEnvironment)
-        vm.channel.name message =
-      (if message = vm.next state then 1 else 0) - (if message = state then 1 else 0)) ∧
-    ∀ interaction ∈ interactionsIn vm.component env.toEnvironment,
-      interaction.channel.name ≠ vm.channel.name →
+  vm_row : ∀ state, state.size = vm.channel.arity →
+    RowInteractions vm.component.circuit fun input _ interactions =>
+      input = inputOf vm.component (vm.input state) →
+      (∀ message, netOfInteractions interactions vm.channel.name message =
+        (if message = vm.next state then 1 else 0) - (if message = state then 1 else 0)) ∧
+      ∀ interaction ∈ interactions, interaction.channel.name ≠ vm.channel.name →
         SideInteraction ens.ensemble plan vm.channel.name false interaction
   /-- The verifier pushes the initial state, pulls the final one, and otherwise pulls single
   messages satisfying their prover guarantees. -/
@@ -227,8 +238,8 @@ structure CompletePlan (ens : FormalEnsemble (F p) PublicIO) (plan : GenerationP
           interaction.ProverGuarantees data
   /-- A demand-driven component other than the VM answers the pulls of a message satisfying its
   prover guarantees with rows satisfying their prover assumptions, which push exactly the
-  answered count of that message and otherwise pull single messages. Coalescing rows do the same
-  for every count. -/
+  answered count of that message and otherwise pull single messages. Coalescing rows pull the
+  same for every count. -/
   demand : ∀ component ∈ ens.ensemble.tables, ∀ rowPlan mode,
     (component.circuit.name, rowPlan) ∈ plan.components → rowPlan.mode = .demand mode →
     component ≠ vm.component →
@@ -240,77 +251,74 @@ structure CompletePlan (ens : FormalEnsemble (F p) PublicIO) (plan : GenerationP
             component.circuit.ProverAssumptions
               (inputOf component (mode.input.eval message.toArray count)) data
               (ens.hint proverInput)) ∧
-      (∀ message count env, HonestEnv component (mode.input.eval message count) env →
-        component.circuit.ProverAssumptions
-          (inputOf component (mode.input.eval message count)) env.data env.hint →
-        (∀ other, netOfInteractions (interactionsIn component env.toEnvironment)
-            mode.channel.name other = if other = message then (count : (F p)) else 0) ∧
-        ∀ interaction ∈ interactionsIn component env.toEnvironment,
-          interaction.channel.name ≠ mode.channel.name →
-            SideInteraction ens.ensemble plan vm.channel.name false interaction) ∧
-      (mode.aggregation = .byMessage →
-        ∀ message count count' env env', HonestEnv component (mode.input.eval message count) env →
-          HonestEnv component (mode.input.eval message count') env' →
-          env.data = env'.data → env.hint = env'.hint →
+      (∀ message count, RowInteractions component.circuit fun input _ interactions =>
+        input = inputOf component (mode.input.eval message count) →
+        (∀ other, netOfInteractions interactions mode.channel.name other =
+          if other = message then (count : F p) else 0) ∧
+        ∀ interaction ∈ interactions, interaction.channel.name ≠ mode.channel.name →
+          SideInteraction ens.ensemble plan vm.channel.name false interaction) ∧
+      (mode.aggregation = .byMessage → ∀ message, ∃ nets : ProverData (F p) → ProverHint (F p) →
+          String → Array (F p) → F p, ∀ count,
+        RowInteractions component.circuit fun input env interactions =>
+          input = inputOf component (mode.input.eval message count) →
           ∀ channel ≠ mode.channel.name, ∀ other,
-            netOfInteractions (interactionsIn component env.toEnvironment) channel other =
-              netOfInteractions (interactionsIn component env'.toEnvironment) channel other)
+            netOfInteractions interactions channel other = nets env.data env.hint channel other)
   /-- A preallocated component's initial rows satisfy their prover assumptions, also with any
-  handler column changed. Every handled interaction pushes with the handler column as
-  multiplicity, the row's other interactions pull single messages, and neither depends on the
-  handler column, and pull no channel the component answers; every message satisfying the channel's
-  prover guarantees has a row. -/
+  handler column changed. Its rows interact as `interactionsOf` their input: every handled
+  interaction pushes on a declared channel with the handler column as multiplicity, the other
+  interactions pull single messages of channels the component does not answer, and changing a
+  handler column changes nothing else; every message satisfying the channel's prover guarantees
+  has a row. -/
   preallocated : ∀ component ∈ ens.ensemble.tables, ∀ rowPlan mode,
     (component.circuit.name, rowPlan) ∈ plan.components → rowPlan.mode = .preallocated mode →
-    ∀ publicInput proverInput, ens.ProverAssumptions publicInput proverInput →
-    ∀ data, StableData ens.ensemble plan (ens.hint proverInput) data →
-      (∀ row < mode.rows.toNat, component.circuit.ProverAssumptions
-        (inputOf component (preallocatedInput component mode (ens.hint proverInput) row)) data
-        (ens.hint proverInput)) ∧
-      (∀ handler ∈ mode.handlers, ∀ row < mode.rows.toNat,
-        (preallocatedInput component mode (ens.hint proverInput) row)[handler.column]?.getD 0 = 0) ∧
-      (∀ input, ∀ handler ∈ mode.handlers, ∀ value,
-        component.circuit.ProverAssumptions (inputOf component input) data (ens.hint proverInput) →
-        component.circuit.ProverAssumptions (inputOf component (input.set! handler.column value))
-          data (ens.hint proverInput)) ∧
-      (∀ input env, HonestEnv component input env → env.data = data →
-        env.hint = ens.hint proverInput →
-        component.circuit.ProverAssumptions (inputOf component input) data env.hint →
-        ∀ index, index ∉ mode.handlers.map (·.interaction) →
-          ∀ other ∈ (interactionsIn component env.toEnvironment)[index]?,
-            SideInteraction ens.ensemble plan vm.channel.name false other ∧
-              (other.channel.name, Direction.pull) ∉ rowPlan.mode.handled component) ∧
-      ∀ handler ∈ mode.handlers, ∃ interaction,
-        component.rowOperations.interactions[handler.interaction]? = some interaction ∧
-        interaction.channel ∈ ens.ensemble.channels ∧
-        (∀ message, interaction.channel.ProverGuarantees message data →
-          ∃ row < mode.rows.toNat, ∀ env,
-            HonestEnv component (preallocatedInput component mode (ens.hint proverInput) row) env →
-            env.data = data → env.hint = ens.hint proverInput →
-              (interaction.eval env.toEnvironment).msg = message.toArray) ∧
-        ∀ input env, HonestEnv component input env → env.data = data →
-          env.hint = ens.hint proverInput →
-          component.circuit.ProverAssumptions (inputOf component input) data env.hint →
-            (interaction.eval env.toEnvironment).assumeGuarantees = false ∧
-            (interaction.eval env.toEnvironment).mult = input[handler.column]?.getD 0 ∧
-            ∀ value env', HonestEnv component (input.set! handler.column value) env' →
-              env'.data = data → env'.hint = env.hint →
-              (interaction.eval env'.toEnvironment).msg = (interaction.eval env.toEnvironment).msg ∧
-              ∀ index ≠ handler.interaction,
-                (interactionsIn component env'.toEnvironment)[index]? =
-                  (interactionsIn component env.toEnvironment)[index]?
+    (∀ publicInput proverInput, ens.ProverAssumptions publicInput proverInput →
+      ∀ data, StableData ens.ensemble plan (ens.hint proverInput) data →
+        (∀ row < mode.rows.toNat, component.circuit.ProverAssumptions
+          (inputOf component (preallocatedInput component mode (ens.hint proverInput) row)) data
+          (ens.hint proverInput)) ∧
+        (∀ handler ∈ mode.handlers, ∀ row < mode.rows.toNat,
+          (preallocatedInput component mode (ens.hint proverInput) row)[handler.column]?.getD 0 =
+            0) ∧
+        ∀ input, ∀ handler ∈ mode.handlers, ∀ value,
+          component.circuit.ProverAssumptions (inputOf component input) data
+            (ens.hint proverInput) →
+          component.circuit.ProverAssumptions (inputOf component (input.set! handler.column value))
+            data (ens.hint proverInput)) ∧
+    ∃ interactionsOf : Array (F p) → ProverData (F p) → ProverHint (F p) → List (Interaction (F p)),
+      (∀ input, RowInteractions component.circuit fun inputValue env interactions =>
+        inputValue = inputOf component input →
+          interactions = interactionsOf input env.data env.hint) ∧
+      (∀ input data hint, ∀ index, index ∉ mode.handlers.map (·.interaction) →
+        ∀ other ∈ (interactionsOf input data hint)[index]?,
+          SideInteraction ens.ensemble plan vm.channel.name false other ∧
+            (other.channel.name, Direction.pull) ∉ rowPlan.mode.handled component) ∧
+      ∀ handler ∈ mode.handlers, ∃ channel ∈ ens.ensemble.channels,
+        (∀ input data hint, ∃ interaction ∈ (interactionsOf input data hint)[handler.interaction]?,
+          interaction.channel = channel ∧ interaction.assumeGuarantees = false ∧
+            interaction.mult = input[handler.column]?.getD 0) ∧
+        (∀ input value data hint,
+          ((interactionsOf (input.set! handler.column value) data hint)[handler.interaction]?.map
+            (·.msg)) = (interactionsOf input data hint)[handler.interaction]?.map (·.msg)) ∧
+        (∀ input value data hint, ∀ index ≠ handler.interaction,
+          (interactionsOf (input.set! handler.column value) data hint)[index]? =
+            (interactionsOf input data hint)[index]?) ∧
+        ∀ publicInput proverInput, ens.ProverAssumptions publicInput proverInput →
+          ∀ data, StableData ens.ensemble plan (ens.hint proverInput) data →
+          ∀ message : Vector (F p) channel.arity, channel.ProverGuarantees message data →
+            ∃ row < mode.rows.toNat, ∃ interaction ∈ (interactionsOf
+              (preallocatedInput component mode (ens.hint proverInput) row) data
+              (ens.hint proverInput))[handler.interaction]?, interaction.msg = message.toArray
   /-- Padding rows satisfy their prover assumptions and add nothing but single pulls that
   preallocated components answer. -/
   padding : ∀ component ∈ ens.ensemble.tables, ∀ rowPlan,
     (component.circuit.name, rowPlan) ∈ plan.components →
-    ∀ publicInput proverInput, ens.ProverAssumptions publicInput proverInput →
-    ∀ data, StableData ens.ensemble plan (ens.hint proverInput) data →
-      component.circuit.ProverAssumptions (inputOf component rowPlan.padding.input) data
-        (ens.hint proverInput) ∧
-      ∀ env, HonestEnv component rowPlan.padding.input env → env.data = data →
-        env.hint = ens.hint proverInput →
-        ∀ interaction ∈ interactionsIn component env.toEnvironment,
-          SideInteraction ens.ensemble plan vm.channel.name true interaction
+    (∀ publicInput proverInput, ens.ProverAssumptions publicInput proverInput →
+      ∀ data, StableData ens.ensemble plan (ens.hint proverInput) data →
+        component.circuit.ProverAssumptions (inputOf component rowPlan.padding.input) data
+          (ens.hint proverInput)) ∧
+    RowInteractions component.circuit fun input _ interactions =>
+      input = inputOf component rowPlan.padding.input →
+        ∀ interaction ∈ interactions, SideInteraction ens.ensemble plan vm.channel.name true interaction
 
 end Air.Flat.WitnessGeneration
 

@@ -351,6 +351,208 @@ lemma honestEnv_row {component : Component (F p)} (hmem : component ∈ ens.ense
   honestEnv_rowEnvironment component data run.hint input hsize
     (run.planValid.reads_below component hmem)
 
+/-- A row obligation applies to every honest row. -/
+lemma rowInteractions_honest {F : Type} [FiniteField F] {component : Component F}
+    {P : component.Input F → ProverEnvironment F → List (Interaction F) → Prop}
+    (h : RowInteractions component.circuit P) {input : Array F} {env : ProverEnvironment F}
+    (honest : HonestEnv component input env)
+    (hassumptions : component.circuit.ProverAssumptions (inputOf component input) env.data
+      env.hint) :
+    P (inputOf component input) env (interactionsIn component env.toEnvironment) := by
+  have hlocal := ProverEnvironment.can_replace_usesLocalWitnessesCompleteness
+    (component.circuit.subcircuitsConsistent _ _) honest.usesLocalWitnesses
+  have hinput : (Eval.eval env (varFromOffset component.Input 0 : component.Input (Expression F)) :
+      component.Input F) = inputOf component input := by
+    rw [ProvableType.eval_varFromOffset_prover]
+    have := honest.input_eq
+    simp only [Component.rowInput, valueFromOffset] at this
+    exact this
+  exact h _ env _ hlocal _ hinput hassumptions
+
+
+/-- The VM obligation for honest rows. -/
+lemma vmObligation (state : Array (F p)) (env : ProverEnvironment (F p))
+    (hsize : state.size = run.complete.vm.channel.arity)
+    (honest : HonestEnv run.complete.vm.component (run.complete.vm.input state) env)
+    (hassumptions : run.complete.vm.component.circuit.ProverAssumptions
+      (inputOf run.complete.vm.component (run.complete.vm.input state)) env.data env.hint) :
+    (∀ message, netOfInteractions (interactionsIn run.complete.vm.component env.toEnvironment)
+        run.complete.vm.channel.name message =
+      (if message = run.complete.vm.next state then 1 else 0) - (if message = state then 1 else 0)) ∧
+    ∀ interaction ∈ interactionsIn run.complete.vm.component env.toEnvironment,
+      interaction.channel.name ≠ run.complete.vm.channel.name →
+        SideInteraction ens.ensemble plan run.complete.vm.channel.name false interaction :=
+  rowInteractions_honest (run.complete.vm_row state hsize) honest hassumptions rfl
+
+/-- The demand obligation for honest rows. -/
+lemma demandObligation {component : Component (F p)} (hmem : component ∈ ens.ensemble.tables)
+    {rowPlan : RowPlan (F p)} {mode : DemandMode (F p)}
+    (hplanned : (component.circuit.name, rowPlan) ∈ plan.components)
+    (hmode : rowPlan.mode = .demand mode) (hvm : component ≠ run.complete.vm.component) :
+    mode.channel ∈ ens.ensemble.channels ∧ mode.direction = .pull ∧
+    (∀ publicInput proverInput, ens.ProverAssumptions publicInput proverInput →
+      ∀ data, StableData ens.ensemble plan (ens.hint proverInput) data →
+      ∀ (message : Vector (F p) mode.channel.arity) (count : ℕ), 0 < count →
+        mode.channel.ProverGuarantees message data →
+          component.circuit.ProverAssumptions
+            (inputOf component (mode.input.eval message.toArray count)) data
+            (ens.hint proverInput)) ∧
+    (∀ message count env, HonestEnv component (mode.input.eval message count) env →
+      component.circuit.ProverAssumptions
+        (inputOf component (mode.input.eval message count)) env.data env.hint →
+      (∀ other, netOfInteractions (interactionsIn component env.toEnvironment)
+          mode.channel.name other = if other = message then (count : (F p)) else 0) ∧
+      ∀ interaction ∈ interactionsIn component env.toEnvironment,
+        interaction.channel.name ≠ mode.channel.name →
+          SideInteraction ens.ensemble plan run.complete.vm.channel.name false interaction) ∧
+    (mode.aggregation = .byMessage →
+      ∀ message count count' env env', HonestEnv component (mode.input.eval message count) env →
+        HonestEnv component (mode.input.eval message count') env' →
+        env.data = env'.data → env.hint = env'.hint →
+        component.circuit.ProverAssumptions
+          (inputOf component (mode.input.eval message count)) env.data env.hint →
+        component.circuit.ProverAssumptions
+          (inputOf component (mode.input.eval message count')) env'.data env'.hint →
+        ∀ channel ≠ mode.channel.name, ∀ other,
+          netOfInteractions (interactionsIn component env.toEnvironment) channel other =
+            netOfInteractions (interactionsIn component env'.toEnvironment) channel other) := by
+  obtain ⟨hdeclared, hdirection, hassumptions, hnet, hbyMessage⟩ :=
+    run.complete.demand component hmem rowPlan mode hplanned hmode hvm
+  refine ⟨hdeclared, hdirection, hassumptions, fun message count env honest hPA =>
+    rowInteractions_honest (hnet message count) honest hPA rfl, fun hagg message count count' env
+      env' honest honest' hdata hhint hPA hPA' channel hchannel other => ?_⟩
+  obtain ⟨nets, hnets⟩ := hbyMessage hagg message
+  rw [rowInteractions_honest (hnets count) honest hPA rfl channel hchannel other,
+    rowInteractions_honest (hnets count') honest' hPA' rfl channel hchannel other, hdata, hhint]
+
+/-- The padding obligation for honest rows. -/
+lemma paddingObligation {component : Component (F p)} (hmem : component ∈ ens.ensemble.tables)
+    {rowPlan : RowPlan (F p)} (hplanned : (component.circuit.name, rowPlan) ∈ plan.components)
+    (publicInput : PublicIO (F p)) (proverInput : ens.ProverInput (F p))
+    (hassumptions : ens.ProverAssumptions publicInput proverInput) (data : ProverData (F p))
+    (hstable : StableData ens.ensemble plan (ens.hint proverInput) data) :
+    component.circuit.ProverAssumptions (inputOf component rowPlan.padding.input) data
+      (ens.hint proverInput) ∧
+    ∀ env, HonestEnv component rowPlan.padding.input env → env.data = data →
+      env.hint = ens.hint proverInput →
+      ∀ interaction ∈ interactionsIn component env.toEnvironment,
+        SideInteraction ens.ensemble plan run.complete.vm.channel.name true interaction := by
+  obtain ⟨hPA, hside⟩ := run.complete.padding component hmem rowPlan hplanned
+  refine ⟨hPA publicInput proverInput hassumptions data hstable, fun env honest hdata hhint => ?_⟩
+  have hPA' : component.circuit.ProverAssumptions (inputOf component rowPlan.padding.input)
+      env.data env.hint := by
+    rw [hdata, hhint]
+    exact hPA publicInput proverInput hassumptions data hstable
+  exact rowInteractions_honest hside honest hPA' rfl
+
+lemma interactionsIn_getElem? {component : Component (F p)} (env : Environment (F p)) {index : ℕ}
+    {abstract : AbstractInteraction (F p)}
+    (h : component.rowOperations.interactions[index]? = some abstract) :
+    (interactionsIn component env)[index]? = some (abstract.eval env) := by
+  simp [interactionsIn, h]
+
+/-- The preallocated obligation for honest rows. -/
+lemma preallocatedObligation {component : Component (F p)} (hmem : component ∈ ens.ensemble.tables)
+    {rowPlan : RowPlan (F p)} {mode : PreallocatedMode (F p)}
+    (hplanned : (component.circuit.name, rowPlan) ∈ plan.components)
+    (hmode : rowPlan.mode = .preallocated mode) (publicInput : PublicIO (F p))
+    (proverInput : ens.ProverInput (F p))
+    (hassumptions : ens.ProverAssumptions publicInput proverInput) (data : ProverData (F p))
+    (hstable : StableData ens.ensemble plan (ens.hint proverInput) data) :
+    (∀ row < mode.rows.toNat, component.circuit.ProverAssumptions
+      (inputOf component (preallocatedInput component mode (ens.hint proverInput) row)) data
+      (ens.hint proverInput)) ∧
+    (∀ handler ∈ mode.handlers, ∀ row < mode.rows.toNat,
+      (preallocatedInput component mode (ens.hint proverInput) row)[handler.column]?.getD 0 = 0) ∧
+    (∀ input, ∀ handler ∈ mode.handlers, ∀ value,
+      component.circuit.ProverAssumptions (inputOf component input) data (ens.hint proverInput) →
+      component.circuit.ProverAssumptions (inputOf component (input.set! handler.column value))
+        data (ens.hint proverInput)) ∧
+    (∀ input env, HonestEnv component input env → env.data = data →
+      env.hint = ens.hint proverInput →
+      component.circuit.ProverAssumptions (inputOf component input) data env.hint →
+      ∀ index, index ∉ mode.handlers.map (·.interaction) →
+        ∀ other ∈ (interactionsIn component env.toEnvironment)[index]?,
+          SideInteraction ens.ensemble plan run.complete.vm.channel.name false other ∧
+            (other.channel.name, Direction.pull) ∉ rowPlan.mode.handled component) ∧
+    ∀ handler ∈ mode.handlers, ∃ interaction,
+      component.rowOperations.interactions[handler.interaction]? = some interaction ∧
+      interaction.channel ∈ ens.ensemble.channels ∧
+      (∀ message, interaction.channel.ProverGuarantees message data →
+        ∃ row < mode.rows.toNat, ∀ env,
+          HonestEnv component (preallocatedInput component mode (ens.hint proverInput) row) env →
+          env.data = data → env.hint = ens.hint proverInput →
+            (interaction.eval env.toEnvironment).msg = message.toArray) ∧
+      ∀ input env, HonestEnv component input env → env.data = data →
+        env.hint = ens.hint proverInput →
+        component.circuit.ProverAssumptions (inputOf component input) data env.hint →
+          (interaction.eval env.toEnvironment).assumeGuarantees = false ∧
+          (interaction.eval env.toEnvironment).mult = input[handler.column]?.getD 0 ∧
+          ∀ value env', HonestEnv component (input.set! handler.column value) env' →
+            env'.data = data → env'.hint = env.hint →
+            (interaction.eval env'.toEnvironment).msg = (interaction.eval env.toEnvironment).msg ∧
+            ∀ index ≠ handler.interaction,
+              (interactionsIn component env'.toEnvironment)[index]? =
+                (interactionsIn component env.toEnvironment)[index]? := by
+  obtain ⟨hfacts, interactionsOf, hEq, hSide, hHandlers⟩ :=
+    run.complete.preallocated component hmem rowPlan mode hplanned hmode
+  obtain ⟨hbase, hzero, hset⟩ := hfacts publicInput proverInput hassumptions data hstable
+  have hentry := run.mem_zip hmem hplanned
+  have hints : ∀ input env, HonestEnv component input env → env.data = data →
+      env.hint = ens.hint proverInput →
+      component.circuit.ProverAssumptions (inputOf component input) data (ens.hint proverInput) →
+      interactionsIn component env.toEnvironment =
+        interactionsOf input data (ens.hint proverInput) := by
+    intro input env honest hdata hhint hPA
+    have hPA' : component.circuit.ProverAssumptions (inputOf component input) env.data env.hint := by
+      rw [hdata, hhint]
+      exact hPA
+    rw [← hdata, ← hhint]
+    exact rowInteractions_honest (hEq input) honest hPA' rfl
+  refine ⟨hbase, hzero, hset, fun input env honest hdata hhint hPA index hindex other hother => ?_,
+    fun handler hhandler => ?_⟩
+  · rw [hints input env honest hdata hhint (hhint ▸ hPA)] at hother
+    exact hSide input data _ index hindex other hother
+  obtain ⟨channel, hdeclared, hshape, hmsg, hothers, hexists⟩ := hHandlers handler hhandler
+  -- an honest padding row exposes the handler's abstract interaction
+  have hpaddingPA := (run.paddingObligation hmem hplanned publicInput proverInput hassumptions data
+    hstable).1
+  have hsize : rowPlan.padding.input.size = component.rowOffset :=
+    (run.planValid.row_plans _ hentry).padding_width
+  have honest₀ := honestEnv_rowEnvironment component data (ens.hint proverInput)
+    rowPlan.padding.input hsize (run.planValid.reads_below component hmem)
+  have hints₀ := hints _ _ honest₀ rfl rfl hpaddingPA
+  obtain ⟨interaction₀, hinteraction₀, hchannel₀, -, -⟩ :=
+    hshape rowPlan.padding.input data (ens.hint proverInput)
+  rw [← hints₀] at hinteraction₀
+  simp only [interactionsIn, List.getElem?_map, Option.mem_def, Option.map_eq_some_iff]
+    at hinteraction₀
+  obtain ⟨abstract, habstract, rfl⟩ := hinteraction₀
+  have hchannel : abstract.channel = channel := hchannel₀
+  subst hchannel
+  refine ⟨abstract, habstract, hdeclared, fun message hguarantees => ?_,
+    fun input env honest hdata hhint hPA => ?_⟩
+  · obtain ⟨row, hrow, interaction, hinteraction, hinteractionMsg⟩ :=
+      hexists publicInput proverInput hassumptions data hstable message hguarantees
+    refine ⟨row, hrow, fun env honest hdata hhint => ?_⟩
+    rw [← hints _ env honest hdata hhint (hbase row hrow),
+      interactionsIn_getElem? _ habstract, Option.mem_def, Option.some.injEq] at hinteraction
+    rw [hinteraction, hinteractionMsg]
+  · have hints₁ := hints input env honest hdata hhint (hhint ▸ hPA)
+    obtain ⟨interaction, hinteraction, -, hpush, hmult⟩ := hshape input data (ens.hint proverInput)
+    rw [← hints₁, interactionsIn_getElem? _ habstract, Option.mem_def, Option.some.injEq]
+      at hinteraction
+    refine ⟨hinteraction ▸ hpush, hinteraction ▸ hmult, fun value env' honest' hdata' hhint' => ?_⟩
+    have hints₂ := hints _ env' honest' hdata' (hhint'.trans hhint)
+      (hset input handler hhandler value (hhint ▸ hPA))
+    refine ⟨?_, fun index hindex => ?_⟩
+    · have := hmsg input value data (ens.hint proverInput)
+      rw [← hints₂, ← hints₁, interactionsIn_getElem? _ habstract,
+        interactionsIn_getElem? _ habstract] at this
+      simpa using this
+    · rw [hints₂, hints₁]
+      exact hothers input value data _ index hindex
+
 /-- The interactions of a generated row are those of its honest row over any stable data. -/
 lemma rowInteractions_row {state : ComponentState (F p)}
     (hinteractions : state.interactions = state.component.rowOperations.interactions)
@@ -672,7 +874,7 @@ lemma vm_row_facts {state : Array (F p)} (hsize : state.size = run.complete.vm.c
       (if message = run.complete.vm.next state then 1 else 0) - (if message = state then 1 else 0)) ∧
     ∀ interaction ∈ interactions, interaction.channel.name ≠ run.complete.vm.channel.name →
       SideInteraction ens.ensemble plan run.complete.vm.channel.name false interaction :=
-  run.complete.vm_row state _ hsize
+  run.vmObligation state _ hsize
     (run.honestEnv_row run.complete.vm.mem (run.vm_input_size state) run.stableData)
     (hassumptions.assumptions _ run.stableData_stable)
 
@@ -833,8 +1035,7 @@ lemma answersPull_demand {state : ComponentState (F p)} (hok : run.StateOk state
     (hvm : state.component ≠ run.complete.vm.component) {mode : DemandMode (F p)}
     (hmode : state.rowPlan.mode = .demand mode) (channel : String) :
     AnswersPull state channel ↔ channel = mode.channel.name := by
-  have hdirection := (run.complete.demand state.component hok.mem state.rowPlan mode
-    (run.planned _ hok.entry) hmode hvm).2.1
+  have hdirection := (run.demandObligation hok.mem (run.planned _ hok.entry) hmode hvm).2.1
   simp [AnswersPull, hmode, Mode.handled, hdirection]
 
 /-- No component answers pulls on the VM channel. -/
@@ -848,8 +1049,8 @@ lemma rowFacts_answerRow {state : ComponentState (F p)} (hok : run.StateOk state
     (hcount : 0 < count) (hsize : message.size = mode.channel.arity)
     (hpullable : run.Pullable mode.channel message) :
     run.RowFacts state (run.answerRow state.component mode message count) := by
-  obtain ⟨-, -, hassumptions, hnet, -⟩ := run.complete.demand state.component hok.mem
-    state.rowPlan mode (run.planned _ hok.entry) hmode hvm
+  obtain ⟨-, -, hassumptions, hnet, -⟩ := run.demandObligation hok.mem
+    (run.planned _ hok.entry) hmode hvm
   have hentry := hok.entry
   have hinputSize := run.demand_input_size hentry hmode message count
   have hadmissible : run.Admissible state.component (mode.input.eval message count) :=
@@ -920,8 +1121,8 @@ lemma mult_eq_zero_of_padding {state : ComponentState (F p)} (hok : run.StateOk 
 lemma rowFacts_padding {state : ComponentState (F p)} (hok : run.StateOk state)
     {mode : DemandMode (F p)} (hmode : state.rowPlan.mode = .demand mode) :
     run.RowFacts state (run.row state.component state.rowPlan.padding.input none) := by
-  have hpadding := run.complete.padding state.component hok.mem state.rowPlan
-    (run.planned _ hok.entry) run.publicInput run.proverInput run.assumptions
+  have hpadding := run.paddingObligation hok.mem (run.planned _ hok.entry) run.publicInput run.proverInput
+    run.assumptions
   have hsize : state.rowPlan.padding.input.size = state.component.rowOffset :=
     (run.planValid.row_plans _ hok.entry).padding_width
   have hadmissible : run.Admissible state.component state.rowPlan.padding.input :=
@@ -950,9 +1151,9 @@ lemma rowFacts_preallocated {state : ComponentState (F p)} (hok : run.StateOk st
     {mode : PreallocatedMode (F p)} (hmode : state.rowPlan.mode = .preallocated mode)
     {input : Array (F p)} (hadmissible : run.Admissible state.component input) :
     run.RowFacts state (run.row state.component input none) := by
-  obtain ⟨-, -, -, hsideP, hhandlers⟩ := run.complete.preallocated state.component hok.mem
-    state.rowPlan mode (run.planned _ hok.entry) hmode run.publicInput run.proverInput
-    run.assumptions run.stableData run.stableData_stable
+  obtain ⟨-, -, -, hsideP, hhandlers⟩ := run.preallocatedObligation hok.mem
+    (run.planned _ hok.entry) hmode run.publicInput run.proverInput run.assumptions run.stableData
+    run.stableData_stable
   have hhonest := run.honestEnv_row hok.mem hadmissible.size run.stableData
   have hPA := hadmissible.assumptions _ run.stableData_stable
   have hside := hsideP input _ hhonest rfl rfl hPA
@@ -1108,11 +1309,10 @@ lemma admissible_baseInput {state : ComponentState (F p)} (hok : run.StateOk sta
   split
   · rename_i hrow
     exact ⟨run.preallocatedInput_size hok.entry hmode row, fun data hstable =>
-      (run.complete.preallocated state.component hok.mem state.rowPlan mode
-        (run.planned _ hok.entry) hmode run.publicInput run.proverInput run.assumptions data
+      (run.preallocatedObligation hok.mem (run.planned _ hok.entry) hmode run.publicInput run.proverInput run.assumptions data
         hstable).1 row hrow⟩
   · exact ⟨(run.planValid.row_plans _ hok.entry).padding_width, fun data hstable =>
-      (run.complete.padding state.component hok.mem state.rowPlan (run.planned _ hok.entry)
+      (run.paddingObligation hok.mem (run.planned _ hok.entry)
         run.publicInput run.proverInput run.assumptions data hstable).1⟩
 
 lemma admissible_of_reachable {state : ComponentState (F p)} (hok : run.StateOk state)
@@ -1123,8 +1323,7 @@ lemma admissible_of_reachable {state : ComponentState (F p)} (hok : run.StateOk 
   | base => exact hbase
   | set _ handler hmem value ih =>
       refine ⟨by simp [ih.size], fun data hstable => ?_⟩
-      exact (run.complete.preallocated state.component hok.mem state.rowPlan mode
-        (run.planned _ hok.entry) hmode run.publicInput run.proverInput run.assumptions data
+      exact (run.preallocatedObligation hok.mem (run.planned _ hok.entry) hmode run.publicInput run.proverInput run.assumptions data
         hstable).2.2.1 _ handler hmem value (ih.assumptions data hstable)
 
 lemma rowFacts_of_rowsOk {k : ℕ} {padded : Bool} {state : ComponentState (F p)}
@@ -2020,8 +2219,7 @@ lemma msg_reachable {state : ComponentState (F p)} (hok : run.StateOk state)
       have hadmissible' := run.admissible_of_reachable hok hmode (hprevious.set handler' hmem value)
         hbase
       obtain ⟨interaction', hinteraction', -, -, hfacts⟩ :=
-        (run.complete.preallocated state.component hok.mem state.rowPlan mode
-          (run.planned _ hok.entry) hmode run.publicInput run.proverInput run.assumptions
+        (run.preallocatedObligation hok.mem (run.planned _ hok.entry) hmode run.publicInput run.proverInput run.assumptions
           run.stableData run.stableData_stable).2.2.2.2 handler' hmem
       obtain ⟨-, -, hset⟩ := hfacts previous _ (run.honestEnv_row hok.mem hadmissible.size _) rfl rfl
         (hadmissible.assumptions _ run.stableData_stable)
@@ -2055,8 +2253,7 @@ lemma answeredBy_preallocated {state : ComponentState (F p)} (hok : run.StateOk 
       interaction.assumeGuarantees = false := by
     intro handler hmem interaction hinteraction
     obtain ⟨interaction', hinteraction', -, -, hfacts⟩ :=
-      (run.complete.preallocated state.component hok.mem state.rowPlan mode
-        (run.planned _ hok.entry) hmode run.publicInput run.proverInput run.assumptions
+      (run.preallocatedObligation hok.mem (run.planned _ hok.entry) hmode run.publicInput run.proverInput run.assumptions
         run.stableData run.stableData_stable).2.2.2.2 handler hmem
     rw [hinteraction] at hinteraction'
     cases hinteraction'
@@ -2237,7 +2434,7 @@ lemma initial_inv : run.Inv 0 false run.initialBalancing := by
     · rw [hmode] at hrow
       obtain ⟨input, hinput, rfl⟩ := List.mem_map.mp hrow
       obtain ⟨j, hj, rfl⟩ := List.mem_map.mp hinput
-      have hzero := (run.complete.preallocated component (List.of_mem_zip hentry).1 rowPlan mode
+      have hzero := (run.preallocatedObligation (List.of_mem_zip hentry).1
         (run.planned _ hentry) hmode run.publicInput run.proverInput run.assumptions
         run.stableData run.stableData_stable).2.1
       simp only [answeredBy, hmode]
@@ -2706,8 +2903,7 @@ lemma demand_setup (hinv : run.Inv k padded balancing) {demand : Demand (F p)}
   have hmodeChannel : demand.channel = mode.channel.name := by
     simp only [hmode, Mode.handled, List.mem_singleton, Prod.mk.injEq] at hhandled
     exact hhandled.1
-  have hdeclared := (run.complete.demand state.component hok.mem state.rowPlan mode
-    (run.planned _ hok.entry) hmode hvm).1
+  have hdeclared := (run.demandObligation hok.mem (run.planned _ hok.entry) hmode hvm).1
   have hpulled : demand.message ∈ run.pulledMsgs balancing.states demand.channel :=
     Multiset.count_pos.mp (by omega)
   obtain ⟨hpullable, hsize⟩ := (run.pulled_facts hinv.statesOk hchannel hpulled).2 mode.channel
@@ -3035,10 +3231,13 @@ lemma step_update (hinv : run.Inv k padded balancing) {demand : Demand (F p)} {i
       simp only [updated, answerRow]
       rw [run.rowInteractions_row hok.interactions hok.mem (hinputSize _ _) _ run.stableData_stable,
         run.rowInteractions_row hok.interactions hok.mem (hinputSize _ _) _ run.stableData_stable]
-      exact (run.complete.demand state.component hok.mem state.rowPlan mode
-        (run.planned _ hok.entry) hmode hvm).2.2.2.2 hbyMessage demand.message count₀ (count₀ + δ)
-        _ _ (run.honestEnv_row hok.mem (hinputSize _ _) run.stableData)
-        (run.honestEnv_row hok.mem (hinputSize _ _) run.stableData) rfl rfl channel hne message
+      exact (run.demandObligation hok.mem (run.planned _ hok.entry) hmode hvm).2.2.2.2 hbyMessage
+        demand.message count₀ (count₀ + δ) _ _
+        (run.honestEnv_row hok.mem (hinputSize _ _) run.stableData)
+        (run.honestEnv_row hok.mem (hinputSize _ _) run.stableData) rfl rfl
+        ((run.rowFacts_answerRow hok hvm hmode hcount₀ hsize₀ hpullable₀).admissible.assumptions _
+          run.stableData_stable)
+        (hfactsU.admissible.assumptions _ run.stableData_stable) channel hne message
     have hanswered₀ : run.answeredBy state row' mode.channel.name =
         Multiset.replicate count₀ demand.message := by
       simp [hrowEq, answeredBy, hmode, answerRow, Run.row, demandOrigin]
@@ -3162,8 +3361,7 @@ lemma step_preallocated (hinv : run.Inv k padded balancing) {demand : Demand (F 
   have hok := run.stateOk_of_shape hinv.shape hmemState
   have hdirection := (demand_pull hmult hpos hlt).1
   have hdemandCount := (demand_pull hmult hpos hlt).2
-  have hobligation := run.complete.preallocated state.component hok.mem state.rowPlan mode
-    (run.planned _ hok.entry) hmode run.publicInput run.proverInput run.assumptions run.stableData
+  have hobligation := run.preallocatedObligation hok.mem (run.planned _ hok.entry) hmode run.publicInput run.proverInput run.assumptions run.stableData
     run.stableData_stable
   have hnodup := run.handled_nodup hok.entry
   simp only [hmode, Mode.handled] at hnodup
@@ -3621,14 +3819,13 @@ lemma answeredBy_paddingRow (hinv : run.Inv k padded balancing) {state : Compone
   have hok := run.stateOk_of_shape hinv.shape hstate
   rcases hmode : state.rowPlan.mode with mode | mode
   · simp [answeredBy, hmode, paddingRow, Run.row]
-  have hpadding := run.complete.padding state.component hok.mem state.rowPlan
-    (run.planned _ hok.entry) run.publicInput run.proverInput run.assumptions run.stableData
-    run.stableData_stable
+  have hpadding := run.paddingObligation hok.mem (run.planned _ hok.entry) run.publicInput
+    run.proverInput run.assumptions run.stableData run.stableData_stable
   have hsize : state.rowPlan.padding.input.size = state.component.rowOffset :=
     (run.planValid.row_plans _ hok.entry).padding_width
   have hadmissible : run.Admissible state.component state.rowPlan.padding.input :=
-    ⟨hsize, fun data hstable => (run.complete.padding state.component hok.mem state.rowPlan
-      (run.planned _ hok.entry) run.publicInput run.proverInput run.assumptions data hstable).1⟩
+    ⟨hsize, fun data hstable => (run.paddingObligation hok.mem (run.planned _ hok.entry)
+      run.publicInput run.proverInput run.assumptions data hstable).1⟩
   by_cases hanswers : AnswersPull state channel
   · have hhandled := hanswers
     simp only [AnswersPull, hmode, Mode.handled, List.mem_filterMap, Option.map_eq_some_iff,
@@ -3636,8 +3833,7 @@ lemma answeredBy_paddingRow (hinv : run.Inv k padded balancing) {state : Compone
     obtain ⟨handler, hhandler, interaction, hinteraction, hname, -⟩ := hhandled
     rw [paddingRow, ← hname, run.answeredBy_preallocated hok hmode hadmissible hhandler hinteraction]
     obtain ⟨interaction', hinteraction', -, -, hfacts⟩ :=
-      (run.complete.preallocated state.component hok.mem state.rowPlan mode
-        (run.planned _ hok.entry) hmode run.publicInput run.proverInput run.assumptions
+      (run.preallocatedObligation hok.mem (run.planned _ hok.entry) hmode run.publicInput run.proverInput run.assumptions
         run.stableData run.stableData_stable).2.2.2.2 handler hhandler
     rw [hinteraction] at hinteraction'
     cases hinteraction'
@@ -3762,9 +3958,8 @@ lemma pad (hinv : run.Inv k false balancing) (hsettled : balancing.demands = [])
       (run.planValid.row_plans _ hokState.entry).padding_width
     rw [paddingRow, run.rowInteractions_row hokState.interactions hokState.mem hsize none
       run.stableData_stable] at hmem
-    have hside := (run.complete.padding state.component hokState.mem state.rowPlan
-      (run.planned _ hokState.entry) run.publicInput run.proverInput run.assumptions run.stableData
-      run.stableData_stable).2 _ (run.honestEnv_row hokState.mem hsize _) rfl rfl interaction hmem
+    have hside := (run.paddingObligation hokState.mem (run.planned _ hokState.entry)
+      run.publicInput run.proverInput run.assumptions run.stableData run.stableData_stable).2 _ (run.honestEnv_row hokState.mem hsize _) rfl rfl interaction hmem
     rcases hside with hzero | ⟨-, -, hanswered⟩
     · rw [hmult] at hzero
       exact neg_ne_zero.mpr one_ne_zero hzero
