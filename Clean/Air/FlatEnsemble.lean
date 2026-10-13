@@ -426,7 +426,29 @@ structure FormalEnsemble (F : Type) [FiniteField F]
   Assumptions : PublicIO F → Prop := fun _ => True
   Spec : PublicIO F → Prop
   soundness : ensemble.Soundness Assumptions Spec
-  -- completeness : ensemble.Completeness Assumptions Spec
+  /-- The prover's private input to witness generation. -/
+  ProverInput : Type := Unit
+  /-- The named hint tables that witness programs read, encoding the private input. -/
+  hint : ProverInput → ProverHint F := fun _ => ProverHint.empty F
+  /-- What the public and private inputs must satisfy for witness generation to succeed. -/
+  ProverAssumptions : PublicIO F → ProverInput → Prop := fun _ _ => True
+
+namespace FormalEnsemble
+
+/-- Declare the prover's private input: its type, its encoding as hint tables, and the
+assumptions witness generation needs. -/
+def withProverInput (ens : FormalEnsemble F PublicIO) (ProverInput : Type)
+    (hint : ProverInput → ProverHint F) (ProverAssumptions : PublicIO F → ProverInput → Prop) :
+    FormalEnsemble F PublicIO where
+  ensemble := ens.ensemble
+  Assumptions := ens.Assumptions
+  Spec := ens.Spec
+  soundness := ens.soundness
+  ProverInput
+  hint
+  ProverAssumptions
+
+end FormalEnsemble
 
 namespace Ensemble
 
