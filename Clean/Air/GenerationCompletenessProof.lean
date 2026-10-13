@@ -3908,6 +3908,90 @@ lemma final_tables {k : ℕ} {balancing : Balancing (F p)} (hinv : run.Inv k tru
       exact run.fixed_prefix hok hmode hfixed (by rw [hrows]; omega) hreachable
         hfactsRow.admissible
 
+/-- The tables generation assembles from its final states. -/
+def TablesOf (balancing : Balancing (F p)) (tables : List (Table (F p))) : Prop :=
+  tables.map (fun table => (table.component, table.table)) =
+    balancing.states.map fun state => (state.component, state.rows.map (·.values))
+
+lemma mem_tablesOf {balancing : Balancing (F p)} {tables : List (Table (F p))}
+    (htables : TablesOf balancing tables) {table : Table (F p)} (htable : table ∈ tables) :
+    ∃ state ∈ balancing.states, table.component = state.component ∧
+      table.table = state.rows.map (·.values) := by
+  have : (table.component, table.table) ∈ tables.map (fun table => (table.component, table.table)) :=
+    List.mem_map_of_mem htable
+  rw [htables] at this
+  obtain ⟨state, hstate, heq⟩ := List.mem_map.mp this
+  simp only [Prod.mk.injEq] at heq
+  exact ⟨state, hstate, heq.1.symm, heq.2.symm⟩
+
+lemma exists_table {balancing : Balancing (F p)} {tables : List (Table (F p))}
+    (htables : TablesOf balancing tables) {state : ComponentState (F p)}
+    (hstate : state ∈ balancing.states) :
+    ∃ table ∈ tables, table.component = state.component ∧
+      table.table = state.rows.map (·.values) := by
+  have : (state.component, state.rows.map (·.values)) ∈ balancing.states.map fun state =>
+      (state.component, state.rows.map (·.values)) := List.mem_map_of_mem hstate
+  rw [← htables] at this
+  obtain ⟨table, htable, heq⟩ := List.mem_map.mp this
+  simp only [Prod.mk.injEq] at heq
+  exact ⟨table, htable, heq.1, heq.2⟩
+
+/-- The prover data of the final tables is stable. -/
+lemma stable_final {k : ℕ} {balancing : Balancing (F p)} (hinv : run.Inv k true balancing)
+    {tables : List (Table (F p))} (htables : TablesOf balancing tables) :
+    run.Stable (deriveProverData tables) := by
+  intro component hmem rowPlan mode hplanned hmode
+  have hentry := run.mem_zip hmem hplanned
+  obtain ⟨state, hstate, -, hcomponent, hrowPlan⟩ := run.find?_state hinv.shape hentry
+  simp only at hcomponent hrowPlan
+  obtain ⟨table, htable, htableComponent, htableRows⟩ := exists_table htables hstate
+  have hnames : (tables.map (fun table => table.component.circuit.name)).Nodup := by
+    have h := congrArg (List.map fun pair => pair.1.circuit.name) htables
+    simp only [List.map_map, Function.comp_def] at h
+    rw [h]
+    have := run.names_nodup hinv.shape
+    simpa [Function.comp_def] using this
+  have hcomponent' := hcomponent
+  subst hcomponent'
+  have hdata := deriveProverData_eq_of_mem tables hnames htable (size state.component.Input)
+  rw [htableComponent] at hdata
+  simp only [Component.proverRows, dite_true, htableRows, List.map_map] at hdata
+  have hrows := hinv.rows state hstate
+  simp only [RowsOk, hrowPlan, hmode, if_true] at hrows
+  obtain ⟨hlength, hrowsEq⟩ := hrows
+  simp only [Component.rowOffset]
+  simp only [hdata]
+  refine ⟨by simp [hlength], ?_⟩
+  intro row hrow column hcolumn hnotHandler
+  simp only [List.size_toArray, List.length_map] at hrow
+  obtain ⟨input, hreachable, heq⟩ := hrowsEq row hrow
+  have hfacts := (hinv.statesOk state hstate).2 _ (List.getElem_mem hrow)
+  rw [heq] at hfacts
+  simp only [List.getElem_toArray, List.getElem_map, Function.comp_apply, heq, inputRow,
+    Vector.getElem_mk, List.getElem_ofFn]
+  have hsize : input.size = size state.component.Input := hfacts.admissible.size
+  rw [Run.row, honestRow, honestWitgen_getElem? _ _ _ _ _ (by rw [hsize]; exact hcolumn),
+    hreachable.getElem?_eq hnotHandler]
+  simp only [baseInput, ← hrowPlan]
+  split <;> rfl
+
+/-- Every row of the final tables satisfies its component's constraints. -/
+lemma constraints_final {k : ℕ} {balancing : Balancing (F p)} (hinv : run.Inv k true balancing)
+    {tables : List (Table (F p))} (htables : TablesOf balancing tables) :
+    ∀ table ∈ tables, table.Constraints (deriveProverData tables) := by
+  intro table htable values hvalues
+  obtain ⟨state, hstate, hcomponent, htableRows⟩ := mem_tablesOf htables htable
+  rw [htableRows] at hvalues
+  obtain ⟨row, hrow, rfl⟩ := List.mem_map.mp hvalues
+  have hok := run.stateOk_of_shape hinv.shape hstate
+  have hfacts := (hinv.statesOk state hstate).2 row hrow
+  have hstable := run.stable_final hinv htables
+  rw [hcomponent, hfacts.eq_row]
+  simp only [Run.row]
+  rw [run.honestRow_eq_of_stable hok.mem run.stableData_stable hstable hfacts.admissible.size]
+  exact (honestRow_complete state.component _ run.hint row.input hfacts.admissible.size
+    (run.planValid.reads_below _ hok.mem) (hfacts.admissible.assumptions _ hstable)).1
+
 end Run
 
 end Air.Flat.WitnessGeneration
