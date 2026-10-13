@@ -120,6 +120,7 @@ theorem FExprList.validForRow_map_const (source : RowProgram.Source) (values : L
 def Step.validForRow (source : RowProgram.Source) : Step F → Bool
   | .letF value => value.validForRow source
   | .letU value => value.validForRow source
+  | .read .. => false
 
 def VExpr.validForRow (source : RowProgram.Source) : {n : ℕ} → VExpr F n → Bool
   | _, .lit values => values.toList.all (FExpr.validForRow source)

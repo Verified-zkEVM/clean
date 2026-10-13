@@ -333,6 +333,10 @@ earlier steps. Referenced by position via `localVar`. -/
 inductive Step (F : Type) where
   | letF (e : FExpr F)
   | letU (e : U64Expr F)
+  /-- A field-sorted read of committed prover data, valued like `FExpr.dataGet`. During flat
+  witness generation, a cell that no earlier read has defined is defined as `proposal` by this
+  read; circuits only ever see the committed value. -/
+  | read (key : String) (n : ℕ) (row : U64Expr F) (col : Fin n) (proposal : FExpr F)
 
 /-- Evaluate the `let`-steps left to right, accumulating their values. -/
 @[circuit_norm]
@@ -343,6 +347,9 @@ def evalSteps [FiniteField F] (env : ProverEnvironment F)
   | [] => locals
   | .letF e :: steps => evalSteps env steps (locals.push (.inl (e.eval { env, locals, idx }))) idx
   | .letU e :: steps => evalSteps env steps (locals.push (.inr (e.eval { env, locals, idx }))) idx
+  | .read key n row col _ :: steps =>
+    evalSteps env steps (locals.push (.inl ((FExpr.dataGet key n row col).eval { env, locals, idx })))
+      idx
 
 /-- A witness-generation program producing `m` field elements. -/
 inductive WitgenIR (F : Type) : ℕ → Type where

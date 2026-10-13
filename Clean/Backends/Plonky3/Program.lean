@@ -86,6 +86,7 @@ def vexprWellFormed (locals : List LocalSort) : {n : ℕ} → Witgen.VExpr F n �
 def appendStepSort (locals : List LocalSort) : Witgen.Step F → List LocalSort
   | .letF _ => locals ++ [.field]
   | .letU _ => locals ++ [.u64]
+  | .read .. => locals ++ [.field]
 
 def stepsWellFormedFrom : List LocalSort → List (Witgen.Step F) → Bool
   | _, [] => true
@@ -93,6 +94,9 @@ def stepsWellFormedFrom : List LocalSort → List (Witgen.Step F) → Bool
       fexprWellFormed locals value && stepsWellFormedFrom (locals ++ [.field]) steps
   | locals, .letU value :: steps =>
       u64exprWellFormed locals value && stepsWellFormedFrom (locals ++ [.u64]) steps
+  | locals, .read _ _ row _ proposal :: steps =>
+      u64exprWellFormed locals row && fexprWellFormed locals proposal &&
+        stepsWellFormedFrom (locals ++ [.field]) steps
 
 def stepSorts (initial : List LocalSort) (steps : List (Witgen.Step F)) : List LocalSort :=
   steps.foldl appendStepSort initial

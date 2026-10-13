@@ -102,6 +102,9 @@ pub enum Mode<F> {
     Preallocated {
         rows: usize,
         handlers: Vec<PreallocatedHandler>,
+        /// Input columns whose cells start undefined: the first read of a cell, in generation
+        /// order, defines it as that read's proposal.
+        lazy_columns: Vec<usize>,
     },
 }
 
@@ -212,8 +215,13 @@ pub trait Program<F: WitnessField> {
     fn padding() -> Vec<Padding<F>>;
     /// The initial input of row `row` of a preallocated component.
     fn initial_row(component: usize, row: u64, hint: &WitnessData<F>) -> Vec<F>;
-    fn complete_row(component: usize, input: &[F], data: &WitnessData<F>)
-        -> Result<Vec<F>, String>;
+    fn complete_row(
+        component: usize,
+        input: &[F],
+        data: &WitnessData<F>,
+        hint: &WitnessData<F>,
+        cells: &mut Cells<'_, F>,
+    ) -> Result<Vec<F>, String>;
     fn interactions(component: usize, row: &[F]) -> Vec<Interaction<F>>;
     fn verifier_interactions(public_input: &[F]) -> Vec<Interaction<F>>;
 }
@@ -263,6 +271,129 @@ struct Row<F> {
     input: Vec<F>,
     values: Vec<F>,
     origin: Option<Origin<F>>,
+    /// The lazy input columns no read has defined yet.
+    undefined: Vec<usize>,
+}
+
+/// A lazy cell defined by its first read.
+#[derive(Clone, Debug)]
+struct Definition<F> {
+    key: &'static str,
+    row: usize,
+    column: usize,
+    value: F,
+}
+
+/// The prover-data cells that read steps of extracted witness programs read during generation:
+/// the generator's rows, and the cells defined by earlier reads of the current step.
+pub struct Cells<'a, F> {
+    tables: &'a [Vec<Row<F>>],
+    pending: Vec<Definition<F>>,
+    names: &'static [&'static str],
+}
+
+impl<F: WitnessField> Cells<'_, F> {
+    /// Read column `column` of row `row` of component `key`, whose rows have width `width`. An
+    /// undefined lazy cell is defined as `proposal`. Missing rows read as zero.
+    pub fn read(
+        &mut self,
+        key: &'static str,
+        width: usize,
+        row: usize,
+        column: usize,
+        proposal: F,
+    ) -> F {
+        if let Some(definition) = self.pending.iter().find(|definition| {
+            definition.key == key && definition.row == row && definition.column == column
+        }) {
+            return definition.value;
+        }
+        let Some(component) = self.names.iter().position(|name| *name == key) else {
+            return F::ZERO;
+        };
+        let Some(generated) = self.tables[component].get(row) else {
+            return F::ZERO;
+        };
+        if generated.input.len() != width {
+            return F::ZERO;
+        }
+        if generated.undefined.contains(&column) {
+            self.pending.push(Definition {
+                key,
+                row,
+                column,
+                value: proposal,
+            });
+            return proposal;
+        }
+        generated.input.get(column).copied().unwrap_or(F::ZERO)
+    }
+}
+
+/// What witness programs read during generation besides rows: the prover-data snapshot of the
+/// initial rows, and the generation hint.
+#[derive(Clone, Copy)]
+struct Sources<'a, F> {
+    data: &'a WitnessData<F>,
+    hint: &'a WitnessData<F>,
+}
+
+/// Complete a component row, reading prover data from `tables` and the pending definitions.
+fn complete<F: WitnessField, P: Program<F>>(
+    component: usize,
+    input: &[F],
+    sources: Sources<'_, F>,
+    tables: &[Vec<Row<F>>],
+    pending: Vec<Definition<F>>,
+) -> Result<(Vec<F>, Vec<Definition<F>>), String> {
+    let mut cells = Cells {
+        tables,
+        pending,
+        names: P::COMPONENT_NAMES,
+    };
+    let values = P::complete_row(component, input, sources.data, sources.hint, &mut cells)?;
+    Ok((values, cells.pending))
+}
+
+/// Set the defined lazy cells in their rows, completing each defined row again.
+fn define<F: WitnessField, P: Program<F>>(
+    tables: &mut [Vec<Row<F>>],
+    definitions: Vec<Definition<F>>,
+    demands: &mut Vec<Demand<F>>,
+    sources: Sources<'_, F>,
+) -> Result<(), String> {
+    for definition in definitions {
+        let Some(component) = P::COMPONENT_NAMES
+            .iter()
+            .position(|name| *name == definition.key)
+        else {
+            continue;
+        };
+        let Some(row) = tables[component].get(definition.row).cloned() else {
+            continue;
+        };
+        let mut input = row.input.clone();
+        if let Some(cell) = input.get_mut(definition.column) {
+            *cell = definition.value;
+        }
+        let (values, _) = complete::<F, P>(component, &input, sources, tables, Vec::new())?;
+        let mut undefined = row.undefined.clone();
+        if let Some(position) = undefined
+            .iter()
+            .position(|column| *column == definition.column)
+        {
+            undefined.remove(position);
+        }
+        remove_interactions(demands, P::interactions(component, &row.values));
+        add_interactions(demands, P::interactions(component, &values));
+        tables[component][definition.row] = Row {
+            input,
+            values,
+            origin: row.origin,
+            undefined,
+        };
+    }
+    Ok(())
 }
 
 /// Add a multiplicity for a channel message, dropping the entry when it cancels to zero.
@@ -354,40 +485,47 @@ fn make_demand_row<F: WitnessField, P: Program<F>>(
     mode: &DemandMode<F>,
     demand: &Demand<F>,
     multiplicity: usize,
-    data: &WitnessData<F>,
-) -> Result<Row<F>, String> {
+    sources: Sources<'_, F>,
+    tables: &[Vec<Row<F>>],
+) -> Result<(Row<F>, Vec<Definition<F>>), String> {
     let input = input_for_demand(mode, demand, multiplicity)?;
-    let values = P::complete_row(component, &input, data)?;
-    Ok(Row {
-        input,
-        values,
-        origin: Some(Origin {
-            channel: mode.channel,
-            direction: mode.direction,
-            message: demand.message.clone(),
-            multiplicity,
-        }),
-    })
+    let (values, definitions) = complete::<F, P>(component, &input, sources, tables, Vec::new())?;
+    Ok((
+        Row {
+            input,
+            values,
+            origin: Some(Origin {
+                channel: mode.channel,
+                direction: mode.direction,
+                message: demand.message.clone(),
+                multiplicity,
+            }),
+            undefined: Vec::new(),
+        },
+        definitions,
+    ))
 }
 
 fn handle_demand<F: WitnessField, P: Program<F>>(
     component: usize,
     mode: &DemandMode<F>,
     demand: &Demand<F>,
-    table: &mut Vec<Row<F>>,
+    tables: &mut [Vec<Row<F>>],
     demands: &mut Vec<Demand<F>>,
-    data: &WitnessData<F>,
+    sources: Sources<'_, F>,
 ) -> Result<(), String> {
-    match mode.aggregation {
+    let definitions = match mode.aggregation {
         Aggregation::PerOccurrence => {
+            let (row, definitions) =
+                make_demand_row::<F, P>(component, mode, demand, 1, sources, tables)?;
             for _ in 0..demand.count() {
-                let row = make_demand_row::<F, P>(component, mode, demand, 1, data)?;
                 add_interactions(demands, P::interactions(component, &row.values));
-                table.push(row);
+                tables[component].push(row.clone());
             }
+            definitions
         }
         Aggregation::ByMessage => {
-            let existing = table.iter().position(|row| {
+            let existing = tables[component].iter().position(|row| {
                 row.origin.as_ref().is_some_and(|origin| {
                     origin.channel == mode.channel
                         && origin.direction == mode.direction
@@ -396,39 +534,54 @@ fn handle_demand<F: WitnessField, P: Program<F>>(
             });
             match existing {
                 None => {
-                    let row =
-                        make_demand_row::<F, P>(component, mode, demand, demand.count(), data)?;
+                    let (row, definitions) = make_demand_row::<F, P>(
+                        component,
+                        mode,
+                        demand,
+                        demand.count(),
+                        sources,
+                        tables,
+                    )?;
                     add_interactions(demands, P::interactions(component, &row.values));
-                    table.push(row);
+                    tables[component].push(row);
+                    definitions
                 }
                 Some(index) => {
-                    let old = table[index].clone();
+                    let old = tables[component][index].clone();
                     let multiplicity = old
                         .origin
                         .as_ref()
                         .expect("matched row must have an origin")
                         .multiplicity
                         + demand.count();
-                    let updated =
-                        make_demand_row::<F, P>(component, mode, demand, multiplicity, data)?;
+                    let (updated, definitions) = make_demand_row::<F, P>(
+                        component,
+                        mode,
+                        demand,
+                        multiplicity,
+                        sources,
+                        tables,
+                    )?;
                     remove_interactions(demands, P::interactions(component, &old.values));
                     add_interactions(demands, P::interactions(component, &updated.values));
-                    table[index] = updated;
+                    tables[component][index] = updated;
+                    definitions
                 }
             }
         }
-    }
-    Ok(())
+    };
+    define::<F, P>(tables, definitions, demands, sources)
 }
 
 fn handle_preallocated<F: WitnessField, P: Program<F>>(
     component: usize,
     handlers: &[PreallocatedHandler],
     demand: &Demand<F>,
-    table: &mut [Row<F>],
+    tables: &mut [Vec<Row<F>>],
     demands: &mut Vec<Demand<F>>,
-    data: &WitnessData<F>,
+    sources: Sources<'_, F>,
 ) -> Result<(), String> {
+    let table = &tables[component];
     let mut matches = handlers.iter().flat_map(|handler| {
         table
             .iter()
@@ -463,20 +616,25 @@ fn handle_preallocated<F: WitnessField, P: Program<F>>(
             demand.channel
         ));
     }
-    let row = &mut table[row_index];
+    let row = table[row_index].clone();
     let current = row.input.get(handler.column).copied().ok_or_else(|| {
         format!(
             "preallocated handler column {} is out of bounds",
             handler.column
         )
     })?;
-    let value = current + F::from_canonical_u64(demand.count() as u64);
-    let old_interactions = P::interactions(component, &row.values);
-    row.input[handler.column] = value;
-    row.values = P::complete_row(component, &row.input, data)?;
-    remove_interactions(demands, old_interactions);
-    add_interactions(demands, P::interactions(component, &row.values));
-    Ok(())
+    let mut input = row.input.clone();
+    input[handler.column] = current + F::from_canonical_u64(demand.count() as u64);
+    let (values, definitions) = complete::<F, P>(component, &input, sources, tables, Vec::new())?;
+    remove_interactions(demands, P::interactions(component, &row.values));
+    add_interactions(demands, P::interactions(component, &values));
+    tables[component][row_index] = Row {
+        input,
+        values,
+        origin: row.origin,
+        undefined: row.undefined,
+    };
+    define::<F, P>(tables, definitions, demands, sources)
 }
 
 /// The number of interactions of the verifier and all rows.
@@ -502,7 +660,7 @@ fn balance<F: WitnessField, P: Program<F>>(
     modes: &[Mode<F>],
     tables: &mut [Vec<Row<F>>],
     demands: &mut Vec<Demand<F>>,
-    data: &WitnessData<F>,
+    sources: Sources<'_, F>,
     verifier_interactions: usize,
 ) -> Result<(), String> {
     loop {
@@ -550,22 +708,12 @@ fn balance<F: WitnessField, P: Program<F>>(
         // opposite interaction (or fixed-slot delta) cancels it incrementally.
         let demand = demands[demand_index].clone();
         match &modes[component] {
-            Mode::Demand(mode) => handle_demand::<F, P>(
-                component,
-                mode,
-                &demand,
-                &mut tables[component],
-                demands,
-                data,
-            )?,
-            Mode::Preallocated { handlers, .. } => handle_preallocated::<F, P>(
-                component,
-                handlers,
-                &demand,
-                &mut tables[component],
-                demands,
-                data,
-            )?,
+            Mode::Demand(mode) => {
+                handle_demand::<F, P>(component, mode, &demand, tables, demands, sources)?
+            }
+            Mode::Preallocated { handlers, .. } => {
+                handle_preallocated::<F, P>(component, handlers, &demand, tables, demands, sources)?
+            }
         }
     }
 }
@@ -583,26 +731,42 @@ fn pad_and_balance<F: WitnessField, P: Program<F>>(
     modes: &[Mode<F>],
     padding: &[Padding<F>],
     tables: &mut [Vec<Row<F>>],
-    data: &WitnessData<F>,
+    sources: Sources<'_, F>,
     verifier_interactions: usize,
 ) -> Result<(), String> {
     loop {
         let before = interaction_count::<F, P>(verifier_interactions, tables);
         let mut demands = Vec::new();
-        for (component, (table, padding)) in tables.iter_mut().zip(padding).enumerate() {
-            let height = target_height(table.len(), padding);
-            for _ in table.len()..height {
-                let values = P::complete_row(component, &padding.input, data)?;
+        let mut pending = Vec::new();
+        let mut padded = Vec::with_capacity(tables.len());
+        for (component, (table, padding)) in tables.iter().zip(padding).enumerate() {
+            let count = target_height(table.len(), padding) - table.len();
+            if count == 0 {
+                padded.push(None);
+                continue;
+            }
+            let (values, definitions) =
+                complete::<F, P>(component, &padding.input, sources, tables, pending)?;
+            pending = definitions;
+            padded.push(Some((count, values)));
+        }
+        for (component, (table, rows)) in tables.iter_mut().zip(padded).enumerate() {
+            let Some((count, values)) = rows else {
+                continue;
+            };
+            for _ in 0..count {
                 add_interactions(&mut demands, P::interactions(component, &values));
                 table.push(Row {
-                    input: padding.input.clone(),
-                    values,
+                    input: padding[component].input.clone(),
+                    values: values.clone(),
                     origin: None,
+                    undefined: Vec::new(),
                 });
             }
         }
+        define::<F, P>(tables, pending, &mut demands, sources)?;
 
-        balance::<F, P>(modes, tables, &mut demands, data, verifier_interactions)?;
+        balance::<F, P>(modes, tables, &mut demands, sources, verifier_interactions)?;
         if tables
             .iter()
             .zip(padding)
@@ -671,20 +835,22 @@ pub fn generate<F: WitnessField, P: Program<F>>(
 
     let mut tables = Vec::with_capacity(modes.len());
     for (component, mode) in modes.iter().enumerate() {
-        let inputs = match mode {
+        let rows = match mode {
             Mode::Demand(_) => Vec::new(),
-            Mode::Preallocated { rows, .. } => (0..*rows as u64)
-                .map(|row| P::initial_row(component, row, hint))
+            Mode::Preallocated {
+                rows, lazy_columns, ..
+            } => (0..*rows as u64)
+                .map(|row| {
+                    let input = P::initial_row(component, row, hint);
+                    Row {
+                        values: input.clone(),
+                        input,
+                        origin: None,
+                        undefined: lazy_columns.clone(),
+                    }
+                })
                 .collect(),
         };
-        let rows = inputs
-            .into_iter()
-            .map(|input| Row {
-                values: input.clone(),
-                input,
-                origin: None,
-            })
-            .collect();
         tables.push(rows);
     }
 
@@ -712,11 +878,25 @@ pub fn generate<F: WitnessField, P: Program<F>>(
     }
 
     let data = WitnessData::from_initial_tables(P::COMPONENT_NAMES, &tables);
-    for (component, table) in tables.iter_mut().enumerate() {
+    let sources = Sources { data: &data, hint };
+    let mut pending = Vec::new();
+    let mut completed = Vec::with_capacity(tables.len());
+    for (component, table) in tables.iter().enumerate() {
+        let mut values = Vec::with_capacity(table.len());
         for row in table {
-            row.values = P::complete_row(component, &row.input, &data)?;
+            let (row_values, definitions) =
+                complete::<F, P>(component, &row.input, sources, &tables, pending)?;
+            pending = definitions;
+            values.push(row_values);
+        }
+        completed.push(values);
+    }
+    for (table, values) in tables.iter_mut().zip(completed) {
+        for (row, row_values) in table.iter_mut().zip(values) {
+            row.values = row_values;
         }
     }
+    define::<F, P>(&mut tables, pending, &mut Vec::new(), sources)?;
 
     let mut demands = Vec::new();
     let verifier = P::verifier_interactions(public_input);
@@ -732,10 +912,16 @@ pub fn generate<F: WitnessField, P: Program<F>>(
         &modes,
         &mut tables,
         &mut demands,
-        &data,
+        sources,
         verifier_interactions,
     )?;
-    pad_and_balance::<F, P>(&modes, &padding, &mut tables, &data, verifier_interactions)?;
+    pad_and_balance::<F, P>(
+        &modes,
+        &padding,
+        &mut tables,
+        sources,
+        verifier_interactions,
+    )?;
 
     Ok(EnsembleWitness {
         fixed_widths: P::FIXED_WIDTHS.to_vec(),
