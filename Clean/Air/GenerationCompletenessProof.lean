@@ -3808,3 +3808,47 @@ theorem balance_ok {padded : Bool} (balancing : Balancing (F p)) :
 end Run
 
 end Air.Flat.WitnessGeneration
+
+namespace Air.Flat.WitnessGeneration
+
+lemma width_eq {F : Type} [FiniteField F] (component : Component F) :
+    component.width =
+      component.rowOffset + FlatOperation.localLength component.rowOperations.toFlat := by
+  rw [Component.width, GeneralFormalCircuit.size_eq, FlatOperation.localLength_toFlat,
+    Component.rowOperations, Component.rowOffset]
+  rw [← component.circuit.localLength_eq (varFromOffset component.Input 0) (size component.Input)]
+
+lemma honestRow_size {F : Type} [FiniteField F] (component : Component F) (data : ProverData F)
+    (hint : ProverHint F) {input : Array F} (hsize : input.size = component.rowOffset) :
+    (honestRow component data hint input).size = component.width := by
+  rw [honestRow, honestWitgen_size, hsize, width_eq]
+
+/-- Assembly succeeds on states whose rows fit the components. -/
+lemma assembleTables_ok {F : Type} [FiniteField F] :
+    ∀ (states : List (ComponentState F)),
+      (∀ state ∈ states, state.rows.length ≤ UInt64.size ∧
+        (∀ row ∈ state.rows, row.values.size = state.component.width) ∧
+        state.component.fixedRowsMatch (state.rows.map (·.values))) →
+      ∃ assembled, assembleTables (states.map (·.component)) states = .ok assembled ∧
+        assembled.tables.map (fun table => (table.component, table.table)) =
+          states.map fun state => (state.component, state.rows.map (·.values))
+  | [], _ => ⟨_, rfl, rfl⟩
+  | state :: states, hstates => by
+      obtain ⟨hlength, hwidth, hfixed⟩ := hstates state (List.mem_cons_self ..)
+      obtain ⟨rest, hrest, hrestTables⟩ := assembleTables_ok states fun state hstate =>
+        hstates state (List.mem_cons_of_mem _ hstate)
+      have hvalidate : ∃ matched, validateFixedRows state.component
+          (state.rows.map (·.values)) = .ok matched := by
+        unfold validateFixedRows
+        split
+        · exact ⟨_, rfl⟩
+        · rename_i fixed hcolumns
+          rw [Component.fixedRowsMatch, hcolumns] at hfixed
+          exact ⟨_, dif_pos hfixed⟩
+      obtain ⟨matched, hmatched⟩ := hvalidate
+      rw [List.map_cons, assembleTables, dif_neg (by simp; omega),
+        dif_pos (by simpa using hwidth)]
+      simp only [hmatched, hrest, bind, Except.bind, pure, Except.pure]
+      exact ⟨_, rfl, by simp [hrestTables]⟩
+
+end Air.Flat.WitnessGeneration
