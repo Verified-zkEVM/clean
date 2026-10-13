@@ -711,6 +711,8 @@ def assembleTables :
           let table : Table F := {
             component
             table := rows
+            -- replaced by the ensemble's derived data in `generateValid`
+            data := fun _ _ => #[]
             uniform_width := h
             length_le := Nat.le_of_not_lt hlength
             fixed_rows_match := matched.property
@@ -752,10 +754,11 @@ def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensembl
   let padded ← padAndBalance data hint config.fuel config.fuel generated
   let assembled ← assembleTables ensemble.tables padded
   return {
-    tables := assembled.tables
+    tables := withDerivedData assembled.tables
     publicInput
-    same_length := assembled.same_length
-    same_circuits := assembled.same_circuits
+    same_length := by simp [withDerivedData, assembled.same_length]
+    same_circuits := by simp [withDerivedData, assembled.same_circuits]
+    same_data := withDerivedData_data assembled.tables
   }
 
 /-- Validate generation metadata, then generate an ensemble witness from the public input and the
