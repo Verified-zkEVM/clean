@@ -180,6 +180,46 @@ lemma next_interactions {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
     FormalAssertion.toSubcircuit, Circuit.forEach, FlatOperation.interactions, circuit_norm,
     explicit_provable_type]
 
+/-! #### Pulls of the step -/
+
+/-- A single pull of a program word or memory cell. -/
+def StepPull {p : ℕ} [Fact p.Prime] {programSize : ℕ} (program : Fin programSize → F p)
+    (interaction : AbstractInteraction (F p)) : Prop :=
+  (interaction.channel = (ProgramChannel program).toRaw ∨ interaction.channel = MemoryChannel.toRaw) ∧
+    interaction.mult = -1 ∧ interaction.assumeGuarantees = true
+
+lemma fetch_pulls {p : ℕ} [Fact p.Prime] {programSize : ℕ} (program : Fin programSize → F p)
+    (h_programSize : programSize < p) (pc : Expression (F p)) (n : ℕ) :
+    ∀ interaction ∈ Operations.interactions ((fetchInstruction program h_programSize).main pc n).2,
+      StepPull program interaction := by
+  simp [fetchInstruction, StepPull, circuit_norm]
+
+lemma read_pulls {p : ℕ} [Fact p.Prime] [Fact (p > 512)] {programSize : ℕ}
+    (program : Fin programSize → F p) (input : Var MemoryReadInput (F p)) (n : ℕ) :
+    ∀ interaction ∈ Operations.interactions (readFromMemory.main input n).2,
+      StepPull program interaction := by
+  simp [readFromMemory, Gadgets.Equality.circuit, Gadgets.Equality.main,
+    FormalAssertion.toSubcircuit, Circuit.forEach, FlatOperation.interactions, StepPull,
+    circuit_norm, explicit_provable_type]
+
+/-- The step only pulls program words and memory cells. -/
+lemma step_pulls {p : ℕ} [Fact p.Prime] [Fact (p > 512)] {programSize : ℕ}
+    (program : Fin programSize → F p) (h_programSize : programSize < p) (state : Var State (F p))
+    (n : ℕ) :
+    ∀ interaction ∈ FlatOperation.interactions
+      ((femtoCairoStep program h_programSize).toSubcircuit n state).ops.toFlat,
+      StepPull program interaction := by
+  rw [GeneralFormalCircuit.toSubcircuit_interactions]
+  simp only [femtoCairoStep, femtoCairoStepMain, GeneralFormalCircuit.WithHint.toSubcircuit,
+    GeneralFormalCircuit.toWithHint, GeneralFormalCircuit.toSubcircuit, circuit_norm]
+  rintro interaction (h | h | h | h | h | h)
+  · exact fetch_pulls program h_programSize _ _ _ h
+  · simp [List.eq_nil_of_length_eq_zero (decode_interactions _ _)] at h
+  · exact read_pulls program _ _ _ h
+  · exact read_pulls program _ _ _ h
+  · exact read_pulls program _ _ _ h
+  · simp [List.eq_nil_of_length_eq_zero (next_interactions _ _)] at h
+
 section Shapes
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
@@ -645,6 +685,90 @@ lemma vm_input (state : State (F p)) :
   rw [inputOf_of_size _ rfl]
   with_unfolding_all rfl
 
+lemma answers_memory : Answers (formalEnsemble program h_programSize h_memorySize initialState).ensemble
+    (plan (memorySize := memorySize) program h_programSize initialState) false "memory" :=
+  ⟨memoryComponent memorySize h_memorySize, by simp [tables_eq],
+    { mode := .preallocated (memoryMode memorySize),
+      padding := { input := #[0, 0, 0], minimumRows := memorySize } },
+    by simp [plan, memoryComponent],
+    by simp [Mode.handled, memoryMode, memoryComponent, provideMemory, handlerDirection,
+      MemoryChannel, circuit_norm, Component.rowOperations],
+    by simp⟩
+
+lemma answers_program : Answers (formalEnsemble program h_programSize h_memorySize initialState).ensemble
+    (plan (memorySize := memorySize) program h_programSize initialState) false "program" :=
+  ⟨programComponent program h_programSize, by simp [tables_eq],
+    { mode := .preallocated (programMode programSize),
+      padding := { input := #[0, 0, 0], minimumRows := programSize } },
+    by simp [plan, programComponent],
+    by simp [Mode.handled, programMode, programComponent, provideProgram, handlerDirection,
+      ProgramChannel, circuit_norm, Component.rowOperations],
+    by simp⟩
+
+/-- An execution row answering `state` pulls it and pushes the next state; it also pulls program
+words and memory cells. -/
+lemma execution_row (hmemoryHeight : 2 ^ Nat.clog 2 memorySize.toNat = memorySize.toNat)
+    (memoryValues : fields memorySize.toNat (F p)) (state : State (F p)) :
+    RowInteractions (executeStep program h_programSize initialState) fun input env interactions =>
+      env.hint = (formalEnsemble program h_programSize h_memorySize initialState).hint memoryValues →
+      StableData (formalEnsemble program h_programSize h_memorySize initialState).ensemble
+        (plan (memorySize := memorySize) program h_programSize initialState) env.hint env.data →
+      input = { enabled := 1, state := state } →
+      (∀ message, netOfInteractions interactions "state" message =
+        (if message = next program memoryValues (messageOf state) then 1 else 0) -
+          (if message = messageOf state then 1 else 0)) ∧
+      ∀ interaction ∈ interactions, interaction.channel.name ≠ "state" →
+        SideInteraction (formalEnsemble program h_programSize h_memorySize initialState).ensemble
+          (plan (memorySize := memorySize) program h_programSize initialState) "state" false
+          interaction := by
+  circuit_proof_start [executeStep, StateChannel]
+  rintro hhint hstable ⟨rfl, rfl⟩
+  simp only [List.map_append, List.map_cons, List.map_nil, netOfInteractions_cons,
+    netOfInteractions_append, netOfInteractions_nil]
+  obtain ⟨-, hstepAssumptions⟩ := h_assumptions
+  have hspec := (h_env hstepAssumptions).1 trivial
+  obtain ⟨hsize, hmemoryData⟩ := memory_eq_of_stable program h_programSize h_memorySize initialState
+    hmemoryHeight memoryValues (hhint ▸ hstable)
+  have hnext : next program memoryValues (messageOf input_state) = messageOf (eval env.toEnvironment
+      ((femtoCairoStep program h_programSize).output input_var_state i₀)) := by
+    simp only [femtoCairoStep, femtoCairoStepSpec] at hspec
+    rw [transition_congr program _ _ hsize (fun i => by rw [hmemoryData])] at hspec
+    simp [next, stateOf_messageOf, hspec]
+    rfl
+  have hside : ∀ interaction ∈ List.map (fun x => AbstractInteraction.eval env.toEnvironment x)
+      (FlatOperation.interactions
+        ((femtoCairoStep program h_programSize).toSubcircuit (i₀ + 0 + 0) input_var_state).ops.toFlat),
+      (interaction.channel.name = "program" ∨ interaction.channel.name = "memory") ∧
+        interaction.IsUnitPull := by
+    intro interaction hinteraction
+    obtain ⟨abstract, habstract, rfl⟩ := List.mem_map.mp hinteraction
+    obtain ⟨hchannel, hmult, hassume⟩ := step_pulls program h_programSize _ _ abstract habstract
+    refine ⟨?_, ?_⟩
+    · rcases hchannel with h | h <;>
+        simp [AbstractInteraction.eval, h, ProgramChannel, MemoryChannel, Channel.toRaw]
+    · simp [Interaction.IsUnitPull, AbstractInteraction.eval, hmult, hassume, circuit_norm]
+  have hzero := netOfInteractions_eq_zero (channel := "state") (fun interaction hinteraction hname => by
+    rcases (hside interaction hinteraction).1 with h | h <;> rw [h] at hname <;>
+      exact absurd hname (by decide))
+  refine ⟨fun message => ?_, fun interaction hmem hname => ?_⟩
+  · simp only [hzero, zero_add, add_zero, hnext]
+    obtain ⟨henabled, hstate⟩ := h_input
+    subst hstate
+    generalize (femtoCairoStep program h_programSize).output input_var_state i₀ = output
+    obtain ⟨_, _, _⟩ := output
+    obtain ⟨_, _, _⟩ := input_var_state
+    simp [AbstractInteraction.eval, ChannelInteraction.toRaw, henabled, Channel.toRaw, messageOf,
+      circuit_norm, explicit_provable_type]
+    simp only [eq_comm (a := message)]
+    split_ifs <;> ring
+  obtain ⟨abstract, habstract | rfl, rfl⟩ := hmem
+  · obtain ⟨hchannel, hpull⟩ := hside _ (List.mem_map.mpr ⟨abstract, habstract, rfl⟩)
+    refine .inr ⟨hpull, hname, ?_⟩
+    rcases hchannel with h | h <;> rw [h]
+    · exact answers_program program h_programSize h_memorySize initialState
+    · exact answers_memory program h_programSize h_memorySize initialState
+  · simp [AbstractInteraction.eval, ChannelInteraction.toRaw, Channel.toRaw] at hname
+
 def completePlan (hprogram : ∃ k, programSize.toNat = 2 ^ k)
     (hmemory : ∃ k, memorySize.toNat = 2 ^ k) :
     CompletePlan (formalEnsemble program h_programSize h_memorySize initialState)
@@ -762,7 +886,16 @@ def completePlan (hprogram : ∃ k, programSize.toNat = 2 ^ k)
           if_neg (show "program" ≠ "execution" by decide), if_neg (show "program" ≠ "memory" by decide),
           execution_interactions_length, hmemoryLength, hprogramLength, FiniteField.char_F]
         exact lt_of_le_of_lt (by omega) hp
-  vm_row := sorry
+  vm_row memoryValues state hsize := by
+    have hmemoryHeight : 2 ^ Nat.clog 2 memorySize.toNat = memorySize.toNat := by
+      obtain ⟨k, hk⟩ := hmemory
+      rw [hk, Nat.clog_pow _ _ (by decide)]
+    change state.size = 3 at hsize
+    rcases state with ⟨_ | ⟨pc, _ | ⟨ap, _ | ⟨fp, _ | ⟨_, _⟩⟩⟩⟩⟩ <;> simp at hsize
+    exact (execution_row program h_programSize h_memorySize initialState hmemoryHeight memoryValues
+      ⟨pc, ap, fp⟩).mono fun _ _ _ h hhint hstable hinput =>
+        h hhint hstable (hinput.trans (vm_input program h_programSize h_memorySize initialState
+          ⟨pc, ap, fp⟩))
   verifier := sorry
   demand := by
     intro component hmem rowPlan mode hplanned hmode hvm
