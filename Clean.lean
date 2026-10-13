@@ -26,6 +26,7 @@ public import Clean.Examples.FemtoCairo.FemtoCairo
 public import Clean.Examples.FemtoCairo.FlatAir
 public import Clean.Air.WitnessGeneration
 public import Clean.Air.GenerationCorrectness
+public import Clean.Air.HonestRows
 public import Clean.Backends.Plonky3.Print
 public import Clean.Backends.Plonky3.Correctness
 public import Clean.Tables.Fibonacci8

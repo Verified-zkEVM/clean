@@ -135,6 +135,7 @@ inductive PlanError where
   | lazyHandlerColumn (component : String) (column : ℕ)
   | lazyComponentRead (component : String) (operation : ℕ)
   | paddedDataRead (component : String) (operation : ℕ) (key : String)
+  | witnessReadsAhead (component : String)
 deriving Repr, DecidableEq
 
 def Direction.name : Direction → String
@@ -184,6 +185,9 @@ instance : ToString PlanError where
     | .paddedDataRead component operation key =>
         s!"component '{component}' witness operation {operation} reads prover-data component \
           '{key}', whose padding adds rows"
+    | .witnessReadsAhead component =>
+        s!"a witness program of component '{component}' is native or reads cells it does not \
+          precede"
     | .lazyComponentRead component operation =>
         s!"component '{component}' has lazy columns, so its witness operation {operation} must not \
           read prover data with a read step"
@@ -268,6 +272,76 @@ def stepDataReads : Witgen.Step F → List DataRead
 def witnessDataReads : {n : ℕ} → Witgen.WitgenIR F n → List DataRead
   | _, .native _ => []
   | _, .ir steps output => steps.flatMap stepDataReads ++ vexprDataReads output
+
+/-! ### Reading only earlier cells
+
+Witness programs compute a row's cells in order, so each may read only the cells before its own.
+Native programs are opaque and never qualify. -/
+
+def expressionReadsBelow (n : ℕ) : Expression F → Bool
+  | .var cell => cell.index < n
+  | .const _ => true
+  | .add left right | .mul left right => expressionReadsBelow n left && expressionReadsBelow n right
+
+mutual
+
+def fexprReadsBelow (n : ℕ) : Witgen.FExpr F → Bool
+  | .expr e => expressionReadsBelow n e
+  | .const _ | .localVar _ => true
+  | .add left right | .mul left right => fexprReadsBelow n left && fexprReadsBelow n right
+  | .inv value => fexprReadsBelow n value
+  | .ofU64 value => u64exprReadsBelow n value
+  | .ite condition thenValue elseValue =>
+      bexprReadsBelow n condition && fexprReadsBelow n thenValue && fexprReadsBelow n elseValue
+  | .listGet values index => fexprListReadsBelow n values && u64exprReadsBelow n index
+  | .dataGet _ _ row _ | .hintGet _ _ row _ => u64exprReadsBelow n row
+
+def fexprListReadsBelow (n : ℕ) : List (Witgen.FExpr F) → Bool
+  | [] => true
+  | value :: values => fexprReadsBelow n value && fexprListReadsBelow n values
+
+def u64exprReadsBelow (n : ℕ) : Witgen.U64Expr F → Bool
+  | .const _ | .idx | .localVar _ => true
+  | .val value => fexprReadsBelow n value
+  | .add left right | .mul left right | .div left right | .mod left right |
+      .land left right | .lor left right | .lxor left right |
+      .shiftL left right | .shiftR left right => u64exprReadsBelow n left && u64exprReadsBelow n right
+  | .ite condition thenValue elseValue =>
+      bexprReadsBelow n condition && u64exprReadsBelow n thenValue && u64exprReadsBelow n elseValue
+
+def bexprReadsBelow (n : ℕ) : Witgen.BExpr F → Bool
+  | .true | .false => true
+  | .feq left right | .flt left right => fexprReadsBelow n left && fexprReadsBelow n right
+  | .neq left right | .lt left right => u64exprReadsBelow n left && u64exprReadsBelow n right
+  | .bit value _ => fexprReadsBelow n value
+  | .not condition => bexprReadsBelow n condition
+  | .and left right => bexprReadsBelow n left && bexprReadsBelow n right
+
+end
+
+def vexprReadsBelow (n : ℕ) : {m : ℕ} → Witgen.VExpr F m → Bool
+  | _, .lit values => values.toList.all (fexprReadsBelow n)
+  | _, .mapRange _ body => fexprReadsBelow n body
+  | m, .envRange offset => offset + m ≤ n
+  | _, .bitsOf value => fexprReadsBelow n value
+  | _, .append left right => vexprReadsBelow n left && vexprReadsBelow n right
+
+def stepReadsBelow (n : ℕ) : Witgen.Step F → Bool
+  | .letF value => fexprReadsBelow n value
+  | .letU value => u64exprReadsBelow n value
+  | .read _ _ row _ proposal => u64exprReadsBelow n row && fexprReadsBelow n proposal
+
+/-- A witness program that reads the environment only below cell `n`; native programs are opaque
+and never qualify. -/
+def witgenReadsBelow (n : ℕ) : {m : ℕ} → Witgen.WitgenIR F m → Bool
+  | _, .native _ => false
+  | _, .ir steps output => steps.all (stepReadsBelow n) && vexprReadsBelow n output
+
+/-- Every witness operation of `ops`, placed from cell `n` on, reads only earlier cells. -/
+def flatReadsBelow : ℕ → List (FlatOperation F) → Bool
+  | _, [] => true
+  | n, .witness m code :: ops => witgenReadsBelow n code && flatReadsBelow (m + n) ops
+  | n, .assert _ :: ops | n, .lookup _ :: ops | n, .interact _ :: ops => flatReadsBelow n ops
 
 /-! ### Validation -/
 
@@ -375,6 +449,9 @@ def validatePlan (ensemble : Ensemble F PublicIO) (rowPlans : List (RowPlan F)) 
     validateRowPlan component rowPlan
   validateHandlers ensemble.tables rowPlans
   validateDataReads ensemble.tables rowPlans
+  for component in ensemble.tables do
+    unless flatReadsBelow component.rowOffset component.rowOperations.toFlat do
+      throw (.witnessReadsAhead component.circuit.name)
 
 /-- A generation plan that passed `GenerationPlan.validate` for `ensemble`. -/
 structure ValidPlan (ensemble : Ensemble F PublicIO) where
