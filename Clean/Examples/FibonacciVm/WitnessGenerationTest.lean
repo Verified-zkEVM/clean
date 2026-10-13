@@ -102,7 +102,7 @@ def planErrors : List String :=
   [{ plan with components := plan.components.drop 1 },
     { plan with components := plan.components ++ plan.components.take 1 },
     { plan with components :=
-      ("unknown", { mode := FibonacciWitness.fibMode, padding := { input := #[] } }) ::
+      ("unknown", { mode := .demand FibonacciWitness.fibMode, padding := { input := #[] } }) ::
         plan.components }]
   |>.map fun (plan : GenerationPlan (F pBabybear)) => match plan.align ensemble with
     | .error error => toString error

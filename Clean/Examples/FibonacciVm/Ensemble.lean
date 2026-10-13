@@ -92,6 +92,8 @@ def Add8Channel : Channel (F p) fieldTriple where
   Guarantees
   | (x, y, z), _ =>
     x.val < 256 → y.val < 256 → z.val = (x.val + y.val) % 256
+  ProverGuarantees
+  | (x, y, z), _ => x.val < 256 ∧ y.val < 256 ∧ z.val = (x.val + y.val) % 256
 
 structure Add8Inputs F where
   x : F
@@ -240,9 +242,12 @@ def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
     rcases h_assumptions with rfl | ⟨ rfl, h_fib ⟩
     · simp
     simp_all
-    intro hx hy
-    rw [Nat.mod_eq_of_lt (by grind), ZMod.val_add_of_lt]
-    linarith [hx, hy, ‹Fact (p > 512)›.elim]
+    obtain ⟨k, hk, -⟩ := h_fib
+    obtain ⟨hx, hy⟩ := fibonacci_bytes hk
+    have hsum : ZMod.val (input_x + input_y) % 256 % p = (ZMod.val input_x + ZMod.val input_y) % 256 := by
+      rw [Nat.mod_eq_of_lt (by grind), ZMod.val_add_of_lt]
+      linarith [hx, hy, ‹Fact (p > 512)›.elim]
+    exact ⟨fun _ _ => hsum, hx, hy, hsum⟩
 
 example (input : Var Fib8Input (F p)) :
     ExplicitCircuit (fib8.main input) := by
@@ -315,43 +320,43 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
       intro witness _ spec
       simp only [circuit_norm, fibonacciVm, fibonacciVerifier] at spec
       exact spec)
+  |>.withProverInput unit []
+    -- the public state is the `n`-th Fibonacci state, and the run fits the field and the trace
+    fun (n, x, y) _ => (x.val, y.val) = fibonacci n.val ∧ 20 * n.val + 1156 < p ∧ n.val ≤ 2 ^ 64
 
 namespace FibonacciWitness
 
 open Air.Flat.WitnessGeneration
 
 /-- Push-driven row generation for the Fibonacci VM component. -/
-def fibMode : Mode (F p) := .demand {
+def fibMode : DemandMode (F p) where
   channel := (FibonacciChannel (p := p)).toRaw
   direction := .push
   aggregation := .perOccurrence
   input := { cells := [.const 1, .message 0, .message 1, .message 2] }
-}
 
 /-- Pull-driven, message-coalescing row generation for the addition chip. -/
-def add8Mode : Mode (F p) := .demand {
+def add8Mode : DemandMode (F p) where
   channel := (Add8Channel (p := p)).toRaw
   direction := .pull
   aggregation := .byMessage
   input := { cells := [.message 0, .message 1, .message 2, .multiplicity] }
-}
 
 /-- The byte provider preallocates one verifier-fixed byte and one generated
 multiplicity cell per row. Its declared push interaction routes byte pulls back to
 the corresponding row. -/
-def bytesMode : Mode (F p) := .preallocated {
+def bytesMode : PreallocatedMode (F p) where
   rows := (bytesFixedColumns (p := p)).height
   input := .ofFExprs #v[.const 0]
   input_valid := by rfl
   handlers := [{ interaction := 0, column := 1 }]
-}
 
 /-- The generation plan: how the rows of each component of the ensemble are generated. -/
 def plan : GenerationPlan (F p) where
   components := [
-    ((fib8 (p := p)).name, { mode := fibMode, padding := { input := #[0, 0, 0, 0], minimumRows := 32 } }),
-    ((add8 (p := p)).name, { mode := add8Mode, padding := { input := #[0, 0, 0, 0], minimumRows := 32 } }),
-    ((pushBytes (p := p)).name, { mode := bytesMode, padding := { input := #[0, 0], minimumRows := 256 } })
+    ((fib8 (p := p)).name, { mode := .demand fibMode, padding := { input := #[0, 0, 0, 0], minimumRows := 32 } }),
+    ((add8 (p := p)).name, { mode := .demand add8Mode, padding := { input := #[0, 0, 0, 0], minimumRows := 32 } }),
+    ((pushBytes (p := p)).name, { mode := .preallocated bytesMode, padding := { input := #[0, 0], minimumRows := 256 } })
   ]
 
 /-- Generate a complete ensemble witness from the claimed public final state. -/
