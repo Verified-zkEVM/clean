@@ -2494,6 +2494,260 @@ lemma step_new (hinv : run.Inv k padded balancing) {demand : Demand (F p)} {inde
       (fun h => absurd (hbyMessage ▸ h) (by simp)) hchannel (by omega)
       (handle_spec _ _ _ _ _ hhandle)⟩
 
+/-- An update changing the net of one channel message from `-δ` to zero shortens the canonical
+demand list. -/
+lemma length_apply_of_update {balancing : Balancing (F p)} {states : List (ComponentState (F p))}
+    {change : Change (F p)} (hcanonical : Demand.Canonical balancing.demands) {channel : String}
+    {message : Array (F p)} {δ : F p} (hδ : δ ≠ 0)
+    (hnet : netOf balancing.demands channel message = -δ)
+    (hchange : ∀ channel' message', netOfInteractions change.added channel' message' -
+        netOfInteractions change.removed channel' message' =
+      if channel' = channel ∧ message' = message then δ else 0) :
+    (balancing.apply states change).demands.length + 1 = balancing.demands.length := by
+  have hcanonical' : Demand.Canonical (balancing.apply states change).demands :=
+    (hcanonical.removeInteractions _).addInteractions _
+  have hnetApply : ∀ channel' message', netOf (balancing.apply states change).demands channel'
+      message' = netOf balancing.demands channel' message' +
+        if channel' = channel ∧ message' = message then δ else 0 := by
+    intro channel' message'
+    rw [← hchange]
+    simp only [Balancing.apply, netOf_addInteractions, netOf_removeInteractions]
+    abel
+  apply hcanonical.length_succ hcanonical' (channel := channel) (message := message)
+    (by rw [hnet]; exact neg_ne_zero.mpr hδ)
+  intro channel' message'
+  rw [hnetApply]
+  by_cases hkey : channel' = channel ∧ message' = message
+  · obtain ⟨rfl, rfl⟩ := hkey
+    simp [hnet]
+  · rw [if_neg hkey, add_zero]
+    constructor
+    · intro h
+      exact ⟨h, fun heq => hkey (by simpa using heq)⟩
+    · exact fun h => h.1
+
+/-- Rows whose side nets agree on a channel their component does not answer pull the same
+messages on it. -/
+lemma pulledBy_eq (hinv : run.Inv k padded balancing) {state : ComponentState (F p)}
+    (hstate : state ∈ balancing.states) (hrows : state.rows ≠ []) {row row' : GeneratedRow (F p)}
+    (hfacts : run.RowFacts state row) (hfacts' : run.RowFacts state row') {channel : String}
+    (hchannel : channel ≠ run.complete.vm.channel.name) (hnot : ¬AnswersPull state channel)
+    (hnet : ∀ message, netOfInteractions (rowInteractions state row run.data0) channel message =
+      netOfInteractions (rowInteractions state row' run.data0) channel message) :
+    run.pulledBy state row channel = run.pulledBy state row' channel := by
+  have hlengthState : state.interactions.length ≤
+      (run.verifier ++ statesInteractions balancing.states run.data0).length := by
+    rw [List.length_append, length_statesInteractions]
+    have : state.rows.length * state.interactions.length ≤
+        (balancing.states.map fun state => state.rows.length * state.interactions.length).sum :=
+      List.le_sum_of_mem (List.mem_map_of_mem (f := fun state : ComponentState (F p) =>
+        state.rows.length * state.interactions.length) hstate)
+    have hpos : 0 < state.rows.length := List.length_pos_of_ne_nil hrows
+    nlinarith
+  have hbound := hinv.length_lt
+  ext message
+  simp only [pulledBy, hnot, if_false]
+  have h1 := run.rowFacts_net hfacts hchannel message
+  have h2 := run.rowFacts_net hfacts' hchannel message
+  rw [hnet message, h2, hfacts.answered_zero _ hchannel hnot,
+    hfacts'.answered_zero _ hchannel hnot] at h1
+  simp only [pulledBy, hnot, if_false, Multiset.count_zero, Nat.cast_zero, zero_sub,
+    neg_inj] at h1
+  have hle : ∀ row, (pullsOf (rowInteractions state row run.data0) channel).count message <
+      p := by
+    intro row
+    have hcount := Multiset.count_le_card message
+      (pullsOf (rowInteractions state row run.data0) channel)
+    have hcard := card_pullsOf_le (rowInteractions state row run.data0) channel
+    have hlen : (rowInteractions state row run.data0).length = state.interactions.length := by
+      simp [rowInteractions]
+    omega
+  have := (ZMod.natCast_eq_natCast_iff' _ _ p).mp h1
+  rw [Nat.mod_eq_of_lt (hle _), Nat.mod_eq_of_lt (hle _)] at this
+  exact this.symm
+
+/-- A by-message component answers a deficit of a message it has a row for by raising that row's
+count. -/
+lemma step_update (hinv : run.Inv k padded balancing) {demand : Demand (F p)} {index : ℕ}
+    {state : ComponentState (F p)} (hstate : balancing.states[index]? = some state)
+    (hdemand : demand ∈ balancing.demands) (hhandles : state.handles demand = true)
+    {mode : DemandMode (F p)} (hmode : state.rowPlan.mode = .demand mode)
+    (hbyMessage : mode.aggregation = .byMessage) {row₀ : GeneratedRow (F p)}
+    {origin : Origin (F p)} {position : ℕ}
+    (hfound : state.rows.zipIdx.findSome? (fun (row, index) => row.origin.bind fun origin =>
+        if sameOrigin origin mode demand then some (row, origin, index) else none) =
+      some (row₀, origin, position))
+    (hchannel : demand.channel ≠ run.complete.vm.channel.name) {δ : ℕ} (hpos : 0 < δ)
+    (hlt : 2 * δ < p) (hmult : demand.multiplicity = -(δ : F p))
+    (hcount : (run.answeredMsgs balancing.states demand.channel).count demand.message + δ =
+      (run.pulledMsgs balancing.states demand.channel).count demand.message) :
+    ∃ states change, handle balancing.states demand index run.data0 run.hint = .ok (states, change) ∧
+      run.Inv k padded (balancing.apply states change) ∧
+      Prod.Lex (· < ·) (· < ·) (balancing.apply states change).measure balancing.measure := by
+  have hmemState := List.mem_of_getElem? hstate
+  have hok := run.stateOk_of_shape hinv.shape hmemState
+  obtain ⟨hvm, hmodeChannel, hpadded, hpullable, hsize⟩ :=
+    hinv.demand_setup hmemState hhandles hmode hchannel hpos hlt hmult hcount
+  have hdemandCount := (demand_pull hmult hpos hlt).2
+  have hanswers := run.answersPull_demand hok hvm hmode
+  -- the row found for the message
+  obtain ⟨position', row', hrow', hg⟩ := getElem?_of_findSome?_zipIdx hfound
+  rcases horigin : row'.origin with _ | origin'
+  · simp [horigin] at hg
+  simp only [horigin, Option.bind_some] at hg
+  split at hg
+  swap
+  · simp at hg
+  · rename_i hsame
+    simp only [Option.some.injEq, Prod.mk.injEq] at hg
+    obtain ⟨rfl, rfl, rfl⟩ := hg
+    have hrowsOld := hinv.rows state hmemState
+    simp only [RowsOk, hmode] at hrowsOld
+    obtain ⟨main, pad, hrowsEq, hpad, -, -, hanswer⟩ := hrowsOld
+    rw [hpad hpadded, List.replicate_zero, List.append_nil] at hrowsEq
+    have hrowMem : row' ∈ main := hrowsEq ▸ List.mem_of_getElem? hrow'
+    obtain ⟨message₀, count₀, hcount₀, hsize₀, hpullable₀, -, hrowEq⟩ := hanswer hvm row' hrowMem
+    have horiginEq : origin' = demandOrigin mode message₀ count₀ := by
+      rw [hrowEq] at horigin
+      simpa [answerRow, Run.row] using horigin.symm
+    have hmessage : message₀ = demand.message := by
+      simp only [sameOrigin, horiginEq, demandOrigin, Bool.and_eq_true, beq_iff_eq] at hsame
+      exact hsame.2
+    subst hmessage
+    have hposition : position' < state.rows.length := (List.getElem?_eq_some_iff.mp hrow').1
+    set updated := run.answerRow state.component mode demand.message (count₀ + δ)
+    have hmutation : handleDemand balancing.states state mode demand run.data0 run.hint =
+        Mutation.mk { state with rows := state.rows.set position' updated } [row'] [updated] [] := by
+      simp [handleDemand, hbyMessage, hfound, hinv.createDemandRow_eq hmemState hmode,
+        hdemandCount, horiginEq, demandOrigin, updated]
+    have hhandle := run.handle_demand hstate hmode demand (by rw [hmutation])
+    rw [hmutation] at hhandle
+    simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil] at hhandle
+    refine ⟨_, _, hhandle, ?_⟩
+    have hchanges := handle_spec _ _ _ _ _ hhandle
+    have hfacts₀ := run.rowFacts_answerRow hok hvm hmode hcount₀ hsize₀ hpullable₀
+    have hfactsU := run.rowFacts_answerRow hok hvm hmode (count := count₀ + δ) (by omega) hsize
+      hpullable
+    rw [← hrowEq] at hfacts₀
+    have hinputSize := run.demand_input_size hok.entry hmode
+    have hindependent : ∀ channel ≠ mode.channel.name, ∀ message,
+        netOfInteractions (rowInteractions state row' run.data0) channel message =
+          netOfInteractions (rowInteractions state updated run.data0) channel message := by
+      intro channel hne message
+      rw [hrowEq]
+      simp only [updated, answerRow]
+      rw [run.rowInteractions_row hok.interactions hok.mem (hinputSize _ _) _ run.stableData_stable,
+        run.rowInteractions_row hok.interactions hok.mem (hinputSize _ _) _ run.stableData_stable]
+      exact (run.complete.demand state.component hok.mem state.rowPlan mode
+        (run.planned _ hok.entry) hmode hvm).2.2.2.2 hbyMessage demand.message count₀ (count₀ + δ)
+        _ _ (run.honestEnv_row hok.mem (hinputSize _ _) run.stableData)
+        (run.honestEnv_row hok.mem (hinputSize _ _) run.stableData) rfl rfl channel hne message
+    have hanswered₀ : run.answeredBy state row' mode.channel.name =
+        Multiset.replicate count₀ demand.message := by
+      simp [hrowEq, answeredBy, hmode, answerRow, Run.row, demandOrigin]
+    have hansweredU : run.answeredBy state updated mode.channel.name =
+        Multiset.replicate (count₀ + δ) demand.message := by
+      simp [updated, answeredBy, hmode, answerRow, Run.row, demandOrigin]
+    have hlengthRow : ∀ row, (rowInteractions state row run.data0).length =
+        state.interactions.length := by simp [rowInteractions]
+    have hrowsNe : state.rows ≠ [] := List.ne_nil_of_mem (List.mem_of_getElem? hrow')
+    constructor
+    · refine ⟨hchanges.1.trans hinv.shape, ?_, hinv.steps_le, hinv.padded_steps,
+        Balancing.tracks_apply hinv.tracks hchanges.2,
+        (hinv.canonical.removeInteractions _).addInteractions _, ?_, ?_,
+        fun h => absurd h (by simp [hpadded])⟩
+      · intro x hx
+        rcases mem_set_cases hx with rfl | ⟨j, hj, hji, rfl⟩
+        · simp only [RowsOk, hmode]
+          refine ⟨state.rows.set position' updated, 0, by simp, fun _ => rfl,
+            fun h => absurd h (by simp [hpadded]), fun h => absurd h hvm, fun _ x hx => ?_⟩
+          rcases List.mem_or_eq_of_mem_set hx with hx | rfl
+          · exact hanswer hvm x (hrowsEq ▸ hx)
+          · exact ⟨demand.message, count₀ + δ, by omega, hsize, hpullable,
+              fun h => absurd (hbyMessage ▸ h) (by simp), rfl⟩
+        · exact hinv.rows _ (List.getElem_mem hj)
+      · have hlength := length_statesInteractions_set hstate (state.rows.set position' updated)
+          run.data0
+        simp only [List.length_set] at hlength
+        simp only [Balancing.apply, List.length_append, hinv.interactions, hlengthRow]
+        omega
+      · intro channel hchannel'
+        have hanswered := run.answeredMsgs_set hstate (state.rows.set position' updated) channel
+        have hpulled := run.pulledMsgs_set hstate (state.rows.set position' updated) channel
+        have hrowAnswered := sum_map_set_add (fun row => run.answeredBy state row channel)
+          state.rows position' hposition updated
+        have hrowPulled := sum_map_set_add (fun row => run.pulledBy state row channel)
+          state.rows position' hposition updated
+        have hrow'' : state.rows[position'] = row' := (List.getElem?_eq_some_iff.mp hrow').2
+        rw [hrow''] at hrowAnswered hrowPulled
+        simp only [Balancing.apply]
+        have hold := hinv.answered_le channel hchannel'
+        by_cases hmodeChannelEq : channel = mode.channel.name
+        · subst hmodeChannelEq
+          have hzero : ∀ row, run.pulledBy state row mode.channel.name = 0 := by
+            intro row
+            simp [pulledBy, (hanswers _).mpr rfl]
+          simp only [hzero, List.map_const', List.sum_replicate, smul_zero, add_zero] at hpulled
+          rw [hanswered₀, hansweredU, Multiset.replicate_add, ← add_assoc,
+            add_right_comm _ (Multiset.replicate count₀ demand.message)] at hrowAnswered
+          have hrows' := add_right_cancel hrowAnswered
+          rw [hrows', ← add_assoc] at hanswered
+          have hAnswered : run.answeredMsgs (balancing.states.set index
+              { state with rows := state.rows.set position' updated }) mode.channel.name =
+              run.answeredMsgs balancing.states mode.channel.name +
+                Multiset.replicate δ demand.message := by
+            apply add_right_cancel (b := (state.rows.map fun row =>
+              run.answeredBy state row mode.channel.name).sum)
+            rw [hanswered]
+            abel
+          rw [hAnswered, hpulled, Multiset.le_iff_count]
+          intro message'
+          rw [Multiset.count_add, Multiset.count_replicate]
+          rw [hmodeChannel] at hcount
+          split_ifs with hmessage
+          · subst hmessage
+            omega
+          · simpa using Multiset.le_iff_count.mp hold message'
+        · have hnot : ¬AnswersPull state channel := fun h => hmodeChannelEq ((hanswers _).mp h)
+          rw [hfacts₀.answered_zero _ hchannel' hnot, hfactsU.answered_zero _ hchannel' hnot,
+            add_zero, add_zero] at hrowAnswered
+          rw [← hrowAnswered, add_left_inj] at hanswered
+          rw [hinv.pulledBy_eq hmemState hrowsNe hfacts₀ hfactsU hchannel' hnot
+            (hindependent channel hmodeChannelEq), add_left_inj] at hrowPulled
+          rw [← hrowPulled, add_left_inj] at hpulled
+          rw [hanswered, hpulled]
+          exact hold
+    · apply measure_lt_right
+      · simp only [Balancing.apply, hlengthRow]
+        omega
+      · have hδ : (δ : F p) ≠ 0 := by
+          rw [Ne, ZMod.natCast_eq_zero_iff]
+          intro hdvd
+          have := Nat.le_of_dvd hpos hdvd
+          omega
+        have hlength := length_apply_of_update (states := balancing.states.set index
+          { state with rows := state.rows.set position' updated })
+          (change := ⟨rowInteractions state row' run.data0, rowInteractions state updated run.data0⟩)
+          hinv.canonical hδ (by rw [hinv.canonical.netOf_eq hdemand, hmult]) ?_
+        · omega
+        intro channel' message'
+        by_cases hchannelEq : channel' = demand.channel
+        · subst hchannelEq
+          rw [hmodeChannel] at hchannel ⊢
+          rw [hfactsU.answered_net _ hchannel ((hanswers _).mpr rfl),
+            hfacts₀.answered_net _ hchannel ((hanswers _).mpr rfl)]
+          rw [show run.answeredBy state (run.answerRow state.component mode demand.message
+            (count₀ + δ)) mode.channel.name = Multiset.replicate (count₀ + δ) demand.message from
+            hansweredU, hanswered₀]
+          simp only [Multiset.count_replicate, true_and]
+          by_cases hm : message' = demand.message
+          · subst hm
+            simp
+          · simp [hm, Ne.symm hm]
+        · rw [hmodeChannel] at hchannelEq
+          rw [hindependent channel' hchannelEq message', sub_self, if_neg (fun h => hchannelEq
+            (h.1.trans hmodeChannel))]
+
 end Inv
 
 end Run
