@@ -655,7 +655,7 @@ def padTables (data : ProverData F) (hint : ProverHint F) (states : List (Compon
     ({ state with rows := state.rows ++ rows }, rows.flatMap (rowInteractions state · data))
   (padded.map (·.1), padded.flatMap (·.2))
 
-def tablesArePadded (states : List (ComponentState F)) : Bool :=
+def tablesPadded (states : List (ComponentState F)) : Bool :=
   states.all fun state =>
     state.rows.length == state.generation.padding.targetHeight state.rows.length
 
@@ -666,7 +666,7 @@ def padAndBalance (data : ProverData F) (hint : ProverHint F) (fuel : ℕ) :
   | rounds + 1, states => do
       let (states, added) := padTables data hint states
       let states ← generateLoop data hint fuel states (Demand.addInteractions [] added)
-      if tablesArePadded states then return states
+      if tablesPadded states then return states
       padAndBalance data hint fuel rounds states
 
 /-! ### Assembling the witness -/
@@ -679,15 +679,15 @@ structure AssembledTables (components : List (Component F)) where
 
 structure MatchedFixedRows (component : Component F) (rows : List (Array F)) where
   marker : Unit := ()
-  property : component.fixedRowsMatch rows
+  property : component.FixedRowsMatch rows
 
 def validateFixedRows (component : Component F) (rows : List (Array F)) :
     Except GenerationError (MatchedFixedRows component rows) :=
   match hcolumns : component.fixedColumns with
-  | none => .ok ⟨(), by simp [Component.fixedRowsMatch, hcolumns]⟩
+  | none => .ok ⟨(), by simp [Component.FixedRowsMatch, hcolumns]⟩
   | some fixed =>
       if hrows : FixedColumns.RowsMatch fixed rows then
-        .ok ⟨(), by simpa [Component.fixedRowsMatch, hcolumns] using hrows⟩
+        .ok ⟨(), by simpa [Component.FixedRowsMatch, hcolumns] using hrows⟩
       else
         .error (.assembly "generated table does not match its fixed columns")
 

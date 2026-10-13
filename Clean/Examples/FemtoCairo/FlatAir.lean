@@ -405,7 +405,7 @@ def programFixedColumns {programSize : UInt64} (program : Fin programSize.toNat 
     FixedColumns (F p) where
   height := programSize
   program := .ofFExprs #v[
-    .ofU64 .idx,
+    .idx,
     .listGet ((Vector.ofFn program).toList.map .const) .idx
   ]
   valid := by simp [Witgen.RowProgram.Valid, Witgen.RowProgram.ofFExprs,
@@ -443,7 +443,7 @@ def provideMemory : GeneralFormalCircuit (F p) ProviderInput unit where
 
 def memoryFixedColumns (memorySize : UInt64) : FixedColumns (F p) where
   height := memorySize
-  program := .ofFExprs #v[.ofU64 .idx]
+  program := .ofFExpr .idx
   valid := by rfl
 
 def memoryComponent (memorySize : UInt64) (h_memorySize : memorySize.toNat < p) :

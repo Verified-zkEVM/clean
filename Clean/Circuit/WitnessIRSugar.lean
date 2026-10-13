@@ -131,6 +131,9 @@ abbrev FExpr.bit [Field F] (e : FExpr F) (i : ℕ) : FExpr F := (BExpr.bit e i).
 abbrev _root_.Expression.bit [Field F] (e : Expression F) (i : ℕ) : FExpr F :=
   (BExpr.bit (.expr e) i).toField
 
+/-- The row index as a field element: `.idx`. -/
+abbrev FExpr.idx : FExpr F := .ofU64 .idx
+
 /-- A bit-valued condition cast into the field is the corresponding `0`/`1` element —
 the same normal form `VExpr.bitsOf` evaluates to, so bit-decomposition proofs see one
 shape whether the bit index is static or the loop index. Keyed as a pre-rewrite so it

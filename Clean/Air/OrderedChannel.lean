@@ -698,7 +698,7 @@ theorem tableSoundness_of_soundChannels {ens : Ensemble F PublicIO} :
       exact verifier_channel_guarantees channel
         ((ens.channelsWithGuarantees_subset_iff.mp soundChannels.left).left h_channel)
     · exact ens.verifier.operations.inChannelsOrGuaranteesFull _
-  exact ⟨ens.verifierSoundness witness.publicInput witness.data verifier_guarantees,
+  exact ⟨ens.verifierSpec_of_verifierGuarantees witness.publicInput witness.data verifier_guarantees,
     fun table h_table => (table_results table h_table).left⟩
 
 /-- Empty ensemble satisfies SoundChannels -/

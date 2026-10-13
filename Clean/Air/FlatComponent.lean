@@ -96,7 +96,7 @@ namespace Component
 def fixedWidth (component : Component F) : ℕ :=
   component.fixedColumns.map FixedColumns.width |>.getD 0
 
-def fixedRowsMatch (component : Component F) (rows : List (Array F)) : Prop :=
+def FixedRowsMatch (component : Component F) (rows : List (Array F)) : Prop :=
   match component.fixedColumns with
   | none => True
   | some fixed => FixedColumns.RowsMatch fixed rows
@@ -258,8 +258,7 @@ structure Table (F : Type) [FiniteField F] where
   /-- Row indices are `u64` values. -/
   length_le : table.length ≤ UInt64.size
   /-- Connects the row-indexed fixed-column declaration to the concrete semantic rows. -/
-  fixed_rows_match : component.fixedRowsMatch table := by
-    simp [Component.fixedRowsMatch]
+  fixed_rows_match : component.FixedRowsMatch table
 
 /-- Each named component is the source of its circuit-input rows in `ProverData`. -/
 def deriveProverData : List (Table F) → ProverData F
@@ -360,7 +359,7 @@ lemma circuitAssumptions (table : Table F) (consistent : table.DataConsistency)
     | none => simp [FixedInputAt]
     | some fixed =>
       have hmatch := table.fixed_rows_match
-      simp only [Component.fixedRowsMatch, hcolumns] at hmatch
+      simp only [Component.FixedRowsMatch, hcolumns] at hmatch
       have hlength : table.table.length = fixed.height.toNat := by
         simpa using congrArg List.length hmatch
       have hprefix := congrArg (fun rows => rows[i.val]?) hmatch

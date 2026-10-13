@@ -35,7 +35,7 @@ def generateResult (memoryValues : fields 8 (F pBabybear)) (executionRows : UInt
     Except String (List ℕ × Bool × Bool × ℕ × ℕ × ℕ) :=
   match Examples.FemtoCairo.FlatAir.Witness.generate
       (p := pBabybear) (programSize := programSize) (memorySize := 8)
-      testProgram h_programSize h_memorySize
+      testProgram programSize_lt memorySize_lt
       memoryValues initialState finalRegisters executionRows 1000 with
   | .error error => .error (toString error)
   | .ok witness =>
@@ -71,7 +71,7 @@ example : generateResult memoryValues 16 = .ok ([16, 8, 32], true, true, 8, 10, 
 
 def unstableDataReadRejected : Bool :=
   let config : Config (F pBabybear) :=
-    Witness.config (memorySize := 8) testProgram h_programSize initialState 8 1000
+    Witness.config (memorySize := 8) testProgram programSize_lt initialState 8 1000
   let mutableMemory : Mode (F pBabybear) := .preallocated {
     rows := 8
     input := .ofFExprs #v[.hintGet memoryValuesKey 1 .idx 0, .const 0]
@@ -83,7 +83,7 @@ def unstableDataReadRejected : Bool :=
         if name = (provideMemory (p := pBabybear)).name then (name, { generation with mode := mutableMemory })
         else (name, generation) }
   match Backends.Plonky3.lower
-      (formalEnsemble testProgram h_programSize h_memorySize initialState) config with
+      (formalEnsemble testProgram programSize_lt memorySize_lt initialState) config with
   | .error (.config (.unstableDataRead _ _ "memory" 1)) => true
   | _ => false
 

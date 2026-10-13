@@ -13,7 +13,7 @@ component shapes, and ensemble generation modes. Backends consume this represent
 traversing a Clean ensemble while printing source code.
 
 The representation deliberately reuses Clean's expression and witness IR nodes, together with
-their existing Lean semantics. `WitnessBlock.wellFormed` additionally certifies that every local
+their existing Lean semantics. `WitnessBlock.well_formed` additionally certifies that every local
 reference has the sort of an earlier step. Native Lean closures are not representable.
 -/
 
@@ -106,7 +106,7 @@ structure WitnessBlock (F : Type) [FiniteField F] where
   outputWidth : ℕ
   steps : List (Witgen.Step F)
   output : Witgen.VExpr F outputWidth
-  wellFormed : witnessProgramWellFormed steps output = true
+  well_formed : witnessProgramWellFormed steps output = true
 
 namespace WitnessBlock
 

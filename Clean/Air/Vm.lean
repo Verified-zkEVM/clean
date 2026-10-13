@@ -117,7 +117,7 @@ def toFormal (ens : SoundVmEnsemble F PublicIO) (Assumptions Spec : PublicIO F �
     intro publicInput assumptions ⟨witness, input_eq, constraints, balance⟩
     subst input_eq
     apply spec_of_verifierSpec witness assumptions
-    apply ens.ensemble.verifierSoundness
+    apply ens.ensemble.verifierSpec_of_verifierGuarantees
     exact ens.soundVmChannel witness (assumptionsConsistency witness assumptions) constraints balance
 end SoundVmEnsemble
 end Air.Flat
@@ -304,7 +304,7 @@ noncomputable def vmInteractionsWith (witness : EnsembleWitness (ens.addVm vm na
   witness.verifierInteractionsWith channel ++
     witness.vmTables.flatMap (·.interactionsWith channel)
 
-lemma vmMemTablesComponent
+lemma component_mem_tables_of_mem_vmTables
     {witness : EnsembleWitness (ens.addVm vm names)} {table : Table F} :
     table ∈ witness.vmTables → table.component ∈ vm.tables := by
   intro htable
@@ -323,17 +323,17 @@ lemma vmMemTablesComponent
 noncomputable def vmRowEnabled (witness : EnsembleWitness (ens.addVm vm names))
     {table} (h : table ∈ witness.vmTables) (row : Array F) : F :=
   (table.environment row)
-    (vm.tableStep (witness.vmMemTablesComponent h)).enabled
+    (vm.tableStep (witness.component_mem_tables_of_mem_vmTables h)).enabled
 
 noncomputable def vmRowPull (witness : EnsembleWitness (ens.addVm vm names))
     {table} (h : table ∈ witness.vmTables) (row : Array F) : vm.Message F :=
   eval (table.environment row)
-    (vm.tableStep (witness.vmMemTablesComponent h)).pull
+    (vm.tableStep (witness.component_mem_tables_of_mem_vmTables h)).pull
 
 noncomputable def vmRowPush (witness : EnsembleWitness (ens.addVm vm names))
     {table} (h : table ∈ witness.vmTables) (row : Array F) : vm.Message F :=
   eval (table.environment row)
-    (vm.tableStep (witness.vmMemTablesComponent h)).push
+    (vm.tableStep (witness.component_mem_tables_of_mem_vmTables h)).push
 
 noncomputable def vmVerifierEnabled (witness : EnsembleWitness (ens.addVm vm names)) : F :=
   eval (Environment.fromInput witness.publicInput witness.data) vm.verifierStep.enabled
@@ -352,7 +352,7 @@ noncomputable def vmVerifierPair (witness : EnsembleWitness (ens.addVm vm names)
   (vm.channel.pulledValue witness.vmVerifierPull,
     vm.channel.pushedValue witness.vmVerifierPush)
 
-lemma vmVerifierInteractionValuesWith_eq
+lemma verifierInteractionsWith_vmChannel_eq
     (witness : EnsembleWitness (ens.addVm vm names)) :
     witness.verifierInteractionsWith vm.channel.toRaw =
       [witness.vmVerifierPair.1, witness.vmVerifierPair.2] := by
@@ -370,7 +370,7 @@ lemma vmInteractionValuesWith_eq (witness : EnsembleWitness (ens.addVm vm names)
       (table.environment row) = [
     vm.channel.pulledIfValue (witness.vmRowEnabled h row) (witness.vmRowPull h row),
     vm.channel.pushedIfValue (witness.vmRowEnabled h row) (witness.vmRowPush h row) ] := by
-  simp only [circuit_norm, vm.interactionsWith_eq (witness.vmMemTablesComponent h),
+  simp only [circuit_norm, vm.interactionsWith_eq (witness.component_mem_tables_of_mem_vmTables h),
     vmRowEnabled, vmRowPull, vmRowPush, AbstractInteraction.eval, ProvableType.toElements_eval]
 
 lemma vmInteractionValuesWith_length (witness : EnsembleWitness (ens.addVm vm names))
@@ -432,12 +432,12 @@ lemma vmPulls_length {witness : EnsembleWitness (ens.addVm vm names)} : witness.
 lemma vmPushes_length {witness : EnsembleWitness (ens.addVm vm names)} : witness.vmPushes.length = witness.vmSteps + 1 := by
   simp [vmSteps, vmPushes, vmInteractionPairs, vmTables, circuit_norm]
 
-lemma vmRowEnabled_isBool_of_constraints {witness : EnsembleWitness (ens.addVm vm names)} :
+lemma vmRowEnabled_isBool_of_vmConstraints {witness : EnsembleWitness (ens.addVm vm names)} :
     witness.VmConstraints →
     ∀ table (h : table ∈ witness.vmTables), ∀ row ∈ table.table,
       IsBool (witness.vmRowEnabled h row) := by
   intro constraints table table_mem row row_mem
-  exact vm.tableStep_enabled_isBool (witness.vmMemTablesComponent table_mem) _
+  exact vm.tableStep_enabled_isBool (witness.component_mem_tables_of_mem_vmTables table_mem) _
     (constraints table table_mem row row_mem)
 
 lemma vmPulls_mult {witness : EnsembleWitness (ens.addVm vm names)} :
@@ -448,7 +448,7 @@ lemma vmPulls_mult {witness : EnsembleWitness (ens.addVm vm names)} :
   rcases h_pull with rfl | ⟨table, table_mem, row, row_mem, rfl⟩
   · simp [vmVerifierPair, Channel.pulledValue]
   · simp only [circuit_norm, neg_inj]
-    apply witness.vmRowEnabled_isBool_of_constraints constraints _ ‹_› _ ‹_›
+    apply witness.vmRowEnabled_isBool_of_vmConstraints constraints _ ‹_› _ ‹_›
 
 lemma vmPushes_mult {witness : EnsembleWitness (ens.addVm vm names)} :
   witness.VmConstraints →
@@ -458,7 +458,7 @@ lemma vmPushes_mult {witness : EnsembleWitness (ens.addVm vm names)} :
   rcases h_push with rfl | ⟨table, table_mem, row, row_mem, rfl⟩
   · simp [vmVerifierPair, Channel.pushedValue]
   · simp only [circuit_norm]
-    apply witness.vmRowEnabled_isBool_of_constraints constraints _ ‹_› _ ‹_›
+    apply witness.vmRowEnabled_isBool_of_vmConstraints constraints _ ‹_› _ ‹_›
 
 lemma vmPulls_zero_iff_vmPushes_zero {witness : EnsembleWitness (ens.addVm vm names)} :
     ∀ i (hi : i < witness.vmPulls.length) (hi' : i < witness.vmPushes.length),
@@ -495,7 +495,7 @@ lemma vmInteractionss_eq_interactionPairs (witness : EnsembleWitness (ens.addVm 
   [witness.verifierInteractionsWith vm.channel.toRaw] ++
       witness.vmTables.flatMap (·.interactionssWith vm.channel.toRaw) =
     witness.vmInteractionPairs.map (fun ⟨pull, push⟩ => [pull, push]) := by
-  rw [witness.vmVerifierInteractionValuesWith_eq]
+  rw [witness.verifierInteractionsWith_vmChannel_eq]
   simp only [vmInteractionPairs, List.flatMap_def, List.map_flatten, List.map_cons,
     List.singleton_append]
   congr 1
@@ -506,14 +506,14 @@ lemma vmInteractionss_eq_interactionPairs (witness : EnsembleWitness (ens.addVm 
   intro ⟨ table, table_mem ⟩ _
   simp [Table.interactionssWith, witness.vmInteractionValuesWith_eq table_mem]
 
-lemma vmInteractionss_eq_pulls_pushes (witness : EnsembleWitness (ens.addVm vm names)) :
+lemma vmInteractionss_eq_zip_vmPulls_vmPushes (witness : EnsembleWitness (ens.addVm vm names)) :
   [witness.verifierInteractionsWith vm.channel.toRaw] ++
       witness.vmTables.flatMap (·.interactionssWith vm.channel.toRaw) =
     (List.zip witness.vmPulls witness.vmPushes).map (fun ⟨pull, push⟩ => [pull, push]) := by
   rw [vmInteractionss_eq_interactionPairs]
   simp [vmPulls, vmPushes, List.zip_map_fst_snd]
 
-lemma vmInteractions_eq_pulls_pushes (witness : EnsembleWitness (ens.addVm vm names)) :
+lemma vmInteractionsWith_eq_vmPulls_vmPushes (witness : EnsembleWitness (ens.addVm vm names)) :
   witness.vmInteractionsWith vm.channel.toRaw =
     (List.zip witness.vmPulls witness.vmPushes).flattenPairs := by
   have unfold_interactions : witness.vmInteractionsWith vm.channel.toRaw =
@@ -523,9 +523,9 @@ lemma vmInteractions_eq_pulls_pushes (witness : EnsembleWitness (ens.addVm vm na
     simp only [vmInteractionsWith, Table.interactionsWith, Table.interactionssWith,
       List.singleton_append, List.flatten_cons]
     rw [List.flatMap_flatMap, List.flatMap_def]
-  rw [unfold_interactions, vmInteractionss_eq_pulls_pushes, List.flattenPairs]
+  rw [unfold_interactions, vmInteractionss_eq_zip_vmPulls_vmPushes, List.flattenPairs]
 
-lemma vmMem_zip_pulls_pushes_iff (witness : EnsembleWitness (ens.addVm vm names)) (pull push : Interaction F) :
+lemma mem_zip_vmPulls_vmPushes_iff (witness : EnsembleWitness (ens.addVm vm names)) (pull push : Interaction F) :
   (pull, push) ∈ List.zip witness.vmPulls witness.vmPushes ↔
     (pull, push) = witness.vmVerifierPair ∨
       ∃ table ∈ witness.vmTables, ∃ row ∈ table.table,
@@ -548,7 +548,7 @@ lemma vmMem_zip_pulls_pushes_iff (witness : EnsembleWitness (ens.addVm vm names)
       simp only [List.cons.injEq, and_true] at h_interactions
       exact Prod.ext h_interactions.left.symm h_interactions.right.symm
 
-lemma vmPullRequirementsOfConstraints {witness : EnsembleWitness (ens.addVm vm names)} :
+lemma vmPulls_requirements_of_vmConstraints {witness : EnsembleWitness (ens.addVm vm names)} :
   witness.VmConstraints →
     ∀ pull ∈ witness.vmPulls, pull.Requirements witness.data := by
   intro constraints pull h_pull
@@ -560,12 +560,12 @@ lemma vmPullRequirementsOfConstraints {witness : EnsembleWitness (ens.addVm vm n
       vm.channel.toRaw at verifier_requirements
     rw [witness.verifierChannelRequirements_iff_forall] at verifier_requirements
     apply verifier_requirements
-    rw [witness.vmVerifierInteractionValuesWith_eq]
+    rw [witness.verifierInteractionsWith_vmChannel_eq]
     simp
   · apply Channel.pulledIfValue_requirements_of_isBool_enabled
-    apply witness.vmRowEnabled_isBool_of_constraints constraints _ ‹_› _ ‹_›
+    apply witness.vmRowEnabled_isBool_of_vmConstraints constraints _ ‹_› _ ‹_›
 
-lemma vmPushGuarantees {witness : EnsembleWitness (ens.addVm vm names)} :
+lemma vmPushes_guarantees {witness : EnsembleWitness (ens.addVm vm names)} :
   ∀ push ∈ witness.vmPushes, push.Guarantees witness.data := by
   intro push h_push
   rw [witness.mem_vmPushes_iff] at h_push
@@ -618,7 +618,7 @@ lemma activeInteractions_vmPushes_getElem_zero_eq {witness : EnsembleWitness (en
     Channel.pushedValue, Channel.pushedIfValue]
 
 /-- Translation of the VM soundness theorem to VmTables -/
-theorem vmVerifierGuarantees
+theorem verifierChannelGuarantees_of_verifierChannelRequirements
   [Fact (ringChar F ≠ 2)] (witness : EnsembleWitness (ens.addVm vm names)) :
   -- if the vm interactions with the vm channel are balanced
   BalancedInteractions (witness.vmInteractionsWith vm.channel.toRaw) →
@@ -636,10 +636,10 @@ theorem vmVerifierGuarantees
     (ens.addVm vm names).VerifierChannelGuarantees witness.publicInput witness.data
       vm.channel.toRaw := by
   intro balance witness_constraints constraints verifier_requirements
-  have row_enabled_boolean := witness.vmRowEnabled_isBool_of_constraints witness_constraints
+  have row_enabled_boolean := witness.vmRowEnabled_isBool_of_vmConstraints witness_constraints
   -- prove balance of vmPulls + vmPushes
   replace balance : BalancedInteractions (witness.vmPulls ++ witness.vmPushes) := by
-    rw [witness.vmInteractions_eq_pulls_pushes] at balance
+    rw [witness.vmInteractionsWith_eq_vmPulls_vmPushes] at balance
     apply balancedInteractions_of_perm balance
     apply List.zip_flattenPairs_perm <| witness.vmPushes_length ▸ witness.vmPulls_length.symm
   -- we fill in the conditions on vmPulls and vmPushes in `guarantees_of_requirements_of_requirements_of_guarantees`
@@ -663,9 +663,9 @@ theorem vmVerifierGuarantees
     intro (pull, push) pair_mem
     simp only
     have ⟨ mem_pull, mem_push ⟩ := List.of_mem_zip pair_mem
-    have push_grts := witness.vmPushGuarantees push mem_push
-    have pull_reqs := witness.vmPullRequirementsOfConstraints witness_constraints pull mem_pull
-    rw [witness.vmMem_zip_pulls_pushes_iff] at pair_mem
+    have push_grts := witness.vmPushes_guarantees push mem_push
+    have pull_reqs := witness.vmPulls_requirements_of_vmConstraints witness_constraints pull mem_pull
+    rw [witness.mem_zip_vmPulls_vmPushes_iff] at pair_mem
     rcases pair_mem with h_verifier | ⟨table, table_mem, row, row_mem, interactions_eq⟩
     · have verifier_requirements' := verifier_requirements
       rw [witness.verifierChannelRequirements_iff_forall] at verifier_requirements'
@@ -676,7 +676,7 @@ theorem vmVerifierGuarantees
       subst push
       intro _
       apply verifier_requirements'
-      rw [witness.vmVerifierInteractionValuesWith_eq]
+      rw [witness.verifierInteractionsWith_vmChannel_eq]
       simp
     · suffices (∀ i ∈ [pull, push], i.Guarantees witness.data) →
           (∀ i ∈ [pull, push], i.Requirements witness.data) by
@@ -697,13 +697,13 @@ theorem vmVerifierGuarantees
       (vm.channel.pushedIfValue witness.vmVerifierEnabled witness.vmVerifierPush).Requirements
         witness.data := by
     apply verifier_requirements'
-    rw [witness.vmVerifierInteractionValuesWith_eq, witness.vmVerifierEnabled_eq_one]
+    rw [witness.verifierInteractionsWith_vmChannel_eq, witness.vmVerifierEnabled_eq_one]
     simp [vmVerifierPair, Channel.pushedIfValue, Channel.pushedValue]
   specialize grts_of_reqs push_requirements
   rw [witness.vmVerifierEnabled_eq_one] at grts_of_reqs
   rw [witness.verifierChannelGuarantees_iff_forall]
   intro interaction h_interaction
-  rw [witness.vmVerifierInteractionValuesWith_eq] at h_interaction
+  rw [witness.verifierInteractionsWith_vmChannel_eq] at h_interaction
   simp only [List.mem_cons, List.not_mem_nil, or_false] at h_interaction
   rcases h_interaction with rfl | rfl
   · simpa [vmVerifierPair, Channel.pulledIfValue, Channel.pulledValue] using grts_of_reqs
@@ -811,12 +811,12 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
       table.channelsWithGuarantees ⊆ vmChannel :: finished := by
     intro table h_table
     apply grts_subset.2 table.component
-    exact witness.vmMemTablesComponent h_table
+    exact witness.component_mem_tables_of_mem_vmTables h_table
   have vm_reqs_disjoint : ∀ channel ∈ finished, ∀ table ∈ witness.vmTables,
       channel ∉ table.channelsWithRequirements := by
     intro channel channel_mem table table_mem
     apply (reqs_disjoint channel channel_mem).2
-    exact witness.vmMemTablesComponent table_mem
+    exact witness.component_mem_tables_of_mem_vmTables table_mem
   -- specialize constraints and assumptions to both old and vm ensemble
   have old_constraints : oldContext.Constraints := by
     intro table table_mem
@@ -912,7 +912,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
       (ens.addVm vm names).VerifierChannelRequirements witness.publicInput witness.data
         vm.channel.toRaw := by
     exact vm.verifier_requirements (Environment.fromInput witness.publicInput witness.data)
-  have vm_verifier_guarantees := witness.vmVerifierGuarantees vm_balance vm_constraints
+  have vm_verifier_guarantees := witness.verifierChannelGuarantees_of_verifierChannelRequirements vm_balance vm_constraints
     reqs_of_grts verifier_requirements
   have finished_verifier_guarantees : ∀ channel ∈ finished,
       (ens.addVm vm names).VerifierChannelGuarantees witness.publicInput witness.data channel := by

@@ -50,6 +50,10 @@ def ofFExprs {n : ℕ} (values : Vector (FExpr F) n) : RowProgram F where
   steps := []
   output := .lit values
 
+/-- A single-column row program. -/
+@[circuit_norm]
+def ofFExpr (value : FExpr F) : RowProgram F := ofFExprs #v[value]
+
 end RowProgram
 
 /-- External inputs available to an index-aware row program. -/

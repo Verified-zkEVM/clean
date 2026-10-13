@@ -56,21 +56,18 @@ def pushBytes : GeneralFormalCircuit (F p) BytesInput unit where
 
   channelsWithRequirements := [ BytesChannel.toRaw ]
   Assumptions
-  | { value, .. }, _ => ∃ i : Fin 256, value = ByteUtils.fromByte i
+  | { value, .. }, _ => value.val < 256
   ProverAssumptions
-  | { value, .. }, _, _ => ∃ i : Fin 256, value = ByteUtils.fromByte i
+  | { value, .. }, _, _ => value.val < 256
   Spec _ _ _ := True
   soundness := by
     circuit_proof_start [BytesTable]
-    obtain ⟨byteIndex, hvalue⟩ := h_assumptions
-    rw [hvalue]
-    intro _ _
-    exact ByteUtils.fromByte_lt byteIndex
+    simp_all
   completeness := by circuit_proof_start
 
 def bytesFixedColumns : FixedColumns (F p) where
   height := 256
-  program := .ofFExprs #v[.ofU64 .idx]
+  program := .ofFExpr .idx
   valid := by rfl
 
 def bytesComponent : Component (F p) where
@@ -82,7 +79,7 @@ def bytesComponent : Component (F p) where
     rintro i ⟨value, multiplicity⟩ data hfixed - -
     simp [bytesFixedColumns, circuit_norm, explicit_provable_type] at hfixed
     obtain ⟨hi, rfl⟩ := hfixed
-    exact ⟨⟨i.toNat, hi⟩, by rw [ByteUtils.fromByte, FieldUtils.natToField_eq_natCast]⟩
+    simp [pushBytes, ZMod.val_cast_of_lt (show i.toNat < p by linarith [pGt.out]), hi]
 
 def Add8Channel : Channel (F p) fieldTriple where
   name := "add8"
@@ -150,9 +147,6 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
 example (input : Var Add8Inputs (F p)) :
     ExplicitCircuit (add8.main input) := by
   infer_explicit_circuit
-
-def add8Component : Component (F p) where
-  circuit := add8
 
 def fibonacci : ℕ → (ℕ × ℕ)
   | 0 => (0, 1)
@@ -259,16 +253,13 @@ def fibonacciVerifier : Verifier.Program (F p) fieldTriple where
       AbstractInteraction.Guarantees, Channel.toRaw, explicit_provable_type] at guarantees ⊢
     exact guarantees
 
-def fib8Component : Component (F p) where
-  circuit := fib8
-
 def fibonacciVm : VmTables (F p) fieldTriple where
   channel := FibonacciChannel
-  tables := [fib8Component]
-  unique_names := by simp [fib8Component]
+  tables := [{ circuit := fib8 }]
+  unique_names := by simp
   verifier := fibonacciVerifier
   tables_channel := by
-    simp [circuit_norm, fib8Component, fib8, Component.rowInputVar, Component.rowOperations]
+    simp [circuit_norm, fib8, Component.rowInputVar, Component.rowOperations]
     intro env h
     rcases h with h | h
     · exact Or.inl h
@@ -284,23 +275,23 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
     (List.Subset.refl _)
     (by simp [circuit_norm, bytesComponent, pushBytes])
   |>.addFinishedChannel BytesChannel.toRaw
-  |>.addTable add8Component
-    (by unfold add8Component add8; simp +instances [circuit_norm])
-    (by simp [circuit_norm, add8Component, add8])
-    (by simp [circuit_norm, add8Component, add8, bytesComponent, pushBytes])
+  |>.addTable { circuit := add8 }
+    (by simp [circuit_norm, add8])
+    (by simp [circuit_norm, add8])
+    (by simp [circuit_norm, add8, bytesComponent, pushBytes])
   |>.addFinishedChannel Add8Channel.toRaw
   |>.addVm fibonacciVm
-    (by simp +instances [circuit_norm, fibonacciVm, add8Component, add8, bytesComponent, pushBytes,
+    (by simp +instances [circuit_norm, fibonacciVm, add8, bytesComponent, pushBytes,
       Add8Channel, FibonacciChannel])
-    (by simp +instances [circuit_norm, fibonacciVm, fib8Component, fib8, fibonacciVerifier])
-    (by simp [circuit_norm, fibonacciVm, fib8Component, fib8, fibonacciVerifier,
+    (by simp +instances [circuit_norm, fibonacciVm, fib8, fibonacciVerifier])
+    (by simp [circuit_norm, fibonacciVm, fib8, fibonacciVerifier,
       Add8Channel, FibonacciChannel])
-    (by simp [circuit_norm, fibonacciVm, fib8Component, fib8, add8Component, add8,
+    (by simp [circuit_norm, fibonacciVm, fib8, add8,
       bytesComponent, pushBytes])
   |>.toFormal (fun _ => True)
     (fun (n, x, y) => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val)
     (Ensemble.assumptionsConsistency_of_components _ <| by
-      simp [circuit_norm, fibonacciVm, fib8Component, add8Component, add8, bytesComponent,
+      simp [circuit_norm, fibonacciVm, add8, bytesComponent,
         pushBytes, fib8])
     (by
       intro witness _ spec

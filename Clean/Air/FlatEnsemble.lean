@@ -100,7 +100,7 @@ def VerifierSpec (ens : Ensemble F PublicIO) (publicInput : PublicIO F)
     (data : ProverData F) : Prop :=
   ens.verifier.Spec publicInput data
 
-lemma verifierSoundness (ens : Ensemble F PublicIO) (publicInput : PublicIO F)
+lemma verifierSpec_of_verifierGuarantees (ens : Ensemble F PublicIO) (publicInput : PublicIO F)
     (data : ProverData F) :
     ens.VerifierGuarantees publicInput data → ens.VerifierSpec publicInput data := by
   intro guarantees
@@ -170,7 +170,7 @@ lemma tables_map_component (witness : EnsembleWitness ens) :
   intro i hi hi'
   simp [witness.same_circuits i hi']
 
-lemma tableNamesNodup (witness : EnsembleWitness ens) :
+lemma tableNames_nodup (witness : EnsembleWitness ens) :
     (witness.tables.map (fun table => table.component.circuit.name)).Nodup := by
   rw [show witness.tables.map (fun table => table.component.circuit.name) =
     ens.tables.map (·.circuit.name) by
@@ -184,7 +184,7 @@ lemma data_consistent (witness : EnsembleWitness ens) :
     ∀ table ∈ witness.tables, table.DataConsistency := by
   intro table htable
   rw [Table.DataConsistency, Component.DataConsistency, witness.same_data table htable]
-  exact deriveProverData_eq_of_mem witness.tables witness.tableNamesNodup htable _
+  exact deriveProverData_eq_of_mem witness.tables witness.tableNames_nodup htable _
 
 def toTables (witness : EnsembleWitness ens) : Tables F where
   tables := witness.tables
@@ -210,7 +210,7 @@ lemma getRows_size_of_fixedColumns (witness : EnsembleWitness ens) {component : 
   rw [← witness.tables_map_component, List.mem_map] at hcomponent
   obtain ⟨table, htable, rfl⟩ := hcomponent
   have hmatch := table.fixed_rows_match
-  simp only [Component.fixedRowsMatch, hfixed] at hmatch
+  simp only [Component.FixedRowsMatch, hfixed] at hmatch
   rw [ProverData.getRows, EnsembleWitness.data, ← witness.same_data table htable,
     witness.data_consistent table htable]
   simpa [Component.proverRows] using congrArg List.length hmatch

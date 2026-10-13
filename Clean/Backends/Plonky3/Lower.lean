@@ -58,7 +58,7 @@ def lowerWitness (component operation : ℕ) {width : ℕ}
   | .native _ => .error (.nativeWitness component operation)
   | .ir steps output =>
       if h : witnessProgramWellFormed steps output then
-        .ok { outputWidth := width, steps, output, wellFormed := h }
+        .ok { outputWidth := width, steps, output, well_formed := h }
       else
         .error (.malformedWitnessLocals component operation)
 
@@ -76,7 +76,7 @@ def lowerRowProgram (error : LoweringError) (program : Witgen.RowProgram F) :
       outputWidth := program.width
       steps := program.steps
       output := program.output
-      wellFormed := h
+      well_formed := h
     }
   else
     .error error
