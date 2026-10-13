@@ -2,6 +2,7 @@ module
 
 public import Clean.Air.FlatEnsemble
 public import Clean.Circuit.WitnessGeneration
+public import Mathlib.Data.Nat.Log
 
 @[expose] public section
 
@@ -372,8 +373,9 @@ def GenerationPlan.align (plan : GenerationPlan F) (ensemble : Ensemble F Public
   | some (name, _) => .error (.unknownComponent name)
   | none => plan.rowPlansOf ensemble.tables
 
+/-- The least power of two that is at least the row count and the minimum height. -/
 def Padding.targetHeight (padding : Padding F) (rowCount : ℕ) : ℕ :=
-  (max rowCount padding.minimumRows.toNat).nextPowerOfTwo
+  2 ^ Nat.clog 2 (max rowCount padding.minimumRows.toNat)
 
 /-- `error` unless `condition` holds. -/
 def check (condition : Bool) (error : PlanError) : Option PlanError :=

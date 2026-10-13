@@ -24,7 +24,7 @@ def next (state : Array (F p)) : Array (F p) :=
     ((((state[1]?.getD 0).val + (state[2]?.getD 0).val) % 256 : ℕ) : F p)]
 
 /-- A table height for a run of `steps` steps. -/
-def height (steps : ℕ) : ℕ := (max steps 32).nextPowerOfTwo
+def height (steps : ℕ) : ℕ := 2 ^ Nat.clog 2 (max steps 32)
 
 def vm : Vm (fibonacciEnsemble (p := p)) (plan (p := p)) where
   channel := FibonacciChannel.toRaw

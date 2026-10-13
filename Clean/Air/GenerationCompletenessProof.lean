@@ -12,6 +12,31 @@ the run the plan's author provides. The proof follows the generator: the initial
 balancing under an invariant that every step preserves, padding, and assembly.
 -/
 
+/-! ### Target heights -/
+
+namespace Air.Flat.WitnessGeneration
+
+lemma le_targetHeight {F : Type} (padding : Padding F) (rowCount : ℕ) :
+    rowCount ≤ padding.targetHeight rowCount ∧
+      padding.minimumRows.toNat ≤ padding.targetHeight rowCount := by
+  have := Nat.le_pow_clog (b := 2) (by decide) (max rowCount padding.minimumRows.toNat)
+  exact ⟨le_trans (le_max_left _ _) this, le_trans (le_max_right _ _) this⟩
+
+/-- The target height is the least power of two at least the row count and the minimum. -/
+lemma targetHeight_le {F : Type} (padding : Padding F) {rowCount bound : ℕ}
+    (hpower : ∃ k, bound = 2 ^ k) (hrows : rowCount ≤ bound)
+    (hminimum : padding.minimumRows.toNat ≤ bound) : padding.targetHeight rowCount ≤ bound := by
+  obtain ⟨k, rfl⟩ := hpower
+  exact Nat.pow_le_pow_right (by decide) (Nat.clog_le_of_le_pow (max_le hrows hminimum))
+
+lemma targetHeight_targetHeight {F : Type} (padding : Padding F) (rowCount : ℕ) :
+    padding.targetHeight (padding.targetHeight rowCount) = padding.targetHeight rowCount := by
+  apply le_antisymm
+  · exact targetHeight_le padding ⟨_, rfl⟩ le_rfl (le_targetHeight padding rowCount).2
+  · exact (le_targetHeight padding _).1
+
+end Air.Flat.WitnessGeneration
+
 /-! ### Validation facts -/
 
 namespace Air.Flat.WitnessGeneration
@@ -306,6 +331,7 @@ def RowsOk (k : ℕ) (padded : Bool) (state : ComponentState (F p)) : Prop :=
       ∃ main pad, state.rows = main ++
           List.replicate pad (run.row state.component state.rowPlan.padding.input none) ∧
         (padded = false → pad = 0) ∧
+        (padded = true → main.length + pad = state.rowPlan.padding.targetHeight main.length) ∧
         (state.component = run.complete.vm.component → main = (List.range k).map run.vmRow) ∧
         (state.component ≠ run.complete.vm.component → ∀ row ∈ main, ∃ message count,
           0 < count ∧ message.size = mode.channel.arity ∧ run.Pullable mode.channel message ∧
@@ -730,6 +756,7 @@ def vmNet (state : ComponentState (F p)) (row : GeneratedRow (F p))
 does not answer are side interactions, and its nets on answered channels and the VM channel are
 what its component's mode says. -/
 structure RowFacts (state : ComponentState (F p)) (row : GeneratedRow (F p)) : Prop where
+  eq_row : row = run.row state.component row.input row.origin
   admissible : run.Admissible state.component row.input
   side : ∀ interaction ∈ rowInteractions state row run.data0,
     ¬AnswersPull state interaction.channel.name →
@@ -786,7 +813,7 @@ lemma rowFacts_vmRow {state : ComponentState (F p)} (hok : run.StateOk state)
       (some (demandOrigin run.complete.vm.mode (run.complete.vm.state run.publicInput index) 1)) run.stableData_stable
     rw [hvm] at this
     exact this
-  refine ⟨hvm ▸ hadmissible, ?_, ?_, ?_, ?_⟩
+  refine ⟨by simp [vmRow, row, hvm], hvm ▸ hadmissible, ?_, ?_, ?_, ?_⟩
   · intro interaction hmem _ hname
     rw [hinteractions] at hmem
     exact hfacts.2 interaction hmem (hname hvm)
@@ -835,7 +862,7 @@ lemma rowFacts_answerRow {state : ComponentState (F p)} (hok : run.StateOk state
   have hanswers := run.answersPull_demand hok hvm hmode
   have hmodeChannel : mode.channel.name ≠ run.complete.vm.channel.name := fun h =>
     run.not_answersPull_vmChannel hok ((hanswers _).mpr h.symm)
-  refine ⟨hadmissible, ?_, ?_, ?_, ?_⟩
+  refine ⟨rfl, hadmissible, ?_, ?_, ?_, ?_⟩
   · intro interaction hmem hnot _
     rw [answerRow, hinteractions] at hmem
     exact hside interaction hmem fun h => hnot ((hanswers _).mpr h)
@@ -903,7 +930,7 @@ lemma rowFacts_padding {state : ComponentState (F p)} (hok : run.StateOk state)
     (run.honestEnv_row hok.mem hsize run.stableData) rfl rfl
   have hinteractions := run.rowInteractions_row hok.interactions hok.mem hsize none
     run.stableData_stable
-  refine ⟨hadmissible, fun interaction hmem _ _ => run.sideInteraction_false
+  refine ⟨rfl, hadmissible, fun interaction hmem _ _ => run.sideInteraction_false
     (hside' interaction (hinteractions ▸ hmem)), ?_, ?_, ?_⟩
   · intro channel _ _
     simp [answeredBy, hmode, row]
@@ -984,7 +1011,7 @@ lemma rowFacts_preallocated {state : ComponentState (F p)} (hok : run.StateOk st
     intro handler interaction hinteraction
     obtain ⟨hlt, heq⟩ := List.getElem?_eq_some_iff.mp hinteraction
     exact ⟨by omega, by simp [rowInts, interactionsIn, heq]⟩
-  refine ⟨hadmissible, ?_, ?_, ?_, ?_⟩
+  refine ⟨rfl, hadmissible, ?_, ?_, ?_, ?_⟩
   · intro interaction hmem hnot _
     rw [hinteractions] at hmem
     obtain ⟨index, hindex, rfl⟩ := List.getElem_of_mem hmem
@@ -1114,7 +1141,7 @@ lemma rowFacts_of_rowsOk {k : ℕ} {padded : Bool} {state : ComponentState (F p)
     exact run.rowFacts_preallocated hok hmode (run.admissible_of_reachable hok hmode hreachable
       (run.admissible_baseInput hok hmode j))
   · rename_i mode hmode
-    obtain ⟨main, pad, hrowsEq, -, hvm, hanswer⟩ := hrows
+    obtain ⟨main, pad, hrowsEq, -, -, hvm, hanswer⟩ := hrows
     rw [hrowsEq, List.mem_append] at hrow
     rcases hrow with hrow | hrow
     · by_cases hcomponent : state.component = run.complete.vm.component
@@ -1282,6 +1309,154 @@ structure Inv (k : ℕ) (padded : Bool) (balancing : Balancing (F p)) : Prop whe
     run.answeredMsgs balancing.states channel = run.pulledMsgs balancing.states channel
 
 
+omit [Fact p.Prime] in
+lemma mem_sum_map {α : Type*} {β : Type} {values : List α} {f : α → Multiset β} {b : β}
+    (h : b ∈ (values.map f).sum) : ∃ a ∈ values, b ∈ f a := by
+  induction values with
+  | nil => simp at h
+  | cons head rest ih =>
+      simp only [List.map_cons, List.sum_cons, Multiset.mem_add] at h
+      rcases h with h | h
+      · exact ⟨head, List.mem_cons_self .., h⟩
+      · obtain ⟨a, ha, hb⟩ := ih h
+        exact ⟨a, List.mem_cons_of_mem _ ha, hb⟩
+
+lemma mem_pullsOf {interactions : List (Interaction (F p))} {channel : String}
+    {message : Array (F p)} (h : message ∈ pullsOf interactions channel) :
+    ∃ interaction ∈ interactions, interaction.channel.name = channel ∧
+      interaction.assumeGuarantees = true ∧ interaction.mult = -1 ∧ interaction.msg = message := by
+  simp only [pullsOf, Multiset.mem_coe, List.mem_map, List.mem_filter, decide_eq_true_eq] at h
+  obtain ⟨interaction, ⟨hmem, hname, hguarantees, hmult⟩, rfl⟩ := h
+  exact ⟨interaction, hmem, hname, hguarantees, hmult, rfl⟩
+
+/-- A pulled message has a component answering its channel, and is pullable on the declared
+channel of that name. -/
+lemma pulled_facts {states : List (ComponentState (F p))} (hstates : run.StatesOk states)
+    {channel : String} (hchannel : channel ≠ run.complete.vm.channel.name) {message : Array (F p)}
+    (hmessage : message ∈ run.pulledMsgs states channel) :
+    Answers ens.ensemble plan false channel ∧
+      ∀ declared ∈ ens.ensemble.channels, declared.name = channel →
+        run.Pullable declared message := by
+  rcases Multiset.mem_add.mp hmessage with hverifier | hrows
+  · obtain ⟨interaction, hmem, hname, -, hmult, rfl⟩ := mem_pullsOf hverifier
+    obtain ⟨hside, hguarantees⟩ := run.verifier_side hmem (hname ▸ hchannel)
+    have hmult' : interaction.mult ≠ 0 := by rw [hmult]; exact neg_ne_zero.mpr one_ne_zero
+    refine ⟨?_, fun declared hdeclared hdeclaredName data hstable vector hvector => ?_⟩
+    · rcases hside with hzero | ⟨-, -, hanswers⟩
+      · exact absurd hzero hmult'
+      · exact hname ▸ hanswers
+    · have hchannelEq := run.verifier_channel_eq hmem hdeclared (hname.trans hdeclaredName.symm)
+      subst hchannelEq
+      have hvector' : vector = interaction.msgVector := Vector.toArray_inj.mp hvector
+      subst hvector'
+      exact hguarantees data hstable hmult'
+  · obtain ⟨state, hstate, hrow⟩ := mem_sum_map hrows
+    obtain ⟨row, hrowMem, hpulled⟩ := mem_sum_map hrow
+    obtain ⟨hok, hfacts⟩ := hstates state hstate
+    have hrowFacts := hfacts row hrowMem
+    unfold pulledBy at hpulled
+    split at hpulled
+    · simp at hpulled
+    rename_i hnot
+    obtain ⟨interaction, hmem, hname, -, hmult, rfl⟩ := mem_pullsOf hpulled
+    have hmult' : interaction.mult ≠ 0 := by rw [hmult]; exact neg_ne_zero.mpr one_ne_zero
+    refine ⟨?_, fun declared hdeclared hdeclaredName => ?_⟩
+    · rcases hrowFacts.side interaction hmem (hname ▸ hnot) (fun _ => hname ▸ hchannel) with
+        hzero | ⟨-, -, hanswers⟩
+      · exact absurd hzero hmult'
+      · exact hname ▸ hanswers
+    · rw [hrowFacts.eq_row, run.rowInteractions_row hok.interactions hok.mem
+        hrowFacts.admissible.size _ run.stableData_stable] at hmem
+      exact run.pullable_of_row hok.mem hrowFacts.admissible hmem hdeclared
+        (hname.trans hdeclaredName.symm) hmult'
+
+/-! ### Row bounds -/
+
+lemma card_pullsOf_map (interactions : List (AbstractInteraction (F p))) (env : Environment (F p))
+    (channel : String) :
+    Multiset.card (pullsOf (interactions.map (·.eval env)) channel) ≤
+      (interactions.filter fun interaction =>
+        interaction.channel.name == channel && interaction.assumeGuarantees).length := by
+  simp only [pullsOf, Multiset.coe_card, List.length_map, List.filter_map, Function.comp_def]
+  apply List.Sublist.length_le
+  apply List.monotone_filter_right
+  intro interaction h
+  have h' := of_decide_eq_true h
+  simp only [Bool.and_eq_true, beq_iff_eq]
+  exact ⟨h'.1, h'.2.1⟩
+
+omit [Fact p.Prime] in
+lemma card_list_sum {α : Type} (values : List (Multiset α)) :
+    Multiset.card values.sum = (values.map Multiset.card).sum := by
+  induction values with
+  | nil => simp
+  | cons head rest ih => simp [ih]
+
+lemma card_pulledBy_le {state : ComponentState (F p)} (hok : run.StateOk state)
+    (row : GeneratedRow (F p)) (channel : String) :
+    Multiset.card (run.pulledBy state row channel) ≤
+      if AnswersPull state channel then 0 else pullsOn state.component channel := by
+  unfold pulledBy
+  split
+  · simp
+  · simp only [rowInteractions, hok.interactions]
+    exact card_pullsOf_map _ _ channel
+
+lemma card_pulledMsgs_le {states : List (ComponentState (F p))}
+    (hok : ∀ state ∈ states, run.StateOk state) (channel : String) :
+    Multiset.card (run.pulledMsgs states channel) ≤
+      verifierPullsOn ens.ensemble channel + (states.map fun state =>
+        if AnswersPull state channel then 0
+        else state.rows.length * pullsOn state.component channel).sum := by
+  simp only [pulledMsgs, Multiset.card_add]
+  apply Nat.add_le_add
+  · exact card_pullsOf_map _ _ channel
+  · rw [card_list_sum]
+    simp only [List.map_map, Function.comp_def]
+    apply List.sum_le_sum
+    intro state hstate
+    rw [card_list_sum]
+    simp only [List.map_map, Function.comp_def]
+    calc (state.rows.map fun row => Multiset.card (run.pulledBy state row channel)).sum
+        ≤ (state.rows.map fun _ => if AnswersPull state channel then 0
+            else pullsOn state.component channel).sum :=
+          List.sum_le_sum fun row _ => run.card_pulledBy_le (hok state hstate) row channel
+      _ = _ := by split <;> simp
+
+/-- The row bounds of the run. -/
+abbrev bound : String → ℕ := run.complete.rowBound run.steps
+
+omit [Fact p.Prime] in
+lemma padded_le {F : Type} {padding : Padding F} {padded : Bool} {main pad bound : ℕ}
+    (hpower : ∃ k, bound = 2 ^ k) (hminimum : padding.minimumRows.toNat ≤ bound)
+    (hmain : main ≤ bound) (hpad : padded = false → pad = 0)
+    (htarget : padded = true → main + pad = padding.targetHeight main) : main + pad ≤ bound := by
+  cases padded
+  · rw [hpad rfl]; simpa using hmain
+  · rw [htarget rfl]; exact targetHeight_le padding hpower hmain hminimum
+
+lemma card_answeredBy_ge {state : ComponentState (F p)} {mode : DemandMode (F p)}
+    (hmode : state.rowPlan.mode = .demand mode) {main : List (GeneratedRow (F p))} {pad : ℕ}
+    (hrows : state.rows = main ++
+      List.replicate pad (run.row state.component state.rowPlan.padding.input none))
+    (hanswer : ∀ row ∈ main, ∃ message count, 0 < count ∧ row = run.answerRow state.component mode
+      message count) :
+    main.length ≤
+      Multiset.card ((state.rows.map fun row => run.answeredBy state row mode.channel.name).sum) := by
+  rw [card_list_sum, hrows, List.map_append, List.map_append, List.sum_append]
+  have hpadding : ((List.replicate pad (run.row state.component state.rowPlan.padding.input none)).map
+      (fun row => run.answeredBy state row mode.channel.name)).map Multiset.card = List.replicate pad 0 := by
+    simp [answeredBy, hmode, row]
+  rw [List.map_map, hpadding, List.sum_replicate, smul_zero, add_zero]
+  calc main.length = (main.map fun _ => 1).sum := by simp
+    _ ≤ _ := by
+      apply List.sum_le_sum
+      intro row hrow
+      obtain ⟨message, count, hcount, rfl⟩ := hanswer row hrow
+      simp [answeredBy, hmode, answerRow, row, demandOrigin]
+      omega
+
+
 namespace Inv
 
 variable {run} {k : ℕ} {padded : Bool} {balancing : Balancing (F p)}
@@ -1299,7 +1474,7 @@ lemma vm_rows (hinv : run.Inv k padded balancing) {state : ComponentState (F p)}
   have hplan := StateOk.vm_rowPlan run hok hvm
   have hrows := hinv.rows state hstate
   simp only [RowsOk, hplan] at hrows
-  obtain ⟨main, pad, hrowsEq, -, hmain, -⟩ := hrows
+  obtain ⟨main, pad, hrowsEq, -, -, hmain, -⟩ := hrows
   exact ⟨pad, by rw [hrowsEq, hmain hvm]⟩
 
 /-- On the VM channel, all interactions net the state after `k` steps against the final state. -/
@@ -1349,6 +1524,105 @@ lemma net_vm (hinv : run.Inv k padded balancing) (message : Array (F p)) :
     by_cases hfinal : message = run.complete.vm.final run.publicInput <;>
     by_cases hstate : message = run.complete.vm.next^[k] (run.complete.vm.initial run.publicInput) <;>
     simp [hinitial, hfinal, hstate]
+
+/-- The VM and preallocated components stay within their row bounds. -/
+lemma rows_le_bound_direct (hinv : run.Inv k padded balancing) {state : ComponentState (F p)}
+    (hstate : state ∈ balancing.states)
+    (hdirect : state.component = run.complete.vm.component ∨
+      ∃ mode, state.rowPlan.mode = .preallocated mode) :
+    state.rows.length ≤ run.bound state.component.circuit.name := by
+  have hok := run.stateOk_of_shape hinv.shape hstate
+  obtain ⟨hpower, hminimum, -, hmode⟩ := run.bounds.row_plan state.component hok.mem state.rowPlan
+    (run.planned _ hok.entry)
+  have hrows := hinv.rows state hstate
+  unfold RowsOk at hrows
+  split at hrows
+  · rename_i mode hmodeEq
+    simp only [hmodeEq] at hmode
+    rw [hrows.1]
+    split
+    · exact targetHeight_le _ hpower hmode hminimum
+    · exact hmode
+  · rename_i mode hmodeEq
+    obtain ⟨main, pad, hrowsEq, hpad, htarget, hvm, -⟩ := hrows
+    rcases hdirect with hcomponent | ⟨mode', hmode'⟩
+    · rw [hrowsEq, List.length_append, List.length_replicate]
+      apply padded_le hpower hminimum _ hpad htarget
+      rw [hvm hcomponent, List.length_map, List.length_range, hcomponent]
+      exact le_trans hinv.steps_le run.bounds.steps_le
+    · rw [hmodeEq] at hmode'
+      cases hmode'
+
+/-- Every component stays within its row bound: demand-driven components answer pulls of
+components of lower rank. -/
+lemma rows_le_bound (hinv : run.Inv k padded balancing) :
+    ∀ state ∈ balancing.states, state.rows.length ≤ run.bound state.component.circuit.name := by
+  suffices h : ∀ rank, ∀ state ∈ balancing.states,
+      run.complete.rank state.component.circuit.name = rank →
+        state.rows.length ≤ run.bound state.component.circuit.name from
+    fun state hstate => h _ state hstate rfl
+  intro rank
+  induction rank using Nat.strong_induction_on with
+  | _ rank ih =>
+  intro state hstate hrank
+  have hok := run.stateOk_of_shape hinv.shape hstate
+  by_cases hdirect : state.component = run.complete.vm.component ∨
+      ∃ mode, state.rowPlan.mode = .preallocated mode
+  · exact hinv.rows_le_bound_direct hstate hdirect
+  push Not at hdirect
+  obtain ⟨hcomponent, hnotPreallocated⟩ := hdirect
+  obtain ⟨hpower, hminimum, -, hmode⟩ := run.bounds.row_plan state.component hok.mem state.rowPlan
+    (run.planned _ hok.entry)
+  have hrows := hinv.rows state hstate
+  unfold RowsOk at hrows
+  split at hrows
+  · rename_i mode hmodeEq
+    exact absurd hmodeEq (hnotPreallocated mode)
+  rename_i mode hmodeEq
+  simp only [hmodeEq] at hmode
+  rcases hmode with hmode | hmode
+  · exact absurd hmode hcomponent
+  obtain ⟨main, pad, hrowsEq, hpad, htarget, -, hanswer⟩ := hrows
+  rw [hrowsEq, List.length_append, List.length_replicate]
+  apply padded_le hpower hminimum _ hpad htarget
+  refine le_trans ?_ hmode
+  have hanswers := run.answersPull_demand hok hcomponent hmodeEq
+  have hchannel : mode.channel.name ≠ run.complete.vm.channel.name := fun h =>
+    run.not_answersPull_vmChannel hok ((hanswers _).mpr h.symm)
+  have hmain := run.card_answeredBy_ge hmodeEq hrowsEq fun row hrow => by
+    obtain ⟨message, count, hcount, -, -, -, h⟩ := hanswer hcomponent row hrow
+    exact ⟨message, count, hcount, h⟩
+  have hstateLe : (state.rows.map fun row => run.answeredBy state row mode.channel.name).sum ≤
+      run.answeredMsgs balancing.states mode.channel.name :=
+    List.le_sum_of_mem (List.mem_map_of_mem (f := fun state => (state.rows.map fun row =>
+      run.answeredBy state row mode.channel.name).sum) hstate)
+  have hpulled := run.card_pulledMsgs_le (fun state hstate => run.stateOk_of_shape hinv.shape hstate)
+    (states := balancing.states) mode.channel.name
+  refine le_trans hmain (le_trans (Multiset.card_le_card hstateLe) (le_trans
+    (Multiset.card_le_card (hinv.answered_le _ hchannel)) (le_trans hpulled ?_)))
+  apply Nat.add_le_add_left
+  rw [← run.components_eq hinv.shape, List.map_map]
+  apply List.sum_le_sum
+  intro other hother
+  have hokOther := run.stateOk_of_shape hinv.shape hother
+  simp only [Function.comp_apply]
+  split
+  · exact Nat.zero_le _
+  rename_i hnot
+  by_cases hpulls : pullsOn other.component mode.channel.name = 0
+  · simp [hpulls]
+  apply Nat.mul_le_mul_right
+  by_cases hdirect : other.component = run.complete.vm.component ∨
+      ∃ mode, other.rowPlan.mode = .preallocated mode
+  · exact hinv.rows_le_bound_direct hother hdirect
+  push Not at hdirect
+  obtain ⟨hotherVm, hotherNotPreallocated⟩ := hdirect
+  rcases hotherMode : other.rowPlan.mode with otherMode | otherMode
+  · have hlt := run.complete.acyclic state.component hok.mem state.rowPlan mode
+      (run.planned _ hok.entry) hmodeEq hcomponent other.component hokOther.mem other.rowPlan
+      otherMode (run.planned _ hokOther.entry) hotherMode hotherVm (Nat.pos_of_ne_zero hpulls)
+    exact ih _ (hrank ▸ hlt) other hother rfl
+  · exact absurd hotherMode (hotherNotPreallocated otherMode)
 
 end Inv
 

@@ -160,7 +160,7 @@ structure RowBounds (ens : FormalEnsemble (F p) PublicIO) (plan : GenerationPlan
   row_plan : ∀ component ∈ ens.ensemble.tables, ∀ rowPlan,
     (component.circuit.name, rowPlan) ∈ plan.components →
       let rows := bound component.circuit.name
-      rows.isPowerOfTwo ∧ rowPlan.padding.minimumRows.toNat ≤ rows ∧ rows ≤ UInt64.size ∧
+      (∃ k, rows = 2 ^ k) ∧ rowPlan.padding.minimumRows.toNat ≤ rows ∧ rows ≤ UInt64.size ∧
       match rowPlan.mode with
       | .preallocated mode => mode.rows.toNat ≤ rows
       | .demand mode =>
