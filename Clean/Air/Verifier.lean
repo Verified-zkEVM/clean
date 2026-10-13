@@ -65,7 +65,7 @@ lemma circuitOperations_interactions (operations : Operations F) :
           Operation.interaction operation :: interactions operations
       rw [ih]
 
-lemma inChannelsOrGuaranteesFull (operations : Operations F) (env : Environment F) :
+lemma circuitOperations_inChannelsOrGuaranteesFull (operations : Operations F) (env : Environment F) :
     operations.circuitOperations.InChannelsOrGuaranteesFull
       operations.channelsWithGuarantees env := by
   rw [_root_.Operations.InChannelsOrGuaranteesFull, circuitOperations_interactions]
@@ -84,7 +84,7 @@ lemma inChannelsOrGuaranteesFull (operations : Operations F) (env : Environment 
       Bool.eq_false_of_not_eq_true assumes
     simpa only [assumes_false, Bool.false_eq_true, if_false] using otherSide env
 
-lemma inChannelsOrRequirementsFull (operations : Operations F) (env : Environment F) :
+lemma circuitOperations_inChannelsOrRequirementsFull (operations : Operations F) (env : Environment F) :
     operations.circuitOperations.InChannelsOrRequirementsFull
       operations.channelsWithRequirements env := by
   rw [_root_.Operations.InChannelsOrRequirementsFull, circuitOperations_interactions]

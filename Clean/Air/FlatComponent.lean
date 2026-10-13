@@ -345,7 +345,7 @@ def Assumptions (table : Table F) : Prop :=
   ∀ row ∈ table.table,
     table.component.RowAssumptions (table.environment row)
 
-lemma circuitAssumptions (table : Table F) (consistent : table.DataConsistency)
+lemma circuitAssumptions_of_dataConsistency (table : Table F) (consistent : table.DataConsistency)
     (assumptions : table.Assumptions)
     (row : Array F) (hrow : row ∈ table.table) :
     table.component.CircuitAssumptions (table.environment row) := by
@@ -587,10 +587,10 @@ theorem weakSoundness {table : Table F} (consistent : table.DataConsistency) :
   intro assumptions constraints guarantees
   constructor
   · intro row hrow
-    exact (table.component.weakSoundness (table.circuitAssumptions consistent assumptions row hrow)
+    exact (table.component.weakSoundness (table.circuitAssumptions_of_dataConsistency consistent assumptions row hrow)
       (constraints row hrow) (guarantees row hrow)).left
   · intro row hrow
-    exact (table.component.weakSoundness (table.circuitAssumptions consistent assumptions row hrow)
+    exact (table.component.weakSoundness (table.circuitAssumptions_of_dataConsistency consistent assumptions row hrow)
       (constraints row hrow) (guarantees row hrow)).right
 
 /--
@@ -617,7 +617,7 @@ lemma requirements_of_partial_guarantees_of_constraints {table : Table F}
     intro i hi _
     exact this i hi
   suffices table.component.operations.FullGuarantees env from
-    table.component.weakSoundness (table.circuitAssumptions consistent assumptions row h_row)
+    table.component.weakSoundness (table.circuitAssumptions_of_dataConsistency consistent assumptions row h_row)
       (constraints row h_row) this |>.right
   simp only [Component.guarantees_iff, Component.rowOperations]
   rw [GeneralFormalCircuit.guarantees_iff]

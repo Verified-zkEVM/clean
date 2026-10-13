@@ -853,7 +853,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
           exact (reqs_disjoint channel channel_mem).2 table h_table)⟩
     · right
       rw [Ensemble.addVm_verifier, List.flatMap_singleton,
-        Air.Flat.verifier_channelInterface_requirements]
+        Air.Flat.verifier_channelInterface_channelsWithRequirements]
       exact (reqs_disjoint channel channel_mem).1
   have partial_balance : ∀ channel ∈ finished,
       PartialBalancedChannel witness.toTables channel := by
@@ -880,7 +880,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
       table.ChannelRequirements channel := by
     intro channel channel_mem table table_mem
     refine spec_and_guarantees_of_soundChannels (witness := oldContext)
-      ?soundChannels (fun table h_table => witness.data_consistent table (List.mem_of_mem_drop h_table))
+      ?soundChannels (fun table h_table => witness.dataConsistency_of_mem table (List.mem_of_mem_drop h_table))
       old_assumptions old_constraints old_partial_balance table table_mem
       |>.right channel channel_mem |>.right
     have old_sound_channels : _root_.SoundChannels ens.tables finished := ⟨
@@ -905,7 +905,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
   -- and use it in `verifier_guarantees`
   have reqs_of_grts (table) (h_table : table ∈ witness.vmTables) :=
     table.requirements_of_partial_guarantees_of_constraints (unfinished := vmChannel)
-    (witness.data_consistent table (List.mem_of_mem_take h_table))
+    (witness.dataConsistency_of_mem table (List.mem_of_mem_take h_table))
     (vm_assumptions table h_table) (vm_constraints table h_table)
     (grts_subset_all table h_table) (finished_grts table h_table)
   have verifier_requirements :
@@ -942,7 +942,7 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
     rcases List.mem_cons.mp (grts_subset.1 h_channel) with rfl | h_finished
     · exact vm_verifier_guarantees
     · exact finished_verifier_guarantees channel h_finished
-  · exact vm.verifier.operations.inChannelsOrGuaranteesFull _
+  · exact vm.verifier.operations.circuitOperations_inChannelsOrGuaranteesFull _
 end Ensemble
 
 namespace SoundEnsemble

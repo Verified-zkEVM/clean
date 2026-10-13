@@ -34,15 +34,15 @@ instance : HasChannelInterface F (Verifier.Program F PublicIO) where
     { channelsWithGuarantees := verifier.channelsWithGuarantees
       channelsWithRequirements := verifier.channelsWithRequirements }
 
-@[circuit_norm] lemma component_channelInterface (component : Component F) :
+@[circuit_norm] lemma component_channelInterface_channelsWithGuarantees (component : Component F) :
     (channelInterface component).channelsWithGuarantees =
       component.circuit.channelsWithGuarantees := rfl
-@[circuit_norm] lemma component_channelInterface_requirements (component : Component F) :
+@[circuit_norm] lemma component_channelInterface_channelsWithRequirements (component : Component F) :
     (channelInterface component).channelsWithRequirements =
       component.circuit.channelsWithRequirements := rfl
-@[circuit_norm] lemma verifier_channelInterface (verifier : Verifier.Program F PublicIO) :
+@[circuit_norm] lemma verifier_channelInterface_channelsWithGuarantees (verifier : Verifier.Program F PublicIO) :
     (channelInterface verifier).channelsWithGuarantees = verifier.channelsWithGuarantees := rfl
-@[circuit_norm] lemma verifier_channelInterface_requirements
+@[circuit_norm] lemma verifier_channelInterface_channelsWithRequirements
     (verifier : Verifier.Program F PublicIO) :
     (channelInterface verifier).channelsWithRequirements = verifier.channelsWithRequirements := rfl
 
@@ -123,7 +123,7 @@ lemma verifierChannelRequirements_of_not_mem
   intro h_not_mem
   exact Operations.requirements_of_not_mem ens.verifierOperations
     ens.verifier.channelsWithRequirements (.fromInput publicInput data)
-    (ens.verifier.operations.inChannelsOrRequirementsFull _) channel h_not_mem
+    (ens.verifier.operations.circuitOperations_inChannelsOrRequirementsFull _) channel h_not_mem
 
 lemma verifierChannelGuarantees_of_not_mem
     (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : ProverData F)
@@ -133,7 +133,7 @@ lemma verifierChannelGuarantees_of_not_mem
   intro h_not_mem
   exact Operations.guarantees_of_not_mem ens.verifierOperations
     ens.verifier.channelsWithGuarantees (.fromInput publicInput data)
-    (ens.verifier.operations.inChannelsOrGuaranteesFull _) channel h_not_mem
+    (ens.verifier.operations.circuitOperations_inChannelsOrGuaranteesFull _) channel h_not_mem
 
 def channelsWithGuarantees (ens : Ensemble F PublicIO) : List (RawChannel F) :=
   ens.verifier.channelsWithGuarantees ++
@@ -180,7 +180,7 @@ lemma tableNames_nodup (witness : EnsembleWitness ens) :
           congrArg (List.map (·.circuit.name)) witness.tables_map_component]
   exact ens.unique_names
 
-lemma data_consistent (witness : EnsembleWitness ens) :
+lemma dataConsistency_of_mem (witness : EnsembleWitness ens) :
     ∀ table ∈ witness.tables, table.DataConsistency := by
   intro table htable
   rw [Table.DataConsistency, Component.DataConsistency, witness.same_data table htable]
@@ -197,7 +197,7 @@ def toTables (witness : EnsembleWitness ens) : Tables F where
   witness.toTables.data = witness.data := rfl
 
 @[circuit_norm]
-lemma mem_component_of_mem {witness : EnsembleWitness ens} {table : Table F} :
+lemma component_mem_tables_of_mem {witness : EnsembleWitness ens} {table : Table F} :
     table ∈ witness.tables → table.component ∈ ens.tables := by
   rw [← witness.tables_map_component]
   grind
@@ -212,7 +212,7 @@ lemma getRows_size_of_fixedColumns (witness : EnsembleWitness ens) {component : 
   have hmatch := table.fixed_rows_match
   simp only [Component.FixedRowsMatch, hfixed] at hmatch
   rw [ProverData.getRows, EnsembleWitness.data, ← witness.same_data table htable,
-    witness.data_consistent table htable]
+    witness.dataConsistency_of_mem table htable]
   simpa [Component.proverRows] using congrArg List.length hmatch
 
 def Constraints {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Prop :=
@@ -432,7 +432,7 @@ lemma assumptionsConsistency_of_components (ens : Ensemble F PublicIO)
       ∀ component ∈ ens.tables, ∀ input data, component.Assumptions input data) :
     ens.AssumptionsConsistency Assumptions := by
   intro witness assumptions table htable row _
-  exact h _ assumptions _ (EnsembleWitness.mem_component_of_mem htable) _ _
+  exact h _ assumptions _ (EnsembleWitness.component_mem_tables_of_mem htable) _ _
 
 theorem soundness_of_tableSoundness_and_specConsistency (ens : Ensemble F PublicIO)
   (Assumptions Spec : PublicIO F → Prop) :

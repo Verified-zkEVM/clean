@@ -679,7 +679,7 @@ theorem tableSoundness_of_soundChannels {ens : Ensemble F PublicIO} :
   have table_results := spec_and_guarantees_of_soundChannels
     (witness := witness.toTables) (by
       simpa only [EnsembleWitness.toTables_tables,
-        witness.tables_map_component] using table_sound_channels) witness.data_consistent assumptions
+        witness.tables_map_component] using table_sound_channels) witness.dataConsistency_of_mem assumptions
     constraints partial_balance
   have verifier_channel_guarantees : ∀ channel ∈ finished,
       ens.VerifierChannelGuarantees witness.publicInput witness.data channel := by
@@ -697,7 +697,7 @@ theorem tableSoundness_of_soundChannels {ens : Ensemble F PublicIO} :
     · intro channel h_channel
       exact verifier_channel_guarantees channel
         ((ens.channelsWithGuarantees_subset_iff.mp soundChannels.left).left h_channel)
-    · exact ens.verifier.operations.inChannelsOrGuaranteesFull _
+    · exact ens.verifier.operations.circuitOperations_inChannelsOrGuaranteesFull _
   exact ⟨ens.verifierSpec_of_verifierGuarantees witness.publicInput witness.data verifier_guarantees,
     fun table h_table => (table_results table h_table).left⟩
 
@@ -739,7 +739,7 @@ theorem orderedChannels_of_soundChannels_addTable (ens : Ensemble F PublicIO)
     exact ⟨Or.inr (reqs_disjoint_finished channel h_channel),
       (h_sound.right.left channel h_channel).right.left,
       Or.inr (by
-        rw [List.flatMap_singleton, Air.Flat.component_channelInterface_requirements]
+        rw [List.flatMap_singleton, Air.Flat.component_channelInterface_channelsWithRequirements]
         exact reqs_disjoint_finished channel h_channel)⟩
   · rw [Ensemble.addTable_verifier]
     right
@@ -781,7 +781,7 @@ theorem orderedChannels_of_soundChannels_merge (ens1 ens2 : Ensemble F PublicIO)
         exact no_table_requirements table h_table)⟩
   · rw [Ensemble.merge_tables, Ensemble.merge_verifier]
     right
-    rw [List.flatMap_singleton, Air.Flat.verifier_channelInterface_requirements]
+    rw [List.flatMap_singleton, Air.Flat.verifier_channelInterface_channelsWithRequirements]
     exact no_requirements.left
 
 theorem soundChannels_markFinished (ens : Ensemble F PublicIO)
@@ -807,7 +807,7 @@ theorem soundChannels_markFinished (ens : Ensemble F PublicIO)
       have no_table_guarantees : ∀ table ∈ ens.tables,
           channel ∉ (channelInterface table).channelsWithGuarantees := by
         intro table h_table
-        rw [Air.Flat.component_channelInterface]
+        rw [Air.Flat.component_channelInterface_channelsWithGuarantees]
         intro h_guarantee
         exact no_guarantees.right ⟨table, h_table, h_guarantee⟩
       exact ⟨Or.inl no_guarantees.left,
