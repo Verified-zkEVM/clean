@@ -3999,7 +3999,7 @@ end Air.Flat.WitnessGeneration
 namespace Air.Flat.WitnessGeneration
 
 /-- Assembly succeeds on states whose rows fit the components. -/
-lemma assembleTables_ok {F : Type} [FiniteField F] :
+lemma assembleTables_map_ok {F : Type} [FiniteField F] :
     ∀ (states : List (ComponentState F)),
       (∀ state ∈ states, state.rows.length ≤ UInt64.size ∧
         (∀ row ∈ state.rows, row.values.size = state.component.width) ∧
@@ -4010,7 +4010,7 @@ lemma assembleTables_ok {F : Type} [FiniteField F] :
   | [], _ => ⟨_, rfl, rfl⟩
   | state :: states, hstates => by
       obtain ⟨hlength, hwidth, hfixed⟩ := hstates state (List.mem_cons_self ..)
-      obtain ⟨rest, hrest, hrestTables⟩ := assembleTables_ok states fun state hstate =>
+      obtain ⟨rest, hrest, hrestTables⟩ := assembleTables_map_ok states fun state hstate =>
         hstates state (List.mem_cons_of_mem _ hstate)
       have hvalidate : ∃ matched, validateFixedRows state.component
           (state.rows.map (·.values)) = .ok matched := by
@@ -4025,5 +4025,97 @@ lemma assembleTables_ok {F : Type} [FiniteField F] :
         dif_pos (by simpa using hwidth)]
       simp only [hmatched, hrest, bind, Except.bind, pure, Except.pure]
       exact ⟨_, rfl, by simp [hrestTables]⟩
+
+lemma assembleTables_ok {F : Type} [FiniteField F] {states : List (ComponentState F)}
+    (hstates : ∀ state ∈ states, state.rows.length ≤ UInt64.size ∧
+      (∀ row ∈ state.rows, row.values.size = state.component.width) ∧
+      state.component.fixedRowsMatch (state.rows.map (·.values)))
+    {components : List (Component F)} (hcomponents : states.map (·.component) = components) :
+    ∃ assembled, assembleTables components states = .ok assembled ∧
+      assembled.tables.map (fun table => (table.component, table.table)) =
+        states.map fun state => (state.component, state.rows.map (·.values)) := by
+  subst hcomponents
+  exact assembleTables_map_ok states hstates
+
+end Air.Flat.WitnessGeneration
+
+namespace Air.Flat.WitnessGeneration
+
+variable {p : ℕ} [Fact p.Prime] {PublicIO : TypeMap} [ProvableType PublicIO]
+
+/-- Witness generation is complete: for inputs satisfying the ensemble's prover assumptions, a
+complete plan generates a witness with the given public input that satisfies the constraints and
+balances every channel. -/
+theorem generate_complete {ens : FormalEnsemble (F p) PublicIO} {plan : GenerationPlan (F p)}
+    (complete : CompletePlan ens plan) {publicInput : PublicIO (F p)}
+    {proverInput : ens.ProverInput (F p)} (h : ens.ProverAssumptions publicInput proverInput) :
+    ∃ witness, generate ens plan publicInput proverInput = .ok witness ∧
+      witness.publicInput = publicInput ∧ witness.Constraints ∧ witness.BalancedChannels := by
+  obtain ⟨validPlan, hvalidated⟩ := complete.valid
+  obtain ⟨steps, hreaches, hdistinct, hassumptions, hbounds⟩ :=
+    complete.run publicInput proverInput h
+  let run : Run ens plan := {
+    complete := complete
+    validPlan := validPlan
+    validated := hvalidated
+    publicInput := publicInput
+    proverInput := proverInput
+    assumptions := h
+    steps := steps
+    reaches := hreaches
+    distinct := hdistinct
+    vm_assumptions := hassumptions
+    bounds := hbounds }
+  obtain ⟨k₁, balanced, hbalance, hinv₁, hsettled₁⟩ :=
+    run.balance_ok run.initialBalancing 0 run.initial_inv
+  obtain ⟨k₂, padded, hpad, hinv₂, -⟩ := run.padAndBalance_ok hinv₁ hsettled₁
+  obtain ⟨assembled, hassemble, htables⟩ :=
+    assembleTables_ok (run.final_tables hinv₂) (run.components_eq hinv₂.shape)
+  have hinit : initialStates validPlan (ens.hint proverInput) = (run.initial, run.data0) :=
+    run.initialStates_eq
+  have hbalance' : balance run.data0 (ens.hint proverInput) {
+      states := run.initial
+      demands := Demand.addInteractions []
+        (ens.ensemble.verifierOperations.interactionValues (.fromInput publicInput run.data0) ++
+          run.initial.flatMap fun state => state.rows.flatMap (rowInteractions state · run.data0))
+      interactions := (ens.ensemble.verifierOperations.interactionValues
+        (.fromInput publicInput run.data0) ++
+          run.initial.flatMap fun state => state.rows.flatMap (rowInteractions state · run.data0)).length
+    } = .ok balanced := hbalance
+  have hpad' : padAndBalance run.data0 (ens.hint proverInput) balanced = .ok padded := hpad
+  have hgenerate : generate ens plan publicInput proverInput =
+      generateValid validPlan publicInput (ens.hint proverInput) := by
+    simp only [generate, hvalidated]
+  let witness : EnsembleWitness ens.ensemble := {
+    tables := assembled.tables
+    publicInput := publicInput
+    same_length := assembled.same_length
+    same_circuits := assembled.same_circuits }
+  have hinteractions : padded.states.map (·.interactions) =
+      ens.ensemble.tables.map (·.rowOperations.interactions) := by
+    rw [← run.components_eq hinv₂.shape, List.map_map]
+    apply List.map_congr_left
+    intro state hstate
+    exact (run.stateOk_of_shape hinv₂.shape hstate).interactions
+  have hlength : witness.interactions.length < FiniteField.char (F p) := by
+    have hbound := hinv₂.length_lt
+    have hrows := assembleTables_interactions hassemble hinteractions run.data0 witness.data
+    simp only [EnsembleWitness.interactions, List.length_append, Operations.interactionValues,
+      List.length_map, witness] at hrows ⊢
+    rw [hrows]
+    simp only [List.length_append, Run.verifier, Operations.interactionValues,
+      List.length_map] at hbound
+    show _ < p
+    omega
+  have hgenerated : generateValid validPlan publicInput (ens.hint proverInput) = .ok witness := by
+    simp only [generateValid, hinit, bind, Except.bind]
+    rw [hbalance']
+    simp only [hpad', hassemble]
+    rw [if_pos hlength]
+    rfl
+  obtain ⟨-, hbalanced⟩ := generateValid_balanced hgenerated
+  refine ⟨witness, by rw [hgenerate, hgenerated], rfl, ?_, hbalanced⟩
+  intro table htable
+  exact run.constraints_final hinv₂ htables table htable
 
 end Air.Flat.WitnessGeneration
