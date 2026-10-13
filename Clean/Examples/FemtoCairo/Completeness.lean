@@ -151,6 +151,35 @@ lemma next_dataReads {p : ℕ} [Fact p.Prime] [Fact (p > 512)] (input : Var Stat
     List.toList_toArray]
   simp [circuit_norm, Circuit.forEach, explicit_provable_type]
 
+/-! #### Interaction counts -/
+
+lemma fetch_interactions {p : ℕ} [Fact p.Prime] {programSize : ℕ} (program : Fin programSize → F p)
+    (h_programSize : programSize < p) (pc : Expression (F p)) (n : ℕ) :
+    (Operations.interactions ((fetchInstruction program h_programSize).main pc n).2).length = 4 := by
+  simp [fetchInstruction, circuit_norm]
+
+lemma decode_interactions {p : ℕ} [Fact p.Prime] [Fact (p > 512)] (x : Expression (F p)) (n : ℕ) :
+    (Operations.interactions (Examples.FemtoCairo.decodeInstruction.main x n).2).length = 0 := by
+  simp [Examples.FemtoCairo.decodeInstruction, Examples.FemtoCairo.decodeInstructionMain,
+    Gadgets.toBits, Gadgets.ToBits.main, GeneralFormalCircuit.toSubcircuit,
+    GeneralFormalCircuit.toWithHint, GeneralFormalCircuit.WithHint.toSubcircuit,
+    FormalAssertion.toSubcircuit, Operations.toNested_toFlat, Circuit.forEach,
+    Gadgets.Equality.circuit, Gadgets.Equality.main, FlatOperation.interactions, circuit_norm,
+    explicit_provable_type]
+
+lemma read_interactions {p : ℕ} [Fact p.Prime] [Fact (p > 512)] (input : Var MemoryReadInput (F p))
+    (n : ℕ) : (Operations.interactions (readFromMemory.main input n).2).length = 2 := by
+  simp [readFromMemory, Gadgets.Equality.circuit, Gadgets.Equality.main,
+    FormalAssertion.toSubcircuit, Circuit.forEach, FlatOperation.interactions, circuit_norm,
+    explicit_provable_type]
+
+lemma next_interactions {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
+    (input : Var StateTransitionInput (F p)) (n : ℕ) :
+    (Operations.interactions (Examples.FemtoCairo.nextState.main input n).2).length = 0 := by
+  simp [Examples.FemtoCairo.nextState, Gadgets.Equality.circuit, Gadgets.Equality.main,
+    FormalAssertion.toSubcircuit, Circuit.forEach, FlatOperation.interactions, circuit_norm,
+    explicit_provable_type]
+
 section Shapes
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 
@@ -556,5 +585,192 @@ lemma execution_isSome_of_le {programSize memorySize : ℕ} {program : Fin progr
     simp only [Spec.femtoCairoMachineBoundedExecution, Option.bind_eq_bind] at h
     cases hstate : Spec.femtoCairoMachineBoundedExecution program memory state _ <;>
       simp_all
+
+omit p_large_enough in
+/-- An execution that fails stays failed. -/
+lemma execution_none_of_le {programSize memorySize : ℕ} {program : Fin programSize → F p}
+    {memory : Fin memorySize → F p} {state : Option (State (F p))} {k k' : ℕ} (hle : k ≤ k')
+    (h : Spec.femtoCairoMachineBoundedExecution program memory state k = none) :
+    Spec.femtoCairoMachineBoundedExecution program memory state k' = none := by
+  induction hle with
+  | refl => exact h
+  | step _ ih => simp [Spec.femtoCairoMachineBoundedExecution, ih]
+
+lemma proverAssumptions_iff (registers : fieldPair (F p)) (memoryValues : fields memorySize.toNat (F p)) :
+    (formalEnsemble program h_programSize h_memorySize initialState).ProverAssumptions registers
+      memoryValues ↔ ProverAssumptions program memorySize initialState registers memoryValues :=
+  Iff.rfl
+
+/-- Every component of the ensemble with its row plan. -/
+lemma planned_cases {component : Component (F p)}
+    (hmem : component ∈ (formalEnsemble program h_programSize h_memorySize initialState).ensemble.tables)
+    {rowPlan : RowPlan (F p)}
+    (hplanned : (component.circuit.name, rowPlan) ∈
+      (plan (memorySize := memorySize) program h_programSize initialState).components) :
+    (component = executionComponent program h_programSize initialState ∧ rowPlan =
+      { mode := .demand (executionMode program initialState),
+        padding := (vm program h_programSize h_memorySize initialState).padding }) ∨
+    (component = memoryComponent memorySize h_memorySize ∧ rowPlan =
+      { mode := .preallocated (memoryMode memorySize),
+        padding := { input := #[0, 0, 0], minimumRows := memorySize } }) ∨
+    (component = programComponent program h_programSize ∧ rowPlan =
+      { mode := .preallocated (programMode programSize),
+        padding := { input := #[0, 0, 0], minimumRows := programSize } }) := by
+  simp only [tables_eq, List.mem_cons, List.not_mem_nil, or_false] at hmem
+  rcases hmem with rfl | rfl | rfl <;>
+    simp [plan, executionComponent, memoryComponent, programComponent, executeStep, provideMemory,
+      provideProgram] at hplanned <;>
+    simp [hplanned, vm]
+
+lemma verifier_eq : (formalEnsemble program h_programSize h_memorySize initialState).ensemble.verifier =
+    verifier program initialState := by
+  with_unfolding_all rfl
+
+lemma execution_interactions_length :
+    (executionComponent program h_programSize initialState).rowOperations.interactions.length =
+      12 := by
+  simp only [Component.rowOperations, executionComponent, executeStep, femtoCairoStep]
+  simp only [femtoCairoStepMain, GeneralFormalCircuit.WithHint.toSubcircuit,
+    GeneralFormalCircuit.toWithHint, GeneralFormalCircuit.toSubcircuit, circuit_norm]
+  simp only [List.length_cons, List.length_append, List.length_nil, fetch_interactions,
+    decode_interactions, read_interactions, next_interactions]
+
+/-- The execution row answering a state is enabled at that state. -/
+lemma vm_input (state : State (F p)) :
+    inputOf (executionComponent program h_programSize initialState)
+      ((vm program h_programSize h_memorySize initialState).input (messageOf state)) =
+      { enabled := 1, state := state } := by
+  obtain ⟨pc, ap, fp⟩ := state
+  simp only [Vm.input, vm, executionMode, InputTemplate.eval, messageOf]
+  rw [inputOf_of_size _ rfl]
+  with_unfolding_all rfl
+
+def completePlan (hprogram : ∃ k, programSize.toNat = 2 ^ k)
+    (hmemory : ∃ k, memorySize.toNat = 2 ^ k) :
+    CompletePlan (formalEnsemble program h_programSize h_memorySize initialState)
+      (plan (memorySize := memorySize) program h_programSize initialState) where
+  valid := valid program h_programSize h_memorySize initialState hprogram hmemory
+  no_lazy := by
+    intro component hmem rowPlan mode hplanned hmode
+    rcases planned_cases program h_programSize h_memorySize initialState hmem hplanned with
+      ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
+    · cases hmode
+    all_goals
+      simp only [RowPlan.mk.injEq, Mode.preallocated.injEq] at hmode
+      subst hmode
+      rfl
+  vm := vm program h_programSize h_memorySize initialState
+  rowBound steps name :=
+    if name = "execution" then
+      (vm program h_programSize h_memorySize initialState).padding.targetHeight steps
+    else if name = "memory" then memorySize.toNat else programSize.toNat
+  rank _ := 0
+  acyclic := by
+    intro component hmem rowPlan mode hplanned hmode hvm
+    rcases planned_cases program h_programSize h_memorySize initialState hmem hplanned with
+      ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
+    · exact absurd rfl hvm
+    all_goals cases hmode
+  run := by
+    rintro ⟨ap, fp⟩ memoryValues ⟨steps, hhalt, hp, hsteps⟩
+    have hmemoryHeight : 2 ^ Nat.clog 2 memorySize.toNat = memorySize.toNat := by
+      obtain ⟨k, hk⟩ := hmemory
+      rw [hk, Nat.clog_pow _ _ (by decide)]
+    -- every state of the run is reached
+    have hreached : ∀ k ≤ steps + 1, ∃ state,
+        Spec.femtoCairoMachineBoundedExecution program memoryValues.get (some initialState) k =
+          some state := fun k hk =>
+      Option.isSome_iff_exists.mp (execution_isSome_of_le hk (by simp [hhalt]))
+    refine ⟨steps + 1, ?_, fun k hk heq => ?_, fun k hk data hstable => ?_, ?_⟩
+    · rw [vm_state program h_programSize h_memorySize initialState memoryValues _ hhalt]
+      rfl
+    · obtain ⟨state, hstate⟩ := hreached k hk.le
+      rw [vm_state program h_programSize h_memorySize initialState memoryValues _ hstate] at heq
+      obtain rfl := messageOf_injective heq
+      have hstuck : Spec.femtoCairoMachineBoundedExecution program memoryValues.get
+          (some initialState) (k + 1) = none := by
+        simp [Spec.femtoCairoMachineBoundedExecution, hstate,
+          femtoCairoMachineTransition_haltedState program h_programSize]
+      simp [execution_none_of_le (show k + 1 ≤ steps + 1 by omega) hstuck] at hhalt
+    · obtain ⟨state, hstate⟩ := hreached k hk.le
+      obtain ⟨next, hnext⟩ := hreached (k + 1) hk
+      rw [vm_state program h_programSize h_memorySize initialState memoryValues _ hstate]
+      change (executeStep program h_programSize initialState).ProverAssumptions
+        (inputOf (executionComponent program h_programSize initialState) _) data _
+      rw [vm_input]
+      obtain ⟨hsize, hmemoryData⟩ := memory_eq_of_stable program h_programSize h_memorySize
+        initialState hmemoryHeight memoryValues hstable
+      have hsame : ∀ k, Spec.femtoCairoMachineBoundedExecution program (memory data)
+          (some initialState) k =
+          Spec.femtoCairoMachineBoundedExecution program memoryValues.get (some initialState) k :=
+        fun k => execution_congr program _ _ hsize (fun i => by rw [hmemoryData]) _ k
+      simp only [executeStep, femtoCairoStep, femtoCairoStepAssumptions, StateChannel]
+      refine ⟨.inr ⟨trivial, k, by rw [hsame, hstate]⟩, by unfold Spec.ValidProgramSize; omega,
+        by have := UInt64.toNat_lt_size programSize; simp only [UInt64.size] at this; omega,
+        memoryCompleteness_of_stable program h_programSize h_memorySize initialState
+          hmemoryHeight memoryValues hstable, ?_⟩
+      rw [transition_congr program _ _ hsize (fun i => by rw [hmemoryData])]
+      simp [Spec.femtoCairoMachineBoundedExecution, hstate] at hnext
+      simp [hnext]
+    · have hle := le_targetHeight (vm program h_programSize h_memorySize initialState).padding
+        (steps + 1)
+      have hle2 := targetHeight_le_two_mul (vm program h_programSize h_memorySize initialState).padding
+        (steps + 1) (by simp)
+      have hmin : (vm program h_programSize h_memorySize initialState).padding.minimumRows.toNat = 8 :=
+        rfl
+      rw [hmin] at hle hle2
+      have hsize : (vm program h_programSize h_memorySize initialState).padding.targetHeight
+          (steps + 1) ≤ UInt64.size := by
+        have : max (steps + 1) 8 < 2 ^ 63 := by
+          have : steps + 1 < 2 ^ 63 := by omega
+          omega
+        simp only [UInt64.size]
+        omega
+      have hprogramSize := (UInt64.toNat_lt_size programSize).le
+      have hmemorySize := (UInt64.toNat_lt_size memorySize).le
+      refine ⟨by simpa [vm, executionComponent, executeStep] using hle.1, ?_, ?_⟩
+      · intro component hmem rowPlan hplanned
+        rcases planned_cases program h_programSize h_memorySize initialState hmem hplanned with
+          ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
+        · simp only [show (executionComponent program h_programSize initialState).circuit.name =
+            "execution" from rfl, if_true]
+          exact ⟨⟨_, rfl⟩, hle.2, hsize, .inl rfl⟩
+        · simp only [show (memoryComponent memorySize h_memorySize (p := p)).circuit.name =
+            "memory" from rfl, if_neg (show "memory" ≠ "execution" by decide), if_true]
+          exact ⟨hmemory, le_rfl, hmemorySize, le_rfl⟩
+        · simp only [show (programComponent program h_programSize).circuit.name =
+            "program" from rfl, if_neg (show "program" ≠ "execution" by decide),
+            if_neg (show "program" ≠ "memory" by decide)]
+          exact ⟨hprogram, le_rfl, hprogramSize, le_rfl⟩
+      · have hverifier : (formalEnsemble program h_programSize h_memorySize
+            initialState).ensemble.verifierOperations.interactions.length = 2 := by
+          simp [Ensemble.verifierOperations, verifier_eq, verifier, Verifier.Program.circuitOperations,
+            circuit_norm]
+        have hmemoryLength :
+            (memoryComponent memorySize h_memorySize (p := p)).rowOperations.interactions.length =
+              1 := by
+          simp [memoryComponent, provideMemory, Component.rowOperations, circuit_norm]
+        have hprogramLength :
+            (programComponent program h_programSize).rowOperations.interactions.length = 1 := by
+          simp [programComponent, provideProgram, Component.rowOperations, circuit_norm]
+        rw [hverifier, tables_eq]
+        simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil,
+          show (executionComponent program h_programSize initialState).circuit.name =
+            "execution" from rfl, show (memoryComponent memorySize h_memorySize (p := p)).circuit.name =
+            "memory" from rfl, show (programComponent program h_programSize).circuit.name =
+            "program" from rfl, if_true, if_neg (show "memory" ≠ "execution" by decide),
+          if_neg (show "program" ≠ "execution" by decide), if_neg (show "program" ≠ "memory" by decide),
+          execution_interactions_length, hmemoryLength, hprogramLength, FiniteField.char_F]
+        exact lt_of_le_of_lt (by omega) hp
+  vm_row := sorry
+  verifier := sorry
+  demand := by
+    intro component hmem rowPlan mode hplanned hmode hvm
+    rcases planned_cases program h_programSize h_memorySize initialState hmem hplanned with
+      ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
+    · exact absurd rfl hvm
+    all_goals cases hmode
+  preallocated := sorry
+  padding := sorry
 
 end Examples.FemtoCairo.FlatAir.Witness

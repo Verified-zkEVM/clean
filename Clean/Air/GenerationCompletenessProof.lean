@@ -29,6 +29,23 @@ lemma targetHeight_le {F : Type} (padding : Padding F) {rowCount bound : ℕ}
   obtain ⟨k, rfl⟩ := hpower
   exact Nat.pow_le_pow_right (by decide) (Nat.clog_le_of_le_pow (max_le hrows hminimum))
 
+/-- The target height at most doubles the larger of the row count and the minimum. -/
+lemma targetHeight_le_two_mul {F : Type} (padding : Padding F) (rowCount : ℕ)
+    (hpos : 0 < max rowCount padding.minimumRows.toNat) :
+    padding.targetHeight rowCount ≤ 2 * max rowCount padding.minimumRows.toNat := by
+  unfold Padding.targetHeight
+  set m := max rowCount padding.minimumRows.toNat
+  rcases Nat.lt_or_ge m 2 with hm | hm
+  · have : m = 1 := by omega
+    rw [this]
+    decide
+  have hclog : 1 ≤ Nat.clog 2 m := Nat.clog_pos (by decide) (by omega)
+  have hlt := Nat.pow_pred_clog_lt_self (b := 2) (x := m) (by decide) (by omega)
+  have hpow : 2 ^ Nat.clog 2 m = 2 * 2 ^ (Nat.clog 2 m).pred := by
+    rw [← pow_succ']
+    exact congrArg (2 ^ ·) (Nat.succ_pred_eq_of_pos hclog).symm
+  omega
+
 lemma targetHeight_targetHeight {F : Type} (padding : Padding F) (rowCount : ℕ) :
     padding.targetHeight (padding.targetHeight rowCount) = padding.targetHeight rowCount := by
   apply le_antisymm
