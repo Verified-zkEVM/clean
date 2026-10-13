@@ -111,6 +111,12 @@ def StableData (ens : Ensemble F PublicIO) (plan : GenerationPlan F) (hint : Pro
             if row < mode.rows.toNat then (preallocatedInput component mode hint row)[column]?.getD 0
             else rowPlan.padding.input[column]?.getD 0
 
+/-- Generation may pad a component: it is demand-driven, or preallocates fewer rows than its padded
+height. -/
+def RowPlan.MayPad (rowPlan : RowPlan F) : Prop :=
+  ∀ mode, rowPlan.mode = .preallocated mode →
+    mode.rows.toNat < rowPlan.padding.targetHeight mode.rows.toNat
+
 /-! ### What an ensemble's author proves -/
 
 /-- The interactions of `component` on channel `channel` that pull. -/
@@ -329,10 +335,10 @@ structure CompletePlan (ens : FormalEnsemble (F p) PublicIO) (plan : GenerationP
             ∃ row < mode.rows.toNat, ∃ interaction ∈ (interactionsOf
               (preallocatedInput component mode (ens.hint proverInput) row) data
               (ens.hint proverInput))[handler.interaction]?, interaction.msg = message.toArray
-  /-- Padding rows satisfy their prover assumptions and add nothing but single pulls that
-  preallocated components answer. -/
+  /-- Padding rows of components generation may pad satisfy their prover assumptions and add
+  nothing but single pulls that preallocated components answer. -/
   padding : ∀ component ∈ ens.ensemble.tables, ∀ rowPlan,
-    (component.circuit.name, rowPlan) ∈ plan.components →
+    (component.circuit.name, rowPlan) ∈ plan.components → rowPlan.MayPad →
     (∀ publicInput proverInput, ens.ProverAssumptions publicInput proverInput →
       ∀ data, StableData ens.ensemble plan (ens.hint proverInput) data →
         component.circuit.ProverAssumptions (inputOf component rowPlan.padding.input) data

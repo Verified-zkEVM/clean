@@ -155,13 +155,6 @@ lemma add8_padding : RowInteractions (add8 (p := p)) fun input _ interactions =>
     Gadgets.Equality.main, Circuit.forEach, FlatOperation.interactions, SideInteraction]
   exact ⟨⟨rfl, .inr rfl⟩, by simp [BytesTable], by simpa [BytesTable] using answers_bytes⟩
 
-/-- A zero byte row pushes nothing. -/
-lemma bytes_padding (row : Array (F p)) (hrow : row = #[0, 0]) :
-    ∀ interaction ∈ bytesInteractions row,
-      SideInteraction (fibonacciEnsemble (p := p)).ensemble plan "fibonacci" true interaction := by
-  subst hrow
-  simp [bytesInteractions, SideInteraction]
-
 /-- Row `row` of the byte table initially holds the byte `row` with multiplicity zero. -/
 lemma bytes_initial (hint : ProverHint (F p)) (row : ℕ) :
     preallocatedInput bytesComponent bytesMode hint row = #[((row % 2 ^ 64 : ℕ) : F p), 0] := by
@@ -419,16 +412,17 @@ def completePlan : CompletePlan (fibonacciEnsemble (p := p)) (plan (p := p)) whe
         refine ⟨byte.val, by simpa [bytesMode, bytesFixedColumns] using hguarantees, ?_⟩
         simp [bytes_initial, bytesInteractions]
   padding := by
-    intro component hmem rowPlan hplanned
+    intro component hmem rowPlan hplanned hpad
     rcases planned_cases hmem hplanned with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
     · refine ⟨fun _ _ _ _ _ => ?_, fib8_padding⟩
       simp [inputOf_of_size, fib8Component, fib8, explicit_provable_type, circuit_norm]
     · refine ⟨fun _ _ _ _ _ => ?_, add8_padding⟩
       simp [inputOf_of_size, add8Component, add8, explicit_provable_type, circuit_norm]
-    · refine ⟨fun _ _ _ _ _ => ?_, ?_⟩
-      · simp [inputOf_of_size, bytesComponent, pushBytes, explicit_provable_type, circuit_norm]
-        exact ⟨_, (ByteUtils.fromByte_eq 0 (by simp)).symm⟩
-      · exact (pushBytes_row #[0, 0]).mono fun _ _ _ h hinput => h hinput ▸ bytes_padding _ rfl
+    · -- the byte table has exactly its padded height
+      have := hpad bytesMode rfl
+      simp only [bytesMode, bytesFixedColumns, Padding.targetHeight] at this
+      rw [show (256 : UInt64).toNat = 2 ^ 8 from rfl, max_self, Nat.clog_pow _ _ (by decide)] at this
+      exact absurd this (lt_irrefl _)
 
 /-- Fibonacci witness generation is complete: from the `n`-th Fibonacci state of a run short enough
 for the field, it returns a witness for that state satisfying the constraints and balancing all

@@ -430,9 +430,15 @@ lemma demandObligation {component : Component (F p)} (hmem : component ∈ ens.e
   rw [rowInteractions_honest (hnets count) honest hPA rfl channel hchannel other,
     rowInteractions_honest (hnets count') honest' hPA' rfl channel hchannel other, hdata, hhint]
 
+lemma fixedPrefix_size (component : Component (F p)) (row : UInt64) :
+    (fixedPrefix component row).size = component.fixedWidth := by
+  unfold fixedPrefix Component.fixedWidth
+  cases component.fixedColumns <;> simp [FixedColumns.row]
+
 /-- The padding obligation for honest rows. -/
 lemma paddingObligation {component : Component (F p)} (hmem : component ∈ ens.ensemble.tables)
     {rowPlan : RowPlan (F p)} (hplanned : (component.circuit.name, rowPlan) ∈ plan.components)
+    (hpad : rowPlan.MayPad)
     (publicInput : PublicIO (F p)) (proverInput : ens.ProverInput (F p))
     (hassumptions : ens.ProverAssumptions publicInput proverInput) (data : ProverData (F p))
     (hstable : StableData ens.ensemble plan (ens.hint proverInput) data) :
@@ -442,7 +448,7 @@ lemma paddingObligation {component : Component (F p)} (hmem : component ∈ ens.
       env.hint = ens.hint proverInput →
       ∀ interaction ∈ interactionsIn component env.toEnvironment,
         SideInteraction ens.ensemble plan run.complete.vm.channel.name true interaction := by
-  obtain ⟨hPA, hside⟩ := run.complete.padding component hmem rowPlan hplanned
+  obtain ⟨hPA, hside⟩ := run.complete.padding component hmem rowPlan hplanned hpad
   refine ⟨hPA publicInput proverInput hassumptions data hstable, fun env honest hdata hhint => ?_⟩
   have hPA' : component.circuit.ProverAssumptions (inputOf component rowPlan.padding.input)
       env.data env.hint := by
@@ -519,16 +525,27 @@ lemma preallocatedObligation {component : Component (F p)} (hmem : component ∈
   · rw [hints input env honest hdata hhint (hhint ▸ hPA)] at hother
     exact hSide input data _ index hindex other hother
   obtain ⟨channel, hdeclared, hshape, hmsg, hothers, hexists⟩ := hHandlers handler hhandler
-  -- an honest padding row exposes the handler's abstract interaction
-  have hpaddingPA := (run.paddingObligation hmem hplanned publicInput proverInput hassumptions data
-    hstable).1
-  have hsize : rowPlan.padding.input.size = component.rowOffset :=
-    (run.planValid.row_plans _ hentry).padding_width
+  -- an honest first row, or padding row if there is none, exposes the handler's abstract
+  -- interaction
+  obtain ⟨input₀, hsize, hPA₀⟩ : ∃ input₀ : Array (F p), input₀.size = component.rowOffset ∧
+      component.circuit.ProverAssumptions (inputOf component input₀) data (ens.hint proverInput) := by
+    by_cases hrows : 0 < mode.rows.toNat
+    · refine ⟨_, ?_, hbase 0 hrows⟩
+      simp only [preallocatedInput, Array.size_append, fixedPrefix_size, Vector.size_toArray]
+      exact ((run.planValid.row_plans _ hentry).preallocated mode hmode).1
+    · refine ⟨_, (run.planValid.row_plans _ hentry).padding_width,
+        (run.paddingObligation hmem hplanned (fun mode' hmode' => ?_) publicInput proverInput
+          hassumptions data hstable).1⟩
+      rw [hmode] at hmode'
+      cases hmode'
+      have := Nat.two_pow_pos (Nat.clog 2 (max mode.rows.toNat rowPlan.padding.minimumRows.toNat))
+      simp only [Padding.targetHeight]
+      omega
   have honest₀ := honestEnv_rowEnvironment component data (ens.hint proverInput)
-    rowPlan.padding.input hsize (run.planValid.reads_below component hmem)
-  have hints₀ := hints _ _ honest₀ rfl rfl hpaddingPA
+    input₀ hsize (run.planValid.reads_below component hmem)
+  have hints₀ := hints _ _ honest₀ rfl rfl hPA₀
   obtain ⟨interaction₀, hinteraction₀, hchannel₀, -, -⟩ :=
-    hshape rowPlan.padding.input data (ens.hint proverInput)
+    hshape input₀ data (ens.hint proverInput)
   rw [← hints₀] at hinteraction₀
   simp only [interactionsIn, List.getElem?_map, Option.mem_def, Option.map_eq_some_iff]
     at hinteraction₀
@@ -1126,8 +1143,9 @@ lemma mult_eq_zero_of_padding {state : ComponentState (F p)} (hok : run.StateOk 
 lemma rowFacts_padding {state : ComponentState (F p)} (hok : run.StateOk state)
     {mode : DemandMode (F p)} (hmode : state.rowPlan.mode = .demand mode) :
     run.RowFacts state (run.row state.component state.rowPlan.padding.input none) := by
-  have hpadding := run.paddingObligation hok.mem (run.planned _ hok.entry) run.publicInput run.proverInput
-    run.assumptions
+  have hpad : state.rowPlan.MayPad := fun _ h => by rw [hmode] at h; cases h
+  have hpadding := run.paddingObligation hok.mem (run.planned _ hok.entry) hpad run.publicInput
+    run.proverInput run.assumptions
   have hsize : state.rowPlan.padding.input.size = state.component.rowOffset :=
     (run.planValid.row_plans _ hok.entry).padding_width
   have hadmissible : run.Admissible state.component state.rowPlan.padding.input :=
@@ -1295,11 +1313,6 @@ lemma rowFacts_preallocated {state : ComponentState (F p)} (hok : run.StateOk st
         · exact hzero
         · exact absurd hname hne
 
-lemma fixedPrefix_size (component : Component (F p)) (row : UInt64) :
-    (fixedPrefix component row).size = component.fixedWidth := by
-  unfold fixedPrefix Component.fixedWidth
-  cases component.fixedColumns <;> simp [FixedColumns.row]
-
 lemma preallocatedInput_size {component : Component (F p)} {rowPlan : RowPlan (F p)}
     {mode : PreallocatedMode (F p)} (hentry : (component, rowPlan) ∈ ens.ensemble.tables.zip run.rowPlans)
     (hmode : rowPlan.mode = .preallocated mode) (row : ℕ) :
@@ -1308,7 +1321,8 @@ lemma preallocatedInput_size {component : Component (F p)} {rowPlan : RowPlan (F
   exact ((run.planValid.row_plans _ hentry).preallocated mode hmode).1
 
 lemma admissible_baseInput {state : ComponentState (F p)} (hok : run.StateOk state)
-    {mode : PreallocatedMode (F p)} (hmode : state.rowPlan.mode = .preallocated mode) (row : ℕ) :
+    {mode : PreallocatedMode (F p)} (hmode : state.rowPlan.mode = .preallocated mode) {row : ℕ}
+    (hheight : row < state.rowPlan.padding.targetHeight mode.rows.toNat) :
     run.Admissible state.component (run.baseInput state.component state.rowPlan mode row) := by
   unfold baseInput
   split
@@ -1316,9 +1330,24 @@ lemma admissible_baseInput {state : ComponentState (F p)} (hok : run.StateOk sta
     exact ⟨run.preallocatedInput_size hok.entry hmode row, fun data hstable =>
       (run.preallocatedObligation hok.mem (run.planned _ hok.entry) hmode run.publicInput run.proverInput run.assumptions data
         hstable).1 row hrow⟩
-  · exact ⟨(run.planValid.row_plans _ hok.entry).padding_width, fun data hstable =>
-      (run.paddingObligation hok.mem (run.planned _ hok.entry)
+  · rename_i hrow
+    have hpad : state.rowPlan.MayPad := fun mode' hmode' => by
+      rw [hmode] at hmode'
+      cases hmode'
+      omega
+    exact ⟨(run.planValid.row_plans _ hok.entry).padding_width, fun data hstable =>
+      (run.paddingObligation hok.mem (run.planned _ hok.entry) hpad
         run.publicInput run.proverInput run.assumptions data hstable).1⟩
+
+/-- The rows of a preallocated state are within its padded height. -/
+lemma length_le_targetHeight {state : ComponentState (F p)} {mode : PreallocatedMode (F p)}
+    {padded : Bool} (hlength : state.rows.length =
+      if padded then state.rowPlan.padding.targetHeight mode.rows.toNat else mode.rows.toNat) :
+    state.rows.length ≤ state.rowPlan.padding.targetHeight mode.rows.toNat := by
+  rw [hlength]
+  split
+  · exact le_rfl
+  · exact (le_targetHeight _ _).1
 
 lemma admissible_of_reachable {state : ComponentState (F p)} (hok : run.StateOk state)
     {mode : PreallocatedMode (F p)} (hmode : state.rowPlan.mode = .preallocated mode)
@@ -1338,12 +1367,12 @@ lemma rowFacts_of_rowsOk {k : ℕ} {padded : Bool} {state : ComponentState (F p)
   unfold RowsOk at hrows
   split at hrows
   · rename_i mode hmode
-    obtain ⟨-, hrowsEq⟩ := hrows
+    obtain ⟨hlength, hrowsEq⟩ := hrows
     obtain ⟨j, hj, rfl⟩ := List.getElem_of_mem hrow
     obtain ⟨input, hreachable, heq⟩ := hrowsEq j hj
     rw [heq]
     exact run.rowFacts_preallocated hok hmode (run.admissible_of_reachable hok hmode hreachable
-      (run.admissible_baseInput hok hmode j))
+      (run.admissible_baseInput hok hmode (lt_of_lt_of_le hj (length_le_targetHeight hlength))))
   · rename_i mode hmode
     obtain ⟨main, pad, hrowsEq, -, -, hvm, hanswer⟩ := hrows
     rw [hrowsEq, List.mem_append] at hrow
@@ -2692,7 +2721,8 @@ lemma viewOk (hinv : run.Inv k padded balancing) : run.ViewOk balancing.states :
     rw [hlength]; split <;> simp [hheight]
   refine ⟨hlength', fun j hj => ?_⟩
   obtain ⟨input, hreachable, heq⟩ := hrowsEq j hj
-  have hbase := run.admissible_baseInput hok hmode j
+  have hbase := run.admissible_baseInput hok hmode
+    (lt_of_lt_of_le hj (length_le_targetHeight hlength))
   have hj' : j < mode.rows.toNat := hlength' ▸ hj
   rw [heq]
   refine ⟨rfl, hreachable.size_eq.trans hbase.size, fun column hcolumn => ?_⟩
@@ -3395,7 +3425,8 @@ lemma step_preallocated (hinv : run.Inv k padded balancing) {demand : Demand (F 
     · exact (le_targetHeight _ _).1
     · exact le_rfl
   obtain ⟨input₀, hreachable₀, hrowEq₀⟩ := hrowsEq row₀ (by omega)
-  have hbase₀ := run.admissible_baseInput hok hmode row₀
+  have hbase₀ := run.admissible_baseInput hok hmode
+    (lt_of_lt_of_le (show row₀ < state.rows.length by omega) (length_le_targetHeight hlength))
   have hbaseEq : run.baseInput state.component state.rowPlan mode row₀ =
       preallocatedInput state.component mode run.hint row₀ := by
     simp [baseInput, hrow₀]
@@ -3437,13 +3468,15 @@ lemma step_preallocated (hinv : run.Inv k padded balancing) {demand : Demand (F 
     exact ((List.getElem?_eq_some_iff.mp hrow).2).symm
   subst hrowIs
   have hadmissible := run.admissible_of_reachable hok hmode hreachable
-    (run.admissible_baseInput hok hmode position)
+    (run.admissible_baseInput hok hmode
+      (lt_of_lt_of_le hposition (length_le_targetHeight hlength)))
   set value : F p := (input[handler.column]?.getD 0) + FiniteField.fromNat demand.count
   set input' := input.set! handler.column value
   have hreachable' : Reachable mode.handlers (run.baseInput state.component state.rowPlan mode
       position) input' := hreachable.set handler hhandler value
   have hadmissible' := run.admissible_of_reachable hok hmode hreachable'
-    (run.admissible_baseInput hok hmode position)
+    (run.admissible_baseInput hok hmode
+      (lt_of_lt_of_le hposition (length_le_targetHeight hlength)))
   set updated := run.row state.component input' none
   have hupdated : completeRow balancing.states [] state input' run.data0 run.hint none
       (run.row state.component input none).undefined = (updated, []) :=
@@ -3816,20 +3849,35 @@ lemma tablesArePadded_of_padded (hinv : run.Inv k true balancing) :
   · obtain ⟨main, pad, hrowsEq, -, htarget, -, -⟩ := hrows
     rw [hrowsEq, List.length_append, List.length_replicate, htarget rfl, targetHeight_targetHeight]
 
+/-- A state that gets padding rows may be padded. -/
+lemma mayPad_of_padCount (hinv : run.Inv k padded balancing) {state : ComponentState (F p)}
+    (hstate : state ∈ balancing.states) (hpos : 0 < padCount state) : state.rowPlan.MayPad := by
+  intro mode hmode
+  have hrows := hinv.rows state hstate
+  simp only [RowsOk, hmode] at hrows
+  obtain ⟨hlength, -⟩ := hrows
+  unfold padCount at hpos
+  rw [hlength] at hpos
+  split at hpos
+  · rw [targetHeight_targetHeight] at hpos
+    omega
+  · omega
+
 /-- Padding rows add no answers. -/
 lemma answeredBy_paddingRow (hinv : run.Inv k padded balancing) {state : ComponentState (F p)}
-    (hstate : state ∈ balancing.states) {channel : String}
+    (hstate : state ∈ balancing.states) (hpos : 0 < padCount state) {channel : String}
     (hchannel : channel ≠ run.complete.vm.channel.name) :
     run.answeredBy state (run.paddingRow state) channel = 0 := by
   have hok := run.stateOk_of_shape hinv.shape hstate
+  have hpad := hinv.mayPad_of_padCount hstate hpos
   rcases hmode : state.rowPlan.mode with mode | mode
   · simp [answeredBy, hmode, paddingRow, Run.row]
-  have hpadding := run.paddingObligation hok.mem (run.planned _ hok.entry) run.publicInput
+  have hpadding := run.paddingObligation hok.mem (run.planned _ hok.entry) hpad run.publicInput
     run.proverInput run.assumptions run.stableData run.stableData_stable
   have hsize : state.rowPlan.padding.input.size = state.component.rowOffset :=
     (run.planValid.row_plans _ hok.entry).padding_width
   have hadmissible : run.Admissible state.component state.rowPlan.padding.input :=
-    ⟨hsize, fun data hstable => (run.paddingObligation hok.mem (run.planned _ hok.entry)
+    ⟨hsize, fun data hstable => (run.paddingObligation hok.mem (run.planned _ hok.entry) hpad
       run.publicInput run.proverInput run.assumptions data hstable).1⟩
   by_cases hanswers : AnswersPull state channel
   · have hhandled := hanswers
@@ -3871,10 +3919,13 @@ lemma answeredMsgs_pad (hinv : run.Inv k padded balancing) {channel : String}
   apply List.map_congr_left
   intro state hstate
   simp only [padOne, List.map_append, List.sum_append, sum_map_replicate]
-  rw [show run.answeredBy { state with rows := (state.rows ++ List.replicate (padCount state)
-    (run.paddingRow state)) } (run.paddingRow state) channel = 0 from
-    hinv.answeredBy_paddingRow hstate hchannel, smul_zero, add_zero]
-  rfl
+  by_cases hpos : 0 < padCount state
+  · rw [show run.answeredBy { state with rows := (state.rows ++ List.replicate (padCount state)
+      (run.paddingRow state)) } (run.paddingRow state) channel = 0 from
+      hinv.answeredBy_paddingRow hstate hpos hchannel, smul_zero, add_zero]
+    rfl
+  · rw [show padCount state = 0 by omega, zero_smul, add_zero]
+    rfl
 
 lemma pulledMsgs_pad (channel : String) :
     run.pulledMsgs (balancing.states.map run.padOne) channel =
@@ -3946,12 +3997,15 @@ lemma pad (hinv : run.Inv k false balancing) (hsettled : balancing.demands = [])
     simp only [Balancing.apply]
     rw [hinv.answeredMsgs_pad hchannel, pulledMsgs_pad (run := run) (balancing := balancing),
       hinv.answered_eq_of_settled hsettled hchannel]
-    suffices h : ∀ state ∈ balancing.states, run.pulledBy state (run.paddingRow state) channel = 0 by
+    suffices h : ∀ state ∈ balancing.states, 0 < padCount state →
+        run.pulledBy state (run.paddingRow state) channel = 0 by
       rw [List.sum_eq_zero, add_zero]
       intro x hx
       obtain ⟨state, hstate, rfl⟩ := List.mem_map.mp hx
-      rw [h state hstate, smul_zero]
-    intro state hstate
+      by_cases hpos : 0 < padCount state
+      · rw [h state hstate hpos, smul_zero]
+      · rw [show padCount state = 0 by omega, zero_smul]
+    intro state hstate hpos
     have hokState := hok state hstate
     unfold pulledBy
     split
@@ -3964,7 +4018,7 @@ lemma pad (hinv : run.Inv k false balancing) (hsettled : balancing.demands = [])
     rw [paddingRow, run.rowInteractions_row hokState.interactions hokState.mem hsize none
       run.stableData_stable] at hmem
     have hside := (run.paddingObligation hokState.mem (run.planned _ hokState.entry)
-      run.publicInput run.proverInput run.assumptions run.stableData run.stableData_stable).2 _ (run.honestEnv_row hokState.mem hsize _) rfl rfl interaction hmem
+      (hinv.mayPad_of_padCount hstate hpos) run.publicInput run.proverInput run.assumptions run.stableData run.stableData_stable).2 _ (run.honestEnv_row hokState.mem hsize _) rfl rfl interaction hmem
     rcases hside with hzero | ⟨-, -, hanswered⟩
     · rw [hmult] at hzero
       exact neg_ne_zero.mpr one_ne_zero hzero
