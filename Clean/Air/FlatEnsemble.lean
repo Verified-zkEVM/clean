@@ -338,6 +338,22 @@ def Completeness (ens : Ensemble F PublicIO) (Assumptions Spec : PublicIO F → 
   ∀ publicInput, Assumptions publicInput → Spec publicInput → ens.Statement publicInput
 end Ensemble
 
+/-- A named hint table viewing the flattened private input: `rows` rows of `width` elements,
+starting at element `offset`. Elements beyond the input read as zero. -/
+structure HintTable where
+  key : String
+  width : ℕ
+  offset : ℕ
+  rows : ℕ
+deriving Repr, DecidableEq
+
+/-- The hint tables `tables` take from the flattened private input `elements`. -/
+def HintTable.hint (tables : List HintTable) (elements : Array F) : ProverHint F := fun key width =>
+  match tables.find? fun table => table.key == key && table.width == width with
+  | none => #[]
+  | some table => Array.ofFn fun (row : Fin table.rows) => Vector.ofFn fun (column : Fin width) =>
+      elements[table.offset + row.val * width + column.val]?.getD 0
+
 structure FormalEnsemble (F : Type) [FiniteField F]
     (PublicIO : TypeMap) [ProvableType PublicIO] where
   ensemble : Ensemble F PublicIO
@@ -345,25 +361,33 @@ structure FormalEnsemble (F : Type) [FiniteField F]
   Spec : PublicIO F → Prop
   soundness : ensemble.Soundness Assumptions Spec
   /-- The prover's private input to witness generation. -/
-  ProverInput : Type := Unit
-  /-- The named hint tables that witness programs read, encoding the private input. -/
-  hint : ProverInput → ProverHint F := fun _ => ProverHint.empty F
+  ProverInput : TypeMap := unit
+  [provableProverInput : ProvableType ProverInput]
+  /-- The hint tables that witness programs read, as views of the flattened private input. -/
+  hintTables : List HintTable := []
   /-- What the public and private inputs must satisfy for witness generation to succeed. -/
-  ProverAssumptions : PublicIO F → ProverInput → Prop := fun _ _ => True
+  ProverAssumptions : PublicIO F → ProverInput F → Prop := fun _ _ => True
+
+instance (ens : FormalEnsemble F PublicIO) : ProvableType ens.ProverInput :=
+  ens.provableProverInput
 
 namespace FormalEnsemble
 
-/-- Declare the prover's private input: its type, its encoding as hint tables, and the
-assumptions witness generation needs. -/
-def withProverInput (ens : FormalEnsemble F PublicIO) (ProverInput : Type)
-    (hint : ProverInput → ProverHint F) (ProverAssumptions : PublicIO F → ProverInput → Prop) :
-    FormalEnsemble F PublicIO where
+/-- The hint tables encoding a private input. -/
+def hint (ens : FormalEnsemble F PublicIO) (proverInput : ens.ProverInput F) : ProverHint F :=
+  HintTable.hint ens.hintTables (toElements proverInput).toArray
+
+/-- Declare the prover's private input: its type, the hint tables viewing it, and the assumptions
+witness generation needs. -/
+def withProverInput (ens : FormalEnsemble F PublicIO) (ProverInput : TypeMap)
+    [ProvableType ProverInput] (hintTables : List HintTable)
+    (ProverAssumptions : PublicIO F → ProverInput F → Prop) : FormalEnsemble F PublicIO where
   ensemble := ens.ensemble
   Assumptions := ens.Assumptions
   Spec := ens.Spec
   soundness := ens.soundness
   ProverInput
-  hint
+  hintTables
   ProverAssumptions
 
 end FormalEnsemble

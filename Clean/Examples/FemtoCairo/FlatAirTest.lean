@@ -70,7 +70,7 @@ def unstableDataReadRejected : Bool :=
     Witness.config (memorySize := 8) testProgram h_programSize initialState 8 1000
   let mutableMemory : Mode (F pBabybear) := .preallocated {
     rows := 8
-    input := .ofFExprs #v[.hintGet Witness.memoryValuesKey 1 .idx 0, .const 0]
+    input := .ofFExprs #v[.hintGet memoryValuesKey 1 .idx 0, .const 0]
     input_valid := by rfl
     handlers := [{ interaction := 0, column := 1 }]
   }
@@ -79,7 +79,7 @@ def unstableDataReadRejected : Bool :=
         if name = (provideMemory (p := pBabybear)).name then (name, { generation with mode := mutableMemory })
         else (name, generation) }
   match Backends.Plonky3.lower
-      (soundEnsemble testProgram h_programSize h_memorySize initialState).ensemble config with
+      (formalEnsemble testProgram h_programSize h_memorySize initialState) config with
   | .error (.config (.unstableDataRead _ _ "memory" 1)) => true
   | _ => false
 

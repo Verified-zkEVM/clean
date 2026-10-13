@@ -2,8 +2,8 @@
 use alloc::string::String;
 use alloc::{format, vec, vec::Vec};
 use clean_backend::witness_generation::{
-    Aggregation, DemandMode, Direction, EnsembleWitness, InputCell, Interaction, Mode, Padding,
-    PreallocatedHandler, Program, WitnessData, WitnessField, WitnessGenerationError,
+    Aggregation, DemandMode, Direction, EnsembleWitness, HintTable, InputCell, Interaction, Mode,
+    Padding, PreallocatedHandler, Program, WitnessData, WitnessField, WitnessGenerationError,
 };
 use clean_backend::{GeneratedAirSpec, GeneratedEnsemble, GeneratedLookup};
 use p3_air::lookup::Direction as LookupDirection;
@@ -333,6 +333,8 @@ impl<F: WitnessField> Program<F> for FibonacciEnsembleProgram {
     const FUEL: usize = 100000;
     const COMPONENTS: usize = 3;
     const PUBLIC_INPUTS: usize = 3;
+    const PROVER_INPUTS: usize = 0;
+    const HINT_TABLES: &'static [HintTable] = &[];
     const FIXED_WIDTHS: &'static [usize] = &[0, 0, 1];
     const COMPONENT_NAMES: &'static [&'static str] = &["fibonacci", "add8", "bytes"];
 
@@ -435,7 +437,10 @@ impl<F: WitnessField> Program<F> for FibonacciEnsembleProgram {
 
 pub fn generate<F: WitnessField>(
     public_input: &[F],
-    hint: &WitnessData<F>,
+    prover_input: &[F],
 ) -> Result<EnsembleWitness<F>, WitnessGenerationError> {
-    clean_backend::witness_generation::generate::<F, FibonacciEnsembleProgram>(public_input, hint)
+    clean_backend::witness_generation::generate::<F, FibonacciEnsembleProgram>(
+        public_input,
+        prover_input,
+    )
 }

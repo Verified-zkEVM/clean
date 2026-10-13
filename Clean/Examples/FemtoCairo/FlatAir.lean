@@ -669,13 +669,6 @@ lemma spec_of_proverAssumptions {programSize memorySize : UInt64}
 /-- Name of the hint table holding the prover's memory values, one per address. -/
 def memoryValuesKey : String := "memoryValues"
 
-/-- The hint encoding the prover's memory values as the `memoryValues` table. -/
-def memoryValuesHint {memorySize : UInt64} (memoryValues : fields memorySize.toNat (F p)) :
-    ProverHint (F p) := fun key n =>
-  if key = memoryValuesKey ∧ n = 1 then
-    memoryValues.toArray.map fun value => Vector.ofFn fun _ => value
-  else #[]
-
 def formalEnsemble {programSize memorySize : UInt64} (program : Fin programSize.toNat → F p)
     (h_programSize : programSize.toNat < p) (h_memorySize : memorySize.toNat < p)
     (initialState : State (F p)) :=
@@ -701,7 +694,8 @@ def formalEnsemble {programSize memorySize : UInt64} (program : Fin programSize.
       obtain ⟨steps, hsteps⟩ := spec
       exact ⟨memory witness.data ∘ Fin.cast hsize.symm, steps,
         femtoCairoMachineBoundedExecution_cast program hsize _ _ _ ▸ hsteps⟩)
-  |>.withProverInput (fields memorySize.toNat (F p)) memoryValuesHint
+  |>.withProverInput (fields memorySize.toNat)
+    [{ key := memoryValuesKey, width := 1, offset := 0, rows := memorySize.toNat }]
     (ProverAssumptions program memorySize initialState)
 
 /-- End-to-end soundness: a valid proof for the public registers `(ap, fp)` shows that the
