@@ -1020,7 +1020,112 @@ def completePlan (hprogram : ∃ k, programSize.toNat = 2 ^ k)
       ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
     · exact absurd rfl hvm
     all_goals cases hmode
-  preallocated := sorry
+  preallocated := by
+    have hmemoryHeight : 2 ^ Nat.clog 2 memorySize.toNat = memorySize.toNat := by
+      obtain ⟨k, hk⟩ := hmemory
+      rw [hk, Nat.clog_pow _ _ (by decide)]
+    intro component hmem rowPlan mode hplanned hmode
+    rcases planned_cases program h_programSize h_memorySize initialState hmem hplanned with
+      ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
+    · cases hmode
+    · simp only [Mode.preallocated.injEq] at hmode
+      subst hmode
+      refine ⟨fun publicInput memoryValues _ data hstable => ⟨?_, ?_, ?_⟩,
+        fun row _ _ => providerInteractions MemoryChannel.toRaw rfl row,
+        fun row => memory_row h_memorySize row, ?_, ?_⟩
+      · intro row hrow
+        change row < memorySize.toNat at hrow
+        obtain ⟨hsize, hrows⟩ := memory_stable program h_programSize h_memorySize initialState
+          hmemoryHeight memoryValues hstable
+        have hval : ((row : ℕ) : F p).val = row := ZMod.val_natCast_of_lt (by omega)
+        rw [memory_initial program h_programSize h_memorySize initialState memoryValues hrow,
+          inputOf_memory]
+        simp only [memoryComponent, provideMemory, MemoryChannel]
+        simp only [List.getElem?_toArray, List.getElem?_cons_zero, List.getElem?_cons_succ,
+          Option.getD_some, hval]
+        exact ⟨hsize ▸ hrow, (hrows row hrow).1.symm, (hrows row hrow).2.symm⟩
+      · intro handler hhandler row hrow
+        simp only [memoryMode, List.mem_singleton] at hhandler
+        subst hhandler
+        rw [memory_initial program h_programSize h_memorySize initialState memoryValues
+          (show row < memorySize.toNat from hrow)]
+        rfl
+      · intro input handler hhandler value hassumptions
+        simp only [memoryMode, List.mem_singleton] at hhandler
+        subst hhandler
+        rw [inputOf_memory] at hassumptions ⊢
+        simpa [memoryComponent, provideMemory] using hassumptions
+      · intro input data hint index hindex other hother
+        simp only [memoryMode, List.map_cons, List.map_nil, List.mem_singleton] at hindex
+        rcases index with _ | index
+        · contradiction
+        · simp [providerInteractions] at hother
+      · intro handler hhandler
+        simp only [memoryMode, List.mem_singleton] at hhandler
+        subst hhandler
+        refine ⟨MemoryChannel.toRaw, by simp [channels_eq], fun _ _ _ => by simp [providerInteractions],
+          fun _ _ _ _ => by simp [providerInteractions], fun _ _ _ _ index hindex => ?_, ?_⟩
+        · rcases index with _ | index
+          · contradiction
+          · simp [providerInteractions]
+        rintro publicInput memoryValues - data hstable
+          ⟨⟨_ | ⟨address, _ | ⟨value, _ | _⟩⟩⟩, hlength⟩ hguarantees <;>
+          change _ = 2 at hlength <;> simp at hlength
+        simp [Channel.toRaw, MemoryChannel, explicit_provable_type, circuit_norm] at hguarantees
+        obtain ⟨hlt, haddress, hvalue⟩ := hguarantees
+        obtain ⟨hsize, hrows⟩ := memory_stable program h_programSize h_memorySize initialState
+          hmemoryHeight memoryValues hstable
+        have hrow : address.val < memorySize.toNat := hsize ▸ hlt
+        refine ⟨address.val, hrow, _, rfl, ?_⟩
+        rw [memory_initial program h_programSize h_memorySize initialState memoryValues hrow]
+        simp only [providerInteractions, List.getElem?_toArray, List.getElem?_cons_zero,
+          List.getElem?_cons_succ, Option.getD_some, Vector.toArray_mk, ZMod.natCast_zmod_val]
+        rw [hvalue, (hrows _ hrow).2]
+    · simp only [Mode.preallocated.injEq] at hmode
+      subst hmode
+      refine ⟨fun publicInput memoryValues _ data hstable => ⟨?_, ?_, ?_⟩,
+        fun row _ _ => providerInteractions (ProgramChannel program).toRaw rfl row,
+        fun row => program_row program h_programSize row, ?_, ?_⟩
+      · intro row hrow
+        change row < programSize.toNat at hrow
+        have hval : ((row : ℕ) : F p).val = row := ZMod.val_natCast_of_lt (by omega)
+        rw [program_initial program h_programSize _ hrow, inputOf_program]
+        simp only [programComponent, provideProgram, ProgramChannel]
+        simp only [List.getElem?_toArray, List.getElem?_cons_zero, List.getElem?_cons_succ,
+          Option.getD_some, hval]
+        exact ⟨hrow, trivial⟩
+      · intro handler hhandler row hrow
+        simp only [programMode, List.mem_singleton] at hhandler
+        subst hhandler
+        rw [program_initial program h_programSize _ (show row < programSize.toNat from hrow)]
+        rfl
+      · intro input handler hhandler value hassumptions
+        simp only [programMode, List.mem_singleton] at hhandler
+        subst hhandler
+        rw [inputOf_program] at hassumptions ⊢
+        simpa [programComponent, provideProgram] using hassumptions
+      · intro input data hint index hindex other hother
+        simp only [programMode, List.map_cons, List.map_nil, List.mem_singleton] at hindex
+        rcases index with _ | index
+        · contradiction
+        · simp [providerInteractions] at hother
+      · intro handler hhandler
+        simp only [programMode, List.mem_singleton] at hhandler
+        subst hhandler
+        refine ⟨(ProgramChannel program).toRaw, by simp [channels_eq],
+          fun _ _ _ => by simp [providerInteractions], fun _ _ _ _ => by simp [providerInteractions],
+          fun _ _ _ _ index hindex => ?_, ?_⟩
+        · rcases index with _ | index
+          · contradiction
+          · simp [providerInteractions]
+        rintro publicInput memoryValues - data -
+          ⟨⟨_ | ⟨address, _ | ⟨value, _ | _⟩⟩⟩, hlength⟩ hguarantees <;>
+          change _ = 2 at hlength <;> simp at hlength
+        simp [Channel.toRaw, ProgramChannel, explicit_provable_type, circuit_norm] at hguarantees
+        obtain ⟨hrow, hvalue⟩ := hguarantees
+        refine ⟨address.val, hrow, _, rfl, ?_⟩
+        rw [program_initial program h_programSize _ hrow]
+        simp [providerInteractions, hvalue]
   padding := by
     have hmemoryHeight : 2 ^ Nat.clog 2 memorySize.toNat = memorySize.toNat := by
       obtain ⟨k, hk⟩ := hmemory
@@ -1044,5 +1149,21 @@ def completePlan (hprogram : ∃ k, programSize.toNat = 2 ^ k)
       simp [Padding.targetHeight, memoryMode, hmemoryHeight] at this
     · have := hpad (programMode programSize) rfl
       simp [Padding.targetHeight, programMode, hprogramHeight] at this
+
+/-- FemtoCairo witness generation is complete: from memory values on which the program runs in at
+least one step to completion with registers `(ap, fp)`, in a run that fits the field and the trace, it
+returns a witness for these registers satisfying the constraints and balancing all channels. -/
+theorem generate_complete (hprogram : ∃ k, programSize.toNat = 2 ^ k)
+    (hmemory : ∃ k, memorySize.toNat = 2 ^ k) (memoryValues : fields memorySize.toNat (F p))
+    (ap fp : F p) (steps : ℕ)
+    (hrun : Spec.femtoCairoMachineBoundedExecution program memoryValues.get (some initialState)
+      (steps + 1) = some (haltedState programSize.toNat ap fp))
+    (hp : 64 * (steps + programSize.toNat + memorySize.toNat + 8) < p) (hsteps : steps < 2 ^ 62) :
+    ∃ witness, generate program h_programSize h_memorySize memoryValues initialState (ap, fp) =
+        .ok witness ∧ witness.publicInput = (ap, fp) ∧ witness.Constraints ∧
+      witness.BalancedChannels :=
+  Air.Flat.WitnessGeneration.generate_complete
+    (completePlan program h_programSize h_memorySize initialState hprogram hmemory)
+    ⟨steps, hrun, hp, hsteps⟩
 
 end Examples.FemtoCairo.FlatAir.Witness
