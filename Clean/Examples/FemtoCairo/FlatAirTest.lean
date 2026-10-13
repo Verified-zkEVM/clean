@@ -36,7 +36,7 @@ def generateResult (memoryValues : fields 8 (F pBabybear)) :
   match Examples.FemtoCairo.FlatAir.Witness.generate
       (p := pBabybear) (programSize := programSize) (memorySize := 8)
       testProgram h_programSize h_memorySize
-      memoryValues initialState finalRegisters 8 with
+      memoryValues initialState finalRegisters with
   | .error error => .error (toString error)
   | .ok witness =>
     let memoryData := witness.data "memory" 3
@@ -68,7 +68,7 @@ example : generateResult alternateMemoryValues = .ok ([8, 8, 32], true, true, 8,
 /-- The plan error of exporting with a replaced memory generation mode. -/
 def memoryModeError (memory : Mode (F pBabybear)) : Option PlanError :=
   let plan : GenerationPlan (F pBabybear) :=
-    Witness.plan (memorySize := 8) testProgram h_programSize initialState 8
+    Witness.plan (memorySize := 8) testProgram h_programSize initialState
   let plan : GenerationPlan (F pBabybear) :=
     { plan with components := plan.components.map fun (name, rowPlan) =>
         if name = (provideMemory (p := pBabybear)).name then (name, { rowPlan with mode := memory })

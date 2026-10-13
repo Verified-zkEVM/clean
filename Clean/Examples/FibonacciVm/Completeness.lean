@@ -198,7 +198,7 @@ def vm : Vm (fibonacciEnsemble (p := p)) (plan (p := p)) where
       simp [Mode.handled, fibMode, add8Mode, bytesMode, handlerDirection, circuit_norm,
         Component.rowOperations, bytesComponent, pushBytes,
         BytesTable, Add8Channel, FibonacciChannel]
-  next
+  next _ := next
   initial _ := #[0, 0, 1]
   final | (n, x, y) => #[n, x, y]
 
@@ -209,13 +209,15 @@ lemma fibonacci_val (k : ℕ) : ZMod.val (((fibonacci k).1 : ℕ) : F p) = (fibo
     ZMod.val_natCast_of_lt (by linarith [pGt.out])⟩
 
 /-- The `k`-th state of the run is the `k`-th Fibonacci state. -/
-lemma vm_state (publicInput : fieldTriple (F p)) (k : ℕ) :
-    (vm (p := p)).state publicInput k =
+lemma vm_state (publicInput : fieldTriple (F p))
+    (proverInput : (fibonacciEnsemble (p := p)).ProverInput (F p)) (k : ℕ) :
+    (vm (p := p)).state publicInput proverInput k =
       #[(k : F p), ((fibonacci k).1 : F p), ((fibonacci k).2 : F p)] := by
   induction k with
   | zero => simp [Vm.state, vm, fibonacci]
   | succ k ih =>
-      rw [Vm.state, Function.iterate_succ_apply', ← Vm.state, ih]
+      simp only [Vm.state, Function.iterate_succ_apply'] at ih ⊢
+      rw [ih]
       obtain ⟨h1, h2⟩ := fibonacci_val (p := p) k
       simp [vm, next, h1, h2, fibonacci]
 
@@ -351,10 +353,10 @@ def completePlan : CompletePlan (fibonacciEnsemble (p := p)) (plan (p := p)) whe
           Operations.toNested_toFlat, Gadgets.Equality.circuit, Gadgets.Equality.main,
           Circuit.forEach, FlatOperation.interactions]
         exact interactions_lt hp
-  vm_row state hsize := by
+  vm_row _ state hsize := by
     change state.size = 3 at hsize
     rcases state with ⟨_ | ⟨n, _ | ⟨x, _ | ⟨y, _ | ⟨_, _⟩⟩⟩⟩⟩ <;> simp at hsize
-    exact fib8_row n x y
+    exact (fib8_row n x y).mono fun _ _ _ h _ _ => h
   verifier := by
     rintro ⟨n, x, y⟩ proverInput - data -
     exact verifier_row n x y data

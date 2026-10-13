@@ -133,12 +133,12 @@ structure Run (ens : FormalEnsemble (F p) PublicIO) (plan : GenerationPlan (F p)
   proverInput : ens.ProverInput (F p)
   assumptions : ens.ProverAssumptions publicInput proverInput
   steps : ℕ
-  reaches : complete.vm.state publicInput steps = complete.vm.final publicInput
-  distinct : ∀ index < steps, complete.vm.state publicInput index ≠ complete.vm.final publicInput
+  reaches : complete.vm.state publicInput proverInput steps = complete.vm.final publicInput
+  distinct : ∀ index < steps, complete.vm.state publicInput proverInput index ≠ complete.vm.final publicInput
   vm_assumptions : ∀ index < steps, ∀ data,
     StableData ens.ensemble plan (ens.hint proverInput) data →
       complete.vm.component.circuit.ProverAssumptions
-        (inputOf complete.vm.component (complete.vm.input (complete.vm.state publicInput index)))
+        (inputOf complete.vm.component (complete.vm.input (complete.vm.state publicInput proverInput index)))
         data (ens.hint proverInput)
   bounds : RowBounds ens plan complete.vm (complete.rowBound steps) steps
 
@@ -286,8 +286,8 @@ def demandOrigin (mode : DemandMode (F p)) (message : Array (F p)) (count : ℕ)
 /-- The VM row answering the `index`-th state. -/
 def vmRow (index : ℕ) : GeneratedRow (F p) :=
   let vm := run.complete.vm
-  run.row vm.component (vm.input (vm.state run.publicInput index))
-    (some (demandOrigin vm.mode (vm.state run.publicInput index) 1))
+  run.row vm.component (vm.input (vm.state run.publicInput run.proverInput index))
+    (some (demandOrigin vm.mode (vm.state run.publicInput run.proverInput index) 1))
 
 /-- The row of a demand-driven component answering `count` occurrences of `message`. -/
 def answerRow (component : Component (F p)) (mode : DemandMode (F p)) (message : Array (F p))
@@ -374,15 +374,18 @@ lemma rowInteractions_honest {F : Type} [FiniteField F] {component : Component F
 lemma vmObligation (state : Array (F p)) (env : ProverEnvironment (F p))
     (hsize : state.size = run.complete.vm.channel.arity)
     (honest : HonestEnv run.complete.vm.component (run.complete.vm.input state) env)
+    (hhint : env.hint = ens.hint run.proverInput)
+    (hstable : StableData ens.ensemble plan env.hint env.data)
     (hassumptions : run.complete.vm.component.circuit.ProverAssumptions
       (inputOf run.complete.vm.component (run.complete.vm.input state)) env.data env.hint) :
     (∀ message, netOfInteractions (interactionsIn run.complete.vm.component env.toEnvironment)
         run.complete.vm.channel.name message =
-      (if message = run.complete.vm.next state then 1 else 0) - (if message = state then 1 else 0)) ∧
+      (if message = run.complete.vm.next run.proverInput state then 1 else 0) - (if message = state then 1 else 0)) ∧
     ∀ interaction ∈ interactionsIn run.complete.vm.component env.toEnvironment,
       interaction.channel.name ≠ run.complete.vm.channel.name →
         SideInteraction ens.ensemble plan run.complete.vm.channel.name false interaction :=
-  rowInteractions_honest (run.complete.vm_row state hsize) honest hassumptions rfl
+  rowInteractions_honest (run.complete.vm_row run.proverInput state hsize) honest hassumptions hhint
+    hstable rfl
 
 /-- The demand obligation for honest rows. -/
 lemma demandObligation {component : Component (F p)} (hmem : component ∈ ens.ensemble.tables)
@@ -873,20 +876,20 @@ lemma vm_row_facts {state : Array (F p)} (hsize : state.size = run.complete.vm.c
     let interactions := interactionsIn run.complete.vm.component
       (run.rowEnv run.complete.vm.component (run.complete.vm.input state) run.stableData).toEnvironment
     (∀ message, netOfInteractions interactions run.complete.vm.channel.name message =
-      (if message = run.complete.vm.next state then 1 else 0) - (if message = state then 1 else 0)) ∧
+      (if message = run.complete.vm.next run.proverInput state then 1 else 0) - (if message = state then 1 else 0)) ∧
     ∀ interaction ∈ interactions, interaction.channel.name ≠ run.complete.vm.channel.name →
       SideInteraction ens.ensemble plan run.complete.vm.channel.name false interaction :=
   run.vmObligation state _ hsize
-    (run.honestEnv_row run.complete.vm.mem (run.vm_input_size state) run.stableData)
-    (hassumptions.assumptions _ run.stableData_stable)
+    (run.honestEnv_row run.complete.vm.mem (run.vm_input_size state) run.stableData) rfl
+    run.stableData_stable (hassumptions.assumptions _ run.stableData_stable)
 
 lemma vm_admissible {index : ℕ} (hindex : index < run.steps) :
-    run.Admissible run.complete.vm.component (run.complete.vm.input (run.complete.vm.state run.publicInput index)) :=
+    run.Admissible run.complete.vm.component (run.complete.vm.input (run.complete.vm.state run.publicInput run.proverInput index)) :=
   ⟨run.vm_input_size _, run.vm_assumptions index hindex⟩
 
 /-- The states of the run have the VM channel's arity. -/
 lemma state_size : ∀ index < run.steps,
-    (run.complete.vm.state run.publicInput index).size = run.complete.vm.channel.arity
+    (run.complete.vm.state run.publicInput run.proverInput index).size = run.complete.vm.channel.arity
   | 0, hindex => by
       have hverifier := (run.complete.verifier run.publicInput run.proverInput run.assumptions
         run.stableData run.stableData_stable).1 (run.complete.vm.initial run.publicInput)
@@ -901,15 +904,15 @@ lemma state_size : ∀ index < run.steps,
       exact interaction.same_size
   | index + 1, hindex => by
       have hsize := state_size index (by omega)
-      have hstep : run.complete.vm.state run.publicInput (index + 1) =
-          run.complete.vm.next (run.complete.vm.state run.publicInput index) := by
+      have hstep : run.complete.vm.state run.publicInput run.proverInput (index + 1) =
+          run.complete.vm.next run.proverInput (run.complete.vm.state run.publicInput run.proverInput index) := by
         simp only [Vm.state, Function.iterate_succ_apply']
       rw [hstep]
-      by_cases hsame : run.complete.vm.next (run.complete.vm.state run.publicInput index) =
-          run.complete.vm.state run.publicInput index
+      by_cases hsame : run.complete.vm.next run.proverInput (run.complete.vm.state run.publicInput run.proverInput index) =
+          run.complete.vm.state run.publicInput run.proverInput index
       · rw [hsame, hsize]
       have hnet := (run.vm_row_facts hsize (run.vm_admissible (by omega))).1
-        (run.complete.vm.next (run.complete.vm.state run.publicInput index))
+        (run.complete.vm.next run.proverInput (run.complete.vm.state run.publicInput run.proverInput index))
       simp only [hsame, if_true, if_false, sub_zero] at hnet
       obtain ⟨interaction, hmem, hname, hmsg, -⟩ :=
         exists_of_netOfInteractions_ne_zero (hnet ▸ one_ne_zero)
@@ -951,7 +954,7 @@ def vmNet (state : ComponentState (F p)) (row : GeneratedRow (F p))
     (message : Array (F p)) : F p :=
   if state.component.circuit.name = run.complete.vm.component.circuit.name then
     match row.origin with
-    | some origin => (if message = run.complete.vm.next origin.message then 1 else 0) -
+    | some origin => (if message = run.complete.vm.next run.proverInput origin.message then 1 else 0) -
         (if message = origin.message then 1 else 0)
     | none => 0
   else 0
@@ -1011,10 +1014,10 @@ lemma rowFacts_vmRow {state : ComponentState (F p)} (hok : run.StateOk state)
   have hfacts := run.vm_row_facts (run.state_size index hindex) hadmissible
   have hinteractions : rowInteractions state (run.vmRow index) run.data0 =
       interactionsIn run.complete.vm.component (run.rowEnv run.complete.vm.component
-        (run.complete.vm.input (run.complete.vm.state run.publicInput index)) run.stableData).toEnvironment := by
+        (run.complete.vm.input (run.complete.vm.state run.publicInput run.proverInput index)) run.stableData).toEnvironment := by
     have := run.rowInteractions_row hok.interactions hok.mem (input :=
-      run.complete.vm.input (run.complete.vm.state run.publicInput index)) (hvm ▸ run.vm_input_size _)
-      (some (demandOrigin run.complete.vm.mode (run.complete.vm.state run.publicInput index) 1)) run.stableData_stable
+      run.complete.vm.input (run.complete.vm.state run.publicInput run.proverInput index)) (hvm ▸ run.vm_input_size _)
+      (some (demandOrigin run.complete.vm.mode (run.complete.vm.state run.publicInput run.proverInput index) 1)) run.stableData_stable
     rw [hvm] at this
     exact this
   refine ⟨by simp [vmRow, row, hvm], hvm ▸ hadmissible, ?_, ?_, ?_, ?_⟩
@@ -1479,10 +1482,10 @@ lemma exists_vm_state {states : List (ComponentState (F p))}
 
 lemma telescope (k : ℕ) (message : Array (F p)) :
     ((List.range k).map fun index =>
-      (if message = run.complete.vm.state run.publicInput (index + 1) then (1 : F p) else 0) -
-        (if message = run.complete.vm.state run.publicInput index then 1 else 0)).sum =
-      (if message = run.complete.vm.state run.publicInput k then 1 else 0) -
-        (if message = run.complete.vm.state run.publicInput 0 then 1 else 0) := by
+      (if message = run.complete.vm.state run.publicInput run.proverInput (index + 1) then (1 : F p) else 0) -
+        (if message = run.complete.vm.state run.publicInput run.proverInput index then 1 else 0)).sum =
+      (if message = run.complete.vm.state run.publicInput run.proverInput k then 1 else 0) -
+        (if message = run.complete.vm.state run.publicInput run.proverInput 0 then 1 else 0) := by
   induction k with
   | zero => simp
   | succ k ih =>
@@ -2102,17 +2105,17 @@ lemma length_rowInteractions_flatMap {F : Type} [FiniteField F] (state : Compone
 
 /-- Before the final state, the VM moves. -/
 lemma next_ne {index : ℕ} (hindex : index < run.steps) :
-    run.complete.vm.next (run.complete.vm.state run.publicInput index) ≠
-      run.complete.vm.state run.publicInput index := by
+    run.complete.vm.next run.proverInput (run.complete.vm.state run.publicInput run.proverInput index) ≠
+      run.complete.vm.state run.publicInput run.proverInput index := by
   intro hstuck
-  have hconstant : ∀ j, run.complete.vm.state run.publicInput (index + j) =
-      run.complete.vm.state run.publicInput index := by
+  have hconstant : ∀ j, run.complete.vm.state run.publicInput run.proverInput (index + j) =
+      run.complete.vm.state run.publicInput run.proverInput index := by
     intro j
     induction j with
     | zero => rfl
     | succ j ih =>
-        rw [← Nat.add_assoc, show run.complete.vm.state run.publicInput (index + j + 1) =
-          run.complete.vm.next (run.complete.vm.state run.publicInput (index + j)) by
+        rw [← Nat.add_assoc, show run.complete.vm.state run.publicInput run.proverInput (index + j + 1) =
+          run.complete.vm.next run.proverInput (run.complete.vm.state run.publicInput run.proverInput (index + j)) by
             simp only [Vm.state, Function.iterate_succ_apply'], ih, hstuck]
   have := hconstant (run.steps - index)
   rw [Nat.add_sub_cancel' hindex.le, run.reaches] at this
@@ -2536,7 +2539,7 @@ lemma vm_rows (hinv : run.Inv k padded balancing) {state : ComponentState (F p)}
 lemma net_vm (hinv : run.Inv k padded balancing) (message : Array (F p)) :
     netOfInteractions (run.verifier ++ statesInteractions balancing.states run.data0)
       run.complete.vm.channel.name message =
-      (if message = run.complete.vm.state run.publicInput k then 1 else 0) -
+      (if message = run.complete.vm.state run.publicInput run.proverInput k then 1 else 0) -
         (if message = run.complete.vm.final run.publicInput then 1 else 0) := by
   have hverifier := (run.complete.verifier run.publicInput run.proverInput run.assumptions
     run.stableData run.stableData_stable).1 message
@@ -2559,8 +2562,8 @@ lemma net_vm (hinv : run.Inv k padded balancing) (message : Array (F p)) :
     simp [vmNet, row]
   have hsteps : (((List.range k).map ((fun row => run.vmNet vmState row message) ∘ run.vmRow))).sum =
       ((List.range k).map fun index =>
-        (if message = run.complete.vm.state run.publicInput (index + 1) then (1 : F p) else 0) -
-          (if message = run.complete.vm.state run.publicInput index then 1 else 0)).sum := by
+        (if message = run.complete.vm.state run.publicInput run.proverInput (index + 1) then (1 : F p) else 0) -
+          (if message = run.complete.vm.state run.publicInput run.proverInput index then 1 else 0)).sum := by
     congr 1
     apply List.map_congr_left
     intro index _
@@ -2568,16 +2571,16 @@ lemma net_vm (hinv : run.Inv k padded balancing) (message : Array (F p)) :
       rw [hvm]
     simp only [Function.comp_apply, vmNet, hname, if_true, vmRow, row, demandOrigin, Vm.state,
       Function.iterate_succ_apply']
-    by_cases hnext : message = run.complete.vm.next (run.complete.vm.next^[index]
+    by_cases hnext : message = run.complete.vm.next run.proverInput ((run.complete.vm.next run.proverInput)^[index]
         (run.complete.vm.initial run.publicInput)) <;>
-      by_cases hcurrent : message = run.complete.vm.next^[index]
+      by_cases hcurrent : message = (run.complete.vm.next run.proverInput)^[index]
         (run.complete.vm.initial run.publicInput) <;>
       simp [hnext, hcurrent]
   rw [hpad, add_zero, hsteps, run.telescope]
   simp only [Vm.state, Function.iterate_zero, id_eq]
   by_cases hinitial : message = run.complete.vm.initial run.publicInput <;>
     by_cases hfinal : message = run.complete.vm.final run.publicInput <;>
-    by_cases hstate : message = run.complete.vm.next^[k] (run.complete.vm.initial run.publicInput) <;>
+    by_cases hstate : message = (run.complete.vm.next run.proverInput)^[k] (run.complete.vm.initial run.publicInput) <;>
     simp [hinitial, hfinal, hstate]
 
 /-- The VM and preallocated components stay within their row bounds. -/
@@ -2717,7 +2720,7 @@ channel. -/
 lemma demand_cases (hinv : run.Inv k padded balancing) {demand : Demand (F p)}
     (hmem : demand ∈ balancing.demands) :
     (demand.channel = run.complete.vm.channel.name ∧ k < run.steps ∧ padded = false ∧
-      ((demand.message = run.complete.vm.state run.publicInput k ∧ demand.multiplicity = 1) ∨
+      ((demand.message = run.complete.vm.state run.publicInput run.proverInput k ∧ demand.multiplicity = 1) ∨
         (demand.message = run.complete.vm.final run.publicInput ∧ demand.multiplicity = -1))) ∨
     (demand.channel ≠ run.complete.vm.channel.name ∧ ∃ δ, 0 < δ ∧ 2 * δ < p ∧
       demand.multiplicity = -(δ : F p) ∧
@@ -2739,7 +2742,7 @@ lemma demand_cases (hinv : run.Inv k padded balancing) {demand : Demand (F p)}
       · rfl
       · exact absurd (hinv.padded_steps rfl) (by omega)
     · have hdistinct := run.distinct k hk
-      by_cases hstate : demand.message = run.complete.vm.state run.publicInput k
+      by_cases hstate : demand.message = run.complete.vm.state run.publicInput run.proverInput k
       · refine .inl ⟨hstate, ?_⟩
         rw [← hnet]
         simp [hstate, hdistinct]
@@ -2773,7 +2776,7 @@ lemma exists_handled (hinv : run.Inv k padded balancing) (hne : balancing.demand
   rcases hinv.demand_cases hmem with ⟨-, hk, -, -⟩ | ⟨hchannel, δ, hpos, hlt, hmult, hcount⟩
   · have hdistinct := run.distinct k hk
     have hnet : netOf balancing.demands run.complete.vm.channel.name
-        (run.complete.vm.state run.publicInput k) = 1 := by
+        (run.complete.vm.state run.publicInput run.proverInput k) = 1 := by
       rw [hinv.tracks, hinv.net_vm]
       simp [hdistinct]
     obtain ⟨demand', hmem', hkey⟩ := List.mem_map.mp ((hinv.canonical.mem_iff _ _).mpr
@@ -2806,7 +2809,7 @@ lemma step_vm (hinv : run.Inv k padded balancing) {demand : Demand (F p)} {index
     {state : ComponentState (F p)} (hstate : balancing.states[index]? = some state)
     (hvm : state.component = run.complete.vm.component) (hk : k < run.steps)
     (hpadded : padded = false)
-    (hmessage : demand.message = run.complete.vm.state run.publicInput k)
+    (hmessage : demand.message = run.complete.vm.state run.publicInput run.proverInput k)
     (hmult : demand.multiplicity = 1) :
     ∃ states change, handle balancing.states demand index run.data0 run.hint = .ok (states, change) ∧
       run.Inv (k + 1) padded (balancing.apply states change) ∧
@@ -2876,7 +2879,7 @@ lemma step_vm (hinv : run.Inv k padded balancing) {demand : Demand (F p)} {index
     have hname : state.component.circuit.name = run.complete.vm.component.circuit.name := by
       rw [hvm]
     have hne : netOfInteractions (rowInteractions state (run.vmRow k) run.data0)
-        run.complete.vm.channel.name (run.complete.vm.state run.publicInput k) ≠ 0 := by
+        run.complete.vm.channel.name (run.complete.vm.state run.publicInput run.proverInput k) ≠ 0 := by
       rw [(run.rowFacts_vmRow hok hvm hk).vm_net]
       simp [vmNet, hname, vmRow, row, demandOrigin, Ne.symm hnext]
     obtain ⟨interaction, hmem, -⟩ := exists_of_netOfInteractions_ne_zero hne
@@ -3783,7 +3786,7 @@ lemma steps_of_settled (hinv : run.Inv k padded balancing) (hsettled : balancing
     k = run.steps := by
   by_contra hne
   have hk : k < run.steps := lt_of_le_of_ne hinv.steps_le hne
-  have hnet := hinv.tracks run.complete.vm.channel.name (run.complete.vm.state run.publicInput k)
+  have hnet := hinv.tracks run.complete.vm.channel.name (run.complete.vm.state run.publicInput run.proverInput k)
   rw [hinv.net_vm, hsettled] at hnet
   simp [run.distinct k hk] at hnet
 

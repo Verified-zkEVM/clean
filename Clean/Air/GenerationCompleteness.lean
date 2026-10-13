@@ -162,8 +162,8 @@ structure Vm (ens : FormalEnsemble (F p) PublicIO) (plan : GenerationPlan (F p))
   no_pull_handler : ∀ other ∈ ens.ensemble.tables, ∀ rowPlan,
     (other.circuit.name, rowPlan) ∈ plan.components →
       (channel.name, Direction.pull) ∉ rowPlan.mode.handled other
-  /-- The state after a state. -/
-  next : Array (F p) → Array (F p)
+  /-- The state after a state, for a prover input. -/
+  next : ens.ProverInput (F p) → Array (F p) → Array (F p)
   /-- The states the verifier pushes first and pulls last. -/
   initial : PublicIO (F p) → Array (F p)
   final : PublicIO (F p) → Array (F p)
@@ -176,8 +176,9 @@ variable {ens : FormalEnsemble (F p) PublicIO} {plan : GenerationPlan (F p)}
 def input (vm : Vm ens plan) (state : Array (F p)) : Array (F p) := vm.mode.input.eval state 1
 
 /-- The `index`-th state of the run from the public input's initial state. -/
-def state (vm : Vm ens plan) (publicInput : PublicIO (F p)) (index : ℕ) : Array (F p) :=
-  vm.next^[index] (vm.initial publicInput)
+def state (vm : Vm ens plan) (publicInput : PublicIO (F p)) (proverInput : ens.ProverInput (F p))
+    (index : ℕ) : Array (F p) :=
+  (vm.next proverInput)^[index] (vm.initial publicInput)
 
 end Vm
 
@@ -226,19 +227,21 @@ structure CompletePlan (ens : FormalEnsemble (F p) PublicIO) (plan : GenerationP
         rank other.circuit.name < rank component.circuit.name
   /-- The run reaches the final state, through states the VM rows can answer, within the bounds. -/
   run : ∀ publicInput proverInput, ens.ProverAssumptions publicInput proverInput →
-    ∃ steps, vm.state publicInput steps = vm.final publicInput ∧
-      (∀ index < steps, vm.state publicInput index ≠ vm.final publicInput) ∧
+    ∃ steps, vm.state publicInput proverInput steps = vm.final publicInput ∧
+      (∀ index < steps, vm.state publicInput proverInput index ≠ vm.final publicInput) ∧
       (∀ index < steps, ∀ data, StableData ens.ensemble plan (ens.hint proverInput) data →
         vm.component.circuit.ProverAssumptions
-          (inputOf vm.component (vm.input (vm.state publicInput index))) data
+          (inputOf vm.component (vm.input (vm.state publicInput proverInput index))) data
           (ens.hint proverInput)) ∧
       RowBounds ens plan vm (rowBound steps) steps
   /-- A VM row pulls its state and pushes the next one; it adds nothing else on the VM channel. -/
-  vm_row : ∀ state, state.size = vm.channel.arity →
-    RowInteractions vm.component.circuit fun input _ interactions =>
+  vm_row : ∀ proverInput state, state.size = vm.channel.arity →
+    RowInteractions vm.component.circuit fun input env interactions =>
+      env.hint = ens.hint proverInput → StableData ens.ensemble plan env.hint env.data →
       input = inputOf vm.component (vm.input state) →
       (∀ message, netOfInteractions interactions vm.channel.name message =
-        (if message = vm.next state then 1 else 0) - (if message = state then 1 else 0)) ∧
+        (if message = vm.next proverInput state then 1 else 0) -
+          (if message = state then 1 else 0)) ∧
       ∀ interaction ∈ interactions, interaction.channel.name ≠ vm.channel.name →
         SideInteraction ens.ensemble plan vm.channel.name false interaction
   /-- The verifier pushes the initial state, pulls the final one, and otherwise pulls single

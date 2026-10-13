@@ -17,6 +17,6 @@ def main : IO Unit := do
       (Examples.FemtoCairo.FlatAir.formalEnsemble testProgram h_programSize h_memorySize
         initialState)
       (Examples.FemtoCairo.FlatAir.Witness.plan (memorySize := 8)
-        testProgram h_programSize initialState 8) with
+        testProgram h_programSize initialState) with
   | .ok rust => IO.print rust
   | .error error => throw (IO.userError error)
