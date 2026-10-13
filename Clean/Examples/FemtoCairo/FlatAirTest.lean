@@ -36,7 +36,7 @@ def generateResult (memoryValues : fields 8 (F pBabybear)) (executionRows : UInt
   match Examples.FemtoCairo.FlatAir.Witness.generate
       (p := pBabybear) (programSize := programSize) (memorySize := 8)
       testProgram h_programSize h_memorySize
-      memoryValues initialState finalRegisters executionRows with
+      memoryValues initialState finalRegisters with
   | .error error => .error (toString error)
   | .ok witness =>
     let memoryData := witness.data "memory" 3
@@ -60,34 +60,31 @@ used by the execution trace.
 -/
 example : result = .ok ([8, 8, 32], true, true, 8, 10, 0) := by native_decide
 
-/-- The same Lean witness program accepts a second runtime memory without changing
-the compiled ensemble or generation configuration. -/
+/-- The same Lean witness program accepts a second private memory without changing the compiled
+ensemble or generation plan. -/
 example : generateResult alternateMemoryValues = .ok ([8, 8, 32], true, true, 8, 10, 99) := by
   native_decide
 
-/-- Execution rows beyond the run are disabled padding rows at the initial state. -/
-example : generateResult memoryValues 16 = .ok ([16, 8, 32], true, true, 8, 10, 0) := by
-  native_decide
+/-- The plan error of exporting with a replaced memory generation mode. -/
+def memoryModeError (memory : Mode (F pBabybear)) : Option PlanError :=
+  let plan : GenerationPlan (F pBabybear) :=
+    Witness.plan (memorySize := 8) testProgram h_programSize initialState
+  let plan : GenerationPlan (F pBabybear) :=
+    { plan with components := plan.components.map fun (name, rowPlan) =>
+        if name = (provideMemory (p := pBabybear)).name then (name, { rowPlan with mode := memory })
+        else (name, rowPlan) }
+  match Backends.Plonky3.lower
+      (formalEnsemble testProgram h_programSize h_memorySize initialState) plan with
+  | .error (.plan error) => some error
+  | _ => none
 
-def unstableDataReadRejected : Bool :=
-  let config : Config (F pBabybear) :=
-    Witness.config (memorySize := 8) testProgram h_programSize initialState 8
-  let mutableMemory : Mode (F pBabybear) := .preallocated {
+/-- Export rejects reads of handler columns, which balancing mutates. -/
+example : (match memoryModeError (.preallocated {
     rows := 8
     input := .ofFExprs #v[.hintGet memoryValuesKey 1 .idx 0, .const 0]
     input_valid := by rfl
-    handlers := [{ interaction := 0, column := 1 }]
-  }
-  let config : Config (F pBabybear) :=
-    { config with components := config.components.map fun (name, generation) =>
-        if name = (provideMemory (p := pBabybear)).name then (name, { generation with mode := mutableMemory })
-        else (name, generation) }
-  match Backends.Plonky3.lower
-      (formalEnsemble testProgram h_programSize h_memorySize initialState) config with
-  | .error (.config (.unstableDataRead _ _ "memory" 1)) => true
-  | _ => false
-
-/-- Export rejects witness programs that read cells mutated later by channel balancing. -/
-example : unstableDataReadRejected = true := by native_decide
+    handlers := [{ interaction := 0, column := 1 }] }) with
+    | some (.unstableDataRead _ _ "memory" 1) => true
+    | _ => false) = true := by native_decide
 
 end Examples.FemtoCairo.FlatAirTest

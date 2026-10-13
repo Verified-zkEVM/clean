@@ -2,6 +2,7 @@ module
 
 public import Clean.Air.FlatEnsemble
 public import Clean.Circuit.WitnessGeneration
+public import Mathlib.Data.Nat.Log
 
 @[expose] public section
 
@@ -12,8 +13,8 @@ This file contains the executable reference builder for flat AIR ensemble witnes
 does not depend on this builder; generated rows still have to satisfy the component constraints
 and the global channel-balance relation.
 
-`Config.validate` checks generation metadata against an ensemble once. A `ValidConfig` carries
-that check, and generation from it cannot hit structural errors. Its remaining failures are
+`GenerationPlan.validate` checks a generation plan against an ensemble once. A `ValidPlan`
+carries that check, and generation from it cannot hit structural errors. Its remaining failures are
 semantic: channel imbalance that no component handles, a message no preallocated row matches,
 and reaching as many interactions as the field has elements, beyond which channels cannot
 balance.
@@ -32,13 +33,13 @@ variable {PublicIO : TypeMap} [ProvableType PublicIO]
 inductive Direction where
   | pull
   | push
-deriving Repr, DecidableEq, BEq
+deriving Repr, DecidableEq
 
 /-- How dynamically generated rows are allocated for repeated demand. -/
 inductive Aggregation where
   | perOccurrence
   | byMessage
-deriving Repr, DecidableEq, BEq
+deriving Repr, DecidableEq
 
 /-- A structured component-input cell derived from a triggering interaction. -/
 inductive InputCell (F : Type) where
@@ -101,17 +102,17 @@ structure Padding (F : Type) where
   minimumRows : UInt64 := 1
 
 /-- How the generator builds the rows of one component. -/
-structure Generation (F : Type) where
+structure RowPlan (F : Type) where
   mode : Mode F
   padding : Padding F
 
-/-- Generation metadata keyed by component name; every ensemble component needs exactly one
-entry. -/
-structure Config (F : Type) where
-  components : List (String × Generation F)
+/-- How the generator builds the rows of every component: row plans keyed by component name;
+every ensemble component needs exactly one. -/
+structure GenerationPlan (F : Type) where
+  components : List (String × RowPlan F)
 
-/-- A structural problem with generation metadata, found by `Config.validate`. -/
-inductive ConfigError where
+/-- A structural problem with a generation plan, found by `GenerationPlan.validate`. -/
+inductive PlanError where
   | unknownComponent (name : String)
   | missingComponent (name : String)
   | duplicateComponent (name : String)
@@ -129,17 +130,18 @@ inductive ConfigError where
   | dataReadWidth (component : String) (operation : ℕ) (key : String) (expected actual : ℕ)
   | unstableDataRead (component : String) (operation : ℕ) (key : String) (column : ℕ)
   | paddedDataRead (component : String) (operation : ℕ) (key : String)
+  | witnessReadsAhead (component : String)
 deriving Repr, DecidableEq
 
 def Direction.name : Direction → String
   | .pull => "pull"
   | .push => "push"
 
-instance : ToString ConfigError where
+instance : ToString PlanError where
   toString
-    | .unknownComponent name => s!"generation config names unknown component '{name}'"
-    | .missingComponent name => s!"component '{name}' has no generation config"
-    | .duplicateComponent name => s!"component '{name}' has multiple generation configs"
+    | .unknownComponent name => s!"generation plan names unknown component '{name}'"
+    | .missingComponent name => s!"component '{name}' has no generation plan"
+    | .duplicateComponent name => s!"component '{name}' has multiple row plans"
     | .fixedDemandMode component =>
         s!"fixed-column component '{component}' must use preallocated generation"
     | .demandInputWidth component expected actual =>
@@ -173,6 +175,9 @@ instance : ToString ConfigError where
     | .paddedDataRead component operation key =>
         s!"component '{component}' witness operation {operation} reads prover-data component \
           '{key}', whose padding adds rows"
+    | .witnessReadsAhead component =>
+        s!"a witness program of component '{component}' is native or reads cells it does not \
+          precede"
 
 /-- The direction of demand a preallocated handler's interaction serves: a push serves pulls and
 a pull serves pushes. -/
@@ -250,114 +255,216 @@ def witnessDataReads : {n : ℕ} → Witgen.WitgenIR F n → List DataRead
   | _, .native _ => []
   | _, .ir steps output => steps.flatMap stepDataReads ++ vexprDataReads output
 
+/-! ### Reading only earlier cells
+
+Witness programs compute a row's cells in order, so each may read only the cells before its own.
+Native programs are opaque and never qualify. -/
+
+def expressionReadsBelow (n : ℕ) : Expression F → Bool
+  | .var cell => cell.index < n
+  | .const _ => true
+  | .add left right | .mul left right => expressionReadsBelow n left && expressionReadsBelow n right
+
+mutual
+
+def fexprReadsBelow (n : ℕ) : Witgen.FExpr F → Bool
+  | .expr e => expressionReadsBelow n e
+  | .const _ | .localVar _ => true
+  | .add left right | .mul left right => fexprReadsBelow n left && fexprReadsBelow n right
+  | .inv value => fexprReadsBelow n value
+  | .ofU64 value => u64exprReadsBelow n value
+  | .ite condition thenValue elseValue =>
+      bexprReadsBelow n condition && fexprReadsBelow n thenValue && fexprReadsBelow n elseValue
+  | .listGet values index => fexprListReadsBelow n values && u64exprReadsBelow n index
+  | .dataGet _ _ row _ | .hintGet _ _ row _ => u64exprReadsBelow n row
+
+def fexprListReadsBelow (n : ℕ) : List (Witgen.FExpr F) → Bool
+  | [] => true
+  | value :: values => fexprReadsBelow n value && fexprListReadsBelow n values
+
+def u64exprReadsBelow (n : ℕ) : Witgen.U64Expr F → Bool
+  | .const _ | .idx | .localVar _ => true
+  | .val value => fexprReadsBelow n value
+  | .add left right | .mul left right | .div left right | .mod left right |
+      .land left right | .lor left right | .lxor left right |
+      .shiftL left right | .shiftR left right => u64exprReadsBelow n left && u64exprReadsBelow n right
+  | .ite condition thenValue elseValue =>
+      bexprReadsBelow n condition && u64exprReadsBelow n thenValue && u64exprReadsBelow n elseValue
+
+def bexprReadsBelow (n : ℕ) : Witgen.BExpr F → Bool
+  | .true | .false => true
+  | .feq left right | .flt left right => fexprReadsBelow n left && fexprReadsBelow n right
+  | .neq left right | .lt left right => u64exprReadsBelow n left && u64exprReadsBelow n right
+  | .bit value _ => fexprReadsBelow n value
+  | .not condition => bexprReadsBelow n condition
+  | .and left right => bexprReadsBelow n left && bexprReadsBelow n right
+
+end
+
+def vexprReadsBelow (n : ℕ) : {m : ℕ} → Witgen.VExpr F m → Bool
+  | _, .lit values => values.toList.all (fexprReadsBelow n)
+  | _, .mapRange _ body => fexprReadsBelow n body
+  | m, .envRange offset => offset + m ≤ n
+  | _, .bitsOf value => fexprReadsBelow n value
+  | _, .append left right => vexprReadsBelow n left && vexprReadsBelow n right
+
+def stepReadsBelow (n : ℕ) : Witgen.Step F → Bool
+  | .letF value => fexprReadsBelow n value
+  | .letU value => u64exprReadsBelow n value
+
+/-- A witness program that reads the environment only below cell `n`; native programs are opaque
+and never qualify. -/
+def witgenReadsBelow (n : ℕ) : {m : ℕ} → Witgen.WitgenIR F m → Bool
+  | _, .native _ => false
+  | _, .ir steps output => steps.all (stepReadsBelow n) && vexprReadsBelow n output
+
+/-- Every witness operation of `ops`, placed from cell `n` on, reads only earlier cells. -/
+def flatReadsBelow : ℕ → List (FlatOperation F) → Bool
+  | _, [] => true
+  | n, .witness m code :: ops => witgenReadsBelow n code && flatReadsBelow (m + n) ops
+  | n, .assert _ :: ops | n, .lookup _ :: ops | n, .interact _ :: ops => flatReadsBelow n ops
+
 /-! ### Validation -/
 
-/-- Look up the generation metadata of every ensemble component, in ensemble order. -/
-def Config.align (config : Config F) (ensemble : Ensemble F PublicIO) :
-    Except ConfigError (List (Generation F)) := do
-  for (name, _) in config.components do
-    unless ensemble.tables.any (·.circuit.name == name) do
-      throw (.unknownComponent name)
-  ensemble.tables.mapM fun component =>
-    match config.components.filter (·.1 == component.circuit.name) with
-    | [(_, generation)] => pure generation
-    | [] => throw (.missingComponent component.circuit.name)
-    | _ => throw (.duplicateComponent component.circuit.name)
+/-- The row plan of the component named `name`. -/
+def GenerationPlan.rowPlanOf (plan : GenerationPlan F) (name : String) :
+    Except PlanError (RowPlan F) :=
+  match plan.components.filter (·.1 == name) with
+  | [(_, rowPlan)] => .ok rowPlan
+  | [] => .error (.missingComponent name)
+  | _ => .error (.duplicateComponent name)
 
+/-- The row plans of `components`, in order. -/
+def GenerationPlan.rowPlansOf (plan : GenerationPlan F) :
+    List (Component F) → Except PlanError (List (RowPlan F))
+  | [] => .ok []
+  | component :: components =>
+      match plan.rowPlanOf component.circuit.name with
+      | .error error => .error error
+      | .ok rowPlan =>
+          match plan.rowPlansOf components with
+          | .error error => .error error
+          | .ok rowPlans => .ok (rowPlan :: rowPlans)
+
+/-- Look up the row plan of every ensemble component, in ensemble order. -/
+def GenerationPlan.align (plan : GenerationPlan F) (ensemble : Ensemble F PublicIO) :
+    Except PlanError (List (RowPlan F)) :=
+  match plan.components.find? fun (name, _) => !ensemble.tables.any (·.circuit.name == name) with
+  | some (name, _) => .error (.unknownComponent name)
+  | none => plan.rowPlansOf ensemble.tables
+
+/-- The least power of two that is at least the row count and the minimum height. -/
 def Padding.targetHeight (padding : Padding F) (rowCount : ℕ) : ℕ :=
-  (max rowCount padding.minimumRows.toNat).nextPowerOfTwo
+  2 ^ Nat.clog 2 (max rowCount padding.minimumRows.toNat)
 
-/-- Check one component's generation mode and padding against the component. -/
-def validateGeneration (component : Component F) (generation : Generation F) :
-    Except ConfigError Unit := do
+/-- `error` unless `condition` holds. -/
+def check (condition : Bool) (error : PlanError) : Option PlanError :=
+  if condition then none else some error
+
+/-- The first problem with one component's generation mode and padding, if any. -/
+def rowPlanError (component : Component F) (rowPlan : RowPlan F) : Option PlanError :=
   let name := component.circuit.name
   let fixedWidth := component.fixedWidth
   let inputWidth := component.rowOffset
-  unless generation.padding.input.size = inputWidth do
-    throw (.paddingWidth name inputWidth generation.padding.input.size)
-  match component.fixedColumns, generation.mode with
-  | none, _ => pure ()
-  | some _, .demand _ => throw (.fixedDemandMode name)
-  | some fixed, .preallocated preallocated =>
-      unless preallocated.rows = fixed.height do
-        throw (.preallocatedRows name fixed.height.toNat preallocated.rows.toNat)
-      let paddedHeight := generation.padding.targetHeight fixed.height.toNat
-      unless paddedHeight = fixed.height.toNat do
-        throw (.fixedPadding name fixed.height.toNat paddedHeight)
-  match generation.mode with
+  (check (rowPlan.padding.input.size == inputWidth)
+    (.paddingWidth name inputWidth rowPlan.padding.input.size) <|>
+  (match component.fixedColumns, rowPlan.mode with
+    | none, _ => none
+    | some _, .demand _ => some (.fixedDemandMode name)
+    | some fixed, .preallocated preallocated =>
+        check (preallocated.rows == fixed.height)
+          (.preallocatedRows name fixed.height.toNat preallocated.rows.toNat) <|>
+        check (rowPlan.padding.targetHeight fixed.height.toNat == fixed.height.toNat)
+          (.fixedPadding name fixed.height.toNat
+            (rowPlan.padding.targetHeight fixed.height.toNat))) <|>
+  match rowPlan.mode with
   | .demand mode =>
-      unless mode.input.cells.length = inputWidth do
-        throw (.demandInputWidth name inputWidth mode.input.cells.length)
-      for cell in mode.input.cells do
-        if let .message index := cell then
-          unless index < mode.channel.arity do
-            throw (.demandMessageIndex name index mode.channel.arity)
+      check (mode.input.cells.length == inputWidth)
+        (.demandInputWidth name inputWidth mode.input.cells.length) <|>
+      mode.input.cells.findSome? fun cell =>
+        match cell with
+        | .message index =>
+            check (index < mode.channel.arity) (.demandMessageIndex name index mode.channel.arity)
+        | _ => none
   | .preallocated preallocated =>
-      unless fixedWidth + preallocated.input.width = inputWidth do
-        throw (.preallocatedWidth name (inputWidth - fixedWidth) preallocated.input.width)
-      for handler in preallocated.handlers do
-        unless handler.interaction < component.rowOperations.interactions.length do
-          throw (.preallocatedInteraction name handler.interaction)
-        unless fixedWidth ≤ handler.column && handler.column < inputWidth do
-          throw (.preallocatedColumn name handler.column fixedWidth inputWidth)
+      check (fixedWidth + preallocated.input.width == inputWidth)
+        (.preallocatedWidth name (inputWidth - fixedWidth) preallocated.input.width) <|>
+      preallocated.handlers.findSome? (fun handler =>
+        check (handler.interaction < component.rowOperations.interactions.length)
+          (.preallocatedInteraction name handler.interaction) <|>
+        check (fixedWidth ≤ handler.column && handler.column < inputWidth)
+          (.preallocatedColumn name handler.column fixedWidth inputWidth)))
 
-/-- Check that every prover-data read targets a stable cell of a preallocated component. -/
-def validateDataReads (components : List (Component F)) (generations : List (Generation F)) :
-    Except ConfigError Unit := do
-  for component in components do
-    for (operation, operationIndex) in component.rowOperations.toFlat.zipIdx do
-      if let .witness _ code := operation then
-        for read in witnessDataReads code do
-          let some (target, generation) := (components.zip generations).find? fun (target, _) =>
-              target.circuit.name == read.key
-            | throw (.unknownDataRead component.circuit.name operationIndex read.key)
-          unless read.width = target.rowOffset do
-            throw (.dataReadWidth component.circuit.name operationIndex read.key target.rowOffset
-              read.width)
-          match generation.mode with
-          | .demand _ =>
-              throw (.unstableDataRead component.circuit.name operationIndex read.key read.column)
-          | .preallocated preallocated =>
-              if preallocated.handlers.any (·.column = read.column) then
-                throw (.unstableDataRead component.circuit.name operationIndex read.key read.column)
-              unless generation.padding.targetHeight preallocated.rows.toNat =
-                  preallocated.rows.toNat do
-                throw (.paddedDataRead component.circuit.name operationIndex read.key)
+/-- The first problem with a prover-data read of witness operation `operation` of `component`:
+it must target a stable cell of a preallocated component that padding does not extend. -/
+def dataReadError (components : List (Component F)) (rowPlans : List (RowPlan F))
+    (component : Component F) (operation : ℕ) (read : DataRead) : Option PlanError :=
+  match (components.zip rowPlans).find? fun (target, _) => target.circuit.name == read.key with
+  | none => some (.unknownDataRead component.circuit.name operation read.key)
+  | some (target, rowPlan) =>
+      check (read.width == target.rowOffset)
+        (.dataReadWidth component.circuit.name operation read.key target.rowOffset read.width) <|>
+      match rowPlan.mode with
+      | .demand _ => some (.unstableDataRead component.circuit.name operation read.key read.column)
+      | .preallocated preallocated =>
+          check (!preallocated.handlers.any (·.column = read.column))
+            (.unstableDataRead component.circuit.name operation read.key read.column) <|>
+          check (rowPlan.padding.targetHeight preallocated.rows.toNat == preallocated.rows.toNat)
+            (.paddedDataRead component.circuit.name operation read.key)
 
-/-- Check that no two components handle demand of the same channel and direction. -/
-def validateHandlers (components : List (Component F)) (generations : List (Generation F)) :
-    Except ConfigError Unit := do
-  let handled := (components.zip generations).flatMap fun (component, generation) =>
-    generation.mode.handled component
-  for (entry, index) in handled.zipIdx do
-    if (handled.take index).contains entry then
-      throw (.duplicateHandler entry.1 entry.2)
+/-- The first prover-data read that does not target a stable cell of a preallocated component that
+padding does not extend. -/
+def dataReadsError (components : List (Component F)) (rowPlans : List (RowPlan F)) :
+    Option PlanError :=
+  components.findSome? fun component =>
+    component.rowOperations.toFlat.zipIdx.findSome? fun (operation, operationIndex) =>
+      match operation with
+      | .witness _ code =>
+          (witnessDataReads code).findSome?
+            (dataReadError components rowPlans component operationIndex)
+      | .assert _ | .lookup _ | .interact _ => none
 
-/-- All structural checks of generation metadata aligned with an ensemble's components. -/
-def validateGenerations (ensemble : Ensemble F PublicIO) (generations : List (Generation F)) :
-    Except ConfigError Unit := do
-  for (component, generation) in ensemble.tables.zip generations do
-    validateGeneration component generation
-  validateHandlers ensemble.tables generations
-  validateDataReads ensemble.tables generations
+/-- The first channel and direction of demand that two components handle. -/
+def handlersError (components : List (Component F)) (rowPlans : List (RowPlan F)) :
+    Option PlanError :=
+  let handled := (components.zip rowPlans).flatMap fun (component, rowPlan) =>
+    rowPlan.mode.handled component
+  handled.zipIdx.findSome? fun (entry, index) =>
+    check (!(handled.take index).contains entry) (.duplicateHandler entry.1 entry.2)
 
-/-- Generation metadata that passed `Config.validate` for `ensemble`. -/
-structure ValidConfig (ensemble : Ensemble F PublicIO) where
-  /-- The generation metadata of each component, in ensemble order. -/
-  generations : List (Generation F)
-  aligned : generations.length = ensemble.tables.length
-  valid : validateGenerations ensemble generations = .ok ()
+/-- The first component with a witness program that is native or reads cells it does not
+precede. -/
+def readsAheadError (components : List (Component F)) : Option PlanError :=
+  components.findSome? fun component =>
+    check (flatReadsBelow component.rowOffset component.rowOperations.toFlat)
+      (.witnessReadsAhead component.circuit.name)
 
-/-- Align generation metadata with an ensemble's components and check it. -/
-def Config.validate (config : Config F) (ensemble : Ensemble F PublicIO) :
-    Except ConfigError (ValidConfig ensemble) :=
-  match config.align ensemble with
+/-- The first structural problem with row plans aligned with an ensemble's components. -/
+def planError (ensemble : Ensemble F PublicIO) (rowPlans : List (RowPlan F)) :
+    Option PlanError :=
+  (ensemble.tables.zip rowPlans).findSome? (fun (component, rowPlan) =>
+    rowPlanError component rowPlan) <|>
+  handlersError ensemble.tables rowPlans <|>
+  dataReadsError ensemble.tables rowPlans <|>
+  readsAheadError ensemble.tables
+
+/-- A generation plan that passed `GenerationPlan.validate` for `ensemble`. -/
+structure ValidPlan (ensemble : Ensemble F PublicIO) where
+  /-- The row plan of each component, in ensemble order. -/
+  rowPlans : List (RowPlan F)
+  aligned : rowPlans.length = ensemble.tables.length
+  valid : planError ensemble rowPlans = none
+
+/-- Align a generation plan with an ensemble's components and check it. -/
+def GenerationPlan.validate (plan : GenerationPlan F) (ensemble : Ensemble F PublicIO) :
+    Except PlanError (ValidPlan ensemble) :=
+  match plan.align ensemble with
   | .error error => .error error
-  | .ok generations =>
-      if hlength : generations.length = ensemble.tables.length then
-        match hvalid : validateGenerations ensemble generations with
-        | .error error => .error error
-        | .ok () => .ok { generations, aligned := hlength, valid := hvalid }
+  | .ok rowPlans =>
+      if hlength : rowPlans.length = ensemble.tables.length then
+        match hvalid : planError ensemble rowPlans with
+        | some error => .error error
+        | none => .ok { rowPlans, aligned := hlength, valid := hvalid }
       else
         -- `align` produces one entry per component
         .error (.missingComponent "")
@@ -421,13 +528,13 @@ structure GeneratedRow (F : Type) where
   values : Array F
   origin : Option (Origin F) := none
 
-/-- One component's generation state: its operations, its validated generation metadata, and
+/-- One component's generation state: its operations, its validated row plan, and
 the rows generated so far. -/
 structure ComponentState (F : Type) [FiniteField F] where
   component : Component F
   witgenOps : List (FlatOperation F)
   interactions : List (AbstractInteraction F)
-  generation : Generation F
+  rowPlan : RowPlan F
   rows : List (GeneratedRow F) := []
 
 def witnessOperationsOnly : List (FlatOperation F) → List (FlatOperation F)
@@ -437,14 +544,14 @@ def witnessOperationsOnly : List (FlatOperation F) → List (FlatOperation F)
       | .witness _ _ => operation :: witnessOperationsOnly operations
       | .assert _ | .lookup _ | .interact _ => witnessOperationsOnly operations
 
-def ComponentState.initial (component : Component F) (generation : Generation F) :
+def ComponentState.initial (component : Component F) (rowPlan : RowPlan F) :
     ComponentState F :=
   let operations := component.rowOperations
   {
     component
     witgenOps := witnessOperationsOnly operations.toFlat
     interactions := operations.interactions
-    generation
+    rowPlan
   }
 
 def witgenStepWithData (data : ProverData F) (hint : ProverHint F)
@@ -488,7 +595,7 @@ def fixedPrefix (component : Component F) (row : UInt64) : Array F :=
 
 /-- The initial rows of a preallocated component: its fixed prefix followed by its row program. -/
 def initialInputs (state : ComponentState F) (hint : ProverHint F) : List (Array F) :=
-  match state.generation.mode with
+  match state.rowPlan.mode with
   | .demand _ => []
   | .preallocated mode =>
       (List.range mode.rows.toNat).map fun row =>
@@ -506,7 +613,7 @@ def PreallocatedHandler.handles (state : ComponentState F) (handler : Preallocat
         handlerDirection interaction == demand.direction
 
 def ComponentState.handles (state : ComponentState F) (demand : Demand F) : Bool :=
-  match state.generation.mode with
+  match state.rowPlan.mode with
   | .demand mode => mode.channel.name == demand.channel && mode.direction == demand.direction
   | .preallocated mode => mode.handlers.any fun handler => handler.handles state demand
 
@@ -588,7 +695,7 @@ def handlePreallocated (state : ComponentState F) (handlers : List PreallocatedH
 
 /-- A semantic failure of witness generation. -/
 inductive GenerationError where
-  | config (error : ConfigError)
+  | plan (error : PlanError)
   | unhandledImbalance (channels : List String)
   | noPreallocatedRow (component channel : String)
   | interactionBound
@@ -598,7 +705,7 @@ deriving Repr
 
 instance : ToString GenerationError where
   toString
-    | .config error => toString error
+    | .plan error => toString error
     | .unhandledImbalance channels =>
         s!"unhandled channel imbalance on: {String.intercalate ", " channels}"
     | .noPreallocatedRow component channel =>
@@ -617,7 +724,7 @@ def handle (states : List (ComponentState F)) (demand : Demand F) (index : ℕ)
     (data : ProverData F) (hint : ProverHint F) :
     Except GenerationError (List (ComponentState F) × Change F) := do
   let some state := states[index]? | return (states, ⟨[], []⟩)
-  let mutation ← match state.generation.mode with
+  let mutation ← match state.rowPlan.mode with
     | .demand mode => pure (handleDemand state mode demand data hint)
     | .preallocated mode =>
         match handlePreallocated state mode.handlers demand data hint with
@@ -671,7 +778,7 @@ and the interactions of the new rows. -/
 def padTables (data : ProverData F) (hint : ProverHint F) (states : List (ComponentState F)) :
     List (ComponentState F) × List (Interaction F) :=
   let padded := states.map fun state =>
-    let padding := state.generation.padding
+    let padding := state.rowPlan.padding
     let count := padding.targetHeight state.rows.length - state.rows.length
     let rows := List.replicate count (completeRow state padding.input data hint none)
     ({ state with rows := state.rows ++ rows }, rows.flatMap (rowInteractions state · data))
@@ -679,7 +786,7 @@ def padTables (data : ProverData F) (hint : ProverHint F) (states : List (Compon
 
 def tablesArePadded (states : List (ComponentState F)) : Bool :=
   states.all fun state =>
-    state.rows.length == state.generation.padding.targetHeight state.rows.length
+    state.rows.length == state.rowPlan.padding.targetHeight state.rows.length
 
 /-- Pad, then balance the interactions of the padding rows, until every component is padded. A
 round that leaves a component unpadded added rows through demand, and with them interactions. -/
@@ -760,10 +867,10 @@ def assembleTables :
   | _, _ => .error (.assembly "generated-table count does not match ensemble component count")
 
 /-- The components with their initial rows completed, and the prover data the rows derive. -/
-def initialStates {ensemble : Ensemble F PublicIO} (config : ValidConfig ensemble)
+def initialStates {ensemble : Ensemble F PublicIO} (plan : ValidPlan ensemble)
     (hint : ProverHint F) : List (ComponentState F) × ProverData F :=
-  let initial := (ensemble.tables.zip config.generations).map fun (component, generation) =>
-    ComponentState.initial component generation
+  let initial := (ensemble.tables.zip plan.rowPlans).map fun (component, rowPlan) =>
+    ComponentState.initial component rowPlan
   let initial := initial.map fun state =>
     { state with rows := (initialInputs state hint).map fun input =>
       { input, values := input } }
@@ -771,13 +878,13 @@ def initialStates {ensemble : Ensemble F PublicIO} (config : ValidConfig ensembl
   (initial.map fun state =>
     { state with rows := state.rows.map fun row => completeRow state row.input data hint none }, data)
 
-/-- Execute channel-driven generation from validated metadata. `hint` is read by the row programs
+/-- Execute channel-driven generation from a validated plan. `hint` is read by the row programs
 that initialize preallocated components and by the witness programs of all rows; semantic
 `ProverData` is derived from the final committed component rows. -/
-def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensemble)
+def generateValid {ensemble : Ensemble F PublicIO} (plan : ValidPlan ensemble)
     (publicInput : PublicIO F) (hint : ProverHint F) :
     Except GenerationError (EnsembleWitness ensemble) := do
-  let (initial, data) := initialStates config hint
+  let (initial, data) := initialStates plan hint
   let verifier := ensemble.verifierOperations.interactionValues (.fromInput publicInput data)
   let rows := initial.flatMap fun state => state.rows.flatMap (rowInteractions state · data)
   let balanced ← balance data hint {
@@ -795,13 +902,13 @@ def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensembl
   if witness.interactions.length < FiniteField.char F then return witness
   throw .interactionBound
 
-/-- Validate generation metadata, then generate an ensemble witness from the public input and the
+/-- Validate a generation plan, then generate an ensemble witness from the public input and the
 prover's private input. -/
-def generate (ens : FormalEnsemble F PublicIO) (config : Config F) (publicInput : PublicIO F)
+def generate (ens : FormalEnsemble F PublicIO) (plan : GenerationPlan F) (publicInput : PublicIO F)
     (proverInput : ens.ProverInput F) : Except GenerationError (EnsembleWitness ens.ensemble) :=
-  match config.validate ens.ensemble with
-  | .error error => .error (.config error)
-  | .ok config => generateValid config publicInput (ens.hint proverInput)
+  match plan.validate ens.ensemble with
+  | .error error => .error (.plan error)
+  | .ok plan => generateValid plan publicInput (ens.hint proverInput)
 
 /-- Executable constraint check for the no-legacy-lookup initial milestone. -/
 def constraintsHold {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness ensemble) : Bool :=

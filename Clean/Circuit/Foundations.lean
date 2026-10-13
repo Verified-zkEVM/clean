@@ -55,8 +55,8 @@ theorem original_completeness (circuit : GeneralFormalCircuit.WithHint F β α) 
     -- if the environment uses default witness generators (original definition)
     env.UsesLocalWitnesses offset ops →
     circuit.ProverAssumptions input env.data env.hint →
-    -- the constraints and guarantees hold (original definition)
-    ops.ConstraintsHold env ∧ ops.FullGuarantees env ∧
+    -- the constraints, guarantees and prover guarantees hold (original definition)
+    ops.ConstraintsHold env ∧ ops.FullGuarantees env ∧ ops.FullProverGuarantees env ∧
     -- and the prover spec holds
     circuit.ProverSpec input (eval env (circuit.output b_var offset)) env.hint := by
   intro offset env b_var ops input h_env h_assumptions
@@ -65,7 +65,8 @@ theorem original_completeness (circuit : GeneralFormalCircuit.WithHint F β α) 
   have h_completeness := circuit.completeness offset env b_var h_env' input rfl h_assumptions
   have h_constraints_and_guarantees :=
     Circuit.can_replace_completeness_and_guarantees h_consistent h_env h_completeness.1
-  exact ⟨h_constraints_and_guarantees.1, h_constraints_and_guarantees.2, h_completeness.2⟩
+  exact ⟨h_constraints_and_guarantees.1, h_constraints_and_guarantees.2.1,
+    h_constraints_and_guarantees.2.2, h_completeness.2⟩
 end GeneralFormalCircuit.WithHint
 
 variable [ProvableType α] [ProvableType β]
@@ -103,7 +104,8 @@ theorem FormalCircuit.original_completeness (circuit : FormalCircuit F β α) :
     env.UsesLocalWitnesses offset (circuit.main b_var |>.operations offset) →
     -- the constraints and guarantees hold (original definition)
     Operations.ConstraintsHold env (circuit.main b_var |>.operations offset) ∧
-    Operations.FullGuarantees env (circuit.main b_var |>.operations offset) := by
+    Operations.FullGuarantees env (circuit.main b_var |>.operations offset) ∧
+    Operations.FullProverGuarantees env (circuit.main b_var |>.operations offset) := by
 
   intro offset env b_var b h_input h_assumptions h_env
   have h_env' := ProverEnvironment.can_replace_usesLocalWitnessesCompleteness (circuit.subcircuitsConsistent ..) h_env
@@ -143,7 +145,8 @@ theorem FormalAssertion.original_completeness (circuit : FormalAssertion F β) :
     -- the spec implies that the constraints hold (original definition)
     circuit.Spec b →
     Operations.ConstraintsHold env (circuit.main b_var |>.operations offset) ∧
-    Operations.FullGuarantees env (circuit.main b_var |>.operations offset) := by
+    Operations.FullGuarantees env (circuit.main b_var |>.operations offset) ∧
+    Operations.FullProverGuarantees env (circuit.main b_var |>.operations offset) := by
 
   intro offset env b_var b h_input h_assumptions h_env h_spec
   have h_env' := ProverEnvironment.can_replace_usesLocalWitnessesCompleteness (circuit.subcircuitsConsistent ..) h_env
@@ -174,7 +177,8 @@ theorem GeneralFormalCircuit.original_full_soundness
 
 /--
   Foundational completeness theorem for general circuits with interactions:
-  assumptions + local witness usage imply original constraints and full guarantees.
+  assumptions + local witness usage imply original constraints, full guarantees and prover
+  guarantees.
 -/
 theorem GeneralFormalCircuit.original_full_completeness
     (circuit : GeneralFormalCircuit F β α) :
@@ -182,7 +186,7 @@ theorem GeneralFormalCircuit.original_full_completeness
     let ops := circuit.main input_var |>.operations offset;
     let input := eval env input_var;
     env.UsesLocalWitnesses offset ops → circuit.ProverAssumptions input env.data env.hint →
-    ops.ConstraintsHold env ∧ ops.FullGuarantees env := by
+    ops.ConstraintsHold env ∧ ops.FullGuarantees env ∧ ops.FullProverGuarantees env := by
   intro offset env input_var ops input h_env h_assumptions
   have h_consistent := circuit.subcircuitsConsistent input_var offset
   apply Circuit.can_replace_completeness_and_guarantees h_consistent h_env

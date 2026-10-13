@@ -44,6 +44,9 @@ def ProgramChannel {programSize : ℕ} (program : Fin programSize → F p) :
   Guarantees
   | (address, value), _ =>
       ∃ h : address.val < programSize, value = program ⟨address.val, h⟩
+  ProverGuarantees
+  | (address, value), _ =>
+      ∃ h : address.val < programSize, value = program ⟨address.val, h⟩
 
 def fetchInstruction
     {programSize : ℕ} (program : Fin programSize → F p) (h_programSize : programSize < p) :
@@ -96,6 +99,11 @@ def fetchInstruction
 def MemoryChannel : Channel (F p) MemoryEntry where
   name := "memory"
   Guarantees entry data :=
+    let table := data.getRows "memory" ProviderInput
+    ∃ ha : entry.address.val < table.size,
+      entry.address = table[entry.address.val].address ∧
+      entry.value = table[entry.address.val].value
+  ProverGuarantees entry data :=
     let table := data.getRows "memory" ProviderInput
     ∃ ha : entry.address.val < table.size,
       entry.address = table[entry.address.val].address ∧
@@ -251,7 +259,6 @@ def femtoCairoStepAssumptions {programSize : ℕ} (program : Fin programSize →
     (state : State (F p)) (data : ProverData (F p)) (_hint : ProverHint (F p)) : Prop :=
   ValidProgramSize p programSize ∧
   programSize ≤ 2^64 ∧
-  ValidProgram program ∧
   MemoryCompletenessAssumption data ∧
   (Spec.femtoCairoMachineTransition program (memory data) state).isSome
 
@@ -315,8 +322,8 @@ theorem femtoCairoStepCompleteness {programSize : ℕ} (program : Fin programSiz
   circuit_proof_start [femtoCairoStepAssumptions, femtoCairoStepMain,
     fetchInstruction, Examples.FemtoCairo.decodeInstruction, readFromMemory,
     Examples.FemtoCairo.nextState, Gadgets.toBits]
-  obtain ⟨h_valid_size, h_programSize_u64, h_valid_program, h_memory_completeness,
-    h_transition_isSome⟩ := h_assumptions
+  obtain ⟨h_valid_size, h_programSize_u64, h_memory_completeness, h_transition_isSome⟩ :=
+    h_assumptions
   have h_decompose := Spec.transition_isSome_implies_computeNextState_isSome
     program (memory env.data) input h_transition_isSome
   obtain ⟨raw, decode, v1, v2, v3, h_fetch, h_decode, h_v1, h_v2, h_v3,
@@ -399,7 +406,9 @@ def provideProgram {programSize : ℕ} (program : Fin programSize → F p) :
     circuit_proof_start [ProgramChannel]
     intro _ _
     exact h_assumptions
-  completeness := by circuit_proof_start
+  completeness := by
+    circuit_proof_start [ProgramChannel]
+    exact fun _ => h_assumptions
 
 def programFixedColumns {programSize : UInt64} (program : Fin programSize.toNat → F p) :
     FixedColumns (F p) where
@@ -438,7 +447,9 @@ def provideMemory : GeneralFormalCircuit (F p) ProviderInput unit where
     circuit_proof_start [MemoryChannel]
     intro _ _
     exact h_assumptions
-  completeness := by circuit_proof_start
+  completeness := by
+    circuit_proof_start [MemoryChannel]
+    exact fun _ => h_assumptions
 
 def memoryFixedColumns (memorySize : UInt64) : FixedColumns (F p) where
   height := memorySize
@@ -668,13 +679,15 @@ def Spec {programSize : UInt64} (program : Fin programSize.toNat → F p) (memor
         some (haltedState programSize.toNat ap fp)
 
 /-- The prover's assumptions: its memory values make the program run from `initialState` to
-completion with registers `(ap, fp)`. -/
+completion with registers `(ap, fp)`, in at least one step, and the run fits the field and the
+trace. -/
 def ProverAssumptions {programSize : UInt64} (program : Fin programSize.toNat → F p)
     (memorySize : UInt64) (initialState : State (F p)) :
     fieldPair (F p) → fields memorySize.toNat (F p) → Prop
   | (ap, fp), memoryValues => ∃ steps,
-      Spec.femtoCairoMachineBoundedExecution program memoryValues.get (some initialState) steps =
-        some (haltedState programSize.toNat ap fp)
+      Spec.femtoCairoMachineBoundedExecution program memoryValues.get (some initialState)
+        (steps + 1) = some (haltedState programSize.toNat ap fp) ∧
+      64 * (steps + programSize.toNat + memorySize.toNat + 8) < p ∧ steps < 2 ^ 62
 
 omit p_large_enough in
 /-- The prover's assumptions are no stronger than the public statement. -/
@@ -683,7 +696,8 @@ lemma spec_of_proverAssumptions {programSize memorySize : UInt64}
     (registers : fieldPair (F p)) (memoryValues : fields memorySize.toNat (F p))
     (h : ProverAssumptions program memorySize initialState registers memoryValues) :
     Spec program memorySize initialState registers :=
-  ⟨_, h⟩
+  let ⟨_, hsteps, _⟩ := h
+  ⟨_, _, hsteps⟩
 
 /-- Name of the hint table holding the prover's memory values, one per address. -/
 def memoryValuesKey : String := "memoryValues"
@@ -734,53 +748,51 @@ namespace Witness
 open Air.Flat.WitnessGeneration
 
 def executionMode {programSize : ℕ} (program : Fin programSize → F p)
-    (initialState : State (F p)) : Mode (F p) := .demand {
+    (initialState : State (F p)) : DemandMode (F p) where
   channel := (StateChannel program initialState).toRaw
   direction := .push
   aggregation := .perOccurrence
   input := { cells := [.const 1, .message 0, .message 1, .message 2] }
-}
 
-def programMode (programSize : UInt64) : Mode (F p) :=
-  .preallocated {
-    rows := programSize
-    input := .ofFExprs #v[.const 0]
-    input_valid := by rfl
-    handlers := [{ interaction := 0, column := 2 }]
-  }
+def programMode (programSize : UInt64) : PreallocatedMode (F p) where
+  rows := programSize
+  input := .ofFExprs #v[.const 0]
+  input_valid := by rfl
+  handlers := [{ interaction := 0, column := 2 }]
 
-def memoryMode (memorySize : UInt64) : Mode (F p) := .preallocated {
+/-- Memory rows hold the prover's memory values, read from the private input. -/
+def memoryMode (memorySize : UInt64) : PreallocatedMode (F p) where
   rows := memorySize
   input := .ofFExprs #v[.hintGet memoryValuesKey 1 .idx 0, .const 0]
   input_valid := by rfl
   handlers := [{ interaction := 0, column := 2 }]
-}
 
-def config {programSize memorySize : UInt64} (program : Fin programSize.toNat → F p)
-    (h_programSize : programSize.toNat < p) (initialState : State (F p)) (executionRows : UInt64) :
-    Config (F p) where
+/-- The generation plan. Disabled execution rows at the initial state pad the execution table. -/
+def plan {programSize memorySize : UInt64} (program : Fin programSize.toNat → F p)
+    (h_programSize : programSize.toNat < p) (initialState : State (F p)) :
+    GenerationPlan (F p) where
   components := [
     ((executeStep program h_programSize initialState).name, {
-      mode := executionMode program initialState
+      mode := .demand (executionMode program initialState)
       padding := {
         input := #[0, initialState.pc, initialState.ap, initialState.fp]
-        minimumRows := executionRows } }),
+        minimumRows := 8 } }),
     ((provideMemory (p := p)).name, {
-      mode := memoryMode memorySize
+      mode := .preallocated (memoryMode memorySize)
       padding := { input := #[0, 0, 0], minimumRows := memorySize } }),
     ((provideProgram program).name, {
-      mode := programMode programSize
+      mode := .preallocated (programMode programSize)
       padding := { input := #[0, 0, 0], minimumRows := programSize } })
   ]
 
 def generate {programSize memorySize : UInt64} (program : Fin programSize.toNat → F p)
     (h_programSize : programSize.toNat < p) (h_memorySize : memorySize.toNat < p)
     (memoryValues : fields memorySize.toNat (F p)) (initialState : State (F p))
-    (finalRegisters : fieldPair (F p)) (executionRows : UInt64) :
+    (finalRegisters : fieldPair (F p)) :
     Except GenerationError (EnsembleWitness
       (formalEnsemble program h_programSize h_memorySize initialState).ensemble) :=
   Air.Flat.WitnessGeneration.generate (formalEnsemble program h_programSize h_memorySize initialState)
-    (config (memorySize := memorySize) program h_programSize initialState executionRows)
+    (plan (memorySize := memorySize) program h_programSize initialState)
     finalRegisters memoryValues
 
 end Witness

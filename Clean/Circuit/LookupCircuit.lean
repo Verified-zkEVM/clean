@@ -61,8 +61,9 @@ def toTable (circuit : LookupCircuit F α β) (hint : ProverHint F) : Table F (P
     use 0, circuit.proverEnvironment input hint
     simp only [h_output, LookupCircuit.constantOutput, circuit_norm,and_true]
     set env := circuit.proverEnvironment input hint
-    exact circuit.original_completeness 0 env (const input) input ProvableType.eval_const_prover
+    have h := circuit.original_completeness 0 env (const input) input ProvableType.eval_const_prover
       h_assumptions (circuit.proverEnvironment_usesLocalWitnesses input hint)
+    exact ⟨h.1, h.2.1⟩
 
 -- we create another `FormalCircuit` that wraps a lookup into the table defined by the input circuit
 -- this gives `circuit.lookup input` _exactly_ the same interface as `circuit input`.

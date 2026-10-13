@@ -28,6 +28,7 @@ partial def circuitProofStartCore : TacticM Unit := do
                           headConst? == some ``FormalAssertion.Completeness ||
                           headConst? == some ``GeneralFormalCircuit.Completeness ||
                           headConst? == some ``GeneralFormalCircuit.WithHint.Completeness
+    let isRowInteractions := headConst? == some `Air.Flat.WitnessGeneration.RowInteractions
 
     if isSoundness then
       match headConst? with
@@ -52,6 +53,12 @@ partial def circuitProofStartCore : TacticM Unit := do
         for name in names do
           evalTactic (← `(tactic| intro $(mkIdent name):ident))
       | _ => pure ()
+      return
+    else if isRowInteractions then
+      evalTactic (← `(tactic| unfold $(mkIdent `Air.Flat.WitnessGeneration.RowInteractions):ident))
+      let names := [`i₀, `env, `input_var, `h_env, `input, `h_input, `h_assumptions]
+      for name in names do
+        evalTactic (← `(tactic| intro $(mkIdent name):ident))
       return
     else if isCompleteness then
       -- Unfold the appropriate Completeness definition and introduce the correct parameters
@@ -80,7 +87,7 @@ partial def circuitProofStartCore : TacticM Unit := do
       return
     else
       -- Goal is not a supported Soundness or Completeness type
-      throwError "circuit_proof_start can only be used on Soundness, Completeness and variants"
+      throwError "circuit_proof_start can only be used on Soundness, Completeness, RowInteractions and variants"
 
 /--
   Standard tactic for starting soundness and completeness proofs.
@@ -95,7 +102,9 @@ partial def circuitProofStartCore : TacticM Unit := do
   **Supported goal types**: This tactic works on `Soundness`, `Completeness`,
   `FormalAssertion.Soundness`, `FormalAssertion.Completeness`,
   `GeneralFormalCircuit.Soundness`, `GeneralFormalCircuit.Completeness`,
-  `GeneralFormalCircuit.WithHint.Soundness`, `GeneralFormalCircuit.WithHint.Completeness`.
+  `GeneralFormalCircuit.WithHint.Soundness`, `GeneralFormalCircuit.WithHint.Completeness`, and
+  the row obligations `Air.Flat.WitnessGeneration.RowInteractions` of witness generation, which it
+  introduces like `Completeness`.
 
   **Optional argument**: You can provide additional lemmas for simplification by using square brackets:
   `circuit_proof_start [lemma1, lemma2, ...]`. These lemmas will be used alongside `circuit_norm`

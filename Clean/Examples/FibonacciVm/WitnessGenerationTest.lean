@@ -96,31 +96,31 @@ def invalidRejected : Bool :=
 beyond which channels cannot balance. A small field reaches that bound quickly. -/
 example : invalidRejected = true := by native_decide
 
-def configErrors : List String :=
-  let config := FibonacciWitness.config (p := pBabybear)
+def planErrors : List String :=
+  let plan := FibonacciWitness.plan (p := pBabybear)
   let ensemble := (fibonacciEnsemble (p := pBabybear)).ensemble
-  [{ config with components := config.components.drop 1 },
-    { config with components := config.components ++ config.components.take 1 },
-    { config with components :=
-      ("unknown", { mode := FibonacciWitness.fibMode, padding := { input := #[] } }) ::
-        config.components }]
-  |>.map fun (config : Config (F pBabybear)) => match config.align ensemble with
+  [{ plan with components := plan.components.drop 1 },
+    { plan with components := plan.components ++ plan.components.take 1 },
+    { plan with components :=
+      ("unknown", { mode := .demand FibonacciWitness.fibMode, padding := { input := #[] } }) ::
+        plan.components }]
+  |>.map fun (plan : GenerationPlan (F pBabybear)) => match plan.align ensemble with
     | .error error => toString error
     | .ok _ => ""
 
-/-- Generation metadata is looked up by component name; missing, duplicate, and unknown entries
+/-- Row plans are looked up by component name; missing, duplicate, and unknown entries
 are rejected. -/
-example : configErrors = [
-    "component 'fibonacci' has no generation config",
-    "component 'fibonacci' has multiple generation configs",
-    "generation config names unknown component 'unknown'"] := by native_decide
+example : planErrors = [
+    "component 'fibonacci' has no generation plan",
+    "component 'fibonacci' has multiple row plans",
+    "generation plan names unknown component 'unknown'"] := by native_decide
 
 def noData : ProverData (F pBabybear) := fun _ _ => #[]
 
 def extractedFirstRow : Except String (Array (F pBabybear)) := do
   let program ← Backends.Plonky3.lower
     (fibonacciEnsemble (p := pBabybear))
-    (FibonacciWitness.config (p := pBabybear))
+    (FibonacciWitness.plan (p := pBabybear))
     |>.mapError toString
   let some component := program.components[0]?
     | throw "extracted program has no Fibonacci component"

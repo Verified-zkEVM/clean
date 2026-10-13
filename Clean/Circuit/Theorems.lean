@@ -323,23 +323,41 @@ theorem can_replace_completeness_guarantees {env} {ops : Operations F} {n : ℕ}
   rw [constraintsHold_completeness_iff_forall_mem,
     Operations.FullGuarantees, Operations.forall_interactions_iff]
   intro h_env ⟨ h_constraints, h_lookups, h_guarantees, h_subcircuit ⟩
-  use h_guarantees
+  use fun i hi => (h_guarantees i hi).1
   intro ⟨n', s⟩ h_mem
   have h := s.completeness env
   rw [FlatOperation.guarantees_iff_forall_mem, ←ProverEnvironment.usesLocalWitnessesFlat_iff_extends] at h
   suffices env.UsesLocalWitnessesFlat n' s.ops.toFlat by
-    exact ((h this).1 (h_subcircuit _ h_mem)).2
+    exact ((h this).1 (h_subcircuit _ h_mem)).2.1
   apply ProverEnvironment.usesLocalWitnesses_to_subcircuit h_consistent h_env _ h_mem
 
--- TODO prove this first and the previous two as trivial consequences
+theorem can_replace_completeness_proverGuarantees {env} {ops : Operations F} {n : ℕ}
+  (h_consistent : ops.SubcircuitsConsistent n) :
+    env.UsesLocalWitnesses n ops →
+    ConstraintsHold.Completeness env ops →
+    ops.FullProverGuarantees env := by
+  rw [constraintsHold_completeness_iff_forall_mem, Operations.FullProverGuarantees,
+    Operations.forall_interactions_iff]
+  intro h_env ⟨ h_constraints, h_lookups, h_guarantees, h_subcircuit ⟩
+  use fun i hi => (h_guarantees i hi).2
+  intro ⟨n', s⟩ h_mem
+  have h := s.completeness env
+  rw [FlatOperation.proverGuarantees_iff_forall_mem,
+    ←ProverEnvironment.usesLocalWitnessesFlat_iff_extends] at h
+  suffices env.UsesLocalWitnessesFlat n' s.ops.toFlat by
+    exact ((h this).1 (h_subcircuit _ h_mem)).2.2
+  apply ProverEnvironment.usesLocalWitnesses_to_subcircuit h_consistent h_env _ h_mem
+
+-- TODO prove this first and the previous three as trivial consequences
 theorem can_replace_completeness_and_guarantees {env} {ops : Operations F} {n : ℕ}
   (h_consistent : ops.SubcircuitsConsistent n) :
     env.UsesLocalWitnesses n ops →
     ConstraintsHold.Completeness env ops →
-    (ops.ConstraintsHold env ∧ ops.FullGuarantees env) := by
+    (ops.ConstraintsHold env ∧ ops.FullGuarantees env ∧ ops.FullProverGuarantees env) := by
   intro h_env h_compl
   exact ⟨ can_replace_completeness h_consistent h_env h_compl,
-    can_replace_completeness_guarantees h_consistent h_env h_compl ⟩
+    can_replace_completeness_guarantees h_consistent h_env h_compl,
+    can_replace_completeness_proverGuarantees h_consistent h_env h_compl ⟩
 end Circuit
 
 namespace Circuit

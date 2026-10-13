@@ -464,19 +464,19 @@ lemma balancedChannels_of_net {ens : Ensemble F PublicIO} {witness : EnsembleWit
   refine ⟨.inl (lt_of_le_of_lt (List.length_filter_le _ _) hlength), fun message => ?_⟩
   rw [balanceOf_filter_channel (mem_interactions_named witness hchannel), hnet]
 
-lemma initialStates_interactions {ens : Ensemble F PublicIO} (config : ValidConfig ens)
+lemma initialStates_interactions {ens : Ensemble F PublicIO} (plan : ValidPlan ens)
     (hint : ProverHint F) :
-    (initialStates config hint).1.map (·.interactions) =
+    (initialStates plan hint).1.map (·.interactions) =
       ens.tables.map (·.rowOperations.interactions) := by
-  conv_rhs => rw [← List.map_fst_zip (l₁ := ens.tables) (l₂ := config.generations) (by rw [config.aligned])]
+  conv_rhs => rw [← List.map_fst_zip (l₁ := ens.tables) (l₂ := plan.rowPlans) (by rw [plan.aligned])]
   simp [initialStates, ComponentState.initial, Function.comp_def]
 
 /-- Generated witnesses have the requested public input and balance all channels. -/
-theorem generateValid_balanced {ens : Ensemble F PublicIO} {config : ValidConfig ens}
-    {publicInput : PublicIO F} {hint : ProverHint F} {witness : EnsembleWitness ens} (h : generateValid config publicInput hint = .ok witness) :
+theorem generateValid_balanced {ens : Ensemble F PublicIO} {plan : ValidPlan ens}
+    {publicInput : PublicIO F} {hint : ProverHint F} {witness : EnsembleWitness ens} (h : generateValid plan publicInput hint = .ok witness) :
     witness.publicInput = publicInput ∧ witness.BalancedChannels := by
-  have hinteractions := initialStates_interactions config hint
-  rcases hinit : initialStates config hint with ⟨initial, data⟩
+  have hinteractions := initialStates_interactions plan hint
+  rcases hinit : initialStates plan hint with ⟨initial, data⟩
   rw [hinit] at hinteractions
   simp only [generateValid, hinit, bind, Except.bind] at h
   split at h

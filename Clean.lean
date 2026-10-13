@@ -24,8 +24,11 @@ public import Clean.Examples.ToJson
 public import Clean.Examples.HintExample
 public import Clean.Examples.FemtoCairo.FemtoCairo
 public import Clean.Examples.FemtoCairo.FlatAir
+public import Clean.Examples.FemtoCairo.Completeness
 public import Clean.Air.WitnessGeneration
 public import Clean.Air.GenerationCorrectness
+public import Clean.Air.GenerationCompletenessProof
+public import Clean.Air.HonestRows
 public import Clean.Backends.Plonky3.Print
 public import Clean.Backends.Plonky3.Correctness
 public import Clean.Tables.Fibonacci8
@@ -46,6 +49,7 @@ public import Clean.Gadgets.BLAKE3.FinalStateUpdate
 public import Clean.Gadgets.BLAKE3.Round
 public import Clean.Gadgets.BLAKE3.FinalizeChunk
 public import Clean.Examples.FibonacciVm.Ensemble
+public import Clean.Examples.FibonacciVm.Completeness
 public import Clean.Gadgets.SHA256.SHA256Compress
 public import Clean.Backends.Circom.Ast
 public import Clean.Backends.Circom.Compile
