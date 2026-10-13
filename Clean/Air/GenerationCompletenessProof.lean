@@ -1882,6 +1882,36 @@ lemma length_rowInteractions_flatMap {F : Type} [FiniteField F] (state : Compone
     (rows.flatMap (rowInteractions state · data)).length = rows.length * state.interactions.length := by
   simp [List.length_flatMap, rowInteractions, mul_comm]
 
+/-- Before the final state, the VM moves. -/
+lemma next_ne {index : ℕ} (hindex : index < run.steps) :
+    run.complete.vm.next (run.complete.vm.state run.publicInput index) ≠
+      run.complete.vm.state run.publicInput index := by
+  intro hstuck
+  have hconstant : ∀ j, run.complete.vm.state run.publicInput (index + j) =
+      run.complete.vm.state run.publicInput index := by
+    intro j
+    induction j with
+    | zero => rfl
+    | succ j ih =>
+        rw [← Nat.add_assoc, show run.complete.vm.state run.publicInput (index + j + 1) =
+          run.complete.vm.next (run.complete.vm.state run.publicInput (index + j)) by
+            simp only [Vm.state, Function.iterate_succ_apply'], ih, hstuck]
+  have := hconstant (run.steps - index)
+  rw [Nat.add_sub_cancel' hindex.le, run.reaches] at this
+  exact run.distinct index hindex this.symm
+
+lemma measure_lt_left {balancing balancing' : Balancing (F p)} (hlt : balancing.interactions < p)
+    (hgt : balancing.interactions < balancing'.interactions) :
+    Prod.Lex (· < ·) (· < ·) balancing'.measure balancing.measure :=
+  Prod.Lex.left _ _ (show p - balancing'.interactions < p - balancing.interactions by omega)
+
+lemma measure_lt_right {balancing balancing' : Balancing (F p)}
+    (heq : balancing'.interactions = balancing.interactions)
+    (hlt : balancing'.demands.length < balancing.demands.length) :
+    Prod.Lex (· < ·) (· < ·) balancing'.measure balancing.measure := by
+  simp only [Balancing.measure, heq]
+  exact Prod.Lex.right _ hlt
+
 namespace Inv
 
 variable {run} {k : ℕ} {padded : Bool} {balancing : Balancing (F p)}
@@ -2165,6 +2195,93 @@ lemma exists_handled (hinv : run.Inv k padded balancing) (hne : balancing.demand
     refine ⟨demand, hmem, state, hstate, (run.handles_iff hok demand).mpr ?_⟩
     rw [hcomponent, hrowPlan, (demand_pull hmult hpos hlt).1]
     exact hhandled
+
+lemma interactions_lt (hinv : run.Inv k padded balancing) : balancing.interactions < p := by
+  have := hinv.length_lt
+  rw [hinv.interactions]
+  omega
+
+/-- The VM answers the pushed state `k` with its row. -/
+lemma step_vm (hinv : run.Inv k padded balancing) {demand : Demand (F p)} {index : ℕ}
+    {state : ComponentState (F p)} (hstate : balancing.states[index]? = some state)
+    (hvm : state.component = run.complete.vm.component) (hk : k < run.steps)
+    (hpadded : padded = false)
+    (hmessage : demand.message = run.complete.vm.state run.publicInput k)
+    (hmult : demand.multiplicity = 1) :
+    ∃ states change, handle balancing.states demand index run.data0 run.hint = .ok (states, change) ∧
+      run.Inv (k + 1) padded (balancing.apply states change) ∧
+      Prod.Lex (· < ·) (· < ·) (balancing.apply states change).measure balancing.measure := by
+  have hmemState := List.mem_of_getElem? hstate
+  have hok := run.stateOk_of_shape hinv.shape hmemState
+  have hplan := StateOk.vm_rowPlan run hok hvm
+  have hmode : state.rowPlan.mode = .demand run.complete.vm.mode := by rw [hplan]
+  have hrow : createDemandRow balancing.states state run.complete.vm.mode demand 1 run.data0
+      run.hint = (run.vmRow k, []) := by
+    unfold createDemandRow
+    rw [run.completeRow_eq hinv.viewOk hok (run.demand_input_size hok.entry hmode _ _)]
+    simp [vmRow, hvm, hmessage, demandOrigin, Vm.input]
+  have hmutation : handleDemand balancing.states state run.complete.vm.mode demand run.data0
+      run.hint = Mutation.mk { state with rows := state.rows ++ [run.vmRow k] } []
+        [run.vmRow k] [] := by
+    simp [handleDemand, run.complete.vm.mode_aggregation, hrow, (demand_push hmult).2]
+  have hhandle := run.handle_demand hstate hmode demand (by rw [hmutation])
+  rw [hmutation] at hhandle
+  simp only [List.flatMap_nil, List.flatMap_cons, List.flatMap_nil, List.append_nil] at hhandle
+  refine ⟨_, _, hhandle, ?_, ?_⟩
+  · have hchanges := handle_spec _ _ _ _ _ hhandle
+    have hrowsOld := hinv.rows state hmemState
+    simp only [RowsOk, hmode] at hrowsOld
+    obtain ⟨main, pad, hrowsEq, hpad, -, hmain, -⟩ := hrowsOld
+    rw [hmain hvm, hpad hpadded, List.replicate_zero, List.append_nil] at hrowsEq
+    have hfacts := run.rowFacts_vmRow hok hvm hk
+    refine ⟨hchanges.1.trans hinv.shape, ?_, hk, fun h => absurd h (by simp [hpadded]),
+      Balancing.tracks_apply hinv.tracks hchanges.2,
+      (hinv.canonical.removeInteractions _).addInteractions _, ?_, ?_,
+      fun h => absurd h (by simp [hpadded])⟩
+    · intro x hx
+      rcases mem_set_cases hx with rfl | ⟨j, hj, hji, rfl⟩
+      · simp only [RowsOk, hmode]
+        refine ⟨(List.range (k + 1)).map run.vmRow, 0, ?_, fun _ => rfl,
+          fun h => absurd h (by simp [hpadded]), fun _ => rfl, fun h => absurd hvm h⟩
+        simp [hrowsEq, List.range_succ]
+      · have hne := run.component_ne_of_set hinv.shape hstate hj hji
+        exact run.rowsOk_of_ne_vm (hvm ▸ hne) (hinv.rows _ (List.getElem_mem hj))
+    · have hlength := length_statesInteractions_set hstate (state.rows ++ [run.vmRow k]) run.data0
+      simp only [List.length_append, List.length_singleton, Nat.add_mul, one_mul] at hlength
+      simp only [Balancing.apply, List.length_nil, Nat.sub_zero, List.length_append,
+        hinv.interactions, rowInteractions, List.length_map]
+      linarith
+    · intro channel hchannel
+      have hanswered := run.answeredMsgs_set hstate (state.rows ++ [run.vmRow k]) channel
+      have hpulled := run.pulledMsgs_set hstate (state.rows ++ [run.vmRow k]) channel
+      rw [List.map_append, List.sum_append, List.map_singleton, List.sum_singleton,
+        hfacts.answered_zero channel hchannel (run.not_answersPull_vm hok hvm channel),
+        add_zero, add_left_inj] at hanswered
+      rw [List.map_append, List.sum_append, List.map_singleton, List.sum_singleton] at hpulled
+      simp only [Balancing.apply]
+      rw [hanswered]
+      have hold := hinv.answered_le channel hchannel
+      have : run.pulledMsgs balancing.states channel ≤
+          run.pulledMsgs (balancing.states.set index { state with rows := state.rows ++
+            [run.vmRow k] }) channel := by
+        have := le_self_add (a := run.pulledMsgs balancing.states channel +
+          (state.rows.map fun row => run.pulledBy state row channel).sum)
+          (b := run.pulledBy state (run.vmRow k) channel)
+        rw [add_assoc, ← hpulled] at this
+        exact le_of_add_le_add_right this
+      exact hold.trans this
+  · apply measure_lt_left hinv.interactions_lt
+    simp only [Balancing.apply, List.length_nil, Nat.sub_zero]
+    have hnext := run.next_ne hk
+    have hname : state.component.circuit.name = run.complete.vm.component.circuit.name := by
+      rw [hvm]
+    have hne : netOfInteractions (rowInteractions state (run.vmRow k) run.data0)
+        run.complete.vm.channel.name (run.complete.vm.state run.publicInput k) ≠ 0 := by
+      rw [(run.rowFacts_vmRow hok hvm hk).vm_net]
+      simp [vmNet, hname, vmRow, row, demandOrigin, Ne.symm hnext]
+    obtain ⟨interaction, hmem, -⟩ := exists_of_netOfInteractions_ne_zero hne
+    have := List.length_pos_of_mem hmem
+    omega
 
 end Inv
 
