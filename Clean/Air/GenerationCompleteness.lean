@@ -502,3 +502,193 @@ lemma Canonical.length_succ {demands demands' : List (Demand F)} (hcanonical : C
 end Demand
 
 end Air.Flat.WitnessGeneration
+
+/-! ### What validation guarantees -/
+
+namespace Air.Flat.WitnessGeneration
+
+variable {F : Type} [FiniteField F] {PublicIO : TypeMap} [ProvableType PublicIO]
+
+@[simp] lemma orElse_eq_none {α : Type} (a b : Option α) : (a <|> b) = none ↔ a = none ∧ b = none := by
+  cases a <;> simp [HOrElse.hOrElse, OrElse.orElse, Option.orElse]
+
+@[simp] lemma check_eq_none (condition : Bool) (error : PlanError) :
+    check condition error = none ↔ condition = true := by
+  cases condition <;> simp [check]
+
+/-- What validation guarantees about one component's row plan. -/
+structure RowPlanValid (component : Component F) (rowPlan : RowPlan F) : Prop where
+  padding_width : rowPlan.padding.input.size = component.rowOffset
+  fixed : ∀ fixed, component.fixedColumns = some fixed → ∃ mode,
+    rowPlan.mode = .preallocated mode ∧ mode.rows = fixed.height ∧
+      rowPlan.padding.targetHeight fixed.height.toNat = fixed.height.toNat
+  demand : ∀ mode, rowPlan.mode = .demand mode →
+    mode.input.cells.length = component.rowOffset ∧
+      ∀ index, .message index ∈ mode.input.cells → index < mode.channel.arity
+  preallocated : ∀ mode, rowPlan.mode = .preallocated mode →
+    component.fixedWidth + mode.input.width = component.rowOffset ∧
+      ∀ handler ∈ mode.handlers, handler.interaction < component.rowOperations.interactions.length ∧
+        component.fixedWidth ≤ handler.column ∧ handler.column < component.rowOffset
+
+lemma rowPlanValid_of_error_eq_none {component : Component F} {rowPlan : RowPlan F}
+    (h : rowPlanError component rowPlan = none) : RowPlanValid component rowPlan := by
+  simp only [rowPlanError, orElse_eq_none, check_eq_none, beq_iff_eq] at h
+  obtain ⟨hpadding, hfixed, hmode⟩ := h
+  refine ⟨hpadding, ?_, ?_, ?_⟩
+  · intro fixed hcolumns
+    rw [hcolumns] at hfixed
+    rcases hrow : rowPlan.mode with mode | mode <;> rw [hrow] at hfixed
+    · simp at hfixed
+    · simp only [orElse_eq_none, check_eq_none, beq_iff_eq] at hfixed
+      exact ⟨mode, rfl, hfixed.1, hfixed.2⟩
+  · intro mode hrow
+    rw [hrow] at hmode
+    simp only [orElse_eq_none, check_eq_none, beq_iff_eq, List.findSome?_eq_none_iff] at hmode
+    refine ⟨hmode.1, fun index hindex => ?_⟩
+    have := hmode.2 _ hindex
+    simpa using this
+  · intro mode hrow
+    rw [hrow] at hmode
+    simp only [orElse_eq_none, check_eq_none, beq_iff_eq, List.findSome?_eq_none_iff,
+      Bool.and_eq_true, decide_eq_true_eq] at hmode
+    exact ⟨hmode.1, fun handler hhandler => ⟨(hmode.2.1 handler hhandler).1,
+      (hmode.2.1 handler hhandler).2.1, (hmode.2.1 handler hhandler).2.2⟩⟩
+
+end Air.Flat.WitnessGeneration
+
+namespace Air.Flat.WitnessGeneration
+
+variable {F : Type} [FiniteField F] {PublicIO : TypeMap} [ProvableType PublicIO]
+
+/-- What validation guarantees about a prover-data read: it targets a stable cell of a preallocated
+component that padding does not extend, or a lazy cell through a read step. -/
+structure DataReadValid (components : List (Component F)) (rowPlans : List (RowPlan F))
+    (read : DataRead) : Prop where
+  target : ∃ target rowPlan mode,
+    (components.zip rowPlans).find? (fun (target, _) => target.circuit.name == read.key) =
+      some (target, rowPlan) ∧
+    read.width = target.rowOffset ∧ rowPlan.mode = .preallocated mode ∧
+    read.column ∉ mode.handlers.map (·.column) ∧
+    (read.defining = false → read.column ∉ mode.lazyColumns) ∧
+    rowPlan.padding.targetHeight mode.rows.toNat = mode.rows.toNat
+
+lemma dataReadValid_of_error_eq_none {components : List (Component F)}
+    {rowPlans : List (RowPlan F)} {component : Component F} {operation : ℕ} {read : DataRead}
+    (h : dataReadError components rowPlans component operation read = none) :
+    DataReadValid components rowPlans read := by
+  simp only [dataReadError] at h
+  split at h
+  · simp at h
+  · rename_i target rowPlan hfind
+    simp only [orElse_eq_none, check_eq_none, beq_iff_eq] at h
+    obtain ⟨hwidth, hmode⟩ := h
+    split at hmode
+    · simp at hmode
+    · rename_i mode hrow
+      simp only [orElse_eq_none, check_eq_none, beq_iff_eq, Bool.not_eq_true',
+        Bool.or_eq_false_iff, List.any_eq_false, decide_eq_true_eq] at hmode
+      refine ⟨target, rowPlan, mode, hfind, hwidth, hrow, ?_, ?_, hmode.2⟩
+      · simp only [List.mem_map, not_exists, not_and]
+        intro handler hhandler hcolumn
+        exact hmode.1.1 handler hhandler hcolumn
+      · intro hdefining hlazy
+        have := hmode.1.2
+        simp [hdefining, hlazy] at this
+
+/-- What validation guarantees about a whole plan. -/
+structure PlanValid (ensemble : Ensemble F PublicIO) (rowPlans : List (RowPlan F)) : Prop where
+  row_plans : ∀ entry ∈ ensemble.tables.zip rowPlans, RowPlanValid entry.1 entry.2
+  handlers_nodup : ((ensemble.tables.zip rowPlans).flatMap fun entry =>
+    entry.2.mode.handled entry.1).Nodup
+  data_reads : ∀ entry ∈ ensemble.tables.zip rowPlans, ∀ m (code : Witgen.WitgenIR F m),
+    .witness m code ∈ entry.1.rowOperations.toFlat →
+      ∀ read ∈ witnessDataReads code, DataReadValid ensemble.tables rowPlans read
+  reads_below : ∀ component ∈ ensemble.tables,
+    flatReadsBelow component.rowOffset component.rowOperations.toFlat = true
+
+lemma nodup_of_not_mem_take {α : Type} [BEq α] [LawfulBEq α] {values : List α}
+    (h : ∀ entry ∈ values.zipIdx, (values.take entry.2).contains entry.1 = false) :
+    values.Nodup := by
+  rw [List.nodup_iff_injective_get]
+  intro i j hij
+  by_contra hne
+  rcases Nat.lt_or_gt_of_ne (Fin.val_ne_of_ne hne) with hlt | hlt
+  · have := h (values[j], j) (List.mem_zipIdx_iff_getElem?.mpr (by simp))
+    simp only [List.contains_eq_mem, decide_eq_false_iff_not] at this
+    exact this (List.mem_iff_getElem.mpr ⟨i, by simp; omega, by simpa using hij⟩)
+  · have := h (values[i], i) (List.mem_zipIdx_iff_getElem?.mpr (by simp))
+    simp only [List.contains_eq_mem, decide_eq_false_iff_not] at this
+    exact this (List.mem_iff_getElem.mpr ⟨j, by simp; omega, by simpa using hij.symm⟩)
+
+lemma planValid_of_error_eq_none {ensemble : Ensemble F PublicIO} {rowPlans : List (RowPlan F)}
+    (h : planError ensemble rowPlans = none) : PlanValid ensemble rowPlans := by
+  simp only [planError, orElse_eq_none, List.findSome?_eq_none_iff] at h
+  obtain ⟨hrowPlans, hhandlers, hreads, hbelow⟩ := h
+  refine ⟨fun entry hentry => rowPlanValid_of_error_eq_none (hrowPlans entry hentry), ?_, ?_, ?_⟩
+  · simp only [handlersError, List.findSome?_eq_none_iff, check_eq_none, Bool.not_eq_true'] at hhandlers
+    exact nodup_of_not_mem_take hhandlers
+  · intro entry hentry m code hcode read hread
+    simp only [dataReadsError, List.findSome?_eq_none_iff] at hreads
+    obtain ⟨index, hlt, hindex⟩ := List.mem_iff_getElem.mp hcode
+    have := hreads entry hentry (.witness m code, index)
+      (List.mem_zipIdx_iff_getElem?.mpr (by simp [hindex, hlt]))
+    simp only [orElse_eq_none, List.findSome?_eq_none_iff] at this
+    exact dataReadValid_of_error_eq_none (this.2 read hread)
+  · simp only [readsAheadError, List.findSome?_eq_none_iff, check_eq_none] at hbelow
+    exact hbelow
+
+/-- Alignment by name finds, for every component, its row plan. -/
+lemma rowPlansOf_spec {plan : GenerationPlan F} :
+    (components : List (Component F)) → {rowPlans : List (RowPlan F)} →
+      plan.rowPlansOf components = .ok rowPlans →
+      rowPlans.length = components.length ∧
+        ∀ entry ∈ components.zip rowPlans, (entry.1.circuit.name, entry.2) ∈ plan.components
+  | [], rowPlans, h => by
+      simp only [GenerationPlan.rowPlansOf, Except.ok.injEq] at h
+      subst h
+      simp
+  | component :: components, rowPlans, h => by
+      simp only [GenerationPlan.rowPlansOf] at h
+      split at h
+      · cases h
+      · rename_i rowPlan hrowPlan
+        split at h
+        · cases h
+        · rename_i rest hrest
+          cases h
+          obtain ⟨hlength, hmem⟩ := rowPlansOf_spec components hrest
+          refine ⟨by simp [hlength], ?_⟩
+          intro entry hentry
+          simp only [List.zip_cons_cons, List.mem_cons] at hentry
+          rcases hentry with rfl | hentry
+          · simp only [GenerationPlan.rowPlanOf] at hrowPlan
+            split at hrowPlan
+            · rename_i name _ hfilter
+              cases hrowPlan
+              have hmem' : (name, rowPlan) ∈ plan.components.filter (·.1 == component.circuit.name) := by
+                rw [hfilter]; simp
+              simp only [List.mem_filter, beq_iff_eq] at hmem'
+              simpa [hmem'.2] using hmem'.1
+            · cases hrowPlan
+            · cases hrowPlan
+          · exact hmem entry hentry
+
+lemma validate_spec {plan : GenerationPlan F} {ensemble : Ensemble F PublicIO}
+    {validPlan : ValidPlan ensemble} (h : plan.validate ensemble = .ok validPlan) :
+    ∀ entry ∈ ensemble.tables.zip validPlan.rowPlans,
+      (entry.1.circuit.name, entry.2) ∈ plan.components := by
+  simp only [GenerationPlan.validate] at h
+  split at h
+  · cases h
+  · rename_i rowPlans halign
+    split at h
+    · split at h
+      · cases h
+      · cases h
+        simp only [GenerationPlan.align] at halign
+        split at halign
+        · cases halign
+        · exact (rowPlansOf_spec _ halign).2
+    · cases h
+
+end Air.Flat.WitnessGeneration

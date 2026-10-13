@@ -32,13 +32,13 @@ variable {PublicIO : TypeMap} [ProvableType PublicIO]
 inductive Direction where
   | pull
   | push
-deriving Repr, DecidableEq, BEq
+deriving Repr, DecidableEq
 
 /-- How dynamically generated rows are allocated for repeated demand. -/
 inductive Aggregation where
   | perOccurrence
   | byMessage
-deriving Repr, DecidableEq, BEq
+deriving Repr, DecidableEq
 
 /-- A structured component-input cell derived from a triggering interaction. -/
 inductive InputCell (F : Type) where
@@ -345,59 +345,77 @@ def flatReadsBelow : ℕ → List (FlatOperation F) → Bool
 
 /-! ### Validation -/
 
+/-- The row plan of the component named `name`. -/
+def GenerationPlan.rowPlanOf (plan : GenerationPlan F) (name : String) :
+    Except PlanError (RowPlan F) :=
+  match plan.components.filter (·.1 == name) with
+  | [(_, rowPlan)] => .ok rowPlan
+  | [] => .error (.missingComponent name)
+  | _ => .error (.duplicateComponent name)
+
+/-- The row plans of `components`, in order. -/
+def GenerationPlan.rowPlansOf (plan : GenerationPlan F) :
+    List (Component F) → Except PlanError (List (RowPlan F))
+  | [] => .ok []
+  | component :: components =>
+      match plan.rowPlanOf component.circuit.name with
+      | .error error => .error error
+      | .ok rowPlan =>
+          match plan.rowPlansOf components with
+          | .error error => .error error
+          | .ok rowPlans => .ok (rowPlan :: rowPlans)
+
 /-- Look up the row plan of every ensemble component, in ensemble order. -/
 def GenerationPlan.align (plan : GenerationPlan F) (ensemble : Ensemble F PublicIO) :
-    Except PlanError (List (RowPlan F)) := do
-  for (name, _) in plan.components do
-    unless ensemble.tables.any (·.circuit.name == name) do
-      throw (.unknownComponent name)
-  ensemble.tables.mapM fun component =>
-    match plan.components.filter (·.1 == component.circuit.name) with
-    | [(_, rowPlan)] => pure rowPlan
-    | [] => throw (.missingComponent component.circuit.name)
-    | _ => throw (.duplicateComponent component.circuit.name)
+    Except PlanError (List (RowPlan F)) :=
+  match plan.components.find? fun (name, _) => !ensemble.tables.any (·.circuit.name == name) with
+  | some (name, _) => .error (.unknownComponent name)
+  | none => plan.rowPlansOf ensemble.tables
 
 def Padding.targetHeight (padding : Padding F) (rowCount : ℕ) : ℕ :=
   (max rowCount padding.minimumRows.toNat).nextPowerOfTwo
 
-/-- Check one component's generation mode and padding against the component. -/
-def validateRowPlan (component : Component F) (rowPlan : RowPlan F) :
-    Except PlanError Unit := do
+/-- `error` unless `condition` holds. -/
+def check (condition : Bool) (error : PlanError) : Option PlanError :=
+  if condition then none else some error
+
+/-- The first problem with one component's generation mode and padding, if any. -/
+def rowPlanError (component : Component F) (rowPlan : RowPlan F) : Option PlanError :=
   let name := component.circuit.name
   let fixedWidth := component.fixedWidth
   let inputWidth := component.rowOffset
-  unless rowPlan.padding.input.size = inputWidth do
-    throw (.paddingWidth name inputWidth rowPlan.padding.input.size)
-  match component.fixedColumns, rowPlan.mode with
-  | none, _ => pure ()
-  | some _, .demand _ => throw (.fixedDemandMode name)
-  | some fixed, .preallocated preallocated =>
-      unless preallocated.rows = fixed.height do
-        throw (.preallocatedRows name fixed.height.toNat preallocated.rows.toNat)
-      let paddedHeight := rowPlan.padding.targetHeight fixed.height.toNat
-      unless paddedHeight = fixed.height.toNat do
-        throw (.fixedPadding name fixed.height.toNat paddedHeight)
+  (check (rowPlan.padding.input.size == inputWidth)
+    (.paddingWidth name inputWidth rowPlan.padding.input.size) <|>
+  (match component.fixedColumns, rowPlan.mode with
+    | none, _ => none
+    | some _, .demand _ => some (.fixedDemandMode name)
+    | some fixed, .preallocated preallocated =>
+        check (preallocated.rows == fixed.height)
+          (.preallocatedRows name fixed.height.toNat preallocated.rows.toNat) <|>
+        check (rowPlan.padding.targetHeight fixed.height.toNat == fixed.height.toNat)
+          (.fixedPadding name fixed.height.toNat
+            (rowPlan.padding.targetHeight fixed.height.toNat))) <|>
   match rowPlan.mode with
   | .demand mode =>
-      unless mode.input.cells.length = inputWidth do
-        throw (.demandInputWidth name inputWidth mode.input.cells.length)
-      for cell in mode.input.cells do
-        if let .message index := cell then
-          unless index < mode.channel.arity do
-            throw (.demandMessageIndex name index mode.channel.arity)
+      check (mode.input.cells.length == inputWidth)
+        (.demandInputWidth name inputWidth mode.input.cells.length) <|>
+      mode.input.cells.findSome? fun cell =>
+        match cell with
+        | .message index =>
+            check (index < mode.channel.arity) (.demandMessageIndex name index mode.channel.arity)
+        | _ => none
   | .preallocated preallocated =>
-      unless fixedWidth + preallocated.input.width = inputWidth do
-        throw (.preallocatedWidth name (inputWidth - fixedWidth) preallocated.input.width)
-      for handler in preallocated.handlers do
-        unless handler.interaction < component.rowOperations.interactions.length do
-          throw (.preallocatedInteraction name handler.interaction)
-        unless fixedWidth ≤ handler.column && handler.column < inputWidth do
-          throw (.preallocatedColumn name handler.column fixedWidth inputWidth)
-      for column in preallocated.lazyColumns do
-        unless fixedWidth ≤ column && column < inputWidth do
-          throw (.lazyColumn name column fixedWidth inputWidth)
-        if preallocated.handlers.any (·.column = column) then
-          throw (.lazyHandlerColumn name column)
+      check (fixedWidth + preallocated.input.width == inputWidth)
+        (.preallocatedWidth name (inputWidth - fixedWidth) preallocated.input.width) <|>
+      preallocated.handlers.findSome? (fun handler =>
+        check (handler.interaction < component.rowOperations.interactions.length)
+          (.preallocatedInteraction name handler.interaction) <|>
+        check (fixedWidth ≤ handler.column && handler.column < inputWidth)
+          (.preallocatedColumn name handler.column fixedWidth inputWidth)) <|>
+      preallocated.lazyColumns.findSome? fun column =>
+        check (fixedWidth ≤ column && column < inputWidth)
+          (.lazyColumn name column fixedWidth inputWidth) <|>
+        check (!preallocated.handlers.any (·.column = column)) (.lazyHandlerColumn name column))
 
 /-- The lazy columns of a component's generation mode. -/
 def Mode.lazyColumns (mode : Mode F) : List ℕ :=
@@ -405,60 +423,68 @@ def Mode.lazyColumns (mode : Mode F) : List ℕ :=
   | .demand _ => []
   | .preallocated allocation => allocation.lazyColumns
 
-/-- Check that every prover-data read targets a stable cell of a preallocated component, or a
-lazy cell through a read step, and that components with lazy cells do not read them. -/
-def validateDataReads (components : List (Component F)) (rowPlans : List (RowPlan F)) :
-    Except PlanError Unit := do
-  for (component, ownRowPlan) in components.zip rowPlans do
-    for (operation, operationIndex) in component.rowOperations.toFlat.zipIdx do
-      if let .witness _ code := operation then
-        if !ownRowPlan.mode.lazyColumns.isEmpty &&
-            (witnessDataReads code).any (·.defining) then
-          throw (.lazyComponentRead component.circuit.name operationIndex)
-        for read in witnessDataReads code do
-          let some (target, rowPlan) := (components.zip rowPlans).find? fun (target, _) =>
-              target.circuit.name == read.key
-            | throw (.unknownDataRead component.circuit.name operationIndex read.key)
-          unless read.width = target.rowOffset do
-            throw (.dataReadWidth component.circuit.name operationIndex read.key target.rowOffset
-              read.width)
-          match rowPlan.mode with
-          | .demand _ =>
-              throw (.unstableDataRead component.circuit.name operationIndex read.key read.column)
-          | .preallocated preallocated =>
-              if preallocated.handlers.any (·.column = read.column) ||
-                  (!read.defining && preallocated.lazyColumns.contains read.column) then
-                throw (.unstableDataRead component.circuit.name operationIndex read.key read.column)
-              unless rowPlan.padding.targetHeight preallocated.rows.toNat =
-                  preallocated.rows.toNat do
-                throw (.paddedDataRead component.circuit.name operationIndex read.key)
+/-- The first problem with a prover-data read of witness operation `operation` of `component`:
+it must target a stable cell of a preallocated component, or a lazy cell through a read step. -/
+def dataReadError (components : List (Component F)) (rowPlans : List (RowPlan F))
+    (component : Component F) (operation : ℕ) (read : DataRead) : Option PlanError :=
+  match (components.zip rowPlans).find? fun (target, _) => target.circuit.name == read.key with
+  | none => some (.unknownDataRead component.circuit.name operation read.key)
+  | some (target, rowPlan) =>
+      check (read.width == target.rowOffset)
+        (.dataReadWidth component.circuit.name operation read.key target.rowOffset read.width) <|>
+      match rowPlan.mode with
+      | .demand _ => some (.unstableDataRead component.circuit.name operation read.key read.column)
+      | .preallocated preallocated =>
+          check (!(preallocated.handlers.any (·.column = read.column) ||
+              (!read.defining && preallocated.lazyColumns.contains read.column)))
+            (.unstableDataRead component.circuit.name operation read.key read.column) <|>
+          check (rowPlan.padding.targetHeight preallocated.rows.toNat == preallocated.rows.toNat)
+            (.paddedDataRead component.circuit.name operation read.key)
 
-/-- Check that no two components handle demand of the same channel and direction. -/
-def validateHandlers (components : List (Component F)) (rowPlans : List (RowPlan F)) :
-    Except PlanError Unit := do
+/-- The first prover-data read that does not target a stable cell of a preallocated component, or a
+lazy cell through a read step, and the first read step of a component with lazy cells. -/
+def dataReadsError (components : List (Component F)) (rowPlans : List (RowPlan F)) :
+    Option PlanError :=
+  (components.zip rowPlans).findSome? fun (component, ownRowPlan) =>
+    component.rowOperations.toFlat.zipIdx.findSome? fun (operation, operationIndex) =>
+      match operation with
+      | .witness _ code =>
+          check (ownRowPlan.mode.lazyColumns.isEmpty || !(witnessDataReads code).any (·.defining))
+            (.lazyComponentRead component.circuit.name operationIndex) <|>
+          (witnessDataReads code).findSome?
+            (dataReadError components rowPlans component operationIndex)
+      | .assert _ | .lookup _ | .interact _ => none
+
+/-- The first channel and direction of demand that two components handle. -/
+def handlersError (components : List (Component F)) (rowPlans : List (RowPlan F)) :
+    Option PlanError :=
   let handled := (components.zip rowPlans).flatMap fun (component, rowPlan) =>
     rowPlan.mode.handled component
-  for (entry, index) in handled.zipIdx do
-    if (handled.take index).contains entry then
-      throw (.duplicateHandler entry.1 entry.2)
+  handled.zipIdx.findSome? fun (entry, index) =>
+    check (!(handled.take index).contains entry) (.duplicateHandler entry.1 entry.2)
 
-/-- All structural checks of row plans aligned with an ensemble's components. -/
-def validatePlan (ensemble : Ensemble F PublicIO) (rowPlans : List (RowPlan F)) :
-    Except PlanError Unit := do
-  for (component, rowPlan) in ensemble.tables.zip rowPlans do
-    validateRowPlan component rowPlan
-  validateHandlers ensemble.tables rowPlans
-  validateDataReads ensemble.tables rowPlans
-  for component in ensemble.tables do
-    unless flatReadsBelow component.rowOffset component.rowOperations.toFlat do
-      throw (.witnessReadsAhead component.circuit.name)
+/-- The first component with a witness program that is native or reads cells it does not
+precede. -/
+def readsAheadError (components : List (Component F)) : Option PlanError :=
+  components.findSome? fun component =>
+    check (flatReadsBelow component.rowOffset component.rowOperations.toFlat)
+      (.witnessReadsAhead component.circuit.name)
+
+/-- The first structural problem with row plans aligned with an ensemble's components. -/
+def planError (ensemble : Ensemble F PublicIO) (rowPlans : List (RowPlan F)) :
+    Option PlanError :=
+  (ensemble.tables.zip rowPlans).findSome? (fun (component, rowPlan) =>
+    rowPlanError component rowPlan) <|>
+  handlersError ensemble.tables rowPlans <|>
+  dataReadsError ensemble.tables rowPlans <|>
+  readsAheadError ensemble.tables
 
 /-- A generation plan that passed `GenerationPlan.validate` for `ensemble`. -/
 structure ValidPlan (ensemble : Ensemble F PublicIO) where
   /-- The row plan of each component, in ensemble order. -/
   rowPlans : List (RowPlan F)
   aligned : rowPlans.length = ensemble.tables.length
-  valid : validatePlan ensemble rowPlans = .ok ()
+  valid : planError ensemble rowPlans = none
 
 /-- Align a generation plan with an ensemble's components and check it. -/
 def GenerationPlan.validate (plan : GenerationPlan F) (ensemble : Ensemble F PublicIO) :
@@ -467,9 +493,9 @@ def GenerationPlan.validate (plan : GenerationPlan F) (ensemble : Ensemble F Pub
   | .error error => .error error
   | .ok rowPlans =>
       if hlength : rowPlans.length = ensemble.tables.length then
-        match hvalid : validatePlan ensemble rowPlans with
-        | .error error => .error error
-        | .ok () => .ok { rowPlans, aligned := hlength, valid := hvalid }
+        match hvalid : planError ensemble rowPlans with
+        | some error => .error error
+        | none => .ok { rowPlans, aligned := hlength, valid := hvalid }
       else
         -- `align` produces one entry per component
         .error (.missingComponent "")
