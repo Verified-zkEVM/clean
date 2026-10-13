@@ -383,7 +383,7 @@ lemma pullable_of_row {component : Component (F p)} (hmem : component ∈ ens.en
 /-! ### Answered and pulled messages -/
 
 /-- A component state answers pulls on `channel`. -/
-def AnswersPull (state : ComponentState (F p)) (channel : String) : Prop :=
+abbrev AnswersPull (state : ComponentState (F p)) (channel : String) : Prop :=
   (channel, Direction.pull) ∈ state.rowPlan.mode.handled state.component
 
 /-- The messages a row answers on `channel`, with multiplicity. -/
@@ -410,9 +410,8 @@ def pullsOf (interactions : List (Interaction (F p))) (channel : String) : Multi
   ((interactions.filter fun interaction => interaction.channel.name = channel ∧
     interaction.assumeGuarantees ∧ interaction.mult = -1).map (·.msg) : List _)
 
-open Classical in
 /-- The messages a row pulls on `channel`, unless its component answers that channel. -/
-noncomputable def pulledBy (state : ComponentState (F p)) (row : GeneratedRow (F p))
+def pulledBy (state : ComponentState (F p)) (row : GeneratedRow (F p))
     (channel : String) : Multiset (Array (F p)) :=
   if AnswersPull state channel then 0 else pullsOf (rowInteractions state row run.data0) channel
 
@@ -421,7 +420,7 @@ def answeredMsgs (states : List (ComponentState (F p))) (channel : String) : Mul
   (states.map fun state => (state.rows.map fun row => run.answeredBy state row channel).sum).sum
 
 /-- The messages the verifier and all rows pull on `channel`, except rows answering it. -/
-noncomputable def pulledMsgs (states : List (ComponentState (F p))) (channel : String) :
+def pulledMsgs (states : List (ComponentState (F p))) (channel : String) :
     Multiset (Array (F p)) :=
   pullsOf run.verifier channel +
     (states.map fun state => (state.rows.map fun row => run.pulledBy state row channel).sum).sum
@@ -494,7 +493,7 @@ lemma exists_of_netOfInteractions_ne_zero {F : Type} [FiniteField F]
   exact hnone interaction hmem hname hmsg
 
 omit [Fact p.Prime] in
-lemma filterMap_nodup_unique {α β : Type} {g : α → Option β} {b : β} :
+lemma filterMap_nodup_unique {α β : Type*} {g : α → Option β} {b : β} :
     ∀ {values : List α}, (values.filterMap g).Nodup → ∀ {a a' : α}, a ∈ values → a' ∈ values →
       g a = some b → g a' = some b → a = a'
   | [], _, _, _, ha, _, _, _ => by simp at ha
@@ -516,7 +515,7 @@ lemma filterMap_nodup_unique {α β : Type} {g : α → Option β} {b : β} :
       · exact filterMap_nodup_unique hrest ha ha' hga hga'
 
 omit [Fact p.Prime] in
-lemma sum_map_eq_of_unique {α β M : Type} [AddCommMonoid M] {g : α → Option β} {b : β}
+lemma sum_map_eq_of_unique {α β M : Type*} [AddCommMonoid M] {g : α → Option β} {b : β}
     {f : α → M} {values : List α} (hnodup : (values.filterMap g).Nodup) {a : α} (ha : a ∈ values)
     (hga : g a = some b) (hzero : ∀ a' ∈ values, g a' ≠ some b → f a' = 0) :
     (values.map f).sum = f a := by
@@ -603,8 +602,6 @@ lemma handled_nodup {entry : Component (F p) × RowPlan (F p)}
 
 /-! ### The VM -/
 
-abbrev vm : Vm ens plan := run.complete.vm
-
 lemma verifier_eq (data : ProverData (F p)) :
     ens.ensemble.verifierOperations.interactionValues (.fromInput run.publicInput data) =
       run.verifier := by
@@ -622,9 +619,9 @@ lemma verifier_channel_eq {interaction : Interaction (F p)} (hinteraction : inte
   exact ens.ensemble.channels_named channel hchannel _
     (Ensemble.channel_mem_declaredChannels (List.mem_append_left _ habstract)) hname
 
-lemma vm_entry : (run.vm.component, { mode := .demand run.vm.mode, padding := run.vm.padding }) ∈
+lemma vm_entry : (run.complete.vm.component, { mode := .demand run.complete.vm.mode, padding := run.complete.vm.padding }) ∈
     ens.ensemble.tables.zip run.rowPlans :=
-  run.mem_zip run.vm.mem run.vm.planned
+  run.mem_zip run.complete.vm.mem run.complete.vm.planned
 
 lemma eval_size (template : InputTemplate (F p)) (message : Array (F p)) (count : ℕ) :
     (template.eval message count).size = template.cells.length := by
@@ -637,57 +634,57 @@ lemma demand_input_size {component : Component (F p)} {rowPlan : RowPlan (F p)}
   rw [eval_size]
   exact ((run.planValid.row_plans _ hentry).demand mode hmode).1
 
-lemma vm_input_size (state : Array (F p)) : (run.vm.input state).size = run.vm.component.rowOffset :=
+lemma vm_input_size (state : Array (F p)) : (run.complete.vm.input state).size = run.complete.vm.component.rowOffset :=
   run.demand_input_size run.vm_entry rfl state 1
 
 /-- The facts the VM obligation gives about the row answering a state. -/
-lemma vm_row_facts {state : Array (F p)} (hsize : state.size = run.vm.channel.arity)
-    (hassumptions : run.Admissible run.vm.component (run.vm.input state)) :
-    let interactions := interactionsIn run.vm.component
-      (run.rowEnv run.vm.component (run.vm.input state) run.stableData).toEnvironment
-    (∀ message, netOfInteractions interactions run.vm.channel.name message =
-      (if message = run.vm.next state then 1 else 0) - (if message = state then 1 else 0)) ∧
-    ∀ interaction ∈ interactions, interaction.channel.name ≠ run.vm.channel.name →
-      SideInteraction ens.ensemble plan run.vm.channel.name false interaction :=
+lemma vm_row_facts {state : Array (F p)} (hsize : state.size = run.complete.vm.channel.arity)
+    (hassumptions : run.Admissible run.complete.vm.component (run.complete.vm.input state)) :
+    let interactions := interactionsIn run.complete.vm.component
+      (run.rowEnv run.complete.vm.component (run.complete.vm.input state) run.stableData).toEnvironment
+    (∀ message, netOfInteractions interactions run.complete.vm.channel.name message =
+      (if message = run.complete.vm.next state then 1 else 0) - (if message = state then 1 else 0)) ∧
+    ∀ interaction ∈ interactions, interaction.channel.name ≠ run.complete.vm.channel.name →
+      SideInteraction ens.ensemble plan run.complete.vm.channel.name false interaction :=
   run.complete.vm_row state _ hsize
-    (run.honestEnv_row run.vm.mem (run.vm_input_size state) run.stableData)
+    (run.honestEnv_row run.complete.vm.mem (run.vm_input_size state) run.stableData)
     (hassumptions.assumptions _ run.stableData_stable)
 
 lemma vm_admissible {index : ℕ} (hindex : index < run.steps) :
-    run.Admissible run.vm.component (run.vm.input (run.vm.state run.publicInput index)) :=
+    run.Admissible run.complete.vm.component (run.complete.vm.input (run.complete.vm.state run.publicInput index)) :=
   ⟨run.vm_input_size _, run.vm_assumptions index hindex⟩
 
 /-- The states of the run have the VM channel's arity. -/
 lemma state_size : ∀ index < run.steps,
-    (run.vm.state run.publicInput index).size = run.vm.channel.arity
+    (run.complete.vm.state run.publicInput index).size = run.complete.vm.channel.arity
   | 0, hindex => by
       have hverifier := (run.complete.verifier run.publicInput run.proverInput run.assumptions
-        run.stableData run.stableData_stable).1 (run.vm.initial run.publicInput)
+        run.stableData run.stableData_stable).1 (run.complete.vm.initial run.publicInput)
       rw [run.verifier_eq] at hverifier
-      have hne : run.vm.initial run.publicInput ≠ run.vm.final run.publicInput :=
+      have hne : run.complete.vm.initial run.publicInput ≠ run.complete.vm.final run.publicInput :=
         run.distinct 0 hindex
       simp only [hne, if_true, if_false, sub_zero] at hverifier
       obtain ⟨interaction, hmem, hname, hmsg, -⟩ :=
         exists_of_netOfInteractions_ne_zero (hverifier ▸ one_ne_zero)
-      rw [← run.verifier_channel_eq hmem run.vm.declared hname]
+      rw [← run.verifier_channel_eq hmem run.complete.vm.declared hname]
       simp only [Vm.state, Function.iterate_zero, id_eq, ← hmsg]
       exact interaction.same_size
   | index + 1, hindex => by
       have hsize := state_size index (by omega)
-      have hstep : run.vm.state run.publicInput (index + 1) =
-          run.vm.next (run.vm.state run.publicInput index) := by
+      have hstep : run.complete.vm.state run.publicInput (index + 1) =
+          run.complete.vm.next (run.complete.vm.state run.publicInput index) := by
         simp only [Vm.state, Function.iterate_succ_apply']
       rw [hstep]
-      by_cases hsame : run.vm.next (run.vm.state run.publicInput index) =
-          run.vm.state run.publicInput index
+      by_cases hsame : run.complete.vm.next (run.complete.vm.state run.publicInput index) =
+          run.complete.vm.state run.publicInput index
       · rw [hsame, hsize]
       have hnet := (run.vm_row_facts hsize (run.vm_admissible (by omega))).1
-        (run.vm.next (run.vm.state run.publicInput index))
+        (run.complete.vm.next (run.complete.vm.state run.publicInput index))
       simp only [hsame, if_true, if_false, sub_zero] at hnet
       obtain ⟨interaction, hmem, hname, hmsg, -⟩ :=
         exists_of_netOfInteractions_ne_zero (hnet ▸ one_ne_zero)
       obtain ⟨abstract, habstract, rfl⟩ := List.mem_map.mp hmem
-      rw [← hmsg, ← channel_eq_of_mem run.vm.mem habstract run.vm.declared hname]
+      rw [← hmsg, ← channel_eq_of_mem run.complete.vm.mem habstract run.complete.vm.declared hname]
       exact (abstract.eval _).same_size
 
 /-! ### Facts about rows -/
@@ -718,14 +715,13 @@ lemma stateOk_of_shape {states : List (ComponentState (F p))}
   obtain ⟨rfl, rfl, rfl, rfl, -⟩ := heq
   exact ⟨hentry, rfl, rfl⟩
 
-open Classical in
 /-- The net multiplicity a row adds on the VM channel: a VM row pulls its state and pushes the
 next one. -/
-noncomputable def vmNet (state : ComponentState (F p)) (row : GeneratedRow (F p))
+def vmNet (state : ComponentState (F p)) (row : GeneratedRow (F p))
     (message : Array (F p)) : F p :=
-  if state.component = run.vm.component then
+  if state.component.circuit.name = run.complete.vm.component.circuit.name then
     match row.origin with
-    | some origin => (if message = run.vm.next origin.message then 1 else 0) -
+    | some origin => (if message = run.complete.vm.next origin.message then 1 else 0) -
         (if message = origin.message then 1 else 0)
     | none => 0
   else 0
@@ -737,46 +733,57 @@ structure RowFacts (state : ComponentState (F p)) (row : GeneratedRow (F p)) : P
   admissible : run.Admissible state.component row.input
   side : ∀ interaction ∈ rowInteractions state row run.data0,
     ¬AnswersPull state interaction.channel.name →
-    (state.component = run.vm.component → interaction.channel.name ≠ run.vm.channel.name) →
-      SideInteraction ens.ensemble plan run.vm.channel.name false interaction
-  answered_zero : ∀ channel ≠ run.vm.channel.name, ¬AnswersPull state channel →
+    (state.component = run.complete.vm.component → interaction.channel.name ≠ run.complete.vm.channel.name) →
+      SideInteraction ens.ensemble plan run.complete.vm.channel.name false interaction
+  answered_zero : ∀ channel ≠ run.complete.vm.channel.name, ¬AnswersPull state channel →
     run.answeredBy state row channel = 0
-  answered_net : ∀ channel ≠ run.vm.channel.name, AnswersPull state channel → ∀ message,
+  answered_net : ∀ channel ≠ run.complete.vm.channel.name, AnswersPull state channel → ∀ message,
     netOfInteractions (rowInteractions state row run.data0) channel message =
       ((run.answeredBy state row channel).count message : F p)
   vm_net : ∀ message, netOfInteractions (rowInteractions state row run.data0)
-    run.vm.channel.name message = run.vmNet state row message
+    run.complete.vm.channel.name message = run.vmNet state row message
 
-lemma entry_unique {entry entry' : Component (F p) × RowPlan (F p)}
+lemma entry_unique_name {entry entry' : Component (F p) × RowPlan (F p)}
     (hentry : entry ∈ ens.ensemble.tables.zip run.rowPlans)
-    (hentry' : entry' ∈ ens.ensemble.tables.zip run.rowPlans) (h : entry.1 = entry'.1) :
-    entry = entry' := by
+    (hentry' : entry' ∈ ens.ensemble.tables.zip run.rowPlans)
+    (h : entry.1.circuit.name = entry'.1.circuit.name) : entry = entry' := by
   have := run.find?_eq hentry
   rw [h, run.find?_eq hentry'] at this
   exact (Option.some.inj this).symm
 
+lemma entry_unique {entry entry' : Component (F p) × RowPlan (F p)}
+    (hentry : entry ∈ ens.ensemble.tables.zip run.rowPlans)
+    (hentry' : entry' ∈ ens.ensemble.tables.zip run.rowPlans) (h : entry.1 = entry'.1) :
+    entry = entry' :=
+  run.entry_unique_name hentry hentry' (by rw [h])
+
+lemma StateOk.name_ne_vm {state : ComponentState (F p)} (hok : run.StateOk state)
+    (hvm : state.component ≠ run.complete.vm.component) :
+    state.component.circuit.name ≠ run.complete.vm.component.circuit.name := fun h =>
+  hvm (congrArg Prod.fst (run.entry_unique_name hok.entry run.vm_entry h))
+
 lemma StateOk.vm_rowPlan {state : ComponentState (F p)} (hok : run.StateOk state)
-    (hvm : state.component = run.vm.component) :
-    state.rowPlan = { mode := .demand run.vm.mode, padding := run.vm.padding } :=
+    (hvm : state.component = run.complete.vm.component) :
+    state.rowPlan = { mode := .demand run.complete.vm.mode, padding := run.complete.vm.padding } :=
   congrArg Prod.snd (run.entry_unique hok.entry run.vm_entry hvm)
 
 lemma not_answersPull_vm {state : ComponentState (F p)} (hok : run.StateOk state)
-    (hvm : state.component = run.vm.component) (channel : String) :
+    (hvm : state.component = run.complete.vm.component) (channel : String) :
     ¬AnswersPull state channel := by
   have hplan := StateOk.vm_rowPlan run hok hvm
-  simp [AnswersPull, hplan, Mode.handled, run.vm.mode_direction]
+  simp [AnswersPull, hplan, Mode.handled, run.complete.vm.mode_direction]
 
 lemma rowFacts_vmRow {state : ComponentState (F p)} (hok : run.StateOk state)
-    (hvm : state.component = run.vm.component) {index : ℕ} (hindex : index < run.steps) :
+    (hvm : state.component = run.complete.vm.component) {index : ℕ} (hindex : index < run.steps) :
     run.RowFacts state (run.vmRow index) := by
   have hadmissible := run.vm_admissible hindex
   have hfacts := run.vm_row_facts (run.state_size index hindex) hadmissible
   have hinteractions : rowInteractions state (run.vmRow index) run.data0 =
-      interactionsIn run.vm.component (run.rowEnv run.vm.component
-        (run.vm.input (run.vm.state run.publicInput index)) run.stableData).toEnvironment := by
+      interactionsIn run.complete.vm.component (run.rowEnv run.complete.vm.component
+        (run.complete.vm.input (run.complete.vm.state run.publicInput index)) run.stableData).toEnvironment := by
     have := run.rowInteractions_row hok.interactions hok.mem (input :=
-      run.vm.input (run.vm.state run.publicInput index)) (hvm ▸ run.vm_input_size _)
-      (some (demandOrigin run.vm.mode (run.vm.state run.publicInput index) 1)) run.stableData_stable
+      run.complete.vm.input (run.complete.vm.state run.publicInput index)) (hvm ▸ run.vm_input_size _)
+      (some (demandOrigin run.complete.vm.mode (run.complete.vm.state run.publicInput index) 1)) run.stableData_stable
     rw [hvm] at this
     exact this
   refine ⟨hvm ▸ hadmissible, ?_, ?_, ?_, ?_⟩
@@ -785,16 +792,18 @@ lemma rowFacts_vmRow {state : ComponentState (F p)} (hok : run.StateOk state)
     exact hfacts.2 interaction hmem (hname hvm)
   · intro channel hchannel _
     have hplan := StateOk.vm_rowPlan run hok hvm
-    simp only [answeredBy, hplan, run.vm.mode_channel]
+    simp only [answeredBy, hplan, run.complete.vm.mode_channel]
     simp [Ne.symm hchannel]
   · intro channel _ hanswers
     exact absurd hanswers (run.not_answersPull_vm hok hvm channel)
   · intro message
+    have hname : state.component.circuit.name = run.complete.vm.component.circuit.name := by
+      rw [hvm]
     rw [hinteractions, hfacts.1 message]
-    simp [vmNet, hvm, vmRow, row, demandOrigin]
+    simp [vmNet, hname, vmRow, row, demandOrigin]
 
 lemma answersPull_demand {state : ComponentState (F p)} (hok : run.StateOk state)
-    (hvm : state.component ≠ run.vm.component) {mode : DemandMode (F p)}
+    (hvm : state.component ≠ run.complete.vm.component) {mode : DemandMode (F p)}
     (hmode : state.rowPlan.mode = .demand mode) (channel : String) :
     AnswersPull state channel ↔ channel = mode.channel.name := by
   have hdirection := (run.complete.demand state.component hok.mem state.rowPlan mode
@@ -803,11 +812,11 @@ lemma answersPull_demand {state : ComponentState (F p)} (hok : run.StateOk state
 
 /-- No component answers pulls on the VM channel. -/
 lemma not_answersPull_vmChannel {state : ComponentState (F p)} (hok : run.StateOk state) :
-    ¬AnswersPull state run.vm.channel.name :=
-  run.vm.no_pull_handler state.component hok.mem state.rowPlan (run.planned _ hok.entry)
+    ¬AnswersPull state run.complete.vm.channel.name :=
+  run.complete.vm.no_pull_handler state.component hok.mem state.rowPlan (run.planned _ hok.entry)
 
 lemma rowFacts_answerRow {state : ComponentState (F p)} (hok : run.StateOk state)
-    (hvm : state.component ≠ run.vm.component) {mode : DemandMode (F p)}
+    (hvm : state.component ≠ run.complete.vm.component) {mode : DemandMode (F p)}
     (hmode : state.rowPlan.mode = .demand mode) {message : Array (F p)} {count : ℕ}
     (hcount : 0 < count) (hsize : message.size = mode.channel.arity)
     (hpullable : run.Pullable mode.channel message) :
@@ -824,7 +833,7 @@ lemma rowFacts_answerRow {state : ComponentState (F p)} (hok : run.StateOk state
   have hinteractions := run.rowInteractions_row hok.interactions hok.mem hinputSize
     (some (demandOrigin mode message count)) run.stableData_stable
   have hanswers := run.answersPull_demand hok hvm hmode
-  have hmodeChannel : mode.channel.name ≠ run.vm.channel.name := fun h =>
+  have hmodeChannel : mode.channel.name ≠ run.complete.vm.channel.name := fun h =>
     run.not_answersPull_vmChannel hok ((hanswers _).mpr h.symm)
   refine ⟨hadmissible, ?_, ?_, ?_, ?_⟩
   · intro interaction hmem hnot _
@@ -842,7 +851,7 @@ lemma rowFacts_answerRow {state : ComponentState (F p)} (hok : run.StateOk state
     · simp [hmessage, Ne.symm hmessage]
   · intro message'
     rw [answerRow, hinteractions]
-    simp only [vmNet, hvm, if_false]
+    simp only [vmNet, if_neg (StateOk.name_ne_vm run hok hvm)]
     apply netOfInteractions_eq_zero
     intro interaction hmem hname
     rcases hside interaction hmem (by rw [hname]; exact Ne.symm hmodeChannel) with hzero | ⟨-, hne, -⟩
@@ -850,8 +859,8 @@ lemma rowFacts_answerRow {state : ComponentState (F p)} (hok : run.StateOk state
     · exact absurd hname hne
 
 lemma sideInteraction_false {interaction : Interaction (F p)}
-    (h : SideInteraction ens.ensemble plan run.vm.channel.name true interaction) :
-    SideInteraction ens.ensemble plan run.vm.channel.name false interaction := by
+    (h : SideInteraction ens.ensemble plan run.complete.vm.channel.name true interaction) :
+    SideInteraction ens.ensemble plan run.complete.vm.channel.name false interaction := by
   rcases h with h | ⟨hpull, hne, component, hmem, rowPlan, hplanned, hhandled, -⟩
   · exact .inl h
   · exact .inr ⟨hpull, hne, component, hmem, rowPlan, hplanned, hhandled, by simp⟩
@@ -870,7 +879,7 @@ multiplicity zero. -/
 lemma mult_eq_zero_of_padding {state : ComponentState (F p)} (hok : run.StateOk state)
     {mode : DemandMode (F p)} (hmode : state.rowPlan.mode = .demand mode)
     {interaction : Interaction (F p)}
-    (hside : SideInteraction ens.ensemble plan run.vm.channel.name true interaction)
+    (hside : SideInteraction ens.ensemble plan run.complete.vm.channel.name true interaction)
     (hanswers : AnswersPull state interaction.channel.name) : interaction.mult = 0 := by
   rcases hside with hzero | ⟨-, -, hanswered⟩
   · exact hzero
@@ -961,7 +970,7 @@ lemma rowFacts_preallocated {state : ComponentState (F p)} (hok : run.StateOk st
     simp [rowInts, interactionsIn]
   have hclass : ∀ index (hindex : index < rowInts.length),
       (∃ handler ∈ mode.handlers, handler.interaction = index) ∨
-        (SideInteraction ens.ensemble plan run.vm.channel.name false rowInts[index] ∧
+        (SideInteraction ens.ensemble plan run.complete.vm.channel.name false rowInts[index] ∧
           ¬AnswersPull state rowInts[index].channel.name) := by
     intro index hindex
     by_cases hmem : index ∈ mode.handlers.map (·.interaction)
@@ -1034,13 +1043,13 @@ lemma rowFacts_preallocated {state : ComponentState (F p)} (hok : run.StateOk st
         exact hne (by rw [this])
       · exact hnot (hname' ▸ hanswer)
   · intro message
-    have hvm : state.component ≠ run.vm.component := by
+    have hvm : state.component ≠ run.complete.vm.component := by
       intro hvm
       have := StateOk.vm_rowPlan run hok hvm
       rw [this] at hmode
       cases hmode
     rw [hinteractions, netOfInteractions_eq_zero]
-    · simp [vmNet, hvm]
+    · simp [vmNet, StateOk.name_ne_vm run hok hvm]
     · intro interaction hmem hname
       obtain ⟨index, hindex, rfl⟩ := List.getElem_of_mem hmem
       rcases hclass index hindex with ⟨handler, hmem', rfl⟩ | ⟨hside', -⟩
@@ -1108,7 +1117,7 @@ lemma rowFacts_of_rowsOk {k : ℕ} {padded : Bool} {state : ComponentState (F p)
     obtain ⟨main, pad, hrowsEq, -, hvm, hanswer⟩ := hrows
     rw [hrowsEq, List.mem_append] at hrow
     rcases hrow with hrow | hrow
-    · by_cases hcomponent : state.component = run.vm.component
+    · by_cases hcomponent : state.component = run.complete.vm.component
       · rw [hvm hcomponent] at hrow
         obtain ⟨j, hj, rfl⟩ := List.mem_map.mp hrow
         exact run.rowFacts_vmRow hok hcomponent (by simp at hj; omega)
@@ -1116,6 +1125,142 @@ lemma rowFacts_of_rowsOk {k : ℕ} {padded : Bool} {state : ComponentState (F p)
         exact run.rowFacts_answerRow hok hcomponent hmode hcount hsize hpullable
     · rw [List.eq_of_mem_replicate hrow]
       exact run.rowFacts_padding hok hmode
+
+/-! ### Nets of all interactions -/
+
+omit [Fact p.Prime] in
+lemma count_list_sum {α : Type} [DecidableEq α] (values : List (Multiset α)) (a : α) :
+    values.sum.count a = (values.map (·.count a)).sum := by
+  induction values with
+  | nil => simp
+  | cons head rest ih => simp [ih]
+
+omit [Fact p.Prime] in
+lemma list_sum_map_sub {α M : Type*} [AddCommGroup M] (values : List α) (f g : α → M) :
+    (values.map fun x => f x - g x).sum = (values.map f).sum - (values.map g).sum := by
+  induction values with
+  | nil => simp
+  | cons head rest ih => simp [ih]; abel
+
+lemma rowFacts_net {state : ComponentState (F p)} {row : GeneratedRow (F p)}
+    (h : run.RowFacts state row) {channel : String} (hchannel : channel ≠ run.complete.vm.channel.name)
+    (message : Array (F p)) :
+    netOfInteractions (rowInteractions state row run.data0) channel message =
+      ((run.answeredBy state row channel).count message : F p) -
+        ((run.pulledBy state row channel).count message : F p) := by
+  by_cases hanswers : AnswersPull state channel
+  · rw [h.answered_net channel hchannel hanswers message]
+    simp [pulledBy, hanswers]
+  · rw [h.answered_zero channel hchannel hanswers, net_eq_neg_pullsOf]
+    · simp [pulledBy, hanswers]
+    · intro interaction hmem hname
+      rcases h.side interaction hmem (hname ▸ hanswers) (fun _ => hname ▸ hchannel) with
+        hzero | ⟨hpull, -⟩
+      · exact .inl hzero
+      · exact .inr hpull
+
+/-- The verifier's interactions off the VM channel are side interactions satisfying their prover
+guarantees for every stable data. -/
+lemma verifier_side {interaction : Interaction (F p)} (hmem : interaction ∈ run.verifier)
+    (hname : interaction.channel.name ≠ run.complete.vm.channel.name) :
+    SideInteraction ens.ensemble plan run.complete.vm.channel.name false interaction ∧
+      ∀ data, run.Stable data → interaction.ProverGuarantees data := by
+  refine ⟨?_, fun data hstable => ?_⟩
+  · have h := (run.complete.verifier run.publicInput run.proverInput run.assumptions
+      run.stableData run.stableData_stable).2
+    rw [run.verifier_eq] at h
+    exact (h interaction hmem hname).1
+  · have h := (run.complete.verifier run.publicInput run.proverInput run.assumptions
+      data hstable).2
+    rw [run.verifier_eq] at h
+    exact (h interaction hmem hname).2
+
+/-- States whose rows all satisfy their facts. -/
+def StatesOk (states : List (ComponentState (F p))) : Prop :=
+  ∀ state ∈ states, run.StateOk state ∧ ∀ row ∈ state.rows, run.RowFacts state row
+
+/-- Off the VM channel, the net of all interactions is what rows answer minus what is pulled. -/
+lemma net_eq_answered_sub_pulled {states : List (ComponentState (F p))} (hstates : run.StatesOk states)
+    {channel : String} (hchannel : channel ≠ run.complete.vm.channel.name) (message : Array (F p)) :
+    netOfInteractions (run.verifier ++ statesInteractions states run.data0) channel message =
+      ((run.answeredMsgs states channel).count message : F p) -
+        ((run.pulledMsgs states channel).count message : F p) := by
+  rw [netOfInteractions_append, net_eq_neg_pullsOf]
+  · simp only [statesInteractions, ComponentState.interactionsOf, netOfInteractions_flatMap,
+      answeredMsgs, pulledMsgs, count_list_sum, Multiset.count_add, List.map_map, Nat.cast_add,
+      Nat.cast_list_sum]
+    have hrows : ∀ state ∈ states,
+        (state.rows.map fun row => netOfInteractions (rowInteractions state row run.data0) channel
+          message) =
+        state.rows.map fun row => ((run.answeredBy state row channel).count message : F p) -
+          ((run.pulledBy state row channel).count message : F p) := by
+      intro state hstate
+      apply List.map_congr_left
+      intro row hrow
+      exact run.rowFacts_net ((hstates state hstate).2 row hrow) hchannel message
+    rw [List.map_congr_left fun state hstate => congrArg List.sum (hrows state hstate)]
+    simp only [list_sum_map_sub, count_list_sum, Nat.cast_list_sum, List.map_map,
+      Function.comp_def]
+    ring
+  · intro interaction hmem hname
+    rcases (run.verifier_side hmem (hname ▸ hchannel)).1 with hzero | ⟨hpull, -⟩
+    · exact .inl hzero
+    · exact .inr hpull
+
+lemma components_eq {states : List (ComponentState (F p))}
+    (hshape : states.map (·.shape) = run.initialShape) :
+    states.map (·.component) = ens.ensemble.tables := by
+  have h := congrArg (List.map (·.component)) hshape
+  simp only [List.map_map, Function.comp_def, ComponentState.shape, initialShape,
+    ComponentState.initial] at h
+  rw [h]
+  exact List.map_fst_zip (by rw [run.length_rowPlans])
+
+lemma names_nodup {states : List (ComponentState (F p))}
+    (hshape : states.map (·.shape) = run.initialShape) :
+    (states.map (·.component.circuit.name)).Nodup := by
+  have := ens.ensemble.unique_names
+  rw [← run.components_eq hshape, List.map_map] at this
+  exact this
+
+/-- A sum over states of terms that vanish off one state. -/
+lemma sum_states_eq {M : Type*} [AddCommMonoid M] {states : List (ComponentState (F p))}
+    (hshape : states.map (·.shape) = run.initialShape) {state : ComponentState (F p)}
+    (hstate : state ∈ states) (f : ComponentState (F p) → M)
+    (hzero : ∀ other ∈ states, other.component ≠ state.component → f other = 0) :
+    (states.map f).sum = f state := by
+  apply sum_map_eq_of_unique (g := fun state => some state.component.circuit.name)
+    (b := state.component.circuit.name)
+  · change (states.filterMap (some ∘ fun state => state.component.circuit.name)).Nodup
+    rw [List.filterMap_eq_map]
+    exact run.names_nodup hshape
+  · exact hstate
+  · rfl
+  · intro other hother hname
+    apply hzero other hother
+    intro hcomponent
+    exact hname (by rw [hcomponent])
+
+lemma exists_vm_state {states : List (ComponentState (F p))}
+    (hshape : states.map (·.shape) = run.initialShape) :
+    ∃ state ∈ states, state.component = run.complete.vm.component := by
+  have := run.complete.vm.mem
+  rw [← run.components_eq hshape] at this
+  obtain ⟨state, hstate, h⟩ := List.mem_map.mp this
+  exact ⟨state, hstate, h⟩
+
+lemma telescope (k : ℕ) (message : Array (F p)) :
+    ((List.range k).map fun index =>
+      (if message = run.complete.vm.state run.publicInput (index + 1) then (1 : F p) else 0) -
+        (if message = run.complete.vm.state run.publicInput index then 1 else 0)).sum =
+      (if message = run.complete.vm.state run.publicInput k then 1 else 0) -
+        (if message = run.complete.vm.state run.publicInput 0 then 1 else 0) := by
+  induction k with
+  | zero => simp
+  | succ k ih =>
+      rw [List.range_succ, List.map_append, List.sum_append, ih]
+      simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, add_zero]
+      ring
 
 /-! ### The balancing invariant -/
 
@@ -1135,6 +1280,77 @@ structure Inv (k : ℕ) (padded : Bool) (balancing : Balancing (F p)) : Prop whe
     (∀ state ∈ balancing.states, AnswersPull state channel →
       ∃ mode, state.rowPlan.mode = .demand mode) →
     run.answeredMsgs balancing.states channel = run.pulledMsgs balancing.states channel
+
+
+namespace Inv
+
+variable {run} {k : ℕ} {padded : Bool} {balancing : Balancing (F p)}
+
+lemma statesOk (hinv : run.Inv k padded balancing) : run.StatesOk balancing.states := by
+  intro state hstate
+  have hok := run.stateOk_of_shape hinv.shape hstate
+  exact ⟨hok, run.rowFacts_of_rowsOk hok (hinv.rows state hstate) hinv.steps_le⟩
+
+lemma vm_rows (hinv : run.Inv k padded balancing) {state : ComponentState (F p)}
+    (hstate : state ∈ balancing.states) (hvm : state.component = run.complete.vm.component) :
+    ∃ pad, state.rows = (List.range k).map run.vmRow ++
+      List.replicate pad (run.row state.component run.complete.vm.padding.input none) := by
+  have hok := run.stateOk_of_shape hinv.shape hstate
+  have hplan := StateOk.vm_rowPlan run hok hvm
+  have hrows := hinv.rows state hstate
+  simp only [RowsOk, hplan] at hrows
+  obtain ⟨main, pad, hrowsEq, -, hmain, -⟩ := hrows
+  exact ⟨pad, by rw [hrowsEq, hmain hvm]⟩
+
+/-- On the VM channel, all interactions net the state after `k` steps against the final state. -/
+lemma net_vm (hinv : run.Inv k padded balancing) (message : Array (F p)) :
+    netOfInteractions (run.verifier ++ statesInteractions balancing.states run.data0)
+      run.complete.vm.channel.name message =
+      (if message = run.complete.vm.state run.publicInput k then 1 else 0) -
+        (if message = run.complete.vm.final run.publicInput then 1 else 0) := by
+  have hverifier := (run.complete.verifier run.publicInput run.proverInput run.assumptions
+    run.stableData run.stableData_stable).1 message
+  rw [run.verifier_eq] at hverifier
+  rw [netOfInteractions_append, hverifier]
+  simp only [statesInteractions, ComponentState.interactionsOf, netOfInteractions_flatMap]
+  have hstates := hinv.statesOk
+  rw [List.map_congr_left fun state hstate => congrArg List.sum (List.map_congr_left
+    fun row hrow => ((hstates state hstate).2 row hrow).vm_net message)]
+  obtain ⟨vmState, hvmState, hvm⟩ := run.exists_vm_state hinv.shape
+  rw [run.sum_states_eq hinv.shape hvmState _ fun other hother hne => by
+    apply List.sum_eq_zero
+    intro x hx
+    obtain ⟨row, -, rfl⟩ := List.mem_map.mp hx
+    simp [vmNet, StateOk.name_ne_vm run (run.stateOk_of_shape hinv.shape hother) (hvm ▸ hne)]]
+  obtain ⟨pad, hrows⟩ := hinv.vm_rows hvmState hvm
+  rw [hrows, List.map_append, List.sum_append, List.map_map]
+  have hpad : ((List.replicate pad (run.row vmState.component run.complete.vm.padding.input none)).map
+      fun row => run.vmNet vmState row message).sum = 0 := by
+    simp [vmNet, row]
+  have hsteps : (((List.range k).map ((fun row => run.vmNet vmState row message) ∘ run.vmRow))).sum =
+      ((List.range k).map fun index =>
+        (if message = run.complete.vm.state run.publicInput (index + 1) then (1 : F p) else 0) -
+          (if message = run.complete.vm.state run.publicInput index then 1 else 0)).sum := by
+    congr 1
+    apply List.map_congr_left
+    intro index _
+    have hname : vmState.component.circuit.name = run.complete.vm.component.circuit.name := by
+      rw [hvm]
+    simp only [Function.comp_apply, vmNet, hname, if_true, vmRow, row, demandOrigin, Vm.state,
+      Function.iterate_succ_apply']
+    by_cases hnext : message = run.complete.vm.next (run.complete.vm.next^[index]
+        (run.complete.vm.initial run.publicInput)) <;>
+      by_cases hcurrent : message = run.complete.vm.next^[index]
+        (run.complete.vm.initial run.publicInput) <;>
+      simp [hnext, hcurrent]
+  rw [hpad, add_zero, hsteps, run.telescope]
+  simp only [Vm.state, Function.iterate_zero, id_eq]
+  by_cases hinitial : message = run.complete.vm.initial run.publicInput <;>
+    by_cases hfinal : message = run.complete.vm.final run.publicInput <;>
+    by_cases hstate : message = run.complete.vm.next^[k] (run.complete.vm.initial run.publicInput) <;>
+    simp [hinitial, hfinal, hstate]
+
+end Inv
 
 end Run
 
