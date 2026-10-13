@@ -8,10 +8,7 @@ public import Clean.Backends.Plonky3.Program
 /-!
 # Correctness of the witness IR to Rust translation
 
-The Rust model computes exactly the witness IR's values: `program_run` states that running a
-translated witness program produces the witness IR's output vector, for fields of order at most
-`2^64`. `witnessBlock_run` and `rowProgram_run` specialize it to component witness blocks and to
-row programs.
+The Rust model computes exactly the witness IR's values: `program_run` states that running a translated witness program produces the witness IR's output vector, for fields of order at most `2^64`. `witnessBlock_run` and `rowProgram_run` specialize it to component witness blocks and to row programs.
 -/
 
 namespace Backends.Plonky3.Codegen
@@ -26,8 +23,7 @@ def proverEnvironment (env : Env F) : ProverEnvironment F where
   data := env.data
   hint := env.hint
 
-/-- The witness IR context matching a Rust frame. `.idx` is the loop variable inside loops and
-the row index outside. -/
+/-- The witness IR context matching a Rust frame. `.idx` is the loop variable inside loops and the row index outside. -/
 def context (env : Env F) (frame : Frame F) (inLoop : Bool) : Witgen.Ctx F where
   env := proverEnvironment env
   locals := frame.locals
@@ -317,8 +313,7 @@ theorem program_run (hsize : FiniteField.size (F := F) ≤ UInt64.size) (env : E
   simp only [Array.empty_append]
   rfl
 
-/-- The Rust function of a component witness block, run on the row built so far, computes the
-block's witness values. -/
+/-- The Rust function of a component witness block, run on the row built so far, computes the block's witness values. -/
 theorem witnessBlock_run (hsize : FiniteField.size (F := F) ≤ UInt64.size) (block : WitnessBlock F)
     (row : Array F) (data : ProverData F) (hint : ProverHint F) :
     (run ⟨row, 0, data, hint⟩ (program block.steps block.output)).output =

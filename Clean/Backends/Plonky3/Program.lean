@@ -7,14 +7,9 @@ public import Clean.Air.WitnessGeneration
 /-!
 # Typed AIR extraction program
 
-This file is the semantic boundary between Clean and concrete backends. An extraction program is
-ordinary typed Lean data: it contains structured witness programs, constraints, interactions,
-component shapes, and ensemble generation modes. Backends consume this representation instead of
-traversing a Clean ensemble while printing source code.
+This file is the semantic boundary between Clean and concrete backends. An extraction program is ordinary typed Lean data: it contains structured witness programs, constraints, interactions, component shapes, and ensemble generation modes. Backends consume this representation instead of traversing a Clean ensemble while printing source code.
 
-The representation deliberately reuses Clean's expression and witness IR nodes, together with
-their existing Lean semantics. `WitnessBlock.well_formed` additionally certifies that every local
-reference has the sort of an earlier step. Native Lean closures are not representable.
+The representation deliberately reuses Clean's expression and witness IR nodes, together with their existing Lean semantics. `WitnessBlock.well_formed` additionally certifies that every local reference has the sort of an earlier step. Native Lean closures are not representable.
 -/
 
 namespace Backends.Plonky3

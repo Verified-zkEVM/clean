@@ -279,8 +279,7 @@ fn verifier_rejects_a_valid_proof_at_the_wrong_height() {
     ));
 }
 
-/// Prove a tampered trace of the 32-step execution and assert that verification rejects it.
-/// The prover checks constraints in debug builds, so such proofs exist only in release builds.
+/// Prove a tampered trace of the 32-step execution and assert that verification rejects it. The prover checks constraints in debug builds, so such proofs exist only in release builds.
 #[cfg(not(debug_assertions))]
 fn assert_tampered_trace_rejected(
     seed: u64,
@@ -303,8 +302,7 @@ fn assert_tampered_trace_rejected(
     ));
 }
 
-/// The `add8` carry occurs in no interaction, so changing it violates only the printed
-/// constraints.
+/// The `add8` carry occurs in no interaction, so changing it violates only the printed constraints.
 #[cfg(not(debug_assertions))]
 #[test]
 fn verifier_rejects_a_violated_constraint() {
@@ -315,8 +313,7 @@ fn verifier_rejects_a_violated_constraint() {
     });
 }
 
-/// The byte table has no constraints, so changing a multiplicity unbalances only the `bytes`
-/// channel.
+/// The byte table has no constraints, so changing a multiplicity unbalances only the `bytes` channel.
 #[cfg(not(debug_assertions))]
 #[test]
 fn verifier_rejects_an_unbalanced_channel() {

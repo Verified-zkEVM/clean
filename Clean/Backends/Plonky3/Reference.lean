@@ -8,12 +8,7 @@ public import Clean.Utils.Primes
 /-!
 # Differential reference for the witness IR Rust renderer
 
-Generated Rust evaluates witness IR in witness generation, in prover row initialization, and in
-fixed columns, where it defines verifier-known values and is therefore trusted for soundness. This
-executable renders witness programs covering every witness IR constructor, including
-wrapping, out-of-range, and division-by-zero edge cases, together with their values under the Lean
-semantics. `backends/plonky3/tests/witness_ir_reference_tests.rs` checks that the generated Rust
-reproduces every value.
+Generated Rust evaluates witness IR in witness generation, in prover row initialization, and in fixed columns, where it defines verifier-known values and is therefore trusted for soundness. This executable renders witness programs covering every witness IR constructor, including wrapping, out-of-range, and division-by-zero edge cases, together with their values under the Lean semantics. `backends/plonky3/tests/witness_ir_reference_tests.rs` checks that the generated Rust reproduces every value.
 -/
 
 namespace Backends.Plonky3.Reference

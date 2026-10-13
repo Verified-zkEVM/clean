@@ -9,9 +9,7 @@ namespace Air.Flat
 variable {F : Type} [FiniteField F]
 variable {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
 
-/-- Public, index-addressed columns supplied by the verifier rather than committed by the prover.
-Their values are defined by a structured row program evaluated on the row index, which Lean and
-extracted backends evaluate identically. -/
+/-- Public, index-addressed columns supplied by the verifier rather than committed by the prover. Their values are defined by a structured row program evaluated on the row index, which Lean and extracted backends evaluate identically. -/
 structure FixedColumns (F : Type) where
   height : UInt64
   program : Witgen.RowProgram F
@@ -50,15 +48,13 @@ end FixedColumns
 def rowPrefix (n : ℕ) (row : Array F) : Vector F n :=
   ⟨(List.ofFn (fun i : Fin n => row[i.val]?.getD 0)).toArray, by simp⟩
 
-/-- The fixed-column fact about the input of row `i`: the row lies within the fixed height, and
-the input's first elements are the row's fixed values. -/
+/-- The fixed-column fact about the input of row `i`: the row lies within the fixed height, and the input's first elements are the row's fixed values. -/
 @[circuit_norm]
 def FixedInputAt (fixedColumns : Option (FixedColumns F)) (i : UInt64) (input : Input F) : Prop :=
   ∀ fixed ∈ fixedColumns,
     i < fixed.height ∧ (toElements input).toList.take fixed.width = (fixed.row i).toList
 
-/-- The derived-data fact about the input of row `i`: it is row `i` of the component's
-`ProverData` entry. -/
+/-- The derived-data fact about the input of row `i`: it is row `i` of the component's `ProverData` entry. -/
 @[circuit_norm]
 def DataInputAt (name : String) (i : UInt64) (input : Input F) (data : ProverData F) : Prop :=
   (data.getRows name Input)[i.toNat]? = some input
@@ -83,8 +79,7 @@ structure Component (F : Type) [FiniteField F] where
   fixedColumns : Option (FixedColumns F) := none
   /-- Assumptions still required from the enclosing ensemble after fixed-row and data facts. -/
   Assumptions : Input F → ProverData F → Prop := circuit.Assumptions
-  /-- Fixed-row and derived-data facts, together with the residual assumptions, imply the
-  assumptions of the underlying row circuit. -/
+  /-- Fixed-row and derived-data facts, together with the residual assumptions, imply the assumptions of the underlying row circuit. -/
   circuit_assumptions_of_assumptions : ∀ (i : UInt64) (input : Input F) data,
       FixedInputAt fixedColumns i input → DataInputAt circuit.name i input data →
         Assumptions input data → circuit.Assumptions input data := by simp

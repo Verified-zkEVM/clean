@@ -1,8 +1,6 @@
 //! Runtime for witness programs compiled from Clean's witness IR.
 //!
-//! This module contains no JSON parser. Lean-generated Rust implements [`Program`]
-//! with ordinary field expressions; proving-time witness generation only executes
-//! those compiled functions and this channel worklist.
+//! This module contains no JSON parser. Lean-generated Rust implements [`Program`] with ordinary field expressions; proving-time witness generation only executes those compiled functions and this channel worklist.
 
 use alloc::format;
 use alloc::string::{String, ToString};
@@ -110,8 +108,7 @@ pub enum Mode<F> {
     },
 }
 
-/// A named hint table viewing the flattened private input: `rows` rows of `width` elements,
-/// starting at element `offset`. Elements beyond the input read as zero.
+/// A named hint table viewing the flattened private input: `rows` rows of `width` elements, starting at element `offset`. Elements beyond the input read as zero.
 #[derive(Clone, Copy, Debug)]
 pub struct HintTable {
     pub key: &'static str,
@@ -167,8 +164,7 @@ impl<F: Field + Copy> WitnessData<F> {
         Self::from_entries(entries)
     }
 
-    /// Reads column `column` of the named rows cut off or zero-padded at `width` elements, as
-    /// in Lean's `ProverData` and `ProverHint`.
+    /// Reads column `column` of the named rows cut off or zero-padded at `width` elements, as in Lean's `ProverData` and `ProverHint`.
     #[inline(always)]
     pub fn get(&self, name: &str, width: usize, row: usize, column: usize) -> F {
         if column >= width {
@@ -275,8 +271,7 @@ struct Demand<F> {
 }
 
 impl<F: WitnessField> Demand<F> {
-    /// The direction and size of a net multiplicity: pushes count positively and pulls
-    /// negatively, so values above half the field order are read as negative.
+    /// The direction and size of a net multiplicity: pushes count positively and pulls negatively, so values above half the field order are read as negative.
     fn surplus(&self) -> (Direction, usize) {
         let value = self.multiplicity.canonical_u64();
         if 2 * u128::from(value) <= u128::from(F::ORDER_U64) {
@@ -648,8 +643,7 @@ fn pad_and_balance<F: WitnessField, P: Program<F>>(
     Err("ensemble padding exhausted its fuel".to_string())
 }
 
-/// Run an extracted channel-driven ensemble witness program on the public input and the
-/// flattened private input, which witness programs read through the program's hint tables.
+/// Run an extracted channel-driven ensemble witness program on the public input and the flattened private input, which witness programs read through the program's hint tables.
 pub fn generate<F: WitnessField, P: Program<F>>(
     public_input: &[F],
     prover_input: &[F],

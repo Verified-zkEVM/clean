@@ -109,8 +109,7 @@ end Operations
 end Verifier
 
 /--
-An append-only verifier program. Like `Circuit`, its monad instance accumulates operations by
-appending the continuation's operations to those already emitted.
+An append-only verifier program. Like `Circuit`, its monad instance accumulates operations by appending the continuation's operations to those already emitted.
 -/
 @[implicit_reducible]
 def Verifier (F : Type) [FiniteField F] (α : Type) := α × Verifier.Operations F

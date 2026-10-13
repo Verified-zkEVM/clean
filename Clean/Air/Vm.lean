@@ -100,9 +100,7 @@ structure SoundVmEnsemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [Prova
 
 namespace SoundVmEnsemble
 /--
-Bundle a sound VM ensemble with its public statement. `Assumptions` and `Spec` only refer to the
-public input. The verifier spec is evaluated on prover data derived from the witness, so the
-bridge from it to `Spec` quantifies over witnesses.
+Bundle a sound VM ensemble with its public statement. `Assumptions` and `Spec` only refer to the public input. The verifier spec is evaluated on prover data derived from the witness, so the bridge from it to `Spec` quantifies over witnesses.
 -/
 def toFormal (ens : SoundVmEnsemble F PublicIO) (Assumptions Spec : PublicIO F → Prop)
     (assumptionsConsistency : ens.ensemble.AssumptionsConsistency Assumptions)

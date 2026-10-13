@@ -1,8 +1,6 @@
 //! Generic Plonky3 AIR wrapper for programs extracted from Clean.
 //!
-//! Generated files provide only component widths and direct expression builders through
-//! [`GeneratedAirSpec`]. Lookup registration and Plonky3 trait plumbing live here so they are
-//! implemented and reviewed once.
+//! Generated files provide only component widths and direct expression builders through [`GeneratedAirSpec`]. Lookup registration and Plonky3 trait plumbing live here so they are implemented and reviewed once.
 
 use alloc::string::String;
 use alloc::vec;
@@ -122,8 +120,7 @@ pub struct GeneratedAir<P> {
 
 /// A complete generated Clean statement with its AIR components in canonical order.
 ///
-/// The component AIRs are private so callers cannot omit, duplicate, or reorder them. Construction
-/// also establishes the interaction-count side condition required by Clean's channel semantics.
+/// The component AIRs are private so callers cannot omit, duplicate, or reorder them. Construction also establishes the interaction-count side condition required by Clean's channel semantics.
 #[derive(Clone, Debug)]
 pub struct GeneratedEnsemble<F, P> {
     airs: Vec<GeneratedAir<P>>,

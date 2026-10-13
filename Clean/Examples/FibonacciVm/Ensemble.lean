@@ -318,9 +318,7 @@ def add8Mode : Mode (F p) := .demand {
   input := { cells := [.message 0, .message 1, .message 2, .multiplicity] }
 }
 
-/-- The byte provider preallocates one verifier-fixed byte and one generated
-multiplicity cell per row. Its declared push interaction routes byte pulls back to
-the corresponding row. -/
+/-- The byte provider preallocates one verifier-fixed byte and one generated multiplicity cell per row. Its declared push interaction routes byte pulls back to the corresponding row. -/
 def bytesMode : Mode (F p) := .preallocated {
   rows := (bytesFixedColumns (p := p)).height
   input := .ofFExprs #v[.const 0]

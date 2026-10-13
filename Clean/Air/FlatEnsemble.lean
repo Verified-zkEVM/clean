@@ -47,8 +47,7 @@ instance : HasChannelInterface F (Verifier.Program F PublicIO) where
     (channelInterface verifier).channelsWithRequirements = verifier.channelsWithRequirements := rfl
 
 structure Ensemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO] where
-  /-- Components form an ordered map: names are keys, while list order fixes the trace order
-  consumed by witness generation and backend extraction. -/
+  /-- Components form an ordered map: names are keys, while list order fixes the trace order consumed by witness generation and backend extraction. -/
   tables : List (Component F)
   unique_names : (tables.map (·.circuit.name)).Nodup
   channels : List (RawChannel F)
@@ -340,8 +339,7 @@ def Completeness (ens : Ensemble F PublicIO) (Assumptions Spec : PublicIO F → 
   ∀ publicInput, Assumptions publicInput → Spec publicInput → ens.Statement publicInput
 end Ensemble
 
-/-- A named hint table viewing the flattened private input: `rows` rows of `width` elements,
-starting at element `offset`. Elements beyond the input read as zero. -/
+/-- A named hint table viewing the flattened private input: `rows` rows of `width` elements, starting at element `offset`. Elements beyond the input read as zero. -/
 structure HintTable where
   key : String
   width : ℕ
@@ -349,8 +347,7 @@ structure HintTable where
   rows : ℕ
 deriving Repr, DecidableEq
 
-/-- The hint tables `tables` take from the flattened private input `elements`. Like derived prover
-data, rows are cut off or zero-padded at the requested width. -/
+/-- The hint tables `tables` take from the flattened private input `elements`. Like derived prover data, rows are cut off or zero-padded at the requested width. -/
 def HintTable.hint (tables : List HintTable) (elements : Array F) : ProverHint F := fun key width =>
   match tables.find? (·.key == key) with
   | none => #[]
@@ -381,8 +378,7 @@ namespace FormalEnsemble
 def hint (ens : FormalEnsemble F PublicIO) (proverInput : ens.ProverInput F) : ProverHint F :=
   HintTable.hint ens.hintTables (toElements proverInput).toArray
 
-/-- Declare the prover's private input: its type, the hint tables viewing it, and the assumptions
-witness generation needs. -/
+/-- Declare the prover's private input: its type, the hint tables viewing it, and the assumptions witness generation needs. -/
 def withProverInput (ens : FormalEnsemble F PublicIO) (ProverInput : TypeMap)
     [ProvableType ProverInput] (hintTables : List HintTable)
     (ProverAssumptions : PublicIO F → ProverInput F → Prop) : FormalEnsemble F PublicIO where
@@ -426,8 +422,7 @@ def AssumptionsConsistency (ens : Ensemble F PublicIO) (Assumptions : PublicIO F
     Assumptions witness.publicInput →
     witness.Assumptions
 
-/-- Public assumptions that imply every component's residual assumptions for all inputs and
-prover data are consistent. -/
+/-- Public assumptions that imply every component's residual assumptions for all inputs and prover data are consistent. -/
 lemma assumptionsConsistency_of_components (ens : Ensemble F PublicIO)
     {Assumptions : PublicIO F → Prop}
     (h : ∀ publicInput, Assumptions publicInput →

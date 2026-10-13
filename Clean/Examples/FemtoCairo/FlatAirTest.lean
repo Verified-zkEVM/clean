@@ -53,15 +53,11 @@ def generateResult (memoryValues : fields 8 (F pBabybear)) (executionRows : UInt
 def result := generateResult memoryValues
 
 /--
-The full channel-driven witness contains eight execution rows, the eight-row fixed
-memory, and the 32-row fixed program. The derived prover data exposes each complete
-memory input row, including its multiplicity, while preserving the non-trivial value
-used by the execution trace.
+The full channel-driven witness contains eight execution rows, the eight-row fixed memory, and the 32-row fixed program. The derived prover data exposes each complete memory input row, including its multiplicity, while preserving the non-trivial value used by the execution trace.
 -/
 example : result = .ok ([8, 8, 32], true, true, 8, 10, 0) := by native_decide
 
-/-- The same Lean witness program accepts a second runtime memory without changing
-the compiled ensemble or generation configuration. -/
+/-- The same Lean witness program accepts a second runtime memory without changing the compiled ensemble or generation configuration. -/
 example : generateResult alternateMemoryValues = .ok ([8, 8, 32], true, true, 8, 10, 99) := by
   native_decide
 

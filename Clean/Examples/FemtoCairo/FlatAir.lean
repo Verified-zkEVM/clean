@@ -472,8 +472,7 @@ structure ExecutionInput (F : Type) where
   state : State F
 deriving ProvableStruct
 
-/-- One execution row: when enabled, it pulls a state and pushes the state after it. Disabled rows
-pad the execution table. -/
+/-- One execution row: when enabled, it pulls a state and pushes the state after it. Disabled rows pad the execution table. -/
 def executeStep {programSize : ℕ} (program : Fin programSize → F p)
     (h_programSize : programSize < p) (initialState : State (F p)) :
     GeneralFormalCircuit (F p) ExecutionInput unit where
@@ -566,8 +565,7 @@ def executionComponent {programSize : ℕ} (program : Fin programSize → F p)
     (h_programSize : programSize < p) (initialState : State (F p)) : Component (F p) where
   circuit := executeStep program h_programSize initialState
 
-/-- The state in which a program has run to completion: `pc` points just past the program, where
-no further instruction can be fetched. -/
+/-- The state in which a program has run to completion: `pc` points just past the program, where no further instruction can be fetched. -/
 def haltedState (programSize : ℕ) (ap fp : F p) : State (F p) :=
   { pc := programSize, ap, fp }
 
@@ -653,16 +651,14 @@ lemma femtoCairoMachineBoundedExecution_cast {programSize : ℕ} (program : Fin 
   subst h
   rfl
 
-/-- The public statement: some memory of size `memorySize.toNat` makes the program run from
-`initialState` to completion with registers `(ap, fp)`. -/
+/-- The public statement: some memory of size `memorySize.toNat` makes the program run from `initialState` to completion with registers `(ap, fp)`. -/
 def Spec {programSize : UInt64} (program : Fin programSize.toNat → F p) (memorySize : UInt64)
     (initialState : State (F p)) : fieldPair (F p) → Prop
   | (ap, fp) => ∃ mem : Fin memorySize.toNat → F p, ∃ steps,
       Spec.femtoCairoMachineBoundedExecution program mem (some initialState) steps =
         some (haltedState programSize.toNat ap fp)
 
-/-- The prover's assumptions: its memory values make the program run from `initialState` to
-completion with registers `(ap, fp)`. -/
+/-- The prover's assumptions: its memory values make the program run from `initialState` to completion with registers `(ap, fp)`. -/
 def ProverAssumptions {programSize : UInt64} (program : Fin programSize.toNat → F p)
     (memorySize : UInt64) (initialState : State (F p)) :
     fieldPair (F p) → fields memorySize.toNat (F p) → Prop
@@ -711,8 +707,7 @@ def formalEnsemble {programSize memorySize : UInt64} (program : Fin programSize.
     [{ key := memoryValuesKey, width := 1, offset := 0, rows := memorySize.toNat }]
     (ProverAssumptions program memorySize initialState)
 
-/-- End-to-end soundness: a valid proof for the public registers `(ap, fp)` shows that the
-program, run on some memory of size `memorySize`, halts with these registers. -/
+/-- End-to-end soundness: a valid proof for the public registers `(ap, fp)` shows that the program, run on some memory of size `memorySize`, halts with these registers. -/
 theorem femtoCairo_soundness {programSize memorySize : UInt64}
     (program : Fin programSize.toNat → F p)
     (h_programSize : programSize.toNat < p) (h_memorySize : memorySize.toNat < p)

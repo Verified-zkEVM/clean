@@ -8,9 +8,7 @@ public import Clean.Backends.Plonky3.Codegen
 /-!
 # Rust rendering for typed AIR extraction programs
 
-This is the only string-producing part of ensemble extraction. It consumes a validated
-`Backends.Plonky3.Program`; lowering, validation, and executable semantics live in `Program.lean` and
-`Lower.lean`. Generic Plonky3 `Air` plumbing lives in the Rust backend.
+This is the only string-producing part of ensemble extraction. It consumes a validated `Backends.Plonky3.Program`; lowering, validation, and executable semantics live in `Program.lean` and `Lower.lean`. Generic Plonky3 `Air` plumbing lives in the Rust backend.
 -/
 
 namespace Backends.Plonky3.Print
@@ -22,12 +20,10 @@ open Backends.Plonky3
 variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
 
-/-- Order of the field the generated code is printed for. Generated programs and AIRs reject
-any other Rust field. -/
+/-- Order of the field the generated code is printed for. Generated programs and AIRs reject any other Rust field. -/
 def fieldOrder : ℕ := FiniteField.size (F := F)
 
-/-- A field constant in the Rust field type `ty`. Values above half the field order are printed as
-negations, so that e.g. `-1` reads as `-ty::from_u64(1u64)`. -/
+/-- A field constant in the Rust field type `ty`. Values above half the field order are printed as negations, so that e.g. `-1` reads as `-ty::from_u64(1u64)`. -/
 def fieldIn (ty : String) (value : F) : String :=
   let value := FiniteField.val value
   if 2 * value > fieldOrder (F := F) then s!"-{ty}::from_u64({fieldOrder (F := F) - value}u64)"
@@ -127,8 +123,7 @@ def stmtsToRust (names : Names) (lets : ℕ) : List (Rust.Stmt F) → List Strin
       s!"        for idx in 0u64..{count}u64 \{\n            output.push({fieldToRust names value});\n        }" ::
         stmtsToRust names lets rest
 
-/-- Print the Rust function body of a witness IR program, filling a vector `output` of `width`
-elements. -/
+/-- Print the Rust function body of a witness IR program, filling a vector `output` of `width` elements. -/
 def outputToRust {n : ℕ} (steps : List (Witgen.Step F)) (output : Witgen.VExpr F n)
     (names : Names) : String :=
   let body := String.intercalate "\n" (stmtsToRust names 0 (Codegen.program steps output))
@@ -316,8 +311,7 @@ def modeToRust (component : ComponentProgram F) : Mode F → Except String Strin
       let handlers ← mode.handlers.mapM (preallocatedHandlerToRust component)
       return s!"Mode::Preallocated \{ rows: {mode.rows}, handlers: vec![{commaSep handlers}] }"
 
-/-- The initial input of a row of a preallocated component: its fixed prefix followed by its row
-program's values. -/
+/-- The initial input of a row of a preallocated component: its fixed prefix followed by its row program's values. -/
 def initialRowToRust (index : ℕ) (component : ComponentProgram F) : Mode F → Option String
   | .demand _ => none
   | .preallocated mode =>

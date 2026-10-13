@@ -143,8 +143,7 @@ impl GeneratedAirSpec for PermutedMemoryAddresses {
     }
 }
 
-/// Memory is indexed: permuting (address, value) rows keeps every channel balanced and every
-/// constraint satisfied, but needs a different address table, which the verifier fixes.
+/// Memory is indexed: permuting (address, value) rows keeps every channel balanced and every constraint satisfied, but needs a different address table, which the verifier fixes.
 #[test]
 fn verifier_rejects_permuted_memory() {
     let config = setup::test_config(19);

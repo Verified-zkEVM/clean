@@ -7,11 +7,9 @@ public import Clean.Backends.Plonky3.Rust
 /-!
 # Witness IR to Rust model
 
-Translates Clean expressions and witness programs into the typed Rust model. The translation is
-total; `Correctness.lean` proves that the Rust model computes the witness IR's values.
+Translates Clean expressions and witness programs into the typed Rust model. The translation is total; `Correctness.lean` proves that the Rust model computes the witness IR's values.
 
-The witness IR's index `.idx` is the row index outside loops and the loop variable inside
-`mapRange`; `inLoop` records which one an expression is translated for.
+The witness IR's index `.idx` is the row index outside loops and the loop variable inside `mapRange`; `inLoop` records which one an expression is translated for.
 -/
 
 namespace Backends.Plonky3.Codegen

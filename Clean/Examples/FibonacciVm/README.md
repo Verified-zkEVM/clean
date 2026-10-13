@@ -1,13 +1,9 @@
 # Fibonacci VM example
 
-This directory contains the channel-based Fibonacci VM used to exercise generic ensemble witness
-generation and the Rust/Plonky3 extraction path.
+This directory contains the channel-based Fibonacci VM used to exercise generic ensemble witness generation and the Rust/Plonky3 extraction path.
 
-- `Ensemble.lean` defines the byte and addition chips, the Fibonacci VM, its formally sound
-  ensemble, and the explicit witness-generation and semantic-padding configuration.
-- `WitnessGenerationTest.lean` executes the generic ensemble witness builder in Lean. It checks
-  constraints and channel balance, repeated-pull coalescing, byte multiplicities greater than one,
-  and fuel exhaustion.
+- `Ensemble.lean` defines the byte and addition chips, the Fibonacci VM, its formally sound ensemble, and the explicit witness-generation and semantic-padding configuration.
+- `WitnessGenerationTest.lean` executes the generic ensemble witness builder in Lean. It checks constraints and channel balance, repeated-pull coalescing, byte multiplicities greater than one, and fuel exhaustion.
 - `Rust.lean` lowers the ensemble to direct Rust witness and AIR code.
 
 Build the Lean tests with:
@@ -31,7 +27,4 @@ cargo test --locked --release --manifest-path backends/plonky3/Cargo.toml \
   --test fibonacci_ensemble_tests -- --nocapture
 ```
 
-The proof test takes public values `(steps, x, y)`, generates power-of-two component traces without
-invoking Lean, proves the resulting Plonky3 batch, and verifies it. The verifier's initial and final
-Fibonacci interactions are public contributions to the channel argument rather than a synthetic
-trace.
+The proof test takes public values `(steps, x, y)`, generates power-of-two component traces without invoking Lean, proves the resulting Plonky3 batch, and verifies it. The verifier's initial and final Fibonacci interactions are public contributions to the channel argument rather than a synthetic trace.

@@ -453,8 +453,7 @@ lemma toList_componentsToElements {F : Type} :
   | _ :: cs, .cons a as => by
     simp [componentsToElements, componentsToList, toList_componentsToElements cs as]
 
-/-- The elements of a structure, as a list, are those of its components. Applied before simp
-descends into `toElements`, so that the elements of a structure literal compute. -/
+/-- The elements of a structure, as a list, are those of its components. Applied before simp descends into `toElements`, so that the elements of a structure literal compute. -/
 @[circuit_norm ↓] lemma toList_toElements {α : TypeMap} [ProvableStruct α] {F : Type} (x : α F) :
     (toElements x).toList = componentsToList (components α) (toComponents x) := by
   change (structToElements x).toList = _

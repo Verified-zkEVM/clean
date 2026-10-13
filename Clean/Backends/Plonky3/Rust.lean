@@ -7,13 +7,9 @@ public import Clean.Circuit.WitnessIR
 /-!
 # A typed model of the generated Rust witness code
 
-The Rust code generated for witness programs, row programs, and fixed columns is built as values of
-this model and printed structurally. Each constructor corresponds to one Rust expression or
-statement shape, and `eval`/`run` state its meaning: generic field arithmetic over
-`F: WitnessField`, wrapping `u64` arithmetic, and reads that return zero when out of range.
+The Rust code generated for witness programs, row programs, and fixed columns is built as values of this model and printed structurally. Each constructor corresponds to one Rust expression or statement shape, and `eval`/`run` state its meaning: generic field arithmetic over `F: WitnessField`, wrapping `u64` arithmetic, and reads that return zero when out of range.
 
-The semantics describe the generated Rust for fields whose order is at most `2^64`, which the
-backend's `WitnessField: PrimeField64` bound guarantees: `canonical` is the field element's value.
+The semantics describe the generated Rust for fields whose order is at most `2^64`, which the backend's `WitnessField: PrimeField64` bound guarantees: `canonical` is the field element's value.
 -/
 
 namespace Backends.Plonky3.Rust
@@ -100,8 +96,7 @@ inductive Stmt (F : Type) where
   /-- `for idx in 0u64..count { output.push(value); }` -/
   | forPush (count : ℕ) (value : FieldExpr F)
 
-/-- The inputs of a generated function: the row slice it reads, the row index argument, committed
-prover data, and the prover hint. -/
+/-- The inputs of a generated function: the row slice it reads, the row index argument, committed prover data, and the prover hint. -/
 structure Env (F : Type) where
   row : Array F
   rowIndex : UInt64

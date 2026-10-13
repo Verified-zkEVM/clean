@@ -8,18 +8,11 @@ public import Clean.Circuit.WitnessGeneration
 /-!
 # Channel-driven ensemble witness generation
 
-This file contains the executable reference builder for flat AIR ensemble witnesses. Soundness
-does not depend on this builder; generated rows still have to satisfy the component constraints
-and the global channel-balance relation.
+This file contains the executable reference builder for flat AIR ensemble witnesses. Soundness does not depend on this builder; generated rows still have to satisfy the component constraints and the global channel-balance relation.
 
-`Config.validate` checks generation metadata against an ensemble once. A `ValidConfig` carries
-that check, and generation from it cannot hit structural errors. Its remaining failures are
-semantic: channel imbalance that no component handles, a message no preallocated row matches,
-and running out of fuel.
+`Config.validate` checks generation metadata against an ensemble once. A `ValidConfig` carries that check, and generation from it cannot hit structural errors. Its remaining failures are semantic: channel imbalance that no component handles, a message no preallocated row matches, and running out of fuel.
 
-The builder maintains the channel imbalance incrementally, as the net field multiplicity of each
-channel message, the quantity channel balance is about. New rows add their interactions;
-updated rows first remove their previous contribution and then add their new one.
+The builder maintains the channel imbalance incrementally, as the net field multiplicity of each channel message, the quantity channel balance is about. New rows add their interactions; updated rows first remove their previous contribution and then add their new one.
 -/
 
 namespace Air.Flat.WitnessGeneration
@@ -72,24 +65,19 @@ structure DemandMode (F : Type) where
   aggregation : Aggregation
   input : InputTemplate F
 
-/-- A channel handler for preallocated rows. The interaction is the component
-interaction whose message selects a row; `column` is the generated multiplicity
-input updated when the opposite demand arrives. -/
+/-- A channel handler for preallocated rows. The interaction is the component interaction whose message selects a row; `column` is the generated multiplicity input updated when the opposite demand arrives. -/
 structure PreallocatedHandler where
   interaction : ℕ
   column : ℕ
 
-/-- Rows allocated before channel balancing. Fixed columns, when present, are
-prepended by the generic builder; `input` is an index-aware Witness IR program for
-the prover-owned suffix. -/
+/-- Rows allocated before channel balancing. Fixed columns, when present, are prepended by the generic builder; `input` is an index-aware Witness IR program for the prover-owned suffix. -/
 structure PreallocatedMode (F : Type) where
   rows : UInt64
   input : Witgen.RowProgram F
   input_valid : input.Valid .prover
   handlers : List PreallocatedHandler
 
-/-- The row-allocation modes needed by flat AIR ensembles. Fixed columns are an
-orthogonal component property and are not themselves a generation mode. -/
+/-- The row-allocation modes needed by flat AIR ensembles. Fixed columns are an orthogonal component property and are not themselves a generation mode. -/
 inductive Mode (F : Type) where
   | demand (mode : DemandMode F)
   | preallocated (mode : PreallocatedMode F)
@@ -104,8 +92,7 @@ structure Generation (F : Type) where
   mode : Mode F
   padding : Padding F
 
-/-- Generation metadata keyed by component name; every ensemble component needs exactly one
-entry. -/
+/-- Generation metadata keyed by component name; every ensemble component needs exactly one entry. -/
 structure Config (F : Type) where
   components : List (String × Generation F)
   fuel : ℕ
@@ -174,8 +161,7 @@ instance : ToString ConfigError where
         s!"component '{component}' witness operation {operation} reads prover-data component \
           '{key}', whose padding adds rows"
 
-/-- The direction of demand a preallocated handler's interaction serves: a push serves pulls and
-a pull serves pushes. -/
+/-- The direction of demand a preallocated handler's interaction serves: a push serves pulls and a pull serves pushes. -/
 def handlerDirection (interaction : AbstractInteraction F) : Direction :=
   if interaction.assumeGuarantees then .push else .pull
 
@@ -188,10 +174,7 @@ def Mode.handled (component : Component F) : Mode F → List (String × Directio
 
 /-! ### Prover-data reads
 
-Witness generation reads prover data from the rows initialized before channel balancing. That
-snapshot equals the final derived data at every cell that balancing never changes, so witness
-programs may read only the stable cells of preallocated components, and only of components that
-padding does not extend. -/
+Witness generation reads prover data from the rows initialized before channel balancing. That snapshot equals the final derived data at every cell that balancing never changes, so witness programs may read only the stable cells of preallocated components, and only of components that padding does not extend. -/
 
 structure DataRead where
   key : String
@@ -381,8 +364,7 @@ structure Demand (F : Type) where
 
 namespace Demand
 
-/-- The direction and size of a net multiplicity: pushes count positively and pulls negatively,
-so values above half the field order are read as negative. -/
+/-- The direction and size of a net multiplicity: pushes count positively and pulls negatively, so values above half the field order are read as negative. -/
 def surplus (demand : Demand F) : Direction × ℕ :=
   if 2 * FiniteField.val demand.multiplicity ≤ FiniteField.size (F := F) then
     (.push, FiniteField.val demand.multiplicity)
@@ -430,8 +412,7 @@ structure GeneratedRow (F : Type) where
   values : Array F
   origin : Option (Origin F) := none
 
-/-- One component's generation state: its operations, its validated generation metadata, and
-the rows generated so far. -/
+/-- One component's generation state: its operations, its validated generation metadata, and the rows generated so far. -/
 structure ComponentState (F : Type) [FiniteField F] where
   component : Component F
   witgenOps : List (FlatOperation F)
@@ -516,8 +497,7 @@ def ComponentState.handles (state : ComponentState F) (demand : Demand F) : Bool
   | .demand mode => mode.channel.name == demand.channel && mode.direction == demand.direction
   | .preallocated mode => mode.handlers.any fun handler => handler.handles state demand
 
-/-- The first demand some component handles, with that component's index. Validation ensures
-at most one component handles each channel and direction. -/
+/-- The first demand some component handles, with that component's index. Validation ensures at most one component handles each channel and direction. -/
 def findAction (states : List (ComponentState F)) :
     List (Demand F) → Option (Demand F × ℕ)
   | [] => none
@@ -641,8 +621,7 @@ def generateLoop (data : ProverData F) (hint : ProverHint F) :
           let (states, update) ← handle states demand index data hint
           generateLoop data hint fuel states (update demands)
 
-/-- Pad every component to its target height with its padding row; returns the padded states
-and the interactions of the new rows. -/
+/-- Pad every component to its target height with its padding row; returns the padded states and the interactions of the new rows. -/
 def padTables (data : ProverData F) (hint : ProverHint F) (states : List (ComponentState F)) :
     List (ComponentState F) × List (Interaction F) :=
   let padded := states.map fun state =>
@@ -730,9 +709,7 @@ def assembleTables :
         throw (.assembly "generated table contains a row of the wrong width")
   | _, _ => .error (.assembly "generated-table count does not match ensemble component count")
 
-/-- Execute channel-driven generation from validated metadata. `hint` is read by the row programs
-that initialize preallocated components and by the witness programs of all rows; semantic
-`ProverData` is derived from the final committed component rows. -/
+/-- Execute channel-driven generation from validated metadata. `hint` is read by the row programs that initialize preallocated components and by the witness programs of all rows; semantic `ProverData` is derived from the final committed component rows. -/
 def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensemble)
     (publicInput : PublicIO F) (hint : ProverHint F) :
     Except GenerationError (EnsembleWitness ensemble) := do
@@ -758,8 +735,7 @@ def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensembl
     same_data := withDerivedData_data assembled.tables
   }
 
-/-- Validate generation metadata, then generate an ensemble witness from the public input and the
-prover's private input. -/
+/-- Validate generation metadata, then generate an ensemble witness from the public input and the prover's private input. -/
 def generate (ens : FormalEnsemble F PublicIO) (config : Config F) (publicInput : PublicIO F)
     (proverInput : ens.ProverInput F) : Except GenerationError (EnsembleWitness ens.ensemble) :=
   match config.validate ens.ensemble with

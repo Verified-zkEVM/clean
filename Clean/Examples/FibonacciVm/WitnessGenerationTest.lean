@@ -37,8 +37,7 @@ def result : Except String (List ℕ × ℕ × ℕ × Bool × Bool) :=
       | _ => .error "ensemble has no byte table"
 
 /--
-The verifier seed automatically creates 32 Fibonacci rows; their pulls create 32
-distinct addition rows; byte range checks are accumulated in the 256 fixed byte rows.
+The verifier seed automatically creates 32 Fibonacci rows; their pulls create 32 distinct addition rows; byte range checks are accumulated in the 256 fixed byte rows.
 -/
 example : result = .ok ([32, 32, 256], 32, 2, true, true) := by native_decide
 
@@ -105,8 +104,7 @@ def configErrors : List String :=
     | .error error => toString error
     | .ok _ => ""
 
-/-- Generation metadata is looked up by component name; missing, duplicate, and unknown entries
-are rejected. -/
+/-- Generation metadata is looked up by component name; missing, duplicate, and unknown entries are rejected. -/
 example : configErrors = [
     "component 'fibonacci' has no generation config",
     "component 'fibonacci' has multiple generation configs",
