@@ -196,6 +196,14 @@ lemma guarantees_iff_forall_mem {env : Environment F} {ops : List (FlatOperation
 def Requirements (env : Environment F) : List (FlatOperation F) → Prop :=
   forAllNoOffset { interact i := i.Requirements env }
 
+def ProverGuarantees (env : Environment F) : List (FlatOperation F) → Prop :=
+  forAllNoOffset { interact i := i.ProverGuarantees env }
+
+@[circuit_norm]
+lemma proverGuarantees_iff_forall_mem {env : Environment F} {ops : List (FlatOperation F)} :
+  ProverGuarantees env ops ↔ (∀ i ∈ interactions ops, i.ProverGuarantees env) := by
+  simp [ProverGuarantees, forAllNoOffset_iff_forall_mem]
+
  @[circuit_norm]
 lemma requirements_iff_forall_mem {env : Environment F} {ops : List (FlatOperation F)} :
   Requirements env ops ↔ (∀ i ∈ interactions ops, i.Requirements env) := by
@@ -285,12 +293,13 @@ structure Subcircuit (F : Type) [FiniteField F] (offset : ℕ) where
     FlatOperation.Guarantees env ops.toFlat →
     Spec env ∧ FlatOperation.Requirements env ops.toFlat
 
-  -- completeness: `ProverAssumptions` needs to imply the constraints and guarantees,
-  -- when using the locally declared witness generators of this circuit.
+  -- completeness: `ProverAssumptions` needs to imply the constraints, guarantees and prover
+  -- guarantees, when using the locally declared witness generators of this circuit.
   -- `ProverSpec` also needs to follow from the local witness generator condition.
   completeness : ∀ env, env.ExtendsVector (localWitnesses env ops.toFlat) offset →
     (ProverAssumptions env →
-      ConstraintsHoldFlat env ops.toFlat ∧ FlatOperation.Guarantees env ops.toFlat) ∧
+      ConstraintsHoldFlat env ops.toFlat ∧ FlatOperation.Guarantees env ops.toFlat ∧
+        FlatOperation.ProverGuarantees env ops.toFlat) ∧
     ProverSpec env
 
   -- `localLength` must be consistent with the operations
@@ -718,7 +727,7 @@ def ConstraintsHold.Completeness (env : ProverEnvironment F)
     (ops : Operations F) : Prop := ops.forAllNoOffset {
   assert e := env e = 0
   lookup l := l.Completeness env
-  interact i := i.Guarantees env
+  interact i := i.Guarantees env ∧ i.ProverGuarantees env
   subcircuit s := s.ProverAssumptions env
 }
 
@@ -740,7 +749,7 @@ lemma constraintsHold_completeness_iff_forall_mem {env : ProverEnvironment F} {o
     ConstraintsHold.Completeness env ops ↔
     (∀ e ∈ ops.shallowConstraints, env e = 0) ∧
     (∀ l ∈ ops.shallowLookups, l.Completeness env) ∧
-    (∀ i ∈ ops.shallowInteractions, i.Guarantees env) ∧
+    (∀ i ∈ ops.shallowInteractions, i.Guarantees env ∧ i.ProverGuarantees env) ∧
     (∀ s ∈ ops.subcircuits, s.2.ProverAssumptions env) := by
   simp [ConstraintsHold.Completeness, Operations.forAllNoOffset_iff_forall_mem]
 
@@ -836,6 +845,10 @@ lemma requirements_iff_forall_mem {env : Environment F} {ops : Operations F} :
 @[circuit_norm]
 def FullRequirements (env : Environment F) (ops : Operations F) : Prop :=
   ∀ i ∈ ops.interactions, i.Requirements env
+
+@[circuit_norm]
+def FullProverGuarantees (env : Environment F) (ops : Operations F) : Prop :=
+  ∀ i ∈ ops.interactions, i.ProverGuarantees env
 
 @[circuit_norm]
 def ChannelGuarantees (channel : RawChannel F) (env : Environment F) (ops : Operations F) :=

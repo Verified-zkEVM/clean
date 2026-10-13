@@ -402,7 +402,7 @@ def provideProgram {programSize : ℕ} (program : Fin programSize → F p) :
     circuit_proof_start [ProgramChannel]
     intro _ _
     exact h_assumptions
-  completeness := by circuit_proof_start
+  completeness := by circuit_proof_start [ProgramChannel]
 
 def programFixedColumns {programSize : UInt64} (program : Fin programSize.toNat → F p) :
     FixedColumns (F p) where
@@ -441,7 +441,7 @@ def provideMemory : GeneralFormalCircuit (F p) ProviderInput unit where
     circuit_proof_start [MemoryChannel]
     intro _ _
     exact h_assumptions
-  completeness := by circuit_proof_start
+  completeness := by circuit_proof_start [MemoryChannel]
 
 def memoryFixedColumns (memorySize : UInt64) : FixedColumns (F p) where
   height := memorySize

@@ -66,7 +66,11 @@ def pushBytes : GeneralFormalCircuit (F p) BytesInput unit where
     rw [hvalue]
     intro _ _
     exact ByteUtils.fromByte_lt byteIndex
-  completeness := by circuit_proof_start
+  completeness := by
+    circuit_proof_start [BytesTable]
+    obtain ⟨byteIndex, rfl⟩ := h_assumptions
+    intro _
+    exact ByteUtils.fromByte_lt byteIndex
 
 def bytesFixedColumns : FixedColumns (F p) where
   height := 256
@@ -125,7 +129,7 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
     have add_soundness := Theorems.soundness input_x input_y input_z 0 carry hx hy hz (by left; trivial) hcarry
     simp_all
   completeness := by
-    circuit_proof_start [BytesTable]
+    circuit_proof_start [BytesTable, Add8Channel]
     set carry := env.get i₀
     rcases h_assumptions with ⟨ hx, hy, hz, heq ⟩
     have add_completeness_bool := Theorems.completeness_bool input_x input_y 0 hx hy (by simp)
