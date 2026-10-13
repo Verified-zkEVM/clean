@@ -78,10 +78,11 @@ def bytesComponent : Component (F p) where
   fixedColumns := some bytesFixedColumns
   fixed_width_le_input := by change 1 ≤ 2; omega
   Assumptions := fun _ _ => True
-  assumptions_imply_circuit := by
-    rintro i ⟨value, multiplicity⟩ data ⟨hi, rest, hrow⟩ - -
-    simp [bytesFixedColumns, circuit_norm, explicit_provable_type] at hi hrow
-    exact ⟨⟨i.toNat, hi⟩, by rw [hrow.1, ByteUtils.fromByte, FieldUtils.natToField_eq_natCast]⟩
+  circuit_assumptions_of_assumptions := by
+    rintro i ⟨value, multiplicity⟩ data hfixed - -
+    simp [bytesFixedColumns, circuit_norm, explicit_provable_type] at hfixed
+    obtain ⟨hi, rfl⟩ := hfixed
+    exact ⟨⟨i.toNat, hi⟩, by rw [ByteUtils.fromByte, FieldUtils.natToField_eq_natCast]⟩
 
 def Add8Channel : Channel (F p) fieldTriple where
   name := "add8"

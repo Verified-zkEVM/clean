@@ -50,11 +50,11 @@ def inputRow (Input : TypeMap) [ProvableType Input] (row : Array F) : Vector F (
   ⟨(List.ofFn (fun i : Fin (size Input) => row[i.val]?.getD 0)).toArray, by simp⟩
 
 /-- The fixed-column fact about the input of row `i`: the row lies within the fixed height, and
-the input starts with the declared fixed values. -/
+the input's first elements are the row's fixed values. -/
+@[circuit_norm]
 def FixedInputAt (fixedColumns : Option (FixedColumns F)) (i : UInt64) (input : Input F) : Prop :=
-  match fixedColumns with
-  | none => True
-  | some fixed => i < fixed.height ∧ ∃ rest, input = fromElements (inputRow Input (fixed.row i ++ rest))
+  ∀ fixed ∈ fixedColumns,
+    i < fixed.height ∧ (toElements input).toList.take fixed.width = (fixed.row i).toList
 
 /-- The derived-data fact about the input of row `i`: it is row `i` of the component's
 `ProverData` entry. -/
@@ -84,7 +84,7 @@ structure Component (F : Type) [FiniteField F] where
   Assumptions : Input F → ProverData F → Prop := circuit.Assumptions
   /-- Fixed-row and derived-data facts, together with the residual assumptions, imply the
   assumptions of the underlying row circuit. -/
-  assumptions_imply_circuit : ∀ (i : UInt64) (input : Input F) data,
+  circuit_assumptions_of_assumptions : ∀ (i : UInt64) (input : Input F) data,
       FixedInputAt fixedColumns i input → DataInputAt circuit.name i input data →
         Assumptions input data → circuit.Assumptions input data := by simp
   fixed_width_le_input : (fixedColumns.map FixedColumns.width).getD 0 ≤ size Input := by simp
@@ -330,7 +330,7 @@ lemma circuitAssumptions (table : Table F) (consistent : table.DataConsistency d
   have hi' : table.table[i.val] = row := hi
   have hindex : (UInt64.ofNat i.val).toNat = i.val :=
     UInt64.toNat_ofNat_of_lt' (Nat.lt_of_lt_of_le i.isLt table.length_le)
-  apply table.component.assumptions_imply_circuit (UInt64.ofNat i.val)
+  apply table.component.circuit_assumptions_of_assumptions (UInt64.ofNat i.val)
   · cases hcolumns : table.component.fixedColumns with
     | none => simp [FixedInputAt]
     | some fixed =>
@@ -346,9 +346,17 @@ lemma circuitAssumptions (table : Table F) (consistent : table.DataConsistency d
         have := congrArg Array.size hprefix
         simp [FixedColumns.row] at this
         omega
-      refine ⟨by simp [UInt64.lt_iff_toNat_lt, hindex]; omega, row.extract fixed.width row.size, ?_⟩
-      rw [Component.rowInput, valueFromOffset_fromArray, ← hprefix, Array.extract_append_extract]
-      simp [hsize]
+      have hwidth : fixed.width ≤ size table.component.Input := by
+        simpa [hcolumns] using table.component.fixed_width_le_input
+      rintro _ ⟨⟩
+      refine ⟨by simp [UInt64.lt_iff_toNat_lt, hindex]; omega, ?_⟩
+      rw [Component.rowInput, valueFromOffset_fromArray, ProvableType.toElements_fromElements,
+        ← hprefix]
+      apply List.ext_getElem
+      · simp; omega
+      · intro j hj _
+        simp only [List.length_take, Vector.length_toList] at hj
+        simp [inputRow, show j < row.size by omega]
   · simp only [DataInputAt, ProverData.getRows, Component.rowInput, valueFromOffset_fromArray, hindex]
     rw [consistent]
     simp [Component.proverRows, i.isLt, hi']
