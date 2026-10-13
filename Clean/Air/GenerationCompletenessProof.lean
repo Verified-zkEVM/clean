@@ -2905,6 +2905,386 @@ lemma step_update (hinv : run.Inv k padded balancing) {demand : Demand (F p)} {i
           rw [hindependent channel' hchannelEq message', sub_self, if_neg (fun h => hchannelEq
             (h.1.trans hmodeChannel))]
 
+/-- A preallocated component answers a deficit by raising the handler column of the row whose
+handled interaction carries the message. -/
+lemma step_preallocated (hinv : run.Inv k padded balancing) {demand : Demand (F p)} {index : ℕ}
+    {state : ComponentState (F p)} (hstate : balancing.states[index]? = some state)
+    (hdemand : demand ∈ balancing.demands) (hhandles : state.handles demand = true)
+    {mode : PreallocatedMode (F p)} (hmode : state.rowPlan.mode = .preallocated mode)
+    (hchannel : demand.channel ≠ run.complete.vm.channel.name) {δ : ℕ} (hpos : 0 < δ)
+    (hlt : 2 * δ < p) (hmult : demand.multiplicity = -(δ : F p))
+    (hcount : (run.answeredMsgs balancing.states demand.channel).count demand.message + δ =
+      (run.pulledMsgs balancing.states demand.channel).count demand.message) :
+    ∃ states change, handle balancing.states demand index run.data0 run.hint = .ok (states, change) ∧
+      run.Inv k padded (balancing.apply states change) ∧
+      Prod.Lex (· < ·) (· < ·) (balancing.apply states change).measure balancing.measure := by
+  have hmemState := List.mem_of_getElem? hstate
+  have hok := run.stateOk_of_shape hinv.shape hmemState
+  have hdirection := (demand_pull hmult hpos hlt).1
+  have hdemandCount := (demand_pull hmult hpos hlt).2
+  have hobligation := run.complete.preallocated state.component hok.mem state.rowPlan mode
+    (run.planned _ hok.entry) hmode run.publicInput run.proverInput run.assumptions run.stableData
+    run.stableData_stable
+  have hnodup := run.handled_nodup hok.entry
+  simp only [hmode, Mode.handled] at hnodup
+  -- the handler of the demand
+  have hhandled := (run.handles_iff hok demand).mp hhandles
+  rw [hdirection, hmode] at hhandled
+  simp only [Mode.handled, List.mem_filterMap, Option.map_eq_some_iff, Prod.mk.injEq] at hhandled
+  obtain ⟨handler, hhandler, interaction, hinteraction, hname, -⟩ := hhandled
+  obtain ⟨interaction', hinteraction', hdeclared, hrowsWith, hfacts⟩ :=
+    hobligation.2.2.2.2 handler hhandler
+  rw [hinteraction] at hinteraction'
+  cases hinteraction'
+  -- the message is pullable and some row carries it
+  have hpulled : demand.message ∈ run.pulledMsgs balancing.states demand.channel :=
+    Multiset.count_pos.mp (by omega)
+  obtain ⟨hpullable, hsize⟩ := (run.pulled_facts hinv.statesOk hchannel hpulled).2
+    interaction.channel hdeclared hname
+  obtain ⟨row₀, hrow₀, hrowMessage⟩ := hrowsWith ⟨demand.message, hsize⟩
+    (hpullable _ run.stableData_stable _ rfl)
+  have hrowsOk := hinv.rows state hmemState
+  simp only [RowsOk, hmode] at hrowsOk
+  obtain ⟨hlength, hrowsEq⟩ := hrowsOk
+  have hlengthGe : mode.rows.toNat ≤ state.rows.length := by
+    rw [hlength]
+    split
+    · exact (le_targetHeight _ _).1
+    · exact le_rfl
+  obtain ⟨input₀, hreachable₀, hrowEq₀⟩ := hrowsEq row₀ (by omega)
+  have hbase₀ := run.admissible_baseInput hok hmode row₀
+  have hbaseEq : run.baseInput state.component state.rowPlan mode row₀ =
+      preallocatedInput state.component mode run.hint row₀ := by
+    simp [baseInput, hrow₀]
+  have hmessage₀ : (interaction.eval (Environment.fromArray (state.rows[row₀]'(by omega)).values
+      run.data0)).msg = demand.message := by
+    rw [hrowEq₀]
+    have hreach := run.msg_reachable hok hmode hinteraction hreachable₀ hbase₀
+    rw [show interaction.eval (Environment.fromArray (run.row state.component input₀ none).values
+      run.data0) = interaction.eval (run.rowEnv state.component input₀ run.stableData).toEnvironment
+      by apply interaction_eval_congr; rfl, hreach]
+    rw [hbaseEq] at hbase₀ ⊢
+    exact hrowMessage _ (run.honestEnv_row hok.mem hbase₀.size _) rfl rfl
+  have hpush : interaction.assumeGuarantees = false :=
+    (hfacts _ _ (run.honestEnv_row hok.mem hbase₀.size _) rfl rfl
+      (hbase₀.assumptions _ run.stableData_stable)).1
+  have hhandles' : handler.handles state demand = true := by
+    simp [PreallocatedHandler.handles, hok.interactions, hinteraction, hname, hdirection,
+      handlerDirection, hpush]
+  obtain ⟨⟨handler₁, position, row⟩, hfind⟩ := findPreallocatedRow_isSome hhandler hhandles'
+    (List.getElem?_eq_getElem (by omega)) (hok.interactions ▸ hinteraction) hmessage₀
+  obtain ⟨hhandler₁, hhandles₁, hrow, interaction₁, hinteraction₁, hmessage⟩ :=
+    findPreallocatedRow_some hfind
+  rw [hok.interactions] at hinteraction₁
+  have hsame : handler₁ = handler := by
+    apply filterMap_nodup_unique hnodup hhandler₁ hhandler (b := (demand.channel, Direction.pull))
+    · simp only [PreallocatedHandler.handles, hok.interactions, hinteraction₁, Bool.and_eq_true,
+        beq_iff_eq, hdirection] at hhandles₁
+      rw [hinteraction₁]
+      simp [hhandles₁.1, hhandles₁.2]
+    · rw [hinteraction]
+      simp [hname, handlerDirection, hpush]
+  subst handler₁
+  rw [hinteraction] at hinteraction₁
+  cases hinteraction₁
+  have hposition : position < state.rows.length := (List.getElem?_eq_some_iff.mp hrow).1
+  obtain ⟨input, hreachable, hrowEq⟩ := hrowsEq position hposition
+  have hrowIs : row = run.row state.component input none := by
+    rw [← hrowEq]
+    exact ((List.getElem?_eq_some_iff.mp hrow).2).symm
+  subst hrowIs
+  have hadmissible := run.admissible_of_reachable hok hmode hreachable
+    (run.admissible_baseInput hok hmode position)
+  set value : F p := (input[handler.column]?.getD 0) + FiniteField.fromNat demand.count
+  set input' := input.set! handler.column value
+  have hreachable' : Reachable mode.handlers (run.baseInput state.component state.rowPlan mode
+      position) input' := hreachable.set handler hhandler value
+  have hadmissible' := run.admissible_of_reachable hok hmode hreachable'
+    (run.admissible_baseInput hok hmode position)
+  set updated := run.row state.component input' none
+  have hupdated : completeRow balancing.states [] state input' run.data0 run.hint none
+      (run.row state.component input none).undefined = (updated, []) :=
+    run.completeRow_eq hinv.viewOk hok hadmissible'.size none
+  have hmutation : handlePreallocated balancing.states state mode.handlers demand run.data0 run.hint =
+      some (Mutation.mk { state with rows := state.rows.set position updated }
+        [run.row state.component input none] [updated] []) := by
+    simp only [handlePreallocated, hfind]
+    rw [show (run.row state.component input none).input = input from rfl]
+    rw [hupdated]
+  have hhandle := run.handle_preallocated hstate hmode hmutation rfl
+  simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil] at hhandle
+  refine ⟨_, _, hhandle, ?_⟩
+  have hchanges := handle_spec _ _ _ _ _ hhandle
+  have hhonest := run.honestEnv_row hok.mem hadmissible.size run.stableData
+  have hhonest' := run.honestEnv_row hok.mem hadmissible'.size run.stableData
+  obtain ⟨-, hmult₀, hset⟩ := hfacts input _ hhonest rfl rfl
+    (hadmissible.assumptions _ run.stableData_stable)
+  obtain ⟨hmessageSame, hother⟩ := hset value _ hhonest' rfl rfl
+  have hmult₁ := (hfacts input' _ hhonest' rfl rfl
+    (hadmissible'.assumptions _ run.stableData_stable)).2.1
+  have hcolumn : handler.column < input.size := by
+    rw [hadmissible.size]
+    exact (((run.planValid.row_plans _ hok.entry).preallocated mode hmode).2 handler hhandler).2.2
+  have hvalue : input'[handler.column]?.getD 0 = value := by
+    simp [input', hcolumn]
+  rw [hvalue] at hmult₁
+  set env₀ := run.rowEnv state.component input run.stableData
+  set env₁ := run.rowEnv state.component input' run.stableData
+  have hrowInts₀ : rowInteractions state (run.row state.component input none) run.data0 =
+      interactionsIn state.component env₀.toEnvironment :=
+    run.rowInteractions_row hok.interactions hok.mem hadmissible.size none run.stableData_stable
+  have hrowInts₁ : rowInteractions state updated run.data0 =
+      interactionsIn state.component env₁.toEnvironment :=
+    run.rowInteractions_row hok.interactions hok.mem hadmissible'.size none run.stableData_stable
+  have hindexLt : handler.interaction < (interactionsIn state.component env₀.toEnvironment).length := by
+    simp only [interactionsIn, List.length_map]
+    exact (List.getElem?_eq_some_iff.mp hinteraction).1
+  have hL₀ : (interactionsIn state.component env₀.toEnvironment)[handler.interaction] =
+      interaction.eval env₀.toEnvironment := by
+    simp [interactionsIn, (List.getElem?_eq_some_iff.mp hinteraction).2]
+  have hL : interactionsIn state.component env₁.toEnvironment =
+      (interactionsIn state.component env₀.toEnvironment).set handler.interaction
+        (interaction.eval env₁.toEnvironment) := by
+    rw [eq_set_of_agree (by simp [interactionsIn]) hindexLt hother]
+    congr 1
+    simp [interactionsIn, (List.getElem?_eq_some_iff.mp hinteraction).2]
+  have hmessage₀ : (interaction.eval env₀.toEnvironment).msg = demand.message := by
+    rw [← hmessage]
+    congr 1
+    apply interaction_eval_congr
+    rfl
+  have hmessage₁ : (interaction.eval env₁.toEnvironment).msg = demand.message :=
+    hmessageSame.trans hmessage₀
+  have hcountEq : FiniteField.fromNat demand.count = (δ : F p) := by
+    rw [hdemandCount]; rfl
+  have hdiff : ∀ channel' message',
+      netOfInteractions (rowInteractions state updated run.data0) channel' message' -
+        netOfInteractions (rowInteractions state (run.row state.component input none) run.data0)
+          channel' message' =
+      if channel' = demand.channel ∧ message' = demand.message then (δ : F p) else 0 := by
+    intro channel' message'
+    rw [hrowInts₁, hrowInts₀, hL, netOfInteractions_set _ hindexLt, hL₀]
+    simp only [contribution, AbstractInteraction.eval_channel, hname, hmessage₀, hmessage₁,
+      hmult₀, hmult₁, value, hcountEq]
+    by_cases hkey : demand.channel = channel' ∧ demand.message = message'
+    · obtain ⟨rfl, rfl⟩ := hkey
+      simp only [and_self, if_true]
+      ring
+    · rw [if_neg hkey, if_neg hkey, if_neg fun h => hkey ⟨h.1.symm, h.2.symm⟩]
+      ring
+  -- what the row and its update answer
+  have hanswered₀ := run.answeredBy_preallocated hok hmode hadmissible hhandler hinteraction
+  have hanswered₁ := run.answeredBy_preallocated hok hmode hadmissible' hhandler hinteraction
+  rw [hname, hmessage₀] at hanswered₀
+  rw [hname, hmessage₁, hvalue] at hanswered₁
+  have hrowMem : run.row state.component input none ∈ state.rows := List.mem_of_getElem? hrow
+  have hold := hinv.answered_le _ hchannel
+  have hvalBound : (input[handler.column]?.getD 0).val + δ < p := by
+    have h1 : (input[handler.column]?.getD 0).val ≤
+        (run.answeredMsgs balancing.states demand.channel).count demand.message := by
+      have hle : run.answeredBy state (run.row state.component input none) demand.channel ≤
+          run.answeredMsgs balancing.states demand.channel :=
+        le_trans (List.le_sum_of_mem (List.mem_map_of_mem (f := fun row =>
+          run.answeredBy state row demand.channel) hrowMem))
+          (List.le_sum_of_mem (List.mem_map_of_mem (f := fun state => (state.rows.map fun row =>
+            run.answeredBy state row demand.channel).sum) hmemState))
+      have := Multiset.count_le_of_le demand.message hle
+      rwa [hanswered₀, Multiset.count_replicate_self] at this
+    have h2 := Multiset.count_le_card demand.message (run.pulledMsgs balancing.states demand.channel)
+    have h3 := run.card_pulledMsgs_le_length balancing.states demand.channel
+    have h4 := hinv.length_lt
+    omega
+  have hvalValue : value.val = (input[handler.column]?.getD 0).val + δ := by
+    simp only [value, hcountEq]
+    rw [ZMod.val_add_of_lt (by rw [ZMod.val_natCast_of_lt (by omega)]; exact hvalBound),
+      ZMod.val_natCast_of_lt (by omega)]
+  rw [hvalValue, Multiset.replicate_add] at hanswered₁
+  -- other channels see the same row
+  have hanswersChannel : AnswersPull state demand.channel := by
+    rw [AnswersPull, hmode, ← hdirection]
+    exact (run.handles_iff hok demand).mp hhandles |> fun h => by rwa [hmode] at h
+  have hAnsweredOther : ∀ channel, channel ≠ demand.channel →
+      run.answeredBy state updated channel =
+        run.answeredBy state (run.row state.component input none) channel := by
+    intro channel hchannel'
+    simp only [answeredBy, hmode]
+    congr 1
+    apply List.map_congr_left
+    intro handler' hhandler'
+    rw [hok.interactions]
+    split
+    · rename_i interaction' hinteraction'
+      split_ifs with hname'
+      · have hne : handler'.interaction ≠ handler.interaction := by
+          intro heq
+          rw [heq, hinteraction] at hinteraction'
+          cases hinteraction'
+          exact hchannel' (hname'.symm.trans hname)
+        have hsameInteraction := hother handler'.interaction hne
+        simp only [interactionsIn, List.getElem?_map, hinteraction', Option.map_some,
+          Option.some.injEq] at hsameInteraction
+        obtain ⟨interaction'', hinteraction'', -, -, hfacts'⟩ :=
+          hobligation.2.2.2.2 handler' hhandler'
+        rw [hinteraction'] at hinteraction''
+        cases hinteraction''
+        have hmultSame : input'[handler'.column]?.getD 0 = input[handler'.column]?.getD 0 := by
+          rw [← (hfacts' input' _ hhonest' rfl rfl
+              (hadmissible'.assumptions _ run.stableData_stable)).2.1,
+            ← (hfacts' input _ hhonest rfl rfl
+              (hadmissible.assumptions _ run.stableData_stable)).2.1, hsameInteraction]
+        have hmsgSame : (interaction'.eval (Environment.fromArray updated.values run.data0)).msg =
+            (interaction'.eval (Environment.fromArray (run.row state.component input none).values
+              run.data0)).msg := by
+          rw [show interaction'.eval (Environment.fromArray updated.values run.data0) =
+              interaction'.eval env₁.toEnvironment by apply interaction_eval_congr; rfl,
+            show interaction'.eval (Environment.fromArray (run.row state.component input none).values
+              run.data0) = interaction'.eval env₀.toEnvironment by apply interaction_eval_congr; rfl,
+            hsameInteraction]
+        simp only [updated, Run.row] at hmsgSame ⊢
+        rw [hmultSame, hmsgSame]
+      · rfl
+    · rfl
+  have hPulledOther : ∀ channel, channel ≠ demand.channel →
+      channel ≠ run.complete.vm.channel.name →
+      run.pulledBy state updated channel =
+        run.pulledBy state (run.row state.component input none) channel := by
+    intro channel hchannel' hvm'
+    by_cases hnot : AnswersPull state channel
+    · simp [pulledBy, hnot]
+    · refine (hinv.pulledBy_eq hmemState (List.ne_nil_of_mem hrowMem)
+        (run.rowFacts_preallocated hok hmode hadmissible)
+        (run.rowFacts_preallocated hok hmode hadmissible') hvm' hnot fun message' => ?_).symm
+      have := hdiff channel message'
+      rw [if_neg fun h => hchannel' h.1] at this
+      exact (sub_eq_zero.mp this).symm
+  have hlengthRow : ∀ row, (rowInteractions state row run.data0).length =
+      state.interactions.length := by simp [rowInteractions]
+  have hrowAt : state.rows[position] = run.row state.component input none :=
+    (List.getElem?_eq_some_iff.mp hrow).2
+  have hsameOther : ∀ channel, channel ≠ demand.channel → channel ≠ run.complete.vm.channel.name →
+      run.answeredMsgs (balancing.states.set index
+        { state with rows := state.rows.set position updated }) channel =
+        run.answeredMsgs balancing.states channel ∧
+      run.pulledMsgs (balancing.states.set index
+        { state with rows := state.rows.set position updated }) channel =
+        run.pulledMsgs balancing.states channel := by
+    intro channel hchannelEq hchannel'
+    have hanswered := run.answeredMsgs_set hstate (state.rows.set position updated) channel
+    have hpulled := run.pulledMsgs_set hstate (state.rows.set position updated) channel
+    have hrowAnswered := sum_map_set_add (fun row => run.answeredBy state row channel)
+      state.rows position hposition updated
+    have hrowPulled := sum_map_set_add (fun row => run.pulledBy state row channel)
+      state.rows position hposition updated
+    rw [hrowAt] at hrowAnswered hrowPulled
+    rw [hAnsweredOther _ hchannelEq, add_left_inj] at hrowAnswered
+    rw [← hrowAnswered, add_left_inj] at hanswered
+    rw [hPulledOther _ hchannelEq hchannel', add_left_inj] at hrowPulled
+    rw [← hrowPulled, add_left_inj] at hpulled
+    exact ⟨hanswered, hpulled⟩
+  have hindex : index < balancing.states.length := (List.getElem?_eq_some_iff.mp hstate).1
+  constructor
+  · refine ⟨hchanges.1.trans hinv.shape, ?_, hinv.steps_le, hinv.padded_steps,
+      Balancing.tracks_apply hinv.tracks hchanges.2,
+      (hinv.canonical.removeInteractions _).addInteractions _, ?_, ?_, ?_⟩
+    · intro x hx
+      rcases mem_set_cases hx with rfl | ⟨j, hj, hji, rfl⟩
+      · simp only [RowsOk, hmode]
+        refine ⟨by rw [List.length_set]; exact hlength, fun j' hj' => ?_⟩
+        by_cases hj'' : j' = position
+        · subst hj''
+          exact ⟨input', hreachable', by simp [updated]⟩
+        · rw [List.length_set] at hj'
+          obtain ⟨input'', hreachable'', heq⟩ := hrowsEq j' hj'
+          exact ⟨input'', hreachable'', by rw [List.getElem_set_ne (Ne.symm hj'')]; exact heq⟩
+      · exact hinv.rows _ (List.getElem_mem hj)
+    · have hlength := length_statesInteractions_set hstate (state.rows.set position updated)
+        run.data0
+      simp only [List.length_set] at hlength
+      simp only [Balancing.apply, List.length_append, hinv.interactions, hlengthRow]
+      omega
+    · intro channel hchannel'
+      have hanswered := run.answeredMsgs_set hstate (state.rows.set position updated) channel
+      have hpulled := run.pulledMsgs_set hstate (state.rows.set position updated) channel
+      have hrowAnswered := sum_map_set_add (fun row => run.answeredBy state row channel)
+        state.rows position hposition updated
+      have hrowPulled := sum_map_set_add (fun row => run.pulledBy state row channel)
+        state.rows position hposition updated
+      rw [hrowAt] at hrowAnswered hrowPulled
+      simp only [Balancing.apply]
+      have hold' := hinv.answered_le channel hchannel'
+      by_cases hchannelEq : channel = demand.channel
+      · subst hchannelEq
+        have hzero : ∀ row, run.pulledBy state row demand.channel = 0 := by
+          intro row
+          simp [pulledBy, hanswersChannel]
+        simp only [hzero, List.map_const', List.sum_replicate, smul_zero, add_zero] at hpulled
+        rw [hanswered₁, hanswered₀, ← add_assoc, add_right_comm _ (Multiset.replicate _ _)]
+          at hrowAnswered
+        have hrows' := add_right_cancel hrowAnswered
+        rw [hrows', ← add_assoc] at hanswered
+        have hAnswered : run.answeredMsgs (balancing.states.set index
+            { state with rows := state.rows.set position updated }) demand.channel =
+            run.answeredMsgs balancing.states demand.channel +
+              Multiset.replicate δ demand.message := by
+          apply add_right_cancel (b := (state.rows.map fun row =>
+            run.answeredBy state row demand.channel).sum)
+          rw [hanswered]
+          abel
+        rw [hAnswered, hpulled, Multiset.le_iff_count]
+        intro message'
+        rw [Multiset.count_add, Multiset.count_replicate]
+        split_ifs with hmessage'
+        · subst hmessage'
+          omega
+        · simpa using Multiset.le_iff_count.mp hold' message'
+      · obtain ⟨hanswered', hpulled'⟩ := hsameOther channel hchannelEq hchannel'
+        rw [hanswered', hpulled']
+        exact hold'
+    · intro hpadded channel hchannel' hall
+      have hgetState : (balancing.states.set index
+          { state with rows := state.rows.set position updated })[index]'(by simpa using hindex) =
+          { state with rows := state.rows.set position updated } := List.getElem_set_self ..
+      have hnewMem : { state with rows := state.rows.set position updated } ∈
+          balancing.states.set index { state with rows := state.rows.set position updated } :=
+        List.mem_iff_getElem.mpr ⟨index, by simpa using hindex, hgetState⟩
+      have hne : channel ≠ demand.channel := by
+        rintro rfl
+        obtain ⟨mode', hmode'⟩ := hall _ hnewMem hanswersChannel
+        simp only at hmode'
+        rw [hmode] at hmode'
+        cases hmode'
+      obtain ⟨hanswered', hpulled'⟩ := hsameOther channel hne hchannel'
+      simp only [Balancing.apply]
+      rw [hanswered', hpulled']
+      apply hinv.padded_answered hpadded channel hchannel'
+      intro other hother hanswersOther
+      obtain ⟨j, hj, rfl⟩ := List.getElem_of_mem hother
+      by_cases hji : j = index
+      · subst hji
+        obtain ⟨_, hstateEq⟩ := List.getElem?_eq_some_iff.mp hstate
+        rw [hstateEq] at hanswersOther ⊢
+        exact hall { state with rows := state.rows.set position updated } hnewMem hanswersOther
+      · have hmem : balancing.states[j] ∈ balancing.states.set index
+            { state with rows := state.rows.set position updated } := by
+          rw [← List.getElem_set_ne (Ne.symm hji) (l := balancing.states)
+            (a := { state with rows := state.rows.set position updated }) (by simpa using hj)]
+          exact List.getElem_mem _
+        exact hall _ hmem hanswersOther
+  · apply measure_lt_right
+    · simp only [Balancing.apply, hlengthRow]
+      omega
+    · have hδ : (δ : F p) ≠ 0 := by
+        rw [Ne, ZMod.natCast_eq_zero_iff]
+        intro hdvd
+        have := Nat.le_of_dvd hpos hdvd
+        omega
+      have hlength := length_apply_of_update (states := balancing.states.set index
+        { state with rows := state.rows.set position updated })
+        (change := ⟨rowInteractions state (run.row state.component input none) run.data0,
+          rowInteractions state updated run.data0⟩)
+        hinv.canonical hδ (by rw [hinv.canonical.netOf_eq hdemand, hmult]) hdiff
+      omega
+
 end Inv
 
 end Run
