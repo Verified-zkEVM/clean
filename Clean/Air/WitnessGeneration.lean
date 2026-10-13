@@ -481,9 +481,9 @@ def generatedData (states : List (ComponentState F)) : ProverData F := fun name 
   | none => #[]
 
 /-- Complete a component row from its input with the component's witness programs. -/
-def completeRow (state : ComponentState F) (input : Array F) (data : ProverData F)
+def completeRow (state : ComponentState F) (input : Array F) (data : ProverData F) (hint : ProverHint F)
     (origin : Option (Origin F)) : GeneratedRow F :=
-  { input, values := witgenWithData data (ProverHint.empty F) state.witgenOps input, origin }
+  { input, values := witgenWithData data hint state.witgenOps input, origin }
 
 def rowInteractions (state : ComponentState F) (row : GeneratedRow F) (data : ProverData F) :
     List (Interaction F) :=
@@ -534,14 +534,15 @@ def sameOrigin (origin : Origin F) (mode : DemandMode F) (demand : Demand F) : B
     origin.message == demand.message
 
 def createDemandRow (state : ComponentState F) (mode : DemandMode F)
-    (demand : Demand F) (multiplicity : ℕ) (data : ProverData F) : GeneratedRow F :=
+    (demand : Demand F) (multiplicity : ℕ) (data : ProverData F) (hint : ProverHint F) :
+    GeneratedRow F :=
   let origin : Origin F := {
     channel := mode.channel.name
     direction := mode.direction
     message := demand.message
     multiplicity
   }
-  completeRow state (mode.input.eval demand.message multiplicity) data (some origin)
+  completeRow state (mode.input.eval demand.message multiplicity) data hint (some origin)
 
 /-- A component's new rows, and the rows they replaced. -/
 structure Mutation (F : Type) [FiniteField F] where
@@ -550,10 +551,10 @@ structure Mutation (F : Type) [FiniteField F] where
   addedRows : List (GeneratedRow F) := []
 
 def handleDemand (state : ComponentState F) (mode : DemandMode F)
-    (demand : Demand F) (data : ProverData F) : Mutation F :=
+    (demand : Demand F) (data : ProverData F) (hint : ProverHint F) : Mutation F :=
   match mode.aggregation with
   | .perOccurrence =>
-      let rows := List.replicate demand.count (createDemandRow state mode demand 1 data)
+      let rows := List.replicate demand.count (createDemandRow state mode demand 1 data hint)
       { state := { state with rows := state.rows ++ rows }, addedRows := rows }
   | .byMessage =>
       let existing := state.rows.zipIdx.findSome? fun (row, index) =>
@@ -561,11 +562,11 @@ def handleDemand (state : ComponentState F) (mode : DemandMode F)
           if sameOrigin origin mode demand then some (row, origin, index) else none
       match existing with
       | none =>
-          let row := createDemandRow state mode demand demand.count data
+          let row := createDemandRow state mode demand demand.count data hint
           { state := { state with rows := state.rows ++ [row] }, addedRows := [row] }
       | some (row, origin, index) =>
           let updated :=
-            createDemandRow state mode demand (origin.multiplicity + demand.count) data
+            createDemandRow state mode demand (origin.multiplicity + demand.count) data hint
           { state := { state with rows := state.rows.set index updated }
             removedRows := [row]
             addedRows := [updated] }
@@ -583,12 +584,12 @@ def findPreallocatedRow (state : ComponentState F) (handlers : List Preallocated
     else none
 
 def handlePreallocated (state : ComponentState F) (handlers : List PreallocatedHandler)
-    (demand : Demand F) (data : ProverData F) : Option (Mutation F) :=
+    (demand : Demand F) (data : ProverData F) (hint : ProverHint F) : Option (Mutation F) :=
   match findPreallocatedRow state handlers demand data with
   | none => none
   | some (handler, rowIndex, row) =>
       let value := (row.input[handler.column]?.getD 0) + FiniteField.fromNat demand.count
-      let updated := completeRow state (row.input.set! handler.column value) data none
+      let updated := completeRow state (row.input.set! handler.column value) data hint none
       some {
         state := { state with rows := state.rows.set rowIndex updated }
         removedRows := [row]
@@ -616,13 +617,13 @@ instance : ToString GenerationError where
 
 /-- Route one demand to the component at `index`. -/
 def handle (states : List (ComponentState F)) (demand : Demand F) (index : ℕ)
-    (data : ProverData F) :
+    (data : ProverData F) (hint : ProverHint F) :
     Except GenerationError (List (ComponentState F) × (List (Demand F) → List (Demand F))) := do
   let some state := states[index]? | return (states, id)
   let mutation ← match state.generation.mode with
-    | .demand mode => pure (handleDemand state mode demand data)
+    | .demand mode => pure (handleDemand state mode demand data hint)
     | .preallocated mode =>
-        match handlePreallocated state mode.handlers demand data with
+        match handlePreallocated state mode.handlers demand data hint with
         | some mutation => pure mutation
         | none => throw (.noPreallocatedRow state.component.circuit.name demand.channel)
   let removed := mutation.removedRows.flatMap (rowInteractions state · data)
@@ -631,7 +632,7 @@ def handle (states : List (ComponentState F)) (demand : Demand F) (index : ℕ)
     Demand.addInteractions (Demand.removeInteractions demands removed) added)
 
 /-- Handle demand until the channels balance. -/
-def generateLoop (data : ProverData F) :
+def generateLoop (data : ProverData F) (hint : ProverHint F) :
     ℕ → List (ComponentState F) → List (Demand F) →
       Except GenerationError (List (ComponentState F))
   | 0, _, _ => throw .fuelExhausted
@@ -640,17 +641,17 @@ def generateLoop (data : ProverData F) :
       match findAction states demands with
       | none => throw (.unhandledImbalance (demands.map (·.channel)))
       | some (demand, index) => do
-          let (states, update) ← handle states demand index data
-          generateLoop data fuel states (update demands)
+          let (states, update) ← handle states demand index data hint
+          generateLoop data hint fuel states (update demands)
 
 /-- Pad every component to its target height with its padding row; returns the padded states
 and the interactions of the new rows. -/
-def padTables (data : ProverData F) (states : List (ComponentState F)) :
+def padTables (data : ProverData F) (hint : ProverHint F) (states : List (ComponentState F)) :
     List (ComponentState F) × List (Interaction F) :=
   let padded := states.map fun state =>
     let padding := state.generation.padding
     let count := padding.targetHeight state.rows.length - state.rows.length
-    let rows := List.replicate count (completeRow state padding.input data none)
+    let rows := List.replicate count (completeRow state padding.input data hint none)
     ({ state with rows := state.rows ++ rows }, rows.flatMap (rowInteractions state · data))
   (padded.map (·.1), padded.flatMap (·.2))
 
@@ -659,14 +660,14 @@ def tablesArePadded (states : List (ComponentState F)) : Bool :=
     state.rows.length == state.generation.padding.targetHeight state.rows.length
 
 /-- Pad, then balance the interactions of the padding rows, until no component grows. -/
-def padAndBalance (data : ProverData F) (fuel : ℕ) :
+def padAndBalance (data : ProverData F) (hint : ProverHint F) (fuel : ℕ) :
     ℕ → List (ComponentState F) → Except GenerationError (List (ComponentState F))
   | 0, _ => throw .fuelExhausted
   | rounds + 1, states => do
-      let (states, added) := padTables data states
-      let states ← generateLoop data fuel states (Demand.addInteractions [] added)
+      let (states, added) := padTables data hint states
+      let states ← generateLoop data hint fuel states (Demand.addInteractions [] added)
       if tablesArePadded states then return states
-      padAndBalance data fuel rounds states
+      padAndBalance data hint fuel rounds states
 
 /-! ### Assembling the witness -/
 
@@ -730,9 +731,9 @@ def assembleTables :
         throw (.assembly "generated table contains a row of the wrong width")
   | _, _ => .error (.assembly "generated-table count does not match ensemble component count")
 
-/-- Execute channel-driven generation from validated metadata. `hint` is read only by the row
-programs that initialize preallocated components; semantic `ProverData` is derived from the final
-committed component rows. -/
+/-- Execute channel-driven generation from validated metadata. `hint` is read by the row programs
+that initialize preallocated components and by the witness programs of all rows; semantic
+`ProverData` is derived from the final committed component rows. -/
 def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensemble)
     (publicInput : PublicIO F) (hint : ProverHint F) :
     Except GenerationError (EnsembleWitness ensemble) := do
@@ -743,12 +744,12 @@ def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensembl
       { input, values := input } }
   let data := generatedData initial
   let initial := initial.map fun state =>
-    { state with rows := state.rows.map fun row => completeRow state row.input data none }
+    { state with rows := state.rows.map fun row => completeRow state row.input data hint none }
   let verifier := ensemble.verifierOperations.interactionValues (.fromInput publicInput data)
   let rows := initial.flatMap fun state => state.rows.flatMap (rowInteractions state · data)
   let demands := Demand.addInteractions [] (verifier ++ rows)
-  let generated ← generateLoop data config.fuel initial demands
-  let padded ← padAndBalance data config.fuel config.fuel generated
+  let generated ← generateLoop data hint config.fuel initial demands
+  let padded ← padAndBalance data hint config.fuel config.fuel generated
   let assembled ← assembleTables ensemble.tables padded
   return {
     tables := assembled.tables

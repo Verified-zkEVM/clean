@@ -27,14 +27,17 @@ fn safe_rem(left: u64, right: u64) -> u64 {
     }
 }
 
-fn component_0<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<Vec<F>, String> {
+fn component_0<F: WitnessField>(
+    input: &[F],
+    _data: &WitnessData<F>,
+    _hint: &WitnessData<F>,
+) -> Result<Vec<F>, String> {
     if input.len() != 3 {
         return Err(format!(
             "component input has width {}, expected 3",
             input.len()
         ));
     }
-    let _hint = &WitnessData::<F>::from_entries(Vec::new());
     let mut row = input.to_vec();
     {
         let mut output: Vec<F> = Vec::with_capacity(1);
@@ -641,14 +644,17 @@ fn component_0_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
     ]
 }
 
-fn component_1<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<Vec<F>, String> {
+fn component_1<F: WitnessField>(
+    input: &[F],
+    _data: &WitnessData<F>,
+    _hint: &WitnessData<F>,
+) -> Result<Vec<F>, String> {
     if input.len() != 3 {
         return Err(format!(
             "component input has width {}, expected 3",
             input.len()
         ));
     }
-    let _hint = &WitnessData::<F>::from_entries(Vec::new());
     let row = input.to_vec();
 
     if row.len() != 3 {
@@ -669,14 +675,17 @@ fn component_1_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> {
     }]
 }
 
-fn component_2<F: WitnessField>(input: &[F], _data: &WitnessData<F>) -> Result<Vec<F>, String> {
+fn component_2<F: WitnessField>(
+    input: &[F],
+    _data: &WitnessData<F>,
+    _hint: &WitnessData<F>,
+) -> Result<Vec<F>, String> {
     if input.len() != 3 {
         return Err(format!(
             "component input has width {}, expected 3",
             input.len()
         ));
     }
-    let _hint = &WitnessData::<F>::from_entries(Vec::new());
     let row = input.to_vec();
 
     if row.len() != 3 {
@@ -1368,11 +1377,12 @@ impl<F: WitnessField> Program<F> for FemtoCairoFlatAirProgram {
         component: usize,
         input: &[F],
         data: &WitnessData<F>,
+        hint: &WitnessData<F>,
     ) -> Result<Vec<F>, String> {
         match component {
-            0 => component_0(input, data),
-            1 => component_1(input, data),
-            2 => component_2(input, data),
+            0 => component_0(input, data, hint),
+            1 => component_1(input, data, hint),
+            2 => component_2(input, data, hint),
             _ => Err(format!("component index {component} is out of bounds")),
         }
     }

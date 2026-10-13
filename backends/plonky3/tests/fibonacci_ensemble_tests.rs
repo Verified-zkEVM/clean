@@ -220,8 +220,9 @@ impl<F: WitnessField> Program<F> for Minimum64Program {
         component: usize,
         input: &[F],
         data: &WitnessData<F>,
+        hint: &WitnessData<F>,
     ) -> Result<Vec<F>, String> {
-        generated::FibonacciEnsembleProgram::complete_row(component, input, data)
+        generated::FibonacciEnsembleProgram::complete_row(component, input, data, hint)
     }
 
     fn interactions(component: usize, row: &[F]) -> Vec<Interaction<F>> {

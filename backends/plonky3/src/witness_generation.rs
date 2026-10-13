@@ -253,8 +253,12 @@ pub trait Program<F: WitnessField> {
     fn padding() -> Vec<Padding<F>>;
     /// The initial input of row `row` of a preallocated component.
     fn initial_row(component: usize, row: u64, hint: &WitnessData<F>) -> Vec<F>;
-    fn complete_row(component: usize, input: &[F], data: &WitnessData<F>)
-        -> Result<Vec<F>, String>;
+    fn complete_row(
+        component: usize,
+        input: &[F],
+        data: &WitnessData<F>,
+        hint: &WitnessData<F>,
+    ) -> Result<Vec<F>, String>;
     fn interactions(component: usize, row: &[F]) -> Vec<Interaction<F>>;
     fn verifier_interactions(public_input: &[F]) -> Vec<Interaction<F>>;
 }
@@ -396,9 +400,10 @@ fn make_demand_row<F: WitnessField, P: Program<F>>(
     demand: &Demand<F>,
     multiplicity: usize,
     data: &WitnessData<F>,
+    hint: &WitnessData<F>,
 ) -> Result<Row<F>, String> {
     let input = input_for_demand(mode, demand, multiplicity)?;
-    let values = P::complete_row(component, &input, data)?;
+    let values = P::complete_row(component, &input, data, hint)?;
     Ok(Row {
         input,
         values,
@@ -418,11 +423,12 @@ fn handle_demand<F: WitnessField, P: Program<F>>(
     table: &mut Vec<Row<F>>,
     demands: &mut Vec<Demand<F>>,
     data: &WitnessData<F>,
+    hint: &WitnessData<F>,
 ) -> Result<(), String> {
     match mode.aggregation {
         Aggregation::PerOccurrence => {
             for _ in 0..demand.count() {
-                let row = make_demand_row::<F, P>(component, mode, demand, 1, data)?;
+                let row = make_demand_row::<F, P>(component, mode, demand, 1, data, hint)?;
                 add_interactions(demands, P::interactions(component, &row.values));
                 table.push(row);
             }
@@ -437,8 +443,14 @@ fn handle_demand<F: WitnessField, P: Program<F>>(
             });
             match existing {
                 None => {
-                    let row =
-                        make_demand_row::<F, P>(component, mode, demand, demand.count(), data)?;
+                    let row = make_demand_row::<F, P>(
+                        component,
+                        mode,
+                        demand,
+                        demand.count(),
+                        data,
+                        hint,
+                    )?;
                     add_interactions(demands, P::interactions(component, &row.values));
                     table.push(row);
                 }
@@ -451,7 +463,7 @@ fn handle_demand<F: WitnessField, P: Program<F>>(
                         .multiplicity
                         + demand.count();
                     let updated =
-                        make_demand_row::<F, P>(component, mode, demand, multiplicity, data)?;
+                        make_demand_row::<F, P>(component, mode, demand, multiplicity, data, hint)?;
                     remove_interactions(demands, P::interactions(component, &old.values));
                     add_interactions(demands, P::interactions(component, &updated.values));
                     table[index] = updated;
@@ -469,6 +481,7 @@ fn handle_preallocated<F: WitnessField, P: Program<F>>(
     table: &mut [Row<F>],
     demands: &mut Vec<Demand<F>>,
     data: &WitnessData<F>,
+    hint: &WitnessData<F>,
 ) -> Result<(), String> {
     let mut matches = handlers.iter().flat_map(|handler| {
         table
@@ -514,7 +527,7 @@ fn handle_preallocated<F: WitnessField, P: Program<F>>(
     let value = current + F::from_canonical_u64(demand.count() as u64);
     let old_interactions = P::interactions(component, &row.values);
     row.input[handler.column] = value;
-    row.values = P::complete_row(component, &row.input, data)?;
+    row.values = P::complete_row(component, &row.input, data, hint)?;
     remove_interactions(demands, old_interactions);
     add_interactions(demands, P::interactions(component, &row.values));
     Ok(())
@@ -525,6 +538,7 @@ fn balance<F: WitnessField, P: Program<F>>(
     tables: &mut [Vec<Row<F>>],
     demands: &mut Vec<Demand<F>>,
     data: &WitnessData<F>,
+    hint: &WitnessData<F>,
 ) -> Result<(), String> {
     for _ in 0..P::FUEL {
         if demands.is_empty() {
@@ -572,6 +586,7 @@ fn balance<F: WitnessField, P: Program<F>>(
                 &mut tables[component],
                 demands,
                 data,
+                hint,
             )?,
             Mode::Preallocated { handlers, .. } => handle_preallocated::<F, P>(
                 component,
@@ -580,6 +595,7 @@ fn balance<F: WitnessField, P: Program<F>>(
                 &mut tables[component],
                 demands,
                 data,
+                hint,
             )?,
         }
     }
@@ -599,13 +615,14 @@ fn pad_and_balance<F: WitnessField, P: Program<F>>(
     padding: &[Padding<F>],
     tables: &mut [Vec<Row<F>>],
     data: &WitnessData<F>,
+    hint: &WitnessData<F>,
 ) -> Result<(), String> {
     for _ in 0..P::FUEL {
         let mut demands = Vec::new();
         for (component, (table, padding)) in tables.iter_mut().zip(padding).enumerate() {
             let height = target_height(table.len(), padding);
             for _ in table.len()..height {
-                let values = P::complete_row(component, &padding.input, data)?;
+                let values = P::complete_row(component, &padding.input, data, hint)?;
                 add_interactions(&mut demands, P::interactions(component, &values));
                 table.push(Row {
                     input: padding.input.clone(),
@@ -615,7 +632,7 @@ fn pad_and_balance<F: WitnessField, P: Program<F>>(
             }
         }
 
-        balance::<F, P>(modes, tables, &mut demands, data)?;
+        balance::<F, P>(modes, tables, &mut demands, data, hint)?;
         if tables
             .iter()
             .zip(padding)
@@ -733,7 +750,7 @@ pub fn generate<F: WitnessField, P: Program<F>>(
     let data = WitnessData::from_initial_tables(P::COMPONENT_NAMES, &tables);
     for (component, table) in tables.iter_mut().enumerate() {
         for row in table {
-            row.values = P::complete_row(component, &row.input, &data)?;
+            row.values = P::complete_row(component, &row.input, &data, hint)?;
         }
     }
 
@@ -745,8 +762,8 @@ pub fn generate<F: WitnessField, P: Program<F>>(
         }
     }
 
-    balance::<F, P>(&modes, &mut tables, &mut demands, &data)?;
-    pad_and_balance::<F, P>(&modes, &padding, &mut tables, &data)?;
+    balance::<F, P>(&modes, &mut tables, &mut demands, &data, hint)?;
+    pad_and_balance::<F, P>(&modes, &padding, &mut tables, &data, hint)?;
 
     Ok(EnsembleWitness {
         fixed_widths: P::FIXED_WIDTHS.to_vec(),
