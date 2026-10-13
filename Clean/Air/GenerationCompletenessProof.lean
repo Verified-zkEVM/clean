@@ -2073,6 +2073,99 @@ lemma answeredBy_preallocated {state : ComponentState (F p)} (hok : run.StateOk 
       exact hne (by rw [hhandled handler' hmem' interaction' hinteraction', hname])
     · rfl
 
+/-! ### Initial states -/
+
+lemma no_lazy {component : Component (F p)} {rowPlan : RowPlan (F p)}
+    (hentry : (component, rowPlan) ∈ ens.ensemble.tables.zip run.rowPlans) :
+    rowPlan.mode.lazyColumns = [] := by
+  rcases hmode : rowPlan.mode with mode | mode
+  · rfl
+  · exact run.complete.no_lazy component (List.of_mem_zip hentry).1 rowPlan mode
+      (run.planned _ hentry) hmode
+
+lemma mem_initialRows {state : ComponentState (F p)} (hstate : state ∈ run.initialRows) :
+    ∃ entry ∈ ens.ensemble.tables.zip run.rowPlans,
+      state = { ComponentState.initial entry.1 entry.2 with
+        rows := (initialInputs (ComponentState.initial entry.1 entry.2) run.hint).map fun input =>
+          { input, values := input, undefined := entry.2.mode.lazyColumns } } := by
+  simp only [initialRows, List.map_map, List.mem_map] at hstate
+  obtain ⟨entry, hentry, rfl⟩ := hstate
+  exact ⟨entry, hentry, rfl⟩
+
+lemma initialRows_shape : run.initialRows.map (·.shape) = run.initialShape := by
+  simp only [initialRows, initialShape, List.map_map]
+  apply List.map_congr_left
+  intro entry _
+  rfl
+
+lemma initialRows_viewOk : run.ViewOk run.initialRows := by
+  refine ⟨run.initialRows_shape, fun state hstate mode hmode _ => ?_⟩
+  obtain ⟨⟨component, rowPlan⟩, hentry, rfl⟩ := run.mem_initialRows hstate
+  simp only [ComponentState.initial] at hmode ⊢
+  have hlazy := run.no_lazy hentry
+  rw [hmode] at hlazy
+  simp only [initialInputs, hmode, List.map_map, List.length_map, List.length_range, true_and]
+  intro j hj
+  simp only [List.getElem_map, List.getElem_range, Function.comp_apply]
+  exact ⟨hlazy, run.preallocatedInput_size hentry hmode j, fun column _ => rfl⟩
+
+lemma initialRows_stateOk {state : ComponentState (F p)} (hstate : state ∈ run.initialRows) :
+    run.StateOk state :=
+  run.stateOk_of_shape run.initialRows_shape hstate
+
+/-- Completing rows on a stable view computes their honest rows. -/
+lemma completeRows_eq {view : List (ComponentState (F p))} (hview : run.ViewOk view)
+    {state : ComponentState (F p)} (hok : run.StateOk state) :
+    ∀ rows : List (GeneratedRow (F p)), (∀ row ∈ rows, row.origin = none ∧ row.undefined = [] ∧
+      row.input.size = state.component.rowOffset) →
+    completeRows run.data0 run.hint view state rows [] =
+      (rows.map fun row => run.row state.component row.input none, [])
+  | [], _ => rfl
+  | row :: rows, hrows => by
+      obtain ⟨horigin, hundefined, hsize⟩ := hrows row (List.mem_cons_self ..)
+      simp only [completeRows, horigin, hundefined, run.completeRow_eq hview hok hsize,
+        completeRows_eq hview hok rows fun row hrow => hrows row (List.mem_cons_of_mem _ hrow),
+        List.map_cons]
+
+lemma completeStates_eq {view : List (ComponentState (F p))} (hview : run.ViewOk view) :
+    ∀ states : List (ComponentState (F p)), (∀ state ∈ states, run.StateOk state ∧
+      ∀ row ∈ state.rows, row.origin = none ∧ row.undefined = [] ∧
+        row.input.size = state.component.rowOffset) →
+    completeStates run.data0 run.hint view states [] =
+      (states.map fun state => { state with rows := (state.rows.map fun row =>
+        run.row state.component row.input none) }, [])
+  | [], _ => rfl
+  | state :: states, hstates => by
+      obtain ⟨hok, hrows⟩ := hstates state (List.mem_cons_self ..)
+      simp only [completeStates, run.completeRows_eq hview hok state.rows hrows,
+        completeStates_eq hview states fun state hstate => hstates state (List.mem_cons_of_mem _
+          hstate), List.map_cons]
+
+/-- The states generation starts balancing from. -/
+def initial : List (ComponentState (F p)) :=
+  run.initialRows.map fun state => { state with rows := (state.rows.map fun row =>
+    run.row state.component row.input none) }
+
+lemma initialStates_eq : initialStates run.validPlan run.hint = (run.initial, run.data0) := by
+  have hrows : ∀ state ∈ run.initialRows, run.StateOk state ∧ ∀ row ∈ state.rows,
+      row.origin = none ∧ row.undefined = [] ∧ row.input.size = state.component.rowOffset := by
+    intro state hstate
+    refine ⟨run.initialRows_stateOk hstate, fun row hrow => ?_⟩
+    obtain ⟨⟨component, rowPlan⟩, hentry, rfl⟩ := run.mem_initialRows hstate
+    simp only [ComponentState.initial, List.mem_map] at hrow ⊢
+    obtain ⟨input, hinput, rfl⟩ := hrow
+    refine ⟨rfl, run.no_lazy hentry, ?_⟩
+    simp only [initialInputs] at hinput
+    split at hinput
+    · simp at hinput
+    · rename_i mode hmode
+      obtain ⟨j, -, rfl⟩ := List.mem_map.mp hinput
+      exact run.preallocatedInput_size hentry hmode j
+  have hcomplete := run.completeStates_eq run.initialRows_viewOk run.initialRows hrows
+  simp only [initialStates]
+  rw [← initialRows, ← data0_eq, hcomplete]
+  rfl
+
 namespace Inv
 
 variable {run} {k : ℕ} {padded : Bool} {balancing : Balancing (F p)}
