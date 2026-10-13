@@ -1916,6 +1916,80 @@ lemma measure_lt_right {balancing balancing' : Balancing (F p)}
   simp only [Balancing.measure, heq]
   exact Prod.Lex.right _ hlt
 
+/-- The contribution of one interaction to the net of a channel message. -/
+def contribution {F : Type} [FiniteField F] (channel : String) (message : Array F)
+    (interaction : Interaction F) : F :=
+  if interaction.channel.name = channel ∧ interaction.msg = message then interaction.mult else 0
+
+lemma netOfInteractions_eq_sum {F : Type} [FiniteField F] (interactions : List (Interaction F))
+    (channel : String) (message : Array F) :
+    netOfInteractions interactions channel message =
+      (interactions.map (contribution channel message)).sum := by
+  induction interactions with
+  | nil => rfl
+  | cons interaction rest ih =>
+      rw [netOfInteractions_cons, ih]
+      simp [contribution]
+
+lemma netOfInteractions_set {F : Type} [FiniteField F] (interactions : List (Interaction F))
+    {index : ℕ} (hindex : index < interactions.length) (value : Interaction F) (channel : String)
+    (message : Array F) :
+    netOfInteractions (interactions.set index value) channel message =
+      netOfInteractions interactions channel message -
+        contribution channel message interactions[index] + contribution channel message value := by
+  rw [netOfInteractions_eq_sum, netOfInteractions_eq_sum, sum_map_set _ _ _ hindex]
+
+omit [Fact p.Prime] in
+lemma eq_set_of_agree {α : Type*} {values values' : List α} (hlength : values'.length = values.length)
+    {index : ℕ} (hindex : index < values.length)
+    (hagree : ∀ i ≠ index, values'[i]? = values[i]?) :
+    values' = values.set index (values'[index]'(hlength ▸ hindex)) := by
+  apply List.ext_getElem?
+  intro i
+  by_cases hi : i = index
+  · subst hi
+    simp [List.getElem?_set_self hindex, List.getElem?_eq_getElem (hlength ▸ hindex)]
+  · rw [List.getElem?_set_ne (Ne.symm hi), hagree i hi]
+
+lemma findPreallocatedRow_some {F : Type} [FiniteField F] {state : ComponentState F}
+    {handlers : List PreallocatedHandler} {demand : Demand F} {data : ProverData F}
+    {handler : PreallocatedHandler} {position : ℕ} {row : GeneratedRow F}
+    (h : findPreallocatedRow state handlers demand data = some (handler, position, row)) :
+    handler ∈ handlers ∧ handler.handles state demand = true ∧ state.rows[position]? = some row ∧
+      ∃ interaction, state.interactions[handler.interaction]? = some interaction ∧
+        (interaction.eval (Environment.fromArray row.values data)).msg = demand.message := by
+  obtain ⟨handler', hmem, hfound⟩ := List.exists_of_findSome?_eq_some h
+  split at hfound
+  · rename_i hhandles
+    obtain ⟨position', row', hrow, hg⟩ := getElem?_of_findSome?_zipIdx hfound
+    rcases hinteraction : state.interactions[handler'.interaction]? with _ | interaction
+    · simp [hinteraction] at hg
+    simp only [hinteraction, Option.bind_some] at hg
+    split at hg
+    · rename_i hmsg
+      simp only [Option.some.injEq, Prod.mk.injEq] at hg
+      obtain ⟨rfl, rfl, rfl⟩ := hg
+      exact ⟨hmem, hhandles, hrow, interaction, hinteraction, by simpa using hmsg⟩
+    · simp at hg
+  · simp at hfound
+
+lemma findPreallocatedRow_isSome {F : Type} [FiniteField F] {state : ComponentState F}
+    {handlers : List PreallocatedHandler} {demand : Demand F} {data : ProverData F}
+    {handler : PreallocatedHandler} (hmem : handler ∈ handlers)
+    (hhandles : handler.handles state demand = true) {position : ℕ} {row : GeneratedRow F}
+    (hrow : state.rows[position]? = some row) {interaction : AbstractInteraction F}
+    (hinteraction : state.interactions[handler.interaction]? = some interaction)
+    (hmsg : (interaction.eval (Environment.fromArray row.values data)).msg = demand.message) :
+    ∃ result, findPreallocatedRow state handlers demand data = some result := by
+  rw [← Option.isSome_iff_exists]
+  unfold findPreallocatedRow
+  rw [List.findSome?_isSome_iff]
+  refine ⟨handler, hmem, ?_⟩
+  rw [if_pos hhandles, Option.isSome_iff_exists]
+  rw [← Option.isSome_iff_exists, List.findSome?_isSome_iff]
+  refine ⟨(row, position), List.mem_zipIdx_iff_getElem?.mpr hrow, ?_⟩
+  simp [hinteraction, hmsg]
+
 namespace Inv
 
 variable {run} {k : ℕ} {padded : Bool} {balancing : Balancing (F p)}
