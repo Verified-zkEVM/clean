@@ -2166,6 +2166,82 @@ lemma initialStates_eq : initialStates run.validPlan run.hint = (run.initial, ru
   rw [← initialRows, ← data0_eq, hcomplete]
   rfl
 
+/-- The balancing state generation starts from. -/
+def initialBalancing : Balancing (F p) where
+  states := run.initial
+  demands := Demand.addInteractions [] (run.verifier ++ statesInteractions run.initial run.data0)
+  interactions := (run.verifier ++ statesInteractions run.initial run.data0).length
+
+lemma mem_initial {state : ComponentState (F p)} (hstate : state ∈ run.initial) :
+    ∃ entry ∈ ens.ensemble.tables.zip run.rowPlans,
+      state = { ComponentState.initial entry.1 entry.2 with
+        rows := (initialInputs (ComponentState.initial entry.1 entry.2) run.hint).map fun input =>
+          run.row entry.1 input none } := by
+  simp only [initial, List.mem_map] at hstate
+  obtain ⟨state', hstate', rfl⟩ := hstate
+  obtain ⟨entry, hentry, rfl⟩ := run.mem_initialRows hstate'
+  exact ⟨entry, hentry, by simp [ComponentState.initial, List.map_map, Function.comp_def]⟩
+
+lemma initial_inv : run.Inv 0 false run.initialBalancing := by
+  have hshape : run.initial.map (·.shape) = run.initialShape := by
+    rw [← run.initialRows_shape]
+    simp only [initial, List.map_map]
+    rfl
+  refine ⟨hshape, ?_, Nat.zero_le _, (fun h => absurd h (by simp)), (fun channel message => ?_),
+    Demand.canonical_nil.addInteractions _, rfl, (fun channel _ => ?_),
+    (fun h => absurd h (by simp))⟩
+  · intro state hstate
+    obtain ⟨⟨component, rowPlan⟩, hentry, rfl⟩ := run.mem_initial hstate
+    unfold RowsOk
+    simp only [ComponentState.initial]
+    split
+    · rename_i mode hmode
+      simp only [initialInputs, hmode, List.map_map, List.length_map, List.length_range,
+        Bool.false_eq_true, if_false, true_and]
+      intro j hj
+      refine ⟨preallocatedInput component mode run.hint j, ?_, ?_⟩
+      · have : run.baseInput component rowPlan mode j = preallocatedInput component mode run.hint j :=
+          by simp [baseInput, hj]
+        rw [this]
+        exact .base
+      · simp [preallocatedInput]
+    · rename_i mode hmode
+      refine ⟨[], 0, by simp [initialInputs, hmode], fun _ => rfl,
+        (fun h => absurd h (by simp)), fun _ => rfl, fun _ row hrow => absurd hrow (by simp)⟩
+  · simp [initialBalancing, netOf_addInteractions]
+  · simp only [initialBalancing]
+    suffices h : run.answeredMsgs run.initial channel = 0 by rw [h]; exact Multiset.zero_le _
+    apply List.sum_eq_zero
+    intro x hx
+    obtain ⟨state, hstate, rfl⟩ := List.mem_map.mp hx
+    obtain ⟨⟨component, rowPlan⟩, hentry, rfl⟩ := run.mem_initial hstate
+    apply List.sum_eq_zero
+    intro x hx
+    obtain ⟨row, hrow, rfl⟩ := List.mem_map.mp hx
+    simp only [ComponentState.initial, initialInputs] at hrow ⊢
+    rcases hmode : rowPlan.mode with mode | mode
+    · simp [hmode] at hrow
+    · rw [hmode] at hrow
+      obtain ⟨input, hinput, rfl⟩ := List.mem_map.mp hrow
+      obtain ⟨j, hj, rfl⟩ := List.mem_map.mp hinput
+      have hzero := (run.complete.preallocated component (List.of_mem_zip hentry).1 rowPlan mode
+        (run.planned _ hentry) hmode run.publicInput run.proverInput run.assumptions
+        run.stableData run.stableData_stable).2.1
+      simp only [answeredBy, hmode]
+      apply List.sum_eq_zero
+      intro x hx
+      obtain ⟨handler, hhandler, rfl⟩ := List.mem_map.mp hx
+      split
+      · split
+        · simp only [row]
+          rw [show (fixedPrefix component (UInt64.ofNat j) ++
+            (mode.input.eval (UInt64.ofNat j) run.hint).toArray) =
+            preallocatedInput component mode run.hint j from rfl,
+            hzero handler hhandler j (List.mem_range.mp hj)]
+          simp
+        · rfl
+      · rfl
+
 namespace Inv
 
 variable {run} {k : ℕ} {padded : Bool} {balancing : Balancing (F p)}
