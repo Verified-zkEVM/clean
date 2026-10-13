@@ -2242,6 +2242,64 @@ lemma initial_inv : run.Inv 0 false run.initialBalancing := by
         · rfl
       · rfl
 
+/-! ### Padding -/
+
+/-- The padding row of a component state. -/
+def paddingRow (state : ComponentState (F p)) : GeneratedRow (F p) :=
+  run.row state.component state.rowPlan.padding.input none
+
+/-- The number of padding rows a state gets. -/
+def padCount (state : ComponentState (F p)) : ℕ :=
+  state.rowPlan.padding.targetHeight state.rows.length - state.rows.length
+
+/-- A state padded to its target height. -/
+def padOne (state : ComponentState (F p)) : ComponentState (F p) :=
+  { state with rows := (state.rows ++ List.replicate (padCount state) (run.paddingRow state)) }
+
+lemma padState_eq {view : List (ComponentState (F p))} (hview : run.ViewOk view)
+    {state : ComponentState (F p)} (hok : run.StateOk state) :
+    padState run.data0 run.hint view state [] = (run.padOne state,
+      (List.replicate (padCount state) (run.paddingRow state)).flatMap
+        (rowInteractions state · run.data0), []) := by
+  have hsize : state.rowPlan.padding.input.size = state.component.rowOffset :=
+    (run.planValid.row_plans _ hok.entry).padding_width
+  unfold padState
+  dsimp only
+  split
+  · rename_i hzero
+    simp only [padOne, padCount] at hzero ⊢
+    simp [hzero]
+  · rename_i hcount
+    rw [run.completeRow_eq hview hok hsize]
+    rfl
+
+lemma padStates_eq {view : List (ComponentState (F p))} (hview : run.ViewOk view) :
+    ∀ states : List (ComponentState (F p)), (∀ state ∈ states, run.StateOk state) →
+    padStates run.data0 run.hint view states [] = (states.map run.padOne,
+      states.flatMap (fun state => (List.replicate (padCount state)
+        (run.paddingRow state)).flatMap (rowInteractions state · run.data0)), [])
+  | [], _ => rfl
+  | state :: states, hok => by
+      simp only [padStates, run.padState_eq hview (hok state (List.mem_cons_self ..)),
+        padStates_eq hview states fun state hstate => hok state (List.mem_cons_of_mem _ hstate),
+        List.map_cons, List.flatMap_cons]
+
+lemma padTables_eq {states : List (ComponentState (F p))} (hview : run.ViewOk states)
+    (hok : ∀ state ∈ states, run.StateOk state) :
+    padTables run.data0 run.hint states = (states.map run.padOne,
+      ⟨[], states.flatMap (fun state => (List.replicate (padCount state)
+        (run.paddingRow state)).flatMap (rowInteractions state · run.data0))⟩) := by
+  simp only [padTables, run.padStates_eq hview states hok]
+  simp [define, Change.append]
+
+lemma tablesArePadded_padOne (states : List (ComponentState (F p))) :
+    tablesArePadded (states.map run.padOne) = true := by
+  simp only [tablesArePadded, List.all_map, List.all_eq_true, Function.comp_apply, beq_iff_eq]
+  intro state _
+  simp only [padOne, padCount, List.length_append, List.length_replicate]
+  have := (le_targetHeight state.rowPlan.padding state.rows.length).1
+  rw [Nat.add_sub_cancel' this, targetHeight_targetHeight]
+
 namespace Inv
 
 variable {run} {k : ℕ} {padded : Bool} {balancing : Balancing (F p)}
