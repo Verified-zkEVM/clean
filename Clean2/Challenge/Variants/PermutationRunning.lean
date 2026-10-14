@@ -165,13 +165,8 @@ theorem encard_bad_le (n : ℕ) (v : Vector B.Native (n + n)) : {x | Bad n v x}.
 
 /-- The rare event. Its bound is `n`, the degree of `poly a b`: tighter than the `2n` of the
 generic quotient identity. -/
-noncomputable def event (n : ℕ) (a b : Vector B.Var n) (α : B.Var) : RareEvent B where
-  m := n + n
-  committed := a ++ b
-  challenge := α
-  Bad := Bad n
-  bound := n
-  encard_bad_le := encard_bad_le n
+noncomputable def event (n : ℕ) (a b : Vector B.Var n) (α : B.Var) : RareEvent B :=
+  .ofNative (a ++ b) α (Bad n) n (encard_bad_le n)
 
 /-- The running product, with its own rare event. Implements the same interface as the generic
 quotient identity (`PermutationQuotient.interface`): same spec, different circuit and bound. -/

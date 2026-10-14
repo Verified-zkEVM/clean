@@ -18,8 +18,9 @@ variable {B : Backend}
 
 /--
 An event that happens at few values of a verifier challenge: a predicate `Bad` on the values of
-some *committed* variables and of a *challenge* variable, which holds at no more than `bound`
-values of the challenge, whatever the committed values are.
+some *committed* variables and of the *challenge* variables, which holds at no more than `bound`
+values of the challenge, whatever the committed values are. A challenge in the native field is
+one variable; a challenge in an extension field of degree `k` is `k` of them.
 
 A circuit can *assume* that a rare event does not happen (`Circuit.assumeRare`). The verifier does
 not check it: it is not a constraint, and it does not occur in the real semantics
@@ -28,21 +29,52 @@ every challenge outside the bad ones; `Impl.soundness_error` (in `Clean2/Challen
 Circuits that use no challenge emit no rare events, and nothing about them changes.
 -/
 structure RareEvent (B : Backend) where
-  {m : ℕ}
+  {m k : ℕ}
   /-- the variables the event depends on, which must be fixed before the challenge is sampled -/
   committed : Vector B.Var m
   /-- the challenge -/
-  challenge : B.Var
+  challenge : Vector B.Var k
   /-- the event, on the values of the committed variables and of the challenge -/
-  Bad : Vector B.Native m → B.Native → Prop
+  Bad : Vector B.Native m → Vector B.Native k → Prop
   /-- the number of challenges at which it happens -/
   bound : ℕ
   encard_bad_le : ∀ v, {α | Bad v α}.encard ≤ bound
 
 /-- The event happens under an assignment of the cells. -/
-@[circuit_norm]
 def RareEvent.Happens (ev : RareEvent B) (env : B.Cell → B.Native) : Prop :=
-  ev.Bad (ev.committed.map (B.eval env)) (B.eval env ev.challenge)
+  ev.Bad (ev.committed.map (B.eval env)) (ev.challenge.map (B.eval env))
+
+/-- A rare event with a challenge in the native field. -/
+def RareEvent.ofNative {m : ℕ} (committed : Vector B.Var m) (α : B.Var)
+    (Bad : Vector B.Native m → B.Native → Prop) (bound : ℕ)
+    (encard_bad_le : ∀ v, {a | Bad v a}.encard ≤ bound) : RareEvent B where
+  committed := committed
+  challenge := #v[α]
+  Bad v a := Bad v a[0]
+  bound := bound
+  encard_bad_le v := by
+    have h : {a : Vector B.Native 1 | Bad v a[0]} = (fun x => #v[x]) '' {x | Bad v x} := by
+      ext a
+      refine ⟨fun ha => ⟨a[0], ha, ?_⟩, ?_⟩
+      · ext i hi
+        obtain rfl : i = 0 := by omega
+        rfl
+      · rintro ⟨x, hx, rfl⟩
+        exact hx
+    rw [h]
+    exact (Set.encard_image_le _ _).trans (encard_bad_le v)
+
+@[circuit_norm]
+theorem RareEvent.ofNative_bound {m : ℕ} (committed : Vector B.Var m) (α : B.Var)
+    (Bad : Vector B.Native m → B.Native → Prop) (bound : ℕ) (h) :
+    (RareEvent.ofNative committed α Bad bound h).bound = bound := rfl
+
+@[circuit_norm]
+theorem RareEvent.ofNative_happens {m : ℕ} (committed : Vector B.Var m) (α : B.Var)
+    (Bad : Vector B.Native m → B.Native → Prop) (bound : ℕ) (h) (env : B.Cell → B.Native) :
+    (RareEvent.ofNative committed α Bad bound h).Happens env ↔
+      Bad (committed.map (B.eval env)) (B.eval env α) := by
+  simp [RareEvent.Happens, RareEvent.ofNative]
 
 /--
 A called implementation, as recorded in the parent's operations. It carries the flattened native

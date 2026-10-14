@@ -34,6 +34,14 @@ def interface (k d : ℕ) (R : Vector F k → RatFunc F) : Interface F where
   Spec := fun ((c, _), _) _ => R c = 0
   ProverAssumptions := fun ((c, x), α) => (x ≙[α] R c) ∧ R c = 0
 
+/-- The committed values `c`, and the challenge. -/
+@[reducible]
+def phases (k d : ℕ) (R : Vector F k → RatFunc F) : (interface k d R).Phases where
+  Committed := Vector F k
+  committed := fun ((c, _), _) => c
+  Challenge := F
+  challenge := fun (_, α) => α
+
 /-- The bad challenges: `R c` is not zero, but its numerator, of degree at most `d`, vanishes. -/
 def Bad (d : ℕ) {k : ℕ} (R : Vector F k → RatFunc F) (c : Vector F k) (a : F) : Prop :=
   R c ≠ 0 ∧ (RatFunc.num (R c)).eval a = 0 ∧ (RatFunc.num (R c)).natDegree ≤ d
@@ -49,12 +57,8 @@ variable {B : Backend} [Field B.Native]
 
 /-- The rare event of a boundary. It depends on the committed values and the challenge only. -/
 def event (d : ℕ) {k : ℕ} (R : Vector B.Native k → RatFunc B.Native) (c : Vector B.Var k) (α : B.Var) :
-    RareEvent B where
-  committed := c
-  challenge := α
-  Bad := Bad d R
-  bound := d
-  encard_bad_le := encard_bad_le d R
+    RareEvent B :=
+  .ofNative c α (Bad d R) d (encard_bad_le d R)
 
 variable (arith : ∀ n, Impl B (Arith.interface n))
 
@@ -81,6 +85,10 @@ def impl {k : ℕ} (d : ℕ) (R : Vector B.Native k → RatFunc B.Native) : Impl
     simp only [circuit_norm, event] at h_prover ⊢
     obtain ⟨h_rep, h_R⟩ := h_prover
     exact ⟨(h_R ▸ h_rep).eq_zero, fun h_bad => h_bad.1 h_R⟩
+
+instance {k : ℕ} (d : ℕ) (R : Vector B.Native k → RatFunc B.Native) [∀ n, Impl.NoEvents (arith n)] :
+    Impl.Phased (impl arith d R) (phases k d R) := by
+  phased [impl, event]
 
 end AssertIdentity
 end Clean2

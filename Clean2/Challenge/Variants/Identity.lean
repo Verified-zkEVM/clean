@@ -40,12 +40,8 @@ def interface {k : ℕ} (e : RExpr Native k) : Interface Native where
 variable {B : Backend} [Field B.Native]
 
 /-- The rare event of checking `e` at the challenge `α`. -/
-def event {k : ℕ} (e : RExpr B.Native k) (x : Vector B.Var k) (α : B.Var) : RareEvent B where
-  committed := x
-  challenge := α
-  Bad := fun v a => e.Bad (fun i => v[i]) a
-  bound := e.bound
-  encard_bad_le := fun v => e.encard_bad_le _
+def event {k : ℕ} (e : RExpr B.Native k) (x : Vector B.Var k) (α : B.Var) : RareEvent B :=
+  .ofNative x α (fun v a => e.Bad (fun i => v[i]) a) e.bound fun v => e.encard_bad_le _
 
 variable (arith : ∀ n, Impl B (Arith.interface n))
 

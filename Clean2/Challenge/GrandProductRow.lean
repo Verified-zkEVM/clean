@@ -28,15 +28,19 @@ def interface : Interface F where
   outputCType := .native
   Spec := fun (((v, a), acc), α) out => α ≠ v ∧ out = acc * ((α - a) / (α - v))
 
+/-- `v` is committed. -/
+@[reducible]
+def phases : (interface (F := F)).Phases where
+  Committed := F
+  committed := fun (((v, _), _), _) => v
+  Challenge := F
+  challenge := fun (_, α) => α
+
 variable {B : Backend} [Field B.Native]
 
 /-- The honest prover divides by `α - v`: it is stuck if the challenge hits `v`. -/
-def event (v α : B.Var) : RareEvent B where
-  committed := #v[v]
-  challenge := α
-  Bad := fun c a => a = c[0]
-  bound := 1
-  encard_bad_le := fun c => by simp
+def event (v α : B.Var) : RareEvent B :=
+  .ofNative #v[v] α (fun c a => a = c[0]) 1 fun c => by simp
 
 variable (arith : ∀ n, Impl B (Arith.interface n)) (inverse : Impl B Inverse.interface)
 
@@ -67,6 +71,9 @@ def impl : Impl B interface where
     rw [h_δ, sub_ne_zero]
     simpa using h_ev
 
+instance [∀ n, Impl.NoEvents (arith n)] [Impl.NoEvents inverse] : Impl.Phased (impl arith inverse) phases := by
+  phased [impl, event]
+
 end ProductRow
 
 namespace ProductLoop
@@ -80,6 +87,14 @@ def interface (n : ℕ) : Interface F where
   output := F
   outputCType := .native
   Spec := fun ((v, a), α) out => (∀ i : Fin n, α ≠ v[i]) ∧ out = ∏ i : Fin n, (α - a[i]) / (α - v[i])
+
+/-- The denominators `v` are committed. -/
+@[reducible]
+def phases (n : ℕ) : (interface (F := F) n).Phases where
+  Committed := Vector F n
+  committed := fun ((v, _), _) => v
+  Challenge := F
+  challenge := fun (_, α) => α
 
 variable {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface n))
   (row : Impl B ProductRow.interface)
@@ -203,6 +218,10 @@ def impl (n : ℕ) : Impl B (interface n) where
     simp only [circuit_norm] at h ⊢
     exact loop_complete row α n _ _ _ _ env
 
+instance (n : ℕ) [∀ n, Impl.NoEvents (arith n)] [Impl.Phased row ProductRow.phases] :
+    Impl.Phased (impl arith row n) (phases n) := by
+  phased [impl]
+
 end ProductLoop
 
 
@@ -219,6 +238,14 @@ def interface (n : ℕ) : Interface F where
   outputCType := .unit
   Spec := fun ((a, b), _) _ => elems a = elems b
   ProverAssumptions := fun ((a, b), _) => elems a = elems b
+
+/-- Both sides are committed. -/
+@[reducible]
+def phases (n : ℕ) : (interface (F := F) n).Phases where
+  Committed := Vector F n × Vector F n
+  committed := fun (ab, _) => ab
+  Challenge := F
+  challenge := fun (_, α) => α
 
 /-- What the final product, minus one, stands for, in the committed values `b ++ a`. -/
 noncomputable def R (n : ℕ) (c : Vector F (n + n)) : RatFunc F :=
@@ -275,6 +302,10 @@ noncomputable def impl : Impl B (interface n) where
     obtain ⟨⟨h_ne, h_p⟩, h_one, h_x, -⟩ := h
     rw [Vector.map_append, h_x, h_one]
     exact ⟨represents_prod h_ne h_p, (R_eq_zero_iff _ _).mpr h_prover⟩
+
+instance [∀ n, Impl.NoEvents (arith n)] [Impl.Phased prod (ProductLoop.phases n)]
+    [Impl.Phased boundary (AssertIdentity.phases _ _ _)] : Impl.Phased (impl arith prod boundary) (phases n) := by
+  phased [impl]
 
 end PermutationRow
 end Clean2

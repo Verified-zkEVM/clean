@@ -23,6 +23,10 @@ public import Clean2.Gadgets.Inverse
 namespace Clean2
 open Polynomial
 
+instance {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface n)) [∀ n, Impl.NoEvents (arith n)] :
+    Impl.NoEvents (Inverse.impl arith) := by
+  no_events [Inverse.impl]
+
 namespace LogUpRow
 variable {F : Type} [Field F]
 
@@ -35,15 +39,19 @@ def interface : Interface F where
   outputCType := .native
   Spec := fun (((v, m), acc), α) out => α ≠ v ∧ out = acc + m / (α - v)
 
+/-- `v` is committed; `m` and `acc` need not be. -/
+@[reducible]
+def phases : (interface (F := F)).Phases where
+  Committed := F
+  committed := fun (((v, _), _), _) => v
+  Challenge := F
+  challenge := fun (_, α) => α
+
 variable {B : Backend} [Field B.Native]
 
 /-- The honest prover divides by `α - v`: it is stuck if the challenge hits `v`. -/
-def event (v α : B.Var) : RareEvent B where
-  committed := #v[v]
-  challenge := α
-  Bad := fun c a => a = c[0]
-  bound := 1
-  encard_bad_le := fun c => by simp
+def event (v α : B.Var) : RareEvent B :=
+  .ofNative #v[v] α (fun c a => a = c[0]) 1 fun c => by simp
 
 variable (arith : ∀ n, Impl B (Arith.interface n)) (inverse : Impl B Inverse.interface)
 
@@ -73,6 +81,9 @@ def impl : Impl B interface where
     rw [h_δ, sub_ne_zero]
     simpa using h_ev
 
+instance [∀ n, Impl.NoEvents (arith n)] [Impl.NoEvents inverse] : Impl.Phased (impl arith inverse) phases := by
+  phased [impl, event]
+
 end LogUpRow
 
 namespace LogUpSum
@@ -86,6 +97,14 @@ def interface (n : ℕ) : Interface F where
   output := F
   outputCType := .native
   Spec := fun ((v, m), α) out => (∀ i : Fin n, α ≠ v[i]) ∧ out = ∑ i : Fin n, m[i] / (α - v[i])
+
+/-- The values `v` are committed; the multiplicities need not be. -/
+@[reducible]
+def phases (n : ℕ) : (interface (F := F) n).Phases where
+  Committed := Vector F n
+  committed := fun ((v, _), _) => v
+  Challenge := F
+  challenge := fun (_, α) => α
 
 variable {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface n))
   (row : Impl B LogUpRow.interface)
@@ -209,6 +228,10 @@ def impl (n : ℕ) : Impl B (interface n) where
     simp only [circuit_norm] at h ⊢
     exact loop_complete row α n _ _ _ _ env
 
+instance (n : ℕ) [∀ n, Impl.NoEvents (arith n)] [Impl.Phased row LogUpRow.phases] :
+    Impl.Phased (impl arith row n) (phases n) := by
+  phased [impl]
+
 end LogUpSum
 
 namespace Balance
@@ -224,6 +247,14 @@ def interface (n : ℕ) : Interface F where
   outputCType := .unit
   Spec := fun ((v, m), _) _ => ∀ y, ∑ i ∈ Finset.univ.filter (fun i : Fin n => v[i] = y), m[i] = 0
   ProverAssumptions := fun ((v, m), _) => ∀ y, ∑ i ∈ Finset.univ.filter (fun i : Fin n => v[i] = y), m[i] = 0
+
+/-- The values and their multiplicities are committed. -/
+@[reducible]
+def phases (n : ℕ) : (interface (F := F) n).Phases where
+  Committed := Vector F n × Vector F n
+  committed := fun (vm, _) => vm
+  Challenge := F
+  challenge := fun (_, α) => α
 
 /-- What the final sum stands for, in the committed values `v ++ m`: `∑ m i / (X - v i)`. -/
 noncomputable def R (n : ℕ) (c : Vector F (n + n)) : RatFunc F :=
@@ -280,6 +311,10 @@ noncomputable def impl : Impl B (interface n) where
     exact (balance_iff (fun i : Fin n => (Vector.map (B.eval env) v)[i])
       (fun i : Fin n => (Vector.map (B.eval env) m)[i])).mpr h_prover
 
+instance [Impl.Phased sum (LogUpSum.phases n)] [Impl.Phased boundary (AssertIdentity.phases _ _ _)] :
+    Impl.Phased (impl sum boundary) (phases n) := by
+  phased [impl]
+
 end Balance
 
 namespace Lookup
@@ -297,6 +332,14 @@ def interface (n l : ℕ) : Interface F where
     ((Finset.univ.filter fun j : Fin l => f[j] = y).card : F) = ∑ i ∈ Finset.univ.filter (fun i : Fin n => t[i] = y), μ[i]
   ProverAssumptions := fun (((t, μ), f), _) => ∀ y,
     ((Finset.univ.filter fun j : Fin l => f[j] = y).card : F) = ∑ i ∈ Finset.univ.filter (fun i : Fin n => t[i] = y), μ[i]
+
+/-- The table, its multiplicities, and the looked-up values are committed. -/
+@[reducible]
+def phases (n l : ℕ) : (interface (F := F) n l).Phases where
+  Committed := (Vector F n × Vector F n) × Vector F l
+  committed := fun (tμf, _) => tμf
+  Challenge := F
+  challenge := fun (_, α) => α
 
 /-- What the final sum stands for, in the committed values `t ++ (μ ++ f)`. -/
 noncomputable def R (n l : ℕ) (c : Vector F (n + (n + l))) : RatFunc F :=
@@ -373,6 +416,10 @@ noncomputable def impl : Impl B (interface n l) where
     rw [R_append, sub_eq_zero]
     exact (logUp_iff (fun i : Fin n => (Vector.map (B.eval env) t)[i]) (fun i : Fin n => (Vector.map (B.eval env) μ)[i])
       (fun j : Fin l => (Vector.map (B.eval env) f)[j])).mpr h_prover
+
+instance [∀ n, Impl.NoEvents (arith n)] [Impl.Phased sumT (LogUpSum.phases n)] [Impl.Phased sumF (LogUpSum.phases l)]
+    [Impl.Phased boundary (AssertIdentity.phases _ _ _)] : Impl.Phased (impl arith sumT sumF boundary) (phases n l) := by
+  phased [impl]
 
 end Lookup
 end Clean2

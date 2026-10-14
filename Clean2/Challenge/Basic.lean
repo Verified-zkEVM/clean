@@ -31,7 +31,7 @@ after the challenge, which over-approximates the real protocol.
 -/
 module
 
-public import Clean2.Core
+public import Clean2.Challenge.Phase
 public import Lean.Elab.Tactic
 meta import Clean2.Core.Spatial
 public import Mathlib.Algebra.Polynomial.Roots
@@ -142,87 +142,96 @@ theorem Backend.footprintT_append_subset {n m : ℕ} {a : Vector B.Var n} {b : V
 namespace Impl
 variable {c : Interface B.Native}
 
-/-- **Soundness error.** Fix the values `env₁` of a set `C` of committed cells, which contains
-everything the rare events of the circuit depend on, but not the challenge `α`. If the input
-satisfies the assumptions at every assignment agreeing with `env₁` on `C` (typically: the
-assumptions are about committed values), then the challenges at which some such assignment
-satisfies the real constraints but not the spec are at most `errorBound` many. -/
-theorem soundness_error (impl : Impl B c) (s : B.State) (input : c.Input B.Var)
-    (C : Set B.Cell) (α : B.Var) (env₁ : B.Cell → B.Native)
-    (h_events : ∀ ev ∈ ((impl.main input).operations s).events,
-      (∀ i : Fin ev.m, B.footprint ev.committed[i] ⊆ C) ∧ ev.challenge = α)
-    (h_assumptions : ∀ env : B.Cell → B.Native, (∀ x ∈ C, env x = env₁ x) →
-      c.inputCType.Valid (B.evalT env input) ∧ c.Assumptions (c.inputCType.decode (B.evalT env input))) :
-    {a | ∃ env : B.Cell → B.Native, (∀ x ∈ C, env x = env₁ x) ∧ B.eval env α = a ∧
-      ((impl.main input).operations s).ConstraintsHold env s ∧
-      ¬(c.outputCType.Valid (B.evalT env (impl.output input s)) ∧
-        c.Spec (c.inputCType.decode (B.evalT env input))
-          (c.outputCType.decode (B.evalT env (impl.output input s))))}.encard ≤
-      errorBound.ofOps ((impl.main input).operations s) := by
+/-- The rare events, each with the challenges at which it happens for the committed value `x`:
+together, a superset of the bad challenges, of size at most the sum of the bounds. -/
+theorem encard_bad_le {κ T : Type} {K : (B.Cell → B.Native) → κ} {A : (B.Cell → B.Native) → T}
+    (evs : List (RareEvent B)) (h : ∀ ev ∈ evs, ev.Phased K A) (x : κ) (S : Set T)
+    (hS : ∀ a ∈ S, ∃ ev ∈ evs, ∃ env, K env = x ∧ A env = a ∧ ev.Happens env) :
+    S.encard ≤ ((evs.map RareEvent.bound).sum : ℕ) :=
+  (Set.encard_le_encard fun a ha => hS a ha).trans
+    (encard_iUnion_list_le evs (fun ev => {a | ∃ env, K env = x ∧ A env = a ∧ ev.Happens env})
+      RareEvent.bound fun ev hev => (h ev hev).encard_le x)
+
+/-- The bad challenges for soundness, with the committed part `x` of the input fixed: those at which
+some assignment, with that committed part and satisfying the assumptions, satisfies the real
+constraints but not the spec. -/
+def BadChallenges {ph : c.Phases} (impl : Impl B c) (_ : Phased impl ph) (s : B.State) (input : c.Input B.Var)
+    (x : ph.Committed) : Set ph.Challenge :=
+  {a | ∃ env : B.Cell → B.Native, ph.key input env = x ∧ ph.chal input env = a ∧
+    c.inputCType.Valid (B.evalT env input) ∧ c.Assumptions (c.inputCType.decode (B.evalT env input)) ∧
+    ((impl.main input).operations s).ConstraintsHold env s ∧
+    ¬(c.outputCType.Valid (B.evalT env (impl.output input s)) ∧
+      c.Spec (c.inputCType.decode (B.evalT env input))
+        (c.outputCType.decode (B.evalT env (impl.output input s))))}
+
+/-- The bad challenges for completeness, with the committed part `x` of the input fixed: those at
+which the honest prover can fail, starting from some assignment of the heap with that committed
+part and satisfying the prover assumptions. -/
+def HonestFailures {ph : c.Phases} (impl : Impl B c) (_ : Phased impl ph) (s : B.State) (input : c.Input B.Var)
+    (x : ph.Committed) : Set ph.Challenge :=
+  {a | ∃ env₀ : B.Cell → B.Native, ph.key input env₀ = x ∧ ph.chal input env₀ = a ∧
+    c.inputCType.Valid (B.evalT env₀ input) ∧ c.ProverAssumptions (c.inputCType.decode (B.evalT env₀ input)) ∧
+    ¬∃ env : B.Cell → B.Native, (∀ x ∈ B.Alloc s, env x = env₀ x) ∧
+      ((impl.main input).operations s).ConstraintsHold env s}
+
+/-- **Soundness error.** Fix the committed part `x` of the input. The challenges at which some
+assignment, with that committed part and satisfying the assumptions, satisfies the real
+constraints but not the spec are at most `errorBound` many.
+
+The committed part and the challenge are those of the interface's phase annotation `ph`, and the
+phase contract (`Impl.Phased`) is what makes the rare events depend on nothing else. -/
+theorem soundness_error {ph : c.Phases} (impl : Impl B c) [h_phased : Phased impl ph]
+    (s : B.State) (input : c.Input B.Var) (x : ph.Committed) :
+    (impl.BadChallenges h_phased s input x).encard ≤ errorBound.ofOps ((impl.main input).operations s) := by
   rw [errorBound_ofOps]
-  refine (Set.encard_le_encard fun a ha => ?_).trans
-    (encard_iUnion_list_le ((impl.main input).operations s).events
-      (fun ev => {a | ev.Bad (ev.committed.map (B.eval env₁)) a})
-      RareEvent.bound fun ev _ => ev.encard_bad_le _)
-  obtain ⟨env, h_agree, rfl, h_holds, h_spec⟩ := ha
+  refine encard_bad_le _ (fun ev hev => h_phased.phased input s ev (List.mem_append_left _ hev)) x _ ?_
+  rintro a ⟨env, h_K, rfl, h_valid, h_assumptions, h_holds, h_spec⟩
   -- some rare event happens: otherwise soundness would give the spec
   by_contra h_none
-  apply h_spec
-  refine impl.soundness s env input (h_assumptions env h_agree)
-    (Ops.soundnessHold_of_constraintsHold (impl.consistent input s) (fun ev hev h_happens => ?_) h_holds)
-  apply h_none
-  refine ⟨ev, hev, ?_⟩
-  -- and it depends only on the committed values, and the challenge
-  obtain ⟨h_committed, h_challenge⟩ := h_events ev hev
-  have h_map : ev.committed.map (B.eval env) = ev.committed.map (B.eval env₁) := by
-    ext i hi
-    simp only [Vector.getElem_map]
-    exact B.eval_frame env env₁ _ fun x hx => h_agree x (h_committed ⟨i, hi⟩ hx)
-  simp only [RareEvent.Happens, h_map, h_challenge] at h_happens
-  exact h_happens
+  push Not at h_none
+  exact h_spec (impl.soundness s env input ⟨h_valid, h_assumptions⟩
+    (Ops.soundnessHold_of_constraintsHold (impl.consistent input s)
+      (fun ev hev h_happens => h_none ev hev env h_K rfl h_happens) h_holds))
 
-/-- **Completeness error.** Fix the values `env₁` of a set `C` of committed cells, which contains
-everything the honest prover's rare events depend on, but not the challenge `α`. If the input,
-`C` and `α` exist in the heap and the input satisfies the prover assumptions at every assignment
-agreeing with `env₁` on `C`, then the challenges at which the honest prover can fail, starting
-from some such assignment, are at most `honestErrorBound` many. -/
-theorem completeness_error (impl : Impl B c) (s : B.State) (input : c.Input B.Var)
-    (C : Set B.Cell) (α : B.Var) (env₁ : B.Cell → B.Native)
-    (h_in : B.footprintT input ⊆ B.Alloc s) (h_C : C ⊆ B.Alloc s) (h_α : B.footprint α ⊆ B.Alloc s)
-    (h_events : ∀ ev ∈ ((impl.main input).operations s).honestEvents,
-      (∀ i : Fin ev.m, B.footprint ev.committed[i] ⊆ C) ∧ ev.challenge = α)
-    (h_prover : ∀ env : B.Cell → B.Native, (∀ x ∈ C, env x = env₁ x) →
-      c.inputCType.Valid (B.evalT env input) ∧ c.ProverAssumptions (c.inputCType.decode (B.evalT env input))) :
-    {a | ∃ env₀ : B.Cell → B.Native, (∀ x ∈ C, env₀ x = env₁ x) ∧ B.eval env₀ α = a ∧
-      ¬∃ env : B.Cell → B.Native, (∀ x ∈ B.Alloc s, env x = env₀ x) ∧
-        ((impl.main input).operations s).ConstraintsHold env s}.encard ≤
-      honestErrorBound.ofOps ((impl.main input).operations s) := by
+/-- **Completeness error.** Fix the committed part `x` of the input, which exists in the heap.
+The challenges at which the honest prover can fail, starting from some assignment of the heap
+with that committed part and satisfying the prover assumptions, are at most `honestErrorBound`
+many. -/
+theorem completeness_error {ph : c.Phases} (impl : Impl B c) [h_phased : Phased impl ph]
+    (s : B.State) (input : c.Input B.Var) (h_in : B.footprintT input ⊆ B.Alloc s) (x : ph.Committed) :
+    (impl.HonestFailures h_phased s input x).encard ≤ honestErrorBound.ofOps ((impl.main input).operations s) := by
   rw [honestErrorBound_ofOps]
-  refine (Set.encard_le_encard fun a ha => ?_).trans
-    (encard_iUnion_list_le ((impl.main input).operations s).honestEvents
-      (fun ev => {a | ev.Bad (ev.committed.map (B.eval env₁)) a})
-      RareEvent.bound fun ev _ => ev.encard_bad_le _)
-  obtain ⟨env₀, h_agree₀, rfl, h_fail⟩ := ha
+  refine encard_bad_le _ (fun ev hev => h_phased.phased input s ev (List.mem_append_right _ hev)) x _ ?_
+  rintro a ⟨env₀, h_K, rfl, h_valid, h_prover, h_fail⟩
   -- if no rare event of the honest prover happens, an honest assignment is accepted
   by_contra h_none
+  push Not at h_none
+  refine h_fail ?_
   have h_hev : ∀ env : B.Cell → B.Native, (∀ x ∈ B.Alloc s, env x = env₀ x) →
       ∀ ev ∈ ((impl.main input).operations s).honestEvents, ¬ev.Happens env := by
     intro env h_agree ev hev h_happens
-    apply h_none
-    refine ⟨ev, hev, ?_⟩
-    obtain ⟨h_committed, h_challenge⟩ := h_events ev hev
-    have h_map : ev.committed.map (B.eval env) = ev.committed.map (B.eval env₁) := by
-      ext i hi
-      simp only [Vector.getElem_map]
-      exact B.eval_frame env env₁ _ fun x hx =>
-        (h_agree x (h_C (h_committed ⟨i, hi⟩ hx))).trans (h_agree₀ x (h_committed ⟨i, hi⟩ hx))
-    have h_α_eq : B.eval env α = B.eval env₀ α :=
-      B.eval_frame env env₀ α fun x hx => h_agree x (h_α hx)
-    simp only [RareEvent.Happens, h_map, h_challenge, h_α_eq] at h_happens
-    exact h_happens
-  obtain ⟨env, h_agree, h_holds, -⟩ := impl.exists_honest_env input s env₀ h_in
-    (h_prover env₀ h_agree₀) h_hev
-  exact h_fail ⟨env, h_agree, h_holds⟩
+    -- the input, hence its committed part and its challenge, is in the heap
+    have h_eq : B.evalT env input = B.evalT env₀ input :=
+      Backend.evalT_frame env env₀ input fun x hx => h_agree x (h_in hx)
+    exact h_none ev hev env (by rw [Interface.Phases.key, h_eq]; exact h_K)
+      (by rw [Interface.Phases.chal, h_eq]) h_happens
+  obtain ⟨env, h_agree, h_holds, -⟩ := impl.exists_honest_env input s env₀ h_in ⟨h_valid, h_prover⟩ h_hev
+  exact ⟨env, h_agree, h_holds⟩
+
+/-- The soundness error, read off the closed form of `errorBound`. -/
+theorem soundness_error_of {ph : c.Phases} (impl : Impl B c) [h_phased : Phased impl ph] [Measured errorBound impl]
+    (s : B.State) (input : c.Input B.Var) (x : ph.Committed) :
+    (impl.BadChallenges h_phased s input x).encard ≤ errorBound.of impl := by
+  rw [Backend.Measure.of, ← Measured.value_eq input s]
+  exact impl.soundness_error s input x
+
+/-- The completeness error, read off the closed form of `honestErrorBound`. -/
+theorem completeness_error_of {ph : c.Phases} (impl : Impl B c) [h_phased : Phased impl ph]
+    [Measured honestErrorBound impl] (s : B.State) (input : c.Input B.Var) (h_in : B.footprintT input ⊆ B.Alloc s)
+    (x : ph.Committed) :
+    (impl.HonestFailures h_phased s input x).encard ≤ honestErrorBound.of impl := by
+  rw [Backend.Measure.of, ← Measured.value_eq input s]
+  exact impl.completeness_error s input h_in x
 
 end Impl
 
