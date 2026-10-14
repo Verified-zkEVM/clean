@@ -102,6 +102,65 @@ theorem balance_iff {n : ℕ} (v m : Fin n → F) :
     refine Finset.sum_eq_zero fun y _ => ?_
     rw [h y, map_zero, zero_div]
 
+/-! ### Native values, poles in the challenge field
+
+Committed values are native, the identity lives in the challenge field `K`: the statements pull
+back along the (injective) embedding. -/
+
+section Map
+variable {K : Type} [Field K] [Algebra F K] [DecidableEq K]
+
+theorem sum_filter_map_eq {n : ℕ} (v : Fin n → F) (w : Fin n → K) (y : F) :
+    ∑ i ∈ Finset.univ.filter (fun i => algebraMap F K (v i) = algebraMap F K y), w i = ∑ i ∈ Finset.univ.filter (fun i => v i = y), w i := by
+  congr 1
+  ext i
+  simp [(algebraMap F K).injective.eq_iff]
+
+omit [DecidableEq F] in
+theorem filter_map_eq_empty {n : ℕ} (v : Fin n → F) (y : K) (hy : ∀ y' : F, algebraMap F K y' ≠ y) :
+    Finset.univ.filter (fun i => algebraMap F K (v i) = y) = ∅ :=
+  Finset.filter_eq_empty_iff.mpr fun _ _ hi => hy _ hi
+
+/-- **Bus balance**, with poles in `K`. -/
+theorem balance_iff_map {n : ℕ} (v m : Fin n → F) :
+    ∑ i, RatFunc.C (algebraMap F K (m i)) / (RatFunc.X - RatFunc.C (algebraMap F K (v i))) = 0 ↔
+      ∀ y, ∑ i ∈ Finset.univ.filter (fun i => v i = y), m i = 0 := by
+  rw [balance_iff]
+  constructor
+  · intro h y
+    have h := h (algebraMap F K y)
+    rw [sum_filter_map_eq, ← map_sum] at h
+    exact (algebraMap F K).injective (h.trans (map_zero _).symm)
+  · intro h y
+    by_cases hy : ∃ y' : F, algebraMap F K y' = y
+    · obtain ⟨y', rfl⟩ := hy
+      rw [sum_filter_map_eq, ← map_sum, h y', map_zero]
+    · push Not at hy
+      rw [filter_map_eq_empty v y hy, Finset.sum_empty]
+
+/-- **logUp**, with poles in `K`. -/
+theorem logUp_iff_map {n l : ℕ} (t m : Fin n → F) (f : Fin l → F) :
+    ∑ i, RatFunc.C (algebraMap F K (m i)) / (RatFunc.X - RatFunc.C (algebraMap F K (t i))) = ∑ j, (RatFunc.X - RatFunc.C (algebraMap F K (f j)))⁻¹ ↔
+      ∀ y, ((Finset.univ.filter fun j => f j = y).card : F) =
+        ∑ i ∈ Finset.univ.filter (fun i => t i = y), m i := by
+  rw [logUp_iff]
+  have h_card : ∀ y : F, (Finset.univ.filter fun j => algebraMap F K (f j) = algebraMap F K y) = Finset.univ.filter fun j => f j = y := by
+    intro y; ext j; simp [(algebraMap F K).injective.eq_iff]
+  constructor
+  · intro h y
+    have h := h (algebraMap F K y)
+    rw [h_card, sum_filter_map_eq, ← map_sum, ← map_natCast (algebraMap F K)] at h
+    exact (algebraMap F K).injective h
+  · intro h y
+    by_cases hy : ∃ y' : F, algebraMap F K y' = y
+    · obtain ⟨y', rfl⟩ := hy
+      rw [h_card, sum_filter_map_eq, ← map_sum, ← map_natCast (algebraMap F K), h y']
+    · push Not at hy
+      rw [filter_map_eq_empty t y hy, filter_map_eq_empty f y hy]
+      simp
+
+end Map
+
 end Fractions
 
 /-! ## Multisets as roots: the symbolic argument behind permutation checks -/
@@ -136,6 +195,18 @@ theorem elems_eq_of_prod_eq {n : ℕ} {a b : Vector Native n}
   rw [prod_X_sub_C_eq, prod_X_sub_C_eq] at h
   have h := congrArg roots (RatFunc.algebraMap_injective Native h)
   rwa [roots_multiset_prod_X_sub_C, roots_multiset_prod_X_sub_C] at h
+
+omit [Field Native] in
+/-- The entries of a mapped vector. -/
+theorem elems_map {T : Type} {n : ℕ} (f : Native → T) (v : Vector Native n) :
+    elems (v.map f) = (elems v).map f := by
+  simp [elems, Function.comp_def]
+
+omit [Field Native] in
+theorem elems_map_eq_iff {T : Type} {n : ℕ} {f : Native → T} (hf : Function.Injective f) (a b : Vector Native n) :
+    elems (a.map f) = elems (b.map f) ↔ elems a = elems b := by
+  rw [elems_map, elems_map]
+  exact (Multiset.map_injective hf).eq_iff
 
 end Permutation
 end Clean2

@@ -118,6 +118,73 @@ theorem RareEvent.ofNative_phased {κ T : Type} {K : (B.Cell → B.Native) → �
   have := congrArg (fun v : Vector B.Native 1 => v[0]) he
   simpa [RareEvent.ofNative] using this
 
+/-- A layout of challenge values: without an invariant, and representing each value at most
+once, so that counting layouts counts values. -/
+class CType.Faithful {F T : Type} (t : CType F T) : Prop where
+  valid : ∀ x, t.Valid x
+  injective : Function.Injective t.decode
+
+instance {F : Type} : (CType.native : CType F F).Faithful := ⟨fun _ => trivial, fun _ _ h => h⟩
+
+@[circuit_norm]
+theorem CType.Faithful.valid_eq {F T : Type} (t : CType F T) [h : t.Faithful] (x : t.Shape F) : t.Valid x = True :=
+  eq_true (h.valid x)
+
+/-! ## Rare events with a challenge in a field `K` -/
+
+/-- A rare event whose challenge is a value of `K`, laid out by a faithful `kty`: it happens when the
+layout of the challenge is that of a bad value. -/
+def RareEvent.ofType {K : Type} (kty : CType B.Native K) [kty.Faithful] {m : ℕ} (committed : Vector B.Var m)
+    (α : kty.Shape B.Var) (Bad : Vector B.Native m → K → Prop) (bound : ℕ)
+    (encard_bad_le : ∀ v, {a | Bad v a}.encard ≤ bound) : RareEvent B where
+  committed := committed
+  challenge := toElements α
+  Bad v a := ∃ y : kty.Shape B.Native, toElements y = a ∧ Bad v (kty.decode y)
+  bound := bound
+  encard_bad_le v := by
+    have h_to : Function.Injective (toElements : kty.Shape B.Native → _) := fun x y h => by
+      rw [← ProvableType.fromElements_toElements x, h, ProvableType.fromElements_toElements]
+    calc {a | ∃ y : kty.Shape B.Native, toElements y = a ∧ Bad v (kty.decode y)}.encard
+        = (toElements '' {y : kty.Shape B.Native | Bad v (kty.decode y)}).encard := by
+          congr 1; ext a; simp [and_comm]
+      _ = {y : kty.Shape B.Native | Bad v (kty.decode y)}.encard := h_to.encard_image _
+      _ = (kty.decode '' {y : kty.Shape B.Native | Bad v (kty.decode y)}).encard :=
+          (CType.Faithful.injective.encard_image _).symm
+      _ ≤ {k | Bad v k}.encard := Set.encard_le_encard (by rintro _ ⟨a, ha, rfl⟩; exact ha)
+      _ ≤ bound := encard_bad_le v
+
+@[circuit_norm]
+theorem RareEvent.ofType_bound {K : Type} (kty : CType B.Native K) [kty.Faithful] {m : ℕ}
+    (committed : Vector B.Var m) (α : kty.Shape B.Var) (Bad : Vector B.Native m → K → Prop) (bound : ℕ) (h) :
+    (RareEvent.ofType kty committed α Bad bound h).bound = bound := rfl
+
+@[circuit_norm]
+theorem RareEvent.ofType_happens {K : Type} (kty : CType B.Native K) [kty.Faithful] {m : ℕ}
+    (committed : Vector B.Var m) (α : kty.Shape B.Var) (Bad : Vector B.Native m → K → Prop) (bound : ℕ) (h)
+    (env : B.Cell → B.Native) :
+    (RareEvent.ofType kty committed α Bad bound h).Happens env ↔
+      Bad (committed.map (B.eval env)) (kty.decode (B.evalT env α)) := by
+  simp only [RareEvent.Happens, RareEvent.ofType]
+  constructor
+  · rintro ⟨y, hy, h⟩
+    have : y = B.evalT env α := by
+      rw [← ProvableType.fromElements_toElements y, hy, ← Backend.evalT_eq_fromElements]
+    rwa [← this]
+  · intro h
+    exact ⟨B.evalT env α, ProvableType.toElements_map _ _, h⟩
+
+/-- A rare event with a challenge in `K` is phased if its committed values are determined by the
+committed key, and the decoded challenge determines the challenge `A`. -/
+theorem RareEvent.ofType_phased {κ T K : Type} {A' : (B.Cell → B.Native) → T} {K' : (B.Cell → B.Native) → κ}
+    (kty : CType B.Native K) [kty.Faithful] {m : ℕ} (committed : Vector B.Var m) (α : kty.Shape B.Var)
+    (Bad : Vector B.Native m → K → Prop) (bound : ℕ) (h)
+    (hK : Determined K' (fun env => committed.map (B.eval env)))
+    (hA : Determined (fun env => kty.decode (B.evalT env α)) A') :
+    (RareEvent.ofType kty committed α Bad bound h).Phased K' A' := by
+  refine ⟨hK, fun e e' he => hA e e' ?_⟩
+  have he' : (toElements α).map (B.eval e) = (toElements α).map (B.eval e') := he
+  simp only [Backend.evalT_eq_fromElements, he']
+
 /-! ## Phased operations -/
 
 /-- Every rare event of the operations, for soundness or completeness, is phased. -/
@@ -343,7 +410,8 @@ partial def phasedSplit : TacticM Unit := do
     catch _ => saved.restore
     let saved ← saveState
     try
-      Term.withoutErrToSorry <| evalTactic (← `(tactic| first | apply Impl.phased_call | apply RareEvent.ofNative_phased))
+      Term.withoutErrToSorry <| evalTactic (← `(tactic| first
+        | apply Impl.phased_call | apply RareEvent.ofNative_phased | apply RareEvent.ofType_phased))
       phasedSplit
       rest := rest ++ (← getUnsolvedGoals)
       continue

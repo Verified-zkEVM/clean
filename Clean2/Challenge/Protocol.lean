@@ -28,30 +28,31 @@ public import Clean2.Challenge.Basic
 namespace Clean2
 
 namespace Challenge
-variable {F : Type}
+variable {F K : Type}
 
-/-- Commit to `m` values, receive a challenge. Nothing is promised about the challenge. -/
+/-- Commit to `m` values, receive a challenge in `K`, laid out by `kty`. Nothing is promised about
+the challenge. -/
 @[reducible]
-def interface (m : ℕ) : Interface F where
+def interface (m : ℕ) (kty : CType F K) : Interface F where
   input := Vector F m
   inputCType := .natives m
-  output := F
-  outputCType := .native
+  output := K
+  outputCType := kty
 
 variable {B : Backend}
 
 /-- A challenge that constrains nothing: every assignment, in particular every value of the
 challenge, satisfies its constraints. -/
-class Free {m : ℕ} (challenge : Impl B (interface m)) : Prop where
+class Free {m : ℕ} {kty : CType B.Native K} (challenge : Impl B (interface m kty)) : Prop where
   holds : ∀ input s env, ((challenge.main input).operations s).ConstraintsHold env s
 
 end Challenge
 
-/-- The contract `p`, for a check that is given a challenge on the side. -/
+/-- The contract `p`, for a check that is given a challenge in `K` on the side. -/
 @[reducible]
-def Interface.withChallenge {F : Type} (p : Interface F) : Interface F where
-  input := p.input × F
-  inputCType := p.inputCType ×ᵗ .native
+def Interface.withChallenge {F K : Type} (p : Interface F) (kty : CType F K) : Interface F where
+  input := p.input × K
+  inputCType := p.inputCType ×ᵗ kty
   output := p.output
   outputCType := p.outputCType
   Assumptions x := p.Assumptions x.1
@@ -61,15 +62,15 @@ def Interface.withChallenge {F : Type} (p : Interface F) : Interface F where
 
 /-- All of the input is committed. -/
 @[reducible]
-def Interface.withChallenge.phases {F : Type} (p : Interface F) : p.withChallenge.Phases where
+def Interface.withChallenge.phases {F K : Type} (p : Interface F) (kty : CType F K) : (p.withChallenge kty).Phases where
   Committed := p.input
   committed x := x.1
-  Challenge := F
+  Challenge := K
   challenge x := x.2
 
 namespace Protocol
-variable {B : Backend} {p : Interface B.Native}
-  (challenge : Impl B (Challenge.interface (size p.Input))) (check : Impl B p.withChallenge)
+variable {B : Backend} {K : Type} {p : Interface B.Native} {kty : CType B.Native K} [kty.Faithful]
+  (challenge : Impl B (Challenge.interface (size p.Input) kty)) (check : Impl B (p.withChallenge kty))
 
 /-- Commit to the input, draw a challenge, check. -/
 def impl : Impl B p where
@@ -93,9 +94,9 @@ variable [Impl.NoEvents challenge]
 
 /-- The rare events of a protocol depend on the committed input, and determine the drawn
 challenge. -/
-theorem phased [Impl.Phased check (Interface.withChallenge.phases p)] (s : B.State) (x : p.Input B.Var) :
+theorem phased [Impl.Phased check (Interface.withChallenge.phases p kty)] (s : B.State) (x : p.Input B.Var) :
     (((impl challenge check).main x).operations s).Phased (fun env => p.inputCType.decode (B.evalT env x))
-      (fun env => B.eval env (challenge.output (toElements x) s)) := by
+      (fun env => kty.decode (B.evalT env (challenge.output (toElements x) s))) := by
   simp only [impl, circuit_norm]
   refine (Ops.phased_cons_call _ _).mpr ⟨Impl.phased_call_of_noEvents _ _ _,
     (Ops.phased_cons_call _ _).mpr ⟨Impl.phased_call _ _ _ ?_ ?_, Ops.phased_nil⟩⟩
@@ -113,9 +114,9 @@ instance {M : Type} [AddCommMonoid M] (μ : B.Measure M) [Impl.Measured μ chall
 
 /-- The values of the drawn challenge at which a false statement is accepted, with the committed
 input fixed to `x₀`. -/
-def BadChallenges (s : B.State) (x : p.Input B.Var) (x₀ : p.input) : Set B.Native :=
+def BadChallenges (s : B.State) (x : p.Input B.Var) (x₀ : p.input) : Set K :=
   {a | ∃ env : B.Cell → B.Native, p.inputCType.decode (B.evalT env x) = x₀ ∧
-    B.eval env (challenge.output (toElements x) s) = a ∧
+    kty.decode (B.evalT env (challenge.output (toElements x) s)) = a ∧
     p.inputCType.Valid (B.evalT env x) ∧ p.Assumptions x₀ ∧
     (((impl challenge check).main x).operations s).ConstraintsHold env s ∧
     ¬(p.outputCType.Valid (B.evalT env ((impl challenge check).output x s)) ∧
@@ -124,14 +125,14 @@ def BadChallenges (s : B.State) (x : p.Input B.Var) (x₀ : p.input) : Set B.Nat
 /-- The values of the drawn challenge at which the honest prover fails, with the committed input
 fixed to `x₀`: it continues from an assignment of the heap that holds the input and the
 challenge. -/
-def HonestFailures (s : B.State) (x : p.Input B.Var) (x₀ : p.input) : Set B.Native :=
+def HonestFailures (s : B.State) (x : p.Input B.Var) (x₀ : p.input) : Set K :=
   {a | ∃ env₀ : B.Cell → B.Native, p.inputCType.decode (B.evalT env₀ x) = x₀ ∧
-    B.eval env₀ (challenge.output (toElements x) s) = a ∧
+    kty.decode (B.evalT env₀ (challenge.output (toElements x) s)) = a ∧
     p.inputCType.Valid (B.evalT env₀ x) ∧ p.ProverAssumptions x₀ ∧
     ¬∃ env : B.Cell → B.Native, (∀ c ∈ B.Alloc (challenge.advance (toElements x) s), env c = env₀ c) ∧
       (((impl challenge check).main x).operations s).ConstraintsHold env s}
 
-variable [Impl.Phased check (Interface.withChallenge.phases p)]
+variable [Impl.Phased check (Interface.withChallenge.phases p kty)]
 
 /-- **Soundness error of a protocol.** Fix the committed input `x₀`. The values of the drawn
 challenge at which some assignment satisfies the real constraints, but the input does not satisfy
@@ -162,8 +163,8 @@ theorem completeness_error [Challenge.Free challenge] [Impl.Measured honestError
   have h_post := (challenge.toSubcircuit s (toElements x)).post_of_pre h_in
   have h_mono := (challenge.toSubcircuit s (toElements x)).alloc_mono
   simp only [circuit_norm] at h_post h_mono
-  have h_in' : B.footprintT (M := p.withChallenge.Input) (x, α) ⊆ B.Alloc s' :=
-    Backend.footprintT_ctypeProd_subset.mpr ⟨h_in.trans h_mono, Backend.footprintT_native_subset.mpr h_post⟩
+  have h_in' : B.footprintT (M := (p.withChallenge kty).Input) (x, α) ⊆ B.Alloc s' :=
+    Backend.footprintT_ctypeProd_subset.mpr ⟨h_in.trans h_mono, h_post⟩
   refine le_trans (Set.encard_le_encard ?_) (check.completeness_error_of s' (x, α) h_in' x₀)
   rintro a ⟨env₀, h_x, h_a, h_valid, h_prover, h_fail⟩
   refine ⟨env₀, ?_, ?_, ?_, ?_, ?_⟩

@@ -13,7 +13,7 @@ challenge costs soundness.
 module
 
 public import Clean2.Challenge.Symbolic
-public import Clean2.Functionalities.Arith
+public import Clean2.Challenge.Field
 
 @[expose] public section
 
@@ -21,13 +21,14 @@ namespace Clean2
 open Polynomial
 
 namespace AssertIdentity
-variable {F : Type} [Field F]
+variable {F K : Type} [Field F] [Field K] [Algebra F K]
 
-/-- `x` stands for `R c`, and is zero at the challenge: so `R c = 0`. -/
+/-- `x` stands for `R c`, and is zero at the challenge: so `R c = 0`. The committed values `c` are
+native; `x`, the challenge and the identity live in the challenge field `K`, laid out by `kty`. -/
 @[reducible]
-def interface (k d : ℕ) (R : Vector F k → RatFunc F) : Interface F where
-  input := (Vector F k × F) × F
-  inputCType := (.natives k ×ᵗ .native) ×ᵗ .native
+def interface (kty : CType F K) (k d : ℕ) (R : Vector F k → RatFunc K) : Interface F where
+  input := (Vector F k × K) × K
+  inputCType := (.natives k ×ᵗ kty) ×ᵗ kty
   output := Unit
   outputCType := .unit
   Assumptions := fun ((c, x), α) => (x ≙[α] R c) ∧ NumDegLE (R c) d
@@ -36,41 +37,42 @@ def interface (k d : ℕ) (R : Vector F k → RatFunc F) : Interface F where
 
 /-- The committed values `c`, and the challenge. -/
 @[reducible]
-def phases (k d : ℕ) (R : Vector F k → RatFunc F) : (interface k d R).Phases where
+def phases (kty : CType F K) (k d : ℕ) (R : Vector F k → RatFunc K) : (interface kty k d R).Phases where
   Committed := Vector F k
   committed := fun ((c, _), _) => c
-  Challenge := F
+  Challenge := K
   challenge := fun (_, α) => α
 
 /-- The bad challenges: `R c` is not zero, but its numerator, of degree at most `d`, vanishes. -/
-def Bad (d : ℕ) {k : ℕ} (R : Vector F k → RatFunc F) (c : Vector F k) (a : F) : Prop :=
+def Bad (d : ℕ) {k : ℕ} (R : Vector F k → RatFunc K) (c : Vector F k) (a : K) : Prop :=
   R c ≠ 0 ∧ (RatFunc.num (R c)).eval a = 0 ∧ (RatFunc.num (R c)).natDegree ≤ d
 
-theorem encard_bad_le (d : ℕ) {k : ℕ} (R : Vector F k → RatFunc F) (c : Vector F k) :
+omit [Field F] [Algebra F K] in
+theorem encard_bad_le (d : ℕ) {k : ℕ} (R : Vector F k → RatFunc K) (c : Vector F k) :
     {a | Bad d R c a}.encard ≤ d := by
   by_cases hd : (RatFunc.num (R c)).natDegree ≤ d
   · refine (Set.encard_le_encard fun a ha => ?_).trans ((encard_polyBad_le _).trans (Nat.cast_le.mpr hd))
     exact ⟨fun h => ha.1 (RatFunc.num_eq_zero_iff.mp h), ha.2.1⟩
   · simp [Bad, hd]
 
-variable {B : Backend} [Field B.Native]
+variable {B : Backend} [Field B.Native] [Algebra B.Native K] (kty : CType B.Native K) [kty.Faithful]
 
 /-- The rare event of a boundary. It depends on the committed values and the challenge only. -/
-def event (d : ℕ) {k : ℕ} (R : Vector B.Native k → RatFunc B.Native) (c : Vector B.Var k) (α : B.Var) :
+def event (d : ℕ) {k : ℕ} (R : Vector B.Native k → RatFunc K) (c : Vector B.Var k) (α : kty.Shape B.Var) :
     RareEvent B :=
-  .ofNative c α (Bad d R) d (encard_bad_le d R)
+  .ofType kty c α (Bad d R) d (encard_bad_le d R)
 
-variable (arith : ∀ n, Impl B (Arith.interface n))
+variable (karith : ∀ n, Impl B (KArith.interface kty n))
 
-def impl {k : ℕ} (d : ℕ) (R : Vector B.Native k → RatFunc B.Native) : Impl B (interface k d R) where
+def impl {k : ℕ} (d : ℕ) (R : Vector B.Native k → RatFunc K) : Impl B (interface kty k d R) where
   main | ((c, x), α) => do
-    arith .assertZero x
-    Circuit.assumeRare (event d R c α)
+    karith .assertZero x
+    Circuit.assumeRare (event kty d R c α)
   spatial := by
     intro ((c, x), α) s h
     obtain ⟨⟨-, h_x⟩, -⟩ := (Backend.footprintT_ctypeProd_subset.mp h).imp_left
       Backend.footprintT_ctypeProd_subset.mp
-    simp only [circuit_norm] at h_x ⊢
+    simp only [circuit_norm]
     exact ⟨h_x, fun _ _ => Set.empty_subset _⟩
   soundness := by
     intro s env ((c, x), α) h_assumptions h
@@ -86,8 +88,8 @@ def impl {k : ℕ} (d : ℕ) (R : Vector B.Native k → RatFunc B.Native) : Impl
     obtain ⟨h_rep, h_R⟩ := h_prover
     exact ⟨(h_R ▸ h_rep).eq_zero, fun h_bad => h_bad.1 h_R⟩
 
-instance {k : ℕ} (d : ℕ) (R : Vector B.Native k → RatFunc B.Native) [∀ n, Impl.NoEvents (arith n)] :
-    Impl.Phased (impl arith d R) (phases k d R) := by
+instance {k : ℕ} (d : ℕ) (R : Vector B.Native k → RatFunc K) [∀ n, Impl.NoEvents (karith n)] :
+    Impl.Phased (impl kty karith d R) (phases kty k d R) := by
   phased [impl, event]
 
 end AssertIdentity
