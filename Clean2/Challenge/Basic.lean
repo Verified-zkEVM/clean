@@ -142,21 +142,21 @@ theorem Backend.footprintT_append_subset {n m : ℕ} {a : Vector B.Var n} {b : V
 namespace Impl
 variable {c : Interface B.Native}
 
-/-- **Soundness error.** Fix the values `env₁` of a set `C` of committed cells, which contains the
-input and everything the rare events of the circuit depend on (except the challenge `α`). If the
-input satisfies the assumptions, then the challenges at which some assignment agreeing with `env₁`
-on `C` satisfies the real constraints but not the spec are at most `errorBound` many. -/
+/-- **Soundness error.** Fix the values `env₁` of a set `C` of committed cells, which contains
+everything the rare events of the circuit depend on, but not the challenge `α`. If the input
+satisfies the assumptions at every assignment agreeing with `env₁` on `C` (typically: the
+assumptions are about committed values), then the challenges at which some such assignment
+satisfies the real constraints but not the spec are at most `errorBound` many. -/
 theorem soundness_error (impl : Impl B c) (s : B.State) (input : c.Input B.Var)
     (C : Set B.Cell) (α : B.Var) (env₁ : B.Cell → B.Native)
-    (h_input : B.footprintT input ⊆ C)
     (h_events : ∀ ev ∈ ((impl.main input).operations s).events,
       (∀ i : Fin ev.m, B.footprint ev.committed[i] ⊆ C) ∧ ev.challenge = α)
-    (h_assumptions : c.inputCType.Valid (B.evalT env₁ input) ∧
-      c.Assumptions (c.inputCType.decode (B.evalT env₁ input))) :
+    (h_assumptions : ∀ env : B.Cell → B.Native, (∀ x ∈ C, env x = env₁ x) →
+      c.inputCType.Valid (B.evalT env input) ∧ c.Assumptions (c.inputCType.decode (B.evalT env input))) :
     {a | ∃ env : B.Cell → B.Native, (∀ x ∈ C, env x = env₁ x) ∧ B.eval env α = a ∧
       ((impl.main input).operations s).ConstraintsHold env s ∧
       ¬(c.outputCType.Valid (B.evalT env (impl.output input s)) ∧
-        c.Spec (c.inputCType.decode (B.evalT env₁ input))
+        c.Spec (c.inputCType.decode (B.evalT env input))
           (c.outputCType.decode (B.evalT env (impl.output input s))))}.encard ≤
       errorBound.ofOps ((impl.main input).operations s) := by
   rw [errorBound_ofOps]
@@ -165,13 +165,10 @@ theorem soundness_error (impl : Impl B c) (s : B.State) (input : c.Input B.Var)
       (fun ev => {a | ev.Bad (ev.committed.map (B.eval env₁)) a})
       RareEvent.bound fun ev _ => ev.encard_bad_le _)
   obtain ⟨env, h_agree, rfl, h_holds, h_spec⟩ := ha
-  have h_input_eq : B.evalT env input = B.evalT env₁ input :=
-    Backend.evalT_frame env env₁ input fun x hx => h_agree x (h_input hx)
   -- some rare event happens: otherwise soundness would give the spec
   by_contra h_none
   apply h_spec
-  rw [← h_input_eq]
-  refine impl.soundness s env input (by rw [h_input_eq]; exact h_assumptions)
+  refine impl.soundness s env input (h_assumptions env h_agree)
     (Ops.soundnessHold_of_constraintsHold (impl.consistent input s) (fun ev hev h_happens => ?_) h_holds)
   apply h_none
   refine ⟨ev, hev, ?_⟩
@@ -185,18 +182,17 @@ theorem soundness_error (impl : Impl B c) (s : B.State) (input : c.Input B.Var)
   exact h_happens
 
 /-- **Completeness error.** Fix the values `env₁` of a set `C` of committed cells, which contains
-the input and everything the honest prover's rare events depend on (except the challenge `α`),
-and exists in the heap. If the input satisfies the prover assumptions, then the challenges at
-which the honest prover can fail, starting from some assignment agreeing with `env₁` on `C`, are
-at most `honestErrorBound` many. -/
+everything the honest prover's rare events depend on, but not the challenge `α`. If the input,
+`C` and `α` exist in the heap and the input satisfies the prover assumptions at every assignment
+agreeing with `env₁` on `C`, then the challenges at which the honest prover can fail, starting
+from some such assignment, are at most `honestErrorBound` many. -/
 theorem completeness_error (impl : Impl B c) (s : B.State) (input : c.Input B.Var)
     (C : Set B.Cell) (α : B.Var) (env₁ : B.Cell → B.Native)
-    (h_input : B.footprintT input ⊆ C) (h_C : C ⊆ B.Alloc s)
+    (h_in : B.footprintT input ⊆ B.Alloc s) (h_C : C ⊆ B.Alloc s) (h_α : B.footprint α ⊆ B.Alloc s)
     (h_events : ∀ ev ∈ ((impl.main input).operations s).honestEvents,
       (∀ i : Fin ev.m, B.footprint ev.committed[i] ⊆ C) ∧ ev.challenge = α)
-    (h_α : B.footprint α ⊆ B.Alloc s)
-    (h_prover : c.inputCType.Valid (B.evalT env₁ input) ∧
-      c.ProverAssumptions (c.inputCType.decode (B.evalT env₁ input))) :
+    (h_prover : ∀ env : B.Cell → B.Native, (∀ x ∈ C, env x = env₁ x) →
+      c.inputCType.Valid (B.evalT env input) ∧ c.ProverAssumptions (c.inputCType.decode (B.evalT env input))) :
     {a | ∃ env₀ : B.Cell → B.Native, (∀ x ∈ C, env₀ x = env₁ x) ∧ B.eval env₀ α = a ∧
       ¬∃ env : B.Cell → B.Native, (∀ x ∈ B.Alloc s, env x = env₀ x) ∧
         ((impl.main input).operations s).ConstraintsHold env s}.encard ≤
@@ -207,8 +203,6 @@ theorem completeness_error (impl : Impl B c) (s : B.State) (input : c.Input B.Va
       (fun ev => {a | ev.Bad (ev.committed.map (B.eval env₁)) a})
       RareEvent.bound fun ev _ => ev.encard_bad_le _)
   obtain ⟨env₀, h_agree₀, rfl, h_fail⟩ := ha
-  have h_input_eq : B.evalT env₀ input = B.evalT env₁ input :=
-    Backend.evalT_frame env₀ env₁ input fun x hx => h_agree₀ x (h_input hx)
   -- if no rare event of the honest prover happens, an honest assignment is accepted
   by_contra h_none
   have h_hev : ∀ env : B.Cell → B.Native, (∀ x ∈ B.Alloc s, env x = env₀ x) →
@@ -226,8 +220,8 @@ theorem completeness_error (impl : Impl B c) (s : B.State) (input : c.Input B.Va
       B.eval_frame env env₀ α fun x hx => h_agree x (h_α hx)
     simp only [RareEvent.Happens, h_map, h_challenge, h_α_eq] at h_happens
     exact h_happens
-  obtain ⟨env, h_agree, h_holds, -⟩ := impl.exists_honest_env input s env₀ (h_input.trans h_C)
-    (by rw [h_input_eq]; exact h_prover) h_hev
+  obtain ⟨env, h_agree, h_holds, -⟩ := impl.exists_honest_env input s env₀ h_in
+    (h_prover env₀ h_agree₀) h_hev
   exact h_fail ⟨env, h_agree, h_holds⟩
 
 end Impl
