@@ -13,7 +13,7 @@ error.
 -/
 module
 
-public import Clean2.Challenge.RExpr
+public import Clean2.Challenge.Variants.RExpr
 public import Clean2.Functionalities.Arith
 
 @[expose] public section

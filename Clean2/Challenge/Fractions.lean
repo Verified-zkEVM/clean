@@ -10,6 +10,7 @@ module
 
 public import Clean2.Challenge.Symbolic
 public import Mathlib.Algebra.BigOperators.Field
+public import Mathlib.Algebra.Polynomial.Roots
 
 @[expose] public section
 
@@ -102,4 +103,39 @@ theorem balance_iff {n : ℕ} (v m : Fin n → F) :
     rw [h y, map_zero, zero_div]
 
 end Fractions
+
+/-! ## Multisets as roots: the symbolic argument behind permutation checks -/
+
+namespace Permutation
+variable {Native : Type} [Field Native]
+
+/-- The entries of a vector, as a multiset. -/
+def elems {n : ℕ} (v : Vector Native n) : Multiset Native := Finset.univ.val.map fun i : Fin n => v[i]
+
+omit [Field Native] in
+/-- Equal multisets have equal products. -/
+theorem prod_eq_of_elems_eq {M : Type} [CommMonoid M] {n : ℕ} {a b : Vector Native n}
+    (h : elems a = elems b) (f : Native → M) : ∏ i : Fin n, f a[i] = ∏ i : Fin n, f b[i] := by
+  rw [Finset.prod_eq_multiset_prod, Finset.prod_eq_multiset_prod]
+  have h := congrArg (fun m => (m.map f).prod) h
+  simp only [elems, Multiset.map_map] at h
+  exact h
+
+theorem prod_X_sub_C_eq {n : ℕ} (v : Vector Native n) :
+    ∏ i : Fin n, (RatFunc.X - RatFunc.C v[i]) =
+      algebraMap Native[X] (RatFunc Native) ((elems v).map fun x => X - C x).prod := by
+  have h : ∏ i : Fin n, (X - C v[i]) = ((elems v).map fun x => X - C x).prod := by
+    rw [Finset.prod_eq_multiset_prod, elems, Multiset.map_map]; rfl
+  rw [← h, map_prod]
+  simp [RatFunc.algebraMap_X, RatFunc.algebraMap_C]
+
+/-- The symbolic argument: equal products of linear factors have the same roots. -/
+theorem elems_eq_of_prod_eq {n : ℕ} {a b : Vector Native n}
+    (h : ∏ i : Fin n, (RatFunc.X - RatFunc.C a[i]) = ∏ i : Fin n, (RatFunc.X - RatFunc.C b[i])) :
+    elems a = elems b := by
+  rw [prod_X_sub_C_eq, prod_X_sub_C_eq] at h
+  have h := congrArg roots (RatFunc.algebraMap_injective Native h)
+  rwa [roots_multiset_prod_X_sub_C, roots_multiset_prod_X_sub_C] at h
+
+end Permutation
 end Clean2

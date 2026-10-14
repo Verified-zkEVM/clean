@@ -6,7 +6,7 @@ argument is that a polynomial is zero exactly when its coefficients are.
 -/
 module
 
-public import Clean2.Challenge.Identity
+public import Clean2.Challenge.Variants.Identity
 
 @[expose] public section
 

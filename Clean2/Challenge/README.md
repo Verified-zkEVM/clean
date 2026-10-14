@@ -1,72 +1,72 @@
 # Verifier challenges in Clean 2
 
-Experimental. Challenges in ordinary circuits, with symbolic reasoning for users and the soundness
-error tracked by the framework.
+Experimental. Challenges in ordinary circuits: users write row-level gadgets with pointwise specs,
+reason symbolically only where a protocol concludes, and the framework tracks both the soundness
+and the completeness error.
 
-## The model
+## The idea
 
-- **A challenge is an ordinary variable.** A gadget that needs one takes it as an input, like any
-  other. Circuits that do not use challenges are unchanged.
-- **Rare events** (`RareEvent`, `Circuit.assumeRare`, in `Core/Circuit.lean`). A circuit may assume
-  that a rare event does not happen: a predicate on *committed* variables and a challenge that holds
-  at no more than `bound` challenges, whatever the committed values. Soundness proofs may use the
-  assumption (`SoundnessHold`); the verifier does not check it (`ConstraintsHold` ignores it).
-  Subcircuits carry their events up. Normal circuits emit none, and their proofs never see them.
-- **The error is a measure** (`errorBound`). `Measure` now also measures rare events
-  (`rare`, default `0`, so existing measures are unaffected). A parent reads its error off its
-  children's `Measured errorBound` instances, like cost.
-- **One theorem** (`Impl.soundness_error`): fix the committed cells (the inputs, and what every
-  event depends on). The challenges at which the real constraints hold but the spec fails are at
-  most `errorBound` many. For a circuit without events, that is ordinary soundness.
+```lean
+-- logUp row: add m / (α - v) to the running sum
+main | (((v, m), acc), α) => do
+  let d ← inverse (α - v)              -- d * (α - v) = 1
+  return acc + m * d                   -- spec: out = acc + m / (α - v)
 
-## What users write
+-- boundary: the final sum is 0 at α  ⇒  ∑ m / (X - v) ≡ 0 in F(X), up to rare α
+main | ((c, acc), α) => assertIdentity acc
+```
 
-`Identity.interface e` is a functionality like `arith`: its input is `k` committed values and the
-challenge, its spec is the **symbolic** identity `sym x e = 0`, an equation in `K⟮X⟯`. The
-challenge does not appear in the spec. `e : RExpr F k` is any rational expression in the committed
-values (`leaf i`), constants, and the challenge `X`, with `+ - * /`, `sum`, `prod`, `^`.
+- **Values computed after the challenge can stand for a rational function** of committed values
+  and `X` (`x ≙[α] R`, `Symbolic.lean`). Gadgets keep ordinary pointwise specs; generic lemmas
+  carry meanings through `+ - * /`, sums and products.
+- **The boundary** (`AssertIdentity`) turns "`x = 0` at `α`" into "`R ≡ 0`". That step assumes a
+  soundness rare event: `R ≢ 0` but `α` is a root of its numerator, at most `deg` challenges.
+  It is the only soundness cost. Rows cost no soundness: `d * (α - v) = 1` already excludes `α = v`.
+- **Division costs completeness**: the honest prover is stuck at `α = v`, a completeness rare event.
+- **Both errors are measures** (`errorBound`, `honestErrorBound`): they add up like cost.
+  `Impl.soundness_error` and `Impl.completeness_error` turn them into bounds on bad challenges, once.
+- **The proof system only provides challenges.** Protocols like logUp are specified and proved at
+  the circuit layer.
 
-`Identity.impl` implements it on any backend with `Arith`: evaluate `e` at `α` (a witness and a
-`mulEq` per division), assert zero, assume the rare event that `α` is a root of a divisor or of a
-nonzero numerator. Bound: `degN e + divDeg e`, static.
+## Core change (`Core/Circuit.lean`, `Core/Formal.lean`, `Core/Measure.lean`)
 
-| Protocol | Expression | Error (bad challenges) | Completeness needs | User proof |
+Two circuit-level operations, `rare` and `rareHonest`: assumptions that a rare event does not
+happen, for soundness and for completeness. The verifier never checks them (`ConstraintsHold`
+ignores them); `SoundnessHold` / `HonestCompleteness` may use them; subcircuits carry them up;
+`Measure` measures them (default `0`). Every existing gadget, backend and measure builds unchanged.
+
+## Files
+
+| File | What |
+|---|---|
+| `Basic.lean` | the two error measures, `soundness_error`, `completeness_error` |
+| `Symbolic.lean` | `x ≙[α] R`, its algebra, the boundary lemma, static degree bounds (`NumDegLE`) |
+| `AssertIdentity.lean` | the boundary gadget: spec `R c = 0`, soundness error `d` |
+| `Fractions.lean` | the symbolic arguments: partial fractions, bus balance, logUp, multisets as roots |
+| `LogUpRow.lean` | `LogUpRow`, `LogUpSum`, `Balance` (bus balance), `Lookup` (table + lookups) |
+| `GrandProductRow.lean` | `ProductRow`, `ProductLoop`, `PermutationRow` |
+| `Examples.lean` | `LookupAndPermutation` on one challenge; both errors on R1CS from the parts |
+| `NaiveSymbolic.lean` | why constraints are never read symbolically |
+| `Variants/` | whole-expression identities (`Identity`, `RExpr`), and a hand-written check with its own event |
+
+## Protocols (row-level)
+
+| Protocol | Rows | Boundary identity | Soundness error | Completeness error |
 |---|---|---|---|---|
-| `ZeroCheck` | `∑ c i X^i` | `n - 1` | nothing | coefficients of `0` |
-| `Permutation` | `∏ (X - a i) - ∏ (X - b i)` | `n` | nothing | equal roots |
-| `PermutationQuotient` | `∏ (X - a i)/(X - b i) - 1` | `2n` | `α ∉ b` | equal roots |
-| `PermutationRunning` | hand-written running product, own event | `n` | `α ∉ b` | pointwise loop proof |
-| `LogUp` | `∑ m i/(X - t i) - ∑ 1/(X - f j)` | `≈ 2(n + l)` | `α ∉ t, f` | partial fractions |
-| `PermutationChain` | two `Permutation`s, one challenge | `2n` (R1CS, via the measure) | — | transitivity |
+| `Balance` | `acc + m / (α - v)` | `∑ m / (X - v) ≡ 0` | `n` | `n` |
+| `Lookup` | two sums | `∑ μ / (X - t) - ∑ 1 / (X - f) ≡ 0` | `n + l` | `n + l` |
+| `PermutationRow` | `acc * (α - a) / (α - b)` | `∏ (X - a) / (X - b) - 1 ≡ 0` | `n` | `n` |
+| `LookupAndPermutation` | both, one challenge | both | `n + l + k` | `n + l + k` |
 
-`PermutationQuotient` and `PermutationRunning` implement the same interface: same spec, different
-circuits, different error. The generic identity pays for every root of a divisor; the
-hand-written argument cross-multiplies and does not.
+User proofs: pointwise algebra for the rows (no probability), one symbolic lemma for the
+conclusion (`Fractions`), and a degree bound for the boundary (`NumDegLE`).
 
-## Findings
+## Not done yet
 
-- **Phases are enforced by the proof obligation, not by types.** An event may only depend on
-  committed values. A gadget that feeds a value chosen after the challenge into an identity cannot
-  state the event it needs. Challenge-dependent values belong *in the expression* (e.g. a random
-  linear combination `a + X * b`), not in a variable.
-- **Constraints are never read symbolically, only expressions.** `NaiveSymbolic.lean`:
-  `w * w = X` has no polynomial solution but is satisfied at every square.
-- **Division costs error.** A division by `d` makes the roots of `d` bad. With no division, the
-  identity is complete at every challenge.
-- **User proofs are short** once `simp` knows the meanings: the permutation and logUp gadgets'
-  soundness and completeness are one to three lines each, on top of one math lemma. What helped:
-  `simp` lemmas for `sym`/`evalAt`/`NZ`/`Good` through `+ - * /`, `sum`, `prod`, `^`;
-  `RatFunc.X_sub_C_ne_zero` and `prod_X_sub_C_ne_zero` (so `simp` discharges divisor side
-  conditions and `div_eq_one_iff_eq`); right-nested leaf vectors (`t ++ (m ++ f)`), which `simp`
-  indexes into without arithmetic on `Fin`.
-
-## Not done
-
-- **The phase hypothesis of `soundness_error` is not compositional yet.** It asks that every event
-  of the top-level circuit depends on committed cells and the given challenge. That should be a
-  per-`Impl` contract, like `Measured`.
-- **One challenge.** Several challenges, sampled in rounds after cells that depend on earlier
-  ones, need a game-based statement.
-- **No `challenge` operation.** Sampling, transcripts and Fiat–Shamir are out of scope; the top
-  level designates the challenge variable.
-- **Base field only.** Extension-field challenges are not modelled.
+- **Phase hypothesis.** `soundness_error` / `completeness_error` ask that every event depends on
+  committed cells and the given challenge. That should be a per-`Impl` contract, like `Measured`,
+  discharged by the spatial machinery once challenges are a backend operation.
+- **A challenge operation in the backends**, recording the phase boundary in the heap state; named,
+  shared challenges across rounds and across tables (a table's final sum as a boundary output, the
+  ensemble asserting the total).
+- **Extension-field challenges.**

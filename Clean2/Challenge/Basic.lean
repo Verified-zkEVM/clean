@@ -1,29 +1,33 @@
 /-
-Verifier challenges in ordinary circuits.
+Verifier challenges in ordinary circuits: what the rare-event assumptions cost.
 
 A challenge is a field element that the verifier samples after the prover has committed to some
-values. In Clean 2 a challenge is an ordinary variable, passed to the gadgets that use it like any
-other input. A gadget that uses it to check something assumes that a *rare event* does not happen
-(`Circuit.assumeRare`, `RareEvent` in `Clean2/Core/Circuit.lean`): the event is a predicate on
-committed values and the challenge that holds at no more than `bound` challenges, whatever the
-committed values are. Soundness proofs may use the assumption; the verifier does not check it.
+values. In Clean 2 it is an ordinary variable, passed to the gadgets that use it like any other
+input. Gadgets that use it may assume that a *rare event* does not happen (`RareEvent` in
+`Clean2/Core/Circuit.lean`): a predicate on committed values and the challenge that holds at no
+more than `bound` challenges, whatever the committed values are. There are two kinds:
+
+- for soundness (`Circuit.assumeRare`): soundness proofs may assume it, the verifier does not
+  check it. A boundary (`AssertIdentity`) assumes one: "the identity fails, but not at `α`".
+- for completeness (`Circuit.assumeRareHonest`): the honest prover may assume it. A row that
+  divides by `α - v` assumes one: "`α = v`".
+
 Everything else is unchanged: interfaces, specs, `Impl`, composition. A circuit that uses no
-challenge assumes no rare event.
+challenge assumes no rare event. This file proves, once, what the assumptions cost:
 
-This file proves, once, what the assumptions cost:
-
-- `errorBound`: the sum of the bounds of the rare events of a circuit, a `Measure`, so that a
-  parent reads it off its children's closed forms (`Impl.Measured errorBound`);
-- `Impl.soundness_error`: fix the values of a set `C` of committed cells, which contains the
-  inputs and everything the rare events depend on (except the challenge). Then the challenges at
-  which some assignment satisfies the real constraints but not the spec are at most
-  `errorBound`. For a circuit without challenges, the bound is `0`: ordinary soundness.
+- `errorBound`, `honestErrorBound`: the sums of the bounds of the two kinds of events. Measures,
+  so that a parent reads them off its children's closed forms (`Impl.Measured`), like cost.
+- `Impl.soundness_error`: with the committed cells fixed, the challenges at which some assignment
+  satisfies the real constraints but not the spec are at most `errorBound` many. For a circuit
+  without challenges, the bound is `0`: ordinary soundness.
+- `Impl.completeness_error`: with the committed cells fixed, the challenges at which the honest
+  prover can fail are at most `honestErrorBound` many.
 
 Why the committed values must be fixed first: a cheating prover chooses the cells it fills after
 the challenge as arbitrary functions of it. That is why a rare event may only depend on committed
-values (and why constraints mentioning a challenge are never read as identities in `F[X]`, see
-`NaiveSymbolic.lean`). In `soundness_error`, every cell outside `C` is quantified after the
-challenge, which over-approximates the real protocol.
+values, and why constraints mentioning a challenge are never read as identities in `F[X]`
+(`NaiveSymbolic.lean`). In both theorems, every cell outside the committed ones is quantified
+after the challenge, which over-approximates the real protocol.
 -/
 module
 

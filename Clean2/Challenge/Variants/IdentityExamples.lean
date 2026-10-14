@@ -10,10 +10,10 @@ expression's bound, a permutation check costs `n`, the chain `2 n`.
 -/
 module
 
-public import Clean2.Challenge.ZeroCheck
-public import Clean2.Challenge.Permutation
-public import Clean2.Challenge.PermutationRunning
-public import Clean2.Challenge.LogUp
+public import Clean2.Challenge.Variants.ZeroCheck
+public import Clean2.Challenge.Variants.Permutation
+public import Clean2.Challenge.Variants.PermutationRunning
+public import Clean2.Challenge.Variants.LogUp
 public import Clean2.Backends.R1CS
 
 @[expose] public section

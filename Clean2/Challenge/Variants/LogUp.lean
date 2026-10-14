@@ -12,7 +12,7 @@ The symbolic argument is a uniqueness of partial fractions (`eq_zero_of_sum_div_
 -/
 module
 
-public import Clean2.Challenge.Identity
+public import Clean2.Challenge.Variants.Identity
 public import Clean2.Challenge.Fractions
 
 @[expose] public section

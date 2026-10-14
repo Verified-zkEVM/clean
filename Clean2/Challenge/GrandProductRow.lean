@@ -10,7 +10,6 @@ A grand product, row by row: the multiplicative counterpart of `LogUpRow`.
 module
 
 public import Clean2.Challenge.LogUpRow
-public import Clean2.Challenge.Permutation
 
 @[expose] public section
 

@@ -11,7 +11,7 @@ cost and error measures.
 -/
 module
 
-public import Clean2.Challenge.Permutation
+public import Clean2.Challenge.Variants.Permutation
 public import Mathlib.Algebra.BigOperators.Fin
 public import Mathlib.Algebra.Polynomial.BigOperators
 
