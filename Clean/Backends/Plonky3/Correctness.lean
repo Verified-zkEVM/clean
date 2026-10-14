@@ -15,7 +15,58 @@ namespace Backends.Plonky3.Codegen
 
 open Rust
 
-variable {F : Type} [FiniteField F]
+variable {F : Type}
+
+lemma constants?_eq_some {values : List (Witgen.FExpr F)} {constants : List F}
+    (h : constants? values = some constants) : values = constants.map .const := by
+  induction values generalizing constants with
+  | nil => simp [constants?] at h; simp [← h]
+  | cons value values ih =>
+      cases value <;> simp [constants?] at h
+      obtain ⟨rest, hrest, rfl⟩ := h
+      simp [ih hrest]
+
+/-- Bit `bit` of a value below `2^64`, computed on its `u64` representation. -/
+lemma testBit_eq_u64 {value bit : ℕ} (hvalue : value < UInt64.size) (hbit : bit < 64) :
+    value.testBit bit = decide ((UInt64.ofNat value >>> bit.toUInt64) &&& 1 = 1) := by
+  have hbits : ((UInt64.ofNat value >>> bit.toUInt64) &&& 1).toNat = (value >>> bit) % 2 := by
+    simp [UInt64.toNat_and, UInt64.toNat_shiftRight, UInt64.toNat_ofNat_of_lt' hvalue,
+      Nat.mod_eq_of_lt hbit, Nat.and_one_is_mod]
+  have hiff : ((UInt64.ofNat value >>> bit.toUInt64) &&& 1 = 1) ↔ (value >>> bit) % 2 = 1 := by
+    rw [← UInt64.toNat_inj, hbits]
+    simp
+  simp only [hiff, Nat.testBit, Nat.one_and_eq_mod_two]
+  rcases Nat.mod_two_eq_zero_or_one (value >>> bit) with h | h <;> simp [h]
+
+lemma shiftRight_eq_zero {value bit : ℕ} (hvalue : value < UInt64.size) (hbit : 64 ≤ bit) :
+    value >>> bit = 0 := by
+  rw [Nat.shiftRight_eq_div_pow]
+  apply Nat.div_eq_of_lt
+  calc value < 2 ^ 64 := hvalue
+    _ ≤ 2 ^ bit := Nat.pow_le_pow_right (by norm_num) hbit
+
+lemma testBit_eq_false {value bit : ℕ} (hvalue : value < UInt64.size) (hbit : 64 ≤ bit) :
+    value.testBit bit = false := by
+  simp [Nat.testBit, shiftRight_eq_zero hvalue hbit]
+
+/-- Bit `index` of a value below `2^64`, as computed by `loopBit`. -/
+lemma loopBit_toNat {value index : ℕ} (hvalue : value < UInt64.size) :
+    (if index < 64 then (UInt64.ofNat value >>> UInt64.ofNat index) &&& 1 else 0).toNat =
+      value >>> index % 2 := by
+  split
+  · rename_i hindex
+    simp [UInt64.toNat_and, UInt64.toNat_shiftRight, UInt64.toNat_ofNat_of_lt' hvalue,
+      Nat.and_one_is_mod, Nat.mod_eq_of_lt hindex]
+  · rename_i hindex
+    simp [shiftRight_eq_zero (bit := index) hvalue (by omega)]
+
+lemma toArray_mapRange {α : Type} (count : ℕ) (create : ℕ → α) :
+    (Vector.mapRange count create).toArray = (List.range count).toArray.map create := by
+  ext index hleft hright
+  · simp
+  · simp [Vector.getElem_mapRange]
+
+variable [FiniteField F]
 
 /-- The prover environment seen by the witness IR when the Rust function reads `env`. -/
 def proverEnvironment (env : Env F) : ProverEnvironment F where
@@ -47,16 +98,6 @@ lemma evalList_eq_getD (ctx : Witgen.Ctx F) :
   | index + 1, value :: values => by
       simp [Witgen.FExpr.evalList, evalList_eq_getD ctx index values]
 
-omit [FiniteField F] in
-lemma constants?_eq_some {values : List (Witgen.FExpr F)} {constants : List F}
-    (h : constants? values = some constants) : values = constants.map .const := by
-  induction values generalizing constants with
-  | nil => simp [constants?] at h; simp [← h]
-  | cons value values ih =>
-      cases value <;> simp [constants?] at h
-      obtain ⟨rest, hrest, rfl⟩ := h
-      simp [ih hrest]
-
 lemma tableGet_eq (table : String → (n : ℕ) → Array (Vector F n)) (key : String) (width : ℕ)
     (row : UInt64) (column : Fin width) :
     tableGet table key width row column.val =
@@ -65,44 +106,6 @@ lemma tableGet_eq (table : String → (n : ℕ) → Array (Vector F n)) (key : S
   cases (table key width)[row.toNat]? with
   | none => simp [default]
   | some values => simp
-
-omit [FiniteField F] in
-/-- Bit `bit` of a value below `2^64`, computed on its `u64` representation. -/
-lemma testBit_eq_u64 {value bit : ℕ} (hvalue : value < UInt64.size) (hbit : bit < 64) :
-    value.testBit bit = decide ((UInt64.ofNat value >>> bit.toUInt64) &&& 1 = 1) := by
-  have hbits : ((UInt64.ofNat value >>> bit.toUInt64) &&& 1).toNat = (value >>> bit) % 2 := by
-    simp [UInt64.toNat_and, UInt64.toNat_shiftRight, UInt64.toNat_ofNat_of_lt' hvalue,
-      Nat.mod_eq_of_lt hbit, Nat.and_one_is_mod]
-  have hiff : ((UInt64.ofNat value >>> bit.toUInt64) &&& 1 = 1) ↔ (value >>> bit) % 2 = 1 := by
-    rw [← UInt64.toNat_inj, hbits]
-    simp
-  simp only [hiff, Nat.testBit, Nat.one_and_eq_mod_two]
-  rcases Nat.mod_two_eq_zero_or_one (value >>> bit) with h | h <;> simp [h]
-
-omit [FiniteField F] in
-lemma shiftRight_eq_zero {value bit : ℕ} (hvalue : value < UInt64.size) (hbit : 64 ≤ bit) :
-    value >>> bit = 0 := by
-  rw [Nat.shiftRight_eq_div_pow]
-  apply Nat.div_eq_of_lt
-  calc value < 2 ^ 64 := hvalue
-    _ ≤ 2 ^ bit := Nat.pow_le_pow_right (by norm_num) hbit
-
-omit [FiniteField F] in
-lemma testBit_eq_false {value bit : ℕ} (hvalue : value < UInt64.size) (hbit : 64 ≤ bit) :
-    value.testBit bit = false := by
-  simp [Nat.testBit, shiftRight_eq_zero hvalue hbit]
-
-omit [FiniteField F] in
-/-- Bit `index` of a value below `2^64`, as computed by `loopBit`. -/
-lemma loopBit_toNat {value index : ℕ} (hvalue : value < UInt64.size) :
-    (if index < 64 then (UInt64.ofNat value >>> UInt64.ofNat index) &&& 1 else 0).toNat =
-      value >>> index % 2 := by
-  split
-  · rename_i hindex
-    simp [UInt64.toNat_and, UInt64.toNat_shiftRight, UInt64.toNat_ofNat_of_lt' hvalue,
-      Nat.and_one_is_mod, Nat.mod_eq_of_lt hindex]
-  · rename_i hindex
-    simp [shiftRight_eq_zero (bit := index) hvalue (by omega)]
 
 lemma val_lt_u64 (hsize : FiniteField.size (F := F) ≤ UInt64.size) (x : F) :
     FiniteField.val x < UInt64.size :=
@@ -231,13 +234,6 @@ theorem boolExpr_eval (hsize : FiniteField.size (F := F) ≤ UInt64.size) (env :
         boolExpr_eval hsize env frame inLoop left, boolExpr_eval hsize env frame inLoop right]
 
 end
-
-omit [FiniteField F] in
-lemma toArray_mapRange {α : Type} (count : ℕ) (create : ℕ → α) :
-    (Vector.mapRange count create).toArray = (List.range count).toArray.map create := by
-  ext index hleft hright
-  · simp
-  · simp [Vector.getElem_mapRange]
 
 lemma context_outside_loop (env : Env F) (locals : Array (F ⊕ UInt64)) (loopVar : ℕ) :
     context env ⟨locals, loopVar⟩ false = context env ⟨locals, 0⟩ false := rfl

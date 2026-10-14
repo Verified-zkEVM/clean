@@ -4,11 +4,9 @@ public import Clean.Air.FlatEnsemble
 
 @[expose] public section
 
-variable {F : Type} [FiniteField F]
-open Air.Flat (Component Table Tables channelInterface)
-universe u v
-variable {α : Type u} {β : Type v}
-variable [Air.Flat.HasChannelInterface F α] [Air.Flat.HasChannelInterface F β]
+open Air.Flat (Component Table Tables ChannelInterface)
+open Air.Flat.ChannelInterface (channelsWithGuarantees channelsWithRequirements)
+variable {F : Type} {α β : Type*} [ChannelInterface α F] [ChannelInterface β F]
 
 -- TODO deduplicate and add to Basic
 attribute [circuit_norm] forall_eq_or_imp List.mem_flatMap List.mem_map exists_exists_and_eq_and
@@ -26,65 +24,53 @@ after the rest of the list.
 -/
 def OrderedChannel (channel : RawChannel F) (tables : List α) : Prop :=
   ∀ i (hi : i < tables.length) j (hj : j < tables.length),
-    channel ∈ (channelInterface tables[i]).channelsWithGuarantees →
-    channel ∈ (channelInterface tables[j]).channelsWithRequirements →
+    channel ∈ channelsWithGuarantees tables[i] →
+    channel ∈ channelsWithRequirements tables[j] →
       i < j
 
-omit [FiniteField F] in
-@[circuit_norm] lemma orderedChannel_nil (channel : RawChannel F) :
-    OrderedChannel channel ([] : List α) := by
+@[circuit_norm]
+lemma orderedChannel_nil (channel : RawChannel F) : OrderedChannel channel ([] : List α) := by
   simp [OrderedChannel]
 
 @[circuit_norm]
 abbrev OrderedChannelRefl (channel : RawChannel F) (table : α) : Prop :=
-  channel ∉ (channelInterface table).channelsWithGuarantees ∨
-    channel ∉ (channelInterface table).channelsWithRequirements
+  channel ∉ channelsWithGuarantees table ∨ channel ∉ channelsWithRequirements table
 
-abbrev OrderedChannelLt (channel : RawChannel F) (tables₁ : List α)
-    (tables₂ : List β) : Prop :=
-  channel ∉ tables₁.flatMap
-      (fun x ↦ (channelInterface (F := F) x).channelsWithGuarantees) ∨
-    channel ∉ tables₂.flatMap
-      (fun x ↦ (channelInterface (F := F) x).channelsWithRequirements)
+abbrev OrderedChannelLt (channel : RawChannel F) (tables₁ : List α) (tables₂ : List β) : Prop :=
+  channel ∉ tables₁.flatMap channelsWithGuarantees ∨ channel ∉ tables₂.flatMap channelsWithRequirements
 
-omit [FiniteField F] in
-@[circuit_norm] lemma orderedChannelLt_nil_right (channel : RawChannel F) (tables : List α) :
+@[circuit_norm]
+lemma orderedChannelLt_nil_right (channel : RawChannel F) (tables : List α) :
     OrderedChannelLt channel tables ([] : List β) := by simp [OrderedChannelLt]
 
-omit [FiniteField F] in
-@[circuit_norm] lemma orderedChannelLt_nil_left (channel : RawChannel F) (tables : List β) :
+@[circuit_norm]
+lemma orderedChannelLt_nil_left (channel : RawChannel F) (tables : List β) :
     OrderedChannelLt channel ([] : List α) tables := by simp [OrderedChannelLt]
 
-omit [FiniteField F] in
-@[circuit_norm] lemma orderedChannelLt_cons_right (channel : RawChannel F)
-    {table : β} {ts : List β} {ss : List α} :
+@[circuit_norm]
+lemma orderedChannelLt_cons_right (channel : RawChannel F) {table : β} {ts : List β} {ss : List α} :
   OrderedChannelLt channel ss (table :: ts) ↔
-    (channel ∉ ss.flatMap
-        (fun x ↦ (channelInterface (F := F) x).channelsWithGuarantees) ∨
-      channel ∉ (channelInterface table).channelsWithRequirements) ∧
+    (channel ∉ ss.flatMap channelsWithGuarantees ∨ channel ∉ channelsWithRequirements table) ∧
     OrderedChannelLt channel ss ts := by
   simp [OrderedChannelLt, circuit_norm]
   tauto
 
-omit [FiniteField F] in
-@[circuit_norm] lemma orderedChannelLt_append_left {channel : RawChannel F}
-    {ts₁ ts₂ : List α} {ss : List β} :
+@[circuit_norm]
+lemma orderedChannelLt_append_left {channel : RawChannel F} {ts₁ ts₂ : List α} {ss : List β} :
   OrderedChannelLt channel (ts₁ ++ ts₂) ss ↔
     OrderedChannelLt channel ts₁ ss ∧ OrderedChannelLt channel ts₂ ss := by
   simp only [OrderedChannelLt, circuit_norm]
   tauto
 
-omit [FiniteField F] in
-@[circuit_norm] lemma orderedChannelLt_append_right {channel : RawChannel F}
-    {ts : List α} {ss₁ ss₂ : List β} :
+@[circuit_norm]
+lemma orderedChannelLt_append_right {channel : RawChannel F} {ts : List α} {ss₁ ss₂ : List β} :
   OrderedChannelLt channel ts (ss₁ ++ ss₂) ↔
     OrderedChannelLt channel ts ss₁ ∧ OrderedChannelLt channel ts ss₂ := by
   simp only [OrderedChannelLt, circuit_norm]
   tauto
 
-omit [FiniteField F] in
-@[circuit_norm] lemma orderedChannel_cons (table : α) (tables : List α)
-    (channel : RawChannel F) :
+@[circuit_norm]
+lemma orderedChannel_cons (table : α) (tables : List α) (channel : RawChannel F) :
   OrderedChannel channel (table :: tables) ↔
   OrderedChannelRefl channel table ∧ OrderedChannel channel tables ∧ OrderedChannelLt channel tables [table] := by
   simp only [circuit_norm, OrderedChannel, OrderedChannelRefl, List.length_cons]
@@ -98,12 +84,10 @@ omit [FiniteField F] in
   simp only [exists_imp]
   tauto
 
-omit [FiniteField F] in
 lemma orderedChannel_singleton_iff (table : α) (channel : RawChannel F) :
     OrderedChannel channel [table] ↔ OrderedChannelRefl channel table := by
   simp [circuit_norm]
 
-omit [FiniteField F] in
 /-- Alternative, and sometimes more convenient, formulation of `OrderedChannel` -/
 lemma orderedChannel_iff (tables : List α) (channel : RawChannel F) :
   OrderedChannel channel tables ↔
@@ -134,8 +118,8 @@ lemma orderedChannel_iff (tables : List α) (channel : RawChannel F) :
   intro ordered_channel' i hi j hj
   simp only [List.forall_mem_iff_getElem] at ordered_channel'
   suffices j = i ∨ j < i →
-    channel ∉ (channelInterface tables[i]).channelsWithGuarantees ∨
-    channel ∉ (channelInterface tables[j]).channelsWithRequirements by grind
+    channel ∉ channelsWithGuarantees tables[i] ∨
+    channel ∉ channelsWithRequirements tables[j] by grind
   rintro h
   rcases h with rfl | j_lt_i
   · exact ordered_channel'.left j hi
@@ -151,9 +135,9 @@ lemma orderedChannel_iff (tables : List α) (channel : RawChannel F) :
     specialize no_reqs j (by omega) hj
     exact no_reqs
 
-omit [FiniteField F] in
 /-- "Merge sort" for ordered channels -/
-@[circuit_norm] lemma orderedChannel_append (ts ss : List α) (channel : RawChannel F) :
+@[circuit_norm]
+lemma orderedChannel_append (ts ss : List α) (channel : RawChannel F) :
   OrderedChannel channel (ts ++ ss) ↔
     OrderedChannel channel ts ∧ OrderedChannel channel ss ∧ OrderedChannelLt channel ss ts := by
   simp only [orderedChannel_iff]
@@ -172,41 +156,37 @@ omit [FiniteField F] in
   · simp only [List.append_eq_append_iff, ←exists_or]
     grind
 
-omit [FiniteField F] in
 /-- A sufficient condition for ordered channel is that there are no requirements added -/
 lemma orderedChannel_of_no_requirements {channel : RawChannel F} {tables : List α} :
-  (∀ table ∈ tables, channel ∉ (channelInterface table).channelsWithRequirements) →
+  (∀ table ∈ tables, channel ∉ channelsWithRequirements table) →
     OrderedChannel channel tables := by
   intro reqs
   rw [orderedChannel_iff]
   simp_all [OrderedChannelRefl, OrderedChannelLt]
 
-omit [FiniteField F] in
 /-- A sufficient condition for ordered channel is that there are no guarantees added -/
 lemma orderedChannel_of_no_guarantees {channel : RawChannel F} {tables : List α} :
-  (∀ table ∈ tables, channel ∉ (channelInterface table).channelsWithGuarantees) →
+  (∀ table ∈ tables, channel ∉ channelsWithGuarantees table) →
     OrderedChannel channel tables := by
   intro grts
   rw [orderedChannel_iff]
   simp_all [OrderedChannelRefl, OrderedChannelLt]
 
-omit [FiniteField F] in
 /-- A sufficient condition for ordered channel lt is that there are no requirements added in the second list -/
-lemma orderedChannelLt_of_no_requirements
-    {channel : RawChannel F} {ts : List β} {ss : List α} :
-  (∀ table ∈ ts, channel ∉ (channelInterface table).channelsWithRequirements) →
+lemma orderedChannelLt_of_no_requirements {channel : RawChannel F} {ts : List β} {ss : List α} :
+  (∀ table ∈ ts, channel ∉ channelsWithRequirements table) →
     OrderedChannelLt channel ss ts := by
   intro no_reqs
   simp_all [OrderedChannelLt]
 
-omit [FiniteField F] in
 /-- A sufficient condition for ordered channel lt is that there are no guarantees added in the first list -/
-lemma orderedChannelLt_of_no_guarantees
-    {channel : RawChannel F} {ts : List β} {ss : List α} :
-  (∀ table ∈ ss, channel ∉ (channelInterface table).channelsWithGuarantees) →
+lemma orderedChannelLt_of_no_guarantees {channel : RawChannel F} {ts : List β} {ss : List α} :
+  (∀ table ∈ ss, channel ∉ channelsWithGuarantees table) →
     OrderedChannelLt channel ss ts := by
   intro no_grts
   simp_all [OrderedChannelLt]
+
+variable [FiniteField F]
 
 /--
 Relaxed version of BalancedChannel that works with ensembles that aren't fully specified yet,
@@ -484,7 +464,7 @@ However, in that scenario, it is still useful to establish `SoundChannels` on th
 -/
 @[circuit_norm]
 def SoundChannels (tables : List α) (finished : List (RawChannel F)) : Prop :=
-  (∀ table ∈ tables, (channelInterface table).channelsWithGuarantees ⊆ finished) ∧
+  (∀ table ∈ tables, channelsWithGuarantees table ⊆ finished) ∧
   (∀ channel ∈ finished, OrderedChannel channel tables) ∧
   ∀ channel ∈ finished, channel.Consistent
 
@@ -539,8 +519,7 @@ theorem spec_and_guarantees_of_soundChannels {witness : Tables F} {finished : Li
   exact (ih t ht).right _ h_channel |>.right
 
 /-- `SoundChannels` is strictly increasing: you can make the finished list bigger by any consistent channels -/
-lemma soundChannels_of_soundChannels_subset {tables : List α}
-    {finished finished' : List (RawChannel F)} :
+lemma soundChannels_of_soundChannels_subset {tables : List α} {finished finished' : List (RawChannel F)} :
   SoundChannels tables finished →
   finished ⊆ finished' →
   (∀ channel ∈ finished', channel.Consistent) →
@@ -562,7 +541,7 @@ lemma soundChannels_of_soundChannels_subset {tables : List α}
 
 /-- You can add one channel to the finished list and preserve `SoundChannels` -/
 lemma soundChannels_cons_of_soundChannels {tables : List α}
-    {finished : List (RawChannel F)} {channel : RawChannel F} [channel.Consistent] :
+  {finished : List (RawChannel F)} {channel : RawChannel F} [channel.Consistent] :
   SoundChannels tables finished →
     SoundChannels tables (channel :: finished) := by
   intro sound_channels
@@ -577,8 +556,8 @@ namespace Ensemble
 @[circuit_norm]
 def OrderedChannel (ens : Ensemble F PublicIO) (channel : RawChannel F) : Prop :=
   _root_.OrderedChannelRefl channel ens.verifier ∧
-    _root_.OrderedChannel channel ens.tables ∧
-      _root_.OrderedChannelLt channel ens.tables [ens.verifier]
+  _root_.OrderedChannel channel ens.tables ∧
+  _root_.OrderedChannelLt channel ens.tables [ens.verifier]
 
 @[circuit_norm]
 abbrev OrderedChannels (ens : Ensemble F PublicIO) (finished : List (RawChannel F)) : Prop :=
@@ -587,8 +566,8 @@ abbrev OrderedChannels (ens : Ensemble F PublicIO) (finished : List (RawChannel 
 @[circuit_norm]
 def SoundChannels (ens : Ensemble F PublicIO) (finished : List (RawChannel F)) : Prop :=
   ens.channelsWithGuarantees ⊆ finished ∧
-    ens.OrderedChannels finished ∧
-      ∀ channel ∈ finished, channel.Consistent
+  ens.OrderedChannels finished ∧
+  ∀ channel ∈ finished, channel.Consistent
 
 lemma partialBalancedChannel_of_balancedChannel {ens : Ensemble F PublicIO}
     {witness : EnsembleWitness ens} {channel : RawChannel F} :
@@ -606,19 +585,12 @@ lemma partialBalancedChannel_of_balancedChannel {ens : Ensemble F PublicIO}
     simp [EnsembleWitness.interactionsWith, h_interaction]
   rcases ordered.right.right with no_table_guarantees | no_verifier_requirements
   · left
-    simp only [EnsembleWitness.toTables_tables, Table.channelsWithGuarantees]
-    rw [show witness.tables.flatMap (fun table =>
-        table.component.circuit.channelsWithGuarantees) =
-      ens.tables.flatMap (·.circuit.channelsWithGuarantees) by
-        have h := congrArg (List.flatMap (·.circuit.channelsWithGuarantees))
-          witness.tables_map_component
-        simpa only [List.flatMap_map] using h]
-    exact no_table_guarantees
+    simp only [circuit_norm, Table.channelsWithGuarantees] at no_table_guarantees ⊢
+    exact fun table h_table => no_table_guarantees _ (EnsembleWitness.component_mem_tables_of_mem h_table)
   · right
-    rw [witness.toTables_data]
-    rw [← witness.verifierChannelRequirements_iff_forall]
-    apply ens.verifierChannelRequirements_of_not_mem witness.publicInput witness.data
-    simpa [OrderedChannelLt, circuit_norm] using no_verifier_requirements
+    rw [witness.toTables_data, ← witness.verifierChannelRequirements_iff_forall]
+    apply ens.verifierChannelRequirements_of_not_mem
+    simp_all [circuit_norm]
 
 lemma verifierChannelGuarantees_of_tableRequirements {ens : Ensemble F PublicIO}
     {witness : EnsembleWitness ens} {channel : RawChannel F} [channel.Consistent] :
@@ -628,31 +600,22 @@ lemma verifierChannelGuarantees_of_tableRequirements {ens : Ensemble F PublicIO}
       ens.VerifierChannelGuarantees witness.publicInput witness.data channel := by
   intro ordered balanced table_requirements
   rcases ordered with no_verifier_guarantees | no_verifier_requirements
-  · exact ens.verifierChannelGuarantees_of_not_mem
-      witness.publicInput witness.data no_verifier_guarantees
-  have verifier_requirements :
-      ens.VerifierChannelRequirements witness.publicInput witness.data channel := by
-    apply ens.verifierChannelRequirements_of_not_mem witness.publicInput witness.data
-    exact no_verifier_requirements
-  rw [witness.verifierChannelGuarantees_iff_forall]
-  have all_requirements : ∀ interaction ∈ witness.interactionsWith channel,
-      interaction.Requirements witness.data := by
-    rw [witness.verifierChannelRequirements_iff_forall] at verifier_requirements
+  · exact ens.verifierChannelGuarantees_of_not_mem _ _ no_verifier_guarantees
+  have verifier_requirements := ens.verifierChannelRequirements_of_not_mem witness.publicInput witness.data
+    no_verifier_requirements
+  rw [witness.verifierChannelRequirements_iff_forall] at verifier_requirements
+  -- all interactions satisfy their requirements, so by consistency they satisfy their guarantees
+  have all_guarantees := ‹channel.Consistent›.consistent (witness.interactionsWith channel) witness.data balanced (by
     intro interaction h_interaction
+    refine ⟨witness.channel_eq_of_mem_interactionsWith h_interaction, ?_⟩
     rw [witness.mem_interactionsWith] at h_interaction
     rcases h_interaction with h_verifier | ⟨table, h_table, h_interaction⟩
     · exact verifier_requirements interaction h_verifier
-    · have requirements := table_requirements table h_table
-      rw [Table.channelRequirements_iff_forall, witness.same_data table h_table] at requirements
-      exact requirements interaction h_interaction
-  have all_guarantees :=
-    ‹channel.Consistent›.consistent (witness.interactionsWith channel)
-      witness.data balanced (fun interaction h_interaction =>
-        ⟨witness.channel_eq_of_mem_interactionsWith h_interaction,
-          all_requirements interaction h_interaction⟩)
-  intro interaction h_interaction
-  exact all_guarantees interaction (by
-    simp [EnsembleWitness.interactionsWith, h_interaction])
+    have requirements := table_requirements table h_table
+    rw [Table.channelRequirements_iff_forall, witness.same_data table h_table] at requirements
+    exact requirements interaction h_interaction)
+  rw [witness.verifierChannelGuarantees_iff_forall]
+  exact fun interaction h_interaction => all_guarantees interaction (by simp [EnsembleWitness.interactionsWith, h_interaction])
 
 /--
 Main result of this section:
@@ -662,53 +625,26 @@ Main result of this section:
 theorem tableSoundness_of_soundChannels {ens : Ensemble F PublicIO} :
   (∃ finished, finished ⊆ ens.channels ∧ ens.SoundChannels finished) →
     ens.TableSoundness := by
-  intro ⟨ finished, finished_subset, soundChannels ⟩ witness assumptions constraints balance
-  have table_sound_channels : _root_.SoundChannels ens.tables finished := by
-    have subset_finished := ens.channelsWithGuarantees_subset_iff.mp soundChannels.left
-    exact ⟨
-      subset_finished.right,
-      fun channel h_channel => (soundChannels.right.left channel h_channel).right.left,
-      soundChannels.right.right
-    ⟩
-  have partial_balance : ∀ channel ∈ finished,
-      PartialBalancedChannel witness.toTables channel := by
-    intro channel h_channel
-    apply partialBalancedChannel_of_balancedChannel
-    · exact soundChannels.right.left channel h_channel
-    · exact balance _ <| finished_subset h_channel
-  have table_results := spec_and_guarantees_of_soundChannels
-    (witness := witness.toTables) (by
-      simpa only [EnsembleWitness.toTables_tables,
-        witness.tables_map_component] using table_sound_channels) witness.dataConsistency_of_mem assumptions
-    constraints partial_balance
-  have verifier_channel_guarantees : ∀ channel ∈ finished,
-      ens.VerifierChannelGuarantees witness.publicInput witness.data channel := by
-    intro channel h_channel
-    let : channel.Consistent := soundChannels.right.right channel h_channel
-    apply verifierChannelGuarantees_of_tableRequirements
-      (soundChannels.right.left channel h_channel).left
-      (balance channel (finished_subset h_channel))
-    intro table h_table
-    exact (table_results table h_table).right channel h_channel |>.right
-  have verifier_guarantees : ens.VerifierGuarantees witness.publicInput witness.data := by
-    rw [Ensemble.VerifierGuarantees]
-    rw [Operations.guarantees_iff ens.verifierOperations
-      ens.verifier.channelsWithGuarantees (.fromInput witness.publicInput witness.data)]
-    · intro channel h_channel
-      exact verifier_channel_guarantees channel
-        ((ens.channelsWithGuarantees_subset_iff.mp soundChannels.left).left h_channel)
-    · exact ens.verifier.operations.circuitOperations_inChannelsOrGuaranteesFull _
-  exact ⟨ens.verifierSpec_of_verifierGuarantees witness.publicInput witness.data verifier_guarantees,
-    fun table h_table => (table_results table h_table).left⟩
+  intro ⟨ finished, finished_subset, subset_finished, ordered, consistent ⟩ witness assumptions constraints balance
+  rw [channelsWithGuarantees_subset_iff] at subset_finished
+  -- the tables are sound by themselves, given partial balance
+  have table_results := spec_and_guarantees_of_soundChannels (witness := witness.toTables)
+    (by simp_all [circuit_norm, witness.tables_map_component]) witness.dataConsistency_of_mem assumptions constraints
+    fun channel h_channel =>
+      partialBalancedChannel_of_balancedChannel (ordered channel h_channel) (balance _ (finished_subset h_channel))
+  -- their requirements imply the verifier guarantees
+  refine ⟨ens.verifierSpec_of_verifierGuarantees _ _ ?_, fun table h_table => (table_results table h_table).left⟩
+  rw [verifierGuarantees_iff]
+  intro channel h_channel
+  have h_finished := subset_finished.left h_channel
+  have := consistent channel h_finished
+  apply verifierChannelGuarantees_of_tableRequirements (ordered channel h_finished).left
+    (balance channel (finished_subset h_finished))
+  exact fun table h_table => ((table_results table h_table).right channel h_finished).right
 
 /-- Empty ensemble satisfies SoundChannels -/
 theorem empty_soundChannels : (empty F PublicIO).SoundChannels [] := by
-  rw [SoundChannels]
-  constructor
-  · rw [Ensemble.channelsWithGuarantees_eq_verifier_append, empty_verifier, empty_tables,
-      Verifier.Program.empty_channelsWithGuarantees]
-    simp
-  simp [OrderedChannels]
+  simp only [circuit_norm]
 
 /-- Empty ensemble satisfies TableSoundness -/
 theorem empty_tableSoundness : (empty F PublicIO).TableSoundness :=
@@ -730,20 +666,10 @@ theorem orderedChannels_of_soundChannels_addTable (ens : Ensemble F PublicIO)
     -- the ensemble with the new table also satisfies SoundChannels!
     (ens.addTable table fresh).OrderedChannels finished := by
   intro h_sound verifier_empty grts_subset_finished reqs_disjoint_finished channel h_channel
-  rw [OrderedChannel]
-  constructor
-  · left
-    simp [verifier_empty, circuit_norm, Verifier.Program.empty]
-  constructor
-  · rw [Ensemble.addTable_tables, orderedChannel_cons]
-    exact ⟨Or.inr (reqs_disjoint_finished channel h_channel),
-      (h_sound.right.left channel h_channel).right.left,
-      Or.inr (by
-        rw [List.flatMap_singleton, Air.Flat.component_channelInterface_channelsWithRequirements]
-        exact reqs_disjoint_finished channel h_channel)⟩
-  · rw [Ensemble.addTable_verifier]
-    right
-    simp [verifier_empty, circuit_norm, Verifier.Program.empty]
+  -- we need to make use of soundness of the original ensemble; that'll give us most of what we need
+  simp only [circuit_norm, verifier_empty] at h_sound ⊢
+  -- proof is a trivial combination of the hypotheses
+  simp_all
 
 theorem orderedChannels_of_soundChannels_merge (ens1 ens2 : Ensemble F PublicIO)
   (unique_names : ((ens2.tables ++ ens1.tables).map (·.circuit.name)).Nodup)
@@ -756,33 +682,14 @@ theorem orderedChannels_of_soundChannels_merge (ens1 ens2 : Ensemble F PublicIO)
     -- the merged ensemble with the new table satisfies OrderedChannels!
     (ens1.merge ens2 unique_names).OrderedChannels finished := by
   intro h_sound verifier_empty reqs_disjoint_finished channel h_channel
-  have no_requirements := reqs_disjoint_finished channel h_channel
-  rw [channelsWithRequirements_eq_verifier_append] at no_requirements
-  simp only [List.mem_append, not_or, List.mem_flatMap] at no_requirements
-  have no_table_requirements : ∀ table ∈ ens2.tables,
-      channel ∉ table.circuit.channelsWithRequirements := by
-    intro table h_table h_requirement
-    exact no_requirements.right ⟨table, h_table, h_requirement⟩
-  rw [OrderedChannel]
+  simp only [circuit_norm] at h_sound ⊢
+  simp only [channelsWithRequirements_eq_verifier_append, circuit_norm] at reqs_disjoint_finished
+  simp_all only [not_false_eq_true, or_true, true_and, and_true]
   constructor
-  · rw [Ensemble.merge_verifier]
-    exact Or.inr no_requirements.left
-  constructor
-  · rw [Ensemble.merge_tables, orderedChannel_append]
-    exact ⟨
-      orderedChannel_of_no_requirements (by
-        intro table h_table
-        change channel ∉ table.circuit.channelsWithRequirements
-        exact no_table_requirements table h_table),
-      (h_sound.right.left channel h_channel).right.left,
-      orderedChannelLt_of_no_requirements (by
-        intro table h_table
-        change channel ∉ table.circuit.channelsWithRequirements
-        exact no_table_requirements table h_table)⟩
-  · rw [Ensemble.merge_tables, Ensemble.merge_verifier]
-    right
-    rw [List.flatMap_singleton, Air.Flat.verifier_channelInterface_channelsWithRequirements]
-    exact no_requirements.left
+  · apply orderedChannel_of_no_requirements
+    simp_all [circuit_norm]
+  · apply orderedChannelLt_of_no_requirements
+    simp_all [circuit_norm]
 
 theorem soundChannels_markFinished (ens : Ensemble F PublicIO)
     -- given a sound channels ensemble with a list of finished channels
@@ -792,34 +699,13 @@ theorem soundChannels_markFinished (ens : Ensemble F PublicIO)
     -- the ensemble also satisfies SoundChannels including the new channel in the finished list
     ens.SoundChannels (channel :: finished) := by
   rcases h_sound with ⟨subset_finished, ordered_channels, consistent_channels⟩
-  refine ⟨fun c hc => List.mem_cons_of_mem channel (subset_finished hc), ?_, ?_⟩
-  · intro c hc
-    rw [List.mem_cons] at hc
-    rcases hc with h_eq | hc
-    · subst c
-      by_cases old : channel ∈ finished
-      · exact ordered_channels channel old
-      have no_guarantees : channel ∉ ens.channelsWithGuarantees := by
-        intro h
-        exact old (subset_finished h)
-      rw [Ensemble.channelsWithGuarantees_eq_verifier_append] at no_guarantees
-      simp only [List.mem_append, not_or, List.mem_flatMap] at no_guarantees
-      have no_table_guarantees : ∀ table ∈ ens.tables,
-          channel ∉ (channelInterface table).channelsWithGuarantees := by
-        intro table h_table
-        rw [Air.Flat.component_channelInterface_channelsWithGuarantees]
-        intro h_guarantee
-        exact no_guarantees.right ⟨table, h_table, h_guarantee⟩
-      exact ⟨Or.inl no_guarantees.left,
-        orderedChannel_of_no_guarantees no_table_guarantees,
-        orderedChannelLt_of_no_guarantees no_table_guarantees⟩
-    · exact ordered_channels c hc
-  · intro c hc
-    rw [List.mem_cons] at hc
-    rcases hc with h_eq | hc
-    · subst c
-      infer_instance
-    · exact consistent_channels c hc
+  refine ⟨List.subset_cons_of_subset _ subset_finished, ?_, by simp_all⟩
+  by_cases h_finished : channel ∈ finished
+  · simp_all [OrderedChannels]
+  -- the new channel has no guarantees, so it is trivially ordered
+  have no_guarantees : channel ∉ ens.channelsWithGuarantees := fun h => h_finished (subset_finished h)
+  simp only [channelsWithGuarantees_eq_verifier_append, circuit_norm] at no_guarantees
+  simp_all [circuit_norm, orderedChannel_of_no_guarantees]
 end Ensemble
 
 structure SoundEnsemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO]

@@ -835,26 +835,10 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
   have ordered_finished : ∀ channel ∈ finished,
       (ens.addVm vm names).OrderedChannel channel := by
     intro channel channel_mem
-    rw [Ensemble.OrderedChannel]
-    constructor
-    · right
-      exact (reqs_disjoint channel channel_mem).1
-    constructor
-    · rw [Ensemble.addVm_tables, orderedChannel_append]
-      exact ⟨
-        orderedChannel_of_no_requirements (by
-          intro table h_table
-          change channel ∉ table.circuit.channelsWithRequirements
-          exact (reqs_disjoint channel channel_mem).2 table h_table),
-        (soundChannels.right.left channel channel_mem).right.left,
-        orderedChannelLt_of_no_requirements (by
-          intro table h_table
-          change channel ∉ table.circuit.channelsWithRequirements
-          exact (reqs_disjoint channel channel_mem).2 table h_table)⟩
-    · right
-      rw [Ensemble.addVm_verifier, List.flatMap_singleton,
-        Air.Flat.verifier_channelInterface_channelsWithRequirements]
-      exact (reqs_disjoint channel channel_mem).1
+    have ordered := (soundChannels.right.left channel channel_mem).right.left
+    have no_requirements := reqs_disjoint channel channel_mem
+    clear * - ordered no_requirements
+    simp_all [circuit_norm, orderedChannel_of_no_requirements, orderedChannelLt_of_no_requirements]
   have partial_balance : ∀ channel ∈ finished,
       PartialBalancedChannel witness.toTables channel := by
     intro channel channel_mem
@@ -935,14 +919,11 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
         rw [h_split, List.mem_append] at h_table
         exact h_table.resolve_left h_vm
       exact finished_reqs channel channel_mem table h_old
-  rw [Ensemble.VerifierGuarantees]
-  rw [Operations.guarantees_iff (ens.addVm vm names).verifierOperations
-    vm.verifier.channelsWithGuarantees (.fromInput witness.publicInput witness.data)]
-  · intro channel h_channel
-    rcases List.mem_cons.mp (grts_subset.1 h_channel) with rfl | h_finished
-    · exact vm_verifier_guarantees
-    · exact finished_verifier_guarantees channel h_finished
-  · exact vm.verifier.operations.circuitOperations_inChannelsOrGuaranteesFull _
+  rw [Ensemble.verifierGuarantees_iff]
+  intro channel h_channel
+  rcases List.mem_cons.mp (grts_subset.1 h_channel) with rfl | h_finished
+  · exact vm_verifier_guarantees
+  · exact finished_verifier_guarantees channel h_finished
 end Ensemble
 
 namespace SoundEnsemble

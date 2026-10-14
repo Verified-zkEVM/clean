@@ -6,8 +6,7 @@ public import Clean.Air.RowProgram
 @[expose] public section
 
 namespace Air.Flat
-variable {F : Type} [FiniteField F]
-variable {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
+variable {F : Type}
 
 /-- Public, index-addressed columns supplied by the verifier rather than committed by the prover. Their values are defined by a structured row program evaluated on the row index, which Lean and extracted backends evaluate identically. -/
 structure FixedColumns (F : Type) where
@@ -19,13 +18,15 @@ namespace FixedColumns
 
 abbrev width (fixed : FixedColumns F) : ℕ := fixed.program.width
 
-def row (fixed : FixedColumns F) (i : UInt64) : Array F :=
-  (fixed.program.eval i (.empty F)).toArray
-
-omit [FiniteField F] in
 @[circuit_norm]
 lemma width_ofFExprs {n : ℕ} (height : UInt64) (values : Vector (Witgen.FExpr F) n) (valid) :
     ({ height, program := .ofFExprs values, valid } : FixedColumns F).width = n := rfl
+
+variable [FiniteField F]
+
+def row (fixed : FixedColumns F) (i : UInt64) : Array F :=
+  (fixed.program.eval i (.empty F)).toArray
+
 
 /-- Fixed values declared directly by one expression per column. -/
 @[circuit_norm]
@@ -42,6 +43,9 @@ abbrev RowsMatch (fixed : FixedColumns F) (rows : List (Array F)) : Prop :=
     (List.range fixed.height.toNat).map (fixed.row ∘ UInt64.ofNat)
 
 end FixedColumns
+
+variable [FiniteField F]
+variable {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
 
 /-- The first `n` elements of a row, padded with zeros. -/
 @[circuit_norm]

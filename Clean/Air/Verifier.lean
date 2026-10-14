@@ -46,6 +46,8 @@ def interactions (operations : Operations F) : List (AbstractInteraction F) :=
 def circuitOperations (operations : Operations F) : _root_.Operations F :=
   operations.interactions.map _root_.Operation.interact
 
+attribute [circuit_norm] List.filterMap_nil List.filterMap_cons
+
 @[circuit_norm]
 def channelsWithGuarantees (operations : Operations F) : List (RawChannel F) :=
   operations.filterMap Operation.guaranteeChannel
@@ -211,13 +213,7 @@ def empty (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO
   soundness _ _ := trivial
 
 @[circuit_norm]
-lemma empty_operations : (empty F PublicIO).operations = [] := rfl
-
-@[circuit_norm]
-lemma empty_channelsWithGuarantees : (empty F PublicIO).channelsWithGuarantees = [] := rfl
-
-@[circuit_norm]
-lemma empty_channelsWithRequirements : (empty F PublicIO).channelsWithRequirements = [] := rfl
+lemma empty_main (input : Var PublicIO F) : (empty F PublicIO).main input = pure () := rfl
 
 end Program
 end Verifier

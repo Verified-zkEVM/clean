@@ -14,37 +14,29 @@ universe u
 variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
 
-structure ChannelInterface (F : Type) where
-  channelsWithGuarantees : List (RawChannel F)
-  channelsWithRequirements : List (RawChannel F)
+/-- Channels on which a participant of an ensemble, a component or the verifier, adds guarantees and requirements. -/
+class ChannelInterface (α : Type u) (F : outParam Type) where
+  channelsWithGuarantees : α → List (RawChannel F)
+  channelsWithRequirements : α → List (RawChannel F)
 
-class HasChannelInterface (F : Type) (α : Type u) where
-  channelInterface : α → ChannelInterface F
+instance : ChannelInterface (Component F) F where
+  channelsWithGuarantees component := component.circuit.channelsWithGuarantees
+  channelsWithRequirements component := component.circuit.channelsWithRequirements
 
-def channelInterface {α : Type u} [HasChannelInterface F α] (value : α) : ChannelInterface F :=
-  HasChannelInterface.channelInterface value
+instance : ChannelInterface (Verifier.Program F PublicIO) F where
+  channelsWithGuarantees verifier := verifier.channelsWithGuarantees
+  channelsWithRequirements verifier := verifier.channelsWithRequirements
 
-instance : HasChannelInterface F (Component F) where
-  channelInterface component :=
-    { channelsWithGuarantees := component.circuit.channelsWithGuarantees
-      channelsWithRequirements := component.circuit.channelsWithRequirements }
-
-instance : HasChannelInterface F (Verifier.Program F PublicIO) where
-  channelInterface verifier :=
-    { channelsWithGuarantees := verifier.channelsWithGuarantees
-      channelsWithRequirements := verifier.channelsWithRequirements }
-
-@[circuit_norm] lemma component_channelInterface_channelsWithGuarantees (component : Component F) :
-    (channelInterface component).channelsWithGuarantees =
-      component.circuit.channelsWithGuarantees := rfl
-@[circuit_norm] lemma component_channelInterface_channelsWithRequirements (component : Component F) :
-    (channelInterface component).channelsWithRequirements =
-      component.circuit.channelsWithRequirements := rfl
-@[circuit_norm] lemma verifier_channelInterface_channelsWithGuarantees (verifier : Verifier.Program F PublicIO) :
-    (channelInterface verifier).channelsWithGuarantees = verifier.channelsWithGuarantees := rfl
-@[circuit_norm] lemma verifier_channelInterface_channelsWithRequirements
-    (verifier : Verifier.Program F PublicIO) :
-    (channelInterface verifier).channelsWithRequirements = verifier.channelsWithRequirements := rfl
+namespace ChannelInterface
+@[circuit_norm] lemma channelsWithGuarantees_component (component : Component F) :
+    channelsWithGuarantees component = component.circuit.channelsWithGuarantees := rfl
+@[circuit_norm] lemma channelsWithRequirements_component (component : Component F) :
+    channelsWithRequirements component = component.circuit.channelsWithRequirements := rfl
+@[circuit_norm] lemma channelsWithGuarantees_verifier (verifier : Verifier.Program F PublicIO) :
+    channelsWithGuarantees verifier = verifier.channelsWithGuarantees := rfl
+@[circuit_norm] lemma channelsWithRequirements_verifier (verifier : Verifier.Program F PublicIO) :
+    channelsWithRequirements verifier = verifier.channelsWithRequirements := rfl
+end ChannelInterface
 
 structure Ensemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO] where
   /-- Components form an ordered map: names are keys, while list order fixes the trace order consumed by witness generation and backend extraction. -/
@@ -133,6 +125,12 @@ lemma verifierChannelGuarantees_of_not_mem
   exact Operations.guarantees_of_not_mem ens.verifierOperations
     ens.verifier.channelsWithGuarantees (.fromInput publicInput data)
     (ens.verifier.operations.circuitOperations_inChannelsOrGuaranteesFull _) channel h_not_mem
+
+lemma verifierGuarantees_iff (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : ProverData F) :
+    ens.VerifierGuarantees publicInput data ↔
+      ∀ channel ∈ ens.verifier.channelsWithGuarantees, ens.VerifierChannelGuarantees publicInput data channel :=
+  Operations.guarantees_iff ens.verifierOperations ens.verifier.channelsWithGuarantees _
+    (ens.verifier.operations.circuitOperations_inChannelsOrGuaranteesFull _)
 
 def channelsWithGuarantees (ens : Ensemble F PublicIO) : List (RawChannel F) :=
   ens.verifier.channelsWithGuarantees ++
