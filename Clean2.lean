@@ -21,10 +21,11 @@ public import Clean2.Challenge.ZeroCheck
 public import Clean2.Challenge.Permutation
 public import Clean2.Challenge.PermutationRunning
 public import Clean2.Challenge.LogUp
-public import Clean2.Challenge.Examples
+public import Clean2.Challenge.IdentityExamples
 public import Clean2.Challenge.NaiveSymbolic
 public import Clean2.Challenge.Symbolic
 public import Clean2.Challenge.AssertIdentity
 public import Clean2.Challenge.Fractions
 public import Clean2.Challenge.LogUpRow
 public import Clean2.Challenge.GrandProductRow
+public import Clean2.Challenge.Examples
