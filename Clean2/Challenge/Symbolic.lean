@@ -181,6 +181,19 @@ theorem NumDegLE.sum_div_X_sub_C {n : ℕ} (c a : Fin n → F) :
         = ∑ j ∈ Finset.univ.erase i, 1 := Finset.sum_congr rfl fun j _ => natDegree_X_sub_C _
       _ ≤ n := by simp
 
+/-- The logUp shape, `∑ c i / (X - a i) - ∑ 1 / (X - b j)`, has a numerator of degree at most
+`n + l`: it is one sum of simple fractions. -/
+theorem NumDegLE.sum_sub_sum_inv {n l : ℕ} (c a : Fin n → F) (b : Fin l → F) :
+    NumDegLE (∑ i, RatFunc.C (c i) / (RatFunc.X - RatFunc.C (a i)) - ∑ j, (RatFunc.X - RatFunc.C (b j))⁻¹)
+      (n + l) := by
+  have h : ∑ i, RatFunc.C (c i) / (RatFunc.X - RatFunc.C (a i)) - ∑ j, (RatFunc.X - RatFunc.C (b j))⁻¹ =
+      ∑ i : Fin (n + l), RatFunc.C (Fin.append c (fun _ => (-1 : F)) i) /
+        (RatFunc.X - RatFunc.C (Fin.append a b i)) := by
+    rw [Fin.sum_univ_add, sub_eq_add_neg, ← Finset.sum_neg_distrib]
+    simp [Fin.append_left, Fin.append_right, neg_div]
+  rw [h]
+  exact sum_div_X_sub_C _ _
+
 /-- `∏ (X - a i) / (X - b i) - 1` has a numerator of degree at most `n`. -/
 theorem NumDegLE.prod_div_sub_one {n : ℕ} (a b : Fin n → F) :
     NumDegLE (∏ i, (RatFunc.X - RatFunc.C (a i)) / (RatFunc.X - RatFunc.C (b i)) - 1) n := by

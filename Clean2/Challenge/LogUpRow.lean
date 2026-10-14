@@ -281,4 +281,98 @@ noncomputable def impl : Impl B (interface n) where
       (fun i : Fin n => (Vector.map (B.eval env) m)[i])).mpr h_prover
 
 end Balance
+
+namespace Lookup
+open Fractions
+variable {F : Type} [Field F] [DecidableEq F]
+
+/-- Every value is looked up (in `f`) as often as the table's multiplicities (`μ` on `t`) say. -/
+@[reducible]
+def interface (n l : ℕ) : Interface F where
+  input := ((Vector F n × Vector F n) × Vector F l) × F
+  inputCType := ((.natives n ×ᵗ .natives n) ×ᵗ .natives l) ×ᵗ .native
+  output := Unit
+  outputCType := .unit
+  Spec := fun (((t, μ), f), _) _ => ∀ y,
+    ((Finset.univ.filter fun j : Fin l => f[j] = y).card : F) = ∑ i ∈ Finset.univ.filter (fun i : Fin n => t[i] = y), μ[i]
+  ProverAssumptions := fun (((t, μ), f), _) => ∀ y,
+    ((Finset.univ.filter fun j : Fin l => f[j] = y).card : F) = ∑ i ∈ Finset.univ.filter (fun i : Fin n => t[i] = y), μ[i]
+
+/-- What the final sum stands for, in the committed values `t ++ (μ ++ f)`. -/
+noncomputable def R (n l : ℕ) (c : Vector F (n + (n + l))) : RatFunc F :=
+  ∑ i : Fin n, RatFunc.C c[Fin.natAdd n (Fin.castAdd l i)] / (RatFunc.X - RatFunc.C c[Fin.castAdd (n + l) i]) -
+    ∑ j : Fin l, (RatFunc.X - RatFunc.C c[Fin.natAdd n (Fin.natAdd n j)])⁻¹
+
+omit [DecidableEq F] in
+theorem R_append {n l : ℕ} (t μ : Vector F n) (f : Vector F l) :
+    R n l (t ++ (μ ++ f)) =
+      ∑ i : Fin n, RatFunc.C μ[i] / (RatFunc.X - RatFunc.C t[i]) - ∑ j : Fin l, (RatFunc.X - RatFunc.C f[j])⁻¹ := by
+  simp [R]
+
+variable {B : Backend} [Field B.Native] [DecidableEq B.Native] {n l : ℕ}
+  (arith : ∀ n, Impl B (Arith.interface n))
+  (sumT : Impl B (LogUpSum.interface n)) (sumF : Impl B (LogUpSum.interface l))
+  (boundary : Impl B (AssertIdentity.interface (n + (n + l)) (n + l) (R n l)))
+
+omit [DecidableEq B.Native] in
+/-- The two running sums together stand for the logUp rational function. -/
+theorem represents_sum {α s₁ s₂ : B.Native} {t μ : Vector B.Native n} {f : Vector B.Native l}
+    (h_t : ∀ i : Fin n, α ≠ t[i]) (h_s₁ : s₁ = ∑ i : Fin n, μ[i] / (α - t[i]))
+    (h_f : ∀ j : Fin l, α ≠ f[j]) (h_s₂ : s₂ = ∑ j : Fin l, -1 / (α - f[j])) :
+    s₁ + s₂ ≙[α] R n l (t ++ (μ ++ f)) := by
+  rw [R_append, sub_eq_add_neg, ← Finset.sum_neg_distrib, h_s₁, h_s₂]
+  refine (Represents.sum _ fun i _ =>
+    (Represents.const _).div (Represents.X.sub (Represents.const _)) (sub_ne_zero.mpr (h_t i))).add ?_
+  refine (Represents.sum (f := fun j : Fin l => -1 / (α - f[j])) _ fun j _ =>
+    (Represents.const (-1)).div (Represents.X.sub (Represents.const _)) (sub_ne_zero.mpr (h_f j))).congr ?_
+  simp [neg_div]
+
+/-- The table's sum, the lookups' sum, and a boundary. -/
+noncomputable def impl : Impl B (interface n l) where
+  main | (((t, μ), f), α) => do
+    let negOne ← arith (.const (-1)) ()
+    let s₁ ← sumT ((t, μ), α)
+    let s₂ ← sumF ((f, Vector.replicate l negOne), α)
+    let acc ← arith .add (s₁, s₂)
+    boundary ((t ++ (μ ++ f), acc), α)
+  spatial := by
+    intro (((t, μ), f), α) s h
+    obtain ⟨⟨⟨h_t, h_μ⟩, h_f⟩, h_α⟩ := (Backend.footprintT_ctypeProd_subset.mp h).imp_left fun h =>
+      (Backend.footprintT_ctypeProd_subset.mp h).imp_left Backend.footprintT_ctypeProd_subset.mp
+    simp only [circuit_norm] at h_α ⊢
+    have h_rep : ∀ {x : B.Var} {S : Set B.Cell}, B.footprint x ⊆ S →
+        B.footprintT (M := natives l) (Vector.replicate l x) ⊆ S := fun h => by
+      rw [Backend.footprintT_natives]
+      exact Set.iUnion_subset fun i => by simpa using h
+    refine ⟨Set.empty_subset _, fun h_neg m₁ => ⟨?_, fun h_s₁ m₂ => ⟨?_, fun h_s₂ m₃ =>
+      ⟨Set.union_subset (h_s₁.trans m₃) h_s₂, fun h_acc m₄ => ⟨?_, fun _ _ => Set.empty_subset _⟩⟩⟩⟩⟩
+    · exact Backend.footprintT_ctypeProd_subset.mpr ⟨Backend.footprintT_ctypeProd_subset.mpr
+        ⟨h_t.trans m₁, h_μ.trans m₁⟩, Backend.footprintT_native_subset.mpr (h_α.trans m₁)⟩
+    · exact Backend.footprintT_ctypeProd_subset.mpr ⟨Backend.footprintT_ctypeProd_subset.mpr
+        ⟨h_f.trans (m₁.trans m₂), h_rep (h_neg.trans m₂)⟩, Backend.footprintT_native_subset.mpr (h_α.trans (m₁.trans m₂))⟩
+    · have m := m₁.trans (m₂.trans (m₃.trans m₄))
+      exact Backend.footprintT_ctypeProd_subset.mpr ⟨Backend.footprintT_ctypeProd_subset.mpr
+        ⟨Backend.footprintT_append_subset (h_t.trans m) (Backend.footprintT_append_subset (h_μ.trans m) (h_f.trans m)),
+          Backend.footprintT_native_subset.mpr h_acc⟩, Backend.footprintT_native_subset.mpr (h_α.trans m)⟩
+  soundness := by
+    intro s env (((t, μ), f), α) _ h
+    simp only [circuit_norm] at h ⊢
+    obtain ⟨h_neg, ⟨h_t, h_s₁⟩, ⟨h_f, h_s₂⟩, h_add, h_boundary⟩ := h
+    rw [Vector.map_append, Vector.map_append] at h_boundary
+    have h_R := h_boundary ⟨by rw [h_add]; exact represents_sum h_t h_s₁ h_f (by simpa [h_neg] using h_s₂),
+      by rw [R_append]; exact NumDegLE.sum_sub_sum_inv _ _ _⟩
+    rw [R_append, sub_eq_zero] at h_R
+    exact (logUp_iff (fun i : Fin n => (Vector.map (B.eval env) t)[i]) (fun i : Fin n => (Vector.map (B.eval env) μ)[i])
+      (fun j : Fin l => (Vector.map (B.eval env) f)[j])).mp h_R
+  completeness := by
+    intro s env (((t, μ), f), α) h h_prover
+    simp only [circuit_norm] at h h_prover ⊢
+    obtain ⟨h_neg, ⟨h_t, h_s₁⟩, ⟨h_f, h_s₂⟩, h_add, -⟩ := h
+    rw [Vector.map_append, Vector.map_append, h_add]
+    refine ⟨represents_sum h_t h_s₁ h_f (by simpa [h_neg] using h_s₂), ?_⟩
+    rw [R_append, sub_eq_zero]
+    exact (logUp_iff (fun i : Fin n => (Vector.map (B.eval env) t)[i]) (fun i : Fin n => (Vector.map (B.eval env) μ)[i])
+      (fun j : Fin l => (Vector.map (B.eval env) f)[j])).mpr h_prover
+
+end Lookup
 end Clean2
