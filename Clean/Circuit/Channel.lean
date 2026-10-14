@@ -15,19 +15,25 @@ structure Channel (F : Type) (Message : TypeMap) [ProvableType Message] where
   /-- the guarantees you get from adding an interaction to the channel, to be used locally in your soundness proof -/
   Guarantees (message : Message F) (data : ProverData F) : Prop
 
-/-- `Channel` with type argument removed, to be used in the core framework. -/
-structure RawChannel (F : Type) where
+/--
+`Channel` with type argument removed, to be used in the core framework.
+
+Multiplicities live in `M`, which defaults to the message field `F`. Channels whose interactions
+are counted outside the field, for example over a binary field where `-1 = 1` would make pushes
+and pulls indistinguishable, can take `M = ℤ`.
+-/
+structure RawChannel (F : Type) (M : Type := F) where
   name : String
   arity : ℕ
   /-- the guarantees you get from adding an interaction to the channel, to be used locally in your soundness proof -/
-  Guarantees (mult : F) (message : Vector F arity) (data : ProverData F) : Prop
+  Guarantees (mult : M) (message : Vector F arity) (data : ProverData F) : Prop
   /--
   proof obligation from adding an interaction, to be _provided_ locally in your soundness proof.
   intuition: the `Guarantees` for multiplicity `-m` should follow from the `Requirements` for multiplicity `m`,
   so that pulling from the channel gives you a guarantee that is satisfied on the other side by the requirement for pushing
   the same element.
   -/
-  Requirements (mult : F) (message : Vector F arity) (data : ProverData F) : Prop
+  Requirements (mult : M) (message : Vector F arity) (data : ProverData F) : Prop
 
 namespace Channel
 /--
@@ -305,22 +311,26 @@ lemma mem_expose_pulled_pushed (pull pull' push push' : Message (Expression F)) 
 Concrete interaction values are heterogeneous: after evaluation, we collect interactions for
 all channels in one list. The typed `Channel F Message` wrapper still remembers message shape
 when building interactions, while this raw representation carries the channel arity explicitly.
+
+The multiplicity lives in `M`, which defaults to the message field `F`.
 -/
-structure Interaction (F : Type) where
-  channel : RawChannel F
-  mult : F
+structure Interaction (F : Type) (M : Type := F) where
+  channel : RawChannel F M
+  mult : M
   msg : Array F
   same_size : msg.size = channel.arity
   assumeGuarantees : Bool
 
 namespace Interaction
-def msgVector (i : Interaction F) : Vector F i.channel.arity :=
+variable {M : Type}
+
+def msgVector (i : Interaction F M) : Vector F i.channel.arity :=
   ⟨ i.msg, i.same_size ⟩
 
-def Guarantees (i : Interaction F) (data : ProverData F) : Prop :=
+def Guarantees (i : Interaction F M) (data : ProverData F) : Prop :=
   i.assumeGuarantees → i.channel.Guarantees i.mult i.msgVector data
 
-def Requirements (i : Interaction F) (data : ProverData F) : Prop :=
+def Requirements (i : Interaction F M) (data : ProverData F) : Prop :=
   i.channel.Requirements i.mult i.msgVector data
 end Interaction
 
