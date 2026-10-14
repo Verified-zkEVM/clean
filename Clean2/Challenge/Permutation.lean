@@ -77,7 +77,7 @@ def impl (n : ℕ) : Impl B (interface n) where
     obtain ⟨⟨h_a, h_b⟩, h_α⟩ := (Backend.footprintT_ctypeProd_subset.mp h).imp_left
       Backend.footprintT_ctypeProd_subset.mp
     simp only [circuit_norm]
-    exact ⟨Backend.footprintT_ctypeProd_subset.mpr ⟨Identity.footprintT_append_subset h_a h_b, h_α⟩,
+    exact ⟨Backend.footprintT_ctypeProd_subset.mpr ⟨Backend.footprintT_append_subset h_a h_b, h_α⟩,
       fun _ _ => Set.empty_subset _⟩
   soundness := by
     intro s env ((a, b), α) _ h
@@ -121,7 +121,7 @@ def impl (n : ℕ) : Impl B (interface n) where
     obtain ⟨⟨h_a, h_b⟩, h_α⟩ := (Backend.footprintT_ctypeProd_subset.mp h).imp_left
       Backend.footprintT_ctypeProd_subset.mp
     simp only [circuit_norm]
-    exact ⟨Backend.footprintT_ctypeProd_subset.mpr ⟨Identity.footprintT_append_subset h_a h_b, h_α⟩,
+    exact ⟨Backend.footprintT_ctypeProd_subset.mpr ⟨Backend.footprintT_append_subset h_a h_b, h_α⟩,
       fun _ _ => Set.empty_subset _⟩
   soundness := by
     intro s env ((a, b), α) _ h

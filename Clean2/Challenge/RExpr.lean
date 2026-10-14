@@ -19,7 +19,7 @@ nonzero numerator. There are at most `bound e = degN e + divDeg e` of them, what
 -/
 module
 
-public import Clean2.Challenge.Basic
+public import Clean2.Challenge.Symbolic
 public import Mathlib.FieldTheory.RatFunc.AsPolynomial
 public import Mathlib.Algebra.BigOperators.Fin
 public import Mathlib.Tactic.Ring
@@ -253,16 +253,6 @@ variable (a b : RExpr F k) (α : F)
     tauto
 
 end Simp
-
-/-- The divisors users write: `X - c` is never zero. -/
-@[simp] theorem _root_.RatFunc.X_sub_C_ne_zero (c : F) : (RatFunc.X - RatFunc.C c : RatFunc F) ≠ 0 := by
-  rw [← RatFunc.algebraMap_X, ← RatFunc.algebraMap_C, ← map_sub]
-  exact RatFunc.algebraMap_ne_zero (Polynomial.X_sub_C_ne_zero c)
-
-/-- So is a product of them: `simp` uses this to discharge `div_eq_one_iff_eq`. -/
-@[simp] theorem _root_.RatFunc.prod_X_sub_C_ne_zero {n : ℕ} (c : Fin n → F) :
-    ∏ i, (RatFunc.X - RatFunc.C (c i) : RatFunc F) ≠ 0 :=
-  Finset.prod_ne_zero_iff.mpr fun i _ => RatFunc.X_sub_C_ne_zero (c i)
 
 /-! ### The bridges -/
 

@@ -243,17 +243,5 @@ theorem errorBound_impl
   simp only [impl, circuit_norm, Backend.Measure.ofOps, measure_call errorBound, h0, errorBound_evalCircuit arith h0,
     errorBound_rare, event, zero_add, add_zero]
 
-omit [Field B.Native] in
-/-- What a concatenation of committed values reads. For the spatial obligation of a call. -/
-theorem footprintT_append_subset {n m : ℕ} {a : Vector B.Var n} {b : Vector B.Var m} {S : Set B.Cell}
-    (ha : B.footprintT (M := natives n) a ⊆ S) (hb : B.footprintT (M := natives m) b ⊆ S) :
-    B.footprintT (M := natives (n + m)) (a ++ b) ⊆ S := by
-  rw [Backend.footprintT_natives] at ha hb ⊢
-  refine Set.iUnion_subset fun i => ?_
-  rw [Fin.getElem_fin, Vector.getElem_append]
-  split
-  · exact (Set.subset_iUnion (fun j : Fin n => B.footprint a[j]) ⟨i, by omega⟩).trans ha
-  · exact (Set.subset_iUnion (fun j : Fin m => B.footprint b[j]) ⟨i - n, by omega⟩).trans hb
-
 end Identity
 end Clean2
