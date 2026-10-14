@@ -416,7 +416,6 @@ def programComponent {programSize : UInt64} (program : Fin programSize.toNat →
     Component (F p) where
   circuit := provideProgram program
   fixedColumns := some (programFixedColumns program)
-  Assumptions := fun _ _ => True
   circuit_assumptions_of_assumptions := by
     rintro i ⟨address, value, multiplicity⟩ data hfixed - -
     simp [programFixedColumns, circuit_norm, explicit_provable_type] at hfixed
@@ -449,7 +448,6 @@ def memoryComponent (memorySize : UInt64) (h_memorySize : memorySize.toNat < p) 
     Component (F p) where
   circuit := provideMemory
   fixedColumns := some (memoryFixedColumns memorySize)
-  Assumptions := fun _ _ => True
   circuit_assumptions_of_assumptions := by
     rintro i ⟨address, value, multiplicity⟩ data hfixed hdata -
     simp [memoryFixedColumns, provideMemory, circuit_norm, explicit_provable_type] at hfixed hdata
@@ -670,8 +668,7 @@ def formalEnsemble {programSize memorySize : UInt64} (program : Fin programSize.
     (initialState : State (F p)) :=
   (soundEnsemble program h_programSize h_memorySize initialState).toFormal (fun _ => True)
     (Spec program memorySize initialState)
-    (by simp [circuit_norm, soundEnsemble, vm, executionComponent, executeStep, memoryComponent,
-      programComponent])
+    (by simp [circuit_norm, soundEnsemble, vm, executionComponent, memoryComponent, programComponent])
     (by
       rintro witness - spec
       have hsize := witness.getRows_size_of_fixedColumns

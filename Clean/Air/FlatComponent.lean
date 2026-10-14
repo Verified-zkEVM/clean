@@ -78,11 +78,11 @@ structure Component (F : Type) [FiniteField F] where
   /-- When present, identifies the fixed prefix available to the circuit on row `i`. -/
   fixedColumns : Option (FixedColumns F) := none
   /-- Assumptions still required from the enclosing ensemble after fixed-row and data facts. -/
-  Assumptions : Input F → ProverData F → Prop := circuit.Assumptions
+  Assumptions : Input F → ProverData F → Prop := fun _ _ => True
   /-- Fixed-row and derived-data facts, together with the residual assumptions, imply the assumptions of the underlying row circuit. -/
   circuit_assumptions_of_assumptions : ∀ (i : UInt64) (input : Input F) data,
       FixedInputAt fixedColumns i input → DataInputAt circuit.name i input data →
-        Assumptions input data → circuit.Assumptions input data := by simp
+        Assumptions input data → circuit.Assumptions input data := by intros; trivial
   fixed_width_le_input : (fixedColumns.map FixedColumns.width).getD 0 ≤ size Input := by simp <;> exact Nat.le_of_ble_eq_true rfl
 
 instance (t: Component F) : ProvableType t.Input := t.provableInput

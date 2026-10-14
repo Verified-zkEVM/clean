@@ -73,7 +73,6 @@ def bytesFixedColumns : FixedColumns (F p) where
 def bytesComponent : Component (F p) where
   circuit := pushBytes
   fixedColumns := some bytesFixedColumns
-  Assumptions := fun _ _ => True
   circuit_assumptions_of_assumptions := by
     rintro i ⟨value, multiplicity⟩ data hfixed - -
     simp [bytesFixedColumns, circuit_norm, explicit_provable_type] at hfixed
@@ -279,7 +278,7 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
       bytesComponent, pushBytes])
   |>.toFormal (fun _ => True)
     (fun (n, x, y) => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val)
-    (by simp [circuit_norm, fibonacciVm, add8, bytesComponent, pushBytes, fib8])
+    (by simp [circuit_norm, fibonacciVm, bytesComponent])
     (by simp [circuit_norm, fibonacciVm, fibonacciVerifier])
 
 namespace FibonacciWitness
