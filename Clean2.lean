@@ -14,3 +14,7 @@ public import Clean2.Gadgets.Select
 public import Clean2.Gadgets.Bits2Num
 public import Clean2.Gadgets.Poseidon
 public import Clean2.Gadgets.Byte
+public import Clean2.Challenge.Basic
+public import Clean2.Challenge.Quadratic
+public import Clean2.Challenge.GrandProduct
+public import Clean2.Challenge.NaiveSymbolic
