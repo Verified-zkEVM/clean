@@ -44,6 +44,11 @@ public import Clean.Gadgets.BLAKE3.FinalStateUpdate
 public import Clean.Gadgets.BLAKE3.Round
 public import Clean.Gadgets.BLAKE3.FinalizeChunk
 public import Clean.Examples.FibonacciWithChannels
+public import Clean.Examples.FibonacciWithDirectedChannels
+public import Clean.Circuit.DirectedChannel
+public import Clean.Air.BalanceModel
+public import Clean.Air.VmWith
+public import Clean.Air.BusProtocol
 public import Clean.Gadgets.SHA256.SHA256Compress
 public import Clean.Backends.Circom.Ast
 public import Clean.Backends.Circom.Compile
