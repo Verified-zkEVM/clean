@@ -19,7 +19,7 @@ In this terminology, a `Flat.Component` is a one-row AIR component: it packages 
 - `Flat.Tables`: a bundle of tables sharing one prover data object.
 - `Flat.FixedColumns`: verifier-known columns that form a prefix of a component's input, defined by a row program evaluated on the row index.
 
-A component's prover data is the list of complete inputs of every row, cut off at the requested width, keyed by the component's circuit name. A component may weaken its circuit's assumptions to residual `Assumptions`, provided that together with the facts its rows get for free, `FixedInputAt` (the input starts with the row's fixed values) and `DataInputAt` (the input is the row's entry in the prover data), they imply the circuit's assumptions.
+A component's prover data is the list of complete inputs of every row, cut off at the requested width, keyed by the component's circuit name. A component states residual `Assumptions` (default `True`) such that, together with the facts its rows get for free, `FixedInputAt` (the input starts with the row's fixed values) and `DataInputAt` (the input is the row's entry in the prover data), they imply the circuit's assumptions.
 
 It also proves the basic row-level transport lemmas: instantiated component operations agree with row operations, component soundness lifts to table soundness, and table interactions can be collected per channel.
 
