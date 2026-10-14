@@ -15,6 +15,7 @@ Soundness error `n` (the boundary), completeness error `n` (one per row).
 module
 
 public import Clean2.Challenge.AssertIdentity
+public import Clean2.Challenge.Protocol
 public import Clean2.Challenge.Fractions
 public import Clean2.Gadgets.Inverse
 
@@ -240,21 +241,20 @@ variable {F : Type} [Field F] [DecidableEq F]
 
 /-- Every value's multiplicities add up to zero. -/
 @[reducible]
-def interface (n : ℕ) : Interface F where
-  input := (Vector F n × Vector F n) × F
-  inputCType := (.natives n ×ᵗ .natives n) ×ᵗ .native
+def contract (n : ℕ) : Interface F where
+  input := Vector F n × Vector F n
+  inputCType := .natives n ×ᵗ .natives n
   output := Unit
   outputCType := .unit
-  Spec := fun ((v, m), _) _ => ∀ y, ∑ i ∈ Finset.univ.filter (fun i : Fin n => v[i] = y), m[i] = 0
-  ProverAssumptions := fun ((v, m), _) => ∀ y, ∑ i ∈ Finset.univ.filter (fun i : Fin n => v[i] = y), m[i] = 0
+  Spec := fun (v, m) _ => ∀ y, ∑ i ∈ Finset.univ.filter (fun i : Fin n => v[i] = y), m[i] = 0
+  ProverAssumptions := fun (v, m) => ∀ y, ∑ i ∈ Finset.univ.filter (fun i : Fin n => v[i] = y), m[i] = 0
 
-/-- The values and their multiplicities are committed. -/
+/-- The check, given a challenge: everything else is committed. -/
 @[reducible]
-def phases (n : ℕ) : (interface (F := F) n).Phases where
-  Committed := Vector F n × Vector F n
-  committed := fun (vm, _) => vm
-  Challenge := F
-  challenge := fun (_, α) => α
+def interface (n : ℕ) : Interface F := (contract n).withChallenge
+
+@[reducible]
+def phases (n : ℕ) : (interface (F := F) n).Phases := Interface.withChallenge.phases _
 
 /-- What the final sum stands for, in the committed values `v ++ m`: `∑ m i / (X - v i)`. -/
 noncomputable def R (n : ℕ) (c : Vector F (n + n)) : RatFunc F :=
@@ -323,23 +323,23 @@ variable {F : Type} [Field F] [DecidableEq F]
 
 /-- Every value is looked up (in `f`) as often as the table's multiplicities (`μ` on `t`) say. -/
 @[reducible]
-def interface (n l : ℕ) : Interface F where
-  input := ((Vector F n × Vector F n) × Vector F l) × F
-  inputCType := ((.natives n ×ᵗ .natives n) ×ᵗ .natives l) ×ᵗ .native
+def contract (n l : ℕ) : Interface F where
+  input := (Vector F n × Vector F n) × Vector F l
+  inputCType := (.natives n ×ᵗ .natives n) ×ᵗ .natives l
   output := Unit
   outputCType := .unit
-  Spec := fun (((t, μ), f), _) _ => ∀ y,
+  Spec := fun ((t, μ), f) _ => ∀ y,
     ((Finset.univ.filter fun j : Fin l => f[j] = y).card : F) = ∑ i ∈ Finset.univ.filter (fun i : Fin n => t[i] = y), μ[i]
-  ProverAssumptions := fun (((t, μ), f), _) => ∀ y,
+  ProverAssumptions := fun ((t, μ), f) => ∀ y,
     ((Finset.univ.filter fun j : Fin l => f[j] = y).card : F) = ∑ i ∈ Finset.univ.filter (fun i : Fin n => t[i] = y), μ[i]
 
-/-- The table, its multiplicities, and the looked-up values are committed. -/
+/-- The check, given a challenge: the table, its multiplicities, and the looked-up values are
+committed. -/
 @[reducible]
-def phases (n l : ℕ) : (interface (F := F) n l).Phases where
-  Committed := (Vector F n × Vector F n) × Vector F l
-  committed := fun (tμf, _) => tμf
-  Challenge := F
-  challenge := fun (_, α) => α
+def interface (n l : ℕ) : Interface F := (contract n l).withChallenge
+
+@[reducible]
+def phases (n l : ℕ) : (interface (F := F) n l).Phases := Interface.withChallenge.phases _
 
 /-- What the final sum stands for, in the committed values `t ++ (μ ++ f)`. -/
 noncomputable def R (n l : ℕ) (c : Vector F (n + (n + l))) : RatFunc F :=

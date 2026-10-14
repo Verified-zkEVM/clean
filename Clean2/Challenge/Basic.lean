@@ -174,17 +174,20 @@ def HonestFailures {ph : c.Phases} (impl : Impl B c) (_ : Phased impl ph) (s : B
     ¬∃ env : B.Cell → B.Native, (∀ x ∈ B.Alloc s, env x = env₀ x) ∧
       ((impl.main input).operations s).ConstraintsHold env s}
 
-/-- **Soundness error.** Fix the committed part `x` of the input. The challenges at which some
-assignment, with that committed part and satisfying the assumptions, satisfies the real
-constraints but not the spec are at most `errorBound` many.
-
-The committed part and the challenge are those of the interface's phase annotation `ph`, and the
-phase contract (`Impl.Phased`) is what makes the rare events depend on nothing else. -/
-theorem soundness_error {ph : c.Phases} (impl : Impl B c) [h_phased : Phased impl ph]
-    (s : B.State) (input : c.Input B.Var) (x : ph.Committed) :
-    (impl.BadChallenges h_phased s input x).encard ≤ errorBound.ofOps ((impl.main input).operations s) := by
+/-- The soundness error, for any committed key `K` and challenge `A` with respect to which the
+rare events are phased: the form for a circuit that draws its challenge itself (`Protocol`). -/
+theorem soundness_error_ops {κ T : Type} (impl : Impl B c) (s : B.State) (input : c.Input B.Var)
+    {K : (B.Cell → B.Native) → κ} {A : (B.Cell → B.Native) → T}
+    (h_phased : ((impl.main input).operations s).Phased K A) (x : κ) :
+    {a | ∃ env : B.Cell → B.Native, K env = x ∧ A env = a ∧
+      c.inputCType.Valid (B.evalT env input) ∧ c.Assumptions (c.inputCType.decode (B.evalT env input)) ∧
+      ((impl.main input).operations s).ConstraintsHold env s ∧
+      ¬(c.outputCType.Valid (B.evalT env (impl.output input s)) ∧
+        c.Spec (c.inputCType.decode (B.evalT env input))
+          (c.outputCType.decode (B.evalT env (impl.output input s))))}.encard ≤
+      errorBound.ofOps ((impl.main input).operations s) := by
   rw [errorBound_ofOps]
-  refine encard_bad_le _ (fun ev hev => h_phased.phased input s ev (List.mem_append_left _ hev)) x _ ?_
+  refine encard_bad_le _ (fun ev hev => h_phased ev (List.mem_append_left _ hev)) x _ ?_
   rintro a ⟨env, h_K, rfl, h_valid, h_assumptions, h_holds, h_spec⟩
   -- some rare event happens: otherwise soundness would give the spec
   by_contra h_none
@@ -193,15 +196,21 @@ theorem soundness_error {ph : c.Phases} (impl : Impl B c) [h_phased : Phased imp
     (Ops.soundnessHold_of_constraintsHold (impl.consistent input s)
       (fun ev hev h_happens => h_none ev hev env h_K rfl h_happens) h_holds))
 
-/-- **Completeness error.** Fix the committed part `x` of the input, which exists in the heap.
-The challenges at which the honest prover can fail, starting from some assignment of the heap
-with that committed part and satisfying the prover assumptions, are at most `honestErrorBound`
-many. -/
-theorem completeness_error {ph : c.Phases} (impl : Impl B c) [h_phased : Phased impl ph]
-    (s : B.State) (input : c.Input B.Var) (h_in : B.footprintT input ⊆ B.Alloc s) (x : ph.Committed) :
-    (impl.HonestFailures h_phased s input x).encard ≤ honestErrorBound.ofOps ((impl.main input).operations s) := by
+/-- The completeness error, for any committed key `K` and challenge `A` that are fixed by the heap
+and with respect to which the rare events of the honest prover are phased. -/
+theorem completeness_error_ops {κ T : Type} (impl : Impl B c) (s : B.State) (input : c.Input B.Var)
+    (h_in : B.footprintT input ⊆ B.Alloc s)
+    {K : (B.Cell → B.Native) → κ} {A : (B.Cell → B.Native) → T}
+    (h_phased : ((impl.main input).operations s).Phased K A)
+    (h_heap : ∀ env env₀ : B.Cell → B.Native, (∀ x ∈ B.Alloc s, env x = env₀ x) → K env = K env₀ ∧ A env = A env₀)
+    (x : κ) :
+    {a | ∃ env₀ : B.Cell → B.Native, K env₀ = x ∧ A env₀ = a ∧
+      c.inputCType.Valid (B.evalT env₀ input) ∧ c.ProverAssumptions (c.inputCType.decode (B.evalT env₀ input)) ∧
+      ¬∃ env : B.Cell → B.Native, (∀ x ∈ B.Alloc s, env x = env₀ x) ∧
+        ((impl.main input).operations s).ConstraintsHold env s}.encard ≤
+      honestErrorBound.ofOps ((impl.main input).operations s) := by
   rw [honestErrorBound_ofOps]
-  refine encard_bad_le _ (fun ev hev => h_phased.phased input s ev (List.mem_append_right _ hev)) x _ ?_
+  refine encard_bad_le _ (fun ev hev => h_phased ev (List.mem_append_right _ hev)) x _ ?_
   rintro a ⟨env₀, h_K, rfl, h_valid, h_prover, h_fail⟩
   -- if no rare event of the honest prover happens, an honest assignment is accepted
   by_contra h_none
@@ -210,13 +219,34 @@ theorem completeness_error {ph : c.Phases} (impl : Impl B c) [h_phased : Phased 
   have h_hev : ∀ env : B.Cell → B.Native, (∀ x ∈ B.Alloc s, env x = env₀ x) →
       ∀ ev ∈ ((impl.main input).operations s).honestEvents, ¬ev.Happens env := by
     intro env h_agree ev hev h_happens
-    -- the input, hence its committed part and its challenge, is in the heap
-    have h_eq : B.evalT env input = B.evalT env₀ input :=
-      Backend.evalT_frame env env₀ input fun x hx => h_agree x (h_in hx)
-    exact h_none ev hev env (by rw [Interface.Phases.key, h_eq]; exact h_K)
-      (by rw [Interface.Phases.chal, h_eq]) h_happens
+    obtain ⟨h_K', h_A'⟩ := h_heap env env₀ h_agree
+    exact h_none ev hev env (h_K'.trans h_K) h_A' h_happens
   obtain ⟨env, h_agree, h_holds, -⟩ := impl.exists_honest_env input s env₀ h_in ⟨h_valid, h_prover⟩ h_hev
   exact ⟨env, h_agree, h_holds⟩
+
+/-- **Soundness error.** Fix the committed part `x` of the input. The challenges at which some
+assignment, with that committed part and satisfying the assumptions, satisfies the real
+constraints but not the spec are at most `errorBound` many.
+
+The committed part and the challenge are those of the interface's phase annotation `ph`, and the
+phase contract (`Impl.Phased`) is what makes the rare events depend on nothing else. -/
+theorem soundness_error {ph : c.Phases} (impl : Impl B c) [h_phased : Phased impl ph]
+    (s : B.State) (input : c.Input B.Var) (x : ph.Committed) :
+    (impl.BadChallenges h_phased s input x).encard ≤ errorBound.ofOps ((impl.main input).operations s) :=
+  impl.soundness_error_ops s input (h_phased.phased input s) x
+
+/-- **Completeness error.** Fix the committed part `x` of the input, which exists in the heap.
+The challenges at which the honest prover can fail, starting from some assignment of the heap
+with that committed part and satisfying the prover assumptions, are at most `honestErrorBound`
+many. -/
+theorem completeness_error {ph : c.Phases} (impl : Impl B c) [h_phased : Phased impl ph]
+    (s : B.State) (input : c.Input B.Var) (h_in : B.footprintT input ⊆ B.Alloc s) (x : ph.Committed) :
+    (impl.HonestFailures h_phased s input x).encard ≤ honestErrorBound.ofOps ((impl.main input).operations s) := by
+  refine impl.completeness_error_ops s input h_in (h_phased.phased input s) (fun env env₀ h_agree => ?_) x
+  -- the input, hence its committed part and its challenge, is in the heap
+  have h_eq : B.evalT env input = B.evalT env₀ input :=
+    Backend.evalT_frame env env₀ input fun x hx => h_agree x (h_in hx)
+  simp only [Interface.Phases.key, Interface.Phases.chal, h_eq, and_self]
 
 /-- The soundness error, read off the closed form of `errorBound`. -/
 theorem soundness_error_of {ph : c.Phases} (impl : Impl B c) [h_phased : Phased impl ph] [Measured errorBound impl]

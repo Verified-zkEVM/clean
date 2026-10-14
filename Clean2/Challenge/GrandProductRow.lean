@@ -231,21 +231,20 @@ variable {F : Type} [Field F]
 
 /-- `b` is a permutation of `a`. -/
 @[reducible]
-def interface (n : ℕ) : Interface F where
-  input := (Vector F n × Vector F n) × F
-  inputCType := (.natives n ×ᵗ .natives n) ×ᵗ .native
+def contract (n : ℕ) : Interface F where
+  input := Vector F n × Vector F n
+  inputCType := .natives n ×ᵗ .natives n
   output := Unit
   outputCType := .unit
-  Spec := fun ((a, b), _) _ => elems a = elems b
-  ProverAssumptions := fun ((a, b), _) => elems a = elems b
+  Spec := fun (a, b) _ => elems a = elems b
+  ProverAssumptions := fun (a, b) => elems a = elems b
 
-/-- Both sides are committed. -/
+/-- The check, given a challenge: both sides are committed. -/
 @[reducible]
-def phases (n : ℕ) : (interface (F := F) n).Phases where
-  Committed := Vector F n × Vector F n
-  committed := fun (ab, _) => ab
-  Challenge := F
-  challenge := fun (_, α) => α
+def interface (n : ℕ) : Interface F := (contract n).withChallenge
+
+@[reducible]
+def phases (n : ℕ) : (interface (F := F) n).Phases := Interface.withChallenge.phases _
 
 /-- What the final product, minus one, stands for, in the committed values `b ++ a`. -/
 noncomputable def R (n : ℕ) (c : Vector F (n + n)) : RatFunc F :=

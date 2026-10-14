@@ -22,25 +22,24 @@ variable {F : Type} [Field F] [DecidableEq F]
 
 /-- `f` is looked up in `t` with multiplicities `μ`, and `b` is a permutation of `a`. -/
 @[reducible]
-def interface (n l k : ℕ) : Interface F where
-  input := ((((Vector F n × Vector F n) × Vector F l) × (Vector F k × Vector F k))) × F
-  inputCType := (((.natives n ×ᵗ .natives n) ×ᵗ .natives l) ×ᵗ (.natives k ×ᵗ .natives k)) ×ᵗ .native
+def contract (n l k : ℕ) : Interface F where
+  input := ((Vector F n × Vector F n) × Vector F l) × (Vector F k × Vector F k)
+  inputCType := ((.natives n ×ᵗ .natives n) ×ᵗ .natives l) ×ᵗ (.natives k ×ᵗ .natives k)
   output := Unit
   outputCType := .unit
-  Spec := fun ((((t, μ), f), (a, b)), _) _ => (∀ y,
+  Spec := fun (((t, μ), f), (a, b)) _ => (∀ y,
     ((Finset.univ.filter fun j : Fin l => f[j] = y).card : F) =
       ∑ i ∈ Finset.univ.filter (fun i : Fin n => t[i] = y), μ[i]) ∧ elems a = elems b
-  ProverAssumptions := fun ((((t, μ), f), (a, b)), _) => (∀ y,
+  ProverAssumptions := fun (((t, μ), f), (a, b)) => (∀ y,
     ((Finset.univ.filter fun j : Fin l => f[j] = y).card : F) =
       ∑ i ∈ Finset.univ.filter (fun i : Fin n => t[i] = y), μ[i]) ∧ elems a = elems b
 
-/-- Everything but the challenge is committed. -/
+/-- The check, given a challenge: everything else is committed. -/
 @[reducible]
-def phases (n l k : ℕ) : (interface (F := F) n l k).Phases where
-  Committed := ((Vector F n × Vector F n) × Vector F l) × (Vector F k × Vector F k)
-  committed := fun (x, _) => x
-  Challenge := F
-  challenge := fun (_, α) => α
+def interface (n l k : ℕ) : Interface F := (contract n l k).withChallenge
+
+@[reducible]
+def phases (n l k : ℕ) : (interface (F := F) n l k).Phases := Interface.withChallenge.phases _
 
 variable {B : Backend} [Field B.Native] [DecidableEq B.Native] {n l k : ℕ}
   (lookup : Impl B (Lookup.interface n l)) (perm : Impl B (PermutationRow.interface k))
@@ -264,6 +263,73 @@ theorem lookupAndPermutationR1CS_error (n l k : ℕ) (s : ℕ)
       ((lookupAndPermutationR1CS n l k).HonestFailures inferInstance s input x).encard ≤ ↑(n + l + k) := by
   have h₁ := Impl.soundness_error_of (lookupAndPermutationR1CS (F := F) n l k) s input x
   have h₂ := Impl.completeness_error_of (lookupAndPermutationR1CS (F := F) n l k) s input h_in x
+  rw [(errors_lookupAndPermutationR1CS n l k).1] at h₁
+  rw [(errors_lookupAndPermutationR1CS n l k).2] at h₂
+  exact ⟨h₁, h₂⟩
+
+/-! ### Closing the protocols: draw the challenge on R1CS -/
+
+/-- A challenge on R1CS: one native operation, a fresh cell. -/
+def challengeR1CS (m : ℕ) : Impl (R1CS F) (Challenge.interface m) where
+  main vars := R1CS.challenge vars
+  spatial := by
+    intro vars s h
+    simp only [circuit_norm]
+    exact ⟨h, Linear.singleton_subset_alloc_succ s⟩
+  soundness := by
+    intro s env _ _ _
+    simp [circuit_norm]
+  completeness := by
+    intro s env _ _ _
+    simp [circuit_norm]
+
+instance (m : ℕ) : Impl.NoEvents (challengeR1CS (F := F) m) := ⟨fun _ _ => rfl, fun _ _ => rfl⟩
+instance (m : ℕ) : Challenge.Free (challengeR1CS (F := F) m) := ⟨fun _ _ _ => ⟨trivial, trivial⟩⟩
+instance (m : ℕ) : Impl.Measured errorBound (challengeR1CS (F := F) m) where
+  value := 0
+  value_eq _ _ := rfl
+instance (m : ℕ) : Impl.Measured honestErrorBound (challengeR1CS (F := F) m) where
+  value := 0
+  value_eq _ _ := rfl
+instance (m : ℕ) : Impl.Measured R1CS.cost (challengeR1CS (F := F) m) where
+  value := (1, 0)
+  value_eq _ _ := rfl
+
+/-- The lookup argument, closed: commit to the table, its multiplicities and the lookups, draw
+the challenge, check. It implements `Lookup.contract`, which mentions no challenge. -/
+noncomputable def lookupProtocolR1CS (n l : ℕ) : Impl (R1CS F) (Lookup.contract n l) :=
+  Protocol.impl (challengeR1CS _) (lookupR1CS n l)
+
+/-- **The lookup argument on R1CS.** Fix the committed table, multiplicities and lookups. A false
+lookup is accepted at no more than `n + l` values of the drawn challenge, and the honest prover
+fails at no more than `n + l`. -/
+theorem lookupProtocolR1CS_error (n l : ℕ) (s : ℕ) (x : (Lookup.contract (F := F) n l).Input (R1CS F).Var)
+    (h_in : (R1CS F).footprintT x ⊆ (R1CS F).Alloc s) (x₀ : (Lookup.contract (F := F) n l).input) :
+    (Protocol.BadChallenges (challengeR1CS _) (lookupR1CS n l) s x x₀).encard ≤ ↑(n + l) ∧
+      (Protocol.HonestFailures (challengeR1CS _) (lookupR1CS n l) s x x₀).encard ≤ ↑(n + l) := by
+  have h₁ := Protocol.soundness_error (challengeR1CS _) (lookupR1CS (F := F) n l) rfl s x x₀
+  have h₂ := Protocol.completeness_error (challengeR1CS _) (lookupR1CS (F := F) n l) s x h_in x₀
+  rw [errorBound_of_lookup] at h₁
+  rw [honestErrorBound_of_lookup] at h₂
+  exact ⟨h₁, h₂⟩
+
+/-- A lookup and a permutation check, closed: one challenge, drawn after committing to all of
+it, shared by the two checks and by the two sides of the lookup. -/
+noncomputable def lookupAndPermutationProtocolR1CS (n l k : ℕ) : Impl (R1CS F) (LookupAndPermutation.contract n l k) :=
+  Protocol.impl (challengeR1CS _) (lookupAndPermutationR1CS n l k)
+
+/-- **Both checks on R1CS, end to end.** Fix the committed values. A false statement is accepted
+at no more than `n + l + k` values of the drawn challenge, and the honest prover fails at no more
+than `n + l + k`. -/
+theorem lookupAndPermutationProtocolR1CS_error (n l k : ℕ) (s : ℕ)
+    (x : (LookupAndPermutation.contract (F := F) n l k).Input (R1CS F).Var)
+    (h_in : (R1CS F).footprintT x ⊆ (R1CS F).Alloc s)
+    (x₀ : (LookupAndPermutation.contract (F := F) n l k).input) :
+    (Protocol.BadChallenges (challengeR1CS _) (lookupAndPermutationR1CS n l k) s x x₀).encard ≤ ↑(n + l + k) ∧
+      (Protocol.HonestFailures (challengeR1CS _) (lookupAndPermutationR1CS n l k) s x x₀).encard ≤
+        ↑(n + l + k) := by
+  have h₁ := Protocol.soundness_error (challengeR1CS _) (lookupAndPermutationR1CS (F := F) n l k) rfl s x x₀
+  have h₂ := Protocol.completeness_error (challengeR1CS _) (lookupAndPermutationR1CS (F := F) n l k) s x h_in x₀
   rw [(errors_lookupAndPermutationR1CS n l k).1] at h₁
   rw [(errors_lookupAndPermutationR1CS n l k).2] at h₂
   exact ⟨h₁, h₂⟩
