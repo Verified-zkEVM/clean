@@ -128,6 +128,7 @@ def toSubcircuit (impl : Impl B c) (s : B.State) (input : c.Input B.Var) : Subci
   ops := ((impl.main input).operations s).toFlat
   next := impl.advance input s
   next_eq := by rw [Ops.flatAdvance_toFlat (impl.consistent input s), impl.advance_eq]
+  events := ((impl.main input).operations s).events
   Assumptions env := c.inputCType.Valid (B.evalT env input) ∧ c.Assumptions (c.inputCType.decode (B.evalT env input))
   Spec env := c.outputCType.Valid (B.evalT env (impl.output input s)) ∧
     c.Spec (c.inputCType.decode (B.evalT env input)) (c.outputCType.decode (B.evalT env (impl.output input s)))
@@ -142,19 +143,22 @@ def toSubcircuit (impl : Impl B c) (s : B.State) (input : c.Input B.Var) : Subci
         c.ProverSpec (c.inputCType.decode (B.evalT env input)) (c.outputCType.decode (B.evalT env (impl.output input s)))
   pre := B.footprintT input ⊆ B.Alloc s
   post := B.footprintT (impl.output input s) ⊆ B.Alloc (impl.advance input s)
-  soundness env h_assumptions h_holds :=
+  soundness env h_assumptions h_events h_holds :=
     impl.soundness s env input h_assumptions
-      (Ops.soundnessHold_of_constraintsHold (impl.consistent input s) h_holds)
+      (Ops.soundnessHold_of_constraintsHold (impl.consistent input s) h_events h_holds)
   completeness env h_honest := by
     have h_consistent := impl.consistent input s
     have h_honest' := Ops.honestCompleteness_of_honest h_consistent h_honest
-    refine ⟨fun h_prover => ?_, fun h_prover => ⟨fun h_assumptions => ?_, ?_⟩⟩
+    refine ⟨fun h_prover => ⟨?_, ?_⟩, fun h_prover => ⟨fun h_assumptions => ?_, ?_⟩⟩
     · exact Ops.constraintsHold_of_completenessHold h_consistent h_honest
         (impl.completeness s env input h_honest' h_prover).1
-    · exact impl.soundness s env input h_assumptions
+    · exact Ops.events_of_completenessHold h_consistent h_honest
+        (impl.completeness s env input h_honest' h_prover).1
+    · have h_complete := (impl.completeness s env input h_honest' h_prover).1
+      exact impl.soundness s env input h_assumptions
         (Ops.soundnessHold_of_constraintsHold h_consistent
-          (Ops.constraintsHold_of_completenessHold h_consistent h_honest
-            (impl.completeness s env input h_honest' h_prover).1))
+          (Ops.events_of_completenessHold h_consistent h_honest h_complete)
+          (Ops.constraintsHold_of_completenessHold h_consistent h_honest h_complete))
     · exact (impl.completeness s env input h_honest' h_prover).2
   local_of_pre h := (Ops.local_of_localHold (impl.consistent input s) (impl.spatial input s h)).1
   post_of_pre h := by

@@ -9,11 +9,40 @@ The replacement theorems at the end connect the two.
 module
 
 public import Clean2.Core.Backend
+public import Mathlib.Data.Set.Card
 
 @[expose] public section
 
 namespace Clean2
 variable {B : Backend}
+
+/--
+An event that happens at few values of a verifier challenge: a predicate `Bad` on the values of
+some *committed* variables and of a *challenge* variable, which holds at no more than `bound`
+values of the challenge, whatever the committed values are.
+
+A circuit can *assume* that a rare event does not happen (`Circuit.assumeRare`). The verifier does
+not check it: it is not a constraint, and it does not occur in the real semantics
+(`Ops.ConstraintsHold`). Soundness proofs may use it (`Ops.SoundnessHold`), so soundness holds at
+every challenge outside the bad ones; `Impl.soundness_error` (in `Clean2/Challenge`) counts them.
+Circuits that use no challenge emit no rare events, and nothing about them changes.
+-/
+structure RareEvent (B : Backend) where
+  {m : ℕ}
+  /-- the variables the event depends on, which must be fixed before the challenge is sampled -/
+  committed : Vector B.Var m
+  /-- the challenge -/
+  challenge : B.Var
+  /-- the event, on the values of the committed variables and of the challenge -/
+  Bad : Vector B.Native m → B.Native → Prop
+  /-- the number of challenges at which it happens -/
+  bound : ℕ
+  encard_bad_le : ∀ v, {α | Bad v α}.encard ≤ bound
+
+/-- The event happens under an assignment of the cells. -/
+@[circuit_norm]
+def RareEvent.Happens (ev : RareEvent B) (env : B.Cell → B.Native) : Prop :=
+  ev.Bad (ev.committed.map (B.eval env)) (B.eval env ev.challenge)
 
 /--
 A called implementation, as recorded in the parent's operations. It carries the flattened native
@@ -29,15 +58,17 @@ structure Subcircuit (B : Backend) (s : B.State) where
   /-- the allocation state after the call -/
   next : B.State
   next_eq : next = B.flatAdvance ops s
+  /-- the rare events the call assumes do not happen -/
+  events : List (RareEvent B)
   Assumptions : (B.Cell → B.Native) → Prop
   Spec : (B.Cell → B.Native) → Prop
   ProverAssumptions : (B.Cell → B.Native) → Prop
   ProverSpec : (B.Cell → B.Native) → Prop
   pre : Prop
   post : Prop
-  soundness : ∀ env, Assumptions env → B.FlatHolds env s ops → Spec env
+  soundness : ∀ env, Assumptions env → (∀ ev ∈ events, ¬ev.Happens env) → B.FlatHolds env s ops → Spec env
   completeness : ∀ env, B.FlatHonest env s ops →
-    (ProverAssumptions env → B.FlatHolds env s ops) ∧ ProverSpec env
+    (ProverAssumptions env → B.FlatHolds env s ops ∧ ∀ ev ∈ events, ¬ev.Happens env) ∧ ProverSpec env
   local_of_pre : pre → B.FlatLocal s ops
   post_of_pre : pre → post
 
@@ -47,6 +78,8 @@ theorem Subcircuit.alloc_mono {s : B.State} (sc : Subcircuit B s) : B.Alloc s �
 inductive Op (B : Backend) where
   | native : B.Op → Op B
   | call : {s : B.State} → Subcircuit B s → Op B
+  /-- an assumption that a rare event does not happen -/
+  | rare : RareEvent B → Op B
 
 @[reducible]
 def Ops (B : Backend) := List (Op B)
@@ -59,11 +92,21 @@ def advance : Ops B → B.State → B.State
   | [], s => s
   | .native op :: ops, s => advance ops (B.advance op s)
   | .call sc :: ops, _ => advance ops sc.next
+  | .rare _ :: ops, s => advance ops s
 
 def toFlat : Ops B → List B.Op
   | [] => []
   | .native op :: ops => op :: toFlat ops
   | .call sc :: ops => sc.ops ++ toFlat ops
+  | .rare _ :: ops => toFlat ops
+
+/-- The rare events assumed by the operations, including those of every call. -/
+@[circuit_norm]
+def events : Ops B → List (RareEvent B)
+  | [] => []
+  | .native _ :: ops => events ops
+  | .call sc :: ops => sc.events ++ events ops
+  | .rare ev :: ops => ev :: events ops
 
 /-- Every call was recorded at the state where it actually sits. -/
 @[circuit_norm]
@@ -71,6 +114,7 @@ def Consistent : B.State → Ops B → Prop
   | _, [] => True
   | s, .native op :: ops => Consistent (B.advance op s) ops
   | s, .call (s := s₀) sc :: ops => s = s₀ ∧ Consistent sc.next ops
+  | s, .rare _ :: ops => Consistent s ops
 
 /-! ### Real semantics -/
 
@@ -91,6 +135,7 @@ def SoundnessHold (env : B.Cell → B.Native) : B.State → Ops B → Prop
   | _, [] => True
   | s, .native op :: ops => B.Holds env s op ∧ SoundnessHold env (B.advance op s) ops
   | _, .call sc :: ops => (sc.Assumptions env → sc.Spec env) ∧ SoundnessHold env sc.next ops
+  | s, .rare ev :: ops => ¬ev.Happens env ∧ SoundnessHold env s ops
 
 /-- Constraints hold, with calls replaced by `ProverAssumptions`. This is what a completeness
 proof has to establish. -/
@@ -99,6 +144,7 @@ def CompletenessHold (env : B.Cell → B.Native) : B.State → Ops B → Prop
   | _, [] => True
   | s, .native op :: ops => B.Holds env s op ∧ CompletenessHold env (B.advance op s) ops
   | _, .call sc :: ops => sc.ProverAssumptions env ∧ CompletenessHold env sc.next ops
+  | s, .rare ev :: ops => ¬ev.Happens env ∧ CompletenessHold env s ops
 
 /-- The prover is honest, with calls replaced by `ProverSpec`. This is what a completeness proof
 may assume. -/
@@ -107,6 +153,7 @@ def HonestCompleteness (env : B.Cell → B.Native) : B.State → Ops B → Prop
   | _, [] => True
   | s, .native op :: ops => B.Honest env s op ∧ HonestCompleteness env (B.advance op s) ops
   | _, .call sc :: ops => sc.ProverSpec env ∧ HonestCompleteness env sc.next ops
+  | s, .rare _ :: ops => HonestCompleteness env s ops
 
 /-- Well-formedness, with calls replaced by `pre`, and each call's `post` (plus heap growth)
 available to what follows; at the end, the continuation `K` holds at the final state, under
@@ -117,6 +164,7 @@ def LocalHold : B.State → Ops B → (B.State → Prop) → Prop
   | s, [], K => K s
   | s, .native op :: ops, K => B.reads op ⊆ B.Alloc s ∧ LocalHold (B.advance op s) ops K
   | s, .call sc :: ops, K => sc.pre ∧ (sc.post → B.Alloc s ⊆ B.Alloc sc.next → LocalHold sc.next ops K)
+  | s, .rare _ :: ops, K => LocalHold s ops K
 
 /-! ### Structural lemmas -/
 
@@ -142,6 +190,7 @@ theorem flatAdvance_toFlat {s : B.State} {ops : Ops B} (h : Consistent s ops) :
       obtain ⟨rfl, h⟩ := h
       simp only [toFlat, Backend.flatAdvance_append, advance, ← sc.next_eq]
       exact ih h
+    | rare ev => simp only [toFlat, advance]; exact ih h
 
 @[circuit_norm]
 theorem consistent_append {s : B.State} (a b : Ops B) :
@@ -152,6 +201,7 @@ theorem consistent_append {s : B.State} (a b : Ops B) :
     cases op with
     | native op => simp [Consistent, advance, ih]
     | call sc => simp [Consistent, advance, ih, and_assoc]
+    | rare ev => simp [Consistent, advance, ih]
 
 @[circuit_norm]
 theorem soundnessHold_append {env : B.Cell → B.Native} {s : B.State} (a b : Ops B) :
@@ -162,6 +212,7 @@ theorem soundnessHold_append {env : B.Cell → B.Native} {s : B.State} (a b : Op
     cases op with
     | native op => simp [SoundnessHold, advance, ih, and_assoc]
     | call sc => simp [SoundnessHold, advance, ih, and_assoc]
+    | rare ev => simp [SoundnessHold, advance, ih, and_assoc]
 
 @[circuit_norm]
 theorem completenessHold_append {env : B.Cell → B.Native} {s : B.State} (a b : Ops B) :
@@ -173,6 +224,7 @@ theorem completenessHold_append {env : B.Cell → B.Native} {s : B.State} (a b :
     cases op with
     | native op => simp [CompletenessHold, advance, ih, and_assoc]
     | call sc => simp [CompletenessHold, advance, ih, and_assoc]
+    | rare ev => simp [CompletenessHold, advance, ih, and_assoc]
 
 @[circuit_norm]
 theorem honestCompleteness_append {env : B.Cell → B.Native} {s : B.State} (a b : Ops B) :
@@ -184,6 +236,7 @@ theorem honestCompleteness_append {env : B.Cell → B.Native} {s : B.State} (a b
     cases op with
     | native op => simp [HonestCompleteness, advance, ih, and_assoc]
     | call sc => simp [HonestCompleteness, advance, ih, and_assoc]
+    | rare ev => simp [HonestCompleteness, advance, ih]
 
 /-- `LocalHold` over an append, in continuation-passing form: the continuation of the first part
 is the obligation of the second, so everything the first part's calls establish is available. -/
@@ -204,6 +257,7 @@ theorem localHold_mono_of_consistent {s : B.State} {ops : Ops B} (h : Consistent
     | call sc =>
       obtain ⟨rfl, h⟩ := h
       exact ⟨h_loc.1, fun h_post h_mono => ih h (h_loc.2 h_post h_mono) h_imp⟩
+    | rare ev => exact ih h h_loc h_imp
 
 /-- The same for consistent operations, where the continuation runs at the state the operations
 advance to. This is the form a proof by induction over a loop needs: the `pre` of a call is
@@ -217,6 +271,7 @@ theorem localHold_append_of_consistent {s : B.State} {a : Ops B} (h : Consistent
     cases op with
     | native op => simp only [Consistent] at h; simp [LocalHold, advance, ih h]
     | call sc => obtain ⟨rfl, h⟩ := h; simp [LocalHold, advance, ih h]
+    | rare ev => simp only [Consistent] at h; simp [LocalHold, advance, ih h]
 
 -- Instead, operation lists are normalized to cons form (calls and natives emit singletons).
 
@@ -230,23 +285,37 @@ theorem alloc_mono {s : B.State} {ops : Ops B} (h : Consistent s ops) :
     | call sc =>
       obtain ⟨rfl, h⟩ := h
       exact sc.alloc_mono.trans (ih h)
+    | rare ev => exact ih h
 
 /-! ### Replacement theorems: real semantics ↔ proof-level semantics -/
 
-/-- If the real constraints hold, then the proof-level soundness statement holds. -/
+@[circuit_norm]
+theorem events_append (a b : Ops B) : events (a ++ b) = events a ++ events b := by
+  induction a with
+  | nil => rfl
+  | cons op ops ih => cases op <;> simp [events, ih]
+
+/-- If the real constraints hold and none of the assumed rare events happens, then the
+proof-level soundness statement holds. -/
 theorem soundnessHold_of_constraintsHold {env : B.Cell → B.Native} {s : B.State} {ops : Ops B}
-    (h_consistent : Consistent s ops) (h : ConstraintsHold env s ops) : SoundnessHold env s ops := by
+    (h_consistent : Consistent s ops) (h_events : ∀ ev ∈ ops.events, ¬ev.Happens env)
+    (h : ConstraintsHold env s ops) : SoundnessHold env s ops := by
   induction ops generalizing s with
   | nil => trivial
   | cons op ops ih =>
     cases op with
     | native op =>
       simp only [ConstraintsHold, toFlat, Backend.FlatHolds] at h
-      exact ⟨h.1, ih h_consistent h.2⟩
+      exact ⟨h.1, ih h_consistent h_events h.2⟩
     | call sc =>
       obtain ⟨rfl, h_consistent⟩ := h_consistent
       simp only [ConstraintsHold, toFlat, Backend.flatHolds_append, ← sc.next_eq] at h
-      exact ⟨fun has => sc.soundness env has h.1, ih h_consistent h.2⟩
+      simp only [events, List.mem_append] at h_events
+      exact ⟨fun has => sc.soundness env has (fun ev hev => h_events ev (.inl hev)) h.1,
+        ih h_consistent (fun ev hev => h_events ev (.inr hev)) h.2⟩
+    | rare ev =>
+      simp only [events, List.mem_cons] at h_events
+      exact ⟨h_events ev (.inl rfl), ih h_consistent (fun ev' hev => h_events ev' (.inr hev)) h⟩
 
 /-- If the prover is honest and the proof-level completeness statement holds, then the real
 constraints hold. -/
@@ -264,7 +333,35 @@ theorem constraintsHold_of_completenessHold {env : B.Cell → B.Native} {s : B.S
       obtain ⟨rfl, h_consistent⟩ := h_consistent
       simp only [Honest, toFlat, Backend.flatHonest_append, ← sc.next_eq] at h_honest
       simp only [ConstraintsHold, toFlat, Backend.flatHolds_append, ← sc.next_eq]
-      exact ⟨(sc.completeness env h_honest.1).1 h.1, ih h_consistent h_honest.2 h.2⟩
+      exact ⟨((sc.completeness env h_honest.1).1 h.1).1, ih h_consistent h_honest.2 h.2⟩
+    | rare ev => exact ih h_consistent h_honest h.2
+
+/-- If the prover is honest and the proof-level completeness statement holds, then none of the
+assumed rare events happens. -/
+theorem events_of_completenessHold {env : B.Cell → B.Native} {s : B.State} {ops : Ops B}
+    (h_consistent : Consistent s ops) (h_honest : Honest env s ops) (h : CompletenessHold env s ops) :
+    ∀ ev ∈ ops.events, ¬ev.Happens env := by
+  induction ops generalizing s with
+  | nil => simp [events]
+  | cons op ops ih =>
+    cases op with
+    | native op =>
+      simp only [Honest, toFlat, Backend.FlatHonest] at h_honest
+      exact ih h_consistent h_honest.2 h.2
+    | call sc =>
+      obtain ⟨rfl, h_consistent⟩ := h_consistent
+      simp only [Honest, toFlat, Backend.flatHonest_append, ← sc.next_eq] at h_honest
+      intro ev hev
+      simp only [events, List.mem_append] at hev
+      rcases hev with hev | hev
+      · exact ((sc.completeness env h_honest.1).1 h.1).2 ev hev
+      · exact ih h_consistent h_honest.2 h.2 ev hev
+    | rare ev =>
+      intro ev' hev
+      simp only [events, List.mem_cons] at hev
+      rcases hev with rfl | hev
+      · exact h.1
+      · exact ih h_consistent h_honest h.2 ev' hev
 
 /-- If the prover is honest, then the proof-level honesty statement holds. -/
 theorem honestCompleteness_of_honest {env : B.Cell → B.Native} {s : B.State} {ops : Ops B}
@@ -280,6 +377,7 @@ theorem honestCompleteness_of_honest {env : B.Cell → B.Native} {s : B.State} {
       obtain ⟨rfl, h_consistent⟩ := h_consistent
       simp only [Honest, toFlat, Backend.flatHonest_append, ← sc.next_eq] at h_honest
       exact ⟨(sc.completeness env h_honest.1).2, ih h_consistent h_honest.2⟩
+    | rare ev => exact ih h_consistent h_honest
 
 /-- If the proof-level spatial statement holds, the flattened operations are well-formed and
 the continuation holds at the final state: the frame rule, discharged once for all calls. -/
@@ -298,6 +396,7 @@ theorem local_of_localHold {s : B.State} {ops : Ops B} {K : B.State → Prop}
       obtain ⟨h_loc, h_k⟩ := ih h_consistent (h_rest (sc.post_of_pre h_pre) sc.alloc_mono)
       simp only [Local, toFlat, Backend.flatLocal_append, ← sc.next_eq]
       exact ⟨⟨sc.local_of_pre h_pre, h_loc⟩, h_k⟩
+    | rare ev => exact ih h_consistent h
 
 end Ops
 
@@ -395,6 +494,10 @@ def output {α : Type} (circuit : Circuit B α) (s : B.State) : α := (circuit s
 /-- Emit a native operation. Backends wrap this in typed smart constructors. -/
 @[circuit_norm]
 def native (op : B.Op) : Circuit B Unit := fun _ => ((), [.native op])
+
+/-- Assume that a rare event does not happen. Not a constraint: see `RareEvent`. -/
+@[circuit_norm]
+def assumeRare (ev : RareEvent B) : Circuit B Unit := fun _ => ((), [.rare ev])
 
 end Circuit
 

@@ -12,11 +12,11 @@ The constraint `w * w = α`, with `w` chosen after `α`:
 - pointwise, it is satisfied at every square `α` (`exists_mul_self_eq_of_isSquare`), which is
   about half of all challenges in an odd prime field.
 
-`ChallengeCheck` avoids this by never interpreting a constraint symbolically. The constraints
-are checked pointwise, at an arbitrary `α`, and only the conclusion, a polynomial built from the
-phase-1 values, is symbolic. For this circuit, the best pointwise spec is `IsSquare α`. That is a
-root condition only for `α ^ ((p - 1) / 2) - 1` (times `α`), of degree about `p / 2`, so the bound
-`ncard_accepting_le` gives is about `1 / 2`: correct, and useless.
+`Identity` avoids this by never reading a constraint symbolically. The circuit checks the
+expression pointwise, at an arbitrary `α`; only the expression itself, built from committed values,
+is read as a rational function, and its bad challenges are bounded by its degree. A user who wants
+`w * w = α` has no expression to hand to `Identity`: `w` is chosen after the challenge, so it cannot
+be a committed value.
 -/
 module
 

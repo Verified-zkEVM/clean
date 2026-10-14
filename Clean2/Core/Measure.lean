@@ -28,10 +28,12 @@ public import Mathlib.Tactic.Abel
 
 namespace Clean2
 
-/-- A structural property of a backend: a monoid-valued measure of its native operations. The
-measure of a circuit is the sum of the measures of the operations it emits. -/
+/-- A structural property of a backend: a monoid-valued measure of its native operations, and of
+the rare events a circuit assumes (zero by default). The measure of a circuit is the sum of the
+measures of the operations it emits. -/
 structure Backend.Measure (B : Backend) (M : Type) [AddCommMonoid M] where
   op : B.Op → M
+  rare : RareEvent B → M := fun _ => 0
 
 namespace Backend.Measure
 variable {B : Backend} {M : Type} [AddCommMonoid M] (μ : B.Measure M)
@@ -46,20 +48,42 @@ theorem flat_append (a b : List B.Op) : μ.flat (a ++ b) = μ.flat a + μ.flat b
   | nil => simp [flat]
   | cons op ops ih => simp [flat, ih, add_assoc]
 
-/-- The measure of operations, with a call contributing the measure of its (flattened) body:
-the proof-level semantics. A parent never unfolds `sc.ops`: `Impl.flat_call` replaces it by the
-closed form recorded for the callee. -/
+/-- The measure of a list of rare events. -/
+def rares (evs : List (RareEvent B)) : M := (evs.map μ.rare).sum
+
+/-- The measure of operations, with a call contributing the measure of its (flattened) body and
+of its rare events: the proof-level semantics. A parent never unfolds `sc.ops`: `Impl.flat_call`
+replaces it by the closed form recorded for the callee. -/
 @[circuit_norm]
 def ofOps : Ops B → M
   | [] => 0
   | .native op :: ops => μ.op op + ofOps ops
-  | .call sc :: ops => μ.flat sc.ops + ofOps ops
+  | .call sc :: ops => (μ.flat sc.ops + μ.rares sc.events) + ofOps ops
+  | .rare ev :: ops => μ.rare ev + ofOps ops
 
-/-- The two semantics agree. -/
-theorem flat_toFlat (ops : Ops B) : μ.flat ops.toFlat = μ.ofOps ops := by
+/-- The two semantics agree: the native operations, and the rare events. -/
+theorem flat_toFlat (ops : Ops B) : μ.flat ops.toFlat + μ.rares ops.events = μ.ofOps ops := by
   induction ops with
-  | nil => rfl
-  | cons op ops ih => cases op <;> simp [Ops.toFlat, flat, flat_append, ofOps, ih]
+  | nil => simp [Ops.toFlat, flat, rares, Ops.events, ofOps]
+  | cons op ops ih =>
+    simp only [rares] at ih ⊢
+    cases op with
+    | native op =>
+      simp only [Ops.toFlat, flat, ofOps, Ops.events]
+      rw [← ih]; abel
+    | call sc =>
+      simp only [Ops.toFlat, flat_append, ofOps, Ops.events, List.map_append, List.sum_append, rares]
+      rw [← ih]; abel
+    | rare ev =>
+      simp only [Ops.toFlat, ofOps, Ops.events, List.map_cons, List.sum_cons]
+      rw [← ih]; abel
+
+/-- A measure that ignores rare events sees only the native operations. -/
+theorem flat_toFlat_of_rare_eq_zero (h : ∀ ev, μ.rare ev = 0) (ops : Ops B) :
+    μ.flat ops.toFlat = μ.ofOps ops := by
+  have h0 : ∀ l : List (RareEvent B), (l.map μ.rare).sum = 0 := by
+    intro l; induction l <;> simp_all
+  rw [← flat_toFlat, rares, h0, add_zero]
 
 @[circuit_norm]
 theorem ofOps_append (a b : Ops B) : μ.ofOps (a ++ b) = μ.ofOps a + μ.ofOps b := by
@@ -155,8 +179,8 @@ def _root_.Clean2.Backend.Measure.of (μ : B.Measure M) {c : Interface B.Native}
 @[circuit_norm]
 theorem flat_call (μ : B.Measure M) {c : Interface B.Native} (impl : Impl B c) [Measured μ impl]
     (s : B.State) (input : c.Input B.Var) :
-    μ.flat (impl.toSubcircuit s input).ops = μ.of impl := by
-  show μ.flat ((impl.main input).operations s).toFlat = _
+    μ.flat (impl.toSubcircuit s input).ops + μ.rares (impl.toSubcircuit s input).events = μ.of impl := by
+  show μ.flat ((impl.main input).operations s).toFlat + μ.rares ((impl.main input).operations s).events = _
   rw [Backend.Measure.flat_toFlat, Measured.value_eq]
 
 /-- Refinement does not change the circuit. -/

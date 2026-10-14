@@ -15,6 +15,11 @@ public import Clean2.Gadgets.Bits2Num
 public import Clean2.Gadgets.Poseidon
 public import Clean2.Gadgets.Byte
 public import Clean2.Challenge.Basic
-public import Clean2.Challenge.Quadratic
-public import Clean2.Challenge.GrandProduct
+public import Clean2.Challenge.RExpr
+public import Clean2.Challenge.Identity
+public import Clean2.Challenge.ZeroCheck
+public import Clean2.Challenge.Permutation
+public import Clean2.Challenge.PermutationRunning
+public import Clean2.Challenge.LogUp
+public import Clean2.Challenge.Examples
 public import Clean2.Challenge.NaiveSymbolic

@@ -1,27 +1,29 @@
 /-
-Verifier challenges, with no probabilities in circuit proofs.
+Verifier challenges in ordinary circuits.
 
-A challenge is a field element `α` that the verifier samples after the prover has committed to
-some values, the *phase-1* values `x`. A circuit that uses a challenge is an ordinary Clean 2
-circuit that takes `α` as one more input: the backends and the circuit monad do not change. What
-changes is the contract it is checked against, a `ChallengeCheck`:
+A challenge is a field element that the verifier samples after the prover has committed to some
+values. In Clean 2 a challenge is an ordinary variable, passed to the gadgets that use it like any
+other input. A gadget that uses it to check something assumes that a *rare event* does not happen
+(`Circuit.assumeRare`, `RareEvent` in `Clean2/Core/Circuit.lean`): the event is a predicate on
+committed values and the challenge that holds at no more than `bound` challenges, whatever the
+committed values are. Soundness proofs may use the assumption; the verifier does not check it.
+Everything else is unchanged: interfaces, specs, `Impl`, composition. A circuit that uses no
+challenge assumes no rare event.
 
-- *pointwise* (the implementation's ordinary soundness, `α` universally quantified): if the
-  constraints hold at `α`, then the polynomial `poly x` vanishes at `α`. The polynomial depends on
-  the phase-1 values only.
-- *symbolic* (pure algebra, no circuit): `poly x = 0` as a polynomial implies the statement.
+This file proves, once, what the assumptions cost:
 
-`ChallengeCheck.soundness_error` combines the two: if the statement is false, then the set of
-challenges at which any prover is accepted has at most `natDegree (poly x)` elements. That is the
-soundness error, `natDegree (poly x) / |F|` for a uniform challenge. It is the only place where
-counting happens, and it is proved once.
+- `errorBound`: the sum of the bounds of the rare events of a circuit, a `Measure`, so that a
+  parent reads it off its children's closed forms (`Impl.Measured errorBound`);
+- `Impl.soundness_error`: fix the values of a set `C` of committed cells, which contains the
+  inputs and everything the rare events depend on (except the challenge). Then the challenges at
+  which some assignment satisfies the real constraints but not the spec are at most
+  `errorBound`. For a circuit without challenges, the bound is `0`: ordinary soundness.
 
-Why not read constraints that mention `α` as polynomial identities in `F[X]` directly? Because a
-cheating prover chooses the cells it fills after `α` pointwise, as arbitrary functions of `α`, not as
-polynomials in `X`. See `Clean2/Challenge/NaiveSymbolic.lean` for a constraint that is
-unsatisfiable symbolically but accepted at half of all challenges. Here every cell other than the
-phase-1 inputs is quantified after `α` (`Accepts`), which over-approximates the real protocol (where
-some of those cells are committed together with `x`), so the bound holds a fortiori.
+Why the committed values must be fixed first: a cheating prover chooses the cells it fills after
+the challenge as arbitrary functions of it. That is why a rare event may only depend on committed
+values (and why constraints mentioning a challenge are never read as identities in `F[X]`, see
+`NaiveSymbolic.lean`). In `soundness_error`, every cell outside `C` is quantified after the
+challenge, which over-approximates the real protocol.
 -/
 module
 
@@ -36,119 +38,113 @@ public import Mathlib.Data.Set.Card
 namespace Clean2
 open Polynomial
 
-/-! ## Counting roots -/
+/-! ## Counting -/
 
-section Roots
+section Counting
 variable {F : Type} [Field F]
 
-/-- The points where a nonzero polynomial vanishes are its roots. -/
-theorem setOf_eval_eq_zero {P : F[X]} (hP : P ≠ 0) [DecidableEq F] :
-    {α | P.eval α = 0} = ↑P.roots.toFinset := by
-  ext α
-  simp [mem_roots hP, IsRoot]
+/-- The bad challenges of a polynomial check: `P` is not zero, but vanishes at `α`. -/
+def polyBad (P : F[X]) (α : F) : Prop := P ≠ 0 ∧ P.eval α = 0
 
 /-- A nonzero polynomial vanishes at no more points than its degree. -/
-theorem ncard_eval_eq_zero_le {P : F[X]} (hP : P ≠ 0) : {α | P.eval α = 0}.ncard ≤ P.natDegree := by
+theorem encard_polyBad_le (P : F[X]) : {α | polyBad P α}.encard ≤ P.natDegree := by
   classical
-  rw [setOf_eval_eq_zero hP, Set.ncard_coe_finset]
+  by_cases hP : P = 0
+  · simp [polyBad, hP]
+  have h : {α | polyBad P α} = ↑P.roots.toFinset := by
+    ext α
+    simp [polyBad, hP, mem_roots hP, IsRoot]
+  rw [h, Set.encard_coe_eq_coe_finsetCard, Nat.cast_le]
   exact (Multiset.toFinset_card_le _).trans (card_roots' P)
 
-/-- **Soundness error from a symbolic argument.** If acceptance at a challenge implies that `P`
-vanishes there, and `P = 0` implies the statement, then a false statement is accepted at no more
-challenges than the degree of `P`. -/
-theorem ncard_accepting_le {Accept : F → Prop} {Statement : Prop} (P : F[X])
-    (pointwise : ∀ α, Accept α → P.eval α = 0) (symbolic : P = 0 → Statement) (h : ¬Statement) :
-    {α | Accept α}.ncard ≤ P.natDegree := by
-  classical
-  have hP : P ≠ 0 := fun h0 => h (symbolic h0)
-  have h_finite : {α | P.eval α = 0}.Finite := by
-    rw [setOf_eval_eq_zero hP]
-    exact Finset.finite_toSet _
-  exact (Set.ncard_le_ncard (fun α hα => pointwise α hα) h_finite).trans (ncard_eval_eq_zero_le hP)
+omit [Field F] in
+/-- The bad sets of several rare events: the bounds add. -/
+theorem encard_iUnion_list_le {ι : Type} (l : List ι) (S : ι → Set F) (b : ι → ℕ)
+    (h : ∀ i ∈ l, (S i).encard ≤ b i) :
+    {α | ∃ i ∈ l, α ∈ S i}.encard ≤ ((l.map b).sum : ℕ) := by
+  induction l with
+  | nil => simp
+  | cons i l ih =>
+    have h_union : {α | ∃ j ∈ i :: l, α ∈ S j} = S i ∪ {α | ∃ j ∈ l, α ∈ S j} := by
+      ext α; simp
+    rw [h_union, List.map_cons, List.sum_cons, Nat.cast_add]
+    exact (Set.encard_union_le _ _).trans
+      (add_le_add (h i (by simp)) (ih fun j hj => h j (by simp [hj])))
 
-end Roots
+end Counting
 
-/-! ## Challenge checks -/
+/-! ## The soundness error of a circuit -/
 
-/-- The contract of a circuit that checks a statement about phase-1 values with one challenge. -/
-structure ChallengeCheck (Native : Type) [Field Native] where
-  /-- the meaning of the phase-1 values, committed before the challenge -/
-  Phase1 : Type
-  /-- how the phase-1 values are laid out -/
-  phase1CType : CType Native Phase1
-  /-- assumed of the phase-1 values -/
-  Assumptions : Phase1 → Prop := fun _ => True
-  /-- the statement the check establishes, with a soundness error -/
-  Statement : Phase1 → Prop
-  /-- what the circuit proves at the challenge: this polynomial vanishes there -/
-  poly : Phase1 → Native[X]
-  /-- the symbolic argument: the polynomial identity implies the statement -/
-  symbolic : ∀ x, Assumptions x → poly x = 0 → Statement x
-  /-- assumed for completeness, of the phase-1 values and the challenge; typically the statement,
-  and that the challenge avoids the points where the honest prover would divide by zero -/
-  ProverAssumptions : Phase1 → Native → Prop
+variable {B : Backend}
 
-namespace ChallengeCheck
-variable {Native : Type} [Field Native] (cc : ChallengeCheck Native)
+/-- The soundness error of a circuit, as a number of bad challenges: the sum of the bounds of the
+rare events it assumes. A measure, so that it composes like any other. -/
+def errorBound : B.Measure ℕ where
+  op _ := 0
+  rare ev := ev.bound
 
-/-- The interface a challenge check is implemented against: phase-1 values and a challenge in,
-nothing out; the spec is the pointwise half of the check. -/
-@[reducible]
-def interface : Interface Native where
-  input := cc.Phase1 × Native
-  inputCType := cc.phase1CType ×ᵗ .native
-  output := Unit
-  outputCType := .unit
-  Assumptions := fun (x, _) => cc.Assumptions x
-  Spec := fun (x, α) _ => (cc.poly x).eval α = 0
-  ProverAssumptions := fun (x, α) => cc.ProverAssumptions x α
+@[circuit_norm] theorem errorBound_op (op : B.Op) : (errorBound (B := B)).op op = 0 := rfl
+@[circuit_norm] theorem errorBound_rare (ev : RareEvent B) : (errorBound (B := B)).rare ev = ev.bound := rfl
 
-variable {B : Backend} [Field B.Native] {cc : ChallengeCheck B.Native}
+/-- A call contributes the error of the callee's operations. -/
+theorem errorBound_call {c : Interface B.Native} (impl : Impl B c) (s : B.State) (input : c.Input B.Var) :
+    errorBound.flat (impl.toSubcircuit s input).ops + errorBound.rares (impl.toSubcircuit s input).events =
+      errorBound.ofOps ((impl.main input).operations s) :=
+  Backend.Measure.flat_toFlat _ _
 
-/-- The challenges at which a prover is accepted, for phase-1 values `x`: some assignment of all
-cells (chosen after the challenge, as an arbitrary function of it) has inputs that mean `x` and the
-challenge, and satisfies the constraints. -/
-def Accepts (impl : Impl B cc.interface) (x : cc.Phase1) (α : B.Native) : Prop :=
-  ∃ (s : B.State) (env : B.Cell → B.Native) (input : cc.interface.Input B.Var),
-    cc.interface.inputCType.Valid (B.evalT env input) ∧
-    cc.interface.inputCType.decode (B.evalT env input) = (x, α) ∧
-    ((impl.main input).operations s).ConstraintsHold env s
+theorem errorBound_ofOps (ops : Ops B) : errorBound.ofOps ops = (ops.events.map RareEvent.bound).sum := by
+  rw [← Backend.Measure.flat_toFlat]
+  have h0 : ∀ l : List B.Op, errorBound.flat l = 0 := by
+    intro l; induction l <;> simp_all [Backend.Measure.flat, errorBound]
+  rw [h0, zero_add]
+  simp [Backend.Measure.rares, errorBound]
 
-/-- **Soundness error.** For phase-1 values satisfying the assumptions but not the statement, the
-prover is accepted at no more challenges than the degree of the check's polynomial. -/
-theorem soundness_error (impl : Impl B cc.interface) (x : cc.Phase1) (h_assumptions : cc.Assumptions x)
-    (h_false : ¬cc.Statement x) :
-    {α | Accepts impl x α}.ncard ≤ (cc.poly x).natDegree := by
-  refine ncard_accepting_le (cc.poly x) ?_ (cc.symbolic x h_assumptions) h_false
-  rintro α ⟨s, env, input, h_valid, h_decode, h_holds⟩
-  have h := impl.soundness s env input ⟨h_valid, by rw [h_decode]; exact h_assumptions⟩
-    (Ops.soundnessHold_of_constraintsHold (impl.consistent input s) h_holds)
-  have h_spec := h.2
-  rw [h_decode] at h_spec
-  exact h_spec
+namespace Impl
+variable {c : Interface B.Native}
 
-/-- **Completeness.** On inputs that exist in the heap and mean phase-1 values and a challenge
-satisfying the prover assumptions, an honest assignment satisfies the constraints. -/
-theorem completeness (impl : Impl B cc.interface) (x : cc.Phase1) (α : B.Native)
-    (s : B.State) (env₀ : B.Cell → B.Native) (input : cc.interface.Input B.Var)
-    (h_in : B.footprintT input ⊆ B.Alloc s)
-    (h_valid : cc.interface.inputCType.Valid (B.evalT env₀ input))
-    (h_decode : cc.interface.inputCType.decode (B.evalT env₀ input) = (x, α))
-    (h_prover : cc.ProverAssumptions x α) :
-    ∃ env, (∀ c ∈ B.Alloc s, env c = env₀ c) ∧ ((impl.main input).operations s).ConstraintsHold env s := by
-  obtain ⟨env, h_agree, h_holds, -⟩ := impl.exists_honest_env input s env₀ h_in
-    ⟨h_valid, by rw [h_decode]; exact h_prover⟩
-  exact ⟨env, h_agree, h_holds⟩
+/-- **Soundness error.** Fix the values `env₁` of a set `C` of committed cells, which contains the
+input and everything the rare events of the circuit depend on (except the challenge `α`). If the
+input satisfies the assumptions, then the challenges at which some assignment agreeing with `env₁`
+on `C` satisfies the real constraints but not the spec are at most `errorBound` many. -/
+theorem soundness_error (impl : Impl B c) (s : B.State) (input : c.Input B.Var)
+    (C : Set B.Cell) (α : B.Var) (env₁ : B.Cell → B.Native)
+    (h_input : B.footprintT input ⊆ C)
+    (h_events : ∀ ev ∈ ((impl.main input).operations s).events,
+      (∀ i : Fin ev.m, B.footprint ev.committed[i] ⊆ C) ∧ ev.challenge = α)
+    (h_assumptions : c.inputCType.Valid (B.evalT env₁ input) ∧
+      c.Assumptions (c.inputCType.decode (B.evalT env₁ input))) :
+    {a | ∃ env : B.Cell → B.Native, (∀ x ∈ C, env x = env₁ x) ∧ B.eval env α = a ∧
+      ((impl.main input).operations s).ConstraintsHold env s ∧
+      ¬(c.outputCType.Valid (B.evalT env (impl.output input s)) ∧
+        c.Spec (c.inputCType.decode (B.evalT env₁ input))
+          (c.outputCType.decode (B.evalT env (impl.output input s))))}.encard ≤
+      errorBound.ofOps ((impl.main input).operations s) := by
+  rw [errorBound_ofOps]
+  refine (Set.encard_le_encard fun a ha => ?_).trans
+    (encard_iUnion_list_le ((impl.main input).operations s).events
+      (fun ev => {a | ev.Bad (ev.committed.map (B.eval env₁)) a})
+      RareEvent.bound fun ev _ => ev.encard_bad_le _)
+  obtain ⟨env, h_agree, rfl, h_holds, h_spec⟩ := ha
+  have h_input_eq : B.evalT env input = B.evalT env₁ input :=
+    Backend.evalT_frame env env₁ input fun x hx => h_agree x (h_input hx)
+  -- some rare event happens: otherwise soundness would give the spec
+  by_contra h_none
+  apply h_spec
+  rw [← h_input_eq]
+  refine impl.soundness s env input (by rw [h_input_eq]; exact h_assumptions)
+    (Ops.soundnessHold_of_constraintsHold (impl.consistent input s) (fun ev hev h_happens => ?_) h_holds)
+  apply h_none
+  refine ⟨ev, hev, ?_⟩
+  -- and it depends only on the committed values, and the challenge
+  obtain ⟨h_committed, h_challenge⟩ := h_events ev hev
+  have h_map : ev.committed.map (B.eval env) = ev.committed.map (B.eval env₁) := by
+    ext i hi
+    simp only [Vector.getElem_map]
+    exact B.eval_frame env env₁ _ fun x hx => h_agree x (h_committed ⟨i, hi⟩ hx)
+  simp only [RareEvent.Happens, h_map, h_challenge] at h_happens
+  exact h_happens
 
-end ChallengeCheck
-
-/--
-Discharge the spatial obligation of a challenge check: `spatial`, after splitting what the input
-reads into what the phase-1 values read and what the challenge reads. (The input type of
-`cc.interface` is `(cc.phase1CType ×ᵗ .native).Shape` only after unfolding the interface, which
-`simp` does not do inside `footprintT`.)
--/
-syntax "challenge_spatial" : tactic
+end Impl
 
 /-- The second half of `spatial`: split a normalized spatial goal along `∧` and `→` and close the
 leaves from the hypotheses. For loop lemmas, where the goal is not an `Impl`'s obligation. -/
@@ -157,14 +153,6 @@ syntax "spatial_split" : tactic
 meta section
 open Lean Elab Tactic in
 elab_rules : tactic
-  | `(tactic| challenge_spatial) => do
-    evalTactic (← `(tactic| intro input s h_in))
-    destructProds
-    evalTactic (← `(tactic| (
-      obtain ⟨h_x, h_α⟩ := Backend.footprintT_ctypeProd_subset.mp h_in
-      simp only [circuit_norm, Set.union_subset_iff, Set.empty_subset, and_imp] at h_x h_α ⊢
-      try casesm* _ ∧ _)))
-    spatialSplit #[]
   | `(tactic| spatial_split) => spatialSplit #[]
 end
 

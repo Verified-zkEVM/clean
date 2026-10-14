@@ -1,26 +1,17 @@
 /-
-A grand-product permutation check: `b` is a permutation of `a`, with one challenge `α`.
+A permutation check with a hand-written argument and its own rare event.
 
-The circuit keeps a running product `z`, from `z = 1`, through `z' * (α - b i) = z * (α - a i)`, and
-asserts that it ends at `1`. The honest prover sets `z' = z * (α - a i) / (α - b i)`, so it is the
-cells `z` that depend on the challenge.
-
-- Pointwise, with no case split on the challenge: the constraints imply
-  `∏ (α - a i) = ∏ (α - b i)`. In the cross-multiplied form a denominator that vanishes does not
-  break the argument, it only makes the last step say `0 = 0`.
-- Symbolically: `∏ (X - a i) = ∏ (X - b i)` in `F[X]` means that `a` and `b` have the same roots,
-  with multiplicity, so they are the same multiset.
-- The polynomial has degree at most `n`: a false claim is accepted at no more than `n`
-  challenges, which is a soundness error of `n / |F|`.
-- Completeness needs the challenge to avoid every `b i`: the honest prover divides by `α - b i`.
-  That is a separate error of at most `n / |F|`, and it is the only place where a "bad"
-  challenge appears.
+The circuit keeps a running product `z' * (α - b i) = z * (α - a i)` from `z = 1` and asserts that
+it ends at `1`. Pointwise, cross-multiplied, the constraints give `∏ (α - a i) = ∏ (α - b i)` with
+no case split on vanishing denominators, so the only bad challenges are the roots of
+`∏ (X - a i) - ∏ (X - b i)`: at most `n`, half of what the generic quotient identity
+(`PermutationQuotient`) pays for the same circuit shape. The price is the pointwise proof, which
+the user writes. Same interface, same spec: a parent cannot tell the two apart, except by their
+cost and error measures.
 -/
 module
 
-public import Clean2.Challenge.Basic
-public import Clean2.Functionalities.Arith
-public import Clean2.Backends.R1CS
+public import Clean2.Challenge.Permutation
 public import Mathlib.Algebra.BigOperators.Fin
 public import Mathlib.Algebra.Polynomial.BigOperators
 
@@ -29,11 +20,9 @@ public import Mathlib.Algebra.Polynomial.BigOperators
 namespace Clean2
 open Polynomial
 
-namespace GrandProduct
+namespace PermutationRunning
+open Permutation
 variable {Native : Type} [Field Native]
-
-/-- The entries of a vector, as a multiset. -/
-def elems {n : ℕ} (v : Vector Native n) : Multiset Native := Finset.univ.val.map fun i : Fin n => v[i]
 
 /-- `∏ (X - a i) - ∏ (X - b i)`, which vanishes exactly when `a` and `b` are the same multiset. -/
 noncomputable def poly {n : ℕ} (a b : Vector Native n) : Native[X] :=
@@ -60,22 +49,14 @@ theorem natDegree_poly_le {n : ℕ} (a b : Vector Native n) : (poly a b).natDegr
     simp [elems]
 
 /-- Equal multisets have equal products of `α - ·`. -/
-theorem prod_eq_of_elems_eq {n : ℕ} {a b : Vector Native n} (h : elems a = elems b) (α : Native) :
+theorem prod_sub_eq_of_elems_eq {n : ℕ} {a b : Vector Native n} (h : elems a = elems b) (α : Native) :
     ∏ i : Fin n, (α - a[i]) = ∏ i : Fin n, (α - b[i]) := by
-  rw [Finset.prod_eq_multiset_prod, Finset.prod_eq_multiset_prod]
-  have h := congrArg (fun m => (m.map fun x => α - x).prod) h
-  simp only [elems, Multiset.map_map] at h
-  exact h
+  exact Permutation.prod_eq_of_elems_eq h (fun x => α - x)
 
-/-- The check: `b` is a permutation of `a`. -/
-@[reducible]
-noncomputable def check (n : ℕ) : ChallengeCheck Native where
-  Phase1 := Vector Native n × Vector Native n
-  phase1CType := .natives n ×ᵗ .natives n
-  Statement := fun (a, b) => elems a = elems b
-  poly := fun (a, b) => poly a b
-  symbolic := fun (_, _) _ h => elems_eq_of_poly_eq_zero h
-  ProverAssumptions := fun (a, b) α => elems a = elems b ∧ ∀ i : Fin n, α ≠ b[i]
+/-- The polynomial identity holds for permutations. -/
+theorem poly_eq_zero_of_elems_eq {n : ℕ} {a b : Vector Native n} (h : elems a = elems b) : poly a b = 0 := by
+  rw [poly, sub_eq_zero]
+  exact Permutation.prod_eq_of_elems_eq h (fun x => X - C x)
 
 variable {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface n))
 
@@ -174,12 +155,32 @@ theorem loop_local (s : B.State) (K : B.State → Prop)
 
 end Loop
 
-/-- The grand-product check, for every length `n`. -/
-noncomputable def impl (n : ℕ) : Impl B (check n).interface where
+/-- The bad challenges: `poly a b` is not zero, but vanishes there, for `a ++ b` given as one
+vector. -/
+noncomputable def Bad (n : ℕ) (v : Vector B.Native (n + n)) (x : B.Native) : Prop :=
+  polyBad (poly (Vector.ofFn fun i : Fin n => v[Fin.castAdd n i]) (Vector.ofFn fun i : Fin n => v[Fin.natAdd n i])) x
+
+theorem encard_bad_le (n : ℕ) (v : Vector B.Native (n + n)) : {x | Bad n v x}.encard ≤ n :=
+  (encard_polyBad_le _).trans (Nat.cast_le.mpr (natDegree_poly_le _ _))
+
+/-- The rare event. Its bound is `n`, the degree of `poly a b`: tighter than the `2n` of the
+generic quotient identity. -/
+noncomputable def event (n : ℕ) (a b : Vector B.Var n) (α : B.Var) : RareEvent B where
+  m := n + n
+  committed := a ++ b
+  challenge := α
+  Bad := Bad n
+  bound := n
+  encard_bad_le := encard_bad_le n
+
+/-- The running product, with its own rare event. Implements the same interface as the generic
+quotient identity (`PermutationQuotient.interface`): same spec, different circuit and bound. -/
+noncomputable def impl (n : ℕ) : Impl B (PermutationQuotient.interface n) where
   main | ((a, b), α) => do
     let one ← arith (.const 1) ()
     let z ← loop arith n α (fun i => a[i]) (fun i => b[i]) one
     arith .mulEq (z, one, one)
+    Circuit.assumeRare (event n a b α)
   consistent := by
     intro ((a, b), α) s
     simp only [circuit_norm]
@@ -203,60 +204,41 @@ noncomputable def impl (n : ℕ) : Impl B (check n).interface where
     spatial_split
   soundness := by
     intro s env ((a, b), α) _ h
-    simp only [circuit_norm] at h ⊢
-    obtain ⟨h_one, h_loop, h_end⟩ := h
+    simp only [circuit_norm, event, Bad] at h ⊢
+    obtain ⟨h_one, h_loop, h_end, h_rare⟩ := h
     have h_val := loop_sound arith n α (fun i => a[i]) (fun i => b[i]) _ _ env h_loop
-    rw [eval_poly]
-    simp only [circuit_norm, Fin.getElem_fin, Vector.getElem_map] at h_val h_end ⊢
-    rw [h_one] at h_end h_val
-    linear_combination (-1 : B.Native) * h_val + (∏ i : Fin n, (B.eval env α - B.eval env b[(i : ℕ)])) * h_end
+    -- pointwise: the polynomial vanishes at the challenge
+    have h_eval : (poly (a.map (B.eval env)) (b.map (B.eval env))).eval (B.eval env α) = 0 := by
+      rw [eval_poly]
+      simp only [circuit_norm, Fin.getElem_fin, Vector.getElem_map] at h_val h_end ⊢
+      rw [h_one] at h_end h_val
+      linear_combination (-1 : B.Native) * h_val + (∏ i : Fin n, (B.eval env α - B.eval env b[(i : ℕ)])) * h_end
+    -- and the challenge is not bad, so it is zero
+    have h_ab : (Vector.ofFn fun i : Fin n => (Vector.map (B.eval env) (a ++ b))[Fin.castAdd n i]) = a.map (B.eval env) ∧
+        (Vector.ofFn fun i : Fin n => (Vector.map (B.eval env) (a ++ b))[Fin.natAdd n i]) = b.map (B.eval env) := by
+      constructor <;> ext i hi <;> simp
+    rw [h_ab.1, h_ab.2] at h_rare
+    exact elems_eq_of_poly_eq_zero (by_contra fun h0 => h_rare ⟨h0, h_eval⟩)
   completeness := by
     intro s env ((a, b), α) h h_prover
-    simp only [circuit_norm] at h h_prover ⊢
+    simp only [circuit_norm, event, Bad] at h h_prover ⊢
     obtain ⟨h_one, h_loop⟩ := h
     obtain ⟨h_perm, h_avoid⟩ := h_prover
+    have h_ab : (Vector.ofFn fun i : Fin n => (Vector.map (B.eval env) (a ++ b))[Fin.castAdd n i]) = a.map (B.eval env) ∧
+        (Vector.ofFn fun i : Fin n => (Vector.map (B.eval env) (a ++ b))[Fin.natAdd n i]) = b.map (B.eval env) := by
+      constructor <;> ext i hi <;> simp
+    rw [h_ab.1, h_ab.2]
     simp only [Fin.getElem_fin, Vector.getElem_map] at h_avoid
     obtain ⟨h_loop', h_inv⟩ := loop_complete arith n α (fun i => a[i]) (fun i => b[i]) _ _ env h_avoid h_loop
-    refine ⟨h_loop', ?_⟩
-    have h_prod := prod_eq_of_elems_eq h_perm (B.eval env α)
+    have h_prod := prod_sub_eq_of_elems_eq h_perm (B.eval env α)
     have h_ne : ∏ i : Fin n, (B.eval env α - B.eval env b[(i : ℕ)]) ≠ 0 :=
       Finset.prod_ne_zero_iff.mpr fun i _ => sub_ne_zero.mpr (h_avoid i)
+    refine ⟨h_loop', ?_, fun h_bad => h_bad.1 (poly_eq_zero_of_elems_eq h_perm)⟩
     simp only [circuit_norm, Fin.getElem_fin, Vector.getElem_map] at h_prod h_inv ⊢
     rw [h_one] at h_inv ⊢
     rw [mul_one]
     apply mul_right_cancel₀ h_ne
     linear_combination h_inv + h_prod
 
-/-- **Soundness error.** If `b` is not a permutation of `a`, the prover is accepted at no more
-than `n` challenges, on any backend: a soundness error of `n / |F|`. -/
-theorem soundness_error (n : ℕ) (a b : Vector B.Native n) (h : elems a ≠ elems b) :
-    {α | ChallengeCheck.Accepts (impl arith n) (a, b) α}.ncard ≤ n :=
-  (ChallengeCheck.soundness_error (impl arith n) (a, b) trivial h).trans (natDegree_poly_le a b)
-
-/-- **Completeness error.** If `b` is a permutation of `a`, the honest prover only fails at
-challenges that hit an entry of `b`, which are at most `n`: a completeness error of `n / |F|`.
-Stated as: at every challenge outside the entries of `b`, an honest assignment is accepted. -/
-theorem completeness_of_avoids (n : ℕ) (a b : Vector B.Native n) (h : elems a = elems b) (α : B.Native)
-    (h_avoid : α ∉ elems b) (s : B.State) (env₀ : B.Cell → B.Native)
-    (input : (check n).interface.Input B.Var) (h_in : B.footprintT input ⊆ B.Alloc s)
-    (h_valid : (check n).interface.inputCType.Valid (B.evalT env₀ input))
-    (h_decode : (check n).interface.inputCType.decode (B.evalT env₀ input) = ((a, b), α)) :
-    ∃ env, (∀ c ∈ B.Alloc s, env c = env₀ c) ∧ (((impl arith n).main input).operations s).ConstraintsHold env s :=
-  ChallengeCheck.completeness (impl arith n) (a, b) α s env₀ input h_in h_valid h_decode
-    ⟨h, fun i h_eq => h_avoid (h_eq ▸ Multiset.mem_map.mpr ⟨i, Finset.mem_univ_val i, rfl⟩)⟩
-
-omit [Field Native] in
-theorem ncard_elems_le {n : ℕ} (b : Vector Native n) : {α | α ∈ elems b}.ncard ≤ n := by
-  classical
-  have h : {α | α ∈ elems b} = ↑(elems b).toFinset := by ext; simp
-  rw [h, Set.ncard_coe_finset]
-  exact (Multiset.toFinset_card_le _).trans (by simp [elems])
-
-end GrandProduct
-
-/-- On R1CS. -/
-noncomputable def grandProductR1CS {F : Type} [Field F] (n : ℕ) :
-    Impl (R1CS F) (GrandProduct.check (Native := F) n).interface :=
-  GrandProduct.impl R1CS.arith n
-
+end PermutationRunning
 end Clean2
