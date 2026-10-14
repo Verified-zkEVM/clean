@@ -27,3 +27,4 @@ public import Clean2.Challenge.Symbolic
 public import Clean2.Challenge.AssertIdentity
 public import Clean2.Challenge.Fractions
 public import Clean2.Challenge.LogUpRow
+public import Clean2.Challenge.GrandProductRow
