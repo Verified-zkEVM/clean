@@ -8,11 +8,11 @@ consumed by the snarkjs toolchain:
 * binary `.r1cs` (`compileR1CSBin`) — the r1csfile format read by
   `snarkjs r1cs info`, `groth16 setup`, and the other `r1cs` subcommands.
 
-Uses the shared flattening logic from Compile.lean.
+Uses the shared symbolic lowering (`lowerAssert`/`symExpr` with product
+absorption) from Compile.lean.
 -/
 module
 
-public import Clean.Circuit.Expression
 public import Clean.Circuit.Operations
 public import Clean.Backends.Circom.Compile
 
@@ -21,8 +21,6 @@ public section
 open Lean
 
 namespace Backends.Circom
-
-open Expression (const add mul)
 
 variable {F : Type} [FiniteField F]
 
@@ -34,51 +32,31 @@ def processOps (vm : VarMap) (ops : List (FlatOperation F)) (st : FlattenState F
   match ops with
   | [] => pure (st.constraints, st.nextSignal)
   | .witness _ _ :: rest => processOps vm rest st
-  | .assert e@(.add (.mul a b) (.mul (.const c) z)) :: rest =>
-    if c = -1 ∨ c = 1 then
-      let (la, st1) := flattenExpr vm a st
-      let (lb, st2) := flattenExpr vm b st1
-      -- Linearize a·b exactly like the WASM witness module does (it flattens
-      -- the whole assert in order: the product first, then z), so intermediate
-      -- numbering stays in sync: k = a·b, then k ± z = 0. A constant factor
-      -- collapses into a scalar, no intermediate.
-      if isConstant la ∨ isConstant lb then
-        let (lz, st3) := flattenExpr vm z st2
-        let lz' := if c = -1 then lz else scaleLinComb (-1 : F) lz
-        processOps vm rest { st3 with constraints := (la, lb, lz') :: st3.constraints }
-      else
-        let k := st2.nextSignal
-        let st3 : FlattenState F := { nextSignal := k + 1, constraints := (la, lb, [(k, (1 : F))]) :: st2.constraints }
-        let (lz, st4) := flattenExpr vm z st3
-        let lz' := if c = -1 then scaleLinComb (-1 : F) lz else lz
-        let lc := addLinCombs [(k, (1 : F))] lz'
-        processOps vm rest { st4 with constraints := (lc, [(0, (1 : F))], []) :: st4.constraints }
-    else
-      let (lc, st1) := flattenExpr vm e st
-      processOps vm rest { st1 with constraints := (lc, [(0, (1 : F))], []) :: st1.constraints }
-  | .assert e@(.add (.mul (.const c) z) (.mul a b)) :: rest =>
-    if c = -1 ∨ c = 1 then
-      -- Match the original expression order used by WASM: z before a*b.
-      let (lz, stZ) := flattenExpr vm z st
-      let (la, st1) := flattenExpr vm a stZ
-      let (lb, st2) := flattenExpr vm b st1
-      if isConstant la ∨ isConstant lb then
-        let lz' := if c = -1 then lz else scaleLinComb (-1 : F) lz
-        processOps vm rest { st2 with constraints := (la, lb, lz') :: st2.constraints }
-      else
-        let k := st2.nextSignal
-        let st3 : FlattenState F := { nextSignal := k + 1, constraints := (la, lb, [(k, (1 : F))]) :: st2.constraints }
-        let lz' := if c = -1 then scaleLinComb (-1 : F) lz else lz
-        let lc := addLinCombs [(k, (1 : F))] lz'
-        processOps vm rest { st3 with constraints := (lc, [(0, (1 : F))], []) :: st3.constraints }
-    else
-      let (lc, st1) := flattenExpr vm e st
-      processOps vm rest { st1 with constraints := (lc, [(0, (1 : F))], []) :: st1.constraints }
-  | .assert e :: rest =>
-      let (lc, st1) := flattenExpr vm e st
-      processOps vm rest { st1 with constraints := (lc, [(0, (1 : F))], []) :: st1.constraints }
+  | .assert e :: rest => do
+    -- Asserts lower to absorbed R1CS rows through the same `lowerAssert` the
+    -- WASM witness module uses, so signal numbering and row shapes stay in
+    -- sync by construction (products are absorbed into the assert row instead
+    -- of being witnessed as their own signals — no copy rows).
+    let st' ← lowerAssert vm e st
+    processOps vm rest st'
   | .lookup _ :: _ => .error "processOps: lookup constraints cannot be represented in R1CS"
   | .interact _ :: _ => .error "processOps: interactions cannot be represented in R1CS"
+
+/-- Structural equality on linear combinations (rows are canonical: sorted
+    indices, no zero coefficients, so pointwise equality is value equality). -/
+private def linCombEq : LinComb F → LinComb F → Bool
+  | [], [] => true
+  | (i, c) :: xs, (i', c') :: ys => i == i' && decide (c = c') && linCombEq xs ys
+  | _, _ => false
+
+/-- Drop duplicate constraint rows, keeping the first occurrence in program
+    order. R1CS-side only: repeated asserts that allocate no intermediates
+    lower to byte-identical rows, and emitting both is pointless work for the
+    prover. (The WASM witness generator is insensitive to row multiplicity.) -/
+private def dedupConstraints (cs : List (Constraint F)) : List (Constraint F) :=
+  let rowEq (x y : Constraint F) :=
+    linCombEq x.1 y.1 && linCombEq x.2.1 y.2.1 && linCombEq x.2.2 y.2.2
+  cs.foldl (fun acc c => if acc.any (fun c' => rowEq c' c) then acc else c :: acc) [] |>.reverse
 
 /-- Convert a linear combination to a sparse JSON object: {"signalIndex": "coeff", ...} -/
 def linCombToJson (lc : List (ℕ × F)) : Json :=
@@ -118,7 +96,7 @@ private def compileConstraints (fieldPrime numInputs : ℕ) (inputNames : List S
   let (allConstraints, nVars) ← processOps vm flatOps st
   let primeBits := Nat.log2 fieldPrime + 1
   let n8 : ℕ := (primeBits + bitsPerByte - 1) / bitsPerByte
-  pure (allConstraints.reverse, nVars, n8)
+  pure (dedupConstraints allConstraints.reverse, nVars, n8)
 
 /--
 Compile Clean circuit operations to R1CS JSON (snarkjs-compatible format).
