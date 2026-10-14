@@ -262,6 +262,7 @@ def expose {Message : TypeMap} [ProvableType Message] (channel : Channel F Messa
     (interactions : List (ChannelInteraction channel)) : List (ExposedChannel F) :=
   [{ channel, interactions := interactions.map (·.toRaw) }]
 
+@[circuit_norm]
 lemma channelInteraction_toRaw_inj {i j : ChannelInteraction channel} :
     i.toRaw = j.toRaw ↔ i = j := by
   constructor; swap

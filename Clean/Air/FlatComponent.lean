@@ -83,7 +83,7 @@ structure Component (F : Type) [FiniteField F] where
   circuit_assumptions_of_assumptions : ∀ (i : UInt64) (input : Input F) data,
       FixedInputAt fixedColumns i input → DataInputAt circuit.name i input data →
         Assumptions input data → circuit.Assumptions input data := by simp
-  fixed_width_le_input : (fixedColumns.map FixedColumns.width).getD 0 ≤ size Input := by simp
+  fixed_width_le_input : (fixedColumns.map FixedColumns.width).getD 0 ≤ size Input := by simp <;> exact Nat.le_of_ble_eq_true rfl
 
 instance (t: Component F) : ProvableType t.Input := t.provableInput
 instance (t: Component F) : ProvableType t.Output := t.provableOutput
@@ -105,18 +105,12 @@ def width (component : Component F) : ℕ := component.circuit.size
 def committedWidth (component : Component F) : ℕ :=
   component.width - component.fixedWidth
 
+@[circuit_norm]
 def rowOffset (component : Component F) : ℕ := size component.Input
 
+@[circuit_norm]
 def rowInputVar (component : Component F): Var component.Input F :=
   varFromOffset component.Input 0
-
-@[circuit_norm]
-lemma rowOffset_mk (circuit : GeneralFormalCircuit F Input Output) :
-  ({ circuit } : Component F).rowOffset = size Input := rfl
-
-@[circuit_norm]
-lemma rowInputVar_mk (circuit : GeneralFormalCircuit F Input Output) :
-  ({ circuit } : Component F).rowInputVar = varFromOffset Input 0 := rfl
 
 /-- first `size Input` elements of the environment are the input -/
 @[circuit_norm]
@@ -129,13 +123,9 @@ def rowOutput (component : Component F) (row : Environment F) : component.Output
   let outputVar := (component.circuit component.rowInputVar).output component.rowOffset
   eval row outputVar
 
+@[circuit_norm]
 def rowOperations (component : Component F) : Operations F :=
   component.circuit.main (varFromOffset component.Input 0) |>.operations (size component.Input)
-
-@[circuit_norm]
-lemma rowOperations_mk (circuit : GeneralFormalCircuit F Input Output) :
-  ({ circuit } : Component F).rowOperations =
-    (circuit.main (varFromOffset Input 0)).operations (size Input) := rfl
 
 def Spec (component : Component F) (row : Environment F) : Prop :=
   component.circuit.Spec (component.rowInput row) (component.rowOutput row) row.data

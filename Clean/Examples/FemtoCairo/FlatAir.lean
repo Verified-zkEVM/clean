@@ -416,7 +416,6 @@ def programComponent {programSize : UInt64} (program : Fin programSize.toNat →
     Component (F p) where
   circuit := provideProgram program
   fixedColumns := some (programFixedColumns program)
-  fixed_width_le_input := by change 2 ≤ 3; omega
   Assumptions := fun _ _ => True
   circuit_assumptions_of_assumptions := by
     rintro i ⟨address, value, multiplicity⟩ data hfixed - -
@@ -450,7 +449,6 @@ def memoryComponent (memorySize : UInt64) (h_memorySize : memorySize.toNat < p) 
     Component (F p) where
   circuit := provideMemory
   fixedColumns := some (memoryFixedColumns memorySize)
-  fixed_width_le_input := by change 1 ≤ 3; omega
   Assumptions := fun _ _ => True
   circuit_assumptions_of_assumptions := by
     rintro i ⟨address, value, multiplicity⟩ data hfixed hdata -
@@ -589,11 +587,7 @@ def verifier {programSize : ℕ} (program : Fin programSize → F p)
   Spec
   | (ap, fp), data =>
       (stateChannel program initialState).Guarantees (haltedState programSize ap fp) data
-  soundness := by
-    intro env guarantees
-    simp only [circuit_norm, explicit_provable_type, Operations.FullGuarantees,
-      AbstractInteraction.Guarantees, Channel.toRaw, haltedState] at guarantees ⊢
-    exact guarantees
+  soundness := by simp_all [circuit_norm, explicit_provable_type, stateChannel, haltedState]
 
 def vm {programSize : ℕ} (program : Fin programSize → F p)
     (h_programSize : programSize < p) (initialState : State (F p)) :
@@ -602,15 +596,8 @@ def vm {programSize : ℕ} (program : Fin programSize → F p)
   tables := [executionComponent program h_programSize initialState]
   unique_names := by simp [executionComponent]
   verifier := verifier program initialState
-  tables_channel := by
-    simp [circuit_norm, executionComponent, executeStep, Component.rowInputVar,
-      Component.rowOperations]
-    intro env h
-    rcases h with h | h
-    · exact Or.inl h
-    · exact Or.inr (sub_eq_zero.mp h)
-  verifier_channel := by
-    simp [verifier, circuit_norm, ChannelInteraction.toRaw]
+  tables_channel := by simp [circuit_norm, executionComponent, executeStep, sub_eq_zero]
+  verifier_channel := by simp [circuit_norm, verifier]
   verifier_requirements env := by
     simp only [verifier, stateChannel, circuit_norm]
     exact ⟨0, rfl⟩
@@ -683,16 +670,8 @@ def formalEnsemble {programSize memorySize : UInt64} (program : Fin programSize.
     (initialState : State (F p)) :=
   (soundEnsemble program h_programSize h_memorySize initialState).toFormal (fun _ => True)
     (Spec program memorySize initialState)
-    (Ensemble.assumptionsConsistency_of_components _ <| by
-      intro _ _ component hcomponent input data
-      simp [soundEnsemble, circuit_norm] at hcomponent
-      rcases hcomponent with hvm | rfl | rfl
-      · have heq : component = executionComponent program h_programSize initialState := by
-          simpa [vm] using hvm
-        subst component
-        simp [executionComponent, executeStep]
-      · simp [memoryComponent]
-      · simp [programComponent])
+    (by simp [circuit_norm, soundEnsemble, vm, executionComponent, executeStep, memoryComponent,
+      programComponent])
     (by
       rintro witness - spec
       have hsize := witness.getRows_size_of_fixedColumns

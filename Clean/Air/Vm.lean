@@ -116,7 +116,9 @@ def toFormal (ens : SoundVmEnsemble F PublicIO) (Assumptions Spec : PublicIO F â
     subst input_eq
     apply spec_of_verifierSpec witness assumptions
     apply ens.ensemble.verifierSpec_of_verifierGuarantees
-    exact ens.soundVmChannel witness (assumptionsConsistency witness assumptions) constraints balance
+    exact ens.soundVmChannel witness
+      (Ensemble.assumptions_of_assumptionsConsistency assumptionsConsistency witness assumptions)
+      constraints balance
 end SoundVmEnsemble
 end Air.Flat
 

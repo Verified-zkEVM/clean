@@ -214,12 +214,15 @@ lemma getRows_size_of_fixedColumns (witness : EnsembleWitness ens) {component : 
     witness.dataConsistency_of_mem table htable]
   simpa [Table.proverRows] using congrArg List.length hmatch
 
+@[circuit_norm]
 def Constraints {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Prop :=
-  witness.toTables.Constraints
+  ∀ table ∈ witness.tables, table.Constraints
 
+@[circuit_norm]
 def Assumptions {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Prop :=
-  witness.toTables.Assumptions
+  ∀ table ∈ witness.tables, table.Assumptions
 
+@[circuit_norm]
 def Spec {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Prop :=
   ens.VerifierSpec witness.publicInput witness.data ∧
     ∀ table ∈ witness.tables, table.Spec
@@ -236,22 +239,6 @@ noncomputable def verifierInteractionsWith {ens : Ensemble F PublicIO}
 noncomputable def interactionsWith {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens)
     (channel : RawChannel F) : List (Interaction F) :=
   witness.verifierInteractionsWith channel ++ witness.toTables.interactionsWith channel
-
-@[circuit_norm] lemma constraints_iff {ens : Ensemble F PublicIO}
-    (witness : EnsembleWitness ens) :
-  witness.Constraints ↔ ∀ table ∈ witness.tables, table.Constraints := by
-  rfl
-
-@[circuit_norm] lemma assumptions_iff {ens : Ensemble F PublicIO}
-    (witness : EnsembleWitness ens) :
-  witness.Assumptions ↔ ∀ table ∈ witness.tables, table.Assumptions := by
-  rfl
-
-@[circuit_norm] lemma spec_iff {ens : Ensemble F PublicIO}
-    (witness : EnsembleWitness ens) :
-  witness.Spec ↔ ens.VerifierSpec witness.publicInput witness.data ∧
-    ∀ table ∈ witness.tables, table.Spec := by
-  rfl
 
 lemma mem_interactionsWith {witness : EnsembleWitness ens}
   {channel : RawChannel F} {i : Interaction F} :
@@ -416,20 +403,17 @@ def SpecConsistency (ens : Ensemble F PublicIO) (Spec : PublicIO F → Prop) : P
     witness.Spec →
     Spec witness.publicInput
 
-/-- Ensemble-level assumptions imply every table's assumptions. -/
+/-- Ensemble-level assumptions imply every component's residual assumptions, for all inputs and prover data. -/
+@[circuit_norm]
 def AssumptionsConsistency (ens : Ensemble F PublicIO) (Assumptions : PublicIO F → Prop) : Prop :=
-  ∀ (witness : EnsembleWitness ens),
-    Assumptions witness.publicInput →
-    witness.Assumptions
+  ∀ publicInput, Assumptions publicInput →
+    ∀ component ∈ ens.tables, ∀ input data, component.Assumptions input data
 
-/-- Public assumptions that imply every component's residual assumptions for all inputs and prover data are consistent. -/
-lemma assumptionsConsistency_of_components (ens : Ensemble F PublicIO)
-    {Assumptions : PublicIO F → Prop}
-    (h : ∀ publicInput, Assumptions publicInput →
-      ∀ component ∈ ens.tables, ∀ input data, component.Assumptions input data) :
-    ens.AssumptionsConsistency Assumptions := by
-  intro witness assumptions table htable row _
-  exact h _ assumptions _ (EnsembleWitness.component_mem_tables_of_mem htable) _ _
+lemma assumptions_of_assumptionsConsistency {ens : Ensemble F PublicIO} {Assumptions : PublicIO F → Prop}
+    (consistency : ens.AssumptionsConsistency Assumptions) (witness : EnsembleWitness ens)
+    (assumptions : Assumptions witness.publicInput) : witness.Assumptions := by
+  intro table htable row _
+  exact consistency _ assumptions _ (EnsembleWitness.component_mem_tables_of_mem htable) _ _
 
 theorem soundness_of_tableSoundness_and_specConsistency (ens : Ensemble F PublicIO)
   (Assumptions Spec : PublicIO F → Prop) :
@@ -444,7 +428,7 @@ theorem soundness_of_tableSoundness_and_specConsistency (ens : Ensemble F Public
   simp only [← publicInput_eq] at *
   apply spec_consistency witness
   apply table_soundness witness ?assumptions constraints balance
-  exact assumptions_consistency witness assumptions
+  exact assumptions_of_assumptionsConsistency assumptions_consistency witness assumptions
 end Ensemble
 
 /- ## Constructing ensembles -/

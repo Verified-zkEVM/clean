@@ -73,7 +73,6 @@ def bytesFixedColumns : FixedColumns (F p) where
 def bytesComponent : Component (F p) where
   circuit := pushBytes
   fixedColumns := some bytesFixedColumns
-  fixed_width_le_input := by change 1 ≤ 2; omega
   Assumptions := fun _ _ => True
   circuit_assumptions_of_assumptions := by
     rintro i ⟨value, multiplicity⟩ data hfixed - -
@@ -247,25 +246,15 @@ def fibonacciVerifier : Verifier.Program (F p) fieldTriple where
     Verifier.push FibonacciChannel (0, 0, 1)
   Spec
   | (n, x, y), _ => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
-  soundness := by
-    intro env guarantees
-    simp only [circuit_norm, Operations.FullGuarantees, FibonacciChannel,
-      AbstractInteraction.Guarantees, Channel.toRaw, explicit_provable_type] at guarantees ⊢
-    exact guarantees
+  soundness := by simp_all [circuit_norm, FibonacciChannel]
 
 def fibonacciVm : VmTables (F p) fieldTriple where
   channel := FibonacciChannel
   tables := [{ circuit := fib8 }]
   unique_names := by simp
   verifier := fibonacciVerifier
-  tables_channel := by
-    simp [circuit_norm, fib8, Component.rowInputVar, Component.rowOperations]
-    intro env h
-    rcases h with h | h
-    · exact Or.inl h
-    · exact Or.inr (sub_eq_zero.mp h)
-  verifier_channel := by
-    simp [fibonacciVerifier, circuit_norm, ChannelInteraction.toRaw]
+  tables_channel := by simp [circuit_norm, fib8, sub_eq_zero]
+  verifier_channel := by simp [circuit_norm, fibonacciVerifier]
   verifier_requirements env := by
     simp only [circuit_norm, fibonacciVerifier, FibonacciChannel, ZMod.val_zero, ZMod.val_one]
     exact ⟨ 0, rfl, rfl ⟩
@@ -290,13 +279,8 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
       bytesComponent, pushBytes])
   |>.toFormal (fun _ => True)
     (fun (n, x, y) => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val)
-    (Ensemble.assumptionsConsistency_of_components _ <| by
-      simp [circuit_norm, fibonacciVm, add8, bytesComponent,
-        pushBytes, fib8])
-    (by
-      intro witness _ spec
-      simp only [circuit_norm, fibonacciVm, fibonacciVerifier] at spec
-      exact spec)
+    (by simp [circuit_norm, fibonacciVm, add8, bytesComponent, pushBytes, fib8])
+    (by simp [circuit_norm, fibonacciVm, fibonacciVerifier])
 
 namespace FibonacciWitness
 
