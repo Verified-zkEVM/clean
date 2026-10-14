@@ -78,26 +78,51 @@ end Counting
 variable {B : Backend}
 
 /-- The soundness error of a circuit, as a number of bad challenges: the sum of the bounds of the
-rare events it assumes. A measure, so that it composes like any other. -/
+rare events it assumes for soundness. A measure, so that it composes like any other. -/
 def errorBound : B.Measure ℕ where
   op _ := 0
   rare ev := ev.bound
 
+/-- The completeness error of a circuit, as a number of bad challenges: the sum of the bounds of
+the rare events the honest prover assumes. -/
+def honestErrorBound : B.Measure ℕ where
+  op _ := 0
+  rareHonest ev := ev.bound
+
 @[circuit_norm] theorem errorBound_op (op : B.Op) : (errorBound (B := B)).op op = 0 := rfl
 @[circuit_norm] theorem errorBound_rare (ev : RareEvent B) : (errorBound (B := B)).rare ev = ev.bound := rfl
+@[circuit_norm] theorem errorBound_rareHonest (ev : RareEvent B) : (errorBound (B := B)).rareHonest ev = 0 := rfl
+@[circuit_norm] theorem honestErrorBound_op (op : B.Op) : (honestErrorBound (B := B)).op op = 0 := rfl
+@[circuit_norm] theorem honestErrorBound_rare (ev : RareEvent B) : (honestErrorBound (B := B)).rare ev = 0 := rfl
+@[circuit_norm] theorem honestErrorBound_rareHonest (ev : RareEvent B) :
+    (honestErrorBound (B := B)).rareHonest ev = ev.bound := rfl
 
-/-- A call contributes the error of the callee's operations. -/
-theorem errorBound_call {c : Interface B.Native} (impl : Impl B c) (s : B.State) (input : c.Input B.Var) :
-    errorBound.flat (impl.toSubcircuit s input).ops + errorBound.rares (impl.toSubcircuit s input).events =
-      errorBound.ofOps ((impl.main input).operations s) :=
+/-- A call contributes the measure of the callee's operations. -/
+theorem measure_call {M : Type} [AddCommMonoid M] (μ : B.Measure M) {c : Interface B.Native} (impl : Impl B c)
+    (s : B.State) (input : c.Input B.Var) :
+    μ.flat (impl.toSubcircuit s input).ops +
+      μ.rares (impl.toSubcircuit s input).events (impl.toSubcircuit s input).honestEvents =
+      μ.ofOps ((impl.main input).operations s) :=
   Backend.Measure.flat_toFlat _ _
 
 theorem errorBound_ofOps (ops : Ops B) : errorBound.ofOps ops = (ops.events.map RareEvent.bound).sum := by
   rw [← Backend.Measure.flat_toFlat]
   have h0 : ∀ l : List B.Op, errorBound.flat l = 0 := by
     intro l; induction l <;> simp_all [Backend.Measure.flat, errorBound]
-  rw [h0, zero_add]
-  simp [Backend.Measure.rares, errorBound]
+  have h1 : ∀ l : List (RareEvent B), (l.map errorBound.rareHonest).sum = 0 := by
+    intro l; induction l <;> simp_all [errorBound]
+  rw [h0, zero_add, Backend.Measure.rares, h1, add_zero]
+  rfl
+
+theorem honestErrorBound_ofOps (ops : Ops B) :
+    honestErrorBound.ofOps ops = (ops.honestEvents.map RareEvent.bound).sum := by
+  rw [← Backend.Measure.flat_toFlat]
+  have h0 : ∀ l : List B.Op, honestErrorBound.flat l = 0 := by
+    intro l; induction l <;> simp_all [Backend.Measure.flat, honestErrorBound]
+  have h1 : ∀ l : List (RareEvent B), (l.map honestErrorBound.rare).sum = 0 := by
+    intro l; induction l <;> simp_all [honestErrorBound]
+  rw [h0, zero_add, Backend.Measure.rares, h1, zero_add]
+  rfl
 
 namespace Impl
 variable {c : Interface B.Native}
@@ -143,6 +168,52 @@ theorem soundness_error (impl : Impl B c) (s : B.State) (input : c.Input B.Var)
     exact B.eval_frame env env₁ _ fun x hx => h_agree x (h_committed ⟨i, hi⟩ hx)
   simp only [RareEvent.Happens, h_map, h_challenge] at h_happens
   exact h_happens
+
+/-- **Completeness error.** Fix the values `env₁` of a set `C` of committed cells, which contains
+the input and everything the honest prover's rare events depend on (except the challenge `α`),
+and exists in the heap. If the input satisfies the prover assumptions, then the challenges at
+which the honest prover can fail, starting from some assignment agreeing with `env₁` on `C`, are
+at most `honestErrorBound` many. -/
+theorem completeness_error (impl : Impl B c) (s : B.State) (input : c.Input B.Var)
+    (C : Set B.Cell) (α : B.Var) (env₁ : B.Cell → B.Native)
+    (h_input : B.footprintT input ⊆ C) (h_C : C ⊆ B.Alloc s)
+    (h_events : ∀ ev ∈ ((impl.main input).operations s).honestEvents,
+      (∀ i : Fin ev.m, B.footprint ev.committed[i] ⊆ C) ∧ ev.challenge = α)
+    (h_α : B.footprint α ⊆ B.Alloc s)
+    (h_prover : c.inputCType.Valid (B.evalT env₁ input) ∧
+      c.ProverAssumptions (c.inputCType.decode (B.evalT env₁ input))) :
+    {a | ∃ env₀ : B.Cell → B.Native, (∀ x ∈ C, env₀ x = env₁ x) ∧ B.eval env₀ α = a ∧
+      ¬∃ env : B.Cell → B.Native, (∀ x ∈ B.Alloc s, env x = env₀ x) ∧
+        ((impl.main input).operations s).ConstraintsHold env s}.encard ≤
+      honestErrorBound.ofOps ((impl.main input).operations s) := by
+  rw [honestErrorBound_ofOps]
+  refine (Set.encard_le_encard fun a ha => ?_).trans
+    (encard_iUnion_list_le ((impl.main input).operations s).honestEvents
+      (fun ev => {a | ev.Bad (ev.committed.map (B.eval env₁)) a})
+      RareEvent.bound fun ev _ => ev.encard_bad_le _)
+  obtain ⟨env₀, h_agree₀, rfl, h_fail⟩ := ha
+  have h_input_eq : B.evalT env₀ input = B.evalT env₁ input :=
+    Backend.evalT_frame env₀ env₁ input fun x hx => h_agree₀ x (h_input hx)
+  -- if no rare event of the honest prover happens, an honest assignment is accepted
+  by_contra h_none
+  have h_hev : ∀ env : B.Cell → B.Native, (∀ x ∈ B.Alloc s, env x = env₀ x) →
+      ∀ ev ∈ ((impl.main input).operations s).honestEvents, ¬ev.Happens env := by
+    intro env h_agree ev hev h_happens
+    apply h_none
+    refine ⟨ev, hev, ?_⟩
+    obtain ⟨h_committed, h_challenge⟩ := h_events ev hev
+    have h_map : ev.committed.map (B.eval env) = ev.committed.map (B.eval env₁) := by
+      ext i hi
+      simp only [Vector.getElem_map]
+      exact B.eval_frame env env₁ _ fun x hx =>
+        (h_agree x (h_C (h_committed ⟨i, hi⟩ hx))).trans (h_agree₀ x (h_committed ⟨i, hi⟩ hx))
+    have h_α_eq : B.eval env α = B.eval env₀ α :=
+      B.eval_frame env env₀ α fun x hx => h_agree x (h_α hx)
+    simp only [RareEvent.Happens, h_map, h_challenge, h_α_eq] at h_happens
+    exact h_happens
+  obtain ⟨env, h_agree, h_holds, -⟩ := impl.exists_honest_env input s env₀ (h_input.trans h_C)
+    (by rw [h_input_eq]; exact h_prover) h_hev
+  exact h_fail ⟨env, h_agree, h_holds⟩
 
 end Impl
 

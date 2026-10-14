@@ -229,9 +229,9 @@ theorem errorBound_evalCircuit
   induction e generalizing s with
   | leaf | X => rfl
   | const c =>
-    simp only [circuit_norm, Backend.Measure.ofOps, errorBound_call, h0, add_zero]
+    simp only [circuit_norm, Backend.Measure.ofOps, measure_call errorBound, h0, add_zero]
   | add a b iha ihb | sub a b iha ihb | mul a b iha ihb | div a b iha ihb =>
-    simp only [circuit_norm, Backend.Measure.ofOps, errorBound_call, h0, iha, ihb, add_zero]
+    simp only [circuit_norm, Backend.Measure.ofOps, measure_call errorBound, h0, iha, ihb, add_zero]
 
 /-- **The error of an identity check** is the bound of its expression, if the arithmetic it uses
 has no rare events of its own. -/
@@ -240,7 +240,7 @@ theorem errorBound_impl
     {k : ℕ} (e : RExpr B.Native k) (input : (interface e).Input B.Var) (s : B.State) :
     errorBound.ofOps (((impl arith e).main input).operations s) = e.bound := by
   obtain ⟨x, α⟩ := input
-  simp only [impl, circuit_norm, Backend.Measure.ofOps, errorBound_call, h0, errorBound_evalCircuit arith h0,
+  simp only [impl, circuit_norm, Backend.Measure.ofOps, measure_call errorBound, h0, errorBound_evalCircuit arith h0,
     errorBound_rare, event, zero_add, add_zero]
 
 omit [Field B.Native] in
