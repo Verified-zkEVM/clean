@@ -11,10 +11,9 @@ namespace Verifier
 
 /-- Operations emitted by a public verifier program. New verifier-only primitives belong here. -/
 inductive Operation (F : Type) [FiniteField F] where
-  /-- Append an interaction whose non-assumed side holds unconditionally. -/
+  /-- Append an interaction. If it assumes guarantees, the verifier doesn't list its channel as one with requirements, so its requirements must hold unconditionally. -/
   | interact (interaction : AbstractInteraction F)
-      (otherSide : ∀ env, if interaction.assumeGuarantees then
-        interaction.Requirements env else interaction.Guarantees env)
+      (requirements : interaction.assumeGuarantees → ∀ env, interaction.Requirements env)
 
 namespace Operation
 
@@ -74,17 +73,14 @@ lemma circuitOperations_inChannelsOrGuaranteesFull (operations : Operations F) (
   intro interaction h_interaction
   simp only [interactions, List.mem_map] at h_interaction
   obtain ⟨operation, h_operation, rfl⟩ := h_interaction
-  obtain ⟨interaction, otherSide⟩ := operation
+  obtain ⟨interaction, requirements⟩ := operation
   by_cases assumes : interaction.assumeGuarantees
   · left
     rw [channelsWithGuarantees, List.mem_filterMap]
-    refine ⟨.interact interaction otherSide, h_operation, ?_⟩
+    refine ⟨.interact interaction requirements, h_operation, ?_⟩
     simp only [Operation.guaranteeChannel, Operation.interaction, assumes, if_true]
   · right
-    change interaction.Guarantees env
-    have assumes_false : interaction.assumeGuarantees = false :=
-      Bool.eq_false_of_not_eq_true assumes
-    simpa only [assumes_false, Bool.false_eq_true, if_false] using otherSide env
+    exact fun h => absurd h assumes
 
 lemma circuitOperations_inChannelsOrRequirementsFull (operations : Operations F) (env : Environment F) :
     operations.circuitOperations.InChannelsOrRequirementsFull
@@ -93,14 +89,13 @@ lemma circuitOperations_inChannelsOrRequirementsFull (operations : Operations F)
   intro interaction h_interaction
   simp only [interactions, List.mem_map] at h_interaction
   obtain ⟨operation, h_operation, rfl⟩ := h_interaction
-  obtain ⟨interaction, otherSide⟩ := operation
+  obtain ⟨interaction, requirements⟩ := operation
   by_cases assumes : interaction.assumeGuarantees
   · right
-    change interaction.Requirements env
-    simpa only [assumes, if_true] using otherSide env
+    exact requirements assumes env
   · left
     rw [channelsWithRequirements, List.mem_filterMap]
-    refine ⟨.interact interaction otherSide, h_operation, ?_⟩
+    refine ⟨.interact interaction requirements, h_operation, ?_⟩
     have assumes_false : interaction.assumeGuarantees = false :=
       Bool.eq_false_of_not_eq_true assumes
     simp only [Operation.requirementChannel, Operation.interaction, assumes_false,
@@ -153,18 +148,12 @@ def addOperation (operation : Operation F) : Verifier F Unit :=
 @[circuit_norm]
 def emit {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (mult : Expression F) (message : Message (Expression F)) : Verifier F Unit :=
-  addOperation (.interact (channel.emitted mult message).toRaw (by
-    intro env
-    change (channel.emitted mult message).toRaw.Guarantees env
-    intro assumes
-    exact Bool.noConfusion assumes))
+  addOperation (.interact (channel.emitted mult message).toRaw (Bool.noConfusion ·))
 
 @[circuit_norm]
 def pull {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (message : Message (Expression F)) : Verifier F Unit :=
-  addOperation (.interact (channel.pulled message).toRaw (by
-    intro env
-    change (channel.pulled message).toRaw.Requirements env
+  addOperation (.interact (channel.pulled message).toRaw (fun _ env => by
     rw [ChannelInteraction.toRaw_requirements]
     change Expression.eval env (-1 : Expression F) ≠ -1 →
       Expression.eval env (-1 : Expression F) ≠ 0 → _
