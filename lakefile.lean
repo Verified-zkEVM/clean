@@ -12,6 +12,10 @@ lean_lib Clean where
   -- every file under `Clean/` that Lake builds uses the module system; warn if a new one does not
   requiresModuleSystem := true
 
+/-- Experimental new core: interfaces, implementations, backends as heap models. See `Clean2/`. -/
+lean_lib Clean2 where
+  requiresModuleSystem := true
+
 lean_lib CleanTests where
   roots := #[`Clean.Test, `Clean.Specs.BLAKE3.ChunkProcessingTests]
 
