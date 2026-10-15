@@ -519,8 +519,8 @@ lemma balanceOf_active_append_eq {pulls pushes : List (Interaction F)} {msg : Ar
           exact h_zero ((h_pair 0 (by simp) (by simp)).mpr h_push_zero)
         simp [activeInteractions, h_zero, h_push_ne_zero, balanceOf_append,
           balanceOf_cons] at ih' ⊢
-        ring_nf at ih' ⊢
-        exact congrArg (fun x => x + if push.msg = msg then push.mult else 0) ih'
+        convert congrArg (fun x => x + if push.msg = msg then push.mult else 0) ih' using 1 <;>
+          ring
 
 lemma balancedInteractions_active_append {pulls pushes : List (Interaction F)}
     (balance : BalancedInteractions (pulls ++ pushes))
