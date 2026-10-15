@@ -1,12 +1,12 @@
 module
 
-public import Clean.Backends.Plonky3.Lower
+public import Clean.Backends.Program
 public import Clean.Examples.FemtoCairo.FlatAir
 public import Clean.Examples.FemtoCairo.FlatAirTestData
 public import Clean.Utils.Primes
 
 -- `native_decide` runs compiled code from these modules.
-public meta import Clean.Backends.Plonky3.Lower
+public meta import Clean.Backends.Program
 public meta import Clean.Examples.FemtoCairo.FlatAir
 public meta import Clean.Examples.FemtoCairo.FlatAirTestData
 public meta import Clean.Utils.Primes
@@ -78,7 +78,7 @@ def unstableDataReadRejected : Bool :=
     { config with components := config.components.map fun (name, generation) =>
         if name = (provideMemory (p := pBabybear)).name then (name, { generation with mode := mutableMemory })
         else (name, generation) }
-  match Backends.Plonky3.lower
+  match Backends.lower
       (formalEnsemble testProgram programSize_lt memorySize_lt initialState) config with
   | .error (.config (.unstableDataRead _ _ "memory" 1)) => true
   | _ => false

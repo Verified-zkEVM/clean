@@ -1,21 +1,21 @@
 module
 
-public import Clean.Backends.Plonky3.Lower
-public import Clean.Backends.Plonky3.Codegen
+public import Clean.Backends.Program
 
 @[expose] public section
 
 /-!
-# Rust rendering for typed AIR extraction programs
+# Rust printer for extraction programs
 
-This is the only string-producing part of ensemble extraction. It consumes a validated `Backends.Plonky3.Program`; lowering, validation, and executable semantics live in `Program.lean` and `Lower.lean`. Generic Plonky3 `Air` plumbing lives in the Rust backend.
+Prints a validated `Backends.Program` as Rust for the `clean_backend` crate, one constructor at a time. Each component becomes a Rust module with the same items: its shape, its witness and fixed-column programs, and its constraints and interactions. A final `clean_backend::ensemble!` invocation lists the modules; the macro implements the crate's traits on top of them, so dispatch, width checks, and Plonky3 plumbing are written once in Rust.
+
+Constraints and interactions are printed as functions generic over a Rust ring type `E`, reading a complete row whose fixed columns come first. The crate instantiates them with field elements for witness generation and with symbolic Plonky3 expressions for the AIR. Witness programs are printed over field elements, reading the partially built row.
 -/
 
 namespace Backends.Plonky3.Print
 
 open Air.Flat
 open Air.Flat.WitnessGeneration
-open Backends.Plonky3
 
 variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
@@ -23,266 +23,164 @@ variable {PublicIO : TypeMap} [ProvableType PublicIO]
 /-- Order of the field the generated code is printed for. Generated programs and AIRs reject any other Rust field. -/
 def fieldOrder : ℕ := FiniteField.size (F := F)
 
-/-- A field constant in the Rust field type `ty`. Values above half the field order are printed as negations, so that e.g. `-1` reads as `-ty::from_u64(1u64)`. -/
+/-- A field constant in the Rust ring type `ty`. Values above half the field order are printed as negations, so that e.g. `-1` reads as `-ty::from_u64(1u64)`. -/
 def fieldIn (ty : String) (value : F) : String :=
   let value := FiniteField.val value
   if 2 * value > fieldOrder (F := F) then s!"-{ty}::from_u64({fieldOrder (F := F) - value}u64)"
   else s!"{ty}::from_u64({value}u64)"
-
-def field (value : F) : String := fieldIn "F" value
 
 def quoted (value : String) : String := reprStr value
 
 def commaSep (values : List String) : String :=
   String.intercalate ", " values
 
-def constantLookupToRust (index : String) (values : List F) : String :=
-  let cases := values.zipIdx.map fun (value, i) => s!"{i} => {field value}, "
-  s!"match ({index}) as usize \{ {String.join cases}_ => F::ZERO }"
+def lines (values : List String) : String :=
+  String.intercalate "\n" values
 
-def exprToRust (row : String) : Expression F → String
-  | .var cell => s!"{row}.get({cell.index}).copied().unwrap_or(F::ZERO)"
-  | .const value => field value
-  | .add left right => s!"({exprToRust row left} + {exprToRust row right})"
-  | .mul left right => s!"({exprToRust row left} * {exprToRust row right})"
+/-! ## Constraints and interactions, generic over the ring type `E` -/
 
-/-- Names of the Rust variables a function body reads: the row slice and the row index. -/
-structure Names where
-  row : String
-  rowIndex : String
+def exprToRust : Expression F → String
+  | .var cell => s!"row[{cell.index}].clone()"
+  | .const value => fieldIn "E" value
+  | .add left right => s!"({exprToRust left} + {exprToRust right})"
+  | .mul left right => s!"({exprToRust left} * {exprToRust right})"
+
+def interactionToRust (interaction : AbstractInteraction F) : String :=
+  let message := commaSep (interaction.msg.toList.map exprToRust)
+  s!"Interaction \{ channel: {quoted interaction.channel.name}, multiplicity: {exprToRust interaction.mult}, message: vec![{message}], assume_guarantees: {interaction.assumeGuarantees} }"
+
+/-- `fn constraints<E>(row: &[E]) -> Vec<E>` -/
+def constraintsToRust (constraints : List (Expression F)) : String :=
+  s!"pub fn constraints<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<E> \{
+    vec![{commaSep (constraints.map exprToRust)}]
+}"
+
+/-- `fn interactions<E>(row: &[E]) -> Vec<Interaction<E>>` -/
+def interactionsToRust (interactions : List (AbstractInteraction F)) : String :=
+  s!"pub const INTERACTIONS: usize = {interactions.length};
+
+pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> \{
+    vec![{commaSep (interactions.map interactionToRust)}]
+}"
+
+/-! ## Witness IR, over field elements
+
+Printed function bodies read the row slice `row`, the row index `row_index`, the prover data `data`, and the hint `hint`. Inside loops, `idx` is the loop index. `inLoop` records whether `.idx` is the loop index or the row index. -/
 
 mutual
 
-def fieldToRust (names : Names) : Rust.FieldExpr F → String
-  | .const value => field value
-  | .cell index => s!"{names.row}.get({index}).copied().unwrap_or(F::ZERO)"
-  | .cellAtLoop offset =>
-      s!"{names.row}.get({offset}usize + idx as usize).copied().unwrap_or(F::ZERO)"
+def fexprToRust (inLoop : Bool) : Witgen.FExpr F → String
+  | .expr e => witnessExprToRust e
+  | .const value => fieldIn "F" value
   | .localVar index => s!"local_{index}"
-  | .add left right => s!"({fieldToRust names left} + {fieldToRust names right})"
-  | .mul left right => s!"({fieldToRust names left} * {fieldToRust names right})"
-  | .inverseOrZero value => s!"({fieldToRust names value}).inverse_or_zero()"
-  | .fromU64 value => s!"F::from_u64({u64ToRust names value})"
+  | .add left right => s!"({fexprToRust inLoop left} + {fexprToRust inLoop right})"
+  | .mul left right => s!"({fexprToRust inLoop left} * {fexprToRust inLoop right})"
+  | .inv value => s!"({fexprToRust inLoop value}).inverse_or_zero()"
+  | .ofU64 value => s!"F::from_u64({u64exprToRust inLoop value})"
   | .ite condition thenValue elseValue =>
-      s!"if {boolToRust names condition} \{ {fieldToRust names thenValue} } else \{ {fieldToRust names elseValue} }"
-  | .arrayGet values index =>
-      s!"[{commaSep (fieldListToRust names values)}].get(({u64ToRust names index}) as usize).copied().unwrap_or(F::ZERO)"
-  | .constMatch values index => constantLookupToRust (u64ToRust names index) values
+      s!"if {bexprToRust inLoop condition} \{ {fexprToRust inLoop thenValue} } else \{ {fexprToRust inLoop elseValue} }"
+  | .listGet values index =>
+      s!"[{commaSep (fexprListToRust inLoop values)}].get(({u64exprToRust inLoop index}) as usize).copied().unwrap_or(F::ZERO)"
   | .dataGet key width row column =>
-      s!"_data.get({quoted key}, {width}, ({u64ToRust names row}) as usize, {column})"
+      s!"data.get({quoted key}, {width}, ({u64exprToRust inLoop row}) as usize, {column})"
   | .hintGet key width row column =>
-      s!"_hint.get({quoted key}, {width}, ({u64ToRust names row}) as usize, {column})"
+      s!"hint.get({quoted key}, {width}, ({u64exprToRust inLoop row}) as usize, {column})"
 
-def fieldListToRust (names : Names) : List (Rust.FieldExpr F) → List String
+def fexprListToRust (inLoop : Bool) : List (Witgen.FExpr F) → List String
   | [] => []
-  | value :: values => fieldToRust names value :: fieldListToRust names values
+  | value :: values => fexprToRust inLoop value :: fexprListToRust inLoop values
 
-def u64ToRust (names : Names) : Rust.U64Expr F → String
+def u64exprToRust (inLoop : Bool) : Witgen.U64Expr F → String
   | .const value => s!"{value.toNat}u64"
-  | .canonical value => s!"({fieldToRust names value}).canonical_u64()"
+  | .val value => s!"({fexprToRust inLoop value}).canonical_u64()"
+  | .idx => if inLoop then "idx" else "row_index"
   | .localVar index => s!"local_{index}"
-  | .loopVar => "idx"
-  | .rowIndex => names.rowIndex
-  | .wrappingAdd left right => s!"({u64ToRust names left}).wrapping_add({u64ToRust names right})"
-  | .wrappingMul left right => s!"({u64ToRust names left}).wrapping_mul({u64ToRust names right})"
-  | .safeDiv left right => s!"safe_div({u64ToRust names left}, {u64ToRust names right})"
-  | .safeRem left right => s!"safe_rem({u64ToRust names left}, {u64ToRust names right})"
-  | .and left right => s!"({u64ToRust names left} & {u64ToRust names right})"
-  | .or left right => s!"({u64ToRust names left} | {u64ToRust names right})"
-  | .xor left right => s!"({u64ToRust names left} ^ {u64ToRust names right})"
-  | .wrappingShl left right =>
-      s!"({u64ToRust names left}).wrapping_shl(({u64ToRust names right} & 63) as u32)"
-  | .wrappingShr left right =>
-      s!"({u64ToRust names left}).wrapping_shr(({u64ToRust names right} & 63) as u32)"
-  | .loopBit value =>
-      s!"(if idx < 64 \{ ({u64ToRust names value} >> idx) & 1 } else \{ 0 })"
+  | .add left right => s!"({u64exprToRust inLoop left}).wrapping_add({u64exprToRust inLoop right})"
+  | .mul left right => s!"({u64exprToRust inLoop left}).wrapping_mul({u64exprToRust inLoop right})"
+  | .div left right => s!"safe_div({u64exprToRust inLoop left}, {u64exprToRust inLoop right})"
+  | .mod left right => s!"safe_rem({u64exprToRust inLoop left}, {u64exprToRust inLoop right})"
+  | .land left right => s!"({u64exprToRust inLoop left} & {u64exprToRust inLoop right})"
+  | .lor left right => s!"({u64exprToRust inLoop left} | {u64exprToRust inLoop right})"
+  | .lxor left right => s!"({u64exprToRust inLoop left} ^ {u64exprToRust inLoop right})"
+  | .shiftL left right => s!"shift_left({u64exprToRust inLoop left}, {u64exprToRust inLoop right})"
+  | .shiftR left right => s!"shift_right({u64exprToRust inLoop left}, {u64exprToRust inLoop right})"
   | .ite condition thenValue elseValue =>
-      s!"if {boolToRust names condition} \{ {u64ToRust names thenValue} } else \{ {u64ToRust names elseValue} }"
+      s!"if {bexprToRust inLoop condition} \{ {u64exprToRust inLoop thenValue} } else \{ {u64exprToRust inLoop elseValue} }"
 
-def boolToRust (names : Names) : Rust.BoolExpr F → String
+def bexprToRust (inLoop : Bool) : Witgen.BExpr F → String
   | .true => "true"
   | .false => "false"
-  | .fieldEq left right => s!"({fieldToRust names left} == {fieldToRust names right})"
-  | .u64Eq left right => s!"({u64ToRust names left} == {u64ToRust names right})"
-  | .u64Lt left right => s!"({u64ToRust names left} < {u64ToRust names right})"
-  | .not condition => s!"!({boolToRust names condition})"
-  | .and left right => s!"({boolToRust names left} && {boolToRust names right})"
+  | .feq left right => s!"({fexprToRust inLoop left} == {fexprToRust inLoop right})"
+  | .neq left right => s!"({u64exprToRust inLoop left} == {u64exprToRust inLoop right})"
+  | .lt left right => s!"({u64exprToRust inLoop left} < {u64exprToRust inLoop right})"
+  | .flt left right =>
+      s!"(({fexprToRust inLoop left}).canonical_u64() < ({fexprToRust inLoop right}).canonical_u64())"
+  | .bit value index => s!"bit(({fexprToRust inLoop value}).canonical_u64(), {min index 64})"
+  | .not condition => s!"!({bexprToRust inLoop condition})"
+  | .and left right => s!"({bexprToRust inLoop left} && {bexprToRust inLoop right})"
+
+/-- A circuit expression read from the partially built row. -/
+def witnessExprToRust : Expression F → String
+  | .var cell => s!"row.get({cell.index}).copied().unwrap_or(F::ZERO)"
+  | .const value => fieldIn "F" value
+  | .add left right => s!"({witnessExprToRust left} + {witnessExprToRust right})"
+  | .mul left right => s!"({witnessExprToRust left} * {witnessExprToRust right})"
 
 end
 
-/-- Print statements, numbering `let` locals in order. -/
-def stmtsToRust (names : Names) (lets : ℕ) : List (Rust.Stmt F) → List String
+/-- `let` statements for witness IR steps, numbering locals in order. -/
+def stepsToRust (lets : ℕ) : List (Witgen.Step F) → List String
   | [] => []
-  | .letField value :: rest =>
-      s!"        let local_{lets}: F = {fieldToRust names value};" :: stmtsToRust names (lets + 1) rest
-  | .letU64 value :: rest =>
-      s!"        let local_{lets}: u64 = {u64ToRust names value};" :: stmtsToRust names (lets + 1) rest
-  | .push value :: rest =>
-      s!"        output.push({fieldToRust names value});" :: stmtsToRust names lets rest
-  | .forPush count value :: rest =>
-      s!"        for idx in 0u64..{count}u64 \{\n            output.push({fieldToRust names value});\n        }" ::
-        stmtsToRust names lets rest
+  | .letF value :: steps => s!"let local_{lets}: F = {fexprToRust false value};" :: stepsToRust (lets + 1) steps
+  | .letU value :: steps => s!"let local_{lets}: u64 = {u64exprToRust false value};" :: stepsToRust (lets + 1) steps
 
-/-- Print the Rust function body of a witness IR program, filling a vector `output` of `width` elements. -/
-def outputToRust {n : ℕ} (steps : List (Witgen.Step F)) (output : Witgen.VExpr F n)
-    (names : Names) : String :=
-  let body := String.intercalate "\n" (stmtsToRust names 0 (Codegen.program steps output))
-  s!"        let mut output: Vec<F> = Vec::with_capacity({n});\n{body}\n        debug_assert_eq!(output.len(), {n});"
+/-- Statements pushing a witness IR output vector to `output`. -/
+def outputToRust : {n : ℕ} → Witgen.VExpr F n → List String
+  | _, .lit values => values.toList.map fun value => s!"output.push({fexprToRust false value});"
+  | _, .mapRange count body => [s!"for idx in 0u64..{count}u64 \{ output.push({fexprToRust true body}); }"]
+  | count, .envRange offset =>
+      [s!"for idx in 0u64..{count}u64 \{ output.push(row.get({offset} + idx as usize).copied().unwrap_or(F::ZERO)); }"]
+  | count, .bitsOf value =>
+      [s!"for idx in 0u64..{count}u64 \{ output.push(F::from_u64(bit_u64(({fexprToRust false value}).canonical_u64(), idx))); }"]
+  | _, .append left right => outputToRust left ++ outputToRust right
 
-def witnessBlockToRust (block : WitnessBlock F) (row : String) : String :=
-  s!"{outputToRust block.steps block.output ⟨row, "0u64"⟩}\n        {row}.extend(output);"
+/-- A block computing a witness IR program into a fresh vector `output`. -/
+def programToRust {n : ℕ} (steps : List (Witgen.Step F)) (output : Witgen.VExpr F n) : String :=
+  lines (["let mut output: Vec<F> = Vec::with_capacity(" ++ toString n ++ ");"] ++
+    stepsToRust 0 steps ++ outputToRust output)
 
-def fixedRowFunctionToRust (index : ℕ) (component : ComponentProgram F) :
-    Except String (Option String) :=
-  match component.fixedColumns with
-  | none => pure none
-  | some fixed => do
-      let program := outputToRust fixed.program.steps fixed.program.output ⟨"&[]", "row"⟩
-      return some s!"fn component_{index}_fixed_row<F: WitnessField>(row: u64) -> Vec<F> \{
-{program}
+/-! ## Components -/
+
+/-- `fn fixed_row(row_index) -> Vec<F>` -/
+def fixedRowToRust : Option (FixedColumnsProgram F) → String
+  | none => "pub const FIXED_WIDTH: usize = 0;
+pub const FIXED_HEIGHT: usize = 0;
+
+pub fn fixed_row<F: WitnessField>(_row_index: u64) -> Vec<F> {
+    Vec::new()
+}"
+  | some fixed => s!"pub const FIXED_WIDTH: usize = {fixed.width};
+pub const FIXED_HEIGHT: usize = {fixed.height};
+
+pub fn fixed_row<F: WitnessField>(row_index: u64) -> Vec<F> \{
+    let row: &[F] = &[];
+    {programToRust fixed.program.steps fixed.program.output}
     output
 }"
 
-def witnessBlocksToRust (blocks : List (WitnessBlock F)) : Except String String := do
-  let rendered := blocks.map fun block => s!"    \{\n{witnessBlockToRust block "row"}\n    }"
-  return String.intercalate "\n" rendered
-
-def interactionToRust (row : String) (interaction : AbstractInteraction F) : String :=
-  let message := interaction.msg.toList.map (exprToRust row)
-  s!"Interaction \{ channel: {quoted interaction.channel.name}, multiplicity: {exprToRust row interaction.mult}, message: vec![{commaSep message}], assume_guarantees: {interaction.assumeGuarantees} }"
-
-def interactionsToRust (row : String) (interactions : List (AbstractInteraction F)) : String :=
-  s!"vec![{commaSep (interactions.map (interactionToRust row))}]"
-
-def airExprToRust (fixedWidth : ℕ) (fixed main : String) : Expression F → String
-  | .var cell =>
-      if cell.index < fixedWidth then
-        s!"Into::<AB::Expr>::into({fixed}[{cell.index}].clone())"
-      else
-        s!"Into::<AB::Expr>::into({main}[{cell.index - fixedWidth}].clone())"
-  | .const value =>
-      s!"Into::<AB::Expr>::into({fieldIn "AB::F" value})"
-  | .add left right =>
-      s!"({airExprToRust fixedWidth fixed main left} + {airExprToRust fixedWidth fixed main right})"
-  | .mul left right =>
-      s!"({airExprToRust fixedWidth fixed main left} * {airExprToRust fixedWidth fixed main right})"
-
-def symbolicExprToRust (fixedWidth : ℕ) (fixed main : String) : Expression F → String
-  | .var cell =>
-      if cell.index < fixedWidth then
-        s!"SymbolicExpression::<F>::from({fixed}[{cell.index}])"
-      else
-        s!"SymbolicExpression::<F>::from({main}[{cell.index - fixedWidth}])"
-  | .const value =>
-      s!"SymbolicExpression::<F>::from({field value})"
-  | .add left right =>
-      s!"({symbolicExprToRust fixedWidth fixed main left} + {symbolicExprToRust fixedWidth fixed main right})"
-  | .mul left right =>
-      s!"({symbolicExprToRust fixedWidth fixed main left} * {symbolicExprToRust fixedWidth fixed main right})"
-
-def componentFixedWidth (component : ComponentProgram F) : ℕ :=
-  component.fixedColumns.map (·.width) |>.getD 0
-
-def componentCommittedWidth (component : ComponentProgram F) : ℕ :=
-  component.width - componentFixedWidth component
-
-def constraintCaseToRust (index : ℕ) (component : ComponentProgram F) : String :=
-  let constraints := component.constraints.map
-    (airExprToRust (componentFixedWidth component) "fixed" "local")
-  s!"            {index} => vec![{commaSep constraints}],"
-
-def lookupToRust (fixedWidth : ℕ) (fixed main : String)
-    (interaction : AbstractInteraction F) : String :=
-  let message := commaSep <| interaction.msg.toList.map
-    (symbolicExprToRust fixedWidth fixed main)
-  let multiplicity := symbolicExprToRust fixedWidth fixed main interaction.mult
-  let (multiplicity, direction) := if interaction.assumeGuarantees then
-    (s!"-({multiplicity})", "LookupDirection::Receive")
-  else
-    (multiplicity, "LookupDirection::Send")
-  s!"                lookups.push(GeneratedLookup \{ channel: {quoted interaction.channel.name}.into(), message: vec![{message}], multiplicity: {multiplicity}, direction: {direction} });"
-
-def lookupCaseToRust (index fixedWidth : ℕ) (fixed main : String)
-    (interactions : List (AbstractInteraction F)) : String :=
-  let lookups := String.intercalate "\n" <|
-    interactions.map (lookupToRust fixedWidth fixed main)
-  s!"            {index} => \{\n{lookups}\n            }"
-
-def airToRust (name : String) (program : Program F) : Except String String := do
-  let widths := program.components.map (toString ∘ componentCommittedWidth)
-  let fixedWidths := program.components.map (toString ∘ componentFixedWidth)
-  let fixedHeights := program.components.map fun component =>
-    toString (component.fixedColumns.map (·.height) |>.getD 0)
-  let interactionsPerRow := program.components.map fun component =>
-    toString component.interactions.length
-  let constraintCases := String.intercalate "\n" <|
-    program.components.zipIdx.map fun (component, index) => constraintCaseToRust index component
-  let tableCases := String.intercalate "\n" <| program.components.zipIdx.map fun (component, index) =>
-    lookupCaseToRust index (componentFixedWidth component) "fixed" "local" component.interactions
-  let fixedCases := String.intercalate "\n" <| program.components.zipIdx.filterMap
-    fun (component, index) => component.fixedColumns.map fun _ =>
-      s!"            {index} => component_{index}_fixed_row::<F>(row),"
-  return s!"#[derive(Clone, Debug)]\n\
-pub struct {name}AirSpec;\n\
-\n\
-impl GeneratedAirSpec for {name}AirSpec \{\n\
-    const FIELD_ORDER: u64 = {fieldOrder (F := F)};\n\
-    const PUBLIC_VALUES: usize = {program.publicInputWidth};\n\
-    const WIDTHS: &'static [usize] = &[{commaSep widths}];\n\
-    const FIXED_WIDTHS: &'static [usize] = &[{commaSep fixedWidths}];\n\
-    const FIXED_HEIGHTS: &'static [usize] = &[{commaSep fixedHeights}];\n\
-    const INTERACTIONS_PER_ROW: &'static [usize] = &[{commaSep interactionsPerRow}];\n\
-    const VERIFIER_INTERACTIONS: usize = {program.verifierInteractions.length};\n\
-\n\
-    fn fixed_row<F: WitnessField>(component: usize, row: u64) -> Vec<F> \{\n\
-        match component \{\n\
-{fixedCases}\n\
-            _ => unreachable!(\"component without fixed columns\"),\n\
-        }\n\
-    }\n\
-\n\
-    fn constraints<AB>(component: usize, fixed: &[AB::Var], local: &[AB::Var]) -> Vec<AB::Expr>\n\
-    where\n\
-        AB: AirBuilderWithPublicValues,\n\
-        AB::F: Field + PrimeCharacteristicRing,\n\
-    \{\n\
-        let _ = fixed;\n\
-        match component \{\n\
-{constraintCases}\n\
-            _ => unreachable!(\"invalid generated AIR component\"),\n\
-        }\n\
-    }\n\
-\n\
-    fn lookups<F: Field>(\n\
-        component: usize,\n\
-        fixed: &[SymbolicVariable<F>],\n\
-        local: &[SymbolicVariable<F>],\n\
-    ) -> Vec<GeneratedLookup<F>> \{\n\
-        let mut lookups = Vec::new();\n\
-        match component \{\n\
-{tableCases}\n\
-            _ => unreachable!(\"invalid generated AIR component\"),\n\
-        }\n\
-        lookups\n\
-    }\n\
-\n\
-    fn verifier_interactions<F: WitnessField>(public_values: &[F]) -> Vec<Interaction<F>> \{\n\
-        public_interactions(public_values)\n\
-    }\n\
-}\n\
-\n\
-pub type {name}Statement<F> = GeneratedEnsemble<F, {name}AirSpec>;"
-
-def componentToRust (index : ℕ) (component : ComponentProgram F) : Except String String := do
-  let witgen ← witnessBlocksToRust component.witnesses
-  let mutable := if component.witnesses.isEmpty then "" else "mut "
-  let interactions := interactionsToRust "row" component.interactions
-  return s!"fn component_{index}<F: WitnessField>(input: &[F], _data: &WitnessData<F>, _hint: &WitnessData<F>) -> Result<Vec<F>, String> \{\n    if input.len() != {component.inputWidth} \{ return Err(format!(\"component input has width \{}, expected {component.inputWidth}\", input.len())); }\n    let {mutable}row = input.to_vec();\n{witgen}\n    if row.len() != {component.width} \{ return Err(format!(\"generated row has width \{}, expected {component.width}\", row.len())); }\n    Ok(row)\n}\n\nfn component_{index}_interactions<F: WitnessField>(row: &[F]) -> Vec<Interaction<F>> \{\n    {interactions}\n}"
+/-- `fn complete(row, data, hint)`, appending the witnesses to the row's input. -/
+def completeToRust (witnesses : List (WitnessBlock F)) : String :=
+  let blocks := witnesses.map fun block =>
+    s!"    \{\n{programToRust block.steps block.output}\n    row.extend(output);\n    }"
+  s!"pub fn complete<F: WitnessField>(row: &mut Vec<F>, data: &WitnessData<F>, hint: &WitnessData<F>) \{
+    let row_index = 0u64;
+{lines blocks}
+}"
 
 def inputCellToRust : InputCell F → String
   | .message index => s!"InputCell::Message({index})"
   | .multiplicity => "InputCell::Multiplicity"
-  | .const value => s!"InputCell::Constant({field value})"
+  | .const value => s!"InputCell::Constant({fieldIn "F" value})"
 
 def directionToRust : Direction → String
   | .pull => "Direction::Pull"
@@ -292,93 +190,94 @@ def aggregationToRust : Aggregation → String
   | .perOccurrence => "Aggregation::PerOccurrence"
   | .byMessage => "Aggregation::ByMessage"
 
-def rowToRust (row : Array F) : String :=
-  s!"vec![{commaSep (row.toList.map field)}]"
+def handlerToRust (handler : HandlerProgram) : String :=
+  s!"PreallocatedHandler \{ channel: {quoted handler.channel}, direction: {directionToRust handler.direction}, interaction: {handler.interaction}, column: {handler.column} }"
 
-def preallocatedHandlerToRust (component : ComponentProgram F)
-    (handler : PreallocatedHandler) : Except String String := do
-  let some interaction := component.interactions[handler.interaction]?
-    | throw s!"preallocated handler interaction {handler.interaction} is out of bounds"
-  let direction := if interaction.assumeGuarantees then Direction.push else Direction.pull
-  return s!"PreallocatedHandler \{ channel: {quoted interaction.channel.name}, direction: \
-    {directionToRust direction}, interaction: {handler.interaction}, column: {handler.column} }"
+/-- `fn mode()`, and `fn initial_row(row_index, hint)`, which for preallocated components is the fixed prefix followed by the row program's values. -/
+def modeToRust : ModeProgram F → String
+  | .demand mode => s!"pub fn mode<F: WitnessField>() -> Mode<F> \{
+    Mode::Demand(DemandMode \{ channel: {quoted mode.channel.name}, direction: {directionToRust mode.direction}, aggregation: {aggregationToRust mode.aggregation}, input: vec![{commaSep (mode.input.cells.map inputCellToRust)}] })
+}
 
-def modeToRust (component : ComponentProgram F) : Mode F → Except String String
-  | .demand mode =>
-      let input := commaSep (mode.input.cells.map inputCellToRust)
-      pure s!"Mode::Demand(DemandMode \{ channel: {quoted mode.channel.name}, direction: {directionToRust mode.direction}, aggregation: {aggregationToRust mode.aggregation}, input: vec![{input}] })"
-  | .preallocated mode => do
-      let handlers ← mode.handlers.mapM (preallocatedHandlerToRust component)
-      return s!"Mode::Preallocated \{ rows: {mode.rows}, handlers: vec![{commaSep handlers}] }"
+pub fn initial_row<F: WitnessField>(_row_index: u64, _hint: &WitnessData<F>) -> Vec<F> \{
+    Vec::new()
+}"
+  | .preallocated rows input handlers => s!"pub fn mode<F: WitnessField>() -> Mode<F> \{
+    Mode::Preallocated \{ rows: {rows}, handlers: vec![{commaSep (handlers.map handlerToRust)}] }
+}
 
-/-- The initial input of a row of a preallocated component: its fixed prefix followed by its row program's values. -/
-def initialRowToRust (index : ℕ) (component : ComponentProgram F) : Mode F → Option String
-  | .demand _ => none
-  | .preallocated mode =>
-      let suffix := outputToRust mode.input.steps mode.input.output ⟨"&[]", "row"⟩
-      let fixed := match component.fixedColumns with
-        | none => "Vec::new()"
-        | some _ => s!"component_{index}_fixed_row::<F>(row)"
-      some s!"fn component_{index}_initial_row<F: WitnessField>(row: u64, _hint: &WitnessData<F>) -> Vec<F> \{
-    let mut input = {fixed};
-{suffix}
+pub fn initial_row<F: WitnessField>(row_index: u64, hint: &WitnessData<F>) -> Vec<F> \{
+    let row: &[F] = &[];
+    let mut input = fixed_row::<F>(row_index);
+    {programToRust input.steps input.output}
     input.extend(output);
     input
 }"
 
 def paddingToRust (padding : Padding F) : String :=
-  s!"Padding \{ input: {rowToRust padding.input}, minimum_rows: {padding.minimumRows} }"
+  s!"pub fn padding<F: WitnessField>() -> Padding<F> \{
+    Padding \{ input: vec![{commaSep (padding.input.toList.map (fieldIn "F"))}], minimum_rows: {padding.minimumRows} }
+}"
 
-/-- Rust helpers implementing the `UInt64` division semantics of the witness IR. -/
-def u64Helpers : String := "#[inline(always)]\n\
-fn safe_div(left: u64, right: u64) -> u64 { if right == 0 { 0 } else { left / right } }\n\
-#[inline(always)]\n\
-fn safe_rem(left: u64, right: u64) -> u64 { if right == 0 { left } else { left % right } }\n"
+def componentToRust (index : ℕ) (component : ComponentProgram F) (mode : ModeProgram F)
+    (padding : Padding F) : String :=
+  s!"#[allow(unused_variables, unused_mut, unused_parens)]
+pub mod component_{index} \{
+use super::*;
 
-def prelude : String := "// Generated by Clean from a typed extraction program. Do not edit.\n\
-use clean_backend::witness_generation::{Aggregation, DemandMode, Direction, EnsembleWitness, HintTable, InputCell, Interaction, Mode, Padding, PreallocatedHandler, Program, WitnessData, WitnessField, WitnessGenerationError};\n\
-use clean_backend::{GeneratedAirSpec, GeneratedEnsemble, GeneratedLookup};\n\
-use p3_air::lookup::Direction as LookupDirection;\n\
-use p3_air::{AirBuilderWithPublicValues, SymbolicExpression, SymbolicVariable};\n\
-use p3_field::{Field, PrimeCharacteristicRing};\n\
-use alloc::{format, vec, vec::Vec};\n\
-use alloc::string::String;\n\
-\n" ++ u64Helpers
+pub const NAME: &str = {quoted component.name};
+pub const INPUT_WIDTH: usize = {component.inputWidth};
+pub const WIDTH: usize = {component.width};
 
-/-- Render a validated extraction program as direct Rust witness and constraint code. -/
-def programToRust (name : String) (program : Program F) : Except String String := do
-  let components ← program.components.zipIdx.mapM fun (component, index) =>
-    componentToRust index component
-  let fixedRows ← program.components.zipIdx.filterMapM fun (component, index) =>
-    fixedRowFunctionToRust index component
-  let components := components ++ fixedRows
-  let initialRows := (program.components.zip program.modes).zipIdx.filterMap fun
-    | ((component, mode), index) => initialRowToRust index component mode
-  let verifier := interactionsToRust "public_input" program.verifierInteractions
-  let air ← airToRust name program
-  let modes ← (program.components.zip program.modes).mapM fun (component, mode) =>
-    modeToRust component mode
-  let modes := commaSep modes
-  let padding := commaSep (program.padding.map paddingToRust)
-  let componentNames := commaSep (program.components.map (quoted ∘ (·.name)))
-  let hintTables := commaSep <| program.hintTables.map fun table =>
-    s!"HintTable \{ key: {quoted table.key}, width: {table.width}, offset: {table.offset}, rows: {table.rows} }"
-  let fixedWidths := commaSep (program.components.map (toString ∘ componentFixedWidth))
-  let completeCases := String.intercalate "\n" <| program.components.zipIdx.map fun (_, index) =>
-    s!"            {index} => component_{index}(input, data, hint),"
-  let initialCases := String.intercalate "\n" <| (program.modes.zipIdx.filter fun
-    | (.preallocated _, _) => true
-    | (.demand _, _) => false).map fun (_, index) =>
-      s!"            {index} => component_{index}_initial_row(row, hint),"
-  let interactionCases := String.intercalate "\n" <| program.components.zipIdx.map fun (_, index) =>
-    s!"            {index} => component_{index}_interactions(row),"
-  return s!"{prelude}\n{String.intercalate "\n\n" components}\n\n{String.intercalate "\n\n" initialRows}\n\nfn public_interactions<F: WitnessField>(public_input: &[F]) -> Vec<Interaction<F>> \{\n    {verifier}\n}\n\n{air}\n\npub struct {name};\n\nimpl<F: WitnessField> Program<F> for {name} \{\n    const FIELD_ORDER: u64 = {fieldOrder (F := F)};\n    const FUEL: usize = {program.fuel};\n    const COMPONENTS: usize = {program.components.length};\n    const PUBLIC_INPUTS: usize = {program.publicInputWidth};\n    const PROVER_INPUTS: usize = {program.proverInputWidth};\n    const HINT_TABLES: &'static [HintTable] = &[{hintTables}];\n    const FIXED_WIDTHS: &'static [usize] = &[{fixedWidths}];\n    const COMPONENT_NAMES: &'static [&'static str] = &[{componentNames}];\n\n    fn modes() -> Vec<Mode<F>> \{ vec![{modes}] }\n\n    fn padding() -> Vec<Padding<F>> \{ vec![{padding}] }\n\n    fn initial_row(component: usize, row: u64, hint: &WitnessData<F>) -> Vec<F> \{\n        match component \{\n{initialCases}\n            _ => unreachable!(\"component without preallocated rows\"),\n        }\n    }\n\n    fn complete_row(component: usize, input: &[F], data: &WitnessData<F>, hint: &WitnessData<F>) -> Result<Vec<F>, String> \{\n        match component \{\n{completeCases}\n            _ => Err(format!(\"component index \{component} is out of bounds\")),\n        }\n    }\n\n    fn interactions(component: usize, row: &[F]) -> Vec<Interaction<F>> \{\n        match component \{\n{interactionCases}\n            _ => vec![],\n        }\n    }\n\n    fn verifier_interactions(public_input: &[F]) -> Vec<Interaction<F>> \{\n        public_interactions(public_input)\n    }\n}\n\npub fn generate<F: WitnessField>(public_input: &[F], prover_input: &[F]) -> Result<EnsembleWitness<F>, WitnessGenerationError> \{\n    clean_backend::witness_generation::generate::<F, {name}>(public_input, prover_input)\n}\n"
+{fixedRowToRust component.fixedColumns}
 
-/-- Validate an ensemble into the typed artifact and render that artifact as Rust. -/
-def ensembleToRust (name : String) (ens : FormalEnsemble F PublicIO)
-    (config : Config F) :
-    Except String String := do
+{completeToRust component.witnesses}
+
+{constraintsToRust component.constraints}
+
+{interactionsToRust component.interactions}
+
+{modeToRust mode}
+
+{paddingToRust padding}
+}"
+
+def hintTableToRust (table : HintTable) : String :=
+  s!"HintTable \{ key: {quoted table.key}, width: {table.width}, offset: {table.offset}, rows: {table.rows} }"
+
+def prelude : String := "// Generated by Clean from an extraction program. Do not edit.
+use clean_backend::witness_generation::*;
+use p3_field::PrimeCharacteristicRing;
+use alloc::{vec, vec::Vec};
+"
+
+/-- Print a validated extraction program as a Rust module body. -/
+def programToRustFile (program : Program F) : String :=
+  let components := ((program.components.zip (program.modes.zip program.padding)).zipIdx.map
+    fun ((component, mode, padding), index) => componentToRust index component mode padding)
+  let names := commaSep (program.components.zipIdx.map fun (_, index) => s!"component_{index}")
+  s!"{prelude}
+{lines (components.map (· ++ "\n"))}
+#[allow(unused_variables, unused_parens)]
+pub mod verifier \{
+use super::*;
+
+{interactionsToRust program.verifierInteractions}
+}
+
+clean_backend::ensemble! \{
+    field_order: {fieldOrder (F := F)},
+    fuel: {program.fuel},
+    public_inputs: {program.publicInputWidth},
+    prover_inputs: {program.proverInputWidth},
+    hint_tables: [{commaSep (program.hintTables.map hintTableToRust)}],
+    components: [{names}],
+}
+"
+
+/-- Lower an ensemble to an extraction program and print it as Rust. -/
+def ensembleToRust (ens : FormalEnsemble F PublicIO) (config : Config F) : Except String String := do
   let program ← lower ens config |>.mapError toString
-  programToRust name program
+  return programToRustFile program
 
 end Backends.Plonky3.Print

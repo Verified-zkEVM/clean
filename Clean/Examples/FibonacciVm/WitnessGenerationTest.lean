@@ -1,12 +1,12 @@
 module
 
 public import Clean.Examples.FibonacciVm.Ensemble
-public import Clean.Backends.Plonky3.Lower
+public import Clean.Backends.Program
 public import Clean.Utils.Primes
 
 -- `native_decide` runs compiled code from these modules.
 public meta import Clean.Examples.FibonacciVm.Ensemble
-public meta import Clean.Backends.Plonky3.Lower
+public meta import Clean.Backends.Program
 public meta import Clean.Utils.Primes
 
 @[expose] public section
@@ -113,7 +113,7 @@ example : configErrors = [
 def noData : ProverData (F pBabybear) := fun _ _ => #[]
 
 def extractedFirstRow : Except String (Array (F pBabybear)) := do
-  let program ← Backends.Plonky3.lower
+  let program ← Backends.lower
     (fibonacciEnsemble (p := pBabybear))
     (FibonacciWitness.config (p := pBabybear) 1000)
     |>.mapError toString

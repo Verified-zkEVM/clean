@@ -29,6 +29,54 @@ pub trait WitnessField: Field + PrimeField64 + Copy + Eq {
 
 impl<F> WitnessField for F where F: Field + PrimeField64 + Copy + Eq {}
 
+/// `UInt64` division in the witness IR: division by zero is zero.
+#[inline(always)]
+pub fn safe_div(left: u64, right: u64) -> u64 {
+    if right == 0 {
+        0
+    } else {
+        left / right
+    }
+}
+
+/// `UInt64` remainder in the witness IR: the remainder modulo zero is the dividend.
+#[inline(always)]
+pub fn safe_rem(left: u64, right: u64) -> u64 {
+    if right == 0 {
+        left
+    } else {
+        left % right
+    }
+}
+
+/// `UInt64` left shift in the witness IR, by the shift amount modulo 64.
+#[inline(always)]
+pub fn shift_left(value: u64, shift: u64) -> u64 {
+    value.wrapping_shl((shift & 63) as u32)
+}
+
+/// `UInt64` right shift in the witness IR, by the shift amount modulo 64.
+#[inline(always)]
+pub fn shift_right(value: u64, shift: u64) -> u64 {
+    value.wrapping_shr((shift & 63) as u32)
+}
+
+/// Bit `index` of `value`, as a number. Bits at index 64 and above are zero.
+#[inline(always)]
+pub fn bit_u64(value: u64, index: u64) -> u64 {
+    if index < 64 {
+        (value >> index) & 1
+    } else {
+        0
+    }
+}
+
+/// Whether bit `index` of `value` is set. Bits at index 64 and above are unset.
+#[inline(always)]
+pub fn bit(value: u64, index: u64) -> bool {
+    bit_u64(value, index) == 1
+}
+
 /// Failures surfaced by the public witness-generation API.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum WitnessGenerationError {

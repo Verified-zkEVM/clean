@@ -10,12 +10,10 @@ mod generated {
 use clean_backend::witness_generation::{Interaction, WitnessField};
 use clean_backend::{
     prove_ensemble, verify_ensemble, EnsembleVerificationError, GeneratedAirSpec,
-    GeneratedEnsemble, GeneratedLookup,
+    GeneratedEnsemble,
 };
 use common::setup;
-use p3_air::{AirBuilderWithPublicValues, SymbolicVariable};
 use p3_baby_bear::BabyBear;
-use p3_field::Field;
 use p3_field::{PrimeCharacteristicRing, PrimeField64};
 use p3_matrix::Matrix;
 
@@ -61,7 +59,7 @@ fn extracted_femtocairo_accepts_runtime_private_memories() {
         .into_traces()
         .expect("second runtime memory produced invalid traces");
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
-    let statement = generated::FemtoCairoFlatAirProgramStatement::<BabyBear>::new(&trace_heights)
+    let statement = generated::Statement::<BabyBear>::new(&trace_heights)
         .expect("invalid generated AIR shape");
     let (proof, _) = prove_ensemble(&config, &statement, traces, &public_values)
         .expect("second runtime memory produced an invalid proving shape");
@@ -88,7 +86,7 @@ fn extracted_femtocairo_air_proves_and_verifies() {
     );
 
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
-    let statement = generated::FemtoCairoFlatAirProgramStatement::<BabyBear>::new(&trace_heights)
+    let statement = generated::Statement::<BabyBear>::new(&trace_heights)
         .expect("invalid generated AIR shape");
     let (proof, _) =
         prove_ensemble(&config, &statement, traces, &public_values).expect("invalid proving shape");
@@ -96,7 +94,7 @@ fn extracted_femtocairo_air_proves_and_verifies() {
         .expect("extracted FemtoCairo AIR proof failed verification");
 }
 
-type Spec = generated::FemtoCairoFlatAirProgramAirSpec;
+type Spec = generated::Ensemble;
 
 const MEMORY: usize = 1;
 
@@ -122,20 +120,15 @@ impl GeneratedAirSpec for PermutedMemoryAddresses {
         Spec::fixed_row(component, row)
     }
 
-    fn constraints<AB>(component: usize, fixed: &[AB::Var], local: &[AB::Var]) -> Vec<AB::Expr>
-    where
-        AB: AirBuilderWithPublicValues,
-        AB::F: Field + PrimeCharacteristicRing,
-    {
-        Spec::constraints::<AB>(component, fixed, local)
+    fn constraints<E: PrimeCharacteristicRing + Clone>(component: usize, row: &[E]) -> Vec<E> {
+        Spec::constraints(component, row)
     }
 
-    fn lookups<F: Field>(
+    fn interactions<E: PrimeCharacteristicRing + Clone>(
         component: usize,
-        fixed: &[SymbolicVariable<F>],
-        local: &[SymbolicVariable<F>],
-    ) -> Vec<GeneratedLookup<F>> {
-        Spec::lookups(component, fixed, local)
+        row: &[E],
+    ) -> Vec<Interaction<E>> {
+        Spec::interactions(component, row)
     }
 
     fn verifier_interactions<F: WitnessField>(public_values: &[F]) -> Vec<Interaction<F>> {
@@ -165,7 +158,7 @@ fn verifier_rejects_permuted_memory() {
     verify_ensemble(&config, &permuted, &proof, &public_values)
         .expect("the permuted-memory proof must be valid for the permuted address table");
 
-    let statement = generated::FemtoCairoFlatAirProgramStatement::<BabyBear>::new(&trace_heights)
+    let statement = generated::Statement::<BabyBear>::new(&trace_heights)
         .expect("invalid generated AIR shape");
     assert!(matches!(
         verify_ensemble(&config, &statement, &proof, &public_values),

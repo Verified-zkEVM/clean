@@ -2,11 +2,12 @@
 
 This crate proves channel-based Clean AIR ensembles with Plonky3.
 
-1. Lean lowers a `Clean.Air.Flat.Ensemble` into a typed extraction program (`Clean/Backends/Plonky3/Lower.lean`).
-2. Witness programs, row programs, and fixed columns are translated into a typed model of the generated Rust (`Rust.lean`, `Codegen.lean`). `Correctness.lean` proves that the model computes the witness IR's values, for fields of order at most 2^64. `Print.lean` prints model terms structurally, together with constraint expressions, channel interactions, and the per-component dispatch. The Rust printers are part of the trusted computing base.
-3. `src/witness_generation.rs` runs the generated channel worklist and constructs all component traces without invoking Lean, building preallocated rows from the generated row functions. Lean's witness configuration supplies semantic padding rows; the worklist executes them and balances any interactions they create until every trace has a power-of-two height.
-4. `src/generated_air.rs` supplies the shared Plonky3 `Air` implementation, builds fixed traces from the generated fixed-row functions, and registers generated channel lookups.
-5. `src/ensemble_prover.rs` proves or verifies an opaque generated statement containing every component AIR exactly once in canonical order. Verifier-only interactions are derived from public inputs and enter the global channel argument directly, without a synthetic verifier AIR or trace.
+1. Lean lowers a `Clean.Air.Flat.Ensemble` into a backend-agnostic extraction program (`Clean/Backends/Program.lean`). Lowering validates the ensemble and resolves everything the printer would otherwise have to compute.
+2. `Clean/Backends/Plonky3/Print.lean` prints the program mechanically, one constructor at a time: a Rust module per component with its shape, witness and fixed-column programs, constraints, and interactions, followed by a `clean_backend::ensemble!` invocation. Constraints and interactions are printed once, generic over the ring of values, and read a complete row whose fixed columns come first. The printer is part of the trusted computing base.
+3. The `ensemble!` macro (`src/ensemble_macro.rs`) implements the crate's witness generation and AIR traits on top of the component modules.
+4. `src/witness_generation.rs` runs the generated channel worklist and constructs all component traces without invoking Lean, building preallocated rows from the generated row functions. Lean's witness configuration supplies semantic padding rows; the worklist executes them and balances any interactions they create until every trace has a power-of-two height.
+5. `src/generated_air.rs` supplies the shared Plonky3 `Air` implementation, builds fixed traces from the generated fixed-row functions, and registers the generated channel interactions as lookups.
+6. `src/ensemble_prover.rs` proves or verifies an opaque generated statement containing every component AIR exactly once in canonical order. Verifier-only interactions are derived from public inputs and enter the global channel argument directly, without a synthetic verifier AIR or trace.
 
 Statement construction binds component trace heights, exact fixed heights, and the complete component inventory. It also checks the Clean channel-soundness side condition `verifier interactions + Σ(trace height × interactions per row) < field order` before proving or verification. Individual component AIRs cannot be assembled through the public API.
 
@@ -37,7 +38,7 @@ cargo test --locked --release --manifest-path backends/plonky3/Cargo.toml \
   --test witness_ir_reference_tests
 ```
 
-`witness_ir_reference_tests` checks the Rust rendering of the witness IR against Lean's semantics. It covers every witness IR constructor with wrapping, out-of-range, and division-by-zero edge cases. The Rust printers are part of the trusted computing base.
+`witness_ir_reference_tests` checks the printed witness IR against Lean's semantics. Its cases (`Clean/Backends/Plonky3/Test/Reference.lean`) cover every witness IR constructor with wrapping, out-of-range, and division-by-zero edge cases.
 
 The largest test generates, proves, and verifies a 4,096-step Fibonacci execution and reports witness generation, proving, verification, trace dimensions, and serialized proof size.
 

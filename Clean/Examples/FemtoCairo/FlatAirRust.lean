@@ -13,7 +13,6 @@ open Examples.FemtoCairo.FlatAirTestData
 
 def main : IO Unit := do
   match Backends.Plonky3.Print.ensembleToRust
-      "FemtoCairoFlatAirProgram"
       (Examples.FemtoCairo.FlatAir.formalEnsemble testProgram programSize_lt memorySize_lt
         initialState)
       (Examples.FemtoCairo.FlatAir.Witness.config (memorySize := 8)

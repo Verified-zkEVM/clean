@@ -82,7 +82,7 @@ fn extracted_fibonacci_air_proves_and_verifies() {
     );
 
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
-    let statement = generated::FibonacciEnsembleProgramStatement::<BabyBear>::new(&trace_heights)
+    let statement = generated::Statement::<BabyBear>::new(&trace_heights)
         .expect("invalid generated AIR shape");
     let witness_elapsed = witness_started.elapsed();
     let proving_started = Instant::now();
@@ -109,13 +109,13 @@ fn ensemble_api_reports_shape_errors() {
         generated::generate(&public_values, &[]).expect("extracted Rust witness generation failed");
     let traces = witness.into_traces().expect("invalid extracted traces");
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
-    let statement = generated::FibonacciEnsembleProgramStatement::<BabyBear>::new(&trace_heights)
+    let statement = generated::Statement::<BabyBear>::new(&trace_heights)
         .expect("invalid generated AIR shape");
     assert_eq!(statement.component_count(), 3);
     assert_eq!(statement.trace_heights(), trace_heights);
     assert_eq!(statement.interaction_count(), 418);
     let different_dynamic_shape =
-        generated::FibonacciEnsembleProgramStatement::<BabyBear>::new(&[64, 32, 256])
+        generated::Statement::<BabyBear>::new(&[64, 32, 256])
             .expect("valid alternative dynamic shape");
     assert!(matches!(
         prove_ensemble(
@@ -141,7 +141,7 @@ fn ensemble_api_reports_shape_errors() {
         })
     ));
     assert!(matches!(
-        generated::FibonacciEnsembleProgramStatement::<BabyBear>::new(&trace_heights[..2]),
+        generated::Statement::<BabyBear>::new(&trace_heights[..2]),
         Err(EnsembleShapeError::ComponentCount {
             expected: 3,
             trace_heights: 2,
@@ -150,7 +150,7 @@ fn ensemble_api_reports_shape_errors() {
     let mut wrong_fixed_height = trace_heights.clone();
     wrong_fixed_height[2] = 128;
     assert!(matches!(
-        generated::FibonacciEnsembleProgramStatement::<BabyBear>::new(&wrong_fixed_height),
+        generated::Statement::<BabyBear>::new(&wrong_fixed_height),
         Err(EnsembleShapeError::FixedTraceHeight {
             component: 2,
             expected: 256,
@@ -160,7 +160,7 @@ fn ensemble_api_reports_shape_errors() {
 
     let excessive_interactions = [1usize << 30, 1, 256];
     assert!(matches!(
-        generated::FibonacciEnsembleProgramStatement::<BabyBear>::new(&excessive_interactions),
+        generated::Statement::<BabyBear>::new(&excessive_interactions),
         Err(EnsembleShapeError::InteractionCountBound {
             interactions,
             field_order,
@@ -171,7 +171,7 @@ fn ensemble_api_reports_shape_errors() {
 #[test]
 fn generated_code_rejects_other_fields() {
     assert!(matches!(
-        generated::FibonacciEnsembleProgramStatement::<KoalaBear>::new(&[32, 32, 256]),
+        generated::Statement::<KoalaBear>::new(&[32, 32, 256]),
         Err(EnsembleShapeError::FieldOrder { expected, actual })
             if expected == BabyBear::ORDER_U64 && actual == KoalaBear::ORDER_U64
     ));
@@ -186,24 +186,24 @@ fn generated_code_rejects_other_fields() {
 struct Minimum64Program;
 
 impl<F: WitnessField> Program<F> for Minimum64Program {
-    const FIELD_ORDER: u64 = <generated::FibonacciEnsembleProgram as Program<F>>::FIELD_ORDER;
-    const FUEL: usize = <generated::FibonacciEnsembleProgram as Program<F>>::FUEL;
-    const COMPONENTS: usize = <generated::FibonacciEnsembleProgram as Program<F>>::COMPONENTS;
-    const PUBLIC_INPUTS: usize = <generated::FibonacciEnsembleProgram as Program<F>>::PUBLIC_INPUTS;
-    const PROVER_INPUTS: usize = <generated::FibonacciEnsembleProgram as Program<F>>::PROVER_INPUTS;
+    const FIELD_ORDER: u64 = <generated::Ensemble as Program<F>>::FIELD_ORDER;
+    const FUEL: usize = <generated::Ensemble as Program<F>>::FUEL;
+    const COMPONENTS: usize = <generated::Ensemble as Program<F>>::COMPONENTS;
+    const PUBLIC_INPUTS: usize = <generated::Ensemble as Program<F>>::PUBLIC_INPUTS;
+    const PROVER_INPUTS: usize = <generated::Ensemble as Program<F>>::PROVER_INPUTS;
     const HINT_TABLES: &'static [HintTable] =
-        <generated::FibonacciEnsembleProgram as Program<F>>::HINT_TABLES;
+        <generated::Ensemble as Program<F>>::HINT_TABLES;
     const FIXED_WIDTHS: &'static [usize] =
-        <generated::FibonacciEnsembleProgram as Program<F>>::FIXED_WIDTHS;
+        <generated::Ensemble as Program<F>>::FIXED_WIDTHS;
     const COMPONENT_NAMES: &'static [&'static str] =
-        <generated::FibonacciEnsembleProgram as Program<F>>::COMPONENT_NAMES;
+        <generated::Ensemble as Program<F>>::COMPONENT_NAMES;
 
     fn modes() -> Vec<Mode<F>> {
-        generated::FibonacciEnsembleProgram::modes()
+        generated::Ensemble::modes()
     }
 
     fn padding() -> Vec<Padding<F>> {
-        generated::FibonacciEnsembleProgram::padding()
+        generated::Ensemble::padding()
             .into_iter()
             .map(|padding| Padding {
                 minimum_rows: 64,
@@ -213,7 +213,7 @@ impl<F: WitnessField> Program<F> for Minimum64Program {
     }
 
     fn initial_row(component: usize, row: u64, hint: &WitnessData<F>) -> Vec<F> {
-        generated::FibonacciEnsembleProgram::initial_row(component, row, hint)
+        generated::Ensemble::initial_row(component, row, hint)
     }
 
     fn complete_row(
@@ -222,15 +222,15 @@ impl<F: WitnessField> Program<F> for Minimum64Program {
         data: &WitnessData<F>,
         hint: &WitnessData<F>,
     ) -> Result<Vec<F>, String> {
-        generated::FibonacciEnsembleProgram::complete_row(component, input, data, hint)
+        generated::Ensemble::complete_row(component, input, data, hint)
     }
 
     fn interactions(component: usize, row: &[F]) -> Vec<Interaction<F>> {
-        generated::FibonacciEnsembleProgram::interactions(component, row)
+        generated::Ensemble::interactions(component, row)
     }
 
     fn verifier_interactions(public_input: &[F]) -> Vec<Interaction<F>> {
-        generated::FibonacciEnsembleProgram::verifier_interactions(public_input)
+        generated::Ensemble::verifier_interactions(public_input)
     }
 }
 
@@ -246,7 +246,7 @@ fn verifier_rejects_a_valid_proof_at_the_wrong_height() {
     let wrong_traces = wrong.into_traces().expect("invalid wrong-height traces");
     let wrong_heights = wrong_traces.iter().map(Matrix::height).collect::<Vec<_>>();
     let wrong_statement =
-        generated::FibonacciEnsembleProgramStatement::<BabyBear>::new(&wrong_heights)
+        generated::Statement::<BabyBear>::new(&wrong_heights)
             .expect("invalid wrong-height AIR shape");
     let (wrong_proof, _) = prove_ensemble(&config, &wrong_statement, wrong_traces, &public_values)
         .expect("invalid wrong-height proving shape");
@@ -269,7 +269,7 @@ fn verifier_rejects_a_valid_proof_at_the_wrong_height() {
         .map(Matrix::height)
         .collect::<Vec<_>>();
     let expected_statement =
-        generated::FibonacciEnsembleProgramStatement::<BabyBear>::new(&expected_heights)
+        generated::Statement::<BabyBear>::new(&expected_heights)
             .expect("invalid expected AIR shape");
     assert!(matches!(
         verify_ensemble(&config, &expected_statement, &wrong_proof, &public_values),
@@ -292,7 +292,7 @@ fn assert_tampered_trace_rejected(
     let mut traces = witness.into_traces().expect("invalid extracted traces");
     tamper(&mut traces);
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
-    let statement = generated::FibonacciEnsembleProgramStatement::<BabyBear>::new(&trace_heights)
+    let statement = generated::Statement::<BabyBear>::new(&trace_heights)
         .expect("invalid generated AIR shape");
     let (proof, _) =
         prove_ensemble(&config, &statement, traces, &public_values).expect("invalid proving shape");

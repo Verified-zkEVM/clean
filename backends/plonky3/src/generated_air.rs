@@ -1,8 +1,7 @@
 //! Generic Plonky3 AIR wrapper for programs extracted from Clean.
 //!
-//! Generated files provide only component widths and direct expression builders through [`GeneratedAirSpec`]. Lookup registration and Plonky3 trait plumbing live here so they are implemented and reviewed once.
+//! Generated files provide component shapes and direct expression builders through [`GeneratedAirSpec`], usually implemented by [`crate::ensemble`]. Lookup registration and Plonky3 trait plumbing live here so they are implemented and reviewed once.
 
-use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::marker::PhantomData;
@@ -10,9 +9,9 @@ use core::marker::PhantomData;
 use p3_air::lookup::{Direction as LookupDirection, Kind, Lookup};
 use p3_air::{
     Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PermutationAirBuilder,
-    SymbolicExpression, SymbolicVariable,
+    SymbolicExpression,
 };
-use p3_field::{Field, PrimeCharacteristicRing};
+use p3_field::PrimeCharacteristicRing;
 use p3_matrix::dense::RowMajorMatrix;
 use p3_matrix::Matrix;
 use p3_uni_stark::SymbolicAirBuilder;
@@ -74,19 +73,14 @@ pub enum EnsembleShapeError {
     },
 }
 
-/// One generated symbolic channel interaction before Plonky3 allocates lookup columns.
-pub struct GeneratedLookup<F: Field> {
-    pub channel: String,
-    pub message: Vec<SymbolicExpression<F>>,
-    pub multiplicity: SymbolicExpression<F>,
-    pub direction: LookupDirection,
-}
-
 /// Direct expressions emitted for one Clean ensemble.
+///
+/// Constraints and interactions read a complete row: the fixed columns followed by the committed columns. They are generic over the ring of values, so the same generated functions run on field elements during witness generation and on symbolic expressions here.
 pub trait GeneratedAirSpec: Clone + Sync {
     /// Order of the field whose constants and arithmetic the generated code was printed for.
     const FIELD_ORDER: u64;
     const PUBLIC_VALUES: usize;
+    /// Committed widths, without the fixed columns.
     const WIDTHS: &'static [usize];
     const FIXED_WIDTHS: &'static [usize];
     const FIXED_HEIGHTS: &'static [usize];
@@ -96,16 +90,12 @@ pub trait GeneratedAirSpec: Clone + Sync {
     /// The fixed-column values of one row of a component with fixed columns.
     fn fixed_row<F: WitnessField>(component: usize, row: u64) -> Vec<F>;
 
-    fn constraints<AB>(component: usize, fixed: &[AB::Var], local: &[AB::Var]) -> Vec<AB::Expr>
-    where
-        AB: AirBuilderWithPublicValues,
-        AB::F: Field + PrimeCharacteristicRing;
+    fn constraints<E: PrimeCharacteristicRing + Clone>(component: usize, row: &[E]) -> Vec<E>;
 
-    fn lookups<F: Field>(
+    fn interactions<E: PrimeCharacteristicRing + Clone>(
         component: usize,
-        fixed: &[SymbolicVariable<F>],
-        local: &[SymbolicVariable<F>],
-    ) -> Vec<GeneratedLookup<F>>;
+        row: &[E],
+    ) -> Vec<Interaction<E>>;
 
     fn verifier_interactions<F: WitnessField>(public_values: &[F]) -> Vec<Interaction<F>>;
 }
@@ -260,24 +250,22 @@ where
     P: GeneratedAirSpec,
 {
     fn eval(&self, builder: &mut AB) {
+        let mut row: Vec<AB::Expr> = Vec::new();
+        if P::FIXED_WIDTHS[self.component] != 0 {
+            let fixed = builder
+                .preprocessed()
+                .expect("fixed component has no preprocessed trace");
+            let fixed_local = fixed
+                .row_slice(0)
+                .expect("validated fixed trace height is nonzero");
+            row.extend(fixed_local.iter().map(|value| value.clone().into()));
+        }
         let main = builder.main();
         let local = main
             .row_slice(0)
             .expect("validated trace height is nonzero");
-        let constraints = if P::FIXED_WIDTHS[self.component] == 0 {
-            P::constraints::<AB>(self.component, &[], &local)
-        } else {
-            match builder.preprocessed() {
-                Some(fixed) => {
-                    let fixed_local = fixed
-                        .row_slice(0)
-                        .expect("validated fixed trace height is nonzero");
-                    P::constraints::<AB>(self.component, &fixed_local, &local)
-                }
-                None => unreachable!("fixed component has no preprocessed trace"),
-            }
-        };
-        for constraint in constraints {
+        row.extend(local.iter().map(|value| value.clone().into()));
+        for constraint in P::constraints(self.component, &row) {
             builder.assert_zero(constraint);
         }
     }
@@ -294,30 +282,33 @@ where
             0,
             0,
         );
+        let mut row: Vec<SymbolicExpression<AB::F>> = Vec::new();
+        if P::FIXED_WIDTHS[self.component] != 0 {
+            let fixed = AirBuilder::preprocessed(&symbolic)
+                .expect("fixed component has no symbolic preprocessed trace");
+            let fixed_local = fixed
+                .row_slice(0)
+                .expect("validated fixed trace height is nonzero");
+            row.extend(fixed_local.iter().map(|&value| value.into()));
+        }
         let main = AirBuilder::main(&symbolic);
         let local = main
             .row_slice(0)
             .expect("validated trace height is nonzero");
-        let lookups = if P::FIXED_WIDTHS[self.component] == 0 {
-            P::lookups(self.component, &[], &local)
-        } else {
-            match AirBuilder::preprocessed(&symbolic) {
-                Some(fixed) => {
-                    let fixed_local = fixed
-                        .row_slice(0)
-                        .expect("validated fixed trace height is nonzero");
-                    P::lookups(self.component, &fixed_local, &local)
-                }
-                None => unreachable!("fixed component has no symbolic preprocessed trace"),
-            }
-        };
-        lookups
+        row.extend(local.iter().map(|&value| value.into()));
+        // an interaction that assumes guarantees pulls from the channel: it is received with the negated multiplicity
+        P::interactions(self.component, &row)
             .into_iter()
-            .map(|lookup| {
+            .map(|interaction| {
+                let (multiplicity, direction) = if interaction.assume_guarantees {
+                    (-interaction.multiplicity, LookupDirection::Receive)
+                } else {
+                    (interaction.multiplicity, LookupDirection::Send)
+                };
                 Air::<AB>::register_lookup(
                     self,
-                    Kind::Global(lookup.channel),
-                    &[(lookup.message, lookup.multiplicity, lookup.direction)],
+                    Kind::Global(interaction.channel.into()),
+                    &[(interaction.message, multiplicity, direction)],
                 )
             })
             .collect()
