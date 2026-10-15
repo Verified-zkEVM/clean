@@ -23,14 +23,7 @@ public import Clean2.Challenge.Extension
 public import Clean2.Challenge.Symbolic
 public import Clean2.Challenge.AssertIdentity
 public import Clean2.Challenge.Fractions
-public import Clean2.Challenge.LogUpRow
-public import Clean2.Challenge.GrandProductRow
+public import Clean2.Challenge.LogUp
+public import Clean2.Challenge.GrandProduct
 public import Clean2.Challenge.Examples
 public import Clean2.Challenge.NaiveSymbolic
-public import Clean2.Challenge.Variants.RExpr
-public import Clean2.Challenge.Variants.Identity
-public import Clean2.Challenge.Variants.ZeroCheck
-public import Clean2.Challenge.Variants.Permutation
-public import Clean2.Challenge.Variants.PermutationRunning
-public import Clean2.Challenge.Variants.LogUp
-public import Clean2.Challenge.Variants.IdentityExamples

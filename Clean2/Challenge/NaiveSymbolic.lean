@@ -12,11 +12,11 @@ The constraint `w * w = α`, with `w` chosen after `α`:
 - pointwise, it is satisfied at every square `α` (`exists_mul_self_eq_of_isSquare`), which is
   about half of all challenges in an odd prime field.
 
-`Identity` avoids this by never reading a constraint symbolically. The circuit checks the
-expression pointwise, at an arbitrary `α`; only the expression itself, built from committed values,
-is read as a rational function, and its bad challenges are bounded by its degree. A user who wants
-`w * w = α` has no expression to hand to `Identity`: `w` is chosen after the challenge, so it cannot
-be a committed value.
+The challenge library avoids this by never reading a constraint symbolically. Gadgets have
+pointwise specs, at an arbitrary `α`; only at a boundary (`AssertIdentity`) is a value read as a
+rational function `R` (`x ≙[α] R`), and `R` is built from committed values only, so that its bad
+challenges are bounded by its degree. A user who wants `w * w = α` has no such `R`: `w` is chosen
+after the challenge, so it cannot be a committed value.
 -/
 module
 

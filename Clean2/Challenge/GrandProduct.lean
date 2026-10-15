@@ -4,14 +4,14 @@ A grand product, row by row: the multiplicative counterpart of `LogUpRow`.
 - `ProductRow`: one row multiplies the accumulator by `(α - a) / (α - v)`. A pointwise spec, no
   soundness cost; the honest prover assumes `α ≠ v` (completeness).
 - `ProductLoop`: `n` rows, from `1`.
-- `PermutationRow`: the product, minus one, at a boundary: `∏ (X - a i) / (X - v i) - 1 ≡ 0`, so
+- `PermutationCheck`: the product, minus one, at a boundary: `∏ (X - a i) / (X - v i) - 1 ≡ 0`, so
   `a` and `v` are the same multiset. Soundness error `n`, completeness error `n`.
 
 As for logUp, the values are native and the challenge lives in the challenge field `K`.
 -/
 module
 
-public import Clean2.Challenge.LogUpRow
+public import Clean2.Challenge.LogUp
 
 @[expose] public section
 
@@ -219,7 +219,7 @@ instance (n : ℕ) [∀ n, Impl.NoEvents (karith n)] [Impl.Phased row (ProductRo
 
 end ProductLoop
 
-namespace PermutationRow
+namespace PermutationCheck
 open Permutation
 variable {F K : Type} [Field F] [Field K] [Algebra F K]
 
@@ -309,5 +309,5 @@ instance [∀ n, Impl.NoEvents (karith n)] [Impl.Phased prod (ProductLoop.phases
     [Impl.Phased boundary (AssertIdentity.phases _ _ _ _)] : Impl.Phased (impl karith prod boundary) (phases kty n) := by
   phased [impl]
 
-end PermutationRow
+end PermutationCheck
 end Clean2

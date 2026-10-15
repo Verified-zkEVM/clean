@@ -44,7 +44,7 @@ ignores them); `SoundnessHold` / `HonestCompleteness` may use them; subcircuits 
 | `AssertIdentity.lean` | the boundary gadget: spec `R c = 0`, soundness error `d` |
 | `Fractions.lean` | the symbolic arguments: partial fractions, bus balance, logUp, multisets as roots |
 | `LogUpRow.lean` | `LogUpRow`, `LogUpSum`, `Balance` (bus balance), `Lookup` (table + lookups) |
-| `GrandProductRow.lean` | `ProductRow`, `ProductLoop`, `PermutationRow` |
+| `GrandProductRow.lean` | `ProductRow`, `ProductLoop`, `PermutationCheck` |
 | `Examples.lean` | `LookupAndPermutation` on one challenge; both errors on R1CS from the parts |
 | `NaiveSymbolic.lean` | why constraints are never read symbolically |
 | `Variants/` | whole-expression identities (`Identity`, `RExpr`), and a hand-written check with its own event |
@@ -55,7 +55,7 @@ ignores them); `SoundnessHold` / `HonestCompleteness` may use them; subcircuits 
 |---|---|---|---|---|
 | `Balance` | `acc + m / (α - v)` | `∑ m / (X - v) ≡ 0` | `n` | `n` |
 | `Lookup` | two sums | `∑ μ / (X - t) - ∑ 1 / (X - f) ≡ 0` | `n + l` | `n + l` |
-| `PermutationRow` | `acc * (α - a) / (α - b)` | `∏ (X - a) / (X - b) - 1 ≡ 0` | `n` | `n` |
+| `PermutationCheck` | `acc * (α - a) / (α - b)` | `∏ (X - a) / (X - b) - 1 ≡ 0` | `n` | `n` |
 | `LookupAndPermutation` | both, one challenge | both | `n + l + k` | `n + l + k` |
 
 User proofs: pointwise algebra for the rows (no probability), one symbolic lemma for the

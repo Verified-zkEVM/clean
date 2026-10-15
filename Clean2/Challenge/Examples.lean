@@ -13,7 +13,7 @@ Challenges in an ordinary circuit, row by row, and what they cost.
 -/
 module
 
-public import Clean2.Challenge.GrandProductRow
+public import Clean2.Challenge.GrandProduct
 public import Clean2.Backends.R1CS
 public import Clean2.Backends.Plonkish
 public import Clean2.Challenge.Extension
@@ -48,7 +48,7 @@ def interface (kty : CType F K) (n l k : ℕ) : Interface F := (contract n l k).
 def phases (kty : CType F K) (n l k : ℕ) : (interface kty n l k).Phases := Interface.withChallenge.phases _ _
 
 variable {B : Backend} [Field B.Native] [DecidableEq B.Native] [Algebra B.Native K] {kty : CType B.Native K}
-  [kty.Faithful] {n l k : ℕ} (lookup : Impl B (Lookup.interface kty n l)) (perm : Impl B (PermutationRow.interface kty k))
+  [kty.Faithful] {n l k : ℕ} (lookup : Impl B (Lookup.interface kty n l)) (perm : Impl B (PermutationCheck.interface kty k))
 
 /-- Both checks, on one challenge. -/
 def impl : Impl B (interface kty n l k) where
@@ -75,7 +75,7 @@ def impl : Impl B (interface kty n l k) where
     simp only [circuit_norm] at h_prover ⊢
     exact h_prover
 
-instance [Impl.Phased lookup (Lookup.phases kty n l)] [Impl.Phased perm (PermutationRow.phases kty k)] :
+instance [Impl.Phased lookup (Lookup.phases kty n l)] [Impl.Phased perm (PermutationCheck.phases kty k)] :
     Impl.Phased (impl lookup perm) (phases kty n l k) := by
   phased [impl]
 
@@ -198,17 +198,17 @@ theorem errorBound_productLoop (n : ℕ) : errorBound.of (productLoop kty karith
 omit [DecidableEq B.Native] in
 theorem honestErrorBound_productLoop (n : ℕ) : honestErrorBound.of (productLoop kty karith n) = n := rfl
 
-noncomputable def permutation (n : ℕ) : Impl B (PermutationRow.interface kty n) :=
-  PermutationRow.impl karith (productLoop kty karith n) (boundary kty karith _ _ _)
-instance (n : ℕ) : Impl.Phased (permutation kty karith n) (PermutationRow.phases kty n) :=
-  inferInstanceAs (Impl.Phased (PermutationRow.impl karith (productLoop kty karith n) (boundary kty karith _ _ _)) _)
+noncomputable def permutation (n : ℕ) : Impl B (PermutationCheck.interface kty n) :=
+  PermutationCheck.impl karith (productLoop kty karith n) (boundary kty karith _ _ _)
+instance (n : ℕ) : Impl.Phased (permutation kty karith n) (PermutationCheck.phases kty n) :=
+  inferInstanceAs (Impl.Phased (PermutationCheck.impl karith (productLoop kty karith n) (boundary kty karith _ _ _)) _)
 instance (n : ℕ) : Impl.Measured errorBound (permutation kty karith n) where
   value := n
-  value_eq := by measure [permutation, PermutationRow.impl, errorBound_productLoop, honestErrorBound_productLoop,
+  value_eq := by measure [permutation, PermutationCheck.impl, errorBound_productLoop, honestErrorBound_productLoop,
     errorBound_boundary, honestErrorBound_boundary]
 instance (n : ℕ) : Impl.Measured honestErrorBound (permutation kty karith n) where
   value := n
-  value_eq := by measure [permutation, PermutationRow.impl, errorBound_productLoop, honestErrorBound_productLoop,
+  value_eq := by measure [permutation, PermutationCheck.impl, errorBound_productLoop, honestErrorBound_productLoop,
     errorBound_boundary, honestErrorBound_boundary]
 
 omit [DecidableEq B.Native] in
