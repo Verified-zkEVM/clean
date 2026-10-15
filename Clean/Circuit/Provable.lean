@@ -459,9 +459,6 @@ lemma toList_componentsToElements {F : Type} :
   change (structToElements x).toList = _
   rw [structToElements_eq, Vector.toList_cast, toList_componentsToElements]
 
-end ProvableStruct
-
-namespace ProvableStruct
 variable {α : TypeMap} [ProvableStruct α] {F : Type} [FiniteField F]
 
 /--
