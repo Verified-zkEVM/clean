@@ -110,6 +110,11 @@ attribute [circuit_norm] interface
 
 /-! ### `K = F`: the arithmetic of the native field -/
 
+instance {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface n)) [∀ n, Impl.NoEvents (arith n)] :
+    Impl.NoEvents (Inverse.impl arith) := by
+  no_events [Inverse.impl]
+
+
 section Native
 variable {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface n)) (inverse : Impl B Inverse.interface)
 
@@ -165,6 +170,18 @@ def native : ∀ n, Impl B (interface nat n)
   | .inv => nativeInv inverse
   | .assertZero => nativeAssertZero arith
   | .const c => nativeConst arith c
+
+instance [∀ n, Impl.NoEvents (arith n)] [Impl.NoEvents inverse] (n : Name B.Native B.Native) :
+    Impl.NoEvents (native arith inverse n) := by
+  cases n
+  · no_events [native, nativeEmbed]
+  · no_events [native, nativeAdd]
+  · no_events [native, nativeSub]
+  · no_events [native, nativeMul]
+  · no_events [native, nativeSmul]
+  · no_events [native, nativeInv]
+  · no_events [native, nativeAssertZero]
+  · no_events [native, nativeConst]
 
 end Native
 

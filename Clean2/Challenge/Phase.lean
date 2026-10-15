@@ -257,6 +257,38 @@ theorem mapFin_phased {α : Type} {n : ℕ} (f : Fin n → Circuit B α)
     refine (Ops.phased_append _ _).mpr ⟨ih _ (fun i => h i.castSucc) s, ?_⟩
     simpa using h _ _
 
+/-- A loop whose body assumes no rare event assumes none. -/
+theorem foldr_events {α : Type} {n : ℕ} (f : Fin n → α → Circuit B α) (z : α)
+    (h : ∀ i acc s, ((f i acc).operations s).events = []) (s : B.State) :
+    ((foldr n f z).operations s).events = [] := by
+  induction n generalizing z s with
+  | zero => simp only [circuit_norm]
+  | succ n ih => simp only [circuit_norm, Ops.events_append, ih _ z (fun i => h i.succ) s, h 0, List.append_nil]
+
+theorem foldr_honestEvents {α : Type} {n : ℕ} (f : Fin n → α → Circuit B α) (z : α)
+    (h : ∀ i acc s, ((f i acc).operations s).honestEvents = []) (s : B.State) :
+    ((foldr n f z).operations s).honestEvents = [] := by
+  induction n generalizing z s with
+  | zero => simp only [circuit_norm]
+  | succ n ih =>
+    simp only [circuit_norm, Ops.honestEvents_append, ih _ z (fun i => h i.succ) s, h 0, List.append_nil]
+
+theorem mapFin_events {α : Type} {n : ℕ} (f : Fin n → Circuit B α)
+    (h : ∀ i s, ((f i).operations s).events = []) (s : B.State) :
+    ((mapFin n f).operations s).events = [] := by
+  induction n generalizing s with
+  | zero => simp only [circuit_norm]
+  | succ n ih =>
+    simp only [circuit_norm, Ops.events_append, ih _ (fun i => h i.castSucc) s, h, List.append_nil]
+
+theorem mapFin_honestEvents {α : Type} {n : ℕ} (f : Fin n → Circuit B α)
+    (h : ∀ i s, ((f i).operations s).honestEvents = []) (s : B.State) :
+    ((mapFin n f).operations s).honestEvents = [] := by
+  induction n generalizing s with
+  | zero => simp only [circuit_norm]
+  | succ n ih =>
+    simp only [circuit_norm, Ops.honestEvents_append, ih _ (fun i => h i.castSucc) s, h, List.append_nil]
+
 end Circuit
 
 /-! ## The contract of an implementation -/
@@ -419,6 +451,28 @@ partial def phasedSplit : TacticM Unit := do
     rest := rest.push goal
   setGoals rest.toList
 
+/-- Close `events = []` and `honestEvents = []` goals: normalize, split, and go into loops. -/
+partial def noEventsSplit (lemmas : Array (TSyntax ``Lean.Parser.Tactic.simpLemma)) : TacticM Unit := do
+  let goals ← getUnsolvedGoals
+  for goal in goals do
+    setGoals [goal]
+    evalTactic (← `(tactic| try simp only [circuit_norm, Impl.events_call_of_noEvents,
+      Impl.honestEvents_call_of_noEvents, Ops.events_append, Ops.honestEvents_append, List.append_eq_nil_iff,
+      $lemmas,*]))
+    for g in ← getUnsolvedGoals do
+      setGoals [g]
+      let ty ← instantiateMVars (← g.getType)
+      if ty.isAppOfArity ``And 2 then
+        evalTactic (← `(tactic| constructor))
+        noEventsSplit lemmas
+        continue
+      evalTactic (← `(tactic| first
+        | refine Circuit.foldr_events _ _ (fun _ _ _ => ?_) _
+        | refine Circuit.foldr_honestEvents _ _ (fun _ _ _ => ?_) _
+        | refine Circuit.mapFin_events _ (fun _ _ => ?_) _
+        | refine Circuit.mapFin_honestEvents _ (fun _ _ => ?_) _))
+      noEventsSplit lemmas
+
 elab_rules : tactic
   | `(tactic| no_events $[[$extra,*]]?) => do
     let extra := (extra.map (·.getElems)).getD #[]
@@ -429,8 +483,7 @@ elab_rules : tactic
       setGoals [goal]
       evalTactic (← `(tactic| intro input s))
       destructProds
-      evalTactic (← `(tactic| simp only [circuit_norm, Impl.events_call_of_noEvents,
-        Impl.honestEvents_call_of_noEvents, $lemmas,*]))
+      noEventsSplit lemmas
 
   | `(tactic| phased $[[$extra,*]]?) => do
     let extra := (extra.map (·.getElems)).getD #[]

@@ -27,10 +27,6 @@ public import Clean2.Challenge.Fractions
 namespace Clean2
 open Polynomial
 
-instance {B : Backend} [Field B.Native] (arith : ∀ n, Impl B (Arith.interface n)) [∀ n, Impl.NoEvents (arith n)] :
-    Impl.NoEvents (Inverse.impl arith) := by
-  no_events [Inverse.impl]
-
 namespace LogUpRow
 variable {F K : Type} [Field F] [Field K] [Algebra F K]
 
