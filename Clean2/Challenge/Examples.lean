@@ -15,6 +15,7 @@ module
 
 public import Clean2.Challenge.GrandProductRow
 public import Clean2.Backends.R1CS
+public import Clean2.Backends.Plonkish
 public import Clean2.Challenge.Extension
 
 @[expose] public section
@@ -390,5 +391,57 @@ theorem lookupAndPermutationProtocolExtR1CS_error (n l k : ℕ) (s : ℕ)
 end Extension
 
 end R1CS
+
+/-! ## On Plonkish: the same stack, another backend -/
+
+section Plonkish
+variable {F : Type} [Field F] [DecidableEq F]
+
+instance (n : Arith.Name F) : Impl.NoEvents (Plonkish.arith n) where
+  events_eq input s := by cases n <;> rfl
+  honestEvents_eq input s := by cases n <;> rfl
+
+/-- The arithmetic of the native field, from gates. -/
+def karithPlonkish : ∀ n, Impl (Plonkish F) (KArith.interface .native n) :=
+  KArith.native Plonkish.arith (Inverse.impl Plonkish.arith)
+instance (n : KArith.Name F F) : Impl.NoEvents (karithPlonkish n) :=
+  inferInstanceAs (Impl.NoEvents (KArith.native Plonkish.arith (Inverse.impl Plonkish.arith) n))
+
+/-- A challenge on Plonkish: a fresh row holding it. -/
+def challengePlonkish (m : ℕ) : Impl (Plonkish F) (Challenge.interface m .native) where
+  main vars := Plonkish.challenge vars
+  spatial := by
+    intro vars s h
+    simp only [circuit_norm]
+    exact ⟨h, by simp [Plonkish.mem_alloc]⟩
+  soundness := by
+    intro s env _ _ _
+    simp [circuit_norm]
+  completeness := by
+    intro s env _ _ _
+    simp [circuit_norm]
+
+instance (m : ℕ) : Impl.NoEvents (challengePlonkish (F := F) m) := ⟨fun _ _ => rfl, fun _ _ => rfl⟩
+instance (m : ℕ) : Challenge.Free (challengePlonkish (F := F) m) := ⟨fun _ _ _ => ⟨trivial, trivial⟩⟩
+
+/-- **A lookup and a permutation on Plonkish, end to end.** The same gadgets and the same bounds as
+on R1CS: only the arithmetic and the challenge operation differ. -/
+theorem lookupAndPermutationProtocolPlonkish_error (n l k : ℕ) (s : ℕ)
+    (x : (LookupAndPermutation.contract (F := F) n l k).Input (Plonkish F).Var)
+    (h_in : (Plonkish F).footprintT x ⊆ (Plonkish F).Alloc s)
+    (x₀ : (LookupAndPermutation.contract (F := F) n l k).input) :
+    (Protocol.BadChallenges (challengePlonkish _)
+        (Stack.lookupAndPermutation .native Plonkish.arith karithPlonkish n l k) s x x₀).encard ≤ ↑(n + l + k) ∧
+      (Protocol.HonestFailures (challengePlonkish _)
+        (Stack.lookupAndPermutation .native Plonkish.arith karithPlonkish n l k) s x x₀).encard ≤ ↑(n + l + k) := by
+  have h₁ := Protocol.soundness_error (challengePlonkish _)
+    (Stack.lookupAndPermutation .native Plonkish.arith karithPlonkish n l k) rfl s x x₀
+  have h₂ := Protocol.completeness_error (challengePlonkish _)
+    (Stack.lookupAndPermutation .native Plonkish.arith karithPlonkish n l k) s x h_in x₀
+  rw [(Stack.errors_lookupAndPermutation _ _ _ n l k).1] at h₁
+  rw [(Stack.errors_lookupAndPermutation _ _ _ n l k).2] at h₂
+  exact ⟨h₁, h₂⟩
+
+end Plonkish
 
 end Clean2

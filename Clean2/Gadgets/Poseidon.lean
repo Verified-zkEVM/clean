@@ -268,7 +268,7 @@ theorem plonkish_advance (x : Vector (ℕ × ℕ) p.t) (s : ℕ) : (plonkish p).
 
 /-- Every operation of the gated circuit places the round gate. -/
 theorem plonkish_shape (x : Vector (ℕ × ℕ) p.t) (s : ℕ) :
-    ∀ op ∈ (((plonkish p).main x).operations s).toFlat, op.shape = (roundGate p).toGateShape :=
+    ∀ op ∈ (((plonkish p).main x).operations s).toFlat, op.shape = some (roundGate p).toGateShape :=
   Circuit.foldr_flat (B := Plonkish F) _ _ _ (fun i acc s op h => by
     have h' : op ∈ [PlonkishOp.gate (roundGate p) acc (p.rc (p.rounds - 1 - i))] := h
     obtain rfl := List.mem_singleton.mp h'
@@ -277,15 +277,19 @@ theorem plonkish_shape (x : Vector (ℕ × ℕ) p.t) (s : ℕ) :
 /-- The configuration of the gated circuit, read off its operations: one gate. -/
 theorem plonkish_config [DecidableEq F] (h : p.rounds ≠ 0) (x : Vector (ℕ × ℕ) p.t) (s : ℕ) :
     Plonkish.config (((plonkish p).main x).operations s).toFlat = [(roundGate p).toGateShape] := by
-  have h_all : ∀ sh ∈ (((plonkish p).main x).operations s).toFlat.map PlonkishOp.shape,
+  have h_map : (((plonkish p).main x).operations s).toFlat.filterMap PlonkishOp.shape =
+      (((plonkish p).main x).operations s).toFlat.map fun _ => (roundGate p).toGateShape := by
+    rw [← List.filterMap_eq_map]
+    exact List.filterMap_congr fun op hop => plonkish_shape p x s op hop
+  have h_all : ∀ sh ∈ (((plonkish p).main x).operations s).toFlat.map fun _ => (roundGate p).toGateShape,
       sh = (roundGate p).toGateShape := by
     intro sh hsh
-    obtain ⟨op, hop, rfl⟩ := List.mem_map.mp hsh
-    exact plonkish_shape p x s op hop
+    obtain ⟨op, -, rfl⟩ := List.mem_map.mp hsh
+    rfl
   have h_len : (((plonkish p).main x).operations s).toFlat.length = p.rounds * 1 :=
     Circuit.foldr_flat_length (B := Plonkish F) _ x 1 (fun i acc s => rfl) s
   unfold Plonkish.config
-  rw [List.eq_replicate_of_mem h_all, List.replicate_dedup]
+  rw [h_map, List.eq_replicate_of_mem h_all, List.replicate_dedup]
   rw [List.length_map, h_len]
   omega
 
