@@ -130,24 +130,24 @@ theorem honestErrorBound_ofOps (ops : Ops B) :
 
 /-- A circuit that assumes no rare event has no soundness error: every circuit that does not use
 a challenge, once it says so (`Impl.NoEvents`). -/
-instance (priority := low) Impl.errorBound_of_noEvents {c : Interface B.Native} (impl : Impl B c)
+instance (priority := low) Impl.measured_errorBound_of_noEvents {c : Interface B.Native} (impl : Impl B c)
     [h : Impl.NoEvents impl] : Impl.Measured errorBound impl where
   value := 0
   value_eq input s := by rw [errorBound_ofOps, h.events_eq]; rfl
 
 /-- A circuit that assumes no rare event has no completeness error. -/
-instance (priority := low) Impl.honestErrorBound_of_noEvents {c : Interface B.Native} (impl : Impl B c)
+instance (priority := low) Impl.measured_honestErrorBound_of_noEvents {c : Interface B.Native} (impl : Impl B c)
     [h : Impl.NoEvents impl] : Impl.Measured honestErrorBound impl where
   value := 0
   value_eq input s := by rw [honestErrorBound_ofOps, h.honestEvents_eq]; rfl
 
 @[circuit_norm]
 theorem errorBound_of_noEvents {c : Interface B.Native} (impl : Impl B c) [Impl.NoEvents impl] :
-    errorBound.of (inst := Impl.errorBound_of_noEvents impl) impl = 0 := rfl
+    errorBound.of (inst := Impl.measured_errorBound_of_noEvents impl) impl = 0 := rfl
 
 @[circuit_norm]
 theorem honestErrorBound_of_noEvents {c : Interface B.Native} (impl : Impl B c) [Impl.NoEvents impl] :
-    honestErrorBound.of (inst := Impl.honestErrorBound_of_noEvents impl) impl = 0 := rfl
+    honestErrorBound.of (inst := Impl.measured_honestErrorBound_of_noEvents impl) impl = 0 := rfl
 
 /-- What a concatenation of committed values reads. For the spatial obligation of a call. -/
 theorem Backend.footprintT_append_subset {n m : ℕ} {a : Vector B.Var n} {b : Vector B.Var m} {S : Set B.Cell}

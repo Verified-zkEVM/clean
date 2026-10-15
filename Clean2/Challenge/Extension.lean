@@ -80,12 +80,6 @@ variable {B : Backend} [Field B.Native] [Algebra B.Native K] (b : Basis (Fin d) 
 
 local notation "kty" => basisType b
 
-/-- The meaning of a layout, as a function of its values. -/
-theorem decode_eq (env : B.Cell → B.Native) (x : Vector B.Var d) :
-    (basisType b).decode (B.evalT (M := (basisType b).Shape) env x) =
-      b.equivFun.symm fun i => B.eval env x[i] := by
-  simp [circuit_norm]
-
 /-- Embed a native value: its coordinates are those of `1`, scaled. -/
 def basisEmbed : Impl B (embed kty) where
   main v := Circuit.mapFin d fun i => arith (.scale (b.equivFun 1 i)) v
