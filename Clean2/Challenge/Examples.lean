@@ -1,16 +1,21 @@
 /-
-Challenges in an ordinary circuit, row by row, and what they cost on R1CS.
+Challenges in an ordinary circuit, row by row, and what they cost.
 
-`LookupAndPermutation` checks a lookup and a permutation with the same challenge. It is generic
-over both checks: it knows nothing about challenges, symbolic meanings or rare events, and its
-proofs are one line each.
-
-On R1CS, both errors are measures: they compose like cost, from the closed forms of the parts.
+- `LookupAndPermutation` checks a lookup and a permutation with the same challenge. It is generic
+  over both checks: it knows nothing about challenges, symbolic meanings or rare events, and its
+  proofs are one line each.
+- `Stack`: the whole stack of gadgets, on any backend, for any challenge field: generic over the
+  native arithmetic and the arithmetic of the challenge field. Both errors are measures, read off
+  the parts.
+- On R1CS, closed into protocols with the native `challenge` operation, twice: with the challenge
+  in the native field (`KArith.native`), and in an extension of degree `d` (`KArith.ofBasis`),
+  drawn as `d` native challenges. The same gadgets, the same bounds, counted in `K`.
 -/
 module
 
 public import Clean2.Challenge.GrandProductRow
 public import Clean2.Backends.R1CS
+public import Clean2.Challenge.Extension
 
 @[expose] public section
 
@@ -18,7 +23,7 @@ namespace Clean2
 
 namespace LookupAndPermutation
 open Permutation
-variable {F : Type} [Field F] [DecidableEq F]
+variable {F K : Type} [Field F] [DecidableEq F] [Field K] [Algebra F K]
 
 /-- `f` is looked up in `t` with multiplicities `μ`, and `b` is a permutation of `a`. -/
 @[reducible]
@@ -36,16 +41,16 @@ def contract (n l k : ℕ) : Interface F where
 
 /-- The check, given a challenge: everything else is committed. -/
 @[reducible]
-def interface (n l k : ℕ) : Interface F := (contract n l k).withChallenge
+def interface (kty : CType F K) (n l k : ℕ) : Interface F := (contract n l k).withChallenge kty
 
 @[reducible]
-def phases (n l k : ℕ) : (interface (F := F) n l k).Phases := Interface.withChallenge.phases _
+def phases (kty : CType F K) (n l k : ℕ) : (interface kty n l k).Phases := Interface.withChallenge.phases _ _
 
-variable {B : Backend} [Field B.Native] [DecidableEq B.Native] {n l k : ℕ}
-  (lookup : Impl B (Lookup.interface n l)) (perm : Impl B (PermutationRow.interface k))
+variable {B : Backend} [Field B.Native] [DecidableEq B.Native] [Algebra B.Native K] {kty : CType B.Native K}
+  [kty.Faithful] {n l k : ℕ} (lookup : Impl B (Lookup.interface kty n l)) (perm : Impl B (PermutationRow.interface kty k))
 
 /-- Both checks, on one challenge. -/
-def impl : Impl B (interface n l k) where
+def impl : Impl B (interface kty n l k) where
   main | ((((t, μ), f), (a, b)), α) => do
     lookup (((t, μ), f), α)
     perm ((a, b), α)
@@ -69,208 +74,193 @@ def impl : Impl B (interface n l k) where
     simp only [circuit_norm] at h_prover ⊢
     exact h_prover
 
-instance [Impl.Phased lookup (Lookup.phases n l)] [Impl.Phased perm (PermutationRow.phases k)] :
-    Impl.Phased (impl lookup perm) (phases n l k) := by
+instance [Impl.Phased lookup (Lookup.phases kty n l)] [Impl.Phased perm (PermutationRow.phases kty k)] :
+    Impl.Phased (impl lookup perm) (phases kty n l k) := by
   phased [impl]
 
 end LookupAndPermutation
 
-/-! ## On R1CS, with both errors as measures -/
+/-! ## The stack, on any backend and any challenge field -/
+
+namespace Stack
+variable {B : Backend} [Field B.Native] [DecidableEq B.Native] {K : Type} [Field K] [Algebra B.Native K]
+  (kty : CType B.Native K) [kty.Faithful]
+  (arith : ∀ n, Impl B (Arith.interface n)) [∀ n, Impl.NoEvents (arith n)]
+  (karith : ∀ n, Impl B (KArith.interface kty n)) [∀ n, Impl.NoEvents (karith n)]
+
+def logUpRow : Impl B (LogUpRow.interface kty) := LogUpRow.impl kty karith
+instance : Impl.Phased (logUpRow kty karith) (LogUpRow.phases kty) :=
+  inferInstanceAs (Impl.Phased (LogUpRow.impl kty karith) _)
+instance : Impl.Measured errorBound (logUpRow kty karith) where
+  value := 0
+  value_eq := by measure [logUpRow, LogUpRow.impl]
+instance : Impl.Measured honestErrorBound (logUpRow kty karith) where
+  value := 1
+  value_eq := by measure [logUpRow, LogUpRow.impl, LogUpRow.event]
+
+def logUpSum (n : ℕ) : Impl B (LogUpSum.interface kty n) := LogUpSum.impl kty karith (logUpRow kty karith) n
+instance (n : ℕ) : Impl.Phased (logUpSum kty karith n) (LogUpSum.phases kty n) :=
+  inferInstanceAs (Impl.Phased (LogUpSum.impl kty karith (logUpRow kty karith) n) _)
+instance (n : ℕ) : Impl.Measured errorBound (logUpSum kty karith n) where
+  value := 0
+  value_eq := by
+    intro ((v, m), α) s
+    simp only [logUpSum, LogUpSum.impl, LogUpSum.loop, circuit_norm]
+    rw [Circuit.foldr_measure_const errorBound _ _ 0 fun i acc s => by simp only [circuit_norm]; rfl]
+    show 0 + n • 0 = 0
+    simp
+instance (n : ℕ) : Impl.Measured honestErrorBound (logUpSum kty karith n) where
+  value := n
+  value_eq := by
+    intro ((v, m), α) s
+    simp only [logUpSum, LogUpSum.impl, LogUpSum.loop, circuit_norm]
+    rw [Circuit.foldr_measure_const honestErrorBound _ _ 1 fun i acc s => by simp only [circuit_norm]; rfl]
+    show 0 + n • 1 = n
+    simp
+
+omit [DecidableEq B.Native] in
+theorem errorBound_logUpSum (n : ℕ) : errorBound.of (logUpSum kty karith n) = 0 := rfl
+omit [DecidableEq B.Native] in
+theorem honestErrorBound_logUpSum (n : ℕ) : honestErrorBound.of (logUpSum kty karith n) = n := rfl
+
+/-- The boundary: its expression's degree bound, for soundness; nothing for completeness. -/
+def boundary (k d : ℕ) (R : Vector B.Native k → RatFunc K) : Impl B (AssertIdentity.interface kty k d R) :=
+  AssertIdentity.impl kty karith d R
+instance (k d : ℕ) (R : Vector B.Native k → RatFunc K) :
+    Impl.Phased (boundary kty karith k d R) (AssertIdentity.phases kty k d R) :=
+  inferInstanceAs (Impl.Phased (AssertIdentity.impl kty karith d R) _)
+instance (k d : ℕ) (R : Vector B.Native k → RatFunc K) : Impl.Measured errorBound (boundary kty karith k d R) where
+  value := d
+  value_eq := by measure [boundary, AssertIdentity.impl, AssertIdentity.event]
+instance (k d : ℕ) (R : Vector B.Native k → RatFunc K) :
+    Impl.Measured honestErrorBound (boundary kty karith k d R) where
+  value := 0
+  value_eq := by measure [boundary, AssertIdentity.impl]
+
+omit [DecidableEq B.Native] in
+theorem errorBound_boundary (k d : ℕ) (R : Vector B.Native k → RatFunc K) :
+    errorBound.of (boundary kty karith k d R) = d := rfl
+omit [DecidableEq B.Native] in
+theorem honestErrorBound_boundary (k d : ℕ) (R : Vector B.Native k → RatFunc K) :
+    honestErrorBound.of (boundary kty karith k d R) = 0 := rfl
+
+noncomputable def lookup (n l : ℕ) : Impl B (Lookup.interface kty n l) :=
+  Lookup.impl arith karith (logUpSum kty karith n) (logUpSum kty karith l) (boundary kty karith _ _ _)
+instance (n l : ℕ) : Impl.Phased (lookup kty arith karith n l) (Lookup.phases kty n l) :=
+  inferInstanceAs (Impl.Phased (Lookup.impl arith karith (logUpSum kty karith n) (logUpSum kty karith l)
+    (boundary kty karith _ _ _)) _)
+instance (n l : ℕ) : Impl.Measured errorBound (lookup kty arith karith n l) where
+  value := n + l
+  value_eq := by measure [lookup, Lookup.impl, errorBound_logUpSum, honestErrorBound_logUpSum,
+    errorBound_boundary, honestErrorBound_boundary]
+instance (n l : ℕ) : Impl.Measured honestErrorBound (lookup kty arith karith n l) where
+  value := n + l
+  value_eq := by measure [lookup, Lookup.impl, errorBound_logUpSum, honestErrorBound_logUpSum,
+    errorBound_boundary, honestErrorBound_boundary]
+
+theorem errorBound_lookup (n l : ℕ) : errorBound.of (lookup kty arith karith n l) = n + l := rfl
+theorem honestErrorBound_lookup (n l : ℕ) : honestErrorBound.of (lookup kty arith karith n l) = n + l := rfl
+
+def productRow : Impl B (ProductRow.interface kty) := ProductRow.impl kty karith
+instance : Impl.Phased (productRow kty karith) (ProductRow.phases kty) :=
+  inferInstanceAs (Impl.Phased (ProductRow.impl kty karith) _)
+instance : Impl.Measured errorBound (productRow kty karith) where
+  value := 0
+  value_eq := by measure [productRow, ProductRow.impl]
+instance : Impl.Measured honestErrorBound (productRow kty karith) where
+  value := 1
+  value_eq := by measure [productRow, ProductRow.impl, ProductRow.event]
+
+def productLoop (n : ℕ) : Impl B (ProductLoop.interface kty n) :=
+  ProductLoop.impl kty karith (productRow kty karith) n
+instance (n : ℕ) : Impl.Phased (productLoop kty karith n) (ProductLoop.phases kty n) :=
+  inferInstanceAs (Impl.Phased (ProductLoop.impl kty karith (productRow kty karith) n) _)
+instance (n : ℕ) : Impl.Measured errorBound (productLoop kty karith n) where
+  value := 0
+  value_eq := by
+    intro ((v, m), α) s
+    simp only [productLoop, ProductLoop.impl, ProductLoop.loop, circuit_norm]
+    rw [Circuit.foldr_measure_const errorBound _ _ 0 fun i acc s => by simp only [circuit_norm]; rfl]
+    show 0 + n • 0 = 0
+    simp
+instance (n : ℕ) : Impl.Measured honestErrorBound (productLoop kty karith n) where
+  value := n
+  value_eq := by
+    intro ((v, m), α) s
+    simp only [productLoop, ProductLoop.impl, ProductLoop.loop, circuit_norm]
+    rw [Circuit.foldr_measure_const honestErrorBound _ _ 1 fun i acc s => by simp only [circuit_norm]; rfl]
+    show 0 + n • 1 = n
+    simp
+
+omit [DecidableEq B.Native] in
+theorem errorBound_productLoop (n : ℕ) : errorBound.of (productLoop kty karith n) = 0 := rfl
+omit [DecidableEq B.Native] in
+theorem honestErrorBound_productLoop (n : ℕ) : honestErrorBound.of (productLoop kty karith n) = n := rfl
+
+noncomputable def permutation (n : ℕ) : Impl B (PermutationRow.interface kty n) :=
+  PermutationRow.impl karith (productLoop kty karith n) (boundary kty karith _ _ _)
+instance (n : ℕ) : Impl.Phased (permutation kty karith n) (PermutationRow.phases kty n) :=
+  inferInstanceAs (Impl.Phased (PermutationRow.impl karith (productLoop kty karith n) (boundary kty karith _ _ _)) _)
+instance (n : ℕ) : Impl.Measured errorBound (permutation kty karith n) where
+  value := n
+  value_eq := by measure [permutation, PermutationRow.impl, errorBound_productLoop, honestErrorBound_productLoop,
+    errorBound_boundary, honestErrorBound_boundary]
+instance (n : ℕ) : Impl.Measured honestErrorBound (permutation kty karith n) where
+  value := n
+  value_eq := by measure [permutation, PermutationRow.impl, errorBound_productLoop, honestErrorBound_productLoop,
+    errorBound_boundary, honestErrorBound_boundary]
+
+omit [DecidableEq B.Native] in
+theorem errorBound_permutation (n : ℕ) : errorBound.of (permutation kty karith n) = n := rfl
+omit [DecidableEq B.Native] in
+theorem honestErrorBound_permutation (n : ℕ) : honestErrorBound.of (permutation kty karith n) = n := rfl
+
+/-- A lookup and a permutation check on one challenge. -/
+noncomputable def lookupAndPermutation (n l k : ℕ) : Impl B (LookupAndPermutation.interface kty n l k) :=
+  LookupAndPermutation.impl (lookup kty arith karith n l) (permutation kty karith k)
+instance (n l k : ℕ) :
+    Impl.Phased (lookupAndPermutation kty arith karith n l k) (LookupAndPermutation.phases kty n l k) :=
+  inferInstanceAs (Impl.Phased (LookupAndPermutation.impl (lookup kty arith karith n l) (permutation kty karith k)) _)
+instance (n l k : ℕ) : Impl.Measured errorBound (lookupAndPermutation kty arith karith n l k) where
+  value := n + l + k
+  value_eq := by measure [lookupAndPermutation, LookupAndPermutation.impl, errorBound_lookup,
+    honestErrorBound_lookup, errorBound_permutation, honestErrorBound_permutation]
+instance (n l k : ℕ) : Impl.Measured honestErrorBound (lookupAndPermutation kty arith karith n l k) where
+  value := n + l + k
+  value_eq := by measure [lookupAndPermutation, LookupAndPermutation.impl, errorBound_lookup,
+    honestErrorBound_lookup, errorBound_permutation, honestErrorBound_permutation]
+
+/-- **Both errors, read off the parts.** A lookup of `l` values into a table of `n`, and a
+permutation of `k` values, on one challenge: a false statement is accepted at no more than
+`n + l + k` values of the challenge, and the honest prover fails at no more than `n + l + k`. -/
+theorem errors_lookupAndPermutation (n l k : ℕ) :
+    errorBound.of (lookupAndPermutation kty arith karith n l k) = n + l + k ∧
+      honestErrorBound.of (lookupAndPermutation kty arith karith n l k) = n + l + k :=
+  ⟨rfl, rfl⟩
+
+end Stack
+
+/-! ## On R1CS -/
 
 section R1CS
 variable {F : Type} [Field F] [DecidableEq F]
-
-instance (n : Arith.Name F) : Impl.Measured errorBound (R1CS.arith n) where
-  value := 0
-  value_eq input s := by cases n <;> rfl
-instance (n : Arith.Name F) : Impl.Measured honestErrorBound (R1CS.arith n) where
-  value := 0
-  value_eq input s := by cases n <;> rfl
 
 instance (n : Arith.Name F) : Impl.NoEvents (R1CS.arith n) where
   events_eq input s := by cases n <;> rfl
   honestEvents_eq input s := by cases n <;> rfl
 
-omit [DecidableEq F] in
-theorem errorBound_of_arith (n : Arith.Name F) : errorBound.of (R1CS.arith n) = 0 := rfl
-omit [DecidableEq F] in
-theorem honestErrorBound_of_arith (n : Arith.Name F) : honestErrorBound.of (R1CS.arith n) = 0 := rfl
-
 def inverseR1CS : Impl (R1CS F) Inverse.interface := Inverse.impl R1CS.arith
 instance : Impl.NoEvents (inverseR1CS (F := F)) := inferInstanceAs (Impl.NoEvents (Inverse.impl R1CS.arith))
-instance : Impl.Measured errorBound (inverseR1CS (F := F)) where
-  value := 0
-  value_eq := by measure [inverseR1CS, Inverse.impl]
-instance : Impl.Measured honestErrorBound (inverseR1CS (F := F)) where
-  value := 0
-  value_eq := by measure [inverseR1CS, Inverse.impl]
 
-def logUpRowR1CS : Impl (R1CS F) LogUpRow.interface := LogUpRow.impl R1CS.arith inverseR1CS
-instance : Impl.Phased (logUpRowR1CS (F := F)) LogUpRow.phases :=
-  inferInstanceAs (Impl.Phased (LogUpRow.impl R1CS.arith inverseR1CS) _)
-instance : Impl.Measured errorBound (logUpRowR1CS (F := F)) where
-  value := 0
-  value_eq := by measure [logUpRowR1CS, LogUpRow.impl]
-instance : Impl.Measured honestErrorBound (logUpRowR1CS (F := F)) where
-  value := 1
-  value_eq := by measure [logUpRowR1CS, LogUpRow.impl, LogUpRow.event]
+/-! ### The challenge in the native field -/
 
-def logUpSumR1CS (n : ℕ) : Impl (R1CS F) (LogUpSum.interface n) := LogUpSum.impl R1CS.arith logUpRowR1CS n
-instance (n : ℕ) : Impl.Phased (logUpSumR1CS (F := F) n) (LogUpSum.phases n) :=
-  inferInstanceAs (Impl.Phased (LogUpSum.impl R1CS.arith logUpRowR1CS n) _)
-instance (n : ℕ) : Impl.Measured honestErrorBound (logUpSumR1CS (F := F) n) where
-  value := n
-  value_eq := by
-    intro ((v, m), α) s
-    simp only [logUpSumR1CS, LogUpSum.impl, LogUpSum.loop, circuit_norm]
-    rw [Circuit.foldr_measure_const honestErrorBound _ _ 1 fun i acc s => by simp only [circuit_norm]; rfl]
-    show 0 + n • 1 = n
-    simp
-
-instance (n : ℕ) : Impl.Measured errorBound (logUpSumR1CS (F := F) n) where
-  value := 0
-  value_eq := by
-    intro ((v, m), α) s
-    simp only [logUpSumR1CS, LogUpSum.impl, LogUpSum.loop, circuit_norm]
-    rw [Circuit.foldr_measure_const errorBound _ _ 0 fun i acc s => by simp only [circuit_norm]; rfl]
-    show 0 + n • 0 = 0
-    simp
-
-omit [DecidableEq F] in
-theorem errorBound_of_logUpSum (n : ℕ) : errorBound.of (logUpSumR1CS (F := F) n) = 0 := rfl
-omit [DecidableEq F] in
-theorem honestErrorBound_of_logUpSum (n : ℕ) : honestErrorBound.of (logUpSumR1CS (F := F) n) = n := rfl
-
-/-- The boundary: its expression's degree bound, for soundness; nothing for completeness. -/
-def boundaryR1CS (k d : ℕ) (R : Vector F k → RatFunc F) : Impl (R1CS F) (AssertIdentity.interface k d R) :=
-  AssertIdentity.impl R1CS.arith d R
-instance (k d : ℕ) (R : Vector F k → RatFunc F) : Impl.Phased (boundaryR1CS k d R) (AssertIdentity.phases k d R) :=
-  inferInstanceAs (Impl.Phased (AssertIdentity.impl R1CS.arith d R) _)
-instance (k d : ℕ) (R : Vector F k → RatFunc F) : Impl.Measured errorBound (boundaryR1CS k d R) where
-  value := d
-  value_eq := by measure [boundaryR1CS, AssertIdentity.impl, AssertIdentity.event, errorBound_of_arith]
-instance (k d : ℕ) (R : Vector F k → RatFunc F) : Impl.Measured honestErrorBound (boundaryR1CS k d R) where
-  value := 0
-  value_eq := by measure [boundaryR1CS, AssertIdentity.impl, honestErrorBound_of_arith]
-
-omit [DecidableEq F] in
-theorem errorBound_of_boundary (k d : ℕ) (R : Vector F k → RatFunc F) :
-    errorBound.of (boundaryR1CS k d R) = d := rfl
-omit [DecidableEq F] in
-theorem honestErrorBound_of_boundary (k d : ℕ) (R : Vector F k → RatFunc F) :
-    honestErrorBound.of (boundaryR1CS k d R) = 0 := rfl
-
-noncomputable def lookupR1CS (n l : ℕ) : Impl (R1CS F) (Lookup.interface n l) :=
-  Lookup.impl R1CS.arith (logUpSumR1CS n) (logUpSumR1CS l) (boundaryR1CS _ _ _)
-instance (n l : ℕ) : Impl.Phased (lookupR1CS (F := F) n l) (Lookup.phases n l) :=
-  inferInstanceAs (Impl.Phased (Lookup.impl R1CS.arith (logUpSumR1CS n) (logUpSumR1CS l) (boundaryR1CS _ _ _)) _)
-instance (n l : ℕ) : Impl.Measured errorBound (lookupR1CS (F := F) n l) where
-  value := n + l
-  value_eq := by measure [lookupR1CS, Lookup.impl, errorBound_of_arith, errorBound_of_logUpSum,
-    errorBound_of_boundary]
-instance (n l : ℕ) : Impl.Measured honestErrorBound (lookupR1CS (F := F) n l) where
-  value := n + l
-  value_eq := by measure [lookupR1CS, Lookup.impl, honestErrorBound_of_arith, honestErrorBound_of_logUpSum,
-    honestErrorBound_of_boundary]
-
-def productRowR1CS : Impl (R1CS F) ProductRow.interface := ProductRow.impl R1CS.arith inverseR1CS
-instance : Impl.Phased (productRowR1CS (F := F)) ProductRow.phases :=
-  inferInstanceAs (Impl.Phased (ProductRow.impl R1CS.arith inverseR1CS) _)
-instance : Impl.Measured errorBound (productRowR1CS (F := F)) where
-  value := 0
-  value_eq := by measure [productRowR1CS, ProductRow.impl]
-instance : Impl.Measured honestErrorBound (productRowR1CS (F := F)) where
-  value := 1
-  value_eq := by measure [productRowR1CS, ProductRow.impl, ProductRow.event]
-
-def productLoopR1CS (n : ℕ) : Impl (R1CS F) (ProductLoop.interface n) :=
-  ProductLoop.impl R1CS.arith productRowR1CS n
-instance (n : ℕ) : Impl.Phased (productLoopR1CS (F := F) n) (ProductLoop.phases n) :=
-  inferInstanceAs (Impl.Phased (ProductLoop.impl R1CS.arith productRowR1CS n) _)
-instance (n : ℕ) : Impl.Measured errorBound (productLoopR1CS (F := F) n) where
-  value := 0
-  value_eq := by
-    intro ((v, m), α) s
-    simp only [productLoopR1CS, ProductLoop.impl, ProductLoop.loop, circuit_norm]
-    rw [Circuit.foldr_measure_const errorBound _ _ 0 fun i acc s => by simp only [circuit_norm]; rfl]
-    show 0 + n • 0 = 0
-    simp
-instance (n : ℕ) : Impl.Measured honestErrorBound (productLoopR1CS (F := F) n) where
-  value := n
-  value_eq := by
-    intro ((v, m), α) s
-    simp only [productLoopR1CS, ProductLoop.impl, ProductLoop.loop, circuit_norm]
-    rw [Circuit.foldr_measure_const honestErrorBound _ _ 1 fun i acc s => by simp only [circuit_norm]; rfl]
-    show 0 + n • 1 = n
-    simp
-
-omit [DecidableEq F] in
-theorem errorBound_of_productLoop (n : ℕ) : errorBound.of (productLoopR1CS (F := F) n) = 0 := rfl
-omit [DecidableEq F] in
-theorem honestErrorBound_of_productLoop (n : ℕ) : honestErrorBound.of (productLoopR1CS (F := F) n) = n := rfl
-
-noncomputable def permutationRowR1CS (n : ℕ) : Impl (R1CS F) (PermutationRow.interface n) :=
-  PermutationRow.impl R1CS.arith (productLoopR1CS n) (boundaryR1CS _ _ _)
-instance (n : ℕ) : Impl.Phased (permutationRowR1CS (F := F) n) (PermutationRow.phases n) :=
-  inferInstanceAs (Impl.Phased (PermutationRow.impl R1CS.arith (productLoopR1CS n) (boundaryR1CS _ _ _)) _)
-instance (n : ℕ) : Impl.Measured errorBound (permutationRowR1CS (F := F) n) where
-  value := n
-  value_eq := by measure [permutationRowR1CS, PermutationRow.impl, errorBound_of_arith, errorBound_of_productLoop,
-    errorBound_of_boundary]
-instance (n : ℕ) : Impl.Measured honestErrorBound (permutationRowR1CS (F := F) n) where
-  value := n
-  value_eq := by measure [permutationRowR1CS, PermutationRow.impl, honestErrorBound_of_arith,
-    honestErrorBound_of_productLoop, honestErrorBound_of_boundary]
-
-theorem errorBound_of_lookup (n l : ℕ) : errorBound.of (lookupR1CS (F := F) n l) = n + l := rfl
-theorem honestErrorBound_of_lookup (n l : ℕ) : honestErrorBound.of (lookupR1CS (F := F) n l) = n + l := rfl
-omit [DecidableEq F] in
-theorem errorBound_of_permutationRow (n : ℕ) : errorBound.of (permutationRowR1CS (F := F) n) = n := rfl
-omit [DecidableEq F] in
-theorem honestErrorBound_of_permutationRow (n : ℕ) : honestErrorBound.of (permutationRowR1CS (F := F) n) = n := rfl
-
-/-- A lookup and a permutation check on one challenge. -/
-noncomputable def lookupAndPermutationR1CS (n l k : ℕ) :
-    Impl (R1CS F) (LookupAndPermutation.interface n l k) :=
-  LookupAndPermutation.impl (lookupR1CS n l) (permutationRowR1CS k)
-instance (n l k : ℕ) : Impl.Phased (lookupAndPermutationR1CS (F := F) n l k) (LookupAndPermutation.phases n l k) :=
-  inferInstanceAs (Impl.Phased (LookupAndPermutation.impl (lookupR1CS n l) (permutationRowR1CS k)) _)
-instance (n l k : ℕ) : Impl.Measured errorBound (lookupAndPermutationR1CS (F := F) n l k) where
-  value := n + l + k
-  value_eq := by measure [lookupAndPermutationR1CS, LookupAndPermutation.impl, errorBound_of_lookup,
-    errorBound_of_permutationRow]
-instance (n l k : ℕ) : Impl.Measured honestErrorBound (lookupAndPermutationR1CS (F := F) n l k) where
-  value := n + l + k
-  value_eq := by measure [lookupAndPermutationR1CS, LookupAndPermutation.impl, honestErrorBound_of_lookup,
-    honestErrorBound_of_permutationRow]
-
-/-- **Both errors, read off the parts.** A lookup of `l` values into a table of `n`, and a
-permutation of `k` values, on one challenge: a false statement is accepted at no more than
-`n + l + k` challenges, and the honest prover fails at no more than `n + l + k`. -/
-theorem errors_lookupAndPermutationR1CS (n l k : ℕ) :
-    errorBound.of (lookupAndPermutationR1CS (F := F) n l k) = n + l + k ∧
-      honestErrorBound.of (lookupAndPermutationR1CS (F := F) n l k) = n + l + k :=
-  ⟨rfl, rfl⟩
-
-/-- **End to end.** A lookup of `l` values into a table of `n`, and a permutation of `k` values, on
-one challenge, on R1CS. Fix the committed values `x`: a false statement is accepted at no more
-than `n + l + k` challenges, and the honest prover fails at no more than `n + l + k`. -/
-theorem lookupAndPermutationR1CS_error (n l k : ℕ) (s : ℕ)
-    (input : (LookupAndPermutation.interface (F := F) n l k).Input (R1CS F).Var)
-    (h_in : (R1CS F).footprintT input ⊆ (R1CS F).Alloc s)
-    (x : (LookupAndPermutation.phases (F := F) n l k).Committed) :
-    ((lookupAndPermutationR1CS n l k).BadChallenges inferInstance s input x).encard ≤ ↑(n + l + k) ∧
-      ((lookupAndPermutationR1CS n l k).HonestFailures inferInstance s input x).encard ≤ ↑(n + l + k) := by
-  have h₁ := Impl.soundness_error_of (lookupAndPermutationR1CS (F := F) n l k) s input x
-  have h₂ := Impl.completeness_error_of (lookupAndPermutationR1CS (F := F) n l k) s input h_in x
-  rw [(errors_lookupAndPermutationR1CS n l k).1] at h₁
-  rw [(errors_lookupAndPermutationR1CS n l k).2] at h₂
-  exact ⟨h₁, h₂⟩
-
-/-! ### Closing the protocols: draw the challenge on R1CS -/
+/-- The arithmetic of the native field, as a challenge field. -/
+def karithR1CS : ∀ n, Impl (R1CS F) (KArith.interface .native n) := KArith.native R1CS.arith inverseR1CS
+instance (n : KArith.Name F F) : Impl.NoEvents (karithR1CS n) :=
+  inferInstanceAs (Impl.NoEvents (KArith.native R1CS.arith inverseR1CS n))
 
 /-- A challenge on R1CS: one native operation, a fresh cell. -/
-def challengeR1CS (m : ℕ) : Impl (R1CS F) (Challenge.interface m) where
+def challengeR1CS (m : ℕ) : Impl (R1CS F) (Challenge.interface m .native) where
   main vars := R1CS.challenge vars
   spatial := by
     intro vars s h
@@ -285,12 +275,6 @@ def challengeR1CS (m : ℕ) : Impl (R1CS F) (Challenge.interface m) where
 
 instance (m : ℕ) : Impl.NoEvents (challengeR1CS (F := F) m) := ⟨fun _ _ => rfl, fun _ _ => rfl⟩
 instance (m : ℕ) : Challenge.Free (challengeR1CS (F := F) m) := ⟨fun _ _ _ => ⟨trivial, trivial⟩⟩
-instance (m : ℕ) : Impl.Measured errorBound (challengeR1CS (F := F) m) where
-  value := 0
-  value_eq _ _ := rfl
-instance (m : ℕ) : Impl.Measured honestErrorBound (challengeR1CS (F := F) m) where
-  value := 0
-  value_eq _ _ := rfl
 instance (m : ℕ) : Impl.Measured R1CS.cost (challengeR1CS (F := F) m) where
   value := (1, 0)
   value_eq _ _ := rfl
@@ -298,41 +282,112 @@ instance (m : ℕ) : Impl.Measured R1CS.cost (challengeR1CS (F := F) m) where
 /-- The lookup argument, closed: commit to the table, its multiplicities and the lookups, draw
 the challenge, check. It implements `Lookup.contract`, which mentions no challenge. -/
 noncomputable def lookupProtocolR1CS (n l : ℕ) : Impl (R1CS F) (Lookup.contract n l) :=
-  Protocol.impl (challengeR1CS _) (lookupR1CS n l)
+  Protocol.impl (challengeR1CS _) (Stack.lookup .native R1CS.arith karithR1CS n l)
 
 /-- **The lookup argument on R1CS.** Fix the committed table, multiplicities and lookups. A false
 lookup is accepted at no more than `n + l` values of the drawn challenge, and the honest prover
 fails at no more than `n + l`. -/
 theorem lookupProtocolR1CS_error (n l : ℕ) (s : ℕ) (x : (Lookup.contract (F := F) n l).Input (R1CS F).Var)
     (h_in : (R1CS F).footprintT x ⊆ (R1CS F).Alloc s) (x₀ : (Lookup.contract (F := F) n l).input) :
-    (Protocol.BadChallenges (challengeR1CS _) (lookupR1CS n l) s x x₀).encard ≤ ↑(n + l) ∧
-      (Protocol.HonestFailures (challengeR1CS _) (lookupR1CS n l) s x x₀).encard ≤ ↑(n + l) := by
-  have h₁ := Protocol.soundness_error (challengeR1CS _) (lookupR1CS (F := F) n l) rfl s x x₀
-  have h₂ := Protocol.completeness_error (challengeR1CS _) (lookupR1CS (F := F) n l) s x h_in x₀
-  rw [errorBound_of_lookup] at h₁
-  rw [honestErrorBound_of_lookup] at h₂
+    (Protocol.BadChallenges (challengeR1CS _) (Stack.lookup .native R1CS.arith karithR1CS n l) s x x₀).encard ≤
+        ↑(n + l) ∧
+      (Protocol.HonestFailures (challengeR1CS _) (Stack.lookup .native R1CS.arith karithR1CS n l) s x x₀).encard ≤
+        ↑(n + l) := by
+  have h₁ := Protocol.soundness_error (challengeR1CS _) (Stack.lookup .native R1CS.arith karithR1CS n l) rfl s x x₀
+  have h₂ := Protocol.completeness_error (challengeR1CS _) (Stack.lookup .native R1CS.arith karithR1CS n l) s x h_in x₀
+  rw [Stack.errorBound_lookup] at h₁
+  rw [Stack.honestErrorBound_lookup] at h₂
   exact ⟨h₁, h₂⟩
 
-/-- A lookup and a permutation check, closed: one challenge, drawn after committing to all of
-it, shared by the two checks and by the two sides of the lookup. -/
-noncomputable def lookupAndPermutationProtocolR1CS (n l k : ℕ) : Impl (R1CS F) (LookupAndPermutation.contract n l k) :=
-  Protocol.impl (challengeR1CS _) (lookupAndPermutationR1CS n l k)
-
-/-- **Both checks on R1CS, end to end.** Fix the committed values. A false statement is accepted
-at no more than `n + l + k` values of the drawn challenge, and the honest prover fails at no more
-than `n + l + k`. -/
+/-- **A lookup and a permutation on R1CS, end to end.** One challenge, drawn after committing to
+all of it, shared by the two checks and by the two sides of the lookup. Fix the committed values:
+a false statement is accepted at no more than `n + l + k` values of the drawn challenge, and the
+honest prover fails at no more than `n + l + k`. -/
 theorem lookupAndPermutationProtocolR1CS_error (n l k : ℕ) (s : ℕ)
     (x : (LookupAndPermutation.contract (F := F) n l k).Input (R1CS F).Var)
     (h_in : (R1CS F).footprintT x ⊆ (R1CS F).Alloc s)
     (x₀ : (LookupAndPermutation.contract (F := F) n l k).input) :
-    (Protocol.BadChallenges (challengeR1CS _) (lookupAndPermutationR1CS n l k) s x x₀).encard ≤ ↑(n + l + k) ∧
-      (Protocol.HonestFailures (challengeR1CS _) (lookupAndPermutationR1CS n l k) s x x₀).encard ≤
-        ↑(n + l + k) := by
-  have h₁ := Protocol.soundness_error (challengeR1CS _) (lookupAndPermutationR1CS (F := F) n l k) rfl s x x₀
-  have h₂ := Protocol.completeness_error (challengeR1CS _) (lookupAndPermutationR1CS (F := F) n l k) s x h_in x₀
-  rw [(errors_lookupAndPermutationR1CS n l k).1] at h₁
-  rw [(errors_lookupAndPermutationR1CS n l k).2] at h₂
+    (Protocol.BadChallenges (challengeR1CS _) (Stack.lookupAndPermutation .native R1CS.arith karithR1CS n l k)
+        s x x₀).encard ≤ ↑(n + l + k) ∧
+      (Protocol.HonestFailures (challengeR1CS _) (Stack.lookupAndPermutation .native R1CS.arith karithR1CS n l k)
+        s x x₀).encard ≤ ↑(n + l + k) := by
+  have h₁ := Protocol.soundness_error (challengeR1CS _)
+    (Stack.lookupAndPermutation .native R1CS.arith karithR1CS n l k) rfl s x x₀
+  have h₂ := Protocol.completeness_error (challengeR1CS _)
+    (Stack.lookupAndPermutation .native R1CS.arith karithR1CS n l k) s x h_in x₀
+  rw [(Stack.errors_lookupAndPermutation _ _ _ n l k).1] at h₁
+  rw [(Stack.errors_lookupAndPermutation _ _ _ n l k).2] at h₂
   exact ⟨h₁, h₂⟩
+
+/-! ### The challenge in an extension field -/
+
+section Extension
+open Module
+variable {K : Type} [Field K] [Algebra (R1CS F).Native K] {d : ℕ} (b : Basis (Fin d) (R1CS F).Native K)
+
+/-- A challenge in `K`, on R1CS: `d` native challenges, its coordinates in the basis `b`. -/
+def challengeExtR1CS (m : ℕ) : Impl (R1CS F) (Challenge.interface m (KArith.basisType b)) where
+  main vars := Circuit.mapFin d fun _ => R1CS.challenge vars
+  consistent := by
+    intro vars s
+    exact Circuit.mapFin_consistent _ _ fun i s => by simp only [circuit_norm]
+  spatial := by
+    intro vars s h
+    simp only [circuit_norm] at h ⊢
+    exact Circuit.mapFin_local _ _ _ (fun i s => by simp only [circuit_norm])
+      (fun i s h_mono => by
+        simp only [circuit_norm]
+        exact ⟨h.trans h_mono, Linear.singleton_subset_alloc_succ s⟩) id
+  soundness := by
+    intro s env _ _ _
+    simp [circuit_norm]
+  completeness := by
+    intro s env _ h _
+    simp only [circuit_norm] at h ⊢
+    exact Circuit.mapFin_complete _ _ env (fun i s h => by simp only [circuit_norm]) h
+
+instance (m : ℕ) : Impl.NoEvents (challengeExtR1CS b m) := by no_events [challengeExtR1CS]
+
+omit [DecidableEq F] in
+/-- Challenges constrain nothing. -/
+theorem challenges_holds (n m : ℕ) (vars : Vector (LinComb F) m) (s : ℕ) (env : ℕ → F) :
+    ((Circuit.mapFin n fun _ => R1CS.challenge vars).operations s).ConstraintsHold env s := by
+  induction n generalizing s with
+  | zero => simp [circuit_norm, Ops.ConstraintsHold, Ops.toFlat, Backend.FlatHolds]
+  | succ n ih =>
+    simp only [circuit_norm] at ih ⊢
+    simp only [Ops.ConstraintsHold, Ops.toFlat_append, Backend.flatHolds_append] at ih ⊢
+    exact ⟨ih s, by simp [Ops.toFlat, Backend.FlatHolds, circuit_norm]⟩
+
+instance (m : ℕ) : Challenge.Free (challengeExtR1CS b m) := ⟨fun vars s env => challenges_holds d m vars s env⟩
+
+/-- The arithmetic of `K`, from the basis `b` and the native arithmetic of R1CS. -/
+noncomputable def karithExtR1CS : ∀ n, Impl (R1CS F) (KArith.interface (KArith.basisType b) n) :=
+  KArith.ofBasis b R1CS.arith
+instance (n : KArith.Name (R1CS F).Native K) : Impl.NoEvents (karithExtR1CS b n) :=
+  inferInstanceAs (Impl.NoEvents (KArith.ofBasis b R1CS.arith n))
+
+/-- **A lookup and a permutation on R1CS, with the challenge in an extension.** The same gadgets
+and the same proofs as over the native field. Fix the committed values: a false statement is
+accepted at no more than `n + l + k` values of the drawn challenge in `K`, and the honest prover
+fails at no more than `n + l + k`; with `|K| = |F|^d`, a much smaller fraction. -/
+theorem lookupAndPermutationProtocolExtR1CS_error (n l k : ℕ) (s : ℕ)
+    (x : (LookupAndPermutation.contract (F := F) n l k).Input (R1CS F).Var)
+    (h_in : (R1CS F).footprintT x ⊆ (R1CS F).Alloc s)
+    (x₀ : (LookupAndPermutation.contract (F := F) n l k).input) :
+    (Protocol.BadChallenges (challengeExtR1CS b _)
+        (Stack.lookupAndPermutation _ R1CS.arith (karithExtR1CS b) n l k) s x x₀).encard ≤ ↑(n + l + k) ∧
+      (Protocol.HonestFailures (challengeExtR1CS b _)
+        (Stack.lookupAndPermutation _ R1CS.arith (karithExtR1CS b) n l k) s x x₀).encard ≤ ↑(n + l + k) := by
+  have h₁ := Protocol.soundness_error (challengeExtR1CS b _)
+    (Stack.lookupAndPermutation _ R1CS.arith (karithExtR1CS b) n l k) rfl s x x₀
+  have h₂ := Protocol.completeness_error (challengeExtR1CS b _)
+    (Stack.lookupAndPermutation _ R1CS.arith (karithExtR1CS b) n l k) s x h_in x₀
+  rw [(Stack.errors_lookupAndPermutation _ _ _ n l k).1] at h₁
+  rw [(Stack.errors_lookupAndPermutation _ _ _ n l k).2] at h₂
+  exact ⟨h₁, h₂⟩
+
+end Extension
 
 end R1CS
 
