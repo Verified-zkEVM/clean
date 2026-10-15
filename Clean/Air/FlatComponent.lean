@@ -8,39 +8,45 @@ public import Clean.Air.RowProgram
 namespace Air.Flat
 variable {F : Type}
 
-/-- Public, index-addressed columns supplied by the verifier rather than committed by the prover. Their values are defined by a structured row program evaluated on the row index, which Lean and extracted backends evaluate identically. -/
+/-- Public, index-addressed columns supplied by the verifier rather than committed by the prover. Each row is a value of the provable type `Row`, computed from the row index `.idx` by a witness program, which Lean and extracted backends evaluate identically. -/
 structure FixedColumns (F : Type) where
+  {Row : TypeMap} [provableRow : ProvableType Row]
   height : UInt64
-  program : Witgen.RowProgram F
-  valid : program.Valid .fixed
+  /-- The row at index `.idx`. Fixed rows can't read prover data or hints. -/
+  row : Witgen.M F (Row (Witgen.FExpr F))
+  valid : (Witgen.RowProgram.ofM row).Valid .fixed := by
+    simp [Witgen.RowProgram.Valid, Witgen.VExpr.validForRow, Witgen.FExpr.validForRow,
+      Witgen.U64Expr.validForRow, Witgen.BExpr.validForRow, circuit_norm, explicit_provable_type]
+
+instance (fixed : FixedColumns F) : ProvableType fixed.Row := fixed.provableRow
 
 namespace FixedColumns
 
-abbrev width (fixed : FixedColumns F) : ℕ := fixed.program.width
+abbrev width (fixed : FixedColumns F) : ℕ := size fixed.Row
 
-@[circuit_norm]
-lemma width_ofFExprs {n : ℕ} (height : UInt64) (values : Vector (Witgen.FExpr F) n) (valid) :
-    ({ height, program := .ofFExprs values, valid } : FixedColumns F).width = n := rfl
+/-- The row program computing the fixed values, as consumed by witness generation and backends. -/
+def program (fixed : FixedColumns F) : Witgen.RowProgram F := .ofM fixed.row
 
 variable [FiniteField F]
 
-def row (fixed : FixedColumns F) (i : UInt64) : Array F :=
+/-- The fixed values of row `i`. -/
+def values (fixed : FixedColumns F) (i : UInt64) : Array F :=
   (fixed.program.eval i (.empty F)).toArray
 
-
-/-- Fixed values declared directly by one expression per column. -/
+/-- The fixed row `i`, as a value of the row type. -/
 @[circuit_norm]
-lemma row_ofFExprs {n : ℕ} (height : UInt64) (values : Vector (Witgen.FExpr F) n) (valid)
-    (i : UInt64) :
-    ({ height, program := .ofFExprs values, valid } : FixedColumns F).row i =
-      (values.map (Witgen.FExpr.eval {
-        env := { get _ := 0, data _ _ := #[], hint := .empty F }
-        idx := i.toNat })).toArray := rfl
+def rowValue (fixed : FixedColumns F) (i : UInt64) : fixed.Row F := fixed.row.evalRow i
+
+@[circuit_norm]
+lemma values_eq (fixed : FixedColumns F) (i : UInt64) :
+    fixed.values i = (toElements (fixed.rowValue i)).toArray := by
+  rw [values, program, Witgen.RowProgram.eval_ofM]
+  rfl
 
 /-- The full semantic rows have exactly the declared fixed prefix at every row index. -/
 abbrev RowsMatch (fixed : FixedColumns F) (rows : List (Array F)) : Prop :=
   rows.map (fun row => row.extract 0 fixed.width) =
-    (List.range fixed.height.toNat).map (fixed.row ∘ UInt64.ofNat)
+    (List.range fixed.height.toNat).map (fixed.values ∘ UInt64.ofNat)
 
 end FixedColumns
 
@@ -56,7 +62,7 @@ def rowPrefix (n : ℕ) (row : Array F) : Vector F n :=
 @[circuit_norm]
 def FixedInputAt (fixedColumns : Option (FixedColumns F)) (i : UInt64) (input : Input F) : Prop :=
   ∀ fixed ∈ fixedColumns,
-    i < fixed.height ∧ (toElements input).toList.take fixed.width = (fixed.row i).toList
+    i < fixed.height ∧ (toElements input).toList.take fixed.width = (fixed.values i).toList
 
 /-- The derived-data fact about the input of row `i`: it is row `i` of the component's `ProverData` entry. -/
 @[circuit_norm]
@@ -348,7 +354,7 @@ lemma circuitAssumptions_of_dataConsistency (table : Table F) (consistent : tabl
         Function.comp_apply] at hprefix
       have hsize : fixed.width ≤ row.size := by
         have := congrArg Array.size hprefix
-        simp [FixedColumns.row] at this
+        simp [FixedColumns.values, FixedColumns.program, Witgen.RowProgram.ofM] at this
         omega
       have hwidth : fixed.width ≤ size table.component.Input := by
         simpa [hcolumns] using table.component.fixed_width_le_input

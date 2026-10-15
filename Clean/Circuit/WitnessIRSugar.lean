@@ -275,6 +275,9 @@ instance {F : Type} {n : ℕ} : GetElem (Var (fields n) F) (U64Expr F) (FExpr F)
 instance {F : Type} {n : ℕ} : GetElem (Vector (FExpr F) n) (U64Expr F) (FExpr F) (fun _ _ => True) where
   getElem v i _ := FExpr.listGet v.toList i
 
+instance {F : Type} : GetElem (Array F) (U64Expr F) (FExpr F) (fun _ _ => True) where
+  getElem xs i _ := FExpr.listGet (xs.toList.map FExpr.const) i
+
 /-! Desugar the `GetElem` instances above to `FExpr.listGet`, for the same reason as the
 operator lemmas: matchers and simp keying do not see through the instances. -/
 
@@ -284,11 +287,21 @@ operator lemmas: matchers and simp keying do not see through the instances. -/
     v[i] = FExpr.listGet (v.toList.map FExpr.expr) i := rfl
 @[circuit_norm] theorem getElem_vector_fexpr_def {F : Type} {n : ℕ} (v : Vector (FExpr F) n) (i : U64Expr F) :
     v[i] = FExpr.listGet v.toList i := rfl
+@[circuit_norm] theorem getElem_array_const_def {F : Type} (xs : Array F) (i : U64Expr F) :
+    xs[i] = FExpr.listGet (xs.toList.map FExpr.const) i := rfl
 
 @[circuit_norm]
 lemma evalList_map_vector_const {F : Type} {ctx : Ctx F} [FiniteField F] {n : ℕ} (v : Vector F n) (i : ℕ) :
     FExpr.evalList ctx i (v.toList.map FExpr.const) = if hi : i < n then v[i] else 0 := by
   induction v using Vector.induct generalizing i with
+  | nil => simp [FExpr.evalList]
+  | cons hd tl ih => cases i <;> simp_all [FExpr.evalList, FExpr.eval]
+
+@[circuit_norm]
+lemma evalList_map_array_const {F : Type} {ctx : Ctx F} [FiniteField F] (xs : Array F) (i : ℕ) :
+    FExpr.evalList ctx i (xs.toList.map FExpr.const) = xs[i]?.getD 0 := by
+  rcases xs with ⟨xs⟩
+  induction xs generalizing i with
   | nil => simp [FExpr.evalList]
   | cons hd tl ih => cases i <;> simp_all [FExpr.evalList, FExpr.eval]
 

@@ -31,17 +31,14 @@ def decodeInstruction (instr : (F p)) : Option (ℕ × ℕ × ℕ × ℕ) :=
   Safe memory access function. Returns `some value` if the address is within bounds,
   otherwise returns `none`.
 -/
-def memoryAccess {n : ℕ} (memory : Fin n → F p) (addr : F p) : Option (F p) :=
-  if h : addr.val < n then
-    some (memory ⟨addr.val, h⟩)
-  else
-    none
+def memoryAccess (memory : Array (F p)) (addr : F p) : Option (F p) :=
+  memory[addr.val]?
 
 /--
   Fetch an instruction from the program memory at the given program counter (pc).
 -/
 def fetchInstruction
-    {programSize : ℕ} (program : Fin programSize → (F p))
+    (program : Array (F p))
     (pc : (F p)) : Option (RawInstruction (F p)) := do
   let type ← memoryAccess program pc
   let op1 ← memoryAccess program (pc + 1)
@@ -55,7 +52,7 @@ def fetchInstruction
   - mode: addressing mode (0=double, 1=ap-relative, 2=fp-relative, 3=immediate)
 -/
 def dataMemoryAccess
-    {memorySize : ℕ} (memory : Fin memorySize → (F p))
+    (memory : Array (F p))
     (addr : (F p)) (mode : ℕ) (ap : F p) (fp : F p) : Option (F p) :=
   match mode with
   | 0 => do
@@ -103,8 +100,8 @@ def computeNextState
   if all individual transitions are valid.
 -/
 def femtoCairoMachineTransition
-    {programSize : ℕ} (program : Fin programSize → (F p))
-    {memorySize : ℕ} (memory : Fin memorySize → (F p))
+    (program : Array (F p))
+    (memory : Array (F p))
     (state : State (F p)) : Option (State (F p)) := do
   -- fetch instruction
   let { rawInstrType, op1, op2, op3 } ← fetchInstruction program state.pc
@@ -126,8 +123,8 @@ def femtoCairoMachineTransition
   transition execution completed successfully, otherwise returns None.
 -/
 def femtoCairoMachineBoundedExecution
-    {programSize : ℕ} (program : Fin programSize → (F p))
-    {memorySize : ℕ} (memory : Fin memorySize → (F p))
+    (program : Array (F p))
+    (memory : Array (F p))
     (state : Option (State (F p))) (steps : Nat) :
     Option (State (F p)) := match steps with
   | 0 => state
@@ -139,8 +136,8 @@ def femtoCairoMachineBoundedExecution
   A program is valid if all instruction bytes in the program memory are < 256.
   This ensures that `decodeInstruction` will always succeed for any fetched instruction.
 -/
-def ValidProgram {programSize : ℕ} (program : Fin programSize → F p) : Prop :=
-  ∀ (i : Fin programSize), (program i).val < 256
+def ValidProgram (program : Array (F p)) : Prop :=
+  ∀ value ∈ program, value.val < 256
 
 /--
   Program size is valid if `programSize + 3 < p`. This ensures no field arithmetic

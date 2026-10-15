@@ -471,7 +471,7 @@ def rowInteractions (state : ComponentState F) (row : GeneratedRow F) (data : Pr
 def fixedPrefix (component : Component F) (row : UInt64) : Array F :=
   match component.fixedColumns with
   | none => #[]
-  | some fixed => fixed.row row
+  | some fixed => fixed.values row
 
 /-- The initial rows of a preallocated component: its fixed prefix followed by its row program. -/
 def initialInputs (state : ComponentState F) (hint : ProverHint F) : List (Array F) :=

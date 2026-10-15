@@ -1,6 +1,6 @@
 module
 
-public import Clean.Circuit.WitnessIR
+public import Clean.Circuit.WitnessIRSugar
 
 @[expose] public section
 
@@ -45,9 +45,34 @@ def ofFExprs {n : ℕ} (values : Vector (FExpr F) n) : RowProgram F where
   steps := []
   output := .lit values
 
-/-- A single-column row program. -/
+/-- The row program computing a provable value with a witness program. -/
 @[circuit_norm]
-def ofFExpr (value : FExpr F) : RowProgram F := ofFExprs #v[value]
+def ofM {Row : TypeMap} [ProvableType Row] (program : M F (Row (FExpr F))) : RowProgram F where
+  width := size Row
+  steps := (program #[]).2.toList
+  output := .lit (toElements (program #[]).1)
+
+/-- The empty environment of fixed rows, which read nothing but the row index. -/
+@[circuit_norm]
+def fixedEnvironment (F : Type) [Field F] : ProverEnvironment F where
+  get _ := 0
+  data _ _ := #[]
+  hint := .empty F
+
+/-- Evaluate a witness program for a fixed row at row `row`. -/
+@[circuit_norm]
+def _root_.Witgen.M.evalRow [FiniteField F] {Row : TypeMap} [ProvableType Row]
+    (program : M F (Row (FExpr F))) (row : UInt64) : Row F :=
+  Witgen.eval {
+    env := fixedEnvironment F
+    locals := evalSteps (fixedEnvironment F) (program #[]).2.toList #[] row.toNat
+    idx := row.toNat
+  } (program #[]).1
+
+theorem eval_ofM [FiniteField F] {Row : TypeMap} [ProvableType Row] (program : M F (Row (FExpr F)))
+    (row : UInt64) : (ofM program).eval row (.empty F) = toElements (program.evalRow row) := by
+  simp only [eval, ofM, M.evalRow, fixedEnvironment, Witgen.eval, VExpr.eval,
+    ProvableType.toElements_fromElements]
 
 end RowProgram
 

@@ -17,7 +17,7 @@ In this terminology, a `Flat.Component` is a one-row AIR component: it packages 
 - `Flat.Component`: the static one-row component, backed by a `GeneralFormalCircuit`.
 - `Flat.Table`: concrete array of rows for one component, together with the prover data used to evaluate constraints and channel interactions.
 - `Flat.Tables`: a bundle of tables sharing one prover data object.
-- `Flat.FixedColumns`: verifier-known columns that form a prefix of a component's input, defined by a row program evaluated on the row index.
+- `Flat.FixedColumns`: verifier-known columns that form a prefix of a component's input. Each row is a value of a provable `Row` type, computed from the row index by a witness program.
 
 A component's prover data is the list of complete inputs of every row, cut off at the requested width, keyed by the component's circuit name. A component states residual `Assumptions` (default `True`) such that, together with the facts its rows get for free, `FixedInputAt` (the input starts with the row's fixed values) and `DataInputAt` (the input is the row's entry in the prover data), they imply the circuit's assumptions.
 
@@ -28,6 +28,8 @@ It also proves the basic row-level transport lemmas: instantiated component oper
 `Verifier.lean` defines the verifier program language: an append-only list of public interactions, together with the verifier's spec and its soundness.
 
 `RowProgram.lean` defines index-aware row programs, which compute fixed columns and the prover-committed inputs of preallocated components.
+
+`Lookup.lean` defines static lookups, `Flat.Lookup`: a verifier-known table, given by its rows and what it means to be in the table, read by other components through a channel. A lookup provides its channel, the table component (fixed rows plus a multiplicity column), and its witness generation; `SoundEnsemble.addLookup` adds the table and finishes its channel.
 
 `FlatEnsemble.lean` defines flat AIR ensembles, `Flat.Ensemble` and their witnesses, `Flat.EnsembleWitness`. An ensemble has components, channels, and an append-only verifier program. The verifier contributes public interactions directly; its operation type cannot create witnesses, constraints, lookups, or a synthetic table. Its `Statement` is the raw proof-system relation: there exists a witness whose table constraints hold and whose table and verifier interactions are balanced. Every table of a witness carries the prover data derived from all the witness tables. The ensemble file also defines soundness and completeness and the `FormalEnsemble` structure which bundles an ensemble with its `Spec`, `Assumptions` and the soundness proof (completeness is TODO).
 

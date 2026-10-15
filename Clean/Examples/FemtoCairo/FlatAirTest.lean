@@ -34,7 +34,7 @@ def finalRegisters : fieldPair (F pBabybear) := (0, 0)
 def generateResult (memoryValues : fields 8 (F pBabybear)) (executionRows : UInt64 := 8) :
     Except String (List ℕ × Bool × Bool × ℕ × ℕ × ℕ) :=
   match Examples.FemtoCairo.FlatAir.Witness.generate
-      (p := pBabybear) (programSize := programSize) (memorySize := 8)
+      (p := pBabybear) (memorySize := 8)
       testProgram programSize_lt memorySize_lt
       memoryValues initialState finalRegisters executionRows 1000 with
   | .error error => .error (toString error)

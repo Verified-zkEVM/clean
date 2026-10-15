@@ -28,14 +28,23 @@ variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
   To represent, e.g., a read-write memory we will need a more complex construction.
 -/
-def Table.staticOfFn {n : ℕ} (h : n < p) (name : String) (f : Fin n → F p) :
+def Table.staticOfArray (name : String) (values : Array (F p)) (h : values.size < p) :
     Table (F p) fieldPair := .fromStatic {
   name
-  length := n
-  row i := (i, f i)
+  length := values.size
+  row i := (i.val, values[i])
   index | (i, _) => i.val
-  Spec | (i, v) => ∃ hi: i.val < n, v = f ⟨ i.val, hi ⟩
-  contains_iff := by grind
+  Spec | (i, v) => ∃ hi : i.val < values.size, v = values[i.val]
+  contains_iff := by
+    rintro ⟨address, value⟩
+    constructor
+    · rintro ⟨i, hi⟩
+      simp only [Prod.mk.injEq] at hi
+      obtain ⟨rfl, rfl⟩ := hi
+      have : ((i.val : ℕ) : F p).val = i.val := ZMod.val_cast_of_lt (by omega)
+      simp [this]
+    · rintro ⟨hi, rfl⟩
+      exact ⟨⟨address.val, hi⟩, by simp⟩
 }
 
 def decodeInstructionMain (instruction : Expression (F p)) : Circuit (F p) (Var DecodedInstruction (F p)) := do
@@ -144,16 +153,15 @@ def decodeInstruction : GeneralFormalCircuit (F p) field DecodedInstruction wher
   This circuit is not satisfiable if the program counter is out of bounds.
 -/
 def fetchInstruction
-    {programSize : ℕ} (program : Fin programSize → (F p)) (h_programSize : programSize < p) :
+    (program : Array (F p)) (h_programSize : program.size < p) :
     GeneralFormalCircuit (F p) field RawInstruction where
   main (pc : Expression (F p)) := do
-    let programTable := .staticOfFn h_programSize "program" program
-    let programVector := Vector.ofFn program
+    let programTable := .staticOfArray "program" program h_programSize
 
-    let rawInstrType ← witness programVector[pc.val]
-    let op1 ← witness programVector[pc.val + 1]
-    let op2 ← witness programVector[pc.val + 2]
-    let op3 ← witness programVector[pc.val + 3]
+    let rawInstrType ← witness program[pc.val]
+    let op1 ← witness program[pc.val + 1]
+    let op2 ← witness program[pc.val + 2]
+    let op3 ← witness program[pc.val + 3]
 
     lookup programTable ⟨pc, rawInstrType⟩
     lookup programTable ⟨pc + 1, op1⟩
@@ -165,7 +173,7 @@ def fetchInstruction
   -- the witness generator computes program addresses in `u64`,
   -- so the program has to fit into that index range
   ProverAssumptions
-  | pc, _, _ => pc.val + 3 < programSize ∧ programSize ≤ 2^64
+  | pc, _, _ => pc.val + 3 < program.size ∧ program.size ≤ 2^64
 
   Spec
   | pc, output, _ =>
@@ -174,7 +182,7 @@ def fetchInstruction
       | none => False -- impossible, lookups ensure that memory accesses are valid
 
   soundness := by
-    circuit_proof_start [Table.staticOfFn, Spec.fetchInstruction, Spec.memoryAccess]
+    circuit_proof_start [Table.staticOfArray, Spec.fetchInstruction, Spec.memoryAccess]
     split
     -- the lookups imply that the memory accesses are valid, therefore
     -- here we prove that Spec.memoryAccess never returns none
@@ -184,14 +192,14 @@ def fetchInstruction
       grind
 
   completeness := by
-    circuit_proof_start [Table.staticOfFn]
+    circuit_proof_start [Table.staticOfArray]
     obtain ⟨ h_pc_bound, h_programSize_u64 ⟩ := h_assumptions
     have val_3 : ZMod.val (3 : F p) = 3 := ZMod.val_natCast_of_lt (by linarith)
     have val_2 : ZMod.val (2 : F p) = 2 := ZMod.val_natCast_of_lt (by linarith)
     have val_1 : ZMod.val (1 : F p) = 1 := ZMod.val_one p
-    have : input.val < programSize := by linarith
-    have : input.val + 1 < programSize := by linarith
-    have : input.val + 2 < programSize := by linarith
+    have : input.val < program.size := by linarith
+    have : input.val + 1 < program.size := by linarith
+    have : input.val + 2 < program.size := by linarith
     -- the addresses are computed in `u64` by the witness generator;
     -- this bound lets the `u64` wrapping simplify away
     have h_no_wrap : input.val + 3 < 2^64 := by omega
@@ -213,19 +221,14 @@ def MemoryTable : Table (F p) MemoryEntry where
     entry.address = table[entry.address.val].address ∧
     entry.value = table[entry.address.val].value
 
-def memorySize (data : ProverData (F p)) : ℕ :=
-  let mem := data.getTable MemoryTable
-  mem.size
-
 def memoryValue (env : Environment (F p)) (address : Expression (F p)) : F p :=
   let mem := env.data.getTable MemoryTable
   if he : (env address).val < mem.size then
     mem[(env address).val].value
   else 0
 
-def memory (env : ProverData (F p)) : Fin (memorySize env) → F p :=
-  let mem := env.getTable MemoryTable
-  fun i => mem[i.val].value
+def memory (env : ProverData (F p)) : Array (F p) :=
+  (env.getTable MemoryTable).map (·.value)
 
 -- to satisfy memory lookup constraints, the prover needs to make sure that `memory[addr] = (addr, ·)`,
 -- that the memory is non-empty (so we can use address 0 as a dummy address),
@@ -254,7 +257,7 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
     /-
       read into memory for all cases of addressing mode.
       to avoid a completeness issue, we use dummy lookups (0, DUMMY_VALUE),
-      where DUMMY_VALUE is the actual memory value at address 0 (which is a valid address since memorySize > 0).
+      where DUMMY_VALUE is the actual memory value at address 0 (which is a valid address since the memory is non-empty).
 
       we do two lookups to cover all cases:
       - in case of double addressing, these are the actual two lookups we need
@@ -300,54 +303,26 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
       | none => False -- impossible, constraints ensure that memory accesses are valid
 
   soundness := by
-    circuit_proof_start [Table.staticOfFn, Spec.dataMemoryAccess,
-      Spec.memoryAccess, DecodedAddressingMode.val, DecodedAddressingMode.isEncodedCorrectly,
-      memorySize, memoryValue, memory, MemoryEntry, MemoryReadInput.mk.injEq]
-    set memoryTable := env.data.getTable MemoryTable with h_memory_table_def
-    simp only [MemoryTable] at h_holds
-
-    -- circuit_proof_start did not unpack those, so we manually unpack here
+    circuit_proof_start [Spec.dataMemoryAccess, Spec.memoryAccess, DecodedAddressingMode.val,
+      DecodedAddressingMode.isEncodedCorrectly, MemoryReadInput.mk.injEq]
     obtain ⟨isDoubleAddressing, isApRelative, isFpRelative, isImmediate⟩ := input_mode
     obtain ⟨_pc, ap, fp⟩ := input_state
-
-    simp only [CircuitType.eval_expression, fromElements, ProvableType.eval,
-      size, toElements, Vector.map_mk, List.map_toArray,
-      List.map_cons, List.map_nil, Vector.getElem_mk, ↓List.getElem_toArray,
-      ↓List.getElem_cons_zero, ↓List.getElem_cons_succ, State.mk.injEq,
+    simp only [circuit_norm, explicit_provable_type, State.mk.injEq,
       DecodedAddressingMode.mk.injEq] at h_holds h_assumptions h_input
-    simp only [h_input] at h_holds
-    simp only [Option.bind_eq_bind]
-    obtain ⟨ h_addr1, h_addr2, ⟨ h_addr1_lt, h_mem1 ⟩, ⟨ h_addr2_lt, h_mem2 ⟩, h_value ⟩ := h_holds
-    obtain ⟨ h_addr1', h_value1 ⟩ := h_mem1
-    obtain ⟨ h_addr2', h_value2 ⟩ := h_mem2
-
-    simp only [h_addr1] at h_value1 h_addr1_lt
-    rw [h_value1] at h_addr2
-    simp only [h_addr2] at h_value2 h_addr2_lt
-    simp only [h_value1, h_value2] at h_value
-    clear h_input
-
-    -- Each valid one-hot mode reduces the semantic access to the lookup values above.
-    rcases h_assumptions with h_mode | h_mode | h_mode | h_mode
-    · simp only [h_mode, one_mul, zero_mul, add_zero] at h_addr1_lt h_addr2_lt h_value
-      simp only [h_mode, ↓reduceIte]
-      simp only [← h_memory_table_def, h_addr1_lt, ↓reduceDIte,
-        Option.bind_some, h_addr2_lt]
-      exact h_value
-    · simp only [h_mode, one_mul, zero_mul, add_zero, zero_add] at h_addr1_lt h_value
-      simp only [h_mode, zero_ne_one, ↓reduceIte]
-      simp only [← h_memory_table_def, h_addr1_lt, ↓reduceDIte]
-      exact h_value
-    · simp only [h_mode, one_mul, zero_mul, add_zero, zero_add] at h_addr1_lt h_value
-      simp only [h_mode, zero_ne_one, ↓reduceIte]
-      simp only [← h_memory_table_def, h_addr1_lt, ↓reduceDIte]
-      exact h_value
-    · simpa only [h_mode, one_mul, zero_mul, add_zero, zero_add,
-        zero_ne_one, ↓reduceIte] using h_value
+    obtain ⟨⟨-, rfl, rfl⟩, rfl, rfl, rfl, rfl, rfl⟩ := h_input
+    obtain ⟨h_addr1, h_addr2, ⟨h_lt1, -, h_value1⟩, ⟨h_lt2, -, h_value2⟩, h_value⟩ := h_holds
+    -- the two memory lookups, as reads of the memory array
+    dsimp only at h_lt1 h_value1 h_lt2 h_value2
+    have h_read1 : (memory env.data)[(env.get i₀).val]? = some (env.get (i₀ + 1)) := by
+      rw [memory, Array.getElem?_map, Array.getElem?_eq_getElem h_lt1, Option.map_some, h_value1]
+    have h_read2 : (memory env.data)[(env.get (i₀ + 1 + 1)).val]? = some (env.get (i₀ + 1 + 1 + 1)) := by
+      rw [memory, Array.getElem?_map, Array.getElem?_eq_getElem h_lt2, Option.map_some, h_value2]
+    clear h_lt1 h_value1 h_lt2 h_value2
+    rcases h_assumptions with h_mode | h_mode | h_mode | h_mode <;> simp_all
 
   completeness := by
-    circuit_proof_start [Table.staticOfFn, DecodedAddressingMode.isEncodedCorrectly,
-      Spec.dataMemoryAccess, memory, memorySize, memoryValue, MemoryReadInput.mk.injEq]
+    circuit_proof_start [Table.staticOfArray, DecodedAddressingMode.isEncodedCorrectly,
+      Spec.dataMemoryAccess, memory, memoryValue, MemoryReadInput.mk.injEq]
     set addr1 := env.get i₀
     set value1 := env.get (i₀ + 1)
     set addr2 := env.get (i₀ + 2)
@@ -385,19 +360,21 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
     -- by cases on the addressing mode
     rcases h_mode_encode with h_mode|h_mode|h_mode|h_mode
     <;> simp only [h_mode, one_mul, zero_mul, add_zero, zero_add, reduceIte] at *
-    · simp only [Option.bind_eq_bind, Option.isSome_iff_exists, Option.bind_eq_some_iff,
-      Option.dite_none_right_eq_some, Option.some.injEq, exists_exists_eq_and, ↓existsAndEq,
-      exists_prop, and_true] at h_mem_access
-      obtain ⟨ h_addr1_lt, h_addr2_lt ⟩ := h_mem_access
-      simp only [addr1, addr1_def, addr2, addr2_def, value1_def, memoryTable]
-      refine ⟨h_addr1_lt, ?_⟩
-      simpa [h_addr1_lt] using h_addr2_lt
-    · simp at h_mem_access
-      simp [addr1, addr2, *]
-    · simp at h_mem_access
-      simp [addr1, addr2, *]
-    · simp at h_mem_access
-      simp [addr1, addr2, *]
+    · have h1 : (ap + input_offset).val < memoryTable.size := by
+        by_contra h
+        simp [Array.getElem?_eq_none (Nat.le_of_not_lt h)] at h_mem_access
+      rw [Array.getElem?_map, Array.getElem?_eq_getElem h1] at h_mem_access
+      have h2 : memoryTable[(ap + input_offset).val].value.val < memoryTable.size := by
+        by_contra h
+        simp [Array.getElem?_eq_none (Nat.le_of_not_lt h)] at h_mem_access
+      have h_addr1 : addr1.val < memoryTable.size := addr1_def ▸ h1
+      refine ⟨h_addr1, ?_⟩
+      rw [addr2_def, value1_def, Nat.mod_eq_of_lt (by omega), Array.getElem?_eq_getElem h_addr1]
+      simpa [addr1_def] using h2
+    all_goals simp at h_mem_access
+    all_goals first
+      | exact ⟨addr1_def ▸ h_mem_access, by simpa [addr2_def] using h_pos⟩
+      | exact ⟨by simpa [addr1_def] using h_pos, by simpa [addr2_def] using h_pos⟩
 
 /--
   Circuit that computes the next state of the femtoCairo VM, given the current state,
@@ -547,7 +524,7 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
   as input and returns the next state as output.
   The circuit is not satisfiable if the state transition is invalid.
 -/
-def femtoCairoStepMain {programSize : ℕ} (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+def femtoCairoStepMain (program : Array (F p)) (h_programSize : program.size < p)
     (state : Var State (F p)) : Circuit (F p) (Var State (F p)) := do
   -- Fetch instruction
   let raw ← fetchInstruction program h_programSize state.pc
@@ -564,35 +541,35 @@ def femtoCairoStepMain {programSize : ℕ} (program : Fin programSize → (F p))
   nextState { state, decoded, v1, v2, v3 }
 
 @[reducible]
-instance {programSize : ℕ} (program : Fin programSize → (F p)) (h_programSize : programSize < p) :
+instance (program : Array (F p)) (h_programSize : program.size < p) :
     ElaboratedCircuit (F p) State State (femtoCairoStepMain program h_programSize) := by
   elaborate_circuit
 
 def femtoCairoStepSpec
-    {programSize : ℕ} (program : Fin programSize → (F p))
+    (program : Array (F p))
     (state : State (F p)) (nextState : State (F p)) (data : ProverData (F p)) : Prop :=
   Spec.femtoCairoMachineTransition program (memory data) state = some nextState
 
 /--
   Assumptions required for the FemtoCairo step circuit completeness.
   1. ValidProgramSize: programSize + 3 < p (ensures no field wraparound in address arithmetic)
-  2. programSize ≤ 2^64: the program fits into the `u64` index range that the witness
+  2. program.size ≤ 2^64: the program fits into the `u64` index range that the witness
      generator uses to address it
   3. ValidProgram: All instruction bytes in program memory are < 256
   4. MemoryCompletenessAssumption: memory table is non-empty and filled correctly
   5. The state transition succeeds (execution doesn't fail)
 -/
 def femtoCairoStepAssumptions
-    {programSize : ℕ} (program : Fin programSize → F p)
+    (program : Array (F p))
     (state : State (F p)) (data : ProverData (F p)) (_hint : ProverHint (F p)) : Prop :=
-  ValidProgramSize p programSize ∧
-  programSize ≤ 2^64 ∧
+  ValidProgramSize p program.size ∧
+  program.size ≤ 2^64 ∧
   ValidProgram program ∧
   MemoryCompletenessAssumption data ∧
   (Spec.femtoCairoMachineTransition program (memory data) state).isSome
 
 theorem femtoCairoStepSoundness
-    {programSize : ℕ} (program : Fin programSize → (F p)) (h_programSize : programSize < p)
+    (program : Array (F p)) (h_programSize : program.size < p)
     : GeneralFormalCircuit.Soundness (F p) (femtoCairoStepMain program h_programSize) (fun _ _ => True)
       (femtoCairoStepSpec program) := by
   circuit_proof_start [femtoCairoStepSpec, femtoCairoStepAssumptions, femtoCairoStepMain,
@@ -677,8 +654,8 @@ theorem femtoCairoStepSoundness
             case h_1 next_state h_eq_next =>
               rw [h_eq_next, ←c_next]
 
-theorem femtoCairoStepCompleteness {programSize : ℕ} (program : Fin programSize → (F p))
-  (h_programSize : programSize < p) :
+theorem femtoCairoStepCompleteness (program : Array (F p))
+  (h_programSize : program.size < p) :
     GeneralFormalCircuit.Completeness (F p) (femtoCairoStepMain program h_programSize)
       (femtoCairoStepAssumptions program) (fun _ _ _ => True) := by
   circuit_proof_start [femtoCairoStepAssumptions, femtoCairoStepMain,
@@ -694,7 +671,7 @@ theorem femtoCairoStepCompleteness {programSize : ℕ} (program : Fin programSiz
 
   have h_fetch_isSome : (Spec.fetchInstruction program input.pc).isSome := by
     exact Spec.transition_isSome_implies_fetch_isSome program (memory env.data) input h_transition_isSome
-  have h_pc_bound : input.pc.val + 3 < programSize :=
+  have h_pc_bound : input.pc.val + 3 < program.size :=
     Spec.fetchInstruction_isSome_implies_pc_bound program h_valid_size input.pc h_fetch_isSome
   have h_instr_bound : raw.rawInstrType.val < 256 := by
     have h_decode_bound := Spec.decodeInstruction_isSome_implies_bound raw.rawInstrType
@@ -754,8 +731,8 @@ theorem femtoCairoStepCompleteness {programSize : ℕ} (program : Fin programSiz
       rw [h_instr_type_val, h_read1_value, h_read2_value, h_read3_value]
       exact h_computeNext⟩
 
-variable {programSize : ℕ} (program : Fin programSize → (F p)) (h_programSize : programSize < p)
-variable (h_program : ValidProgramSize p programSize ∧ ValidProgram program)
+variable (program : Array (F p)) (h_programSize : program.size < p)
+variable (h_program : ValidProgramSize p program.size ∧ ValidProgram program)
 
 def femtoCairoStep : GeneralFormalCircuit (F p) State State where
   main := femtoCairoStepMain program h_programSize
@@ -785,7 +762,7 @@ def femtoCairoTable (n : ℕ) : InductiveTable (F p) State unit where
   InputAssumptions i _ _ := i < n
   -- the witness generator indexes the program in `u64`, so the program has to fit
   InitialStateAssumptions initialState env :=
-    programSize ≤ 2^64 ∧
+    program.size ≤ 2^64 ∧
     MemoryCompletenessAssumption env ∧
     ∀ i ≤ n, (Spec.femtoCairoMachineBoundedExecution program (memory env) (some initialState) i).isSome
 

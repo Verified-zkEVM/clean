@@ -75,23 +75,6 @@ lemma toRaw_ext_iff {Message2 : TypeMap} [ProvableType Message2]
 end Channel
 
 /--
-Static lookup channels expose a predicate that is equivalent
-to being a member of a fixed list of values.
--/
-structure StaticLookupChannel (F : Type) [Field F] (Message : TypeMap) [ProvableType Message] where
-  name : String
-  table : List (Message F)
-  Guarantees : Message F → Prop
-  guarantees_iff : ∀ msg, Guarantees msg ↔ msg ∈ table
-
-@[circuit_norm]
-def Channel.fromStatic (F : Type) [Field F]
-    (Message : TypeMap) [ProvableType Message]
-    (slc : StaticLookupChannel F Message) : Channel F Message where
-  name := slc.name
-  Guarantees msg _ := slc.Guarantees msg
-
-/--
 A _channel interaction_ is a channel message along with a multiplicity.
 
 In addition, via `assumeGuarantees`, the interaction can opt into carrying the

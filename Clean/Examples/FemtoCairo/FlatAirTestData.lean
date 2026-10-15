@@ -16,13 +16,9 @@ open Examples.FemtoCairo.Types
 
 namespace Examples.FemtoCairo.FlatAirTestData
 
-def programSize : UInt64 := 32
-
-instance : NeZero programSize.toNat := ⟨by decide⟩
-
 /-- Seven instructions followed by one padding instruction. -/
-def programData : Vector (F pBabybear) programSize.toNat :=
-  #v[212, 1, 2, 8,       -- ADD mem[ap+1] + mem[ap+2] = 8
+def testProgram : Array (F pBabybear) :=
+  #[212, 1, 2, 8,       -- ADD mem[ap+1] + mem[ap+2] = 8
      213, 3, 4, 14,      -- MUL mem[ap+3] * mem[ap+4] = 14
      244, 1, 10, 15,     -- ADD mem[ap+1] + 10 = 15
      233, 5, 2, 30,      -- MUL mem[fp+5] * mem[fp+2] = 30
@@ -31,9 +27,7 @@ def programData : Vector (F pBabybear) programSize.toNat :=
      252, 0, 0, 0,       -- ADD 0 + 0 = 0
      0, 0, 0, 0]
 
-def testProgram : Fin programSize.toNat → F pBabybear := fun i => programData[i]
-
-theorem programSize_lt : programSize.toNat < pBabybear := by decide
+theorem programSize_lt : testProgram.size < pBabybear := by decide
 
 theorem memorySize_lt : (8 : UInt64).toNat < pBabybear := by decide
 

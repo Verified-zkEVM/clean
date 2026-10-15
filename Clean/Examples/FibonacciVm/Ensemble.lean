@@ -11,6 +11,7 @@ Prove e2e soundness and completeness of the table ensemble.
 module
 
 public import Clean.Air.Vm
+public import Clean.Air.Lookup
 public import Clean.Air.WitnessGeneration
 public import Clean.Gadgets.Addition8.Theorems
 
@@ -27,57 +28,15 @@ instance (p : ℕ) [pGt : Fact (p > 512)] : Fact (ringChar (F p) ≠ 2) := .mk <
 
 variable {p : ℕ} [Fact p.Prime] [pGt: Fact (p > 512)]
 
-def BytesTable : StaticLookupChannel (F p) field where
+/-- The bytes `0, ..., 255`, for range checks. -/
+def bytes : Lookup (F p) field where
   name := "bytes"
-  table := List.finRange 256 |>.map ByteUtils.fromByte
-  Guarantees msg := msg.val < 256
-  guarantees_iff := by
-    intro (msg : F p)
-    simp only [List.mem_map, List.mem_finRange, true_and]
-    constructor
-    · intro h_lt
-      exact ⟨⟨ msg.val, h_lt ⟩, ByteUtils.fromByte_eq ..⟩
-    · intro ⟨ ⟨ b, hb ⟩, h_eq ⟩
-      rw [← h_eq]
-      apply ByteUtils.fromByte_lt
-
-abbrev BytesChannel : Channel (F p) field := .fromStatic _ _ BytesTable
-
-structure BytesInput F where
-  value : F
-  multiplicity : F
-deriving ProvableStruct
-
-/-- One byte-channel row. Its byte value is supplied by an indexed fixed column. -/
-def pushBytes : GeneralFormalCircuit (F p) BytesInput unit where
-  name := "bytes"
-  main | { value, multiplicity } => do
-    BytesChannel.emit multiplicity value
-
-  channelsWithRequirements := [ BytesChannel.toRaw ]
-  Assumptions
-  | { value, .. }, _ => value.val < 256
-  ProverAssumptions
-  | { value, .. }, _, _ => value.val < 256
-  Spec _ _ _ := True
-  soundness := by
-    circuit_proof_start [BytesTable]
-    simp_all
-  completeness := by circuit_proof_start
-
-def bytesFixedColumns : FixedColumns (F p) where
   height := 256
-  program := .ofFExpr .idx
-  valid := by rfl
-
-def bytesComponent : Component (F p) where
-  circuit := pushBytes
-  fixedColumns := some bytesFixedColumns
-  circuit_assumptions_of_assumptions := by
-    rintro i ⟨value, multiplicity⟩ data hfixed - -
-    simp [bytesFixedColumns, circuit_norm, explicit_provable_type] at hfixed
-    obtain ⟨hi, rfl⟩ := hfixed
-    simp [pushBytes, ZMod.val_cast_of_lt (show i.toNat < p by linarith [pGt.out]), hi]
+  row := pure .idx
+  Contains value := value.val < 256
+  contains_row i hi := by
+    have : i.toNat < 256 := UInt64.lt_iff_toNat_lt.mp hi
+    simp [circuit_norm, explicit_provable_type, Nat.mod_eq_of_lt (show i.toNat < p by linarith [pGt.out]), this]
 
 def Add8Channel : Channel (F p) fieldTriple where
   name := "add8"
@@ -98,7 +57,7 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
   main input := do
     -- range-check z using the bytes channel
     -- (x and y are guaranteed to be range-checked from earlier interactions)
-    BytesChannel.pull input.z
+    bytes.channel.pull input.z
     -- witness the output carry
     let carry ← witness ((input.x + input.y).val / 256).toField
     assertBool carry
@@ -114,14 +73,14 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
   channelsWithRequirements := [ Add8Channel.toRaw ]
 
   soundness := by
-    circuit_proof_start [BytesTable, Add8Channel]
+    circuit_proof_start [bytes, Add8Channel]
     set carry := env.get i₀
     obtain ⟨ hz, hcarry, heq ⟩ := h_holds
     intro hm h0 hx hy
     have add_soundness := Theorems.soundness input_x input_y input_z 0 carry hx hy hz (by left; trivial) hcarry
     simp_all
   completeness := by
-    circuit_proof_start [BytesTable]
+    circuit_proof_start [bytes]
     set carry := env.get i₀
     rcases h_assumptions with ⟨ hx, hy, hz, heq ⟩
     have add_completeness_bool := Theorems.completeness_bool input_x input_y 0 hx hy (by simp)
@@ -259,26 +218,23 @@ def fibonacciVm : VmTables (F p) fieldTriple where
     exact ⟨ 0, rfl, rfl ⟩
 
 def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
-  |>.addTable bytesComponent
-    (List.Subset.refl _)
-    (by simp [circuit_norm, bytesComponent, pushBytes])
-  |>.addFinishedChannel BytesChannel.toRaw
+  |>.addLookup bytes
   |>.addTable { circuit := add8 }
     (by simp [circuit_norm, add8])
     (by simp [circuit_norm, add8])
-    (by simp [circuit_norm, add8, bytesComponent, pushBytes])
+    (by simp [circuit_norm, add8, bytes])
   |>.addFinishedChannel Add8Channel.toRaw
   |>.addVm fibonacciVm
-    (by simp +instances [circuit_norm, fibonacciVm, add8, bytesComponent, pushBytes,
+    (by simp +instances [circuit_norm, fibonacciVm, add8, bytes,
       Add8Channel, FibonacciChannel])
     (by simp +instances [circuit_norm, fibonacciVm, fib8, fibonacciVerifier])
     (by simp [circuit_norm, fibonacciVm, fib8, fibonacciVerifier,
       Add8Channel, FibonacciChannel])
     (by simp [circuit_norm, fibonacciVm, fib8, add8,
-      bytesComponent, pushBytes])
+      bytes])
   |>.toFormal (fun _ => True)
     (fun (n, x, y) => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val)
-    (by simp [circuit_norm, fibonacciVm, bytesComponent])
+    (by simp [circuit_norm, fibonacciVm, bytes])
     (by simp [circuit_norm, fibonacciVm, fibonacciVerifier])
 
 namespace FibonacciWitness
@@ -301,20 +257,12 @@ def add8Mode : Mode (F p) := .demand {
   input := { cells := [.message 0, .message 1, .message 2, .multiplicity] }
 }
 
-/-- The byte provider preallocates one verifier-fixed byte and one generated multiplicity cell per row. Its declared push interaction routes byte pulls back to the corresponding row. -/
-def bytesMode : Mode (F p) := .preallocated {
-  rows := (bytesFixedColumns (p := p)).height
-  input := .ofFExprs #v[.const 0]
-  input_valid := by rfl
-  handlers := [{ interaction := 0, column := 1 }]
-}
-
 /-- Channel-driven witness-generation metadata for each component of the ensemble. -/
 def config (fuel : ℕ) : Config (F p) where
   components := [
     ((fib8 (p := p)).name, { mode := fibMode, padding := { input := #[0, 0, 0, 0], minimumRows := 32 } }),
     ((add8 (p := p)).name, { mode := add8Mode, padding := { input := #[0, 0, 0, 0], minimumRows := 32 } }),
-    ((pushBytes (p := p)).name, { mode := bytesMode, padding := { input := #[0, 0], minimumRows := 256 } })
+    ((bytes (p := p)).name, bytes.generation)
   ]
   fuel := fuel
 
