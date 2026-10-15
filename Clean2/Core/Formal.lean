@@ -128,6 +128,8 @@ def toSubcircuit (impl : Impl B c) (s : B.State) (input : c.Input B.Var) : Subci
   ops := ((impl.main input).operations s).toFlat
   next := impl.advance input s
   next_eq := by rw [Ops.flatAdvance_toFlat (impl.consistent input s), impl.advance_eq]
+  events := ((impl.main input).operations s).events
+  honestEvents := ((impl.main input).operations s).honestEvents
   Assumptions env := c.inputCType.Valid (B.evalT env input) ∧ c.Assumptions (c.inputCType.decode (B.evalT env input))
   Spec env := c.outputCType.Valid (B.evalT env (impl.output input s)) ∧
     c.Spec (c.inputCType.decode (B.evalT env input)) (c.outputCType.decode (B.evalT env (impl.output input s)))
@@ -142,19 +144,22 @@ def toSubcircuit (impl : Impl B c) (s : B.State) (input : c.Input B.Var) : Subci
         c.ProverSpec (c.inputCType.decode (B.evalT env input)) (c.outputCType.decode (B.evalT env (impl.output input s)))
   pre := B.footprintT input ⊆ B.Alloc s
   post := B.footprintT (impl.output input s) ⊆ B.Alloc (impl.advance input s)
-  soundness env h_assumptions h_holds :=
+  soundness env h_assumptions h_events h_holds :=
     impl.soundness s env input h_assumptions
-      (Ops.soundnessHold_of_constraintsHold (impl.consistent input s) h_holds)
-  completeness env h_honest := by
+      (Ops.soundnessHold_of_constraintsHold (impl.consistent input s) h_events h_holds)
+  completeness env h_hev h_honest := by
     have h_consistent := impl.consistent input s
-    have h_honest' := Ops.honestCompleteness_of_honest h_consistent h_honest
-    refine ⟨fun h_prover => ?_, fun h_prover => ⟨fun h_assumptions => ?_, ?_⟩⟩
-    · exact Ops.constraintsHold_of_completenessHold h_consistent h_honest
+    have h_honest' := Ops.honestCompleteness_of_honest h_consistent h_hev h_honest
+    refine ⟨fun h_prover => ⟨?_, ?_⟩, fun h_prover => ⟨fun h_assumptions => ?_, ?_⟩⟩
+    · exact Ops.constraintsHold_of_completenessHold h_consistent h_hev h_honest
         (impl.completeness s env input h_honest' h_prover).1
-    · exact impl.soundness s env input h_assumptions
+    · exact Ops.events_of_completenessHold h_consistent h_hev h_honest
+        (impl.completeness s env input h_honest' h_prover).1
+    · have h_complete := (impl.completeness s env input h_honest' h_prover).1
+      exact impl.soundness s env input h_assumptions
         (Ops.soundnessHold_of_constraintsHold h_consistent
-          (Ops.constraintsHold_of_completenessHold h_consistent h_honest
-            (impl.completeness s env input h_honest' h_prover).1))
+          (Ops.events_of_completenessHold h_consistent h_hev h_honest h_complete)
+          (Ops.constraintsHold_of_completenessHold h_consistent h_hev h_honest h_complete))
     · exact (impl.completeness s env input h_honest' h_prover).2
   local_of_pre h := (Ops.local_of_localHold (impl.consistent input s) (impl.spatial input s h)).1
   post_of_pre h := by
@@ -234,10 +239,14 @@ theorem honest_env_exists (impl : Impl B c) (input : c.Input B.Var) (s : B.State
 
 /-- Completeness, as a statement about the real constraints: for inputs that exist in the heap
 and satisfy the prover assumptions, some honest environment (agreeing with the given one on the
-existing heap) satisfies all constraints, and the prover spec holds there. -/
+existing heap) satisfies all constraints, and the prover spec holds there; provided that none of
+the rare events the honest prover assumes happens. (Circuits without such events: `honestEvents`
+is empty, and the proviso is trivial.) -/
 theorem exists_honest_env (impl : Impl B c) (input : c.Input B.Var) (s : B.State)
     (env₀ : B.Cell → B.Native) (h_in : B.footprintT input ⊆ B.Alloc s)
-    (h_prover : c.inputCType.Valid (B.evalT env₀ input) ∧ c.ProverAssumptions (c.inputCType.decode (B.evalT env₀ input))) :
+    (h_prover : c.inputCType.Valid (B.evalT env₀ input) ∧ c.ProverAssumptions (c.inputCType.decode (B.evalT env₀ input)))
+    (h_honestEvents : ∀ env, (∀ c ∈ B.Alloc s, env c = env₀ c) →
+      ∀ ev ∈ ((impl.main input).operations s).honestEvents, ¬ev.Happens env) :
     ∃ env, (∀ c ∈ B.Alloc s, env c = env₀ c) ∧
       ((impl.main input).operations s).ConstraintsHold env s ∧
       c.outputCType.Valid (B.evalT env (impl.output input s)) ∧
@@ -246,8 +255,9 @@ theorem exists_honest_env (impl : Impl B c) (input : c.Input B.Var) (s : B.State
   have h_consistent := impl.consistent input s
   have h_prover' : c.inputCType.Valid (B.evalT env input) ∧ c.ProverAssumptions (c.inputCType.decode (B.evalT env input)) := by
     rwa [Backend.evalT_frame env env₀ input fun c hc => h_agree c (h_in hc)]
-  have h := impl.completeness s env input (Ops.honestCompleteness_of_honest h_consistent h_honest) h_prover'
-  exact ⟨env, h_agree, Ops.constraintsHold_of_completenessHold h_consistent h_honest h.1, h.2⟩
+  have h_hev := h_honestEvents env h_agree
+  have h := impl.completeness s env input (Ops.honestCompleteness_of_honest h_consistent h_hev h_honest) h_prover'
+  exact ⟨env, h_agree, Ops.constraintsHold_of_completenessHold h_consistent h_hev h_honest h.1, h.2⟩
 
 end Impl
 end

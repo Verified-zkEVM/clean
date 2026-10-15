@@ -134,6 +134,10 @@ end Gate
 and its fixed cells set to `fixed`. -/
 inductive PlonkishOp (F : Type) where
   | gate (g : Gate F) (inputs : Vector (ℕ × ℕ) g.nIn) (fixed : Vector F g.nFixed)
+  /-- A verifier challenge, drawn after the prover has committed to `inputs`: a fresh row whose
+  first cell holds it (in Halo2, a challenge of a later phase, copied into an advice cell). The
+  prover does not choose it, and it constrains nothing. -/
+  | challenge (m : ℕ) (inputs : Vector (ℕ × ℕ) m)
 
 namespace Plonkish
 
@@ -151,10 +155,12 @@ def outCells (g : Gate F) (s : ℕ) : Vector (ℕ × ℕ) g.nOut := Vector.ofFn 
 /-- The cells an operation reads: its inputs. -/
 def reads : PlonkishOp F → Set (ℕ × ℕ)
   | .gate g inputs _ => ⋃ i : Fin g.nIn, {inputs[i]}
+  | .challenge m inputs => ⋃ i : Fin m, {inputs[i]}
 
 /-- The cells an operation writes: the row it is placed on. -/
 def writes : PlonkishOp F → ℕ → Set (ℕ × ℕ)
   | .gate g .., s => {c | c.1 = s ∧ c.2 < g.nIn + g.nOut}
+  | .challenge .., s => {(s, 0)}
 
 /-- The inputs are copied into the row (the permutation argument), and the identities hold on
 the row (the gate polynomials, enabled by the selector at this row). -/
@@ -162,12 +168,15 @@ def Holds (env : ℕ × ℕ → F) (s : ℕ) : PlonkishOp F → Prop
   | .gate g inputs k =>
     (inCells g s).map env = inputs.map env ∧
     g.Constraint ((inCells g s).map env) k ((outCells g s).map env)
+  | .challenge .. => True
 
-/-- The honest prover copies the inputs and computes the outputs. -/
+/-- The honest prover copies the inputs and computes the outputs, and takes a challenge as it
+comes. -/
 def Honest (env : ℕ × ℕ → F) (s : ℕ) : PlonkishOp F → Prop
   | .gate g inputs k =>
     (inCells g s).map env = inputs.map env ∧
     (outCells g s).map env = g.witness ((inCells g s).map env) k
+  | .challenge .. => True
 
 omit [Field F] in
 theorem map_congr_of_agree {m : ℕ} (v : Vector (ℕ × ℕ) m) {S : Set (ℕ × ℕ)} (hv : ∀ i : Fin m, v[i] ∈ S)
@@ -187,7 +196,8 @@ theorem outCells_mem (g : Gate F) (s : ℕ) (o : Fin g.nOut) : (outCells g s)[o]
 omit [Field F] in
 theorem honest_frame (env env' : ℕ × ℕ → F) (s : ℕ) (op : PlonkishOp F) (h_reads : reads op ⊆ Alloc s)
     (h : Honest env s op) (h_agree : ∀ c ∈ Alloc (s + 1), env c = env' c) : Honest env' s op := by
-  obtain ⟨g, inputs, k⟩ := op
+  obtain ⟨g, inputs, k⟩ | _ := op
+  swap; · trivial
   have h_inputs : ∀ i : Fin g.nIn, inputs[i] ∈ Alloc (s + 1) := fun i =>
     alloc_mono_succ s (h_reads (Set.mem_iUnion.mpr ⟨i, rfl⟩))
   simp only [Honest] at h ⊢
@@ -207,7 +217,8 @@ def honestRow (env₀ : ℕ × ℕ → F) (s : ℕ) (g : Gate F) (inputs : Vecto
 omit [Field F] in
 theorem honest_extend (env₀ : ℕ × ℕ → F) (s : ℕ) (op : PlonkishOp F) (h_reads : reads op ⊆ Alloc s) :
     ∃ env, (∀ c ∈ Alloc s, env c = env₀ c) ∧ Honest env s op := by
-  obtain ⟨g, inputs, k⟩ := op
+  obtain ⟨g, inputs, k⟩ | _ := op
+  swap; · exact ⟨env₀, fun _ _ => rfl, trivial⟩
   have h_inputs : ∀ i : Fin g.nIn, inputs[i] ∈ Alloc s := fun i => h_reads (Set.mem_iUnion.mpr ⟨i, rfl⟩)
   refine ⟨honestRow env₀ s g inputs k, fun c hc => ?_, ?_⟩
   · simp only [honestRow, mem_alloc] at hc ⊢
@@ -245,7 +256,11 @@ def Plonkish (F : Type) [Field F] : Backend where
   reads := Plonkish.reads
   writes := Plonkish.writes
   writes_fresh op s := by
-    obtain ⟨g, inputs, k⟩ := op
+    obtain ⟨g, inputs, k⟩ | _ := op
+    swap
+    · refine ⟨Set.disjoint_singleton_left.mpr fun h => ?_, Set.singleton_subset_iff.mpr ?_⟩
+      · exact absurd h (by simp [Plonkish.mem_alloc])
+      · simp [Plonkish.mem_alloc]
     constructor
     · rw [Set.disjoint_left]
       rintro c ⟨hc, _⟩ hc'
@@ -261,6 +276,7 @@ def Plonkish (F : Type) [Field F] : Backend where
 
 /-- The native values of the plonkish backend are the field it is built over. -/
 instance : Field (Plonkish F).Native := ‹Field F›
+instance [DecidableEq F] : DecidableEq (Plonkish F).Native := ‹DecidableEq F›
 
 namespace Plonkish
 
@@ -287,6 +303,23 @@ namespace Plonkish
     (Plonkish F).Honest env s (.gate g inputs k) =
       ((inCells g s).map env = inputs.map env ∧
         (outCells g s).map env = g.witness ((inCells g s).map env) k) := rfl
+
+@[circuit_norm] theorem advance_challenge {m : ℕ} (inputs : Vector (ℕ × ℕ) m) (s : ℕ) :
+    (Plonkish F).advance (.challenge m inputs) s = s + 1 := rfl
+@[circuit_norm] theorem reads_challenge {m : ℕ} (inputs : Vector (ℕ × ℕ) m) :
+    (Plonkish F).reads (.challenge m inputs) = (Plonkish F).footprintT (M := natives m) inputs := by
+  ext c
+  simp only [Backend.footprintT_natives, footprint_def]
+  rfl
+@[circuit_norm] theorem holds_challenge (env : ℕ × ℕ → F) (s : ℕ) {m : ℕ} (inputs : Vector (ℕ × ℕ) m) :
+    (Plonkish F).Holds env s (.challenge m inputs) = True := rfl
+@[circuit_norm] theorem honest_challenge (env : ℕ × ℕ → F) (s : ℕ) {m : ℕ} (inputs : Vector (ℕ × ℕ) m) :
+    (Plonkish F).Honest env s (.challenge m inputs) = True := rfl
+
+/-- Draw a challenge, after committing to `inputs`: the first cell of a fresh row. -/
+@[circuit_norm]
+def challenge {m : ℕ} (inputs : Vector (ℕ × ℕ) m) : Circuit (Plonkish F) (ℕ × ℕ) :=
+  fun s => ((s, 0), [.native (.challenge m inputs)])
 
 theorem footprintT_outCells (g : Gate F) (s : ℕ) :
     (Plonkish F).footprintT (M := natives g.nOut) (outCells g s) ⊆ Alloc (s + 1) := by
@@ -525,6 +558,8 @@ def rows : (Plonkish F).Measure ℕ where
 
 @[circuit_norm] theorem rows_gate (g : Gate F) (inputs : Vector (ℕ × ℕ) g.nIn) (k : Vector F g.nFixed) :
     rows.op (.gate g inputs k) = 1 := rfl
+@[circuit_norm] theorem rows_challenge {m : ℕ} (inputs : Vector (ℕ × ℕ) m) :
+    rows.op (.challenge (F := F) m inputs) = 1 := rfl
 
 instance (g : Gate F) (k : Vector F g.nFixed) : Impl.Measured rows (gate g k) where value := 1
 instance : Impl.Measured rows (add (F := F)) where value := 1
@@ -553,14 +588,15 @@ instance : ∀ n, Impl.Measured rows (arith (F := F) n)
 
 /-! ## The configuration, read off the operations -/
 
-/-- The gate an operation places. -/
-def _root_.Clean2.PlonkishOp.shape : PlonkishOp F → GateShape F
-  | .gate g .. => g.toGateShape
+/-- The gate an operation places, if it places one. -/
+def _root_.Clean2.PlonkishOp.shape : PlonkishOp F → Option (GateShape F)
+  | .gate g .. => some g.toGateShape
+  | .challenge .. => none
 
 /-- The configuration of a list of native operations: the distinct gates it places, in order of
 first use. This is what Halo2's `configure` declares, and what the verifying key is built from. -/
 def config [DecidableEq F] (ops : List (PlonkishOp F)) : List (GateShape F) :=
-  (ops.map PlonkishOp.shape).dedup
+  (ops.filterMap PlonkishOp.shape).dedup
 
 end Plonkish
 end Clean2

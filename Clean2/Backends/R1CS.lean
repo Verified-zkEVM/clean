@@ -92,28 +92,37 @@ end LinComb
 inductive R1CSOp (Native : Type) where
   | witness (m : ℕ) (vars : Vector (LinComb Native) m) (f : Vector Native m → Native)
   | constraint (a b c : LinComb Native)
+  /-- A verifier challenge, drawn after the prover has committed to `vars` (as in gnark's
+  `Commit`): a fresh cell that the prover does not choose. It constrains nothing. -/
+  | challenge (m : ℕ) (vars : Vector (LinComb Native) m)
 
 namespace R1CSOp
 
 def advance : R1CSOp Native → ℕ → ℕ
   | .witness .., s => s + 1
   | .constraint .., s => s
+  | .challenge .., s => s + 1
 
 def reads : R1CSOp Native → Set ℕ
   | .witness _ vars _ => Linear.witnessReads LinComb.footprint vars
   | .constraint a b c => a.footprint ∪ b.footprint ∪ c.footprint
+  | .challenge _ vars => Linear.witnessReads LinComb.footprint vars
 
 def writes : R1CSOp Native → ℕ → Set ℕ
   | .witness .., s => {s}
   | .constraint .., _ => ∅
+  | .challenge .., s => {s}
 
 def Holds (env : ℕ → Native) (_ : ℕ) : R1CSOp Native → Prop
   | .witness .. => True
   | .constraint a b c => a.eval env * b.eval env = c.eval env
+  | .challenge .. => True
 
+/-- The honest prover takes the challenge as it comes: any value is honest. -/
 def Honest (env : ℕ → Native) (s : ℕ) : R1CSOp Native → Prop
   | .witness _ vars f => Linear.WitnessHonest LinComb.eval env s vars f
   | .constraint .. => True
+  | .challenge .. => True
 
 end R1CSOp
 
@@ -137,15 +146,18 @@ def R1CS (Native : Type) [Field Native] : Backend where
     cases op
     · exact ⟨Linear.disjoint_singleton_alloc s, Linear.singleton_subset_alloc_succ s⟩
     · exact ⟨disjoint_bot_left, Set.empty_subset _⟩
+    · exact ⟨Linear.disjoint_singleton_alloc s, Linear.singleton_subset_alloc_succ s⟩
   Holds := R1CSOp.Holds
   Honest := R1CSOp.Honest
   honest_frame env env' s op h_reads h h_agree := by
     cases op
     · exact Linear.witnessHonest_frame LinComb.eval LinComb.footprint LinComb.eval_frame h_reads h h_agree
     · trivial
+    · trivial
   honest_extend env₀ s op h_reads := by
     cases op
     · exact Linear.witnessHonest_extend LinComb.eval LinComb.footprint LinComb.eval_frame env₀ h_reads
+    · exact ⟨env₀, fun _ _ => rfl, trivial⟩
     · exact ⟨env₀, fun _ _ => rfl, trivial⟩
 
 /-- The native values of the R1CS backend are the field it is built over. -/
@@ -173,6 +185,14 @@ namespace R1CS
     (R1CS Native).Honest env s (.witness m vars f) = (env s = f (vars.map (LinComb.eval env))) := rfl
 @[circuit_norm] theorem honest_constraint (env : ℕ → Native) (s : ℕ) (a b c : LinComb Native) :
     (R1CS Native).Honest env s (.constraint a b c) = True := rfl
+@[circuit_norm] theorem advance_challenge {m : ℕ} (vars : Vector (LinComb Native) m) (s : ℕ) :
+    (R1CS Native).advance (.challenge m vars) s = s + 1 := rfl
+@[circuit_norm] theorem reads_challenge {m : ℕ} (vars : Vector (LinComb Native) m) :
+    (R1CS Native).reads (.challenge m vars) = Linear.witnessReads LinComb.footprint vars := rfl
+@[circuit_norm] theorem holds_challenge (env : ℕ → Native) (s : ℕ) {m : ℕ} (vars : Vector (LinComb Native) m) :
+    (R1CS Native).Holds env s (.challenge m vars) = True := rfl
+@[circuit_norm] theorem honest_challenge (env : ℕ → Native) (s : ℕ) {m : ℕ} (vars : Vector (LinComb Native) m) :
+    (R1CS Native).Honest env s (.challenge m vars) = True := rfl
 
 @[circuit_norm]
 def witness {m : ℕ} (vars : Vector (LinComb Native) m) (f : Vector Native m → Native) : Circuit (R1CS Native) (LinComb Native) :=
@@ -181,6 +201,11 @@ def witness {m : ℕ} (vars : Vector (LinComb Native) m) (f : Vector Native m �
 @[circuit_norm]
 def constraint (a b c : LinComb Native) : Circuit (R1CS Native) Unit :=
   Circuit.native (.constraint a b c)
+
+/-- Draw a challenge, after committing to `vars`. -/
+@[circuit_norm]
+def challenge {m : ℕ} (vars : Vector (LinComb Native) m) : Circuit (R1CS Native) (LinComb Native) :=
+  fun s => (.cell s, [.native (.challenge m vars)])
 
 /-! Native implementations: exactly `Base.interface`. Linear operations are free. -/
 
@@ -282,6 +307,7 @@ def cost : (R1CS Native).Measure (ℕ × ℕ) where
   op
     | .witness .. => (1, 0)
     | .constraint .. => (0, 1)
+    | .challenge .. => (1, 0)
 
 @[circuit_norm] theorem cost_witness {m : ℕ} (vars : Vector (LinComb Native) m) (f : Vector Native m → Native) :
     cost.op (.witness m vars f) = (1, 0) := rfl

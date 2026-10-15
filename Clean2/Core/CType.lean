@@ -239,6 +239,14 @@ theorem Backend.footprintT_ctypeProd_subset {B : Backend} {T U : Type} {a : CTyp
     B.footprintT (M := (a ×ᵗ b).Shape) (x, y) ⊆ S ↔ B.footprintT x ⊆ S ∧ B.footprintT y ⊆ S := by
   rw [Backend.footprintT_ctypeProd, Set.union_subset_iff]
 
+/-- A pair reads what its components read: as a rule, for `apply`, which finds the components'
+shapes by unifying with the pair's (also when it is stated at an interface's input type). -/
+theorem Backend.footprintT_pair_subset_of {B : Backend} {M N : TypeMap} [ProvableType M] [ProvableType N]
+    {x : M B.Var} {y : N B.Var} {S : Set B.Cell} (hx : B.footprintT x ⊆ S) (hy : B.footprintT y ⊆ S) :
+    B.footprintT (M := fun α => M α × N α) (x, y) ⊆ S := by
+  rw [Backend.footprintT_prod]
+  exact Set.union_subset hx hy
+
 theorem Backend.footprintT_ctypeVec_subset {B : Backend} {T : Type} {a : CType B.Native T} {n : ℕ}
     {v : Vector (a.Shape B.Var) n} {S : Set B.Cell} :
     B.footprintT (M := (CType.vec n a).Shape) v ⊆ S ↔ ∀ i : Fin n, B.footprintT v[i] ⊆ S := by
