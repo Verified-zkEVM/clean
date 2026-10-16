@@ -318,8 +318,8 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
     dsimp only at h_lt1 h_value1 h_lt2 h_value2
     have h_read1 : (memory env.data)[(env.get i₀).val]? = some (env.get (i₀ + 1)) := by
       rw [memory, Array.getElem?_map, Array.getElem?_eq_getElem h_lt1, Option.map_some, h_value1]
-    have h_read2 : (memory env.data)[(env.get (i₀ + 1 + 1)).val]? = some (env.get (i₀ + 1 + 1 + 1))
-        := by
+    have h_read2 :
+        (memory env.data)[(env.get (i₀ + 1 + 1)).val]? = some (env.get (i₀ + 1 + 1 + 1)) := by
       rw [memory, Array.getElem?_map, Array.getElem?_eq_getElem h_lt2, Option.map_some, h_value2]
     clear h_lt1 h_value1 h_lt2 h_value2
     rcases h_assumptions with h_mode | h_mode | h_mode | h_mode <;> simp_all

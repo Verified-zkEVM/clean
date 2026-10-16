@@ -12,7 +12,7 @@ namespace Verifier
 /-- Operations emitted by a public verifier program. New verifier-only primitives belong here. -/
 inductive Operation (F : Type) [FiniteField F] where
   /-- Append an interaction. If it assumes guarantees, the verifier doesn't list its channel as one
-    with requirements, so its requirements must hold unconditionally. -/
+  with requirements, so its requirements must hold unconditionally. -/
   | interact (interaction : AbstractInteraction F)
       (requirements : interaction.assumeGuarantees → ∀ env, interaction.Requirements env)
 
@@ -67,8 +67,8 @@ lemma circuitOperations_interactions (operations : Operations F) :
           Operation.interaction operation :: interactions operations
       rw [ih]
 
-lemma circuitOperations_inChannelsOrGuaranteesFull (operations : Operations F) (env : Environment F)
-    :
+lemma circuitOperations_inChannelsOrGuaranteesFull (operations : Operations F)
+    (env : Environment F) :
     operations.circuitOperations.InChannelsOrGuaranteesFull
       operations.channelsWithGuarantees env := by
   rw [_root_.Operations.InChannelsOrGuaranteesFull, circuitOperations_interactions]

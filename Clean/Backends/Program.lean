@@ -185,7 +185,7 @@ structure HandlerProgram where
   column : ℕ
 
 /-- How the rows of one component are generated, with the row program of preallocated rows
-  validated. -/
+validated. -/
 inductive ModeProgram (F : Type) [FiniteField F] where
   | demand (mode : DemandMode F)
   | preallocated (rows : UInt64) (input : WitnessBlock F) (handlers : List HandlerProgram)
@@ -311,8 +311,8 @@ def lowerHandler (index : ℕ) (component : ComponentProgram F) (handler : Preal
     column := handler.column
   }
 
-def lowerMode (index : ℕ) (component : ComponentProgram F) : Mode F → Except LoweringError
-    (ModeProgram F)
+def lowerMode (index : ℕ) (component : ComponentProgram F) :
+    Mode F → Except LoweringError (ModeProgram F)
   | .demand mode => pure (.demand mode)
   | .preallocated mode => do
       let input ← lowerRowProgram (.malformedInitializer index) mode.input
@@ -326,8 +326,8 @@ def lower (ens : FormalEnsemble F PublicIO) (config : Config F) :
   let config ← (config.validate ensemble).mapError .config
   let components ← ensemble.tables.zipIdx.mapM fun (component, index) =>
     lowerComponent index component
-  let modes ← (components.zip config.generations).zipIdx.mapM fun ((component, generation), index)
-      =>
+  let modes ← (components.zip config.generations).zipIdx.mapM
+    fun ((component, generation), index) =>
     lowerMode index component generation.mode
   let verifierOperations := ensemble.verifierOperations.toFlat
   let verifierInteractions := FlatOperation.interactions verifierOperations

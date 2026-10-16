@@ -134,13 +134,14 @@ def u64List (values : List ℕ) : String :=
   s!"&[{Print.commaSep (values.map fun value => s!"{value}u64")}]"
 
 def Case.toRust (c : Case) (index : ℕ) : String :=
-  s!"pub fn case_{index}<F: WitnessField>(row: &[F], row_index: u64, hint: &WitnessData<F>, data: \
-      &WitnessData<F>) -> Vec<F> \{\n{Print.programToRust c.steps c.output}\n    output\n}"
+  s!"pub fn case_{index}<F: WitnessField>(\
+      row: &[F], row_index: u64, hint: &WitnessData<F>, data: &WitnessData<F>) -> Vec<F> \{\n\
+      {Print.programToRust c.steps c.output}\n    output\n}"
 
 def render : Except String String := do
   let functions := cases.zipIdx.map fun (c, index) => c.toRust index
   let dispatch := Print.commaSep <| cases.zipIdx.map fun (_, index) =>
-      s!"{index} => case_{index}(input, row, hint, data)"
+    s!"{index} => case_{index}(input, row, hint, data)"
   let expected := Print.commaSep <| cases.map fun c =>
     s!"&[{Print.commaSep (rowIndices.map fun row => u64List ((c.eval row).toList.map (·.val)))}]"
   let memory := Print.commaSep (memoryRows.map fun row => u64List (row.map (·.val)))
@@ -158,9 +159,9 @@ pub const EXPECTED: &[&[&[u64]]] = &[{expected}];
 
 {String.intercalate "\n\n" functions}
 
-pub fn eval_case<F:
-    WitnessField>(case: usize, input: &[F], row: u64, hint: &WitnessData<F>, data: &WitnessData<F>)
-    -> Vec<F> \{
+pub fn eval_case<F: WitnessField>(
+    case: usize, input: &[F], row: u64, hint: &WitnessData<F>, data: &WitnessData<F>,
+) -> Vec<F> \{
     match case \{ {dispatch}, _ => unreachable!(\"invalid reference case\") }
 }
 "

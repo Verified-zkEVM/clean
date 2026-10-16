@@ -60,7 +60,7 @@ multiplicity, while preserving the non-trivial value used by the execution trace
 example : result = .ok ([8, 8, 32], true, true, 8, 10, 0) := by native_decide
 
 /-- The same Lean witness program accepts a second runtime memory without changing the compiled
-  ensemble or generation configuration. -/
+ensemble or generation configuration. -/
 example : generateResult alternateMemoryValues = .ok ([8, 8, 32], true, true, 8, 10, 99) := by
   native_decide
 
@@ -70,8 +70,7 @@ example : generateResult memoryValues 16 = .ok ([16, 8, 32], true, true, 8, 10, 
 
 def unstableDataReadRejected : Bool :=
   let config : Config (F pBabybear) :=
-    Witness.config (memorySize := 8) testProgram testProgram_valid initialState 8
-        1000
+    Witness.config (memorySize := 8) testProgram testProgram_valid initialState 8 1000
   let mutableMemory : Mode (F pBabybear) := .preallocated {
     rows := 8
     input := .ofFExprs #v[.hintGet memoryValuesKey 1 .idx 0, .const 0]
@@ -81,11 +80,10 @@ def unstableDataReadRejected : Bool :=
   let config : Config (F pBabybear) :=
     { config with components := config.components.map fun (name, generation) =>
         if name = (provideMemory (p := pBabybear)).name then
-            (name, { generation with mode := mutableMemory })
+          (name, { generation with mode := mutableMemory })
         else (name, generation) }
   match Backends.lower
-      (formalEnsemble testProgram testProgram_valid memorySize_lt initialState)
-          config with
+      (formalEnsemble testProgram testProgram_valid memorySize_lt initialState) config with
   | .error (.config (.unstableDataRead _ _ "memory" 1)) => true
   | _ => false
 

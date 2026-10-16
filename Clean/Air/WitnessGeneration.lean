@@ -73,14 +73,14 @@ structure DemandMode (F : Type) where
   input : InputTemplate F
 
 /-- A channel handler for preallocated rows. The interaction is the component interaction whose
-  message selects a row; `column` is the generated multiplicity input updated when the opposite
-  demand arrives. -/
+message selects a row; `column` is the generated multiplicity input updated when the opposite
+demand arrives. -/
 structure PreallocatedHandler where
   interaction : ℕ
   column : ℕ
 
 /-- Rows allocated before channel balancing. Fixed columns, when present, are prepended by the
-  generic builder; `input` is an index-aware Witness IR program for the prover-owned suffix. -/
+generic builder; `input` is an index-aware Witness IR program for the prover-owned suffix. -/
 structure PreallocatedMode (F : Type) where
   rows : UInt64
   input : Witgen.RowProgram F
@@ -88,7 +88,7 @@ structure PreallocatedMode (F : Type) where
   handlers : List PreallocatedHandler
 
 /-- The row-allocation modes needed by flat AIR ensembles. Fixed columns are an orthogonal component
-  property and are not themselves a generation mode. -/
+property and are not themselves a generation mode. -/
 inductive Mode (F : Type) where
   | demand (mode : DemandMode F)
   | preallocated (mode : PreallocatedMode F)
@@ -179,7 +179,7 @@ instance : ToString ConfigError where
           '{key}', whose padding adds rows"
 
 /-- The direction of demand a preallocated handler's interaction serves: a push serves pulls and a
-  pull serves pushes. -/
+pull serves pushes. -/
 def handlerDirection (interaction : AbstractInteraction F) : Direction :=
   if interaction.assumeGuarantees then .push else .pull
 
@@ -386,7 +386,7 @@ structure Demand (F : Type) where
 namespace Demand
 
 /-- The direction and size of a net multiplicity: pushes count positively and pulls negatively, so
-  values above half the field order are read as negative. -/
+values above half the field order are read as negative. -/
 def surplus (demand : Demand F) : Direction × ℕ :=
   if 2 * FiniteField.val demand.multiplicity ≤ FiniteField.size (F := F) then
     (.push, FiniteField.val demand.multiplicity)
@@ -435,7 +435,7 @@ structure GeneratedRow (F : Type) where
   origin : Option (Origin F) := none
 
 /-- One component's generation state: its operations, its validated generation metadata, and the
-  rows generated so far. -/
+rows generated so far. -/
 structure ComponentState (F : Type) [FiniteField F] where
   component : Component F
   witgenOps : List (FlatOperation F)
@@ -522,7 +522,7 @@ def ComponentState.handles (state : ComponentState F) (demand : Demand F) : Bool
   | .preallocated mode => mode.handlers.any fun handler => handler.handles state demand
 
 /-- The first demand some component handles, with that component's index. Validation ensures at most
-  one component handles each channel and direction. -/
+one component handles each channel and direction. -/
 def findAction (states : List (ComponentState F)) :
     List (Demand F) → Option (Demand F × ℕ)
   | [] => none
@@ -647,7 +647,7 @@ def generateLoop (data : ProverData F) (hint : ProverHint F) :
           generateLoop data hint fuel states (update demands)
 
 /-- Pad every component to its target height with its padding row; returns the padded states and the
-  interactions of the new rows. -/
+interactions of the new rows. -/
 def padTables (data : ProverData F) (hint : ProverHint F) (states : List (ComponentState F)) :
     List (ComponentState F) × List (Interaction F) :=
   let padded := states.map fun state =>
@@ -736,8 +736,8 @@ def assembleTables :
   | _, _ => .error (.assembly "generated-table count does not match ensemble component count")
 
 /-- Execute channel-driven generation from validated metadata. `hint` is read by the row programs
-  that initialize preallocated components and by the witness programs of all rows; semantic
-  `ProverData` is derived from the final committed component rows. -/
+that initialize preallocated components and by the witness programs of all rows; semantic
+`ProverData` is derived from the final committed component rows. -/
 def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensemble)
     (publicInput : PublicIO F) (hint : ProverHint F) :
     Except GenerationError (EnsembleWitness ensemble) := do
@@ -764,7 +764,7 @@ def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensembl
   }
 
 /-- Validate generation metadata, then generate an ensemble witness from the public input and the
-  prover's private input. -/
+prover's private input. -/
 def generate (ens : FormalEnsemble F PublicIO) (config : Config F) (publicInput : PublicIO F)
     (proverInput : ens.ProverInput F) : Except GenerationError (EnsembleWitness ens.ensemble) :=
   match config.validate ens.ensemble with

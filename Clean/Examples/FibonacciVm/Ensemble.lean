@@ -38,8 +38,7 @@ def bytes : Lookup (F p) field where
     simp only [circuit_norm, Nat.mod_eq_of_lt (UInt64.toNat_lt _)]
     constructor
     · intro h
-      refine ⟨value.val.toUInt64, ?_, ?_⟩ <;>
-        simp [h]
+      refine ⟨value.val.toUInt64, ?_, ?_⟩ <;> simp [h]
     · rintro ⟨i, hi, rfl⟩
       rwa [ZMod.val_cast_of_lt (by linarith [pGt.out])]
 
@@ -82,8 +81,8 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
     set carry := env.get i₀
     obtain ⟨ hz, hcarry, heq ⟩ := h_holds
     intro hm h0 hx hy
-    have add_soundness := Theorems.soundness input_x input_y input_z 0 carry hx hy hz
-        (by left; trivial) hcarry
+    have add_soundness :=
+      Theorems.soundness input_x input_y input_z 0 carry hx hy hz (by left; trivial) hcarry
     simp_all
   completeness := by
     circuit_proof_start [bytes]
@@ -266,10 +265,12 @@ def add8Mode : Mode (F p) := .demand {
 /-- Channel-driven witness-generation metadata for each component of the ensemble. -/
 def config (fuel : ℕ) : Config (F p) where
   components := [
-    ((fib8 (p := p)).name,
-        { mode := fibMode, padding := { input := #[0, 0, 0, 0], minimumRows := 32 } }),
-    ((add8 (p := p)).name,
-        { mode := add8Mode, padding := { input := #[0, 0, 0, 0], minimumRows := 32 } }),
+    ((fib8 (p := p)).name, {
+      mode := fibMode
+      padding := { input := #[0, 0, 0, 0], minimumRows := 32 } }),
+    ((add8 (p := p)).name, {
+      mode := add8Mode
+      padding := { input := #[0, 0, 0, 0], minimumRows := 32 } }),
     ((bytes (p := p)).name, bytes.generation)
   ]
   fuel := fuel

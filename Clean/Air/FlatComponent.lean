@@ -9,8 +9,8 @@ namespace Air.Flat
 variable {F : Type}
 
 /-- Public, index-addressed columns supplied by the verifier rather than committed by the prover.
-  Each row is a value of the provable type `Row`, computed from the row index by a witness program,
-  which Lean and extracted backends evaluate identically. -/
+Each row is a value of the provable type `Row`, computed from the row index by a witness program,
+which Lean and extracted backends evaluate identically. -/
 structure FixedColumns (F : Type) where
   {Row : TypeMap} [provableRow : ProvableType Row]
   height : UInt64
@@ -60,21 +60,21 @@ def rowPrefix (n : ℕ) (row : Array F) : Vector F n :=
   ⟨(List.ofFn (fun i : Fin n => row[i.val]?.getD 0)).toArray, by simp⟩
 
 /-- The fixed-column fact about the input of row `i`: the row lies within the fixed height, and the
-  input's first elements are the row's fixed values. -/
+input's first elements are the row's fixed values. -/
 @[circuit_norm]
 def FixedInputAt (fixedColumns : Option (FixedColumns F)) (i : UInt64) (input : Input F) : Prop :=
   ∀ fixed ∈ fixedColumns,
     i < fixed.height ∧ (toElements input).toList.take fixed.width = (fixed.values i).toList
 
 /-- The derived-data fact about the input of row `i`: it is row `i` of the component's `ProverData`
-  entry. -/
+entry. -/
 @[circuit_norm]
 def DataInputAt (name : String) (i : UInt64) (input : Input F) (data : ProverData F) : Prop :=
   (data.getRows name Input)[i.toNat]? = some input
 
 lemma valueFromOffset_fromArray (row : Array F) (data : ProverData F) :
-    valueFromOffset Input 0 (Environment.fromArray row data) = fromElements
-        (rowPrefix (size Input) row) := by
+    valueFromOffset Input 0 (Environment.fromArray row data) =
+      fromElements (rowPrefix (size Input) row) := by
   simp only [valueFromOffset]
   congr 1
   ext j hj
@@ -94,7 +94,7 @@ structure Component (F : Type) [FiniteField F] where
   /-- Assumptions still required from the enclosing ensemble after fixed-row and data facts. -/
   Assumptions : Input F → ProverData F → Prop := fun _ _ => True
   /-- Fixed-row and derived-data facts, together with the residual assumptions, imply the
-    assumptions of the underlying row circuit. -/
+  assumptions of the underlying row circuit. -/
   circuit_assumptions_of_assumptions : ∀ (i : UInt64) (input : Input F) data,
       FixedInputAt fixedColumns i input → DataInputAt circuit.name i input data →
         Assumptions input data → circuit.Assumptions input data := by intros; trivial
@@ -233,8 +233,8 @@ theorem weakSoundness {component : Component F} {env : Environment F} :
   set inputVar := varFromOffset component.Input 0
   set ops := (component.circuit.main inputVar).operations (size component.Input)
   have h_assumptions' : component.circuit.Assumptions (eval env inputVar) env.data := by
-    simpa only [CircuitAssumptions, rowInput, inputVar, eval_varFromOffset_valueFromOffset] using
-        h_assumptions
+    simpa only [CircuitAssumptions, rowInput, inputVar, eval_varFromOffset_valueFromOffset]
+      using h_assumptions
   convert component.circuit.original_full_soundness _ _ _ h_assumptions' h_constraints h_guarantees
   simp only [rowInput, inputVar, eval_varFromOffset_valueFromOffset]
   rfl
@@ -374,8 +374,8 @@ lemma circuitAssumptions_of_dataConsistency (table : Table F) (consistent : tabl
       · intro j hj _
         simp only [List.length_take, Vector.length_toList] at hj
         simp [rowPrefix, show j < row.size by omega]
-  · simp only
-      [DataInputAt, ProverData.getRows, Component.rowInput, valueFromOffset_fromArray, hindex]
+  · simp only [DataInputAt, ProverData.getRows, Component.rowInput, valueFromOffset_fromArray,
+      hindex]
     rw [consistent]
     simp [proverRows, i.isLt, hi']
   · exact assumptions row hrow
@@ -583,11 +583,11 @@ theorem weakSoundness {table : Table F} (consistent : table.DataConsistency) :
   constructor
   · intro row hrow
     exact (table.component.weakSoundness
-        (table.circuitAssumptions_of_dataConsistency consistent assumptions row hrow)
+      (table.circuitAssumptions_of_dataConsistency consistent assumptions row hrow)
       (constraints row hrow) (guarantees row hrow)).left
   · intro row hrow
     exact (table.component.weakSoundness
-        (table.circuitAssumptions_of_dataConsistency consistent assumptions row hrow)
+      (table.circuitAssumptions_of_dataConsistency consistent assumptions row hrow)
       (constraints row hrow) (guarantees row hrow)).right
 
 /--
@@ -615,7 +615,7 @@ lemma requirements_of_partial_guarantees_of_constraints {table : Table F}
     exact this i hi
   suffices table.component.operations.FullGuarantees env from
     table.component.weakSoundness
-        (table.circuitAssumptions_of_dataConsistency consistent assumptions row h_row)
+      (table.circuitAssumptions_of_dataConsistency consistent assumptions row h_row)
       (constraints row h_row) this |>.right
   simp only [Component.guarantees_iff, Component.rowOperations]
   rw [GeneralFormalCircuit.guarantees_iff]

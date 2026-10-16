@@ -238,7 +238,8 @@ instance : NonEmptyProvableType fieldTriple where
     toElements (M := fieldPair) (x, y) = #v[x, y] := rfl
 @[circuit_norm] lemma toElements_fieldTriple {F : Type} (x y z : F) :
     toElements (M := fieldTriple) (x, y, z) = #v[x, y, z] := rfl
-@[circuit_norm] lemma fromElements_field {F : Type} (x : F) : fromElements (M := field) #v[x] = x := rfl
+@[circuit_norm] lemma fromElements_field {F : Type} (x : F) :
+    fromElements (M := field) #v[x] = x := rfl
 @[circuit_norm] lemma fromElements_fieldPair {F : Type} (x y : F) :
     fromElements (M := fieldPair) #v[x, y] = (x, y) := rfl
 @[circuit_norm] lemma fromElements_fieldTriple {F : Type} (x y z : F) :
@@ -465,7 +466,7 @@ lemma toList_componentsToElements {F : Type} :
     simp [componentsToElements, componentsToList, toList_componentsToElements cs as]
 
 /-- The elements of a structure, as a list, are those of its components. Applied before simp
-  descends into `toElements`, so that the elements of a structure literal compute. -/
+descends into `toElements`, so that the elements of a structure literal compute. -/
 @[circuit_norm ↓] lemma toList_toElements {α : TypeMap} [ProvableStruct α] {F : Type} (x : α F) :
     (toElements x).toList = componentsToList (components α) (toComponents x) := by
   change (structToElements x).toList = _

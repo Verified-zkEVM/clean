@@ -16,8 +16,8 @@ namespace Witgen
 variable {F : Type}
 
 /-- A structured, index-aware program producing one row segment. Unlike `WitgenIR`, this has no
-  native-closure escape hatch and can therefore be interpreted identically by Lean and extracted
-  backends. -/
+native-closure escape hatch and can therefore be interpreted identically by Lean and extracted
+backends. -/
 structure RowProgram (F : Type) where
   width : ℕ
   steps : List (Step F)
@@ -26,7 +26,7 @@ structure RowProgram (F : Type) where
 namespace RowProgram
 
 /-- Evaluate a row program at `row`, which `U64Expr.idx` reads. Prover row programs may read `hint`;
-  fixed-column programs cannot. -/
+fixed-column programs cannot. -/
 def eval [FiniteField F] (program : RowProgram F) (row : UInt64) (hint : ProverHint F) :
     Vector F program.width :=
   let env : ProverEnvironment F := {
@@ -94,7 +94,7 @@ def RowProgram.Source.allowsHints : RowProgram.Source → Bool
 mutual
 
 /-- Whether an expression is valid in a row program. These programs have no circuit-row or
-  semantic-data environment. Prover row programs additionally read hints; fixed programs do not. -/
+semantic-data environment. Prover row programs additionally read hints; fixed programs do not. -/
 def FExpr.validForRow (source : RowProgram.Source) : FExpr F → Bool
   | .expr _ => false
   | .const _ | .localVar _ => true

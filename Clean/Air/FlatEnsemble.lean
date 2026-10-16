@@ -15,7 +15,7 @@ variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
 
 /-- Channels on which a participant of an ensemble, a component or the verifier, adds guarantees and
-  requirements. -/
+requirements. -/
 class ChannelInterface (α : Type u) (F : outParam Type) where
   channelsWithGuarantees : α → List (RawChannel F)
   channelsWithRequirements : α → List (RawChannel F)
@@ -41,7 +41,7 @@ end ChannelInterface
 
 structure Ensemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO] where
   /-- Components form an ordered map: names are keys, while list order fixes the trace order
-    consumed by witness generation and backend extraction. -/
+  consumed by witness generation and backend extraction. -/
   tables : List (Component F)
   unique_names : (tables.map (·.circuit.name)).Nodup
   channels : List (RawChannel F)
@@ -131,8 +131,8 @@ lemma verifierChannelGuarantees_of_not_mem
 lemma verifierGuarantees_iff (ens : Ensemble F PublicIO) (publicInput : PublicIO F)
     (data : ProverData F) :
     ens.VerifierGuarantees publicInput data ↔
-      ∀ channel ∈ ens.verifier.channelsWithGuarantees, ens.VerifierChannelGuarantees publicInput
-          data channel :=
+      ∀ channel ∈ ens.verifier.channelsWithGuarantees,
+        ens.VerifierChannelGuarantees publicInput data channel :=
   Operations.guarantees_iff ens.verifierOperations ens.verifier.channelsWithGuarantees _
     (ens.verifier.operations.circuitOperations_inChannelsOrGuaranteesFull _)
 
@@ -329,7 +329,7 @@ def Completeness (ens : Ensemble F PublicIO) (Assumptions Spec : PublicIO F → 
 end Ensemble
 
 /-- A named hint table viewing the flattened private input: `rows` rows of `width` elements,
-  starting at element `offset`. Elements beyond the input read as zero. -/
+starting at element `offset`. Elements beyond the input read as zero. -/
 structure HintTable where
   key : String
   width : ℕ
@@ -338,7 +338,7 @@ structure HintTable where
 deriving Repr, DecidableEq
 
 /-- The hint tables `tables` take from the flattened private input `elements`. Like derived prover
-  data, rows are cut off or zero-padded at the requested width. -/
+data, rows are cut off or zero-padded at the requested width. -/
 def HintTable.hint (tables : List HintTable) (elements : Array F) : ProverHint F := fun key width =>
   match tables.find? (·.key == key) with
   | none => #[]
@@ -370,7 +370,7 @@ def hint (ens : FormalEnsemble F PublicIO) (proverInput : ens.ProverInput F) : P
   HintTable.hint ens.hintTables (toElements proverInput).toArray
 
 /-- Declare the prover's private input: its type, the hint tables viewing it, and the assumptions
-  witness generation needs. -/
+witness generation needs. -/
 def withProverInput (ens : FormalEnsemble F PublicIO) (ProverInput : TypeMap)
     [ProvableType ProverInput] (hintTables : List HintTable)
     (ProverAssumptions : PublicIO F → ProverInput F → Prop) : FormalEnsemble F PublicIO where
@@ -409,7 +409,7 @@ def SpecConsistency (ens : Ensemble F PublicIO) (Spec : PublicIO F → Prop) : P
     Spec witness.publicInput
 
 /-- Ensemble-level assumptions imply every component's residual assumptions, for all inputs and
-  prover data. -/
+prover data. -/
 @[circuit_norm]
 def AssumptionsConsistency (ens : Ensemble F PublicIO) (Assumptions : PublicIO F → Prop) : Prop :=
   ∀ publicInput, Assumptions publicInput →

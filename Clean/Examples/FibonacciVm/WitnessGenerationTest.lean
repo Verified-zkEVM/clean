@@ -106,7 +106,7 @@ def configErrors : List String :=
     | .ok _ => ""
 
 /-- Generation metadata is looked up by component name; missing, duplicate, and unknown entries are
-  rejected. -/
+rejected. -/
 example : configErrors = [
     "component 'fibonacci' has no generation config",
     "component 'fibonacci' has multiple generation configs",

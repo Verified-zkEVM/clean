@@ -95,8 +95,8 @@ def Completeness (lookup : Lookup F) (env : Environment F) : Prop :=
 lemma soundness_of_vector {Row : TypeMap} [ProvableType Row]
     (table : Table F Row) (env : Environment F) (entry : Vector (Expression F) (size Row)) :
     let lookup : Lookup F := { table := table.toRaw, entry };
-    lookup.Soundness env ↔
-      table.Soundness (env.data.getTable table) (fromElements (entry.map (Expression.eval env))) :=
+    lookup.Soundness env ↔ table.Soundness (env.data.getTable table)
+      (fromElements (entry.map (Expression.eval env))) :=
   .rfl
 
 /-- Lookup completeness for an entry given as a vector of elements, e.g. a vector literal. -/
@@ -104,8 +104,8 @@ lemma soundness_of_vector {Row : TypeMap} [ProvableType Row]
 lemma completeness_of_vector {Row : TypeMap} [ProvableType Row]
     (table : Table F Row) (env : Environment F) (entry : Vector (Expression F) (size Row)) :
     let lookup : Lookup F := { table := table.toRaw, entry };
-    lookup.Completeness env ↔
-      table.Completeness (env.data.getTable table) (fromElements (entry.map (Expression.eval env))) :=
+    lookup.Completeness env ↔ table.Completeness (env.data.getTable table)
+      (fromElements (entry.map (Expression.eval env))) :=
   .rfl
 
 @[circuit_norm]

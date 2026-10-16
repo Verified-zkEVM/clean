@@ -66,8 +66,8 @@ def provider : GeneralFormalCircuit F (ProvablePair Row field) unit where
 omit [FiniteField F] in
 /-- The first elements of a pair are those of its first component. -/
 lemma take_toElements_pair {β : TypeMap} [ProvableType β] (a : Row F) (b : β F) (n : ℕ)
-    (h : n = size Row) : (toElements (M := ProvablePair Row β) (a, b)).toList.take n =
-        (toElements a).toList := by
+    (h : n = size Row) :
+    (toElements (M := ProvablePair Row β) (a, b)).toList.take n = (toElements a).toList := by
   subst h
   simp only [toElements, Vector.toList_append]
   exact List.take_left' Vector.length_toList
@@ -81,7 +81,7 @@ def component : Component F where
     rintro i ⟨value, multiplicity⟩ data hfixed - -
     obtain ⟨hi, hrow⟩ := hfixed _ rfl
     replace hrow :=
-        (take_toElements_pair value multiplicity lookup.fixedColumns.width rfl).symm.trans hrow
+      (take_toElements_pair value multiplicity lookup.fixedColumns.width rfl).symm.trans hrow
     change lookup.Contains value
     refine (lookup.contains_iff value).mpr ⟨i, hi, ?_⟩
     have h : toElements value = toElements ((lookup.row .idx).evalRow i) :=
@@ -93,12 +93,11 @@ def component : Component F where
     lookup.component.circuit.channelsWithGuarantees = [] := rfl
 @[circuit_norm] lemma component_channelsWithRequirements :
     lookup.component.circuit.channelsWithRequirements = [lookup.channel.toRaw] := rfl
-@[circuit_norm] lemma component_assumptions (input : lookup.component.Input F) (data : ProverData F)
-    :
-    lookup.component.Assumptions input data = True := rfl
+@[circuit_norm] lemma component_assumptions (input : lookup.component.Input F)
+    (data : ProverData F) : lookup.component.Assumptions input data = True := rfl
 
 /-- Witness generation for the table: one preallocated row per table row, whose multiplicity counts
-  the pulls. -/
+the pulls. -/
 def generation : WitnessGeneration.Generation F where
   mode := .preallocated {
     rows := lookup.height
@@ -121,21 +120,21 @@ def addLookup (soundEns : SoundEnsemble F PublicIO) (lookup : Lookup F Row)
   soundEns.addTable lookup.component (List.nil_subset _)
     (fun channel h_channel h_mem =>
       not_finished
-          (List.mem_singleton.mp (show channel ∈ [lookup.channel.toRaw] from h_mem) ▸ h_channel))
+        (List.mem_singleton.mp (show channel ∈ [lookup.channel.toRaw] from h_mem) ▸ h_channel))
     fresh
     |>.addFinishedChannel lookup.channel.toRaw
 
 variable {soundEns : SoundEnsemble F PublicIO} {lookup : Lookup F Row} {fresh not_finished}
 
 @[circuit_norm] lemma addLookup_tables :
-    (soundEns.addLookup lookup fresh not_finished).tables = lookup.component :: soundEns.tables :=
-        rfl
+    (soundEns.addLookup lookup fresh not_finished).tables =
+      lookup.component :: soundEns.tables := rfl
 @[circuit_norm] lemma addLookup_channels :
-    (soundEns.addLookup lookup fresh not_finished).channels = lookup.channel.toRaw ::
-        soundEns.channels := rfl
+    (soundEns.addLookup lookup fresh not_finished).channels =
+      lookup.channel.toRaw :: soundEns.channels := rfl
 @[circuit_norm] lemma addLookup_finished :
-    (soundEns.addLookup lookup fresh not_finished).finished = lookup.channel.toRaw ::
-        soundEns.finished := rfl
+    (soundEns.addLookup lookup fresh not_finished).finished =
+      lookup.channel.toRaw :: soundEns.finished := rfl
 @[circuit_norm] lemma addLookup_verifier :
     (soundEns.addLookup lookup fresh not_finished).verifier = soundEns.verifier := rfl
 
