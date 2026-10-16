@@ -11,10 +11,9 @@ public import Clean.Utils.Primes
 This program exercises AP-relative, FP-relative, and immediate memory addressing.
 -/
 
-open Examples.FemtoCairo
-open Examples.FemtoCairo.Types
-
 namespace Examples.FemtoCairo.FlatAirTestData
+
+open Types
 
 /-- Seven instructions followed by one padding instruction. -/
 def testProgram : Array (F pBabybear) :=

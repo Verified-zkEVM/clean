@@ -10,9 +10,8 @@ public import Clean.Examples.FemtoCairo.FemtoCairo
 namespace Examples.FemtoCairo.FlatAir
 
 open Air.Flat
-open Examples.FemtoCairo
-open Examples.FemtoCairo.Types
-open Examples.FemtoCairo.Spec
+open Types
+open Spec
 
 variable {p : ℕ} [Fact p.Prime] [p_large_enough : Fact (p > 512)]
 
@@ -227,11 +226,11 @@ def femtoCairoStepMain (program : Array (F p)) (h_program : ValidProgram program
     (state : Var State (F p)) :
     Circuit (F p) (Var State (F p)) := do
   let raw ← fetchInstruction program h_program state.pc
-  let decoded ← Examples.FemtoCairo.decodeInstruction raw.rawInstrType
+  let decoded ← decodeInstruction raw.rawInstrType
   let v1 ← readFromMemory { state, offset := raw.op1, mode := decoded.mode1 }
   let v2 ← readFromMemory { state, offset := raw.op2, mode := decoded.mode2 }
   let v3 ← readFromMemory { state, offset := raw.op3, mode := decoded.mode3 }
-  Examples.FemtoCairo.nextState { state, decoded, v1, v2, v3 }
+  nextState { state, decoded, v1, v2, v3 }
 
 @[reducible]
 instance (program : Array (F p)) (h_program : ValidProgram program) :
@@ -252,8 +251,8 @@ theorem femtoCairoStepSoundness (program : Array (F p)) (h_program : ValidProgra
       (fun _ _ => True) (femtoCairoStepSpec program) := by
   circuit_proof_start [femtoCairoStepSpec, femtoCairoStepAssumptions, femtoCairoStepMain,
     Spec.femtoCairoMachineTransition, fetchInstruction, readFromMemory,
-    Examples.FemtoCairo.nextState, Examples.FemtoCairo.decodeInstruction,
-    Examples.FemtoCairo.decodeInstructionSpec, Gadgets.toBits]
+    nextState, decodeInstruction,
+    decodeInstructionSpec, Gadgets.toBits]
   obtain ⟨pc_var, ap_var, fp_var⟩ := input_var
   obtain ⟨pc, ap, fp⟩ := input
   simp only [circuit_norm, explicit_provable_type, State.mk.injEq] at h_input
@@ -303,8 +302,8 @@ theorem femtoCairoStepCompleteness (program : Array (F p)) (h_program : ValidPro
     GeneralFormalCircuit.Completeness (F p) (femtoCairoStepMain program h_program)
       (femtoCairoStepAssumptions program) (fun _ _ _ => True) := by
   circuit_proof_start [femtoCairoStepAssumptions, femtoCairoStepMain,
-    fetchInstruction, Examples.FemtoCairo.decodeInstruction, readFromMemory,
-    Examples.FemtoCairo.nextState, Gadgets.toBits]
+    fetchInstruction, decodeInstruction, readFromMemory,
+    nextState, Gadgets.toBits]
   obtain ⟨h_memory_completeness, h_transition_isSome⟩ := h_assumptions
   have h_decompose := Spec.transition_isSome_implies_computeNextState_isSome
     program (memory env.data) input h_transition_isSome
@@ -330,7 +329,7 @@ theorem femtoCairoStepCompleteness (program : Array (F p)) (h_program : ValidPro
   simp only [h_fetch, circuit_norm, explicit_provable_type, RawInstruction.mk.injEq] at h_fetch_env
   obtain ⟨h_rawInstrType, h_op1, h_op2, h_op3⟩ := h_fetch_env
   specialize h_decode_env (by rw [h_rawInstrType]; exact h_instr_bound)
-  simp only [Examples.FemtoCairo.decodeInstructionSpec, h_rawInstrType, h_decode] at h_decode_env
+  simp only [decodeInstructionSpec, h_rawInstrType, h_decode] at h_decode_env
   obtain ⟨h_instr_type_val, h_instr_type_encoded_correctly, h_mode1_val,
     h_mode1_encoded_correctly, h_mode2_val, h_mode2_encoded_correctly,
     h_mode3_val, h_mode3_encoded_correctly⟩ := h_decode_env

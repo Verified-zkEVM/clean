@@ -13,9 +13,8 @@ open Examples.FemtoCairo.FlatAirTestData
 
 def main : IO Unit := do
   match Backends.Plonky3.Print.ensembleToRust
-      (Examples.FemtoCairo.FlatAir.formalEnsemble testProgram testProgram_valid memorySize_lt
-        initialState)
-      (Examples.FemtoCairo.FlatAir.Witness.config (memorySize := 8)
-        testProgram testProgram_valid initialState 8 1000) with
+      (FlatAir.formalEnsemble testProgram testProgram_valid memorySize_lt initialState)
+      (FlatAir.Witness.config (memorySize := 8) testProgram testProgram_valid initialState 8 1000)
+      with
   | .ok rust => IO.print rust
   | .error error => throw (IO.userError error)

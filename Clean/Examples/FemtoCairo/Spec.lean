@@ -9,7 +9,7 @@ public import Clean.Examples.FemtoCairo.Types
 
 namespace Examples.FemtoCairo.Spec
 open Utils.Bits
-open Examples.FemtoCairo.Types
+open Types
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 /--

@@ -13,9 +13,8 @@ public import Clean.Examples.FemtoCairo.TypesLemmas
 namespace Examples.FemtoCairo
 open Gadgets
 open Utils.Bits
-open Examples.FemtoCairo
-open Examples.FemtoCairo.Types
-open Examples.FemtoCairo.Spec
+open Types
+open Spec
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 /--
@@ -156,7 +155,7 @@ def fetchInstruction
     (program : Array (F p)) (h_program : ValidProgram program) :
     GeneralFormalCircuit (F p) field RawInstruction where
   main (pc : Expression (F p)) := do
-    let programTable := .staticOfArray "program" program h_program.size_lt
+    let programTable := Table.staticOfArray "program" program h_program.size_lt
 
     let rawInstrType ← witness program[pc.val]
     let op1 ← witness program[pc.val + 1]

@@ -16,10 +16,9 @@ public meta import Clean.Utils.Primes
 namespace Examples.FemtoCairo.FlatAirTest
 
 open Air.Flat
-open Examples.FemtoCairo
-open Examples.FemtoCairo.Types
-open Examples.FemtoCairo.FlatAir
-open Examples.FemtoCairo.FlatAirTestData
+open Types
+open FlatAir
+open FlatAirTestData
 open Air.Flat.WitnessGeneration
 
 def memoryValues : fields 8 (F pBabybear) :=
@@ -33,7 +32,7 @@ def finalRegisters : fieldPair (F pBabybear) := (0, 0)
 
 def generateResult (memoryValues : fields 8 (F pBabybear)) (executionRows : UInt64 := 8) :
     Except String (List ℕ × Bool × Bool × ℕ × ℕ × ℕ) :=
-  match Examples.FemtoCairo.FlatAir.Witness.generate
+  match Witness.generate
       (p := pBabybear) (memorySize := 8)
       testProgram testProgram_valid memorySize_lt
       memoryValues initialState finalRegisters executionRows 1000 with
