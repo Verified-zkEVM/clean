@@ -1,6 +1,7 @@
 module
 
 public import Clean.Circuit
+public import Clean.Air.ResourceHistory
 public import Clean.Examples.WitnessExport
 public import Clean.Utils.FiniteField
 public import Clean.Utils.SourceSinkPath

@@ -26,11 +26,19 @@ It also proves the basic row-level transport lemmas: instantiated component oper
 
 **Ensemble-level soundness** is more than a simple lifting of per-circuit soundness: it requires that channel guarantees, which were _assumed_ as part of local circuit proofs, are shown to hold unconditionally from global channel balance and constraints.
 
-The library currently provides two distinct arguments to establish soundness, covering two prominent ways of using channels:
+The library provides several arguments for ensemble soundness, suited to different uses of channels:
 
 `OrderedChannels.lean` contains a staged channel construction for ordinary lookup-like channels. The defining property is a strict hierarchy on the list of component tables: any table that pushes to a channel must come before every table that pulls from it. From little more than this property, we prove ensemble-level soundness, as encapsulated in the `SoundEnsemble` structure. On the way, we introduce a relaxed notion of channel balance called `PartialBalancedChannels` that allows the balanced interaction list to contain additional interactions from tables added later. This makes it suitable for an inductive argument or gradual addition of tables to an existing sound ensemble.
 
 `Vm.lean` contains a construction aimed at "VM-like" components that perform one transition per row. Since VM components both pull from and push to one distinguished state channel, they cannot follow the theory of ordered lookup-channel soundness. Instead, we prove a dedicated soundness theorem that applies to a set of VM components added to an existing hierarchical ensemble; a typical modern zkVMs layout.
+
+`ResourceHistory.lean` provides the stronger interface for distributed mutable resources:
+exact physical-ledger views, exhaustive event histories, current-record replay, and semantic
+grounding over the same event occurrences. `Realizes.lean` adds complete realization with
+relational boundary authentication and a data-driven witness compiler. The existing VM theorem
+remains useful for endpoint properties that permit unused cycles. See
+[`doc/resource-histories.md`](../../doc/resource-histories.md) for a worked memory example,
+the proof obligations at each layer, and extension contracts.
 
 ## Relation To Clean/Table
 
