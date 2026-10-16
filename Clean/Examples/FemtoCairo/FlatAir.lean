@@ -584,7 +584,8 @@ the reads of that address. -/
 def memoryGeneration (memorySize : UInt64) : WitnessGeneration.Generation (F p) where
   mode := .preallocated {
     rows := memorySize
-    input := { Row := fieldPair, row i := pure (.hintGet memoryValuesKey 1 i 0, 0) }
+    Row := fieldPair
+    row i := pure (.hintGet memoryValuesKey 1 i 0, 0)
     handlers := [{ interaction := 0, column := 2 }]
   }
   padding := { input := #[0, 0, 0], minimumRows := memorySize }

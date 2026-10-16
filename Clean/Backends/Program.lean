@@ -310,7 +310,7 @@ def lowerMode (index : ℕ) (component : ComponentProgram F) :
     Mode F → Except LoweringError (ModeProgram F)
   | .demand mode => pure (.demand mode)
   | .preallocated mode => do
-      let input ← lowerRowProgram (.malformedInitializer index) mode.input
+      let input ← lowerRowProgram (.malformedInitializer index) mode.toRowProgram
       let handlers ← mode.handlers.mapM (lowerHandler index component)
       return .preallocated mode.rows input handlers
 

@@ -100,7 +100,8 @@ the pulls. -/
 def generation : WitnessGeneration.Generation F where
   mode := .preallocated {
     rows := lookup.height
-    input := { Row := field, row _ := pure 0 }
+    Row := field
+    row _ := pure 0
     handlers := [{ interaction := 0, column := size Row }]
   }
   padding := { input := .replicate (size Row + 1) 0, minimumRows := lookup.height }

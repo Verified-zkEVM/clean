@@ -68,11 +68,10 @@ structure PreallocatedHandler where
   interaction : ℕ
   column : ℕ
 
-/-- Rows allocated before channel balancing. `input` computes the input of each row after its fixed
+/-- Rows allocated before channel balancing. `row` computes the input of each row after its fixed
 columns. -/
-structure PreallocatedMode (F : Type) where
+structure PreallocatedMode (F : Type) extends Witgen.RowProgram F .prover where
   rows : UInt64
-  input : Witgen.RowProgram F .prover
   handlers : List PreallocatedHandler
 
 /-- Whether rows are generated on demand or allocated before channel balancing. -/
@@ -292,8 +291,8 @@ def validateGeneration (component : Component F) (generation : Generation F) :
           unless index < mode.channel.arity do
             throw (.demandMessageIndex name index mode.channel.arity)
   | .preallocated preallocated =>
-      unless fixedWidth + preallocated.input.width = inputWidth do
-        throw (.preallocatedWidth name (inputWidth - fixedWidth) preallocated.input.width)
+      unless fixedWidth + preallocated.width = inputWidth do
+        throw (.preallocatedWidth name (inputWidth - fixedWidth) preallocated.width)
       for handler in preallocated.handlers do
         unless handler.interaction < component.rowOperations.interactions.length do
           throw (.preallocatedInteraction name handler.interaction)
@@ -491,7 +490,7 @@ def initialInputs (state : ComponentState F) (hint : ProverHint F) : List (Array
   | .preallocated mode =>
       (List.range mode.rows.toNat).map fun row =>
         fixedPrefix state.component (UInt64.ofNat row) ++
-          (toElements (mode.input.eval (UInt64.ofNat row) hint)).toArray
+          (toElements (mode.eval (UInt64.ofNat row) hint)).toArray
 
 /-! ### Handling demand -/
 
