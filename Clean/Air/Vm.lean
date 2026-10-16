@@ -53,7 +53,7 @@ structure VmTables (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType
   channel : Channel F Message
 
   tables : List (Component F)
-  unique_names : (tables.map (·.circuit.name)).Nodup
+  unique_names : (tables.map (·.circuit.name)).Nodup := by simp
   verifier : Verifier.Program F PublicIO
 
   tables_channel : tables.Forall fun table =>
