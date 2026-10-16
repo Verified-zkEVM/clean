@@ -9,38 +9,16 @@ namespace Air.Flat
 variable {F : Type}
 
 /-- Verifier-known columns: `height` rows of type `Row`, computed from the row index. -/
-structure FixedColumns (F : Type) where
-  {Row : TypeMap} [provableRow : ProvableType Row]
+structure FixedColumns (F : Type) extends Witgen.RowProgram F .fixed where
   height : UInt64
-  /-- The row at index `i`. Fixed rows can't read prover data or hints. -/
-  row (i : Witgen.U64Expr F) : Witgen.M F (Row (Witgen.FExpr F))
-  valid : (Witgen.RowProgram.ofM (row .idx)).Valid .fixed := by
-    simp [circuit_norm]
-
-instance (fixed : FixedColumns F) : ProvableType fixed.Row := fixed.provableRow
 
 namespace FixedColumns
-
-abbrev width (fixed : FixedColumns F) : ℕ := size fixed.Row
-
-/-- The row program computing the fixed values. -/
-def program (fixed : FixedColumns F) : Witgen.RowProgram F := .ofM (fixed.row .idx)
-
 variable [FiniteField F]
 
 /-- The fixed values of row `i`. -/
+@[circuit_norm]
 def values (fixed : FixedColumns F) (i : UInt64) : Array F :=
-  (fixed.program.eval i (.empty F)).toArray
-
-/-- The fixed row `i`, as a value of the row type. -/
-@[circuit_norm]
-def rowValue (fixed : FixedColumns F) (i : UInt64) : fixed.Row F := (fixed.row .idx).evalRow i
-
-@[circuit_norm]
-lemma values_eq (fixed : FixedColumns F) (i : UInt64) :
-    fixed.values i = (toElements (fixed.rowValue i)).toArray := by
-  rw [values, program, Witgen.RowProgram.eval_ofM]
-  rfl
+  (toElements (fixed.eval i)).toArray
 
 /-- Every row starts with the fixed values of its index. -/
 abbrev RowsMatch (fixed : FixedColumns F) (rows : List (Array F)) : Prop :=
@@ -95,7 +73,7 @@ structure Component (F : Type) [FiniteField F] where
   circuit_assumptions_of_assumptions : ∀ (i : UInt64) (input : Input F) data,
       FixedInputAt fixedColumns i input → DataInputAt circuit.name i input data →
         Assumptions input data → circuit.Assumptions input data := by intros; trivial
-  fixed_width_le_input : (fixedColumns.map FixedColumns.width).getD 0 ≤ size Input := by
+  fixed_width_le_input : (fixedColumns.map (·.width)).getD 0 ≤ size Input := by
     simp <;> exact Nat.le_of_ble_eq_true rfl
 
 instance (t: Component F) : ProvableType t.Input := t.provableInput
@@ -103,7 +81,7 @@ instance (t: Component F) : ProvableType t.Output := t.provableOutput
 
 namespace Component
 def fixedWidth (component : Component F) : ℕ :=
-  component.fixedColumns.map FixedColumns.width |>.getD 0
+  component.fixedColumns.map (·.width) |>.getD 0
 
 def FixedRowsMatch (component : Component F) (rows : List (Array F)) : Prop :=
   match component.fixedColumns with
@@ -355,7 +333,7 @@ lemma circuitAssumptions_of_dataConsistency (table : Table F) (consistent : tabl
         Function.comp_apply] at hprefix
       have hsize : fixed.width ≤ row.size := by
         have := congrArg Array.size hprefix
-        simp [FixedColumns.values, FixedColumns.program, Witgen.RowProgram.ofM] at this
+        simp [FixedColumns.values] at this
         omega
       have hwidth : fixed.width ≤ size table.component.Input := by
         simpa [hcolumns] using table.component.fixed_width_le_input

@@ -399,7 +399,7 @@ def memoryComponent (memorySize : UInt64) (h_memorySize : memorySize.toNat < p) 
   fixedColumns := some (memoryFixedColumns memorySize)
   circuit_assumptions_of_assumptions := by
     rintro i ⟨address, value, multiplicity⟩ data hfixed hdata -
-    simp [memoryFixedColumns, FixedColumns.width, provideMemory, circuit_norm,
+    simp [memoryFixedColumns, Witgen.RowProgram.width, provideMemory, circuit_norm,
       explicit_provable_type] at hfixed hdata
     obtain ⟨hi, rfl⟩ := hfixed
     have hval : (i.toNat : F p).val = i.toNat := ZMod.val_cast_of_lt (by omega)
@@ -584,8 +584,7 @@ the reads of that address. -/
 def memoryGeneration (memorySize : UInt64) : WitnessGeneration.Generation (F p) where
   mode := .preallocated {
     rows := memorySize
-    input := .ofFExprs #v[.hintGet memoryValuesKey 1 .idx 0, .const 0]
-    input_valid := by rfl
+    input := { Row := fieldPair, row i := pure (.hintGet memoryValuesKey 1 i 0, 0) }
     handlers := [{ interaction := 0, column := 2 }]
   }
   padding := { input := #[0, 0, 0], minimumRows := memorySize }

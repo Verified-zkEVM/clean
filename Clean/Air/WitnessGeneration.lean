@@ -72,8 +72,7 @@ structure PreallocatedHandler where
 columns. -/
 structure PreallocatedMode (F : Type) where
   rows : UInt64
-  input : Witgen.RowProgram F
-  input_valid : input.Valid .prover
+  input : Witgen.RowProgram F .prover
   handlers : List PreallocatedHandler
 
 /-- Whether rows are generated on demand or allocated before channel balancing. -/
@@ -492,7 +491,7 @@ def initialInputs (state : ComponentState F) (hint : ProverHint F) : List (Array
   | .preallocated mode =>
       (List.range mode.rows.toNat).map fun row =>
         fixedPrefix state.component (UInt64.ofNat row) ++
-          (mode.input.eval (UInt64.ofNat row) hint).toArray
+          (toElements (mode.input.eval (UInt64.ofNat row) hint)).toArray
 
 /-! ### Handling demand -/
 

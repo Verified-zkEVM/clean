@@ -258,17 +258,15 @@ def lowerWitnesses (component : ℕ) (operations : List (FlatOperation F)) :
     | .witness _ code => return some (← lowerWitness component index code)
     | _ => return none
 
-def lowerRowProgram (error : LoweringError) (program : Witgen.RowProgram F) :
-    Except LoweringError (WitnessBlock F) :=
-  if h : witnessProgramWellFormed program.steps program.output then
-    .ok {
-      outputWidth := program.width
-      steps := program.steps
-      output := program.output
-      well_formed := h
-    }
-  else
-    .error error
+def lowerRowProgram {source : Witgen.RowProgram.Source} (error : LoweringError)
+    (program : Witgen.RowProgram F source) : Except LoweringError (WitnessBlock F) :=
+  match program.ir with
+  | .ir steps output =>
+    if h : witnessProgramWellFormed steps output then
+      .ok { outputWidth := program.width, steps, output, well_formed := h }
+    else
+      .error error
+  | .native _ => .error error
 
 def lowerComponent (index : ℕ) (component : Component F) :
     Except LoweringError (ComponentProgram F) := do
@@ -278,7 +276,7 @@ def lowerComponent (index : ℕ) (component : Component F) :
   let flat := operations.toFlat
   let witnesses ← lowerWitnesses index flat
   let fixedColumns ← component.fixedColumns.mapM fun fixed => do
-    let program ← lowerRowProgram (.malformedFixedProgram index) fixed.program
+    let program ← lowerRowProgram (.malformedFixedProgram index) fixed.toRowProgram
     return { height := fixed.height, program }
   let constraints := operations.constraints
   let interactions := operations.interactions
@@ -320,28 +318,31 @@ def lowerMode (index : ℕ) (component : ComponentProgram F) :
 def lower (ens : FormalEnsemble F PublicIO) (config : Config F) :
     Except LoweringError (Program F) := do
   let ensemble := ens.ensemble
-  let config ← (config.validate ensemble).mapError .config
-  let components ← ensemble.tables.zipIdx.mapM fun (component, index) =>
-    lowerComponent index component
-  let modes ← (components.zip config.generations).zipIdx.mapM
-    fun ((component, generation), index) =>
-    lowerMode index component generation.mode
-  let verifierOperations := ensemble.verifierOperations.toFlat
-  let verifierInteractions := FlatOperation.interactions verifierOperations
-  let verifierExpressions := verifierInteractions.flatMap fun interaction =>
-    interaction.mult :: interaction.msg.toList
-  match expressionsBadVariable (size PublicIO) verifierExpressions with
-  | some cellIndex => throw (.verifierVariable cellIndex (size PublicIO))
-  | none => pure ()
-  return {
-    publicInputWidth := size PublicIO
-    proverInputWidth := size ens.ProverInput
-    hintTables := ens.hintTables
-    components
-    verifierInteractions
-    modes
-    padding := config.generations.map (·.padding)
-    fuel := config.fuel
-  }
+  -- `ValidConfig` lives in a higher universe, so it is matched rather than bound
+  match config.validate ensemble with
+  | .error error => throw (.config error)
+  | .ok config =>
+    let components ← ensemble.tables.zipIdx.mapM fun (component, index) =>
+      lowerComponent index component
+    let modes ← (components.zip config.generations).zipIdx.mapM
+      fun ((component, generation), index) =>
+      lowerMode index component generation.mode
+    let verifierOperations := ensemble.verifierOperations.toFlat
+    let verifierInteractions := FlatOperation.interactions verifierOperations
+    let verifierExpressions := verifierInteractions.flatMap fun interaction =>
+      interaction.mult :: interaction.msg.toList
+    match expressionsBadVariable (size PublicIO) verifierExpressions with
+    | some cellIndex => throw (.verifierVariable cellIndex (size PublicIO))
+    | none => pure ()
+    return {
+      publicInputWidth := size PublicIO
+      proverInputWidth := size ens.ProverInput
+      hintTables := ens.hintTables
+      components
+      verifierInteractions
+      modes
+      padding := config.generations.map (·.padding)
+      fuel := config.fuel
+    }
 
 end Backends
