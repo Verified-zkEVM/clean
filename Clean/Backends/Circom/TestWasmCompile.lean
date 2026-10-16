@@ -238,9 +238,10 @@ def envRangeOps : List (Operation (F p1009)) :=
       cmd := "snarkjs", args := #["wtns", "calculate", wasmPath, "/tmp/poseidon1_input.json", "/tmp/poseidon1_witness.wtns"]
     }
     if snarkOut.exitCode ≠ 0 then throw <| IO.userError s!"FAIL: snarkjs: {snarkOut.stderr}"
-    -- Verify against Lean ground truth. The Poseidon1 output is the circuit
-    -- variable at index 402 (0-based signal 402), which is NOT the last signal
-    -- (later signals are intermediate constraint witnesses).
+    -- Verify against Lean ground truth. The Poseidon1 output is circuit
+    -- variable 401, represented by signal 402 in the default layout because
+    -- signal 0 is the constant wire. It is not the last signal because later
+    -- signals are intermediate constraint witnesses.
     -- Ground truths from Specs.PoseidonOptimized.poseidon1Opt:
     --   0 → 19014214495641488759237505126948346942972912379615652741039992445865937985820
     --   1 → 18586133768512220936620570745912940619677854269274689475585506675881198879027
@@ -254,7 +255,8 @@ def envRangeOps : List (Operation (F p1009)) :=
         cmd := "snarkjs", args := #["wtns", "calculate", wasmPath, "/tmp/poseidon1_input.json", "/tmp/poseidon1_witness.wtns"]
       }
       if r.exitCode ≠ 0 then throw <| IO.userError s!"FAIL: snarkjs input={input}: {r.stderr}"
-      -- Parse the wtns file: read signal 402 (32 bytes, little-endian)
+      -- Parse the wtns file: read signal 402 (32 bytes, little-endian), which
+      -- corresponds to circuit variable 401.
       let wtnsBytes ← IO.FS.readBinFile (System.FilePath.mk "/tmp/poseidon1_witness.wtns")
       -- wtns layout: "wtns"(4) version(4) nSections(4) id1(4) len1(8) n8(4) prime(n8) nWitnesses(4) id2(4) len2(8) witnesses...
       -- Section 2 header is id2(4)+len2(8), then witness data directly (nWitnesses is in section 1).
