@@ -306,6 +306,17 @@ def Subcircuit.ChannelsLawful (s : Subcircuit F n) : Prop :=
     FlatOperation.InChannelsOrRequirements s.channelsWithRequirements env s.ops.toFlat) ∧
   FlatOperation.channels s.ops.toFlat ⊆ s.channelsWithGuarantees ++ s.channelsWithRequirements
 
+open Classical in
+/-- A lawful subcircuit has no interactions on a channel outside its declared channels. -/
+@[circuit_norm]
+theorem Subcircuit.interactions_filter_eq_nil (s : Subcircuit F n) {channel : RawChannel F}
+    (h_lawful : s.ChannelsLawful)
+    (h : channel ∉ s.channelsWithGuarantees ++ s.channelsWithRequirements) :
+    (FlatOperation.interactions s.ops.toFlat).filter (fun i => i.channel = channel) = [] := by
+  rw [List.filter_eq_nil_iff]
+  intro i hi heq
+  exact h (h_lawful.2.2 (of_decide_eq_true heq ▸ List.mem_map_of_mem hi))
+
 @[reducible, circuit_norm]
 def Subcircuit.witnesses (sc : Subcircuit F n) env :=
   (FlatOperation.localWitnesses env sc.ops.toFlat).cast sc.localLength_eq.symm

@@ -887,18 +887,6 @@ theorem GeneralFormalCircuit.toSubcircuit_interactions
     GeneralFormalCircuit.WithHint.toSubcircuit]
   rw [Operations.toNested_toFlat, Operations.interactions_toFlat]
 
-open Classical in
-/-- A subcircuit has no interactions on a channel outside its declared channels. -/
-@[circuit_norm]
-theorem GeneralFormalCircuit.toSubcircuit_interactions_filter_eq_nil
-    (circuit : GeneralFormalCircuit F Input Output) {channel : RawChannel F}
-    (h : channel ∉ circuit.channelsWithGuarantees ++ circuit.channelsWithRequirements) :
-    (FlatOperation.interactions (circuit.toSubcircuit n input_var).ops.toFlat).filter
-      (fun i => i.channel = channel) = [] := by
-  rw [List.filter_eq_nil_iff, toSubcircuit_interactions]
-  intro i hi heq
-  exact h (of_decide_eq_true heq ▸ circuit.channels_subset input_var n (List.mem_map_of_mem hi))
-
 theorem FormalAssertion.toSubcircuit_interactions (circuit : FormalAssertion F Input) :
   FlatOperation.interactions (circuit.toSubcircuit n input_var).ops.toFlat =
     (circuit.main input_var |>.operations n |>.interactions) := by
