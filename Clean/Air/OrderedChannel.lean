@@ -601,12 +601,12 @@ lemma verifierChannelGuarantees_of_tableRequirements {ens : Ensemble F PublicIO}
     OrderedChannelRefl channel ens.verifier →
     witness.BalancedChannel channel →
     (∀ table ∈ witness.tables, table.ChannelRequirements channel) →
-      ens.VerifierChannelGuarantees witness.publicInput witness.data channel := by
+      ens.VerifierChannelGuarantees witness.data channel := by
   intro ordered balanced table_requirements
   rcases ordered with no_verifier_guarantees | no_verifier_requirements
-  · exact ens.verifierChannelGuarantees_of_not_mem _ _ no_verifier_guarantees
+  · exact ens.verifierChannelGuarantees_of_not_mem _ no_verifier_guarantees
   have verifier_requirements :=
-    ens.verifierChannelRequirements_of_not_mem witness.publicInput witness.data
+    ens.verifierChannelRequirements_of_not_mem witness.data
       no_verifier_requirements
   rw [witness.verifierChannelRequirements_iff_forall] at verifier_requirements
   -- all interactions satisfy their requirements, so by consistency they satisfy their guarantees
@@ -643,7 +643,7 @@ theorem tableSoundness_of_soundChannels {ens : Ensemble F PublicIO} :
       partialBalancedChannel_of_balancedChannel
         (ordered channel h_channel) (balance _ (finished_subset h_channel))
   -- their requirements imply the verifier guarantees
-  refine ⟨ens.verifierSpec_of_verifierGuarantees _ _ ?_,
+  refine ⟨witness.data_getPublicInput ▸ ens.verifierSpec_of_verifierGuarantees _ ?_,
     fun table h_table => (table_results table h_table).left⟩
   rw [verifierGuarantees_iff]
   intro channel h_channel

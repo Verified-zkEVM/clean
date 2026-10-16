@@ -752,7 +752,7 @@ def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensembl
   let data := generatedData initial (toElements publicInput).toArray
   let initial := initial.map fun state =>
     { state with rows := state.rows.map fun row => completeRow state row.input data hint none }
-  let verifier := ensemble.verifierOperations.interactionValues (.fromInput publicInput data)
+  let verifier := ensemble.verifierOperations.interactionValues data.publicEnvironment
   let rows := initial.flatMap fun state => state.rows.flatMap (rowInteractions state · data)
   let demands := Demand.addInteractions [] (verifier ++ rows)
   let generated ← generateLoop data hint config.fuel initial demands

@@ -61,6 +61,12 @@ def EnsembleWitness.data {ens : Ensemble F PublicIO} (witness : EnsembleWitness 
     ProverData F :=
   deriveProverData witness.tables (toElements witness.publicInput).toArray
 
+/-- The prover data of a witness holds its public input. -/
+@[circuit_norm]
+lemma EnsembleWitness.data_getPublicInput {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) :
+    witness.data.getPublicInput PublicIO = witness.publicInput :=
+  ProvableType.eval_fromInput_varFromOffset_zero witness.publicInput _
+
 @[circuit_norm]
 lemma List.flatMap_subset_iff {α β : Type*} {f : α → List β} {l₁ : List α} {l₂ : List β} :
     l₁.flatMap f ⊆ l₂ ↔ ∀ a ∈ l₁, f a ⊆ l₂ := by
@@ -85,54 +91,44 @@ def empty (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO
 abbrev verifierOperations (ens : Ensemble F PublicIO) : Operations F :=
   ens.verifier.circuitOperations
 
-def VerifierGuarantees (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : ProverData F) : Prop :=
-  ens.verifierOperations.FullGuarantees (.fromInput publicInput data)
+def VerifierGuarantees (ens : Ensemble F PublicIO) (data : ProverData F) : Prop :=
+  ens.verifierOperations.FullGuarantees data.publicEnvironment
 
 @[circuit_norm]
-def VerifierSpec (ens : Ensemble F PublicIO) (publicInput : PublicIO F)
-    (data : ProverData F) : Prop :=
+def VerifierSpec (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : ProverData F) :
+    Prop :=
   ens.verifier.Spec publicInput data
 
-lemma verifierSpec_of_verifierGuarantees (ens : Ensemble F PublicIO) (publicInput : PublicIO F)
-    (data : ProverData F) :
-    ens.VerifierGuarantees publicInput data → ens.VerifierSpec publicInput data := by
-  intro guarantees
-  have soundness := ens.verifier.soundness (.fromInput publicInput data) guarantees
-  simpa only [VerifierSpec, ProvableType.eval_fromInput_varFromOffset_zero] using soundness
+lemma verifierSpec_of_verifierGuarantees (ens : Ensemble F PublicIO) (data : ProverData F) :
+    ens.VerifierGuarantees data → ens.VerifierSpec (data.getPublicInput PublicIO) data :=
+  ens.verifier.soundness data
 
-def VerifierChannelGuarantees (ens : Ensemble F PublicIO) (publicInput : PublicIO F)
-    (data : ProverData F) (channel : RawChannel F) : Prop :=
-  ens.verifierOperations.ChannelGuarantees channel (.fromInput publicInput data)
+def VerifierChannelGuarantees (ens : Ensemble F PublicIO) (data : ProverData F)
+    (channel : RawChannel F) : Prop :=
+  ens.verifierOperations.ChannelGuarantees channel data.publicEnvironment
 
-def VerifierChannelRequirements (ens : Ensemble F PublicIO) (publicInput : PublicIO F)
-    (data : ProverData F) (channel : RawChannel F) : Prop :=
-  ens.verifierOperations.ChannelRequirements channel (.fromInput publicInput data)
+def VerifierChannelRequirements (ens : Ensemble F PublicIO) (data : ProverData F)
+    (channel : RawChannel F) : Prop :=
+  ens.verifierOperations.ChannelRequirements channel data.publicEnvironment
 
-lemma verifierChannelRequirements_of_not_mem
-    (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : ProverData F)
+lemma verifierChannelRequirements_of_not_mem (ens : Ensemble F PublicIO) (data : ProverData F)
     {channel : RawChannel F} :
     channel ∉ ens.verifier.channelsWithRequirements →
-      ens.VerifierChannelRequirements publicInput data channel := by
-  intro h_not_mem
-  exact Operations.requirements_of_not_mem ens.verifierOperations
-    ens.verifier.channelsWithRequirements (.fromInput publicInput data)
-    (ens.verifier.operations.circuitOperations_inChannelsOrRequirementsFull _) channel h_not_mem
+      ens.VerifierChannelRequirements data channel :=
+  Operations.requirements_of_not_mem ens.verifierOperations
+    ens.verifier.channelsWithRequirements data.publicEnvironment
+    (ens.verifier.operations.circuitOperations_inChannelsOrRequirementsFull _) channel
 
-lemma verifierChannelGuarantees_of_not_mem
-    (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : ProverData F)
+lemma verifierChannelGuarantees_of_not_mem (ens : Ensemble F PublicIO) (data : ProverData F)
     {channel : RawChannel F} :
-    channel ∉ ens.verifier.channelsWithGuarantees →
-      ens.VerifierChannelGuarantees publicInput data channel := by
-  intro h_not_mem
-  exact Operations.guarantees_of_not_mem ens.verifierOperations
-    ens.verifier.channelsWithGuarantees (.fromInput publicInput data)
-    (ens.verifier.operations.circuitOperations_inChannelsOrGuaranteesFull _) channel h_not_mem
+    channel ∉ ens.verifier.channelsWithGuarantees → ens.VerifierChannelGuarantees data channel :=
+  Operations.guarantees_of_not_mem ens.verifierOperations
+    ens.verifier.channelsWithGuarantees data.publicEnvironment
+    (ens.verifier.operations.circuitOperations_inChannelsOrGuaranteesFull _) channel
 
-lemma verifierGuarantees_iff (ens : Ensemble F PublicIO) (publicInput : PublicIO F)
-    (data : ProverData F) :
-    ens.VerifierGuarantees publicInput data ↔
-      ∀ channel ∈ ens.verifier.channelsWithGuarantees,
-        ens.VerifierChannelGuarantees publicInput data channel :=
+lemma verifierGuarantees_iff (ens : Ensemble F PublicIO) (data : ProverData F) :
+    ens.VerifierGuarantees data ↔
+      ∀ channel ∈ ens.verifier.channelsWithGuarantees, ens.VerifierChannelGuarantees data channel :=
   Operations.guarantees_iff ens.verifierOperations ens.verifier.channelsWithGuarantees _
     (ens.verifier.operations.circuitOperations_inChannelsOrGuaranteesFull _)
 
@@ -230,13 +226,13 @@ def Spec {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Prop :=
     ∀ table ∈ witness.tables, table.Spec
 
 def interactions {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : List (Interaction F) :=
-  ens.verifierOperations.interactionValues (.fromInput witness.publicInput witness.data) ++
+  ens.verifierOperations.interactionValues witness.data.publicEnvironment ++
     witness.tables.flatMap (fun table => table.interactions)
 
 noncomputable def verifierInteractionsWith {ens : Ensemble F PublicIO}
     (witness : EnsembleWitness ens) (channel : RawChannel F) : List (Interaction F) :=
   ens.verifierOperations.interactionValuesWith channel
-    (.fromInput witness.publicInput witness.data)
+    witness.data.publicEnvironment
 
 noncomputable def interactionsWith {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens)
     (channel : RawChannel F) : List (Interaction F) :=
@@ -263,7 +259,7 @@ lemma channel_eq_of_mem_interactionsWith {witness : EnsembleWitness ens}
 
 lemma verifierChannelRequirements_iff_forall {witness : EnsembleWitness ens}
     {channel : RawChannel F} :
-    ens.VerifierChannelRequirements witness.publicInput witness.data channel ↔
+    ens.VerifierChannelRequirements witness.data channel ↔
       ∀ i ∈ witness.verifierInteractionsWith channel, i.Requirements witness.data := by
   simp only [Ensemble.VerifierChannelRequirements, Operations.ChannelRequirements,
     Operations.forall_interactionsWith_iff, verifierInteractionsWith,
@@ -272,7 +268,7 @@ lemma verifierChannelRequirements_iff_forall {witness : EnsembleWitness ens}
 
 lemma verifierChannelGuarantees_iff_forall {witness : EnsembleWitness ens}
     {channel : RawChannel F} :
-    ens.VerifierChannelGuarantees witness.publicInput witness.data channel ↔
+    ens.VerifierChannelGuarantees witness.data channel ↔
       ∀ i ∈ witness.verifierInteractionsWith channel, i.Guarantees witness.data := by
   simp only [Ensemble.VerifierChannelGuarantees, Operations.ChannelGuarantees,
     Operations.forall_interactionsWith_iff, verifierInteractionsWith,

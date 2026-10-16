@@ -82,6 +82,10 @@ instance {α} : CoeOut (Environment F → α) (ProverEnvironment F → α) := �
   get j := row[j]?.getD 0
   data
 
+/-- The verifier's environment: its variables are the public input of the prover data. -/
+abbrev ProverData.publicEnvironment [Field F] (data : ProverData F) : Environment F :=
+  .fromArray data.publicInput data
+
 namespace Expression
 variable [Field F]
 
