@@ -436,53 +436,7 @@ def executeStep (program : Array (F p)) (h_program : ValidProgram program)
     expose (stateChannel program initialState)
       [pulledIf input.enabled input.state, pushedIf input.enabled nextState]
   exposedChannels_eq input i₀ := by
-    classical
-    have hfilter :
-        (FlatOperation.interactions
-          ((femtoCairoStep program h_program).toSubcircuit i₀ input.state).ops.toFlat).filter
-            (fun (interaction : AbstractInteraction (F p)) => decide (interaction.channel =
-              (stateChannel program initialState).toRaw)) = [] := by
-      rw [List.filter_eq_nil_iff]
-      intro interaction hinteraction heq
-      have hinteraction' : interaction ∈
-          (((femtoCairoStep program h_program).main input.state).operations i₀).interactions := by
-        rw [← GeneralFormalCircuit.toSubcircuit_interactions]
-        exact hinteraction
-      have hchannel : interaction.channel ∈
-          (((femtoCairoStep program h_program).main input.state).operations i₀).channels :=
-        List.mem_map.mpr ⟨interaction, hinteraction', rfl⟩
-      have hsubset := (femtoCairoStep program h_program).channels_subset input.state i₀ hchannel
-      have hneProgram : (stateChannel program initialState).toRaw ≠
-          (programLookup program h_program).channel.toRaw := by
-        intro heq
-        have hname := congrArg RawChannel.name heq
-        change "state" = "program" at hname
-        contradiction
-      have hneMemory : (stateChannel program initialState).toRaw ≠ memoryChannel.toRaw := by
-        intro heq
-        have hname := congrArg RawChannel.name heq
-        change "state" = "memory" at hname
-        contradiction
-      have hnot : (stateChannel program initialState).toRaw ∉
-          (femtoCairoStep program h_program).channels := by
-        change (stateChannel program initialState).toRaw ∉
-          [(programLookup program h_program).channel.toRaw,
-            (programLookup program h_program).channel.toRaw,
-            (programLookup program h_program).channel.toRaw,
-            (programLookup program h_program).channel.toRaw,
-            memoryChannel.toRaw, memoryChannel.toRaw, memoryChannel.toRaw,
-            memoryChannel.toRaw, memoryChannel.toRaw, memoryChannel.toRaw]
-        simp [hneProgram, hneMemory]
-      have heq' : interaction.channel = (stateChannel program initialState).toRaw :=
-        of_decide_eq_true heq
-      exact hnot (heq' ▸ hsubset)
-    have hfilter' :
-        (FlatOperation.interactions
-          ((femtoCairoStep program h_program).toSubcircuit (i₀ + 0) input.state).ops.toFlat).filter
-            (fun (interaction : AbstractInteraction (F p)) => decide (interaction.channel =
-              (stateChannel program initialState).toRaw)) = [] := by
-      simpa only [Nat.add_zero] using hfilter
-    simp only [circuit_norm, hfilter', List.nil_append]
+    simp [circuit_norm, femtoCairoStep, stateChannel]
 
   ProverAssumptions input data hint :=
     (input.enabled = 0 ∨
@@ -514,16 +468,6 @@ def executeStep (program : Array (F p)) (h_program : ValidProgram program)
 further instruction can be fetched. -/
 def haltedState (programSize : ℕ) (ap fp : F p) : State (F p) :=
   { pc := programSize, ap, fp }
-
-omit p_large_enough in
-/-- No transition leaves a halted state. -/
-lemma femtoCairoMachineTransition_haltedState
-    (program : Array (F p)) (h_program : ValidProgram program)
-    (memory : Array (F p)) (ap fp : F p) :
-    Spec.femtoCairoMachineTransition program memory (haltedState program.size ap fp) = none := by
-  have hval : (program.size : F p).val = program.size := ZMod.val_cast_of_lt h_program.size_lt
-  simp [Spec.femtoCairoMachineTransition, Spec.fetchInstruction, Spec.memoryAccess,
-    haltedState, hval]
 
 /-- The public input `(ap, fp)` claims that the program halts with these registers. -/
 def verifier (program : Array (F p))
@@ -582,15 +526,6 @@ def ProverAssumptions (program : Array (F p))
   | (ap, fp), memoryValues => ∃ steps,
       Spec.femtoCairoMachineBoundedExecution program memoryValues.toArray (some initialState)
         steps = some (haltedState program.size ap fp)
-
-omit p_large_enough in
-/-- The prover's assumptions are no stronger than the public statement. -/
-lemma spec_of_proverAssumptions {memorySize : UInt64}
-    (program : Array (F p)) (initialState : State (F p))
-    (registers : fieldPair (F p)) (memoryValues : fields memorySize.toNat (F p))
-    (h : ProverAssumptions program memorySize initialState registers memoryValues) :
-    Spec program memorySize initialState registers :=
-  ⟨_, memoryValues.size_toArray, h⟩
 
 /-- Name of the hint table holding the prover's memory values, one per address. -/
 def memoryValuesKey : String := "memoryValues"

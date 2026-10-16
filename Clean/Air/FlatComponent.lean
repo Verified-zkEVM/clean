@@ -118,9 +118,6 @@ def operations (component : Component F) : Operations F :=
 
 def width (component : Component F) : ℕ := component.circuit.size
 
-def committedWidth (component : Component F) : ℕ :=
-  component.width - component.fixedWidth
-
 @[circuit_norm]
 def rowOffset (component : Component F) : ℕ := size component.Input
 
