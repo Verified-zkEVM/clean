@@ -17,9 +17,7 @@ In this terminology, a `Flat.Component` is a one-row AIR component: it packages 
 - `Flat.Component`: the static one-row component, backed by a `GeneralFormalCircuit`.
 - `Flat.Table`: concrete array of rows for one component, together with the prover data used to evaluate constraints and channel interactions.
 - `Flat.Tables`: a bundle of tables sharing one prover data object.
-- `Flat.FixedColumns`: verifier-known columns that form a prefix of a component's input. Each row is a value of a provable `Row` type, computed from the row index by a witness program.
-
-A component's prover data is the list of complete inputs of every row, cut off at the requested width, keyed by the component's circuit name. A component states residual `Assumptions` (default `True`) such that, together with the facts its rows get for free, `FixedInputAt` (the input starts with the row's fixed values) and `DataInputAt` (the input is the row's entry in the prover data), they imply the circuit's assumptions.
+- `Flat.FixedColumns`: verifier-known columns that form a prefix of a component's input.
 
 It also proves the basic row-level transport lemmas: instantiated component operations agree with row operations, component soundness lifts to table soundness, and table interactions can be collected per channel.
 
@@ -29,9 +27,9 @@ It also proves the basic row-level transport lemmas: instantiated component oper
 
 `RowProgram.lean` defines index-aware row programs, which compute fixed columns and the prover-committed inputs of preallocated components.
 
-`Lookup.lean` defines static lookups, `Flat.Lookup`: a verifier-known table, given by its rows and what it means to be in the table, read by other components through a channel. A lookup provides its channel, the table component (fixed rows plus a multiplicity column), and its witness generation; `SoundEnsemble.addLookup` adds the table and finishes its channel.
+`Lookup.lean` defines a convenience wrapper for static lookups.
 
-`FlatEnsemble.lean` defines flat AIR ensembles, `Flat.Ensemble` and their witnesses, `Flat.EnsembleWitness`. An ensemble has components, channels, and an append-only verifier program. The verifier contributes public interactions directly; its operation type cannot create witnesses, constraints, lookups, or a synthetic table. Its `Statement` is the raw proof-system relation: there exists a witness whose table constraints hold and whose table and verifier interactions are balanced. Every table of a witness carries the prover data derived from all the witness tables. The ensemble file also defines soundness and completeness and the `FormalEnsemble` structure which bundles an ensemble with its `Spec`, `Assumptions` and the soundness proof (completeness is TODO).
+`FlatEnsemble.lean` defines flat AIR ensembles, `Flat.Ensemble` and their witnesses, `Flat.EnsembleWitness`. An ensemble has components, channels, and a verifier program. The verifier only contributes public interactions directly. Its `Statement` is the raw proof-system relation: there exists a witness whose table constraints hold and whose interactions are balanced. Every table of a witness carries the prover data derived from all the witness tables. The ensemble file also defines soundness and completeness and the `FormalEnsemble` structure which bundles an ensemble with its `Spec`, `Assumptions` and the soundness proof (completeness is TODO).
 
 **Ensemble-level soundness** is more than a simple lifting of per-circuit soundness: it requires that channel guarantees, which were _assumed_ as part of local circuit proofs, are shown to hold unconditionally from global channel balance and constraints.
 
@@ -41,9 +39,7 @@ The library currently provides two distinct arguments to establish soundness, co
 
 `Vm.lean` contains a construction aimed at "VM-like" components that perform one transition per row. Since VM components both pull from and push to one distinguished state channel, they cannot follow the theory of ordered lookup-channel soundness. Instead, we prove a dedicated soundness theorem that applies to a set of VM components added to an existing hierarchical ensemble; a typical modern zkVMs layout.
 
-`WitnessGeneration.lean` constructs ensemble witnesses from the public input and the prover's private input. A `FormalEnsemble` declares the type of its private input, the hint tables that witness programs read as views of the flattened private input, and the `ProverAssumptions` on public and private input that witness generation needs. Demand-driven components allocate rows from channel messages. Preallocated components initialize their prover-owned cells with row programs, which may read the hint, while the generic builder supplies any verifier-fixed prefix. Preallocated channel handlers identify an existing component interaction and a generated multiplicity column; messages and row indices are derived from completed rows rather than duplicated in generation metadata.
-
-The hint is only an input to honest witness construction. Semantic `ProverData` is always derived from the final committed component inputs. `Config.validate` permits `dataGet` only from stable cells of preallocated components and rejects reads from demand-generated or mutable cells. This makes the initial data snapshot used by witness generation agree with the final derived data at every readable location.
+`WitnessGeneration.lean` constructs ensemble witnesses from the public input and the prover's private input. A `FormalEnsemble` declares the type of its private input, the hint tables that witness programs read as views of the flattened private input, and the `ProverAssumptions` on public and private input that witness generation needs. Demand-driven components allocate rows from channel messages. Preallocated components initialize their prover-owned cells with row programs, which may read the hint, while the generic builder supplies any verifier-fixed prefix.
 
 ## Relation To Clean/Table
 

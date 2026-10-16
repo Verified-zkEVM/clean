@@ -29,11 +29,7 @@ namespace RowProgram
 fixed-column programs cannot. -/
 def eval [FiniteField F] (program : RowProgram F) (row : UInt64) (hint : ProverHint F) :
     Vector F program.width :=
-  let env : ProverEnvironment F := {
-    get := fun _ => 0
-    data := .empty F
-    hint
-  }
+  let env := { get _ := 0, data := .empty F, hint }
   program.output.eval {
     env
     locals := evalSteps env program.steps #[] row.toNat
