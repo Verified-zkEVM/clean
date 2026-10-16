@@ -46,7 +46,7 @@ def derivedBytesData : Bool :=
   match FibonacciWitness.generate publicInput 1000 with
   | .error _ => false
   | .ok witness =>
-      let rows := witness.data "bytes" 2
+      let rows := witness.data.tables "bytes" 2
       rows.size == 256 && match rows[42]? with
         | some row => row[0] == (42 : F pBabybear)
         | none => false
@@ -58,7 +58,7 @@ def dynamicComponentData : Bool :=
   match FibonacciWitness.generate publicInput 1000 with
   | .error _ => false
   | .ok witness =>
-      let rows := witness.data "fibonacci" 4
+      let rows := witness.data.tables "fibonacci" 4
       rows.size == 32 && match rows[0]? with
         | some row => row[0] == 1 && row[1] == 0 && row[2] == 0 && row[3] == 1
         | none => false
@@ -112,7 +112,6 @@ example : configErrors = [
     "component 'fibonacci' has multiple generation configs",
     "generation config names unknown component 'unknown'"] := by native_decide
 
-def noData : ProverData (F pBabybear) := fun _ _ => #[]
 
 def extractedFirstRow : Except String (Array (F pBabybear)) := do
   let program ← Backends.lower
@@ -121,7 +120,7 @@ def extractedFirstRow : Except String (Array (F pBabybear)) := do
     |>.mapError toString
   let some component := program.components[0]?
     | throw "extracted program has no Fibonacci component"
-  component.completeRow #[1, 0, 0, 1] noData
+  component.completeRow #[1, 0, 0, 1] (.empty _)
 
 /-- The typed extraction semantics execute the same row-local witness IR as the source circuit. -/
 example : extractedFirstRow = .ok #[1, 0, 0, 1, 1] := by native_decide

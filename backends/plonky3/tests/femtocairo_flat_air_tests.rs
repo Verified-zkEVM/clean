@@ -20,6 +20,11 @@ fn field(value: u64) -> BabyBear {
     BabyBear::from_u64(value)
 }
 
+/// The public input: the program starts at `pc = ap = fp = 0`, and halts with `ap = fp = 0`.
+fn public_values() -> Vec<BabyBear> {
+    vec![field(0); 5]
+}
+
 /// The prover's memory values, the private input of FemtoCairo witness generation.
 fn memory(values: [u64; 8]) -> Vec<BabyBear> {
     values.into_iter().map(field).collect()
@@ -28,7 +33,7 @@ fn memory(values: [u64; 8]) -> Vec<BabyBear> {
 #[test]
 fn extracted_femtocairo_witness_uses_committed_memory_data() {
     let memory_values = memory([0, 5, 3, 7, 2, 10, 0, 0]);
-    let witness = generated::generate(&[field(0), field(0)], &memory_values)
+    let witness = generated::generate(&public_values(), &memory_values)
         .expect("extracted FemtoCairo witness generation failed");
 
     assert_eq!(
@@ -42,7 +47,7 @@ fn extracted_femtocairo_witness_uses_committed_memory_data() {
 
 #[test]
 fn extracted_femtocairo_accepts_runtime_private_memories() {
-    let public_values = vec![field(0), field(0)];
+    let public_values = public_values();
     let first = memory([0, 5, 3, 7, 2, 10, 0, 0]);
     let second = memory([0, 5, 3, 7, 2, 10, 0, 99]);
 
@@ -69,7 +74,7 @@ fn extracted_femtocairo_accepts_runtime_private_memories() {
 #[test]
 fn extracted_femtocairo_air_proves_and_verifies() {
     let config = setup::test_config(7);
-    let public_values = vec![field(0), field(0)];
+    let public_values = public_values();
     let memory_values = memory([0, 5, 3, 7, 2, 10, 0, 0]);
     let witness = generated::generate(&public_values, &memory_values)
         .expect("extracted FemtoCairo witness generation failed");
@@ -140,7 +145,7 @@ impl GeneratedAirSpec for PermutedMemoryAddresses {
 #[test]
 fn verifier_rejects_permuted_memory() {
     let config = setup::test_config(19);
-    let public_values = vec![field(0), field(0)];
+    let public_values = public_values();
     let witness = generated::generate(&public_values, &memory([0, 5, 3, 7, 2, 10, 0, 0]))
         .expect("extracted FemtoCairo witness generation failed");
     let mut traces = witness.into_traces().expect("invalid extracted traces");

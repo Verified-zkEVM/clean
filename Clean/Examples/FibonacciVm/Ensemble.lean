@@ -237,7 +237,7 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
       Add8Channel, FibonacciChannel])
     (by simp [circuit_norm, fibonacciVm, fib8, add8,
       bytes])
-  |>.toFormal (fun _ => True)
+  |>.toFormal (fun _ _ => True)
     (fun (n, x, y) => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val)
     (by simp [circuit_norm, fibonacciVm, bytes])
     (by simp [circuit_norm, fibonacciVm, fibonacciVerifier])
@@ -306,11 +306,11 @@ transforms that state.
 Then let the guarantees/requirements access that state (the guarantees _before_ and the requiremtns
 _after_ the interaction).
 -/
-theorem fibonacci_soundness : ∀ (n x y : F p),
-  fibonacciEnsemble.ensemble.Statement (n, x, y) →
+theorem fibonacci_soundness : ∀ (n x y : F p) heights,
+  fibonacciEnsemble.ensemble.Statement (n, x, y) heights →
     ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val := by
-  intro n x y statement
-  exact fibonacciEnsemble.soundness (n, x, y) trivial statement
+  intro n x y heights statement
+  exact fibonacciEnsemble.soundness (n, x, y) heights trivial statement
 
 /-
 Fun fact! We can prove end-to-end soundness of a component that proves `False`

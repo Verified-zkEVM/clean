@@ -29,7 +29,7 @@ namespace RowProgram
 fixed-column programs cannot. -/
 def eval [FiniteField F] (program : RowProgram F) (row : UInt64) (hint : ProverHint F) :
     Vector F program.width :=
-  let env := { get _ := 0, data _ _ := #[], hint }
+  let env := { get _ := 0, data := .empty F, hint }
   program.output.eval {
     env
     locals := evalSteps env program.steps #[] row.toNat
@@ -57,7 +57,7 @@ def ofM {Row : TypeMap} [ProvableType Row] (program : M F (Row (FExpr F))) : Row
 @[circuit_norm]
 def fixedEnvironment (F : Type) [Field F] : ProverEnvironment F where
   get _ := 0
-  data _ _ := #[]
+  data := .empty F
   hint := .empty F
 
 /-- Evaluate a witness program for a fixed row at row `row`. -/
