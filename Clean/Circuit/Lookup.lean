@@ -73,7 +73,7 @@ def Table.toRaw (table : Table F Row) : RawTable F where
 
 def ProverData.getTable (data : ProverData F) {Row : TypeMap} [ProvableType Row]
   (table : Table F Row) : Array (Row F) :=
-  data table.name (size Row) |>.map fromElements
+  data.getRows table.name Row
 
 namespace Lookup
 variable {F : Type} [FiniteField F]
@@ -90,6 +90,24 @@ def Completeness (lookup : Lookup F) (env : Environment F) : Prop :=
   lookup.table.Completeness (env.data lookup.table.name lookup.table.arity)
     (lookup.entry.map env)
 
+/-- Lookup soundness for an entry given as a vector of elements, e.g. a vector literal. -/
+@[circuit_norm]
+lemma soundness_mk {Row : TypeMap} [ProvableType Row]
+    (table : Table F Row) (env : Environment F) (entry : Vector (Expression F) (size Row)) :
+    let lookup : Lookup F := { table := table.toRaw, entry };
+    lookup.Soundness env ↔ table.Soundness (env.data.getTable table)
+      (fromElements (entry.map (Expression.eval env))) :=
+  .rfl
+
+/-- Lookup completeness for an entry given as a vector of elements, e.g. a vector literal. -/
+@[circuit_norm]
+lemma completeness_mk {Row : TypeMap} [ProvableType Row]
+    (table : Table F Row) (env : Environment F) (entry : Vector (Expression F) (size Row)) :
+    let lookup : Lookup F := { table := table.toRaw, entry };
+    lookup.Completeness env ↔ table.Completeness (env.data.getTable table)
+      (fromElements (entry.map (Expression.eval env))) :=
+  .rfl
+
 @[circuit_norm]
 lemma soundess_def {Row : TypeMap} [ProvableType Row]
   (table : Table F Row) (env : Environment F) (entry : Row (Expression F)) :
@@ -98,14 +116,6 @@ lemma soundess_def {Row : TypeMap} [ProvableType Row]
   simp only [CircuitType.eval_expression]
   rfl
 
-@[circuit_norm]
-lemma soundess_def_field {F : Type} [FiniteField F]
-  (table : Table F field) (env : Environment F) (entry : Expression F) :
-    let lookup : Lookup F := { table := table.toRaw, entry := #v[entry] };
-    lookup.Soundness env ↔ table.Soundness (env.data.getTable table) (entry.eval (F:=F) env) := by
-  simp only [Soundness, Table.toRaw, Vector.map_mk, List.map_toArray, List.map_cons,
-    List.map_nil]
-  rfl
 
 @[circuit_norm]
 lemma completeness_def {Row : TypeMap} [ProvableType Row]
@@ -115,14 +125,6 @@ lemma completeness_def {Row : TypeMap} [ProvableType Row]
   simp only [CircuitType.eval_expression]
   rfl
 
-@[circuit_norm]
-lemma completeness_def_field {F : Type} [FiniteField F]
-  (table : Table F field) (env : Environment F) (entry : Expression F) :
-    let lookup : Lookup F := { table := table.toRaw, entry := #v[entry] };
-    lookup.Completeness env ↔ table.Completeness (env.data.getTable table) (entry.eval (F:=F) env) := by
-  simp only [Completeness, Table.toRaw, Vector.map_mk, List.map_toArray, List.map_cons,
-    List.map_nil]
-  rfl
 end Lookup
 
 variable {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
@@ -160,8 +162,7 @@ namespace Table
 
 /-- Read a typed row from committed prover data. -/
 def dataGet (table : Table F Row) (row : Witgen.U64Expr F) : Row (Witgen.FExpr F) :=
-  fromElements <| Vector.mapFinRange (size Row) fun col =>
-    Witgen.FExpr.dataGet table.name (size Row) row col
+  Witgen.dataGet table.name Row row
 
 /-- Read a typed row from prover hints. -/
 def hintGet (table : Table F Row) (row : Witgen.U64Expr F) : Row (Witgen.FExpr F) :=
@@ -172,14 +173,7 @@ def hintGet (table : Table F Row) (row : Witgen.U64Expr F) : Row (Witgen.FExpr F
 lemma eval_dataGet [FiniteField F] (table : Table F Row) (row : Witgen.U64Expr F) (ctx : Witgen.Ctx F) :
     Witgen.eval ctx (table.dataGet row) =
       ((ctx.env.data.getTable table)[(row.eval ctx).toNat]?.getD default) := by
-  simp only [Witgen.eval, dataGet, ProverData.getTable]
-  rw [ProvableType.fromElements_eq_iff, ProvableType.toElements_fromElements, Vector.map_mapFinRange]
-  simp only [Witgen.FExpr.eval]
-  by_cases h : (row.eval ctx).toNat < (ctx.env.data table.name (size Row)).size
-  · simp [h]
-    rw [ProvableType.toElements_fromElements, Vector.mapFinRange_eq_self]
-  · simp [h, Vector.mapFinRange_eq_self]
-    simp only [default, ProvableType.toElements_fromElements]
+  exact Witgen.eval_dataGet table.name Row row ctx
 
 @[circuit_norm]
 lemma eval_hintGet [FiniteField F] (table : Table F Row) (row : Witgen.U64Expr F) (ctx : Witgen.Ctx F) :

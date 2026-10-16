@@ -18,13 +18,8 @@ pub mod setup {
     pub type Perm = Poseidon2BabyBear<16>;
     pub type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
     pub type MyCompress = TruncatedPermutation<Perm, 2, 8, 16>;
-    pub type ValMmcs = MerkleTreeMmcs<
-        <Val as Field>::Packing,
-        <Val as Field>::Packing,
-        MyHash,
-        MyCompress,
-        8,
-    >;
+    pub type ValMmcs =
+        MerkleTreeMmcs<<Val as Field>::Packing, <Val as Field>::Packing, MyHash, MyCompress, 8>;
     pub type Challenge = BinomialExtensionField<Val, 4>;
     pub type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
     pub type Challenger = DuplexChallenger<Val, Perm, 16, 8>;

@@ -13,7 +13,7 @@ in proving completeness of the circuit.
 
 namespace Examples.FemtoCairo.Spec
 open Utils.Bits
-open Examples.FemtoCairo.Types
+open Types
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 omit p_large_enough in
@@ -26,19 +26,16 @@ lemma ZMod_val_add_nat (x : F p) (n : ℕ) (h : x.val + n < p) :
 
 omit [Fact p.Prime] p_large_enough in
 /-- If memoryAccess succeeds, the address is in bounds -/
-lemma memoryAccess_isSome_implies_bounds {n : ℕ}
-    (memory : Fin n → F p) (addr : F p)
-    (h : (memoryAccess memory addr).isSome) : addr.val < n := by
-  simp only [memoryAccess, Option.isSome_iff_exists] at h
-  split at h
-  case isTrue h_bound => exact h_bound
-  case isFalse => simp at h
+lemma memoryAccess_isSome_implies_bounds
+    (memory : Array (F p)) (addr : F p)
+    (h : (memoryAccess memory addr).isSome) : addr.val < memory.size := by
+  simpa [memoryAccess] using h
 
 omit [Fact p.Prime] p_large_enough in
 /-- If memoryAccess returns some value, the address is in bounds -/
-lemma memoryAccess_eq_some_implies_bounds {n : ℕ}
-    (memory : Fin n → F p) (addr : F p) (v : F p)
-    (h : memoryAccess memory addr = some v) : addr.val < n :=
+lemma memoryAccess_eq_some_implies_bounds
+    (memory : Array (F p)) (addr : F p) (v : F p)
+    (h : memoryAccess memory addr = some v) : addr.val < memory.size :=
   memoryAccess_isSome_implies_bounds memory addr (Option.isSome_iff_exists.mpr ⟨v, h⟩)
 
 omit p_large_enough in
@@ -59,8 +56,8 @@ lemma decodeInstruction_eq_some_implies_bound (instr : F p) (result : ℕ × ℕ
 omit p_large_enough in
 /-- If femtoCairoMachineTransition succeeds, fetchInstruction succeeds -/
 lemma transition_isSome_implies_fetch_isSome
-    {programSize : ℕ} (program : Fin programSize → F p)
-    {memorySize : ℕ} (memory : Fin memorySize → F p)
+    (program : Array (F p))
+    (memory : Array (F p))
     (state : State (F p))
     (h : (femtoCairoMachineTransition program memory state).isSome) :
     (fetchInstruction program state.pc).isSome := by
@@ -72,12 +69,12 @@ lemma transition_isSome_implies_fetch_isSome
   · simp
 
 omit p_large_enough in
-/-- If fetchInstruction succeeds and programSize + 3 < p (no wraparound), then pc.val + 3 < programSize -/
+/-- If fetchInstruction succeeds on a valid program, then `pc.val + 3 < program.size`. -/
 lemma fetchInstruction_isSome_implies_pc_bound
-    {programSize : ℕ} (program : Fin programSize → F p)
-    (h_valid_size : ValidProgramSize p programSize)
+    (program : Array (F p))
+    (h_program : ValidProgram program)
     (pc : F p)
-    (h : (fetchInstruction program pc).isSome) : pc.val + 3 < programSize := by
+    (h : (fetchInstruction program pc).isSome) : pc.val + 3 < program.size := by
   simp only [fetchInstruction, Option.isSome_iff_exists] at h
   obtain ⟨raw, h_raw⟩ := h
   simp only [Option.bind_eq_bind] at h_raw
@@ -95,7 +92,7 @@ lemma fetchInstruction_isSome_implies_pc_bound
         | some v3 =>
           have bound0 := memoryAccess_eq_some_implies_bounds program pc v0 h0
           have bound3 := memoryAccess_eq_some_implies_bounds program (pc + 3) v3 h3
-          simp only [ValidProgramSize] at h_valid_size
+          have := h_program.size_add_three_lt
           have h_no_wrap : pc.val + 3 < p := by omega
           have h_eq : (pc + 3).val = pc.val + 3 := ZMod_val_add_nat pc 3 h_no_wrap
           omega
@@ -103,8 +100,8 @@ lemma fetchInstruction_isSome_implies_pc_bound
 omit p_large_enough in
 /-- If transition succeeds, decode succeeds -/
 lemma transition_isSome_implies_decode_isSome
-    {programSize : ℕ} (program : Fin programSize → F p)
-    {memorySize : ℕ} (memory : Fin memorySize → F p)
+    (program : Array (F p))
+    (memory : Array (F p))
     (state : State (F p))
     (h : (femtoCairoMachineTransition program memory state).isSome) :
     ∃ raw, fetchInstruction program state.pc = some raw ∧
@@ -126,8 +123,8 @@ lemma transition_isSome_implies_decode_isSome
 omit p_large_enough in
 /-- If transition succeeds with ValidProgram, the fetched instruction type is < 256 -/
 lemma transition_isSome_with_valid_program_implies_instr_bound
-    {programSize : ℕ} (program : Fin programSize → F p)
-    {memorySize : ℕ} (memory : Fin memorySize → F p)
+    (program : Array (F p))
+    (memory : Array (F p))
     (state : State (F p))
     (_h_valid : ValidProgram program)
     (h_trans : (femtoCairoMachineTransition program memory state).isSome) :
@@ -141,8 +138,8 @@ lemma transition_isSome_with_valid_program_implies_instr_bound
 omit p_large_enough in
 /-- If transition succeeds, all intermediate steps succeed -/
 lemma transition_isSome_implies_computeNextState_isSome
-    {programSize : ℕ} (program : Fin programSize → F p)
-    {memorySize : ℕ} (memory : Fin memorySize → F p)
+    (program : Array (F p))
+    (memory : Array (F p))
     (state : State (F p))
     (h : (femtoCairoMachineTransition program memory state).isSome) :
     ∃ raw decode v1 v2 v3,
@@ -178,8 +175,8 @@ lemma transition_isSome_implies_computeNextState_isSome
 omit p_large_enough in
 /-- If boundedExec n = some state and boundedExec (n+1).isSome, then transition(state).isSome -/
 lemma transition_isSome_of_boundedExecution_succ_isSome
-    {programSize : ℕ} (program : Fin programSize → F p)
-    {memorySize : ℕ} (memory : Fin memorySize → F p)
+    (program : Array (F p))
+    (memory : Array (F p))
     (initialState : Option (State (F p))) (state : State (F p)) (n : ℕ)
     (h_n : femtoCairoMachineBoundedExecution program memory initialState n = some state)
     (h_succ : (femtoCairoMachineBoundedExecution program memory initialState (n + 1)).isSome) :
@@ -191,9 +188,9 @@ lemma transition_isSome_of_boundedExecution_succ_isSome
 
 omit [Fact (Nat.Prime p)] p_large_enough in
 /-- ValidProgram ensures any program access returns a value < 256 -/
-lemma validProgram_bound {programSize : ℕ} {program : Fin programSize → F p}
-    (h_valid : ValidProgram program) (i : Fin programSize) :
-    (program i).val < 256 := h_valid i
+lemma validProgram_bound {program : Array (F p)}
+    (h_valid : ValidProgram program) (i : ℕ) (hi : i < program.size) :
+    program[i].val < 256 := h_valid.bytes_lt _ (Array.getElem_mem hi)
 
 omit p_large_enough in
 /-- If decodeInstruction succeeds, the result encodes a valid instruction type -/
@@ -273,49 +270,44 @@ lemma decodeInstruction_eq_some_implies_modes_encoded (instr : F p) (result : �
 omit p_large_enough in
 /-- If dataMemoryAccess succeeds, specific accessed addresses are in bounds -/
 lemma dataMemoryAccess_mode0_bound
-    {memorySize : ℕ} (memory : Fin memorySize → F p)
+    (memory : Array (F p))
     (offset ap fp result : F p)
     (h : dataMemoryAccess memory offset 0 ap fp = some result) :
-    (ap + offset).val < memorySize ∧
-    ∃ addr', memoryAccess memory (ap + offset) = some addr' ∧ addr'.val < memorySize := by
+    (ap + offset).val < memory.size ∧
+    ∃ addr', memoryAccess memory (ap + offset) = some addr' ∧ addr'.val < memory.size := by
   simp only [dataMemoryAccess, Option.bind_eq_bind] at h
   cases h_first : memoryAccess memory (ap + offset) with
   | none => simp [h_first] at h
   | some addr' =>
     simp only [h_first, Option.bind_some] at h
-    simp only [memoryAccess] at h_first
-    split at h_first
-    case isTrue h_lt =>
-      simp only [Option.some.injEq] at h_first
-      exact ⟨h_lt, addr', rfl, by simp only [memoryAccess] at h; split at h <;> simp_all⟩
-    case isFalse h_neg =>
-      simp at h_first
+    exact ⟨memoryAccess_eq_some_implies_bounds _ _ _ h_first, addr', rfl,
+      memoryAccess_eq_some_implies_bounds _ _ _ h⟩
 
 omit p_large_enough in
 /-- If dataMemoryAccess succeeds in mode 1 (ap-relative), the address is in bounds -/
 lemma dataMemoryAccess_mode1_bound
-    {memorySize : ℕ} (memory : Fin memorySize → F p)
+    (memory : Array (F p))
     (offset ap fp result : F p)
     (h : dataMemoryAccess memory offset 1 ap fp = some result) :
-    (ap + offset).val < memorySize := by
-  simp only [dataMemoryAccess, memoryAccess] at h
-  split at h <;> simp_all
+    (ap + offset).val < memory.size := by
+  simp only [dataMemoryAccess] at h
+  exact memoryAccess_eq_some_implies_bounds _ _ _ h
 
 omit p_large_enough in
 /-- If dataMemoryAccess succeeds in mode 2 (fp-relative), the address is in bounds -/
 lemma dataMemoryAccess_mode2_bound
-    {memorySize : ℕ} (memory : Fin memorySize → F p)
+    (memory : Array (F p))
     (offset ap fp result : F p)
     (h : dataMemoryAccess memory offset 2 ap fp = some result) :
-    (fp + offset).val < memorySize := by
-  simp only [dataMemoryAccess, memoryAccess] at h
-  split at h <;> simp_all
+    (fp + offset).val < memory.size := by
+  simp only [dataMemoryAccess] at h
+  exact memoryAccess_eq_some_implies_bounds _ _ _ h
 
 omit p_large_enough in
 /-- If transition succeeds, all memory addresses accessed are in bounds -/
 lemma transition_isSome_implies_all_memory_bounds
-    {programSize : ℕ} (program : Fin programSize → F p)
-    {memorySize : ℕ} (memory : Fin memorySize → F p)
+    (program : Array (F p))
+    (memory : Array (F p))
     (state : State (F p))
     (h : (femtoCairoMachineTransition program memory state).isSome) :
     ∃ raw decode,
@@ -334,41 +326,27 @@ lemma transition_isSome_implies_all_memory_bounds
 omit p_large_enough in
 /-- If fetchInstruction succeeds, rawInstrType is a valid program memory value -/
 lemma fetchInstruction_rawInstrType_eq_program
-    {programSize : ℕ} (program : Fin programSize → F p)
+    (program : Array (F p))
     (pc : F p) (raw : Types.RawInstruction (F p))
     (h : fetchInstruction program pc = some raw)
-    (h_bound : pc.val < programSize) :
-    raw.rawInstrType = program ⟨pc.val, h_bound⟩ := by
-  simp only [fetchInstruction, Option.bind_eq_bind] at h
-  cases h_mem : memoryAccess program pc with
-  | none => simp [h_mem] at h
-  | some type =>
-    simp only [h_mem, Option.bind_some] at h
-    simp only [memoryAccess] at h_mem
-    split at h_mem
-    case isTrue h_lt =>
-      simp only [Option.some.injEq] at h_mem
-      cases h_op1 : memoryAccess program (pc + 1)
-      · simp [h_op1] at h
-      · simp only [h_op1, Option.bind_some] at h
-        cases h_op2 : memoryAccess program (pc + 2)
-        · simp [h_op2] at h
-        · simp only [h_op2, Option.bind_some] at h
-          cases h_op3 : memoryAccess program (pc + 3)
-          · simp [h_op3] at h
-          · aesop
-    case isFalse h_neg => aesop
+    (h_bound : pc.val < program.size) :
+    raw.rawInstrType = program[pc.val] := by
+  simp only [fetchInstruction, memoryAccess, Option.bind_eq_bind,
+    Array.getElem?_eq_getElem h_bound, Option.bind_some, Option.bind_eq_some_iff] at h
+  obtain ⟨_, _, _, _, _, _, h⟩ := h
+  cases h
+  rfl
 
 omit p_large_enough in
 /-- Combining ValidProgram with fetchInstruction success gives rawInstrType.val < 256 -/
 lemma fetchInstruction_rawInstrType_bound
-    {programSize : ℕ} (program : Fin programSize → F p)
+    (program : Array (F p))
     (h_valid : ValidProgram program)
     (pc : F p) (raw : Types.RawInstruction (F p))
     (h : fetchInstruction program pc = some raw)
-    (h_bound : pc.val < programSize) :
+    (h_bound : pc.val < program.size) :
     raw.rawInstrType.val < 256 := by
   rw [fetchInstruction_rawInstrType_eq_program program pc raw h h_bound]
-  aesop
+  exact h_valid.bytes_lt _ (Array.getElem_mem h_bound)
 
 end Examples.FemtoCairo.Spec

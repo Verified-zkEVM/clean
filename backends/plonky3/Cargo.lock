@@ -55,15 +55,15 @@ dependencies = [
  "p3-dft",
  "p3-field",
  "p3-fri",
+ "p3-koala-bear",
+ "p3-lookup",
  "p3-matrix",
  "p3-merkle-tree",
  "p3-symmetric",
  "p3-uni-stark",
  "p3-util",
  "rand",
- "serde",
  "serde_json",
- "tracing",
 ]
 
 [[package]]
@@ -234,12 +234,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "once_cell"
-version = "1.21.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
-
-[[package]]
 name = "p3-air"
 version = "0.4.2"
 source = "git+https://github.com/Plonky3/Plonky3?rev=47e442f#47e442ffb5ad5f6c86f845e48283867f348243ba"
@@ -266,7 +260,6 @@ dependencies = [
 [[package]]
 name = "p3-batch-stark"
 version = "0.4.2"
-source = "git+https://github.com/Plonky3/Plonky3?rev=47e442f#47e442ffb5ad5f6c86f845e48283867f348243ba"
 dependencies = [
  "hashbrown 0.16.1",
  "itertools",
@@ -368,6 +361,19 @@ dependencies = [
  "p3-matrix",
  "p3-maybe-rayon",
  "p3-util",
+]
+
+[[package]]
+name = "p3-koala-bear"
+version = "0.4.2"
+source = "git+https://github.com/Plonky3/Plonky3?rev=47e442f#47e442ffb5ad5f6c86f845e48283867f348243ba"
+dependencies = [
+ "p3-challenger",
+ "p3-field",
+ "p3-monty-31",
+ "p3-poseidon2",
+ "p3-symmetric",
+ "rand",
 ]
 
 [[package]]
@@ -698,9 +704,6 @@ name = "tracing-core"
 version = "0.1.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a"
-dependencies = [
- "once_cell",
-]
 
 [[package]]
 name = "transpose"

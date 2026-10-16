@@ -471,6 +471,17 @@ open Classical in
       interactionsWith channel ops := by
   simp [interactionsWith, interactions]
 
+open Classical in
+/-- A lawful subcircuit has no interactions on a channel outside its declared channels. -/
+@[circuit_norm]
+theorem _root_.Subcircuit.interactions_filter_eq_nil {n : ℕ} (s : Subcircuit F n)
+    {channel : RawChannel F} (h_lawful : s.ChannelsLawful)
+    (h : channel ∉ s.channelsWithGuarantees ++ s.channelsWithRequirements) :
+    (FlatOperation.interactions s.ops.toFlat).filter (fun i => i.channel = channel) = [] := by
+  rw [List.filter_eq_nil_iff]
+  intro i hi heq
+  exact h (h_lawful.2.2 (of_decide_eq_true heq ▸ List.mem_map_of_mem hi))
+
 def shallowInteractions : Operations F → List (AbstractInteraction F)
   | [] => []
   | .interact i :: ops => i :: shallowInteractions ops

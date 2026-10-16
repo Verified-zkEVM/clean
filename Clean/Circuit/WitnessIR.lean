@@ -75,9 +75,8 @@ inductive FExpr (F : Type) where
   | ite (c : BExpr F) (t e : FExpr F)
   /-- Read an expression list at a computed index, 0 if out of range -/
   | listGet (xs : List (FExpr F)) (i : U64Expr F)
-  /-- Read committed prover data (`Environment.data`), keyed like `ProverData`:
-  row `row` of table `key` with rows of width `n`, projected at column `col`.
-  Missing rows read as 0. The nondeterministic escape hatch (FemtoCairo memory). -/
+  /-- Read committed prover data (`Environment.data`), keyed like `ProverData`: row `row` of
+  component `key` with rows of width `n`, projected at column `col`. Missing rows read as 0. -/
   | dataGet (key : String) (n : ℕ) (row : U64Expr F) (col : Fin n)
   /-- Same as `dataGet` but reads the uncommitted `ProverEnvironment.hint`. -/
   | hintGet (key : String) (n : ℕ) (row : U64Expr F) (col : Fin n)
@@ -337,11 +336,12 @@ inductive Step (F : Type) where
 /-- Evaluate the `let`-steps left to right, accumulating their values. -/
 @[circuit_norm]
 def evalSteps [FiniteField F] (env : ProverEnvironment F)
-    (steps : List (Step F)) (locals : Array (F ⊕ UInt64) := #[]) : Array (F ⊕ UInt64) :=
+    (steps : List (Step F)) (locals : Array (F ⊕ UInt64) := #[])
+    (idx : ℕ := 0) : Array (F ⊕ UInt64) :=
   match steps with
   | [] => locals
-  | .letF e :: steps => evalSteps env steps (locals.push (.inl (e.eval { env, locals })))
-  | .letU e :: steps => evalSteps env steps (locals.push (.inr (e.eval { env, locals })))
+  | .letF e :: steps => evalSteps env steps (locals.push (.inl (e.eval { env, locals, idx }))) idx
+  | .letU e :: steps => evalSteps env steps (locals.push (.inr (e.eval { env, locals, idx }))) idx
 
 /-- A witness-generation program producing `m` field elements. -/
 inductive WitgenIR (F : Type) : ℕ → Type where
@@ -497,23 +497,14 @@ theorem WitgenIR.getElem_eval_ofFExprs [FiniteField F] {n : ℕ} (es : Vector (F
   simp [ofFExprs, WitgenIR.eval, VExpr.eval, evalSteps]
 
 @[circuit_norm]
-theorem WitgenIR.eval_ofFExprs_singleton {F: Type} [FiniteField F]
+theorem WitgenIR.eval_ofFExprs_one {F : Type} [FiniteField F]
     (x : FExpr F) (env : ProverEnvironment F) :
-    (WitgenIR.ofFExprs (toElements (M:=field) x)).eval env = #v[x.eval { env }] := by
+    (WitgenIR.ofFExprs #v[x]).eval env = #v[x.eval { env }] := by
   ext i hi
   change i < 1 at hi
   have : i = 0 := Nat.lt_one_iff.mp hi
   subst i
-  simp [WitgenIR.getElem_eval_ofFExprs, toElements]
-
-/-- Same as `eval_ofFExprs_singleton`, keyed on the literal-vector spelling
-(`toElements (M := field) x` and `#v[x]` are not identified during simp matching).
-Not in `circuit_norm`: firing on transient literal-vector spellings changes downstream
-goal shapes; cite it explicitly where needed. -/
-theorem WitgenIR.eval_ofFExprs_one {F : Type} [FiniteField F]
-    (x : FExpr F) (env : ProverEnvironment F) :
-    (WitgenIR.ofFExprs #v[x]).eval env = #v[x.eval { env }] := by
-  exact WitgenIR.eval_ofFExprs_singleton x env
+  simp [WitgenIR.getElem_eval_ofFExprs]
 
 /-- Field-equality conditions decide propositional equality (via the injective
 `ℕ` embedding). -/
@@ -750,3 +741,29 @@ end Eval
 end Witgen
 
 export Witgen (WitgenIR)
+
+/-- Interpret the rows stored under a component name using their declared circuit-input type. -/
+def ProverData.getRows (data : ProverData F) (name : String)
+    (Row : TypeMap) [ProvableType Row] : Array (Row F) :=
+  data name (size Row) |>.map fromElements
+
+/-- Read a typed component-input row from committed prover data. -/
+def Witgen.dataGet (name : String) (Row : TypeMap) [ProvableType Row]
+    (row : Witgen.U64Expr F) : Row (Witgen.FExpr F) :=
+  fromElements <| Vector.mapFinRange (size Row) fun col =>
+    Witgen.FExpr.dataGet name (size Row) row col
+
+@[circuit_norm]
+lemma Witgen.eval_dataGet [FiniteField F] (name : String) (Row : TypeMap) [ProvableType Row]
+    (row : Witgen.U64Expr F) (ctx : Witgen.Ctx F) :
+    Witgen.eval ctx (Witgen.dataGet name Row row) =
+      ((ctx.env.data.getRows name Row)[(row.eval ctx).toNat]?.getD default) := by
+  simp only [Witgen.eval, Witgen.dataGet, ProverData.getRows]
+  rw [ProvableType.fromElements_eq_iff, ProvableType.toElements_fromElements,
+    Vector.map_mapFinRange]
+  simp only [Witgen.FExpr.eval]
+  by_cases h : (row.eval ctx).toNat < (ctx.env.data name (size Row)).size
+  · simp [h]
+    rw [ProvableType.toElements_fromElements, Vector.mapFinRange_eq_self]
+  · simp [h, Vector.mapFinRange_eq_self]
+    simp only [default, ProvableType.toElements_fromElements]
