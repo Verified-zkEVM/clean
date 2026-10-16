@@ -7,9 +7,16 @@ public import Clean.Backends.Program
 /-!
 # Rust printer for extraction programs
 
-Prints a validated `Backends.Program` as Rust for the `clean_backend` crate, one constructor at a time. Each component becomes a Rust module with the same items: its shape, its witness and fixed-column programs, and its constraints and interactions. A final `clean_backend::ensemble!` invocation lists the modules; the macro implements the crate's traits on top of them, so dispatch, width checks, and Plonky3 plumbing are written once in Rust.
+Prints a validated `Backends.Program` as Rust for the `clean_backend` crate, one constructor at a
+time. Each component becomes a Rust module with the same items: its shape, its witness and
+fixed-column programs, and its constraints and interactions. A final `clean_backend::ensemble!`
+invocation lists the modules; the macro implements the crate's traits on top of them, so dispatch,
+width checks, and Plonky3 plumbing are written once in Rust.
 
-Constraints and interactions are printed as functions generic over a Rust ring type `E`, reading a complete row whose fixed columns come first. The crate instantiates them with field elements for witness generation and with symbolic Plonky3 expressions for the AIR. Witness programs are printed over field elements, reading the partially built row.
+Constraints and interactions are printed as functions generic over a Rust ring type `E`, reading a
+complete row whose fixed columns come first. The crate instantiates them with field elements for
+witness generation and with symbolic Plonky3 expressions for the AIR. Witness programs are printed
+over field elements, reading the partially built row.
 -/
 
 namespace Backends.Plonky3.Print
@@ -20,10 +27,12 @@ open Air.Flat.WitnessGeneration
 variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
 
-/-- Order of the field the generated code is printed for. Generated programs and AIRs reject any other Rust field. -/
+/-- Order of the field the generated code is printed for. Generated programs and AIRs reject any
+  other Rust field. -/
 def fieldOrder : ℕ := FiniteField.size (F := F)
 
-/-- A field constant in the Rust ring type `ty`. Values above half the field order are printed as negations, so that e.g. `-1` reads as `-ty::from_u64(1u64)`. -/
+/-- A field constant in the Rust ring type `ty`. Values above half the field order are printed as
+  negations, so that e.g. `-1` reads as `-ty::from_u64(1u64)`. -/
 def fieldIn (ty : String) (value : F) : String :=
   let value := FiniteField.val value
   if 2 * value > fieldOrder (F := F) then s!"-{ty}::from_u64({fieldOrder (F := F) - value}u64)"
@@ -47,7 +56,9 @@ def exprToRust : Expression F → String
 
 def interactionToRust (interaction : AbstractInteraction F) : String :=
   let message := commaSep (interaction.msg.toList.map exprToRust)
-  s!"Interaction \{ channel: {quoted interaction.channel.name}, multiplicity: {exprToRust interaction.mult}, message: vec![{message}], assume_guarantees: {interaction.assumeGuarantees} }"
+  s!"Interaction \{ channel: {quoted interaction.channel.name}, multiplicity: \
+      {exprToRust interaction.mult}, message: vec![{message}], \
+      assume_guarantees: {interaction.assumeGuarantees} }"
 
 /-- `fn constraints<E>(row: &[E]) -> Vec<E>` -/
 def constraintsToRust (constraints : List (Expression F)) : String :=
@@ -65,7 +76,9 @@ pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Intera
 
 /-! ## Witness IR, over field elements
 
-Printed function bodies read the row slice `row`, the row index `row_index`, the prover data `data`, and the hint `hint`. Inside loops, `idx` is the loop index. `inLoop` records whether `.idx` is the loop index or the row index. -/
+Printed function bodies read the row slice `row`, the row index `row_index`, the prover data `data`,
+and the hint `hint`. Inside loops, `idx` is the loop index. `inLoop` records whether `.idx` is the
+loop index or the row index. -/
 
 mutual
 
@@ -78,9 +91,11 @@ def fexprToRust (inLoop : Bool) : Witgen.FExpr F → String
   | .inv value => s!"({fexprToRust inLoop value}).inverse_or_zero()"
   | .ofU64 value => s!"F::from_u64({u64exprToRust inLoop value})"
   | .ite condition thenValue elseValue =>
-      s!"if {bexprToRust inLoop condition} \{ {fexprToRust inLoop thenValue} } else \{ {fexprToRust inLoop elseValue} }"
+      s!"if {bexprToRust inLoop condition} \{ {fexprToRust inLoop thenValue} } else \{ \
+          {fexprToRust inLoop elseValue} }"
   | .listGet values index =>
-      s!"[{commaSep (fexprListToRust inLoop values)}].get(({u64exprToRust inLoop index}) as usize).copied().unwrap_or(F::ZERO)"
+      s!"[{commaSep (fexprListToRust inLoop values)}].get(({u64exprToRust inLoop index}) as \
+          usize).copied().unwrap_or(F::ZERO)"
   | .dataGet key width row column =>
       s!"data.get({quoted key}, {width}, ({u64exprToRust inLoop row}) as usize, {column})"
   | .hintGet key width row column =>
@@ -105,7 +120,8 @@ def u64exprToRust (inLoop : Bool) : Witgen.U64Expr F → String
   | .shiftL left right => s!"shift_left({u64exprToRust inLoop left}, {u64exprToRust inLoop right})"
   | .shiftR left right => s!"shift_right({u64exprToRust inLoop left}, {u64exprToRust inLoop right})"
   | .ite condition thenValue elseValue =>
-      s!"if {bexprToRust inLoop condition} \{ {u64exprToRust inLoop thenValue} } else \{ {u64exprToRust inLoop elseValue} }"
+      s!"if {bexprToRust inLoop condition} \{ {u64exprToRust inLoop thenValue} } else \{ \
+          {u64exprToRust inLoop elseValue} }"
 
 def bexprToRust (inLoop : Bool) : Witgen.BExpr F → String
   | .true => "true"
@@ -114,7 +130,8 @@ def bexprToRust (inLoop : Bool) : Witgen.BExpr F → String
   | .neq left right => s!"({u64exprToRust inLoop left} == {u64exprToRust inLoop right})"
   | .lt left right => s!"({u64exprToRust inLoop left} < {u64exprToRust inLoop right})"
   | .flt left right =>
-      s!"(({fexprToRust inLoop left}).canonical_u64() < ({fexprToRust inLoop right}).canonical_u64())"
+      s!"(({fexprToRust inLoop left}).canonical_u64() < \
+          ({fexprToRust inLoop right}).canonical_u64())"
   | .bit value index => s!"bit(({fexprToRust inLoop value}).canonical_u64(), {min index 64})"
   | .not condition => s!"!({bexprToRust inLoop condition})"
   | .and left right => s!"({bexprToRust inLoop left} && {bexprToRust inLoop right})"
@@ -131,17 +148,22 @@ end
 /-- `let` statements for witness IR steps, numbering locals in order. -/
 def stepsToRust (lets : ℕ) : List (Witgen.Step F) → List String
   | [] => []
-  | .letF value :: steps => s!"let local_{lets}: F = {fexprToRust false value};" :: stepsToRust (lets + 1) steps
-  | .letU value :: steps => s!"let local_{lets}: u64 = {u64exprToRust false value};" :: stepsToRust (lets + 1) steps
+  | .letF value :: steps => s!"let local_{lets}: F = {fexprToRust false value};" :: stepsToRust
+      (lets + 1) steps
+  | .letU value :: steps => s!"let local_{lets}: u64 = {u64exprToRust false value};" ::
+      stepsToRust (lets + 1) steps
 
 /-- Statements pushing a witness IR output vector to `output`. -/
 def outputToRust : {n : ℕ} → Witgen.VExpr F n → List String
   | _, .lit values => values.toList.map fun value => s!"output.push({fexprToRust false value});"
-  | _, .mapRange count body => [s!"for idx in 0u64..{count}u64 \{ output.push({fexprToRust true body}); }"]
+  | _, .mapRange count body => [s!"for idx in 0u64..{count}u64 \{ \
+      output.push({fexprToRust true body}); }"]
   | count, .envRange offset =>
-      [s!"for idx in 0u64..{count}u64 \{ output.push(row.get({offset} + idx as usize).copied().unwrap_or(F::ZERO)); }"]
+      [s!"for idx in 0u64..{count}u64 \{ output.push(row.get({offset} + idx as \
+          usize).copied().unwrap_or(F::ZERO)); }"]
   | count, .bitsOf value =>
-      [s!"for idx in 0u64..{count}u64 \{ output.push(F::from_u64(bit_u64(({fexprToRust false value}).canonical_u64(), idx))); }"]
+      [s!"for idx in 0u64..{count}u64 \{ \
+          output.push(F::from_u64(bit_u64(({fexprToRust false value}).canonical_u64(), idx))); }"]
   | _, .append left right => outputToRust left ++ outputToRust right
 
 /-- A block computing a witness IR program into a fresh vector `output`. -/
@@ -172,7 +194,8 @@ pub fn fixed_row<F: WitnessField>(row_index: u64) -> Vec<F> \{
 def completeToRust (witnesses : List (WitnessBlock F)) : String :=
   let blocks := witnesses.map fun block =>
     s!"    \{\n{programToRust block.steps block.output}\n    row.extend(output);\n    }"
-  s!"pub fn complete<F: WitnessField>(row: &mut Vec<F>, data: &WitnessData<F>, hint: &WitnessData<F>) \{
+  s!"pub fn complete<F: WitnessField>(row: &mut Vec<F>, data: &WitnessData<F>, hint: \
+      &WitnessData<F>) \{
     let row_index = 0u64;
 {lines blocks}
 }"
@@ -191,12 +214,17 @@ def aggregationToRust : Aggregation → String
   | .byMessage => "Aggregation::ByMessage"
 
 def handlerToRust (handler : HandlerProgram) : String :=
-  s!"PreallocatedHandler \{ channel: {quoted handler.channel}, direction: {directionToRust handler.direction}, interaction: {handler.interaction}, column: {handler.column} }"
+  s!"PreallocatedHandler \{ channel: {quoted handler.channel}, direction: \
+      {directionToRust handler.direction}, interaction: {handler.interaction}, column:
+      {handler.column} }"
 
-/-- `fn mode()`, and `fn initial_row(row_index, hint)`, which for preallocated components is the fixed prefix followed by the row program's values. -/
+/-- `fn mode()`, and `fn initial_row(row_index, hint)`, which for preallocated components is the
+  fixed prefix followed by the row program's values. -/
 def modeToRust : ModeProgram F → String
   | .demand mode => s!"pub fn mode<F: WitnessField>() -> Mode<F> \{
-    Mode::Demand(DemandMode \{ channel: {quoted mode.channel.name}, direction: {directionToRust mode.direction}, aggregation: {aggregationToRust mode.aggregation}, input: vec![{commaSep (mode.input.cells.map inputCellToRust)}] })
+    Mode::Demand(DemandMode \{ channel: {quoted mode.channel.name}, direction: \
+        {directionToRust mode.direction}, aggregation: {aggregationToRust mode.aggregation}, \
+        input: vec![{commaSep (mode.input.cells.map inputCellToRust)}] })
 }
 
 pub fn initial_row<F: WitnessField>(_row_index: u64, _hint: &WitnessData<F>) -> Vec<F> \{
@@ -216,7 +244,8 @@ pub fn initial_row<F: WitnessField>(row_index: u64, hint: &WitnessData<F>) -> Ve
 
 def paddingToRust (padding : Padding F) : String :=
   s!"pub fn padding<F: WitnessField>() -> Padding<F> \{
-    Padding \{ input: vec![{commaSep (padding.input.toList.map (fieldIn "F"))}], minimum_rows: {padding.minimumRows} }
+    Padding \{ input: vec![{commaSep (padding.input.toList.map (fieldIn "F"))}], minimum_rows: \
+        {padding.minimumRows} }
 }"
 
 def componentToRust (index : ℕ) (component : ComponentProgram F) (mode : ModeProgram F)
@@ -243,7 +272,8 @@ pub const WIDTH: usize = {component.width};
 }"
 
 def hintTableToRust (table : HintTable) : String :=
-  s!"HintTable \{ key: {quoted table.key}, width: {table.width}, offset: {table.offset}, rows: {table.rows} }"
+  s!"HintTable \{ key: {quoted table.key}, width: {table.width}, offset: {table.offset}, rows: \
+      {table.rows} }"
 
 def prelude : String := "// Generated by Clean from an extraction program. Do not edit.
 use clean_backend::witness_generation::*;
@@ -276,7 +306,8 @@ clean_backend::ensemble! \{
 "
 
 /-- Lower an ensemble to an extraction program and print it as Rust. -/
-def ensembleToRust (ens : FormalEnsemble F PublicIO) (config : Config F) : Except String String := do
+def ensembleToRust (ens : FormalEnsemble F PublicIO) (config : Config F) : Except String String :=
+    do
   let program ← lower ens config |>.mapError toString
   return programToRustFile program
 

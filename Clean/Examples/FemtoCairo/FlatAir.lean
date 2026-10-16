@@ -36,32 +36,40 @@ def MemoryCompletenessAssumption (data : ProverData (F p)) : Prop :=
     ∀ (address : F p) (ha : address.val < mem.size), mem[address.val].address = address
 
 /-- The program, as a table of `(address, value)` rows. -/
-def programLookup (program : Array (F p)) (h_programSize : program.size < p) : Lookup (F p) fieldPair where
+def programLookup (program : Array (F p)) (h_programSize : program.size < p)
+    (h_programSize_u64 : program.size < 2 ^ 64) : Lookup (F p) fieldPair where
   name := "program"
   height := program.size.toUInt64
   row i := pure (i, program[i])
   Contains
   | (address, value) => ∃ h : address.val < program.size, value = program[address.val]
-  contains_row i hi := by
-    have hi' : i.toNat < program.size := by
-      have := UInt64.lt_iff_toNat_lt.mp hi
-      simp only [Nat.toUInt64_eq, UInt64.toNat_ofNat'] at this
-      exact lt_of_lt_of_le this (Nat.mod_le _ _)
-    have hval : (i.toNat : F p).val = i.toNat := ZMod.val_cast_of_lt (by omega)
-    simp [circuit_norm, explicit_provable_type, hval, hi']
+  contains_iff value := by
+    obtain ⟨address, v⟩ := value
+    simp only
+        [circuit_norm, Nat.mod_eq_of_lt (UInt64.toNat_lt _), Nat.mod_eq_of_lt h_programSize_u64]
+    constructor
+    · rintro ⟨h, rfl⟩
+      refine ⟨address.val.toUInt64, ?_, ?_⟩ <;>
+        simp [h]
+    · rintro ⟨i, hi, h⟩
+      simp only [Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      have hval : (i.toNat : F p).val = i.toNat := ZMod.val_cast_of_lt (by omega)
+      simp [hval, hi]
 
 def fetchInstruction
-    (program : Array (F p)) (h_programSize : program.size < p) :
+    (program : Array (F p)) (h_programSize : program.size < p)
+        (h_programSize_u64 : program.size < 2 ^ 64) :
     GeneralFormalCircuit (F p) field RawInstruction where
   main pc := do
     let rawInstrType ← witness program[pc.val]
     let op1 ← witness program[pc.val + 1]
     let op2 ← witness program[pc.val + 2]
     let op3 ← witness program[pc.val + 3]
-    (programLookup program h_programSize).channel.pull (pc, rawInstrType)
-    (programLookup program h_programSize).channel.pull (pc + 1, op1)
-    (programLookup program h_programSize).channel.pull (pc + 2, op2)
-    (programLookup program h_programSize).channel.pull (pc + 3, op3)
+    (programLookup program h_programSize h_programSize_u64).channel.pull (pc, rawInstrType)
+    (programLookup program h_programSize h_programSize_u64).channel.pull (pc + 1, op1)
+    (programLookup program h_programSize h_programSize_u64).channel.pull (pc + 2, op2)
+    (programLookup program h_programSize h_programSize_u64).channel.pull (pc + 3, op3)
     return { rawInstrType, op1, op2, op3 }
 
   ProverAssumptions
@@ -153,7 +161,8 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
     -- the two memory lookups, as reads of the memory array
     have h_read1 : (memory env.data)[(env.get i₀).val]? = some (env.get (i₀ + 1)) := by
       rw [memory, Array.getElem?_map, Array.getElem?_eq_getElem h_lt1, Option.map_some, h_value1]
-    have h_read2 : (memory env.data)[(env.get (i₀ + 1 + 1)).val]? = some (env.get (i₀ + 1 + 1 + 1)) := by
+    have h_read2 : (memory env.data)[(env.get (i₀ + 1 + 1)).val]? = some (env.get (i₀ + 1 + 1 + 1))
+        := by
       rw [memory, Array.getElem?_map, Array.getElem?_eq_getElem h_lt2, Option.map_some, h_value2]
     clear h_lt1 h_value1 h_lt2 h_value2
     rcases h_assumptions with h_mode | h_mode | h_mode | h_mode <;> simp_all
@@ -214,9 +223,10 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
       | exact ⟨by simpa [addr1_def] using h_pos, by simpa [addr2_def] using h_pos⟩
 
 def femtoCairoStepMain (program : Array (F p))
-    (h_programSize : program.size < p) (state : Var State (F p)) :
+    (h_programSize : program.size < p) (h_programSize_u64 : program.size < 2 ^ 64)
+        (state : Var State (F p)) :
     Circuit (F p) (Var State (F p)) := do
-  let raw ← fetchInstruction program h_programSize state.pc
+  let raw ← fetchInstruction program h_programSize h_programSize_u64 state.pc
   let decoded ← Examples.FemtoCairo.decodeInstruction raw.rawInstrType
   let v1 ← readFromMemory { state, offset := raw.op1, mode := decoded.mode1 }
   let v2 ← readFromMemory { state, offset := raw.op2, mode := decoded.mode2 }
@@ -224,8 +234,10 @@ def femtoCairoStepMain (program : Array (F p))
   Examples.FemtoCairo.nextState { state, decoded, v1, v2, v3 }
 
 @[reducible]
-instance (program : Array (F p)) (h_programSize : program.size < p) :
-    ElaboratedCircuit (F p) State State (femtoCairoStepMain program h_programSize) := by
+instance (program : Array (F p)) (h_programSize : program.size < p)
+    (h_programSize_u64 : program.size < 2 ^ 64) :
+    ElaboratedCircuit (F p) State State (femtoCairoStepMain program h_programSize h_programSize_u64)
+        := by
   elaborate_circuit
 
 def femtoCairoStepSpec (program : Array (F p))
@@ -241,8 +253,9 @@ def femtoCairoStepAssumptions (program : Array (F p))
   (Spec.femtoCairoMachineTransition program (memory data) state).isSome
 
 theorem femtoCairoStepSoundness (program : Array (F p))
-    (h_programSize : program.size < p) :
-    GeneralFormalCircuit.Soundness (F p) (femtoCairoStepMain program h_programSize)
+    (h_programSize : program.size < p) (h_programSize_u64 : program.size < 2 ^ 64) :
+    GeneralFormalCircuit.Soundness (F p)
+        (femtoCairoStepMain program h_programSize h_programSize_u64)
       (fun _ _ => True) (femtoCairoStepSpec program) := by
   circuit_proof_start [femtoCairoStepSpec, femtoCairoStepAssumptions, femtoCairoStepMain,
     Spec.femtoCairoMachineTransition, fetchInstruction, readFromMemory,
@@ -294,8 +307,9 @@ theorem femtoCairoStepSoundness (program : Array (F p))
             case h_1 next_state h_eq_next => rw [h_eq_next, ← c_next]
 
 theorem femtoCairoStepCompleteness (program : Array (F p))
-    (h_programSize : program.size < p) :
-    GeneralFormalCircuit.Completeness (F p) (femtoCairoStepMain program h_programSize)
+    (h_programSize : program.size < p) (h_programSize_u64 : program.size < 2 ^ 64) :
+    GeneralFormalCircuit.Completeness (F p)
+        (femtoCairoStepMain program h_programSize h_programSize_u64)
       (femtoCairoStepAssumptions program) (fun _ _ _ => True) := by
   circuit_proof_start [femtoCairoStepAssumptions, femtoCairoStepMain,
     fetchInstruction, Examples.FemtoCairo.decodeInstruction, readFromMemory,
@@ -362,12 +376,13 @@ theorem femtoCairoStepCompleteness (program : Array (F p))
       exact h_computeNext⟩
 
 def femtoCairoStep (program : Array (F p))
-    (h_programSize : program.size < p) : GeneralFormalCircuit (F p) State State where
-  main := femtoCairoStepMain program h_programSize
+    (h_programSize : program.size < p) (h_programSize_u64 : program.size < 2 ^ 64) :
+        GeneralFormalCircuit (F p) State State where
+  main := femtoCairoStepMain program h_programSize h_programSize_u64
   ProverAssumptions := femtoCairoStepAssumptions program
   Spec := femtoCairoStepSpec program
-  soundness := femtoCairoStepSoundness program h_programSize
-  completeness := femtoCairoStepCompleteness program h_programSize
+  soundness := femtoCairoStepSoundness program h_programSize h_programSize_u64
+  completeness := femtoCairoStepCompleteness program h_programSize h_programSize_u64
 
 def provideMemory : GeneralFormalCircuit (F p) ProviderInput unit where
   name := "memory"
@@ -396,7 +411,8 @@ def memoryComponent (memorySize : UInt64) (h_memorySize : memorySize.toNat < p) 
   fixedColumns := some (memoryFixedColumns memorySize)
   circuit_assumptions_of_assumptions := by
     rintro i ⟨address, value, multiplicity⟩ data hfixed hdata -
-    simp [memoryFixedColumns, FixedColumns.width, provideMemory, circuit_norm, explicit_provable_type] at hfixed hdata
+    simp [memoryFixedColumns, FixedColumns.width, provideMemory, circuit_norm,
+        explicit_provable_type] at hfixed hdata
     obtain ⟨hi, rfl⟩ := hfixed
     have hval : (i.toNat : F p).val = i.toNat := ZMod.val_cast_of_lt (by omega)
     obtain ⟨hsize, hentry⟩ := Array.getElem?_eq_some_iff.mp hdata
@@ -414,41 +430,47 @@ structure ExecutionInput (F : Type) where
   state : State F
 deriving ProvableStruct
 
-/-- One execution row: when enabled, it pulls a state and pushes the state after it. Disabled rows pad the execution table. -/
+/-- One execution row: when enabled, it pulls a state and pushes the state after it. Disabled rows
+  pad the execution table. -/
 def executeStep (program : Array (F p))
-    (h_programSize : program.size < p) (initialState : State (F p)) :
+    (h_programSize : program.size < p) (h_programSize_u64 : program.size < 2 ^ 64)
+        (initialState : State (F p)) :
     GeneralFormalCircuit (F p) ExecutionInput unit where
   name := "execution"
   main input := do
     -- has to be inline, channels with requirements proof doesn't handle subcircuits
     assertZero (input.enabled * (input.enabled - 1))
     (stateChannel program initialState).pullIf input.enabled input.state
-    let nextState ← femtoCairoStep program h_programSize input.state
+    let nextState ← femtoCairoStep program h_programSize h_programSize_u64 input.state
     (stateChannel program initialState).pushIf input.enabled nextState
 
   exposedChannels input i₀ :=
-    let nextState := (femtoCairoStep program h_programSize).output input.state i₀
+    let nextState := (femtoCairoStep program h_programSize h_programSize_u64).output input.state i₀
     expose (stateChannel program initialState)
       [pulledIf input.enabled input.state, pushedIf input.enabled nextState]
   exposedChannels_eq input i₀ := by
     classical
     have hfilter :
         (FlatOperation.interactions
-          ((femtoCairoStep program h_programSize).toSubcircuit i₀ input.state).ops.toFlat).filter
+          ((femtoCairoStep program h_programSize h_programSize_u64).toSubcircuit i₀
+              input.state).ops.toFlat).filter
             (fun (interaction : AbstractInteraction (F p)) => decide (interaction.channel =
               (stateChannel program initialState).toRaw)) = [] := by
       rw [List.filter_eq_nil_iff]
       intro interaction hinteraction heq
       have hinteraction' : interaction ∈
-          (((femtoCairoStep program h_programSize).main input.state).operations i₀).interactions := by
+          (((femtoCairoStep program h_programSize h_programSize_u64).main input.state).operations
+              i₀).interactions := by
         rw [← GeneralFormalCircuit.toSubcircuit_interactions]
         exact hinteraction
       have hchannel : interaction.channel ∈
-          (((femtoCairoStep program h_programSize).main input.state).operations i₀).channels :=
+          (((femtoCairoStep program h_programSize h_programSize_u64).main input.state).operations
+              i₀).channels :=
         List.mem_map.mpr ⟨interaction, hinteraction', rfl⟩
-      have hsubset := (femtoCairoStep program h_programSize).channels_subset input.state i₀ hchannel
+      have hsubset := (femtoCairoStep program h_programSize h_programSize_u64).channels_subset
+          input.state i₀ hchannel
       have hneProgram : (stateChannel program initialState).toRaw ≠
-          (programLookup program h_programSize).channel.toRaw := by
+          (programLookup program h_programSize h_programSize_u64).channel.toRaw := by
         intro heq
         have hname := congrArg RawChannel.name heq
         change "state" = "program" at hname
@@ -459,10 +481,12 @@ def executeStep (program : Array (F p))
         change "state" = "memory" at hname
         contradiction
       have hnot : (stateChannel program initialState).toRaw ∉
-          (femtoCairoStep program h_programSize).channels := by
+          (femtoCairoStep program h_programSize h_programSize_u64).channels := by
         change (stateChannel program initialState).toRaw ∉
-          [(programLookup program h_programSize).channel.toRaw, (programLookup program h_programSize).channel.toRaw,
-            (programLookup program h_programSize).channel.toRaw, (programLookup program h_programSize).channel.toRaw,
+          [(programLookup program h_programSize h_programSize_u64).channel.toRaw,
+              (programLookup program h_programSize h_programSize_u64).channel.toRaw,
+            (programLookup program h_programSize h_programSize_u64).channel.toRaw,
+                (programLookup program h_programSize h_programSize_u64).channel.toRaw,
             memoryChannel.toRaw, memoryChannel.toRaw, memoryChannel.toRaw,
             memoryChannel.toRaw, memoryChannel.toRaw, memoryChannel.toRaw]
         simp [hneProgram, hneMemory]
@@ -471,7 +495,8 @@ def executeStep (program : Array (F p))
       exact hnot (heq' ▸ hsubset)
     have hfilter' :
         (FlatOperation.interactions
-          ((femtoCairoStep program h_programSize).toSubcircuit (i₀ + 0) input.state).ops.toFlat).filter
+          ((femtoCairoStep program h_programSize h_programSize_u64).toSubcircuit (i₀ + 0)
+              input.state).ops.toFlat).filter
             (fun (interaction : AbstractInteraction (F p)) => decide (interaction.channel =
               (stateChannel program initialState).toRaw)) = [] := by
       simpa only [Nat.add_zero] using hfilter
@@ -480,7 +505,7 @@ def executeStep (program : Array (F p))
   ProverAssumptions input data hint :=
     (input.enabled = 0 ∨
       input.enabled = 1 ∧ (stateChannel program initialState).Guarantees input.state data) ∧
-    (femtoCairoStep program h_programSize).ProverAssumptions input.state data hint
+    (femtoCairoStep program h_programSize h_programSize_u64).ProverAssumptions input.state data hint
 
   Spec _ _ _ := True
   channelsWithRequirements := [(stateChannel program initialState).toRaw]
@@ -504,10 +529,12 @@ def executeStep (program : Array (F p))
     · simp [h_state, h_step]
 
 def executionComponent (program : Array (F p))
-    (h_programSize : program.size < p) (initialState : State (F p)) : Component (F p) where
-  circuit := executeStep program h_programSize initialState
+    (h_programSize : program.size < p) (h_programSize_u64 : program.size < 2 ^ 64)
+        (initialState : State (F p)) : Component (F p) where
+  circuit := executeStep program h_programSize h_programSize_u64 initialState
 
-/-- The state in which a program has run to completion: `pc` points just past the program, where no further instruction can be fetched. -/
+/-- The state in which a program has run to completion: `pc` points just past the program, where no
+  further instruction can be fetched. -/
 def haltedState (programSize : ℕ) (ap fp : F p) : State (F p) :=
   { pc := programSize, ap, fp }
 
@@ -534,10 +561,11 @@ def verifier (program : Array (F p))
   soundness := by simp_all [circuit_norm, explicit_provable_type, stateChannel, haltedState]
 
 def vm (program : Array (F p))
-    (h_programSize : program.size < p) (initialState : State (F p)) :
+    (h_programSize : program.size < p) (h_programSize_u64 : program.size < 2 ^ 64)
+        (initialState : State (F p)) :
     VmTables (F p) fieldPair where
   channel := stateChannel program initialState
-  tables := [executionComponent program h_programSize initialState]
+  tables := [executionComponent program h_programSize h_programSize_u64 initialState]
   unique_names := by simp [executionComponent]
   verifier := verifier program initialState
   tables_channel := by simp [circuit_norm, executionComponent, executeStep, sub_eq_zero]
@@ -547,37 +575,43 @@ def vm (program : Array (F p))
     exact ⟨0, rfl⟩
 
 def soundEnsemble {memorySize : UInt64} (program : Array (F p))
-    (h_programSize : program.size < p) (h_memorySize : memorySize.toNat < p)
+    (h_programSize : program.size < p) (h_programSize_u64 : program.size < 2 ^ 64)
+        (h_memorySize : memorySize.toNat < p)
     (initialState : State (F p)) :=
   SoundEnsemble.empty (F p) fieldPair
-  |>.addLookup (programLookup program h_programSize)
+  |>.addLookup (programLookup program h_programSize h_programSize_u64)
   |>.addTable (memoryComponent memorySize h_memorySize)
     (by simp +instances [circuit_norm, memoryComponent, provideMemory])
     (by simp [circuit_norm, memoryComponent, provideMemory, programLookup, memoryChannel])
     (by simp [circuit_norm, memoryComponent, provideMemory, programLookup])
   |>.addFinishedChannel memoryChannel.toRaw
-  |>.addVm (vm program h_programSize initialState)
-    (by simp +instances [circuit_norm, vm, programLookup, memoryComponent, provideMemory, stateChannel,
+  |>.addVm (vm program h_programSize h_programSize_u64 initialState)
+    (by simp +instances
+        [circuit_norm, vm, programLookup, memoryComponent, provideMemory, stateChannel,
       memoryChannel])
     (by simp +instances [circuit_norm, vm, executionComponent, executeStep, verifier])
-    (by simp [circuit_norm, vm, executionComponent, executeStep, verifier, stateChannel, programLookup,
+    (by simp [circuit_norm, vm, executionComponent, executeStep, verifier, stateChannel,
+        programLookup,
       memoryChannel])
     (by simp [circuit_norm, vm, executionComponent, executeStep, memoryComponent, provideMemory,
       programLookup])
 
-/-- The public statement: some memory of size `memorySize.toNat` makes the program run from `initialState` to completion with registers `(ap, fp)`. -/
+/-- The public statement: some memory of size `memorySize.toNat` makes the program run from
+  `initialState` to completion with registers `(ap, fp)`. -/
 def Spec (program : Array (F p)) (memorySize : UInt64)
     (initialState : State (F p)) : fieldPair (F p) → Prop
   | (ap, fp) => ∃ mem : Array (F p), mem.size = memorySize.toNat ∧ ∃ steps,
       Spec.femtoCairoMachineBoundedExecution program mem (some initialState) steps =
         some (haltedState program.size ap fp)
 
-/-- The prover's assumptions: its memory values make the program run from `initialState` to completion with registers `(ap, fp)`. -/
+/-- The prover's assumptions: its memory values make the program run from `initialState` to
+  completion with registers `(ap, fp)`. -/
 def ProverAssumptions (program : Array (F p))
     (memorySize : UInt64) (initialState : State (F p)) :
     fieldPair (F p) → fields memorySize.toNat (F p) → Prop
   | (ap, fp), memoryValues => ∃ steps,
-      Spec.femtoCairoMachineBoundedExecution program memoryValues.toArray (some initialState) steps =
+      Spec.femtoCairoMachineBoundedExecution program memoryValues.toArray (some initialState) steps
+          =
         some (haltedState program.size ap fp)
 
 omit p_large_enough in
@@ -593,9 +627,11 @@ lemma spec_of_proverAssumptions {memorySize : UInt64}
 def memoryValuesKey : String := "memoryValues"
 
 def formalEnsemble {memorySize : UInt64} (program : Array (F p))
-    (h_programSize : program.size < p) (h_memorySize : memorySize.toNat < p)
+    (h_programSize : program.size < p) (h_programSize_u64 : program.size < 2 ^ 64)
+        (h_memorySize : memorySize.toNat < p)
     (initialState : State (F p)) :=
-  (soundEnsemble program h_programSize h_memorySize initialState).toFormal (fun _ => True)
+  (soundEnsemble program h_programSize h_programSize_u64 h_memorySize initialState).toFormal
+      (fun _ => True)
     (Spec program memorySize initialState)
     (by simp [circuit_norm, soundEnsemble, vm, executionComponent, memoryComponent])
     (by
@@ -611,16 +647,20 @@ def formalEnsemble {memorySize : UInt64} (program : Array (F p))
     [{ key := memoryValuesKey, width := 1, offset := 0, rows := memorySize.toNat }]
     (ProverAssumptions program memorySize initialState)
 
-/-- End-to-end soundness: a valid proof for the public registers `(ap, fp)` shows that the program, run on some memory of size `memorySize`, halts with these registers. -/
+/-- End-to-end soundness: a valid proof for the public registers `(ap, fp)` shows that the program,
+  run on some memory of size `memorySize`, halts with these registers. -/
 theorem femtoCairo_soundness {memorySize : UInt64}
     (program : Array (F p))
-    (h_programSize : program.size < p) (h_memorySize : memorySize.toNat < p)
+    (h_programSize : program.size < p) (h_programSize_u64 : program.size < 2 ^ 64)
+        (h_memorySize : memorySize.toNat < p)
     (initialState : State (F p)) (ap fp : F p) :
-    (soundEnsemble program h_programSize h_memorySize initialState).ensemble.Statement (ap, fp) →
+    (soundEnsemble program h_programSize h_programSize_u64 h_memorySize
+        initialState).ensemble.Statement (ap, fp) →
       ∃ mem : Array (F p), mem.size = memorySize.toNat ∧ ∃ steps,
         Spec.femtoCairoMachineBoundedExecution program mem (some initialState) steps =
           some (haltedState program.size ap fp) :=
-  (formalEnsemble program h_programSize h_memorySize initialState).soundness (ap, fp) trivial
+  (formalEnsemble program h_programSize h_programSize_u64 h_memorySize initialState).soundness
+      (ap, fp) trivial
 
 namespace Witness
 
@@ -642,11 +682,12 @@ def memoryMode (memorySize : UInt64) : Mode (F p) := .preallocated {
 }
 
 def config {memorySize : UInt64} (program : Array (F p))
-    (h_programSize : program.size < p) (initialState : State (F p)) (executionRows : UInt64)
+    (h_programSize : program.size < p) (h_programSize_u64 : program.size < 2 ^ 64)
+        (initialState : State (F p)) (executionRows : UInt64)
     (fuel : ℕ) :
     Config (F p) where
   components := [
-    ((executeStep program h_programSize initialState).name, {
+    ((executeStep program h_programSize h_programSize_u64 initialState).name, {
       mode := executionMode program initialState
       padding := {
         input := #[0, initialState.pc, initialState.ap, initialState.fp]
@@ -654,18 +695,23 @@ def config {memorySize : UInt64} (program : Array (F p))
     ((provideMemory (p := p)).name, {
       mode := memoryMode memorySize
       padding := { input := #[0, 0, 0], minimumRows := memorySize } }),
-    ((programLookup program h_programSize).name, (programLookup program h_programSize).generation)
+    ((programLookup program h_programSize h_programSize_u64).name,
+        (programLookup program h_programSize h_programSize_u64).generation)
   ]
   fuel := fuel
 
 def generate {memorySize : UInt64} (program : Array (F p))
-    (h_programSize : program.size < p) (h_memorySize : memorySize.toNat < p)
+    (h_programSize : program.size < p) (h_programSize_u64 : program.size < 2 ^ 64)
+        (h_memorySize : memorySize.toNat < p)
     (memoryValues : fields memorySize.toNat (F p)) (initialState : State (F p))
     (finalRegisters : fieldPair (F p)) (executionRows : UInt64) (fuel : ℕ) :
     Except GenerationError (EnsembleWitness
-      (formalEnsemble program h_programSize h_memorySize initialState).ensemble) :=
-  Air.Flat.WitnessGeneration.generate (formalEnsemble program h_programSize h_memorySize initialState)
-    (config (memorySize := memorySize) program h_programSize initialState executionRows fuel)
+      (formalEnsemble program h_programSize h_programSize_u64 h_memorySize initialState).ensemble)
+          :=
+  Air.Flat.WitnessGeneration.generate
+      (formalEnsemble program h_programSize h_programSize_u64 h_memorySize initialState)
+    (config (memorySize := memorySize) program h_programSize h_programSize_u64 initialState
+        executionRows fuel)
     finalRegisters memoryValues
 
 end Witness

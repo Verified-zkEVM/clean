@@ -8,7 +8,11 @@ public import Clean.Air.WitnessGeneration
 /-!
 # Static lookups
 
-A static lookup is a verifier-known table, read by other components through a channel. It is always set up the same way: the table is a component whose fixed columns are the table's rows, followed by one multiplicity column, and it pushes each row as often as it is pulled. `Lookup` bundles the channel, that component, and its witness generation from the table's rows and what it means to be in the table.
+A static lookup is a verifier-known table, read by other components through a channel. It is always
+set up the same way: the table is a component whose fixed columns are the table's rows, followed by
+one multiplicity column, and it pushes each row as often as it is pulled. `Lookup` bundles the
+channel, that component, and its witness generation from the table's rows and what it means to be in
+the table.
 -/
 
 namespace Air.Flat
@@ -22,11 +26,12 @@ structure Lookup (F : Type) [FiniteField F] (Row : TypeMap) [ProvableType Row] w
   row (i : Witgen.U64Expr F) : Witgen.M F (Row (Witgen.FExpr F))
   valid : (Witgen.RowProgram.ofM (row .idx)).Valid .fixed := by
     simp [Witgen.RowProgram.Valid, Witgen.VExpr.validForRow, Witgen.FExpr.validForRow,
-      Witgen.U64Expr.validForRow, Witgen.BExpr.validForRow, circuit_norm, explicit_provable_type]
+      Witgen.U64Expr.validForRow, Witgen.BExpr.validForRow, circuit_norm, toElements_field,
+      toElements_fieldPair, toElements_fieldTriple]
   /-- What it means to be in the table. Pulling a row from the lookup's channel guarantees it. -/
   Contains : Row F → Prop
-  /-- Every row of the table is contained in it. -/
-  contains_row : ∀ i < height, Contains ((row .idx).evalRow i)
+  /-- `Contains` holds exactly for the rows of the table. -/
+  contains_iff : ∀ value, Contains value ↔ ∃ i < height, value = (row .idx).evalRow i
 
 namespace Lookup
 variable (lookup : Lookup F Row)
@@ -63,7 +68,8 @@ def provider : GeneralFormalCircuit F (ProvablePair Row field) unit where
 omit [FiniteField F] in
 /-- The first elements of a pair are those of its first component. -/
 lemma take_toElements_pair {β : TypeMap} [ProvableType β] (a : Row F) (b : β F) (n : ℕ)
-    (h : n = size Row) : (toElements (M := ProvablePair Row β) (a, b)).toList.take n = (toElements a).toList := by
+    (h : n = size Row) : (toElements (M := ProvablePair Row β) (a, b)).toList.take n =
+        (toElements a).toList := by
   subst h
   simp only [toElements, Vector.toList_append]
   exact List.take_left' Vector.length_toList
@@ -76,9 +82,10 @@ def component : Component F where
   circuit_assumptions_of_assumptions := by
     rintro i ⟨value, multiplicity⟩ data hfixed - -
     obtain ⟨hi, hrow⟩ := hfixed _ rfl
-    replace hrow := (take_toElements_pair value multiplicity lookup.fixedColumns.width rfl).symm.trans hrow
+    replace hrow :=
+        (take_toElements_pair value multiplicity lookup.fixedColumns.width rfl).symm.trans hrow
     change lookup.Contains value
-    convert lookup.contains_row i hi
+    refine (lookup.contains_iff value).mpr ⟨i, hi, ?_⟩
     have h : toElements value = toElements ((lookup.row .idx).evalRow i) :=
       Vector.toList_inj.mp (hrow.trans (by rw [FixedColumns.values_eq]; rfl))
     simpa [ProvableType.fromElements_toElements] using congrArg (fromElements (M := Row)) h
@@ -88,10 +95,12 @@ def component : Component F where
     lookup.component.circuit.channelsWithGuarantees = [] := rfl
 @[circuit_norm] lemma component_channelsWithRequirements :
     lookup.component.circuit.channelsWithRequirements = [lookup.channel.toRaw] := rfl
-@[circuit_norm] lemma component_assumptions (input : lookup.component.Input F) (data : ProverData F) :
+@[circuit_norm] lemma component_assumptions (input : lookup.component.Input F) (data : ProverData F)
+    :
     lookup.component.Assumptions input data = True := rfl
 
-/-- Witness generation for the table: one preallocated row per table row, whose multiplicity counts the pulls. -/
+/-- Witness generation for the table: one preallocated row per table row, whose multiplicity counts
+  the pulls. -/
 def generation : WitnessGeneration.Generation F where
   mode := .preallocated {
     rows := lookup.height
@@ -113,18 +122,22 @@ def addLookup (soundEns : SoundEnsemble F PublicIO) (lookup : Lookup F Row)
     SoundEnsemble F PublicIO :=
   soundEns.addTable lookup.component (List.nil_subset _)
     (fun channel h_channel h_mem =>
-      not_finished (List.mem_singleton.mp (show channel ∈ [lookup.channel.toRaw] from h_mem) ▸ h_channel))
+      not_finished
+          (List.mem_singleton.mp (show channel ∈ [lookup.channel.toRaw] from h_mem) ▸ h_channel))
     fresh
     |>.addFinishedChannel lookup.channel.toRaw
 
 variable {soundEns : SoundEnsemble F PublicIO} {lookup : Lookup F Row} {fresh not_finished}
 
 @[circuit_norm] lemma addLookup_tables :
-    (soundEns.addLookup lookup fresh not_finished).tables = lookup.component :: soundEns.tables := rfl
+    (soundEns.addLookup lookup fresh not_finished).tables = lookup.component :: soundEns.tables :=
+        rfl
 @[circuit_norm] lemma addLookup_channels :
-    (soundEns.addLookup lookup fresh not_finished).channels = lookup.channel.toRaw :: soundEns.channels := rfl
+    (soundEns.addLookup lookup fresh not_finished).channels = lookup.channel.toRaw ::
+        soundEns.channels := rfl
 @[circuit_norm] lemma addLookup_finished :
-    (soundEns.addLookup lookup fresh not_finished).finished = lookup.channel.toRaw :: soundEns.finished := rfl
+    (soundEns.addLookup lookup fresh not_finished).finished = lookup.channel.toRaw ::
+        soundEns.finished := rfl
 @[circuit_norm] lemma addLookup_verifier :
     (soundEns.addLookup lookup fresh not_finished).verifier = soundEns.verifier := rfl
 

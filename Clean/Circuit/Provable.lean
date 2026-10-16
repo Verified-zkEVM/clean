@@ -233,6 +233,12 @@ instance (priority := high) : ProvableType fieldTriple where
   fromElements := fun ⟨⟨[x, y, z]⟩, _ ⟩ => (x, y, z)
 instance : NonEmptyProvableType fieldTriple where
 
+lemma toElements_field {F : Type} (x : F) : toElements (M := field) x = #v[x] := rfl
+lemma toElements_fieldPair {F : Type} (x y : F) :
+    toElements (M := fieldPair) (x, y) = #v[x, y] := rfl
+lemma toElements_fieldTriple {F : Type} (x y z : F) :
+    toElements (M := fieldTriple) (x, y, z) = #v[x, y, z] := rfl
+
 variable {n : ℕ}
 abbrev ProvableVector (α : TypeMap) (n : ℕ) := fun F => Vector (α F) n
 
@@ -453,7 +459,8 @@ lemma toList_componentsToElements {F : Type} :
   | _ :: cs, .cons a as => by
     simp [componentsToElements, componentsToList, toList_componentsToElements cs as]
 
-/-- The elements of a structure, as a list, are those of its components. Applied before simp descends into `toElements`, so that the elements of a structure literal compute. -/
+/-- The elements of a structure, as a list, are those of its components. Applied before simp
+  descends into `toElements`, so that the elements of a structure literal compute. -/
 @[circuit_norm ↓] lemma toList_toElements {α : TypeMap} [ProvableStruct α] {F : Type} (x : α F) :
     (toElements x).toList = componentsToList (components α) (toComponents x) := by
   change (structToElements x).toList = _

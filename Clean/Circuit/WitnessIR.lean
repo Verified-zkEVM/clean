@@ -75,7 +75,8 @@ inductive FExpr (F : Type) where
   | ite (c : BExpr F) (t e : FExpr F)
   /-- Read an expression list at a computed index, 0 if out of range -/
   | listGet (xs : List (FExpr F)) (i : U64Expr F)
-  /-- Read committed prover data (`Environment.data`), keyed like `ProverData`: row `row` of component `key` with rows of width `n`, projected at column `col`. Missing rows read as 0. -/
+  /-- Read committed prover data (`Environment.data`), keyed like `ProverData`: row `row` of
+    component `key` with rows of width `n`, projected at column `col`. Missing rows read as 0. -/
   | dataGet (key : String) (n : ℕ) (row : U64Expr F) (col : Fin n)
   /-- Same as `dataGet` but reads the uncommitted `ProverEnvironment.hint`. -/
   | hintGet (key : String) (n : ℕ) (row : U64Expr F) (col : Fin n)

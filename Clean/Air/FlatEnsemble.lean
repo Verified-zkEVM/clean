@@ -14,7 +14,8 @@ universe u
 variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
 
-/-- Channels on which a participant of an ensemble, a component or the verifier, adds guarantees and requirements. -/
+/-- Channels on which a participant of an ensemble, a component or the verifier, adds guarantees and
+  requirements. -/
 class ChannelInterface (α : Type u) (F : outParam Type) where
   channelsWithGuarantees : α → List (RawChannel F)
   channelsWithRequirements : α → List (RawChannel F)
@@ -39,7 +40,8 @@ namespace ChannelInterface
 end ChannelInterface
 
 structure Ensemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO] where
-  /-- Components form an ordered map: names are keys, while list order fixes the trace order consumed by witness generation and backend extraction. -/
+  /-- Components form an ordered map: names are keys, while list order fixes the trace order
+    consumed by witness generation and backend extraction. -/
   tables : List (Component F)
   unique_names : (tables.map (·.circuit.name)).Nodup
   channels : List (RawChannel F)
@@ -126,9 +128,11 @@ lemma verifierChannelGuarantees_of_not_mem
     ens.verifier.channelsWithGuarantees (.fromInput publicInput data)
     (ens.verifier.operations.circuitOperations_inChannelsOrGuaranteesFull _) channel h_not_mem
 
-lemma verifierGuarantees_iff (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : ProverData F) :
+lemma verifierGuarantees_iff (ens : Ensemble F PublicIO) (publicInput : PublicIO F)
+    (data : ProverData F) :
     ens.VerifierGuarantees publicInput data ↔
-      ∀ channel ∈ ens.verifier.channelsWithGuarantees, ens.VerifierChannelGuarantees publicInput data channel :=
+      ∀ channel ∈ ens.verifier.channelsWithGuarantees, ens.VerifierChannelGuarantees publicInput
+          data channel :=
   Operations.guarantees_iff ens.verifierOperations ens.verifier.channelsWithGuarantees _
     (ens.verifier.operations.circuitOperations_inChannelsOrGuaranteesFull _)
 
@@ -324,7 +328,8 @@ def Completeness (ens : Ensemble F PublicIO) (Assumptions Spec : PublicIO F → 
   ∀ publicInput, Assumptions publicInput → Spec publicInput → ens.Statement publicInput
 end Ensemble
 
-/-- A named hint table viewing the flattened private input: `rows` rows of `width` elements, starting at element `offset`. Elements beyond the input read as zero. -/
+/-- A named hint table viewing the flattened private input: `rows` rows of `width` elements,
+  starting at element `offset`. Elements beyond the input read as zero. -/
 structure HintTable where
   key : String
   width : ℕ
@@ -332,7 +337,8 @@ structure HintTable where
   rows : ℕ
 deriving Repr, DecidableEq
 
-/-- The hint tables `tables` take from the flattened private input `elements`. Like derived prover data, rows are cut off or zero-padded at the requested width. -/
+/-- The hint tables `tables` take from the flattened private input `elements`. Like derived prover
+  data, rows are cut off or zero-padded at the requested width. -/
 def HintTable.hint (tables : List HintTable) (elements : Array F) : ProverHint F := fun key width =>
   match tables.find? (·.key == key) with
   | none => #[]
@@ -363,7 +369,8 @@ namespace FormalEnsemble
 def hint (ens : FormalEnsemble F PublicIO) (proverInput : ens.ProverInput F) : ProverHint F :=
   HintTable.hint ens.hintTables (toElements proverInput).toArray
 
-/-- Declare the prover's private input: its type, the hint tables viewing it, and the assumptions witness generation needs. -/
+/-- Declare the prover's private input: its type, the hint tables viewing it, and the assumptions
+  witness generation needs. -/
 def withProverInput (ens : FormalEnsemble F PublicIO) (ProverInput : TypeMap)
     [ProvableType ProverInput] (hintTables : List HintTable)
     (ProverAssumptions : PublicIO F → ProverInput F → Prop) : FormalEnsemble F PublicIO where
@@ -401,13 +408,15 @@ def SpecConsistency (ens : Ensemble F PublicIO) (Spec : PublicIO F → Prop) : P
     witness.Spec →
     Spec witness.publicInput
 
-/-- Ensemble-level assumptions imply every component's residual assumptions, for all inputs and prover data. -/
+/-- Ensemble-level assumptions imply every component's residual assumptions, for all inputs and
+  prover data. -/
 @[circuit_norm]
 def AssumptionsConsistency (ens : Ensemble F PublicIO) (Assumptions : PublicIO F → Prop) : Prop :=
   ∀ publicInput, Assumptions publicInput →
     ∀ component ∈ ens.tables, ∀ input data, component.Assumptions input data
 
-lemma assumptions_of_assumptionsConsistency {ens : Ensemble F PublicIO} {Assumptions : PublicIO F → Prop}
+lemma assumptions_of_assumptionsConsistency {ens : Ensemble F PublicIO}
+    {Assumptions : PublicIO F → Prop}
     (consistency : ens.AssumptionsConsistency Assumptions) (witness : EnsembleWitness ens)
     (assumptions : Assumptions witness.publicInput) : witness.Assumptions := by
   intro table htable row _

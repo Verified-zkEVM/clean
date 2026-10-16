@@ -34,9 +34,14 @@ def bytes : Lookup (F p) field where
   height := 256
   row i := pure i
   Contains value := value.val < 256
-  contains_row i hi := by
-    have : i.toNat < 256 := UInt64.lt_iff_toNat_lt.mp hi
-    simp [circuit_norm, explicit_provable_type, Nat.mod_eq_of_lt (show i.toNat < p by linarith [pGt.out]), this]
+  contains_iff value := by
+    simp only [circuit_norm, Nat.mod_eq_of_lt (UInt64.toNat_lt _)]
+    constructor
+    · intro h
+      refine ⟨value.val.toUInt64, ?_, ?_⟩ <;>
+        simp [h]
+    · rintro ⟨i, hi, rfl⟩
+      rwa [ZMod.val_cast_of_lt (by linarith [pGt.out])]
 
 def Add8Channel : Channel (F p) fieldTriple where
   name := "add8"
@@ -77,7 +82,8 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
     set carry := env.get i₀
     obtain ⟨ hz, hcarry, heq ⟩ := h_holds
     intro hm h0 hx hy
-    have add_soundness := Theorems.soundness input_x input_y input_z 0 carry hx hy hz (by left; trivial) hcarry
+    have add_soundness := Theorems.soundness input_x input_y input_z 0 carry hx hy hz
+        (by left; trivial) hcarry
     simp_all
   completeness := by
     circuit_proof_start [bytes]
@@ -260,8 +266,10 @@ def add8Mode : Mode (F p) := .demand {
 /-- Channel-driven witness-generation metadata for each component of the ensemble. -/
 def config (fuel : ℕ) : Config (F p) where
   components := [
-    ((fib8 (p := p)).name, { mode := fibMode, padding := { input := #[0, 0, 0, 0], minimumRows := 32 } }),
-    ((add8 (p := p)).name, { mode := add8Mode, padding := { input := #[0, 0, 0, 0], minimumRows := 32 } }),
+    ((fib8 (p := p)).name,
+        { mode := fibMode, padding := { input := #[0, 0, 0, 0], minimumRows := 32 } }),
+    ((add8 (p := p)).name,
+        { mode := add8Mode, padding := { input := #[0, 0, 0, 0], minimumRows := 32 } }),
     ((bytes (p := p)).name, bytes.generation)
   ]
   fuel := fuel
@@ -280,17 +288,22 @@ then you know that the public input is a Fibonacci number.
 
 TODO: find a generic strategy to show that k < p, so the statement simplifies to
 `(x.val, y.val) = fibonacci n.val`
-The problem is that the row-transition circuit currently can't prove this: it receives any field elements n and
+The problem is that the row-transition circuit currently can't prove this: it receives any field
+elements n and
 pushes n+1, so a priori it can overflow.
 
-It would make sense to provide a guarantee that mentions the total interaction length "before" running the row circuit,
+It would make sense to provide a guarantee that mentions the total interaction length "before"
+running the row circuit,
 and prove a requirement about the total interaction length after:
 pre: 2*n ≤ total_length_before
 post: 2*(n + 1) ≤ total_length_after = total_length_before + 2 :check_mark:
-But that massively complicates the guarantees/requirements system, since they now need access to global information.
+But that massively complicates the guarantees/requirements system, since they now need access to
+global information.
 
-And idea could be to define a "global state" per channel, and define how every interaction transforms that state.
-Then let the guarantees/requirements access that state (the guarantees _before_ and the requiremtns _after_ the interaction).
+And idea could be to define a "global state" per channel, and define how every interaction
+transforms that state.
+Then let the guarantees/requirements access that state (the guarantees _before_ and the requiremtns
+_after_ the interaction).
 -/
 theorem fibonacci_soundness : ∀ (n x y : F p),
   fibonacciEnsemble.ensemble.Statement (n, x, y) →

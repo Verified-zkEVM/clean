@@ -1,6 +1,8 @@
 //! Generic Plonky3 AIR wrapper for programs extracted from Clean.
 //!
-//! Generated files provide component shapes and direct expression builders through [`GeneratedAirSpec`], usually implemented by [`crate::ensemble`]. Lookup registration and Plonky3 trait plumbing live here so they are implemented and reviewed once.
+//! Generated files provide component shapes and direct expression builders through
+//! [`GeneratedAirSpec`], usually implemented by [`crate::ensemble`]. Lookup registration and
+//! Plonky3 trait plumbing live here so they are implemented and reviewed once.
 
 use alloc::vec;
 use alloc::vec::Vec;
@@ -8,8 +10,7 @@ use core::marker::PhantomData;
 
 use p3_air::lookup::{Direction as LookupDirection, Kind, Lookup};
 use p3_air::{
-    Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PermutationAirBuilder,
-    SymbolicExpression,
+    Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PermutationAirBuilder, SymbolicExpression,
 };
 use p3_field::PrimeCharacteristicRing;
 use p3_matrix::dense::RowMajorMatrix;
@@ -75,7 +76,9 @@ pub enum EnsembleShapeError {
 
 /// Direct expressions emitted for one Clean ensemble.
 ///
-/// Constraints and interactions read a complete row: the fixed columns followed by the committed columns. They are generic over the ring of values, so the same generated functions run on field elements during witness generation and on symbolic expressions here.
+/// Constraints and interactions read a complete row: the fixed columns followed by the committed
+/// columns. They are generic over the ring of values, so the same generated functions run on field
+/// elements during witness generation and on symbolic expressions here.
 pub trait GeneratedAirSpec: Clone + Sync {
     /// Order of the field whose constants and arithmetic the generated code was printed for.
     const FIELD_ORDER: u64;
@@ -110,7 +113,8 @@ pub struct GeneratedAir<P> {
 
 /// A complete generated Clean statement with its AIR components in canonical order.
 ///
-/// The component AIRs are private so callers cannot omit, duplicate, or reorder them. Construction also establishes the interaction-count side condition required by Clean's channel semantics.
+/// The component AIRs are private so callers cannot omit, duplicate, or reorder them. Construction
+/// also establishes the interaction-count side condition required by Clean's channel semantics.
 #[derive(Clone, Debug)]
 pub struct GeneratedEnsemble<F, P> {
     airs: Vec<GeneratedAir<P>>,
@@ -296,7 +300,8 @@ where
             .row_slice(0)
             .expect("validated trace height is nonzero");
         row.extend(local.iter().map(|&value| value.into()));
-        // an interaction that assumes guarantees pulls from the channel: it is received with the negated multiplicity
+        // an interaction that assumes guarantees pulls from the channel: it is received with the
+        // negated multiplicity
         P::interactions(self.component, &row)
             .into_iter()
             .map(|interaction| {

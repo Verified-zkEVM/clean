@@ -7,9 +7,13 @@ public import Clean.Air.WitnessGeneration
 /-!
 # Extraction programs
 
-An extraction program is the backend-agnostic form of a flat AIR ensemble that source-code backends print: structured witness programs, constraints, interactions, component shapes, and ensemble generation modes. `lower` validates an ensemble and produces it.
+An extraction program is the backend-agnostic form of a flat AIR ensemble that source-code backends
+print: structured witness programs, constraints, interactions, component shapes, and ensemble
+generation modes. `lower` validates an ensemble and produces it.
 
-The representation reuses Clean's expression and witness IR nodes, together with their Lean semantics. `WitnessBlock.well_formed` additionally certifies that every local reference has the sort of an earlier step. Native Lean closures are not representable.
+The representation reuses Clean's expression and witness IR nodes, together with their Lean
+semantics. `WitnessBlock.well_formed` additionally certifies that every local reference has the sort
+of an earlier step. Native Lean closures are not representable.
 -/
 
 namespace Backends
@@ -172,14 +176,16 @@ def interactionValues (component : ComponentProgram F) (row : Array F)
 
 end ComponentProgram
 
-/-- A preallocated handler, with the channel and direction of the component interaction it serves. -/
+/-- A preallocated handler, with the channel and direction of the component interaction it serves.
+-/
 structure HandlerProgram where
   channel : String
   direction : Direction
   interaction : ℕ
   column : ℕ
 
-/-- How the rows of one component are generated, with the row program of preallocated rows validated. -/
+/-- How the rows of one component are generated, with the row program of preallocated rows
+  validated. -/
 inductive ModeProgram (F : Type) [FiniteField F] where
   | demand (mode : DemandMode F)
   | preallocated (rows : UInt64) (input : WitnessBlock F) (handlers : List HandlerProgram)
@@ -305,7 +311,8 @@ def lowerHandler (index : ℕ) (component : ComponentProgram F) (handler : Preal
     column := handler.column
   }
 
-def lowerMode (index : ℕ) (component : ComponentProgram F) : Mode F → Except LoweringError (ModeProgram F)
+def lowerMode (index : ℕ) (component : ComponentProgram F) : Mode F → Except LoweringError
+    (ModeProgram F)
   | .demand mode => pure (.demand mode)
   | .preallocated mode => do
       let input ← lowerRowProgram (.malformedInitializer index) mode.input
@@ -319,7 +326,8 @@ def lower (ens : FormalEnsemble F PublicIO) (config : Config F) :
   let config ← (config.validate ensemble).mapError .config
   let components ← ensemble.tables.zipIdx.mapM fun (component, index) =>
     lowerComponent index component
-  let modes ← (components.zip config.generations).zipIdx.mapM fun ((component, generation), index) =>
+  let modes ← (components.zip config.generations).zipIdx.mapM fun ((component, generation), index)
+      =>
     lowerMode index component generation.mode
   let verifierOperations := ensemble.verifierOperations.toFlat
   let verifierInteractions := FlatOperation.interactions verifierOperations

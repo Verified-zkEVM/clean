@@ -11,7 +11,8 @@ namespace Verifier
 
 /-- Operations emitted by a public verifier program. New verifier-only primitives belong here. -/
 inductive Operation (F : Type) [FiniteField F] where
-  /-- Append an interaction. If it assumes guarantees, the verifier doesn't list its channel as one with requirements, so its requirements must hold unconditionally. -/
+  /-- Append an interaction. If it assumes guarantees, the verifier doesn't list its channel as one
+    with requirements, so its requirements must hold unconditionally. -/
   | interact (interaction : AbstractInteraction F)
       (requirements : interaction.assumeGuarantees → ∀ env, interaction.Requirements env)
 
@@ -66,7 +67,8 @@ lemma circuitOperations_interactions (operations : Operations F) :
           Operation.interaction operation :: interactions operations
       rw [ih]
 
-lemma circuitOperations_inChannelsOrGuaranteesFull (operations : Operations F) (env : Environment F) :
+lemma circuitOperations_inChannelsOrGuaranteesFull (operations : Operations F) (env : Environment F)
+    :
     operations.circuitOperations.InChannelsOrGuaranteesFull
       operations.channelsWithGuarantees env := by
   rw [_root_.Operations.InChannelsOrGuaranteesFull, circuitOperations_interactions]
@@ -82,7 +84,8 @@ lemma circuitOperations_inChannelsOrGuaranteesFull (operations : Operations F) (
   · right
     exact fun h => absurd h assumes
 
-lemma circuitOperations_inChannelsOrRequirementsFull (operations : Operations F) (env : Environment F) :
+lemma circuitOperations_inChannelsOrRequirementsFull (operations : Operations F)
+    (env : Environment F) :
     operations.circuitOperations.InChannelsOrRequirementsFull
       operations.channelsWithRequirements env := by
   rw [_root_.Operations.InChannelsOrRequirementsFull, circuitOperations_interactions]
@@ -106,7 +109,8 @@ end Operations
 end Verifier
 
 /--
-An append-only verifier program. Like `Circuit`, its monad instance accumulates operations by appending the continuation's operations to those already emitted.
+An append-only verifier program. Like `Circuit`, its monad instance accumulates operations by
+appending the continuation's operations to those already emitted.
 -/
 @[implicit_reducible]
 def Verifier (F : Type) [FiniteField F] (α : Type) := α × Verifier.Operations F

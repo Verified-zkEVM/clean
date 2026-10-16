@@ -35,7 +35,8 @@ fn public_lookups<F: WitnessField>(interactions: Vec<Interaction<F>>) -> Vec<Pub
         .collect()
 }
 
-/// Verification failures are separated into caller-visible statement-shape errors and cryptographic Plonky3 verification errors.
+/// Verification failures are separated into caller-visible statement-shape errors and cryptographic
+/// Plonky3 verification errors.
 #[derive(Debug)]
 pub enum EnsembleVerificationError<E: core::fmt::Debug> {
     Shape(EnsembleShapeError),

@@ -29,6 +29,8 @@ def testProgram : Array (F pBabybear) :=
 
 theorem programSize_lt : testProgram.size < pBabybear := by decide
 
+theorem programSize_lt_u64 : testProgram.size < 2 ^ 64 := by decide
+
 theorem memorySize_lt : (8 : UInt64).toNat < pBabybear := by decide
 
 def initialState : State (F pBabybear) := { pc := 0, ap := 0, fp := 0 }

@@ -82,8 +82,8 @@ fn extracted_fibonacci_air_proves_and_verifies() {
     );
 
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
-    let statement = generated::Statement::<BabyBear>::new(&trace_heights)
-        .expect("invalid generated AIR shape");
+    let statement =
+        generated::Statement::<BabyBear>::new(&trace_heights).expect("invalid generated AIR shape");
     let witness_elapsed = witness_started.elapsed();
     let proving_started = Instant::now();
     let (proof, _) =
@@ -96,7 +96,8 @@ fn extracted_fibonacci_air_proves_and_verifies() {
     verify_ensemble(&config, &statement, &proof, &public_values)
         .expect("extracted Fibonacci AIR proof failed verification");
     eprintln!(
-        "4096 steps: witness+padding={witness_elapsed:?}, proving={proving_elapsed:?}, verification={:?}, proof_json={proof_json_bytes} bytes",
+        "4096 steps: witness+padding={witness_elapsed:?}, proving={proving_elapsed:?}, \
+         verification={:?}, proof_json={proof_json_bytes} bytes",
         verification_started.elapsed()
     );
 }
@@ -109,14 +110,13 @@ fn ensemble_api_reports_shape_errors() {
         generated::generate(&public_values, &[]).expect("extracted Rust witness generation failed");
     let traces = witness.into_traces().expect("invalid extracted traces");
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
-    let statement = generated::Statement::<BabyBear>::new(&trace_heights)
-        .expect("invalid generated AIR shape");
+    let statement =
+        generated::Statement::<BabyBear>::new(&trace_heights).expect("invalid generated AIR shape");
     assert_eq!(statement.component_count(), 3);
     assert_eq!(statement.trace_heights(), trace_heights);
     assert_eq!(statement.interaction_count(), 418);
-    let different_dynamic_shape =
-        generated::Statement::<BabyBear>::new(&[64, 32, 256])
-            .expect("valid alternative dynamic shape");
+    let different_dynamic_shape = generated::Statement::<BabyBear>::new(&[64, 32, 256])
+        .expect("valid alternative dynamic shape");
     assert!(matches!(
         prove_ensemble(
             &config,
@@ -191,10 +191,8 @@ impl<F: WitnessField> Program<F> for Minimum64Program {
     const COMPONENTS: usize = <generated::Ensemble as Program<F>>::COMPONENTS;
     const PUBLIC_INPUTS: usize = <generated::Ensemble as Program<F>>::PUBLIC_INPUTS;
     const PROVER_INPUTS: usize = <generated::Ensemble as Program<F>>::PROVER_INPUTS;
-    const HINT_TABLES: &'static [HintTable] =
-        <generated::Ensemble as Program<F>>::HINT_TABLES;
-    const FIXED_WIDTHS: &'static [usize] =
-        <generated::Ensemble as Program<F>>::FIXED_WIDTHS;
+    const HINT_TABLES: &'static [HintTable] = <generated::Ensemble as Program<F>>::HINT_TABLES;
+    const FIXED_WIDTHS: &'static [usize] = <generated::Ensemble as Program<F>>::FIXED_WIDTHS;
     const COMPONENT_NAMES: &'static [&'static str] =
         <generated::Ensemble as Program<F>>::COMPONENT_NAMES;
 
@@ -245,9 +243,8 @@ fn verifier_rejects_a_valid_proof_at_the_wrong_height() {
 
     let wrong_traces = wrong.into_traces().expect("invalid wrong-height traces");
     let wrong_heights = wrong_traces.iter().map(Matrix::height).collect::<Vec<_>>();
-    let wrong_statement =
-        generated::Statement::<BabyBear>::new(&wrong_heights)
-            .expect("invalid wrong-height AIR shape");
+    let wrong_statement = generated::Statement::<BabyBear>::new(&wrong_heights)
+        .expect("invalid wrong-height AIR shape");
     let (wrong_proof, _) = prove_ensemble(&config, &wrong_statement, wrong_traces, &public_values)
         .expect("invalid wrong-height proving shape");
     verify_ensemble(&config, &wrong_statement, &wrong_proof, &public_values)
@@ -268,9 +265,8 @@ fn verifier_rejects_a_valid_proof_at_the_wrong_height() {
         .iter()
         .map(Matrix::height)
         .collect::<Vec<_>>();
-    let expected_statement =
-        generated::Statement::<BabyBear>::new(&expected_heights)
-            .expect("invalid expected AIR shape");
+    let expected_statement = generated::Statement::<BabyBear>::new(&expected_heights)
+        .expect("invalid expected AIR shape");
     assert!(matches!(
         verify_ensemble(&config, &expected_statement, &wrong_proof, &public_values),
         Err(EnsembleVerificationError::Shape(
@@ -279,7 +275,8 @@ fn verifier_rejects_a_valid_proof_at_the_wrong_height() {
     ));
 }
 
-/// Prove a tampered trace of the 32-step execution and assert that verification rejects it. The prover checks constraints in debug builds, so such proofs exist only in release builds.
+/// Prove a tampered trace of the 32-step execution and assert that verification rejects it. The
+/// prover checks constraints in debug builds, so such proofs exist only in release builds.
 #[cfg(not(debug_assertions))]
 fn assert_tampered_trace_rejected(
     seed: u64,
@@ -292,8 +289,8 @@ fn assert_tampered_trace_rejected(
     let mut traces = witness.into_traces().expect("invalid extracted traces");
     tamper(&mut traces);
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
-    let statement = generated::Statement::<BabyBear>::new(&trace_heights)
-        .expect("invalid generated AIR shape");
+    let statement =
+        generated::Statement::<BabyBear>::new(&trace_heights).expect("invalid generated AIR shape");
     let (proof, _) =
         prove_ensemble(&config, &statement, traces, &public_values).expect("invalid proving shape");
     assert!(matches!(
@@ -313,7 +310,8 @@ fn verifier_rejects_a_violated_constraint() {
     });
 }
 
-/// The byte table has no constraints, so changing a multiplicity unbalances only the `bytes` channel.
+/// The byte table has no constraints, so changing a multiplicity unbalances only the `bytes`
+/// channel.
 #[cfg(not(debug_assertions))]
 #[test]
 fn verifier_rejects_an_unbalanced_channel() {

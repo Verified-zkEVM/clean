@@ -69,7 +69,8 @@ lemma transition_isSome_implies_fetch_isSome
   · simp
 
 omit p_large_enough in
-/-- If fetchInstruction succeeds and programSize + 3 < p (no wraparound), then pc.val + 3 < program.size -/
+/-- If fetchInstruction succeeds and programSize + 3 < p (no wraparound), then pc.val + 3 <
+  program.size -/
 lemma fetchInstruction_isSome_implies_pc_bound
     (program : Array (F p))
     (h_valid_size : ValidProgramSize p program.size)

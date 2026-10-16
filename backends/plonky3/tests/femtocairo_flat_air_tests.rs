@@ -9,8 +9,7 @@ mod generated {
 
 use clean_backend::witness_generation::{Interaction, WitnessField};
 use clean_backend::{
-    prove_ensemble, verify_ensemble, EnsembleVerificationError, GeneratedAirSpec,
-    GeneratedEnsemble,
+    prove_ensemble, verify_ensemble, EnsembleVerificationError, GeneratedAirSpec, GeneratedEnsemble,
 };
 use common::setup;
 use p3_baby_bear::BabyBear;
@@ -59,8 +58,8 @@ fn extracted_femtocairo_accepts_runtime_private_memories() {
         .into_traces()
         .expect("second runtime memory produced invalid traces");
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
-    let statement = generated::Statement::<BabyBear>::new(&trace_heights)
-        .expect("invalid generated AIR shape");
+    let statement =
+        generated::Statement::<BabyBear>::new(&trace_heights).expect("invalid generated AIR shape");
     let (proof, _) = prove_ensemble(&config, &statement, traces, &public_values)
         .expect("second runtime memory produced an invalid proving shape");
     verify_ensemble(&config, &statement, &proof, &public_values)
@@ -86,8 +85,8 @@ fn extracted_femtocairo_air_proves_and_verifies() {
     );
 
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
-    let statement = generated::Statement::<BabyBear>::new(&trace_heights)
-        .expect("invalid generated AIR shape");
+    let statement =
+        generated::Statement::<BabyBear>::new(&trace_heights).expect("invalid generated AIR shape");
     let (proof, _) =
         prove_ensemble(&config, &statement, traces, &public_values).expect("invalid proving shape");
     verify_ensemble(&config, &statement, &proof, &public_values)
@@ -136,7 +135,8 @@ impl GeneratedAirSpec for PermutedMemoryAddresses {
     }
 }
 
-/// Memory is indexed: permuting (address, value) rows keeps every channel balanced and every constraint satisfied, but needs a different address table, which the verifier fixes.
+/// Memory is indexed: permuting (address, value) rows keeps every channel balanced and every
+/// constraint satisfied, but needs a different address table, which the verifier fixes.
 #[test]
 fn verifier_rejects_permuted_memory() {
     let config = setup::test_config(19);
@@ -158,8 +158,8 @@ fn verifier_rejects_permuted_memory() {
     verify_ensemble(&config, &permuted, &proof, &public_values)
         .expect("the permuted-memory proof must be valid for the permuted address table");
 
-    let statement = generated::Statement::<BabyBear>::new(&trace_heights)
-        .expect("invalid generated AIR shape");
+    let statement =
+        generated::Statement::<BabyBear>::new(&trace_heights).expect("invalid generated AIR shape");
     assert!(matches!(
         verify_ensemble(&config, &statement, &proof, &public_values),
         Err(EnsembleVerificationError::Proof(_))

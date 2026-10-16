@@ -35,7 +35,7 @@ def generateResult (memoryValues : fields 8 (F pBabybear)) (executionRows : UInt
     Except String (List ℕ × Bool × Bool × ℕ × ℕ × ℕ) :=
   match Examples.FemtoCairo.FlatAir.Witness.generate
       (p := pBabybear) (memorySize := 8)
-      testProgram programSize_lt memorySize_lt
+      testProgram programSize_lt programSize_lt_u64 memorySize_lt
       memoryValues initialState finalRegisters executionRows 1000 with
   | .error error => .error (toString error)
   | .ok witness =>
@@ -53,11 +53,14 @@ def generateResult (memoryValues : fields 8 (F pBabybear)) (executionRows : UInt
 def result := generateResult memoryValues
 
 /--
-The full channel-driven witness contains eight execution rows, the eight-row fixed memory, and the 32-row fixed program. The derived prover data exposes each complete memory input row, including its multiplicity, while preserving the non-trivial value used by the execution trace.
+The full channel-driven witness contains eight execution rows, the eight-row fixed memory, and the
+32-row fixed program. The derived prover data exposes each complete memory input row, including its
+multiplicity, while preserving the non-trivial value used by the execution trace.
 -/
 example : result = .ok ([8, 8, 32], true, true, 8, 10, 0) := by native_decide
 
-/-- The same Lean witness program accepts a second runtime memory without changing the compiled ensemble or generation configuration. -/
+/-- The same Lean witness program accepts a second runtime memory without changing the compiled
+  ensemble or generation configuration. -/
 example : generateResult alternateMemoryValues = .ok ([8, 8, 32], true, true, 8, 10, 99) := by
   native_decide
 
@@ -67,7 +70,8 @@ example : generateResult memoryValues 16 = .ok ([16, 8, 32], true, true, 8, 10, 
 
 def unstableDataReadRejected : Bool :=
   let config : Config (F pBabybear) :=
-    Witness.config (memorySize := 8) testProgram programSize_lt initialState 8 1000
+    Witness.config (memorySize := 8) testProgram programSize_lt programSize_lt_u64 initialState 8
+        1000
   let mutableMemory : Mode (F pBabybear) := .preallocated {
     rows := 8
     input := .ofFExprs #v[.hintGet memoryValuesKey 1 .idx 0, .const 0]
@@ -76,10 +80,12 @@ def unstableDataReadRejected : Bool :=
   }
   let config : Config (F pBabybear) :=
     { config with components := config.components.map fun (name, generation) =>
-        if name = (provideMemory (p := pBabybear)).name then (name, { generation with mode := mutableMemory })
+        if name = (provideMemory (p := pBabybear)).name then
+            (name, { generation with mode := mutableMemory })
         else (name, generation) }
   match Backends.lower
-      (formalEnsemble testProgram programSize_lt memorySize_lt initialState) config with
+      (formalEnsemble testProgram programSize_lt programSize_lt_u64 memorySize_lt initialState)
+          config with
   | .error (.config (.unstableDataRead _ _ "memory" 1)) => true
   | _ => false
 
