@@ -31,7 +31,7 @@ def eval [FiniteField F] (program : RowProgram F) (row : UInt64) (hint : ProverH
     Vector F program.width :=
   let env : ProverEnvironment F := {
     get := fun _ => 0
-    data := fun _ _ => #[]
+    data := .empty F
     hint
   }
   program.output.eval {
@@ -61,7 +61,7 @@ def ofM {Row : TypeMap} [ProvableType Row] (program : M F (Row (FExpr F))) : Row
 @[circuit_norm]
 def fixedEnvironment (F : Type) [Field F] : ProverEnvironment F where
   get _ := 0
-  data _ _ := #[]
+  data := .empty F
   hint := .empty F
 
 /-- Evaluate a witness program for a fixed row at row `row`. -/

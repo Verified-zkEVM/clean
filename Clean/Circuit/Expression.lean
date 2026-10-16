@@ -21,9 +21,15 @@ inductive Expression (F : Type) where
 
 export Expression (var)
 
-/-- Arbitrary data a prover can witness and refer to in a circuit spec -/
-def ProverData (F : Type) :=
-  String → (n : ℕ) → Array (Vector F n)
+/-- Data fixed for a whole proof, which circuit specs may refer to: the rows of the proof's tables,
+keyed by name, and the public input. -/
+structure ProverData (F : Type) where
+  tables : String → (n : ℕ) → Array (Vector F n)
+  publicInput : Array F := #[]
+
+/-- Proof data without tables or public input. -/
+def ProverData.empty (F : Type) : ProverData F where
+  tables _ _ := #[]
 
 /-- Runtime-only hashmap of prover hints. Same shape as `ProverData`, but
 distinct to emphasize that hints are *not* committed: they feed only the

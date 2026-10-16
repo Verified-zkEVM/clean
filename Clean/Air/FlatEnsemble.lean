@@ -54,12 +54,12 @@ structure EnsembleWitness (ens : Ensemble F PublicIO) where
   same_length : ens.tables.length = tables.length
   same_circuits : ∀ i (hi : i < ens.tables.length),
     ens.tables[i] = tables[i].component
-  same_data : ∀ table ∈ tables, table.data = deriveProverData tables
+  same_data : ∀ table ∈ tables, table.data = deriveProverData tables (toElements publicInput).toArray
 
-/-- External prover data consists of the complete inputs of the committed component traces. -/
+/-- The prover data of a proof: the complete inputs of its component traces, and its public input. -/
 def EnsembleWitness.data {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) :
     ProverData F :=
-  deriveProverData witness.tables
+  deriveProverData witness.tables (toElements witness.publicInput).toArray
 
 @[circuit_norm]
 lemma List.flatMap_subset_iff {α β : Type*} {f : α → List β} {l₁ : List α} {l₂ : List β} :
@@ -185,7 +185,7 @@ lemma dataConsistency_of_mem (witness : EnsembleWitness ens) :
     ∀ table ∈ witness.tables, table.DataConsistency := by
   intro table htable
   rw [Table.DataConsistency, witness.same_data table htable]
-  exact deriveProverData_eq_of_mem witness.tables witness.tableNames_nodup htable _
+  exact deriveTables_eq_of_mem witness.tables witness.tableNames_nodup htable _
 
 def toTables (witness : EnsembleWitness ens) : Tables F where
   tables := witness.tables

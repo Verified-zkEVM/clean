@@ -475,11 +475,14 @@ def witgenWithData (data : ProverData F) (hint : ProverHint F)
     (ops : List (FlatOperation F)) (input : Array F) : Array F :=
   ops.foldl (witgenStepWithData data hint) input
 
-/-- The runtime view of the same complete circuit inputs used by `deriveProverData`. -/
-def generatedData (states : List (ComponentState F)) : ProverData F := fun name n =>
-  match states.find? (·.component.circuit.name == name) with
-  | some state => (state.rows.map (rowPrefix n ∘ (·.input))).toArray
-  | none => #[]
+/-- The runtime view of the same complete circuit inputs used by `deriveProverData`, together with
+the public input. -/
+def generatedData (states : List (ComponentState F)) (publicInput : Array F) : ProverData F where
+  tables name n :=
+    match states.find? (·.component.circuit.name == name) with
+    | some state => (state.rows.map (rowPrefix n ∘ (·.input))).toArray
+    | none => #[]
+  publicInput
 
 /-- Complete a component row from its input with the component's witness programs. -/
 def completeRow (state : ComponentState F) (input : Array F) (data : ProverData F)
@@ -714,7 +717,7 @@ def assembleTables :
             component
             table := rows
             -- replaced by the ensemble's derived data in `generateValid`
-            data := fun _ _ => #[]
+            data := .empty F
             uniform_width := h
             length_le := Nat.le_of_not_lt hlength
             fixed_rows_match := matched.property
@@ -746,7 +749,7 @@ def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensembl
   let initial := initial.map fun state =>
     { state with rows := (initialInputs state hint).map fun input =>
       { input, values := input } }
-  let data := generatedData initial
+  let data := generatedData initial (toElements publicInput).toArray
   let initial := initial.map fun state =>
     { state with rows := state.rows.map fun row => completeRow state row.input data hint none }
   let verifier := ensemble.verifierOperations.interactionValues (.fromInput publicInput data)
@@ -756,11 +759,11 @@ def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensembl
   let padded ← padAndBalance data hint config.fuel config.fuel generated
   let assembled ← assembleTables ensemble.tables padded
   return {
-    tables := withDerivedData assembled.tables
+    tables := withDerivedData assembled.tables (toElements publicInput).toArray
     publicInput
     same_length := by simp [withDerivedData, assembled.same_length]
     same_circuits := by simp [withDerivedData, assembled.same_circuits]
-    same_data := withDerivedData_data assembled.tables
+    same_data := withDerivedData_data assembled.tables _
   }
 
 /-- Validate generation metadata, then generate an ensemble witness from the public input and the

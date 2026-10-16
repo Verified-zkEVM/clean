@@ -35,7 +35,7 @@ Array-backed counterpart of `ProverEnvironment.fromList`. -/
 def ProverEnvironment.fromArray (witnesses : Array F) (hint : ProverHint F) :
     ProverEnvironment F where
   get i := witnesses[i]?.getD 0
-  data _ _ := #[]
+  data := .empty F
   hint
 
 theorem ProverEnvironment.fromArray_eq_fromList (witnesses : Array F) (hint : ProverHint F) :

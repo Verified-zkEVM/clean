@@ -38,7 +38,7 @@ def generateResult (memoryValues : fields 8 (F pBabybear)) (executionRows : UInt
       memoryValues initialState finalRegisters executionRows 1000 with
   | .error error => .error (toString error)
   | .ok witness =>
-    let memoryData := witness.data "memory" 3
+    let memoryData := witness.data.tables "memory" 3
     let memoryValue := match memoryData[5]? with
       | some row => (row[1]?.getD 0).val
       | none => 0

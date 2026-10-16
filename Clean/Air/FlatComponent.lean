@@ -252,17 +252,22 @@ structure Table (F : Type) [FiniteField F] where
 def Table.proverRows (table : Table F) (n : ℕ) : Array (Vector F n) :=
   (table.table.map (rowPrefix n)).toArray
 
-/-- Each named component is the source of its circuit-input rows in `ProverData`. -/
-def deriveProverData : List (Table F) → ProverData F
+/-- Each named component is the source of its circuit-input rows in the prover data. -/
+def deriveTables : List (Table F) → String → (n : ℕ) → Array (Vector F n)
   | [] => fun _ _ => #[]
   | table :: tables => fun name n =>
       if table.component.circuit.name = name then table.proverRows n
-      else deriveProverData tables name n
+      else deriveTables tables name n
 
-lemma deriveProverData_eq_of_mem (tables : List (Table F))
+/-- The prover data of a proof with these tables and this public input. -/
+def deriveProverData (tables : List (Table F)) (publicInput : Array F) : ProverData F where
+  tables := deriveTables tables
+  publicInput
+
+lemma deriveTables_eq_of_mem (tables : List (Table F))
     (hunique : (tables.map (fun table => table.component.circuit.name)).Nodup)
     {table : Table F} (hmem : table ∈ tables) (n : ℕ) :
-    deriveProverData tables table.component.circuit.name n = table.proverRows n := by
+    deriveTables tables table.component.circuit.name n = table.proverRows n := by
   induction tables with
   | nil => simp at hmem
   | cons head tail ih =>
@@ -270,39 +275,41 @@ lemma deriveProverData_eq_of_mem (tables : List (Table F))
       obtain ⟨hhead, htail⟩ := hunique
       simp only [List.mem_cons] at hmem
       rcases hmem with rfl | hmem
-      · simp [deriveProverData]
+      · simp [deriveTables]
       · have hne : head.component.circuit.name ≠ table.component.circuit.name := by
           intro heq
           apply hhead
           rw [heq]
           exact List.mem_map.mpr ⟨table, hmem, rfl⟩
-        simp [deriveProverData, hne, ih htail hmem]
+        simp [deriveTables, hne, ih htail hmem]
 
-/-- `deriveProverData` only reads the components and rows of the tables. -/
-lemma deriveProverData_map_data (tables : List (Table F)) (data : ProverData F) :
-    deriveProverData (tables.map fun table => { table with data }) = deriveProverData tables := by
+/-- `deriveTables` only reads the components and rows of the tables. -/
+lemma deriveTables_map_data (tables : List (Table F)) (data : ProverData F) :
+    deriveTables (tables.map fun table => { table with data }) = deriveTables tables := by
   induction tables with
   | nil => rfl
-  | cons table tables ih => rw [List.map_cons, deriveProverData, deriveProverData, ih]; rfl
+  | cons table tables ih => rw [List.map_cons, deriveTables, deriveTables, ih]; rfl
 
-/-- Gives every table the prover data derived from all of them. -/
-def withDerivedData (tables : List (Table F)) : List (Table F) :=
-  tables.map fun table => { table with data := deriveProverData tables }
+/-- Gives every table the prover data derived from all of them and the public input. -/
+def withDerivedData (tables : List (Table F)) (publicInput : Array F) : List (Table F) :=
+  tables.map fun table => { table with data := deriveProverData tables publicInput }
 
-@[circuit_norm] lemma withDerivedData_map_component (tables : List (Table F)) :
-    (withDerivedData tables).map (·.component) = tables.map (·.component) := by
+@[circuit_norm] lemma withDerivedData_map_component (tables : List (Table F))
+    (publicInput : Array F) :
+    (withDerivedData tables publicInput).map (·.component) = tables.map (·.component) := by
   simp [withDerivedData]
 
-lemma withDerivedData_data (tables : List (Table F)) :
-    ∀ table ∈ withDerivedData tables, table.data = deriveProverData (withDerivedData tables) := by
-  simp [withDerivedData, deriveProverData_map_data]
+lemma withDerivedData_data (tables : List (Table F)) (publicInput : Array F) :
+    ∀ table ∈ withDerivedData tables publicInput,
+      table.data = deriveProverData (withDerivedData tables publicInput) publicInput := by
+  simp [withDerivedData, deriveProverData, deriveTables_map_data]
 
 namespace Table
 variable {table : Table F} {channel : RawChannel F}
 
 /-- The table's prover data contains its own component's circuit-input rows. -/
 def DataConsistency (table : Table F) : Prop :=
-  table.data table.component.circuit.name (size table.component.Input) =
+  table.data.tables table.component.circuit.name (size table.component.Input) =
     table.proverRows (size table.component.Input)
 
 abbrev length (t : Table F) : ℕ := t.table.length

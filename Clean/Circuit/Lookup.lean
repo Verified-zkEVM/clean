@@ -79,15 +79,15 @@ namespace Lookup
 variable {F : Type} [FiniteField F]
 
 def Contains (lookup : Lookup F) (env : Environment F) : Prop :=
-  lookup.table.Contains (env.data lookup.table.name lookup.table.arity)
+  lookup.table.Contains (env.data.tables lookup.table.name lookup.table.arity)
     (lookup.entry.map env)
 
 def Soundness (lookup : Lookup F) (env : Environment F) : Prop :=
-  lookup.table.Soundness (env.data lookup.table.name lookup.table.arity)
+  lookup.table.Soundness (env.data.tables lookup.table.name lookup.table.arity)
     (lookup.entry.map env)
 
 def Completeness (lookup : Lookup F) (env : Environment F) : Prop :=
-  lookup.table.Completeness (env.data lookup.table.name lookup.table.arity)
+  lookup.table.Completeness (env.data.tables lookup.table.name lookup.table.arity)
     (lookup.entry.map env)
 
 /-- Lookup soundness for an entry given as a vector of elements, e.g. a vector literal. -/
