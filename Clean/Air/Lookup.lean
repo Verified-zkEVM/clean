@@ -18,15 +18,15 @@ variable {F : Type} [FiniteField F] {Row : TypeMap} [ProvableType Row]
 structure Lookup (F : Type) [FiniteField F] (Row : TypeMap) [ProvableType Row] where
   name : String
   height : UInt64
-  /-- The row at index `.idx`. Fixed rows can't read prover data or hints. -/
-  row : Witgen.M F (Row (Witgen.FExpr F))
-  valid : (Witgen.RowProgram.ofM row).Valid .fixed := by
+  /-- The row at index `i`. Fixed rows can't read prover data or hints. -/
+  row (i : Witgen.U64Expr F) : Witgen.M F (Row (Witgen.FExpr F))
+  valid : (Witgen.RowProgram.ofM (row .idx)).Valid .fixed := by
     simp [Witgen.RowProgram.Valid, Witgen.VExpr.validForRow, Witgen.FExpr.validForRow,
       Witgen.U64Expr.validForRow, Witgen.BExpr.validForRow, circuit_norm, explicit_provable_type]
   /-- What it means to be in the table. Pulling a row from the lookup's channel guarantees it. -/
   Contains : Row F → Prop
   /-- Every row of the table is contained in it. -/
-  contains_row : ∀ i < height, Contains (row.evalRow i)
+  contains_row : ∀ i < height, Contains ((row .idx).evalRow i)
 
 namespace Lookup
 variable (lookup : Lookup F Row)
@@ -79,7 +79,7 @@ def component : Component F where
     replace hrow := (take_toElements_pair value multiplicity lookup.fixedColumns.width rfl).symm.trans hrow
     change lookup.Contains value
     convert lookup.contains_row i hi
-    have h : toElements value = toElements (lookup.row.evalRow i) :=
+    have h : toElements value = toElements ((lookup.row .idx).evalRow i) :=
       Vector.toList_inj.mp (hrow.trans (by rw [FixedColumns.values_eq]; rfl))
     simpa [ProvableType.fromElements_toElements] using congrArg (fromElements (M := Row)) h
 

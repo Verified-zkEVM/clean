@@ -39,7 +39,7 @@ def MemoryCompletenessAssumption (data : ProverData (F p)) : Prop :=
 def programLookup (program : Array (F p)) (h_programSize : program.size < p) : Lookup (F p) fieldPair where
   name := "program"
   height := program.size.toUInt64
-  row := pure (.idx, program[(.idx : Witgen.U64Expr (F p))])
+  row i := pure (i, program[i])
   Contains
   | (address, value) => ∃ h : address.val < program.size, value = program[address.val]
   contains_row i hi := by
@@ -388,7 +388,7 @@ def provideMemory : GeneralFormalCircuit (F p) ProviderInput unit where
 def memoryFixedColumns (memorySize : UInt64) : FixedColumns (F p) where
   Row := field
   height := memorySize
-  row := pure .idx
+  row i := pure i
 
 def memoryComponent (memorySize : UInt64) (h_memorySize : memorySize.toNat < p) :
     Component (F p) where

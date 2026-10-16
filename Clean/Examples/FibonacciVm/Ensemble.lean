@@ -32,7 +32,7 @@ variable {p : ℕ} [Fact p.Prime] [pGt: Fact (p > 512)]
 def bytes : Lookup (F p) field where
   name := "bytes"
   height := 256
-  row := pure .idx
+  row i := pure i
   Contains value := value.val < 256
   contains_row i hi := by
     have : i.toNat < 256 := UInt64.lt_iff_toNat_lt.mp hi

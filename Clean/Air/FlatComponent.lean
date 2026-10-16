@@ -8,13 +8,13 @@ public import Clean.Air.RowProgram
 namespace Air.Flat
 variable {F : Type}
 
-/-- Public, index-addressed columns supplied by the verifier rather than committed by the prover. Each row is a value of the provable type `Row`, computed from the row index `.idx` by a witness program, which Lean and extracted backends evaluate identically. -/
+/-- Public, index-addressed columns supplied by the verifier rather than committed by the prover. Each row is a value of the provable type `Row`, computed from the row index by a witness program, which Lean and extracted backends evaluate identically. -/
 structure FixedColumns (F : Type) where
   {Row : TypeMap} [provableRow : ProvableType Row]
   height : UInt64
-  /-- The row at index `.idx`. Fixed rows can't read prover data or hints. -/
-  row : Witgen.M F (Row (Witgen.FExpr F))
-  valid : (Witgen.RowProgram.ofM row).Valid .fixed := by
+  /-- The row at index `i`. Fixed rows can't read prover data or hints. -/
+  row (i : Witgen.U64Expr F) : Witgen.M F (Row (Witgen.FExpr F))
+  valid : (Witgen.RowProgram.ofM (row .idx)).Valid .fixed := by
     simp [Witgen.RowProgram.Valid, Witgen.VExpr.validForRow, Witgen.FExpr.validForRow,
       Witgen.U64Expr.validForRow, Witgen.BExpr.validForRow, circuit_norm, explicit_provable_type]
 
@@ -25,7 +25,7 @@ namespace FixedColumns
 abbrev width (fixed : FixedColumns F) : ℕ := size fixed.Row
 
 /-- The row program computing the fixed values, as consumed by witness generation and backends. -/
-def program (fixed : FixedColumns F) : Witgen.RowProgram F := .ofM fixed.row
+def program (fixed : FixedColumns F) : Witgen.RowProgram F := .ofM (fixed.row .idx)
 
 variable [FiniteField F]
 
@@ -35,7 +35,7 @@ def values (fixed : FixedColumns F) (i : UInt64) : Array F :=
 
 /-- The fixed row `i`, as a value of the row type. -/
 @[circuit_norm]
-def rowValue (fixed : FixedColumns F) (i : UInt64) : fixed.Row F := fixed.row.evalRow i
+def rowValue (fixed : FixedColumns F) (i : UInt64) : fixed.Row F := (fixed.row .idx).evalRow i
 
 @[circuit_norm]
 lemma values_eq (fixed : FixedColumns F) (i : UInt64) :
