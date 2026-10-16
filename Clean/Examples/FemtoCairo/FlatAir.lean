@@ -470,8 +470,8 @@ def haltedState (programSize : ℕ) (ap fp : F p) : State (F p) :=
   { pc := programSize, ap, fp }
 
 /-- The public input `(ap, fp)` claims that the program halts with these registers. -/
-def verifier (program : Array (F p))
-    (initialState : State (F p)) : Verifier.Program (F p) fieldPair where
+def verifier (program : Array (F p)) (initialState : State (F p)) :
+    Verifier.Program (F p) fieldPair where
   main | (ap, fp) => do
     Verifier.pull (stateChannel program initialState)
       { pc := .const (program.size : F p), ap, fp }
