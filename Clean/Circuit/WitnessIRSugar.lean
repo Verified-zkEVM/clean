@@ -35,6 +35,7 @@ namespace Witgen
 /-! ## Operators and coercions -/
 
 instance : Coe (Expression F) (FExpr F) := ⟨.expr⟩
+instance : Coe (U64Expr F) (FExpr F) := ⟨.ofU64⟩
 instance : Coe (Expression F) (field (FExpr F)) where
   coe e := .expr e
 instance : Coe F (FExpr F) := ⟨.const⟩
