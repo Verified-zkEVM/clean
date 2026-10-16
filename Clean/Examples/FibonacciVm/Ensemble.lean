@@ -244,10 +244,8 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
 
 namespace FibonacciWitness
 
-open Air.Flat.WitnessGeneration
-
 /-- One Fibonacci VM row per state pushed to the Fibonacci channel. -/
-def fibGeneration : Generation (F p) where
+def fibGeneration : WitnessGeneration.Generation (F p) where
   mode := .demand {
     channel := (FibonacciChannel (p := p)).toRaw
     direction := .push
@@ -258,7 +256,7 @@ def fibGeneration : Generation (F p) where
 
 /-- One addition-chip row per distinct message pulled from the addition channel, with the number
 of pulls as its multiplicity. -/
-def add8Generation : Generation (F p) where
+def add8Generation : WitnessGeneration.Generation (F p) where
   mode := .demand {
     channel := (Add8Channel (p := p)).toRaw
     direction := .pull
@@ -268,18 +266,19 @@ def add8Generation : Generation (F p) where
   padding := { input := #[0, 0, 0, 0], minimumRows := 32 }
 
 /-- Witness generation for each component of the ensemble. -/
-def config (fuel : ℕ) : Config (F p) where
+def config (fuel : ℕ) : WitnessGeneration.Config (F p) where
   components := [
     ("fibonacci", fibGeneration),
     ("add8", add8Generation),
     ("bytes", bytes.generation)
   ]
-  fuel := fuel
+  fuel
 
 /-- Generate a complete ensemble witness from the claimed public final state. -/
 def generate (publicInput : fieldTriple (F p)) (fuel : ℕ) :
-    Except GenerationError (EnsembleWitness (fibonacciEnsemble (p := p)).ensemble) :=
-  Air.Flat.WitnessGeneration.generate (fibonacciEnsemble (p := p)) (config (p := p) fuel)
+    Except WitnessGeneration.GenerationError
+      (EnsembleWitness (fibonacciEnsemble (p := p)).ensemble) :=
+  WitnessGeneration.generate (fibonacciEnsemble (p := p)) (config (p := p) fuel)
     publicInput ()
 
 end FibonacciWitness
