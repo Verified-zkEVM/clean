@@ -534,7 +534,7 @@ def memoryValuesKey : String := "memoryValues"
 
 def formalEnsemble {memorySize : UInt64} (program : Array (F p)) (h_program : ValidProgram program)
     (h_memorySize : memorySize.toNat < p) :=
-  (soundEnsemble program h_program h_memorySize).toFormal (fun _ => True)
+  (soundEnsemble program h_program h_memorySize).toFormal (fun _ _ => True)
     (Spec program memorySize)
     (by simp [circuit_norm, soundEnsemble, vm, memoryComponent])
     (by
@@ -559,10 +559,10 @@ def formalEnsemble {memorySize : UInt64} (program : Array (F p)) (h_program : Va
 initial state and run on some memory of size `memorySize`, halts with its final registers. -/
 theorem femtoCairo_soundness {memorySize : UInt64}
     (program : Array (F p)) (h_program : ValidProgram program)
-    (h_memorySize : memorySize.toNat < p) (publicInput : PublicInput (F p)) :
-    (soundEnsemble program h_program h_memorySize).ensemble.Statement publicInput →
+    (h_memorySize : memorySize.toNat < p) (publicInput : PublicInput (F p)) (heights : List ℕ) :
+    (soundEnsemble program h_program h_memorySize).ensemble.Statement publicInput heights →
       Spec program memorySize publicInput :=
-  (formalEnsemble program h_program h_memorySize).soundness publicInput trivial
+  (formalEnsemble program h_program h_memorySize).soundness publicInput heights trivial
 
 namespace Witness
 

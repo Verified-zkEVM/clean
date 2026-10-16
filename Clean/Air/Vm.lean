@@ -99,22 +99,23 @@ structure SoundVmEnsemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [Prova
 
 namespace SoundVmEnsemble
 /--
-Bundle a sound VM ensemble with its public statement. `Assumptions` and `Spec` only refer to the
-public input. The verifier spec is evaluated on prover data derived from the witness, so the bridge
-from it to `Spec` quantifies over witnesses.
+Bundle a sound VM ensemble with its public statement. `Assumptions` refer to the public input and
+the table heights, `Spec` only to the public input. The verifier spec is evaluated on prover data
+derived from the witness, so the bridge from it to `Spec` quantifies over witnesses.
 -/
-def toFormal (ens : SoundVmEnsemble F PublicIO) (Assumptions Spec : PublicIO F → Prop)
+def toFormal (ens : SoundVmEnsemble F PublicIO) (Assumptions : PublicIO F → List ℕ → Prop)
+    (Spec : PublicIO F → Prop)
     (assumptionsConsistency : ens.ensemble.AssumptionsConsistency Assumptions)
     (spec_of_verifierSpec : ∀ witness : EnsembleWitness ens.ensemble,
-      Assumptions witness.publicInput →
+      Assumptions witness.publicInput witness.heights →
       ens.VerifierSpec witness.publicInput witness.data → Spec witness.publicInput) :
     FormalEnsemble F PublicIO where
   ensemble := ens.ensemble
   Assumptions
   Spec
   soundness := by
-    intro publicInput assumptions ⟨witness, input_eq, constraints, balance⟩
-    subst input_eq
+    intro publicInput heights assumptions ⟨witness, input_eq, heights_eq, constraints, balance⟩
+    subst input_eq heights_eq
     apply spec_of_verifierSpec witness assumptions
     rw [← witness.data_getPublicInput]
     apply ens.ensemble.verifierSpec_of_verifierGuarantees

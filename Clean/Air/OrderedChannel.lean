@@ -849,7 +849,7 @@ def addFinishedChannel (soundEns : SoundEnsemble F PublicIO) (channel : RawChann
   (soundEns.addFinishedChannel channel).finished = channel :: soundEns.finished := rfl
 
 def toFormal (soundEns : SoundEnsemble F PublicIO)
-    (Assumptions Spec : PublicIO F → Prop)
+    (Assumptions : PublicIO F → List ℕ → Prop) (Spec : PublicIO F → Prop)
     (assumptionsConsistency : soundEns.AssumptionsConsistency Assumptions)
     (specConsistency : soundEns.SpecConsistency Spec) :
     FormalEnsemble F PublicIO where
