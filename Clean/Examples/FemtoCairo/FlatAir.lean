@@ -437,53 +437,7 @@ def executeStep (program : Array (F p)) (h_program : ValidProgram program)
     expose (stateChannel program initialState)
       [pulledIf input.enabled input.state, pushedIf input.enabled nextState]
   exposedChannels_eq input i₀ := by
-    classical
-    have hfilter :
-        (FlatOperation.interactions
-          ((femtoCairoStep program h_program).toSubcircuit i₀ input.state).ops.toFlat).filter
-            (fun (interaction : AbstractInteraction (F p)) => decide (interaction.channel =
-              (stateChannel program initialState).toRaw)) = [] := by
-      rw [List.filter_eq_nil_iff]
-      intro interaction hinteraction heq
-      have hinteraction' : interaction ∈
-          (((femtoCairoStep program h_program).main input.state).operations i₀).interactions := by
-        rw [← GeneralFormalCircuit.toSubcircuit_interactions]
-        exact hinteraction
-      have hchannel : interaction.channel ∈
-          (((femtoCairoStep program h_program).main input.state).operations i₀).channels :=
-        List.mem_map.mpr ⟨interaction, hinteraction', rfl⟩
-      have hsubset := (femtoCairoStep program h_program).channels_subset input.state i₀ hchannel
-      have hneProgram : (stateChannel program initialState).toRaw ≠
-          (programLookup program h_program).channel.toRaw := by
-        intro heq
-        have hname := congrArg RawChannel.name heq
-        change "state" = "program" at hname
-        contradiction
-      have hneMemory : (stateChannel program initialState).toRaw ≠ memoryChannel.toRaw := by
-        intro heq
-        have hname := congrArg RawChannel.name heq
-        change "state" = "memory" at hname
-        contradiction
-      have hnot : (stateChannel program initialState).toRaw ∉
-          (femtoCairoStep program h_program).channels := by
-        change (stateChannel program initialState).toRaw ∉
-          [(programLookup program h_program).channel.toRaw,
-            (programLookup program h_program).channel.toRaw,
-            (programLookup program h_program).channel.toRaw,
-            (programLookup program h_program).channel.toRaw,
-            memoryChannel.toRaw, memoryChannel.toRaw, memoryChannel.toRaw,
-            memoryChannel.toRaw, memoryChannel.toRaw, memoryChannel.toRaw]
-        simp [hneProgram, hneMemory]
-      have heq' : interaction.channel = (stateChannel program initialState).toRaw :=
-        of_decide_eq_true heq
-      exact hnot (heq' ▸ hsubset)
-    have hfilter' :
-        (FlatOperation.interactions
-          ((femtoCairoStep program h_program).toSubcircuit (i₀ + 0) input.state).ops.toFlat).filter
-            (fun (interaction : AbstractInteraction (F p)) => decide (interaction.channel =
-              (stateChannel program initialState).toRaw)) = [] := by
-      simpa only [Nat.add_zero] using hfilter
-    simp only [circuit_norm, hfilter', List.nil_append]
+    simp [circuit_norm, femtoCairoStep, stateChannel]
 
   ProverAssumptions input data hint :=
     (input.enabled = 0 ∨
