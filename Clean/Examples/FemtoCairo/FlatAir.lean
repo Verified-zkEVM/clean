@@ -571,33 +571,38 @@ namespace Witness
 
 open Air.Flat.WitnessGeneration
 
-def executionMode (program : Array (F p))
-    (initialState : State (F p)) : Mode (F p) := .demand {
-  channel := (stateChannel program initialState).toRaw
-  direction := .push
-  aggregation := .perOccurrence
-  input := { cells := [.const 1, .message 0, .message 1, .message 2] }
-}
+/-- One execution row per state pushed to the state channel. Padding rows are disabled and hold the
+initial state. -/
+def executionGeneration (program : Array (F p)) (initialState : State (F p))
+    (executionRows : UInt64) : Generation (F p) where
+  mode := .demand {
+    channel := (stateChannel program initialState).toRaw
+    direction := .push
+    aggregation := .perOccurrence
+    input := { cells := [.const 1, .message 0, .message 1, .message 2] }
+  }
+  padding := {
+    input := #[0, initialState.pc, initialState.ap, initialState.fp]
+    minimumRows := executionRows
+  }
 
-def memoryMode (memorySize : UInt64) : Mode (F p) := .preallocated {
-  rows := memorySize
-  input := .ofFExprs #v[.hintGet memoryValuesKey 1 .idx 0, .const 0]
-  input_valid := by rfl
-  handlers := [{ interaction := 0, column := 2 }]
-}
+/-- One memory row per address, whose value the prover supplies as a hint. Its multiplicity counts
+the reads of that address. -/
+def memoryGeneration (memorySize : UInt64) : Generation (F p) where
+  mode := .preallocated {
+    rows := memorySize
+    input := .ofFExprs #v[.hintGet memoryValuesKey 1 .idx 0, .const 0]
+    input_valid := by rfl
+    handlers := [{ interaction := 0, column := 2 }]
+  }
+  padding := { input := #[0, 0, 0], minimumRows := memorySize }
 
 def config {memorySize : UInt64} (program : Array (F p)) (h_program : ValidProgram program)
     (initialState : State (F p)) (executionRows : UInt64) (fuel : ℕ) : Config (F p) where
   components := [
-    ((executeStep program h_program initialState).name, {
-      mode := executionMode program initialState
-      padding := {
-        input := #[0, initialState.pc, initialState.ap, initialState.fp]
-        minimumRows := executionRows } }),
-    ((provideMemory (p := p)).name, {
-      mode := memoryMode memorySize
-      padding := { input := #[0, 0, 0], minimumRows := memorySize } }),
-    ((programLookup program h_program).name, (programLookup program h_program).generation)
+    ("execution", executionGeneration program initialState executionRows),
+    ("memory", memoryGeneration memorySize),
+    ("program", (programLookup program h_program).generation)
   ]
   fuel := fuel
 

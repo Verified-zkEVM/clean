@@ -99,7 +99,7 @@ def configErrors : List String :=
   [{ config with components := config.components.drop 1 },
     { config with components := config.components ++ config.components.take 1 },
     { config with components :=
-      ("unknown", { mode := FibonacciWitness.fibMode, padding := { input := #[] } }) ::
+      ("unknown", FibonacciWitness.fibGeneration) ::
         config.components }]
   |>.map fun (config : Config (F pBabybear)) => match config.align ensemble with
     | .error error => toString error

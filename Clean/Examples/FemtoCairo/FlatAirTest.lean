@@ -78,7 +78,7 @@ def unstableDataReadRejected : Bool :=
   }
   let config : Config (F pBabybear) :=
     { config with components := config.components.map fun (name, generation) =>
-        if name = (provideMemory (p := pBabybear)).name then
+        if name = "memory" then
           (name, { generation with mode := mutableMemory })
         else (name, generation) }
   match Backends.lower
