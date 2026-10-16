@@ -48,7 +48,7 @@ def programLookup (program : Array (F p)) (h_programSize : program.size < p) : L
       simp only [Nat.toUInt64_eq, UInt64.toNat_ofNat'] at this
       exact lt_of_lt_of_le this (Nat.mod_le _ _)
     have hval : (i.toNat : F p).val = i.toNat := ZMod.val_cast_of_lt (by omega)
-    simp [circuit_norm, explicit_provable_type, hval, hi']
+    simp [circuit_norm, hval, hi']
 
 def fetchInstruction
     (program : Array (F p)) (h_programSize : program.size < p) :
