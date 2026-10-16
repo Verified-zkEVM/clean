@@ -17,9 +17,7 @@ structure FixedColumns (F : Type) where
   /-- The row at index `i`. Fixed rows can't read prover data or hints. -/
   row (i : Witgen.U64Expr F) : Witgen.M F (Row (Witgen.FExpr F))
   valid : (Witgen.RowProgram.ofM (row .idx)).Valid .fixed := by
-    simp [Witgen.RowProgram.Valid, Witgen.VExpr.validForRow, Witgen.FExpr.validForRow,
-      Witgen.U64Expr.validForRow, Witgen.BExpr.validForRow, circuit_norm, toElements_field,
-      toElements_fieldPair, toElements_fieldTriple]
+    simp [circuit_norm]
 
 instance (fixed : FixedColumns F) : ProvableType fixed.Row := fixed.provableRow
 

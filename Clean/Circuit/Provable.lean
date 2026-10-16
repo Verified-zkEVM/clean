@@ -233,11 +233,16 @@ instance (priority := high) : ProvableType fieldTriple where
   fromElements := fun ⟨⟨[x, y, z]⟩, _ ⟩ => (x, y, z)
 instance : NonEmptyProvableType fieldTriple where
 
-lemma toElements_field {F : Type} (x : F) : toElements (M := field) x = #v[x] := rfl
-lemma toElements_fieldPair {F : Type} (x y : F) :
+@[circuit_norm] lemma toElements_field {F : Type} (x : F) : toElements (M := field) x = #v[x] := rfl
+@[circuit_norm] lemma toElements_fieldPair {F : Type} (x y : F) :
     toElements (M := fieldPair) (x, y) = #v[x, y] := rfl
-lemma toElements_fieldTriple {F : Type} (x y z : F) :
+@[circuit_norm] lemma toElements_fieldTriple {F : Type} (x y z : F) :
     toElements (M := fieldTriple) (x, y, z) = #v[x, y, z] := rfl
+@[circuit_norm] lemma fromElements_field {F : Type} (x : F) : fromElements (M := field) #v[x] = x := rfl
+@[circuit_norm] lemma fromElements_fieldPair {F : Type} (x y : F) :
+    fromElements (M := fieldPair) #v[x, y] = (x, y) := rfl
+@[circuit_norm] lemma fromElements_fieldTriple {F : Type} (x y z : F) :
+    fromElements (M := fieldTriple) #v[x, y, z] = (x, y, z) := rfl
 
 variable {n : ℕ}
 abbrev ProvableVector (α : TypeMap) (n : ℕ) := fun F => Vector (α F) n

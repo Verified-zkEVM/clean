@@ -25,9 +25,7 @@ structure Lookup (F : Type) [FiniteField F] (Row : TypeMap) [ProvableType Row] w
   /-- The row at index `i`. Fixed rows can't read prover data or hints. -/
   row (i : Witgen.U64Expr F) : Witgen.M F (Row (Witgen.FExpr F))
   valid : (Witgen.RowProgram.ofM (row .idx)).Valid .fixed := by
-    simp [Witgen.RowProgram.Valid, Witgen.VExpr.validForRow, Witgen.FExpr.validForRow,
-      Witgen.U64Expr.validForRow, Witgen.BExpr.validForRow, circuit_norm, toElements_field,
-      toElements_fieldPair, toElements_fieldTriple]
+    simp [circuit_norm]
   /-- What it means to be in the table. Pulling a row from the lookup's channel guarantees it. -/
   Contains : Row F → Prop
   /-- `Contains` holds exactly for the rows of the table. -/

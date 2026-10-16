@@ -158,8 +158,12 @@ def VExpr.validForRow (source : RowProgram.Source) : {n : ℕ} → VExpr F n →
   | _, .append left right =>
       left.validForRow source && right.validForRow source
 
+attribute [circuit_norm] FExpr.validForRow U64Expr.validForRow BExpr.validForRow
+  FExprList.validForRow Step.validForRow VExpr.validForRow
+
 namespace RowProgram
 
+@[circuit_norm]
 def Valid (program : RowProgram F) (source : Source) : Prop :=
   program.steps.all (Step.validForRow source) &&
     program.output.validForRow source = true

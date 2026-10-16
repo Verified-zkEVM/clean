@@ -497,23 +497,14 @@ theorem WitgenIR.getElem_eval_ofFExprs [FiniteField F] {n : ℕ} (es : Vector (F
   simp [ofFExprs, WitgenIR.eval, VExpr.eval, evalSteps]
 
 @[circuit_norm]
-theorem WitgenIR.eval_ofFExprs_singleton {F: Type} [FiniteField F]
+theorem WitgenIR.eval_ofFExprs_one {F : Type} [FiniteField F]
     (x : FExpr F) (env : ProverEnvironment F) :
-    (WitgenIR.ofFExprs (toElements (M:=field) x)).eval env = #v[x.eval { env }] := by
+    (WitgenIR.ofFExprs #v[x]).eval env = #v[x.eval { env }] := by
   ext i hi
   change i < 1 at hi
   have : i = 0 := Nat.lt_one_iff.mp hi
   subst i
-  simp [WitgenIR.getElem_eval_ofFExprs, toElements]
-
-/-- Same as `eval_ofFExprs_singleton`, keyed on the literal-vector spelling
-(`toElements (M := field) x` and `#v[x]` are not identified during simp matching).
-Not in `circuit_norm`: firing on transient literal-vector spellings changes downstream
-goal shapes; cite it explicitly where needed. -/
-theorem WitgenIR.eval_ofFExprs_one {F : Type} [FiniteField F]
-    (x : FExpr F) (env : ProverEnvironment F) :
-    (WitgenIR.ofFExprs #v[x]).eval env = #v[x.eval { env }] := by
-  exact WitgenIR.eval_ofFExprs_singleton x env
+  simp [WitgenIR.getElem_eval_ofFExprs]
 
 /-- Field-equality conditions decide propositional equality (via the injective
 `ℕ` embedding). -/

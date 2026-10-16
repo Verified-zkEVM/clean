@@ -90,6 +90,24 @@ def Completeness (lookup : Lookup F) (env : Environment F) : Prop :=
   lookup.table.Completeness (env.data lookup.table.name lookup.table.arity)
     (lookup.entry.map env)
 
+/-- Lookup soundness for an entry given as a vector of elements, e.g. a vector literal. -/
+@[circuit_norm]
+lemma soundness_of_vector {Row : TypeMap} [ProvableType Row]
+    (table : Table F Row) (env : Environment F) (entry : Vector (Expression F) (size Row)) :
+    let lookup : Lookup F := { table := table.toRaw, entry };
+    lookup.Soundness env ↔
+      table.Soundness (env.data.getTable table) (fromElements (entry.map (Expression.eval env))) :=
+  .rfl
+
+/-- Lookup completeness for an entry given as a vector of elements, e.g. a vector literal. -/
+@[circuit_norm]
+lemma completeness_of_vector {Row : TypeMap} [ProvableType Row]
+    (table : Table F Row) (env : Environment F) (entry : Vector (Expression F) (size Row)) :
+    let lookup : Lookup F := { table := table.toRaw, entry };
+    lookup.Completeness env ↔
+      table.Completeness (env.data.getTable table) (fromElements (entry.map (Expression.eval env))) :=
+  .rfl
+
 @[circuit_norm]
 lemma soundess_def {Row : TypeMap} [ProvableType Row]
   (table : Table F Row) (env : Environment F) (entry : Row (Expression F)) :
@@ -98,14 +116,6 @@ lemma soundess_def {Row : TypeMap} [ProvableType Row]
   simp only [CircuitType.eval_expression]
   rfl
 
-@[circuit_norm]
-lemma soundess_def_field {F : Type} [FiniteField F]
-  (table : Table F field) (env : Environment F) (entry : Expression F) :
-    let lookup : Lookup F := { table := table.toRaw, entry := #v[entry] };
-    lookup.Soundness env ↔ table.Soundness (env.data.getTable table) (entry.eval (F:=F) env) := by
-  simp only [Soundness, Table.toRaw, Vector.map_mk, List.map_toArray, List.map_cons,
-    List.map_nil]
-  rfl
 
 @[circuit_norm]
 lemma completeness_def {Row : TypeMap} [ProvableType Row]
@@ -115,14 +125,6 @@ lemma completeness_def {Row : TypeMap} [ProvableType Row]
   simp only [CircuitType.eval_expression]
   rfl
 
-@[circuit_norm]
-lemma completeness_def_field {F : Type} [FiniteField F]
-  (table : Table F field) (env : Environment F) (entry : Expression F) :
-    let lookup : Lookup F := { table := table.toRaw, entry := #v[entry] };
-    lookup.Completeness env ↔ table.Completeness (env.data.getTable table) (entry.eval (F:=F) env) := by
-  simp only [Completeness, Table.toRaw, Vector.map_mk, List.map_toArray, List.map_cons,
-    List.map_nil]
-  rfl
 end Lookup
 
 variable {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
