@@ -27,15 +27,12 @@ def memoryValues : fields 8 (F pBabybear) :=
 def alternateMemoryValues : fields 8 (F pBabybear) :=
   #v[0, 5, 3, 7, 2, 10, 0, 99]
 
-/-- The program halts after eight steps at `pc = 32` with `ap = fp = 0`. -/
-def finalRegisters : fieldPair (F pBabybear) := (0, 0)
-
 def generateResult (memoryValues : fields 8 (F pBabybear)) (executionRows : UInt64 := 8) :
     Except String (List ℕ × Bool × Bool × ℕ × ℕ × ℕ) :=
   match Witness.generate
       (p := pBabybear) (memorySize := 8)
       testProgram testProgram_valid memorySize_lt
-      memoryValues initialState finalRegisters executionRows 1000 with
+      memoryValues publicInput executionRows 1000 with
   | .error error => .error (toString error)
   | .ok witness =>
     let memoryData := witness.data.tables "memory" 3
@@ -63,13 +60,13 @@ ensemble or generation configuration. -/
 example : generateResult alternateMemoryValues = .ok ([8, 8, 32], true, true, 8, 10, 99) := by
   native_decide
 
-/-- Execution rows beyond the run are disabled padding rows at the initial state. -/
+/-- Execution rows beyond the run are disabled padding rows. -/
 example : generateResult memoryValues 16 = .ok ([16, 8, 32], true, true, 8, 10, 0) := by
   native_decide
 
 def unstableDataReadRejected : Bool :=
   let config : Config (F pBabybear) :=
-    Witness.config (memorySize := 8) testProgram testProgram_valid initialState 8 1000
+    Witness.config (memorySize := 8) testProgram testProgram_valid 8 1000
   let mutableMemory : Mode (F pBabybear) := .preallocated {
     rows := 8
     input := .ofFExprs #v[.hintGet memoryValuesKey 1 .idx 0, .const 0]
@@ -82,7 +79,7 @@ def unstableDataReadRejected : Bool :=
           (name, { generation with mode := mutableMemory })
         else (name, generation) }
   match Backends.lower
-      (formalEnsemble testProgram testProgram_valid memorySize_lt initialState) config with
+      (formalEnsemble testProgram testProgram_valid memorySize_lt) config with
   | .error (.config (.unstableDataRead _ _ "memory" 1)) => true
   | _ => false
 
