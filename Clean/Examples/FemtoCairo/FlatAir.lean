@@ -520,16 +520,6 @@ further instruction can be fetched. -/
 def haltedState (programSize : ℕ) (ap fp : F p) : State (F p) :=
   { pc := programSize, ap, fp }
 
-omit p_large_enough in
-/-- No transition leaves a halted state. -/
-lemma femtoCairoMachineTransition_haltedState
-    (program : Array (F p)) (h_program : ValidProgram program)
-    (memory : Array (F p)) (ap fp : F p) :
-    Spec.femtoCairoMachineTransition program memory (haltedState program.size ap fp) = none := by
-  have hval : (program.size : F p).val = program.size := ZMod.val_cast_of_lt h_program.size_lt
-  simp [Spec.femtoCairoMachineTransition, Spec.fetchInstruction, Spec.memoryAccess,
-    haltedState, hval]
-
 /-- The public input `(ap, fp)` claims that the program halts with these registers. -/
 def verifier (program : Array (F p))
     (initialState : State (F p)) : Verifier.Program (F p) fieldPair where
@@ -589,15 +579,6 @@ def ProverAssumptions (program : Array (F p))
   | (ap, fp), memoryValues => ∃ steps,
       Spec.femtoCairoMachineBoundedExecution program memoryValues.toArray (some initialState)
         steps = some (haltedState program.size ap fp)
-
-omit p_large_enough in
-/-- The prover's assumptions are no stronger than the public statement. -/
-lemma spec_of_proverAssumptions {memorySize : UInt64}
-    (program : Array (F p)) (initialState : State (F p))
-    (registers : fieldPair (F p)) (memoryValues : fields memorySize.toNat (F p))
-    (h : ProverAssumptions program memorySize initialState registers memoryValues) :
-    Spec program memorySize initialState registers :=
-  ⟨_, memoryValues.size_toArray, h⟩
 
 /-- Name of the hint table holding the prover's memory values, one per address. -/
 def memoryValuesKey : String := "memoryValues"
