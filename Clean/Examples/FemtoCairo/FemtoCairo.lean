@@ -153,10 +153,10 @@ def decodeInstruction : GeneralFormalCircuit (F p) field DecodedInstruction wher
   This circuit is not satisfiable if the program counter is out of bounds.
 -/
 def fetchInstruction
-    (program : Array (F p)) (h_programSize : program.size < p) :
+    (program : Array (F p)) (h_program : ValidProgram program) :
     GeneralFormalCircuit (F p) field RawInstruction where
   main (pc : Expression (F p)) := do
-    let programTable := .staticOfArray "program" program h_programSize
+    let programTable := .staticOfArray "program" program h_program.size_lt
 
     let rawInstrType ← witness program[pc.val]
     let op1 ← witness program[pc.val + 1]
@@ -173,7 +173,7 @@ def fetchInstruction
   -- the witness generator computes program addresses in `u64`,
   -- so the program has to fit into that index range
   ProverAssumptions
-  | pc, _, _ => pc.val + 3 < program.size ∧ program.size ≤ 2^64
+  | pc, _, _ => pc.val + 3 < program.size
 
   Spec
   | pc, output, _ =>
@@ -193,7 +193,9 @@ def fetchInstruction
 
   completeness := by
     circuit_proof_start [Table.staticOfArray]
-    obtain ⟨ h_pc_bound, h_programSize_u64 ⟩ := h_assumptions
+    have h_pc_bound := h_assumptions
+    have h_size := h_program.size_lt
+    have h_programSize_u64 := h_program.size_lt_u64
     have val_3 : ZMod.val (3 : F p) = 3 := ZMod.val_natCast_of_lt (by linarith)
     have val_2 : ZMod.val (2 : F p) = 2 := ZMod.val_natCast_of_lt (by linarith)
     have val_1 : ZMod.val (1 : F p) = 1 := ZMod.val_one p
@@ -526,10 +528,10 @@ def nextState : GeneralFormalCircuit (F p) StateTransitionInput State where
   as input and returns the next state as output.
   The circuit is not satisfiable if the state transition is invalid.
 -/
-def femtoCairoStepMain (program : Array (F p)) (h_programSize : program.size < p)
+def femtoCairoStepMain (program : Array (F p)) (h_program : ValidProgram program)
     (state : Var State (F p)) : Circuit (F p) (Var State (F p)) := do
   -- Fetch instruction
-  let raw ← fetchInstruction program h_programSize state.pc
+  let raw ← fetchInstruction program h_program state.pc
 
   -- Decode instruction
   let decoded ← decodeInstruction raw.rawInstrType
@@ -543,8 +545,8 @@ def femtoCairoStepMain (program : Array (F p)) (h_programSize : program.size < p
   nextState { state, decoded, v1, v2, v3 }
 
 @[reducible]
-instance (program : Array (F p)) (h_programSize : program.size < p) :
-    ElaboratedCircuit (F p) State State (femtoCairoStepMain program h_programSize) := by
+instance (program : Array (F p)) (h_program : ValidProgram program) :
+    ElaboratedCircuit (F p) State State (femtoCairoStepMain program h_program) := by
   elaborate_circuit
 
 def femtoCairoStepSpec
@@ -553,26 +555,19 @@ def femtoCairoStepSpec
   Spec.femtoCairoMachineTransition program (memory data) state = some nextState
 
 /--
-  Assumptions required for the FemtoCairo step circuit completeness.
-  1. ValidProgramSize: programSize + 3 < p (ensures no field wraparound in address arithmetic)
-  2. program.size ≤ 2^64: the program fits into the `u64` index range that the witness
-     generator uses to address it
-  3. ValidProgram: All instruction bytes in program memory are < 256
-  4. MemoryCompletenessAssumption: memory table is non-empty and filled correctly
-  5. The state transition succeeds (execution doesn't fail)
+  Assumptions required for the FemtoCairo step circuit completeness, besides a valid program.
+  1. MemoryCompletenessAssumption: memory table is non-empty and filled correctly
+  2. The state transition succeeds (execution doesn't fail)
 -/
 def femtoCairoStepAssumptions
     (program : Array (F p))
     (state : State (F p)) (data : ProverData (F p)) (_hint : ProverHint (F p)) : Prop :=
-  ValidProgramSize p program.size ∧
-  program.size ≤ 2^64 ∧
-  ValidProgram program ∧
   MemoryCompletenessAssumption data ∧
   (Spec.femtoCairoMachineTransition program (memory data) state).isSome
 
 theorem femtoCairoStepSoundness
-    (program : Array (F p)) (h_programSize : program.size < p)
-    : GeneralFormalCircuit.Soundness (F p) (femtoCairoStepMain program h_programSize) (fun _ _ => True)
+    (program : Array (F p)) (h_program : ValidProgram program)
+    : GeneralFormalCircuit.Soundness (F p) (femtoCairoStepMain program h_program) (fun _ _ => True)
       (femtoCairoStepSpec program) := by
   circuit_proof_start [femtoCairoStepSpec, femtoCairoStepAssumptions, femtoCairoStepMain,
     Spec.femtoCairoMachineTransition, fetchInstruction, readFromMemory, nextState,
@@ -657,14 +652,13 @@ theorem femtoCairoStepSoundness
               rw [h_eq_next, ←c_next]
 
 theorem femtoCairoStepCompleteness (program : Array (F p))
-  (h_programSize : program.size < p) :
-    GeneralFormalCircuit.Completeness (F p) (femtoCairoStepMain program h_programSize)
+  (h_program : ValidProgram program) :
+    GeneralFormalCircuit.Completeness (F p) (femtoCairoStepMain program h_program)
       (femtoCairoStepAssumptions program) (fun _ _ _ => True) := by
   circuit_proof_start [femtoCairoStepAssumptions, femtoCairoStepMain,
     fetchInstruction, decodeInstruction, readFromMemory, nextState, Gadgets.toBits]
 
-  obtain ⟨h_valid_size, h_programSize_u64, h_valid_program, h_memory_completeness,
-    h_transition_isSome⟩ := h_assumptions
+  obtain ⟨h_memory_completeness, h_transition_isSome⟩ := h_assumptions
 
   -- Decompose transition into components
   have h_decompose := Spec.transition_isSome_implies_computeNextState_isSome
@@ -674,7 +668,7 @@ theorem femtoCairoStepCompleteness (program : Array (F p))
   have h_fetch_isSome : (Spec.fetchInstruction program input.pc).isSome := by
     exact Spec.transition_isSome_implies_fetch_isSome program (memory env.data) input h_transition_isSome
   have h_pc_bound : input.pc.val + 3 < program.size :=
-    Spec.fetchInstruction_isSome_implies_pc_bound program h_valid_size input.pc h_fetch_isSome
+    Spec.fetchInstruction_isSome_implies_pc_bound program h_program input.pc h_fetch_isSome
   have h_instr_bound : raw.rawInstrType.val < 256 := by
     have h_decode_bound := Spec.decodeInstruction_isSome_implies_bound raw.rawInstrType
     simp only [Option.isSome_iff_exists] at h_decode_bound
@@ -690,7 +684,7 @@ theorem femtoCairoStepCompleteness (program : Array (F p))
   have h_eval_pc : Expression.eval env input_var.pc = input.pc := by
     rw [← State.eval_pc env input_var, h_input]
   simp only [h_eval_pc] at h_fetch_env
-  specialize h_fetch_env ⟨h_pc_bound, h_programSize_u64⟩
+  specialize h_fetch_env h_pc_bound
   simp only [h_fetch, circuit_norm, explicit_provable_type, RawInstruction.mk.injEq] at h_fetch_env
   obtain ⟨h_rawInstrType, h_op1, h_op2, h_op3⟩ := h_fetch_env
   specialize h_decode_env (by
@@ -717,7 +711,7 @@ theorem femtoCairoStepCompleteness (program : Array (F p))
   simp only [h_op3, h_mode3_val, h_v3] at h_read3_value
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩
   · rw [h_eval_pc]
-    exact ⟨h_pc_bound, h_programSize_u64⟩
+    exact h_pc_bound
   · rw [h_rawInstrType]
     exact h_instr_bound
   · exact ⟨h_mode1_encoded_correctly, h_memory_completeness, by
@@ -733,15 +727,14 @@ theorem femtoCairoStepCompleteness (program : Array (F p))
       rw [h_instr_type_val, h_read1_value, h_read2_value, h_read3_value]
       exact h_computeNext⟩
 
-variable (program : Array (F p)) (h_programSize : program.size < p)
-variable (h_program : ValidProgramSize p program.size ∧ ValidProgram program)
+variable (program : Array (F p)) (h_program : ValidProgram program)
 
 def femtoCairoStep : GeneralFormalCircuit (F p) State State where
-  main := femtoCairoStepMain program h_programSize
+  main := femtoCairoStepMain program h_program
   ProverAssumptions := femtoCairoStepAssumptions program
   Spec := femtoCairoStepSpec program
-  soundness := femtoCairoStepSoundness program h_programSize
-  completeness := femtoCairoStepCompleteness program h_programSize
+  soundness := femtoCairoStepSoundness program h_program
+  completeness := femtoCairoStepCompleteness program h_program
 
 /--
   The femtoCairo table, which defines the step relation for the femtoCairo VM.
@@ -755,16 +748,14 @@ def femtoCairoStep : GeneralFormalCircuit (F p) State State where
 -/
 def femtoCairoTable (n : ℕ) : InductiveTable (F p) State unit where
   step state _ :=
-    femtoCairoStep program h_programSize state
+    femtoCairoStep program h_program state
 
   Spec initialState _ i _ state env : Prop :=
     (Spec.femtoCairoMachineBoundedExecution program (memory env) (some initialState) i) = some state
 
   -- For completeness, we assume that execution on the initial state succeeds, for all steps up to a maximum N
   InputAssumptions i _ _ := i < n
-  -- the witness generator indexes the program in `u64`, so the program has to fit
   InitialStateAssumptions initialState env :=
-    program.size ≤ 2^64 ∧
     MemoryCompletenessAssumption env ∧
     ∀ i ≤ n, (Spec.femtoCairoMachineBoundedExecution program (memory env) (some initialState) i).isSome
 
@@ -775,7 +766,7 @@ def femtoCairoTable (n : ℕ) : InductiveTable (F p) State unit where
 
   completeness := by
     intro initialState i env acc_var x_var acc x xs xs_len h_eval h_witnesses
-    rintro ⟨ ⟨ h_programSize_u64, h_mem_completeness, h_initial_state ⟩, h_spec, h_i⟩
+    rintro ⟨ ⟨ h_mem_completeness, h_initial_state ⟩, h_spec, h_i⟩
     specialize h_initial_state (i+1) h_i
     simp_all [circuit_norm, Spec.femtoCairoMachineBoundedExecution, femtoCairoStep, femtoCairoStepAssumptions, MemoryCompletenessAssumption]
 
@@ -793,7 +784,7 @@ theorem femtoCairoTableStatement (finalState : State (F p)) :
 
   ∀ n > 0, ∀ trace data,
 
-  let table := femtoCairoTable program h_programSize h_program n
+  let table := femtoCairoTable program h_program n
     |>.toFormal initialState finalState
 
   table.statement n trace data →

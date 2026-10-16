@@ -27,9 +27,12 @@ def testProgram : Array (F pBabybear) :=
      252, 0, 0, 0,       -- ADD 0 + 0 = 0
      0, 0, 0, 0]
 
-theorem programSize_lt : testProgram.size < pBabybear := by decide
-
-theorem programSize_lt_u64 : testProgram.size < 2 ^ 64 := by decide
+theorem testProgram_valid : Spec.ValidProgram testProgram where
+  size_add_three_lt := by decide
+  size_lt_u64 := by decide
+  bytes_lt := by
+    simp [testProgram, ZMod.val_ofNat, ZMod.val_one]
+    decide
 
 theorem memorySize_lt : (8 : UInt64).toNat < pBabybear := by decide
 

@@ -132,18 +132,19 @@ def femtoCairoMachineBoundedExecution
     let reachedState ← femtoCairoMachineBoundedExecution program memory state i
     femtoCairoMachineTransition program memory reachedState
 
-/--
-  A program is valid if all instruction bytes in the program memory are < 256.
-  This ensures that `decodeInstruction` will always succeed for any fetched instruction.
--/
-def ValidProgram (program : Array (F p)) : Prop :=
-  ∀ value ∈ program, value.val < 256
+/-- The requirements on a program. -/
+structure ValidProgram (program : Array (F p)) : Prop where
+  /-- Accessing the instruction at `pc, pc + 1, pc + 2, pc + 3` doesn't wrap around in the field. -/
+  size_add_three_lt : program.size + 3 < p
+  /-- The program fits into the `u64` indices that witness generation uses to address it. -/
+  size_lt_u64 : program.size < 2 ^ 64
+  /-- Every instruction byte is `< 256`, so that `decodeInstruction` succeeds on it. -/
+  bytes_lt : ∀ value ∈ program, value.val < 256
 
-/--
-  Program size is valid if `programSize + 3 < p`. This ensures no field arithmetic
-  wraparound can occur when accessing consecutive instruction addresses (pc, pc+1, pc+2, pc+3).
-  In practice, this is always satisfied since program sizes are much smaller than cryptographic primes.
--/
-def ValidProgramSize (p : ℕ) (programSize : ℕ) : Prop := programSize + 3 < p
+omit [Fact p.Prime] p_large_enough in
+lemma ValidProgram.size_lt {program : Array (F p)} (h_program : ValidProgram program) :
+    program.size < p := by
+  have := h_program.size_add_three_lt
+  omega
 
 end Examples.FemtoCairo.Spec

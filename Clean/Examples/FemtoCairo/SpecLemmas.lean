@@ -69,11 +69,10 @@ lemma transition_isSome_implies_fetch_isSome
   · simp
 
 omit p_large_enough in
-/-- If fetchInstruction succeeds and programSize + 3 < p (no wraparound), then pc.val + 3 <
-  program.size -/
+/-- If fetchInstruction succeeds on a valid program, then `pc.val + 3 < program.size`. -/
 lemma fetchInstruction_isSome_implies_pc_bound
     (program : Array (F p))
-    (h_valid_size : ValidProgramSize p program.size)
+    (h_program : ValidProgram program)
     (pc : F p)
     (h : (fetchInstruction program pc).isSome) : pc.val + 3 < program.size := by
   simp only [fetchInstruction, Option.isSome_iff_exists] at h
@@ -93,7 +92,7 @@ lemma fetchInstruction_isSome_implies_pc_bound
         | some v3 =>
           have bound0 := memoryAccess_eq_some_implies_bounds program pc v0 h0
           have bound3 := memoryAccess_eq_some_implies_bounds program (pc + 3) v3 h3
-          simp only [ValidProgramSize] at h_valid_size
+          have := h_program.size_add_three_lt
           have h_no_wrap : pc.val + 3 < p := by omega
           have h_eq : (pc + 3).val = pc.val + 3 := ZMod_val_add_nat pc 3 h_no_wrap
           omega
@@ -191,7 +190,7 @@ omit [Fact (Nat.Prime p)] p_large_enough in
 /-- ValidProgram ensures any program access returns a value < 256 -/
 lemma validProgram_bound {program : Array (F p)}
     (h_valid : ValidProgram program) (i : ℕ) (hi : i < program.size) :
-    program[i].val < 256 := h_valid _ (Array.getElem_mem hi)
+    program[i].val < 256 := h_valid.bytes_lt _ (Array.getElem_mem hi)
 
 omit p_large_enough in
 /-- If decodeInstruction succeeds, the result encodes a valid instruction type -/
@@ -348,6 +347,6 @@ lemma fetchInstruction_rawInstrType_bound
     (h_bound : pc.val < program.size) :
     raw.rawInstrType.val < 256 := by
   rw [fetchInstruction_rawInstrType_eq_program program pc raw h h_bound]
-  exact h_valid _ (Array.getElem_mem h_bound)
+  exact h_valid.bytes_lt _ (Array.getElem_mem h_bound)
 
 end Examples.FemtoCairo.Spec

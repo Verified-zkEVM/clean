@@ -35,7 +35,7 @@ def generateResult (memoryValues : fields 8 (F pBabybear)) (executionRows : UInt
     Except String (List ℕ × Bool × Bool × ℕ × ℕ × ℕ) :=
   match Examples.FemtoCairo.FlatAir.Witness.generate
       (p := pBabybear) (memorySize := 8)
-      testProgram programSize_lt programSize_lt_u64 memorySize_lt
+      testProgram testProgram_valid memorySize_lt
       memoryValues initialState finalRegisters executionRows 1000 with
   | .error error => .error (toString error)
   | .ok witness =>
@@ -70,7 +70,7 @@ example : generateResult memoryValues 16 = .ok ([16, 8, 32], true, true, 8, 10, 
 
 def unstableDataReadRejected : Bool :=
   let config : Config (F pBabybear) :=
-    Witness.config (memorySize := 8) testProgram programSize_lt programSize_lt_u64 initialState 8
+    Witness.config (memorySize := 8) testProgram testProgram_valid initialState 8
         1000
   let mutableMemory : Mode (F pBabybear) := .preallocated {
     rows := 8
@@ -84,7 +84,7 @@ def unstableDataReadRejected : Bool :=
             (name, { generation with mode := mutableMemory })
         else (name, generation) }
   match Backends.lower
-      (formalEnsemble testProgram programSize_lt programSize_lt_u64 memorySize_lt initialState)
+      (formalEnsemble testProgram testProgram_valid memorySize_lt initialState)
           config with
   | .error (.config (.unstableDataRead _ _ "memory" 1)) => true
   | _ => false
