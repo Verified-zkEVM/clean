@@ -7,17 +7,14 @@ public import Clean.Circuit.WitnessIRSugar
 /-!
 # Row programs
 
-Index-aware witness programs that produce one segment of an AIR row: verifier-known fixed columns,
-and prover-committed inputs of preallocated components. They read the row index and, for prover
-inputs, the runtime prover input, but no circuit environment.
+Witness programs that compute a segment of a row from the row index: fixed columns, and the inputs
+of preallocated components. The latter can also read the hint.
 -/
 
 namespace Witgen
 variable {F : Type}
 
-/-- A structured, index-aware program producing one row segment. Unlike `WitgenIR`, this has no
-native-closure escape hatch and can therefore be interpreted identically by Lean and extracted
-backends. -/
+/-- A program computing a row segment of width `width`. -/
 structure RowProgram (F : Type) where
   width : ℕ
   steps : List (Step F)
@@ -77,7 +74,7 @@ theorem eval_ofM [FiniteField F] {Row : TypeMap} [ProvableType Row] (program : M
 
 end RowProgram
 
-/-- External inputs available to an index-aware row program. -/
+/-- What a row program computes: fixed columns, or inputs of preallocated components. -/
 inductive RowProgram.Source where
   | fixed
   | prover
@@ -89,8 +86,8 @@ def RowProgram.Source.allowsHints : RowProgram.Source → Bool
 
 mutual
 
-/-- Whether an expression is valid in a row program. These programs have no circuit-row or
-semantic-data environment. Prover row programs additionally read hints; fixed programs do not. -/
+/-- Whether an expression is valid in a row program: it reads no row or prover data, and only
+prover row programs read hints. -/
 def FExpr.validForRow (source : RowProgram.Source) : FExpr F → Bool
   | .expr _ => false
   | .const _ | .localVar _ => true

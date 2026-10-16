@@ -1,8 +1,5 @@
-//! Runtime for witness programs compiled from Clean's witness IR.
-//!
-//! This module contains no JSON parser. Lean-generated Rust implements [`Program`] with ordinary
-//! field expressions; proving-time witness generation only executes those compiled functions and
-//! this channel worklist.
+//! Witness generation for ensembles extracted from Clean. Generated Rust implements [`Program`], and
+//! [`generate`] runs it with a channel worklist.
 
 use alloc::format;
 use alloc::string::{String, ToString};
@@ -79,7 +76,7 @@ pub fn bit(value: u64, index: u64) -> bool {
     bit_u64(value, index) == 1
 }
 
-/// Failures surfaced by the public witness-generation API.
+/// A witness generation failure.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum WitnessGenerationError {
     FieldOrder { expected: u64, actual: u64 },
@@ -232,7 +229,7 @@ impl<F: Field + Copy> WitnessData<F> {
     }
 }
 
-/// A semantic component input used to extend a table to a power-of-two height.
+/// The input row that pads a component to a power-of-two height, of at least `minimum_rows`.
 #[derive(Clone, Debug)]
 pub struct Padding<F> {
     pub input: Vec<F>,
@@ -247,7 +244,7 @@ pub struct Interaction<F> {
     pub assume_guarantees: bool,
 }
 
-/// The backend-neutral output of extracted ensemble witness generation.
+/// A generated ensemble witness: the rows of each component.
 #[derive(Clone, Debug)]
 pub struct EnsembleWitness<F> {
     fixed_widths: Vec<usize>,
@@ -255,7 +252,7 @@ pub struct EnsembleWitness<F> {
 }
 
 impl<F: Field> EnsembleWitness<F> {
-    /// Convert already-padded semantic tables to Plonky3 trace matrices.
+    /// Convert the tables to Plonky3 trace matrices.
     pub fn into_traces(self) -> Result<Vec<RowMajorMatrix<F>>, String> {
         self.tables
             .into_iter()
@@ -288,7 +285,7 @@ impl<F: Field> EnsembleWitness<F> {
     }
 }
 
-/// Implemented by Rust emitted directly from a Clean ensemble and its witness IR.
+/// A witness generation program, implemented by Rust generated from a Clean ensemble.
 pub trait Program<F: WitnessField> {
     /// Order of the field whose constants and arithmetic the generated code was printed for.
     const FIELD_ORDER: u64;
@@ -626,8 +623,7 @@ fn balance<F: WitnessField, P: Program<F>>(
                 .join(", ");
             format!("unhandled channel imbalance on: {channels}")
         })?;
-        // Keep the selected imbalance in the worklist. The generated row's
-        // opposite interaction (or fixed-slot delta) cancels it incrementally.
+        // The demand stays in the worklist: the interactions of the new or updated row cancel it.
         let demand = demands[demand_index].clone();
         match &modes[component] {
             Mode::Demand(mode) => handle_demand::<F, P>(

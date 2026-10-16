@@ -7,13 +7,12 @@ public import Clean.Air.WitnessGeneration
 /-!
 # Extraction programs
 
-An extraction program is the backend-agnostic form of a flat AIR ensemble that source-code backends
-print: structured witness programs, constraints, interactions, component shapes, and ensemble
-generation modes. `lower` validates an ensemble and produces it.
+An extraction program is the form of a flat AIR ensemble that source-code backends print: witness
+programs, constraints, interactions, component shapes, and generation modes. `lower` validates an
+ensemble and produces it.
 
 The representation reuses Clean's expression and witness IR nodes, together with their Lean
-semantics. `WitnessBlock.well_formed` additionally certifies that every local reference has the sort
-of an earlier step. Native Lean closures are not representable.
+semantics.
 -/
 
 namespace Backends
@@ -101,7 +100,7 @@ def witnessProgramWellFormed {n : ℕ} (steps : List (Witgen.Step F))
     (output : Witgen.VExpr F n) : Bool :=
   stepsWellFormedFrom [] steps && vexprWellFormed (stepSorts [] steps) output
 
-/-- One structured witness operation. Native Lean closures cannot inhabit this type. -/
+/-- A witness program, whose local references all have the sort of an earlier step. -/
 structure WitnessBlock (F : Type) [FiniteField F] where
   outputWidth : ℕ
   steps : List (Witgen.Step F)
@@ -110,7 +109,6 @@ structure WitnessBlock (F : Type) [FiniteField F] where
 
 namespace WitnessBlock
 
-/-- Lean semantics for the backend-facing structured witness block. -/
 def eval (block : WitnessBlock F) (environment : ProverEnvironment F)
     (row : ℕ := 0) : Vector F block.outputWidth :=
   block.output.eval {
@@ -121,7 +119,6 @@ def eval (block : WitnessBlock F) (environment : ProverEnvironment F)
 
 end WitnessBlock
 
-/-- A backend-facing component with explicit shape and only same-row operations. -/
 structure FixedColumnsProgram (F : Type) [FiniteField F] where
   height : UInt64
   program : WitnessBlock F
@@ -154,7 +151,7 @@ def evalWitnesses (data : ProverData F) (hint : ProverHint F) :
       }
       evalWitnesses data hint blocks (row ++ (block.eval environment).toArray)
 
-/-- Complete one component row according to the typed extraction semantics. -/
+/-- Complete a component row from its input. -/
 def completeRow (component : ComponentProgram F) (input : Array F)
     (data : ProverData F) (hint : ProverHint F := .empty F) : Except String (Array F) := do
   unless input.size = component.inputWidth do
@@ -190,7 +187,7 @@ inductive ModeProgram (F : Type) [FiniteField F] where
   | demand (mode : DemandMode F)
   | preallocated (rows : UInt64) (input : WitnessBlock F) (handlers : List HandlerProgram)
 
-/-- Complete typed artifact consumed by source-code backends. -/
+/-- An ensemble in the form that source-code backends print. -/
 structure Program (F : Type) [FiniteField F] where
   publicInputWidth : ℕ
   proverInputWidth : ℕ
@@ -319,7 +316,7 @@ def lowerMode (index : ℕ) (component : ComponentProgram F) :
       let handlers ← mode.handlers.mapM (lowerHandler index component)
       return .preallocated mode.rows input handlers
 
-/-- Lower and validate the backend-facing portion of an ensemble without producing source text. -/
+/-- Validate an ensemble and its generation metadata, and lower them to an extraction program. -/
 def lower (ens : FormalEnsemble F PublicIO) (config : Config F) :
     Except LoweringError (Program F) := do
   let ensemble := ens.ensemble

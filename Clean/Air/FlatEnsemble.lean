@@ -40,14 +40,13 @@ namespace ChannelInterface
 end ChannelInterface
 
 structure Ensemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO] where
-  /-- Components form an ordered map: names are keys, while list order fixes the trace order
-  consumed by witness generation and backend extraction. -/
+  /-- Components have unique names. Their order is the order of the traces. -/
   tables : List (Component F)
   unique_names : (tables.map (·.circuit.name)).Nodup
   channels : List (RawChannel F)
   verifier : Verifier.Program F PublicIO := .empty F PublicIO
 
-/-- The public input and component traces committed by an ensemble proof. -/
+/-- The public input and the component traces of an ensemble proof. -/
 structure EnsembleWitness (ens : Ensemble F PublicIO) where
   tables : List (Table F)
   publicInput : PublicIO F
@@ -56,7 +55,7 @@ structure EnsembleWitness (ens : Ensemble F PublicIO) where
     ens.tables[i] = tables[i].component
   same_data : ∀ table ∈ tables, table.data = deriveProverData tables
 
-/-- External prover data consists of the complete inputs of the committed component traces. -/
+/-- The prover data of a witness: the input rows of its tables. -/
 def EnsembleWitness.data {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) :
     ProverData F :=
   deriveProverData witness.tables

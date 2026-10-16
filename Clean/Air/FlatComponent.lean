@@ -8,9 +8,7 @@ public import Clean.Air.RowProgram
 namespace Air.Flat
 variable {F : Type}
 
-/-- Public, index-addressed columns supplied by the verifier rather than committed by the prover.
-Each row is a value of the provable type `Row`, computed from the row index by a witness program,
-which Lean and extracted backends evaluate identically. -/
+/-- Verifier-known columns: `height` rows of type `Row`, computed from the row index. -/
 structure FixedColumns (F : Type) where
   {Row : TypeMap} [provableRow : ProvableType Row]
   height : UInt64
@@ -25,7 +23,7 @@ namespace FixedColumns
 
 abbrev width (fixed : FixedColumns F) : ℕ := size fixed.Row
 
-/-- The row program computing the fixed values, as consumed by witness generation and backends. -/
+/-- The row program computing the fixed values. -/
 def program (fixed : FixedColumns F) : Witgen.RowProgram F := .ofM (fixed.row .idx)
 
 variable [FiniteField F]
@@ -44,7 +42,7 @@ lemma values_eq (fixed : FixedColumns F) (i : UInt64) :
   rw [values, program, Witgen.RowProgram.eval_ofM]
   rfl
 
-/-- The full semantic rows have exactly the declared fixed prefix at every row index. -/
+/-- Every row starts with the fixed values of its index. -/
 abbrev RowsMatch (fixed : FixedColumns F) (rows : List (Array F)) : Prop :=
   rows.map (fun row => row.extract 0 fixed.width) =
     (List.range fixed.height.toNat).map (fixed.values ∘ UInt64.ofNat)
@@ -89,12 +87,11 @@ structure Component (F : Type) [FiniteField F] where
   {Input : TypeMap} {Output : TypeMap}
   [provableInput : ProvableType Input] [provableOutput : ProvableType Output]
   circuit : GeneralFormalCircuit F Input Output
-  /-- When present, identifies the fixed prefix available to the circuit on row `i`. -/
+  /-- Fixed columns, which form a prefix of the input. -/
   fixedColumns : Option (FixedColumns F) := none
-  /-- Assumptions still required from the enclosing ensemble after fixed-row and data facts. -/
+  /-- Assumptions the ensemble has to provide, beyond the fixed-row and data facts. -/
   Assumptions : Input F → ProverData F → Prop := fun _ _ => True
-  /-- Fixed-row and derived-data facts, together with the residual assumptions, imply the
-  assumptions of the underlying row circuit. -/
+  /-- Fixed-row and data facts, together with `Assumptions`, imply the circuit's assumptions. -/
   circuit_assumptions_of_assumptions : ∀ (i : UInt64) (input : Input F) data,
       FixedInputAt fixedColumns i input → DataInputAt circuit.name i input data →
         Assumptions input data → circuit.Assumptions input data := by intros; trivial
@@ -146,7 +143,7 @@ def Spec (component : Component F) (row : Environment F) : Prop :=
 def CircuitAssumptions (component : Component F) (row : Environment F) : Prop :=
   component.circuit.Assumptions (component.rowInput row) row.data
 
-/-- Residual assumptions not supplied by fixed-row or derived-data invariants. -/
+/-- The component's `Assumptions` on a row. -/
 def RowAssumptions (component : Component F) (row : Environment F) : Prop :=
   component.Assumptions (component.rowInput row) row.data
 
@@ -245,14 +242,14 @@ structure Table (F : Type) [FiniteField F] where
   uniform_width : ∀ row ∈ table, row.size = component.width
   /-- Row indices are `u64` values. -/
   length_le : table.length ≤ UInt64.size
-  /-- Connects the row-indexed fixed-column declaration to the concrete semantic rows. -/
+  /-- The rows start with the fixed columns. -/
   fixed_rows_match : component.FixedRowsMatch table
 
 /-- The table's rows cut off at `n` elements. -/
 def Table.proverRows (table : Table F) (n : ℕ) : Array (Vector F n) :=
   (table.table.map (rowPrefix n)).toArray
 
-/-- Each named component is the source of its circuit-input rows in `ProverData`. -/
+/-- The prover data of a list of tables: the input rows of each component, under its name. -/
 def deriveProverData : List (Table F) → ProverData F
   | [] => fun _ _ => #[]
   | table :: tables => fun name n =>

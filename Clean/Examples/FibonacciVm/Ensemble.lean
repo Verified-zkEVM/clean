@@ -250,7 +250,7 @@ def fibGeneration : WitnessGeneration.Generation (F p) where
     channel := (FibonacciChannel (p := p)).toRaw
     direction := .push
     aggregation := .perOccurrence
-    input := { cells := [.const 1, .message 0, .message 1, .message 2] }
+    input := [.const 1, .message 0, .message 1, .message 2]
   }
   padding := { input := #[0, 0, 0, 0], minimumRows := 32 }
 
@@ -261,7 +261,7 @@ def add8Generation : WitnessGeneration.Generation (F p) where
     channel := (Add8Channel (p := p)).toRaw
     direction := .pull
     aggregation := .byMessage
-    input := { cells := [.message 0, .message 1, .message 2, .multiplicity] }
+    input := [.message 0, .message 1, .message 2, .multiplicity]
   }
   padding := { input := #[0, 0, 0, 0], minimumRows := 32 }
 

@@ -9,7 +9,7 @@ variable {PublicIO : TypeMap} [ProvableType PublicIO]
 
 namespace Verifier
 
-/-- Operations emitted by a public verifier program. New verifier-only primitives belong here. -/
+/-- Operations of a verifier program. -/
 inductive Operation (F : Type) [FiniteField F] where
   /-- Append an interaction. If it assumes guarantees, the verifier doesn't list its channel as one
   with requirements, so its requirements must hold unconditionally. -/

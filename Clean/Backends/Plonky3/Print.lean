@@ -225,7 +225,7 @@ def modeToRust : ModeProgram F → String
     Mode::Demand(DemandMode \{ channel: {quoted mode.channel.name}, \
         direction: {directionToRust mode.direction}, \
         aggregation: {aggregationToRust mode.aggregation}, \
-        input: vec![{commaSep (mode.input.cells.map inputCellToRust)}] })
+        input: vec![{commaSep (mode.input.map inputCellToRust)}] })
 }
 
 pub fn initial_row<F: WitnessField>(_row_index: u64, _hint: &WitnessData<F>) -> Vec<F> \{

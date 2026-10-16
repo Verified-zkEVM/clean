@@ -572,7 +572,7 @@ def executionGeneration (program : Array (F p)) (initialState : State (F p))
     channel := (stateChannel program initialState).toRaw
     direction := .push
     aggregation := .perOccurrence
-    input := { cells := [.const 1, .message 0, .message 1, .message 2] }
+    input := [.const 1, .message 0, .message 1, .message 2]
   }
   padding := {
     input := #[0, initialState.pc, initialState.ap, initialState.fp]

@@ -8,14 +8,13 @@ public import Clean.Circuit.WitnessGeneration
 /-!
 # Channel-driven ensemble witness generation
 
-This file contains the executable reference builder for flat AIR ensemble witnesses. Soundness does
-not depend on this builder; generated rows still have to satisfy the component constraints and the
-global channel-balance relation.
+This file contains the executable reference builder for flat AIR ensemble witnesses.
 
-`Config.validate` checks generation metadata against an ensemble once. A `ValidConfig` carries that
-    check, and generation from it cannot hit structural errors. Its remaining failures are semantic:
-    channel imbalance that no component handles, a message no preallocated row matches, and running
-    out of fuel.
+TODO. Generation starts with `Config.validate`, which rejects invalid configs, a hack that might be
+removed once we have good support for proofs of that validity. After that check, generation can
+still fail because we hacked around non-termination using a `fuel` parameter which can be
+exhausted, and because so far we don't have a proof that channels will actually balance, so we fail
+on unhandled imbalance.
 
 The builder maintains the channel imbalance incrementally, as the net field multiplicity of each
 channel message, the quantity channel balance is about. New rows add their interactions; updated
@@ -27,7 +26,7 @@ namespace Air.Flat.WitnessGeneration
 variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
 
-/-- Operational direction of a typed channel interaction. -/
+/-- The direction of a channel interaction. -/
 inductive Direction where
   | pull
   | push
@@ -39,7 +38,8 @@ inductive Aggregation where
   | byMessage
 deriving Repr, DecidableEq, BEq
 
-/-- A structured component-input cell derived from a triggering interaction. -/
+/-- One input cell of a demand-generated row: an element of the demanded message, its multiplicity,
+or a constant. -/
 inductive InputCell (F : Type) where
   | message (index : ℕ)
   | multiplicity
@@ -54,23 +54,12 @@ def eval (message : Array F) (multiplicity : ℕ) : InputCell F → F
 
 end InputCell
 
-/-- Build one component input row from a channel message and an integer multiplicity. -/
-structure InputTemplate (F : Type) where
-  cells : List (InputCell F)
-
-namespace InputTemplate
-
-def eval (template : InputTemplate F) (message : Array F) (multiplicity : ℕ) : Array F :=
-  (template.cells.map (InputCell.eval message multiplicity)).toArray
-
-end InputTemplate
-
 /-- Demand-driven row generation. -/
 structure DemandMode (F : Type) where
   channel : RawChannel F
   direction : Direction
   aggregation : Aggregation
-  input : InputTemplate F
+  input : List (InputCell F)
 
 /-- A channel handler for preallocated rows. The interaction is the component interaction whose
 message selects a row; `column` is the generated multiplicity input updated when the opposite
@@ -79,21 +68,20 @@ structure PreallocatedHandler where
   interaction : ℕ
   column : ℕ
 
-/-- Rows allocated before channel balancing. Fixed columns, when present, are prepended by the
-generic builder; `input` is an index-aware Witness IR program for the prover-owned suffix. -/
+/-- Rows allocated before channel balancing. `input` computes the input of each row after its fixed
+columns. -/
 structure PreallocatedMode (F : Type) where
   rows : UInt64
   input : Witgen.RowProgram F
   input_valid : input.Valid .prover
   handlers : List PreallocatedHandler
 
-/-- The row-allocation modes needed by flat AIR ensembles. Fixed columns are an orthogonal component
-property and are not themselves a generation mode. -/
+/-- Whether rows are generated on demand or allocated before channel balancing. -/
 inductive Mode (F : Type) where
   | demand (mode : DemandMode F)
   | preallocated (mode : PreallocatedMode F)
 
-/-- A semantic row used to extend one component to a power-of-two trace height. -/
+/-- The input row that pads a component to a power-of-two height, of at least `minimumRows`. -/
 structure Padding (F : Type) where
   input : Array F
   minimumRows : UInt64 := 1
@@ -192,10 +180,10 @@ def Mode.handled (component : Component F) : Mode F → List (String × Directio
 
 /-! ### Prover-data reads
 
-Witness generation reads prover data from the rows initialized before channel balancing. That
-snapshot equals the final derived data at every cell that balancing never changes, so witness
-programs may read only the stable cells of preallocated components, and only of components that
-padding does not extend. -/
+TODO. Witness programs read prover data from a snapshot of the rows initialized before channel
+balancing, which only agrees with the final prover data on cells that balancing and padding don't
+change. So for now, reads are restricted to such cells: the non-multiplicity cells of preallocated
+components that padding does not extend. -/
 
 structure DataRead where
   key : String
@@ -298,9 +286,9 @@ def validateGeneration (component : Component F) (generation : Generation F) :
         throw (.fixedPadding name fixed.height.toNat paddedHeight)
   match generation.mode with
   | .demand mode =>
-      unless mode.input.cells.length = inputWidth do
-        throw (.demandInputWidth name inputWidth mode.input.cells.length)
-      for cell in mode.input.cells do
+      unless mode.input.length = inputWidth do
+        throw (.demandInputWidth name inputWidth mode.input.length)
+      for cell in mode.input do
         if let .message index := cell then
           unless index < mode.channel.arity do
             throw (.demandMessageIndex name index mode.channel.arity)
@@ -422,7 +410,7 @@ end Demand
 
 /-! ### Rows and tables -/
 
-/-- How a dynamic row was triggered, retained for message-coalesced updates. -/
+/-- The demand that created a row, kept to update the row when the message is demanded again. -/
 structure Origin (F : Type) where
   channel : String
   direction : Direction
@@ -475,7 +463,7 @@ def witgenWithData (data : ProverData F) (hint : ProverHint F)
     (ops : List (FlatOperation F)) (input : Array F) : Array F :=
   ops.foldl (witgenStepWithData data hint) input
 
-/-- The runtime view of the same complete circuit inputs used by `deriveProverData`. -/
+/-- The prover data of the rows generated so far. -/
 def generatedData (states : List (ComponentState F)) : ProverData F := fun name n =>
   match states.find? (·.component.circuit.name == name) with
   | some state => (state.rows.map (rowPrefix n ∘ (·.input))).toArray
@@ -544,7 +532,8 @@ def createDemandRow (state : ComponentState F) (mode : DemandMode F)
     message := demand.message
     multiplicity
   }
-  completeRow state (mode.input.eval demand.message multiplicity) data hint (some origin)
+  let input := (mode.input.map (·.eval demand.message multiplicity)).toArray
+  completeRow state input data hint (some origin)
 
 /-- A component's new rows, and the rows they replaced. -/
 structure Mutation (F : Type) [FiniteField F] where
@@ -735,9 +724,7 @@ def assembleTables :
         throw (.assembly "generated table contains a row of the wrong width")
   | _, _ => .error (.assembly "generated-table count does not match ensemble component count")
 
-/-- Execute channel-driven generation from validated metadata. `hint` is read by the row programs
-that initialize preallocated components and by the witness programs of all rows; semantic
-`ProverData` is derived from the final committed component rows. -/
+/-- Generate an ensemble witness from validated generation metadata. -/
 def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensemble)
     (publicInput : PublicIO F) (hint : ProverHint F) :
     Except GenerationError (EnsembleWitness ensemble) := do
@@ -771,7 +758,7 @@ def generate (ens : FormalEnsemble F PublicIO) (config : Config F) (publicInput 
   | .error error => .error (.config error)
   | .ok config => generateValid config publicInput (ens.hint proverInput)
 
-/-- Executable constraint check for the no-legacy-lookup initial milestone. -/
+/-- Whether all constraints of a witness hold. Fails on tables with lookups. -/
 def constraintsHold {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness ensemble) : Bool :=
   witness.tables.all fun table =>
     table.table.all fun row =>
@@ -779,7 +766,7 @@ def constraintsHold {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness 
       table.component.operations.constraints.all fun constraint =>
         constraint.eval (Environment.fromArray row witness.data) == 0
 
-/-- Executable balance check using the same net-multiplicity representation. -/
+/-- Whether all channels of a witness balance. -/
 def channelsBalanced {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness ensemble) : Bool :=
   (Demand.addInteractions [] witness.interactions).isEmpty
 
