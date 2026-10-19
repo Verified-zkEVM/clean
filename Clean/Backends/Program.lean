@@ -309,7 +309,7 @@ def lowerGeneration (index : ℕ) (component : Component F) (generation : Genera
       return .preallocated rows program counters
 
 /-- Validate an ensemble and its generation metadata, and lower them to an extraction program. -/
-def lower (ens : FormalEnsemble F PublicIO) (config : Config ens.ensemble) :
+def lower {ens : FormalEnsemble F PublicIO} (config : Config ens) :
     Except LoweringError (Program F) := do
   let ensemble := ens.ensemble
   -- `ValidConfig` lives in a higher universe, so it is matched rather than bound

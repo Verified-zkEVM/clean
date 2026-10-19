@@ -216,13 +216,13 @@ def validateGenerations (generations : List ((c : Component F) × Generation c))
 
 /-- A config that passed `Config.validate`, with the counters of every component, in ensemble
 order. -/
-structure ValidConfig (ensemble : Ensemble F PublicIO) extends Config ensemble where
+structure ValidConfig (ens : FormalEnsemble F PublicIO) extends Config ens where
   counters : List (List Counter)
   valid : validateGenerations generations = .ok counters
 
 /-- Check a config and resolve its counters. -/
-def Config.validate {ensemble : Ensemble F PublicIO} (config : Config ensemble) :
-    Except ConfigError (ValidConfig ensemble) :=
+def Config.validate {ens : FormalEnsemble F PublicIO} (config : Config ens) :
+    Except ConfigError (ValidConfig ens) :=
   match hvalid : validateGenerations config.generations with
   | .error error => .error error
   | .ok counters => .ok { config with counters, valid := hvalid }

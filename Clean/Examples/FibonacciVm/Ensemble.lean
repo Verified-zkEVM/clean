@@ -266,7 +266,7 @@ def add8Generation : WitnessGeneration.Generation (F := F p) { circuit := add8 }
   }
 
 /-- Witness generation for each component of the ensemble. -/
-def config (fuel : ℕ) : WitnessGeneration.Config (fibonacciEnsemble (p := p)).ensemble where
+def config (fuel : ℕ) : WitnessGeneration.Config (fibonacciEnsemble (p := p)) where
   generations := [⟨_, fibGeneration⟩, ⟨_, add8Generation⟩, ⟨_, bytes.generation⟩]
   fuel
 
@@ -274,8 +274,7 @@ def config (fuel : ℕ) : WitnessGeneration.Config (fibonacciEnsemble (p := p)).
 def generate (publicInput : fieldTriple (F p)) (fuel : ℕ) :
     Except WitnessGeneration.GenerationError
       (EnsembleWitness (fibonacciEnsemble (p := p)).ensemble) :=
-  WitnessGeneration.generate (fibonacciEnsemble (p := p)) (config (p := p) fuel)
-    publicInput ()
+  WitnessGeneration.generate (config (p := p) fuel) publicInput ()
 
 end FibonacciWitness
 

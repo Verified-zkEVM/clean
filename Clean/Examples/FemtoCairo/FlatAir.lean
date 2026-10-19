@@ -593,8 +593,7 @@ def memoryGeneration {memorySize : UInt64} (h_memorySize : memorySize.toNat < p)
 def config {memorySize : UInt64} (program : Array (F p)) (h_program : ValidProgram program)
     (h_memorySize : memorySize.toNat < p) (initialState : State (F p)) (executionRows : UInt64)
     (fuel : ℕ) :
-    WitnessGeneration.Config (formalEnsemble program h_program h_memorySize initialState).ensemble
-    where
+    WitnessGeneration.Config (formalEnsemble program h_program h_memorySize initialState) where
   generations := [
     ⟨_, executionGeneration program h_program initialState executionRows⟩,
     ⟨_, memoryGeneration h_memorySize⟩,
@@ -608,8 +607,7 @@ def generate {memorySize : UInt64} (program : Array (F p)) (h_program : ValidPro
     (finalRegisters : fieldPair (F p)) (executionRows : UInt64) (fuel : ℕ) :
     Except WitnessGeneration.GenerationError
       (EnsembleWitness (formalEnsemble program h_program h_memorySize initialState).ensemble) :=
-  WitnessGeneration.generate (formalEnsemble program h_program h_memorySize initialState)
-    (config program h_program h_memorySize initialState executionRows fuel)
+  WitnessGeneration.generate (config program h_program h_memorySize initialState executionRows fuel)
     finalRegisters memoryValues
 
 end Witness

@@ -200,10 +200,12 @@ def padAndBalance (data : ProverData F) (hint : ProverHint F) (fuel : ℕ) :
 
 /-! ### Generating a witness -/
 
-/-- Generate an ensemble witness from a validated config. -/
-def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensemble)
-    (publicInput : PublicIO F) (hint : ProverHint F) :
-    Except GenerationError (EnsembleWitness ensemble) := do
+/-- Generate an ensemble witness from a validated config, the public input and the prover's
+private input. -/
+def generateValid {ens : FormalEnsemble F PublicIO} (config : ValidConfig ens)
+    (publicInput : PublicIO F) (proverInput : ens.ProverInput F) :
+    Except GenerationError (EnsembleWitness ens.ensemble) := do
+  let hint := ens.hint proverInput
   -- preallocate rows, and complete them with the prover data of all preallocated inputs
   let initial := (config.generations.zip config.counters).map
     fun (⟨component, generation⟩, counters) => ComponentState.initial component generation counters
@@ -213,12 +215,12 @@ def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensembl
   let initial := initial.map fun state =>
     { state with rows := state.rows.map fun row => completeRow state row.input data hint }
   -- start the chain reaction from the verifier's and the preallocated rows' interactions
-  let verifier := ensemble.verifierOperations.interactionValues (.fromInput publicInput data)
+  let verifier := ens.ensemble.verifierOperations.interactionValues (.fromInput publicInput data)
   let rows := initial.flatMap fun state => state.rows.flatMap (rowInteractions state · data)
   let demands := Demand.addInteractions [] (verifier ++ rows)
   let generated ← generateLoop data hint config.fuel initial demands
   let padded ← padAndBalance data hint config.fuel config.fuel generated
-  let assembled ← assembleTables ensemble.tables padded
+  let assembled ← assembleTables ens.ensemble.tables padded
   return {
     tables := withDerivedData assembled.tables
     publicInput
@@ -229,12 +231,11 @@ def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensembl
 
 /-- Validate a config, then generate an ensemble witness from the public input and the prover's
 private input. -/
-def generate (ens : FormalEnsemble F PublicIO) (config : Config ens.ensemble)
-    (publicInput : PublicIO F) (proverInput : ens.ProverInput F) :
-    Except GenerationError (EnsembleWitness ens.ensemble) :=
+def generate {ens : FormalEnsemble F PublicIO} (config : Config ens) (publicInput : PublicIO F)
+    (proverInput : ens.ProverInput F) : Except GenerationError (EnsembleWitness ens.ensemble) :=
   match config.validate with
   | .error error => .error (.config error)
-  | .ok config => generateValid config publicInput (ens.hint proverInput)
+  | .ok config => generateValid config publicInput proverInput
 
 /-! ### Checking a witness -/
 

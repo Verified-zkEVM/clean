@@ -113,11 +113,11 @@ inductive Generation [FiniteField F] (c : Component F) where
 
 /-- Generation for a whole ensemble. -/
 structure Config [FiniteField F] {PublicIO : TypeMap} [ProvableType PublicIO]
-    (ensemble : Ensemble F PublicIO) where
+    (ens : FormalEnsemble F PublicIO) where
   /-- Every ensemble component with its generation, in ensemble order. -/
   generations : List ((c : Component F) × Generation c)
   /-- The config lists exactly the ensemble's components. -/
-  same_components : generations.map (·.1) = ensemble.tables := by rfl
+  same_components : generations.map (·.1) = ens.ensemble.tables := by rfl
   /-- Bounds the number of generation steps. -/
   fuel : ℕ
 
