@@ -77,18 +77,11 @@ structure ComponentState (F : Type) [FiniteField F] where
   /-- The component's counters, resolved by validation. -/
   counters : List Counter
   /-- The component's witness operations, which complete a row from its input. -/
-  witgenOps : List (FlatOperation F)
+  witnessOperations : List (WitnessOperation F)
   /-- The component's channel interactions on a row. -/
   interactions : List (AbstractInteraction F)
   /-- The rows generated so far. -/
   rows : List (GeneratedRow F) := []
-
-def witnessOperationsOnly : List (FlatOperation F) → List (FlatOperation F)
-  | [] => []
-  | operation :: operations =>
-      match operation with
-      | .witness _ _ => operation :: witnessOperationsOnly operations
-      | .assert _ | .lookup _ | .interact _ => witnessOperationsOnly operations
 
 def ComponentState.initial (component : Component F) (generation : Generation component)
     (counters : List Counter) : ComponentState F :=
@@ -97,29 +90,20 @@ def ComponentState.initial (component : Component F) (generation : Generation co
     component
     generation
     counters
-    witgenOps := witnessOperationsOnly operations.toFlat
+    witnessOperations := FlatOperation.witnessOperations operations.toFlat
     interactions := operations.interactions
   }
 
-def witgenStepWithData (data : ProverData F) (hint : ProverHint F)
-    (acc : Array F) : FlatOperation F → Array F
-  | .witness _ code =>
-      let environment : ProverEnvironment F := {
-        get index := acc[index]?.getD 0
-        data
-        hint
-      }
-      acc ++ (code.eval environment).toArray
-  | .assert _ | .lookup _ | .interact _ => acc
-
+/-- Run witness operations on an input, appending the values of each to the row. -/
 def witgenWithData (data : ProverData F) (hint : ProverHint F)
-    (ops : List (FlatOperation F)) (input : Array F) : Array F :=
-  ops.foldl (witgenStepWithData data hint) input
+    (operations : List (WitnessOperation F)) (input : Array F) : Array F :=
+  operations.foldl (init := input) fun row ⟨_, code⟩ =>
+    row ++ (code.eval { get index := row[index]?.getD 0, data, hint }).toArray
 
 /-- Complete a component row from its input with the component's witness programs. -/
 def completeRow (state : ComponentState F) (input : Array F) (data : ProverData F)
     (hint : ProverHint F) : GeneratedRow F :=
-  { input, values := witgenWithData data hint state.witgenOps input }
+  { input, values := witgenWithData data hint state.witnessOperations input }
 
 def rowInteractions (state : ComponentState F) (row : GeneratedRow F) (data : ProverData F) :
     List (Interaction F) :=
