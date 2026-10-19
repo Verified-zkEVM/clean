@@ -19,9 +19,6 @@ variable {PublicIO : TypeMap} [ProvableType PublicIO]
 
 /-- A problem with a generation config, found by `Config.validate`. -/
 inductive ConfigError where
-  | unknownComponent (name : String)
-  | missingComponent (name : String)
-  | duplicateComponent (name : String)
   | demandWithFixedColumns (component : String)
   | preallocatedWithoutFixedColumns (component : String)
   | demandInputWidth (component : String) (expected actual : ℕ)
@@ -31,6 +28,7 @@ inductive ConfigError where
   | preallocatedWidth (component : String) (expected actual : ℕ)
   | counter (component : String) (error : CounterError)
   | byMessagePush (component : String)
+  | byMessageChannel (component counted demanded : String)
   | duplicateHandler (channel : String) (surplus : Direction)
   | unknownDataRead (component : String) (operation : ℕ) (key : String)
   | dataReadWidth (component : String) (operation : ℕ) (key : String) (expected actual : ℕ)
@@ -39,9 +37,6 @@ deriving Repr, DecidableEq
 
 instance : ToString ConfigError where
   toString
-    | .unknownComponent name => s!"generation config names unknown component '{name}'"
-    | .missingComponent name => s!"component '{name}' has no generation config"
-    | .duplicateComponent name => s!"component '{name}' has multiple generation configs"
     | .demandWithFixedColumns component =>
         s!"component '{component}' has fixed columns, so it must be preallocated"
     | .preallocatedWithoutFixedColumns component =>
@@ -61,6 +56,9 @@ instance : ToString ConfigError where
     | .counter component error => s!"component '{component}' {error}"
     | .byMessagePush component =>
         s!"component '{component}' aggregates by message, so it can only answer pull surplus"
+    | .byMessageChannel component counted demanded =>
+        s!"component '{component}' counts on channel '{counted}' but answers demand on channel \
+          '{demanded}'"
     | .duplicateHandler channel surplus =>
         s!"multiple components handle {surplus.name} surplus on channel '{channel}'"
     | .unknownDataRead component operation key =>
@@ -140,35 +138,27 @@ def witnessDataReads : {n : ℕ} → Witgen.WitgenIR F n → List DataRead
 
 /-- The channels a component's generation handles, with the surplus it answers there. A counter
 only grows the pushes of its interaction, so it answers pull surplus. -/
-def Generation.handled : Generation F → List (String × Direction)
+def Generation.handled {component : Component F} (counters : List Counter) :
+    Generation component → List (String × Direction)
   | .demand mode => [(mode.channel.name, mode.surplus)]
-  | .preallocated mode => mode.channels.map (·.name, .pull)
-
-/-- Look up the generation of every ensemble component, in ensemble order. -/
-def Config.align (config : Config F) (ensemble : Ensemble F PublicIO) :
-    Except ConfigError (List (Generation F)) := do
-  for (name, _) in config.components do
-    unless ensemble.tables.any (·.circuit.name == name) do
-      throw (.unknownComponent name)
-  ensemble.tables.mapM fun component =>
-    match config.components.filter (·.1 == component.circuit.name) with
-    | [(_, generation)] => pure generation
-    | [] => throw (.missingComponent component.circuit.name)
-    | _ => throw (.duplicateComponent component.circuit.name)
+  | .preallocated _ => counters.map (·.channel, .pull)
 
 /-- Check one component's generation against the component, and resolve its counters. -/
-def validateGeneration (component : Component F) (generation : Generation F) :
+def validateGeneration (component : Component F) (generation : Generation component) :
     Except ConfigError (List Counter) := do
   let name := component.circuit.name
   let fixedWidth := component.fixedWidth
   let inputWidth := component.rowOffset
-  let counters ← (generation.counters component).mapError (.counter name)
+  let counters ← generation.counters.mapError (.counter name)
   match component.fixedColumns, generation with
   | some _, .demand _ => throw (.demandWithFixedColumns name)
   | none, .preallocated _ => throw (.preallocatedWithoutFixedColumns name)
   | _, .demand mode =>
-      if mode.aggregation == .byMessage && mode.surplus == .push then
-        throw (.byMessagePush name)
+      if let .byMessage _ := mode.aggregation then
+        if mode.surplus == .push then throw (.byMessagePush name)
+        for counter in counters do
+          unless counter.channel == mode.channel.name do
+            throw (.byMessageChannel name counter.channel mode.channel.name)
       unless mode.input.length + counters.length = inputWidth do
         throw (.demandInputWidth name (inputWidth - counters.length) mode.input.length)
       for cell in mode.input do
@@ -186,15 +176,15 @@ def validateGeneration (component : Component F) (generation : Generation F) :
 
 /-- Check that every prover-data read targets a cell of a preallocated component that generation
 doesn't change. -/
-def validateDataReads (components : List (Component F)) (generations : List (Generation F))
+def validateDataReads (generations : List ((c : Component F) × Generation c))
     (counters : List (List Counter)) : Except ConfigError Unit := do
-  for component in components do
+  let targets := generations.zip counters
+  for ⟨component, _⟩ in generations do
     for (operation, operationIndex) in component.rowOperations.toFlat.zipIdx do
       if let .witness _ code := operation then
         for read in witnessDataReads code do
-          let targets := components.zip (generations.zip counters)
-          let some (target, generation, targetCounters) := targets.find? fun (target, _) =>
-              target.circuit.name == read.key
+          let some (⟨target, generation⟩, targetCounters) := targets.find? fun (entry, _) =>
+              entry.1.circuit.name == read.key
             | throw (.unknownDataRead component.circuit.name operationIndex read.key)
           unless read.width = target.rowOffset do
             throw (.dataReadWidth component.circuit.name operationIndex read.key target.rowOffset
@@ -207,45 +197,34 @@ def validateDataReads (components : List (Component F)) (generations : List (Gen
                 throw (.unstableDataRead component.circuit.name operationIndex read.key read.column)
 
 /-- Check that no two components answer the same surplus on the same channel. -/
-def validateHandlers (generations : List (Generation F)) : Except ConfigError Unit := do
-  let handled := generations.flatMap (·.handled)
+def validateHandlers (generations : List ((c : Component F) × Generation c))
+    (counters : List (List Counter)) : Except ConfigError Unit := do
+  let handled := (generations.zip counters).flatMap fun (entry, counters) =>
+    entry.2.handled counters
   for (entry, index) in handled.zipIdx do
     if (handled.take index).contains entry then
       throw (.duplicateHandler entry.1 entry.2)
 
-/-- All checks of the generations aligned with an ensemble's components; returns the counters of
-every component. -/
-def validateGenerations (ensemble : Ensemble F PublicIO) (generations : List (Generation F)) :
+/-- All checks of a config's generations; returns the counters of every component. -/
+def validateGenerations (generations : List ((c : Component F) × Generation c)) :
     Except ConfigError (List (List Counter)) := do
-  let counters ← (ensemble.tables.zip generations).mapM fun (component, generation) =>
+  let counters ← generations.mapM fun ⟨component, generation⟩ =>
     validateGeneration component generation
-  validateHandlers generations
-  validateDataReads ensemble.tables generations counters
+  validateHandlers generations counters
+  validateDataReads generations counters
   return counters
 
-/-- A config that passed `Config.validate` for `ensemble`. -/
-structure ValidConfig (ensemble : Ensemble F PublicIO) where
-  /-- The generation of each component, in ensemble order. -/
-  generations : List (Generation F)
-  /-- The counters of each component, in ensemble order. -/
+/-- A config that passed `Config.validate`, with the counters of every component, in ensemble
+order. -/
+structure ValidConfig (ensemble : Ensemble F PublicIO) extends Config ensemble where
   counters : List (List Counter)
-  aligned : generations.length = ensemble.tables.length
-  valid : validateGenerations ensemble generations = .ok counters
-  fuel : ℕ
+  valid : validateGenerations generations = .ok counters
 
-/-- Align a config with an ensemble's components and check it. -/
-def Config.validate (config : Config F) (ensemble : Ensemble F PublicIO) :
+/-- Check a config and resolve its counters. -/
+def Config.validate {ensemble : Ensemble F PublicIO} (config : Config ensemble) :
     Except ConfigError (ValidConfig ensemble) :=
-  match config.align ensemble with
+  match hvalid : validateGenerations config.generations with
   | .error error => .error error
-  | .ok generations =>
-      if hlength : generations.length = ensemble.tables.length then
-        match hvalid : validateGenerations ensemble generations with
-        | .error error => .error error
-        | .ok counters =>
-            .ok { generations, counters, aligned := hlength, valid := hvalid, fuel := config.fuel }
-      else
-        -- `align` produces one entry per component
-        .error (.missingComponent "")
+  | .ok counters => .ok { config with counters, valid := hvalid }
 
 end Air.Flat.WitnessGeneration

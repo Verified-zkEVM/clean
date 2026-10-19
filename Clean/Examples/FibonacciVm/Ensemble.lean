@@ -245,7 +245,7 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
 namespace FibonacciWitness
 
 /-- One Fibonacci VM row per state pushed to the Fibonacci channel. -/
-def fibGeneration : WitnessGeneration.Generation (F p) :=
+def fibGeneration : WitnessGeneration.Generation (F := F p) { circuit := fib8 } :=
   .demand {
     channel := (FibonacciChannel (p := p)).toRaw
     surplus := .push
@@ -256,22 +256,18 @@ def fibGeneration : WitnessGeneration.Generation (F p) :=
 
 /-- One addition-chip row per distinct message pulled from the addition channel, with the number
 of pulls as its counter. -/
-def add8Generation : WitnessGeneration.Generation (F p) :=
+def add8Generation : WitnessGeneration.Generation (F := F p) { circuit := add8 } :=
   .demand {
     channel := (Add8Channel (p := p)).toRaw
     surplus := .pull
-    aggregation := .byMessage
+    aggregation := .byMessage fun input => input.m
     input := [.message 0, .message 1, .message 2]
     padding := { input := #[0, 0, 0, 0], minimumRows := 32 }
   }
 
 /-- Witness generation for each component of the ensemble. -/
-def config (fuel : ℕ) : WitnessGeneration.Config (F p) where
-  components := [
-    ("fibonacci", fibGeneration),
-    ("add8", add8Generation),
-    ("bytes", bytes.generation)
-  ]
+def config (fuel : ℕ) : WitnessGeneration.Config (fibonacciEnsemble (p := p)).ensemble where
+  generations := [⟨_, fibGeneration⟩, ⟨_, add8Generation⟩, ⟨_, bytes.generation⟩]
   fuel
 
 /-- Generate a complete ensemble witness from the claimed public final state. -/

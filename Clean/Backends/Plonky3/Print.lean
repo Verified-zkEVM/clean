@@ -208,11 +208,10 @@ def directionToRust : Direction → String
   | .pull => "Direction::Pull"
   | .push => "Direction::Push"
 
-def aggregationToRust : Aggregation → String
-  | .perOccurrence => "Aggregation::PerOccurrence"
-  | .byMessage => "Aggregation::ByMessage"
+def aggregationToRust (byMessage : Bool) : String :=
+  if byMessage then "Aggregation::ByMessage" else "Aggregation::PerOccurrence"
 
-def counterToRust (counter : CounterProgram) : String :=
+def counterToRust (counter : Counter) : String :=
   s!"Counter \{ channel: {quoted counter.channel}, interaction: {counter.interaction}, \
       column: {counter.column} }"
 
@@ -224,9 +223,9 @@ def paddingToRust (padding : Padding F) : String :=
 fixed prefix followed by the row program's values, with zeros inserted at the counter columns. -/
 def modeToRust : ModeProgram F → String
   | .demand mode counters => s!"pub fn mode<F: WitnessField>() -> Mode<F> \{
-    Mode::Demand(DemandMode \{ channel: {quoted mode.channel.name}, \
+    Mode::Demand(DemandMode \{ channel: {quoted mode.channel}, \
         surplus: {directionToRust mode.surplus}, \
-        aggregation: {aggregationToRust mode.aggregation}, \
+        aggregation: {aggregationToRust mode.byMessage}, \
         input: vec![{commaSep (mode.input.map inputCellToRust)}], \
         counters: vec![{commaSep (counters.map counterToRust)}], \
         padding: {paddingToRust mode.padding} })
@@ -307,7 +306,7 @@ clean_backend::ensemble! \{
 "
 
 /-- Lower an ensemble to an extraction program and print it as Rust. -/
-def ensembleToRust (ens : FormalEnsemble F PublicIO) (config : Config F) :
+def ensembleToRust (ens : FormalEnsemble F PublicIO) (config : Config ens.ensemble) :
     Except String String := do
   let program ← lower ens config |>.mapError toString
   return programToRustFile program

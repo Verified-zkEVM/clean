@@ -7,42 +7,44 @@ public import Clean.Air.WitnessGeneration.Config
 /-!
 # Counters
 
-A counter is the multiplicity of a component's interaction on a channel where it answers demand by
-message, see `Clean.Air.WitnessGeneration.Config`. This file finds the counters in the circuit.
+A counter is an input variable of a component that is the multiplicity of one of its interactions,
+see `Clean.Air.WitnessGeneration.Config`. The config names the variable; this file finds the
+interaction it counts.
 -/
 
 namespace Air.Flat.WitnessGeneration
 
 variable {F : Type} [FiniteField F]
 
-/-- A counter, resolved from the channel it counts on. -/
+/-- A counter, resolved from the input variable that holds it. -/
 structure Counter where
+  /-- The input column holding the counter. -/
+  column : ℕ
   /-- The position of the counted interaction among the component's row interactions. -/
   interaction : ℕ
-  /-- The input column holding the interaction's multiplicity. -/
-  column : ℕ
+  /-- The channel of the counted interaction, on which the counter answers demand. -/
+  channel : String
 
-/-- Why a component has no valid counter on a channel. -/
+/-- Why a named counter is invalid. -/
 inductive CounterError where
-  /-- The component doesn't have exactly one interaction on the channel. -/
-  | interactions (channel : String) (count : ℕ)
-  /-- The multiplicity of the interaction isn't a single non-fixed input variable. -/
-  | multiplicity (channel : String)
-  /-- The message of the interaction reads a cell other than a non-counter input cell, so counting
-  could change which message the row answers. -/
-  | message (channel : String)
+  /-- The counter isn't a single input variable after the fixed columns. -/
+  | notVariable
+  /-- Not exactly one interaction has the counter as its multiplicity. -/
+  | interactions (column count : ℕ)
+  /-- The message of the counted interaction reads a cell other than a non-counter input cell, so
+  counting could change which message the row answers. -/
+  | message (column : ℕ)
 deriving Repr, DecidableEq
 
 instance : ToString CounterError where
   toString
-    | .interactions channel count =>
-        s!"has {count} interactions on channel '{channel}', expected one to count"
-    | .multiplicity channel =>
-        s!"counts on channel '{channel}' with a multiplicity that is not a non-fixed input \
-          variable"
-    | .message channel =>
-        s!"counts on channel '{channel}' with a message that reads a cell other than a \
-          non-counter input cell"
+    | .notVariable => "names a counter that is not a single input variable after the fixed columns"
+    | .interactions column count =>
+        s!"has {count} interactions whose multiplicity is the counter in column {column}, \
+          expected one"
+    | .message column =>
+        s!"counts with column {column} on an interaction whose message reads a cell other than \
+          a non-counter input cell"
 
 /-- The cells an expression reads. -/
 def expressionCells : Expression F → List ℕ
@@ -50,20 +52,23 @@ def expressionCells : Expression F → List ℕ
   | .const _ => []
   | .add left right | .mul left right => expressionCells left ++ expressionCells right
 
-/-- The counter of a component on `channel`: its unique interaction on that channel, whose
-multiplicity must be an input variable after the fixed columns. Finding counters by channel is a
-stopgap, see the assumptions in `Clean.Air.WitnessGeneration`. -/
-def Counter.resolve (component : Component F) (channel : RawChannel F) :
+/-- Resolve a counter of `component`, named by its input variable, to the unique interaction whose
+multiplicity is exactly that variable. -/
+def Counter.resolve (component : Component F) (counter : Var component.Input F → Expression F) :
     Except CounterError Counter :=
-  match component.rowOperations.interactions.zipIdx.filter (·.1.channel.name == channel.name) with
-  | [(interaction, index)] =>
-      match interaction.mult with
-      | .var cell =>
-          if component.fixedWidth ≤ cell.index && cell.index < component.rowOffset then
-            .ok { interaction := index, column := cell.index }
-          else .error (.multiplicity channel.name)
-      | _ => .error (.multiplicity channel.name)
-  | found => .error (.interactions channel.name found.length)
+  match counter (varFromOffset component.Input 0) with
+  | .var cell =>
+      if component.fixedWidth ≤ cell.index && cell.index < component.rowOffset then
+        let counted := component.rowOperations.interactions.zipIdx.filter fun (interaction, _) =>
+          match interaction.mult with
+          | .var multiplicity => multiplicity.index == cell.index
+          | _ => false
+        match counted with
+        | [(interaction, index)] =>
+            .ok { column := cell.index, interaction := index, channel := interaction.channel.name }
+        | found => .error (.interactions cell.index found.length)
+      else .error .notVariable
+  | _ => .error .notVariable
 
 /-- Check that counting never changes which message a row answers: the messages of counted
 interactions only read input cells that aren't counters. -/
@@ -74,17 +79,17 @@ def checkCounterMessages (component : Component F) (counters : List Counter) :
     let some interaction := interactions[counter.interaction]? | continue
     let cells := interaction.msg.toList.flatMap expressionCells
     unless cells.all fun cell => cell < component.rowOffset && counters.all (·.column ≠ cell) do
-      throw (.message interaction.channel.name)
+      throw (.message counter.column)
 
-/-- The counters of a component's generation: one per channel of a preallocated component, and one
-on the channel of a `byMessage` demand component. -/
-def Generation.counters (component : Component F) (generation : Generation F) :
+/-- The counters of a component's generation: the one of a `byMessage` demand component, or those of
+a preallocated component. -/
+def Generation.counters {component : Component F} (generation : Generation component) :
     Except CounterError (List Counter) := do
   let counters ← match generation with
     | .demand mode => match mode.aggregation with
       | .perOccurrence => pure []
-      | .byMessage => ([·]) <$> Counter.resolve component mode.channel
-    | .preallocated mode => mode.channels.mapM (Counter.resolve component)
+      | .byMessage counter => ([·]) <$> Counter.resolve component counter
+    | .preallocated mode => mode.counters.mapM (Counter.resolve component)
   checkCounterMessages component counters
   return counters
 

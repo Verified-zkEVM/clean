@@ -35,18 +35,13 @@ so the generator balances and pads again until no table grows.
 ## Assumptions
 
 TODO. The generator makes assumptions about the AIRs it handles, which come from our examples
-rather than from the idea. None of them is fundamental, and the first two are planned to go:
-- Counters are found by channel: the counter is the multiplicity of the component's unique
-  interaction on the counted channel, which must be a single non-fixed input variable. That is a
-  stopgap, since such a variable may also be a flag like `enabled`, which counting would break.
-  The plan is to name the counter cell in the config with a typed accessor on the component's input,
-  like `fun row => row.multiplicity`, and to count on the interaction whose multiplicity is exactly
-  that cell.
+rather than from the idea. None of them is fundamental, and the first is planned to go:
 - Demand is routed by channel only: one component answers each channel and surplus. That rules out
   a Merkle tree component whose rows pull two children and push their parent, since internal nodes
   and leaves are pulled on the same channel but answered by different components. The plan is to
   route by message.
 - Counters only answer pull surplus, so `byMessage` requires `surplus := .pull`.
+- A counter is the whole multiplicity of exactly one interaction.
 - The input of a demand-generated row consists of message elements and constants; its other cells
   are computed by the witness programs.
 - Witness programs only read prover data from cells of preallocated components that aren't
@@ -72,16 +67,14 @@ structure Mutation (F : Type) [FiniteField F] where
   removedRows : List (GeneratedRow F) := []
   addedRows : List (GeneratedRow F) := []
 
-def DemandMode.handles (mode : DemandMode F) (demand : Demand F) : Bool :=
+def DemandMode.handles {component : Component F} (mode : DemandMode component)
+    (demand : Demand F) : Bool :=
   mode.channel.name == demand.channel && mode.surplus == demand.direction
 
 /-- The counters that answer `demand`: those on its channel, if the message was pulled more often
 than pushed. -/
 def countersFor (state : ComponentState F) (demand : Demand F) : List Counter :=
-  if demand.direction == .pull then
-    state.counters.filter fun counter =>
-      state.interactions[counter.interaction]?.any (·.channel.name == demand.channel)
-  else []
+  if demand.direction == .pull then state.counters.filter (·.channel == demand.channel) else []
 
 /-- The first row whose counted interaction carries the demanded message, with the counter and the
 row's index. -/
@@ -106,20 +99,20 @@ def incrementCounter (state : ComponentState F) (demand : Demand F) (data : Prov
 
 /-- A new row answering the demanded message, whose counter, if any, starts at the demanded
 count. -/
-def DemandMode.newRow (mode : DemandMode F) (state : ComponentState F) (demand : Demand F)
-    (data : ProverData F) (hint : ProverHint F) : GeneratedRow F :=
+def DemandMode.newRow (state : ComponentState F) (mode : DemandMode state.component)
+    (demand : Demand F) (data : ProverData F) (hint : ProverHint F) : GeneratedRow F :=
   let cells := (mode.input.map (·.eval demand.message)).toArray
   completeRow state (insertCounters state (FiniteField.fromNat demand.count) cells) data hint
 
 /-- Answer demand with one new row per occurrence, or, with `byMessage`, by counting it in the row
 for the message, which is created if there is none yet. -/
-def DemandMode.answer (mode : DemandMode F) (state : ComponentState F) (demand : Demand F)
-    (data : ProverData F) (hint : ProverHint F) : Mutation F :=
+def DemandMode.answer (state : ComponentState F) (mode : DemandMode state.component)
+    (demand : Demand F) (data : ProverData F) (hint : ProverHint F) : Mutation F :=
   let addRows (rows : List (GeneratedRow F)) : Mutation F :=
     { state := { state with rows := state.rows ++ rows }, addedRows := rows }
   match mode.aggregation with
   | .perOccurrence => addRows (List.replicate demand.count (mode.newRow state demand data hint))
-  | .byMessage =>
+  | .byMessage _ =>
       match findCountedRow state demand data with
       | some found => incrementCounter state demand data hint found
       | none => addRows [mode.newRow state demand data hint]
@@ -212,8 +205,8 @@ def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensembl
     (publicInput : PublicIO F) (hint : ProverHint F) :
     Except GenerationError (EnsembleWitness ensemble) := do
   -- preallocate rows, and complete them with the prover data of all preallocated inputs
-  let initial := (ensemble.tables.zip (config.generations.zip config.counters)).map
-    fun (component, generation, counters) => ComponentState.initial component generation counters
+  let initial := (config.generations.zip config.counters).map
+    fun (⟨component, generation⟩, counters) => ComponentState.initial component generation counters
   let initial := initial.map fun state =>
     { state with rows := (initialInputs state hint).map fun input => { input, values := input } }
   let data := generatedData initial
@@ -236,9 +229,10 @@ def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensembl
 
 /-- Validate a config, then generate an ensemble witness from the public input and the prover's
 private input. -/
-def generate (ens : FormalEnsemble F PublicIO) (config : Config F) (publicInput : PublicIO F)
-    (proverInput : ens.ProverInput F) : Except GenerationError (EnsembleWitness ens.ensemble) :=
-  match config.validate ens.ensemble with
+def generate (ens : FormalEnsemble F PublicIO) (config : Config ens.ensemble)
+    (publicInput : PublicIO F) (proverInput : ens.ProverInput F) :
+    Except GenerationError (EnsembleWitness ens.ensemble) :=
+  match config.validate with
   | .error error => .error (.config error)
   | .ok config => generateValid config publicInput (ens.hint proverInput)
 

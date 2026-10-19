@@ -9,7 +9,8 @@ public import Clean.Air.FlatEnsemble
 
 What the ensemble author writes to generate witnesses: for every component, how its rows come into
 existence. The generator itself, and the "chain reaction" that drives it, is described in
-`Clean.Air.WitnessGeneration`.
+`Clean.Air.WitnessGeneration`. A generation `Generation c` is indexed by its component `c`, and a
+`Config` lists every ensemble component with its generation.
 
 A component's generation is one of two modes:
 - `demand`: the component starts without rows and gets a new row whenever its channel has an
@@ -19,12 +20,12 @@ A component's generation is one of two modes:
   row per address, and a lookup table.
 
 Rows that answer repeated demand for the same message, in a `byMessage` demand component or a
-preallocated one, do so through a *counter*: the multiplicity of the row's interaction on the
-demanded channel, which must be a single input variable. The circuit fixes where the counter is.
-For example, a memory row emits `memoryChannel.emit multiplicity { address, value }`, so its counter
-is `multiplicity`. The generator finds the row whose interaction carries the demanded message and
-increments its counter. Since a counter only adds pushes, it answers messages pulled more often
-than pushed.
+preallocated one, do so through a *counter*: an input variable that is the multiplicity of one of
+the row's interactions. The config names the variable, and the generator finds the interaction.
+For example, a memory row emits `memoryChannel.emit multiplicity { address, value }`, so its config
+names the counter `fun row => row.multiplicity`. The generator finds the row whose counted
+interaction carries the demanded message and increments its counter. Since a counter only adds
+pushes, it answers messages pulled more often than pushed.
 
 Fixed columns are never generated: they are part of the component, and the generator copies them
 into the first cells of every row. So configs only describe the cells after the fixed columns. That
@@ -45,16 +46,15 @@ def Direction.name : Direction → String
   | .pull => "pull"
   | .push => "push"
 
-/-- How a demand-generated component answers the same message demanded several times. -/
-inductive Aggregation where
-  /-- One row per occurrence, each with multiplicity 1. Right for a VM, where every step is its own
-  row even if two steps happen to agree. -/
+/-- How a demand-generated component `c` answers the same message demanded several times. -/
+inductive Aggregation [FiniteField F] (c : Component F) where
+  /-- One row per occurrence. Right for a VM, where every step is its own row even if two steps
+  happen to agree. -/
   | perOccurrence
-  /-- One row per distinct message, whose counter counts the occurrences. Right for chips whose rows
-  only depend on their message, like an addition chip. Only answers pull surplus, see counters in
-  the module doc. -/
-  | byMessage
-deriving Repr, DecidableEq, BEq
+  /-- One row per distinct message, whose `counter` counts the occurrences, named by its input
+  variable like `fun row => row.multiplicity`. Right for chips whose rows only depend on their
+  message, like an addition chip. Only answers pull surplus, see counters in the module doc. -/
+  | byMessage (counter : Var c.Input F → Expression F)
 
 /-- One input cell of a demand-generated row. -/
 inductive InputCell (F : Type) where
@@ -76,22 +76,22 @@ structure Padding (F : Type) where
   /-- The table has at least this many rows. -/
   minimumRows : UInt64 := 1
 
-/-- Rows created by channel demand. -/
-structure DemandMode (F : Type) where
+/-- Rows of component `c` created by channel demand. -/
+structure DemandMode [FiniteField F] (c : Component F) where
   /-- The channel whose unanswered messages create rows of this component. -/
   channel : RawChannel F
   /-- Which unanswered messages create rows: `.push` means messages pushed more often than pulled,
   so the new row pulls them; `.pull` means the opposite. -/
   surplus : Direction
   /-- Whether repeated demand for one message creates repeated rows. -/
-  aggregation : Aggregation
+  aggregation : Aggregation c
   /-- The input of a new row, cell by cell, built from the message it answers. With `byMessage`, the
   cells skip the counter, which starts at the demanded count. The component's witness programs
   compute the rest of the row. -/
   input : List (InputCell F)
   padding : Padding F
 
-/-- One row per fixed row, with a counter per channel in `channels`.
+/-- One row of component `c` per fixed row, with the given counters.
 
 The input of row `i` consists of:
 - the fixed columns of row `i`, which come first,
@@ -100,19 +100,24 @@ The input of row `i` consists of:
 
 For example, a memory row emits `memoryChannel.emit multiplicity { address, value }`: its fixed
 column is `address`, its row program computes `value`, and `multiplicity` is its counter. -/
-structure PreallocatedMode (F : Type) extends Witgen.RowProgram F .prover where
-  /-- The channels on which the component answers demand, each with a counter. -/
-  channels : List (RawChannel F)
+structure PreallocatedMode [FiniteField F] (c : Component F) extends Witgen.RowProgram F .prover
+    where
+  /-- The counters, named by their input variables like `fun row => row.multiplicity`. The
+  component answers demand on the channels of the counted interactions. -/
+  counters : List (Var c.Input F → Expression F)
 
-/-- How the generator builds the rows of one component. -/
-inductive Generation (F : Type) where
-  | demand (mode : DemandMode F)
-  | preallocated (mode : PreallocatedMode F)
+/-- How the generator builds the rows of component `c`. -/
+inductive Generation [FiniteField F] (c : Component F) where
+  | demand (mode : DemandMode c)
+  | preallocated (mode : PreallocatedMode c)
 
 /-- Generation for a whole ensemble. -/
-structure Config (F : Type) where
-  /-- The generation of every ensemble component, keyed by component name. -/
-  components : List (String × Generation F)
+structure Config [FiniteField F] {PublicIO : TypeMap} [ProvableType PublicIO]
+    (ensemble : Ensemble F PublicIO) where
+  /-- Every ensemble component with its generation, in ensemble order. -/
+  generations : List ((c : Component F) × Generation c)
+  /-- The config lists exactly the ensemble's components. -/
+  same_components : generations.map (·.1) = ensemble.tables := by rfl
   /-- Bounds the number of generation steps. -/
   fuel : ℕ
 

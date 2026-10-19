@@ -97,8 +97,12 @@ def component : Component F where
 
 /-- Witness generation for the table: one preallocated row per table row, whose multiplicity counts
 the pulls. -/
-def generation : WitnessGeneration.Generation F :=
-  .preallocated { Row := unit, row _ := pure (), channels := [lookup.channel.toRaw] }
+def generation : WitnessGeneration.Generation lookup.component :=
+  .preallocated {
+    Row := unit
+    row _ := pure ()
+    counters := [fun (_, multiplicity) => multiplicity]
+  }
 
 end Lookup
 

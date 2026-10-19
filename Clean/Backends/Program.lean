@@ -173,21 +173,22 @@ def interactionValues (component : ComponentProgram F) (row : Array F)
 
 end ComponentProgram
 
-/-- A counter, with the channel of its interaction. -/
-structure CounterProgram where
+/-- A `DemandMode`, apart from its counter. -/
+structure DemandProgram (F : Type) where
   channel : String
-  /-- The position of the counted interaction among the component's interactions. -/
-  interaction : ℕ
-  /-- The input column holding the interaction's multiplicity. -/
-  column : ℕ
+  surplus : Direction
+  /-- Whether the mode aggregates by message, with its counter in `ModeProgram.demand`. -/
+  byMessage : Bool
+  input : List (InputCell F)
+  padding : Padding F
 
 /-- How the rows of one component are generated. -/
 inductive ModeProgram (F : Type) [FiniteField F] where
   /-- The `counters` exist with `byMessage` aggregation only: one on the mode's channel. -/
-  | demand (mode : DemandMode F) (counters : List CounterProgram)
+  | demand (mode : DemandProgram F) (counters : List Counter)
   /-- `rows` rows, whose inputs after the fixed columns are the values of `program` with zeros
   inserted at the counter columns. -/
-  | preallocated (rows : UInt64) (program : WitnessBlock F) (counters : List CounterProgram)
+  | preallocated (rows : UInt64) (program : WitnessBlock F) (counters : List Counter)
 
 /-- An ensemble in the form that source-code backends print. -/
 structure Program (F : Type) [FiniteField F] where
@@ -293,36 +294,32 @@ def lowerComponent (index : ℕ) (component : Component F) :
     interactions
   }
 
-def lowerCounters (component : Component F) (counters : List Counter) : List CounterProgram :=
-  let interactions := component.rowOperations.interactions
-  counters.map fun counter => {
-    channel := (interactions[counter.interaction]?.map (·.channel.name)).getD ""
-    interaction := counter.interaction
-    column := counter.column
-  }
-
-def lowerGeneration (index : ℕ) (component : Component F) (generation : Generation F)
+def lowerGeneration (index : ℕ) (component : Component F) (generation : Generation component)
     (counters : List Counter) : Except LoweringError (ModeProgram F) := do
-  let counters := lowerCounters component counters
   match generation with
-  | .demand mode => return .demand mode counters
+  | .demand mode =>
+      let byMessage := match mode.aggregation with
+        | .perOccurrence => false
+        | .byMessage _ => true
+      let { channel, surplus, input, padding, .. } := mode
+      return .demand { channel := channel.name, surplus, byMessage, input, padding } counters
   | .preallocated mode =>
       let program ← lowerRowProgram (.malformedRowProgram index) mode.toRowProgram
       let rows := component.fixedColumns.map (·.height) |>.getD 0
       return .preallocated rows program counters
 
 /-- Validate an ensemble and its generation metadata, and lower them to an extraction program. -/
-def lower (ens : FormalEnsemble F PublicIO) (config : Config F) :
+def lower (ens : FormalEnsemble F PublicIO) (config : Config ens.ensemble) :
     Except LoweringError (Program F) := do
   let ensemble := ens.ensemble
   -- `ValidConfig` lives in a higher universe, so it is matched rather than bound
-  match config.validate ensemble with
+  match config.validate with
   | .error error => throw (.config error)
   | .ok config =>
     let components ← ensemble.tables.zipIdx.mapM fun (component, index) =>
       lowerComponent index component
-    let modes ← (ensemble.tables.zip (config.generations.zip config.counters)).zipIdx.mapM
-      fun ((component, generation, counters), index) =>
+    let modes ← (config.generations.zip config.counters).zipIdx.mapM
+      fun ((⟨component, generation⟩, counters), index) =>
         lowerGeneration index component generation counters
     let verifierOperations := ensemble.verifierOperations.toFlat
     let verifierInteractions := FlatOperation.interactions verifierOperations
