@@ -6,7 +6,7 @@
 /// Every module listed in `components`, and the module `verifier`, must be in scope. Component
 /// modules provide the constants `NAME`, `INPUT_WIDTH`, `WIDTH`, `FIXED_WIDTH`, `FIXED_HEIGHT` and
 /// `INTERACTIONS`, and the functions `fixed_row`, `complete`, `constraints`, `interactions`,
-/// `mode`, `initial_row` and `padding`. The verifier module provides `INTERACTIONS` and
+/// `mode` and `initial_row`. The verifier module provides `INTERACTIONS` and
 /// `interactions`.
 ///
 /// The macro defines the type `Ensemble`, implementing both traits, the AIR statement
@@ -40,10 +40,6 @@ macro_rules! ensemble {
 
             fn modes() -> $crate::__private::Vec<$crate::witness_generation::Mode<F>> {
                 $crate::__private::vec![$($component::mode::<F>()),+]
-            }
-
-            fn padding() -> $crate::__private::Vec<$crate::witness_generation::Padding<F>> {
-                $crate::__private::vec![$($component::padding::<F>()),+]
             }
 
             fn initial_row(

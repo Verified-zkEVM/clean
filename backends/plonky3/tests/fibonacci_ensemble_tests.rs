@@ -7,7 +7,7 @@ mod generated {
 }
 
 use clean_backend::witness_generation::{
-    self, HintTable, Interaction, Mode, Padding, Program, WitnessData, WitnessField,
+    self, DemandMode, HintTable, Interaction, Mode, Padding, Program, WitnessData, WitnessField,
     WitnessGenerationError,
 };
 use clean_backend::{
@@ -198,14 +198,16 @@ impl<F: WitnessField> Program<F> for Minimum64Program {
 
     fn modes() -> Vec<Mode<F>> {
         generated::Ensemble::modes()
-    }
-
-    fn padding() -> Vec<Padding<F>> {
-        generated::Ensemble::padding()
             .into_iter()
-            .map(|padding| Padding {
-                minimum_rows: 64,
-                ..padding
+            .map(|mode| match mode {
+                Mode::Demand(mode) => Mode::Demand(DemandMode {
+                    padding: Padding {
+                        minimum_rows: 64,
+                        ..mode.padding
+                    },
+                    ..mode
+                }),
+                mode => mode,
             })
             .collect()
     }

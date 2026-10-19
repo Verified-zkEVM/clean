@@ -173,19 +173,20 @@ def interactionValues (component : ComponentProgram F) (row : Array F)
 
 end ComponentProgram
 
-/-- A preallocated handler, with the channel and direction of the component interaction it serves.
--/
-structure HandlerProgram where
+/-- A counter of a preallocated component, with the channel of its interaction. -/
+structure CounterProgram where
   channel : String
-  direction : Direction
+  /-- The position of the counted interaction among the component's interactions. -/
   interaction : ℕ
+  /-- The input column holding the interaction's multiplicity. -/
   column : ℕ
 
-/-- How the rows of one component are generated, with the row program of preallocated rows
-validated. -/
+/-- How the rows of one component are generated. -/
 inductive ModeProgram (F : Type) [FiniteField F] where
   | demand (mode : DemandMode F)
-  | preallocated (rows : UInt64) (input : WitnessBlock F) (handlers : List HandlerProgram)
+  /-- `rows` rows, whose inputs after the fixed columns are the values of `program` with zeros
+  inserted at the counter columns. -/
+  | preallocated (rows : UInt64) (program : WitnessBlock F) (counters : List CounterProgram)
 
 /-- An ensemble in the form that source-code backends print. -/
 structure Program (F : Type) [FiniteField F] where
@@ -195,7 +196,6 @@ structure Program (F : Type) [FiniteField F] where
   components : List (ComponentProgram F)
   verifierInteractions : List (AbstractInteraction F)
   modes : List (ModeProgram F)
-  padding : List (Padding F)
   fuel : ℕ
 
 /-! ## Lowering a flat Clean ensemble to an extraction program -/
@@ -205,8 +205,7 @@ inductive LoweringError where
   | nativeWitness (component operation : ℕ)
   | malformedWitnessLocals (component operation : ℕ)
   | malformedFixedProgram (component : ℕ)
-  | malformedInitializer (component : ℕ)
-  | handlerInteraction (component interaction : ℕ)
+  | malformedRowProgram (component : ℕ)
   | legacyLookup (component : ℕ)
   | componentVariable (component index width : ℕ)
   | verifierVariable (index width : ℕ)
@@ -221,10 +220,8 @@ instance : ToString LoweringError where
         s!"component {component} witness operation {operation} has an invalid local reference"
     | .malformedFixedProgram component =>
         s!"component {component} fixed-column program has an invalid local reference"
-    | .malformedInitializer component =>
-        s!"component {component} row initializer has an invalid local reference"
-    | .handlerInteraction component interaction =>
-        s!"component {component} preallocated handler refers to missing interaction {interaction}"
+    | .malformedRowProgram component =>
+        s!"component {component} preallocated row program has an invalid local reference"
     | .legacyLookup component =>
         s!"component {component} contains a legacy lookup; extraction supports channels only"
     | .componentVariable component index width =>
@@ -295,24 +292,16 @@ def lowerComponent (index : ℕ) (component : Component F) :
     interactions
   }
 
-def lowerHandler (index : ℕ) (component : ComponentProgram F) (handler : PreallocatedHandler) :
-    Except LoweringError HandlerProgram := do
-  let some interaction := component.interactions[handler.interaction]?
-    | throw (.handlerInteraction index handler.interaction)
-  return {
-    channel := interaction.channel.name
-    direction := if interaction.assumeGuarantees then .push else .pull
-    interaction := handler.interaction
-    column := handler.column
-  }
-
-def lowerMode (index : ℕ) (component : ComponentProgram F) :
-    Mode F → Except LoweringError (ModeProgram F)
+def lowerGeneration (index : ℕ) (component : Component F) :
+    Generation F → Except LoweringError (ModeProgram F)
   | .demand mode => pure (.demand mode)
   | .preallocated mode => do
-      let input ← lowerRowProgram (.malformedInitializer index) mode.toRowProgram
-      let handlers ← mode.handlers.mapM (lowerHandler index component)
-      return .preallocated mode.rows input handlers
+      let program ← lowerRowProgram (.malformedRowProgram index) mode.toRowProgram
+      let counters ← (mode.counters component).mapError .config
+      let counters := (mode.channels.zip counters).map fun (channel, counter) =>
+        { channel := channel.name, interaction := counter.interaction, column := counter.column }
+      let rows := component.fixedColumns.map (·.height) |>.getD 0
+      return .preallocated rows program counters
 
 /-- Validate an ensemble and its generation metadata, and lower them to an extraction program. -/
 def lower (ens : FormalEnsemble F PublicIO) (config : Config F) :
@@ -324,9 +313,8 @@ def lower (ens : FormalEnsemble F PublicIO) (config : Config F) :
   | .ok config =>
     let components ← ensemble.tables.zipIdx.mapM fun (component, index) =>
       lowerComponent index component
-    let modes ← (components.zip config.generations).zipIdx.mapM
-      fun ((component, generation), index) =>
-      lowerMode index component generation.mode
+    let modes ← (ensemble.tables.zip config.generations).zipIdx.mapM
+      fun ((component, generation), index) => lowerGeneration index component generation
     let verifierOperations := ensemble.verifierOperations.toFlat
     let verifierInteractions := FlatOperation.interactions verifierOperations
     let verifierExpressions := verifierInteractions.flatMap fun interaction =>
@@ -341,7 +329,6 @@ def lower (ens : FormalEnsemble F PublicIO) (config : Config F) :
       components
       verifierInteractions
       modes
-      padding := config.generations.map (·.padding)
       fuel := config.fuel
     }
 

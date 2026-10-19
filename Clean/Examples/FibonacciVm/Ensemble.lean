@@ -245,25 +245,25 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
 namespace FibonacciWitness
 
 /-- One Fibonacci VM row per state pushed to the Fibonacci channel. -/
-def fibGeneration : WitnessGeneration.Generation (F p) where
-  mode := .demand {
+def fibGeneration : WitnessGeneration.Generation (F p) :=
+  .demand {
     channel := (FibonacciChannel (p := p)).toRaw
-    direction := .push
+    surplus := .push
     aggregation := .perOccurrence
     input := [.const 1, .message 0, .message 1, .message 2]
+    padding := { input := #[0, 0, 0, 0], minimumRows := 32 }
   }
-  padding := { input := #[0, 0, 0, 0], minimumRows := 32 }
 
 /-- One addition-chip row per distinct message pulled from the addition channel, with the number
 of pulls as its multiplicity. -/
-def add8Generation : WitnessGeneration.Generation (F p) where
-  mode := .demand {
+def add8Generation : WitnessGeneration.Generation (F p) :=
+  .demand {
     channel := (Add8Channel (p := p)).toRaw
-    direction := .pull
+    surplus := .pull
     aggregation := .byMessage
     input := [.message 0, .message 1, .message 2, .multiplicity]
+    padding := { input := #[0, 0, 0, 0], minimumRows := 32 }
   }
-  padding := { input := #[0, 0, 0, 0], minimumRows := 32 }
 
 /-- Witness generation for each component of the ensemble. -/
 def config (fuel : ℕ) : WitnessGeneration.Config (F p) where

@@ -39,7 +39,22 @@ The library currently provides two distinct arguments to establish soundness, co
 
 `Vm.lean` contains a construction aimed at "VM-like" components that perform one transition per row. Since VM components both pull from and push to one distinguished state channel, they cannot follow the theory of ordered lookup-channel soundness. Instead, we prove a dedicated soundness theorem that applies to a set of VM components added to an existing hierarchical ensemble; a typical modern zkVMs layout.
 
-`WitnessGeneration.lean` constructs ensemble witnesses from the public input and the prover's private input. A `FormalEnsemble` declares the type of its private input, the hint tables that witness programs read as views of the flattened private input, and the `ProverAssumptions` on public and private input that witness generation needs. Demand-driven components allocate rows from channel messages. Preallocated components initialize their prover-owned cells with row programs, which may read the hint, while the generic builder supplies any verifier-fixed prefix.
+`WitnessGeneration.lean` constructs ensemble witnesses from the public input and the prover's private input, see the next section.
+
+## Witness generation
+
+Witness generation is driven by channel balance. In a valid witness, every channel message is pushed as often as it is pulled. The generator keeps a tally of the messages that don't cancel yet, their *demand*, and answers it one message at a time: the component that handles the message adds or updates a row that cancels it. The new row has interactions of its own, which create new demand. So witness generation is a chain reaction, which ends when the tally is empty.
+
+For example, the verifier of a VM pushes the initial state and pulls the final state. Nothing pulls the initial state yet, so the VM gets a row that pulls it and pushes the next state, which is again unanswered, and so on. Each VM row may also pull from other channels: an addition chip then gets a row for the addition, and a memory counts one more read of the address. The reaction stops once a row pushes the final state, which the verifier pulls.
+
+Each component declares how it answers demand, in a `Config` defined in `WitnessGeneration/Config.lean`:
+
+- **demand**: the component starts empty and gets a new row whenever a message on its channel is unanswered. The row's input is built from the message. Repeated messages either get a row each (a VM step) or share one row with a multiplicity (a chip). After balancing, these tables are padded to a power-of-two height. Padding rows can interact too, so the generator balances again until no table grows.
+- **preallocated**: the component has one row per row of its fixed columns from the start, like a memory with one row per address or a lookup table. Demand only increments a *counter*: the multiplicity of the row whose interaction carries the demanded message. The circuit determines which input cell is the counter, since it is the variable the interaction uses as its multiplicity.
+
+Fixed columns are never generated. They belong to the component, and the generator copies them into the first cells of each row, so components with fixed columns are exactly the preallocated ones. The remaining cells of a preallocated row, apart from its counters, come from a row program, which may read the prover's private input.
+
+That private input is declared by the `FormalEnsemble`: its type, the hint tables through which witness programs read it, and the `ProverAssumptions` on public and private input that witness generation needs. The Plonky3 backend in `backends/plonky3` implements the same algorithm in Rust, and runs it on configs and witness programs extracted by `Clean/Backends`.
 
 ## Relation To Clean/Table
 

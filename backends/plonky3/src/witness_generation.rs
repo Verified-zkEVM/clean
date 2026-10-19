@@ -133,26 +133,28 @@ pub enum InputCell<F> {
 #[derive(Clone, Debug)]
 pub struct DemandMode<F> {
     pub channel: &'static str,
-    pub direction: Direction,
+    /// Which unanswered messages create rows: pushed more often than pulled, or the opposite.
+    pub surplus: Direction,
     pub aggregation: Aggregation,
     pub input: Vec<InputCell<F>>,
+    pub padding: Padding<F>,
 }
 
+/// A counter of a preallocated component: the multiplicity of its interaction on `channel`,
+/// which answers pull surplus on that channel.
 #[derive(Clone, Debug)]
-pub struct PreallocatedHandler {
+pub struct Counter {
     pub channel: &'static str,
-    pub direction: Direction,
+    /// The position of the counted interaction among the component's interactions.
     pub interaction: usize,
+    /// The input column holding the interaction's multiplicity.
     pub column: usize,
 }
 
 #[derive(Clone, Debug)]
 pub enum Mode<F> {
     Demand(DemandMode<F>),
-    Preallocated {
-        rows: usize,
-        handlers: Vec<PreallocatedHandler>,
-    },
+    Preallocated { rows: usize, counters: Vec<Counter> },
 }
 
 /// A named hint table viewing the flattened private input: `rows` rows of `width` elements,
@@ -229,7 +231,7 @@ impl<F: Field + Copy> WitnessData<F> {
     }
 }
 
-/// The input row that pads a component to a power-of-two height, of at least `minimum_rows`.
+/// The input row that pads a demand-generated component to a power-of-two height, of at least `minimum_rows`.
 #[derive(Clone, Debug)]
 pub struct Padding<F> {
     pub input: Vec<F>,
@@ -298,7 +300,6 @@ pub trait Program<F: WitnessField> {
     const COMPONENT_NAMES: &'static [&'static str];
 
     fn modes() -> Vec<Mode<F>>;
-    fn padding() -> Vec<Padding<F>>;
     /// The initial input of row `row` of a preallocated component.
     fn initial_row(component: usize, row: u64, hint: &WitnessData<F>) -> Vec<F>;
     fn complete_row(
@@ -346,7 +347,7 @@ impl<F: WitnessField> Demand<F> {
 #[derive(Clone, Debug)]
 struct Origin<F> {
     channel: &'static str,
-    direction: Direction,
+    surplus: Direction,
     message: Vec<F>,
     multiplicity: usize,
 }
@@ -414,12 +415,13 @@ fn remove_interactions<F: WitnessField>(
 
 fn mode_handles<F: WitnessField>(mode: &Mode<F>, demand: &Demand<F>) -> bool {
     match mode {
-        Mode::Demand(mode) => {
-            mode.channel == demand.channel && mode.direction == demand.direction()
+        Mode::Demand(mode) => mode.channel == demand.channel && mode.surplus == demand.direction(),
+        Mode::Preallocated { counters, .. } => {
+            demand.direction() == Direction::Pull
+                && counters
+                    .iter()
+                    .any(|counter| counter.channel == demand.channel)
         }
-        Mode::Preallocated { handlers, .. } => handlers.iter().any(|handler| {
-            handler.channel == demand.channel && handler.direction == demand.direction()
-        }),
     }
 }
 
@@ -457,7 +459,7 @@ fn make_demand_row<F: WitnessField, P: Program<F>>(
         values,
         origin: Some(Origin {
             channel: mode.channel,
-            direction: mode.direction,
+            surplus: mode.surplus,
             message: demand.message.clone(),
             multiplicity,
         }),
@@ -485,7 +487,7 @@ fn handle_demand<F: WitnessField, P: Program<F>>(
             let existing = table.iter().position(|row| {
                 row.origin.as_ref().is_some_and(|origin| {
                     origin.channel == mode.channel
-                        && origin.direction == mode.direction
+                        && origin.surplus == mode.surplus
                         && origin.message == demand.message
                 })
             });
@@ -524,57 +526,48 @@ fn handle_demand<F: WitnessField, P: Program<F>>(
 
 fn handle_preallocated<F: WitnessField, P: Program<F>>(
     component: usize,
-    handlers: &[PreallocatedHandler],
+    counters: &[Counter],
     demand: &Demand<F>,
     table: &mut [Row<F>],
     demands: &mut Vec<Demand<F>>,
     data: &WitnessData<F>,
     hint: &WitnessData<F>,
 ) -> Result<(), String> {
-    let mut matches = handlers.iter().flat_map(|handler| {
-        table
-            .iter()
-            .enumerate()
-            .filter_map(move |(row_index, row)| {
-                if handler.channel != demand.channel || handler.direction != demand.direction() {
-                    return None;
-                }
-                let interaction = P::interactions(component, &row.values)
-                    .into_iter()
-                    .nth(handler.interaction)?;
-                let direction = if interaction.assume_guarantees {
-                    Direction::Push
-                } else {
-                    Direction::Pull
-                };
-                (interaction.channel == handler.channel
-                    && direction == handler.direction
-                    && interaction.message == demand.message)
-                    .then_some((handler, row_index))
-            })
-    });
-    let (handler, row_index) = matches.next().ok_or_else(|| {
+    let mut matches = counters
+        .iter()
+        .filter(|counter| counter.channel == demand.channel)
+        .flat_map(|counter| {
+            table
+                .iter()
+                .enumerate()
+                .filter_map(move |(row_index, row)| {
+                    let interaction = P::interactions(component, &row.values)
+                        .into_iter()
+                        .nth(counter.interaction)?;
+                    (interaction.message == demand.message).then_some((counter, row_index))
+                })
+        });
+    let (counter, row_index) = matches.next().ok_or_else(|| {
         format!(
-            "preallocated handler has no row for channel '{}'",
+            "preallocated component has no row for a message on channel '{}'",
             demand.channel
         )
     })?;
     if matches.next().is_some() {
         return Err(format!(
-            "preallocated handler has multiple rows for channel '{}'",
+            "preallocated component has multiple rows for a message on channel '{}'",
             demand.channel
         ));
     }
     let row = &mut table[row_index];
-    let current = row.input.get(handler.column).copied().ok_or_else(|| {
-        format!(
-            "preallocated handler column {} is out of bounds",
-            handler.column
-        )
-    })?;
+    let current = row
+        .input
+        .get(counter.column)
+        .copied()
+        .ok_or_else(|| format!("counter column {} is out of bounds", counter.column))?;
     let value = current + F::from_canonical_u64(demand.count() as u64);
     let old_interactions = P::interactions(component, &row.values);
-    row.input[handler.column] = value;
+    row.input[counter.column] = value;
     row.values = P::complete_row(component, &row.input, data, hint)?;
     remove_interactions(demands, old_interactions);
     add_interactions(demands, P::interactions(component, &row.values));
@@ -635,9 +628,9 @@ fn balance<F: WitnessField, P: Program<F>>(
                 data,
                 hint,
             )?,
-            Mode::Preallocated { handlers, .. } => handle_preallocated::<F, P>(
+            Mode::Preallocated { counters, .. } => handle_preallocated::<F, P>(
                 component,
-                handlers,
+                counters,
                 &demand,
                 &mut tables[component],
                 demands,
@@ -650,24 +643,30 @@ fn balance<F: WitnessField, P: Program<F>>(
     Err("ensemble witness generation exhausted its fuel".to_string())
 }
 
-fn target_height<F>(row_count: usize, padding: &Padding<F>) -> usize {
-    row_count
-        .max(padding.minimum_rows)
-        .max(1)
-        .next_power_of_two()
+/// The padded height of a table. Preallocated tables are never padded.
+fn target_height<F>(row_count: usize, mode: &Mode<F>) -> usize {
+    match mode {
+        Mode::Demand(mode) => row_count
+            .max(mode.padding.minimum_rows)
+            .max(1)
+            .next_power_of_two(),
+        Mode::Preallocated { .. } => row_count,
+    }
 }
 
 fn pad_and_balance<F: WitnessField, P: Program<F>>(
     modes: &[Mode<F>],
-    padding: &[Padding<F>],
     tables: &mut [Vec<Row<F>>],
     data: &WitnessData<F>,
     hint: &WitnessData<F>,
 ) -> Result<(), String> {
     for _ in 0..P::FUEL {
         let mut demands = Vec::new();
-        for (component, (table, padding)) in tables.iter_mut().zip(padding).enumerate() {
-            let height = target_height(table.len(), padding);
+        for (component, (table, mode)) in tables.iter_mut().zip(modes).enumerate() {
+            let Mode::Demand(DemandMode { padding, .. }) = mode else {
+                continue;
+            };
+            let height = target_height(table.len(), mode);
             for _ in table.len()..height {
                 let values = P::complete_row(component, &padding.input, data, hint)?;
                 add_interactions(&mut demands, P::interactions(component, &values));
@@ -682,8 +681,8 @@ fn pad_and_balance<F: WitnessField, P: Program<F>>(
         balance::<F, P>(modes, tables, &mut demands, data, hint)?;
         if tables
             .iter()
-            .zip(padding)
-            .all(|(table, padding)| table.len() == target_height(table.len(), padding))
+            .zip(modes)
+            .all(|(table, mode)| table.len() == target_height(table.len(), mode))
         {
             return Ok(());
         }
@@ -705,19 +704,10 @@ pub fn generate<F: WitnessField, P: Program<F>>(
         });
     }
     let modes = P::modes();
-    let padding = P::padding();
     if modes.len() != P::COMPONENTS {
         return Err(format!(
             "generation-mode count {} does not match component count {}",
             modes.len(),
-            P::COMPONENTS
-        )
-        .into());
-    }
-    if padding.len() != P::COMPONENTS {
-        return Err(format!(
-            "padding count {} does not match component count {}",
-            padding.len(),
             P::COMPONENTS
         )
         .into());
@@ -780,12 +770,12 @@ pub fn generate<F: WitnessField, P: Program<F>>(
                 )
                 .into());
             }
-            Mode::Preallocated { handlers, .. } => {
-                if let Some(handler) = handlers.iter().find(|handler| handler.column < fixed_width)
+            Mode::Preallocated { counters, .. } => {
+                if let Some(counter) = counters.iter().find(|counter| counter.column < fixed_width)
                 {
                     return Err(format!(
-                        "preallocated handler for component {component} mutates fixed column {}",
-                        handler.column
+                        "counter of component {component} is fixed column {}",
+                        counter.column
                     )
                     .into());
                 }
@@ -810,7 +800,7 @@ pub fn generate<F: WitnessField, P: Program<F>>(
     }
 
     balance::<F, P>(&modes, &mut tables, &mut demands, &data, hint)?;
-    pad_and_balance::<F, P>(&modes, &padding, &mut tables, &data, hint)?;
+    pad_and_balance::<F, P>(&modes, &mut tables, &data, hint)?;
 
     Ok(EnsembleWitness {
         fixed_widths: P::FIXED_WIDTHS.to_vec(),

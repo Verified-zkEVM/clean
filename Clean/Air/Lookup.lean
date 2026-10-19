@@ -97,14 +97,8 @@ def component : Component F where
 
 /-- Witness generation for the table: one preallocated row per table row, whose multiplicity counts
 the pulls. -/
-def generation : WitnessGeneration.Generation F where
-  mode := .preallocated {
-    rows := lookup.height
-    Row := field
-    row _ := pure 0
-    handlers := [{ interaction := 0, column := size Row }]
-  }
-  padding := { input := .replicate (size Row + 1) 0, minimumRows := lookup.height }
+def generation : WitnessGeneration.Generation F :=
+  .preallocated { Row := unit, row _ := pure (), channels := [lookup.channel.toRaw] }
 
 end Lookup
 

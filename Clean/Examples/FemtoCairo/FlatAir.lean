@@ -567,35 +567,33 @@ namespace Witness
 /-- One execution row per state pushed to the state channel. Padding rows are disabled and hold the
 initial state. -/
 def executionGeneration (program : Array (F p)) (initialState : State (F p))
-    (executionRows : UInt64) : WitnessGeneration.Generation (F p) where
-  mode := .demand {
+    (executionRows : UInt64) : WitnessGeneration.Generation (F p) :=
+  .demand {
     channel := (stateChannel program initialState).toRaw
-    direction := .push
+    surplus := .push
     aggregation := .perOccurrence
     input := [.const 1, .message 0, .message 1, .message 2]
-  }
-  padding := {
-    input := #[0, initialState.pc, initialState.ap, initialState.fp]
-    minimumRows := executionRows
+    padding := {
+      input := #[0, initialState.pc, initialState.ap, initialState.fp]
+      minimumRows := executionRows
+    }
   }
 
 /-- One memory row per address, whose value the prover supplies as a hint. Its multiplicity counts
 the reads of that address. -/
-def memoryGeneration (memorySize : UInt64) : WitnessGeneration.Generation (F p) where
-  mode := .preallocated {
-    rows := memorySize
-    Row := fieldPair
-    row i := pure (.hintGet memoryValuesKey 1 i 0, 0)
-    handlers := [{ interaction := 0, column := 2 }]
+def memoryGeneration : WitnessGeneration.Generation (F p) :=
+  .preallocated {
+    Row := field
+    row i := pure (.hintGet memoryValuesKey 1 i 0)
+    channels := [memoryChannel.toRaw]
   }
-  padding := { input := #[0, 0, 0], minimumRows := memorySize }
 
-def config {memorySize : UInt64} (program : Array (F p)) (h_program : ValidProgram program)
+def config (program : Array (F p)) (h_program : ValidProgram program)
     (initialState : State (F p)) (executionRows : UInt64) (fuel : ℕ) :
     WitnessGeneration.Config (F p) where
   components := [
     ("execution", executionGeneration program initialState executionRows),
-    ("memory", memoryGeneration memorySize),
+    ("memory", memoryGeneration),
     ("program", (programLookup program h_program).generation)
   ]
   fuel
@@ -607,7 +605,7 @@ def generate {memorySize : UInt64} (program : Array (F p)) (h_program : ValidPro
     Except WitnessGeneration.GenerationError
       (EnsembleWitness (formalEnsemble program h_program h_memorySize initialState).ensemble) :=
   WitnessGeneration.generate (formalEnsemble program h_program h_memorySize initialState)
-    (config (memorySize := memorySize) program h_program initialState executionRows fuel)
+    (config program h_program initialState executionRows fuel)
     finalRegisters memoryValues
 
 end Witness
