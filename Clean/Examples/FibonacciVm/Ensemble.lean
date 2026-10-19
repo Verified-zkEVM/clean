@@ -255,13 +255,13 @@ def fibGeneration : WitnessGeneration.Generation (F p) :=
   }
 
 /-- One addition-chip row per distinct message pulled from the addition channel, with the number
-of pulls as its multiplicity. -/
+of pulls as its counter. -/
 def add8Generation : WitnessGeneration.Generation (F p) :=
   .demand {
     channel := (Add8Channel (p := p)).toRaw
     surplus := .pull
     aggregation := .byMessage
-    input := [.message 0, .message 1, .message 2, .multiplicity]
+    input := [.message 0, .message 1, .message 2]
     padding := { input := #[0, 0, 0, 0], minimumRows := 32 }
   }
 

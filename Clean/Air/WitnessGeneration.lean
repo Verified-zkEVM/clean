@@ -56,70 +56,60 @@ structure Mutation (F : Type) [FiniteField F] where
 def DemandMode.handles (mode : DemandMode F) (demand : Demand F) : Bool :=
   mode.channel.name == demand.channel && mode.surplus == demand.direction
 
-/-- A demand-generated row answering `multiplicity` occurrences of the demanded message. -/
-def DemandMode.newRow (mode : DemandMode F) (state : ComponentState F) (demand : Demand F)
-    (multiplicity : ℕ) (data : ProverData F) (hint : ProverHint F) : GeneratedRow F :=
-  let origin : Origin F := {
-    channel := mode.channel.name
-    surplus := mode.surplus
-    message := demand.message
-    multiplicity
-  }
-  let input := (mode.input.map (·.eval demand.message multiplicity)).toArray
-  completeRow state input data hint (some origin)
-
-/-- Answer demand with new rows, or with a higher multiplicity of the row a `byMessage` component
-already has for the message. -/
-def DemandMode.answer (mode : DemandMode F) (state : ComponentState F) (demand : Demand F)
-    (data : ProverData F) (hint : ProverHint F) : Mutation F :=
-  match mode.aggregation with
-  | .perOccurrence =>
-      let rows := List.replicate demand.count (mode.newRow state demand 1 data hint)
-      { state := { state with rows := state.rows ++ rows }, addedRows := rows }
-  | .byMessage =>
-      let existing := state.rows.zipIdx.findSome? fun (row, index) =>
-        row.origin.bind fun origin =>
-          if origin.channel == mode.channel.name && origin.surplus == mode.surplus &&
-            origin.message == demand.message then some (row, origin, index) else none
-      match existing with
-      | none =>
-          let row := mode.newRow state demand demand.count data hint
-          { state := { state with rows := state.rows ++ [row] }, addedRows := [row] }
-      | some (row, origin, index) =>
-          let updated := mode.newRow state demand (origin.multiplicity + demand.count) data hint
-          { state := { state with rows := state.rows.set index updated }
-            removedRows := [row]
-            addedRows := [updated] }
-
-/-- The counters of a preallocated component that answer `demand`: counters only answer pulls. -/
+/-- The counters that answer `demand`: those on its channel, if the message was pulled more often
+than pushed. -/
 def countersFor (state : ComponentState F) (demand : Demand F) : List Counter :=
   if demand.direction == .pull then
     state.counters.filter fun counter =>
       state.interactions[counter.interaction]?.any (·.channel.name == demand.channel)
   else []
 
-/-- Answer demand by incrementing the counter of the first row whose counted interaction carries
-the demanded message. Fails if there is no such row, for example when a memory read is out of
-bounds. -/
-def PreallocatedMode.answer (state : ComponentState F) (demand : Demand F) (data : ProverData F)
-    (hint : ProverHint F) : Option (Mutation F) :=
-  let found := (countersFor state demand).findSome? fun counter =>
+/-- The first row whose counted interaction carries the demanded message, with the counter and the
+row's index. -/
+def findCountedRow (state : ComponentState F) (demand : Demand F) (data : ProverData F) :
+    Option (Counter × ℕ × GeneratedRow F) :=
+  (countersFor state demand).findSome? fun counter =>
     state.rows.zipIdx.findSome? fun (row, index) =>
       state.interactions[counter.interaction]?.bind fun interaction =>
         if (interaction.eval (Environment.fromArray row.values data)).msg == demand.message then
           some (counter, index, row)
         else none
-  -- `Mutation` lives in a higher universe, so this matches instead of binding with `←`
-  match found with
-  | none => none
-  | some (counter, index, row) =>
+
+/-- Add the demanded count to the counter of a row, and complete the row again. -/
+def incrementCounter (state : ComponentState F) (demand : Demand F) (data : ProverData F)
+    (hint : ProverHint F) : Counter × ℕ × GeneratedRow F → Mutation F
+  | (counter, index, row) =>
       let count := (row.input[counter.column]?.getD 0) + FiniteField.fromNat demand.count
-      let updated := completeRow state (row.input.set! counter.column count) data hint none
-      some {
-        state := { state with rows := state.rows.set index updated }
+      let updated := completeRow state (row.input.set! counter.column count) data hint
+      { state := { state with rows := state.rows.set index updated }
         removedRows := [row]
-        addedRows := [updated]
-      }
+        addedRows := [updated] }
+
+/-- A new row answering the demanded message, whose counter, if any, starts at the demanded
+count. -/
+def DemandMode.newRow (mode : DemandMode F) (state : ComponentState F) (demand : Demand F)
+    (data : ProverData F) (hint : ProverHint F) : GeneratedRow F :=
+  let cells := (mode.input.map (·.eval demand.message)).toArray
+  completeRow state (insertCounters state (FiniteField.fromNat demand.count) cells) data hint
+
+/-- Answer demand with one new row per occurrence, or, with `byMessage`, by counting it in the row
+for the message, which is created if there is none yet. -/
+def DemandMode.answer (mode : DemandMode F) (state : ComponentState F) (demand : Demand F)
+    (data : ProverData F) (hint : ProverHint F) : Mutation F :=
+  let addRows (rows : List (GeneratedRow F)) : Mutation F :=
+    { state := { state with rows := state.rows ++ rows }, addedRows := rows }
+  match mode.aggregation with
+  | .perOccurrence => addRows (List.replicate demand.count (mode.newRow state demand data hint))
+  | .byMessage =>
+      match findCountedRow state demand data with
+      | some found => incrementCounter state demand data hint found
+      | none => addRows [mode.newRow state demand data hint]
+
+/-- Answer demand by counting it in the row for the message. Fails if there is no such row, for
+example when a memory read is out of bounds. -/
+def PreallocatedMode.answer (state : ComponentState F) (demand : Demand F) (data : ProverData F)
+    (hint : ProverHint F) : Option (Mutation F) :=
+  (findCountedRow state demand data).map (incrementCounter state demand data hint)
 
 def ComponentState.handles (state : ComponentState F) (demand : Demand F) : Bool :=
   match state.generation with
@@ -182,7 +172,7 @@ def padTables (data : ProverData F) (hint : ProverHint F) (states : List (Compon
     | .preallocated _ => (state, [])
     | .demand mode =>
         let count := state.targetHeight - state.rows.length
-        let rows := List.replicate count (completeRow state mode.padding.input data hint none)
+        let rows := List.replicate count (completeRow state mode.padding.input data hint)
         ({ state with rows := state.rows ++ rows }, rows.flatMap (rowInteractions state · data))
   (padded.map (·.1), padded.flatMap (·.2))
 
@@ -209,7 +199,7 @@ def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensembl
     { state with rows := (initialInputs state hint).map fun input => { input, values := input } }
   let data := generatedData initial
   let initial := initial.map fun state =>
-    { state with rows := state.rows.map fun row => completeRow state row.input data hint none }
+    { state with rows := state.rows.map fun row => completeRow state row.input data hint }
   -- start the chain reaction from the verifier's and the preallocated rows' interactions
   let verifier := ensemble.verifierOperations.interactionValues (.fromInput publicInput data)
   let rows := initial.flatMap fun state => state.rows.flatMap (rowInteractions state · data)

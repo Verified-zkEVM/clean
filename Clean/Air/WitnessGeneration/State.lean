@@ -64,27 +64,17 @@ end Demand
 
 /-! ### Rows -/
 
-/-- The demand that created a demand-generated row. A `byMessage` row is rebuilt from it when its
-message is demanded again. -/
-structure Origin (F : Type) where
-  channel : String
-  surplus : Direction
-  message : Array F
-  /-- The occurrences of the message the row answers. -/
-  multiplicity : ℕ
-
 structure GeneratedRow (F : Type) where
   /-- The row's input, from which its witness programs compute the rest of the row. -/
   input : Array F
   /-- The full row. -/
   values : Array F
-  origin : Option (Origin F) := none
 
 /-- One component's generation state. -/
 structure ComponentState (F : Type) [FiniteField F] where
   component : Component F
   generation : Generation F
-  /-- The counters of a preallocated component. -/
+  /-- The component's counters, see `Generation.counters`. -/
   counters : List Counter
   /-- The component's witness operations, which complete a row from its input. -/
   witgenOps : List (FlatOperation F)
@@ -106,9 +96,7 @@ def ComponentState.initial (component : Component F) (generation : Generation F)
   {
     component
     generation
-    counters := match generation with
-      | .demand _ => []
-      | .preallocated mode => (mode.counters component).toOption.getD []
+    counters := (generation.counters component).toOption.getD []
     witgenOps := witnessOperationsOnly operations.toFlat
     interactions := operations.interactions
   }
@@ -130,8 +118,8 @@ def witgenWithData (data : ProverData F) (hint : ProverHint F)
 
 /-- Complete a component row from its input with the component's witness programs. -/
 def completeRow (state : ComponentState F) (input : Array F) (data : ProverData F)
-    (hint : ProverHint F) (origin : Option (Origin F)) : GeneratedRow F :=
-  { input, values := witgenWithData data hint state.witgenOps input, origin }
+    (hint : ProverHint F) : GeneratedRow F :=
+  { input, values := witgenWithData data hint state.witgenOps input }
 
 def rowInteractions (state : ComponentState F) (row : GeneratedRow F) (data : ProverData F) :
     List (Interaction F) :=
@@ -144,16 +132,19 @@ def generatedData (states : List (ComponentState F)) : ProverData F := fun name 
   | some state => (state.rows.map (rowPrefix n ∘ (·.input))).toArray
   | none => #[]
 
+/-- Insert the counters, all with value `count`, into the other cells of an input. -/
+def insertCounters (state : ComponentState F) (count : F) (cells : Array F) : Array F :=
+  (state.counters.map (·.column)).mergeSort.foldl (fun input column => input.insertIdx! column count)
+    cells
+
 /-- The inputs of a preallocated component's rows: per fixed row, its fixed values and the values of
-the row program, with zeros inserted at the counter columns. -/
+the row program, with counters starting at 0. -/
 def initialInputs (state : ComponentState F) (hint : ProverHint F) : List (Array F) :=
   match state.component.fixedColumns, state.generation with
   | some fixed, .preallocated mode =>
-      let counterColumns := (state.counters.map (·.column)).mergeSort
       (List.range fixed.height.toNat).map fun row =>
         let row := UInt64.ofNat row
-        let input := fixed.values row ++ (toElements (mode.eval row hint)).toArray
-        counterColumns.foldl (fun input column => input.insertIdx! column 0) input
+        insertCounters state 0 (fixed.values row ++ (toElements (mode.eval row hint)).toArray)
   | _, _ => []
 
 /-! ### Errors -/

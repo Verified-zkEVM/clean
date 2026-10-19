@@ -173,7 +173,7 @@ def interactionValues (component : ComponentProgram F) (row : Array F)
 
 end ComponentProgram
 
-/-- A counter of a preallocated component, with the channel of its interaction. -/
+/-- A counter, with the channel of its interaction. -/
 structure CounterProgram where
   channel : String
   /-- The position of the counted interaction among the component's interactions. -/
@@ -183,7 +183,8 @@ structure CounterProgram where
 
 /-- How the rows of one component are generated. -/
 inductive ModeProgram (F : Type) [FiniteField F] where
-  | demand (mode : DemandMode F)
+  /-- The `counters` exist with `byMessage` aggregation only: one on the mode's channel. -/
+  | demand (mode : DemandMode F) (counters : List CounterProgram)
   /-- `rows` rows, whose inputs after the fixed columns are the values of `program` with zeros
   inserted at the counter columns. -/
   | preallocated (rows : UInt64) (program : WitnessBlock F) (counters : List CounterProgram)
@@ -292,14 +293,23 @@ def lowerComponent (index : ℕ) (component : Component F) :
     interactions
   }
 
-def lowerGeneration (index : ℕ) (component : Component F) :
-    Generation F → Except LoweringError (ModeProgram F)
-  | .demand mode => pure (.demand mode)
-  | .preallocated mode => do
+def lowerCounters (component : Component F) (generation : Generation F) :
+    Except LoweringError (List CounterProgram) := do
+  let counters ← (generation.counters component).mapError .config
+  let interactions := component.rowOperations.interactions
+  return counters.map fun counter => {
+    channel := (interactions[counter.interaction]?.map (·.channel.name)).getD ""
+    interaction := counter.interaction
+    column := counter.column
+  }
+
+def lowerGeneration (index : ℕ) (component : Component F) (generation : Generation F) :
+    Except LoweringError (ModeProgram F) := do
+  let counters ← lowerCounters component generation
+  match generation with
+  | .demand mode => return .demand mode counters
+  | .preallocated mode =>
       let program ← lowerRowProgram (.malformedRowProgram index) mode.toRowProgram
-      let counters ← (mode.counters component).mapError .config
-      let counters := (mode.channels.zip counters).map fun (channel, counter) =>
-        { channel := channel.name, interaction := counter.interaction, column := counter.column }
       let rows := component.fixedColumns.map (·.height) |>.getD 0
       return .preallocated rows program counters
 

@@ -49,8 +49,10 @@ For example, the verifier of a VM pushes the initial state and pulls the final s
 
 Each component declares how it answers demand, in a `Config` defined in `WitnessGeneration/Config.lean`:
 
-- **demand**: the component starts empty and gets a new row whenever a message on its channel is unanswered. The row's input is built from the message. Repeated messages either get a row each (a VM step) or share one row with a multiplicity (a chip). After balancing, these tables are padded to a power-of-two height. Padding rows can interact too, so the generator balances again until no table grows.
-- **preallocated**: the component has one row per row of its fixed columns from the start, like a memory with one row per address or a lookup table. Demand only increments a *counter*: the multiplicity of the row whose interaction carries the demanded message. The circuit determines which input cell is the counter, since it is the variable the interaction uses as its multiplicity.
+- **demand**: the component starts empty and gets a new row whenever a message on its channel is unanswered. The row's input is built from the message. Repeated messages either get a row each (a VM step) or share one row whose counter counts them (a chip). After balancing, these tables are padded to a power-of-two height. Padding rows can interact too, so the generator balances again until no table grows.
+- **preallocated**: the component has one row per row of its fixed columns from the start, like a memory with one row per address or a lookup table. Demand only increments counters.
+
+A *counter* is the multiplicity of a row's interaction on the demanded channel, which must be an input variable, so the circuit determines which cell it is. A chip row emitting `add8.emit m (x, y, z)` has the counter `m`. To answer a pulled message, the generator finds the row whose interaction carries that message and increments its counter, or, in a chip, creates the row if there is none yet. Counters may not influence the message they count, so incrementing one never changes which message a row answers.
 
 Fixed columns are never generated. They belong to the component, and the generator copies them into the first cells of each row, so components with fixed columns are exactly the preallocated ones. The remaining cells of a preallocated row, apart from its counters, come from a row program, which may read the prover's private input.
 

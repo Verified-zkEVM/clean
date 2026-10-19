@@ -18,6 +18,14 @@ A component's generation is one of two modes:
   Demand only increments the multiplicities of existing rows. Examples are a memory, which has one
   row per address, and a lookup table.
 
+Rows that answer repeated demand for the same message, in a `byMessage` demand component or a
+preallocated one, do so through a *counter*: the multiplicity of the row's interaction on the
+demanded channel, which must be a single input variable. The circuit fixes where the counter is.
+For example, a memory row emits `memoryChannel.emit multiplicity { address, value }`, so its counter
+is `multiplicity`. The generator finds the row whose interaction carries the demanded message and
+increments its counter. Since a counter only adds pushes, it answers messages pulled more often
+than pushed.
+
 Fixed columns are never generated: they are part of the component, and the generator copies them
 into the first cells of every row. So configs only describe the cells after the fixed columns. That
 is why only components with fixed columns can be preallocated, and those components must be.
@@ -42,8 +50,9 @@ inductive Aggregation where
   /-- One row per occurrence, each with multiplicity 1. Right for a VM, where every step is its own
   row even if two steps happen to agree. -/
   | perOccurrence
-  /-- One row per distinct message, whose multiplicity counts the occurrences. Right for chips whose
-  rows only depend on their message, like an addition chip. -/
+  /-- One row per distinct message, whose counter counts the occurrences. Right for chips whose rows
+  only depend on their message, like an addition chip. Only answers pull surplus, see counters in
+  the module doc. -/
   | byMessage
 deriving Repr, DecidableEq, BEq
 
@@ -51,15 +60,11 @@ deriving Repr, DecidableEq, BEq
 inductive InputCell (F : Type) where
   /-- Element `index` of the demanded message. -/
   | message (index : ℕ)
-  /-- The number of occurrences of the message this row answers: always 1 with `perOccurrence`, the
-  total count with `byMessage`. -/
-  | multiplicity
   /-- A constant, like an enabled flag. -/
   | const (value : F)
 
-def InputCell.eval [FiniteField F] (message : Array F) (multiplicity : ℕ) : InputCell F → F
+def InputCell.eval (message : Array F) [Zero F] : InputCell F → F
   | .message index => message[index]?.getD 0
-  | .multiplicity => FiniteField.fromNat multiplicity
   | .const value => value
 
 /-- The rows appended to a demand-generated table after balancing, to make its height a power of
@@ -80,27 +85,23 @@ structure DemandMode (F : Type) where
   surplus : Direction
   /-- Whether repeated demand for one message creates repeated rows. -/
   aggregation : Aggregation
-  /-- The input of a new row, cell by cell, built from the message it answers. The component's
-  witness programs compute the rest of the row. -/
+  /-- The input of a new row, cell by cell, built from the message it answers. With `byMessage`, the
+  cells skip the counter, which starts at the demanded count. The component's witness programs
+  compute the rest of the row. -/
   input : List (InputCell F)
   padding : Padding F
 
-/-- One row per fixed row, whose remaining cells come from a row program, plus counters that demand
-increments.
+/-- One row per fixed row, with a counter per channel in `channels`.
 
 The input of row `i` consists of:
 - the fixed columns of row `i`, which come first,
-- the counter columns, wherever the circuit puts them, which start at 0,
+- the counters, wherever the circuit puts them, which start at 0,
 - the values of `row i` from `RowProgram`, which fill the remaining cells in order.
 
-A counter column is the multiplicity of the component's interaction on one of `channels`. The
-circuit fixes where it is: it is the input variable that the interaction uses as its multiplicity.
 For example, a memory row emits `memoryChannel.emit multiplicity { address, value }`: its fixed
-column is `address`, its row program computes `value`, and `multiplicity` is a counter. -/
+column is `address`, its row program computes `value`, and `multiplicity` is its counter. -/
 structure PreallocatedMode (F : Type) extends Witgen.RowProgram F .prover where
-  /-- The channels on which the component answers demand. On each of them, the component has exactly
-  one interaction, whose multiplicity is a single input variable: its counter. Demand for a message
-  increments the counter of the row whose interaction carries that message. -/
+  /-- The channels on which the component answers demand, each with a counter. -/
   channels : List (RawChannel F)
 
 /-- How the generator builds the rows of one component. -/

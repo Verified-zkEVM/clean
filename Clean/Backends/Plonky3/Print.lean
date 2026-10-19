@@ -202,7 +202,6 @@ def completeToRust (witnesses : List (WitnessBlock F)) : String :=
 
 def inputCellToRust : InputCell F → String
   | .message index => s!"InputCell::Message({index})"
-  | .multiplicity => "InputCell::Multiplicity"
   | .const value => s!"InputCell::Constant({fieldIn "F" value})"
 
 def directionToRust : Direction → String
@@ -224,11 +223,12 @@ def paddingToRust (padding : Padding F) : String :=
 /-- `fn mode()`, and `fn initial_row(row_index, hint)`, which for preallocated components is the
 fixed prefix followed by the row program's values, with zeros inserted at the counter columns. -/
 def modeToRust : ModeProgram F → String
-  | .demand mode => s!"pub fn mode<F: WitnessField>() -> Mode<F> \{
+  | .demand mode counters => s!"pub fn mode<F: WitnessField>() -> Mode<F> \{
     Mode::Demand(DemandMode \{ channel: {quoted mode.channel.name}, \
         surplus: {directionToRust mode.surplus}, \
         aggregation: {aggregationToRust mode.aggregation}, \
         input: vec![{commaSep (mode.input.map inputCellToRust)}], \
+        counters: vec![{commaSep (counters.map counterToRust)}], \
         padding: {paddingToRust mode.padding} })
 }
 

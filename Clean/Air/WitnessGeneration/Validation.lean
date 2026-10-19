@@ -31,6 +31,8 @@ inductive ConfigError where
   | preallocatedWidth (component : String) (expected actual : ℕ)
   | counterInteractions (component channel : String) (count : ℕ)
   | counterMultiplicity (component channel : String)
+  | counterMessage (component channel : String)
+  | byMessagePush (component : String)
   | duplicateHandler (channel : String) (surplus : Direction)
   | unknownDataRead (component : String) (operation : ℕ) (key : String)
   | dataReadWidth (component : String) (operation : ℕ) (key : String) (expected actual : ℕ)
@@ -64,6 +66,11 @@ instance : ToString ConfigError where
     | .counterMultiplicity component channel =>
         s!"the multiplicity of the interaction of component '{component}' on channel \
           '{channel}' is not a non-fixed input variable"
+    | .counterMessage component channel =>
+        s!"the message of the interaction of component '{component}' on channel '{channel}' \
+          reads a cell other than a non-counter input cell"
+    | .byMessagePush component =>
+        s!"component '{component}' aggregates by message, so it can only answer pull surplus"
     | .duplicateHandler channel surplus =>
         s!"multiple components handle {surplus.name} surplus on channel '{channel}'"
     | .unknownDataRead component operation key =>
@@ -78,15 +85,21 @@ instance : ToString ConfigError where
 
 /-! ### Counters -/
 
-/-- A counter of a preallocated component, resolved from one of its channels. -/
+/-- A counter, resolved from the channel it counts on. -/
 structure Counter where
   /-- The position of the counted interaction among the component's row interactions. -/
   interaction : ℕ
   /-- The input column holding the interaction's multiplicity. -/
   column : ℕ
 
-/-- The counter of a preallocated component on `channel`: its unique interaction on that channel,
-whose multiplicity must be an input variable after the fixed columns. -/
+/-- The cells an expression reads. -/
+def expressionCells : Expression F → List ℕ
+  | .var cell => [cell.index]
+  | .const _ => []
+  | .add left right | .mul left right => expressionCells left ++ expressionCells right
+
+/-- The counter of a component on `channel`: its unique interaction on that channel, whose
+multiplicity must be an input variable after the fixed columns. -/
 def Counter.resolve (component : Component F) (channel : RawChannel F) :
     Except ConfigError Counter :=
   let name := component.circuit.name
@@ -100,16 +113,30 @@ def Counter.resolve (component : Component F) (channel : RawChannel F) :
       | _ => .error (.counterMultiplicity name channel.name)
   | found => .error (.counterInteractions name channel.name found.length)
 
-/-- The counters of a preallocated component, one per channel. -/
-def PreallocatedMode.counters (component : Component F) (mode : PreallocatedMode F) :
-    Except ConfigError (List Counter) :=
-  mode.channels.mapM (Counter.resolve component)
+/-- The counters of a component's generation: one per channel of a preallocated component, and one
+on the channel of a `byMessage` demand component. -/
+def Generation.counters (component : Component F) : Generation F → Except ConfigError (List Counter)
+  | .demand mode => match mode.aggregation with
+    | .perOccurrence => pure []
+    | .byMessage => return [← Counter.resolve component mode.channel]
+  | .preallocated mode => mode.channels.mapM (Counter.resolve component)
 
 /-- The channels a component's generation handles, with the surplus it answers there. A counter
 only grows the pushes of its interaction, so it answers pull surplus. -/
 def Generation.handled : Generation F → List (String × Direction)
   | .demand mode => [(mode.channel.name, mode.surplus)]
   | .preallocated mode => mode.channels.map (·.name, .pull)
+
+/-- Check that counting never changes which message a row answers: the messages of counted
+interactions only read input cells that aren't counters. -/
+def validateCounters (component : Component F) (counters : List Counter) :
+    Except ConfigError Unit := do
+  let interactions := component.rowOperations.interactions
+  for counter in counters do
+    let some interaction := interactions[counter.interaction]? | continue
+    let cells := interaction.msg.toList.flatMap expressionCells
+    unless cells.all fun cell => cell < component.rowOffset && counters.all (·.column ≠ cell) do
+      throw (.counterMessage component.circuit.name interaction.channel.name)
 
 /-! ### Prover-data reads
 
@@ -194,12 +221,16 @@ def validateGeneration (component : Component F) (generation : Generation F) :
   let name := component.circuit.name
   let fixedWidth := component.fixedWidth
   let inputWidth := component.rowOffset
+  let counters ← generation.counters component
+  validateCounters component counters
   match component.fixedColumns, generation with
   | some _, .demand _ => throw (.demandWithFixedColumns name)
   | none, .preallocated _ => throw (.preallocatedWithoutFixedColumns name)
   | _, .demand mode =>
-      unless mode.input.length = inputWidth do
-        throw (.demandInputWidth name inputWidth mode.input.length)
+      if mode.aggregation == .byMessage && mode.surplus == .push then
+        throw (.byMessagePush name)
+      unless mode.input.length + counters.length = inputWidth do
+        throw (.demandInputWidth name (inputWidth - counters.length) mode.input.length)
       for cell in mode.input do
         if let .message index := cell then
           unless index < mode.channel.arity do
@@ -209,7 +240,6 @@ def validateGeneration (component : Component F) (generation : Generation F) :
   | some fixed, .preallocated mode =>
       unless nextPowerOfTwo fixed.height.toNat = fixed.height.toNat do
         throw (.preallocatedHeight name fixed.height.toNat)
-      let counters ← mode.counters component
       unless fixedWidth + counters.length + mode.width = inputWidth do
         throw (.preallocatedWidth name (inputWidth - fixedWidth - counters.length) mode.width)
 
@@ -230,8 +260,8 @@ def validateDataReads (components : List (Component F)) (generations : List (Gen
           match generation with
           | .demand _ =>
               throw (.unstableDataRead component.circuit.name operationIndex read.key read.column)
-          | .preallocated mode =>
-              let counters ← mode.counters target
+          | .preallocated _ =>
+              let counters ← generation.counters target
               if counters.any (·.column = read.column) then
                 throw (.unstableDataRead component.circuit.name operationIndex read.key read.column)
 

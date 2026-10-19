@@ -79,6 +79,7 @@ pub mod component_0 {
                 InputCell::Message(1),
                 InputCell::Message(2),
             ],
+            counters: vec![],
             padding: Padding {
                 input: vec![
                     F::from_u64(0u64),
@@ -164,8 +165,12 @@ pub mod component_1 {
                 InputCell::Message(0),
                 InputCell::Message(1),
                 InputCell::Message(2),
-                InputCell::Multiplicity,
             ],
+            counters: vec![Counter {
+                channel: "add8",
+                interaction: 1,
+                column: 3,
+            }],
             padding: Padding {
                 input: vec![
                     F::from_u64(0u64),
