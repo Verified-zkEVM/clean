@@ -2,6 +2,7 @@ module
 
 public import Clean.Air.Circuit
 public import Clean.Air.RowProgram
+public import Clean.Air.WitnessGeneration.Generation
 
 @[expose] public section
 
@@ -75,6 +76,10 @@ structure Component (F : Type) [FiniteField F] where
         Assumptions input data → circuit.Assumptions input data := by intros; trivial
   fixed_width_le_input : (fixedColumns.map (·.width)).getD 0 ≤ size Input := by
     simp <;> exact Nat.le_of_ble_eq_true rfl
+  /-- How the prover builds the component's rows: preallocated if it has fixed columns, demand
+  otherwise. See `Clean.Air.WitnessGeneration.Generation`. -/
+  generation : WitnessGeneration.Generation F Input
+  generation_preallocated : generation.isPreallocated = fixedColumns.isSome := by rfl
 
 instance (t: Component F) : ProvableType t.Input := t.provableInput
 instance (t: Component F) : ProvableType t.Output := t.provableOutput

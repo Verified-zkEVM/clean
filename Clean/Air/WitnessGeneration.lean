@@ -7,8 +7,8 @@ public import Clean.Air.WitnessGeneration.Assembly
 /-!
 # Channel-driven witness generation
 
-This file generates the witness of a flat AIR ensemble from its public input, the prover's private
-input, and a `Config` that says how each component's rows come into existence.
+This file generates the witness of a flat AIR ensemble from its public input and the prover's
+private input. Each component says how its rows come into existence in its `generation`.
 
 ## The chain reaction
 
@@ -25,7 +25,7 @@ is again unanswered, so the VM gets another row. Every row may also pull from ot
 creates rows in chips like an addition chip, or increments counters in a memory or a lookup table.
 The reaction stops when a row pushes the final state, which the verifier pulls.
 
-How a component answers is its generation mode, see `Clean.Air.WitnessGeneration.Config`:
+How a component answers is its generation mode, see `Clean.Air.WitnessGeneration.Generation`:
 - a `demand` component gets a new row for the message, or a higher multiplicity of an existing row,
 - a `preallocated` component increments the counter of the row that carries the message.
 
@@ -67,7 +67,7 @@ structure Mutation (F : Type) [FiniteField F] where
   removedRows : List (GeneratedRow F) := []
   addedRows : List (GeneratedRow F) := []
 
-def DemandMode.handles {component : Component F} (mode : DemandMode component)
+def DemandMode.handles {Input : TypeMap} [ProvableType Input] (mode : DemandMode F Input)
     (demand : Demand F) : Bool :=
   mode.channel.name == demand.channel && mode.surplus == demand.direction
 
@@ -99,14 +99,14 @@ def incrementCounter (state : ComponentState F) (demand : Demand F) (data : Prov
 
 /-- A new row answering the demanded message, whose counter, if any, starts at the demanded
 count. -/
-def DemandMode.newRow (state : ComponentState F) (mode : DemandMode state.component)
+def DemandMode.newRow (state : ComponentState F) (mode : DemandMode F state.component.Input)
     (demand : Demand F) (data : ProverData F) (hint : ProverHint F) : GeneratedRow F :=
   let cells := (mode.input.map (·.eval demand.message)).toArray
   completeRow state (insertCounters state (FiniteField.fromNat demand.count) cells) data hint
 
 /-- Answer demand with one new row per occurrence, or, with `byMessage`, by counting it in the row
 for the message, which is created if there is none yet. -/
-def DemandMode.answer (state : ComponentState F) (mode : DemandMode state.component)
+def DemandMode.answer (state : ComponentState F) (mode : DemandMode F state.component.Input)
     (demand : Demand F) (data : ProverData F) (hint : ProverHint F) : Mutation F :=
   let addRows (rows : List (GeneratedRow F)) : Mutation F :=
     { state := { state with rows := state.rows ++ rows }, addedRows := rows }
@@ -124,7 +124,7 @@ def PreallocatedMode.answer (state : ComponentState F) (demand : Demand F) (data
   (findCountedRow state demand data).map (incrementCounter state demand data hint)
 
 def ComponentState.handles (state : ComponentState F) (demand : Demand F) : Bool :=
-  match state.generation with
+  match state.component.generation with
   | .demand mode => mode.handles demand
   | .preallocated _ => !(countersFor state demand).isEmpty
 
@@ -143,7 +143,7 @@ def answer (states : List (ComponentState F)) (demands : List (Demand F)) (deman
     (index : ℕ) (data : ProverData F) (hint : ProverHint F) :
     Except GenerationError (List (ComponentState F) × List (Demand F)) := do
   let some state := states[index]? | return (states, demands)
-  let mutation ← match state.generation with
+  let mutation ← match state.component.generation with
     | .demand mode => pure (mode.answer state demand data hint)
     | .preallocated _ =>
         match PreallocatedMode.answer state demand data hint with
@@ -171,7 +171,7 @@ def generateLoop (data : ProverData F) (hint : ProverHint F) :
 
 /-- The padded height of a demand-generated table. Preallocated tables are never padded. -/
 def ComponentState.targetHeight (state : ComponentState F) : ℕ :=
-  match state.generation with
+  match state.component.generation with
   | .demand mode => mode.padding.targetHeight state.rows.length
   | .preallocated _ => state.rows.length
 
@@ -180,7 +180,7 @@ interactions of the padding rows. -/
 def padTables (data : ProverData F) (hint : ProverHint F) (states : List (ComponentState F)) :
     List (ComponentState F) × List (Interaction F) :=
   let padded := states.map fun state =>
-    match state.generation with
+    match state.component.generation with
     | .preallocated _ => (state, [])
     | .demand mode =>
         let count := state.targetHeight - state.rows.length
@@ -200,27 +200,27 @@ def padAndBalance (data : ProverData F) (hint : ProverHint F) (fuel : ℕ) :
 
 /-! ### Generating a witness -/
 
-/-- Generate an ensemble witness from a validated config, the public input and the prover's
-private input. -/
-def generateValid {ens : FormalEnsemble F PublicIO} (config : ValidConfig ens)
+/-- Generate an ensemble witness from an ensemble with validated generation, the public input and
+the prover's private input. -/
+def generateValid {ens : Ensemble F PublicIO} (valid : ValidGeneration ens) (fuel : ℕ)
     (publicInput : PublicIO F) (proverInput : ens.ProverInput F) :
-    Except GenerationError (EnsembleWitness ens.ensemble) := do
+    Except GenerationError (EnsembleWitness ens) := do
   let hint := ens.hint proverInput
   -- preallocate rows, and complete them with the prover data of all preallocated inputs
-  let initial := (config.generations.zip config.counters).map
-    fun (⟨component, generation⟩, counters) => ComponentState.initial component generation counters
+  let initial := (ens.tables.zip valid.counters).map fun (component, counters) =>
+    ComponentState.initial component counters
   let initial := initial.map fun state =>
     { state with rows := (initialInputs state hint).map fun input => { input, values := input } }
   let data := generatedData initial
   let initial := initial.map fun state =>
     { state with rows := state.rows.map fun row => completeRow state row.input data hint }
   -- start the chain reaction from the verifier's and the preallocated rows' interactions
-  let verifier := ens.ensemble.verifierOperations.interactionValues (.fromInput publicInput data)
+  let verifier := ens.verifierOperations.interactionValues (.fromInput publicInput data)
   let rows := initial.flatMap fun state => state.rows.flatMap (rowInteractions state · data)
   let demands := Demand.addInteractions [] (verifier ++ rows)
-  let generated ← generateLoop data hint config.fuel initial demands
-  let padded ← padAndBalance data hint config.fuel config.fuel generated
-  let assembled ← assembleTables ens.ensemble.tables padded
+  let generated ← generateLoop data hint fuel initial demands
+  let padded ← padAndBalance data hint fuel fuel generated
+  let assembled ← assembleTables ens.tables padded
   return {
     tables := withDerivedData assembled.tables
     publicInput
@@ -229,13 +229,13 @@ def generateValid {ens : FormalEnsemble F PublicIO} (config : ValidConfig ens)
     same_data := withDerivedData_data assembled.tables
   }
 
-/-- Validate a config, then generate an ensemble witness from the public input and the prover's
-private input. -/
-def generate {ens : FormalEnsemble F PublicIO} (config : Config ens) (publicInput : PublicIO F)
-    (proverInput : ens.ProverInput F) : Except GenerationError (EnsembleWitness ens.ensemble) :=
-  match config.validate with
-  | .error error => .error (.config error)
-  | .ok config => generateValid config publicInput proverInput
+/-- Validate the generation of an ensemble, then generate a witness from the public input and the
+prover's private input. `fuel` bounds the number of generation steps. -/
+def generate (ens : Ensemble F PublicIO) (fuel : ℕ) (publicInput : PublicIO F)
+    (proverInput : ens.ProverInput F) : Except GenerationError (EnsembleWitness ens) :=
+  match validateGeneration ens with
+  | .error error => .error (.validation error)
+  | .ok valid => generateValid valid fuel publicInput proverInput
 
 /-! ### Checking a witness -/
 

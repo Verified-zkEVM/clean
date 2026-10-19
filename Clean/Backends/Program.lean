@@ -203,7 +203,7 @@ structure Program (F : Type) [FiniteField F] where
 /-! ## Lowering a flat Clean ensemble to an extraction program -/
 
 inductive LoweringError where
-  | config (error : ConfigError)
+  | validation (error : ValidationError)
   | nativeWitness (component operation : ℕ)
   | malformedWitnessLocals (component operation : ℕ)
   | malformedFixedProgram (component : ℕ)
@@ -215,7 +215,7 @@ deriving Repr, DecidableEq
 
 instance : ToString LoweringError where
   toString
-    | .config error => toString error
+    | .validation error => toString error
     | .nativeWitness component operation =>
         s!"component {component} witness operation {operation} is a native Lean closure"
     | .malformedWitnessLocals component operation =>
@@ -294,9 +294,9 @@ def lowerComponent (index : ℕ) (component : Component F) :
     interactions
   }
 
-def lowerGeneration (index : ℕ) (component : Component F) (generation : Generation component)
-    (counters : List Counter) : Except LoweringError (ModeProgram F) := do
-  match generation with
+def lowerGeneration (index : ℕ) (component : Component F) (counters : List Counter) :
+    Except LoweringError (ModeProgram F) := do
+  match component.generation with
   | .demand mode =>
       let byMessage := match mode.aggregation with
         | .perOccurrence => false
@@ -308,19 +308,16 @@ def lowerGeneration (index : ℕ) (component : Component F) (generation : Genera
       let rows := component.fixedColumns.map (·.height) |>.getD 0
       return .preallocated rows program counters
 
-/-- Validate an ensemble and its generation metadata, and lower them to an extraction program. -/
-def lower {ens : FormalEnsemble F PublicIO} (config : Config ens) :
-    Except LoweringError (Program F) := do
-  let ensemble := ens.ensemble
-  -- `ValidConfig` lives in a higher universe, so it is matched rather than bound
-  match config.validate with
-  | .error error => throw (.config error)
-  | .ok config =>
+/-- Validate the generation of an ensemble, and lower it to an extraction program. `fuel` bounds the
+number of witness generation steps. -/
+def lower (ensemble : Ensemble F PublicIO) (fuel : ℕ) : Except LoweringError (Program F) := do
+  match validateGeneration ensemble with
+  | .error error => throw (.validation error)
+  | .ok valid =>
     let components ← ensemble.tables.zipIdx.mapM fun (component, index) =>
       lowerComponent index component
-    let modes ← (config.generations.zip config.counters).zipIdx.mapM
-      fun ((⟨component, generation⟩, counters), index) =>
-        lowerGeneration index component generation counters
+    let modes ← (ensemble.tables.zip valid.counters).zipIdx.mapM
+      fun ((component, counters), index) => lowerGeneration index component counters
     let verifierOperations := ensemble.verifierOperations.toFlat
     let verifierInteractions := FlatOperation.interactions verifierOperations
     let verifierExpressions := verifierInteractions.flatMap fun interaction =>
@@ -330,12 +327,12 @@ def lower {ens : FormalEnsemble F PublicIO} (config : Config ens) :
     | none => pure ()
     return {
       publicInputWidth := size PublicIO
-      proverInputWidth := size ens.ProverInput
-      hintTables := ens.hintTables
+      proverInputWidth := size ensemble.ProverInput
+      hintTables := ensemble.hintTables
       components
       verifierInteractions
       modes
-      fuel := config.fuel
+      fuel
     }
 
 end Backends

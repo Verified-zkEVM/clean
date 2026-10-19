@@ -73,7 +73,6 @@ structure GeneratedRow (F : Type) where
 /-- One component's generation state. -/
 structure ComponentState (F : Type) [FiniteField F] where
   component : Component F
-  generation : Generation component
   /-- The component's counters, resolved by validation. -/
   counters : List Counter
   /-- The component's row operations, whose witness programs complete a row from its input. -/
@@ -83,12 +82,11 @@ structure ComponentState (F : Type) [FiniteField F] where
   /-- The rows generated so far. -/
   rows : List (GeneratedRow F) := []
 
-def ComponentState.initial (component : Component F) (generation : Generation component)
-    (counters : List Counter) : ComponentState F :=
+def ComponentState.initial (component : Component F) (counters : List Counter) :
+    ComponentState F :=
   let operations := component.rowOperations
   {
     component
-    generation
     counters
     operations := operations.toFlat
     interactions := operations.interactions
@@ -118,7 +116,7 @@ def insertCounters (state : ComponentState F) (count : F) (cells : Array F) : Ar
 /-- The inputs of a preallocated component's rows: per fixed row, its fixed values and the values of
 the row program, with counters starting at 0. -/
 def initialInputs (state : ComponentState F) (hint : ProverHint F) : List (Array F) :=
-  match state.component.fixedColumns, state.generation with
+  match state.component.fixedColumns, state.component.generation with
   | some fixed, .preallocated mode =>
       (List.range fixed.height.toNat).map fun row =>
         let row := UInt64.ofNat row
@@ -129,7 +127,7 @@ def initialInputs (state : ComponentState F) (hint : ProverHint F) : List (Array
 
 /-- A failure of witness generation. -/
 inductive GenerationError where
-  | config (error : ConfigError)
+  | validation (error : ValidationError)
   | unhandledImbalance (channels : List String)
   | noPreallocatedRow (component channel : String)
   | fuelExhausted
@@ -138,7 +136,7 @@ deriving Repr
 
 instance : ToString GenerationError where
   toString
-    | .config error => toString error
+    | .validation error => toString error
     | .unhandledImbalance channels =>
         s!"unhandled channel imbalance on: {String.intercalate ", " channels}"
     | .noPreallocatedRow component channel =>

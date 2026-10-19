@@ -747,7 +747,7 @@ pub mod component_0 {
                     F::from_u64(0u64),
                     F::from_u64(0u64),
                 ],
-                minimum_rows: 8,
+                minimum_rows: 1,
             },
         })
     }

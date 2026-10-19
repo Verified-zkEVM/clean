@@ -110,6 +110,18 @@ example (input : Var Add8Inputs (F p)) :
     ExplicitCircuit (add8.main input) := by
   infer_explicit_circuit
 
+/-- The addition chip: one row per distinct message pulled from the addition channel, with the
+number of pulls as its multiplicity `m`. -/
+abbrev add8Component : Component (F p) where
+  circuit := add8
+  generation := .demand {
+    channel := Add8Channel.toRaw
+    surplus := .pull
+    aggregation := .byMessage fun input => input.m
+    input := [.message 0, .message 1, .message 2]
+    padding := { input := #[0, 0, 0, 0], minimumRows := 32 }
+  }
+
 def fibonacci : ℕ → (ℕ × ℕ)
   | 0 => (0, 1)
   | n + 1 =>
@@ -201,6 +213,18 @@ example (input : Var Fib8Input (F p)) :
     ExplicitCircuit (fib8.main input) := by
   infer_explicit_circuit
 
+/-- The Fibonacci VM: one row per state pushed to the Fibonacci channel. Padding rows are
+disabled. -/
+abbrev fib8Component : Component (F p) where
+  circuit := fib8
+  generation := .demand {
+    channel := FibonacciChannel.toRaw
+    surplus := .push
+    aggregation := .perOccurrence
+    input := [.const 1, .message 0, .message 1, .message 2]
+    padding := { input := #[0, 0, 0, 0], minimumRows := 32 }
+  }
+
 -- completing Fibonacci channel with input and output
 def fibonacciVerifier : Verifier.Program (F p) fieldTriple where
   main | (n, x, y) => do
@@ -213,7 +237,7 @@ def fibonacciVerifier : Verifier.Program (F p) fieldTriple where
 
 def fibonacciVm : VmTables (F p) fieldTriple where
   channel := FibonacciChannel
-  tables := [{ circuit := fib8 }]
+  tables := [fib8Component]
   unique_names := by simp
   verifier := fibonacciVerifier
   tables_channel := by simp [circuit_norm, fib8, sub_eq_zero]
@@ -224,7 +248,7 @@ def fibonacciVm : VmTables (F p) fieldTriple where
 
 def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
   |>.addLookup bytes
-  |>.addTable { circuit := add8 }
+  |>.addTable add8Component
     (by simp [circuit_norm, add8])
     (by simp [circuit_norm, add8])
     (by simp [circuit_norm, add8, bytes])
@@ -244,37 +268,11 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
 
 namespace FibonacciWitness
 
-/-- One Fibonacci VM row per state pushed to the Fibonacci channel. -/
-def fibGeneration : WitnessGeneration.Generation (F := F p) { circuit := fib8 } :=
-  .demand {
-    channel := (FibonacciChannel (p := p)).toRaw
-    surplus := .push
-    aggregation := .perOccurrence
-    input := [.const 1, .message 0, .message 1, .message 2]
-    padding := { input := #[0, 0, 0, 0], minimumRows := 32 }
-  }
-
-/-- One addition-chip row per distinct message pulled from the addition channel, with the number
-of pulls as its counter. -/
-def add8Generation : WitnessGeneration.Generation (F := F p) { circuit := add8 } :=
-  .demand {
-    channel := (Add8Channel (p := p)).toRaw
-    surplus := .pull
-    aggregation := .byMessage fun input => input.m
-    input := [.message 0, .message 1, .message 2]
-    padding := { input := #[0, 0, 0, 0], minimumRows := 32 }
-  }
-
-/-- Witness generation for each component of the ensemble. -/
-def config (fuel : ℕ) : WitnessGeneration.Config (fibonacciEnsemble (p := p)) where
-  generations := [⟨_, fibGeneration⟩, ⟨_, add8Generation⟩, ⟨_, bytes.generation⟩]
-  fuel
-
 /-- Generate a complete ensemble witness from the claimed public final state. -/
 def generate (publicInput : fieldTriple (F p)) (fuel : ℕ) :
     Except WitnessGeneration.GenerationError
       (EnsembleWitness (fibonacciEnsemble (p := p)).ensemble) :=
-  WitnessGeneration.generate (config (p := p) fuel) publicInput ()
+  WitnessGeneration.generate fibonacciEnsemble.ensemble fuel publicInput ()
 
 end FibonacciWitness
 
@@ -324,7 +322,18 @@ def falseCircuit : GeneralFormalCircuit (F p) unit unit where
   soundness := by circuit_proof_start [FalseChannel]
   completeness := by circuit_proof_start [FalseChannel]
 
+/-- Rows that answer pushes on the false channel, of which there are none. -/
+abbrev falseComponent : Component (F p) where
+  circuit := falseCircuit
+  generation := .demand {
+    channel := FalseChannel.toRaw
+    surplus := .push
+    aggregation := .perOccurrence
+    input := []
+    padding := { input := #[] }
+  }
+
 def falseEnsemble := SoundEnsemble.empty (F p) unit
   |>.addFinishedChannel FalseChannel.toRaw
-  |>.addTable { circuit := falseCircuit }
+  |>.addTable falseComponent
     (by simp [circuit_norm, falseCircuit]) (by simp [circuit_norm, falseCircuit])

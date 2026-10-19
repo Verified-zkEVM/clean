@@ -393,6 +393,11 @@ def memoryFixedColumns (memorySize : UInt64) : FixedColumns (F p) where
   height := memorySize
   row i := pure i
 
+/-- Name of the hint table holding the prover's memory values, one per address. -/
+def memoryValuesKey : String := "memoryValues"
+
+/-- One memory row per address, whose value the prover supplies as a hint. Its multiplicity counts
+the reads of that address. -/
 def memoryComponent (memorySize : UInt64) (h_memorySize : memorySize.toNat < p) :
     Component (F p) where
   circuit := provideMemory
@@ -405,6 +410,11 @@ def memoryComponent (memorySize : UInt64) (h_memorySize : memorySize.toNat < p) 
     have hval : (i.toNat : F p).val = i.toNat := ZMod.val_cast_of_lt (by omega)
     obtain ⟨hsize, hentry⟩ := Array.getElem?_eq_some_iff.mp hdata
     simp [provideMemory, memoryChannel, hval, hsize, hentry]
+  generation := .preallocated {
+    Row := field
+    row i := pure (.hintGet memoryValuesKey 1 i 0)
+    counters := [fun row => row.multiplicity]
+  }
 
 def stateChannel (program : Array (F p))
     (initialState : State (F p)) : Channel (F p) State where
@@ -464,6 +474,19 @@ def executeStep (program : Array (F p)) (h_program : ValidProgram program)
     · simp [h_step]
     · simp [h_state, h_step]
 
+/-- One execution row per state pushed to the state channel. Padding rows are disabled and hold the
+initial state. -/
+abbrev executionComponent (program : Array (F p)) (h_program : ValidProgram program)
+    (initialState : State (F p)) : Component (F p) where
+  circuit := executeStep program h_program initialState
+  generation := .demand {
+    channel := (stateChannel program initialState).toRaw
+    surplus := .push
+    aggregation := .perOccurrence
+    input := [.const 1, .message 0, .message 1, .message 2]
+    padding := { input := #[0, initialState.pc, initialState.ap, initialState.fp] }
+  }
+
 /-- The state in which a program has run to completion: `pc` points just past the program, where no
 further instruction can be fetched. -/
 def haltedState (programSize : ℕ) (ap fp : F p) : State (F p) :=
@@ -485,7 +508,7 @@ def vm (program : Array (F p)) (h_program : ValidProgram program)
     (initialState : State (F p)) :
     VmTables (F p) fieldPair where
   channel := stateChannel program initialState
-  tables := [{ circuit := executeStep program h_program initialState }]
+  tables := [executionComponent program h_program initialState]
   verifier := verifier program initialState
   tables_channel := by simp [circuit_norm, executeStep, sub_eq_zero]
   verifier_channel := by simp [circuit_norm, verifier]
@@ -509,6 +532,8 @@ def soundEnsemble {memorySize : UInt64} (program : Array (F p)) (h_program : Val
     (by simp [circuit_norm, vm, executeStep, verifier, stateChannel,
       programLookup, memoryChannel])
     (by simp [circuit_norm, vm, executeStep, memoryComponent, provideMemory, programLookup])
+  |>.withProverInput (fields memorySize.toNat)
+    [{ key := memoryValuesKey, width := 1, offset := 0, rows := memorySize.toNat }]
 
 /-- The public statement: some memory of size `memorySize.toNat` makes the program run from
 `initialState` to completion with registers `(ap, fp)`. -/
@@ -527,9 +552,6 @@ def ProverAssumptions (program : Array (F p))
       Spec.femtoCairoMachineBoundedExecution program memoryValues.toArray (some initialState)
         steps = some (haltedState program.size ap fp)
 
-/-- Name of the hint table holding the prover's memory values, one per address. -/
-def memoryValuesKey : String := "memoryValues"
-
 def formalEnsemble {memorySize : UInt64} (program : Array (F p)) (h_program : ValidProgram program)
     (h_memorySize : memorySize.toNat < p) (initialState : State (F p)) :=
   (soundEnsemble program h_program h_memorySize initialState).toFormal (fun _ => True)
@@ -546,8 +568,6 @@ def formalEnsemble {memorySize : UInt64} (program : Array (F p)) (h_program : Va
       refine ⟨ memory witness.data, ?_, steps, hsteps ⟩
       rw [memory, Array.size_map]
       exact hsize)
-  |>.withProverInput (fields memorySize.toNat)
-    [{ key := memoryValuesKey, width := 1, offset := 0, rows := memorySize.toNat }]
     (ProverAssumptions program memorySize initialState)
 
 /-- End-to-end soundness: a valid proof for the public registers `(ap, fp)` shows that the program,
@@ -564,51 +584,14 @@ theorem femtoCairo_soundness {memorySize : UInt64}
 
 namespace Witness
 
-/-- One execution row per state pushed to the state channel. Padding rows are disabled and hold the
-initial state. -/
-def executionGeneration (program : Array (F p)) (h_program : ValidProgram program)
-    (initialState : State (F p)) (executionRows : UInt64) :
-    WitnessGeneration.Generation { circuit := executeStep program h_program initialState } :=
-  .demand {
-    channel := (stateChannel program initialState).toRaw
-    surplus := .push
-    aggregation := .perOccurrence
-    input := [.const 1, .message 0, .message 1, .message 2]
-    padding := {
-      input := #[0, initialState.pc, initialState.ap, initialState.fp]
-      minimumRows := executionRows
-    }
-  }
-
-/-- One memory row per address, whose value the prover supplies as a hint. Its multiplicity counts
-the reads of that address. -/
-def memoryGeneration {memorySize : UInt64} (h_memorySize : memorySize.toNat < p) :
-    WitnessGeneration.Generation (memoryComponent memorySize h_memorySize) :=
-  .preallocated {
-    Row := field
-    row i := pure (.hintGet memoryValuesKey 1 i 0)
-    counters := [fun row => row.multiplicity]
-  }
-
-def config {memorySize : UInt64} (program : Array (F p)) (h_program : ValidProgram program)
-    (h_memorySize : memorySize.toNat < p) (initialState : State (F p)) (executionRows : UInt64)
-    (fuel : ℕ) :
-    WitnessGeneration.Config (formalEnsemble program h_program h_memorySize initialState) where
-  generations := [
-    ⟨_, executionGeneration program h_program initialState executionRows⟩,
-    ⟨_, memoryGeneration h_memorySize⟩,
-    ⟨_, (programLookup program h_program).generation⟩
-  ]
-  fuel
-
 def generate {memorySize : UInt64} (program : Array (F p)) (h_program : ValidProgram program)
     (h_memorySize : memorySize.toNat < p)
     (memoryValues : fields memorySize.toNat (F p)) (initialState : State (F p))
-    (finalRegisters : fieldPair (F p)) (executionRows : UInt64) (fuel : ℕ) :
+    (finalRegisters : fieldPair (F p)) (fuel : ℕ) :
     Except WitnessGeneration.GenerationError
       (EnsembleWitness (formalEnsemble program h_program h_memorySize initialState).ensemble) :=
-  WitnessGeneration.generate (config program h_program h_memorySize initialState executionRows fuel)
-    finalRegisters memoryValues
+  WitnessGeneration.generate (formalEnsemble program h_program h_memorySize initialState).ensemble
+    fuel finalRegisters memoryValues
 
 end Witness
 

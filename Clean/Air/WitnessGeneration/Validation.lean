@@ -5,11 +5,11 @@ public import Clean.Air.WitnessGeneration.Counter
 @[expose] public section
 
 /-!
-# Validating a witness generation config
+# Validating the generation of an ensemble
 
-TODO. Generation starts with `Config.validate`, which rejects configs that don't fit the ensemble,
-for example a demand input of the wrong width. Most of these checks should become types or proof
-obligations of the config instead.
+TODO. Generation starts with `validateGeneration`, which rejects component generations
+that don't fit their components, for example a demand input of the wrong width. Most of these
+checks should become types or proof obligations of the generation instead.
 -/
 
 namespace Air.Flat.WitnessGeneration
@@ -17,10 +17,8 @@ namespace Air.Flat.WitnessGeneration
 variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
 
-/-- A problem with a generation config, found by `Config.validate`. -/
-inductive ConfigError where
-  | demandWithFixedColumns (component : String)
-  | preallocatedWithoutFixedColumns (component : String)
+/-- A problem with the generation of an ensemble, found by `validateGeneration`. -/
+inductive ValidationError where
   | demandInputWidth (component : String) (expected actual : ℕ)
   | demandMessageIndex (component : String) (index arity : ℕ)
   | paddingWidth (component : String) (expected actual : ℕ)
@@ -35,12 +33,8 @@ inductive ConfigError where
   | unstableDataRead (component : String) (operation : ℕ) (key : String) (column : ℕ)
 deriving Repr, DecidableEq
 
-instance : ToString ConfigError where
+instance : ToString ValidationError where
   toString
-    | .demandWithFixedColumns component =>
-        s!"component '{component}' has fixed columns, so it must be preallocated"
-    | .preallocatedWithoutFixedColumns component =>
-        s!"component '{component}' has no fixed columns, so it can't be preallocated"
     | .demandInputWidth component expected actual =>
         s!"demand input of component '{component}' has width {actual}, expected {expected}"
     | .demandMessageIndex component index arity =>
@@ -136,24 +130,22 @@ def witnessDataReads : {n : ℕ} → Witgen.WitgenIR F n → List DataRead
 
 /-! ### Validation -/
 
-/-- The channels a component's generation handles, with the surplus it answers there. A counter
-only grows the pushes of its interaction, so it answers pull surplus. -/
-def Generation.handled {component : Component F} (counters : List Counter) :
-    Generation component → List (String × Direction)
+/-- The channels a component handles, with the surplus it answers there. A counter only grows the
+pushes of its interaction, so it answers pull surplus. -/
+def handledChannels (component : Component F) (counters : List Counter) :
+    List (String × Direction) :=
+  match component.generation with
   | .demand mode => [(mode.channel.name, mode.surplus)]
   | .preallocated _ => counters.map (·.channel, .pull)
 
-/-- Check one component's generation against the component, and resolve its counters. -/
-def validateGeneration (component : Component F) (generation : Generation component) :
-    Except ConfigError (List Counter) := do
+/-- Check a component's generation against the component, and resolve its counters. -/
+def validateComponent (component : Component F) : Except ValidationError (List Counter) := do
   let name := component.circuit.name
   let fixedWidth := component.fixedWidth
   let inputWidth := component.rowOffset
-  let counters ← generation.counters.mapError (.counter name)
-  match component.fixedColumns, generation with
-  | some _, .demand _ => throw (.demandWithFixedColumns name)
-  | none, .preallocated _ => throw (.preallocatedWithoutFixedColumns name)
-  | _, .demand mode =>
+  let counters ← (resolveCounters component).mapError (.counter name)
+  match component.generation with
+  | .demand mode =>
       if let .byMessage _ := mode.aggregation then
         if mode.surplus == .push then throw (.byMessagePush name)
         for counter in counters do
@@ -167,29 +159,30 @@ def validateGeneration (component : Component F) (generation : Generation compon
             throw (.demandMessageIndex name index mode.channel.arity)
       unless mode.padding.input.size = inputWidth do
         throw (.paddingWidth name inputWidth mode.padding.input.size)
-  | some fixed, .preallocated mode =>
-      unless nextPowerOfTwo fixed.height.toNat = fixed.height.toNat do
-        throw (.preallocatedHeight name fixed.height.toNat)
+  | .preallocated mode =>
+      let height := (component.fixedColumns.map (·.height.toNat)).getD 0
+      unless nextPowerOfTwo height = height do
+        throw (.preallocatedHeight name height)
       unless fixedWidth + counters.length + mode.width = inputWidth do
         throw (.preallocatedWidth name (inputWidth - fixedWidth - counters.length) mode.width)
   return counters
 
 /-- Check that every prover-data read targets a cell of a preallocated component that generation
 doesn't change. -/
-def validateDataReads (generations : List ((c : Component F) × Generation c))
-    (counters : List (List Counter)) : Except ConfigError Unit := do
-  let targets := generations.zip counters
-  for ⟨component, _⟩ in generations do
+def validateDataReads (components : List (Component F)) (counters : List (List Counter)) :
+    Except ValidationError Unit := do
+  let targets := components.zip counters
+  for component in components do
     for (operation, operationIndex) in component.rowOperations.toFlat.zipIdx do
       if let .witness _ code := operation then
         for read in witnessDataReads code do
-          let some (⟨target, generation⟩, targetCounters) := targets.find? fun (entry, _) =>
-              entry.1.circuit.name == read.key
+          let some (target, targetCounters) := targets.find? fun (target, _) =>
+              target.circuit.name == read.key
             | throw (.unknownDataRead component.circuit.name operationIndex read.key)
           unless read.width = target.rowOffset do
             throw (.dataReadWidth component.circuit.name operationIndex read.key target.rowOffset
               read.width)
-          match generation with
+          match target.generation with
           | .demand _ =>
               throw (.unstableDataRead component.circuit.name operationIndex read.key read.column)
           | .preallocated _ =>
@@ -197,34 +190,33 @@ def validateDataReads (generations : List ((c : Component F) × Generation c))
                 throw (.unstableDataRead component.circuit.name operationIndex read.key read.column)
 
 /-- Check that no two components answer the same surplus on the same channel. -/
-def validateHandlers (generations : List ((c : Component F) × Generation c))
-    (counters : List (List Counter)) : Except ConfigError Unit := do
-  let handled := (generations.zip counters).flatMap fun (entry, counters) =>
-    entry.2.handled counters
+def validateHandlers (components : List (Component F)) (counters : List (List Counter)) :
+    Except ValidationError Unit := do
+  let handled := (components.zip counters).flatMap fun (component, counters) =>
+    handledChannels component counters
   for (entry, index) in handled.zipIdx do
     if (handled.take index).contains entry then
       throw (.duplicateHandler entry.1 entry.2)
 
-/-- All checks of a config's generations; returns the counters of every component. -/
-def validateGenerations (generations : List ((c : Component F) × Generation c)) :
-    Except ConfigError (List (List Counter)) := do
-  let counters ← generations.mapM fun ⟨component, generation⟩ =>
-    validateGeneration component generation
-  validateHandlers generations counters
-  validateDataReads generations counters
+/-- All checks of the components' generations; returns the counters of every component. -/
+def validateComponents (components : List (Component F)) :
+    Except ValidationError (List (List Counter)) := do
+  let counters ← components.mapM validateComponent
+  validateHandlers components counters
+  validateDataReads components counters
   return counters
 
-/-- A config that passed `Config.validate`, with the counters of every component, in ensemble
-order. -/
-structure ValidConfig (ens : FormalEnsemble F PublicIO) extends Config ens where
+/-- An ensemble whose generation passed `validateGeneration`, with the counters of every
+component, in ensemble order. -/
+structure ValidGeneration (ens : Ensemble F PublicIO) where
   counters : List (List Counter)
-  valid : validateGenerations generations = .ok counters
+  valid : validateComponents ens.tables = .ok counters
 
-/-- Check a config and resolve its counters. -/
-def Config.validate {ens : FormalEnsemble F PublicIO} (config : Config ens) :
-    Except ConfigError (ValidConfig ens) :=
-  match hvalid : validateGenerations config.generations with
+/-- Check the generation of every component of an ensemble, and resolve its counters. -/
+def validateGeneration (ens : Ensemble F PublicIO) :
+    Except ValidationError (ValidGeneration ens) :=
+  match hvalid : validateComponents ens.tables with
   | .error error => .error error
-  | .ok counters => .ok { config with counters, valid := hvalid }
+  | .ok counters => .ok { counters, valid := hvalid }
 
 end Air.Flat.WitnessGeneration

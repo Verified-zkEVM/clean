@@ -39,12 +39,42 @@ namespace ChannelInterface
     channelsWithRequirements verifier = verifier.channelsWithRequirements := rfl
 end ChannelInterface
 
+/-- A named hint table viewing the flattened private input: `rows` rows of `width` elements,
+starting at element `offset`. Elements beyond the input read as zero. -/
+structure HintTable where
+  key : String
+  width : ℕ
+  offset : ℕ
+  rows : ℕ
+deriving Repr, DecidableEq
+
+/-- The hint tables `tables` take from the flattened private input `elements`. Like derived prover
+data, rows are cut off or zero-padded at the requested width. -/
+def HintTable.hint (tables : List HintTable) (elements : Array F) : ProverHint F := fun key width =>
+  match tables.find? (·.key == key) with
+  | none => #[]
+  | some table => Array.ofFn fun (row : Fin table.rows) => rowPrefix width <|
+      elements.extract (table.offset + row.val * table.width)
+        (table.offset + (row.val + 1) * table.width)
+
+/-- An ensemble of AIR components: everything a prover and a verifier implementation need. -/
 structure Ensemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO] where
   /-- Components have unique names. Their order is the order of the traces. -/
   tables : List (Component F)
   unique_names : (tables.map (·.circuit.name)).Nodup
   channels : List (RawChannel F)
   verifier : Verifier.Program F PublicIO := .empty F PublicIO
+  /-- The prover's private input to witness generation. -/
+  ProverInput : TypeMap := unit
+  [provableProverInput : ProvableType ProverInput]
+  /-- The hint tables that witness programs read, as views of the flattened private input. -/
+  hintTables : List HintTable := []
+
+instance (ens : Ensemble F PublicIO) : ProvableType ens.ProverInput := ens.provableProverInput
+
+/-- The hint tables encoding a private input. -/
+def Ensemble.hint (ens : Ensemble F PublicIO) (proverInput : ens.ProverInput F) : ProverHint F :=
+  HintTable.hint ens.hintTables (toElements proverInput).toArray
 
 /-- The public input and the component traces of an ensemble proof. -/
 structure EnsembleWitness (ens : Ensemble F PublicIO) where
@@ -327,61 +357,15 @@ def Completeness (ens : Ensemble F PublicIO) (Assumptions Spec : PublicIO F → 
   ∀ publicInput, Assumptions publicInput → Spec publicInput → ens.Statement publicInput
 end Ensemble
 
-/-- A named hint table viewing the flattened private input: `rows` rows of `width` elements,
-starting at element `offset`. Elements beyond the input read as zero. -/
-structure HintTable where
-  key : String
-  width : ℕ
-  offset : ℕ
-  rows : ℕ
-deriving Repr, DecidableEq
-
-/-- The hint tables `tables` take from the flattened private input `elements`. Like derived prover
-data, rows are cut off or zero-padded at the requested width. -/
-def HintTable.hint (tables : List HintTable) (elements : Array F) : ProverHint F := fun key width =>
-  match tables.find? (·.key == key) with
-  | none => #[]
-  | some table => Array.ofFn fun (row : Fin table.rows) => rowPrefix width <|
-      elements.extract (table.offset + row.val * table.width)
-        (table.offset + (row.val + 1) * table.width)
-
+/-- An ensemble with its specification and soundness proof. -/
 structure FormalEnsemble (F : Type) [FiniteField F]
     (PublicIO : TypeMap) [ProvableType PublicIO] where
   ensemble : Ensemble F PublicIO
   Assumptions : PublicIO F → Prop := fun _ => True
   Spec : PublicIO F → Prop
   soundness : ensemble.Soundness Assumptions Spec
-  /-- The prover's private input to witness generation. -/
-  ProverInput : TypeMap := unit
-  [provableProverInput : ProvableType ProverInput]
-  /-- The hint tables that witness programs read, as views of the flattened private input. -/
-  hintTables : List HintTable := []
   /-- What the public and private inputs must satisfy for witness generation to succeed. -/
-  ProverAssumptions : PublicIO F → ProverInput F → Prop := fun _ _ => True
-
-instance (ens : FormalEnsemble F PublicIO) : ProvableType ens.ProverInput :=
-  ens.provableProverInput
-
-namespace FormalEnsemble
-
-/-- The hint tables encoding a private input. -/
-def hint (ens : FormalEnsemble F PublicIO) (proverInput : ens.ProverInput F) : ProverHint F :=
-  HintTable.hint ens.hintTables (toElements proverInput).toArray
-
-/-- Declare the prover's private input: its type, the hint tables viewing it, and the assumptions
-witness generation needs. -/
-def withProverInput (ens : FormalEnsemble F PublicIO) (ProverInput : TypeMap)
-    [ProvableType ProverInput] (hintTables : List HintTable)
-    (ProverAssumptions : PublicIO F → ProverInput F → Prop) : FormalEnsemble F PublicIO where
-  ensemble := ens.ensemble
-  Assumptions := ens.Assumptions
-  Spec := ens.Spec
-  soundness := ens.soundness
-  ProverInput
-  hintTables
-  ProverAssumptions
-
-end FormalEnsemble
+  ProverAssumptions : PublicIO F → ensemble.ProverInput F → Prop := fun _ _ => True
 
 namespace Ensemble
 
@@ -440,7 +424,7 @@ end Ensemble
 /- ## Constructing ensembles -/
 
 namespace Ensemble
-/-- Takes the verifier from the second ensemble. -/
+/-- Takes the verifier and the prover input from the second ensemble. -/
 def merge (ens1 ens2 : Ensemble F PublicIO)
     (unique_names : ((ens2.tables ++ ens1.tables).map (·.circuit.name)).Nodup) :
     Ensemble F PublicIO :=
@@ -464,6 +448,23 @@ def addTable (ens : Ensemble F PublicIO) (table : Component F)
   (ens.addTable table fresh).tables = table :: ens.tables := rfl
 @[circuit_norm] lemma addTable_verifier (ens : Ensemble F PublicIO) (table : Component F) (fresh) :
   (ens.addTable table fresh).verifier = ens.verifier := rfl
+
+/-- Declare the prover's private input: its type, and the hint tables viewing it. -/
+def withProverInput (ens : Ensemble F PublicIO) (ProverInput : TypeMap)
+    [ProvableType ProverInput] (hintTables : List HintTable) : Ensemble F PublicIO :=
+  { ens with ProverInput, provableProverInput := inferInstance, hintTables }
+
+section
+variable {ens : Ensemble F PublicIO} {ProverInput : TypeMap} [ProvableType ProverInput]
+  {hintTables : List HintTable}
+
+@[circuit_norm] lemma withProverInput_tables :
+  (ens.withProverInput ProverInput hintTables).tables = ens.tables := rfl
+@[circuit_norm] lemma withProverInput_channels :
+  (ens.withProverInput ProverInput hintTables).channels = ens.channels := rfl
+@[circuit_norm] lemma withProverInput_verifier :
+  (ens.withProverInput ProverInput hintTables).verifier = ens.verifier := rfl
+end
 
 end Ensemble
 end Air.Flat

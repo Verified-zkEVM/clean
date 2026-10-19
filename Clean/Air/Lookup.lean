@@ -1,7 +1,6 @@
 module
 
 public import Clean.Air.OrderedChannel
-public import Clean.Air.WitnessGeneration
 
 @[expose] public section
 
@@ -71,7 +70,8 @@ lemma take_toElements_pair {β : TypeMap} [ProvableType β] (a : Row F) (b : β 
   simp only [toElements, Vector.toList_append]
   exact List.take_left' Vector.length_toList
 
-/-- The table as a component: its fixed rows, followed by a multiplicity column. -/
+/-- The table as a component: its fixed rows, followed by a multiplicity column. Witness
+generation preallocates one row per table row, whose multiplicity counts the pulls. -/
 def component : Component F where
   circuit := lookup.provider
   fixedColumns := some lookup.fixedColumns
@@ -86,6 +86,11 @@ def component : Component F where
     have h : toElements value = toElements ((lookup.row .idx).evalRow i) :=
       Vector.toList_inj.mp (hrow.trans rfl)
     simpa [ProvableType.fromElements_toElements] using congrArg (fromElements (M := Row)) h
+  generation := .preallocated {
+    Row := unit
+    row _ := pure ()
+    counters := [fun (_, multiplicity) => multiplicity]
+  }
 
 @[circuit_norm] lemma component_name : lookup.component.circuit.name = lookup.name := rfl
 @[circuit_norm] lemma component_channelsWithGuarantees :
@@ -94,15 +99,6 @@ def component : Component F where
     lookup.component.circuit.channelsWithRequirements = [lookup.channel.toRaw] := rfl
 @[circuit_norm] lemma component_assumptions (input : lookup.component.Input F)
     (data : ProverData F) : lookup.component.Assumptions input data = True := rfl
-
-/-- Witness generation for the table: one preallocated row per table row, whose multiplicity counts
-the pulls. -/
-def generation : WitnessGeneration.Generation lookup.component :=
-  .preallocated {
-    Row := unit
-    row _ := pure ()
-    counters := [fun (_, multiplicity) => multiplicity]
-  }
 
 end Lookup
 

@@ -1,6 +1,6 @@
 module
 
-public import Clean.Air.WitnessGeneration.Config
+public import Clean.Air.FlatEnsemble
 
 @[expose] public section
 
@@ -8,8 +8,8 @@ public import Clean.Air.WitnessGeneration.Config
 # Counters
 
 A counter is an input variable of a component that is the multiplicity of one of its interactions,
-see `Clean.Air.WitnessGeneration.Config`. The config names the variable; this file finds the
-interaction it counts.
+see `Clean.Air.WitnessGeneration.Generation`. The generation names the variable; this file finds
+the interaction it counts.
 -/
 
 namespace Air.Flat.WitnessGeneration
@@ -81,11 +81,10 @@ def checkCounterMessages (component : Component F) (counters : List Counter) :
     unless cells.all fun cell => cell < component.rowOffset && counters.all (·.column ≠ cell) do
       throw (.message counter.column)
 
-/-- The counters of a component's generation: the one of a `byMessage` demand component, or those of
-a preallocated component. -/
-def Generation.counters {component : Component F} (generation : Generation component) :
-    Except CounterError (List Counter) := do
-  let counters ← match generation with
+/-- The counters of a component: the one of a `byMessage` demand component, or those of a
+preallocated component. -/
+def resolveCounters (component : Component F) : Except CounterError (List Counter) := do
+  let counters ← match component.generation with
     | .demand mode => match mode.aggregation with
       | .perOccurrence => pure []
       | .byMessage counter => ([·]) <$> Counter.resolve component counter

@@ -306,9 +306,8 @@ clean_backend::ensemble! \{
 "
 
 /-- Lower an ensemble to an extraction program and print it as Rust. -/
-def ensembleToRust {ens : FormalEnsemble F PublicIO} (config : Config ens) :
-    Except String String := do
-  let program ← lower config |>.mapError toString
+def ensembleToRust (ensemble : Ensemble F PublicIO) (fuel : ℕ) : Except String String := do
+  let program ← lower ensemble fuel |>.mapError toString
   return programToRustFile program
 
 end Backends.Plonky3.Print
