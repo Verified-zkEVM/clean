@@ -134,8 +134,8 @@ def generatedData (states : List (ComponentState F)) : ProverData F := fun name 
 
 /-- Insert the counters, all with value `count`, into the other cells of an input. -/
 def insertCounters (state : ComponentState F) (count : F) (cells : Array F) : Array F :=
-  (state.counters.map (·.column)).mergeSort.foldl (fun input column => input.insertIdx! column count)
-    cells
+  let columns := (state.counters.map (·.column)).mergeSort
+  columns.foldl (fun input column => input.insertIdx! column count) cells
 
 /-- The inputs of a preallocated component's rows: per fixed row, its fixed values and the values of
 the row program, with counters starting at 0. -/
