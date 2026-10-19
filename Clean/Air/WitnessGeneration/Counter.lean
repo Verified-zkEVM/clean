@@ -51,7 +51,8 @@ def expressionCells : Expression F → List ℕ
   | .add left right | .mul left right => expressionCells left ++ expressionCells right
 
 /-- The counter of a component on `channel`: its unique interaction on that channel, whose
-multiplicity must be an input variable after the fixed columns. -/
+multiplicity must be an input variable after the fixed columns. Finding counters by channel is a
+stopgap, see the assumptions in `Clean.Air.WitnessGeneration`. -/
 def Counter.resolve (component : Component F) (channel : RawChannel F) :
     Except CounterError Counter :=
   match component.rowOperations.interactions.zipIdx.filter (·.1.channel.name == channel.name) with

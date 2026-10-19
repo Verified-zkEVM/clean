@@ -32,11 +32,30 @@ How a component answers is its generation mode, see `Clean.Air.WitnessGeneration
 Finally, demand-generated tables are padded to a power-of-two height. Padding rows can interact,
 so the generator balances and pads again until no table grows.
 
-## Limitations
+## Assumptions
 
-TODO. Generation can still fail, because we hacked around non-termination with a `fuel` parameter
-that can be exhausted, and because we don't yet prove that channels balance, so generation fails on
-demand that no component handles.
+TODO. The generator makes assumptions about the AIRs it handles, which come from our examples
+rather than from the idea. None of them is fundamental, and the first two are planned to go:
+- Counters are found by channel: the counter is the multiplicity of the component's unique
+  interaction on the counted channel, which must be a single non-fixed input variable. That is a
+  stopgap, since such a variable may also be a flag like `enabled`, which counting would break.
+  The plan is to name the counter cell in the config with a typed accessor on the component's input,
+  like `fun row => row.multiplicity`, and to count on the interaction whose multiplicity is exactly
+  that cell.
+- Demand is routed by channel only: one component answers each channel and surplus. That rules out
+  a Merkle tree component whose rows pull two children and push their parent, since internal nodes
+  and leaves are pulled on the same channel but answered by different components. The plan is to
+  route by message.
+- Counters only answer pull surplus, so `byMessage` requires `surplus := .pull`.
+- The input of a demand-generated row consists of message elements and constants; its other cells
+  are computed by the witness programs.
+- Witness programs only read prover data from cells of preallocated components that aren't
+  counters, see `Clean.Air.WitnessGeneration.Validation`.
+- All padding rows of a component have the same input.
+
+Generation can also fail, because we hacked around non-termination with a `fuel` parameter that can
+be exhausted, and because we don't yet prove that channels balance, so generation fails on demand
+that no component handles.
 -/
 
 namespace Air.Flat.WitnessGeneration
