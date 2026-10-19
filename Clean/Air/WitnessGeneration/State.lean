@@ -76,8 +76,8 @@ structure ComponentState (F : Type) [FiniteField F] where
   generation : Generation component
   /-- The component's counters, resolved by validation. -/
   counters : List Counter
-  /-- The component's witness operations, which complete a row from its input. -/
-  witnessOperations : List (WitnessOperation F)
+  /-- The component's row operations, whose witness programs complete a row from its input. -/
+  operations : List (FlatOperation F)
   /-- The component's channel interactions on a row. -/
   interactions : List (AbstractInteraction F)
   /-- The rows generated so far. -/
@@ -90,20 +90,14 @@ def ComponentState.initial (component : Component F) (generation : Generation co
     component
     generation
     counters
-    witnessOperations := FlatOperation.witnessOperations operations.toFlat
+    operations := operations.toFlat
     interactions := operations.interactions
   }
-
-/-- Run witness operations on an input, appending the values of each to the row. -/
-def witgenWithData (data : ProverData F) (hint : ProverHint F)
-    (operations : List (WitnessOperation F)) (input : Array F) : Array F :=
-  operations.foldl (init := input) fun row ⟨_, code⟩ =>
-    row ++ (code.eval { get index := row[index]?.getD 0, data, hint }).toArray
 
 /-- Complete a component row from its input with the component's witness programs. -/
 def completeRow (state : ComponentState F) (input : Array F) (data : ProverData F)
     (hint : ProverHint F) : GeneratedRow F :=
-  { input, values := witgenWithData data hint state.witnessOperations input }
+  { input, values := FlatOperation.witgen data hint state.operations input }
 
 def rowInteractions (state : ComponentState F) (row : GeneratedRow F) (data : ProverData F) :
     List (Interaction F) :=
