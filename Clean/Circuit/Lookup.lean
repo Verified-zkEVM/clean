@@ -116,7 +116,6 @@ lemma soundess_def {Row : TypeMap} [ProvableType Row]
   simp only [CircuitType.eval_expression]
   rfl
 
-
 @[circuit_norm]
 lemma completeness_def {Row : TypeMap} [ProvableType Row]
   (table : Table F Row) (env : Environment F) (entry : Row (Expression F)) :
