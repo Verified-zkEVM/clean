@@ -74,7 +74,7 @@ structure GeneratedRow (F : Type) where
 structure ComponentState (F : Type) [FiniteField F] where
   component : Component F
   generation : Generation F
-  /-- The component's counters, see `Generation.counters`. -/
+  /-- The component's counters, resolved by validation. -/
   counters : List Counter
   /-- The component's witness operations, which complete a row from its input. -/
   witgenOps : List (FlatOperation F)
@@ -90,13 +90,13 @@ def witnessOperationsOnly : List (FlatOperation F) → List (FlatOperation F)
       | .witness _ _ => operation :: witnessOperationsOnly operations
       | .assert _ | .lookup _ | .interact _ => witnessOperationsOnly operations
 
-def ComponentState.initial (component : Component F) (generation : Generation F) :
-    ComponentState F :=
+def ComponentState.initial (component : Component F) (generation : Generation F)
+    (counters : List Counter) : ComponentState F :=
   let operations := component.rowOperations
   {
     component
     generation
-    counters := (generation.counters component).toOption.getD []
+    counters
     witgenOps := witnessOperationsOnly operations.toFlat
     interactions := operations.interactions
   }

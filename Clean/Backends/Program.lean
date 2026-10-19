@@ -293,19 +293,17 @@ def lowerComponent (index : ℕ) (component : Component F) :
     interactions
   }
 
-def lowerCounters (component : Component F) (generation : Generation F) :
-    Except LoweringError (List CounterProgram) := do
-  let counters ← (generation.counters component).mapError .config
+def lowerCounters (component : Component F) (counters : List Counter) : List CounterProgram :=
   let interactions := component.rowOperations.interactions
-  return counters.map fun counter => {
+  counters.map fun counter => {
     channel := (interactions[counter.interaction]?.map (·.channel.name)).getD ""
     interaction := counter.interaction
     column := counter.column
   }
 
-def lowerGeneration (index : ℕ) (component : Component F) (generation : Generation F) :
-    Except LoweringError (ModeProgram F) := do
-  let counters ← lowerCounters component generation
+def lowerGeneration (index : ℕ) (component : Component F) (generation : Generation F)
+    (counters : List Counter) : Except LoweringError (ModeProgram F) := do
+  let counters := lowerCounters component counters
   match generation with
   | .demand mode => return .demand mode counters
   | .preallocated mode =>
@@ -323,8 +321,9 @@ def lower (ens : FormalEnsemble F PublicIO) (config : Config F) :
   | .ok config =>
     let components ← ensemble.tables.zipIdx.mapM fun (component, index) =>
       lowerComponent index component
-    let modes ← (ensemble.tables.zip config.generations).zipIdx.mapM
-      fun ((component, generation), index) => lowerGeneration index component generation
+    let modes ← (ensemble.tables.zip (config.generations.zip config.counters)).zipIdx.mapM
+      fun ((component, generation, counters), index) =>
+        lowerGeneration index component generation counters
     let verifierOperations := ensemble.verifierOperations.toFlat
     let verifierInteractions := FlatOperation.interactions verifierOperations
     let verifierExpressions := verifierInteractions.flatMap fun interaction =>

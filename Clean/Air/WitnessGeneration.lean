@@ -193,8 +193,8 @@ def generateValid {ensemble : Ensemble F PublicIO} (config : ValidConfig ensembl
     (publicInput : PublicIO F) (hint : ProverHint F) :
     Except GenerationError (EnsembleWitness ensemble) := do
   -- preallocate rows, and complete them with the prover data of all preallocated inputs
-  let initial := (ensemble.tables.zip config.generations).map fun (component, generation) =>
-    ComponentState.initial component generation
+  let initial := (ensemble.tables.zip (config.generations.zip config.counters)).map
+    fun (component, generation, counters) => ComponentState.initial component generation counters
   let initial := initial.map fun state =>
     { state with rows := (initialInputs state hint).map fun input => { input, values := input } }
   let data := generatedData initial
