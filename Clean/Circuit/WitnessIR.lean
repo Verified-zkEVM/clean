@@ -18,8 +18,8 @@ A deep-embedded IR for witness-generation callbacks
 
 A witness program (`WitgenIR F m`) is either
 - `native f` — an arbitrary Lean closure, the migration escape hatch. Not serializable.
-  `eval (native f) = f` holds definitionally, which is what lets phase 2 wrap all
-  existing callbacks without touching any gadget or proof.
+  `eval (native f) = f` holds definitionally, which lets existing callbacks be wrapped
+  without touching any gadget or proof.
 - `ir steps out` — structured IR: a list of scalar `let`-steps, followed by a
   vector-shaped output expression.
 

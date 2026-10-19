@@ -5,26 +5,21 @@ public import Clean.Circuit.Theorems
 @[expose] public section
 
 /-!
-# Array-backed witness generation (witgen IR plan, phase 3)
+# Array-backed witness generation
 
-`FlatOperation.dynamicWitnesses` is the semantic reference for witness generation, but
-it is accidentally quadratic: the accumulator is a `List` (O(n) append per operation),
-and the prover environment it builds is list-backed, so every `env.get` inside a
-witness callback walks the list from the head (O(i) per read).
+`FlatOperation.dynamicWitnesses` is the semantic reference for witness generation, but it is
+quadratic: the accumulator is a `List` (O(n) append per operation), and the prover environment it
+builds is list-backed, so every `env.get` inside a witness program walks the list from the head
+(O(i) per read).
 
-`FlatOperation.witgen` below is the runtime counterpart: a single linear fold over the
-operations with an `Array` accumulator (amortized O(1) append, in-place when the array
-is used linearly) and an array-backed environment (O(1) reads).
+`FlatOperation.witgen` is the runtime counterpart: a single linear fold over the operations with an
+`Array` accumulator (amortized O(1) append, in place when the array is used linearly) and an
+array-backed environment (O(1) reads). It also takes the prover data that witness programs read,
+like the rows of a memory component. Ensemble witness generation uses it to complete rows.
 
-The theorem `witgen_eq_dynamicWitnesses` proves once, by induction, that it computes
-exactly the same witnesses. Downstream corollaries transfer the existing
-`UsesLocalWitnesses` result, so `Circuit.witgen` is a drop-in fast path for honest
-witness generation — and the reference interpreter that the future Rust witgen
-pipeline is differentially tested against.
-
-`FlatOperation.witgen` takes the prover data that witness programs read, like the rows of
-a FemtoCairo memory. The reference semantics has empty data, so the theorems relating the
-two are about empty data.
+The theorem `witgen_eq_dynamicWitnesses` proves that, on empty prover data, it computes exactly the
+same witnesses as the reference. Corollaries transfer `UsesLocalWitnesses`, so `Circuit.witgen` is
+honest witness generation.
 -/
 
 variable {F : Type} [FiniteField F] {α : Type}
