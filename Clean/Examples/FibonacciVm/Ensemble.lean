@@ -235,8 +235,7 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
     (by simp +instances [circuit_norm, fibonacciVm, fib8, fibonacciVerifier])
     (by simp [circuit_norm, fibonacciVm, fib8, fibonacciVerifier,
       Add8Channel, FibonacciChannel])
-    (by simp [circuit_norm, fibonacciVm, fib8, add8,
-      bytes])
+    (by simp [circuit_norm, fibonacciVm, fib8, add8, bytes])
   |>.toFormal (fun _ => True)
     (fun (n, x, y) => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val)
     (by simp [circuit_norm, fibonacciVm, bytes])
