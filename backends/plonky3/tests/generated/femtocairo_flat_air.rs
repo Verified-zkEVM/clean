@@ -732,6 +732,7 @@ pub mod component_0 {
         Mode::Demand(DemandMode {
             channel: "state",
             surplus: Direction::Push,
+            guard: None,
             aggregation: Aggregation::PerOccurrence,
             input: vec![
                 InputCell::Constant(F::from_u64(1u64)),

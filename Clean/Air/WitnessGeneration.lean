@@ -29,17 +29,16 @@ How a component answers is its generation mode, see `Clean.Air.WitnessGeneration
 - a `demand` component gets a new row for the message, or a higher multiplicity of an existing row,
 - a `preallocated` component increments the counter of the row that carries the message.
 
+Exactly one component may accept each message: the demand components on its channel whose guard
+holds, and the preallocated components that have a row for it.
+
 Finally, demand-generated tables are padded to a power-of-two height. Padding rows can interact,
 so the generator balances and pads again until no table grows.
 
 ## Assumptions
 
 TODO. The generator makes assumptions about the AIRs it handles, which come from our examples
-rather than from the idea. None of them is fundamental, and the first is planned to go:
-- Demand is routed by channel only: one component answers each channel and surplus. That rules out
-  a Merkle tree component whose rows pull two children and push their parent, since internal nodes
-  and leaves are pulled on the same channel but answered by different components. The plan is to
-  route by message.
+rather than from the idea. None of them is fundamental:
 - Counters only answer pull surplus, so `byMessage` requires `surplus := .pull`.
 - A counter is the whole multiplicity of exactly one interaction.
 - The input of a demand-generated row consists of message elements and constants; its other cells
@@ -67,9 +66,14 @@ structure Mutation (F : Type) [FiniteField F] where
   removedRows : List (GeneratedRow F) := []
   addedRows : List (GeneratedRow F) := []
 
-def DemandMode.handles {Input : TypeMap} [ProvableType Input] (mode : DemandMode F Input)
-    (demand : Demand F) : Bool :=
-  mode.channel.name == demand.channel && mode.surplus == demand.direction
+/-- Whether a demand component answers the demand: it is on the mode's channel and surplus, and
+the guard holds. -/
+def DemandMode.accepts {Input : TypeMap} [ProvableType Input] (mode : DemandMode F Input)
+    (demand : Demand F) (data : ProverData F) (hint : ProverHint F) : Bool :=
+  mode.channel.name == demand.channel && mode.surplus == demand.direction &&
+    match mode.guardCondition with
+    | none => true
+    | some guard => guard.eval { env := .fromArray demand.message data hint }
 
 /-- The counters that answer `demand`: those on its channel, if the message was pulled more often
 than pushed. -/
@@ -117,41 +121,37 @@ def DemandMode.answer (state : ComponentState F) (mode : DemandMode F state.comp
       | some found => incrementCounter state demand data hint found
       | none => addRows [mode.newRow state demand data hint]
 
-/-- Answer demand by counting it in the row for the message. Fails if there is no such row, for
-example when a memory read is out of bounds. -/
-def PreallocatedMode.answer (state : ComponentState F) (demand : Demand F) (data : ProverData F)
+/-- The component's answer to the demand, if it accepts it. A preallocated component accepts the
+messages it has a row for. -/
+def ComponentState.answer? (state : ComponentState F) (demand : Demand F) (data : ProverData F)
     (hint : ProverHint F) : Option (Mutation F) :=
-  (findCountedRow state demand data).map (incrementCounter state demand data hint)
-
-def ComponentState.handles (state : ComponentState F) (demand : Demand F) : Bool :=
   match state.component.generation with
-  | .demand mode => mode.handles demand
-  | .preallocated _ => !(countersFor state demand).isEmpty
+  | .demand mode =>
+      if mode.accepts demand data hint then some (mode.answer state demand data hint) else none
+  | .preallocated _ =>
+      (findCountedRow state demand data).map (incrementCounter state demand data hint)
 
-/-- The first demand that some component handles, with that component's index. Validation ensures
-at most one component handles each channel and surplus. -/
-def findHandler (states : List (ComponentState F)) :
-    List (Demand F) → Option (Demand F × ℕ)
-  | [] => none
+/-- The answer to the first demand that some component accepts, with that component's index. Fails
+if several components accept it. -/
+def findAnswer (states : List (ComponentState F)) (data : ProverData F) (hint : ProverHint F) :
+    List (Demand F) → Except GenerationError (Option (ℕ × Mutation F))
+  | [] => pure none
   | demand :: demands =>
-      match states.findIdx? (·.handles demand) with
-      | some index => some (demand, index)
-      | none => findHandler states demands
+      let answers := states.zipIdx.filterMap fun (state, index) =>
+        (state.answer? demand data hint).map (index, ·)
+      match answers with
+      | [] => findAnswer states data hint demands
+      | [answer] => pure (some answer)
+      | _ => throw (.ambiguousDemand demand.channel
+          (answers.map fun (_, mutation) => mutation.state.component.circuit.name))
 
-/-- Let the component at `index` answer `demand`, and update the tally with the changed rows. -/
-def answer (states : List (ComponentState F)) (demands : List (Demand F)) (demand : Demand F)
-    (index : ℕ) (data : ProverData F) (hint : ProverHint F) :
-    Except GenerationError (List (ComponentState F) × List (Demand F)) := do
-  let some state := states[index]? | return (states, demands)
-  let mutation ← match state.component.generation with
-    | .demand mode => pure (mode.answer state demand data hint)
-    | .preallocated _ =>
-        match PreallocatedMode.answer state demand data hint with
-        | some mutation => pure mutation
-        | none => throw (.noPreallocatedRow state.component.circuit.name demand.channel)
-  let removed := mutation.removedRows.flatMap (rowInteractions state · data)
-  let added := mutation.addedRows.flatMap (rowInteractions state · data)
-  return (states.set index mutation.state,
+/-- Apply the answer of the component at `index`, and update the tally with the changed rows. -/
+def applyAnswer (states : List (ComponentState F)) (demands : List (Demand F)) (index : ℕ)
+    (mutation : Mutation F) (data : ProverData F) :
+    List (ComponentState F) × List (Demand F) :=
+  let removed := mutation.removedRows.flatMap (rowInteractions mutation.state · data)
+  let added := mutation.addedRows.flatMap (rowInteractions mutation.state · data)
+  (states.set index mutation.state,
     Demand.addInteractions (Demand.removeInteractions demands removed) added)
 
 /-! ### The loop -/
@@ -162,11 +162,11 @@ def generateLoop (data : ProverData F) (hint : ProverHint F) :
       Except GenerationError (List (ComponentState F))
   | 0, _, _ => throw .fuelExhausted
   | fuel + 1, states, demands =>
-      if demands.isEmpty then pure states else
-      match findHandler states demands with
+      if demands.isEmpty then pure states else do
+      match ← findAnswer states data hint demands with
       | none => throw (.unhandledImbalance (demands.map (·.channel)))
-      | some (demand, index) => do
-          let (states, demands) ← answer states demands demand index data hint
+      | some (index, mutation) =>
+          let (states, demands) := applyAnswer states demands index mutation data
           generateLoop data hint fuel states demands
 
 /-- The padded height of a demand-generated table. Preallocated tables are never padded. -/

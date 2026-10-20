@@ -219,12 +219,26 @@ def paddingToRust (padding : Padding F) : String :=
   s!"Padding \{ input: vec![{commaSep (padding.input.toList.map (fieldIn "F"))}], \
       minimum_rows: {padding.minimumRows} }"
 
+/-- `fn guard(row, data, hint)`, where `row` is the demanded message. -/
+def guardToRust (guard : Witgen.BExpr F) : String :=
+  s!"pub fn guard<F: WitnessField>(row: &[F], data: &WitnessData<F>, hint: &WitnessData<F>) \
+      -> bool \{
+    let row_index = 0u64;
+    {bexprToRust false guard}
+}"
+
 /-- `fn mode()`, and `fn initial_row(row_index, hint)`, which for preallocated components is the
-fixed prefix followed by the row program's values, with zeros inserted at the counter columns. -/
+fixed prefix followed by the row program's values, with zeros inserted at the counter columns. A
+demand mode with a guard also gets `fn guard`. -/
 def modeToRust : ModeProgram F → String
-  | .demand mode counters => s!"pub fn mode<F: WitnessField>() -> Mode<F> \{
+  | .demand mode counters =>
+    let guard := match mode.guard with
+      | none => ""
+      | some guard => s!"{guardToRust guard}\n\n"
+    s!"{guard}pub fn mode<F: WitnessField>() -> Mode<F> \{
     Mode::Demand(DemandMode \{ channel: {quoted mode.channel}, \
         surplus: {directionToRust mode.surplus}, \
+        guard: {if mode.guard.isSome then "Some(guard::<F>)" else "None"}, \
         aggregation: {aggregationToRust mode.byMessage}, \
         input: vec![{commaSep (mode.input.map inputCellToRust)}], \
         counters: vec![{commaSep (counters.map counterToRust)}], \

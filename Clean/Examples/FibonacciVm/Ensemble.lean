@@ -22,10 +22,6 @@ open Gadgets.Addition8 (Theorems.soundness Theorems.completeness_bool Theorems.c
 
 open Air.Flat
 
-instance (p : ℕ) [pGt : Fact (p > 512)] : Fact (ringChar (F p) ≠ 2) := .mk <| by
-  simp [F, ZMod.ringChar_zmod_n]
-  linarith [pGt.out]
-
 variable {p : ℕ} [Fact p.Prime] [pGt: Fact (p > 512)]
 
 /-- The bytes `0, ..., 255`, for range checks. -/
@@ -115,7 +111,7 @@ number of pulls as its multiplicity `m`. -/
 abbrev add8Component : Component (F p) where
   circuit := add8
   generation := .demand {
-    channel := Add8Channel.toRaw
+    channel := Add8Channel
     surplus := .pull
     aggregation := .byMessage fun input => input.m
     input := [.message 0, .message 1, .message 2]
@@ -218,7 +214,7 @@ disabled. -/
 abbrev fib8Component : Component (F p) where
   circuit := fib8
   generation := .demand {
-    channel := FibonacciChannel.toRaw
+    channel := FibonacciChannel
     surplus := .push
     aggregation := .perOccurrence
     input := [.const 1, .message 0, .message 1, .message 2]
@@ -325,7 +321,7 @@ def falseCircuit : GeneralFormalCircuit (F p) unit unit where
 abbrev falseComponent : Component (F p) where
   circuit := falseCircuit
   generation := .demand {
-    channel := FalseChannel.toRaw
+    channel := FalseChannel
     surplus := .push
     aggregation := .perOccurrence
     input := []

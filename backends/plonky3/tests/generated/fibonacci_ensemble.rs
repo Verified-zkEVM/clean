@@ -72,6 +72,7 @@ pub mod component_0 {
         Mode::Demand(DemandMode {
             channel: "fibonacci",
             surplus: Direction::Push,
+            guard: None,
             aggregation: Aggregation::PerOccurrence,
             input: vec![
                 InputCell::Constant(F::from_u64(1u64)),
@@ -160,6 +161,7 @@ pub mod component_1 {
         Mode::Demand(DemandMode {
             channel: "add8",
             surplus: Direction::Pull,
+            guard: None,
             aggregation: Aggregation::ByMessage,
             input: vec![
                 InputCell::Message(0),

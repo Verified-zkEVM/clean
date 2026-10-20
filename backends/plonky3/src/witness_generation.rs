@@ -129,11 +129,16 @@ pub enum InputCell<F> {
     Constant(F),
 }
 
+/// A condition on a demanded message, which can read the prover data and the hint.
+pub type Guard<F> = fn(&[F], &WitnessData<F>, &WitnessData<F>) -> bool;
+
 #[derive(Clone, Debug)]
 pub struct DemandMode<F> {
     pub channel: &'static str,
     /// Which unanswered messages create rows: pushed more often than pulled, or the opposite.
     pub surplus: Direction,
+    /// Which of these messages the component answers, all of them if `None`.
+    pub guard: Option<Guard<F>>,
     pub aggregation: Aggregation,
     /// The input of a new row, without its counters.
     pub input: Vec<InputCell<F>>,
@@ -406,14 +411,37 @@ fn remove_interactions<F: WitnessField>(
     }
 }
 
-fn mode_handles<F: WitnessField>(mode: &Mode<F>, demand: &Demand<F>) -> bool {
+/// How a component answers a demand it accepts.
+enum Answer<'a, F> {
+    /// With the component's demand mode.
+    Demand(&'a DemandMode<F>),
+    /// By incrementing the counter of the row at `row_index`.
+    Counter {
+        counter: &'a Counter,
+        row_index: usize,
+    },
+}
+
+/// How the component answers the demand, if it accepts it: a demand component accepts the messages
+/// on its channel and surplus that its guard holds for, a preallocated one those it has a row for.
+fn accepts<'a, F: WitnessField, P: Program<F>>(
+    component: usize,
+    mode: &'a Mode<F>,
+    demand: &Demand<F>,
+    table: &[Row<F>],
+    data: &WitnessData<F>,
+    hint: &WitnessData<F>,
+) -> Result<Option<Answer<'a, F>>, String> {
     match mode {
-        Mode::Demand(mode) => mode.channel == demand.channel && mode.surplus == demand.direction(),
+        Mode::Demand(mode) => Ok((mode.channel == demand.channel
+            && mode.surplus == demand.direction()
+            && mode
+                .guard
+                .is_none_or(|guard| guard(&demand.message, data, hint)))
+        .then_some(Answer::Demand(mode))),
         Mode::Preallocated { counters, .. } => {
-            demand.direction() == Direction::Pull
-                && counters
-                    .iter()
-                    .any(|counter| counter.channel == demand.channel)
+            let found = find_counted_row::<F, P>(component, counters, demand, table)?;
+            Ok(found.map(|(counter, row_index)| Answer::Counter { counter, row_index }))
         }
     }
 }
@@ -544,27 +572,6 @@ fn handle_demand<F: WitnessField, P: Program<F>>(
     Ok(())
 }
 
-fn handle_preallocated<F: WitnessField, P: Program<F>>(
-    component: usize,
-    counters: &[Counter],
-    demand: &Demand<F>,
-    table: &mut [Row<F>],
-    demands: &mut Vec<Demand<F>>,
-    data: &WitnessData<F>,
-    hint: &WitnessData<F>,
-) -> Result<(), String> {
-    let (counter, row_index) = find_counted_row::<F, P>(component, counters, demand, table)?
-        .ok_or_else(|| {
-            format!(
-                "preallocated component has no row for a message on channel '{}'",
-                demand.channel
-            )
-        })?;
-    increment_counter::<F, P>(
-        component, counter, row_index, demand, table, demands, data, hint,
-    )
-}
-
 fn balance<F: WitnessField, P: Program<F>>(
     modes: &[Mode<F>],
     tables: &mut [Vec<Row<F>>],
@@ -579,27 +586,32 @@ fn balance<F: WitnessField, P: Program<F>>(
 
         let mut action = None;
         for (demand_index, demand) in demands.iter().enumerate() {
-            let handlers: Vec<_> = modes
-                .iter()
-                .enumerate()
-                .filter_map(|(component, mode)| mode_handles(mode, demand).then_some(component))
-                .collect();
-            match handlers.as_slice() {
-                [] => continue,
-                [component] => {
-                    action = Some((demand_index, *component));
-                    break;
+            let mut answers = Vec::new();
+            for (component, mode) in modes.iter().enumerate() {
+                if let Some(answer) =
+                    accepts::<F, P>(component, mode, demand, &tables[component], data, hint)?
+                {
+                    answers.push((component, answer));
                 }
-                _ => {
-                    return Err(format!(
-                        "multiple generation handlers match channel '{}'",
-                        demand.channel
-                    ));
-                }
+            }
+            if answers.len() > 1 {
+                let components = answers
+                    .iter()
+                    .map(|(component, _)| P::COMPONENT_NAMES[*component])
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                return Err(format!(
+                    "components {components} all accept a message on channel '{}'",
+                    demand.channel
+                ));
+            }
+            if let Some((component, answer)) = answers.pop() {
+                action = Some((demand_index, component, answer));
+                break;
             }
         }
 
-        let (demand_index, component) = action.ok_or_else(|| {
+        let (demand_index, component, answer) = action.ok_or_else(|| {
             let channels = demands
                 .iter()
                 .map(|demand| demand.channel)
@@ -609,8 +621,8 @@ fn balance<F: WitnessField, P: Program<F>>(
         })?;
         // The demand stays in the worklist: the interactions of the new or updated row cancel it.
         let demand = demands[demand_index].clone();
-        match &modes[component] {
-            Mode::Demand(mode) => handle_demand::<F, P>(
+        match answer {
+            Answer::Demand(mode) => handle_demand::<F, P>(
                 component,
                 mode,
                 &demand,
@@ -619,9 +631,10 @@ fn balance<F: WitnessField, P: Program<F>>(
                 data,
                 hint,
             )?,
-            Mode::Preallocated { counters, .. } => handle_preallocated::<F, P>(
+            Answer::Counter { counter, row_index } => increment_counter::<F, P>(
                 component,
-                counters,
+                counter,
+                row_index,
                 &demand,
                 &mut tables[component],
                 demands,

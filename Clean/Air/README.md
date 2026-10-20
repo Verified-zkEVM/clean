@@ -52,13 +52,15 @@ Each component declares how it answers demand in its `generation` field, whose t
 - **demand**: the component starts empty and gets a new row whenever a message on its channel is unanswered. The row's input is built from the message. Repeated messages either get a row each (a VM step) or share one row whose counter counts them (a chip). After balancing, these tables are padded to a power-of-two height. Padding rows can interact too, so the generator balances again until no table grows.
 - **preallocated**: the component has one row per row of its fixed columns from the start, like a memory with one row per address or a lookup table. Demand only increments counters.
 
+Several components may answer the same channel, like the opcode tables of a VM, which share its state channel. A demand component can then restrict the messages it answers by a *guard*, a witness program over the message: an opcode table's guard reads the opcode at the state's `pc` from the program table. Each message must be accepted by exactly one component: a demand component whose guard holds, or a preallocated component with a row for it. `Clean/Examples/OpcodeVm` is a toy VM built this way.
+
 A *counter* is an input variable that is the multiplicity of one of a row's interactions. The generation names it with an accessor on the component's input: a chip row emitting `add8.emit m (x, y, z)` has the counter `fun row => row.m`, and the generator finds the interaction whose multiplicity it is. To answer a pulled message, the generator finds the row whose counted interaction carries that message and increments its counter, or, in a chip, creates the row if there is none yet. Counters may not influence the message they count, so incrementing one never changes which message a row answers.
 
 Fixed columns are never generated. They belong to the component, and the generator copies them into the first cells of each row, so components with fixed columns are exactly the preallocated ones. The remaining cells of a preallocated row, apart from its counters, come from a row program, which may read the prover's private input.
 
 That private input is declared by the `Ensemble`: its type, and the hint tables through which witness programs read it. The `FormalEnsemble` adds the `ProverAssumptions` on public and private input that witness generation needs. The Plonky3 backend in `backends/plonky3` implements the same algorithm in Rust, and runs it on generation modes and witness programs extracted by `Clean/Backends`.
 
-The generator currently makes assumptions that come from our examples rather than from the idea, listed in the module doc of `WitnessGeneration.lean`. None of them is fundamental. One is planned to go: demand is routed by channel only, so one component answers each channel. That rules out designs like a Merkle tree component whose rows pull two children and push their parent, where leaves on the same channel are answered by another component; demand should be routed by message instead.
+The generator currently makes assumptions that come from our examples rather than from the idea, listed in the module doc of `WitnessGeneration.lean`. None of them is fundamental.
 
 ## Relation To Clean/Table
 

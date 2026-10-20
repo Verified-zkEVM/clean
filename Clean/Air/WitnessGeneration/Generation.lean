@@ -28,7 +28,13 @@ adds pushes, it answers messages pulled more often than pushed.
 
 Fixed columns are never generated: they are part of the component, and the generator copies them
 into the first cells of every row. So generations only describe the cells after the fixed columns.
-A component is preallocated exactly when it has fixed columns, which the component requires. The fixed columns may have no values, `Row := unit`, and only fix the height.
+A component is preallocated exactly when it has fixed columns, which the component requires. The
+fixed columns may have no values, `Row := unit`, and only fix the height.
+
+Several components may answer demand on the same channel. Each demanded message is then routed to
+the one component that accepts it: a demand component accepts the messages its guard holds for, a
+preallocated one those it has a row for. For example, the opcode tables of a VM share its state
+channel, and each table's guard checks the opcode at the state's `pc`.
 -/
 
 namespace Air.Flat.WitnessGeneration
@@ -78,11 +84,16 @@ structure Padding (F : Type) where
 
 /-- Rows created by channel demand. -/
 structure DemandMode (F : Type) (Input : TypeMap) [ProvableType Input] where
+  {Message : TypeMap} [provableMessage : ProvableType Message]
   /-- The channel whose unanswered messages create rows of this component. -/
-  channel : RawChannel F
+  channel : Channel F Message
   /-- Which unanswered messages create rows: `.push` means messages pushed more often than pulled,
   so the new row pulls them; `.pull` means the opposite. -/
   surplus : Direction
+  /-- Which of these messages the component answers, all of them if `none`. Components sharing a
+  channel, like the opcode tables of a VM, are told apart by guards. A guard is a witness program
+  over the message, so it can read prover data and hints, like the opcode at the message's `pc`. -/
+  guard : Option (Var Message F → Witgen.BExpr F) := none
   /-- Whether repeated demand for one message creates repeated rows. -/
   aggregation : Aggregation F Input
   /-- The input of a new row, cell by cell, built from the message it answers. With `byMessage`, the
@@ -105,6 +116,15 @@ structure PreallocatedMode (F : Type) (Input : TypeMap) [ProvableType Input]
   /-- The counters, named by their input variables like `fun row => row.multiplicity`. The
   component answers demand on the channels of the counted interactions. -/
   counters : List (Var Input F → Expression F)
+
+instance {Input : TypeMap} [ProvableType Input] (mode : DemandMode F Input) :
+    ProvableType mode.Message :=
+  mode.provableMessage
+
+/-- The guard as a condition on the cells of the message. -/
+def DemandMode.guardCondition {Input : TypeMap} [ProvableType Input] (mode : DemandMode F Input) :
+    Option (Witgen.BExpr F) :=
+  mode.guard.map (· (varFromOffset mode.Message 0))
 
 /-- How the generator builds the rows of a component with input `Input`. -/
 inductive Generation (F : Type) (Input : TypeMap) [ProvableType Input] where

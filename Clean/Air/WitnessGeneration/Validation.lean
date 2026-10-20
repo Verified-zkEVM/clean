@@ -17,6 +17,19 @@ namespace Air.Flat.WitnessGeneration
 variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
 
+/-- A program of a component that reads prover data. -/
+inductive DataReader where
+  /-- The witness program of the component's operation at this index. -/
+  | witness (operation : ℕ)
+  /-- The guard of the component's demand mode. -/
+  | guard
+deriving Repr, DecidableEq
+
+instance : ToString DataReader where
+  toString
+    | .witness operation => s!"witness operation {operation}"
+    | .guard => "guard"
+
 /-- A problem with the generation of an ensemble, found by `validateGeneration`. -/
 inductive ValidationError where
   | demandInputWidth (component : String) (expected actual : ℕ)
@@ -27,10 +40,10 @@ inductive ValidationError where
   | counter (component : String) (error : CounterError)
   | byMessagePush (component : String)
   | byMessageChannel (component counted demanded : String)
-  | duplicateHandler (channel : String) (surplus : Direction)
-  | unknownDataRead (component : String) (operation : ℕ) (key : String)
-  | dataReadWidth (component : String) (operation : ℕ) (key : String) (expected actual : ℕ)
-  | unstableDataRead (component : String) (operation : ℕ) (key : String) (column : ℕ)
+  | unguardedHandler (component channel : String) (surplus : Direction)
+  | unknownDataRead (component : String) (reader : DataReader) (key : String)
+  | dataReadWidth (component : String) (reader : DataReader) (key : String) (expected actual : ℕ)
+  | unstableDataRead (component : String) (reader : DataReader) (key : String) (column : ℕ)
 deriving Repr, DecidableEq
 
 instance : ToString ValidationError where
@@ -53,23 +66,24 @@ instance : ToString ValidationError where
     | .byMessageChannel component counted demanded =>
         s!"component '{component}' counts on channel '{counted}' but answers demand on channel \
           '{demanded}'"
-    | .duplicateHandler channel surplus =>
-        s!"multiple components handle {surplus.name} surplus on channel '{channel}'"
-    | .unknownDataRead component operation key =>
-        s!"component '{component}' witness operation {operation} reads unknown prover-data \
-          component '{key}'"
-    | .dataReadWidth component operation key expected actual =>
-        s!"component '{component}' witness operation {operation} reads prover-data component \
-          '{key}' with width {actual}, expected {expected}"
-    | .unstableDataRead component operation key column =>
-        s!"component '{component}' witness operation {operation} reads cell {column} of \
-          '{key}', which generation changes"
+    | .unguardedHandler component channel surplus =>
+        s!"component '{component}' answers {surplus.name} surplus on channel '{channel}' without \
+          a guard, but other components answer it too"
+    | .unknownDataRead component reader key =>
+        s!"component '{component}' {reader} reads unknown prover-data component '{key}'"
+    | .dataReadWidth component reader key expected actual =>
+        s!"component '{component}' {reader} reads prover-data component '{key}' with width \
+          {actual}, expected {expected}"
+    | .unstableDataRead component reader key column =>
+        s!"component '{component}' {reader} reads cell {column} of '{key}', which generation \
+          changes"
 
 /-! ### Prover-data reads
 
 TODO. Witness programs read prover data from a snapshot of the rows initialized before channel
 balancing, which only agrees with the final prover data on cells that balancing doesn't change. So
-for now, reads are restricted to such cells: the non-counter cells of preallocated components. -/
+for now, reads of witness programs and guards are restricted to such cells: the non-counter cells
+of preallocated components. -/
 
 structure DataRead where
   key : String
@@ -130,13 +144,34 @@ def witnessDataReads : {n : ℕ} → Witgen.WitgenIR F n → List DataRead
 
 /-! ### Validation -/
 
-/-- The channels a component handles, with the surplus it answers there. A counter only grows the
-pushes of its interaction, so it answers pull surplus. -/
-def handledChannels (component : Component F) (counters : List Counter) :
-    List (String × Direction) :=
+/-- A channel and surplus that a component answers. -/
+structure Handler where
+  channel : String
+  surplus : Direction
+  /-- Whether the component answers only some messages: those its guard holds for, or, for a
+  preallocated component, those it has a row for. -/
+  selective : Bool
+
+/-- The channels a component answers demand on. A counter only grows the pushes of its interaction,
+so it answers pull surplus. -/
+def handlers (component : Component F) (counters : List Counter) : List Handler :=
   match component.generation with
-  | .demand mode => [(mode.channel.name, mode.surplus)]
-  | .preallocated _ => counters.map (·.channel, .pull)
+  | .demand mode =>
+      [{ channel := mode.channel.name, surplus := mode.surplus, selective := mode.guard.isSome }]
+  | .preallocated _ =>
+      counters.map fun counter =>
+        { channel := counter.channel, surplus := .pull, selective := true }
+
+/-- The programs of a component that read prover data, with their reads. -/
+def dataReaders (component : Component F) : List (DataReader × List DataRead) :=
+  let witnesses := component.rowOperations.toFlat.zipIdx.filterMap fun (operation, index) =>
+    match operation with
+    | .witness _ code => some (.witness index, witnessDataReads code)
+    | _ => none
+  let guard := match component.generation with
+    | .demand mode => (mode.guardCondition.map fun guard => (.guard, bexprDataReads guard)).toList
+    | .preallocated _ => []
+  witnesses ++ guard
 
 /-- Check a component's generation against the component, and resolve its counters. -/
 def validateComponent (component : Component F) : Except ValidationError (List Counter) := do
@@ -155,8 +190,8 @@ def validateComponent (component : Component F) : Except ValidationError (List C
         throw (.demandInputWidth name (inputWidth - counters.length) mode.input.length)
       for cell in mode.input do
         if let .message index := cell then
-          unless index < mode.channel.arity do
-            throw (.demandMessageIndex name index mode.channel.arity)
+          unless index < size mode.Message do
+            throw (.demandMessageIndex name index (size mode.Message))
       unless mode.padding.input.size = inputWidth do
         throw (.paddingWidth name inputWidth mode.padding.input.size)
   | .preallocated mode =>
@@ -173,30 +208,32 @@ def validateDataReads (components : List (Component F)) (counters : List (List C
     Except ValidationError Unit := do
   let targets := components.zip counters
   for component in components do
-    for (operation, operationIndex) in component.rowOperations.toFlat.zipIdx do
-      if let .witness _ code := operation then
-        for read in witnessDataReads code do
-          let some (target, targetCounters) := targets.find? fun (target, _) =>
-              target.circuit.name == read.key
-            | throw (.unknownDataRead component.circuit.name operationIndex read.key)
-          unless read.width = target.rowOffset do
-            throw (.dataReadWidth component.circuit.name operationIndex read.key target.rowOffset
-              read.width)
-          match target.generation with
-          | .demand _ =>
-              throw (.unstableDataRead component.circuit.name operationIndex read.key read.column)
-          | .preallocated _ =>
-              if targetCounters.any (·.column = read.column) then
-                throw (.unstableDataRead component.circuit.name operationIndex read.key read.column)
+    let name := component.circuit.name
+    for (reader, reads) in dataReaders component do
+      for read in reads do
+        let some (target, targetCounters) := targets.find? fun (target, _) =>
+            target.circuit.name == read.key
+          | throw (.unknownDataRead name reader read.key)
+        unless read.width = target.rowOffset do
+          throw (.dataReadWidth name reader read.key target.rowOffset read.width)
+        match target.generation with
+        | .demand _ => throw (.unstableDataRead name reader read.key read.column)
+        | .preallocated _ =>
+            if targetCounters.any (·.column = read.column) then
+              throw (.unstableDataRead name reader read.key read.column)
 
-/-- Check that no two components answer the same surplus on the same channel. -/
+/-- Check that a component answering every message on a channel, without a guard, is the only one
+answering that channel and surplus. Whether selective components overlap is only found out during
+generation, when two of them accept the same message. -/
 def validateHandlers (components : List (Component F)) (counters : List (List Counter)) :
     Except ValidationError Unit := do
   let handled := (components.zip counters).flatMap fun (component, counters) =>
-    handledChannels component counters
-  for (entry, index) in handled.zipIdx do
-    if (handled.take index).contains entry then
-      throw (.duplicateHandler entry.1 entry.2)
+    (handlers component counters).map (component.circuit.name, ·)
+  for (name, handler) in handled do
+    let shared := handled.filter fun (_, other) =>
+      other.channel == handler.channel && other.surplus == handler.surplus
+    unless handler.selective || shared.length ≤ 1 do
+      throw (.unguardedHandler name handler.channel handler.surplus)
 
 /-- All checks of the components' generations; returns the counters of every component. -/
 def validateComponents (components : List (Component F)) :

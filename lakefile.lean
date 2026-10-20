@@ -21,6 +21,9 @@ lean_exe export_fibonacci_ensemble_rust where
 lean_exe export_femtocairo_flat_air_rust where
   root := `Clean.Examples.FemtoCairo.FlatAirRust
 
+lean_exe export_opcode_vm_rust where
+  root := `Clean.Examples.OpcodeVm.Rust
+
 lean_exe export_witness_ir_reference_rust where
   root := `Clean.Backends.Plonky3.Test.Reference
 

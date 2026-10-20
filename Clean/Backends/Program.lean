@@ -177,6 +177,8 @@ end ComponentProgram
 structure DemandProgram (F : Type) where
   channel : String
   surplus : Direction
+  /-- The guard, as a condition on the message cells. -/
+  guard : Option (Witgen.BExpr F)
   /-- Whether the mode aggregates by message, with its counter in `ModeProgram.demand`. -/
   byMessage : Bool
   input : List (InputCell F)
@@ -208,6 +210,7 @@ inductive LoweringError where
   | malformedWitnessLocals (component operation : ℕ)
   | malformedFixedProgram (component : ℕ)
   | malformedRowProgram (component : ℕ)
+  | malformedGuard (component : ℕ)
   | legacyLookup (component : ℕ)
   | componentVariable (component index width : ℕ)
   | verifierVariable (index width : ℕ)
@@ -224,6 +227,8 @@ instance : ToString LoweringError where
         s!"component {component} fixed-column program has an invalid local reference"
     | .malformedRowProgram component =>
         s!"component {component} preallocated row program has an invalid local reference"
+    | .malformedGuard component =>
+        s!"component {component} guard has an invalid local reference"
     | .legacyLookup component =>
         s!"component {component} contains a legacy lookup; extraction supports channels only"
     | .componentVariable component index width =>
@@ -301,8 +306,11 @@ def lowerGeneration (index : ℕ) (component : Component F) (counters : List Cou
       let byMessage := match mode.aggregation with
         | .perOccurrence => false
         | .byMessage _ => true
+      let guard := mode.guardCondition
+      unless guard.all (bexprWellFormed []) do
+        throw (.malformedGuard index)
       let { channel, surplus, input, padding, .. } := mode
-      return .demand { channel := channel.name, surplus, byMessage, input, padding } counters
+      return .demand { channel := channel.name, surplus, guard, byMessage, input, padding } counters
   | .preallocated mode =>
       let program ← lowerRowProgram (.malformedRowProgram index) mode.toRowProgram
       let rows := component.fixedColumns.map (·.height) |>.getD 0

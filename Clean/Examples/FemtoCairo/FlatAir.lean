@@ -480,7 +480,7 @@ abbrev executionComponent (program : Array (F p)) (h_program : ValidProgram prog
     (initialState : State (F p)) : Component (F p) where
   circuit := executeStep program h_program initialState
   generation := .demand {
-    channel := (stateChannel program initialState).toRaw
+    channel := stateChannel program initialState
     surplus := .push
     aggregation := .perOccurrence
     input := [.const 1, .message 0, .message 1, .message 2]

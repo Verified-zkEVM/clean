@@ -129,7 +129,7 @@ def initialInputs (state : ComponentState F) (hint : ProverHint F) : List (Array
 inductive GenerationError where
   | validation (error : ValidationError)
   | unhandledImbalance (channels : List String)
-  | noPreallocatedRow (component channel : String)
+  | ambiguousDemand (channel : String) (components : List String)
   | fuelExhausted
   | assembly (message : String)
 deriving Repr
@@ -139,8 +139,9 @@ instance : ToString GenerationError where
     | .validation error => toString error
     | .unhandledImbalance channels =>
         s!"unhandled channel imbalance on: {String.intercalate ", " channels}"
-    | .noPreallocatedRow component channel =>
-        s!"component '{component}' has no preallocated row for a message on channel '{channel}'"
+    | .ambiguousDemand channel components =>
+        s!"components {String.intercalate ", " components} all accept a message on channel \
+          '{channel}'"
     | .fuelExhausted => "ensemble witness generation exhausted its fuel"
     | .assembly message => message
 
