@@ -83,7 +83,6 @@ import Clean.Ironwood.Action.RealBases
 import Clean.Ironwood.Action.Spec
 import Clean.Ironwood.Action.Separation
 import Clean.Ironwood.Action.Shape
-import Clean.Ironwood.Action.Shape.Anchors
 
 /-!
 # Ironwood circuits
