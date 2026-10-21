@@ -11,7 +11,7 @@ import Clean.Ironwood.Action.SpendAuthority
 import Clean.Ironwood.Action.AddressIntegrity
 
 /-!
-# The Orchard Action circuit (Ironwood): configure
+# The Orchard-protocol Action circuit: configure
 
 Reference (ported from actual Rust, not memory):
 `orchard@0.14.0/src/circuit.rs`, `impl plonk::Circuit for Circuit` —
@@ -1023,24 +1023,6 @@ theorem configure_output_sinsemilla2_qS2_mem_regionFixedColumns
       ((configure G).output counts).regionFixedColumns := by
   simp [Config.regionFixedColumns]
 
-private theorem lt_add_three_of_eq_add_zero_or_one_or_two
-    {base value : ℕ}
-    (hvalue : value = base ∨ value = base + 1 ∨ value = base + 2) :
-    value < base + 3 := by
-  omega
-
-private theorem add_three_le_of_eq_add_eleven_or_twelve_or_thirteen
-    {base value : ℕ}
-    (hvalue : value = base + 11 ∨ value = base + 12 ∨ value = base + 13) :
-    base + 3 ≤ value := by
-  omega
-
-private theorem add_three_le_of_lagrange_index
-    {base value : ℕ} (index : Fin 8)
-    (hvalue : base + 3 + index = value) :
-    base + 3 ≤ value := by
-  omega
-
 theorem configure_output_generatorTableColumns_disjoint_regionFixedColumns
     (G : Generators) (counts : ConfigureCounts) :
     let cfg := (configure G).output counts
@@ -1049,7 +1031,7 @@ theorem configure_output_generatorTableColumns_disjoint_regionFixedColumns
   simp only at hindices
   rcases hindices with
     ⟨htableIdx, htableX, htableY,
-      _, _, _, _, _, _, _, _, hfixedZ, hqS21, hqS22⟩
+      -, -, -, -, -, -, -, -, hfixedZ, hqS21, hqS22⟩
   have hgenerator : ∀ column ∈
       ((configure G).output counts).generatorTableColumns,
       column.index < counts.numFixedColumns + 3 := by
@@ -1060,7 +1042,8 @@ theorem configure_output_generatorTableColumns_disjoint_regionFixedColumns
     simp only [Config.generatorTableColumns, List.map_cons, List.map_nil,
       List.mem_cons, List.not_mem_nil, or_false] at hindex
     rw [htableIdx, htableX, htableY] at hindex
-    exact lt_add_three_of_eq_add_zero_or_one_or_two hindex
+    clear G hcolumn htableIdx htableX htableY hfixedZ hqS21 hqS22
+    omega
   have hregionColumn : ∀ column ∈
       ((configure G).output counts).regionFixedColumns,
       counts.numFixedColumns + 3 ≤ column.index := by
@@ -1070,7 +1053,9 @@ theorem configure_output_generatorTableColumns_disjoint_regionFixedColumns
     · obtain ⟨index, hindex⟩ := List.mem_ofFn.mp hlagrange
       have hcolumnIndex := congrArg Column.index hindex
       rw [configure_output_lagrangeCoeff_index] at hcolumnIndex
-      exact add_three_le_of_lagrange_index index hcolumnIndex
+      clear G hgenerator hlagrange hindex
+        htableIdx htableX htableY hfixedZ hqS21 hqS22
+      omega
     · have hindex : column.index ∈
           [((configure G).output counts).eccConfig.mulFixedShort.superConfig.fixedZ,
             ((configure G).output counts).sinsemilla1.qS2,
@@ -1079,7 +1064,9 @@ theorem configure_output_generatorTableColumns_disjoint_regionFixedColumns
       simp only [List.map_cons, List.map_nil, List.mem_cons,
         List.not_mem_nil, or_false] at hindex
       rw [hfixedZ, hqS21, hqS22] at hindex
-      exact add_three_le_of_eq_add_eleven_or_twelve_or_thirteen hindex
+      clear G hgenerator hrest
+        htableIdx htableX htableY hfixedZ hqS21 hqS22
+      omega
   rw [List.disjoint_left]
   intro column htable hregion
   exact (Nat.not_lt_of_ge (hregionColumn column hregion))
@@ -1099,6 +1086,15 @@ theorem configure_finalCounts_numFixedColumns_from (G : Generators)
     (counts : ConfigureCounts) :
     ((configure G).finalCounts counts).numFixedColumns =
       counts.numFixedColumns + 14 := by
+  configure_norm
+
+/-- Action configuration allocates fifty-six selectors after any ambient configure
+prefix. -/
+@[keygen_norm]
+theorem configure_finalCounts_numSelectors_from (G : Generators)
+    (counts : ConfigureCounts) :
+    ((configure G).finalCounts counts).numSelectors =
+      counts.numSelectors + 56 := by
   configure_norm
 
 /-- Every fixed column used by Action regions is among the columns allocated by Action's
@@ -1179,9 +1175,47 @@ theorem configure_finalCounts_numFixedColumns (G : Generators) :
     ((configure G).finalCounts {}).numFixedColumns = 14 := by
   configure_norm
 
+/-- The closed Action configuration allocates fifty-six selectors. -/
+theorem configure_finalCounts_numSelectors (G : Generators) :
+    ((configure G).finalCounts {}).numSelectors = 56 := by
+  configure_norm
+
 /-- The closed Action configuration allocates one instance column. -/
 theorem configure_finalCounts_numInstanceColumns (G : Generators) :
     ((configure G).finalCounts {}).numInstanceColumns = 1 := by
+  configure_norm
+
+set_option maxRecDepth 10000 in
+/-- The closed Action configuration equality-enables fifteen distinct columns. -/
+theorem configure_permutationColumns_length (G : Generators) :
+    ((configure G).run {}).2.permutationColumns.length = 15 := by
+  configure_norm
+
+/-- The three Action lookup arguments have arities one, three, and three. -/
+theorem configure_lookupInputLengths (G : Generators) :
+    ((configure G).delta {}).lookups.map (fun lookup => lookup.inputs.length) =
+      [1, 3, 3] := by
+  configure_norm
+
+/-- Every lookup configured by the Action circuit has at most four inputs. -/
+theorem configure_lookupInputArity_le (G : Generators) :
+    ∀ lookup ∈ ((configure G).run {}).2.lookups,
+      lookup.inputs.length ≤ 4 := by
+  intro lookup hlookup
+  rw [show ((configure G).run {}).2.lookups =
+    ((configure G).delta {}).lookups by rfl] at hlookup
+  have hlength : lookup.inputs.length ∈
+      ((configure G).delta {}).lookups.map
+        (fun argument => argument.inputs.length) :=
+    List.mem_map.mpr ⟨lookup, hlookup, rfl⟩
+  rw [configure_lookupInputLengths] at hlength
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hlength
+  omega
+
+set_option maxRecDepth 10000 in
+/-- Action's closed configure run records twenty-five distinct advice queries. -/
+theorem configure_adviceQueries_length (G : Generators) :
+    ((configure G).run {}).2.adviceQueries.length = 25 := by
   configure_norm
 
 private instance elaboratedConfigure (G : Generators) : ElaboratedConfigure (configure G) := by
@@ -1568,7 +1602,7 @@ def synthOrchardChecks (cfg : Config) (witnessCells : WitnessCells)
 
 def orchardChecksRegionSynthesisSummary (cfg : Config) :
     FloorPlanner.RegionSynthesisSummary :=
-  FloorPlanner.RegionSynthesisSummary.ofColumns
+  .ofColumns
     [.column .advice (cfg.advices 0).index,
       .column .advice (cfg.advices 1).index,
       .column .advice (cfg.advices 2).index,
@@ -1578,7 +1612,8 @@ def orchardChecksRegionSynthesisSummary (cfg : Config) :
       .column .advice (cfg.advices 6).index,
       .column .advice (cfg.advices 7).index,
       .selector cfg.qOrchard.index]
-    1 0 (ENABLE_OUTPUT + 1)
+    1 0 [(cfg.qOrchard.index, 0)]
+    (instanceRowExtent := ENABLE_OUTPUT + 1)
 
 @[synthesis_summary_norm]
 theorem orchardChecksRegionSynthesisSummary_lookupActivationCount (cfg : Config) :
@@ -1607,8 +1642,7 @@ theorem synthOrchardChecks_fixedAssignmentsAgree (cfg : Config)
   apply FloorPlanner.RegionSynthesisSummary.HasNoFixedColumns.hasNoFixedAssignments
   rw [orchardChecksRegion_synthesisSummary_eq]
   rw [orchardChecksRegionSynthesisSummary]
-  apply (FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns
-    _ _ _ (ENABLE_OUTPUT + 1)).2
+  rw [FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_ofColumns]
   simp
 
 /-- Stage C (91 regions): old/new note-commitment integrity and the final
@@ -2000,7 +2034,7 @@ theorem synthNotes_synthesisSummary_eq (G : Generators) (B : Bases)
     List.foldr_cons, List.foldr_nil,
     FloorPlanner.SynthesisSummary.combine_empty]
 
-/-- Rust `AddressPoints` (ironwood `circuit.rs`): the old/new-note diversified-address
+/-- Rust `AddressPoints` (orchard `circuit.rs`): the old/new-note diversified-address
 points the cross-address stage compares — the base circuit's output. -/
 structure AddressPoints (F : Type) where
   gdOld : Point F
@@ -2055,14 +2089,18 @@ theorem crossAddressRow_synthesisSummary_eq (cfg : Config)
     (oldCell newCell : AssignedCell Fp) (row : ℕ) (region : RegionIndex) :
     FloorPlanner.regionSynthesisSummary
         ((synthCrossAddressRow cfg oldCell newCell row).operations region) =
-      FloorPlanner.RegionSynthesisSummary.ofColumns
-        (crossAddressColumns cfg) (row + 1) 4 (DISABLE_CROSS_ADDRESS + 1) := by
+      .ofColumns (crossAddressColumns cfg) (row + 1) 4
+        [(cfg.qOrchard.index, row)]
+        (instanceRowExtent := DISABLE_CROSS_ADDRESS + 1) := by
   apply FloorPlanner.RegionSynthesisSummary.ext <;>
     simp only [synthCrossAddressRow, crossAddressColumns, orchardGate, circuit_norm,
       synthesis_summary_norm]
 
-/-- Ironwood `Circuit::synthesize_cross_address_checks` (`circuit.rs:920-1035`): the
-`"post-NU 6.3 cross-address checks"` region — one row per address coordinate. -/
+/-- The post-NU6.3 `Circuit::synthesize_cross_address_checks` (`circuit.rs:920-1035`): the
+`"post-NU 6.3 cross-address checks"` region — one row per address coordinate, reusing
+the `q_orchard` gate as `disableCrossAddress − 0 = disableCrossAddress · 1` (value
+row), `disableCrossAddress · (old − new) = 0` (root/anchor row), with both enable
+checks neutralized and the rightmost columns occupied against foreign gate rows. -/
 def synthCrossAddressChecks (cfg : Config) (pts : Var AddressPoints Fp) :
     Circuit Fp Unit :=
   assignRegion "post-NU 6.3 cross-address checks"
@@ -2075,8 +2113,9 @@ def synthCrossAddressChecks (cfg : Config) (pts : Var AddressPoints Fp) :
 def synthCrossAddressChecksSynthesisSummary (cfg : Config) :
     FloorPlanner.SynthesisSummary :=
   FloorPlanner.SynthesisSummary.ofRegion
-    (FloorPlanner.RegionSynthesisSummary.repeatColumns
-      (crossAddressColumns cfg) 0 1 1 4 4 (DISABLE_CROSS_ADDRESS + 1))
+    (FloorPlanner.RegionSynthesisSummary.repeatColumnsWithSelector
+      cfg.qOrchard.index (crossAddressColumns cfg) 0 1 1 4 4
+        (DISABLE_CROSS_ADDRESS + 1))
 
 @[synthesis_summary_norm]
 theorem synthCrossAddressChecksSynthesisSummary_lookupActivationCount (cfg : Config) :
@@ -2096,6 +2135,19 @@ theorem synthCrossAddressChecksSynthesisSummary_instanceRowExtent_eq (cfg : Conf
   norm_num
 
 @[synthesis_summary_norm]
+theorem synthCrossAddressChecksSynthesisSummary_hasNoFixedWrites (cfg : Config) :
+    (synthCrossAddressChecksSynthesisSummary cfg).HasNoFixedWrites := by
+  rw [synthCrossAddressChecksSynthesisSummary]
+  apply (FloorPlanner.SynthesisSummary.hasNoFixedWrites_ofRegion _).2
+  apply (FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_repeatColumnsWithSelector
+    cfg.qOrchard.index (crossAddressColumns cfg) 0 1 1 4 4
+      (DISABLE_CROSS_ADDRESS + 1)).2
+  apply (FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_repeatColumns
+    (crossAddressColumns cfg) 0 1 1 4 4 (DISABLE_CROSS_ADDRESS + 1)).2
+  right
+  simp [crossAddressColumns]
+
+@[synthesis_summary_norm]
 theorem synthCrossAddressChecks_synthesisSummary_eq
     (cfg : Config) (pts : Var AddressPoints Fp) (region : RegionIndex) :
     FloorPlanner.synthesisSummary
@@ -2110,14 +2162,15 @@ theorem synthCrossAddressChecks_synthesisSummary_eq
               (pts.pkdOld.y, pts.pkdNew.y)]
             let (oldCell, newCell) := coords[row]!
             synthCrossAddressRow cfg oldCell newCell row).operations region) =
-        FloorPlanner.RegionSynthesisSummary.repeatColumns
-          (crossAddressColumns cfg) 0 1 1 4 4
+        FloorPlanner.RegionSynthesisSummary.repeatColumnsWithSelector
+          cfg.qOrchard.index (crossAddressColumns cfg) 0 1 1 4 4
             (DISABLE_CROSS_ADDRESS + 1) := by
     rw [RegionCircuit.forRange'_regionSynthesisSummary]
     simp only [crossAddressRow_synthesisSummary_eq]
     simpa only [Nat.zero_add, Nat.one_mul] using
-      (FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns
-        (crossAddressColumns cfg) 0 1 1 4 4 (DISABLE_CROSS_ADDRESS + 1))
+      (FloorPlanner.RegionSynthesisSummary.foldr_ofColumnsWithSelector_eq_repeatColumnsWithSelector
+          cfg.qOrchard.index (crossAddressColumns cfg) 0 1 1 4 4
+            (DISABLE_CROSS_ADDRESS + 1))
   rw [synthCrossAddressChecks, operations_assignRegion,
     FloorPlanner.synthesisSummary_region_cons,
     FloorPlanner.synthesisSummary_nil,
@@ -2168,13 +2221,8 @@ theorem synthCrossAddressChecks_hasNoFixedWrites
     (region : RegionIndex) :
     ((synthCrossAddressChecks config points).operations region).HasNoFixedWrites := by
   apply FloorPlanner.SynthesisSummary.HasNoFixedWrites.hasNoFixedWrites
-  rw [synthCrossAddressChecks_synthesisSummary_eq,
-    synthCrossAddressChecksSynthesisSummary,
-    FloorPlanner.SynthesisSummary.hasNoFixedWrites_ofRegion]
-  apply (FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_repeatColumns
-    _ 0 1 1 4 4 (DISABLE_CROSS_ADDRESS + 1)).2
-  right
-  simp [crossAddressColumns]
+  rw [synthCrossAddressChecks_synthesisSummary_eq]
+  exact synthCrossAddressChecksSynthesisSummary_hasNoFixedWrites config
 
 @[keygen_norm]
 theorem synthCrossAddressChecks_lookupSelectorAssignmentsAgree
@@ -2248,8 +2296,8 @@ theorem synthCrossAddressChecks_copyCellsAssigned
 
 /-- Rust `Circuit::synthesize_base` (`circuit.rs:461-828`): the staged witness /
 integrity-check / note-commitment composition, returning the `AddressPoints` the
-ironwood cross-address stage reads. This alone is the pre-ironwood (fixed post-NU 6.2)
-circuit — see `Action/CircuitPreIronwood.lean`. -/
+post-NU6.3 cross-address stage reads. This alone is the pre-NU6.3 (fixed post-NU6.2)
+circuit — see `Action/CircuitPreNU63.lean`. -/
 def synthesizeBase (G : Generators) (B : Bases) (W : Witnesses Fp) (cfg : Config) :
     Circuit Fp (Var AddressPoints Fp) := do
   let wc ← synthWitness G W cfg
@@ -2257,7 +2305,7 @@ def synthesizeBase (G : Generators) (B : Bases) (W : Witnesses Fp) (cfg : Config
   let nc ← synthNotes G B W cfg wc cc
   pure { gdOld := wc.gdOld, pkdOld := cc.pkdOld, gdNew := nc.gdNew, pkdNew := nc.pkdNew }
 
-/-- Exact reduced footprint of the 394-region pre-Ironwood Action circuit. -/
+/-- Exact reduced footprint of the 394-region pre-NU6.3 Action circuit. -/
 def synthesizeBaseSynthesisSummary (cfg : Config) :
     FloorPlanner.SynthesisSummary :=
   (synthWitnessSynthesisSummary cfg).combine
@@ -2275,11 +2323,11 @@ theorem synthesizeBase_synthesisSummary_eq (G : Generators) (B : Bases)
     FloorPlanner.synthesisSummary
         ((synthesizeBase G B W cfg).operations region) =
       synthesizeBaseSynthesisSummary cfg := by
-  simp only [synthesizeBase, synthesizeBaseSynthesisSummary, circuit_norm,
-    synthesis_summary_norm]
+   simp only [synthesizeBase, synthesizeBaseSynthesisSummary, circuit_norm,
+     synthesis_summary_norm]
 
-/-- The ironwood (post-NU 6.3) `Circuit::synthesize` — THE top-level circuit this repo
-targets: the base stages plus the cross-address checks region. -/
+/-- The post-NU6.3 `Circuit::synthesize` — the base stages plus the cross-address
+checks region. -/
 def synthesize (G : Generators) (B : Bases) (W : Witnesses Fp) (cfg : Config) :
     Circuit Fp Unit := do
   let pts ← synthesizeBase G B W cfg

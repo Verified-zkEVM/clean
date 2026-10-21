@@ -310,6 +310,22 @@ end Configure
   | mk kind index =>
       cases kind <;> rfl
 
+@[simp] theorem ConfigureDelta.queryAny_advice_fixedQueries
+    (column : Column .advice) :
+    (ConfigureDelta.queryAny (F := F) column.toAny).fixedQueries = [] := by
+  rfl
+
+@[simp] theorem ConfigureDelta.queryAny_fixed_fixedQueries
+    (column : Column .fixed) :
+    (ConfigureDelta.queryAny (F := F) column.toAny).fixedQueries =
+      [(column, 0)] := by
+  rfl
+
+@[simp] theorem ConfigureDelta.queryAny_instance_fixedQueries
+    (column : Column .instance) :
+    (ConfigureDelta.queryAny (F := F) column.toAny).fixedQueries = [] := by
+  rfl
+
 @[simp] theorem ConfigureDelta.queriedCell_instanceQueries
     (cell : Expression F Query) :
     (ConfigureDelta.queriedCell cell).instanceQueries =

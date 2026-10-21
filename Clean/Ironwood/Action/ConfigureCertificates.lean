@@ -656,6 +656,64 @@ theorem configure_fixedQueries_cover (G : Generators) :
     rw [← h13]
     exact sinsemilla2_qS2_fixedQuery_mem_actionConfigure G {}
 
+section
+
+attribute [local simp] querySelector queryAdvice queryFixed queryInstance
+
+/-- Every Action fixed-query registration uses Halo 2's canonical rotation zero. -/
+theorem configure_fixedQueries_rotation_eq_zero (G : Generators) :
+    ((configure G).delta {}).fixedQueries.Forall fun query => query.2 = 0 := by
+  configure_norm
+
+end
+
+/-- Action's closed configure run records exactly one rotation-zero query for each of
+its fourteen fixed columns. -/
+theorem configure_fixedQueries_length (G : Generators) :
+    ((configure G).run {}).2.fixedQueries.length = 14 := by
+  let queries := ((configure G).run {}).2.fixedQueries
+  let expected : List (Column .fixed × Rotation) :=
+    (List.range 14).map fun index => (⟨index⟩, 0)
+  have hqueries : queries.Nodup := by
+    exact Configure.fixedQueries_run_nodup (configure G) {} (by simp)
+  have hexpected : expected.Nodup := by
+    apply List.Nodup.map
+    · intro left right heq
+      simpa using congrArg (fun query => query.1.index) heq
+    · exact List.nodup_range
+  have hperm : queries.Perm expected :=
+    (List.perm_ext_iff_of_nodup hqueries hexpected).2 fun query => by
+      constructor
+      · intro hquery
+        have hdelta : query ∈ ((configure G).delta {}).fixedQueries := by
+          exact (Configure.mem_fixedQueries_run_iff (configure G) {} query).1 hquery
+            |>.resolve_left (by simp)
+        have hrotation : query.2 = 0 :=
+          List.forall_iff_forall_mem.mp
+            (configure_fixedQueries_rotation_eq_zero G) query hdelta
+        have hlawful := (configureElaborated G).queriesLawful {} trivial
+        have hindex : query.1.index < 14 := by
+          have := List.forall_iff_forall_mem.mp
+            hlawful.fixedQueries_fst_lt_numFixedColumns query hdelta
+          simpa only [configure_finalCounts_numFixedColumns] using this
+        rw [List.mem_map]
+        exact ⟨query.1.index, List.mem_range.mpr hindex, by
+          cases query
+          simp_all⟩
+      · intro hquery
+        rw [List.mem_map] at hquery
+        obtain ⟨index, hindex, rfl⟩ := hquery
+        obtain ⟨rotation, hdelta⟩ := configure_fixedQueries_cover G index
+          (List.mem_range.mp hindex)
+        have hrotation : rotation = 0 :=
+          List.forall_iff_forall_mem.mp
+            (configure_fixedQueries_rotation_eq_zero G) _ hdelta
+        rw [hrotation] at hdelta
+        rw [Configure.mem_fixedQueries_run_iff]
+        exact Or.inr hdelta
+  simp only [queries, expected, hperm.length_eq, List.length_map,
+    List.length_range]
+
 /-- The second Merkle configure, transported through Action's direct bind. -/
 private def merkle2Capabilities (G : Generators) (counts : ConfigureCounts) :
     MerkleCapabilities ((configure G).output counts).merkle2
@@ -1034,6 +1092,8 @@ private theorem noteCommitNewDirectGates (G : Generators)
     simp only [List.mem_cons, List.not_mem_nil, or_false] at hgate ⊢
     aesop
 
+/-- The old-note commitment configuration certificate, assembled from Action's first Sinsemilla
+hash configuration and its shared ECC, lookup, and addition capabilities. -/
 opaque noteCommitOldCertificate (G : Generators) (B : Bases)
     (counts : ConfigureCounts) :
     (NoteCommit.Main.circuit G B.noteCommitR B.noteQ
@@ -1070,6 +1130,8 @@ opaque noteCommitOldCertificate (G : Generators) (B : Bases)
           all_goals exact base.advicePermutationColumn _
         · exact commit.permutationColumns_of_configured column hcommit)
 
+/-- The new-note commitment configuration certificate, assembled from Action's second Sinsemilla
+hash configuration and its shared ECC, lookup, and addition capabilities. -/
 opaque noteCommitNewCertificate (G : Generators) (B : Bases)
     (counts : ConfigureCounts) :
     (NoteCommit.Main.circuit G B.noteCommitR B.noteQ

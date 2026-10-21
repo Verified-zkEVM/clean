@@ -23,7 +23,7 @@ lean_lib CleanTests where
 -- zcash/ironwood (which pins the same revision) — replacing the formerly vendored
 -- Clean/Ironwood/Specs/CompElliptic+CompPoly copies. Brings CompPoly transitively.
 require CompElliptic from git
-  "https://github.com/daira/CompElliptic" @ "0eee049f32e1c2bbcb37cb31f89e53f8f52f7d2a"
+  "https://github.com/daira/CompElliptic" @ "2c0444035a84db957f27f06433715058d1e890ad"
 
 -- mathlib LAST so its pinned toolchain-matched versions of the common transitive
 -- dependencies (batteries, aesop, Qq, proofwidgets, ...) take precedence.

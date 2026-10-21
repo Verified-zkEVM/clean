@@ -4,7 +4,7 @@ import Clean.Ironwood.Specs.Sinsemilla
 # Sinsemilla exceptional cases as computed break data
 
 The Σ-refinement of the ⊥-propagating `hashToPoint` chain requested by
-zcash/ironwood#45 (breaks-as-computed-data): instead of collapsing every
+the breaks-as-computed-data discipline: instead of collapsing every
 incomplete-addition escape to `none`, `hashToPointB` returns `Point ⊕ BreakData`,
 where the break datum records *where* the escape fired (the consumed chunk prefix,
 the escape chunk, the remaining suffix), the accumulator at that step, and *which*

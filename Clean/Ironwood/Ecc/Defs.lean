@@ -2,7 +2,10 @@ import Clean.Circuit
 import CompElliptic.CurveForms.ShortWeierstrass
 import Clean.Ironwood.Specs.Pallas
 import Clean.Utils.Tactics
-import Mathlib.Tactic
+import Mathlib.Tactic.FieldSimp
+import Mathlib.Tactic.Linarith
+import Mathlib.Tactic.NormNum
+import Mathlib.Tactic.Ring
 
 /-
 Some definitions useful for circuits involving points
@@ -31,7 +34,6 @@ end Zcash.Circuits
 namespace Zcash.Circuits.Ecc
 
 /-- Shared helpers for the scalar-multiplication gates. -/
-
 def ternary {K : Type} [Zero K] [One K] [Add K] [Sub K] [Mul K]
     (choice ifTrue ifFalse : K) : K :=
   choice * ifTrue + (1 - choice) * ifFalse

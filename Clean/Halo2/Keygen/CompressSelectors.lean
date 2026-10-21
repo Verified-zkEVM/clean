@@ -254,6 +254,319 @@ structure SelectorDescription where
   activations : Array Bool
   maxDegree : ℕ
 
+/-- The part of selector packing which determines the number of packed columns,
+parameterized by the representation of selector activations.  Keeping the conflict
+test abstract lets proofs compute from sparse activation rows without materializing
+the dense `numSelectors × n` table used by key generation. -/
+def extendCombinationWith {α : Type} (maxDegree : ℕ)
+    (degree : α → ℕ) (conflicts : α → α → Bool) :
+    ℕ → List α → List α → List α × List α
+  | _, combination, [] => (combination, [])
+  | currentDegree, combination, selector :: remaining =>
+      if currentDegree + combination.length = maxDegree then
+        (combination, selector :: remaining)
+      else if combination.any (conflicts · selector) then
+        let (chosen, rest) := extendCombinationWith maxDegree degree conflicts
+          currentDegree combination remaining
+        (chosen, selector :: rest)
+      else
+        let nextDegree := max currentDegree (degree selector - 1)
+        if nextDegree + combination.length + 1 > maxDegree then
+          let (chosen, rest) := extendCombinationWith maxDegree degree conflicts
+            currentDegree combination remaining
+          (chosen, selector :: rest)
+        else
+          extendCombinationWith maxDegree degree conflicts nextDegree
+            (combination ++ [selector]) remaining
+
+/-- Greedy selector combinations with an abstract conflict representation. -/
+def buildCombinationsWith {α : Type} (maxDegree : ℕ)
+    (degree : α → ℕ) (conflicts : α → α → Bool) :
+    ℕ → List α → List (List α)
+  | 0, _ => []
+  | _, [] => []
+  | fuel + 1, selector :: remaining =>
+      let (combination, rest) := extendCombinationWith maxDegree degree conflicts
+        (degree selector - 1) [selector] remaining
+      combination :: buildCombinationsWith maxDegree degree conflicts fuel rest
+
+/-- The packed-column count, separated from construction of the substitution map. -/
+def selectorColumnCountWith {α : Type} (selectors : List α)
+    (maxDegree : ℕ) (degree : α → ℕ) (conflicts : α → α → Bool) : ℕ :=
+  let degreeZero := selectors.filter (degree · = 0)
+  let remaining := selectors.filter (degree · ≠ 0)
+  degreeZero.length +
+    (buildCombinationsWith maxDegree degree conflicts remaining.length remaining).length
+
+private theorem any_eq_of_eq_on {α : Type} (items : List α)
+    (left right : α → Bool)
+    (heq : ∀ item ∈ items, left item = right item) :
+    items.any left = items.any right := by
+  induction items with
+  | nil => rfl
+  | cons item rest ih =>
+      simp only [List.any_cons]
+      rw [heq item (by simp), ih]
+      intro candidate hcandidate
+      exact heq candidate (by simp [hcandidate])
+
+/-- The greedy inner loop depends only on degrees and conflicts of selectors from its
+finite source list. This lets a circuit replace dense activation data by an exact
+reduced summary without proving irrelevant global function equality. -/
+theorem extendCombinationWith_congr_on {α : Type} [DecidableEq α]
+    (source : List α) (maxDegree currentDegree : ℕ)
+    (degreeA degreeB : α → ℕ)
+    (conflictsA conflictsB : α → α → Bool)
+    (hdegree : ∀ selector ∈ source, degreeA selector = degreeB selector)
+    (hconflicts : ∀ left ∈ source, ∀ right ∈ source,
+      conflictsA left right = conflictsB left right)
+    (combination selectors : List α)
+    (hcombination : ∀ selector ∈ combination, selector ∈ source)
+    (hselectors : ∀ selector ∈ selectors, selector ∈ source) :
+    extendCombinationWith maxDegree degreeA conflictsA currentDegree
+        combination selectors =
+      extendCombinationWith maxDegree degreeB conflictsB currentDegree
+        combination selectors := by
+  induction selectors generalizing currentDegree combination with
+  | nil => rfl
+  | cons selector remaining ih =>
+      have hselector : selector ∈ source := hselectors selector (by simp)
+      have hremaining : ∀ candidate ∈ remaining, candidate ∈ source := by
+        intro candidate hcandidate
+        exact hselectors candidate (by simp [hcandidate])
+      have hany : combination.any (conflictsA · selector) =
+          combination.any (conflictsB · selector) := by
+        apply any_eq_of_eq_on
+        intro candidate hcandidate
+        exact hconflicts candidate (hcombination candidate hcandidate)
+          selector hselector
+      simp only [extendCombinationWith, hany]
+      split
+      · rfl
+      · split
+        · rw [ih currentDegree combination hcombination hremaining]
+        · rw [hdegree selector hselector]
+          split
+          · rw [ih currentDegree combination hcombination hremaining]
+          · apply ih
+            · intro candidate hcandidate
+              rw [List.mem_append] at hcandidate
+              rcases hcandidate with hcandidate | hcandidate
+              · exact hcombination candidate hcandidate
+              · simp only [List.mem_singleton] at hcandidate
+                subst candidate
+                exact hselector
+            · exact hremaining
+
+/-- The greedy inner loop only redistributes values from its two list inputs. -/
+theorem extendCombinationWith_forall {α : Type} (maxDegree currentDegree : ℕ)
+    (degree : α → ℕ) (conflicts : α → α → Bool)
+    (combination selectors : List α) (predicate : α → Prop)
+    (hcombination : combination.Forall predicate)
+    (hselectors : selectors.Forall predicate) :
+    (extendCombinationWith maxDegree degree conflicts currentDegree
+      combination selectors).1.Forall predicate ∧
+    (extendCombinationWith maxDegree degree conflicts currentDegree
+      combination selectors).2.Forall predicate := by
+  induction selectors generalizing currentDegree combination with
+  | nil =>
+      simp only [extendCombinationWith]
+      exact ⟨hcombination, by simp⟩
+  | cons selector remaining ih =>
+      rw [List.forall_cons] at hselectors
+      simp only [extendCombinationWith]
+      split
+      · exact ⟨hcombination,
+          (List.forall_cons predicate selector remaining).mpr hselectors⟩
+      · split
+        · obtain ⟨hchosen, hrest⟩ :=
+            ih currentDegree combination hcombination hselectors.2
+          exact ⟨hchosen,
+            (List.forall_cons predicate selector _).mpr
+              ⟨hselectors.1, hrest⟩⟩
+        · split
+          · obtain ⟨hchosen, hrest⟩ :=
+              ih currentDegree combination hcombination hselectors.2
+            exact ⟨hchosen,
+              (List.forall_cons predicate selector _).mpr
+                ⟨hselectors.1, hrest⟩⟩
+          · apply ih
+            · rw [List.forall_append]
+              exact ⟨hcombination, by simp [hselectors.1]⟩
+            · exact hselectors.2
+
+/-- Greedy packing is invariant under replacing degrees and conflicts by summaries
+that agree on the finite source list. -/
+theorem buildCombinationsWith_congr_on {α : Type} [DecidableEq α]
+    (source : List α) (maxDegree fuel : ℕ)
+    (degreeA degreeB : α → ℕ)
+    (conflictsA conflictsB : α → α → Bool)
+    (hdegree : ∀ selector ∈ source, degreeA selector = degreeB selector)
+    (hconflicts : ∀ left ∈ source, ∀ right ∈ source,
+      conflictsA left right = conflictsB left right)
+    (selectors : List α)
+    (hselectors : ∀ selector ∈ selectors, selector ∈ source) :
+    buildCombinationsWith maxDegree degreeA conflictsA fuel selectors =
+      buildCombinationsWith maxDegree degreeB conflictsB fuel selectors := by
+  induction fuel generalizing selectors with
+  | zero => rfl
+  | succ fuel ih =>
+      cases selectors with
+      | nil => rfl
+      | cons selector remaining =>
+          have hselector : selector ∈ source := hselectors selector (by simp)
+          have hremaining : ∀ candidate ∈ remaining, candidate ∈ source := by
+            intro candidate hcandidate
+            exact hselectors candidate (by simp [hcandidate])
+          have hinner := extendCombinationWith_congr_on source maxDegree
+            (degreeB selector - 1) degreeA degreeB conflictsA conflictsB
+            hdegree hconflicts [selector] remaining
+            (by simp [hselector]) hremaining
+          have hrest : ∀ candidate ∈
+              (extendCombinationWith maxDegree degreeB conflictsB
+                (degreeB selector - 1) [selector] remaining).2,
+              candidate ∈ source := by
+            have hpreserved := extendCombinationWith_forall maxDegree
+              (degreeB selector - 1) degreeB conflictsB [selector] remaining
+              (· ∈ source) (by simp [hselector])
+              (List.forall_iff_forall_mem.mpr hremaining)
+            exact List.forall_iff_forall_mem.mp hpreserved.2
+          simp only [buildCombinationsWith]
+          rw [hdegree selector hselector]
+          rw [hinner]
+          rw [ih _ hrest]
+
+/-- The packed-column count can therefore be computed from any exact reduced degree
+and conflict summary on the requested selector list. -/
+theorem selectorColumnCountWith_congr_on {α : Type} [DecidableEq α]
+    (selectors : List α) (maxDegree : ℕ)
+    (degreeA degreeB : α → ℕ)
+    (conflictsA conflictsB : α → α → Bool)
+    (hdegree : ∀ selector ∈ selectors, degreeA selector = degreeB selector)
+    (hconflicts : ∀ left ∈ selectors.filter (degreeB · ≠ 0),
+      ∀ right ∈ selectors.filter (degreeB · ≠ 0),
+        conflictsA left right = conflictsB left right) :
+    selectorColumnCountWith selectors maxDegree degreeA conflictsA =
+      selectorColumnCountWith selectors maxDegree degreeB conflictsB := by
+  have hzero : selectors.filter (degreeA · = 0) =
+      selectors.filter (degreeB · = 0) := by
+    apply List.filter_congr
+    intro selector hselector
+    simp only [decide_eq_decide]
+    rw [hdegree selector hselector]
+  have hremaining : selectors.filter (degreeA · ≠ 0) =
+      selectors.filter (degreeB · ≠ 0) := by
+    apply List.filter_congr
+    intro selector hselector
+    simp only [decide_eq_decide]
+    rw [hdegree selector hselector]
+  let remaining := selectors.filter (degreeB · ≠ 0)
+  have hremainingSource : ∀ selector ∈ remaining, selector ∈ selectors := by
+    intro selector hselector
+    exact (List.mem_filter.mp hselector).1
+  have hremainingDegree : ∀ selector ∈ remaining,
+      degreeA selector = degreeB selector := by
+    intro selector hselector
+    exact hdegree selector (hremainingSource selector hselector)
+  simp only [selectorColumnCountWith]
+  rw [hzero, hremaining]
+  congr 1
+  exact congrArg List.length (buildCombinationsWith_congr_on remaining
+    maxDegree remaining.length degreeA degreeB conflictsA conflictsB
+    hremainingDegree hconflicts remaining (fun _ => id))
+
+/-- Changing the representation of selector descriptions preserves the inner greedy
+loop when degrees and pairwise conflicts are preserved. -/
+theorem extendCombinationWith_map {α β : Type} (maxDegree currentDegree : ℕ)
+    (degreeA : α → ℕ) (degreeB : β → ℕ)
+    (conflictsA : α → α → Bool) (conflictsB : β → β → Bool)
+    (transform : α → β)
+    (hdegree : ∀ selector, degreeB (transform selector) = degreeA selector)
+    (hconflicts : ∀ left right,
+      conflictsB (transform left) (transform right) = conflictsA left right)
+    (combination selectors : List α) :
+    extendCombinationWith maxDegree degreeB conflictsB currentDegree
+        (combination.map transform) (selectors.map transform) =
+      let result := extendCombinationWith maxDegree degreeA conflictsA
+        currentDegree combination selectors
+      (result.1.map transform, result.2.map transform) := by
+  induction selectors generalizing currentDegree combination with
+  | nil => rfl
+  | cons selector remaining inductionHypothesis =>
+      simp only [List.map_cons, extendCombinationWith]
+      rw [List.length_map]
+      split <;> try rfl
+      have hany : (combination.map transform).any
+            (fun item => conflictsB item (transform selector)) =
+          combination.any (fun item => conflictsA item selector) := by
+        rw [List.any_map]
+        exact List.any_congr rfl fun item => hconflicts item selector
+      rw [hany]
+      split
+      · rw [inductionHypothesis]
+        rfl
+      · rw [hdegree]
+        split
+        · rw [inductionHypothesis]
+          rfl
+        · simpa only [List.map_append, List.map_singleton] using
+            inductionHypothesis (max currentDegree (degreeA selector - 1))
+              (combination ++ [selector])
+
+/-- Changing the representation of selector descriptions preserves every greedy
+combination when degrees and pairwise conflicts are preserved. -/
+theorem buildCombinationsWith_map {α β : Type} (maxDegree fuel : ℕ)
+    (degreeA : α → ℕ) (degreeB : β → ℕ)
+    (conflictsA : α → α → Bool) (conflictsB : β → β → Bool)
+    (transform : α → β)
+    (hdegree : ∀ selector, degreeB (transform selector) = degreeA selector)
+    (hconflicts : ∀ left right,
+      conflictsB (transform left) (transform right) = conflictsA left right)
+    (selectors : List α) :
+    buildCombinationsWith maxDegree degreeB conflictsB fuel
+        (selectors.map transform) =
+      (buildCombinationsWith maxDegree degreeA conflictsA fuel selectors).map
+        (List.map transform) := by
+  induction fuel generalizing selectors with
+  | zero => rfl
+  | succ fuel inductionHypothesis =>
+      cases selectors with
+      | nil => rfl
+      | cons selector remaining =>
+          simp only [List.map_cons, buildCombinationsWith, hdegree]
+          have hextend := extendCombinationWith_map maxDegree
+            (degreeA selector - 1) degreeA degreeB conflictsA conflictsB
+            transform hdegree hconflicts [selector] remaining
+          simp only [List.map_singleton] at hextend
+          rw [hextend, inductionHypothesis]
+
+/-- Consequently, the selector column count is independent of the representation of
+activation sets. -/
+theorem selectorColumnCountWith_map {α β : Type} (selectors : List α)
+    (maxDegree : ℕ) (degreeA : α → ℕ) (degreeB : β → ℕ)
+    (conflictsA : α → α → Bool) (conflictsB : β → β → Bool)
+    (transform : α → β)
+    (hdegree : ∀ selector, degreeB (transform selector) = degreeA selector)
+    (hconflicts : ∀ left right,
+      conflictsB (transform left) (transform right) = conflictsA left right) :
+    selectorColumnCountWith (selectors.map transform) maxDegree degreeB conflictsB =
+      selectorColumnCountWith selectors maxDegree degreeA conflictsA := by
+  have hzero : (fun selector => decide (degreeB (transform selector) = 0)) =
+      fun selector => decide (degreeA selector = 0) := by
+    funext selector
+    rw [hdegree]
+  have hnonzero : (fun selector => decide (degreeB (transform selector) ≠ 0)) =
+      fun selector => decide (degreeA selector ≠ 0) := by
+    funext selector
+    rw [hdegree]
+  simp only [selectorColumnCountWith, List.filter_map, List.length_map]
+  rw [show (fun selector => decide (degreeB selector = 0)) ∘ transform =
+      (fun selector => decide (degreeA selector = 0)) by exact hzero]
+  rw [show (fun selector => decide (degreeB selector ≠ 0)) ∘ transform =
+      (fun selector => decide (degreeA selector ≠ 0)) by exact hnonzero]
+  rw [buildCombinationsWith_map maxDegree _ degreeA degreeB conflictsA
+    conflictsB transform hdegree hconflicts, List.length_map]
+
 /-- Two selectors conflict if they are enabled on a common row. -/
 def SelectorDescription.conflicts (a b : SelectorDescription) : Bool :=
   (a.activations.toList.zip b.activations.toList).any fun (x, y) => x && y
@@ -307,6 +620,40 @@ def buildCombinations (maxDegree : ℕ) :
   | fuel + 1, s :: rest =>
       let (comb, rem) := extendCombination maxDegree (s.maxDegree - 1) [s] rest
       comb :: buildCombinations maxDegree fuel rem
+
+/-- The representation-independent inner packing loop specializes to halo2's dense
+selector descriptions. -/
+theorem extendCombinationWith_selectorDescription
+    (maxDegree currentDegree : ℕ)
+    (combination selectors : List SelectorDescription) :
+    extendCombinationWith maxDegree SelectorDescription.maxDegree
+        SelectorDescription.conflicts currentDegree combination selectors =
+      extendCombination maxDegree currentDegree combination selectors := by
+  induction selectors generalizing currentDegree combination with
+  | nil => rfl
+  | cons selector remaining inductionHypothesis =>
+      simp only [extendCombinationWith, extendCombination]
+      split <;> try rfl
+      split
+      · rw [inductionHypothesis]
+      · split <;> rw [inductionHypothesis]
+
+/-- The representation-independent outer packing loop specializes to halo2's dense
+selector descriptions. -/
+theorem buildCombinationsWith_selectorDescription
+    (maxDegree fuel : ℕ) (selectors : List SelectorDescription) :
+    buildCombinationsWith maxDegree SelectorDescription.maxDegree
+        SelectorDescription.conflicts fuel selectors =
+      buildCombinations maxDegree fuel selectors := by
+  induction fuel generalizing selectors with
+  | zero => rfl
+  | succ fuel inductionHypothesis =>
+      cases selectors with
+      | nil => rfl
+      | cons selector remaining =>
+          simp only [buildCombinationsWith, buildCombinations]
+          rw [extendCombinationWith_selectorDescription,
+            inductionHypothesis]
 
 /-- The greedy packer emits at most one combination per unit of recursion fuel. -/
 theorem buildCombinations_length_le (maxDegree fuel : ℕ)
@@ -438,6 +785,16 @@ def process (selectors : List SelectorDescription) (maxDegree : ℕ) : SelCompre
       (s.selector, SelCompress.mk (deg0.length + k) comb.length (p + 1))
   { newFixedCols := deg0.length + combs.length
     entries := deg0Entries ++ combEntries }
+
+/-- The number of columns emitted by halo2's selector packer can be computed through
+the representation-independent packing loop. -/
+theorem process_newFixedCols_eq_selectorColumnCountWith
+    (selectors : List SelectorDescription) (maxDegree : ℕ) :
+    (process selectors maxDegree).newFixedCols =
+      selectorColumnCountWith selectors maxDegree
+        SelectorDescription.maxDegree SelectorDescription.conflicts := by
+  simp only [process, selectorColumnCountWith,
+    buildCombinationsWith_selectorDescription]
 
 /-- Selector compression allocates no more fixed columns than source selectors. -/
 theorem process_newFixedCols_le_length
@@ -979,6 +1336,59 @@ def activationTable (n numSelectors : ℕ) (acts : List (ℕ × ℕ)) : Array (A
       ((List.replicate n false).toArray)).toArray)
     fun tbl (sel, row) => tbl.modify sel (·.set! row true)
 
+/-- Sparse rows for one selector, used to reason about selector conflicts without
+materializing the dense activation table. -/
+def selectorActivationRows (activations : List (ℕ × ℕ))
+    (selector : ℕ) : List ℕ :=
+  (activations.filter fun activation => activation.1 = selector).map Prod.snd
+
+/-- Two selectors conflict in a sparse activation stream when some row contains both. -/
+def selectorActivationsConflict (activations : List (ℕ × ℕ))
+    (left right : ℕ) : Bool :=
+  (selectorActivationRows activations left).any fun row =>
+    (right, row) ∈ activations
+
+/-- Sparse selector rows are exactly the rows paired with that selector. -/
+theorem mem_selectorActivationRows_iff (activations : List (ℕ × ℕ))
+    (selector row : ℕ) :
+    row ∈ selectorActivationRows activations selector ↔
+      (selector, row) ∈ activations := by
+  rw [selectorActivationRows, List.mem_map]
+  constructor
+  · rintro ⟨activation, hactivation, rfl⟩
+    have hfiltered := List.mem_filter.mp hactivation
+    simp only [decide_eq_true_eq] at hfiltered
+    rw [← hfiltered.2]
+    exact hfiltered.1
+  · intro hactivation
+    exact ⟨(selector, row),
+      List.mem_filter.mpr ⟨hactivation, by simp⟩, rfl⟩
+
+/-- Sparse selector conflict is symmetric in the two selectors. -/
+theorem selectorActivationsConflict_comm (activations : List (ℕ × ℕ))
+    (left right : ℕ) :
+    selectorActivationsConflict activations left right =
+      selectorActivationsConflict activations right left := by
+  rw [Bool.eq_iff_iff]
+  simp only [selectorActivationsConflict, List.any_eq_true,
+    decide_eq_true_eq, mem_selectorActivationRows_iff]
+  constructor
+  · rintro ⟨row, hleft, hright⟩
+    exact ⟨row, hright, hleft⟩
+  · rintro ⟨row, hright, hleft⟩
+    exact ⟨row, hleft, hright⟩
+
+/-- Sparse conflicts depend only on the two selectors' row lists. -/
+theorem selectorActivationsConflict_eq_any_rows
+    (activations : List (ℕ × ℕ)) (left right : ℕ) :
+    selectorActivationsConflict activations left right =
+      (selectorActivationRows activations left).any fun row =>
+        row ∈ selectorActivationRows activations right := by
+  unfold selectorActivationsConflict
+  apply List.any_congr rfl
+  intro row
+  simp only [mem_selectorActivationRows_iff]
+
 private def ActivationRowsSized (n : ℕ) (table : Array (Array Bool)) : Prop :=
   ∀ selector (hselector : selector < table.size), table[selector].size = n
 
@@ -1084,6 +1494,84 @@ private theorem activationTable_cell_preserved_foldl
         (activationTable_cell_preserved table selector row
           hselector hrow hvalue activation.1 activation.2)
 
+private theorem activationTable_modified_cell_eq_true_iff
+    (table : Array (Array Bool))
+    (selector row updatedSelector updatedRow : ℕ)
+    (hselector : selector < table.size)
+    (hrow : row < table[selector].size) :
+    ((table.modify updatedSelector
+      (·.set! updatedRow true))[selector]!)[row]! = true ↔
+      table[selector][row] = true ∨
+        (selector, row) = (updatedSelector, updatedRow) := by
+  have hselectorUpdated : selector <
+      (table.modify updatedSelector (·.set! updatedRow true)).size := by
+    simpa using hselector
+  rw [getElem!_pos _ selector hselectorUpdated]
+  rw [Array.getElem_modify]
+  split
+  · rename_i hselectorEq
+    subst updatedSelector
+    simp only [Prod.mk.injEq, true_and]
+    rw [getElem!_pos _ row (by simp [Array.set!, hrow])]
+    simp only [Array.set!]
+    rw [Array.getElem_setIfInBounds hrow]
+    split
+    · rename_i hrowEq
+      subst updatedRow
+      simp
+    · rename_i hrowNe
+      constructor
+      · exact fun hvalue => Or.inl hvalue
+      · intro hresult
+        rcases hresult with hvalue | hequal
+        · exact hvalue
+        · exact (hrowNe hequal.symm).elim
+  · rename_i hselectorNe
+    rw [getElem!_pos table[selector] row hrow]
+    simp only [Prod.mk.injEq]
+    constructor
+    · exact fun hvalue => Or.inl hvalue
+    · intro hresult
+      rcases hresult with hvalue | hequal
+      · exact hvalue
+      · exact (hselectorNe hequal.1.symm).elim
+
+private theorem activationTable_foldl_cell_eq_true_iff
+    (table : Array (Array Bool))
+    (activations : List (ℕ × ℕ)) (selector row : ℕ)
+    (hselector : selector < table.size)
+    (hrow : row < table[selector].size) :
+    ((activations.foldl
+      (fun current activation =>
+        current.modify activation.1 (·.set! activation.2 true))
+      table)[selector]!)[row]! = true ↔
+      table[selector][row] = true ∨ (selector, row) ∈ activations := by
+  induction activations generalizing table with
+  | nil =>
+      simp only [List.foldl_nil, List.not_mem_nil, or_false]
+      rw [getElem!_pos table selector hselector,
+        getElem!_pos table[selector] row hrow]
+  | cons activation remaining inductionHypothesis =>
+      rw [List.foldl_cons]
+      let updated := table.modify activation.1 (·.set! activation.2 true)
+      have hselectorUpdated : selector < updated.size := by
+        simpa [updated] using hselector
+      have hrowUpdated : row < updated[selector].size := by
+        simp only [updated, Array.getElem_modify]
+        split
+        · simpa [Array.set!] using hrow
+        · exact hrow
+      rw [inductionHypothesis updated hselectorUpdated hrowUpdated]
+      have hmodified : updated[selector][row] = true ↔
+          table[selector][row] = true ∨
+            (selector, row) = (activation.1, activation.2) := by
+        rw [← getElem!_pos updated[selector] row hrowUpdated,
+          ← getElem!_pos updated selector hselectorUpdated]
+        exact activationTable_modified_cell_eq_true_iff table selector row
+          activation.1 activation.2 hselector hrow
+      rw [hmodified]
+      simp only [List.mem_cons, or_assoc]
+
 private theorem activationTable_cell_true_of_mem_foldl
     (n : ℕ) (table : Array (Array Bool)) (acts : List (ℕ × ℕ))
     (hsized : ActivationRowsSized n table)
@@ -1140,6 +1628,21 @@ theorem activationTable_getElem_eq_true_of_mem
   · simpa using hselector
   · exact hrow
 
+/-- An in-bounds dense activation-table cell is true exactly when the corresponding
+selector-row pair occurs in the sparse activation stream. -/
+theorem activationTable_getElem_eq_true_iff_mem
+    (n numSelectors : ℕ) (activations : List (ℕ × ℕ))
+    (selector row : ℕ)
+    (hselector : selector < numSelectors) (hrow : row < n) :
+    ((activationTable n numSelectors activations)[selector]!)[row]! = true ↔
+      (selector, row) ∈ activations := by
+  unfold activationTable
+  rw [activationTable_foldl_cell_eq_true_iff]
+  · simp
+  · simpa using hselector
+  · simp only [List.getElem_toArray, List.getElem_replicate]
+    simpa using hrow
+
 /-- Every row in an activation table has the configured domain length. -/
 theorem activationTable_getElem_size
     (n numSelectors : ℕ) (acts : List (ℕ × ℕ))
@@ -1162,6 +1665,93 @@ theorem activationTable_getElem_size
   rw [getElem!_pos (activationTable n numSelectors acts) selector hbound]
   exact hsized' selector hbound
 
+/-- The dense activation arrays used by halo2 and the sparse activation stream induce
+the same selector conflict relation. -/
+theorem selectorDescription_conflicts_eq_selectorActivationsConflict
+    (n numSelectors : ℕ) (activations : List (ℕ × ℕ))
+    (left right : ℕ)
+    (hleft : left < numSelectors) (hright : right < numSelectors)
+    (hrows : ∀ activation ∈ activations, activation.2 < n) :
+    (SelectorDescription.mk left
+        (activationTable n numSelectors activations)[left]! 0).conflicts
+      (SelectorDescription.mk right
+        (activationTable n numSelectors activations)[right]! 0) =
+        selectorActivationsConflict activations left right := by
+  apply Bool.eq_iff_iff.mpr
+  constructor
+  · intro hdense
+    rw [SelectorDescription.conflicts, List.any_eq_true] at hdense
+    obtain ⟨⟨leftValue, rightValue⟩, hvalues, hboth⟩ := hdense
+    rw [List.mem_iff_getElem] at hvalues
+    obtain ⟨row, hrowZip, hvalues⟩ := hvalues
+    have hrow : row < n := by
+      simpa only [List.length_zip, Array.length_toList,
+        activationTable_getElem_size n numSelectors activations left hleft,
+        activationTable_getElem_size n numSelectors activations right hright,
+        min_self] using hrowZip
+    rw [List.getElem_zip, Array.getElem_toList, Array.getElem_toList] at hvalues
+    have hleftValue := congrArg Prod.fst hvalues
+    have hrightValue := congrArg Prod.snd hvalues
+    simp only [Bool.and_eq_true] at hboth
+    simp only at hleftValue hrightValue
+    have hleftSize := activationTable_getElem_size n numSelectors
+      activations left hleft
+    have hrightSize := activationTable_getElem_size n numSelectors
+      activations right hright
+    have hrowLeft : row <
+        (activationTable n numSelectors activations)[left]!.size := by
+      omega
+    have hrowRight : row <
+        (activationTable n numSelectors activations)[right]!.size := by
+      omega
+    have hleftActive :
+        ((activationTable n numSelectors activations)[left]!)[row]! = true := by
+      rw [getElem!_pos _ row hrowLeft, hleftValue]
+      exact hboth.1
+    have hrightActive :
+        ((activationTable n numSelectors activations)[right]!)[row]! = true := by
+      rw [getElem!_pos _ row hrowRight, hrightValue]
+      exact hboth.2
+    have hleftMem := (activationTable_getElem_eq_true_iff_mem n numSelectors
+      activations left row hleft hrow).mp hleftActive
+    have hrightMem := (activationTable_getElem_eq_true_iff_mem n numSelectors
+      activations right row hright hrow).mp hrightActive
+    rw [selectorActivationsConflict, List.any_eq_true]
+    exact ⟨row, (mem_selectorActivationRows_iff activations left row).mpr
+      hleftMem, by simpa using hrightMem⟩
+  · intro hsparse
+    rw [selectorActivationsConflict, List.any_eq_true] at hsparse
+    obtain ⟨row, hleftRows, hrightMem⟩ := hsparse
+    have hleftMem :=
+      (mem_selectorActivationRows_iff activations left row).mp hleftRows
+    have hrightMem : (right, row) ∈ activations := by simpa using hrightMem
+    have hrow := hrows (left, row) hleftMem
+    let leftDescription := SelectorDescription.mk left
+      (activationTable n numSelectors activations)[left]! 0
+    let rightDescription := SelectorDescription.mk right
+      (activationTable n numSelectors activations)[right]! 0
+    have hleftSize := activationTable_getElem_size n numSelectors
+      activations left hleft
+    have hrightSize := activationTable_getElem_size n numSelectors
+      activations right hright
+    have hrowLeft : row < leftDescription.activations.size := by
+      simpa [leftDescription, hleftSize] using hrow
+    have hrowRight : row < rightDescription.activations.size := by
+      simpa [rightDescription, hrightSize] using hrow
+    have hleftActiveBang := (activationTable_getElem_eq_true_iff_mem n
+      numSelectors activations left row hleft hrow).mpr hleftMem
+    have hrightActiveBang := (activationTable_getElem_eq_true_iff_mem n
+      numSelectors activations right row hright hrow).mpr hrightMem
+    have hleftActive : leftDescription.activations[row] = true := by
+      rw [← getElem!_pos leftDescription.activations row hrowLeft]
+      exact hleftActiveBang
+    have hrightActive : rightDescription.activations[row] = true := by
+      rw [← getElem!_pos rightDescription.activations row hrowRight]
+      exact hrightActiveBang
+    exact SelectorDescription.conflicts_eq_true_of_activated
+      leftDescription rightDescription row hrowLeft hrowRight
+      hleftActive hrightActive
+
 /-- **Derive the selector-compression map from the circuit**: the constraint system
 supplies the degrees and budget, the synthesized activations supply the packing
 constraints, and the packed columns append after the existing fixed columns. -/
@@ -1175,6 +1765,102 @@ def deriveSelCompressMap (cs : ConstraintSystem F) (n : ℕ) (acts : List (ℕ �
   { newFixedCols := m.newFixedCols
     entries := m.entries.map fun (s, sc) =>
       (s, { sc with packedCol := sc.packedCol + cs.numFixedColumns }) }
+
+/-- The number of packed selector columns depends only on selector count, maximal
+degrees, constraint-system degree, and the synthesized activation rows. -/
+theorem deriveSelCompressMap_newFixedCols_eq
+    (cs : ConstraintSystem F) (n : ℕ) (acts : List (ℕ × ℕ)) :
+    (deriveSelCompressMap cs n acts).newFixedCols =
+      (process
+        ((List.range cs.numSelectors).map fun index =>
+          SelectorDescription.mk index
+            (activationTable n cs.numSelectors acts)[index]!
+            (selectorMaxDegrees cs)[index]!)
+        (csDegree cs)).newFixedCols := rfl
+
+/-- Selector-column allocation can be computed directly from the sparse activation
+stream.  This is extensionally the same greedy halo2 algorithm; only its conflict
+oracle avoids the dense `numSelectors × n` table. -/
+theorem deriveSelCompressMap_newFixedCols_eq_selectorColumnCountWith
+    (cs : ConstraintSystem F) (n : ℕ) (activations : List (ℕ × ℕ))
+    (hrows : ∀ activation ∈ activations, activation.2 < n) :
+    (deriveSelCompressMap cs n activations).newFixedCols =
+      selectorColumnCountWith (List.range cs.numSelectors) (csDegree cs)
+        (fun selector => (selectorMaxDegrees cs)[selector]!)
+        (selectorActivationsConflict activations) := by
+  let indices := (List.range cs.numSelectors).attach
+  let denseDescription : { selector // selector ∈ List.range cs.numSelectors } →
+      SelectorDescription := fun selector =>
+    SelectorDescription.mk selector.val
+      (activationTable n cs.numSelectors activations)[selector.val]!
+      (selectorMaxDegrees cs)[selector.val]!
+  let degree : { selector // selector ∈ List.range cs.numSelectors } → ℕ :=
+    fun selector => (selectorMaxDegrees cs)[selector.val]!
+  let conflict :
+      { selector // selector ∈ List.range cs.numSelectors } →
+      { selector // selector ∈ List.range cs.numSelectors } → Bool :=
+    fun left right =>
+      selectorActivationsConflict activations left.val right.val
+  have hdense :
+      selectorColumnCountWith (indices.map denseDescription) (csDegree cs)
+          SelectorDescription.maxDegree SelectorDescription.conflicts =
+        selectorColumnCountWith indices (csDegree cs) degree conflict := by
+    apply selectorColumnCountWith_map
+    · intro selector
+      rfl
+    · intro left right
+      have hleft := List.mem_range.mp left.property
+      have hright := List.mem_range.mp right.property
+      simpa only [denseDescription, conflict,
+        SelectorDescription.conflicts] using
+          selectorDescription_conflicts_eq_selectorActivationsConflict
+            n cs.numSelectors activations left.val right.val hleft hright hrows
+  have hsparse :
+      selectorColumnCountWith (indices.map Subtype.val) (csDegree cs)
+          (fun selector => (selectorMaxDegrees cs)[selector]!)
+          (selectorActivationsConflict activations) =
+        selectorColumnCountWith indices (csDegree cs) degree conflict := by
+    apply selectorColumnCountWith_map
+    · intro selector
+      rfl
+    · intro left right
+      rfl
+  have hdenseDescriptions :
+      ((List.range cs.numSelectors).map fun selector =>
+        SelectorDescription.mk selector
+          (activationTable n cs.numSelectors activations)[selector]!
+          (selectorMaxDegrees cs)[selector]!) =
+        indices.map denseDescription := by
+    simpa only [indices, denseDescription] using
+      (List.attach_map_val (l := List.range cs.numSelectors)
+        (f := fun selector =>
+          SelectorDescription.mk selector
+            (activationTable n cs.numSelectors activations)[selector]!
+            (selectorMaxDegrees cs)[selector]!)).symm
+  have hindices : indices.map Subtype.val = List.range cs.numSelectors := by
+    simpa only [indices, id_eq, List.map_id] using
+      (List.attach_map_val (l := List.range cs.numSelectors)
+        (f := id))
+  rw [deriveSelCompressMap_newFixedCols_eq,
+    process_newFixedCols_eq_selectorColumnCountWith]
+  calc
+    selectorColumnCountWith
+        ((List.range cs.numSelectors).map fun selector =>
+          SelectorDescription.mk selector
+            (activationTable n cs.numSelectors activations)[selector]!
+            (selectorMaxDegrees cs)[selector]!)
+        (csDegree cs) SelectorDescription.maxDegree
+        SelectorDescription.conflicts =
+      selectorColumnCountWith indices (csDegree cs) degree conflict := by
+        rw [hdenseDescriptions]
+        exact hdense
+    _ = selectorColumnCountWith (List.range cs.numSelectors) (csDegree cs)
+        (fun selector => (selectorMaxDegrees cs)[selector]!)
+        (selectorActivationsConflict activations) := by
+      exact hsparse.symm.trans <| congrArg
+        (fun selectors => selectorColumnCountWith selectors (csDegree cs)
+          (fun selector => (selectorMaxDegrees cs)[selector]!)
+          (selectorActivationsConflict activations)) hindices
 
 /-- Circuit-derived selector compression allocates at most one new fixed column per
 configured selector. -/

@@ -300,7 +300,7 @@ def canonicityRegionSynthesisSummary (cfg : Config) :
       .column .advice (cfg.canonAdvices 0).index,
       .column .advice (cfg.canonAdvices 1).index,
       .column .advice (cfg.canonAdvices 2).index]
-    3 0
+    3 0 [(cfg.qMulFixedBaseField.index, 1)]
 
 @[synthesis_summary_norm]
 theorem canonicityRegionSynthesisSummary_lookupActivationCount (cfg : Config) :
@@ -315,18 +315,8 @@ theorem canonicityRegion_synthesisSummary_eq
         ((canonicityRegion cfg alpha z84 alphaPrime z13 z44 z43).operations self) =
       canonicityRegionSynthesisSummary cfg := by
   apply FloorPlanner.RegionSynthesisSummary.ext
-  · simp only [canonicityRegionSynthesisSummary, canonicityRegion,
-      circuit_norm, canonGate]
-  · simp only [canonicityRegionSynthesisSummary, canonicityRegion,
-      circuit_norm, canonGate]
-    omega
-  · simp only [canonicityRegionSynthesisSummary, canonicityRegion,
-      circuit_norm, canonGate, synthesis_summary_norm]
-  · simp only [canonicityRegionSynthesisSummary, canonicityRegion,
-      circuit_norm, canonGate]
-    omega
-  · simp only [canonicityRegionSynthesisSummary, canonicityRegion,
-      circuit_norm, canonGate]
+  all_goals simp only [canonicityRegionSynthesisSummary, canonicityRegion,
+    circuit_norm, canonGate, synthesis_summary_norm] <;> try omega
 
 @[synthesis_summary_norm]
 theorem canonicityRegionSynthesisSummary_hasNoFixedColumns (cfg : Config) :

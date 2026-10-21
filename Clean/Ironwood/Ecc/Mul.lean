@@ -11,7 +11,7 @@ import Clean.Ironwood.Ecc.MulComplete
 import Clean.Ironwood.Ecc.MulOverflow
 
 /-!
-Variable-base scalar multiplication: computes `[alpha] base` where `alpha : Fp` is a Pallas
+Variable-base scalar multiplication: computes `alpha • base` where `alpha : Fp` is a Pallas
 base-field element. The working scalar `k = alpha.val + t_q` is decomposed MSB-first into 255
 bits and processed as: `acc = [2]base` via complete addition; the running sum `z` starts at 0;
 the `hi` incomplete half (125 double-and-add steps, bits `k_254..k_130`); the `lo` incomplete
@@ -20,7 +20,7 @@ half (126 steps, bits `k_129..k_4`); three complete-addition bits `k_3..k_1`; th
 `k_254`.
 
 Soundness rests on `2^254 + t_q ≡ 0 (mod q)`: the double-and-add accumulates
-`[2^254 + k] base = [alpha] base`.
+`(2^254 + k) • base = alpha • base`.
 
 Reference: `halo2_gadgets/src/ecc/chip/mul.rs`.
 -/
@@ -223,7 +223,7 @@ over the parent's stored `overflowConfig`. Aggregates the children's (`Add`, bot
 def EnvAssumptions (cfg : Config) (env : Placed Environment Fp) : Prop :=
   MulOverflow.EnvAssumptions 10 cfg.overflowConfig env
 
-/-- The circuit computes the variable-base scalar multiplication `[alpha] base`, with the
+/-- The circuit computes the variable-base scalar multiplication `alpha • base`, with the
 identity encoded as `(0, 0)` coordinates. -/
 def Spec (input : Inputs Fp) (output : Point Fp) : Prop :=
   output = input.alpha.val • input.base
@@ -521,7 +521,7 @@ def mainCircuitSynthesisSummary (cfg : Config) :
                   .column .advice cfg.addConfig.xP.index,
                   .column .advice cfg.addConfig.yP.index,
                   .selector cfg.qMulLsb.index]
-                (offLsb + 2) 0).combine
+                (offLsb + 2) 0 [(cfg.qMulLsb.index, offLsb)]).combine
               (Add.synthesisSummary cfg.addConfig offLsb))))))
 
 @[synthesis_summary_norm]
@@ -564,6 +564,8 @@ theorem mainCircuitSynthesisSummary_eq (cfg : Config)
       synthesis_summary_norm, configure_selector_norm]
   · simp only [mainCircuitSynthesisSummary, circuit_norm,
       synthesis_summary_norm, configure_selector_norm]
+  · simp only [mainCircuitSynthesisSummary, circuit_norm,
+      synthesis_summary_norm, configure_selector_norm, lsbGate]
 
 def mainKeygenRequirements : KeygenRequirements Fp Config (Var Inputs Fp) where
   configLawful cfg :=
@@ -1072,7 +1074,7 @@ def mainElaborated : ElaboratedRegionCircuit Fp Config Config Inputs MainOutputs
 /-- The main double-and-add region as a bundle. `Spec` is the pre-overflow seam: some bit
 families drive the three chained double-and-add phases plus the constraint-forced LSB, the
 running-sum cells carry their chain values, and the result is the assembled scalar
-multiple `[2^254 + 2·K + k₀] base`. The overflow contract then rules out the non-canonical
+multiple `(2^254 + 2·K + k₀) • base`. The overflow contract then rules out the non-canonical
 readings (`mul.soundness`). -/
 def mainCircuit : FormalRegionCircuit Fp Config Config Inputs MainOutputs where
   configure := pure
@@ -1556,7 +1558,7 @@ derive_contract_bridges main := mainCircuit.toFormal "variable-base scalar mul"
 double-and-add convergence runs in one region (the `mainCircuit` bundle), and the overflow
 check runs after that region closes as a separate layouter-level `overflow_check` of three
 sibling regions. The `z_0`/`z_130`/`k_254` cells cross into the overflow regions as copies.
-Returns `[alpha] base`. -/
+Returns `alpha • base`. -/
 def synthesize (cfg : Config) (input : Var Inputs Fp) :
     Circuit Fp (Var Point Fp) := do
   -- the main double-and-add region
@@ -1984,7 +1986,7 @@ private theorem synthesize_copyCellsAssigned
     simp only [mulSynthesisSummary, synthesize, circuit_norm,
       synthesis_summary_norm]
 
-/-- Variable-base scalar multiplication by a base-field element: `[alpha] base`. A
+/-- Variable-base scalar multiplication by a base-field element: `alpha • base`. A
 layouter-level `FormalCircuit`: the main double-and-add region plus the overflow check's three
 sibling regions after it. No `BitsHint` parameter — the working-scalar bits are derived from the
 `alpha` cell inside the witness IR. -/

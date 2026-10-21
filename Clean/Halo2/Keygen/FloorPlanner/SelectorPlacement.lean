@@ -75,12 +75,15 @@ def SelectorAnchoredBy (summaries : List RegionShapeSummary)
 theorem SummarySelectorsAnchoredBy.ofColumns
     {columns : List RegionColumn}
     {rowCount constantSiteCount instanceRowExtent lookupActivationCount : ℕ}
+    {selectorActivations : List (ℕ × ℕ)}
     {anchor : ℕ → RegionColumn}
     (hanchor : ∀ selector, .selector selector ∈ columns →
       anchor selector ∈ physicalColumns columns) :
     SummarySelectorsAnchoredBy
       (RegionSynthesisSummary.ofColumns columns rowCount constantSiteCount
-        instanceRowExtent lookupActivationCount
+        selectorActivations
+        (instanceRowExtent := instanceRowExtent)
+        (lookupActivationCount := lookupActivationCount)
         |>.toRegionShapeSummary)
       anchor := by
   intro selector hselector
@@ -460,8 +463,26 @@ def Represents
     (allocations : CircuitAllocations) (view : AllocationView) : Prop :=
   ∀ column, allocations.getD column #[] = view column
 
+theorem Represents.of_equivalent
+    {left right : CircuitAllocations} {view : AllocationView}
+    (hRepresents : view.Represents right)
+    (hEquivalent : left.Equivalent right) :
+    view.Represents left := by
+  intro column
+  rw [hEquivalent column]
+  exact hRepresents column
+
 def Valid (view : AllocationView) : Prop :=
   ∀ column, (view column).Valid
+
+theorem empty_represents_empty :
+    empty.Represents (∅ : CircuitAllocations) := by
+  intro column
+  simp [empty]
+
+theorem empty_valid : empty.Valid := by
+  intro column
+  simp [empty, Allocations.Valid]
 
 def FitsColumns (view : AllocationView) (columns : List RegionColumn)
     (start length : ℕ) : Prop :=
@@ -514,6 +535,11 @@ def insertRepeated (view : AllocationView) (columns : List RegionColumn)
   | count + 1 =>
       insertRepeated (view.insert columns start length) columns
         (start + length) length count
+
+theorem insertRepeated_zero
+    (view : AllocationView) (columns : List RegionColumn)
+    (start length : ℕ) :
+    view.insertRepeated columns start length 0 = view := rfl
 
 theorem insertRepeated_one
     (view : AllocationView) (columns : List RegionColumn)

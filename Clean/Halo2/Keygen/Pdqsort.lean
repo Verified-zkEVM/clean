@@ -3843,7 +3843,7 @@ private theorem blockCore_offset_bounds
     by omega, hright.2.1, by omega, hright.2.2.2,
     by simpa only [count] using hexhaust⟩
 
-private structure BlockLoopState (T : Type) where
+structure BlockLoopState (T : Type) where
   v : Array T
   l : ℕ
   r : ℕ
@@ -3855,8 +3855,9 @@ private structure BlockLoopState (T : Type) where
   startR : ℕ
   endR : ℕ
   offsetsR : Array ℕ
+deriving DecidableEq, Inhabited, Repr
 
-private def blockCoreState
+def blockCoreState
     (blockL blockR : ℕ) (core : BlockCoreResult T) :
     BlockLoopState T := {
   v := core.v
@@ -3872,7 +3873,7 @@ private def blockCoreState
   offsetsR := core.offsetsR
 }
 
-private def blockLoopStep
+def blockLoopStep
     (pivot : T) (isLess : T → T → Bool)
     (state : BlockLoopState T) : ForInStep (BlockLoopState T) :=
   let gap := state.r - state.l
@@ -4808,7 +4809,7 @@ private theorem blockLoop_order_contract
       simp [BlockOrderInv, initial, RangeAll.empty]
   · simp
 
-private def partitionInBlocksFactored
+def partitionInBlocksFactored
     (v : Array T) (pivot : T)
     (isLess : T → T → Bool) : ℕ × Array T :=
   let initial : BlockLoopState T := {

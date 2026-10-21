@@ -161,7 +161,7 @@ def ofActionData (data : ActionData) : PrivateWitness where
 end PrivateWitness
 
 /-- Reassemble the formal circuit witness from its public and private parts. -/
-def combine (inputs : PublicInputs Fp) (privateWitness : PrivateWitness) :
+def combine (inputs : PublicInputs Fp) (wit : PrivateWitness) :
     ActionData where
   anchor := inputs.anchor
   cvX := inputs.cvX
@@ -173,29 +173,29 @@ def combine (inputs : PublicInputs Fp) (privateWitness : PrivateWitness) :
   enableSpend := inputs.enableSpend
   enableOutput := inputs.enableOutput
   disableCrossAddress := inputs.disableCrossAddress
-  psiOld := privateWitness.psiOld
-  rhoOld := privateWitness.rhoOld
-  nk := privateWitness.nk
-  vOld := privateWitness.vOld
-  vNew := privateWitness.vNew
-  psiNew := privateWitness.psiNew
-  magnitude := privateWitness.magnitude
-  sign := privateWitness.sign
-  cmOld := privateWitness.cmOld
-  gdOld := privateWitness.gdOld
-  akP := privateWitness.akP
-  pkdOld := privateWitness.pkdOld
-  gdNew := privateWitness.gdNew
-  pkdNew := privateWitness.pkdNew
-  leftEncoding := privateWitness.leftEncoding
-  rightEncoding := privateWitness.rightEncoding
-  merkleSide := privateWitness.merkleSide
-  merklePath := privateWitness.merklePath
-  rcv := privateWitness.rcv
-  alpha := privateWitness.alpha
-  rivk := privateWitness.rivk
-  rcmOld := privateWitness.rcmOld
-  rcmNew := privateWitness.rcmNew
+  psiOld := wit.psiOld
+  rhoOld := wit.rhoOld
+  nk := wit.nk
+  vOld := wit.vOld
+  vNew := wit.vNew
+  psiNew := wit.psiNew
+  magnitude := wit.magnitude
+  sign := wit.sign
+  cmOld := wit.cmOld
+  gdOld := wit.gdOld
+  akP := wit.akP
+  pkdOld := wit.pkdOld
+  gdNew := wit.gdNew
+  pkdNew := wit.pkdNew
+  leftEncoding := wit.leftEncoding
+  rightEncoding := wit.rightEncoding
+  merkleSide := wit.merkleSide
+  merklePath := wit.merklePath
+  rcv := wit.rcv
+  alpha := wit.alpha
+  rivk := wit.rivk
+  rcmOld := wit.rcmOld
+  rcmNew := wit.rcmNew
 
 @[simp] theorem combine_parts (data : ActionData) :
     combine (PublicInputs.ofActionData data) (PrivateWitness.ofActionData data) =

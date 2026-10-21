@@ -1,6 +1,7 @@
+import CompElliptic.CurveForms.ShortWeierstrass
 import CompElliptic.Curves.Pasta
 import CompElliptic.Curves.PastaOrder
-import Clean.Ironwood.Specs.CompEllipticExtras
+import CompElliptic.Fields.Pasta
 
 /-!
 # Orchard-facing Pallas vocabulary
@@ -9,46 +10,6 @@ The vendored CompElliptic layer states curve facts over coordinate pairs. This m
 defines the predicates in the point language we want to use for Orchard protocol specs,
 and provides bridge lemmas back to CompElliptic when theorem support is needed.
 -/
-
-/-! ### Pallas-side curve facts missing from CompElliptic
-
-CompElliptic proves `neg_five_not_isCube`/`no_onCurve_y_zero` for the VESTA base field
-(its verifier works over Vesta); Orchard needs the same pair on the PALLAS side. Stated
-in CompElliptic's own namespace so they read as the natural twins — candidates for
-upstreaming to `daira/CompElliptic` (they were part of the formerly vendored copy). -/
-
-namespace CompElliptic.Curves.Pasta.Pallas
-
-open CompElliptic.CurveForms.ShortWeierstrass
-
-/-- `-5` is not a cube in the Pallas base field, so `y = 0` is impossible for a curve point.
-
-The kernel-tier twin of CompElliptic's Vesta `neg_five_not_isCube`, proved the same way: `3 ∣ p - 1`,
-so `not_exists_pow_eq_of_pow_ne_one` reduces the claim to the single power `(-5)^((p-1)/3) ≠ 1`,
-which `reduce_mod_char` (fast modular exponentiation) evaluates with the kernel re-checking the
-result. No `native_decide`, hence no compiler-trust axiom: this used to carry two, which read in
-the census as an inherited CompElliptic dependency when it is in fact declared here. -/
-theorem neg_five_not_isCube : ¬ ∃ x : Fields.Pasta.PallasBaseField, x ^ 3 = -(5 : Fields.Pasta.PallasBaseField) := by
-  have hcard : Fintype.card Fields.Pasta.PallasBaseField = Fields.Pasta.PALLAS_BASE_CARD :=
-    ZMod.card _
-  refine Fields.not_exists_pow_eq_of_pow_ne_one (n := 3) (by rw [hcard]; decide) (by decide) ?_
-  rw [hcard]
-  -- `reduce_mod_char` keys on the `ZMod` spelling of the type, which the `PallasBaseField` abbrev
-  -- hides; `show` re-exposes it (the `Field` instances agree definitionally).
-  show (-(5 : ZMod Fields.Pasta.PALLAS_BASE_CARD)) ^ ((Fields.Pasta.PALLAS_BASE_CARD - 1) / 3) ≠ 1
-  reduce_mod_char
-  decide
-
-/-- No point on the Pallas curve has `y`-coordinate `0`. -/
-theorem no_onCurve_y_zero (x : Fields.Pasta.PallasBaseField) : ¬ OnCurve a b (x, 0) := by
-  intro h
-  have hsum : x ^ 3 + 5 = 0 := by
-    simpa [OnCurve, a, b] using h.symm
-  have h' : x ^ 3 = -(5 : Fields.Pasta.PallasBaseField) := by
-    linear_combination hsum
-  exact neg_five_not_isCube ⟨x, h'⟩
-
-end CompElliptic.Curves.Pasta.Pallas
 
 namespace Zcash.Circuits
 
@@ -287,15 +248,12 @@ theorem y_eq_or_neg_of_same_x {p q : Point Fp}
     rcases hq with hCurve | hIdentity
     · exact hCurve
     · exact False.elim (hqx (congrArg Point.x hIdentity))
-  unfold Point.OnCurve at hpCurve hqCurve
-  have hsquare : (q.y - p.y) * (q.y + p.y) = 0 := by
-    rw [hx] at hqCurve
-    linear_combination hqCurve - hpCurve
-  rcases mul_eq_zero.mp hsquare with h | h
-  · left
-    exact sub_eq_zero.mp h
-  · right
-    linear_combination h
+  have hp' : ShortWeierstrass.OnCurve pallasA pallasB (p.x, p.y) :=
+    (onCurve_iff p).mp hpCurve
+  have hq' : ShortWeierstrass.OnCurve pallasA pallasB (p.x, q.y) := by
+    rw [← hx]
+    exact (onCurve_iff q).mp hqCurve
+  exact ShortWeierstrass.y_eq_pm_of_onCurve_x_eq hq' hp'
 
 def toSW (point : Point Fp) (h : point.Valid) : SWPoint Pallas.curve where
   x := point.x

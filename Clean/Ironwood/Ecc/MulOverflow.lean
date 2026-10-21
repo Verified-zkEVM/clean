@@ -196,12 +196,13 @@ theorem gateRegion_synthesisSummary
           .column .advice cfg.adv1.index,
           .column .advice cfg.adv2.index,
           .selector cfg.qOverflow.index]
-        3 0 := by
+        3 0 [(cfg.qOverflow.index, 1)] := by
   apply FloorPlanner.RegionSynthesisSummary.ext
   · simp only [gateRegion, circuit_norm, synthesis_summary_norm,
       configure_selector_norm]
   · simp only [gateRegion, circuit_norm, synthesis_summary_norm]
     omega
+  · simp only [gateRegion, circuit_norm, synthesis_summary_norm]
   · simp only [gateRegion, circuit_norm, synthesis_summary_norm]
   · simp only [gateRegion, circuit_norm, synthesis_summary_norm]
   · simp only [gateRegion, circuit_norm, synthesis_summary_norm]
@@ -306,7 +307,7 @@ def circuitSynthesisSummary (K : ℕ) (cfg : Config K)
             .column .advice cfg.adv1.index,
             .column .advice cfg.adv2.index,
             .selector cfg.qOverflow.index]
-          3 0)))
+          3 0 [(cfg.qOverflow.index, 1)])))
 
 @[synthesis_summary_norm]
 theorem circuitSynthesisSummary_lookupActivationCount (K : ℕ) (cfg : Config K) :

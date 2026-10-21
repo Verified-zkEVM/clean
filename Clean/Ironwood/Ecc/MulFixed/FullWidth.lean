@@ -99,7 +99,8 @@ def witnessScalarLoop (cfg : Config) (windows : Vector (Witgen.MOver Fp (Assigne
 /-- Reduced footprint of the selector and advice passes that witness all 85 windows. -/
 def witnessScalarLoopSynthesisSummary (cfg : Config) (offset : ℕ) :
     FloorPlanner.RegionSynthesisSummary :=
-  (FloorPlanner.RegionSynthesisSummary.repeatColumns
+  (FloorPlanner.RegionSynthesisSummary.repeatColumnsWithSelector
+      cfg.qMulFixedFull.index
       [.selector cfg.qMulFixedFull.index] offset 1 1 0 85).combine
     (FloorPlanner.RegionSynthesisSummary.repeatColumns
       [.column .advice cfg.superConfig.window.index] offset 1 1 0 85)
@@ -127,8 +128,8 @@ theorem witnessScalarLoop_synthesisSummary_eq
         ((witnessScalarLoop cfg windows offset).operations self) =
       witnessScalarLoopSynthesisSummary cfg offset := by
   have hselectors :=
-    FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns
-      [.selector cfg.qMulFixedFull.index] offset 1 1 0 85
+    FloorPlanner.RegionSynthesisSummary.foldr_ofColumnsWithSelector_eq_repeatColumnsWithSelector
+      cfg.qMulFixedFull.index [.selector cfg.qMulFixedFull.index] offset 1 1 0 85
   have hwindows :=
     FloorPlanner.RegionSynthesisSummary.foldr_ofColumns_eq_repeatColumns
       [.column .advice cfg.superConfig.window.index] offset 1 1 0 85
@@ -139,10 +140,12 @@ theorem witnessScalarLoop_synthesisSummary_eq
   rw [show
     (List.ofFn fun i : Fin 85 =>
       FloorPlanner.RegionSynthesisSummary.ofColumns
-        [.selector cfg.1.index] (offset + i.val + 1) 0).foldr
+        [.selector cfg.1.index] (offset + i.val + 1) 0
+        [(cfg.qMulFixedFull.index, offset + i.val)]).foldr
           FloorPlanner.RegionSynthesisSummary.combine {} =
-        FloorPlanner.RegionSynthesisSummary.repeatColumns
-          [.selector cfg.qMulFixedFull.index] offset 1 1 0 85 by
+        FloorPlanner.RegionSynthesisSummary.repeatColumnsWithSelector
+          cfg.qMulFixedFull.index [.selector cfg.qMulFixedFull.index]
+          offset 1 1 0 85 by
       simpa [Nat.add_assoc] using hselectors]
   rw [show
     (List.ofFn fun i : Fin 85 =>
@@ -166,6 +169,7 @@ theorem witnessScalarLoopSynthesisSummary_hasNoFixedColumns
     (witnessScalarLoopSynthesisSummary cfg offset).HasNoFixedColumns := by
   simp only [witnessScalarLoopSynthesisSummary,
     FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_combine,
+    FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_repeatColumnsWithSelector,
     FloorPlanner.RegionSynthesisSummary.hasNoFixedColumns_repeatColumns]
   simp
 
@@ -259,6 +263,8 @@ theorem processWindowH_synthesisSummary_eq
     omega
   · simp only [processWindowH, processWindowSynthesisSummary, circuit_norm]
   · simp only [processWindowH, processWindowSynthesisSummary, circuit_norm]
+  · simp only [processWindowH, processWindowSynthesisSummary, circuit_norm,
+      synthesis_summary_norm]
   · simp only [processWindowH, processWindowSynthesisSummary, circuit_norm,
       synthesis_summary_norm]
 
