@@ -3,6 +3,8 @@ import Clean.Gadgets.Keccak.KeccakState
 import Clean.Gadgets.Rotation64.Rotation64
 import Clean.Specs.Keccak256
 
+open Clean
+
 namespace Gadgets.Keccak256.ThetaD
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
 

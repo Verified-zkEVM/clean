@@ -10,6 +10,8 @@ import Clean.Circuit.Extensions
 import Clean.Table.Theorems
 import Clean.Gadgets.Equality
 
+open Clean
+
 def InductiveTable.Soundness (F : Type) [FiniteField F] (State Input : Type → Type) [ProvableType State] [ProvableType Input]
     (Spec : (initialState : State F) → (xs : List (Input F)) → (i : ℕ) → (xs.length = i) → (currentState : State F) → ProverData F → Prop)
     (step : Var State F → Var Input F → Circuit F (Var State F)) :=
@@ -136,7 +138,7 @@ theorem equalityConstraint.soundness {row : State F × Input F} {input_state : S
   have h_env : (eval env'.toEnvironment (varFromOffset State 0 : State (Expression F)) : State F) = row.1 := by
     rw [ProvableType.ext_iff]
     intro i hi
-    rw [h_env_in i hi, ProvableType.eval_varFromOffset,
+    rw [h_env_in i hi, ProvableType.Clean.eval_varFromOffset,
       ProvableType.toElements_fromElements, Vector.getElem_mapRange, zero_add]
   rw [h_env]
 
@@ -312,7 +314,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
       intro i hi
       simp only [curr_var, varFromOffset_pair]
       convert (h_env_input_1 i hi).symm
-      simp only [ProvableType.eval_varFromOffset,
+      simp only [ProvableType.Clean.eval_varFromOffset,
         ProvableType.toElements_fromElements, zero_add]
       convert Vector.getElem_mapRange _ hi
 
@@ -321,7 +323,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
       intro i hi
       simp only [curr_var, varFromOffset_pair]
       convert (h_env_input_2 i hi).symm
-      simp only [s, ProvableType.eval_varFromOffset,
+      simp only [s, ProvableType.Clean.eval_varFromOffset,
         ProvableType.toElements_fromElements, zero_add]
       convert Vector.getElem_mapRange _ hi using 1
       ac_rfl
@@ -329,7 +331,7 @@ lemma table_soundness_aux (table : InductiveTable F State Input) (input output :
     have next_eq : eval env'.toEnvironment (varFromOffset (F := F) State (size State + size Input + main_ops.localLength)) = next.1 := by
       rw [ProvableType.ext_iff]
       intro i hi
-      rw [h_env_output i hi, ProvableType.eval_varFromOffset,
+      rw [h_env_output i hi, ProvableType.Clean.eval_varFromOffset,
         ProvableType.toElements_fromElements, Vector.getElem_mapRange]
       simp only [t, s, x]
       ac_rfl

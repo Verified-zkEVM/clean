@@ -3,6 +3,8 @@ import Clean.Orchard.Ecc.AddIncomplete
 import Clean.Orchard.Ecc.Add
 import Clean.Orchard.Utilities
 
+open Clean
+
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul_fixed/short.rs`.
 
@@ -320,7 +322,7 @@ theorem coords_eq_windowPoint {w k : ℕ} (hw : w < 22) (hk : k < 8)
     row.xP = (windowPoint B.point w k).x ∧ row.yP = (windowPoint B.point w k).y := by
   obtain ⟨hx, hu, hcurve⟩ := hspec
   have hxP : row.xP = (windowPoint B.point w k).x := by
-    rw [hx, interpolatedX, hwindow, B.interpolate_eq w hw k hk]
+    rw [hx, hwindow, B.interpolate_eq w hw k hk]
   refine ⟨hxP, ?_⟩
   have hrowCurve : ({ x := (windowPoint B.point w k).x, y := row.yP } : Point Fp).OnCurve := by
     rw [← hxP]
@@ -393,7 +395,7 @@ private theorem rowTailValue_u (B : FixedBase) (m : Fp) (w : ℕ) :
 of the committed magnitude (`k = m.val / 8^w % 8`, matching `windowVal` definitionally),
 witness the next running-sum value, and read the three window-table columns at `k`. -/
 def rowProgram (B : FixedBase) (magnitude : Expression Fp) (w : ℕ) :
-    Witgen.M Fp (RowTail (Witgen.FExpr Fp)) := do
+    Witgen.M Fp (RowTail (FExpr Fp)) := do
   let xs := Vector.ofFn fun k : Fin 8 => (windowPoint B.point w k.val).x
   let ys := Vector.ofFn fun k : Fin 8 => (windowPoint B.point w k.val).y
   let us := Vector.ofFn fun k : Fin 8 => B.u w k.val
@@ -978,7 +980,7 @@ private theorem coordsRow_spec (B : FixedBase) (m : Fp) {w : ℕ} (hw : w < 22)
     linear_combination zValue_step m w
   refine ⟨?_, ?_, ?_⟩
   · rw [show (RunningSumCoords.coordsRow row).xP = row.xP from rfl, hx,
-      interpolatedX, hwin, B.interpolate_eq w hw _ (windowVal_lt m w)]
+      hwin, B.interpolate_eq w hw _ (windowVal_lt m w)]
   · rw [show (RunningSumCoords.coordsRow row).u = row.u from rfl,
       show (RunningSumCoords.coordsRow row).yP = row.yP from rfl, hu, hy]
     exact B.u_mul_u w hw _ (windowVal_lt m w)
@@ -1118,7 +1120,7 @@ private theorem honest_loop_constraints (B : FixedBase) (env : ProverEnvironment
     exact B.nsmul_x_ne hS_pos
       (Nat.lt_of_lt_of_le hS_lt ht_lower) hsum_card
 
-private theorem signed_y_eq_of_gate
+theorem signed_y_eq_of_gate
     {sign yA yP : Fp} (hyP : yP = sign * yA) :
     (sign = 1 → yP = yA) ∧ (sign = -1 → yP = -yA) := by
   constructor
@@ -1128,7 +1130,7 @@ private theorem signed_y_eq_of_gate
     rw [hyP, hs]
     ring
 
-private theorem signed_output_spec (B : FixedBase) {m : ℕ}
+theorem signed_output_spec (B : FixedBase) {m : ℕ}
     {sign x y ySigned : Fp}
     (hmulEq : ({ x := x, y := y } : Point Fp) = ((m : Fq) • B))
     (hySigned_pos : sign = 1 → ySigned = y)
@@ -1154,7 +1156,7 @@ private theorem zValue_22_eq_zero {m : Fp} (hm : m.val < 2 ^ 64) : zValue m 22 =
   exact Nat.cast_zero
 
 /-- The last window of a 64-bit magnitude is a bit. -/
-private theorem zValue_21_isBool {m : Fp} (hm : m.val < 2 ^ 64) : IsBool (zValue m 21) := by
+theorem zValue_21_isBool {m : Fp} (hm : m.val < 2 ^ 64) : IsBool (zValue m 21) := by
   have hdiv : m.val / 8 ^ 21 = 0 ∨ m.val / 8 ^ 21 = 1 := by
     have h8 : (8 : ℕ) ^ 21 = 2 ^ 63 := by norm_num
     have : m.val / 8 ^ 21 < 2 := by omega
@@ -1165,7 +1167,7 @@ private theorem zValue_21_isBool {m : Fp} (hm : m.val < 2 ^ 64) : IsBool (zValue
   · exact Or.inr Nat.cast_one
 
 /-- Base-8 digit recombination of the magnitude. -/
-private theorem sum_windowVal {m : Fp} (hm : m.val < 2 ^ 64) :
+theorem sum_windowVal {m : Fp} (hm : m.val < 2 ^ 64) :
     ∑ j ∈ Finset.range 22, windowVal m j * 8 ^ j = m.val := by
   unfold windowVal
   have h := sum_base8 m.val 22

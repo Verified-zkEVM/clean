@@ -2,6 +2,8 @@ import Clean.Orchard.Specs.Pallas
 import Clean.Orchard.Ecc.Defs
 import Clean.Orchard.Ecc.DoubleAndAdd
 
+open Clean
+
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul/incomplete.rs`.
 -/
@@ -395,7 +397,7 @@ def ProverSpec (n : ℕ) (input : ProverValue Input Fp) (output : Output (n + 1)
     2 ≤ m → 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254 →
     Point.ofCoords (output.xA, output.yA) = (accScalar m input.bits (n + 1)) • base
 
-private theorem accScalar_two_le {m : ℕ} (h2 : 2 ≤ m) (bits : ℕ → Bool) :
+theorem accScalar_two_le {m : ℕ} (h2 : 2 ≤ m) (bits : ℕ → Bool) :
     ∀ b, 2 ≤ accScalar m bits b
   | 0 => h2
   | b + 1 => by
@@ -403,7 +405,7 @@ private theorem accScalar_two_le {m : ℕ} (h2 : 2 ≤ m) (bits : ℕ → Bool) 
     simp only [accScalar]
     rcases Bool.dichotomy (bits b) with hb | hb <;> rw [hb] <;> norm_num <;> omega
 
-private theorem accScalar_le {m : ℕ} (bits : ℕ → Bool) :
+theorem accScalar_le {m : ℕ} (bits : ℕ → Bool) :
     ∀ b, accScalar m bits b ≤ 2 ^ b * (m + 1) - 1
   | 0 => by simp [accScalar]
   | b + 1 => by
@@ -413,7 +415,7 @@ private theorem accScalar_le {m : ℕ} (bits : ℕ → Bool) :
     simp only [accScalar]
     rcases Bool.dichotomy (bits b) with hb | hb <;> rw [hb] <;> norm_num <;> omega
 
-private theorem pow254_lt_card : 2 ^ 254 < PALLAS_SCALAR_CARD := by
+theorem pow254_lt_card : 2 ^ 254 < PALLAS_SCALAR_CARD := by
   norm_num [CompElliptic.Fields.Pasta.PALLAS_SCALAR_CARD]
 
 /-- The witnessed `z` cell of loop row `r`. -/
@@ -454,7 +456,7 @@ value of row `r` (with `YAD (n+1)` the witnessed doubled final `y`), and `bits` 
 values. Splitting this from `soundness` keeps each declaration within the elaboration
 budget.
 -/
-private theorem soundness_aux (n : ℕ) (P : Point Fp) (hP : P.OnCurve)
+theorem soundness_aux (n : ℕ) (P : Point Fp) (hP : P.OnCurve)
     (m : ℕ) (h2 : 2 ≤ m) (hbound : 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254)
     (XA XP YP L1 L2 YAD : ℕ → Fp) (bits : ℕ → Bool)
     (hxA0 : XA 0 = (m • P).x)
@@ -543,7 +545,7 @@ private theorem soundness_aux (n : ℕ) (P : Point Fp) (hP : P.OnCurve)
 The honest row at a small positive multiple of the base: the gate equations hold for
 `lambdaCellsValue`'s cells, and they step the accumulator to `[2m + 2k - 1] P`.
 -/
-private theorem honest_step {P : Point Fp} (hP : P.OnCurve) (bits : ℕ → Bool)
+theorem honest_step {P : Point Fp} (hP : P.OnCurve) (bits : ℕ → Bool)
     {m : ℕ} (h2 : 2 ≤ m) (hBound : 2 * m + 1 < PALLAS_SCALAR_CARD) (b : ℕ) :
     2 * (m • P).y - 2 * (lambdaCellsValue P.x P.y (m • P).x (m • P).y (bits b)).lambda1 *
         ((m • P).x - P.x)
@@ -916,7 +918,7 @@ theorem soundness (n : ℕ) :
 
 /-- The honest accumulator entering row `r` is `[accScalar m bits r] P`, by induction
 over `honest_step`'s output conclusions. -/
-private theorem accVal_eq_nsmul {P : Point Fp} (hP : P.OnCurve) (bits : ℕ → Bool)
+theorem accVal_eq_nsmul {P : Point Fp} (hP : P.OnCurve) (bits : ℕ → Bool)
     {m : ℕ} (h2 : 2 ≤ m) (n : ℕ) (hbound : 2 ^ (n + 2) * (m + 1) ≤ 2 ^ 254) :
     ∀ r, r ≤ n + 1 →
       accVal P.x P.y (m • P).x (m • P).y bits r

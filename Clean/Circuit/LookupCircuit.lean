@@ -1,6 +1,8 @@
 import Clean.Circuit.Subcircuit
 import Clean.Circuit.Foundations
 
+namespace Clean
+
 /--
 A `LookupCircuit` is a circuit that can be used to instantiate a lookup table.
 
@@ -49,7 +51,7 @@ def toTable (circuit : LookupCircuit F α β) (hint : ProverHint F) : Table F (P
   imply_soundness := by
     intro _ (input, output) ⟨n, env, h_holds, h_guarantees, h_output⟩ h_assumptions
     simp only [h_output]
-    exact (circuit.original_soundness n env (const input) input ProvableType.eval_const
+    exact (circuit.original_soundness n env (const input) input ProvableType.Clean.eval_const
       h_assumptions h_holds h_guarantees).1
 
   implied_by_completeness := by
@@ -57,7 +59,7 @@ def toTable (circuit : LookupCircuit F α β) (hint : ProverHint F) : Table F (P
     use 0, circuit.proverEnvironment input hint
     simp only [h_output, LookupCircuit.constantOutput, circuit_norm,and_true]
     set env := circuit.proverEnvironment input hint
-    exact circuit.original_completeness 0 env (const input) input ProvableType.eval_const_prover
+    exact circuit.original_completeness 0 env (const input) input ProvableType.Clean.eval_const_prover
       h_assumptions (circuit.proverEnvironment_usesLocalWitnesses input hint)
 
 -- we create another `FormalCircuit` that wraps a lookup into the table defined by the input circuit
@@ -90,3 +92,5 @@ def lookupCircuit (circuit : LookupCircuit F α β) (hint : ProverHint F) :
 def lookup (circuit : LookupCircuit F α β) (hint : ProverHint F) (input : Var α F) : Circuit F (Var β F) :=
   lookupCircuit circuit hint input
 end LookupCircuit
+
+end Clean

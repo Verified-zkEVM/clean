@@ -1,5 +1,7 @@
 import Clean.Examples.FemtoCairo.Types
 
+open Clean
+
 /-!
 # Helper lemmas for FemtoCairo types
 

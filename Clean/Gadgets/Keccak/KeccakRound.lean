@@ -4,6 +4,8 @@ import Clean.Gadgets.Keccak.Chi
 import Clean.Gadgets.Keccak.KeccakState
 import Clean.Specs.Keccak256
 
+open Clean
+
 namespace Gadgets.Keccak256.KeccakRound
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2^16 + 2^8)]
 open Specs.Keccak256

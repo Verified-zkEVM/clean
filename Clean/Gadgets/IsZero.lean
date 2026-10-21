@@ -6,6 +6,8 @@ import Clean.Gadgets.IsZeroField
 import Clean.Utils.Field
 import Clean.Utils.Tactics
 
+open Clean
+
 namespace Gadgets.IsZero
 
 variable {F : Type} [FiniteField F] [DecidableEq F]

@@ -3,6 +3,8 @@ import Clean.Circuit.SimpGadget
 
 variable {F : Type}
 
+namespace Clean
+
 structure Variable (F : Type) where
   index : ℕ
 
@@ -16,6 +18,8 @@ inductive Expression (F : Type) where
   | mul : Expression F -> Expression F -> Expression F
 
 export Expression (var)
+
+end Clean
 
 /-- Arbitrary data a prover can witness and refer to in a circuit spec -/
 def ProverData (F : Type) :=
@@ -32,6 +36,8 @@ def ProverHint.empty (F : Type) : ProverHint F := fun _ _ => #[]
 
 instance : Inhabited (ProverHint F) where
   default := ProverHint.empty F
+
+namespace Clean
 
 /--
   `Environment` represents the data that is provided at runtime to concretely
@@ -193,3 +199,5 @@ lemma eval_foldl (env : Environment F) (n : ℕ)
     rw [h1]
 
 end EvalLemmas
+
+end Clean

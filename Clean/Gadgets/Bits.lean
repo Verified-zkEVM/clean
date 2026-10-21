@@ -3,6 +3,8 @@ import Clean.Gadgets.Boolean
 import Clean.Utils.Bits
 import Clean.Utils.Tactics
 
+open Clean
+
 namespace Gadgets.ToBits
 open Utils.Bits
 variable {p : ℕ} [prime: Fact p.Prime] [p_large_enough: Fact (p > 2)]

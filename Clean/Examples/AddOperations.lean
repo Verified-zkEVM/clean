@@ -2,6 +2,8 @@ import Clean.Utils.Primes
 import Clean.Gadgets.Addition8.Addition8
 import Clean.Gadgets.Addition32.Addition32Full
 
+open Clean
+
 section
 def circuit := do
   let x ← witness (F := F pBabybear) 246

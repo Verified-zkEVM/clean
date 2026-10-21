@@ -3,6 +3,8 @@ import Clean.Gadgets.Boolean
 import Clean.Utils.Primes
 import Clean.Utils.Bits
 
+open Clean
+
 section
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
 

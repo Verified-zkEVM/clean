@@ -10,6 +10,8 @@ import Clean.Circuit.ExplicitAttributes
 import Lean.Elab.Tactic
 import Mathlib.Lean.Meta.Simp
 
+namespace Clean
+
 open Lean Meta Elab Tactic
 
 register_option debug.elaborateCircuit : Bool := {
@@ -354,18 +356,18 @@ instance {M : TypeMap} [ProvableType M] {ir : WitgenIR F (size M)} : ExplicitCir
   operations n := [.witness (size M) ir]
   channelsWithGuarantees _ := []
 
-instance {m : ℕ} {c : Witgen.M F (Witgen.VExpr F m)} :
+instance {m : ℕ} {c : Witgen.M F (VExpr F m)} :
     ExplicitCircuit (witnessVectorProgram (F:=F) m c) :=
-  inferInstanceAs (ExplicitCircuit (witnessIR (fields m) c.toIR))
+  inferInstanceAs (ExplicitCircuit (witnessIR (fields m) (Witgen.M.toIR c)))
 
 /-- Bridge for scalar `witness` call sites (the family instance is keyed at
 `field (FExpr F)` / `size field`, while call sites elaborate at the literal). -/
-instance {e : Witgen.FExpr F} :
+instance {e : FExpr F} :
     ExplicitCircuit (witness (value := field) (var := Expression) e) :=
   inferInstanceAs (ExplicitCircuit (witnessField e))
 
 /-- Bridge for vector `witness` call sites at literal length `m`. -/
-instance {m : ℕ} {v : Vector (Witgen.FExpr F) m} :
+instance {m : ℕ} {v : Vector (FExpr F) m} :
     ExplicitCircuit (witness (value := (Vector · m)) (var := Var (fields m)) v) :=
   inferInstanceAs (ExplicitCircuit (witnessVector m (.lit v)))
 
@@ -451,9 +453,9 @@ instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value 
     simp [circuit_norm]
 
 instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value var]
-    {c : Witgen.M F (value (Witgen.FExpr F))} :
+    {c : Witgen.M F (value (FExpr F))} :
     ExplicitCircuit (witnessProgram (F:=F) (value:=value) (var:=var) c) :=
-  inferInstanceAs (ExplicitCircuit (inst.witnessIR (F:=F) (var:=var) (value := value) c.toIRLiteral))
+  inferInstanceAs (ExplicitCircuit (inst.witnessIR (F:=F) (var:=var) (value := value) (Witgen.M.toIRLiteral c)))
 
 instance {value var : TypeMap} [ProvableType value] [inst : Witnessable F value var] :
     ExplicitCircuits (witnessNative (F:=F) (value:=value) (var:=var)) where
@@ -1168,3 +1170,5 @@ private def assertBool (x : Expression F) := do
 example : ElaboratedCircuit F field unit assertBool := by elaborate_circuit_naive
 
 end
+
+end Clean

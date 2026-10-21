@@ -2,6 +2,8 @@ import Clean.Circuit.Basic
 import Clean.Circuit.Subcircuit
 import Clean.Circuit.Theorems
 
+namespace Clean
+
 variable {F : Type} [FiniteField F]
   {Input Mid Output : TypeMap} [ProvableType Input] [ProvableType Mid] [ProvableType Output]
 
@@ -139,3 +141,5 @@ lemma weakenSpec_assumptions (c : GeneralFormalCircuit F Input Output)
     (c.weakenSpec WeakerSpec h_spec_implication).Assumptions = c.Assumptions := by
   simp only [GeneralFormalCircuit.weakenSpec]
 end GeneralFormalCircuit
+
+end Clean

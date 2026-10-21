@@ -1,6 +1,8 @@
 import Clean.Circuit
 import Clean.Types.U32
 
+open Clean
+
 namespace TestCircuitStructDeriving
 
 structure Inputs (F : Type) where

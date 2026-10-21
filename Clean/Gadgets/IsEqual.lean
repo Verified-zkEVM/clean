@@ -14,6 +14,8 @@ import Clean.Gadgets.IsZero
 import Clean.Utils.Field
 import Clean.Utils.Tactics
 
+open Clean
+
 namespace Gadgets.IsEqual
 
 variable {F : Type} [FiniteField F] [DecidableEq F]
@@ -57,7 +59,7 @@ theorem soundness : Soundness (Input:=ProvablePair α α) (Output:=field) F (mai
       (toElements input.1)[i] - (toElements input.2)[i] := by
     intro i hi
     simp only [diffs, Vector.getElem_mapFinRange, Expression.eval, neg_one_mul]
-    erw [ProvableType.getElem_eval_toElements input_var.1 i, ProvableType.getElem_eval_toElements input_var.2 i,
+    erw [ProvableType.Clean.getElem_eval_toElements input_var.1 i, ProvableType.Clean.getElem_eval_toElements input_var.2 i,
       h_x, h_y]
     ring
   -- Helper: (toElements 0)[i] = 0
@@ -70,14 +72,14 @@ theorem soundness : Soundness (Input:=ProvablePair α α) (Output:=field) F (mai
     intro h_zero
     rw [ProvableType.ext_iff]; intro i hi
     have h_elem := congrArg (fun (x : α F) => (toElements x)[i]) h_zero
-    simp only [ProvableType.eval_fromElements, ProvableType.toElements_fromElements,
+    simp only [ProvableType.Clean.eval_fromElements, ProvableType.toElements_fromElements,
       Vector.getElem_map] at h_elem
     rw [h_diff i hi, h_zero_elem i hi] at h_elem
     exact sub_eq_zero.mp h_elem
   · -- backward: inputs equal → diffs evaluated to zero
     intro h_eq
     rw [ProvableType.ext_iff]; intro i hi
-    simp only [ProvableType.eval_fromElements, ProvableType.toElements_fromElements,
+    simp only [ProvableType.Clean.eval_fromElements, ProvableType.toElements_fromElements,
       Vector.getElem_map]
     rw [h_diff i hi, h_zero_elem i hi]
     rw [ProvableType.ext_iff] at h_eq; rw [h_eq i hi]; ring

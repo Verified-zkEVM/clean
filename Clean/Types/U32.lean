@@ -6,6 +6,8 @@ import Clean.Utils.Primes
 import Clean.Circuit.Subcircuit
 import Clean.Gadgets.Equality
 
+open Clean
+
 section
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
@@ -290,7 +292,7 @@ end U32.AssertNormalized
 /--
   Witness a 32-bit unsigned integer.
 -/
-def U32.witness (value : U32 (Witgen.FExpr (F p))) := do
+def U32.witness (value : U32 (FExpr (F p))) := do
   let x ← Witnessable.witness (F := F p) value
   U32.AssertNormalized.circuit x
   return x
@@ -330,11 +332,11 @@ lemma toLimbs_map {α β : Type} (x : U32 α) (f : α → β) :
 
 lemma getElem_eval_toLimbs {F} [FiniteField F] {env : Environment F} {x : U32 (Expression F)} {i : ℕ} (hi : i < 4) :
     Expression.eval env x.toLimbs[i] = (eval env x).toLimbs[i] := by
-  exact ProvableType.getElem_eval_toElements x i hi
+  exact ProvableType.Clean.getElem_eval_toElements x i hi
 
 lemma eval_fromLimbs {F} [FiniteField F] {env : Environment F} {v : Vector (Expression F) 4} :
     eval env (U32.fromLimbs v) = .fromLimbs (v.map env) := by
-  simp only [circuit_norm, U32.fromLimbs, ProvableType.eval_fromElements]
+  simp only [circuit_norm, U32.fromLimbs, ProvableType.Clean.eval_fromElements]
 end ByteVector
 
 -- Bitwise operations on U32

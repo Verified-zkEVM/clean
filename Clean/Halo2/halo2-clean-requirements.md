@@ -1,0 +1,294 @@
+# Halo2-Clean: Requirements
+
+This document defines the requirements for the second phase of the Zcash circuit
+formalization: a halo2-native circuit framework in Lean ("Halo2-Clean"), and the port of
+the ironwood action circuit to it.
+
+## Starting Point
+
+Phase one ([orchard-clean-plan](../Orchard/orchard-clean-plan.md), PRs #402/#409) ported
+the entire Orchard action circuit to Clean in an "approximate" form: source-conformant
+gadget structure, semantic specs, full soundness/completeness proofs — but Clean's linear
+witness tape cannot represent halo2's cell layout (columns, rows, rotations, selectors,
+copy constraints), so nothing ties those circuits to the constraint system behind the
+real verification key.
+
+This phase closes that gap. We deliberately do **not** generalize Clean's core (variable
+indices, operation set); instead we build a parallel, halo2-shaped framework from the
+ground up. Unifying the two frameworks is deferred until after the Zcash work ships.
+
+## Goal
+
+1. A framework for writing halo2 circuits in Lean idiomatically — at least the
+   circuit-writing convenience level of the Rust halo2 API — with formal proofs of
+   soundness and completeness against trace-level semantics.
+2. The ironwood action circuit (Orchard + cross-address checks) written in that
+   framework, with specs and proofs ported from the phase-one Orchard work.
+3. The framework is designed and looks **exactly like Clean**. It replaces only the
+   parts of Clean that are incompatible with halo2 and is otherwise the same, so that it
+   can be consolidated with main Clean later on.
+4. The two open seams in [zcash/ironwood](https://github.com/zcash/ironwood) discharged:
+   - **VK-correctness** (`Zcash/Snark/Verifier/Assemble.lean`): re-derive the
+     `VerifyingKey` constraint-system data from the circuit definition in Lean and prove
+     it equal to the captured fixture (`Zcash/Snark/Fingerprint/Fixture.lean`).
+   - **Semantic adequacy** (`Zcash/Snark/Soundness/Main.lean`): prove that
+     circuit-satisfaction implies the high-level action spec, filling the assumed
+     `hencodes`/`S` hypothesis.
+
+Timeline: ships before the Zcash network upgrade (early August 2026).
+
+## Where Code Lives
+
+- The framework starts as a branch of `clean` (`Clean/Halo2/`), moving to Lean/Mathlib
+  4.30 immediately so ironwood can import it ASAP.
+- The zcash circuit work itself (the phase-two equivalent of `Clean/Orchard/`) is
+  destined for the **ironwood repo**, importing clean for the framework. Until the 4.30
+  move lands, ironwood types may be temporarily vendored here.
+
+## Reference Sources
+
+Local clones in `/mnt/data-2tb/zks/`:
+
+- **orchard**: branch `feat/ironwood` (`0.15.0-pre.1`; `ebfull/ironwood` is the working
+  branch it derives from). The ironwood circuit = Orchard action circuit +
+  `synthesize_cross_address_checks` (`src/circuit.rs`); 99% is exactly Orchard.
+- **halo2**: tag `halo2_gadgets-0.5.0` (orchard's `feat/ironwood` depends on crates.io
+  `halo2_gadgets 0.5` / `halo2_proofs 0.3`, same as phase one).
+- **ironwood**: main. Verifier-side formalization; defines the types we must converge
+  with (`VerifyingKey`, `Expr`, `circuitSatViaGates`, `DeployedAccepts`).
+
+The hard reference rule from phase one carries over: every definition is ported from the
+actual Rust source, never inferred from memory or protocol descriptions.
+
+## Framework Requirements
+
+Informed by a survey of the halo2 `Region` API, halo2_gadgets, and orchard's circuit
+code, plus the (in-flux) ironwood Lean interfaces.
+
+### Clean-shaped, consolidation-ready
+
+The guiding design rule: **every deviation from main Clean must be justified by a halo2
+incompatibility; everything else is copied from Clean verbatim.** Same core concepts,
+names, file organization, and proof experience: a `Circuit` monad, `ProvableType`/
+`ProvableStruct`, a `FormalCircuit` bundle with `Assumptions`/`Spec`/`soundness`/
+`completeness`, `ElaboratedCircuit`, the subcircuit mechanism as the proof boundary,
+witgen IR for witness values, `circuit_norm`/`circuit_proof_start` as the automation
+entry points. One simplification versus main Clean: `FormalCircuit`/`FormalAssertion`/
+`GeneralFormalCircuit` collapse into the single hint-aware structure (main Clean's
+`GeneralFormalCircuit.WithHint`, under the shorter name) — the three-way split was a UX
+nicety that phase-one's Orchard port didn't lean on. The expected deviations are
+confined to: variables are cells rather than tape indices (with region-relative
+addressing replacing the linear offset), the operation set is halo2's (assign, copy,
+selector enable, region) rather than witness/assert, and the compiled artifact is a
+constraint system + layout rather than a flat operation list. This keeps a later
+consolidation with main Clean tractable and is a hard requirement, not a preference.
+
+Where code can actually be shared, it is **shared, not copied** — the witgen IR is the
+expected first case; candidates include `ProvableType` machinery and generic utilities.
+Reorganizing Clean core code is permitted where it facilitates sharing (e.g. splitting a
+file so the reusable part has no dependency on Clean's tape-indexed layer).
+
+### Two-layer DSL, mirroring halo2
+
+1. **Configure layer**: define custom gates and lookups as expressions over
+   (column, rotation) queries, with **first-class selectors**. The gate AST is main
+   Clean's four-node `Expression`, generalized over the variable type only
+   (`Expression F Query`); halo2's extra `Negated`/`Scaled` nodes are handled by a
+   total, semantics-preserving erasure (halo2 → clean direction) at the VK-comparison
+   boundary, so fixture matching stays an exact tree equality. Chip `configure`
+   functions are ported verbatim from Rust.
+2. **Synthesize layer**: monadic region DSL mirroring the halo2 `Region` API surface:
+   `assignAdvice`, `assignAdviceFromConstant`, `assignAdviceFromInstance`, `assignFixed`,
+   `copyAdvice`, `constrainEqual`, `constrainConstant`, selector `enable`;
+   `assignRegion` as the composition unit.
+
+Both layers are bundled in one gadget contract, `FormalCircuit F ConfigInput Config Input
+Output` (layouter-level) and `FormalRegionCircuit F ConfigInput Config Input Output`
+(region-level, for `assign_region` fragments composed inside a parent region): `configure
+: ConfigInput → Configure F Config` and `synthesize : Config → Var Input F → Circuit F
+(Var Output F)` (region-level `synthesize` additionally takes the row `offset` inside the
+ambient region). `ConfigInput` and `Config` are **type parameters** of the gadget, not
+existentials — parents interact with both, so they're part of the gadget's visible
+signature — and bundles (`witness_point`, `add_incomplete`, `add`, …) are consequently
+*parameterless* defs, not functions of a config. Soundness and completeness each quantify
+over an arbitrary `config` (and, region-level, `offset`), never fixing one; phase
+consistency between `configure` and `synthesize` is not proved but holds by construction,
+because the gate — the columns and selector a custom constraint refers to — is a
+standalone pure def referenced identically by both phases (see `AddIncomplete.gate` for
+the pattern).
+
+### ConfigWF is retired (closed design decision)
+
+Across all ported gadgets, the only configuration fact any soundness proof needed is
+lookup selector-index distinctness, carried by the config-aware `EnvAssumptions` slot.
+Rust's cross-sub-config column non-overlap assertions (`mul.rs` `configure`) are
+model-vacuous here: `cell` reads key on `(column, row)`, and the synthesize offset
+discipline provides row-disjointness where Rust's single region needs
+column-disjointness. The "consistent-by-design" fallback (config storing gates,
+soundness proved at `configure`'s output) is retired.
+
+### Composition currency: cell references
+
+The Rust survey settled this: halo2's synthesize API has no expression inputs
+(`Expression` exists only in configure), and every gadget-level abstraction is
+cell-backed (`Var` requires `cell()`; `EccPoint`, `MessagePiece`, `RunningSum` are
+structs of `AssignedCell`s). Therefore:
+
+- Subcircuit inputs/outputs are `AssignedCell` references, grouped in typed structs
+  (`ProvableStruct` analogue).
+- Source sum types are ported faithfully where they appear:
+  `PaddedWord = Message(cell) | Padding(constant)`, `RangeConstrained` over
+  assigned-cell vs. prover-value.
+- Prover-side `Value<F>` inputs (unassigned values, assigned inside the gadget) use the
+  phase-one `Unconstrained`/hint pattern; witness generation reuses Clean's witgen IR
+  concepts.
+- **`constrainConstant` and the constants column are first-class**: constants are copies
+  against fixed cells that participate in the permutation argument (this is visible in
+  the pinned CS: `constants: [Column 3 Fixed]`, permutation over 15 columns). Modeling
+  them as gate-level `.const` would break VK matching.
+- **No prover information at synthesis time (hard rule)**: `synthesize` functions must
+  never take or depend on prover-side witness values — no `BitsHint`-style parameters, no
+  `Value<>`-like data. All witness computation goes through the witness IR callbacks. Where
+  the Rust computes a value from a witnessed cell (e.g. `decompose_for_scalar_mul` from
+  `alpha.value()`), the port derives it from that cell via IR programs (`NExpr`/`BExpr`),
+  not via a bundle parameter. Genuinely external hints use the `Unconstrained` mechanisms
+  above, not ad hoc parameters.
+
+### Semantics: trace satisfaction
+
+The proof-facing anchor is a row-wise satisfaction predicate over traces
+(assignments column-index → row → F): every gate polynomial vanishes at every row
+(selector-weighted), copy-constrained cells are equal, lookup rows are members of their
+tables. This predicate must bridge (one shared lemma, joint work with ironwood's
+permutation/lookup soundness effort) to ironwood's polynomial-level `circuitSatViaGates`.
+
+### Proofs are region-relative
+
+- Cells in proofs are region-relative; absolute rows exist only after placement.
+  Soundness/completeness of a gadget never depends on where the floor planner puts its
+  regions.
+
+### Region-faithfulness (hard porting rule)
+
+Region boundaries in a port must mirror the Rust source exactly: which
+`layouter.assign_region` calls exist, and what each one contains. "Same constraints,
+different layout" is a VK bug — the verifying key's permutation commitments are built
+from copy constraints over absolute floor-planned positions, so flattening sibling
+regions into one region (or splitting one region into several) silently breaks VK
+matching even when the soundness/completeness proofs go through unchanged. (`mul.rs`
+runs its overflow check at layouter level in three sibling regions; an early port
+flattened them into the main region — caught in review, being fixed.)
+
+### Knowledge soundness: constructive high-level witnesses
+
+Plain input/output soundness is insufficient for some Zcash specs: when a spec must
+talk about internal witnesses that are not circuit I/O (halo2's fixed-base scalar mul:
+the scalar exists only as window cells), an existential spec (`∃ s, output = s • B`)
+says nothing — the interesting property is that the prover *knows* `s`. Therefore
+(tried here first, destined for main Clean):
+
+- `FormalCircuit` gains a `Witness` type slot (default `unit`) and a **constructive
+  extractor** — a computable function from the low-level witness (placement +
+  environment) to `Witness F`. `Spec` receives the extracted witness as an additional
+  argument; soundness concludes `Spec input (extract …) output`.
+- Extractors compose through the subcircuit tree by construction (parents call child
+  extractors), so knowledge soundness composes constructively — which is what the
+  ironwood integration needs end-to-end (their SNARK extractor yields the low-level
+  witness; the circuit extractor chain lifts it to the high-level one).
+- No polytime/complexity formalism at the framework level: constructivity is the
+  requirement (soft-enforced — `FormalCircuit`s must be computable anyway for VK
+  compilation, so `Classical.choice` in an extractor forces a visible `noncomputable`).
+  Practical speed, if needed, is argued once about the top-level circuit's extractor.
+- Phase-one specs with existential internal witnesses (the fixed-base mul family) are
+  upgraded to extractor form during the port.
+
+### Proof UX
+
+Target the phase-one proof experience: analogues of `circuit_proof_start`,
+`circuit_norm`, and `elaborate_circuit`; subcircuit-style proof boundaries so parent
+proofs consume child specs opaquely. User-land proofs must not unfold framework
+internals.
+
+**Completeness assumes `Assumptions ∧ ProverAssumptions`.** Completeness carries the same
+`Assumptions (eval env.toEnvironment input)` hypothesis as soundness — the verifier-visible
+value, evaluated through `Placed.toEnvironment` — *plus* `ProverAssumptions` on the
+prover-side value and hints. `ProverAssumptions` is strictly additional: gadgets never
+repeat a fact already implied by `Assumptions`, only hint-side facts the verifier value
+erases. Symmetrically, `completeness_iff` intros only the prover-side input value (with its
+defining equation); the `Assumptions` hypothesis is left as a raw verifier-side `eval`, which
+the eval machinery decomposes like any other row-level fact. Gadget contract rules of thumb:
+leave `ProverSpec`/`ProverAssumptions` at their defaults (`True`) unless the gadget actually
+needs more — `ProverSpec` only once a *parent's* completeness needs something beyond
+`Assumptions → Spec` (typically hint-consuming gadgets, e.g. `witness_point`'s
+`output = input`), `ProverAssumptions` only for genuinely hint-side facts.
+
+**Deliberate simp normal forms** (a lesson from main Clean, where blanket
+`@[circuit_norm]` tagging of every circuit definition made proofs unfold to unwieldy
+low-level statements): monadic composition, DSL atoms (`assignAdvice`, …), and circuit
+accessors (`Circuit.output`, `operations`) are themselves the normal forms and never
+unfold. The simp set is a dedicated file of *composition lemmas* (accessors over
+binds/atoms, `Constraints` over operation lists), added on demand, never
+speculatively.
+
+**`provable_type_simp`** is the halo2 counterpart of main Clean's `provable_struct_simp`:
+one tactic that normalizes provable-type values along semantic component boundaries via a
+dedicated set of struct-eval simprocs — decomposing literals and lifting projections at
+`ProvableStruct`/`ProvableType` component boundaries, gated so it only fires where a fact
+in context makes a value's shape relevant. Opaque evals not tied to such a fact stay
+folded as `Eval.eval` — never eagerly unfolded. The companion "pretty" normal form pins how
+circuit-created cells and environment reads print: named cells (`AssignedCell.of`, never an
+anonymous record literal) and typed reads on the `Environment.advice`-family accessors
+(`Column.toAny` folded away). This is pinned syntactically by `guard_hyp :ₛ` regression
+tests (`Clean/Utils/Test/TestProvableTypeSimp.lean`), not just checked up to defeq.
+
+**Proof style contract, enforced by convention**: every gadget proof splits into a
+framework/tactic half — nothing gadget-specific beyond the gadget's own defs passed as simp
+args, chaining row-level facts down from the constraints — and a user half of pure value
+math with zero framework vocabulary (field/curve algebra closed by whatever's simplest,
+`grind`/`simp_all` preferred over manual case chains). `AddIncomplete.add`'s soundness and
+completeness proofs are the reference shape for the split. Spots where the framework half
+still needs a manual assist are to be marked `-- TACTIC GAP:` in the gadget source as they
+come up; these feed the design of a single starting tactic (subsuming
+`circuit_proof_start`) that also does the row-fact chaining the forward-lemma mechanism
+will need.
+
+**Friction-twice rule (agent working rule)**: when the same manual proof plumbing appears
+in a second gadget, stop porting and build the generic tool (tactic, simproc, framework
+lemma, deriving mechanism) before continuing. Collecting friction findings without
+spending them is how helper-lemma bloat accumulated in the first composite ports; the
+tactic layer is a primary goal of the vertical slice, not a follow-up.
+
+### Reuse from phase one
+
+The Orchard-in-Clean tree is the reference implementation and proof-content donor:
+
+- `Spec`s, `Assumptions`, and all mathematical lemmas (CompElliptic-based EC facts,
+  Sinsemilla/Poseidon specs, `pallas_natCard`) carry over (modulo consolidating them with `zcash/ironwood` specs).
+- Circuit bodies are rewritten in the new DSL (mechanical; they already mirror
+  `assign_region` structure), and plumbing halves of proofs are redone with the new
+  automation.
+
+## Out of Scope (Deferred)
+
+- Recomputing the VK's `fixed_commitments` / permutation commitments in Lean (Pallas
+  MSMs); until then, commitment-level VK identity rests on ironwood's fixture capture.
+- Generalizing mainline Clean to share code with Halo2-Clean.
+
+## Milestones
+
+1. **Vertical slice**: core types + one gadget chain (`witness_point` →
+   `add_incomplete`) end to end — configure, synthesize, region-relative proof, CS data
+   extraction matched against the corresponding fixture fragment. De-risks every layer.
+   Done: `witness_point`, `add_incomplete`, and `add` (complete addition) are all ported
+   with soundness and completeness proved.
+2. **Forward-lemma subcircuit machinery** (the `#358` mechanism sketched in
+   `Clean/Halo2/Formal.lean`, `FormalCircuit`'s TODO): lets a parent's proof consume a
+   child's `soundness`/`completeness` opaquely instead of unfolding its `.subcircuit`
+   operations by hand. First real consumer: `mul` (variable-base scalar multiplication,
+   `halo2_gadgets/src/ecc/chip/mul/complete.rs`), whose complete-addition step calls `add`
+   as a child. Expected to be where `ConfigWF` first bites — `mul`'s `configure` composes
+   several sub-configs and needs their columns proved non-overlapping.
+3. **Lookup axis**, designed in parallel: fixed-column lookup arguments, needed for
+   `mul`'s overflow checks (`mul/overflow.rs`) and Sinsemilla.
+
+(More concrete milestones will be added as we progress.)

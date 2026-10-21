@@ -2,6 +2,8 @@ import Clean.Circuit
 import Clean.Utils.Field
 import Clean.Utils.Tactics
 
+open Clean
+
 namespace Circomlib
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
 

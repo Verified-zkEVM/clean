@@ -7,6 +7,8 @@ import Clean.Specs.BLAKE3
 import Clean.Circuit.StructuralLemmas
 import Clean.Utils.Tactics
 
+open Clean
+
 namespace Gadgets.BLAKE3.ApplyRounds
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
 instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])

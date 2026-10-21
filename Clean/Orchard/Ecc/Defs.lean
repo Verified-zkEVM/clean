@@ -4,6 +4,8 @@ import Clean.Orchard.Specs.Pallas
 import Clean.Utils.Tactics
 import Mathlib.Tactic
 
+open Clean
+
 /-
 Some definitions useful for circuits involving points
 -/

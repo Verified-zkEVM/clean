@@ -3,6 +3,8 @@ import Clean.Circuit.Basic
 import Clean.Table.Basic
 import Clean.Gadgets.Addition8.Addition8
 
+open Clean
+
 namespace Tables.Addition8
 open Gadgets
 variable {p : ℕ} [Fact p.Prime]

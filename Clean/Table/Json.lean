@@ -2,6 +2,8 @@ import Clean.Table.Basic
 import Clean.Table.WitnessGeneration
 import Clean.Circuit.Json
 
+open Clean
+
 open Lean
 
 instance : ToJson RowIndex where

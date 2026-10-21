@@ -1,5 +1,5 @@
 import Clean.Circuit
-import Clean.Orchard
+import Clean.Halo2
 import Clean.Examples.WitnessExport
 import Clean.Utils.FiniteField
 import Clean.Utils.SourceSinkPath

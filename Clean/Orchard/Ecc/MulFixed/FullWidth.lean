@@ -2,6 +2,8 @@ import Clean.Orchard.Ecc.MulFixed
 import Clean.Orchard.Ecc.AddIncomplete
 import Clean.Orchard.Ecc.Add
 
+open Clean
+
 /-!
 Reference: `halo2_gadgets/src/ecc/chip/mul_fixed/full_width.rs`.
 
@@ -64,7 +66,7 @@ def circuit (params : CoordsParams Fp) :
   Spec := Spec params
   soundness := by
     circuit_proof_start [main, Spec, IsWindow, Coords.circuit, Coords.Spec,
-      rangeCheck, xCheck, yCheck, onCurve, interpolatedX, interpolate]
+      rangeCheck, interpolate]
     constructor
     · simpa [sub_eq_add_neg] using h_holds.1
     · have hRange := h_holds.2
@@ -87,7 +89,7 @@ def circuit (params : CoordsParams Fp) :
           linear_combination -h7)))))))
   completeness := by
     circuit_proof_start [main, Spec, IsWindow, Coords.circuit, Coords.Spec,
-      rangeCheck, xCheck, yCheck, onCurve, interpolatedX, interpolate]
+      rangeCheck, interpolate]
     constructor
     · simpa [sub_eq_add_neg] using h_spec.1
     · rcases h_spec.2 with h0 | h1 | h2 | h3 | h4 | h5 | h6 | h7
@@ -164,14 +166,14 @@ theorem rowValue_spec (B : FixedBase) (s : ℕ) {w : ℕ} (hw : w < 85) :
     dsimp [Point.OnCurve] at h
     show (windowPoint B.point w (windowVal s w)).y * (windowPoint B.point w (windowVal s w)).y
       = (windowPoint B.point w (windowVal s w)).x * (windowPoint B.point w (windowVal s w)).x
-        * (windowPoint B.point w (windowVal s w)).x + 5
+        * (windowPoint B.point w (windowVal s w)).x + pallasB
     linear_combination h
 
 /-- The witness program of one window row: read the scalar hint, take window `w` of its
 base-8 decomposition (`k = s / 8^w % 8`, matching `windowVal` definitionally), and read
 the three window-table columns at the computed index `k`. -/
 def rowProgram (B : FixedBase) (scalar : Var UnconstrainedNat Fp) (w : ℕ) :
-    Witgen.M Fp (CoordsRow (Witgen.FExpr Fp)) := do
+    Witgen.M Fp (CoordsRow (FExpr Fp)) := do
   let xs := Vector.ofFn fun k : Fin 8 => (windowPoint B.point w k.val).x
   let ys := Vector.ofFn fun k : Fin 8 => (windowPoint B.point w k.val).y
   let us := Vector.ofFn fun k : Fin 8 => B.u w k.val
@@ -625,7 +627,7 @@ theorem completeness (B : FixedBase) :
   have h84yR : env.get (i₀ + 4 + 830 + 1 + 1) = R84.yP := by
     rw [← hR84_def]
     exact h84y
-  have hcurveR : R84.yP * R84.yP = R84.xP * R84.xP * R84.xP + 5 := by
+  have hcurveR : R84.yP * R84.yP = R84.xP * R84.xP * R84.xP + pallasB := by
     rw [← hR84_def]
     exact (rowValue_spec B input (w := 84) (by norm_num)).1.2.2
   have hValidP :

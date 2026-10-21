@@ -2,6 +2,8 @@ import Clean.Circuit
 import Clean.Orchard.Ecc.MulFixed.FullWidth
 import Clean.Orchard.Ecc.Add
 
+open Clean
+
 /-!
 # Orchard spend authority
 

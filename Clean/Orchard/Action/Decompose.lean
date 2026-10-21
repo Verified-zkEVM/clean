@@ -4,6 +4,8 @@ import Clean.Orchard.Action.CanonicityTheorems
 import Clean.Utils.Tactics
 import Clean.Utils.Tactics.ProvableStructDeriving
 
+open Clean
+
 /-!
 # NoteCommit message-piece decomposition gates
 

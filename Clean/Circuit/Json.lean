@@ -2,6 +2,8 @@ import Clean.Utils.Field
 import Clean.Circuit.Expression
 import Clean.Circuit.Basic
 
+namespace Clean
+
 open Lean
 
 -- needs to be above the variable F, otherwise the F p from Utils.Field got overrided
@@ -79,3 +81,5 @@ instance : ToJson (Operation F) where
 
 instance : ToJson (Operations F) where
   toJson ops := toJson ops.toList
+
+end Clean

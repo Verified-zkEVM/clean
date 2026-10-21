@@ -11,6 +11,8 @@ This ensures that the `FormalCircuit` and `FormalAssertion` definitions are not 
 import Clean.Circuit.Formal
 import Clean.Circuit.Theorems
 
+namespace Clean
+
 variable {F : Type} [FiniteField F]
 variable {α β : TypeMap}
 
@@ -184,3 +186,5 @@ theorem GeneralFormalCircuit.original_full_completeness
   apply Circuit.can_replace_completeness_and_guarantees h_consistent h_env
   have h_env' := env.can_replace_usesLocalWitnessesCompleteness h_consistent h_env
   exact (circuit.completeness offset env input_var h_env' input rfl h_assumptions).1
+
+end Clean

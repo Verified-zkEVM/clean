@@ -5,6 +5,8 @@ import Clean.Circuit.Provable
 import Clean.Utils.Tactics
 import Clean.Utils.Tactics.ProvableStructDeriving
 
+open Clean
+
 namespace Gadgets.BLAKE3.Round
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 2^16 + 2^8)]
 instance : Fact (p > 512) := .mk (by linarith [p_large_enough.elim])

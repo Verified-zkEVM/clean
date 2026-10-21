@@ -5,6 +5,8 @@ import Clean.Gadgets.Bits
 import Clean.Gadgets.Keccak.Permutation
 import Clean.Utils.Primes
 
+open Clean
+
 /-!
 Exercises `#assert_exportable` and `#witgen_json` (witgen IR plan, phase 6) on ported
 gadgets, including a guarded failure for a native-closure witness.

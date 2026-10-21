@@ -1,6 +1,8 @@
 import Clean.Gadgets.Addition8.Addition8FullCarry
 import Clean.Gadgets.Boolean
 
+open Clean
+
 namespace Gadgets
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 

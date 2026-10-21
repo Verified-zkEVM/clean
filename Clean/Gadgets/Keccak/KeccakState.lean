@@ -3,6 +3,8 @@ import Clean.Circuit.Provable
 import Clean.Utils.Field
 import Clean.Specs.Keccak256
 
+open Clean
+
 namespace Gadgets.Keccak256
 open Specs.Keccak256
 

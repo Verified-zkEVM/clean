@@ -1,6 +1,8 @@
 import Clean.Circuit
 import Clean.Utils.Tactics
 
+open Clean
+
 namespace TestSplitProvableStructEq
 
 -- Test structure with ProvableStruct instance

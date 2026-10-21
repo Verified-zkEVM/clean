@@ -5,6 +5,8 @@ import Clean.Orchard.Action.CanonicityTheorems
 import Clean.Utils.Tactics
 import Clean.Utils.Tactics.ProvableStructDeriving
 
+open Clean
+
 /-!
 # Orchard incoming viewing key commitment gate
 
@@ -120,7 +122,7 @@ instance elaborated : ElaboratedCircuit Fp Input unit main := by
 /-- The `ak` side of the gate's soundness argument (mirrors `GdCanonicity`): `a`/`b0`/`b1`
 are the canonical bit slices of `ak`. Split out of `soundness` so that no single
 declaration's kernel check explodes (4.30 bump). -/
-private theorem soundness_ak {ak a b0 b1 z13A aPrime z13APrime : Fp}
+theorem soundness_ak {ak a b0 b1 z13A aPrime z13APrime : Fp}
     (ha_lt : a.val < 2 ^ 250) (hb0_lt : b0.val < 2 ^ 4) (hb1 : IsBool b1)
     (haPrime : aPrime = a + ((2 ^ 130 : ℕ) : Fp) - tP)
     (hz13A : z13A = ((a.val / 2 ^ 130 : ℕ) : Fp))
@@ -180,7 +182,7 @@ private theorem soundness_ak {ak a b0 b1 z13A aPrime z13APrime : Fp}
 /-- The `nk` side of the gate's soundness argument (3-limb low part `b2 + c·2^5 + d0·2^245`,
 top bit `d1`): `b2`/`c`/`d0`/`d1` are the canonical bit slices of `nk`. Split out of
 `soundness` so that no single declaration's kernel check explodes (4.30 bump). -/
-private theorem soundness_nk {nk b2 c d0 d1 b2CPrime z14B2CPrime : Fp}
+theorem soundness_nk {nk b2 c d0 d1 b2CPrime z14B2CPrime : Fp}
     (hb2_lt : b2.val < 2 ^ 5) (hc_lt : c.val < 2 ^ 240) (hd0_lt : d0.val < 2 ^ 9)
     (hd1 : IsBool d1)
     (hb2cP : b2CPrime = b2 + c * ((2 ^ 5 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - tP)
@@ -260,35 +262,49 @@ theorem soundness : FormalAssertion.Soundness Fp main Assumptions Spec := by
   exact ⟨ha_eq, hb0_eq, hb1_eq, hb2_eq, hc_eq, hd0_eq, hd1_eq,
     by linear_combination hbW, by linear_combination hdW⟩
 
-theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := by
-  circuit_proof_start
+/-- Row-level completeness direction (extracted from `completeness` for the halo2-native
+port): the rely-conditions plus the spec discharge the fourteen gate equations. -/
+theorem eqs_of_spec (row : Input Fp) (hAss : Assumptions row) (hSpec : Spec row) :
+    IsBool row.b1 ∧ IsBool row.d1 ∧
+    (row.bWhole - (row.b0 + row.b1 * 16 + row.b2 * 32) = 0) ∧
+    (row.dWhole - (row.d0 + row.d1 * 512) = 0) ∧
+    (row.a + row.b0 * ((2 ^ 250 : ℕ) : Fp) + row.b1 * ((2 ^ 254 : ℕ) : Fp)
+      - row.ak = 0) ∧
+    (row.b2 + row.c * ((2 ^ 5 : ℕ) : Fp) + row.d0 * ((2 ^ 245 : ℕ) : Fp)
+      + row.d1 * ((2 ^ 254 : ℕ) : Fp) - row.nk = 0) ∧
+    row.b1 * row.b0 = 0 ∧ row.b1 * row.z13A = 0 ∧
+    (row.a + ((2 ^ 130 : ℕ) : Fp) - tP - row.aPrime = 0) ∧
+    row.b1 * row.z13APrime = 0 ∧ row.d1 * row.d0 = 0 ∧ row.d1 * row.z13C = 0 ∧
+    (row.b2 + row.c * ((2 ^ 5 : ℕ) : Fp) + ((2 ^ 140 : ℕ) : Fp) - tP
+      - row.b2CPrime = 0) ∧
+    row.d1 * row.z14B2CPrime = 0 := by
   obtain ⟨ha_lt, hb0_lt, hb2_lt, hc_lt, hd0_lt, haPrime, hz13A, _hz13APrimeDec,
-    hb1z13APrimeImpl, hb2cP, hz13C, _hz14Dec, hd1z14Impl⟩ := h_assumptions
-  obtain ⟨ha_val, hb0_val, hb1_val, hb2_val, hc_val, hd0_val, hd1_val, hbW, hdW⟩ := h_spec
+    hb1z13APrimeImpl, hb2cP, hz13C, _hz14Dec, hd1z14Impl⟩ := hAss
+  obtain ⟨ha_val, hb0_val, hb1_val, hb2_val, hc_val, hd0_val, hd1_val, hbW, hdW⟩ := hSpec
   have hp := pallasBaseCard_eq
   have htpsmall : tPNat < 2 ^ 130 := by norm_num [tPNat]
-  have hak : input_ak.val < 2 ^ 255 :=
-    lt_trans (ZMod.val_lt input_ak) (by norm_num [PALLAS_BASE_CARD])
-  have hnk : input_nk.val < 2 ^ 255 :=
-    lt_trans (ZMod.val_lt input_nk) (by norm_num [PALLAS_BASE_CARD])
-  have ha_eq : input_a = ((bitrange input_ak.val 0 250 : ℕ) : Fp) := by
-    rw [← ha_val]; exact (ZMod.natCast_rightInverse input_a).symm
-  have hb0_eq : input_b0 = ((bitrange input_ak.val 250 4 : ℕ) : Fp) := by
-    rw [← hb0_val]; exact (ZMod.natCast_rightInverse input_b0).symm
-  have hb1_eq : input_b1 = ((bitrange input_ak.val 254 1 : ℕ) : Fp) := by
-    rw [← hb1_val]; exact (ZMod.natCast_rightInverse input_b1).symm
-  have hb2_eq : input_b2 = ((bitrange input_nk.val 0 5 : ℕ) : Fp) := by
-    rw [← hb2_val]; exact (ZMod.natCast_rightInverse input_b2).symm
-  have hc_eq : input_c = ((bitrange input_nk.val 5 240 : ℕ) : Fp) := by
-    rw [← hc_val]; exact (ZMod.natCast_rightInverse input_c).symm
-  have hd0_eq : input_d0 = ((bitrange input_nk.val 245 9 : ℕ) : Fp) := by
-    rw [← hd0_val]; exact (ZMod.natCast_rightInverse input_d0).symm
-  have hd1_eq : input_d1 = ((bitrange input_nk.val 254 1 : ℕ) : Fp) := by
-    rw [← hd1_val]; exact (ZMod.natCast_rightInverse input_d1).symm
-  have hb1cases := show bitrange input_ak.val 254 1 = 0 ∨ bitrange input_ak.val 254 1 = 1 from by
-    have := bitrange_lt input_ak.val 254 1; omega
-  have hd1cases := show bitrange input_nk.val 254 1 = 0 ∨ bitrange input_nk.val 254 1 = 1 from by
-    have := bitrange_lt input_nk.val 254 1; omega
+  have hak : row.ak.val < 2 ^ 255 :=
+    lt_trans (ZMod.val_lt row.ak) (by norm_num [PALLAS_BASE_CARD])
+  have hnk : row.nk.val < 2 ^ 255 :=
+    lt_trans (ZMod.val_lt row.nk) (by norm_num [PALLAS_BASE_CARD])
+  have ha_eq : row.a = ((bitrange row.ak.val 0 250 : ℕ) : Fp) := by
+    rw [← ha_val]; exact (ZMod.natCast_rightInverse row.a).symm
+  have hb0_eq : row.b0 = ((bitrange row.ak.val 250 4 : ℕ) : Fp) := by
+    rw [← hb0_val]; exact (ZMod.natCast_rightInverse row.b0).symm
+  have hb1_eq : row.b1 = ((bitrange row.ak.val 254 1 : ℕ) : Fp) := by
+    rw [← hb1_val]; exact (ZMod.natCast_rightInverse row.b1).symm
+  have hb2_eq : row.b2 = ((bitrange row.nk.val 0 5 : ℕ) : Fp) := by
+    rw [← hb2_val]; exact (ZMod.natCast_rightInverse row.b2).symm
+  have hc_eq : row.c = ((bitrange row.nk.val 5 240 : ℕ) : Fp) := by
+    rw [← hc_val]; exact (ZMod.natCast_rightInverse row.c).symm
+  have hd0_eq : row.d0 = ((bitrange row.nk.val 245 9 : ℕ) : Fp) := by
+    rw [← hd0_val]; exact (ZMod.natCast_rightInverse row.d0).symm
+  have hd1_eq : row.d1 = ((bitrange row.nk.val 254 1 : ℕ) : Fp) := by
+    rw [← hd1_val]; exact (ZMod.natCast_rightInverse row.d1).symm
+  have hb1cases := show bitrange row.ak.val 254 1 = 0 ∨ bitrange row.ak.val 254 1 = 1 from by
+    have := bitrange_lt row.ak.val 254 1; omega
+  have hd1cases := show bitrange row.nk.val 254 1 = 0 ∨ bitrange row.nk.val 254 1 = 1 from by
+    have := bitrange_lt row.nk.val 254 1; omega
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · -- IsBool b1
     rw [hb1_eq]; exact bitrange_one_isBool _ _
@@ -299,36 +315,36 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
   · -- dWhole
     rw [hdW]; ring
   · -- ak reconstruction
-    have hak_eq : input_ak = ((bitrange input_ak.val 0 250 : ℕ) : Fp)
-        + ((bitrange input_ak.val 250 4 : ℕ) : Fp) * ((2 ^ 250 : ℕ) : Fp)
-        + ((bitrange input_ak.val 254 1 : ℕ) : Fp) * ((2 ^ 254 : ℕ) : Fp) := by
-      conv_lhs => rw [← ZMod.natCast_rightInverse input_ak, bit_decomp_255 hak]
+    have hak_eq : row.ak = ((bitrange row.ak.val 0 250 : ℕ) : Fp)
+        + ((bitrange row.ak.val 250 4 : ℕ) : Fp) * ((2 ^ 250 : ℕ) : Fp)
+        + ((bitrange row.ak.val 254 1 : ℕ) : Fp) * ((2 ^ 254 : ℕ) : Fp) := by
+      conv_lhs => rw [← ZMod.natCast_rightInverse row.ak, bit_decomp_255 hak]
       push_cast; ring
     rw [ha_eq, hb0_eq, hb1_eq]; linear_combination -hak_eq
   · -- nk reconstruction
-    have hdec : input_nk.val = bitrange input_nk.val 0 5
-        + 2 ^ 5 * bitrange input_nk.val 5 240
-        + 2 ^ 245 * bitrange input_nk.val 245 9
-        + 2 ^ 254 * bitrange input_nk.val 254 1 := by
+    have hdec : row.nk.val = bitrange row.nk.val 0 5
+        + 2 ^ 5 * bitrange row.nk.val 5 240
+        + 2 ^ 245 * bitrange row.nk.val 245 9
+        + 2 ^ 254 * bitrange row.nk.val 254 1 := by
       simp only [bitrange, pow_zero, Nat.div_one]; omega
-    have hnk_eq : input_nk = ((bitrange input_nk.val 0 5 : ℕ) : Fp)
-        + ((bitrange input_nk.val 5 240 : ℕ) : Fp) * ((2 ^ 5 : ℕ) : Fp)
-        + ((bitrange input_nk.val 245 9 : ℕ) : Fp) * ((2 ^ 245 : ℕ) : Fp)
-        + ((bitrange input_nk.val 254 1 : ℕ) : Fp) * ((2 ^ 254 : ℕ) : Fp) := by
-      conv_lhs => rw [← ZMod.natCast_rightInverse input_nk, hdec]
+    have hnk_eq : row.nk = ((bitrange row.nk.val 0 5 : ℕ) : Fp)
+        + ((bitrange row.nk.val 5 240 : ℕ) : Fp) * ((2 ^ 5 : ℕ) : Fp)
+        + ((bitrange row.nk.val 245 9 : ℕ) : Fp) * ((2 ^ 245 : ℕ) : Fp)
+        + ((bitrange row.nk.val 254 1 : ℕ) : Fp) * ((2 ^ 254 : ℕ) : Fp) := by
+      conv_lhs => rw [← ZMod.natCast_rightInverse row.nk, hdec]
       push_cast; ring
     rw [hb2_eq, hc_eq, hd0_eq, hd1_eq]; linear_combination -hnk_eq
   · -- b1·b0 = 0
     rcases hb1cases with h | h
     · rw [hb1_eq, h]; simp
-    · rw [hb0_eq, (high_bit_canonical (ZMod.val_lt input_ak) h).1]; simp
+    · rw [hb0_eq, (high_bit_canonical (ZMod.val_lt row.ak) h).1]; simp
   · -- b1·z13A = 0
     rcases hb1cases with h | h
     · rw [hb1_eq, h]; simp
     · rw [hz13A, ha_val,
-        show bitrange input_ak.val 0 250 / 2 ^ 130 = bitrange input_ak.val 130 120 from
-          bitrange_low_div input_ak.val 130 120,
-        high_bit_z13_zero (ZMod.val_lt input_ak) h]
+        show bitrange row.ak.val 0 250 / 2 ^ 130 = bitrange row.ak.val 130 120 from
+          bitrange_low_div row.ak.val 130 120,
+        high_bit_z13_zero (ZMod.val_lt row.ak) h]
       simp
   · -- aPrime
     rw [haPrime]; ring
@@ -339,14 +355,14 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
   · -- d1·d0 = 0
     rcases hd1cases with h | h
     · rw [hd1_eq, h]; simp
-    · rw [hd0_eq, (high_bit_high_zero (ZMod.val_lt input_nk) h (by norm_num) (by norm_num))]; simp
+    · rw [hd0_eq, (high_bit_high_zero (ZMod.val_lt row.nk) h (by norm_num) (by norm_num))]; simp
   · -- d1·z13C = 0
     rcases hd1cases with h | h
     · rw [hd1_eq, h]; simp
     · rw [hz13C, hc_val,
-        show bitrange input_nk.val 5 240 / 2 ^ 130 = bitrange input_nk.val 135 110 from
-          bitrange_div_pow input_nk.val 5 130 110,
-        high_bit_high_zero (ZMod.val_lt input_nk) h (by norm_num) (by norm_num)]
+        show bitrange row.nk.val 5 240 / 2 ^ 130 = bitrange row.nk.val 135 110 from
+          bitrange_div_pow row.nk.val 5 130 110,
+        high_bit_high_zero (ZMod.val_lt row.nk) h (by norm_num) (by norm_num)]
       simp
   · -- b2CPrime
     rw [hb2cP]; ring
@@ -354,6 +370,14 @@ theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := 
     rcases hd1cases with h | h
     · rw [hd1_eq, h]; simp
     · rw [hd1z14Impl (by rw [hd1_eq, h]; norm_num)]; simp
+
+theorem completeness : FormalAssertion.Completeness Fp main Assumptions Spec := by
+  circuit_proof_start
+  exact eqs_of_spec
+    ⟨input_ak, input_nk, input_a, input_bWhole, input_c, input_dWhole, input_b0,
+      input_b1, input_b2, input_d0, input_d1, input_z13A, input_z13C, input_aPrime,
+      input_b2CPrime, input_z13APrime, input_z14B2CPrime⟩
+    h_assumptions h_spec
 
 def circuit : FormalAssertion Fp Input where
   name := "GATE CommitIvk canonicity check"

@@ -3,6 +3,8 @@ import Clean.Circuit.Provable
 import Clean.Circuit.SimpGadget
 import Mathlib.Data.Finsupp.Defs
 
+namespace Clean
+
 variable {F : Type} [FiniteField F]
 variable {Message : TypeMap} [ProvableType Message]
 
@@ -191,15 +193,15 @@ omit [FiniteField F] in @[circuit_norm] lemma pushedIf_assumeGuarantees (enabled
   (pushedIf enabled msg : ChannelInteraction channel).assumeGuarantees = false := rfl
 
 @[circuit_norm] def Channel.emitted (channel : Channel F Message) mult msg :=
-  _root_.emitted (channel := channel) mult msg
+  Clean.emitted (channel := channel) mult msg
 @[circuit_norm] def Channel.pulled (channel : Channel F Message) msg :=
-  _root_.pulled (channel := channel) msg
+  Clean.pulled (channel := channel) msg
 @[circuit_norm] def Channel.pushed (channel : Channel F Message) msg :=
-  _root_.pushed (channel := channel) msg
+  Clean.pushed (channel := channel) msg
 @[circuit_norm] def Channel.pulledIf (channel : Channel F Message) enabled msg :=
-  _root_.pulledIf (channel := channel) enabled msg
+  Clean.pulledIf (channel := channel) enabled msg
 @[circuit_norm] def Channel.pushedIf (channel : Channel F Message) enabled msg :=
-  _root_.pushedIf (channel := channel) enabled msg
+  Clean.pushedIf (channel := channel) enabled msg
 
 namespace ChannelInteraction
 def toRaw (i : ChannelInteraction channel) : AbstractInteraction F :=
@@ -237,13 +239,13 @@ namespace ChannelInteraction
 lemma toRaw_guarantees (env : Environment F) (int : ChannelInteraction channel) :
     int.toRaw.Guarantees env ↔ int.Guarantees env := by
   simp [AbstractInteraction.Guarantees, ChannelInteraction.Guarantees,
-    ChannelInteraction.toRaw, Channel.toRaw, ProvableType.fromElements_eval_toElements]
+    ChannelInteraction.toRaw, Channel.toRaw, ProvableType.Clean.fromElements_eval_toElements]
 
 @[circuit_norm]
 lemma toRaw_requirements (env : Environment F) (int : ChannelInteraction channel) :
     int.toRaw.Requirements env ↔ int.Requirements env := by
   simp [AbstractInteraction.Requirements, ChannelInteraction.Requirements,
-    ChannelInteraction.toRaw, Channel.toRaw, ProvableType.fromElements_eval_toElements]
+    ChannelInteraction.toRaw, Channel.toRaw, ProvableType.Clean.fromElements_eval_toElements]
 end ChannelInteraction
 
 structure ExposedChannel (F : Type) [Field F] where
@@ -420,3 +422,5 @@ lemma eval_pushedIf {channel : Channel F Message} {enabled : Expression F}
   rw [←ProvableType.fromElements_eq_iff, CircuitType.eval_var]
   rfl
 end Channel
+
+end Clean

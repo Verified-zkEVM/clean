@@ -61,7 +61,7 @@ lemma zero_def [Zero F] : (0 : Point F) = { x := 0, y := 0 } := rfl
 
 /-- The Pallas affine curve equation, phrased over Orchard `Point`s. -/
 def OnCurve (point : Point Fp) : Prop :=
-  point.y ^ 2 = point.x ^ 3 + 5
+  point.y ^ 2 = point.x ^ 3 + pallasB
 
 /-- A representable Pallas group point: affine on-curve, or the `(0, 0)` identity sentinel. -/
 def Valid (point : Point Fp) : Prop :=

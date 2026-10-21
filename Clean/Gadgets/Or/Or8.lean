@@ -1,6 +1,8 @@
 import Clean.Circuit
 import Clean.Gadgets.Xor.ByteXorTable
 
+open Clean
+
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
 namespace Gadgets.Or.Or8

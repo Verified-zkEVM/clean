@@ -5,6 +5,8 @@ import Clean.Utils.Primes
 import Clean.Circuit.Subcircuit
 import Clean.Gadgets.Equality
 
+open Clean
+
 section
 variable {p : ℕ} [Fact p.Prime] [p_large_enough: Fact (p > 512)]
 
@@ -217,7 +219,7 @@ end U64.AssertNormalized
 /--
   Witness a 64-bit unsigned integer.
 -/
-def U64.witness (value : U64 (Witgen.FExpr (F p))) := do
+def U64.witness (value : U64 (FExpr (F p))) := do
   let x ← Witnessable.witness (F := F p) value
   U64.AssertNormalized.circuit x
   return x
@@ -274,10 +276,10 @@ lemma toLimbs_map {α β : Type} (x : U64 α) (f : α → β) :
 
 lemma getElem_eval_toLimbs {F} [FiniteField F] {env : Environment F} {x : U64 (Expression F)} {i : ℕ} (hi : i < 8) :
     Expression.eval env x.toLimbs[i] = (eval env x).toLimbs[i] := by
-  exact ProvableType.getElem_eval_toElements x i hi
+  exact ProvableType.Clean.getElem_eval_toElements x i hi
 
 lemma eval_fromLimbs {F} [FiniteField F] {env : Environment F} {v : Vector (Expression F) 8} :
     eval env (U64.fromLimbs v) = .fromLimbs (v.map env) := by
-  simp only [circuit_norm, U64.fromLimbs, ProvableType.eval_fromElements]
+  simp only [circuit_norm, U64.fromLimbs, ProvableType.Clean.eval_fromElements]
 end ByteVector
 end U64

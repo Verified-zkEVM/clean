@@ -2,6 +2,8 @@ import Clean.Circuit
 import Clean.Utils.Bits
 import Clean.Gadgets.Bits
 
+open Clean
+
 namespace Circomlib
 open Utils.Bits
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]

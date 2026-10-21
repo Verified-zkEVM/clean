@@ -1,5 +1,7 @@
 import Clean.Orchard.Poseidon.Sponge
 
+open Clean
+
 /-!
 # Orchard Poseidon hash APIs
 

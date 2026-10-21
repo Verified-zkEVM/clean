@@ -11,6 +11,8 @@ import Clean.Circuit
 import Clean.Gadgets.Boolean
 import Clean.Types.U32
 
+open Clean
+
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2)]
 
 namespace Examples.HintExample

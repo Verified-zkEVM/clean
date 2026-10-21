@@ -2,6 +2,8 @@ import Clean.Circuit
 import Clean.Utils.Bits
 import Clean.Circomlib.Bitify
 import Mathlib.Data.Int.Basic
+
+open Clean
 /-
 Original source code:
 https://github.com/iden3/circomlib/blob/35e54ea21da3e8762557234298dbb553c175ea8d/circuits/comparators.circom

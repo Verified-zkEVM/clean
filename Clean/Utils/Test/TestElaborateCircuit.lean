@@ -2,6 +2,8 @@ import Clean.Circuit
 import Clean.Gadgets.Equality
 import Clean.Utils.Primes
 
+open Clean
+
 /-!
 # Regression tests for `elaborate_circuit`'s output quality
 
@@ -95,5 +97,38 @@ instance elaboratedLoop : ElaboratedCircuit (F p) (fields 3) field mainLoop := b
 assert_nat_literal (elaboratedLoop (p := pBabybear)).localLength 3
 assert_reduced (elaboratedLoop (p := pBabybear)).localLength
 assert_reduced (elaboratedLoop (p := pBabybear)).output
+
+/-! ### 3. Parametric circuit: a loop over a variable bound with a subcircuit body.
+`localLength` cannot be a literal, but must be arithmetic over `n` — free of
+metadata projections (regression: the parametric path used to store the raw
+`ExplicitCircuits.localLength (main n) ⟨inferred instance⟩` projection, a
+~600KB term that blows up all downstream proofs; cf. Orchard `Mul/Incomplete`). -/
+
+def mainParam (n : ℕ) (input : Var field (F p)) : Circuit (F p) (Expression (F p)) :=
+  .foldlRange n input fun acc _ => loopBody acc acc
+
+instance elaboratedParam (n : ℕ) :
+    ElaboratedCircuit (F p) field field (mainParam n) := by
+  elaborate_circuit
+
+assert_reduced fun (n : ℕ) => (elaboratedParam (p := pBabybear) n).localLength
+assert_reduced fun (n : ℕ) => (elaboratedParam (p := pBabybear) n).output
+
+/-! ### 4. Parametric output type: the shape that used to produce an `Eq.mpr`-wrapped
+instance from `infer_explicit_circuits`' goal-simp, blocking all projection reduction
+(cf. Orchard `Mul/Incomplete.DoubleAndAdd`). -/
+
+def mainParamOut (n : ℕ) (input : Var field (F p)) :
+    Circuit (F p) (Var (fields (n + 1)) (F p)) := do
+  let v ← witnessVector (n + 1) (.mapRange (n + 1) (.expr input))
+  v[0]'(Nat.succ_pos n) === input
+  return v
+
+instance elaboratedParamOut (n : ℕ) :
+    ElaboratedCircuit (F p) field (fields (n + 1)) (mainParamOut n) := by
+  elaborate_circuit
+
+assert_reduced fun (n : ℕ) => (elaboratedParamOut (p := pBabybear) n).localLength
+assert_reduced fun (n : ℕ) => (elaboratedParamOut (p := pBabybear) n).output
 
 end TestElaborateCircuit

@@ -3,6 +3,8 @@ import Clean.Table.Inductive
 import Clean.Circuit.Extensions
 import Clean.Gadgets.Keccak.AbsorbBlock
 import Clean.Specs.Keccak256
+
+open Clean
 open Specs.Keccak256
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 2 ^ 16 + 2 ^ 8)]
 

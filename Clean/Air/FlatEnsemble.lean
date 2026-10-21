@@ -4,7 +4,7 @@ This file defines flat AIR ensembles and what soundness and completeness mean fo
 import Clean.Air.FlatComponent
 import Clean.Air.Balance
 
-namespace Air.Flat
+namespace Clean.Air.Flat
 variable {F : Type} [FiniteField F]
 variable {PublicIO : TypeMap} [ProvableType PublicIO]
 
@@ -540,4 +540,4 @@ lemma addTable_witness (ens : Ensemble F PublicIO) (table : Component F)
   have : witness.tables[0] ∈ witness.tables := by simp
   simp [addTable, witness', witness.same_data _ this]
 end Ensemble
-end Air.Flat
+end Clean.Air.Flat

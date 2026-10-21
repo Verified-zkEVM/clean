@@ -3,6 +3,8 @@ import Clean.Gadgets.Xor.Xor64
 import Clean.Gadgets.Keccak.KeccakState
 import Clean.Specs.Keccak256
 
+open Clean
+
 namespace Gadgets.Keccak256.ThetaXor
 variable {p : ℕ} [Fact p.Prime] [Fact (p > 512)]
 

@@ -1,6 +1,8 @@
 import Clean.Circuit.Basic
 import Clean.Utils.Field
 
+open Clean
+
 namespace Gadgets
 variable {p : ℕ} [Fact (p ≠ 0)] [Fact p.Prime]
 variable [p_large_enough: Fact (p > 512)]

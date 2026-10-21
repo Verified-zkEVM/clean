@@ -2,6 +2,8 @@ import Clean.Utils.Tactics
 import Clean.Types.U32
 import Clean.Gadgets.Or.Or8
 
+open Clean
+
 section
 variable {p : ℕ} [Fact p.Prime] [p_large_enough : Fact (p > 512)]
 

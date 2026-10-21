@@ -3,6 +3,8 @@ import Clean.Circuit.Json
 import Clean.Table.Json
 import Clean.Utils.Primes
 
+open Clean
+
 namespace Examples.FemtoCairo.Plonky3Helpers
 
 /-
