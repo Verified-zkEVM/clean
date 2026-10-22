@@ -257,15 +257,11 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
     (by simp [circuit_norm, fibonacciVm, bytes])
     (by simp [circuit_norm, fibonacciVm, fibonacciVerifier])
 
-namespace FibonacciWitness
-
 /-- Generate a complete ensemble witness from the claimed public final state. -/
-def generate (publicInput : fieldTriple (F p)) (fuel : ℕ) :
+def fibonacciGenerate (publicInput : fieldTriple (F p)) (fuel : ℕ) :
     Except WitnessGeneration.GenerationError
       (EnsembleWitness (fibonacciEnsemble (p := p)).ensemble) :=
   WitnessGeneration.generate fibonacciEnsemble.ensemble fuel publicInput ()
-
-end FibonacciWitness
 
 /--
 Fibonacci soundness, concretely: if someone gives you a proof of the ensemble statement,

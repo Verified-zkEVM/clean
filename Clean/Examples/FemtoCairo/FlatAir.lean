@@ -582,9 +582,9 @@ theorem femtoCairo_soundness {memorySize : UInt64}
           some (haltedState program.size ap fp) :=
   (formalEnsemble program h_program h_memorySize initialState).soundness (ap, fp) trivial
 
-namespace Witness
-
-def generate {memorySize : UInt64} (program : Array (F p)) (h_program : ValidProgram program)
+/-- Generate a complete ensemble witness from the memory, the initial state, and the claimed final
+registers. -/
+def femtoCairoGenerate {memorySize : UInt64} (program : Array (F p)) (h_program : ValidProgram program)
     (h_memorySize : memorySize.toNat < p)
     (memoryValues : fields memorySize.toNat (F p)) (initialState : State (F p))
     (finalRegisters : fieldPair (F p)) (fuel : ℕ) :
@@ -592,7 +592,5 @@ def generate {memorySize : UInt64} (program : Array (F p)) (h_program : ValidPro
       (EnsembleWitness (formalEnsemble program h_program h_memorySize initialState).ensemble) :=
   WitnessGeneration.generate (formalEnsemble program h_program h_memorySize initialState).ensemble
     fuel finalRegisters memoryValues
-
-end Witness
 
 end Examples.FemtoCairo.FlatAir

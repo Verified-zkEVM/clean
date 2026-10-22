@@ -20,7 +20,7 @@ def publicInput : fieldTriple (F pBabybear) :=
   (steps, state.1, state.2)
 
 def result : Except String (List ℕ × ℕ × ℕ × Bool × Bool) :=
-  match FibonacciWitness.generate publicInput 1000 with
+  match fibonacciGenerate publicInput 1000 with
   | .error error => .error (toString error)
   | .ok witness =>
       match witness.tables with
