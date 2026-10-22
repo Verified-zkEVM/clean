@@ -48,7 +48,8 @@ def params : Fri.Params := ⟨1, 0, 1, 8, 0, 0, 0, 0, 0⟩
 /-- The trace with the square of row `5` changed. -/
 def tampered : Array K := trace.modify (5 * 3 + 1) (· + 1)
 
-#guard verify params air (setup params air 3) (prove EF params air 3 tampered []) [] matches .error _
+#guard verify params air (setup params air 3) (prove EF params air 3 tampered []) []
+  matches .error _
 
 /-! ### Soundness -/
 
@@ -146,15 +147,17 @@ theorem knowledgeSoundness_ro (δ δ' : NNReal) (hδ' : (δ' : ℝ) < 1 - setup.
     [] δ δ' hδ' Q prover hQ
 
 /--
-info: 'CleanCompStarkTests.SquaresTable.knowledgeSoundness' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'CleanCompStarkTests.SquaresTable.knowledgeSoundness' depends on axioms:
+[propext, Classical.choice, Quot.sound]
 -/
-#guard_msgs in
+#guard_msgs (whitespace := lax) in
 #print axioms knowledgeSoundness
 
 /--
-info: 'CleanCompStarkTests.SquaresTable.knowledgeSoundness_ro' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'CleanCompStarkTests.SquaresTable.knowledgeSoundness_ro' depends on axioms:
+[propext, Classical.choice, Quot.sound]
 -/
-#guard_msgs in
+#guard_msgs (whitespace := lax) in
 #print axioms knowledgeSoundness_ro
 
 end CleanCompStarkTests.SquaresTable

@@ -307,7 +307,8 @@ theorem eval_constraint_iff {component : Component F} (hc : bridgeable component
           (traceEnv e logN trace component publicValues i) = 0) := by
     rintro hsel rfl
     rw [eval_toRow e logN trace component i data x hcells, gateExpr,
-      eval_toExpr_congr e logN trace component publicValues i x hsel, map_eq_zero_iff _ e.symm.injective]
+      eval_toExpr_congr e logN trace component publicValues i x hsel,
+      map_eq_zero_iff _ e.symm.injective]
   cases hw : component.window with
   | none =>
     simp only [hw, Option.map_none, gateConstraint, Option.some.injEq] at hg
