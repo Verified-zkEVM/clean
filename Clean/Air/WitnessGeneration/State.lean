@@ -117,13 +117,17 @@ def insertCounters (state : ComponentState F) (count : F) (cells : Array F) : Ar
   columns.foldl (fun input column => input.insertIdx! column count) cells
 
 /-- The inputs of a preallocated component's rows: per fixed row, its fixed values and the values of
-the row program, with counters starting at 0. -/
+the row program, with counters starting at 0; or of a segment-generated component's rows: per fixed
+row, its fixed values and the values of the segment program. -/
 def initialInputs (state : ComponentState F) (hint : ProverHint F) : List (Array F) :=
   match state.component.fixedColumns, state.component.generation with
   | some fixed, .preallocated mode =>
       (List.range fixed.height.toNat).map fun row =>
         let row := UInt64.ofNat row
         insertCounters state 0 (fixed.values row ++ (toElements (mode.eval row hint)).toArray)
+  | some fixed, .segments program =>
+      (program.rows fixed.height.toNat hint).zipIdx.map fun (values, row) =>
+        fixed.values (UInt64.ofNat row) ++ (toElements values).toArray
   | _, _ => []
 
 /-! ### Errors -/

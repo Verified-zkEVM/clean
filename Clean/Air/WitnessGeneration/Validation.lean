@@ -46,6 +46,7 @@ inductive ValidationError where
   | unstableDataRead (component : String) (reader : DataReader) (key : String) (column : ℕ)
   | windowWitnessRead (component : String) (operation : ℕ)
   | windowInteractionRead (component : String) (interaction : ℕ)
+  | invalidSegmentProgram (component : String)
 deriving Repr, DecidableEq
 
 instance : ToString ValidationError where
@@ -83,6 +84,9 @@ instance : ToString ValidationError where
         s!"component '{component}' witness operation {operation} reads a window cell"
     | .windowInteractionRead component interaction =>
         s!"component '{component}' interaction {interaction} reads a window cell"
+    | .invalidSegmentProgram component =>
+        s!"segment program of component '{component}' reads prover data, or cells other than \
+          the previous row's"
 
 /-! ### Prover-data reads
 
@@ -224,6 +228,7 @@ def handlers (component : Component F) (counters : List Counter) : List Handler 
   | .preallocated _ =>
       counters.map fun counter =>
         { channel := counter.channel, trigger := .pull, selective := true }
+  | .segments _ => []
 
 /-- The programs of a component that read prover data, with their reads. -/
 def dataReaders (component : Component F) : List (DataReader × List DataRead) :=
@@ -233,7 +238,7 @@ def dataReaders (component : Component F) : List (DataReader × List DataRead) :
     | _ => none
   let guard := match component.generation with
     | .demand mode => [(.guard, bexprDataReads mode.guardCondition)]
-    | .preallocated _ => []
+    | .preallocated _ | .segments _ => []
   witnesses ++ guard
 
 /-- Check a component's generation against the component, and resolve its counters. -/
@@ -263,6 +268,14 @@ def validateComponent (component : Component F) : Except ValidationError (List C
         throw (.preallocatedHeight name height)
       unless fixedWidth + counters.length + mode.width = inputWidth do
         throw (.preallocatedWidth name (inputWidth - fixedWidth - counters.length) mode.width)
+  | .segments program =>
+      let height := (component.fixedColumns.map (·.height.toNat)).getD 0
+      unless nextPowerOfTwo height = height do
+        throw (.preallocatedHeight name height)
+      unless fixedWidth + program.width = inputWidth do
+        throw (.preallocatedWidth name (inputWidth - fixedWidth) program.width)
+      unless decide program.Valid do
+        throw (.invalidSegmentProgram name)
   return counters
 
 /-- Check that every prover-data read targets a cell of a preallocated component that generation
@@ -281,7 +294,7 @@ def validateDataReads (components : List (Component F)) (counters : List (List C
           throw (.dataReadWidth name reader read.key target.rowOffset read.width)
         match target.generation with
         | .demand _ => throw (.unstableDataRead name reader read.key read.column)
-        | .preallocated _ =>
+        | .preallocated _ | .segments _ =>
             if targetCounters.any (·.column = read.column) || target.isWindowCell read.column then
               throw (.unstableDataRead name reader read.key read.column)
 

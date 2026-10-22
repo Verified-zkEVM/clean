@@ -7,6 +7,7 @@ assumes: the step flags of a round `r`, and the state after `r` rounds of the ro
 module
 
 public import Clean.Examples.KeccakAir.Soundness
+public import Clean.Examples.KeccakAir.Witness
 public import Clean.Air.FlatEnsemble
 
 @[expose] public section
@@ -183,8 +184,9 @@ def circuit : GeneralFormalCircuit (F p) (Window Row) unit where
     rw [constraints_eval_iff, ← CircuitType.eval_var_prover_to_verifier, h_input]
     exact h_assumptions
 
-/-- The Keccak-f AIR with `height` rows. The fixed columns are empty and only fix the height. Each
-row is copied from the prover's hint table `keccak`, which holds the trace. -/
+/-- The Keccak-f AIR with `height` rows. The fixed columns are empty and only fix the height. The
+rows are computed by `Witness.program`, 24 per permutation, whose inputs are the rows of the
+prover's hint table `keccak`. -/
 def component (height : UInt64) : Component (F p) where
   circuit := circuit
   fixedColumns := some { Row := unit, row _ := pure (), height }
@@ -201,13 +203,6 @@ def component (height : UInt64) : Component (F p) where
         simpa only [ProvableType.fromElements_toElements] using congrArg fromElements h_next
       rw [← h_next]
       exact carried_of_windowSpec h_spec h_transition
-  generation := .preallocated {
-    Row
-    row i := pure (fromElements (Vector.ofFn fun j => .hintGet "keccak" (size Row) i j))
-    valid := by
-      simp [Witgen.M.ValidForRow, pure, ProvableType.toElements_fromElements,
-        Witgen.VExpr.validForRow, Witgen.FExpr.validForRow, Witgen.U64Expr.validForRow,
-        Witgen.RowProgram.Source.allowsHints]
-    counters := [] }
+  generation := .segments Witness.program
 
 end KeccakAir

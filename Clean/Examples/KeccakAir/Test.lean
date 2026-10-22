@@ -1,12 +1,13 @@
 module
 
 public import Clean.Examples.KeccakAir.Ensemble
-public import Clean.Examples.KeccakAir.Trace
+public import Clean.Examples.KeccakAir.FastTrace
+public import CompPoly.Fields.KoalaBear.Fast
 public import Clean.Backends.Program
 
 -- `#guard` runs compiled code from these modules.
 public meta import Clean.Examples.KeccakAir.Ensemble
-public meta import Clean.Examples.KeccakAir.Trace
+public meta import Clean.Examples.KeccakAir.FastTrace
 public meta import Clean.Backends.Program
 
 @[expose] public section
@@ -135,11 +136,8 @@ end Reference
 
 /-! ## The lowered constraints are Plonky3's -/
 
-def program : Except LoweringError (ComponentProgram F) := do
-  let program ← lower (ensemble (p := KoalaBear.fieldSize) 32) 10
-  match program.components with
-  | [component] => return component
-  | _ => throw (.validation (.preallocatedHeight "keccak" 0))
+def program : Except LoweringError (ComponentProgram F) :=
+  lowerComponent 0 (component (p := KoalaBear.fieldSize) 32)
 
 /-- Pseudorandom field elements (SplitMix64). -/
 def samples (seed : UInt64) (n : ℕ) : Array F := Id.run do
@@ -210,21 +208,90 @@ def specState (state : Trace.State) : Vector ℕ 25 :=
 #guard !satisfies (traceRows.modify 5 fun row => row.modify 30 (· + 1))
 #guard !satisfies (traceRows.modify 0 fun row => (row.set! 0 0).set! 1 1)
 
-/-! ## Witness generation copies the trace
+/-! ## Witness generation computes the trace
 
-Generation reads every cell from the hint table, which is rebuilt on every read, so this checks a
-table of two rows: the first two rounds of the permutation.
+The segment program computes the 24 rows of a permutation from its input. Generation computes the
+trace of one permutation and its padding. Fast generation is tested natively, by
+`Clean.Examples.KeccakAir.FastTest`.
 -/
 
-def proverInput : (ensemble (p := KoalaBear.fieldSize) 2).ProverInput F :=
-  Vector.ofFn fun i => (traceRows[i.val / size Row]!)[i.val % size Row]!
+/-- The prover input of the ensemble of 32 rows: the permutation's input, and the zero input of
+the padding permutation. -/
+def proverInput : (ensemble (p := KoalaBear.fieldSize) 32).ProverInput F :=
+  Vector.ofFn fun i => ((preimageLimbs input)[i.val]?.getD 0 : F)
 
 def generated : Except String (List (List F) × Bool) :=
-  match WitnessGeneration.generate (ensemble (p := KoalaBear.fieldSize) 2) 10 () proverInput with
+  match WitnessGeneration.generate (ensemble (p := KoalaBear.fieldSize) 32) 10 () proverInput with
   | .error error => .error (toString error)
   | .ok witness => .ok (witness.tables.flatMap fun table =>
       table.table.map fun row => (row.extract 0 (size Row)).toList, constraintsHold witness)
 
-#guard generated = .ok ((traceRows.toList.take 2).map (·.toList), true)
+#guard generated = .ok (traceRows.toList.map (·.toList), true)
+
+/-! ## The trace is Plonky3's
+
+The FNV-1a hashes of the canonical values of the rows of Plonky3's `generate_trace_rows` (at
+a4982ec, over KoalaBear) for three permutations, whose lane `i` of permutation `k` is SplitMix64 of
+`25 k + i`: 72 rows of the permutations and 56 rows of padding, two zero permutations and the first
+8 rows of a third one. `fast_witness_test` compares fast generation with them.
+-/
+
+def splitMix (seed : UInt64) : UInt64 :=
+  let z := seed + 0x9e3779b97f4a7c15
+  let z := (z ^^^ (z >>> 30)) * 0xbf58476d1ce4e5b9
+  let z := (z ^^^ (z >>> 27)) * 0x94d049bb133111eb
+  z ^^^ (z >>> 31)
+
+def katInputs : Array Trace.State :=
+  (Array.range 3).map fun k => Vector.ofFn fun i => splitMix (25 * k + i.val).toUInt64
+
+def plonky3RowHashes : List UInt64 := [
+  0x5d1f5a1a45684878, 0x31d336515472b3e3, 0x5432086fd349a362, 0xe5fcfa0ac8999271,
+  0x4322c3741ba7af71, 0x76000087f6c6636b, 0x64a70464270f5ab1, 0x56d1d7b28e0c68eb,
+  0x6da6bcd968bc4b9f, 0x58335f06c77e2326, 0xa22b96ca182c57d4, 0x6bb27683a69ed5ea,
+  0x8ed304ef8a554411, 0x14173624a38b498a, 0x514dbd514bb0417e, 0x55fed82ed6635f5b,
+  0x80c5f8e2171942ad, 0xefa4553fa5a2b63f, 0xf44823965853fb53, 0xe98218d0fcef413d,
+  0xbda6dcc01d9d7025, 0x276fdf8ce97901a1, 0x019bce646210f4bb, 0xa78e19905c9d5ee3,
+  0x6901c1645588c5de, 0x0e34d7e0f264e030, 0x6b64d5e76171aa96, 0x856bb838692990cf,
+  0x5bb1b593646853ab, 0x6937d9c73741ff63, 0x19cf8cf780c85921, 0x34c2ec3f4349bfa9,
+  0x50f6bbee404e1f7f, 0xb80c3ed14ce6cffb, 0xcafb5185edd23bf3, 0x4e462f30212f8aea,
+  0x41d94793401d5e89, 0x3cb4107968e00409, 0x5489377e5a79feb9, 0xbb3f6ddc1680f63b,
+  0xc3c31a564c6c94c9, 0x9eebeb5d462d5dfc, 0xbea830e63584363d, 0xce9435a03ff60114,
+  0xfd9adaaf5582f9a2, 0x7f8248d53232a2e0, 0x7ed9a9101369d6cb, 0xc4a5010b84744247,
+  0xb19d8102cd7faabb, 0x1d398b69e5b6dee5, 0xa37fd59b6c62bf5f, 0x9e3563e7c5d8937e,
+  0x03ca18c608ca0676, 0xec938a9af832b0af, 0x647dcaccc9389e48, 0xc4fdc4398751b8e8,
+  0x191c70ef370cf1df, 0x01868ed52f46d711, 0x534e6345952973f9, 0xb03b362698506ca0,
+  0xdbc67d1bd49b500d, 0x5c706d9f69bf7df8, 0xf90bd8f6c04d6ccd, 0xa6604bda1b3d9b9b,
+  0x62e5647ff852f1f5, 0x1f36411164cf69d3, 0x860e99b35ece51d2, 0xea8f9039c6ce7b59,
+  0x655971ee06095065, 0xc1f0255bc49970db, 0xc614038bf3f63a1f, 0x31afded9f5850fdc,
+  0x52bc88866b5a7c3d, 0x18a5b347815e43b4, 0xf21ff16ee960409c, 0xe619b89a2de026c4,
+  0x5c240880f405fffe, 0xceb8a178dd28989a, 0xd325992207ffdc11, 0xc35249e9137ada33,
+  0xb1c9a06c5b60a21e, 0xa06bf10bd2362157, 0x76c4c5e274554a3d, 0x7894f37955fcd7ce,
+  0xf506b991690ddf2c, 0x3751857ca50b6bf9, 0xd5afb0597440bdd5, 0x71a5c99dbb933474,
+  0x51c96ee314c44e82, 0x0dde85415b2da7eb, 0x044eab4089e291d1, 0x71806f688e4ea14f,
+  0xd0d15d772e9de38a, 0xcbdf36adf74c95d7, 0x5326eaf5bc5b9136, 0xe31891701deae6a2,
+  0x52bc88866b5a7c3d, 0x18a5b347815e43b4, 0xf21ff16ee960409c, 0xe619b89a2de026c4,
+  0x5c240880f405fffe, 0xceb8a178dd28989a, 0xd325992207ffdc11, 0xc35249e9137ada33,
+  0xb1c9a06c5b60a21e, 0xa06bf10bd2362157, 0x76c4c5e274554a3d, 0x7894f37955fcd7ce,
+  0xf506b991690ddf2c, 0x3751857ca50b6bf9, 0xd5afb0597440bdd5, 0x71a5c99dbb933474,
+  0x51c96ee314c44e82, 0x0dde85415b2da7eb, 0x044eab4089e291d1, 0x71806f688e4ea14f,
+  0xd0d15d772e9de38a, 0xcbdf36adf74c95d7, 0x5326eaf5bc5b9136, 0xe31891701deae6a2,
+  0x52bc88866b5a7c3d, 0x18a5b347815e43b4, 0xf21ff16ee960409c, 0xe619b89a2de026c4,
+  0x5c240880f405fffe, 0xceb8a178dd28989a, 0xd325992207ffdc11, 0xc35249e9137ada33]
+
+/-- The FNV-1a hashes of the canonical values of the rows of a trace. -/
+def rowHashes (chunks : Except String (Array ByteArray)) : List UInt64 :=
+  match chunks with
+  | .error _ => []
+  | .ok chunks =>
+    let words := chunks.foldl (· ++ ·) ByteArray.empty
+    (List.range (words.size / (4 * size Row))).map fun r =>
+      (List.range (size Row)).foldl (fun hash c =>
+        let word := words.getUInt32LE! (4 * (r * size Row + c))
+        let value : UInt64 := if h : word.toNat < KoalaBear.fieldSize then
+          (Montgomery.Native32.FastField.toUInt32 (⟨word, h⟩ :
+            Montgomery.Native32.FastField KoalaBear.fieldSize)).toUInt64
+          else 0
+        (hash ^^^ value) * 0x100000001b3) 0xcbf29ce484222325
 
 end KeccakAir.Test

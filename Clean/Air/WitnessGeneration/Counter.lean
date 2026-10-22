@@ -89,6 +89,7 @@ def resolveCounters (component : Component F) : Except CounterError (List Counte
       | .perOccurrence => pure []
       | .byMessage counter => ([·]) <$> Counter.resolve component counter
     | .preallocated mode => mode.counters.mapM (Counter.resolve component)
+    | .segments _ => pure []
   checkCounterMessages component counters
   return counters
 

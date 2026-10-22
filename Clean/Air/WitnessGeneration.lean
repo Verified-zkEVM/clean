@@ -27,7 +27,8 @@ The reaction stops when a row pushes the final state, which the verifier pulls.
 
 How a component answers is its generation mode, see `Clean.Air.WitnessGeneration.Generation`:
 - a `demand` component gets a new row for the message, or a higher multiplicity of an existing row,
-- a `preallocated` component increments the counter of the row that carries the message.
+- a `preallocated` component increments the counter of the row that carries the message,
+- a `segments` component never answers, its rows only start the reaction.
 
 Exactly one component may accept each message: the demand components on its channel whose guard
 holds, and the preallocated components that have a row for it.
@@ -128,6 +129,7 @@ def ComponentState.answer? (state : ComponentState F) (demand : Demand F) (data 
       if mode.accepts demand data hint then some (mode.answer state demand data hint) else none
   | .preallocated _ =>
       (findCountedRow state demand data).map (incrementCounter state demand data hint)
+  | .segments _ => none
 
 /-- The answer to the first demand that some component accepts, with that component's index. Fails
 if several components accept it. -/
@@ -167,11 +169,12 @@ def generateLoop (data : ProverData F) (hint : ProverHint F) :
           let (states, demands) := applyAnswer states demands index mutation data
           generateLoop data hint fuel states demands
 
-/-- The padded height of a demand-generated table. Preallocated tables are never padded. -/
+/-- The padded height of a demand-generated table. Preallocated and segment-generated tables are
+never padded. -/
 def ComponentState.targetHeight (state : ComponentState F) : ℕ :=
   match state.component.generation with
   | .demand _ => nextPowerOfTwo state.rows.length
-  | .preallocated _ => state.rows.length
+  | .preallocated _ | .segments _ => state.rows.length
 
 /-- Pad every demand-generated table to its target height; returns the padded states and the
 interactions of the padding rows. -/
@@ -179,7 +182,7 @@ def padTables (data : ProverData F) (hint : ProverHint F) (states : List (Compon
     List (ComponentState F) × List (Interaction F) :=
   let padded := states.map fun state =>
     match state.component.generation with
-    | .preallocated _ => (state, [])
+    | .preallocated _ | .segments _ => (state, [])
     | .demand mode =>
         let count := state.targetHeight - state.rows.length
         let rows := List.replicate count (completeRow state mode.padding data hint)
