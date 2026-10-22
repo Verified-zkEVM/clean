@@ -51,8 +51,9 @@ its AIR (`toAir`), given the batch's validity. -/
 def toBatchSetup (ens : Ensemble F PublicIO) (params : Fri.Params)
     (logN : Fin ens.tables.length → ℕ)
     (valid : ∀ i, ValidConfig params (toAir e ens.tables[i] (logN i)) (logN i))
-    (folds : ∀ i, params.logFinalPolyLen < logN i) (nonempty : 0 < ens.tables.length)
-    (lookupsValid : ∀ i, LookupsValid params (toAir e ens.tables[i] (logN i)) (logN i)
+    (folds : ∀ i, params.logFinalPolyLen < logN i)
+    (capFits : ∀ i, params.capHeight ≤ logN i + params.logBlowup - params.maxLogArity)
+    (nonempty : 0 < ens.tables.length) (lookupsValid : ∀ i, LookupsValid params (toAir e ens.tables[i] (logN i)) (logN i)
       (Batch.instanceLookups true (toAir e ens.tables[i] (logN i)) (logN i)))
     (buses : Batch.BusesValid (List.ofFn fun i =>
       Batch.instanceLookups true (toAir e ens.tables[i] (logN i)) (logN i))) :
@@ -63,14 +64,15 @@ def toBatchSetup (ens : Ensemble F PublicIO) (params : Fri.Params)
   logN
   valid
   folds
+  capFits
   nonempty
   lookupsValid
   buses
 
 theorem provesEnsemble_toBatchSetup (ens : Ensemble F PublicIO) (params : Fri.Params)
-    (logN : Fin ens.tables.length → ℕ) valid folds nonempty lookupsValid buses :
-    ProvesEnsemble e (toBatchSetup (EF := EF) e ens params logN valid folds nonempty lookupsValid
-      buses) ens :=
+    (logN : Fin ens.tables.length → ℕ) valid folds capFits nonempty lookupsValid buses :
+    ProvesEnsemble e (toBatchSetup (EF := EF) e ens params logN valid folds capFits nonempty
+      lookupsValid buses) ens :=
   ⟨rfl, fun _ => rfl⟩
 
 /-- The number of interactions of the tables of an ensemble with `2 ^ logN i` rows. -/
@@ -444,7 +446,7 @@ theorem batchKnowledgeSoundness_of_soundness (h : ProvesEnsemble e S ens)
 /-- **Knowledge soundness of an ensemble's batch STARK in the random-oracle model.** If a batch
 proves a bridgeable ensemble and the ensemble proves `P` of its witnesses' tables, a prover making
 at most `Q` oracle calls gets a proof accepted while the rows read off no tuple of traces close to
-the ones it committed to satisfy `P` with probability at most `q · roundError + hashError q`,
+the ones it committed to satisfy `P` with probability at most `q · roundError + hashError h q`,
 `q = Q + verifierQueries`. -/
 theorem batchKnowledgeSoundness_ro_of_witnessSound (h : ProvesEnsemble e S ens)
     (hb : EnsembleBridgeable ens)
@@ -458,7 +460,7 @@ theorem batchKnowledgeSoundness_ro_of_witnessSound (h : ProvesEnsemble e S ens)
         ∀ traces ∈ Batch.closeTraces S δ' (Batch.committedTraces S log proof),
           ¬ P (List.ofFn fun i => toRows e (componentAt ens h.length i) (S.logN i) (traces i))] ≤
       (Q + S.verifierQueries) * Batch.roundError S δ δ' +
-        hashError K (Q + S.verifierQueries) :=
+        hashError K S.params.capHeight (Q + S.verifierQueries) :=
   (prEvent_mono _ _ _ fun ⟨_, _, _⟩ hev ↦ ⟨hev.1, hev.2.1, fun traces ht hsat ↦ by
     have := hP (toWitness e h fits traces publicInput)
       (constraints_toWitness e h hb fits hsat.air publicInput)

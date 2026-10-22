@@ -48,8 +48,8 @@ theorem knowledgeSoundness_of_tableSound (S : Iop.Setup EF) {component : Compone
 /-- **Knowledge soundness of a component's STARK in the random-oracle model.** If a STARK proves
 a bridgeable component's AIR and the component's circuit proves `P` of its tables, a prover
 making at most `Q` oracle calls gets a proof accepted while the rows of no trace within `δ'` of
-the one it committed to satisfy `P` with probability at most `q · roundError + hashError q`,
-`q = Q + verifierQueries`. -/
+the one it committed to satisfy `P` with probability at most `q · roundError + hashError h q`,
+`q = Q + verifierQueries`, `h` the Merkle cap height. -/
 theorem knowledgeSoundness_ro_of_tableSound (S : Iop.Setup EF) {component : Component F}
     (hair : S.air = toAir e component S.logN) (hc : bridgeable component = true)
     (fits : Fits (K := K) component S.logN) {P : List (Array F) → Prop}
@@ -60,7 +60,8 @@ theorem knowledgeSoundness_ro_of_tableSound (S : Iop.Setup EF) {component : Comp
       verdict = .ok () ∧ proof.degreeBits = S.logN ∧
         ∀ trace ∈ closeTraces S δ' (committedTrace S log proof),
           ¬ P (toRows e component S.logN trace)] ≤
-      (Q + S.verifierQueries) * roundError S δ δ' + hashError K (Q + S.verifierQueries) :=
+      (Q + S.verifierQueries) * roundError S δ δ' +
+        hashError K S.params.capHeight (Q + S.verifierQueries) :=
   (prEvent_mono _ _ _ fun ⟨_, _, _⟩ h ↦ ⟨h.1, h.2.1, fun trace ht hsat ↦ by
     rw [hair] at hsat
     obtain ⟨table, hcomponent, hrows, hdata, hconstraints⟩ :=

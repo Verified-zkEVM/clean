@@ -68,7 +68,7 @@ def setup : Batch.Setup EF :=
     (fun i => match i with | ⟨0, _⟩ => valid_queries | ⟨1, _⟩ => valid_bytes)
     (fun i => match i with
       | ⟨0, _⟩ => show 0 < 4 by decide
-      | ⟨1, _⟩ => show 0 < 8 by decide) (by decide)
+      | ⟨1, _⟩ => show 0 < 8 by decide) (fun _ => Nat.zero_le _) (by decide)
     (fun i => match i with | ⟨0, _⟩ => lookupsValid_queries | ⟨1, _⟩ => lookupsValid_bytes)
     ⟨by decide +kernel, by decide +kernel, by decide +kernel⟩
 
@@ -82,7 +82,7 @@ theorem bridgeable_ensemble : EnsembleBridgeable (ensemble 16) where
     simp [circuit_norm, ensemble, queries, query, bytes, Lookup.component, Lookup.provider]
 
 theorem proves : ProvesEnsemble babyBear setup (ensemble 16) :=
-  provesEnsemble_toBatchSetup babyBear _ _ _ _ _ _ _ _
+  provesEnsemble_toBatchSetup babyBear _ _ _ _ _ _ _ _ _
 
 theorem fits (i : Fin setup.k) :
     Fits (K := K) (componentAt (ensemble 16) proves.length i) (setup.logN i) := by
