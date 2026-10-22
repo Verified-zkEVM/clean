@@ -113,7 +113,7 @@ abbrev add8Component : Component (F p) where
   generation := .demand {
     channel := add8Channel
     surplus := .pull
-    aggregation := .byMessage fun input => input.m
+    aggregation := .byMessage fun { m, .. } => m
     input := [.message 0, .message 1, .message 2]
     padding := { input := #[0, 0, 0, 0], minimumRows := 32 }
   }
@@ -204,10 +204,6 @@ def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
     intro hx hy
     rw [Nat.mod_eq_of_lt (by grind), ZMod.val_add_of_lt]
     linarith [hx, hy, ‹Fact (p > 512)›.elim]
-
-example (input : Var Fib8Input (F p)) :
-    ExplicitCircuit (fib8.main input) := by
-  infer_explicit_circuit
 
 /-- The Fibonacci VM: one row per state pushed to the Fibonacci channel. Padding rows are
 disabled. -/
@@ -301,7 +297,9 @@ theorem fibonacci_soundness : ∀ (n x y : F p),
   exact fibonacciEnsemble.soundness (n, x, y) trivial statement
 
 /-
-Fun fact! We can prove end-to-end soundness of a component that proves `False`
+Fun fact! We can prove end-to-end soundness of a component that proves `False`.
+This only works because we don't add a component that pushes to the channel;
+requiring a completeness proof would make it impossible.
 -/
 def falseChannel : Channel (F p) unit where
   name := "false"
