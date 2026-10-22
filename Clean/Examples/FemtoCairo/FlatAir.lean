@@ -136,12 +136,12 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
 
   ProverAssumptions
   | { state, offset, mode }, data, _ =>
-      mode.isEncodedCorrectly ∧
+      mode.IsEncodedCorrectly ∧
       MemoryCompletenessAssumption data ∧
       (Spec.dataMemoryAccess (memory data) offset mode.val state.ap state.fp).isSome
 
   Assumptions
-  | { mode, .. }, _ => mode.isEncodedCorrectly
+  | { mode, .. }, _ => mode.IsEncodedCorrectly
 
   Spec
   | { state, offset, mode }, output, data =>
@@ -151,7 +151,7 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
 
   soundness := by
     circuit_proof_start [memoryChannel, Spec.dataMemoryAccess, Spec.memoryAccess,
-      DecodedAddressingMode.val, DecodedAddressingMode.isEncodedCorrectly, MemoryReadInput.mk.injEq]
+      DecodedAddressingMode.val, DecodedAddressingMode.IsEncodedCorrectly, MemoryReadInput.mk.injEq]
     obtain ⟨isDoubleAddressing, isApRelative, isFpRelative, isImmediate⟩ := input_mode
     obtain ⟨_pc, ap, fp⟩ := input_state
     simp only [circuit_norm, explicit_provable_type, State.mk.injEq,
@@ -168,7 +168,7 @@ def readFromMemory : GeneralFormalCircuit (F p) MemoryReadInput field where
     rcases h_assumptions with h_mode | h_mode | h_mode | h_mode <;> simp_all
 
   completeness := by
-    circuit_proof_start [memoryChannel, DecodedAddressingMode.isEncodedCorrectly,
+    circuit_proof_start [memoryChannel, DecodedAddressingMode.IsEncodedCorrectly,
       Spec.dataMemoryAccess, memory, MemoryReadInput.mk.injEq]
     set addr1 := env.get i₀
     set value1 := env.get (i₀ + 1)
@@ -237,22 +237,22 @@ instance (program : Array (F p)) (h_program : ValidProgram program) :
     ElaboratedCircuit (F p) State State (femtoCairoStepMain program h_program) := by
   elaborate_circuit
 
-def femtoCairoStepSpec (program : Array (F p))
+def FemtoCairoStepSpec (program : Array (F p))
     (state nextState : State (F p)) (data : ProverData (F p)) : Prop :=
   Spec.femtoCairoMachineTransition program (memory data) state = some nextState
 
-def femtoCairoStepAssumptions (program : Array (F p))
+def FemtoCairoStepAssumptions (program : Array (F p))
     (state : State (F p)) (data : ProverData (F p)) (_hint : ProverHint (F p)) : Prop :=
   MemoryCompletenessAssumption data ∧
   (Spec.femtoCairoMachineTransition program (memory data) state).isSome
 
 theorem femtoCairoStepSoundness (program : Array (F p)) (h_program : ValidProgram program) :
     GeneralFormalCircuit.Soundness (F p) (femtoCairoStepMain program h_program)
-      (fun _ _ => True) (femtoCairoStepSpec program) := by
-  circuit_proof_start [femtoCairoStepSpec, femtoCairoStepAssumptions, femtoCairoStepMain,
+      (fun _ _ => True) (FemtoCairoStepSpec program) := by
+  circuit_proof_start [FemtoCairoStepSpec, FemtoCairoStepAssumptions, femtoCairoStepMain,
     Spec.femtoCairoMachineTransition, fetchInstruction, readFromMemory,
     nextState, decodeInstruction,
-    decodeInstructionSpec, Gadgets.toBits]
+    DecodeInstructionSpec, Gadgets.toBits]
   obtain ⟨pc_var, ap_var, fp_var⟩ := input_var
   obtain ⟨pc, ap, fp⟩ := input
   simp only [circuit_norm, explicit_provable_type, State.mk.injEq] at h_input
@@ -300,8 +300,8 @@ theorem femtoCairoStepSoundness (program : Array (F p)) (h_program : ValidProgra
 
 theorem femtoCairoStepCompleteness (program : Array (F p)) (h_program : ValidProgram program) :
     GeneralFormalCircuit.Completeness (F p) (femtoCairoStepMain program h_program)
-      (femtoCairoStepAssumptions program) (fun _ _ _ => True) := by
-  circuit_proof_start [femtoCairoStepAssumptions, femtoCairoStepMain,
+      (FemtoCairoStepAssumptions program) (fun _ _ _ => True) := by
+  circuit_proof_start [FemtoCairoStepAssumptions, femtoCairoStepMain,
     fetchInstruction, decodeInstruction, readFromMemory,
     nextState, Gadgets.toBits]
   obtain ⟨h_memory_completeness, h_transition_isSome⟩ := h_assumptions
@@ -329,7 +329,7 @@ theorem femtoCairoStepCompleteness (program : Array (F p)) (h_program : ValidPro
   simp only [h_fetch, circuit_norm, explicit_provable_type, RawInstruction.mk.injEq] at h_fetch_env
   obtain ⟨h_rawInstrType, h_op1, h_op2, h_op3⟩ := h_fetch_env
   specialize h_decode_env (by rw [h_rawInstrType]; exact h_instr_bound)
-  simp only [decodeInstructionSpec, h_rawInstrType, h_decode] at h_decode_env
+  simp only [DecodeInstructionSpec, h_rawInstrType, h_decode] at h_decode_env
   obtain ⟨h_instr_type_val, h_instr_type_encoded_correctly, h_mode1_val,
     h_mode1_encoded_correctly, h_mode2_val, h_mode2_encoded_correctly,
     h_mode3_val, h_mode3_encoded_correctly⟩ := h_decode_env
@@ -367,8 +367,8 @@ theorem femtoCairoStepCompleteness (program : Array (F p)) (h_program : ValidPro
 def femtoCairoStep (program : Array (F p)) (h_program : ValidProgram program) :
     GeneralFormalCircuit (F p) State State where
   main := femtoCairoStepMain program h_program
-  ProverAssumptions := femtoCairoStepAssumptions program
-  Spec := femtoCairoStepSpec program
+  ProverAssumptions := FemtoCairoStepAssumptions program
+  Spec := FemtoCairoStepSpec program
   soundness := femtoCairoStepSoundness program h_program
   completeness := femtoCairoStepCompleteness program h_program
 
@@ -457,7 +457,7 @@ def executeStep (program : Array (F p)) (h_program : ValidProgram program)
   channelsWithRequirements := [(stateChannel program initialState).toRaw]
 
   soundness := by
-    circuit_proof_start [stateChannel, femtoCairoStep, femtoCairoStepSpec,
+    circuit_proof_start [stateChannel, femtoCairoStep, FemtoCairoStepSpec,
       Spec.femtoCairoMachineBoundedExecution]
     obtain ⟨h_bool, h_pull, h_step⟩ := h_holds
     rw [mul_eq_zero, sub_eq_zero] at h_bool
