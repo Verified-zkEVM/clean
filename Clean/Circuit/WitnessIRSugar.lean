@@ -307,6 +307,16 @@ lemma evalList_map_array_const {F : Type} {ctx : Ctx F} [FiniteField F] (xs : Ar
   | cons hd tl ih => cases i <;> simp_all [FExpr.evalList, FExpr.eval]
 
 @[circuit_norm]
+lemma evalList_map_list_const {F : Type} {ctx : Ctx F} [FiniteField F] (xs : List F) (i : ℕ) :
+    FExpr.evalList ctx i (xs.map FExpr.const) = xs[i]?.getD 0 := by
+  simpa using evalList_map_array_const (ctx := ctx) xs.toArray i
+
+@[circuit_norm]
+lemma evalList_map_const_comp {F α : Type} {ctx : Ctx F} [FiniteField F] (xs : List α) (f : α → F)
+    (i : ℕ) : FExpr.evalList ctx i (xs.map (FExpr.const ∘ f)) = (xs[i]?.map f).getD 0 := by
+  simpa using evalList_map_list_const (ctx := ctx) (xs.map f) i
+
+@[circuit_norm]
 lemma evalList_map_vector_expr {F : Type} {ctx : Ctx F} [FiniteField F] {n : ℕ} (v : Vector (Expression F) n) (i : ℕ) :
     FExpr.evalList ctx i (v.toList.map FExpr.expr) = if hi : i < n then v[i].eval ctx.env else 0 := by
   induction v using Vector.induct generalizing i with

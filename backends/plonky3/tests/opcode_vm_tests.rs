@@ -19,9 +19,9 @@ fn field(value: u64) -> BabyBear {
     BabyBear::from_u64(value)
 }
 
-/// The program `exampleProgram` takes the accumulator 2 to 438.
+/// The program `exampleProgram` takes the initial accumulator 2 to 438.
 fn public_values() -> Vec<BabyBear> {
-    vec![field(2), field(438)]
+    vec![field(438)]
 }
 
 #[test]
@@ -38,7 +38,7 @@ fn extracted_rust_routes_states_by_opcode() {
 
 #[test]
 fn extracted_rust_rejects_a_wrong_final_state() {
-    let error = generated::generate(&[field(2), field(439)], &[], setup::MINIMUM_TRACE_HEIGHT)
+    let error = generated::generate(&[field(439)], &[], setup::MINIMUM_TRACE_HEIGHT)
         .expect_err("witness generation for a wrong final state succeeded");
     assert!(error.to_string().contains("unhandled channel imbalance"));
 }

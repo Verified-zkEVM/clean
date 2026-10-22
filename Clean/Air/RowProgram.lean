@@ -80,6 +80,12 @@ theorem FExprList.validForRow_map_const (source : RowProgram.Source) (values : L
   | nil => rfl
   | cons value values ih => simp [FExprList.validForRow, FExpr.validForRow, ih]
 
+@[simp]
+theorem FExprList.validForRow_map_const_comp {α : Type} (source : RowProgram.Source)
+    (values : List α) (f : α → F) :
+    FExprList.validForRow source (values.map (FExpr.const ∘ f)) = true := by
+  simpa using validForRow_map_const source (values.map f)
+
 def Step.validForRow (source : RowProgram.Source) : Step F → Bool
   | .letF value => value.validForRow source
   | .letU value => value.validForRow source

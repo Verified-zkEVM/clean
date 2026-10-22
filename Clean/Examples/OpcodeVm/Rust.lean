@@ -8,6 +8,7 @@ public import Clean.Utils.Primes
 
 def main : IO Unit := do
   match Backends.Plonky3.Print.ensembleToRust
-      (OpcodeVm.ensemble (p := pBabybear) OpcodeVm.exampleProgram).ensemble 1000 with
+      (OpcodeVm.formalEnsemble OpcodeVm.exampleProgram OpcodeVm.exampleProgram_length
+        (2 : F pBabybear)).ensemble 1000 with
   | .ok rust => IO.print rust
   | .error error => throw (IO.userError error)
