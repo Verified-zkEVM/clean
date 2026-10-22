@@ -9,6 +9,7 @@ pub mod component_0 {
 
     pub const NAME: &str = "execution";
     pub const INPUT_WIDTH: usize = 4;
+    pub const WINDOW: Option<usize> = None;
     pub const WIDTH: usize = 34;
 
     pub const FIXED_WIDTH: usize = 0;
@@ -497,155 +498,255 @@ pub mod component_0 {
         }
     }
 
-    pub fn constraints<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<E> {
+    pub fn constraints<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Constraint<E>> {
         vec![
-            (row[0].clone() * (row[0].clone() + (-E::from_u64(1u64) * E::from_u64(1u64)))),
-            (row[8].clone() * (row[8].clone() + (-E::from_u64(1u64) * E::from_u64(1u64)))),
-            (row[9].clone() * (row[9].clone() + (-E::from_u64(1u64) * E::from_u64(1u64)))),
-            (row[10].clone() * (row[10].clone() + (-E::from_u64(1u64) * E::from_u64(1u64)))),
-            (row[11].clone() * (row[11].clone() + (-E::from_u64(1u64) * E::from_u64(1u64)))),
-            (row[12].clone() * (row[12].clone() + (-E::from_u64(1u64) * E::from_u64(1u64)))),
-            (row[13].clone() * (row[13].clone() + (-E::from_u64(1u64) * E::from_u64(1u64)))),
-            (row[14].clone() * (row[14].clone() + (-E::from_u64(1u64) * E::from_u64(1u64)))),
-            (row[15].clone() * (row[15].clone() + (-E::from_u64(1u64) * E::from_u64(1u64)))),
-            (row[4].clone()
-                + (-E::from_u64(1u64)
-                    * ((((((((E::from_u64(0u64) + (row[8].clone() * E::from_u64(1u64)))
-                        + (row[9].clone() * E::from_u64(2u64)))
-                        + (row[10].clone() * E::from_u64(4u64)))
-                        + (row[11].clone() * E::from_u64(8u64)))
-                        + (row[12].clone() * E::from_u64(16u64)))
-                        + (row[13].clone() * E::from_u64(32u64)))
-                        + (row[14].clone() * E::from_u64(64u64)))
-                        + (row[15].clone() * E::from_u64(128u64))))),
-            (row[16].clone()
-                + (-E::from_u64(1u64)
-                    * ((((((E::from_u64(1u64) + (-E::from_u64(1u64) * row[10].clone()))
-                        + (-E::from_u64(1u64) * row[11].clone()))
-                        + (row[10].clone() * row[11].clone()))
-                        * (row[2].clone() + row[5].clone()))
-                        + ((row[10].clone()
-                            + (-E::from_u64(1u64) * (row[10].clone() * row[11].clone())))
-                            * (row[2].clone() + row[5].clone())))
-                        + ((row[11].clone()
-                            + (-E::from_u64(1u64) * (row[10].clone() * row[11].clone())))
-                            * (row[3].clone() + row[5].clone()))))),
-            (row[18].clone()
-                + (-E::from_u64(1u64)
-                    * ((((E::from_u64(1u64) + (-E::from_u64(1u64) * row[10].clone()))
-                        + (-E::from_u64(1u64) * row[11].clone()))
-                        + (row[10].clone() * row[11].clone()))
-                        * row[17].clone()))),
-            (row[20].clone()
-                + (-E::from_u64(1u64)
-                    * (((((((E::from_u64(1u64) + (-E::from_u64(1u64) * row[10].clone()))
-                        + (-E::from_u64(1u64) * row[11].clone()))
-                        + (row[10].clone() * row[11].clone()))
-                        * row[19].clone())
-                        + ((row[10].clone()
-                            + (-E::from_u64(1u64) * (row[10].clone() * row[11].clone())))
-                            * row[17].clone()))
-                        + ((row[11].clone()
-                            + (-E::from_u64(1u64) * (row[10].clone() * row[11].clone())))
-                            * row[17].clone()))
-                        + ((row[10].clone() * row[11].clone()) * row[5].clone())))),
-            (row[21].clone()
-                + (-E::from_u64(1u64)
-                    * ((((((E::from_u64(1u64) + (-E::from_u64(1u64) * row[12].clone()))
-                        + (-E::from_u64(1u64) * row[13].clone()))
-                        + (row[12].clone() * row[13].clone()))
-                        * (row[2].clone() + row[6].clone()))
-                        + ((row[12].clone()
-                            + (-E::from_u64(1u64) * (row[12].clone() * row[13].clone())))
-                            * (row[2].clone() + row[6].clone())))
-                        + ((row[13].clone()
-                            + (-E::from_u64(1u64) * (row[12].clone() * row[13].clone())))
-                            * (row[3].clone() + row[6].clone()))))),
-            (row[23].clone()
-                + (-E::from_u64(1u64)
-                    * ((((E::from_u64(1u64) + (-E::from_u64(1u64) * row[12].clone()))
-                        + (-E::from_u64(1u64) * row[13].clone()))
-                        + (row[12].clone() * row[13].clone()))
-                        * row[22].clone()))),
-            (row[25].clone()
-                + (-E::from_u64(1u64)
-                    * (((((((E::from_u64(1u64) + (-E::from_u64(1u64) * row[12].clone()))
-                        + (-E::from_u64(1u64) * row[13].clone()))
-                        + (row[12].clone() * row[13].clone()))
-                        * row[24].clone())
-                        + ((row[12].clone()
-                            + (-E::from_u64(1u64) * (row[12].clone() * row[13].clone())))
-                            * row[22].clone()))
-                        + ((row[13].clone()
-                            + (-E::from_u64(1u64) * (row[12].clone() * row[13].clone())))
-                            * row[22].clone()))
-                        + ((row[12].clone() * row[13].clone()) * row[6].clone())))),
-            (row[26].clone()
-                + (-E::from_u64(1u64)
-                    * ((((((E::from_u64(1u64) + (-E::from_u64(1u64) * row[14].clone()))
-                        + (-E::from_u64(1u64) * row[15].clone()))
-                        + (row[14].clone() * row[15].clone()))
-                        * (row[2].clone() + row[7].clone()))
-                        + ((row[14].clone()
-                            + (-E::from_u64(1u64) * (row[14].clone() * row[15].clone())))
-                            * (row[2].clone() + row[7].clone())))
-                        + ((row[15].clone()
-                            + (-E::from_u64(1u64) * (row[14].clone() * row[15].clone())))
-                            * (row[3].clone() + row[7].clone()))))),
-            (row[28].clone()
-                + (-E::from_u64(1u64)
-                    * ((((E::from_u64(1u64) + (-E::from_u64(1u64) * row[14].clone()))
-                        + (-E::from_u64(1u64) * row[15].clone()))
-                        + (row[14].clone() * row[15].clone()))
-                        * row[27].clone()))),
-            (row[30].clone()
-                + (-E::from_u64(1u64)
-                    * (((((((E::from_u64(1u64) + (-E::from_u64(1u64) * row[14].clone()))
-                        + (-E::from_u64(1u64) * row[15].clone()))
-                        + (row[14].clone() * row[15].clone()))
-                        * row[29].clone())
-                        + ((row[14].clone()
-                            + (-E::from_u64(1u64) * (row[14].clone() * row[15].clone())))
-                            * row[27].clone()))
-                        + ((row[15].clone()
-                            + (-E::from_u64(1u64) * (row[14].clone() * row[15].clone())))
-                            * row[27].clone()))
-                        + ((row[14].clone() * row[15].clone()) * row[7].clone())))),
-            (((((E::from_u64(1u64) + (-E::from_u64(1u64) * row[8].clone()))
-                + (-E::from_u64(1u64) * row[9].clone()))
-                + (row[8].clone() * row[9].clone()))
-                * (row[30].clone() + (-E::from_u64(1u64) * (row[20].clone() + row[25].clone()))))
-                + (-E::from_u64(1u64) * E::from_u64(0u64))),
-            (((row[8].clone() + (-E::from_u64(1u64) * (row[8].clone() * row[9].clone())))
-                * (row[30].clone() + (-E::from_u64(1u64) * (row[20].clone() * row[25].clone()))))
-                + (-E::from_u64(1u64) * E::from_u64(0u64))),
-            (((row[9].clone() + (-E::from_u64(1u64) * (row[8].clone() * row[9].clone())))
-                * (row[20].clone() + (-E::from_u64(1u64) * row[1].clone())))
-                + (-E::from_u64(1u64) * E::from_u64(0u64))),
-            (((row[9].clone() + (-E::from_u64(1u64) * (row[8].clone() * row[9].clone())))
-                * (row[25].clone() + (-E::from_u64(1u64) * row[2].clone())))
-                + (-E::from_u64(1u64) * E::from_u64(0u64))),
-            (((row[9].clone() + (-E::from_u64(1u64) * (row[8].clone() * row[9].clone())))
-                * (row[30].clone() + (-E::from_u64(1u64) * row[3].clone())))
-                + (-E::from_u64(1u64) * E::from_u64(0u64))),
-            (row[31].clone()
-                + (-E::from_u64(1u64)
-                    * (((row[8].clone() * row[9].clone()) * row[20].clone())
-                        + ((E::from_u64(1u64)
-                            + (-E::from_u64(1u64) * (row[8].clone() * row[9].clone())))
-                            * (row[1].clone() + E::from_u64(4u64)))))),
-            (row[32].clone()
-                + (-E::from_u64(1u64)
-                    * (((row[8].clone() * row[9].clone()) * row[25].clone())
-                        + ((E::from_u64(1u64)
-                            + (-E::from_u64(1u64) * (row[8].clone() * row[9].clone())))
-                            * row[2].clone())))),
-            (row[33].clone()
-                + (-E::from_u64(1u64)
-                    * (((row[8].clone() * row[9].clone()) * row[30].clone())
-                        + ((E::from_u64(1u64)
-                            + (-E::from_u64(1u64) * (row[8].clone() * row[9].clone())))
-                            * row[3].clone())))),
+            Constraint {
+                gate: Gate::EveryRow,
+                value: (row[0].clone()
+                    * (row[0].clone() + (-E::from_u64(1u64) * E::from_u64(1u64)))),
+            },
+            Constraint {
+                gate: Gate::EveryRow,
+                value: (row[8].clone()
+                    * (row[8].clone() + (-E::from_u64(1u64) * E::from_u64(1u64)))),
+            },
+            Constraint {
+                gate: Gate::EveryRow,
+                value: (row[9].clone()
+                    * (row[9].clone() + (-E::from_u64(1u64) * E::from_u64(1u64)))),
+            },
+            Constraint {
+                gate: Gate::EveryRow,
+                value: (row[10].clone()
+                    * (row[10].clone() + (-E::from_u64(1u64) * E::from_u64(1u64)))),
+            },
+            Constraint {
+                gate: Gate::EveryRow,
+                value: (row[11].clone()
+                    * (row[11].clone() + (-E::from_u64(1u64) * E::from_u64(1u64)))),
+            },
+            Constraint {
+                gate: Gate::EveryRow,
+                value: (row[12].clone()
+                    * (row[12].clone() + (-E::from_u64(1u64) * E::from_u64(1u64)))),
+            },
+            Constraint {
+                gate: Gate::EveryRow,
+                value: (row[13].clone()
+                    * (row[13].clone() + (-E::from_u64(1u64) * E::from_u64(1u64)))),
+            },
+            Constraint {
+                gate: Gate::EveryRow,
+                value: (row[14].clone()
+                    * (row[14].clone() + (-E::from_u64(1u64) * E::from_u64(1u64)))),
+            },
+            Constraint {
+                gate: Gate::EveryRow,
+                value: (row[15].clone()
+                    * (row[15].clone() + (-E::from_u64(1u64) * E::from_u64(1u64)))),
+            },
+            Constraint {
+                gate: Gate::EveryRow,
+                value: (row[4].clone()
+                    + (-E::from_u64(1u64)
+                        * ((((((((E::from_u64(0u64)
+                            + (row[8].clone() * E::from_u64(1u64)))
+                            + (row[9].clone() * E::from_u64(2u64)))
+                            + (row[10].clone() * E::from_u64(4u64)))
+                            + (row[11].clone() * E::from_u64(8u64)))
+                            + (row[12].clone() * E::from_u64(16u64)))
+                            + (row[13].clone() * E::from_u64(32u64)))
+                            + (row[14].clone() * E::from_u64(64u64)))
+                            + (row[15].clone() * E::from_u64(128u64))))),
+            },
+            Constraint {
+                gate: Gate::EveryRow,
+                value: (row[16].clone()
+                    + (-E::from_u64(1u64)
+                        * ((((((E::from_u64(1u64) + (-E::from_u64(1u64) * row[10].clone()))
+                            + (-E::from_u64(1u64) * row[11].clone()))
+                            + (row[10].clone() * row[11].clone()))
+                            * (row[2].clone() + row[5].clone()))
+                            + ((row[10].clone()
+                                + (-E::from_u64(1u64) * (row[10].clone() * row[11].clone())))
+                                * (row[2].clone() + row[5].clone())))
+                            + ((row[11].clone()
+                                + (-E::from_u64(1u64) * (row[10].clone() * row[11].clone())))
+                                * (row[3].clone() + row[5].clone()))))),
+            },
+            Constraint {
+                gate: Gate::EveryRow,
+                value: (row[18].clone()
+                    + (-E::from_u64(1u64)
+                        * ((((E::from_u64(1u64) + (-E::from_u64(1u64) * row[10].clone()))
+                            + (-E::from_u64(1u64) * row[11].clone()))
+                            + (row[10].clone() * row[11].clone()))
+                            * row[17].clone()))),
+            },
+            Constraint {
+                gate: Gate::EveryRow,
+                value: (row[20].clone()
+                    + (-E::from_u64(1u64)
+                        * (((((((E::from_u64(1u64)
+                            + (-E::from_u64(1u64) * row[10].clone()))
+                            + (-E::from_u64(1u64) * row[11].clone()))
+                            + (row[10].clone() * row[11].clone()))
+                            * row[19].clone())
+                            + ((row[10].clone()
+                                + (-E::from_u64(1u64) * (row[10].clone() * row[11].clone())))
+                                * row[17].clone()))
+                            + ((row[11].clone()
+                                + (-E::from_u64(1u64) * (row[10].clone() * row[11].clone())))
+                                * row[17].clone()))
+                            + ((row[10].clone() * row[11].clone()) * row[5].clone())))),
+            },
+            Constraint {
+                gate: Gate::EveryRow,
+                value: (row[21].clone()
+                    + (-E::from_u64(1u64)
+                        * ((((((E::from_u64(1u64) + (-E::from_u64(1u64) * row[12].clone()))
+                            + (-E::from_u64(1u64) * row[13].clone()))
+                            + (row[12].clone() * row[13].clone()))
+                            * (row[2].clone() + row[6].clone()))
+                            + ((row[12].clone()
+                                + (-E::from_u64(1u64) * (row[12].clone() * row[13].clone())))
+                                * (row[2].clone() + row[6].clone())))
+                            + ((row[13].clone()
+                                + (-E::from_u64(1u64) * (row[12].clone() * row[13].clone())))
+                                * (row[3].clone() + row[6].clone()))))),
+            },
+            Constraint {
+                gate: Gate::EveryRow,
+                value: (row[23].clone()
+                    + (-E::from_u64(1u64)
+                        * ((((E::from_u64(1u64) + (-E::from_u64(1u64) * row[12].clone()))
+                            + (-E::from_u64(1u64) * row[13].clone()))
+                            + (row[12].clone() * row[13].clone()))
+                            * row[22].clone()))),
+            },
+            Constraint {
+                gate: Gate::EveryRow,
+                value: (row[25].clone()
+                    + (-E::from_u64(1u64)
+                        * (((((((E::from_u64(1u64)
+                            + (-E::from_u64(1u64) * row[12].clone()))
+                            + (-E::from_u64(1u64) * row[13].clone()))
+                            + (row[12].clone() * row[13].clone()))
+                            * row[24].clone())
+                            + ((row[12].clone()
+                                + (-E::from_u64(1u64) * (row[12].clone() * row[13].clone())))
+                                * row[22].clone()))
+                            + ((row[13].clone()
+                                + (-E::from_u64(1u64) * (row[12].clone() * row[13].clone())))
+                                * row[22].clone()))
+                            + ((row[12].clone() * row[13].clone()) * row[6].clone())))),
+            },
+            Constraint {
+                gate: Gate::EveryRow,
+                value: (row[26].clone()
+                    + (-E::from_u64(1u64)
+                        * ((((((E::from_u64(1u64) + (-E::from_u64(1u64) * row[14].clone()))
+                            + (-E::from_u64(1u64) * row[15].clone()))
+                            + (row[14].clone() * row[15].clone()))
+                            * (row[2].clone() + row[7].clone()))
+                            + ((row[14].clone()
+                                + (-E::from_u64(1u64) * (row[14].clone() * row[15].clone())))
+                                * (row[2].clone() + row[7].clone())))
+                            + ((row[15].clone()
+                                + (-E::from_u64(1u64) * (row[14].clone() * row[15].clone())))
+                                * (row[3].clone() + row[7].clone()))))),
+            },
+            Constraint {
+                gate: Gate::EveryRow,
+                value: (row[28].clone()
+                    + (-E::from_u64(1u64)
+                        * ((((E::from_u64(1u64) + (-E::from_u64(1u64) * row[14].clone()))
+                            + (-E::from_u64(1u64) * row[15].clone()))
+                            + (row[14].clone() * row[15].clone()))
+                            * row[27].clone()))),
+            },
+            Constraint {
+                gate: Gate::EveryRow,
+                value: (row[30].clone()
+                    + (-E::from_u64(1u64)
+                        * (((((((E::from_u64(1u64)
+                            + (-E::from_u64(1u64) * row[14].clone()))
+                            + (-E::from_u64(1u64) * row[15].clone()))
+                            + (row[14].clone() * row[15].clone()))
+                            * row[29].clone())
+                            + ((row[14].clone()
+                                + (-E::from_u64(1u64) * (row[14].clone() * row[15].clone())))
+                                * row[27].clone()))
+                            + ((row[15].clone()
+                                + (-E::from_u64(1u64) * (row[14].clone() * row[15].clone())))
+                                * row[27].clone()))
+                            + ((row[14].clone() * row[15].clone()) * row[7].clone())))),
+            },
+            Constraint {
+                gate: Gate::EveryRow,
+                value: (((((E::from_u64(1u64) + (-E::from_u64(1u64) * row[8].clone()))
+                    + (-E::from_u64(1u64) * row[9].clone()))
+                    + (row[8].clone() * row[9].clone()))
+                    * (row[30].clone()
+                        + (-E::from_u64(1u64) * (row[20].clone() + row[25].clone()))))
+                    + (-E::from_u64(1u64) * E::from_u64(0u64))),
+            },
+            Constraint {
+                gate: Gate::EveryRow,
+                value: (((row[8].clone()
+                    + (-E::from_u64(1u64) * (row[8].clone() * row[9].clone())))
+                    * (row[30].clone()
+                        + (-E::from_u64(1u64) * (row[20].clone() * row[25].clone()))))
+                    + (-E::from_u64(1u64) * E::from_u64(0u64))),
+            },
+            Constraint {
+                gate: Gate::EveryRow,
+                value: (((row[9].clone()
+                    + (-E::from_u64(1u64) * (row[8].clone() * row[9].clone())))
+                    * (row[20].clone() + (-E::from_u64(1u64) * row[1].clone())))
+                    + (-E::from_u64(1u64) * E::from_u64(0u64))),
+            },
+            Constraint {
+                gate: Gate::EveryRow,
+                value: (((row[9].clone()
+                    + (-E::from_u64(1u64) * (row[8].clone() * row[9].clone())))
+                    * (row[25].clone() + (-E::from_u64(1u64) * row[2].clone())))
+                    + (-E::from_u64(1u64) * E::from_u64(0u64))),
+            },
+            Constraint {
+                gate: Gate::EveryRow,
+                value: (((row[9].clone()
+                    + (-E::from_u64(1u64) * (row[8].clone() * row[9].clone())))
+                    * (row[30].clone() + (-E::from_u64(1u64) * row[3].clone())))
+                    + (-E::from_u64(1u64) * E::from_u64(0u64))),
+            },
+            Constraint {
+                gate: Gate::EveryRow,
+                value: (row[31].clone()
+                    + (-E::from_u64(1u64)
+                        * (((row[8].clone() * row[9].clone()) * row[20].clone())
+                            + ((E::from_u64(1u64)
+                                + (-E::from_u64(1u64) * (row[8].clone() * row[9].clone())))
+                                * (row[1].clone() + E::from_u64(4u64)))))),
+            },
+            Constraint {
+                gate: Gate::EveryRow,
+                value: (row[32].clone()
+                    + (-E::from_u64(1u64)
+                        * (((row[8].clone() * row[9].clone()) * row[25].clone())
+                            + ((E::from_u64(1u64)
+                                + (-E::from_u64(1u64) * (row[8].clone() * row[9].clone())))
+                                * row[2].clone())))),
+            },
+            Constraint {
+                gate: Gate::EveryRow,
+                value: (row[33].clone()
+                    + (-E::from_u64(1u64)
+                        * (((row[8].clone() * row[9].clone()) * row[30].clone())
+                            + ((E::from_u64(1u64)
+                                + (-E::from_u64(1u64) * (row[8].clone() * row[9].clone())))
+                                * row[3].clone())))),
+            },
         ]
     }
 
@@ -766,6 +867,7 @@ pub mod component_1 {
 
     pub const NAME: &str = "memory";
     pub const INPUT_WIDTH: usize = 3;
+    pub const WINDOW: Option<usize> = None;
     pub const WIDTH: usize = 3;
 
     pub const FIXED_WIDTH: usize = 1;
@@ -786,7 +888,7 @@ pub mod component_1 {
         let row_index = 0u64;
     }
 
-    pub fn constraints<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<E> {
+    pub fn constraints<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Constraint<E>> {
         vec![]
     }
 
@@ -829,6 +931,7 @@ pub mod component_2 {
 
     pub const NAME: &str = "program";
     pub const INPUT_WIDTH: usize = 3;
+    pub const WINDOW: Option<usize> = None;
     pub const WIDTH: usize = 3;
 
     pub const FIXED_WIDTH: usize = 2;
@@ -888,7 +991,7 @@ pub mod component_2 {
         let row_index = 0u64;
     }
 
-    pub fn constraints<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<E> {
+    pub fn constraints<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Constraint<E>> {
         vec![]
     }
 

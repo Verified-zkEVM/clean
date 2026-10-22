@@ -17,7 +17,7 @@ use p3_matrix::dense::RowMajorMatrix;
 use p3_matrix::Matrix;
 use p3_uni_stark::SymbolicAirBuilder;
 
-use crate::witness_generation::{Interaction, WitnessField};
+use crate::witness_generation::{Constraint, Gate, Interaction, WitnessField};
 
 /// Shape errors detected before proving or verification.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -77,8 +77,11 @@ pub enum EnsembleShapeError {
 /// Direct expressions emitted for one Clean ensemble.
 ///
 /// Constraints and interactions read a complete row: the fixed columns followed by the committed
-/// columns. They are generic over the ring of values, so the same generated functions run on field
-/// elements during witness generation and on symbolic expressions here.
+/// columns, with the window cells of a two-row component, the next row's own input and three
+/// selector cells, inserted after the row's own input. They are generic over the ring of values, so
+/// the same generated functions run on field elements during witness generation and on symbolic
+/// expressions here. Constraint bodies and interactions never read the selector cells: a constraint
+/// that reads a selector is gated by it instead.
 pub trait GeneratedAirSpec: Clone + Sync {
     /// Order of the field whose constants and arithmetic the generated code was printed for.
     const FIELD_ORDER: u64;
@@ -87,13 +90,18 @@ pub trait GeneratedAirSpec: Clone + Sync {
     const WIDTHS: &'static [usize];
     const FIXED_WIDTHS: &'static [usize];
     const FIXED_HEIGHTS: &'static [usize];
+    /// The own-input width of each two-row component.
+    const WINDOWS: &'static [Option<usize>];
     const INTERACTIONS_PER_ROW: &'static [usize];
     const VERIFIER_INTERACTIONS: usize;
 
     /// The fixed-column values of one row of a component with fixed columns.
     fn fixed_row<F: WitnessField>(component: usize, row: u64) -> Vec<F>;
 
-    fn constraints<E: PrimeCharacteristicRing + Clone>(component: usize, row: &[E]) -> Vec<E>;
+    fn constraints<E: PrimeCharacteristicRing + Clone>(
+        component: usize,
+        row: &[E],
+    ) -> Vec<Constraint<E>>;
 
     fn interactions<E: PrimeCharacteristicRing + Clone>(
         component: usize,
@@ -101,6 +109,25 @@ pub trait GeneratedAirSpec: Clone + Sync {
     ) -> Vec<Interaction<E>>;
 
     fn verifier_interactions<F: WitnessField>(public_values: &[F]) -> Vec<Interaction<F>>;
+}
+
+/// A row as the generated functions read it: for a two-row component whose own input has width
+/// `width`, the next row's own input and three zero selector cells are inserted after the row's own
+/// input.
+fn window_row<E: PrimeCharacteristicRing + Clone>(
+    window: Option<usize>,
+    mut row: Vec<E>,
+    next: impl FnOnce() -> Vec<E>,
+) -> Vec<E> {
+    let Some(width) = window else {
+        return row;
+    };
+    let next = next();
+    let rest = row.split_off(width);
+    row.extend_from_slice(&next[..width]);
+    row.extend([E::ZERO, E::ZERO, E::ZERO]);
+    row.extend(rest);
+    row
 }
 
 /// Plonky3 wrapper shared by every generated ensemble AIR.
@@ -138,6 +165,7 @@ impl<F: WitnessField, P: GeneratedAirSpec> GeneratedEnsemble<F, P> {
         for (metadata, actual) in [
             ("fixed widths", P::FIXED_WIDTHS.len()),
             ("fixed heights", P::FIXED_HEIGHTS.len()),
+            ("windows", P::WINDOWS.len()),
             ("interactions per row", P::INTERACTIONS_PER_ROW.len()),
         ] {
             if actual != expected {
@@ -254,23 +282,34 @@ where
     P: GeneratedAirSpec,
 {
     fn eval(&self, builder: &mut AB) {
-        let mut row: Vec<AB::Expr> = Vec::new();
-        if P::FIXED_WIDTHS[self.component] != 0 {
-            let fixed = builder
+        let fixed = (P::FIXED_WIDTHS[self.component] != 0).then(|| {
+            builder
                 .preprocessed()
-                .expect("fixed component has no preprocessed trace");
-            let fixed_local = fixed
-                .row_slice(0)
-                .expect("validated fixed trace height is nonzero");
-            row.extend(fixed_local.iter().map(|value| value.clone().into()));
-        }
+                .expect("fixed component has no preprocessed trace")
+        });
         let main = builder.main();
-        let local = main
-            .row_slice(0)
-            .expect("validated trace height is nonzero");
-        row.extend(local.iter().map(|value| value.clone().into()));
+        let row = |offset: usize| {
+            let mut row: Vec<AB::Expr> = Vec::new();
+            if let Some(fixed) = &fixed {
+                let fixed = fixed
+                    .row_slice(offset)
+                    .expect("validated fixed trace height is nonzero");
+                row.extend(fixed.iter().map(|value| value.clone().into()));
+            }
+            let main = main
+                .row_slice(offset)
+                .expect("validated trace height is nonzero");
+            row.extend(main.iter().map(|value| value.clone().into()));
+            row
+        };
+        let row = window_row(P::WINDOWS[self.component], row(0), || row(1));
         for constraint in P::constraints(self.component, &row) {
-            builder.assert_zero(constraint);
+            match constraint.gate {
+                Gate::EveryRow => builder.assert_zero(constraint.value),
+                Gate::FirstRow => builder.when_first_row().assert_zero(constraint.value),
+                Gate::LastRow => builder.when_last_row().assert_zero(constraint.value),
+                Gate::Transition => builder.when_transition().assert_zero(constraint.value),
+            }
         }
     }
 
@@ -286,20 +325,26 @@ where
             0,
             0,
         );
-        let mut row: Vec<SymbolicExpression<AB::F>> = Vec::new();
-        if P::FIXED_WIDTHS[self.component] != 0 {
-            let fixed = AirBuilder::preprocessed(&symbolic)
-                .expect("fixed component has no symbolic preprocessed trace");
-            let fixed_local = fixed
-                .row_slice(0)
-                .expect("validated fixed trace height is nonzero");
-            row.extend(fixed_local.iter().map(|&value| value.into()));
-        }
+        let fixed = (P::FIXED_WIDTHS[self.component] != 0).then(|| {
+            AirBuilder::preprocessed(&symbolic)
+                .expect("fixed component has no symbolic preprocessed trace")
+        });
         let main = AirBuilder::main(&symbolic);
-        let local = main
-            .row_slice(0)
-            .expect("validated trace height is nonzero");
-        row.extend(local.iter().map(|&value| value.into()));
+        let row = |offset: usize| {
+            let mut row: Vec<SymbolicExpression<AB::F>> = Vec::new();
+            if let Some(fixed) = &fixed {
+                let fixed = fixed
+                    .row_slice(offset)
+                    .expect("validated fixed trace height is nonzero");
+                row.extend(fixed.iter().map(|&value| value.into()));
+            }
+            let main = main
+                .row_slice(offset)
+                .expect("validated trace height is nonzero");
+            row.extend(main.iter().map(|&value| value.into()));
+            row
+        };
+        let row = window_row(P::WINDOWS[self.component], row(0), || row(1));
         // an interaction that assumes guarantees pulls from the channel: it is received with the
         // negated multiplicity
         P::interactions(self.component, &row)

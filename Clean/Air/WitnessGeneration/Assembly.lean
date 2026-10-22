@@ -8,7 +8,8 @@ public import Clean.Air.WitnessGeneration.State
 # Assembling generated tables
 
 Turns the generated rows of every component into the tables of an ensemble witness, checking the
-facts that the witness type requires: row widths, table heights and fixed columns.
+facts that the witness type requires: row widths, table heights, fixed columns and windows. The
+window cells of two-row components are filled in here, once the rows are final.
 -/
 
 namespace Air.Flat.WitnessGeneration
@@ -35,6 +36,30 @@ def validateFixedRows (component : Component F) (rows : List (Array F)) :
       else
         .error (.assembly "generated table does not match its fixed columns")
 
+structure MatchedWindows (component : Component F) (rows : List (Array F)) where
+  marker : Unit := ()
+  property : component.WindowsMatch rows
+
+def validateWindows (component : Component F) (rows : List (Array F)) :
+    Except GenerationError (MatchedWindows component rows) :=
+  if hrows : component.WindowsMatch rows then .ok ⟨(), hrows⟩
+  else .error (.assembly "generated table does not match its windows")
+
+/-- The rows of a two-row component, with their window cells filled from the next rows and the
+selectors. -/
+def fillWindows (component : Component F) (rows : List (Array F)) : List (Array F) :=
+  match component.window with
+  | none => rows
+  | some layout =>
+      let width := layout.rowWidth
+      rows.zipIdx.map fun (row, i) =>
+        let next := rows[(i + 1) % rows.length]?.getD #[]
+        let last := i + 1 = rows.length
+        let selectors : Array F :=
+          #[if i = 0 then 1 else 0, if last then 1 else 0, if last then 0 else 1]
+        row.extract 0 width ++ next.extract 0 width ++ selectors ++
+          row.extract (2 * width + 3) row.size
+
 def assembleTables :
     (components : List (Component F)) → List (ComponentState F) →
       Except GenerationError (AssembledTables components)
@@ -44,14 +69,14 @@ def assembleTables :
       same_circuits := by simp
     }
   | component :: components, state :: states => do
-      let rows := state.rows.map (·.values)
+      let rows := fillWindows component (state.rows.map (·.values))
       if hlength : rows.length > UInt64.size then
         throw (.assembly s!"generated table for component '{component.circuit.name}' has more \
           than 2^64 rows")
       else if h : ∀ row ∈ rows, row.size = component.width then
-        match validateFixedRows component rows with
-        | .error error => .error error
-        | .ok matched => do
+        match validateFixedRows component rows, validateWindows component rows with
+        | .error error, _ | _, .error error => .error error
+        | .ok matched, .ok windows => do
           let table : Table F := {
             component
             table := rows
@@ -60,6 +85,7 @@ def assembleTables :
             uniform_width := h
             length_le := Nat.le_of_not_lt hlength
             fixed_rows_match := matched.property
+            windows_match := windows.property
           }
           let rest ← assembleTables components states
           return {

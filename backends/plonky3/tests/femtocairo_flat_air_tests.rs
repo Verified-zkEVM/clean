@@ -7,7 +7,7 @@ mod generated {
     include!("generated/femtocairo_flat_air.rs");
 }
 
-use clean_backend::witness_generation::{Interaction, WitnessField};
+use clean_backend::witness_generation::{Constraint, Interaction, WitnessField};
 use clean_backend::{
     prove_ensemble, verify_ensemble, EnsembleVerificationError, GeneratedAirSpec, GeneratedEnsemble,
 };
@@ -111,6 +111,7 @@ impl GeneratedAirSpec for PermutedMemoryAddresses {
     const WIDTHS: &'static [usize] = Spec::WIDTHS;
     const FIXED_WIDTHS: &'static [usize] = Spec::FIXED_WIDTHS;
     const FIXED_HEIGHTS: &'static [usize] = Spec::FIXED_HEIGHTS;
+    const WINDOWS: &'static [Option<usize>] = Spec::WINDOWS;
     const INTERACTIONS_PER_ROW: &'static [usize] = Spec::INTERACTIONS_PER_ROW;
     const VERIFIER_INTERACTIONS: usize = Spec::VERIFIER_INTERACTIONS;
 
@@ -123,7 +124,10 @@ impl GeneratedAirSpec for PermutedMemoryAddresses {
         Spec::fixed_row(component, row)
     }
 
-    fn constraints<E: PrimeCharacteristicRing + Clone>(component: usize, row: &[E]) -> Vec<E> {
+    fn constraints<E: PrimeCharacteristicRing + Clone>(
+        component: usize,
+        row: &[E],
+    ) -> Vec<Constraint<E>> {
         Spec::constraints(component, row)
     }
 

@@ -6,7 +6,7 @@ This crate proves channel-based Clean AIR ensembles with Plonky3.
 2. `Clean/Backends/Plonky3/Print.lean` prints the program mechanically, one constructor at a time: a Rust module per component with its shape, witness and fixed-column programs, constraints, and interactions, followed by a `clean_backend::ensemble!` invocation. Constraints and interactions are printed once, generic over the ring of values, and read a complete row whose fixed columns come first. The printer is part of the trusted computing base.
 3. The `ensemble!` macro (`src/ensemble_macro.rs`) implements the crate's witness generation and AIR traits on top of the component modules.
 4. `src/witness_generation.rs` runs the generated channel worklist and constructs all component traces without invoking Lean, building preallocated rows from the generated row functions. Each demand-generated component supplies the input of its padding rows; the worklist completes them and balances any interactions they create until every trace has a power-of-two height. Traces are also padded to the minimum height the caller passes to `generate`, the smallest that the prover's FRI parameters accept; preallocated components, whose height is fixed, must have at least that many rows.
-5. `src/generated_air.rs` supplies the shared Plonky3 `Air` implementation, builds fixed traces from the generated fixed-row functions, and registers the generated channel interactions as lookups.
+5. `src/generated_air.rs` supplies the shared Plonky3 `Air` implementation, builds fixed traces from the generated fixed-row functions, and registers the generated channel interactions as lookups. The window cells of a two-row component are not committed: the AIR reads them from Plonky3's next row and asserts each constraint under its gate, `when_first_row`, `when_last_row` or `when_transition`. Lowering splits a constraint that reads a selector into the selector and a body that reads none, and rejects any other use of a selector, because Plonky3's selectors are 0 or 1 only up to a nonzero factor.
 6. `src/ensemble_prover.rs` proves or verifies an opaque generated statement containing every component AIR exactly once in canonical order. Verifier-only interactions are derived from public inputs and enter the global channel argument directly, without a synthetic verifier AIR or trace.
 
 Statement construction binds component trace heights, exact fixed heights, and the complete component inventory. It also checks the Clean channel-soundness side condition `verifier interactions + Σ(trace height × interactions per row) < field order` before proving or verification. Individual component AIRs cannot be assembled through the public API.
@@ -25,6 +25,9 @@ lake exe export_femtocairo_flat_air_rust \
 lake exe export_opcode_vm_rust \
   | rustfmt --edition 2021 --emit stdout \
   > backends/plonky3/tests/generated/opcode_vm.rs
+lake exe export_squares_table_rust \
+  | rustfmt --edition 2021 --emit stdout \
+  > backends/plonky3/tests/generated/squares_table.rs
 lake exe export_witness_ir_reference_rust \
   | rustfmt --edition 2021 --emit stdout \
   > backends/plonky3/tests/generated/witness_ir_reference.rs
@@ -40,6 +43,8 @@ cargo test --locked --release --manifest-path backends/plonky3/Cargo.toml \
 cargo test --locked --release --manifest-path backends/plonky3/Cargo.toml \
   --test opcode_vm_tests
 cargo test --locked --release --manifest-path backends/plonky3/Cargo.toml \
+  --test squares_table_tests
+cargo test --locked --release --manifest-path backends/plonky3/Cargo.toml \
   --test witness_ir_reference_tests
 ```
 
@@ -47,4 +52,4 @@ cargo test --locked --release --manifest-path backends/plonky3/Cargo.toml \
 
 The largest test generates, proves, and verifies a 4,096-step Fibonacci execution and reports witness generation, proving, verification, trace dimensions, and serialized proof size.
 
-The generated ensemble path takes the public input and the flattened private input of the ensemble. The ensemble declares named hint tables as views of the private input, and the generated program builds them for the row programs of preallocated components and the witness programs of all rows to read, exactly as Lean's `Ensemble.hint` does. Clean's `ProverData` is derived from the final component rows. Witness programs may only read cells of preallocated components that channel balancing and padding don't change; extraction rejects other reads.
+The generated ensemble path takes the public input and the flattened private input of the ensemble. The ensemble declares named hint tables as views of the private input, and the generated program builds them for the row programs of preallocated components and the witness programs of all rows to read, exactly as Lean's `Ensemble.hint` does. Clean's `ProverData` is derived from the final component rows. Witness programs may only read cells of preallocated components that channel balancing and padding don't change; extraction rejects other reads. The witness programs and interactions of a two-row component only read the row's own cells, since generation fills in the window cells once the tables are final.

@@ -334,6 +334,10 @@ namespace Ensemble
 /--
 The raw "statement" that a proof about an ensemble makes. Could also be called "relation".
 
+Beyond constraints and balance, the tables of the witness have the facts every `Table` has: their
+rows start with the fixed columns, and the window cells of a two-row component's rows hold the next
+row's input and the row's selectors.
+
 TODO: we currently assume a proof system that already provides us with the fact that the
 total interaction length doesn't overflow (as part of `BalancedChannels`).
 

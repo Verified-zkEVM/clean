@@ -70,6 +70,7 @@ impl<F: WitnessField> Program<F> for UnguardedProgram {
     const PROVER_INPUTS: usize = <generated::Ensemble as Program<F>>::PROVER_INPUTS;
     const HINT_TABLES: &'static [HintTable] = <generated::Ensemble as Program<F>>::HINT_TABLES;
     const FIXED_WIDTHS: &'static [usize] = <generated::Ensemble as Program<F>>::FIXED_WIDTHS;
+    const WINDOWS: &'static [Option<usize>] = <generated::Ensemble as Program<F>>::WINDOWS;
     const COMPONENT_NAMES: &'static [&'static str] =
         <generated::Ensemble as Program<F>>::COMPONENT_NAMES;
 

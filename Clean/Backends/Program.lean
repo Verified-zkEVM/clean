@@ -7,9 +7,14 @@ public import Clean.Air.WitnessGeneration
 /-!
 # Extraction programs
 
-An extraction program is the form of a flat AIR ensemble that source-code backends print: witness
+An extraction program is the form of an AIR ensemble that source-code backends print: witness
 programs, constraints, interactions, component shapes, and generation modes. `lower` validates an
 ensemble and produces it.
+
+A two-row component's constraints read the next row's input from the window cells of its rows, and
+use the selectors only as gates: a constraint that reads a selector is the selector times a
+constraint that reads none, which a backend checks on the rows the selector marks. This is how
+Plonky3 uses its selectors, which are only 0 or 1 up to a nonzero factor.
 
 The representation reuses Clean's expression and witness IR nodes, together with their Lean
 semantics.
@@ -129,16 +134,39 @@ abbrev width (fixed : FixedColumnsProgram F) : ℕ := fixed.program.outputWidth
 
 end FixedColumnsProgram
 
+/-- The rows a constraint is checked on: every row, or the rows one of the selectors marks. -/
+inductive Gate where
+  | everyRow
+  | firstRow
+  | lastRow
+  | transition
+deriving Repr, DecidableEq
+
+/-- A constraint, split into its gate and a body that reads no selector. -/
+structure GatedConstraint (F : Type) where
+  gate : Gate
+  body : Expression F
+
 structure ComponentProgram (F : Type) [FiniteField F] where
   name : String
+  /-- The width of the row's own input, which generation produces. -/
   inputWidth : ℕ
   fixedColumns : Option (FixedColumnsProgram F)
+  /-- For a two-row component, the width of the row's own input: cells `[w, 2w)` of a row hold the
+  next row's first `w` cells, and cells `2w`, `2w + 1` and `2w + 2` the selectors `isFirstRow`,
+  `isLastRow` and `isTransition`. A backend reads these cells from the next row and from its
+  selectors instead of committing them. -/
+  window : Option ℕ
   width : ℕ
   witnesses : List (WitnessBlock F)
-  constraints : List (Expression F)
+  constraints : List (GatedConstraint F)
   interactions : List (AbstractInteraction F)
 
 namespace ComponentProgram
+
+/-- The number of window cells of a row. -/
+def windowWidth (component : ComponentProgram F) : ℕ :=
+  (component.window.map (· + 3)).getD 0
 
 def evalWitnesses (data : ProverData F) (hint : ProverHint F) :
     List (WitnessBlock F) → Array F → Array F
@@ -151,20 +179,30 @@ def evalWitnesses (data : ProverData F) (hint : ProverHint F) :
       }
       evalWitnesses data hint blocks (row ++ (block.eval environment).toArray)
 
-/-- Complete a component row from its input. -/
+/-- Complete a component row from its own input. The window cells stay zero. -/
 def completeRow (component : ComponentProgram F) (input : Array F)
     (data : ProverData F) (hint : ProverHint F := .empty F) : Except String (Array F) := do
   unless input.size = component.inputWidth do
     throw s!"component input has width {input.size}, expected {component.inputWidth}"
-  let row := evalWitnesses data hint component.witnesses input
+  let cells := input ++ Array.replicate component.windowWidth 0
+  let row := evalWitnesses data hint component.witnesses cells
   unless row.size = component.width do
     throw s!"generated row has width {row.size}, expected {component.width}"
   return row
 
+/-- Whether the constraints hold on a row, whose window cells are filled. -/
 def constraintsHold (component : ComponentProgram F) (row : Array F)
     (data : ProverData F) : Bool :=
   let environment := Environment.fromArray row data
-  component.constraints.all fun constraint => constraint.eval environment == 0
+  let selector (offset : ℕ) := (component.window.map fun width =>
+    environment.get (2 * width + offset)).getD 1
+  component.constraints.all fun constraint =>
+    let gate := match constraint.gate with
+      | .everyRow => 1
+      | .firstRow => selector 0
+      | .lastRow => selector 1
+      | .transition => selector 2
+    gate * constraint.body.eval environment == 0
 
 def interactionValues (component : ComponentProgram F) (row : Array F)
     (data : ProverData F) : List (Interaction F) :=
@@ -214,6 +252,7 @@ inductive LoweringError where
   | legacyLookup (component : ℕ)
   | componentVariable (component index width : ℕ)
   | verifierVariable (index width : ℕ)
+  | ungatedSelector (component constraint : ℕ)
 deriving Repr, DecidableEq
 
 instance : ToString LoweringError where
@@ -235,6 +274,9 @@ instance : ToString LoweringError where
         s!"component {component} expression reads cell {index}, but its width is {width}"
     | .verifierVariable index width =>
         s!"verifier interaction reads public cell {index}, but the public input width is {width}"
+    | .ungatedSelector component constraint =>
+        s!"component {component} constraint {constraint} reads a selector, but is not the \
+          selector times a constraint that reads none"
 
 def expressionBadVariable (width : ℕ) : Expression F → Option ℕ
   | .var cell => if cell.index < width then none else some cell.index
@@ -272,6 +314,96 @@ def lowerRowProgram {source : Witgen.RowProgram.Source} (error : LoweringError)
       .error error
   | .native _ => .error error
 
+/-- The selector cell of a gate, for a two-row component whose own input has width `width`. -/
+def Gate.selectorCell (width : ℕ) : Gate → Option ℕ
+  | .everyRow => none
+  | .firstRow => some (2 * width)
+  | .lastRow => some (2 * width + 1)
+  | .transition => some (2 * width + 2)
+
+/-- The gate of a selector cell, for a two-row component whose own input has width `width`. -/
+def selectorGate? (width : ℕ) : Expression F → Option Gate
+  | .var cell =>
+      if cell.index = 2 * width then some .firstRow
+      else if cell.index = 2 * width + 1 then some .lastRow
+      else if cell.index = 2 * width + 2 then some .transition
+      else none
+  | _ => none
+
+/-- Split a selector factor off a product, keeping the shape of the other factors. -/
+def splitSelector (width : ℕ) : Expression F → Option (Gate × Expression F)
+  | .mul left right =>
+      match selectorGate? width left, selectorGate? width right with
+      | some gate, _ => some (gate, right)
+      | none, some gate => some (gate, left)
+      | none, none =>
+          match splitSelector width left with
+          | some (gate, left) => some (gate, .mul left right)
+          | none => (splitSelector width right).map fun (gate, right) => (gate, .mul left right)
+  | _ => none
+
+/-- Split a constraint into its gate and a body that reads no selector: either it reads no selector,
+or it is a product with a selector factor. -/
+def gateConstraint (window : Option ℕ) (constraint : Expression F) :
+    Option (GatedConstraint F) :=
+  match window with
+  | none => some { gate := .everyRow, body := constraint }
+  | some width =>
+      let readsSelector (expression : Expression F) := (expressionCells expression).any
+        fun cell => 2 * width ≤ cell && cell < 2 * width + 3
+      if !readsSelector constraint then some { gate := .everyRow, body := constraint }
+      else do
+        let (gate, body) ← splitSelector width constraint
+        if readsSelector body then none else some { gate, body }
+
+lemma selectorGate?_eq_some {F : Type} {width : ℕ} {expression : Expression F} {gate : Gate}
+    (h : selectorGate? width expression = some gate) :
+    ∃ cell, gate.selectorCell width = some cell ∧ expression = .var ⟨cell⟩ := by
+  match expression with
+  | .var ⟨index⟩ =>
+    simp only [selectorGate?] at h
+    split_ifs at h <;> cases h <;> simp_all [Gate.selectorCell]
+  | .const _ | .add _ _ | .mul _ _ => simp [selectorGate?] at h
+
+/-- A split constraint is its selector times its body. -/
+theorem eval_of_splitSelector {width : ℕ} {expression body : Expression F} {gate : Gate}
+    (env : Environment F) (h : splitSelector width expression = some (gate, body)) :
+    ∃ cell, gate.selectorCell width = some cell ∧
+      expression.eval env = env.get cell * body.eval env := by
+  induction expression generalizing gate body with
+  | var _ | const _ | add _ _ => simp [splitSelector] at h
+  | mul left right ihLeft ihRight =>
+    simp only [splitSelector] at h
+    split at h
+    · rename_i hleft
+      obtain ⟨cell, hcell, rfl⟩ := selectorGate?_eq_some hleft
+      simp only [Option.some.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      exact ⟨cell, hcell, rfl⟩
+    · rename_i hright
+      obtain ⟨cell, hcell, rfl⟩ := selectorGate?_eq_some hright
+      simp only [Option.some.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
+      exact ⟨cell, hcell, by simp only [Expression.eval]; ring⟩
+    · split at h
+      · rename_i hsplit
+        simp only [Option.some.injEq, Prod.mk.injEq] at h
+        obtain ⟨rfl, rfl⟩ := h
+        obtain ⟨cell, hcell, heval⟩ := ihLeft hsplit
+        exact ⟨cell, hcell, by simp only [Expression.eval, heval]; ring⟩
+      · obtain ⟨⟨gate', right'⟩, hsplit, heq⟩ := Option.map_eq_some_iff.mp h
+        simp only [Prod.mk.injEq] at heq
+        obtain ⟨rfl, rfl⟩ := heq
+        obtain ⟨cell, hcell, heval⟩ := ihRight hsplit
+        exact ⟨cell, hcell, by simp only [Expression.eval, heval]; ring⟩
+
+def lowerConstraints (component : ℕ) (window : Option ℕ) (constraints : List (Expression F)) :
+    Except LoweringError (List (GatedConstraint F)) :=
+  constraints.zipIdx.mapM fun (constraint, index) =>
+    match gateConstraint window constraint with
+    | some gated => .ok gated
+    | none => .error (.ungatedSelector component index)
+
 def lowerComponent (index : ℕ) (component : Component F) :
     Except LoweringError (ComponentProgram F) := do
   let operations := component.rowOperations
@@ -282,17 +414,19 @@ def lowerComponent (index : ℕ) (component : Component F) :
   let fixedColumns ← component.fixedColumns.mapM fun fixed => do
     let program ← lowerRowProgram (.malformedFixedProgram index) fixed.toRowProgram
     return { height := fixed.height, program }
-  let constraints := operations.constraints
+  let window := component.window.map (·.rowWidth)
+  let constraints ← lowerConstraints index window operations.constraints
   let interactions := operations.interactions
-  let expressions := constraints ++ interactions.flatMap fun interaction =>
+  let expressions := operations.constraints ++ interactions.flatMap fun interaction =>
     interaction.mult :: interaction.msg.toList
   match expressionsBadVariable component.width expressions with
   | some cellIndex => throw (.componentVariable index cellIndex component.width)
   | none => pure ()
   return {
     name := component.circuit.name
-    inputWidth := component.rowOffset
+    inputWidth := component.ownInputWidth
     fixedColumns
+    window
     width := component.width
     witnesses
     constraints

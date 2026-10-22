@@ -65,7 +65,7 @@ end Demand
 /-! ### Rows -/
 
 structure GeneratedRow (F : Type) where
-  /-- The row's input, from which its witness programs compute the rest of the row. -/
+  /-- The row's own input, from which its witness programs compute the rest of the row. -/
   input : Array F
   /-- The full row. -/
   values : Array F
@@ -92,10 +92,13 @@ def ComponentState.initial (component : Component F) (counters : List Counter) :
     interactions := operations.interactions
   }
 
-/-- Complete a component row from its input with the component's witness programs. -/
+/-- Complete a component row from its own input with the component's witness programs. The window
+cells of a two-row component's row stay zero until the table is assembled, which is why witness
+programs and interactions don't read them. -/
 def completeRow (state : ComponentState F) (input : Array F) (data : ProverData F)
     (hint : ProverHint F) : GeneratedRow F :=
-  { input, values := FlatOperation.witgen data hint state.operations input }
+  let cells := input ++ Array.replicate state.component.windowWidth 0
+  { input, values := FlatOperation.witgen data hint state.operations cells }
 
 def rowInteractions (state : ComponentState F) (row : GeneratedRow F) (data : ProverData F) :
     List (Interaction F) :=
