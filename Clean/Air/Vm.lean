@@ -98,6 +98,18 @@ structure SoundVmEnsemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [Prova
   soundVmChannel : ensemble.SoundVmChannel
 
 namespace SoundVmEnsemble
+
+/-- Declare the prover's private input: its type, and the hint tables viewing it. -/
+def withProverInput (ens : SoundVmEnsemble F PublicIO) (ProverInput : TypeMap)
+    [ProvableType ProverInput] (hintTables : List HintTable) : SoundVmEnsemble F PublicIO where
+  ensemble := ens.ensemble.withProverInput ProverInput hintTables
+  -- the witnesses of both ensembles have the same tables
+  soundVmChannel witness := ens.soundVmChannel { witness with }
+
+@[circuit_norm] lemma withProverInput_ensemble (ens : SoundVmEnsemble F PublicIO)
+    (ProverInput : TypeMap) [ProvableType ProverInput] (hintTables : List HintTable) :
+    (ens.withProverInput ProverInput hintTables).ensemble =
+      ens.ensemble.withProverInput ProverInput hintTables := rfl
 /--
 Bundle a sound VM ensemble with its public statement. `Assumptions` refer to the public input and
 the table heights, `Spec` only to the public input. The verifier spec is evaluated on prover data
@@ -108,11 +120,13 @@ def toFormal (ens : SoundVmEnsemble F PublicIO) (Assumptions : PublicIO F → Li
     (assumptionsConsistency : ens.ensemble.AssumptionsConsistency Assumptions)
     (spec_of_verifierSpec : ∀ witness : EnsembleWitness ens.ensemble,
       Assumptions witness.publicInput witness.heights →
-      ens.VerifierSpec witness.publicInput witness.data → Spec witness.publicInput) :
+      ens.VerifierSpec witness.publicInput witness.data → Spec witness.publicInput)
+    (ProverAssumptions : PublicIO F → ens.ensemble.ProverInput F → Prop := fun _ _ => True) :
     FormalEnsemble F PublicIO where
   ensemble := ens.ensemble
   Assumptions
   Spec
+  ProverAssumptions
   soundness := by
     intro publicInput heights assumptions ⟨witness, input_eq, heights_eq, constraints, balance⟩
     subst input_eq heights_eq
@@ -279,11 +293,12 @@ namespace Ensemble
 
 def addVm (ens : Ensemble F PublicIO) (vm : VmTables F PublicIO)
     (unique_names : ((vm.tables ++ ens.tables).map (·.circuit.name)).Nodup) :
-    Ensemble F PublicIO where
-  channels := vm.channel :: ens.channels
-  tables := vm.tables ++ ens.tables
-  unique_names
-  verifier := vm.verifier
+    Ensemble F PublicIO :=
+  { ens with
+    channels := vm.channel :: ens.channels
+    tables := vm.tables ++ ens.tables
+    unique_names
+    verifier := vm.verifier }
 
 @[circuit_norm] lemma addVm_channels (ens : Ensemble F PublicIO) (vm : VmTables F PublicIO)
     (names) :

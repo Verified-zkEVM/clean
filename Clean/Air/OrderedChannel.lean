@@ -848,14 +848,18 @@ def addFinishedChannel (soundEns : SoundEnsemble F PublicIO) (channel : RawChann
 @[circuit_norm] lemma addFinishedChannel_finished {channel : RawChannel F} [channel.Consistent] :
   (soundEns.addFinishedChannel channel).finished = channel :: soundEns.finished := rfl
 
+/-- The formal ensemble, from the ensemble-level assumptions and spec, and the prover assumptions
+that witness generation needs. -/
 def toFormal (soundEns : SoundEnsemble F PublicIO)
     (Assumptions : PublicIO F → List ℕ → Prop) (Spec : PublicIO F → Prop)
     (assumptionsConsistency : soundEns.AssumptionsConsistency Assumptions)
-    (specConsistency : soundEns.SpecConsistency Spec) :
+    (specConsistency : soundEns.SpecConsistency Spec)
+    (ProverAssumptions : PublicIO F → soundEns.ProverInput F → Prop := fun _ _ => True) :
     FormalEnsemble F PublicIO where
   ensemble := soundEns.ensemble
   Assumptions := Assumptions
   Spec := Spec
+  ProverAssumptions
   soundness := by
     apply soundEns.soundness_of_tableSoundness_and_specConsistency
       Assumptions Spec ?_ assumptionsConsistency specConsistency

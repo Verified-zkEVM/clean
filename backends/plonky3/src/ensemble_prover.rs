@@ -1,4 +1,4 @@
-//! Generic batch proving for AIR enums emitted by Clean.
+//! Proving and verification of ensembles extracted from Clean.
 
 use alloc::vec::Vec;
 
@@ -35,8 +35,7 @@ fn public_lookups<F: WitnessField>(interactions: Vec<Interaction<F>>) -> Vec<Pub
         .collect()
 }
 
-/// Verification failures are separated into caller-visible statement-shape errors and cryptographic
-/// Plonky3 verification errors.
+/// A verification failure: a statement-shape error, or a Plonky3 verification error.
 #[derive(Debug)]
 pub enum EnsembleVerificationError<E: core::fmt::Debug> {
     Shape(EnsembleShapeError),

@@ -1,7 +1,6 @@
 module
 
 public import Clean.Air.OrderedChannel
-public import Clean.Air.WitnessGeneration
 
 @[expose] public section
 
@@ -24,8 +23,7 @@ structure Lookup (F : Type) [FiniteField F] (Row : TypeMap) [ProvableType Row] w
   height : UInt64
   /-- The row at index `i`. Fixed rows can't read prover data or hints. -/
   row (i : Witgen.U64Expr F) : Witgen.M F (Row (Witgen.FExpr F))
-  valid : (Witgen.RowProgram.ofM (row .idx)).Valid .fixed := by
-    simp [circuit_norm]
+  valid : (row .idx).ValidForRow .fixed := by simp [circuit_norm]
   /-- What it means to be in the table. Pulling a row from the lookup's channel guarantees it. -/
   Contains : Row F → Prop
   /-- `Contains` holds exactly for the rows of the table. -/
@@ -72,11 +70,12 @@ lemma take_toElements_pair {β : TypeMap} [ProvableType β] (a : Row F) (b : β 
   simp only [toElements, Vector.toList_append]
   exact List.take_left' Vector.length_toList
 
-/-- The table as a component: its fixed rows, followed by a multiplicity column. -/
+/-- The table as a component: its fixed rows, followed by a multiplicity column. Witness
+generation preallocates one row per table row, whose multiplicity counts the pulls. -/
 def component : Component F where
   circuit := lookup.provider
   fixedColumns := some lookup.fixedColumns
-  fixed_width_le_input := by simp [fixedColumns, FixedColumns.width, size]
+  fixed_width_le_input := by simp [fixedColumns, Witgen.RowProgram.width, size]
   circuit_assumptions_of_assumptions := by
     rintro i ⟨value, multiplicity⟩ data hfixed - -
     obtain ⟨hi, hrow⟩ := hfixed _ rfl
@@ -85,8 +84,13 @@ def component : Component F where
     change lookup.Contains value
     refine (lookup.contains_iff value).mpr ⟨i, hi, ?_⟩
     have h : toElements value = toElements ((lookup.row .idx).evalRow i) :=
-      Vector.toList_inj.mp (hrow.trans (by rw [FixedColumns.values_eq]; rfl))
+      Vector.toList_inj.mp (hrow.trans rfl)
     simpa [ProvableType.fromElements_toElements] using congrArg (fromElements (M := Row)) h
+  generation := .preallocated {
+    Row := unit
+    row _ := pure ()
+    counters := [fun (_, multiplicity) => multiplicity]
+  }
 
 @[circuit_norm] lemma component_name : lookup.component.circuit.name = lookup.name := rfl
 @[circuit_norm] lemma component_channelsWithGuarantees :
@@ -95,17 +99,6 @@ def component : Component F where
     lookup.component.circuit.channelsWithRequirements = [lookup.channel.toRaw] := rfl
 @[circuit_norm] lemma component_assumptions (input : lookup.component.Input F)
     (data : ProverData F) : lookup.component.Assumptions input data = True := rfl
-
-/-- Witness generation for the table: one preallocated row per table row, whose multiplicity counts
-the pulls. -/
-def generation : WitnessGeneration.Generation F where
-  mode := .preallocated {
-    rows := lookup.height
-    input := .ofFExprs #v[.const 0]
-    input_valid := by rfl
-    handlers := [{ interaction := 0, column := size Row }]
-  }
-  padding := { input := .replicate (size Row + 1) 0, minimumRows := lookup.height }
 
 end Lookup
 

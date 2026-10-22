@@ -7,13 +7,12 @@ public import Clean.Air.WitnessGeneration
 /-!
 # Extraction programs
 
-An extraction program is the backend-agnostic form of a flat AIR ensemble that source-code backends
-print: structured witness programs, constraints, interactions, component shapes, and ensemble
-generation modes. `lower` validates an ensemble and produces it.
+An extraction program is the form of a flat AIR ensemble that source-code backends print: witness
+programs, constraints, interactions, component shapes, and generation modes. `lower` validates an
+ensemble and produces it.
 
 The representation reuses Clean's expression and witness IR nodes, together with their Lean
-semantics. `WitnessBlock.well_formed` additionally certifies that every local reference has the sort
-of an earlier step. Native Lean closures are not representable.
+semantics.
 -/
 
 namespace Backends
@@ -101,7 +100,7 @@ def witnessProgramWellFormed {n : ℕ} (steps : List (Witgen.Step F))
     (output : Witgen.VExpr F n) : Bool :=
   stepsWellFormedFrom [] steps && vexprWellFormed (stepSorts [] steps) output
 
-/-- One structured witness operation. Native Lean closures cannot inhabit this type. -/
+/-- A witness program, whose local references all have the sort of an earlier step. -/
 structure WitnessBlock (F : Type) [FiniteField F] where
   outputWidth : ℕ
   steps : List (Witgen.Step F)
@@ -110,7 +109,6 @@ structure WitnessBlock (F : Type) [FiniteField F] where
 
 namespace WitnessBlock
 
-/-- Lean semantics for the backend-facing structured witness block. -/
 def eval (block : WitnessBlock F) (environment : ProverEnvironment F)
     (row : ℕ := 0) : Vector F block.outputWidth :=
   block.output.eval {
@@ -121,7 +119,6 @@ def eval (block : WitnessBlock F) (environment : ProverEnvironment F)
 
 end WitnessBlock
 
-/-- A backend-facing component with explicit shape and only same-row operations. -/
 structure FixedColumnsProgram (F : Type) [FiniteField F] where
   height : UInt64
   program : WitnessBlock F
@@ -154,7 +151,7 @@ def evalWitnesses (data : ProverData F) (hint : ProverHint F) :
       }
       evalWitnesses data hint blocks (row ++ (block.eval environment).toArray)
 
-/-- Complete one component row according to the typed extraction semantics. -/
+/-- Complete a component row from its input. -/
 def completeRow (component : ComponentProgram F) (input : Array F)
     (data : ProverData F) (hint : ProverHint F := .empty F) : Except String (Array F) := do
   unless input.size = component.inputWidth do
@@ -176,21 +173,26 @@ def interactionValues (component : ComponentProgram F) (row : Array F)
 
 end ComponentProgram
 
-/-- A preallocated handler, with the channel and direction of the component interaction it serves.
--/
-structure HandlerProgram where
+/-- A `DemandMode`, apart from its counter. -/
+structure DemandProgram (F : Type) where
   channel : String
-  direction : Direction
-  interaction : ℕ
-  column : ℕ
+  trigger : Direction
+  /-- The guard, as a condition on the message cells. -/
+  guard : Option (Witgen.BExpr F)
+  /-- Whether the mode aggregates by message, with its counter in `ModeProgram.demand`. -/
+  byMessage : Bool
+  input : List (InputCell F)
+  padding : Array F
 
-/-- How the rows of one component are generated, with the row program of preallocated rows
-validated. -/
+/-- How the rows of one component are generated. -/
 inductive ModeProgram (F : Type) [FiniteField F] where
-  | demand (mode : DemandMode F)
-  | preallocated (rows : UInt64) (input : WitnessBlock F) (handlers : List HandlerProgram)
+  /-- The `counters` exist with `byMessage` aggregation only: one on the mode's channel. -/
+  | demand (mode : DemandProgram F) (counters : List Counter)
+  /-- `rows` rows, whose inputs after the fixed columns are the values of `program` with zeros
+  inserted at the counter columns. -/
+  | preallocated (rows : UInt64) (program : WitnessBlock F) (counters : List Counter)
 
-/-- Complete typed artifact consumed by source-code backends. -/
+/-- An ensemble in the form that source-code backends print. -/
 structure Program (F : Type) [FiniteField F] where
   publicInputWidth : ℕ
   proverInputWidth : ℕ
@@ -198,18 +200,17 @@ structure Program (F : Type) [FiniteField F] where
   components : List (ComponentProgram F)
   verifierInteractions : List (AbstractInteraction F)
   modes : List (ModeProgram F)
-  padding : List (Padding F)
   fuel : ℕ
 
 /-! ## Lowering a flat Clean ensemble to an extraction program -/
 
 inductive LoweringError where
-  | config (error : ConfigError)
+  | validation (error : ValidationError)
   | nativeWitness (component operation : ℕ)
   | malformedWitnessLocals (component operation : ℕ)
   | malformedFixedProgram (component : ℕ)
-  | malformedInitializer (component : ℕ)
-  | handlerInteraction (component interaction : ℕ)
+  | malformedRowProgram (component : ℕ)
+  | malformedGuard (component : ℕ)
   | legacyLookup (component : ℕ)
   | componentVariable (component index width : ℕ)
   | verifierVariable (index width : ℕ)
@@ -217,17 +218,17 @@ deriving Repr, DecidableEq
 
 instance : ToString LoweringError where
   toString
-    | .config error => toString error
+    | .validation error => toString error
     | .nativeWitness component operation =>
         s!"component {component} witness operation {operation} is a native Lean closure"
     | .malformedWitnessLocals component operation =>
         s!"component {component} witness operation {operation} has an invalid local reference"
     | .malformedFixedProgram component =>
         s!"component {component} fixed-column program has an invalid local reference"
-    | .malformedInitializer component =>
-        s!"component {component} row initializer has an invalid local reference"
-    | .handlerInteraction component interaction =>
-        s!"component {component} preallocated handler refers to missing interaction {interaction}"
+    | .malformedRowProgram component =>
+        s!"component {component} preallocated row program has an invalid local reference"
+    | .malformedGuard component =>
+        s!"component {component} guard has an invalid local reference"
     | .legacyLookup component =>
         s!"component {component} contains a legacy lookup; extraction supports channels only"
     | .componentVariable component index width =>
@@ -261,17 +262,15 @@ def lowerWitnesses (component : ℕ) (operations : List (FlatOperation F)) :
     | .witness _ code => return some (← lowerWitness component index code)
     | _ => return none
 
-def lowerRowProgram (error : LoweringError) (program : Witgen.RowProgram F) :
-    Except LoweringError (WitnessBlock F) :=
-  if h : witnessProgramWellFormed program.steps program.output then
-    .ok {
-      outputWidth := program.width
-      steps := program.steps
-      output := program.output
-      well_formed := h
-    }
-  else
-    .error error
+def lowerRowProgram {source : Witgen.RowProgram.Source} (error : LoweringError)
+    (program : Witgen.RowProgram F source) : Except LoweringError (WitnessBlock F) :=
+  match program.ir with
+  | .ir steps output =>
+    if h : witnessProgramWellFormed steps output then
+      .ok { outputWidth := program.width, steps, output, well_formed := h }
+    else
+      .error error
+  | .native _ => .error error
 
 def lowerComponent (index : ℕ) (component : Component F) :
     Except LoweringError (ComponentProgram F) := do
@@ -281,7 +280,7 @@ def lowerComponent (index : ℕ) (component : Component F) :
   let flat := operations.toFlat
   let witnesses ← lowerWitnesses index flat
   let fixedColumns ← component.fixedColumns.mapM fun fixed => do
-    let program ← lowerRowProgram (.malformedFixedProgram index) fixed.program
+    let program ← lowerRowProgram (.malformedFixedProgram index) fixed.toRowProgram
     return { height := fixed.height, program }
   let constraints := operations.constraints
   let interactions := operations.interactions
@@ -300,51 +299,48 @@ def lowerComponent (index : ℕ) (component : Component F) :
     interactions
   }
 
-def lowerHandler (index : ℕ) (component : ComponentProgram F) (handler : PreallocatedHandler) :
-    Except LoweringError HandlerProgram := do
-  let some interaction := component.interactions[handler.interaction]?
-    | throw (.handlerInteraction index handler.interaction)
-  return {
-    channel := interaction.channel.name
-    direction := if interaction.assumeGuarantees then .push else .pull
-    interaction := handler.interaction
-    column := handler.column
-  }
+def lowerGeneration (index : ℕ) (component : Component F) (counters : List Counter) :
+    Except LoweringError (ModeProgram F) := do
+  match component.generation with
+  | .demand mode =>
+      let byMessage := match mode.aggregation with
+        | .perOccurrence => false
+        | .byMessage _ => true
+      let guard := mode.guardCondition
+      unless guard.all (bexprWellFormed []) do
+        throw (.malformedGuard index)
+      let { channel, trigger, input, padding, .. } := mode
+      return .demand { channel := channel.name, trigger, guard, byMessage, input, padding } counters
+  | .preallocated mode =>
+      let program ← lowerRowProgram (.malformedRowProgram index) mode.toRowProgram
+      let rows := component.fixedColumns.map (·.height) |>.getD 0
+      return .preallocated rows program counters
 
-def lowerMode (index : ℕ) (component : ComponentProgram F) :
-    Mode F → Except LoweringError (ModeProgram F)
-  | .demand mode => pure (.demand mode)
-  | .preallocated mode => do
-      let input ← lowerRowProgram (.malformedInitializer index) mode.input
-      let handlers ← mode.handlers.mapM (lowerHandler index component)
-      return .preallocated mode.rows input handlers
-
-/-- Lower and validate the backend-facing portion of an ensemble without producing source text. -/
-def lower (ens : FormalEnsemble F PublicIO) (config : Config F) :
-    Except LoweringError (Program F) := do
-  let ensemble := ens.ensemble
-  let config ← (config.validate ensemble).mapError .config
-  let components ← ensemble.tables.zipIdx.mapM fun (component, index) =>
-    lowerComponent index component
-  let modes ← (components.zip config.generations).zipIdx.mapM
-    fun ((component, generation), index) =>
-    lowerMode index component generation.mode
-  let verifierOperations := ensemble.verifierOperations.toFlat
-  let verifierInteractions := FlatOperation.interactions verifierOperations
-  let verifierExpressions := verifierInteractions.flatMap fun interaction =>
-    interaction.mult :: interaction.msg.toList
-  match expressionsBadVariable (size PublicIO) verifierExpressions with
-  | some cellIndex => throw (.verifierVariable cellIndex (size PublicIO))
-  | none => pure ()
-  return {
-    publicInputWidth := size PublicIO
-    proverInputWidth := size ens.ProverInput
-    hintTables := ens.hintTables
-    components
-    verifierInteractions
-    modes
-    padding := config.generations.map (·.padding)
-    fuel := config.fuel
-  }
+/-- Validate the generation of an ensemble, and lower it to an extraction program. `fuel` bounds the
+number of witness generation steps. -/
+def lower (ensemble : Ensemble F PublicIO) (fuel : ℕ) : Except LoweringError (Program F) := do
+  match validateGeneration ensemble with
+  | .error error => throw (.validation error)
+  | .ok valid =>
+    let components ← ensemble.tables.zipIdx.mapM fun (component, index) =>
+      lowerComponent index component
+    let modes ← (ensemble.tables.zip valid.counters).zipIdx.mapM
+      fun ((component, counters), index) => lowerGeneration index component counters
+    let verifierOperations := ensemble.verifierOperations.toFlat
+    let verifierInteractions := FlatOperation.interactions verifierOperations
+    let verifierExpressions := verifierInteractions.flatMap fun interaction =>
+      interaction.mult :: interaction.msg.toList
+    match expressionsBadVariable (size PublicIO) verifierExpressions with
+    | some cellIndex => throw (.verifierVariable cellIndex (size PublicIO))
+    | none => pure ()
+    return {
+      publicInputWidth := size PublicIO
+      proverInputWidth := size ensemble.ProverInput
+      hintTables := ensemble.hintTables
+      components
+      verifierInteractions
+      modes
+      fuel
+    }
 
 end Backends

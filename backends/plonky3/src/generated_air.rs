@@ -2,7 +2,7 @@
 //!
 //! Generated files provide component shapes and direct expression builders through
 //! [`GeneratedAirSpec`], usually implemented by [`crate::ensemble`]. Lookup registration and
-//! Plonky3 trait plumbing live here so they are implemented and reviewed once.
+//! Plonky3 trait plumbing live here.
 
 use alloc::vec;
 use alloc::vec::Vec;

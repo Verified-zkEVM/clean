@@ -7,90 +7,28 @@ public import Clean.Circuit.WitnessIRSugar
 /-!
 # Row programs
 
-Index-aware witness programs that produce one segment of an AIR row: verifier-known fixed columns,
-and prover-committed inputs of preallocated components. They read the row index and, for prover
-inputs, the runtime prover input, but no circuit environment.
+Witness programs that compute a segment of a row from the row index: fixed columns, and the inputs
+of preallocated components. The latter can also read the hint.
 -/
 
 namespace Witgen
 variable {F : Type}
 
-/-- A structured, index-aware program producing one row segment. Unlike `WitgenIR`, this has no
-native-closure escape hatch and can therefore be interpreted identically by Lean and extracted
-backends. -/
-structure RowProgram (F : Type) where
-  width : ℕ
-  steps : List (Step F)
-  output : VExpr F width
-
-namespace RowProgram
-
-/-- Evaluate a row program at `row`, which `U64Expr.idx` reads. Prover row programs may read `hint`;
-fixed-column programs cannot. -/
-def eval [FiniteField F] (program : RowProgram F) (row : UInt64) (hint : ProverHint F) :
-    Vector F program.width :=
-  let env := { get _ := 0, data := .empty F, hint }
-  program.output.eval {
-    env
-    locals := evalSteps env program.steps #[] row.toNat
-    idx := row.toNat
-  }
-
-def empty (F : Type) : RowProgram F where
-  width := 0
-  steps := []
-  output := .lit #v[]
-
-def ofFExprs {n : ℕ} (values : Vector (FExpr F) n) : RowProgram F where
-  width := n
-  steps := []
-  output := .lit values
-
-/-- The row program computing a provable value with a witness program. -/
-@[circuit_norm]
-def ofM {Row : TypeMap} [ProvableType Row] (program : M F (Row (FExpr F))) : RowProgram F where
-  width := size Row
-  steps := (program #[]).2.toList
-  output := .lit (toElements (program #[]).1)
-
-/-- The empty environment of fixed rows, which read nothing but the row index. -/
-@[circuit_norm]
-def fixedEnvironment (F : Type) [Field F] : ProverEnvironment F where
-  get _ := 0
-  data := .empty F
-  hint := .empty F
-
-/-- Evaluate a witness program for a fixed row at row `row`. -/
-@[circuit_norm]
-def _root_.Witgen.M.evalRow [FiniteField F] {Row : TypeMap} [ProvableType Row]
-    (program : M F (Row (FExpr F))) (row : UInt64) : Row F :=
-  Witgen.eval {
-    env := fixedEnvironment F
-    locals := evalSteps (fixedEnvironment F) (program #[]).2.toList #[] row.toNat
-    idx := row.toNat
-  } (program #[]).1
-
-theorem eval_ofM [FiniteField F] {Row : TypeMap} [ProvableType Row] (program : M F (Row (FExpr F)))
-    (row : UInt64) : (ofM program).eval row (.empty F) = toElements (program.evalRow row) := by
-  simp only [eval, ofM, M.evalRow, fixedEnvironment, Witgen.eval, VExpr.eval,
-    ProvableType.toElements_fromElements]
-
-end RowProgram
-
-/-- External inputs available to an index-aware row program. -/
+/-- What a row program computes: fixed columns, or inputs of preallocated components. -/
 inductive RowProgram.Source where
   | fixed
   | prover
 deriving DecidableEq
 
+@[circuit_norm]
 def RowProgram.Source.allowsHints : RowProgram.Source → Bool
   | .fixed => false
   | .prover => true
 
 mutual
 
-/-- Whether an expression is valid in a row program. These programs have no circuit-row or
-semantic-data environment. Prover row programs additionally read hints; fixed programs do not. -/
+/-- Whether an expression is valid in a row program: it reads no row or prover data, and only
+prover row programs read hints. -/
 def FExpr.validForRow (source : RowProgram.Source) : FExpr F → Bool
   | .expr _ => false
   | .const _ | .localVar _ => true
@@ -157,12 +95,50 @@ def VExpr.validForRow (source : RowProgram.Source) : {n : ℕ} → VExpr F n →
 attribute [circuit_norm] FExpr.validForRow U64Expr.validForRow BExpr.validForRow
   FExprList.validForRow Step.validForRow VExpr.validForRow
 
-namespace RowProgram
-
+/-- Whether a witness program is valid in a row program. -/
 @[circuit_norm]
-def Valid (program : RowProgram F) (source : Source) : Prop :=
-  program.steps.all (Step.validForRow source) &&
-    program.output.validForRow source = true
+def M.ValidForRow {Row : TypeMap} [ProvableType Row] (program : M F (Row (FExpr F)))
+    (source : RowProgram.Source) : Prop :=
+  ((program #[]).2.toList.all (Step.validForRow source) &&
+    (VExpr.lit (toElements (program #[]).1)).validForRow source) = true
+
+/-- Evaluate a witness program at row `row`, which `.idx` reads. Only prover row programs read
+`hint`. -/
+@[circuit_norm]
+def M.evalRow [FiniteField F] {Row : TypeMap} [ProvableType Row]
+    (program : M F (Row (FExpr F))) (row : UInt64) (hint : ProverHint F := .empty F) : Row F :=
+  let env : ProverEnvironment F := { get _ := 0, data := .empty F, hint }
+  Witgen.eval {
+    env
+    locals := evalSteps env (program #[]).2.toList #[] row.toNat
+    idx := row.toNat
+  } (program #[]).1
+
+/-- A program computing a row segment of type `Row` from the row index. -/
+structure RowProgram (F : Type) (source : RowProgram.Source) where
+  {Row : TypeMap} [provableRow : ProvableType Row]
+  /-- The values of row `i`. -/
+  row (i : U64Expr F) : M F (Row (FExpr F))
+  valid : (row .idx).ValidForRow source := by simp [circuit_norm]
+
+instance {source : RowProgram.Source} (program : RowProgram F source) :
+    ProvableType program.Row :=
+  program.provableRow
+
+namespace RowProgram
+variable {source : Source}
+
+abbrev width (program : RowProgram F source) : ℕ := size program.Row
+
+/-- The program as witness IR. -/
+def ir (program : RowProgram F source) : WitgenIR F program.width :=
+  (program.row .idx).toIRLiteral
+
+/-- The values of row `i`. -/
+@[circuit_norm]
+def eval [FiniteField F] (program : RowProgram F source) (i : UInt64)
+    (hint : ProverHint F := .empty F) : program.Row F :=
+  (program.row .idx).evalRow i hint
 
 end RowProgram
 

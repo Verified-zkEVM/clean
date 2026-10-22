@@ -33,8 +33,12 @@ fn memory(values: [u64; 8]) -> Vec<BabyBear> {
 #[test]
 fn extracted_femtocairo_witness_uses_committed_memory_data() {
     let memory_values = memory([0, 5, 3, 7, 2, 10, 0, 0]);
-    let witness = generated::generate(&public_values(), &memory_values)
-        .expect("extracted FemtoCairo witness generation failed");
+    let witness = generated::generate(
+        &public_values(),
+        &memory_values,
+        setup::MINIMUM_TRACE_HEIGHT,
+    )
+    .expect("extracted FemtoCairo witness generation failed");
 
     assert_eq!(
         witness.tables.iter().map(Vec::len).collect::<Vec<_>>(),
@@ -51,9 +55,9 @@ fn extracted_femtocairo_accepts_runtime_private_memories() {
     let first = memory([0, 5, 3, 7, 2, 10, 0, 0]);
     let second = memory([0, 5, 3, 7, 2, 10, 0, 99]);
 
-    let first_witness = generated::generate(&public_values, &first)
+    let first_witness = generated::generate(&public_values, &first, setup::MINIMUM_TRACE_HEIGHT)
         .expect("first runtime memory should generate a witness");
-    let second_witness = generated::generate(&public_values, &second)
+    let second_witness = generated::generate(&public_values, &second, setup::MINIMUM_TRACE_HEIGHT)
         .expect("second runtime memory should generate a witness");
     assert_eq!(first_witness.tables[1][7][1], field(0));
     assert_eq!(second_witness.tables[1][7][1], field(99));
@@ -76,7 +80,7 @@ fn extracted_femtocairo_air_proves_and_verifies() {
     let config = setup::test_config(7);
     let public_values = public_values();
     let memory_values = memory([0, 5, 3, 7, 2, 10, 0, 0]);
-    let witness = generated::generate(&public_values, &memory_values)
+    let witness = generated::generate(&public_values, &memory_values, setup::MINIMUM_TRACE_HEIGHT)
         .expect("extracted FemtoCairo witness generation failed");
     let traces = witness.into_traces().expect("invalid extracted traces");
 
@@ -146,8 +150,12 @@ impl GeneratedAirSpec for PermutedMemoryAddresses {
 fn verifier_rejects_permuted_memory() {
     let config = setup::test_config(19);
     let public_values = public_values();
-    let witness = generated::generate(&public_values, &memory([0, 5, 3, 7, 2, 10, 0, 0]))
-        .expect("extracted FemtoCairo witness generation failed");
+    let witness = generated::generate(
+        &public_values,
+        &memory([0, 5, 3, 7, 2, 10, 0, 0]),
+        setup::MINIMUM_TRACE_HEIGHT,
+    )
+    .expect("extracted FemtoCairo witness generation failed");
     let mut traces = witness.into_traces().expect("invalid extracted traces");
     let memory_trace = &mut traces[MEMORY];
     let width = memory_trace.width();

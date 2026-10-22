@@ -196,7 +196,7 @@ omit p_large_enough in
 /-- If decodeInstruction succeeds, the result encodes a valid instruction type -/
 lemma decodeInstruction_eq_some_implies_isEncodedCorrectly (instr : F p) (result : ℕ × ℕ × ℕ × ℕ)
     (h : decodeInstruction instr = some result) :
-    Types.DecodedInstructionType.isEncodedCorrectly (p := p) {
+    Types.DecodedInstructionType.IsEncodedCorrectly (p := p) {
       isAdd := if result.1 = 0 then 1 else 0
       isMul := if result.1 = 1 then 1 else 0
       isStoreState := if result.1 = 2 then 1 else 0
@@ -232,9 +232,9 @@ lemma decodeInstruction_eq_some_implies_modes_encoded (instr : F p) (result : �
                    isApRelative := if result.2.2.2 = 1 then 1 else 0
                    isFpRelative := if result.2.2.2 = 2 then 1 else 0
                    isImmediate := if result.2.2.2 = 3 then 1 else 0 }
-    Types.DecodedAddressingMode.isEncodedCorrectly mode1 ∧
-    Types.DecodedAddressingMode.isEncodedCorrectly mode2 ∧
-    Types.DecodedAddressingMode.isEncodedCorrectly mode3 := by
+    Types.DecodedAddressingMode.IsEncodedCorrectly mode1 ∧
+    Types.DecodedAddressingMode.IsEncodedCorrectly mode2 ∧
+    Types.DecodedAddressingMode.IsEncodedCorrectly mode3 := by
   simp only [decodeInstruction] at h
   split at h
   case isTrue => simp at h

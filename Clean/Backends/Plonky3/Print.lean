@@ -202,55 +202,69 @@ def completeToRust (witnesses : List (WitnessBlock F)) : String :=
 
 def inputCellToRust : InputCell F → String
   | .message index => s!"InputCell::Message({index})"
-  | .multiplicity => "InputCell::Multiplicity"
   | .const value => s!"InputCell::Constant({fieldIn "F" value})"
 
 def directionToRust : Direction → String
   | .pull => "Direction::Pull"
   | .push => "Direction::Push"
 
-def aggregationToRust : Aggregation → String
-  | .perOccurrence => "Aggregation::PerOccurrence"
-  | .byMessage => "Aggregation::ByMessage"
+def aggregationToRust (byMessage : Bool) : String :=
+  if byMessage then "Aggregation::ByMessage" else "Aggregation::PerOccurrence"
 
-def handlerToRust (handler : HandlerProgram) : String :=
-  s!"PreallocatedHandler \{ channel: {quoted handler.channel}, \
-      direction: {directionToRust handler.direction}, interaction: {handler.interaction}, \
-      column: {handler.column} }"
+def counterToRust (counter : Counter) : String :=
+  s!"Counter \{ channel: {quoted counter.channel}, interaction: {counter.interaction}, \
+      column: {counter.column} }"
+
+def paddingToRust (padding : Array F) : String :=
+  s!"vec![{commaSep (padding.toList.map (fieldIn "F"))}]"
+
+/-- `fn guard(row, data, hint)`, where `row` is the demanded message. -/
+def guardToRust (guard : Witgen.BExpr F) : String :=
+  s!"pub fn guard<F: WitnessField>(row: &[F], data: &WitnessData<F>, hint: &WitnessData<F>) \
+      -> bool \{
+    let row_index = 0u64;
+    {bexprToRust false guard}
+}"
 
 /-- `fn mode()`, and `fn initial_row(row_index, hint)`, which for preallocated components is the
-fixed prefix followed by the row program's values. -/
+fixed prefix followed by the row program's values, with zeros inserted at the counter columns. A
+demand mode with a guard also gets `fn guard`. -/
 def modeToRust : ModeProgram F → String
-  | .demand mode => s!"pub fn mode<F: WitnessField>() -> Mode<F> \{
-    Mode::Demand(DemandMode \{ channel: {quoted mode.channel.name}, \
-        direction: {directionToRust mode.direction}, \
-        aggregation: {aggregationToRust mode.aggregation}, \
-        input: vec![{commaSep (mode.input.cells.map inputCellToRust)}] })
+  | .demand mode counters =>
+    let guard := match mode.guard with
+      | none => ""
+      | some guard => s!"{guardToRust guard}\n\n"
+    s!"{guard}pub fn mode<F: WitnessField>() -> Mode<F> \{
+    Mode::Demand(DemandMode \{ channel: {quoted mode.channel}, \
+        trigger: {directionToRust mode.trigger}, \
+        guard: {if mode.guard.isSome then "Some(guard::<F>)" else "None"}, \
+        aggregation: {aggregationToRust mode.byMessage}, \
+        input: vec![{commaSep (mode.input.map inputCellToRust)}], \
+        counters: vec![{commaSep (counters.map counterToRust)}], \
+        padding: {paddingToRust mode.padding} })
 }
 
 pub fn initial_row<F: WitnessField>(_row_index: u64, _hint: &WitnessData<F>) -> Vec<F> \{
     Vec::new()
 }"
-  | .preallocated rows input handlers => s!"pub fn mode<F: WitnessField>() -> Mode<F> \{
-    Mode::Preallocated \{ rows: {rows}, handlers: vec![{commaSep (handlers.map handlerToRust)}] }
+  | .preallocated rows program counters =>
+    let zeros := (counters.map (·.column)).mergeSort.map fun column =>
+      s!"input.insert({column}, F::ZERO);"
+    s!"pub fn mode<F: WitnessField>() -> Mode<F> \{
+    Mode::Preallocated \{ rows: {rows}, counters: vec![{commaSep (counters.map counterToRust)}] }
 }
 
 pub fn initial_row<F: WitnessField>(row_index: u64, hint: &WitnessData<F>) -> Vec<F> \{
     let row: &[F] = &[];
     let mut input = fixed_row::<F>(row_index);
-    {programToRust input.steps input.output}
+    {programToRust program.steps program.output}
     input.extend(output);
+    {String.intercalate "\n    " zeros}
     input
 }"
 
-def paddingToRust (padding : Padding F) : String :=
-  s!"pub fn padding<F: WitnessField>() -> Padding<F> \{
-    Padding \{ input: vec![{commaSep (padding.input.toList.map (fieldIn "F"))}], \
-        minimum_rows: {padding.minimumRows} }
-}"
-
-def componentToRust (index : ℕ) (component : ComponentProgram F) (mode : ModeProgram F)
-    (padding : Padding F) : String :=
+def componentToRust (index : ℕ) (component : ComponentProgram F) (mode : ModeProgram F) :
+    String :=
   s!"#[allow(unused_variables, unused_mut, unused_parens)]
 pub mod component_{index} \{
 use super::*;
@@ -268,8 +282,6 @@ pub const WIDTH: usize = {component.width};
 {interactionsToRust component.interactions}
 
 {modeToRust mode}
-
-{paddingToRust padding}
 }"
 
 def hintTableToRust (table : HintTable) : String :=
@@ -284,8 +296,8 @@ use alloc::{vec, vec::Vec};
 
 /-- Print a validated extraction program as a Rust module body. -/
 def programToRustFile (program : Program F) : String :=
-  let components := ((program.components.zip (program.modes.zip program.padding)).zipIdx.map
-    fun ((component, mode, padding), index) => componentToRust index component mode padding)
+  let components := ((program.components.zip program.modes).zipIdx.map
+    fun ((component, mode), index) => componentToRust index component mode)
   let names := commaSep (program.components.zipIdx.map fun (_, index) => s!"component_{index}")
   s!"{prelude}
 {lines (components.map (· ++ "\n"))}
@@ -307,9 +319,8 @@ clean_backend::ensemble! \{
 "
 
 /-- Lower an ensemble to an extraction program and print it as Rust. -/
-def ensembleToRust (ens : FormalEnsemble F PublicIO) (config : Config F) :
-    Except String String := do
-  let program ← lower ens config |>.mapError toString
+def ensembleToRust (ensemble : Ensemble F PublicIO) (fuel : ℕ) : Except String String := do
+  let program ← lower ensemble fuel |>.mapError toString
   return programToRustFile program
 
 end Backends.Plonky3.Print

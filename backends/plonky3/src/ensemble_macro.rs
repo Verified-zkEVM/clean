@@ -6,7 +6,7 @@
 /// Every module listed in `components`, and the module `verifier`, must be in scope. Component
 /// modules provide the constants `NAME`, `INPUT_WIDTH`, `WIDTH`, `FIXED_WIDTH`, `FIXED_HEIGHT` and
 /// `INTERACTIONS`, and the functions `fixed_row`, `complete`, `constraints`, `interactions`,
-/// `mode`, `initial_row` and `padding`. The verifier module provides `INTERACTIONS` and
+/// `mode` and `initial_row`. The verifier module provides `INTERACTIONS` and
 /// `interactions`.
 ///
 /// The macro defines the type `Ensemble`, implementing both traits, the AIR statement
@@ -40,10 +40,6 @@ macro_rules! ensemble {
 
             fn modes() -> $crate::__private::Vec<$crate::witness_generation::Mode<F>> {
                 $crate::__private::vec![$($component::mode::<F>()),+]
-            }
-
-            fn padding() -> $crate::__private::Vec<$crate::witness_generation::Padding<F>> {
-                $crate::__private::vec![$($component::padding::<F>()),+]
             }
 
             fn initial_row(
@@ -159,15 +155,21 @@ macro_rules! ensemble {
         /// The AIR statement of the extracted ensemble.
         pub type Statement<F> = $crate::GeneratedEnsemble<F, Ensemble>;
 
-        /// Generate a witness of the extracted ensemble.
+        /// Generate a witness of the extracted ensemble, whose traces have at least `minimum_height`
+        /// rows.
         pub fn generate<F: $crate::witness_generation::WitnessField>(
             public_input: &[F],
             prover_input: &[F],
+            minimum_height: usize,
         ) -> Result<
             $crate::witness_generation::EnsembleWitness<F>,
             $crate::witness_generation::WitnessGenerationError,
         > {
-            $crate::witness_generation::generate::<F, Ensemble>(public_input, prover_input)
+            $crate::witness_generation::generate::<F, Ensemble>(
+                public_input,
+                prover_input,
+                minimum_height,
+            )
         }
     };
 }

@@ -2,49 +2,26 @@ module
 
 public import Clean.Air.Circuit
 public import Clean.Air.RowProgram
+public import Clean.Air.WitnessGeneration.Generation
 
 @[expose] public section
 
 namespace Air.Flat
 variable {F : Type}
 
-/-- Public, index-addressed columns supplied by the verifier rather than committed by the prover.
-Each row is a value of the provable type `Row`, computed from the row index by a witness program,
-which Lean and extracted backends evaluate identically. -/
-structure FixedColumns (F : Type) where
-  {Row : TypeMap} [provableRow : ProvableType Row]
+/-- Verifier-known columns: `height` rows of type `Row`, computed from the row index. -/
+structure FixedColumns (F : Type) extends Witgen.RowProgram F .fixed where
   height : UInt64
-  /-- The row at index `i`. Fixed rows can't read prover data or hints. -/
-  row (i : Witgen.U64Expr F) : Witgen.M F (Row (Witgen.FExpr F))
-  valid : (Witgen.RowProgram.ofM (row .idx)).Valid .fixed := by
-    simp [circuit_norm]
-
-instance (fixed : FixedColumns F) : ProvableType fixed.Row := fixed.provableRow
 
 namespace FixedColumns
-
-abbrev width (fixed : FixedColumns F) : ℕ := size fixed.Row
-
-/-- The row program computing the fixed values, as consumed by witness generation and backends. -/
-def program (fixed : FixedColumns F) : Witgen.RowProgram F := .ofM (fixed.row .idx)
-
 variable [FiniteField F]
 
 /-- The fixed values of row `i`. -/
+@[circuit_norm]
 def values (fixed : FixedColumns F) (i : UInt64) : Array F :=
-  (fixed.program.eval i (.empty F)).toArray
+  (toElements (fixed.eval i)).toArray
 
-/-- The fixed row `i`, as a value of the row type. -/
-@[circuit_norm]
-def rowValue (fixed : FixedColumns F) (i : UInt64) : fixed.Row F := (fixed.row .idx).evalRow i
-
-@[circuit_norm]
-lemma values_eq (fixed : FixedColumns F) (i : UInt64) :
-    fixed.values i = (toElements (fixed.rowValue i)).toArray := by
-  rw [values, program, Witgen.RowProgram.eval_ofM]
-  rfl
-
-/-- The full semantic rows have exactly the declared fixed prefix at every row index. -/
+/-- Every row starts with the fixed values of its index. -/
 abbrev RowsMatch (fixed : FixedColumns F) (rows : List (Array F)) : Prop :=
   rows.map (fun row => row.extract 0 fixed.width) =
     (List.range fixed.height.toNat).map (fixed.values ∘ UInt64.ofNat)
@@ -89,24 +66,27 @@ structure Component (F : Type) [FiniteField F] where
   {Input : TypeMap} {Output : TypeMap}
   [provableInput : ProvableType Input] [provableOutput : ProvableType Output]
   circuit : GeneralFormalCircuit F Input Output
-  /-- When present, identifies the fixed prefix available to the circuit on row `i`. -/
+  /-- Fixed columns, which form a prefix of the input. -/
   fixedColumns : Option (FixedColumns F) := none
-  /-- Assumptions still required from the enclosing ensemble after fixed-row and data facts. -/
+  /-- Assumptions the ensemble has to provide, beyond the fixed-row and data facts. -/
   Assumptions : Input F → ProverData F → Prop := fun _ _ => True
-  /-- Fixed-row and derived-data facts, together with the residual assumptions, imply the
-  assumptions of the underlying row circuit. -/
+  /-- Fixed-row and data facts, together with `Assumptions`, imply the circuit's assumptions. -/
   circuit_assumptions_of_assumptions : ∀ (i : UInt64) (input : Input F) data,
       FixedInputAt fixedColumns i input → DataInputAt circuit.name i input data →
         Assumptions input data → circuit.Assumptions input data := by intros; trivial
-  fixed_width_le_input : (fixedColumns.map FixedColumns.width).getD 0 ≤ size Input := by
+  fixed_width_le_input : (fixedColumns.map (·.width)).getD 0 ≤ size Input := by
     simp <;> exact Nat.le_of_ble_eq_true rfl
+  /-- How the prover builds the component's rows: preallocated if it has fixed columns, demand
+  otherwise. See `Clean.Air.WitnessGeneration.Generation`. -/
+  generation : WitnessGeneration.Generation F Input
+  generation_preallocated : generation.isPreallocated = fixedColumns.isSome := by rfl
 
 instance (t: Component F) : ProvableType t.Input := t.provableInput
 instance (t: Component F) : ProvableType t.Output := t.provableOutput
 
 namespace Component
 def fixedWidth (component : Component F) : ℕ :=
-  component.fixedColumns.map FixedColumns.width |>.getD 0
+  component.fixedColumns.map (·.width) |>.getD 0
 
 def FixedRowsMatch (component : Component F) (rows : List (Array F)) : Prop :=
   match component.fixedColumns with
@@ -146,7 +126,7 @@ def Spec (component : Component F) (row : Environment F) : Prop :=
 def CircuitAssumptions (component : Component F) (row : Environment F) : Prop :=
   component.circuit.Assumptions (component.rowInput row) row.data
 
-/-- Residual assumptions not supplied by fixed-row or derived-data invariants. -/
+/-- The component's `Assumptions` on a row. -/
 def RowAssumptions (component : Component F) (row : Environment F) : Prop :=
   component.Assumptions (component.rowInput row) row.data
 
@@ -245,14 +225,14 @@ structure Table (F : Type) [FiniteField F] where
   uniform_width : ∀ row ∈ table, row.size = component.width
   /-- Row indices are `u64` values. -/
   length_le : table.length ≤ UInt64.size
-  /-- Connects the row-indexed fixed-column declaration to the concrete semantic rows. -/
+  /-- The rows start with the fixed columns. -/
   fixed_rows_match : component.FixedRowsMatch table
 
 /-- The table's rows cut off at `n` elements. -/
 def Table.proverRows (table : Table F) (n : ℕ) : Array (Vector F n) :=
   (table.table.map (rowPrefix n)).toArray
 
-/-- Each named component is the source of its circuit-input rows in the prover data. -/
+/-- The input rows of each component of a list of tables, under its name. -/
 def deriveTables : List (Table F) → String → (n : ℕ) → Array (Vector F n)
   | [] => fun _ _ => #[]
   | table :: tables => fun name n =>
@@ -365,7 +345,7 @@ lemma circuitAssumptions_of_dataConsistency (table : Table F) (consistent : tabl
         Function.comp_apply] at hprefix
       have hsize : fixed.width ≤ row.size := by
         have := congrArg Array.size hprefix
-        simp [FixedColumns.values, FixedColumns.program, Witgen.RowProgram.ofM] at this
+        simp [FixedColumns.values] at this
         omega
       have hwidth : fixed.width ≤ size table.component.Input := by
         simpa [hcolumns] using table.component.fixed_width_le_input

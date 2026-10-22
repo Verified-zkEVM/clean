@@ -71,7 +71,8 @@ pub mod component_0 {
     pub fn mode<F: WitnessField>() -> Mode<F> {
         Mode::Demand(DemandMode {
             channel: "fibonacci",
-            direction: Direction::Push,
+            trigger: Direction::Push,
+            guard: None,
             aggregation: Aggregation::PerOccurrence,
             input: vec![
                 InputCell::Constant(F::from_u64(1u64)),
@@ -79,23 +80,18 @@ pub mod component_0 {
                 InputCell::Message(1),
                 InputCell::Message(2),
             ],
-        })
-    }
-
-    pub fn initial_row<F: WitnessField>(_row_index: u64, _hint: &WitnessData<F>) -> Vec<F> {
-        Vec::new()
-    }
-
-    pub fn padding<F: WitnessField>() -> Padding<F> {
-        Padding {
-            input: vec![
+            counters: vec![],
+            padding: vec![
                 F::from_u64(0u64),
                 F::from_u64(0u64),
                 F::from_u64(0u64),
                 F::from_u64(0u64),
             ],
-            minimum_rows: 32,
-        }
+        })
+    }
+
+    pub fn initial_row<F: WitnessField>(_row_index: u64, _hint: &WitnessData<F>) -> Vec<F> {
+        Vec::new()
     }
 }
 
@@ -161,31 +157,30 @@ pub mod component_1 {
     pub fn mode<F: WitnessField>() -> Mode<F> {
         Mode::Demand(DemandMode {
             channel: "add8",
-            direction: Direction::Pull,
+            trigger: Direction::Pull,
+            guard: None,
             aggregation: Aggregation::ByMessage,
             input: vec![
                 InputCell::Message(0),
                 InputCell::Message(1),
                 InputCell::Message(2),
-                InputCell::Multiplicity,
+            ],
+            counters: vec![Counter {
+                channel: "add8",
+                interaction: 1,
+                column: 3,
+            }],
+            padding: vec![
+                F::from_u64(0u64),
+                F::from_u64(0u64),
+                F::from_u64(0u64),
+                F::from_u64(0u64),
             ],
         })
     }
 
     pub fn initial_row<F: WitnessField>(_row_index: u64, _hint: &WitnessData<F>) -> Vec<F> {
         Vec::new()
-    }
-
-    pub fn padding<F: WitnessField>() -> Padding<F> {
-        Padding {
-            input: vec![
-                F::from_u64(0u64),
-                F::from_u64(0u64),
-                F::from_u64(0u64),
-                F::from_u64(0u64),
-            ],
-            minimum_rows: 32,
-        }
     }
 }
 
@@ -233,9 +228,8 @@ pub mod component_2 {
     pub fn mode<F: WitnessField>() -> Mode<F> {
         Mode::Preallocated {
             rows: 256,
-            handlers: vec![PreallocatedHandler {
+            counters: vec![Counter {
                 channel: "bytes",
-                direction: Direction::Pull,
                 interaction: 0,
                 column: 1,
             }],
@@ -245,17 +239,10 @@ pub mod component_2 {
     pub fn initial_row<F: WitnessField>(row_index: u64, hint: &WitnessData<F>) -> Vec<F> {
         let row: &[F] = &[];
         let mut input = fixed_row::<F>(row_index);
-        let mut output: Vec<F> = Vec::with_capacity(1);
-        output.push(F::from_u64(0u64));
+        let mut output: Vec<F> = Vec::with_capacity(0);
         input.extend(output);
+        input.insert(1, F::ZERO);
         input
-    }
-
-    pub fn padding<F: WitnessField>() -> Padding<F> {
-        Padding {
-            input: vec![F::from_u64(0u64), F::from_u64(0u64)],
-            minimum_rows: 256,
-        }
     }
 }
 
