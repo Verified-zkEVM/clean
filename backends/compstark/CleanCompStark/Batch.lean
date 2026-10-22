@@ -53,7 +53,8 @@ def toBatchSetup (ens : Ensemble F PublicIO) (params : Fri.Params)
     (valid : ∀ i, ValidConfig params (toAir e ens.tables[i] (logN i)) (logN i))
     (folds : ∀ i, params.logFinalPolyLen < logN i)
     (capFits : ∀ i, params.capHeight ≤ logN i + params.logBlowup - params.maxLogArity)
-    (nonempty : 0 < ens.tables.length) (lookupsValid : ∀ i, LookupsValid params (toAir e ens.tables[i] (logN i)) (logN i)
+    (nonempty : 0 < ens.tables.length)
+    (lookupsValid : ∀ i, LookupsValid params (toAir e ens.tables[i] (logN i)) (logN i)
       (Batch.instanceLookups true (toAir e ens.tables[i] (logN i)) (logN i)))
     (buses : Batch.BusesValid (List.ofFn fun i =>
       Batch.instanceLookups true (toAir e ens.tables[i] (logN i)) (logN i))) :
