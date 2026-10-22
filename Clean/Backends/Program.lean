@@ -176,7 +176,7 @@ end ComponentProgram
 /-- A `DemandMode`, apart from its counter. -/
 structure DemandProgram (F : Type) where
   channel : String
-  surplus : Direction
+  trigger : Direction
   /-- The guard, as a condition on the message cells. -/
   guard : Option (Witgen.BExpr F)
   /-- Whether the mode aggregates by message, with its counter in `ModeProgram.demand`. -/
@@ -309,8 +309,8 @@ def lowerGeneration (index : ℕ) (component : Component F) (counters : List Cou
       let guard := mode.guardCondition
       unless guard.all (bexprWellFormed []) do
         throw (.malformedGuard index)
-      let { channel, surplus, input, padding, .. } := mode
-      return .demand { channel := channel.name, surplus, guard, byMessage, input, padding } counters
+      let { channel, trigger, input, padding, .. } := mode
+      return .demand { channel := channel.name, trigger, guard, byMessage, input, padding } counters
   | .preallocated mode =>
       let program ← lowerRowProgram (.malformedRowProgram index) mode.toRowProgram
       let rows := component.fixedColumns.map (·.height) |>.getD 0

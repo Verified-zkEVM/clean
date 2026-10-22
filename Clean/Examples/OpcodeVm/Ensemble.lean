@@ -136,7 +136,7 @@ abbrev stepComponent (program : Program) (opcode : Opcode) : Component (F p) whe
   circuit := step program opcode
   generation := .demand {
     channel := stateChannel
-    surplus := .push
+    trigger := .push
     guard := some fun state => programCell state.pc 1 =? Witgen.FExpr.const (opcode.code : F p)
     aggregation := .perOccurrence
     input := [.const 1, .message 0, .message 1]

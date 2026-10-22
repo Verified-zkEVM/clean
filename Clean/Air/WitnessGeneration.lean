@@ -39,7 +39,7 @@ so the generator balances and pads again until no table grows.
 
 TODO. The generator makes assumptions about the AIRs it handles, which come from our examples
 rather than from the idea. None of them is fundamental:
-- Counters only answer pull surplus, so `byMessage` requires `surplus := .pull`.
+- Counters only answer unmatched pulls, so `byMessage` requires `trigger := .pull`.
 - A counter is the whole multiplicity of exactly one interaction.
 - The input of a demand-generated row consists of message elements and constants; its other cells
   are computed by the witness programs.
@@ -66,11 +66,11 @@ structure Mutation (F : Type) [FiniteField F] where
   removedRows : List (GeneratedRow F) := []
   addedRows : List (GeneratedRow F) := []
 
-/-- Whether a demand component answers the demand: it is on the mode's channel and surplus, and
+/-- Whether a demand component answers the demand: it is on the mode's channel and triggers it, and
 the guard holds. -/
 def DemandMode.accepts {Input : TypeMap} [ProvableType Input] (mode : DemandMode F Input)
     (demand : Demand F) (data : ProverData F) (hint : ProverHint F) : Bool :=
-  mode.channel.name == demand.channel && mode.surplus == demand.direction &&
+  mode.channel.name == demand.channel && mode.trigger == demand.direction &&
     match mode.guardCondition with
     | none => true
     | some guard => guard.eval { env := .fromArray demand.message data hint }

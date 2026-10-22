@@ -160,7 +160,7 @@ pub type Guard<F> = fn(&[F], &WitnessData<F>, &WitnessData<F>) -> bool;
 pub struct DemandMode<F> {
     pub channel: &'static str,
     /// Which unanswered messages create rows: pushed more often than pulled, or the opposite.
-    pub surplus: Direction,
+    pub trigger: Direction,
     /// Which of these messages the component answers, all of them if `None`.
     pub guard: Option<Guard<F>>,
     pub aggregation: Aggregation,
@@ -172,8 +172,8 @@ pub struct DemandMode<F> {
     pub padding: Vec<F>,
 }
 
-/// A counter: the multiplicity of a component's interaction on `channel`, which answers pull
-/// surplus on that channel.
+/// A counter: the multiplicity of a component's interaction on `channel`, which answers unmatched
+/// pulls on that channel.
 #[derive(Clone, Debug)]
 pub struct Counter {
     pub channel: &'static str,
@@ -441,7 +441,8 @@ enum Answer<'a, F> {
 }
 
 /// How the component answers the demand, if it accepts it: a demand component accepts the messages
-/// on its channel and surplus that its guard holds for, a preallocated one those it has a row for.
+/// on its channel that trigger it and that its guard holds for, a preallocated one those it has a
+/// row for.
 fn accepts<'a, F: WitnessField, P: Program<F>>(
     component: usize,
     mode: &'a Mode<F>,
@@ -452,7 +453,7 @@ fn accepts<'a, F: WitnessField, P: Program<F>>(
 ) -> Result<Option<Answer<'a, F>>, String> {
     match mode {
         Mode::Demand(mode) => Ok((mode.channel == demand.channel
-            && mode.surplus == demand.direction()
+            && mode.trigger == demand.direction()
             && mode
                 .guard
                 .is_none_or(|guard| guard(&demand.message, data, hint)))

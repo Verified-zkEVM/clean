@@ -112,7 +112,7 @@ abbrev add8Component : Component (F p) where
   circuit := add8
   generation := .demand {
     channel := add8Channel
-    surplus := .pull
+    trigger := .pull
     aggregation := .byMessage fun input => input.m
     input := [.message 0, .message 1, .message 2]
     padding := #[0, 0, 0, 0]
@@ -215,7 +215,7 @@ abbrev fib8Component : Component (F p) where
   circuit := fib8
   generation := .demand {
     channel := fibonacciChannel
-    surplus := .push
+    trigger := .push
     aggregation := .perOccurrence
     input := [.const 1, .message 0, .message 1, .message 2]
     padding := #[0, 0, 0, 0]
@@ -322,7 +322,7 @@ abbrev falseComponent : Component (F p) where
   circuit := falseCircuit
   generation := .demand {
     channel := falseChannel
-    surplus := .push
+    trigger := .push
     aggregation := .perOccurrence
     input := []
     padding := #[]

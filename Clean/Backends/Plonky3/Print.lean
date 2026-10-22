@@ -236,7 +236,7 @@ def modeToRust : ModeProgram F → String
       | some guard => s!"{guardToRust guard}\n\n"
     s!"{guard}pub fn mode<F: WitnessField>() -> Mode<F> \{
     Mode::Demand(DemandMode \{ channel: {quoted mode.channel}, \
-        surplus: {directionToRust mode.surplus}, \
+        trigger: {directionToRust mode.trigger}, \
         guard: {if mode.guard.isSome then "Some(guard::<F>)" else "None"}, \
         aggregation: {aggregationToRust mode.byMessage}, \
         input: vec![{commaSep (mode.input.map inputCellToRust)}], \

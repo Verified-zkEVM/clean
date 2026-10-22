@@ -40,7 +40,7 @@ inductive ValidationError where
   | counter (component : String) (error : CounterError)
   | byMessagePush (component : String)
   | byMessageChannel (component counted demanded : String)
-  | unguardedHandler (component channel : String) (surplus : Direction)
+  | unguardedHandler (component channel : String) (trigger : Direction)
   | unknownDataRead (component : String) (reader : DataReader) (key : String)
   | dataReadWidth (component : String) (reader : DataReader) (key : String) (expected actual : ℕ)
   | unstableDataRead (component : String) (reader : DataReader) (key : String) (column : ℕ)
@@ -62,13 +62,13 @@ instance : ToString ValidationError where
         s!"row program of component '{component}' has width {actual}, expected {expected}"
     | .counter component error => s!"component '{component}' {error}"
     | .byMessagePush component =>
-        s!"component '{component}' aggregates by message, so it can only answer pull surplus"
+        s!"component '{component}' aggregates by message, so it can only answer unmatched pulls"
     | .byMessageChannel component counted demanded =>
         s!"component '{component}' counts on channel '{counted}' but answers demand on channel \
           '{demanded}'"
-    | .unguardedHandler component channel surplus =>
-        s!"component '{component}' answers {surplus.name} surplus on channel '{channel}' without \
-          a guard, but other components answer it too"
+    | .unguardedHandler component channel trigger =>
+        s!"component '{component}' is triggered by unmatched {trigger.name} interactions on \
+          channel '{channel}' without a guard, but other components are too"
     | .unknownDataRead component reader key =>
         s!"component '{component}' {reader} reads unknown prover-data component '{key}'"
     | .dataReadWidth component reader key expected actual =>
@@ -144,23 +144,23 @@ def witnessDataReads : {n : ℕ} → Witgen.WitgenIR F n → List DataRead
 
 /-! ### Validation -/
 
-/-- A channel and surplus that a component answers. -/
+/-- A channel and the unmatched interactions on it that a component answers. -/
 structure Handler where
   channel : String
-  surplus : Direction
+  trigger : Direction
   /-- Whether the component answers only some messages: those its guard holds for, or, for a
   preallocated component, those it has a row for. -/
   selective : Bool
 
 /-- The channels a component answers demand on. A counter only grows the pushes of its interaction,
-so it answers pull surplus. -/
+so it answers unmatched pulls. -/
 def handlers (component : Component F) (counters : List Counter) : List Handler :=
   match component.generation with
   | .demand mode =>
-      [{ channel := mode.channel.name, surplus := mode.surplus, selective := mode.guard.isSome }]
+      [{ channel := mode.channel.name, trigger := mode.trigger, selective := mode.guard.isSome }]
   | .preallocated _ =>
       counters.map fun counter =>
-        { channel := counter.channel, surplus := .pull, selective := true }
+        { channel := counter.channel, trigger := .pull, selective := true }
 
 /-- The programs of a component that read prover data, with their reads. -/
 def dataReaders (component : Component F) : List (DataReader × List DataRead) :=
@@ -182,7 +182,7 @@ def validateComponent (component : Component F) : Except ValidationError (List C
   match component.generation with
   | .demand mode =>
       if let .byMessage _ := mode.aggregation then
-        if mode.surplus == .push then throw (.byMessagePush name)
+        if mode.trigger == .push then throw (.byMessagePush name)
         for counter in counters do
           unless counter.channel == mode.channel.name do
             throw (.byMessageChannel name counter.channel mode.channel.name)
@@ -222,18 +222,18 @@ def validateDataReads (components : List (Component F)) (counters : List (List C
             if targetCounters.any (·.column = read.column) then
               throw (.unstableDataRead name reader read.key read.column)
 
-/-- Check that a component answering every message on a channel, without a guard, is the only one
-answering that channel and surplus. Whether selective components overlap is only found out during
-generation, when two of them accept the same message. -/
+/-- Check that a component without a guard is the only one with its channel and trigger. Whether
+selective components overlap is only found out during generation, when two of them accept the same
+message. -/
 def validateHandlers (components : List (Component F)) (counters : List (List Counter)) :
     Except ValidationError Unit := do
   let handled := (components.zip counters).flatMap fun (component, counters) =>
     (handlers component counters).map (component.circuit.name, ·)
   for (name, handler) in handled do
     let shared := handled.filter fun (_, other) =>
-      other.channel == handler.channel && other.surplus == handler.surplus
+      other.channel == handler.channel && other.trigger == handler.trigger
     unless handler.selective || shared.length ≤ 1 do
-      throw (.unguardedHandler name handler.channel handler.surplus)
+      throw (.unguardedHandler name handler.channel handler.trigger)
 
 /-- All checks of the components' generations; returns the counters of every component. -/
 def validateComponents (components : List (Component F)) :

@@ -59,7 +59,7 @@ inductive Aggregation (F : Type) (Input : TypeMap) [ProvableType Input] where
   | perOccurrence
   /-- One row per distinct message, whose `counter` counts the occurrences, named by its input
   variable like `fun row => row.multiplicity`. Right for chips whose rows only depend on their
-  message, like an addition chip. Only answers pull surplus, see counters in the module doc. -/
+  message, like an addition chip. Only answers unmatched pulls, see counters in the module doc. -/
   | byMessage (counter : Var Input F → Expression F)
 
 /-- One input cell of a demand-generated row. -/
@@ -80,7 +80,7 @@ structure DemandMode (F : Type) (Input : TypeMap) [ProvableType Input] where
   channel : Channel F Message
   /-- Which unanswered messages create rows: `.push` means messages pushed more often than pulled,
   so the new row pulls them; `.pull` means the opposite. -/
-  surplus : Direction
+  trigger : Direction
   /-- Which of these messages the component answers, all of them if `none`. Components sharing a
   channel, like the opcode tables of a VM, are told apart by guards. A guard is a witness program
   over the message, so it can read prover data and hints, like the opcode at the message's `pc`. -/

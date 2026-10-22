@@ -81,7 +81,7 @@ pub mod component_0 {
     pub fn mode<F: WitnessField>() -> Mode<F> {
         Mode::Demand(DemandMode {
             channel: "state",
-            surplus: Direction::Push,
+            trigger: Direction::Push,
             guard: Some(guard::<F>),
             aggregation: Aggregation::PerOccurrence,
             input: vec![
@@ -177,7 +177,7 @@ pub mod component_1 {
     pub fn mode<F: WitnessField>() -> Mode<F> {
         Mode::Demand(DemandMode {
             channel: "state",
-            surplus: Direction::Push,
+            trigger: Direction::Push,
             guard: Some(guard::<F>),
             aggregation: Aggregation::PerOccurrence,
             input: vec![

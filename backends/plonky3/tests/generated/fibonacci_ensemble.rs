@@ -71,7 +71,7 @@ pub mod component_0 {
     pub fn mode<F: WitnessField>() -> Mode<F> {
         Mode::Demand(DemandMode {
             channel: "fibonacci",
-            surplus: Direction::Push,
+            trigger: Direction::Push,
             guard: None,
             aggregation: Aggregation::PerOccurrence,
             input: vec![
@@ -157,7 +157,7 @@ pub mod component_1 {
     pub fn mode<F: WitnessField>() -> Mode<F> {
         Mode::Demand(DemandMode {
             channel: "add8",
-            surplus: Direction::Pull,
+            trigger: Direction::Pull,
             guard: None,
             aggregation: Aggregation::ByMessage,
             input: vec![
