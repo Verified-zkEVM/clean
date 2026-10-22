@@ -212,7 +212,7 @@ abbrev stepComponent (program : Program) (h_program : program.length < p) (initi
   generation := .demand {
     channel := stateChannel program initial
     trigger := .push
-    guard := some fun state => programCell state.pc 1 =? Witgen.FExpr.const (opcode.code : F p)
+    guard state := programCell state.pc 1 =? Witgen.FExpr.const (opcode.code : F p)
     aggregation := .perOccurrence
     input := [.const 1, .message 0, .message 1]
     padding := #[0, 0, 0]

@@ -228,16 +228,15 @@ def guardToRust (guard : Witgen.BExpr F) : String :=
 
 /-- `fn mode()`, and `fn initial_row(row_index, hint)`, which for preallocated components is the
 fixed prefix followed by the row program's values, with zeros inserted at the counter columns. A
-demand mode with a guard also gets `fn guard`. -/
+demand mode also gets `fn guard`. -/
 def modeToRust : ModeProgram F → String
   | .demand mode counters =>
-    let guard := match mode.guard with
-      | none => ""
-      | some guard => s!"{guardToRust guard}\n\n"
-    s!"{guard}pub fn mode<F: WitnessField>() -> Mode<F> \{
+    s!"{guardToRust mode.guard}
+
+pub fn mode<F: WitnessField>() -> Mode<F> \{
     Mode::Demand(DemandMode \{ channel: {quoted mode.channel}, \
         trigger: {directionToRust mode.trigger}, \
-        guard: {if mode.guard.isSome then "Some(guard::<F>)" else "None"}, \
+        guard: guard::<F>, \
         aggregation: {aggregationToRust mode.byMessage}, \
         input: vec![{commaSep (mode.input.map inputCellToRust)}], \
         counters: vec![{commaSep (counters.map counterToRust)}], \

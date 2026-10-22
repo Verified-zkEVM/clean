@@ -81,10 +81,10 @@ structure DemandMode (F : Type) (Input : TypeMap) [ProvableType Input] where
   /-- Which unanswered messages create rows: `.push` means messages pushed more often than pulled,
   so the new row pulls them; `.pull` means the opposite. -/
   trigger : Direction
-  /-- Which of these messages the component answers, all of them if `none`. Components sharing a
+  /-- Which of these messages the component answers, by default all of them. Components sharing a
   channel, like the opcode tables of a VM, are told apart by guards. A guard is a witness program
   over the message, so it can read prover data and hints, like the opcode at the message's `pc`. -/
-  guard : Option (Var Message F → Witgen.BExpr F) := none
+  guard : Var Message F → Witgen.BExpr F := fun _ => .true
   /-- Whether repeated demand for one message creates repeated rows. -/
   aggregation : Aggregation F Input
   /-- The input of a new row, cell by cell, built from the message it answers. With `byMessage`, the
@@ -117,8 +117,8 @@ instance {Input : TypeMap} [ProvableType Input] (mode : DemandMode F Input) :
 
 /-- The guard as a condition on the cells of the message. -/
 def DemandMode.guardCondition {Input : TypeMap} [ProvableType Input] (mode : DemandMode F Input) :
-    Option (Witgen.BExpr F) :=
-  mode.guard.map (· (varFromOffset mode.Message 0))
+    Witgen.BExpr F :=
+  mode.guard (varFromOffset mode.Message 0)
 
 /-- How the generator builds the rows of a component with input `Input`. -/
 inductive Generation (F : Type) (Input : TypeMap) [ProvableType Input] where

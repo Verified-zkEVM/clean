@@ -157,7 +157,10 @@ so it answers unmatched pulls. -/
 def handlers (component : Component F) (counters : List Counter) : List Handler :=
   match component.generation with
   | .demand mode =>
-      [{ channel := mode.channel.name, trigger := mode.trigger, selective := mode.guard.isSome }]
+      let selective := match mode.guardCondition with
+        | .true => false
+        | _ => true
+      [{ channel := mode.channel.name, trigger := mode.trigger, selective }]
   | .preallocated _ =>
       counters.map fun counter =>
         { channel := counter.channel, trigger := .pull, selective := true }
@@ -169,7 +172,7 @@ def dataReaders (component : Component F) : List (DataReader × List DataRead) :
     | .witness _ code => some (.witness index, witnessDataReads code)
     | _ => none
   let guard := match component.generation with
-    | .demand mode => (mode.guardCondition.map fun guard => (.guard, bexprDataReads guard)).toList
+    | .demand mode => [(.guard, bexprDataReads mode.guardCondition)]
     | .preallocated _ => []
   witnesses ++ guard
 
@@ -222,7 +225,7 @@ def validateDataReads (components : List (Component F)) (counters : List (List C
             if targetCounters.any (·.column = read.column) then
               throw (.unstableDataRead name reader read.key read.column)
 
-/-- Check that a component without a guard is the only one with its channel and trigger. Whether
+/-- Check that a component whose guard is `true` is the only one with its channel and trigger. Whether
 selective components overlap is only found out during generation, when two of them accept the same
 message. -/
 def validateHandlers (components : List (Component F)) (counters : List (List Counter)) :

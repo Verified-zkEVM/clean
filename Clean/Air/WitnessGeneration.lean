@@ -71,9 +71,7 @@ the guard holds. -/
 def DemandMode.accepts {Input : TypeMap} [ProvableType Input] (mode : DemandMode F Input)
     (demand : Demand F) (data : ProverData F) (hint : ProverHint F) : Bool :=
   mode.channel.name == demand.channel && mode.trigger == demand.direction &&
-    match mode.guardCondition with
-    | none => true
-    | some guard => guard.eval { env := .fromArray demand.message data hint }
+    mode.guardCondition.eval { env := .fromArray demand.message data hint }
 
 /-- The counters that answer `demand`: those on its channel, if the message was pulled more often
 than pushed. -/

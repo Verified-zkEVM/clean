@@ -82,7 +82,7 @@ pub mod component_0 {
         Mode::Demand(DemandMode {
             channel: "state",
             trigger: Direction::Push,
-            guard: Some(guard::<F>),
+            guard: guard::<F>,
             aggregation: Aggregation::PerOccurrence,
             input: vec![
                 InputCell::Constant(F::from_u64(1u64)),
@@ -178,7 +178,7 @@ pub mod component_1 {
         Mode::Demand(DemandMode {
             channel: "state",
             trigger: Direction::Push,
-            guard: Some(guard::<F>),
+            guard: guard::<F>,
             aggregation: Aggregation::PerOccurrence,
             input: vec![
                 InputCell::Constant(F::from_u64(1u64)),

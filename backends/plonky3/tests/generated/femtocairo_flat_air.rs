@@ -728,11 +728,16 @@ pub mod component_0 {
         ]
     }
 
+    pub fn guard<F: WitnessField>(row: &[F], data: &WitnessData<F>, hint: &WitnessData<F>) -> bool {
+        let row_index = 0u64;
+        true
+    }
+
     pub fn mode<F: WitnessField>() -> Mode<F> {
         Mode::Demand(DemandMode {
             channel: "state",
             trigger: Direction::Push,
-            guard: None,
+            guard: guard::<F>,
             aggregation: Aggregation::PerOccurrence,
             input: vec![
                 InputCell::Constant(F::from_u64(1u64)),

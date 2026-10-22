@@ -178,7 +178,7 @@ structure DemandProgram (F : Type) where
   channel : String
   trigger : Direction
   /-- The guard, as a condition on the message cells. -/
-  guard : Option (Witgen.BExpr F)
+  guard : Witgen.BExpr F
   /-- Whether the mode aggregates by message, with its counter in `ModeProgram.demand`. -/
   byMessage : Bool
   input : List (InputCell F)
@@ -307,7 +307,7 @@ def lowerGeneration (index : ℕ) (component : Component F) (counters : List Cou
         | .perOccurrence => false
         | .byMessage _ => true
       let guard := mode.guardCondition
-      unless guard.all (bexprWellFormed []) do
+      unless bexprWellFormed [] guard do
         throw (.malformedGuard index)
       let { channel, trigger, input, padding, .. } := mode
       return .demand { channel := channel.name, trigger, guard, byMessage, input, padding } counters

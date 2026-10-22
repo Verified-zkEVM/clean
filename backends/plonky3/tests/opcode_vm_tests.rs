@@ -78,7 +78,7 @@ impl<F: WitnessField> Program<F> for UnguardedProgram {
             .into_iter()
             .map(|mode| match mode {
                 Mode::Demand(mode) => Mode::Demand(DemandMode {
-                    guard: None,
+                    guard: |_, _, _| true,
                     ..mode
                 }),
                 mode => mode,

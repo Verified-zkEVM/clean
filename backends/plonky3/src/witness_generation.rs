@@ -161,8 +161,8 @@ pub struct DemandMode<F> {
     pub channel: &'static str,
     /// Which unanswered messages create rows: pushed more often than pulled, or the opposite.
     pub trigger: Direction,
-    /// Which of these messages the component answers, all of them if `None`.
-    pub guard: Option<Guard<F>>,
+    /// Which of these messages the component answers.
+    pub guard: Guard<F>,
     pub aggregation: Aggregation,
     /// The input of a new row, without its counters.
     pub input: Vec<InputCell<F>>,
@@ -454,9 +454,7 @@ fn accepts<'a, F: WitnessField, P: Program<F>>(
     match mode {
         Mode::Demand(mode) => Ok((mode.channel == demand.channel
             && mode.trigger == demand.direction()
-            && mode
-                .guard
-                .is_none_or(|guard| guard(&demand.message, data, hint)))
+            && (mode.guard)(&demand.message, data, hint))
         .then_some(Answer::Demand(mode))),
         Mode::Preallocated { counters, .. } => {
             let found = find_counted_row::<F, P>(component, counters, demand, table)?;
