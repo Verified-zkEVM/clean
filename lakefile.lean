@@ -27,5 +27,8 @@ lean_exe export_opcode_vm_rust where
 lean_exe export_witness_ir_reference_rust where
   root := `Clean.Backends.Plonky3.Test.Reference
 
-require "leanprover-community" / "mathlib" @ git "v4.33.1"
-require CompPoly from git "https://github.com/Verified-zkEVM/CompPoly.git"@"v4.33.1"
+require "leanprover-community" / "mathlib" @ git "v4.35.0"
+-- The CompPoly commit CompStark pins (fork branch `koalabear-fast-ext5`), so that a package can
+-- require both Clean and CompStark.
+require CompPoly from git "https://github.com/mitschabaude-bot/CompPoly.git" @
+    "ea043f53a48ed44cbd7e301db55f651af45ad9d2"

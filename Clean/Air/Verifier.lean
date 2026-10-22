@@ -80,7 +80,7 @@ lemma circuitOperations_inChannelsOrGuaranteesFull (operations : Operations F)
   · left
     rw [channelsWithGuarantees, List.mem_filterMap]
     refine ⟨.interact interaction requirements, h_operation, ?_⟩
-    simp only [Operation.guaranteeChannel, Operation.interaction, assumes, if_true]
+    simp only [Operation.guaranteeChannel, Operation.interaction, assumes, ite_true]
   · right
     exact fun h => absurd h assumes
 
@@ -102,7 +102,7 @@ lemma circuitOperations_inChannelsOrRequirementsFull (operations : Operations F)
     have assumes_false : interaction.assumeGuarantees = false :=
       Bool.eq_false_of_not_eq_true assumes
     simp only [Operation.requirementChannel, Operation.interaction, assumes_false,
-      Bool.false_eq_true, if_false]
+      Bool.false_eq_true, ite_false]
 
 end Operations
 
