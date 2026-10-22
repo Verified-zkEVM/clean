@@ -1,6 +1,7 @@
 module
 
 public import CleanCompStark.Soundness
+public import CleanCompStark.KeccakAir.Bridgeable
 public import CleanCompStark.Fields
 public import Clean.Examples.KeccakAir.Ensemble
 public import CompStark.KoalaBear.Challenge
@@ -54,12 +55,12 @@ read off some trace within `δ'` of the prover's committed trace compute Keccak-
 block that starts at round 0. -/
 theorem knowledgeSoundness (S : Iop.Setup KoalaBear.Fast.Ext4)
     (hair : S.air = toAir koalaBear (component S.logN) S.logN)
-    (hb : bridgeable (component S.logN) = true) (prover : Prover S) (δ δ' : NNReal)
+    (prover : Prover S) (δ δ' : NNReal)
     (hδ' : (δ' : ℝ) < 1 - S.rate) :
     (∀ trace ∈ closeTraces S δ' prover.trace,
       ¬ BlocksCorrect (toRows koalaBear (component S.logN) S.logN trace)) →
       acceptance [] prover ≤ knowledgeError S δ δ' :=
-  knowledgeSoundness_of_tableSound koalaBear S hair hb
+  knowledgeSoundness_of_tableSound koalaBear S hair (bridgeable_component _)
     (fits (by have := S.valid.twoAdic; rw [KoalaBear.twoAdicity_eq] at this; omega))
     (tableSound _) [] prover δ δ' hδ'
 
