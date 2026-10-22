@@ -140,7 +140,7 @@ abbrev stepComponent (program : Program) (opcode : Opcode) : Component (F p) whe
     guard := some fun state => programCell state.pc 1 =? Witgen.FExpr.const (opcode.code : F p)
     aggregation := .perOccurrence
     input := [.const 1, .message 0, .message 1]
-    padding := { input := #[0, 0, 0], minimumRows := 16 }
+    padding := #[0, 0, 0]
   }
 
 /-- The public input `(initial, final)` claims that running the program on the accumulator

@@ -115,7 +115,7 @@ abbrev add8Component : Component (F p) where
     surplus := .pull
     aggregation := .byMessage fun input => input.m
     input := [.message 0, .message 1, .message 2]
-    padding := { input := #[0, 0, 0, 0], minimumRows := 32 }
+    padding := #[0, 0, 0, 0]
   }
 
 def fibonacci : ℕ → (ℕ × ℕ)
@@ -218,7 +218,7 @@ abbrev fib8Component : Component (F p) where
     surplus := .push
     aggregation := .perOccurrence
     input := [.const 1, .message 0, .message 1, .message 2]
-    padding := { input := #[0, 0, 0, 0], minimumRows := 32 }
+    padding := #[0, 0, 0, 0]
   }
 
 -- completing Fibonacci channel with input and output
@@ -325,7 +325,7 @@ abbrev falseComponent : Component (F p) where
     surplus := .push
     aggregation := .perOccurrence
     input := []
-    padding := { input := #[] }
+    padding := #[]
   }
 
 def falseEnsemble := SoundEnsemble.empty (F p) unit

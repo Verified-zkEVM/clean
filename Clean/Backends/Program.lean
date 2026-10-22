@@ -182,7 +182,7 @@ structure DemandProgram (F : Type) where
   /-- Whether the mode aggregates by message, with its counter in `ModeProgram.demand`. -/
   byMessage : Bool
   input : List (InputCell F)
-  padding : Padding F
+  padding : Array F
 
 /-- How the rows of one component are generated. -/
 inductive ModeProgram (F : Type) [FiniteField F] where

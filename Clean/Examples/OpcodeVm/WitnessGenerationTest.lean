@@ -20,10 +20,10 @@ def result (final : F pBabybear) : Except String (List ℕ × Bool × Bool) :=
       .ok (witness.tables.map (·.length), constraintsHold witness, channelsBalanced witness)
 
 /--
-Each state goes to the table of the opcode at its `pc`: six rows in the `add` table and four in the
-`mul` table, both padded to sixteen rows. The program table has sixteen rows.
+Each state goes to the table of the opcode at its `pc`: six rows in the `add` table, padded to
+eight, and four in the `mul` table. The program table has sixteen rows.
 -/
-example : result (run exampleProgram 2) = .ok ([16, 16, 16], true, true) := by native_decide
+example : result (run exampleProgram 2) = .ok ([8, 4, 16], true, true) := by native_decide
 
 /-- A wrong final accumulator leaves the final state unanswered. -/
 example :
