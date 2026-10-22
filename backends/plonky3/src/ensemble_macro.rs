@@ -155,15 +155,21 @@ macro_rules! ensemble {
         /// The AIR statement of the extracted ensemble.
         pub type Statement<F> = $crate::GeneratedEnsemble<F, Ensemble>;
 
-        /// Generate a witness of the extracted ensemble.
+        /// Generate a witness of the extracted ensemble, whose traces have at least `minimum_height`
+        /// rows.
         pub fn generate<F: $crate::witness_generation::WitnessField>(
             public_input: &[F],
             prover_input: &[F],
+            minimum_height: usize,
         ) -> Result<
             $crate::witness_generation::EnsembleWitness<F>,
             $crate::witness_generation::WitnessGenerationError,
         > {
-            $crate::witness_generation::generate::<F, Ensemble>(public_input, prover_input)
+            $crate::witness_generation::generate::<F, Ensemble>(
+                public_input,
+                prover_input,
+                minimum_height,
+            )
         }
     };
 }

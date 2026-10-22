@@ -14,6 +14,13 @@ use rand::SeedableRng;
 pub mod setup {
     use super::*;
 
+    /// The base-2 logarithm of the length of FRI's final polynomial.
+    const LOG_FINAL_POLY_LEN: usize = 2;
+
+    /// The smallest trace height the test configuration accepts: FRI folds every trace down to its
+    /// final polynomial, so the trace's degree must exceed that polynomial's length.
+    pub const MINIMUM_TRACE_HEIGHT: usize = 1 << (LOG_FINAL_POLY_LEN + 1);
+
     pub type Val = BabyBear;
     pub type Perm = Poseidon2BabyBear<16>;
     pub type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
@@ -35,7 +42,7 @@ pub mod setup {
         let val_mmcs = ValMmcs::new(hash, compress);
         let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
         let dft = Dft::default();
-        let fri = create_test_fri_params(challenge_mmcs, 2);
+        let fri = create_test_fri_params(challenge_mmcs, LOG_FINAL_POLY_LEN);
         let pcs = Pcs::new(dft, val_mmcs, fri);
         let challenger = Challenger::new(perm);
         MyConfig::new(pcs, challenger)

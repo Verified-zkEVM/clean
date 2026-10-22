@@ -192,8 +192,8 @@ def validateComponent (component : Component F) : Except ValidationError (List C
         if let .message index := cell then
           unless index < size mode.Message do
             throw (.demandMessageIndex name index (size mode.Message))
-      unless mode.padding.input.size = inputWidth do
-        throw (.paddingWidth name inputWidth mode.padding.input.size)
+      unless mode.padding.size = inputWidth do
+        throw (.paddingWidth name inputWidth mode.padding.size)
   | .preallocated mode =>
       let height := (component.fixedColumns.map (·.height.toNat)).getD 0
       unless nextPowerOfTwo height = height do

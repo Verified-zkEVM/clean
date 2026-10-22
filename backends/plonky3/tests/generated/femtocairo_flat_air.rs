@@ -741,15 +741,12 @@ pub mod component_0 {
                 InputCell::Message(2),
             ],
             counters: vec![],
-            padding: Padding {
-                input: vec![
-                    F::from_u64(0u64),
-                    F::from_u64(0u64),
-                    F::from_u64(0u64),
-                    F::from_u64(0u64),
-                ],
-                minimum_rows: 1,
-            },
+            padding: vec![
+                F::from_u64(0u64),
+                F::from_u64(0u64),
+                F::from_u64(0u64),
+                F::from_u64(0u64),
+            ],
         })
     }
 

@@ -215,9 +215,8 @@ def counterToRust (counter : Counter) : String :=
   s!"Counter \{ channel: {quoted counter.channel}, interaction: {counter.interaction}, \
       column: {counter.column} }"
 
-def paddingToRust (padding : Padding F) : String :=
-  s!"Padding \{ input: vec![{commaSep (padding.input.toList.map (fieldIn "F"))}], \
-      minimum_rows: {padding.minimumRows} }"
+def paddingToRust (padding : Array F) : String :=
+  s!"vec![{commaSep (padding.toList.map (fieldIn "F"))}]"
 
 /-- `fn guard(row, data, hint)`, where `row` is the demanded message. -/
 def guardToRust (guard : Witgen.BExpr F) : String :=

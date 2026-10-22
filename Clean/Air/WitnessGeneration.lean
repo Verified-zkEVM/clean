@@ -172,7 +172,7 @@ def generateLoop (data : ProverData F) (hint : ProverHint F) :
 /-- The padded height of a demand-generated table. Preallocated tables are never padded. -/
 def ComponentState.targetHeight (state : ComponentState F) : ℕ :=
   match state.component.generation with
-  | .demand mode => mode.padding.targetHeight state.rows.length
+  | .demand _ => nextPowerOfTwo state.rows.length
   | .preallocated _ => state.rows.length
 
 /-- Pad every demand-generated table to its target height; returns the padded states and the
@@ -184,7 +184,7 @@ def padTables (data : ProverData F) (hint : ProverHint F) (states : List (Compon
     | .preallocated _ => (state, [])
     | .demand mode =>
         let count := state.targetHeight - state.rows.length
-        let rows := List.replicate count (completeRow state mode.padding.input data hint)
+        let rows := List.replicate count (completeRow state mode.padding data hint)
         ({ state with rows := state.rows ++ rows }, rows.flatMap (rowInteractions state · data))
   (padded.map (·.1), padded.flatMap (·.2))
 

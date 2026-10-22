@@ -90,10 +90,7 @@ pub mod component_0 {
                 InputCell::Message(1),
             ],
             counters: vec![],
-            padding: Padding {
-                input: vec![F::from_u64(0u64), F::from_u64(0u64), F::from_u64(0u64)],
-                minimum_rows: 16,
-            },
+            padding: vec![F::from_u64(0u64), F::from_u64(0u64), F::from_u64(0u64)],
         })
     }
 
@@ -189,10 +186,7 @@ pub mod component_1 {
                 InputCell::Message(1),
             ],
             counters: vec![],
-            padding: Padding {
-                input: vec![F::from_u64(0u64), F::from_u64(0u64), F::from_u64(0u64)],
-                minimum_rows: 16,
-            },
+            padding: vec![F::from_u64(0u64), F::from_u64(0u64), F::from_u64(0u64)],
         })
     }
 

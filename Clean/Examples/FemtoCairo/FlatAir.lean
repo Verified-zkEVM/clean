@@ -484,7 +484,7 @@ abbrev executionComponent (program : Array (F p)) (h_program : ValidProgram prog
     surplus := .push
     aggregation := .perOccurrence
     input := [.const 1, .message 0, .message 1, .message 2]
-    padding := { input := #[0, initialState.pc, initialState.ap, initialState.fp] }
+    padding := #[0, initialState.pc, initialState.ap, initialState.fp]
   }
 
 /-- The state in which a program has run to completion: `pc` points just past the program, where no

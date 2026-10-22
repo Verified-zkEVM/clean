@@ -73,15 +73,6 @@ def InputCell.eval (message : Array F) [Zero F] : InputCell F → F
   | .message index => message[index]?.getD 0
   | .const value => value
 
-/-- The rows appended to a demand-generated table after balancing, to make its height a power of
-two. -/
-structure Padding (F : Type) where
-  /-- The input of every padding row. Padding rows are completed by the component's witness programs
-  like any other row; if they interact, the generator balances again. -/
-  input : Array F
-  /-- The table has at least this many rows. -/
-  minimumRows : UInt64 := 1
-
 /-- Rows created by channel demand. -/
 structure DemandMode (F : Type) (Input : TypeMap) [ProvableType Input] where
   {Message : TypeMap} [provableMessage : ProvableType Message]
@@ -100,7 +91,10 @@ structure DemandMode (F : Type) (Input : TypeMap) [ProvableType Input] where
   cells skip the counter, which starts at the demanded count. The component's witness programs
   compute the rest of the row. -/
   input : List (InputCell F)
-  padding : Padding F
+  /-- The input of the rows appended after balancing, to make the table's height a power of two.
+  Padding rows are completed by the component's witness programs like any other row; if they
+  interact, the generator balances again. -/
+  padding : Array F
 
 /-- One row per fixed row, with the given counters.
 
@@ -145,9 +139,5 @@ def nextPowerOfTwoAux (target : ℕ) : ℕ → ℕ → ℕ
 
 def nextPowerOfTwo (value : ℕ) : ℕ :=
   nextPowerOfTwoAux (max value 1) value 1
-
-/-- The padded height of a table with `rowCount` rows. -/
-def Padding.targetHeight (padding : Padding F) (rowCount : ℕ) : ℕ :=
-  nextPowerOfTwo (max rowCount padding.minimumRows.toNat)
 
 end Air.Flat.WitnessGeneration

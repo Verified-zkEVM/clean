@@ -79,9 +79,24 @@ pub fn bit(value: u64, index: u64) -> bool {
 /// A witness generation failure.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum WitnessGenerationError {
-    FieldOrder { expected: u64, actual: u64 },
-    PublicInputWidth { expected: usize, actual: usize },
-    ProverInputWidth { expected: usize, actual: usize },
+    FieldOrder {
+        expected: u64,
+        actual: u64,
+    },
+    PublicInputWidth {
+        expected: usize,
+        actual: usize,
+    },
+    ProverInputWidth {
+        expected: usize,
+        actual: usize,
+    },
+    /// A preallocated component has fewer rows than the minimum trace height.
+    PreallocatedHeight {
+        component: &'static str,
+        height: usize,
+        minimum: usize,
+    },
     Runtime(String),
 }
 
@@ -99,6 +114,15 @@ impl core::fmt::Display for WitnessGenerationError {
             Self::ProverInputWidth { expected, actual } => write!(
                 formatter,
                 "prover input has width {actual}, expected {expected}"
+            ),
+            Self::PreallocatedHeight {
+                component,
+                height,
+                minimum,
+            } => write!(
+                formatter,
+                "preallocated component '{component}' has {height} rows, fewer than the minimum \
+                 trace height {minimum}"
             ),
             Self::Runtime(error) => formatter.write_str(error),
         }
@@ -144,7 +168,8 @@ pub struct DemandMode<F> {
     pub input: Vec<InputCell<F>>,
     /// With `ByMessage` aggregation, the counter on `channel`.
     pub counters: Vec<Counter>,
-    pub padding: Padding<F>,
+    /// The input of the rows that pad the component's table to a power-of-two height.
+    pub padding: Vec<F>,
 }
 
 /// A counter: the multiplicity of a component's interaction on `channel`, which answers pull
@@ -236,13 +261,6 @@ impl<F: Field + Copy> WitnessData<F> {
             .copied()
             .unwrap_or(F::ZERO)
     }
-}
-
-/// The input row that pads a demand-generated component to a power-of-two height, of at least `minimum_rows`.
-#[derive(Clone, Debug)]
-pub struct Padding<F> {
-    pub input: Vec<F>,
-    pub minimum_rows: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -647,13 +665,11 @@ fn balance<F: WitnessField, P: Program<F>>(
     Err("ensemble witness generation exhausted its fuel".to_string())
 }
 
-/// The padded height of a table. Preallocated tables are never padded.
-fn target_height<F>(row_count: usize, mode: &Mode<F>) -> usize {
+/// The padded height of a table: a power of two of at least `minimum_height` rows. Preallocated
+/// tables are never padded.
+fn target_height<F>(row_count: usize, mode: &Mode<F>, minimum_height: usize) -> usize {
     match mode {
-        Mode::Demand(mode) => row_count
-            .max(mode.padding.minimum_rows)
-            .max(1)
-            .next_power_of_two(),
+        Mode::Demand(_) => row_count.max(minimum_height).next_power_of_two(),
         Mode::Preallocated { .. } => row_count,
     }
 }
@@ -663,6 +679,7 @@ fn pad_and_balance<F: WitnessField, P: Program<F>>(
     tables: &mut [Vec<Row<F>>],
     data: &WitnessData<F>,
     hint: &WitnessData<F>,
+    minimum_height: usize,
 ) -> Result<(), String> {
     for _ in 0..P::FUEL {
         let mut demands = Vec::new();
@@ -670,12 +687,12 @@ fn pad_and_balance<F: WitnessField, P: Program<F>>(
             let Mode::Demand(DemandMode { padding, .. }) = mode else {
                 continue;
             };
-            let height = target_height(table.len(), mode);
+            let height = target_height(table.len(), mode, minimum_height);
             for _ in table.len()..height {
-                let values = P::complete_row(component, &padding.input, data, hint)?;
+                let values = P::complete_row(component, padding, data, hint)?;
                 add_interactions(&mut demands, P::interactions(component, &values));
                 table.push(Row {
-                    input: padding.input.clone(),
+                    input: padding.clone(),
                     values,
                 });
             }
@@ -685,7 +702,7 @@ fn pad_and_balance<F: WitnessField, P: Program<F>>(
         if tables
             .iter()
             .zip(modes)
-            .all(|(table, mode)| table.len() == target_height(table.len(), mode))
+            .all(|(table, mode)| table.len() == target_height(table.len(), mode, minimum_height))
         {
             return Ok(());
         }
@@ -696,9 +713,14 @@ fn pad_and_balance<F: WitnessField, P: Program<F>>(
 
 /// Run an extracted channel-driven ensemble witness program on the public input and the flattened
 /// private input, which witness programs read through the program's hint tables.
+///
+/// `minimum_height` is the smallest trace height the prover's configuration accepts, which depends
+/// on its FRI parameters. Demand-generated tables are padded to at least that height, and
+/// preallocated tables, whose height is fixed, must have at least that many rows.
 pub fn generate<F: WitnessField, P: Program<F>>(
     public_input: &[F],
     prover_input: &[F],
+    minimum_height: usize,
 ) -> Result<EnsembleWitness<F>, WitnessGenerationError> {
     if F::ORDER_U64 != P::FIELD_ORDER {
         return Err(WitnessGenerationError::FieldOrder {
@@ -772,7 +794,14 @@ pub fn generate<F: WitnessField, P: Program<F>>(
                 )
                 .into());
             }
-            Mode::Preallocated { counters, .. } => {
+            Mode::Preallocated { rows, counters } => {
+                if *rows < minimum_height {
+                    return Err(WitnessGenerationError::PreallocatedHeight {
+                        component: P::COMPONENT_NAMES[component],
+                        height: *rows,
+                        minimum: minimum_height,
+                    });
+                }
                 if let Some(counter) = counters.iter().find(|counter| counter.column < fixed_width)
                 {
                     return Err(format!(
@@ -802,7 +831,7 @@ pub fn generate<F: WitnessField, P: Program<F>>(
     }
 
     balance::<F, P>(&modes, &mut tables, &mut demands, &data, hint)?;
-    pad_and_balance::<F, P>(&modes, &mut tables, &data, hint)?;
+    pad_and_balance::<F, P>(&modes, &mut tables, &data, hint, minimum_height)?;
 
     Ok(EnsembleWitness {
         fixed_widths: P::FIXED_WIDTHS.to_vec(),

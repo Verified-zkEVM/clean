@@ -26,18 +26,19 @@ fn public_values() -> Vec<BabyBear> {
 
 #[test]
 fn extracted_rust_routes_states_by_opcode() {
-    let witness = generated::generate(&public_values(), &[])
+    let witness = generated::generate(&public_values(), &[], setup::MINIMUM_TRACE_HEIGHT)
         .expect("extracted Rust witness generation failed");
 
+    // six `add` steps, padded to eight rows, and four `mul` steps, padded to the minimum height
     assert_eq!(
         witness.tables.iter().map(Vec::len).collect::<Vec<_>>(),
-        vec![16, 16, 16]
+        vec![8, setup::MINIMUM_TRACE_HEIGHT, 16]
     );
 }
 
 #[test]
 fn extracted_rust_rejects_a_wrong_final_state() {
-    let error = generated::generate(&[field(2), field(439)], &[])
+    let error = generated::generate(&[field(2), field(439)], &[], setup::MINIMUM_TRACE_HEIGHT)
         .expect_err("witness generation for a wrong final state succeeded");
     assert!(error.to_string().contains("unhandled channel imbalance"));
 }
@@ -46,8 +47,8 @@ fn extracted_rust_rejects_a_wrong_final_state() {
 fn extracted_opcode_vm_proves_and_verifies() {
     let config = setup::test_config(7);
     let public_values = public_values();
-    let witness =
-        generated::generate(&public_values, &[]).expect("extracted Rust witness generation failed");
+    let witness = generated::generate(&public_values, &[], setup::MINIMUM_TRACE_HEIGHT)
+        .expect("extracted Rust witness generation failed");
     let traces = witness.into_traces().expect("invalid extracted traces");
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
     let statement =
@@ -109,8 +110,12 @@ impl<F: WitnessField> Program<F> for UnguardedProgram {
 
 #[test]
 fn witness_generation_rejects_states_that_several_tables_accept() {
-    let error = witness_generation::generate::<BabyBear, UnguardedProgram>(&public_values(), &[])
-        .expect_err("witness generation without guards succeeded");
+    let error = witness_generation::generate::<BabyBear, UnguardedProgram>(
+        &public_values(),
+        &[],
+        setup::MINIMUM_TRACE_HEIGHT,
+    )
+    .expect_err("witness generation without guards succeeded");
     assert_eq!(
         error.to_string(),
         "components add, mul all accept a message on channel 'state'"
