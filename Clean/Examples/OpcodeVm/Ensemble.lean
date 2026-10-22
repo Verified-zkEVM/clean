@@ -77,7 +77,7 @@ def programCell (pc : Expression (F p)) (column : Fin 4) : Witgen.FExpr (F p) :=
 def programCellIn (data : ProverData (F p)) (pc : F p) (column : Fin 4) : F p :=
   ((data "program" 4)[(UInt64.ofNat pc.val).toNat]?.getD default)[column]
 
-def StateChannel : Channel (F p) State where
+def stateChannel : Channel (F p) State where
   name := "state"
   Guarantees _ _ := True
 
@@ -93,20 +93,20 @@ def step (program : Program) (opcode : Opcode) : GeneralFormalCircuit (F p) Step
   name := opcode.name
   main input := do
     assertZero (input.enabled * (input.enabled - 1))
-    StateChannel.pullIf input.enabled { pc := input.pc, acc := input.acc }
+    stateChannel.pullIf input.enabled { pc := input.pc, acc := input.acc }
     let operand ← witness (programCell input.pc 2)
     (programLookup program).channel.pullIf input.enabled
       { pc := input.pc, opcode := .const (opcode.code : F p), operand }
-    StateChannel.pushIf input.enabled { pc := input.pc + 1, acc := opcode.apply input.acc operand }
+    stateChannel.pushIf input.enabled { pc := input.pc + 1, acc := opcode.apply input.acc operand }
 
   exposedChannels
   | { enabled, pc, acc }, i₀ =>
     let operand := var ⟨ i₀ ⟩
-    expose StateChannel [ pulledIf enabled { pc, acc },
+    expose stateChannel [ pulledIf enabled { pc, acc },
       pushedIf enabled { pc := pc + 1, acc := opcode.apply acc operand } ]
   exposedChannels_eq input i₀ := by
     obtain ⟨enabled, pc, acc⟩ := input
-    simp [circuit_norm, StateChannel, programLookup]
+    simp [circuit_norm, stateChannel, programLookup]
 
   ProverAssumptions
   | { enabled, pc, .. }, data, _ => enabled = 0 ∨ enabled = 1 ∧
@@ -114,20 +114,20 @@ def step (program : Program) (opcode : Opcode) : GeneralFormalCircuit (F p) Step
       { pc, opcode := opcode.code, operand := programCellIn data pc 2 }
   Spec _ _ _ := True
 
-  channelsWithRequirements := [ StateChannel.toRaw ]
+  channelsWithRequirements := [ stateChannel.toRaw ]
   requirementsChannelsLawful input_var i₀ := by
     obtain ⟨enabled, pc, acc⟩ := input_var
-    simp only [circuit_norm, StateChannel, programLookup]
+    simp only [circuit_norm, stateChannel, programLookup]
     intro env h_bool h_one h_zero
     rcases mul_eq_zero.mp h_bool with h | h <;> simp_all [sub_eq_zero]
 
   soundness := by
-    circuit_proof_start [StateChannel]
+    circuit_proof_start [stateChannel]
     obtain ⟨h_bool, -⟩ := h_holds
     rw [mul_eq_zero, sub_eq_zero] at h_bool
     rcases h_bool with rfl | rfl <;> simp
   completeness := by
-    circuit_proof_start [StateChannel, programCell, programCellIn]
+    circuit_proof_start [stateChannel, programCell, programCellIn]
     rcases h_assumptions with h | ⟨h, h_contains⟩ <;> simp_all
 
 /-- The table of `opcode`: one row per state whose `pc` holds `opcode`. Padding rows are
@@ -135,7 +135,7 @@ disabled. -/
 abbrev stepComponent (program : Program) (opcode : Opcode) : Component (F p) where
   circuit := step program opcode
   generation := .demand {
-    channel := StateChannel
+    channel := stateChannel
     surplus := .push
     guard := some fun state => programCell state.pc 1 =? Witgen.FExpr.const (opcode.code : F p)
     aggregation := .perOccurrence
@@ -147,26 +147,26 @@ abbrev stepComponent (program : Program) (opcode : Opcode) : Component (F p) whe
 `initial` ends with the accumulator `final`. -/
 def verifier (program : Program) : Verifier.Program (F p) fieldPair where
   main | (initial, final) => do
-    Verifier.pull StateChannel { pc := .const (program.length : F p), acc := final }
-    Verifier.push StateChannel { pc := 0, acc := initial }
+    Verifier.pull stateChannel { pc := .const (program.length : F p), acc := final }
+    Verifier.push stateChannel { pc := 0, acc := initial }
   Spec _ _ := True
   soundness := by simp [circuit_norm]
 
 def vm (program : Program) : VmTables (F p) fieldPair where
-  channel := StateChannel
+  channel := stateChannel
   tables := [stepComponent program .add, stepComponent program .mul]
   unique_names := by simp [step, Opcode.name]
   verifier := verifier program
   tables_channel := by simp [circuit_norm, step, sub_eq_zero]
   verifier_channel := by simp [circuit_norm, verifier]
-  verifier_requirements env := by simp [circuit_norm, verifier, StateChannel]
+  verifier_requirements env := by simp [circuit_norm, verifier, stateChannel]
 
 def ensemble (program : Program) := SoundEnsemble.empty (F p) fieldPair
   |>.addLookup (programLookup program)
   |>.addVm (vm program)
-    (by simp +instances [circuit_norm, vm, programLookup, StateChannel])
+    (by simp +instances [circuit_norm, vm, programLookup, stateChannel])
     (by simp +instances [circuit_norm, vm, step, verifier])
-    (by simp [circuit_norm, vm, step, verifier, programLookup, StateChannel])
+    (by simp [circuit_norm, vm, step, verifier, programLookup, stateChannel])
     (by simp [circuit_norm, vm, step, programLookup, Opcode.name])
 
 /-- The program of the tests: `acc := ((((acc + 3) * 5 + 7) * 2 + 1 + 4) * 3 + 9) * 2 + 6`. -/

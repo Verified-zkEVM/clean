@@ -38,7 +38,7 @@ def bytes : Lookup (F p) field where
     · rintro ⟨i, hi, rfl⟩
       rwa [ZMod.val_cast_of_lt (by linarith [pGt.out])]
 
-def Add8Channel : Channel (F p) fieldTriple where
+def add8Channel : Channel (F p) fieldTriple where
   name := "add8"
   Guarantees
   | (x, y, z), _ =>
@@ -64,16 +64,16 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
     -- assert correctness
     input.x + input.y === input.z + carry * 256
     -- emit to the add8 channel with multiplicity `m`
-    Add8Channel.emit input.m (input.x, input.y, input.z)
+    add8Channel.emit input.m (input.x, input.y, input.z)
 
   ProverAssumptions
   | { x, y, z, m }, _, _ =>
     x.val < 256 ∧ y.val < 256 ∧ z.val < 256 ∧ z.val = (x.val + y.val) % 256
   Spec _ _ _ := True
-  channelsWithRequirements := [ Add8Channel.toRaw ]
+  channelsWithRequirements := [ add8Channel.toRaw ]
 
   soundness := by
-    circuit_proof_start [bytes, Add8Channel]
+    circuit_proof_start [bytes, add8Channel]
     set carry := env.get i₀
     obtain ⟨ hz, hcarry, heq ⟩ := h_holds
     intro hm h0 hx hy
@@ -111,7 +111,7 @@ number of pulls as its multiplicity `m`. -/
 abbrev add8Component : Component (F p) where
   circuit := add8
   generation := .demand {
-    channel := Add8Channel
+    channel := add8Channel
     surplus := .pull
     aggregation := .byMessage fun input => input.m
     input := [.message 0, .message 1, .message 2]
@@ -132,7 +132,7 @@ lemma fibonacci_bytes {n x y : ℕ} : (x, y) = fibonacci n → x < 256 ∧ y < 2
     specialize ih rfl
     simp_all [fibonacci, Nat.mod_lt]
 
-def FibonacciChannel : Channel (F p) fieldTriple where
+def fibonacciChannel : Channel (F p) fieldTriple where
   name := "fibonacci"
   -- when pulling, we want the guarantee that the input is a valid Fibonacci step
   Guarantees
@@ -153,36 +153,36 @@ def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
     -- has to be inline, channels with requirements proof doesn't handle subcircuits
     assertZero (input.enabled * (input.enabled - 1))
     -- pull the current Fibonacci state
-    FibonacciChannel.pullIf input.enabled (input.n, input.x, input.y)
+    fibonacciChannel.pullIf input.enabled (input.n, input.x, input.y)
     -- witness the next Fibonacci value
     let z ← witness ((input.x + input.y).val % 256).toField
     -- pull from the Add8 channel to check addition
-    Add8Channel.pullIf input.enabled (input.x, input.y, z)
+    add8Channel.pullIf input.enabled (input.x, input.y, z)
     -- push the next Fibonacci state
-    FibonacciChannel.pushIf input.enabled (input.n + 1, input.y, z)
+    fibonacciChannel.pushIf input.enabled (input.n + 1, input.y, z)
 
   -- expose interactions
   exposedChannels
   | { enabled, n, x, y }, i₀ =>
     let z := var ⟨ i₀ ⟩
-    expose FibonacciChannel [ pulledIf enabled (n, x, y), pushedIf enabled (n + 1, y, z) ]
+    expose fibonacciChannel [ pulledIf enabled (n, x, y), pushedIf enabled (n + 1, y, z) ]
   exposedChannels_eq input i₀ := by
     obtain ⟨enabled, n, x, y⟩ := input
-    simp only [circuit_norm, FibonacciChannel, Add8Channel]
+    simp only [circuit_norm, fibonacciChannel, add8Channel]
 
   ProverAssumptions
   | { enabled, n, x, y }, _, _ =>
     enabled = 0 ∨ (enabled = 1 ∧ ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val)
   Spec _ _ _ := True
 
-  channelsWithRequirements := [ FibonacciChannel.toRaw ]
+  channelsWithRequirements := [ fibonacciChannel.toRaw ]
   requirementsChannelsLawful input_var i₀ := by
     obtain ⟨enabled, n, x, y⟩ := input_var
-    simp only [circuit_norm, FibonacciChannel, Add8Channel]
+    simp only [circuit_norm, fibonacciChannel, add8Channel]
     grind
 
   soundness := by
-    circuit_proof_start [FibonacciChannel, Add8Channel]
+    circuit_proof_start [fibonacciChannel, add8Channel]
     set z := env.get i₀
     obtain ⟨ h_bool, h_fib, h_add ⟩ := h_holds
     rw [mul_eq_zero, sub_eq_zero] at h_bool
@@ -197,7 +197,7 @@ def fib8 : GeneralFormalCircuit (F p) Fib8Input unit where
     simp_all
 
   completeness := by
-    circuit_proof_start [FibonacciChannel, Add8Channel]
+    circuit_proof_start [fibonacciChannel, add8Channel]
     rcases h_assumptions with rfl | ⟨ rfl, h_fib ⟩
     · simp
     simp_all
@@ -214,7 +214,7 @@ disabled. -/
 abbrev fib8Component : Component (F p) where
   circuit := fib8
   generation := .demand {
-    channel := FibonacciChannel
+    channel := fibonacciChannel
     surplus := .push
     aggregation := .perOccurrence
     input := [.const 1, .message 0, .message 1, .message 2]
@@ -225,21 +225,21 @@ abbrev fib8Component : Component (F p) where
 def fibonacciVerifier : Verifier.Program (F p) fieldTriple where
   main | (n, x, y) => do
     -- push initial state, pull the final state
-    Verifier.pull FibonacciChannel (n, x, y)
-    Verifier.push FibonacciChannel (0, 0, 1)
+    Verifier.pull fibonacciChannel (n, x, y)
+    Verifier.push fibonacciChannel (0, 0, 1)
   Spec
   | (n, x, y), _ => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val
-  soundness := by simp_all [circuit_norm, FibonacciChannel]
+  soundness := by simp_all [circuit_norm, fibonacciChannel]
 
 def fibonacciVm : VmTables (F p) fieldTriple where
-  channel := FibonacciChannel
+  channel := fibonacciChannel
   tables := [fib8Component]
   unique_names := by simp
   verifier := fibonacciVerifier
   tables_channel := by simp [circuit_norm, fib8, sub_eq_zero]
   verifier_channel := by simp [circuit_norm, fibonacciVerifier]
   verifier_requirements env := by
-    simp only [circuit_norm, fibonacciVerifier, FibonacciChannel, ZMod.val_zero, ZMod.val_one]
+    simp only [circuit_norm, fibonacciVerifier, fibonacciChannel, ZMod.val_zero, ZMod.val_one]
     exact ⟨ 0, rfl, rfl ⟩
 
 def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
@@ -248,13 +248,13 @@ def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
     (by simp [circuit_norm, add8])
     (by simp [circuit_norm, add8])
     (by simp [circuit_norm, add8, bytes])
-  |>.addFinishedChannel Add8Channel.toRaw
+  |>.addFinishedChannel add8Channel.toRaw
   |>.addVm fibonacciVm
     (by simp +instances [circuit_norm, fibonacciVm, add8, bytes,
-      Add8Channel, FibonacciChannel])
+      add8Channel, fibonacciChannel])
     (by simp +instances [circuit_norm, fibonacciVm, fib8, fibonacciVerifier])
     (by simp [circuit_norm, fibonacciVm, fib8, fibonacciVerifier,
-      Add8Channel, FibonacciChannel])
+      add8Channel, fibonacciChannel])
     (by simp [circuit_norm, fibonacciVm, fib8, add8, bytes])
   |>.toFormal (fun _ => True)
     (fun (n, x, y) => ∃ k : ℕ, (x.val, y.val) = fibonacci k ∧ k % p = n.val)
@@ -303,25 +303,25 @@ theorem fibonacci_soundness : ∀ (n x y : F p),
 /-
 Fun fact! We can prove end-to-end soundness of a component that proves `False`
 -/
-def FalseChannel : Channel (F p) unit where
+def falseChannel : Channel (F p) unit where
   name := "false"
   Guarantees _ _ := False
 
 def falseCircuit : GeneralFormalCircuit (F p) unit unit where
   name := "false"
   main _ := do
-    FalseChannel.pull ()
+    falseChannel.pull ()
     return
   Spec _ _ _ := False
   ProverAssumptions _ _ _ := False
-  soundness := by circuit_proof_start [FalseChannel]
-  completeness := by circuit_proof_start [FalseChannel]
+  soundness := by circuit_proof_start [falseChannel]
+  completeness := by circuit_proof_start [falseChannel]
 
 /-- Rows that answer pushes on the false channel, of which there are none. -/
 abbrev falseComponent : Component (F p) where
   circuit := falseCircuit
   generation := .demand {
-    channel := FalseChannel
+    channel := falseChannel
     surplus := .push
     aggregation := .perOccurrence
     input := []
@@ -329,6 +329,6 @@ abbrev falseComponent : Component (F p) where
   }
 
 def falseEnsemble := SoundEnsemble.empty (F p) unit
-  |>.addFinishedChannel FalseChannel.toRaw
+  |>.addFinishedChannel falseChannel.toRaw
   |>.addTable falseComponent
     (by simp [circuit_norm, falseCircuit]) (by simp [circuit_norm, falseCircuit])
