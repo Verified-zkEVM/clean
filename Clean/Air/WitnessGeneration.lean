@@ -145,15 +145,15 @@ def answers (states : Array (ComponentState F)) (demand : Demand F) (data : Prov
     (state.answer? demand data hint).map (index, state.component.circuit.name, ·)
 
 /-- The answer to the first demand that some component accepts, with that component's index. Fails
-if several components accept it. -/
+if several components accept it, or if no component accepts any demand. -/
 def findAnswer (states : Array (ComponentState F)) (data : ProverData F) (hint : ProverHint F)
-    (tally : Tally F) : Except GenerationError (Option (ℕ × Change F)) := do
+    (tally : Tally F) : Except GenerationError (ℕ × Change F) := do
   for (_, demand) in tally.byPosition do
     match answers states demand data hint with
     | [] => pure ()
-    | [(index, _, change)] => return some (index, change)
+    | [(index, _, change)] => return (index, change)
     | answers => throw (.ambiguousDemand demand.channel (answers.map (·.2.1)))
-  return none
+  throw (.unhandledImbalance (tally.demands.map (·.channel)))
 
 /-- Apply the change of the component at `index`, and update the tally with the changed rows. -/
 def applyAnswer (states : Array (ComponentState F)) (tally : Tally F) (index : ℕ)
@@ -176,8 +176,7 @@ def generateLoop (data : ProverData F) (hint : ProverHint F) :
       if tally.isEmpty then pure states else
       match findAnswer states data hint tally with
       | .error error => throw error
-      | .ok none => throw (.unhandledImbalance (tally.demands.map (·.channel)))
-      | .ok (some (index, change)) =>
+      | .ok (index, change) =>
           let (states, tally) := applyAnswer states tally index change data
           generateLoop data hint fuel states tally
 
