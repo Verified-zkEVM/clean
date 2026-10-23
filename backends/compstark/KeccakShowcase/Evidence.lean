@@ -71,11 +71,8 @@ variable (I : CompStark.KoalaBear.Instances)
 
 /-- CompStark's fast prover with the Poseidon2 instances `I`. -/
 def prove (P : Fri.Params) (logN : ℕ) (chunks : Array ByteArray) : Proof F EF :=
-  letI := I.field
-  letI := I.packed
   let A := air logN
-  proveWith (Stark.Fast.backendFor (p := _root_.KoalaBear.fieldSize) P.logBlowup
-    [(logN, A.logQuotientChunks logN)]) P A logN chunks []
+  proveWith (I.backendFor P.logBlowup [(logN, A.logQuotientChunks logN)]) P A logN chunks []
 
 /-- CompStark's verifier with the Poseidon2 instances `I`. -/
 def verifyProof (P : Fri.Params) (logN : ℕ) (proof : Proof F EF) : Except String Unit :=

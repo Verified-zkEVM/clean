@@ -12,9 +12,9 @@ package CleanCompStark where
 
 require Clean from "../.."
 
--- CompStark's `main`.
+-- CompStark's branch `kk-k6a`.
 require CompStark from git "https://github.com/zksecurity/CompStark" @
-  "eef5dce52de9640e71ac376d76fc7b6f7944ed7a"
+  "ada028648e85f2daa5187c3b9363329c0c0c270f"
 
 @[default_target]
 lean_lib CleanCompStark
