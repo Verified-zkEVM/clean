@@ -223,7 +223,7 @@ def generateValid {ens : Ensemble F PublicIO} (valid : ValidGeneration ens) (fue
     (publicInput : PublicIO F) (proverInput : ens.ProverInput F) :
     Except GenerationError (EnsembleWitness ens) := do
   let hint : ProverHint F :=
-    readNamedRows (HintTable.prepare ens.hintTables (toElements proverInput).toArray)
+    readNamedRows (prepareHint ens.hintTables (toElements proverInput).toArray)
   -- preallocate rows, and complete them with the prover data of all preallocated inputs
   let states := (ens.tables.zip valid.multiplicities).toArray.map fun (component, multiplicity) =>
     ComponentState.initial component multiplicity

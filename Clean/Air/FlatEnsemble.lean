@@ -48,30 +48,6 @@ structure HintTable where
   rows : ℕ
 deriving Repr, DecidableEq
 
-/-- The hint tables `tables` take from the flattened private input `elements`. Like derived prover
-data, rows are cut off or zero-padded at the requested width. -/
-def HintTable.hint (tables : List HintTable) (elements : Array F) : ProverHint F := fun key width =>
-  match tables.find? (·.key == key) with
-  | none => #[]
-  | some table => Array.ofFn fun (row : Fin table.rows) => rowPrefix width <|
-      elements.extract (table.offset + row.val * table.width)
-        (table.offset + (row.val + 1) * table.width)
-
-/-- The hint tables prepared for reading, see `HintTable.readNamedRows_prepare`. -/
-def HintTable.prepare (tables : List HintTable) (elements : Array F) :
-    List (String × PreparedRows F) :=
-  tables.map fun table =>
-    (table.key, .ofRows (Array.ofFn fun (row : Fin table.rows) =>
-      elements.extract (table.offset + row.val * table.width)
-        (table.offset + (row.val + 1) * table.width)) table.width)
-
-lemma HintTable.readNamedRows_prepare (tables : List HintTable) (elements : Array F) :
-    readNamedRows (prepare tables elements) = hint tables elements := by
-  funext key width
-  simp only [readNamedRows, prepare, hint, List.find?_map, Function.comp_def]
-  cases tables.find? (fun table => table.key == key) <;>
-    simp [PreparedRows.read_eq, PreparedRows.ofRows, Array.map_ofFn, Function.comp_def]
-
 /-- An ensemble of AIR components: everything a prover and a verifier implementation need. -/
 structure Ensemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO] where
   /-- Components have unique names. Their order is the order of the traces. -/
@@ -86,10 +62,6 @@ structure Ensemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType
   hintTables : List HintTable := []
 
 instance (ens : Ensemble F PublicIO) : ProvableType ens.ProverInput := ens.provableProverInput
-
-/-- The hint tables encoding a private input. -/
-def Ensemble.hint (ens : Ensemble F PublicIO) (proverInput : ens.ProverInput F) : ProverHint F :=
-  HintTable.hint ens.hintTables (toElements proverInput).toArray
 
 /-- The public input and the component traces of an ensemble proof. -/
 structure EnsembleWitness (ens : Ensemble F PublicIO) where

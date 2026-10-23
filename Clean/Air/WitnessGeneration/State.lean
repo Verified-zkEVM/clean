@@ -1,5 +1,6 @@
 module
 
+public import Clean.Air.WitnessGeneration.PreparedRows
 public import Clean.Air.WitnessGeneration.Tally
 public import Clean.Air.WitnessGeneration.Validation
 public import Clean.Circuit.WitnessGeneration

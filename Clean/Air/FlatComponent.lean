@@ -16,37 +16,6 @@ variable {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
 def rowPrefix (n : ℕ) (row : Array F) : Vector F n :=
   ⟨(List.ofFn (fun i : Fin n => row[i.val]?.getD 0)).toArray, by simp⟩
 
-/-- Rows that witness programs read as prover data or hints: at width `n`, every row is cut off or
-padded with zeros. The rows at `width`, their usual read width, are prepared once, so that reads at
-that width don't copy them. -/
-structure PreparedRows (F : Type) [FiniteField F] where
-  rows : Array (Array F)
-  width : ℕ
-  prepared : Array (Vector F width)
-  prepared_eq : prepared = rows.map (rowPrefix width)
-
-def PreparedRows.ofRows (rows : Array (Array F)) (width : ℕ) : PreparedRows F :=
-  { rows, width, prepared := rows.map (rowPrefix width), prepared_eq := rfl }
-
-def PreparedRows.read (rows : PreparedRows F) (n : ℕ) : Array (Vector F n) :=
-  if h : rows.width = n then h ▸ rows.prepared else rows.rows.map (rowPrefix n)
-
-lemma PreparedRows.read_eq (rows : PreparedRows F) (n : ℕ) :
-    rows.read n = rows.rows.map (rowPrefix n) := by
-  unfold read
-  split
-  · rename_i h
-    subst h
-    exact rows.prepared_eq
-  · rfl
-
-/-- Prepared rows under names, read like prover data or hints. -/
-def readNamedRows (entries : List (String × PreparedRows F)) (name : String) (n : ℕ) :
-    Array (Vector F n) :=
-  match entries.find? (·.1 == name) with
-  | some (_, rows) => rows.read n
-  | none => #[]
-
 /-- The derived-data fact about the input of row `i`: it is row `i` of the component's `ProverData`
 entry. -/
 @[circuit_norm]
