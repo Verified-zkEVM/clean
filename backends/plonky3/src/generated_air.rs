@@ -76,16 +76,18 @@ pub enum EnsembleShapeError {
 
 /// Direct expressions emitted for one Clean ensemble.
 ///
-/// Constraints and interactions read a complete row: the fixed columns followed by the committed
-/// columns. They are generic over the ring of values, so the same generated functions run on field
-/// elements during witness generation and on symbolic expressions here.
+/// Constraints and interactions read a complete row: the fixed columns at their input columns, and
+/// the committed columns in the others. They are generic over the ring of values, so the same
+/// generated functions run on field elements during witness generation and on symbolic expressions
+/// here.
 pub trait GeneratedAirSpec: Clone + Sync {
     /// Order of the field whose constants and arithmetic the generated code was printed for.
     const FIELD_ORDER: u64;
     const PUBLIC_VALUES: usize;
     /// Committed widths, without the fixed columns.
     const WIDTHS: &'static [usize];
-    const FIXED_WIDTHS: &'static [usize];
+    /// The input columns that are fixed columns, per component, in increasing order.
+    const FIXED_COLUMNS: &'static [&'static [usize]];
     const FIXED_HEIGHTS: &'static [usize];
     const INTERACTIONS_PER_ROW: &'static [usize];
     const VERIFIER_INTERACTIONS: usize;
@@ -101,6 +103,33 @@ pub trait GeneratedAirSpec: Clone + Sync {
     ) -> Vec<Interaction<E>>;
 
     fn verifier_interactions<F: WitnessField>(public_values: &[F]) -> Vec<Interaction<F>>;
+}
+
+/// The complete row of a component: the values of the fixed columns at the input columns
+/// `fixed_columns`, which are in increasing order, and the committed values in the other columns.
+fn semantic_row<E>(
+    fixed_columns: &[usize],
+    fixed: impl IntoIterator<Item = E>,
+    committed: impl IntoIterator<Item = E>,
+) -> Vec<E> {
+    let mut fixed_columns = fixed_columns.iter().peekable();
+    let mut fixed = fixed.into_iter();
+    let mut committed = committed.into_iter();
+    let mut row = Vec::new();
+    loop {
+        let value = if fixed_columns
+            .next_if(|&&column| column == row.len())
+            .is_some()
+        {
+            fixed.next()
+        } else {
+            committed.next()
+        };
+        let Some(value) = value else {
+            return row;
+        };
+        row.push(value);
+    }
 }
 
 /// Plonky3 wrapper shared by every generated ensemble AIR.
@@ -136,7 +165,7 @@ impl<F: WitnessField, P: GeneratedAirSpec> GeneratedEnsemble<F, P> {
             return Err(EnsembleShapeError::NoComponents);
         }
         for (metadata, actual) in [
-            ("fixed widths", P::FIXED_WIDTHS.len()),
+            ("fixed columns", P::FIXED_COLUMNS.len()),
             ("fixed heights", P::FIXED_HEIGHTS.len()),
             ("interactions per row", P::INTERACTIONS_PER_ROW.len()),
         ] {
@@ -234,7 +263,7 @@ impl<F: WitnessField, P: GeneratedAirSpec> BaseAir<F> for GeneratedAir<P> {
     }
 
     fn preprocessed_trace(&self) -> Option<RowMajorMatrix<F>> {
-        let width = P::FIXED_WIDTHS[self.component];
+        let width = P::FIXED_COLUMNS[self.component].len();
         if width == 0 {
             return None;
         }
@@ -254,21 +283,23 @@ where
     P: GeneratedAirSpec,
 {
     fn eval(&self, builder: &mut AB) {
-        let mut row: Vec<AB::Expr> = Vec::new();
-        if P::FIXED_WIDTHS[self.component] != 0 {
-            let fixed = builder
+        let fixed_columns = P::FIXED_COLUMNS[self.component];
+        let mut fixed: Vec<AB::Expr> = Vec::new();
+        if !fixed_columns.is_empty() {
+            let preprocessed = builder
                 .preprocessed()
                 .expect("fixed component has no preprocessed trace");
-            let fixed_local = fixed
+            let fixed_local = preprocessed
                 .row_slice(0)
                 .expect("validated fixed trace height is nonzero");
-            row.extend(fixed_local.iter().map(|value| value.clone().into()));
+            fixed.extend(fixed_local.iter().map(|value| value.clone().into()));
         }
         let main = builder.main();
         let local = main
             .row_slice(0)
             .expect("validated trace height is nonzero");
-        row.extend(local.iter().map(|value| value.clone().into()));
+        let committed = local.iter().map(|value| value.clone().into());
+        let row = semantic_row(fixed_columns, fixed, committed);
         for constraint in P::constraints(self.component, &row) {
             builder.assert_zero(constraint);
         }
@@ -279,27 +310,29 @@ where
         AB: PermutationAirBuilder + AirBuilderWithPublicValues,
     {
         self.num_lookups = 0;
+        let fixed_columns = P::FIXED_COLUMNS[self.component];
         let symbolic = SymbolicAirBuilder::<AB::F>::new(
-            P::FIXED_WIDTHS[self.component],
+            fixed_columns.len(),
             BaseAir::<AB::F>::width(self),
             P::PUBLIC_VALUES,
             0,
             0,
         );
-        let mut row: Vec<SymbolicExpression<AB::F>> = Vec::new();
-        if P::FIXED_WIDTHS[self.component] != 0 {
-            let fixed = AirBuilder::preprocessed(&symbolic)
+        let mut fixed: Vec<SymbolicExpression<AB::F>> = Vec::new();
+        if !fixed_columns.is_empty() {
+            let preprocessed = AirBuilder::preprocessed(&symbolic)
                 .expect("fixed component has no symbolic preprocessed trace");
-            let fixed_local = fixed
+            let fixed_local = preprocessed
                 .row_slice(0)
                 .expect("validated fixed trace height is nonzero");
-            row.extend(fixed_local.iter().map(|&value| value.into()));
+            fixed.extend(fixed_local.iter().map(|&value| value.into()));
         }
         let main = AirBuilder::main(&symbolic);
         let local = main
             .row_slice(0)
             .expect("validated trace height is nonzero");
-        row.extend(local.iter().map(|&value| value.into()));
+        let committed = local.iter().map(|&value| value.into());
+        let row = semantic_row(fixed_columns, fixed, committed);
         // an interaction that assumes guarantees pulls from the channel: it is received with the
         // negated multiplicity
         P::interactions(self.component, &row)
@@ -323,5 +356,19 @@ where
         let index = self.num_lookups;
         self.num_lookups += 1;
         vec![index]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::semantic_row;
+    use alloc::vec;
+
+    #[test]
+    fn semantic_row_puts_fixed_values_at_their_columns() {
+        assert_eq!(
+            semantic_row(&[1, 3, 4], [10, 30, 40], [0, 2, 5]),
+            vec![0, 10, 2, 30, 40, 5]
+        );
     }
 }

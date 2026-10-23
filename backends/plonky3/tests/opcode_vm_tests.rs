@@ -19,9 +19,9 @@ fn field(value: u64) -> BabyBear {
     BabyBear::from_u64(value)
 }
 
-/// The program `exampleProgram` takes the accumulator 2 to 438.
+/// The program `exampleProgram` takes the initial accumulator 2 to 438.
 fn public_values() -> Vec<BabyBear> {
-    vec![field(2), field(438)]
+    vec![field(438)]
 }
 
 #[test]
@@ -38,7 +38,7 @@ fn extracted_rust_routes_states_by_opcode() {
 
 #[test]
 fn extracted_rust_rejects_a_wrong_final_state() {
-    let error = generated::generate(&[field(2), field(439)], &[], setup::MINIMUM_TRACE_HEIGHT)
+    let error = generated::generate(&[field(439)], &[], setup::MINIMUM_TRACE_HEIGHT)
         .expect_err("witness generation for a wrong final state succeeded");
     assert!(error.to_string().contains("unhandled channel imbalance"));
 }
@@ -69,7 +69,8 @@ impl<F: WitnessField> Program<F> for UnguardedProgram {
     const PUBLIC_INPUTS: usize = <generated::Ensemble as Program<F>>::PUBLIC_INPUTS;
     const PROVER_INPUTS: usize = <generated::Ensemble as Program<F>>::PROVER_INPUTS;
     const HINT_TABLES: &'static [HintTable] = <generated::Ensemble as Program<F>>::HINT_TABLES;
-    const FIXED_WIDTHS: &'static [usize] = <generated::Ensemble as Program<F>>::FIXED_WIDTHS;
+    const FIXED_COLUMNS: &'static [&'static [usize]] =
+        <generated::Ensemble as Program<F>>::FIXED_COLUMNS;
     const COMPONENT_NAMES: &'static [&'static str] =
         <generated::Ensemble as Program<F>>::COMPONENT_NAMES;
 
@@ -78,7 +79,7 @@ impl<F: WitnessField> Program<F> for UnguardedProgram {
             .into_iter()
             .map(|mode| match mode {
                 Mode::Demand(mode) => Mode::Demand(DemandMode {
-                    guard: None,
+                    guard: |_, _, _| true,
                     ..mode
                 }),
                 mode => mode,

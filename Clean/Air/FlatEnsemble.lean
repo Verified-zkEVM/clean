@@ -48,15 +48,6 @@ structure HintTable where
   rows : ℕ
 deriving Repr, DecidableEq
 
-/-- The hint tables `tables` take from the flattened private input `elements`. Like derived prover
-data, rows are cut off or zero-padded at the requested width. -/
-def HintTable.hint (tables : List HintTable) (elements : Array F) : ProverHint F := fun key width =>
-  match tables.find? (·.key == key) with
-  | none => #[]
-  | some table => Array.ofFn fun (row : Fin table.rows) => rowPrefix width <|
-      elements.extract (table.offset + row.val * table.width)
-        (table.offset + (row.val + 1) * table.width)
-
 /-- An ensemble of AIR components: everything a prover and a verifier implementation need. -/
 structure Ensemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO] where
   /-- Components have unique names. Their order is the order of the traces. -/
@@ -71,10 +62,6 @@ structure Ensemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType
   hintTables : List HintTable := []
 
 instance (ens : Ensemble F PublicIO) : ProvableType ens.ProverInput := ens.provableProverInput
-
-/-- The hint tables encoding a private input. -/
-def Ensemble.hint (ens : Ensemble F PublicIO) (proverInput : ens.ProverInput F) : ProverHint F :=
-  HintTable.hint ens.hintTables (toElements proverInput).toArray
 
 /-- The public input and the component traces of an ensemble proof. -/
 structure EnsembleWitness (ens : Ensemble F PublicIO) where
@@ -196,22 +183,6 @@ lemma tables_map_component (witness : EnsembleWitness ens) :
   intro i hi hi'
   simp [witness.same_circuits i hi']
 
-lemma tableNames_nodup (witness : EnsembleWitness ens) :
-    (witness.tables.map (fun table => table.component.circuit.name)).Nodup := by
-  rw [show witness.tables.map (fun table => table.component.circuit.name) =
-    ens.tables.map (·.circuit.name) by
-      calc
-        _ = (witness.tables.map (·.component)).map (·.circuit.name) := by simp
-        _ = ens.tables.map (·.circuit.name) :=
-          congrArg (List.map (·.circuit.name)) witness.tables_map_component]
-  exact ens.unique_names
-
-lemma dataConsistency_of_mem (witness : EnsembleWitness ens) :
-    ∀ table ∈ witness.tables, table.DataConsistency := by
-  intro table htable
-  rw [Table.DataConsistency, witness.same_data table htable]
-  exact deriveTables_eq_of_mem witness.tables witness.tableNames_nodup htable _
-
 def toTables (witness : EnsembleWitness ens) : Tables F where
   tables := witness.tables
   data := witness.data
@@ -228,18 +199,19 @@ lemma component_mem_tables_of_mem {witness : EnsembleWitness ens} {table : Table
   rw [← witness.tables_map_component]
   grind
 
-/-- A component with fixed columns has exactly one row of prover data per fixed row. -/
-lemma getRows_size_of_fixedColumns (witness : EnsembleWitness ens) {component : Component F}
-    (hcomponent : component ∈ ens.tables) {fixed : FixedColumns F}
-    (hfixed : component.fixedColumns = some fixed) :
-    (witness.data.getRows component.circuit.name component.Input).size = fixed.height.toNat := by
+/-- A preallocated component has exactly one row of prover data per row index. -/
+lemma getRows_size_of_preallocated (witness : EnsembleWitness ens) {component : Component F}
+    (hcomponent : component ∈ ens.tables)
+    {mode : WitnessGeneration.PreallocatedMode F component.Input}
+    (hgeneration : component.generation = .preallocated mode) :
+    (witness.data.getRows component.circuit.name component.Input).size = mode.height.toNat := by
   rw [← witness.tables_map_component, List.mem_map] at hcomponent
   obtain ⟨table, htable, rfl⟩ := hcomponent
   have hmatch := table.fixed_rows_match
-  simp only [Component.FixedRowsMatch, hfixed] at hmatch
+  simp only [Component.FixedRowsMatch, hgeneration] at hmatch
   rw [ProverData.getRows, EnsembleWitness.data, ← witness.same_data table htable,
-    witness.dataConsistency_of_mem table htable]
-  simpa [Table.proverRows] using congrArg List.length hmatch
+    table.data_consistent]
+  simpa using hmatch.1
 
 @[circuit_norm]
 def Constraints {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Prop :=

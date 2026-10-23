@@ -4,8 +4,8 @@
 /// Implements an extracted ensemble on top of its generated modules.
 ///
 /// Every module listed in `components`, and the module `verifier`, must be in scope. Component
-/// modules provide the constants `NAME`, `INPUT_WIDTH`, `WIDTH`, `FIXED_WIDTH`, `FIXED_HEIGHT` and
-/// `INTERACTIONS`, and the functions `fixed_row`, `complete`, `constraints`, `interactions`,
+/// modules provide the constants `NAME`, `INPUT_WIDTH`, `WIDTH`, `FIXED_COLUMNS`, `FIXED_HEIGHT`
+/// and `INTERACTIONS`, and the functions `fixed_row`, `complete`, `constraints`, `interactions`,
 /// `mode` and `initial_row`. The verifier module provides `INTERACTIONS` and
 /// `interactions`.
 ///
@@ -35,7 +35,7 @@ macro_rules! ensemble {
             const PROVER_INPUTS: usize = $prover_inputs;
             const HINT_TABLES: &'static [$crate::witness_generation::HintTable] =
                 &[$($hint_table),*];
-            const FIXED_WIDTHS: &'static [usize] = &[$($component::FIXED_WIDTH),+];
+            const FIXED_COLUMNS: &'static [&'static [usize]] = &[$($component::FIXED_COLUMNS),+];
             const COMPONENT_NAMES: &'static [&'static str] = &[$($component::NAME),+];
 
             fn modes() -> $crate::__private::Vec<$crate::witness_generation::Mode<F>> {
@@ -108,8 +108,9 @@ macro_rules! ensemble {
         impl $crate::GeneratedAirSpec for Ensemble {
             const FIELD_ORDER: u64 = $field_order;
             const PUBLIC_VALUES: usize = $public_inputs;
-            const WIDTHS: &'static [usize] = &[$($component::WIDTH - $component::FIXED_WIDTH),+];
-            const FIXED_WIDTHS: &'static [usize] = &[$($component::FIXED_WIDTH),+];
+            const WIDTHS: &'static [usize] =
+                &[$($component::WIDTH - $component::FIXED_COLUMNS.len()),+];
+            const FIXED_COLUMNS: &'static [&'static [usize]] = &[$($component::FIXED_COLUMNS),+];
             const FIXED_HEIGHTS: &'static [usize] = &[$($component::FIXED_HEIGHT),+];
             const INTERACTIONS_PER_ROW: &'static [usize] = &[$($component::INTERACTIONS),+];
             const VERIFIER_INTERACTIONS: usize = verifier::INTERACTIONS;
