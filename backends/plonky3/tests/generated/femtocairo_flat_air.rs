@@ -813,6 +813,7 @@ pub mod component_1 {
     pub fn mode<F: WitnessField>() -> Mode<F> {
         Mode::Preallocated {
             channel: "memory",
+            trigger: Direction::Pull,
             rows: 8,
             multiplicity: MultiplicityColumn {
                 interaction: 0,
@@ -914,6 +915,7 @@ pub mod component_2 {
     pub fn mode<F: WitnessField>() -> Mode<F> {
         Mode::Preallocated {
             channel: "program",
+            trigger: Direction::Pull,
             rows: 32,
             multiplicity: MultiplicityColumn {
                 interaction: 0,

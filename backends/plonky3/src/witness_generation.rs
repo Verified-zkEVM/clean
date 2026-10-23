@@ -179,6 +179,8 @@ pub enum Mode<F> {
     Demand(DemandMode<F>),
     Preallocated {
         channel: &'static str,
+        /// Which unanswered messages the rows answer, like `DemandMode::trigger`.
+        trigger: Direction,
         rows: usize,
         multiplicity: MultiplicityColumn,
     },
@@ -500,9 +502,9 @@ enum Answer<'a, F> {
     },
 }
 
-/// How the component answers the demand, if it accepts it: a demand component accepts the messages
-/// on its channel that trigger it and that its guard holds for, a preallocated one the messages on
-/// its channel that it has a row for.
+/// How the component answers the demand, if it accepts it: a component accepts the messages on its
+/// channel that trigger it, and that a demand component's guard holds for, or that a preallocated
+/// component has a row for.
 fn accepts<'a, F: WitnessField>(
     mode: &'a Mode<F>,
     demand: &Demand<F>,
@@ -517,9 +519,10 @@ fn accepts<'a, F: WitnessField>(
         .then_some(Answer::Demand(mode)),
         Mode::Preallocated {
             channel,
+            trigger,
             multiplicity,
             ..
-        } => (demand.channel == *channel)
+        } => (demand.channel == *channel && demand.direction() == *trigger)
             .then(|| table.counted_row(demand))
             .flatten()
             .map(|row_index| Answer::Multiplicity {

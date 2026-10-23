@@ -256,6 +256,7 @@ pub mod component_2 {
     pub fn mode<F: WitnessField>() -> Mode<F> {
         Mode::Preallocated {
             channel: "bytes",
+            trigger: Direction::Pull,
             rows: 256,
             multiplicity: MultiplicityColumn {
                 interaction: 0,

@@ -194,7 +194,7 @@ pub const FIXED_HEIGHT: usize = 0;
 pub fn fixed_row<F: WitnessField>(_row_index: u64) -> Vec<F> {
     Vec::new()
 }"
-  | .preallocated _ rows input _ =>
+  | .preallocated _ _ rows input _ =>
     let fixed := input.cells.filter (·.isFixed)
     s!"pub const FIXED_COLUMNS: &[usize] = &[{commaSep (input.fixedColumns.map toString)}];
 pub const FIXED_HEIGHT: usize = {rows};
@@ -262,10 +262,10 @@ pub fn mode<F: WitnessField>() -> Mode<F> \{
 pub fn initial_row<F: WitnessField>(_row_index: u64, _hint: &WitnessData<F>) -> Vec<F> \{
     Vec::new()
 }"
-  | .preallocated channel rows input multiplicity =>
+  | .preallocated channel trigger rows input multiplicity =>
     s!"pub fn mode<F: WitnessField>() -> Mode<F> \{
-    Mode::Preallocated \{ channel: {quoted channel}, rows: {rows}, \
-        multiplicity: {multiplicityToRust multiplicity} }
+    Mode::Preallocated \{ channel: {quoted channel}, trigger: {directionToRust trigger}, \
+        rows: {rows}, multiplicity: {multiplicityToRust multiplicity} }
 }
 
 pub fn initial_row<F: WitnessField>(row_index: u64, hint: &WitnessData<F>) -> Vec<F> \{

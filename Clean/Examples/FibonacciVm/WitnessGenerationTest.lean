@@ -40,31 +40,55 @@ the byte range checks are counted in the 256 fixed byte rows.
 -/
 example : result = .ok ([32, 32, 256], 32, 2, true, true) := by native_decide
 
-/-- A verifier that pushes byte 5 twice, so that the byte table has to pull it twice. -/
+/-- A channel on which the verifier pushes values for a table to consume. -/
+def valueChannel : Channel (F pBabybear) field where
+  name := "values"
+  Guarantees _ _ := True
+
+/-- One row of a table that consumes the values `0, ..., 7`, counted by its multiplicity. -/
+def consumeValue : GeneralFormalCircuit (F pBabybear) fieldPair unit where
+  name := "sink"
+  main | (value, multiplicity) => valueChannel.emit multiplicity value
+  channelsWithRequirements := [valueChannel.toRaw]
+  Spec _ _ _ := True
+  soundness := by circuit_proof_start [valueChannel]
+  completeness := by circuit_proof_start
+
+/-- The consuming table answers values pushed more often than pulled. -/
+def sink : Component (F pBabybear) where
+  circuit := consumeValue
+  generation := .preallocated {
+    channel := valueChannel
+    trigger := .push
+    height := 8
+    input i := pure (.fixed i.toField, .multiplicity)
+  }
+
+/-- A verifier that pushes the value 5 twice. -/
 def pushingVerifier : Verifier.Program (F pBabybear) unit where
   main _ := do
-    Verifier.push bytes.channel (5 : Expression (F pBabybear))
-    Verifier.push bytes.channel (5 : Expression (F pBabybear))
+    Verifier.push valueChannel (5 : Expression (F pBabybear))
+    Verifier.push valueChannel (5 : Expression (F pBabybear))
   Spec _ _ := True
   soundness := by simp
 
-def pushedBytes : Ensemble (F pBabybear) unit where
-  tables := [bytes.component]
+def pushedValues : Ensemble (F pBabybear) unit where
+  tables := [sink]
   unique_names := by simp
-  channels := [bytes.channel.toRaw]
+  channels := [valueChannel.toRaw]
   verifier := pushingVerifier
 
 def pushedResult : Except String (F pBabybear × Bool × Bool) :=
-  match generate pushedBytes 1000 () () with
+  match generate pushedValues 1000 () () with
   | .error error => .error (toString error)
   | .ok witness =>
       match witness.tables with
-      | [bytes] =>
-          .ok ((bytes.table[5]?.bind (·[1]?)).getD 0, constraintsHold witness,
+      | [sink] =>
+          .ok ((sink.table[5]?.bind (·[1]?)).getD 0, constraintsHold witness,
             channelsBalanced witness)
-      | _ => .error "ensemble has no byte table"
+      | _ => .error "ensemble has no sink table"
 
-/-- The byte table answers the surplus pushes with a negative multiplicity in the row for 5. -/
+/-- The sink answers the surplus pushes with a negative multiplicity in the row for 5. -/
 example : pushedResult = .ok (-2, true, true) := by native_decide
 
 end Air.Flat.WitnessGenerationTest

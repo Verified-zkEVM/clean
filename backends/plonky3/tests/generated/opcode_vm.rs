@@ -291,6 +291,7 @@ pub mod component_2 {
     pub fn mode<F: WitnessField>() -> Mode<F> {
         Mode::Preallocated {
             channel: "program",
+            trigger: Direction::Pull,
             rows: 16,
             multiplicity: MultiplicityColumn {
                 interaction: 0,

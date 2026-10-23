@@ -26,8 +26,9 @@ creates rows in chips like an addition chip, or increments multiplicities in a m
 table. The reaction stops when a row pushes the final state, which the verifier pulls.
 
 How a component answers is its generation mode, see `Clean.Air.WitnessGeneration.Generation`:
-- a `demand` component gets a new row for the message, or a higher multiplicity of an existing row,
-- a `preallocated` component increments the multiplicity cell of the row that carries the message.
+- a `demand` component gets a new row for the message, or changes the multiplicity cell of an
+  existing row,
+- a `preallocated` component changes the multiplicity cell of the row that carries the message.
 
 Exactly one component may accept each message: the demand components on its channel whose guard
 holds, and the preallocated components that have a row for it.
@@ -85,11 +86,11 @@ def DemandMode.accepts {Input : TypeMap} [ProvableType Input] (mode : DemandMode
   mode.channel.name == demand.channel && mode.trigger == demand.direction &&
     mode.guardCondition.eval { env := .fromArray demand.message data hint }
 
-/-- Whether a preallocated component answers the demand: it is on the mode's channel. Answering
-also needs a row for the message. -/
+/-- Whether a preallocated component answers the demand: it is on the mode's channel and triggers
+it. Answering also needs a row for the message. -/
 def PreallocatedMode.accepts {Input : TypeMap} [ProvableType Input]
     (mode : PreallocatedMode F Input) (demand : Demand F) : Bool :=
-  mode.channel.name == demand.channel
+  mode.channel.name == demand.channel && mode.trigger == demand.direction
 
 /-- The row that counts the demanded message, with the multiplicity cell and the row's index. -/
 def findCountedRow (state : ComponentState F) (demand : Demand F) :

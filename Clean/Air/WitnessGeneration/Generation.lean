@@ -15,8 +15,10 @@ A component's generation is one of two modes:
 - `demand`: the component starts without rows and gets a new row whenever its channel has an
   unanswered message. Examples are a VM, which gets one row per state, and an addition chip.
 - `preallocated`: the component has a fixed number of rows from the start. Demand on its channel
-  only increments the multiplicities of existing rows. Examples are a memory, which has one row per
+  only changes the multiplicities of existing rows. Examples are a memory, which has one row per
   address, and a lookup table.
+
+In both modes, the component answers demand on one channel, in one direction, its `trigger`.
 
 Both modes describe the input of a row as a witness program producing the component's `Input`, with
 a `Cell` for every input variable:
@@ -139,7 +141,7 @@ structure DemandMode (F : Type) [FiniteField F] (Input : TypeMap) [ProvableType 
   over the message, so it can read prover data and hints, like the opcode at the message's `pc`. -/
   guard : Var Message F → Witgen.BExpr F := fun _ => .true
   /-- The input of a new row, built from the message it answers. A multiplicity cell starts at the
-  demanded count. -/
+  value that cancels the demand. -/
   input : Var Message F → Witgen.M F (Input (Cell F))
   /-- The input of the rows appended after balancing, to make the table's height a power of two.
   Padding rows are completed by the component's witness programs like any other row; if they
@@ -152,6 +154,10 @@ structure PreallocatedMode (F : Type) (Input : TypeMap) [ProvableType Input] whe
   {Message : TypeMap} [provableMessage : ProvableType Message]
   /-- The channel on which the rows answer demand. -/
   channel : Channel F Message
+  /-- Which unanswered messages the rows answer: `.pull` means messages pulled more often than
+  pushed, which the multiplicity cell counts positively, like the reads of a lookup table; `.push`
+  means the opposite, which it counts negatively. -/
+  trigger : Direction
   /-- The number of rows, a power of two. -/
   height : UInt64
   /-- The input of row `i`. Its `let`-steps and fixed cells are computed from `i` alone; its witness

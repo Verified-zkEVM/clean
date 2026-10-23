@@ -398,6 +398,7 @@ def memoryComponent (memorySize : UInt64) (h_memorySize : memorySize.toNat < p) 
   circuit := provideMemory
   generation := .preallocated {
     channel := memoryChannel
+    trigger := .pull
     height := memorySize
     input i := pure {
       address := .fixed i.toField

@@ -60,6 +60,7 @@ def component : Component F where
   circuit := lookup.provider
   generation := .preallocated {
     channel := lookup.channel
+    trigger := .pull
     height := lookup.height
     input i := do
       let row ← lookup.row i

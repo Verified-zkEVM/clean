@@ -142,17 +142,16 @@ structure Handler where
   preallocated component, those it has a row for. -/
   selective : Bool
 
-/-- The demand a component answers. A preallocated component answers both directions on its
-channel, with its multiplicity cell. -/
-def handlers (component : Component F) : List Handler :=
+/-- The demand a component answers. -/
+def handler (component : Component F) : Handler :=
   match component.generation with
   | .demand mode =>
       let selective := match mode.guardCondition with
         | .true => false
         | _ => true
-      [{ channel := mode.channel.name, trigger := mode.trigger, selective }]
+      { channel := mode.channel.name, trigger := mode.trigger, selective }
   | .preallocated mode =>
-      [.pull, .push].map fun trigger => { channel := mode.channel.name, trigger, selective := true }
+      { channel := mode.channel.name, trigger := mode.trigger, selective := true }
 
 def cellDataReads : Cell F → List DataRead
   | .fixed value | .witness value => fexprDataReads value
@@ -221,8 +220,7 @@ def validateDataReads (components : List (Component F))
 Whether selective components overlap is only found out during generation, when two of them accept
 the same message. -/
 def validateHandlers (components : List (Component F)) : Except ValidationError Unit := do
-  let handled := components.flatMap fun component =>
-    (handlers component).map (component.circuit.name, ·)
+  let handled := components.map fun component => (component.circuit.name, handler component)
   for (name, handler) in handled do
     let shared := handled.filter fun (_, other) =>
       other.channel == handler.channel && other.trigger == handler.trigger
