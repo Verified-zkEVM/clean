@@ -8,14 +8,10 @@ use alloc::vec;
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 
-use p3_air::lookup::{Direction as LookupDirection, Kind, Lookup};
-use p3_air::{
-    Air, AirBuilder, AirBuilderWithPublicValues, BaseAir, PermutationAirBuilder, SymbolicExpression,
-};
+use p3_air::{Air, AirBuilder, BaseAir, WindowAccess};
 use p3_field::PrimeCharacteristicRing;
+use p3_lookup::{Count, InteractionBuilder};
 use p3_matrix::dense::RowMajorMatrix;
-use p3_matrix::Matrix;
-use p3_uni_stark::SymbolicAirBuilder;
 
 use crate::witness_generation::{Interaction, WitnessField};
 
@@ -67,6 +63,8 @@ pub enum EnsembleShapeError {
         expected: Vec<usize>,
         actual: Vec<usize>,
     },
+    /// The verifier failed to set up the ensemble's preprocessed columns and lookups.
+    Setup,
     InteractionCountOverflow,
     InteractionCountBound {
         interactions: u128,
@@ -102,7 +100,9 @@ pub trait GeneratedAirSpec: Clone + Sync {
         row: &[E],
     ) -> Vec<Interaction<E>>;
 
-    fn verifier_interactions<F: WitnessField>(public_values: &[F]) -> Vec<Interaction<F>>;
+    fn verifier_interactions<E: PrimeCharacteristicRing + Clone>(
+        public_values: &[E],
+    ) -> Vec<Interaction<E>>;
 }
 
 /// The complete row of a component: the values of the fixed columns at the input columns
@@ -132,18 +132,38 @@ fn semantic_row<E>(
     }
 }
 
+/// The AIR of one extracted component, or of the verifier's public interactions.
+#[derive(Clone, Copy, Debug)]
+enum AirKind {
+    Component(usize),
+    /// A trace of `height` rows that makes the verifier's interactions on its first row, from the
+    /// public values.
+    Verifier {
+        height: usize,
+    },
+}
+
 /// Plonky3 wrapper shared by every generated ensemble AIR.
 #[derive(Clone, Debug)]
 pub struct GeneratedAir<P> {
-    component: usize,
-    num_lookups: usize,
+    kind: AirKind,
     _program: PhantomData<P>,
+}
+
+impl<P> GeneratedAir<P> {
+    const fn new(kind: AirKind) -> Self {
+        Self {
+            kind,
+            _program: PhantomData,
+        }
+    }
 }
 
 /// A complete generated Clean statement with its AIR components in canonical order.
 ///
-/// The component AIRs are private so callers cannot omit, duplicate, or reorder them. Construction
-/// also establishes the interaction-count side condition required by Clean's channel semantics.
+/// The component AIRs are private so callers cannot omit, duplicate, or reorder them. They are
+/// followed by the verifier AIR, whose height is the smallest component height. Construction also
+/// establishes the interaction-count side condition required by Clean's channel semantics.
 #[derive(Clone, Debug)]
 pub struct GeneratedEnsemble<F, P> {
     airs: Vec<GeneratedAir<P>>,
@@ -183,7 +203,7 @@ impl<F: WitnessField, P: GeneratedAirSpec> GeneratedEnsemble<F, P> {
                 trace_heights: trace_heights.len(),
             });
         }
-        let airs = trace_heights
+        let mut airs = trace_heights
             .iter()
             .copied()
             .enumerate()
@@ -202,13 +222,13 @@ impl<F: WitnessField, P: GeneratedAirSpec> GeneratedEnsemble<F, P> {
                         actual: trace_height,
                     });
                 }
-                Ok(GeneratedAir {
-                    component,
-                    num_lookups: 0,
-                    _program: PhantomData,
-                })
+                Ok(GeneratedAir::new(AirKind::Component(component)))
             })
             .collect::<Result<Vec<_>, _>>()?;
+        let verifier_height = trace_heights.iter().copied().min().unwrap_or(1);
+        airs.push(GeneratedAir::new(AirKind::Verifier {
+            height: verifier_height,
+        }));
 
         let interactions = trace_heights
             .iter()
@@ -245,117 +265,126 @@ impl<F: WitnessField, P: GeneratedAirSpec> GeneratedEnsemble<F, P> {
     }
 
     pub fn component_count(&self) -> usize {
-        self.airs.len()
+        self.trace_heights.len()
     }
 
     pub fn interaction_count(&self) -> u128 {
         self.interaction_count
     }
 
+    /// The component AIRs followed by the verifier AIR.
     pub(crate) fn airs(&self) -> &[GeneratedAir<P>] {
         &self.airs
+    }
+
+    /// The height of the verifier AIR's trace.
+    pub(crate) fn verifier_height(&self) -> usize {
+        match self.airs.last().map(|air| air.kind) {
+            Some(AirKind::Verifier { height }) => height,
+            _ => unreachable!("the verifier AIR is the last AIR"),
+        }
     }
 }
 
 impl<F: WitnessField, P: GeneratedAirSpec> BaseAir<F> for GeneratedAir<P> {
     fn width(&self) -> usize {
-        P::WIDTHS[self.component]
+        match self.kind {
+            AirKind::Component(component) => P::WIDTHS[component],
+            AirKind::Verifier { .. } => 1,
+        }
+    }
+
+    fn num_public_values(&self) -> usize {
+        match self.kind {
+            AirKind::Component(_) => 0,
+            AirKind::Verifier { .. } => P::PUBLIC_VALUES,
+        }
+    }
+
+    fn preprocessed_width(&self) -> usize {
+        match self.kind {
+            AirKind::Component(component) => P::FIXED_COLUMNS[component].len(),
+            AirKind::Verifier { .. } => 1,
+        }
     }
 
     fn preprocessed_trace(&self) -> Option<RowMajorMatrix<F>> {
-        let width = P::FIXED_COLUMNS[self.component].len();
-        if width == 0 {
-            return None;
+        match self.kind {
+            AirKind::Component(component) => {
+                let width = P::FIXED_COLUMNS[component].len();
+                if width == 0 {
+                    return None;
+                }
+                let height = P::FIXED_HEIGHTS[component];
+                let mut values = Vec::with_capacity(height * width);
+                for row in 0..height as u64 {
+                    values.extend(P::fixed_row::<F>(component, row));
+                }
+                Some(RowMajorMatrix::new(values, width))
+            }
+            // the selector of the first row
+            AirKind::Verifier { height } => {
+                let mut values = vec![F::ZERO; height];
+                values[0] = F::ONE;
+                Some(RowMajorMatrix::new(values, 1))
+            }
         }
-        let height = P::FIXED_HEIGHTS[self.component];
-        let mut values = Vec::with_capacity(height * width);
-        for row in 0..height as u64 {
-            values.extend(P::fixed_row::<F>(self.component, row));
-        }
-        Some(RowMajorMatrix::new(values, width))
+    }
+
+    fn main_next_row_columns(&self) -> Vec<usize> {
+        Vec::new()
+    }
+
+    fn preprocessed_next_row_columns(&self) -> Vec<usize> {
+        Vec::new()
     }
 }
 
 impl<AB, P> Air<AB> for GeneratedAir<P>
 where
-    AB: AirBuilderWithPublicValues,
+    AB: AirBuilder + InteractionBuilder,
     AB::F: WitnessField,
     P: GeneratedAirSpec,
 {
     fn eval(&self, builder: &mut AB) {
-        let fixed_columns = P::FIXED_COLUMNS[self.component];
-        let mut fixed: Vec<AB::Expr> = Vec::new();
-        if !fixed_columns.is_empty() {
-            let preprocessed = builder
-                .preprocessed()
-                .expect("fixed component has no preprocessed trace");
-            let fixed_local = preprocessed
-                .row_slice(0)
-                .expect("validated fixed trace height is nonzero");
-            fixed.extend(fixed_local.iter().map(|value| value.clone().into()));
+        // Clean's channel balance is over field multiplicities: every interaction is provided,
+        // with the signed multiplicity of its push or pull, and the interaction-count bound of
+        // `GeneratedEnsemble::new` replaces LogUp's height check.
+        let interactions = match self.kind {
+            AirKind::Component(component) => {
+                let preprocessed = builder.preprocessed().current_slice().to_vec();
+                let fixed = preprocessed.into_iter().map(Into::into);
+                let main = builder.main();
+                let committed = main.current_slice().iter().map(|&value| value.into());
+                let row = semantic_row(P::FIXED_COLUMNS[component], fixed, committed);
+                for constraint in P::constraints(component, &row) {
+                    builder.assert_zero(constraint);
+                }
+                P::interactions(component, &row)
+            }
+            AirKind::Verifier { .. } => {
+                let first_row: AB::Expr = builder.preprocessed().current_slice()[0].into();
+                let public_values = builder
+                    .public_values()
+                    .iter()
+                    .map(|&value| value.into())
+                    .collect::<Vec<AB::Expr>>();
+                P::verifier_interactions(&public_values)
+                    .into_iter()
+                    .map(|interaction| Interaction {
+                        multiplicity: first_row.clone() * interaction.multiplicity,
+                        ..interaction
+                    })
+                    .collect()
+            }
+        };
+        for interaction in interactions {
+            builder.push_interaction(
+                interaction.channel,
+                interaction.message,
+                Count::provided(interaction.multiplicity),
+            );
         }
-        let main = builder.main();
-        let local = main
-            .row_slice(0)
-            .expect("validated trace height is nonzero");
-        let committed = local.iter().map(|value| value.clone().into());
-        let row = semantic_row(fixed_columns, fixed, committed);
-        for constraint in P::constraints(self.component, &row) {
-            builder.assert_zero(constraint);
-        }
-    }
-
-    fn get_lookups(&mut self) -> Vec<Lookup<AB::F>>
-    where
-        AB: PermutationAirBuilder + AirBuilderWithPublicValues,
-    {
-        self.num_lookups = 0;
-        let fixed_columns = P::FIXED_COLUMNS[self.component];
-        let symbolic = SymbolicAirBuilder::<AB::F>::new(
-            fixed_columns.len(),
-            BaseAir::<AB::F>::width(self),
-            P::PUBLIC_VALUES,
-            0,
-            0,
-        );
-        let mut fixed: Vec<SymbolicExpression<AB::F>> = Vec::new();
-        if !fixed_columns.is_empty() {
-            let preprocessed = AirBuilder::preprocessed(&symbolic)
-                .expect("fixed component has no symbolic preprocessed trace");
-            let fixed_local = preprocessed
-                .row_slice(0)
-                .expect("validated fixed trace height is nonzero");
-            fixed.extend(fixed_local.iter().map(|&value| value.into()));
-        }
-        let main = AirBuilder::main(&symbolic);
-        let local = main
-            .row_slice(0)
-            .expect("validated trace height is nonzero");
-        let committed = local.iter().map(|&value| value.into());
-        let row = semantic_row(fixed_columns, fixed, committed);
-        // an interaction that assumes guarantees pulls from the channel: it is received with the
-        // negated multiplicity
-        P::interactions(self.component, &row)
-            .into_iter()
-            .map(|interaction| {
-                let (multiplicity, direction) = if interaction.assume_guarantees {
-                    (-interaction.multiplicity, LookupDirection::Receive)
-                } else {
-                    (interaction.multiplicity, LookupDirection::Send)
-                };
-                Air::<AB>::register_lookup(
-                    self,
-                    Kind::Global(interaction.channel.into()),
-                    &[(interaction.message, multiplicity, direction)],
-                )
-            })
-            .collect()
-    }
-
-    fn add_lookup_columns(&mut self) -> Vec<usize> {
-        let index = self.num_lookups;
-        self.num_lookups += 1;
-        vec![index]
     }
 }
 

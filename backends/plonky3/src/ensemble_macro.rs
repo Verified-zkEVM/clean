@@ -146,9 +146,9 @@ macro_rules! ensemble {
                     .map_or_else($crate::__private::Vec::new, |interactions| interactions(row))
             }
 
-            fn verifier_interactions<F: $crate::witness_generation::WitnessField>(
-                public_values: &[F],
-            ) -> $crate::__private::Vec<$crate::witness_generation::Interaction<F>> {
+            fn verifier_interactions<E: $crate::__private::PrimeCharacteristicRing + Clone>(
+                public_values: &[E],
+            ) -> $crate::__private::Vec<$crate::witness_generation::Interaction<E>> {
                 verifier::interactions(public_values)
             }
         }

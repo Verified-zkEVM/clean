@@ -64,7 +64,7 @@ fn extracted_femtocairo_accepts_runtime_private_memories() {
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
     let statement =
         generated::Statement::<BabyBear>::new(&trace_heights).expect("invalid generated AIR shape");
-    let (proof, _) = prove_ensemble(&config, &statement, traces, &public_values)
+    let proof = prove_ensemble(&config, &statement, traces, &public_values)
         .expect("second runtime memory produced an invalid proving shape");
     verify_ensemble(&config, &statement, &proof, &public_values)
         .expect("proof with the second runtime memory failed verification");
@@ -91,7 +91,7 @@ fn extracted_femtocairo_air_proves_and_verifies() {
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
     let statement =
         generated::Statement::<BabyBear>::new(&trace_heights).expect("invalid generated AIR shape");
-    let (proof, _) =
+    let proof =
         prove_ensemble(&config, &statement, traces, &public_values).expect("invalid proving shape");
     verify_ensemble(&config, &statement, &proof, &public_values)
         .expect("extracted FemtoCairo AIR proof failed verification");
@@ -134,7 +134,9 @@ impl GeneratedAirSpec for PermutedMemoryAddresses {
         Spec::interactions(component, row)
     }
 
-    fn verifier_interactions<F: WitnessField>(public_values: &[F]) -> Vec<Interaction<F>> {
+    fn verifier_interactions<E: PrimeCharacteristicRing + Clone>(
+        public_values: &[E],
+    ) -> Vec<Interaction<E>> {
         Spec::verifier_interactions(public_values)
     }
 }
@@ -161,7 +163,7 @@ fn verifier_rejects_permuted_memory() {
 
     let permuted = GeneratedEnsemble::<BabyBear, PermutedMemoryAddresses>::new(&trace_heights)
         .expect("invalid permuted AIR shape");
-    let (proof, _) =
+    let proof =
         prove_ensemble(&config, &permuted, traces, &public_values).expect("invalid proving shape");
     verify_ensemble(&config, &permuted, &proof, &public_values)
         .expect("the permuted-memory proof must be valid for the permuted address table");

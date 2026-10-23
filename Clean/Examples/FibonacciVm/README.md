@@ -31,4 +31,4 @@ cargo test --locked --release --manifest-path backends/plonky3/Cargo.toml \
   --test fibonacci_ensemble_tests -- --nocapture
 ```
 
-The proof test takes public values `(steps, x, y)`, generates power-of-two component traces without invoking Lean, proves the resulting Plonky3 batch, and verifies it. The verifier's initial and final Fibonacci interactions are public contributions to the channel argument.
+The proof test takes public values `(steps, x, y)`, generates power-of-two component traces without invoking Lean, proves the resulting Plonky3 batch, and verifies it. The verifier's initial and final Fibonacci interactions are made by the verifier AIR from the public values.

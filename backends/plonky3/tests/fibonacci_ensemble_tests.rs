@@ -8,7 +8,8 @@ mod generated {
 
 use clean_backend::witness_generation::WitnessGenerationError;
 use clean_backend::{
-    prove_ensemble, verify_ensemble, EnsembleShapeError, EnsembleVerificationError,
+    prove_ensemble, verify_ensemble, EnsembleProvingError, EnsembleShapeError,
+    EnsembleVerificationError,
 };
 use common::setup;
 use p3_baby_bear::BabyBear;
@@ -91,7 +92,7 @@ fn extracted_fibonacci_air_proves_and_verifies() {
         generated::Statement::<BabyBear>::new(&trace_heights).expect("invalid generated AIR shape");
     let witness_elapsed = witness_started.elapsed();
     let proving_started = Instant::now();
-    let (proof, _) =
+    let proof =
         prove_ensemble(&config, &statement, traces, &public_values).expect("invalid proving shape");
     let proving_elapsed = proving_started.elapsed();
     let proof_json_bytes = serde_json::to_vec(&proof)
@@ -129,21 +130,25 @@ fn ensemble_api_reports_shape_errors() {
             traces.clone(),
             &public_values,
         ),
-        Err(EnsembleShapeError::StatementTraceHeight {
-            component: 0,
-            expected: 64,
-            actual: 32,
-        })
+        Err(EnsembleProvingError::Shape(
+            EnsembleShapeError::StatementTraceHeight {
+                component: 0,
+                expected: 64,
+                actual: 32,
+            }
+        ))
     ));
     let mut traces = traces;
     traces.pop();
 
     assert!(matches!(
         prove_ensemble(&config, &statement, traces, &public_values),
-        Err(EnsembleShapeError::TraceCount {
-            expected: 3,
-            actual: 2,
-        })
+        Err(EnsembleProvingError::Shape(
+            EnsembleShapeError::TraceCount {
+                expected: 3,
+                actual: 2,
+            }
+        ))
     ));
     assert!(matches!(
         generated::Statement::<BabyBear>::new(&trace_heights[..2]),
@@ -206,7 +211,7 @@ fn short_runs_are_padded_to_the_minimum_trace_height() {
     );
     let statement =
         generated::Statement::<BabyBear>::new(&trace_heights).expect("invalid generated AIR shape");
-    let (proof, _) =
+    let proof =
         prove_ensemble(&config, &statement, traces, &public_values).expect("invalid proving shape");
     verify_ensemble(&config, &statement, &proof, &public_values)
         .expect("extracted Fibonacci AIR proof failed verification");
@@ -237,7 +242,7 @@ fn verifier_rejects_a_valid_proof_at_the_wrong_height() {
     let wrong_heights = wrong_traces.iter().map(Matrix::height).collect::<Vec<_>>();
     let wrong_statement = generated::Statement::<BabyBear>::new(&wrong_heights)
         .expect("invalid wrong-height AIR shape");
-    let (wrong_proof, _) = prove_ensemble(&config, &wrong_statement, wrong_traces, &public_values)
+    let wrong_proof = prove_ensemble(&config, &wrong_statement, wrong_traces, &public_values)
         .expect("invalid wrong-height proving shape");
     verify_ensemble(&config, &wrong_statement, &wrong_proof, &public_values)
         .expect("the wrong-height proof must be otherwise valid");
@@ -283,7 +288,7 @@ fn assert_tampered_trace_rejected(
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
     let statement =
         generated::Statement::<BabyBear>::new(&trace_heights).expect("invalid generated AIR shape");
-    let (proof, _) =
+    let proof =
         prove_ensemble(&config, &statement, traces, &public_values).expect("invalid proving shape");
     assert!(matches!(
         verify_ensemble(&config, &statement, &proof, &public_values),
