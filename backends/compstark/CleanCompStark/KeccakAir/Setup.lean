@@ -2,16 +2,17 @@ module
 
 public import CleanCompStark.KeccakAir.Lowered
 public import CleanCompStark.KeccakAir
-public import CompStark.SecurityCalculator
+public import CompStark.Complete.Quotient
+public import CompStark.Sound.Calculator
 
 /-!
 # The Keccak-f STARK
 
 The CompStark AIR of the Keccak-f component on `2 ^ logN` rows has 2633 columns, 3182 constraints
-of Plonky3's degree at most 3 that read the current and the next row (`colsInWidth`), a quotient of
-two chunks (`logQuotientChunks_eq`) and CompStark's degree bound below `3 n` (`degreeFits`). With
-FRI's parameters, it is a STARK (`setup`) whose numbers the security calculator reads:
-`numConstraints_setup`, `identityDegree_setup`, `numOpened_setup`.
+of Plonky3's degree at most 3 that read the current and the next row (`colsInWidth_toAir`), a
+quotient of two chunks (`logQuotientChunks_toAir`) and degree profiles that fit them at every trace
+length (`profileFits_toAir`). With FRI's parameters, it is a STARK (`setup`) whose shape the
+security calculator reads (`shape_setup`).
 -/
 
 @[expose] public section
@@ -24,12 +25,6 @@ open Air.Flat Air.Flat.WitnessGeneration Backends CompStark CompStark.Stark Comp
 
 section Fold
 variable {α : Type} (f : α → ℕ)
-
-lemma foldl_max_le (k : ℕ) : ∀ (l : List α) (start : ℕ), start ≤ k → (∀ y ∈ l, f y ≤ k) →
-    l.foldl (fun m c => max m (f c)) start ≤ k
-  | [], _, hm, _ => hm
-  | y :: l, _, hm, h => foldl_max_le k l _ (max_le hm (h y (List.mem_cons_self ..)))
-      fun z hz => h z (List.mem_cons_of_mem _ hz)
 
 lemma le_foldl_max : ∀ (l : List α) (m : ℕ), m ≤ l.foldl (fun m c => max m (f c)) m ∧
     ∀ y ∈ l, f y ≤ l.foldl (fun m c => max m (f c)) m
@@ -45,7 +40,7 @@ lemma le_foldl_max : ∀ (l : List α) (m : ℕ), m ≤ l.foldl (fun m c => max 
 lemma foldl_max_eq (l : List α) (k : ℕ) (hle : ∀ y ∈ l, f y ≤ k) (hex : ∃ y ∈ l, f y = k) :
     l.foldl (fun m c => max m (f c)) 0 = k := by
   obtain ⟨y, hy, rfl⟩ := hex
-  exact le_antisymm (foldl_max_le f _ l 0 (Nat.zero_le _) hle) ((le_foldl_max f l 0).2 y hy)
+  exact le_antisymm (Sound.foldl_max_le f _ l 0 (Nat.zero_le _) hle) ((le_foldl_max f l 0).2 y hy)
 
 lemma length_filterMap_of_isSome {β : Type} (g : α → Option β) :
     ∀ l : List α, (∀ x ∈ l, (g x).isSome) → (l.filterMap g).length = l.length
@@ -135,19 +130,20 @@ theorem exists_degree_eq :
   · rw [degree_lower e (window_component height) hgate.2 hg]
     exact hval
 
-theorem degBound_le (n : ℕ) (hn : 2 ≤ n) (pd : ℕ → ℕ) {y : Expr K}
-    (hy : y ∈ (toAir e (_root_.KeccakAir.component (p := p) height) logN).constraints) :
-    y.degBound n pd ≤ 3 * (n - 1) := by
+/-- Every constraint's degree profile `(a, b)` has `a + b ≤ 3` and `b ≤ 1`: it fits two quotient
+chunks. -/
+theorem profileFits_toAir :
+    (toAir e (_root_.KeccakAir.component (p := p) height) logN).ProfileFits 1 := fun y hy => by
   obtain ⟨x, hx, g, hg, hcells, rfl⟩ := lower_of_mem e height logN hy
-  rw [degBound_lower e (window_component height) n pd hcells hg]
+  obtain ⟨hsum, htransition⟩ := degProfile_lower e (window_component height) hcells hg
   have hmem := List.mem_map_of_mem
-    (f := fun x => (⟨weight (fun j => if j = 2 * size Row + 2 then 1 else n - 1) x⟩ : Deg)) hx
+    (f := fun x => (⟨weight (fun j => if j = 2 * size Row + 2 then 1 else 1) x⟩ : Deg)) hx
   rw [weights_vars] at hmem
-  have := weights_le _ _ (n - 1) 1 _ hmem
-  simp only at this
-  have hw : boundWeight (Window.layout Row).rowWidth n =
-      fun j => if j = 2 * size Row + 2 then 1 else n - 1 := rfl
-  rw [hw]
+  have := weights_le _ _ 1 1 _ hmem
+  have hw : (fun j : ℕ => if j = 2 * size Row + 2 then 1 else 1) = fun _ => 1 :=
+    funext fun _ => ite_self 1
+  simp only [hw] at this
+  simp only [pow_one]
   omega
 
 local notation "A" => toAir e (_root_.KeccakAir.component (p := p) height) logN
@@ -188,14 +184,10 @@ theorem colsInWidth_toAir : (A).ColsInWidth := fun _ hy => by
   obtain ⟨x, -, g, hg, hcells, rfl⟩ := lower_of_mem e height logN hy
   exact colsBelow_lower e (window_component height) logN hcells hg
 
-theorem degreeFits_toAir (hlogN : 1 ≤ logN) : (A).DegreeFits logN := by
-  unfold Air.DegreeFits Air.DegreeFitsAt
+theorem degreeFits_toAir : (A).DegreeFits logN := by
+  unfold Air.DegreeFits
   rw [logQuotientChunks_toAir]
-  intro c hc
-  have h2 : 2 ≤ 2 ^ logN := (Nat.pow_le_pow_right (by norm_num) hlogN : 2 ^ 1 ≤ 2 ^ logN)
-  have := degBound_le e height logN (2 ^ logN) h2 ((A).periodicDegree (2 ^ logN)) hc
-  rw [Nat.pow_succ]
-  omega
+  exact Air.degreeFitsAt_of_profileFits _ _ _ (profileFits_toAir e height logN)
 
 theorem preprocessedSize_toAir : (A).preprocessed.size = 2 ^ logN * (A).preprocessedWidth := by
   simp only [toAir, fixedTrace, _root_.KeccakAir.component, Array.size_ofFn]
@@ -230,7 +222,7 @@ def setup (params : Fri.Params) (logN : ℕ) (h : ParamsFit params logN) :
     { colsInWidth := colsInWidth_toAir koalaBear _ logN
       preprocessedSize := preprocessedSize_toAir koalaBear _ logN
       periodicFits := rfl
-      degreeFits := degreeFits_toAir koalaBear _ logN (Nat.lt_of_le_of_lt (Nat.zero_le _) h.2.2.2.1)
+      degreeFits := degreeFits_toAir koalaBear _ logN
       twoAdic := by rw [KoalaBear.twoAdicity_eq]; exact h.2.1
       chunksFit := by rw [logQuotientChunks_toAir]; exact h.1
       folds := h.2.2.1
@@ -241,10 +233,6 @@ def setup (params : Fri.Params) (logN : ℕ) (h : ParamsFit params logN) :
   capFits := h.2.2.2.2.2
 
 variable (params : Fri.Params) (logN : ℕ) (h : ParamsFit params logN)
-
-theorem numConstraints_setup : (setup params logN h).numConstraints = 3182 := by
-  rw [Setup.numConstraints_nil]
-  exact length_toAir koalaBear _ logN
 
 theorem chunks_setup : (setup params logN h).chunks = 2 := by
   rw [Setup.chunks_nil]
@@ -261,18 +249,17 @@ theorem numOpened_setup : (setup params logN h).numOpened = 5274 := by
   have hd : Challenge.d KoalaBear.Fast.Ext4 = 4 := rfl
   rw [Setup.numOpened_nil, chunks_setup, hnext, hprep, hprepNext, hd, width_setup]
 
-theorem identityDegree_setup : (setup params logN h).identityDegree = 3 * 2 ^ logN := by
-  rw [Setup.identityDegree_nil, chunks_setup]
-  have hle := foldl_max_le (fun c : Expr KoalaBear.Fast.Field => c.degBound (2 ^ logN + 1)
-    ((setup params logN h).air.periodicDegree (2 ^ logN))) (3 * 2 ^ logN)
-    (setup params logN h).air.constraints 0 (Nat.zero_le _) fun c hc => by
-      have := degBound_le koalaBear _ logN (2 ^ logN + 1)
-        (by have := Nat.one_le_two_pow (n := logN); omega)
-        ((setup params logN h).air.periodicDegree (2 ^ logN)) hc
-      omega
-  simp only [Setup.n] at hle ⊢
-  rw [Nat.mul_comm]
-  exact max_eq_right hle
+/-- The calculator's shape of the STARK: `3182` constraints, the identity degree `3 n`, `5274`
+opened words, no lookups. -/
+theorem shape_setup : (setup params logN h).shape = ⟨3182, 2 ^ logN * 3, 5274, false, logN⟩ := by
+  rw [Sound.shape_eq_of_profileFits _ (by
+      change (toAir koalaBear (component logN) logN).ProfileFits
+        ((toAir koalaBear (component logN) logN).logQuotientChunks logN)
+      rw [logQuotientChunks_toAir]
+      exact profileFits_toAir koalaBear _ logN), chunks_setup, numOpened_setup]
+  change Iop.Shape.mk (toAir koalaBear (component logN) logN).constraints.length _ _ _ _ = _
+  rw [length_toAir]
+  rfl
 
 end Stark
 

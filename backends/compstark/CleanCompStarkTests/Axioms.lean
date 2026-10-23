@@ -73,3 +73,10 @@ info: 'CleanCompStark.KeccakShowcase.keccak_soundness' depends on axioms:
 -/
 #guard_msgs (whitespace := lax) in
 #print axioms CleanCompStark.KeccakShowcase.keccak_soundness
+
+/--
+info: 'CleanCompStark.KeccakShowcase.keccak_soundness_ro_example' depends on axioms:
+[propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs (whitespace := lax) in
+#print axioms CleanCompStark.KeccakShowcase.keccak_soundness_ro_example

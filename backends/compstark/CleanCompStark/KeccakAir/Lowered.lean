@@ -8,13 +8,13 @@ public import CompStark.SoundnessError
 
 The shape of the CompStark AIR of the Keccak-f component (`toAir`), which the STARK's validity
 and the security calculator read: 2633 columns, 3182 constraints that read the current and the
-next row, Plonky3's constraint degree 3 and so a quotient of two chunks, and CompStark's degree
-bound `3 (n - 1)` on `n` rows.
+next row, Plonky3's constraint degree 3 and so a quotient of two chunks, and degree profiles that
+fit two chunks at every trace length.
 
 A lowered constraint is a Clean constraint's body under CompStark's selector
-(`mem_toAir_constraints`); its degree and degree bound are weights of the Clean constraint
-(`degree_lower`, `degBound_lower`), and the weights of the component's constraints are bounded by
-`weights_le`.
+(`mem_toAir_constraints`); its degree is a weight of the Clean constraint (`degree_lower`), and so
+is the sum of its degree profile's entries (`degProfile_lower`); the weights of the component's
+constraints are bounded by `weights_le`.
 -/
 
 @[expose] public section
@@ -71,25 +71,24 @@ theorem degree_toExpr (hw : component.window = some layout) :
       degree_toExpr hw a fun j hj => h j (Or.inl hj),
       degree_toExpr hw b fun j hj => h j (Or.inr hj)]
 
-theorem degBound_toExpr (hw : component.window = some layout) (n : ℕ) (pd : ℕ → ℕ) :
+/-- A body reading the window's rows has the degree profile `(w, 0)`, `w` its weight with every
+cell weighing `1`. -/
+theorem degProfile_toExpr (hw : component.window = some layout) :
     ∀ x : Expression F, (∀ j ∈ expressionCells x, j < 2 * layout.rowWidth) →
-      (toExpr e component x).degBound n pd = weight (fun _ => n - 1) x
+      (toExpr e component x).degProfile = (weight (fun _ => 1) x, 0)
   | .var v, h => by
     obtain ⟨c, hc | hc | hc | hc⟩ :=
       cellExpr_of_lt (K := K) hw (h v.index (by simp [expressionCells]))
-    all_goals simp only [toExpr, hc, Expr.degBound, weight]
+    all_goals simp only [toExpr, hc, Expr.degProfile, weight]
   | .const _, _ => rfl
   | .add a b, h | .mul a b, h => by
     simp only [expressionCells, List.mem_append] at h
-    simp only [toExpr, Expr.degBound, weight, degBound_toExpr hw n pd a fun j hj => h j (Or.inl hj),
-      degBound_toExpr hw n pd b fun j hj => h j (Or.inr hj)]
+    simp only [toExpr, Expr.degProfile, weight,
+      degProfile_toExpr hw a fun j hj => h j (Or.inl hj),
+      degProfile_toExpr hw b fun j hj => h j (Or.inr hj), Nat.max_self, Nat.add_zero]
 
 /-- The weights of Plonky3's degree: `1` per cell, but `0` for the transition selector. -/
 def degreeWeight (w : ℕ) (j : ℕ) : ℕ := if j = 2 * w + 2 then 0 else 1
-
-/-- The weights of CompStark's degree bound on `n` rows: `n - 1` per cell, but `1` for the
-transition selector. -/
-def boundWeight (w n : ℕ) (j : ℕ) : ℕ := if j = 2 * w + 2 then 1 else n - 1
 
 theorem degree_lower (hw : component.window = some layout) {x : Expression F}
     {g : GatedConstraint F} (hcells : ∀ j ∈ expressionCells x, j < 2 * layout.rowWidth + 3)
@@ -103,18 +102,19 @@ theorem degree_lower (hw : component.window = some layout) {x : Expression F}
     split_ifs <;> omega, ← degree_toExpr e hw g.body hbody]
   cases hgate : g.gate <;> simp [gateExpr, gateWeight, degreeWeight, Expr.degree]
 
-theorem degBound_lower (hw : component.window = some layout) (n : ℕ) (pd : ℕ → ℕ)
-    {x : Expression F} {g : GatedConstraint F}
-    (hcells : ∀ j ∈ expressionCells x, j < 2 * layout.rowWidth + 3)
+/-- A lowered constraint's degree profile `(a, b)`: `a + b` is the Clean constraint's weight with
+every cell weighing `1`, and `b ≤ 1`, the transition selector's share. -/
+theorem degProfile_lower (hw : component.window = some layout) {x : Expression F}
+    {g : GatedConstraint F} (hcells : ∀ j ∈ expressionCells x, j < 2 * layout.rowWidth + 3)
     (hg : gateConstraint (some layout.rowWidth) x = some g) :
-    (gateExpr g.gate (toExpr e component g.body)).degBound n pd =
-      weight (boundWeight layout.rowWidth n) x := by
+    (gateExpr g.gate (toExpr e component g.body)).degProfile.1 +
+        (gateExpr g.gate (toExpr e component g.body)).degProfile.2 = weight (fun _ => 1) x ∧
+      (gateExpr g.gate (toExpr e component g.body)).degProfile.2 ≤ 1 := by
   obtain ⟨hbody, hweight⟩ := gateConstraint_weight hcells hg
-  rw [hweight, weight_congr (boundWeight layout.rowWidth n) (fun _ => n - 1) g.body fun j hj => by
-    have := hbody j hj
-    simp only [boundWeight]
-    split_ifs <;> omega, ← degBound_toExpr e hw n pd g.body hbody]
-  cases hgate : g.gate <;> simp [gateExpr, gateWeight, boundWeight, Expr.degBound]
+  rw [hweight]
+  have hprofile := degProfile_toExpr e hw g.body hbody
+  cases g.gate <;>
+    simp only [gateExpr, gateWeight, HMul.hMul, Mul.mul, Expr.degProfile, hprofile] <;> omega
 
 theorem colsBelow_toExpr (hw : component.window = some layout) (logN : ℕ) :
     ∀ y : Expression F, (∀ j ∈ expressionCells y, j < 2 * layout.rowWidth) →

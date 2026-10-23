@@ -30,9 +30,9 @@ of `rust/`, Plonky3 `a4982ec`):
 * the example's configuration (caps of height 3, the example's Poseidon2 constants, FRI with
   arity up to 8 and 87 queries): CompStark's fast prover, from the Clean AIR and the Clean trace,
   produces Plonky3's proof byte for byte, and CompStark's verifier accepts Plonky3's proof;
-* the proven configuration of the end-to-end theorem (`CleanCompStark.KeccakShowcase.params`):
-  Plonky3's verifier accepts CompStark's proof and rejects it with an opened value changed,
-  CompStark's verifier accepts Plonky3's proof, and the two are byte for byte the same.
+* the proven configuration of the end-to-end theorem (`keccak_soundness_ro`, the example's with
+  `203` queries): Plonky3's verifier accepts CompStark's proof and rejects it with an opened value
+  changed, CompStark's verifier accepts Plonky3's proof, and the two are byte for byte the same.
 
 `lake exe keccak_showcase bench CONFIG L REPS` times trace generation, the proof and its
 verification in Lean on `2 ^ L` rows, `CONFIG` `example` or `proven`; `rust/`'s `bench` times
@@ -47,23 +47,17 @@ open CompStark CompStark.Stark CleanCompStark
 abbrev F := KoalaBear.Fast.Field
 abbrev EF := KoalaBear.Fast.Ext4
 
-/-- The configuration of Plonky3's example `prove_prime_field_31`: blowup `2`, a constant final
-polynomial, arity up to `8`, `87` queries with `16` bits of query and `10` of batching grinding,
-caps of height `3`. -/
-def exampleParams : Fri.Params where
-  logBlowup := 1
-  logFinalPolyLen := 0
-  maxLogArity := 3
-  numQueries := 87
-  commitPowBits := 0
-  queryPowBits := 16
-  batchPowBits := 10
-  capHeight := 3
+/-- The configuration of Plonky3's example `prove_prime_field_31`, `87` queries
+(`CleanCompStark.KeccakShowcase.params`). -/
+def exampleParams : Fri.Params := CleanCompStark.KeccakShowcase.params 87
+
+/-- The configuration of `keccak_soundness_ro`, `203` queries. -/
+def provenParams : Fri.Params := CleanCompStark.KeccakShowcase.params 203
 
 /-- The configurations by name. -/
 def params : String → IO Fri.Params
   | "example" => pure exampleParams
-  | "proven" => pure CleanCompStark.KeccakShowcase.params
+  | "proven" => pure provenParams
   | name => throw (IO.userError s!"unknown configuration {name}: example or proven")
 
 /-- The CompStark AIR of Clean's keccak-air component on `2 ^ logN` rows. -/
@@ -205,7 +199,7 @@ def check (logN : ℕ) (bin : String) : IO Unit := do
   IO.println s!"example: CompStark's proof from the Clean AIR and trace is Plonky3's byte for \
     byte ({theirsText.length} bytes of JSON), and CompStark's verifier accepts Plonky3's proof"
   -- The proven configuration: each side accepts the other's proof.
-  let P := CleanCompStark.KeccakShowcase.params
+  let P := provenParams
   let oursProof := prove I P logN chunks
   let oursFile := s!"{dir}/proven_{logN}_lean.json"
   IO.FS.writeFile oursFile (Json.proof oursProof)

@@ -9,8 +9,8 @@
 //!
 //! * `example`: the example's `new_benchmark_high_arity` (blowup 2, arity up to 8, 16 bits of
 //!   query and 10 of batching grinding) with its query count for 100 conjectured bits;
-//! * `proven`: the parameters for which CompStark's security calculator proves 100 bits per
-//!   oracle answer (`CleanCompStark.KeccakShowcase.params`): blowup 2, arity 2, 204 queries.
+//! * `proven`: the example's with 203 queries, for which CompStark's security calculator proves 100
+//!   bits per oracle answer (`CleanCompStark.KeccakShowcase.keccak_soundness_ro`).
 //!
 //! The permutations' inputs are the example's: `2^L / 24` draws of `SmallRng` seeded with `1`.
 //!
@@ -67,16 +67,9 @@ fn config(name: &str) -> Config {
             }
             fri
         }
-        "proven" => FriParameters {
-            log_blowup: 1,
-            log_final_poly_len: 0,
-            max_log_arity: 1,
-            num_queries: 204,
-            batch_proof_of_work_bits: 10,
-            commit_proof_of_work_bits: 0,
-            query_proof_of_work_bits: 16,
-            mmcs,
-        },
+        "proven" => {
+            FriParameters { num_queries: 203, ..FriParameters::new_benchmark_high_arity(mmcs) }
+        }
         _ => panic!("unknown configuration {name}: example or proven"),
     };
     let pcs = TwoAdicFriPcs::new(Radix2DitParallel::default(), val_mmcs, fri);

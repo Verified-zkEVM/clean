@@ -30,24 +30,32 @@ Plonky3's Keccak-f AIR, `p3-keccak-air` at `a4982ec` (2633 columns, 3182 constra
 
 ```lean
 theorem keccak_soundness_ro (logN : ℕ) (h : Sized logN) (Q : ℕ)
-    (prover : NIProver (stark logN h)) (hQ : prover.IsTotalQueryBound Q) :
-    Pr{let (proof, log, verdict) ← run (stark logN h) [] prover}[
+    (prover : NIProver (stark 203 logN h)) (hQ : prover.IsTotalQueryBound Q) :
+    Pr{let (proof, log, verdict) ← run (stark 203 logN h) [] prover}[
       verdict = .ok () ∧ proof.degreeBits = logN ∧
-        ∀ trace ∈ closeTraces (stark logN h) extractorRadius
-            (committedTrace (stark logN h) log proof),
+        ∀ trace ∈ closeTraces (stark 203 logN h) (radius 13)
+            (committedTrace (stark 203 logN h) log proof),
           ¬ BlocksCorrect (toRows koalaBear (component logN) logN trace)] ≤
-      (Q + (stark logN h).verifierQueries) * (2 ^ 100)⁻¹ +
-        hashError KoalaBear.Fast.Field 3 (Q + (stark logN h).verifierQueries)
+      (Q + (stark 203 logN h).verifierQueries) * (2 ^ 100)⁻¹ +
+        hashError KoalaBear.Fast.Field 3 (Q + (stark 203 logN h).verifierQueries)
 ```
 
-On `2 ^ logN` rows, `2 ^ 11` to `2 ^ 21` (`Sized`), a prover making at most `Q` oracle calls gets a proof accepted while the rows read off every trace within `δ' = 1/4 - 2 ^ (-11)` of the one it committed to fail to compute Keccak-f on some 24-row block starting at round 0 with probability at most `q · 2 ^ (-100) + hashError q`, `q = Q + verifierQueries`: 100 bits per oracle call. `BlocksCorrect rows` says that every 24-row block starting at round 0 has its preimage in 16-bit limbs and its last row's output is `keccakPermutation` of its first row's preimage (`KeccakAir.table_block_soundness`). The interactive version, `keccak_soundness`, bounds the acceptance probability of a prover none of whose close traces has correct blocks by `2 ^ (-84)`: without grinding to credit, the same configuration has 84 bits.
+On `2 ^ logN` rows, `2 ^ 12` to `2 ^ 21` (`Sized`), a prover making at most `Q` oracle calls gets a proof accepted while the rows read off every trace within `δ' = 1/4 - 2 ^ (-13)` (`radius 13`) of the one it committed to fail to compute Keccak-f on some 24-row block starting at round 0 with probability at most `q · 2 ^ (-100) + hashError q`, `q = Q + verifierQueries`: 100 bits per oracle call. `BlocksCorrect rows` says that every 24-row block starting at round 0 has its preimage in 16-bit limbs and its last row's output is `keccakPermutation` of its first row's preimage (`KeccakAir.table_block_soundness`).
 
-`stark logN h` is the STARK over KoalaBear's quartic extension with FRI's parameters `params`: blowup `2`, folding by arity `2` down to a constant (the arity the security calculator analyses), `204` queries with `16` bits of query grinding and `10` bits of batching grinding, and Merkle caps of height `3`. The calculator (`CompStark/SecurityCalculator.lean`) certifies every round error to be at most `2 ^ (-100)` (`secureRo`) with FRI's proximity `δ = 1/4 - 2 ^ (-10)` and the extractor's radius `δ' = 1/4 - 2 ^ (-11)`, below the unique-decoding radius of rate `1/2`, from the AIR's numbers: 3182 constraints (`numConstraints_setup`), the constraint identity's degree `3 n` (`identityDegree_setup`) and 5274 opened words (`numOpened_setup`). The largest round error is FRI's queries', about `2 ^ (-100.3)`; constraint folding, which Plonky3 does not grind, is about `2 ^ (-112.3)`. Plonky3's example's configuration (arity up to 8, 87 queries) is only conjectured to reach 100 bits.
+`stark numQueries logN h` is the STARK over KoalaBear's quartic extension with FRI's parameters `params numQueries`: those of Plonky3's example `prove_prime_field_31` (blowup `2`, folding by arity up to `8` down to a constant, `16` bits of query grinding and `10` bits of batching grinding, Merkle caps of height `3`) with `numQueries` queries. The example's own configuration is `params 87`. The security calculator (CompStark's `CompStark/SecurityCalculator.lean`) reads the STARK's shape (`shape_setup`: 3182 constraints, the identity degree `3 n`, 5274 opened words, no lookups) and certifies each bound in the kernel, for every trace length of `Sized`, at an analysis its search finds. Each query count is the smallest the calculator certifies on all of `2 ^ 12` to `2 ^ 21` rows:
 
-The theorem composes CompStark's knowledge soundness in the random-oracle model, the transfer theorem `table_of_satisfied`, Clean's `KeccakAir.table_block_soundness` and the calculator. All of it uses only `propext`, `Classical.choice` and `Quot.sound` (`CleanCompStarkTests/Axioms.lean`) and is checked by the kernel in seconds: no proof evaluates the 3182 constraints.
+| theorem | queries | analysis | proven bits |
+| --- | --- | --- | --- |
+| `keccak_soundness_ro` | `203` | `δ = 1/4 - 2 ^ (-11)`, `δ' = 1/4 - 2 ^ (-13)` | `100` per oracle call |
+| `keccak_soundness` (interactive) | `247` | `δ = 1/4 - 2 ^ (-10)`, `δ' = 1/4 - 2 ^ (-12)`, loss `2 ^ (-16)` | `100` |
+| `keccak_soundness_ro_example` (Plonky3's example) | `87` | `δ = 1/4 - 2 ^ (-11)`, `δ' = 1/4 - 2 ^ (-13)` | `52` per oracle call |
+
+In the random-oracle model the largest round error is FRI's queries', `2 ^ (-100.06)` with `203` queries; constraint folding, which Plonky3 does not grind, is `2 ^ (-112.3)`, and the out-of-domain term `(3n + n) / |𝕂|` is `2 ^ (-100.95)` on `2 ^ 21` rows, which bounds the trace lengths from above. FRI's proximity `δ` stays below the unique-decoding radius `1/4` of rate `1/2`, where the proven correlated-agreement bounds hold, so each query is worth at most `log₂ (4/3) ≈ 0.415` bits: the `87` queries and `16` bits of grinding of Plonky3's example prove `52` bits per oracle call, where Plonky3 conjectures 100. Interactively, without grinding to credit, `247` queries reach 100 bits on `2 ^ 21` rows (`100.07`), limited by the sum of the out-of-domain, batching and query terms. At blowup `4` the calculator's search reaches 100 bits per oracle call with `124` queries; the showcase keeps the example's blowup.
+
+The theorems compose CompStark's knowledge soundness in the random-oracle model, the transfer theorem `table_of_satisfied`, Clean's `KeccakAir.table_block_soundness` and the calculator. All of it uses only `propext`, `Classical.choice` and `Quot.sound` (`CleanCompStarkTests/Axioms.lean`) and is checked by the kernel in seconds: no proof evaluates the 3182 constraints.
 
 - `bridgeable_component` (`CleanCompStark/KeccakAir/Bridgeable.lean`): the constraints are written once over any type with `+`, `-`, `*` and numerals, so their shapes (`plain`, a `selector`, `gated`) are the constraints of the cells' shapes, which `simp` reduces family by family.
-- The AIR's numbers (`CleanCompStark/KeccakAir/Degree.lean`, `Lowered.lean`, `Setup.lean`): a lowered constraint's degree and degree bound are weights of the Clean constraint, and the weights are the constraints of the cells' weights, at most `max (3 a) (b + 2 a)` for cells of weight `a` and the transition selector `b`, with the parity constraints at `3 a`.
+- The STARK's shape (`CleanCompStark/KeccakAir/Degree.lean`, `Lowered.lean`, `Setup.lean`): a lowered constraint's degree, and the sum of its degree profile's entries, are weights of the Clean constraint, and the weights are the constraints of the cells' weights, at most `max (3 a) (b + 2 a)` for cells of weight `a` and the transition selector `b`, with the parity constraints at `3 a`. So every constraint's degree profile fits two quotient chunks (`profileFits_toAir`), which fixes the calculator's shape (`shape_setup`).
 
 ### Evidence
 
@@ -56,7 +64,7 @@ The theorem composes CompStark's knowledge soundness in the random-oracle model,
 - fingerprint: the fingerprint report of the Clean AIR (`toAir`), the values of its 3182 constraints at pseudorandom points and their Poseidon2 digest, is that of Plonky3's `KeccakAir` from its symbolic constraints (CompStark's `tests/data/fingerprint/keccak_4.json`);
 - trace: Clean's fast trace (`KeccakAir.koalaBearTrace`) is Plonky3's `generate_trace_rows` on the example's inputs, row by row, padding included;
 - the example's configuration: CompStark's fast prover, from the Clean AIR and the Clean trace, produces Plonky3's proof byte for byte, and CompStark's verifier accepts Plonky3's proof;
-- the proven configuration of the theorem: Plonky3's `verify` accepts CompStark's proof and rejects it with an opened value changed, CompStark's verifier accepts Plonky3's proof, and the two proofs are byte for byte the same.
+- the proven configuration of `keccak_soundness_ro` (the example's with `203` queries): Plonky3's `verify` accepts CompStark's proof and rejects it with an opened value changed, CompStark's verifier accepts Plonky3's proof, and the two proofs are byte for byte the same.
 
 Run, in this directory:
 
@@ -74,14 +82,14 @@ scripts/showcase.sh bench 16 3
 
 times trace generation, the proof and its verification on `2 ^ 16` rows, `lake exe keccak_showcase bench CONFIG 16 3` (Lean: Clean's fast trace and CompStark's fast prover) interleaved with `rust/target/release/keccak-showcase bench CONFIG 16 3` (Plonky3), both configurations, medians of 3, two rounds each.
 
-At CompStark `50708f5` on a Ryzen 7 3700X (8 cores, 16 threads), shared and loaded (load 9 to 13), all threads, two rounds:
+At CompStark `eef5dce` on a Ryzen 7 3700X (8 cores, 16 threads), shared and loaded (load 15 to 21), all threads, two rounds:
 
 | rows | configuration | Lean tracegen | Lean prove | Lean verify | Plonky3 tracegen | Plonky3 prove | Plonky3 verify |
 |---|---|---|---|---|---|---|---|
-| $2^{15}$ | example | 45–110 ms | 6.7–7.7 s | 326–334 ms | 26–28 ms | 850–862 ms | 11 ms |
-| $2^{15}$ | proven | 36–55 ms | 7.1–7.6 s | 871–895 ms | 27–30 ms | 869–1008 ms | 18–19 ms |
-| $2^{16}$ | example | 57–58 ms | 12.6–13.1 s | 281 ms | 52–57 ms | 1.84–1.92 s | 11 ms |
-| $2^{16}$ | proven | 70 ms | 12.5–13.0 s | 873–917 ms | 56–60 ms | 1.91–2.04 s | 19 ms |
+| $2^{15}$ | example | 38–40 ms | 5.8 s | 335–360 ms | 31–40 ms | 1.04–1.06 s | 14–15 ms |
+| $2^{15}$ | proven | 44–87 ms | 9.4–9.6 s | 800–811 ms | 42–44 ms | 1.10–1.22 s | 21–22 ms |
+| $2^{16}$ | example | 67–81 ms | 9.8–11.3 s | 331–338 ms | 54–77 ms | 1.97–2.07 s | 13–14 ms |
+| $2^{16}$ | proven | 101–152 ms | 13.8–14.9 s | 806–881 ms | 58–66 ms | 2.08–2.16 s | 17–20 ms |
 
 ## Tests
 
