@@ -226,15 +226,20 @@ def timeNs {α : Type} (f : Unit → α) : IO (ℕ × α) := do
   let t1 ← IO.monoNanosNow
   return (t1 - t0, a)
 
+/-- The benchmark: the AIR, the prover's backend (its extension plans and quotient tables) and
+the verifying key are made once, as Plonky3's side makes its configuration once. -/
 def bench (name : String) (logN reps : ℕ) : IO Unit := do
   let P ← params name
   let inputs ← readInputs s!".lake/showcase/inputs_{logN}.txt"
+  let A := air logN
+  let B := I.backendFor P.logBlowup [(logN, A.logQuotientChunks logN)]
+  let vk := letI := I.field; setup P A logN
   let mut samples : Array (Array ℕ) := #[#[], #[], #[]]
   for _ in [0:reps] do
     let (t0, chunks) ← timeNs fun _ => trace logN inputs
     let chunks ← IO.ofExcept chunks
-    let (t1, proof) ← timeNs fun _ => prove I P logN chunks
-    let (t2, verdict) ← timeNs fun _ => verifyProof I P logN proof
+    let (t1, proof) ← timeNs fun _ => proveWith B P A logN chunks []
+    let (t2, verdict) ← timeNs fun _ => letI := I.field; verify P A vk proof []
     IO.ofExcept verdict
     samples := (samples.zip #[t0, t1, t2]).map fun (s, t) => s.push t
   let median (s : Array ℕ) : String :=
