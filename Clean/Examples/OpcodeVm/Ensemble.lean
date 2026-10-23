@@ -258,10 +258,8 @@ def Spec (program : Program) (initial final : F p) : Prop :=
 def formalEnsemble (program : Program) (h_program : program.length < p) (initial : F p) :=
   (soundEnsemble program h_program initial).toFormal (fun _ => True) (Spec program initial)
     (by simp [circuit_norm, soundEnsemble, vm])
-    (by
-      rintro witness - spec
-      simp_all [circuit_norm, soundEnsemble, vm, verifier, stateChannel, Spec,
-        ZMod.val_cast_of_lt h_program])
+    (by simp [circuit_norm, soundEnsemble, vm, verifier, stateChannel, Spec,
+      ZMod.val_cast_of_lt h_program])
 
 /-- End-to-end soundness: a valid proof for the public input `final` shows that running the program
 on the initial accumulator ends with `final`. -/
