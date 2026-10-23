@@ -83,35 +83,35 @@ scripts/showcase.sh bench 16 3
 
 times trace generation, the proof, both together and the proof's verification on `2 ^ 16` rows, `lake exe keccak_showcase bench CONFIG 16 3` (Lean: Clean's fast trace, CompStark's fast prover and its fast verifier `verifyFast`, Plonky3's verifier by `verifyFast_eq`, with the AIR, the prover's backend and the verifying key made once, as Plonky3's side makes its configuration once) interleaved with `rust/target/release/keccak-showcase bench CONFIG 16 3` (Plonky3, built for the native CPU), both configurations, medians of 3, two rounds each, with each process's peak memory. `LEAN_NUM_THREADS=1 RAYON_NUM_THREADS=1 scripts/showcase.sh bench 16 1` runs both sides on one thread.
 
-At CompStark `80eefbd` (CompPoly `b8e2f94`) on a Ryzen 7 3700X (8 cores, 16 threads), shared with other jobs (load 5.3 to 6.0), all threads, medians of 3 in each of two interleaved rounds, the median of the rounds. Total is trace generation and proof, end to end from the inputs; the example configuration has 87 queries, the proven one (`keccak_soundness_ro`) 203:
+At CompStark `29aaf95` (CompPoly `7596b8e`) on a Ryzen 7 3700X (8 cores, 16 threads), shared with other jobs (each run started when the other processes used under 2 cores), all threads, medians of 3 in each of three interleaved rounds, the median of the rounds. Total is trace generation and proof, end to end from the inputs; the example configuration has 87 queries, the proven one (`keccak_soundness_ro`) 203:
 
 | rows | config | Lean tracegen | Lean prove | Lean total | Plonky3 tracegen | Plonky3 prove | Plonky3 total | Lean / Plonky3 | Lean verify | Plonky3 verify | peak memory Lean / Plonky3 |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| $2^{15}$ | example | 25 ms | 1.09 s | 1.12 s | 27 ms | 861 ms | 887 ms | 1.26 | 49 ms | 13 ms | 1.5 GB / 0.7 GB |
-| $2^{15}$ | proven | 24 ms | 1.09 s | 1.11 s | 24 ms | 826 ms | 851 ms | 1.30 | 115 ms | 16 ms | 1.5 GB / 0.7 GB |
-| $2^{16}$ | example | 50 ms | 2.09 s | 2.14 s | 48 ms | 1.84 s | 1.89 s | 1.14 | 51 ms | 11 ms | 2.8 GB / 1.3 GB |
-| $2^{16}$ | proven | 47 ms | 2.12 s | 2.16 s | 48 ms | 1.83 s | 1.88 s | 1.15 | 125 ms | 16 ms | 2.8 GB / 1.3 GB |
-| $2^{17}$ | example | 89 ms | 3.84 s | 3.93 s | 90 ms | 4.53 s | 4.62 s | 0.85 | 51 ms | 11 ms | 4.8 GB / 2.7 GB |
-| $2^{17}$ | proven | 94 ms | 4.13 s | 4.22 s | 89 ms | 4.49 s | 4.58 s | 0.92 | 128 ms | 17 ms | 4.8 GB / 2.7 GB |
-| $2^{18}$ | example | 184 ms | 8.04 s | 8.24 s | 178 ms | 10.82 s | 11.01 s | 0.75 | 56 ms | 11 ms | 9.0 GB / 5.3 GB |
-| $2^{18}$ | proven | 175 ms | 7.97 s | 8.14 s | 180 ms | 10.79 s | 10.97 s | 0.74 | 133 ms | 17 ms | 9.0 GB / 5.3 GB |
+| $2^{15}$ | example | 22 ms | 912 ms | 934 ms | 24 ms | 956 ms | 979 ms | 0.95 | 44 ms | 10 ms | 1.3 GB / 0.7 GB |
+| $2^{15}$ | proven | 22 ms | 921 ms | 952 ms | 26 ms | 840 ms | 866 ms | 1.10 | 87 ms | 16 ms | 1.3 GB / 0.7 GB |
+| $2^{16}$ | example | 49 ms | 2.11 s | 2.16 s | 44 ms | 1.85 s | 1.89 s | 1.14 | 52 ms | 10 ms | 2.5 GB / 1.3 GB |
+| $2^{16}$ | proven | 49 ms | 1.79 s | 1.84 s | 44 ms | 1.86 s | 1.91 s | 0.96 | 96 ms | 16 ms | 2.4 GB / 1.3 GB |
+| $2^{17}$ | example | 86 ms | 3.56 s | 3.64 s | 89 ms | 4.57 s | 4.65 s | 0.78 | 47 ms | 11 ms | 4.4 GB / 2.7 GB |
+| $2^{17}$ | proven | 87 ms | 3.46 s | 3.56 s | 86 ms | 4.55 s | 4.64 s | 0.77 | 95 ms | 17 ms | 4.5 GB / 2.7 GB |
+| $2^{18}$ | example | 190 ms | 6.93 s | 7.16 s | 171 ms | 10.92 s | 11.10 s | 0.65 | 50 ms | 11 ms | 7.7 GB / 5.3 GB |
+| $2^{18}$ | proven | 183 ms | 6.90 s | 7.08 s | 172 ms | 10.88 s | 11.05 s | 0.64 | 106 ms | 17 ms | 7.8 GB / 5.3 GB |
 
-On one thread (load 3 to 13), medians of 3 interleaved rounds of one proof each:
+On one thread (the other processes using 1 to 2 cores, once 5), medians of 3 interleaved rounds of one proof each:
 
 | rows | config | Lean tracegen | Lean prove | Lean total | Plonky3 tracegen | Plonky3 prove | Plonky3 total | Lean / Plonky3 | Lean verify | Plonky3 verify |
 |---|---|---|---|---|---|---|---|---|---|---|
-| $2^{15}$ | example | 100 ms | 6.37 s | 6.47 s | 170 ms | 4.16 s | 4.33 s | 1.50 | 51 ms | 10 ms |
-| $2^{15}$ | proven | 100 ms | 6.50 s | 6.60 s | 170 ms | 4.14 s | 4.31 s | 1.53 | 112 ms | 16 ms |
-| $2^{16}$ | example | 206 ms | 13.02 s | 13.22 s | 321 ms | 8.24 s | 8.58 s | 1.54 | 49 ms | 11 ms |
-| $2^{16}$ | proven | 212 ms | 13.67 s | 13.88 s | 322 ms | 8.32 s | 8.64 s | 1.61 | 125 ms | 16 ms |
-| $2^{17}$ | example | 394 ms | 29.39 s | 29.80 s | 640 ms | 17.14 s | 17.78 s | 1.68 | 54 ms | 14 ms |
-| $2^{17}$ | proven | 400 ms | 27.55 s | 27.98 s | 643 ms | 16.88 s | 17.51 s | 1.60 | 123 ms | 17 ms |
-| $2^{18}$ | example | 935 ms | 67.54 s | 68.87 s | 1.35 s | 33.45 s | 34.81 s | 1.98 | 62 ms | 11 ms |
-| $2^{18}$ | proven | 793 ms | 61.47 s | 62.26 s | 1.34 s | 35.22 s | 36.56 s | 1.70 | 182 ms | 22 ms |
+| $2^{15}$ | example | 92 ms | 5.98 s | 6.07 s | 160 ms | 4.08 s | 4.23 s | 1.43 | 47 ms | 10 ms |
+| $2^{15}$ | proven | 91 ms | 6.09 s | 6.18 s | 157 ms | 4.02 s | 4.18 s | 1.48 | 84 ms | 16 ms |
+| $2^{16}$ | example | 183 ms | 12.41 s | 12.59 s | 319 ms | 8.15 s | 8.47 s | 1.49 | 57 ms | 10 ms |
+| $2^{16}$ | proven | 181 ms | 12.43 s | 12.61 s | 319 ms | 8.07 s | 8.39 s | 1.50 | 88 ms | 16 ms |
+| $2^{17}$ | example | 372 ms | 24.11 s | 24.48 s | 625 ms | 16.16 s | 16.78 s | 1.46 | 46 ms | 10 ms |
+| $2^{17}$ | proven | 363 ms | 24.01 s | 24.37 s | 627 ms | 16.60 s | 17.22 s | 1.42 | 90 ms | 16 ms |
+| $2^{18}$ | example | 710 ms | 49.68 s | 50.39 s | 1.23 s | 32.82 s | 34.05 s | 1.48 | 50 ms | 11 ms |
+| $2^{18}$ | proven | 710 ms | 49.15 s | 49.85 s | 1.25 s | 32.71 s | 33.94 s | 1.47 | 111 ms | 17 ms |
 
-From $2^{17}$ rows on 16 threads, the Lean side proves faster than Plonky3 end to end, by a quarter at $2^{18}$; on one thread it takes 1.5 to 2 times as long. Clean's trace generation takes about the time of Plonky3's `generate_trace_rows` on 16 threads and 0.6 times it on one. The proven configuration's 116 more queries cost little to prove and add about 70 ms to the Lean verifier, which takes 50 to 180 ms against Plonky3's 10 to 22 ms.
+On 16 threads, the Lean side is within 15% of Plonky3 end to end on $2^{15}$ and $2^{16}$ rows and faster from $2^{17}$ rows, by a third at $2^{18}$; on one thread it takes about 1.45 times as long at every size. Clean's trace generation takes about the time of Plonky3's `generate_trace_rows` on 16 threads and 0.6 times it on one. The Lean prover's peak memory is 1.5 to 1.9 times Plonky3's. The proven configuration's 116 more queries cost nothing measurable to prove and add 45 to 55 ms to the Lean verifier, which takes 45 to 110 ms against Plonky3's 10 to 17 ms.
 
-The prover is CompStark's on its Keccak fixture (`CompStarkBench keccak`, Plonky3's `KeccakAir` written directly in CompStark, interleaved with the runs above): its proofs from the trace take 1.08 s, 2.00 s, 4.01 s and 8.01 s on $2^{15}$ to $2^{18}$ rows on 16 threads and 6.5 s, 12.9 s, 27.4 s and 56.8 s on one thread, the same as the showcase's within the noise, and its trace generation takes about twice Clean's. The Clean AIR's quotient is the fixture's: Clean writes `x - y` as `x + (-1) * y`, which the lowering turns back into a subtraction (`addExpr`), so that its program has the fixture's instruction mix (36212 instructions, 8941 multiplications, against 36069 and 8742) rather than 43048 instructions with 15777 multiplications; the showcase runs this program as the generated kernel `KeccakShowcase/Kernel.lean`, checked against the AIR by `check` and `kat`.
+The prover is CompStark's on its Keccak fixture (`CompStarkBench keccak`, Plonky3's `KeccakAir` written directly in CompStark, interleaved with the runs above): its proofs from the trace take 1.05 s, 1.74 s, 3.55 s and 6.79 s on $2^{15}$ to $2^{18}$ rows on 16 threads and 6.0 s, 12.3 s, 23.8 s and 48.9 s on one thread, the same as the showcase's within the noise, and its trace generation takes about twice Clean's. The Clean AIR's quotient is the fixture's: Clean writes `x - y` as `x + (-1) * y`, which the lowering turns back into a subtraction (`addExpr`), so that its program has the fixture's instruction mix (36212 instructions, 8941 multiplications, against 36069 and 8742) rather than 43048 instructions with 15777 multiplications; the showcase runs this program as the generated kernel `KeccakShowcase/Kernel.lean`, whose constraints `check` and `kat` verify are the AIR's.
 
 ## Tests
 
