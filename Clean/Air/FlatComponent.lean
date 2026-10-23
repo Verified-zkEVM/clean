@@ -11,24 +11,11 @@ variable {F : Type}
 variable [FiniteField F]
 variable {Input Output : TypeMap} [ProvableType Input] [ProvableType Output]
 
-/-- The first `n` elements of a row, padded with zeros. -/
-@[circuit_norm]
-def rowPrefix (n : ℕ) (row : Array F) : Vector F n :=
-  ⟨(List.ofFn (fun i : Fin n => row[i.val]?.getD 0)).toArray, by simp⟩
-
 /-- The derived-data fact about the input of row `i`: it is row `i` of the component's `ProverData`
 entry. -/
 @[circuit_norm]
 def DataInputAt (name : String) (i : UInt64) (input : Input F) (data : ProverData F) : Prop :=
   (data.getRows name Input)[i.toNat]? = some input
-
-lemma valueFromOffset_fromArray (row : Array F) (data : ProverData F) :
-    valueFromOffset Input 0 (Environment.fromArray row data) =
-      fromElements (rowPrefix (size Input) row) := by
-  simp only [valueFromOffset]
-  congr 1
-  ext j hj
-  simp [rowPrefix, Vector.getElem_mapRange]
 
 /--
 A flat AIR component: one circuit whose constraints are checked independently on each row.
@@ -51,6 +38,11 @@ structure Component (F : Type) [FiniteField F] where
 
 instance (t: Component F) : ProvableType t.Input := t.provableInput
 instance (t: Component F) : ProvableType t.Output := t.provableOutput
+
+/-- The first `n` elements of a row, padded with zeros. -/
+@[circuit_norm]
+def rowPrefix (n : ℕ) (row : Array F) : Vector F n :=
+  ⟨(List.ofFn (fun i : Fin n => row[i.val]?.getD 0)).toArray, by simp⟩
 
 namespace Component
 
@@ -277,6 +269,14 @@ lemma withDerivedData_data (tables : List (Table F))
   simp only [withDerivedData, List.map_attach_eq_pmap, List.mem_pmap]
   rintro _ ⟨_, _, rfl⟩
   rfl
+
+lemma valueFromOffset_fromArray (row : Array F) (data : ProverData F) :
+    valueFromOffset Input 0 (Environment.fromArray row data) =
+      fromElements (rowPrefix (size Input) row) := by
+  simp only [valueFromOffset]
+  congr 1
+  ext j hj
+  simp [rowPrefix, Vector.getElem_mapRange]
 
 namespace Table
 variable {table : Table F} {channel : RawChannel F}
