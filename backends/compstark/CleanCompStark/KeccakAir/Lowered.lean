@@ -67,7 +67,7 @@ theorem degree_toExpr (hw : component.window = some layout) :
   | .const _, _ => rfl
   | .add a b, h | .mul a b, h => by
     simp only [expressionCells, List.mem_append] at h
-    simp only [toExpr, Expr.degree, weight,
+    simp only [toExpr, degree_addExpr, Expr.degree, weight,
       degree_toExpr hw a fun j hj => h j (Or.inl hj),
       degree_toExpr hw b fun j hj => h j (Or.inr hj)]
 
@@ -83,7 +83,7 @@ theorem degProfile_toExpr (hw : component.window = some layout) :
   | .const _, _ => rfl
   | .add a b, h | .mul a b, h => by
     simp only [expressionCells, List.mem_append] at h
-    simp only [toExpr, Expr.degProfile, weight,
+    simp only [toExpr, degProfile_addExpr, Expr.degProfile, weight,
       degProfile_toExpr hw a fun j hj => h j (Or.inl hj),
       degProfile_toExpr hw b fun j hj => h j (Or.inr hj), Nat.max_self, Nat.add_zero]
 
@@ -146,7 +146,7 @@ theorem colsBelow_toExpr (hw : component.window = some layout) (logN : ℕ) :
   | .const _, _ => rfl
   | .add a b, h | .mul a b, h => by
     simp only [expressionCells, List.mem_append] at h
-    simp only [toExpr, Expr.colsBelow, Bool.and_eq_true]
+    simp only [toExpr, colsBelow_addExpr, Expr.colsBelow, Bool.and_eq_true]
     exact ⟨colsBelow_toExpr hw logN a fun j hj => h j (Or.inl hj),
       colsBelow_toExpr hw logN b fun j hj => h j (Or.inr hj)⟩
 

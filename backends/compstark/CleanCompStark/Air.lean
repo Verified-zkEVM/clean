@@ -11,9 +11,10 @@ prefix of the row's own input, are the preprocessed trace; the trace commits the
 own input and the witnesses. A two-row component's window cells are not committed: the next row's
 input reads the next row, and the selectors are Plonky3's. Every constraint is lowered with
 `Backends.gateConstraint` and becomes its body times its gate's selector, as Plonky3's
-`when_first_row`, `when_last_row` and `when_transition` do. Every interaction becomes a global
-lookup on the bus named after its channel, with the multiplicity negated and weight `0`, as the
-Plonky3 backend registers it.
+`when_first_row`, `when_last_row` and `when_transition` do; Clean's subtraction `x + (-1) * z`
+becomes a subtraction (`addExpr`). Every interaction becomes a global lookup on the bus named
+after its channel, with the multiplicity negated and weight `0`, as the Plonky3 backend registers
+it.
 
 The constraints are over a Clean field `F` and the AIR over a CompStark base field `K`; a ring
 isomorphism `e : F ≃+* K` maps the constants.
@@ -52,13 +53,55 @@ def cellExpr (component : Component F) (j : ℕ) : Expr K :=
     else if j = 2 * w + 2 then .isTransition
     else .cur (j - (w + 3) - fixedWidth)
 
+/-- The sum `x + y` of AIR expressions, where a summand `(-1) * z`, Clean's subtraction
+`x - z = x + (-1) * z`, becomes a subtraction `x - z`, which the quotient's program computes
+without a multiplication. -/
+def addExpr (x : Expr K) : Expr K → Expr K
+  | .mul (.const c) z => if c = -1 then .sub x z else .add x (.mul (.const c) z)
+  | y => .add x y
+
+/-- `addExpr x y` is `x + y`, or `x - z` for `y = (-1) * z`. -/
+theorem addExpr_cases (x y : Expr K) :
+    addExpr x y = .add x y ∨ ∃ z, y = .mul (.const (-1)) z ∧ addExpr x y = .sub x z := by
+  unfold addExpr
+  split
+  · split_ifs with h
+    · exact Or.inr ⟨_, by rw [h], rfl⟩
+    · exact Or.inl rfl
+  · exact Or.inl rfl
+
+theorem eval_addExpr {R : Type*} [Ring R] (env : Expr.Env K R) (hconst : env.const (-1) = -1)
+    (x y : Expr K) : (addExpr x y).eval env = x.eval env + y.eval env := by
+  rcases addExpr_cases x y with h | ⟨z, rfl, h⟩ <;> rw [h]
+  · rfl
+  · simp only [Expr.eval, hconst, neg_one_mul, sub_eq_add_neg]
+
+theorem degree_addExpr (x y : Expr K) : (addExpr x y).degree = max x.degree y.degree := by
+  rcases addExpr_cases x y with h | ⟨z, rfl, h⟩ <;> rw [h]
+  · rfl
+  · simp only [Expr.degree, Nat.zero_add]
+
+theorem degProfile_addExpr (x y : Expr K) :
+    (addExpr x y).degProfile =
+      (max x.degProfile.1 y.degProfile.1, max x.degProfile.2 y.degProfile.2) := by
+  rcases addExpr_cases x y with h | ⟨z, rfl, h⟩ <;> rw [h]
+  · rfl
+  · simp only [Expr.degProfile, Nat.zero_add]
+
+theorem colsBelow_addExpr (w wNext pw pwNext : ℕ) (x y : Expr K) :
+    (addExpr x y).colsBelow w wNext pw pwNext =
+      (x.colsBelow w wNext pw pwNext && y.colsBelow w wNext pw pwNext) := by
+  rcases addExpr_cases x y with h | ⟨z, rfl, h⟩ <;> rw [h]
+  · rfl
+  · simp only [Expr.colsBelow, Bool.true_and]
+
 variable (e : F ≃+* K)
 
 /-- A Clean expression of a component's row as an AIR expression. -/
 def toExpr (component : Component F) : Expression F → Expr K
   | .var v => cellExpr component v.index
   | .const c => .const (e c)
-  | .add a b => .add (toExpr component a) (toExpr component b)
+  | .add a b => addExpr (toExpr component a) (toExpr component b)
   | .mul a b => .mul (toExpr component a) (toExpr component b)
 
 /-- A constraint body checked on the rows of its gate: Plonky3's `when_*(selector)`. -/

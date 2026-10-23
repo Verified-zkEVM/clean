@@ -134,7 +134,13 @@ theorem eval_toExpr_publicValues (component : Component F) (A : Air K) (logN : â
         (toExpr e component x).eval (Lookup.generationRow A logN trace publicValues' r)
   | .var v => eval_cellExpr_publicValues component A logN trace publicValues publicValues' r _
   | .const _ => rfl
-  | .add a b | .mul a b => by
+  | .add a b => by
+    simp only [toExpr]
+    rw [eval_addExpr (Lookup.generationRow A logN trace publicValues r) rfl,
+      eval_addExpr (Lookup.generationRow A logN trace publicValues' r) rfl,
+      eval_toExpr_publicValues component A logN trace publicValues publicValues' r a,
+      eval_toExpr_publicValues component A logN trace publicValues publicValues' r b]
+  | .mul a b => by
     simp only [toExpr, Expr.eval]
     rw [eval_toExpr_publicValues component A logN trace publicValues publicValues' r a,
       eval_toExpr_publicValues component A logN trace publicValues publicValues' r b]
