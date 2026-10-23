@@ -14,20 +14,9 @@ the rows on every read. Instead, the generator prepares the rows once, and reads
 `readNamedRows`.
 -/
 
-namespace Air.Flat
+namespace Air.Flat.WitnessGeneration
 
 variable {F : Type} [FiniteField F]
-
-/-- The hint tables `tables` take from the flattened private input `elements`. Like derived prover
-data, rows are cut off or zero-padded at the requested width. -/
-def HintTable.hint (tables : List HintTable) (elements : Array F) : ProverHint F := fun key width =>
-  match tables.find? (·.key == key) with
-  | none => #[]
-  | some table => Array.ofFn fun (row : Fin table.rows) => rowPrefix width <|
-      elements.extract (table.offset + row.val * table.width)
-        (table.offset + (row.val + 1) * table.width)
-
-namespace WitnessGeneration
 
 /-- Rows that witness programs read as prover data or hints: at width `n`, every row is cut off or
 padded with zeros. The rows at `width`, their usual read width, are prepared once, so that reads at
@@ -60,7 +49,8 @@ def readNamedRows (entries : List (String × PreparedRows F)) (name : String) (n
   | some (_, rows) => rows.read n
   | none => #[]
 
-/-- The hint tables prepared for reading, see `readNamedRows_prepareHint`. -/
+/-- The hint tables prepared for reading: each table's rows, taken from the flattened private input
+`elements`. -/
 def prepareHint (tables : List HintTable) (elements : Array F) :
     List (String × PreparedRows F) :=
   tables.map fun table =>
@@ -68,13 +58,4 @@ def prepareHint (tables : List HintTable) (elements : Array F) :
       elements.extract (table.offset + row.val * table.width)
         (table.offset + (row.val + 1) * table.width)) table.width)
 
-lemma readNamedRows_prepareHint (tables : List HintTable) (elements : Array F) :
-    readNamedRows (prepareHint tables elements) = HintTable.hint tables elements := by
-  funext key width
-  simp only [readNamedRows, prepareHint, HintTable.hint, List.find?_map, Function.comp_def]
-  cases tables.find? (fun table => table.key == key) <;>
-    simp [PreparedRows.read_eq, PreparedRows.ofRows, Array.map_ofFn, Function.comp_def]
-
-end WitnessGeneration
-
-end Air.Flat
+end Air.Flat.WitnessGeneration
