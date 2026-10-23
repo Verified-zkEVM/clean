@@ -63,7 +63,8 @@ fn extracted_femtocairo_accepts_runtime_private_memories() {
         .expect("second runtime memory produced invalid traces");
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
     let statement =
-        generated::Statement::<BabyBear>::new(&trace_heights).expect("invalid generated AIR shape");
+        generated::Statement::<BabyBear>::new(&trace_heights, setup::MINIMUM_TRACE_HEIGHT)
+            .expect("invalid generated AIR shape");
     let proof = prove_ensemble(&config, &statement, traces, &public_values)
         .expect("second runtime memory produced an invalid proving shape");
     verify_ensemble(&config, &statement, &proof, &public_values)
@@ -90,7 +91,8 @@ fn extracted_femtocairo_air_proves_and_verifies() {
 
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
     let statement =
-        generated::Statement::<BabyBear>::new(&trace_heights).expect("invalid generated AIR shape");
+        generated::Statement::<BabyBear>::new(&trace_heights, setup::MINIMUM_TRACE_HEIGHT)
+            .expect("invalid generated AIR shape");
     let proof =
         prove_ensemble(&config, &statement, traces, &public_values).expect("invalid proving shape");
     verify_ensemble(&config, &statement, &proof, &public_values)
@@ -159,15 +161,19 @@ fn verifier_rejects_permuted_memory() {
     }
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
 
-    let permuted = GeneratedEnsemble::<BabyBear, PermutedMemoryAddresses>::new(&trace_heights)
-        .expect("invalid permuted AIR shape");
+    let permuted = GeneratedEnsemble::<BabyBear, PermutedMemoryAddresses>::new(
+        &trace_heights,
+        setup::MINIMUM_TRACE_HEIGHT,
+    )
+    .expect("invalid permuted AIR shape");
     let proof =
         prove_ensemble(&config, &permuted, traces, &public_values).expect("invalid proving shape");
     verify_ensemble(&config, &permuted, &proof, &public_values)
         .expect("the permuted-memory proof must be valid for the permuted address table");
 
     let statement =
-        generated::Statement::<BabyBear>::new(&trace_heights).expect("invalid generated AIR shape");
+        generated::Statement::<BabyBear>::new(&trace_heights, setup::MINIMUM_TRACE_HEIGHT)
+            .expect("invalid generated AIR shape");
     assert!(matches!(
         verify_ensemble(&config, &statement, &proof, &public_values),
         Err(EnsembleVerificationError::Proof(_))

@@ -4,6 +4,7 @@
 //! [`GeneratedAirSpec`], usually implemented by [`crate::ensemble`]. Lookup registration and
 //! Plonky3 trait plumbing live here.
 
+use alloc::collections::BTreeMap;
 use alloc::vec;
 use alloc::vec::Vec;
 use core::marker::PhantomData;
@@ -41,9 +42,19 @@ pub enum EnsembleShapeError {
         expected: usize,
         actual: usize,
     },
+    /// The minimum trace height is not a power of two.
+    MinimumHeight {
+        height: usize,
+    },
+    /// A trace height is not a power of two of at least the minimum height.
     TraceHeight {
         component: usize,
         height: usize,
+    },
+    /// A trace height exceeds the largest the PCS supports.
+    MaximumTraceHeight {
+        log_height: usize,
+        log_maximum: usize,
     },
     StatementTraceHeight {
         component: usize,
@@ -65,6 +76,13 @@ pub enum EnsembleShapeError {
     },
     /// The verifier failed to set up the ensemble's preprocessed columns and lookups.
     Setup,
+    /// The configuration is zero-knowledge, which the backend doesn't support.
+    ZeroKnowledge,
+    /// Two interactions on a channel have messages of different widths.
+    ChannelWidth {
+        channel: &'static str,
+        widths: (usize, usize),
+    },
     InteractionCountOverflow,
     InteractionCountBound {
         interactions: u128,
@@ -160,8 +178,8 @@ impl<P> GeneratedAir<P> {
 /// A complete generated Clean statement with its AIR components in canonical order.
 ///
 /// The component AIRs are private so callers cannot omit, duplicate, or reorder them. They are
-/// followed by the verifier AIR, whose height is the smallest component height. Construction also
-/// establishes the interaction-count side condition required by Clean's channel semantics.
+/// followed by the verifier AIR. Construction also establishes the interaction-count side condition
+/// required by Clean's channel semantics, and that every channel has one message width.
 #[derive(Clone, Debug)]
 pub struct GeneratedEnsemble<F, P> {
     airs: Vec<GeneratedAir<P>>,
@@ -171,7 +189,10 @@ pub struct GeneratedEnsemble<F, P> {
 }
 
 impl<F: WitnessField, P: GeneratedAirSpec> GeneratedEnsemble<F, P> {
-    pub fn new(trace_heights: &[usize]) -> Result<Self, EnsembleShapeError> {
+    /// The statement with these component trace heights. The verifier AIR has `minimum_height`
+    /// rows, the smallest trace height the proof configuration accepts, which every component trace
+    /// height must reach.
+    pub fn new(trace_heights: &[usize], minimum_height: usize) -> Result<Self, EnsembleShapeError> {
         if F::ORDER_U64 != P::FIELD_ORDER {
             return Err(EnsembleShapeError::FieldOrder {
                 expected: P::FIELD_ORDER,
@@ -194,6 +215,11 @@ impl<F: WitnessField, P: GeneratedAirSpec> GeneratedEnsemble<F, P> {
                 });
             }
         }
+        if !minimum_height.is_power_of_two() {
+            return Err(EnsembleShapeError::MinimumHeight {
+                height: minimum_height,
+            });
+        }
         if trace_heights.len() != expected {
             return Err(EnsembleShapeError::ComponentCount {
                 expected,
@@ -205,7 +231,7 @@ impl<F: WitnessField, P: GeneratedAirSpec> GeneratedEnsemble<F, P> {
             .copied()
             .enumerate()
             .map(|(component, trace_height)| {
-                if trace_height == 0 || !trace_height.is_power_of_two() {
+                if !trace_height.is_power_of_two() || trace_height < minimum_height {
                     return Err(EnsembleShapeError::TraceHeight {
                         component,
                         height: trace_height,
@@ -222,22 +248,39 @@ impl<F: WitnessField, P: GeneratedAirSpec> GeneratedEnsemble<F, P> {
                 Ok(GeneratedAir::new(AirKind::Component(component)))
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let verifier_height = trace_heights.iter().copied().min().unwrap_or(1);
         airs.push(GeneratedAir::new(AirKind::Verifier {
-            height: verifier_height,
+            height: minimum_height,
         }));
 
-        // The generated interaction functions return the same number of interactions for every
-        // row, so evaluating them on zeros counts them.
-        let verifier_interactions =
-            P::verifier_interactions(&vec![F::ZERO; P::PUBLIC_VALUES]).len() as u128;
-        let interactions = trace_heights.iter().copied().enumerate().try_fold(
-            verifier_interactions,
-            |total, (component, height)| {
+        // The generated interaction functions return the same interactions for every row, up to
+        // their values, so evaluating them on zeros shows their channels and message widths.
+        let verifier_interactions = P::verifier_interactions(&vec![F::ZERO; P::PUBLIC_VALUES]);
+        let component_interactions = (0..expected)
+            .map(|component| {
                 let width = P::WIDTHS[component] + P::FIXED_COLUMNS[component].len();
-                let per_row = P::interactions(component, &vec![F::ZERO; width]).len();
+                P::interactions(component, &vec![F::ZERO; width])
+            })
+            .collect::<Vec<_>>();
+        let mut channel_widths = BTreeMap::new();
+        for interaction in verifier_interactions
+            .iter()
+            .chain(component_interactions.iter().flatten())
+        {
+            let width = *channel_widths
+                .entry(interaction.channel)
+                .or_insert(interaction.message.len());
+            if width != interaction.message.len() {
+                return Err(EnsembleShapeError::ChannelWidth {
+                    channel: interaction.channel,
+                    widths: (width, interaction.message.len()),
+                });
+            }
+        }
+        let interactions = trace_heights.iter().zip(&component_interactions).try_fold(
+            verifier_interactions.len() as u128,
+            |total, (&height, interactions)| {
                 let component = (height as u128)
-                    .checked_mul(per_row as u128)
+                    .checked_mul(interactions.len() as u128)
                     .ok_or(EnsembleShapeError::InteractionCountOverflow)?;
                 total
                     .checked_add(component)

@@ -15,7 +15,7 @@ use p3_batch_stark::{
     ProvingError, StarkGenericConfig, StarkInstance, Val,
 };
 use p3_challenger::GrindingChallenger;
-use p3_commit::Pcs;
+use p3_commit::{Pcs, UnivariateStarkPcs};
 use p3_field::{Algebra, BasedVectorSpace, PrimeCharacteristicRing, PrimeField64};
 use p3_lookup::InteractionSymbolicBuilder;
 use p3_matrix::dense::RowMajorMatrix;
@@ -85,6 +85,39 @@ where
 {
 }
 
+/// Check that the configuration isn't zero-knowledge, and that it supports the statement's trace
+/// heights. Returns the degree bits of the traces, the verifier AIR's last.
+fn degree_bits<SC, P>(
+    config: &SC,
+    ensemble: &GeneratedEnsemble<Val<SC>, P>,
+) -> Result<Vec<usize>, EnsembleShapeError>
+where
+    SC: StarkGenericConfig,
+    Val<SC>: WitnessField,
+    P: GeneratedAirSpec,
+{
+    // a hiding PCS salts the preprocessed commitments, which the verifier then can't recompute
+    if config.is_zk() != 0 {
+        return Err(EnsembleShapeError::ZeroKnowledge);
+    }
+    let log_maximum = config.pcs().log_max_trace_height();
+    ensemble
+        .trace_heights()
+        .iter()
+        .chain([&ensemble.verifier_height()])
+        .map(|&height| {
+            let log_height = log2_strict_usize(height);
+            if log_height > log_maximum {
+                return Err(EnsembleShapeError::MaximumTraceHeight {
+                    log_height,
+                    log_maximum,
+                });
+            }
+            Ok(log_height)
+        })
+        .collect()
+}
+
 /// The public values of every AIR: only the verifier AIR, which is last, reads them.
 fn per_air_public_values<F: Clone>(airs: usize, public_values: &[F]) -> Vec<Vec<F>> {
     let mut values = vec![Vec::new(); airs - 1];
@@ -113,6 +146,7 @@ where
     <SC::Pcs as Pcs<SC::Challenge, SC::Challenger>>::ProverData: Sync,
     <SC::Pcs as Pcs<SC::Challenge, SC::Challenger>>::Commitment: Sync,
 {
+    let log_degrees = degree_bits(config, ensemble).map_err(EnsembleProvingError::Shape)?;
     let airs = ensemble.airs();
     let trace_heights = ensemble.trace_heights();
     if trace_heights.len() != traces.len() {
@@ -157,10 +191,6 @@ where
         vec![Val::<SC>::ZERO; ensemble.verifier_height()],
         1,
     ));
-    let log_degrees = traces
-        .iter()
-        .map(|trace| log2_strict_usize(trace.height()) + config.is_zk())
-        .collect::<Vec<_>>();
     let prover_data = ProverData::from_airs_and_degrees(config, airs, &log_degrees)
         .map_err(EnsembleProvingError::Proof)?;
     let public_values = per_air_public_values(airs.len(), public_values);
@@ -196,12 +226,7 @@ where
             },
         ));
     }
-    let degree_bits = ensemble
-        .trace_heights()
-        .iter()
-        .chain([&ensemble.verifier_height()])
-        .map(|height| log2_strict_usize(*height) + config.is_zk())
-        .collect::<Vec<_>>();
+    let degree_bits = degree_bits(config, ensemble).map_err(EnsembleVerificationError::Shape)?;
     if proof.degree_bits != degree_bits {
         return Err(EnsembleVerificationError::Shape(
             EnsembleShapeError::ProofDegreeBits {

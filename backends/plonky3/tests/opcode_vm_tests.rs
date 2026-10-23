@@ -52,7 +52,8 @@ fn extracted_opcode_vm_proves_and_verifies() {
     let traces = witness.into_traces().expect("invalid extracted traces");
     let trace_heights = traces.iter().map(Matrix::height).collect::<Vec<_>>();
     let statement =
-        generated::Statement::<BabyBear>::new(&trace_heights).expect("invalid generated AIR shape");
+        generated::Statement::<BabyBear>::new(&trace_heights, setup::MINIMUM_TRACE_HEIGHT)
+            .expect("invalid generated AIR shape");
     let proof =
         prove_ensemble(&config, &statement, traces, &public_values).expect("invalid proving shape");
     verify_ensemble(&config, &statement, &proof, &public_values)
