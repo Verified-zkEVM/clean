@@ -16,10 +16,10 @@
    "type": "git",
    "subDir": null,
    "scope": "",
-   "rev": "bcaa7ff38a4f658e2d2ae49a2ccffdce20375e6e",
+   "rev": "45dadc64f9e6b25756179a74186502ca34b026d2",
    "name": "CompStark",
    "manifestFile": "lake-manifest.json",
-   "inputRev": "bcaa7ff38a4f658e2d2ae49a2ccffdce20375e6e",
+   "inputRev": "45dadc64f9e6b25756179a74186502ca34b026d2",
    "inherited": false,
    "configFile": "lakefile.lean"
   },

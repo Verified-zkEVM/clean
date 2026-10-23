@@ -80,16 +80,29 @@ It builds `rust/` and the executable, runs `lake exe keccak_showcase kat` (CompS
 scripts/showcase.sh bench 16 3
 ```
 
-times trace generation, the proof and its verification on `2 ^ 16` rows, `lake exe keccak_showcase bench CONFIG 16 3` (Lean: Clean's fast trace and CompStark's fast prover) interleaved with `rust/target/release/keccak-showcase bench CONFIG 16 3` (Plonky3), both configurations, medians of 3, two rounds each.
+times trace generation, the proof and its verification on `2 ^ 16` rows, `lake exe keccak_showcase bench CONFIG 16 3` (Lean: Clean's fast trace and CompStark's fast prover, with the AIR, the prover's backend and the verifying key made once, as Plonky3's side makes its configuration once) interleaved with `rust/target/release/keccak-showcase bench CONFIG 16 3` (Plonky3, built for the native CPU), both configurations, medians of 3, two rounds each. `LEAN_NUM_THREADS=1 RAYON_NUM_THREADS=1 scripts/showcase.sh bench 16 1` runs both sides on one thread.
 
-At CompStark `eef5dce` on a Ryzen 7 3700X (8 cores, 16 threads), shared and loaded (load 15 to 21), all threads, two rounds:
+At CompStark `45dadc6` on a Ryzen 7 3700X (8 cores, 16 threads), shared and loaded (load 6 to 22), all threads, two rounds:
 
 | rows | configuration | Lean tracegen | Lean prove | Lean verify | Plonky3 tracegen | Plonky3 prove | Plonky3 verify |
 |---|---|---|---|---|---|---|---|
-| $2^{15}$ | example | 38–40 ms | 5.8 s | 335–360 ms | 31–40 ms | 1.04–1.06 s | 14–15 ms |
-| $2^{15}$ | proven | 44–87 ms | 9.4–9.6 s | 800–811 ms | 42–44 ms | 1.10–1.22 s | 21–22 ms |
-| $2^{16}$ | example | 67–81 ms | 9.8–11.3 s | 331–338 ms | 54–77 ms | 1.97–2.07 s | 13–14 ms |
-| $2^{16}$ | proven | 101–152 ms | 13.8–14.9 s | 806–881 ms | 58–66 ms | 2.08–2.16 s | 17–20 ms |
+| $2^{15}$ | example | 30–32 ms | 2.11–2.29 s | 167–171 ms | 28–29 ms | 0.89–0.94 s | 11 ms |
+| $2^{15}$ | proven | 32–34 ms | 2.33–2.53 s | 403–415 ms | 27 ms | 0.87–0.90 s | 17 ms |
+| $2^{16}$ | example | 59–62 ms | 4.65–4.88 s | 172–175 ms | 55–59 ms | 1.89–1.96 s | 11 ms |
+| $2^{16}$ | proven | 60–61 ms | 3.97–4.67 s | 399–412 ms | 50–52 ms | 1.82–1.94 s | 16–17 ms |
+| $2^{17}$ | example | 126–134 ms | 10.10–10.68 s | 244–251 ms | 105–117 ms | 4.75–4.80 s | 11–12 ms |
+| $2^{17}$ | proven | 144 ms | 11.86–13.29 s | 467–474 ms | 121–158 ms | 4.91–5.30 s | 17–18 ms |
+
+On one thread (load 10 to 24), medians of 1, two rounds:
+
+| rows | configuration | Lean tracegen | Lean prove | Lean verify | Plonky3 tracegen | Plonky3 prove | Plonky3 verify |
+|---|---|---|---|---|---|---|---|
+| $2^{15}$ | example | 100–133 ms | 10.5–11.9 s | 198–263 ms | 190–221 ms | 4.64–4.74 s | 15 ms |
+| $2^{15}$ | proven | 129–134 ms | 12.0–12.8 s | 402–488 ms | 171–180 ms | 4.39–4.66 s | 23–24 ms |
+| $2^{16}$ | example | 194–271 ms | 23.3–26.8 s | 171–200 ms | 353–366 ms | 8.48–9.23 s | 11–15 ms |
+| $2^{16}$ | proven | 194–206 ms | 21.9–25.3 s | 408–468 ms | 344–345 ms | 8.65–8.70 s | 17 ms |
+
+On $2^{18}$ rows the Lean prover peaks above 12 GB of memory (7.5 GB on $2^{17}$, where Plonky3 takes 2.8 GB).
 
 ## Tests
 

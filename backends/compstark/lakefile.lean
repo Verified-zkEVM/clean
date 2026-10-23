@@ -14,7 +14,7 @@ require Clean from "../.."
 
 -- CompStark's branch `kk-k6a`.
 require CompStark from git "https://github.com/zksecurity/CompStark" @
-  "bcaa7ff38a4f658e2d2ae49a2ccffdce20375e6e"
+  "45dadc64f9e6b25756179a74186502ca34b026d2"
 
 @[default_target]
 lean_lib CleanCompStark
