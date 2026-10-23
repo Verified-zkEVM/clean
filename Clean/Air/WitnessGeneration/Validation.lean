@@ -40,7 +40,6 @@ inductive ValidationError where
   | rowProgram (component : String)
   | demandFixedCell (component : String)
   | multiplicity (component : String) (error : MultiplicityError)
-  | unguardedHandler (component channel : String) (trigger : Direction)
   | unknownDataRead (component : String) (reader : DataReader) (key : String)
   | dataReadWidth (component : String) (reader : DataReader) (key : String) (expected actual : ℕ)
   | unstableDataRead (component : String) (reader : DataReader) (key : String) (column : ℕ)
@@ -56,9 +55,6 @@ instance : ToString ValidationError where
     | .demandFixedCell component =>
         s!"demand input of component '{component}' has a fixed cell"
     | .multiplicity component error => s!"component '{component}' {error}"
-    | .unguardedHandler component channel trigger =>
-        s!"component '{component}' is triggered by unmatched {trigger.name} interactions on \
-          channel '{channel}' without a guard, but other components are too"
     | .unknownDataRead component reader key =>
         s!"component '{component}' {reader} reads unknown prover-data component '{key}'"
     | .dataReadWidth component reader key expected actual =>
@@ -134,25 +130,6 @@ def witnessDataReads : {n : ℕ} → Witgen.WitgenIR F n → List DataRead
 
 /-! ### Validation -/
 
-/-- A channel and the unmatched interactions on it that a component answers. -/
-structure Handler where
-  channel : String
-  trigger : Direction
-  /-- Whether the component answers only some messages: those its guard holds for, or, for a
-  preallocated component, those it has a row for. -/
-  selective : Bool
-
-/-- The demand a component answers. -/
-def handler (component : Component F) : Handler :=
-  match component.generation with
-  | .demand mode =>
-      let selective := match mode.guardCondition with
-        | .true => false
-        | _ => true
-      { channel := mode.channel.name, trigger := mode.trigger, selective }
-  | .preallocated mode =>
-      { channel := mode.channel.name, trigger := mode.trigger, selective := true }
-
 def cellDataReads : Cell F → List DataRead
   | .fixed value | .witness value => fexprDataReads value
   | .multiplicity => []
@@ -216,22 +193,10 @@ def validateDataReads (components : List (Component F))
             if targetMultiplicity.any (·.column = read.column) then
               throw (.unstableDataRead name reader read.key read.column)
 
-/-- Check that a component whose guard is `true` is the only one with its channel and trigger.
-Whether selective components overlap is only found out during generation, when two of them accept
-the same message. -/
-def validateHandlers (components : List (Component F)) : Except ValidationError Unit := do
-  let handled := components.map fun component => (component.circuit.name, handler component)
-  for (name, handler) in handled do
-    let shared := handled.filter fun (_, other) =>
-      other.channel == handler.channel && other.trigger == handler.trigger
-    unless handler.selective || shared.length ≤ 1 do
-      throw (.unguardedHandler name handler.channel handler.trigger)
-
 /-- All checks of the components' generations; returns the multiplicity cell of every component. -/
 def validateComponents (components : List (Component F)) :
     Except ValidationError (List (Option MultiplicityColumn)) := do
   let multiplicities ← components.mapM validateComponent
-  validateHandlers components
   validateDataReads components multiplicities
   return multiplicities
 
