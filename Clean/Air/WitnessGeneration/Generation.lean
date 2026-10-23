@@ -29,9 +29,10 @@ a `Cell` for every input variable:
 A multiplicity cell makes a component answer repeated demand for a message by counting it in one
 row: the generator finds the row whose interaction on the channel carries the message, and
 increments the cell. Since this only adds pushes, it answers messages pulled more often than pushed.
-Preallocated components have exactly one multiplicity cell. A demand component with one gets one row
-per distinct message, like an addition chip; without one, it gets one row per occurrence, like a
-VM, where every step is its own row even if two steps happen to agree. For example, a memory row
+Preallocated components must have exactly one multiplicity cell. For demand components, behavior
+depends on whether you use a multiplicity cell in the input: if yes, the component gets one row per
+distinct message, like an addition chip; if not, it gets one row per occurrence, like a VM, where
+every step is its own row even if two steps happen to agree. For example, a memory row
 emits `memoryChannel.emit multiplicity { address, value }`, so its input is
 `{ address := .fixed i.toField, value := .witness ..., multiplicity := .multiplicity }`.
 
