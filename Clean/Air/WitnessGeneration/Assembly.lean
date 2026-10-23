@@ -30,7 +30,7 @@ def assembleTables :
       same_circuits := by simp
     }
   | component :: components, state :: states => do
-      let rows := state.rows.map (·.values)
+      let rows := state.rows.toList.map (·.values)
       if hlength : rows.length > UInt64.size then
         throw (.assembly s!"generated table for component '{component.circuit.name}' has more \
           than 2^64 rows")

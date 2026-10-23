@@ -1,5 +1,6 @@
 module
 
+public import Clean.Air.WitnessGeneration.Tally
 public import Clean.Air.WitnessGeneration.Validation
 public import Clean.Circuit.WitnessGeneration
 
@@ -8,59 +9,13 @@ public import Clean.Circuit.WitnessGeneration
 /-!
 # Witness generation state
 
-The state that `Clean.Air.WitnessGeneration` evolves: the channel demand left to answer, and the
-rows of every component generated so far.
+The state that `Clean.Air.WitnessGeneration` evolves: the tally of channel demand left to answer,
+see `Clean.Air.WitnessGeneration.Tally`, and the rows of every component generated so far.
 -/
 
 namespace Air.Flat.WitnessGeneration
 
 variable {F : Type} [FiniteField F]
-
-/-! ### Demand -/
-
-/-- An unanswered channel message: its net multiplicity, pushes minus pulls, is nonzero. -/
-structure Demand (F : Type) where
-  channel : String
-  message : Array F
-  /-- The net multiplicity of the message, pushes minus pulls. -/
-  multiplicity : F
-
-namespace Demand
-
-/-- Whether the message was pushed or pulled more often, and by how much. Multiplicities above half
-the field order are read as negative. -/
-def surplus (demand : Demand F) : Direction × ℕ :=
-  if 2 * FiniteField.val demand.multiplicity ≤ FiniteField.size (F := F) then
-    (.push, FiniteField.val demand.multiplicity)
-  else
-    (.pull, FiniteField.val (-demand.multiplicity))
-
-def direction (demand : Demand F) : Direction := demand.surplus.1
-
-def count (demand : Demand F) : ℕ := demand.surplus.2
-
-/-- Add a multiplicity for a channel message, dropping the entry when it cancels to zero. -/
-def add (channel : String) (message : Array F) (multiplicity : F) :
-    List (Demand F) → List (Demand F)
-  | [] => if multiplicity = 0 then [] else [{ channel, message, multiplicity }]
-  | current :: rest =>
-      if current.channel == channel && current.message == message then
-        let total := current.multiplicity + multiplicity
-        if total = 0 then rest else { current with multiplicity := total } :: rest
-      else
-        current :: add channel message multiplicity rest
-
-def addInteractions (demands : List (Demand F)) (interactions : List (Interaction F)) :
-    List (Demand F) :=
-  interactions.foldl (fun demands interaction =>
-    add interaction.channel.name interaction.msg interaction.mult demands) demands
-
-def removeInteractions (demands : List (Demand F)) (interactions : List (Interaction F)) :
-    List (Demand F) :=
-  interactions.foldl (fun demands interaction =>
-    add interaction.channel.name interaction.msg (-interaction.mult) demands) demands
-
-end Demand
 
 /-! ### Rows -/
 
@@ -80,7 +35,10 @@ structure ComponentState (F : Type) [FiniteField F] where
   /-- The component's channel interactions on a row. -/
   interactions : List (AbstractInteraction F)
   /-- The rows generated so far. -/
-  rows : List (GeneratedRow F) := []
+  rows : Array (GeneratedRow F) := #[]
+  /-- The index of the first row whose counted interaction carries each message, see
+  `countedMessage`. -/
+  countedRows : Std.HashMap (Array F) ℕ := {}
 
 def ComponentState.initial (component : Component F) (multiplicity : Option MultiplicityColumn) :
     ComponentState F :=
@@ -102,11 +60,28 @@ def rowInteractions (state : ComponentState F) (row : GeneratedRow F) (data : Pr
   let environment := Environment.fromArray row.values data
   state.interactions.map (·.eval environment)
 
-/-- The prover data of the rows generated so far. -/
-def generatedData (states : List (ComponentState F)) : ProverData F := fun name n =>
-  match states.find? (·.component.circuit.name == name) with
-  | some state => (state.rows.map (rowPrefix n ∘ (·.input))).toArray
-  | none => #[]
+/-- The message of a row's counted interaction, if the component has a multiplicity cell. -/
+def ComponentState.countedMessage (state : ComponentState F) (row : GeneratedRow F)
+    (data : ProverData F) : Option (Array F) :=
+  state.multiplicity.bind fun multiplicity =>
+    state.interactions[multiplicity.interaction]?.map fun interaction =>
+      (interaction.eval (Environment.fromArray row.values data)).msg
+
+/-- Append a row, which counts its message if no earlier row does. -/
+def ComponentState.pushRow (state : ComponentState F) (data : ProverData F)
+    (row : GeneratedRow F) : ComponentState F :=
+  let message := state.countedMessage row data
+  let index := state.rows.size
+  { state with
+    rows := state.rows.push row
+    countedRows := match message with
+      | some message => state.countedRows.insertIfNew message index
+      | none => state.countedRows }
+
+/-- Replace the row at `index`, which must count the same message. -/
+def ComponentState.setRow (state : ComponentState F) (index : ℕ) (row : GeneratedRow F) :
+    ComponentState F :=
+  { state with rows := state.rows.set! index row }
 
 /-- The inputs of a preallocated component's rows, from its input program, with multiplicity 0. -/
 def initialInputs (state : ComponentState F) (hint : ProverHint F) : List (Array F) :=

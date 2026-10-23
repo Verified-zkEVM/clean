@@ -59,12 +59,26 @@ variable {PublicIO : TypeMap} [ProvableType PublicIO]
 
 /-! ### Answering demand -/
 
-/-- A component's changed rows: they leave the tally with their old interactions and enter it with
-their new ones. -/
-structure Mutation (F : Type) [FiniteField F] where
-  state : ComponentState F
-  removedRows : List (GeneratedRow F) := []
-  addedRows : List (GeneratedRow F) := []
+/-- The rows a component adds or replaces to answer a demand. -/
+inductive Change (F : Type) where
+  | add (rows : List (GeneratedRow F))
+  /-- The row at `index` is updated from `old` to `new`. -/
+  | update (index : ℕ) (old new : GeneratedRow F)
+
+/-- The rows that leave the tally with their interactions. -/
+def Change.removedRows : Change F → List (GeneratedRow F)
+  | .add _ => []
+  | .update _ old _ => [old]
+
+/-- The rows that enter the tally with their interactions. -/
+def Change.addedRows : Change F → List (GeneratedRow F)
+  | .add rows => rows
+  | .update _ _ new => [new]
+
+def ComponentState.applyChange (state : ComponentState F) (data : ProverData F) :
+    Change F → ComponentState F
+  | .add rows => rows.foldl (·.pushRow data) state
+  | .update index _ new => state.setRow index new
 
 /-- Whether a demand component answers the demand: it is on the mode's channel and triggers it, and
 the guard holds. -/
@@ -80,26 +94,19 @@ def multiplicityFor (state : ComponentState F) (demand : Demand F) : Option Mult
     state.multiplicity
   else none
 
-/-- The first row whose counted interaction carries the demanded message, with the multiplicity cell
-and the row's index. -/
-def findCountedRow (state : ComponentState F) (demand : Demand F) (data : ProverData F) :
+/-- The row that counts the demanded message, with the multiplicity cell and the row's index. -/
+def findCountedRow (state : ComponentState F) (demand : Demand F) :
     Option (MultiplicityColumn × ℕ × GeneratedRow F) :=
   (multiplicityFor state demand).bind fun multiplicity =>
-    state.rows.zipIdx.findSome? fun (row, index) =>
-      state.interactions[multiplicity.interaction]?.bind fun interaction =>
-        if (interaction.eval (Environment.fromArray row.values data)).msg == demand.message then
-          some (multiplicity, index, row)
-        else none
+    state.countedRows[demand.message]?.bind fun index =>
+      state.rows[index]?.map fun row => (multiplicity, index, row)
 
 /-- Add the demanded count to the multiplicity cell of a row, and complete the row again. -/
 def incrementMultiplicity (state : ComponentState F) (demand : Demand F) (data : ProverData F)
-    (hint : ProverHint F) : MultiplicityColumn × ℕ × GeneratedRow F → Mutation F
+    (hint : ProverHint F) : MultiplicityColumn × ℕ × GeneratedRow F → Change F
   | (multiplicity, index, row) =>
       let count := (row.input[multiplicity.column]?.getD 0) + FiniteField.fromNat demand.count
-      let updated := completeRow state (row.input.set! multiplicity.column count) data hint
-      { state := { state with rows := state.rows.set index updated }
-        removedRows := [row]
-        addedRows := [updated] }
+      .update index row (completeRow state (row.input.set! multiplicity.column count) data hint)
 
 /-- A new row answering the demanded message, whose multiplicity cell, if any, starts at the
 demanded count. -/
@@ -113,117 +120,125 @@ def DemandMode.newRow (state : ComponentState F) (mode : DemandMode F state.comp
 /-- Answer demand with one new row per occurrence, or, with a multiplicity cell, by counting it in
 the row for the message, which is created if there is none yet. -/
 def DemandMode.answer (state : ComponentState F) (mode : DemandMode F state.component.Input)
-    (demand : Demand F) (data : ProverData F) (hint : ProverHint F) : Mutation F :=
-  let addRows (rows : List (GeneratedRow F)) : Mutation F :=
-    { state := { state with rows := state.rows ++ rows }, addedRows := rows }
+    (demand : Demand F) (data : ProverData F) (hint : ProverHint F) : Change F :=
   match state.multiplicity with
-  | none => addRows (List.replicate demand.count (mode.newRow state demand data hint))
+  | none => .add (List.replicate demand.count (mode.newRow state demand data hint))
   | some _ =>
-      match findCountedRow state demand data with
+      match findCountedRow state demand with
       | some found => incrementMultiplicity state demand data hint found
-      | none => addRows [mode.newRow state demand data hint]
+      | none => .add [mode.newRow state demand data hint]
 
 /-- The component's answer to the demand, if it accepts it. A preallocated component accepts the
 messages it has a row for. -/
 def ComponentState.answer? (state : ComponentState F) (demand : Demand F) (data : ProverData F)
-    (hint : ProverHint F) : Option (Mutation F) :=
+    (hint : ProverHint F) : Option (Change F) :=
   match state.component.generation with
   | .demand mode =>
       if mode.accepts demand data hint then some (mode.answer state demand data hint) else none
   | .preallocated _ =>
-      (findCountedRow state demand data).map (incrementMultiplicity state demand data hint)
+      (findCountedRow state demand).map (incrementMultiplicity state demand data hint)
+
+/-- The answers of all components that accept the demand, with their indices and names. -/
+def answers (states : Array (ComponentState F)) (demand : Demand F) (data : ProverData F)
+    (hint : ProverHint F) : List (ℕ × String × Change F) :=
+  states.toList.zipIdx.filterMap fun (state, index) =>
+    (state.answer? demand data hint).map (index, state.component.circuit.name, ·)
 
 /-- The answer to the first demand that some component accepts, with that component's index. Fails
 if several components accept it. -/
-def findAnswer (states : List (ComponentState F)) (data : ProverData F) (hint : ProverHint F) :
-    List (Demand F) → Except GenerationError (Option (ℕ × Mutation F))
-  | [] => pure none
-  | demand :: demands =>
-      let answers := states.zipIdx.filterMap fun (state, index) =>
-        (state.answer? demand data hint).map (index, ·)
-      match answers with
-      | [] => findAnswer states data hint demands
-      | [answer] => pure (some answer)
-      | _ => throw (.ambiguousDemand demand.channel
-          (answers.map fun (_, mutation) => mutation.state.component.circuit.name))
+def findAnswer (states : Array (ComponentState F)) (data : ProverData F) (hint : ProverHint F)
+    (tally : Tally F) : Except GenerationError (Option (ℕ × Change F)) := do
+  for (_, demand) in tally.byPosition do
+    match answers states demand data hint with
+    | [] => pure ()
+    | [(index, _, change)] => return some (index, change)
+    | answers => throw (.ambiguousDemand demand.channel (answers.map (·.2.1)))
+  return none
 
-/-- Apply the answer of the component at `index`, and update the tally with the changed rows. -/
-def applyAnswer (states : List (ComponentState F)) (demands : List (Demand F)) (index : ℕ)
-    (mutation : Mutation F) (data : ProverData F) :
-    List (ComponentState F) × List (Demand F) :=
-  let removed := mutation.removedRows.flatMap (rowInteractions mutation.state · data)
-  let added := mutation.addedRows.flatMap (rowInteractions mutation.state · data)
-  (states.set index mutation.state,
-    Demand.addInteractions (Demand.removeInteractions demands removed) added)
+/-- Apply the change of the component at `index`, and update the tally with the changed rows. -/
+def applyAnswer (states : Array (ComponentState F)) (tally : Tally F) (index : ℕ)
+    (change : Change F) (data : ProverData F) : Array (ComponentState F) × Tally F :=
+  let (removed, added) := match states[index]? with
+    | some state =>
+        (change.removedRows.flatMap (rowInteractions state · data),
+          change.addedRows.flatMap (rowInteractions state · data))
+    | none => ([], [])
+  (states.modify index (·.applyChange data change),
+    (tally.removeInteractions removed).addInteractions added)
 
 /-! ### The loop -/
 
 /-- Answer demand until the tally is empty. -/
 def generateLoop (data : ProverData F) (hint : ProverHint F) :
-    ℕ → List (ComponentState F) → List (Demand F) →
-      Except GenerationError (List (ComponentState F))
+    ℕ → Array (ComponentState F) → Tally F → Except GenerationError (Array (ComponentState F))
   | 0, _, _ => throw .fuelExhausted
-  | fuel + 1, states, demands =>
-      if demands.isEmpty then pure states else do
-      match ← findAnswer states data hint demands with
-      | none => throw (.unhandledImbalance (demands.map (·.channel)))
-      | some (index, mutation) =>
-          let (states, demands) := applyAnswer states demands index mutation data
-          generateLoop data hint fuel states demands
+  | fuel + 1, states, tally =>
+      if tally.isEmpty then pure states else
+      match findAnswer states data hint tally with
+      | .error error => throw error
+      | .ok none => throw (.unhandledImbalance (tally.demands.map (·.channel)))
+      | .ok (some (index, change)) =>
+          let (states, tally) := applyAnswer states tally index change data
+          generateLoop data hint fuel states tally
 
 /-- The padded height of a demand-generated table. Preallocated tables are never padded. -/
 def ComponentState.targetHeight (state : ComponentState F) : ℕ :=
   match state.component.generation with
-  | .demand _ => nextPowerOfTwo state.rows.length
-  | .preallocated _ => state.rows.length
+  | .demand _ => nextPowerOfTwo state.rows.size
+  | .preallocated _ => state.rows.size
 
-/-- Pad every demand-generated table to its target height; returns the padded states and the
+/-- Pad a demand-generated table to its target height; returns the padded state and the
 interactions of the padding rows. -/
-def padTables (data : ProverData F) (hint : ProverHint F) (states : List (ComponentState F)) :
-    List (ComponentState F) × List (Interaction F) :=
-  let padded := states.map fun state =>
-    match state.component.generation with
-    | .preallocated _ => (state, [])
-    | .demand mode =>
-        let count := state.targetHeight - state.rows.length
-        let padding := (toElements mode.padding).toArray
-        let rows := List.replicate count (completeRow state padding data hint)
-        ({ state with rows := state.rows ++ rows }, rows.flatMap (rowInteractions state · data))
-  (padded.map (·.1), padded.flatMap (·.2))
+def ComponentState.pad (state : ComponentState F) (data : ProverData F) (hint : ProverHint F) :
+    ComponentState F × List (Interaction F) :=
+  match state.component.generation with
+  | .preallocated _ => (state, [])
+  | .demand mode =>
+      let row := completeRow state (toElements mode.padding).toArray data hint
+      let rows := List.replicate (state.targetHeight - state.rows.size) row
+      (rows.foldl (·.pushRow data) state, rows.flatMap (rowInteractions state · data))
 
 /-- Pad, then answer the demand of the padding rows, until no table grows. -/
 def padAndBalance (data : ProverData F) (hint : ProverHint F) (fuel : ℕ) :
-    ℕ → List (ComponentState F) → Except GenerationError (List (ComponentState F))
+    ℕ → Array (ComponentState F) → Except GenerationError (Array (ComponentState F))
   | 0, _ => throw .fuelExhausted
   | rounds + 1, states => do
-      let (states, added) := padTables data hint states
-      let states ← generateLoop data hint fuel states (Demand.addInteractions [] added)
-      if states.all fun state => state.rows.length == state.targetHeight then return states
+      let padded := states.map (·.pad data hint)
+      let tally := Tally.empty.addInteractions (padded.toList.flatMap (·.2))
+      let states ← generateLoop data hint fuel (padded.map (·.1)) tally
+      if states.all fun state => state.rows.size == state.targetHeight then return states
       padAndBalance data hint fuel rounds states
 
 /-! ### Generating a witness -/
+
+/-- The prover data of the preallocated rows' inputs, under their components' names. -/
+def initialData (states : Array (ComponentState F)) (inputs : Array (List (Array F))) :
+    List (String × PreparedRows F) :=
+  (states.zip inputs).toList.map fun (state, inputs) =>
+    (state.component.circuit.name, .ofRows inputs.toArray (size state.component.Input))
 
 /-- Generate an ensemble witness from an ensemble with validated generation, the public input and
 the prover's private input. -/
 def generateValid {ens : Ensemble F PublicIO} (valid : ValidGeneration ens) (fuel : ℕ)
     (publicInput : PublicIO F) (proverInput : ens.ProverInput F) :
     Except GenerationError (EnsembleWitness ens) := do
-  let hint := ens.hint proverInput
+  let hint : ProverHint F :=
+    readNamedRows (HintTable.prepare ens.hintTables (toElements proverInput).toArray)
   -- preallocate rows, and complete them with the prover data of all preallocated inputs
-  let initial := (ens.tables.zip valid.multiplicities).map fun (component, multiplicity) =>
+  let states := (ens.tables.zip valid.multiplicities).toArray.map fun (component, multiplicity) =>
     ComponentState.initial component multiplicity
-  let initial := initial.map fun state =>
-    { state with rows := (initialInputs state hint).map fun input => { input, values := input } }
-  let data := generatedData initial
-  let initial := initial.map fun state =>
-    { state with rows := state.rows.map fun row => completeRow state row.input data hint }
+  let inputs := states.map (initialInputs · hint)
+  let data : ProverData F := readNamedRows (initialData states inputs)
+  let states := (states.zip inputs).map fun (state, inputs) =>
+    inputs.foldl (fun state input => state.pushRow data (completeRow state input data hint)) state
   -- start the chain reaction from the verifier's and the preallocated rows' interactions
   let verifier := ens.verifierOperations.interactionValues (.fromInput publicInput data)
-  let rows := initial.flatMap fun state => state.rows.flatMap (rowInteractions state · data)
-  let demands := Demand.addInteractions [] (verifier ++ rows)
-  let generated ← generateLoop data hint fuel initial demands
+  let rows := states.toList.flatMap fun state =>
+    state.rows.toList.flatMap (rowInteractions state · data)
+  let tally := Tally.empty.addInteractions (verifier ++ rows)
+  let generated ← generateLoop data hint fuel states tally
   let padded ← padAndBalance data hint fuel fuel generated
-  let assembled ← assembleTables ens.tables padded
+  let assembled ← assembleTables ens.tables padded.toList
   return {
     tables := withDerivedData assembled.tables
     publicInput
@@ -252,6 +267,6 @@ def constraintsHold {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness 
 
 /-- Whether all channels of a witness balance. -/
 def channelsBalanced {ensemble : Ensemble F PublicIO} (witness : EnsembleWitness ensemble) : Bool :=
-  (Demand.addInteractions [] witness.interactions).isEmpty
+  (Tally.empty.addInteractions witness.interactions).isEmpty
 
 end Air.Flat.WitnessGeneration

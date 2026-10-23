@@ -57,6 +57,21 @@ def HintTable.hint (tables : List HintTable) (elements : Array F) : ProverHint F
       elements.extract (table.offset + row.val * table.width)
         (table.offset + (row.val + 1) * table.width)
 
+/-- The hint tables prepared for reading, see `HintTable.readNamedRows_prepare`. -/
+def HintTable.prepare (tables : List HintTable) (elements : Array F) :
+    List (String × PreparedRows F) :=
+  tables.map fun table =>
+    (table.key, .ofRows (Array.ofFn fun (row : Fin table.rows) =>
+      elements.extract (table.offset + row.val * table.width)
+        (table.offset + (row.val + 1) * table.width)) table.width)
+
+lemma HintTable.readNamedRows_prepare (tables : List HintTable) (elements : Array F) :
+    readNamedRows (prepare tables elements) = hint tables elements := by
+  funext key width
+  simp only [readNamedRows, prepare, hint, List.find?_map, Function.comp_def]
+  cases tables.find? (fun table => table.key == key) <;>
+    simp [PreparedRows.read_eq, PreparedRows.ofRows, Array.map_ofFn, Function.comp_def]
+
 /-- An ensemble of AIR components: everything a prover and a verifier implementation need. -/
 structure Ensemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO] where
   /-- Components have unique names. Their order is the order of the traces. -/
