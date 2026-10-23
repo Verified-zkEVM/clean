@@ -117,7 +117,10 @@ fn semantic_row<E>(
     let mut committed = committed.into_iter();
     let mut row = Vec::new();
     loop {
-        let value = if fixed_columns.next_if(|&&column| column == row.len()).is_some() {
+        let value = if fixed_columns
+            .next_if(|&&column| column == row.len())
+            .is_some()
+        {
             fixed.next()
         } else {
             committed.next()
