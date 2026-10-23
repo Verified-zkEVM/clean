@@ -516,16 +516,16 @@ def soundEnsemble {memorySize : UInt64} (program : Array (F p)) (h_program : Val
     (h_memorySize : memorySize.toNat < p) (initialState : State (F p)) :=
   SoundEnsemble.empty (F p) fieldPair
   |>.addLookup (programLookup program h_program)
+  |>.addChannel memoryChannel.toRaw (by simp [circuit_norm, memoryChannel, programLookup])
   |>.addTable (memoryComponent memorySize h_memorySize)
     (by simp +instances [circuit_norm, memoryComponent, provideMemory])
     (by simp [circuit_norm, memoryComponent, provideMemory, programLookup, memoryChannel])
     (by simp [circuit_norm, memoryComponent, provideMemory, programLookup])
-  |>.addFinishedChannel memoryChannel.toRaw
+  |>.markFinished memoryChannel.toRaw
   |>.addVm (vm program h_program initialState)
-    (by simp +instances [circuit_norm, vm, programLookup, memoryComponent, provideMemory,
-      stateChannel, memoryChannel])
+    (by simp [circuit_norm, vm, programLookup, stateChannel, memoryChannel])
     (by simp +instances [circuit_norm, vm, executeStep, verifier])
-    (by simp [circuit_norm, vm, executeStep, verifier, stateChannel,
+    (by simp +instances [circuit_norm, vm, executeStep, verifier, stateChannel,
       programLookup, memoryChannel])
     (by simp [circuit_norm, vm, executeStep, memoryComponent, provideMemory, programLookup])
   |>.withProverInput (fields memorySize.toNat)

@@ -234,16 +234,16 @@ def fibonacciVm : VmTables (F p) fieldTriple where
 
 def fibonacciEnsemble := SoundEnsemble.empty (F p) fieldTriple
   |>.addLookup bytes
+  |>.addChannel add8Channel.toRaw (by simp [circuit_norm, add8Channel, bytes])
   |>.addTable add8Component
     (by simp [circuit_norm, add8])
-    (by simp [circuit_norm, add8])
+    (by simp [circuit_norm, add8, add8Channel, bytes])
     (by simp [circuit_norm, add8, bytes])
-  |>.addFinishedChannel add8Channel.toRaw
+  |>.markFinished add8Channel.toRaw
   |>.addVm fibonacciVm
-    (by simp +instances [circuit_norm, fibonacciVm, add8, bytes,
-      add8Channel, fibonacciChannel])
+    (by simp +instances [circuit_norm, fibonacciVm, bytes, add8Channel, fibonacciChannel])
     (by simp +instances [circuit_norm, fibonacciVm, fib8, fibonacciVerifier])
-    (by simp [circuit_norm, fibonacciVm, fib8, fibonacciVerifier,
+    (by simp +instances [circuit_norm, fibonacciVm, fib8, fibonacciVerifier,
       add8Channel, fibonacciChannel])
     (by simp [circuit_norm, fibonacciVm, fib8, add8, bytes])
   |>.toFormal (fun _ => True)

@@ -76,7 +76,10 @@ def pushedValues : Ensemble (F pBabybear) unit where
   tables := [sink]
   unique_names := by simp
   channels := [valueChannel.toRaw]
+  unique_channel_names := by simp
   verifier := pushingVerifier
+  tables_channels := by simp [circuit_norm, sink, consumeValue]
+  verifier_channels := by simp [circuit_norm, pushingVerifier]
 
 def pushedResult : Except String (F pBabybear × Bool × Bool) :=
   match generate pushedValues 1000 () () with
