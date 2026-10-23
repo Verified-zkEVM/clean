@@ -78,6 +78,8 @@ The window's selectors are 0 or 1 in Clean's semantics. Plonky3's selectors are 
 
 VM tables are single-row, since the VM soundness argument derives each row's requirements from its own guarantees.
 
+`Clean/Examples/KeccakAir` is Plonky3's Keccak-f AIR (`p3-keccak-air`) as a two-row component, with Plonky3's columns and constraints in Plonky3's order. A row assumes, unless it is the first row, that its one-hot step flags are those of a round `r` and its input is the state after `r` rounds of its preimage; its spec is that it computes round `r`. `KeccakAir.table_block_soundness` concludes that every block of 24 rows starting at round 0 outputs Keccak-f of its preimage, and `KeccakAir.table_soundness` that every row computing the last round outputs Keccak-f of its preimage.
+
 ## Relation To Clean/Table
 
 `Clean/Table` is the older table infrastructure. Its `InductiveTable` interface models classic AIRs where a row transition may directly relate adjacent rows, by putting the output of one VM step in the same relative position as the input of the next step. Two-row components cover the same ground: a step's output can be constrained against the next row's input, and an inductive table's spec on the current state becomes the invariant that a row assumes unless it is the first row. They differ in that the window is an ordinary circuit input instead of a cell assignment across rows, and in that two-row components interact with channels like any other component.
