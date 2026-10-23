@@ -5,7 +5,7 @@ use p3_commit::ExtensionMmcs;
 use p3_dft::Radix2DitParallel;
 use p3_field::extension::BinomialExtensionField;
 use p3_field::Field;
-use p3_fri::{create_test_fri_params, TwoAdicFriPcs};
+use p3_fri::{FriParameters, TwoAdicFriPcs};
 use p3_merkle_tree::MerkleTreeMmcs;
 use p3_symmetric::{PaddingFreeSponge, TruncatedPermutation};
 use rand::rngs::SmallRng;
@@ -14,17 +14,19 @@ use rand::SeedableRng;
 pub mod setup {
     use super::*;
 
+    /// The base-2 logarithm of the length of FRI's final polynomial.
+    const LOG_FINAL_POLY_LEN: usize = 2;
+
+    /// The smallest trace height the test configuration accepts: FRI folds every trace down to its
+    /// final polynomial, so the trace's degree must exceed that polynomial's length.
+    pub const MINIMUM_TRACE_HEIGHT: usize = 1 << (LOG_FINAL_POLY_LEN + 1);
+
     pub type Val = BabyBear;
     pub type Perm = Poseidon2BabyBear<16>;
     pub type MyHash = PaddingFreeSponge<Perm, 16, 8, 8>;
     pub type MyCompress = TruncatedPermutation<Perm, 2, 8, 16>;
-    pub type ValMmcs = MerkleTreeMmcs<
-        <Val as Field>::Packing,
-        <Val as Field>::Packing,
-        MyHash,
-        MyCompress,
-        8,
-    >;
+    pub type ValMmcs =
+        MerkleTreeMmcs<<Val as Field>::Packing, <Val as Field>::Packing, MyHash, MyCompress, 2, 8>;
     pub type Challenge = BinomialExtensionField<Val, 4>;
     pub type ChallengeMmcs = ExtensionMmcs<Val, Challenge, ValMmcs>;
     pub type Challenger = DuplexChallenger<Val, Perm, 16, 8>;
@@ -37,10 +39,10 @@ pub mod setup {
         let perm = Perm::new_from_rng_128(&mut rng);
         let hash = MyHash::new(perm.clone());
         let compress = MyCompress::new(perm.clone());
-        let val_mmcs = ValMmcs::new(hash, compress);
+        let val_mmcs = ValMmcs::new(hash, compress, 0);
         let challenge_mmcs = ChallengeMmcs::new(val_mmcs.clone());
         let dft = Dft::default();
-        let fri = create_test_fri_params(challenge_mmcs, 2);
+        let fri = FriParameters::new_testing(challenge_mmcs, LOG_FINAL_POLY_LEN);
         let pcs = Pcs::new(dft, val_mmcs, fri);
         let challenger = Challenger::new(perm);
         MyConfig::new(pcs, challenger)

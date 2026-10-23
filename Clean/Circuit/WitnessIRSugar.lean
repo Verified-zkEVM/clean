@@ -35,6 +35,7 @@ namespace Witgen
 /-! ## Operators and coercions -/
 
 instance : Coe (Expression F) (FExpr F) := ⟨.expr⟩
+instance : Coe (U64Expr F) (FExpr F) := ⟨.ofU64⟩
 instance : Coe (Expression F) (field (FExpr F)) where
   coe e := .expr e
 instance : Coe F (FExpr F) := ⟨.const⟩
@@ -130,6 +131,9 @@ abbrev FExpr.bit [Field F] (e : FExpr F) (i : ℕ) : FExpr F := (BExpr.bit e i).
 /-- Bit `i` of the field value of a circuit expression: `x.bit i`. -/
 abbrev _root_.Expression.bit [Field F] (e : Expression F) (i : ℕ) : FExpr F :=
   (BExpr.bit (.expr e) i).toField
+
+/-- The row index as a field element: `.idx`. -/
+abbrev FExpr.idx : FExpr F := .ofU64 .idx
 
 /-- A bit-valued condition cast into the field is the corresponding `0`/`1` element —
 the same normal form `VExpr.bitsOf` evaluates to, so bit-decomposition proofs see one
@@ -272,6 +276,9 @@ instance {F : Type} {n : ℕ} : GetElem (Var (fields n) F) (U64Expr F) (FExpr F)
 instance {F : Type} {n : ℕ} : GetElem (Vector (FExpr F) n) (U64Expr F) (FExpr F) (fun _ _ => True) where
   getElem v i _ := FExpr.listGet v.toList i
 
+instance {F : Type} : GetElem (Array F) (U64Expr F) (FExpr F) (fun _ _ => True) where
+  getElem xs i _ := FExpr.listGet (xs.toList.map FExpr.const) i
+
 /-! Desugar the `GetElem` instances above to `FExpr.listGet`, for the same reason as the
 operator lemmas: matchers and simp keying do not see through the instances. -/
 
@@ -281,6 +288,8 @@ operator lemmas: matchers and simp keying do not see through the instances. -/
     v[i] = FExpr.listGet (v.toList.map FExpr.expr) i := rfl
 @[circuit_norm] theorem getElem_vector_fexpr_def {F : Type} {n : ℕ} (v : Vector (FExpr F) n) (i : U64Expr F) :
     v[i] = FExpr.listGet v.toList i := rfl
+@[circuit_norm] theorem getElem_array_const_def {F : Type} (xs : Array F) (i : U64Expr F) :
+    xs[i] = FExpr.listGet (xs.toList.map FExpr.const) i := rfl
 
 @[circuit_norm]
 lemma evalList_map_vector_const {F : Type} {ctx : Ctx F} [FiniteField F] {n : ℕ} (v : Vector F n) (i : ℕ) :
@@ -288,6 +297,24 @@ lemma evalList_map_vector_const {F : Type} {ctx : Ctx F} [FiniteField F] {n : �
   induction v using Vector.induct generalizing i with
   | nil => simp [FExpr.evalList]
   | cons hd tl ih => cases i <;> simp_all [FExpr.evalList, FExpr.eval]
+
+@[circuit_norm]
+lemma evalList_map_array_const {F : Type} {ctx : Ctx F} [FiniteField F] (xs : Array F) (i : ℕ) :
+    FExpr.evalList ctx i (xs.toList.map FExpr.const) = xs[i]?.getD 0 := by
+  rcases xs with ⟨xs⟩
+  induction xs generalizing i with
+  | nil => simp [FExpr.evalList]
+  | cons hd tl ih => cases i <;> simp_all [FExpr.evalList, FExpr.eval]
+
+@[circuit_norm]
+lemma evalList_map_list_const {F : Type} {ctx : Ctx F} [FiniteField F] (xs : List F) (i : ℕ) :
+    FExpr.evalList ctx i (xs.map FExpr.const) = xs[i]?.getD 0 := by
+  simpa using evalList_map_array_const (ctx := ctx) xs.toArray i
+
+@[circuit_norm]
+lemma evalList_map_const_comp {F α : Type} {ctx : Ctx F} [FiniteField F] (xs : List α) (f : α → F)
+    (i : ℕ) : FExpr.evalList ctx i (xs.map (FExpr.const ∘ f)) = (xs[i]?.map f).getD 0 := by
+  simpa using evalList_map_list_const (ctx := ctx) (xs.map f) i
 
 @[circuit_norm]
 lemma evalList_map_vector_expr {F : Type} {ctx : Ctx F} [FiniteField F] {n : ℕ} (v : Vector (Expression F) n) (i : ℕ) :

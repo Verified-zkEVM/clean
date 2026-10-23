@@ -4,7 +4,7 @@ public import Clean.Circuit.Json
 public import Clean.Circuit.Formal
 
 /-!
-# Witness-generation export (witgen IR plan, phase 6)
+# Witness-generation export
 
 Two pieces:
 
@@ -12,7 +12,7 @@ Two pieces:
    offending operations) if any witness generator reachable from `c` is a `.native`
    closure. Since the witness IR is plain data, this is a *runtime* check (an `#eval`
    under the hood): no expression-level normalization is involved, so it is immune to
-   the `whnf`-timeout problems that sank the PR #401 spike.
+   `whnf` timeouts.
 
 2. **Serialization** — `ToJson`-style encoders for the witness IR, mirroring the
    constraint export conventions in `Clean/Circuit/Json.lean` (tagged `{"type": ...}`
@@ -22,8 +22,8 @@ Two pieces:
    `.native` witnesses.
 
 Trust note: a wrong Rust witgen is a completeness bug, not a soundness bug — the
-serialized IR is differentially tested against the Lean reference interpreter
-(`Circuit.witgen`, phase 3), not verified.
+Rust evaluation of the IR is differentially tested against Lean's
+(`Clean/Backends/Plonky3/Test/Reference.lean`), not verified.
 -/
 
 @[expose] public section
