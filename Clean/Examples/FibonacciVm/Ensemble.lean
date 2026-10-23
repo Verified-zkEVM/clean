@@ -102,19 +102,16 @@ def add8 : GeneralFormalCircuit (F p) Add8Inputs unit where
     change carry = floorDiv (input_x + input_y) 256 at h_env
     grind
 
-example (input : Var Add8Inputs (F p)) :
-    ExplicitCircuit (add8.main input) := by
-  infer_explicit_circuit
-
 /-- The addition chip: one row per distinct message pulled from the addition channel, with the
 number of pulls as its multiplicity `m`. -/
 abbrev add8Component : Component (F p) where
   circuit := add8
+  /- witness generation: whenever someone ... -/
   generation := .demand {
-    channel := add8Channel
-    trigger := .pull
+    trigger := .pull -- pulls ...
+    channel := add8Channel --- from the addition channel ...
+    --- this circuit is run with the channel message (x, y, z) and its current multiplicity as input.
     input | (x, y, z) => pure { x, y, z, m := .multiplicity }
-    padding := { x := 0, y := 0, z := 0, m := 0 }
   }
 
 def fibonacci : ℕ → (ℕ × ℕ)
@@ -209,10 +206,9 @@ disabled. -/
 abbrev fib8Component : Component (F p) where
   circuit := fib8
   generation := .demand {
-    channel := fibonacciChannel
     trigger := .push
+    channel := fibonacciChannel
     input | (n, x, y) => pure { enabled := 1, n, x, y }
-    padding := { enabled := 0, n := 0, x := 0, y := 0 }
   }
 
 -- completing Fibonacci channel with input and output

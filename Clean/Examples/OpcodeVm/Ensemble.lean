@@ -159,13 +159,17 @@ def step (program : Program) (h_program : program.length < p) (initial : F p) (o
     GeneralFormalCircuit (F p) StepInput unit where
   name := opcode.name
   main input := do
+    -- enabled flag is boolean
     assertZero (input.enabled * (input.enabled - 1))
+    -- pull current state
     (stateChannel program initial).pullIf input.enabled { pc := input.pc, acc := input.acc }
+    -- look up current operand in the program
     let operand ← witness (programCell input.pc 2)
-    (programLookup program).channel.pullIf input.enabled
-      { pc := input.pc, opcode := .const (opcode.code : F p), operand }
-    (stateChannel program initial).pushIf input.enabled
-      { pc := input.pc + 1, acc := opcode.apply input.acc operand }
+    (programLookup program).channel.pullIf input.enabled ⟨ input.pc, .const opcode.code, operand ⟩
+    -- compute next accumulator (this statically branches the circuit layout based on the operand)
+    let acc := opcode.apply input.acc operand
+    -- push next state
+    (stateChannel program initial).pushIf input.enabled { pc := input.pc + 1, acc }
 
   exposedChannels
   | { enabled, pc, acc }, i₀ =>
@@ -203,17 +207,17 @@ def step (program : Program) (h_program : program.length < p) (initial : F p) (o
     circuit_proof_start [programCell, programCellIn]
     rcases h_assumptions with h | ⟨h, h_state, h_contains⟩ <;> simp_all
 
-/-- The table of `opcode`: one row per state whose `pc` holds `opcode`. Padding rows are
-disabled. -/
+/-- The table of `opcode`: one row per state whose `pc` holds `opcode`. -/
 abbrev stepComponent (program : Program) (h_program : program.length < p) (initial : F p)
     (opcode : Opcode) : Component (F p) where
   circuit := step program h_program initial opcode
+  -- witness generation: whenever someone pushes to the state channel,
   generation := .demand {
     channel := stateChannel program initial
     trigger := .push
+    -- we handle this message if the current program opcode matches the static opcode parameter
     guard state := programCell state.pc 1 =? Witgen.FExpr.const (opcode.code : F p)
     input | { pc, acc } => pure { enabled := 1, pc, acc }
-    padding := { enabled := 0, pc := 0, acc := 0 }
   }
 
 /-- The public input `final` claims that running the program on the initial accumulator ends with

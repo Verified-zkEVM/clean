@@ -125,7 +125,7 @@ def rowEnvironment [FiniteField F] (hint : ProverHint F) : ProverEnvironment F :
   { get _ := 0, data _ _ := #[], hint }
 
 /-- Rows created by channel demand. -/
-structure DemandMode (F : Type) (Input : TypeMap) [ProvableType Input] where
+structure DemandMode (F : Type) [FiniteField F] (Input : TypeMap) [ProvableType Input] where
   {Message : TypeMap} [provableMessage : ProvableType Message]
   /-- The channel whose unanswered messages create rows of this component. -/
   channel : Channel F Message
@@ -142,7 +142,7 @@ structure DemandMode (F : Type) (Input : TypeMap) [ProvableType Input] where
   /-- The input of the rows appended after balancing, to make the table's height a power of two.
   Padding rows are completed by the component's witness programs like any other row; if they
   interact, the generator balances again. -/
-  padding : Input F
+  padding : Input F := 0
 
 /-- A fixed number of rows, which answer demand on the channel by counting it in their multiplicity
 cell. The fixed cells of all rows are the component's fixed columns. -/
@@ -155,6 +155,8 @@ structure PreallocatedMode (F : Type) (Input : TypeMap) [ProvableType Input] whe
   /-- The input of row `i`. Its `let`-steps and fixed cells are computed from `i` alone; its witness
   cells may also read the hint. Its multiplicity cell starts at 0. -/
   input (i : Witgen.U64Expr F) : Witgen.M F (Input (Cell F))
+
+variable [FiniteField F]
 
 instance {Input : TypeMap} [ProvableType Input] (mode : DemandMode F Input) :
     ProvableType mode.Message :=
@@ -170,7 +172,7 @@ def DemandMode.guardCondition {Input : TypeMap} [ProvableType Input] (mode : Dem
   mode.guard (varFromOffset mode.Message 0)
 
 /-- How the generator builds the rows of a component with input `Input`. -/
-inductive Generation (F : Type) (Input : TypeMap) [ProvableType Input] where
+inductive Generation (F : Type) [FiniteField F] (Input : TypeMap) [ProvableType Input] where
   | demand (mode : DemandMode F Input)
   | preallocated (mode : PreallocatedMode F Input)
 
@@ -193,7 +195,7 @@ end Generation
 /-! ### Fixed cells -/
 
 namespace PreallocatedMode
-variable [FiniteField F] {Input : TypeMap} [ProvableType Input]
+variable {Input : TypeMap} [ProvableType Input]
 
 /-- The input agrees with the fixed cells of row `i`. -/
 @[circuit_norm]
@@ -211,7 +213,7 @@ end PreallocatedMode
 /-- The fixed-column fact about the input of row `i`: in a preallocated component, the row lies
 within the height, and the input agrees with the row's fixed cells. -/
 @[circuit_norm]
-def Generation.FixedInputAt [FiniteField F] {Input : TypeMap} [ProvableType Input] :
+def Generation.FixedInputAt {Input : TypeMap} [ProvableType Input] :
     Generation F Input → UInt64 → Input F → Prop
   | .demand _, _, _ => True
   | .preallocated mode, i, input => i < mode.height ∧ mode.FixedAt i input
