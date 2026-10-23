@@ -87,17 +87,16 @@ def DemandMode.accepts {Input : TypeMap} [ProvableType Input] (mode : DemandMode
   mode.channel.name == demand.channel && mode.trigger == demand.direction &&
     mode.guardCondition.eval { env := .fromArray demand.message data hint }
 
-/-- The multiplicity cell that answers `demand`: the component's, if the demand is on its channel
-and the message was pulled more often than pushed. -/
-def multiplicityFor (state : ComponentState F) (demand : Demand F) : Option MultiplicityColumn :=
-  if demand.direction == .pull && state.component.generation.channelName == demand.channel then
-    state.multiplicity
-  else none
+/-- Whether a preallocated component answers the demand: it is on the mode's channel, and the
+message was pulled more often than pushed. Answering also needs a row for the message. -/
+def PreallocatedMode.accepts {Input : TypeMap} [ProvableType Input]
+    (mode : PreallocatedMode F Input) (demand : Demand F) : Bool :=
+  mode.channel.name == demand.channel && demand.direction == .pull
 
 /-- The row that counts the demanded message, with the multiplicity cell and the row's index. -/
 def findCountedRow (state : ComponentState F) (demand : Demand F) :
     Option (MultiplicityColumn × ℕ × GeneratedRow F) :=
-  (multiplicityFor state demand).bind fun multiplicity =>
+  state.multiplicity.bind fun multiplicity =>
     state.countedRows[demand.message]?.bind fun index =>
       state.rows[index]?.map fun row => (multiplicity, index, row)
 
@@ -135,8 +134,10 @@ def ComponentState.answer? (state : ComponentState F) (demand : Demand F) (data 
   match state.component.generation with
   | .demand mode =>
       if mode.accepts demand data hint then some (mode.answer state demand data hint) else none
-  | .preallocated _ =>
-      (findCountedRow state demand).map (incrementMultiplicity state demand data hint)
+  | .preallocated mode =>
+      if mode.accepts demand then
+        (findCountedRow state demand).map (incrementMultiplicity state demand data hint)
+      else none
 
 /-- The answers of all components that accept the demand, with their indices and names. -/
 def answers (states : Array (ComponentState F)) (demand : Demand F) (data : ProverData F)

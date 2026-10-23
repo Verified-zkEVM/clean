@@ -483,12 +483,8 @@ impl<F: WitnessField> Table<F> {
         interactions
     }
 
-    /// The first row whose counted interaction carries the demanded message, if the demand is a
-    /// pull on `channel`.
-    fn counted_row(&self, channel: &str, demand: &Demand<F>) -> Option<usize> {
-        if demand.direction() != Direction::Pull || demand.channel != channel {
-            return None;
-        }
+    /// The first row whose counted interaction carries the demanded message.
+    fn counted_row(&self, demand: &Demand<F>) -> Option<usize> {
         self.counted_rows.get(&demand.message).copied()
     }
 }
@@ -505,8 +501,8 @@ enum Answer<'a, F> {
 }
 
 /// How the component answers the demand, if it accepts it: a demand component accepts the messages
-/// on its channel that trigger it and that its guard holds for, a preallocated one those it has a
-/// row for.
+/// on its channel that trigger it and that its guard holds for, a preallocated one the pulls on its
+/// channel that it has a row for.
 fn accepts<'a, F: WitnessField>(
     mode: &'a Mode<F>,
     demand: &Demand<F>,
@@ -523,8 +519,9 @@ fn accepts<'a, F: WitnessField>(
             channel,
             multiplicity,
             ..
-        } => table
-            .counted_row(channel, demand)
+        } => (demand.channel == *channel && demand.direction() == Direction::Pull)
+            .then(|| table.counted_row(demand))
+            .flatten()
             .map(|row_index| Answer::Multiplicity {
                 multiplicity,
                 row_index,
@@ -585,7 +582,7 @@ fn handle_demand<F: WitnessField, P: Program<F>>(
 ) -> Result<(), String> {
     let new_rows = match &mode.multiplicity {
         None => demand.count(),
-        Some(multiplicity) => match table.counted_row(mode.channel, demand) {
+        Some(multiplicity) => match table.counted_row(demand) {
             Some(row_index) => {
                 return increment_multiplicity::<F, P>(
                     component,
