@@ -4,10 +4,9 @@
 /// Implements an extracted ensemble on top of its generated modules.
 ///
 /// Every module listed in `components`, and the module `verifier`, must be in scope. Component
-/// modules provide the constants `NAME`, `INPUT_WIDTH`, `WIDTH`, `FIXED_COLUMNS`, `FIXED_HEIGHT`
-/// and `INTERACTIONS`, and the functions `fixed_row`, `complete`, `constraints`, `interactions`,
-/// `mode` and `initial_row`. The verifier module provides `INTERACTIONS` and
-/// `interactions`.
+/// modules provide the constants `NAME`, `INPUT_WIDTH`, `WIDTH`, `FIXED_COLUMNS` and
+/// `FIXED_HEIGHT`, and the functions `fixed_row`, `complete`, `constraints`, `interactions`, `mode`
+/// and `initial_row`. The verifier module provides `interactions`.
 ///
 /// The macro defines the type `Ensemble`, implementing both traits, the AIR statement
 /// `Statement<F>`, and `generate`, the witness generator.
@@ -112,8 +111,6 @@ macro_rules! ensemble {
                 &[$($component::WIDTH - $component::FIXED_COLUMNS.len()),+];
             const FIXED_COLUMNS: &'static [&'static [usize]] = &[$($component::FIXED_COLUMNS),+];
             const FIXED_HEIGHTS: &'static [usize] = &[$($component::FIXED_HEIGHT),+];
-            const INTERACTIONS_PER_ROW: &'static [usize] = &[$($component::INTERACTIONS),+];
-            const VERIFIER_INTERACTIONS: usize = verifier::INTERACTIONS;
 
             fn fixed_row<F: $crate::witness_generation::WitnessField>(
                 component: usize,

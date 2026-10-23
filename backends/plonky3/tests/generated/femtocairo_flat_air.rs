@@ -649,8 +649,6 @@ pub mod component_0 {
         ]
     }
 
-    pub const INTERACTIONS: usize = 12;
-
     pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
         vec![
             Interaction {
@@ -799,8 +797,6 @@ pub mod component_1 {
         vec![]
     }
 
-    pub const INTERACTIONS: usize = 1;
-
     pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
         vec![Interaction {
             channel: "memory",
@@ -901,8 +897,6 @@ pub mod component_2 {
         vec![]
     }
 
-    pub const INTERACTIONS: usize = 1;
-
     pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
         vec![Interaction {
             channel: "program",
@@ -975,8 +969,6 @@ pub mod component_2 {
 #[allow(unused_variables, unused_parens)]
 pub mod verifier {
     use super::*;
-
-    pub const INTERACTIONS: usize = 2;
 
     pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
         vec![

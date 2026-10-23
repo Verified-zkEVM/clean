@@ -40,8 +40,6 @@ pub mod component_0 {
         vec![(row[0].clone() * (row[0].clone() + (-E::from_u64(1u64) * E::from_u64(1u64))))]
     }
 
-    pub const INTERACTIONS: usize = 3;
-
     pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
         vec![
             Interaction {
@@ -144,8 +142,6 @@ pub mod component_1 {
     pub fn constraints<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<E> {
         vec![(row[0].clone() * (row[0].clone() + (-E::from_u64(1u64) * E::from_u64(1u64))))]
     }
-
-    pub const INTERACTIONS: usize = 3;
 
     pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
         vec![
@@ -277,8 +273,6 @@ pub mod component_2 {
         vec![]
     }
 
-    pub const INTERACTIONS: usize = 1;
-
     pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
         vec![Interaction {
             channel: "program",
@@ -346,8 +340,6 @@ pub mod component_2 {
 #[allow(unused_variables, unused_parens)]
 pub mod verifier {
     use super::*;
-
-    pub const INTERACTIONS: usize = 2;
 
     pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> {
         vec![

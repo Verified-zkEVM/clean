@@ -68,9 +68,7 @@ def constraintsToRust (constraints : List (Expression F)) : String :=
 
 /-- `fn interactions<E>(row: &[E]) -> Vec<Interaction<E>>` -/
 def interactionsToRust (interactions : List (AbstractInteraction F)) : String :=
-  s!"pub const INTERACTIONS: usize = {interactions.length};
-
-pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> \{
+  s!"pub fn interactions<E: PrimeCharacteristicRing + Clone>(row: &[E]) -> Vec<Interaction<E>> \{
     vec![{commaSep (interactions.map interactionToRust)}]
 }"
 

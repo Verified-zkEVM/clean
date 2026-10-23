@@ -111,8 +111,6 @@ impl GeneratedAirSpec for PermutedMemoryAddresses {
     const WIDTHS: &'static [usize] = Spec::WIDTHS;
     const FIXED_COLUMNS: &'static [&'static [usize]] = Spec::FIXED_COLUMNS;
     const FIXED_HEIGHTS: &'static [usize] = Spec::FIXED_HEIGHTS;
-    const INTERACTIONS_PER_ROW: &'static [usize] = Spec::INTERACTIONS_PER_ROW;
-    const VERIFIER_INTERACTIONS: usize = Spec::VERIFIER_INTERACTIONS;
 
     fn fixed_row<F: WitnessField>(component: usize, row: u64) -> Vec<F> {
         let row = match (component, row) {

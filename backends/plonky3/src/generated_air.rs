@@ -87,8 +87,6 @@ pub trait GeneratedAirSpec: Clone + Sync {
     /// The input columns that are fixed columns, per component, in increasing order.
     const FIXED_COLUMNS: &'static [&'static [usize]];
     const FIXED_HEIGHTS: &'static [usize];
-    const INTERACTIONS_PER_ROW: &'static [usize];
-    const VERIFIER_INTERACTIONS: usize;
 
     /// The fixed-column values of one row of a component with fixed columns.
     fn fixed_row<F: WitnessField>(component: usize, row: u64) -> Vec<F>;
@@ -187,7 +185,6 @@ impl<F: WitnessField, P: GeneratedAirSpec> GeneratedEnsemble<F, P> {
         for (metadata, actual) in [
             ("fixed columns", P::FIXED_COLUMNS.len()),
             ("fixed heights", P::FIXED_HEIGHTS.len()),
-            ("interactions per row", P::INTERACTIONS_PER_ROW.len()),
         ] {
             if actual != expected {
                 return Err(EnsembleShapeError::MetadataCount {
@@ -230,21 +227,23 @@ impl<F: WitnessField, P: GeneratedAirSpec> GeneratedEnsemble<F, P> {
             height: verifier_height,
         }));
 
-        let interactions = trace_heights
-            .iter()
-            .copied()
-            .zip(P::INTERACTIONS_PER_ROW.iter().copied())
-            .try_fold(
-                P::VERIFIER_INTERACTIONS as u128,
-                |total, (height, per_row)| {
-                    let component = (height as u128)
-                        .checked_mul(per_row as u128)
-                        .ok_or(EnsembleShapeError::InteractionCountOverflow)?;
-                    total
-                        .checked_add(component)
-                        .ok_or(EnsembleShapeError::InteractionCountOverflow)
-                },
-            )?;
+        // The generated interaction functions return the same number of interactions for every
+        // row, so evaluating them on zeros counts them.
+        let verifier_interactions =
+            P::verifier_interactions(&vec![F::ZERO; P::PUBLIC_VALUES]).len() as u128;
+        let interactions = trace_heights.iter().copied().enumerate().try_fold(
+            verifier_interactions,
+            |total, (component, height)| {
+                let width = P::WIDTHS[component] + P::FIXED_COLUMNS[component].len();
+                let per_row = P::interactions(component, &vec![F::ZERO; width]).len();
+                let component = (height as u128)
+                    .checked_mul(per_row as u128)
+                    .ok_or(EnsembleShapeError::InteractionCountOverflow)?;
+                total
+                    .checked_add(component)
+                    .ok_or(EnsembleShapeError::InteractionCountOverflow)
+            },
+        )?;
         if interactions >= F::ORDER_U64 as u128 {
             return Err(EnsembleShapeError::InteractionCountBound {
                 interactions,
