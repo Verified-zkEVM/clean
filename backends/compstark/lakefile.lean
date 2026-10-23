@@ -14,7 +14,7 @@ require Clean from "../.."
 
 -- CompStark's `main`.
 require CompStark from git "https://github.com/zksecurity/CompStark" @
-  "80eefbd2fbabf6a84a86b1dcf8ccf96062cd35c9"
+  "29aaf95b5cf111f46e8784dbb4f981a56b964aeb"
 
 @[default_target]
 lean_lib CleanCompStark

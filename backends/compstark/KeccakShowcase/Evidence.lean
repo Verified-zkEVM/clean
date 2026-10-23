@@ -117,13 +117,14 @@ def firstDifference (a b : String) : Option (ℕ × String × String) :=
   ((la.zip lb).zipIdx.find? fun ((x, y), _) => x != y).map (fun ((x, y), i) => (i + 1, x, y)) <|>
     if la.length = lb.length then none else some (min la.length lb.length, "", "")
 
-/-- The quotient kernel's code is the program of the AIR's constraints on `2 ^ logN` rows, so that
-the fast backend runs it. -/
+/-- The quotient kernel's constraints are the AIR's on `2 ^ logN` rows and its code is their
+program, so that the fast backend runs it. -/
 def kernelApplies (logN : ℕ) : IO Unit := do
-  unless QuotientKernel.kernel.code == (Prog.compile (air logN).constraints).code do
+  let K := QuotientKernel.kernel
+  unless K.kernel.code == K.prog.code && decide (K.cs = (air logN).constraints) do
     throw (IO.userError s!"the quotient kernel is not the AIR's program on 2^{logN} rows")
-  IO.println s!"quotient kernel: the {QuotientKernel.kernel.code.size} instructions of the \
-    generated kernel are the program of the AIR's constraints on 2^{logN} rows"
+  IO.println s!"quotient kernel: the {K.kernel.code.size} instructions of the generated kernel \
+    are the program of the AIR's constraints on 2^{logN} rows"
 
 /-- CompStark's known answers from Plonky3. -/
 def data : String := ".lake/packages/CompStark/tests/data"
