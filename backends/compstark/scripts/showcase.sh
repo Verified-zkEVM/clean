@@ -4,7 +4,8 @@
 #   scripts/showcase.sh check L        CompStark's known answers from Plonky3, then the evidence on
 #                                      2^L rows against Plonky3 (`lake exe keccak_showcase check`)
 #   scripts/showcase.sh bench L REPS   trace generation, proof and verification on 2^L rows, Lean
-#                                      and Plonky3 interleaved, both configurations, medians of REPS
+#                                      and Plonky3 interleaved, both configurations, medians of
+#                                      REPS, and each process's peak memory
 #
 # Builds Plonky3's side (`rust/`, Plonky3 a4982ec, target-cpu=native) and the Lean executable first.
 set -euo pipefail
@@ -22,8 +23,8 @@ case "${1:-}" in
     "$rust" inputs "$2" ".lake/showcase/inputs_$2.txt"
     for config in example proven; do
       for _ in 1 2; do
-        lake exe keccak_showcase bench "$config" "$2" "$3"
-        "$rust" bench "$config" "$2" "$3"
+        /usr/bin/time -f "lean peak %M KB" .lake/build/bin/keccak_showcase bench "$config" "$2" "$3"
+        /usr/bin/time -f "plonky3 peak %M KB" "$rust" bench "$config" "$2" "$3"
       done
     done
     ;;

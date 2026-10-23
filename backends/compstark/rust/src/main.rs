@@ -124,7 +124,7 @@ fn main() {
         ["bench", name, log_n, reps] => {
             let config = config(name);
             let log_n: usize = log_n.parse().unwrap();
-            let (mut tg, mut tp, mut tv) = (vec![], vec![], vec![]);
+            let (mut tg, mut tp, mut tt, mut tv) = (vec![], vec![], vec![], vec![]);
             for _ in 0..reps.parse().unwrap() {
                 let ins = inputs(log_n);
                 let t = Instant::now();
@@ -133,6 +133,7 @@ fn main() {
                 let t = Instant::now();
                 let proof = prove(&config, &KeccakAir {}, trace, &[]).unwrap();
                 tp.push(t.elapsed().as_secs_f64() * 1e3);
+                tt.push(tg[tg.len() - 1] + tp[tp.len() - 1]);
                 let t = Instant::now();
                 verify(&config, &KeccakAir {}, &proof, &[]).unwrap();
                 tv.push(t.elapsed().as_secs_f64() * 1e3);
@@ -141,8 +142,9 @@ fn main() {
                 v.sort_by(|a, b| a.partial_cmp(b).unwrap());
                 v[v.len() / 2]
             };
-            println!("plonky3 {name} 2^{log_n} tracegen {:.1} prove {:.1} verify {:.1} ms",
-                med(&mut tg), med(&mut tp), med(&mut tv));
+            println!(
+                "plonky3 {name} 2^{log_n} tracegen {:.1} prove {:.1} total {:.1} verify {:.1} ms",
+                med(&mut tg), med(&mut tp), med(&mut tt), med(&mut tv));
         }
         _ => panic!("usage: inputs L FILE | trace L | prove CONFIG L FILE | verify CONFIG L FILE \
             | bench CONFIG L REPS"),

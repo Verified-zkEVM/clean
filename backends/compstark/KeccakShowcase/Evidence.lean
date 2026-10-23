@@ -35,8 +35,9 @@ of `rust/`, Plonky3 `a4982ec`):
   `203` queries): Plonky3's verifier accepts CompStark's proof and rejects it with an opened value
   changed, CompStark's verifier accepts Plonky3's proof, and the two are byte for byte the same.
 
-`lake exe keccak_showcase bench CONFIG L REPS` times trace generation, the proof and its
-verification in Lean on `2 ^ L` rows, `CONFIG` `example` or `proven`; `rust/`'s `bench` times
+`lake exe keccak_showcase bench CONFIG L REPS` times trace generation, the proof, both together
+and the proof's verification by CompStark's fast verifier (`verifyFast`, Plonky3's verifier by
+`verifyFast_eq`) in Lean on `2 ^ L` rows, `CONFIG` `example` or `proven`; `rust/`'s `bench` times
 Plonky3's.
 -/
 
@@ -240,19 +241,19 @@ def bench (name : String) (logN reps : ℕ) : IO Unit := do
   let A := air logN
   let B := I.backendFor [QuotientKernel.kernel] P.logBlowup [(logN, A.logQuotientChunks logN)]
   let vk := letI := I.field; setup P A logN
-  let mut samples : Array (Array ℕ) := #[#[], #[], #[]]
+  let mut samples : Array (Array ℕ) := #[#[], #[], #[], #[]]
   for _ in [0:reps] do
     let (t0, chunks) ← timeNs fun _ => trace logN inputs
     let chunks ← IO.ofExcept chunks
     let (t1, proof) ← timeNs fun _ => proveWith B P A logN chunks []
-    let (t2, verdict) ← timeNs fun _ => letI := I.field; verify P A vk proof []
+    let (t2, verdict) ← timeNs fun _ => I.verifyFast P A vk proof []
     IO.ofExcept verdict
-    samples := (samples.zip #[t0, t1, t2]).map fun (s, t) => s.push t
+    samples := (samples.zip #[t0, t1, t0 + t1, t2]).map fun (s, t) => s.push t
   let median (s : Array ℕ) : String :=
     let m := (s.qsort (· < ·))[s.size / 2]!
     s!"{m / 1000000}.{(m / 100000) % 10}"
   IO.println s!"lean {name} 2^{logN} tracegen {median samples[0]!} prove {median samples[1]!} \
-    verify {median samples[2]!} ms"
+    total {median samples[2]!} verify {median samples[3]!} ms"
 
 def main (args : List String) : IO UInt32 := do
   match args with
