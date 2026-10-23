@@ -1,6 +1,7 @@
 module
 
-public import CleanCompStark.KeccakShowcase
+public import KeccakShowcase.Air
+public import KeccakShowcase.Kernel
 public import KeccakShowcase.Json
 public import Clean.Examples.KeccakAir.FastKernel
 public import CompStark.Stark.Fingerprint
@@ -44,9 +45,6 @@ Plonky3's.
 namespace KeccakShowcase
 open CompStark CompStark.Stark CleanCompStark
 
-abbrev F := KoalaBear.Fast.Field
-abbrev EF := KoalaBear.Fast.Ext4
-
 /-- The configuration of Plonky3's example `prove_prime_field_31`, `87` queries
 (`CleanCompStark.KeccakShowcase.params`). -/
 def exampleParams : Fri.Params := CleanCompStark.KeccakShowcase.params 87
@@ -60,9 +58,6 @@ def params : String → IO Fri.Params
   | "proven" => pure provenParams
   | name => throw (IO.userError s!"unknown configuration {name}: example or proven")
 
-/-- The CompStark AIR of Clean's keccak-air component on `2 ^ logN` rows. -/
-def air (logN : ℕ) : Air F := toAir koalaBear (CleanCompStark.KeccakAir.component logN) logN
-
 /-- The Clean trace of the inputs, in row chunks of CompStark's fast prover. -/
 def trace (logN : ℕ) (inputs : Array KeccakAir.Trace.State) : Except String (Array ByteArray) :=
   KeccakAir.koalaBearTrace inputs (min logN 6)
@@ -72,7 +67,8 @@ variable (I : CompStark.KoalaBear.Instances)
 /-- CompStark's fast prover with the Poseidon2 instances `I`. -/
 def prove (P : Fri.Params) (logN : ℕ) (chunks : Array ByteArray) : Proof F EF :=
   let A := air logN
-  proveWith (I.backendFor P.logBlowup [(logN, A.logQuotientChunks logN)]) P A logN chunks []
+  let B := I.backendFor [QuotientKernel.kernel] P.logBlowup [(logN, A.logQuotientChunks logN)]
+  proveWith B P A logN chunks []
 
 /-- CompStark's verifier with the Poseidon2 instances `I`. -/
 def verifyProof (P : Fri.Params) (logN : ℕ) (proof : Proof F EF) : Except String Unit :=
@@ -120,6 +116,14 @@ def firstDifference (a b : String) : Option (ℕ × String × String) :=
   ((la.zip lb).zipIdx.find? fun ((x, y), _) => x != y).map (fun ((x, y), i) => (i + 1, x, y)) <|>
     if la.length = lb.length then none else some (min la.length lb.length, "", "")
 
+/-- The quotient kernel's code is the program of the AIR's constraints on `2 ^ logN` rows, so that
+the fast backend runs it. -/
+def kernelApplies (logN : ℕ) : IO Unit := do
+  unless QuotientKernel.kernel.code == (Prog.compile (air logN).constraints).code do
+    throw (IO.userError s!"the quotient kernel is not the AIR's program on 2^{logN} rows")
+  IO.println s!"quotient kernel: the {QuotientKernel.kernel.code.size} instructions of the \
+    generated kernel are the program of the AIR's constraints on 2^{logN} rows"
+
 /-- CompStark's known answers from Plonky3. -/
 def data : String := ".lake/packages/CompStark/tests/data"
 
@@ -138,6 +142,7 @@ trace of five permutations and a truncated padding one (each row's Poseidon2 dig
 proof of Plonky3's example on `2 ^ 6` rows. -/
 def kat : IO Unit := do
   fingerprint
+  kernelApplies 6
   let expected := (← IO.FS.readFile s!"{data}/keccak_trace_5.txt").splitOn "\n" |>.filter (· ≠ "")
   let inputs : Array KeccakAir.Trace.State := (Array.range 5).map fun k =>
     Vector.ofFn fun i => (25 * k + i.val + 1).toUInt64 * 0x9e3779b97f4a7c15
@@ -169,6 +174,7 @@ def check (logN : ℕ) (bin : String) : IO Unit := do
   let dir := ".lake/showcase"
   IO.FS.createDirAll dir
   fingerprint
+  kernelApplies logN
   -- The trace is Plonky3's.
   let inputsFile := s!"{dir}/inputs_{logN}.txt"
   let _ ← rust bin #["inputs", toString logN, inputsFile]
@@ -232,7 +238,7 @@ def bench (name : String) (logN reps : ℕ) : IO Unit := do
   let P ← params name
   let inputs ← readInputs s!".lake/showcase/inputs_{logN}.txt"
   let A := air logN
-  let B := I.backendFor P.logBlowup [(logN, A.logQuotientChunks logN)]
+  let B := I.backendFor [QuotientKernel.kernel] P.logBlowup [(logN, A.logQuotientChunks logN)]
   let vk := letI := I.field; setup P A logN
   let mut samples : Array (Array ℕ) := #[#[], #[], #[]]
   for _ in [0:reps] do
