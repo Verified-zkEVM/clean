@@ -110,7 +110,7 @@ lemma foldl_eq_sum_range {α : Type*} [AddCommMonoid α] : ∀ (n' : ℕ) (f' : 
       have hi' : i < n'' + 1 := by omega
       simp only [hi', ↓reduceDIte]
     · -- For the last term
-      simp only [Fin.last, Nat.lt_succ_self, dif_pos]
+      simp only [Fin.last, Nat.lt_succ_self, dite_eq_left]
 
 /-- Convert Fin.foldl to a standard sum -/
 lemma foldl_to_sum {α : Type*} [AddCommMonoid α] : ∀ (n' : ℕ) (f' : Fin n' → α),

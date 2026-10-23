@@ -232,7 +232,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
   · intro input
     rintro (_ | _) <;> simp_all
   by_cases h_x : x_block_exists = 1
-  · simp only [h_x, decide_true, cond_true, circuit_norm] at *
+  · simp only [h_x, decide_true, Bool.cond_true, circuit_norm] at *
     have h_state_norm := h_holds.1
     have h_input_norm := h_holds.2.1
     have h_iszero := h_holds.2.2.1
@@ -314,7 +314,7 @@ lemma soundness : InductiveTable.Soundness (F p) ProcessBlocksState BlockInput S
     · exact h_state_norm.2.1
     change ({ x0 := env.get 5553, x1 := env.get 5555, x2 := env.get 5557, x3 := env.get 5559 } : U32 (F p)).Normalized
     exact h_add_norm
-  · simp only [h_x, decide_false, cond_false]
+  · simp only [h_x, decide_false, Bool.cond_false]
     simp only [circuit_norm] at h_holds
     have x_block_exists_zero : x_block_exists = 0 := by
       simp only [BlockInput.Normalized] at input_normalized
