@@ -69,9 +69,8 @@ structure VmTables (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType
     [(channel.pulled m1).toRaw, (channel.pushed m2).toRaw]
 
   -- verifier requirements hold unconditionally (without relying on channel guarantees)
-  verifier_requirements :
-    ∀ env,
-      Operations.ChannelRequirements channel env verifier.circuitOperations
+  verifier_requirements : ∀ data : ProverData F,
+    Operations.ChannelRequirements channel data.publicEnvironment verifier.circuitOperations
 
 instance (vm : VmTables F PublicIO) : ProvableType vm.Message := vm.provableMessage
 
@@ -92,7 +91,7 @@ def Ensemble.SoundVmChannel (ens : Ensemble F PublicIO) : Prop :=
     witness.Assumptions →
     witness.Constraints →
     witness.BalancedChannels →
-      ens.VerifierGuarantees witness.publicInput witness.data
+      ens.VerifierGuarantees witness.data
 
 structure SoundVmEnsemble (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO]
     extends ensemble : Ensemble F PublicIO where
@@ -112,14 +111,15 @@ def withProverInput (ens : SoundVmEnsemble F PublicIO) (ProverInput : TypeMap)
     (ens.withProverInput ProverInput hintTables).ensemble =
       ens.ensemble.withProverInput ProverInput hintTables := rfl
 /--
-Bundle a sound VM ensemble with its public statement. `Assumptions` and `Spec` only refer to the
-public input. The verifier spec is evaluated on prover data derived from the witness, so the bridge
-from it to `Spec` quantifies over witnesses.
+Bundle a sound VM ensemble with its public statement. `Assumptions` refer to the public input and
+the table heights, `Spec` only to the public input. The verifier spec is evaluated on prover data
+derived from the witness, so the bridge from it to `Spec` quantifies over witnesses.
 -/
-def toFormal (ens : SoundVmEnsemble F PublicIO) (Assumptions Spec : PublicIO F → Prop)
+def toFormal (ens : SoundVmEnsemble F PublicIO) (Assumptions : PublicIO F → List ℕ → Prop)
+    (Spec : PublicIO F → Prop)
     (assumptionsConsistency : ens.ensemble.AssumptionsConsistency Assumptions)
     (spec_of_verifierSpec : ∀ witness : EnsembleWitness ens.ensemble,
-      Assumptions witness.publicInput →
+      Assumptions witness.publicInput witness.heights →
       ens.VerifierSpec witness.publicInput witness.data → Spec witness.publicInput)
     (ProverAssumptions : PublicIO F → ens.ensemble.ProverInput F → Prop := fun _ _ => True) :
     FormalEnsemble F PublicIO where
@@ -128,9 +128,10 @@ def toFormal (ens : SoundVmEnsemble F PublicIO) (Assumptions Spec : PublicIO F �
   Spec
   ProverAssumptions
   soundness := by
-    intro publicInput assumptions ⟨witness, input_eq, constraints, balance⟩
-    subst input_eq
+    intro publicInput heights assumptions ⟨witness, input_eq, heights_eq, constraints, balance⟩
+    subst input_eq heights_eq
     apply spec_of_verifierSpec witness assumptions
+    rw [← witness.data_getPublicInput]
     apply ens.ensemble.verifierSpec_of_verifierGuarantees
     exact ens.soundVmChannel witness
       (Ensemble.assumptions_of_assumptionsConsistency assumptionsConsistency witness assumptions)
@@ -362,16 +363,16 @@ noncomputable def rowPush (witness : VmWitness ens vm names)
     (vm.step (witness.component_mem_tables_of_mem_vmTables h)).push
 
 noncomputable def verifierEnabled (witness : VmWitness ens vm names) : F :=
-  eval (Environment.fromInput witness.publicInput witness.data) vm.verifierStep.enabled
+  eval witness.data.publicEnvironment vm.verifierStep.enabled
 
 lemma verifierEnabled_eq_one (witness : VmWitness ens vm names) : witness.verifierEnabled = 1 := by
   simp only [verifierEnabled, VmTables.verifierStep, circuit_norm]
 
 noncomputable def verifierPull (witness : VmWitness ens vm names) : vm.Message F :=
-  eval (Environment.fromInput witness.publicInput witness.data) vm.verifierStep.pull
+  eval witness.data.publicEnvironment vm.verifierStep.pull
 
 noncomputable def verifierPush (witness : VmWitness ens vm names) : vm.Message F :=
-  eval (Environment.fromInput witness.publicInput witness.data) vm.verifierStep.push
+  eval witness.data.publicEnvironment vm.verifierStep.push
 
 noncomputable def verifierPair (witness : VmWitness ens vm names) :
     Interaction F × Interaction F :=
@@ -586,9 +587,8 @@ lemma pulls_requirements_of_vmConstraints {witness : VmWitness ens vm names} :
   intro constraints pull h_pull
   rw [witness.mem_pulls_iff] at h_pull
   rcases h_pull with rfl | ⟨table, table_mem, row, row_mem, rfl⟩
-  · have verifier_requirements := vm.verifier_requirements
-      (Environment.fromInput witness.publicInput witness.data)
-    change (ens.addVm vm names).VerifierChannelRequirements witness.publicInput witness.data
+  · have verifier_requirements := vm.verifier_requirements witness.data
+    change (ens.addVm vm names).VerifierChannelRequirements witness.data
       vm.channel.toRaw at verifier_requirements
     rw [witness.verifierChannelRequirements_iff_forall] at verifier_requirements
     apply verifier_requirements
@@ -663,9 +663,9 @@ theorem verifierChannelGuarantees_of_verifierChannelRequirements
     table.component.operations.ChannelRequirements vm.channel.toRaw
       (table.environment row)) →
   -- vm channel verifier requirements imply vm channel verifier guarantees
-  (ens.addVm vm names).VerifierChannelRequirements witness.publicInput witness.data
+  (ens.addVm vm names).VerifierChannelRequirements witness.data
       vm.channel.toRaw →
-    (ens.addVm vm names).VerifierChannelGuarantees witness.publicInput witness.data
+    (ens.addVm vm names).VerifierChannelGuarantees witness.data
       vm.channel.toRaw := by
   intro balance witness_constraints constraints verifier_requirements
   have row_enabled_boolean := witness.rowEnabled_isBool_of_vmConstraints witness_constraints
@@ -937,9 +937,9 @@ theorem addVm_soundVmChannel_of_soundChannels [Fact (ringChar F ≠ 2)] (ens : E
   have vm_verifier_guarantees :=
     witness.verifierChannelGuarantees_of_verifierChannelRequirements vm_balance vm_constraints
       reqs_of_grts
-      (vm.verifier_requirements (Environment.fromInput witness.publicInput witness.data))
+      (vm.verifier_requirements witness.data)
   have finished_verifier_guarantees : ∀ channel ∈ finished,
-      (ens.addVm vm names).VerifierChannelGuarantees witness.publicInput witness.data channel := by
+      (ens.addVm vm names).VerifierChannelGuarantees witness.data channel := by
     intro channel channel_mem
     let : channel.Consistent := consistent channel channel_mem
     apply Ensemble.verifierChannelGuarantees_of_tableRequirements

@@ -194,24 +194,29 @@ structure Table (F : Type) [FiniteField F] where
   fixed_rows_match : component.FixedRowsMatch table
   /-- The prover data contains the table's inputs: its rows under the component's name, cut off at
   the input width. -/
-  data_consistent : data component.circuit.name (size component.Input) =
+  data_consistent : data.tables component.circuit.name (size component.Input) =
     (table.map (rowPrefix (size component.Input))).toArray
 
 /-- The table's rows cut off, or padded with zeros, at `n` elements. -/
 def Table.rowPrefixes (table : Table F) (n : ℕ) : Array (Vector F n) :=
   (table.table.map (rowPrefix n)).toArray
 
-/-- The prover data of a list of tables: the input rows of each component, under its name. -/
-def deriveProverData : List (Table F) → ProverData F
+/-- The input rows of each component of a list of tables, under its name. -/
+def deriveTables : List (Table F) → String → (n : ℕ) → Array (Vector F n)
   | [] => fun _ _ => #[]
   | table :: tables => fun name n =>
       if table.component.circuit.name = name then table.rowPrefixes n
-      else deriveProverData tables name n
+      else deriveTables tables name n
 
-lemma deriveProverData_eq_of_mem (tables : List (Table F))
+/-- The prover data of a proof with these tables and this public input. -/
+def deriveProverData (tables : List (Table F)) (publicInput : Array F) : ProverData F where
+  tables := deriveTables tables
+  publicInput
+
+lemma deriveTables_eq_of_mem (tables : List (Table F))
     (hunique : (tables.map (fun table => table.component.circuit.name)).Nodup)
     {table : Table F} (hmem : table ∈ tables) (n : ℕ) :
-    deriveProverData tables table.component.circuit.name n = table.rowPrefixes n := by
+    deriveTables tables table.component.circuit.name n = table.rowPrefixes n := by
   induction tables with
   | nil => simp at hmem
   | cons head tail ih =>
@@ -219,19 +224,19 @@ lemma deriveProverData_eq_of_mem (tables : List (Table F))
       obtain ⟨hhead, htail⟩ := hunique
       simp only [List.mem_cons] at hmem
       rcases hmem with rfl | hmem
-      · simp [deriveProverData]
+      · simp [deriveTables]
       · have hne : head.component.circuit.name ≠ table.component.circuit.name := by
           intro heq
           apply hhead
           rw [heq]
           exact List.mem_map.mpr ⟨table, hmem, rfl⟩
-        simp [deriveProverData, hne, ih htail hmem]
+        simp [deriveTables, hne, ih htail hmem]
 
-/-- `deriveProverData` only reads the components and rows of the tables. -/
-lemma deriveProverData_congr {tables tables' : List (Table F)}
+/-- `deriveTables` only reads the components and rows of the tables. -/
+lemma deriveTables_congr {tables tables' : List (Table F)}
     (h : tables'.map (fun table => (table.component, table.table)) =
       tables.map (fun table => (table.component, table.table))) :
-    deriveProverData tables' = deriveProverData tables := by
+    deriveTables tables' = deriveTables tables := by
   induction tables generalizing tables' with
   | nil => cases tables' <;> simp_all
   | cons table tables ih =>
@@ -240,32 +245,37 @@ lemma deriveProverData_congr {tables tables' : List (Table F)}
       | cons table' tables' =>
           simp only [List.map_cons, List.cons.injEq, Prod.mk.injEq] at h
           obtain ⟨⟨hcomponent, htable⟩, h⟩ := h
-          simp only [deriveProverData, Table.rowPrefixes, htable, ih h]
+          simp only [deriveTables, Table.rowPrefixes, htable, ih h]
           rw [hcomponent]
 
-/-- Gives every table the prover data derived from all of them, given unique component names. -/
+/-- Gives every table the prover data derived from all of them and the public input, given unique
+component names. -/
 def withDerivedData (tables : List (Table F))
-    (hunique : (tables.map fun table => table.component.circuit.name).Nodup) : List (Table F) :=
+    (hunique : (tables.map fun table => table.component.circuit.name).Nodup)
+    (publicInput : Array F) : List (Table F) :=
   tables.attach.map fun ⟨table, hmem⟩ => { table with
-    data := deriveProverData tables
-    data_consistent := deriveProverData_eq_of_mem tables hunique hmem _ }
+    data := deriveProverData tables publicInput
+    data_consistent := deriveTables_eq_of_mem tables hunique hmem _ }
 
 @[circuit_norm] lemma withDerivedData_map (tables : List (Table F))
-    (hunique : (tables.map fun table => table.component.circuit.name).Nodup) :
-    (withDerivedData tables hunique).map (fun table => (table.component, table.table)) =
+    (hunique : (tables.map fun table => table.component.circuit.name).Nodup)
+    (publicInput : Array F) :
+    (withDerivedData tables hunique publicInput).map (fun table => (table.component, table.table)) =
       tables.map (fun table => (table.component, table.table)) := by
   simp [withDerivedData, List.map_attach_eq_pmap, List.map_pmap, List.pmap_eq_map]
 
 @[circuit_norm] lemma withDerivedData_map_component (tables : List (Table F))
-    (hunique : (tables.map fun table => table.component.circuit.name).Nodup) :
-    (withDerivedData tables hunique).map (·.component) = tables.map (·.component) := by
+    (hunique : (tables.map fun table => table.component.circuit.name).Nodup)
+    (publicInput : Array F) :
+    (withDerivedData tables hunique publicInput).map (·.component) = tables.map (·.component) := by
   simp [withDerivedData, List.map_attach_eq_pmap, List.map_pmap, List.pmap_eq_map]
 
 lemma withDerivedData_data (tables : List (Table F))
-    (hunique : (tables.map fun table => table.component.circuit.name).Nodup) :
-    ∀ table ∈ withDerivedData tables hunique,
-      table.data = deriveProverData (withDerivedData tables hunique) := by
-  rw [deriveProverData_congr (withDerivedData_map tables hunique)]
+    (hunique : (tables.map fun table => table.component.circuit.name).Nodup)
+    (publicInput : Array F) :
+    ∀ table ∈ withDerivedData tables hunique publicInput,
+      table.data = deriveProverData (withDerivedData tables hunique publicInput) publicInput := by
+  rw [deriveProverData, deriveTables_congr (withDerivedData_map tables hunique publicInput)]
   simp only [withDerivedData, List.map_attach_eq_pmap, List.mem_pmap]
   rintro _ ⟨_, _, rfl⟩
   rfl

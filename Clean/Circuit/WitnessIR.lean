@@ -163,7 +163,7 @@ def FExpr.eval (ctx : Ctx F) : FExpr F → F
   | .ite c t e => if c.eval ctx then t.eval ctx else e.eval ctx
   | .listGet xs i => FExpr.evalList ctx (i.eval ctx).toNat xs
   | .dataGet key n row col =>
-    ((ctx.env.data key n)[(row.eval ctx).toNat]?.getD default)[col.val]'col.isLt
+    ((ctx.env.data.tables key n)[(row.eval ctx).toNat]?.getD default)[col.val]'col.isLt
   | .hintGet key n row col =>
     ((ctx.env.hint key n)[(row.eval ctx).toNat]?.getD default)[col.val]'col.isLt
 
@@ -745,7 +745,7 @@ export Witgen (WitgenIR)
 /-- Interpret the rows stored under a component name using their declared circuit-input type. -/
 def ProverData.getRows (data : ProverData F) (name : String)
     (Row : TypeMap) [ProvableType Row] : Array (Row F) :=
-  data name (size Row) |>.map fromElements
+  data.tables name (size Row) |>.map fromElements
 
 /-- Read a typed component-input row from committed prover data. -/
 def Witgen.dataGet (name : String) (Row : TypeMap) [ProvableType Row]
@@ -762,7 +762,7 @@ lemma Witgen.eval_dataGet [FiniteField F] (name : String) (Row : TypeMap) [Prova
   rw [ProvableType.fromElements_eq_iff, ProvableType.toElements_fromElements,
     Vector.map_mapFinRange]
   simp only [Witgen.FExpr.eval]
-  by_cases h : (row.eval ctx).toNat < (ctx.env.data name (size Row)).size
+  by_cases h : (row.eval ctx).toNat < (ctx.env.data.tables name (size Row)).size
   · simp [h]
     rw [ProvableType.toElements_fromElements, Vector.mapFinRange_eq_self]
   · simp [h, Vector.mapFinRange_eq_self]

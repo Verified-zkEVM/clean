@@ -117,7 +117,7 @@ def programCell (pc : Expression (F p)) (column : Fin 4) : Witgen.FExpr (F p) :=
 
 /-- The cell of prover data that `programCell` reads. -/
 def programCellIn (data : ProverData (F p)) (pc : F p) (column : Fin 4) : F p :=
-  ((data "program" 4)[(UInt64.ofNat pc.val).toNat]?.getD default)[column]
+  ((data.tables "program" 4)[(UInt64.ofNat pc.val).toNat]?.getD default)[column]
 
 /-- The state after running the first `pc` instructions of the program on the initial accumulator.
 -/
@@ -256,7 +256,7 @@ def Spec (program : Program) (initial final : F p) : Prop :=
   final = run program initial
 
 def formalEnsemble (program : Program) (h_program : program.length < p) (initial : F p) :=
-  (soundEnsemble program h_program initial).toFormal (fun _ => True) (Spec program initial)
+  (soundEnsemble program h_program initial).toFormal (fun _ _ => True) (Spec program initial)
     (by simp [circuit_norm, soundEnsemble, vm])
     (by simp [circuit_norm, soundEnsemble, vm, verifier, stateChannel, Spec,
       ZMod.val_cast_of_lt h_program])
@@ -264,10 +264,10 @@ def formalEnsemble (program : Program) (h_program : program.length < p) (initial
 /-- End-to-end soundness: a valid proof for the public input `final` shows that running the program
 on the initial accumulator ends with `final`. -/
 theorem opcodeVm_soundness (program : Program) (h_program : program.length < p)
-    (initial final : F p) :
-    (soundEnsemble program h_program initial).ensemble.Statement final →
+    (initial final : F p) (heights : List ℕ) :
+    (soundEnsemble program h_program initial).ensemble.Statement final heights →
       final = run program initial :=
-  (formalEnsemble program h_program initial).soundness final trivial
+  (formalEnsemble program h_program initial).soundness final heights trivial
 
 /-- The program of the tests: `acc := ((((acc + 3) * 5 + 7) * 2 + 1 + 4) * 3 + 9) * 2 + 6`. -/
 def exampleProgram : Program :=

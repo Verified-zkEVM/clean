@@ -123,7 +123,7 @@ def evalInput [FiniteField F] {Input : TypeMap} [ProvableType Input]
 /-- The environment of a row program: no row cells and no prover data, only the hint. -/
 @[circuit_norm]
 def rowEnvironment [FiniteField F] (hint : ProverHint F) : ProverEnvironment F :=
-  { get _ := 0, data _ _ := #[], hint }
+  { get _ := 0, data := .empty F, hint }
 
 /-- Rows created by channel demand. -/
 structure DemandMode (F : Type) [FiniteField F] (Input : TypeMap) [ProvableType Input] where

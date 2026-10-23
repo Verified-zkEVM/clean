@@ -168,14 +168,21 @@ def push {Message : TypeMap} [ProvableType Message] (channel : Channel F Message
     (message : Message (Expression F)) : Verifier F Unit :=
   emit channel 1 message
 
-/-- A verifier program parameterized by the proof's public input variables. -/
+/-- The public input of the prover data, as a value of the public input type. -/
+def _root_.ProverData.getPublicInput (data : ProverData F) (PublicIO : TypeMap)
+    [ProvableType PublicIO] : PublicIO F :=
+  eval data.publicEnvironment (varFromOffset (F := F) PublicIO 0)
+
+/-- A verifier program parameterized by the proof's public input variables. It runs in the prover
+data's `publicEnvironment`, whose variables are the public input. -/
 structure Program (F : Type) [FiniteField F]
     (PublicIO : TypeMap) [ProvableType PublicIO] where
   main : Var PublicIO F → Verifier F Unit
   Spec : PublicIO F → ProverData F → Prop
-  soundness : ∀ env,
-    ((main (varFromOffset PublicIO 0)).operations.circuitOperations).FullGuarantees env →
-      Spec (eval env (varFromOffset (F := F) PublicIO 0)) env.data
+  soundness : ∀ data : ProverData F,
+    ((main (varFromOffset PublicIO 0)).operations.circuitOperations).FullGuarantees
+      data.publicEnvironment →
+    Spec (eval data.publicEnvironment (varFromOffset (F := F) PublicIO 0)) data
 
 namespace Program
 

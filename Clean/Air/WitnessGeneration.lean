@@ -228,11 +228,13 @@ def generateValid {ens : Ensemble F PublicIO} (valid : ValidGeneration ens) (fue
   let states := (ens.tables.zip valid.multiplicities).toArray.map fun (component, multiplicity) =>
     ComponentState.initial component multiplicity
   let inputs := states.map (initialInputs · hint)
-  let data : ProverData F := readNamedRows (initialData states inputs)
+  let data : ProverData F := {
+    tables := readNamedRows (initialData states inputs)
+    publicInput := (toElements publicInput).toArray }
   let states := (states.zip inputs).map fun (state, inputs) =>
     inputs.foldl (fun state input => state.pushRow data (completeRow state input data hint)) state
   -- start the chain reaction from the verifier's and the preallocated rows' interactions
-  let verifier := ens.verifierOperations.interactionValues (.fromInput publicInput data)
+  let verifier := ens.verifierOperations.interactionValues data.publicEnvironment
   let rows := states.toList.flatMap fun state =>
     state.rows.toList.flatMap (rowInteractions state · data)
   let tally := Tally.empty.addInteractions (verifier ++ rows)
@@ -242,11 +244,11 @@ def generateValid {ens : Ensemble F PublicIO} (valid : ValidGeneration ens) (fue
   have hunique : (assembled.tables.map fun table => table.component.circuit.name).Nodup := by
     simpa [← assembled.map_component, Function.comp_def] using ens.unique_names
   return {
-    tables := withDerivedData assembled.tables hunique
+    tables := withDerivedData assembled.tables hunique (toElements publicInput).toArray
     publicInput
     same_length := by simp [withDerivedData, assembled.same_length]
     same_circuits := by simp [withDerivedData, assembled.same_circuits]
-    same_data := withDerivedData_data assembled.tables hunique
+    same_data := withDerivedData_data assembled.tables hunique _
   }
 
 /-- Validate the generation of an ensemble, then generate a witness from the public input and the

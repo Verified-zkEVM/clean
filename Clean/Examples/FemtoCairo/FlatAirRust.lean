@@ -12,7 +12,7 @@ open Examples.FemtoCairo.Types
 open Examples.FemtoCairo.FlatAirTestData
 
 def main : IO Unit := do
-  let ens := FlatAir.formalEnsemble testProgram testProgram_valid memorySize_lt initialState
+  let ens := FlatAir.formalEnsemble testProgram testProgram_valid memorySize_lt
   match Backends.Plonky3.Print.ensembleToRust ens.ensemble 1000 with
   | .ok rust => IO.print rust
   | .error error => throw (IO.userError error)
