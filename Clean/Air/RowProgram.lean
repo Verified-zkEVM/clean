@@ -7,14 +7,15 @@ public import Clean.Circuit.WitnessIRSugar
 /-!
 # Row programs
 
-Witness programs that compute a segment of a row from the row index: fixed columns, and the inputs
-of preallocated components. The latter can also read the hint.
+Witness programs that compute the input of a row from the row index: the inputs of preallocated
+components. Their fixed cells are computed from the index alone; their witness cells can also read
+the hint.
 -/
 
 namespace Witgen
 variable {F : Type}
 
-/-- What a row program computes: fixed columns, or inputs of preallocated components. -/
+/-- What a row program computes: fixed cells, or witness cells of preallocated components. -/
 inductive RowProgram.Source where
   | fixed
   | prover
@@ -73,79 +74,19 @@ def FExprList.validForRow (source : RowProgram.Source) : List (FExpr F) → Bool
 
 end
 
-@[simp]
-theorem FExprList.validForRow_map_const (source : RowProgram.Source) (values : List F) :
-    FExprList.validForRow source (values.map FExpr.const) = true := by
-  induction values with
-  | nil => rfl
-  | cons value values ih => simp [FExprList.validForRow, FExpr.validForRow, ih]
-
-@[simp]
-theorem FExprList.validForRow_map_const_comp {α : Type} (source : RowProgram.Source)
-    (values : List α) (f : α → F) :
-    FExprList.validForRow source (values.map (FExpr.const ∘ f)) = true := by
-  simpa using validForRow_map_const source (values.map f)
-
 def Step.validForRow (source : RowProgram.Source) : Step F → Bool
   | .letF value => value.validForRow source
   | .letU value => value.validForRow source
 
-def VExpr.validForRow (source : RowProgram.Source) : {n : ℕ} → VExpr F n → Bool
-  | _, .lit values => values.toList.all (FExpr.validForRow source)
-  | _, .mapRange _ body => body.validForRow source
-  | _, .envRange _ => false
-  | _, .bitsOf value => value.validForRow source
-  | _, .append left right =>
-      left.validForRow source && right.validForRow source
-
-attribute [circuit_norm] FExpr.validForRow U64Expr.validForRow BExpr.validForRow
-  FExprList.validForRow Step.validForRow VExpr.validForRow
-
-/-- Whether a witness program is valid in a row program. -/
-@[circuit_norm]
-def M.ValidForRow {Row : TypeMap} [ProvableType Row] (program : M F (Row (FExpr F)))
-    (source : RowProgram.Source) : Prop :=
-  ((program #[]).2.toList.all (Step.validForRow source) &&
-    (VExpr.lit (toElements (program #[]).1)).validForRow source) = true
-
-/-- Evaluate a witness program at row `row`, which `.idx` reads. Only prover row programs read
-`hint`. -/
+/-- Evaluate a fixed row program at row `row`, which `.idx` reads. -/
 @[circuit_norm]
 def M.evalRow [FiniteField F] {Row : TypeMap} [ProvableType Row]
-    (program : M F (Row (FExpr F))) (row : UInt64) (hint : ProverHint F := .empty F) : Row F :=
-  let env : ProverEnvironment F := { get _ := 0, data _ _ := #[], hint }
+    (program : M F (Row (FExpr F))) (row : UInt64) : Row F :=
+  let env : ProverEnvironment F := { get _ := 0, data _ _ := #[], hint := .empty F }
   Witgen.eval {
     env
     locals := evalSteps env (program #[]).2.toList #[] row.toNat
     idx := row.toNat
   } (program #[]).1
-
-/-- A program computing a row segment of type `Row` from the row index. -/
-structure RowProgram (F : Type) (source : RowProgram.Source) where
-  {Row : TypeMap} [provableRow : ProvableType Row]
-  /-- The values of row `i`. -/
-  row (i : U64Expr F) : M F (Row (FExpr F))
-  valid : (row .idx).ValidForRow source := by simp [circuit_norm]
-
-instance {source : RowProgram.Source} (program : RowProgram F source) :
-    ProvableType program.Row :=
-  program.provableRow
-
-namespace RowProgram
-variable {source : Source}
-
-abbrev width (program : RowProgram F source) : ℕ := size program.Row
-
-/-- The program as witness IR. -/
-def ir (program : RowProgram F source) : WitgenIR F program.width :=
-  (program.row .idx).toIRLiteral
-
-/-- The values of row `i`. -/
-@[circuit_norm]
-def eval [FiniteField F] (program : RowProgram F source) (i : UInt64)
-    (hint : ProverHint F := .empty F) : program.Row F :=
-  (program.row .idx).evalRow i hint
-
-end RowProgram
 
 end Witgen

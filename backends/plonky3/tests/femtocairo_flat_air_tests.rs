@@ -109,7 +109,7 @@ impl GeneratedAirSpec for PermutedMemoryAddresses {
     const FIELD_ORDER: u64 = Spec::FIELD_ORDER;
     const PUBLIC_VALUES: usize = Spec::PUBLIC_VALUES;
     const WIDTHS: &'static [usize] = Spec::WIDTHS;
-    const FIXED_WIDTHS: &'static [usize] = Spec::FIXED_WIDTHS;
+    const FIXED_COLUMNS: &'static [&'static [usize]] = Spec::FIXED_COLUMNS;
     const FIXED_HEIGHTS: &'static [usize] = Spec::FIXED_HEIGHTS;
     const INTERACTIONS_PER_ROW: &'static [usize] = Spec::INTERACTIONS_PER_ROW;
     const VERIFIER_INTERACTIONS: usize = Spec::VERIFIER_INTERACTIONS;

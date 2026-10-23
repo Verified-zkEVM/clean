@@ -8,7 +8,7 @@ public import Clean.Air.WitnessGeneration.State
 # Assembling generated tables
 
 Turns the generated rows of every component into the tables of an ensemble witness, checking the
-facts that the witness type requires: row widths, table heights and fixed columns.
+facts that the witness type requires: row widths, table heights and fixed cells.
 -/
 
 namespace Air.Flat.WitnessGeneration
@@ -20,20 +20,6 @@ structure AssembledTables (components : List (Component F)) where
   same_length : components.length = tables.length
   same_circuits : ∀ index (hindex : index < components.length),
     components[index] = tables[index].component
-
-structure MatchedFixedRows (component : Component F) (rows : List (Array F)) where
-  marker : Unit := ()
-  property : component.FixedRowsMatch rows
-
-def validateFixedRows (component : Component F) (rows : List (Array F)) :
-    Except GenerationError (MatchedFixedRows component rows) :=
-  match hcolumns : component.fixedColumns with
-  | none => .ok ⟨(), by simp [Component.FixedRowsMatch, hcolumns]⟩
-  | some fixed =>
-      if hrows : FixedColumns.RowsMatch fixed rows then
-        .ok ⟨(), by simpa [Component.FixedRowsMatch, hcolumns] using hrows⟩
-      else
-        .error (.assembly "generated table does not match its fixed columns")
 
 def assembleTables :
     (components : List (Component F)) → List (ComponentState F) →
@@ -49,9 +35,7 @@ def assembleTables :
         throw (.assembly s!"generated table for component '{component.circuit.name}' has more \
           than 2^64 rows")
       else if h : ∀ row ∈ rows, row.size = component.width then
-        match validateFixedRows component rows with
-        | .error error => .error error
-        | .ok matched => do
+        if hfixed : component.FixedRowsMatch rows then do
           let table : Table F := {
             component
             table := rows
@@ -59,7 +43,7 @@ def assembleTables :
             data := fun _ _ => #[]
             uniform_width := h
             length_le := Nat.le_of_not_lt hlength
-            fixed_rows_match := matched.property
+            fixed_rows_match := hfixed
           }
           let rest ← assembleTables components states
           return {
@@ -73,6 +57,8 @@ def assembleTables :
                   simp only [List.getElem_cons_succ]
                   exact rest.same_circuits index (by simp at hindex; omega)
           }
+        else
+          throw (.assembly "generated table does not match its fixed columns")
       else
         throw (.assembly "generated table contains a row of the wrong width")
   | _, _ => .error (.assembly "generated-table count does not match ensemble component count")

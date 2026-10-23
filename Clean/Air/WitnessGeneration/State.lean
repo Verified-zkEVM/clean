@@ -73,8 +73,8 @@ structure GeneratedRow (F : Type) where
 /-- One component's generation state. -/
 structure ComponentState (F : Type) [FiniteField F] where
   component : Component F
-  /-- The component's counters, resolved by validation. -/
-  counters : List Counter
+  /-- The component's multiplicity cell, resolved by validation. -/
+  multiplicity : Option MultiplicityColumn
   /-- The component's row operations, whose witness programs complete a row from its input. -/
   operations : List (FlatOperation F)
   /-- The component's channel interactions on a row. -/
@@ -82,12 +82,12 @@ structure ComponentState (F : Type) [FiniteField F] where
   /-- The rows generated so far. -/
   rows : List (GeneratedRow F) := []
 
-def ComponentState.initial (component : Component F) (counters : List Counter) :
+def ComponentState.initial (component : Component F) (multiplicity : Option MultiplicityColumn) :
     ComponentState F :=
   let operations := component.rowOperations
   {
     component
-    counters
+    multiplicity
     operations := operations.toFlat
     interactions := operations.interactions
   }
@@ -108,20 +108,13 @@ def generatedData (states : List (ComponentState F)) : ProverData F := fun name 
   | some state => (state.rows.map (rowPrefix n ∘ (·.input))).toArray
   | none => #[]
 
-/-- Insert the counters, all with value `count`, into the other cells of an input. -/
-def insertCounters (state : ComponentState F) (count : F) (cells : Array F) : Array F :=
-  let columns := (state.counters.map (·.column)).mergeSort
-  columns.foldl (fun input column => input.insertIdx! column count) cells
-
-/-- The inputs of a preallocated component's rows: per fixed row, its fixed values and the values of
-the row program, with counters starting at 0. -/
+/-- The inputs of a preallocated component's rows, from its input program, with multiplicity 0. -/
 def initialInputs (state : ComponentState F) (hint : ProverHint F) : List (Array F) :=
-  match state.component.fixedColumns, state.component.generation with
-  | some fixed, .preallocated mode =>
-      (List.range fixed.height.toNat).map fun row =>
-        let row := UInt64.ofNat row
-        insertCounters state 0 (fixed.values row ++ (toElements (mode.eval row hint)).toArray)
-  | _, _ => []
+  match state.component.generation with
+  | .preallocated mode =>
+      (List.range mode.height.toNat).map fun row =>
+        evalInput (mode.input .idx) (rowEnvironment hint) row 0
+  | .demand _ => []
 
 /-! ### Errors -/
 

@@ -23,7 +23,6 @@ structure Lookup (F : Type) [FiniteField F] (Row : TypeMap) [ProvableType Row] w
   height : UInt64
   /-- The row at index `i`. Fixed rows can't read prover data or hints. -/
   row (i : Witgen.U64Expr F) : Witgen.M F (Row (Witgen.FExpr F))
-  valid : (row .idx).ValidForRow .fixed := by simp [circuit_norm]
   /-- What it means to be in the table. Pulling a row from the lookup's channel guarantees it. -/
   Contains : Row F → Prop
   /-- `Contains` holds exactly for the rows of the table. -/
@@ -31,12 +30,6 @@ structure Lookup (F : Type) [FiniteField F] (Row : TypeMap) [ProvableType Row] w
 
 namespace Lookup
 variable (lookup : Lookup F Row)
-
-/-- The table's rows, as fixed columns. -/
-def fixedColumns : FixedColumns F where
-  height := lookup.height
-  row := lookup.row
-  valid := lookup.valid
 
 /-- The channel through which other components read the table. -/
 def channel : Channel F Row where
@@ -61,36 +54,29 @@ def provider : GeneralFormalCircuit F (ProvablePair Row field) unit where
     simp_all
   completeness := by circuit_proof_start
 
-omit [FiniteField F] in
-/-- The first elements of a pair are those of its first component. -/
-lemma take_toElements_pair {β : TypeMap} [ProvableType β] (a : Row F) (b : β F) (n : ℕ)
-    (h : n = size Row) :
-    (toElements (M := ProvablePair Row β) (a, b)).toList.take n = (toElements a).toList := by
-  subst h
-  simp only [toElements, Vector.toList_append]
-  exact List.take_left' Vector.length_toList
-
 /-- The table as a component: its fixed rows, followed by a multiplicity column. Witness
 generation preallocates one row per table row, whose multiplicity counts the pulls. -/
 def component : Component F where
   circuit := lookup.provider
-  fixedColumns := some lookup.fixedColumns
-  fixed_width_le_input := by simp [fixedColumns, Witgen.RowProgram.width, size]
-  circuit_assumptions_of_assumptions := by
-    rintro i ⟨value, multiplicity⟩ data hfixed - -
-    obtain ⟨hi, hrow⟩ := hfixed _ rfl
-    replace hrow :=
-      (take_toElements_pair value multiplicity lookup.fixedColumns.width rfl).symm.trans hrow
-    change lookup.Contains value
-    refine (lookup.contains_iff value).mpr ⟨i, hi, ?_⟩
-    have h : toElements value = toElements ((lookup.row .idx).evalRow i) :=
-      Vector.toList_inj.mp (hrow.trans rfl)
-    simpa [ProvableType.fromElements_toElements] using congrArg (fromElements (M := Row)) h
   generation := .preallocated {
-    Row := unit
-    row _ := pure ()
-    counters := [fun (_, multiplicity) => multiplicity]
+    channel := lookup.channel
+    height := lookup.height
+    input i := do
+      let row ← lookup.row i
+      return (fromElements ((toElements row).map .fixed), .multiplicity)
   }
+  circuit_assumptions_of_assumptions := by
+    rintro i ⟨value, multiplicity⟩ data ⟨hi, hfixed⟩ - -
+    refine (lookup.contains_iff value).mpr ⟨i, hi, ?_⟩
+    simp only [WitnessGeneration.PreallocatedMode.FixedAt, Witgen.M.bind_def, Witgen.M.pure_def,
+      toElements, Vector.toList_append, Vector.toList_map, ProvableType.toElements_fromElements,
+      List.forall₂_iff_get] at hfixed
+    have h : toElements value = toElements ((lookup.row .idx).evalRow i) := by
+      ext j hj
+      simpa [List.getElem_append_left, hj, Witgen.M.evalRow, Witgen.eval,
+        WitnessGeneration.Cell.FixedMatches, ProvableType.toElements_fromElements, circuit_norm]
+        using hfixed.2 j (by simp; omega) (by simp; omega)
+    simpa [ProvableType.fromElements_toElements] using congrArg (fromElements (M := Row)) h
 
 @[circuit_norm] lemma component_name : lookup.component.circuit.name = lookup.name := rfl
 @[circuit_norm] lemma component_channelsWithGuarantees :

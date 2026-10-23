@@ -232,18 +232,19 @@ lemma component_mem_tables_of_mem {witness : EnsembleWitness ens} {table : Table
   rw [← witness.tables_map_component]
   grind
 
-/-- A component with fixed columns has exactly one row of prover data per fixed row. -/
-lemma getRows_size_of_fixedColumns (witness : EnsembleWitness ens) {component : Component F}
-    (hcomponent : component ∈ ens.tables) {fixed : FixedColumns F}
-    (hfixed : component.fixedColumns = some fixed) :
-    (witness.data.getRows component.circuit.name component.Input).size = fixed.height.toNat := by
+/-- A preallocated component has exactly one row of prover data per row index. -/
+lemma getRows_size_of_preallocated (witness : EnsembleWitness ens) {component : Component F}
+    (hcomponent : component ∈ ens.tables)
+    {mode : WitnessGeneration.PreallocatedMode F component.Input}
+    (hgeneration : component.generation = .preallocated mode) :
+    (witness.data.getRows component.circuit.name component.Input).size = mode.height.toNat := by
   rw [← witness.tables_map_component, List.mem_map] at hcomponent
   obtain ⟨table, htable, rfl⟩ := hcomponent
   have hmatch := table.fixed_rows_match
-  simp only [Component.FixedRowsMatch, hfixed] at hmatch
+  simp only [Component.FixedRowsMatch, hgeneration] at hmatch
   rw [ProverData.getRows, EnsembleWitness.data, ← witness.same_data table htable,
     witness.dataConsistency_of_mem table htable]
-  simpa [Table.proverRows] using congrArg List.length hmatch
+  simpa [Table.proverRows] using hmatch.1
 
 @[circuit_norm]
 def Constraints {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Prop :=

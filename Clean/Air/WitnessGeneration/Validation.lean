@@ -1,6 +1,6 @@
 module
 
-public import Clean.Air.WitnessGeneration.Counter
+public import Clean.Air.WitnessGeneration.Multiplicity
 
 @[expose] public section
 
@@ -8,8 +8,9 @@ public import Clean.Air.WitnessGeneration.Counter
 # Validating the generation of an ensemble
 
 TODO. Generation starts with `validateGeneration`, which rejects component generations
-that don't fit their components, for example a demand input of the wrong width. Most of these
-checks should become types or proof obligations of the generation instead.
+that don't fit their components, for example a multiplicity cell that isn't the multiplicity of an
+interaction. Most of these checks should become types or proof obligations of the generation
+instead.
 -/
 
 namespace Air.Flat.WitnessGeneration
@@ -23,23 +24,23 @@ inductive DataReader where
   | witness (operation : ℕ)
   /-- The guard of the component's demand mode. -/
   | guard
+  /-- The input program of the component's demand mode. -/
+  | input
 deriving Repr, DecidableEq
 
 instance : ToString DataReader where
   toString
     | .witness operation => s!"witness operation {operation}"
     | .guard => "guard"
+    | .input => "demand input"
 
 /-- A problem with the generation of an ensemble, found by `validateGeneration`. -/
 inductive ValidationError where
-  | demandInputWidth (component : String) (expected actual : ℕ)
-  | demandMessageIndex (component : String) (index arity : ℕ)
-  | paddingWidth (component : String) (expected actual : ℕ)
   | preallocatedHeight (component : String) (height : ℕ)
-  | preallocatedWidth (component : String) (expected actual : ℕ)
-  | counter (component : String) (error : CounterError)
-  | byMessagePush (component : String)
-  | byMessageChannel (component counted demanded : String)
+  | rowProgram (component : String)
+  | demandFixedCell (component : String)
+  | multiplicity (component : String) (error : MultiplicityError)
+  | countedPush (component : String)
   | unguardedHandler (component channel : String) (trigger : Direction)
   | unknownDataRead (component : String) (reader : DataReader) (key : String)
   | dataReadWidth (component : String) (reader : DataReader) (key : String) (expected actual : ℕ)
@@ -48,24 +49,17 @@ deriving Repr, DecidableEq
 
 instance : ToString ValidationError where
   toString
-    | .demandInputWidth component expected actual =>
-        s!"demand input of component '{component}' has width {actual}, expected {expected}"
-    | .demandMessageIndex component index arity =>
-        s!"demand input of component '{component}' reads message element {index} of a channel \
-          with arity {arity}"
-    | .paddingWidth component expected actual =>
-        s!"padding input of component '{component}' has width {actual}, expected {expected}"
     | .preallocatedHeight component height =>
-        s!"preallocated component '{component}' has {height} fixed rows, which is not a power of \
-          two"
-    | .preallocatedWidth component expected actual =>
-        s!"row program of component '{component}' has width {actual}, expected {expected}"
-    | .counter component error => s!"component '{component}' {error}"
-    | .byMessagePush component =>
-        s!"component '{component}' aggregates by message, so it can only answer unmatched pulls"
-    | .byMessageChannel component counted demanded =>
-        s!"component '{component}' counts on channel '{counted}' but answers demand on channel \
-          '{demanded}'"
+        s!"preallocated component '{component}' has {height} rows, which is not a power of two"
+    | .rowProgram component =>
+        s!"input program of preallocated component '{component}' reads prover data, or reads the \
+          hint outside of witness cells"
+    | .demandFixedCell component =>
+        s!"demand input of component '{component}' has a fixed cell"
+    | .multiplicity component error => s!"component '{component}' {error}"
+    | .countedPush component =>
+        s!"component '{component}' counts demand in a multiplicity cell, so it can only answer \
+          unmatched pulls"
     | .unguardedHandler component channel trigger =>
         s!"component '{component}' is triggered by unmatched {trigger.name} interactions on \
           channel '{channel}' without a guard, but other components are too"
@@ -82,8 +76,8 @@ instance : ToString ValidationError where
 
 TODO. Witness programs read prover data from a snapshot of the rows initialized before channel
 balancing, which only agrees with the final prover data on cells that balancing doesn't change. So
-for now, reads of witness programs and guards are restricted to such cells: the non-counter cells
-of preallocated components. -/
+for now, reads of witness programs, guards and demand inputs are restricted to such cells: the
+non-multiplicity cells of preallocated components. -/
 
 structure DataRead where
   key : String
@@ -152,18 +146,20 @@ structure Handler where
   preallocated component, those it has a row for. -/
   selective : Bool
 
-/-- The channels a component answers demand on. A counter only grows the pushes of its interaction,
-so it answers unmatched pulls. -/
-def handlers (component : Component F) (counters : List Counter) : List Handler :=
+/-- The channel a component answers demand on. A multiplicity cell only grows the pushes of its
+interaction, so a preallocated component answers unmatched pulls. -/
+def handler (component : Component F) : Handler :=
   match component.generation with
   | .demand mode =>
       let selective := match mode.guardCondition with
         | .true => false
         | _ => true
-      [{ channel := mode.channel.name, trigger := mode.trigger, selective }]
-  | .preallocated _ =>
-      counters.map fun counter =>
-        { channel := counter.channel, trigger := .pull, selective := true }
+      { channel := mode.channel.name, trigger := mode.trigger, selective }
+  | .preallocated mode => { channel := mode.channel.name, trigger := .pull, selective := true }
+
+def cellDataReads : Cell F → List DataRead
+  | .fixed value | .witness value => fexprDataReads value
+  | .multiplicity => []
 
 /-- The programs of a component that read prover data, with their reads. -/
 def dataReaders (component : Component F) : List (DataReader × List DataRead) :=
@@ -171,50 +167,50 @@ def dataReaders (component : Component F) : List (DataReader × List DataRead) :
     match operation with
     | .witness _ code => some (.witness index, witnessDataReads code)
     | _ => none
-  let guard := match component.generation with
-    | .demand mode => [(.guard, bexprDataReads mode.guardCondition)]
+  let demand := match component.generation with
+    | .demand mode =>
+        let (cells, steps) := component.generation.cells
+        [(.guard, bexprDataReads mode.guardCondition),
+          (.input, steps.flatMap stepDataReads ++ cells.toList.flatMap cellDataReads)]
     | .preallocated _ => []
-  witnesses ++ guard
+  witnesses ++ demand
 
-/-- Check a component's generation against the component, and resolve its counters. -/
-def validateComponent (component : Component F) : Except ValidationError (List Counter) := do
+/-- Whether the input program of a preallocated row is computed from the row index, except for its
+witness cells, which may also read the hint. -/
+def rowProgramValid (steps : List (Witgen.Step F)) (cells : List (Cell F)) : Bool :=
+  steps.all (·.validForRow .fixed) && cells.all fun
+    | .fixed value => value.validForRow .fixed
+    | .witness value => value.validForRow .prover
+    | .multiplicity => true
+
+/-- Check a component's generation against the component, and resolve its multiplicity cell. -/
+def validateComponent (component : Component F) :
+    Except ValidationError (Option MultiplicityColumn) := do
   let name := component.circuit.name
-  let fixedWidth := component.fixedWidth
-  let inputWidth := component.rowOffset
-  let counters ← (resolveCounters component).mapError (.counter name)
+  let multiplicity ← (resolveMultiplicity component).mapError (.multiplicity name)
+  let (cells, steps) := component.generation.cells
   match component.generation with
   | .demand mode =>
-      if let .byMessage _ := mode.aggregation then
-        if mode.trigger == .push then throw (.byMessagePush name)
-        for counter in counters do
-          unless counter.channel == mode.channel.name do
-            throw (.byMessageChannel name counter.channel mode.channel.name)
-      unless mode.input.length + counters.length = inputWidth do
-        throw (.demandInputWidth name (inputWidth - counters.length) mode.input.length)
-      for cell in mode.input do
-        if let .message index := cell then
-          unless index < size mode.Message do
-            throw (.demandMessageIndex name index (size mode.Message))
-      unless mode.padding.size = inputWidth do
-        throw (.paddingWidth name inputWidth mode.padding.size)
+      if multiplicity.isSome && mode.trigger == .push then throw (.countedPush name)
+      if cells.toList.any (·.isFixed) then throw (.demandFixedCell name)
   | .preallocated mode =>
-      let height := (component.fixedColumns.map (·.height.toNat)).getD 0
+      let height := mode.height.toNat
       unless nextPowerOfTwo height = height do
         throw (.preallocatedHeight name height)
-      unless fixedWidth + counters.length + mode.width = inputWidth do
-        throw (.preallocatedWidth name (inputWidth - fixedWidth - counters.length) mode.width)
-  return counters
+      unless rowProgramValid steps cells.toList do
+        throw (.rowProgram name)
+  return multiplicity
 
 /-- Check that every prover-data read targets a cell of a preallocated component that generation
 doesn't change. -/
-def validateDataReads (components : List (Component F)) (counters : List (List Counter)) :
-    Except ValidationError Unit := do
-  let targets := components.zip counters
+def validateDataReads (components : List (Component F))
+    (multiplicities : List (Option MultiplicityColumn)) : Except ValidationError Unit := do
+  let targets := components.zip multiplicities
   for component in components do
     let name := component.circuit.name
     for (reader, reads) in dataReaders component do
       for read in reads do
-        let some (target, targetCounters) := targets.find? fun (target, _) =>
+        let some (target, targetMultiplicity) := targets.find? fun (target, _) =>
             target.circuit.name == read.key
           | throw (.unknownDataRead name reader read.key)
         unless read.width = target.rowOffset do
@@ -222,41 +218,39 @@ def validateDataReads (components : List (Component F)) (counters : List (List C
         match target.generation with
         | .demand _ => throw (.unstableDataRead name reader read.key read.column)
         | .preallocated _ =>
-            if targetCounters.any (·.column = read.column) then
+            if targetMultiplicity.any (·.column = read.column) then
               throw (.unstableDataRead name reader read.key read.column)
 
-/-- Check that a component whose guard is `true` is the only one with its channel and trigger. Whether
-selective components overlap is only found out during generation, when two of them accept the same
-message. -/
-def validateHandlers (components : List (Component F)) (counters : List (List Counter)) :
-    Except ValidationError Unit := do
-  let handled := (components.zip counters).flatMap fun (component, counters) =>
-    (handlers component counters).map (component.circuit.name, ·)
+/-- Check that a component whose guard is `true` is the only one with its channel and trigger.
+Whether selective components overlap is only found out during generation, when two of them accept
+the same message. -/
+def validateHandlers (components : List (Component F)) : Except ValidationError Unit := do
+  let handled := components.map fun component => (component.circuit.name, handler component)
   for (name, handler) in handled do
     let shared := handled.filter fun (_, other) =>
       other.channel == handler.channel && other.trigger == handler.trigger
     unless handler.selective || shared.length ≤ 1 do
       throw (.unguardedHandler name handler.channel handler.trigger)
 
-/-- All checks of the components' generations; returns the counters of every component. -/
+/-- All checks of the components' generations; returns the multiplicity cell of every component. -/
 def validateComponents (components : List (Component F)) :
-    Except ValidationError (List (List Counter)) := do
-  let counters ← components.mapM validateComponent
-  validateHandlers components counters
-  validateDataReads components counters
-  return counters
+    Except ValidationError (List (Option MultiplicityColumn)) := do
+  let multiplicities ← components.mapM validateComponent
+  validateHandlers components
+  validateDataReads components multiplicities
+  return multiplicities
 
-/-- An ensemble whose generation passed `validateGeneration`, with the counters of every
+/-- An ensemble whose generation passed `validateGeneration`, with the multiplicity cell of every
 component, in ensemble order. -/
 structure ValidGeneration (ens : Ensemble F PublicIO) where
-  counters : List (List Counter)
-  valid : validateComponents ens.tables = .ok counters
+  multiplicities : List (Option MultiplicityColumn)
+  valid : validateComponents ens.tables = .ok multiplicities
 
-/-- Check the generation of every component of an ensemble, and resolve its counters. -/
+/-- Check the generation of every component of an ensemble, and resolve its multiplicity cell. -/
 def validateGeneration (ens : Ensemble F PublicIO) :
     Except ValidationError (ValidGeneration ens) :=
   match hvalid : validateComponents ens.tables with
   | .error error => .error error
-  | .ok counters => .ok { counters, valid := hvalid }
+  | .ok multiplicities => .ok { multiplicities, valid := hvalid }
 
 end Air.Flat.WitnessGeneration

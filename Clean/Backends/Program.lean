@@ -119,20 +119,24 @@ def eval (block : WitnessBlock F) (environment : ProverEnvironment F)
 
 end WitnessBlock
 
-structure FixedColumnsProgram (F : Type) [FiniteField F] where
-  height : UInt64
-  program : WitnessBlock F
+def cellWellFormed (locals : List LocalSort) : Cell F → Bool
+  | .fixed value | .witness value => fexprWellFormed locals value
+  | .multiplicity => true
 
-namespace FixedColumnsProgram
+/-- The input program of a generation mode: its `let`-steps, and its input cells. -/
+structure InputProgram (F : Type) [FiniteField F] where
+  steps : List (Witgen.Step F)
+  cells : List (Cell F)
+  well_formed :
+    (stepsWellFormedFrom [] steps && cells.all (cellWellFormed (stepSorts [] steps))) = true
 
-abbrev width (fixed : FixedColumnsProgram F) : ℕ := fixed.program.outputWidth
-
-end FixedColumnsProgram
+/-- The input columns of the fixed cells. -/
+def InputProgram.fixedColumns (input : InputProgram F) : List ℕ :=
+  (input.cells.zipIdx.filter (·.1.isFixed)).map (·.2)
 
 structure ComponentProgram (F : Type) [FiniteField F] where
   name : String
   inputWidth : ℕ
-  fixedColumns : Option (FixedColumnsProgram F)
   width : ℕ
   witnesses : List (WitnessBlock F)
   constraints : List (Expression F)
@@ -173,24 +177,23 @@ def interactionValues (component : ComponentProgram F) (row : Array F)
 
 end ComponentProgram
 
-/-- A `DemandMode`, apart from its counter. -/
-structure DemandProgram (F : Type) where
+/-- A `DemandMode`. -/
+structure DemandProgram (F : Type) [FiniteField F] where
   channel : String
   trigger : Direction
   /-- The guard, as a condition on the message cells. -/
   guard : Witgen.BExpr F
-  /-- Whether the mode aggregates by message, with its counter in `ModeProgram.demand`. -/
-  byMessage : Bool
-  input : List (InputCell F)
+  /-- The input of a new row, reading the message cells. -/
+  input : InputProgram F
+  multiplicity : Option MultiplicityColumn
   padding : Array F
 
 /-- How the rows of one component are generated. -/
 inductive ModeProgram (F : Type) [FiniteField F] where
-  /-- The `counters` exist with `byMessage` aggregation only: one on the mode's channel. -/
-  | demand (mode : DemandProgram F) (counters : List Counter)
-  /-- `rows` rows, whose inputs after the fixed columns are the values of `program` with zeros
-  inserted at the counter columns. -/
-  | preallocated (rows : UInt64) (program : WitnessBlock F) (counters : List Counter)
+  | demand (mode : DemandProgram F)
+  /-- `rows` rows, whose inputs are `input` at the row index, with multiplicity 0. -/
+  | preallocated (channel : String) (rows : UInt64) (input : InputProgram F)
+      (multiplicity : MultiplicityColumn)
 
 /-- An ensemble in the form that source-code backends print. -/
 structure Program (F : Type) [FiniteField F] where
@@ -208,8 +211,7 @@ inductive LoweringError where
   | validation (error : ValidationError)
   | nativeWitness (component operation : ℕ)
   | malformedWitnessLocals (component operation : ℕ)
-  | malformedFixedProgram (component : ℕ)
-  | malformedRowProgram (component : ℕ)
+  | malformedInputProgram (component : ℕ)
   | malformedGuard (component : ℕ)
   | legacyLookup (component : ℕ)
   | componentVariable (component index width : ℕ)
@@ -223,10 +225,8 @@ instance : ToString LoweringError where
         s!"component {component} witness operation {operation} is a native Lean closure"
     | .malformedWitnessLocals component operation =>
         s!"component {component} witness operation {operation} has an invalid local reference"
-    | .malformedFixedProgram component =>
-        s!"component {component} fixed-column program has an invalid local reference"
-    | .malformedRowProgram component =>
-        s!"component {component} preallocated row program has an invalid local reference"
+    | .malformedInputProgram component =>
+        s!"component {component} input program has an invalid local reference"
     | .malformedGuard component =>
         s!"component {component} guard has an invalid local reference"
     | .legacyLookup component =>
@@ -262,15 +262,13 @@ def lowerWitnesses (component : ℕ) (operations : List (FlatOperation F)) :
     | .witness _ code => return some (← lowerWitness component index code)
     | _ => return none
 
-def lowerRowProgram {source : Witgen.RowProgram.Source} (error : LoweringError)
-    (program : Witgen.RowProgram F source) : Except LoweringError (WitnessBlock F) :=
-  match program.ir with
-  | .ir steps output =>
-    if h : witnessProgramWellFormed steps output then
-      .ok { outputWidth := program.width, steps, output, well_formed := h }
-    else
-      .error error
-  | .native _ => .error error
+def lowerInputProgram {Input : TypeMap} [ProvableType Input] (index : ℕ)
+    (cells : Vector (Cell F) (size Input)) (steps : List (Witgen.Step F)) :
+    Except LoweringError (InputProgram F) :=
+  let cells := cells.toList
+  if h : (stepsWellFormedFrom [] steps && cells.all (cellWellFormed (stepSorts [] steps))) = true
+  then .ok { steps, cells, well_formed := h }
+  else .error (.malformedInputProgram index)
 
 def lowerComponent (index : ℕ) (component : Component F) :
     Except LoweringError (ComponentProgram F) := do
@@ -279,9 +277,6 @@ def lowerComponent (index : ℕ) (component : Component F) :
     throw (.legacyLookup index)
   let flat := operations.toFlat
   let witnesses ← lowerWitnesses index flat
-  let fixedColumns ← component.fixedColumns.mapM fun fixed => do
-    let program ← lowerRowProgram (.malformedFixedProgram index) fixed.toRowProgram
-    return { height := fixed.height, program }
   let constraints := operations.constraints
   let interactions := operations.interactions
   let expressions := constraints ++ interactions.flatMap fun interaction =>
@@ -292,29 +287,29 @@ def lowerComponent (index : ℕ) (component : Component F) :
   return {
     name := component.circuit.name
     inputWidth := component.rowOffset
-    fixedColumns
     width := component.width
     witnesses
     constraints
     interactions
   }
 
-def lowerGeneration (index : ℕ) (component : Component F) (counters : List Counter) :
-    Except LoweringError (ModeProgram F) := do
-  match component.generation with
-  | .demand mode =>
-      let byMessage := match mode.aggregation with
-        | .perOccurrence => false
-        | .byMessage _ => true
+def lowerGeneration (index : ℕ) (component : Component F)
+    (multiplicity : Option MultiplicityColumn) : Except LoweringError (ModeProgram F) := do
+  let (cells, steps) := component.generation.cells
+  let input ← lowerInputProgram index cells steps
+  match component.generation, multiplicity with
+  | .demand mode, multiplicity =>
       let guard := mode.guardCondition
       unless bexprWellFormed [] guard do
         throw (.malformedGuard index)
-      let { channel, trigger, input, padding, .. } := mode
-      return .demand { channel := channel.name, trigger, guard, byMessage, input, padding } counters
-  | .preallocated mode =>
-      let program ← lowerRowProgram (.malformedRowProgram index) mode.toRowProgram
-      let rows := component.fixedColumns.map (·.height) |>.getD 0
-      return .preallocated rows program counters
+      let { channel, trigger, padding, .. } := mode
+      return .demand {
+        channel := channel.name, trigger, guard, input, multiplicity
+        padding := (toElements padding).toArray }
+  | .preallocated mode, some multiplicity =>
+      return .preallocated mode.channel.name mode.height input multiplicity
+  | .preallocated _, none =>
+      throw (.validation (.multiplicity component.circuit.name (.cells 0)))
 
 /-- Validate the generation of an ensemble, and lower it to an extraction program. `fuel` bounds the
 number of witness generation steps. -/
@@ -324,8 +319,8 @@ def lower (ensemble : Ensemble F PublicIO) (fuel : ℕ) : Except LoweringError (
   | .ok valid =>
     let components ← ensemble.tables.zipIdx.mapM fun (component, index) =>
       lowerComponent index component
-    let modes ← (ensemble.tables.zip valid.counters).zipIdx.mapM
-      fun ((component, counters), index) => lowerGeneration index component counters
+    let modes ← (ensemble.tables.zip valid.multiplicities).zipIdx.mapM
+      fun ((component, multiplicity), index) => lowerGeneration index component multiplicity
     let verifierOperations := ensemble.verifierOperations.toFlat
     let verifierInteractions := FlatOperation.interactions verifierOperations
     let verifierExpressions := verifierInteractions.flatMap fun interaction =>

@@ -98,7 +98,6 @@ def programLookup (program : Program) : Lookup (F p) Instruction where
   name := "program"
   height := programHeight program
   row i := pure (programRow program i)
-  valid := by simp [circuit_norm, programRow]
   Contains
   | { pc, opcode, operand } => ∃ i < programHeight program, pc = i.toNat ∧
       match program[i.toNat]? with
@@ -213,9 +212,8 @@ abbrev stepComponent (program : Program) (h_program : program.length < p) (initi
     channel := stateChannel program initial
     trigger := .push
     guard state := programCell state.pc 1 =? Witgen.FExpr.const (opcode.code : F p)
-    aggregation := .perOccurrence
-    input := [.const 1, .message 0, .message 1]
-    padding := #[0, 0, 0]
+    input | { pc, acc } => pure { enabled := 1, pc, acc }
+    padding := { enabled := 0, pc := 0, acc := 0 }
   }
 
 /-- The public input `final` claims that running the program on the initial accumulator ends with

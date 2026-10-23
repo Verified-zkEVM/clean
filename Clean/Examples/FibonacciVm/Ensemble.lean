@@ -113,9 +113,8 @@ abbrev add8Component : Component (F p) where
   generation := .demand {
     channel := add8Channel
     trigger := .pull
-    aggregation := .byMessage fun { m, .. } => m
-    input := [.message 0, .message 1, .message 2]
-    padding := #[0, 0, 0, 0]
+    input | (x, y, z) => pure { x, y, z, m := .multiplicity }
+    padding := { x := 0, y := 0, z := 0, m := 0 }
   }
 
 def fibonacci : ℕ → (ℕ × ℕ)
@@ -212,9 +211,8 @@ abbrev fib8Component : Component (F p) where
   generation := .demand {
     channel := fibonacciChannel
     trigger := .push
-    aggregation := .perOccurrence
-    input := [.const 1, .message 0, .message 1, .message 2]
-    padding := #[0, 0, 0, 0]
+    input | (n, x, y) => pure { enabled := 1, n, x, y }
+    padding := { enabled := 0, n := 0, x := 0, y := 0 }
   }
 
 -- completing Fibonacci channel with input and output
@@ -317,9 +315,8 @@ abbrev falseComponent : Component (F p) where
   generation := .demand {
     channel := falseChannel
     trigger := .push
-    aggregation := .perOccurrence
-    input := []
-    padding := #[]
+    input _ := pure ()
+    padding := ()
   }
 
 def falseEnsemble := SoundEnsemble.empty (F p) unit

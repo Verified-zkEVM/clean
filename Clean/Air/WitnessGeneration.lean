@@ -22,12 +22,12 @@ tally is empty.
 For example, the verifier of a VM pushes the initial state and pulls the final state. The pushed
 initial state has no pull, so the VM gets a row that pulls it and pushes the next state. That state
 is again unanswered, so the VM gets another row. Every row may also pull from other channels, which
-creates rows in chips like an addition chip, or increments counters in a memory or a lookup table.
-The reaction stops when a row pushes the final state, which the verifier pulls.
+creates rows in chips like an addition chip, or increments multiplicities in a memory or a lookup
+table. The reaction stops when a row pushes the final state, which the verifier pulls.
 
 How a component answers is its generation mode, see `Clean.Air.WitnessGeneration.Generation`:
 - a `demand` component gets a new row for the message, or a higher multiplicity of an existing row,
-- a `preallocated` component increments the counter of the row that carries the message.
+- a `preallocated` component increments the multiplicity cell of the row that carries the message.
 
 Exactly one component may accept each message: the demand components on its channel whose guard
 holds, and the preallocated components that have a row for it.
@@ -39,12 +39,12 @@ so the generator balances and pads again until no table grows.
 
 TODO. The generator makes assumptions about the AIRs it handles, which come from our examples
 rather than from the idea. None of them is fundamental:
-- Counters only answer unmatched pulls, so `byMessage` requires `trigger := .pull`.
-- A counter is the whole multiplicity of exactly one interaction.
-- The input of a demand-generated row consists of message elements and constants; its other cells
-  are computed by the witness programs.
+- Multiplicity cells only answer unmatched pulls, so a demand component with one requires
+  `trigger := .pull`.
+- A multiplicity cell is the whole multiplicity of exactly one interaction, on the component's
+  channel.
 - Witness programs only read prover data from cells of preallocated components that aren't
-  counters, see `Clean.Air.WitnessGeneration.Validation`.
+  multiplicity cells, see `Clean.Air.WitnessGeneration.Validation`.
 - All padding rows of a component have the same input.
 
 Generation can also fail, because we hacked around non-termination with a `fuel` parameter that can
@@ -73,50 +73,54 @@ def DemandMode.accepts {Input : TypeMap} [ProvableType Input] (mode : DemandMode
   mode.channel.name == demand.channel && mode.trigger == demand.direction &&
     mode.guardCondition.eval { env := .fromArray demand.message data hint }
 
-/-- The counters that answer `demand`: those on its channel, if the message was pulled more often
-than pushed. -/
-def countersFor (state : ComponentState F) (demand : Demand F) : List Counter :=
-  if demand.direction == .pull then state.counters.filter (·.channel == demand.channel) else []
+/-- The multiplicity cell that answers `demand`: the component's, if the demand is on its channel
+and the message was pulled more often than pushed. -/
+def multiplicityFor (state : ComponentState F) (demand : Demand F) : Option MultiplicityColumn :=
+  if demand.direction == .pull && state.component.generation.channelName == demand.channel then
+    state.multiplicity
+  else none
 
-/-- The first row whose counted interaction carries the demanded message, with the counter and the
-row's index. -/
+/-- The first row whose counted interaction carries the demanded message, with the multiplicity cell
+and the row's index. -/
 def findCountedRow (state : ComponentState F) (demand : Demand F) (data : ProverData F) :
-    Option (Counter × ℕ × GeneratedRow F) :=
-  (countersFor state demand).findSome? fun counter =>
+    Option (MultiplicityColumn × ℕ × GeneratedRow F) :=
+  (multiplicityFor state demand).bind fun multiplicity =>
     state.rows.zipIdx.findSome? fun (row, index) =>
-      state.interactions[counter.interaction]?.bind fun interaction =>
+      state.interactions[multiplicity.interaction]?.bind fun interaction =>
         if (interaction.eval (Environment.fromArray row.values data)).msg == demand.message then
-          some (counter, index, row)
+          some (multiplicity, index, row)
         else none
 
-/-- Add the demanded count to the counter of a row, and complete the row again. -/
-def incrementCounter (state : ComponentState F) (demand : Demand F) (data : ProverData F)
-    (hint : ProverHint F) : Counter × ℕ × GeneratedRow F → Mutation F
-  | (counter, index, row) =>
-      let count := (row.input[counter.column]?.getD 0) + FiniteField.fromNat demand.count
-      let updated := completeRow state (row.input.set! counter.column count) data hint
+/-- Add the demanded count to the multiplicity cell of a row, and complete the row again. -/
+def incrementMultiplicity (state : ComponentState F) (demand : Demand F) (data : ProverData F)
+    (hint : ProverHint F) : MultiplicityColumn × ℕ × GeneratedRow F → Mutation F
+  | (multiplicity, index, row) =>
+      let count := (row.input[multiplicity.column]?.getD 0) + FiniteField.fromNat demand.count
+      let updated := completeRow state (row.input.set! multiplicity.column count) data hint
       { state := { state with rows := state.rows.set index updated }
         removedRows := [row]
         addedRows := [updated] }
 
-/-- A new row answering the demanded message, whose counter, if any, starts at the demanded
-count. -/
+/-- A new row answering the demanded message, whose multiplicity cell, if any, starts at the
+demanded count. -/
 def DemandMode.newRow (state : ComponentState F) (mode : DemandMode F state.component.Input)
     (demand : Demand F) (data : ProverData F) (hint : ProverHint F) : GeneratedRow F :=
-  let cells := (mode.input.map (·.eval demand.message)).toArray
-  completeRow state (insertCounters state (FiniteField.fromNat demand.count) cells) data hint
+  let env := ProverEnvironment.fromArray demand.message data hint
+  let input := evalInput (mode.input (varFromOffset mode.Message 0)) env 0
+    (FiniteField.fromNat demand.count)
+  completeRow state input data hint
 
-/-- Answer demand with one new row per occurrence, or, with `byMessage`, by counting it in the row
-for the message, which is created if there is none yet. -/
+/-- Answer demand with one new row per occurrence, or, with a multiplicity cell, by counting it in
+the row for the message, which is created if there is none yet. -/
 def DemandMode.answer (state : ComponentState F) (mode : DemandMode F state.component.Input)
     (demand : Demand F) (data : ProverData F) (hint : ProverHint F) : Mutation F :=
   let addRows (rows : List (GeneratedRow F)) : Mutation F :=
     { state := { state with rows := state.rows ++ rows }, addedRows := rows }
-  match mode.aggregation with
-  | .perOccurrence => addRows (List.replicate demand.count (mode.newRow state demand data hint))
-  | .byMessage _ =>
+  match state.multiplicity with
+  | none => addRows (List.replicate demand.count (mode.newRow state demand data hint))
+  | some _ =>
       match findCountedRow state demand data with
-      | some found => incrementCounter state demand data hint found
+      | some found => incrementMultiplicity state demand data hint found
       | none => addRows [mode.newRow state demand data hint]
 
 /-- The component's answer to the demand, if it accepts it. A preallocated component accepts the
@@ -127,7 +131,7 @@ def ComponentState.answer? (state : ComponentState F) (demand : Demand F) (data 
   | .demand mode =>
       if mode.accepts demand data hint then some (mode.answer state demand data hint) else none
   | .preallocated _ =>
-      (findCountedRow state demand data).map (incrementCounter state demand data hint)
+      (findCountedRow state demand data).map (incrementMultiplicity state demand data hint)
 
 /-- The answer to the first demand that some component accepts, with that component's index. Fails
 if several components accept it. -/
@@ -182,7 +186,8 @@ def padTables (data : ProverData F) (hint : ProverHint F) (states : List (Compon
     | .preallocated _ => (state, [])
     | .demand mode =>
         let count := state.targetHeight - state.rows.length
-        let rows := List.replicate count (completeRow state mode.padding data hint)
+        let padding := (toElements mode.padding).toArray
+        let rows := List.replicate count (completeRow state padding data hint)
         ({ state with rows := state.rows ++ rows }, rows.flatMap (rowInteractions state · data))
   (padded.map (·.1), padded.flatMap (·.2))
 
@@ -205,8 +210,8 @@ def generateValid {ens : Ensemble F PublicIO} (valid : ValidGeneration ens) (fue
     Except GenerationError (EnsembleWitness ens) := do
   let hint := ens.hint proverInput
   -- preallocate rows, and complete them with the prover data of all preallocated inputs
-  let initial := (ens.tables.zip valid.counters).map fun (component, counters) =>
-    ComponentState.initial component counters
+  let initial := (ens.tables.zip valid.multiplicities).map fun (component, multiplicity) =>
+    ComponentState.initial component multiplicity
   let initial := initial.map fun state =>
     { state with rows := (initialInputs state hint).map fun input => { input, values := input } }
   let data := generatedData initial

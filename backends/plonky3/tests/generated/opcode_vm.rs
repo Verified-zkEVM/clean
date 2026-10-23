@@ -11,7 +11,7 @@ pub mod component_0 {
     pub const INPUT_WIDTH: usize = 3;
     pub const WIDTH: usize = 4;
 
-    pub const FIXED_WIDTH: usize = 0;
+    pub const FIXED_COLUMNS: &[usize] = &[];
     pub const FIXED_HEIGHT: usize = 0;
 
     pub fn fixed_row<F: WitnessField>(_row_index: u64) -> Vec<F> {
@@ -78,18 +78,27 @@ pub mod component_0 {
         ) == F::from_u64(1u64))
     }
 
+    pub fn input<F: WitnessField>(
+        row: &[F],
+        data: &WitnessData<F>,
+        hint: &WitnessData<F>,
+        multiplicity: F,
+    ) -> Vec<F> {
+        let row_index = 0u64;
+        let mut output: Vec<F> = Vec::with_capacity(3);
+        output.push(F::from_u64(1u64));
+        output.push(row.get(0).copied().unwrap_or(F::ZERO));
+        output.push(row.get(1).copied().unwrap_or(F::ZERO));
+        output
+    }
+
     pub fn mode<F: WitnessField>() -> Mode<F> {
         Mode::Demand(DemandMode {
             channel: "state",
             trigger: Direction::Push,
             guard: guard::<F>,
-            aggregation: Aggregation::PerOccurrence,
-            input: vec![
-                InputCell::Constant(F::from_u64(1u64)),
-                InputCell::Message(0),
-                InputCell::Message(1),
-            ],
-            counters: vec![],
+            input: input::<F>,
+            multiplicity: None,
             padding: vec![F::from_u64(0u64), F::from_u64(0u64), F::from_u64(0u64)],
         })
     }
@@ -107,7 +116,7 @@ pub mod component_1 {
     pub const INPUT_WIDTH: usize = 3;
     pub const WIDTH: usize = 4;
 
-    pub const FIXED_WIDTH: usize = 0;
+    pub const FIXED_COLUMNS: &[usize] = &[];
     pub const FIXED_HEIGHT: usize = 0;
 
     pub fn fixed_row<F: WitnessField>(_row_index: u64) -> Vec<F> {
@@ -174,18 +183,27 @@ pub mod component_1 {
         ) == F::from_u64(2u64))
     }
 
+    pub fn input<F: WitnessField>(
+        row: &[F],
+        data: &WitnessData<F>,
+        hint: &WitnessData<F>,
+        multiplicity: F,
+    ) -> Vec<F> {
+        let row_index = 0u64;
+        let mut output: Vec<F> = Vec::with_capacity(3);
+        output.push(F::from_u64(1u64));
+        output.push(row.get(0).copied().unwrap_or(F::ZERO));
+        output.push(row.get(1).copied().unwrap_or(F::ZERO));
+        output
+    }
+
     pub fn mode<F: WitnessField>() -> Mode<F> {
         Mode::Demand(DemandMode {
             channel: "state",
             trigger: Direction::Push,
             guard: guard::<F>,
-            aggregation: Aggregation::PerOccurrence,
-            input: vec![
-                InputCell::Constant(F::from_u64(1u64)),
-                InputCell::Message(0),
-                InputCell::Message(1),
-            ],
-            counters: vec![],
+            input: input::<F>,
+            multiplicity: None,
             padding: vec![F::from_u64(0u64), F::from_u64(0u64), F::from_u64(0u64)],
         })
     }
@@ -203,7 +221,7 @@ pub mod component_2 {
     pub const INPUT_WIDTH: usize = 4;
     pub const WIDTH: usize = 4;
 
-    pub const FIXED_WIDTH: usize = 3;
+    pub const FIXED_COLUMNS: &[usize] = &[0, 1, 2];
     pub const FIXED_HEIGHT: usize = 16;
 
     pub fn fixed_row<F: WitnessField>(row_index: u64) -> Vec<F> {
@@ -272,22 +290,55 @@ pub mod component_2 {
 
     pub fn mode<F: WitnessField>() -> Mode<F> {
         Mode::Preallocated {
+            channel: "program",
             rows: 16,
-            counters: vec![Counter {
-                channel: "program",
+            multiplicity: MultiplicityColumn {
                 interaction: 0,
                 column: 3,
-            }],
+            },
         }
     }
 
     pub fn initial_row<F: WitnessField>(row_index: u64, hint: &WitnessData<F>) -> Vec<F> {
         let row: &[F] = &[];
-        let mut input = fixed_row::<F>(row_index);
-        let mut output: Vec<F> = Vec::with_capacity(0);
-        input.extend(output);
-        input.insert(3, F::ZERO);
-        input
+        let mut output: Vec<F> = Vec::with_capacity(4);
+        output.push(F::from_u64(row_index));
+        output.push(
+            [
+                F::from_u64(1u64),
+                F::from_u64(2u64),
+                F::from_u64(1u64),
+                F::from_u64(2u64),
+                F::from_u64(1u64),
+                F::from_u64(1u64),
+                F::from_u64(2u64),
+                F::from_u64(1u64),
+                F::from_u64(2u64),
+                F::from_u64(1u64),
+            ]
+            .get((row_index) as usize)
+            .copied()
+            .unwrap_or(F::ZERO),
+        );
+        output.push(
+            [
+                F::from_u64(3u64),
+                F::from_u64(5u64),
+                F::from_u64(7u64),
+                F::from_u64(2u64),
+                F::from_u64(1u64),
+                F::from_u64(4u64),
+                F::from_u64(3u64),
+                F::from_u64(9u64),
+                F::from_u64(2u64),
+                F::from_u64(6u64),
+            ]
+            .get((row_index) as usize)
+            .copied()
+            .unwrap_or(F::ZERO),
+        );
+        output.push(F::ZERO);
+        output
     }
 }
 
