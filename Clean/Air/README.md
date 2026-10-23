@@ -6,7 +6,9 @@
 
 The first supported AIR style is **flat AIR**. In a flat AIR, one circuit is checked independently on each row of a table. The circuit does not directly refer to adjacent rows. All communication between rows and between components is expressed through channel interactions. This matches the modern layout where lookups, VM state transitions, and public API links are modeled by balanced channels rather than by next-row constraints.
 
-In this terminology, a `Flat.Component` is a one-row AIR component: it packages the circuit whose constraints are applied to every row. A `Flat.Table` is the concrete trace table and prover data for such a component. A `Flat.Tables` value is a lightweight bundle of multiple concrete tables that share the same prover data object.
+In this terminology, a `Flat.Component` is an AIR component: it packages the circuit whose constraints are applied to every row. A `Flat.Table` is the concrete trace table and prover data for such a component. A `Flat.Tables` value is a lightweight bundle of multiple concrete tables that share the same prover data object.
+
+A component may also be a **two-row component**, whose circuit additionally reads the next row and the row's position, as in classic AIRs like Plonky3's. See the section on two-row components below.
 
 ## Organization
 
@@ -20,6 +22,8 @@ In this terminology, a `Flat.Component` is a one-row AIR component: it packages 
 - `Flat.FixedColumns`: verifier-known columns that form a prefix of a component's input.
 
 It also proves the basic row-level transport lemmas: instantiated component operations agree with row operations, component soundness lifts to table soundness, and table interactions can be collected per channel.
+
+`Window.lean` defines the `Window` that a two-row component's circuit reads, and the `WindowLayout` that locates its cells in the circuit's input.
 
 `Balance.lean` contains the channel multiset theory. It defines `BalancedInteractions`, proves permutation and counting lemmas, and provides the channel-level implication principles used by higher-level soundness proofs. It also defines `RawChannel.Consistent` and `RawChannel.Normal`; typed channels are normal by construction, and normal channels are consistent, so both properties are satisfied in practice. A highlight in `Balance.lean` is the "guarantees-to-requirements-reversal" theorem which provides the basis for soundness of VM channels.
 
@@ -62,6 +66,18 @@ That private input is declared by the `Ensemble`: its type, and the hint tables 
 
 The generator currently makes assumptions that come from our examples rather than from the idea, listed in the module doc of `WitnessGeneration.lean`. None of them is fundamental.
 
+## Two-row components
+
+A two-row component checks its circuit on a window of the trace: its circuit's input is a `Window Row`, which consists of the row's own input `current : Row`, the next row's own input `next : Row`, and the selectors `isFirstRow`, `isLastRow` and `isTransition`. These have Plonky3's semantics: the selectors are 1 on the first row, on the last row, and on every row but the last, and 0 elsewhere, and the next row of the last row is the first row, so constraints that read the next row are usually gated by `isTransition`. A component declares the window with `window := Window.layout Row`. Everything else is as for a single-row component: the circuit is an ordinary `GeneralFormalCircuit`, its witnesses and interactions are cells of the row, and it can use channels and fixed columns. Single-row components are unchanged.
+
+A trace stores the window cells in every row of a two-row table, like any other input cell, and the table's `windows_match` fact ties them to the next row and to the row's position. So a two-row table is a flat table with one more fact about its rows, and the per-row theory, channel balance and the ensemble statements carry over unchanged. A proving backend doesn't commit the window cells: it reads the next row's input from its next row, and gates constraints by its selectors.
+
+**Soundness across rows.** A circuit's soundness is about one window. Facts that hold along the whole table are proved by induction along it, which the framework does: a two-row circuit may assume an invariant of its current row unless it is the first row, and its spec establishes the invariant for the next row on transitions. Concretely, the component's `circuit_assumptions_of_assumptions` receives `PreviousRowAt`: the row is the first row, or the previous row is a transition into it whose spec holds. `Table.weakSoundness` proves every row's spec by induction from there, so the invariant is part of every row's spec, and can establish the requirements of the row's channel interactions. In `Clean/Examples/SquaresTable`, every row assumes that its square is the square of its counter, and the last row pushes both to the verifier, who learns that the public square is a square.
+
+The window's selectors are 0 or 1 in Clean's semantics. Plonky3's selectors are only nonzero on the same rows, so a constraint can only use a selector as a factor of the whole constraint, which backends check under the selector's gate; lowering rejects other uses. Interactions and witness programs read only the row's own cells: witness generation completes rows and balances their interactions before the window cells are known, and fills them in when the tables are final. Rows that depend on the previous row can't be generated yet: the row program of a preallocated two-row component only reads the row index and the hints.
+
+VM tables are single-row, since the VM soundness argument derives each row's requirements from its own guarantees.
+
 ## Relation To Clean/Table
 
-`Clean/Table` is the older table infrastructure. Its `InductiveTable` interface models classic AIRs where a row transition may directly relate adjacent rows, by putting the output of one VM step in the same relative position as the input of the next step. `Clean.Air.Flat` instead models the modern one-row style: each component checks a single row in isolation, and all cross-row or cross-component structure is mediated by channels. The two layers are currently independent, but `Clean.Air` is intended to become the common home for AIR-style infrastructure, including future support for the older inductive table style now living under `Clean/Table`.
+`Clean/Table` is the older table infrastructure. Its `InductiveTable` interface models classic AIRs where a row transition may directly relate adjacent rows, by putting the output of one VM step in the same relative position as the input of the next step. Two-row components cover the same ground: a step's output can be constrained against the next row's input, and an inductive table's spec on the current state becomes the invariant that a row assumes unless it is the first row. They differ in that the window is an ordinary circuit input instead of a cell assignment across rows, and in that two-row components interact with channels like any other component.

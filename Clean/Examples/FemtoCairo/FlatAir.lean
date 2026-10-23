@@ -403,7 +403,7 @@ def memoryComponent (memorySize : UInt64) (h_memorySize : memorySize.toNat < p) 
   circuit := provideMemory
   fixedColumns := some (memoryFixedColumns memorySize)
   circuit_assumptions_of_assumptions := by
-    rintro i ⟨address, value, multiplicity⟩ data hfixed hdata -
+    rintro i ⟨address, value, multiplicity⟩ data hfixed hdata - -
     simp [memoryFixedColumns, Witgen.RowProgram.width, provideMemory, circuit_norm,
       explicit_provable_type] at hfixed hdata
     obtain ⟨hi, rfl⟩ := hfixed

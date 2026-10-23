@@ -77,7 +77,7 @@ def component : Component F where
   fixedColumns := some lookup.fixedColumns
   fixed_width_le_input := by simp [fixedColumns, Witgen.RowProgram.width, size]
   circuit_assumptions_of_assumptions := by
-    rintro i ⟨value, multiplicity⟩ data hfixed - -
+    rintro i ⟨value, multiplicity⟩ data hfixed - - -
     obtain ⟨hi, hrow⟩ := hfixed _ rfl
     replace hrow :=
       (take_toElements_pair value multiplicity lookup.fixedColumns.width rfl).symm.trans hrow

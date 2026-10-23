@@ -58,7 +58,7 @@ def Counter.resolve (component : Component F) (counter : Var component.Input F �
     Except CounterError Counter :=
   match counter (varFromOffset component.Input 0) with
   | .var cell =>
-      if component.fixedWidth ≤ cell.index && cell.index < component.rowOffset then
+      if component.fixedWidth ≤ cell.index && cell.index < component.ownInputWidth then
         let counted := component.rowOperations.interactions.zipIdx.filter fun (interaction, _) =>
           match interaction.mult with
           | .var multiplicity => multiplicity.index == cell.index
@@ -78,7 +78,7 @@ def checkCounterMessages (component : Component F) (counters : List Counter) :
   for counter in counters do
     let some interaction := interactions[counter.interaction]? | continue
     let cells := interaction.msg.toList.flatMap expressionCells
-    unless cells.all fun cell => cell < component.rowOffset && counters.all (·.column ≠ cell) do
+    unless cells.all fun cell => cell < component.ownInputWidth && counters.all (·.column ≠ cell) do
       throw (.message counter.column)
 
 /-- The counters of a component: the one of a `byMessage` demand component, or those of a

@@ -263,6 +263,31 @@ impl<F: Field + Copy> WitnessData<F> {
     }
 }
 
+/// The rows a constraint is checked on: every row, or the rows one of Plonky3's selectors marks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Gate {
+    EveryRow,
+    FirstRow,
+    LastRow,
+    Transition,
+}
+
+/// A constraint, checked on the rows of its gate.
+#[derive(Clone, Debug)]
+pub struct Constraint<E> {
+    pub gate: Gate,
+    pub value: E,
+}
+
+/// The number of window cells of a two-row component whose own input has width `window`: the next
+/// row's input and the three selectors.
+pub const fn window_width(window: Option<usize>) -> usize {
+    match window {
+        Some(width) => width + 3,
+        None => 0,
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Interaction<F> {
     pub channel: &'static str,
@@ -271,21 +296,24 @@ pub struct Interaction<F> {
     pub assume_guarantees: bool,
 }
 
-/// A generated ensemble witness: the rows of each component.
+/// A generated ensemble witness: the rows of each component, as in Clean, with the window cells of
+/// two-row components filled.
 #[derive(Clone, Debug)]
 pub struct EnsembleWitness<F> {
     fixed_widths: Vec<usize>,
+    windows: Vec<Option<usize>>,
     pub tables: Vec<Vec<Vec<F>>>,
 }
 
 impl<F: Field> EnsembleWitness<F> {
-    /// Convert the tables to Plonky3 trace matrices.
+    /// Convert the tables to Plonky3 trace matrices: the committed columns, without the fixed
+    /// columns and the window cells.
     pub fn into_traces(self) -> Result<Vec<RowMajorMatrix<F>>, String> {
         self.tables
             .into_iter()
-            .zip(self.fixed_widths)
+            .zip(self.fixed_widths.into_iter().zip(self.windows))
             .enumerate()
-            .map(|(component, (rows, fixed_width))| {
+            .map(|(component, (rows, (fixed_width, window)))| {
                 if rows.is_empty() || !rows.len().is_power_of_two() {
                     return Err(format!(
                         "component {component} has non-power-of-two height {}",
@@ -293,17 +321,25 @@ impl<F: Field> EnsembleWitness<F> {
                     ));
                 }
                 let semantic_width = rows[0].len();
-                let width = semantic_width.checked_sub(fixed_width).ok_or_else(|| {
-                    format!("component {component} fixed width exceeds its semantic row width")
-                })?;
+                let width = semantic_width
+                    .checked_sub(fixed_width + window_width(window))
+                    .ok_or_else(|| {
+                        format!("component {component} fixed width exceeds its semantic row width")
+                    })?;
                 if width == 0 || rows.iter().any(|row| row.len() != semantic_width) {
                     return Err(format!(
                         "component {component} contains a row of the wrong width"
                     ));
                 }
+                let own_width = window.unwrap_or(semantic_width);
+                let rest = own_width + window_width(window);
                 Ok(RowMajorMatrix::new(
                     rows.into_iter()
-                        .flat_map(|row| row.into_iter().skip(fixed_width))
+                        .flat_map(|row| {
+                            let mut committed = row[fixed_width..own_width].to_vec();
+                            committed.extend_from_slice(&row[rest..]);
+                            committed
+                        })
                         .collect(),
                     width,
                 ))
@@ -322,11 +358,15 @@ pub trait Program<F: WitnessField> {
     const PROVER_INPUTS: usize;
     const HINT_TABLES: &'static [HintTable];
     const FIXED_WIDTHS: &'static [usize];
+    /// The own-input width of each two-row component.
+    const WINDOWS: &'static [Option<usize>];
     const COMPONENT_NAMES: &'static [&'static str];
 
     fn modes() -> Vec<Mode<F>>;
     /// The initial input of row `row` of a preallocated component.
     fn initial_row(component: usize, row: u64, hint: &WitnessData<F>) -> Vec<F>;
+    /// Complete a row from its own input. The window cells of a two-row component's row stay zero
+    /// until the table is final.
     fn complete_row(
         component: usize,
         input: &[F],
@@ -744,6 +784,14 @@ pub fn generate<F: WitnessField, P: Program<F>>(
         )
         .into());
     }
+    if P::WINDOWS.len() != P::COMPONENTS {
+        return Err(format!(
+            "window count {} does not match component count {}",
+            P::WINDOWS.len(),
+            P::COMPONENTS
+        )
+        .into());
+    }
     if P::COMPONENT_NAMES.len() != P::COMPONENTS {
         return Err(format!(
             "component-name count {} does not match component count {}",
@@ -834,9 +882,33 @@ pub fn generate<F: WitnessField, P: Program<F>>(
 
     Ok(EnsembleWitness {
         fixed_widths: P::FIXED_WIDTHS.to_vec(),
+        windows: P::WINDOWS.to_vec(),
         tables: tables
             .into_iter()
-            .map(|table| table.into_iter().map(|row| row.values).collect())
+            .zip(P::WINDOWS)
+            .map(|(table, window)| {
+                fill_windows(table.into_iter().map(|row| row.values).collect(), *window)
+            })
             .collect(),
     })
+}
+
+/// Fill the window cells of a two-row component's rows from the next rows and the selectors.
+fn fill_windows<F: Field>(mut rows: Vec<Vec<F>>, window: Option<usize>) -> Vec<Vec<F>> {
+    let Some(width) = window else {
+        return rows;
+    };
+    let height = rows.len();
+    let firsts = rows
+        .iter()
+        .map(|row| row[..width].to_vec())
+        .collect::<Vec<_>>();
+    for (index, row) in rows.iter_mut().enumerate() {
+        let last = index + 1 == height;
+        row[width..2 * width].copy_from_slice(&firsts[(index + 1) % height]);
+        row[2 * width] = F::from_bool(index == 0);
+        row[2 * width + 1] = F::from_bool(last);
+        row[2 * width + 2] = F::from_bool(!last);
+    }
+    rows
 }
