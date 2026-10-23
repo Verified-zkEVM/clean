@@ -406,11 +406,11 @@ def memoryComponent (memorySize : UInt64) (h_memorySize : memorySize.toNat < p) 
   }
   circuit_assumptions_of_assumptions := by
     rintro i ⟨address, value, multiplicity⟩ data hfixed hdata -
-    simp [provideMemory, circuit_norm, explicit_provable_type] at hfixed hdata
+    simp [circuit_norm, provideMemory, memoryChannel] at hfixed hdata ⊢
     obtain ⟨hi, rfl⟩ := hfixed
     have hval : (i.toNat : F p).val = i.toNat := ZMod.val_cast_of_lt (by omega)
     obtain ⟨hsize, hentry⟩ := Array.getElem?_eq_some_iff.mp hdata
-    simp [provideMemory, memoryChannel, hval, hsize, hentry]
+    simp [hval, hsize, hentry]
 
 def stateChannel (program : Array (F p))
     (initialState : State (F p)) : Channel (F p) State where
