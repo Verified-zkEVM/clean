@@ -15,7 +15,7 @@ In this terminology, a `Flat.Component` is a one-row AIR component: it packages 
 `FlatComponent.lean` defines the flat AIR component layer:
 
 - `Flat.Component`: the static one-row component, backed by a `GeneralFormalCircuit`.
-- `Flat.Table`: concrete array of rows for one component, together with the prover data used to evaluate constraints and channel interactions.
+- `Flat.Table`: concrete array of rows for one component, together with the prover data used to evaluate constraints and channel interactions. Its fields guarantee that the rows agree with the component's fixed cells, and that the prover data contains the table's inputs under the component's name, so component soundness proofs can use both.
 - `Flat.Tables`: a bundle of tables sharing one prover data object.
 - `Component.FixedRowsMatch`: the rows of a preallocated component agree with its fixed cells, the verifier-known columns.
 
@@ -49,16 +49,16 @@ For example, the verifier of a VM pushes the initial state and pulls the final s
 
 Each component declares how it answers demand in its `generation` field, whose types are defined in `WitnessGeneration/Generation.lean`:
 
-- **demand**: the component starts empty and gets a new row whenever a message on its channel is unanswered. The row's input is built from the message. Repeated messages either get a row each (a VM step) or share one row whose multiplicity cell counts them (a chip). After balancing, these tables are padded to a power-of-two height. Padding rows can interact too, so the generator balances again until no table grows. A proving backend may also need a minimum trace height, which the Plonky3 backend pads to.
-- **preallocated**: the component has a fixed number of rows from the start, like a memory with one row per address or a lookup table. Demand on its channel only increments multiplicities.
+- **demand**: the component starts empty and gets a new row whenever a message on its channel is unanswered. The row's input is built from the message. How it answers repeated messages depends on whether its input uses a multiplicity cell: if not, each occurrence gets its own row (a VM step); if yes, they share one row whose multiplicity cell counts them (a chip). After balancing, these tables are padded to a power-of-two height. Padding rows can interact too, so the generator balances again until no table grows. A proving backend may also need a minimum trace height, which the Plonky3 backend pads to.
+- **preallocated**: the component has a fixed number of rows from the start, like a memory with one row per address or a lookup table. Its input must have exactly one multiplicity cell, and demand on its channel only increments it.
 
 Several components may answer the same channel, like the opcode tables of a VM, which share its state channel. A demand component can then restrict the messages it answers by a *guard*, a witness program over the message: an opcode table's guard reads the opcode at the state's `pc` from the program table. Each message must be accepted by exactly one component: a demand component whose guard holds, or a preallocated component with a row for it. `Clean/Examples/OpcodeVm` is a toy VM built this way.
 
 Both modes describe the input of a row as a witness program producing the component's input type, with a *cell* for every input variable: a fixed cell, whose value the verifier knows and which only preallocated rows have; a witness cell, which the prover computes; or the multiplicity cell, the multiplicity of the component's interaction on its channel. A memory row emitting `memoryChannel.emit multiplicity { address, value }` has the input `{ address := .fixed i.toField, value := .witness ..., multiplicity := .multiplicity }`, and a chip row emitting `add8.emit m (x, y, z)` gets the input `{ x, y, z, m := .multiplicity }` from the message `(x, y, z)`. To answer a pulled message, the generator finds the row whose interaction on the channel carries that message and increments its multiplicity cell, or, in a chip, creates the row if there is none yet. The multiplicity may not influence the message it counts, so incrementing it never changes which message a row answers.
 
-The fixed cells of a preallocated component are its fixed columns, wherever they sit in the input. The ensemble statement requires every row to agree with them, and the Plonky3 backend commits them as preprocessed columns.
+The fixed cells of a preallocated component are its fixed columns, wherever they sit in the input. Every table's rows agree with them by a field of `Flat.Table`, and the Plonky3 backend commits them as preprocessed columns.
 
-That private input is declared by the `Ensemble`: its type, and the hint tables through which witness programs read it. The `FormalEnsemble` adds the `ProverAssumptions` on public and private input that witness generation needs. The Plonky3 backend in `backends/plonky3` implements the same algorithm in Rust, and runs it on generation modes and witness programs extracted by `Clean/Backends`.
+The prover's private input is declared by the `Ensemble`: its type, and the hint tables through which witness programs read it. The `FormalEnsemble` adds the `ProverAssumptions` on public and private input that witness generation needs. The Plonky3 backend in `backends/plonky3` implements the same algorithm in Rust, and runs it on generation modes and witness programs extracted by `Clean/Backends`.
 
 The generator currently makes assumptions that come from our examples rather than from the idea, listed in the module doc of `WitnessGeneration.lean`. None of them is fundamental.
 
