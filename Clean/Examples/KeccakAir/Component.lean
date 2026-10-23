@@ -54,74 +54,89 @@ lemma getElem_map_fin {α β : Type} {n : ℕ} (f : α → β) (v : Vector α n)
     (v.map f)[i] = f v[i] := by
   simp
 
+section Map
+variable {α β : Type} [Add α] [Sub α] [Mul α] [OfNat α 1] [OfNat α 2] [OfNat α 4]
+  [Add β] [Sub β] [Mul β] [OfNat β 1] [OfNat β 2] [OfNat β 4]
+
+/-- A map that commutes with the operations the constraints are written in. -/
+structure IsHom (f : α → β) : Prop where
+  add : ∀ x y, f (x + y) = f x + f y
+  sub : ∀ x y, f (x - y) = f x - f y
+  mul : ∀ x y, f (x * y) = f x * f y
+  one : f 1 = 1
+  two : f 2 = 2
+  four : f 4 = 4
+
+namespace IsHom
+variable {f : α → β} (hf : IsHom f)
+include hf
+
+lemma map_boolCheck (x : α) : f (boolCheck x) = boolCheck (f x) := by
+  simp only [boolCheck, hf.mul, hf.sub, hf.one]
+
+lemma map_xor (x y : α) : f (xor x y) = xor (f x) (f y) := by
+  simp only [xor, hf.add, hf.mul, hf.sub, hf.two]
+
+lemma map_andn (x y : α) : f (andn x y) = andn (f x) (f y) := by
+  simp only [andn, hf.mul, hf.sub, hf.one]
+
+lemma map_horner (bit : Fin 16 → α) (n : ℕ) :
+    f (horner bit n) = horner (fun k => f (bit k)) n := by
+  induction n with
+  | zero => rfl
+  | succ n ih => simp only [horner, hf.add, hf.mul, hf.two, ih]
+
+lemma map_limbOf (bit : Fin 64 → α) (limb : Fin 4) :
+    f (limbOf bit limb) = limbOf (fun z => f (bit z)) limb := by
+  simp only [limbOf, hf.map_horner]
+
+lemma map_iotaBit (flags : Vector α 24) (bit : α) (z : Fin 64) :
+    f (iotaBit flags bit z) = iotaBit (flags.map f) (f bit) z := by
+  have hfold (rounds : List (Fin 24)) (sum : α) :
+      f (rounds.foldl (fun sum (r : Fin 24) => sum + flags[r]) sum) =
+        rounds.foldl (fun sum (r : Fin 24) => sum + (flags.map f)[r]) (f sum) := by
+    induction rounds generalizing sum with
+    | nil => rfl
+    | cons r rounds ih => simp only [List.foldl_cons, ih, hf.add, getElem_map_fin]
+  unfold iotaBit
+  split
+  · rfl
+  · simp only [hf.map_xor, hfold, getElem_map_fin]
+
+lemma map_transitionInPermutation (window : Window Row α) :
+    f (transitionInPermutation window) = transitionInPermutation (mapWindow f window) := by
+  simp [transitionInPermutation, mapWindow, hf.mul, hf.sub, hf.one]
+
+/-- The images of the constraints are the constraints of the images. -/
+theorem map_constraints (window : Window Row α) :
+    (constraints window).map f = constraints (mapWindow f window) := by
+  simp only [constraints, roundFlagConstraints, preimageConstraints, exportConstraints,
+    thetaColumnConstraints, thetaConstraints, parityConstraints, chiConstraints, iotaConstraints,
+    outputConstraints, List.map_append, List.map_cons, List.map_nil, List.map_flatMap,
+    List.map_map, Function.comp_def, hf.add, hf.mul, hf.sub, hf.one, hf.two, hf.four,
+    hf.map_boolCheck, hf.map_xor, hf.map_andn, hf.map_limbOf, hf.map_iotaBit,
+    hf.map_transitionInPermutation]
+  simp [mapWindow, hf.map_xor]
+
+end IsHom
+end Map
+
 section Eval
 variable (env : Environment (F p))
-
-lemma eval_add (x y : Expression (F p)) : (x + y).eval env = x.eval env + y.eval env := rfl
-
-lemma eval_mul (x y : Expression (F p)) : (x * y).eval env = x.eval env * y.eval env := rfl
 
 lemma eval_sub (x y : Expression (F p)) : (x - y).eval env = x.eval env - y.eval env := by
   change x.eval env + -1 * y.eval env = _
   ring
 
-lemma eval_one : (1 : Expression (F p)).eval env = 1 := rfl
-
-lemma eval_two : (2 : Expression (F p)).eval env = 2 := rfl
-
-lemma eval_four : (4 : Expression (F p)).eval env = 4 := rfl
-
-lemma eval_boolCheck (x : Expression (F p)) : (boolCheck x).eval env = boolCheck (x.eval env) := by
-  simp only [boolCheck, eval_mul, eval_sub, eval_one]
-
-lemma eval_xor (x y : Expression (F p)) : (xor x y).eval env = xor (x.eval env) (y.eval env) := by
-  simp only [xor, eval_add, eval_mul, eval_sub, eval_two]
-
-lemma eval_andn (x y : Expression (F p)) :
-    (andn x y).eval env = andn (x.eval env) (y.eval env) := by
-  simp only [andn, eval_mul, eval_sub, eval_one]
-
-lemma eval_horner (bit : Fin 16 → Expression (F p)) (n : ℕ) :
-    (horner bit n).eval env = horner (fun k => (bit k).eval env) n := by
-  induction n with
-  | zero => rfl
-  | succ n ih => simp only [horner, eval_add, eval_mul, eval_two, ih]
-
-lemma eval_limbOf (bit : Fin 64 → Expression (F p)) (limb : Fin 4) :
-    (limbOf bit limb).eval env = limbOf (fun z => (bit z).eval env) limb := by
-  simp only [limbOf, eval_horner]
-
-lemma eval_iotaBit (flags : Vector (Expression (F p)) 24) (bit : Expression (F p)) (z : Fin 64) :
-    (iotaBit flags bit z).eval env =
-      iotaBit (flags.map (Expression.eval env)) (bit.eval env) z := by
-  have hfold (rounds : List (Fin 24)) (sum : Expression (F p)) :
-      (rounds.foldl (fun sum (r : Fin 24) => sum + flags[r]) sum).eval env =
-        rounds.foldl (fun sum (r : Fin 24) => sum + (flags.map (Expression.eval env))[r])
-          (sum.eval env) := by
-    induction rounds generalizing sum with
-    | nil => rfl
-    | cons r rounds ih => simp only [List.foldl_cons, ih, eval_add, getElem_map_fin]
-  unfold iotaBit
-  split
-  · rfl
-  · simp only [eval_xor, hfold, getElem_map_fin]
-
-lemma eval_transitionInPermutation (window : Window Row (Expression (F p))) :
-    (transitionInPermutation window).eval env =
-      transitionInPermutation (mapWindow (Expression.eval env) window) := by
-  simp [transitionInPermutation, mapWindow, eval_mul, eval_sub, eval_one]
+/-- Evaluation commutes with the operations of the constraints. -/
+lemma isHom_eval : IsHom (Expression.eval (F := F p) env) :=
+  ⟨fun _ _ => rfl, eval_sub env, fun _ _ => rfl, rfl, rfl, rfl⟩
 
 /-- The values of the constraints are the constraints of the values. -/
 theorem map_eval_constraints (window : Window Row (Expression (F p))) :
     (constraints window).map (Expression.eval env) =
-      constraints (mapWindow (Expression.eval env) window) := by
-  simp only [constraints, roundFlagConstraints, preimageConstraints, exportConstraints,
-    thetaColumnConstraints, thetaConstraints, parityConstraints, chiConstraints, iotaConstraints,
-    outputConstraints, List.map_append, List.map_cons, List.map_nil, List.map_flatMap,
-    List.map_map, Function.comp_def, eval_add, eval_mul, eval_sub, eval_one, eval_two,
-    eval_four, eval_boolCheck, eval_xor, eval_andn, eval_limbOf, eval_iotaBit,
-    eval_transitionInPermutation]
-  simp [mapWindow, eval_xor]
+      constraints (mapWindow (Expression.eval env) window) :=
+  (isHom_eval env).map_constraints window
 
 lemma eval_window (window : Var (Window Row) (F p)) :
     eval env window = mapWindow (Expression.eval env) window := by
