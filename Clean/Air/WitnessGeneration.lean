@@ -239,12 +239,14 @@ def generateValid {ens : Ensemble F PublicIO} (valid : ValidGeneration ens) (fue
   let generated ← generateLoop data hint fuel states tally
   let padded ← padAndBalance data hint fuel fuel generated
   let assembled ← assembleTables ens.tables padded.toList
+  have hunique : (assembled.tables.map fun table => table.component.circuit.name).Nodup := by
+    simpa [← assembled.map_component, Function.comp_def] using ens.unique_names
   return {
-    tables := withDerivedData assembled.tables
+    tables := withDerivedData assembled.tables hunique
     publicInput
     same_length := by simp [withDerivedData, assembled.same_length]
     same_circuits := by simp [withDerivedData, assembled.same_circuits]
-    same_data := withDerivedData_data assembled.tables
+    same_data := withDerivedData_data assembled.tables hunique
   }
 
 /-- Validate the generation of an ensemble, then generate a witness from the public input and the

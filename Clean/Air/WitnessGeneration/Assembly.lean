@@ -21,6 +21,11 @@ structure AssembledTables (components : List (Component F)) where
   same_circuits : ∀ index (hindex : index < components.length),
     components[index] = tables[index].component
 
+lemma AssembledTables.map_component {components : List (Component F)}
+    (assembled : AssembledTables components) : assembled.tables.map (·.component) = components :=
+  List.ext_getElem (by simp [assembled.same_length]) fun i _ hi => by
+    simpa using (assembled.same_circuits i hi).symm
+
 def assembleTables :
     (components : List (Component F)) → List (ComponentState F) →
       Except GenerationError (AssembledTables components)
@@ -39,11 +44,13 @@ def assembleTables :
           let table : Table F := {
             component
             table := rows
-            -- replaced by the ensemble's derived data in `generateValid`
-            data := fun _ _ => #[]
+            -- the table's own rows, replaced by the ensemble's derived data in `generateValid`
+            data name n :=
+              if name = component.circuit.name then (rows.map (rowPrefix n)).toArray else #[]
             uniform_width := h
             length_le := Nat.le_of_not_lt hlength
             fixed_rows_match := hfixed
+            data_consistent := by simp
           }
           let rest ← assembleTables components states
           return {

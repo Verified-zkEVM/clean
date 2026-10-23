@@ -231,22 +231,26 @@ structure Table (F : Type) [FiniteField F] where
   length_le : table.length ≤ UInt64.size
   /-- The rows of a preallocated component agree with its fixed cells. -/
   fixed_rows_match : component.FixedRowsMatch table
+  /-- The prover data contains the table's inputs: its rows under the component's name, cut off at
+  the input width. -/
+  data_consistent : data component.circuit.name (size component.Input) =
+    (table.map (rowPrefix (size component.Input))).toArray
 
-/-- The table's rows cut off at `n` elements. -/
-def Table.proverRows (table : Table F) (n : ℕ) : Array (Vector F n) :=
+/-- The table's rows cut off, or padded with zeros, at `n` elements. -/
+def Table.rowPrefixes (table : Table F) (n : ℕ) : Array (Vector F n) :=
   (table.table.map (rowPrefix n)).toArray
 
 /-- The prover data of a list of tables: the input rows of each component, under its name. -/
 def deriveProverData : List (Table F) → ProverData F
   | [] => fun _ _ => #[]
   | table :: tables => fun name n =>
-      if table.component.circuit.name = name then table.proverRows n
+      if table.component.circuit.name = name then table.rowPrefixes n
       else deriveProverData tables name n
 
 lemma deriveProverData_eq_of_mem (tables : List (Table F))
     (hunique : (tables.map (fun table => table.component.circuit.name)).Nodup)
     {table : Table F} (hmem : table ∈ tables) (n : ℕ) :
-    deriveProverData tables table.component.circuit.name n = table.proverRows n := by
+    deriveProverData tables table.component.circuit.name n = table.rowPrefixes n := by
   induction tables with
   | nil => simp at hmem
   | cons head tail ih =>
@@ -263,31 +267,50 @@ lemma deriveProverData_eq_of_mem (tables : List (Table F))
         simp [deriveProverData, hne, ih htail hmem]
 
 /-- `deriveProverData` only reads the components and rows of the tables. -/
-lemma deriveProverData_map_data (tables : List (Table F)) (data : ProverData F) :
-    deriveProverData (tables.map fun table => { table with data }) = deriveProverData tables := by
-  induction tables with
-  | nil => rfl
-  | cons table tables ih => rw [List.map_cons, deriveProverData, deriveProverData, ih]; rfl
+lemma deriveProverData_congr {tables tables' : List (Table F)}
+    (h : tables'.map (fun table => (table.component, table.table)) =
+      tables.map (fun table => (table.component, table.table))) :
+    deriveProverData tables' = deriveProverData tables := by
+  induction tables generalizing tables' with
+  | nil => cases tables' <;> simp_all
+  | cons table tables ih =>
+      cases tables' with
+      | nil => simp at h
+      | cons table' tables' =>
+          simp only [List.map_cons, List.cons.injEq, Prod.mk.injEq] at h
+          obtain ⟨⟨hcomponent, htable⟩, h⟩ := h
+          simp only [deriveProverData, Table.rowPrefixes, htable, ih h]
+          rw [hcomponent]
 
-/-- Gives every table the prover data derived from all of them. -/
-def withDerivedData (tables : List (Table F)) : List (Table F) :=
-  tables.map fun table => { table with data := deriveProverData tables }
+/-- Gives every table the prover data derived from all of them, given unique component names. -/
+def withDerivedData (tables : List (Table F))
+    (hunique : (tables.map fun table => table.component.circuit.name).Nodup) : List (Table F) :=
+  tables.attach.map fun ⟨table, hmem⟩ => { table with
+    data := deriveProverData tables
+    data_consistent := deriveProverData_eq_of_mem tables hunique hmem _ }
 
-@[circuit_norm] lemma withDerivedData_map_component (tables : List (Table F)) :
-    (withDerivedData tables).map (·.component) = tables.map (·.component) := by
-  simp [withDerivedData]
+@[circuit_norm] lemma withDerivedData_map (tables : List (Table F))
+    (hunique : (tables.map fun table => table.component.circuit.name).Nodup) :
+    (withDerivedData tables hunique).map (fun table => (table.component, table.table)) =
+      tables.map (fun table => (table.component, table.table)) := by
+  simp [withDerivedData, List.map_attach_eq_pmap, List.map_pmap, List.pmap_eq_map]
 
-lemma withDerivedData_data (tables : List (Table F)) :
-    ∀ table ∈ withDerivedData tables, table.data = deriveProverData (withDerivedData tables) := by
-  simp [withDerivedData, deriveProverData_map_data]
+@[circuit_norm] lemma withDerivedData_map_component (tables : List (Table F))
+    (hunique : (tables.map fun table => table.component.circuit.name).Nodup) :
+    (withDerivedData tables hunique).map (·.component) = tables.map (·.component) := by
+  simp [withDerivedData, List.map_attach_eq_pmap, List.map_pmap, List.pmap_eq_map]
+
+lemma withDerivedData_data (tables : List (Table F))
+    (hunique : (tables.map fun table => table.component.circuit.name).Nodup) :
+    ∀ table ∈ withDerivedData tables hunique,
+      table.data = deriveProverData (withDerivedData tables hunique) := by
+  rw [deriveProverData_congr (withDerivedData_map tables hunique)]
+  simp only [withDerivedData, List.map_attach_eq_pmap, List.mem_pmap]
+  rintro _ ⟨_, _, rfl⟩
+  rfl
 
 namespace Table
 variable {table : Table F} {channel : RawChannel F}
-
-/-- The table's prover data contains its own component's circuit-input rows. -/
-def DataConsistency (table : Table F) : Prop :=
-  table.data table.component.circuit.name (size table.component.Input) =
-    table.proverRows (size table.component.Input)
 
 abbrev length (t : Table F) : ℕ := t.table.length
 
@@ -319,8 +342,7 @@ def Assumptions (table : Table F) : Prop :=
   ∀ row ∈ table.table,
     table.component.RowAssumptions (table.environment row)
 
-lemma circuitAssumptions_of_dataConsistency (table : Table F) (consistent : table.DataConsistency)
-    (assumptions : table.Assumptions)
+lemma circuitAssumptions_of_assumptions (table : Table F) (assumptions : table.Assumptions)
     (row : Array F) (hrow : row ∈ table.table) :
     table.component.CircuitAssumptions (table.environment row) := by
   unfold environment
@@ -340,8 +362,8 @@ lemma circuitAssumptions_of_dataConsistency (table : Table F) (consistent : tabl
       simpa [hi'] using hfixed i.val i.isLt
   · simp only [DataInputAt, ProverData.getRows, Component.rowInput, valueFromOffset_fromArray,
       hindex]
-    rw [consistent]
-    simp [proverRows, i.isLt, hi']
+    rw [table.data_consistent]
+    simp [i.isLt, hi']
   · exact assumptions row hrow
 
 def Guarantees (table : Table F) : Prop :=
@@ -540,18 +562,18 @@ lemma guarantees_of_not_mem (table : Table F) {channel : RawChannel F} :
   assumption
 
 /-- Circuit soundness, lifted to full table level. -/
-theorem weakSoundness {table : Table F} (consistent : table.DataConsistency) :
+theorem weakSoundness {table : Table F} :
     table.Assumptions → table.Constraints → table.Guarantees →
     table.Spec ∧ table.Requirements := by
   intro assumptions constraints guarantees
   constructor
   · intro row hrow
     exact (table.component.weakSoundness
-      (table.circuitAssumptions_of_dataConsistency consistent assumptions row hrow)
+      (table.circuitAssumptions_of_assumptions assumptions row hrow)
       (constraints row hrow) (guarantees row hrow)).left
   · intro row hrow
     exact (table.component.weakSoundness
-      (table.circuitAssumptions_of_dataConsistency consistent assumptions row hrow)
+      (table.circuitAssumptions_of_assumptions assumptions row hrow)
       (constraints row hrow) (guarantees row hrow)).right
 
 /--
@@ -562,7 +584,6 @@ prove guarantees for.
 -/
 lemma requirements_of_partial_guarantees_of_constraints {table : Table F}
   {finished : List (RawChannel F)} {unfinished : RawChannel F} :
-  table.DataConsistency →
   table.Assumptions →
   table.Constraints →
   table.channelsWithGuarantees ⊆ unfinished :: finished →
@@ -570,7 +591,7 @@ lemma requirements_of_partial_guarantees_of_constraints {table : Table F}
     ∀ row ∈ table.table,
       table.component.operations.ChannelGuarantees unfinished (table.environment row) →
       table.component.operations.ChannelRequirements unfinished (table.environment row) := by
-  intro consistent assumptions constraints subset finished_grts row h_row channel_grts
+  intro assumptions constraints subset finished_grts row h_row channel_grts
   replace finished_grts channel hc := finished_grts channel hc row h_row
   set env := table.environment row
   suffices table.component.operations.FullRequirements env by
@@ -579,7 +600,7 @@ lemma requirements_of_partial_guarantees_of_constraints {table : Table F}
     exact this i hi
   suffices table.component.operations.FullGuarantees env from
     table.component.weakSoundness
-      (table.circuitAssumptions_of_dataConsistency consistent assumptions row h_row)
+      (table.circuitAssumptions_of_assumptions assumptions row h_row)
       (constraints row h_row) this |>.right
   simp only [Component.guarantees_iff, Component.rowOperations]
   rw [GeneralFormalCircuit.guarantees_iff]

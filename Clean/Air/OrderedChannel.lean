@@ -425,13 +425,12 @@ lemma guarantees_of_requirements_append
 
 /-- Helper lemma that uses circuit soundness, to strengthen guarantees to include requirements -/
 lemma iff_guarantees_of_constraints {table : Table F} {finished : List (RawChannel F)} :
-  table.DataConsistency →
   table.Assumptions →
   table.Constraints →
   table.component.circuit.channelsWithGuarantees ⊆ finished →
   ((table.Spec ∧ ∀ channel ∈ finished, table.ChannelGuarantees channel ∧ table.ChannelRequirements channel) ↔
     ∀ channel ∈ finished, table.ChannelGuarantees channel) := by
-  intro consistent assumptions constraints subset_finished
+  intro assumptions constraints subset_finished
   constructor; simp_all
   intro grts
   have all_grts : table.Guarantees := by
@@ -439,7 +438,7 @@ lemma iff_guarantees_of_constraints {table : Table F} {finished : List (RawChann
     intro channel h_channel
     exact grts _ (subset_finished h_channel)
   -- constraints ∧ guarantees → requirements → channelRequirements
-  have ⟨ spec, all_reqs ⟩ := table.weakSoundness consistent assumptions constraints all_grts
+  have ⟨ spec, all_reqs ⟩ := table.weakSoundness assumptions constraints all_grts
   use spec
   intro channel h_channel
   exact ⟨ grts _ h_channel, table.channelRequirements_of_requirements all_reqs ⟩
@@ -472,8 +471,7 @@ def SoundChannels (tables : List α) (finished : List (RawChannel F)) : Prop :=
 /-- `SoundChannels` lets us prove a soundness theorem. -/
 theorem spec_and_guarantees_of_soundChannels {witness : Tables F} {finished : List (RawChannel F)} :
   SoundChannels (witness.tables.map (·.component)) finished →
-  -- consistent prover data, constraints + partial balance
-  (∀ table ∈ witness.tables, table.DataConsistency) →
+  -- constraints + partial balance
   witness.Assumptions →
   witness.Constraints →
   (∀ channel ∈ finished, PartialBalancedChannel witness channel) →
@@ -482,7 +480,7 @@ theorem spec_and_guarantees_of_soundChannels {witness : Tables F} {finished : Li
     table.ChannelGuarantees channel ∧ table.ChannelRequirements channel := by
   -- by induction on the tables
   rintro ⟨ subset_finished, ordered_channels, consistent_channels ⟩
-    consistent assumptions constraints partial_balance
+    assumptions constraints partial_balance
   induction witness using Tables.induct
   · intro _ h_table; nomatch h_table
   -- induction step
@@ -504,12 +502,11 @@ theorem spec_and_guarantees_of_soundChannels {witness : Tables F} {finished : Li
     · right
       exact no_reqs
   specialize ih subset_finished.right (fun c hc => (ordered_channels c hc).right.left)
-    consistent.right assumptions.right constraints.right partial_balance'
+    assumptions.right constraints.right partial_balance'
   constructor; swap
   · exact ih
   -- it's enough to prove guarantees of all channels, since they + constraints imply requirements
-  rw [iff_guarantees_of_constraints
-    consistent.left assumptions.left constraints.left subset_finished.left]
+  rw [iff_guarantees_of_constraints assumptions.left constraints.left subset_finished.left]
   -- the rest is just applying `guarantees_of_requirements_cons`
   intro channel h_channel
   have : channel.Consistent := consistent_channels _ h_channel
@@ -638,7 +635,7 @@ theorem tableSoundness_of_soundChannels {ens : Ensemble F PublicIO} :
   -- the tables are sound by themselves, given partial balance
   have table_results := spec_and_guarantees_of_soundChannels (witness := witness.toTables)
     (by simp_all [circuit_norm, witness.tables_map_component])
-    witness.dataConsistency_of_mem assumptions constraints
+    assumptions constraints
     fun channel h_channel =>
       partialBalancedChannel_of_balancedChannel
         (ordered channel h_channel) (balance _ (finished_subset h_channel))

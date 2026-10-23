@@ -215,22 +215,6 @@ lemma tables_map_component (witness : EnsembleWitness ens) :
   intro i hi hi'
   simp [witness.same_circuits i hi']
 
-lemma tableNames_nodup (witness : EnsembleWitness ens) :
-    (witness.tables.map (fun table => table.component.circuit.name)).Nodup := by
-  rw [show witness.tables.map (fun table => table.component.circuit.name) =
-    ens.tables.map (·.circuit.name) by
-      calc
-        _ = (witness.tables.map (·.component)).map (·.circuit.name) := by simp
-        _ = ens.tables.map (·.circuit.name) :=
-          congrArg (List.map (·.circuit.name)) witness.tables_map_component]
-  exact ens.unique_names
-
-lemma dataConsistency_of_mem (witness : EnsembleWitness ens) :
-    ∀ table ∈ witness.tables, table.DataConsistency := by
-  intro table htable
-  rw [Table.DataConsistency, witness.same_data table htable]
-  exact deriveProverData_eq_of_mem witness.tables witness.tableNames_nodup htable _
-
 def toTables (witness : EnsembleWitness ens) : Tables F where
   tables := witness.tables
   data := witness.data
@@ -258,8 +242,8 @@ lemma getRows_size_of_preallocated (witness : EnsembleWitness ens) {component : 
   have hmatch := table.fixed_rows_match
   simp only [Component.FixedRowsMatch, hgeneration] at hmatch
   rw [ProverData.getRows, EnsembleWitness.data, ← witness.same_data table htable,
-    witness.dataConsistency_of_mem table htable]
-  simpa [Table.proverRows] using hmatch.1
+    table.data_consistent]
+  simpa using hmatch.1
 
 @[circuit_norm]
 def Constraints {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Prop :=
