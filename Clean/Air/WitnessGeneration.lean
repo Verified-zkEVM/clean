@@ -39,8 +39,6 @@ so the generator balances and pads again until no table grows.
 
 TODO. The generator makes assumptions about the AIRs it handles, which come from our examples
 rather than from the idea. None of them is fundamental:
-- Multiplicity cells only answer unmatched pulls, so a demand component with one requires
-  `trigger := .pull`.
 - A multiplicity cell is the whole multiplicity of exactly one interaction, on the component's
   channel.
 - Witness programs only read prover data from cells of preallocated components that aren't
@@ -87,11 +85,11 @@ def DemandMode.accepts {Input : TypeMap} [ProvableType Input] (mode : DemandMode
   mode.channel.name == demand.channel && mode.trigger == demand.direction &&
     mode.guardCondition.eval { env := .fromArray demand.message data hint }
 
-/-- Whether a preallocated component answers the demand: it is on the mode's channel, and the
-message was pulled more often than pushed. Answering also needs a row for the message. -/
+/-- Whether a preallocated component answers the demand: it is on the mode's channel. Answering
+also needs a row for the message. -/
 def PreallocatedMode.accepts {Input : TypeMap} [ProvableType Input]
     (mode : PreallocatedMode F Input) (demand : Demand F) : Bool :=
-  mode.channel.name == demand.channel && demand.direction == .pull
+  mode.channel.name == demand.channel
 
 /-- The row that counts the demanded message, with the multiplicity cell and the row's index. -/
 def findCountedRow (state : ComponentState F) (demand : Demand F) :
@@ -100,20 +98,19 @@ def findCountedRow (state : ComponentState F) (demand : Demand F) :
     state.countedRows[demand.message]?.bind fun index =>
       state.rows[index]?.map fun row => (multiplicity, index, row)
 
-/-- Add the demanded count to the multiplicity cell of a row, and complete the row again. -/
+/-- Cancel the demand in the multiplicity cell of a row, and complete the row again. -/
 def incrementMultiplicity (state : ComponentState F) (demand : Demand F) (data : ProverData F)
     (hint : ProverHint F) : MultiplicityColumn × ℕ × GeneratedRow F → Change F
   | (multiplicity, index, row) =>
-      let count := (row.input[multiplicity.column]?.getD 0) + FiniteField.fromNat demand.count
+      let count := (row.input[multiplicity.column]?.getD 0) - demand.multiplicity
       .update index row (completeRow state (row.input.set! multiplicity.column count) data hint)
 
-/-- A new row answering the demanded message, whose multiplicity cell, if any, starts at the
-demanded count. -/
+/-- A new row answering the demanded message, whose multiplicity cell, if any, cancels the
+demand. -/
 def DemandMode.newRow (state : ComponentState F) (mode : DemandMode F state.component.Input)
     (demand : Demand F) (data : ProverData F) (hint : ProverHint F) : GeneratedRow F :=
   let env := ProverEnvironment.fromArray demand.message data hint
-  let input := evalInput (mode.input (varFromOffset mode.Message 0)) env 0
-    (FiniteField.fromNat demand.count)
+  let input := evalInput (mode.input (varFromOffset mode.Message 0)) env 0 (-demand.multiplicity)
   completeRow state input data hint
 
 /-- Answer demand with one new row per occurrence, or, with a multiplicity cell, by counting it in

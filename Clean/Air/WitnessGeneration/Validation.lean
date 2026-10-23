@@ -40,7 +40,6 @@ inductive ValidationError where
   | rowProgram (component : String)
   | demandFixedCell (component : String)
   | multiplicity (component : String) (error : MultiplicityError)
-  | countedPush (component : String)
   | unguardedHandler (component channel : String) (trigger : Direction)
   | unknownDataRead (component : String) (reader : DataReader) (key : String)
   | dataReadWidth (component : String) (reader : DataReader) (key : String) (expected actual : ℕ)
@@ -57,9 +56,6 @@ instance : ToString ValidationError where
     | .demandFixedCell component =>
         s!"demand input of component '{component}' has a fixed cell"
     | .multiplicity component error => s!"component '{component}' {error}"
-    | .countedPush component =>
-        s!"component '{component}' counts demand in a multiplicity cell, so it can only answer \
-          unmatched pulls"
     | .unguardedHandler component channel trigger =>
         s!"component '{component}' is triggered by unmatched {trigger.name} interactions on \
           channel '{channel}' without a guard, but other components are too"
@@ -146,16 +142,17 @@ structure Handler where
   preallocated component, those it has a row for. -/
   selective : Bool
 
-/-- The channel a component answers demand on. A multiplicity cell only grows the pushes of its
-interaction, so a preallocated component answers unmatched pulls. -/
-def handler (component : Component F) : Handler :=
+/-- The demand a component answers. A preallocated component answers both directions on its
+channel, with its multiplicity cell. -/
+def handlers (component : Component F) : List Handler :=
   match component.generation with
   | .demand mode =>
       let selective := match mode.guardCondition with
         | .true => false
         | _ => true
-      { channel := mode.channel.name, trigger := mode.trigger, selective }
-  | .preallocated mode => { channel := mode.channel.name, trigger := .pull, selective := true }
+      [{ channel := mode.channel.name, trigger := mode.trigger, selective }]
+  | .preallocated mode =>
+      [.pull, .push].map fun trigger => { channel := mode.channel.name, trigger, selective := true }
 
 def cellDataReads : Cell F → List DataRead
   | .fixed value | .witness value => fexprDataReads value
@@ -191,7 +188,6 @@ def validateComponent (component : Component F) :
   let (cells, steps) := component.generation.cells
   match component.generation with
   | .demand mode =>
-      if multiplicity.isSome && mode.trigger == .push then throw (.countedPush name)
       if cells.toList.any (·.isFixed) then throw (.demandFixedCell name)
   | .preallocated mode =>
       let height := mode.height.toNat
@@ -225,7 +221,8 @@ def validateDataReads (components : List (Component F))
 Whether selective components overlap is only found out during generation, when two of them accept
 the same message. -/
 def validateHandlers (components : List (Component F)) : Except ValidationError Unit := do
-  let handled := components.map fun component => (component.circuit.name, handler component)
+  let handled := components.flatMap fun component =>
+    (handlers component).map (component.circuit.name, ·)
   for (name, handler) in handled do
     let shared := handled.filter fun (_, other) =>
       other.channel == handler.channel && other.trigger == handler.trigger
