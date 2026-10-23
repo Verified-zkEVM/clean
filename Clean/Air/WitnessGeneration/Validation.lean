@@ -163,7 +163,7 @@ def validateComponent (component : Component F) :
   let multiplicity ← (resolveMultiplicity component).mapError (.multiplicity name)
   let (cells, steps) := component.generation.cells
   match component.generation with
-  | .demand mode =>
+  | .demand _ =>
       if cells.toList.any (·.isFixed) then throw (.demandFixedCell name)
   | .preallocated mode =>
       let height := mode.height.toNat
