@@ -180,7 +180,14 @@ theorem eval_toExpr_congr (component : Component F) (publicValues : List K) (i :
   | .var v, h => eval_cellExpr_congr e logN trace component publicValues i v.index
       (h v.index (by simp [expressionCells]))
   | .const _, _ => rfl
-  | .add a b, h | .mul a b, h => by
+  | .add a b, h => by
+    simp only [expressionCells, List.mem_append] at h
+    simp only [toExpr]
+    rw [eval_addExpr (traceEnv e logN trace component publicValues i) rfl,
+      eval_addExpr (rowEnv e logN trace component i) rfl,
+      eval_toExpr_congr component publicValues i a fun j hj => h j (Or.inl hj),
+      eval_toExpr_congr component publicValues i b fun j hj => h j (Or.inr hj)]
+  | .mul a b, h => by
     simp only [expressionCells, List.mem_append] at h
     simp only [toExpr, Expr.eval]
     rw [eval_toExpr_congr component publicValues i a fun j hj => h j (Or.inl hj),
@@ -199,9 +206,15 @@ theorem eval_toRow (component : Component F) (i : ℕ) (data : ProverData F) :
         e.symm ((toExpr e component x).eval (rowEnv e logN trace component i))
   | .var v, h => getD_toRow e logN trace component i v.index (h v.index (by simp [expressionCells]))
   | .const c, _ => (e.symm_apply_apply c).symm
-  | .add a b, h | .mul a b, h => by
+  | .add a b, h => by
     simp only [expressionCells, List.mem_append] at h
-    simp only [Expression.eval, toExpr, Expr.eval, map_add, map_mul]
+    simp only [Expression.eval, toExpr]
+    rw [eval_addExpr (rowEnv e logN trace component i) rfl, map_add,
+      eval_toRow component i data a fun j hj => h j (Or.inl hj),
+      eval_toRow component i data b fun j hj => h j (Or.inr hj)]
+  | .mul a b, h => by
+    simp only [expressionCells, List.mem_append] at h
+    simp only [Expression.eval, toExpr, Expr.eval, map_mul]
     rw [eval_toRow component i data a fun j hj => h j (Or.inl hj),
       eval_toRow component i data b fun j hj => h j (Or.inr hj)]
 

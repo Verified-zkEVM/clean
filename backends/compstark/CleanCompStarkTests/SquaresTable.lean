@@ -39,7 +39,7 @@ def trace : Array K := toTrace babyBear component rows
 def air : Air K := toAir babyBear component 3
 
 /-- FRI with blowup `2`, folding by arity `2` to a constant, and `8` queries. -/
-def params : Fri.Params := ⟨1, 0, 1, 8, 0, 0, 0, 0, 0⟩
+def params : Fri.Params := ⟨1, 0, 1, 8, 0, 0, 0, 0, 0, 0⟩
 
 #guard rows.length == 8 && air.width == 3 && trace.size == 8 * 3
 #guard toRows babyBear component 3 trace == rows
@@ -70,6 +70,7 @@ def setup : Iop.Setup EF where
       queries := by decide
       blowup := by decide }
   folds := by decide
+  capFits := Nat.zero_le _
 
 /-- Every row of a squares table holds the square of its counter. -/
 def SquaresHeld (rows : List (Array (F p))) : Prop :=
@@ -142,7 +143,7 @@ theorem knowledgeSoundness_ro (δ δ' : NNReal) (hδ' : (δ' : ℝ) < 1 - setup.
         ∀ trace ∈ Iop.closeTraces setup δ' (Iop.committedTrace setup log proof),
           ¬ SquaresHeld (toRows babyBear component 3 trace)] ≤
       (Q + setup.verifierQueries) * Iop.roundError setup δ δ' +
-        Iop.hashError K (Q + setup.verifierQueries) :=
+        Iop.hashError K setup.params.capHeight (Q + setup.verifierQueries) :=
   knowledgeSoundness_ro_of_tableSound babyBear setup rfl bridgeable_component fits (tableSound 8)
     [] δ δ' hδ' Q prover hQ
 
