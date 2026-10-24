@@ -72,7 +72,7 @@ def traces (values : List ℕ) : List (Array K) :=
     toTrace babyBear (bytes (p := p)).component (byteRows values)]
 
 /-- FRI with blowup `4`, folding by arity `2` to a constant, and `8` queries. -/
-def params : Fri.Params := ⟨2, 0, 1, 8, 0, 0, 0, 0, 0⟩
+def params : Fri.Params := ⟨2, 0, 1, 8, 0, 0, 0, 0, 0, 0⟩
 
 def proveAndVerify (values : List ℕ) : Except String Unit :=
   Batch.verifyBatch params instances (Batch.setupBatch params instances)
