@@ -60,14 +60,17 @@ lemma oneHot_injective {r s : Fin 24} (h : (oneHot r : Vector (F p) 24) = oneHot
 
 variable [Fact (2 ^ 16 < p)]
 
-/-- The ensemble of the Keccak-f AIR with `height` rows. The prover's input is the trace, which
-generation copies into the rows. -/
+/-- The number of permutations of a trace with `height` rows, the last one possibly cut off. -/
+def permutations (height : UInt64) : ℕ := (height.toNat + 23) / 24
+
+/-- The ensemble of the Keccak-f AIR with `height` rows. The prover's input is the input of every
+permutation, as the 100 16-bit limbs of its lanes in the order of the `preimage` columns. -/
 def ensemble (height : UInt64) : Ensemble (F p) unit where
   tables := [component height]
   unique_names := by simp
   channels := []
-  ProverInput := fields (height.toNat * size Row)
-  hintTables := [{ key := "keccak", width := size Row, offset := 0, rows := height.toNat }]
+  ProverInput := fields (permutations height * 100)
+  hintTables := [{ key := "keccak", width := 100, offset := 0, rows := permutations height }]
 
 /-- Every window of a satisfied table of the Keccak-f component computes a round of its
 preimage. -/

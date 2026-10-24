@@ -9,28 +9,57 @@ public import Clean.Circuit.WitnessIRSugar
 
 Witness programs that compute a segment of a row from the row index: fixed columns, and the inputs
 of preallocated components. The latter can also read the hint.
+
+Segment programs compute the inputs of a component's rows in segments of consecutive rows: the first
+row of a segment like a row program, every other row also from the previous row's values, which
+carry the segment's state. For example, the 24 rows of a Keccak-f permutation: the first row reads
+the permutation's input from the hint, every later row continues from the state of the row before.
 -/
 
 namespace Witgen
 variable {F : Type}
 
-/-- What a row program computes: fixed columns, or inputs of preallocated components. -/
+/-- What a row program computes: fixed columns, inputs of preallocated components, or the inputs of
+the rows of a segment after its first, which read the previous row's first `width` cells. -/
 inductive RowProgram.Source where
   | fixed
   | prover
+  | continuation (width : ℕ)
 deriving DecidableEq
 
 @[circuit_norm]
 def RowProgram.Source.allowsHints : RowProgram.Source → Bool
   | .fixed => false
-  | .prover => true
+  | .prover | .continuation _ => true
+
+/-- Whether an expression reads only cells below `width`. -/
+def _root_.Expression.readsBelow (width : ℕ) : Expression F → Bool
+  | .var cell => cell.index < width
+  | .const _ => true
+  | .add left right | .mul left right => left.readsBelow width && right.readsBelow width
+
+/-- Whether a row program reads the cells `offset, …, offset + n - 1`: only a continuation does, of
+the previous row. -/
+@[circuit_norm]
+def RowProgram.Source.allowsRange (source : RowProgram.Source) (offset n : ℕ) : Bool :=
+  match source with
+  | .fixed | .prover => false
+  | .continuation width => offset + n ≤ width
+
+/-- Which circuit expressions a row program reads: those of the previous row in a continuation, and
+none otherwise. -/
+@[circuit_norm]
+def RowProgram.Source.allowsRead (source : RowProgram.Source) (e : Expression F) : Bool :=
+  match source with
+  | .fixed | .prover => false
+  | .continuation width => e.readsBelow width
 
 mutual
 
-/-- Whether an expression is valid in a row program: it reads no row or prover data, and only
-prover row programs read hints. -/
+/-- Whether an expression is valid in a row program: it reads no prover data, only prover row
+programs and continuations read hints, and only continuations read cells, of the previous row. -/
 def FExpr.validForRow (source : RowProgram.Source) : FExpr F → Bool
-  | .expr _ => false
+  | .expr e => source.allowsRead e
   | .const _ | .localVar _ => true
   | .add left right | .mul left right =>
       left.validForRow source && right.validForRow source
@@ -93,7 +122,7 @@ def Step.validForRow (source : RowProgram.Source) : Step F → Bool
 def VExpr.validForRow (source : RowProgram.Source) : {n : ℕ} → VExpr F n → Bool
   | _, .lit values => values.toList.all (FExpr.validForRow source)
   | _, .mapRange _ body => body.validForRow source
-  | _, .envRange _ => false
+  | n, .envRange offset => source.allowsRange offset n
   | _, .bitsOf value => value.validForRow source
   | _, .append left right =>
       left.validForRow source && right.validForRow source
@@ -147,5 +176,76 @@ def eval [FiniteField F] (program : RowProgram F source) (i : UInt64)
   (program.row .idx).evalRow i hint
 
 end RowProgram
+
+/-- Evaluate a witness program at row `row` after a row with the values `previous`, which `.expr`
+reads. -/
+def M.evalRowAfter [FiniteField F] {Row : TypeMap} [ProvableType Row]
+    (program : M F (Row (FExpr F))) (previous : Array F) (row : UInt64) (hint : ProverHint F) :
+    Row F :=
+  let env : ProverEnvironment F := { get j := previous[j]?.getD 0, data _ _ := #[], hint }
+  Witgen.eval {
+    env
+    locals := evalSteps env (program #[]).2.toList #[] row.toNat
+    idx := row.toNat
+  } (program #[]).1
+
+/-- A program computing rows of type `Row` in segments of `length` consecutive rows. Row `i` starts
+a segment if `i % length = 0`, so with `length = 0` only row 0 does. A row that starts a segment is
+computed from its index, like a row program; every other row from its index and the previous row's
+values, which carry the segment's state. -/
+structure SegmentProgram (F : Type) where
+  {Row : TypeMap} [provableRow : ProvableType Row]
+  length : ℕ
+  /-- The values of row `i`, which starts a segment. -/
+  first (i : U64Expr F) : M F (Row (FExpr F))
+  /-- The values of row `i`, which continues the segment of the row `previous`. -/
+  next (i : U64Expr F) (previous : Row (Expression F)) : M F (Row (FExpr F))
+
+instance (program : SegmentProgram F) : ProvableType program.Row := program.provableRow
+
+namespace SegmentProgram
+
+abbrev width (program : SegmentProgram F) : ℕ := size program.Row
+
+/-- The program of rows that start a segment. -/
+def firstProgram (program : SegmentProgram F) : M F (program.Row (FExpr F)) := program.first .idx
+
+/-- The program of the other rows, which reads the previous row's cells. -/
+def nextProgram (program : SegmentProgram F) : M F (program.Row (FExpr F)) :=
+  program.next .idx (varFromOffset program.Row 0)
+
+/-- Whether a row starts a segment. -/
+def StartsSegment (program : SegmentProgram F) (row : UInt64) : Prop :=
+  row.toNat % program.length = 0
+
+instance (program : SegmentProgram F) (row : UInt64) : Decidable (program.StartsSegment row) :=
+  inferInstanceAs (Decidable (_ = _))
+
+/-- Whether the program reads no prover data, and reads only the previous row's cells after the
+first row of a segment. -/
+def Valid (program : SegmentProgram F) : Prop :=
+  program.firstProgram.ValidForRow .prover ∧
+    program.nextProgram.ValidForRow (.continuation program.width)
+
+instance (program : SegmentProgram F) : Decidable program.Valid := by
+  unfold Valid M.ValidForRow
+  infer_instance
+
+variable [FiniteField F]
+
+/-- The values of row `i` after a row with the values `previous`. -/
+def evalRow (program : SegmentProgram F) (i : UInt64) (previous : program.Row F)
+    (hint : ProverHint F) : program.Row F :=
+  if program.StartsSegment i then program.firstProgram.evalRow i hint
+  else program.nextProgram.evalRowAfter (toElements previous).toArray i hint
+
+/-- The values of the rows `0, …, count - 1`. -/
+def rows (program : SegmentProgram F) (count : ℕ) (hint : ProverHint F) : List (program.Row F) :=
+  let step (state : Array (program.Row F) × program.Row F) (i : ℕ) :=
+    let row := program.evalRow (UInt64.ofNat i) state.2 hint
+    (state.1.push row, row)
+  ((List.range count).foldl step (#[], fromElements (Vector.replicate _ 0))).1.toList
+
+end SegmentProgram
 
 end Witgen

@@ -26,6 +26,8 @@ jobs:
         # CleanTests shells out to snarkjs / wasm-validate; without them the
         # affected checks print SKIP instead of failing.
         run: lake build CleanTests
+      - name: Fast witness generation tests
+        run: lake exe fast_witness_test
 
   plonky3-backend:
     runs-on: ubuntu-latest

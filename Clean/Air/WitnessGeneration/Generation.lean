@@ -11,12 +11,16 @@ public import Clean.Circuit.Channel
 How the prover builds the rows of a component: its `generation` field. The generator itself, and
 the "chain reaction" that drives it, is described in `Clean.Air.WitnessGeneration`.
 
-A component's generation is one of two modes:
+A component's generation is one of three modes:
 - `demand`: the component starts without rows and gets a new row whenever its channel has an
   unanswered message. Examples are a VM, which gets one row per state, and an addition chip.
 - `preallocated`: the component's rows exist from the start, one per row of its fixed columns.
   Demand only increments the multiplicities of existing rows. Examples are a memory, which has one
   row per address, and a lookup table.
+- `segments`: the component's rows exist from the start, one per row of its fixed columns, and are
+  computed by a segment program, in segments of consecutive rows where each row continues from the
+  previous one. They have no counters, so they never answer demand. An example is Plonky3's Keccak
+  AIR, whose 24 rows per permutation each compute a round from the previous round's output.
 
 Rows that answer repeated demand for the same message, in a `byMessage` demand component or a
 preallocated one, do so through a *counter*: an input variable that is the multiplicity of one of
@@ -28,7 +32,8 @@ adds pushes, it answers messages pulled more often than pushed.
 
 Fixed columns are never generated: they are part of the component, and the generator copies them
 into the first cells of every row. So generations only describe the cells after the fixed columns.
-A component is preallocated exactly when it has fixed columns, which the component requires. The
+A component is preallocated or segment-generated exactly when it has fixed columns, which the
+component requires. The
 fixed columns may have no values, `Row := unit`, and only fix the height.
 
 Several components may answer demand on the same channel. Each demanded message is then routed to
@@ -124,11 +129,14 @@ def DemandMode.guardCondition {Input : TypeMap} [ProvableType Input] (mode : Dem
 inductive Generation (F : Type) (Input : TypeMap) [ProvableType Input] where
   | demand (mode : DemandMode F Input)
   | preallocated (mode : PreallocatedMode F Input)
+  /-- Rows computed by a segment program, whose values fill the cells after the fixed columns. -/
+  | segments (program : Witgen.SegmentProgram F)
 
+/-- Whether the rows exist from the start, one per row of the fixed columns. -/
 def Generation.isPreallocated {Input : TypeMap} [ProvableType Input] :
     Generation F Input → Bool
   | .demand _ => false
-  | .preallocated _ => true
+  | .preallocated _ | .segments _ => true
 
 /-! ### Padding -/
 
