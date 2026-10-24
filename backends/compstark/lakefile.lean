@@ -21,3 +21,11 @@ lean_lib CleanCompStark
 
 lean_lib CleanCompStarkTests where
   globs := #[.submodules `CleanCompStarkTests]
+
+/-- The keccak-air showcase's evidence against Plonky3 and its benchmark. -/
+lean_lib KeccakShowcase where
+  moreLeancArgs := #["-march=native"]
+
+lean_exe keccak_showcase where
+  root := `KeccakShowcase.Main
+  moreLeancArgs := #["-march=native"]

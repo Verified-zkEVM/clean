@@ -45,3 +45,38 @@ info: 'CleanCompStark.KeccakAir.knowledgeSoundness' depends on axioms:
 -/
 #guard_msgs (whitespace := lax) in
 #print axioms CleanCompStark.KeccakAir.knowledgeSoundness
+
+/--
+info: 'CleanCompStark.KeccakAir.knowledgeSoundness_ro' depends on axioms:
+[propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs (whitespace := lax) in
+#print axioms CleanCompStark.KeccakAir.knowledgeSoundness_ro
+
+/--
+info: 'CleanCompStark.KeccakAir.bridgeable_component' depends on axioms:
+[propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs (whitespace := lax) in
+#print axioms CleanCompStark.KeccakAir.bridgeable_component
+
+/--
+info: 'CleanCompStark.KeccakShowcase.keccak_soundness_ro' depends on axioms:
+[propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs (whitespace := lax) in
+#print axioms CleanCompStark.KeccakShowcase.keccak_soundness_ro
+
+/--
+info: 'CleanCompStark.KeccakShowcase.keccak_soundness' depends on axioms:
+[propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs (whitespace := lax) in
+#print axioms CleanCompStark.KeccakShowcase.keccak_soundness
+
+/--
+info: 'CleanCompStark.KeccakShowcase.keccak_soundness_ro_example' depends on axioms:
+[propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs (whitespace := lax) in
+#print axioms CleanCompStark.KeccakShowcase.keccak_soundness_ro_example
