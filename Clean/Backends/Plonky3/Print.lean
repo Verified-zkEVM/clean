@@ -339,12 +339,12 @@ clean_backend::ensemble! \{
 }
 "
 
-/-- Lower an ensemble to an extraction program and print it as Rust. The ensemble is over a prime
-field, whose constants are printed as their canonical values, the values that Rust's prime fields
-compute with. -/
-def ensembleToRust {p : ℕ} [Fact p.Prime] (ensemble : Ensemble (ZMod p) PublicIO) (fuel : ℕ) :
-    Except String String := do
-  let program ← lower ensemble fuel |>.mapError toString
+/-- Lower a proven ensemble to an extraction program and print it as Rust. The ensemble is over a
+prime field, whose constants are printed as their canonical values, the values that Rust's prime
+fields compute with. -/
+def ensembleToRust {p : ℕ} [Fact p.Prime] (ensemble : FormalEnsemble (ZMod p) PublicIO)
+    (fuel : ℕ) : Except String String := do
+  let program ← lower ensemble.ensemble fuel |>.mapError toString
   return programToRustFile program
 
 end Backends.Plonky3.Print
