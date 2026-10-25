@@ -25,11 +25,12 @@ export Expression (var)
 keyed by name, and the public input. -/
 structure ProverData (F : Type) where
   tables : String → (n : ℕ) → Array (Vector F n)
-  publicInput : Array F := #[]
+  publicInput : Array F
 
 /-- Proof data without tables or public input. -/
 def ProverData.empty (F : Type) : ProverData F where
   tables _ _ := #[]
+  publicInput := #[]
 
 /-- Runtime-only hashmap of prover hints. Same shape as `ProverData`, but
 distinct to emphasize that hints are *not* committed: they feed only the

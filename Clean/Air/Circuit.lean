@@ -32,6 +32,11 @@ lemma ProvableType.valueFromOffset_zero_fromInput_eq (input : Input F) (data : P
   simp only [circuit_norm, Vector.getElem?_toArray]
   grind
 
+/-- The public input of the prover data, as a value of the public input type. -/
+def ProverData.getPublicInput (data : ProverData F) (PublicIO : TypeMap) [ProvableType PublicIO] :
+    PublicIO F :=
+  eval data.publicEnvironment (varFromOffset (F := F) PublicIO 0)
+
 namespace GeneralFormalCircuit
 /--
 Formal circuits are parametrized by their input, with the goal of being reusable in any parent circuit.

@@ -44,6 +44,7 @@ def data : ProverData Fb where
     if key = "memory" then
       (memoryRows.map fun row => Vector.ofFn fun i : Fin n => row[i.val]?.getD 0).toArray
     else #[]
+  publicInput := #[]
 
 def rowIndices : List ℕ := [0, 1, 2, 3, 4, 63, 64, 65, 255, 256, 1000, pBabybear + 3, 2^32 + 5]
 

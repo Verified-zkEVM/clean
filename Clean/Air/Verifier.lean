@@ -1,6 +1,6 @@
 module
 
-public import Clean.Circuit.Theorems
+public import Clean.Air.Circuit
 
 @[expose] public section
 
@@ -179,11 +179,6 @@ def pull {Message : TypeMap} [ProvableType Message] (channel : Channel F Message
 def push {Message : TypeMap} [ProvableType Message] (channel : Channel F Message)
     (message : Message (Expression F)) : Verifier F Unit :=
   emit channel 1 message
-
-/-- The public input of the prover data, as a value of the public input type. -/
-def _root_.ProverData.getPublicInput (data : ProverData F) (PublicIO : TypeMap)
-    [ProvableType PublicIO] : PublicIO F :=
-  eval data.publicEnvironment (varFromOffset (F := F) PublicIO 0)
 
 /-- A verifier program parameterized by the proof's public input variables. It runs in the prover
 data's `publicEnvironment`, whose variables are the public input. -/
