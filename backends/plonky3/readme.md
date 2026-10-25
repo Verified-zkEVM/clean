@@ -28,6 +28,9 @@ lake exe export_opcode_vm_rust \
 lake exe export_witness_ir_reference_rust \
   | rustfmt --edition 2021 --emit stdout \
   > backends/plonky3/tests/generated/witness_ir_reference.rs
+lake exe export_differential_rust \
+  | rustfmt --edition 2021 --emit stdout \
+  > backends/plonky3/tests/generated/differential.rs
 ```
 
 Run the generated witness and end-to-end proof tests:
@@ -41,9 +44,11 @@ cargo test --locked --release --manifest-path backends/plonky3/Cargo.toml \
   --test opcode_vm_tests
 cargo test --locked --release --manifest-path backends/plonky3/Cargo.toml \
   --test witness_ir_reference_tests
+cargo test --locked --release --manifest-path backends/plonky3/Cargo.toml \
+  --test differential_tests
 ```
 
-`witness_ir_reference_tests` checks the printed witness IR against Lean's semantics. Its cases (`Clean/Backends/Plonky3/Test/Reference.lean`) cover every witness IR constructor with wrapping, out-of-range, and division-by-zero edge cases.
+`witness_ir_reference_tests` checks the printed witness IR against Lean's semantics. Its cases (`Clean/Backends/Plonky3/Test/Reference.lean`) cover every witness IR constructor with wrapping, out-of-range, and division-by-zero edge cases. `differential_tests` checks the printed AIRs and witness generators of the examples against Lean (`Clean/Backends/Plonky3/Test/Differential.lean`): constraints and interactions on pseudo-random rows, every fixed row, verifier interactions on pseudo-random public inputs, and the generated traces.
 
 The largest test generates, proves, and verifies a 4,096-step Fibonacci execution and reports witness generation, proving, verification, trace dimensions, and serialized proof size.
 

@@ -107,18 +107,6 @@ structure WitnessBlock (F : Type) [FiniteField F] where
   output : Witgen.VExpr F outputWidth
   well_formed : witnessProgramWellFormed steps output = true
 
-namespace WitnessBlock
-
-def eval (block : WitnessBlock F) (environment : ProverEnvironment F)
-    (row : ℕ := 0) : Vector F block.outputWidth :=
-  block.output.eval {
-    env := environment
-    locals := Witgen.evalSteps environment block.steps #[] row
-    idx := row
-  }
-
-end WitnessBlock
-
 def cellWellFormed (locals : List LocalSort) : Cell F → Bool
   | .fixed value | .witness value => fexprWellFormed locals value
   | .multiplicity => true
@@ -141,41 +129,6 @@ structure ComponentProgram (F : Type) [FiniteField F] where
   witnesses : List (WitnessBlock F)
   constraints : List (Expression F)
   interactions : List (AbstractInteraction F)
-
-namespace ComponentProgram
-
-def evalWitnesses (data : ProverData F) (hint : ProverHint F) :
-    List (WitnessBlock F) → Array F → Array F
-  | [], row => row
-  | block :: blocks, row =>
-      let environment : ProverEnvironment F := {
-        get index := row[index]?.getD 0
-        data
-        hint
-      }
-      evalWitnesses data hint blocks (row ++ (block.eval environment).toArray)
-
-/-- Complete a component row from its input. -/
-def completeRow (component : ComponentProgram F) (input : Array F)
-    (data : ProverData F) (hint : ProverHint F := .empty F) : Except String (Array F) := do
-  unless input.size = component.inputWidth do
-    throw s!"component input has width {input.size}, expected {component.inputWidth}"
-  let row := evalWitnesses data hint component.witnesses input
-  unless row.size = component.width do
-    throw s!"generated row has width {row.size}, expected {component.width}"
-  return row
-
-def constraintsHold (component : ComponentProgram F) (row : Array F)
-    (data : ProverData F) : Bool :=
-  let environment := Environment.fromArray row data
-  component.constraints.all fun constraint => constraint.eval environment == 0
-
-def interactionValues (component : ComponentProgram F) (row : Array F)
-    (data : ProverData F) : List (Interaction F) :=
-  let environment := Environment.fromArray row data
-  component.interactions.map (·.eval environment)
-
-end ComponentProgram
 
 /-- A `DemandMode`. -/
 structure DemandProgram (F : Type) [FiniteField F] where
