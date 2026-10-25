@@ -119,20 +119,26 @@ def programCell (pc : Expression (F p)) (column : Fin 4) : Witgen.FExpr (F p) :=
 def programCellIn (data : ProverData (F p)) (pc : F p) (column : Fin 4) : F p :=
   ((data.tables "program" 4)[(UInt64.ofNat pc.val).toNat]?.getD default)[column]
 
-/-- The state after running the first `pc` instructions of the program on the initial accumulator.
--/
-def stateChannel (program : Program) (initial : F p) : Channel (F p) State where
+/-- The public input: the accumulator the program starts with, and the one it ends with. -/
+structure PublicInput (F : Type) where
+  initial : F
+  final : F
+deriving ProvableStruct
+
+/-- The state after running the first `pc` instructions of the program on the public initial
+accumulator. -/
+def stateChannel (program : Program) : Channel (F p) State where
   name := "state"
-  Guarantees state _ :=
-    state.pc.val ≤ program.length ∧ state.acc = run (program.take state.pc.val) initial
+  Guarantees state data := state.pc.val ≤ program.length ∧
+    state.acc = run (program.take state.pc.val) (data.getPublicInput PublicInput).initial
 
 /-- Executing the program's instruction at `pc` takes a state reached after `pc` instructions to the
 state reached after `pc + 1` instructions. -/
 lemma stateChannel_guarantees_step {program : Program} (h_program : program.length < p)
-    {initial : F p} {opcode : Opcode} {pc acc operand : F p} {data : ProverData (F p)}
-    (h_state : (stateChannel program initial).Guarantees { pc, acc } data)
+    {opcode : Opcode} {pc acc operand : F p} {data : ProverData (F p)}
+    (h_state : (stateChannel program).Guarantees { pc, acc } data)
     (h_instruction : (programLookup program).Contains { pc, opcode := opcode.code, operand }) :
-    (stateChannel program initial).Guarantees
+    (stateChannel program).Guarantees
       { pc := pc + 1, acc := opcode.apply acc operand } data := by
   obtain ⟨h_pc, h_acc⟩ := h_state
   obtain ⟨i, -, rfl, h_instruction⟩ := h_instruction
@@ -144,7 +150,7 @@ lemma stateChannel_guarantees_step {program : Program} (h_program : program.leng
   have h_val (n : ℕ) (hn : n ≤ program.length) : (n : F p).val = n :=
     ZMod.val_cast_of_lt (by omega)
   simp only [stateChannel, h_val i.toNat hi.le] at h_acc ⊢
-  rw [← Nat.cast_add_one, h_val _ hi, run_take_succ program initial hi, h_instruction, h_acc]
+  rw [← Nat.cast_add_one, h_val _ hi, run_take_succ program _ hi, h_instruction, h_acc]
   exact ⟨hi, rfl⟩
 
 structure StepInput (F : Type) where
@@ -155,26 +161,26 @@ deriving ProvableStruct
 
 /-- One step of the VM that executes `opcode`: pull a state, check that the program has `opcode` at
 its `pc`, and push the next state. -/
-def step (program : Program) (h_program : program.length < p) (initial : F p) (opcode : Opcode) :
+def step (program : Program) (h_program : program.length < p) (opcode : Opcode) :
     GeneralFormalCircuit (F p) StepInput unit where
   name := opcode.name
   main input := do
     -- enabled flag is boolean
     assertZero (input.enabled * (input.enabled - 1))
     -- pull current state
-    (stateChannel program initial).pullIf input.enabled { pc := input.pc, acc := input.acc }
+    (stateChannel program).pullIf input.enabled { pc := input.pc, acc := input.acc }
     -- look up current operand in the program
     let operand ← witness (programCell input.pc 2)
     (programLookup program).channel.pullIf input.enabled ⟨ input.pc, .const opcode.code, operand ⟩
     -- compute next accumulator (this statically branches the circuit layout based on the operand)
     let acc := opcode.apply input.acc operand
     -- push next state
-    (stateChannel program initial).pushIf input.enabled { pc := input.pc + 1, acc }
+    (stateChannel program).pushIf input.enabled { pc := input.pc + 1, acc }
 
   exposedChannels
   | { enabled, pc, acc }, i₀ =>
     let operand := var ⟨ i₀ ⟩
-    expose (stateChannel program initial) [ pulledIf enabled { pc, acc },
+    expose (stateChannel program) [ pulledIf enabled { pc, acc },
       pushedIf enabled { pc := pc + 1, acc := opcode.apply acc operand } ]
   exposedChannels_eq input i₀ := by
     obtain ⟨enabled, pc, acc⟩ := input
@@ -182,12 +188,12 @@ def step (program : Program) (h_program : program.length < p) (initial : F p) (o
 
   ProverAssumptions
   | { enabled, pc, acc }, data, _ => enabled = 0 ∨ enabled = 1 ∧
-    (stateChannel program initial).Guarantees { pc, acc } data ∧
+    (stateChannel program).Guarantees { pc, acc } data ∧
     (programLookup program).Contains
       { pc, opcode := opcode.code, operand := programCellIn data pc 2 }
   Spec _ _ _ := True
 
-  channelsWithRequirements := [ (stateChannel program initial).toRaw ]
+  channelsWithRequirements := [ (stateChannel program).toRaw ]
   requirementsChannelsLawful input_var i₀ := by
     obtain ⟨enabled, pc, acc⟩ := input_var
     simp only [circuit_norm, stateChannel, programLookup]
@@ -208,66 +214,65 @@ def step (program : Program) (h_program : program.length < p) (initial : F p) (o
     rcases h_assumptions with h | ⟨h, h_state, h_contains⟩ <;> simp_all
 
 /-- The table of `opcode`: one row per state whose `pc` holds `opcode`. -/
-abbrev stepComponent (program : Program) (h_program : program.length < p) (initial : F p)
-    (opcode : Opcode) : Component (F p) where
-  circuit := step program h_program initial opcode
+abbrev stepComponent (program : Program) (h_program : program.length < p) (opcode : Opcode) :
+    Component (F p) where
+  circuit := step program h_program opcode
   -- witness generation: whenever someone pushes to the state channel,
   generation := .demand {
-    channel := stateChannel program initial
+    channel := stateChannel program
     trigger := .push
     -- we handle this message if the current program opcode matches the static opcode parameter
     guard state := programCell state.pc 1 =? Witgen.FExpr.const (opcode.code : F p)
     input | { pc, acc } => pure { enabled := 1, pc, acc }
   }
 
-/-- The public input `final` claims that running the program on the initial accumulator ends with
-the accumulator `final`. -/
-def verifier (program : Program) (initial : F p) : Verifier.Program (F p) field where
-  main final := do
-    Verifier.pull (stateChannel program initial)
-      { pc := .const (program.length : F p), acc := final }
-    Verifier.push (stateChannel program initial) { pc := 0, acc := .const initial }
-  Spec final data :=
-    (stateChannel program initial).Guarantees { pc := program.length, acc := final } data
-  soundness := by simp [circuit_norm]
+/-- The public input claims that running the program on the initial accumulator ends with the final
+accumulator. -/
+def verifier (program : Program) : Verifier.Program (F p) PublicInput where
+  main | { initial, final } => do
+    Verifier.pull (stateChannel program) { pc := .const (program.length : F p), acc := final }
+    Verifier.push (stateChannel program) { pc := 0, acc := initial }
+  Spec
+  | { final, .. }, data =>
+      (stateChannel program).Guarantees { pc := program.length, acc := final } data
+  soundness := by simp_all [circuit_norm, explicit_provable_type]
 
-def vm (program : Program) (h_program : program.length < p) (initial : F p) :
-    VmTables (F p) field where
-  channel := stateChannel program initial
-  tables := [stepComponent program h_program initial .add,
-    stepComponent program h_program initial .mul]
+def vm (program : Program) (h_program : program.length < p) : VmTables (F p) PublicInput where
+  channel := stateChannel program
+  tables := [stepComponent program h_program .add, stepComponent program h_program .mul]
   unique_names := by simp [step, Opcode.name]
-  verifier := verifier program initial
+  verifier := verifier program
   tables_channel := by simp [circuit_norm, step, sub_eq_zero]
   verifier_channel := by simp [circuit_norm, verifier]
-  verifier_requirements data := by simp [circuit_norm, verifier, stateChannel, run]
+  verifier_requirements data := by
+    simp [circuit_norm, verifier, stateChannel, run, ProverData.getPublicInput]
 
-def soundEnsemble (program : Program) (h_program : program.length < p) (initial : F p) :=
-  SoundEnsemble.empty (F p) field
+def soundEnsemble (program : Program) (h_program : program.length < p) :=
+  SoundEnsemble.empty (F p) PublicInput
   |>.addLookup (programLookup program)
-  |>.addVm (vm program h_program initial)
+  |>.addVm (vm program h_program)
     (by simp +instances [circuit_norm, vm, programLookup, stateChannel])
     (by simp +instances [circuit_norm, vm, step, verifier])
     (by simp +instances [circuit_norm, vm, step, verifier, programLookup, stateChannel])
     (by simp [circuit_norm, vm, step, programLookup, Opcode.name])
 
-/-- The public statement: running the program on the initial accumulator ends with `final`. -/
-def Spec (program : Program) (initial final : F p) : Prop :=
-  final = run program initial
+/-- The public statement: running the program on the initial accumulator ends with the final one. -/
+def Spec (program : Program) : PublicInput (F p) → Prop
+  | { initial, final } => final = run program initial
 
-def formalEnsemble (program : Program) (h_program : program.length < p) (initial : F p) :=
-  (soundEnsemble program h_program initial).toFormal (fun _ _ => True) (Spec program initial)
+def formalEnsemble (program : Program) (h_program : program.length < p) :=
+  (soundEnsemble program h_program).toFormal (fun _ _ => True) (Spec program)
     (by simp [circuit_norm, soundEnsemble, vm])
     (by simp [circuit_norm, soundEnsemble, vm, verifier, stateChannel, Spec,
       ZMod.val_cast_of_lt h_program])
 
-/-- End-to-end soundness: a valid proof for the public input `final` shows that running the program
-on the initial accumulator ends with `final`. -/
+/-- End-to-end soundness: a valid proof for a public input shows that running the program on its
+initial accumulator ends with its final accumulator. -/
 theorem opcodeVm_soundness (program : Program) (h_program : program.length < p)
-    (initial final : F p) (heights : List ℕ) :
-    (soundEnsemble program h_program initial).ensemble.Statement final heights →
-      final = run program initial :=
-  (formalEnsemble program h_program initial).soundness final heights trivial
+    (publicInput : PublicInput (F p)) (heights : List ℕ) :
+    (soundEnsemble program h_program).ensemble.Statement publicInput heights →
+      Spec program publicInput :=
+  (formalEnsemble program h_program).soundness publicInput heights trivial
 
 /-- The program of the tests: `acc := ((((acc + 3) * 5 + 7) * 2 + 1 + 4) * 3 + 9) * 2 + 6`. -/
 def exampleProgram : Program :=
