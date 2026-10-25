@@ -60,6 +60,7 @@ def component : Component F where
   circuit := lookup.provider
   generation := .preallocated {
     channel := lookup.channel
+    trigger := .pull
     height := lookup.height
     input i := do
       let row ← lookup.row i
@@ -94,28 +95,30 @@ variable {PublicIO : TypeMap} [ProvableType PublicIO]
 /-- Add a static lookup: its table component and its channel, which is finished right away. -/
 def addLookup (soundEns : SoundEnsemble F PublicIO) (lookup : Lookup F Row)
     (fresh : lookup.name ∉ soundEns.tables.map (·.circuit.name) := by simp [circuit_norm])
-    (not_finished : lookup.channel.toRaw ∉ soundEns.finished := by simp [circuit_norm]) :
+    (fresh_channel : lookup.name ∉ soundEns.channels.map (·.name) := by simp [circuit_norm]) :
     SoundEnsemble F PublicIO :=
-  soundEns.addTable lookup.component (List.nil_subset _)
-    (fun channel h_channel h_mem =>
-      not_finished
-        (List.mem_singleton.mp (show channel ∈ [lookup.channel.toRaw] from h_mem) ▸ h_channel))
-    fresh
-    |>.addFinishedChannel lookup.channel.toRaw
+  soundEns.addChannel lookup.channel.toRaw fresh_channel
+    |>.addTable lookup.component (List.nil_subset _)
+      (fun channel h_channel => by
+        obtain rfl := List.mem_singleton.mp (show channel ∈ [lookup.channel.toRaw] from h_channel)
+        refine ⟨List.mem_cons_self .., fun h_finished => fresh_channel ?_⟩
+        exact List.mem_map.mpr ⟨_, soundEns.finished_subset h_finished, rfl⟩)
+      fresh
+    |>.markFinished lookup.channel.toRaw (List.mem_cons_self ..)
 
-variable {soundEns : SoundEnsemble F PublicIO} {lookup : Lookup F Row} {fresh not_finished}
+variable {soundEns : SoundEnsemble F PublicIO} {lookup : Lookup F Row} {fresh fresh_channel}
 
 @[circuit_norm] lemma addLookup_tables :
-    (soundEns.addLookup lookup fresh not_finished).tables =
+    (soundEns.addLookup lookup fresh fresh_channel).tables =
       lookup.component :: soundEns.tables := rfl
 @[circuit_norm] lemma addLookup_channels :
-    (soundEns.addLookup lookup fresh not_finished).channels =
+    (soundEns.addLookup lookup fresh fresh_channel).channels =
       lookup.channel.toRaw :: soundEns.channels := rfl
 @[circuit_norm] lemma addLookup_finished :
-    (soundEns.addLookup lookup fresh not_finished).finished =
+    (soundEns.addLookup lookup fresh fresh_channel).finished =
       lookup.channel.toRaw :: soundEns.finished := rfl
 @[circuit_norm] lemma addLookup_verifier :
-    (soundEns.addLookup lookup fresh not_finished).verifier = soundEns.verifier := rfl
+    (soundEns.addLookup lookup fresh fresh_channel).verifier = soundEns.verifier := rfl
 
 end SoundEnsemble
 end Air.Flat

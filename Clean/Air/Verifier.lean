@@ -56,6 +56,18 @@ def channelsWithGuarantees (operations : Operations F) : List (RawChannel F) :=
 def channelsWithRequirements (operations : Operations F) : List (RawChannel F) :=
   operations.filterMap Operation.requirementChannel
 
+/-- Every interaction is on a channel with guarantees or with requirements. -/
+lemma channel_mem_of_mem_interactions {operations : Operations F}
+    {interaction : AbstractInteraction F} : interaction ∈ operations.interactions →
+      interaction.channel ∈ operations.channelsWithGuarantees ++
+        operations.channelsWithRequirements := by
+  simp only [interactions, List.mem_map, List.mem_append, channelsWithGuarantees,
+    channelsWithRequirements, List.mem_filterMap]
+  rintro ⟨⟨interaction, requirements⟩, h_mem, rfl⟩
+  by_cases h : interaction.assumeGuarantees
+  · exact .inl ⟨_, h_mem, by simp [Operation.guaranteeChannel, Operation.interaction, h]⟩
+  · exact .inr ⟨_, h_mem, by simp [Operation.requirementChannel, Operation.interaction, h]⟩
+
 @[circuit_norm]
 lemma circuitOperations_interactions (operations : Operations F) :
     (_root_.Operations.interactions (circuitOperations operations)) = interactions operations := by
@@ -205,6 +217,11 @@ abbrev channelsWithGuarantees (program : Program F PublicIO) : List (RawChannel 
 @[circuit_norm]
 abbrev channelsWithRequirements (program : Program F PublicIO) : List (RawChannel F) :=
   program.operations.channelsWithRequirements
+
+/-- The channels the program interacts with. -/
+@[circuit_norm]
+abbrev channels (program : Program F PublicIO) : List (RawChannel F) :=
+  program.channelsWithGuarantees ++ program.channelsWithRequirements
 
 def empty (F : Type) [FiniteField F] (PublicIO : TypeMap) [ProvableType PublicIO] :
     Program F PublicIO where

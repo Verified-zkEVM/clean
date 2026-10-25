@@ -192,7 +192,7 @@ structure DemandProgram (F : Type) [FiniteField F] where
 inductive ModeProgram (F : Type) [FiniteField F] where
   | demand (mode : DemandProgram F)
   /-- `rows` rows, whose inputs are `input` at the row index, with multiplicity 0. -/
-  | preallocated (channel : String) (rows : UInt64) (input : InputProgram F)
+  | preallocated (channel : String) (trigger : Direction) (rows : UInt64) (input : InputProgram F)
       (multiplicity : MultiplicityColumn)
 
 /-- An ensemble in the form that source-code backends print. -/
@@ -307,7 +307,7 @@ def lowerGeneration (index : ℕ) (component : Component F)
         channel := channel.name, trigger, guard, input, multiplicity
         padding := (toElements padding).toArray }
   | .preallocated mode, some multiplicity =>
-      return .preallocated mode.channel.name mode.height input multiplicity
+      return .preallocated mode.channel.name mode.trigger mode.height input multiplicity
   | .preallocated _, none =>
       throw (.validation (.multiplicity component.circuit.name (.cells 0)))
 

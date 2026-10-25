@@ -248,7 +248,7 @@ def soundEnsemble (program : Program) (h_program : program.length < p) (initial 
   |>.addVm (vm program h_program initial)
     (by simp +instances [circuit_norm, vm, programLookup, stateChannel])
     (by simp +instances [circuit_norm, vm, step, verifier])
-    (by simp [circuit_norm, vm, step, verifier, programLookup, stateChannel])
+    (by simp +instances [circuit_norm, vm, step, verifier, programLookup, stateChannel])
     (by simp [circuit_norm, vm, step, programLookup, Opcode.name])
 
 /-- The public statement: running the program on the initial accumulator ends with `final`. -/
