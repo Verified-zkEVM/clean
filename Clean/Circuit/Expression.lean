@@ -32,7 +32,7 @@ def ProverData.empty (F : Type) : ProverData F where
   tables _ _ := #[]
   publicInput := #[]
 
-/-- Runtime-only hashmap of prover hints. Same shape as `ProverData`, but
+/-- Runtime-only hashmap of prover hints. Same shape as `ProverData.tables`, but
 distinct to emphasize that hints are *not* committed: they feed only the
 witness-generation step and never appear in the proof. -/
 def ProverHint (F : Type) :=
