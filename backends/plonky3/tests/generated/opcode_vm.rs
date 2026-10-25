@@ -26,12 +26,15 @@ pub mod component_0 {
         let row_index = 0u64;
         {
             let mut output: Vec<F> = Vec::with_capacity(1);
-            output.push(data.get(
-                "program",
-                4,
-                ((row.get(1).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
-                2,
-            ));
+            output.push(
+                data.get(
+                    "program",
+                    4,
+                    usize::try_from((row.get(1).copied().unwrap_or(F::ZERO)).canonical_u64())
+                        .unwrap_or(usize::MAX),
+                    2,
+                ),
+            );
             row.extend(output);
         }
     }
@@ -71,7 +74,8 @@ pub mod component_0 {
         (data.get(
             "program",
             4,
-            ((row.get(0).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
+            usize::try_from((row.get(0).copied().unwrap_or(F::ZERO)).canonical_u64())
+                .unwrap_or(usize::MAX),
             1,
         ) == F::from_u64(1u64))
     }
@@ -129,12 +133,15 @@ pub mod component_1 {
         let row_index = 0u64;
         {
             let mut output: Vec<F> = Vec::with_capacity(1);
-            output.push(data.get(
-                "program",
-                4,
-                ((row.get(1).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
-                2,
-            ));
+            output.push(
+                data.get(
+                    "program",
+                    4,
+                    usize::try_from((row.get(1).copied().unwrap_or(F::ZERO)).canonical_u64())
+                        .unwrap_or(usize::MAX),
+                    2,
+                ),
+            );
             row.extend(output);
         }
     }
@@ -174,7 +181,8 @@ pub mod component_1 {
         (data.get(
             "program",
             4,
-            ((row.get(0).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
+            usize::try_from((row.get(0).copied().unwrap_or(F::ZERO)).canonical_u64())
+                .unwrap_or(usize::MAX),
             1,
         ) == F::from_u64(2u64))
     }
@@ -237,7 +245,7 @@ pub mod component_2 {
                 F::from_u64(2u64),
                 F::from_u64(1u64),
             ]
-            .get((row_index) as usize)
+            .get(usize::try_from(row_index).unwrap_or(usize::MAX))
             .copied()
             .unwrap_or(F::ZERO),
         );
@@ -254,7 +262,7 @@ pub mod component_2 {
                 F::from_u64(2u64),
                 F::from_u64(6u64),
             ]
-            .get((row_index) as usize)
+            .get(usize::try_from(row_index).unwrap_or(usize::MAX))
             .copied()
             .unwrap_or(F::ZERO),
         );
@@ -311,7 +319,7 @@ pub mod component_2 {
                 F::from_u64(2u64),
                 F::from_u64(1u64),
             ]
-            .get((row_index) as usize)
+            .get(usize::try_from(row_index).unwrap_or(usize::MAX))
             .copied()
             .unwrap_or(F::ZERO),
         );
@@ -328,7 +336,7 @@ pub mod component_2 {
                 F::from_u64(2u64),
                 F::from_u64(6u64),
             ]
-            .get((row_index) as usize)
+            .get(usize::try_from(row_index).unwrap_or(usize::MAX))
             .copied()
             .unwrap_or(F::ZERO),
         );

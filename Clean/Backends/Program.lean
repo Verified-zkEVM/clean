@@ -209,6 +209,7 @@ structure Program (F : Type) [FiniteField F] where
 
 inductive LoweringError where
   | validation (error : ValidationError)
+  | noComponents
   | nativeWitness (component operation : ℕ)
   | malformedWitnessLocals (component operation : ℕ)
   | malformedInputProgram (component : ℕ)
@@ -221,6 +222,7 @@ deriving Repr, DecidableEq
 instance : ToString LoweringError where
   toString
     | .validation error => toString error
+    | .noComponents => "the ensemble has no components"
     | .nativeWitness component operation =>
         s!"component {component} witness operation {operation} is a native Lean closure"
     | .malformedWitnessLocals component operation =>
@@ -314,6 +316,7 @@ def lowerGeneration (index : ℕ) (component : Component F)
 /-- Validate the generation of an ensemble, and lower it to an extraction program. `fuel` bounds the
 number of witness generation steps. -/
 def lower (ensemble : Ensemble F PublicIO) (fuel : ℕ) : Except LoweringError (Program F) := do
+  if ensemble.tables.isEmpty then throw .noComponents
   match validateGeneration ensemble with
   | .error error => throw (.validation error)
   | .ok valid =>

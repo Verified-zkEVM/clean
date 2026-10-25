@@ -61,52 +61,9 @@ pub mod component_0 {
                     F::from_u64(0u64),
                     F::from_u64(0u64),
                 ]
-                .get(((row.get(1).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize)
-                .copied()
-                .unwrap_or(F::ZERO),
-            );
-            row.extend(output);
-        }
-        {
-            let mut output: Vec<F> = Vec::with_capacity(1);
-            output.push(
-                [
-                    F::from_u64(212u64),
-                    F::from_u64(1u64),
-                    F::from_u64(2u64),
-                    F::from_u64(8u64),
-                    F::from_u64(213u64),
-                    F::from_u64(3u64),
-                    F::from_u64(4u64),
-                    F::from_u64(14u64),
-                    F::from_u64(244u64),
-                    F::from_u64(1u64),
-                    F::from_u64(10u64),
-                    F::from_u64(15u64),
-                    F::from_u64(233u64),
-                    F::from_u64(5u64),
-                    F::from_u64(2u64),
-                    F::from_u64(30u64),
-                    F::from_u64(220u64),
-                    F::from_u64(100u64),
-                    F::from_u64(3u64),
-                    F::from_u64(107u64),
-                    F::from_u64(212u64),
-                    F::from_u64(4u64),
-                    F::from_u64(5u64),
-                    F::from_u64(12u64),
-                    F::from_u64(252u64),
-                    F::from_u64(0u64),
-                    F::from_u64(0u64),
-                    F::from_u64(0u64),
-                    F::from_u64(0u64),
-                    F::from_u64(0u64),
-                    F::from_u64(0u64),
-                    F::from_u64(0u64),
-                ]
                 .get(
-                    (((row.get(1).copied().unwrap_or(F::ZERO)).canonical_u64()).wrapping_add(1u64))
-                        as usize,
+                    usize::try_from((row.get(1).copied().unwrap_or(F::ZERO)).canonical_u64())
+                        .unwrap_or(usize::MAX),
                 )
                 .copied()
                 .unwrap_or(F::ZERO),
@@ -151,8 +108,11 @@ pub mod component_0 {
                     F::from_u64(0u64),
                 ]
                 .get(
-                    (((row.get(1).copied().unwrap_or(F::ZERO)).canonical_u64()).wrapping_add(2u64))
-                        as usize,
+                    usize::try_from(
+                        ((row.get(1).copied().unwrap_or(F::ZERO)).canonical_u64())
+                            .wrapping_add(1u64),
+                    )
+                    .unwrap_or(usize::MAX),
                 )
                 .copied()
                 .unwrap_or(F::ZERO),
@@ -197,8 +157,60 @@ pub mod component_0 {
                     F::from_u64(0u64),
                 ]
                 .get(
-                    (((row.get(1).copied().unwrap_or(F::ZERO)).canonical_u64()).wrapping_add(3u64))
-                        as usize,
+                    usize::try_from(
+                        ((row.get(1).copied().unwrap_or(F::ZERO)).canonical_u64())
+                            .wrapping_add(2u64),
+                    )
+                    .unwrap_or(usize::MAX),
+                )
+                .copied()
+                .unwrap_or(F::ZERO),
+            );
+            row.extend(output);
+        }
+        {
+            let mut output: Vec<F> = Vec::with_capacity(1);
+            output.push(
+                [
+                    F::from_u64(212u64),
+                    F::from_u64(1u64),
+                    F::from_u64(2u64),
+                    F::from_u64(8u64),
+                    F::from_u64(213u64),
+                    F::from_u64(3u64),
+                    F::from_u64(4u64),
+                    F::from_u64(14u64),
+                    F::from_u64(244u64),
+                    F::from_u64(1u64),
+                    F::from_u64(10u64),
+                    F::from_u64(15u64),
+                    F::from_u64(233u64),
+                    F::from_u64(5u64),
+                    F::from_u64(2u64),
+                    F::from_u64(30u64),
+                    F::from_u64(220u64),
+                    F::from_u64(100u64),
+                    F::from_u64(3u64),
+                    F::from_u64(107u64),
+                    F::from_u64(212u64),
+                    F::from_u64(4u64),
+                    F::from_u64(5u64),
+                    F::from_u64(12u64),
+                    F::from_u64(252u64),
+                    F::from_u64(0u64),
+                    F::from_u64(0u64),
+                    F::from_u64(0u64),
+                    F::from_u64(0u64),
+                    F::from_u64(0u64),
+                    F::from_u64(0u64),
+                    F::from_u64(0u64),
+                ]
+                .get(
+                    usize::try_from(
+                        ((row.get(1).copied().unwrap_or(F::ZERO)).canonical_u64())
+                            .wrapping_add(3u64),
+                    )
+                    .unwrap_or(usize::MAX),
                 )
                 .copied()
                 .unwrap_or(F::ZERO),
@@ -242,12 +254,15 @@ pub mod component_0 {
         }
         {
             let mut output: Vec<F> = Vec::with_capacity(1);
-            output.push(data.get(
-                "memory",
-                3,
-                ((row.get(16).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
-                1,
-            ));
+            output.push(
+                data.get(
+                    "memory",
+                    3,
+                    usize::try_from((row.get(16).copied().unwrap_or(F::ZERO)).canonical_u64())
+                        .unwrap_or(usize::MAX),
+                    1,
+                ),
+            );
             row.extend(output);
         }
         {
@@ -264,12 +279,15 @@ pub mod component_0 {
         }
         {
             let mut output: Vec<F> = Vec::with_capacity(1);
-            output.push(data.get(
-                "memory",
-                3,
-                ((row.get(18).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
-                1,
-            ));
+            output.push(
+                data.get(
+                    "memory",
+                    3,
+                    usize::try_from((row.get(18).copied().unwrap_or(F::ZERO)).canonical_u64())
+                        .unwrap_or(usize::MAX),
+                    1,
+                ),
+            );
             row.extend(output);
         }
         {
@@ -324,12 +342,15 @@ pub mod component_0 {
         }
         {
             let mut output: Vec<F> = Vec::with_capacity(1);
-            output.push(data.get(
-                "memory",
-                3,
-                ((row.get(21).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
-                1,
-            ));
+            output.push(
+                data.get(
+                    "memory",
+                    3,
+                    usize::try_from((row.get(21).copied().unwrap_or(F::ZERO)).canonical_u64())
+                        .unwrap_or(usize::MAX),
+                    1,
+                ),
+            );
             row.extend(output);
         }
         {
@@ -346,12 +367,15 @@ pub mod component_0 {
         }
         {
             let mut output: Vec<F> = Vec::with_capacity(1);
-            output.push(data.get(
-                "memory",
-                3,
-                ((row.get(23).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
-                1,
-            ));
+            output.push(
+                data.get(
+                    "memory",
+                    3,
+                    usize::try_from((row.get(23).copied().unwrap_or(F::ZERO)).canonical_u64())
+                        .unwrap_or(usize::MAX),
+                    1,
+                ),
+            );
             row.extend(output);
         }
         {
@@ -406,12 +430,15 @@ pub mod component_0 {
         }
         {
             let mut output: Vec<F> = Vec::with_capacity(1);
-            output.push(data.get(
-                "memory",
-                3,
-                ((row.get(26).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
-                1,
-            ));
+            output.push(
+                data.get(
+                    "memory",
+                    3,
+                    usize::try_from((row.get(26).copied().unwrap_or(F::ZERO)).canonical_u64())
+                        .unwrap_or(usize::MAX),
+                    1,
+                ),
+            );
             row.extend(output);
         }
         {
@@ -428,12 +455,15 @@ pub mod component_0 {
         }
         {
             let mut output: Vec<F> = Vec::with_capacity(1);
-            output.push(data.get(
-                "memory",
-                3,
-                ((row.get(28).copied().unwrap_or(F::ZERO)).canonical_u64()) as usize,
-                1,
-            ));
+            output.push(
+                data.get(
+                    "memory",
+                    3,
+                    usize::try_from((row.get(28).copied().unwrap_or(F::ZERO)).canonical_u64())
+                        .unwrap_or(usize::MAX),
+                    1,
+                ),
+            );
             row.extend(output);
         }
         {
@@ -822,7 +852,12 @@ pub mod component_1 {
         let row: &[F] = &[];
         let mut output: Vec<F> = Vec::with_capacity(3);
         output.push(F::from_u64(row_index));
-        output.push(hint.get("memoryValues", 1, (row_index) as usize, 0));
+        output.push(hint.get(
+            "memoryValues",
+            1,
+            usize::try_from(row_index).unwrap_or(usize::MAX),
+            0,
+        ));
         output.push(F::ZERO);
         output
     }
@@ -878,7 +913,7 @@ pub mod component_2 {
                 F::from_u64(0u64),
                 F::from_u64(0u64),
             ]
-            .get((row_index) as usize)
+            .get(usize::try_from(row_index).unwrap_or(usize::MAX))
             .copied()
             .unwrap_or(F::ZERO),
         );
@@ -957,7 +992,7 @@ pub mod component_2 {
                 F::from_u64(0u64),
                 F::from_u64(0u64),
             ]
-            .get((row_index) as usize)
+            .get(usize::try_from(row_index).unwrap_or(usize::MAX))
             .copied()
             .unwrap_or(F::ZERO),
         );
