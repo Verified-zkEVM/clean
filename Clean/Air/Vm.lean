@@ -114,7 +114,7 @@ def toFormal (ens : SoundVmEnsemble F PublicIO) (Assumptions : PublicIO F → Li
     (assumptionsConsistency : ens.ensemble.AssumptionsConsistency Assumptions)
     (spec_of_verifierSpec : ∀ witness : EnsembleWitness ens.ensemble,
       Assumptions witness.publicInput witness.heights →
-      ens.VerifierSpec witness.publicInput witness.data → Spec witness.publicInput)
+      ens.VerifierSpec witness.data → Spec witness.publicInput)
     (ProverAssumptions : PublicIO F → ens.ensemble.ProverInput F → Prop := fun _ _ => True) :
     FormalEnsemble F PublicIO where
   ensemble := ens.ensemble
@@ -125,7 +125,6 @@ def toFormal (ens : SoundVmEnsemble F PublicIO) (Assumptions : PublicIO F → Li
     intro publicInput heights assumptions ⟨witness, input_eq, heights_eq, constraints, balance⟩
     subst input_eq heights_eq
     apply spec_of_verifierSpec witness assumptions
-    rw [← witness.data_getPublicInput]
     apply ens.ensemble.verifierSpec_of_verifierGuarantees
     exact ens.soundVmChannel witness
       (Ensemble.assumptions_of_assumptionsConsistency assumptionsConsistency witness assumptions)

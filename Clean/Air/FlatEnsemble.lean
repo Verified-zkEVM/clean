@@ -119,12 +119,11 @@ def VerifierGuarantees (ens : Ensemble F PublicIO) (data : ProverData F) : Prop 
   ens.verifierOperations.FullGuarantees data.publicEnvironment
 
 @[circuit_norm]
-def VerifierSpec (ens : Ensemble F PublicIO) (publicInput : PublicIO F) (data : ProverData F) :
-    Prop :=
-  ens.verifier.Spec publicInput data
+def VerifierSpec (ens : Ensemble F PublicIO) (data : ProverData F) : Prop :=
+  ens.verifier.Spec (data.getPublicInput PublicIO) data
 
 lemma verifierSpec_of_verifierGuarantees (ens : Ensemble F PublicIO) (data : ProverData F) :
-    ens.VerifierGuarantees data → ens.VerifierSpec (data.getPublicInput PublicIO) data :=
+    ens.VerifierGuarantees data → ens.VerifierSpec data :=
   ens.verifier.soundness data
 
 def VerifierChannelGuarantees (ens : Ensemble F PublicIO) (data : ProverData F)
@@ -231,7 +230,7 @@ def Assumptions {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Pr
 
 @[circuit_norm]
 def Spec {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : Prop :=
-  ens.VerifierSpec witness.publicInput witness.data ∧
+  ens.VerifierSpec witness.data ∧
     ∀ table ∈ witness.tables, table.Spec
 
 def interactions {ens : Ensemble F PublicIO} (witness : EnsembleWitness ens) : List (Interaction F) :=

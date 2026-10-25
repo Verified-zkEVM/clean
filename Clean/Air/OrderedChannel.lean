@@ -640,7 +640,7 @@ theorem tableSoundness_of_soundChannels {ens : Ensemble F PublicIO} :
       partialBalancedChannel_of_balancedChannel
         (ordered channel h_channel) (balance _ (finished_subset h_channel))
   -- their requirements imply the verifier guarantees
-  refine ⟨witness.data_getPublicInput ▸ ens.verifierSpec_of_verifierGuarantees _ ?_,
+  refine ⟨ens.verifierSpec_of_verifierGuarantees _ ?_,
     fun table h_table => (table_results table h_table).left⟩
   rw [verifierGuarantees_iff]
   intro channel h_channel

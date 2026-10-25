@@ -559,6 +559,7 @@ def formalEnsemble {memorySize : UInt64} (program : Array (F p)) (h_program : Va
       have hsize := witness.getRows_size_of_preallocated
         (component := memoryComponent memorySize h_memorySize)
         (by simp [soundEnsemble, circuit_norm]) rfl
+      rw [Ensemble.VerifierSpec, witness.data_getPublicInput] at spec
       have h_halted : (stateChannel program).Guarantees
           (haltedState program.size witness.publicInput.finalAp witness.publicInput.finalFp)
           witness.data := spec
