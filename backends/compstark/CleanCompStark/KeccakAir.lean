@@ -5,17 +5,16 @@ public import CleanCompStark.KeccakAir.Bridgeable
 public import CleanCompStark.Fields
 public import Clean.Examples.KeccakAir.Ensemble
 public import CompStark.KoalaBear.Challenge
-public import CompStark.NonInteractive
 
 /-!
 # Plonky3's Keccak-f AIR as a CompStark STARK
 
-The knowledge soundness of a STARK proving Clean's Keccak-f component (Plonky3's `keccak-air`)
-over KoalaBear, interactive and in the random-oracle model: unless the rows read off some trace
-close to the prover's committed trace compute Keccak-f on every 24-row block that starts at round
-0, the verifier accepts with probability at most the knowledge error.
+Clean's Keccak-f component (Plonky3's `keccak-air`) over KoalaBear, with what the backend's
+knowledge soundness theorems (`knowledgeSoundness_of_secure`, `knowledgeSoundness_ro_of_secureRo`)
+ask of it: it is bridgeable (`bridgeable_component`), it fits every trace domain of KoalaBear
+(`fits`), and its circuit proves of its tables that every 24-row block starting at round 0
+computes Keccak-f (`tableSound`, `BlocksCorrect`).
 -/
-
 @[expose] public section
 
 namespace CleanCompStark.KeccakAir
@@ -49,39 +48,5 @@ theorem fits {logN : ℕ} (h : logN ≤ 24) :
     rintro _ ⟨⟩
     exact UInt64.toNat_ofNat_of_lt' (Nat.lt_of_le_of_lt (Nat.pow_le_pow_right (by norm_num) h)
       (by decide))
-
-/-- **Knowledge soundness of a Keccak-f STARK.** If a STARK over KoalaBear proves the Keccak-f
-AIR, the verifier accepts a prover with probability at most the knowledge error unless the rows
-read off some trace within `δ'` of the prover's committed trace compute Keccak-f on every 24-row
-block that starts at round 0. -/
-theorem knowledgeSoundness (S : Iop.Setup KoalaBear.Fast.Ext4)
-    (hair : S.air = toAir koalaBear (component S.logN) S.logN)
-    (prover : Prover S) (δ δ' : NNReal)
-    (hδ' : (δ' : ℝ) < 1 - S.rate) :
-    (∀ trace ∈ closeTraces S δ' prover.trace,
-      ¬ BlocksCorrect (toRows koalaBear (component S.logN) S.logN trace)) →
-      acceptance [] prover ≤ knowledgeError S δ δ' :=
-  knowledgeSoundness_of_tableSound koalaBear S hair (bridgeable_component _)
-    (fits (by have := S.valid.twoAdic; rw [KoalaBear.twoAdicity_eq] at this; omega))
-    (tableSound _) [] prover δ δ' hδ'
-
-/-- **Knowledge soundness of a Keccak-f STARK in the random-oracle model.** If a STARK over
-KoalaBear proves the Keccak-f AIR, a prover making at most `Q` oracle calls gets a proof accepted
-while the rows read off no trace within `δ'` of the one it committed to compute Keccak-f on every
-24-row block that starts at round 0 with probability at most `q · roundError + hashError h q`,
-`q = Q + verifierQueries`, `h` the Merkle cap height. -/
-theorem knowledgeSoundness_ro (S : Iop.Setup KoalaBear.Fast.Ext4)
-    (hair : S.air = toAir koalaBear (component S.logN) S.logN) (δ δ' : NNReal)
-    (hδ' : (δ' : ℝ) < 1 - S.rate) (Q : ℕ) (prover : NIProver S)
-    (hQ : prover.IsTotalQueryBound Q) :
-    Pr{let (proof, log, verdict) ← run S [] prover}[
-      verdict = .ok () ∧ proof.degreeBits = S.logN ∧
-        ∀ trace ∈ closeTraces S δ' (committedTrace S log proof),
-          ¬ BlocksCorrect (toRows koalaBear (component S.logN) S.logN trace)] ≤
-      (Q + S.verifierQueries) * roundError S δ δ' +
-        hashError KoalaBear.Fast.Field S.params.capHeight (Q + S.verifierQueries) :=
-  knowledgeSoundness_ro_of_tableSound koalaBear S hair (bridgeable_component _)
-    (fits (by have := S.valid.twoAdic; rw [KoalaBear.twoAdicity_eq] at this; omega))
-    (tableSound _) [] δ δ' hδ' Q prover hQ
 
 end CleanCompStark.KeccakAir

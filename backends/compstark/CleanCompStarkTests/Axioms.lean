@@ -68,20 +68,6 @@ info: 'CleanCompStark.batchKnowledgeSoundness_of_soundness' depends on axioms:
 #print axioms CleanCompStark.batchKnowledgeSoundness_of_soundness
 
 /--
-info: 'CleanCompStark.KeccakAir.knowledgeSoundness' depends on axioms:
-[propext, Classical.choice, Quot.sound]
--/
-#guard_msgs (whitespace := lax) in
-#print axioms CleanCompStark.KeccakAir.knowledgeSoundness
-
-/--
-info: 'CleanCompStark.KeccakAir.knowledgeSoundness_ro' depends on axioms:
-[propext, Classical.choice, Quot.sound]
--/
-#guard_msgs (whitespace := lax) in
-#print axioms CleanCompStark.KeccakAir.knowledgeSoundness_ro
-
-/--
 info: 'CleanCompStark.KeccakAir.bridgeable_component' depends on axioms:
 [propext, Classical.choice, Quot.sound]
 -/

@@ -26,31 +26,31 @@ Plonky3's Keccak-f AIR, `p3-keccak-air` at `a4982ec` (2633 columns, 3182 constra
 
 ### The theorem
 
-`CleanCompStark/KeccakShowcase.lean`, in the random-oracle model:
+`CleanCompStark/KeccakShowcase.lean`, in the random-oracle model, an instance of the backend's `knowledgeSoundness_ro_of_secureRo` for the Keccak-f component; CompStark's calculator certifies any configuration the same way:
 
 ```lean
 theorem keccak_soundness_ro (logN : ℕ) (h : Sized logN) (Q : ℕ)
-    (prover : NIProver (stark 188 .johnson logN h)) (hQ : prover.IsTotalQueryBound Q) :
-    Pr{let (proof, log, verdict) ← run (stark 188 .johnson logN h) [] prover}[
+    (prover : NIProver (stark 203 logN h)) (hQ : prover.IsTotalQueryBound Q) :
+    Pr{let (proof, log, verdict) ← run (stark 203 logN h) [] prover}[
       verdict = .ok () ∧ proof.degreeBits = logN ∧
-        ∀ trace ∈ closeTraces (stark 188 .johnson logN h) (4585033 / 16777216)
-            (committedTrace (stark 188 .johnson logN h) log proof),
+        ∀ trace ∈ closeTraces (stark 203 logN h) (2047 / 8192)
+            (committedTrace (stark 203 logN h) log proof),
           ¬ BlocksCorrect (toRows koalaBear (component logN) logN trace)] ≤
-      (Q + (stark 188 .johnson logN h).verifierQueries) * (2 ^ 100)⁻¹ +
-        hashError KoalaBear.Fast.Field 3 (Q + (stark 188 .johnson logN h).verifierQueries)
+      (Q + (stark 203 logN h).verifierQueries) * (2 ^ 100)⁻¹ +
+        hashError KoalaBear.Fast.Field 3 (Q + (stark 203 logN h).verifierQueries)
 ```
 
-On `2 ^ logN` rows, `2 ^ 12` to `2 ^ 21` (`Sized`), a prover making at most `Q` oracle calls gets a proof accepted while the rows read off every trace within `δ' = 4585033 / 2 ^ 24 ≈ 0.2733` of the one it committed to fail to compute Keccak-f on some 24-row block starting at round 0 with probability at most `q · 2 ^ (-100) + hashError q`, `q = Q + verifierQueries`: 100 bits per oracle call. `BlocksCorrect rows` says that every 24-row block starting at round 0 has its preimage in 16-bit limbs and its last row's output is `keccakPermutation` of its first row's preimage (`KeccakAir.table_block_soundness`).
+On `2 ^ logN` rows, `2 ^ 12` to `2 ^ 21` (`Sized`), a prover making at most `Q` oracle calls gets a proof accepted while the rows read off every trace within `δ' = 2047 / 8192 = 1/4 - 2 ^ (-13)` of the one it committed to fail to compute Keccak-f on some 24-row block starting at round 0 with probability at most `q · 2 ^ (-100) + hashError q`, `q = Q + verifierQueries`: 100 bits per oracle call. `BlocksCorrect rows` says that every 24-row block starting at round 0 has its preimage in 16-bit limbs and its last row's output is `keccakPermutation` of its first row's preimage (`KeccakAir.table_block_soundness`).
 
-`stark numQueries g logN h` is the STARK over KoalaBear's quartic extension with FRI's parameters `params numQueries g`: those of Plonky3's example `prove_prime_field_31` (blowup `2`, folding by arity up to `8` down to a constant, `16` bits of query grinding, Merkle caps of height `3`) with `numQueries` queries and the grinding `g` before the out-of-domain point `ζ`, the batching challenge and each fold. The example's own configuration is `params 87 .plonky3`, `10` bits before the batching challenge; `Grinding.johnson` grinds `2`, `24` and `12` bits. The security calculator (CompStark's `CompStark/SecurityCalculator.lean`) reads the STARK's shape (`shape_setup`: 3182 constraints, the identity degree `3 n`, 5274 opened words, no lookups) and certifies each bound in the kernel, for every trace length of `Sized`, at an analysis its search finds, with the MCA bound up to the Johnson radius (`McaBound.uniqueOrJohnson`, which holds by `McaBound.uniqueOrJohnson_holds`). Each query count is the smallest the calculator certifies on all of `2 ^ 12` to `2 ^ 21` rows:
+`stark numQueries logN h` is the STARK over KoalaBear's quartic extension with FRI's parameters `params numQueries`: those of Plonky3's example `prove_prime_field_31` (blowup `2`, folding by arity up to `8` down to a constant, `16` bits of query grinding and `10` bits of batching grinding, Merkle caps of height `3`) with `numQueries` queries. The example's own configuration is `params 87`. The security calculator (CompStark's `CompStark/SecurityCalculator.lean`) reads the STARK's shape (`shape_setup`: 3182 constraints, the identity degree `3 n`, 5274 opened words, no lookups) and certifies each bound in the kernel, for every trace length of `Sized`, at an analysis its search finds, with the MCA bound up to the Johnson radius (`McaBound.uniqueOrJohnson`, which holds by `McaBound.uniqueOrJohnson_holds`). Each query count is the smallest the calculator certifies on all of `2 ^ 12` to `2 ^ 21` rows:
 
-| theorem | queries | grinding | analysis | proven bits |
-| --- | --- | --- | --- | --- |
-| `keccak_soundness_ro` | `188` | `Grinding.johnson` | `δ ≈ 0.2668`, `δ' ≈ 0.2733`, loss `2 ^ (-16)` | `100` per oracle call |
-| `keccak_soundness` (interactive) | `247` | | `δ = 1/4 - 2 ^ (-10)`, `δ' = 1/4 - 2 ^ (-12)`, loss `2 ^ (-16)` | `100` |
-| `keccak_soundness_ro_example` (Plonky3's example) | `87` | `Grinding.plonky3` | `δ ≈ 0.2916`, `δ' ≈ 0.2919` | `59` per oracle call |
+| theorem | queries | analysis | proven bits |
+| --- | --- | --- | --- |
+| `keccak_soundness_ro` | `203` | `δ = 1/4 - 2 ^ (-11)`, `δ' = 1/4 - 2 ^ (-13)`, loss `2 ^ (-60)` | `100` per oracle call |
+| `keccak_soundness` (interactive) | `247` | `δ = 1/4 - 2 ^ (-10)`, `δ' = 1/4 - 2 ^ (-12)`, loss `2 ^ (-16)` | `100` |
+| `keccak_soundness_ro_example` (Plonky3's example) | `87` | `δ ≈ 0.2916`, `δ' ≈ 0.2919`, loss `2 ^ (-60)` | `59` per oracle call |
 
-Up to the Johnson radius `1 - √(1/2) ≈ 0.2929` of rate `1/2`, FRI's proximity `δ` goes beyond the unique-decoding radius `1/4`, so a query is worth up to `0.4985` bits instead of `log₂ (4/3) ≈ 0.415`: the `87` queries and `16` bits of grinding of Plonky3's example prove `59` bits per oracle call, where Plonky3 conjectures 100. Beyond the unique-decoding radius the Johnson list size multiplies the out-of-domain, batching and fold terms, and the batching term also by the batching curve's degree `5273`, so with Plonky3's grinding the quartic extension stays at the unique-decoding count, `203` queries. Grinding before those challenges buys queries: with `Grinding.johnson` on `2 ^ 21` rows the terms are `2 ^ (-100.12)` for the queries, `2 ^ (-100.03)` for batching, `2 ^ (-100.31)` out of domain, `2 ^ (-100.59)` for the largest fold and `2 ^ (-109.3)` for constraint folding, which Plonky3 does not grind. The batching term sets the price: `24` bits, about `2 ^ 24` Poseidon2 permutations, give `188` queries, and `26`, `28` and `30` bits (with `3`, `3` and `4` bits before `ζ` and `14`, `16` and `18` before each fold) would give `180`, `176` and `173`, at four, sixteen and sixty-four times the grinding. Interactively, without grinding to credit, the Johnson regime does not help: `247` queries reach 100 bits on `2 ^ 21` rows (`100.07`), limited by the sum of the out-of-domain, batching and query terms. At blowup `4` the calculator's search reaches 100 bits per oracle call with `124` queries and Plonky3's grinding, or `93` with more; the showcase keeps the example's blowup.
+Up to the Johnson radius `1 - √(1/2) ≈ 0.2929` of rate `1/2`, FRI's proximity `δ` goes beyond the unique-decoding radius `1/4`, so a query is worth up to `0.4985` bits instead of `log₂ (4/3) ≈ 0.415`: the `87` queries and `16` bits of grinding of Plonky3's example prove `59` bits per oracle call, where Plonky3 conjectures 100. Beyond the unique-decoding radius the Johnson list size multiplies the out-of-domain, batching and fold terms, so with Plonky3's grinding 100 bits per oracle call stay at the unique-decoding count, `203` queries, limited by the queries' term, `2 ^ (-100.06)`; the out-of-domain term is `2 ^ (-100.95)` on `2 ^ 21` rows, batching `2 ^ (-111.6)`, the largest fold `2 ^ (-102.1)` and constraint folding, which Plonky3 does not grind, `2 ^ (-112.3)`. More grinding, mostly before the batching challenge, buys fewer queries at the cost of prover time: `188` at `24` bits of batching grinding, `173` at `30`. Interactively, without grinding to credit, `247` queries reach 100 bits on `2 ^ 21` rows (`100.07`), limited by the sum of the out-of-domain, batching and query terms. At blowup `4` the calculator's search reaches 100 bits per oracle call with `124` queries; the showcase keeps the example's blowup.
 
 The theorems compose CompStark's knowledge soundness in the random-oracle model, the transfer theorem `table_of_satisfied`, Clean's `KeccakAir.table_block_soundness` and the calculator. All of it uses only `propext`, `Classical.choice` and `Quot.sound` (`CleanCompStarkTests/Axioms.lean`) and is checked by the kernel in seconds: no proof evaluates the 3182 constraints.
 
@@ -65,7 +65,7 @@ The theorems compose CompStark's knowledge soundness in the random-oracle model,
 - quotient kernel: the program of the Clean AIR's constraints (CompStark's `Prog.compile`, the same on every trace length) is the code of the quotient kernel `KeccakShowcase/Kernel.lean`, so that CompStark's fast backend runs it: straight-line code CompStark's `#gen_group_chunks` generates from the program in 19 chunks of 2000 instructions, in four modules (`KeccakShowcase/Kernel/`) that build in parallel, each chunk checked equal to the program on CompStark's group machine by the kernel's `rfl`;
 - trace: Clean's fast trace (`KeccakAir.koalaBearTrace`) is Plonky3's `generate_trace_rows` on the example's inputs, row by row, padding included;
 - the example's configuration: CompStark's fast prover, from the Clean AIR and the Clean trace, produces Plonky3's proof byte for byte, and CompStark's verifier accepts Plonky3's proof;
-- the proven configuration of `keccak_soundness_ro` (the example's with `188` queries and the grinding `Grinding.johnson`, `2`, `24` and `12` bits before `ζ`, the batching challenge and each fold, which Plonky3's `StarkConfig::with_ood_proof_of_work_bits` and `FriParameters` set): Plonky3's `verify` accepts CompStark's proof and rejects it with an opened value changed, CompStark's verifier accepts Plonky3's proof, and the two proofs are byte for byte the same.
+- the proven configuration of `keccak_soundness_ro` (the example's with `203` queries): Plonky3's `verify` accepts CompStark's proof and rejects it with an opened value changed, CompStark's verifier accepts Plonky3's proof, and the two proofs are byte for byte the same.
 
 Run, in this directory:
 
@@ -83,33 +83,25 @@ scripts/showcase.sh bench 16 3
 
 times trace generation, the proof, both together and the proof's verification on `2 ^ 16` rows, `lake exe keccak_showcase bench CONFIG 16 3` (Lean: Clean's fast trace, CompStark's fast prover and its fast verifier `verifyFast`, Plonky3's verifier by `verifyFast_eq`, with the AIR, the prover's backend and the verifying key made once, as Plonky3's side makes its configuration once) interleaved with `rust/target/release/keccak-showcase bench CONFIG 16 3` (Plonky3, built for the native CPU), both configurations, medians of 3, two rounds each, with each process's peak memory. `LEAN_NUM_THREADS=1 RAYON_NUM_THREADS=1 scripts/showcase.sh bench 16 1` runs both sides on one thread.
 
-At CompStark `fd2cbab` (CompPoly `7596b8e`) on a Ryzen 7 3700X (8 cores, 16 threads), shared with other jobs, all threads, medians of 3 in each of three interleaved rounds, the median of the rounds. Total is trace generation and proof, end to end from the inputs; the example configuration has 87 queries and `10` bits of batching grinding, the proven one (`keccak_soundness_ro`) 188 queries and `Grinding.johnson`:
+At CompStark `fd2cbab` (CompPoly `7596b8e`) on a Ryzen 7 3700X (8 cores, 16 threads), shared with other jobs, all threads, medians of 3 in each of three interleaved rounds, the median of the rounds. Total is trace generation and proof, end to end from the inputs, at the example configuration (87 queries):
 
-| rows | config | Lean tracegen | Lean prove | Lean total | Plonky3 tracegen | Plonky3 prove | Plonky3 total | Lean / Plonky3 | Lean verify | Plonky3 verify | peak memory Lean / Plonky3 |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| $2^{15}$ | example | 30 ms | 824 ms | 851 ms | 23 ms | 824 ms | 846 ms | 1.01 | 42 ms | 10 ms | 1.4 GB / 0.7 GB |
-| $2^{15}$ | proven | 28 ms | 864 ms | 886 ms | 23 ms | 1.22 s | 1.24 s | 0.71 | 85 ms | 16 ms | 1.3 GB / 0.7 GB |
-| $2^{16}$ | example | 42 ms | 1.90 s | 1.96 s | 46 ms | 1.85 s | 1.90 s | 1.03 | 44 ms | 11 ms | 2.4 GB / 1.4 GB |
-| $2^{16}$ | proven | 47 ms | 2.00 s | 2.05 s | 50 ms | 2.51 s | 2.55 s | 0.80 | 87 ms | 16 ms | 2.5 GB / 1.4 GB |
-| $2^{17}$ | example | 92 ms | 3.81 s | 3.93 s | 92 ms | 4.60 s | 4.69 s | 0.84 | 48 ms | 11 ms | 4.4 GB / 2.8 GB |
-| $2^{17}$ | proven | 94 ms | 7.20 s | 7.31 s | 93 ms | 4.81 s | 4.90 s | 1.49 | 88 ms | 16 ms | 4.3 GB / 2.8 GB |
-| $2^{18}$ | example | 181 ms | 6.46 s | 6.63 s | 182 ms | 11.24 s | 11.42 s | 0.58 | 46 ms | 11 ms | 8.4 GB / 5.5 GB |
-| $2^{18}$ | proven | 179 ms | 7.25 s | 7.42 s | 172 ms | 11.24 s | 11.41 s | 0.65 | 91 ms | 16 ms | 8.1 GB / 5.5 GB |
+| rows | Lean tracegen | Lean prove | Lean total | Plonky3 tracegen | Plonky3 prove | Plonky3 total | Lean / Plonky3 | Lean verify | Plonky3 verify | peak memory Lean / Plonky3 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| $2^{15}$ | 30 ms | 824 ms | 851 ms | 23 ms | 824 ms | 846 ms | 1.01 | 42 ms | 10 ms | 1.4 GB / 0.7 GB |
+| $2^{16}$ | 42 ms | 1.90 s | 1.96 s | 46 ms | 1.85 s | 1.90 s | 1.03 | 44 ms | 11 ms | 2.4 GB / 1.4 GB |
+| $2^{17}$ | 92 ms | 3.81 s | 3.93 s | 92 ms | 4.60 s | 4.69 s | 0.84 | 48 ms | 11 ms | 4.4 GB / 2.8 GB |
+| $2^{18}$ | 181 ms | 6.46 s | 6.63 s | 182 ms | 11.24 s | 11.42 s | 0.58 | 46 ms | 11 ms | 8.4 GB / 5.5 GB |
 
 On one thread, medians of 3 interleaved rounds of one proof each:
 
-| rows | config | Lean tracegen | Lean prove | Lean total | Plonky3 tracegen | Plonky3 prove | Plonky3 total | Lean / Plonky3 | Lean verify | Plonky3 verify |
-|---|---|---|---|---|---|---|---|---|---|---|
-| $2^{15}$ | example | 95 ms | 6.21 s | 6.30 s | 159 ms | 4.03 s | 4.19 s | 1.50 | 45 ms | 11 ms |
-| $2^{15}$ | proven | 91 ms | 6.15 s | 6.24 s | 166 ms | 4.14 s | 4.31 s | 1.45 | 79 ms | 16 ms |
-| $2^{16}$ | example | 179 ms | 12.16 s | 12.34 s | 323 ms | 7.93 s | 8.25 s | 1.50 | 44 ms | 10 ms |
-| $2^{16}$ | proven | 179 ms | 13.57 s | 13.75 s | 318 ms | 8.31 s | 8.63 s | 1.59 | 78 ms | 15 ms |
-| $2^{17}$ | example | 366 ms | 24.14 s | 24.51 s | 630 ms | 15.85 s | 16.48 s | 1.49 | 46 ms | 10 ms |
-| $2^{17}$ | proven | 356 ms | 58.70 s | 59.06 s | 622 ms | 26.47 s | 27.09 s | 2.18 | 82 ms | 16 ms |
-| $2^{18}$ | example | 752 ms | 50.03 s | 50.79 s | 1.31 s | 33.62 s | 34.95 s | 1.45 | 51 ms | 10 ms |
-| $2^{18}$ | proven | 703 ms | 52.61 s | 53.30 s | 1.27 s | 34.51 s | 35.79 s | 1.49 | 89 ms | 16 ms |
+| rows | Lean tracegen | Lean prove | Lean total | Plonky3 tracegen | Plonky3 prove | Plonky3 total | Lean / Plonky3 | Lean verify | Plonky3 verify |
+|---|---|---|---|---|---|---|---|---|---|
+| $2^{15}$ | 95 ms | 6.21 s | 6.30 s | 159 ms | 4.03 s | 4.19 s | 1.50 | 45 ms | 11 ms |
+| $2^{16}$ | 179 ms | 12.16 s | 12.34 s | 323 ms | 7.93 s | 8.25 s | 1.50 | 44 ms | 10 ms |
+| $2^{17}$ | 366 ms | 24.14 s | 24.51 s | 630 ms | 15.85 s | 16.48 s | 1.49 | 46 ms | 10 ms |
+| $2^{18}$ | 752 ms | 50.03 s | 50.79 s | 1.31 s | 33.62 s | 34.95 s | 1.45 | 51 ms | 10 ms |
 
-On 16 threads, the Lean side is within 3% of Plonky3 end to end at the example configuration on $2^{15}$ and $2^{16}$ rows and faster from $2^{17}$ rows, by 40% at $2^{18}$; on one thread it takes about 1.5 times as long at every size. Clean's trace generation takes about the time of Plonky3's `generate_trace_rows` on 16 threads and 0.6 times it on one. The Lean prover's peak memory is 1.5 to 2 times Plonky3's. The proven configuration's 101 more queries add 40 to 45 ms to the Lean verifier, which takes 40 to 95 ms against Plonky3's 10 to 16 ms. Its grinding costs what its transcript draws: the batching challenge's `24` bits take about `2 ^ 24` Poseidon2 permutations on average, which CompStark's grinding, eight candidates per packed permutation on 16 tasks, runs in about 0.4 s on 16 threads and 4 s on one, about three times Plonky3's time per candidate. On $2^{17}$ rows the transcript's smallest witness is about eight times the average, so the proof takes 3.4 s longer in Lean (35 s on one thread, where Plonky3, which then finds the same witness, takes 11 s); on the other sizes it adds under 1 s, or under 3 s on one thread, and on 16 threads Plonky3's grinding, which takes any passing witness rather than the smallest, varies between proofs.
+On 16 threads, the Lean side is within 3% of Plonky3 end to end at the example configuration on $2^{15}$ and $2^{16}$ rows and faster from $2^{17}$ rows, by 40% at $2^{18}$; on one thread it takes about 1.5 times as long at every size. Clean's trace generation takes about the time of Plonky3's `generate_trace_rows` on 16 threads and 0.6 times it on one. The Lean prover's peak memory is 1.5 to 2 times Plonky3's. The proven configuration (`keccak_soundness_ro`) is the example's with 116 more queries and no other change: on $2^{16}$ rows its proofs take the example's time within the noise, and the Lean verifier takes about 90 ms against Plonky3's 16 ms (45 and 11 ms at the example).
 
 The prover is CompStark's on its Keccak fixture (`CompStarkBench keccak`, Plonky3's `KeccakAir` written directly in CompStark, measured at CompStark `29aaf95` interleaved with the showcase): its proofs from the trace take 1.05 s, 1.74 s, 3.55 s and 6.79 s on $2^{15}$ to $2^{18}$ rows on 16 threads and 6.0 s, 12.3 s, 23.8 s and 48.9 s on one thread, the same as the showcase's within the noise, and its trace generation takes about twice Clean's. The Clean AIR's quotient is the fixture's: Clean writes `x - y` as `x + (-1) * y`, which the lowering turns back into a subtraction (`addExpr`), so that its program has the fixture's instruction mix (36212 instructions, 8941 multiplications, against 36069 and 8742) rather than 43048 instructions with 15777 multiplications; the showcase runs this program as the generated kernel `KeccakShowcase/Kernel.lean`, whose constraints `check` and `kat` verify are the AIR's.
 

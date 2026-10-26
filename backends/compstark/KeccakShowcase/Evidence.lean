@@ -49,11 +49,10 @@ open CompStark CompStark.Stark CleanCompStark
 
 /-- The configuration of Plonky3's example `prove_prime_field_31`, `87` queries
 (`CleanCompStark.KeccakShowcase.params`). -/
-def exampleParams : Fri.Params := CleanCompStark.KeccakShowcase.params 87 .plonky3
+def exampleParams : Fri.Params := CleanCompStark.KeccakShowcase.params 87
 
-/-- The configuration of `keccak_soundness_ro`, `188` queries and `2`, `24` and `12` bits of
-grinding before `ζ`, the batching challenge and each fold. -/
-def provenParams : Fri.Params := CleanCompStark.KeccakShowcase.params 188 .johnson
+/-- The configuration of `keccak_soundness_ro`, the example's with `203` queries. -/
+def provenParams : Fri.Params := CleanCompStark.KeccakShowcase.params 203
 
 /-- The configurations by name. -/
 def params : String → IO Fri.Params
