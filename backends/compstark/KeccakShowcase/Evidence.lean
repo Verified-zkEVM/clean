@@ -32,7 +32,8 @@ of `rust/`, Plonky3 `a4982ec`):
   arity up to 8 and 87 queries): CompStark's fast prover, from the Clean AIR and the Clean trace,
   produces Plonky3's proof byte for byte, and CompStark's verifier accepts Plonky3's proof;
 * the proven configuration of the end-to-end theorem (`keccak_soundness_ro`, the example's with
-  `203` queries): Plonky3's verifier accepts CompStark's proof and rejects it with an opened value
+  `188` queries and `2`, `24` and `12` bits of grinding before `ζ`, the batching challenge and each
+  fold): Plonky3's verifier accepts CompStark's proof and rejects it with an opened value
   changed, CompStark's verifier accepts Plonky3's proof, and the two are byte for byte the same.
 
 `lake exe keccak_showcase bench CONFIG L REPS` times trace generation, the proof, both together
@@ -48,10 +49,11 @@ open CompStark CompStark.Stark CleanCompStark
 
 /-- The configuration of Plonky3's example `prove_prime_field_31`, `87` queries
 (`CleanCompStark.KeccakShowcase.params`). -/
-def exampleParams : Fri.Params := CleanCompStark.KeccakShowcase.params 87
+def exampleParams : Fri.Params := CleanCompStark.KeccakShowcase.params 87 .plonky3
 
-/-- The configuration of `keccak_soundness_ro`, `203` queries. -/
-def provenParams : Fri.Params := CleanCompStark.KeccakShowcase.params 203
+/-- The configuration of `keccak_soundness_ro`, `188` queries and `2`, `24` and `12` bits of
+grinding before `ζ`, the batching challenge and each fold. -/
+def provenParams : Fri.Params := CleanCompStark.KeccakShowcase.params 188 .johnson
 
 /-- The configurations by name. -/
 def params : String → IO Fri.Params

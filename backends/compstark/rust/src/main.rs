@@ -9,8 +9,10 @@
 //!
 //! * `example`: the example's `new_benchmark_high_arity` (blowup 2, arity up to 8, 16 bits of
 //!   query and 10 of batching grinding) with its query count for 100 conjectured bits;
-//! * `proven`: the example's with 203 queries, for which CompStark's security calculator proves 100
-//!   bits per oracle answer (`CleanCompStark.KeccakShowcase.keccak_soundness_ro`).
+//! * `proven`: the example's with 188 queries and 2, 24 and 12 bits of grinding before the
+//!   out-of-domain point, the batching challenge and each fold, for which CompStark's security
+//!   calculator proves 100 bits per oracle answer
+//!   (`CleanCompStark.KeccakShowcase.keccak_soundness_ro`).
 //!
 //! The permutations' inputs are the example's: `2^L / 24` draws of `SmallRng` seeded with `1`.
 //!
@@ -55,7 +57,7 @@ fn config(name: &str) -> Config {
     let val_mmcs = ValMmcs::new(PaddingFreeSponge::new(p24.clone()), TruncatedPermutation::new(p16),
         3);
     let mmcs = ChallengeMmcs::new(val_mmcs.clone());
-    let fri = match name {
+    let (fri, ood_pow_bits) = match name {
         "example" => {
             let mut fri = FriParameters::new_benchmark_high_arity(mmcs);
             // `example_fri_parameters`: the fewest queries for 100 conjectured bits.
@@ -65,15 +67,21 @@ fn config(name: &str) -> Config {
             {
                 fri.num_queries += 1;
             }
-            fri
+            (fri, 0)
         }
         "proven" => {
-            FriParameters { num_queries: 203, ..FriParameters::new_benchmark_high_arity(mmcs) }
+            let fri = FriParameters {
+                num_queries: 188,
+                batch_proof_of_work_bits: 24,
+                commit_proof_of_work_bits: 12,
+                ..FriParameters::new_benchmark_high_arity(mmcs)
+            };
+            (fri, 2)
         }
         _ => panic!("unknown configuration {name}: example or proven"),
     };
     let pcs = TwoAdicFriPcs::new(Radix2DitParallel::default(), val_mmcs, fri);
-    StarkConfig::new(pcs, DuplexChallenger::new(p24))
+    StarkConfig::new(pcs, DuplexChallenger::new(p24)).with_ood_proof_of_work_bits(ood_pow_bits)
 }
 
 /// The example's inputs on `2^log_n` rows.
