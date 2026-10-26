@@ -19,6 +19,34 @@ info: 'CleanCompStark.statement_of_satisfied' depends on axioms:
 #print axioms CleanCompStark.statement_of_satisfied
 
 /--
+info: 'CleanCompStark.knowledgeSoundness_ro_of_secureRo' depends on axioms:
+[propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs (whitespace := lax) in
+#print axioms CleanCompStark.knowledgeSoundness_ro_of_secureRo
+
+/--
+info: 'CleanCompStark.knowledgeSoundness_of_secure' depends on axioms:
+[propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs (whitespace := lax) in
+#print axioms CleanCompStark.knowledgeSoundness_of_secure
+
+/--
+info: 'CleanCompStark.batchKnowledgeSoundness_ro_of_secureRo' depends on axioms:
+[propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs (whitespace := lax) in
+#print axioms CleanCompStark.batchKnowledgeSoundness_ro_of_secureRo
+
+/--
+info: 'CleanCompStark.batchKnowledgeSoundness_of_secure' depends on axioms:
+[propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs (whitespace := lax) in
+#print axioms CleanCompStark.batchKnowledgeSoundness_of_secure
+
+/--
 info: 'CleanCompStark.knowledgeSoundness_ro_of_tableSound' depends on axioms:
 [propext, Classical.choice, Quot.sound]
 -/
